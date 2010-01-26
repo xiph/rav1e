@@ -249,6 +249,44 @@ pub const fn bexp_q24(log_scale: i32) -> i64 {
   (1i64 << 47) - 1
 }
 
+/// Polynomial approximation of a binary exponential.
+/// Q10 input, Q0 output.
+#[allow(unused)]
+pub const fn bexp32_q10(z: i32) -> u32 {
+  let ipart = z >> 10;
+  let mut n = ((z & ((1 << 10) - 1)) << 4) as u32;
+  n = ({
+    n * (((n * (((n * (((n * 3548) >> 15) + 6817)) >> 15) + 15823)) >> 15)
+      + 22708)
+  } >> 15)
+    + 16384;
+  if 14 - ipart > 0 {
+    (n + (1 << (13 - ipart))) >> (14 - ipart)
+  } else {
+    n << (ipart - 14)
+  }
+}
+
+/// Polynomial approximation of a binary logarithm.
+/// Q0 input, Q10 output.
+#[allow(unused)]
+pub const fn blog32_q10(w: u32) -> i32 {
+  if w == 0 {
+    return -1;
+  }
+  let ipart = 31 - w.leading_zeros() as i32;
+  let n = if ipart - 16 > 0 { w >> (ipart - 16) } else { w << (16 - ipart) }
+    as i32
+    - 32768
+    - 16384;
+  let fpart = ({
+    n * (((n * (((n * (((n * -1402) >> 15) + 2546)) >> 15) - 5216)) >> 15)
+      + 15745)
+  } >> 15)
+    - 6793;
+  (ipart << 10) + (fpart >> 4)
+}
+
 #[cfg(test)]
 mod test {
   use super::*;
