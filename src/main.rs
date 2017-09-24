@@ -97,10 +97,10 @@ struct FrameState {
 }
 
 impl FrameState {
-    pub fn new(width: usize, height: usize) -> FrameState {
+    pub fn new(fi: &FrameInvariants) -> FrameState {
         FrameState {
-            input: Frame::new(width, height),
-            rec: Frame::new(width, height),
+            input: Frame::new(fi.sb_width*64, fi.sb_height*64),
+            rec: Frame::new(fi.sb_width*64, fi.sb_height*64),
         }
     }
 }
@@ -317,16 +317,16 @@ fn main() {
     loop {
         match y4m_dec.read_frame() {
             Ok(y4m_frame) => {
+                let fi = FrameInvariants::new(width, height);
                 let y4m_y = y4m_frame.get_y_plane();
                 println!("Frame {}", i);
-                let mut fs = FrameState::new(width, height);
+                let mut fs = FrameState::new(&fi);
                 for y in 0..height {
                     for x in 0..width {
                         let stride = fs.input.planes[0].stride;
                         fs.input.planes[0].data[y*stride+x] = y4m_y[y*width+x] as u16;
                     }
                 }
-                let fi = FrameInvariants::new(width, height);
                 let packet = encode_frame(&sequence, &fi, &mut fs);
                 write_ivf_frame(&mut output_file, i, packet.as_ref());
                 let mut rec_y = vec![128 as u8; width*height];

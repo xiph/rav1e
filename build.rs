@@ -20,5 +20,6 @@ fn main() {
         .file("src/av1/common/av1_inv_txfm1d.c")
         .file("src/av1/common/av1_inv_txfm2d.c")
         .include("src")
+        .flag("-std=c99")
         .compile("libntr.a");
 }
