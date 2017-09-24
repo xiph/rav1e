@@ -329,6 +329,8 @@ fn main() {
         match y4m_dec.read_frame() {
             Ok(y4m_frame) => {
                 let y4m_y = y4m_frame.get_y_plane();
+                let y4m_u = y4m_frame.get_u_plane();
+                let y4m_v = y4m_frame.get_v_plane();
                 println!("Frame {}", i);
                 let mut fs = FrameState::new(&fi);
                 for y in 0..height {
@@ -337,15 +339,39 @@ fn main() {
                         fs.input.planes[0].data[y*stride+x] = y4m_y[y*width+x] as u16;
                     }
                 }
+                for y in 0..height/2 {
+                    for x in 0..width/2 {
+                        let stride = fs.input.planes[1].stride;
+                        fs.input.planes[1].data[y*stride+x] = y4m_u[y*width/2+x] as u16;
+                    }
+                }
+                for y in 0..height/2 {
+                    for x in 0..width/2 {
+                        let stride = fs.input.planes[2].stride;
+                        fs.input.planes[2].data[y*stride+x] = y4m_v[y*width/2+x] as u16;
+                    }
+                }
                 let packet = encode_frame(&sequence, &fi, &mut fs);
                 write_ivf_frame(&mut output_file, i, packet.as_ref());
                 let mut rec_y = vec![128 as u8; width*height];
-                let rec_u = vec![128 as u8; width*height/4];
-                let rec_v = vec![128 as u8; width*height/4];
+                let mut rec_u = vec![128 as u8; width*height/4];
+                let mut rec_v = vec![128 as u8; width*height/4];
                 for y in 0..height {
                     for x in 0..width {
                         let stride = fs.rec.planes[0].stride;
                         rec_y[y*width+x] = fs.rec.planes[0].data[y*stride+x] as u8;
+                    }
+                }
+                for y in 0..height/2 {
+                    for x in 0..width/2 {
+                        let stride = fs.rec.planes[1].stride;
+                        rec_u[y*width/2+x] = fs.rec.planes[1].data[y*stride+x] as u8;
+                    }
+                }
+                for y in 0..height/2 {
+                    for x in 0..width/2 {
+                        let stride = fs.rec.planes[2].stride;
+                        rec_v[y*width/2+x] = fs.rec.planes[2].data[y*stride+x] as u8;
                     }
                 }
                 let rec_frame = y4m::Frame::new([&rec_y, &rec_u, &rec_v], None);
