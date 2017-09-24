@@ -255,7 +255,7 @@ fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, s
                 //reconstruct
                 let mut rcoeffs = [0 as i32; 16];
                 dequantize(fi.qindex, &coeffs, &mut rcoeffs);
-                idct4x4_add(&mut rcoeffs, &mut fs.rec.planes[0].data[(sby*64+by*4)*stride+sbx*64+bx*4..fi.sb_width*fi.sb_height*64*64], stride);
+                idct4x4_add(&mut rcoeffs, &mut fs.rec.planes[0].data[u*stride+x..fi.sb_width*fi.sb_height*64*64], stride);
             }
         }
     }
