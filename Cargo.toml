@@ -1,0 +1,17 @@
+[package]
+name = "rav1e"
+version = "0.1.0"
+authors = ["Thomas Daede <tdaede@xiph.org>"]
+build = "build.rs"
+
+[dependencies]
+bitstream-io = "0.6.1"
+byteorder = "1.0.0"
+libc = "0.2.24"
+rand = "0.3"
+y4m = "0.1.1"
+
+[build-dependencies]
+gcc = "0.3"
+
+
