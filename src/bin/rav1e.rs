@@ -15,8 +15,10 @@ fn main() {
 
     let mut frame_number = 0;
     loop {
-        process_frame(frame_number, &sequence, &fi,
-                      &mut files.output_file, &mut y4m_dec, &mut y4m_enc);
+        if !process_frame(frame_number, &sequence, &fi,
+                          &mut files.output_file, &mut y4m_dec, &mut y4m_enc) {
+            break;
+        }
         frame_number += 1;
     }
 }
