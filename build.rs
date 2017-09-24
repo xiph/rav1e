@@ -2,10 +2,10 @@
 
 // Bring in a dependency on an externally maintained `gcc` package which manages
 // invoking the C compiler.
-extern crate gcc;
+extern crate cc;
 
 fn main() {
-    gcc::Config::new()
+    cc::Build::new()
         .file("src/aom_mem/aom_mem.c")
         .file("src/aom_dsp/entenc.c")
         .file("src/aom_dsp/entcode.c")
