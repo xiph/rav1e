@@ -1,14 +1,15 @@
 extern crate bitstream_io;
 extern crate byteorder;
+extern crate clap;
 extern crate libc;
 extern crate rand;
 extern crate y4m;
 
-use std::env;
 use std::fs::File;
 use std::io::prelude::*;
 use bitstream_io::{BE, BitWriter};
 use byteorder::*;
+use clap::App;
 
 mod ec;
 mod partition;
@@ -301,9 +302,19 @@ fn encode_frame(sequence: &Sequence, fi: &FrameInvariants, fs: &mut FrameState) 
 }
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    let mut input_file = File::open(&args[1]).unwrap();
-    let mut output_file = File::create(&args[2]).unwrap();
+    let matches = App::new("rav1e")
+        .version("0.1.0")
+        .about("AV1 video encoder")
+        .args_from_usage(
+            "<INPUT.y4m>              'Uncompressed YUV4MPEG2 video input'
+             <OUTPUT.ivf>             'Compressed AV1 in IVF video output'")
+        .get_matches();
+
+    let input = matches.value_of("INPUT.y4m").unwrap();
+    let output = matches.value_of("OUTPUT.ivf").unwrap();
+
+    let mut input_file = File::open(&input).unwrap();
+    let mut output_file = File::create(&output).unwrap();
     let mut rec_file = File::create("rec.y4m").unwrap();
     let mut y4m_dec = y4m::decode(&mut input_file).unwrap();
     let width = y4m_dec.get_width();
