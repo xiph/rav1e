@@ -206,6 +206,50 @@ fn get_compressed_header() -> Vec<u8> {
     h
 }
 
+fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, p: usize, sbx: usize, sby: usize, bx: usize, by: usize) {
+    let stride = fs.input.planes[0].stride;
+    let mut above = [0 as u16; 4];
+    let mut left = [0 as u16; 4];
+    let x = sbx*64 + bx*4;
+    let y = sby*64 + by*4;
+    match (sby, by) {
+        (0,0) => above = [127; 4],
+        _ => {
+            for i in 0..4 {
+                above[i] = fs.rec.planes[0].data[(y-1)*stride+x+i];
+            }
+        }
+    }
+    match (sbx, bx) {
+        (0,0) => left = [129; 4],
+        _ => {
+            for i in 0..4 {
+                left[i] = fs.rec.planes[0].data[(y+i)*stride+x-1];
+            }
+        }
+    }
+    match (sbx, bx, sby, by) {
+        (_,_,0,0) => pred_dc_left_4x4(&mut fs.rec.planes[0].data[y*stride+x..fi.sb_width*fi.sb_height*64*64], stride, &above, &left),
+        (0,0,_,_) => pred_dc_top_4x4(&mut fs.rec.planes[0].data[y*stride+x..fi.sb_width*fi.sb_height*64*64], stride, &above, &left),
+        _ => pred_dc_4x4(&mut fs.rec.planes[0].data[y*stride+x..fi.sb_width*fi.sb_height*64*64], stride, &above, &left),
+    }
+    let mut coeffs = [0 as i32; 16];
+    let mut residual = [0 as i16; 16];
+    for j in 0..4 {
+        for i in 0..4 {
+            residual[j*4+i] = fs.input.planes[0].data[(y+j)*stride+x+i] as i16 - fs.rec.planes[0].data[(j+y)*stride+x+i] as i16;
+        }
+    }
+    fdct4x4(&residual, &mut coeffs, 4);
+    quantize_in_place(fi.qindex, &mut coeffs);
+    cw.mc.set_loc(sbx*16+bx, sby*16+by);
+    cw.write_coeffs(p, &coeffs);
+    //reconstruct
+    let mut rcoeffs = [0 as i32; 16];
+    dequantize(fi.qindex, &coeffs, &mut rcoeffs);
+    idct4x4_add(&mut rcoeffs, &mut fs.rec.planes[0].data[y*stride+x..fi.sb_width*fi.sb_height*64*64], stride);
+}
+
 fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, sbx: usize, sby: usize) {
     cw.write_partition(PartitionType::PARTITION_NONE);
     cw.write_skip(false);
@@ -213,49 +257,9 @@ fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, s
     cw.write_intra_uv_mode(PredictionMode::DC_PRED);
     cw.write_tx_type(TxType::DCT_DCT);
     for p in 0..1 {
-        let stride = fs.input.planes[0].stride;
         for by in 0..16 {
             for bx in 0..16 {
-                let mut above = [0 as u16; 4];
-                let mut left = [0 as u16; 4];
-                let x = sbx*64 + bx*4;
-                let y = sby*64 + by*4;
-                match (sby, by) {
-                    (0,0) => above = [127; 4],
-                    _ => {
-                        for i in 0..4 {
-                            above[i] = fs.rec.planes[0].data[(y-1)*stride+x+i];
-                        }
-                    }
-                }
-                match (sbx, bx) {
-                    (0,0) => left = [129; 4],
-                    _ => {
-                        for i in 0..4 {
-                            left[i] = fs.rec.planes[0].data[(y+i)*stride+x-1];
-                        }
-                    }
-                }
-                match (sbx, bx, sby, by) {
-                    (_,_,0,0) => pred_dc_left_4x4(&mut fs.rec.planes[0].data[y*stride+x..fi.sb_width*fi.sb_height*64*64], stride, &above, &left),
-                    (0,0,_,_) => pred_dc_top_4x4(&mut fs.rec.planes[0].data[y*stride+x..fi.sb_width*fi.sb_height*64*64], stride, &above, &left),
-                    _ => pred_dc_4x4(&mut fs.rec.planes[0].data[y*stride+x..fi.sb_width*fi.sb_height*64*64], stride, &above, &left),
-                }
-                let mut coeffs = [0 as i32; 16];
-                let mut residual = [0 as i16; 16];
-                for j in 0..4 {
-                    for i in 0..4 {
-                        residual[j*4+i] = fs.input.planes[0].data[(y+j)*stride+x+i] as i16 - fs.rec.planes[0].data[(j+y)*stride+x+i] as i16;
-                    }
-                }
-                fdct4x4(&residual, &mut coeffs, 4);
-                quantize_in_place(fi.qindex, &mut coeffs);
-                cw.mc.set_loc(sbx*16+bx, sby*16+by);
-                cw.write_coeffs(p, &coeffs);
-                //reconstruct
-                let mut rcoeffs = [0 as i32; 16];
-                dequantize(fi.qindex, &coeffs, &mut rcoeffs);
-                idct4x4_add(&mut rcoeffs, &mut fs.rec.planes[0].data[u*stride+x..fi.sb_width*fi.sb_height*64*64], stride);
+                write_b(cw, fi, fs, p, sbx, sby, bx, by);
             }
         }
     }
