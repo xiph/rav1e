@@ -26,15 +26,19 @@ use predict::*;
 
 struct Plane {
     data: Vec<u16>,
-    stride: usize
+    stride: usize,
+    xdec: usize,
+    ydec: usize,
 }
 
 #[allow(dead_code)]
 impl Plane {
-    pub fn new(width: usize, height: usize) -> Plane {
+    pub fn new(width: usize, height: usize, xdec: usize, ydec: usize) -> Plane {
         Plane {
             data: vec![128; width*height],
-            stride: width
+            stride: width,
+            xdec: xdec,
+            ydec: ydec,
         }
     }
     pub fn slice<'a>(&'a mut self, x: usize, y: usize) -> PlaneMutSlice<'a> {
@@ -72,9 +76,9 @@ impl Frame {
     pub fn new(width: usize, height:usize) -> Frame {
         Frame {
             planes: [
-                Plane::new(width, height),
-                Plane::new(width/2, height/2),
-                Plane::new(width/2, height/2)
+                Plane::new(width, height, 0, 0),
+                Plane::new(width/2, height/2, 1, 1),
+                Plane::new(width/2, height/2, 1, 1)
             ]
         }
     }
@@ -207,16 +211,18 @@ fn get_compressed_header() -> Vec<u8> {
 }
 
 fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, p: usize, sbx: usize, sby: usize, bx: usize, by: usize) {
-    let stride = fs.input.planes[0].stride;
+    let stride = fs.input.planes[p].stride;
+    let xdec = fs.input.planes[p].xdec;
+    let ydec = fs.input.planes[p].ydec;
     let mut above = [0 as u16; 4];
     let mut left = [0 as u16; 4];
-    let x = sbx*64 + bx*4;
-    let y = sby*64 + by*4;
+    let x = (sbx*64>>xdec) + bx*4;
+    let y = (sby*64>>ydec) + by*4;
     match (sby, by) {
         (0,0) => above = [127; 4],
         _ => {
             for i in 0..4 {
-                above[i] = fs.rec.planes[0].data[(y-1)*stride+x+i];
+                above[i] = fs.rec.planes[p].data[(y-1)*stride+x+i];
             }
         }
     }
@@ -224,20 +230,20 @@ fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, p:
         (0,0) => left = [129; 4],
         _ => {
             for i in 0..4 {
-                left[i] = fs.rec.planes[0].data[(y+i)*stride+x-1];
+                left[i] = fs.rec.planes[p].data[(y+i)*stride+x-1];
             }
         }
     }
     match (sbx, bx, sby, by) {
-        (_,_,0,0) => pred_dc_left_4x4(&mut fs.rec.planes[0].data[y*stride+x..fi.sb_width*fi.sb_height*64*64], stride, &above, &left),
-        (0,0,_,_) => pred_dc_top_4x4(&mut fs.rec.planes[0].data[y*stride+x..fi.sb_width*fi.sb_height*64*64], stride, &above, &left),
-        _ => pred_dc_4x4(&mut fs.rec.planes[0].data[y*stride+x..fi.sb_width*fi.sb_height*64*64], stride, &above, &left),
+        (_,_,0,0) => pred_dc_left_4x4(&mut fs.rec.planes[p].data[y*stride+x..], stride, &above, &left),
+        (0,0,_,_) => pred_dc_top_4x4(&mut fs.rec.planes[p].data[y*stride+x..], stride, &above, &left),
+        _ => pred_dc_4x4(&mut fs.rec.planes[p].data[y*stride+x..], stride, &above, &left),
     }
     let mut coeffs = [0 as i32; 16];
     let mut residual = [0 as i16; 16];
     for j in 0..4 {
         for i in 0..4 {
-            residual[j*4+i] = fs.input.planes[0].data[(y+j)*stride+x+i] as i16 - fs.rec.planes[0].data[(j+y)*stride+x+i] as i16;
+            residual[j*4+i] = fs.input.planes[p].data[(y+j)*stride+x+i] as i16 - fs.rec.planes[p].data[(j+y)*stride+x+i] as i16;
         }
     }
     fdct4x4(&residual, &mut coeffs, 4);
@@ -247,7 +253,7 @@ fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, p:
     //reconstruct
     let mut rcoeffs = [0 as i32; 16];
     dequantize(fi.qindex, &coeffs, &mut rcoeffs);
-    idct4x4_add(&mut rcoeffs, &mut fs.rec.planes[0].data[y*stride+x..fi.sb_width*fi.sb_height*64*64], stride);
+    idct4x4_add(&mut rcoeffs, &mut fs.rec.planes[p].data[y*stride+x..], stride);
 }
 
 fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, sbx: usize, sby: usize) {
@@ -267,8 +273,7 @@ fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, s
     for p in 1..3 {
         for by in 0..8 {
             for bx in 0..8 {
-                cw.mc.set_loc(bx, by);
-                cw.write_token_block_zero(p);
+                write_b(cw, fi, fs, p, sbx, sby, bx, by);
             }
         }
     }
