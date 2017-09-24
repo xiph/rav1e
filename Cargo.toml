@@ -12,6 +12,6 @@ rand = "0.3"
 y4m = "0.1.1"
 
 [build-dependencies]
-gcc = "0.3"
+cc = "1.0"
 
 
