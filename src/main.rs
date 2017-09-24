@@ -218,11 +218,13 @@ fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, s
             for bx in 0..16 {
                 let mut above = [0 as u16; 4];
                 let mut left = [0 as u16; 4];
+                let x = sbx*64 + bx*4;
+                let y = sby*64 + by*4;
                 match (sby, by) {
                     (0,0) => above = [127; 4],
                     _ => {
                         for i in 0..4 {
-                            above[i] = fs.rec.planes[0].data[(sby*64+by*4-1)*stride+sbx*64+bx*4+i];
+                            above[i] = fs.rec.planes[0].data[(y-1)*stride+x+i];
                         }
                     }
                 }
@@ -230,20 +232,20 @@ fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, s
                     (0,0) => left = [129; 4],
                     _ => {
                         for i in 0..4 {
-                            left[i] = fs.rec.planes[0].data[(sby*64+by*4+i)*stride+sbx*64+bx*4-1];
+                            left[i] = fs.rec.planes[0].data[(y+i)*stride+x-1];
                         }
                     }
                 }
                 match (sbx, bx, sby, by) {
-                    (_,_,0,0) => pred_dc_left_4x4(&mut fs.rec.planes[0].data[(sby*64+by*4)*stride+sbx*64+bx*4..fi.sb_width*fi.sb_height*64*64], stride, &above, &left),
-                    (0,0,_,_) => pred_dc_top_4x4(&mut fs.rec.planes[0].data[(sby*64+by*4)*stride+sbx*64+bx*4..fi.sb_width*fi.sb_height*64*64], stride, &above, &left),
-                    _ => pred_dc_4x4(&mut fs.rec.planes[0].data[(sby*64+by*4)*stride+sbx*64+bx*4..fi.sb_width*fi.sb_height*64*64], stride, &above, &left),
+                    (_,_,0,0) => pred_dc_left_4x4(&mut fs.rec.planes[0].data[y*stride+x..fi.sb_width*fi.sb_height*64*64], stride, &above, &left),
+                    (0,0,_,_) => pred_dc_top_4x4(&mut fs.rec.planes[0].data[y*stride+x..fi.sb_width*fi.sb_height*64*64], stride, &above, &left),
+                    _ => pred_dc_4x4(&mut fs.rec.planes[0].data[y*stride+x..fi.sb_width*fi.sb_height*64*64], stride, &above, &left),
                 }
                 let mut coeffs = [0 as i32; 16];
                 let mut residual = [0 as i16; 16];
-                for y in 0..4 {
-                    for x in 0..4 {
-                        residual[y*4+x] = fs.input.planes[0].data[(sby*64+by*4+y)*stride+sbx*64+bx*4+x] as i16 - fs.rec.planes[0].data[(sby*64+by*4+y)*stride+sbx*64+bx*4+x] as i16;
+                for j in 0..4 {
+                    for i in 0..4 {
+                        residual[j*4+i] = fs.input.planes[0].data[(y+j)*stride+x+i] as i16 - fs.rec.planes[0].data[(j+y)*stride+x+i] as i16;
                     }
                 }
                 fdct4x4(&residual, &mut coeffs, 4);
