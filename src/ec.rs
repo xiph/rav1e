@@ -1,6 +1,7 @@
 extern crate libc;
 
 use std::mem::transmute;
+use std::mem::uninitialized;
 use std::slice;
 
 pub struct Writer {
@@ -17,11 +18,11 @@ extern {
 
 impl Writer {
     pub fn new() -> Writer {
-        let enc = [0;100];
         unsafe {
+            let enc = uninitialized();
             od_ec_enc_init(transmute(&enc), 1024);
+            Writer { enc: enc }
         }
-        Writer { enc: enc }
     }
     pub fn done(&mut self) -> &[u8] {
         let mut nbytes: u32 = 0;
