@@ -1,8 +1,17 @@
 The fastest and worstest AV1 compressor.
 
-Input videos must be a multiple of 64 high and wide, in y4m format.
+This repository uses a git submodule, to initialize it, do:
+
+```
+git submodule update --init
+```
+
+This is also required everytime you switch branch or pull code and the submodule changed.
+
 
 # Compressing video
+
+Input videos must be a multiple of 64 high and wide, in y4m format.
 
 ```
 cargo run --bin rav1e --release input.y4m output.ivf
