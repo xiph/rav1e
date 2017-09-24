@@ -5,7 +5,7 @@ Input videos must be a multiple of 64 high and wide, in y4m format.
 # Compressing video
 
 ```
-cargo run --release input.y4m output.ivf
+cargo run --bin rav1e --release input.y4m output.ivf
 ```
 # Decompressing video
 

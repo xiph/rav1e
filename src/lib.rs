@@ -24,11 +24,11 @@ use transform::*;
 use quantize::*;
 use predict::*;
 
-struct Plane {
-    data: Vec<u16>,
-    stride: usize,
-    xdec: usize,
-    ydec: usize,
+pub struct Plane {
+    pub data: Vec<u16>,
+    pub stride: usize,
+    pub xdec: usize,
+    pub ydec: usize,
 }
 
 #[allow(dead_code)]
@@ -54,10 +54,10 @@ impl Plane {
 }
 
 #[allow(dead_code)]
-struct PlaneMutSlice<'a> {
-    p: &'a mut Plane,
-    x: usize,
-    y: usize
+pub struct PlaneMutSlice<'a> {
+    pub p: &'a mut Plane,
+    pub x: usize,
+    pub y: usize
 }
 
 #[allow(dead_code)]
@@ -68,8 +68,8 @@ impl<'a> PlaneMutSlice<'a> {
     }
 }
 
-struct Frame {
-    planes: [Plane; 3]
+pub struct Frame {
+    pub planes: [Plane; 3]
 }
 
 impl Frame {
@@ -84,8 +84,8 @@ impl Frame {
     }
 }
 
-struct Sequence {
-    profile: u8
+pub struct Sequence {
+    pub profile: u8
 }
 
 impl Sequence {
@@ -96,9 +96,9 @@ impl Sequence {
     }
 }
 
-struct FrameState {
-    input: Frame,
-    rec: Frame
+pub struct FrameState {
+    pub input: Frame,
+    pub rec: Frame
 }
 
 impl FrameState {
@@ -111,12 +111,12 @@ impl FrameState {
 }
 
 #[allow(dead_code)]
-struct FrameInvariants {
-    qindex: usize,
-    width: usize,
-    height: usize,
-    sb_width: usize,
-    sb_height: usize
+pub struct FrameInvariants {
+    pub qindex: usize,
+    pub width: usize,
+    pub height: usize,
+    pub sb_width: usize,
+    pub sb_height: usize
 }
 
 impl FrameInvariants {
@@ -131,8 +131,38 @@ impl FrameInvariants {
     }
 }
 
+pub struct EncoderFiles {
+    pub input_file: File,
+    pub output_file: File,
+    pub rec_file: File,
+}
+
+impl EncoderFiles {
+    pub fn from_cli() -> EncoderFiles {
+        let matches = App::new("rav1e")
+            .version("0.1.0")
+            .about("AV1 video encoder")
+            .args_from_usage(
+                "<INPUT.y4m>              'Uncompressed YUV4MPEG2 video input'
+                 <OUTPUT.ivf>             'Compressed AV1 in IVF video output'")
+            .get_matches();
+        let input = matches.value_of("INPUT.y4m").unwrap();
+        let output = matches.value_of("OUTPUT.ivf").unwrap();
+
+        let input_file = File::open(&input).unwrap();
+        let output_file = File::create(&output).unwrap();
+        let rec_file = File::create("rec.y4m").unwrap();
+
+        EncoderFiles {
+            input_file: input_file,
+            output_file: output_file,
+            rec_file: rec_file
+        }
+    }
+}
+
 // TODO: possibly just use bitwriter instead of byteorder
-fn write_ivf_header(output_file: &mut File, width: usize, height: usize) {
+pub fn write_ivf_header(output_file: &mut File, width: usize, height: usize) {
     output_file.write(b"DKIF").unwrap();
     output_file.write_u16::<LittleEndian>(0).unwrap(); // version
     output_file.write_u16::<LittleEndian>(32).unwrap(); // header length
@@ -145,7 +175,7 @@ fn write_ivf_header(output_file: &mut File, width: usize, height: usize) {
     output_file.write_u32::<LittleEndian>(0).unwrap();
 }
 
-fn write_ivf_frame(output_file: &mut File, pts: u64, data: &[u8]) {
+pub fn write_ivf_frame(output_file: &mut File, pts: u64, data: &[u8]) {
     output_file.write_u32::<LittleEndian>(data.len() as u32).unwrap();
     output_file.write_u64::<LittleEndian>(pts).unwrap();
     output_file.write(data).unwrap();
@@ -312,84 +342,65 @@ fn encode_frame(sequence: &Sequence, fi: &FrameInvariants, fs: &mut FrameState) 
     packet
 }
 
-fn main() {
-    let matches = App::new("rav1e")
-        .version("0.1.0")
-        .about("AV1 video encoder")
-        .args_from_usage(
-            "<INPUT.y4m>              'Uncompressed YUV4MPEG2 video input'
-             <OUTPUT.ivf>             'Compressed AV1 in IVF video output'")
-        .get_matches();
-
-    let input = matches.value_of("INPUT.y4m").unwrap();
-    let output = matches.value_of("OUTPUT.ivf").unwrap();
-
-    let mut input_file = File::open(&input).unwrap();
-    let mut output_file = File::create(&output).unwrap();
-    let mut rec_file = File::create("rec.y4m").unwrap();
-    let mut y4m_dec = y4m::decode(&mut input_file).unwrap();
-    let width = y4m_dec.get_width();
-    let height = y4m_dec.get_height();
-    let sequence = Sequence::new();
-    let mut y4m_enc = y4m::encode(width,height,y4m::Ratio::new(30,1)).write_header(&mut rec_file).unwrap();
-    println!("Writing file");
-    let fi = FrameInvariants::new(width, height);
-    write_ivf_header(&mut output_file, fi.sb_width*64, fi.sb_height*64);
-    let mut i = 0;
-    loop {
-        match y4m_dec.read_frame() {
-            Ok(y4m_frame) => {
-                let y4m_y = y4m_frame.get_y_plane();
-                let y4m_u = y4m_frame.get_u_plane();
-                let y4m_v = y4m_frame.get_v_plane();
-                println!("Frame {}", i);
-                let mut fs = FrameState::new(&fi);
-                for y in 0..height {
-                    for x in 0..width {
-                        let stride = fs.input.planes[0].stride;
-                        fs.input.planes[0].data[y*stride+x] = y4m_y[y*width+x] as u16;
-                    }
+/// Encode and write a frame.
+pub fn process_frame(frame_number: u64, sequence: &Sequence, fi: &FrameInvariants,
+                     output_file: &mut File,
+                     y4m_dec: &mut y4m::Decoder<File>,
+                     y4m_enc: &mut y4m::Encoder<File>) -> bool {
+    let width = fi.width;
+    let height = fi.height;
+    match y4m_dec.read_frame() {
+        Ok(y4m_frame) => {
+            let y4m_y = y4m_frame.get_y_plane();
+            let y4m_u = y4m_frame.get_u_plane();
+            let y4m_v = y4m_frame.get_v_plane();
+            println!("Frame {}", frame_number);
+            let mut fs = FrameState::new(&fi);
+            for y in 0..height {
+                for x in 0..width {
+                    let stride = fs.input.planes[0].stride;
+                    fs.input.planes[0].data[y*stride+x] = y4m_y[y*width+x] as u16;
                 }
-                for y in 0..height/2 {
-                    for x in 0..width/2 {
-                        let stride = fs.input.planes[1].stride;
-                        fs.input.planes[1].data[y*stride+x] = y4m_u[y*width/2+x] as u16;
-                    }
+            }
+            for y in 0..height/2 {
+                for x in 0..width/2 {
+                    let stride = fs.input.planes[1].stride;
+                    fs.input.planes[1].data[y*stride+x] = y4m_u[y*width/2+x] as u16;
                 }
-                for y in 0..height/2 {
-                    for x in 0..width/2 {
-                        let stride = fs.input.planes[2].stride;
-                        fs.input.planes[2].data[y*stride+x] = y4m_v[y*width/2+x] as u16;
-                    }
+            }
+            for y in 0..height/2 {
+                for x in 0..width/2 {
+                    let stride = fs.input.planes[2].stride;
+                    fs.input.planes[2].data[y*stride+x] = y4m_v[y*width/2+x] as u16;
                 }
-                let packet = encode_frame(&sequence, &fi, &mut fs);
-                write_ivf_frame(&mut output_file, i, packet.as_ref());
-                let mut rec_y = vec![128 as u8; width*height];
-                let mut rec_u = vec![128 as u8; width*height/4];
-                let mut rec_v = vec![128 as u8; width*height/4];
-                for y in 0..height {
-                    for x in 0..width {
-                        let stride = fs.rec.planes[0].stride;
-                        rec_y[y*width+x] = fs.rec.planes[0].data[y*stride+x] as u8;
-                    }
+            }
+            let packet = encode_frame(&sequence, &fi, &mut fs);
+            write_ivf_frame(output_file, frame_number, packet.as_ref());
+            let mut rec_y = vec![128 as u8; width*height];
+            let mut rec_u = vec![128 as u8; width*height/4];
+            let mut rec_v = vec![128 as u8; width*height/4];
+            for y in 0..height {
+                for x in 0..width {
+                    let stride = fs.rec.planes[0].stride;
+                    rec_y[y*width+x] = fs.rec.planes[0].data[y*stride+x] as u8;
                 }
-                for y in 0..height/2 {
-                    for x in 0..width/2 {
-                        let stride = fs.rec.planes[1].stride;
-                        rec_u[y*width/2+x] = fs.rec.planes[1].data[y*stride+x] as u8;
-                    }
+            }
+            for y in 0..height/2 {
+                for x in 0..width/2 {
+                    let stride = fs.rec.planes[1].stride;
+                    rec_u[y*width/2+x] = fs.rec.planes[1].data[y*stride+x] as u8;
                 }
-                for y in 0..height/2 {
-                    for x in 0..width/2 {
-                        let stride = fs.rec.planes[2].stride;
-                        rec_v[y*width/2+x] = fs.rec.planes[2].data[y*stride+x] as u8;
-                    }
+            }
+            for y in 0..height/2 {
+                for x in 0..width/2 {
+                    let stride = fs.rec.planes[2].stride;
+                    rec_v[y*width/2+x] = fs.rec.planes[2].data[y*stride+x] as u8;
                 }
-                let rec_frame = y4m::Frame::new([&rec_y, &rec_u, &rec_v], None);
-                y4m_enc.write_frame(&rec_frame).unwrap();
-                i += 1;
-            },
-            _ => break
-        }
+            }
+            let rec_frame = y4m::Frame::new([&rec_y, &rec_u, &rec_v], None);
+            y4m_enc.write_frame(&rec_frame).unwrap();
+            true
+        },
+        _ => false
     }
 }
