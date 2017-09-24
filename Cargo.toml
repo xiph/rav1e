@@ -10,6 +10,7 @@ byteorder = "1.0.0"
 clap = "2.26.2"
 libc = "0.2.24"
 rand = "0.3"
+rustyline = "1.0.0"
 y4m = "0.1.1"
 
 [build-dependencies]
