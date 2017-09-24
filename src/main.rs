@@ -105,6 +105,7 @@ impl FrameState {
     }
 }
 
+#[allow(dead_code)]
 struct FrameInvariants {
     qindex: usize,
     width: usize,
@@ -159,8 +160,8 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     uch.write(8,0x43)?;
     uch.write(3,0)?; // colorspace
     uch.write(1,0)?; // color range
-    uch.write(16,(fi.width-1) as u16)?; // width
-    uch.write(16,(fi.height-1) as u16)?; // height
+    uch.write(16,(fi.sb_width*64-1) as u16)?; // width
+    uch.write(16,(fi.sb_height*64-1) as u16)?; // height
     uch.write_bit(false)?; // scaling active
     uch.write_bit(false)?; // screen content tools
     uch.write(3,0x0)?; // frame context
@@ -312,12 +313,12 @@ fn main() {
     let sequence = Sequence::new();
     let mut y4m_enc = y4m::encode(width,height,y4m::Ratio::new(30,1)).write_header(&mut rec_file).unwrap();
     println!("Writing file");
-    write_ivf_header(&mut output_file, width, height);
+    let fi = FrameInvariants::new(width, height);
+    write_ivf_header(&mut output_file, fi.sb_width*64, fi.sb_height*64);
     let mut i = 0;
     loop {
         match y4m_dec.read_frame() {
             Ok(y4m_frame) => {
-                let fi = FrameInvariants::new(width, height);
                 let y4m_y = y4m_frame.get_y_plane();
                 println!("Frame {}", i);
                 let mut fs = FrameState::new(&fi);
