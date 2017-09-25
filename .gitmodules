@@ -1,0 +1,4 @@
+[submodule "aom"]
+	path = aom_build/aom
+	url = https://github.com/tdaede/aom
+	branch = rav1e
