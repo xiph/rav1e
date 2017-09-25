@@ -311,23 +311,21 @@ fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, s
 
 fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
     let mut h = Vec::new();
-    let mut w = ec::Writer::new();
-    let mut fc = CDFContext::new();
-    let mut mc = MIContext::new(fi.sb_width*16, fi.sb_height*16);
-    {
-        let mut cw = ContextWriter {
-            w: &mut w,
-            fc: &mut fc,
-            mc: &mut mc,
-        };
-        for sby in 0..fi.sb_height {
-            cw.reset_left_coeff_context(0);
-            for sbx in 0..fi.sb_width {
-                write_sb(&mut cw, fi, fs, sbx, sby);
-            }
+    let w = ec::Writer::new();
+    let fc = CDFContext::new();
+    let mc = MIContext::new(fi.sb_width*16, fi.sb_height*16);
+    let mut cw = ContextWriter {
+        w: w,
+        fc: fc,
+        mc: mc,
+    };
+    for sby in 0..fi.sb_height {
+        cw.reset_left_coeff_context(0);
+        for sbx in 0..fi.sb_width {
+            write_sb(&mut cw, fi, fs, sbx, sby);
         }
     }
-    h.write(w.done()).unwrap();
+    h.write(cw.w.done()).unwrap();
     h.write(&[0]).unwrap(); // superframe anti emulation
     h
 }

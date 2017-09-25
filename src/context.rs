@@ -295,13 +295,13 @@ impl MIContext {
     }
 }
 
-pub struct ContextWriter<'a> {
-    pub w: &'a mut ec::Writer,
-    pub fc: &'a mut CDFContext,
-    pub mc: &'a mut MIContext
+pub struct ContextWriter {
+    pub w: ec::Writer,
+    pub fc: CDFContext,
+    pub mc: MIContext
 }
 
-impl<'a> ContextWriter<'a> {
+impl ContextWriter {
     pub fn write_partition(&mut self, p: PartitionType) {
         let ctx = self.mc.partition_plane_context(0, 0, BlockSize::BLOCK_64X64);
         self.w.symbol(p as u32, &mut self.fc.partition_cdf[ctx], PARTITION_TYPES);
