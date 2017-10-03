@@ -132,7 +132,7 @@ impl FrameInvariants {
 }
 
 pub struct EncoderFiles {
-    pub input_file: File,
+    pub input_file: Box<Read>,
     pub output_file: File,
     pub rec_file: File,
 }
@@ -149,7 +149,11 @@ impl EncoderFiles {
         let input = matches.value_of("INPUT.y4m").unwrap();
         let output = matches.value_of("OUTPUT.ivf").unwrap();
 
-        let input_file = File::open(&input).unwrap();
+        let input_file = if input == "-" {
+            Box::new(std::io::stdin()) as Box<Read>
+        } else {
+            Box::new(File::open(&input).unwrap()) as Box<Read>
+        };
         let output_file = File::create(&output).unwrap();
         let rec_file = File::create("rec.y4m").unwrap();
 
@@ -346,7 +350,7 @@ fn encode_frame(sequence: &Sequence, fi: &FrameInvariants, fs: &mut FrameState) 
 /// Encode and write a frame.
 pub fn process_frame(frame_number: u64, sequence: &Sequence, fi: &FrameInvariants,
                      output_file: &mut File,
-                     y4m_dec: &mut y4m::Decoder<File>,
+                     y4m_dec: &mut y4m::Decoder<Box<Read>>,
                      y4m_enc: &mut y4m::Encoder<File>) -> bool {
     let width = fi.width;
     let height = fi.height;
