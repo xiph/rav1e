@@ -222,8 +222,11 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     //uch.write_bit(false)?; // use hybrid pred
     //uch.write_bit(false)?; // use compound pred
     uch.write_bit(true)?; // reduced tx
-    uch.write(1,0)?; // tile cols
+    if fi.sb_width*64-1 > 256 {
+        uch.write(1,0)?; // tile cols
+    }
     uch.write(1,0)?; // tile rows
+    uch.write_bit(true)?; // loop filter across tiles
     uch.write(2,0)?; // tile_size_bytes
     //println!("compressed header length: {}", compressed_len);
     uch.write(16,compressed_len)?; // compressed header length
