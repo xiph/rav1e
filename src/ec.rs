@@ -31,9 +31,9 @@ impl Writer {
             slice::from_raw_parts(b, nbytes as usize)
         }
     }
-    pub fn cdf(&mut self, s: u32, cdf: &[u16], nsyms: u32) {
+    pub fn cdf(&mut self, s: u32, cdf: &[u16]) {
         unsafe {
-            od_ec_encode_cdf_q15(transmute(&self.enc), s as libc::c_int, cdf.as_ptr(), nsyms as libc::c_int);
+            od_ec_encode_cdf_q15(transmute(&self.enc), s as libc::c_int, cdf.as_ptr(), cdf.len() as libc::c_int);
         }
     }
     pub fn bool(&mut self, val: bool, f: u16) {
@@ -61,7 +61,7 @@ impl Writer {
         }
     }
     pub fn symbol(&mut self, s: u32, cdf: &mut [u16], nsymbs: usize) {
-        self.cdf(s, cdf, nsymbs as u32);
+        self.cdf(s, &cdf[..nsymbs]);
         Writer::update_cdf(cdf, s, nsymbs);
     }
 }

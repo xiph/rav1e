@@ -184,10 +184,12 @@ extern {
     static default_coef_head_cdf_32x32: [CoeffModel; PLANE_TYPES];
     static default_coef_tail_cdf: [[CoeffModel; PLANE_TYPES]; TX_SIZES];
 
-    static av1_cat1_cdf0: [u16; 2 + 1];
-    static av1_cat2_cdf0: [u16; 4 + 1];
-    static av1_cat3_cdf0: [u16; 8 + 1];
-    static av1_cat4_cdf0: [u16; 16 + 1];
+    static av1_cat1_cdf0: [u16; 2];
+    static av1_cat2_cdf0: [u16; 4];
+    static av1_cat3_cdf0: [u16; 8];
+    static av1_cat4_cdf0: [u16; 16];
+    static av1_cat5_cdf0: [u16; 16];
+    static av1_cat5_cdf1: [u16; 2];
 
     static default_scan_4x4: [u16; 16];
     static default_scan_4x4_neighbors: [u16; 17*2];
@@ -401,21 +403,25 @@ impl ContextWriter {
                 4 => self.w.symbol(TailToken::Four as u32, tailcdf, TAIL_TOKENS),
                 5...6 => {
                     self.w.symbol(TailToken::Cat1 as u32, tailcdf, TAIL_TOKENS);
-                    self.w.cdf(vabs - 5, &av1_cat1_cdf0, 2);
+                    self.w.cdf(vabs - 5, &av1_cat1_cdf0);
                 }
                 7...10 => {
                     self.w.symbol(TailToken::Cat2 as u32, tailcdf, TAIL_TOKENS);
-                    self.w.cdf(vabs - 7, &av1_cat2_cdf0, 4);
+                    self.w.cdf(vabs - 7, &av1_cat2_cdf0);
                 }
                 11...18 => {
                     self.w.symbol(TailToken::Cat3 as u32, tailcdf, TAIL_TOKENS);
-                    self.w.cdf(vabs - 11, &av1_cat3_cdf0, 8);
+                    self.w.cdf(vabs - 11, &av1_cat3_cdf0);
                 }
                 19...34 => {
                     self.w.symbol(TailToken::Cat4 as u32, tailcdf, TAIL_TOKENS);
-                    self.w.cdf(vabs - 19, &av1_cat4_cdf0, 16);
+                    self.w.cdf(vabs - 19, &av1_cat4_cdf0);
                 }
-                35...66 => self.w.symbol(TailToken::Cat5 as u32, tailcdf, TAIL_TOKENS),
+                35...66 => {
+                    self.w.symbol(TailToken::Cat5 as u32, tailcdf, TAIL_TOKENS);
+                    self.w.cdf((vabs - 35) & 0xf, &av1_cat5_cdf0);
+                    self.w.cdf(((vabs - 35) >> 4) & 0x1, &av1_cat5_cdf1);
+                }
                 _ => self.w.symbol(TailToken::Cat6 as u32, tailcdf, TAIL_TOKENS),
             };
             self.w.bool(*v < 0, 16384);
