@@ -8,19 +8,19 @@ extern {
 pub fn quantize_in_place(qindex: usize, coeffs: &mut [i32]) {
     coeffs[0] /= dc_qlookup[qindex] as i32;
     //coeffs[0] = 0;
-    if coeffs[0] > 4 {
-        coeffs[0] = 4;
+    if coeffs[0] > 34 {
+        coeffs[0] = 34;
     }
-    if coeffs[0] < -4 {
-        coeffs[0] = -4;
+    if coeffs[0] < -34 {
+        coeffs[0] = -34;
     }
     for c in coeffs[1..].iter_mut() {
         *c /= ac_qlookup[qindex] as i32;
-        if *c > 4 {
-            *c = 4;
+        if *c > 34 {
+            *c = 34;
         }
-        if *c < -4 {
-            *c = -4;
+        if *c < -34 {
+            *c = -34;
         }
     }
     coeffs[15] = 0;

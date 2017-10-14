@@ -184,6 +184,11 @@ extern {
     static default_coef_head_cdf_32x32: [CoeffModel; PLANE_TYPES];
     static default_coef_tail_cdf: [[CoeffModel; PLANE_TYPES]; TX_SIZES];
 
+    static av1_cat1_cdf0: [u16; 2 + 1];
+    static av1_cat2_cdf0: [u16; 4 + 1];
+    static av1_cat3_cdf0: [u16; 8 + 1];
+    static av1_cat4_cdf0: [u16; 16 + 1];
+
     static default_scan_4x4: [u16; 16];
     static default_scan_4x4_neighbors: [u16; 17*2];
 }
@@ -369,8 +374,7 @@ impl ContextWriter {
         let neighbors = default_scan_4x4_neighbors;
         let mut token_cache = [0 as u8; 64*64];
         for (i, v) in coeffs.iter().enumerate() {
-            let mut vabs = v.abs();
-            if vabs > 4 { vabs = 4 };
+            let vabs = v.abs() as u32;
             let first = i == 0;
             let last = i == (nz_coeff - 1);
             let band = av1_coefband_trans_4x4[i];
@@ -391,11 +395,28 @@ impl ContextWriter {
             };
             let tailcdf = &mut self.fc.coef_tail_cdfs[tx_size_ctx][plane_type][ref_type][band as usize][ctx as usize];
             match vabs {
-                 0|1 => {},
-                 2 => self.w.symbol(TailToken::Two as u32, tailcdf, TAIL_TOKENS),
-                 3 => self.w.symbol(TailToken::Three as u32, tailcdf, TAIL_TOKENS),
-                 4 => self.w.symbol(TailToken::Four as u32, tailcdf, TAIL_TOKENS),
-                 _ => panic!("category tokens not supported"),
+                0|1 => {},
+                2 => self.w.symbol(TailToken::Two as u32, tailcdf, TAIL_TOKENS),
+                3 => self.w.symbol(TailToken::Three as u32, tailcdf, TAIL_TOKENS),
+                4 => self.w.symbol(TailToken::Four as u32, tailcdf, TAIL_TOKENS),
+                5...6 => {
+                    self.w.symbol(TailToken::Cat1 as u32, tailcdf, TAIL_TOKENS);
+                    self.w.cdf(vabs - 5, &av1_cat1_cdf0, 2);
+                }
+                7...10 => {
+                    self.w.symbol(TailToken::Cat2 as u32, tailcdf, TAIL_TOKENS);
+                    self.w.cdf(vabs - 7, &av1_cat2_cdf0, 4);
+                }
+                11...18 => {
+                    self.w.symbol(TailToken::Cat3 as u32, tailcdf, TAIL_TOKENS);
+                    self.w.cdf(vabs - 11, &av1_cat3_cdf0, 8);
+                }
+                19...34 => {
+                    self.w.symbol(TailToken::Cat4 as u32, tailcdf, TAIL_TOKENS);
+                    self.w.cdf(vabs - 19, &av1_cat4_cdf0, 16);
+                }
+                35...66 => self.w.symbol(TailToken::Cat5 as u32, tailcdf, TAIL_TOKENS),
+                _ => self.w.symbol(TailToken::Cat6 as u32, tailcdf, TAIL_TOKENS),
             };
             self.w.bool(*v < 0, 16384);
             let energy_class = match vabs {
@@ -403,7 +424,8 @@ impl ContextWriter {
                 1 => 1,
                 2 => 2,
                 3|4 => 3,
-                _ => 4, //incomplete - add category 3-6
+                5...10 => 4,
+                _ => 5,
             };
             token_cache[scan[i] as usize] = energy_class;
             if last {

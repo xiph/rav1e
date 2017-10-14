@@ -122,7 +122,7 @@ pub struct FrameInvariants {
 impl FrameInvariants {
     pub fn new(width: usize, height: usize) -> FrameInvariants {
         FrameInvariants {
-            qindex: 200,
+            qindex: 150,
             width: width,
             height: height,
             sb_width: (width+63)/64,
