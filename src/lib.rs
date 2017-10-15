@@ -306,7 +306,6 @@ fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, s
             }
         }
     }
-    // chroma all zeroes
     for p in 1..3 {
         for by in 0..8 {
             for bx in 0..8 {
