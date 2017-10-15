@@ -190,6 +190,11 @@ extern {
     static av1_cat4_cdf0: [u16; 16];
     static av1_cat5_cdf0: [u16; 16];
     static av1_cat5_cdf1: [u16; 2];
+    static av1_cat6_cdf0: [u16; 16];
+    static av1_cat6_cdf1: [u16; 16];
+    static av1_cat6_cdf2: [u16; 16];
+    static av1_cat6_cdf3: [u16; 16];
+    static av1_cat6_cdf4: [u16; 4];
 
     static default_scan_4x4: [u16; 16];
     static default_scan_4x4_neighbors: [u16; 17*2];
@@ -370,8 +375,9 @@ impl ContextWriter {
             self.write_token_block_zero(plane);
             return;
         }
+        let tx_size = TxSize::TX_4X4;
         let plane_type = if plane > 0 { 1 } else { 0 };
-        let tx_size_ctx = TXSIZE_SQR_MAP[TxSize::TX_4X4 as usize] as usize;
+        let tx_size_ctx = TXSIZE_SQR_MAP[tx_size as usize] as usize;
         let ref_type = 0;
         let neighbors = default_scan_4x4_neighbors;
         let mut token_cache = [0 as u8; 64*64];
@@ -422,7 +428,21 @@ impl ContextWriter {
                     self.w.cdf((vabs - 35) & 0xf, &av1_cat5_cdf0);
                     self.w.cdf(((vabs - 35) >> 4) & 0x1, &av1_cat5_cdf1);
                 }
-                _ => self.w.symbol(TailToken::Cat6 as u32, tailcdf, TAIL_TOKENS),
+                _ => {
+                    self.w.symbol(TailToken::Cat6 as u32, tailcdf, TAIL_TOKENS);
+                    let tx_offset = tx_size as u32 - TxSize::TX_4X4 as u32;
+                    let bit_depth = 8;
+                    let bits = bit_depth + 3 + tx_offset;
+                    self.w.cdf((vabs - 67) & 0xf, &av1_cat6_cdf0);
+                    self.w.cdf(((vabs - 67) >> 4) & 0xf, &av1_cat6_cdf1);
+                    self.w.cdf(((vabs - 67) >> 8) & 0xf, &av1_cat6_cdf2);
+                    if bits > 12 {
+                        self.w.cdf(((vabs - 67) >> 12) & 0xf, &av1_cat6_cdf3);
+                    }
+                    if bits > 16 {
+                        self.w.cdf(((vabs - 67) >> 16) & 0x3, &av1_cat6_cdf4);
+                    }
+                }
             };
             self.w.bool(*v < 0, 16384);
             let energy_class = match vabs {
