@@ -53,7 +53,8 @@ impl Writer {
             if i as u32 == val {
                 tmp -= diff;
             }
-            cdf[i as usize] = ((cdf[i as usize] as i32) + ((tmp - (cdf[i as usize] as i32)) >> rate)) as u16;
+            let prev_cdf = cdf[i] as i32;
+            cdf[i] = (prev_cdf + ((tmp - prev_cdf) >> rate)) as u16;
             tmp -= tmp0;
         }
         if cdf[nsymbs] < 32 {
