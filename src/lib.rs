@@ -243,7 +243,7 @@ fn get_compressed_header() -> Vec<u8> {
     let mut w = ec::Writer::new();
     // zero length compressed header is invalid, write 1 bit of garbage
     w.bool(false,1024);
-    h.write(w.done()).unwrap();
+    h.write(&w.done()).unwrap();
     h
 }
 
@@ -316,7 +316,6 @@ fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, s
 }
 
 fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
-    let mut h = Vec::new();
     let w = ec::Writer::new();
     let fc = CDFContext::new();
     let mc = MIContext::new(fi.sb_width*16, fi.sb_height*16);
@@ -331,8 +330,8 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
             write_sb(&mut cw, fi, fs, sbx, sby);
         }
     }
-    h.write(cw.w.done()).unwrap();
-    h.write(&[0]).unwrap(); // superframe anti emulation
+    let mut h = cw.w.done();
+    h.push(0); // superframe anti emulation
     h
 }
 
