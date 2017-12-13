@@ -153,17 +153,15 @@ impl od_ec_enc {
         if s > 0 {
             let mut n = (1 << (c + 16)) - 1;
 
-            // Emulate a do-while loop with a while loop
-            while {
-                /* do */
+            loop {
                 self.precarry.push((e >> (c + 16)) as u16);
                 e &= n;
                 s -= 8;
                 c -= 8;
                 n >>= 8;
 
-                /* while */ s > 0
-            } {};
+                if s <= 0 { break; }
+            };
         }
 
         let mut c = 0;
