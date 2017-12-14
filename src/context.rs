@@ -212,6 +212,7 @@ pub struct SCAN_ORDER {
 
 type CoeffModel = [[[[u16; ENTROPY_TOKENS + 1];COEFF_CONTEXTS];COEF_BANDS];REF_TYPES];
 
+#[derive(Clone)]
 pub struct CDFContext {
     partition_cdf: [[u16; PARTITION_TYPES + 1]; PARTITION_CONTEXTS],
     kf_y_cdf: [[[u16; INTRA_MODES + 1]; INTRA_MODES]; INTRA_MODES],
@@ -239,8 +240,7 @@ impl CDFContext {
     }
 }
 
-#[derive(Default)]
-#[allow(dead_code)]
+#[derive(Clone, Default)]
 pub struct MIContext {
     mi_cols: usize,
     mi_rows: usize,
@@ -308,6 +308,13 @@ impl MIContext {
         self.mix = mix;
         self.miy = miy;
     }
+}
+
+#[derive(Clone)]
+pub struct ContextWriterCheckpoint {
+    pub w: ec::WriterCheckpoint,
+    pub fc: CDFContext,
+    pub mc: MIContext
 }
 
 pub struct ContextWriter {
@@ -466,5 +473,19 @@ impl ContextWriter {
         }
         self.mc.above_coeff_context[plane][self.mc.mix] = 1;
         self.mc.left_coeff_context[plane][self.mc.miy % MAX_MIB_SIZE] = 1;
+    }
+
+    pub fn checkpoint(&mut self) -> ContextWriterCheckpoint {
+        ContextWriterCheckpoint {
+            w: self.w.checkpoint(),
+            fc: self.fc.clone(),
+            mc: self.mc.clone()
+        }
+    }
+
+    pub fn rollback(&mut self, checkpoint: ContextWriterCheckpoint) {
+        self.w.rollback(&checkpoint.w);
+        self.fc = checkpoint.fc.clone();
+        self.mc = checkpoint.mc.clone();
     }
 }

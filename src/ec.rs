@@ -283,4 +283,28 @@ impl Writer {
     pub fn tell_frac(&mut self) -> u32 {
         self.enc.od_ec_enc_tell_frac()
     }
+
+    pub fn checkpoint(&mut self) -> WriterCheckpoint {
+        WriterCheckpoint {
+            precarry_len: self.enc.precarry.len(),
+            low: self.enc.low,
+            rng: self.enc.rng,
+            cnt: self.enc.cnt
+        }
+    }
+
+    pub fn rollback(&mut self, checkpoint: &WriterCheckpoint) {
+        self.enc.precarry.truncate(checkpoint.precarry_len);
+        self.enc.low = checkpoint.low;
+        self.enc.rng = checkpoint.rng;
+        self.enc.cnt = checkpoint.cnt;
+    }
+}
+
+#[derive(Clone)]
+pub struct WriterCheckpoint {
+    precarry_len: usize,
+    low: od_ec_window,
+    rng: u16,
+    cnt: i16
 }
