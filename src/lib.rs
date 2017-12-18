@@ -170,7 +170,7 @@ pub fn write_ivf_header(output_file: &mut File, width: usize, height: usize) {
     output_file.write(b"DKIF").unwrap();
     output_file.write_u16::<LittleEndian>(0).unwrap(); // version
     output_file.write_u16::<LittleEndian>(32).unwrap(); // header length
-    output_file.write(b"AV10").unwrap();
+    output_file.write(b"AV01").unwrap();
     output_file.write_u16::<LittleEndian>(width as u16).unwrap();
     output_file.write_u16::<LittleEndian>(height as u16).unwrap();
     output_file.write_u32::<LittleEndian>(60).unwrap();
