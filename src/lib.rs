@@ -272,6 +272,7 @@ fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, p:
         }
     }
     match (sbx, bx, sby, by) {
+        (0,0,0,0) => pred_dc_128(&mut fs.rec.planes[p].data[y*stride+x..], stride),
         (_,_,0,0) => pred_dc_left_4x4(&mut fs.rec.planes[p].data[y*stride+x..], stride, &above, &left),
         (0,0,_,_) => pred_dc_top_4x4(&mut fs.rec.planes[p].data[y*stride+x..], stride, &above, &left),
         _ => pred_dc_4x4(&mut fs.rec.planes[p].data[y*stride+x..], stride, &above, &left),

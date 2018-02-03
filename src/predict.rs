@@ -15,6 +15,14 @@ extern {
                            left: *const u16, bd: libc::c_int);
 }
 
+pub fn pred_dc_128(output: &mut [u16], stride: usize) {
+    for y in 0..4 {
+        for x in 0..4 {
+            output[y*stride+x] = 128;
+        }
+    }
+}
+
 pub fn pred_dc_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
     unsafe {
         highbd_dc_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, 4, 4, above.as_ptr(), left.as_ptr(), 8);
