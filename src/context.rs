@@ -161,14 +161,14 @@ fn get_ext_tx_set(tx_size: TxSize, is_inter: bool,
 
 fn left_block_mode(left_mi: Option<Mode>) -> PredictionMode {
     match left_mi {
-        Some(m) => if m.is_inter() { PredictionMode::DC_PRED } else { m.pred },
+        Some(m) => if m.is_inter() { PredictionMode::DC_PRED } else { m.mode },
         None => PredictionMode::DC_PRED
     }
 }
 
 fn above_block_mode(above_mi: Option<Mode>) -> PredictionMode {
     match above_mi {
-        Some(m) => if m.is_inter() { PredictionMode::DC_PRED } else { m.pred },
+        Some(m) => if m.is_inter() { PredictionMode::DC_PRED } else { m.mode },
         None => PredictionMode::DC_PRED
     }
 }
@@ -262,7 +262,7 @@ impl MIContext {
                                   vec![0;mi_cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],
                                   vec![0;mi_cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],],
             left_coeff_context: [[0; MAX_MIB_SIZE]; PLANES],
-            modes: vec![vec![Mode::new(); mi_cols]; mi_rows],
+            modes: vec![vec![Mode::default(); mi_cols]; mi_rows],
             mix: 0,
             miy: 0,
         }
@@ -319,13 +319,13 @@ impl ContextWriter {
         let ctx = self.mc.partition_plane_context(0, 0, BlockSize::BLOCK_64X64);
         self.w.symbol(p as u32, &mut self.fc.partition_cdf[ctx], PARTITION_TYPES);
     }
-    pub fn write_intra_mode(&mut self, p: PredictionMode) {
+    pub fn write_intra_mode(&mut self, mode: PredictionMode) {
         let cdf = self.fc.get_y_mode_cdf(None, None);;
-        self.w.symbol(intra_mode_ind[p as usize], cdf, INTRA_MODES);
+        self.w.symbol(intra_mode_ind[mode as usize], cdf, INTRA_MODES);
     }
-    pub fn write_intra_uv_mode(&mut self, p: PredictionMode) {
-        let cdf = &mut self.fc.uv_mode_cdf[self.mc.get_mi().pred as usize];
-        self.w.symbol(intra_mode_ind[p as usize], cdf, INTRA_MODES);
+    pub fn write_intra_uv_mode(&mut self, mode: PredictionMode) {
+        let cdf = &mut self.fc.uv_mode_cdf[self.mc.get_mi().mode as usize];
+        self.w.symbol(intra_mode_ind[mode as usize], cdf, INTRA_MODES);
     }
     pub fn write_tx_type(&mut self, tx_type: TxType) {
         let tx_size = TxSize::TX_4X4;
@@ -335,7 +335,7 @@ impl ContextWriter {
         if eset > 0 {
             self.w.symbol(
                 av1_ext_tx_intra_ind[eset as usize][tx_type as usize],
-                &mut self.fc.intra_ext_tx_cdf[eset as usize][square_tx_size as usize][self.mc.get_mi().pred as usize],
+                &mut self.fc.intra_ext_tx_cdf[eset as usize][square_tx_size as usize][self.mc.get_mi().mode as usize],
                 ext_tx_cnt_intra[eset as usize]);
         }
     }

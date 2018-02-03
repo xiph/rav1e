@@ -120,26 +120,26 @@ pub enum TxSetType {
 
 #[derive(Copy,Clone)]
 pub struct SubMode {
-    pub pred: PredictionMode
+    pub mode: PredictionMode
 }
 
 impl SubMode {
-    pub fn new() -> SubMode {
+    pub fn default() -> SubMode {
         SubMode {
-            pred: PredictionMode::DC_PRED
+            mode: PredictionMode::DC_PRED
         }
     }
 }
 
 #[derive(Copy,Clone)]
 pub struct Mode {
-    pub pred: PredictionMode,
+    pub mode: PredictionMode,
     pub skip: bool,
 }
 
 impl Mode {
-    pub fn new() -> Mode {
-        Mode { pred: PredictionMode::DC_PRED,
+    pub fn default() -> Mode {
+        Mode { mode: PredictionMode::DC_PRED,
                skip: false,
         }
     }
