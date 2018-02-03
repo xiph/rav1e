@@ -207,6 +207,12 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     uch.write(6,0)?; // loop filter level
     uch.write(3,0)?; // loop filter sharpness
     uch.write_bit(false)?; // loop filter deltas enabled
+    uch.write(8,fi.qindex as u8)?; // qindex
+    uch.write_bit(false)?; // y dc delta q
+    uch.write_bit(false)?; // uv dc delta q
+    uch.write_bit(false)?; // uv ac delta q
+    //uch.write_bit(false)?; // using qmatrix
+    uch.write_bit(false)?; // segmentation off
     uch.write(1,0)?; // cdef dering damping
     uch.write(2,0)?; // cdef clpf damping
     uch.write(2,0)?; // cdef bits
@@ -214,12 +220,6 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
         uch.write(7,0)?; // cdef y strength
         uch.write(7,0)?; // cdef uv strength
     }
-    uch.write(8,fi.qindex as u8)?; // qindex
-    uch.write_bit(false)?; // y dc delta q
-    uch.write_bit(false)?; // uv dc delta q
-    uch.write_bit(false)?; // uv ac delta q
-    //uch.write_bit(false)?; // using qmatrix
-    uch.write_bit(false)?; // segmentation off
     uch.write_bit(false)?; // no delta q
     uch.write_bit(false)?; // tx mode select
     uch.write(2,0)?; // only 4x4 transforms
