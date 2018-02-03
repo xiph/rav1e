@@ -73,7 +73,7 @@ pub enum TxType {
     H_FLIPADST = 15,
 }
 
-#[derive(Copy,Clone)]
+#[derive(Copy,Clone,Debug)]
 pub enum PredictionMode {
   DC_PRED,    // Average of above and left pixels
   V_PRED,     // Vertical

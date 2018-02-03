@@ -247,7 +247,7 @@ fn get_compressed_header() -> Vec<u8> {
     h
 }
 
-fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, p: usize, sbx: usize, sby: usize, bx: usize, by: usize) {
+fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, p: usize, sbx: usize, sby: usize, bx: usize, by: usize, mode: PredictionMode) {
     let stride = fs.input.planes[p].stride;
     let xdec = fs.input.planes[p].xdec;
     let ydec = fs.input.planes[p].ydec;
@@ -271,11 +271,22 @@ fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, p:
             }
         }
     }
-    match (sbx, bx, sby, by) {
-        (0,0,0,0) => pred_dc_128(&mut fs.rec.planes[p].data[y*stride+x..], stride),
-        (_,_,0,0) => pred_dc_left_4x4(&mut fs.rec.planes[p].data[y*stride+x..], stride, &above, &left),
-        (0,0,_,_) => pred_dc_top_4x4(&mut fs.rec.planes[p].data[y*stride+x..], stride, &above, &left),
-        _ => pred_dc_4x4(&mut fs.rec.planes[p].data[y*stride+x..], stride, &above, &left),
+    match mode {
+        PredictionMode::DC_PRED =>
+            match (sbx, bx, sby, by) {
+                (0,0,0,0) =>
+                    pred_dc_128(&mut fs.rec.planes[p].data[y*stride+x..], stride),
+                (_,_,0,0) =>
+                    pred_dc_left_4x4(&mut fs.rec.planes[p].data[y*stride+x..], stride, &above, &left),
+                (0,0,_,_) =>
+                    pred_dc_top_4x4(&mut fs.rec.planes[p].data[y*stride+x..], stride, &above, &left),
+                _ =>
+                    pred_dc_4x4(&mut fs.rec.planes[p].data[y*stride+x..], stride, &above, &left),
+            }
+        PredictionMode::H_PRED =>
+            pred_h_4x4(&mut fs.rec.planes[p].data[y*stride+x..], stride, &above, &left),
+        _ =>
+            panic!("Unimplemented prediction mode: {:?}", mode),
     }
     let mut coeffs = [0 as i32; 16];
     let mut residual = [0 as i16; 16];
@@ -286,7 +297,6 @@ fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, p:
     }
     fdct4x4(&residual, &mut coeffs, 4);
     quantize_in_place(fi.qindex, &mut coeffs);
-    cw.mc.set_loc(sbx*16+bx, sby*16+by);
     cw.write_coeffs(p, &coeffs);
     //reconstruct
     let mut rcoeffs = [0 as i32; 16];
@@ -294,23 +304,29 @@ fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, p:
     idct4x4_add(&mut rcoeffs, &mut fs.rec.planes[p].data[y*stride+x..], stride);
 }
 
-fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, sbx: usize, sby: usize) {
+fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, sbx: usize, sby: usize, mode: PredictionMode) {
+    cw.mc.set_loc(sbx*16, sby*16);
+
     cw.write_partition(PartitionType::PARTITION_NONE);
     cw.write_skip(false);
-    cw.write_intra_mode(PredictionMode::DC_PRED);
-    cw.write_intra_uv_mode(PredictionMode::DC_PRED);
-    cw.write_tx_type(TxType::DCT_DCT);
+    cw.write_intra_mode_kf(mode);
+    let uv_mode = PredictionMode::DC_PRED;
+    cw.write_intra_uv_mode(uv_mode, mode);
+    cw.write_tx_type(TxType::DCT_DCT, mode);
     for p in 0..1 {
         for by in 0..16 {
             for bx in 0..16 {
-                write_b(cw, fi, fs, p, sbx, sby, bx, by);
+                cw.mc.set_loc(sbx*16+bx, sby*16+by);
+                cw.mc.get_mi().mode = mode;
+                write_b(cw, fi, fs, p, sbx, sby, bx, by, mode);
             }
         }
     }
     for p in 1..3 {
         for by in 0..8 {
             for bx in 0..8 {
-                write_b(cw, fi, fs, p, sbx, sby, bx, by);
+                cw.mc.set_loc(sbx*16+bx, sby*16+by);
+                write_b(cw, fi, fs, p, sbx, sby, bx, by, uv_mode);
             }
         }
     }
@@ -328,7 +344,7 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
     for sby in 0..fi.sb_height {
         cw.reset_left_coeff_context(0);
         for sbx in 0..fi.sb_width {
-            write_sb(&mut cw, fi, fs, sbx, sby);
+            write_sb(&mut cw, fi, fs, sbx, sby, PredictionMode::DC_PRED);
         }
     }
     let mut h = cw.w.done();
