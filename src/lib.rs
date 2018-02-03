@@ -211,7 +211,7 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     uch.write(2,0)?; // cdef clpf damping
     uch.write(2,0)?; // cdef bits
     for _ in 0..1 {
-        uch.write(7,127)?; // cdef y strength
+        uch.write(7,0)?; // cdef y strength
         uch.write(7,0)?; // cdef uv strength
     }
     uch.write(8,fi.qindex as u8)?; // qindex
