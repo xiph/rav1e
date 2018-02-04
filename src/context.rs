@@ -24,6 +24,7 @@ const MAX_SB_SIZE: usize = (1 << MAX_SB_SIZE_LOG2);
 const MAX_SB_SQUARE: usize = (MAX_SB_SIZE * MAX_SB_SIZE);
 
 const INTRA_MODES: usize = 11;
+const UV_INTRA_MODES: usize = 11;
 const intra_mode_ind: [u32; INTRA_MODES] = [0,2,3,6,4,5,8,9,7,10,1,];
 
 const b_width_log2_lookup: [u8; 20] = [0, 0, 0,  0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 0, 2, 1, 3];
@@ -174,8 +175,8 @@ fn above_block_mode(above_mi: Option<Mode>) -> PredictionMode {
 
 extern {
     static default_partition_cdf: [[u16; PARTITION_TYPES + 1]; PARTITION_CONTEXTS];
-    static av1_kf_y_mode_cdf: [[[u16; INTRA_MODES + 1]; INTRA_MODES]; INTRA_MODES];
-    static default_uv_mode_cdf: [[u16; INTRA_MODES + 1]; INTRA_MODES];
+    static default_kf_y_mode_cdf: [[[u16; INTRA_MODES + 1]; INTRA_MODES]; INTRA_MODES];
+    static default_uv_mode_cdf: [[u16; UV_INTRA_MODES + 1]; INTRA_MODES];
     static default_intra_ext_tx_cdf: [[[[u16; TX_TYPES + 1]; INTRA_MODES]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA];
     static default_skip_cdfs: [[u16; 3];SKIP_CONTEXTS];
     static default_coef_head_cdf_4x4: [CoeffModel; PLANE_TYPES];
@@ -216,7 +217,7 @@ impl CDFContext {
     pub fn new() -> CDFContext {
         CDFContext {
             partition_cdf: default_partition_cdf,
-            kf_y_cdf: av1_kf_y_mode_cdf,
+            kf_y_cdf: default_kf_y_mode_cdf,
             uv_mode_cdf: default_uv_mode_cdf,
             intra_ext_tx_cdf: default_intra_ext_tx_cdf,
             skip_cdfs: default_skip_cdfs,
