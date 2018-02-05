@@ -9,7 +9,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use bitstream_io::{BE, BitWriter};
 use byteorder::*;
-use clap::App;
+use clap::{App, Arg};
 
 mod ec;
 mod partition;
@@ -142,19 +142,31 @@ impl EncoderFiles {
         let matches = App::new("rav1e")
             .version("0.1.0")
             .about("AV1 video encoder")
-            .args_from_usage(
-                "<INPUT.y4m>              'Uncompressed YUV4MPEG2 video input'
-                 <OUTPUT.ivf>             'Compressed AV1 in IVF video output'")
+           .arg(Arg::with_name("INPUT")
+                .help("Uncompressed YUV4MPEG2 video input")
+                .required(true)
+                .index(1))
+            .arg(Arg::with_name("OUTPUT")
+                .help("Compressed AV1 in IVF video output")
+                .short("o")
+                .long("output")
+                .default_value("-")
+                .takes_value(true))
             .get_matches();
-        let input = matches.value_of("INPUT.y4m").unwrap();
-        let output = matches.value_of("OUTPUT.ivf").unwrap();
+        let input = matches.value_of("INPUT").unwrap();
+        let output = matches.value_of("OUTPUT").unwrap();
 
         let input_file = if input == "-" {
             Box::new(std::io::stdin()) as Box<Read>
         } else {
             Box::new(File::open(&input).unwrap()) as Box<Read>
         };
-        let output_file = Box::new(File::create(&output).unwrap()) as Box<Write>;
+        let output_file = if output == "-" {
+            Box::new(std::io::stdout()) as Box<Write>
+        }
+        else {
+            Box::new(File::create(&output).unwrap()) as Box<Write>
+        };
         let rec_file = File::create("rec.y4m").unwrap();
 
         EncoderFiles {
