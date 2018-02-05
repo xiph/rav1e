@@ -57,6 +57,19 @@ pub fn pred_dc(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
 }
 
 #[cfg(test)]
+pub fn pred_h(output: &mut [u16], stride: usize, left: &[u16], bh: usize) {
+  let bw = left.len();
+
+  let mut i = 0;
+  for line in output.chunks_mut(stride).take(bh) {
+    for v in &mut line[..bw] {
+      *v = left[i];
+    }
+    i = i + 1;
+  }
+}
+
+#[cfg(test)]
 mod test {
     use super::*;
     use rand::{ChaChaRng, Rng};
@@ -80,7 +93,7 @@ mod test {
         }
     }
 
-    fn do_pred(ra: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>) {
+    fn do_dc_pred(ra: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>) {
         let (above, left, mut o1, mut o2) = setup_pred(ra);
 
         pred_dc_4x4(&mut o1, 32, &above[..4], &left[..4]);
@@ -89,12 +102,31 @@ mod test {
         (o1, o2)
     }
 
+    fn do_h_pred(ra: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>) {
+        let (above, left, mut o1, mut o2) = setup_pred(ra);
+
+        pred_h_4x4(&mut o1, 32, &above[..4], &left[..4]);
+        pred_h(&mut o2, 32, &left[..4], 4);
+
+        (o1, o2)
+    }
+
+    fn assert_same(o2: Vec<u16>) {
+      for l in o2.chunks(32).take(4) {
+        for v in l[..4].windows(2) {
+          assert_eq!(v[0], v[1]);
+        }
+      }
+    }
+
     #[test]
     fn pred_matches() {
         let mut ra = ChaChaRng::new_unseeded();
         for _ in 0..MAX_ITER {
-            let (o1, o2) = do_pred(&mut ra);
+            let (o1, o2) = do_dc_pred(&mut ra);
+            assert_eq!(o1, o2);
 
+            let (o1, o2) = do_h_pred(&mut ra);
             assert_eq!(o1, o2);
         }
     }
@@ -103,13 +135,9 @@ mod test {
     fn pred_same() {
         let mut ra = ChaChaRng::new_unseeded();
         for _ in 0..MAX_ITER {
-            let (_, o2) = do_pred(&mut ra);
+            let (_, o2) = do_dc_pred(&mut ra);
 
-            for l in o2.chunks(32).take(4) {
-                for v in l[..4].windows(2) {
-                    assert_eq!(v[0], v[1]);
-                }
-            }
+            assert_same(o2)
         }
     }
 
