@@ -161,14 +161,14 @@ fn get_ext_tx_set(tx_size: TxSize, is_inter: bool,
 
 fn left_block_mode(left_mi: Option<Mode>) -> PredictionMode {
     match left_mi {
-        Some(m) => if m.is_inter() { PredictionMode::DC_PRED } else { m.pred },
+        Some(m) => if m.is_inter() { PredictionMode::DC_PRED } else { m.mode },
         None => PredictionMode::DC_PRED
     }
 }
 
 fn above_block_mode(above_mi: Option<Mode>) -> PredictionMode {
     match above_mi {
-        Some(m) => if m.is_inter() { PredictionMode::DC_PRED } else { m.pred },
+        Some(m) => if m.is_inter() { PredictionMode::DC_PRED } else { m.mode },
         None => PredictionMode::DC_PRED
     }
 }
@@ -197,8 +197,18 @@ extern {
     static av1_cat6_cdf3: [u16; 16];
     static av1_cat6_cdf4: [u16; 4];
 
-    static default_scan_4x4: [u16; 16];
-    static default_scan_4x4_neighbors: [u16; 17*2];
+    static av1_intra_scan_orders: [[SCAN_ORDER; TX_TYPES]; TX_SIZES_ALL];
+
+    pub static exported_intra_mode_to_tx_type_context: &'static [TxType; INTRA_MODES];
+}
+
+#[repr(C)]
+pub struct SCAN_ORDER {
+  // FIXME: don't hardcode sizes
+
+  pub scan: &'static [u16; 16],
+  pub iscan: &'static [u16; 16],
+  pub neighbors: &'static [u16; 17*2]
 }
 
 type CoeffModel = [[[[u16; ENTROPY_TOKENS + 1];COEFF_CONTEXTS];COEF_BANDS];REF_TYPES];
@@ -228,13 +238,6 @@ impl CDFContext {
             coef_tail_cdfs: default_coef_tail_cdf,
         }
     }
-    pub fn get_y_mode_cdf(&mut self,
-                      above_mi: Option<Mode>,
-                      left_mi: Option<Mode>) -> &mut [u16; INTRA_MODES + 1]{
-        let above = above_block_mode(above_mi);
-        let left = left_block_mode(left_mi);
-        return &mut self.kf_y_cdf[above as usize][left as usize];
-    }
 }
 
 #[derive(Default)]
@@ -262,7 +265,7 @@ impl MIContext {
                                   vec![0;mi_cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],
                                   vec![0;mi_cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],],
             left_coeff_context: [[0; MAX_MIB_SIZE]; PLANES],
-            modes: vec![vec![Mode::new(); mi_cols]; mi_rows],
+            modes: vec![vec![Mode::default(); mi_cols]; mi_rows],
             mix: 0,
             miy: 0,
         }
@@ -282,25 +285,25 @@ impl MIContext {
         return ((left * 2 + above) + bsl) as usize * PARTITION_PLOFFSET;
     }
     fn skip_context(&mut self) -> usize {
-        let above_skip = match self.get_above_mi() {
-            Some(mi) => mi.skip as usize,
-            None => 0
-        };
-        let left_skip = match self.get_left_mi() {
-            Some(mi) => mi.skip as usize,
-            None => 0
-        };
-        above_skip + left_skip
+        (self.get_above_mi().skip as usize) + (self.get_left_mi().skip as usize)
     }
     pub fn get_mi(&mut self) -> &mut Mode {
         &mut self.modes[self.miy][self.mix]
     }
-    // TODO: fix these when adding prediction mode support
-    pub fn get_above_mi(&mut self) -> Option<&mut Mode> {
-        None
+
+    pub fn get_above_mi(&mut self) -> Mode {
+        if self.miy > 0 {
+            self.modes[self.miy - 1][self.mix]
+        } else {
+            Mode::default()
+        }
     }
-    pub fn get_left_mi(&mut self) -> Option<&mut Mode> {
-        None
+    pub fn get_left_mi(&mut self) -> Mode {
+        if self.mix > 0 {
+            self.modes[self.miy][self.mix - 1]
+        } else {
+            Mode::default()
+        }
     }
     pub fn set_loc(&mut self, mix: usize, miy: usize) {
         self.mix = mix;
@@ -319,15 +322,17 @@ impl ContextWriter {
         let ctx = self.mc.partition_plane_context(0, 0, BlockSize::BLOCK_64X64);
         self.w.symbol(p as u32, &mut self.fc.partition_cdf[ctx], PARTITION_TYPES);
     }
-    pub fn write_intra_mode(&mut self, p: PredictionMode) {
-        let cdf = self.fc.get_y_mode_cdf(None, None);;
-        self.w.symbol(intra_mode_ind[p as usize], cdf, INTRA_MODES);
+    pub fn write_intra_mode_kf(&mut self, mode: PredictionMode) {
+        let above_mode = self.mc.get_above_mi().mode as usize;
+        let left_mode = self.mc.get_left_mi().mode as usize;
+        let cdf = &mut self.fc.kf_y_cdf[above_mode][left_mode];
+        self.w.symbol(intra_mode_ind[mode as usize], cdf, INTRA_MODES);
     }
-    pub fn write_intra_uv_mode(&mut self, p: PredictionMode) {
-        let cdf = &mut self.fc.uv_mode_cdf[self.mc.get_mi().pred as usize];
-        self.w.symbol(intra_mode_ind[p as usize], cdf, INTRA_MODES);
+    pub fn write_intra_uv_mode(&mut self, uv_mode: PredictionMode, y_mode: PredictionMode) {
+        let cdf = &mut self.fc.uv_mode_cdf[y_mode as usize];
+        self.w.symbol(intra_mode_ind[uv_mode as usize], cdf, INTRA_MODES);
     }
-    pub fn write_tx_type(&mut self, tx_type: TxType) {
+    pub fn write_tx_type(&mut self, tx_type: TxType, y_mode: PredictionMode) {
         let tx_size = TxSize::TX_4X4;
         let square_tx_size = TXSIZE_SQR_MAP[tx_size as usize];
         let eset =
@@ -335,7 +340,7 @@ impl ContextWriter {
         if eset > 0 {
             self.w.symbol(
                 av1_ext_tx_intra_ind[eset as usize][tx_type as usize],
-                &mut self.fc.intra_ext_tx_cdf[eset as usize][square_tx_size as usize][self.mc.get_mi().pred as usize],
+                &mut self.fc.intra_ext_tx_cdf[eset as usize][square_tx_size as usize][y_mode as usize],
                 ext_tx_cnt_intra[eset as usize]);
         }
     }
@@ -360,8 +365,9 @@ impl ContextWriter {
             *c = 0;
         }
     }
-    pub fn write_coeffs(&mut self, plane: usize, coeffs_in: &[i32]) {
-        let scan = default_scan_4x4;
+    pub fn write_coeffs(&mut self, plane: usize, coeffs_in: &[i32], tx_size: TxSize, tx_type: TxType) {
+        let scan_order = &av1_intra_scan_orders[tx_size as usize][tx_type as usize];
+        let scan = scan_order.scan;
         let mut coeffs = [0 as i32; 16];
         for i in 0..16 {
             coeffs[i] = coeffs_in[scan[i] as usize];
@@ -380,7 +386,7 @@ impl ContextWriter {
         let plane_type = if plane > 0 { 1 } else { 0 };
         let tx_size_ctx = TXSIZE_SQR_MAP[tx_size as usize] as usize;
         let ref_type = 0;
-        let neighbors = default_scan_4x4_neighbors;
+        let neighbors = scan_order.neighbors;
         let mut token_cache = [0 as u8; 64*64];
         for (i, v) in coeffs.iter().enumerate() {
             let vabs = v.abs() as u32;

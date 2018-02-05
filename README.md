@@ -21,7 +21,7 @@ cargo run --bin rav1e --release input.y4m output.ivf
 ```
 mkdir aom_test
 cd aom_test
-../aom_build/aom/configure --enable-debug --enable-experimental --enable-new_multisymbol --disable-var_tx --disable-unit-tests --disable-smooth_hv --disable-aom_qm
+../aom_build/aom/configure --enable-debug --enable-experimental --enable-new_multisymbol --disable-var_tx --disable-unit-tests --disable-smooth_hv --disable-aom_qm --disable-ext-intra
 make -j8
 ./aomdec ../output.ivf -o output.y4m
 ```

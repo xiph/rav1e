@@ -41,7 +41,6 @@ pub fn pred_dc_top_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &
     }
 }
 
-#[allow(dead_code)]
 pub fn pred_h_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
     unsafe {
         highbd_h_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, 4, 4, above.as_ptr(), left.as_ptr(), 8);

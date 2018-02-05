@@ -34,26 +34,27 @@ pub const TX_SIZES: usize = 4;
 pub const TX_SIZES_ALL: usize = 14;
 
 #[derive(Copy,Clone,PartialEq,PartialOrd)]
-pub enum TxSize{
-    TX_4X4,    // 4x4 transform
-    TX_8X8,    // 8x8 transform
-    TX_16X16,  // 16x16 transform
-    TX_32X32,  // 32x32 transform
-    TX_4X8,             // 4x8 transform
-    TX_8X4,             // 8x4 transform
-    TX_8X16,            // 8x16 transform
-    TX_16X8,            // 16x8 transform
-    TX_16X32,           // 16x32 transform
-    TX_32X16,           // 32x16 transform
-    TX_4X16,            // 4x16 transform
-    TX_16X4,            // 16x4 transform
-    TX_8X32,            // 8x32 transform
-    TX_32X8,            // 32x8 transform
+pub enum TxSize {
+    TX_4X4,
+    TX_8X8,
+    TX_16X16,
+    TX_32X32,
+    TX_4X8,
+    TX_8X4,
+    TX_8X16,
+    TX_16X8,
+    TX_16X32,
+    TX_32X16,
+    TX_4X16,
+    TX_16X4,
+    TX_8X32,
+    TX_32X8,
 }
 
 pub const TX_TYPES: usize = 16;
 
 #[derive(Copy,Clone)]
+#[repr(C)]
 pub enum TxType {
     DCT_DCT = 0,    // DCT  in both horizontal and vertical
     ADST_DCT = 1,   // ADST in vertical, DCT in horizontal
@@ -73,7 +74,7 @@ pub enum TxType {
     H_FLIPADST = 15,
 }
 
-#[derive(Copy,Clone)]
+#[derive(Copy,Clone,Debug)]
 pub enum PredictionMode {
   DC_PRED,    // Average of above and left pixels
   V_PRED,     // Vertical
@@ -120,26 +121,26 @@ pub enum TxSetType {
 
 #[derive(Copy,Clone)]
 pub struct SubMode {
-    pub pred: PredictionMode
+    pub mode: PredictionMode
 }
 
 impl SubMode {
-    pub fn new() -> SubMode {
+    pub fn default() -> SubMode {
         SubMode {
-            pred: PredictionMode::DC_PRED
+            mode: PredictionMode::DC_PRED
         }
     }
 }
 
 #[derive(Copy,Clone)]
 pub struct Mode {
-    pub pred: PredictionMode,
+    pub mode: PredictionMode,
     pub skip: bool,
 }
 
 impl Mode {
-    pub fn new() -> Mode {
-        Mode { pred: PredictionMode::DC_PRED,
+    pub fn default() -> Mode {
+        Mode { mode: PredictionMode::DC_PRED,
                skip: false,
         }
     }
