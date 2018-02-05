@@ -152,7 +152,7 @@ impl EncoderFiles {
                 .help("Compressed AV1 in IVF video output")
                 .short("o")
                 .long("output")
-                .default_value("-")
+                .required(true)
                 .takes_value(true))
             .get_matches();
         let input = matches.value_of("INPUT").unwrap();
