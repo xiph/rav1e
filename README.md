@@ -1,5 +1,7 @@
 The fastest and worstest AV1 compressor.
 
+[![Build Status](https://travis-ci.org/tdaede/rav1e.svg?branch=master)](https://travis-ci.org/tdaede/rav1e)
+
 This repository uses a git submodule, to initialize it, do:
 
 ```
