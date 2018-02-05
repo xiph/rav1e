@@ -10,6 +10,8 @@
 
 #![allow(non_camel_case_types)]
 
+pub const OD_BITRES: u8 = 3;
+
 pub struct Writer {
     enc: od_ec_enc
 }
@@ -176,6 +178,63 @@ impl od_ec_enc {
 
         out
     }
+
+    /// Returns the number of bits "used" by the encoded symbols so far.
+    /// This same number can be computed in either the encoder or the decoder, and is
+    ///  suitable for making coding decisions.
+    /// Return: The number of bits.
+    ///         This will always be slightly larger than the exact value (e.g., all
+    ///          rounding error is in the positive direction).
+    pub fn od_ec_enc_tell(&mut self) -> u32 {
+        // The 10 here counteracts the offset of -9 baked into cnt, and adds 1 extra
+        // bit, which we reserve for terminating the stream.
+        (((self.precarry.len() * 8) as i32) + (self.cnt as i32) + 10) as u32
+    }
+
+    /// Returns the number of bits "used" by the encoded symbols so far.
+    /// This same number can be computed in either the encoder or the decoder, and is
+    /// suitable for making coding decisions.
+    /// Return: The number of bits scaled by `2**OD_BITRES`.
+    ///         This will always be slightly larger than the exact value (e.g., all
+    ///          rounding error is in the positive direction).
+    pub fn od_ec_enc_tell_frac(&mut self) -> u32 {
+        od_ec_enc::od_ec_tell_frac(self.od_ec_enc_tell(), self.rng as u32)
+    }
+
+    /// Given the current total integer number of bits used and the current value of
+    /// rng, computes the fraction number of bits used to `OD_BITRES` precision.
+    /// This is used by `od_ec_enc_tell_frac()` and `od_ec_dec_tell_frac()`.
+    /// `nbits_total`: The number of whole bits currently used, i.e., the value
+    ///                returned by `od_ec_enc_tell()` or `od_ec_dec_tell()`.
+    /// `rng`: The current value of rng from either the encoder or decoder state.
+    /// Return: The number of bits scaled by `2**OD_BITRES`.
+    ///         This will always be slightly larger than the exact value (e.g., all
+    ///         rounding error is in the positive direction).
+    fn od_ec_tell_frac(nbits_total: u32, mut rng: u32) -> u32 {
+        // To handle the non-integral number of bits still left in the encoder/decoder
+        //  state, we compute the worst-case number of bits of val that must be
+        //  encoded to ensure that the value is inside the range for any possible
+        //  subsequent bits.
+        // The computation here is independent of val itself (the decoder does not
+        //  even track that value), even though the real number of bits used after
+        //  od_ec_enc_done() may be 1 smaller if rng is a power of two and the
+        //  corresponding trailing bits of val are all zeros.
+        // If we did try to track that special case, then coding a value with a
+        //  probability of 1/(1 << n) might sometimes appear to use more than n bits.
+        // This may help explain the surprising result that a newly initialized
+        //  encoder or decoder claims to have used 1 bit.
+        let nbits = nbits_total << OD_BITRES;
+        let mut l = 0;
+        let mut i = OD_BITRES;
+        while i > 0 {
+            i -= 1;
+            rng = (rng * rng) >> 15;
+            let b = rng >> 16;
+            l = (l << 1) | b;
+            rng >>= b;
+        }
+        nbits - l
+    }
 }
 
 impl Writer {
@@ -215,6 +274,39 @@ impl Writer {
         self.cdf(s, &cdf[..nsymbs]);
         Writer::update_cdf(cdf, s, nsymbs);
     }
+
+    #[allow(dead_code)]
+    pub fn tell(&mut self) -> u32 {
+        self.enc.od_ec_enc_tell_frac()
+    }
+
+    pub fn tell_frac(&mut self) -> u32 {
+        self.enc.od_ec_enc_tell_frac()
+    }
+
+    pub fn checkpoint(&mut self) -> WriterCheckpoint {
+        WriterCheckpoint {
+            precarry_len: self.enc.precarry.len(),
+            low: self.enc.low,
+            rng: self.enc.rng,
+            cnt: self.enc.cnt
+        }
+    }
+
+    pub fn rollback(&mut self, checkpoint: &WriterCheckpoint) {
+        self.enc.precarry.truncate(checkpoint.precarry_len);
+        self.enc.low = checkpoint.low;
+        self.enc.rng = checkpoint.rng;
+        self.enc.cnt = checkpoint.cnt;
+    }
+}
+
+#[derive(Clone)]
+pub struct WriterCheckpoint {
+    precarry_len: usize,
+    low: od_ec_window,
+    rng: u16,
+    cnt: i16
 }
 
 #[repr(C)]

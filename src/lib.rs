@@ -19,12 +19,14 @@ mod context;
 mod transform;
 mod quantize;
 mod predict;
+mod rdo;
 
 use context::*;
 use partition::*;
 use transform::*;
 use quantize::*;
 use predict::*;
+use rdo::*;
 
 pub struct Plane {
     pub data: Vec<u16>,
@@ -345,10 +347,42 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
         fc: fc,
         mc: mc,
     };
+
+    let stride = fs.input.planes[0].stride;
+    let xdec = fs.input.planes[0].xdec;
+    let ydec = fs.input.planes[0].ydec;
+    let q = dc_q(fi.qindex) as f64;
+
+    // Lambda formula from doc/theoretical_results.lyx in the daala repo
+    let lambda = q*q*2.0_f64.log2()/6.0;
+
     for sby in 0..fi.sb_height {
+        let y = sby*64 >> ydec;
         cw.reset_left_coeff_context(0);
         for sbx in 0..fi.sb_width {
-            write_sb(&mut cw, fi, fs, sbx, sby, PredictionMode::DC_PRED);
+            let x = sbx*64 >> xdec;
+            let tell = cw.w.tell_frac();
+
+            let mut best_mode = PredictionMode::DC_PRED;
+            let mut best_rd = std::f64::MAX;
+
+            for &mode in &[PredictionMode::DC_PRED, PredictionMode::H_PRED] {
+                let checkpoint = cw.checkpoint();
+
+                write_sb(&mut cw, fi, fs, sbx, sby, mode);
+                let d = sse_64x64(&fs.input.planes[0].data, &fs.rec.planes[0].data, x, y, stride);
+                let r = ((cw.w.tell_frac() - tell) as f64)/8.0;
+
+                let rd = (d as f64) + lambda*r;
+                if rd < best_rd {
+                    best_rd = rd;
+                    best_mode = mode;
+                }
+
+                cw.rollback(checkpoint.clone());
+            }
+
+            write_sb(&mut cw, fi, fs, sbx, sby, best_mode);
         }
     }
     let mut h = cw.w.done();

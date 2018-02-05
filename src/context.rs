@@ -25,7 +25,6 @@ const MAX_SB_SQUARE: usize = (MAX_SB_SIZE * MAX_SB_SIZE);
 
 const INTRA_MODES: usize = 11;
 const UV_INTRA_MODES: usize = 11;
-const intra_mode_ind: [u32; INTRA_MODES] = [0,2,3,6,4,5,8,9,7,10,1,];
 
 const b_width_log2_lookup: [u8; 20] = [0, 0, 0,  0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 0, 2, 1, 3];
 const b_height_log2_lookup: [u8; 20] = [ 0, 0, 0, 0, 1, 0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 2, 0, 3, 1];
@@ -213,6 +212,7 @@ pub struct SCAN_ORDER {
 
 type CoeffModel = [[[[u16; ENTROPY_TOKENS + 1];COEFF_CONTEXTS];COEF_BANDS];REF_TYPES];
 
+#[derive(Clone)]
 pub struct CDFContext {
     partition_cdf: [[u16; PARTITION_TYPES + 1]; PARTITION_CONTEXTS],
     kf_y_cdf: [[[u16; INTRA_MODES + 1]; INTRA_MODES]; INTRA_MODES],
@@ -240,8 +240,7 @@ impl CDFContext {
     }
 }
 
-#[derive(Default)]
-#[allow(dead_code)]
+#[derive(Clone, Default)]
 pub struct MIContext {
     mi_cols: usize,
     mi_rows: usize,
@@ -311,6 +310,13 @@ impl MIContext {
     }
 }
 
+#[derive(Clone)]
+pub struct ContextWriterCheckpoint {
+    pub w: ec::WriterCheckpoint,
+    pub fc: CDFContext,
+    pub mc: MIContext
+}
+
 pub struct ContextWriter {
     pub w: ec::Writer,
     pub fc: CDFContext,
@@ -326,11 +332,11 @@ impl ContextWriter {
         let above_mode = self.mc.get_above_mi().mode as usize;
         let left_mode = self.mc.get_left_mi().mode as usize;
         let cdf = &mut self.fc.kf_y_cdf[above_mode][left_mode];
-        self.w.symbol(intra_mode_ind[mode as usize], cdf, INTRA_MODES);
+        self.w.symbol(mode as u32, cdf, INTRA_MODES);
     }
     pub fn write_intra_uv_mode(&mut self, uv_mode: PredictionMode, y_mode: PredictionMode) {
         let cdf = &mut self.fc.uv_mode_cdf[y_mode as usize];
-        self.w.symbol(intra_mode_ind[uv_mode as usize], cdf, INTRA_MODES);
+        self.w.symbol(uv_mode as u32, cdf, INTRA_MODES);
     }
     pub fn write_tx_type(&mut self, tx_type: TxType, y_mode: PredictionMode) {
         let tx_size = TxSize::TX_4X4;
@@ -467,5 +473,19 @@ impl ContextWriter {
         }
         self.mc.above_coeff_context[plane][self.mc.mix] = 1;
         self.mc.left_coeff_context[plane][self.mc.miy % MAX_MIB_SIZE] = 1;
+    }
+
+    pub fn checkpoint(&mut self) -> ContextWriterCheckpoint {
+        ContextWriterCheckpoint {
+            w: self.w.checkpoint(),
+            fc: self.fc.clone(),
+            mc: self.mc.clone()
+        }
+    }
+
+    pub fn rollback(&mut self, checkpoint: ContextWriterCheckpoint) {
+        self.w.rollback(&checkpoint.w);
+        self.fc = checkpoint.fc.clone();
+        self.mc = checkpoint.mc.clone();
     }
 }
