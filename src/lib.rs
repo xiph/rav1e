@@ -1,5 +1,7 @@
 #![allow(safe_extern_statics)]
+#![feature(test)]
 
+extern crate test;
 extern crate bitstream_io;
 extern crate byteorder;
 extern crate clap;
