@@ -16,7 +16,7 @@ This is also required everytime you switch branch or pull code and the submodule
 Input videos must be a multiple of 64 high and wide, in y4m format.
 
 ```
-cargo run --bin rav1e --release input.y4m output.ivf
+cargo run --bin rav1e -- input.y4m -o output.ivf
 ```
 # Decompressing video
 
