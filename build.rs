@@ -19,6 +19,8 @@ fn main() {
         .file("aom_build/aom/av1/common/quant_common.c")
         .file("aom_build/aom/av1/common/av1_inv_txfm1d.c")
         .file("aom_build/aom/av1/common/av1_inv_txfm2d.c")
+        .file("aom_build/aom/av1/common/blockd.c")
+        .file("aom_build/aom/av1/encoder/dct.c")
         .include("aom_build")
         .include("aom_build/aom")
         .flag("-std=c99")

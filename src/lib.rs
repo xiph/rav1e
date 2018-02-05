@@ -1,3 +1,5 @@
+#![allow(safe_extern_statics)]
+
 extern crate bitstream_io;
 extern crate byteorder;
 extern crate clap;
@@ -247,7 +249,7 @@ fn get_compressed_header() -> Vec<u8> {
     h
 }
 
-fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, p: usize, sbx: usize, sby: usize, bx: usize, by: usize, mode: PredictionMode) {
+fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, p: usize, sbx: usize, sby: usize, bx: usize, by: usize, mode: PredictionMode, tx_type: TxType) {
     let stride = fs.input.planes[p].stride;
     let xdec = fs.input.planes[p].xdec;
     let ydec = fs.input.planes[p].ydec;
@@ -295,13 +297,14 @@ fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, p:
             residual[j*4+i] = fs.input.planes[p].data[(y+j)*stride+x+i] as i16 - fs.rec.planes[p].data[(j+y)*stride+x+i] as i16;
         }
     }
-    fdct4x4(&residual, &mut coeffs, 4);
+    fht4x4(&residual, &mut coeffs, 4, tx_type);
     quantize_in_place(fi.qindex, &mut coeffs);
-    cw.write_coeffs(p, &coeffs);
+    cw.write_coeffs(p, &coeffs, TxSize::TX_4X4, tx_type);
+
     //reconstruct
     let mut rcoeffs = [0 as i32; 16];
     dequantize(fi.qindex, &coeffs, &mut rcoeffs);
-    idct4x4_add(&mut rcoeffs, &mut fs.rec.planes[p].data[y*stride+x..], stride);
+    iht4x4_add(&mut rcoeffs, &mut fs.rec.planes[p].data[y*stride+x..], stride, tx_type);
 }
 
 fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, sbx: usize, sby: usize, mode: PredictionMode) {
@@ -310,23 +313,25 @@ fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, s
     cw.write_partition(PartitionType::PARTITION_NONE);
     cw.write_skip(false);
     cw.write_intra_mode_kf(mode);
-    let uv_mode = PredictionMode::DC_PRED;
+    let uv_mode = mode;
     cw.write_intra_uv_mode(uv_mode, mode);
-    cw.write_tx_type(TxType::DCT_DCT, mode);
+    let tx_type = TxType::DCT_DCT;
+    cw.write_tx_type(tx_type, mode);
     for p in 0..1 {
         for by in 0..16 {
             for bx in 0..16 {
                 cw.mc.set_loc(sbx*16+bx, sby*16+by);
                 cw.mc.get_mi().mode = mode;
-                write_b(cw, fi, fs, p, sbx, sby, bx, by, mode);
+                write_b(cw, fi, fs, p, sbx, sby, bx, by, mode, tx_type);
             }
         }
     }
+    let uv_tx_type = exported_intra_mode_to_tx_type_context[uv_mode as usize];
     for p in 1..3 {
         for by in 0..8 {
             for bx in 0..8 {
                 cw.mc.set_loc(sbx*16+bx, sby*16+by);
-                write_b(cw, fi, fs, p, sbx, sby, bx, by, uv_mode);
+                write_b(cw, fi, fs, p, sbx, sby, bx, by, uv_mode, uv_tx_type);
             }
         }
     }

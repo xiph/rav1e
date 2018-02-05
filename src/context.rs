@@ -197,8 +197,18 @@ extern {
     static av1_cat6_cdf3: [u16; 16];
     static av1_cat6_cdf4: [u16; 4];
 
-    static default_scan_4x4: [u16; 16];
-    static default_scan_4x4_neighbors: [u16; 17*2];
+    static av1_intra_scan_orders: [[SCAN_ORDER; TX_TYPES]; TX_SIZES_ALL];
+
+    pub static exported_intra_mode_to_tx_type_context: &'static [TxType; INTRA_MODES];
+}
+
+#[repr(C)]
+pub struct SCAN_ORDER {
+  // FIXME: don't hardcode sizes
+
+  pub scan: &'static [u16; 16],
+  pub iscan: &'static [u16; 16],
+  pub neighbors: &'static [u16; 17*2]
 }
 
 type CoeffModel = [[[[u16; ENTROPY_TOKENS + 1];COEFF_CONTEXTS];COEF_BANDS];REF_TYPES];
@@ -355,8 +365,9 @@ impl ContextWriter {
             *c = 0;
         }
     }
-    pub fn write_coeffs(&mut self, plane: usize, coeffs_in: &[i32]) {
-        let scan = default_scan_4x4;
+    pub fn write_coeffs(&mut self, plane: usize, coeffs_in: &[i32], tx_size: TxSize, tx_type: TxType) {
+        let scan_order = &av1_intra_scan_orders[tx_size as usize][tx_type as usize];
+        let scan = scan_order.scan;
         let mut coeffs = [0 as i32; 16];
         for i in 0..16 {
             coeffs[i] = coeffs_in[scan[i] as usize];
@@ -375,7 +386,7 @@ impl ContextWriter {
         let plane_type = if plane > 0 { 1 } else { 0 };
         let tx_size_ctx = TXSIZE_SQR_MAP[tx_size as usize] as usize;
         let ref_type = 0;
-        let neighbors = default_scan_4x4_neighbors;
+        let neighbors = scan_order.neighbors;
         let mut token_cache = [0 as u8; 64*64];
         for (i, v) in coeffs.iter().enumerate() {
             let vabs = v.abs() as u32;
