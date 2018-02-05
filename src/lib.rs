@@ -199,7 +199,7 @@ pub fn write_ivf_frame(output_file: &mut Write, pts: u64, data: &[u8]) {
     output_file.write(data).unwrap();
 }
 
-fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &FrameInvariants, compressed_len: u32) -> Result<(), std::io::Error> {
+fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &FrameInvariants) -> Result<(), std::io::Error> {
     let mut uch = BitWriter::<BE>::new(packet);
     uch.write(2,2)?; // frame type
     uch.write(2,sequence.profile)?; // profile 0
@@ -207,10 +207,8 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     uch.write_bit(false)?; // keyframe
     uch.write_bit(true)?; // show frame
     uch.write_bit(true)?; // error resilient
-    uch.write(8+7,0)?; // frame id
-    uch.write(8,0x49)?; // sync codes
-    uch.write(8,0x83)?;
-    uch.write(8,0x43)?;
+    uch.write(1,0)?; // don't use frame ids
+    //uch.write(8+7,0)?; // frame id
     uch.write(3,0)?; // colorspace
     uch.write(1,0)?; // color range
     uch.write(16,(fi.sb_width*64-1) as u16)?; // width
@@ -246,19 +244,8 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     uch.write(1,0)?; // tile rows
     uch.write_bit(true)?; // loop filter across tiles
     uch.write(2,0)?; // tile_size_bytes
-    //println!("compressed header length: {}", compressed_len);
-    uch.write(16,compressed_len)?; // compressed header length
     uch.byte_align()?;
     Ok(())
-}
-
-fn get_compressed_header() -> Vec<u8> {
-    let mut h = Vec::new();
-    let mut w = ec::Writer::new();
-    // zero length compressed header is invalid, write 1 bit of garbage
-    w.bool(false,1024);
-    h.write(&w.done()).unwrap();
-    h
 }
 
 fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, p: usize, sbx: usize, sby: usize, bx: usize, by: usize, mode: PredictionMode, tx_type: TxType) {
@@ -371,9 +358,7 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
 
 fn encode_frame(sequence: &Sequence, fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
     let mut packet = Vec::new();
-    let compressed_header = get_compressed_header();
-    write_uncompressed_header(&mut packet, sequence, fi, compressed_header.len() as u32).unwrap();
-    packet.write(&compressed_header).unwrap();
+    write_uncompressed_header(&mut packet, sequence, fi).unwrap();
     let tile = encode_tile(fi, fs);
     packet.write(&tile).unwrap();
     packet
