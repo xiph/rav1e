@@ -24,13 +24,6 @@ pub fn pred_dc_128(output: &mut [u16], stride: usize) {
     }
 }
 
-#[cfg(test)]
-fn pred_dc_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
-    unsafe {
-        highbd_dc_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, 4, 4, above.as_ptr(), left.as_ptr(), 8);
-    }
-}
-
 pub fn pred_dc_left_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
     unsafe {
         highbd_dc_left_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, 4, 4, above.as_ptr(), left.as_ptr(), 8);
@@ -79,6 +72,12 @@ mod test {
         let o2 = output.clone();
 
         (above, left, o1, o2)
+    }
+
+    fn pred_dc_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+        unsafe {
+            highbd_dc_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, 4, 4, above.as_ptr(), left.as_ptr(), 8);
+        }
     }
 
     fn do_pred(ra: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>) {
