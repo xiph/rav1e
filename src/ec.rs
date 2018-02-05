@@ -216,3 +216,154 @@ impl Writer {
         Writer::update_cdf(cdf, s, nsymbs);
     }
 }
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct od_ec_dec {
+    pub buf: *const ::std::os::raw::c_uchar,
+    pub eptr: *const ::std::os::raw::c_uchar,
+    pub end_window: od_ec_window,
+    pub nend_bits: ::std::os::raw::c_int,
+    pub tell_offs: i32,
+    pub end: *const ::std::os::raw::c_uchar,
+    pub bptr: *const ::std::os::raw::c_uchar,
+    pub dif: od_ec_window,
+    pub rng: u16,
+    pub cnt: i16,
+    pub error: ::std::os::raw::c_int,
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::mem;
+
+    struct Reader<'a> {
+        dec: od_ec_dec,
+        _dummy: &'a [u8],
+    }
+
+    extern "C" {
+        fn od_ec_dec_init(dec: *mut od_ec_dec, buf: *const ::std::os::raw::c_uchar, storage: u32);
+        fn od_ec_decode_bool_q15(dec: *mut od_ec_dec, f: ::std::os::raw::c_uint) -> ::std::os::raw::c_int;
+        fn od_ec_decode_cdf_q15(dec: *mut od_ec_dec, cdf: *const u16, nsyms: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
+    }
+
+    impl<'a> Reader<'a> {
+        fn new(buf: &'a[u8]) -> Self {
+            let mut r = Reader {
+                dec : unsafe { mem::uninitialized() },
+                _dummy: buf,
+            };
+
+            unsafe { od_ec_dec_init(&mut r.dec, buf.as_ptr(), buf.len() as u32) };
+
+            r
+        }
+
+        fn bool(&mut self, f: u32) -> bool {
+            unsafe { od_ec_decode_bool_q15(&mut self.dec, f) != 0 }
+        }
+
+        fn cdf(&mut self, icdf: &[u16]) -> i32 {
+            let nsyms = icdf.len() - 1;
+            unsafe { od_ec_decode_cdf_q15(&mut self.dec, icdf.as_ptr(), nsyms as i32) }
+        }
+    }
+
+    #[test]
+    fn booleans() {
+        let mut w = Writer::new();
+
+        w.bool(false, 1);
+        w.bool(true, 2);
+        w.bool(false, 3);
+        w.bool(true, 1);
+        w.bool(true, 2);
+        w.bool(false, 3);
+
+        let b = w.done();
+
+        let mut r = Reader::new(&b);
+
+        assert_eq!(r.bool(1), false);
+        assert_eq!(r.bool(2), true);
+        assert_eq!(r.bool(3), false);
+        assert_eq!(r.bool(1), true);
+        assert_eq!(r.bool(2), true);
+        assert_eq!(r.bool(3), false);
+    }
+
+    #[test]
+    fn cdf() {
+        let cdf = [7296, 3819, 1716, 0, 0];
+
+        let mut w = Writer::new();
+
+        w.cdf(0, &cdf);
+        w.cdf(0, &cdf);
+        w.cdf(0, &cdf);
+        w.cdf(1, &cdf);
+        w.cdf(1, &cdf);
+        w.cdf(1, &cdf);
+        w.cdf(2, &cdf);
+        w.cdf(2, &cdf);
+        w.cdf(2, &cdf);
+
+        let b = w.done();
+
+        let mut r = Reader::new(&b);
+
+        assert_eq!(r.cdf(&cdf), 0);
+        assert_eq!(r.cdf(&cdf), 0);
+        assert_eq!(r.cdf(&cdf), 0);
+        assert_eq!(r.cdf(&cdf), 1);
+        assert_eq!(r.cdf(&cdf), 1);
+        assert_eq!(r.cdf(&cdf), 1);
+        assert_eq!(r.cdf(&cdf), 2);
+        assert_eq!(r.cdf(&cdf), 2);
+        assert_eq!(r.cdf(&cdf), 2);
+    }
+
+    #[test]
+    fn mixed() {
+        let cdf = [7296, 3819, 1716, 0, 0];
+
+        let mut w = Writer::new();
+
+        w.cdf(0, &cdf);
+        w.bool(true, 2);
+        w.cdf(0, &cdf);
+        w.bool(true, 2);
+        w.cdf(0, &cdf);
+        w.bool(true, 2);
+        w.cdf(1, &cdf);
+        w.bool(true, 1);
+        w.cdf(1, &cdf);
+        w.bool(false, 2);
+        w.cdf(1, &cdf);
+        w.cdf(2, &cdf);
+        w.cdf(2, &cdf);
+        w.cdf(2, &cdf);
+
+        let b = w.done();
+
+        let mut r = Reader::new(&b);
+
+        assert_eq!(r.cdf(&cdf), 0);
+        assert_eq!(r.bool(2), true);
+        assert_eq!(r.cdf(&cdf), 0);
+        assert_eq!(r.bool(2), true);
+        assert_eq!(r.cdf(&cdf), 0);
+        assert_eq!(r.bool(2), true);
+        assert_eq!(r.cdf(&cdf), 1);
+        assert_eq!(r.bool(1), true);
+        assert_eq!(r.cdf(&cdf), 1);
+        assert_eq!(r.bool(2), false);
+        assert_eq!(r.cdf(&cdf), 1);
+        assert_eq!(r.cdf(&cdf), 2);
+        assert_eq!(r.cdf(&cdf), 2);
+        assert_eq!(r.cdf(&cdf), 2);
+
+    }
+}
