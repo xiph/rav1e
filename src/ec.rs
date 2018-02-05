@@ -66,12 +66,8 @@ impl od_ec_enc {
     ///       The values must be monotonically non-decreasing, and the last value
     ///       must be exactly 32768. There should be at most 16 values.
     fn od_ec_encode_cdf_q15(&mut self, s: usize, cdf: &[u16]) {
-        assert!(cdf[cdf.len() - 1] == od_ec_enc::od_icdf(32768));
-        self.od_ec_encode_q15(if s > 0 { cdf[s - 1] } else { od_ec_enc::od_icdf(0) }, cdf[s]);
-    }
-
-    fn od_icdf(x: u16) -> u16 {
-        32768 - x
+        assert!(cdf[cdf.len() - 1] == 0);
+        self.od_ec_encode_q15(if s > 0 { cdf[s - 1] } else { 32768 }, cdf[s]);
     }
 
     /// Encodes a symbol given its frequency in Q15.
