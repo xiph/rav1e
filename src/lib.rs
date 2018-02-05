@@ -283,7 +283,7 @@ fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, p:
                 (0,0,_,_) =>
                     pred_dc_top_4x4(&mut fs.rec.planes[p].data[y*stride+x..], stride, &above, &left),
                 _ =>
-                    pred_dc_4x4(&mut fs.rec.planes[p].data[y*stride+x..], stride, &above, &left),
+                    pred_dc(&mut fs.rec.planes[p].data[y*stride+x..], stride, &above, &left),
             }
         PredictionMode::H_PRED =>
             pred_h_4x4(&mut fs.rec.planes[p].data[y*stride+x..], stride, &above, &left),
