@@ -358,7 +358,7 @@ pub fn process_frame(frame_number: u64, sequence: &Sequence, fi: &FrameInvariant
             let y4m_y = y4m_frame.get_y_plane();
             let y4m_u = y4m_frame.get_u_plane();
             let y4m_v = y4m_frame.get_v_plane();
-            println!("Frame {}", frame_number);
+            eprintln!("Frame {}", frame_number);
             let mut fs = FrameState::new(&fi);
             for y in 0..height {
                 for x in 0..width {
