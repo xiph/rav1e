@@ -7,7 +7,7 @@ extern crate cc;
 fn main() {
     cc::Build::new()
         .file("aom_build/aom/aom_mem/aom_mem.c")
-        .file("aom_build/aom/aom_dsp/entenc.c")
+        .file("aom_build/aom/aom_dsp/entdec.c")
         .file("aom_build/aom/aom_dsp/entcode.c")
         .file("aom_build/aom/aom_dsp/fwd_txfm.c")
         .file("aom_build/aom/aom_dsp/inv_txfm.c")
