@@ -133,7 +133,7 @@ impl FrameInvariants {
 
 pub struct EncoderFiles {
     pub input_file: Box<Read>,
-    pub output_file: File,
+    pub output_file: Box<Write>,
     pub rec_file: File,
 }
 
@@ -154,7 +154,7 @@ impl EncoderFiles {
         } else {
             Box::new(File::open(&input).unwrap()) as Box<Read>
         };
-        let output_file = File::create(&output).unwrap();
+        let output_file = Box::new(File::create(&output).unwrap()) as Box<Write>;
         let rec_file = File::create("rec.y4m").unwrap();
 
         EncoderFiles {
@@ -166,7 +166,7 @@ impl EncoderFiles {
 }
 
 // TODO: possibly just use bitwriter instead of byteorder
-pub fn write_ivf_header(output_file: &mut File, width: usize, height: usize) {
+pub fn write_ivf_header(output_file: &mut Write, width: usize, height: usize) {
     output_file.write(b"DKIF").unwrap();
     output_file.write_u16::<LittleEndian>(0).unwrap(); // version
     output_file.write_u16::<LittleEndian>(32).unwrap(); // header length
@@ -179,7 +179,7 @@ pub fn write_ivf_header(output_file: &mut File, width: usize, height: usize) {
     output_file.write_u32::<LittleEndian>(0).unwrap();
 }
 
-pub fn write_ivf_frame(output_file: &mut File, pts: u64, data: &[u8]) {
+pub fn write_ivf_frame(output_file: &mut Write, pts: u64, data: &[u8]) {
     output_file.write_u32::<LittleEndian>(data.len() as u32).unwrap();
     output_file.write_u64::<LittleEndian>(pts).unwrap();
     output_file.write(data).unwrap();
@@ -348,7 +348,7 @@ fn encode_frame(sequence: &Sequence, fi: &FrameInvariants, fs: &mut FrameState) 
 
 /// Encode and write a frame.
 pub fn process_frame(frame_number: u64, sequence: &Sequence, fi: &FrameInvariants,
-                     output_file: &mut File,
+                     output_file: &mut Write,
                      y4m_dec: &mut y4m::Decoder<Box<Read>>,
                      y4m_enc: &mut y4m::Encoder<File>) -> bool {
     let width = fi.width;
