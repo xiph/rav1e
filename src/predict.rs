@@ -57,15 +57,11 @@ pub fn pred_dc(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
 }
 
 #[cfg(test)]
-pub fn pred_h(output: &mut [u16], stride: usize, left: &[u16], bh: usize) {
-  let bw = left.len();
-
-  let mut i = 0;
-  for line in output.chunks_mut(stride).take(bh) {
+pub fn pred_h(output: &mut [u16], stride: usize, left: &[u16], bw: usize) {
+  for (line, l) in output.chunks_mut(stride).zip(left) {
     for v in &mut line[..bw] {
-      *v = left[i];
+      *v = *l;
     }
-    i = i + 1;
   }
 }
 
