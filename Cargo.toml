@@ -5,15 +5,13 @@ authors = ["Thomas Daede <tdaede@xiph.org>"]
 build = "build.rs"
 
 [dependencies]
-bitstream-io = "0.6.1"
-byteorder = "1.0.0"
-clap = "2.26.2"
-libc = "0.2.24"
-rand = "0.3"
-rustyline = "1.0.0"
-y4m = "0.1.1"
+bitstream-io = "0.6"
+byteorder = "1"
+clap = "2"
+libc = "0.2"
+rand = "0.4"
+rustyline = "1"
+y4m = "0.1"
 
 [build-dependencies]
-cc = "1.0"
-
-
+cc = "1"
