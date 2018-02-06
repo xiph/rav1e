@@ -340,7 +340,7 @@ fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, s
         for by in 0..16 {
             for bx in 0..16 {
                 cw.mc.set_loc(sbx*16+bx, sby*16+by);
-                cw.mc.get_mi().mode = mode;
+                cw.mc.get_block().mode = mode;
                 write_b(cw, fi, fs, p, sbx, sby, bx, by, mode, tx_type);
             }
         }

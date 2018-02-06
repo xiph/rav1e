@@ -158,14 +158,14 @@ fn get_ext_tx_set(tx_size: TxSize, is_inter: bool,
     }
 }
 
-fn left_block_mode(left_mi: Option<Mode>) -> PredictionMode {
+fn left_block_mode(left_mi: Option<Block>) -> PredictionMode {
     match left_mi {
         Some(m) => if m.is_inter() { PredictionMode::DC_PRED } else { m.mode },
         None => PredictionMode::DC_PRED
     }
 }
 
-fn above_block_mode(above_mi: Option<Mode>) -> PredictionMode {
+fn above_block_mode(above_mi: Option<Block>) -> PredictionMode {
     match above_mi {
         Some(m) => if m.is_inter() { PredictionMode::DC_PRED } else { m.mode },
         None => PredictionMode::DC_PRED
@@ -248,7 +248,7 @@ pub struct MIContext {
     left_seg_context: [u8; MAX_MIB_SIZE],
     above_coeff_context: [Vec<u8>; PLANES],
     left_coeff_context: [[u8; MAX_MIB_SIZE]; PLANES],
-    modes: Vec<Vec<Mode>>,
+    blocks: Vec<Vec<Block>>,
     mix: usize, // absolute
     miy: usize,
 }
@@ -264,7 +264,7 @@ impl MIContext {
                                   vec![0;mi_cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],
                                   vec![0;mi_cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],],
             left_coeff_context: [[0; MAX_MIB_SIZE]; PLANES],
-            modes: vec![vec![Mode::default(); mi_cols]; mi_rows],
+            blocks: vec![vec![Block::default(); mi_cols]; mi_rows],
             mix: 0,
             miy: 0,
         }
@@ -284,24 +284,24 @@ impl MIContext {
         return ((left * 2 + above) + bsl) as usize * PARTITION_PLOFFSET;
     }
     fn skip_context(&mut self) -> usize {
-        (self.get_above_mi().skip as usize) + (self.get_left_mi().skip as usize)
+        (self.get_above_block().skip as usize) + (self.get_left_block().skip as usize)
     }
-    pub fn get_mi(&mut self) -> &mut Mode {
-        &mut self.modes[self.miy][self.mix]
+    pub fn get_block(&mut self) -> &mut Block {
+        &mut self.blocks[self.miy][self.mix]
     }
 
-    pub fn get_above_mi(&mut self) -> Mode {
+    pub fn get_above_block(&mut self) -> Block {
         if self.miy > 0 {
-            self.modes[self.miy - 1][self.mix]
+            self.blocks[self.miy - 1][self.mix]
         } else {
-            Mode::default()
+            Block::default()
         }
     }
-    pub fn get_left_mi(&mut self) -> Mode {
+    pub fn get_left_block(&mut self) -> Block {
         if self.mix > 0 {
-            self.modes[self.miy][self.mix - 1]
+            self.blocks[self.miy][self.mix - 1]
         } else {
-            Mode::default()
+            Block::default()
         }
     }
     pub fn set_loc(&mut self, mix: usize, miy: usize) {
@@ -329,8 +329,8 @@ impl ContextWriter {
         self.w.symbol(p as u32, &mut self.fc.partition_cdf[ctx], PARTITION_TYPES);
     }
     pub fn write_intra_mode_kf(&mut self, mode: PredictionMode) {
-        let above_mode = self.mc.get_above_mi().mode as usize;
-        let left_mode = self.mc.get_left_mi().mode as usize;
+        let above_mode = self.mc.get_above_block().mode as usize;
+        let left_mode = self.mc.get_left_block().mode as usize;
         let cdf = &mut self.fc.kf_y_cdf[above_mode][left_mode];
         self.w.symbol(mode as u32, cdf, INTRA_MODES);
     }

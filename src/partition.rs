@@ -120,15 +120,16 @@ pub enum TxSetType {
 }
 
 #[derive(Copy,Clone)]
-pub struct Mode {
+pub struct Block {
     pub mode: PredictionMode,
     pub skip: bool,
 }
 
-impl Mode {
-    pub fn default() -> Mode {
-        Mode { mode: PredictionMode::DC_PRED,
-               skip: false,
+impl Block {
+    pub fn default() -> Block {
+        Block {
+            mode: PredictionMode::DC_PRED,
+            skip: false,
         }
     }
     pub fn is_inter(&self) -> bool {
