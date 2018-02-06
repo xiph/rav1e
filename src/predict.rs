@@ -45,9 +45,35 @@ pub fn pred_dc_top_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &
 
 pub fn pred_dc(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
     let edges = left.iter().chain(above.iter());
-    let len = (left.len() + above.len()) as u32;
     let bw = above.len();
     let bh = left.len();
+    let len = (bw + bh) as u32;
+    let avg = (edges.fold(0, |acc, &v| acc + v as u32) + (len >> 1)) / len;
+
+    for line in output.chunks_mut(stride).take(bh) {
+        for v in &mut line[..bw] {
+            *v = avg as u16;
+        }
+    }
+}
+
+pub trait Dim {
+    const W : usize;
+    const H : usize;
+}
+
+pub struct Block4x4;
+
+impl Dim for Block4x4 {
+    const W : usize = 4;
+    const H : usize = 4;
+}
+
+pub fn pred_dc_trait<D: Dim>(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+    let edges = left.iter().chain(above.iter());
+    let bw = D::W;
+    let bh = D::H;
+    let len = (bw + bh) as u32;
     let avg = (edges.fold(0, |acc, &v| acc + v as u32) + (len >> 1)) / len;
 
     for line in output.chunks_mut(stride).take(bh) {
