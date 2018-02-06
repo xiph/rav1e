@@ -31,6 +31,8 @@ fn main() {
                                       &mut files.output_file, &mut y4m_dec, &mut y4m_enc);
                         frame_number += 1;
                     },
+                    Some("quit") => break,
+                    Some("exit") => break,
                     Some(cmd) => {
                         println!("Unrecognized command: {:?}", cmd);
                     },
