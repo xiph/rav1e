@@ -33,6 +33,9 @@ fn main() {
                         process_frame(frame_number, &sequence, &fi,
                                       &mut files.output_file, &mut y4m_dec, y4m_enc.as_mut());
                         frame_number += 1;
+                        if frame_number == files.limit {
+                            break;
+                        }
                     },
                     Some("quit") => break,
                     Some("exit") => break,

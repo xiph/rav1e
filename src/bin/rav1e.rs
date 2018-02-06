@@ -23,5 +23,8 @@ fn main() {
             break;
         }
         frame_number += 1;
+        if frame_number == files.limit {
+            break;
+        }
     }
 }
