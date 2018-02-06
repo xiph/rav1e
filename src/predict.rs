@@ -1,5 +1,9 @@
 use libc;
 
+use partition::*;
+
+pub static RAV1E_INTRA_MODES: &'static [PredictionMode] = &[PredictionMode::DC_PRED, PredictionMode::H_PRED, PredictionMode::V_PRED];
+
 extern {
     #[cfg(test)]
     fn highbd_dc_predictor(dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
