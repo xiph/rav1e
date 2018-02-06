@@ -11,6 +11,7 @@ extern {
     fn highbd_dc_top_predictor(dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
                            bh: libc::c_int, above: *const u16,
                            left: *const u16, bd: libc::c_int);
+    #[cfg(test)]
     fn highbd_h_predictor(dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
                            bh: libc::c_int, above: *const u16,
                            left: *const u16, bd: libc::c_int);
@@ -36,11 +37,6 @@ pub fn pred_dc_top_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &
     }
 }
 
-pub fn pred_h_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
-    unsafe {
-        highbd_h_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, 4, 4, above.as_ptr(), left.as_ptr(), 8);
-    }
-}
 
 pub fn pred_dc(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
     let edges = left.iter().chain(above.iter());
@@ -54,6 +50,14 @@ pub fn pred_dc(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
             *v = avg as u16;
         }
     }
+}
+
+pub fn pred_h(output: &mut [u16], stride: usize, left: &[u16], bw: usize) {
+  for (line, l) in output.chunks_mut(stride).zip(left) {
+    for v in &mut line[..bw] {
+      *v = *l;
+    }
+  }
 }
 
 #[cfg(test)]
@@ -80,7 +84,13 @@ mod test {
         }
     }
 
-    fn do_pred(ra: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>) {
+    pub fn pred_h_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+      unsafe {
+        highbd_h_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, 4, 4, above.as_ptr(), left.as_ptr(), 8);
+      }
+    }
+
+    fn do_dc_pred(ra: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>) {
         let (above, left, mut o1, mut o2) = setup_pred(ra);
 
         pred_dc_4x4(&mut o1, 32, &above[..4], &left[..4]);
@@ -89,12 +99,31 @@ mod test {
         (o1, o2)
     }
 
+    fn do_h_pred(ra: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>) {
+        let (above, left, mut o1, mut o2) = setup_pred(ra);
+
+        pred_h_4x4(&mut o1, 32, &above[..4], &left[..4]);
+        pred_h(&mut o2, 32, &left[..4], 4);
+
+        (o1, o2)
+    }
+
+    fn assert_same(o2: Vec<u16>) {
+      for l in o2.chunks(32).take(4) {
+        for v in l[..4].windows(2) {
+          assert_eq!(v[0], v[1]);
+        }
+      }
+    }
+
     #[test]
     fn pred_matches() {
         let mut ra = ChaChaRng::new_unseeded();
         for _ in 0..MAX_ITER {
-            let (o1, o2) = do_pred(&mut ra);
+            let (o1, o2) = do_dc_pred(&mut ra);
+            assert_eq!(o1, o2);
 
+            let (o1, o2) = do_h_pred(&mut ra);
             assert_eq!(o1, o2);
         }
     }
@@ -103,13 +132,9 @@ mod test {
     fn pred_same() {
         let mut ra = ChaChaRng::new_unseeded();
         for _ in 0..MAX_ITER {
-            let (_, o2) = do_pred(&mut ra);
+            let (_, o2) = do_dc_pred(&mut ra);
 
-            for l in o2.chunks(32).take(4) {
-                for v in l[..4].windows(2) {
-                    assert_eq!(v[0], v[1]);
-                }
-            }
+            assert_same(o2)
         }
     }
 
@@ -127,6 +152,14 @@ mod test {
             for v in l[..4].iter() {
                 assert_eq!(*v, max12bit);
             }
+        }
+
+        pred_h(&mut o, 32, &left[..4], 4);
+
+        for l in o.chunks(32).take(4) {
+          for v in l[..4].iter() {
+            assert_eq!(*v, max12bit);
+          }
         }
     }
 }

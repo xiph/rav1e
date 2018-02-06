@@ -287,7 +287,7 @@ fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, p:
                     pred_dc(&mut fs.rec.planes[p].data[y*stride+x..], stride, &above, &left),
             }
         PredictionMode::H_PRED =>
-            pred_h_4x4(&mut fs.rec.planes[p].data[y*stride+x..], stride, &above, &left),
+            pred_h(&mut fs.rec.planes[p].data[y*stride+x..], stride, &left, 4),
         _ =>
             panic!("Unimplemented prediction mode: {:?}", mode),
     }
