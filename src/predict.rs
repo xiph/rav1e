@@ -104,7 +104,7 @@ mod test {
     use rand::{ChaChaRng, Rng};
     use test::Bencher;
 
-    const MAX_ITER: usize = 1000;
+    const MAX_ITER: usize = 50000;
 
     fn setup_pred(ra: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>, Vec<u16>, Vec<u16>) {
         let output = vec![0u16; 32 * 32];
@@ -234,7 +234,22 @@ mod test {
         let (above, left, _, mut o2) = setup_pred(&mut ra);
 
         b.iter(|| {
-            pred_dc(&mut o2, 32, &above[..4], &left[..4]);
+            for _ in 0..MAX_ITER {
+                pred_dc(&mut o2, 32, &above[..4], &left[..4]);
+            }
+        })
+    }
+
+
+    #[bench]
+    fn native_trait(b: &mut Bencher) {
+        let mut ra = ChaChaRng::new_unseeded();
+        let (above, left, _, mut o2) = setup_pred(&mut ra);
+
+        b.iter(|| {
+            for _ in 0..MAX_ITER {
+                pred_dc_trait::<Block4x4>(&mut o2, 32, &above[..4], &left[..4]);
+            }
         })
     }
 
@@ -244,7 +259,9 @@ mod test {
         let (above, left, _, mut o2) = setup_pred(&mut ra);
 
         b.iter(|| {
-            pred_dc_4x4(&mut o2, 32, &above[..4], &left[..4]);
+            for _ in 0..MAX_ITER {
+                pred_dc_4x4(&mut o2, 32, &above[..4], &left[..4]);
+            }
         })
     }
 }
