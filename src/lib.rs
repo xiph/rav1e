@@ -360,7 +360,9 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
 
     for sby in 0..fi.sb_height {
         let y = sby*64 >> ydec;
-        cw.reset_left_coeff_context(0);
+        for p in 0..3 {
+            cw.reset_left_coeff_context(p);
+        }
         for sbx in 0..fi.sb_width {
             let x = sbx*64 >> xdec;
             let tell = cw.w.tell_frac();
