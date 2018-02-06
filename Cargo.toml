@@ -16,3 +16,10 @@ y4m = "0.1"
 
 [build-dependencies]
 cc = "1"
+
+[dev-dependencies]
+bencher = "0.1.5"
+
+[[bench]]
+name = "predict"
+harness = false

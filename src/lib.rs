@@ -1,7 +1,5 @@
 #![allow(safe_extern_statics)]
-#![feature(test)]
 
-extern crate test;
 extern crate bitstream_io;
 extern crate byteorder;
 extern crate clap;
@@ -15,13 +13,14 @@ use bitstream_io::{BE, BitWriter};
 use byteorder::*;
 use clap::{App, Arg};
 
-mod ec;
-mod partition;
-mod context;
-mod transform;
-mod quantize;
-mod predict;
-mod rdo;
+// for benchmarking purpose
+pub mod ec;
+pub mod partition;
+pub mod context;
+pub mod transform;
+pub mod quantize;
+pub mod predict;
+pub mod rdo;
 
 use context::*;
 use partition::*;

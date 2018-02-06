@@ -99,10 +99,9 @@ pub fn pred_v(output: &mut [u16], stride: usize, above: &[u16], bh: usize) {
 }
 
 #[cfg(test)]
-mod test {
+pub mod test {
     use super::*;
     use rand::{ChaChaRng, Rng};
-    use test::Bencher;
 
     const MAX_ITER: usize = 50000;
 
@@ -226,42 +225,5 @@ mod test {
             assert_eq!(*v, max12bit);
           }
         }
-    }
-
-    #[bench]
-    fn native(b: &mut Bencher) {
-        let mut ra = ChaChaRng::new_unseeded();
-        let (above, left, _, mut o2) = setup_pred(&mut ra);
-
-        b.iter(|| {
-            for _ in 0..MAX_ITER {
-                pred_dc(&mut o2, 32, &above[..4], &left[..4]);
-            }
-        })
-    }
-
-
-    #[bench]
-    fn native_trait(b: &mut Bencher) {
-        let mut ra = ChaChaRng::new_unseeded();
-        let (above, left, _, mut o2) = setup_pred(&mut ra);
-
-        b.iter(|| {
-            for _ in 0..MAX_ITER {
-                pred_dc_trait::<Block4x4>(&mut o2, 32, &above[..4], &left[..4]);
-            }
-        })
-    }
-
-    #[bench]
-    fn aom(b: &mut Bencher) {
-        let mut ra = ChaChaRng::new_unseeded();
-        let (above, left, _, mut o2) = setup_pred(&mut ra);
-
-        b.iter(|| {
-            for _ in 0..MAX_ITER {
-                pred_dc_4x4(&mut o2, 32, &above[..4], &left[..4]);
-            }
-        })
     }
 }
