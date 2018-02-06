@@ -8,8 +8,8 @@ fn main() {
     let mut y4m_dec = y4m::decode(&mut files.input_file).unwrap();
     let width = y4m_dec.get_width();
     let height = y4m_dec.get_height();
-    let mut y4m_enc = match files.rec_file {
-        Some(f) => Some(y4m::encode(width,height,y4m::Ratio::new(30,1)).write_header(&mut f).unwrap()),
+    let mut y4m_enc = match files.rec_file.as_mut() {
+        Some(f) => Some(y4m::encode(width,height,y4m::Ratio::new(30,1)).write_header(f).unwrap()),
         None => None
     };
     let fi = FrameInvariants::new(width, height);
@@ -19,7 +19,7 @@ fn main() {
     let mut frame_number = 0;
     loop {
         if !process_frame(frame_number, &sequence, &fi,
-                          &mut files.output_file, &mut y4m_dec, &mut y4m_enc) {
+                          &mut files.output_file, &mut y4m_dec, y4m_enc.as_mut()) {
             break;
         }
         frame_number += 1;
