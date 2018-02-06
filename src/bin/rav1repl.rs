@@ -8,7 +8,7 @@ use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
 fn main() {
-    let mut files = EncoderFiles::from_cli();
+    let mut files = EncoderConfig::from_cli();
     let mut y4m_dec = y4m::decode(&mut files.input_file).unwrap();
     let width = y4m_dec.get_width();
     let height = y4m_dec.get_height();

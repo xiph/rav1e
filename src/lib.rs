@@ -135,14 +135,14 @@ impl FrameInvariants {
     }
 }
 
-pub struct EncoderFiles {
+pub struct EncoderConfig {
     pub input_file: Box<Read>,
     pub output_file: Box<Write>,
     pub rec_file: File,
 }
 
-impl EncoderFiles {
-    pub fn from_cli() -> EncoderFiles {
+impl EncoderConfig {
+    pub fn from_cli() -> EncoderConfig {
         let matches = App::new("rav1e")
             .version("0.1.0")
             .about("AV1 video encoder")
@@ -173,7 +173,7 @@ impl EncoderFiles {
         };
         let rec_file = File::create("rec.y4m").unwrap();
 
-        EncoderFiles {
+        EncoderConfig {
             input_file: input_file,
             output_file: output_file,
             rec_file: rec_file
