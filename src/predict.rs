@@ -49,9 +49,35 @@ pub fn pred_dc_top_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &
 
 pub fn pred_dc(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
     let edges = left.iter().chain(above.iter());
-    let len = (left.len() + above.len()) as u32;
     let bw = above.len();
     let bh = left.len();
+    let len = (bw + bh) as u32;
+    let avg = (edges.fold(0, |acc, &v| acc + v as u32) + (len >> 1)) / len;
+
+    for line in output.chunks_mut(stride).take(bh) {
+        for v in &mut line[..bw] {
+            *v = avg as u16;
+        }
+    }
+}
+
+pub trait Dim {
+    const W : usize;
+    const H : usize;
+}
+
+pub struct Block4x4;
+
+impl Dim for Block4x4 {
+    const W : usize = 4;
+    const H : usize = 4;
+}
+
+pub fn pred_dc_trait<D: Dim>(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+    let edges = left.iter().chain(above.iter());
+    let bw = D::W;
+    let bh = D::H;
+    let len = (bw + bh) as u32;
     let avg = (edges.fold(0, |acc, &v| acc + v as u32) + (len >> 1)) / len;
 
     for line in output.chunks_mut(stride).take(bh) {
@@ -77,11 +103,11 @@ pub fn pred_v(output: &mut [u16], stride: usize, above: &[u16], bh: usize) {
 }
 
 #[cfg(test)]
-mod test {
+pub mod test {
     use super::*;
     use rand::{ChaChaRng, Rng};
 
-    const MAX_ITER: usize = 1000;
+    const MAX_ITER: usize = 50000;
 
     fn setup_pred(ra: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>, Vec<u16>, Vec<u16>) {
         let output = vec![0u16; 32 * 32];
@@ -116,7 +142,7 @@ mod test {
         let (above, left, mut o1, mut o2) = setup_pred(ra);
 
         pred_dc_4x4(&mut o1, 32, &above[..4], &left[..4]);
-        pred_dc(&mut o2, 32, &above[..4], &left[..4]);
+        pred_dc_trait::<Block4x4>(&mut o2, 32, &above[..4], &left[..4]);
 
         (o1, o2)
     }
