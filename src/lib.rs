@@ -444,9 +444,9 @@ pub fn process_frame(frame_number: u64, sequence: &Sequence, fi: &FrameInvariant
                 }
             }
             let packet = encode_frame(&sequence, &fi, &mut fs);
+            write_ivf_frame(output_file, frame_number, packet.as_ref());
             match y4m_enc {
                 Some(mut y4m_enc) => {
-                    write_ivf_frame(output_file, frame_number, packet.as_ref());
                     let mut rec_y = vec![128 as u8; width*height];
                     let mut rec_u = vec![128 as u8; width*height/4];
                     let mut rec_v = vec![128 as u8; width*height/4];
