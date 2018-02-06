@@ -1,0 +1,17 @@
+# rustfmt configuration, not actually used because of
+# https://github.com/rust-lang-nursery/rustfmt/issues/2418
+
+comment_width = 79
+control_brace_style = "ClosingNextLine"
+force_explicit_abi = false
+fn_args_density = "Compressed"
+match_arm_blocks = false
+max_width = 79
+reorder_imported_names = true
+reorder_imports = true
+reorder_imports_in_group = true
+reorder_extern_crates = true
+reorder_extern_crates_in_group = true
+tab_spaces = 2
+use_field_init_shorthand = true
+wrap_comments = true
