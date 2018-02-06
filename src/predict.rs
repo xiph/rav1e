@@ -15,6 +15,10 @@ extern {
     fn highbd_h_predictor(dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
                            bh: libc::c_int, above: *const u16,
                            left: *const u16, bd: libc::c_int);
+
+    fn highbd_v_predictor(dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
+        bh: libc::c_int, above: *const u16,
+        left: *const u16, bd: libc::c_int);
 }
 
 pub fn pred_dc_128(output: &mut [u16], stride: usize) {
@@ -57,6 +61,12 @@ pub fn pred_h(output: &mut [u16], stride: usize, left: &[u16], bw: usize) {
     for v in &mut line[..bw] {
       *v = *l;
     }
+  }
+}
+
+pub fn pred_v_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+  unsafe {
+    highbd_v_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, 4, 4, above.as_ptr(), left.as_ptr(), 8);
   }
 }
 

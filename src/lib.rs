@@ -288,6 +288,8 @@ fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, p:
             }
         PredictionMode::H_PRED =>
             pred_h(&mut fs.rec.planes[p].data[y*stride+x..], stride, &left, 4),
+        PredictionMode::V_PRED =>
+            pred_v_4x4(&mut fs.rec.planes[p].data[y*stride+x..], stride, &above, &left),
         _ =>
             panic!("Unimplemented prediction mode: {:?}", mode),
     }
@@ -366,7 +368,7 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
             let mut best_mode = PredictionMode::DC_PRED;
             let mut best_rd = std::f64::MAX;
 
-            for &mode in &[PredictionMode::DC_PRED, PredictionMode::H_PRED] {
+            for &mode in &[PredictionMode::DC_PRED, PredictionMode::V_PRED] {
                 let checkpoint = cw.checkpoint();
 
                 write_sb(&mut cw, fi, fs, sbx, sby, mode);
