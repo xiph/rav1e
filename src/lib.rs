@@ -139,6 +139,7 @@ pub struct EncoderConfig {
     pub input_file: Box<Read>,
     pub output_file: Box<Write>,
     pub rec_file: Option<Box<Write>>,
+    pub limit: u64
 }
 
 impl EncoderConfig {
@@ -159,6 +160,12 @@ impl EncoderConfig {
             .arg(Arg::with_name("RECONSTRUCTION")
                 .short("r")
                 .takes_value(true))
+            .arg(Arg::with_name("LIMIT")
+                .help("Maximum number of frames to encode")
+                .short("l")
+                .long("limit")
+                .takes_value(true)
+                .default_value("0"))
             .get_matches();
 
         EncoderConfig {
@@ -172,7 +179,8 @@ impl EncoderConfig {
             },
             rec_file: matches.value_of("RECONSTRUCTION").map(|f| {
                 Box::new(File::create(&f).unwrap()) as Box<Write>
-            })
+            }),
+            limit: matches.value_of("LIMIT").unwrap().parse().unwrap()
         }
     }
 }
