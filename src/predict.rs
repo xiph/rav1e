@@ -139,7 +139,7 @@ mod test {
         let (above, left, mut o1, mut o2) = setup_pred(ra);
 
         pred_dc_4x4(&mut o1, 32, &above[..4], &left[..4]);
-        pred_dc(&mut o2, 32, &above[..4], &left[..4]);
+        pred_dc_trait::<Block4x4>(&mut o2, 32, &above[..4], &left[..4]);
 
         (o1, o2)
     }
