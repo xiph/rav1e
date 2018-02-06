@@ -158,20 +158,6 @@ fn get_ext_tx_set(tx_size: TxSize, is_inter: bool,
     }
 }
 
-fn left_block_mode(left_mi: Option<Block>) -> PredictionMode {
-    match left_mi {
-        Some(m) => if m.is_inter() { PredictionMode::DC_PRED } else { m.mode },
-        None => PredictionMode::DC_PRED
-    }
-}
-
-fn above_block_mode(above_mi: Option<Block>) -> PredictionMode {
-    match above_mi {
-        Some(m) => if m.is_inter() { PredictionMode::DC_PRED } else { m.mode },
-        None => PredictionMode::DC_PRED
-    }
-}
-
 extern {
     static default_partition_cdf: [[u16; PARTITION_TYPES + 1]; PARTITION_CONTEXTS];
     static default_kf_y_mode_cdf: [[[u16; INTRA_MODES + 1]; INTRA_MODES]; INTRA_MODES];
@@ -240,73 +226,177 @@ impl CDFContext {
     }
 }
 
+pub struct PlaneConfig {
+    pub stride: usize,
+    pub xdec: usize,
+    pub ydec: usize,
+}
+
+const SUPERBLOCK_TO_PLANE_SHIFT: usize = 6;
+const SUPERBLOCK_TO_BLOCK_SHIFT: usize = 4;
+const BLOCK_TO_PLANE_SHIFT: usize = SUPERBLOCK_TO_PLANE_SHIFT - SUPERBLOCK_TO_BLOCK_SHIFT;
+const LOCAL_BLOCK_MASK: usize = (1 << SUPERBLOCK_TO_BLOCK_SHIFT) - 1;
+
+/// Absolute offset in pixels inside a plane
+pub struct PlaneOffset {
+    pub x: usize,
+    pub y: usize
+}
+
+/// Absolute offset in superblocks inside a plane, where a superblock is defined
+/// to be an N*N square where N = (1 << SUPERBLOCK_TO_PLANE_SHIFT).
+pub struct SuperBlockOffset {
+    pub x: usize,
+    pub y: usize
+}
+
+impl SuperBlockOffset {
+    /// Offset of a block inside the current superblock.
+    pub fn block_offset(&self, block_x: usize, block_y: usize) -> BlockOffset {
+        BlockOffset {
+            x: (self.x << SUPERBLOCK_TO_BLOCK_SHIFT) + block_x,
+            y: (self.y << SUPERBLOCK_TO_BLOCK_SHIFT) + block_y,
+        }
+    }
+
+    /// Offset of the top-left pixel of this block.
+    pub fn plane_offset(&self, plane: &PlaneConfig) -> PlaneOffset {
+        PlaneOffset {
+            x: self.x << (SUPERBLOCK_TO_PLANE_SHIFT - plane.xdec),
+            y: self.y << (SUPERBLOCK_TO_PLANE_SHIFT - plane.ydec),
+        }
+    }
+}
+
+/// Absolute offset in blocks inside a plane, where a block is defined
+/// to be an N*N square where N = (1 << BLOCK_TO_PLANE_SHIFT).
+pub struct BlockOffset {
+    pub x: usize,
+    pub y: usize
+}
+
+impl BlockOffset {
+    /// Offset of the superblock in which this block is located.
+    pub fn sb_offset(&self) -> SuperBlockOffset {
+        SuperBlockOffset {
+            x: self.x >> SUPERBLOCK_TO_BLOCK_SHIFT,
+            y: self.y >> SUPERBLOCK_TO_BLOCK_SHIFT,
+        }
+    }
+
+    /// Offset of the top-left pixel of this block.
+    pub fn plane_offset(&self, plane: &PlaneConfig) -> PlaneOffset {
+        let po = self.sb_offset().plane_offset(plane);
+        let x_offset = self.x & LOCAL_BLOCK_MASK;
+        let y_offset = self.y & LOCAL_BLOCK_MASK;
+        PlaneOffset {
+            x: po.x + (x_offset << BLOCK_TO_PLANE_SHIFT),
+            y: po.y + (y_offset << BLOCK_TO_PLANE_SHIFT),
+        }
+    }
+
+    pub fn y_in_sb(&self) -> usize {
+        self.y % MAX_MIB_SIZE
+    }
+}
+
+#[derive(Copy,Clone)]
+pub struct Block {
+    pub mode: PredictionMode,
+    pub skip: bool,
+}
+
+impl Block {
+    pub fn default() -> Block {
+        Block {
+            mode: PredictionMode::DC_PRED,
+            skip: false,
+        }
+    }
+    pub fn is_inter(&self) -> bool {
+        false
+    }
+}
+
 #[derive(Clone, Default)]
 pub struct BlockContext {
-    block_cols: usize,
-    block_rows: usize,
+    cols: usize,
+    rows: usize,
     above_seg_context: Vec<u8>,
     left_seg_context: [u8; MAX_MIB_SIZE],
     above_coeff_context: [Vec<u8>; PLANES],
     left_coeff_context: [[u8; MAX_MIB_SIZE]; PLANES],
-    blocks: Vec<Vec<Block>>,
-    blockx: usize, // absolute
-    blocky: usize,
+    blocks: Vec<Vec<Block>>
 }
 
 impl BlockContext {
-    pub fn new(block_cols: usize, block_rows: usize) -> BlockContext {
+    pub fn new(cols: usize, rows: usize) -> BlockContext {
         BlockContext {
-            block_cols: block_cols,
-            block_rows: block_rows,
-            above_seg_context: vec![0;block_cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],
+            cols,
+            rows,
+            above_seg_context: vec![0; cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],
             left_seg_context: [0; MAX_MIB_SIZE],
-            above_coeff_context: [vec![0;block_cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],
-                                  vec![0;block_cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],
-                                  vec![0;block_cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],],
+            above_coeff_context: [vec![0; cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],
+                                  vec![0; cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],
+                                  vec![0; cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],],
             left_coeff_context: [[0; MAX_MIB_SIZE]; PLANES],
-            blocks: vec![vec![Block::default(); block_cols]; block_rows],
-            blockx: 0,
-            blocky: 0,
+            blocks: vec![vec![Block::default(); cols]; rows]
         }
     }
-    fn partition_plane_context(&self, block_row: usize,
-                               block_col: usize,
+
+    pub fn at(&mut self, bo: &BlockOffset) -> &mut Block {
+        &mut self.blocks[bo.y][bo.x]
+    }
+
+    pub fn above_of(&mut self, bo: &BlockOffset) -> Block {
+        if bo.y > 0 {
+            self.blocks[bo.y - 1][bo.x]
+        } else {
+            Block::default()
+        }
+    }
+
+    pub fn left_of(&mut self, bo: &BlockOffset) -> Block {
+        if bo.x > 0 {
+            self.blocks[bo.y][bo.x - 1]
+        } else {
+            Block::default()
+        }
+    }
+
+    fn coeff_context(&self, plane: usize, bo: &BlockOffset) -> usize {
+        (self.above_coeff_context[plane][bo.x]
+         + self.left_coeff_context[plane][bo.y_in_sb()]) as usize
+    }
+
+    fn set_coeff_context(&mut self, plane: usize, bo: &BlockOffset, value: bool) {
+        let uvalue = value as u8;
+        self.above_coeff_context[plane][bo.x] = uvalue;
+        self.left_coeff_context[plane][bo.y_in_sb()] = uvalue;
+    }
+
+    pub fn reset_left_coeff_context(&mut self, plane: usize) {
+        for c in self.left_coeff_context[plane].iter_mut() {
+            *c = 0;
+        }
+    }
+
+    fn partition_plane_context(&self, bo: &BlockOffset,
                                bsize: BlockSize) -> usize {
         // TODO: this should be way simpler without sub8x8
-        let above_ctx = self.above_seg_context[block_col];
-        let left_ctx = self.left_seg_context[block_row & MAX_MIB_MASK];
+        let above_ctx = self.above_seg_context[bo.x];
+        let left_ctx = self.left_seg_context[bo.y_in_sb()];
         let bsl = mi_width_log2_lookup[bsize as usize] - mi_width_log2_lookup[BlockSize::BLOCK_8X8 as usize];
         let above = (above_ctx >> bsl) & 1;
         let left = (left_ctx >> bsl) & 1;
 
         assert!(b_width_log2_lookup[bsize as usize] == b_height_log2_lookup[bsize as usize]);
 
-        return ((left * 2 + above) + bsl) as usize * PARTITION_PLOFFSET;
-    }
-    fn skip_context(&mut self) -> usize {
-        (self.get_above_block().skip as usize) + (self.get_left_block().skip as usize)
-    }
-    pub fn get_block(&mut self) -> &mut Block {
-        &mut self.blocks[self.blocky][self.blockx]
+        ((left * 2 + above) + bsl) as usize * PARTITION_PLOFFSET
     }
 
-    pub fn get_above_block(&mut self) -> Block {
-        if self.blocky > 0 {
-            self.blocks[self.blocky - 1][self.blockx]
-        } else {
-            Block::default()
-        }
-    }
-    pub fn get_left_block(&mut self) -> Block {
-        if self.blockx > 0 {
-            self.blocks[self.blocky][self.blockx - 1]
-        } else {
-            Block::default()
-        }
-    }
-    pub fn set_loc(&mut self, blockx: usize, blocky: usize) {
-        self.blockx = blockx;
-        self.blocky = blocky;
+    fn skip_context(&mut self, bo: &BlockOffset) -> usize {
+        (self.above_of(bo).skip as usize) + (self.left_of(bo).skip as usize)
     }
 }
 
@@ -325,12 +415,13 @@ pub struct ContextWriter {
 
 impl ContextWriter {
     pub fn write_partition(&mut self, p: PartitionType) {
-        let ctx = self.bc.partition_plane_context(0, 0, BlockSize::BLOCK_64X64);
+        let bo = BlockOffset { x: 0, y: 0 };
+        let ctx = self.bc.partition_plane_context(&bo, BlockSize::BLOCK_64X64);
         self.w.symbol(p as u32, &mut self.fc.partition_cdf[ctx], PARTITION_TYPES);
     }
-    pub fn write_intra_mode_kf(&mut self, mode: PredictionMode) {
-        let above_mode = self.bc.get_above_block().mode as usize;
-        let left_mode = self.bc.get_left_block().mode as usize;
+    pub fn write_intra_mode_kf(&mut self, bo: &BlockOffset, mode: PredictionMode) {
+        let above_mode = self.bc.above_of(bo).mode as usize;
+        let left_mode = self.bc.left_of(bo).mode as usize;
         let cdf = &mut self.fc.kf_y_cdf[above_mode][left_mode];
         self.w.symbol(mode as u32, cdf, INTRA_MODES);
     }
@@ -350,28 +441,23 @@ impl ContextWriter {
                 ext_tx_cnt_intra[eset as usize]);
         }
     }
-    pub fn write_skip(&mut self, skip: bool) {
-        let ctx = self.bc.skip_context();
+    pub fn write_skip(&mut self, bo: &BlockOffset, skip: bool) {
+        let ctx = self.bc.skip_context(bo);
         self.w.symbol(skip as u32, &mut self.fc.skip_cdfs[ctx], 2);
     }
-    pub fn write_token_block_zero(&mut self, plane: usize) {
+    pub fn write_token_block_zero(&mut self, plane: usize, bo: &BlockOffset) {
         let plane_type = if plane > 0 { 1 } else { 0 };
         let tx_size_ctx = TXSIZE_SQR_MAP[TxSize::TX_4X4 as usize] as usize;
         let ref_type = 0;
         let band = 0;
-        let ctx = self.bc.above_coeff_context[plane][self.bc.blockx] + self.bc.left_coeff_context[plane][self.bc.blocky % MAX_MIB_SIZE];
-        let cdf = &mut self.fc.coef_head_cdfs[tx_size_ctx][plane_type][ref_type][band][ctx as usize];
+        let ctx = self.bc.coeff_context(plane, bo);
+        let cdf = &mut self.fc.coef_head_cdfs[tx_size_ctx][plane_type][ref_type][band][ctx];
         //println!("encoding token band={} ctx={}", band, ctx);
         self.w.symbol(0, cdf, HEAD_TOKENS + 1);
-        self.bc.above_coeff_context[plane][self.bc.blockx] = 0;
-        self.bc.left_coeff_context[plane][self.bc.blocky % MAX_MIB_SIZE] = 0;
+        self.bc.set_coeff_context(plane, bo, false);
     }
-    pub fn reset_left_coeff_context(&mut self, plane: usize) {
-        for c in self.bc.left_coeff_context[plane].iter_mut() {
-            *c = 0;
-        }
-    }
-    pub fn write_coeffs(&mut self, plane: usize, coeffs_in: &[i32], tx_size: TxSize, tx_type: TxType) {
+    pub fn write_coeffs(&mut self, plane: usize, bo: &BlockOffset,
+                        coeffs_in: &[i32], tx_size: TxSize, tx_type: TxType) {
         let scan_order = &av1_intra_scan_orders[tx_size as usize][tx_type as usize];
         let scan = scan_order.scan;
         let mut coeffs = [0 as i32; 16];
@@ -385,7 +471,7 @@ impl ContextWriter {
             }
         }
         if nz_coeff == 0 {
-            self.write_token_block_zero(plane);
+            self.write_token_block_zero(plane, bo);
             return;
         }
         let tx_size = TxSize::TX_4X4;
@@ -399,11 +485,13 @@ impl ContextWriter {
             let first = i == 0;
             let last = i == (nz_coeff - 1);
             let band = av1_coefband_trans_4x4[i];
-            let ctx = match first {
-                true => self.bc.above_coeff_context[plane][self.bc.blockx] + self.bc.left_coeff_context[plane][self.bc.blocky % MAX_MIB_SIZE],
-                false => (1 + token_cache[neighbors[2 * i + 0] as usize] + token_cache[neighbors[2 * i + 1] as usize]) >> 1
+            let ctx = if first {
+                self.bc.coeff_context(plane, bo)
+            } else {
+                ((1 + token_cache[neighbors[2 * i + 0] as usize]
+                  + token_cache[neighbors[2 * i + 1] as usize]) >> 1) as usize
             };
-            let cdf = &mut self.fc.coef_head_cdfs[tx_size_ctx][plane_type][ref_type][band as usize][ctx as usize];
+            let cdf = &mut self.fc.coef_head_cdfs[tx_size_ctx][plane_type][ref_type][band as usize][ctx];
             match (vabs, last) {
                 (0,_) => {
                     self.w.symbol(HeadToken::Zero as u32 - !first as u32, cdf, HEAD_TOKENS + (first as usize));
@@ -471,8 +559,7 @@ impl ContextWriter {
                 break;
             }
         }
-        self.bc.above_coeff_context[plane][self.bc.blockx] = 1;
-        self.bc.left_coeff_context[plane][self.bc.blocky % MAX_MIB_SIZE] = 1;
+        self.bc.set_coeff_context(plane, bo, true);
     }
 
     pub fn checkpoint(&mut self) -> ContextWriterCheckpoint {
