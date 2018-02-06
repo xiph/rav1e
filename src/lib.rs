@@ -368,7 +368,7 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
             let mut best_mode = PredictionMode::DC_PRED;
             let mut best_rd = std::f64::MAX;
 
-            for &mode in &[PredictionMode::DC_PRED, PredictionMode::V_PRED] {
+            for &mode in &[PredictionMode::DC_PRED, PredictionMode::H_PRED, PredictionMode::V_PRED] {
                 let checkpoint = cw.checkpoint();
 
                 write_sb(&mut cw, fi, fs, sbx, sby, mode);
