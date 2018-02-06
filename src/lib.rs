@@ -160,32 +160,19 @@ impl EncoderConfig {
                 .short("r")
                 .takes_value(true))
             .get_matches();
-        let input = matches.value_of("INPUT").unwrap();
-        let output = matches.value_of("OUTPUT").unwrap();
-
-        let input_file = if input == "-" {
-            Box::new(std::io::stdin()) as Box<Read>
-        } else {
-            Box::new(File::open(&input).unwrap()) as Box<Read>
-        };
-        let output_file = if output == "-" {
-            Box::new(std::io::stdout()) as Box<Write>
-        }
-        else {
-            Box::new(File::create(&output).unwrap()) as Box<Write>
-        };
-        let rec_file = if matches.is_present("RECONSTRUCTION") {
-            let recons = matches.value_of("RECONSTRUCTION").unwrap();
-            Some(Box::new(File::create(&recons).unwrap()) as Box<Write>)
-        }
-        else {
-            None
-        };
 
         EncoderConfig {
-            input_file: input_file,
-            output_file: output_file,
-            rec_file: rec_file
+            input_file: match matches.value_of("INPUT").unwrap() {
+                "-" => Box::new(std::io::stdin()) as Box<Read>,
+                f @ _ => Box::new(File::open(&f).unwrap()) as Box<Read>
+            },
+            output_file: match matches.value_of("OUTPUT").unwrap() {
+                "-" => Box::new(std::io::stdout()) as Box<Write>,
+                f @ _ => Box::new(File::create(&f).unwrap()) as Box<Write>
+            },
+            rec_file: matches.value_of("RECONSTRUCTION").map(|f| {
+                Box::new(File::create(&f).unwrap()) as Box<Write>
+            })
         }
     }
 }
