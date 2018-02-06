@@ -138,7 +138,7 @@ impl FrameInvariants {
 pub struct EncoderConfig {
     pub input_file: Box<Read>,
     pub output_file: Box<Write>,
-    pub rec_file: File,
+    pub rec_file: Option<Box<Write>>,
 }
 
 impl EncoderConfig {
@@ -156,6 +156,9 @@ impl EncoderConfig {
                 .long("output")
                 .required(true)
                 .takes_value(true))
+            .arg(Arg::with_name("RECONSTRUCTION")
+                .short("r")
+                .takes_value(true))
             .get_matches();
         let input = matches.value_of("INPUT").unwrap();
         let output = matches.value_of("OUTPUT").unwrap();
@@ -171,7 +174,13 @@ impl EncoderConfig {
         else {
             Box::new(File::create(&output).unwrap()) as Box<Write>
         };
-        let rec_file = File::create("rec.y4m").unwrap();
+        let rec_file = if matches.is_present("RECONSTRUCTION") {
+            let recons = matches.value_of("RECONSTRUCTION").unwrap();
+            Some(Box::new(File::create(&recons).unwrap()) as Box<Write>)
+        }
+        else {
+            None
+        };
 
         EncoderConfig {
             input_file: input_file,
@@ -406,7 +415,7 @@ fn encode_frame(sequence: &Sequence, fi: &FrameInvariants, fs: &mut FrameState) 
 pub fn process_frame(frame_number: u64, sequence: &Sequence, fi: &FrameInvariants,
                      output_file: &mut Write,
                      y4m_dec: &mut y4m::Decoder<Box<Read>>,
-                     y4m_enc: &mut y4m::Encoder<File>) -> bool {
+                     y4m_enc: Option<&mut y4m::Encoder<Box<Write>>>) -> bool {
     let width = fi.width;
     let height = fi.height;
     match y4m_dec.read_frame() {
@@ -435,30 +444,35 @@ pub fn process_frame(frame_number: u64, sequence: &Sequence, fi: &FrameInvariant
                 }
             }
             let packet = encode_frame(&sequence, &fi, &mut fs);
-            write_ivf_frame(output_file, frame_number, packet.as_ref());
-            let mut rec_y = vec![128 as u8; width*height];
-            let mut rec_u = vec![128 as u8; width*height/4];
-            let mut rec_v = vec![128 as u8; width*height/4];
-            for y in 0..height {
-                for x in 0..width {
-                    let stride = fs.rec.planes[0].stride;
-                    rec_y[y*width+x] = fs.rec.planes[0].data[y*stride+x] as u8;
+            match y4m_enc {
+                Some(mut y4m_enc) => {
+                    write_ivf_frame(output_file, frame_number, packet.as_ref());
+                    let mut rec_y = vec![128 as u8; width*height];
+                    let mut rec_u = vec![128 as u8; width*height/4];
+                    let mut rec_v = vec![128 as u8; width*height/4];
+                    for y in 0..height {
+                        for x in 0..width {
+                            let stride = fs.rec.planes[0].stride;
+                            rec_y[y*width+x] = fs.rec.planes[0].data[y*stride+x] as u8;
+                        }
+                    }
+                    for y in 0..height/2 {
+                        for x in 0..width/2 {
+                            let stride = fs.rec.planes[1].stride;
+                            rec_u[y*width/2+x] = fs.rec.planes[1].data[y*stride+x] as u8;
+                        }
+                    }
+                    for y in 0..height/2 {
+                        for x in 0..width/2 {
+                            let stride = fs.rec.planes[2].stride;
+                            rec_v[y*width/2+x] = fs.rec.planes[2].data[y*stride+x] as u8;
+                        }
+                    }
+                    let rec_frame = y4m::Frame::new([&rec_y, &rec_u, &rec_v], None);
+                    y4m_enc.write_frame(&rec_frame).unwrap();
                 }
+                None => {}
             }
-            for y in 0..height/2 {
-                for x in 0..width/2 {
-                    let stride = fs.rec.planes[1].stride;
-                    rec_u[y*width/2+x] = fs.rec.planes[1].data[y*stride+x] as u8;
-                }
-            }
-            for y in 0..height/2 {
-                for x in 0..width/2 {
-                    let stride = fs.rec.planes[2].stride;
-                    rec_v[y*width/2+x] = fs.rec.planes[2].data[y*stride+x] as u8;
-                }
-            }
-            let rec_frame = y4m::Frame::new([&rec_y, &rec_u, &rec_v], None);
-            y4m_enc.write_frame(&rec_frame).unwrap();
             true
         },
         _ => false
