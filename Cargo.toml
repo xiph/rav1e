@@ -3,6 +3,7 @@ name = "rav1e"
 version = "0.1.0"
 authors = ["Thomas Daede <tdaede@xiph.org>"]
 build = "build.rs"
+include = ["/src/**", "/aom_build/**", "/Cargo.toml"]
 
 [dependencies]
 bitstream-io = "0.6.1"
