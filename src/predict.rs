@@ -16,6 +16,7 @@ extern {
                            bh: libc::c_int, above: *const u16,
                            left: *const u16, bd: libc::c_int);
 
+    #[cfg(test)]
     fn highbd_v_predictor(dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
         bh: libc::c_int, above: *const u16,
         left: *const u16, bd: libc::c_int);
@@ -64,10 +65,11 @@ pub fn pred_h(output: &mut [u16], stride: usize, left: &[u16], bw: usize) {
   }
 }
 
-pub fn pred_v_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
-  unsafe {
-    highbd_v_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, 4, 4, above.as_ptr(), left.as_ptr(), 8);
-  }
+pub fn pred_v(output: &mut [u16], stride: usize, above: &[u16], bh: usize) {
+    let bw = above.len();
+    for line in output.chunks_mut(stride).take(bh) {
+        line[..bw].clone_from_slice(above)
+    }
 }
 
 #[cfg(test)]
@@ -95,9 +97,15 @@ mod test {
     }
 
     pub fn pred_h_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
-      unsafe {
-        highbd_h_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, 4, 4, above.as_ptr(), left.as_ptr(), 8);
-      }
+        unsafe {
+            highbd_h_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, 4, 4, above.as_ptr(), left.as_ptr(), 8);
+        }
+    }
+
+    pub fn pred_v_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+        unsafe {
+            highbd_v_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, 4, 4, above.as_ptr(), left.as_ptr(), 8);
+        }
     }
 
     fn do_dc_pred(ra: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>) {
@@ -118,12 +126,21 @@ mod test {
         (o1, o2)
     }
 
+    fn do_v_pred(ra: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>) {
+        let (above, left, mut o1, mut o2) = setup_pred(ra);
+
+        pred_v_4x4(&mut o1, 32, &above[..4], &left[..4]);
+        pred_v(&mut o2, 32, &above[..4], 4);
+
+        (o1, o2)
+    }
+
     fn assert_same(o2: Vec<u16>) {
-      for l in o2.chunks(32).take(4) {
-        for v in l[..4].windows(2) {
-          assert_eq!(v[0], v[1]);
+        for l in o2.chunks(32).take(4) {
+            for v in l[..4].windows(2) {
+                assert_eq!(v[0], v[1]);
+            }
         }
-      }
     }
 
     #[test]
@@ -134,6 +151,9 @@ mod test {
             assert_eq!(o1, o2);
 
             let (o1, o2) = do_h_pred(&mut ra);
+            assert_eq!(o1, o2);
+
+            let (o1, o2) = do_v_pred(&mut ra);
             assert_eq!(o1, o2);
         }
     }
@@ -165,6 +185,14 @@ mod test {
         }
 
         pred_h(&mut o, 32, &left[..4], 4);
+
+        for l in o.chunks(32).take(4) {
+          for v in l[..4].iter() {
+            assert_eq!(*v, max12bit);
+          }
+        }
+
+        pred_v(&mut o, 32, &above[..4], 4);
 
         for l in o.chunks(32).take(4) {
           for v in l[..4].iter() {
