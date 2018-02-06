@@ -241,40 +241,40 @@ impl CDFContext {
 }
 
 #[derive(Clone, Default)]
-pub struct MIContext {
-    mi_cols: usize,
-    mi_rows: usize,
+pub struct BlockContext {
+    block_cols: usize,
+    block_rows: usize,
     above_seg_context: Vec<u8>,
     left_seg_context: [u8; MAX_MIB_SIZE],
     above_coeff_context: [Vec<u8>; PLANES],
     left_coeff_context: [[u8; MAX_MIB_SIZE]; PLANES],
     blocks: Vec<Vec<Block>>,
-    mix: usize, // absolute
-    miy: usize,
+    blockx: usize, // absolute
+    blocky: usize,
 }
 
-impl MIContext {
-    pub fn new(mi_cols: usize, mi_rows: usize) -> MIContext {
-        MIContext {
-            mi_cols: mi_cols,
-            mi_rows: mi_rows,
-            above_seg_context: vec![0;mi_cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],
+impl BlockContext {
+    pub fn new(block_cols: usize, block_rows: usize) -> BlockContext {
+        BlockContext {
+            block_cols: block_cols,
+            block_rows: block_rows,
+            above_seg_context: vec![0;block_cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],
             left_seg_context: [0; MAX_MIB_SIZE],
-            above_coeff_context: [vec![0;mi_cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],
-                                  vec![0;mi_cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],
-                                  vec![0;mi_cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],],
+            above_coeff_context: [vec![0;block_cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],
+                                  vec![0;block_cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],
+                                  vec![0;block_cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],],
             left_coeff_context: [[0; MAX_MIB_SIZE]; PLANES],
-            blocks: vec![vec![Block::default(); mi_cols]; mi_rows],
-            mix: 0,
-            miy: 0,
+            blocks: vec![vec![Block::default(); block_cols]; block_rows],
+            blockx: 0,
+            blocky: 0,
         }
     }
-    fn partition_plane_context(&self, mi_row: usize,
-                               mi_col: usize,
+    fn partition_plane_context(&self, block_row: usize,
+                               block_col: usize,
                                bsize: BlockSize) -> usize {
         // TODO: this should be way simpler without sub8x8
-        let above_ctx = self.above_seg_context[mi_col];
-        let left_ctx = self.left_seg_context[mi_row & MAX_MIB_MASK];
+        let above_ctx = self.above_seg_context[block_col];
+        let left_ctx = self.left_seg_context[block_row & MAX_MIB_MASK];
         let bsl = mi_width_log2_lookup[bsize as usize] - mi_width_log2_lookup[BlockSize::BLOCK_8X8 as usize];
         let above = (above_ctx >> bsl) & 1;
         let left = (left_ctx >> bsl) & 1;
@@ -287,26 +287,26 @@ impl MIContext {
         (self.get_above_block().skip as usize) + (self.get_left_block().skip as usize)
     }
     pub fn get_block(&mut self) -> &mut Block {
-        &mut self.blocks[self.miy][self.mix]
+        &mut self.blocks[self.blocky][self.blockx]
     }
 
     pub fn get_above_block(&mut self) -> Block {
-        if self.miy > 0 {
-            self.blocks[self.miy - 1][self.mix]
+        if self.blocky > 0 {
+            self.blocks[self.blocky - 1][self.blockx]
         } else {
             Block::default()
         }
     }
     pub fn get_left_block(&mut self) -> Block {
-        if self.mix > 0 {
-            self.blocks[self.miy][self.mix - 1]
+        if self.blockx > 0 {
+            self.blocks[self.blocky][self.blockx - 1]
         } else {
             Block::default()
         }
     }
-    pub fn set_loc(&mut self, mix: usize, miy: usize) {
-        self.mix = mix;
-        self.miy = miy;
+    pub fn set_loc(&mut self, blockx: usize, blocky: usize) {
+        self.blockx = blockx;
+        self.blocky = blocky;
     }
 }
 
@@ -314,23 +314,23 @@ impl MIContext {
 pub struct ContextWriterCheckpoint {
     pub w: ec::WriterCheckpoint,
     pub fc: CDFContext,
-    pub mc: MIContext
+    pub bc: BlockContext
 }
 
 pub struct ContextWriter {
     pub w: ec::Writer,
     pub fc: CDFContext,
-    pub mc: MIContext
+    pub bc: BlockContext
 }
 
 impl ContextWriter {
     pub fn write_partition(&mut self, p: PartitionType) {
-        let ctx = self.mc.partition_plane_context(0, 0, BlockSize::BLOCK_64X64);
+        let ctx = self.bc.partition_plane_context(0, 0, BlockSize::BLOCK_64X64);
         self.w.symbol(p as u32, &mut self.fc.partition_cdf[ctx], PARTITION_TYPES);
     }
     pub fn write_intra_mode_kf(&mut self, mode: PredictionMode) {
-        let above_mode = self.mc.get_above_block().mode as usize;
-        let left_mode = self.mc.get_left_block().mode as usize;
+        let above_mode = self.bc.get_above_block().mode as usize;
+        let left_mode = self.bc.get_left_block().mode as usize;
         let cdf = &mut self.fc.kf_y_cdf[above_mode][left_mode];
         self.w.symbol(mode as u32, cdf, INTRA_MODES);
     }
@@ -351,7 +351,7 @@ impl ContextWriter {
         }
     }
     pub fn write_skip(&mut self, skip: bool) {
-        let ctx = self.mc.skip_context();
+        let ctx = self.bc.skip_context();
         self.w.symbol(skip as u32, &mut self.fc.skip_cdfs[ctx], 2);
     }
     pub fn write_token_block_zero(&mut self, plane: usize) {
@@ -359,15 +359,15 @@ impl ContextWriter {
         let tx_size_ctx = TXSIZE_SQR_MAP[TxSize::TX_4X4 as usize] as usize;
         let ref_type = 0;
         let band = 0;
-        let ctx = self.mc.above_coeff_context[plane][self.mc.mix] + self.mc.left_coeff_context[plane][self.mc.miy % MAX_MIB_SIZE];
+        let ctx = self.bc.above_coeff_context[plane][self.bc.blockx] + self.bc.left_coeff_context[plane][self.bc.blocky % MAX_MIB_SIZE];
         let cdf = &mut self.fc.coef_head_cdfs[tx_size_ctx][plane_type][ref_type][band][ctx as usize];
         //println!("encoding token band={} ctx={}", band, ctx);
         self.w.symbol(0, cdf, HEAD_TOKENS + 1);
-        self.mc.above_coeff_context[plane][self.mc.mix] = 0;
-        self.mc.left_coeff_context[plane][self.mc.miy % MAX_MIB_SIZE] = 0;
+        self.bc.above_coeff_context[plane][self.bc.blockx] = 0;
+        self.bc.left_coeff_context[plane][self.bc.blocky % MAX_MIB_SIZE] = 0;
     }
     pub fn reset_left_coeff_context(&mut self, plane: usize) {
-        for c in self.mc.left_coeff_context[plane].iter_mut() {
+        for c in self.bc.left_coeff_context[plane].iter_mut() {
             *c = 0;
         }
     }
@@ -400,7 +400,7 @@ impl ContextWriter {
             let last = i == (nz_coeff - 1);
             let band = av1_coefband_trans_4x4[i];
             let ctx = match first {
-                true => self.mc.above_coeff_context[plane][self.mc.mix] + self.mc.left_coeff_context[plane][self.mc.miy % MAX_MIB_SIZE],
+                true => self.bc.above_coeff_context[plane][self.bc.blockx] + self.bc.left_coeff_context[plane][self.bc.blocky % MAX_MIB_SIZE],
                 false => (1 + token_cache[neighbors[2 * i + 0] as usize] + token_cache[neighbors[2 * i + 1] as usize]) >> 1
             };
             let cdf = &mut self.fc.coef_head_cdfs[tx_size_ctx][plane_type][ref_type][band as usize][ctx as usize];
@@ -471,21 +471,21 @@ impl ContextWriter {
                 break;
             }
         }
-        self.mc.above_coeff_context[plane][self.mc.mix] = 1;
-        self.mc.left_coeff_context[plane][self.mc.miy % MAX_MIB_SIZE] = 1;
+        self.bc.above_coeff_context[plane][self.bc.blockx] = 1;
+        self.bc.left_coeff_context[plane][self.bc.blocky % MAX_MIB_SIZE] = 1;
     }
 
     pub fn checkpoint(&mut self) -> ContextWriterCheckpoint {
         ContextWriterCheckpoint {
             w: self.w.checkpoint(),
             fc: self.fc.clone(),
-            mc: self.mc.clone()
+            bc: self.bc.clone()
         }
     }
 
     pub fn rollback(&mut self, checkpoint: ContextWriterCheckpoint) {
         self.w.rollback(&checkpoint.w);
         self.fc = checkpoint.fc.clone();
-        self.mc = checkpoint.mc.clone();
+        self.bc = checkpoint.bc.clone();
     }
 }

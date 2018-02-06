@@ -327,7 +327,7 @@ fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, p:
 }
 
 fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, sbx: usize, sby: usize, mode: PredictionMode) {
-    cw.mc.set_loc(sbx*16, sby*16);
+    cw.bc.set_loc(sbx*16, sby*16);
 
     cw.write_partition(PartitionType::PARTITION_NONE);
     cw.write_skip(false);
@@ -339,8 +339,8 @@ fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, s
     for p in 0..1 {
         for by in 0..16 {
             for bx in 0..16 {
-                cw.mc.set_loc(sbx*16+bx, sby*16+by);
-                cw.mc.get_block().mode = mode;
+                cw.bc.set_loc(sbx*16+bx, sby*16+by);
+                cw.bc.get_block().mode = mode;
                 write_b(cw, fi, fs, p, sbx, sby, bx, by, mode, tx_type);
             }
         }
@@ -349,7 +349,7 @@ fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, s
     for p in 1..3 {
         for by in 0..8 {
             for bx in 0..8 {
-                cw.mc.set_loc(sbx*16+bx, sby*16+by);
+                cw.bc.set_loc(sbx*16+bx, sby*16+by);
                 write_b(cw, fi, fs, p, sbx, sby, bx, by, uv_mode, uv_tx_type);
             }
         }
@@ -359,11 +359,11 @@ fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, s
 fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
     let w = ec::Writer::new();
     let fc = CDFContext::new();
-    let mc = MIContext::new(fi.sb_width*16, fi.sb_height*16);
+    let bc = BlockContext::new(fi.sb_width*16, fi.sb_height*16);
     let mut cw = ContextWriter {
         w: w,
         fc: fc,
-        mc: mc,
+        bc: bc,
     };
 
     let stride = fs.input.planes[0].stride;
