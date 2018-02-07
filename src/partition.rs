@@ -76,30 +76,32 @@ pub enum TxType {
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum PredictionMode {
-  DC_PRED,    // Average of above and left pixels
-  V_PRED,     // Vertical
-  H_PRED,     // Horizontal
-  D45_PRED,   // Directional 45  deg = round(arctan(1/1) * 180/pi)
-  D135_PRED,  // Directional 135 deg = 180 - 45
-  D117_PRED,  // Directional 117 deg = 180 - 63
-  D153_PRED,  // Directional 153 deg = 180 - 27
-  D207_PRED,  // Directional 207 deg = 180 + 27
-  D63_PRED,   // Directional 63  deg = round(arctan(2/1) * 180/pi)
-  SMOOTH_PRED,  // Combination of horizontal and vertical interpolation
-  TM_PRED,        // True-motion
-  NEARESTMV,
-  NEARMV,
-  ZEROMV,
-  NEWMV,
-  // Compound ref compound modes
-  NEAREST_NEARESTMV,
-  NEAR_NEARMV,
-  NEAREST_NEWMV,
-  NEW_NEARESTMV,
-  NEAR_NEWMV,
-  NEW_NEARMV,
-  ZERO_ZEROMV,
-  NEW_NEWMV,
+    DC_PRED,    // Average of above and left pixels
+    V_PRED,     // Vertical
+    H_PRED,     // Horizontal
+    D45_PRED,   // Directional 45  deg = round(arctan(1/1) * 180/pi)
+    D135_PRED,  // Directional 135 deg = 180 - 45
+    D117_PRED,  // Directional 117 deg = 180 - 63
+    D153_PRED,  // Directional 153 deg = 180 - 27
+    D207_PRED,  // Directional 207 deg = 180 + 27
+    D63_PRED,   // Directional 63  deg = round(arctan(2/1) * 180/pi)
+    SMOOTH_PRED,  // Combination of horizontal and vertical interpolation
+    SMOOTH_V_PRED,
+    SMOOTH_H_PRED,
+    TM_PRED,        // True-motion
+    NEARESTMV,
+    NEARMV,
+    ZEROMV,
+    NEWMV,
+    // Compound ref compound modes
+    NEAREST_NEARESTMV,
+    NEAR_NEARMV,
+    NEAREST_NEWMV,
+    NEW_NEARESTMV,
+    NEAR_NEWMV,
+    NEW_NEARMV,
+    ZERO_ZEROMV,
+    NEW_NEWMV,
 }
 
 use plane::*;
