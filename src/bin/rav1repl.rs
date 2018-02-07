@@ -16,11 +16,10 @@ fn main() {
         Some(rec_file) => Some(y4m::encode(width, height, y4m::Ratio::new(30,1)).write_header(rec_file).unwrap()),
         None => None
     };
-    let fi = FrameInvariants::new(width, height);
+    let mut fi = FrameInvariants::new(width, height);
     let sequence = Sequence::new();
     write_ivf_header(&mut files.output_file, fi.sb_width*64, fi.sb_height*64);
 
-    let mut frame_number = 0;
     let mut rl = Editor::<()>::new();
     let _ = rl.load_history(".rav1e-history");
     loop {
@@ -30,10 +29,9 @@ fn main() {
                 rl.add_history_entry(&line);
                 match line.split_whitespace().next() {
                     Some("process_frame") => {
-                        process_frame(frame_number, &sequence, &fi,
-                                      &mut files.output_file, &mut y4m_dec, y4m_enc.as_mut());
-                        frame_number += 1;
-                        if frame_number == files.limit {
+                        process_frame(&sequence, &fi, &mut files.output_file, &mut y4m_dec, y4m_enc.as_mut());
+                        fi.number += 1;
+                        if fi.number == files.limit {
                             break;
                         }
                     },
