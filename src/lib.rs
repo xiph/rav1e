@@ -130,6 +130,7 @@ pub struct FrameInvariants {
     pub sb_height: usize,
     pub number: u64,
     pub ftype: FrameType,
+    pub show_existing_frame: bool,
 }
 
 impl FrameInvariants {
@@ -141,7 +142,8 @@ impl FrameInvariants {
             sb_width: (width+63)/64,
             sb_height: (height+63)/64,
             number: 0,
-            ftype: FrameType::KEY
+            ftype: FrameType::KEY,
+            show_existing_frame: false,
         }
     }
 }
@@ -247,6 +249,12 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     let mut uch = BitWriter::<BE>::new(packet);
     uch.write(2,2)?; // frame type
     uch.write(2,sequence.profile)?; // profile 0
+    if fi.show_existing_frame {
+        uch.write_bit(true)?; // show_existing_frame=1
+        uch.write(3,0)?; // show last frame
+        uch.byte_align()?;
+        return Ok(());
+    }
     uch.write_bit(false)?; // show_existing_frame=0
     uch.write_bit(false)?; // keyframe
     uch.write_bit(true)?; // show frame
@@ -439,8 +447,10 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
 fn encode_frame(sequence: &Sequence, fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
     let mut packet = Vec::new();
     write_uncompressed_header(&mut packet, sequence, fi).unwrap();
-    let tile = encode_tile(fi, fs);
-    packet.write(&tile).unwrap();
+    if !fi.show_existing_frame {
+        let tile = encode_tile(fi, fs);
+        packet.write(&tile).unwrap();
+    }
     packet
 }
 
