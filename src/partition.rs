@@ -74,7 +74,7 @@ pub enum TxType {
     H_FLIPADST = 15,
 }
 
-#[derive(Copy,Clone,Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum PredictionMode {
   DC_PRED,    // Average of above and left pixels
   V_PRED,     // Vertical
@@ -100,6 +100,63 @@ pub enum PredictionMode {
   NEW_NEARMV,
   ZERO_ZEROMV,
   NEW_NEWMV,
+}
+
+use plane::*;
+use predict::*;
+
+fn setup_left(left: &mut [u16; 4], rec: &PlaneMutSlice) {
+    let left_slice = rec.go_up(1);
+    for i in 0..4 {
+        left[i] = left_slice.p(0, i);
+    }
+}
+
+impl PredictionMode {
+    pub fn predict_4x4<'a>(&self, dst: &'a mut PlaneMutSlice<'a>) {
+        let mut above = [127u16; 4];
+        let mut left = [129u16; 4];
+        let stride = dst.plane.cfg.stride;
+        let x = dst.x;
+        let y = dst.y;
+
+        if self == &PredictionMode::V_PRED ||
+            (self == &PredictionMode::DC_PRED && y != 0) {
+            above.copy_from_slice(&dst.go_left(1).as_slice()[..4]);
+        }
+
+        if self == &PredictionMode::H_PRED ||
+            (self == &PredictionMode::DC_PRED && x != 0) {
+            setup_left(&mut left, dst);
+        }
+
+        let slice = dst.as_mut_slice();
+
+        match *self {
+            PredictionMode::DC_PRED => {
+                match (x, y) {
+                    (0, 0) =>
+                        pred_dc_128(slice, stride),
+                    (_, 0) => {
+                        pred_dc_left_4x4(slice, stride, &above[..4], &left[..4]);
+                    },
+                    (0, _) => {
+                        pred_dc_top_4x4(slice, stride, &above[..4], &left[..4])
+                    },
+                    _ => {
+                        pred_dc(slice, stride, &above[..4], &left[..4]);
+                    }
+                }
+            },
+            PredictionMode::H_PRED => {
+                pred_h(slice, stride, &left[..4], 4);
+            },
+            PredictionMode::V_PRED => {
+                pred_v(slice, stride, &above[..4], 4);
+            },
+            _ => unimplemented!(),
+        }
+    }
 }
 
 #[derive(Copy,Clone)]
