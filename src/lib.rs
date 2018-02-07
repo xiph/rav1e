@@ -31,6 +31,7 @@ use transform::*;
 use quantize::*;
 use predict::*;
 use rdo::*;
+use std::fmt;
 
 pub struct Plane {
     pub data: Vec<u16>,
@@ -118,12 +119,8 @@ impl FrameState {
     }
 }
 
-#[derive(Debug, EnumIterator)]
-pub enum FrameType {
-    Intra,
-    Inter
-}
 
+// Frame Invariants are invariant inside a frame
 #[allow(dead_code)]
 pub struct FrameInvariants {
     pub qindex: usize,
@@ -131,7 +128,8 @@ pub struct FrameInvariants {
     pub height: usize,
     pub sb_width: usize,
     pub sb_height: usize,
-    pub frame_type: FrameType,
+    pub number: u64,
+    pub ftype: FrameType,
 }
 
 impl FrameInvariants {
@@ -142,10 +140,38 @@ impl FrameInvariants {
             height: height,
             sb_width: (width+63)/64,
             sb_height: (height+63)/64,
-            frame_type: FrameType::Intra,
+            number: 0,
+            ftype: FrameType::KEY
         }
     }
 }
+
+impl fmt::Display for FrameInvariants{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Frame {} - {}", self.number, self.ftype)
+    }
+}
+
+#[allow(dead_code,non_camel_case_types)]
+#[derive(Debug,PartialEq,EnumIterator)]
+pub enum FrameType {
+    KEY,
+    INTER,
+    INTRA_ONLY,
+    S,
+}
+
+impl fmt::Display for FrameType{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            &FrameType::KEY => write!(f, "Key frame"),
+            &FrameType::INTER => write!(f, "Inter frame"),
+            &FrameType::INTRA_ONLY => write!(f, "Intra only frame"),
+            &FrameType::S => write!(f, "Switching frame"),
+        }
+    }
+}
+
 
 pub struct EncoderConfig {
     pub input_file: Box<Read>,
@@ -419,7 +445,7 @@ fn encode_frame(sequence: &Sequence, fi: &FrameInvariants, fs: &mut FrameState) 
 }
 
 /// Encode and write a frame.
-pub fn process_frame(frame_number: u64, sequence: &Sequence, fi: &FrameInvariants,
+pub fn process_frame(sequence: &Sequence, fi: &FrameInvariants,
                      output_file: &mut Write,
                      y4m_dec: &mut y4m::Decoder<Box<Read>>,
                      y4m_enc: Option<&mut y4m::Encoder<Box<Write>>>) -> bool {
@@ -430,7 +456,7 @@ pub fn process_frame(frame_number: u64, sequence: &Sequence, fi: &FrameInvariant
             let y4m_y = y4m_frame.get_y_plane();
             let y4m_u = y4m_frame.get_u_plane();
             let y4m_v = y4m_frame.get_v_plane();
-            eprintln!("Frame {}", frame_number);
+            eprintln!("{}", fi);
             let mut fs = FrameState::new(&fi);
             for y in 0..height {
                 for x in 0..width {
@@ -451,7 +477,7 @@ pub fn process_frame(frame_number: u64, sequence: &Sequence, fi: &FrameInvariant
                 }
             }
             let packet = encode_frame(&sequence, &fi, &mut fs);
-            write_ivf_frame(output_file, frame_number, packet.as_ref());
+            write_ivf_frame(output_file, fi.number, packet.as_ref());
             match y4m_enc {
                 Some(mut y4m_enc) => {
                     let mut rec_y = vec![128 as u8; width*height];
