@@ -7,6 +7,9 @@ extern crate libc;
 extern crate rand;
 extern crate y4m;
 
+#[macro_use]
+extern crate enum_iterator_derive;
+
 use std::fs::File;
 use std::io::prelude::*;
 use bitstream_io::{BE, BitWriter};
@@ -115,13 +118,20 @@ impl FrameState {
     }
 }
 
+#[derive(Debug, EnumIterator)]
+pub enum FrameType {
+    Intra,
+    Inter
+}
+
 #[allow(dead_code)]
 pub struct FrameInvariants {
     pub qindex: usize,
     pub width: usize,
     pub height: usize,
     pub sb_width: usize,
-    pub sb_height: usize
+    pub sb_height: usize,
+    pub frame_type: FrameType,
 }
 
 impl FrameInvariants {
@@ -132,6 +142,7 @@ impl FrameInvariants {
             height: height,
             sb_width: (width+63)/64,
             sb_height: (height+63)/64,
+            frame_type: FrameType::Intra,
         }
     }
 }
