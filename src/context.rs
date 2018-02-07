@@ -6,6 +6,7 @@
 use ec;
 use partition::*;
 use partition::TxSize::*;
+use plane::*;
 
 const PLANES: usize = 3;
 
@@ -226,22 +227,10 @@ impl CDFContext {
     }
 }
 
-pub struct PlaneConfig {
-    pub stride: usize,
-    pub xdec: usize,
-    pub ydec: usize,
-}
-
 const SUPERBLOCK_TO_PLANE_SHIFT: usize = 6;
 const SUPERBLOCK_TO_BLOCK_SHIFT: usize = 4;
 const BLOCK_TO_PLANE_SHIFT: usize = SUPERBLOCK_TO_PLANE_SHIFT - SUPERBLOCK_TO_BLOCK_SHIFT;
 const LOCAL_BLOCK_MASK: usize = (1 << SUPERBLOCK_TO_BLOCK_SHIFT) - 1;
-
-/// Absolute offset in pixels inside a plane
-pub struct PlaneOffset {
-    pub x: usize,
-    pub y: usize
-}
 
 /// Absolute offset in superblocks inside a plane, where a superblock is defined
 /// to be an N*N square where N = (1 << SUPERBLOCK_TO_PLANE_SHIFT).

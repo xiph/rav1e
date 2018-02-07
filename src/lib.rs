@@ -19,6 +19,7 @@ use clap::{App, Arg};
 // for benchmarking purpose
 pub mod ec;
 pub mod partition;
+pub mod plane;
 pub mod context;
 pub mod transform;
 pub mod quantize;
@@ -29,52 +30,9 @@ use context::*;
 use partition::*;
 use transform::*;
 use quantize::*;
+use plane::*;
 use predict::*;
 use rdo::*;
-
-pub struct Plane {
-    pub data: Vec<u16>,
-    pub cfg: PlaneConfig,
-}
-
-#[allow(dead_code)]
-impl Plane {
-    pub fn new(width: usize, height: usize, xdec: usize, ydec: usize) -> Plane {
-        Plane {
-            data: vec![128; width*height],
-            cfg: PlaneConfig {
-                stride: width,
-                xdec,
-                ydec,
-            },
-        }
-    }
-    pub fn slice<'a>(&'a mut self, x: usize, y: usize) -> PlaneMutSlice<'a> {
-        PlaneMutSlice {
-            p: self,
-            x: x,
-            y: y
-        }
-    }
-    pub fn p(&self, x: usize, y: usize) -> u16 {
-        self.data[y*self.cfg.stride+x]
-    }
-}
-
-#[allow(dead_code)]
-pub struct PlaneMutSlice<'a> {
-    pub p: &'a mut Plane,
-    pub x: usize,
-    pub y: usize
-}
-
-#[allow(dead_code)]
-impl<'a> PlaneMutSlice<'a> {
-    pub fn as_slice(&mut self) -> &mut [u16] {
-        let stride = self.p.cfg.stride;
-        &mut self.p.data[self.y*stride+self.x..]
-    }
-}
 
 pub struct Frame {
     pub planes: [Plane; 3]
@@ -266,53 +224,74 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     Ok(())
 }
 
-fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, p: usize, bo: &BlockOffset, mode: PredictionMode, tx_type: TxType) {
-    let stride = fs.input.planes[p].cfg.stride;
-    let mut above = [0 as u16; 4];
-    let mut left = [0 as u16; 4];
-    let po = bo.plane_offset(&fs.input.planes[p].cfg);
+/// Setup the `above` and `left` buffer to be used for prediction.
+fn setup_prediction_4x4(above: &mut [u16; 4], left: &mut [u16; 4], rec: &PlaneSlice) {
+    if rec.y == 0 {
+        *above = [127; 4];
+    } else {
+        above.copy_from_slice(&rec.go_left(1).as_slice()[..4]);
+    }
+    if rec.x == 0 {
+        *left = [129; 4];
+    } else {
+        let left_slice = rec.go_up(1);
+        for i in 0..4 {
+            left[i] = left_slice.p(0, i);
+        }
+    }
+}
 
-    if bo.y == 0 {
-        above = [127; 4];
-    } else {
-        for i in 0..4 {
-            above[i] = fs.rec.planes[p].data[(po.y - 1)*stride + po.x + i];
-        }
-    }
-    if bo.x == 0 {
-        left = [129; 4];
-    } else {
-        for i in 0..4 {
-            left[i] = fs.rec.planes[p].data[(po.y + i)*stride + po.x - 1];
-        }
-    }
+/// Write predicted block into `dst`.
+fn predict_4x4<'a>(dst: &'a mut PlaneMutSlice<'a>, above: [u16; 4], left: [u16; 4], mode: PredictionMode) {
+    let x = dst.x;
+    let y = dst.y;
+    let stride = dst.plane.cfg.stride;
+    let slice = dst.as_mut_slice();
     match mode {
         PredictionMode::DC_PRED =>
-            match (bo.x, bo.y) {
+            match (x, y) {
                 (0, 0) =>
-                    pred_dc_128(&mut fs.rec.planes[p].data[po.y*stride + po.x..], stride),
+                    pred_dc_128(slice, stride),
                 (_, 0) =>
-                    pred_dc_left_4x4(&mut fs.rec.planes[p].data[po.y*stride + po.x..], stride, &above, &left),
+                    pred_dc_left_4x4(slice, stride, &above, &left),
                 (0, _) =>
-                    pred_dc_top_4x4(&mut fs.rec.planes[p].data[po.y*stride + po.x..], stride, &above, &left),
+                    pred_dc_top_4x4(slice, stride, &above, &left),
                 _ =>
-                    pred_dc(&mut fs.rec.planes[p].data[po.y*stride + po.x..], stride, &above, &left),
+                    pred_dc(slice, stride, &above, &left),
             }
         PredictionMode::H_PRED =>
-            pred_h(&mut fs.rec.planes[p].data[po.y*stride + po.x..], stride, &left, 4),
+            pred_h(slice, stride, &left, 4),
         PredictionMode::V_PRED =>
-            pred_v(&mut fs.rec.planes[p].data[po.y*stride + po.x..], stride, &above, 4),
+            pred_v(slice, stride, &above, 4),
         _ =>
             panic!("Unimplemented prediction mode: {:?}", mode),
     }
-    let mut coeffs = [0 as i32; 16];
-    let mut residual = [0 as i16; 16];
+}
+
+/// Write into `dst` the difference between the 4x4 blocks at `src1` and `src2`
+fn diff_4x4(dst: &mut [i16; 16], src1: &PlaneSlice, src2: &PlaneSlice) {
     for j in 0..4 {
         for i in 0..4 {
-            residual[j*4+i] = fs.input.planes[p].data[(po.y + j)*stride + po.x + i] as i16
-                - fs.rec.planes[p].data[(po.y + j)*stride + po.x + i] as i16;
+            dst[j*4 + i] = (src1.p(i, j) as i16) - (src2.p(i, j) as i16);
         }
     }
+}
+
+fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, p: usize, bo: &BlockOffset, mode: PredictionMode, tx_type: TxType) {
+    let stride = fs.input.planes[p].cfg.stride;
+    let po = bo.plane_offset(&fs.input.planes[p].cfg);
+
+    let mut above = [0 as u16; 4];
+    let mut left = [0 as u16; 4];
+    setup_prediction_4x4(&mut above, &mut left, &fs.rec.planes[p].slice(&po));
+    predict_4x4(&mut fs.rec.planes[p].mut_slice(&po), above, left, mode);
+
+    let mut residual = [0 as i16; 16];
+    diff_4x4(&mut residual,
+             &fs.input.planes[p].slice(&po),
+             &fs.rec.planes[p].slice(&po));
+
+    let mut coeffs = [0 as i32; 16];
     fht4x4(&residual, &mut coeffs, 4, tx_type);
     quantize_in_place(fi.qindex, &mut coeffs);
     cw.write_coeffs(p, bo, &coeffs, TxSize::TX_4X4, tx_type);
@@ -320,7 +299,8 @@ fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, p:
     //reconstruct
     let mut rcoeffs = [0 as i32; 16];
     dequantize(fi.qindex, &coeffs, &mut rcoeffs);
-    iht4x4_add(&mut rcoeffs, &mut fs.rec.planes[p].data[po.y*stride + po.x..], stride, tx_type);
+
+    iht4x4_add(&mut rcoeffs, &mut fs.rec.planes[p].mut_slice(&po).as_mut_slice(), stride, tx_type);
 }
 
 fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, sbo: &SuperBlockOffset, mode: PredictionMode) {
@@ -363,7 +343,6 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
         bc: bc,
     };
 
-    let stride = fs.input.planes[0].cfg.stride;
     let q = dc_q(fi.qindex) as f64;
 
     // Lambda formula from doc/theoretical_results.lyx in the daala repo
@@ -385,7 +364,7 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
                 let checkpoint = cw.checkpoint();
 
                 write_sb(&mut cw, fi, fs, &sbo, mode);
-                let d = sse_64x64(&fs.input.planes[0].data, &fs.rec.planes[0].data, po.x, po.y, stride);
+                let d = sse_64x64(&fs.input.planes[0].slice(&po), &fs.rec.planes[0].slice(&po));
                 let r = ((cw.w.tell_frac() - tell) as f64)/8.0;
 
                 let rd = (d as f64) + lambda*r;

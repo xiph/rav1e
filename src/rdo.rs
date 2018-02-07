@@ -10,13 +10,14 @@
 
 #![allow(non_camel_case_types)]
 
+use plane::*;
+
 // Sum of Squared Error for a 64x64 block
-pub fn sse_64x64(a: &Vec<u16>, b: &Vec<u16>, x: usize, y: usize, stride: usize) -> u64 {
+pub fn sse_64x64(src1: &PlaneSlice, src2: &PlaneSlice) -> u64 {
     let mut sse: u64 = 0;
     for j in 0..64 {
         for i in 0..64 {
-            let pos = (y+j)*stride + x+i;
-            let dist = (a[pos] as i16 - b[pos] as i16) as i64;
+            let dist = (src1.p(i, j) as i16 - src2.p(i, j) as i16) as i64;
             sse += (dist * dist) as u64;
         }
     }
