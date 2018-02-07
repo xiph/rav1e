@@ -13,6 +13,7 @@ libc = "0.2"
 rand = "0.4"
 rustyline = "1"
 y4m = "0.1"
+enum-iterator-derive = "0.1.1"
 
 [build-dependencies]
 cc = "1"
