@@ -22,5 +22,5 @@ cc = "1"
 bencher = "0.1.5"
 
 [[bench]]
-name = "predict"
+name = "bench"
 harness = false
