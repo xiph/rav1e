@@ -150,6 +150,13 @@ impl FrameInvariants {
     }
 }
 
+use std::fmt;
+impl fmt::Display for FrameInvariants{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Frame {}", self.number)
+    }
+}
+
 pub struct EncoderConfig {
     pub input_file: Box<Read>,
     pub output_file: Box<Write>,
@@ -433,7 +440,7 @@ pub fn process_frame(sequence: &Sequence, fi: &FrameInvariants,
             let y4m_y = y4m_frame.get_y_plane();
             let y4m_u = y4m_frame.get_u_plane();
             let y4m_v = y4m_frame.get_v_plane();
-            eprintln!("Frame {}", fi.frame_number);
+            eprintln!("{}", fi);
             let mut fs = FrameState::new(&fi);
             for y in 0..height {
                 for x in 0..width {
