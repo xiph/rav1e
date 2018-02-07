@@ -305,17 +305,18 @@ fn diff_4x4(dst: &mut [i16; 16], src1: &PlaneSlice, src2: &PlaneSlice) {
 
 pub fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, p: usize, bo: &BlockOffset, mode: PredictionMode, tx_type: TxType) {
     let stride = fs.input.planes[p].cfg.stride;
+    let rec = &mut fs.rec.planes[p];
     let po = bo.plane_offset(&fs.input.planes[p].cfg);
 
     let mut above = [0 as u16; 4];
     let mut left = [0 as u16; 4];
-    setup_prediction_4x4(&mut above, &mut left, &fs.rec.planes[p].slice(&po));
-    predict_4x4(&mut fs.rec.planes[p].mut_slice(&po), above, left, mode);
+    setup_prediction_4x4(&mut above, &mut left, &rec.slice(&po));
+    predict_4x4(&mut rec.mut_slice(&po), above, left, mode);
 
     let mut residual = [0 as i16; 16];
     diff_4x4(&mut residual,
              &fs.input.planes[p].slice(&po),
-             &fs.rec.planes[p].slice(&po));
+             &rec.slice(&po));
 
     let mut coeffs = [0 as i32; 16];
     fht4x4(&residual, &mut coeffs, 4, tx_type);
@@ -326,7 +327,7 @@ pub fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState
     let mut rcoeffs = [0 as i32; 16];
     dequantize(fi.qindex, &coeffs, &mut rcoeffs);
 
-    iht4x4_add(&mut rcoeffs, &mut fs.rec.planes[p].mut_slice(&po).as_mut_slice(), stride, tx_type);
+    iht4x4_add(&mut rcoeffs, &mut rec.mut_slice(&po).as_mut_slice(), stride, tx_type);
 }
 
 fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, sbo: &SuperBlockOffset, mode: PredictionMode) {
