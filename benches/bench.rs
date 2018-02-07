@@ -90,5 +90,42 @@ fn aom(b: &mut Bencher) {
     })
 }
 
-benchmark_group!(predict, aom, native_trait, native);
+use rav1e::*;
+use rav1e::context::*;
+use rav1e::predict::*;
+use rav1e::partition::*;
+use rav1e::ec;
+
+fn write_b_bench(b: &mut Bencher) {
+    let mut fi = FrameInvariants::new(1024, 1024);
+    let w = ec::Writer::new();
+    let fc = CDFContext::new();
+    let bc = BlockContext::new(fi.sb_width * 16, fi.sb_height * 16);
+    let mut fs = FrameState::new(&fi);
+    let mut cw = ContextWriter {
+        w: w,
+        fc: fc,
+        bc: bc,
+    };
+
+    let mode = PredictionMode::DC_PRED;
+    let tx_type = TxType::DCT_DCT;
+
+    let sbx = 0;
+    let sby = 0;
+
+    let p = 0;
+    let by = 0;
+    let bx = 0;
+
+    let sbo = SuperBlockOffset { x: sbx, y: sby };
+    let bo = sbo.block_offset(bx, by);
+
+    cw.bc.at(&bo).mode = mode;
+    b.iter(|| {
+        write_b(&mut cw, &mut fi, &mut fs, p, &bo, mode, tx_type);
+    });
+}
+
+benchmark_group!(predict, aom, native_trait, native, write_b_bench);
 benchmark_main!(predict);
