@@ -19,6 +19,7 @@ use clap::{App, Arg};
 // for benchmarking purpose
 pub mod ec;
 pub mod partition;
+pub mod plane;
 pub mod context;
 pub mod transform;
 pub mod quantize;
@@ -29,53 +30,10 @@ use context::*;
 use partition::*;
 use transform::*;
 use quantize::*;
+use plane::*;
 use predict::*;
 use rdo::*;
 use std::fmt;
-
-pub struct Plane {
-    pub data: Vec<u16>,
-    pub stride: usize,
-    pub xdec: usize,
-    pub ydec: usize,
-}
-
-#[allow(dead_code)]
-impl Plane {
-    pub fn new(width: usize, height: usize, xdec: usize, ydec: usize) -> Plane {
-        Plane {
-            data: vec![128; width*height],
-            stride: width,
-            xdec: xdec,
-            ydec: ydec,
-        }
-    }
-    pub fn slice<'a>(&'a mut self, x: usize, y: usize) -> PlaneMutSlice<'a> {
-        PlaneMutSlice {
-            p: self,
-            x: x,
-            y: y
-        }
-    }
-    pub fn p(&self, x: usize, y: usize) -> u16 {
-        self.data[y*self.stride+x]
-    }
-}
-
-#[allow(dead_code)]
-pub struct PlaneMutSlice<'a> {
-    pub p: &'a mut Plane,
-    pub x: usize,
-    pub y: usize
-}
-
-#[allow(dead_code)]
-impl<'a> PlaneMutSlice<'a> {
-    pub fn as_slice(&mut self) -> &mut [u16] {
-        let stride = self.p.stride;
-        &mut self.p.data[self.y*stride+self.x..]
-    }
-}
 
 pub struct Frame {
     pub planes: [Plane; 3]
@@ -292,72 +250,91 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     Ok(())
 }
 
-fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, p: usize, sbx: usize, sby: usize, bx: usize, by: usize, mode: PredictionMode, tx_type: TxType) {
-    let stride = fs.input.planes[p].stride;
-    let xdec = fs.input.planes[p].xdec;
-    let ydec = fs.input.planes[p].ydec;
-    let mut above = [0 as u16; 4];
-    let mut left = [0 as u16; 4];
-    let x = (sbx*64>>xdec) + bx*4;
-    let y = (sby*64>>ydec) + by*4;
-    match (sby, by) {
-        (0,0) => above = [127; 4],
-        _ => {
-            for i in 0..4 {
-                above[i] = fs.rec.planes[p].data[(y-1)*stride+x+i];
-            }
+/// Setup the `above` and `left` buffer to be used for prediction.
+fn setup_prediction_4x4(above: &mut [u16; 4], left: &mut [u16; 4], rec: &PlaneSlice) {
+    if rec.y == 0 {
+        *above = [127; 4];
+    } else {
+        above.copy_from_slice(&rec.go_left(1).as_slice()[..4]);
+    }
+    if rec.x == 0 {
+        *left = [129; 4];
+    } else {
+        let left_slice = rec.go_up(1);
+        for i in 0..4 {
+            left[i] = left_slice.p(0, i);
         }
     }
-    match (sbx, bx) {
-        (0,0) => left = [129; 4],
-        _ => {
-            for i in 0..4 {
-                left[i] = fs.rec.planes[p].data[(y+i)*stride+x-1];
-            }
-        }
-    }
+}
+
+/// Write predicted block into `dst`.
+fn predict_4x4<'a>(dst: &'a mut PlaneMutSlice<'a>, above: [u16; 4], left: [u16; 4], mode: PredictionMode) {
+    let x = dst.x;
+    let y = dst.y;
+    let stride = dst.plane.cfg.stride;
+    let slice = dst.as_mut_slice();
     match mode {
         PredictionMode::DC_PRED =>
-            match (sbx, bx, sby, by) {
-                (0,0,0,0) =>
-                    pred_dc_128(&mut fs.rec.planes[p].data[y*stride+x..], stride),
-                (_,_,0,0) =>
-                    pred_dc_left_4x4(&mut fs.rec.planes[p].data[y*stride+x..], stride, &above, &left),
-                (0,0,_,_) =>
-                    pred_dc_top_4x4(&mut fs.rec.planes[p].data[y*stride+x..], stride, &above, &left),
+            match (x, y) {
+                (0, 0) =>
+                    pred_dc_128(slice, stride),
+                (_, 0) =>
+                    pred_dc_left_4x4(slice, stride, &above, &left),
+                (0, _) =>
+                    pred_dc_top_4x4(slice, stride, &above, &left),
                 _ =>
-                    pred_dc(&mut fs.rec.planes[p].data[y*stride+x..], stride, &above, &left),
+                    pred_dc(slice, stride, &above, &left),
             }
         PredictionMode::H_PRED =>
-            pred_h(&mut fs.rec.planes[p].data[y*stride+x..], stride, &left, 4),
+            pred_h(slice, stride, &left, 4),
         PredictionMode::V_PRED =>
-            pred_v(&mut fs.rec.planes[p].data[y*stride+x..], stride, &above, 4),
+            pred_v(slice, stride, &above, 4),
         _ =>
             panic!("Unimplemented prediction mode: {:?}", mode),
     }
-    let mut coeffs = [0 as i32; 16];
-    let mut residual = [0 as i16; 16];
+}
+
+/// Write into `dst` the difference between the 4x4 blocks at `src1` and `src2`
+fn diff_4x4(dst: &mut [i16; 16], src1: &PlaneSlice, src2: &PlaneSlice) {
     for j in 0..4 {
         for i in 0..4 {
-            residual[j*4+i] = fs.input.planes[p].data[(y+j)*stride+x+i] as i16 - fs.rec.planes[p].data[(j+y)*stride+x+i] as i16;
+            dst[j*4 + i] = (src1.p(i, j) as i16) - (src2.p(i, j) as i16);
         }
     }
+}
+
+fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, p: usize, bo: &BlockOffset, mode: PredictionMode, tx_type: TxType) {
+    let stride = fs.input.planes[p].cfg.stride;
+    let po = bo.plane_offset(&fs.input.planes[p].cfg);
+
+    let mut above = [0 as u16; 4];
+    let mut left = [0 as u16; 4];
+    setup_prediction_4x4(&mut above, &mut left, &fs.rec.planes[p].slice(&po));
+    predict_4x4(&mut fs.rec.planes[p].mut_slice(&po), above, left, mode);
+
+    let mut residual = [0 as i16; 16];
+    diff_4x4(&mut residual,
+             &fs.input.planes[p].slice(&po),
+             &fs.rec.planes[p].slice(&po));
+
+    let mut coeffs = [0 as i32; 16];
     fht4x4(&residual, &mut coeffs, 4, tx_type);
     quantize_in_place(fi.qindex, &mut coeffs);
-    cw.write_coeffs(p, &coeffs, TxSize::TX_4X4, tx_type);
+    cw.write_coeffs(p, bo, &coeffs, TxSize::TX_4X4, tx_type);
 
     //reconstruct
     let mut rcoeffs = [0 as i32; 16];
     dequantize(fi.qindex, &coeffs, &mut rcoeffs);
-    iht4x4_add(&mut rcoeffs, &mut fs.rec.planes[p].data[y*stride+x..], stride, tx_type);
+
+    iht4x4_add(&mut rcoeffs, &mut fs.rec.planes[p].mut_slice(&po).as_mut_slice(), stride, tx_type);
 }
 
-fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, sbx: usize, sby: usize, mode: PredictionMode) {
-    cw.mc.set_loc(sbx*16, sby*16);
-
+fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, sbo: &SuperBlockOffset, mode: PredictionMode) {
     cw.write_partition(PartitionType::PARTITION_NONE);
-    cw.write_skip(false);
-    cw.write_intra_mode_kf(mode);
+    // The partition offset is represented using a BlockOffset
+    let po = sbo.block_offset(0, 0);
+    cw.write_skip(&po, false);
+    cw.write_intra_mode_kf(&po, mode);
     let uv_mode = mode;
     cw.write_intra_uv_mode(uv_mode, mode);
     let tx_type = TxType::DCT_DCT;
@@ -365,9 +342,9 @@ fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, s
     for p in 0..1 {
         for by in 0..16 {
             for bx in 0..16 {
-                cw.mc.set_loc(sbx*16+bx, sby*16+by);
-                cw.mc.get_mi().mode = mode;
-                write_b(cw, fi, fs, p, sbx, sby, bx, by, mode, tx_type);
+                let bo = sbo.block_offset(bx, by);
+                cw.bc.at(&bo).mode = mode;
+                write_b(cw, fi, fs, p, &bo, mode, tx_type);
             }
         }
     }
@@ -375,8 +352,8 @@ fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, s
     for p in 1..3 {
         for by in 0..8 {
             for bx in 0..8 {
-                cw.mc.set_loc(sbx*16+bx, sby*16+by);
-                write_b(cw, fi, fs, p, sbx, sby, bx, by, uv_mode, uv_tx_type);
+                let bo = sbo.block_offset(bx, by);
+                write_b(cw, fi, fs, p, &bo, uv_mode, uv_tx_type);
             }
         }
     }
@@ -385,28 +362,25 @@ fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, s
 fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
     let w = ec::Writer::new();
     let fc = CDFContext::new();
-    let mc = MIContext::new(fi.sb_width*16, fi.sb_height*16);
+    let bc = BlockContext::new(fi.sb_width*16, fi.sb_height*16);
     let mut cw = ContextWriter {
         w: w,
         fc: fc,
-        mc: mc,
+        bc: bc,
     };
 
-    let stride = fs.input.planes[0].stride;
-    let xdec = fs.input.planes[0].xdec;
-    let ydec = fs.input.planes[0].ydec;
     let q = dc_q(fi.qindex) as f64;
 
     // Lambda formula from doc/theoretical_results.lyx in the daala repo
     let lambda = q*q*2.0_f64.log2()/6.0;
 
     for sby in 0..fi.sb_height {
-        let y = sby*64 >> ydec;
         for p in 0..3 {
-            cw.reset_left_coeff_context(p);
+            cw.bc.reset_left_coeff_context(p);
         }
         for sbx in 0..fi.sb_width {
-            let x = sbx*64 >> xdec;
+            let sbo = SuperBlockOffset { x: sbx, y: sby };
+            let po = sbo.plane_offset(&fs.input.planes[0].cfg);
             let tell = cw.w.tell_frac();
 
             let mut best_mode = PredictionMode::DC_PRED;
@@ -415,8 +389,8 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
             for &mode in RAV1E_INTRA_MODES {
                 let checkpoint = cw.checkpoint();
 
-                write_sb(&mut cw, fi, fs, sbx, sby, mode);
-                let d = sse_64x64(&fs.input.planes[0].data, &fs.rec.planes[0].data, x, y, stride);
+                write_sb(&mut cw, fi, fs, &sbo, mode);
+                let d = sse_64x64(&fs.input.planes[0].slice(&po), &fs.rec.planes[0].slice(&po));
                 let r = ((cw.w.tell_frac() - tell) as f64)/8.0;
 
                 let rd = (d as f64) + lambda*r;
@@ -428,7 +402,7 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
                 cw.rollback(checkpoint.clone());
             }
 
-            write_sb(&mut cw, fi, fs, sbx, sby, best_mode);
+            write_sb(&mut cw, fi, fs, &sbo, best_mode);
         }
     }
     let mut h = cw.w.done();
@@ -460,19 +434,19 @@ pub fn process_frame(sequence: &Sequence, fi: &FrameInvariants,
             let mut fs = FrameState::new(&fi);
             for y in 0..height {
                 for x in 0..width {
-                    let stride = fs.input.planes[0].stride;
+                    let stride = fs.input.planes[0].cfg.stride;
                     fs.input.planes[0].data[y*stride+x] = y4m_y[y*width+x] as u16;
                 }
             }
             for y in 0..height/2 {
                 for x in 0..width/2 {
-                    let stride = fs.input.planes[1].stride;
+                    let stride = fs.input.planes[1].cfg.stride;
                     fs.input.planes[1].data[y*stride+x] = y4m_u[y*width/2+x] as u16;
                 }
             }
             for y in 0..height/2 {
                 for x in 0..width/2 {
-                    let stride = fs.input.planes[2].stride;
+                    let stride = fs.input.planes[2].cfg.stride;
                     fs.input.planes[2].data[y*stride+x] = y4m_v[y*width/2+x] as u16;
                 }
             }
@@ -485,19 +459,19 @@ pub fn process_frame(sequence: &Sequence, fi: &FrameInvariants,
                     let mut rec_v = vec![128 as u8; width*height/4];
                     for y in 0..height {
                         for x in 0..width {
-                            let stride = fs.rec.planes[0].stride;
+                            let stride = fs.rec.planes[0].cfg.stride;
                             rec_y[y*width+x] = fs.rec.planes[0].data[y*stride+x] as u8;
                         }
                     }
                     for y in 0..height/2 {
                         for x in 0..width/2 {
-                            let stride = fs.rec.planes[1].stride;
+                            let stride = fs.rec.planes[1].cfg.stride;
                             rec_u[y*width/2+x] = fs.rec.planes[1].data[y*stride+x] as u8;
                         }
                     }
                     for y in 0..height/2 {
                         for x in 0..width/2 {
-                            let stride = fs.rec.planes[2].stride;
+                            let stride = fs.rec.planes[2].cfg.stride;
                             rec_v[y*width/2+x] = fs.rec.planes[2].data[y*stride+x] as u8;
                         }
                     }

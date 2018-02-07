@@ -118,33 +118,3 @@ pub enum TxSetType {
     EXT_TX_SET_ALL16 = 5,
     EXT_TX_SET_TYPES
 }
-
-#[derive(Copy,Clone)]
-pub struct SubMode {
-    pub mode: PredictionMode
-}
-
-impl SubMode {
-    pub fn default() -> SubMode {
-        SubMode {
-            mode: PredictionMode::DC_PRED
-        }
-    }
-}
-
-#[derive(Copy,Clone)]
-pub struct Mode {
-    pub mode: PredictionMode,
-    pub skip: bool,
-}
-
-impl Mode {
-    pub fn default() -> Mode {
-        Mode { mode: PredictionMode::DC_PRED,
-               skip: false,
-        }
-    }
-    pub fn is_inter(&self) -> bool {
-        false
-    }
-}
