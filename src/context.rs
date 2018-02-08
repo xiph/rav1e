@@ -24,8 +24,8 @@ const MAX_SB_SIZE_LOG2: usize = 6;
 const MAX_SB_SIZE: usize = (1 << MAX_SB_SIZE_LOG2);
 const MAX_SB_SQUARE: usize = (MAX_SB_SIZE * MAX_SB_SIZE);
 
-const INTRA_MODES: usize = 11;
-const UV_INTRA_MODES: usize = 11;
+const INTRA_MODES: usize = 13;
+const UV_INTRA_MODES: usize = 13;
 
 const b_width_log2_lookup: [u8; 20] = [0, 0, 0,  0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 0, 2, 1, 3];
 const b_height_log2_lookup: [u8; 20] = [ 0, 0, 0, 0, 1, 0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 2, 0, 3, 1];
