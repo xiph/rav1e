@@ -5,7 +5,7 @@ set -e
 
 #SEQ=!!!!! ENTER YOUR FAVORITE Y4M HERE !!!!!
 
-if [ -f $SEQ ]; then
+if [[ -z "${SEQ}" ]]; then
   SEQ=nyan.y4m
   wget -nc https://mf4.xiph.org/~ltrudeau/videos/nyan.y4m
 fi
