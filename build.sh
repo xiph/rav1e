@@ -5,6 +5,16 @@ set -e
 
 #SEQ=!!!!! ENTER YOUR FAVORITE Y4M HERE !!!!!
 
+IS_RELEASE=0
+
+for arg in "$@"; do
+  shift
+  case "$arg" in
+    "--release") IS_RELEASE=1 ;;
+    *)        set -- "$@" "$arg"
+  esac
+done
+
 if [[ -z "${SEQ}" ]]; then
   SEQ=nyan.y4m
   SEQ10=nyan10.y4m
@@ -75,7 +85,12 @@ DEC_FILE="dec_file.y4m"
 export RUST_BACKTRACE=1
 
 # Build and run encoder
-cargo run --bin rav1e --release -- $SEQ -o $ENC_FILE -s 3 -r $REC_FILE
+BUILD_TYPE=""
+if [ $IS_RELEASE == 1 ]; then
+  BUILD_TYPE="--release"
+fi
+
+cargo run --bin rav1e $BUILD_TYPE -- $SEQ -o $ENC_FILE -s 3 -r $REC_FILE
 
 # Decode
 ${AOM_TEST}/aomdec $ENC_FILE -o $DEC_FILE
