@@ -74,8 +74,8 @@ impl<'a> PlaneSlice<'a> {
     pub fn go_up(&'a self, i: usize) -> PlaneSlice<'a> {
         PlaneSlice {
             plane: self.plane,
-            x: self.x - i,
-            y: self.y,
+            x: self.x,
+            y: self.y - i,
         }
     }
 
@@ -83,8 +83,8 @@ impl<'a> PlaneSlice<'a> {
     pub fn go_left(&'a self, i: usize) -> PlaneSlice<'a> {
         PlaneSlice {
             plane: self.plane,
-            x: self.x,
-            y: self.y - i,
+            x: self.x - i,
+            y: self.y,
         }
     }
 
@@ -113,8 +113,8 @@ impl<'a> PlaneMutSlice<'a> {
     pub fn go_up(&'a self, i: usize) -> PlaneSlice<'a> {
         PlaneSlice {
             plane: self.plane,
-            x: self.x - i,
-            y: self.y,
+            x: self.x,
+            y: self.y - i,
         }
     }
 
@@ -122,8 +122,8 @@ impl<'a> PlaneMutSlice<'a> {
     pub fn go_left(&'a self, i: usize) -> PlaneSlice<'a> {
         PlaneSlice {
             plane: self.plane,
-            x: self.x,
-            y: self.y - i,
+            x: self.x - i,
+            y: self.y,
         }
     }
 
