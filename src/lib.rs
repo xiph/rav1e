@@ -192,7 +192,7 @@ pub fn write_ivf_header(output_file: &mut Write, width: usize, height: usize) {
     output_file.write_u16::<LittleEndian>(width as u16).unwrap();
     output_file.write_u16::<LittleEndian>(height as u16).unwrap();
     output_file.write_u32::<LittleEndian>(60).unwrap();
-    output_file.write_u32::<LittleEndian>(1).unwrap();
+    output_file.write_u32::<LittleEndian>(0).unwrap();
     output_file.write_u32::<LittleEndian>(0).unwrap();
     output_file.write_u32::<LittleEndian>(0).unwrap();
 }
