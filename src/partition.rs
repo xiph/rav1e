@@ -106,7 +106,7 @@ use plane::*;
 use predict::*;
 
 fn setup_left(left: &mut [u16; 4], rec: &PlaneMutSlice) {
-    let left_slice = rec.go_up(1);
+    let left_slice = rec.go_left(1);
     for i in 0..4 {
         left[i] = left_slice.p(0, i);
     }
@@ -120,13 +120,13 @@ impl PredictionMode {
         let x = dst.x;
         let y = dst.y;
 
-        if self == &PredictionMode::V_PRED ||
-            (self == &PredictionMode::DC_PRED && y != 0) {
-            above.copy_from_slice(&dst.go_left(1).as_slice()[..4]);
+        if (self == &PredictionMode::V_PRED ||
+            self == &PredictionMode::DC_PRED) && x != 0 {
+            above.copy_from_slice(&dst.go_up(1).as_slice()[..4]);
         }
 
-        if self == &PredictionMode::H_PRED ||
-            (self == &PredictionMode::DC_PRED && x != 0) {
+        if (self == &PredictionMode::H_PRED ||
+            self == &PredictionMode::DC_PRED) && y != 0 {
             setup_left(&mut left, dst);
         }
 
