@@ -250,6 +250,50 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     Ok(())
 }
 
+/// Setup the `above` and `left` buffer to be used for prediction.
+fn setup_prediction_4x4(above: &mut [u16; 4], left: &mut [u16; 4], rec: &PlaneSlice) {
+    if rec.y == 0 {
+        *above = [127; 4];
+    } else {
+        above.copy_from_slice(&rec.go_left(1).as_slice()[..4]);
+    }
+    if rec.x == 0 {
+        *left = [129; 4];
+    } else {
+        let left_slice = rec.go_up(1);
+        for i in 0..4 {
+            left[i] = left_slice.p(0, i);
+        }
+    }
+}
+
+/// Write predicted block into `dst`.
+fn predict_4x4<'a>(dst: &'a mut PlaneMutSlice<'a>, above: [u16; 4], left: [u16; 4], mode: PredictionMode) {
+    let x = dst.x;
+    let y = dst.y;
+    let stride = dst.plane.cfg.stride;
+    let slice = dst.as_mut_slice();
+    match mode {
+        PredictionMode::DC_PRED =>
+            match (x, y) {
+                (0, 0) =>
+                    pred_dc_128(slice, stride),
+                (_, 0) =>
+                    pred_dc_left_4x4(slice, stride, &above, &left),
+                (0, _) =>
+                    pred_dc_top_4x4(slice, stride, &above, &left),
+                _ =>
+                    pred_dc(slice, stride, &above, &left),
+            }
+        PredictionMode::H_PRED =>
+            pred_h(slice, stride, &left, 4),
+        PredictionMode::V_PRED =>
+            pred_v(slice, stride, &above, 4),
+        _ =>
+            panic!("Unimplemented prediction mode: {:?}", mode),
+    }
+}
+
 /// Write into `dst` the difference between the 4x4 blocks at `src1` and `src2`
 fn diff_4x4(dst: &mut [i16; 16], src1: &PlaneSlice, src2: &PlaneSlice) {
     for j in 0..4 {
@@ -264,7 +308,10 @@ pub fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState
     let rec = &mut fs.rec.planes[p];
     let po = bo.plane_offset(&fs.input.planes[p].cfg);
 
-    mode.predict_4x4(&mut rec.mut_slice(&po));
+    let mut above = [0 as u16; 4];
+    let mut left = [0 as u16; 4];
+    setup_prediction_4x4(&mut above, &mut left, &rec.slice(&po));
+    predict_4x4(&mut rec.mut_slice(&po), above, left, mode);
 
     let mut residual = [0 as i16; 16];
     diff_4x4(&mut residual,
