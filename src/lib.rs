@@ -235,7 +235,6 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     uch.write_bit(false)?; // uv ac delta q
     //uch.write_bit(false)?; // using qmatrix
     uch.write_bit(false)?; // segmentation off
-    uch.write(1,0)?; // cdef dering damping
     uch.write(2,0)?; // cdef clpf damping
     uch.write(2,0)?; // cdef bits
     for _ in 0..1 {
