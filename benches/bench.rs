@@ -114,16 +114,18 @@ fn write_b_bench(b: &mut Bencher) {
     let sbx = 0;
     let sby = 0;
 
-    let p = 0;
-    let by = 0;
-    let bx = 0;
-
-    let sbo = SuperBlockOffset { x: sbx, y: sby };
-    let bo = sbo.block_offset(bx, by);
-
-    cw.bc.at(&bo).mode = mode;
     b.iter(|| {
-        write_b(&mut cw, &mut fi, &mut fs, p, &bo, mode, tx_type);
+        for &mode in RAV1E_INTRA_MODES {
+            let sbo = SuperBlockOffset { x: sbx, y: sby };
+            for p in 1..3 {
+                for by in 0..8 {
+                    for bx in 0..8 {
+                        let bo = sbo.block_offset(bx, by);
+                            write_b(&mut cw, &mut fi, &mut fs, p, &bo, mode, tx_type);
+                    }
+                }
+            }
+        }
     });
 }
 
