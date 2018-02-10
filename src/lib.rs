@@ -372,10 +372,17 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
     h
 }
 
-fn encode_frame(sequence: &Sequence, fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
+fn encode_frame(sequence: &Sequence, fi: &FrameInvariants, fs: &mut FrameState, last_rec: &Option<Frame>) -> Vec<u8> {
     let mut packet = Vec::new();
     write_uncompressed_header(&mut packet, sequence, fi).unwrap();
-    if !fi.show_existing_frame {
+    if fi.show_existing_frame {
+        match last_rec {
+            &Some(ref rec) => for p in 0..3 {
+                fs.rec.planes[p].data.copy_from_slice(rec.planes[p].data.as_slice());
+            },
+            &None => (),
+        }
+    } else {
         let tile = encode_tile(fi, fs);
         packet.write(&tile).unwrap();
     }
@@ -386,7 +393,8 @@ fn encode_frame(sequence: &Sequence, fi: &FrameInvariants, fs: &mut FrameState) 
 pub fn process_frame(sequence: &Sequence, fi: &FrameInvariants,
                      output_file: &mut Write,
                      y4m_dec: &mut y4m::Decoder<Box<Read>>,
-                     y4m_enc: Option<&mut y4m::Encoder<Box<Write>>>) -> bool {
+                     y4m_enc: Option<&mut y4m::Encoder<Box<Write>>>,
+                     last_rec: &mut Option<Frame>) -> bool {
     let width = fi.width;
     let height = fi.height;
     match y4m_dec.read_frame() {
@@ -414,7 +422,7 @@ pub fn process_frame(sequence: &Sequence, fi: &FrameInvariants,
                     fs.input.planes[2].data[y*stride+x] = y4m_v[y*width/2+x] as u16;
                 }
             }
-            let packet = encode_frame(&sequence, &fi, &mut fs);
+            let packet = encode_frame(&sequence, &fi, &mut fs, &last_rec);
             write_ivf_frame(output_file, fi.number, packet.as_ref());
             match y4m_enc {
                 Some(mut y4m_enc) => {
@@ -444,6 +452,7 @@ pub fn process_frame(sequence: &Sequence, fi: &FrameInvariants,
                 }
                 None => {}
             }
+            *last_rec = Some(fs.rec);
             true
         },
         _ => false

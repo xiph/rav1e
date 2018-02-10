@@ -22,6 +22,7 @@ fn main() {
 
     let mut rl = Editor::<()>::new();
     let _ = rl.load_history(".rav1e-history");
+    let mut last_rec: Option<Frame> = None;
     loop {
         let readline = rl.readline(">> ");
         match readline {
@@ -29,7 +30,7 @@ fn main() {
                 rl.add_history_entry(&line);
                 match line.split_whitespace().next() {
                     Some("process_frame") => {
-                        process_frame(&sequence, &fi, &mut files.output_file, &mut y4m_dec, y4m_enc.as_mut());
+                        process_frame(&sequence, &fi, &mut files.output_file, &mut y4m_dec, y4m_enc.as_mut(), &mut last_rec);
                         fi.number += 1;
                         if fi.number == files.limit {
                             break;

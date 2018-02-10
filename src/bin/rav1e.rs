@@ -16,8 +16,9 @@ fn main() {
     let sequence = Sequence::new();
     write_ivf_header(&mut files.output_file, fi.sb_width*64, fi.sb_height*64);
 
+    let mut last_rec: Option<Frame> = None;
     loop {
-        if !process_frame(&sequence, &fi, &mut files.output_file, &mut y4m_dec, y4m_enc.as_mut()) {
+        if !process_frame(&sequence, &fi, &mut files.output_file, &mut y4m_dec, y4m_enc.as_mut(), &mut last_rec) {
             break;
         }
         fi.number += 1;
