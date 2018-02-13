@@ -1,17 +1,17 @@
 extern {
-    static dc_qlookup: [i16; 256];
-    static ac_qlookup: [i16; 256];
+    static dc_qlookup_Q3: [i16; 256];
+    static ac_qlookup_Q3: [i16; 256];
 }
 
 pub fn dc_q(qindex: usize) -> i16 {
     unsafe {
-        dc_qlookup[qindex]
+        dc_qlookup_Q3[qindex]
     }
 }
 
 pub fn ac_q(qindex: usize) -> i16 {
     unsafe {
-        ac_qlookup[qindex]
+        ac_qlookup_Q3[qindex]
     }
 }
 
