@@ -27,5 +27,6 @@ fn main() {
         if fi.number == files.limit {
             break;
         }
+        files.output_file.flush().unwrap();
     }
 }
