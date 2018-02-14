@@ -184,15 +184,15 @@ impl EncoderConfig {
 }
 
 // TODO: possibly just use bitwriter instead of byteorder
-pub fn write_ivf_header(output_file: &mut Write, width: usize, height: usize) {
+pub fn write_ivf_header(output_file: &mut Write, width: usize, height: usize, num: usize, den: usize) {
     output_file.write(b"DKIF").unwrap();
     output_file.write_u16::<LittleEndian>(0).unwrap(); // version
     output_file.write_u16::<LittleEndian>(32).unwrap(); // header length
     output_file.write(b"AV01").unwrap();
     output_file.write_u16::<LittleEndian>(width as u16).unwrap();
     output_file.write_u16::<LittleEndian>(height as u16).unwrap();
-    output_file.write_u32::<LittleEndian>(60).unwrap();
-    output_file.write_u32::<LittleEndian>(1).unwrap();
+    output_file.write_u32::<LittleEndian>(num as u32).unwrap();
+    output_file.write_u32::<LittleEndian>(den as u32).unwrap();
     output_file.write_u32::<LittleEndian>(0).unwrap();
     output_file.write_u32::<LittleEndian>(0).unwrap();
 }
