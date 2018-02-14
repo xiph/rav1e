@@ -331,9 +331,10 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
     };
 
     let q = dc_q(fi.qindex) as f64;
+	let q0 = q / 4.0_f64;	// Convert q in Q
 
     // Lambda formula from doc/theoretical_results.lyx in the daala repo
-    let lambda = q*q*2.0_f64.log2()/6.0;
+    let lambda = q0*q0*2.0_f64.log2()/6.0;
 
     for sby in 0..fi.sb_height {
         for p in 0..3 {
@@ -353,7 +354,6 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
                 write_sb(&mut cw, fi, fs, &sbo, mode);
                 let d = sse_64x64(&fs.input.planes[0].slice(&po), &fs.rec.planes[0].slice(&po));
                 let r = ((cw.w.tell_frac() - tell) as f64)/8.0;
-
                 let rd = (d as f64) + lambda*r;
                 if rd < best_rd {
                     best_rd = rd;
