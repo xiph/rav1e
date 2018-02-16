@@ -29,8 +29,6 @@ const UV_INTRA_MODES: usize = 13;
 
 const b_width_log2_lookup: [u8; 20] = [0, 0, 0,  0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 0, 2, 1, 3];
 const b_height_log2_lookup: [u8; 20] = [ 0, 0, 0, 0, 1, 0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 2, 0, 3, 1];
-const mi_width_log2_lookup: [u8; 20] = [0, 0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 0, 2, 1, 3];
-const mi_height_log2_lookup: [u8; 20] = [0, 0, 0, 0, 1, 0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 2, 0, 3, 1];
 const tx_size_wide_log2: [usize; 14] = [2, 3, 4, 5, 2, 3, 3, 4, 4, 5, 2, 4, 3, 5];
 const tx_size_high_log2: [usize; 14] = [2, 3, 4, 5, 3, 2, 4, 3, 5, 4, 4, 2, 5, 3];
 
@@ -375,7 +373,7 @@ impl BlockContext {
         // TODO: this should be way simpler without sub8x8
         let above_ctx = self.above_seg_context[bo.x];
         let left_ctx = self.left_seg_context[bo.y_in_sb()];
-        let bsl = mi_width_log2_lookup[bsize as usize] - mi_width_log2_lookup[BlockSize::BLOCK_8X8 as usize];
+        let bsl = b_width_log2_lookup[bsize as usize] - b_width_log2_lookup[BlockSize::BLOCK_8X8 as usize];
         let above = (above_ctx >> bsl) & 1;
         let left = (left_ctx >> bsl) & 1;
 
