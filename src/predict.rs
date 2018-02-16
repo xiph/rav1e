@@ -74,7 +74,7 @@ impl Dim for Block4x4 {
 }
 
 pub fn pred_dc_trait<D: Dim>(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
-    let edges = left.iter().chain(above.iter());
+    let edges = left[..D::H].iter().chain(above[..D::W].iter());
     let bw = D::W;
     let bh = D::H;
     let len = (bw + bh) as u32;
