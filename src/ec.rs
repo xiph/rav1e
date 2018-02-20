@@ -246,7 +246,7 @@ impl Writer {
     pub fn bool(&mut self, val: bool, f: u16) {
         self.enc.od_ec_encode_bool_q15(val, f)
     }
-    fn update_cdf(cdf: &mut [u16], val: u32, nsymbs: usize) {
+    pub fn update_cdf(cdf: &mut [u16], val: u32, nsymbs: usize) {
         let rate = 4 + if cdf[nsymbs] > 31 { 1 } else { 0 } + (31 ^ (nsymbs as u32).leading_zeros());
         let rate2 = 5;
         let mut tmp: i32;
