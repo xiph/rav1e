@@ -21,6 +21,7 @@ fn main() {
         .file("aom_build/aom/av1/common/av1_inv_txfm2d.c")
         .file("aom_build/aom/av1/common/blockd.c")
         .file("aom_build/aom/av1/encoder/dct.c")
+        .file("aom_build/aom/aom_dsp/prob.c")
         .include("aom_build")
         .include("aom_build/aom")
         .flag("-std=c99")

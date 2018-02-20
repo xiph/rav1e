@@ -23,7 +23,8 @@ extern {
                            left: *const u16, bd: libc::c_int);
     fn highbd_v_predictor(dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
         bh: libc::c_int, above: *const u16,
-        left: *const u16, bd: libc::c_int);
+                          left: *const u16, bd: libc::c_int);
+    fn update_cdf_noinline(cdf: *mut u16, val: libc::c_int, nsymbs: libc::c_int);
 }
 
 #[inline(always)]
@@ -94,7 +95,7 @@ use rav1e::*;
 use rav1e::context::*;
 use rav1e::predict::*;
 use rav1e::partition::*;
-use rav1e::ec;
+use rav1e::ec::Writer;
 
 fn write_b_bench(b: &mut Bencher) {
     let mut fi = FrameInvariants::new(1024, 1024);
@@ -129,5 +130,25 @@ fn write_b_bench(b: &mut Bencher) {
     });
 }
 
-benchmark_group!(predict, aom, native_trait, native, write_b_bench);
+fn update_cdf_bench_native(b: &mut Bencher) {
+    let mut cdf = [32768, 16384, 0];
+    b.iter(|| {
+        for _ in 0..MAX_ITER {
+            Writer::update_cdf(&mut cdf, 0, 2);
+        }
+    })
+}
+
+fn update_cdf_bench_c(b: &mut Bencher) {
+    let mut cdf: [u16; 3] = [32768, 16384, 0];
+    b.iter(|| {
+        for _ in 0..MAX_ITER {
+            unsafe {
+                update_cdf_noinline(cdf.as_mut_ptr(), 0, 2);
+            }
+        }
+    })
+}
+
+benchmark_group!(predict, aom, native_trait, native, write_b_bench, update_cdf_bench_native, update_cdf_bench_c);
 benchmark_main!(predict);
