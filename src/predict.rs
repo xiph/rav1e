@@ -58,31 +58,35 @@ impl Dim for Block4x4 {
     const H : usize = 4;
 }
 
-pub fn pred_dc<D: Dim>(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
-    let edges = left[..D::H].iter().chain(above[..D::W].iter());
-    let len = (D::W + D::H) as u32;
-    let avg = ((edges.fold(0, |acc, &v| acc + v as u32) + (len >> 1)) / len) as u16;
+pub trait Intra: Dim {
+    fn pred_dc(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+        let edges = left[..Self::H].iter().chain(above[..Self::W].iter());
+        let len = (Self::W + Self::H) as u32;
+        let avg = ((edges.fold(0, |acc, &v| acc + v as u32) + (len >> 1)) / len) as u16;
 
-    for line in output.chunks_mut(stride).take(D::H) {
-        for v in &mut line[..D::W] {
-            *v = avg;
+        for line in output.chunks_mut(stride).take(Self::H) {
+            for v in &mut line[..Self::W] {
+                *v = avg;
+            }
+        }
+    }
+
+    fn pred_h(output: &mut [u16], stride: usize, left: &[u16]) {
+        for (line, l) in output.chunks_mut(stride).zip(left[..Self::H].iter()) {
+            for v in &mut line[..Self::W] {
+                *v = *l;
+            }
+        }
+    }
+
+    fn pred_v(output: &mut [u16], stride: usize, above: &[u16]) {
+        for line in output.chunks_mut(stride).take(Self::H) {
+            line[..Self::W].clone_from_slice(&above[..Self::W])
         }
     }
 }
 
-pub fn pred_h<D: Dim>(output: &mut [u16], stride: usize, left: &[u16]) {
-  for (line, l) in output.chunks_mut(stride).zip(left[..D::H].iter()) {
-    for v in &mut line[..D::W] {
-      *v = *l;
-    }
-  }
-}
-
-pub fn pred_v<D: Dim>(output: &mut [u16], stride: usize, above: &[u16]) {
-    for line in output.chunks_mut(stride).take(D::H) {
-        line[..D::W].clone_from_slice(&above[..D::W])
-    }
-}
+impl Intra for Block4x4 {}
 
 #[cfg(test)]
 pub mod test {
@@ -124,7 +128,7 @@ pub mod test {
         let (above, left, mut o1, mut o2) = setup_pred(ra);
 
         pred_dc_4x4(&mut o1, 32, &above[..4], &left[..4]);
-        pred_dc::<Block4x4>(&mut o2, 32, &above[..4], &left[..4]);
+        Block4x4::pred_dc(&mut o2, 32, &above[..4], &left[..4]);
 
         (o1, o2)
     }
@@ -133,7 +137,7 @@ pub mod test {
         let (above, left, mut o1, mut o2) = setup_pred(ra);
 
         pred_h_4x4(&mut o1, 32, &above[..4], &left[..4]);
-        pred_h::<Block4x4>(&mut o2, 32, &left[..4]);
+        Block4x4::pred_h(&mut o2, 32, &left[..4]);
 
         (o1, o2)
     }
@@ -142,7 +146,7 @@ pub mod test {
         let (above, left, mut o1, mut o2) = setup_pred(ra);
 
         pred_v_4x4(&mut o1, 32, &above[..4], &left[..4]);
-        pred_v::<Block4x4>(&mut o2, 32, &above[..4]);
+        Block4x4::pred_v(&mut o2, 32, &above[..4]);
 
         (o1, o2)
     }
@@ -188,7 +192,7 @@ pub mod test {
 
         let mut o = vec![0u16; 32 * 32];
 
-        pred_dc::<Block4x4>(&mut o, 32, &above[..4], &left[..4]);
+        Block4x4::pred_dc(&mut o, 32, &above[..4], &left[..4]);
 
         for l in o.chunks(32).take(4) {
             for v in l[..4].iter() {
@@ -196,7 +200,7 @@ pub mod test {
             }
         }
 
-        pred_h::<Block4x4>(&mut o, 32, &left[..4]);
+        Block4x4::pred_h(&mut o, 32, &left[..4]);
 
         for l in o.chunks(32).take(4) {
           for v in l[..4].iter() {
@@ -204,7 +208,7 @@ pub mod test {
           }
         }
 
-        pred_v::<Block4x4>(&mut o, 32, &above[..4]);
+        Block4x4::pred_v(&mut o, 32, &above[..4]);
 
         for l in o.chunks(32).take(4) {
           for v in l[..4].iter() {
