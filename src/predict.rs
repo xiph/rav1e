@@ -70,9 +70,9 @@ pub fn pred_dc<D: Dim>(output: &mut [u16], stride: usize, above: &[u16], left: &
     }
 }
 
-pub fn pred_h(output: &mut [u16], stride: usize, left: &[u16], bw: usize) {
-  for (line, l) in output.chunks_mut(stride).zip(left) {
-    for v in &mut line[..bw] {
+pub fn pred_h<D: Dim>(output: &mut [u16], stride: usize, left: &[u16]) {
+  for (line, l) in output.chunks_mut(stride).zip(left[..D::H].iter()) {
+    for v in &mut line[..D::W] {
       *v = *l;
     }
   }
@@ -134,7 +134,7 @@ pub mod test {
         let (above, left, mut o1, mut o2) = setup_pred(ra);
 
         pred_h_4x4(&mut o1, 32, &above[..4], &left[..4]);
-        pred_h(&mut o2, 32, &left[..4], 4);
+        pred_h::<Block4x4>(&mut o2, 32, &left[..4]);
 
         (o1, o2)
     }
@@ -197,7 +197,7 @@ pub mod test {
             }
         }
 
-        pred_h(&mut o, 32, &left[..4], 4);
+        pred_h::<Block4x4>(&mut o, 32, &left[..4]);
 
         for l in o.chunks(32).take(4) {
           for v in l[..4].iter() {
