@@ -146,7 +146,7 @@ impl PredictionMode {
                         pred_dc_top_4x4(slice, stride, &above[..4], &left[..4])
                     },
                     _ => {
-                        pred_dc(slice, stride, &above[..4], &left[..4]);
+                        pred_dc::<Block4x4>(slice, stride, &above[..4], &left[..4]);
                     }
                 }
             },

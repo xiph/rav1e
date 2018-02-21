@@ -46,21 +46,6 @@ pub fn pred_dc_top_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &
     }
 }
 
-
-pub fn pred_dc(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
-    let edges = left.iter().chain(above.iter());
-    let bw = above.len();
-    let bh = left.len();
-    let len = (bw + bh) as u32;
-    let avg = (edges.fold(0, |acc, &v| acc + v as u32) + (len >> 1)) / len;
-
-    for line in output.chunks_mut(stride).take(bh) {
-        for v in &mut line[..bw] {
-            *v = avg as u16;
-        }
-    }
-}
-
 pub trait Dim {
     const W : usize;
     const H : usize;
@@ -73,16 +58,14 @@ impl Dim for Block4x4 {
     const H : usize = 4;
 }
 
-pub fn pred_dc_trait<D: Dim>(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+pub fn pred_dc<D: Dim>(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
     let edges = left[..D::H].iter().chain(above[..D::W].iter());
-    let bw = D::W;
-    let bh = D::H;
-    let len = (bw + bh) as u32;
-    let avg = (edges.fold(0, |acc, &v| acc + v as u32) + (len >> 1)) / len;
+    let len = (D::W + D::H) as u32;
+    let avg = ((edges.fold(0, |acc, &v| acc + v as u32) + (len >> 1)) / len) as u16;
 
-    for line in output.chunks_mut(stride).take(bh) {
-        for v in &mut line[..bw] {
-            *v = avg as u16;
+    for line in output.chunks_mut(stride).take(D::H) {
+        for v in &mut line[..D::W] {
+            *v = avg;
         }
     }
 }
@@ -142,7 +125,7 @@ pub mod test {
         let (above, left, mut o1, mut o2) = setup_pred(ra);
 
         pred_dc_4x4(&mut o1, 32, &above[..4], &left[..4]);
-        pred_dc_trait::<Block4x4>(&mut o2, 32, &above[..4], &left[..4]);
+        pred_dc::<Block4x4>(&mut o2, 32, &above[..4], &left[..4]);
 
         (o1, o2)
     }
@@ -206,7 +189,7 @@ pub mod test {
 
         let mut o = vec![0u16; 32 * 32];
 
-        pred_dc(&mut o, 32, &above[..4], &left[..4]);
+        pred_dc::<Block4x4>(&mut o, 32, &above[..4], &left[..4]);
 
         for l in o.chunks(32).take(4) {
             for v in l[..4].iter() {
