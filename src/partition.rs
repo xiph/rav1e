@@ -146,15 +146,15 @@ impl PredictionMode {
                         pred_dc_top_4x4(slice, stride, &above[..4], &left[..4])
                     },
                     _ => {
-                        pred_dc::<Block4x4>(slice, stride, &above[..4], &left[..4]);
+                        Block4x4::pred_dc(slice, stride, &above[..4], &left[..4]);
                     }
                 }
             },
             PredictionMode::H_PRED => {
-                pred_h::<Block4x4>(slice, stride, &left[..4]);
+                Block4x4::pred_h(slice, stride, &left[..4]);
             },
             PredictionMode::V_PRED => {
-                pred_v::<Block4x4>(slice, stride, &above[..4]);
+                Block4x4::pred_v(slice, stride, &above[..4]);
             },
             _ => unimplemented!(),
         }

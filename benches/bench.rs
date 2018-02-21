@@ -58,7 +58,7 @@ fn intra_dc_pred_native(b: &mut Bencher) {
 
     b.iter(|| {
         for _ in 0..MAX_ITER {
-        pred_dc::<Block4x4>(&mut o2, 32, &above[..4], &left[..4]);
+            Block4x4::pred_dc(&mut o2, 32, &above[..4], &left[..4]);
         }
     })
 }
@@ -80,7 +80,7 @@ fn intra_h_pred_native(b: &mut Bencher) {
 
     b.iter(|| {
         for _ in 0..MAX_ITER {
-            pred_h::<Block4x4>(&mut o2, 32, &left[..4]);
+            Block4x4::pred_h(&mut o2, 32, &left[..4]);
         }
     })
 }
@@ -102,7 +102,7 @@ fn intra_v_pred_native(b: &mut Bencher) {
 
     b.iter(|| {
         for _ in 0..MAX_ITER {
-            pred_v::<Block4x4>(&mut o2, 32, &above[..4]);
+            Block4x4::pred_v(&mut o2, 32, &above[..4]);
         }
     })
 }
