@@ -154,7 +154,7 @@ impl PredictionMode {
                 pred_h::<Block4x4>(slice, stride, &left[..4]);
             },
             PredictionMode::V_PRED => {
-                pred_v(slice, stride, &above[..4], 4);
+                pred_v::<Block4x4>(slice, stride, &above[..4]);
             },
             _ => unimplemented!(),
         }

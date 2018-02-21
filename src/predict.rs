@@ -78,10 +78,9 @@ pub fn pred_h<D: Dim>(output: &mut [u16], stride: usize, left: &[u16]) {
   }
 }
 
-pub fn pred_v(output: &mut [u16], stride: usize, above: &[u16], bh: usize) {
-    let bw = above.len();
-    for line in output.chunks_mut(stride).take(bh) {
-        line[..bw].clone_from_slice(above)
+pub fn pred_v<D: Dim>(output: &mut [u16], stride: usize, above: &[u16]) {
+    for line in output.chunks_mut(stride).take(D::H) {
+        line[..D::W].clone_from_slice(&above[..D::W])
     }
 }
 
@@ -143,7 +142,7 @@ pub mod test {
         let (above, left, mut o1, mut o2) = setup_pred(ra);
 
         pred_v_4x4(&mut o1, 32, &above[..4], &left[..4]);
-        pred_v(&mut o2, 32, &above[..4], 4);
+        pred_v::<Block4x4>(&mut o2, 32, &above[..4]);
 
         (o1, o2)
     }
@@ -205,7 +204,7 @@ pub mod test {
           }
         }
 
-        pred_v(&mut o, 32, &above[..4], 4);
+        pred_v::<Block4x4>(&mut o, 32, &above[..4]);
 
         for l in o.chunks(32).take(4) {
           for v in l[..4].iter() {
