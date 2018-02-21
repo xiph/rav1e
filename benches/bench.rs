@@ -63,18 +63,7 @@ fn native(b: &mut Bencher) {
 
     b.iter(|| {
         for _ in 0..MAX_ITER {
-            pred_dc(&mut o2, 32, &above[..4], &left[..4]);
-        }
-    })
-}
-
-fn native_trait(b: &mut Bencher) {
-    let mut ra = ChaChaRng::new_unseeded();
-    let (above, left, mut o2) = setup_pred(&mut ra);
-
-    b.iter(|| {
-        for _ in 0..MAX_ITER {
-            pred_dc_trait::<Block4x4>(&mut o2, 32, &above[..4], &left[..4]);
+        pred_dc::<Block4x4>(&mut o2, 32, &above[..4], &left[..4]);
         }
     })
 }
@@ -129,5 +118,5 @@ fn write_b_bench(b: &mut Bencher) {
     });
 }
 
-benchmark_group!(predict, aom, native_trait, native, write_b_bench);
+benchmark_group!(predict, aom, native, write_b_bench);
 benchmark_main!(predict);
