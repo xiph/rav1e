@@ -309,8 +309,8 @@ impl Block {
 pub struct BlockContext {
     cols: usize,
     rows: usize,
-    above_seg_context: Vec<u8>,
-    left_seg_context: [u8; MAX_MIB_SIZE],
+    above_partition_context: Vec<u8>,
+    left_partition_context: [u8; MAX_MIB_SIZE],
     above_coeff_context: [Vec<u8>; PLANES],
     left_coeff_context: [[u8; MAX_MIB_SIZE]; PLANES],
     blocks: Vec<Vec<Block>>
@@ -324,8 +324,8 @@ impl BlockContext {
         BlockContext {
             cols,
             rows,
-            above_seg_context: vec![0; aligned_cols],
-            left_seg_context: [0; MAX_MIB_SIZE],
+            above_partition_context: vec![0; aligned_cols],
+            left_partition_context: [0; MAX_MIB_SIZE],
             above_coeff_context: [vec![0; cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],
                                   vec![0; cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],
                                   vec![0; cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],],
@@ -374,8 +374,8 @@ impl BlockContext {
     fn partition_plane_context(&self, bo: &BlockOffset,
                                bsize: BlockSize) -> usize {
         // TODO: this should be way simpler without sub8x8
-        let above_ctx = self.above_seg_context[bo.x];
-        let left_ctx = self.left_seg_context[bo.y_in_sb()];
+        let above_ctx = self.above_partition_context[bo.x];
+        let left_ctx = self.left_partition_context[bo.y_in_sb()];
         let bsl = b_width_log2_lookup[bsize as usize] - b_width_log2_lookup[BlockSize::BLOCK_8X8 as usize];
         let above = (above_ctx >> bsl) & 1;
         let left = (left_ctx >> bsl) & 1;
