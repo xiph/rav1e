@@ -318,10 +318,13 @@ pub struct BlockContext {
 
 impl BlockContext {
     pub fn new(cols: usize, rows: usize) -> BlockContext {
+        // Align power of two
+        let aligned_cols = (cols + ((1 << MAX_MIB_SIZE_LOG2) - 1)) & 
+                            !((1 << MAX_MIB_SIZE_LOG2) - 1);
         BlockContext {
             cols,
             rows,
-            above_seg_context: vec![0; cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],
+            above_seg_context: vec![0; aligned_cols],
             left_seg_context: [0; MAX_MIB_SIZE],
             above_coeff_context: [vec![0; cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],
                                   vec![0; cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],
