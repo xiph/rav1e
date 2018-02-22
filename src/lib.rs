@@ -242,6 +242,7 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
         uch.write(7,0)?; // cdef uv strength
     }
     uch.write_bit(false)?; // no delta q
+    uch.write(6,0)?; // no y, u or v loop restoration
     uch.write_bit(false)?; // tx mode select
     uch.write(2,0)?; // only 4x4 transforms
     //uch.write_bit(false)?; // use hybrid pred
