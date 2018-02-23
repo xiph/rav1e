@@ -5,6 +5,7 @@
 
 use ec;
 use partition::*;
+use partition::BlockSize::*;
 use partition::TxSize::*;
 use plane::*;
 
@@ -27,10 +28,14 @@ const MAX_SB_SQUARE: usize = (MAX_SB_SIZE * MAX_SB_SIZE);
 const INTRA_MODES: usize = 13;
 const UV_INTRA_MODES: usize = 13;
 
-const b_width_log2_lookup: [u8; 20] = [0, 0, 0,  0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 0, 2, 1, 3];
-const b_height_log2_lookup: [u8; 20] = [ 0, 0, 0, 0, 1, 0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 2, 0, 3, 1];
-const tx_size_wide_log2: [usize; 14] = [2, 3, 4, 5, 2, 3, 3, 4, 4, 5, 2, 4, 3, 5];
-const tx_size_high_log2: [usize; 14] = [2, 3, 4, 5, 3, 2, 4, 3, 5, 4, 4, 2, 5, 3];
+static mi_size_wide: [u8; BLOCK_SIZES_ALL] = [
+  1, 1, 2, 2, 2, 4, 4, 4, 8, 8, 8, 16, 16, 1, 4, 2, 8, 4, 16];
+static mi_size_high: [u8; BLOCK_SIZES_ALL] = [
+  1, 2, 1, 2, 4, 2, 4, 8, 4, 8, 16, 8, 16, 4, 1, 8, 2, 16, 4];
+static b_width_log2_lookup: [u8; BLOCK_SIZES_ALL] = [ 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 0, 2, 1, 3, 2, 4];
+static b_height_log2_lookup: [u8; BLOCK_SIZES_ALL] = [ 0, 1, 0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 2, 0, 3, 1, 4, 2];
+const tx_size_wide_log2: [usize; TX_SIZES_ALL] = [2, 3, 4, 5, 2, 3, 3, 4, 4, 5, 2, 4, 3, 5];
+const tx_size_high_log2: [usize; TX_SIZES_ALL] = [2, 3, 4, 5, 3, 2, 4, 3, 5, 4, 4, 2, 5, 3];
 
 const EXT_TX_SIZES: usize = 4;
 const EXT_TX_SET_TYPES: usize = 6;
@@ -93,6 +98,97 @@ const TXSIZE_SQR_UP_MAP: [TxSize; TX_SIZES_ALL] = [
     TX_16X16,
     TX_32X32,
     TX_32X32,
+];
+
+// Generates 4 bit field in which each bit set to 1 represents
+// a blocksize partition  1111 means we split 64x64, 32x32, 16x16
+// and 8x8.  1000 means we just split the 64x64 to 32x32
+static partition_context_lookup: [[u8; 2]; BLOCK_SIZES_ALL] = [
+  [ 15, 15 ],  // 4X4   - [0b1111, 0b1111]
+  [ 15, 14 ],  // 4X8   - [0b1111, 0b1110]
+  [ 14, 15 ],  // 8X4   - [0b1110, 0b1111]
+  [ 14, 14 ],  // 8X8   - [0b1110, 0b1110]
+  [ 14, 12 ],  // 8X16  - [0b1110, 0b1100]
+  [ 12, 14 ],  // 16X8  - [0b1100, 0b1110]
+  [ 12, 12 ],  // 16X16 - [0b1100, 0b1100]
+  [ 12, 8 ],   // 16X32 - [0b1100, 0b1000]
+  [ 8, 12 ],   // 32X16 - [0b1000, 0b1100]
+  [ 8, 8 ],    // 32X32 - [0b1000, 0b1000]
+  [ 8, 0 ],    // 32X64 - [0b1000, 0b0000]
+  [ 0, 8 ],    // 64X32 - [0b0000, 0b1000]
+  [ 0, 0 ],    // 64X64 - [0b0000, 0b0000]
+
+  [ 15, 12 ],  // 4X16 - [0b1111, 0b1100]
+  [ 12, 15 ],  // 16X4 - [0b1100, 0b1111]
+  [ 8, 14 ],   // 8X32 - [0b1110, 0b1000]
+  [ 14, 8 ],   // 32X8 - [0b1000, 0b1110]
+  [ 12, 0 ],   // 16X64- [0b1100, 0b0000]
+  [ 0, 12 ],   // 64X16- [0b0000, 0b1100]
+];
+
+pub static subsize_lookup: [[BlockSize; BLOCK_SIZES_ALL]; PARTITION_TYPES] =
+[
+  [ // PARTITION_NONE
+    //                            4X4
+                                  BLOCK_4X4,
+    // 4X8,        8X4,           8X8
+    BLOCK_4X8,     BLOCK_8X4,     BLOCK_8X8,
+    // 8X16,       16X8,          16X16
+    BLOCK_8X16,    BLOCK_16X8,    BLOCK_16X16,
+    // 16X32,      32X16,         32X32
+    BLOCK_16X32,   BLOCK_32X16,   BLOCK_32X32,
+    // 32X64,      64X32,         64X64
+    BLOCK_32X64,   BLOCK_64X32,   BLOCK_64X64,
+    // 4X16,       16X4,          8X32
+    BLOCK_4X16,    BLOCK_16X4,    BLOCK_8X32,
+    // 32X8,       16X64,         64X16
+    BLOCK_32X8,    BLOCK_16X64,   BLOCK_64X16,
+  ], [  // PARTITION_HORZ
+    //                            4X4
+                                  BLOCK_INVALID,
+    // 4X8,        8X4,           8X8
+    BLOCK_INVALID, BLOCK_INVALID, BLOCK_8X4,
+    // 8X16,       16X8,          16X16
+    BLOCK_INVALID, BLOCK_INVALID, BLOCK_16X8,
+    // 16X32,      32X16,         32X32
+    BLOCK_INVALID, BLOCK_INVALID, BLOCK_32X16,
+    // 32X64,      64X32,         64X64
+    BLOCK_INVALID, BLOCK_INVALID, BLOCK_64X32,
+    // 4X16,       16X4,          8X32
+    BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
+    // 32X8,       16X64,         64X16
+    BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
+  ], [  // PARTITION_VERT
+    //                            4X4
+                                  BLOCK_INVALID,
+    // 4X8,        8X4,           8X8
+    BLOCK_INVALID, BLOCK_INVALID, BLOCK_4X8,
+    // 8X16,       16X8,          16X16
+    BLOCK_INVALID, BLOCK_INVALID, BLOCK_8X16,
+    // 16X32,      32X16,         32X32
+    BLOCK_INVALID, BLOCK_INVALID, BLOCK_16X32,
+    // 32X64,      64X32,         64X64
+    BLOCK_INVALID, BLOCK_INVALID, BLOCK_32X64,
+    // 4X16,       16X4,          8X32
+    BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
+    // 32X8,       16X64,         64X16
+    BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
+  ], [  // PARTITION_SPLIT
+    //                            4X4
+                                  BLOCK_INVALID,
+    // 4X8,        8X4,           8X8
+    BLOCK_INVALID, BLOCK_INVALID, BLOCK_4X4,
+    // 8X16,       16X8,          16X16
+    BLOCK_INVALID, BLOCK_INVALID, BLOCK_8X8,
+    // 16X32,      32X16,         32X32
+    BLOCK_INVALID, BLOCK_INVALID, BLOCK_16X16,
+    // 32X64,      64X32,         64X64
+    BLOCK_INVALID, BLOCK_INVALID, BLOCK_32X32,
+    // 4X16,       16X4,          8X32
+    BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
+    // 32X8,       16X64,         64X16
+    BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
+  ]
 ];
 
 #[derive(Copy,Clone,PartialEq)]
@@ -385,6 +481,29 @@ impl BlockContext {
         ((left * 2 + above) + bsl) as usize * PARTITION_PLOFFSET
     }
 
+    pub fn update_partition_context(&mut self, bo: &BlockOffset,
+                                subsize : BlockSize, bsize: BlockSize) {
+#[allow(dead_code)]
+        // TODO(yushin): If CONFIG_EXT_PARTITION_TYPES is enabled, use bw and bh
+        //let bw = mi_size_wide[bsize as usize];
+        //let bh = mi_size_high[bsize as usize];
+        let bs = mi_size_wide[bsize as usize];
+
+        let above_ctx = &mut self.above_partition_context[bo.x..bo.x + bs as usize];
+        let left_ctx = &mut self.left_partition_context[bo.y_in_sb()..bo.y_in_sb() + bs as usize];
+
+        // update the partition context at the end notes. set partition bits
+        // of block sizes larger than the current one to be one, and partition
+        // bits of smaller block sizes to be zero.
+        for i in 0..bs {
+            above_ctx[i as usize] = partition_context_lookup[subsize as usize][0];
+        }
+
+        for i in 0..bs {
+            left_ctx[i as usize] = partition_context_lookup[subsize as usize][1];
+        }
+    }
+
     fn skip_context(&mut self, bo: &BlockOffset) -> usize {
         (self.above_of(bo).skip as usize) + (self.left_of(bo).skip as usize)
     }
@@ -404,9 +523,9 @@ pub struct ContextWriter {
 }
 
 impl ContextWriter {
-    pub fn write_partition(&mut self, p: PartitionType) {
+    pub fn write_partition(&mut self, p: PartitionType, bsize: BlockSize) {
         let bo = BlockOffset { x: 0, y: 0 };
-        let ctx = self.bc.partition_plane_context(&bo, BlockSize::BLOCK_64X64);
+        let ctx = self.bc.partition_plane_context(&bo, bsize);
         self.w.symbol(p as u32, &mut self.fc.partition_cdf[ctx], PARTITION_TYPES);
     }
     pub fn write_intra_mode_kf(&mut self, bo: &BlockOffset, mode: PredictionMode) {

@@ -291,8 +291,15 @@ pub fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState
     iht4x4_add(&mut rcoeffs, &mut rec.mut_slice(&po).as_mut_slice(), stride, tx_type);
 }
 
-fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, sbo: &SuperBlockOffset, mode: PredictionMode) {
-    cw.write_partition(PartitionType::PARTITION_NONE);
+fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState,
+            sbo: &SuperBlockOffset, mode: PredictionMode, bsize: BlockSize) {
+    cw.write_partition(PartitionType::PARTITION_NONE, bsize);
+
+    // TODO(yushin): If partition type is PARTITION_SPLIT, recursively call write_sb here.
+    // Otherwise, call write_b for each parition
+
+    // TODO(yushin): Factor out new function which handles four different types of a partition.
+
     // The partition offset is represented using a BlockOffset
     let po = sbo.block_offset(0, 0);
     cw.write_skip(&po, false);
@@ -319,6 +326,11 @@ fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, s
             }
         }
     }
+
+    // Update partition context
+    let subsize = get_subsize(bsize, PartitionType::PARTITION_NONE);
+
+    cw.bc.update_partition_context(&po, subsize, bsize);
 }
 
 fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
@@ -351,7 +363,7 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
             for &mode in RAV1E_INTRA_MODES {
                 let checkpoint = cw.checkpoint();
 
-                write_sb(&mut cw, fi, fs, &sbo, mode);
+                write_sb(&mut cw, fi, fs, &sbo, mode, BlockSize::BLOCK_64X64);
                 let d = sse_64x64(&fs.input.planes[0].slice(&po), &fs.rec.planes[0].slice(&po));
                 let r = ((cw.w.tell_frac() - tell) as f64)/8.0;
 
@@ -364,7 +376,7 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
                 cw.rollback(checkpoint.clone());
             }
 
-            write_sb(&mut cw, fi, fs, &sbo, best_mode);
+            write_sb(&mut cw, fi, fs, &sbo, best_mode, BlockSize::BLOCK_64X64);
         }
     }
     let mut h = cw.w.done();
