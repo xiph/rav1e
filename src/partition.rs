@@ -1,13 +1,16 @@
 #![allow(non_camel_case_types)]
 #![allow(dead_code)]
 
-#[derive(Copy,Clone)]
+#[derive(Copy,Clone,PartialEq)]
 pub enum PartitionType {
     PARTITION_NONE,
     PARTITION_HORZ,
     PARTITION_VERT,
-    PARTITION_SPLIT
+    PARTITION_SPLIT,
+    PARTITION_INVALID = 255
 }
+
+pub const BLOCK_SIZES_ALL: usize = 19;
 
 #[derive(Copy,Clone)]
 pub enum BlockSize {
@@ -27,7 +30,10 @@ pub enum BlockSize {
     BLOCK_4X16,
     BLOCK_16X4,
     BLOCK_8X32,
-    BLOCK_32X8
+    BLOCK_32X8,
+    BLOCK_16X64,
+    BLOCK_64X16,
+    BLOCK_INVALID = 255
 }
 
 pub const TX_SIZES: usize = 4;
@@ -106,6 +112,7 @@ pub enum PredictionMode {
 
 use plane::*;
 use predict::*;
+use context::*;
 
 fn setup_left(left: &mut [u16; 4], rec: &PlaneMutSlice) {
     let left_slice = rec.go_left(1);
@@ -176,4 +183,8 @@ pub enum TxSetType {
     // Discrete Trig transforms w/ flip (9) + Identity (1) + 1D Hor/Ver (6)
     EXT_TX_SET_ALL16 = 5,
     EXT_TX_SET_TYPES
+}
+
+pub fn get_subsize(bsize: BlockSize , partition: PartitionType) -> BlockSize {
+    subsize_lookup[partition as usize][bsize as usize]
 }
