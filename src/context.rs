@@ -32,10 +32,10 @@ static mi_size_wide: [u8; BLOCK_SIZES_ALL] = [
   1, 1, 2, 2, 2, 4, 4, 4, 8, 8, 8, 16, 16, 1, 4, 2, 8, 4, 16];
 static mi_size_high: [u8; BLOCK_SIZES_ALL] = [
   1, 2, 1, 2, 4, 2, 4, 8, 4, 8, 16, 8, 16, 4, 1, 8, 2, 16, 4];
-static b_width_log2_lookup: [u8; 20] = [0, 0, 0,  0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 0, 2, 1, 3];
-static b_height_log2_lookup: [u8; 20] = [ 0, 0, 0, 0, 1, 0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 2, 0, 3, 1];
-static tx_size_wide_log2: [usize; 14] = [2, 3, 4, 5, 2, 3, 3, 4, 4, 5, 2, 4, 3, 5];
-static tx_size_high_log2: [usize; 14] = [2, 3, 4, 5, 3, 2, 4, 3, 5, 4, 4, 2, 5, 3];
+static b_width_log2_lookup: [u8; BLOCK_SIZES_ALL] = [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 0, 2, 1, 3, 2, 4];
+static b_height_log2_lookup: [u8; BLOCK_SIZES_ALL] = [0, 1, 0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 2, 0, 3, 1, 4, 2];
+static tx_size_wide_log2: [usize; TX_SIZES_ALL] = [2, 3, 4, 5, 2, 3, 3, 4, 4, 5, 2, 4, 3, 5];
+static tx_size_high_log2: [usize; TX_SIZES_ALL] = [2, 3, 4, 5, 3, 2, 4, 3, 5, 4, 4, 2, 5, 3];
 
 const EXT_TX_SIZES: usize = 4;
 const EXT_TX_SET_TYPES: usize = 6;
