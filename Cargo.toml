@@ -17,6 +17,9 @@ enum-iterator-derive = "0.1.1"
 
 [build-dependencies]
 cc = "1"
+cmake = "0.1.29"
+bindgen = "0.33"
+pkg-config = "0.3.9"
 
 [dev-dependencies]
 bencher = "0.1.5"
