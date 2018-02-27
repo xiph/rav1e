@@ -92,9 +92,9 @@ pub struct FrameInvariants {
 }
 
 impl FrameInvariants {
-    pub fn new(width: usize, height: usize) -> FrameInvariants {
+    pub fn new(width: usize, height: usize, qindex: usize) -> FrameInvariants {
         FrameInvariants {
-            qindex: 100,
+            qindex: qindex,
             width: width,
             height: height,
             sb_width: (width+63)/64,
@@ -137,7 +137,8 @@ pub struct EncoderConfig {
     pub input_file: Box<Read>,
     pub output_file: Box<Write>,
     pub rec_file: Option<Box<Write>>,
-    pub limit: u64
+    pub limit: u64,
+    pub quantizer: usize
 }
 
 impl EncoderConfig {
@@ -164,6 +165,11 @@ impl EncoderConfig {
                 .long("limit")
                 .takes_value(true)
                 .default_value("0"))
+            .arg(Arg::with_name("QP")
+                .help("Quantizer (0-255)")
+                .long("quantizer")
+                .takes_value(true)
+                .default_value("100"))
             .get_matches();
 
         EncoderConfig {
@@ -178,7 +184,8 @@ impl EncoderConfig {
             rec_file: matches.value_of("RECONSTRUCTION").map(|f| {
                 Box::new(File::create(&f).unwrap()) as Box<Write>
             }),
-            limit: matches.value_of("LIMIT").unwrap().parse().unwrap()
+            limit: matches.value_of("LIMIT").unwrap().parse().unwrap(),
+            quantizer: matches.value_of("QP").unwrap().parse().unwrap()
         }
     }
 }
