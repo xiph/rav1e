@@ -13,7 +13,7 @@ fn main() {
         Some(rec_file) => Some(y4m::encode(width, height, framerate).write_header(rec_file).unwrap()),
         None => None
     };
-    let mut fi = FrameInvariants::new(width, height);
+    let mut fi = FrameInvariants::new(width, height, files.quantizer);
     let sequence = Sequence::new();
     write_ivf_header(&mut files.output_file, fi.sb_width*64, fi.sb_height*64, framerate.num, framerate.den);
 
