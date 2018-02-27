@@ -1,1 +1,15 @@
 language: rust
+addons:
+  apt:
+    packages:
+      - libwxgtk3.0-dev
+      - yasm
+      - nasm
+
+before_install:
+    - wget -O cmake.sh https://cmake.org/files/v3.10/cmake-3.10.2-Linux-x86_64.sh
+    - sudo sh cmake.sh --skip-license --exclude-subdir --prefix=/usr
+    - sudo rm -fR /usr/local/cmake*
+    - hash -r
+    - which cmake
+    - cmake --version
