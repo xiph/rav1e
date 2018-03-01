@@ -478,7 +478,7 @@ impl BlockContext {
 
         assert!(b_width_log2_lookup[bsize as usize] == b_height_log2_lookup[bsize as usize]);
 
-        ((left * 2 + above) + bsl) as usize * PARTITION_PLOFFSET
+        (left * 2 + above) as usize + bsl as usize * PARTITION_PLOFFSET
     }
 
     pub fn update_partition_context(&mut self, bo: &BlockOffset,
