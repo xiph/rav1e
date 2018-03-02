@@ -54,6 +54,7 @@ impl Plane {
     }
 
     pub fn p(&self, x: usize, y: usize) -> u16 {
+        assert!(y*self.cfg.stride + x < self.data.len());
         self.data[y*self.cfg.stride + x]
     }
 }
@@ -91,6 +92,7 @@ impl<'a> PlaneSlice<'a> {
     pub fn p(&self, add_x: usize, add_y: usize) -> u16 {
         let new_y = self.y + add_y;
         let new_x = self.x + add_x;
+        assert!(new_y*self.plane.cfg.stride + new_x < self.plane.data.len());
         self.plane.data[new_y*self.plane.cfg.stride + new_x]
     }
 }
@@ -130,6 +132,7 @@ impl<'a> PlaneMutSlice<'a> {
     pub fn p(&self, add_x: usize, add_y: usize) -> u16 {
         let new_y = self.y + add_y;
         let new_x = self.x + add_x;
+        assert!(new_y*self.plane.cfg.stride + new_x < self.plane.data.len());
         self.plane.data[new_y*self.plane.cfg.stride + new_x]
     }
 }
