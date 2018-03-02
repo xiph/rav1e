@@ -323,7 +323,7 @@ impl CDFContext {
 
 const SUPERBLOCK_TO_PLANE_SHIFT: usize = MAX_SB_SIZE_LOG2;
 const SUPERBLOCK_TO_BLOCK_SHIFT: usize = MAX_MIB_SIZE_LOG2;
-const BLOCK_TO_PLANE_SHIFT: usize = SUPERBLOCK_TO_PLANE_SHIFT - SUPERBLOCK_TO_BLOCK_SHIFT;
+const BLOCK_TO_PLANE_SHIFT: usize = MI_SIZE_LOG2;
 const LOCAL_BLOCK_MASK: usize = (1 << SUPERBLOCK_TO_BLOCK_SHIFT) - 1;
 
 /// Absolute offset in superblocks inside a plane, where a superblock is defined
