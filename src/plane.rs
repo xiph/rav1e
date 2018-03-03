@@ -56,6 +56,15 @@ impl Plane {
     pub fn p(&self, x: usize, y: usize) -> u16 {
         self.data[y*self.cfg.stride + x]
     }
+
+    pub fn copy_from_raw_u8(&mut self, source: &[u8], source_stride: usize) {
+        let stride = self.cfg.stride;
+        for (self_row, source_row) in self.data.chunks_mut(stride).zip(source.chunks(source_stride)) {
+            for (self_pixel, source_pixel) in self_row.iter_mut().zip(source_row.iter()) {
+                *self_pixel = *source_pixel as u16;
+            }
+        }
+    }
 }
 
 pub struct PlaneSlice<'a> {

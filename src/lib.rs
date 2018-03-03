@@ -423,24 +423,9 @@ pub fn process_frame(sequence: &Sequence, fi: &FrameInvariants,
             let y4m_v = y4m_frame.get_v_plane();
             eprintln!("{}", fi);
             let mut fs = FrameState::new(&fi);
-            for y in 0..height {
-                for x in 0..width {
-                    let stride = fs.input.planes[0].cfg.stride;
-                    fs.input.planes[0].data[y*stride+x] = y4m_y[y*width+x] as u16;
-                }
-            }
-            for y in 0..height/2 {
-                for x in 0..width/2 {
-                    let stride = fs.input.planes[1].cfg.stride;
-                    fs.input.planes[1].data[y*stride+x] = y4m_u[y*width/2+x] as u16;
-                }
-            }
-            for y in 0..height/2 {
-                for x in 0..width/2 {
-                    let stride = fs.input.planes[2].cfg.stride;
-                    fs.input.planes[2].data[y*stride+x] = y4m_v[y*width/2+x] as u16;
-                }
-            }
+            fs.input.planes[0].copy_from_raw_u8(&y4m_y, width);
+            fs.input.planes[1].copy_from_raw_u8(&y4m_u, width/2);
+            fs.input.planes[2].copy_from_raw_u8(&y4m_v, width/2);
             let packet = encode_frame(&sequence, &fi, &mut fs, &last_rec);
             write_ivf_frame(output_file, fi.number, packet.as_ref());
             match y4m_enc {
