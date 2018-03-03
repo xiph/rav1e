@@ -13,3 +13,9 @@ before_install:
     - hash -r
     - which cmake
     - cmake --version
+script:
+    - |
+        cargo build --verbose &&
+        cargo test --verbose &&
+        cargo bench --verbose &&
+        cargo doc --verbose
