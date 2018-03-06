@@ -147,6 +147,12 @@ extern {
     dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int, bh: libc::c_int,
     above: *const u16, left: *const u16, bd: libc::c_int
   );
+
+  #[cfg(test)]
+  fn cfl_predict_hbd_c(
+    ac_buf_q3: *const i16, dst: *mut u16, stride: libc::ptrdiff_t,
+    alpha_q3: libc::c_int, bd: libc::c_int, bw: libc::c_int, bh: libc::c_int
+  );
 }
 
 pub trait Dim {
@@ -180,6 +186,17 @@ pub struct Block32x32;
 impl Dim for Block32x32 {
   const W: usize = 32;
   const H: usize = 32;
+}
+
+#[inline(always)]
+fn get_scaled_luma_q0(alpha_q3: i16, ac_pred_q3: i16) -> i32 {
+  let scaled_luma_q6 = (alpha_q3 as i32) * (ac_pred_q3 as i32);
+  let abs_scaled_luma_q0 = (scaled_luma_q6.abs() + 32) >> 6;
+  if scaled_luma_q6 < 0 {
+    -abs_scaled_luma_q0
+  } else {
+    abs_scaled_luma_q0
+  }
 }
 
 pub trait Intra: Dim {
@@ -408,6 +425,24 @@ pub trait Intra: Dim {
       }
     }
   }
+
+  #[cfg_attr(feature = "comparative_bench", inline(never))]
+  fn pred_cfl(
+    output: &mut [u16], stride: usize, ac: &[i16], alpha: i16,
+    bit_depth: usize
+  ) {
+    let sample_max = (1 << bit_depth) - 1;
+    let avg = output[0] as i32;
+
+    for (line, luma) in
+      output.chunks_mut(stride).zip(ac.chunks(32)).take(Self::H)
+    {
+      for (v, &l) in line[..Self::W].iter_mut().zip(luma[..Self::W].iter()) {
+        *v =
+          (avg + get_scaled_luma_q0(alpha, l)).max(0).min(sample_max) as u16;
+      }
+    }
+  }
 }
 
 pub trait Inter: Dim {
@@ -551,6 +586,22 @@ pub mod test {
     }
   }
 
+  pub fn pred_cfl_4x4(
+    output: &mut [u16], stride: usize, ac: &[i16], alpha: i16, bd: i32
+  ) {
+    unsafe {
+      cfl_predict_hbd_c(
+        ac.as_ptr(),
+        output.as_mut_ptr(),
+        stride as libc::ptrdiff_t,
+        alpha as libc::c_int,
+        bd,
+        4,
+        4
+      );
+    }
+  }
+
   fn do_dc_pred(ra: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>) {
     let (above, left, mut o1, mut o2) = setup_pred(ra);
 
@@ -615,6 +666,31 @@ pub mod test {
     (o1, o2)
   }
 
+  fn setup_cfl_pred(
+    ra: &mut ChaChaRng
+  ) -> (Vec<u16>, Vec<u16>, Vec<i16>, i16, Vec<u16>, Vec<u16>) {
+    let o1 = vec![0u16; 32 * 32];
+    let o2 = vec![0u16; 32 * 32];
+    let above: Vec<u16> = (0..32).map(|_| ra.gen()).collect();
+    let left: Vec<u16> = (0..32).map(|_| ra.gen()).collect();
+    let ac: Vec<i16> = (0..(32 * 32)).map(|_| ra.gen()).collect();
+    let alpha = -1 as i16;
+
+    (above, left, ac, alpha, o1, o2)
+  }
+
+  fn do_cfl_pred(ra: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>) {
+    let (above, left, ac, alpha, mut o1, mut o2) = setup_cfl_pred(ra);
+
+    pred_dc_4x4(&mut o1, 32, &above[..4], &left[..4]);
+    Block4x4::pred_dc(&mut o2, 32, &above[..4], &left[..4]);
+
+    pred_cfl_4x4(&mut o1, 32, &ac, alpha, 8);
+    Block4x4::pred_cfl(&mut o2, 32, &ac, alpha, 8);
+
+    (o1, o2)
+  }
+
   fn assert_same(o2: Vec<u16>) {
     for l in o2.chunks(32).take(4) {
       for v in l[..4].windows(2) {
@@ -646,6 +722,9 @@ pub mod test {
       assert_eq!(o1, o2);
 
       let (o1, o2) = do_smooth_v_pred(&mut ra);
+      assert_eq!(o1, o2);
+
+      let (o1, o2) = do_cfl_pred(&mut ra);
       assert_eq!(o1, o2);
     }
   }
