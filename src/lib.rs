@@ -357,9 +357,8 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
     let lambda = q0*q0*2.0_f64.log2()/6.0;	// Use Q0 quantizer since lambda will be applied to Q0 pixel domain
 
     for sby in 0..fi.sb_height {
-        for p in 0..3 {
-            cw.bc.reset_left_coeff_context(p);
-        }
+        cw.bc.reset_left_contexts();
+
         for sbx in 0..fi.sb_width {
             let sbo = SuperBlockOffset { x: sbx, y: sby };
             let po = sbo.plane_offset(&fs.input.planes[0].cfg);
