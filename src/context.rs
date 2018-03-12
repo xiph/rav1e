@@ -461,10 +461,26 @@ impl BlockContext {
         self.left_coeff_context[plane][bo.y_in_sb()] = uvalue;
     }
 
-    pub fn reset_left_coeff_context(&mut self, plane: usize) {
+    fn reset_left_coeff_context(&mut self, plane: usize) {
         for c in self.left_coeff_context[plane].iter_mut() {
             *c = 0;
         }
+    }
+
+    fn reset_left_partition_context(&mut self) {
+        for c in self.left_partition_context.iter_mut() {
+            *c = 0;
+        }
+    }
+    //TODO(anyone): Add reset_left_tx_context() here then call it in reset_left_contexts()
+
+    pub fn reset_left_contexts(&mut self) {
+        for p in 0..3 {
+            BlockContext::reset_left_coeff_context(self, p);
+        }
+        BlockContext::reset_left_partition_context(self);
+
+        //TODO(anyone): Call reset_left_tx_context() here.
     }
 
     fn partition_plane_context(&self, bo: &BlockOffset,
