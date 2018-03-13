@@ -242,13 +242,13 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     uch.write_bit(false)?; // uv ac delta q
     //uch.write_bit(false)?; // using qmatrix
     uch.write_bit(false)?; // segmentation off
+    uch.write_bit(false)?; // no delta q
     uch.write(2,0)?; // cdef clpf damping
     uch.write(2,0)?; // cdef bits
     for _ in 0..1 {
         uch.write(7,0)?; // cdef y strength
         uch.write(7,0)?; // cdef uv strength
     }
-    uch.write_bit(false)?; // no delta q
     uch.write(6,0)?; // no y, u or v loop restoration
     uch.write_bit(false)?; // tx mode select
     uch.write(2,0)?; // only 4x4 transforms
