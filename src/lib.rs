@@ -259,7 +259,8 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
         uch.write(1,0)?; // tile cols
     }
     uch.write(1,0)?; // tile rows
-    uch.write_bit(true)?; // loop filter across tiles
+    // if tile_cols * tile_rows > 1
+    //uch.write_bit(true)?; // loop filter across tiles
     uch.write(2,0)?; // tile_size_bytes
     uch.byte_align()?;
     Ok(())
