@@ -11,12 +11,20 @@
 #![allow(non_camel_case_types)]
 
 use plane::*;
+use partition::PredictionMode;
+//use std::io::prelude::*;
 
-// Sum of Squared Error for a 64x64 block
-pub fn sse_64x64(src1: &PlaneSlice, src2: &PlaneSlice) -> u64 {
+#[derive(Copy,Clone)]
+pub struct RDOOutput {
+    pub rd_cost: u64,
+    pub pred_mode: PredictionMode,
+}
+
+// Sum of Squared Error for a wxh block
+pub fn sse_wxh(src1: &PlaneSlice, src2: &PlaneSlice, w: usize, h: usize) -> u64 {
     let mut sse: u64 = 0;
-    for j in 0..64 {
-        for i in 0..64 {
+    for j in 0..h {
+        for i in 0..w {
             let dist = (src1.p(i, j) as i16 - src2.p(i, j) as i16) as i64;
             sse += (dist * dist) as u64;
         }

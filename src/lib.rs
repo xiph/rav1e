@@ -71,8 +71,8 @@ pub struct FrameState {
 impl FrameState {
     pub fn new(fi: &FrameInvariants) -> FrameState {
         FrameState {
-            input: Frame::new(fi.sb_width*64, fi.sb_height*64),
-            rec: Frame::new(fi.sb_width*64, fi.sb_height*64),
+            input: Frame::new(fi.padded_w, fi.padded_h),
+            rec: Frame::new(fi.padded_w, fi.padded_h),
         }
     }
 }
@@ -84,8 +84,12 @@ pub struct FrameInvariants {
     pub qindex: usize,
     pub width: usize,
     pub height: usize,
+    pub padded_w: usize,
+    pub padded_h: usize,
     pub sb_width: usize,
     pub sb_height: usize,
+    pub w_in_b: usize,
+    pub h_in_b: usize,
     pub number: u64,
     pub ftype: FrameType,
     pub show_existing_frame: bool,
@@ -97,8 +101,12 @@ impl FrameInvariants {
             qindex: qindex,
             width: width,
             height: height,
+            padded_w: ((width+7)/8)*8,
+            padded_h: ((height+7)/8)*8,
             sb_width: (width+63)/64,
             sb_height: (height+63)/64,
+            w_in_b: ((width+7)/8)*8 >> MI_SIZE_LOG2,
+            h_in_b: ((height+7)/8)*8 >> MI_SIZE_LOG2,
             number: 0,
             ftype: FrameType::KEY,
             show_existing_frame: false,
@@ -228,8 +236,8 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     //uch.write(8+7,0)?; // frame id
     uch.write(3,0)?; // colorspace
     uch.write(1,0)?; // color range
-    uch.write(16,(fi.sb_width*64-1) as u16)?; // width
-    uch.write(16,(fi.sb_height*64-1) as u16)?; // height
+    uch.write(16,(fi.padded_w-1) as u16)?; // width
+    uch.write(16,(fi.padded_h-1) as u16)?; // height
     uch.write_bit(false)?; // scaling active
     uch.write_bit(false)?; // screen content tools
     uch.write(3,0x0)?; // frame context
@@ -255,7 +263,7 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     //uch.write_bit(false)?; // use hybrid pred
     //uch.write_bit(false)?; // use compound pred
     uch.write_bit(true)?; // reduced tx
-    if fi.sb_width*64-1 > 256 {
+    if fi.padded_w > 256 {
         uch.write(1,0)?; // tile cols
     }
     uch.write(1,0)?; // tile rows
@@ -275,14 +283,29 @@ fn diff_4x4(dst: &mut [i16; 16], src1: &PlaneSlice, src2: &PlaneSlice) {
     }
 }
 
-pub fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState, p: usize, bo: &BlockOffset, mode: PredictionMode, tx_type: TxType) {
+fn has_chroma(bo: &BlockOffset, bsize: BlockSize,
+                       subsampling_x: usize, subsampling_y: usize) -> bool {
+    let bw = mi_size_wide[bsize as usize] as u8;
+    let bh = mi_size_high[bsize as usize] as u8;
+    let ref_pos = ((bo.x & 0x01) == 1 || (bw & 0x01) == 0 || subsampling_x == 0) &&
+                  ((bo.y & 0x01) == 1 || (bh & 0x01) == 0 || subsampling_y == 0);
+
+    ref_pos
+}
+
+// For a transform block,
+// predict, transform, quantize, write coefficients to a bitstream,
+// dequantize, inverse-transform.
+pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
+                  p: usize, bo: &BlockOffset, mode: PredictionMode, tx_type: TxType,
+                  po: &PlaneOffset) {
     let stride = fs.input.planes[p].cfg.stride;
     let rec = &mut fs.rec.planes[p];
-    let po = bo.plane_offset(&fs.input.planes[p].cfg);
 
     mode.predict_4x4(&mut rec.mut_slice(&po));
 
     let mut residual = [0 as i16; 16];
+
     diff_4x4(&mut residual,
              &fs.input.planes[p].slice(&po),
              &rec.slice(&po));
@@ -299,92 +322,181 @@ pub fn write_b(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState
     iht4x4_add(&mut rcoeffs, &mut rec.mut_slice(&po).as_mut_slice(), stride, tx_type);
 }
 
-fn write_sb(cw: &mut ContextWriter, fi: &FrameInvariants, fs: &mut FrameState,
-            sbo: &SuperBlockOffset, mode: PredictionMode, bsize: BlockSize) {
-    cw.write_partition(PartitionType::PARTITION_NONE, bsize);
+fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
+            mode: PredictionMode, bsize: BlockSize, bo: &BlockOffset) {
+    cw.write_skip(bo, false);
+    cw.write_intra_mode_kf(bo, mode);
 
-    // TODO(yushin): If partition type is PARTITION_SPLIT, recursively call write_sb here.
-    // Otherwise, call write_b for each parition
+    let xdec = fs.input.planes[1].cfg.xdec;
+    let ydec = fs.input.planes[1].cfg.ydec;
 
-    // TODO(yushin): Factor out new function which handles four different types of a partition.
-
-    // The partition offset is represented using a BlockOffset
-    let po = sbo.block_offset(0, 0);
-    cw.write_skip(&po, false);
-    cw.write_intra_mode_kf(&po, mode);
     let uv_mode = mode;
-    cw.write_intra_uv_mode(uv_mode, mode);
+
+    if has_chroma(bo, bsize, xdec, ydec) {
+        cw.write_intra_uv_mode(uv_mode, mode);
+    }
+
     let tx_type = TxType::DCT_DCT;
     cw.write_tx_type(tx_type, mode);
+
+    let bw = mi_size_wide[bsize as usize] as usize;
+    let bh = mi_size_high[bsize as usize] as usize;
+
+    // FIXME(you): Loop for TX blocks. For now, fixed as a 4x4 TX only,
+    // but consider factor out as write_tx_blocks()
     for p in 0..1 {
-        for by in 0..16 {
-            for bx in 0..16 {
-                let bo = sbo.block_offset(bx, by);
-                cw.bc.at(&bo).mode = mode;
-                write_b(cw, fi, fs, p, &bo, mode, tx_type);
-            }
-        }
-    }
-    let uv_tx_type = exported_intra_mode_to_tx_type_context[uv_mode as usize];
-    for p in 1..3 {
-        for by in 0..8 {
-            for bx in 0..8 {
-                let bo = sbo.block_offset(bx, by);
-                write_b(cw, fi, fs, p, &bo, uv_mode, uv_tx_type);
+        for by in 0..bh {
+            for bx in 0..bw {
+                let tx_bo = BlockOffset{x: bo.x + bx, y: bo.y + by};
+                let po = tx_bo.plane_offset(&fs.input.planes[p].cfg);
+                // FIXME(anyone): Another way to do this is
+                // to set mode for each MI block after mode decision is done.
+                // It works now because we set mode for each tx position, where tx_size is 4x4.
+                cw.bc.set_mode(&tx_bo, mode);
+                encode_tx_block(fi, fs, cw, p, &tx_bo, mode, tx_type, &po);
             }
         }
     }
 
-    // Update partition context
-    let subsize = get_subsize(bsize, PartitionType::PARTITION_NONE);
+    if has_chroma(bo, bsize, xdec, ydec) {
+        let uv_tx_type = exported_intra_mode_to_tx_type_context[uv_mode as usize];
+        let partition_x = (bo.x & LOCAL_BLOCK_MASK) >> xdec << MI_SIZE_LOG2;
+        let partition_y = (bo.y & LOCAL_BLOCK_MASK) >> ydec << MI_SIZE_LOG2;
 
-    cw.bc.update_partition_context(&po, subsize, bsize);
+        for p in 1..3 {
+            let sb_offset = bo.sb_offset().plane_offset(&fs.input.planes[p].cfg);
+
+            for by in 0..bh >> ydec {
+                for bx in 0..bw >> xdec {
+                    let tx_bo = BlockOffset{x: bo.x + (bx << xdec), y: bo.y + (by << ydec)};
+                    let po = PlaneOffset {
+                        x: sb_offset.x + partition_x + (bx << MI_SIZE_LOG2),
+                        y: sb_offset.y + partition_y + (by << MI_SIZE_LOG2) };
+
+                    encode_tx_block(fi, fs, cw, p, &tx_bo, uv_mode, uv_tx_type, &po);
+                }
+            }
+        }
+    }
 }
 
-fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
-    let w = ec::Writer::new();
-    let fc = CDFContext::new();
-    let bc = BlockContext::new(fi.sb_width*16, fi.sb_height*16);
-    let mut cw = ContextWriter {
-        w: w,
-        fc: fc,
-        bc: bc,
-    };
-
+// RDO-based mode decision
+fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
+                  cw: &mut ContextWriter,
+                  bsize: BlockSize, bo: &BlockOffset) -> RDOOutput {
     let q = dc_q(fi.qindex) as f64;
     let q0 = q / 8.0_f64;	// Convert q into Q0 precision, given thatn libaom quantizers are Q3.
 
     // Lambda formula from doc/theoretical_results.lyx in the daala repo
     let lambda = q0*q0*2.0_f64.log2()/6.0;	// Use Q0 quantizer since lambda will be applied to Q0 pixel domain
 
+    let mut best_mode = PredictionMode::DC_PRED;
+    let mut best_rd = std::f64::MAX;
+    let tell = cw.w.tell_frac();
+    let w = block_size_wide[bsize as usize];
+    let h = block_size_high[bsize as usize];
+
+    for &mode in RAV1E_INTRA_MODES {
+        let checkpoint = cw.checkpoint();
+
+        encode_block(fi, fs, cw, mode, bsize, bo);
+        let po = bo.plane_offset(&fs.input.planes[0].cfg);
+        let d = sse_wxh(&fs.input.planes[0].slice(&po), &fs.rec.planes[0].slice(&po),
+                        w as usize, h as usize);
+        let r = ((cw.w.tell_frac() - tell) as f64)/8.0;
+
+        let rd = (d as f64) + lambda*r;
+        if rd < best_rd {
+            best_rd = rd;
+            best_mode = mode;
+        }
+
+        cw.rollback(checkpoint.clone());
+    }
+
+    assert!(best_rd as i64 >= 0);
+
+    let rdo_output = RDOOutput { rd_cost: best_rd as u64,
+                                pred_mode: best_mode};
+    rdo_output
+}
+
+fn encode_partition(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
+            bsize: BlockSize, bo: &BlockOffset) {
+
+    if bo.x >= cw.bc.cols || bo.y >= cw.bc.rows {
+        return;
+    }
+
+    // TODO(anyone): Until we have RDO-based block size decision,
+    // split all the way down to 8x8 blocks, then do rdo_mode_decision() for each 8x8 block.
+    // FIXIME(anyone): Enable partition into 4x4 blocks.
+    let partition = if bsize > BlockSize::BLOCK_8X8 {
+                            PartitionType::PARTITION_SPLIT }
+                    else { PartitionType::PARTITION_NONE };
+
+    assert!(mi_size_wide[bsize as usize] == mi_size_high[bsize as usize]);
+
+    assert!(PartitionType::PARTITION_NONE <= partition &&
+            partition < PartitionType::PARTITION_INVALID);
+
+    let bs = mi_size_wide[bsize as usize];
+    let hbs = bs >> 1; // Half the block size in blocks
+    let subsize = get_subsize(bsize, partition);
+
+    if bsize >= BlockSize::BLOCK_8X8 {
+        cw.write_partition(bo, partition, bsize);
+    }
+
+    match partition {
+        PartitionType::PARTITION_NONE => {
+            // TODO(anyone): Until we have RDO-based block size decision,
+            // call rdo_mode_decision() for a partition.
+            let rdo_none = rdo_mode_decision(fi, fs, cw, bsize, bo);
+            // FIXME(anyone): Instead of calling set_mode() in encode_block() for each 4x4tx position,
+            // it would be better to call set_mode() for each MI block position here.
+            cw.bc.set_mode(bo, rdo_none.pred_mode);
+
+            encode_block(fi, fs, cw, rdo_none.pred_mode, bsize, bo);
+        },
+        PartitionType::PARTITION_SPLIT => {
+            assert!(subsize != BlockSize::BLOCK_INVALID);
+            encode_partition(fi, fs, cw, subsize, bo);
+            encode_partition(fi, fs, cw, subsize, &BlockOffset{x: bo.x + hbs as usize, y: bo.y});
+            encode_partition(fi, fs, cw, subsize, &BlockOffset{x: bo.x, y: bo.y + hbs as usize});
+            encode_partition(fi, fs, cw, subsize, &BlockOffset{x: bo.x + hbs as usize, y: bo.y + hbs as usize});
+        },
+        _ => { assert!(false); },
+    }
+
+    if bsize >= BlockSize::BLOCK_8X8 &&
+       (bsize == BlockSize::BLOCK_8X8 || partition != PartitionType::PARTITION_SPLIT) {
+        cw.bc.update_partition_context(bo, subsize, bsize);
+    }
+}
+
+fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
+    let w = ec::Writer::new();
+    let fc = CDFContext::new();
+    let bc = BlockContext::new(fi.w_in_b, fi.h_in_b);
+    let mut cw = ContextWriter {
+        w: w,
+        fc: fc,
+        bc: bc,
+    };
+
     for sby in 0..fi.sb_height {
         cw.bc.reset_left_contexts();
 
         for sbx in 0..fi.sb_width {
             let sbo = SuperBlockOffset { x: sbx, y: sby };
-            let po = sbo.plane_offset(&fs.input.planes[0].cfg);
-            let tell = cw.w.tell_frac();
+            let bo = sbo.block_offset(0, 0);
 
-            let mut best_mode = PredictionMode::DC_PRED;
-            let mut best_rd = std::f64::MAX;
+            // TODO(anyone):
+            // RDO-based block size decision for each SuperBlock can be done here.
 
-            for &mode in RAV1E_INTRA_MODES {
-                let checkpoint = cw.checkpoint();
-
-                write_sb(&mut cw, fi, fs, &sbo, mode, BlockSize::BLOCK_64X64);
-                let d = sse_64x64(&fs.input.planes[0].slice(&po), &fs.rec.planes[0].slice(&po));
-                let r = ((cw.w.tell_frac() - tell) as f64)/8.0;
-
-                let rd = (d as f64) + lambda*r;
-                if rd < best_rd {
-                    best_rd = rd;
-                    best_mode = mode;
-                }
-
-                cw.rollback(checkpoint.clone());
-            }
-
-            write_sb(&mut cw, fi, fs, &sbo, best_mode, BlockSize::BLOCK_64X64);
+            // Encode SuperBlock
+            encode_partition(fi, fs, &mut cw, BlockSize::BLOCK_64X64, &bo);
         }
     }
     let mut h = cw.w.done();

@@ -12,13 +12,13 @@ use plane::*;
 const PLANES: usize = 3;
 
 const PARTITION_PLOFFSET: usize = 4;
-const PARTITION_CONTEXTS: usize = 16;
-const PARTITION_TYPES: usize = 4;
+const PARTITION_CONTEXTS: usize = 20;
+pub const PARTITION_TYPES: usize = 4;
 
-const MI_SIZE_LOG2: usize = 2;
+pub const MI_SIZE_LOG2: usize = 2;
 const MI_SIZE: usize = (1 << MI_SIZE_LOG2);
 const MAX_MIB_SIZE_LOG2: usize = (MAX_SB_SIZE_LOG2 - MI_SIZE_LOG2);
-const MAX_MIB_SIZE: usize = (1 << MAX_MIB_SIZE_LOG2);
+pub const MAX_MIB_SIZE: usize = (1 << MAX_MIB_SIZE_LOG2);
 const MAX_MIB_MASK: usize = (MAX_MIB_SIZE - 1);
 
 const MAX_SB_SIZE_LOG2: usize = 6;
@@ -28,14 +28,20 @@ const MAX_SB_SQUARE: usize = (MAX_SB_SIZE * MAX_SB_SIZE);
 const INTRA_MODES: usize = 13;
 const UV_INTRA_MODES: usize = 13;
 
-static mi_size_wide: [u8; BLOCK_SIZES_ALL] = [
+pub static mi_size_wide: [u8; BLOCK_SIZES_ALL] = [
   1, 1, 2, 2, 2, 4, 4, 4, 8, 8, 8, 16, 16, 1, 4, 2, 8, 4, 16];
-static mi_size_high: [u8; BLOCK_SIZES_ALL] = [
+pub static mi_size_high: [u8; BLOCK_SIZES_ALL] = [
   1, 2, 1, 2, 4, 2, 4, 8, 4, 8, 16, 8, 16, 4, 1, 8, 2, 16, 4];
-static b_width_log2_lookup: [u8; BLOCK_SIZES_ALL] = [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 0, 2, 1, 3, 2, 4];
-static b_height_log2_lookup: [u8; BLOCK_SIZES_ALL] = [0, 1, 0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 2, 0, 3, 1, 4, 2];
-static tx_size_wide_log2: [usize; TX_SIZES_ALL] = [2, 3, 4, 5, 2, 3, 3, 4, 4, 5, 2, 4, 3, 5];
-static tx_size_high_log2: [usize; TX_SIZES_ALL] = [2, 3, 4, 5, 3, 2, 4, 3, 5, 4, 4, 2, 5, 3];
+pub static b_width_log2_lookup: [u8; BLOCK_SIZES_ALL] = [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 0, 2, 1, 3, 2, 4];
+pub static b_height_log2_lookup: [u8; BLOCK_SIZES_ALL] = [0, 1, 0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 2, 0, 3, 1, 4, 2];
+pub static tx_size_wide_log2: [usize; TX_SIZES_ALL] = [2, 3, 4, 5, 2, 3, 3, 4, 4, 5, 2, 4, 3, 5];
+pub static tx_size_high_log2: [usize; TX_SIZES_ALL] = [2, 3, 4, 5, 3, 2, 4, 3, 5, 4, 4, 2, 5, 3];
+// Width/height lookup tables in units of various block sizes
+pub static block_size_wide: [u8; BLOCK_SIZES_ALL] = [
+    4, 4, 8, 8, 8, 16, 16, 16, 32, 32, 32, 64, 64, 4, 16, 8, 32, 16, 64 ];
+
+pub static block_size_high: [u8; BLOCK_SIZES_ALL] = [
+    4, 8, 4, 8, 16, 8, 16, 32, 16, 32, 64, 32, 64, 16,4, 32, 8, 64, 16 ];
 
 const EXT_TX_SIZES: usize = 4;
 const EXT_TX_SET_TYPES: usize = 6;
@@ -324,7 +330,7 @@ impl CDFContext {
 const SUPERBLOCK_TO_PLANE_SHIFT: usize = MAX_SB_SIZE_LOG2;
 const SUPERBLOCK_TO_BLOCK_SHIFT: usize = MAX_MIB_SIZE_LOG2;
 const BLOCK_TO_PLANE_SHIFT: usize = MI_SIZE_LOG2;
-const LOCAL_BLOCK_MASK: usize = (1 << SUPERBLOCK_TO_BLOCK_SHIFT) - 1;
+pub const LOCAL_BLOCK_MASK: usize = (1 << SUPERBLOCK_TO_BLOCK_SHIFT) - 1;
 
 /// Absolute offset in superblocks inside a plane, where a superblock is defined
 /// to be an N*N square where N = (1 << SUPERBLOCK_TO_PLANE_SHIFT).
@@ -386,6 +392,8 @@ impl BlockOffset {
 #[derive(Copy,Clone)]
 pub struct Block {
     pub mode: PredictionMode,
+    pub bsize: BlockSize,
+    pub partition: PartitionType,
     pub skip: bool,
 }
 
@@ -393,18 +401,20 @@ impl Block {
     pub fn default() -> Block {
         Block {
             mode: PredictionMode::DC_PRED,
+            bsize: BlockSize::BLOCK_64X64,
+            partition: PartitionType::PARTITION_NONE,
             skip: false,
         }
     }
     pub fn is_inter(&self) -> bool {
-        false
+        self.mode >= PredictionMode::NEARESTMV
     }
 }
 
 #[derive(Clone, Default)]
 pub struct BlockContext {
-    cols: usize,
-    rows: usize,
+    pub cols: usize,
+    pub rows: usize,
     above_partition_context: Vec<u8>,
     left_partition_context: [u8; MAX_MIB_SIZE],
     above_coeff_context: [Vec<u8>; PLANES],
@@ -483,6 +493,14 @@ impl BlockContext {
         //TODO(anyone): Call reset_left_tx_context() here.
     }
 
+    pub fn set_mode(&mut self, bo: &BlockOffset, mode: PredictionMode) {
+        self.blocks[bo.y][bo.x].mode = mode;
+    }
+
+    pub fn get_mode(&mut self, bo: &BlockOffset) -> PredictionMode {
+        self.blocks[bo.y][bo.x].mode
+    }
+
     fn partition_plane_context(&self, bo: &BlockOffset,
                                bsize: BlockSize) -> usize {
         // TODO: this should be way simpler without sub8x8
@@ -539,10 +557,49 @@ pub struct ContextWriter {
 }
 
 impl ContextWriter {
-    pub fn write_partition(&mut self, p: PartitionType, bsize: BlockSize) {
-        let bo = BlockOffset { x: 0, y: 0 };
+    fn cdf_element_prob(cdf: &[u16], element: usize) -> u16 {
+      return if element > 0 { cdf[element - 1] } else { 32768 } - cdf[element];
+    }
+
+    fn partition_gather_horz_alike(out: &mut [u16; 2], cdf_in: &[u16], _bsize: BlockSize) {
+      out[0] = 32768;
+      out[0] -= ContextWriter::cdf_element_prob(cdf_in, PartitionType::PARTITION_HORZ as usize);
+      out[0] -= ContextWriter::cdf_element_prob(cdf_in, PartitionType::PARTITION_SPLIT as usize);
+      out[0] = 32768 - out[0];
+      out[1] = 0;
+    }
+
+    fn partition_gather_vert_alike(out: &mut [u16; 2], cdf_in: &[u16], _bsize: BlockSize) {
+      out[0] = 32768;
+      out[0] -= ContextWriter::cdf_element_prob(cdf_in, PartitionType::PARTITION_VERT as usize);
+      out[0] -= ContextWriter::cdf_element_prob(cdf_in, PartitionType::PARTITION_SPLIT as usize);
+      out[0] = 32768 - out[0];
+      out[1] = 0;
+    }
+
+    pub fn write_partition(&mut self, bo: &BlockOffset, p: PartitionType, bsize: BlockSize) {
+        let hbs = (mi_size_wide[bsize as usize] / 2) as usize;
+        let has_cols = (bo.x + hbs) < self.bc.cols;
+        let has_rows = (bo.y + hbs) < self.bc.rows;
         let ctx = self.bc.partition_plane_context(&bo, bsize);
-        self.w.symbol(p as u32, &mut self.fc.partition_cdf[ctx], PARTITION_TYPES);
+        assert!(ctx < PARTITION_CONTEXTS);
+        let partition_cdf = &mut self.fc.partition_cdf[ctx];
+
+        if !has_rows && !has_cols {
+          return;
+        }
+
+        if has_rows && has_cols {
+            self.w.symbol(p as u32, partition_cdf, PARTITION_TYPES);
+        } else if !has_rows && has_cols {
+            let mut cdf = [0u16; 2];
+            ContextWriter::partition_gather_vert_alike(&mut cdf, partition_cdf, bsize);
+            self.w.cdf((p == PartitionType::PARTITION_SPLIT) as u32, &cdf);
+        } else {
+            let mut cdf = [0u16; 2];
+            ContextWriter::partition_gather_horz_alike(&mut cdf, partition_cdf, bsize);
+            self.w.cdf((p == PartitionType::PARTITION_SPLIT) as u32, &cdf);
+        }
     }
     pub fn write_intra_mode_kf(&mut self, bo: &BlockOffset, mode: PredictionMode) {
         let above_mode = self.bc.above_of(bo).mode as usize;
