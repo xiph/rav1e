@@ -528,8 +528,7 @@ impl BlockContext {
 #[derive(Clone)]
 pub struct ContextWriterCheckpoint {
     pub w: ec::WriterCheckpoint,
-    pub fc: CDFContext,
-    pub bc: BlockContext
+    pub fc: CDFContext
 }
 
 pub struct ContextWriter {
@@ -690,14 +689,12 @@ impl ContextWriter {
     pub fn checkpoint(&mut self) -> ContextWriterCheckpoint {
         ContextWriterCheckpoint {
             w: self.w.checkpoint(),
-            fc: self.fc.clone(),
-            bc: self.bc.clone()
+            fc: self.fc.clone()
         }
     }
 
     pub fn rollback(&mut self, checkpoint: ContextWriterCheckpoint) {
         self.w.rollback(&checkpoint.w);
-        self.fc = checkpoint.fc.clone();
-        self.bc = checkpoint.bc.clone();
+        self.fc = checkpoint.fc.clone()
     }
 }
