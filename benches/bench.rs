@@ -135,7 +135,6 @@ fn write_b_bench(b: &mut Bencher) {
         bc: bc,
     };
 
-    let mode = PredictionMode::DC_PRED;
     let tx_type = TxType::DCT_DCT;
 
     let sbx = 0;
@@ -148,7 +147,9 @@ fn write_b_bench(b: &mut Bencher) {
                 for by in 0..8 {
                     for bx in 0..8 {
                         let bo = sbo.block_offset(bx, by);
-                            write_b(&mut cw, &mut fi, &mut fs, p, &bo, mode, tx_type);
+                            let tx_bo = BlockOffset{x: bo.x + bx, y: bo.y + by};
+                            let po = tx_bo.plane_offset(&fs.input.planes[p].cfg);
+                            encode_tx_block(&mut fi, &mut fs, &mut cw, p, &bo, mode, tx_type, &po);
                     }
                 }
             }

@@ -19,7 +19,7 @@ fn main() {
     };
     let mut fi = FrameInvariants::new(width, height, files.quantizer);
     let sequence = Sequence::new();
-    write_ivf_header(&mut files.output_file, fi.sb_width*64, fi.sb_height*64, framerate.num, framerate.den);
+    write_ivf_header(&mut files.output_file, fi.padded_w, fi.padded_h, framerate.num, framerate.den);
 
     let mut rl = Editor::<()>::new();
     let _ = rl.load_history(".rav1e-history");
