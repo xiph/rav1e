@@ -298,11 +298,13 @@ fn has_chroma(bo: &BlockOffset, bsize: BlockSize,
 // dequantize, inverse-transform.
 pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
                   p: usize, bo: &BlockOffset, mode: PredictionMode, tx_type: TxType,
-                  po: &PlaneOffset) {
+                  po: &PlaneOffset, skip: bool) {
     let stride = fs.input.planes[p].cfg.stride;
     let rec = &mut fs.rec.planes[p];
 
     mode.predict_4x4(&mut rec.mut_slice(&po));
+
+    if skip { return; }
 
     let mut residual = [0 as i16; 16];
 
@@ -324,7 +326,10 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
 
 fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
             mode: PredictionMode, bsize: BlockSize, bo: &BlockOffset) {
-    cw.write_skip(bo, false);
+    let skip = false;
+
+    cw.bc.set_skip(bo, bsize, skip);
+    cw.write_skip(bo, skip);
     cw.write_intra_mode_kf(bo, mode);
 
     let xdec = fs.input.planes[1].cfg.xdec;
@@ -337,7 +342,8 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
     }
 
     let tx_type = TxType::DCT_DCT;
-    cw.write_tx_type(tx_type, mode);
+
+    if skip == false { cw.write_tx_type(tx_type, mode); }
 
     let bw = mi_size_wide[bsize as usize] as usize;
     let bh = mi_size_high[bsize as usize] as usize;
@@ -353,7 +359,7 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
                 // to set mode for each MI block after mode decision is done.
                 // It works now because we set mode for each tx position, where tx_size is 4x4.
                 cw.bc.set_mode(&tx_bo, mode);
-                encode_tx_block(fi, fs, cw, p, &tx_bo, mode, tx_type, &po);
+                encode_tx_block(fi, fs, cw, p, &tx_bo, mode, tx_type, &po, skip);
             }
         }
     }
@@ -373,7 +379,7 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
                         x: sb_offset.x + partition_x + (bx << MI_SIZE_LOG2),
                         y: sb_offset.y + partition_y + (by << MI_SIZE_LOG2) };
 
-                    encode_tx_block(fi, fs, cw, p, &tx_bo, uv_mode, uv_tx_type, &po);
+                    encode_tx_block(fi, fs, cw, p, &tx_bo, uv_mode, uv_tx_type, &po, skip);
                 }
             }
         }
