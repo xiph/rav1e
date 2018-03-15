@@ -149,7 +149,8 @@ fn write_b_bench(b: &mut Bencher) {
                         let bo = sbo.block_offset(bx, by);
                             let tx_bo = BlockOffset{x: bo.x + bx, y: bo.y + by};
                             let po = tx_bo.plane_offset(&fs.input.planes[p].cfg);
-                            encode_tx_block(&mut fi, &mut fs, &mut cw, p, &bo, mode, tx_type, &po);
+                            encode_tx_block(&mut fi, &mut fs, &mut cw, p, &bo, mode, 
+                                            tx_type, &po, false);
                     }
                 }
             }
