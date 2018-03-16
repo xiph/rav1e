@@ -493,8 +493,15 @@ impl BlockContext {
         //TODO(anyone): Call reset_left_tx_context() here.
     }
 
-    pub fn set_mode(&mut self, bo: &BlockOffset, mode: PredictionMode) {
-        self.blocks[bo.y][bo.x].mode = mode;
+    pub fn set_mode(&mut self, bo: &BlockOffset, bsize: BlockSize, mode: PredictionMode) {
+        let bw = mi_size_wide[bsize as usize];
+        let bh = mi_size_high[bsize as usize];
+
+        for y in 0..bh {
+            for x in 0..bw {
+              self.blocks[bo.y + y as usize][bo.x + x as usize].mode = mode;
+            };
+        }
     }
 
     pub fn get_mode(&mut self, bo: &BlockOffset) -> PredictionMode {
@@ -518,22 +525,20 @@ impl BlockContext {
     pub fn update_partition_context(&mut self, bo: &BlockOffset,
                                 subsize : BlockSize, bsize: BlockSize) {
 #[allow(dead_code)]
-        // TODO(yushin): If CONFIG_EXT_PARTITION_TYPES is enabled, use bw and bh
-        //let bw = mi_size_wide[bsize as usize];
-        //let bh = mi_size_high[bsize as usize];
-        let bs = mi_size_wide[bsize as usize];
+        let bw = mi_size_wide[bsize as usize];
+        let bh = mi_size_high[bsize as usize];
 
-        let above_ctx = &mut self.above_partition_context[bo.x..bo.x + bs as usize];
-        let left_ctx = &mut self.left_partition_context[bo.y_in_sb()..bo.y_in_sb() + bs as usize];
+        let above_ctx = &mut self.above_partition_context[bo.x..bo.x + bw as usize];
+        let left_ctx = &mut self.left_partition_context[bo.y_in_sb()..bo.y_in_sb() + bh as usize];
 
         // update the partition context at the end notes. set partition bits
         // of block sizes larger than the current one to be one, and partition
         // bits of smaller block sizes to be zero.
-        for i in 0..bs {
+        for i in 0..bw {
             above_ctx[i as usize] = partition_context_lookup[subsize as usize][0];
         }
 
-        for i in 0..bs {
+        for i in 0..bh {
             left_ctx[i as usize] = partition_context_lookup[subsize as usize][1];
         }
     }
