@@ -16,7 +16,7 @@ fn main() {
 
     let mut fi = FrameInvariants::new(width, height, files.quantizer);
     let sequence = Sequence::new();
-    write_ivf_header(&mut files.output_file, fi.padded_w, fi.padded_h, framerate.num, framerate.den);
+    write_ivf_header(&mut files.output_file, width, height, framerate.num, framerate.den);
 
     let mut last_rec: Option<Frame> = None;
     loop {
