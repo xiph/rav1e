@@ -330,6 +330,7 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
 
     cw.bc.set_skip(bo, bsize, skip);
     cw.write_skip(bo, skip);
+    cw.bc.set_mode(bo, bsize, mode);
     cw.write_intra_mode_kf(bo, mode);
 
     let xdec = fs.input.planes[1].cfg.xdec;
@@ -355,10 +356,6 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
             for bx in 0..bw {
                 let tx_bo = BlockOffset{x: bo.x + bx, y: bo.y + by};
                 let po = tx_bo.plane_offset(&fs.input.planes[p].cfg);
-                // FIXME(anyone): Another way to do this is
-                // to set mode for each MI block after mode decision is done.
-                // It works now because we set mode for each tx position, where tx_size is 4x4.
-                cw.bc.set_mode(&tx_bo, mode);
                 encode_tx_block(fi, fs, cw, p, &tx_bo, mode, tx_type, &po, skip);
             }
         }
@@ -461,7 +458,7 @@ fn encode_partition(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextW
             let rdo_none = rdo_mode_decision(fi, fs, cw, bsize, bo);
             // FIXME(anyone): Instead of calling set_mode() in encode_block() for each 4x4tx position,
             // it would be better to call set_mode() for each MI block position here.
-            cw.bc.set_mode(bo, rdo_none.pred_mode);
+            cw.bc.set_mode(bo, bsize, rdo_none.pred_mode);
 
             encode_block(fi, fs, cw, rdo_none.pred_mode, bsize, bo);
         },
