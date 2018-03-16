@@ -101,12 +101,12 @@ impl FrameInvariants {
             qindex: qindex,
             width: width,
             height: height,
-            padded_w: ((width+7)/8)*8,
-            padded_h: ((height+7)/8)*8,
+            padded_w: ((width+7)>>3)<<3,
+            padded_h: ((height+7)>>3)<<3,
             sb_width: (width+63)/64,
             sb_height: (height+63)/64,
-            w_in_b: ((width+7)/8)*8 >> MI_SIZE_LOG2,
-            h_in_b: ((height+7)/8)*8 >> MI_SIZE_LOG2,
+            w_in_b: 2 * ((width+7)>>3) ,	// MiCols, ((width+7)/8)<<3 >> MI_SIZE_LOG2
+            h_in_b: 2 * ((height+7)>>3),	// MiRows, ((height+7)/8)<<3 >> MI_SIZE_LOG2
             number: 0,
             ftype: FrameType::KEY,
             show_existing_frame: false,
@@ -236,8 +236,8 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     //uch.write(8+7,0)?; // frame id
     uch.write(3,0)?; // colorspace
     uch.write(1,0)?; // color range
-    uch.write(16,(fi.padded_w-1) as u16)?; // width
-    uch.write(16,(fi.padded_h-1) as u16)?; // height
+    uch.write(16,(fi.width-1) as u16)?; // width
+    uch.write(16,(fi.height-1) as u16)?; // height
     uch.write_bit(false)?; // scaling active
     uch.write_bit(false)?; // screen content tools
     uch.write(3,0x0)?; // frame context
@@ -263,7 +263,7 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     //uch.write_bit(false)?; // use hybrid pred
     //uch.write_bit(false)?; // use compound pred
     uch.write_bit(true)?; // reduced tx
-    if fi.padded_w > 256 {
+    if fi.width > 256 {
         uch.write(1,0)?; // tile cols
     }
     uch.write(1,0)?; // tile rows
@@ -361,7 +361,15 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
         }
     }
 
-    if has_chroma(bo, bsize, xdec, ydec) {
+    let mut bw_uv = bw >> xdec;
+    let mut bh_uv = bh >> ydec;
+
+    if (bw_uv == 0 || bh_uv == 0) && has_chroma(bo, bsize, xdec, ydec) {
+        bw_uv = 1;
+        bh_uv = 1;
+    }
+
+    if bw_uv > 0 && bh_uv > 0 {
         let uv_tx_type = exported_intra_mode_to_tx_type_context[uv_mode as usize];
         let partition_x = (bo.x & LOCAL_BLOCK_MASK) >> xdec << MI_SIZE_LOG2;
         let partition_y = (bo.y & LOCAL_BLOCK_MASK) >> ydec << MI_SIZE_LOG2;
@@ -369,8 +377,8 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
         for p in 1..3 {
             let sb_offset = bo.sb_offset().plane_offset(&fs.input.planes[p].cfg);
 
-            for by in 0..bh >> ydec {
-                for bx in 0..bw >> xdec {
+            for by in 0..bh_uv {
+                for bx in 0..bw_uv {
                     let tx_bo = BlockOffset{x: bo.x + (bx << xdec), y: bo.y + (by << ydec)};
                     let po = PlaneOffset {
                         x: sb_offset.x + partition_x + (bx << MI_SIZE_LOG2),
@@ -432,9 +440,8 @@ fn encode_partition(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextW
     }
 
     // TODO(anyone): Until we have RDO-based block size decision,
-    // split all the way down to 8x8 blocks, then do rdo_mode_decision() for each 8x8 block.
-    // FIXIME(anyone): Enable partition into 4x4 blocks.
-    let partition = if bsize > BlockSize::BLOCK_8X8 {
+    // split all the way down to 4x4 blocks, then do rdo_mode_decision() for each 4x4 block.
+    let partition = if bsize > BlockSize::BLOCK_4X4 {
                             PartitionType::PARTITION_SPLIT }
                     else { PartitionType::PARTITION_NONE };
 
