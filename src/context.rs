@@ -19,7 +19,7 @@ pub const MI_SIZE_LOG2: usize = 2;
 const MI_SIZE: usize = (1 << MI_SIZE_LOG2);
 const MAX_MIB_SIZE_LOG2: usize = (MAX_SB_SIZE_LOG2 - MI_SIZE_LOG2);
 pub const MAX_MIB_SIZE: usize = (1 << MAX_MIB_SIZE_LOG2);
-const MAX_MIB_MASK: usize = (MAX_MIB_SIZE - 1);
+pub const MAX_MIB_MASK: usize = (MAX_MIB_SIZE - 1);
 
 const MAX_SB_SIZE_LOG2: usize = 6;
 const MAX_SB_SIZE: usize = (1 << MAX_SB_SIZE_LOG2);
