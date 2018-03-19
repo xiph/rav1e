@@ -14,7 +14,7 @@ Because AV1 is not yet frozen, it relies on an exact decoder version and configu
 * 64x64 superblocks
 * H, V, and DC prediction modes
 * 4x4 DCT and ADST transforms
-* Realtime 480p encoding
+* ~5 fps encoding @ 480p (see issue #124)
 
 # Building
 
