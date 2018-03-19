@@ -29,7 +29,7 @@ This is also required everytime you switch branch or pull code and the submodule
 
 # Compressing video
 
-Input videos must be 8-bit 4:2:0, in y4m format. Videos will be padded with gray to a multiple of 64x64 pixels (until cropping is implemented in the future).
+Input videos must be 8-bit 4:2:0, in y4m format.
 
 ```
 cargo run --bin rav1e -- input.y4m -o output.ivf
