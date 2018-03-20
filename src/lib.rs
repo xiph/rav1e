@@ -398,7 +398,9 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
 
             for by in 0..bh_uv {
                 for bx in 0..bw_uv {
-                    let tx_bo = BlockOffset{x: bo.x + (bx << xdec), y: bo.y + (by << ydec)};
+                    let tx_bo =
+                        BlockOffset{x: bo.x + (bx << xdec) - ((bw == 1) as usize),
+                                    y: bo.y + (by << ydec) - ((bh == 1) as usize)};
                     let po = PlaneOffset {
                         x: sb_offset.x + partition_x + (bx << MI_SIZE_LOG2),
                         y: sb_offset.y + partition_y + (by << MI_SIZE_LOG2) };
