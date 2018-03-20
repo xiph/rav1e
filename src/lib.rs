@@ -195,7 +195,7 @@ impl EncoderConfig {
                 .short("s")
                 .long("speed")
                 .takes_value(true)
-                .default_value("10"))
+                .default_value("0"))
             .get_matches();
 
         EncoderConfig {
