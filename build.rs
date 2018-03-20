@@ -8,7 +8,7 @@ extern crate cc;
 use std::env;
 use std::path::Path;
 
-use std::fs::OpenOptions;
+use std::fs::File;
 use std::io::Write;
 
 fn format_write(builder: bindgen::Builder, output: &str) {
@@ -19,12 +19,7 @@ fn format_write(builder: bindgen::Builder, output: &str) {
         .replace("/**", "/*")
         .replace("/*!", "/*");
 
-    let mut file = OpenOptions::new()
-        .write(true)
-        .truncate(true)
-        .create(true)
-        .open(output)
-        .unwrap();
+    let mut file = File::create(output).unwrap();
 
     let _ = file.write(s.as_bytes());
 }
