@@ -82,7 +82,6 @@ impl FrameState {
 #[allow(dead_code)]
 pub struct FrameInvariants {
     pub qindex: usize,
-    pub speed: usize,
     pub width: usize,
     pub height: usize,
     pub padded_w: usize,
@@ -94,21 +93,12 @@ pub struct FrameInvariants {
     pub number: u64,
     pub ftype: FrameType,
     pub show_existing_frame: bool,
-    pub min_partition_size: BlockSize,
 }
 
 impl FrameInvariants {
-    pub fn new(width: usize, height: usize, qindex: usize, speed: usize) -> FrameInvariants {
-        // Speed level decides the minimum partition size, i.e. higher speed --> larger min partition size,
-        // with exception that SBs on right or bottom frame borders split down to BLOCK_4X4.
-        let min_partition_size = if speed <= 0 { BlockSize::BLOCK_4X4 } 
-                                 else if speed <= 1 { BlockSize::BLOCK_8X8 }
-                                 else if speed <= 2 { BlockSize::BLOCK_16X16 }
-                                 else if speed <= 3 { BlockSize::BLOCK_32X32 }
-                                 else { BlockSize::BLOCK_64X64 };
+    pub fn new(width: usize, height: usize, qindex: usize) -> FrameInvariants {
         FrameInvariants {
             qindex: qindex,
-            speed: speed,
             width: width,
             height: height,
             padded_w: ((width+7)>>3)<<3,
@@ -120,7 +110,6 @@ impl FrameInvariants {
             number: 0,
             ftype: FrameType::KEY,
             show_existing_frame: false,
-            min_partition_size: min_partition_size,
         }
     }
 }
@@ -157,8 +146,7 @@ pub struct EncoderConfig {
     pub output_file: Box<Write>,
     pub rec_file: Option<Box<Write>>,
     pub limit: u64,
-    pub quantizer: usize,
-    pub speed: usize
+    pub quantizer: usize
 }
 
 impl EncoderConfig {
@@ -190,12 +178,6 @@ impl EncoderConfig {
                 .long("quantizer")
                 .takes_value(true)
                 .default_value("100"))
-            .arg(Arg::with_name("SPEED")
-                .help("Speed level (0(slow)-10(fast))")
-                .short("s")
-                .long("speed")
-                .takes_value(true)
-                .default_value("10"))
             .get_matches();
 
         EncoderConfig {
@@ -211,8 +193,7 @@ impl EncoderConfig {
                 Box::new(File::create(&f).unwrap()) as Box<Write>
             }),
             limit: matches.value_of("LIMIT").unwrap().parse().unwrap(),
-            quantizer: matches.value_of("QP").unwrap().parse().unwrap(),
-            speed: matches.value_of("SPEED").unwrap().parse().unwrap()
+            quantizer: matches.value_of("QP").unwrap().parse().unwrap()
         }
     }
 }
@@ -458,18 +439,11 @@ fn encode_partition(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextW
         return;
     }
 
-    let is_sb_on_frame_border = (fi.sb_width-1) * 16 <= bo.x || (fi.sb_height-1) * 16 <= bo.y;
-
     // TODO(anyone): Until we have RDO-based block size decision,
     // split all the way down to 4x4 blocks, then do rdo_mode_decision() for each 4x4 block.
-    let mut partition = PartitionType::PARTITION_NONE;
-
-    if is_sb_on_frame_border {
-        // SBs on right or bottom frame borders split down to BLOCK_4X4.
-        if bsize > BlockSize::BLOCK_4X4 { partition = PartitionType::PARTITION_SPLIT; }
-    } else {
-        if bsize > fi.min_partition_size { partition = PartitionType::PARTITION_SPLIT; }
-    };
+    let partition = if bsize > BlockSize::BLOCK_4X4 {
+                            PartitionType::PARTITION_SPLIT }
+                    else { PartitionType::PARTITION_NONE };
 
     assert!(mi_size_wide[bsize as usize] == mi_size_high[bsize as usize]);
 

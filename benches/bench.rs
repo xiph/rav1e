@@ -124,7 +124,7 @@ use rav1e::partition::*;
 use rav1e::ec;
 
 fn write_b_bench(b: &mut Bencher) {
-    let mut fi = FrameInvariants::new(1024, 1024, 100, 10);
+    let mut fi = FrameInvariants::new(1024, 1024, 100);
     let w = ec::Writer::new();
     let fc = CDFContext::new();
     let bc = BlockContext::new(fi.sb_width * 16, fi.sb_height * 16);
