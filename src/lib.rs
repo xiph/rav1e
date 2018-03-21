@@ -321,15 +321,15 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
     let stride = fs.input.planes[p].cfg.stride;
     let rec = &mut fs.rec.planes[p];
 
-    mode.predict_4x4(&mut rec.mut_slice(&po));
+    mode.predict_4x4(&mut rec.mut_slice(po));
 
     if skip { return; }
 
     let mut residual = [0 as i16; 16];
 
     diff_4x4(&mut residual,
-             &fs.input.planes[p].slice(&po),
-             &rec.slice(&po));
+             &fs.input.planes[p].slice(po),
+             &rec.slice(po));
 
     let mut coeffs = [0 as i32; 16];
     fht4x4(&residual, &mut coeffs, 4, tx_type);
@@ -340,7 +340,7 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
     let mut rcoeffs = [0 as i32; 16];
     dequantize(fi.qindex, &coeffs, &mut rcoeffs);
 
-    iht4x4_add(&mut rcoeffs, &mut rec.mut_slice(&po).as_mut_slice(), stride, tx_type);
+    iht4x4_add(&mut rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_type);
 }
 
 fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
