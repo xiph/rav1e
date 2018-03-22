@@ -20,7 +20,6 @@ pub fn quantize_in_place(qindex: usize, coeffs: &mut [i32]) {
     for c in coeffs[1..].iter_mut() {
         *c /= ac_q(qindex) as i32;
     }
-    coeffs[15] = 0;
 }
 
 pub fn dequantize(qindex:usize, coeffs: &[i32], rcoeffs: &mut [i32]) {
