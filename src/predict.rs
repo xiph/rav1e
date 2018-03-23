@@ -26,26 +26,6 @@ extern {
         left: *const u16, bd: libc::c_int);
 }
 
-pub fn pred_dc_128(output: &mut [u16], stride: usize) {
-    for y in 0..4 {
-        for x in 0..4 {
-            output[y*stride+x] = 128;
-        }
-    }
-}
-
-pub fn pred_dc_left_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
-    unsafe {
-        highbd_dc_left_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, 4, 4, above.as_ptr(), left.as_ptr(), 8);
-    }
-}
-
-pub fn pred_dc_top_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
-    unsafe {
-        highbd_dc_top_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, 4, 4, above.as_ptr(), left.as_ptr(), 8);
-    }
-}
-
 pub trait Dim {
     const W : usize;
     const H : usize;
@@ -68,6 +48,26 @@ pub trait Intra: Dim {
             for v in &mut line[..Self::W] {
                 *v = avg;
             }
+        }
+    }
+
+    fn pred_dc_128(output: &mut [u16], stride: usize) {
+        for y in 0..Self::H {
+            for x in 0..Self::W {
+                output[y*stride+x] = 128;
+            }
+        }
+    }
+
+    fn pred_dc_left(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+        unsafe {
+            highbd_dc_left_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, Self::W as libc::c_int, Self::H as libc::c_int, above.as_ptr(), left.as_ptr(), 8);
+        }
+    }
+
+    fn pred_dc_top(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+        unsafe {
+            highbd_dc_top_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, Self::W as libc::c_int, Self::H as libc::c_int, above.as_ptr(), left.as_ptr(), 8);
         }
     }
 
