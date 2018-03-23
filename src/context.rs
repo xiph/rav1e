@@ -7,6 +7,7 @@ use ec;
 use partition::*;
 use partition::BlockSize::*;
 use partition::TxSize::*;
+use partition::TxType::*;
 use plane::*;
 
 const PLANES: usize = 3;
@@ -259,6 +260,53 @@ fn get_ext_tx_set(tx_size: TxSize, is_inter: bool,
     }
 }
 
+static intra_mode_to_tx_type_context: [TxType; INTRA_MODES] = [
+    DCT_DCT,    // DC
+    ADST_DCT,   // V
+    DCT_ADST,   // H
+    DCT_DCT,    // D45
+    ADST_ADST,  // D135
+    ADST_DCT,   // D117
+    DCT_ADST,   // D153
+    DCT_ADST,   // D207
+    ADST_DCT,   // D63
+    ADST_ADST,  // SMOOTH
+    ADST_DCT,   // SMOOTH_V
+    DCT_ADST,   // SMOOTH_H
+    ADST_ADST,  // PAETH
+];
+
+/*
+// enable with CfL
+static uv2y: [PredictionMode; UV_INTRA_MODES] = [
+    DC_PRED,        // UV_DC_PRED
+    V_PRED,         // UV_V_PRED
+    H_PRED,         // UV_H_PRED
+    D45_PRED,       // UV_D45_PRED
+    D135_PRED,      // UV_D135_PRED
+    D117_PRED,      // UV_D117_PRED
+    D153_PRED,      // UV_D153_PRED
+    D207_PRED,      // UV_D207_PRED
+    D63_PRED,       // UV_D63_PRED
+    SMOOTH_PRED,    // UV_SMOOTH_PRED
+    SMOOTH_V_PRED,  // UV_SMOOTH_V_PRED
+    SMOOTH_H_PRED,  // UV_SMOOTH_H_PRED
+    PAETH_PRED,     // UV_PAETH_PRED
+    DC_PRED,        // CFL_PRED
+];
+*/
+
+pub fn y_intra_mode_to_tx_type_context(pred: PredictionMode) -> TxType {
+    intra_mode_to_tx_type_context[pred as usize]
+}
+
+pub fn uv_intra_mode_to_tx_type_context(pred: PredictionMode)-> TxType {
+    intra_mode_to_tx_type_context[pred as usize]
+    //flip me when CfL is implemented
+    //intra_mode_to_tx_type_context[uv2y[pred as usize] as usize]
+}
+
+
 extern {
     static default_partition_cdf: [[u16; PARTITION_TYPES + 1]; PARTITION_CONTEXTS];
     static default_kf_y_mode_cdf: [[[u16; INTRA_MODES + 1]; INTRA_MODES]; INTRA_MODES];
@@ -284,8 +332,6 @@ extern {
     static av1_cat6_cdf4: [u16; 4];
 
     static av1_intra_scan_orders: [[SCAN_ORDER; TX_TYPES]; TX_SIZES_ALL];
-
-    pub static exported_intra_mode_to_tx_type_context: &'static [TxType; INTRA_MODES];
 }
 
 #[repr(C)]

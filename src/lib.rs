@@ -35,6 +35,11 @@ use predict::*;
 use rdo::*;
 use std::fmt;
 
+extern {
+    pub fn av1_rtcd();
+    pub fn aom_dsp_rtcd();
+}
+
 pub struct Frame {
     pub planes: [Plane; 3]
 }
@@ -273,8 +278,8 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     uch.write(2,0)?; // cdef clpf damping
     uch.write(2,0)?; // cdef bits
     for _ in 0..1 {
-        uch.write(7,0)?; // cdef y strength
-        uch.write(7,0)?; // cdef uv strength
+        uch.write(6,0)?; // cdef y strength
+        uch.write(6,0)?; // cdef uv strength
     }
     uch.write(6,0)?; // no y, u or v loop restoration
     uch.write_bit(false)?; // tx mode select
@@ -288,7 +293,7 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     uch.write(1,0)?; // tile rows
     // if tile_cols * tile_rows > 1
     //uch.write_bit(true)?; // loop filter across tiles
-    uch.write(2,0)?; // tile_size_bytes
+    uch.write(2,3)?; // tile_size_bytes
     uch.byte_align()?;
     Ok(())
 }
@@ -389,7 +394,7 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
     }
 
     if bw_uv > 0 && bh_uv > 0 {
-        let uv_tx_type = exported_intra_mode_to_tx_type_context[uv_mode as usize];
+        let uv_tx_type = uv_intra_mode_to_tx_type_context(uv_mode);
         let partition_x = (bo.x & LOCAL_BLOCK_MASK) >> xdec << MI_SIZE_LOG2;
         let partition_y = (bo.y & LOCAL_BLOCK_MASK) >> ydec << MI_SIZE_LOG2;
 
@@ -565,6 +570,10 @@ pub fn process_frame(sequence: &Sequence, fi: &FrameInvariants,
                      y4m_dec: &mut y4m::Decoder<Box<Read>>,
                      y4m_enc: Option<&mut y4m::Encoder<Box<Write>>>,
                      last_rec: &mut Option<Frame>) -> bool {
+    unsafe {
+        av1_rtcd();
+        aom_dsp_rtcd();
+    }
     let width = fi.width;
     let height = fi.height;
     match y4m_dec.read_frame() {
