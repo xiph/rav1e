@@ -1763,6 +1763,62 @@ fn write_tile_group_header(tile_start_and_end_present_flag: bool) ->
     buf.clone()
 }
 
+// Input to this process is the array CurrFrame of reconstructed samples.
+// Output from this process is the array CdefFrame containing deringed samples.
+// The purpose of CDEF is to perform deringing based on the detected direction of blocks.
+// CDEF parameters are stored for each 64 by 64 block of pixels.
+// The CDEF filter is applied on each 8 by 8 block of pixels.
+// Reference: http://av1-spec.argondesign.com/av1-spec/av1-spec.html#cdef-process
+fn cdef_frame(fi: &FrameInvariants, rec: &mut Frame) {
+    let width = fi.width;
+    let height = fi.height;
+    let mut cdef_y = vec![128 as u16; width*height];
+    let mut cdef_u = vec![128 as u16; width*height/4];
+    let mut cdef_v = vec![128 as u16; width*height/4];
+    for y in 0..height {
+        for x in 0..width {
+            let stride = rec.planes[0].cfg.stride;
+            cdef_y[y*width+x] = rec.planes[0].data[y*stride+x] as u16;
+        }
+    }
+    for y in 0..height/2 {
+        for x in 0..width/2 {
+            let stride = rec.planes[1].cfg.stride;
+            cdef_u[y*width/2+x] = rec.planes[1].data[y*stride+x] as u16;
+        }
+    }
+    for y in 0..height/2 {
+        for x in 0..width/2 {
+            let stride = rec.planes[2].cfg.stride;
+            cdef_v[y*width/2+x] = rec.planes[2].data[y*stride+x] as u16;
+        }
+    }
+
+    // For each 8x8 block, call cdef_find_dir and cdef_filter_block with a constant strength. */
+    // luma
+    for by in 0..fi.sb_height << 3 {
+        for bx in 0..fi.sb_width << 3 {
+            /*
+            cdef_find_dir(img, stride, var, coeff_shift);
+            cdef_filter_block(dst8, dst16, dstride, input, pri_strength, sec_strength, dir, pri_damping, sec_damping, bsize, max_unused, coeff_shift);
+            */
+        }
+    }
+
+    // chroma, reuse direction from luma
+    for by in 0..fi.sb_height << 4 {
+        for bx in 0..fi.sb_width << 4 {
+            /*
+            cdef_filter_block(dst8, dst16, dstride, input, pri_strength, sec_strength, dir, pri_damping, sec_damping, bsize, max_unused, coeff_shift);
+            */
+        }
+    }
+
+    rec.planes[0].data.copy_from_slice(cdef_y.as_slice());
+    rec.planes[1].data.copy_from_slice(cdef_u.as_slice());
+    rec.planes[2].data.copy_from_slice(cdef_v.as_slice());
+}
+
 fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut FrameState, last_rec: &Option<Frame>) -> Vec<u8> {
     let mut packet = Vec::new();
     //write_uncompressed_header(&mut packet, sequence, fi).unwrap();
@@ -1798,6 +1854,8 @@ fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut Fram
         buf1.clear();
 
         packet.write(&tile).unwrap();
+        /* TODO: Don't apply if lossless */
+        cdef_frame(fi, &mut fs.rec);
     }
     packet
 }
