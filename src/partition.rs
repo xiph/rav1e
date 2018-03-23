@@ -145,12 +145,12 @@ impl PredictionMode {
             PredictionMode::DC_PRED => {
                 match (x, y) {
                     (0, 0) =>
-                        pred_dc_128(slice, stride),
+                        Block4x4::pred_dc_128(slice, stride),
                     (_, 0) => {
-                        pred_dc_left_4x4(slice, stride, &above[..4], &left[..4]);
+                        Block4x4::pred_dc_left(slice, stride, &above[..4], &left[..4]);
                     },
                     (0, _) => {
-                        pred_dc_top_4x4(slice, stride, &above[..4], &left[..4])
+                        Block4x4::pred_dc_top(slice, stride, &above[..4], &left[..4])
                     },
                     _ => {
                         Block4x4::pred_dc(slice, stride, &above[..4], &left[..4]);
