@@ -325,8 +325,9 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
                   po: &PlaneOffset, skip: bool) {
     let stride = fs.input.planes[p].cfg.stride;
     let rec = &mut fs.rec.planes[p];
+    let tx_size = TxSize::TX_4X4;
 
-    mode.predict_4x4(&mut rec.mut_slice(po));
+    mode.predict(&mut rec.mut_slice(po), tx_size);
 
     if skip { return; }
 
