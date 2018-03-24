@@ -338,7 +338,7 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
              &rec.slice(po));
 
     let mut coeffs = [0 as i32; 16];
-    fht4x4(&residual, &mut coeffs, 4, tx_type);
+    forward_transform(&residual, &mut coeffs, 4, tx_size, tx_type);
     quantize_in_place(fi.qindex, &mut coeffs);
     cw.write_coeffs(p, bo, &coeffs, TxSize::TX_4X4, tx_type);
 
@@ -346,7 +346,7 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
     let mut rcoeffs = [0 as i32; 16];
     dequantize(fi.qindex, &coeffs, &mut rcoeffs);
 
-    iht4x4_add(&mut rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_type);
+    inverse_transform_add(&mut rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type);
 }
 
 fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
