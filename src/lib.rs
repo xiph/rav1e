@@ -299,10 +299,10 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
 }
 
 /// Write into `dst` the difference between the 4x4 blocks at `src1` and `src2`
-fn diff_4x4(dst: &mut [i16; 16], src1: &PlaneSlice, src2: &PlaneSlice) {
-    for j in 0..4 {
-        for i in 0..4 {
-            dst[j*4 + i] = (src1.p(i, j) as i16) - (src2.p(i, j) as i16);
+fn diff(dst: &mut [i16; 16], src1: &PlaneSlice, src2: &PlaneSlice, width: usize, height: usize) {
+    for j in 0..height {
+        for i in 0..width {
+            dst[j*width + i] = (src1.p(i, j) as i16) - (src2.p(i, j) as i16);
         }
     }
 }
@@ -333,9 +333,11 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
 
     let mut residual = [0 as i16; 16];
 
-    diff_4x4(&mut residual,
-             &fs.input.planes[p].slice(po),
-             &rec.slice(po));
+    diff(&mut residual,
+         &fs.input.planes[p].slice(po),
+         &rec.slice(po),
+         1<<tx_size_wide_log2[tx_size as usize],
+         1<<tx_size_high_log2[tx_size as usize]);
 
     let mut coeffs = [0 as i32; 16];
     forward_transform(&residual, &mut coeffs, 4, tx_size, tx_type);
