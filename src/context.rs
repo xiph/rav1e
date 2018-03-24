@@ -29,20 +29,23 @@ const MAX_SB_SQUARE: usize = (MAX_SB_SIZE * MAX_SB_SIZE);
 const INTRA_MODES: usize = 13;
 const UV_INTRA_MODES: usize = 13;
 
-pub static mi_size_wide: [u8; BLOCK_SIZES_ALL] = [
-  1, 1, 2, 2, 2, 4, 4, 4, 8, 8, 8, 16, 16, 1, 4, 2, 8, 4, 16];
-pub static mi_size_high: [u8; BLOCK_SIZES_ALL] = [
-  1, 2, 1, 2, 4, 2, 4, 8, 4, 8, 16, 8, 16, 4, 1, 8, 2, 16, 4];
-pub static b_width_log2_lookup: [u8; BLOCK_SIZES_ALL] = [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 0, 2, 1, 3, 2, 4];
-pub static b_height_log2_lookup: [u8; BLOCK_SIZES_ALL] = [0, 1, 0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 2, 0, 3, 1, 4, 2];
-pub static tx_size_wide_log2: [usize; TX_SIZES_ALL] = [2, 3, 4, 5, 2, 3, 3, 4, 4, 5, 2, 4, 3, 5];
-pub static tx_size_high_log2: [usize; TX_SIZES_ALL] = [2, 3, 4, 5, 3, 2, 4, 3, 5, 4, 4, 2, 5, 3];
+pub static mi_size_wide: [u8; BLOCK_SIZES_ALL] =
+    [1, 1, 2, 2, 2, 4, 4, 4, 8, 8, 8, 16, 16, 1, 4, 2, 8, 4, 16];
+pub static mi_size_high: [u8; BLOCK_SIZES_ALL] =
+    [1, 2, 1, 2, 4, 2, 4, 8, 4, 8, 16, 8, 16, 4, 1, 8, 2, 16, 4];
+pub static b_width_log2_lookup: [u8; BLOCK_SIZES_ALL] =
+    [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 0, 2, 1, 3, 2, 4];
+pub static b_height_log2_lookup: [u8; BLOCK_SIZES_ALL] =
+    [0, 1, 0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 2, 0, 3, 1, 4, 2];
+pub static tx_size_wide_log2: [usize; TX_SIZES_ALL] =
+    [2, 3, 4, 5, 2, 3, 3, 4, 4, 5, 2, 4, 3, 5];
+pub static tx_size_high_log2: [usize; TX_SIZES_ALL] =
+    [2, 3, 4, 5, 3, 2, 4, 3, 5, 4, 4, 2, 5, 3];
 // Width/height lookup tables in units of various block sizes
-pub static block_size_wide: [u8; BLOCK_SIZES_ALL] = [
-    4, 4, 8, 8, 8, 16, 16, 16, 32, 32, 32, 64, 64, 4, 16, 8, 32, 16, 64 ];
-
-pub static block_size_high: [u8; BLOCK_SIZES_ALL] = [
-    4, 8, 4, 8, 16, 8, 16, 32, 16, 32, 64, 32, 64, 16,4, 32, 8, 64, 16 ];
+pub static block_size_wide: [u8; BLOCK_SIZES_ALL] =
+    [4, 4, 8, 8, 8, 16, 16, 16, 32, 32, 32, 64, 64, 4, 16, 8, 32, 16, 64 ];
+pub static block_size_high: [u8; BLOCK_SIZES_ALL] =
+    [4, 8, 4, 8, 16, 8, 16, 32, 16, 32, 64, 32, 64, 16,4, 32, 8, 64, 16 ];
 
 const EXT_TX_SIZES: usize = 4;
 const EXT_TX_SET_TYPES: usize = 6;
@@ -52,21 +55,36 @@ const EXT_TX_SETS_INTER: usize = 4;
 static num_ext_tx_set: [usize; EXT_TX_SET_TYPES] = [1, 2, 5, 7, 12, 16];
 // Maps intra set index to the set type
 static ext_tx_set_type_intra: [TxSetType; EXT_TX_SETS_INTRA] = [
-    TxSetType::EXT_TX_SET_DCTONLY, TxSetType::EXT_TX_SET_DTT4_IDTX_1DDCT, TxSetType::EXT_TX_SET_DTT4_IDTX
+    TxSetType::EXT_TX_SET_DCTONLY,
+    TxSetType::EXT_TX_SET_DTT4_IDTX_1DDCT,
+    TxSetType::EXT_TX_SET_DTT4_IDTX
 ];
 // Maps inter set index to the set type
 #[allow(dead_code)]
 static ext_tx_set_type_inter: [TxSetType; EXT_TX_SETS_INTER] = [
-    TxSetType::EXT_TX_SET_DCTONLY, TxSetType::EXT_TX_SET_ALL16, TxSetType::EXT_TX_SET_DTT9_IDTX_1DDCT,
+    TxSetType::EXT_TX_SET_DCTONLY,
+    TxSetType::EXT_TX_SET_ALL16,
+    TxSetType::EXT_TX_SET_DTT9_IDTX_1DDCT,
     TxSetType::EXT_TX_SET_DCT_IDTX
 ];
 // Maps set types above to the indices used for intra
 static ext_tx_set_index_intra: [i8; EXT_TX_SET_TYPES] = [0, -1, 2, 1, -1, -1 ];
 // Maps set types above to the indices used for inter
 static ext_tx_set_index_inter: [i8; EXT_TX_SET_TYPES] = [0, 3, -1, -1, 2, 1];
-static av1_ext_tx_intra_ind: [[u32; TX_TYPES]; EXT_TX_SETS_INTRA] = [[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,],[1,5,6,4,0,0,0,0,0,0,2,3,0,0,0,0,],[1,3,4,2,0,0,0,0,0,0,0,0,0,0,0,0,],];
+static av1_ext_tx_intra_ind: [[u32; TX_TYPES]; EXT_TX_SETS_INTRA] =
+    [
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,],
+        [1,5,6,4,0,0,0,0,0,0,2,3,0,0,0,0,],
+        [1,3,4,2,0,0,0,0,0,0,0,0,0,0,0,0,],
+    ];
 #[allow(dead_code)]
-static av1_ext_tx_inter_ind: [[usize; TX_TYPES]; EXT_TX_SETS_INTER] = [[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,],[1,5,6,4,0,0,0,0,0,0,2,3,0,0,0,0,],[1,3,4,2,0,0,0,0,0,0,0,0,0,0,0,0,],[0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,],];
+static av1_ext_tx_inter_ind: [[usize; TX_TYPES]; EXT_TX_SETS_INTER] =
+    [
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,],
+        [1,5,6,4,0,0,0,0,0,0,2,3,0,0,0,0,],
+        [1,3,4,2,0,0,0,0,0,0,0,0,0,0,0,0,],
+        [0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,],
+    ];
 static ext_tx_cnt_intra: [usize;EXT_TX_SETS_INTRA] = [ 1, 7, 5 ];
 
 static av1_coefband_trans_4x4: [u8; 16] = [
@@ -233,21 +251,37 @@ const REF_TYPES: usize = 2;
 const SKIP_CONTEXTS: usize = 3;
 
 fn get_ext_tx_set_type(tx_size: TxSize, is_inter: bool, use_reduced_set: bool) -> TxSetType {
-  let tx_size_sqr_up = TXSIZE_SQR_UP_MAP[tx_size as usize];
-  let tx_size_sqr = TXSIZE_SQR_MAP[tx_size as usize];
-  if tx_size_sqr > TxSize::TX_32X32 { TxSetType::EXT_TX_SET_DCTONLY }
-  else if use_reduced_set {
-      if is_inter { TxSetType::EXT_TX_SET_DCT_IDTX } else { TxSetType::EXT_TX_SET_DTT4_IDTX }
-  }
-  else if tx_size_sqr_up == TxSize::TX_32X32 {
-      if is_inter { TxSetType::EXT_TX_SET_DCT_IDTX } else { TxSetType::EXT_TX_SET_DCTONLY }
-  }
-  else if is_inter {
-      if tx_size_sqr == TxSize::TX_16X16 { TxSetType::EXT_TX_SET_DTT9_IDTX_1DDCT } else { TxSetType::EXT_TX_SET_ALL16 }
-  } else {
-    if tx_size_sqr == TxSize::TX_16X16 { TxSetType::EXT_TX_SET_DTT4_IDTX
-    } else { TxSetType::EXT_TX_SET_DTT4_IDTX_1DDCT }
-  }
+    let tx_size_sqr_up = TXSIZE_SQR_UP_MAP[tx_size as usize];
+    let tx_size_sqr = TXSIZE_SQR_MAP[tx_size as usize];
+    if tx_size_sqr > TxSize::TX_32X32 {
+        TxSetType::EXT_TX_SET_DCTONLY
+    } else if use_reduced_set {
+      if is_inter {
+          TxSetType::EXT_TX_SET_DCT_IDTX
+      } else {
+          TxSetType::EXT_TX_SET_DTT4_IDTX
+      }
+    }
+    else if tx_size_sqr_up == TxSize::TX_32X32 {
+        if is_inter {
+            TxSetType::EXT_TX_SET_DCT_IDTX
+        } else {
+            TxSetType::EXT_TX_SET_DCTONLY
+        }
+    }
+    else if is_inter {
+        if tx_size_sqr == TxSize::TX_16X16 {
+            TxSetType::EXT_TX_SET_DTT9_IDTX_1DDCT
+        } else {
+            TxSetType::EXT_TX_SET_ALL16
+        }
+    } else {
+        if tx_size_sqr == TxSize::TX_16X16 {
+            TxSetType::EXT_TX_SET_DTT4_IDTX
+        } else {
+            TxSetType::EXT_TX_SET_DTT4_IDTX_1DDCT
+        }
+    }
 }
 
 fn get_ext_tx_set(tx_size: TxSize, is_inter: bool,
