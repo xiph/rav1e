@@ -20,12 +20,13 @@ pub fn quantize_in_place(qindex: usize, coeffs: &mut [i32]) {
     for c in coeffs[1..].iter_mut() {
         *c /= ac_q(qindex) as i32;
     }
-    coeffs[15] = 0;
+    // workaround for bug in token coder
+    *coeffs.last_mut().unwrap() = 0;
 }
 
 pub fn dequantize(qindex:usize, coeffs: &[i32], rcoeffs: &mut [i32]) {
     rcoeffs[0] = coeffs[0] * dc_q(qindex) as i32;
-    for i in 1..16 {
+    for i in 1..coeffs.len() {
         rcoeffs[i] = coeffs[i] * ac_q(qindex) as i32;
     }
 }
