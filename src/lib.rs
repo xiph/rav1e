@@ -1773,6 +1773,9 @@ pub fn cdef_find_dir(input: &[u16], stride: usize, var: &mut [[i32; 8]; 8], coef
     }
 }
 
+fn cdef_block(fi: &FrameInvariants, p: usize, bo: &BlockOffset, po: &PlaneOffset) {
+}
+
 // Input to this process is the array CurrFrame of reconstructed samples.
 // Output from this process is the array CdefFrame containing deringed samples.
 // The purpose of CDEF is to perform deringing based on the detected direction of blocks.
@@ -1813,13 +1816,19 @@ fn cdef_frame(fi: &FrameInvariants, rec: &mut Frame) {
 
     // Each filter block is 64x64, except right and/or bottom for non-multiple-
     // of-64 sizes.
+    // FIXME: 128x128 SB support will break this, we need FilterBlockOffset etc.
     for fby in 0..fi.sb_height {
         for fbx in 0..fi.sb_width {
+            eprintln!("sb_width:{} sb_height:{} fbx:{} fby:{}", fi.sb_width, fi.sb_height, fbx, fby);
+            let sbo = SuperBlockOffset { x: fbx, y: fby };
             // Each direction block is 8x8
             for by in 0..8 {
                 for bx in 0..8 {
                     let stride = rec.planes[0].cfg.stride;
-                    let dir = cdef_find_dir(&rec.planes[0].data[(by << 3)*stride + (bx << 3)..], stride, &mut var, coeff_shift);
+                    let cdef_bo = sbo.block_offset(bx << 1, by << 1);
+                    let po = cdef_bo.plane_offset(&rec.planes[0].cfg);
+                    let dir = cdef_find_dir(&rec.planes[0].data[po.y*stride + po.x..], stride, &mut var, coeff_shift);
+                    eprintln!("bx:{} by:{} box:{} boy:{} pox:{} poy:{} dir:{}", bx, by, cdef_bo.x, cdef_bo.y, po.x, po.y, dir);
                 }
             }
         }
