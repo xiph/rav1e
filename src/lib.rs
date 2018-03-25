@@ -1763,6 +1763,16 @@ fn write_tile_group_header(tile_start_and_end_present_flag: bool) ->
     buf.clone()
 }
 
+extern {
+    fn cdef_find_dir_c(input: *const u16, stride: libc::c_int, var: *mut i32, coeff_shift: libc::c_int) -> libc::c_int;
+}
+
+pub fn cdef_find_dir(input: &[u16], stride: usize, var: &mut [[i32; 8]; 8], coeff_shift: usize) -> i32 {
+    unsafe {
+        cdef_find_dir_c(input.as_ptr(), stride as libc::c_int, var[0].as_mut_ptr(), coeff_shift as libc::c_int)
+    }
+}
+
 // Input to this process is the array CurrFrame of reconstructed samples.
 // Output from this process is the array CdefFrame containing deringed samples.
 // The purpose of CDEF is to perform deringing based on the detected direction of blocks.
@@ -1770,6 +1780,13 @@ fn write_tile_group_header(tile_start_and_end_present_flag: bool) ->
 // The CDEF filter is applied on each 8 by 8 block of pixels.
 // Reference: http://av1-spec.argondesign.com/av1-spec/av1-spec.html#cdef-process
 fn cdef_frame(fi: &FrameInvariants, rec: &mut Frame) {
+    let mut dir: [[i32; 8]; 8] = [[0; 8]; 8];
+    // var can be ignored for now since its only used for variable strength
+    let mut var: [[i32; 8]; 8] = [[0; 8]; 8];
+    let bit_depth = 8;
+    let coeff_shift = bit_depth - 8;
+
+    /* FIXME: Maybe just clone the frame here? */
     let width = fi.width;
     let height = fi.height;
     let mut cdef_y = vec![128 as u16; width*height];
@@ -1794,14 +1811,30 @@ fn cdef_frame(fi: &FrameInvariants, rec: &mut Frame) {
         }
     }
 
+    // Each filter block is 64x64, except right and/or bottom for non-multiple-
+    // of-64 sizes.
+    for fby in 0..fi.sb_height {
+        for fbx in 0..fi.sb_width {
+            // Each direction block is 8x8
+            for by in 0..8 {
+                for bx in 0..8 {
+                    let stride = rec.planes[0].cfg.stride;
+                    let dir = cdef_find_dir(&rec.planes[0].data[(by << 3)*stride + (bx << 3)..], stride, &mut var, coeff_shift);
+                }
+            }
+        }
+    }
+
     // For each 8x8 block, call cdef_find_dir and cdef_filter_block with a constant strength. */
     // luma
     for by in 0..fi.sb_height << 3 {
         for bx in 0..fi.sb_width << 3 {
             /*
-            cdef_find_dir(img, stride, var, coeff_shift);
+            let dir = cdef_find_dir(img, stride, var, coeff_shift);
+            pri_damping and sec_damping are initted to 3 + (base_qindex >> 6) in libaom, so maybe 3 + (fi.qindex >> 6) here?
             cdef_filter_block(dst8, dst16, dstride, input, pri_strength, sec_strength, dir, pri_damping, sec_damping, bsize, max_unused, coeff_shift);
             */
+            /* maybe call cdef_filter_block here for each chroma block since we already have dir */
         }
     }
 
