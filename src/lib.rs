@@ -1807,8 +1807,11 @@ fn cdef_frame(fi: &FrameInvariants, rec: &mut Frame) {
     // Each filter block is 64x64, except right and/or bottom for non-multiple-
     // of-64 sizes.
     // FIXME: 128x128 SB support will break this, we need FilterBlockOffset etc.
-    for fby in 0..fi.sb_height {
-        for fbx in 0..fi.sb_width {
+    // only include whole 64X64 blocks for now, otherwise we would use fi.sb_{width, height} directly
+    let fb_height = fi.padded_h / 64;
+    let fb_width = fi.padded_w / 64;
+    for fby in 0..fb_height {
+        for fbx in 0..fb_width {
             eprintln!("sb_width:{} sb_height:{} fbx:{} fby:{}", fi.sb_width, fi.sb_height, fbx, fby);
             let sbo = SuperBlockOffset { x: fbx, y: fby };
             // Each direction block is 8x8
