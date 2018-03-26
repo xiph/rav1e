@@ -123,7 +123,15 @@ use rav1e::context::*;
 use rav1e::partition::*;
 use rav1e::ec;
 
-fn write_b_bench(b: &mut Bencher) {
+fn write_b_bench_4x4(b: &mut Bencher) {
+    write_b_bench(b, TxSize::TX_4X4);
+}
+
+fn write_b_bench_8x8(b: &mut Bencher) {
+    write_b_bench(b, TxSize::TX_8X8);
+}
+
+fn write_b_bench(b: &mut Bencher, tx_size: TxSize) {
     unsafe {
         av1_rtcd();
         aom_dsp_rtcd();
@@ -153,8 +161,8 @@ fn write_b_bench(b: &mut Bencher) {
                         let bo = sbo.block_offset(bx, by);
                             let tx_bo = BlockOffset{x: bo.x + bx, y: bo.y + by};
                             let po = tx_bo.plane_offset(&fs.input.planes[p].cfg);
-                            encode_tx_block(&mut fi, &mut fs, &mut cw, p, &bo, mode, 
-                                            tx_type, &po, false);
+                            encode_tx_block(&mut fi, &mut fs, &mut cw, p, &bo, mode,
+                                            tx_size, tx_type, &po, false);
                     }
                 }
             }
@@ -165,5 +173,5 @@ fn write_b_bench(b: &mut Bencher) {
 benchmark_group!(intra, intra_dc_pred_native, intra_dc_pred_aom,
     intra_h_pred_native, intra_h_pred_aom, intra_v_pred_native,
     intra_v_pred_aom);
-benchmark_group!(ec, write_b_bench);
+benchmark_group!(ec, write_b_bench_4x4, write_b_bench_8x8);
 benchmark_main!(intra, ec);

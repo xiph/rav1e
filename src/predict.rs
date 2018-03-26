@@ -38,6 +38,14 @@ impl Dim for Block4x4 {
     const H : usize = 4;
 }
 
+pub struct Block8x8;
+
+impl Dim for Block8x8 {
+    const W : usize = 8;
+    const H : usize = 8;
+}
+
+
 pub trait Intra: Dim {
     fn pred_dc(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
         let edges = left[..Self::H].iter().chain(above[..Self::W].iter());
@@ -87,6 +95,7 @@ pub trait Intra: Dim {
 }
 
 impl Intra for Block4x4 {}
+impl Intra for Block8x8 {}
 
 #[cfg(test)]
 pub mod test {

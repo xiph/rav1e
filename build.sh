@@ -69,7 +69,7 @@ DEC_FILE="dec_file.y4m"
 export RUST_BACKTRACE=1
 
 # Build and run encoder
-cargo run --bin rav1e --release -- $SEQ -o $ENC_FILE
+cargo run --bin rav1e --release -- $SEQ -o $ENC_FILE -s 2
 
 # Decode
 ${AOM_TEST}/aomdec $ENC_FILE -o $DEC_FILE

@@ -91,6 +91,49 @@ static av1_coefband_trans_4x4: [u8; 16] = [
     0, 1, 1, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 5, 5, 5,
 ];
 
+static av1_coefband_trans_8x8plus: [u8; 32*32] = [
+  0, 1, 1, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5,
+  // beyond MAXBAND_INDEX+1 all values are filled as 5
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5];
+
 static TXSIZE_SQR_MAP: [TxSize; TX_SIZES_ALL] = [
     TX_4X4,
     TX_8X8,
@@ -372,9 +415,9 @@ extern {
 pub struct SCAN_ORDER {
   // FIXME: don't hardcode sizes
 
-  pub scan: &'static [u16; 16],
-  pub iscan: &'static [u16; 16],
-  pub neighbors: &'static [u16; 17*2]
+  pub scan: &'static [u16; 64*64],
+  pub iscan: &'static [u16; 64*64],
+  pub neighbors: &'static [u16; (64+1)*2]
 }
 
 type CoeffModel = [[[[u16; ENTROPY_TOKENS + 1];COEFF_CONTEXTS];COEF_BANDS];REF_TYPES];
@@ -545,10 +588,16 @@ impl BlockContext {
          + self.left_coeff_context[plane][bo.y_in_sb()]) as usize
     }
 
-    fn set_coeff_context(&mut self, plane: usize, bo: &BlockOffset, value: bool) {
+    fn set_coeff_context(&mut self, plane: usize, bo: &BlockOffset, tx_size: TxSize, xdec: usize, ydec: usize, value: bool) {
         let uvalue = value as u8;
-        self.above_coeff_context[plane][bo.x] = uvalue;
-        self.left_coeff_context[plane][bo.y_in_sb()] = uvalue;
+        // for subsampled planes, coeff contexts are stored sparsely at the moment
+        // so we need to scale our fill by xdec and ydec
+        for bx in bo.x..bo.x+(tx_size.width_mi()<<xdec) {
+            self.above_coeff_context[plane][bx] = uvalue;
+        }
+        for by in bo.y_in_sb()..bo.y_in_sb()+(tx_size.height_mi()<<ydec) {
+            self.left_coeff_context[plane][by] = uvalue;
+        }
     }
 
     fn reset_left_coeff_context(&mut self, plane: usize) {
@@ -711,8 +760,7 @@ impl ContextWriter {
         let cdf = &mut self.fc.uv_mode_cdf[y_mode as usize];
         self.w.symbol(uv_mode as u32, cdf, INTRA_MODES);
     }
-    pub fn write_tx_type(&mut self, tx_type: TxType, y_mode: PredictionMode) {
-        let tx_size = TxSize::TX_4X4;
+    pub fn write_tx_type(&mut self, tx_size: TxSize, tx_type: TxType, y_mode: PredictionMode) {
         let square_tx_size = TXSIZE_SQR_MAP[tx_size as usize];
         let eset =
             get_ext_tx_set(tx_size, false, true);
@@ -727,23 +775,26 @@ impl ContextWriter {
         let ctx = self.bc.skip_context(bo);
         self.w.symbol(skip as u32, &mut self.fc.skip_cdfs[ctx], 2);
     }
-    pub fn write_token_block_zero(&mut self, plane: usize, bo: &BlockOffset) {
+    pub fn write_token_block_zero(&mut self, plane: usize, bo: &BlockOffset, tx_size: TxSize,
+                                  xdec: usize, ydec: usize) {
         let plane_type = if plane > 0 { 1 } else { 0 };
-        let tx_size_ctx = TXSIZE_SQR_MAP[TxSize::TX_4X4 as usize] as usize;
+        let tx_size_ctx = TXSIZE_SQR_MAP[tx_size as usize] as usize;
         let ref_type = 0;
         let band = 0;
         let ctx = self.bc.coeff_context(plane, bo);
         let cdf = &mut self.fc.coef_head_cdfs[tx_size_ctx][plane_type][ref_type][band][ctx];
         //println!("encoding token band={} ctx={}", band, ctx);
         self.w.symbol(0, cdf, HEAD_TOKENS + 1);
-        self.bc.set_coeff_context(plane, bo, false);
+        self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, false);
     }
     pub fn write_coeffs(&mut self, plane: usize, bo: &BlockOffset,
-                        coeffs_in: &[i32], tx_size: TxSize, tx_type: TxType) {
+                        coeffs_in: &[i32], tx_size: TxSize, tx_type: TxType,
+                        xdec: usize, ydec: usize) {
         let scan_order = &av1_intra_scan_orders[tx_size as usize][tx_type as usize];
         let scan = scan_order.scan;
-        let mut coeffs = [0 as i32; 16];
-        for i in 0..16 {
+        let mut coeffs_storage = [0 as i32; 64*64];
+        let coeffs = &mut coeffs_storage[..tx_size.width()*tx_size.height()];
+        for i in 0..tx_size.width()*tx_size.height() {
             coeffs[i] = coeffs_in[scan[i] as usize];
         }
         let mut nz_coeff = 0;
@@ -753,10 +804,9 @@ impl ContextWriter {
             }
         }
         if nz_coeff == 0 {
-            self.write_token_block_zero(plane, bo);
+            self.write_token_block_zero(plane, bo, tx_size, xdec, ydec);
             return;
         }
-        let tx_size = TxSize::TX_4X4;
         let plane_type = if plane > 0 { 1 } else { 0 };
         let tx_size_ctx = TXSIZE_SQR_MAP[tx_size as usize] as usize;
         let ref_type = 0;
@@ -766,7 +816,10 @@ impl ContextWriter {
             let vabs = v.abs() as u32;
             let first = i == 0;
             let last = i == (nz_coeff - 1);
-            let band = av1_coefband_trans_4x4[i];
+            let band = match tx_size {
+                TxSize::TX_4X4 => av1_coefband_trans_4x4[i],
+                _ => av1_coefband_trans_8x8plus[i],
+            };
             let ctx = if first {
                 self.bc.coeff_context(plane, bo)
             } else {
@@ -841,7 +894,7 @@ impl ContextWriter {
                 break;
             }
         }
-        self.bc.set_coeff_context(plane, bo, true);
+        self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, true);
     }
 
     pub fn checkpoint(&mut self) -> ContextWriterCheckpoint {
