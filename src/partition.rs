@@ -57,6 +57,22 @@ pub enum TxSize {
     TX_32X8,
 }
 
+impl TxSize {
+    pub fn width(self) -> usize {
+        1<<tx_size_wide_log2[self as usize]
+    }
+    pub fn height(self) -> usize {
+        1<<tx_size_high_log2[self as usize]
+    }
+    pub fn width_mi(self) -> usize {
+        (1<<tx_size_wide_log2[self as usize])>>2
+    }
+    pub fn height_mi(self) -> usize {
+        (1<<tx_size_high_log2[self as usize])>>2
+    }
+}
+
+
 pub const TX_TYPES: usize = 16;
 
 #[derive(Copy,Clone)]
@@ -114,29 +130,29 @@ use plane::*;
 use predict::*;
 use context::*;
 
-fn setup_left(left: &mut [u16; 4], rec: &PlaneMutSlice) {
+fn setup_left(left: &mut [u16], rec: &PlaneMutSlice, height: usize) {
     let left_slice = rec.go_left(1);
-    for i in 0..4 {
+    for i in 0..height {
         left[i] = left_slice.p(0, i);
     }
 }
 
 impl PredictionMode {
     pub fn predict<'a>(&self, dst: &'a mut PlaneMutSlice<'a>, tx_size: TxSize) {
-        let mut above = [127u16; 4];
-        let mut left = [129u16; 4];
+        let mut above = [127u16; 64];
+        let mut left = [129u16; 64];
         let stride = dst.plane.cfg.stride;
         let x = dst.x;
         let y = dst.y;
 
         if (self == &PredictionMode::V_PRED ||
             self == &PredictionMode::DC_PRED) && y != 0 {
-            above.copy_from_slice(&dst.go_up(1).as_slice()[..4]);
+            above[..tx_size.width()].copy_from_slice(&dst.go_up(1).as_slice()[..tx_size.width()]);
         }
 
         if (self == &PredictionMode::H_PRED ||
             self == &PredictionMode::DC_PRED) && x != 0 {
-            setup_left(&mut left, dst);
+            setup_left(&mut left, dst, tx_size.height());
         }
 
         let slice = dst.as_mut_slice();
@@ -147,21 +163,25 @@ impl PredictionMode {
                     (0, 0) =>
                         match tx_size {
                             TxSize::TX_4X4 => Block4x4::pred_dc_128(slice, stride),
+                            TxSize::TX_8X8 => Block8x8::pred_dc_128(slice, stride),
                             _ => panic!("unimplemented prediction size")
                         },
                     (_, 0) =>
                         match tx_size {
                             TxSize::TX_4X4 => Block4x4::pred_dc_left(slice, stride, &above[..4], &left[..4]),
+                            TxSize::TX_8X8 => Block8x8::pred_dc_left(slice, stride, &above[..8], &left[..8]),
                             _ => panic!("unimplemented prediction size")
                         },
                     (0, _) =>
                         match tx_size {
                             TxSize::TX_4X4 => Block4x4::pred_dc_top(slice, stride, &above[..4], &left[..4]),
+                            TxSize::TX_8X8 => Block8x8::pred_dc_top(slice, stride, &above[..8], &left[..8]),
                             _ => panic!("unimplemented prediction size")
                         },
                     _ =>
                         match tx_size {
                             TxSize::TX_4X4 => Block4x4::pred_dc(slice, stride, &above[..4], &left[..4]),
+                            TxSize::TX_8X8 => Block8x8::pred_dc(slice, stride, &above[..8], &left[..8]),
                             _ => panic!("unimplemented prediction size")
                         },
                 }
@@ -169,12 +189,14 @@ impl PredictionMode {
             PredictionMode::H_PRED => {
                 match tx_size {
                     TxSize::TX_4X4 => Block4x4::pred_h(slice, stride, &left[..4]),
+                    TxSize::TX_8X8 => Block8x8::pred_h(slice, stride, &left[..8]),
                     _ => panic!("unimplemented prediction size")
                 }
             },
             PredictionMode::V_PRED => {
                 match tx_size {
                     TxSize::TX_4X4 => Block4x4::pred_v(slice, stride, &above[..4]),
+                    TxSize::TX_8X8 => Block8x8::pred_v(slice, stride, &above[..8]),
                     _ => panic!("unimplemented prediction size")
                 }
             },

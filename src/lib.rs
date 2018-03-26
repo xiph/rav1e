@@ -283,7 +283,7 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     }
     uch.write(6,0)?; // no y, u or v loop restoration
     uch.write_bit(false)?; // tx mode select
-    uch.write(2,0)?; // only 4x4 transforms
+    uch.write(2,1)?; // only 4x4 and 8x8 transforms
     //uch.write_bit(false)?; // use hybrid pred
     //uch.write_bit(false)?; // use compound pred
     uch.write_bit(true)?; // reduced tx
@@ -298,8 +298,8 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     Ok(())
 }
 
-/// Write into `dst` the difference between the 4x4 blocks at `src1` and `src2`
-fn diff(dst: &mut [i16; 16], src1: &PlaneSlice, src2: &PlaneSlice, width: usize, height: usize) {
+/// Write into `dst` the difference between the blocks at `src1` and `src2`
+fn diff(dst: &mut [i16], src1: &PlaneSlice, src2: &PlaneSlice, width: usize, height: usize) {
     for j in 0..height {
         for i in 0..width {
             dst[j*width + i] = (src1.p(i, j) as i16) - (src2.p(i, j) as i16);
@@ -321,17 +321,18 @@ fn has_chroma(bo: &BlockOffset, bsize: BlockSize,
 // predict, transform, quantize, write coefficients to a bitstream,
 // dequantize, inverse-transform.
 pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
-                  p: usize, bo: &BlockOffset, mode: PredictionMode, tx_type: TxType,
+                  p: usize, bo: &BlockOffset, mode: PredictionMode, tx_size: TxSize, tx_type: TxType,
                   po: &PlaneOffset, skip: bool) {
     let stride = fs.input.planes[p].cfg.stride;
     let rec = &mut fs.rec.planes[p];
-    let tx_size = TxSize::TX_4X4;
+    let xdec = fs.input.planes[p].cfg.xdec;
+    let ydec = fs.input.planes[p].cfg.ydec;
 
     mode.predict(&mut rec.mut_slice(po), tx_size);
 
     if skip { return; }
 
-    let mut residual = [0 as i16; 16];
+    let mut residual = [0 as i16; 64*64];
 
     diff(&mut residual,
          &fs.input.planes[p].slice(po),
@@ -339,13 +340,14 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
          1<<tx_size_wide_log2[tx_size as usize],
          1<<tx_size_high_log2[tx_size as usize]);
 
-    let mut coeffs = [0 as i32; 16];
-    forward_transform(&residual, &mut coeffs, 4, tx_size, tx_type);
-    quantize_in_place(fi.qindex, &mut coeffs);
-    cw.write_coeffs(p, bo, &coeffs, TxSize::TX_4X4, tx_type);
+    let mut coeffs_storage = [0 as i32; 64*64];
+    let coeffs = &mut coeffs_storage[..tx_size.width()*tx_size.height()];
+    forward_transform(&residual, coeffs, 1<<tx_size_wide_log2[tx_size as usize], tx_size, tx_type);
+    quantize_in_place(fi.qindex, coeffs);
+    cw.write_coeffs(p, bo, &coeffs, tx_size, tx_type, xdec, ydec);
 
     //reconstruct
-    let mut rcoeffs = [0 as i32; 16];
+    let mut rcoeffs = [0 as i32; 64*64];
     dequantize(fi.qindex, &coeffs, &mut rcoeffs);
 
     inverse_transform_add(&mut rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type);
@@ -370,31 +372,41 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
     }
 
     let tx_type = TxType::DCT_DCT;
+    let tx_size = match bsize {
+        BlockSize::BLOCK_4X4 => TxSize::TX_4X4,
+        _ => TxSize::TX_8X8
+    };
 
-    if skip == false { cw.write_tx_type(tx_type, mode); }
+    if skip == false { cw.write_tx_type(tx_size, tx_type, mode); }
 
-    let bw = mi_size_wide[bsize as usize] as usize;
-    let bh = mi_size_high[bsize as usize] as usize;
+    let bw = mi_size_wide[bsize as usize] as usize / tx_size.width_mi();
+    let bh = mi_size_high[bsize as usize] as usize / tx_size.height_mi();
 
-    // FIXME(you): Loop for TX blocks. For now, fixed as a 4x4 TX only,
-    // but consider factor out as write_tx_blocks()
+    // FIXME(you): consider factor out as write_tx_blocks()
     for p in 0..1 {
         for by in 0..bh {
             for bx in 0..bw {
-                let tx_bo = BlockOffset{x: bo.x + bx, y: bo.y + by};
+                let tx_bo = BlockOffset{x: bo.x + bx*tx_size.width_mi(), y: bo.y + by*tx_size.height_mi()};
                 let po = tx_bo.plane_offset(&fs.input.planes[p].cfg);
-                encode_tx_block(fi, fs, cw, p, &tx_bo, mode, tx_type, &po, skip);
+                encode_tx_block(fi, fs, cw, p, &tx_bo, mode, tx_size, tx_type, &po, skip);
             }
         }
     }
 
-    let mut bw_uv = bw >> xdec;
-    let mut bh_uv = bh >> ydec;
+    let uv_tx_size = match bsize {
+        BlockSize::BLOCK_4X4 | BlockSize::BLOCK_8X8 => TxSize::TX_4X4,
+        _ => TxSize::TX_8X8
+    };
+    let mut bw_uv = bw*tx_size.width_mi() >> xdec;
+    let mut bh_uv = bh*tx_size.height_mi() >> ydec;
 
     if (bw_uv == 0 || bh_uv == 0) && has_chroma(bo, bsize, xdec, ydec) {
         bw_uv = 1;
         bh_uv = 1;
     }
+
+    bw_uv /= uv_tx_size.width_mi();
+    bh_uv /= uv_tx_size.height_mi();
 
     if bw_uv > 0 && bh_uv > 0 {
         let uv_tx_type = uv_intra_mode_to_tx_type_context(uv_mode);
@@ -407,13 +419,13 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
             for by in 0..bh_uv {
                 for bx in 0..bw_uv {
                     let tx_bo =
-                        BlockOffset{x: bo.x + (bx << xdec) - ((bw == 1) as usize),
-                                    y: bo.y + (by << ydec) - ((bh == 1) as usize)};
+                        BlockOffset{x: bo.x + (bx*uv_tx_size.width_mi() << xdec) - ((bw*tx_size.width_mi() == 1) as usize),
+                                    y: bo.y + (by*uv_tx_size.height_mi() << ydec) - ((bh*tx_size.height_mi() == 1) as usize)};
                     let po = PlaneOffset {
-                        x: sb_offset.x + partition_x + (bx << MI_SIZE_LOG2),
-                        y: sb_offset.y + partition_y + (by << MI_SIZE_LOG2) };
+                        x: sb_offset.x + partition_x + (bx*uv_tx_size.width_mi() << MI_SIZE_LOG2),
+                        y: sb_offset.y + partition_y + (by*uv_tx_size.height_mi() << MI_SIZE_LOG2) };
 
-                    encode_tx_block(fi, fs, cw, p, &tx_bo, uv_mode, uv_tx_type, &po, skip);
+                    encode_tx_block(fi, fs, cw, p, &tx_bo, uv_mode, uv_tx_size, uv_tx_type, &po, skip);
                 }
             }
         }
