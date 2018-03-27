@@ -417,7 +417,7 @@ pub struct SCAN_ORDER {
 
   pub scan: &'static [u16; 64*64],
   pub iscan: &'static [u16; 64*64],
-  pub neighbors: &'static [u16; (64+1)*2]
+  pub neighbors: &'static [u16; ((64*64)+1)*2]
 }
 
 type CoeffModel = [[[[u16; ENTROPY_TOKENS + 1];COEFF_CONTEXTS];COEF_BANDS];REF_TYPES];

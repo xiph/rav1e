@@ -283,7 +283,8 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     }
     uch.write(6,0)?; // no y, u or v loop restoration
     uch.write_bit(false)?; // tx mode select
-    uch.write(2,1)?; // only 4x4 and 8x8 transforms
+    uch.write(2,3)?; // up to 32x32 transforms
+    uch.write(1,0)?; // no 64x64 transforms
     //uch.write_bit(false)?; // use hybrid pred
     //uch.write_bit(false)?; // use compound pred
     uch.write_bit(true)?; // reduced tx
@@ -343,12 +344,12 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
     let mut coeffs_storage = [0 as i32; 64*64];
     let coeffs = &mut coeffs_storage[..tx_size.width()*tx_size.height()];
     forward_transform(&residual, coeffs, 1<<tx_size_wide_log2[tx_size as usize], tx_size, tx_type);
-    quantize_in_place(fi.qindex, coeffs);
+    quantize_in_place(fi.qindex, coeffs, tx_size);
     cw.write_coeffs(p, bo, &coeffs, tx_size, tx_type, xdec, ydec);
 
     //reconstruct
     let mut rcoeffs = [0 as i32; 64*64];
-    dequantize(fi.qindex, &coeffs, &mut rcoeffs);
+    dequantize(fi.qindex, &coeffs, &mut rcoeffs, tx_size);
 
     inverse_transform_add(&mut rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type);
 }
@@ -371,10 +372,13 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
         cw.write_intra_uv_mode(uv_mode, mode);
     }
 
+    // these rules follow TX_MODE_LARGEST
     let tx_type = TxType::DCT_DCT;
     let tx_size = match bsize {
         BlockSize::BLOCK_4X4 => TxSize::TX_4X4,
-        _ => TxSize::TX_8X8
+        BlockSize::BLOCK_8X8 => TxSize::TX_8X8,
+        BlockSize::BLOCK_16X16 => TxSize::TX_16X16,
+        _ => TxSize::TX_32X32
     };
 
     if skip == false { cw.write_tx_type(tx_size, tx_type, mode); }
@@ -392,10 +396,12 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
             }
         }
     }
-
+    // these are only valid for 4:2:0
     let uv_tx_size = match bsize {
         BlockSize::BLOCK_4X4 | BlockSize::BLOCK_8X8 => TxSize::TX_4X4,
-        _ => TxSize::TX_8X8
+        BlockSize::BLOCK_16X16 => TxSize::TX_8X8,
+        BlockSize::BLOCK_32X32 => TxSize::TX_16X16,
+        _ => TxSize::TX_32X32
     };
     let mut bw_uv = bw*tx_size.width_mi() >> xdec;
     let mut bh_uv = bh*tx_size.height_mi() >> ydec;

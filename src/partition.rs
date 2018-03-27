@@ -135,6 +135,8 @@ impl PredictionMode {
         match tx_size {
             TxSize::TX_4X4 => self.predict_inner::<Block4x4>(dst),
             TxSize::TX_8X8 => self.predict_inner::<Block8x8>(dst),
+            TxSize::TX_16X16 => self.predict_inner::<Block16x16>(dst),
+            TxSize::TX_32X32 => self.predict_inner::<Block32x32>(dst),
             _ => unimplemented!()
         }
     }
