@@ -45,6 +45,22 @@ impl Dim for Block8x8 {
     const H : usize = 8;
 }
 
+pub struct Block16x16;
+
+impl Dim for Block16x16 {
+    const W : usize = 16;
+    const H : usize = 16;
+}
+
+
+pub struct Block32x32;
+
+impl Dim for Block32x32 {
+    const W : usize = 32;
+    const H : usize = 32;
+}
+
+
 
 pub trait Intra: Dim {
     fn pred_dc(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
@@ -96,6 +112,8 @@ pub trait Intra: Dim {
 
 impl Intra for Block4x4 {}
 impl Intra for Block8x8 {}
+impl Intra for Block16x16 {}
+impl Intra for Block32x32 {}
 
 #[cfg(test)]
 pub mod test {
