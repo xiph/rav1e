@@ -592,11 +592,12 @@ impl BlockContext {
         let uvalue = value as u8;
         // for subsampled planes, coeff contexts are stored sparsely at the moment
         // so we need to scale our fill by xdec and ydec
-        for bx in bo.x..bo.x+(tx_size.width_mi()<<xdec) {
-            self.above_coeff_context[plane][bx] = uvalue;
+        for bx in 0..tx_size.width_mi() {
+            self.above_coeff_context[plane][bo.x + (bx<<xdec)] = uvalue;
         }
-        for by in bo.y_in_sb()..bo.y_in_sb()+(tx_size.height_mi()<<ydec) {
-            self.left_coeff_context[plane][by] = uvalue;
+        let bo_y = bo.y_in_sb();
+        for by in 0..tx_size.height_mi() {
+            self.left_coeff_context[plane][bo_y + (by<<ydec)] = uvalue;
         }
     }
 
