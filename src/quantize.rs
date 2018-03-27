@@ -30,7 +30,7 @@ pub fn dequantize(qindex:usize, coeffs: &[i32], rcoeffs: &mut [i32]) {
     rcoeffs[0] = coeffs[0] * dc_q(qindex) as i32;
     let ac_quant = ac_q(qindex) as i32;
 
-    for i in 1..coeffs.len() {
-        rcoeffs[i] = coeffs[i] * ac_quant;
+    for (r, &c) in rcoeffs.iter_mut().zip(coeffs.iter()).skip(1) {
+        *r = c * ac_quant;
     }
 }
