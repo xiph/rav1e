@@ -428,8 +428,8 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
                         BlockOffset{x: bo.x + (bx*uv_tx_size.width_mi() << xdec) - ((bw*tx_size.width_mi() == 1) as usize),
                                     y: bo.y + (by*uv_tx_size.height_mi() << ydec) - ((bh*tx_size.height_mi() == 1) as usize)};
                     let po = PlaneOffset {
-                        x: sb_offset.x + partition_x + (bx*uv_tx_size.width_mi() << MI_SIZE_LOG2),
-                        y: sb_offset.y + partition_y + (by*uv_tx_size.height_mi() << MI_SIZE_LOG2) };
+                        x: sb_offset.x + partition_x + bx*uv_tx_size.width(),
+                        y: sb_offset.y + partition_y + by*uv_tx_size.height()};
 
                     encode_tx_block(fi, fs, cw, p, &tx_bo, uv_mode, uv_tx_size, uv_tx_type, &po, skip);
                 }
