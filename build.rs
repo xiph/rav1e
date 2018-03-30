@@ -45,7 +45,6 @@ fn main() {
         .define("CONFIG_MAX_TILE", "0")
         .define("CONFIG_EXT_INTRA_MOD", "0")
         .define("CONFIG_FRAME_SIZE", "0")
-        .define("CONFIG_Q_ADAPT_PROBS", "0")
         .define("CONFIG_SIMPLIFY_TX_MODE", "0")
         .define("CONFIG_OBU", "0")
         .define("CONFIG_FILTER_INTRA", "0")

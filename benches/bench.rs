@@ -138,7 +138,7 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize) {
     }
     let mut fi = FrameInvariants::new(1024, 1024, 100, 10);
     let w = ec::Writer::new();
-    let fc = CDFContext::new();
+    let fc = CDFContext::new(fi.qindex as u8);
     let bc = BlockContext::new(fi.sb_width * 16, fi.sb_height * 16);
     let mut fs = FrameState::new(&fi);
     let mut cw = ContextWriter {
