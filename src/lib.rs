@@ -541,7 +541,7 @@ fn encode_partition(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextW
 
 fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
     let w = ec::Writer::new();
-    let fc = CDFContext::new();
+    let fc = CDFContext::new(fi.qindex as u8);
     let bc = BlockContext::new(fi.w_in_b, fi.h_in_b);
     let mut cw = ContextWriter {
         w: w,

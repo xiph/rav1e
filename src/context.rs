@@ -9,6 +9,7 @@ use partition::BlockSize::*;
 use partition::TxSize::*;
 use partition::TxType::*;
 use plane::*;
+use libc::*;
 
 const PLANES: usize = 3;
 
@@ -390,11 +391,10 @@ extern {
     static default_uv_mode_cdf: [[u16; UV_INTRA_MODES + 1]; INTRA_MODES];
     static default_intra_ext_tx_cdf: [[[[u16; TX_TYPES + 1]; INTRA_MODES]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA];
     static default_skip_cdfs: [[u16; 3];SKIP_CONTEXTS];
-    static default_coef_head_cdf_4x4: [CoeffModel; PLANE_TYPES];
-    static default_coef_head_cdf_8x8: [CoeffModel; PLANE_TYPES];
-    static default_coef_head_cdf_16x16: [CoeffModel; PLANE_TYPES];
-    static default_coef_head_cdf_32x32: [CoeffModel; PLANE_TYPES];
-    static default_coef_tail_cdf: [[CoeffModel; PLANE_TYPES]; TX_SIZES];
+    static av1_default_coef_head_cdfs_q0: [[CoeffModel; PLANE_TYPES]; TX_SIZES];
+    static av1_default_coef_head_cdfs_q1: [[CoeffModel; PLANE_TYPES]; TX_SIZES];
+    static av1_default_coef_head_cdfs_q2: [[CoeffModel; PLANE_TYPES]; TX_SIZES];
+    static av1_default_coef_head_cdfs_q3: [[CoeffModel; PLANE_TYPES]; TX_SIZES];
 
     static av1_cat1_cdf0: [u16; 2];
     static av1_cat2_cdf0: [u16; 4];
@@ -409,6 +409,10 @@ extern {
     static av1_cat6_cdf4: [u16; 4];
 
     static av1_intra_scan_orders: [[SCAN_ORDER; TX_TYPES]; TX_SIZES_ALL];
+
+    fn build_tail_cdfs(cdf_tail: &mut [u16; ENTROPY_TOKENS + 1],
+                    cdf_head: &mut [u16; ENTROPY_TOKENS + 1],
+                    band_zero: c_int);
 }
 
 #[repr(C)]
@@ -434,19 +438,37 @@ pub struct CDFContext {
 }
 
 impl CDFContext {
-    pub fn new() -> CDFContext {
-        CDFContext {
+    pub fn new(qindex: u8) -> CDFContext {
+        let mut c = CDFContext {
             partition_cdf: default_partition_cdf,
             kf_y_cdf: default_kf_y_mode_cdf,
             uv_mode_cdf: default_uv_mode_cdf,
             intra_ext_tx_cdf: default_intra_ext_tx_cdf,
             skip_cdfs: default_skip_cdfs,
-            coef_head_cdfs: [default_coef_head_cdf_4x4,
-                             default_coef_head_cdf_8x8,
-                             default_coef_head_cdf_16x16,
-                             default_coef_head_cdf_32x32],
-            coef_tail_cdfs: default_coef_tail_cdf,
+            coef_head_cdfs: match qindex {
+                0...63 => av1_default_coef_head_cdfs_q0,
+                64...127 => av1_default_coef_head_cdfs_q1,
+                128...191 => av1_default_coef_head_cdfs_q2,
+                _ => av1_default_coef_head_cdfs_q3,
+            },
+            coef_tail_cdfs: Default::default()
+        };
+        for t in 0..TX_SIZES {
+            for i in 0..PLANE_TYPES {
+                for j in 0..REF_TYPES {
+                    for k in 0..COEF_BANDS {
+                        let coeff_contexts = if k == 0 { 3 } else { 6 };
+                        for l in 0..coeff_contexts {
+                            unsafe {
+                                build_tail_cdfs(&mut c.coef_tail_cdfs[t][i][j][k][l],
+                                                &mut c.coef_head_cdfs[t][i][j][k][l], (k == 0) as i32);
+                            }
+                        }
+                    }
+                }
+            }
         }
+        c
     }
 }
 
