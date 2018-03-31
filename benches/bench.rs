@@ -4,7 +4,7 @@ extern crate rav1e;
 extern crate rand;
 extern crate libc;
 
-use bencher::Bencher;
+use bencher::*;
 use rand::{ChaChaRng, Rng};
 use rav1e::predict::*;
 
@@ -123,20 +123,42 @@ use rav1e::context::*;
 use rav1e::partition::*;
 use rav1e::ec;
 
-fn write_b_bench_4x4(b: &mut Bencher) {
-    write_b_bench(b, TxSize::TX_4X4);
+struct WriteB {
+    tx_size: TxSize,
+    qi: usize
 }
 
-fn write_b_bench_8x8(b: &mut Bencher) {
-    write_b_bench(b, TxSize::TX_8X8);
+impl TDynBenchFn for WriteB {
+    fn run(&self, b: &mut Bencher) {
+        write_b_bench(b, self.tx_size, self.qi);
+    }
 }
 
-fn write_b_bench(b: &mut Bencher, tx_size: TxSize) {
+pub fn write_b() -> Vec<TestDescAndFn> {
+    use std::borrow::Cow;
+    let mut benches = ::std::vec::Vec::new();
+    for &tx_size in &[TxSize::TX_4X4, TxSize::TX_8X8] {
+        for &qi in &[20, 55] {
+            let w = WriteB { tx_size, qi };
+            let n = format!("write_b_bench({:?}, {})", tx_size, qi);
+            benches.push(TestDescAndFn {
+                desc: TestDesc {
+                    name: Cow::from(n),
+                    ignore: false,
+                },
+                testfn: TestFn::DynBenchFn(Box::new(w)),
+            });
+        }
+    }
+    benches
+}
+
+fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
     unsafe {
         av1_rtcd();
         aom_dsp_rtcd();
     }
-    let mut fi = FrameInvariants::new(1024, 1024, 100, 10);
+    let mut fi = FrameInvariants::new(1024, 1024, qindex, 10);
     let w = ec::Writer::new();
     let fc = CDFContext::new(fi.qindex as u8);
     let bc = BlockContext::new(fi.sb_width * 16, fi.sb_height * 16);
@@ -173,5 +195,4 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize) {
 benchmark_group!(intra, intra_dc_pred_native, intra_dc_pred_aom,
     intra_h_pred_native, intra_h_pred_aom, intra_v_pred_native,
     intra_v_pred_aom);
-benchmark_group!(ec, write_b_bench_4x4, write_b_bench_8x8);
-benchmark_main!(intra, ec);
+benchmark_main!(intra, write_b);

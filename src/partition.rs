@@ -39,7 +39,7 @@ pub enum BlockSize {
 pub const TX_SIZES: usize = 4;
 pub const TX_SIZES_ALL: usize = 14;
 
-#[derive(Copy,Clone,PartialEq,PartialOrd)]
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 pub enum TxSize {
     TX_4X4,
     TX_8X8,
