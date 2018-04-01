@@ -26,6 +26,11 @@ git submodule update --init
 
 This is also required everytime you switch branch or pull code and the submodule changed.
 
+In order to build the codec, you need two libraries: wxWidgets 3.0 and yasm. To install these on Ubuntu or Linux Mint, run:
+
+```
+sudo apt install libwxgtk3.0-dev libwxgtk3.0-0v5-dbg yasm
+```
 
 # Compressing video
 
