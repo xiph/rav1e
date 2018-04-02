@@ -20,9 +20,7 @@ fn main() {
 
     let mut last_rec: Option<Frame> = None;
     loop {
-        if fi.number % 30 != 0 {
-            fi.ftype = FrameType::INTER;
-        }
+        fi.ftype = FrameType::KEY;
         if !process_frame(&sequence, &fi, &mut files.output_file, &mut y4m_dec, y4m_enc.as_mut(), &mut last_rec) {
             break;
         }
