@@ -253,7 +253,7 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
         return Ok(());
     }
     uch.write_bit(false)?; // show_existing_frame=0
-    uch.write_bit(false)?; // keyframe
+    uch.write_bit(fi.ftype == FrameType::INTER)?; // keyframe : 0, inter: 1
     uch.write_bit(true)?; // show frame
     uch.write_bit(true)?; // error resilient
     uch.write(1,0)?; // don't use frame ids
@@ -357,11 +357,19 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
 fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
             mode: PredictionMode, bsize: BlockSize, bo: &BlockOffset) {
     let skip = false;
+    let is_inter = mode >= PredictionMode::NEARESTMV;
 
     cw.bc.set_skip(bo, bsize, skip);
     cw.write_skip(bo, skip);
+
+    if fi.ftype == FrameType::INTER {
+        cw.write_inter_mode(bo, is_inter);
+    }
+
     cw.bc.set_mode(bo, bsize, mode);
-    cw.write_intra_mode_kf(bo, mode);
+    
+    if is_inter { cw.write_intra_mode(bsize, mode); }
+    else { cw.write_intra_mode_kf(bo, mode); };
 
     let xdec = fs.input.planes[1].cfg.xdec;
     let ydec = fs.input.planes[1].cfg.ydec;
@@ -455,6 +463,9 @@ fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
     let h = block_size_high[bsize as usize];
 
     for &mode in RAV1E_INTRA_MODES {
+        if fi.ftype == FrameType::KEY && mode >= PredictionMode::NEARESTMV {
+          break;
+        }
         let checkpoint = cw.checkpoint();
 
         encode_block(fi, fs, cw, mode, bsize, bo);
