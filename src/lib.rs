@@ -614,22 +614,22 @@ pub fn process_frame(sequence: &Sequence, fi: &FrameInvariants,
                     let mut rec_y = vec![128 as u8; width*height];
                     let mut rec_u = vec![128 as u8; width*height/4];
                     let mut rec_v = vec![128 as u8; width*height/4];
-                    for y in 0..height {
-                        for x in 0..width {
+                    for (y, line) in rec_y.chunks_mut(width).enumerate() {
+                        for (x, pixel) in line.iter_mut().enumerate() {
                             let stride = fs.rec.planes[0].cfg.stride;
-                            rec_y[y*width+x] = fs.rec.planes[0].data[y*stride+x] as u8;
+                            *pixel = fs.rec.planes[0].data[y*stride+x] as u8;
                         }
                     }
-                    for y in 0..height/2 {
-                        for x in 0..width/2 {
+                    for (y, line) in rec_u.chunks_mut(width/2).enumerate() {
+                        for (x, pixel) in line.iter_mut().enumerate() {
                             let stride = fs.rec.planes[1].cfg.stride;
-                            rec_u[y*width/2+x] = fs.rec.planes[1].data[y*stride+x] as u8;
+                            *pixel = fs.rec.planes[1].data[y*stride+x] as u8;
                         }
                     }
-                    for y in 0..height/2 {
-                        for x in 0..width/2 {
+                    for (y, line) in rec_v.chunks_mut(width/2).enumerate() {
+                        for (x, pixel) in line.iter_mut().enumerate() {
                             let stride = fs.rec.planes[2].cfg.stride;
-                            rec_v[y*width/2+x] = fs.rec.planes[2].data[y*stride+x] as u8;
+                            *pixel = fs.rec.planes[2].data[y*stride+x] as u8;
                         }
                     }
                     let rec_frame = y4m::Frame::new([&rec_y, &rec_u, &rec_v], None);
