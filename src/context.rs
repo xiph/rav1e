@@ -29,6 +29,7 @@ const MAX_SB_SQUARE: usize = (MAX_SB_SIZE * MAX_SB_SIZE);
 
 const INTRA_MODES: usize = 13;
 const UV_INTRA_MODES: usize = 13;
+const BLOCK_SIZE_GROUPS: usize = 4;
 
 pub static mi_size_wide: [u8; BLOCK_SIZES_ALL] =
     [1, 1, 2, 2, 2, 4, 4, 4, 8, 8, 8, 16, 16, 1, 4, 2, 8, 4, 16];
@@ -193,6 +194,19 @@ static partition_context_lookup: [[u8; 2]; BLOCK_SIZES_ALL] = [
   [ 14, 8 ],   // 32X8 - [0b1000, 0b1110]
   [ 12, 0 ],   // 16X64- [0b1100, 0b0000]
   [ 0, 12 ],   // 64X16- [0b0000, 0b1100]
+];
+
+static size_group_lookup: [u8; BLOCK_SIZES_ALL] = [
+  0, 0,
+  0, 1,
+  1, 1,
+  2, 2,
+  2, 3,
+  3, 3,
+  3, 0,
+  0, 1,
+  1, 2,
+  2,
 ];
 
 pub static subsize_lookup: [[BlockSize; BLOCK_SIZES_ALL]; PARTITION_TYPES] =
@@ -389,6 +403,7 @@ pub fn uv_intra_mode_to_tx_type_context(pred: PredictionMode)-> TxType {
 extern {
     static default_partition_cdf: [[u16; PARTITION_TYPES + 1]; PARTITION_CONTEXTS];
     static default_kf_y_mode_cdf: [[[u16; INTRA_MODES + 1]; INTRA_MODES]; INTRA_MODES];
+    static default_if_y_mode_cdf: [[u16; INTRA_MODES + 1]; BLOCK_SIZE_GROUPS];
     static default_uv_mode_cdf: [[u16; UV_INTRA_MODES + 1]; INTRA_MODES];
     static default_intra_ext_tx_cdf: [[[[u16; TX_TYPES + 1]; INTRA_MODES]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA];
     static default_skip_cdfs: [[u16; 3];SKIP_CONTEXTS];
@@ -432,6 +447,7 @@ type CoeffModel = [[[[u16; ENTROPY_TOKENS + 1];COEFF_CONTEXTS];COEF_BANDS];REF_T
 pub struct CDFContext {
     partition_cdf: [[u16; PARTITION_TYPES + 1]; PARTITION_CONTEXTS],
     kf_y_cdf: [[[u16; INTRA_MODES + 1]; INTRA_MODES]; INTRA_MODES],
+    y_mode_cdf: [[u16; INTRA_MODES + 1]; BLOCK_SIZE_GROUPS],
     uv_mode_cdf: [[u16; INTRA_MODES + 1]; INTRA_MODES],
     intra_ext_tx_cdf: [[[[u16; TX_TYPES + 1]; INTRA_MODES]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA],
     coef_head_cdfs: [[CoeffModel; PLANE_TYPES]; TX_SIZES],
@@ -445,6 +461,7 @@ impl CDFContext {
         let mut c = CDFContext {
             partition_cdf: default_partition_cdf,
             kf_y_cdf: default_kf_y_mode_cdf,
+            y_mode_cdf: default_if_y_mode_cdf,
             uv_mode_cdf: default_uv_mode_cdf,
             intra_ext_tx_cdf: default_intra_ext_tx_cdf,
             skip_cdfs: default_skip_cdfs,
@@ -807,6 +824,10 @@ impl ContextWriter {
         let above_mode = self.bc.above_of(bo).mode as usize;
         let left_mode = self.bc.left_of(bo).mode as usize;
         let cdf = &mut self.fc.kf_y_cdf[above_mode][left_mode];
+        self.w.symbol(mode as u32, cdf, INTRA_MODES);
+    }
+    pub fn write_intra_mode(&mut self, bsize: BlockSize, mode: PredictionMode) {
+        let cdf = &mut self.fc.y_mode_cdf[size_group_lookup[bsize as usize] as usize];
         self.w.symbol(mode as u32, cdf, INTRA_MODES);
     }
     pub fn write_intra_uv_mode(&mut self, uv_mode: PredictionMode, y_mode: PredictionMode) {
