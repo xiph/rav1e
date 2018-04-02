@@ -293,6 +293,7 @@ const COEFF_CONTEXTS: usize = 6;
 const COEF_BANDS: usize = 6;
 const REF_TYPES: usize = 2;
 const SKIP_CONTEXTS: usize = 3;
+const INTRA_INTER_CONTEXTS: usize = 4;
 
 fn get_ext_tx_set_type(tx_size: TxSize, is_inter: bool, use_reduced_set: bool) -> TxSetType {
     let tx_size_sqr_up = TXSIZE_SQR_UP_MAP[tx_size as usize];
@@ -391,6 +392,7 @@ extern {
     static default_uv_mode_cdf: [[u16; UV_INTRA_MODES + 1]; INTRA_MODES];
     static default_intra_ext_tx_cdf: [[[[u16; TX_TYPES + 1]; INTRA_MODES]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA];
     static default_skip_cdfs: [[u16; 3];SKIP_CONTEXTS];
+    static default_intra_inter_cdf: [[u16; 3];INTRA_INTER_CONTEXTS];
     static av1_default_coef_head_cdfs_q0: [[CoeffModel; PLANE_TYPES]; TX_SIZES];
     static av1_default_coef_head_cdfs_q1: [[CoeffModel; PLANE_TYPES]; TX_SIZES];
     static av1_default_coef_head_cdfs_q2: [[CoeffModel; PLANE_TYPES]; TX_SIZES];
@@ -435,6 +437,7 @@ pub struct CDFContext {
     coef_head_cdfs: [[CoeffModel; PLANE_TYPES]; TX_SIZES],
     coef_tail_cdfs: [[CoeffModel; PLANE_TYPES]; TX_SIZES],
     skip_cdfs: [[u16; 3];SKIP_CONTEXTS],
+    intra_inter_cdfs: [[u16; 3];INTRA_INTER_CONTEXTS],
 }
 
 impl CDFContext {
@@ -445,6 +448,7 @@ impl CDFContext {
             uv_mode_cdf: default_uv_mode_cdf,
             intra_ext_tx_cdf: default_intra_ext_tx_cdf,
             skip_cdfs: default_skip_cdfs,
+            intra_inter_cdfs: default_intra_inter_cdf,
             coef_head_cdfs: match qindex {
                 0...63 => av1_default_coef_head_cdfs_q0,
                 64...127 => av1_default_coef_head_cdfs_q1,
@@ -713,6 +717,32 @@ impl BlockContext {
             };
         }
     }
+
+    // The mode info data structure has a one element border above and to the
+    // left of the entries corresponding to real macroblocks.
+    // The prediction flags in these dummy entries are initialized to 0.
+    // 0 - inter/inter, inter/--, --/inter, --/--
+    // 1 - intra/inter, inter/intra
+    // 2 - intra/--, --/intra
+    // 3 - intra/intra
+    pub fn intra_inter_context(&mut self, bo: &BlockOffset) -> usize {
+        let has_above = bo.y > 0;
+        let has_left = bo.x > 0;
+
+        match (has_above, has_left) {
+            (true, true) => {
+              let above_intra = !self.above_of(bo).is_inter();
+              let left_intra = !self.left_of(bo).is_inter();
+              if above_intra && left_intra { 3 }
+              else { (above_intra || left_intra) as usize}
+            },
+            (true, _) | (_, true) => {
+                2 * if has_above { !self.above_of(bo).is_inter() as usize }
+                    else { !self.left_of(bo).is_inter() as usize }
+            },
+            (_, _) => 0,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -797,6 +827,10 @@ impl ContextWriter {
     pub fn write_skip(&mut self, bo: &BlockOffset, skip: bool) {
         let ctx = self.bc.skip_context(bo);
         self.w.symbol(skip as u32, &mut self.fc.skip_cdfs[ctx], 2);
+    }
+    pub fn write_inter_mode(&mut self, bo: &BlockOffset, is_inter: bool) {
+        let ctx = self.bc.intra_inter_context(bo);
+        self.w.symbol(is_inter as u32, &mut self.fc.intra_inter_cdfs[ctx], 2);
     }
     pub fn write_token_block_zero(&mut self, plane: usize, bo: &BlockOffset, tx_size: TxSize,
                                   xdec: usize, ydec: usize) {
