@@ -48,6 +48,8 @@ fn main() {
         .define("CONFIG_SIMPLIFY_TX_MODE", "0")
         .define("CONFIG_OBU", "0")
         .define("CONFIG_FILTER_INTRA", "0")
+        .define("CONFIG_LV_MAP", "0")
+        .define("CONFIG_LV_MAP_MULTI", "0")
         .define("CONFIG_ANALYZER", "0")
         .build();
 
