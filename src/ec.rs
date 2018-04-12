@@ -11,6 +11,8 @@
 #![allow(non_camel_case_types)]
 
 pub const OD_BITRES: u8 = 3;
+const EC_PROB_SHIFT: u32 = 6;
+const EC_MIN_PROB: u32 = 4;
 
 pub struct Writer {
     enc: od_ec_enc
@@ -52,7 +54,8 @@ impl od_ec_enc {
         let mut r = self.rng as u32;
         assert!(32768 <= r);
 
-        let v = ((r >> 8) * (f as u32)) >> 7;
+        let mut v = ((r >> 8) * (f as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT);
+        v += EC_MIN_PROB;
         if val { l += r - v };
         r = if val { v } else { r - v };
 
@@ -67,7 +70,8 @@ impl od_ec_enc {
     ///       must be exactly 32768. There should be at most 16 values.
     fn od_ec_encode_cdf_q15(&mut self, s: usize, cdf: &[u16]) {
         assert!(cdf[cdf.len() - 1] == 0);
-        self.od_ec_encode_q15(if s > 0 { cdf[s - 1] } else { 32768 }, cdf[s]);
+        let nsyms = cdf.len();
+        self.od_ec_encode_q15(if s > 0 { cdf[s - 1] } else { 32768 }, cdf[s], s, nsyms);
     }
 
     /// Encodes a symbol given its frequency in Q15.
@@ -75,7 +79,7 @@ impl od_ec_enc {
     ///       before the one to be encoded.
     /// `fh`: 32768 moinus the cumulative frequency of all symbols up to and
     ///       including the one to be encoded.
-    fn od_ec_encode_q15(&mut self, fl: u16, fh: u16) {
+    fn od_ec_encode_q15(&mut self, fl: u16, fh: u16, s: usize, nsyms: usize) {
         let mut l = self.low;
         let mut r = self.rng as u32;
         let u: u32;
@@ -84,13 +88,17 @@ impl od_ec_enc {
 
         assert!(fh < fl);
         assert!(fl <= 32768);
+        let n = nsyms - 1;
         if fl < 32768 {
-            u = ((r >> 8) * (fl as u32)) >> 7;
-            v = ((r >> 8) * (fh as u32)) >> 7;
+            u = (((r >> 8) * (fl as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT)) +
+                EC_MIN_PROB * (n - (s - 1)) as u32;
+            v = (((r >> 8) * (fh as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT)) +
+                EC_MIN_PROB * (n - (s + 0)) as u32;
             l += r - u;
             r = u - v;
         } else {
-            r -= ((r >> 8) * (fh as u32)) >> 7;
+            r -= (((r >> 8) * (fh as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT)) +
+                EC_MIN_PROB * (n - (s + 0)) as u32;
         }
 
         self.od_ec_enc_normalize(l, r as u16);
@@ -354,7 +362,7 @@ mod test {
         }
 
         fn cdf(&mut self, icdf: &[u16]) -> i32 {
-            let nsyms = icdf.len() - 1;
+            let nsyms = icdf.len();
             unsafe { od_ec_decode_cdf_q15(&mut self.dec, icdf.as_ptr(), nsyms as i32) }
         }
     }
@@ -384,7 +392,7 @@ mod test {
 
     #[test]
     fn cdf() {
-        let cdf = [7296, 3819, 1716, 0, 0];
+        let cdf = [7296, 3819, 1716, 0];
 
         let mut w = Writer::new();
 
@@ -415,7 +423,7 @@ mod test {
 
     #[test]
     fn mixed() {
-        let cdf = [7296, 3819, 1716, 0, 0];
+        let cdf = [7296, 3819, 1716, 0];
 
         let mut w = Writer::new();
 
