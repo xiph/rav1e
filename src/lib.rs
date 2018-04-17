@@ -1072,7 +1072,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         self.write(2,0)?; // cdef clpf damping
         self.write(2,0)?; // cdef bits
         for _ in 0..1 {
-            self.write(6,0)?; // cdef y strength
+            self.write(6,7)?; // cdef y strength
             self.write(6,0)?; // cdef uv strength
         }
         Ok(())
@@ -1826,7 +1826,8 @@ fn cdef_frame(fi: &FrameInvariants, rec: &mut Frame) {
                         // TODO: handle BLOCK_4X8 and BLOCK_8X4
                         cdef_filter_block(&mut cdef_frame.planes[p].data[po.y*stride + po.x..], stride,
                                           &rec.planes[p].data[po.y*stride + po.x..], cdef_pri_strength, cdef_sec_strength, dir,
-                                          cdef_pri_damping, cdef_sec_damping, 3 /* BLOCK_8X8*/, 0 /* max_unused */, coeff_shift as i32);
+                                          cdef_pri_damping, cdef_sec_damping, 3 /* BLOCK_8X8*/, (256 << coeff_shift) - 1,
+                                          coeff_shift as i32);
                         eprintln!("bx:{} by:{} box:{} boy:{} pox:{} poy:{} dir:{}", bx, by, cdef_bo.x, cdef_bo.y, po.x, po.y, dir);
                     }
                 }
