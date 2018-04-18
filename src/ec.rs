@@ -255,24 +255,23 @@ impl Writer {
         self.enc.od_ec_encode_bool_q15(val, f)
     }
     fn update_cdf(cdf: &mut [u16], val: u32, nsymbs: usize) {
-        let rate = 4 + if cdf[nsymbs] > 31 { 1 } else { 0 } + (31 ^ (nsymbs as u32).leading_zeros());
-        let rate2 = 5;
-        let mut tmp: i32;
-        let diff: i32;
-        let tmp0 = 1 << rate2;
-        tmp = 32768 - tmp0;
-        diff = ((32768 - ((nsymbs as i32) << rate2)) >> rate) << rate;
+        let nsymbs2speed: [usize; 17] = [ 0, 0, 1, 1, 2, 2, 2, 2, 2,
+                                              2, 2, 2, 2, 2, 2, 2, 2 ];
+        assert!(nsymbs < 17);
+        let rate = 3 + (cdf[nsymbs] > 15) as usize + (cdf[nsymbs] > 31) as usize +
+                   nsymbs2speed[nsymbs];  // + get_msb(nsymbs);
+        let mut tmp = 32768;
+
+        // Single loop (faster)
         for i in 0..(nsymbs - 1) {
-            if i as u32 == val {
-                tmp -= diff;
-            }
-            let prev_cdf = cdf[i] as i32;
-            cdf[i] = (prev_cdf + ((tmp - prev_cdf) >> rate)) as u16;
-            tmp -= tmp0;
+          tmp = if i as u32 == val { 0 } else { tmp };
+          if tmp < cdf[i] {
+            cdf[i] -= (cdf[i] - tmp) >> rate;
+          } else {
+            cdf[i] += (tmp - cdf[i]) >> rate;
+          }
         }
-        if cdf[nsymbs] < 32 {
-            cdf[nsymbs] += 1;
-        }
+        cdf[nsymbs] += (cdf[nsymbs] < 32) as u16;
     }
     pub fn symbol(&mut self, s: u32, cdf: &mut [u16], nsymbs: usize) {
         self.cdf(s, &cdf[..nsymbs]);
