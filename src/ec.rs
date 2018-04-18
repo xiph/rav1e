@@ -86,7 +86,7 @@ impl od_ec_enc {
         let v: u32;
         assert!(32768 <= r);
 
-        assert!(fh < fl);
+        assert!(fh <= fl);
         assert!(fl <= 32768);
         let n = nsyms - 1;
         if fl < 32768 {
