@@ -275,6 +275,7 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     //uch.write_bit(false)?; // using qmatrix
     uch.write_bit(false)?; // segmentation off
     uch.write_bit(false)?; // no delta q
+    uch.write_bit(false)?; // no qm
     uch.write(2,0)?; // cdef clpf damping
     uch.write(2,0)?; // cdef bits
     for _ in 0..1 {
@@ -288,10 +289,13 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     //uch.write_bit(false)?; // use hybrid pred
     //uch.write_bit(false)?; // use compound pred
     uch.write_bit(true)?; // reduced tx
-    if fi.width > 256 {
+    uch.write_bit(true)?; // uniform tile spacing
+    if fi.width > 64 {
         uch.write(1,0)?; // tile cols
     }
-    uch.write(1,0)?; // tile rows
+    if fi.height > 64 {
+        uch.write(1,0)?; // tile rows
+    }
     // if tile_cols * tile_rows > 1
     //uch.write_bit(true)?; // loop filter across tiles
     uch.write(2,3)?; // tile_size_bytes
