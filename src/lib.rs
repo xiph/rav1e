@@ -256,23 +256,27 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     uch.write_bit(fi.ftype == FrameType::INTER)?; // keyframe : 0, inter: 1
     uch.write_bit(true)?; // show frame
     uch.write_bit(true)?; // error resilient
+    uch.write(4, 15)?; // 16 bits width
+    uch.write(4, 15)?; // 16 bits height
+    uch.write(16,(fi.width-1) as u16)?; // width
+    uch.write(16,(fi.height-1) as u16)?; // height
     uch.write(1,0)?; // don't use frame ids
+    uch.write_bit(false)?; // no override frame size
     //uch.write(8+7,0)?; // frame id
     uch.write(3,0)?; // colorspace
     uch.write(1,0)?; // color range
-    uch.write(16,(fi.width-1) as u16)?; // width
-    uch.write(16,(fi.height-1) as u16)?; // height
+    uch.write_bit(false)?; // no superres
     uch.write_bit(false)?; // scaling active
     uch.write_bit(false)?; // screen content tools
     uch.write(3,0x0)?; // frame context
-    uch.write(6,0)?; // loop filter level
+    uch.write(6,0)?; // loop filter level 0
+    uch.write(6,0)?; // loop filter level 1
     uch.write(3,0)?; // loop filter sharpness
     uch.write_bit(false)?; // loop filter deltas enabled
     uch.write(8,fi.qindex as u8)?; // qindex
     uch.write_bit(false)?; // y dc delta q
     uch.write_bit(false)?; // uv dc delta q
     uch.write_bit(false)?; // uv ac delta q
-    //uch.write_bit(false)?; // using qmatrix
     uch.write_bit(false)?; // segmentation off
     uch.write_bit(false)?; // no delta q
     uch.write_bit(false)?; // no qm
