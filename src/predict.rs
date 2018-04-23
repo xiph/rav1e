@@ -2,7 +2,7 @@ use libc;
 
 use partition::*;
 
-pub static RAV1E_INTRA_MODES: &'static [PredictionMode] = &[PredictionMode::DC_PRED, PredictionMode::H_PRED, PredictionMode::V_PRED];
+pub static RAV1E_INTRA_MODES: &'static [PredictionMode] = &[PredictionMode::H_PRED];
 
 extern {
     #[cfg(test)]

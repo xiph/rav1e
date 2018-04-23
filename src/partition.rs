@@ -178,6 +178,10 @@ impl PredictionMode {
             _ => unimplemented!(),
         }
     }
+
+    pub fn is_directional(self) -> bool {
+        self >= PredictionMode::V_PRED && self <= PredictionMode::D63_PRED
+    }
 }
 
 #[derive(Copy,Clone)]
