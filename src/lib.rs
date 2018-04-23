@@ -388,6 +388,13 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
         cw.write_intra_uv_mode(uv_mode, mode);
     }
 
+    if mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
+        cw.write_angle_delta(0, mode);
+    }
+    if uv_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
+        cw.write_angle_delta(0, uv_mode);
+    }
+
     // these rules follow TX_MODE_LARGEST
     let tx_type = TxType::DCT_DCT;
     let tx_size = match bsize {

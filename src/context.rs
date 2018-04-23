@@ -30,6 +30,8 @@ const MAX_SB_SQUARE: usize = (MAX_SB_SIZE * MAX_SB_SIZE);
 const INTRA_MODES: usize = 13;
 const UV_INTRA_MODES: usize = 13;
 const BLOCK_SIZE_GROUPS: usize = 4;
+const MAX_ANGLE_DELTA: usize = 3;
+const DIRECTIONAL_MODES: usize = 8;
 
 pub static mi_size_wide: [u8; BLOCK_SIZES_ALL] =
     [1, 1, 2, 2, 2, 4, 4, 4, 8, 8, 8, 16, 16, 1, 4, 2, 8, 4, 16];
@@ -408,6 +410,7 @@ extern {
     static default_intra_ext_tx_cdf: [[[[u16; TX_TYPES + 1]; INTRA_MODES]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA];
     static default_skip_cdfs: [[u16; 3];SKIP_CONTEXTS];
     static default_intra_inter_cdf: [[u16; 3];INTRA_INTER_CONTEXTS];
+    static default_angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES];
     static av1_default_coef_head_cdfs_q0: [[CoeffModel; PLANE_TYPES]; TX_SIZES];
     static av1_default_coef_head_cdfs_q1: [[CoeffModel; PLANE_TYPES]; TX_SIZES];
     static av1_default_coef_head_cdfs_q2: [[CoeffModel; PLANE_TYPES]; TX_SIZES];
@@ -454,6 +457,7 @@ pub struct CDFContext {
     coef_tail_cdfs: [[CoeffModel; PLANE_TYPES]; TX_SIZES],
     skip_cdfs: [[u16; 3];SKIP_CONTEXTS],
     intra_inter_cdfs: [[u16; 3];INTRA_INTER_CONTEXTS],
+    angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES],
 }
 
 impl CDFContext {
@@ -466,6 +470,7 @@ impl CDFContext {
             intra_ext_tx_cdf: default_intra_ext_tx_cdf,
             skip_cdfs: default_skip_cdfs,
             intra_inter_cdfs: default_intra_inter_cdf,
+            angle_delta_cdf: default_angle_delta_cdf,
             coef_head_cdfs: match qindex {
                 0...63 => av1_default_coef_head_cdfs_q0,
                 64...127 => av1_default_coef_head_cdfs_q1,
@@ -833,6 +838,11 @@ impl ContextWriter {
     pub fn write_intra_uv_mode(&mut self, uv_mode: PredictionMode, y_mode: PredictionMode) {
         let cdf = &mut self.fc.uv_mode_cdf[y_mode as usize];
         self.w.symbol(uv_mode as u32, cdf, INTRA_MODES);
+    }
+    pub fn write_angle_delta(&mut self, angle: i8, mode: PredictionMode) {
+    self.w.symbol((angle + MAX_ANGLE_DELTA as i8) as u32,
+                     &mut self.fc.angle_delta_cdf[mode as usize - PredictionMode::V_PRED as usize],
+                     2 * MAX_ANGLE_DELTA + 1);
     }
     pub fn write_tx_type(&mut self, tx_size: TxSize, tx_type: TxType, y_mode: PredictionMode) {
         let square_tx_size = TXSIZE_SQR_MAP[tx_size as usize];
