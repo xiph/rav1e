@@ -39,7 +39,7 @@ echo $ACTUAL_VERSION > $GITHASH
 git submodule update --init
 
 # Get configure command from readme
-CONFIGURE_CMD=$(fgrep configure README.md)
+CONFIGURE_CMD=$(fgrep cmake README.md)
 
 # Create aom_test folder if none
 mkdir -p $AOM_TEST
