@@ -70,6 +70,7 @@ fn main() {
     // Manually fix the comment so rustdoc won't try to pick them
     format_write(builder, "tests/aom.rs");
 
+    println!("cargo:rerun-if-changed=aom_build/aom/build");
 
     cc::Build::new()
         .file("aom_build/aom/aom_dsp/fwd_txfm.c")
