@@ -44,7 +44,7 @@ cargo run --bin rav1e -- input.y4m -o output.ivf
 ```
 mkdir aom_test
 cd aom_test
-../aom_build/aom/configure --disable-av1-encoder --enable-debug --enable-experimental --disable-unit-tests  --disable-ext_partition --disable-ext_partition_types --disable-intra_edge --disable-cfl --disable-kf-ctx --disable-simplify_tx_mode --disable-obu --disable-filter-intra --disable-ext_skip --disable-lv_map --disable-lv_map_multi
+cmake ../aom_build/aom -DCONFIG_AV1_ENCODER=0 -DCONFIG_UNIT_TESTS=0 -DENABLE_DOCS=0 -DCONFIG_EXT_PARTITION=0 -DCONFIG_EXT_PARTITION_TYPES=0 -DCONFIG_INTRA_EDGE=0 -DCONFIG_CFL=0 -DCONFIG_KF_CTX=0 -DCONFIG_SIMPLIFY_TX_MODE=0 -DCONFIG_OBU=0 -DCONFIG_FILTER_INTRA=0 -DCONFIG_EXT_SKIP=0 -DCONFIG_LV_MAP=0 -DCONFIG_INTRABC=0 -DCONFIG_MONO_VIDEO=0
 make -j8
 ./aomdec ../output.ivf -o output.y4m
 ```

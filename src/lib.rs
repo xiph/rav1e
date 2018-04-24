@@ -263,7 +263,8 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     uch.write(1,0)?; // don't use frame ids
     uch.write_bit(false)?; // no override frame size
     //uch.write(8+7,0)?; // frame id
-    uch.write(3,0)?; // colorspace
+    uch.write(1,0)?; // 8 bit video
+    uch.write(4,0)?; // colorspace
     uch.write(1,0)?; // color range
     uch.write_bit(false)?; // no superres
     uch.write_bit(false)?; // scaling active
