@@ -36,6 +36,13 @@ pub enum BlockSize {
     BLOCK_INVALID
 }
 
+impl BlockSize {
+    pub fn cfl_allowed(self) -> bool {
+        // TODO: fix me when enabling EXT_PARTITION_TYPES
+        self <= BlockSize::BLOCK_32X32
+    }
+}
+
 pub const TX_SIZES: usize = 4;
 pub const TX_SIZES_ALL: usize = 14;
 
@@ -110,7 +117,7 @@ pub enum PredictionMode {
     SMOOTH_PRED,  // Combination of horizontal and vertical interpolation
     SMOOTH_V_PRED,
     SMOOTH_H_PRED,
-    TM_PRED,        // True-motion
+    PAETH_PRED,
     NEARESTMV,
     NEARMV,
     ZEROMV,

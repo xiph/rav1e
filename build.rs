@@ -36,15 +36,14 @@ fn main() {
         .define("CONFIG_EXT_PARTITION", "0")
         .define("CONFIG_EXT_PARTITION_TYPES", "0")
         .define("CONFIG_INTRA_EDGE", "0")
-        .define("CONFIG_CFL", "0")
         .define("CONFIG_KF_CTX", "0")
-        .define("CONFIG_SIMPLIFY_TX_MODE", "0")
         .define("CONFIG_OBU", "0")
         .define("CONFIG_FILTER_INTRA", "0")
         .define("CONFIG_EXT_SKIP", "0")
         .define("CONFIG_LV_MAP", "0")
-        .define("CONFIG_LV_MAP_MULTI", "0")
+        .define("CONFIG_TXK_SEL", "0")
         .define("CONFIG_ANALYZER", "0")
+        .define("AOM_TARGET_CPU", "generic")
         .build();
 
     env::set_var("PKG_CONFIG_PATH", cfg.join("lib/pkgconfig"));

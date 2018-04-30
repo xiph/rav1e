@@ -109,8 +109,7 @@ impl FrameInvariants {
         let min_partition_size = if speed <= 0 { BlockSize::BLOCK_4X4 } 
                                  else if speed <= 1 { BlockSize::BLOCK_8X8 }
                                  else if speed <= 2 { BlockSize::BLOCK_16X16 }
-                                 else if speed <= 3 { BlockSize::BLOCK_32X32 }
-                                 else { BlockSize::BLOCK_64X64 };
+                                 else { BlockSize::BLOCK_32X32 };
         FrameInvariants {
             qindex: qindex,
             speed: speed,
@@ -261,6 +260,8 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     uch.write(16,(fi.width-1) as u16)?; // width
     uch.write(16,(fi.height-1) as u16)?; // height
     uch.write(1,0)?; // don't use frame ids
+    uch.write(1,0)?; // screen content tools forced
+    uch.write(1,0)?; // screen content tools forced off
     uch.write_bit(false)?; // no override frame size
     //uch.write(8+7,0)?; // frame id
     uch.write(1,0)?; // 8 bit video
@@ -268,7 +269,6 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     uch.write(1,0)?; // color range
     uch.write_bit(false)?; // no superres
     uch.write_bit(false)?; // scaling active
-    uch.write_bit(false)?; // screen content tools
     uch.write(3,0x0)?; // frame context
     uch.write(6,0)?; // loop filter level 0
     uch.write(6,0)?; // loop filter level 1
@@ -289,8 +289,6 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     }
     uch.write(6,0)?; // no y, u or v loop restoration
     uch.write_bit(false)?; // tx mode select
-    uch.write(2,3)?; // up to 32x32 transforms
-    uch.write(1,0)?; // no 64x64 transforms
     //uch.write_bit(false)?; // use hybrid pred
     //uch.write_bit(false)?; // use compound pred
     uch.write_bit(true)?; // reduced tx
@@ -386,7 +384,7 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
     let uv_mode = mode;
 
     if has_chroma(bo, bsize, xdec, ydec) {
-        cw.write_intra_uv_mode(uv_mode, mode);
+        cw.write_intra_uv_mode(uv_mode, mode, bsize);
     }
 
     if mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
