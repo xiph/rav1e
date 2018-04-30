@@ -8,6 +8,7 @@ use partition::*;
 use partition::BlockSize::*;
 use partition::TxSize::*;
 use partition::TxType::*;
+use partition::PredictionMode::*;
 use plane::*;
 use libc::*;
 
@@ -28,7 +29,7 @@ const MAX_SB_SIZE: usize = (1 << MAX_SB_SIZE_LOG2);
 const MAX_SB_SQUARE: usize = (MAX_SB_SIZE * MAX_SB_SIZE);
 
 const INTRA_MODES: usize = 13;
-const UV_INTRA_MODES: usize = 13;
+const UV_INTRA_MODES: usize = 14;
 const BLOCK_SIZE_GROUPS: usize = 4;
 const MAX_ANGLE_DELTA: usize = 3;
 const DIRECTIONAL_MODES: usize = 8;
@@ -316,21 +317,19 @@ fn get_ext_tx_set_type(tx_size: TxSize, is_inter: bool, use_reduced_set: bool) -
     let tx_size_sqr = TXSIZE_SQR_MAP[tx_size as usize];
     if tx_size_sqr > TxSize::TX_32X32 {
         TxSetType::EXT_TX_SET_DCTONLY
-    } else if use_reduced_set {
-      if is_inter {
-          TxSetType::EXT_TX_SET_DCT_IDTX
-      } else {
-          TxSetType::EXT_TX_SET_DTT4_IDTX
-      }
-    }
-    else if tx_size_sqr_up == TxSize::TX_32X32 {
+    } else if tx_size_sqr_up == TxSize::TX_32X32 {
         if is_inter {
             TxSetType::EXT_TX_SET_DCT_IDTX
         } else {
             TxSetType::EXT_TX_SET_DCTONLY
         }
-    }
-    else if is_inter {
+    } else if use_reduced_set {
+        if is_inter {
+            TxSetType::EXT_TX_SET_DCT_IDTX
+        } else {
+            TxSetType::EXT_TX_SET_DTT4_IDTX
+        }
+    } else if is_inter {
         if tx_size_sqr == TxSize::TX_16X16 {
             TxSetType::EXT_TX_SET_DTT9_IDTX_1DDCT
         } else {
@@ -371,8 +370,6 @@ static intra_mode_to_tx_type_context: [TxType; INTRA_MODES] = [
     ADST_ADST,  // PAETH
 ];
 
-/*
-// enable with CfL
 static uv2y: [PredictionMode; UV_INTRA_MODES] = [
     DC_PRED,        // UV_DC_PRED
     V_PRED,         // UV_V_PRED
@@ -389,16 +386,13 @@ static uv2y: [PredictionMode; UV_INTRA_MODES] = [
     PAETH_PRED,     // UV_PAETH_PRED
     DC_PRED,        // CFL_PRED
 ];
-*/
 
 pub fn y_intra_mode_to_tx_type_context(pred: PredictionMode) -> TxType {
     intra_mode_to_tx_type_context[pred as usize]
 }
 
 pub fn uv_intra_mode_to_tx_type_context(pred: PredictionMode)-> TxType {
-    intra_mode_to_tx_type_context[pred as usize]
-    //flip me when CfL is implemented
-    //intra_mode_to_tx_type_context[uv2y[pred as usize] as usize]
+    intra_mode_to_tx_type_context[uv2y[pred as usize] as usize]
 }
 
 
@@ -406,7 +400,7 @@ extern {
     static default_partition_cdf: [[u16; PARTITION_TYPES + 1]; PARTITION_CONTEXTS];
     static default_kf_y_mode_cdf: [[[u16; INTRA_MODES + 1]; INTRA_MODES]; INTRA_MODES];
     static default_if_y_mode_cdf: [[u16; INTRA_MODES + 1]; BLOCK_SIZE_GROUPS];
-    static default_uv_mode_cdf: [[u16; UV_INTRA_MODES + 1]; INTRA_MODES];
+    static default_uv_mode_cdf: [[[u16; UV_INTRA_MODES + 1]; INTRA_MODES]; 2];
     static default_intra_ext_tx_cdf: [[[[u16; TX_TYPES + 1]; INTRA_MODES]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA];
     static default_skip_cdfs: [[u16; 3];SKIP_CONTEXTS];
     static default_intra_inter_cdf: [[u16; 3];INTRA_INTER_CONTEXTS];
@@ -451,7 +445,7 @@ pub struct CDFContext {
     partition_cdf: [[u16; PARTITION_TYPES + 1]; PARTITION_CONTEXTS],
     kf_y_cdf: [[[u16; INTRA_MODES + 1]; INTRA_MODES]; INTRA_MODES],
     y_mode_cdf: [[u16; INTRA_MODES + 1]; BLOCK_SIZE_GROUPS],
-    uv_mode_cdf: [[u16; INTRA_MODES + 1]; INTRA_MODES],
+    uv_mode_cdf: [[[u16; UV_INTRA_MODES + 1]; INTRA_MODES]; 2],
     intra_ext_tx_cdf: [[[[u16; TX_TYPES + 1]; INTRA_MODES]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA],
     coef_head_cdfs: [[CoeffModel; PLANE_TYPES]; TX_SIZES],
     coef_tail_cdfs: [[CoeffModel; PLANE_TYPES]; TX_SIZES],
@@ -835,9 +829,10 @@ impl ContextWriter {
         let cdf = &mut self.fc.y_mode_cdf[size_group_lookup[bsize as usize] as usize];
         self.w.symbol(mode as u32, cdf, INTRA_MODES);
     }
-    pub fn write_intra_uv_mode(&mut self, uv_mode: PredictionMode, y_mode: PredictionMode) {
-        let cdf = &mut self.fc.uv_mode_cdf[y_mode as usize];
-        self.w.symbol(uv_mode as u32, cdf, INTRA_MODES);
+    pub fn write_intra_uv_mode(&mut self, uv_mode: PredictionMode, y_mode: PredictionMode,
+                               bs: BlockSize) {
+        let cdf = &mut self.fc.uv_mode_cdf[bs.cfl_allowed() as usize][y_mode as usize];
+        self.w.symbol(uv_mode as u32, cdf, UV_INTRA_MODES);
     }
     pub fn write_angle_delta(&mut self, angle: i8, mode: PredictionMode) {
     self.w.symbol((angle + MAX_ANGLE_DELTA as i8) as u32,
