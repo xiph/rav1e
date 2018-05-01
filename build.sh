@@ -48,7 +48,7 @@ pushd $AOM_TEST
 if [ -f Makefile ]; then
   # Clean if needed
   make clean
-  make distclean
+  make distclean || true
 fi
 echo CONFIGURE COMMAND
 echo $CONFIGURE_CMD
