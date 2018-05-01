@@ -244,6 +244,8 @@ pub fn write_ivf_frame(output_file: &mut Write, pts: u64, data: &[u8]) {
 
 trait UncompressedHeader {
     fn write_frame_size(&mut self, fi: &FrameInvariants) -> Result<(), std::io::Error>;
+    fn write_loop_filter(&mut self) -> Result<(), std::io::Error>;
+    fn write_cdef(&mut self) -> Result<(), std::io::Error>;
 }
 
 impl<'a> UncompressedHeader for BitWriter<'a, BE> {
@@ -258,6 +260,21 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         self.write(4, height_bits - 1)?;
         self.write(width_bits, (fi.width - 1) as u16)?;
         self.write(height_bits, (fi.height - 1) as u16)?;
+        Ok(())
+    }
+    fn write_loop_filter(&mut self) -> Result<(), std::io::Error> {
+        self.write(6,0)?; // loop filter level 0
+        self.write(6,0)?; // loop filter level 1
+        self.write(3,0)?; // loop filter sharpness
+        self.write_bit(false) // loop filter deltas enabled
+    }
+    fn write_cdef(&mut self) -> Result<(), std::io::Error> {
+        self.write(2,0)?; // cdef clpf damping
+        self.write(2,0)?; // cdef bits
+        for _ in 0..1 {
+            self.write(6,0)?; // cdef y strength
+            self.write(6,0)?; // cdef uv strength
+        }
         Ok(())
     }
 }
@@ -287,10 +304,7 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     uch.write_bit(false)?; // scaling active
     uch.write_bit(false)?; // screen content tools
     uch.write(3,0x0)?; // frame context
-    uch.write(6,0)?; // loop filter level 0
-    uch.write(6,0)?; // loop filter level 1
-    uch.write(3,0)?; // loop filter sharpness
-    uch.write_bit(false)?; // loop filter deltas enabled
+    uch.write_loop_filter()?;
     uch.write(8,fi.qindex as u8)?; // qindex
     uch.write_bit(false)?; // y dc delta q
     uch.write_bit(false)?; // uv dc delta q
@@ -298,12 +312,7 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     uch.write_bit(false)?; // segmentation off
     uch.write_bit(false)?; // no delta q
     uch.write_bit(false)?; // no qm
-    uch.write(2,0)?; // cdef clpf damping
-    uch.write(2,0)?; // cdef bits
-    for _ in 0..1 {
-        uch.write(6,0)?; // cdef y strength
-        uch.write(6,0)?; // cdef uv strength
-    }
+    uch.write_cdef()?;
     uch.write(6,0)?; // no y, u or v loop restoration
     uch.write_bit(false)?; // tx mode select
     uch.write(2,3)?; // up to 32x32 transforms
