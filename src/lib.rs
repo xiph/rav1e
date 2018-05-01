@@ -106,7 +106,7 @@ impl FrameInvariants {
     pub fn new(width: usize, height: usize, qindex: usize, speed: usize) -> FrameInvariants {
         // Speed level decides the minimum partition size, i.e. higher speed --> larger min partition size,
         // with exception that SBs on right or bottom frame borders split down to BLOCK_4X4.
-        let min_partition_size = if speed <= 0 { BlockSize::BLOCK_4X4 } 
+        let min_partition_size = if speed <= 0 { BlockSize::BLOCK_4X4 }
                                  else if speed <= 1 { BlockSize::BLOCK_8X8 }
                                  else if speed <= 2 { BlockSize::BLOCK_16X16 }
                                  else if speed <= 3 { BlockSize::BLOCK_32X32 }
@@ -393,7 +393,7 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
     }
 
     cw.bc.set_mode(bo, bsize, mode);
-    
+
     if is_inter { cw.write_intra_mode(bsize, mode); }
     else { cw.write_intra_mode_kf(bo, mode); };
 
