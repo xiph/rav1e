@@ -41,15 +41,11 @@ git submodule update --init
 # Get configure command from readme
 CONFIGURE_CMD=$(fgrep cmake README.md)
 
-# Create aom_test folder if none
+# Wipe and create aom_test folder
+rm -fR $AOM_TEST
 mkdir -p $AOM_TEST
 pushd $AOM_TEST
 
-if [ -f Makefile ]; then
-  # Clean if needed
-  make clean
-  make distclean || true
-fi
 echo CONFIGURE COMMAND
 echo $CONFIGURE_CMD
 eval $CONFIGURE_CMD
