@@ -242,18 +242,24 @@ pub fn write_ivf_frame(output_file: &mut Write, pts: u64, data: &[u8]) {
     output_file.write(data).unwrap();
 }
 
-fn write_frame_size(fi: &FrameInvariants, uch: &mut BitWriter<BE>) -> Result<(), std::io::Error> {
-    // width_bits and height_bits will have to be moved to the sequence header OBU
-    // when we add support for it.
-    let width_bits = 32 - (fi.width as u32).leading_zeros();
-    let height_bits = 32 - (fi.height as u32).leading_zeros();
-    assert!(width_bits <= 16);
-    assert!(height_bits <= 16);
-    uch.write(4, width_bits - 1)?;
-    uch.write(4, height_bits - 1)?;
-    uch.write(width_bits,(fi.width-1) as u16)?;
-    uch.write(height_bits,(fi.height-1) as u16)?;
-    Ok(())
+trait UncompressedHeader {
+    fn write_frame_size(&mut self, fi: &FrameInvariants) -> Result<(), std::io::Error>;
+}
+
+impl<'a> UncompressedHeader for BitWriter<'a, BE> {
+    fn write_frame_size(&mut self, fi: &FrameInvariants) -> Result<(), std::io::Error> {
+        // width_bits and height_bits will have to be moved to the sequence header OBU
+        // when we add support for it.
+        let width_bits = 32 - (fi.width as u32).leading_zeros();
+        let height_bits = 32 - (fi.height as u32).leading_zeros();
+        assert!(width_bits <= 16);
+        assert!(height_bits <= 16);
+        self.write(4, width_bits - 1)?;
+        self.write(4, height_bits - 1)?;
+        self.write(width_bits, (fi.width - 1) as u16)?;
+        self.write(height_bits, (fi.height - 1) as u16)?;
+        Ok(())
+    }
 }
 
 fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &FrameInvariants) -> Result<(), std::io::Error> {
@@ -270,7 +276,7 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     uch.write_bit(fi.ftype == FrameType::INTER)?; // keyframe : 0, inter: 1
     uch.write_bit(true)?; // show frame
     uch.write_bit(true)?; // error resilient
-    write_frame_size(fi, &mut uch)?;
+    uch.write_frame_size(fi)?;
     uch.write(1,0)?; // don't use frame ids
     uch.write_bit(false)?; // no override frame size
     //uch.write(8+7,0)?; // frame id
