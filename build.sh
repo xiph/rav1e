@@ -30,7 +30,7 @@ fi
 ACTUAL_VERSION=$(git submodule status | xargs)
 
 AOM_TEST="aom_test"
-if [ "$ACTUAL_VERSION" != "$EXPECTED_VERSION" ] || [ ! -f ./${AOM_TEST}/aomdec ]; then
+if [[ "$ACTUAL_VERSION" != "$EXPECTED_VERSION" ]] || [[ ! -f ./${AOM_TEST}/aomdec ]]; then
 
 # Store current version to file
 echo $ACTUAL_VERSION > $GITHASH
