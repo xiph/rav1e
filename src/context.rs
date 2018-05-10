@@ -832,7 +832,11 @@ impl ContextWriter {
     pub fn write_intra_uv_mode(&mut self, uv_mode: PredictionMode, y_mode: PredictionMode,
                                bs: BlockSize) {
         let cdf = &mut self.fc.uv_mode_cdf[bs.cfl_allowed() as usize][y_mode as usize];
-        self.w.symbol(uv_mode as u32, cdf, UV_INTRA_MODES);
+        if bs.cfl_allowed() {
+            self.w.symbol(uv_mode as u32, cdf, UV_INTRA_MODES);
+        } else {
+            self.w.symbol(uv_mode as u32, cdf, UV_INTRA_MODES - 1);
+        }
     }
     pub fn write_angle_delta(&mut self, angle: i8, mode: PredictionMode) {
     self.w.symbol((angle + MAX_ANGLE_DELTA as i8) as u32,
