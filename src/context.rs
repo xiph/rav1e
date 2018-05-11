@@ -788,6 +788,16 @@ pub fn clamp(val: i32, min: i32, max: i32) -> i32 {
     }
 }
 
+pub fn has_chroma(bo: &BlockOffset, bsize: BlockSize,
+                       subsampling_x: usize, subsampling_y: usize) -> bool {
+    let bw = mi_size_wide[bsize as usize] as u8;
+    let bh = mi_size_high[bsize as usize] as u8;
+
+    ((bo.x & 0x01) == 1 || (bw & 0x01) == 0 || subsampling_x == 0) &&
+        ((bo.y & 0x01) == 1 || (bh & 0x01) == 0 || subsampling_y == 0)
+
+}
+
 fn get_ext_tx_set_type(tx_size: TxSize, is_inter: bool, use_reduced_set: bool) -> TxSetType {
     let tx_size_sqr_up = TXSIZE_SQR_UP_MAP[tx_size as usize];
     let tx_size_sqr = TXSIZE_SQR_MAP[tx_size as usize];
@@ -1162,6 +1172,34 @@ impl BlockContext {
         }
     }
     //TODO(anyone): Add reset_left_tx_context() here then call it in reset_left_contexts()
+
+    pub fn reset_skip_context(&mut self, bo: &BlockOffset,
+                          bsize: BlockSize, xdec: usize, ydec: usize) {
+        const num_planes: usize = 3;
+        let nplanes = if bsize >= BLOCK_8X8 { 3 }
+                      else {
+                          1 + (num_planes - 1) *
+                          has_chroma(bo, bsize, xdec, ydec) as usize };
+
+        for plane in 0..nplanes {
+            let xdec2 = if plane == 0 { 0 } else { xdec };
+            let ydec2 = if plane == 0 { 0 } else { ydec };
+
+            let plane_bsize = if plane == 0 { bsize }
+                              else { get_plane_block_size(bsize, xdec2, ydec2) };
+            let bw = mi_size_wide[plane_bsize as usize];
+            let bh = mi_size_high[plane_bsize as usize];
+
+            for bx in 0..bw {
+                self.above_coeff_context[plane][bo.x + (bx<<xdec2) as usize] = 0;
+            }
+
+            let bo_y = bo.y_in_sb();
+            for by in 0..bh {
+                self.left_coeff_context[plane][bo_y + (by<<ydec2) as usize] = 0;
+            }
+        }
+    }
 
     pub fn reset_left_contexts(&mut self) {
         for p in 0..3 {

@@ -343,16 +343,6 @@ fn diff(dst: &mut [i16], src1: &PlaneSlice, src2: &PlaneSlice, width: usize, hei
     }
 }
 
-fn has_chroma(bo: &BlockOffset, bsize: BlockSize,
-                       subsampling_x: usize, subsampling_y: usize) -> bool {
-    let bw = mi_size_wide[bsize as usize] as u8;
-    let bh = mi_size_high[bsize as usize] as u8;
-    let ref_pos = ((bo.x & 0x01) == 1 || (bw & 0x01) == 0 || subsampling_x == 0) &&
-                  ((bo.y & 0x01) == 1 || (bh & 0x01) == 0 || subsampling_y == 0);
-
-    ref_pos
-}
-
 // For a transform block,
 // predict, transform, quantize, write coefficients to a bitstream,
 // dequantize, inverse-transform.
@@ -432,9 +422,11 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
         _ => TxSize::TX_32X32
     };
 
-    // TODO: Disable below, if TXK_SEL is enabled.
     if skip == false {
+        // TODO: Disable below, if TXK_SEL is enabled.
         cw.write_tx_type_lv_map(tx_size, tx_type, mode, is_inter, fi.use_reduced_tx_set);
+    } else {
+        cw.bc.reset_skip_context(bo, bsize, xdec, ydec);
     }
 
     let bw = mi_size_wide[bsize as usize] as usize / tx_size.width_mi();
