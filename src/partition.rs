@@ -82,7 +82,7 @@ impl TxSize {
 
 pub const TX_TYPES: usize = 16;
 
-#[derive(Copy,Clone)]
+#[derive(Copy,Clone,PartialEq)]
 #[repr(C)]
 pub enum TxType {
     DCT_DCT = 0,    // DCT  in both horizontal and vertical
@@ -194,18 +194,26 @@ impl PredictionMode {
 #[derive(Copy,Clone)]
 pub enum TxSetType {
     // DCT only
-    EXT_TX_SET_DCTONLY = 0,
+    EXT_TX_SET_DCTONLY,
     // DCT + Identity only
-    EXT_TX_SET_DCT_IDTX = 1,
+    EXT_TX_SET_DCT_IDTX,
     // Discrete Trig transforms w/o flip (4) + Identity (1)
-    EXT_TX_SET_DTT4_IDTX = 2,
+    EXT_TX_SET_DTT4_IDTX,
     // Discrete Trig transforms w/o flip (4) + Identity (1) + 1D Hor/vert DCT (2)
-    EXT_TX_SET_DTT4_IDTX_1DDCT = 3,
+    // for 16x16 only
+    EXT_TX_SET_DTT4_IDTX_1DDCT_16X16,
+    // Discrete Trig transforms w/o flip (4) + Identity (1) + 1D Hor/vert DCT (2)
+    EXT_TX_SET_DTT4_IDTX_1DDCT,
+    // Discrete Trig transforms w/ flip (9) + Identity (1)
+    EXT_TX_SET_DTT9_IDTX,
     // Discrete Trig transforms w/ flip (9) + Identity (1) + 1D Hor/Ver DCT (2)
-    EXT_TX_SET_DTT9_IDTX_1DDCT = 4,
+    EXT_TX_SET_DTT9_IDTX_1DDCT,
     // Discrete Trig transforms w/ flip (9) + Identity (1) + 1D Hor/Ver (6)
-    EXT_TX_SET_ALL16 = 5,
-    EXT_TX_SET_TYPES
+    // for 16x16 only
+    EXT_TX_SET_ALL16_16X16,
+    // Discrete Trig transforms w/ flip (9) + Identity (1) + 1D Hor/Ver (6)
+    EXT_TX_SET_ALL16,
+
 }
 
 pub fn get_subsize(bsize: BlockSize , partition: PartitionType) -> BlockSize {

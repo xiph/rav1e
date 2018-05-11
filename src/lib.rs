@@ -99,6 +99,7 @@ pub struct FrameInvariants {
     pub number: u64,
     pub ftype: FrameType,
     pub show_existing_frame: bool,
+    pub use_reduced_tx_set: bool,
     pub min_partition_size: BlockSize,
 }
 
@@ -124,6 +125,7 @@ impl FrameInvariants {
             number: 0,
             ftype: FrameType::KEY,
             show_existing_frame: false,
+            use_reduced_tx_set: true,
             min_partition_size: min_partition_size,
         }
     }
@@ -317,7 +319,7 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
     uch.write_bit(false)?; // tx mode select
     //uch.write_bit(false)?; // use hybrid pred
     //uch.write_bit(false)?; // use compound pred
-    uch.write_bit(true)?; // reduced tx
+    uch.write_bit(fi.use_reduced_tx_set)?; // reduced tx
     uch.write_bit(true)?; // uniform tile spacing
     if fi.width > 64 {
         uch.write(1,0)?; // tile cols
@@ -356,7 +358,7 @@ fn has_chroma(bo: &BlockOffset, bsize: BlockSize,
 // dequantize, inverse-transform.
 pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
                   p: usize, bo: &BlockOffset, mode: PredictionMode, tx_size: TxSize, tx_type: TxType,
-                  po: &PlaneOffset, skip: bool) {
+                  plane_bsize: BlockSize, po: &PlaneOffset, skip: bool) {
     let stride = fs.input.planes[p].cfg.stride;
     let rec = &mut fs.rec.planes[p];
     let xdec = fs.input.planes[p].cfg.xdec;
@@ -378,7 +380,8 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
     let coeffs = &mut coeffs_storage[..tx_size.width()*tx_size.height()];
     forward_transform(&residual, coeffs, 1<<tx_size_wide_log2[tx_size as usize], tx_size, tx_type);
     quantize_in_place(fi.qindex, coeffs, tx_size);
-    cw.write_coeffs(p, bo, &coeffs, tx_size, tx_type, xdec, ydec);
+
+    cw.write_coeffs_lv_map(p, bo, &coeffs, tx_size, tx_type, plane_bsize, xdec, ydec);
 
     //reconstruct
     let mut rcoeffs = [0 as i32; 64*64];
@@ -429,7 +432,10 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
         _ => TxSize::TX_32X32
     };
 
-    if skip == false { cw.write_tx_type(tx_size, tx_type, mode); }
+    // TODO: Disable below, if TXK_SEL is enabled.
+    if skip == false {
+        cw.write_tx_type_lv_map(tx_size, tx_type, mode, is_inter, fi.use_reduced_tx_set);
+    }
 
     let bw = mi_size_wide[bsize as usize] as usize / tx_size.width_mi();
     let bh = mi_size_high[bsize as usize] as usize / tx_size.height_mi();
@@ -440,7 +446,7 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
             for bx in 0..bw {
                 let tx_bo = BlockOffset{x: bo.x + bx*tx_size.width_mi(), y: bo.y + by*tx_size.height_mi()};
                 let po = tx_bo.plane_offset(&fs.input.planes[p].cfg);
-                encode_tx_block(fi, fs, cw, p, &tx_bo, mode, tx_size, tx_type, &po, skip);
+                encode_tx_block(fi, fs, cw, p, &tx_bo, mode, tx_size, tx_type, bsize, &po, skip);
             }
         }
     }
@@ -462,6 +468,8 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
     bw_uv /= uv_tx_size.width_mi();
     bh_uv /= uv_tx_size.height_mi();
 
+    let plane_bsize = get_plane_block_size(bsize, xdec, ydec);
+
     if bw_uv > 0 && bh_uv > 0 {
         let uv_tx_type = uv_intra_mode_to_tx_type_context(uv_mode);
         let partition_x = (bo.x & LOCAL_BLOCK_MASK) >> xdec << MI_SIZE_LOG2;
@@ -479,7 +487,7 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
                         x: sb_offset.x + partition_x + bx*uv_tx_size.width(),
                         y: sb_offset.y + partition_y + by*uv_tx_size.height()};
 
-                    encode_tx_block(fi, fs, cw, p, &tx_bo, uv_mode, uv_tx_size, uv_tx_type, &po, skip);
+                    encode_tx_block(fi, fs, cw, p, &tx_bo, uv_mode, uv_tx_size, uv_tx_type, plane_bsize, &po, skip);
                 }
             }
         }
@@ -568,8 +576,6 @@ fn encode_partition(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextW
             // TODO(anyone): Until we have RDO-based block size decision,
             // call rdo_mode_decision() for a partition.
             let rdo_none = rdo_mode_decision(fi, fs, cw, bsize, bo);
-            // FIXME(anyone): Instead of calling set_mode() in encode_block() for each 4x4tx position,
-            // it would be better to call set_mode() for each MI block position here.
             cw.bc.set_mode(bo, bsize, rdo_none.pred_mode);
 
             encode_block(fi, fs, cw, rdo_none.pred_mode, bsize, bo);
