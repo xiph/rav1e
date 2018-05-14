@@ -1718,7 +1718,8 @@ impl ContextWriter {
 
     pub fn write_coeffs_lv_map(&mut self, plane: usize, bo: &BlockOffset,
                         coeffs_in: &[i32], tx_size: TxSize, tx_type: TxType,
-                        plane_bsize: BlockSize, xdec: usize, ydec: usize) {
+                        plane_bsize: BlockSize, xdec: usize, ydec: usize,
+                        use_reduced_tx_set: bool) {
         let pred_mode = self.bc.get_mode(bo);
         let is_inter = pred_mode >= PredictionMode::NEARESTMV;
         assert!( is_inter == false );
@@ -1767,13 +1768,13 @@ impl ContextWriter {
                             &mut levels_buf);
 
         let tx_class = tx_type_to_class[tx_type as usize];
-        let plane_type = if plane == 0 { 0 as usize} else { 1 as usize };
+        let plane_type = if plane == 0 { 0 } else { 1 } as usize;
 
-        // TODO: Enable this, if TXK_SEL is enabled back.
-        // Only y plane's tx_type is transmitted
-        /*if plane == 0 {
-            self.write_tx_type_lv_map(tx_size, tx_type, pred_mode, is_inter);
-        }*/
+        // Signal tx_type for luma plane only
+        if plane == 0 {
+            self.write_tx_type_lv_map(tx_size, tx_type, pred_mode, is_inter,
+                                      use_reduced_tx_set);
+        }
 
         // Encode EOB
         let mut eob_extra = 0 as u32;
