@@ -371,7 +371,8 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
     forward_transform(&residual, coeffs, 1<<tx_size_wide_log2[tx_size as usize], tx_size, tx_type);
     quantize_in_place(fi.qindex, coeffs, tx_size);
 
-    cw.write_coeffs_lv_map(p, bo, &coeffs, tx_size, tx_type, plane_bsize, xdec, ydec);
+    cw.write_coeffs_lv_map(p, bo, &coeffs, tx_size, tx_type, plane_bsize, xdec, ydec,
+                            fi.use_reduced_tx_set);
 
     //reconstruct
     let mut rcoeffs = [0 as i32; 64*64];
@@ -422,10 +423,7 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
         _ => TxSize::TX_32X32
     };
 
-    if skip == false {
-        // TODO: Disable below, if TXK_SEL is enabled.
-        cw.write_tx_type_lv_map(tx_size, tx_type, mode, is_inter, fi.use_reduced_tx_set);
-    } else {
+    if skip {
         cw.bc.reset_skip_context(bo, bsize, xdec, ydec);
     }
 
