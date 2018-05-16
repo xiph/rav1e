@@ -97,7 +97,9 @@ pub struct FrameInvariants {
     pub w_in_b: usize,
     pub h_in_b: usize,
     pub number: u64,
-    pub ftype: FrameType,
+    pub show_frame: bool,
+    pub intra_only: bool,
+    pub frame_type: FrameType,
     pub show_existing_frame: bool,
     pub use_reduced_tx_set: bool,
     pub min_partition_size: BlockSize,
@@ -123,7 +125,9 @@ impl FrameInvariants {
             w_in_b: 2 * ((width+7)>>3) ,	// MiCols, ((width+7)/8)<<3 >> MI_SIZE_LOG2
             h_in_b: 2 * ((height+7)>>3),	// MiRows, ((height+7)/8)<<3 >> MI_SIZE_LOG2
             number: 0,
-            ftype: FrameType::KEY,
+            show_frame: true,
+            intra_only: false,
+            frame_type: FrameType::KEY,
             show_existing_frame: false,
             use_reduced_tx_set: true,
             min_partition_size: min_partition_size,
@@ -133,7 +137,7 @@ impl FrameInvariants {
 
 impl fmt::Display for FrameInvariants{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Frame {} - {}", self.number, self.ftype)
+        write!(f, "Frame {} - {}", self.number, self.frame_type)
     }
 }
 
@@ -280,9 +284,20 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
     }
 }
 
-fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &FrameInvariants) -> Result<(), std::io::Error> {
+fn write_sequence_header(uch: &mut BitWriter<BE>, fi: &FrameInvariants)
+    -> Result<(), std::io::Error> {
+    uch.write_frame_size(fi)?;
+    uch.write(1,0)?; // don't use frame ids
+    uch.write(1,0)?; // screen content tools forced
+    uch.write(1,0)?; // screen content tools forced off
+
+    Ok(())
+}
+
+fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence,
+                            fi: &FrameInvariants) -> Result<(), std::io::Error> {
     let mut uch = BitWriter::<BE>::new(packet);
-    uch.write(2,2)?; // frame type
+    uch.write(2,2)?; // AOM_FRAME_MARKER, 0x2
     uch.write(2,sequence.profile)?; // profile 0
     if fi.show_existing_frame {
         uch.write_bit(true)?; // show_existing_frame=1
@@ -291,18 +306,42 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence, fi: &Frame
         return Ok(());
     }
     uch.write_bit(false)?; // show_existing_frame=0
-    uch.write_bit(fi.ftype == FrameType::INTER)?; // keyframe : 0, inter: 1
-    uch.write_bit(true)?; // show frame
+    uch.write_bit(fi.frame_type == FrameType::INTER)?; // keyframe : 0, inter: 1
+    uch.write_bit(fi.show_frame)?; // show frame
+    if fi.frame_type != FrameType::KEY {
+        if fi.show_frame { assert!(fi.intra_only == false); }
+        else { uch.write_bit( fi.intra_only )?; };
+    };
     uch.write_bit(true)?; // error resilient
-    uch.write_frame_size(fi)?;
-    uch.write(1,0)?; // don't use frame ids
-    uch.write(1,0)?; // screen content tools forced
-    uch.write(1,0)?; // screen content tools forced off
-    uch.write_bit(false)?; // no override frame size
+
+    if fi.intra_only { assert!( false ); };	// Not supported by rav1e
+
+    if fi.frame_type == FrameType::KEY || fi.intra_only {
+        write_sequence_header(&mut uch, fi)?;
+    }
+
     //uch.write(8+7,0)?; // frame id
-    uch.write(1,0)?; // 8 bit video
-    uch.write(4,0)?; // colorspace
-    uch.write(1,0)?; // color range
+
+    uch.write_bit(false)?; // no override frame size
+
+    if fi.frame_type == FrameType::KEY{
+        uch.write(1,0)?; // 8 bit video
+        uch.write(4,0)?; // colorspace
+        uch.write(1,0)?; // color range
+    } else {
+        // TODO: Inter frame info goes here
+
+        if fi.intra_only {
+            uch.write(1,0)?; // 8 bit video
+            uch.write(4,0)?; // colorspace
+            uch.write(1,0)?; // color range
+        } else {
+        // TODO: More Inter frame info goes here
+
+
+        }
+    };
+
     uch.write_bit(false)?; // no superres
     uch.write_bit(false)?; // scaling active
     uch.write(3,0x0)?; // frame context
@@ -389,7 +428,7 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
     cw.bc.set_skip(bo, bsize, skip);
     cw.write_skip(bo, skip);
 
-    if fi.ftype == FrameType::INTER {
+    if fi.frame_type == FrameType::INTER {
         cw.write_inter_mode(bo, is_inter);
     }
 
@@ -501,7 +540,7 @@ fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
     let h = block_size_high[bsize as usize];
 
     for &mode in RAV1E_INTRA_MODES {
-        if fi.ftype == FrameType::KEY && mode >= PredictionMode::NEARESTMV {
+        if fi.frame_type == FrameType::KEY && mode >= PredictionMode::NEARESTMV {
           break;
         }
         let checkpoint = cw.checkpoint();
