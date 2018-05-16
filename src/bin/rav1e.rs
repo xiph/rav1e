@@ -20,16 +20,21 @@ fn main() {
 
     let mut last_rec: Option<Frame> = None;
     loop {
-        fi.frame_type = FrameType::KEY;
-        /*fi.frame_type = if fi.number % 30 == 0 {
+        //fi.frame_type = FrameType::KEY;
+        fi.frame_type = if fi.number % 30 == 0 {
                         FrameType::KEY }
                     else {
-                        FrameType::INTER };*/
+                        FrameType::INTER };
+
+        fi.intra_only = fi.frame_type == FrameType::KEY ||
+                                          fi.frame_type == FrameType::INTRA_ONLY;
+        fi.use_prev_frame_mvs = !(fi.intra_only || fi.error_resilient);
+
         if !process_frame(&sequence, &fi, &mut files.output_file, &mut y4m_dec, y4m_enc.as_mut(), &mut last_rec) {
             break;
         }
         fi.number += 1;
-        fi.show_existing_frame = fi.number % 2 == 1;
+        //fi.show_existing_frame = fi.number % 2 == 1;
         if fi.number == files.limit {
             break;
         }

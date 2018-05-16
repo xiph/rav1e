@@ -99,10 +99,13 @@ pub struct FrameInvariants {
     pub h_in_b: usize,
     pub number: u64,
     pub show_frame: bool,
+    pub error_resilient: bool,
     pub intra_only: bool,
     pub frame_type: FrameType,
     pub show_existing_frame: bool,
     pub use_reduced_tx_set: bool,
+    pub reference_mode: ReferenceMode,
+    pub use_prev_frame_mvs: bool,
     pub min_partition_size: BlockSize,
 }
 
@@ -127,10 +130,13 @@ impl FrameInvariants {
             h_in_b: 2 * ((height+7)>>3),	// MiRows, ((height+7)/8)<<3 >> MI_SIZE_LOG2
             number: 0,
             show_frame: true,
+            error_resilient: true,
             intra_only: false,
             frame_type: FrameType::KEY,
             show_existing_frame: false,
             use_reduced_tx_set: true,
+            reference_mode: ReferenceMode::SINGLE,
+            use_prev_frame_mvs: false,
             min_partition_size: min_partition_size,
         }
     }
@@ -149,6 +155,16 @@ pub enum FrameType {
     INTER,
     INTRA_ONLY,
     S,
+}
+
+const REFERENCE_MODES: usize = 3;
+
+#[allow(dead_code,non_camel_case_types)]
+#[derive(Debug,PartialEq,EnumIterator)]
+pub enum ReferenceMode {
+  SINGLE = 0,
+  COMPOUND = 1,
+  SELECT = 2,
 }
 
 impl fmt::Display for FrameType{
@@ -309,13 +325,15 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence,
     uch.write_bit(false)?; // show_existing_frame=0
     uch.write_bit(fi.frame_type == FrameType::INTER)?; // keyframe : 0, inter: 1
     uch.write_bit(fi.show_frame)?; // show frame
+
+    if fi.frame_type == FrameType::KEY || fi.frame_type == FrameType::INTRA_ONLY {
+        assert!(fi.intra_only == true);
+    }
     if fi.frame_type != FrameType::KEY {
         if fi.show_frame { assert!(fi.intra_only == false); }
         else { uch.write_bit( fi.intra_only )?; };
     };
-    uch.write_bit(true)?; // error resilient
-
-    if fi.intra_only { assert!( false ); };	// Not supported by rav1e
+    uch.write_bit(fi.error_resilient)?; // error resilient
 
     if fi.frame_type == FrameType::KEY || fi.intra_only {
         write_sequence_header(&mut uch, fi)?;
@@ -325,23 +343,32 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence,
 
     uch.write_bit(false)?; // no override frame size
 
-    if fi.frame_type == FrameType::KEY{
+    if fi.frame_type == FrameType::KEY {
         uch.write(1,0)?; // 8 bit video
         uch.write(4,0)?; // colorspace
         uch.write(1,0)?; // color range
-    } else {
-        // TODO: Inter frame info goes here
-
+    } else { // Inter frame info goes here
         if fi.intra_only {
             uch.write(1,0)?; // 8 bit video
             uch.write(4,0)?; // colorspace
             uch.write(1,0)?; // color range
+
+            uch.write(8,0)?; // refresh_frame_flags
         } else {
-        // TODO: More Inter frame info goes here
-
-
+            uch.write(8,0)?; // refresh_frame_flags
+            // TODO: More Inter frame info goes here
+            for i in 0..7 {
+                uch.write(3,0)?; // dummy ref_frame = 0 until real MC happens
+            }
+            uch.write_bit(true)?; // allow_high_precision_mv
+            uch.write_bit(false)?; // frame_interp_filter is NOT switchable
+            uch.write(2,0)?;	// EIGHTTAP_REGULAR
+            if !fi.intra_only && !fi.error_resilient {
+                uch.write_bit(false)?; // do not use_ref_frame_mvs
+            }
         }
     };
+
 
     uch.write_bit(false)?; // no superres
     uch.write_bit(false)?; // scaling active
@@ -357,9 +384,24 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence,
     uch.write_cdef()?;
     uch.write(6,0)?; // no y, u or v loop restoration
     uch.write_bit(false)?; // tx mode select
-    //uch.write_bit(false)?; // use hybrid pred
-    //uch.write_bit(false)?; // use compound pred
+
+    //fi.reference_mode = ReferenceMode::SINGLE;
+
+    if fi.reference_mode != ReferenceMode::SINGLE {
+        // setup_compound_reference_mode();
+    }
+
+    // if fi.intra_only == false {
+    //	   uch.write_bit(false)?; } // do not use inter_intra
+    // if fi.intra_only == false && fi.reference_mode != ReferenceMode::SINGLE {
+    //     uch.write_bit(false)?; } // do not allow_masked_compound
     uch.write_bit(fi.use_reduced_tx_set)?; // reduced tx
+
+    if fi.intra_only == false {
+        // write global motion info here
+        uch.write_bit(true)?; // TransformationType == IDENTITY
+    }
+
     uch.write_bit(true)?; // uniform tile spacing
     if fi.width > 64 {
         uch.write(1,0)?; // tile cols
