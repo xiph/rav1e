@@ -157,7 +157,7 @@ pub enum FrameType {
     S,
 }
 
-const REFERENCE_MODES: usize = 3;
+//const REFERENCE_MODES: usize = 3;
 
 #[allow(dead_code,non_camel_case_types)]
 #[derive(Debug,PartialEq,EnumIterator)]
@@ -166,6 +166,29 @@ pub enum ReferenceMode {
   COMPOUND = 1,
   SELECT = 2,
 }
+
+/*const NONE_FRAME: isize = -1;
+const INTRA_FRAME: usize = 0;*/
+const LAST_FRAME: usize = 1;
+
+/*const LAST2_FRAME: usize = 2;
+const LAST3_FRAME: usize = 3;
+const GOLDEN_FRAME: usize = 4;
+const BWDREF_FRAME: usize = 5;
+const ALTREF2_FRAME: usize = 6;*/
+const ALTREF_FRAME: usize = 7;
+/*const LAST_REF_FRAMES: usize = LAST3_FRAME - LAST_FRAME + 1;
+
+const INTER_REFS_PER_FRAME: usize = ALTREF_FRAME - LAST_FRAME + 1;
+const TOTAL_REFS_PER_FRAME: usize = ALTREF_FRAME - INTRA_FRAME + 1;
+
+const FWD_REFS: usize = GOLDEN_FRAME - LAST_FRAME + 1;
+//const FWD_RF_OFFSET(ref) (ref - LAST_FRAME)
+const BWD_REFS: usize = ALTREF_FRAME - BWDREF_FRAME + 1;
+//const BWD_RF_OFFSET(ref) (ref - BWDREF_FRAME)
+
+const SINGLE_REFS: usize = FWD_REFS + BWD_REFS;
+*/
 
 impl fmt::Display for FrameType{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -268,6 +291,8 @@ trait UncompressedHeader {
     fn write_frame_size(&mut self, fi: &FrameInvariants) -> Result<(), std::io::Error>;
     fn write_sequence_header(&mut self, fi: &FrameInvariants)
                                     -> Result<(), std::io::Error>;
+    fn write_bitdepth_colorspace_sampling(&mut self) -> Result<(), std::io::Error>;
+    fn write_frame_setup(&mut self) -> Result<(), std::io::Error>;
     fn write_loop_filter(&mut self) -> Result<(), std::io::Error>;
     fn write_cdef(&mut self) -> Result<(), std::io::Error>;
 }
@@ -292,6 +317,17 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         self.write(1,0)?; // don't use frame ids
         self.write(1,0)?; // screen content tools forced
         self.write(1,0)?; // screen content tools forced off
+        Ok(())
+    }
+    fn write_bitdepth_colorspace_sampling(&mut self) -> Result<(), std::io::Error> {
+        self.write(1,0)?; // 8 bit video
+        self.write(4,0)?; // colorspace
+        self.write(1,0)?; // color range
+        Ok(())
+    }
+    fn write_frame_setup(&mut self) -> Result<(), std::io::Error> {
+        self.write_bit(false)?; // no superres
+        self.write_bit(false)?; // scaling active
         Ok(())
     }
     fn write_loop_filter(&mut self) -> Result<(), std::io::Error> {
@@ -344,24 +380,20 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence,
     uch.write_bit(false)?; // no override frame size
 
     if fi.frame_type == FrameType::KEY {
-        uch.write(1,0)?; // 8 bit video
-        uch.write(4,0)?; // colorspace
-        uch.write(1,0)?; // color range
-
-
+        uch.write_bitdepth_colorspace_sampling()?;
+        uch.write_frame_setup()?;
     } else { // Inter frame info goes here
         if fi.intra_only {
-            uch.write(1,0)?; // 8 bit video
-            uch.write(4,0)?; // colorspace
-            uch.write(1,0)?; // color range
-
+            uch.write_bitdepth_colorspace_sampling()?;
             uch.write(8,0)?; // refresh_frame_flags
+            uch.write_frame_setup()?;
         } else {
             uch.write(8,0)?; // refresh_frame_flags
             // TODO: More Inter frame info goes here
             for _ in 0..7 {
                 uch.write(3,0)?; // dummy ref_frame = 0 until real MC happens
             }
+            uch.write_frame_setup()?;
             uch.write_bit(true)?; // allow_high_precision_mv
             uch.write_bit(false)?; // frame_interp_filter is NOT switchable
             uch.write(2,0)?;	// EIGHTTAP_REGULAR
@@ -372,18 +404,15 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence,
     };
 
 
-    uch.write_bit(false)?; // no superres
-    uch.write_bit(false)?; // scaling active
-
     uch.write(3,0x0)?; // frame context
     uch.write_loop_filter()?;
     uch.write(8,fi.qindex as u8)?; // qindex
     uch.write_bit(false)?; // y dc delta q
     uch.write_bit(false)?; // uv dc delta q
     uch.write_bit(false)?; // uv ac delta q
+    uch.write_bit(false)?; // no qm
     uch.write_bit(false)?; // segmentation off
     uch.write_bit(false)?; // no delta q
-    uch.write_bit(false)?; // no qm
     uch.write_cdef()?;
     uch.write(6,0)?; // no y, u or v loop restoration
     uch.write_bit(false)?; // tx mode select
@@ -394,15 +423,18 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence,
         // setup_compound_reference_mode();
     }
 
-    // if fi.intra_only == false {
-    //	   uch.write_bit(false)?; } // do not use inter_intra
-    // if fi.intra_only == false && fi.reference_mode != ReferenceMode::SINGLE {
-    //     uch.write_bit(false)?; } // do not allow_masked_compound
+    if !fi.intra_only {
+        uch.write_bit(false)?; } // do not use inter_intra
+    if !fi.intra_only && fi.reference_mode != ReferenceMode::SINGLE {
+        uch.write_bit(false)?; } // do not allow_masked_compound
+
     uch.write_bit(fi.use_reduced_tx_set)?; // reduced tx
 
     if fi.intra_only == false {
         // write global motion info here
-        uch.write_bit(true)?; // TransformationType == IDENTITY
+        for _ in LAST_FRAME..ALTREF_FRAME+1 {
+            uch.write_bit(false)?; // TransformationType == IDENTITY
+        }
     }
 
     uch.write_bit(true)?; // uniform tile spacing
