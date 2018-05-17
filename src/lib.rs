@@ -265,6 +265,8 @@ pub fn write_ivf_frame(output_file: &mut Write, pts: u64, data: &[u8]) {
 
 trait UncompressedHeader {
     fn write_frame_size(&mut self, fi: &FrameInvariants) -> Result<(), std::io::Error>;
+    fn write_sequence_header(&mut self, fi: &FrameInvariants)
+                                    -> Result<(), std::io::Error>;
     fn write_loop_filter(&mut self) -> Result<(), std::io::Error>;
     fn write_cdef(&mut self) -> Result<(), std::io::Error>;
 }
@@ -283,6 +285,14 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         self.write(height_bits, (fi.height - 1) as u16)?;
         Ok(())
     }
+    fn write_sequence_header(&mut self, fi: &FrameInvariants)
+        -> Result<(), std::io::Error> {
+        self.write_frame_size(fi)?;
+        self.write(1,0)?; // don't use frame ids
+        self.write(1,0)?; // screen content tools forced
+        self.write(1,0)?; // screen content tools forced off
+        Ok(())
+    }
     fn write_loop_filter(&mut self) -> Result<(), std::io::Error> {
         self.write(6,0)?; // loop filter level 0
         self.write(6,0)?; // loop filter level 1
@@ -298,16 +308,6 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         }
         Ok(())
     }
-}
-
-fn write_sequence_header(uch: &mut BitWriter<BE>, fi: &FrameInvariants)
-    -> Result<(), std::io::Error> {
-    uch.write_frame_size(fi)?;
-    uch.write(1,0)?; // don't use frame ids
-    uch.write(1,0)?; // screen content tools forced
-    uch.write(1,0)?; // screen content tools forced off
-
-    Ok(())
 }
 
 fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence,
@@ -335,7 +335,7 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence,
     uch.write_bit(fi.error_resilient)?; // error resilient
 
     if fi.frame_type == FrameType::KEY || fi.intra_only {
-        write_sequence_header(&mut uch, fi)?;
+        uch.write_sequence_header(fi)?;
     }
 
     //uch.write(8+7,0)?; // frame id
@@ -346,6 +346,8 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence,
         uch.write(1,0)?; // 8 bit video
         uch.write(4,0)?; // colorspace
         uch.write(1,0)?; // color range
+
+
     } else { // Inter frame info goes here
         if fi.intra_only {
             uch.write(1,0)?; // 8 bit video
@@ -356,7 +358,7 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence,
         } else {
             uch.write(8,0)?; // refresh_frame_flags
             // TODO: More Inter frame info goes here
-            for i in 0..7 {
+            for _ in 0..7 {
                 uch.write(3,0)?; // dummy ref_frame = 0 until real MC happens
             }
             uch.write_bit(true)?; // allow_high_precision_mv
@@ -371,6 +373,7 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence,
 
     uch.write_bit(false)?; // no superres
     uch.write_bit(false)?; // scaling active
+
     uch.write(3,0x0)?; // frame context
     uch.write_loop_filter()?;
     uch.write(8,fi.qindex as u8)?; // qindex
