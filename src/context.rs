@@ -512,17 +512,13 @@ static k_eob_group_start: [u16; 12] = [ 0, 1, 2, 3, 5, 9,
                                         17, 33, 65, 129, 257, 513 ];
 static k_eob_offset_bits: [u16; 12] = [ 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 ];
 
-static clip_max3: [u8; 256] = [
-  0, 1, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-  3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-  3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-  3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-  3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-  3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-  3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-  3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-  3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-  3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3 ];
+fn clip_max3(x: u8) -> u8 {
+    if x > 3 {
+        3
+    } else {
+        x
+    }
+}
 
 // The ctx offset table when TX is TX_CLASS_2D.
 // TX col and row indices are clamped to 4
@@ -1584,21 +1580,21 @@ impl ContextWriter {
                       bwl: usize, tx_class: TxClass) -> usize {
         // May version.
         // Note: AOMMIN(level, 3) is useless for decoder since level < 3.
-        let mut mag = clip_max3[levels[1] as usize];                 // { 0, 1 }
-        mag += clip_max3[levels[(1 << bwl) + TX_PAD_HOR] as usize];  // { 1, 0 }
+        let mut mag = clip_max3(levels[1]);                 // { 0, 1 }
+        mag += clip_max3(levels[(1 << bwl) + TX_PAD_HOR]);  // { 1, 0 }
 
         if tx_class == TX_CLASS_2D {
-          mag += clip_max3[levels[(1 << bwl) + TX_PAD_HOR + 1] as usize];          // { 1, 1 }
-          mag += clip_max3[levels[2] as usize];                                    // { 0, 2 }
-          mag += clip_max3[levels[(2 << bwl) + (2 << TX_PAD_HOR_LOG2)] as usize];  // { 2, 0 }
+          mag += clip_max3(levels[(1 << bwl) + TX_PAD_HOR + 1]);          // { 1, 1 }
+          mag += clip_max3(levels[2]);                                    // { 0, 2 }
+          mag += clip_max3(levels[(2 << bwl) + (2 << TX_PAD_HOR_LOG2)]);  // { 2, 0 }
         } else if tx_class == TX_CLASS_VERT {
-          mag += clip_max3[levels[(2 << bwl) + (2 << TX_PAD_HOR_LOG2)] as usize];  // { 2, 0 }
-          mag += clip_max3[levels[(3 << bwl) + (3 << TX_PAD_HOR_LOG2)] as usize];  // { 3, 0 }
-          mag += clip_max3[levels[(4 << bwl) + (4 << TX_PAD_HOR_LOG2)] as usize];  // { 4, 0 }
+          mag += clip_max3(levels[(2 << bwl) + (2 << TX_PAD_HOR_LOG2)]);  // { 2, 0 }
+          mag += clip_max3(levels[(3 << bwl) + (3 << TX_PAD_HOR_LOG2)]);  // { 3, 0 }
+          mag += clip_max3(levels[(4 << bwl) + (4 << TX_PAD_HOR_LOG2)]);  // { 4, 0 }
         } else {
-          mag += clip_max3[levels[2] as usize];  // { 0, 2 }
-          mag += clip_max3[levels[3] as usize];  // { 0, 3 }
-          mag += clip_max3[levels[4] as usize];  // { 0, 4 }
+          mag += clip_max3(levels[2]);  // { 0, 2 }
+          mag += clip_max3(levels[3]);  // { 0, 3 }
+          mag += clip_max3(levels[4]);  // { 0, 4 }
         }
 
         mag as usize
