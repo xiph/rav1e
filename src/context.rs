@@ -411,11 +411,6 @@ enum TailToken {
 }
 
 const PLANE_TYPES: usize = 2;
-const HEAD_TOKENS: usize = 5;
-const TAIL_TOKENS: usize = 9;
-const ENTROPY_TOKENS: usize = 12;
-const COEFF_CONTEXTS: usize = 6;
-const COEF_BANDS: usize = 6;
 const REF_TYPES: usize = 2;
 const SKIP_CONTEXTS: usize = 3;
 const INTRA_INTER_CONTEXTS: usize = 4;
@@ -889,10 +884,6 @@ extern {
 
     static av1_intra_scan_orders: [[SCAN_ORDER; TX_TYPES]; TX_SIZES_ALL];
 
-    fn build_tail_cdfs(cdf_tail: &mut [u16; ENTROPY_TOKENS + 1],
-                    cdf_head: &mut [u16; ENTROPY_TOKENS + 1],
-                    band_zero: c_int);
-
     // lv_map
     static av1_default_txb_skip_cdf: [[[u16; 3]; TXB_SKIP_CONTEXTS]; TX_SIZES];
     static av1_default_dc_sign_cdf: [[[u16; 3]; DC_SIGN_CONTEXTS]; TX_SIZES];
@@ -922,8 +913,6 @@ pub struct SCAN_ORDER {
   pub iscan: &'static [u16; 64*64],
   pub neighbors: &'static [u16; ((64*64)+1)*2]
 }
-
-type CoeffModel = [[[[u16; ENTROPY_TOKENS + 1];COEFF_CONTEXTS];COEF_BANDS];REF_TYPES];
 
 #[derive(Clone)]
 pub struct CDFContext {
