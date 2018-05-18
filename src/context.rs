@@ -1540,8 +1540,6 @@ impl ContextWriter {
     }
 */
     pub fn av1_get_adjusted_tx_size(&mut self, tx_size: TxSize) -> TxSize {
-      // TODO: Enable below commented out block if TX64X64 is enabled.
-/*
       if tx_size == TX_64X64 || tx_size == TX_64X32 || tx_size == TX_32X64 {
         return TX_32X32
       }
@@ -1551,7 +1549,6 @@ impl ContextWriter {
       if (tx_size == TX_64X16) {
         return TX_32X16
       }
-*/
       tx_size
     }
 
@@ -1657,8 +1654,8 @@ impl ContextWriter {
                                  tx_size: TxSize, tx_class: TxClass,
                                  coeff_contexts: &mut [i8]) {
         // TODO: If TX_64X64 is enabled, use av1_get_adjusted_tx_size()
-        let bwl = tx_size_wide_log2[tx_size as usize];
-        let height = tx_size_high[tx_size as usize];
+        let bwl = get_txb_bwl(av1_get_adjusted_tx_size(tx_size));
+        let height = tx_size_high[av1_get_adjusted_tx_size(tx_size) as usize];
         for i in 0..eob {
             let pos = scan[i as usize];
             coeff_contexts[pos as usize] =
