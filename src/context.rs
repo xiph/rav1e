@@ -1524,11 +1524,15 @@ pub struct ContextWriterCheckpoint {
 
 pub struct ContextWriter {
     pub w: ec::Writer,
-    pub fc: CDFContext,
-    pub bc: BlockContext
+    pub bc: BlockContext,
+    fc: CDFContext,
+    // fc_map: CDFMap, // For debugging purposes
 }
 
 impl ContextWriter {
+    pub fn new(w: ec::Writer, fc: CDFContext, bc: BlockContext) -> Self {
+        ContextWriter { w, fc, bc }
+    }
     fn cdf_element_prob(cdf: &[u16], element: usize) -> u16 {
       return if element > 0 { cdf[element - 1] } else { 32768 } - cdf[element];
     }

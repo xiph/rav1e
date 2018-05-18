@@ -590,11 +590,7 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
     let w = ec::Writer::new();
     let fc = CDFContext::new(fi.qindex as u8);
     let bc = BlockContext::new(fi.w_in_b, fi.h_in_b);
-    let mut cw = ContextWriter {
-        w: w,
-        fc: fc,
-        bc: bc,
-    };
+    let mut cw = ContextWriter::new(w, fc,  bc);
 
     for sby in 0..fi.sb_height {
         cw.bc.reset_left_contexts();
