@@ -1114,6 +1114,90 @@ impl CDFContext {
 
         c
     }
+
+    pub fn build_map(&self) -> Vec<(&'static str, usize, usize)> {
+        use std::mem::size_of_val;
+
+        let partition_cdf_start = self.partition_cdf.first().unwrap().as_ptr() as usize;
+        let partition_cdf_end = partition_cdf_start + size_of_val(&self.partition_cdf);
+        let kf_y_cdf_start = self.kf_y_cdf.first().unwrap().as_ptr() as usize;
+        let kf_y_cdf_end = kf_y_cdf_start + size_of_val(&self.kf_y_cdf);
+        let y_mode_cdf_start = self.y_mode_cdf.first().unwrap().as_ptr() as usize;
+        let y_mode_cdf_end = y_mode_cdf_start + size_of_val(&self.y_mode_cdf);
+        let uv_mode_cdf_start = self.uv_mode_cdf.first().unwrap().as_ptr() as usize;
+        let uv_mode_cdf_end = uv_mode_cdf_start + size_of_val(&self.uv_mode_cdf);
+        let intra_ext_tx_cdf_start = self.intra_ext_tx_cdf.first().unwrap().as_ptr() as usize;
+        let intra_ext_tx_cdf_end = intra_ext_tx_cdf_start + size_of_val(&self.intra_ext_tx_cdf);
+        let skip_cdfs_start = self.skip_cdfs.first().unwrap().as_ptr() as usize;
+        let skip_cdfs_end = skip_cdfs_start + size_of_val(&self.skip_cdfs);
+        let intra_inter_cdfs_start = self.intra_inter_cdfs.first().unwrap().as_ptr() as usize;
+        let intra_inter_cdfs_end = intra_inter_cdfs_start + size_of_val(&self.intra_inter_cdfs);
+        let angle_delta_cdf_start = self.angle_delta_cdf.first().unwrap().as_ptr() as usize;
+        let angle_delta_cdf_end = angle_delta_cdf_start + size_of_val(&self.angle_delta_cdf);
+        let txb_skip_cdf_start = self.txb_skip_cdf.first().unwrap().as_ptr() as usize;
+        let txb_skip_cdf_end = txb_skip_cdf_start + size_of_val(&self.txb_skip_cdf);
+        let dc_sign_cdf_start = self.dc_sign_cdf.first().unwrap().as_ptr() as usize;
+        let dc_sign_cdf_end = dc_sign_cdf_start + size_of_val(&self.dc_sign_cdf);
+        let eob_extra_cdf_start = self.eob_extra_cdf.first().unwrap().as_ptr() as usize;
+        let eob_extra_cdf_end = eob_extra_cdf_start + size_of_val(&self.eob_extra_cdf);
+        let eob_flag_cdf16_start = self.eob_flag_cdf16.first().unwrap().as_ptr() as usize;
+        let eob_flag_cdf16_end = eob_flag_cdf16_start + size_of_val(&self.eob_flag_cdf16);
+        let eob_flag_cdf32_start = self.eob_flag_cdf32.first().unwrap().as_ptr() as usize;
+        let eob_flag_cdf32_end = eob_flag_cdf32_start + size_of_val(&self.eob_flag_cdf32);
+        let eob_flag_cdf64_start = self.eob_flag_cdf64.first().unwrap().as_ptr() as usize;
+        let eob_flag_cdf64_end = eob_flag_cdf64_start + size_of_val(&self.eob_flag_cdf64);
+        let eob_flag_cdf128_start = self.eob_flag_cdf128.first().unwrap().as_ptr() as usize;
+        let eob_flag_cdf128_end = eob_flag_cdf128_start + size_of_val(&self.eob_flag_cdf128);
+        let eob_flag_cdf256_start = self.eob_flag_cdf256.first().unwrap().as_ptr() as usize;
+        let eob_flag_cdf256_end = eob_flag_cdf256_start + size_of_val(&self.eob_flag_cdf256);
+        let eob_flag_cdf512_start = self.eob_flag_cdf512.first().unwrap().as_ptr() as usize;
+        let eob_flag_cdf512_end = eob_flag_cdf512_start + size_of_val(&self.eob_flag_cdf512);
+        let eob_flag_cdf1024_start = self.eob_flag_cdf1024.first().unwrap().as_ptr() as usize;
+        let eob_flag_cdf1024_end = eob_flag_cdf1024_start + size_of_val(&self.eob_flag_cdf1024);
+        let coeff_base_eob_cdf_start = self.coeff_base_eob_cdf.first().unwrap().as_ptr() as usize;
+        let coeff_base_eob_cdf_end = coeff_base_eob_cdf_start + size_of_val(&self.coeff_base_eob_cdf);
+        let coeff_base_cdf_start = self.coeff_base_cdf.first().unwrap().as_ptr() as usize;
+        let coeff_base_cdf_end = coeff_base_cdf_start + size_of_val(&self.coeff_base_cdf);
+        let coeff_br_cdf_start = self.coeff_br_cdf.first().unwrap().as_ptr() as usize;
+        let coeff_br_cdf_end = coeff_br_cdf_start + size_of_val(&self.coeff_br_cdf);
+
+        vec![
+            ("partition_cdf", partition_cdf_start, partition_cdf_end),
+            ("kf_y_cdf", kf_y_cdf_start, kf_y_cdf_end),
+            ("y_mode_cdf", y_mode_cdf_start, y_mode_cdf_end),
+            ("uv_mode_cdf", uv_mode_cdf_start, uv_mode_cdf_end),
+            ("intra_ext_tx_cdf", intra_ext_tx_cdf_start, intra_ext_tx_cdf_end),
+            ("skip_cdfs", skip_cdfs_start, skip_cdfs_end),
+            ("intra_inter_cdfs", intra_inter_cdfs_start, intra_inter_cdfs_end),
+            ("angle_delta_cdf", angle_delta_cdf_start, angle_delta_cdf_end),
+            ("txb_skip_cdf", txb_skip_cdf_start, txb_skip_cdf_end),
+            ("dc_sign_cdf", dc_sign_cdf_start, dc_sign_cdf_end),
+            ("eob_extra_cdf", eob_extra_cdf_start, eob_extra_cdf_end),
+            ("eob_flag_cdf16", eob_flag_cdf16_start, eob_flag_cdf16_end),
+            ("eob_flag_cdf32", eob_flag_cdf32_start, eob_flag_cdf32_end),
+            ("eob_flag_cdf64", eob_flag_cdf64_start, eob_flag_cdf64_end),
+            ("eob_flag_cdf128", eob_flag_cdf128_start, eob_flag_cdf128_end),
+            ("eob_flag_cdf256", eob_flag_cdf256_start, eob_flag_cdf256_end),
+            ("eob_flag_cdf512", eob_flag_cdf512_start, eob_flag_cdf512_end),
+            ("eob_flag_cdf1024", eob_flag_cdf1024_start, eob_flag_cdf1024_end),
+            ("coeff_base_eob_cdf", coeff_base_eob_cdf_start, coeff_base_eob_cdf_end),
+            ("coeff_base_cdf", coeff_base_cdf_start, coeff_base_cdf_end),
+            ("coeff_br_cdf", coeff_br_cdf_start, coeff_br_cdf_end),
+        ]
+    }
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn cdf_map() {
+        use super::*;
+
+        let cdf = CDFContext::new(8);
+        let cdf_map = FieldMap{ map: cdf.build_map() };
+        let f = &cdf.partition_cdf[2];
+        cdf_map.lookup(f.as_ptr() as usize);
+    }
 }
 
 const SUPERBLOCK_TO_PLANE_SHIFT: usize = MAX_SB_SIZE_LOG2;
@@ -1515,6 +1599,36 @@ impl BlockContext {
     }
 }
 
+#[derive(Debug, Default)]
+struct FieldMap {
+    map: Vec<(&'static str, usize, usize)>,
+}
+
+impl FieldMap {
+    /// Print the field the address belong to
+    fn lookup(&self, addr: usize) {
+        for (name, start, end) in &self.map {
+            // eprintln!("{} {} {} val {}", name, start, end, addr);
+            if addr >= *start && addr < *end {
+                eprintln!(" CDF {}", name);
+                eprintln!("");
+                return;
+            }
+        }
+
+        eprintln!("  CDF address not found {}", addr);
+    }
+}
+
+macro_rules! symbol {
+    ($self:ident, $s:expr, $cdf:expr, $nsymbs:expr) => {
+        $self.w.symbol($s, $cdf, $nsymbs);
+        if let Some(map) = $self.fc_map.as_ref() {
+            map.lookup($cdf.as_ptr() as usize);
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct ContextWriterCheckpoint {
     pub w: ec::WriterCheckpoint,
@@ -1526,13 +1640,21 @@ pub struct ContextWriter {
     pub w: ec::Writer,
     pub bc: BlockContext,
     fc: CDFContext,
-    // fc_map: CDFMap, // For debugging purposes
+    fc_map: Option<FieldMap>, // For debugging purposes
 }
 
 impl ContextWriter {
     pub fn new(w: ec::Writer, fc: CDFContext, bc: BlockContext) -> Self {
-        ContextWriter { w, fc, bc }
+        use std::env;
+
+        let mut cw = ContextWriter { w, fc, bc, fc_map: Default::default() };
+        if env::var_os("RAV1E_DEBUG").is_some() {
+            cw.fc_map = Some(FieldMap{ map: cw.fc.build_map() });
+        }
+
+        cw
     }
+
     fn cdf_element_prob(cdf: &[u16], element: usize) -> u16 {
       return if element > 0 { cdf[element - 1] } else { 32768 } - cdf[element];
     }
@@ -1566,7 +1688,7 @@ impl ContextWriter {
         }
 
         if has_rows && has_cols {
-            self.w.symbol(p as u32, partition_cdf, PARTITION_TYPES);
+            symbol!(self, p as u32, partition_cdf, PARTITION_TYPES);
         } else if !has_rows && has_cols {
             let mut cdf = [0u16; 2];
             ContextWriter::partition_gather_vert_alike(&mut cdf, partition_cdf, bsize);
@@ -1581,23 +1703,23 @@ impl ContextWriter {
         let above_mode = self.bc.above_of(bo).mode as usize;
         let left_mode = self.bc.left_of(bo).mode as usize;
         let cdf = &mut self.fc.kf_y_cdf[above_mode][left_mode];
-        self.w.symbol(mode as u32, cdf, INTRA_MODES);
+        symbol!(self, mode as u32, cdf, INTRA_MODES);
     }
     pub fn write_intra_mode(&mut self, bsize: BlockSize, mode: PredictionMode) {
         let cdf = &mut self.fc.y_mode_cdf[size_group_lookup[bsize as usize] as usize];
-        self.w.symbol(mode as u32, cdf, INTRA_MODES);
+        symbol!(self, mode as u32, cdf, INTRA_MODES);
     }
     pub fn write_intra_uv_mode(&mut self, uv_mode: PredictionMode, y_mode: PredictionMode,
                                bs: BlockSize) {
         let cdf = &mut self.fc.uv_mode_cdf[bs.cfl_allowed() as usize][y_mode as usize];
         if bs.cfl_allowed() {
-            self.w.symbol(uv_mode as u32, cdf, UV_INTRA_MODES);
+            symbol!(self, uv_mode as u32, cdf, UV_INTRA_MODES);
         } else {
-            self.w.symbol(uv_mode as u32, cdf, UV_INTRA_MODES - 1);
+            symbol!(self, uv_mode as u32, cdf, UV_INTRA_MODES - 1);
         }
     }
     pub fn write_angle_delta(&mut self, angle: i8, mode: PredictionMode) {
-    self.w.symbol((angle + MAX_ANGLE_DELTA as i8) as u32,
+    symbol!(self, (angle + MAX_ANGLE_DELTA as i8) as u32,
                      &mut self.fc.angle_delta_cdf[mode as usize - PredictionMode::V_PRED as usize],
                      2 * MAX_ANGLE_DELTA + 1);
     }
@@ -1623,7 +1745,7 @@ impl ContextWriter {
               // intra_dir =
               // fimode_to_intradir[mbmi->filter_intra_mode_info.filter_intra_mode];
 
-              self.w.symbol(
+              symbol!(self,
                   av1_ext_tx_intra_ind[tx_set_type as usize][tx_type as usize],
                   &mut self.fc.intra_ext_tx_cdf[eset as usize][square_tx_size as usize][intra_dir as usize],
                   num_ext_tx_set[tx_set_type as usize]);
@@ -1632,11 +1754,11 @@ impl ContextWriter {
     }
     pub fn write_skip(&mut self, bo: &BlockOffset, skip: bool) {
         let ctx = self.bc.skip_context(bo);
-        self.w.symbol(skip as u32, &mut self.fc.skip_cdfs[ctx], 2);
+        symbol!(self, skip as u32, &mut self.fc.skip_cdfs[ctx], 2);
     }
     pub fn write_inter_mode(&mut self, bo: &BlockOffset, is_inter: bool) {
         let ctx = self.bc.intra_inter_context(bo);
-        self.w.symbol(is_inter as u32, &mut self.fc.intra_inter_cdfs[ctx], 2);
+        symbol!(self, is_inter as u32, &mut self.fc.intra_inter_cdfs[ctx], 2);
     }
 
     pub fn get_txsize_entropy_ctx(&mut self, tx_size: TxSize) -> usize {
@@ -1878,7 +2000,7 @@ impl ContextWriter {
 
         {
           let cdf = &mut self.fc.txb_skip_cdf[txs_ctx][txb_ctx.txb_skip_ctx];
-          self.w.symbol((eob == 0) as u32, cdf, 2);
+          symbol!(self, (eob == 0) as u32, cdf, 2);
         }
 
         if eob == 0 {
@@ -1907,19 +2029,19 @@ impl ContextWriter {
         let eob_multi_ctx: usize = if tx_class == TX_CLASS_2D { 0 } else { 1 };
 
         match eob_multi_size {
-          0 => { self.w.symbol(eob_pt - 1,
+          0 => { symbol!(self, eob_pt - 1,
                      &mut self.fc.eob_flag_cdf16[plane_type][eob_multi_ctx], 5); }
-          1 => { self.w.symbol(eob_pt - 1,
+          1 => { symbol!(self, eob_pt - 1,
                      &mut self.fc.eob_flag_cdf32[plane_type][eob_multi_ctx], 6); }
-          2 => { self.w.symbol(eob_pt - 1,
+          2 => { symbol!(self, eob_pt - 1,
                      &mut self.fc.eob_flag_cdf64[plane_type][eob_multi_ctx], 7); }
-          3 => { self.w.symbol(eob_pt - 1,
+          3 => { symbol!(self, eob_pt - 1,
                      &mut self.fc.eob_flag_cdf128[plane_type][eob_multi_ctx], 8); }
-          4 => { self.w.symbol(eob_pt - 1,
+          4 => { symbol!(self, eob_pt - 1,
                      &mut self.fc.eob_flag_cdf256[plane_type][eob_multi_ctx], 9); }
-          5 => { self.w.symbol(eob_pt - 1,
+          5 => { symbol!(self, eob_pt - 1,
                      &mut self.fc.eob_flag_cdf512[plane_type][eob_multi_ctx], 10); }
-          _ => { self.w.symbol(eob_pt - 1,
+          _ => { symbol!(self, eob_pt - 1,
                      &mut self.fc.eob_flag_cdf1024[plane_type][eob_multi_ctx], 11); }
         };
 
@@ -1928,7 +2050,7 @@ impl ContextWriter {
         if eob_offset_bits > 0 {
             let mut eob_shift = eob_offset_bits - 1;
             let mut bit = if (eob_extra & (1 << eob_shift)) != 0 { 1 } else { 0 } as u32;
-            self.w.symbol(bit,
+            symbol!(self, bit,
               &mut self.fc.eob_extra_cdf[txs_ctx][plane_type][eob_pt as usize],
                              2);
             for i in 1..eob_offset_bits {
@@ -1953,11 +2075,11 @@ impl ContextWriter {
             let level: u32 = v.abs() as u32;
 
             if c == eob - 1 {
-                self.w.symbol((cmp::min(level, 3) - 1) as u32,
+                symbol!(self, (cmp::min(level, 3) - 1) as u32,
                     &mut self.fc.coeff_base_eob_cdf[
                     txs_ctx][plane_type][coeff_ctx as usize], 3);
             } else {
-                self.w.symbol((cmp::min(level, 3)) as u32,
+                symbol!(self, (cmp::min(level, 3)) as u32,
                     &mut self.fc.coeff_base_cdf[txs_ctx][plane_type][coeff_ctx as usize],
                                  4);
             }
@@ -1976,7 +2098,7 @@ impl ContextWriter {
             if level == 0 { continue; }
 
             if c == 0 {
-                self.w.symbol(sign, &mut self.fc.dc_sign_cdf[plane_type]
+                symbol!(self, sign, &mut self.fc.dc_sign_cdf[plane_type]
                               [txb_ctx.dc_sign_ctx], 2);
             } else {
                 self.w.bit(sign as u16);
@@ -1998,7 +2120,7 @@ impl ContextWriter {
                 loop {
                   if idx >= COEFF_BASE_RANGE { break; }
                   let k = cmp::min(base_range - idx as u16, BR_CDF_SIZE as u16 - 1);
-                  self.w.symbol(k as u32, &mut self.fc.coeff_br_cdf[
+                  symbol!(self, k as u32, &mut self.fc.coeff_br_cdf[
                           cmp::min(txs_ctx, TxSize::TX_32X32 as usize)]
                           [plane_type][br_ctx], BR_CDF_SIZE);
                   if k < BR_CDF_SIZE as u16 - 1 { break; }
@@ -2031,5 +2153,8 @@ impl ContextWriter {
         self.w.rollback(&checkpoint.w);
         self.fc = checkpoint.fc.clone();
         self.bc = checkpoint.bc.clone();
+        if self.fc_map.is_some() {
+            self.fc_map = Some(FieldMap { map: self.fc.build_map() });
+        }
     }
 }

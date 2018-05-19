@@ -163,11 +163,7 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
     let fc = CDFContext::new(fi.qindex as u8);
     let bc = BlockContext::new(fi.sb_width * 16, fi.sb_height * 16);
     let mut fs = FrameState::new(&fi);
-    let mut cw = ContextWriter {
-        w: w,
-        fc: fc,
-        bc: bc,
-    };
+    let mut cw = ContextWriter::new(w, fc, bc);
 
     let tx_type = TxType::DCT_DCT;
 
