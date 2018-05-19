@@ -121,16 +121,16 @@ static av1_ext_tx_inter_ind: [[usize; TX_TYPES]; EXT_TX_SETS_INTER] =
     ];
 //static ext_tx_cnt_intra: [usize;EXT_TX_SETS_INTRA] = [ 1, 7, 5 ];
 
-static av1_ext_tx_ind: [[usize; TX_TYPES]; EXT_TX_SET_TYPES] = [ 
-    [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],  
-    [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],  
-    [ 1, 3, 4, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],  
-    [ 1, 5, 6, 4, 0, 0, 0, 0, 0, 0, 2, 3, 0, 0, 0, 0 ],  
-    [ 1, 5, 6, 4, 0, 0, 0, 0, 0, 0, 2, 3, 0, 0, 0, 0 ],  
-    [ 1, 2, 3, 6, 4, 5, 7, 8, 9, 0, 0, 0, 0, 0, 0, 0 ],  
-    [ 3, 4, 5, 8, 6, 7, 9, 10, 11, 0, 1, 2, 0, 0, 0, 0 ],  
-    [ 7, 8, 9, 12, 10, 11, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6 ],  
-    [ 7, 8, 9, 12, 10, 11, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6 ],  
+static av1_ext_tx_ind: [[usize; TX_TYPES]; EXT_TX_SET_TYPES] = [
+    [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+    [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+    [ 1, 3, 4, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
+    [ 1, 5, 6, 4, 0, 0, 0, 0, 0, 0, 2, 3, 0, 0, 0, 0 ],
+    [ 1, 5, 6, 4, 0, 0, 0, 0, 0, 0, 2, 3, 0, 0, 0, 0 ],
+    [ 1, 2, 3, 6, 4, 5, 7, 8, 9, 0, 0, 0, 0, 0, 0, 0 ],
+    [ 3, 4, 5, 8, 6, 7, 9, 10, 11, 0, 1, 2, 0, 0, 0, 0 ],
+    [ 7, 8, 9, 12, 10, 11, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6 ],
+    [ 7, 8, 9, 12, 10, 11, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6 ],
 ];
 
 
@@ -901,7 +901,7 @@ extern {
     static av1_default_txb_skip_cdf: [[[u16; 3]; TXB_SKIP_CONTEXTS]; TX_SIZES];
     static av1_default_dc_sign_cdf: [[[u16; 3]; DC_SIGN_CONTEXTS]; TX_SIZES];
     static av1_default_eob_extra_cdf: [[[[u16; 3]; EOB_COEF_CONTEXTS]; PLANE_TYPES]; TX_SIZES];
-    
+
     static av1_default_eob_multi16: [[[u16; 5+1]; 2]; PLANE_TYPES];
     static av1_default_eob_multi32: [[[u16; 6+1]; 2]; PLANE_TYPES];
     static av1_default_eob_multi64: [[[u16; 7+1]; 2]; PLANE_TYPES];
@@ -1099,7 +1099,7 @@ pub struct BlockContext {
 impl BlockContext {
     pub fn new(cols: usize, rows: usize) -> BlockContext {
         // Align power of two
-        let aligned_cols = (cols + ((1 << MAX_MIB_SIZE_LOG2) - 1)) & 
+        let aligned_cols = (cols + ((1 << MAX_MIB_SIZE_LOG2) - 1)) &
                             !((1 << MAX_MIB_SIZE_LOG2) - 1);
         BlockContext {
             cols,
@@ -1323,13 +1323,13 @@ impl BlockContext {
         for k in 0..txb_w_unit {
             let sign = self.above_coeff_context[plane][bo.x + k] >> COEFF_CONTEXT_BITS;
             assert!(sign <= 2);
-            dc_sign += signs[sign as usize] as i16; 
+            dc_sign += signs[sign as usize] as i16;
         }
 
         for k in 0..txb_h_unit {
             let sign = self.left_coeff_context[plane][bo.y_in_sb() + k] >> COEFF_CONTEXT_BITS;
             assert!(sign <= 2);
-            dc_sign += signs[sign as usize] as i16; 
+            dc_sign += signs[sign as usize] as i16;
         }
 
         txb_ctx.dc_sign_ctx = dc_sign_contexts[(dc_sign + 2 * MAX_TX_SIZE_UNIT as i16) as usize];
@@ -1482,7 +1482,7 @@ impl ContextWriter {
                      2 * MAX_ANGLE_DELTA + 1);
     }
 
-    pub fn write_tx_type_lv_map(&mut self, tx_size: TxSize, tx_type: TxType, 
+    pub fn write_tx_type_lv_map(&mut self, tx_size: TxSize, tx_type: TxType,
                                 y_mode: PredictionMode, is_inter: bool,
                                 use_reduced_tx_set: bool) {
         let square_tx_size = TXSIZE_SQR_MAP[tx_size as usize];
@@ -1523,7 +1523,7 @@ impl ContextWriter {
       (TXSIZE_SQR_MAP[tx_size as usize] as usize + TXSIZE_SQR_MAP[tx_size as usize] as usize + 1) >> 1
     }
 
-    pub fn txb_init_levels(&mut self, coeffs: &[i32], width: usize, height: usize, 
+    pub fn txb_init_levels(&mut self, coeffs: &[i32], width: usize, height: usize,
                                 levels_buf: &mut [u8]) {
         let mut offset = TX_PAD_TOP * (width + TX_PAD_HOR);
 
@@ -1893,7 +1893,7 @@ impl ContextWriter {
         }
 
         cul_level = cmp::min(COEFF_CONTEXT_MASK as u32, cul_level);
-        
+
         self.bc.set_dc_sign(&mut cul_level, coeffs[0]);
 
         self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, cul_level as u8);
