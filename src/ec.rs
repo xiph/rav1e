@@ -274,6 +274,24 @@ impl Writer {
         cdf[nsymbs] += (cdf[nsymbs] < 32) as u16;
     }
     pub fn symbol(&mut self, s: u32, cdf: &mut [u16], nsymbs: usize) {
+        use backtrace;
+        let mut depth = 3;
+        backtrace::trace(|frame| {
+            let ip = frame.ip();
+
+            depth -= 1;
+
+            if depth == 0 {
+                backtrace::resolve(ip, |symbol| {
+                    if let Some(name) = symbol.name() {
+                        eprintln!("Writing symbol {} from {}", s, name);
+                    }
+                });
+                false
+            } else {
+                true
+            }
+        });
         self.cdf(s, &cdf[..nsymbs]);
         Writer::update_cdf(cdf, s, nsymbs);
     }

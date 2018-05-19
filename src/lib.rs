@@ -1,6 +1,7 @@
 #![allow(safe_extern_statics)]
 
 extern crate bitstream_io;
+extern crate backtrace;
 extern crate byteorder;
 extern crate clap;
 extern crate libc;

@@ -14,6 +14,7 @@ rand = "0.4"
 rustyline = "1"
 y4m = "0.1"
 enum-iterator-derive = "0.1.1"
+backtrace = "0.3"
 
 [build-dependencies]
 cc = "1"
