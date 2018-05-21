@@ -44,7 +44,7 @@ impl BlockSize {
 }
 
 pub const TX_SIZES: usize = 4;
-pub const TX_SIZES_ALL: usize = 14;
+pub const TX_SIZES_ALL: usize = 14+5;
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 pub enum TxSize {
@@ -52,16 +52,21 @@ pub enum TxSize {
     TX_8X8,
     TX_16X16,
     TX_32X32,
+    TX_64X64,
     TX_4X8,
     TX_8X4,
     TX_8X16,
     TX_16X8,
     TX_16X32,
     TX_32X16,
+    TX_32X64,
+    TX_64X32,
     TX_4X16,
     TX_16X4,
     TX_8X32,
     TX_32X8,
+    TX_16X64,
+    TX_64X16
 }
 
 impl TxSize {
