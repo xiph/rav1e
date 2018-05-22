@@ -11,7 +11,6 @@ use partition::TxSize::*;
 use partition::TxType::*;
 use partition::PredictionMode::*;
 use plane::*;
-use libc::*;
 
 const PLANES: usize = 3;
 
