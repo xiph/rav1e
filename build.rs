@@ -58,6 +58,7 @@ fn main() {
         .raw_line("#![allow(non_snake_case)]")
         .raw_line("#![allow(non_upper_case_globals)]")
         .blacklist_type("max_align_t")
+        .rustfmt_bindings(false)
         .header("data/aom.h");
 
     for header in headers {
