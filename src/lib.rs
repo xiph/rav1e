@@ -757,6 +757,8 @@ pub fn process_frame(sequence: &Sequence, fi: &FrameInvariants,
     }
     let width = fi.width;
     let height = fi.height;
+    let y4m_bits = y4m_dec.get_bit_depth();
+    let y4m_bytes = y4m_dec.get_bytes_per_sample();
     match y4m_dec.read_frame() {
         Ok(y4m_frame) => {
             let y4m_y = y4m_frame.get_y_plane();
@@ -764,9 +766,23 @@ pub fn process_frame(sequence: &Sequence, fi: &FrameInvariants,
             let y4m_v = y4m_frame.get_v_plane();
             eprintln!("{}", fi);
             let mut fs = FrameState::new(&fi);
-            fs.input.planes[0].copy_from_raw_u8(&y4m_y, width);
-            fs.input.planes[1].copy_from_raw_u8(&y4m_u, width/2);
-            fs.input.planes[2].copy_from_raw_u8(&y4m_v, width/2);
+            fs.input.planes[0].copy_from_raw_u8(&y4m_y, width*y4m_bytes, y4m_bytes);
+            fs.input.planes[1].copy_from_raw_u8(&y4m_u, width*y4m_bytes/2, y4m_bytes);
+            fs.input.planes[2].copy_from_raw_u8(&y4m_v, width*y4m_bytes/2, y4m_bytes);
+
+            // We cannot currently encode > 8 bit input!
+            match y4m_bits {
+                8 => {},
+                10 | 12 => {
+                    for plane in 0..3 {
+                        for row in fs.input.planes[plane].data.chunks_mut(fs.rec.planes[plane].cfg.stride) {
+                            for col in row.iter_mut() { *col >>= y4m_bits-8 }
+                        }
+                    }
+                },
+                _ => panic! ("unknown input bit depth!"),
+            }
+
             let packet = encode_frame(&sequence, &fi, &mut fs, &last_rec);
             write_ivf_frame(output_file, fi.number, packet.as_ref());
             match y4m_enc {
