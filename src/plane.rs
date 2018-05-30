@@ -57,11 +57,24 @@ impl Plane {
         self.data[y*self.cfg.stride + x]
     }
 
-    pub fn copy_from_raw_u8(&mut self, source: &[u8], source_stride: usize) {
+    pub fn copy_from_raw_u8(&mut self,
+                            source: &[u8],
+                            source_stride: usize,
+                            source_bytewidth: usize) {
         let stride = self.cfg.stride;
         for (self_row, source_row) in self.data.chunks_mut(stride).zip(source.chunks(source_stride)) {
-            for (self_pixel, source_pixel) in self_row.iter_mut().zip(source_row.iter()) {
-                *self_pixel = *source_pixel as u16;
+            match source_bytewidth {
+                1 =>
+                    for (self_pixel, source_pixel) in self_row.iter_mut().zip(source_row.iter()) {
+                        *self_pixel = *source_pixel as u16;
+                    },
+                2 => {
+                    for (self_pixel, bytes) in self_row.iter_mut().zip(source_row.chunks(2)) {
+                        *self_pixel = (bytes[1] as u16) << 8 | (bytes[0] as u16);
+                    }
+                },
+
+                _ => {}
             }
         }
     }
