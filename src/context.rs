@@ -1317,6 +1317,27 @@ impl BlockContext {
         }
     }
 
+    pub fn checkpoint(&mut self) -> BlockContext {
+        BlockContext {
+            cols: self.cols,
+            rows: self.rows,
+            above_partition_context: self.above_partition_context.clone(),
+            left_partition_context: self.left_partition_context.clone(),
+            above_coeff_context: self.above_coeff_context.clone(),
+            left_coeff_context: self.left_coeff_context.clone(),
+            blocks: vec![vec![Block::default(); 0]; 0]
+        }
+    }
+
+    pub fn rollback(&mut self, checkpoint: &BlockContext) {
+        self.cols = checkpoint.cols;
+        self.rows = checkpoint.rows;
+        self.above_partition_context = checkpoint.above_partition_context.clone();
+        self.left_partition_context = checkpoint.left_partition_context.clone();
+        self.above_coeff_context = checkpoint.above_coeff_context.clone();
+        self.left_coeff_context = checkpoint.left_coeff_context.clone();
+    }
+
     pub fn at(&mut self, bo: &BlockOffset) -> &mut Block {
         &mut self.blocks[bo.y][bo.x]
     }
@@ -2144,14 +2165,14 @@ impl ContextWriter {
         ContextWriterCheckpoint {
             w: self.w.checkpoint(),
             fc: self.fc.clone(),
-            bc: self.bc.clone()
+            bc: self.bc.checkpoint()
         }
     }
 
     pub fn rollback(&mut self, checkpoint: ContextWriterCheckpoint) {
         self.w.rollback(&checkpoint.w);
         self.fc = checkpoint.fc.clone();
-        self.bc = checkpoint.bc.clone();
+        self.bc.rollback(&checkpoint.bc);
         if self.fc_map.is_some() {
             self.fc_map = Some(FieldMap { map: self.fc.build_map() });
         }
