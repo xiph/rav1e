@@ -508,7 +508,9 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
 
     if fi.frame_type == FrameType::INTER {
         cw.write_inter_mode(bo, is_inter);
-        cw.write_intra_mode(bsize, mode);
+        if !is_inter {
+            cw.write_intra_mode(bsize, mode);
+        }
     } else {
         cw.write_intra_mode_kf(bo, mode);
     }
