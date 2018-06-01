@@ -128,7 +128,7 @@ fn intra_v_pred_aom(b: &mut Bencher) {
     })
 }
 
-fn intra_paeth_native(b: &mut Bencher) {
+fn intra_paeth_pred_native(b: &mut Bencher) {
     let mut ra = ChaChaRng::new_unseeded();
     let (above, left, mut o2) = setup_pred(&mut ra);
 
