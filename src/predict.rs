@@ -3,6 +3,7 @@ use libc;
 use partition::*;
 
 pub static RAV1E_INTRA_MODES: &'static [PredictionMode] = &[PredictionMode::DC_PRED];
+pub static RAV1E_PARTITION_TYPES: &'static [PartitionType] = &[PartitionType::PARTITION_NONE, PartitionType::PARTITION_SPLIT];
 
 extern {
     #[cfg(test)]

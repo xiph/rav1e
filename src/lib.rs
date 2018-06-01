@@ -605,6 +605,7 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
 fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
                   cw: &mut ContextWriter,
                   bsize: BlockSize, bo: &BlockOffset) -> RDOOutput {
+
     let q = dc_q(fi.qindex) as f64;
     let q0 = q / 8.0_f64;	// Convert q into Q0 precision, given thatn libaom quantizers are Q3.
 
@@ -612,7 +613,7 @@ fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
     let lambda = q0*q0*2.0_f64.log2()/6.0;	// Use Q0 quantizer since lambda will be applied to Q0 pixel domain
 
     let mut best_mode = PredictionMode::DC_PRED;
-    let mut best_rd = std::f64::MAX;
+    let mut best_rd = std::u64::MAX as f64;
     let tell = cw.w.tell_frac();
     let w = block_size_wide[bsize as usize];
     let h = block_size_high[bsize as usize];
@@ -621,6 +622,7 @@ fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
         if fi.frame_type == FrameType::KEY && mode >= PredictionMode::NEARESTMV {
           break;
         }
+
         let checkpoint = cw.checkpoint();
 
         encode_block(fi, fs, cw, mode, bsize, bo);
@@ -640,13 +642,111 @@ fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
 
     assert!(best_rd as i64 >= 0);
 
+    let rdo_output = RDOOutput {
+        rd_cost: best_rd as u64,
+        part_type: PartitionType::PARTITION_NONE,
+        part_modes: vec![RDOPartitionOutput { bo: bo.clone(), pred_mode: best_mode, rd_cost: best_rd as u64 }]
+    };
+
+    rdo_output
+}
+
+// RDO-based partitioning decision
+fn rdo_partition_decision(fi: &FrameInvariants, fs: &mut FrameState,
+                  cw: &mut ContextWriter,
+                  bsize: BlockSize, bo: &BlockOffset, cached_block: &RDOOutput) -> RDOOutput {
+    let max_rd = std::u64::MAX as f64;
+
+    let mut best_partition = cached_block.part_type;
+    let mut best_rd = cached_block.rd_cost as f64; // Set cached_block.rd_cost = std::u64::MAX for no bias/initial rdo
+    let mut best_pred_modes = cached_block.part_modes.clone();
+
+    for &partition in RAV1E_PARTITION_TYPES {
+        // Do not re-encode results we already have
+        if partition == cached_block.part_type && cached_block.rd_cost < max_rd as u64 {
+            continue;
+        }
+
+        let checkpoint = cw.checkpoint();
+
+        let mut rd: f64;
+        let mut child_modes = std::vec::Vec::new();
+
+        match partition {
+            PartitionType::PARTITION_NONE => {
+                if bsize > BlockSize::BLOCK_32X32 {
+                    continue;
+                }
+
+                let mode_decision = cached_block.part_modes.get(0)
+                    .unwrap_or(&rdo_mode_decision(fi, fs, cw, bsize, bo).part_modes[0]).clone();
+                child_modes.push(mode_decision);
+            },
+            PartitionType::PARTITION_SPLIT => {
+                let subsize = get_subsize(bsize, partition);
+
+                if subsize == BlockSize::BLOCK_INVALID {
+                    continue;
+                }
+
+                let bs = mi_size_wide[bsize as usize];
+                let hbs = bs >> 1; // Half the block size in blocks
+
+                // FIXME Each block is encoded twice here (for mode decision and for partitioning decision)
+
+                let offset = BlockOffset{x: bo.x, y: bo.y};
+                let mode_decision = rdo_mode_decision(fi, fs, cw, subsize, &offset).part_modes[0].clone();
+                let mode = mode_decision.pred_mode;
+                cw.bc.set_mode(&offset, subsize, mode);
+                encode_block(fi, fs, cw, mode, subsize, &offset);
+                child_modes.push(RDOPartitionOutput { bo: offset.clone(), pred_mode: mode, rd_cost: mode_decision.rd_cost as u64 });
+
+                let offset = BlockOffset{x: bo.x + hbs as usize, y: bo.y};
+                let mode_decision = rdo_mode_decision(fi, fs, cw, subsize, &offset).part_modes[0].clone();
+                let mode = mode_decision.pred_mode;
+                cw.bc.set_mode(&offset, subsize, mode);
+                encode_block(fi, fs, cw, mode, subsize, &offset);
+                child_modes.push(RDOPartitionOutput { bo: offset.clone(), pred_mode: mode, rd_cost: mode_decision.rd_cost as u64 });
+
+                let offset = BlockOffset{x: bo.x, y: bo.y + hbs as usize};
+                let mode_decision = rdo_mode_decision(fi, fs, cw, subsize, &offset).part_modes[0].clone();
+                let mode = mode_decision.pred_mode;
+                cw.bc.set_mode(&offset, subsize, mode);
+                encode_block(fi, fs, cw, mode, subsize, &offset);
+                child_modes.push(RDOPartitionOutput { bo: offset.clone(), pred_mode: mode, rd_cost: mode_decision.rd_cost as u64 });
+
+                let offset = BlockOffset{x: bo.x + hbs as usize, y: bo.y + hbs as usize};
+                let mode_decision = rdo_mode_decision(fi, fs, cw, subsize, &offset).part_modes[0].clone();
+                let mode = mode_decision.pred_mode;
+                cw.bc.set_mode(&offset, subsize, mode);
+                encode_block(fi, fs, cw, mode, subsize, &offset);
+                child_modes.push(RDOPartitionOutput { bo: offset.clone(), pred_mode: mode, rd_cost: mode_decision.rd_cost as u64 });
+            },
+            _ => { assert!(false); },
+        }
+
+        rd = child_modes.iter().map(|m| m.rd_cost as f64).sum::<f64>();
+        
+        if rd < best_rd {
+            best_rd = rd;
+            best_partition = partition;
+            best_pred_modes = child_modes.clone();
+        }
+
+        cw.rollback(checkpoint.clone());
+    }
+
+    assert!(best_rd as i64 >= 0);
+    
     let rdo_output = RDOOutput { rd_cost: best_rd as u64,
-                                pred_mode: best_mode};
+                                part_type: best_partition,
+                                part_modes: best_pred_modes };
+
     rdo_output
 }
 
 fn encode_partition(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
-            bsize: BlockSize, bo: &BlockOffset) {
+            bsize: BlockSize, bo: &BlockOffset, block_output: &Option<RDOOutput>) {
 
     if bo.x >= cw.bc.cols || bo.y >= cw.bc.rows {
         return;
@@ -654,19 +754,26 @@ fn encode_partition(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextW
 
     let is_sb_on_frame_border = (fi.sb_width-1) * 16 <= bo.x || (fi.sb_height-1) * 16 <= bo.y;
 
-    // TODO(anyone): Until we have RDO-based block size decision,
-    // split all the way down to 4x4 blocks, then do rdo_mode_decision() for each 4x4 block.
-    let mut partition = PartitionType::PARTITION_NONE;
+    let mut rdo_output = block_output.clone().unwrap_or(RDOOutput {
+        part_type: PartitionType::PARTITION_INVALID,
+        rd_cost: std::u64::MAX,
+        part_modes: std::vec::Vec::new()
+    });
+    let partition: PartitionType;
 
-    if is_sb_on_frame_border {
+    if is_sb_on_frame_border && bsize > BlockSize::BLOCK_4X4 {
         // SBs on right or bottom frame borders split down to BLOCK_4X4.
-        if bsize > BlockSize::BLOCK_4X4 { partition = PartitionType::PARTITION_SPLIT; }
+        partition = PartitionType::PARTITION_SPLIT;
+    } else if bsize >= BlockSize::BLOCK_64X64 {
+        partition = PartitionType::PARTITION_SPLIT;
+    } else if bsize > fi.min_partition_size {
+        rdo_output = rdo_partition_decision(fi, fs, cw, bsize, bo, &rdo_output);
+        partition = rdo_output.part_type;
     } else {
-        if bsize > fi.min_partition_size { partition = PartitionType::PARTITION_SPLIT; }
-    };
+        partition = PartitionType::PARTITION_NONE;
+    }
 
     assert!(mi_size_wide[bsize as usize] == mi_size_high[bsize as usize]);
-
     assert!(PartitionType::PARTITION_NONE <= partition &&
             partition < PartitionType::PARTITION_INVALID);
 
@@ -680,26 +787,44 @@ fn encode_partition(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextW
 
     match partition {
         PartitionType::PARTITION_NONE => {
-            // TODO(anyone): Until we have RDO-based block size decision,
-            // call rdo_mode_decision() for a partition.
-            let rdo_none = rdo_mode_decision(fi, fs, cw, bsize, bo);
-            cw.bc.set_mode(bo, bsize, rdo_none.pred_mode);
+            let pred_mode = if rdo_output.part_modes.len() > 0 { 
+                rdo_output.part_modes[0].pred_mode
+            } else { // edges
+                rdo_mode_decision(fi, fs, cw, bsize, bo).part_modes[0].pred_mode };
 
-            encode_block(fi, fs, cw, rdo_none.pred_mode, bsize, bo);
+            cw.bc.set_mode(bo, bsize, pred_mode);
+
+            // FIXME every final block is encoded twice, once for RDO decision and once here
+            encode_block(fi, fs, cw, pred_mode, bsize, bo);
         },
         PartitionType::PARTITION_SPLIT => {
-            assert!(subsize != BlockSize::BLOCK_INVALID);
-            encode_partition(fi, fs, cw, subsize, bo);
-            encode_partition(fi, fs, cw, subsize, &BlockOffset{x: bo.x + hbs as usize, y: bo.y});
-            encode_partition(fi, fs, cw, subsize, &BlockOffset{x: bo.x, y: bo.y + hbs as usize});
-            encode_partition(fi, fs, cw, subsize, &BlockOffset{x: bo.x + hbs as usize, y: bo.y + hbs as usize});
+            if rdo_output.part_modes.len() >= 4 {
+                // Assume a partition encoded in a decision (so we know the optimal prediction modes)
+                assert!(subsize != BlockSize::BLOCK_INVALID);
+
+                for mode in rdo_output.part_modes {
+                    let offset = mode.bo.clone();
+
+                    encode_partition(fi, fs, cw, subsize, &offset, 
+                        &Some(RDOOutput { 
+                            rd_cost: mode.rd_cost, 
+                            part_type: PartitionType::PARTITION_NONE, 
+                            part_modes: vec![mode] }));
+                }
+            }
+            else {
+                encode_partition(fi, fs, cw, subsize, bo, &None);
+                encode_partition(fi, fs, cw, subsize, &BlockOffset{x: bo.x + hbs as usize, y: bo.y}, &None);
+                encode_partition(fi, fs, cw, subsize, &BlockOffset{x: bo.x, y: bo.y + hbs as usize}, &None);
+                encode_partition(fi, fs, cw, subsize, &BlockOffset{x: bo.x + hbs as usize, y: bo.y + hbs as usize}, &None);
+            }
         },
         _ => { assert!(false); },
     }
 
-    if bsize >= BlockSize::BLOCK_8X8 &&
-       (bsize == BlockSize::BLOCK_8X8 || partition != PartitionType::PARTITION_SPLIT) {
-        cw.bc.update_partition_context(bo, subsize, bsize);
+    if bsize >= BlockSize::BLOCK_8X8 && 
+        (bsize == BlockSize::BLOCK_8X8 || partition != PartitionType::PARTITION_SPLIT) {
+            cw.bc.update_partition_context(bo, subsize, bsize);
     }
 }
 
@@ -716,11 +841,8 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
             let sbo = SuperBlockOffset { x: sbx, y: sby };
             let bo = sbo.block_offset(0, 0);
 
-            // TODO(anyone):
-            // RDO-based block size decision for each SuperBlock can be done here.
-
             // Encode SuperBlock
-            encode_partition(fi, fs, &mut cw, BlockSize::BLOCK_64X64, &bo);
+            encode_partition(fi, fs, &mut cw, BlockSize::BLOCK_64X64, &bo, &None);
         }
     }
     let mut h = cw.w.done();
