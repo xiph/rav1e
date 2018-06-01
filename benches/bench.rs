@@ -18,6 +18,9 @@ extern {
     fn highbd_v_predictor(dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
         bh: libc::c_int, above: *const u16,
         left: *const u16, bd: libc::c_int);
+    fn highbd_paeth_predictor(dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
+        bh: libc::c_int, above: *const u16,
+        left: *const u16, bd: libc::c_int);
 }
 
 #[inline(always)]
@@ -39,6 +42,13 @@ fn pred_h_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
 fn pred_v_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
     unsafe {
         highbd_v_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, 4, 4, above.as_ptr(), left.as_ptr(), 8);
+    }
+}
+
+#[inline(always)]
+fn pred_paeth_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+    unsafe {
+        highbd_paeth_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, 4, 4, above.as_ptr(), left.as_ptr(), 8);
     }
 }
 
@@ -118,6 +128,28 @@ fn intra_v_pred_aom(b: &mut Bencher) {
     })
 }
 
+fn intra_paeth_pred_native(b: &mut Bencher) {
+    let mut ra = ChaChaRng::new_unseeded();
+    let (above, left, mut o2) = setup_pred(&mut ra);
+
+    b.iter(|| {
+        for _ in 0..MAX_ITER {
+            Block4x4::pred_paeth(&mut o2, 32, &above[..4], &left[..4]);
+        }
+    })
+}
+
+fn intra_paeth_pred_aom(b: &mut Bencher) {
+    let mut ra = ChaChaRng::new_unseeded();
+    let (above, left, mut o2) = setup_pred(&mut ra);
+
+    b.iter(|| {
+        for _ in 0..MAX_ITER {
+            pred_paeth_4x4(&mut o2, 32, &above[..4], &left[..4]);
+        }
+    })
+}
+
 use rav1e::*;
 use rav1e::context::*;
 use rav1e::partition::*;
@@ -192,5 +224,5 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
 
 benchmark_group!(intra, intra_dc_pred_native, intra_dc_pred_aom,
     intra_h_pred_native, intra_h_pred_aom, intra_v_pred_native,
-    intra_v_pred_aom);
+    intra_v_pred_aom, intra_paeth_pred_native, intra_paeth_pred_aom);
 benchmark_main!(intra, write_b);
