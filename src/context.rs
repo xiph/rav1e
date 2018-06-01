@@ -1358,11 +1358,6 @@ impl BlockContext {
         }
     }
 
-    fn coeff_context(&self, plane: usize, bo: &BlockOffset) -> usize {
-        (self.above_coeff_context[plane][bo.x]
-         + self.left_coeff_context[plane][bo.y_in_sb()]) as usize
-    }
-
     pub fn set_dc_sign(&mut self, cul_level: &mut u32, dc_val: i32) {
       if dc_val < 0 {
         *cul_level |= 1 << COEFF_CONTEXT_BITS;
@@ -1530,7 +1525,8 @@ impl BlockContext {
     }
 
     pub fn get_txb_ctx(&mut self, plane_bsize: BlockSize, tx_size: TxSize,
-                       plane: usize, bo: &BlockOffset) -> TXB_CTX {
+                       plane: usize, bo: &BlockOffset,
+                       xdec: usize, ydec: usize) -> TXB_CTX {
         let mut txb_ctx = TXB_CTX { txb_skip_ctx: 0,
                                 dc_sign_ctx: 0 };
         const MAX_TX_SIZE_UNIT: usize = 16;
@@ -1545,13 +1541,13 @@ impl BlockContext {
 
         // Decide txb_ctx.dc_sign_ctx
         for k in 0..txb_w_unit {
-            let sign = self.above_coeff_context[plane][bo.x + k] >> COEFF_CONTEXT_BITS;
+            let sign = self.above_coeff_context[plane][bo.x + (k<<xdec)] >> COEFF_CONTEXT_BITS;
             assert!(sign <= 2);
             dc_sign += signs[sign as usize] as i16;
         }
 
         for k in 0..txb_h_unit {
-            let sign = self.left_coeff_context[plane][bo.y_in_sb() + k] >> COEFF_CONTEXT_BITS;
+            let sign = self.left_coeff_context[plane][bo.y_in_sb() + (k<<ydec)] >> COEFF_CONTEXT_BITS;
             assert!(sign <= 2);
             dc_sign += signs[sign as usize] as i16;
         }
@@ -1583,12 +1579,12 @@ impl BlockContext {
                 let mut left: u8 = 0;
 
                 for k in 0..txb_w_unit {
-                    top |= self.above_coeff_context[plane][bo.x + k];
+                    top |= self.above_coeff_context[0][bo.x + k];
                 }
                 top &= COEFF_CONTEXT_MASK as u8;
 
                 for k in 0..txb_h_unit {
-                    left |= self.left_coeff_context[plane][bo.y_in_sb() + k];
+                    left |= self.left_coeff_context[0][bo.y_in_sb() + k];
                 }
                 left &= COEFF_CONTEXT_MASK as u8;
 
@@ -1602,10 +1598,10 @@ impl BlockContext {
             let mut left: u8 = 0;
 
             for k in 0..txb_w_unit {
-                top |= self.above_coeff_context[plane][bo.x + k];
+                top |= self.above_coeff_context[plane][bo.x + (k<<xdec)];
             }
             for k in 0..txb_h_unit {
-                left |= self.left_coeff_context[plane][bo.y_in_sb() + k];
+                left |= self.left_coeff_context[plane][bo.y_in_sb() + (k<<ydec)];
             }
             let ctx_base = (top != 0) as usize + (left != 0) as usize;
             let ctx_offset = if num_pels_log2_lookup[plane_bsize as usize] >
@@ -2016,7 +2012,7 @@ impl ContextWriter {
         }
 
         let txs_ctx = self.get_txsize_entropy_ctx(tx_size);
-        let txb_ctx = self.bc.get_txb_ctx(plane_bsize, tx_size, plane, bo);
+        let txb_ctx = self.bc.get_txb_ctx(plane_bsize, tx_size, plane, bo, xdec, ydec);
 
         {
           let cdf = &mut self.fc.txb_skip_cdf[txs_ctx][txb_ctx.txb_skip_ctx];
