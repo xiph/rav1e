@@ -507,7 +507,7 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
     cw.write_skip(bo, skip);
 
     if fi.frame_type == FrameType::INTER {
-        cw.write_inter_mode(bo, is_inter);
+        cw.write_is_inter(bo, is_inter);
         if !is_inter {
             cw.write_intra_mode(bsize, mode);
         }
@@ -516,6 +516,10 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
     }
 
     cw.bc.set_mode(bo, bsize, mode);
+
+    if mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
+        cw.write_angle_delta(0, mode);
+    }
 
     let xdec = fs.input.planes[1].cfg.xdec;
     let ydec = fs.input.planes[1].cfg.ydec;
@@ -526,9 +530,6 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
         cw.write_intra_uv_mode(uv_mode, mode, bsize);
     }
 
-    if mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
-        cw.write_angle_delta(0, mode);
-    }
     if uv_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
         cw.write_angle_delta(0, uv_mode);
     }
