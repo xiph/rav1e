@@ -19,14 +19,14 @@ use std::vec::Vec;
 
 #[derive(Clone)]
 pub struct RDOOutput {
-    pub rd_cost: u64,
+    pub rd_cost: f64,
     pub part_type: PartitionType,
     pub part_modes: Vec<RDOPartitionOutput>
 }
 
 #[derive(Clone)]
 pub struct RDOPartitionOutput {
-    pub rd_cost: u64,
+    pub rd_cost: f64,
     pub bo: BlockOffset,
     pub pred_mode: PredictionMode
 }
