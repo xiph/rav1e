@@ -10,14 +10,25 @@
 
 #![allow(non_camel_case_types)]
 
+use context::BlockOffset;
 use plane::*;
 use partition::PredictionMode;
+use partition::PartitionType;
+use std::vec::Vec;
 //use std::io::prelude::*;
 
-#[derive(Copy,Clone)]
+#[derive(Clone)]
 pub struct RDOOutput {
-    pub rd_cost: u64,
-    pub pred_mode: PredictionMode,
+    pub rd_cost: f64,
+    pub part_type: PartitionType,
+    pub part_modes: Vec<RDOPartitionOutput>
+}
+
+#[derive(Clone)]
+pub struct RDOPartitionOutput {
+    pub rd_cost: f64,
+    pub bo: BlockOffset,
+    pub pred_mode: PredictionMode
 }
 
 // Sum of Squared Error for a wxh block

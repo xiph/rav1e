@@ -1206,6 +1206,7 @@ pub const LOCAL_BLOCK_MASK: usize = (1 << SUPERBLOCK_TO_BLOCK_SHIFT) - 1;
 
 /// Absolute offset in superblocks inside a plane, where a superblock is defined
 /// to be an N*N square where N = (1 << SUPERBLOCK_TO_PLANE_SHIFT).
+#[derive(Clone)]
 pub struct SuperBlockOffset {
     pub x: usize,
     pub y: usize
@@ -1231,6 +1232,7 @@ impl SuperBlockOffset {
 
 /// Absolute offset in blocks inside a plane, where a block is defined
 /// to be an N*N square where N = (1 << BLOCK_TO_PLANE_SHIFT).
+#[derive(Clone)]
 pub struct BlockOffset {
     pub x: usize,
     pub y: usize
