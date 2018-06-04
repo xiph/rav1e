@@ -24,6 +24,11 @@ extern {
     fn highbd_v_predictor(dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
         bh: libc::c_int, above: *const u16,
         left: *const u16, bd: libc::c_int);
+
+    #[cfg(test)]
+    fn highbd_paeth_predictor(dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
+        bh: libc::c_int, above: *const u16,
+        left: *const u16, bd: libc::c_int);
 }
 
 pub trait Dim {
@@ -59,8 +64,6 @@ impl Dim for Block32x32 {
     const W : usize = 32;
     const H : usize = 32;
 }
-
-
 
 pub trait Intra: Dim {
     fn pred_dc(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
@@ -108,6 +111,34 @@ pub trait Intra: Dim {
             line[..Self::W].clone_from_slice(&above[..Self::W])
         }
     }
+
+    fn pred_paeth(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+        for r in 0..Self::H {
+            for c in 0..Self::W {
+
+                // Top-left pixel is fixed in libaom
+                let raw_top_left = unsafe { *above.as_ptr().offset( - 1) } as i32;
+                let raw_left = left[r] as i32;
+                let raw_top = above[c] as i32;
+
+                let p_base = raw_top + raw_left - raw_top_left;
+                let p_left = (p_base - raw_left).abs();
+                let p_top = (p_base - raw_top).abs();
+                let p_top_left = (p_base - raw_top_left).abs();
+
+                let output_index = r * stride + c;
+
+                // Return nearest to base of left, top and top_left
+                if p_left <= p_top && p_left <= p_top_left {
+                    output[output_index] = raw_left as u16;
+                } else if p_top <= p_top_left {
+                    output[output_index] = raw_top as u16;
+                } else {
+                    output[output_index] = raw_top_left as u16;
+                }
+            }
+        }
+    }
 }
 
 impl Intra for Block4x4 {}
@@ -151,6 +182,12 @@ pub mod test {
         }
     }
 
+    pub fn pred_paeth_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+        unsafe {
+            highbd_paeth_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, 4, 4, above.as_ptr(), left.as_ptr(), 8);
+        }
+    }
+
     fn do_dc_pred(ra: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>) {
         let (above, left, mut o1, mut o2) = setup_pred(ra);
 
@@ -178,6 +215,15 @@ pub mod test {
         (o1, o2)
     }
 
+    fn do_paeth_pred(ra: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>) {
+        let (above, left, mut o1, mut o2) = setup_pred(ra);
+
+        pred_paeth_4x4(&mut o1, 32, &above[..4], &left[..4]);
+        Block4x4::pred_paeth(&mut o2, 32, &above[..4], &left[..4]);
+
+        (o1, o2)
+    }
+
     fn assert_same(o2: Vec<u16>) {
         for l in o2.chunks(32).take(4) {
             for v in l[..4].windows(2) {
@@ -197,6 +243,9 @@ pub mod test {
             assert_eq!(o1, o2);
 
             let (o1, o2) = do_v_pred(&mut ra);
+            assert_eq!(o1, o2);
+
+            let (o1, o2) = do_paeth_pred(&mut ra);
             assert_eq!(o1, o2);
         }
     }
