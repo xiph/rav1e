@@ -1751,7 +1751,7 @@ impl ContextWriter {
         let ctx = self.bc.skip_context(bo);
         symbol!(self, skip as u32, &mut self.fc.skip_cdfs[ctx], 2);
     }
-    pub fn write_inter_mode(&mut self, bo: &BlockOffset, is_inter: bool) {
+    pub fn write_is_inter(&mut self, bo: &BlockOffset, is_inter: bool) {
         let ctx = self.bc.intra_inter_context(bo);
         symbol!(self, is_inter as u32, &mut self.fc.intra_inter_cdfs[ctx], 2);
     }
