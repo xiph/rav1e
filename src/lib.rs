@@ -605,7 +605,6 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
 fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
                   cw: &mut ContextWriter,
                   bsize: BlockSize, bo: &BlockOffset) -> RDOOutput {
-
     let q = dc_q(fi.qindex) as f64;
     let q0 = q / 8.0_f64;	// Convert q into Q0 precision, given thatn libaom quantizers are Q3.
 
@@ -751,11 +750,14 @@ fn encode_partition(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextW
         // SBs on right or bottom frame borders split down to BLOCK_4X4.
         partition = PartitionType::PARTITION_SPLIT;
     } else if bsize >= BlockSize::BLOCK_64X64 {
+        // Blocks of sizes above the supported range are automatically split
         partition = PartitionType::PARTITION_SPLIT;
     } else if bsize > fi.min_partition_size {
+        // Blocks of sizes within the supported range are subjected to a partitioning decision
         rdo_output = rdo_partition_decision(fi, fs, cw, bsize, bo, &rdo_output);
         partition = rdo_output.part_type;
     } else {
+        // Blocks of sizes below the supported range are encoded directly
         partition = PartitionType::PARTITION_NONE;
     }
 
@@ -773,26 +775,30 @@ fn encode_partition(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextW
 
     match partition {
         PartitionType::PARTITION_NONE => {
-            let pred_mode = if rdo_output.part_modes.len() > 0 { 
+            let pred_mode = if rdo_output.part_modes.len() > 0 {
+                // The optimal prediction mode is known from a previous iteration
                 rdo_output.part_modes[0].pred_mode
-            } else { // edges
-                rdo_mode_decision(fi, fs, cw, bsize, bo).part_modes[0].pred_mode };
+            } else {
+                // Make a prediction mode decision for blocks encoded with no rdo_partition_decision call (e.g. edges)
+                rdo_mode_decision(fi, fs, cw, bsize, bo).part_modes[0].pred_mode
+            };
 
             cw.bc.set_mode(bo, bsize, pred_mode);
 
-            // FIXME every final block is encoded twice, once for RDO decision and once here
+            // FIXME every final block that has gone through the RDO decision process is encoded twice
             encode_block(fi, fs, cw, pred_mode, bsize, bo);
         },
         PartitionType::PARTITION_SPLIT => {
             if rdo_output.part_modes.len() >= 4 {
-                // Assume a partition encoded in a decision (so we know the optimal prediction modes)
+                // The optimal prediction modes for each split block is known from an rdo_partition_decision() call
                 assert!(subsize != BlockSize::BLOCK_INVALID);
 
                 for mode in rdo_output.part_modes {
                     let offset = mode.bo.clone();
 
+                    // Each block is subjected to a new splitting decision
                     encode_partition(fi, fs, cw, subsize, &offset, 
-                        &Some(RDOOutput { 
+                        &Some(RDOOutput {
                             rd_cost: mode.rd_cost, 
                             part_type: PartitionType::PARTITION_NONE, 
                             part_modes: vec![mode] }));
