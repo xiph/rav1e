@@ -694,19 +694,19 @@ fn rdo_partition_decision(fi: &FrameInvariants, fs: &mut FrameState,
 
                 let offset = BlockOffset{x: bo.x, y: bo.y};
                 let mode_decision = rdo_mode_decision(fi, fs, cw, subsize, &offset).part_modes[0].clone();
-                child_modes.push(RDOPartitionOutput { bo: offset.clone(), pred_mode: mode_decision.pred_mode, rd_cost: mode_decision.rd_cost });
+                child_modes.push(mode_decision);
 
                 let offset = BlockOffset{x: bo.x + hbs as usize, y: bo.y};
                 let mode_decision = rdo_mode_decision(fi, fs, cw, subsize, &offset).part_modes[0].clone();
-                child_modes.push(RDOPartitionOutput { bo: offset.clone(), pred_mode: mode_decision.pred_mode, rd_cost: mode_decision.rd_cost });
+                child_modes.push(mode_decision);
 
                 let offset = BlockOffset{x: bo.x, y: bo.y + hbs as usize};
                 let mode_decision = rdo_mode_decision(fi, fs, cw, subsize, &offset).part_modes[0].clone();
-                child_modes.push(RDOPartitionOutput { bo: offset.clone(), pred_mode: mode_decision.pred_mode, rd_cost: mode_decision.rd_cost });
+                child_modes.push(mode_decision);
 
                 let offset = BlockOffset{x: bo.x + hbs as usize, y: bo.y + hbs as usize};
                 let mode_decision = rdo_mode_decision(fi, fs, cw, subsize, &offset).part_modes[0].clone();
-                child_modes.push(RDOPartitionOutput { bo: offset.clone(), pred_mode: mode_decision.pred_mode, rd_cost: mode_decision.rd_cost });
+                child_modes.push(mode_decision);
             },
             _ => { assert!(false); },
         }
