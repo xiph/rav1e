@@ -7,27 +7,36 @@ pub static RAV1E_PARTITION_TYPES: &'static [PartitionType] = &[PartitionType::PA
 
 extern {
     #[cfg(test)]
-    fn highbd_dc_predictor(dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
-                                           bh: libc::c_int, above: *const u16,
-                           left: *const u16, bd: libc::c_int);
-    fn highbd_dc_left_predictor(dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
-                           bh: libc::c_int, above: *const u16,
-                           left: *const u16, bd: libc::c_int);
-    fn highbd_dc_top_predictor(dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
-                           bh: libc::c_int, above: *const u16,
-                           left: *const u16, bd: libc::c_int);
-    #[cfg(test)]
-    fn highbd_h_predictor(dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
-                           bh: libc::c_int, above: *const u16,
-                           left: *const u16, bd: libc::c_int);
+    fn highbd_dc_predictor(
+        dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
+        bh: libc::c_int, above: *const u16,
+        left: *const u16, bd: libc::c_int);
 
-    #[cfg(test)]
-    fn highbd_v_predictor(dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
+    fn highbd_dc_left_predictor(
+        dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
+        bh: libc::c_int, above: *const u16,
+        left: *const u16, bd: libc::c_int);
+
+    fn highbd_dc_top_predictor(
+        dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
         bh: libc::c_int, above: *const u16,
         left: *const u16, bd: libc::c_int);
 
     #[cfg(test)]
-    fn highbd_paeth_predictor(dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
+    fn highbd_h_predictor(
+        dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
+        bh: libc::c_int, above: *const u16,
+        left: *const u16, bd: libc::c_int);
+
+    #[cfg(test)]
+    fn highbd_v_predictor(
+        dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
+        bh: libc::c_int, above: *const u16,
+        left: *const u16, bd: libc::c_int);
+
+    #[cfg(test)]
+    fn highbd_paeth_predictor(
+        dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
         bh: libc::c_int, above: *const u16,
         left: *const u16, bd: libc::c_int);
 }
@@ -291,6 +300,14 @@ pub mod test {
           for v in l[..4].iter() {
             assert_eq!(*v, max12bit);
           }
+        }
+
+        Block4x4::pred_paeth(&mut o, 32, &above[..4], &left[..4]);
+
+        for l in o.chunks(32).take(4) {
+            for v in l[..4].iter() {
+                assert_eq!(*v, max12bit);
+            }
         }
     }
 }
