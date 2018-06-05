@@ -1812,7 +1812,7 @@ fn cdef_frame(fi: &FrameInvariants, rec: &mut Frame) {
     let fb_width = fi.padded_w / 64;
     for fby in 0..fb_height {
         for fbx in 0..fb_width {
-            eprintln!("sb_width:{} sb_height:{} fbx:{} fby:{}", fi.sb_width, fi.sb_height, fbx, fby);
+            // eprintln!("sb_width:{} sb_height:{} fbx:{} fby:{}", fi.sb_width, fi.sb_height, fbx, fby);
             let sbo = SuperBlockOffset { x: fbx, y: fby };
             // Each direction block is 8x8
             for p in 0..1 {
@@ -1828,7 +1828,7 @@ fn cdef_frame(fi: &FrameInvariants, rec: &mut Frame) {
                                           &rec.planes[p].data[po.y*stride + po.x..], cdef_pri_strength, cdef_sec_strength, dir,
                                           cdef_pri_damping, cdef_sec_damping, 3 /* BLOCK_8X8*/, (256 << coeff_shift) - 1,
                                           coeff_shift as i32);
-                        eprintln!("bx:{} by:{} box:{} boy:{} pox:{} poy:{} dir:{}", bx, by, cdef_bo.x, cdef_bo.y, po.x, po.y, dir);
+                        // eprintln!("bx:{} by:{} box:{} boy:{} pox:{} poy:{} dir:{}", bx, by, cdef_bo.x, cdef_bo.y, po.x, po.y, dir);
                     }
                 }
             }
