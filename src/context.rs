@@ -36,6 +36,7 @@ const UV_INTRA_MODES: usize = 14;
 const BLOCK_SIZE_GROUPS: usize = 4;
 const MAX_ANGLE_DELTA: usize = 3;
 const DIRECTIONAL_MODES: usize = 8;
+const KF_MODE_CONTEXTS: usize= 5;
 
 pub static mi_size_wide: [u8; BLOCK_SIZES_ALL] =
     [1, 1, 2, 2, 2, 4, 4, 4, 8, 8, 8, 16, 16, 1, 4, 2, 8, 4, 16];
@@ -69,7 +70,7 @@ pub static block_size_high: [u8; BLOCK_SIZES_ALL] =
 
 const EXT_TX_SIZES: usize = 4;
 const EXT_TX_SET_TYPES: usize = 9;
-const EXT_TX_SETS_INTRA: usize = 6;
+const EXT_TX_SETS_INTRA: usize = 3;
 const EXT_TX_SETS_INTER: usize = 4;
 // Number of transform types in each set type
 static num_ext_tx_set: [usize; EXT_TX_SET_TYPES] = [ 1, 2, 5, 7, 7, 10, 12, 16, 16];
@@ -101,24 +102,6 @@ static ext_tx_set_type_inter: [TxSetType; EXT_TX_SETS_INTER] = [
 static ext_tx_set_index_intra: [i8; EXT_TX_SET_TYPES] = [0, -1, 2, -1, 1, -1, -1, -1, -1];
 // Maps set types above to the indices used for inter
 static ext_tx_set_index_inter: [i8; EXT_TX_SET_TYPES] = [0, 3, -1, -1, -1, -1, 2, -1, 1];
-static av1_ext_tx_intra_ind: [[u32; TX_TYPES]; EXT_TX_SETS_INTRA] =
-    [
-      [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
-      [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
-      [ 1, 3, 4, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
-      [ 1, 5, 6, 4, 0, 0, 0, 0, 0, 0, 2, 3, 0, 0, 0, 0 ],
-      [ 3, 4, 5, 8, 6, 7, 9, 10, 11, 0, 1, 2, 0, 0, 0, 0 ],
-      [ 7, 8, 9, 12, 10, 11, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6 ],
-    ];
-#[allow(dead_code)]
-static av1_ext_tx_inter_ind: [[usize; TX_TYPES]; EXT_TX_SETS_INTER] =
-    [
-        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,],
-        [1,5,6,4,0,0,0,0,0,0,2,3,0,0,0,0,],
-        [1,3,4,2,0,0,0,0,0,0,0,0,0,0,0,0,],
-        [0,1,2,0,0,0,0,0,0,0,0,0,0,0,0,0,],
-    ];
-//static ext_tx_cnt_intra: [usize;EXT_TX_SETS_INTRA] = [ 1, 7, 5 ];
 
 static av1_ext_tx_ind: [[usize; TX_TYPES]; EXT_TX_SET_TYPES] = [
     [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
@@ -1008,7 +991,7 @@ pub fn uv_intra_mode_to_tx_type_context(pred: PredictionMode)-> TxType {
 
 extern {
     static default_partition_cdf: [[u16; PARTITION_TYPES + 1]; PARTITION_CONTEXTS];
-    static default_kf_y_mode_cdf: [[[u16; INTRA_MODES + 1]; INTRA_MODES]; INTRA_MODES];
+    static default_kf_y_mode_cdf: [[[u16; INTRA_MODES + 1]; KF_MODE_CONTEXTS]; KF_MODE_CONTEXTS];
     static default_if_y_mode_cdf: [[u16; INTRA_MODES + 1]; BLOCK_SIZE_GROUPS];
     static default_uv_mode_cdf: [[[u16; UV_INTRA_MODES + 1]; INTRA_MODES]; 2];
     static default_intra_ext_tx_cdf: [[[[u16; TX_TYPES + 1]; INTRA_MODES]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA];
@@ -1016,7 +999,7 @@ extern {
     static default_intra_inter_cdf: [[u16; 3];INTRA_INTER_CONTEXTS];
     static default_angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES];
 
-    static av1_intra_scan_orders: [[SCAN_ORDER; TX_TYPES]; TX_SIZES_ALL];
+    static av1_inter_scan_orders: [[SCAN_ORDER; TX_TYPES]; TX_SIZES_ALL];
 
     // lv_map
     static av1_default_txb_skip_cdf: [[[u16; 3]; TXB_SKIP_CONTEXTS]; TX_SIZES];
@@ -1051,7 +1034,7 @@ pub struct SCAN_ORDER {
 #[derive(Clone)]
 pub struct CDFContext {
     partition_cdf: [[u16; PARTITION_TYPES + 1]; PARTITION_CONTEXTS],
-    kf_y_cdf: [[[u16; INTRA_MODES + 1]; INTRA_MODES]; INTRA_MODES],
+    kf_y_cdf: [[[u16; INTRA_MODES + 1]; KF_MODE_CONTEXTS]; KF_MODE_CONTEXTS],
     y_mode_cdf: [[u16; INTRA_MODES + 1]; BLOCK_SIZE_GROUPS],
     uv_mode_cdf: [[[u16; UV_INTRA_MODES + 1]; INTRA_MODES]; 2],
     intra_ext_tx_cdf: [[[[u16; TX_TYPES + 1]; INTRA_MODES]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA],
@@ -1697,9 +1680,14 @@ impl ContextWriter {
         }
     }
     pub fn write_intra_mode_kf(&mut self, bo: &BlockOffset, mode: PredictionMode) {
+        static intra_mode_context: [usize; INTRA_MODES] = [
+          0, 1, 2, 3, 4, 4, 4, 4, 3, 0, 1, 2, 0,
+        ];
         let above_mode = self.bc.above_of(bo).mode as usize;
         let left_mode = self.bc.left_of(bo).mode as usize;
-        let cdf = &mut self.fc.kf_y_cdf[above_mode][left_mode];
+        let above_ctx = intra_mode_context[above_mode];
+        let left_ctx = intra_mode_context[left_mode];
+        let cdf = &mut self.fc.kf_y_cdf[above_ctx][left_ctx];
         symbol!(self, mode as u32, cdf, INTRA_MODES);
     }
     pub fn write_intra_mode(&mut self, bsize: BlockSize, mode: PredictionMode) {
@@ -1743,7 +1731,7 @@ impl ContextWriter {
               // fimode_to_intradir[mbmi->filter_intra_mode_info.filter_intra_mode];
 
               symbol!(self,
-                  av1_ext_tx_intra_ind[tx_set_type as usize][tx_type as usize],
+                  av1_ext_tx_ind[tx_set_type as usize][tx_type as usize] as u32,
                   &mut self.fc.intra_ext_tx_cdf[eset as usize][square_tx_size as usize][intra_dir as usize],
                   num_ext_tx_set[tx_set_type as usize]);
           }
@@ -1967,7 +1955,7 @@ impl ContextWriter {
         let is_inter = pred_mode >= PredictionMode::NEARESTMV;
         assert!( is_inter == false );
         // TODO: If iner mode, scan_order should use inter version of them
-        let scan_order = &av1_intra_scan_orders[tx_size as usize][tx_type as usize];
+        let scan_order = &av1_inter_scan_orders[tx_size as usize][tx_type as usize];
         let scan = scan_order.scan;
         let mut coeffs_storage = [0 as i32; 64*64];
         let coeffs = &mut coeffs_storage[..tx_size.width()*tx_size.height()];
