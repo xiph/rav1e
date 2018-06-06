@@ -2,6 +2,7 @@
 
 use libc;
 
+use std::mem::*;
 use partition::*;
 use context::MAX_TX_SIZE;
 
@@ -72,6 +73,18 @@ extern {
 
     #[cfg(test)]
     fn highbd_smooth_predictor(
+        dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
+        bh: libc::c_int, above: *const u16,
+        left: *const u16, bd: libc::c_int);
+
+    #[cfg(test)]
+    fn highbd_smooth_h_predictor(
+        dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
+        bh: libc::c_int, above: *const u16,
+        left: *const u16, bd: libc::c_int);
+
+    #[cfg(test)]
+    fn highbd_smooth_v_predictor(
         dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
         bh: libc::c_int, above: *const u16,
         left: *const u16, bd: libc::c_int);
@@ -200,7 +213,7 @@ pub trait Intra: Dim {
         assert!((sm_weights_h[0] as u16) < scale);
         assert!((scale - sm_weights_w[Self::W - 1] as u16) < scale);
         assert!((scale - sm_weights_h[Self::H - 1] as u16) < scale);
-        assert!(log2_scale < 31); // ensures no overflow when calculating predictor
+        assert!(log2_scale as usize + size_of_val(&output[0]) < 31); // ensures no overflow when calculating predictor
 
         for r in 0..Self::H {
             for c in 0..Self::W {
@@ -221,6 +234,68 @@ pub trait Intra: Dim {
                 assert!(scale >= (sm_weights_h[r] as u16) && scale >= (sm_weights_w[c] as u16));
 
                 // Sum up weighted pixels
+                let mut this_pred: u32 = weights.iter().zip(pixels.iter())
+                    .map(|(w, p)| (*w as u32) * (*p as u32)).sum();
+                this_pred = (this_pred + (1 << (log2_scale - 1))) >> log2_scale;
+
+                let output_index = r * stride + c;
+
+                // Clamp the output to the correct bit depth
+                output[output_index] = this_pred.max(0).min((1_u32 << bd) - 1) as u16;
+            }
+        }
+    }
+
+    fn pred_smooth_h(output: &mut [u16], stride: usize, above: &[u16], left: &[u16], bd: u8) {
+        let right_pred = above[Self::W - 1]; // estimated by top-right pixel
+        let sm_weights = &sm_weight_arrays[Self::W..];
+
+        let log2_scale = sm_weight_log2_scale;
+        let scale = 1_u16 << sm_weight_log2_scale;
+
+        // Weights sanity checks
+        assert!((sm_weights[0] as u16) < scale);
+        assert!((scale - sm_weights[Self::W - 1] as u16) < scale);
+        assert!(log2_scale as usize + size_of_val(&output[0]) < 31); // ensures no overflow when calculating predictor
+
+        for r in 0..Self::H {
+            for c in 0..Self::W {
+                let pixels = [ left[r], right_pred ];
+                let weights = [ sm_weights[c] as u16, scale - sm_weights[c] as u16 ];
+
+                assert!(scale >= sm_weights[c] as u16);
+
+                let mut this_pred: u32 = weights.iter().zip(pixels.iter())
+                    .map(|(w, p)| (*w as u32) * (*p as u32)).sum();
+                this_pred = (this_pred + (1 << (log2_scale - 1))) >> log2_scale;
+
+                let output_index = r * stride + c;
+
+                // Clamp the output to the correct bit depth
+                output[output_index] = this_pred.max(0).min((1_u32 << bd) - 1) as u16;
+            }
+        }
+    }
+
+    fn pred_smooth_v(output: &mut [u16], stride: usize, above: &[u16], left: &[u16], bd: u8) {
+        let below_pred = left[Self::H - 1]; // estimated by bottom-left pixel
+        let sm_weights = &sm_weight_arrays[Self::H..];
+
+        let log2_scale = sm_weight_log2_scale;
+        let scale = 1_u16 << sm_weight_log2_scale;
+
+        // Weights sanity checks
+        assert!((sm_weights[0] as u16) < scale);
+        assert!((scale - sm_weights[Self::H - 1] as u16) < scale);
+        assert!(log2_scale as usize + size_of_val(&output[0]) < 31); // ensures no overflow when calculating predictor
+
+        for r in 0..Self::H {
+            for c in 0..Self::W {
+                let pixels = [ above[c], below_pred ];
+                let weights = [ sm_weights[r] as u16, scale - sm_weights[r] as u16 ];
+
+                assert!(scale >= sm_weights[r] as u16);
+
                 let mut this_pred: u32 = weights.iter().zip(pixels.iter())
                     .map(|(w, p)| (*w as u32) * (*p as u32)).sum();
                 this_pred = (this_pred + (1 << (log2_scale - 1))) >> log2_scale;
@@ -287,6 +362,18 @@ pub mod test {
         }
     }
 
+    pub fn pred_smooth_h_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+        unsafe {
+            highbd_smooth_h_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, 4, 4, above.as_ptr(), left.as_ptr(), 8);
+        }
+    }
+
+    pub fn pred_smooth_v_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+        unsafe {
+            highbd_smooth_v_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, 4, 4, above.as_ptr(), left.as_ptr(), 8);
+        }
+    }
+
     fn do_dc_pred(ra: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>) {
         let (above, left, mut o1, mut o2) = setup_pred(ra);
 
@@ -332,6 +419,24 @@ pub mod test {
         (o1, o2)
     }
 
+    fn do_smooth_h_pred(ra: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>) {
+        let (above, left, mut o1, mut o2) = setup_pred(ra);
+
+        pred_smooth_h_4x4(&mut o1, 32, &above[..4], &left[..4]);
+        Block4x4::pred_smooth_h(&mut o2, 32, &above[..4], &left[..4], 8);
+
+        (o1, o2)
+    }
+
+    fn do_smooth_v_pred(ra: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>) {
+        let (above, left, mut o1, mut o2) = setup_pred(ra);
+
+        pred_smooth_v_4x4(&mut o1, 32, &above[..4], &left[..4]);
+        Block4x4::pred_smooth_v(&mut o2, 32, &above[..4], &left[..4], 8);
+
+        (o1, o2)
+    }
+
     fn assert_same(o2: Vec<u16>) {
         for l in o2.chunks(32).take(4) {
             for v in l[..4].windows(2) {
@@ -357,6 +462,12 @@ pub mod test {
             assert_eq!(o1, o2);
 
             let (o1, o2) = do_smooth_pred(&mut ra);
+            assert_eq!(o1, o2);
+
+            let (o1, o2) = do_smooth_h_pred(&mut ra);
+            assert_eq!(o1, o2);
+
+            let (o1, o2) = do_smooth_v_pred(&mut ra);
             assert_eq!(o1, o2);
         }
     }
@@ -412,6 +523,22 @@ pub mod test {
         }
 
         Block4x4::pred_smooth(&mut o, 32, &above[..4], &left[..4], 12);
+
+        for l in o.chunks(32).take(4) {
+            for v in l[..4].iter() {
+                assert_eq!(*v, max12bit);
+            }
+        }
+
+        Block4x4::pred_smooth_h(&mut o, 32, &above[..4], &left[..4], 12);
+
+        for l in o.chunks(32).take(4) {
+            for v in l[..4].iter() {
+                assert_eq!(*v, max12bit);
+            }
+        }
+
+        Block4x4::pred_smooth_v(&mut o, 32, &above[..4], &left[..4], 12);
 
         for l in o.chunks(32).take(4) {
             for v in l[..4].iter() {
