@@ -28,7 +28,7 @@ const MAX_SB_SIZE_LOG2: usize = 6;
 const MAX_SB_SIZE: usize = (1 << MAX_SB_SIZE_LOG2);
 const MAX_SB_SQUARE: usize = (MAX_SB_SIZE * MAX_SB_SIZE);
 
-const MAX_TX_SIZE: usize = 32;
+pub const MAX_TX_SIZE: usize = 32;
 const MAX_TX_SQUARE: usize = MAX_TX_SIZE * MAX_TX_SIZE;
 
 const INTRA_MODES: usize = 13;
