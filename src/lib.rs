@@ -1,3 +1,4 @@
+// Testing whether Travis needs fix itself...
 #![allow(safe_extern_statics)]
 
 extern crate bitstream_io;
