@@ -43,7 +43,7 @@ impl BlockSize {
     }
 }
 
-pub const TX_SIZES: usize = 4;
+pub const TX_SIZES: usize = 5;
 pub const TX_SIZES_ALL: usize = 14+5;
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
@@ -69,18 +69,42 @@ pub enum TxSize {
     TX_64X16
 }
 
+use partition::TxSize::*;
+
 impl TxSize {
     pub fn width(self) -> usize {
-        1<<tx_size_wide_log2[self as usize]
+        tx_size_wide[self as usize]
     }
     pub fn height(self) -> usize {
-        1<<tx_size_high_log2[self as usize]
+        tx_size_high[self as usize]
     }
     pub fn width_mi(self) -> usize {
         (1<<tx_size_wide_log2[self as usize])>>2
     }
     pub fn height_mi(self) -> usize {
         (1<<tx_size_high_log2[self as usize])>>2
+    }
+    pub fn get_adjusted_tx_size(self) -> TxSize {
+      if self == TX_64X64 || self == TX_64X32 || self == TX_32X64 {
+        return TX_32X32
+      }
+      if self == TX_16X64 {
+        return TX_16X32
+      }
+      if self == TX_64X16 {
+        return TX_32X16
+      }
+
+      self
+    }
+    pub fn get_adjusted_bwl(self) -> usize {
+        tx_size_wide_log2[self.get_adjusted_tx_size() as usize]
+    }
+    pub fn get_adjusted_width(self) -> usize {
+        tx_size_wide[self.get_adjusted_tx_size() as usize]
+    }
+    pub fn get_adjusted_height(self) -> usize {
+        tx_size_high[self.get_adjusted_tx_size() as usize]
     }
 }
 
@@ -149,6 +173,7 @@ impl PredictionMode {
             TxSize::TX_8X8 => self.predict_inner::<Block8x8>(dst),
             TxSize::TX_16X16 => self.predict_inner::<Block16x16>(dst),
             TxSize::TX_32X32 => self.predict_inner::<Block32x32>(dst),
+            TxSize::TX_64X64 => self.predict_inner::<Block64x64>(dst),
             _ => unimplemented!()
         }
     }

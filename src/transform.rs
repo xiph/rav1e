@@ -16,6 +16,9 @@ extern {
     fn av1_fht32x32_c(input: *const i16, output: *mut i32, stride: libc::c_int, tx_type: *const libc::c_int);
     fn av1_inv_txfm2d_add_32x32_c(input: *const i32, output: *mut u16, stride: libc::c_int,
                                 tx_type: libc::c_int, bd: libc::c_int);
+    fn av1_fht64x64_c(input: *const i16, output: *mut i32, stride: libc::c_int, tx_type: *const libc::c_int);
+    fn av1_inv_txfm2d_add_64x64_c(input: *const i32, output: *mut u16, stride: libc::c_int,
+                                tx_type: libc::c_int, bd: libc::c_int);
 }
 
 pub fn forward_transform(input: &[i16], output: &mut [i32], stride: usize, tx_size: TxSize, tx_type: TxType) {
@@ -24,6 +27,7 @@ pub fn forward_transform(input: &[i16], output: &mut [i32], stride: usize, tx_si
         TxSize::TX_8X8 => fht8x8(input, output, stride, tx_type),
         TxSize::TX_16X16 => fht16x16(input, output, stride, tx_type),
         TxSize::TX_32X32 => fht32x32(input, output, stride, tx_type),
+        TxSize::TX_64X64 => fht64x64(input, output, stride, tx_type),
         _ => panic!("unimplemented tx size")
     }
 }
@@ -34,6 +38,7 @@ pub fn inverse_transform_add(input: &[i32], output: &mut [u16], stride: usize, t
         TxSize::TX_8X8 => iht8x8_add(input, output, stride, tx_type),
         TxSize::TX_16X16 => iht16x16_add(input, output, stride, tx_type),
         TxSize::TX_32X32 => iht32x32_add(input, output, stride, tx_type),
+        TxSize::TX_64X64 => iht64x64_add(input, output, stride, tx_type),
         _ => panic!("unimplemented tx size")
     }
 }
@@ -87,6 +92,19 @@ fn fht32x32(input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType) {
 fn iht32x32_add(input: &[i32], output: &mut [u16], stride: usize, tx_type: TxType) {
     unsafe {
         av1_inv_txfm2d_add_32x32_c(input.as_ptr(), output.as_mut_ptr(), stride as libc::c_int,
+                                 tx_type as libc::c_int, 8);
+    }
+}
+
+fn fht64x64(input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType) {
+    unsafe {
+        av1_fht64x64_c(input.as_ptr(), output.as_mut_ptr(), stride as libc::c_int, &(tx_type as i32) as *const libc::c_int);
+    }
+}
+
+fn iht64x64_add(input: &[i32], output: &mut [u16], stride: usize, tx_type: TxType) {
+    unsafe {
+        av1_inv_txfm2d_add_64x64_c(input.as_ptr(), output.as_mut_ptr(), stride as libc::c_int,
                                  tx_type as libc::c_int, 8);
     }
 }

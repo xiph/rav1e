@@ -116,7 +116,8 @@ impl FrameInvariants {
         let min_partition_size = if speed <= 0 { BlockSize::BLOCK_4X4 }
                                  else if speed <= 1 { BlockSize::BLOCK_8X8 }
                                  else if speed <= 2 { BlockSize::BLOCK_16X16 }
-                                 else { BlockSize::BLOCK_32X32 };
+                                 else if speed <= 3 { BlockSize::BLOCK_32X32 }
+                                 else { BlockSize::BLOCK_64X64 };
         FrameInvariants {
             qindex: qindex,
             speed: speed,
@@ -480,17 +481,16 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
     diff(&mut residual,
          &fs.input.planes[p].slice(po),
          &rec.slice(po),
-         1<<tx_size_wide_log2[tx_size as usize],
-         1<<tx_size_high_log2[tx_size as usize]);
+         tx_size.width(),
+         tx_size.height());
 
     let mut coeffs_storage = [0 as i32; 64*64];
     let coeffs = &mut coeffs_storage[..tx_size.width()*tx_size.height()];
-    forward_transform(&residual, coeffs, 1<<tx_size_wide_log2[tx_size as usize], tx_size, tx_type);
+    forward_transform(&residual, coeffs, tx_size.width(), tx_size, tx_type);
     quantize_in_place(fi.qindex, coeffs, tx_size);
 
     cw.write_coeffs_lv_map(p, bo, &coeffs, tx_size, tx_type, plane_bsize, xdec, ydec,
                             fi.use_reduced_tx_set);
-
     //reconstruct
     let mut rcoeffs = [0 as i32; 64*64];
     dequantize(fi.qindex, &coeffs, &mut rcoeffs, tx_size);
@@ -539,7 +539,8 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
         BlockSize::BLOCK_4X4 => TxSize::TX_4X4,
         BlockSize::BLOCK_8X8 => TxSize::TX_8X8,
         BlockSize::BLOCK_16X16 => TxSize::TX_16X16,
-        _ => TxSize::TX_32X32
+        BlockSize::BLOCK_32X32 => TxSize::TX_32X32,
+        _ => TxSize::TX_64X64
     };
 
     if skip {
@@ -675,12 +676,18 @@ fn rdo_partition_decision(fi: &FrameInvariants, fs: &mut FrameState,
 
         match partition {
             PartitionType::PARTITION_NONE => {
-                if bsize > BlockSize::BLOCK_32X32 {
+                if bsize > BlockSize::BLOCK_64X64 {
                     continue;
                 }
 
-                let mode_decision = cached_block.part_modes.get(0)
-                    .unwrap_or(&rdo_mode_decision(fi, fs, cw, bsize, bo).part_modes[0]).clone();
+                let mode_decision =
+                    if bsize < BlockSize::BLOCK_64X64 {
+                      cached_block.part_modes.get(0)
+                    .unwrap_or(&rdo_mode_decision(fi, fs, cw, bsize, bo).part_modes[0]).clone()
+                    } else {
+                        rdo_mode_decision(fi, fs, cw, bsize, bo).part_modes[0].clone()
+                    };
+
                 child_modes.push(mode_decision);
             },
             PartitionType::PARTITION_SPLIT => {
@@ -751,13 +758,14 @@ fn encode_partition(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextW
     if is_sb_on_frame_border && bsize > BlockSize::BLOCK_4X4 {
         // SBs on right or bottom frame borders split down to BLOCK_4X4.
         partition = PartitionType::PARTITION_SPLIT;
-    } else if bsize >= BlockSize::BLOCK_64X64 {
+    } else if bsize > BlockSize::BLOCK_64X64 {
         // Blocks of sizes above the supported range are automatically split
         partition = PartitionType::PARTITION_SPLIT;
     } else if bsize > fi.min_partition_size {
         // Blocks of sizes within the supported range are subjected to a partitioning decision
-        rdo_output = rdo_partition_decision(fi, fs, cw, bsize, bo, &rdo_output);
-        partition = rdo_output.part_type;
+        /*rdo_output = rdo_partition_decision(fi, fs, cw, bsize, bo, &rdo_output);
+        partition = rdo_output.part_type;*/
+        partition = PartitionType::PARTITION_SPLIT;
     } else {
         // Blocks of sizes below the supported range are encoded directly
         partition = PartitionType::PARTITION_NONE;

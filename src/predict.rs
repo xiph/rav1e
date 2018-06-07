@@ -3,7 +3,8 @@ use libc;
 use partition::*;
 
 pub static RAV1E_INTRA_MODES: &'static [PredictionMode] =
-    &[PredictionMode::DC_PRED, PredictionMode::H_PRED, PredictionMode::V_PRED];
+    //&[PredictionMode::DC_PRED, PredictionMode::H_PRED, PredictionMode::V_PRED];
+    &[PredictionMode::V_PRED];
 pub static RAV1E_PARTITION_TYPES: &'static [PartitionType] = &[PartitionType::PARTITION_NONE, PartitionType::PARTITION_SPLIT];
 
 extern {
@@ -74,6 +75,13 @@ pub struct Block32x32;
 impl Dim for Block32x32 {
     const W : usize = 32;
     const H : usize = 32;
+}
+
+pub struct Block64x64;
+
+impl Dim for Block64x64 {
+    const W : usize = 64;
+    const H : usize = 64;
 }
 
 pub trait Intra: Dim {
@@ -156,6 +164,7 @@ impl Intra for Block4x4 {}
 impl Intra for Block8x8 {}
 impl Intra for Block16x16 {}
 impl Intra for Block32x32 {}
+impl Intra for Block64x64 {}
 
 #[cfg(test)]
 pub mod test {

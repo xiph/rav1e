@@ -28,7 +28,7 @@ const MAX_SB_SIZE_LOG2: usize = 6;
 const MAX_SB_SIZE: usize = (1 << MAX_SB_SIZE_LOG2);
 const MAX_SB_SQUARE: usize = (MAX_SB_SIZE * MAX_SB_SIZE);
 
-const MAX_TX_SIZE: usize = 32;
+const MAX_TX_SIZE: usize = 64;
 const MAX_TX_SQUARE: usize = MAX_TX_SIZE * MAX_TX_SIZE;
 
 const INTRA_MODES: usize = 13;
@@ -1775,18 +1775,16 @@ impl ContextWriter {
     }
 */
     pub fn av1_get_adjusted_tx_size(&mut self, tx_size: TxSize) -> TxSize {
-      // TODO: Enable below commented out block if TX64X64 is enabled.
-/*
       if tx_size == TX_64X64 || tx_size == TX_64X32 || tx_size == TX_32X64 {
         return TX_32X32
       }
-      if (tx_size == TX_16X64) {
+      if tx_size == TX_16X64 {
         return TX_16X32
       }
-      if (tx_size == TX_64X16) {
+      if tx_size == TX_64X16 {
         return TX_32X16
       }
-*/
+
       tx_size
     }
 
@@ -1794,6 +1792,18 @@ impl ContextWriter {
       let adjusted_tx_size = self.av1_get_adjusted_tx_size(tx_size);
 
       return tx_size_wide_log2[adjusted_tx_size as usize]
+    }
+
+    pub fn get_txb_wide(&mut self, tx_size: TxSize) -> usize {
+      let adjusted_tx_size = self.av1_get_adjusted_tx_size(tx_size);
+
+      return tx_size_wide[adjusted_tx_size as usize]
+    }
+
+    pub fn get_txb_height(&mut self, tx_size: TxSize) -> usize {
+      let adjusted_tx_size = self.av1_get_adjusted_tx_size(tx_size);
+
+      return tx_size_high[adjusted_tx_size as usize]
     }
 
     pub fn get_eob_pos_token(&mut self, eob: usize, extra: &mut u32) -> u32 {
@@ -1891,9 +1901,8 @@ impl ContextWriter {
     pub fn get_nz_map_contexts(&mut self, levels: &mut [u8], scan: &[u16; 4096], eob: u16,
                                  tx_size: TxSize, tx_class: TxClass,
                                  coeff_contexts: &mut [i8]) {
-        // TODO: If TX_64X64 is enabled, use av1_get_adjusted_tx_size()
-        let bwl = tx_size_wide_log2[tx_size as usize];
-        let height = tx_size_high[tx_size as usize];
+        let bwl = self.get_txb_bwl(tx_size);
+        let height = self.get_txb_height(tx_size);
         for i in 0..eob {
             let pos = scan[i as usize];
             coeff_contexts[pos as usize] =
@@ -1954,14 +1963,15 @@ impl ContextWriter {
         let pred_mode = self.bc.get_mode(bo);
         let is_inter = pred_mode >= PredictionMode::NEARESTMV;
         assert!( is_inter == false );
-        // TODO: If iner mode, scan_order should use inter version of them
         let scan_order = &av1_inter_scan_orders[tx_size as usize][tx_type as usize];
         let scan = scan_order.scan;
-        let mut coeffs_storage = [0 as i32; 64*64];
-        let coeffs = &mut coeffs_storage[..tx_size.width()*tx_size.height()];
+        let width = self.get_txb_wide(tx_size);
+        let height = self.get_txb_height(tx_size);
+        let mut coeffs_storage = [0 as i32; 32*32];
+        let coeffs = &mut coeffs_storage[..width*height];
         let mut cul_level = 0 as u32;
 
-        for i in 0..tx_size.width()*tx_size.height() {
+        for i in 0..width*height {
             coeffs[i] = coeffs_in[scan[i] as usize];
             cul_level += coeffs[i].abs() as u32;
         }
@@ -1995,11 +2005,13 @@ impl ContextWriter {
 
         let mut levels_buf = [0 as u8; TX_PAD_2D];
 
-        self.txb_init_levels(coeffs_in, tx_size.width(), tx_size.height(),
+        self.txb_init_levels(coeffs_in, width, height,
                             &mut levels_buf);
 
         let tx_class = tx_type_to_class[tx_type as usize];
         let plane_type = if plane == 0 { 0 } else { 1 } as usize;
+
+        assert!(tx_size <= TX_32X32 || tx_type == DCT_DCT);
 
         // Signal tx_type for luma plane only
         if plane == 0 {
@@ -2046,7 +2058,7 @@ impl ContextWriter {
         }
 
         let mut coeff_contexts = [0 as i8; MAX_TX_SQUARE];
-        let levels = &mut levels_buf[TX_PAD_TOP * (tx_size.width() + TX_PAD_HOR)..];
+        let levels = &mut levels_buf[TX_PAD_TOP * (width + TX_PAD_HOR)..];
 
         self.get_nz_map_contexts(levels, scan, eob as u16, tx_size,
                                  tx_class, &mut coeff_contexts);

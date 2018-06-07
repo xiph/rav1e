@@ -19,6 +19,7 @@ pub fn ac_q(qindex: usize) -> i16 {
 
 pub fn quantize_in_place(qindex: usize, coeffs: &mut [i32], tx_size: TxSize) {
     let tx_scale = match tx_size {
+        TxSize::TX_64X64 => 4,
         TxSize::TX_32X32 => 2,
         _ => 1
     };
@@ -26,16 +27,17 @@ pub fn quantize_in_place(qindex: usize, coeffs: &mut [i32], tx_size: TxSize) {
     coeffs[0] /= dc_q(qindex) as i32;
     let ac_quant = ac_q(qindex) as i32;
 
+    // TODO (anyone): If either w or h of tx > 32,
+    // only quantize those fall in upper-left 32x32 coeffs.
     for c in coeffs[1..].iter_mut() {
         *c *= tx_scale;
         *c /= ac_quant;
     }
-    // workaround for bug in token coder
-    *coeffs.last_mut().unwrap() = 0;
 }
 
 pub fn dequantize(qindex:usize, coeffs: &[i32], rcoeffs: &mut [i32], tx_size: TxSize) {
     let tx_scale = match tx_size {
+        TxSize::TX_64X64 => 4,
         TxSize::TX_32X32 => 2,
         _ => 1
     };
