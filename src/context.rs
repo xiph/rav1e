@@ -1587,9 +1587,9 @@ struct FieldMap {
 impl FieldMap {
     /// Print the field the address belong to
     fn lookup(&self, addr: usize) {
-        for (name, start, end) in &self.map {
+        for &(name, start, end) in &self.map {
             // eprintln!("{} {} {} val {}", name, start, end, addr);
-            if addr >= *start && addr < *end {
+            if addr >= start && addr < end {
                 eprintln!(" CDF {}", name);
                 eprintln!("");
                 return;
