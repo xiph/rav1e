@@ -8,7 +8,7 @@ extern crate cc;
 use std::env;
 use std::path::Path;
 
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::Write;
 
 fn format_write(builder: bindgen::Builder, output: &str) {
@@ -28,7 +28,7 @@ fn main() {
     let cargo_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let build_path = Path::new(&cargo_dir).join("aom_build/aom");
 
-    let cfg = cmake::Config::new(build_path)
+    let dst = cmake::Config::new(build_path)
         .define("CONFIG_AV1_ENCODER", "0")
         .define("CONFIG_DEBUG", "1")
         .define("CONFIG_EXPERIMENTAL", "1")
@@ -45,7 +45,10 @@ fn main() {
         .define("AOM_TARGET_CPU", "generic")
         .build();
 
-    env::set_var("PKG_CONFIG_PATH", cfg.join("lib/pkgconfig"));
+    // Dirty hack to force a rebuild whenever the defaults are changed upstream
+    fs::remove_file(dst.join("build/CMakeCache.txt"));
+
+    env::set_var("PKG_CONFIG_PATH", dst.join("lib/pkgconfig"));
 
 
     let libs = pkg_config::Config::new().statik(true).probe("aom").unwrap();
