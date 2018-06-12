@@ -1073,7 +1073,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         self.write(2,0)?; // cdef bits
         for _ in 0..1 {
             self.write(6,7)?; // cdef y strength
-            self.write(6,0)?; // cdef uv strength
+            self.write(6,7)?; // cdef uv strength
         }
         Ok(())
     }
@@ -1828,6 +1828,17 @@ fn cdef_frame(fi: &FrameInvariants, rec: &mut Frame) {
                                           &rec.planes[p].data[po.y*stride + po.x..], cdef_pri_strength, cdef_sec_strength, dir,
                                           cdef_pri_damping, cdef_sec_damping, 3 /* BLOCK_8X8*/, (256 << coeff_shift) - 1,
                                           coeff_shift as i32);
+                        for chroma_p in 1..3 {
+                            let chroma_stride = rec.planes[chroma_p].cfg.stride;
+                            // FIXME: calculate this offset correctly
+                            let cdef_chroma_bo = sbo.block_offset(bx, by);
+                            let chroma_po = cdef_chroma_bo.plane_offset(&rec.planes[chroma_p].cfg);
+                            // TODO: handle BLOCK_4X8 and BLOCK_8X4
+                            cdef_filter_block(&mut cdef_frame.planes[chroma_p].data[chroma_po.y*chroma_stride + chroma_po.x..], chroma_stride,
+                                          &rec.planes[chroma_p].data[chroma_po.y*chroma_stride + chroma_po.x..], cdef_pri_strength, cdef_sec_strength, dir,
+                                          cdef_pri_damping, cdef_sec_damping, 3 /* BLOCK_8X8*/, (256 << coeff_shift) - 1,
+                                          coeff_shift as i32);
+                        }
                         // eprintln!("bx:{} by:{} box:{} boy:{} pox:{} poy:{} dir:{}", bx, by, cdef_bo.x, cdef_bo.y, po.x, po.y, dir);
                     }
                 }
@@ -1836,7 +1847,7 @@ fn cdef_frame(fi: &FrameInvariants, rec: &mut Frame) {
     }
 
     // overwrite rec with cdef_frame
-    for p in 0..1 {
+    for p in 0..3 {
         rec.planes[p].data.copy_from_slice(cdef_frame.planes[p].data.as_slice());
     }
 }
