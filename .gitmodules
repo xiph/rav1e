@@ -1,4 +1,4 @@
 [submodule "aom"]
 	path = aom_build/aom
 	url = https://gitlab.xiph.org/xiph/aom-rav1e.git
-	branch = rav1e13b
+	branch = rav1e_13b
