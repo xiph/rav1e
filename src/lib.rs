@@ -483,7 +483,7 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
          1<<tx_size_wide_log2[tx_size as usize],
          1<<tx_size_high_log2[tx_size as usize]);
 
-    let mut coeffs_storage = [0 as i32; 64*64];
+    let mut coeffs_storage = [0 as i32; 32*32];
     let coeffs = &mut coeffs_storage[..tx_size.width()*tx_size.height()];
     forward_transform(&residual, coeffs, 1<<tx_size_wide_log2[tx_size as usize], tx_size, tx_type);
     quantize_in_place(fi.qindex, coeffs, tx_size);
@@ -492,7 +492,7 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
                             fi.use_reduced_tx_set);
 
     //reconstruct
-    let mut rcoeffs = [0 as i32; 64*64];
+    let mut rcoeffs = [0 as i32; 32*32];
     dequantize(fi.qindex, &coeffs, &mut rcoeffs, tx_size);
 
     inverse_transform_add(&mut rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type);
