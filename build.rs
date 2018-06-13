@@ -46,7 +46,7 @@ fn main() {
         .build();
 
     // Dirty hack to force a rebuild whenever the defaults are changed upstream
-    fs::remove_file(dst.join("build/CMakeCache.txt"));
+    let _ = fs::remove_file(dst.join("build/CMakeCache.txt"));
 
     env::set_var("PKG_CONFIG_PATH", dst.join("lib/pkgconfig"));
 
