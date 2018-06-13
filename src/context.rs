@@ -767,9 +767,9 @@ static av1_nz_map_ctx_offset_32x64: [i8; 1024] = [
   21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
   21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
   21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
-  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 
-  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 
-  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
+  21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
   21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
   21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
   21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
@@ -1031,72 +1031,74 @@ pub struct SCAN_ORDER {
   pub neighbors: &'static [u16; ((64*64)+1)*2]
 }
 
+use std::borrow::Cow;
+
 #[derive(Clone)]
 pub struct CDFContext {
-    partition_cdf: [[u16; PARTITION_TYPES + 1]; PARTITION_CONTEXTS],
-    kf_y_cdf: [[[u16; INTRA_MODES + 1]; KF_MODE_CONTEXTS]; KF_MODE_CONTEXTS],
-    y_mode_cdf: [[u16; INTRA_MODES + 1]; BLOCK_SIZE_GROUPS],
-    uv_mode_cdf: [[[u16; UV_INTRA_MODES + 1]; INTRA_MODES]; 2],
-    intra_ext_tx_cdf: [[[[u16; TX_TYPES + 1]; INTRA_MODES]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA],
-    skip_cdfs: [[u16; 3];SKIP_CONTEXTS],
-    intra_inter_cdfs: [[u16; 3];INTRA_INTER_CONTEXTS],
-    angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES],
+    partition_cdf: Cow<'static, [[u16; PARTITION_TYPES + 1]; PARTITION_CONTEXTS]>,
+    kf_y_cdf: Cow<'static, [[[u16; INTRA_MODES + 1]; KF_MODE_CONTEXTS]; KF_MODE_CONTEXTS]>,
+    y_mode_cdf: Cow<'static, [[u16; INTRA_MODES + 1]; BLOCK_SIZE_GROUPS]>,
+    uv_mode_cdf: Cow<'static, [[[u16; UV_INTRA_MODES + 1]; INTRA_MODES]; 2]>,
+    intra_ext_tx_cdf: Cow<'static, [[[[u16; TX_TYPES + 1]; INTRA_MODES]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA]>,
+    skip_cdfs: Cow<'static, [[u16; 3];SKIP_CONTEXTS]>,
+    intra_inter_cdfs: Cow<'static, [[u16; 3];INTRA_INTER_CONTEXTS]>,
+    angle_delta_cdf: Cow<'static, [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES]>,
 
     // lv_map
-    txb_skip_cdf: [[[u16; 3]; TXB_SKIP_CONTEXTS]; TX_SIZES],
-    dc_sign_cdf: [[[u16; 3]; DC_SIGN_CONTEXTS]; TX_SIZES],
-    eob_extra_cdf: [[[[u16; 3]; EOB_COEF_CONTEXTS]; PLANE_TYPES]; TX_SIZES],
+    txb_skip_cdf: Cow<'static, [[[u16; 3]; TXB_SKIP_CONTEXTS]; TX_SIZES]>,
+    dc_sign_cdf: Cow<'static, [[[u16; 3]; DC_SIGN_CONTEXTS]; TX_SIZES]>,
+    eob_extra_cdf: Cow<'static, [[[[u16; 3]; EOB_COEF_CONTEXTS]; PLANE_TYPES]; TX_SIZES]>,
 
-    eob_flag_cdf16: [[[u16; 5+1]; 2]; PLANE_TYPES],
-    eob_flag_cdf32: [[[u16; 6+1]; 2]; PLANE_TYPES],
-    eob_flag_cdf64: [[[u16; 7+1]; 2]; PLANE_TYPES],
-    eob_flag_cdf128: [[[u16; 8+1]; 2]; PLANE_TYPES],
-    eob_flag_cdf256: [[[u16; 9+1]; 2]; PLANE_TYPES],
-    eob_flag_cdf512: [[[u16; 10+1]; 2]; PLANE_TYPES],
-    eob_flag_cdf1024: [[[u16; 11+1]; 2]; PLANE_TYPES],
+    eob_flag_cdf16: Cow<'static, [[[u16; 5+1]; 2]; PLANE_TYPES]>,
+    eob_flag_cdf32: Cow<'static, [[[u16; 6+1]; 2]; PLANE_TYPES]>,
+    eob_flag_cdf64: Cow<'static, [[[u16; 7+1]; 2]; PLANE_TYPES]>,
+    eob_flag_cdf128: Cow<'static, [[[u16; 8+1]; 2]; PLANE_TYPES]>,
+    eob_flag_cdf256: Cow<'static, [[[u16; 9+1]; 2]; PLANE_TYPES]>,
+    eob_flag_cdf512: Cow<'static, [[[u16; 10+1]; 2]; PLANE_TYPES]>,
+    eob_flag_cdf1024: Cow<'static, [[[u16; 11+1]; 2]; PLANE_TYPES]>,
 
-    coeff_base_eob_cdf: [[[[u16; 3+1]; SIG_COEF_CONTEXTS_EOB]; PLANE_TYPES];
-                          TX_SIZES],
-    coeff_base_cdf: [[[[u16; 4+1]; SIG_COEF_CONTEXTS]; PLANE_TYPES];
-                          TX_SIZES],
-    coeff_br_cdf: [[[[u16; BR_CDF_SIZE+1]; LEVEL_CONTEXTS]; PLANE_TYPES];
-                          TX_SIZES],
+    coeff_base_eob_cdf: Cow<'static, [[[[u16; 3+1]; SIG_COEF_CONTEXTS_EOB]; PLANE_TYPES];
+                          TX_SIZES]>,
+    coeff_base_cdf: Cow<'static, [[[[u16; 4+1]; SIG_COEF_CONTEXTS]; PLANE_TYPES];
+                          TX_SIZES]>,
+    coeff_br_cdf: Cow<'static, [[[[u16; BR_CDF_SIZE+1]; LEVEL_CONTEXTS]; PLANE_TYPES];
+                          TX_SIZES]>,
 }
 
 impl CDFContext {
     pub fn new(_qindex: u8) -> CDFContext {
         let c = CDFContext {
-            partition_cdf: default_partition_cdf,
-            kf_y_cdf: default_kf_y_mode_cdf,
-            y_mode_cdf: default_if_y_mode_cdf,
-            uv_mode_cdf: default_uv_mode_cdf,
-            intra_ext_tx_cdf: default_intra_ext_tx_cdf,
-            skip_cdfs: default_skip_cdfs,
-            intra_inter_cdfs: default_intra_inter_cdf,
-            angle_delta_cdf: default_angle_delta_cdf,
+            partition_cdf: Cow::Borrowed(&default_partition_cdf),
+            kf_y_cdf: Cow::Borrowed(&default_kf_y_mode_cdf),
+            y_mode_cdf: Cow::Borrowed(&default_if_y_mode_cdf),
+            uv_mode_cdf: Cow::Borrowed(&default_uv_mode_cdf),
+            intra_ext_tx_cdf: Cow::Borrowed(&default_intra_ext_tx_cdf),
+            skip_cdfs: Cow::Borrowed(&default_skip_cdfs),
+            intra_inter_cdfs: Cow::Borrowed(&default_intra_inter_cdf),
+            angle_delta_cdf: Cow::Borrowed(&default_angle_delta_cdf),
 
             // lv_map
-            txb_skip_cdf: av1_default_txb_skip_cdf,
-            dc_sign_cdf: av1_default_dc_sign_cdf,
-            eob_extra_cdf: av1_default_eob_extra_cdf,
+            txb_skip_cdf: Cow::Borrowed(&av1_default_txb_skip_cdf),
+            dc_sign_cdf: Cow::Borrowed(&av1_default_dc_sign_cdf),
+            eob_extra_cdf: Cow::Borrowed(&av1_default_eob_extra_cdf),
 
-            eob_flag_cdf16: av1_default_eob_multi16,
-            eob_flag_cdf32: av1_default_eob_multi32,
-            eob_flag_cdf64: av1_default_eob_multi64,
-            eob_flag_cdf128: av1_default_eob_multi128,
-            eob_flag_cdf256: av1_default_eob_multi256,
-            eob_flag_cdf512: av1_default_eob_multi512,
-            eob_flag_cdf1024: av1_default_eob_multi1024,
+            eob_flag_cdf16: Cow::Borrowed(&av1_default_eob_multi16),
+            eob_flag_cdf32: Cow::Borrowed(&av1_default_eob_multi32),
+            eob_flag_cdf64: Cow::Borrowed(&av1_default_eob_multi64),
+            eob_flag_cdf128: Cow::Borrowed(&av1_default_eob_multi128),
+            eob_flag_cdf256: Cow::Borrowed(&av1_default_eob_multi256),
+            eob_flag_cdf512: Cow::Borrowed(&av1_default_eob_multi512),
+            eob_flag_cdf1024: Cow::Borrowed(&av1_default_eob_multi1024),
 
-            coeff_base_eob_cdf: av1_default_coeff_base_eob_multi,
-            coeff_base_cdf: av1_default_coeff_base_multi,
-            coeff_br_cdf: av1_default_coeff_lps_multi
+            coeff_base_eob_cdf: Cow::Borrowed(&av1_default_coeff_base_eob_multi),
+            coeff_base_cdf: Cow::Borrowed(&av1_default_coeff_base_multi),
+            coeff_br_cdf: Cow::Borrowed(&av1_default_coeff_lps_multi)
 
         };
 
         c
     }
-
+/*
     pub fn build_map(&self) -> Vec<(&'static str, usize, usize)> {
         use std::mem::size_of_val;
 
@@ -1167,8 +1169,10 @@ impl CDFContext {
             ("coeff_br_cdf", coeff_br_cdf_start, coeff_br_cdf_end),
         ]
     }
+    */
 }
 
+/*
 #[cfg(test)]
 mod test {
     #[test]
@@ -1181,6 +1185,7 @@ mod test {
         cdf_map.lookup(f.as_ptr() as usize);
     }
 }
+*/
 
 const SUPERBLOCK_TO_PLANE_SHIFT: usize = MAX_SB_SIZE_LOG2;
 const SUPERBLOCK_TO_BLOCK_SHIFT: usize = MAX_MIB_SIZE_LOG2;
@@ -1626,9 +1631,9 @@ impl FieldMap {
 macro_rules! symbol {
     ($self:ident, $s:expr, $cdf:expr, $nsymbs:expr) => {
         $self.w.symbol($s, $cdf, $nsymbs);
-        if let Some(map) = $self.fc_map.as_ref() {
+        /* if let Some(map) = $self.fc_map.as_ref() {
             map.lookup($cdf.as_ptr() as usize);
-        }
+        } */
     }
 }
 
@@ -1648,12 +1653,12 @@ pub struct ContextWriter {
 
 impl ContextWriter {
     pub fn new(w: ec::Writer, fc: CDFContext, bc: BlockContext) -> Self {
-        use std::env;
+        // use std::env;
 
-        let mut cw = ContextWriter { w, fc, bc, fc_map: Default::default() };
-        if env::var_os("RAV1E_DEBUG").is_some() {
+        let /* mut */ cw = ContextWriter { w, fc, bc, fc_map: Default::default() };
+        /* if env::var_os("RAV1E_DEBUG").is_some() {
             cw.fc_map = Some(FieldMap{ map: cw.fc.build_map() });
-        }
+        }*/
 
         cw
     }
@@ -1684,7 +1689,7 @@ impl ContextWriter {
         let has_rows = (bo.y + hbs) < self.bc.rows;
         let ctx = self.bc.partition_plane_context(&bo, bsize);
         assert!(ctx < PARTITION_CONTEXTS);
-        let partition_cdf = &mut self.fc.partition_cdf[ctx];
+        let partition_cdf = &mut self.fc.partition_cdf.to_mut()[ctx];
 
         if !has_rows && !has_cols {
           return;
@@ -1710,16 +1715,16 @@ impl ContextWriter {
         let left_mode = self.bc.left_of(bo).mode as usize;
         let above_ctx = intra_mode_context[above_mode];
         let left_ctx = intra_mode_context[left_mode];
-        let cdf = &mut self.fc.kf_y_cdf[above_ctx][left_ctx];
+        let cdf = &mut self.fc.kf_y_cdf.to_mut()[above_ctx][left_ctx];
         symbol!(self, mode as u32, cdf, INTRA_MODES);
     }
     pub fn write_intra_mode(&mut self, bsize: BlockSize, mode: PredictionMode) {
-        let cdf = &mut self.fc.y_mode_cdf[size_group_lookup[bsize as usize] as usize];
+        let cdf = &mut self.fc.y_mode_cdf.to_mut()[size_group_lookup[bsize as usize] as usize];
         symbol!(self, mode as u32, cdf, INTRA_MODES);
     }
     pub fn write_intra_uv_mode(&mut self, uv_mode: PredictionMode, y_mode: PredictionMode,
                                bs: BlockSize) {
-        let cdf = &mut self.fc.uv_mode_cdf[bs.cfl_allowed() as usize][y_mode as usize];
+        let cdf = &mut self.fc.uv_mode_cdf.to_mut()[bs.cfl_allowed() as usize][y_mode as usize];
         if bs.cfl_allowed() {
             symbol!(self, uv_mode as u32, cdf, UV_INTRA_MODES);
         } else {
@@ -1728,7 +1733,7 @@ impl ContextWriter {
     }
     pub fn write_angle_delta(&mut self, angle: i8, mode: PredictionMode) {
     symbol!(self, (angle + MAX_ANGLE_DELTA as i8) as u32,
-                     &mut self.fc.angle_delta_cdf[mode as usize - PredictionMode::V_PRED as usize],
+                     &mut self.fc.angle_delta_cdf.to_mut()[mode as usize - PredictionMode::V_PRED as usize],
                      2 * MAX_ANGLE_DELTA + 1);
     }
 
@@ -1755,18 +1760,18 @@ impl ContextWriter {
 
               symbol!(self,
                   av1_ext_tx_ind[tx_set_type as usize][tx_type as usize] as u32,
-                  &mut self.fc.intra_ext_tx_cdf[eset as usize][square_tx_size as usize][intra_dir as usize],
+                  &mut self.fc.intra_ext_tx_cdf.to_mut()[eset as usize][square_tx_size as usize][intra_dir as usize],
                   num_ext_tx_set[tx_set_type as usize]);
           }
         }
     }
     pub fn write_skip(&mut self, bo: &BlockOffset, skip: bool) {
         let ctx = self.bc.skip_context(bo);
-        symbol!(self, skip as u32, &mut self.fc.skip_cdfs[ctx], 2);
+        symbol!(self, skip as u32, &mut self.fc.skip_cdfs.to_mut()[ctx], 2);
     }
     pub fn write_is_inter(&mut self, bo: &BlockOffset, is_inter: bool) {
         let ctx = self.bc.intra_inter_context(bo);
-        symbol!(self, is_inter as u32, &mut self.fc.intra_inter_cdfs[ctx], 2);
+        symbol!(self, is_inter as u32, &mut self.fc.intra_inter_cdfs.to_mut()[ctx], 2);
     }
 
     pub fn get_txsize_entropy_ctx(&mut self, tx_size: TxSize) -> usize {
@@ -2007,7 +2012,7 @@ impl ContextWriter {
         let txb_ctx = self.bc.get_txb_ctx(plane_bsize, tx_size, plane, bo, xdec, ydec);
 
         {
-          let cdf = &mut self.fc.txb_skip_cdf[txs_ctx][txb_ctx.txb_skip_ctx];
+          let cdf = &mut self.fc.txb_skip_cdf.to_mut()[txs_ctx][txb_ctx.txb_skip_ctx];
           symbol!(self, (eob == 0) as u32, cdf, 2);
         }
 
@@ -2038,19 +2043,19 @@ impl ContextWriter {
 
         match eob_multi_size {
           0 => { symbol!(self, eob_pt - 1,
-                     &mut self.fc.eob_flag_cdf16[plane_type][eob_multi_ctx], 5); }
+                     &mut self.fc.eob_flag_cdf16.to_mut()[plane_type][eob_multi_ctx], 5); }
           1 => { symbol!(self, eob_pt - 1,
-                     &mut self.fc.eob_flag_cdf32[plane_type][eob_multi_ctx], 6); }
+                     &mut self.fc.eob_flag_cdf32.to_mut()[plane_type][eob_multi_ctx], 6); }
           2 => { symbol!(self, eob_pt - 1,
-                     &mut self.fc.eob_flag_cdf64[plane_type][eob_multi_ctx], 7); }
+                     &mut self.fc.eob_flag_cdf64.to_mut()[plane_type][eob_multi_ctx], 7); }
           3 => { symbol!(self, eob_pt - 1,
-                     &mut self.fc.eob_flag_cdf128[plane_type][eob_multi_ctx], 8); }
+                     &mut self.fc.eob_flag_cdf128.to_mut()[plane_type][eob_multi_ctx], 8); }
           4 => { symbol!(self, eob_pt - 1,
-                     &mut self.fc.eob_flag_cdf256[plane_type][eob_multi_ctx], 9); }
+                     &mut self.fc.eob_flag_cdf256.to_mut()[plane_type][eob_multi_ctx], 9); }
           5 => { symbol!(self, eob_pt - 1,
-                     &mut self.fc.eob_flag_cdf512[plane_type][eob_multi_ctx], 10); }
+                     &mut self.fc.eob_flag_cdf512.to_mut()[plane_type][eob_multi_ctx], 10); }
           _ => { symbol!(self, eob_pt - 1,
-                     &mut self.fc.eob_flag_cdf1024[plane_type][eob_multi_ctx], 11); }
+                     &mut self.fc.eob_flag_cdf1024.to_mut()[plane_type][eob_multi_ctx], 11); }
         };
 
         let eob_offset_bits = k_eob_offset_bits[eob_pt as usize];
@@ -2059,7 +2064,7 @@ impl ContextWriter {
             let mut eob_shift = eob_offset_bits - 1;
             let mut bit = if (eob_extra & (1 << eob_shift)) != 0 { 1 } else { 0 } as u32;
             symbol!(self, bit,
-              &mut self.fc.eob_extra_cdf[txs_ctx][plane_type][eob_pt as usize],
+              &mut self.fc.eob_extra_cdf.to_mut()[txs_ctx][plane_type][eob_pt as usize],
                              2);
             for i in 1..eob_offset_bits {
               eob_shift = eob_offset_bits as u16 - 1 - i as u16;
@@ -2084,11 +2089,11 @@ impl ContextWriter {
 
             if c == eob - 1 {
                 symbol!(self, (cmp::min(level, 3) - 1) as u32,
-                    &mut self.fc.coeff_base_eob_cdf[
+                    &mut self.fc.coeff_base_eob_cdf.to_mut()[
                     txs_ctx][plane_type][coeff_ctx as usize], 3);
             } else {
                 symbol!(self, (cmp::min(level, 3)) as u32,
-                    &mut self.fc.coeff_base_cdf[txs_ctx][plane_type][coeff_ctx as usize],
+                    &mut self.fc.coeff_base_cdf.to_mut()[txs_ctx][plane_type][coeff_ctx as usize],
                                  4);
             }
         }
@@ -2106,7 +2111,7 @@ impl ContextWriter {
             if level == 0 { continue; }
 
             if c == 0 {
-                symbol!(self, sign, &mut self.fc.dc_sign_cdf[plane_type]
+                symbol!(self, sign, &mut self.fc.dc_sign_cdf.to_mut()[plane_type]
                               [txb_ctx.dc_sign_ctx], 2);
             } else {
                 self.w.bit(sign as u16);
@@ -2128,7 +2133,7 @@ impl ContextWriter {
                 loop {
                   if idx >= COEFF_BASE_RANGE { break; }
                   let k = cmp::min(base_range - idx as u16, BR_CDF_SIZE as u16 - 1);
-                  symbol!(self, k as u32, &mut self.fc.coeff_br_cdf[
+                  symbol!(self, k as u32, &mut self.fc.coeff_br_cdf.to_mut()[
                           cmp::min(txs_ctx, TxSize::TX_32X32 as usize)]
                           [plane_type][br_ctx], BR_CDF_SIZE);
                   if k < BR_CDF_SIZE as u16 - 1 { break; }
@@ -2161,8 +2166,8 @@ impl ContextWriter {
         self.w.rollback(&checkpoint.w);
         self.fc = checkpoint.fc.clone();
         self.bc.rollback(&checkpoint.bc);
-        if self.fc_map.is_some() {
+        /* if self.fc_map.is_some() {
             self.fc_map = Some(FieldMap { map: self.fc.build_map() });
-        }
+        } */
     }
 }
