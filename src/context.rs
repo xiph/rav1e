@@ -1957,7 +1957,7 @@ impl ContextWriter {
         // TODO: If iner mode, scan_order should use inter version of them
         let scan_order = &av1_inter_scan_orders[tx_size as usize][tx_type as usize];
         let scan = scan_order.scan;
-        let mut coeffs_storage = [0 as i32; 64*64];
+        let mut coeffs_storage = [0 as i32; 32*32];
         let coeffs = &mut coeffs_storage[..tx_size.width()*tx_size.height()];
         let mut cul_level = 0 as u32;
 
