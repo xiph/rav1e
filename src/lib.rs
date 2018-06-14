@@ -34,6 +34,7 @@ use quantize::*;
 use plane::*;
 use predict::*;
 use rdo::*;
+use ec::*;
 use std::fmt;
 
 extern {
@@ -630,7 +631,7 @@ fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
         let po = bo.plane_offset(&fs.input.planes[0].cfg);
         let d = sse_wxh(&fs.input.planes[0].slice(&po), &fs.rec.planes[0].slice(&po),
                         w as usize, h as usize);
-        let r = ((cw.w.tell_frac() - tell) as f64)/8.0;
+        let r = ((cw.w.tell_frac() - tell) as f64)/((1 << OD_BITRES) as f64);
 
         let rd = (d as f64) + lambda*r;
         if rd < best_rd {
