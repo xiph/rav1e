@@ -621,6 +621,19 @@ fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
     let w = block_size_wide[bsize as usize];
     let h = block_size_high[bsize as usize];
 
+    let xdec = fs.input.planes[1].cfg.xdec;
+    let ydec = fs.input.planes[1].cfg.ydec;
+    let mut bw_uv = mi_size_wide[bsize as usize] >> xdec;
+    let mut bh_uv = mi_size_high[bsize as usize] >> ydec;
+
+    if (bw_uv == 0 || bh_uv == 0) && has_chroma(bo, bsize, xdec, ydec) {
+        bw_uv = 1;
+        bh_uv = 1;
+    }
+
+    let partition_start_x = (bo.x & LOCAL_BLOCK_MASK) >> xdec << MI_SIZE_LOG2;
+    let partition_start_y = (bo.y & LOCAL_BLOCK_MASK) >> ydec << MI_SIZE_LOG2;
+
     for &mode in RAV1E_INTRA_MODES {
         if fi.frame_type == FrameType::KEY && mode >= PredictionMode::NEARESTMV {
           break;
@@ -630,8 +643,20 @@ fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
 
         encode_block(fi, fs, cw, mode, bsize, bo);
         let po = bo.plane_offset(&fs.input.planes[0].cfg);
-        let d = sse_wxh(&fs.input.planes[0].slice(&po), &fs.rec.planes[0].slice(&po),
-                        w as usize, h as usize);
+        let mut d = sse_wxh(&fs.input.planes[0].slice(&po), &fs.rec.planes[0].slice(&po),
+                                    w as usize, h as usize);
+        // Add chroma distortion only when they are available
+        if bw_uv > 0 && bh_uv > 0 {
+            for p in 1..3 {
+                let sb_offset = bo.sb_offset().plane_offset(&fs.input.planes[p].cfg);
+                let po = PlaneOffset {
+                    x: sb_offset.x + partition_start_x,
+                    y: sb_offset.y + partition_start_y };
+
+                d += sse_wxh(&fs.input.planes[p].slice(&po), &fs.rec.planes[p].slice(&po),
+                                        w as usize >> xdec, h as usize >> ydec);
+            }
+        };
         let r = ((cw.w.tell_frac() - tell) as f64)/((1 << OD_BITRES) as f64);
 
         let rd = (d as f64) + lambda*r;
