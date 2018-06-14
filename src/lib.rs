@@ -612,7 +612,7 @@ fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
     let q0 = q / 8.0_f64;	// Convert q into Q0 precision, given thatn libaom quantizers are Q3.
 
     // Lambda formula from doc/theoretical_results.lyx in the daala repo
-    let lambda = q0*q0*2.0_f64.ln()/6.0;	// Use Q0 quantizer since lambda will be applied to Q0 pixel domain
+    let lambda = q0*q0*std::f64::consts::LN_2/6.0;	// Use Q0 quantizer since lambda will be applied to Q0 pixel domain
 
     let mut best_mode = PredictionMode::DC_PRED;
     let mut best_rd = std::f64::MAX;
