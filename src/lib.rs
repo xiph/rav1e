@@ -876,6 +876,13 @@ pub fn process_frame(sequence: &Sequence, fi: &FrameInvariants,
     let height = fi.height;
     let y4m_bits = y4m_dec.get_bit_depth();
     let y4m_bytes = y4m_dec.get_bytes_per_sample();
+    let csp = y4m_dec.get_colorspace();
+    match csp {
+        y4m::Colorspace::C420 => {},
+        _ => {
+            panic!("Colorspace {:?} is not supported yet.", csp);
+        },
+    }
     match y4m_dec.read_frame() {
         Ok(y4m_frame) => {
             let y4m_y = y4m_frame.get_y_plane();
