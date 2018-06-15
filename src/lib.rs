@@ -785,7 +785,7 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
         partition = PartitionType::PARTITION_SPLIT;
         subsize = get_subsize(bsize, partition);
 
-        let merged_rd_cost = rd_cost;
+        let nosplit_rd_cost = rd_cost;
 
         if bsize >= BlockSize::BLOCK_8X8 {
             cw.write_partition(bo, partition, bsize);
@@ -797,7 +797,7 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
         rd_cost += encode_partition_bottomup(fi, fs, cw, subsize, &BlockOffset { x: bo.x + hbs as usize, y: bo.y + hbs as usize });
 
         // Recode the full block if it is more efficient
-        if is_codable && merged_rd_cost < rd_cost {
+        if is_codable && nosplit_rd_cost < rd_cost {
             cw.rollback(checkpoint.clone());
 
             partition = PartitionType::PARTITION_NONE;
@@ -806,7 +806,7 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
                 cw.write_partition(bo, partition, bsize);
             }
 
-            // FIXME redundant block re-encode
+            // FIXME: redundant block re-encode
             let pred_mode = best_decision.pred_mode;
             cw.bc.set_mode(bo, bsize, pred_mode);
             encode_block(fi, fs, cw, pred_mode, bsize, bo);
@@ -878,7 +878,7 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut 
 
             cw.bc.set_mode(bo, bsize, pred_mode);
 
-            // FIXME every final block that has gone through the RDO decision process is encoded twice
+            // FIXME: every final block that has gone through the RDO decision process is encoded twice
             encode_block(fi, fs, cw, pred_mode, bsize, bo);
         },
         PartitionType::PARTITION_SPLIT => {
@@ -927,7 +927,7 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
             let bo = sbo.block_offset(0, 0);
 
             // Encode SuperBlock
-            if fi.speed <= 0 {
+            if fi.speed == 0 {
                 encode_partition_bottomup(fi, fs, &mut cw, BlockSize::BLOCK_64X64, &bo);
             }
             else {
