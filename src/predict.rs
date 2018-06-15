@@ -6,9 +6,19 @@ use std::mem::*;
 use partition::*;
 use context::MAX_TX_SIZE;
 
-pub static RAV1E_INTRA_MODES: &'static [PredictionMode] =
-    &[PredictionMode::DC_PRED, PredictionMode::H_PRED, PredictionMode::V_PRED];
-pub static RAV1E_PARTITION_TYPES: &'static [PartitionType] = &[PartitionType::PARTITION_NONE, PartitionType::PARTITION_SPLIT];
+pub static RAV1E_INTRA_MODES: &'static [PredictionMode] = &[
+    PredictionMode::DC_PRED,
+    PredictionMode::H_PRED,
+    PredictionMode::V_PRED,
+    PredictionMode::SMOOTH_PRED,
+    PredictionMode::SMOOTH_H_PRED,
+    PredictionMode::SMOOTH_V_PRED
+];
+
+pub static RAV1E_PARTITION_TYPES: &'static [PartitionType] = &[
+    PartitionType::PARTITION_NONE,
+    PartitionType::PARTITION_SPLIT
+];
 
 // Weights are quadratic from '1' to '1 / block_size', scaled by 2^sm_weight_log2_scale.
 const sm_weight_log2_scale: u8 = 8;
