@@ -114,9 +114,10 @@ impl FrameInvariants {
     pub fn new(width: usize, height: usize, qindex: usize, speed: usize) -> FrameInvariants {
         // Speed level decides the minimum partition size, i.e. higher speed --> larger min partition size,
         // with exception that SBs on right or bottom frame borders split down to BLOCK_4X4.
-        let min_partition_size = if speed <= 0 { BlockSize::BLOCK_4X4 }
-                                 else if speed <= 1 { BlockSize::BLOCK_8X8 }
-                                 else if speed <= 2 { BlockSize::BLOCK_16X16 }
+        // At speed = 0, RDO search is exhaustive.
+        let min_partition_size = if speed <= 1 { BlockSize::BLOCK_4X4 }
+                                 else if speed <= 2 { BlockSize::BLOCK_8X8 }
+                                 else if speed <= 3 { BlockSize::BLOCK_16X16 }
                                  else { BlockSize::BLOCK_32X32 };
         FrameInvariants {
             qindex: qindex,
@@ -246,7 +247,7 @@ impl EncoderConfig {
                 .short("s")
                 .long("speed")
                 .takes_value(true)
-                .default_value("2"))
+                .default_value("3"))
             .get_matches();
 
         EncoderConfig {
@@ -655,8 +656,8 @@ fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
 
 // RDO-based partitioning decision
 fn rdo_partition_decision(fi: &FrameInvariants, fs: &mut FrameState,
-                  cw: &mut ContextWriter,
-                  bsize: BlockSize, bo: &BlockOffset, cached_block: &RDOOutput) -> RDOOutput {
+                  cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset,
+                  cached_block: &RDOOutput) -> RDOOutput {
     let max_rd = std::f64::MAX;
 
     let mut best_partition = cached_block.part_type;
@@ -694,19 +695,19 @@ fn rdo_partition_decision(fi: &FrameInvariants, fs: &mut FrameState,
                 let bs = mi_size_wide[bsize as usize];
                 let hbs = bs >> 1; // Half the block size in blocks
 
-                let offset = BlockOffset{x: bo.x, y: bo.y};
+                let offset = BlockOffset { x: bo.x, y: bo.y };
                 let mode_decision = rdo_mode_decision(fi, fs, cw, subsize, &offset).part_modes[0].clone();
                 child_modes.push(mode_decision);
 
-                let offset = BlockOffset{x: bo.x + hbs as usize, y: bo.y};
+                let offset = BlockOffset { x: bo.x + hbs as usize, y: bo.y };
                 let mode_decision = rdo_mode_decision(fi, fs, cw, subsize, &offset).part_modes[0].clone();
                 child_modes.push(mode_decision);
 
-                let offset = BlockOffset{x: bo.x, y: bo.y + hbs as usize};
+                let offset = BlockOffset { x: bo.x, y: bo.y + hbs as usize };
                 let mode_decision = rdo_mode_decision(fi, fs, cw, subsize, &offset).part_modes[0].clone();
                 child_modes.push(mode_decision);
 
-                let offset = BlockOffset{x: bo.x + hbs as usize, y: bo.y + hbs as usize};
+                let offset = BlockOffset { x: bo.x + hbs as usize, y: bo.y + hbs as usize };
                 let mode_decision = rdo_mode_decision(fi, fs, cw, subsize, &offset).part_modes[0].clone();
                 child_modes.push(mode_decision);
             },
@@ -725,7 +726,7 @@ fn rdo_partition_decision(fi: &FrameInvariants, fs: &mut FrameState,
     }
 
     assert!(best_rd >= 0_f64);
-    
+
     let rdo_output = RDOOutput { rd_cost: best_rd,
                                 part_type: best_partition,
                                 part_modes: best_pred_modes };
@@ -733,14 +734,103 @@ fn rdo_partition_decision(fi: &FrameInvariants, fs: &mut FrameState,
     rdo_output
 }
 
-fn encode_partition(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
+fn encode_partition_bottomup(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
+bsize: BlockSize, bo: &BlockOffset) -> f64 {
+    let mut rd_cost = std::f64::MAX;
+
+    if bo.x >= cw.bc.cols || bo.y >= cw.bc.rows {
+        return rd_cost;
+    }
+
+    let is_sb_on_frame_border = (fi.sb_width - 1) * 16 <= bo.x || (fi.sb_height - 1) * 16 <= bo.y;
+    let is_splittable = bsize > fi.min_partition_size;
+    let is_codable = bsize < BlockSize::BLOCK_64X64 &&
+        (!is_sb_on_frame_border || bsize == BlockSize::BLOCK_4X4);
+
+    let mut partition = PartitionType::PARTITION_NONE;
+    let mut best_decision = RDOPartitionOutput {
+        rd_cost: rd_cost,
+        bo: bo.clone(),
+        pred_mode: PredictionMode::DC_PRED
+    }; // Best decision that is not PARTITION_SPLIT
+
+    let bs = mi_size_wide[bsize as usize];
+    let hbs = bs >> 1; // Half the block size in blocks
+    let mut subsize: BlockSize;
+
+    let checkpoint = cw.checkpoint();
+
+    // Code the whole block
+    if is_codable {
+        partition = PartitionType::PARTITION_NONE;
+
+        if bsize >= BlockSize::BLOCK_8X8 {
+            cw.write_partition(bo, partition, bsize);
+        }
+
+        let mode_decision = rdo_mode_decision(fi, fs, cw, bsize, bo).part_modes[0].clone();
+        let pred_mode = mode_decision.pred_mode;
+        rd_cost = mode_decision.rd_cost;
+
+        cw.bc.set_mode(bo, bsize, pred_mode);
+        encode_block(fi, fs, cw, pred_mode, bsize, bo);
+
+        best_decision = mode_decision;
+    }
+
+    // Code a split partition and compare RD costs
+    if is_splittable {
+        cw.rollback(checkpoint.clone());
+
+        partition = PartitionType::PARTITION_SPLIT;
+        subsize = get_subsize(bsize, partition);
+
+        let nosplit_rd_cost = rd_cost;
+
+        if bsize >= BlockSize::BLOCK_8X8 {
+            cw.write_partition(bo, partition, bsize);
+        }
+
+        rd_cost = encode_partition_bottomup(fi, fs, cw, subsize, bo);
+        rd_cost += encode_partition_bottomup(fi, fs, cw, subsize, &BlockOffset { x: bo.x + hbs as usize, y: bo.y });
+        rd_cost += encode_partition_bottomup(fi, fs, cw, subsize, &BlockOffset { x: bo.x, y: bo.y + hbs as usize });
+        rd_cost += encode_partition_bottomup(fi, fs, cw, subsize, &BlockOffset { x: bo.x + hbs as usize, y: bo.y + hbs as usize });
+
+        // Recode the full block if it is more efficient
+        if is_codable && nosplit_rd_cost < rd_cost {
+            cw.rollback(checkpoint.clone());
+
+            partition = PartitionType::PARTITION_NONE;
+
+            if bsize >= BlockSize::BLOCK_8X8 {
+                cw.write_partition(bo, partition, bsize);
+            }
+
+            // FIXME: redundant block re-encode
+            let pred_mode = best_decision.pred_mode;
+            cw.bc.set_mode(bo, bsize, pred_mode);
+            encode_block(fi, fs, cw, pred_mode, bsize, bo);
+        }
+    }
+
+    subsize = get_subsize(bsize, partition);
+    
+    if bsize >= BlockSize::BLOCK_8X8 &&
+        (bsize == BlockSize::BLOCK_8X8 || partition != PartitionType::PARTITION_SPLIT) {
+        cw.bc.update_partition_context(bo, subsize, bsize);
+    }
+
+    rd_cost
+}
+
+fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
             bsize: BlockSize, bo: &BlockOffset, block_output: &Option<RDOOutput>) {
 
     if bo.x >= cw.bc.cols || bo.y >= cw.bc.rows {
         return;
     }
 
-    let is_sb_on_frame_border = (fi.sb_width-1) * 16 <= bo.x || (fi.sb_height-1) * 16 <= bo.y;
+    let is_sb_on_frame_border = (fi.sb_width - 1) * 16 <= bo.x || (fi.sb_height - 1) * 16 <= bo.y;
 
     let mut rdo_output = block_output.clone().unwrap_or(RDOOutput {
         part_type: PartitionType::PARTITION_INVALID,
@@ -750,7 +840,7 @@ fn encode_partition(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextW
     let partition: PartitionType;
 
     if is_sb_on_frame_border && bsize > BlockSize::BLOCK_4X4 {
-        // SBs on right or bottom frame borders split down to BLOCK_4X4.
+        // SBs on right or bottom frame borders split down to BLOCK_4X4
         partition = PartitionType::PARTITION_SPLIT;
     } else if bsize >= BlockSize::BLOCK_64X64 {
         // Blocks of sizes above the supported range are automatically split
@@ -788,7 +878,7 @@ fn encode_partition(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextW
 
             cw.bc.set_mode(bo, bsize, pred_mode);
 
-            // FIXME every final block that has gone through the RDO decision process is encoded twice
+            // FIXME: every final block that has gone through the RDO decision process is encoded twice
             encode_block(fi, fs, cw, pred_mode, bsize, bo);
         },
         PartitionType::PARTITION_SPLIT => {
@@ -800,24 +890,24 @@ fn encode_partition(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextW
                     let offset = mode.bo.clone();
 
                     // Each block is subjected to a new splitting decision
-                    encode_partition(fi, fs, cw, subsize, &offset, 
+                    encode_partition_topdown(fi, fs, cw, subsize, &offset,
                         &Some(RDOOutput {
-                            rd_cost: mode.rd_cost, 
-                            part_type: PartitionType::PARTITION_NONE, 
+                            rd_cost: mode.rd_cost,
+                            part_type: PartitionType::PARTITION_NONE,
                             part_modes: vec![mode] }));
                 }
             }
             else {
-                encode_partition(fi, fs, cw, subsize, bo, &None);
-                encode_partition(fi, fs, cw, subsize, &BlockOffset{x: bo.x + hbs as usize, y: bo.y}, &None);
-                encode_partition(fi, fs, cw, subsize, &BlockOffset{x: bo.x, y: bo.y + hbs as usize}, &None);
-                encode_partition(fi, fs, cw, subsize, &BlockOffset{x: bo.x + hbs as usize, y: bo.y + hbs as usize}, &None);
+                encode_partition_topdown(fi, fs, cw, subsize, bo, &None);
+                encode_partition_topdown(fi, fs, cw, subsize, &BlockOffset{x: bo.x + hbs as usize, y: bo.y}, &None);
+                encode_partition_topdown(fi, fs, cw, subsize, &BlockOffset{x: bo.x, y: bo.y + hbs as usize}, &None);
+                encode_partition_topdown(fi, fs, cw, subsize, &BlockOffset{x: bo.x + hbs as usize, y: bo.y + hbs as usize}, &None);
             }
         },
         _ => { assert!(false); },
     }
 
-    if bsize >= BlockSize::BLOCK_8X8 && 
+    if bsize >= BlockSize::BLOCK_8X8 &&
         (bsize == BlockSize::BLOCK_8X8 || partition != PartitionType::PARTITION_SPLIT) {
             cw.bc.update_partition_context(bo, subsize, bsize);
     }
@@ -837,7 +927,12 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
             let bo = sbo.block_offset(0, 0);
 
             // Encode SuperBlock
-            encode_partition(fi, fs, &mut cw, BlockSize::BLOCK_64X64, &bo, &None);
+            if fi.speed == 0 {
+                encode_partition_bottomup(fi, fs, &mut cw, BlockSize::BLOCK_64X64, &bo);
+            }
+            else {
+                encode_partition_topdown(fi, fs, &mut cw, BlockSize::BLOCK_64X64, &bo, &None);
+            }
         }
     }
     let mut h = cw.w.done();
