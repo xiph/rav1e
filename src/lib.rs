@@ -640,7 +640,7 @@ fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
             best_mode = mode;
         }
 
-        cw.rollback(checkpoint.clone());
+        cw.rollback(&checkpoint);
     }
 
     assert!(best_rd >= 0_f64);
@@ -722,7 +722,7 @@ fn rdo_partition_decision(fi: &FrameInvariants, fs: &mut FrameState,
             best_pred_modes = child_modes.clone();
         }
 
-        cw.rollback(checkpoint.clone());
+        cw.rollback(&checkpoint);
     }
 
     assert!(best_rd >= 0_f64);
@@ -780,7 +780,7 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
 
     // Code a split partition and compare RD costs
     if is_splittable {
-        cw.rollback(checkpoint.clone());
+        cw.rollback(&checkpoint);
 
         partition = PartitionType::PARTITION_SPLIT;
         subsize = get_subsize(bsize, partition);
@@ -798,7 +798,7 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
 
         // Recode the full block if it is more efficient
         if is_codable && nosplit_rd_cost < rd_cost {
-            cw.rollback(checkpoint.clone());
+            cw.rollback(&checkpoint);
 
             partition = PartitionType::PARTITION_NONE;
 
@@ -814,7 +814,7 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
     }
 
     subsize = get_subsize(bsize, partition);
-    
+
     if bsize >= BlockSize::BLOCK_8X8 &&
         (bsize == BlockSize::BLOCK_8X8 || partition != PartitionType::PARTITION_SPLIT) {
         cw.bc.update_partition_context(bo, subsize, bsize);

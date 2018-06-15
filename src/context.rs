@@ -2157,7 +2157,7 @@ impl ContextWriter {
         }
     }
 
-    pub fn rollback(&mut self, checkpoint: ContextWriterCheckpoint) {
+    pub fn rollback(&mut self, checkpoint: &ContextWriterCheckpoint) {
         self.w.rollback(&checkpoint.w);
         self.fc = checkpoint.fc.clone();
         self.bc.rollback(&checkpoint.bc);
