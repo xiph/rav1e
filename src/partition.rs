@@ -161,13 +161,11 @@ impl PredictionMode {
         let x = dst.x;
         let y = dst.y;
 
-        if (self == &PredictionMode::V_PRED ||
-            self == &PredictionMode::DC_PRED) && y != 0 {
+        if self != &PredictionMode::H_PRED && y != 0 {
             above.copy_from_slice(&dst.go_up(1).as_slice()[..B::W]);
         }
 
-        if (self == &PredictionMode::H_PRED ||
-            self == &PredictionMode::DC_PRED) && x != 0 {
+        if self != &PredictionMode::V_PRED && x != 0 {
             let left_slice = dst.go_left(1);
             for i in 0..B::H {
                 left[i] = left_slice.p(0, i);
@@ -187,6 +185,10 @@ impl PredictionMode {
             },
             PredictionMode::H_PRED => B::pred_h(slice, stride, left),
             PredictionMode::V_PRED => B::pred_v(slice, stride, above),
+            PredictionMode::PAETH_PRED => B::pred_paeth(slice, stride, above, left),
+            PredictionMode::SMOOTH_PRED => B::pred_smooth(slice, stride, above, left, 8),
+            PredictionMode::SMOOTH_H_PRED => B::pred_smooth_h(slice, stride, above, left, 8),
+            PredictionMode::SMOOTH_V_PRED => B::pred_smooth_v(slice, stride, above, left, 8),
             _ => unimplemented!(),
         }
     }
