@@ -155,20 +155,23 @@ impl PredictionMode {
 
     #[inline(always)]
     fn predict_inner<'a, B: Intra>(&self, dst: &'a mut PlaneMutSlice<'a>) {
-        let above = &mut [127u16; 64][..B::W];
-        let left = &mut [129u16; 64][..B::H];
+        // above and left arrays include above-left sample
+        // above array includes above-right samples
+        // left array includes below-left samples
+        let above = &mut [127u16; 2*MAX_TX_SIZE+1][..B::W+B::H+1];
+        let left = &mut [129u16; 2*MAX_TX_SIZE+1][..B::H+B::W+1];
         let stride = dst.plane.cfg.stride;
         let x = dst.x;
         let y = dst.y;
 
         if self != &PredictionMode::H_PRED && y != 0 {
-            above.copy_from_slice(&dst.go_up(1).as_slice()[..B::W]);
+            above[1..B::W+1].copy_from_slice(&dst.go_up(1).as_slice()[..B::W]);
         }
 
         if self != &PredictionMode::V_PRED && x != 0 {
             let left_slice = dst.go_left(1);
             for i in 0..B::H {
-                left[i] = left_slice.p(0, i);
+                left[i+1] = left_slice.p(0, i);
             }
         }
 
@@ -178,17 +181,17 @@ impl PredictionMode {
             PredictionMode::DC_PRED => {
                 match (x, y) {
                     (0, 0) => B::pred_dc_128(slice, stride),
-                    (_, 0) => B::pred_dc_left(slice, stride, above, left),
-                    (0, _) => B::pred_dc_top(slice, stride, above, left),
-                    _ => B::pred_dc(slice, stride, above, left),
+                    (_, 0) => B::pred_dc_left(slice, stride, &above[1..B::W+1], &left[1..B::H+1]),
+                    (0, _) => B::pred_dc_top(slice, stride, &above[1..B::W+1], &left[1..B::H+1]),
+                    _ => B::pred_dc(slice, stride, &above[1..B::W+1], &left[1..B::H+1]),
                 }
             },
-            PredictionMode::H_PRED => B::pred_h(slice, stride, left),
-            PredictionMode::V_PRED => B::pred_v(slice, stride, above),
-            PredictionMode::PAETH_PRED => B::pred_paeth(slice, stride, above, left),
-            PredictionMode::SMOOTH_PRED => B::pred_smooth(slice, stride, above, left, 8),
-            PredictionMode::SMOOTH_H_PRED => B::pred_smooth_h(slice, stride, above, left, 8),
-            PredictionMode::SMOOTH_V_PRED => B::pred_smooth_v(slice, stride, above, left, 8),
+            PredictionMode::H_PRED => B::pred_h(slice, stride, &left[1..B::H+1]),
+            PredictionMode::V_PRED => B::pred_v(slice, stride, &above[1..B::W+1]),
+            PredictionMode::PAETH_PRED => B::pred_paeth(slice, stride, &above[1..B::W+1], &left[1..B::H+1]),
+            PredictionMode::SMOOTH_PRED => B::pred_smooth(slice, stride, &above[1..B::W+1], &left[1..B::H+1], 8),
+            PredictionMode::SMOOTH_H_PRED => B::pred_smooth_h(slice, stride, &above[1..B::W+1], &left[1..B::H+1], 8),
+            PredictionMode::SMOOTH_V_PRED => B::pred_smooth_v(slice, stride, &above[1..B::W+1], &left[1..B::H+1], 8),
             _ => unimplemented!(),
         }
     }
