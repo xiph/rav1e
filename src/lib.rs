@@ -973,7 +973,10 @@ pub fn process_frame(sequence: &Sequence, fi: &FrameInvariants,
     let y4m_bytes = y4m_dec.get_bytes_per_sample();
     let csp = y4m_dec.get_colorspace();
     match csp {
-        y4m::Colorspace::C420 => {},
+        y4m::Colorspace::C420 | 
+        y4m::Colorspace::C420jpeg |
+        y4m::Colorspace::C420paldv | 
+        y4m::Colorspace::C420mpeg2 => {},
         _ => {
             panic!("Colorspace {:?} is not supported yet.", csp);
         },
