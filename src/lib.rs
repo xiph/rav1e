@@ -462,6 +462,8 @@ fn diff(dst: &mut [i16], src1: &PlaneSlice, src2: &PlaneSlice, width: usize, hei
     }
 }
 
+use std::mem::uninitialized;
+
 // For a transform block,
 // predict, transform, quantize, write coefficients to a bitstream,
 // dequantize, inverse-transform.
@@ -477,7 +479,11 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
 
     if skip { return; }
 
-    let mut residual = [0 as i16; 64*64];
+    let mut residual: [i16; 64*64] = unsafe { uninitialized() };
+    let mut coeffs_storage: [i32; 64*64] = unsafe { uninitialized() };
+    let mut rcoeffs: [i32; 64*64] = unsafe { uninitialized() };
+
+    let coeffs = &mut coeffs_storage[..tx_size.width()*tx_size.height()];
 
     diff(&mut residual,
          &fs.input.planes[p].slice(po),
@@ -485,8 +491,7 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
          1<<tx_size_wide_log2[tx_size as usize],
          1<<tx_size_high_log2[tx_size as usize]);
 
-    let mut coeffs_storage = [0 as i32; 64*64];
-    let coeffs = &mut coeffs_storage[..tx_size.width()*tx_size.height()];
+
     forward_transform(&residual, coeffs, 1<<tx_size_wide_log2[tx_size as usize], tx_size, tx_type);
     quantize_in_place(fi.qindex, coeffs, tx_size);
 
@@ -494,7 +499,6 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
                             fi.use_reduced_tx_set);
 
     //reconstruct
-    let mut rcoeffs = [0 as i32; 64*64];
     dequantize(fi.qindex, &coeffs, &mut rcoeffs, tx_size);
 
     inverse_transform_add(&mut rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type);
