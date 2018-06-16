@@ -174,10 +174,11 @@ fn intra_v_pred_aom(b: &mut Bencher) {
 fn intra_paeth_pred_native(b: &mut Bencher) {
     let mut ra = ChaChaRng::new_unseeded();
     let (above, left, mut output) = setup_pred(&mut ra);
+    let above_left = unsafe { *above.as_ptr().offset(-1) };
 
     b.iter(|| {
         for _ in 0..MAX_ITER {
-            Block4x4::pred_paeth(&mut output, 32, &above[..4], &left[..4]);
+            Block4x4::pred_paeth(&mut output, 32, &above[..4], &left[..4], above_left);
         }
     })
 }
