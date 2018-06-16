@@ -181,12 +181,12 @@ pub trait Intra: Dim {
         }
     }
 
-    fn pred_paeth(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+    fn pred_paeth(output: &mut [u16], stride: usize, above: &[u16], left: &[u16], above_left: u16) {
         for r in 0..Self::H {
             for c in 0..Self::W {
 
                 // Top-left pixel is fixed in libaom
-                let raw_top_left = unsafe { *above.as_ptr().offset( - 1) } as i32;
+                let raw_top_left = above_left as i32;
                 let raw_left = left[r] as i32;
                 let raw_top = above[c] as i32;
 
@@ -413,9 +413,10 @@ pub mod test {
 
     fn do_paeth_pred(ra: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>) {
         let (above, left, mut o1, mut o2) = setup_pred(ra);
+        let above_left = unsafe { *above.as_ptr().offset(-1) };
 
         pred_paeth_4x4(&mut o1, 32, &above[..4], &left[..4]);
-        Block4x4::pred_paeth(&mut o2, 32, &above[..4], &left[..4]);
+        Block4x4::pred_paeth(&mut o2, 32, &above[..4], &left[..4], above_left);
 
         (o1, o2)
     }
@@ -524,7 +525,9 @@ pub mod test {
           }
         }
 
-        Block4x4::pred_paeth(&mut o, 32, &above[..4], &left[..4]);
+        let above_left = unsafe { *above.as_ptr().offset(-1) };
+
+        Block4x4::pred_paeth(&mut o, 32, &above[..4], &left[..4], above_left);
 
         for l in o.chunks(32).take(4) {
             for v in l[..4].iter() {
