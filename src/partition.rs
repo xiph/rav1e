@@ -155,8 +155,12 @@ impl PredictionMode {
 
     #[inline(always)]
     fn predict_inner<'a, B: Intra>(&self, dst: &'a mut PlaneMutSlice<'a>) {
+        // above and left arrays include above-left sample
+        // above array includes above-right samples
+        // left array includes below-left samples
         let above = &mut [127u16; 64][..B::W];
         let left = &mut [129u16; 64][..B::H];
+        let mut above_left = 0_u16;
         let stride = dst.plane.cfg.stride;
         let x = dst.x;
         let y = dst.y;
@@ -172,6 +176,10 @@ impl PredictionMode {
             }
         }
 
+        if self == &PredictionMode::PAETH_PRED && x != 0 && y != 0 {
+            above_left = dst.go_up(1).go_left(1).p(0, 0);
+        }
+
         let slice = dst.as_mut_slice();
 
         match *self {
@@ -185,7 +193,7 @@ impl PredictionMode {
             },
             PredictionMode::H_PRED => B::pred_h(slice, stride, left),
             PredictionMode::V_PRED => B::pred_v(slice, stride, above),
-            PredictionMode::PAETH_PRED => B::pred_paeth(slice, stride, above, left),
+            PredictionMode::PAETH_PRED => B::pred_paeth(slice, stride, above, left, above_left),
             PredictionMode::SMOOTH_PRED => B::pred_smooth(slice, stride, above, left, 8),
             PredictionMode::SMOOTH_H_PRED => B::pred_smooth_h(slice, stride, above, left, 8),
             PredictionMode::SMOOTH_V_PRED => B::pred_smooth_v(slice, stride, above, left, 8),
