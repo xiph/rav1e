@@ -34,7 +34,7 @@ fn main() {
         .define("CONFIG_UNIT_TESTS", "0")
         .define("CONFIG_EXT_PARTITION", "0")
         .define("CONFIG_EXT_PARTITION_TYPES", "0")
-        .define("CONFIG_OBU", "0")
+        .define("CONFIG_OBU", "1")
         .define("CONFIG_FILTER_INTRA", "0")
         .define("CONFIG_EXT_SKIP", "0")
         .define("CONFIG_LV_MAP", "1")

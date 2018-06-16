@@ -142,6 +142,7 @@ pub struct FrameInvariants {
     pub use_prev_frame_mvs: bool,
     pub min_partition_size: BlockSize,
     pub globalmv_transformation_type: [GlobalMVMode; ALTREF_FRAME + 1],
+    pub num_tg: usize
 }
 
 impl FrameInvariants {
@@ -178,6 +179,7 @@ impl FrameInvariants {
             use_prev_frame_mvs: false,
             min_partition_size,
             globalmv_transformation_type: [GlobalMVMode::IDENTITY; ALTREF_FRAME + 1],
+            num_tg: 1,
         }
     }
 }
@@ -329,6 +331,9 @@ pub fn write_ivf_frame(output_file: &mut Write, pts: u64, data: &[u8]) {
 }
 
 trait UncompressedHeader {
+    fn write_obu_header(&mut self, obu_type: OBU_Type, obu_extension: u32)
+            -> Result<(usize), std::io::Error>;
+
     fn write_frame_size(&mut self, fi: &FrameInvariants) -> Result<(), std::io::Error>;
     fn write_sequence_header(&mut self, fi: &FrameInvariants)
                                     -> Result<(), std::io::Error>;
@@ -339,6 +344,28 @@ trait UncompressedHeader {
 }
 
 impl<'a> UncompressedHeader for BitWriter<'a, BE> {
+    fn write_obu_header(&mut self, obu_type: OBU_Type, obu_extension: u32)
+            -> Result<(usize), std::io::Error>{
+        let mut size: usize = 0;
+        self.write(1,0)?; // forbidden bit.
+        size += 1;
+        self.write(4, obu_type as u32)?;
+        size += 4;
+        self.write_bit(obu_extension != 0)?;
+        size += 1;
+        self.write(1, 1)?; // obu_has_payload_length_field
+        size += 1;
+        self.write(1, 0)?; // reserved
+        size += 1;
+
+        if obu_extension != 0 {
+            self.write(8, obu_extension & 0xFF)?; size += 8;
+        }
+
+        size = (size + 7) / 8; // # of written bytes
+        Ok(size)
+    }
+
     fn write_frame_size(&mut self, fi: &FrameInvariants) -> Result<(), std::io::Error> {
         // width_bits and height_bits will have to be moved to the sequence header OBU
         // when we add support for it.
@@ -389,6 +416,107 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
     }
 }
 
+#[allow(non_camel_case_types)]
+pub enum OBU_Type {
+  OBU_SEQUENCE_HEADER = 1,
+  OBU_TEMPORAL_DELIMITER = 2,
+  OBU_FRAME_HEADER = 3,
+  OBU_TILE_GROUP = 4,
+  OBU_METADATA = 5,
+  OBU_FRAME = 6,
+  OBU_REDUNDANT_FRAME_HEADER = 7,
+  OBU_TILE_LIST = 8,
+  OBU_PADDING = 15,
+}
+
+fn write_sequence_header_obu(packet: &mut Write, obu_type: OBU_Type) 
+    -> Result<(usize), std::io::Error> {
+    let mut size: usize = 0;
+
+    Ok(size)
+}
+
+fn write_frame_header_obu(packet: &mut Write, obu_type: OBU_Type) 
+    -> Result<(usize), std::io::Error> {
+    let mut size: usize = 0;
+
+    Ok(size)
+}
+
+// NOTE from libaom:
+// Disallow values larger than 32-bits to ensure consistent behavior on 32 and
+// 64 bit targets: value is typically used to determine buffer allocation size
+// when decoded.
+fn aom_uleb_size_in_bytes(mut value: u64) -> usize {
+  let mut size = 0;
+  loop {
+    size += 1;
+    value = value >> 7;
+    if value == 0 { break; }
+  } //while ((value >>= 7) != 0);
+  return size;
+}
+/*
+fn write_headers_in_obu(packet: &mut Write, sequence: &Sequence,
+                            fi: &FrameInvariants) -> Result<(), std::io::Error> {
+    let mut uch = BitWriter::<BE>::new(packet);
+
+    // write sequence header obu if KEY_FRAME, preceded by 4-byte size
+    if fi.frame_type == KEY_FRAME {
+        let obu_header_size = write_obu_header(OBU_SEQUENCE_HEADER, 0, data);
+
+        obu_payload_size = write_sequence_header_obu(fi, data + obu_header_size);
+        const size_t length_field_size =
+            obu_memmove(obu_header_size, obu_payload_size, data);
+        if (write_uleb_obu_size(obu_header_size, obu_payload_size, data) !=
+            AOM_CODEC_OK) {
+        return AOM_CODEC_ERROR;
+        }
+
+        data += obu_header_size + obu_payload_size + length_field_size;
+    }
+
+    let write_frame_header = fi.num_tg > 1 || fi.show_existing_frame;
+    struct aom_write_bit_buffer saved_wb;
+    if (write_frame_header) {
+        // Write Frame Header OBU.
+        fh_info.frame_header = data;
+        obu_header_size =
+            write_obu_header(OBU_FRAME_HEADER, obu_extension_header, data);
+        obu_payload_size =
+            write_frame_header_obu(cpi, &saved_wb, data + obu_header_size, 1);
+
+        const size_t length_field_size =
+            obu_memmove(obu_header_size, obu_payload_size, data);
+        if (write_uleb_obu_size(obu_header_size, obu_payload_size, data) !=
+            AOM_CODEC_OK) {
+        return AOM_CODEC_ERROR;
+        }
+
+        fh_info.obu_header_byte_offset = 0;
+        fh_info.total_length =
+            obu_header_size + obu_payload_size + length_field_size;
+        data += fh_info.total_length;
+
+        // Since length_field_size is determined adaptively after frame header
+        // encoding, saved_wb must be adjusted accordingly.
+        saved_wb.bit_buffer += length_field_size;
+    }
+
+    if (cm->show_existing_frame) {
+        data_size = 0;
+    } else {
+        //  Each tile group obu will be preceded by 4-byte size of the tile group
+        //  obu
+        data_size = write_tiles_in_tg_obus(cpi, data, &saved_wb,
+                                        obu_extension_header, &fh_info);
+    }
+    data += data_size;
+    *size = data - dst;
+
+    Ok(())
+}
+*/
 fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence,
                             fi: &FrameInvariants) -> Result<(), std::io::Error> {
     let mut bw = BitWriter::<BE>::new(packet);
@@ -919,6 +1047,7 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
 fn encode_frame(sequence: &Sequence, fi: &FrameInvariants, fs: &mut FrameState, last_rec: &Option<Frame>) -> Vec<u8> {
     let mut packet = Vec::new();
     write_uncompressed_header(&mut packet, sequence, fi).unwrap();
+    //write_headers_in_obu(&mut packet, sequence, fi).unwrap();
     if fi.show_existing_frame {
         match last_rec {
             Some(ref rec) => for p in 0..3 {
