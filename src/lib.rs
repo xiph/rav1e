@@ -771,10 +771,13 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
         return rd_cost;
     }
 
-    let is_sb_on_frame_border = (fi.sb_width - 1) * 16 <= bo.x || (fi.sb_height - 1) * 16 <= bo.y;
+    let bs = mi_size_wide[bsize as usize];
+    let is_too_big =
+        bo.x as i32 + bs as i32 - fi.w_in_b as i32 > 0 ||
+        bo.y as i32 + bs as i32 - fi.h_in_b as i32 > 0;
+
     let is_splittable = bsize > fi.min_partition_size;
-    let is_codable = bsize < BlockSize::BLOCK_64X64 &&
-        (!is_sb_on_frame_border || bsize == BlockSize::BLOCK_4X4);
+    let is_codable = bsize < BlockSize::BLOCK_64X64 && !is_too_big;
 
     let mut partition = PartitionType::PARTITION_NONE;
     let mut best_decision = RDOPartitionOutput {
@@ -783,7 +786,6 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
         pred_mode: PredictionMode::DC_PRED
     }; // Best decision that is not PARTITION_SPLIT
 
-    let bs = mi_size_wide[bsize as usize];
     let hbs = bs >> 1; // Half the block size in blocks
     let mut subsize: BlockSize;
 
@@ -859,7 +861,10 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut 
         return;
     }
 
-    let is_sb_on_frame_border = (fi.sb_width - 1) * 16 <= bo.x || (fi.sb_height - 1) * 16 <= bo.y;
+    let bs = mi_size_wide[bsize as usize];
+    let is_too_big =
+        bo.x as i32 + bs as i32 - fi.w_in_b as i32 > 0 ||
+        bo.y as i32 + bs as i32 - fi.h_in_b as i32 > 0;
 
     let mut rdo_output = block_output.clone().unwrap_or(RDOOutput {
         part_type: PartitionType::PARTITION_INVALID,
@@ -868,8 +873,8 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut 
     });
     let partition: PartitionType;
 
-    if is_sb_on_frame_border && bsize > BlockSize::BLOCK_4X4 {
-        // SBs on right or bottom frame borders split down to BLOCK_4X4
+    if is_too_big {
+        // SBs on right or bottom frame borders split down to the maximum possible size
         partition = PartitionType::PARTITION_SPLIT;
     } else if bsize >= BlockSize::BLOCK_64X64 {
         // Blocks of sizes above the supported range are automatically split
@@ -887,7 +892,6 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut 
     assert!(PartitionType::PARTITION_NONE <= partition &&
             partition < PartitionType::PARTITION_INVALID);
 
-    let bs = mi_size_wide[bsize as usize];
     let hbs = bs >> 1; // Half the block size in blocks
     let subsize = get_subsize(bsize, partition);
 
@@ -898,12 +902,12 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut 
     match partition {
         PartitionType::PARTITION_NONE => {
             let pred_mode = if rdo_output.part_modes.len() > 0 {
-                // The optimal prediction mode is known from a previous iteration
-                rdo_output.part_modes[0].pred_mode
-            } else {
-                // Make a prediction mode decision for blocks encoded with no rdo_partition_decision call (e.g. edges)
-                rdo_mode_decision(fi, fs, cw, bsize, bo).part_modes[0].pred_mode
-            };
+                    // The optimal prediction mode is known from a previous iteration
+                    rdo_output.part_modes[0].pred_mode
+                } else {
+                    // Make a prediction mode decision for blocks encoded with no rdo_partition_decision call (e.g. edges)
+                    rdo_mode_decision(fi, fs, cw, bsize, bo).part_modes[0].pred_mode
+                };
 
             cw.bc.set_mode(bo, bsize, pred_mode);
 
