@@ -12,7 +12,7 @@ Because AV1 is not yet frozen, it relies on an exact decoder version and configu
 
 * Intra frames
 * 64x64 superblocks
-* H, V, and DC prediction modes
+* DC, H, V, Paeth, and smooth prediction modes
 * 4x4 DCT and ADST transforms
 * ~5 fps encoding @ 480p (see issue #124)
 
@@ -51,12 +51,13 @@ make -j8
 
 # Design
 
-* src/lib.rs - The top level library, contains code to write headers, manage buffers, and iterate throught each superblock.
-* src/ec.rs - Low-level implementation of the entropy coder, which directly writes the bitstream.
 * src/context.rs - High-level functions that write symbols to the bitstream, and maintain context.
+* src/ec.rs - Low-level implementation of the entropy coder, which directly writes the bitstream.
+* src/lib.rs - The top level library, contains code to write headers, manage buffers, and iterate throught each superblock.
 * src/partition.rs - Functions and enums to manage partitions (subdivisions of a superblock).
 * src/predict.rs - Intra prediction implementations.
 * src/quantize.rs - Quantization and dequantization functions for coefficients.
+* src/rdo.rs - RDO-related structures and distortion computation functions.
 * src/transform.rs - Implementations of DCT and ADST transforms.
 * src/bin/rav1e.rs - rav1e command line tool.
 * src/bin/rav1erepl.rs - Command line tool for debugging.
