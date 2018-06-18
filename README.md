@@ -12,9 +12,10 @@ Because AV1 is not yet frozen, it relies on an exact decoder version and configu
 
 * Intra frames
 * 64x64 superblocks
+* 4x4 to 32x32 RDO-selected square blocks
 * DC, H, V, Paeth, and smooth prediction modes
 * 4x4 DCT and ADST transforms
-* ~5 fps encoding @ 480p (see issue #124)
+* ~5 fps encoding @ 480p
 
 # Building
 
