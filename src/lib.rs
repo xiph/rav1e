@@ -74,19 +74,19 @@ const MAX_NUM_OPERATING_POINTS:usize = MAX_NUM_TEMPORAL_LAYERS * MAX_NUM_SPATIAL
 pub struct Sequence {
   // OBU Sequence header of AV1
     pub profile: u8,
-    pub num_bits_width: usize,
-    pub num_bits_height: usize,
-    pub max_frame_width: usize,
-    pub max_frame_height: usize,
+    pub num_bits_width: u32,
+    pub num_bits_height: u32,
+    pub max_frame_width: u32,
+    pub max_frame_height: u32,
     pub frame_id_numbers_present_flag: bool,
-    pub frame_id_length: usize,
-    pub delta_frame_id_length: usize,
+    pub frame_id_length: u32,
+    pub delta_frame_id_length: u32,
     pub use_128x128_superblock: bool,
-    pub order_hint_bits_minus_1: usize,
-    pub force_screen_content_tools: bool,  // 0 - force off
+    pub order_hint_bits_minus_1: u32,
+    pub force_screen_content_tools: u32,  // 0 - force off
                                            // 1 - force on
                                            // 2 - adaptive
-    pub force_integer_mv: bool,      // 0 - Not to force. MV can be in 1/4 or 1/8
+    pub force_integer_mv: u32,      // 0 - Not to force. MV can be in 1/4 or 1/8
                                      // 1 - force to integer
                                      // 2 - adaptive
     pub still_picture: bool,               // Video is a single frame still picture
@@ -121,11 +121,18 @@ pub struct Sequence {
     pub decoder_model_info_present_flag: bool,
     pub level: [[usize; 2]; MAX_NUM_OPERATING_POINTS],	// minor, major
     pub tier: [usize; MAX_NUM_OPERATING_POINTS],  // seq_tier in the spec. One bit: 0
-                                             // or 1.
+                                                  // or 1.
+    pub film_grain_params_present: bool,
+    pub separate_uv_delta_q: bool,
 }
 
 impl Sequence {
     pub fn new(width: usize, height: usize) -> Sequence {
+        let width_bits = 32 - (width as u32).leading_zeros();
+        let height_bits = 32 - (height as u32).leading_zeros();
+        assert!(width_bits <= 16);
+        assert!(height_bits <= 16);
+
         let mut operating_point_idc = [0 as u16; MAX_NUM_OPERATING_POINTS];
         let mut level = [[1, 2 as usize]; MAX_NUM_OPERATING_POINTS];
         let mut tier = [0 as usize; MAX_NUM_OPERATING_POINTS];
@@ -139,17 +146,17 @@ impl Sequence {
 
         Sequence {
             profile: 0,
-            num_bits_width: 32 - (width as u32).leading_zeros() as usize,
-            num_bits_height: 32 - (height as u32).leading_zeros() as usize,
-            max_frame_width: width,
-            max_frame_height: height,
+            num_bits_width: width_bits,
+            num_bits_height: height_bits,
+            max_frame_width: width as u32,
+            max_frame_height: height as u32,
             frame_id_numbers_present_flag: false,
             frame_id_length: 0,
             delta_frame_id_length: 0,
             use_128x128_superblock: false,
             order_hint_bits_minus_1: 0,
-            force_screen_content_tools: false,
-            force_integer_mv: false,
+            force_screen_content_tools: 0,
+            force_integer_mv: 0,
             still_picture: false,
             reduced_still_picture_hdr: false,
             monochrome: false,
@@ -171,6 +178,8 @@ impl Sequence {
             decoder_model_info_present_flag: false,
             level: level,
             tier: tier,
+            film_grain_params_present: false,
+            separate_uv_delta_q: false,
         }
     }
 }
@@ -240,7 +249,8 @@ pub struct FrameInvariants {
     pub use_prev_frame_mvs: bool,
     pub min_partition_size: BlockSize,
     pub globalmv_transformation_type: [GlobalMVMode; ALTREF_FRAME + 1],
-    pub num_tg: usize
+    pub num_tg: usize,
+    pub large_scale_tile: bool,
 }
 
 impl FrameInvariants {
@@ -278,6 +288,7 @@ impl FrameInvariants {
             min_partition_size,
             globalmv_transformation_type: [GlobalMVMode::IDENTITY; ALTREF_FRAME + 1],
             num_tg: 1,
+            large_scale_tile: false,
         }
     }
 }
@@ -429,12 +440,17 @@ pub fn write_ivf_frame(output_file: &mut Write, pts: u64, data: &[u8]) {
 }
 
 trait UncompressedHeader {
+    // Start of OBU Headers
     fn write_obu_header(&mut self, obu_type: OBU_Type, obu_extension: u32)
             -> Result<(usize), std::io::Error>;
-    fn write_sequence_header_obu(&mut self, seq: &Sequence, fi: &FrameInvariants)
+    fn write_sequence_header_obu(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
             -> Result<(usize), std::io::Error>;
     fn write_frame_header_obu(&mut self, fi: &FrameInvariants)
             -> Result<(usize), std::io::Error>;
+    fn write_sequence_header2(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
+                                    -> Result<(), std::io::Error>;
+    fn write_color_config(&mut self, seq: &mut Sequence) -> Result<(), std::io::Error>;
+    // End of OBU Headers
 
     fn write_frame_size(&mut self, fi: &FrameInvariants) -> Result<(), std::io::Error>;
     fn write_sequence_header(&mut self, fi: &FrameInvariants)
@@ -450,8 +466,11 @@ const LEVEL_MAJOR_MIN:usize = 2;
 const LEVEL_MAJOR_BITS:usize = 3;
 const LEVEL_MINOR_BITS:usize = 2;
 const LEVEL_BITS:usize = LEVEL_MAJOR_BITS + LEVEL_MINOR_BITS;
+const FRAME_ID_LENGTH: usize = 15;
+const DELTA_FRAME_ID_LENGTH: usize = 14;
 
 impl<'a> UncompressedHeader for BitWriter<'a, BE> {
+    // Start of OBU Headers
     // Write OBU Header syntax
     fn write_obu_header(&mut self, obu_type: OBU_Type, obu_extension: u32)
             -> Result<(usize), std::io::Error>{
@@ -475,15 +494,17 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         Ok(size)
     }
 
-    fn write_sequence_header_obu(&mut self, seq: &Sequence, fi: &FrameInvariants)
+#[allow(unused)]
+    fn write_sequence_header_obu(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
         -> Result<(usize), std::io::Error> {
         let mut size: usize = 0;
+        // TODO: size should be updated since final size is returned as payload
 
         self.write(3, seq.profile)?; // profile 0, 3 bits
         self.write(1, 0)?; // still_picture
         self.write(1, 0)?; // reduced_still_picture
 
-        if false {	// if reduced_still_picture == true
+        if seq.reduced_still_picture_hdr {
             assert!(false);
         } else {
             self.write(1, 0)?; // timing_info_present_flag
@@ -514,17 +535,111 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
             }
         }
 
-        // write_sequence_header2();	// called by write_sequence_header_obu()
+        self.write_sequence_header2(seq, fi);
+
+        self.write_color_config(seq)?;
+
+        self.write_bit(seq.film_grain_params_present)?;
+
+        self.write(1,1)?; // add_trailing_bits
 
         Ok(size)
     }
 
+#[allow(unused)]
+    fn write_sequence_header2(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
+        -> Result<(), std::io::Error> {
+        self.write(4, seq.num_bits_width - 1)?;
+        self.write(4, seq.num_bits_height - 1)?;
+        self.write(seq.num_bits_width, (seq.max_frame_width - 1) as u16)?;
+        self.write(seq.num_bits_height, (seq.max_frame_height - 1) as u16)?;
+
+        if !seq.reduced_still_picture_hdr {
+            seq.frame_id_numbers_present_flag =
+                if fi.large_scale_tile { false } else { fi.error_resilient };
+            seq.frame_id_length = FRAME_ID_LENGTH as u32;
+            seq.delta_frame_id_length = DELTA_FRAME_ID_LENGTH as u32;
+
+            self.write_bit(seq.frame_id_numbers_present_flag)?;
+
+            if seq.frame_id_numbers_present_flag {
+              // We must always have delta_frame_id_length < frame_id_length,
+              // in order for a frame to be referenced with a unique delta.
+              // Avoid wasting bits by using a coding that enforces this restriction.
+              self.write(4, seq.delta_frame_id_length - 2)?;
+              self.write(3, seq.frame_id_length - seq.delta_frame_id_length - 1)?;
+            }
+        }
+
+        self.write_bit(seq.use_128x128_superblock)?;
+        self.write_bit(seq.enable_filter_intra)?;
+        self.write_bit(seq.enable_intra_edge_filter)?;
+
+        if !seq.reduced_still_picture_hdr {
+            self.write_bit(seq.enable_interintra_compound)?;
+            self.write_bit(seq.enable_masked_compound)?;
+            self.write_bit(seq.enable_warped_motion)?;
+            self.write_bit(seq.enable_dual_filter)?;
+            self.write_bit(seq.enable_order_hint)?;
+
+            if seq.enable_order_hint {
+              self.write_bit(seq.enable_jnt_comp)?;
+              self.write_bit(seq.enable_ref_frame_mvs)?;
+            }
+            if seq.force_screen_content_tools == 2 {
+              self.write(1, 1)?;
+            } else {
+              self.write(1, 0)?;
+              self.write_bit(seq.force_screen_content_tools != 0)?;
+            }
+            if seq.force_screen_content_tools > 0 {
+              if seq.force_integer_mv == 2 {
+                self.write(1, 1)?;
+              } else {
+                self.write(1, 0)?;
+                self.write_bit(seq.force_integer_mv != 0)?;
+              }
+            } else {
+              assert!(seq.force_integer_mv == 2);
+            }
+            if seq.enable_order_hint {
+              self.write(3, seq.order_hint_bits_minus_1)?;
+            }
+        }
+
+        self.write_bit(seq.enable_superres)?;
+        self.write_bit(seq.enable_cdef)?;
+        self.write_bit(seq.enable_restoration)?;
+
+        Ok(())
+    }
+
+#[allow(unused)]
+    fn write_color_config(&mut self, seq: &mut Sequence) -> Result<(), std::io::Error> {
+        self.write(1,0)?; // 8 bit video
+        self.write_bit(seq.monochrome)?; 	// monochrome?
+        self.write_bit(false)?;  					// No color description present
+
+        if seq.monochrome {
+            assert!(false);
+        }
+        self.write(1,0)?; // color range
+
+        if true { // subsampling_x == 1 && cm->subsampling_y == 1
+            self.write(2,0)?; // chroma_sample_position == AOM_CSP_UNKNOWN
+        }
+        self.write_bit(seq.separate_uv_delta_q)?;
+        Ok(())
+    }
+
+#[allow(unused)]
     fn write_frame_header_obu(&mut self, fi: &FrameInvariants)
         -> Result<(usize), std::io::Error> {
         let mut size: usize = 0;
 
         Ok(size)
     }
+    // End of OBU Headers
 
     fn write_frame_size(&mut self, fi: &FrameInvariants) -> Result<(), std::io::Error> {
         // width_bits and height_bits will have to be moved to the sequence header OBU
@@ -592,19 +707,19 @@ pub enum OBU_Type {
 // Disallow values larger than 32-bits to ensure consistent behavior on 32 and
 // 64 bit targets: value is typically used to determine buffer allocation size
 // when decoded.
-#[allow(dead_code)]
+#[allow(unused)]
 fn aom_uleb_size_in_bytes(mut value: u64) -> usize {
   let mut size = 0;
   loop {
     size += 1;
     value = value >> 7;
     if value == 0 { break; }
-  } //while ((value >>= 7) != 0);
+  }
   return size;
 }
 
-#[allow(dead_code)]
-fn write_headers_in_obu(packet: &mut Write, sequence: &Sequence,
+#[allow(unused)]
+fn write_obus(packet: &mut Write, sequence: &mut Sequence,
                             fi: &FrameInvariants) -> Result<(), std::io::Error> {
     let mut uch = BitWriter::<BE>::new(packet);
 
@@ -613,19 +728,23 @@ fn write_headers_in_obu(packet: &mut Write, sequence: &Sequence,
         let obu_header_size = uch.write_obu_header(OBU_Type::OBU_SEQUENCE_HEADER, 0);
 
         let obu_payload_size = uch.write_sequence_header_obu(sequence, fi);
+
+        // TODO: Looks like we need to write the length (i.e. obu_payload_size)
+        // btw obu_header and obu+payload (i.e. _sequence_header_obu)
+        // So, memmove() seems needed for that.
+
         /*const size_t length_field_size =
             obu_memmove(obu_header_size, obu_payload_size, data);
         if (write_uleb_obu_size(obu_header_size, obu_payload_size, data) !=
             AOM_CODEC_OK) {
-        return AOM_CODEC_ERROR;
-        }
-
-        data += obu_header_size + obu_payload_size + length_field_size;*/
+        			return AOM_CODEC_ERROR;
+        }*/
     }
-/*
+
     let write_frame_header = fi.num_tg > 1 || fi.show_existing_frame;
-    struct aom_write_bit_buffer saved_wb;
-    if (write_frame_header) {
+
+    if write_frame_header {
+/*
         // Write Frame Header OBU.
         fh_info.frame_header = data;
         obu_header_size =
@@ -648,8 +767,11 @@ fn write_headers_in_obu(packet: &mut Write, sequence: &Sequence,
         // Since length_field_size is determined adaptively after frame header
         // encoding, saved_wb must be adjusted accordingly.
         saved_wb.bit_buffer += length_field_size;
+*/
     }
 
+    // TODO: Below will be done in encode_tile() but not here.
+/*
     if (cm->show_existing_frame) {
         data_size = 0;
     } else {
@@ -658,8 +780,6 @@ fn write_headers_in_obu(packet: &mut Write, sequence: &Sequence,
         data_size = write_tiles_in_tg_obus(cpi, data, &saved_wb,
                                         obu_extension_header, &fh_info);
     }
-    data += data_size;
-    *size = data - dst;
 */
     Ok(())
 }
@@ -1194,7 +1314,7 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
 fn encode_frame(sequence: &Sequence, fi: &FrameInvariants, fs: &mut FrameState, last_rec: &Option<Frame>) -> Vec<u8> {
     let mut packet = Vec::new();
     write_uncompressed_header(&mut packet, sequence, fi).unwrap();
-    //write_headers_in_obu(&mut packet, sequence, fi).unwrap();
+    //write_obus(&mut packet, sequence, fi).unwrap();
     if fi.show_existing_frame {
         match last_rec {
             Some(ref rec) => for p in 0..3 {
