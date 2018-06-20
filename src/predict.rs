@@ -24,11 +24,6 @@ pub static RAV1E_INTRA_MODES: &'static [PredictionMode] = &[
     PredictionMode::SMOOTH_V_PRED
 ];
 
-pub static RAV1E_PARTITION_TYPES: &'static [PartitionType] = &[
-    PartitionType::PARTITION_NONE,
-    PartitionType::PARTITION_SPLIT
-];
-
 // Weights are quadratic from '1' to '1 / block_size', scaled by 2^sm_weight_log2_scale.
 const sm_weight_log2_scale: u8 = 8;
 

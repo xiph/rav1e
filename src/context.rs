@@ -2016,10 +2016,6 @@ impl ContextWriter {
           }
         }
 
-        if plane == 0 && eob == 0 {
-            assert!(tx_type == TxType::DCT_DCT);
-        }
-
         let txs_ctx = self.get_txsize_entropy_ctx(tx_size);
         let txb_ctx = self.bc.get_txb_ctx(plane_bsize, tx_size, plane, bo, xdec, ydec);
 
