@@ -995,6 +995,7 @@ extern {
     static default_if_y_mode_cdf: [[u16; INTRA_MODES + 1]; BLOCK_SIZE_GROUPS];
     static default_uv_mode_cdf: [[[u16; UV_INTRA_MODES + 1]; INTRA_MODES]; 2];
     static default_intra_ext_tx_cdf: [[[[u16; TX_TYPES + 1]; INTRA_MODES]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA];
+    static default_inter_ext_tx_cdf: [[[u16; TX_TYPES + 1]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA];
     static default_skip_cdfs: [[u16; 3];SKIP_CONTEXTS];
     static default_intra_inter_cdf: [[u16; 3];INTRA_INTER_CONTEXTS];
     static default_angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES];
@@ -1038,6 +1039,7 @@ pub struct CDFContext {
     y_mode_cdf: [[u16; INTRA_MODES + 1]; BLOCK_SIZE_GROUPS],
     uv_mode_cdf: [[[u16; UV_INTRA_MODES + 1]; INTRA_MODES]; 2],
     intra_ext_tx_cdf: [[[[u16; TX_TYPES + 1]; INTRA_MODES]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA],
+    inter_ext_tx_cdf: [[[u16; TX_TYPES + 1]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA],
     skip_cdfs: [[u16; 3];SKIP_CONTEXTS],
     intra_inter_cdfs: [[u16; 3];INTRA_INTER_CONTEXTS],
     angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES],
@@ -1071,6 +1073,7 @@ impl CDFContext {
             y_mode_cdf: default_if_y_mode_cdf,
             uv_mode_cdf: default_uv_mode_cdf,
             intra_ext_tx_cdf: default_intra_ext_tx_cdf,
+            inter_ext_tx_cdf: default_inter_ext_tx_cdf,
             skip_cdfs: default_skip_cdfs,
             intra_inter_cdfs: default_intra_inter_cdf,
             angle_delta_cdf: default_angle_delta_cdf,
@@ -1110,6 +1113,8 @@ impl CDFContext {
         let uv_mode_cdf_end = uv_mode_cdf_start + size_of_val(&self.uv_mode_cdf);
         let intra_ext_tx_cdf_start = self.intra_ext_tx_cdf.first().unwrap().as_ptr() as usize;
         let intra_ext_tx_cdf_end = intra_ext_tx_cdf_start + size_of_val(&self.intra_ext_tx_cdf);
+        let inter_ext_tx_cdf_start = self.inter_ext_tx_cdf.first().unwrap().as_ptr() as usize;
+        let inter_ext_tx_cdf_end = inter_ext_tx_cdf_start + size_of_val(&self.inter_ext_tx_cdf);
         let skip_cdfs_start = self.skip_cdfs.first().unwrap().as_ptr() as usize;
         let skip_cdfs_end = skip_cdfs_start + size_of_val(&self.skip_cdfs);
         let intra_inter_cdfs_start = self.intra_inter_cdfs.first().unwrap().as_ptr() as usize;
@@ -1149,6 +1154,7 @@ impl CDFContext {
             ("y_mode_cdf", y_mode_cdf_start, y_mode_cdf_end),
             ("uv_mode_cdf", uv_mode_cdf_start, uv_mode_cdf_end),
             ("intra_ext_tx_cdf", intra_ext_tx_cdf_start, intra_ext_tx_cdf_end),
+            ("inter_ext_tx_cdf", inter_ext_tx_cdf_start, inter_ext_tx_cdf_end),
             ("skip_cdfs", skip_cdfs_start, skip_cdfs_end),
             ("intra_inter_cdfs", intra_inter_cdfs_start, intra_inter_cdfs_end),
             ("angle_delta_cdf", angle_delta_cdf_start, angle_delta_cdf_end),
@@ -1745,8 +1751,10 @@ impl ContextWriter {
           assert!(av1_ext_tx_used[tx_set_type as usize][tx_type as usize] != 0);
 
           if is_inter {
-              // TODO: Support inter mode once inter is enabled.
-              assert!(false);
+              symbol!(self,
+                  av1_ext_tx_ind[tx_set_type as usize][tx_type as usize] as u32,
+                  &mut self.fc.inter_ext_tx_cdf[eset as usize][square_tx_size as usize],
+                  num_ext_tx_set[tx_set_type as usize]);
           } else {
               let intra_dir = y_mode;
               // TODO: Once use_filter_intra is enabled,
