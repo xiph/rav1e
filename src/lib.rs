@@ -803,7 +803,6 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
         let pred_mode = mode_decision.pred_mode;
         rd_cost = mode_decision.rd_cost;
 
-        cw.bc.set_mode(bo, bsize, pred_mode);
         encode_block(fi, fs, cw, pred_mode, bsize, bo);
 
         best_decision = mode_decision;
@@ -839,7 +838,6 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
 
             // FIXME: redundant block re-encode
             let pred_mode = best_decision.pred_mode;
-            cw.bc.set_mode(bo, bsize, pred_mode);
             encode_block(fi, fs, cw, pred_mode, bsize, bo);
         }
     }
@@ -908,8 +906,6 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut 
                     // Make a prediction mode decision for blocks encoded with no rdo_partition_decision call (e.g. edges)
                     rdo_mode_decision(fi, fs, cw, bsize, bo).part_modes[0].pred_mode
                 };
-
-            cw.bc.set_mode(bo, bsize, pred_mode);
 
             // FIXME: every final block that has gone through the RDO decision process is encoded twice
             encode_block(fi, fs, cw, pred_mode, bsize, bo);
