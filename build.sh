@@ -38,6 +38,9 @@ echo $ACTUAL_VERSION > $GITHASH
 # Update aombuild
 git submodule update --init
 
+# Clean project files
+cargo clean
+
 # Get configure command from readme
 CONFIGURE_CMD=$(fgrep cmake README.md)
 
