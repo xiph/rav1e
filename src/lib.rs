@@ -627,10 +627,14 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
     }
 
     let bs = mi_size_wide[bsize as usize];
-    let must_split = bo.x + bs as usize > fi.w_in_b || bo.y + bs as usize > fi.h_in_b;
 
-    let is_splittable = bsize > fi.min_partition_size;
-    let is_codable_unsplit = bsize < BlockSize::BLOCK_64X64 && !must_split;
+    // Always split if the current partition is too large
+    let must_split = bo.x + bs as usize > fi.w_in_b ||
+        bo.y + bs as usize > fi.h_in_b ||
+        bsize >= BlockSize::BLOCK_64X64;
+
+    // must_split overrides the minimum partition size when applicable
+    let can_split = bsize > fi.min_partition_size || must_split;
 
     let mut partition = PartitionType::PARTITION_NONE;
     let mut best_decision = RDOPartitionOutput {
@@ -645,7 +649,7 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
     let checkpoint = cw.checkpoint();
 
     // Code the whole block
-    if is_codable_unsplit {
+    if !must_split {
         partition = PartitionType::PARTITION_NONE;
 
         if bsize >= BlockSize::BLOCK_8X8 {
@@ -662,7 +666,7 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
     }
 
     // Code a split partition and compare RD costs
-    if is_splittable {
+    if can_split {
         cw.rollback(&checkpoint);
 
         partition = PartitionType::PARTITION_SPLIT;
@@ -680,7 +684,7 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
         rd_cost += encode_partition_bottomup(fi, fs, cw, subsize, &BlockOffset { x: bo.x + hbs as usize, y: bo.y + hbs as usize });
 
         // Recode the full block if it is more efficient
-        if is_codable_unsplit && nosplit_rd_cost < rd_cost {
+        if !must_split && nosplit_rd_cost < rd_cost {
             cw.rollback(&checkpoint);
 
             partition = PartitionType::PARTITION_NONE;
