@@ -21,7 +21,8 @@ pub static RAV1E_INTRA_MODES: &'static [PredictionMode] = &[
     PredictionMode::V_PRED,
     PredictionMode::SMOOTH_PRED,
     PredictionMode::SMOOTH_H_PRED,
-    PredictionMode::SMOOTH_V_PRED
+    PredictionMode::SMOOTH_V_PRED,
+    PredictionMode::PAETH_PRED
 ];
 
 // Weights are quadratic from '1' to '1 / block_size', scaled by 2^sm_weight_log2_scale.
