@@ -547,7 +547,6 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
     }
 
     // these rules follow TX_MODE_LARGEST
-    let tx_type = TxType::DCT_DCT;
     let tx_size = match bsize {
         BlockSize::BLOCK_4X4 => TxSize::TX_4X4,
         BlockSize::BLOCK_8X8 => TxSize::TX_8X8,
@@ -559,17 +558,36 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
         cw.bc.reset_skip_context(bo, bsize, xdec, ydec);
     }
 
+    let tx_type = if tx_size > TxSize::TX_32X32 {
+        TxType::DCT_DCT
+    } else {
+        // FIXME: there is one redundant transform type decision per encoded block
+        rdo_tx_type_decision(fi, fs, cw, mode, bsize, bo, tx_size)
+    };
+
+    write_tx_blocks(fi, fs, cw, mode, bo, bsize, tx_size, tx_type, skip);
+}
+
+pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
+                       mode: PredictionMode, bo: &BlockOffset, bsize: BlockSize,
+                       tx_size: TxSize, tx_type: TxType, skip: bool) {
     let bw = mi_size_wide[bsize as usize] as usize / tx_size.width_mi();
     let bh = mi_size_high[bsize as usize] as usize / tx_size.height_mi();
 
-    // FIXME(you): consider factor out as write_tx_blocks()
-    for p in 0..1 {
-        for by in 0..bh {
-            for bx in 0..bw {
-                let tx_bo = BlockOffset{x: bo.x + bx*tx_size.width_mi(), y: bo.y + by*tx_size.height_mi()};
-                let po = tx_bo.plane_offset(&fs.input.planes[p].cfg);
-                encode_tx_block(fi, fs, cw, p, &tx_bo, mode, tx_size, tx_type, bsize, &po, skip);
-            }
+    let xdec = fs.input.planes[1].cfg.xdec;
+    let ydec = fs.input.planes[1].cfg.ydec;
+
+    let uv_mode = mode;
+
+    for by in 0..bh {
+        for bx in 0..bw {
+            let tx_bo = BlockOffset {
+                x: bo.x + bx * tx_size.width_mi(),
+                y: bo.y + by * tx_size.height_mi()
+            };
+
+            let po = tx_bo.plane_offset(&fs.input.planes[0].cfg);
+            encode_tx_block(fi, fs, cw, 0, &tx_bo, mode, tx_size, tx_type, bsize, &po, skip);
         }
     }
 
@@ -581,8 +599,8 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
         _ => TxSize::TX_32X32
     };
 
-    let mut bw_uv = bw*tx_size.width_mi() >> xdec;
-    let mut bh_uv = bh*tx_size.height_mi() >> ydec;
+    let mut bw_uv = bw * tx_size.width_mi() >> xdec;
+    let mut bh_uv = bh * tx_size.height_mi() >> ydec;
 
     if (bw_uv == 0 || bh_uv == 0) && has_chroma(bo, bsize, xdec, ydec) {
         bw_uv = 1;
@@ -605,13 +623,20 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
             for by in 0..bh_uv {
                 for bx in 0..bw_uv {
                     let tx_bo =
-                        BlockOffset{x: bo.x + (bx*uv_tx_size.width_mi() << xdec) - ((bw*tx_size.width_mi() == 1) as usize),
-                                    y: bo.y + (by*uv_tx_size.height_mi() << ydec) - ((bh*tx_size.height_mi() == 1) as usize)};
-                    let po = PlaneOffset {
-                        x: sb_offset.x + partition_x + bx*uv_tx_size.width(),
-                        y: sb_offset.y + partition_y + by*uv_tx_size.height()};
+                        BlockOffset {
+                            x: bo.x + (bx * uv_tx_size.width_mi() << xdec) -
+                                ((bw * tx_size.width_mi() == 1) as usize),
+                            y: bo.y + (by * uv_tx_size.height_mi() << ydec) -
+                                ((bh * tx_size.height_mi() == 1) as usize)
+                        };
 
-                    encode_tx_block(fi, fs, cw, p, &tx_bo, uv_mode, uv_tx_size, uv_tx_type, plane_bsize, &po, skip);
+                    let po = PlaneOffset {
+                        x: sb_offset.x + partition_x + bx * uv_tx_size.width(),
+                        y: sb_offset.y + partition_y + by * uv_tx_size.height()
+                    };
+
+                    encode_tx_block(fi, fs, cw, p, &tx_bo, uv_mode, uv_tx_size, uv_tx_type,
+                                    plane_bsize, &po, skip);
                 }
             }
         }

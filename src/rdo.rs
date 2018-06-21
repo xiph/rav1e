@@ -15,12 +15,13 @@ use FrameInvariants;
 use FrameState;
 use FrameType;
 use encode_block;
-use ec::OD_BITRES;
+use write_tx_blocks;
 use context::*;
+use ec::OD_BITRES;
 use partition::*;
-use quantize::dc_q;
 use plane::*;
 use predict::RAV1E_INTRA_MODES;
+use quantize::dc_q;
 use std;
 use std::vec::Vec;
 
@@ -147,6 +148,53 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
     };
 
     rdo_output
+}
+
+// RDO-based intra frame transform type decision
+pub fn rdo_tx_type_decision(fi: &FrameInvariants, fs: &mut FrameState,
+                                   cw: &mut ContextWriter, mode: PredictionMode,
+                                   bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize) -> TxType {
+    let mut best_type = TxType::DCT_DCT;
+    let mut best_rd = std::f64::MAX;
+    let tell = cw.w.tell_frac();
+
+    // Get block luma and chroma dimensions
+    let w = block_size_wide[bsize as usize];
+    let h = block_size_high[bsize as usize];
+
+    let xdec = fs.input.planes[1].cfg.xdec;
+    let ydec = fs.input.planes[1].cfg.ydec;
+    let mut w_uv = w >> xdec;
+    let mut h_uv = h >> ydec;
+
+    if (w_uv == 0 || h_uv == 0) && has_chroma(bo, bsize, xdec, ydec) {
+        w_uv = 4;
+        h_uv = 4;
+    }
+
+    let partition_start_x = (bo.x & LOCAL_BLOCK_MASK) >> xdec << MI_SIZE_LOG2;
+    let partition_start_y = (bo.y & LOCAL_BLOCK_MASK) >> ydec << MI_SIZE_LOG2;
+
+    for &tx_type in RAV1E_INTRA_TX_TYPES {
+        let checkpoint = cw.checkpoint();
+
+        write_tx_blocks(fi, fs, cw, mode, bo, bsize, tx_size, tx_type, false);
+
+        let cost = cw.w.tell_frac() - tell;
+        let rd = compute_rd_cost(fi, fs, w, h, w_uv, h_uv,
+                                 partition_start_x, partition_start_y, bo, cost);
+
+        if rd < best_rd {
+            best_rd = rd;
+            best_type = tx_type;
+        }
+
+        cw.rollback(&checkpoint);
+    }
+
+    assert!(best_rd >= 0_f64);
+
+    best_type
 }
 
 // RDO-based single level partitioning decision
