@@ -162,6 +162,14 @@ pub static RAV1E_TX_TYPES: &'static [TxType] = &[
     TxType::H_DCT
 ];
 
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+pub enum GlobalMVMode {
+    IDENTITY = 0,      // identity transformation, 0-parameter
+    TRANSLATION = 1,   // translational motion 2-parameter
+    ROTZOOM = 2,       // simplified affine with rotation + zoom only, 4-parameter
+    AFFINE = 3,        // affine, 6-parameter
+}
+
 use plane::*;
 use predict::*;
 use context::*;
