@@ -717,7 +717,11 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut 
     }
 
     let bs = mi_size_wide[bsize as usize];
-    let must_split = bo.x + bs as usize > fi.w_in_b || bo.y + bs as usize > fi.h_in_b;
+
+    // Always split if the current partition is too large
+    let must_split = bo.x + bs as usize > fi.w_in_b ||
+        bo.y + bs as usize > fi.h_in_b ||
+        bsize >= BlockSize::BLOCK_64X64;
 
     let mut rdo_output = block_output.clone().unwrap_or(RDOOutput {
         part_type: PartitionType::PARTITION_INVALID,
@@ -727,10 +731,7 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut 
     let partition: PartitionType;
 
     if must_split {
-        // SBs on right or bottom frame borders split down to the maximum possible size
-        partition = PartitionType::PARTITION_SPLIT;
-    } else if bsize >= BlockSize::BLOCK_64X64 {
-        // Blocks of sizes above the supported range are automatically split
+        // Oversized blocks are split automatically
         partition = PartitionType::PARTITION_SPLIT;
     } else if bsize > fi.min_partition_size {
         // Blocks of sizes within the supported range are subjected to a partitioning decision
