@@ -505,7 +505,7 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
     cw.write_coeffs_lv_map(p, bo, &coeffs, tx_size, tx_type, plane_bsize, xdec, ydec,
                             fi.use_reduced_tx_set);
 
-    //reconstruct
+    // Reconstruct
     dequantize(fi.qindex, &coeffs, &mut rcoeffs, tx_size);
 
     inverse_transform_add(&mut rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type);
@@ -558,7 +558,7 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
         cw.bc.reset_skip_context(bo, bsize, xdec, ydec);
     }
 
-    let tx_type = if tx_size > TxSize::TX_32X32 {
+    let tx_type = if tx_size >= TxSize::TX_32X32 {
         TxType::DCT_DCT
     } else {
         // FIXME: there is one redundant transform type decision per encoded block
