@@ -558,7 +558,7 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
         cw.bc.reset_skip_context(bo, bsize, xdec, ydec);
     }
 
-    let tx_type = if tx_size >= TxSize::TX_32X32 {
+    let tx_type = if tx_size > TxSize::TX_32X32 {
         TxType::DCT_DCT
     } else {
         // FIXME: there is one redundant transform type decision per encoded block
