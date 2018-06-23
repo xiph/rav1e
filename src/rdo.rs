@@ -176,6 +176,10 @@ pub fn rdo_tx_type_decision(fi: &FrameInvariants, fs: &mut FrameState,
     let partition_start_y = (bo.y & LOCAL_BLOCK_MASK) >> ydec << MI_SIZE_LOG2;
 
     for &tx_type in RAV1E_INTRA_TX_TYPES {
+        if tx_type == TxType::IDTX && tx_size >= TxSize::TX_32X32 {
+            continue;
+        }
+
         let checkpoint = cw.checkpoint();
 
         write_tx_blocks(fi, fs, cw, mode, bo, bsize, tx_size, tx_type, false);
