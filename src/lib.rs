@@ -558,11 +558,15 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
         cw.bc.reset_skip_context(bo, bsize, xdec, ydec);
     }
 
-    let tx_type = if tx_size > TxSize::TX_32X32 {
-        TxType::DCT_DCT
-    } else {
+    // Luma plane transform type decision
+    let square_tx_size = TXSIZE_SQR_MAP[tx_size as usize];
+    let tx_set_type = get_ext_tx_set_type(square_tx_size, is_inter, fi.use_reduced_tx_set);
+
+    let tx_type = if tx_set_type > TxSetType::EXT_TX_SET_DCTONLY {
         // FIXME: there is one redundant transform type decision per encoded block
-        rdo_tx_type_decision(fi, fs, cw, mode, bsize, bo, tx_size)
+        rdo_tx_type_decision(fi, fs, cw, mode, bsize, bo, tx_size, tx_set_type)
+    } else {
+        TxType::DCT_DCT
     };
 
     write_tx_blocks(fi, fs, cw, mode, bo, bsize, tx_size, tx_type, skip);

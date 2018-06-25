@@ -231,7 +231,7 @@ impl PredictionMode {
     }
 }
 
-#[derive(Copy,Clone)]
+#[derive(Copy,Clone,PartialEq,PartialOrd)]
 pub enum TxSetType {
     // DCT only
     EXT_TX_SET_DCTONLY,
