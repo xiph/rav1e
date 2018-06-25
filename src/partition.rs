@@ -152,12 +152,14 @@ pub static RAV1E_PARTITION_TYPES: &'static [PartitionType] = &[
     PartitionType::PARTITION_SPLIT
 ];
 
-pub static RAV1E_INTRA_TX_TYPES: &'static [TxType] = &[
+pub static RAV1E_TX_TYPES: &'static [TxType] = &[
     TxType::DCT_DCT,
     TxType::ADST_DCT,
     TxType::DCT_ADST,
     TxType::ADST_ADST,
-    TxType::IDTX
+    TxType::IDTX,
+    TxType::V_DCT,
+    TxType::H_DCT
 ];
 
 use plane::*;

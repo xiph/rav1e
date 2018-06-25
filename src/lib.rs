@@ -126,6 +126,8 @@ impl FrameInvariants {
                                  else if speed <= 2 { BlockSize::BLOCK_8X8 }
                                  else if speed <= 3 { BlockSize::BLOCK_16X16 }
                                  else { BlockSize::BLOCK_32X32 };
+        let use_reduced_tx_set = if speed > 1 { true } else { false };
+
         FrameInvariants {
             qindex: qindex,
             speed: speed,
@@ -143,7 +145,7 @@ impl FrameInvariants {
             intra_only: false,
             frame_type: FrameType::KEY,
             show_existing_frame: false,
-            use_reduced_tx_set: true,
+            use_reduced_tx_set: use_reduced_tx_set,
             reference_mode: ReferenceMode::SINGLE,
             use_prev_frame_mvs: false,
             min_partition_size: min_partition_size,
