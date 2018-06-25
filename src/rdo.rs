@@ -36,7 +36,8 @@ pub struct RDOOutput {
 pub struct RDOPartitionOutput {
     pub rd_cost: f64,
     pub bo: BlockOffset,
-    pub pred_mode: PredictionMode
+    pub pred_mode: PredictionMode,
+    pub skip: bool
 }
 
 // Sum of Squared Error for a wxh block
@@ -98,6 +99,7 @@ fn compute_rd_cost(fi: &FrameInvariants, fs: &FrameState,
 pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
                          bsize: BlockSize, bo: &BlockOffset) -> RDOOutput {
     let mut best_mode = PredictionMode::DC_PRED;
+    let mut best_skip = false;
     let mut best_rd = std::f64::MAX;
     let tell = cw.w.tell_frac();
 
@@ -118,25 +120,33 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
     let partition_start_x = (bo.x & LOCAL_BLOCK_MASK) >> xdec << MI_SIZE_LOG2;
     let partition_start_y = (bo.y & LOCAL_BLOCK_MASK) >> ydec << MI_SIZE_LOG2;
 
-    for &mode in RAV1E_INTRA_MODES {
-        if fi.frame_type == FrameType::KEY && mode >= PredictionMode::NEARESTMV {
-            break;
+    for &skip in [false, true].iter() {
+        // Don't test skipped blocks at higher speed levels
+        if fi.speed > 1 && skip == true {
+            continue;
         }
 
-        let checkpoint = cw.checkpoint();
+        for &mode in RAV1E_INTRA_MODES {
+            if fi.frame_type == FrameType::KEY && mode >= PredictionMode::NEARESTMV {
+                break;
+            }
 
-        encode_block(fi, fs, cw, mode, bsize, bo);
+            let checkpoint = cw.checkpoint();
 
-        let cost = cw.w.tell_frac() - tell;
-        let rd = compute_rd_cost(fi, fs, w, h, w_uv, h_uv,
-                                 partition_start_x, partition_start_y, bo, cost);
+            encode_block(fi, fs, cw, mode, bsize, bo, skip);
 
-        if rd < best_rd {
-            best_rd = rd;
-            best_mode = mode;
+            let cost = cw.w.tell_frac() - tell;
+            let rd = compute_rd_cost(fi, fs, w, h, w_uv, h_uv,
+                                     partition_start_x, partition_start_y, bo, cost);
+
+            if rd < best_rd {
+                best_rd = rd;
+                best_mode = mode;
+                best_skip = skip;
+            }
+
+            cw.rollback(&checkpoint);
         }
-
-        cw.rollback(&checkpoint);
     }
 
     assert!(best_rd >= 0_f64);
@@ -144,7 +154,11 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
     let rdo_output = RDOOutput {
         rd_cost: best_rd,
         part_type: PartitionType::PARTITION_NONE,
-        part_modes: vec![RDOPartitionOutput { bo: bo.clone(), pred_mode: best_mode, rd_cost: best_rd }]
+        part_modes: vec![RDOPartitionOutput {
+            bo: bo.clone(),
+            pred_mode: best_mode,
+            rd_cost: best_rd,
+            skip: best_skip }]
     };
 
     rdo_output

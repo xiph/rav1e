@@ -514,8 +514,7 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
 }
 
 fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
-            mode: PredictionMode, bsize: BlockSize, bo: &BlockOffset) {
-    let skip = false;
+            mode: PredictionMode, bsize: BlockSize, bo: &BlockOffset, skip: bool) {
     let is_inter = mode >= PredictionMode::NEARESTMV;
 
     cw.bc.set_skip(bo, bsize, skip);
@@ -546,6 +545,10 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
         if uv_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
             cw.write_angle_delta(0, uv_mode);
         }
+    }
+
+    if skip {
+        cw.bc.reset_skip_context(bo, bsize, xdec, ydec);
     }
 
     // these rules follow TX_MODE_LARGEST
@@ -670,7 +673,8 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
     let mut best_decision = RDOPartitionOutput {
         rd_cost: rd_cost,
         bo: bo.clone(),
-        pred_mode: PredictionMode::DC_PRED
+        pred_mode: PredictionMode::DC_PRED,
+        skip: false
     }; // Best decision that is not PARTITION_SPLIT
 
     let hbs = bs >> 1; // Half the block size in blocks
@@ -688,9 +692,10 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
 
         let mode_decision = rdo_mode_decision(fi, fs, cw, bsize, bo).part_modes[0].clone();
         let pred_mode = mode_decision.pred_mode;
+        let skip = mode_decision.skip;
         rd_cost = mode_decision.rd_cost;
 
-        encode_block(fi, fs, cw, pred_mode, bsize, bo);
+        encode_block(fi, fs, cw, pred_mode, bsize, bo, skip);
 
         best_decision = mode_decision;
     }
@@ -725,7 +730,8 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
 
             // FIXME: redundant block re-encode
             let pred_mode = best_decision.pred_mode;
-            encode_block(fi, fs, cw, pred_mode, bsize, bo);
+            let skip = best_decision.skip;
+            encode_block(fi, fs, cw, pred_mode, bsize, bo, skip);
         }
     }
 
@@ -785,16 +791,19 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut 
 
     match partition {
         PartitionType::PARTITION_NONE => {
-            let pred_mode = if rdo_output.part_modes.len() > 0 {
+            let part_decision = if rdo_output.part_modes.len() > 0 {
                     // The optimal prediction mode is known from a previous iteration
-                    rdo_output.part_modes[0].pred_mode
+                    rdo_output.part_modes[0].clone()
                 } else {
                     // Make a prediction mode decision for blocks encoded with no rdo_partition_decision call (e.g. edges)
-                    rdo_mode_decision(fi, fs, cw, bsize, bo).part_modes[0].pred_mode
+                    rdo_mode_decision(fi, fs, cw, bsize, bo).part_modes[0].clone()
                 };
 
+            let pred_mode = part_decision.pred_mode;
+            let skip = part_decision.skip;
+
             // FIXME: every final block that has gone through the RDO decision process is encoded twice
-            encode_block(fi, fs, cw, pred_mode, bsize, bo);
+            encode_block(fi, fs, cw, pred_mode, bsize, bo, skip);
         },
         PartitionType::PARTITION_SPLIT => {
             if rdo_output.part_modes.len() >= 4 {
