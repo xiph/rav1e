@@ -479,10 +479,8 @@ use std::mem::uninitialized;
 pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
                   p: usize, bo: &BlockOffset, mode: PredictionMode, tx_size: TxSize, tx_type: TxType,
                   plane_bsize: BlockSize, po: &PlaneOffset, skip: bool) {
-    let stride = fs.input.planes[p].cfg.stride;
     let rec = &mut fs.rec.planes[p];
-    let xdec = fs.input.planes[p].cfg.xdec;
-    let ydec = fs.input.planes[p].cfg.ydec;
+    let PlaneConfig { stride, xdec, ydec } = fs.input.planes[p].cfg;
 
     mode.predict(&mut rec.mut_slice(po), tx_size);
 
@@ -532,8 +530,7 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
 
     cw.bc.set_mode(bo, bsize, mode);
 
-    let xdec = fs.input.planes[1].cfg.xdec;
-    let ydec = fs.input.planes[1].cfg.ydec;
+    let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
     let uv_mode = mode;
 
@@ -579,8 +576,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
     let bw = mi_size_wide[bsize as usize] as usize / tx_size.width_mi();
     let bh = mi_size_high[bsize as usize] as usize / tx_size.height_mi();
 
-    let xdec = fs.input.planes[1].cfg.xdec;
-    let ydec = fs.input.planes[1].cfg.ydec;
+    let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
     let uv_mode = mode;
 

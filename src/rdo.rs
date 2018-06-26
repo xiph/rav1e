@@ -105,8 +105,8 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
     let w = block_size_wide[bsize as usize];
     let h = block_size_high[bsize as usize];
 
-    let xdec = fs.input.planes[1].cfg.xdec;
-    let ydec = fs.input.planes[1].cfg.ydec;
+    let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
+
     let mut w_uv = w >> xdec;
     let mut h_uv = h >> ydec;
 
@@ -162,8 +162,8 @@ pub fn rdo_tx_type_decision(fi: &FrameInvariants, fs: &mut FrameState,
     let w = block_size_wide[bsize as usize];
     let h = block_size_high[bsize as usize];
 
-    let xdec = fs.input.planes[1].cfg.xdec;
-    let ydec = fs.input.planes[1].cfg.ydec;
+    let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
+
     let mut w_uv = w >> xdec;
     let mut h_uv = h >> ydec;
 
