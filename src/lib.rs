@@ -561,8 +561,7 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
     }
 
     // Luma plane transform type decision
-    let square_tx_size = TXSIZE_SQR_MAP[tx_size as usize];
-    let tx_set_type = get_ext_tx_set_type(square_tx_size, is_inter, fi.use_reduced_tx_set);
+    let tx_set_type = get_ext_tx_set_type(tx_size, is_inter, fi.use_reduced_tx_set);
 
     let tx_type = if tx_set_type > TxSetType::EXT_TX_SET_DCTONLY {
         // FIXME: there is one redundant transform type decision per encoded block
