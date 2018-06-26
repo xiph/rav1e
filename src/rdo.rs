@@ -152,8 +152,8 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
 
 // RDO-based intra frame transform type decision
 pub fn rdo_tx_type_decision(fi: &FrameInvariants, fs: &mut FrameState,
-                                   cw: &mut ContextWriter, mode: PredictionMode,
-                                   bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize) -> TxType {
+                            cw: &mut ContextWriter, mode: PredictionMode, bsize: BlockSize,
+                            bo: &BlockOffset, tx_size: TxSize, tx_set_type: TxSetType) -> TxType {
     let mut best_type = TxType::DCT_DCT;
     let mut best_rd = std::f64::MAX;
     let tell = cw.w.tell_frac();
@@ -175,8 +175,9 @@ pub fn rdo_tx_type_decision(fi: &FrameInvariants, fs: &mut FrameState,
     let partition_start_x = (bo.x & LOCAL_BLOCK_MASK) >> xdec << MI_SIZE_LOG2;
     let partition_start_y = (bo.y & LOCAL_BLOCK_MASK) >> ydec << MI_SIZE_LOG2;
 
-    for &tx_type in RAV1E_INTRA_TX_TYPES {
-        if tx_type == TxType::IDTX && tx_size >= TxSize::TX_32X32 {
+    for &tx_type in RAV1E_TX_TYPES {
+        // Skip unsupported transform types
+        if av1_ext_tx_used[tx_set_type as usize][tx_type as usize] == 0 {
             continue;
         }
 

@@ -126,6 +126,8 @@ impl FrameInvariants {
                                  else if speed <= 2 { BlockSize::BLOCK_8X8 }
                                  else if speed <= 3 { BlockSize::BLOCK_16X16 }
                                  else { BlockSize::BLOCK_32X32 };
+        let use_reduced_tx_set = if speed > 1 { true } else { false };
+
         FrameInvariants {
             qindex: qindex,
             speed: speed,
@@ -143,7 +145,7 @@ impl FrameInvariants {
             intra_only: false,
             frame_type: FrameType::KEY,
             show_existing_frame: false,
-            use_reduced_tx_set: true,
+            use_reduced_tx_set: use_reduced_tx_set,
             reference_mode: ReferenceMode::SINGLE,
             use_prev_frame_mvs: false,
             min_partition_size: min_partition_size,
@@ -558,11 +560,14 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
         cw.bc.reset_skip_context(bo, bsize, xdec, ydec);
     }
 
-    let tx_type = if tx_size > TxSize::TX_32X32 {
-        TxType::DCT_DCT
-    } else {
+    // Luma plane transform type decision
+    let tx_set_type = get_ext_tx_set_type(tx_size, is_inter, fi.use_reduced_tx_set);
+
+    let tx_type = if tx_set_type > TxSetType::EXT_TX_SET_DCTONLY {
         // FIXME: there is one redundant transform type decision per encoded block
-        rdo_tx_type_decision(fi, fs, cw, mode, bsize, bo, tx_size)
+        rdo_tx_type_decision(fi, fs, cw, mode, bsize, bo, tx_size, tx_set_type)
+    } else {
+        TxType::DCT_DCT
     };
 
     write_tx_blocks(fi, fs, cw, mode, bo, bsize, tx_size, tx_type, skip);

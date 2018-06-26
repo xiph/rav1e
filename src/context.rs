@@ -83,7 +83,7 @@ const EXT_TX_SETS_INTRA: usize = 3;
 const EXT_TX_SETS_INTER: usize = 4;
 // Number of transform types in each set type
 static num_ext_tx_set: [usize; EXT_TX_SET_TYPES] = [ 1, 2, 5, 7, 7, 10, 12, 16, 16];
-static av1_ext_tx_used: [[usize; TX_TYPES]; EXT_TX_SET_TYPES] = [
+pub static av1_ext_tx_used: [[usize; TX_TYPES]; EXT_TX_SET_TYPES] = [
     [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
     [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 ],
     [ 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 ],
@@ -194,7 +194,7 @@ pub static txsize_to_bsize: [BlockSize; TX_SIZES_ALL] = [
   BLOCK_64X16
 ];
 
-static TXSIZE_SQR_MAP: [TxSize; TX_SIZES_ALL] = [
+pub static TXSIZE_SQR_MAP: [TxSize; TX_SIZES_ALL] = [
     TX_4X4,
     TX_8X8,
     TX_16X16,
@@ -915,7 +915,7 @@ pub fn has_chroma(bo: &BlockOffset, bsize: BlockSize,
 
 }
 
-fn get_ext_tx_set_type(tx_size: TxSize, is_inter: bool, use_reduced_set: bool) -> TxSetType {
+pub fn get_ext_tx_set_type(tx_size: TxSize, is_inter: bool, use_reduced_set: bool) -> TxSetType {
     let tx_size_sqr_up = TXSIZE_SQR_UP_MAP[tx_size as usize];
     let tx_size_sqr = TXSIZE_SQR_MAP[tx_size as usize];
     if tx_size_sqr > TxSize::TX_32X32 {
@@ -949,7 +949,8 @@ fn get_ext_tx_set_type(tx_size: TxSize, is_inter: bool, use_reduced_set: bool) -
 
 fn get_ext_tx_set(tx_size: TxSize, is_inter: bool,
                                  use_reduced_set: bool) -> i8 {
-  let set_type = get_ext_tx_set_type(tx_size, is_inter, use_reduced_set);
+    let set_type = get_ext_tx_set_type(tx_size, is_inter, use_reduced_set);
+
     if is_inter {
         ext_tx_set_index_inter[set_type as usize]
     } else {
