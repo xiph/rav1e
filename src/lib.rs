@@ -559,10 +559,6 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
         _ => TxSize::TX_32X32
     };
 
-    if skip {
-        cw.bc.reset_skip_context(bo, bsize, xdec, ydec);
-    }
-
     // Luma plane transform type decision
     let tx_set_type = get_ext_tx_set_type(tx_size, is_inter, fi.use_reduced_tx_set);
 
