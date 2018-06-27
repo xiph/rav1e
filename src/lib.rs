@@ -495,11 +495,11 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
     diff(&mut residual,
          &fs.input.planes[p].slice(po),
          &rec.slice(po),
-         1<<tx_size_wide_log2[tx_size as usize],
-         1<<tx_size_high_log2[tx_size as usize]);
+         tx_size.width(),
+         tx_size.height());
 
 
-    forward_transform(&residual, coeffs, 1<<tx_size_wide_log2[tx_size as usize], tx_size, tx_type);
+    forward_transform(&residual, coeffs, tx_size.width(), tx_size, tx_type);
     quantize_in_place(fi.qindex, coeffs, tx_size);
 
     cw.write_coeffs_lv_map(p, bo, &coeffs, tx_size, tx_type, plane_bsize, xdec, ydec,

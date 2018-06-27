@@ -52,9 +52,7 @@ impl BlockSize {
     }
 }
 
-pub const TX_SIZES: usize = 4;
-pub const TX_SIZES_ALL: usize = 14+5;
-
+/// Transform Size
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 pub enum TxSize {
     TX_4X4,
@@ -79,17 +77,40 @@ pub enum TxSize {
 }
 
 impl TxSize {
+    /// Number of square transform sizes
+    pub const TX_SIZES: usize = 4;
+
+    /// Number of transform sizes (including non-square sizes)
+    pub const TX_SIZES_ALL: usize = 14 + 5;
+
+    const TX_SIZE_WIDE_LOG2: [usize; TxSize::TX_SIZES_ALL] =
+        [2, 3, 4, 5, 6, 2, 3, 3, 4, 4, 5, 5, 6, 2, 4, 3, 5, 4, 6];
+
+    const TX_SIZE_HIGH_LOG2: [usize; TxSize::TX_SIZES_ALL] =
+        [2, 3, 4, 5, 6, 3, 2, 4, 3, 5, 4, 6, 5, 4, 2, 5, 3, 6, 4];
+
     pub fn width(self) -> usize {
-        1<<tx_size_wide_log2[self as usize]
+        1<<TxSize::TX_SIZE_WIDE_LOG2[self as usize]
     }
+
+    pub fn width_log2(self) -> usize {
+        TxSize::TX_SIZE_WIDE_LOG2[self as usize]
+    }
+    
+    pub fn smallest_width_log2() -> usize {
+        TxSize::TX_SIZE_WIDE_LOG2[0]
+    }
+
     pub fn height(self) -> usize {
-        1<<tx_size_high_log2[self as usize]
+        1<<TxSize::TX_SIZE_HIGH_LOG2[self as usize]
     }
+
     pub fn width_mi(self) -> usize {
-        (1<<tx_size_wide_log2[self as usize])>>2
+        (1<<TxSize::TX_SIZE_WIDE_LOG2[self as usize])>>2
     }
+
     pub fn height_mi(self) -> usize {
-        (1<<tx_size_high_log2[self as usize])>>2
+        (1<<TxSize::TX_SIZE_HIGH_LOG2[self as usize])>>2
     }
 }
 
