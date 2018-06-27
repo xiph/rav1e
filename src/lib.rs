@@ -42,6 +42,7 @@ use transform::*;
 use quantize::*;
 use plane::*;
 use rdo::*;
+use ec::*;
 use std::fmt;
 
 extern {
@@ -109,12 +110,14 @@ pub struct FrameInvariants {
     pub show_frame: bool,
     pub error_resilient: bool,
     pub intra_only: bool,
+    pub allow_high_precision_mv: bool,
     pub frame_type: FrameType,
     pub show_existing_frame: bool,
     pub use_reduced_tx_set: bool,
     pub reference_mode: ReferenceMode,
     pub use_prev_frame_mvs: bool,
     pub min_partition_size: BlockSize,
+    pub globalmv_transformation_type: [GlobalMVMode; ALTREF_FRAME + 1],
 }
 
 impl FrameInvariants {
@@ -143,12 +146,14 @@ impl FrameInvariants {
             show_frame: true,
             error_resilient: true,
             intra_only: false,
+            allow_high_precision_mv: true,
             frame_type: FrameType::KEY,
             show_existing_frame: false,
             use_reduced_tx_set: use_reduced_tx_set,
             reference_mode: ReferenceMode::SINGLE,
             use_prev_frame_mvs: false,
             min_partition_size: min_partition_size,
+            globalmv_transformation_type: [GlobalMVMode::IDENTITY; ALTREF_FRAME + 1],
         }
     }
 }
@@ -405,7 +410,7 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence,
                 uch.write(3,0)?; // dummy ref_frame = 0 until real MC happens
             }
             uch.write_frame_setup()?;
-            uch.write_bit(true)?; // allow_high_precision_mv
+            uch.write_bit(fi.allow_high_precision_mv)?;
             uch.write_bit(false)?; // frame_interp_filter is NOT switchable
             uch.write(2,0)?;	// EIGHTTAP_REGULAR
             if !fi.intra_only && !fi.error_resilient {
@@ -442,9 +447,34 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence,
     uch.write_bit(fi.use_reduced_tx_set)?; // reduced tx
 
     if fi.intra_only == false {
-        // write global motion info here
-        for _ in LAST_FRAME..ALTREF_FRAME+1 {
-            uch.write_bit(false)?; // TransformationType == IDENTITY
+        for i in LAST_FRAME..ALTREF_FRAME+1 {
+            let mode = fi.globalmv_transformation_type[i];
+            uch.write_bit(mode != GlobalMVMode::IDENTITY)?;
+            if mode != GlobalMVMode::IDENTITY {
+                uch.write_bit(mode == GlobalMVMode::ROTZOOM)?;
+                if mode != GlobalMVMode::ROTZOOM {
+                    uch.write_bit(mode == GlobalMVMode::TRANSLATION)?;
+                }
+            }
+            match mode {
+                GlobalMVMode::IDENTITY => { /* Nothing to do */ }
+                GlobalMVMode::TRANSLATION => {
+                    let mv_x = 0;
+                    let mv_x_ref = 0;
+                    let mv_y = 0;
+                    let mv_y_ref = 0;
+                    let bits = 12 - 6 + 3 - !fi.allow_high_precision_mv as u8;
+                    let bits_diff = 12 - 3 + fi.allow_high_precision_mv as u8;
+                    BCodeWriter::write_s_refsubexpfin(&mut uch, (1 << bits) + 1,
+                                                      3, mv_x_ref >> bits_diff,
+                                                      mv_x >> bits_diff)?;
+                    BCodeWriter::write_s_refsubexpfin(&mut uch, (1 << bits) + 1,
+                                                      3, mv_y_ref >> bits_diff,
+                                                      mv_y >> bits_diff)?;
+                }
+                GlobalMVMode::ROTZOOM => unimplemented!(),
+                GlobalMVMode::AFFINE => unimplemented!(),
+            };
         }
     }
 

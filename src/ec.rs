@@ -10,6 +10,9 @@
 
 #![allow(non_camel_case_types)]
 
+use std;
+use bitstream_io::{BE, BitWriter};
+
 pub const OD_BITRES: u8 = 3;
 const EC_PROB_SHIFT: u32 = 6;
 const EC_MIN_PROB: u32 = 4;
@@ -344,6 +347,77 @@ impl Writer {
         self.enc.low = checkpoint.low;
         self.enc.rng = checkpoint.rng;
         self.enc.cnt = checkpoint.cnt;
+    }
+}
+
+pub trait BCodeWriter {
+    fn recenter_nonneg(&mut self, r: u16, v: u16) -> u16;
+    fn recenter_finite_nonneg(&mut self, n: u16, r: u16, v: u16) -> u16;
+    fn write_quniform(&mut self, n: u16, v: u16) -> Result<(), std::io::Error>;
+    fn write_subexpfin(&mut self, n: u16, k: u16, v: u16) -> Result<(), std::io::Error>;
+    fn write_refsubexpfin(&mut self, n: u16, k: u16, r: i16, v: i16) -> Result<(), std::io::Error>;
+    fn write_s_refsubexpfin(&mut self, n: u16, k: u16, r: i16, v: i16) -> Result<(), std::io::Error>;
+}
+
+impl<'a> BCodeWriter for BitWriter<'a, BE> {
+    fn recenter_nonneg(&mut self, r: u16, v: u16) -> u16 {
+        /* Recenters a non-negative literal v around a reference r */
+        if v > (r << 1) { return v }
+        else if v >= r { return (v - r) << 1 }
+        else { return ((r - v) << 1) - 1; }
+    }
+    fn recenter_finite_nonneg(&mut self, n: u16, r: u16, v: u16) -> u16 {
+        /* Recenters a non-negative literal v in [0, n-1] around a
+           reference r also in [0, n-1] */
+        if (r << 1) <= n {
+            return self.recenter_nonneg(r, v);
+        } else {
+            return self.recenter_nonneg(n - 1 - r, n - 1 - v);
+        }
+    }
+    fn write_quniform(&mut self, n: u16, v: u16) -> Result<(), std::io::Error> {
+        /* Encodes a value v in [0, n-1] quasi-uniformly */
+        if n <= 1 { return Ok(()) };
+        let l = 31 ^ ((n - 1) + 1).leading_zeros();
+        let m = (1 << l) - n;
+        if v < m {
+            return self.write(l - 1, v);
+        } else {
+            self.write(l - 1, m + ((v - m) >> 1))?;
+            return self.write_bit(((v - m) & 1) != 0);
+        }
+    }
+    fn write_subexpfin(&mut self, n: u16, k: u16, v: u16) -> Result<(), std::io::Error> {
+        /* Finite subexponential code that codes a symbol v in [0, n-1] with parameter k */
+        let mut i = 0;
+        let mut mk = 0;
+        loop {
+            let b = if i > 0 { k + i - 1 } else { k };
+            let a = 1 << b;
+            if n <= mk + 3 * a {
+                return self.write_quniform(n - mk, v - mk);
+            } else {
+                let t = v >= mk + a;
+                self.write_bit(t)?;
+                if t {
+                    i = i + 1;
+                    mk += a;
+                } else {
+                    return self.write(b as u32, v - mk);
+                }
+            }
+        }
+    }
+    fn write_refsubexpfin(&mut self, n: u16, k: u16, r: i16, v: i16) -> Result<(), std::io::Error> {
+        /* Finite subexponential code that codes a symbol v in [0, n-1] with
+           parameter k based on a reference ref also in [0, n-1].
+           Recenters symbol around r first and then uses a finite subexponential code. */
+        let recentered_v = self.recenter_finite_nonneg(n, r as u16, v as u16);
+        return self.write_subexpfin(n, k, recentered_v);
+    }
+    fn write_s_refsubexpfin(&mut self, n: u16, k: u16, r: i16, v: i16) -> Result<(), std::io::Error> {
+        /* Signed version of the above function */
+        return self.write_refsubexpfin((n << 1) - 1, k, r + (n - 1) as i16, v + (n - 1) as i16);
     }
 }
 
