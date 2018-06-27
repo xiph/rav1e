@@ -55,21 +55,17 @@ pub static b_width_log2_lookup: [u8; BLOCK_SIZES_ALL] =
     [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 0, 2, 1, 3, 2, 4];
 pub static b_height_log2_lookup: [u8; BLOCK_SIZES_ALL] =
     [0, 1, 0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 2, 0, 3, 1, 4, 2];
-pub static tx_size_wide_log2: [usize; TX_SIZES_ALL] =
-    [2, 3, 4, 5, 6, 2, 3, 3, 4, 4, 5, 5, 6, 2, 4, 3, 5, 4, 6];
-pub static tx_size_high_log2: [usize; TX_SIZES_ALL] =
-    [2, 3, 4, 5, 6, 3, 2, 4, 3, 5, 4, 6, 5, 4, 2, 5, 3, 6, 4];
 // Transform block width in pixels
-pub static tx_size_wide: [usize; TX_SIZES_ALL] =
+pub static tx_size_wide: [usize; TxSize::TX_SIZES_ALL] =
     [ 4, 8, 16, 32, 64, 4, 8, 8, 16, 16, 32, 32, 64, 4, 16, 8, 32, 16, 64 ];
 // Transform block height in pixels
-pub static tx_size_high: [usize; TX_SIZES_ALL] =
+pub static tx_size_high: [usize; TxSize::TX_SIZES_ALL] =
     [ 4, 8, 16, 32, 64, 8, 4, 16, 8, 32, 16, 64, 32, 16, 4, 32, 8, 64, 16 ];
 // Transform block width in unit
-pub static tx_size_wide_unit: [usize; TX_SIZES_ALL] =
+pub static tx_size_wide_unit: [usize; TxSize::TX_SIZES_ALL] =
     [1, 2, 4, 8, 16, 1, 2, 2, 4, 4, 8, 8, 16, 1, 4, 2, 8, 4, 16];
 // Transform block height in unit
-pub static tx_size_high_unit: [usize; TX_SIZES_ALL] =
+pub static tx_size_high_unit: [usize; TxSize::TX_SIZES_ALL] =
     [1, 2, 4, 8, 16, 2, 1, 4, 2, 8, 4, 16, 8, 4, 1, 8, 2, 16, 4];
 // Width/height lookup tables in units of various block sizes
 pub static block_size_wide: [u8; BLOCK_SIZES_ALL] =
@@ -172,7 +168,7 @@ static av1_coefband_trans_8x8plus: [u8; 32*32] = [
   5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
   5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5];
 
-pub static txsize_to_bsize: [BlockSize; TX_SIZES_ALL] = [
+pub static txsize_to_bsize: [BlockSize; TxSize::TX_SIZES_ALL] = [
   BLOCK_4X4,    // TX_4X4
   BLOCK_8X8,    // TX_8X8
   BLOCK_16X16,  // TX_16X16
@@ -194,7 +190,7 @@ pub static txsize_to_bsize: [BlockSize; TX_SIZES_ALL] = [
   BLOCK_64X16
 ];
 
-pub static TXSIZE_SQR_MAP: [TxSize; TX_SIZES_ALL] = [
+pub static TXSIZE_SQR_MAP: [TxSize; TxSize::TX_SIZES_ALL] = [
     TX_4X4,
     TX_8X8,
     TX_16X16,
@@ -216,7 +212,7 @@ pub static TXSIZE_SQR_MAP: [TxSize; TX_SIZES_ALL] = [
     TX_16X16
 ];
 
-static TXSIZE_SQR_UP_MAP: [TxSize; TX_SIZES_ALL] = [
+static TXSIZE_SQR_UP_MAP: [TxSize; TxSize::TX_SIZES_ALL] = [
     TX_4X4,
     TX_8X8,
     TX_16X16,
@@ -238,7 +234,7 @@ static TXSIZE_SQR_UP_MAP: [TxSize; TX_SIZES_ALL] = [
     TX_64X64
 ];
 
-static txsize_log2_minus4: [usize; TX_SIZES_ALL] = [
+static txsize_log2_minus4: [usize; TxSize::TX_SIZES_ALL] = [
     0,  // TX_4X4
     2,  // TX_8X8
     4,  // TX_16X16
@@ -849,7 +845,7 @@ static av1_nz_map_ctx_offset_64x32: [i8; 1024] = [
 ];
 
 
-static av1_nz_map_ctx_offset: [&[i8]; TX_SIZES_ALL] = [
+static av1_nz_map_ctx_offset: [&[i8]; TxSize::TX_SIZES_ALL] = [
   &av1_nz_map_ctx_offset_4x4,    // TX_4x4
   &av1_nz_map_ctx_offset_8x8,    // TX_8x8
   &av1_nz_map_ctx_offset_16x16,  // TX_16x16
@@ -1010,12 +1006,12 @@ extern {
     static default_intra_inter_cdf: [[u16; 3];INTRA_INTER_CONTEXTS];
     static default_angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES];
 
-    static av1_inter_scan_orders: [[SCAN_ORDER; TX_TYPES]; TX_SIZES_ALL];
+    static av1_inter_scan_orders: [[SCAN_ORDER; TX_TYPES]; TxSize::TX_SIZES_ALL];
 
     // lv_map
-    static av1_default_txb_skip_cdf: [[[u16; 3]; TXB_SKIP_CONTEXTS]; TX_SIZES];
-    static av1_default_dc_sign_cdf: [[[u16; 3]; DC_SIGN_CONTEXTS]; TX_SIZES];
-    static av1_default_eob_extra_cdf: [[[[u16; 3]; EOB_COEF_CONTEXTS]; PLANE_TYPES]; TX_SIZES];
+    static av1_default_txb_skip_cdf: [[[u16; 3]; TXB_SKIP_CONTEXTS]; TxSize::TX_SIZES];
+    static av1_default_dc_sign_cdf: [[[u16; 3]; DC_SIGN_CONTEXTS]; TxSize::TX_SIZES];
+    static av1_default_eob_extra_cdf: [[[[u16; 3]; EOB_COEF_CONTEXTS]; PLANE_TYPES]; TxSize::TX_SIZES];
 
     static av1_default_eob_multi16: [[[u16; 5+1]; 2]; PLANE_TYPES];
     static av1_default_eob_multi32: [[[u16; 6+1]; 2]; PLANE_TYPES];
@@ -1026,11 +1022,11 @@ extern {
     static av1_default_eob_multi1024: [[[u16; 11+1]; 2]; PLANE_TYPES];
 
     static av1_default_coeff_base_eob_multi: [[[[u16; 3+1]; SIG_COEF_CONTEXTS_EOB];
-                                          PLANE_TYPES]; TX_SIZES];
+                                          PLANE_TYPES]; TxSize::TX_SIZES];
     static av1_default_coeff_base_multi: [[[[u16; 4+1]; SIG_COEF_CONTEXTS];
-                                      PLANE_TYPES]; TX_SIZES];
+                                      PLANE_TYPES]; TxSize::TX_SIZES];
     static av1_default_coeff_lps_multi: [[[[u16; BR_CDF_SIZE+1]; LEVEL_CONTEXTS];
-                                      PLANE_TYPES]; TX_SIZES];
+                                      PLANE_TYPES]; TxSize::TX_SIZES];
 }
 
 #[repr(C)]
@@ -1055,9 +1051,9 @@ pub struct CDFContext {
     angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES],
 
     // lv_map
-    txb_skip_cdf: [[[u16; 3]; TXB_SKIP_CONTEXTS]; TX_SIZES],
-    dc_sign_cdf: [[[u16; 3]; DC_SIGN_CONTEXTS]; TX_SIZES],
-    eob_extra_cdf: [[[[u16; 3]; EOB_COEF_CONTEXTS]; PLANE_TYPES]; TX_SIZES],
+    txb_skip_cdf: [[[u16; 3]; TXB_SKIP_CONTEXTS]; TxSize::TX_SIZES],
+    dc_sign_cdf: [[[u16; 3]; DC_SIGN_CONTEXTS]; TxSize::TX_SIZES],
+    eob_extra_cdf: [[[[u16; 3]; EOB_COEF_CONTEXTS]; PLANE_TYPES]; TxSize::TX_SIZES],
 
     eob_flag_cdf16: [[[u16; 5+1]; 2]; PLANE_TYPES],
     eob_flag_cdf32: [[[u16; 6+1]; 2]; PLANE_TYPES],
@@ -1068,11 +1064,11 @@ pub struct CDFContext {
     eob_flag_cdf1024: [[[u16; 11+1]; 2]; PLANE_TYPES],
 
     coeff_base_eob_cdf: [[[[u16; 3+1]; SIG_COEF_CONTEXTS_EOB]; PLANE_TYPES];
-                          TX_SIZES],
+                          TxSize::TX_SIZES],
     coeff_base_cdf: [[[[u16; 4+1]; SIG_COEF_CONTEXTS]; PLANE_TYPES];
-                          TX_SIZES],
+                          TxSize::TX_SIZES],
     coeff_br_cdf: [[[[u16; BR_CDF_SIZE+1]; LEVEL_CONTEXTS]; PLANE_TYPES];
-                          TX_SIZES],
+                          TxSize::TX_SIZES],
 }
 
 impl CDFContext {
@@ -1310,9 +1306,9 @@ impl BlockContext {
             rows,
             above_partition_context: vec![0; aligned_cols],
             left_partition_context: [0; MAX_MIB_SIZE],
-            above_coeff_context: [vec![0; cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],
-                                  vec![0; cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],
-                                  vec![0; cols << (MI_SIZE_LOG2 - tx_size_wide_log2[0])],],
+            above_coeff_context: [vec![0; cols << (MI_SIZE_LOG2 - TxSize::smallest_width_log2())],
+                                  vec![0; cols << (MI_SIZE_LOG2 - TxSize::smallest_width_log2())],
+                                  vec![0; cols << (MI_SIZE_LOG2 - TxSize::smallest_width_log2())],],
             left_coeff_context: [[0; MAX_MIB_SIZE]; PLANES],
             blocks: vec![vec![Block::default(); cols]; rows]
         }
@@ -1832,9 +1828,7 @@ impl ContextWriter {
     }
 
     pub fn get_txb_bwl(&mut self, tx_size: TxSize) -> usize {
-      let adjusted_tx_size = self.av1_get_adjusted_tx_size(tx_size);
-
-      return tx_size_wide_log2[adjusted_tx_size as usize]
+        self.av1_get_adjusted_tx_size(tx_size).width_log2()
     }
 
     pub fn get_eob_pos_token(&mut self, eob: usize, extra: &mut u32) -> u32 {
@@ -1933,7 +1927,7 @@ impl ContextWriter {
                                  tx_size: TxSize, tx_class: TxClass,
                                  coeff_contexts: &mut [i8]) {
         // TODO: If TX_64X64 is enabled, use av1_get_adjusted_tx_size()
-        let bwl = tx_size_wide_log2[tx_size as usize];
+        let bwl = tx_size.width_log2();
         let height = tx_size_high[tx_size as usize];
         for i in 0..eob {
             let pos = scan[i as usize];
