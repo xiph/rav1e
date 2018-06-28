@@ -36,7 +36,8 @@ pub struct RDOOutput {
 pub struct RDOPartitionOutput {
     pub rd_cost: f64,
     pub bo: BlockOffset,
-    pub pred_mode: PredictionMode,
+    pub pred_mode_luma: PredictionMode,
+    pub pred_mode_chroma: PredictionMode,
     pub skip: bool
 }
 
@@ -98,7 +99,8 @@ fn compute_rd_cost(fi: &FrameInvariants, fs: &FrameState,
 // RDO-based mode decision
 pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
                          bsize: BlockSize, bo: &BlockOffset) -> RDOOutput {
-    let mut best_mode = PredictionMode::DC_PRED;
+    let mut best_mode_luma = PredictionMode::DC_PRED;
+    let mut best_mode_chroma = PredictionMode::DC_PRED;
     let mut best_skip = false;
     let mut best_rd = std::f64::MAX;
     let tell = cw.w.tell_frac();
@@ -112,7 +114,9 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
     let mut w_uv = w >> xdec;
     let mut h_uv = h >> ydec;
 
-    if (w_uv == 0 || h_uv == 0) && has_chroma(bo, bsize, xdec, ydec) {
+    let is_chroma_block = has_chroma(bo, bsize, xdec, ydec);
+
+    if (w_uv == 0 || h_uv == 0) && is_chroma_block {
         w_uv = 4;
         h_uv = 4;
     }
@@ -128,24 +132,45 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
 
         let checkpoint = cw.checkpoint();
 
-        for &mode in RAV1E_INTRA_MODES {
-            if fi.frame_type == FrameType::KEY && mode >= PredictionMode::NEARESTMV {
+        for &luma_mode in RAV1E_INTRA_MODES {
+            if fi.frame_type == FrameType::KEY && luma_mode >= PredictionMode::NEARESTMV {
                 break;
             }
 
-            encode_block(fi, fs, cw, mode, mode, bsize, bo, skip);
+            if is_chroma_block && fi.speed <= 3 {
+                // Find the best chroma prediction mode for the current luma prediction mode
+                for &chroma_mode in RAV1E_INTRA_MODES {
+                    encode_block(fi, fs, cw, luma_mode, chroma_mode, bsize, bo, skip);
 
-            let cost = cw.w.tell_frac() - tell;
-            let rd = compute_rd_cost(fi, fs, w, h, w_uv, h_uv,
-                                     partition_start_x, partition_start_y, bo, cost);
+                    let cost = cw.w.tell_frac() - tell;
+                    let rd = compute_rd_cost(fi, fs, w, h, w_uv, h_uv,
+                                             partition_start_x, partition_start_y, bo, cost);
 
-            if rd < best_rd {
-                best_rd = rd;
-                best_mode = mode;
-                best_skip = skip;
+                    if rd < best_rd {
+                        best_rd = rd;
+                        best_mode_luma = luma_mode;
+                        best_mode_chroma = chroma_mode;
+                        best_skip = skip;
+                    }
+
+                    cw.rollback(&checkpoint);
+                }
+            } else {
+                encode_block(fi, fs, cw, luma_mode, luma_mode, bsize, bo, skip);
+
+                let cost = cw.w.tell_frac() - tell;
+                let rd = compute_rd_cost(fi, fs, w, h, w_uv, h_uv,
+                                         partition_start_x, partition_start_y, bo, cost);
+
+                if rd < best_rd {
+                    best_rd = rd;
+                    best_mode_luma = luma_mode;
+                    best_mode_chroma = luma_mode;
+                    best_skip = skip;
+                }
+
+                cw.rollback(&checkpoint);
             }
-
-            cw.rollback(&checkpoint);
         }
     }
 
@@ -156,7 +181,8 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
         part_type: PartitionType::PARTITION_NONE,
         part_modes: vec![RDOPartitionOutput {
             bo: bo.clone(),
-            pred_mode: best_mode,
+            pred_mode_luma: best_mode_luma,
+            pred_mode_chroma: best_mode_chroma,
             rd_cost: best_rd,
             skip: best_skip }]
     };

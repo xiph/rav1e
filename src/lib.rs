@@ -692,7 +692,8 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
     let mut best_decision = RDOPartitionOutput {
         rd_cost: rd_cost,
         bo: bo.clone(),
-        pred_mode: PredictionMode::DC_PRED,
+        pred_mode_luma: PredictionMode::DC_PRED,
+        pred_mode_chroma: PredictionMode::DC_PRED,
         skip: false
     }; // Best decision that is not PARTITION_SPLIT
 
@@ -710,11 +711,11 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
         }
 
         let mode_decision = rdo_mode_decision(fi, fs, cw, bsize, bo).part_modes[0].clone();
-        let pred_mode = mode_decision.pred_mode;
+        let (mode_luma, mode_chroma) = (mode_decision.pred_mode_luma, mode_decision.pred_mode_chroma);
         let skip = mode_decision.skip;
         rd_cost = mode_decision.rd_cost;
 
-        encode_block(fi, fs, cw, pred_mode, pred_mode, bsize, bo, skip);
+        encode_block(fi, fs, cw, mode_luma, mode_chroma, bsize, bo, skip);
 
         best_decision = mode_decision;
     }
@@ -748,9 +749,9 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
             }
 
             // FIXME: redundant block re-encode
-            let pred_mode = best_decision.pred_mode;
+            let (mode_luma, mode_chroma) = (best_decision.pred_mode_luma, best_decision.pred_mode_chroma);
             let skip = best_decision.skip;
-            encode_block(fi, fs, cw, pred_mode, pred_mode, bsize, bo, skip);
+            encode_block(fi, fs, cw, mode_luma, mode_chroma, bsize, bo, skip);
         }
     }
 
@@ -818,11 +819,11 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut 
                     rdo_mode_decision(fi, fs, cw, bsize, bo).part_modes[0].clone()
                 };
 
-            let pred_mode = part_decision.pred_mode;
+            let (mode_luma, mode_chroma) = (part_decision.pred_mode_luma, part_decision.pred_mode_chroma);
             let skip = part_decision.skip;
 
             // FIXME: every final block that has gone through the RDO decision process is encoded twice
-            encode_block(fi, fs, cw, pred_mode, pred_mode, bsize, bo, skip);
+            encode_block(fi, fs, cw, mode_luma, mode_chroma, bsize, bo, skip);
         },
         PartitionType::PARTITION_SPLIT => {
             if rdo_output.part_modes.len() >= 4 {
