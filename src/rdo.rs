@@ -133,7 +133,7 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
                 break;
             }
 
-            encode_block(fi, fs, cw, mode, bsize, bo, skip);
+            encode_block(fi, fs, cw, mode, mode, bsize, bo, skip);
 
             let cost = cw.w.tell_frac() - tell;
             let rd = compute_rd_cost(fi, fs, w, h, w_uv, h_uv,
@@ -197,7 +197,7 @@ pub fn rdo_tx_type_decision(fi: &FrameInvariants, fs: &mut FrameState,
             continue;
         }
 
-        write_tx_blocks(fi, fs, cw, mode, bo, bsize, tx_size, tx_type, false);
+        write_tx_blocks(fi, fs, cw, mode, mode, bo, bsize, tx_size, tx_type, false);
 
         let cost = cw.w.tell_frac() - tell;
         let rd = compute_rd_cost(fi, fs, w, h, w_uv, h_uv,
