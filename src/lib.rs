@@ -542,8 +542,9 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
 }
 
 fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
-            mode: PredictionMode, bsize: BlockSize, bo: &BlockOffset, skip: bool) {
-    let is_inter = mode >= PredictionMode::NEARESTMV;
+            luma_mode: PredictionMode, chroma_mode: PredictionMode,
+            bsize: BlockSize, bo: &BlockOffset, skip: bool) {
+    let is_inter = luma_mode >= PredictionMode::NEARESTMV;
 
     cw.bc.set_skip(bo, bsize, skip);
     cw.write_skip(bo, skip);
@@ -551,26 +552,24 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
     if fi.frame_type == FrameType::INTER {
         cw.write_is_inter(bo, is_inter);
         if !is_inter {
-            cw.write_intra_mode(bsize, mode);
+            cw.write_intra_mode(bsize, luma_mode);
         }
     } else {
-        cw.write_intra_mode_kf(bo, mode);
+        cw.write_intra_mode_kf(bo, luma_mode);
     }
 
-    cw.bc.set_mode(bo, bsize, mode);
+    cw.bc.set_mode(bo, bsize, luma_mode);
 
     let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
-    let uv_mode = mode;
-
-    if mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
-        cw.write_angle_delta(0, mode);
+    if luma_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
+        cw.write_angle_delta(0, luma_mode);
     }
 
     if has_chroma(bo, bsize, xdec, ydec) {
-        cw.write_intra_uv_mode(uv_mode, mode, bsize);
-        if uv_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
-            cw.write_angle_delta(0, uv_mode);
+        cw.write_intra_uv_mode(chroma_mode, luma_mode, bsize);
+        if chroma_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
+            cw.write_angle_delta(0, chroma_mode);
         }
     }
 
@@ -591,23 +590,21 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
 
     let tx_type = if tx_set_type > TxSetType::EXT_TX_SET_DCTONLY {
         // FIXME: there is one redundant transform type decision per encoded block
-        rdo_tx_type_decision(fi, fs, cw, mode, bsize, bo, tx_size, tx_set_type)
+        rdo_tx_type_decision(fi, fs, cw, luma_mode, bsize, bo, tx_size, tx_set_type)
     } else {
         TxType::DCT_DCT
     };
 
-    write_tx_blocks(fi, fs, cw, mode, bo, bsize, tx_size, tx_type, skip);
+    write_tx_blocks(fi, fs, cw, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip);
 }
 
 pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
-                       mode: PredictionMode, bo: &BlockOffset, bsize: BlockSize,
-                       tx_size: TxSize, tx_type: TxType, skip: bool) {
+                       luma_mode: PredictionMode, chroma_mode: PredictionMode, bo: &BlockOffset,
+                       bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool) {
     let bw = mi_size_wide[bsize as usize] as usize / tx_size.width_mi();
     let bh = mi_size_high[bsize as usize] as usize / tx_size.height_mi();
 
     let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
-
-    let uv_mode = mode;
 
     for by in 0..bh {
         for bx in 0..bw {
@@ -617,7 +614,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
             };
 
             let po = tx_bo.plane_offset(&fs.input.planes[0].cfg);
-            encode_tx_block(fi, fs, cw, 0, &tx_bo, mode, tx_size, tx_type, bsize, &po, skip);
+            encode_tx_block(fi, fs, cw, 0, &tx_bo, luma_mode, tx_size, tx_type, bsize, &po, skip);
         }
     }
 
@@ -643,7 +640,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
     let plane_bsize = get_plane_block_size(bsize, xdec, ydec);
 
     if bw_uv > 0 && bh_uv > 0 {
-        let uv_tx_type = uv_intra_mode_to_tx_type_context(uv_mode);
+        let uv_tx_type = uv_intra_mode_to_tx_type_context(chroma_mode);
         let partition_x = (bo.x & LOCAL_BLOCK_MASK) >> xdec << MI_SIZE_LOG2;
         let partition_y = (bo.y & LOCAL_BLOCK_MASK) >> ydec << MI_SIZE_LOG2;
 
@@ -665,7 +662,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
                         y: sb_offset.y + partition_y + by * uv_tx_size.height()
                     };
 
-                    encode_tx_block(fi, fs, cw, p, &tx_bo, uv_mode, uv_tx_size, uv_tx_type,
+                    encode_tx_block(fi, fs, cw, p, &tx_bo, chroma_mode, uv_tx_size, uv_tx_type,
                                     plane_bsize, &po, skip);
                 }
             }
@@ -695,7 +692,8 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
     let mut best_decision = RDOPartitionOutput {
         rd_cost: rd_cost,
         bo: bo.clone(),
-        pred_mode: PredictionMode::DC_PRED,
+        pred_mode_luma: PredictionMode::DC_PRED,
+        pred_mode_chroma: PredictionMode::DC_PRED,
         skip: false
     }; // Best decision that is not PARTITION_SPLIT
 
@@ -713,11 +711,11 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
         }
 
         let mode_decision = rdo_mode_decision(fi, fs, cw, bsize, bo).part_modes[0].clone();
-        let pred_mode = mode_decision.pred_mode;
+        let (mode_luma, mode_chroma) = (mode_decision.pred_mode_luma, mode_decision.pred_mode_chroma);
         let skip = mode_decision.skip;
         rd_cost = mode_decision.rd_cost;
 
-        encode_block(fi, fs, cw, pred_mode, bsize, bo, skip);
+        encode_block(fi, fs, cw, mode_luma, mode_chroma, bsize, bo, skip);
 
         best_decision = mode_decision;
     }
@@ -751,9 +749,9 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
             }
 
             // FIXME: redundant block re-encode
-            let pred_mode = best_decision.pred_mode;
+            let (mode_luma, mode_chroma) = (best_decision.pred_mode_luma, best_decision.pred_mode_chroma);
             let skip = best_decision.skip;
-            encode_block(fi, fs, cw, pred_mode, bsize, bo, skip);
+            encode_block(fi, fs, cw, mode_luma, mode_chroma, bsize, bo, skip);
         }
     }
 
@@ -821,11 +819,11 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut 
                     rdo_mode_decision(fi, fs, cw, bsize, bo).part_modes[0].clone()
                 };
 
-            let pred_mode = part_decision.pred_mode;
+            let (mode_luma, mode_chroma) = (part_decision.pred_mode_luma, part_decision.pred_mode_chroma);
             let skip = part_decision.skip;
 
             // FIXME: every final block that has gone through the RDO decision process is encoded twice
-            encode_block(fi, fs, cw, pred_mode, bsize, bo, skip);
+            encode_block(fi, fs, cw, mode_luma, mode_chroma, bsize, bo, skip);
         },
         PartitionType::PARTITION_SPLIT => {
             if rdo_output.part_modes.len() >= 4 {
