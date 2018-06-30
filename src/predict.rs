@@ -25,6 +25,13 @@ pub static RAV1E_INTRA_MODES: &'static [PredictionMode] = &[
     PredictionMode::PAETH_PRED
 ];
 
+// Intra prediction modes tested at high speed levels
+pub static RAV1E_INTRA_MODES_MINIMAL: &'static [PredictionMode] = &[
+    PredictionMode::DC_PRED,
+    PredictionMode::H_PRED,
+    PredictionMode::V_PRED
+];
+
 // Weights are quadratic from '1' to '1 / block_size', scaled by 2^sm_weight_log2_scale.
 const sm_weight_log2_scale: u8 = 8;
 

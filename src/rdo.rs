@@ -20,7 +20,7 @@ use context::*;
 use ec::OD_BITRES;
 use partition::*;
 use plane::*;
-use predict::RAV1E_INTRA_MODES;
+use predict::{RAV1E_INTRA_MODES, RAV1E_INTRA_MODES_MINIMAL};
 use quantize::dc_q;
 use std;
 use std::vec::Vec;
@@ -132,7 +132,14 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
 
         let checkpoint = cw.checkpoint();
 
-        for &luma_mode in RAV1E_INTRA_MODES {
+        // Exclude complex prediction modes at higher speed levels
+        let mode_set = if fi.speed <= 3 {
+            RAV1E_INTRA_MODES
+        } else {
+            RAV1E_INTRA_MODES_MINIMAL
+        };
+
+        for &luma_mode in mode_set {
             if fi.frame_type == FrameType::KEY && luma_mode >= PredictionMode::NEARESTMV {
                 break;
             }
