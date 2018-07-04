@@ -92,6 +92,31 @@ impl FrameState {
     }
 }
 
+trait Fixed {
+    fn floor_log2(&self, n: usize) -> usize;
+    fn ceil_log2(&self, n: usize) -> usize;
+    fn align_power_of_two(&self, n: usize) -> usize;
+    fn align_power_of_two_and_shift(&self, n: usize) -> usize;
+}
+
+impl Fixed for usize {
+    #[inline]
+    fn floor_log2(&self, n: usize) -> usize {
+        self & !((1 << n) - 1)
+    }
+    #[inline]
+    fn ceil_log2(&self, n: usize) -> usize {
+        (self + (1 << n) - 1).floor_log2(n)
+    }
+    #[inline]
+    fn align_power_of_two(&self, n: usize) -> usize {
+        self.ceil_log2(n)
+    }
+    #[inline]
+    fn align_power_of_two_and_shift(&self, n: usize) -> usize {
+        (self + (1 << n) - 1) >> n
+    }
+}
 
 // Frame Invariants are invariant inside a frame
 #[allow(dead_code)]
@@ -136,12 +161,12 @@ impl FrameInvariants {
             speed: speed,
             width: width,
             height: height,
-            padded_w: ((width+7)>>3)<<3,
-            padded_h: ((height+7)>>3)<<3,
-            sb_width: (width+63)/64,
-            sb_height: (height+63)/64,
-            w_in_b: 2 * ((width+7)>>3) ,	// MiCols, ((width+7)/8)<<3 >> MI_SIZE_LOG2
-            h_in_b: 2 * ((height+7)>>3),	// MiRows, ((height+7)/8)<<3 >> MI_SIZE_LOG2
+            padded_w: width.align_power_of_two(3),
+            padded_h: height.align_power_of_two(3),
+            sb_width: width.align_power_of_two_and_shift(6),
+            sb_height: height.align_power_of_two_and_shift(6),
+            w_in_b: 2 * width.align_power_of_two_and_shift(3), // MiCols, ((width+7)/8)<<3 >> MI_SIZE_LOG2
+            h_in_b: 2 * height.align_power_of_two_and_shift(3), // MiRows, ((height+7)/8)<<3 >> MI_SIZE_LOG2
             number: 0,
             show_frame: true,
             error_resilient: true,
