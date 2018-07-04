@@ -22,8 +22,7 @@ extern crate enum_iterator_derive;
 
 use std::fs::File;
 use std::io::prelude::*;
-use bitstream_io::{BE, BitWriter};
-use byteorder::*;
+use bitstream_io::{BE, LE, BitWriter};
 use clap::{App, Arg};
 
 // for benchmarking purpose
@@ -283,24 +282,25 @@ impl EncoderConfig {
     }
 }
 
-// TODO: possibly just use bitwriter instead of byteorder
 pub fn write_ivf_header(output_file: &mut Write, width: usize, height: usize, num: usize, den: usize) {
-    output_file.write(b"DKIF").unwrap();
-    output_file.write_u16::<LittleEndian>(0).unwrap(); // version
-    output_file.write_u16::<LittleEndian>(32).unwrap(); // header length
-    output_file.write(b"AV01").unwrap();
-    output_file.write_u16::<LittleEndian>(width as u16).unwrap();
-    output_file.write_u16::<LittleEndian>(height as u16).unwrap();
-    output_file.write_u32::<LittleEndian>(num as u32).unwrap();
-    output_file.write_u32::<LittleEndian>(den as u32).unwrap();
-    output_file.write_u32::<LittleEndian>(0).unwrap();
-    output_file.write_u32::<LittleEndian>(0).unwrap();
+    let mut uch = BitWriter::<LE>::new(output_file);
+    uch.write_bytes(b"DKIF").unwrap();
+    uch.write(16, 0).unwrap(); // version
+    uch.write(16, 32).unwrap(); // version
+    uch.write_bytes(b"AV01").unwrap();
+    uch.write(16, width as u16).unwrap();
+    uch.write(16, height as u16).unwrap();
+    uch.write(32, num as u32).unwrap();
+    uch.write(32, den as u32).unwrap();
+    uch.write(32, 0).unwrap();
+    uch.write(32, 0).unwrap();
 }
 
 pub fn write_ivf_frame(output_file: &mut Write, pts: u64, data: &[u8]) {
-    output_file.write_u32::<LittleEndian>(data.len() as u32).unwrap();
-    output_file.write_u64::<LittleEndian>(pts).unwrap();
-    output_file.write(data).unwrap();
+    let mut uch = BitWriter::<LE>::new(output_file);
+    uch.write(32, data.len() as u32).unwrap();
+    uch.write(64, pts).unwrap();
+    uch.write_bytes(data).unwrap();
 }
 
 trait UncompressedHeader {
