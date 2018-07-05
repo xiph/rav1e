@@ -51,11 +51,11 @@ impl BlockSize {
     pub const BLOCK_SIZES_ALL: usize = 19;
 
     // Width/height lookup tables in units of various block sizes
-    const BLOCK_SIZE_WIDE: [usize; BlockSize::BLOCK_SIZES_ALL] =
-        [4, 4, 8, 8, 8, 16, 16, 16, 32, 32, 32, 64, 64, 4, 16, 8, 32, 16, 64 ];
+    const BLOCK_SIZE_WIDE_LOG2: [usize; BlockSize::BLOCK_SIZES_ALL] =
+        [2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 2, 4, 3, 5, 4, 6];
 
-    const BLOCK_SIZE_HIGH: [usize; BlockSize::BLOCK_SIZES_ALL] =
-        [4, 8, 4, 8, 16, 8, 16, 32, 16, 32, 64, 32, 64, 16,4, 32, 8, 64, 16 ];
+    const BLOCK_SIZE_HIGH_LOG2: [usize; BlockSize::BLOCK_SIZES_ALL] =
+        [2, 3, 2, 3, 4, 3, 4, 5, 4, 5, 6, 5, 6, 4, 2, 5, 3, 6, 4];
 
     pub fn cfl_allowed(self) -> bool {
         // TODO: fix me when enabling EXT_PARTITION_TYPES
@@ -63,7 +63,7 @@ impl BlockSize {
     }
 
     pub fn width(self) -> usize {
-        BlockSize::BLOCK_SIZE_WIDE[self as usize]
+        1 << BlockSize::BLOCK_SIZE_WIDE_LOG2[self as usize]
     }
 
     pub fn width_mi(self) -> usize {
@@ -71,7 +71,7 @@ impl BlockSize {
     }
 
     pub fn height(self) -> usize {
-        BlockSize::BLOCK_SIZE_HIGH[self as usize]
+        1 << BlockSize::BLOCK_SIZE_HIGH_LOG2[self as usize]
     }
 
     pub fn height_mi(self) -> usize {
