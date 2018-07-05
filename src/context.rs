@@ -51,18 +51,6 @@ pub static b_width_log2_lookup: [u8; BLOCK_SIZES_ALL] =
     [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 0, 2, 1, 3, 2, 4];
 pub static b_height_log2_lookup: [u8; BLOCK_SIZES_ALL] =
     [0, 1, 0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 2, 0, 3, 1, 4, 2];
-// Transform block width in pixels
-pub static tx_size_wide: [usize; TxSize::TX_SIZES_ALL] =
-    [ 4, 8, 16, 32, 64, 4, 8, 8, 16, 16, 32, 32, 64, 4, 16, 8, 32, 16, 64 ];
-// Transform block height in pixels
-pub static tx_size_high: [usize; TxSize::TX_SIZES_ALL] =
-    [ 4, 8, 16, 32, 64, 8, 4, 16, 8, 32, 16, 64, 32, 16, 4, 32, 8, 64, 16 ];
-// Transform block width in unit
-pub static tx_size_wide_unit: [usize; TxSize::TX_SIZES_ALL] =
-    [1, 2, 4, 8, 16, 1, 2, 2, 4, 4, 8, 8, 16, 1, 4, 2, 8, 4, 16];
-// Transform block height in unit
-pub static tx_size_high_unit: [usize; TxSize::TX_SIZES_ALL] =
-    [1, 2, 4, 8, 16, 2, 1, 4, 2, 8, 4, 16, 8, 4, 1, 8, 2, 16, 4];
 
 const EXT_TX_SIZES: usize = 4;
 const EXT_TX_SET_TYPES: usize = 9;
@@ -1526,8 +1514,8 @@ impl BlockContext {
             1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
             2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2];
         let mut dc_sign: i16 = 0;
-        let txb_w_unit = tx_size_wide_unit[tx_size as usize];
-        let txb_h_unit = tx_size_high_unit[tx_size as usize];
+        let txb_w_unit = tx_size.width_mi();
+        let txb_h_unit = tx_size.height_mi();
 
         // Decide txb_ctx.dc_sign_ctx
         for k in 0..txb_w_unit {
@@ -1872,8 +1860,8 @@ impl ContextWriter {
         match tx_class {
           TX_CLASS_2D => {
             // This is the algorithm to generate av1_nz_map_ctx_offset[][]
-            //   const int width = tx_size_wide[tx_size];
-            //   const int height = tx_size_high[tx_size];
+            //   const int width = tx_size.width();
+            //   const int height = tx_size.height();
             //   if (width < height) {
             //     if (row < 2) return 11 + ctx;
             //   } else if (width > height) {
@@ -1919,7 +1907,7 @@ impl ContextWriter {
                                  coeff_contexts: &mut [i8]) {
         // TODO: If TX_64X64 is enabled, use av1_get_adjusted_tx_size()
         let bwl = tx_size.width_log2();
-        let height = tx_size_high[tx_size as usize];
+        let height = tx_size.height();
         for i in 0..eob {
             let pos = scan[i as usize];
             coeff_contexts[pos as usize] =
