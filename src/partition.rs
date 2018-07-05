@@ -66,6 +66,10 @@ impl BlockSize {
         1 << BlockSize::BLOCK_SIZE_WIDE_LOG2[self as usize]
     }
 
+    pub fn width_log2(self) -> usize {
+        BlockSize::BLOCK_SIZE_WIDE_LOG2[self as usize]
+    }
+
     pub fn width_mi(self) -> usize {
         self.width() >> MI_SIZE_LOG2
     }
@@ -74,8 +78,16 @@ impl BlockSize {
         1 << BlockSize::BLOCK_SIZE_HIGH_LOG2[self as usize]
     }
 
+    pub fn height_log2(self) -> usize {
+        BlockSize::BLOCK_SIZE_HIGH_LOG2[self as usize]
+    }
+
     pub fn height_mi(self) -> usize {
         self.height() >> MI_SIZE_LOG2
+    }
+
+    pub fn is_sqr(self) -> bool {
+        self.width_log2() == self.height_log2()
     }
 }
 

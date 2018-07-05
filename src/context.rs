@@ -46,11 +46,6 @@ const MAX_ANGLE_DELTA: usize = 3;
 const DIRECTIONAL_MODES: usize = 8;
 const KF_MODE_CONTEXTS: usize= 5;
 
-pub static b_width_log2_lookup: [u8; BlockSize::BLOCK_SIZES_ALL] =
-    [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 0, 2, 1, 3, 2, 4];
-pub static b_height_log2_lookup: [u8; BlockSize::BLOCK_SIZES_ALL] =
-    [0, 1, 0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 2, 0, 3, 1, 4, 2];
-
 const EXT_TX_SIZES: usize = 4;
 const EXT_TX_SET_TYPES: usize = 9;
 const EXT_TX_SETS_INTRA: usize = 3;
@@ -1360,11 +1355,11 @@ impl BlockContext {
         // TODO: this should be way simpler without sub8x8
         let above_ctx = self.above_partition_context[bo.x];
         let left_ctx = self.left_partition_context[bo.y_in_sb()];
-        let bsl = b_width_log2_lookup[bsize as usize] - b_width_log2_lookup[BlockSize::BLOCK_8X8 as usize];
+        let bsl = bsize.width_log2() - BLOCK_8X8.width_log2();
         let above = (above_ctx >> bsl) & 1;
         let left = (left_ctx >> bsl) & 1;
 
-        assert!(b_width_log2_lookup[bsize as usize] == b_height_log2_lookup[bsize as usize]);
+        assert!(bsize.is_sqr());
 
         (left * 2 + above) as usize + bsl as usize * PARTITION_PLOFFSET
     }
