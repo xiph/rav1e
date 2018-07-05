@@ -47,9 +47,9 @@ const MAX_ANGLE_DELTA: usize = 3;
 const DIRECTIONAL_MODES: usize = 8;
 const KF_MODE_CONTEXTS: usize= 5;
 
-pub static b_width_log2_lookup: [u8; BLOCK_SIZES_ALL] =
+pub static b_width_log2_lookup: [u8; BlockSize::BLOCK_SIZES_ALL] =
     [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 0, 2, 1, 3, 2, 4];
-pub static b_height_log2_lookup: [u8; BLOCK_SIZES_ALL] =
+pub static b_height_log2_lookup: [u8; BlockSize::BLOCK_SIZES_ALL] =
     [0, 1, 0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 2, 0, 3, 1, 4, 2];
 
 const EXT_TX_SIZES: usize = 4;
@@ -235,7 +235,7 @@ static txsize_log2_minus4: [usize; TxSize::TX_SIZES_ALL] = [
     5
 ];
 
-static ss_size_lookup: [[[BlockSize; 2]; 2]; BLOCK_SIZES_ALL] = [
+static ss_size_lookup: [[[BlockSize; 2]; 2]; BlockSize::BLOCK_SIZES_ALL] = [
   //  ss_x == 0    ss_x == 0        ss_x == 1      ss_x == 1
   //  ss_y == 0    ss_y == 1        ss_y == 0      ss_y == 1
   [  [ BLOCK_4X4, BLOCK_4X4 ], [BLOCK_4X4, BLOCK_4X4 ] ],
@@ -267,7 +267,7 @@ pub fn get_plane_block_size(bsize: BlockSize, subsampling_x: usize, subsampling_
 // Generates 4 bit field in which each bit set to 1 represents
 // a blocksize partition  1111 means we split 64x64, 32x32, 16x16
 // and 8x8.  1000 means we just split the 64x64 to 32x32
-static partition_context_lookup: [[u8; 2]; BLOCK_SIZES_ALL] = [
+static partition_context_lookup: [[u8; 2]; BlockSize::BLOCK_SIZES_ALL] = [
   [ 15, 15 ],  // 4X4   - [0b1111, 0b1111]
   [ 15, 14 ],  // 4X8   - [0b1111, 0b1110]
   [ 14, 15 ],  // 8X4   - [0b1110, 0b1111]
@@ -290,7 +290,7 @@ static partition_context_lookup: [[u8; 2]; BLOCK_SIZES_ALL] = [
   [ 0, 12 ],   // 64X16- [0b0000, 0b1100]
 ];
 
-static size_group_lookup: [u8; BLOCK_SIZES_ALL] = [
+static size_group_lookup: [u8; BlockSize::BLOCK_SIZES_ALL] = [
   0, 0,
   0, 1,
   1, 1,
@@ -303,10 +303,10 @@ static size_group_lookup: [u8; BLOCK_SIZES_ALL] = [
   2,
 ];
 
-static num_pels_log2_lookup: [u8; BLOCK_SIZES_ALL] = [
+static num_pels_log2_lookup: [u8; BlockSize::BLOCK_SIZES_ALL] = [
   4, 5, 5, 6, 7, 7, 8, 9, 9, 10, 11, 11, 12, 6, 6, 8, 8, 10, 10];
 
-pub static subsize_lookup: [[BlockSize; BLOCK_SIZES_ALL]; PARTITION_TYPES] =
+pub static subsize_lookup: [[BlockSize; BlockSize::BLOCK_SIZES_ALL]; PARTITION_TYPES] =
 [
   [ // PARTITION_NONE
     //                            4X4

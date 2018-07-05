@@ -19,8 +19,6 @@ pub enum PartitionType {
     PARTITION_INVALID
 }
 
-pub const BLOCK_SIZES_ALL: usize = 19;
-
 #[derive(Copy,Clone,PartialEq,PartialOrd)]
 pub enum BlockSize {
     BLOCK_4X4,
@@ -46,10 +44,13 @@ pub enum BlockSize {
 }
 
 impl BlockSize {
+
+    pub const BLOCK_SIZES_ALL: usize = 19;
+
     // Width/height lookup tables in units of various block sizes
-    const BLOCK_SIZE_WIDE: [usize; BLOCK_SIZES_ALL] =
+    const BLOCK_SIZE_WIDE: [usize; BlockSize::BLOCK_SIZES_ALL] =
         [4, 4, 8, 8, 8, 16, 16, 16, 32, 32, 32, 64, 64, 4, 16, 8, 32, 16, 64 ];
-    const BLOCK_SIZE_HIGH: [usize; BLOCK_SIZES_ALL] =
+    const BLOCK_SIZE_HIGH: [usize; BlockSize::BLOCK_SIZES_ALL] =
         [4, 8, 4, 8, 16, 8, 16, 32, 16, 32, 64, 32, 64, 16,4, 32, 8, 64, 16 ];
 
     pub fn cfl_allowed(self) -> bool {
