@@ -283,24 +283,24 @@ impl EncoderConfig {
 }
 
 pub fn write_ivf_header(output_file: &mut Write, width: usize, height: usize, num: usize, den: usize) {
-    let mut uch = BitWriter::<LE>::new(output_file);
-    uch.write_bytes(b"DKIF").unwrap();
-    uch.write(16, 0).unwrap(); // version
-    uch.write(16, 32).unwrap(); // version
-    uch.write_bytes(b"AV01").unwrap();
-    uch.write(16, width as u16).unwrap();
-    uch.write(16, height as u16).unwrap();
-    uch.write(32, num as u32).unwrap();
-    uch.write(32, den as u32).unwrap();
-    uch.write(32, 0).unwrap();
-    uch.write(32, 0).unwrap();
+    let mut bw = BitWriter::<LE>::new(output_file);
+    bw.write_bytes(b"DKIF").unwrap();
+    bw.write(16, 0).unwrap(); // version
+    bw.write(16, 32).unwrap(); // version
+    bw.write_bytes(b"AV01").unwrap();
+    bw.write(16, width as u16).unwrap();
+    bw.write(16, height as u16).unwrap();
+    bw.write(32, num as u32).unwrap();
+    bw.write(32, den as u32).unwrap();
+    bw.write(32, 0).unwrap();
+    bw.write(32, 0).unwrap();
 }
 
 pub fn write_ivf_frame(output_file: &mut Write, pts: u64, data: &[u8]) {
-    let mut uch = BitWriter::<LE>::new(output_file);
-    uch.write(32, data.len() as u32).unwrap();
-    uch.write(64, pts).unwrap();
-    uch.write_bytes(data).unwrap();
+    let mut bw = BitWriter::<LE>::new(output_file);
+    bw.write(32, data.len() as u32).unwrap();
+    bw.write(64, pts).unwrap();
+    bw.write_bytes(data).unwrap();
 }
 
 trait UncompressedHeader {
@@ -365,73 +365,73 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
 
 fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence,
                             fi: &FrameInvariants) -> Result<(), std::io::Error> {
-    let mut uch = BitWriter::<BE>::new(packet);
-    uch.write(2,2)?; // AOM_FRAME_MARKER, 0x2
-    uch.write(2,sequence.profile)?; // profile 0
+    let mut bw = BitWriter::<BE>::new(packet);
+    bw.write(2,2)?; // AOM_FRAME_MARKER, 0x2
+    bw.write(2,sequence.profile)?; // profile 0
     if fi.show_existing_frame {
-        uch.write_bit(true)?; // show_existing_frame=1
-        uch.write(3,0)?; // show last frame
-        uch.byte_align()?;
+        bw.write_bit(true)?; // show_existing_frame=1
+        bw.write(3,0)?; // show last frame
+        bw.byte_align()?;
         return Ok(());
     }
-    uch.write_bit(false)?; // show_existing_frame=0
-    uch.write_bit(fi.frame_type == FrameType::INTER)?; // keyframe : 0, inter: 1
-    uch.write_bit(fi.show_frame)?; // show frame
+    bw.write_bit(false)?; // show_existing_frame=0
+    bw.write_bit(fi.frame_type == FrameType::INTER)?; // keyframe : 0, inter: 1
+    bw.write_bit(fi.show_frame)?; // show frame
 
     if fi.frame_type == FrameType::KEY || fi.frame_type == FrameType::INTRA_ONLY {
         assert!(fi.intra_only == true);
     }
     if fi.frame_type != FrameType::KEY {
         if fi.show_frame { assert!(fi.intra_only == false); }
-        else { uch.write_bit( fi.intra_only )?; };
+        else { bw.write_bit( fi.intra_only )?; };
     };
-    uch.write_bit(fi.error_resilient)?; // error resilient
+    bw.write_bit(fi.error_resilient)?; // error resilient
 
     if fi.frame_type == FrameType::KEY || fi.intra_only {
-        uch.write_sequence_header(fi)?;
+        bw.write_sequence_header(fi)?;
     }
 
-    //uch.write(8+7,0)?; // frame id
+    //bw.write(8+7,0)?; // frame id
 
-    uch.write_bit(false)?; // no override frame size
+    bw.write_bit(false)?; // no override frame size
 
     if fi.frame_type == FrameType::KEY {
-        uch.write_bitdepth_colorspace_sampling()?;
-        uch.write_frame_setup()?;
+        bw.write_bitdepth_colorspace_sampling()?;
+        bw.write_frame_setup()?;
     } else { // Inter frame info goes here
         if fi.intra_only {
-            uch.write_bitdepth_colorspace_sampling()?;
-            uch.write(8,0)?; // refresh_frame_flags
-            uch.write_frame_setup()?;
+            bw.write_bitdepth_colorspace_sampling()?;
+            bw.write(8,0)?; // refresh_frame_flags
+            bw.write_frame_setup()?;
         } else {
-            uch.write(8,0)?; // refresh_frame_flags
+            bw.write(8,0)?; // refresh_frame_flags
             // TODO: More Inter frame info goes here
             for _ in 0..7 {
-                uch.write(3,0)?; // dummy ref_frame = 0 until real MC happens
+                bw.write(3,0)?; // dummy ref_frame = 0 until real MC happens
             }
-            uch.write_frame_setup()?;
-            uch.write_bit(fi.allow_high_precision_mv)?;
-            uch.write_bit(false)?; // frame_interp_filter is NOT switchable
-            uch.write(2,0)?;	// EIGHTTAP_REGULAR
+            bw.write_frame_setup()?;
+            bw.write_bit(fi.allow_high_precision_mv)?;
+            bw.write_bit(false)?; // frame_interp_filter is NOT switchable
+            bw.write(2,0)?;	// EIGHTTAP_REGULAR
             if !fi.intra_only && !fi.error_resilient {
-                uch.write_bit(false)?; // do not use_ref_frame_mvs
+                bw.write_bit(false)?; // do not use_ref_frame_mvs
             }
         }
     };
 
 
-    uch.write(3,0x0)?; // frame context
-    uch.write_loop_filter()?;
-    uch.write(8,fi.qindex as u8)?; // qindex
-    uch.write_bit(false)?; // y dc delta q
-    uch.write_bit(false)?; // uv dc delta q
-    uch.write_bit(false)?; // uv ac delta q
-    uch.write_bit(false)?; // no qm
-    uch.write_bit(false)?; // segmentation off
-    uch.write_bit(false)?; // no delta q
-    uch.write_cdef()?;
-    uch.write(6,0)?; // no y, u or v loop restoration
-    uch.write_bit(false)?; // tx mode select
+    bw.write(3,0x0)?; // frame context
+    bw.write_loop_filter()?;
+    bw.write(8,fi.qindex as u8)?; // qindex
+    bw.write_bit(false)?; // y dc delta q
+    bw.write_bit(false)?; // uv dc delta q
+    bw.write_bit(false)?; // uv ac delta q
+    bw.write_bit(false)?; // no qm
+    bw.write_bit(false)?; // segmentation off
+    bw.write_bit(false)?; // no delta q
+    bw.write_cdef()?;
+    bw.write(6,0)?; // no y, u or v loop restoration
+    bw.write_bit(false)?; // tx mode select
 
     //fi.reference_mode = ReferenceMode::SINGLE;
 
@@ -440,20 +440,20 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence,
     }
 
     if !fi.intra_only {
-        uch.write_bit(false)?; } // do not use inter_intra
+        bw.write_bit(false)?; } // do not use inter_intra
     if !fi.intra_only && fi.reference_mode != ReferenceMode::SINGLE {
-        uch.write_bit(false)?; } // do not allow_masked_compound
+        bw.write_bit(false)?; } // do not allow_masked_compound
 
-    uch.write_bit(fi.use_reduced_tx_set)?; // reduced tx
+    bw.write_bit(fi.use_reduced_tx_set)?; // reduced tx
 
     if fi.intra_only == false {
         for i in LAST_FRAME..ALTREF_FRAME+1 {
             let mode = fi.globalmv_transformation_type[i];
-            uch.write_bit(mode != GlobalMVMode::IDENTITY)?;
+            bw.write_bit(mode != GlobalMVMode::IDENTITY)?;
             if mode != GlobalMVMode::IDENTITY {
-                uch.write_bit(mode == GlobalMVMode::ROTZOOM)?;
+                bw.write_bit(mode == GlobalMVMode::ROTZOOM)?;
                 if mode != GlobalMVMode::ROTZOOM {
-                    uch.write_bit(mode == GlobalMVMode::TRANSLATION)?;
+                    bw.write_bit(mode == GlobalMVMode::TRANSLATION)?;
                 }
             }
             match mode {
@@ -465,10 +465,10 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence,
                     let mv_y_ref = 0;
                     let bits = 12 - 6 + 3 - !fi.allow_high_precision_mv as u8;
                     let bits_diff = 12 - 3 + fi.allow_high_precision_mv as u8;
-                    BCodeWriter::write_s_refsubexpfin(&mut uch, (1 << bits) + 1,
+                    BCodeWriter::write_s_refsubexpfin(&mut bw, (1 << bits) + 1,
                                                       3, mv_x_ref >> bits_diff,
                                                       mv_x >> bits_diff)?;
-                    BCodeWriter::write_s_refsubexpfin(&mut uch, (1 << bits) + 1,
+                    BCodeWriter::write_s_refsubexpfin(&mut bw, (1 << bits) + 1,
                                                       3, mv_y_ref >> bits_diff,
                                                       mv_y >> bits_diff)?;
                 }
@@ -478,17 +478,17 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence,
         }
     }
 
-    uch.write_bit(true)?; // uniform tile spacing
+    bw.write_bit(true)?; // uniform tile spacing
     if fi.width > 64 {
-        uch.write(1,0)?; // tile cols
+        bw.write(1,0)?; // tile cols
     }
     if fi.height > 64 {
-        uch.write(1,0)?; // tile rows
+        bw.write(1,0)?; // tile rows
     }
     // if tile_cols * tile_rows > 1
-    //uch.write_bit(true)?; // loop filter across tiles
-    uch.write(2,3)?; // tile_size_bytes
-    uch.byte_align()?;
+    //.write_bit(true)?; // loop filter across tiles
+    bw.write(2,3)?; // tile_size_bytes
+    bw.byte_align()?;
     Ok(())
 }
 
