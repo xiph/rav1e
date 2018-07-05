@@ -29,7 +29,7 @@ use std::vec::Vec;
 pub struct RDOOutput {
     pub rd_cost: f64,
     pub part_type: PartitionType,
-    pub part_modes: Vec<RDOPartitionOutput>
+    pub part_modes: Vec<RDOPartitionOutput>,
 }
 
 #[derive(Clone)]
@@ -38,7 +38,7 @@ pub struct RDOPartitionOutput {
     pub bo: BlockOffset,
     pub pred_mode_luma: PredictionMode,
     pub pred_mode_chroma: PredictionMode,
-    pub skip: bool
+    pub skip: bool,
 }
 
 // Sum of Squared Error for a wxh block
@@ -79,7 +79,7 @@ fn compute_rd_cost(fi: &FrameInvariants, fs: &FrameState,
             let sb_offset = bo.sb_offset().plane_offset(&fs.input.planes[p].cfg);
             let po = PlaneOffset {
                 x: sb_offset.x + partition_start_x,
-                y: sb_offset.y + partition_start_y
+                y: sb_offset.y + partition_start_y,
             };
 
             distortion += sse_wxh(&fs.input.planes[p].slice(&po),
@@ -109,7 +109,11 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
     let w = bsize.width();
     let h = bsize.height();
 
-    let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
+    let PlaneConfig {
+        xdec,
+        ydec,
+        ..
+    } = fs.input.planes[1].cfg;
 
     let mut w_uv = w >> xdec;
     let mut h_uv = h >> ydec;
@@ -191,7 +195,8 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
             pred_mode_luma: best_mode_luma,
             pred_mode_chroma: best_mode_chroma,
             rd_cost: best_rd,
-            skip: best_skip }]
+            skip: best_skip,
+        }],
     };
 
     rdo_output
@@ -209,7 +214,11 @@ pub fn rdo_tx_type_decision(fi: &FrameInvariants, fs: &mut FrameState,
     let w = bsize.width();
     let h = bsize.height();
 
-    let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
+    let PlaneConfig {
+        xdec,
+        ydec,
+        ..
+    } = fs.input.planes[1].cfg;
 
     let mut w_uv = w >> xdec;
     let mut h_uv = h >> ydec;
@@ -290,23 +299,37 @@ pub fn rdo_partition_decision(fi: &FrameInvariants, fs: &mut FrameState,
                 let bs = bsize.width_mi();
                 let hbs = bs >> 1; // Half the block size in blocks
 
-                let offset = BlockOffset { x: bo.x, y: bo.y };
+                let offset = BlockOffset {
+                    x: bo.x,
+                    y: bo.y,
+                };
                 let mode_decision = rdo_mode_decision(fi, fs, cw, subsize, &offset).part_modes[0].clone();
                 child_modes.push(mode_decision);
 
-                let offset = BlockOffset { x: bo.x + hbs as usize, y: bo.y };
+                let offset = BlockOffset {
+                    x: bo.x + hbs as usize,
+                    y: bo.y,
+                };
                 let mode_decision = rdo_mode_decision(fi, fs, cw, subsize, &offset).part_modes[0].clone();
                 child_modes.push(mode_decision);
 
-                let offset = BlockOffset { x: bo.x, y: bo.y + hbs as usize };
+                let offset = BlockOffset {
+                    x: bo.x,
+                    y: bo.y + hbs as usize,
+                };
                 let mode_decision = rdo_mode_decision(fi, fs, cw, subsize, &offset).part_modes[0].clone();
                 child_modes.push(mode_decision);
 
-                let offset = BlockOffset { x: bo.x + hbs as usize, y: bo.y + hbs as usize };
+                let offset = BlockOffset {
+                    x: bo.x + hbs as usize,
+                    y: bo.y + hbs as usize,
+                };
                 let mode_decision = rdo_mode_decision(fi, fs, cw, subsize, &offset).part_modes[0].clone();
                 child_modes.push(mode_decision);
-            },
-            _ => { assert!(false); },
+            }
+            _ => {
+                assert!(false);
+            }
         }
 
         rd = child_modes.iter().map(|m| m.rd_cost).sum::<f64>();
@@ -322,9 +345,11 @@ pub fn rdo_partition_decision(fi: &FrameInvariants, fs: &mut FrameState,
 
     assert!(best_rd >= 0_f64);
 
-    let rdo_output = RDOOutput { rd_cost: best_rd,
+    let rdo_output = RDOOutput {
+        rd_cost: best_rd,
         part_type: best_partition,
-        part_modes: best_pred_modes };
+        part_modes: best_pred_modes,
+    };
 
     rdo_output
 }

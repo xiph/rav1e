@@ -10,9 +10,10 @@
 #![allow(non_camel_case_types)]
 #![allow(dead_code)]
 
-use TxSize::*;
 use BlockSize::*;
+use TxSize::*;
 
+#[cfg_attr(rustfmt, rustfmt_skip)]
 #[derive(Copy,Clone,PartialEq,PartialOrd)]
 pub enum PartitionType {
     PARTITION_NONE,
@@ -22,6 +23,7 @@ pub enum PartitionType {
     PARTITION_INVALID
 }
 
+#[cfg_attr(rustfmt, rustfmt_skip)]
 #[derive(Copy,Clone,PartialEq,PartialOrd)]
 pub enum BlockSize {
     BLOCK_4X4,
@@ -47,7 +49,6 @@ pub enum BlockSize {
 }
 
 impl BlockSize {
-
     pub const BLOCK_SIZES_ALL: usize = 19;
 
     const BLOCK_SIZE_WIDTH_LOG2: [usize; BlockSize::BLOCK_SIZES_ALL] =
@@ -91,6 +92,7 @@ impl BlockSize {
 }
 
 /// Transform Size
+#[cfg_attr(rustfmt, rustfmt_skip)]
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 pub enum TxSize {
     TX_4X4,
@@ -130,7 +132,7 @@ impl TxSize {
             [2, 3, 4, 5, 6, 2, 3, 3, 4, 4, 5, 5, 6, 2, 4, 3, 5, 4, 6];
         TX_SIZE_WIDTH_LOG2[self as usize]
     }
-    
+
     pub fn smallest_width_log2() -> usize {
         TX_4X4.width_log2()
     }
@@ -162,6 +164,7 @@ impl TxSize {
     }
 
     pub fn block_size(self) -> BlockSize {
+        #[cfg_attr(rustfmt, rustfmt_skip)]
         const TX_SIZE_TO_BLOCK_SIZE: [BlockSize; TxSize::TX_SIZES_ALL] = [
             BLOCK_4X4,    // TX_4X4
             BLOCK_8X8,    // TX_8X8
@@ -187,6 +190,7 @@ impl TxSize {
     }
 
     pub fn sqr(self) -> TxSize {
+        #[cfg_attr(rustfmt, rustfmt_skip)]
         const TX_SIZE_SQR: [TxSize; TxSize::TX_SIZES_ALL] = [
             TX_4X4,
             TX_8X8,
@@ -212,6 +216,7 @@ impl TxSize {
     }
 
     pub fn sqr_up(self) -> TxSize {
+        #[cfg_attr(rustfmt, rustfmt_skip)]
         const TX_SIZE_SQR_UP: [TxSize; TxSize::TX_SIZES_ALL] = [
             TX_4X4,
             TX_8X8,
@@ -237,16 +242,15 @@ impl TxSize {
     }
 }
 
-
 pub const TX_TYPES: usize = 16;
 
-#[derive(Copy,Clone,PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 #[repr(C)]
 pub enum TxType {
-    DCT_DCT = 0,    // DCT  in both horizontal and vertical
-    ADST_DCT = 1,   // ADST in vertical, DCT in horizontal
-    DCT_ADST = 2,   // DCT  in vertical, ADST in horizontal
-    ADST_ADST = 3,  // ADST in both directions
+    DCT_DCT = 0,   // DCT  in both horizontal and vertical
+    ADST_DCT = 1,  // ADST in vertical, DCT in horizontal
+    DCT_ADST = 2,  // DCT  in vertical, ADST in horizontal
+    ADST_ADST = 3, // ADST in both directions
     FLIPADST_DCT = 4,
     DCT_FLIPADST = 5,
     FLIPADST_FLIPADST = 6,
@@ -258,21 +262,21 @@ pub enum TxType {
     V_ADST = 12,
     H_ADST = 13,
     V_FLIPADST = 14,
-    H_FLIPADST = 15,
+    H_FLIPADST = 15
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 pub enum PredictionMode {
-    DC_PRED,    // Average of above and left pixels
-    V_PRED,     // Vertical
-    H_PRED,     // Horizontal
-    D45_PRED,   // Directional 45  deg = round(arctan(1/1) * 180/pi)
-    D135_PRED,  // Directional 135 deg = 180 - 45
-    D117_PRED,  // Directional 117 deg = 180 - 63
-    D153_PRED,  // Directional 153 deg = 180 - 27
-    D207_PRED,  // Directional 207 deg = 180 + 27
-    D63_PRED,   // Directional 63  deg = round(arctan(2/1) * 180/pi)
-    SMOOTH_PRED,  // Combination of horizontal and vertical interpolation
+    DC_PRED,     // Average of above and left pixels
+    V_PRED,      // Vertical
+    H_PRED,      // Horizontal
+    D45_PRED,    // Directional 45  deg = round(arctan(1/1) * 180/pi)
+    D135_PRED,   // Directional 135 deg = 180 - 45
+    D117_PRED,   // Directional 117 deg = 180 - 63
+    D153_PRED,   // Directional 153 deg = 180 - 27
+    D207_PRED,   // Directional 207 deg = 180 + 27
+    D63_PRED,    // Directional 63  deg = round(arctan(2/1) * 180/pi)
+    SMOOTH_PRED, // Combination of horizontal and vertical interpolation
     SMOOTH_V_PRED,
     SMOOTH_H_PRED,
     PAETH_PRED,
@@ -288,9 +292,10 @@ pub enum PredictionMode {
     NEAR_NEWMV,
     NEW_NEARMV,
     ZERO_ZEROMV,
-    NEW_NEWMV,
+    NEW_NEWMV
 }
 
+#[cfg_attr(rustfmt, rustfmt_skip)]
 pub static RAV1E_PARTITION_TYPES: &'static [PartitionType] = &[
     PartitionType::PARTITION_NONE,
     PartitionType::PARTITION_SPLIT
@@ -308,18 +313,20 @@ pub static RAV1E_TX_TYPES: &'static [TxType] = &[
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 pub enum GlobalMVMode {
-    IDENTITY = 0,      // identity transformation, 0-parameter
-    TRANSLATION = 1,   // translational motion 2-parameter
-    ROTZOOM = 2,       // simplified affine with rotation + zoom only, 4-parameter
-    AFFINE = 3,        // affine, 6-parameter
+    IDENTITY = 0,    // identity transformation, 0-parameter
+    TRANSLATION = 1, // translational motion 2-parameter
+    ROTZOOM = 2, // simplified affine with rotation + zoom only, 4-parameter
+    AFFINE = 3   // affine, 6-parameter
 }
 
+use context::*;
 use plane::*;
 use predict::*;
-use context::*;
 
 impl PredictionMode {
-    pub fn predict<'a>(&self, dst: &'a mut PlaneMutSlice<'a>, tx_size: TxSize) {
+    pub fn predict<'a>(
+        &self, dst: &'a mut PlaneMutSlice<'a>, tx_size: TxSize
+    ) {
         match tx_size {
             TxSize::TX_4X4 => self.predict_inner::<Block4x4>(dst),
             TxSize::TX_8X8 => self.predict_inner::<Block8x8>(dst),
@@ -342,7 +349,8 @@ impl PredictionMode {
         let y = dst.y;
 
         if self != &PredictionMode::H_PRED && y != 0 {
-            above[1..B::W + 1].copy_from_slice(&dst.go_up(1).as_slice()[..B::W]);
+            above[1..B::W + 1]
+                .copy_from_slice(&dst.go_up(1).as_slice()[..B::W]);
         }
 
         if self != &PredictionMode::V_PRED && x != 0 {
@@ -362,21 +370,25 @@ impl PredictionMode {
         let left_slice = &left[1..B::H + 1];
 
         match *self {
-            PredictionMode::DC_PRED => {
-                match (x, y) {
-                    (0, 0) => B::pred_dc_128(slice, stride),
-                    (_, 0) => B::pred_dc_left(slice, stride, above_slice, left_slice),
-                    (0, _) => B::pred_dc_top(slice, stride, above_slice, left_slice),
-                    _ => B::pred_dc(slice, stride, above_slice, left_slice),
-                }
+            PredictionMode::DC_PRED => match (x, y) {
+                (0, 0) => B::pred_dc_128(slice, stride),
+                (_, 0) =>
+                    B::pred_dc_left(slice, stride, above_slice, left_slice),
+                (0, _) =>
+                    B::pred_dc_top(slice, stride, above_slice, left_slice),
+                _ => B::pred_dc(slice, stride, above_slice, left_slice)
             },
             PredictionMode::H_PRED => B::pred_h(slice, stride, left_slice),
             PredictionMode::V_PRED => B::pred_v(slice, stride, above_slice),
-            PredictionMode::PAETH_PRED => B::pred_paeth(slice, stride, above_slice, left_slice, above[0]),
-            PredictionMode::SMOOTH_PRED => B::pred_smooth(slice, stride, above_slice, left_slice, 8),
-            PredictionMode::SMOOTH_H_PRED => B::pred_smooth_h(slice, stride, above_slice, left_slice, 8),
-            PredictionMode::SMOOTH_V_PRED => B::pred_smooth_v(slice, stride, above_slice, left_slice, 8),
-            _ => unimplemented!(),
+            PredictionMode::PAETH_PRED =>
+                B::pred_paeth(slice, stride, above_slice, left_slice, above[0]),
+            PredictionMode::SMOOTH_PRED =>
+                B::pred_smooth(slice, stride, above_slice, left_slice, 8),
+            PredictionMode::SMOOTH_H_PRED =>
+                B::pred_smooth_h(slice, stride, above_slice, left_slice, 8),
+            PredictionMode::SMOOTH_V_PRED =>
+                B::pred_smooth_v(slice, stride, above_slice, left_slice, 8),
+            _ => unimplemented!()
         }
     }
 
@@ -385,7 +397,7 @@ impl PredictionMode {
     }
 }
 
-#[derive(Copy,Clone,PartialEq,PartialOrd)]
+#[derive(Copy, Clone, PartialEq, PartialOrd)]
 pub enum TxSetType {
     // DCT only
     EXT_TX_SET_DCTONLY,
@@ -406,10 +418,9 @@ pub enum TxSetType {
     // for 16x16 only
     EXT_TX_SET_ALL16_16X16,
     // Discrete Trig transforms w/ flip (9) + Identity (1) + 1D Hor/Ver (6)
-    EXT_TX_SET_ALL16,
-
+    EXT_TX_SET_ALL16
 }
 
-pub fn get_subsize(bsize: BlockSize , partition: PartitionType) -> BlockSize {
+pub fn get_subsize(bsize: BlockSize, partition: PartitionType) -> BlockSize {
     subsize_lookup[partition as usize][bsize as usize]
 }

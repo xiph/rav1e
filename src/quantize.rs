@@ -25,15 +25,11 @@ fn get_tx_scale(tx_size: TxSize) -> u8 {
 }
 
 pub fn dc_q(qindex: usize) -> i16 {
-    unsafe {
-        dc_qlookup_Q3[qindex]
-    }
+    unsafe { dc_qlookup_Q3[qindex] }
 }
 
 pub fn ac_q(qindex: usize) -> i16 {
-    unsafe {
-        ac_qlookup_Q3[qindex]
-    }
+    unsafe { ac_qlookup_Q3[qindex] }
 }
 
 pub fn quantize_in_place(qindex: usize, coeffs: &mut [i32], tx_size: TxSize) {
@@ -57,7 +53,9 @@ pub fn quantize_in_place(qindex: usize, coeffs: &mut [i32], tx_size: TxSize) {
     }
 }
 
-pub fn dequantize(qindex:usize, coeffs: &[i32], rcoeffs: &mut [i32], tx_size: TxSize) {
+pub fn dequantize(
+    qindex: usize, coeffs: &[i32], rcoeffs: &mut [i32], tx_size: TxSize
+) {
     let tx_scale = get_tx_scale(tx_size) as i32;
 
     rcoeffs[0] = (coeffs[0] * dc_q(qindex) as i32) / tx_scale;

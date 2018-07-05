@@ -11,9 +11,9 @@
 
 use libc;
 
-use std::mem::*;
-use partition::*;
 use context::MAX_TX_SIZE;
+use partition::*;
+use std::mem::*;
 
 pub static RAV1E_INTRA_MODES: &'static [PredictionMode] = &[
     PredictionMode::DC_PRED,
@@ -22,7 +22,7 @@ pub static RAV1E_INTRA_MODES: &'static [PredictionMode] = &[
     PredictionMode::SMOOTH_PRED,
     PredictionMode::SMOOTH_H_PRED,
     PredictionMode::SMOOTH_V_PRED,
-    PredictionMode::PAETH_PRED
+    PredictionMode::PAETH_PRED,
 ];
 
 // Intra prediction modes tested at high speed levels
@@ -113,37 +113,36 @@ extern {
 }
 
 pub trait Dim {
-    const W : usize;
-    const H : usize;
+    const W: usize;
+    const H: usize;
 }
 
 pub struct Block4x4;
 
 impl Dim for Block4x4 {
-    const W : usize = 4;
-    const H : usize = 4;
+    const W: usize = 4;
+    const H: usize = 4;
 }
 
 pub struct Block8x8;
 
 impl Dim for Block8x8 {
-    const W : usize = 8;
-    const H : usize = 8;
+    const W: usize = 8;
+    const H: usize = 8;
 }
 
 pub struct Block16x16;
 
 impl Dim for Block16x16 {
-    const W : usize = 16;
-    const H : usize = 16;
+    const W: usize = 16;
+    const H: usize = 16;
 }
-
 
 pub struct Block32x32;
 
 impl Dim for Block32x32 {
-    const W : usize = 32;
-    const H : usize = 32;
+    const W: usize = 32;
+    const H: usize = 32;
 }
 
 pub trait Intra: Dim {
@@ -162,7 +161,7 @@ pub trait Intra: Dim {
     fn pred_dc_128(output: &mut [u16], stride: usize) {
         for y in 0..Self::H {
             for x in 0..Self::W {
-                output[y*stride+x] = 128;
+                output[y * stride + x] = 128;
             }
         }
     }
@@ -196,7 +195,6 @@ pub trait Intra: Dim {
     fn pred_paeth(output: &mut [u16], stride: usize, above: &[u16], left: &[u16], above_left: u16) {
         for r in 0..Self::H {
             for c in 0..Self::W {
-
                 // Top-left pixel is fixed in libaom
                 let raw_top_left = above_left as i32;
                 let raw_left = left[r] as i32;
@@ -250,14 +248,14 @@ pub trait Intra: Dim {
                     sm_weights_h[r] as u16,
                     scale - sm_weights_h[r] as u16,
                     sm_weights_w[c] as u16,
-                    scale - sm_weights_w[c] as u16
+                    scale - sm_weights_w[c] as u16,
                 ];
 
                 assert!(scale >= (sm_weights_h[r] as u16) && scale >= (sm_weights_w[c] as u16));
 
                 // Sum up weighted pixels
-                let mut this_pred: u32 = weights.iter().zip(pixels.iter())
-                    .map(|(w, p)| (*w as u32) * (*p as u32)).sum();
+                let mut this_pred: u32 =
+                    weights.iter().zip(pixels.iter()).map(|(w, p)| (*w as u32) * (*p as u32)).sum();
                 this_pred = (this_pred + (1 << (log2_scale - 1))) >> log2_scale;
 
                 let output_index = r * stride + c;
@@ -282,13 +280,13 @@ pub trait Intra: Dim {
 
         for r in 0..Self::H {
             for c in 0..Self::W {
-                let pixels = [ left[r], right_pred ];
-                let weights = [ sm_weights[c] as u16, scale - sm_weights[c] as u16 ];
+                let pixels = [left[r], right_pred];
+                let weights = [sm_weights[c] as u16, scale - sm_weights[c] as u16];
 
                 assert!(scale >= sm_weights[c] as u16);
 
-                let mut this_pred: u32 = weights.iter().zip(pixels.iter())
-                    .map(|(w, p)| (*w as u32) * (*p as u32)).sum();
+                let mut this_pred: u32 =
+                    weights.iter().zip(pixels.iter()).map(|(w, p)| (*w as u32) * (*p as u32)).sum();
                 this_pred = (this_pred + (1 << (log2_scale - 1))) >> log2_scale;
 
                 let output_index = r * stride + c;
@@ -313,13 +311,13 @@ pub trait Intra: Dim {
 
         for r in 0..Self::H {
             for c in 0..Self::W {
-                let pixels = [ above[c], below_pred ];
-                let weights = [ sm_weights[r] as u16, scale - sm_weights[r] as u16 ];
+                let pixels = [above[c], below_pred];
+                let weights = [sm_weights[r] as u16, scale - sm_weights[r] as u16];
 
                 assert!(scale >= sm_weights[r] as u16);
 
-                let mut this_pred: u32 = weights.iter().zip(pixels.iter())
-                    .map(|(w, p)| (*w as u32) * (*p as u32)).sum();
+                let mut this_pred: u32 =
+                    weights.iter().zip(pixels.iter()).map(|(w, p)| (*w as u32) * (*p as u32)).sum();
                 this_pred = (this_pred + (1 << (log2_scale - 1))) >> log2_scale;
 
                 let output_index = r * stride + c;
@@ -524,17 +522,17 @@ pub mod test {
         Block4x4::pred_h(&mut o, 32, &left[..4]);
 
         for l in o.chunks(32).take(4) {
-          for v in l[..4].iter() {
-            assert_eq!(*v, max12bit);
-          }
+            for v in l[..4].iter() {
+                assert_eq!(*v, max12bit);
+            }
         }
 
         Block4x4::pred_v(&mut o, 32, &above[..4]);
 
         for l in o.chunks(32).take(4) {
-          for v in l[..4].iter() {
-            assert_eq!(*v, max12bit);
-          }
+            for v in l[..4].iter() {
+                assert_eq!(*v, max12bit);
+            }
         }
 
         let above_left = unsafe { *above.as_ptr().offset(-1) };
