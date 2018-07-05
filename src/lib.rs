@@ -545,7 +545,7 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
     let mut coeffs_storage: [i32; 64*64] = unsafe { uninitialized() };
     let mut rcoeffs: [i32; 64*64] = unsafe { uninitialized() };
 
-    let coeffs = &mut coeffs_storage[..tx_size.width()*tx_size.height()];
+    let coeffs = &mut coeffs_storage[..tx_size.area()];
 
     diff(&mut residual,
          &fs.input.planes[p].slice(po),

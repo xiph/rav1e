@@ -149,7 +149,11 @@ impl TxSize {
         self.width() >> MI_SIZE_LOG2
     }
 
-    pub fn log2(self) -> usize {
+    pub fn area(self) -> usize {
+        1 << self.area_log2()
+    }
+
+    pub fn area_log2(self) -> usize {
         self.width_log2() + self.height_log2()
     }
 

@@ -1878,10 +1878,10 @@ impl ContextWriter {
         let scan_order = &av1_inter_scan_orders[tx_size as usize][tx_type as usize];
         let scan = scan_order.scan;
         let mut coeffs_storage = [0 as i32; 32*32];
-        let coeffs = &mut coeffs_storage[..tx_size.width()*tx_size.height()];
+        let coeffs = &mut coeffs_storage[..tx_size.area()];
         let mut cul_level = 0 as u32;
 
-        for i in 0..tx_size.width()*tx_size.height() {
+        for i in 0..tx_size.area() {
             coeffs[i] = coeffs_in[scan[i] as usize];
             cul_level += coeffs[i].abs() as u32;
         }
@@ -1926,7 +1926,7 @@ impl ContextWriter {
         // Encode EOB
         let mut eob_extra = 0 as u32;
         let eob_pt = self.get_eob_pos_token(eob, &mut eob_extra);
-        let eob_multi_size: usize = tx_size.log2() - 4;
+        let eob_multi_size: usize = tx_size.area_log2() - 4;
         let eob_multi_ctx: usize = if tx_class == TX_CLASS_2D { 0 } else { 1 };
 
         match eob_multi_size {
