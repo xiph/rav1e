@@ -141,28 +141,6 @@ static av1_coefband_trans_8x8plus: [u8; 32*32] = [
   5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
   5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5];
 
-static txsize_log2_minus4: [usize; TxSize::TX_SIZES_ALL] = [
-    0,  // TX_4X4
-    2,  // TX_8X8
-    4,  // TX_16X16
-    6,  // TX_32X32
-    6,  // TX_64X64
-    1,  // TX_4X8
-    1,  // TX_8X4
-    3,  // TX_8X16
-    3,  // TX_16X8
-    5,  // TX_16X32
-    5,  // TX_32X16
-    6,  // TX_32X64
-    6,  // TX_64X32
-    2,  // TX_4X16
-    2,
-    4,
-    4,
-    5,
-    5
-];
-
 static ss_size_lookup: [[[BlockSize; 2]; 2]; BlockSize::BLOCK_SIZES_ALL] = [
   //  ss_x == 0    ss_x == 0        ss_x == 1      ss_x == 1
   //  ss_y == 0    ss_y == 1        ss_y == 0      ss_y == 1
@@ -1948,7 +1926,7 @@ impl ContextWriter {
         // Encode EOB
         let mut eob_extra = 0 as u32;
         let eob_pt = self.get_eob_pos_token(eob, &mut eob_extra);
-        let eob_multi_size: usize = txsize_log2_minus4[tx_size as usize];
+        let eob_multi_size: usize = tx_size.log2() - 4;
         let eob_multi_ctx: usize = if tx_class == TX_CLASS_2D { 0 } else { 1 };
 
         match eob_multi_size {

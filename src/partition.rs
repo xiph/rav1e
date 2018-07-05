@@ -129,7 +129,7 @@ impl TxSize {
         [2, 3, 4, 5, 6, 3, 2, 4, 3, 5, 4, 6, 5, 4, 2, 5, 3, 6, 4];
 
     pub fn width(self) -> usize {
-        1 << TxSize::TX_SIZE_WIDE_LOG2[self as usize]
+        1 << self.width_log2()
     }
 
     pub fn width_log2(self) -> usize {
@@ -141,11 +141,19 @@ impl TxSize {
     }
 
     pub fn height(self) -> usize {
-        1 << TxSize::TX_SIZE_HIGH_LOG2[self as usize]
+        1 << self.height_log2()
+    }
+
+    pub fn height_log2(self) -> usize {
+        TxSize::TX_SIZE_HIGH_LOG2[self as usize]
     }
 
     pub fn width_mi(self) -> usize {
         self.width() >> MI_SIZE_LOG2
+    }
+
+    pub fn log2(self) -> usize {
+        self.width_log2() + self.height_log2()
     }
 
     pub fn height_mi(self) -> usize {
