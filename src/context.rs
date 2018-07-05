@@ -47,10 +47,6 @@ const MAX_ANGLE_DELTA: usize = 3;
 const DIRECTIONAL_MODES: usize = 8;
 const KF_MODE_CONTEXTS: usize= 5;
 
-pub static mi_size_wide: [u8; BLOCK_SIZES_ALL] =
-    [1, 1, 2, 2, 2, 4, 4, 4, 8, 8, 8, 16, 16, 1, 4, 2, 8, 4, 16];
-pub static mi_size_high: [u8; BLOCK_SIZES_ALL] =
-    [1, 2, 1, 2, 4, 2, 4, 8, 4, 8, 16, 8, 16, 4, 1, 8, 2, 16, 4];
 pub static b_width_log2_lookup: [u8; BLOCK_SIZES_ALL] =
     [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 0, 2, 1, 3, 2, 4];
 pub static b_height_log2_lookup: [u8; BLOCK_SIZES_ALL] =
@@ -67,11 +63,6 @@ pub static tx_size_wide_unit: [usize; TxSize::TX_SIZES_ALL] =
 // Transform block height in unit
 pub static tx_size_high_unit: [usize; TxSize::TX_SIZES_ALL] =
     [1, 2, 4, 8, 16, 2, 1, 4, 2, 8, 4, 16, 8, 4, 1, 8, 2, 16, 4];
-// Width/height lookup tables in units of various block sizes
-pub static block_size_wide: [u8; BLOCK_SIZES_ALL] =
-    [4, 4, 8, 8, 8, 16, 16, 16, 32, 32, 32, 64, 64, 4, 16, 8, 32, 16, 64 ];
-pub static block_size_high: [u8; BLOCK_SIZES_ALL] =
-    [4, 8, 4, 8, 16, 8, 16, 32, 16, 32, 64, 32, 64, 16,4, 32, 8, 64, 16 ];
 
 const EXT_TX_SIZES: usize = 4;
 const EXT_TX_SET_TYPES: usize = 9;
@@ -903,8 +894,8 @@ pub fn clamp(val: i32, min: i32, max: i32) -> i32 {
 
 pub fn has_chroma(bo: &BlockOffset, bsize: BlockSize,
                        subsampling_x: usize, subsampling_y: usize) -> bool {
-    let bw = mi_size_wide[bsize as usize] as u8;
-    let bh = mi_size_high[bsize as usize] as u8;
+    let bw = bsize.width_mi();
+    let bh = bsize.height_mi();
 
     ((bo.x & 0x01) == 1 || (bw & 0x01) == 0 || subsampling_x == 0) &&
         ((bo.y & 0x01) == 1 || (bh & 0x01) == 0 || subsampling_y == 0)
@@ -1405,8 +1396,8 @@ impl BlockContext {
 
             let plane_bsize = if plane == 0 { bsize }
                               else { get_plane_block_size(bsize, xdec2, ydec2) };
-            let bw = mi_size_wide[plane_bsize as usize];
-            let bh = mi_size_high[plane_bsize as usize];
+            let bw = plane_bsize.width_mi();
+            let bh = plane_bsize.height_mi();
 
             for bx in 0..bw {
                 self.above_coeff_context[plane][bo.x + (bx<<xdec2) as usize] = 0;
@@ -1429,8 +1420,8 @@ impl BlockContext {
     }
 
     pub fn set_mode(&mut self, bo: &BlockOffset, bsize: BlockSize, mode: PredictionMode) {
-        let bw = mi_size_wide[bsize as usize];
-        let bh = mi_size_high[bsize as usize];
+        let bw = bsize.width_mi();
+        let bh = bsize.height_mi();
 
         for y in 0..bh {
             for x in 0..bw {
@@ -1460,8 +1451,8 @@ impl BlockContext {
     pub fn update_partition_context(&mut self, bo: &BlockOffset,
                                 subsize : BlockSize, bsize: BlockSize) {
 #[allow(dead_code)]
-        let bw = mi_size_wide[bsize as usize];
-        let bh = mi_size_high[bsize as usize];
+        let bw = bsize.width_mi();
+        let bh = bsize.height_mi();
 
         let above_ctx = &mut self.above_partition_context[bo.x..bo.x + bw as usize];
         let left_ctx = &mut self.left_partition_context[bo.y_in_sb()..bo.y_in_sb() + bh as usize];
@@ -1487,8 +1478,8 @@ impl BlockContext {
     }
 
     pub fn set_skip(&mut self, bo: &BlockOffset, bsize: BlockSize, skip: bool) {
-        let bw = mi_size_wide[bsize as usize];
-        let bh = mi_size_high[bsize as usize];
+        let bw = bsize.width_mi();
+        let bh = bsize.height_mi();
 
         for y in 0..bh {
             for x in 0..bw {
@@ -1691,7 +1682,7 @@ impl ContextWriter {
     }
 
     pub fn write_partition(&mut self, bo: &BlockOffset, p: PartitionType, bsize: BlockSize) {
-        let hbs = (mi_size_wide[bsize as usize] / 2) as usize;
+        let hbs = bsize.width_mi() / 2;
         let has_cols = (bo.x + hbs) < self.bc.cols;
         let has_rows = (bo.y + hbs) < self.bc.rows;
         let ctx = self.bc.partition_plane_context(&bo, bsize);

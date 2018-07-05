@@ -55,7 +55,7 @@ fn sse_wxh(src1: &PlaneSlice, src2: &PlaneSlice, w: usize, h: usize) -> u64 {
 
 // Compute the rate-distortion cost for an encode
 fn compute_rd_cost(fi: &FrameInvariants, fs: &FrameState,
-                   w_y: u8, h_y: u8, w_uv: u8, h_uv: u8,
+                   w_y: usize, h_y: usize, w_uv: usize, h_uv: usize,
                    partition_start_x: usize, partition_start_y: usize,
                    bo: &BlockOffset, bit_cost: u32) -> f64 {
     let q = dc_q(fi.qindex) as f64;
@@ -71,7 +71,7 @@ fn compute_rd_cost(fi: &FrameInvariants, fs: &FrameState,
     let po = bo.plane_offset(&fs.input.planes[0].cfg);
     let mut distortion = sse_wxh(&fs.input.planes[0].slice(&po),
                                  &fs.rec.planes[0].slice(&po),
-                                 w_y as usize, h_y as usize);
+                                 w_y, h_y);
 
     // Add chroma distortion only when it is available
     if w_uv > 0 && h_uv > 0 {
@@ -84,7 +84,7 @@ fn compute_rd_cost(fi: &FrameInvariants, fs: &FrameState,
 
             distortion += sse_wxh(&fs.input.planes[p].slice(&po),
                                   &fs.rec.planes[p].slice(&po),
-                                  w_uv as usize, h_uv as usize);
+                                  w_uv, h_uv);
         }
     };
 
@@ -106,8 +106,8 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
     let tell = cw.w.tell_frac();
 
     // Get block luma and chroma dimensions
-    let w = block_size_wide[bsize as usize];
-    let h = block_size_high[bsize as usize];
+    let w = bsize.width();
+    let h = bsize.height();
 
     let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
@@ -206,8 +206,8 @@ pub fn rdo_tx_type_decision(fi: &FrameInvariants, fs: &mut FrameState,
     let tell = cw.w.tell_frac();
 
     // Get block luma and chroma dimensions
-    let w = block_size_wide[bsize as usize];
-    let h = block_size_high[bsize as usize];
+    let w = bsize.width();
+    let h = bsize.height();
 
     let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
@@ -287,7 +287,7 @@ pub fn rdo_partition_decision(fi: &FrameInvariants, fs: &mut FrameState,
                     continue;
                 }
 
-                let bs = mi_size_wide[bsize as usize];
+                let bs = bsize.width_mi();
                 let hbs = bs >> 1; // Half the block size in blocks
 
                 let offset = BlockOffset { x: bo.x, y: bo.y };
