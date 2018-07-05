@@ -16,7 +16,6 @@ use std::*;
 use ec;
 use partition::*;
 use partition::BlockSize::*;
-use partition::TxSize::*;
 use partition::TxType::*;
 use partition::PredictionMode::*;
 use plane::*;
@@ -146,72 +145,6 @@ static av1_coefband_trans_8x8plus: [u8; 32*32] = [
   5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
   5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
   5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5];
-
-pub static txsize_to_bsize: [BlockSize; TxSize::TX_SIZES_ALL] = [
-  BLOCK_4X4,    // TX_4X4
-  BLOCK_8X8,    // TX_8X8
-  BLOCK_16X16,  // TX_16X16
-  BLOCK_32X32,  // TX_32X32
-  BLOCK_64X64,
-  BLOCK_4X8,    // TX_4X8
-  BLOCK_8X4,    // TX_8X4
-  BLOCK_8X16,   // TX_8X16
-  BLOCK_16X8,   // TX_16X8
-  BLOCK_16X32,  // TX_16X32
-  BLOCK_32X16,  // TX_32X16
-  BLOCK_32X64,
-  BLOCK_64X32,
-  BLOCK_4X16,   // TX_4X16
-  BLOCK_16X4,   // TX_16X4
-  BLOCK_8X32,   // TX_8X32
-  BLOCK_32X8,   // TX_32X8
-  BLOCK_16X64,
-  BLOCK_64X16
-];
-
-pub static TXSIZE_SQR_MAP: [TxSize; TxSize::TX_SIZES_ALL] = [
-    TX_4X4,
-    TX_8X8,
-    TX_16X16,
-    TX_32X32,
-    TX_64X64,
-    TX_4X4,
-    TX_4X4,
-    TX_8X8,
-    TX_8X8,
-    TX_16X16,
-    TX_16X16,
-    TX_32X32,
-    TX_32X32,
-    TX_4X4,
-    TX_4X4,
-    TX_8X8,
-    TX_8X8,
-    TX_16X16,
-    TX_16X16
-];
-
-static TXSIZE_SQR_UP_MAP: [TxSize; TxSize::TX_SIZES_ALL] = [
-    TX_4X4,
-    TX_8X8,
-    TX_16X16,
-    TX_32X32,
-    TX_64X64,
-    TX_8X8,
-    TX_8X8,
-    TX_16X16,
-    TX_16X16,
-    TX_32X32,
-    TX_32X32,
-    TX_64X64,
-    TX_64X64,
-    TX_16X16,
-    TX_16X16,
-    TX_32X32,
-    TX_32X32,
-    TX_64X64,
-    TX_64X64
-];
 
 static txsize_log2_minus4: [usize; TxSize::TX_SIZES_ALL] = [
     0,  // TX_4X4
@@ -891,8 +824,8 @@ pub fn has_chroma(bo: &BlockOffset, bsize: BlockSize,
 }
 
 pub fn get_ext_tx_set_type(tx_size: TxSize, is_inter: bool, use_reduced_set: bool) -> TxSetType {
-    let tx_size_sqr_up = TXSIZE_SQR_UP_MAP[tx_size as usize];
-    let tx_size_sqr = TXSIZE_SQR_MAP[tx_size as usize];
+    let tx_size_sqr_up = tx_size.sqr_up();
+    let tx_size_sqr = tx_size.sqr();
     if tx_size_sqr > TxSize::TX_32X32 {
         TxSetType::EXT_TX_SET_DCTONLY
     } else if tx_size_sqr_up == TxSize::TX_32X32 {
@@ -1534,7 +1467,7 @@ impl BlockContext {
 
         // Decide txb_ctx.txb_skip_ctx
         if plane == 0 {
-            if plane_bsize == txsize_to_bsize[tx_size as usize] {
+            if plane_bsize == tx_size.to_block_size() {
               txb_ctx.txb_skip_ctx = 0;
             } else {
                 // This is the algorithm to generate table skip_contexts[min][max].
@@ -1583,7 +1516,7 @@ impl BlockContext {
             }
             let ctx_base = (top != 0) as usize + (left != 0) as usize;
             let ctx_offset = if num_pels_log2_lookup[plane_bsize as usize] >
-                                 num_pels_log2_lookup[txsize_to_bsize[tx_size as usize] as usize]
+                                 num_pels_log2_lookup[tx_size.to_block_size() as usize]
                                 { 10 }
                              else { 7 };
             txb_ctx.txb_skip_ctx = ctx_base + ctx_offset;
@@ -1726,7 +1659,7 @@ impl ContextWriter {
     pub fn write_tx_type_lv_map(&mut self, tx_size: TxSize, tx_type: TxType,
                                 y_mode: PredictionMode, is_inter: bool,
                                 use_reduced_tx_set: bool) {
-        let square_tx_size = TXSIZE_SQR_MAP[tx_size as usize];
+        let square_tx_size = tx_size.sqr();
         let tx_set_type = get_ext_tx_set_type(tx_size, is_inter, use_reduced_tx_set);
         let num_tx_types = num_ext_tx_set[tx_set_type as usize];
 
@@ -1763,7 +1696,7 @@ impl ContextWriter {
     }
 
     pub fn get_txsize_entropy_ctx(&mut self, tx_size: TxSize) -> usize {
-      (TXSIZE_SQR_MAP[tx_size as usize] as usize + TXSIZE_SQR_MAP[tx_size as usize] as usize + 1) >> 1
+      (tx_size.sqr() as usize + tx_size.sqr() as usize + 1) >> 1
     }
 
     pub fn txb_init_levels(&mut self, coeffs: &[i32], width: usize, height: usize,

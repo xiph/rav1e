@@ -10,6 +10,9 @@
 #![allow(non_camel_case_types)]
 #![allow(dead_code)]
 
+use TxSize::*;
+use BlockSize::*;
+
 #[derive(Copy,Clone,PartialEq,PartialOrd)]
 pub enum PartitionType {
     PARTITION_NONE,
@@ -50,6 +53,7 @@ impl BlockSize {
     // Width/height lookup tables in units of various block sizes
     const BLOCK_SIZE_WIDE: [usize; BlockSize::BLOCK_SIZES_ALL] =
         [4, 4, 8, 8, 8, 16, 16, 16, 32, 32, 32, 64, 64, 4, 16, 8, 32, 16, 64 ];
+
     const BLOCK_SIZE_HIGH: [usize; BlockSize::BLOCK_SIZES_ALL] =
         [4, 8, 4, 8, 16, 8, 16, 32, 16, 32, 64, 32, 64, 16,4, 32, 8, 64, 16 ];
 
@@ -134,6 +138,84 @@ impl TxSize {
 
     pub fn height_mi(self) -> usize {
         self.height() >> MI_SIZE_LOG2
+    }
+
+    const TX_SIZE_TO_BLOCK_SIZE: [BlockSize; TxSize::TX_SIZES_ALL] = [
+        BLOCK_4X4,    // TX_4X4
+        BLOCK_8X8,    // TX_8X8
+        BLOCK_16X16,  // TX_16X16
+        BLOCK_32X32,  // TX_32X32
+        BLOCK_64X64,
+        BLOCK_4X8,    // TX_4X8
+        BLOCK_8X4,    // TX_8X4
+        BLOCK_8X16,   // TX_8X16
+        BLOCK_16X8,   // TX_16X8
+        BLOCK_16X32,  // TX_16X32
+        BLOCK_32X16,  // TX_32X16
+        BLOCK_32X64,
+        BLOCK_64X32,
+        BLOCK_4X16,   // TX_4X16
+        BLOCK_16X4,   // TX_16X4
+        BLOCK_8X32,   // TX_8X32
+        BLOCK_32X8,   // TX_32X8
+        BLOCK_16X64,
+        BLOCK_64X16
+    ];
+
+    pub fn to_block_size(self) -> BlockSize {
+        TxSize::TX_SIZE_TO_BLOCK_SIZE[self as usize]
+    }
+
+    const TX_SIZE_SQR: [TxSize; TxSize::TX_SIZES_ALL] = [
+        TX_4X4,
+        TX_8X8,
+        TX_16X16,
+        TX_32X32,
+        TX_64X64,
+        TX_4X4,
+        TX_4X4,
+        TX_8X8,
+        TX_8X8,
+        TX_16X16,
+        TX_16X16,
+        TX_32X32,
+        TX_32X32,
+        TX_4X4,
+        TX_4X4,
+        TX_8X8,
+        TX_8X8,
+        TX_16X16,
+        TX_16X16
+    ];
+
+    pub fn sqr(self) -> TxSize {
+        TxSize::TX_SIZE_SQR[self as usize]
+    }
+
+    const TX_SIZE_SQR_UP: [TxSize; TxSize::TX_SIZES_ALL] = [
+        TX_4X4,
+        TX_8X8,
+        TX_16X16,
+        TX_32X32,
+        TX_64X64,
+        TX_8X8,
+        TX_8X8,
+        TX_16X16,
+        TX_16X16,
+        TX_32X32,
+        TX_32X32,
+        TX_64X64,
+        TX_64X64,
+        TX_16X16,
+        TX_16X16,
+        TX_32X32,
+        TX_32X32,
+        TX_64X64,
+        TX_64X64
+    ];
+
+    pub fn sqr_up(self) -> TxSize {
+        TxSize::TX_SIZE_SQR_UP[self as usize]
     }
 }
 
