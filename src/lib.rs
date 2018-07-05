@@ -545,7 +545,7 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
     let mut coeffs_storage: [i32; 64*64] = unsafe { uninitialized() };
     let mut rcoeffs: [i32; 64*64] = unsafe { uninitialized() };
 
-    let coeffs = &mut coeffs_storage[..tx_size.width()*tx_size.height()];
+    let coeffs = &mut coeffs_storage[..tx_size.area()];
 
     diff(&mut residual,
          &fs.input.planes[p].slice(po),
@@ -626,8 +626,8 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
 pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
                        luma_mode: PredictionMode, chroma_mode: PredictionMode, bo: &BlockOffset,
                        bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool) {
-    let bw = mi_size_wide[bsize as usize] as usize / tx_size.width_mi();
-    let bh = mi_size_high[bsize as usize] as usize / tx_size.height_mi();
+    let bw = bsize.width_mi() / tx_size.width_mi();
+    let bh = bsize.height_mi() / tx_size.height_mi();
 
     let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
@@ -703,7 +703,7 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
         return rd_cost;
     }
 
-    let bs = mi_size_wide[bsize as usize];
+    let bs = bsize.width_mi();
 
     // Always split if the current partition is too large
     let must_split = bo.x + bs as usize > fi.w_in_b ||
@@ -797,7 +797,7 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut 
         return;
     }
 
-    let bs = mi_size_wide[bsize as usize];
+    let bs = bsize.width_mi();
 
     // Always split if the current partition is too large
     let must_split = bo.x + bs as usize > fi.w_in_b ||
@@ -823,7 +823,7 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut 
         partition = PartitionType::PARTITION_NONE;
     }
 
-    assert!(mi_size_wide[bsize as usize] == mi_size_high[bsize as usize]);
+    assert!(bsize.width_mi() == bsize.height_mi());
     assert!(PartitionType::PARTITION_NONE <= partition &&
             partition < PartitionType::PARTITION_INVALID);
 

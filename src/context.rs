@@ -16,7 +16,6 @@ use std::*;
 use ec;
 use partition::*;
 use partition::BlockSize::*;
-use partition::TxSize::*;
 use partition::TxType::*;
 use partition::PredictionMode::*;
 use plane::*;
@@ -46,32 +45,6 @@ const BLOCK_SIZE_GROUPS: usize = 4;
 const MAX_ANGLE_DELTA: usize = 3;
 const DIRECTIONAL_MODES: usize = 8;
 const KF_MODE_CONTEXTS: usize= 5;
-
-pub static mi_size_wide: [u8; BLOCK_SIZES_ALL] =
-    [1, 1, 2, 2, 2, 4, 4, 4, 8, 8, 8, 16, 16, 1, 4, 2, 8, 4, 16];
-pub static mi_size_high: [u8; BLOCK_SIZES_ALL] =
-    [1, 2, 1, 2, 4, 2, 4, 8, 4, 8, 16, 8, 16, 4, 1, 8, 2, 16, 4];
-pub static b_width_log2_lookup: [u8; BLOCK_SIZES_ALL] =
-    [0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 0, 2, 1, 3, 2, 4];
-pub static b_height_log2_lookup: [u8; BLOCK_SIZES_ALL] =
-    [0, 1, 0, 1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 2, 0, 3, 1, 4, 2];
-// Transform block width in pixels
-pub static tx_size_wide: [usize; TxSize::TX_SIZES_ALL] =
-    [ 4, 8, 16, 32, 64, 4, 8, 8, 16, 16, 32, 32, 64, 4, 16, 8, 32, 16, 64 ];
-// Transform block height in pixels
-pub static tx_size_high: [usize; TxSize::TX_SIZES_ALL] =
-    [ 4, 8, 16, 32, 64, 8, 4, 16, 8, 32, 16, 64, 32, 16, 4, 32, 8, 64, 16 ];
-// Transform block width in unit
-pub static tx_size_wide_unit: [usize; TxSize::TX_SIZES_ALL] =
-    [1, 2, 4, 8, 16, 1, 2, 2, 4, 4, 8, 8, 16, 1, 4, 2, 8, 4, 16];
-// Transform block height in unit
-pub static tx_size_high_unit: [usize; TxSize::TX_SIZES_ALL] =
-    [1, 2, 4, 8, 16, 2, 1, 4, 2, 8, 4, 16, 8, 4, 1, 8, 2, 16, 4];
-// Width/height lookup tables in units of various block sizes
-pub static block_size_wide: [u8; BLOCK_SIZES_ALL] =
-    [4, 4, 8, 8, 8, 16, 16, 16, 32, 32, 32, 64, 64, 4, 16, 8, 32, 16, 64 ];
-pub static block_size_high: [u8; BLOCK_SIZES_ALL] =
-    [4, 8, 4, 8, 16, 8, 16, 32, 16, 32, 64, 32, 64, 16,4, 32, 8, 64, 16 ];
 
 const EXT_TX_SIZES: usize = 4;
 const EXT_TX_SET_TYPES: usize = 9;
@@ -168,95 +141,7 @@ static av1_coefband_trans_8x8plus: [u8; 32*32] = [
   5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
   5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5];
 
-pub static txsize_to_bsize: [BlockSize; TxSize::TX_SIZES_ALL] = [
-  BLOCK_4X4,    // TX_4X4
-  BLOCK_8X8,    // TX_8X8
-  BLOCK_16X16,  // TX_16X16
-  BLOCK_32X32,  // TX_32X32
-  BLOCK_64X64,
-  BLOCK_4X8,    // TX_4X8
-  BLOCK_8X4,    // TX_8X4
-  BLOCK_8X16,   // TX_8X16
-  BLOCK_16X8,   // TX_16X8
-  BLOCK_16X32,  // TX_16X32
-  BLOCK_32X16,  // TX_32X16
-  BLOCK_32X64,
-  BLOCK_64X32,
-  BLOCK_4X16,   // TX_4X16
-  BLOCK_16X4,   // TX_16X4
-  BLOCK_8X32,   // TX_8X32
-  BLOCK_32X8,   // TX_32X8
-  BLOCK_16X64,
-  BLOCK_64X16
-];
-
-pub static TXSIZE_SQR_MAP: [TxSize; TxSize::TX_SIZES_ALL] = [
-    TX_4X4,
-    TX_8X8,
-    TX_16X16,
-    TX_32X32,
-    TX_64X64,
-    TX_4X4,
-    TX_4X4,
-    TX_8X8,
-    TX_8X8,
-    TX_16X16,
-    TX_16X16,
-    TX_32X32,
-    TX_32X32,
-    TX_4X4,
-    TX_4X4,
-    TX_8X8,
-    TX_8X8,
-    TX_16X16,
-    TX_16X16
-];
-
-static TXSIZE_SQR_UP_MAP: [TxSize; TxSize::TX_SIZES_ALL] = [
-    TX_4X4,
-    TX_8X8,
-    TX_16X16,
-    TX_32X32,
-    TX_64X64,
-    TX_8X8,
-    TX_8X8,
-    TX_16X16,
-    TX_16X16,
-    TX_32X32,
-    TX_32X32,
-    TX_64X64,
-    TX_64X64,
-    TX_16X16,
-    TX_16X16,
-    TX_32X32,
-    TX_32X32,
-    TX_64X64,
-    TX_64X64
-];
-
-static txsize_log2_minus4: [usize; TxSize::TX_SIZES_ALL] = [
-    0,  // TX_4X4
-    2,  // TX_8X8
-    4,  // TX_16X16
-    6,  // TX_32X32
-    6,  // TX_64X64
-    1,  // TX_4X8
-    1,  // TX_8X4
-    3,  // TX_8X16
-    3,  // TX_16X8
-    5,  // TX_16X32
-    5,  // TX_32X16
-    6,  // TX_32X64
-    6,  // TX_64X32
-    2,  // TX_4X16
-    2,
-    4,
-    4,
-    5,
-    5
-];
-
-static ss_size_lookup: [[[BlockSize; 2]; 2]; BLOCK_SIZES_ALL] = [
+static ss_size_lookup: [[[BlockSize; 2]; 2]; BlockSize::BLOCK_SIZES_ALL] = [
   //  ss_x == 0    ss_x == 0        ss_x == 1      ss_x == 1
   //  ss_y == 0    ss_y == 1        ss_y == 0      ss_y == 1
   [  [ BLOCK_4X4, BLOCK_4X4 ], [BLOCK_4X4, BLOCK_4X4 ] ],
@@ -288,7 +173,7 @@ pub fn get_plane_block_size(bsize: BlockSize, subsampling_x: usize, subsampling_
 // Generates 4 bit field in which each bit set to 1 represents
 // a blocksize partition  1111 means we split 64x64, 32x32, 16x16
 // and 8x8.  1000 means we just split the 64x64 to 32x32
-static partition_context_lookup: [[u8; 2]; BLOCK_SIZES_ALL] = [
+static partition_context_lookup: [[u8; 2]; BlockSize::BLOCK_SIZES_ALL] = [
   [ 15, 15 ],  // 4X4   - [0b1111, 0b1111]
   [ 15, 14 ],  // 4X8   - [0b1111, 0b1110]
   [ 14, 15 ],  // 8X4   - [0b1110, 0b1111]
@@ -311,7 +196,7 @@ static partition_context_lookup: [[u8; 2]; BLOCK_SIZES_ALL] = [
   [ 0, 12 ],   // 64X16- [0b0000, 0b1100]
 ];
 
-static size_group_lookup: [u8; BLOCK_SIZES_ALL] = [
+static size_group_lookup: [u8; BlockSize::BLOCK_SIZES_ALL] = [
   0, 0,
   0, 1,
   1, 1,
@@ -324,10 +209,10 @@ static size_group_lookup: [u8; BLOCK_SIZES_ALL] = [
   2,
 ];
 
-static num_pels_log2_lookup: [u8; BLOCK_SIZES_ALL] = [
+static num_pels_log2_lookup: [u8; BlockSize::BLOCK_SIZES_ALL] = [
   4, 5, 5, 6, 7, 7, 8, 9, 9, 10, 11, 11, 12, 6, 6, 8, 8, 10, 10];
 
-pub static subsize_lookup: [[BlockSize; BLOCK_SIZES_ALL]; PARTITION_TYPES] =
+pub static subsize_lookup: [[BlockSize; BlockSize::BLOCK_SIZES_ALL]; PARTITION_TYPES] =
 [
   [ // PARTITION_NONE
     //                            4X4
@@ -903,8 +788,8 @@ pub fn clamp(val: i32, min: i32, max: i32) -> i32 {
 
 pub fn has_chroma(bo: &BlockOffset, bsize: BlockSize,
                        subsampling_x: usize, subsampling_y: usize) -> bool {
-    let bw = mi_size_wide[bsize as usize] as u8;
-    let bh = mi_size_high[bsize as usize] as u8;
+    let bw = bsize.width_mi();
+    let bh = bsize.height_mi();
 
     ((bo.x & 0x01) == 1 || (bw & 0x01) == 0 || subsampling_x == 0) &&
         ((bo.y & 0x01) == 1 || (bh & 0x01) == 0 || subsampling_y == 0)
@@ -912,8 +797,8 @@ pub fn has_chroma(bo: &BlockOffset, bsize: BlockSize,
 }
 
 pub fn get_ext_tx_set_type(tx_size: TxSize, is_inter: bool, use_reduced_set: bool) -> TxSetType {
-    let tx_size_sqr_up = TXSIZE_SQR_UP_MAP[tx_size as usize];
-    let tx_size_sqr = TXSIZE_SQR_MAP[tx_size as usize];
+    let tx_size_sqr_up = tx_size.sqr_up();
+    let tx_size_sqr = tx_size.sqr();
     if tx_size_sqr > TxSize::TX_32X32 {
         TxSetType::EXT_TX_SET_DCTONLY
     } else if tx_size_sqr_up == TxSize::TX_32X32 {
@@ -1405,8 +1290,8 @@ impl BlockContext {
 
             let plane_bsize = if plane == 0 { bsize }
                               else { get_plane_block_size(bsize, xdec2, ydec2) };
-            let bw = mi_size_wide[plane_bsize as usize];
-            let bh = mi_size_high[plane_bsize as usize];
+            let bw = plane_bsize.width_mi();
+            let bh = plane_bsize.height_mi();
 
             for bx in 0..bw {
                 self.above_coeff_context[plane][bo.x + (bx<<xdec2) as usize] = 0;
@@ -1429,8 +1314,8 @@ impl BlockContext {
     }
 
     pub fn set_mode(&mut self, bo: &BlockOffset, bsize: BlockSize, mode: PredictionMode) {
-        let bw = mi_size_wide[bsize as usize];
-        let bh = mi_size_high[bsize as usize];
+        let bw = bsize.width_mi();
+        let bh = bsize.height_mi();
 
         for y in 0..bh {
             for x in 0..bw {
@@ -1448,11 +1333,11 @@ impl BlockContext {
         // TODO: this should be way simpler without sub8x8
         let above_ctx = self.above_partition_context[bo.x];
         let left_ctx = self.left_partition_context[bo.y_in_sb()];
-        let bsl = b_width_log2_lookup[bsize as usize] - b_width_log2_lookup[BlockSize::BLOCK_8X8 as usize];
+        let bsl = bsize.width_log2() - BLOCK_8X8.width_log2();
         let above = (above_ctx >> bsl) & 1;
         let left = (left_ctx >> bsl) & 1;
 
-        assert!(b_width_log2_lookup[bsize as usize] == b_height_log2_lookup[bsize as usize]);
+        assert!(bsize.is_sqr());
 
         (left * 2 + above) as usize + bsl as usize * PARTITION_PLOFFSET
     }
@@ -1460,8 +1345,8 @@ impl BlockContext {
     pub fn update_partition_context(&mut self, bo: &BlockOffset,
                                 subsize : BlockSize, bsize: BlockSize) {
 #[allow(dead_code)]
-        let bw = mi_size_wide[bsize as usize];
-        let bh = mi_size_high[bsize as usize];
+        let bw = bsize.width_mi();
+        let bh = bsize.height_mi();
 
         let above_ctx = &mut self.above_partition_context[bo.x..bo.x + bw as usize];
         let left_ctx = &mut self.left_partition_context[bo.y_in_sb()..bo.y_in_sb() + bh as usize];
@@ -1487,8 +1372,8 @@ impl BlockContext {
     }
 
     pub fn set_skip(&mut self, bo: &BlockOffset, bsize: BlockSize, skip: bool) {
-        let bw = mi_size_wide[bsize as usize];
-        let bh = mi_size_high[bsize as usize];
+        let bw = bsize.width_mi();
+        let bh = bsize.height_mi();
 
         for y in 0..bh {
             for x in 0..bw {
@@ -1535,8 +1420,8 @@ impl BlockContext {
             1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
             2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2];
         let mut dc_sign: i16 = 0;
-        let txb_w_unit = tx_size_wide_unit[tx_size as usize];
-        let txb_h_unit = tx_size_high_unit[tx_size as usize];
+        let txb_w_unit = tx_size.width_mi();
+        let txb_h_unit = tx_size.height_mi();
 
         // Decide txb_ctx.dc_sign_ctx
         for k in 0..txb_w_unit {
@@ -1555,7 +1440,7 @@ impl BlockContext {
 
         // Decide txb_ctx.txb_skip_ctx
         if plane == 0 {
-            if plane_bsize == txsize_to_bsize[tx_size as usize] {
+            if plane_bsize == tx_size.block_size() {
               txb_ctx.txb_skip_ctx = 0;
             } else {
                 // This is the algorithm to generate table skip_contexts[min][max].
@@ -1604,7 +1489,7 @@ impl BlockContext {
             }
             let ctx_base = (top != 0) as usize + (left != 0) as usize;
             let ctx_offset = if num_pels_log2_lookup[plane_bsize as usize] >
-                                 num_pels_log2_lookup[txsize_to_bsize[tx_size as usize] as usize]
+                                 num_pels_log2_lookup[tx_size.block_size() as usize]
                                 { 10 }
                              else { 7 };
             txb_ctx.txb_skip_ctx = ctx_base + ctx_offset;
@@ -1691,7 +1576,7 @@ impl ContextWriter {
     }
 
     pub fn write_partition(&mut self, bo: &BlockOffset, p: PartitionType, bsize: BlockSize) {
-        let hbs = (mi_size_wide[bsize as usize] / 2) as usize;
+        let hbs = bsize.width_mi() / 2;
         let has_cols = (bo.x + hbs) < self.bc.cols;
         let has_rows = (bo.y + hbs) < self.bc.rows;
         let ctx = self.bc.partition_plane_context(&bo, bsize);
@@ -1747,7 +1632,7 @@ impl ContextWriter {
     pub fn write_tx_type_lv_map(&mut self, tx_size: TxSize, tx_type: TxType,
                                 y_mode: PredictionMode, is_inter: bool,
                                 use_reduced_tx_set: bool) {
-        let square_tx_size = TXSIZE_SQR_MAP[tx_size as usize];
+        let square_tx_size = tx_size.sqr();
         let tx_set_type = get_ext_tx_set_type(tx_size, is_inter, use_reduced_tx_set);
         let num_tx_types = num_ext_tx_set[tx_set_type as usize];
 
@@ -1784,7 +1669,7 @@ impl ContextWriter {
     }
 
     pub fn get_txsize_entropy_ctx(&mut self, tx_size: TxSize) -> usize {
-      (TXSIZE_SQR_MAP[tx_size as usize] as usize + TXSIZE_SQR_MAP[tx_size as usize] as usize + 1) >> 1
+      (tx_size.sqr() as usize + tx_size.sqr() as usize + 1) >> 1
     }
 
     pub fn txb_init_levels(&mut self, coeffs: &[i32], width: usize, height: usize,
@@ -1881,8 +1766,8 @@ impl ContextWriter {
         match tx_class {
           TX_CLASS_2D => {
             // This is the algorithm to generate av1_nz_map_ctx_offset[][]
-            //   const int width = tx_size_wide[tx_size];
-            //   const int height = tx_size_high[tx_size];
+            //   const int width = tx_size.width();
+            //   const int height = tx_size.height();
             //   if (width < height) {
             //     if (row < 2) return 11 + ctx;
             //   } else if (width > height) {
@@ -1928,7 +1813,7 @@ impl ContextWriter {
                                  coeff_contexts: &mut [i8]) {
         // TODO: If TX_64X64 is enabled, use av1_get_adjusted_tx_size()
         let bwl = tx_size.width_log2();
-        let height = tx_size_high[tx_size as usize];
+        let height = tx_size.height();
         for i in 0..eob {
             let pos = scan[i as usize];
             coeff_contexts[pos as usize] =
@@ -1993,10 +1878,10 @@ impl ContextWriter {
         let scan_order = &av1_inter_scan_orders[tx_size as usize][tx_type as usize];
         let scan = scan_order.scan;
         let mut coeffs_storage = [0 as i32; 32*32];
-        let coeffs = &mut coeffs_storage[..tx_size.width()*tx_size.height()];
+        let coeffs = &mut coeffs_storage[..tx_size.area()];
         let mut cul_level = 0 as u32;
 
-        for i in 0..tx_size.width()*tx_size.height() {
+        for i in 0..tx_size.area() {
             coeffs[i] = coeffs_in[scan[i] as usize];
             cul_level += coeffs[i].abs() as u32;
         }
@@ -2041,7 +1926,7 @@ impl ContextWriter {
         // Encode EOB
         let mut eob_extra = 0 as u32;
         let eob_pt = self.get_eob_pos_token(eob, &mut eob_extra);
-        let eob_multi_size: usize = txsize_log2_minus4[tx_size as usize];
+        let eob_multi_size: usize = tx_size.area_log2() - 4;
         let eob_multi_ctx: usize = if tx_class == TX_CLASS_2D { 0 } else { 1 };
 
         match eob_multi_size {
