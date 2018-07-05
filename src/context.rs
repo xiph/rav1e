@@ -1440,7 +1440,7 @@ impl BlockContext {
 
         // Decide txb_ctx.txb_skip_ctx
         if plane == 0 {
-            if plane_bsize == tx_size.to_block_size() {
+            if plane_bsize == tx_size.block_size() {
               txb_ctx.txb_skip_ctx = 0;
             } else {
                 // This is the algorithm to generate table skip_contexts[min][max].
@@ -1489,7 +1489,7 @@ impl BlockContext {
             }
             let ctx_base = (top != 0) as usize + (left != 0) as usize;
             let ctx_offset = if num_pels_log2_lookup[plane_bsize as usize] >
-                                 num_pels_log2_lookup[tx_size.to_block_size() as usize]
+                                 num_pels_log2_lookup[tx_size.block_size() as usize]
                                 { 10 }
                              else { 7 };
             txb_ctx.txb_skip_ctx = ctx_base + ctx_offset;

@@ -50,11 +50,10 @@ impl BlockSize {
 
     pub const BLOCK_SIZES_ALL: usize = 19;
 
-    // Width/height lookup tables in units of various block sizes
-    const BLOCK_SIZE_WIDE_LOG2: [usize; BlockSize::BLOCK_SIZES_ALL] =
+    const BLOCK_SIZE_WIDTH_LOG2: [usize; BlockSize::BLOCK_SIZES_ALL] =
         [2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 2, 4, 3, 5, 4, 6];
 
-    const BLOCK_SIZE_HIGH_LOG2: [usize; BlockSize::BLOCK_SIZES_ALL] =
+    const BLOCK_SIZE_HEIGHT_LOG2: [usize; BlockSize::BLOCK_SIZES_ALL] =
         [2, 3, 2, 3, 4, 3, 4, 5, 4, 5, 6, 5, 6, 4, 2, 5, 3, 6, 4];
 
     pub fn cfl_allowed(self) -> bool {
@@ -63,11 +62,11 @@ impl BlockSize {
     }
 
     pub fn width(self) -> usize {
-        1 << BlockSize::BLOCK_SIZE_WIDE_LOG2[self as usize]
+        1 << BlockSize::BLOCK_SIZE_WIDTH_LOG2[self as usize]
     }
 
     pub fn width_log2(self) -> usize {
-        BlockSize::BLOCK_SIZE_WIDE_LOG2[self as usize]
+        BlockSize::BLOCK_SIZE_WIDTH_LOG2[self as usize]
     }
 
     pub fn width_mi(self) -> usize {
@@ -75,11 +74,11 @@ impl BlockSize {
     }
 
     pub fn height(self) -> usize {
-        1 << BlockSize::BLOCK_SIZE_HIGH_LOG2[self as usize]
+        1 << BlockSize::BLOCK_SIZE_HEIGHT_LOG2[self as usize]
     }
 
     pub fn height_log2(self) -> usize {
-        BlockSize::BLOCK_SIZE_HIGH_LOG2[self as usize]
+        BlockSize::BLOCK_SIZE_HEIGHT_LOG2[self as usize]
     }
 
     pub fn height_mi(self) -> usize {
@@ -122,22 +121,18 @@ impl TxSize {
     /// Number of transform sizes (including non-square sizes)
     pub const TX_SIZES_ALL: usize = 14 + 5;
 
-    const TX_SIZE_WIDE_LOG2: [usize; TxSize::TX_SIZES_ALL] =
-        [2, 3, 4, 5, 6, 2, 3, 3, 4, 4, 5, 5, 6, 2, 4, 3, 5, 4, 6];
-
-    const TX_SIZE_HIGH_LOG2: [usize; TxSize::TX_SIZES_ALL] =
-        [2, 3, 4, 5, 6, 3, 2, 4, 3, 5, 4, 6, 5, 4, 2, 5, 3, 6, 4];
-
     pub fn width(self) -> usize {
         1 << self.width_log2()
     }
 
     pub fn width_log2(self) -> usize {
-        TxSize::TX_SIZE_WIDE_LOG2[self as usize]
+        const TX_SIZE_WIDTH_LOG2: [usize; TxSize::TX_SIZES_ALL] =
+            [2, 3, 4, 5, 6, 2, 3, 3, 4, 4, 5, 5, 6, 2, 4, 3, 5, 4, 6];
+        TX_SIZE_WIDTH_LOG2[self as usize]
     }
     
     pub fn smallest_width_log2() -> usize {
-        TxSize::TX_SIZE_WIDE_LOG2[0]
+        TX_4X4.width_log2()
     }
 
     pub fn height(self) -> usize {
@@ -145,7 +140,9 @@ impl TxSize {
     }
 
     pub fn height_log2(self) -> usize {
-        TxSize::TX_SIZE_HIGH_LOG2[self as usize]
+        const TX_SIZE_HEIGHT_LOG2: [usize; TxSize::TX_SIZES_ALL] =
+            [2, 3, 4, 5, 6, 3, 2, 4, 3, 5, 4, 6, 5, 4, 2, 5, 3, 6, 4];
+        TX_SIZE_HEIGHT_LOG2[self as usize]
     }
 
     pub fn width_mi(self) -> usize {
@@ -160,82 +157,79 @@ impl TxSize {
         self.height() >> MI_SIZE_LOG2
     }
 
-    const TX_SIZE_TO_BLOCK_SIZE: [BlockSize; TxSize::TX_SIZES_ALL] = [
-        BLOCK_4X4,    // TX_4X4
-        BLOCK_8X8,    // TX_8X8
-        BLOCK_16X16,  // TX_16X16
-        BLOCK_32X32,  // TX_32X32
-        BLOCK_64X64,
-        BLOCK_4X8,    // TX_4X8
-        BLOCK_8X4,    // TX_8X4
-        BLOCK_8X16,   // TX_8X16
-        BLOCK_16X8,   // TX_16X8
-        BLOCK_16X32,  // TX_16X32
-        BLOCK_32X16,  // TX_32X16
-        BLOCK_32X64,
-        BLOCK_64X32,
-        BLOCK_4X16,   // TX_4X16
-        BLOCK_16X4,   // TX_16X4
-        BLOCK_8X32,   // TX_8X32
-        BLOCK_32X8,   // TX_32X8
-        BLOCK_16X64,
-        BLOCK_64X16
-    ];
-
-    pub fn to_block_size(self) -> BlockSize {
-        TxSize::TX_SIZE_TO_BLOCK_SIZE[self as usize]
+    pub fn block_size(self) -> BlockSize {
+        const TX_SIZE_TO_BLOCK_SIZE: [BlockSize; TxSize::TX_SIZES_ALL] = [
+            BLOCK_4X4,    // TX_4X4
+            BLOCK_8X8,    // TX_8X8
+            BLOCK_16X16,  // TX_16X16
+            BLOCK_32X32,  // TX_32X32
+            BLOCK_64X64,
+            BLOCK_4X8,    // TX_4X8
+            BLOCK_8X4,    // TX_8X4
+            BLOCK_8X16,   // TX_8X16
+            BLOCK_16X8,   // TX_16X8
+            BLOCK_16X32,  // TX_16X32
+            BLOCK_32X16,  // TX_32X16
+            BLOCK_32X64,
+            BLOCK_64X32,
+            BLOCK_4X16,   // TX_4X16
+            BLOCK_16X4,   // TX_16X4
+            BLOCK_8X32,   // TX_8X32
+            BLOCK_32X8,   // TX_32X8
+            BLOCK_16X64,
+            BLOCK_64X16
+        ];
+        TX_SIZE_TO_BLOCK_SIZE[self as usize]
     }
-
-    const TX_SIZE_SQR: [TxSize; TxSize::TX_SIZES_ALL] = [
-        TX_4X4,
-        TX_8X8,
-        TX_16X16,
-        TX_32X32,
-        TX_64X64,
-        TX_4X4,
-        TX_4X4,
-        TX_8X8,
-        TX_8X8,
-        TX_16X16,
-        TX_16X16,
-        TX_32X32,
-        TX_32X32,
-        TX_4X4,
-        TX_4X4,
-        TX_8X8,
-        TX_8X8,
-        TX_16X16,
-        TX_16X16
-    ];
 
     pub fn sqr(self) -> TxSize {
-        TxSize::TX_SIZE_SQR[self as usize]
+        const TX_SIZE_SQR: [TxSize; TxSize::TX_SIZES_ALL] = [
+            TX_4X4,
+            TX_8X8,
+            TX_16X16,
+            TX_32X32,
+            TX_64X64,
+            TX_4X4,
+            TX_4X4,
+            TX_8X8,
+            TX_8X8,
+            TX_16X16,
+            TX_16X16,
+            TX_32X32,
+            TX_32X32,
+            TX_4X4,
+            TX_4X4,
+            TX_8X8,
+            TX_8X8,
+            TX_16X16,
+            TX_16X16
+        ];
+        TX_SIZE_SQR[self as usize]
     }
 
-    const TX_SIZE_SQR_UP: [TxSize; TxSize::TX_SIZES_ALL] = [
-        TX_4X4,
-        TX_8X8,
-        TX_16X16,
-        TX_32X32,
-        TX_64X64,
-        TX_8X8,
-        TX_8X8,
-        TX_16X16,
-        TX_16X16,
-        TX_32X32,
-        TX_32X32,
-        TX_64X64,
-        TX_64X64,
-        TX_16X16,
-        TX_16X16,
-        TX_32X32,
-        TX_32X32,
-        TX_64X64,
-        TX_64X64
-    ];
-
     pub fn sqr_up(self) -> TxSize {
-        TxSize::TX_SIZE_SQR_UP[self as usize]
+        const TX_SIZE_SQR_UP: [TxSize; TxSize::TX_SIZES_ALL] = [
+            TX_4X4,
+            TX_8X8,
+            TX_16X16,
+            TX_32X32,
+            TX_64X64,
+            TX_8X8,
+            TX_8X8,
+            TX_16X16,
+            TX_16X16,
+            TX_32X32,
+            TX_32X32,
+            TX_64X64,
+            TX_64X64,
+            TX_16X16,
+            TX_16X16,
+            TX_32X32,
+            TX_32X32,
+            TX_64X64,
+            TX_64X64
+        ];
+        TX_SIZE_SQR_UP[self as usize]
     }
 }
 
