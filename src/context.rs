@@ -44,24 +44,25 @@ const UV_INTRA_MODES: usize = 14;
 const BLOCK_SIZE_GROUPS: usize = 4;
 const MAX_ANGLE_DELTA: usize = 3;
 const DIRECTIONAL_MODES: usize = 8;
-const KF_MODE_CONTEXTS: usize= 5;
+const KF_MODE_CONTEXTS: usize = 5;
 
 const EXT_TX_SIZES: usize = 4;
 const EXT_TX_SET_TYPES: usize = 9;
 const EXT_TX_SETS_INTRA: usize = 3;
 const EXT_TX_SETS_INTER: usize = 4;
 // Number of transform types in each set type
-static num_ext_tx_set: [usize; EXT_TX_SET_TYPES] = [ 1, 2, 5, 7, 7, 10, 12, 16, 16];
+static num_ext_tx_set: [usize; EXT_TX_SET_TYPES] = [1, 2, 5, 7, 7, 10, 12, 16, 16];
 pub static av1_ext_tx_used: [[usize; TX_TYPES]; EXT_TX_SET_TYPES] = [
-    [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
-    [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 ],
-    [ 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 ],
-    [ 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0 ],
-    [ 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0 ],
-    [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0 ],
-    [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0 ],
-    [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ],
-    [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 ] ];
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+    [1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+    [1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0],
+    [1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+];
 // Maps intra set index to the set type
 /*static ext_tx_set_type_intra: [TxSetType; EXT_TX_SETS_INTRA] = [
     TxSetType::EXT_TX_SET_DCTONLY,
@@ -74,7 +75,7 @@ static ext_tx_set_type_inter: [TxSetType; EXT_TX_SETS_INTER] = [
     TxSetType::EXT_TX_SET_DCTONLY,
     TxSetType::EXT_TX_SET_ALL16,
     TxSetType::EXT_TX_SET_DTT9_IDTX_1DDCT,
-    TxSetType::EXT_TX_SET_DCT_IDTX
+    TxSetType::EXT_TX_SET_DCT_IDTX,
 ];
 // Maps set types above to the indices used for intra
 static ext_tx_set_index_intra: [i8; EXT_TX_SET_TYPES] = [0, -1, 2, -1, 1, -1, -1, -1, -1];
@@ -82,15 +83,15 @@ static ext_tx_set_index_intra: [i8; EXT_TX_SET_TYPES] = [0, -1, 2, -1, 1, -1, -1
 static ext_tx_set_index_inter: [i8; EXT_TX_SET_TYPES] = [0, 3, -1, -1, -1, -1, 2, -1, 1];
 
 static av1_ext_tx_ind: [[usize; TX_TYPES]; EXT_TX_SET_TYPES] = [
-    [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
-    [ 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
-    [ 1, 3, 4, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 ],
-    [ 1, 5, 6, 4, 0, 0, 0, 0, 0, 0, 2, 3, 0, 0, 0, 0 ],
-    [ 1, 5, 6, 4, 0, 0, 0, 0, 0, 0, 2, 3, 0, 0, 0, 0 ],
-    [ 1, 2, 3, 6, 4, 5, 7, 8, 9, 0, 0, 0, 0, 0, 0, 0 ],
-    [ 3, 4, 5, 8, 6, 7, 9, 10, 11, 0, 1, 2, 0, 0, 0, 0 ],
-    [ 7, 8, 9, 12, 10, 11, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6 ],
-    [ 7, 8, 9, 12, 10, 11, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6 ],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [1, 3, 4, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [1, 5, 6, 4, 0, 0, 0, 0, 0, 0, 2, 3, 0, 0, 0, 0],
+    [1, 5, 6, 4, 0, 0, 0, 0, 0, 0, 2, 3, 0, 0, 0, 0],
+    [1, 2, 3, 6, 4, 5, 7, 8, 9, 0, 0, 0, 0, 0, 0, 0],
+    [3, 4, 5, 8, 6, 7, 9, 10, 11, 0, 1, 2, 0, 0, 0, 0],
+    [7, 8, 9, 12, 10, 11, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6],
+    [7, 8, 9, 12, 10, 11, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6],
 ];
 
 
@@ -277,7 +278,7 @@ pub static subsize_lookup: [[BlockSize; BlockSize::BLOCK_SIZES_ALL]; PARTITION_T
   ]
 ];
 
-#[derive(Copy,Clone,PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 #[allow(dead_code)]
 enum HeadToken {
     BlockZero = 0,
@@ -288,7 +289,7 @@ enum HeadToken {
     TwoPlusNEOB = 5,
 }
 
-#[derive(Copy,Clone,PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 #[allow(dead_code)]
 enum TailToken {
     Two = 0,
@@ -308,23 +309,23 @@ const SKIP_CONTEXTS: usize = 3;
 const INTRA_INTER_CONTEXTS: usize = 4;
 
 // Level Map
-const TXB_SKIP_CONTEXTS: usize =  13;
+const TXB_SKIP_CONTEXTS: usize = 13;
 
-const EOB_COEF_CONTEXTS: usize =  22;
+const EOB_COEF_CONTEXTS: usize = 22;
 
-const SIG_COEF_CONTEXTS_2D: usize =  26;
-const SIG_COEF_CONTEXTS_1D: usize =  16;
-const SIG_COEF_CONTEXTS_EOB: usize =  4;
+const SIG_COEF_CONTEXTS_2D: usize = 26;
+const SIG_COEF_CONTEXTS_1D: usize = 16;
+const SIG_COEF_CONTEXTS_EOB: usize = 4;
 const SIG_COEF_CONTEXTS: usize = SIG_COEF_CONTEXTS_2D + SIG_COEF_CONTEXTS_1D;
 
 const COEFF_BASE_CONTEXTS: usize = SIG_COEF_CONTEXTS;
-const DC_SIGN_CONTEXTS: usize =  3;
+const DC_SIGN_CONTEXTS: usize = 3;
 
-const BR_TMP_OFFSET: usize =  12;
-const BR_REF_CAT: usize =  4;
-const LEVEL_CONTEXTS: usize =  21;
+const BR_TMP_OFFSET: usize = 12;
+const BR_REF_CAT: usize = 4;
+const LEVEL_CONTEXTS: usize = 21;
 
-const NUM_BASE_LEVELS: usize =  2;
+const NUM_BASE_LEVELS: usize = 2;
 
 const BR_CDF_SIZE: usize = 4;
 const COEFF_BASE_RANGE: usize = 4 * (BR_CDF_SIZE - 1);
@@ -349,32 +350,32 @@ const TX_PAD_2D: usize = ((MAX_TX_SIZE + TX_PAD_HOR) * (MAX_TX_SIZE + TX_PAD_VER
 
 const TX_CLASSES: usize = 3;
 
-#[derive(Copy,Clone,PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum TxClass {
-  TX_CLASS_2D = 0,
-  TX_CLASS_HORIZ = 1,
-  TX_CLASS_VERT = 2,
+    TX_CLASS_2D = 0,
+    TX_CLASS_HORIZ = 1,
+    TX_CLASS_VERT = 2,
 }
 
 use context::TxClass::*;
 
 static tx_type_to_class: [TxClass; TX_TYPES] = [
-    TX_CLASS_2D,     // DCT_DCT
-    TX_CLASS_2D,     // ADST_DCT
-    TX_CLASS_2D,     // DCT_ADST
-    TX_CLASS_2D,     // ADST_ADST
-    TX_CLASS_2D,     // FLIPADST_DCT
-    TX_CLASS_2D,     // DCT_FLIPADST
-    TX_CLASS_2D,     // FLIPADST_FLIPADST
-    TX_CLASS_2D,     // ADST_FLIPADST
-    TX_CLASS_2D,     // FLIPADST_ADST
-    TX_CLASS_2D,     // IDTX
-    TX_CLASS_VERT,   // V_DCT
-    TX_CLASS_HORIZ,  // H_DCT
-    TX_CLASS_VERT,   // V_ADST
-    TX_CLASS_HORIZ,  // H_ADST
-    TX_CLASS_VERT,   // V_FLIPADST
-    TX_CLASS_HORIZ,  // H_FLIPADST
+    TX_CLASS_2D,    // DCT_DCT
+    TX_CLASS_2D,    // ADST_DCT
+    TX_CLASS_2D,    // DCT_ADST
+    TX_CLASS_2D,    // ADST_ADST
+    TX_CLASS_2D,    // FLIPADST_DCT
+    TX_CLASS_2D,    // DCT_FLIPADST
+    TX_CLASS_2D,    // FLIPADST_FLIPADST
+    TX_CLASS_2D,    // ADST_FLIPADST
+    TX_CLASS_2D,    // FLIPADST_ADST
+    TX_CLASS_2D,    // IDTX
+    TX_CLASS_VERT,  // V_DCT
+    TX_CLASS_HORIZ, // H_DCT
+    TX_CLASS_VERT,  // V_ADST
+    TX_CLASS_HORIZ, // H_ADST
+    TX_CLASS_VERT,  // V_FLIPADST
+    TX_CLASS_HORIZ, // H_FLIPADST
 ];
 
 static eob_to_pos_small: [u8; 33] = [
@@ -729,27 +730,26 @@ static av1_nz_map_ctx_offset_64x32: [i8; 1024] = [
   21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21,
 ];
 
-
 static av1_nz_map_ctx_offset: [&[i8]; TxSize::TX_SIZES_ALL] = [
-  &av1_nz_map_ctx_offset_4x4,    // TX_4x4
-  &av1_nz_map_ctx_offset_8x8,    // TX_8x8
-  &av1_nz_map_ctx_offset_16x16,  // TX_16x16
-  &av1_nz_map_ctx_offset_32x32,  // TX_32x32
-  &av1_nz_map_ctx_offset_32x32,  // TX_32x32
-  &av1_nz_map_ctx_offset_4x16,   // TX_4x8
-  &av1_nz_map_ctx_offset_8x4,    // TX_8x4
-  &av1_nz_map_ctx_offset_8x32,   // TX_8x16
-  &av1_nz_map_ctx_offset_16x8,   // TX_16x8
-  &av1_nz_map_ctx_offset_16x32,  // TX_16x32
-  &av1_nz_map_ctx_offset_32x16,  // TX_32x16
-  &av1_nz_map_ctx_offset_32x64,  // TX_32x64
-  &av1_nz_map_ctx_offset_64x32,  // TX_64x32
-  &av1_nz_map_ctx_offset_4x16,   // TX_4x16
-  &av1_nz_map_ctx_offset_16x4,   // TX_16x4
-  &av1_nz_map_ctx_offset_8x32,   // TX_8x32
-  &av1_nz_map_ctx_offset_32x8,   // TX_32x8
-  &av1_nz_map_ctx_offset_16x32,  // TX_16x64
-  &av1_nz_map_ctx_offset_64x32,  // TX_64x16
+    &av1_nz_map_ctx_offset_4x4,   // TX_4x4
+    &av1_nz_map_ctx_offset_8x8,   // TX_8x8
+    &av1_nz_map_ctx_offset_16x16, // TX_16x16
+    &av1_nz_map_ctx_offset_32x32, // TX_32x32
+    &av1_nz_map_ctx_offset_32x32, // TX_32x32
+    &av1_nz_map_ctx_offset_4x16,  // TX_4x8
+    &av1_nz_map_ctx_offset_8x4,   // TX_8x4
+    &av1_nz_map_ctx_offset_8x32,  // TX_8x16
+    &av1_nz_map_ctx_offset_16x8,  // TX_16x8
+    &av1_nz_map_ctx_offset_16x32, // TX_16x32
+    &av1_nz_map_ctx_offset_32x16, // TX_32x16
+    &av1_nz_map_ctx_offset_32x64, // TX_32x64
+    &av1_nz_map_ctx_offset_64x32, // TX_64x32
+    &av1_nz_map_ctx_offset_4x16,  // TX_4x16
+    &av1_nz_map_ctx_offset_16x4,  // TX_16x4
+    &av1_nz_map_ctx_offset_8x32,  // TX_8x32
+    &av1_nz_map_ctx_offset_32x8,  // TX_32x8
+    &av1_nz_map_ctx_offset_16x32, // TX_16x64
+    &av1_nz_map_ctx_offset_64x32, // TX_64x16
 ];
 
 const NZ_MAP_CTX_0: usize = SIG_COEF_CONTEXTS_2D;
@@ -840,43 +840,43 @@ fn get_ext_tx_set(tx_size: TxSize, is_inter: bool,
 }
 
 static intra_mode_to_tx_type_context: [TxType; INTRA_MODES] = [
-    DCT_DCT,    // DC
-    ADST_DCT,   // V
-    DCT_ADST,   // H
-    DCT_DCT,    // D45
-    ADST_ADST,  // D135
-    ADST_DCT,   // D117
-    DCT_ADST,   // D153
-    DCT_ADST,   // D207
-    ADST_DCT,   // D63
-    ADST_ADST,  // SMOOTH
-    ADST_DCT,   // SMOOTH_V
-    DCT_ADST,   // SMOOTH_H
-    ADST_ADST,  // PAETH
+    DCT_DCT,   // DC
+    ADST_DCT,  // V
+    DCT_ADST,  // H
+    DCT_DCT,   // D45
+    ADST_ADST, // D135
+    ADST_DCT,  // D117
+    DCT_ADST,  // D153
+    DCT_ADST,  // D207
+    ADST_DCT,  // D63
+    ADST_ADST, // SMOOTH
+    ADST_DCT,  // SMOOTH_V
+    DCT_ADST,  // SMOOTH_H
+    ADST_ADST, // PAETH
 ];
 
 static uv2y: [PredictionMode; UV_INTRA_MODES] = [
-    DC_PRED,        // UV_DC_PRED
-    V_PRED,         // UV_V_PRED
-    H_PRED,         // UV_H_PRED
-    D45_PRED,       // UV_D45_PRED
-    D135_PRED,      // UV_D135_PRED
-    D117_PRED,      // UV_D117_PRED
-    D153_PRED,      // UV_D153_PRED
-    D207_PRED,      // UV_D207_PRED
-    D63_PRED,       // UV_D63_PRED
-    SMOOTH_PRED,    // UV_SMOOTH_PRED
-    SMOOTH_V_PRED,  // UV_SMOOTH_V_PRED
-    SMOOTH_H_PRED,  // UV_SMOOTH_H_PRED
-    PAETH_PRED,     // UV_PAETH_PRED
-    DC_PRED,        // CFL_PRED
+    DC_PRED,       // UV_DC_PRED
+    V_PRED,        // UV_V_PRED
+    H_PRED,        // UV_H_PRED
+    D45_PRED,      // UV_D45_PRED
+    D135_PRED,     // UV_D135_PRED
+    D117_PRED,     // UV_D117_PRED
+    D153_PRED,     // UV_D153_PRED
+    D207_PRED,     // UV_D207_PRED
+    D63_PRED,      // UV_D63_PRED
+    SMOOTH_PRED,   // UV_SMOOTH_PRED
+    SMOOTH_V_PRED, // UV_SMOOTH_V_PRED
+    SMOOTH_H_PRED, // UV_SMOOTH_H_PRED
+    PAETH_PRED,    // UV_PAETH_PRED
+    DC_PRED,       // CFL_PRED
 ];
 
 pub fn y_intra_mode_to_tx_type_context(pred: PredictionMode) -> TxType {
     intra_mode_to_tx_type_context[pred as usize]
 }
 
-pub fn uv_intra_mode_to_tx_type_context(pred: PredictionMode)-> TxType {
+pub fn uv_intra_mode_to_tx_type_context(pred: PredictionMode) -> TxType {
     intra_mode_to_tx_type_context[uv2y[pred as usize] as usize]
 }
 
@@ -887,8 +887,8 @@ extern {
     static default_uv_mode_cdf: [[[u16; UV_INTRA_MODES + 1]; INTRA_MODES]; 2];
     static default_intra_ext_tx_cdf: [[[[u16; TX_TYPES + 1]; INTRA_MODES]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA];
     static default_inter_ext_tx_cdf: [[[u16; TX_TYPES + 1]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA];
-    static default_skip_cdfs: [[u16; 3];SKIP_CONTEXTS];
-    static default_intra_inter_cdf: [[u16; 3];INTRA_INTER_CONTEXTS];
+    static default_skip_cdfs: [[u16; 3]; SKIP_CONTEXTS];
+    static default_intra_inter_cdf: [[u16; 3]; INTRA_INTER_CONTEXTS];
     static default_angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES];
 
     static av1_inter_scan_orders: [[SCAN_ORDER; TX_TYPES]; TxSize::TX_SIZES_ALL];
@@ -916,11 +916,10 @@ extern {
 
 #[repr(C)]
 pub struct SCAN_ORDER {
-  // FIXME: don't hardcode sizes
-
-  pub scan: &'static [u16; 64*64],
-  pub iscan: &'static [u16; 64*64],
-  pub neighbors: &'static [u16; ((64*64)+1)*2]
+    // FIXME: don't hardcode sizes
+    pub scan: &'static [u16; 64 * 64],
+    pub iscan: &'static [u16; 64 * 64],
+    pub neighbors: &'static [u16; ((64 * 64) + 1) * 2],
 }
 
 #[derive(Clone)]
@@ -931,8 +930,8 @@ pub struct CDFContext {
     uv_mode_cdf: [[[u16; UV_INTRA_MODES + 1]; INTRA_MODES]; 2],
     intra_ext_tx_cdf: [[[[u16; TX_TYPES + 1]; INTRA_MODES]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA],
     inter_ext_tx_cdf: [[[u16; TX_TYPES + 1]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA],
-    skip_cdfs: [[u16; 3];SKIP_CONTEXTS],
-    intra_inter_cdfs: [[u16; 3];INTRA_INTER_CONTEXTS],
+    skip_cdfs: [[u16; 3]; SKIP_CONTEXTS],
+    intra_inter_cdfs: [[u16; 3]; INTRA_INTER_CONTEXTS],
     angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES],
 
     // lv_map
@@ -984,8 +983,7 @@ impl CDFContext {
 
             coeff_base_eob_cdf: av1_default_coeff_base_eob_multi,
             coeff_base_cdf: av1_default_coeff_base_multi,
-            coeff_br_cdf: av1_default_coeff_lps_multi
-
+            coeff_br_cdf: av1_default_coeff_lps_multi,
         };
 
         c
@@ -1073,7 +1071,9 @@ mod test {
         use super::*;
 
         let cdf = CDFContext::new(8);
-        let cdf_map = FieldMap{ map: cdf.build_map() };
+        let cdf_map = FieldMap {
+            map: cdf.build_map(),
+        };
         let f = &cdf.partition_cdf[2];
         cdf_map.lookup(f.as_ptr() as usize);
     }
@@ -1089,7 +1089,7 @@ pub const LOCAL_BLOCK_MASK: usize = (1 << SUPERBLOCK_TO_BLOCK_SHIFT) - 1;
 #[derive(Clone)]
 pub struct SuperBlockOffset {
     pub x: usize,
-    pub y: usize
+    pub y: usize,
 }
 
 impl SuperBlockOffset {
@@ -1115,7 +1115,7 @@ impl SuperBlockOffset {
 #[derive(Clone)]
 pub struct BlockOffset {
     pub x: usize,
-    pub y: usize
+    pub y: usize,
 }
 
 impl BlockOffset {
@@ -1143,7 +1143,7 @@ impl BlockOffset {
     }
 }
 
-#[derive(Copy,Clone)]
+#[derive(Copy, Clone)]
 pub struct Block {
     pub mode: PredictionMode,
     pub bsize: BlockSize,
@@ -1165,7 +1165,7 @@ impl Block {
     }
 }
 
-pub struct  TXB_CTX {
+pub struct TXB_CTX {
     pub txb_skip_ctx: usize,
     pub dc_sign_ctx: usize,
 }
@@ -1178,7 +1178,7 @@ pub struct BlockContext {
     left_partition_context: [u8; MAX_MIB_SIZE],
     above_coeff_context: [Vec<u8>; PLANES],
     left_coeff_context: [[u8; MAX_MIB_SIZE]; PLANES],
-    blocks: Vec<Vec<Block>>
+    blocks: Vec<Vec<Block>>,
 }
 
 impl BlockContext {
@@ -1191,14 +1191,15 @@ impl BlockContext {
             rows,
             above_partition_context: vec![0; aligned_cols],
             left_partition_context: [0; MAX_MIB_SIZE],
-            above_coeff_context: [vec![0; cols << (MI_SIZE_LOG2 - TxSize::smallest_width_log2())],
-                                  vec![0; cols << (MI_SIZE_LOG2 - TxSize::smallest_width_log2())],
-                                  vec![0; cols << (MI_SIZE_LOG2 - TxSize::smallest_width_log2())],],
+            above_coeff_context: [
+                vec![0; cols << (MI_SIZE_LOG2 - TxSize::smallest_width_log2())],
+                vec![0; cols << (MI_SIZE_LOG2 - TxSize::smallest_width_log2())],
+                vec![0; cols << (MI_SIZE_LOG2 - TxSize::smallest_width_log2())],
+            ],
             left_coeff_context: [[0; MAX_MIB_SIZE]; PLANES],
-            blocks: vec![vec![Block::default(); cols]; rows]
+            blocks: vec![vec![Block::default(); cols]; rows],
         }
     }
-
 
     pub fn checkpoint(&mut self) -> BlockContext {
         BlockContext {
@@ -1208,7 +1209,7 @@ impl BlockContext {
             left_partition_context: self.left_partition_context.clone(),
             above_coeff_context: self.above_coeff_context.clone(),
             left_coeff_context: self.left_coeff_context.clone(),
-            blocks: vec![vec![Block::default(); 0]; 0]
+            blocks: vec![vec![Block::default(); 0]; 0],
         }
     }
 
@@ -1220,7 +1221,6 @@ impl BlockContext {
         self.above_coeff_context = checkpoint.above_coeff_context.clone();
         self.left_coeff_context = checkpoint.left_coeff_context.clone();
     }
-
 
     pub fn at(&mut self, bo: &BlockOffset) -> &mut Block {
         &mut self.blocks[bo.y][bo.x]
@@ -1243,11 +1243,11 @@ impl BlockContext {
     }
 
     pub fn set_dc_sign(&mut self, cul_level: &mut u32, dc_val: i32) {
-      if dc_val < 0 {
-        *cul_level |= 1 << COEFF_CONTEXT_BITS;
-      } else if dc_val > 0 {
-        *cul_level += 2 << COEFF_CONTEXT_BITS;
-      }
+        if dc_val < 0 {
+            *cul_level |= 1 << COEFF_CONTEXT_BITS;
+        } else if dc_val > 0 {
+            *cul_level += 2 << COEFF_CONTEXT_BITS;
+        }
     }
 
     fn set_coeff_context(&mut self, plane: usize, bo: &BlockOffset, tx_size: TxSize,
@@ -1255,11 +1255,11 @@ impl BlockContext {
         // for subsampled planes, coeff contexts are stored sparsely at the moment
         // so we need to scale our fill by xdec and ydec
         for bx in 0..tx_size.width_mi() {
-            self.above_coeff_context[plane][bo.x + (bx<<xdec)] = value;
+            self.above_coeff_context[plane][bo.x + (bx << xdec)] = value;
         }
         let bo_y = bo.y_in_sb();
         for by in 0..tx_size.height_mi() {
-            self.left_coeff_context[plane][bo_y + (by<<ydec)] = value;
+            self.left_coeff_context[plane][bo_y + (by << ydec)] = value;
         }
     }
 
@@ -1279,27 +1279,39 @@ impl BlockContext {
     pub fn reset_skip_context(&mut self, bo: &BlockOffset,
                           bsize: BlockSize, xdec: usize, ydec: usize) {
         const num_planes: usize = 3;
-        let nplanes = if bsize >= BLOCK_8X8 { 3 }
-                      else {
-                          1 + (num_planes - 1) *
-                          has_chroma(bo, bsize, xdec, ydec) as usize };
+        let nplanes = if bsize >= BLOCK_8X8 {
+            3
+        } else {
+            1 + (num_planes - 1) * has_chroma(bo, bsize, xdec, ydec) as usize
+        };
 
         for plane in 0..nplanes {
-            let xdec2 = if plane == 0 { 0 } else { xdec };
-            let ydec2 = if plane == 0 { 0 } else { ydec };
+            let xdec2 = if plane == 0 {
+                0
+            } else {
+                xdec
+            };
+            let ydec2 = if plane == 0 {
+                0
+            } else {
+                ydec
+            };
 
-            let plane_bsize = if plane == 0 { bsize }
-                              else { get_plane_block_size(bsize, xdec2, ydec2) };
+            let plane_bsize = if plane == 0 {
+                bsize
+            } else {
+                get_plane_block_size(bsize, xdec2, ydec2)
+            };
             let bw = plane_bsize.width_mi();
             let bh = plane_bsize.height_mi();
 
             for bx in 0..bw {
-                self.above_coeff_context[plane][bo.x + (bx<<xdec2) as usize] = 0;
+                self.above_coeff_context[plane][bo.x + (bx << xdec2) as usize] = 0;
             }
 
             let bo_y = bo.y_in_sb();
             for by in 0..bh {
-                self.left_coeff_context[plane][bo_y + (by<<ydec2) as usize] = 0;
+                self.left_coeff_context[plane][bo_y + (by << ydec2) as usize] = 0;
             }
         }
     }
@@ -1319,8 +1331,8 @@ impl BlockContext {
 
         for y in 0..bh {
             for x in 0..bw {
-              self.blocks[bo.y + y as usize][bo.x + x as usize].mode = mode;
-            };
+                self.blocks[bo.y + y as usize][bo.x + x as usize].mode = mode;
+            }
         }
     }
 
@@ -1364,10 +1376,16 @@ impl BlockContext {
     }
 
     fn skip_context(&mut self, bo: &BlockOffset) -> usize {
-        let above_skip = if bo.y > 0 { self.above_of(bo).skip as usize }
-                         else { 0 };
-        let left_skip = if bo.x > 0 { self.left_of(bo).skip as usize }
-                         else { 0 };
+        let above_skip = if bo.y > 0 {
+            self.above_of(bo).skip as usize
+        } else {
+            0
+        };
+        let left_skip = if bo.x > 0 {
+            self.left_of(bo).skip as usize
+        } else {
+            0
+        };
         above_skip + left_skip
     }
 
@@ -1378,7 +1396,7 @@ impl BlockContext {
         for y in 0..bh {
             for x in 0..bw {
                 self.blocks[bo.y + y as usize][bo.x + x as usize].skip = skip;
-            };
+            }
         }
     }
 
@@ -1395,15 +1413,20 @@ impl BlockContext {
 
         match (has_above, has_left) {
             (true, true) => {
-              let above_intra = !self.above_of(bo).is_inter();
-              let left_intra = !self.left_of(bo).is_inter();
-              if above_intra && left_intra { 3 }
-              else { (above_intra || left_intra) as usize}
-            },
-            (true, _) | (_, true) => {
-                2 * if has_above { !self.above_of(bo).is_inter() as usize }
-                    else { !self.left_of(bo).is_inter() as usize }
-            },
+                let above_intra = !self.above_of(bo).is_inter();
+                let left_intra = !self.left_of(bo).is_inter();
+                if above_intra && left_intra {
+                    3
+                } else {
+                    (above_intra || left_intra) as usize
+                }
+            }
+            (true, _) | (_, true) =>
+                2 * if has_above {
+                    !self.above_of(bo).is_inter() as usize
+                } else {
+                    !self.left_of(bo).is_inter() as usize
+                },
             (_, _) => 0,
         }
     }
@@ -1414,7 +1437,7 @@ impl BlockContext {
         let mut txb_ctx = TXB_CTX { txb_skip_ctx: 0,
                                 dc_sign_ctx: 0 };
         const MAX_TX_SIZE_UNIT: usize = 16;
-        const signs: [i8; 3] = [ 0, -1, 1 ];
+        const signs: [i8; 3] = [0, -1, 1];
         const dc_sign_contexts: [usize; 4 * MAX_TX_SIZE_UNIT + 1] = [
             1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
             1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
@@ -1425,13 +1448,13 @@ impl BlockContext {
 
         // Decide txb_ctx.dc_sign_ctx
         for k in 0..txb_w_unit {
-            let sign = self.above_coeff_context[plane][bo.x + (k<<xdec)] >> COEFF_CONTEXT_BITS;
+            let sign = self.above_coeff_context[plane][bo.x + (k << xdec)] >> COEFF_CONTEXT_BITS;
             assert!(sign <= 2);
             dc_sign += signs[sign as usize] as i16;
         }
 
         for k in 0..txb_h_unit {
-            let sign = self.left_coeff_context[plane][bo.y_in_sb() + (k<<ydec)] >> COEFF_CONTEXT_BITS;
+            let sign = self.left_coeff_context[plane][bo.y_in_sb() + (k << ydec)] >> COEFF_CONTEXT_BITS;
             assert!(sign <= 2);
             dc_sign += signs[sign as usize] as i16;
         }
@@ -1441,7 +1464,7 @@ impl BlockContext {
         // Decide txb_ctx.txb_skip_ctx
         if plane == 0 {
             if plane_bsize == tx_size.block_size() {
-              txb_ctx.txb_skip_ctx = 0;
+                txb_ctx.txb_skip_ctx = 0;
             } else {
                 // This is the algorithm to generate table skip_contexts[min][max].
                 //    if (!max)
@@ -1476,22 +1499,23 @@ impl BlockContext {
                 let min = cmp::min(cmp::min(top, left), 4);
                 txb_ctx.txb_skip_ctx = skip_contexts[min as usize][max as usize] as usize;
             }
-
         } else {
             let mut top: u8 = 0;
             let mut left: u8 = 0;
 
             for k in 0..txb_w_unit {
-                top |= self.above_coeff_context[plane][bo.x + (k<<xdec)];
+                top |= self.above_coeff_context[plane][bo.x + (k << xdec)];
             }
             for k in 0..txb_h_unit {
-                left |= self.left_coeff_context[plane][bo.y_in_sb() + (k<<ydec)];
+                left |= self.left_coeff_context[plane][bo.y_in_sb() + (k << ydec)];
             }
             let ctx_base = (top != 0) as usize + (left != 0) as usize;
-            let ctx_offset = if num_pels_log2_lookup[plane_bsize as usize] >
-                                 num_pels_log2_lookup[tx_size.block_size() as usize]
-                                { 10 }
-                             else { 7 };
+            let ctx_offset =
+                if num_pels_log2_lookup[plane_bsize as usize] > num_pels_log2_lookup[tx_size.block_size() as usize] {
+                    10
+                } else {
+                    7
+                };
             txb_ctx.txb_skip_ctx = ctx_base + ctx_offset;
         }
 
@@ -1526,14 +1550,14 @@ macro_rules! symbol {
         if let Some(map) = $self.fc_map.as_ref() {
             map.lookup($cdf.as_ptr() as usize);
         }
-    }
+    };
 }
 
 #[derive(Clone)]
 pub struct ContextWriterCheckpoint {
     pub w: ec::WriterCheckpoint,
     pub fc: CDFContext,
-    pub bc: BlockContext
+    pub bc: BlockContext,
 }
 
 pub struct ContextWriter {
@@ -1556,23 +1580,27 @@ impl ContextWriter {
     }
 
     fn cdf_element_prob(cdf: &[u16], element: usize) -> u16 {
-      return if element > 0 { cdf[element - 1] } else { 32768 } - cdf[element];
+        return if element > 0 {
+            cdf[element - 1]
+        } else {
+            32768
+        } - cdf[element];
     }
 
     fn partition_gather_horz_alike(out: &mut [u16; 2], cdf_in: &[u16], _bsize: BlockSize) {
-      out[0] = 32768;
-      out[0] -= ContextWriter::cdf_element_prob(cdf_in, PartitionType::PARTITION_HORZ as usize);
-      out[0] -= ContextWriter::cdf_element_prob(cdf_in, PartitionType::PARTITION_SPLIT as usize);
-      out[0] = 32768 - out[0];
-      out[1] = 0;
+        out[0] = 32768;
+        out[0] -= ContextWriter::cdf_element_prob(cdf_in, PartitionType::PARTITION_HORZ as usize);
+        out[0] -= ContextWriter::cdf_element_prob(cdf_in, PartitionType::PARTITION_SPLIT as usize);
+        out[0] = 32768 - out[0];
+        out[1] = 0;
     }
 
     fn partition_gather_vert_alike(out: &mut [u16; 2], cdf_in: &[u16], _bsize: BlockSize) {
-      out[0] = 32768;
-      out[0] -= ContextWriter::cdf_element_prob(cdf_in, PartitionType::PARTITION_VERT as usize);
-      out[0] -= ContextWriter::cdf_element_prob(cdf_in, PartitionType::PARTITION_SPLIT as usize);
-      out[0] = 32768 - out[0];
-      out[1] = 0;
+        out[0] = 32768;
+        out[0] -= ContextWriter::cdf_element_prob(cdf_in, PartitionType::PARTITION_VERT as usize);
+        out[0] -= ContextWriter::cdf_element_prob(cdf_in, PartitionType::PARTITION_SPLIT as usize);
+        out[0] = 32768 - out[0];
+        out[1] = 0;
     }
 
     pub fn write_partition(&mut self, bo: &BlockOffset, p: PartitionType, bsize: BlockSize) {
@@ -1584,7 +1612,7 @@ impl ContextWriter {
         let partition_cdf = &mut self.fc.partition_cdf[ctx];
 
         if !has_rows && !has_cols {
-          return;
+            return;
         }
 
         if has_rows && has_cols {
@@ -1637,26 +1665,30 @@ impl ContextWriter {
         let num_tx_types = num_ext_tx_set[tx_set_type as usize];
 
         if num_tx_types > 1 {
-          let eset = get_ext_tx_set(tx_size, is_inter, use_reduced_tx_set);
-          assert!(eset > 0);
-          assert!(av1_ext_tx_used[tx_set_type as usize][tx_type as usize] != 0);
+            let eset = get_ext_tx_set(tx_size, is_inter, use_reduced_tx_set);
+            assert!(eset > 0);
+            assert!(av1_ext_tx_used[tx_set_type as usize][tx_type as usize] != 0);
 
-          if is_inter {
-              symbol!(self,
-                  av1_ext_tx_ind[tx_set_type as usize][tx_type as usize] as u32,
-                  &mut self.fc.inter_ext_tx_cdf[eset as usize][square_tx_size as usize],
-                  num_ext_tx_set[tx_set_type as usize]);
-          } else {
-              let intra_dir = y_mode;
-              // TODO: Once use_filter_intra is enabled,
-              // intra_dir =
-              // fimode_to_intradir[mbmi->filter_intra_mode_info.filter_intra_mode];
+            if is_inter {
+                symbol!(
+                    self,
+                    av1_ext_tx_ind[tx_set_type as usize][tx_type as usize] as u32,
+                    &mut self.fc.inter_ext_tx_cdf[eset as usize][square_tx_size as usize],
+                    num_ext_tx_set[tx_set_type as usize]
+                );
+            } else {
+                let intra_dir = y_mode;
+                // TODO: Once use_filter_intra is enabled,
+                // intra_dir =
+                // fimode_to_intradir[mbmi->filter_intra_mode_info.filter_intra_mode];
 
-              symbol!(self,
-                  av1_ext_tx_ind[tx_set_type as usize][tx_type as usize] as u32,
-                  &mut self.fc.intra_ext_tx_cdf[eset as usize][square_tx_size as usize][intra_dir as usize],
-                  num_ext_tx_set[tx_set_type as usize]);
-          }
+                symbol!(
+                    self,
+                    av1_ext_tx_ind[tx_set_type as usize][tx_type as usize] as u32,
+                    &mut self.fc.intra_ext_tx_cdf[eset as usize][square_tx_size as usize][intra_dir as usize],
+                    num_ext_tx_set[tx_set_type as usize]
+                );
+            }
         }
     }
     pub fn write_skip(&mut self, bo: &BlockOffset, skip: bool) {
@@ -1669,7 +1701,7 @@ impl ContextWriter {
     }
 
     pub fn get_txsize_entropy_ctx(&mut self, tx_size: TxSize) -> usize {
-      (tx_size.sqr() as usize + tx_size.sqr() as usize + 1) >> 1
+        (tx_size.sqr() as usize + tx_size.sqr() as usize + 1) >> 1
     }
 
     pub fn txb_init_levels(&mut self, coeffs: &[i32], width: usize, height: usize,
@@ -1678,7 +1710,7 @@ impl ContextWriter {
 
         for y in 0..height {
             for x in 0..width {
-                levels_buf[offset] = clamp(coeffs[y*width + x].abs(), 0, 127) as u8;
+                levels_buf[offset] = clamp(coeffs[y * width + x].abs(), 0, 127) as u8;
                 offset += 1;
             }
             offset += TX_PAD_HOR;
@@ -1697,7 +1729,7 @@ impl ContextWriter {
     }
 */
     pub fn av1_get_adjusted_tx_size(&mut self, tx_size: TxSize) -> TxSize {
-      // TODO: Enable below commented out block if TX64X64 is enabled.
+        // TODO: Enable below commented out block if TX64X64 is enabled.
 /*
       if tx_size == TX_64X64 || tx_size == TX_64X32 || tx_size == TX_32X64 {
         return TX_32X32
@@ -1709,7 +1741,7 @@ impl ContextWriter {
         return TX_32X16
       }
 */
-      tx_size
+        tx_size
     }
 
     pub fn get_txb_bwl(&mut self, tx_size: TxSize) -> usize {
@@ -1720,10 +1752,10 @@ impl ContextWriter {
         let t: u32;
 
         if eob < 33 {
-          t = eob_to_pos_small[eob] as u32;
+            t = eob_to_pos_small[eob] as u32;
         } else {
-          let e = cmp::min((eob - 1) >> 5, 16);
-          t = eob_to_pos_large[e as usize] as u32;
+            let e = cmp::min((eob - 1) >> 5, 16);
+            t = eob_to_pos_large[e as usize] as u32;
         }
         assert!(eob as i32 >= k_eob_group_start[t as usize] as i32);
         *extra = eob as u32 - k_eob_group_start[t as usize] as u32;
@@ -1795,10 +1827,16 @@ impl ContextWriter {
                           is_eob: bool, tx_size: TxSize,
                           tx_class: TxClass) -> usize {
         if is_eob {
-            if scan_idx == 0 { return 0 }
-            if scan_idx <= (height << bwl) / 8 { return 1 }
-            if scan_idx <= (height << bwl) / 4 { return 2 }
-            return 3
+            if scan_idx == 0 {
+                return 0;
+            }
+            if scan_idx <= (height << bwl) / 8 {
+                return 1;
+            }
+            if scan_idx <= (height << bwl) / 4 {
+                return 2;
+            }
+            return 3;
         }
         let padded_idx = coeff_idx + ((coeff_idx >> bwl) << TX_PAD_HOR_LOG2);
         let stats =
@@ -1834,26 +1872,38 @@ impl ContextWriter {
 
         match tx_class {
             TX_CLASS_2D => {
-              mag += levels[pos + stride + 1] as usize;
-              mag = cmp::min((mag + 1) >> 1, 6);
-              if c == 0 { return mag }
-              if (row < 2) && (col < 2) { return mag + 7 }
+                mag += levels[pos + stride + 1] as usize;
+                mag = cmp::min((mag + 1) >> 1, 6);
+                if c == 0 {
+                    return mag;
+                }
+                if (row < 2) && (col < 2) {
+                    return mag + 7;
+                }
             }
             TX_CLASS_HORIZ => {
-              mag += levels[pos + 2] as usize;
-              mag = cmp::min((mag + 1) >> 1, 6);
-              if c == 0 { return mag }
-              if col == 0 { return mag + 7 }
+                mag += levels[pos + 2] as usize;
+                mag = cmp::min((mag + 1) >> 1, 6);
+                if c == 0 {
+                    return mag;
+                }
+                if col == 0 {
+                    return mag + 7;
+                }
             }
             TX_CLASS_VERT => {
-              mag += levels[pos + (stride << 1)] as usize;
-              mag = cmp::min((mag + 1) >> 1, 6);
-              if c == 0 { return mag }
-              if row == 0 { return mag + 7 }
+                mag += levels[pos + (stride << 1)] as usize;
+                mag = cmp::min((mag + 1) >> 1, 6);
+                if c == 0 {
+                    return mag;
+                }
+                if row == 0 {
+                    return mag + 7;
+                }
             }
         }
 
-        return mag + 14
+        return mag + 14;
     }
 
     pub fn get_level_mag_with_txclass(&mut self, levels: &[u8], stride: usize,
@@ -1873,11 +1923,11 @@ impl ContextWriter {
                         use_reduced_tx_set: bool) {
         let pred_mode = self.bc.get_mode(bo);
         let is_inter = pred_mode >= PredictionMode::NEARESTMV;
-        assert!( is_inter == false );
+        assert!(is_inter == false);
         // TODO: If iner mode, scan_order should use inter version of them
         let scan_order = &av1_inter_scan_orders[tx_size as usize][tx_type as usize];
         let scan = scan_order.scan;
-        let mut coeffs_storage = [0 as i32; 32*32];
+        let mut coeffs_storage = [0 as i32; 32 * 32];
         let coeffs = &mut coeffs_storage[..tx_size.area()];
         let mut cul_level = 0 as u32;
 
@@ -1889,11 +1939,11 @@ impl ContextWriter {
         let mut eob = 0;
 
         if cul_level != 0 {
-          for (i, v) in coeffs.iter().enumerate() {
-              if *v != 0 {
-                  eob = i + 1;
-              }
-          }
+            for (i, v) in coeffs.iter().enumerate() {
+                if *v != 0 {
+                    eob = i + 1;
+                }
+            }
         }
 
         let txs_ctx = self.get_txsize_entropy_ctx(tx_size);
@@ -1915,7 +1965,11 @@ impl ContextWriter {
                             &mut levels_buf);
 
         let tx_class = tx_type_to_class[tx_type as usize];
-        let plane_type = if plane == 0 { 0 } else { 1 } as usize;
+        let plane_type = if plane == 0 {
+            0
+        } else {
+            1
+        } as usize;
 
         // Signal tx_type for luma plane only
         if plane == 0 {
@@ -1927,23 +1981,34 @@ impl ContextWriter {
         let mut eob_extra = 0 as u32;
         let eob_pt = self.get_eob_pos_token(eob, &mut eob_extra);
         let eob_multi_size: usize = tx_size.area_log2() - 4;
-        let eob_multi_ctx: usize = if tx_class == TX_CLASS_2D { 0 } else { 1 };
+        let eob_multi_ctx: usize = if tx_class == TX_CLASS_2D {
+            0
+        } else {
+            1
+        };
 
         match eob_multi_size {
-          0 => { symbol!(self, eob_pt - 1,
-                     &mut self.fc.eob_flag_cdf16[plane_type][eob_multi_ctx], 5); }
-          1 => { symbol!(self, eob_pt - 1,
-                     &mut self.fc.eob_flag_cdf32[plane_type][eob_multi_ctx], 6); }
-          2 => { symbol!(self, eob_pt - 1,
-                     &mut self.fc.eob_flag_cdf64[plane_type][eob_multi_ctx], 7); }
-          3 => { symbol!(self, eob_pt - 1,
-                     &mut self.fc.eob_flag_cdf128[plane_type][eob_multi_ctx], 8); }
-          4 => { symbol!(self, eob_pt - 1,
-                     &mut self.fc.eob_flag_cdf256[plane_type][eob_multi_ctx], 9); }
-          5 => { symbol!(self, eob_pt - 1,
-                     &mut self.fc.eob_flag_cdf512[plane_type][eob_multi_ctx], 10); }
-          _ => { symbol!(self, eob_pt - 1,
-                     &mut self.fc.eob_flag_cdf1024[plane_type][eob_multi_ctx], 11); }
+            0 => {
+                symbol!(self, eob_pt - 1, &mut self.fc.eob_flag_cdf16[plane_type][eob_multi_ctx], 5);
+            }
+            1 => {
+                symbol!(self, eob_pt - 1, &mut self.fc.eob_flag_cdf32[plane_type][eob_multi_ctx], 6);
+            }
+            2 => {
+                symbol!(self, eob_pt - 1, &mut self.fc.eob_flag_cdf64[plane_type][eob_multi_ctx], 7);
+            }
+            3 => {
+                symbol!(self, eob_pt - 1, &mut self.fc.eob_flag_cdf128[plane_type][eob_multi_ctx], 8);
+            }
+            4 => {
+                symbol!(self, eob_pt - 1, &mut self.fc.eob_flag_cdf256[plane_type][eob_multi_ctx], 9);
+            }
+            5 => {
+                symbol!(self, eob_pt - 1, &mut self.fc.eob_flag_cdf512[plane_type][eob_multi_ctx], 10);
+            }
+            _ => {
+                symbol!(self, eob_pt - 1, &mut self.fc.eob_flag_cdf1024[plane_type][eob_multi_ctx], 11);
+            }
         };
 
         let eob_offset_bits = k_eob_offset_bits[eob_pt as usize];
@@ -1994,9 +2059,15 @@ impl ContextWriter {
             let v = coeffs_in[scan[c] as usize];
             let level = v.abs() as u32;
             //let sign = (v < 0) as u32;
-            let sign = if v < 0 { 1 } else { 0 };
+            let sign = if v < 0 {
+                1
+            } else {
+                0
+            };
 
-            if level == 0 { continue; }
+            if level == 0 {
+                continue;
+            }
 
             if c == 0 {
                 symbol!(self, sign, &mut self.fc.dc_sign_cdf[plane_type]
@@ -2007,12 +2078,14 @@ impl ContextWriter {
         }
 
         if update_eob >= 0 {
-            for c in (0..update_eob+1).rev() {
+            for c in (0..update_eob + 1).rev() {
                 let pos = scan[c as usize];
                 let v = coeffs_in[pos as usize];
                 let level = v.abs() as u16;
 
-                if level <= NUM_BASE_LEVELS as u16 { continue; }
+                if level <= NUM_BASE_LEVELS as u16 {
+                    continue;
+                }
 
                 let base_range = level - 1 - NUM_BASE_LEVELS as u16;
                 let br_ctx = self.get_br_ctx(levels, pos as usize, bwl, tx_class);
@@ -2028,7 +2101,9 @@ impl ContextWriter {
                   idx += BR_CDF_SIZE - 1;
                 }
 
-                if base_range < COEFF_BASE_RANGE as u16 { continue; }
+                if base_range < COEFF_BASE_RANGE as u16 {
+                    continue;
+                }
                 // use 0-th order Golomb code to handle the residual level.
                 self.w.write_golomb(level -
                     COEFF_BASE_RANGE as u16 - 1 - NUM_BASE_LEVELS as u16);
@@ -2046,7 +2121,7 @@ impl ContextWriter {
         ContextWriterCheckpoint {
             w: self.w.checkpoint(),
             fc: self.fc.clone(),
-            bc: self.bc.checkpoint()
+            bc: self.bc.checkpoint(),
         }
     }
 
@@ -2055,7 +2130,9 @@ impl ContextWriter {
         self.fc = checkpoint.fc.clone();
         self.bc.rollback(&checkpoint.bc);
         if self.fc_map.is_some() {
-            self.fc_map = Some(FieldMap { map: self.fc.build_map() });
+            self.fc_map = Some(FieldMap {
+                map: self.fc.build_map(),
+            });
         }
     }
 }
