@@ -449,8 +449,8 @@ trait UncompressedHeader {
     fn write_frame_header_obu(&mut self, fi: &FrameInvariants)
             -> Result<(usize), std::io::Error>;
     fn write_sequence_header2(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
-                                    -> Result<(), std::io::Error>;
-    fn write_color_config(&mut self, seq: &mut Sequence) -> Result<(), std::io::Error>;
+                                    -> Result<(usize), std::io::Error>;
+    fn write_color_config(&mut self, seq: &mut Sequence) -> Result<(usize), std::io::Error>;
     // End of OBU Headers
 
     fn write_frame_size(&mut self, fi: &FrameInvariants) -> Result<(), std::io::Error>;
@@ -505,24 +505,29 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         self.write(3, seq.profile)?; // profile 0, 3 bits
         self.write(1, 0)?; // still_picture
         self.write(1, 0)?; // reduced_still_picture
+        size += 5;
 
         if seq.reduced_still_picture_hdr {
             assert!(false);
         } else {
             self.write(1, 0)?; // timing_info_present_flag
+            size += 1;
             if false { // if timing_info_present_flag == true
                 assert!(false);
             }
 
             self.write(1, 0)?; // display_model_info_present_flag
             self.write(5, 0)?; // operating_points_cnt_minus_1, 5 bits
+            size += 6;
 
             for i in 0..seq.operating_points_cnt_minus_1 + 1 {
                 self.write(OP_POINTS_IDC_BITS as u32, seq.operating_point_idc[i])?;
+                size += OP_POINTS_IDC_BITS as usize;
                 //let seq_level_idx = 1 as u16;	// NOTE: This comes from minor and major
                 let seq_level_idx = 
                     ((seq.level[i][1] - LEVEL_MAJOR_MIN) << LEVEL_MINOR_BITS) + seq.level[i][0]; 
                 self.write(LEVEL_BITS as u32, seq_level_idx as u16)?;
+                size += LEVEL_BITS as usize;
 
                 if seq.level[i][1] > 3 {
                     assert!(false); // NOTE: Not supported yet.
@@ -537,20 +542,26 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
             }
         }
 
+        // TODO(yushin): Include the sizes from  write_sequence_header2() and 
+        // write_color_config() to size
         self.write_sequence_header2(seq, fi);
 
         self.write_color_config(seq)?;
 
         self.write_bit(seq.film_grain_params_present)?;
+        size += 1;
 
         self.write(1,1)?; // add_trailing_bits
+        size += 1;
 
         Ok(size)
     }
 
 #[allow(unused)]
     fn write_sequence_header2(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
-        -> Result<(), std::io::Error> {
+        -> Result<(usize), std::io::Error> {
+        let mut size: usize = 0;
+
         self.write(4, seq.num_bits_width - 1)?;
         self.write(4, seq.num_bits_height - 1)?;
         self.write(seq.num_bits_width, (seq.max_frame_width - 1) as u16)?;
@@ -613,25 +624,32 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         self.write_bit(seq.enable_cdef)?;
         self.write_bit(seq.enable_restoration)?;
 
-        Ok(())
+        Ok(size)
     }
 
 #[allow(unused)]
-    fn write_color_config(&mut self, seq: &mut Sequence) -> Result<(), std::io::Error> {
+    fn write_color_config(&mut self, seq: &mut Sequence) -> Result<(usize), std::io::Error> {
+        let mut size: usize = 0;
+
         self.write(1,0)?; // 8 bit video
         self.write_bit(seq.monochrome)?; 	// monochrome?
         self.write_bit(false)?;  					// No color description present
+        size += 3;
 
         if seq.monochrome {
             assert!(false);
         }
         self.write(1,0)?; // color range
+        size += 1;
 
         if true { // subsampling_x == 1 && cm->subsampling_y == 1
             self.write(2,0)?; // chroma_sample_position == AOM_CSP_UNKNOWN
+            size += 2;
         }
         self.write_bit(seq.separate_uv_delta_q)?;
-        Ok(())
+        size += 1;
+
+        Ok(size)
     }
 
 #[allow(unused)]
@@ -734,12 +752,23 @@ fn write_obus(packet: &mut Write, sequence: &mut Sequence,
     if fi.frame_type == FrameType::KEY {
         let obu_header_size = uch.write_obu_header(OBU_Type::OBU_SEQUENCE_HEADER, obu_extension);
 
-        let obu_payload_size = uch.write_sequence_header_obu(sequence, fi);
+        let obu_payload_error = uch.write_sequence_header_obu(sequence, fi);
         uch.byte_align()?;
+
+        let mut obu_payload_size = 0 as u64;
+
+        match obu_payload_error {
+            Ok(size) => { println!("obu_payload_size: {:?}", size);
+                          obu_payload_size = size as u64;
+            }
+            Err(e) => println!("obu_payload_size error: {:?}", e),
+        }
 
         // TODO: Looks like we need to write the length (i.e. obu_payload_size)
         // btw obu_header and obu+payload (i.e. _sequence_header_obu)
         // So, memmove() seems needed for that.
+
+        let obu_payload_size_uleb = aom_uleb_size_in_bytes(obu_payload_size);
 
         /*const size_t length_field_size =
             obu_memmove(obu_header_size, obu_payload_size, data);
