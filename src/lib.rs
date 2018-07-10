@@ -486,7 +486,8 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         size += 1;
 
         if obu_extension != 0 {
-            self.write(8, obu_extension & 0xFF)?; size += 8;
+            assert!(false);
+            //self.write(8, obu_extension & 0xFF)?; size += 8;
         }
 
         size = (size + 7) / 8; // # of written bytes
@@ -722,15 +723,17 @@ fn aom_uleb_size_in_bytes(mut value: u64) -> usize {
 fn write_obus(packet: &mut Write, sequence: &mut Sequence,
                             fi: &FrameInvariants) -> Result<(), std::io::Error> {
     let mut uch = BitWriter::<BE>::new(packet);
+    let obu_extension = 0 as u32;
 
-    uch.write_obu_header(OBU_Type::OBU_TEMPORAL_DELIMITER, 0);
+    uch.write_obu_header(OBU_Type::OBU_TEMPORAL_DELIMITER, obu_extension);
     uch.write(8,0)?;	// size of payload == 0, one byte
 
     // write sequence header obu if KEY_FRAME, preceded by 4-byte size
     if fi.frame_type == FrameType::KEY {
-        let obu_header_size = uch.write_obu_header(OBU_Type::OBU_SEQUENCE_HEADER, 0);
+        let obu_header_size = uch.write_obu_header(OBU_Type::OBU_SEQUENCE_HEADER, obu_extension);
 
         let obu_payload_size = uch.write_sequence_header_obu(sequence, fi);
+        uch.byte_align()?;
 
         // TODO: Looks like we need to write the length (i.e. obu_payload_size)
         // btw obu_header and obu+payload (i.e. _sequence_header_obu)
@@ -754,6 +757,7 @@ fn write_obus(packet: &mut Write, sequence: &mut Sequence,
             write_obu_header(OBU_FRAME_HEADER, obu_extension_header, data);
         obu_payload_size =
             write_frame_header_obu(cpi, &saved_wb, data + obu_header_size, 1);
+        uch.byte_align()?;
 
         const size_t length_field_size =
             obu_memmove(obu_header_size, obu_payload_size, data);
