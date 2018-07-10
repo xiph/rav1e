@@ -50,7 +50,7 @@ fn main() {
         match line.split_whitespace().next() {
           Some("process_frame") => {
             process_frame(
-              &sequence,
+              &mut sequence,
               &fi,
               &mut files.output_file,
               &mut y4m_dec,
