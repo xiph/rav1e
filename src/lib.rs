@@ -725,6 +725,9 @@ fn write_obus(packet: &mut Write, sequence: &mut Sequence,
                             fi: &FrameInvariants) -> Result<(), std::io::Error> {
     let mut uch = BitWriter::<BE>::new(packet);
 
+    uch.write_obu_header(OBU_Type::OBU_TEMPORAL_DELIMITER, 0);
+    uch.write(8,0)?;	// size of payload == 0, one byte
+
     // write sequence header obu if KEY_FRAME, preceded by 4-byte size
     if fi.frame_type == FrameType::KEY {
         let obu_header_size = uch.write_obu_header(OBU_Type::OBU_SEQUENCE_HEADER, 0);
