@@ -50,7 +50,7 @@ fn main() {
     fi.use_prev_frame_mvs = !(fi.intra_only || fi.error_resilient);
 
     if !process_frame(
-      &sequence,
+      &mut sequence,
       &fi,
       &mut files.output_file,
       &mut y4m_dec,

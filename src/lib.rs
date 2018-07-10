@@ -157,7 +157,7 @@ impl Sequence {
             use_128x128_superblock: false,
             order_hint_bits_minus_1: 0,
             force_screen_content_tools: 0,
-            force_integer_mv: 0,
+            force_integer_mv: 2,
             still_picture: false,
             reduced_still_picture_hdr: false,
             monochrome: false,
@@ -1317,7 +1317,7 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
     h
 }
 
-fn encode_frame(sequence: &Sequence, fi: &FrameInvariants, fs: &mut FrameState, last_rec: &Option<Frame>) -> Vec<u8> {
+fn encode_frame(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameState, last_rec: &Option<Frame>) -> Vec<u8> {
     let mut packet = Vec::new();
     write_uncompressed_header(&mut packet, sequence, fi).unwrap();
     //write_obus(&mut packet, sequence, fi).unwrap();
@@ -1336,7 +1336,7 @@ fn encode_frame(sequence: &Sequence, fi: &FrameInvariants, fs: &mut FrameState, 
 }
 
 /// Encode and write a frame.
-pub fn process_frame(sequence: &Sequence, fi: &FrameInvariants,
+pub fn process_frame(sequence: &mut Sequence, fi: &FrameInvariants,
                      output_file: &mut Write,
                      y4m_dec: &mut y4m::Decoder<Box<Read>>,
                      y4m_enc: Option<&mut y4m::Encoder<Box<Write>>>,
@@ -1383,7 +1383,7 @@ pub fn process_frame(sequence: &Sequence, fi: &FrameInvariants,
                 _ => panic! ("unknown input bit depth!"),
             }
 
-            let packet = encode_frame(&sequence, &fi, &mut fs, &last_rec);
+            let packet = encode_frame(sequence, &fi, &mut fs, &last_rec);
             write_ivf_frame(output_file, fi.number, packet.as_ref());
             if let Some(mut y4m_enc) = y4m_enc {
                 let mut rec_y = vec![128 as u8; width*height];
