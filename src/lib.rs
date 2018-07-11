@@ -402,7 +402,11 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence,
     bw.write_bit(false)?; // show_existing_frame=0
     bw.write_bit(fi.frame_type == FrameType::INTER)?; // keyframe : 0, inter: 1
     bw.write_bit(fi.show_frame)?; // show frame
-
+    /*
+    if fi.intra_only {
+        bw.write_bit(true)?; // disable intra edge
+    }
+    */
     if fi.frame_type == FrameType::KEY || fi.frame_type == FrameType::INTRA_ONLY {
         assert!(fi.intra_only == true);
     }
@@ -422,10 +426,12 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence,
 
     if fi.frame_type == FrameType::KEY {
         bw.write_bitdepth_colorspace_sampling()?;
+        bw.write(1,0)?; // separate uv delta q
         bw.write_frame_setup()?;
     } else { // Inter frame info goes here
         if fi.intra_only {
             bw.write_bitdepth_colorspace_sampling()?;
+            bw.write(1,0)?; // separate uv delta q
             bw.write(8,0)?; // refresh_frame_flags
             bw.write_frame_setup()?;
         } else {
