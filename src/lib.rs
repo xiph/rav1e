@@ -760,44 +760,74 @@ fn aom_uleb_size_in_bytes(mut value: u64) -> usize {
 }
 
 #[allow(unused)]
+fn aom_uleb_encode(mut value: u64, coded_value: &mut [u8]) -> usize {
+  let leb_size = aom_uleb_size_in_bytes(value);
+
+  for i in 0..leb_size {
+    let mut byte = (value & 0x7f) as u8;
+    value >>= 7;
+    if value != 0 { byte |= 0x80 };  // Signal that more bytes follow.
+    coded_value[i] = byte;
+  }
+
+  leb_size
+}
+
+#[allow(unused)]
 fn write_obus(packet: &mut Write, sequence: &mut Sequence,
                             fi: &FrameInvariants) -> Result<(), std::io::Error> {
-    let mut uch = BitWriter::<BE>::new(packet);
+    //let mut uch = BitWriter::<BE>::new(packet);
     let obu_extension = 0 as u32;
 
-    uch.write_obu_header(OBU_Type::OBU_TEMPORAL_DELIMITER, obu_extension);
-    uch.write(8,0)?;	// size of payload == 0, one byte
+    let mut buf1 = Vec::new();
+    {
+      let mut bw1 = BitWriter::<BE>::new(&mut buf1);
+      bw1.write_obu_header(OBU_Type::OBU_TEMPORAL_DELIMITER, obu_extension);
+      bw1.write(8,0)?;	// size of payload == 0, one byte
+    }
+    packet.write(&buf1).unwrap();
+    buf1.clear();
 
     // write sequence header obu if KEY_FRAME, preceded by 4-byte size
     if fi.frame_type == FrameType::KEY {
-        let obu_header_size = uch.write_obu_header(OBU_Type::OBU_SEQUENCE_HEADER, obu_extension);
-
-        let obu_payload_error = uch.write_sequence_header_obu(sequence, fi);
-        uch.byte_align()?;
-
-        let mut obu_payload_size = 0 as u64;
-        match obu_payload_error {
-            Ok(size) => obu_payload_size = size as u64,
-            Err(e) => println!("obu_payload_size error: {:?}", e),
+        {
+            let mut bw1 = BitWriter::<BE>::new(&mut buf1);
+            bw1.write_obu_header(OBU_Type::OBU_SEQUENCE_HEADER, obu_extension);
         }
+        packet.write(&buf1).unwrap();
+        buf1.clear();
 
-        // TODO: Looks like we need to write the length (i.e. obu_payload_size)
-        // btw obu_header and obu+payload (i.e. _sequence_header_obu)
-        // So, memmove() seems needed for that.
+        let mut buf2 = Vec::new();
+        {
+            let mut obu_payload_size = 0 as u64;
+            let mut bw2 = BitWriter::<BE>::new(&mut buf2);
+            let error = bw2.write_sequence_header_obu(sequence, fi);
+            bw2.byte_align()?;
 
-        let obu_payload_size_uleb = aom_uleb_size_in_bytes(obu_payload_size);
+            match error {
+                Ok(size) => obu_payload_size = size as u64,
+                Err(e) => println!("obu_payload_size error: {:?}", e),
+            }
+            let mut bw1 = BitWriter::<BE>::new(&mut buf1);
+            // uleb128()
+            let mut coded_payload_length = [0 as u8; 8];
+            let leb_size = aom_uleb_encode(obu_payload_size, &mut coded_payload_length);
+            for i in 0..leb_size {
+                bw1.write(8, coded_payload_length[i]);
+            }
+        }
+        packet.write(&buf1).unwrap();
+        buf1.clear();
 
-        /*const size_t length_field_size =
-            obu_memmove(obu_header_size, obu_payload_size, data);
-        if (write_uleb_obu_size(obu_header_size, obu_payload_size, data) !=
-            AOM_CODEC_OK) {
-        			return AOM_CODEC_ERROR;
-        }*/
+        packet.write(&buf2).unwrap();
+        buf2.clear();
     }
 
     let write_frame_header = fi.num_tg > 1 || fi.show_existing_frame;
 
     if write_frame_header {
+        // TODO: If # of tiles > 1 or show_existing_frame is true,
+        // write Frame Header OBU here.
 /*
         // Write Frame Header OBU.
         fh_info.frame_header = data;
@@ -813,15 +843,6 @@ fn write_obus(packet: &mut Write, sequence: &mut Sequence,
             AOM_CODEC_OK) {
         return AOM_CODEC_ERROR;
         }
-
-        fh_info.obu_header_byte_offset = 0;
-        fh_info.total_length =
-            obu_header_size + obu_payload_size + length_field_size;
-        data += fh_info.total_length;
-
-        // Since length_field_size is determined adaptively after frame header
-        // encoding, saved_wb must be adjusted accordingly.
-        saved_wb.bit_buffer += length_field_size;
 */
     }
 
