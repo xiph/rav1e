@@ -1969,6 +1969,9 @@ impl ContextWriter {
 
         let bwl = self.get_txb_bwl(tx_size);
 
+        let mut update_pos = [0; MAX_TX_SQUARE];
+        let mut num_updates = 0;
+
         for c in (0..eob).rev() {
             let pos = scan[c];
             let coeff_ctx = coeff_contexts[pos as usize];
@@ -1984,30 +1987,8 @@ impl ContextWriter {
                     &mut self.fc.coeff_base_cdf[txs_ctx][plane_type][coeff_ctx as usize],
                                  4);
             }
-        }
 
-        let update_eob = (eob - 1) as i16;
-
-        // Loop to code all signs in the transform block,
-        // starting with the sign of DC (if applicable)
-        for c in 0..eob {
-            let v = coeffs_in[scan[c] as usize];
-            let level = v.abs() as u32;
-            //let sign = (v < 0) as u32;
-            let sign = if v < 0 { 1 } else { 0 };
-
-            if level == 0 { continue; }
-
-            if c == 0 {
-                symbol!(self, sign, &mut self.fc.dc_sign_cdf[plane_type]
-                              [txb_ctx.dc_sign_ctx], 2);
-            } else {
-                self.w.bit(sign as u16);
-            }
-        }
-
-        if update_eob >= 0 {
-            for c in (0..update_eob+1).rev() {
+            if level > NUM_BASE_LEVELS as u32 {
                 let pos = scan[c as usize];
                 let v = coeffs_in[pos as usize];
                 let level = v.abs() as u16;
@@ -2027,12 +2008,36 @@ impl ContextWriter {
                   if k < BR_CDF_SIZE as u16 - 1 { break; }
                   idx += BR_CDF_SIZE - 1;
                 }
-
-                if base_range < COEFF_BASE_RANGE as u16 { continue; }
-                // use 0-th order Golomb code to handle the residual level.
-                self.w.write_golomb(level -
-                    COEFF_BASE_RANGE as u16 - 1 - NUM_BASE_LEVELS as u16);
             }
+        }
+
+        // Loop to code all signs in the transform block,
+        // starting with the sign of DC (if applicable)
+        for c in 0..eob {
+            let v = coeffs_in[scan[c] as usize];
+            let level = v.abs() as u32;
+            let sign = if v < 0 { 1 } else { 0 };
+
+            if level == 0 { continue; }
+
+            if c == 0 {
+                symbol!(self, sign, &mut self.fc.dc_sign_cdf[plane_type]
+                        [txb_ctx.dc_sign_ctx], 2);
+            } else {
+                self.w.bit(sign as u16);
+            }
+            // save extra golomb codes for separate loop
+            if level > (COEFF_BASE_RANGE + NUM_BASE_LEVELS)  as u32 {
+                let pos = scan[c];
+                update_pos[num_updates] = pos;
+                num_updates += 1;
+            }
+        }
+
+        for i in 0..num_updates {
+            self.w.write_golomb(coeffs_in[update_pos[i] as usize].abs() as u16 -
+                                COEFF_BASE_RANGE as u16 - 1 -
+                                NUM_BASE_LEVELS as u16);
         }
 
         cul_level = cmp::min(COEFF_CONTEXT_MASK as u32, cul_level);
