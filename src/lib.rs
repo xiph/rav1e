@@ -540,11 +540,21 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
             }
         }
 
-        // TODO(yushin): Include the sizes from  write_sequence_header2() and 
-        // write_color_config() to size
-        self.write_sequence_header2(seq, fi);
+        let mut error = self.write_sequence_header2(seq, fi);
+        let mut data_size = 0;
+        match error {
+            Ok(size) => data_size = size,
+            Err(e) => println!("write_sequence_header2 error: {:?}", e),
+        }
+        size += data_size;
 
         self.write_color_config(seq)?;
+        error = self.write_sequence_header2(seq, fi);
+        data_size = 0;
+        match error {
+            Ok(size) => data_size = size,
+            Err(e) => println!("write_color_config error: {:?}", e),
+        }
 
         self.write_bit(seq.film_grain_params_present)?;
         size += 1;
@@ -564,6 +574,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         self.write(4, seq.num_bits_height - 1)?;
         self.write(seq.num_bits_width, (seq.max_frame_width - 1) as u16)?;
         self.write(seq.num_bits_height, (seq.max_frame_height - 1) as u16)?;
+        size += 4 + 4 + seq.num_bits_width as usize + seq.num_bits_height as usize;
 
         if !seq.reduced_still_picture_hdr {
             seq.frame_id_numbers_present_flag =
@@ -572,6 +583,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
             seq.delta_frame_id_length = DELTA_FRAME_ID_LENGTH as u32;
 
             self.write_bit(seq.frame_id_numbers_present_flag)?;
+            size += 1;
 
             if seq.frame_id_numbers_present_flag {
               // We must always have delta_frame_id_length < frame_id_length,
@@ -579,12 +591,14 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
               // Avoid wasting bits by using a coding that enforces this restriction.
               self.write(4, seq.delta_frame_id_length - 2)?;
               self.write(3, seq.frame_id_length - seq.delta_frame_id_length - 1)?;
+              size += 4 + 3;
             }
         }
 
         self.write_bit(seq.use_128x128_superblock)?;
         self.write_bit(seq.enable_filter_intra)?;
         self.write_bit(seq.enable_intra_edge_filter)?;
+        size += 3;
 
         if !seq.reduced_still_picture_hdr {
             self.write_bit(seq.enable_interintra_compound)?;
@@ -592,35 +606,43 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
             self.write_bit(seq.enable_warped_motion)?;
             self.write_bit(seq.enable_dual_filter)?;
             self.write_bit(seq.enable_order_hint)?;
+            size += 5;
 
             if seq.enable_order_hint {
               self.write_bit(seq.enable_jnt_comp)?;
               self.write_bit(seq.enable_ref_frame_mvs)?;
+              size += 2;
             }
             if seq.force_screen_content_tools == 2 {
               self.write(1, 1)?;
+              size += 1;
             } else {
               self.write(1, 0)?;
               self.write_bit(seq.force_screen_content_tools != 0)?;
+              size += 2;
             }
             if seq.force_screen_content_tools > 0 {
               if seq.force_integer_mv == 2 {
                 self.write(1, 1)?;
+                size += 1;
               } else {
                 self.write(1, 0)?;
                 self.write_bit(seq.force_integer_mv != 0)?;
+                size += 2;
               }
             } else {
               assert!(seq.force_integer_mv == 2);
             }
             if seq.enable_order_hint {
               self.write(3, seq.order_hint_bits_minus_1)?;
+              size += 3;
             }
         }
 
         self.write_bit(seq.enable_superres)?;
         self.write_bit(seq.enable_cdef)?;
         self.write_bit(seq.enable_restoration)?;
+        size += 3;
 
         Ok(size)
     }
@@ -754,11 +776,8 @@ fn write_obus(packet: &mut Write, sequence: &mut Sequence,
         uch.byte_align()?;
 
         let mut obu_payload_size = 0 as u64;
-
         match obu_payload_error {
-            Ok(size) => { println!("obu_payload_size: {:?}", size);
-                          obu_payload_size = size as u64;
-            }
+            Ok(size) => obu_payload_size = size as u64,
             Err(e) => println!("obu_payload_size error: {:?}", e),
         }
 
