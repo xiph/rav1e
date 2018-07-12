@@ -11,7 +11,7 @@
 pub struct PlaneConfig {
     pub stride: usize,
     pub xdec: usize,
-    pub ydec: usize,
+    pub ydec: usize
 }
 
 /// Absolute offset in pixels inside a plane
@@ -22,18 +22,20 @@ pub struct PlaneOffset {
 
 pub struct Plane {
     pub data: Vec<u16>,
-    pub cfg: PlaneConfig,
+    pub cfg: PlaneConfig
 }
 
 impl Plane {
-    pub fn new(width: usize, height: usize, xdec: usize, ydec: usize) -> Plane {
+    pub fn new(
+        width: usize, height: usize, xdec: usize, ydec: usize
+    ) -> Plane {
         Plane {
-            data: vec![128; width*height],
+            data: vec![128; width * height],
             cfg: PlaneConfig {
                 stride: width,
                 xdec,
-                ydec,
-            },
+                ydec
+            }
         }
     }
 
@@ -54,24 +56,27 @@ impl Plane {
     }
 
     pub fn p(&self, x: usize, y: usize) -> u16 {
-        self.data[y*self.cfg.stride + x]
+        self.data[y * self.cfg.stride + x]
     }
 
-    pub fn copy_from_raw_u8(&mut self,
-                            source: &[u8],
-                            source_stride: usize,
-                            source_bytewidth: usize) {
+    pub fn copy_from_raw_u8(
+        &mut self, source: &[u8], source_stride: usize,
+        source_bytewidth: usize
+    ) {
         let stride = self.cfg.stride;
-        for (self_row, source_row) in self.data.chunks_mut(stride).zip(source.chunks(source_stride)) {
+        for (self_row, source_row) in
+            self.data.chunks_mut(stride).zip(source.chunks(source_stride))
+        {
             match source_bytewidth {
-                1 =>
-                    for (self_pixel, source_pixel) in self_row.iter_mut().zip(source_row.iter()) {
-                        *self_pixel = *source_pixel as u16;
-                    },
-                2 => {
-                    for (self_pixel, bytes) in self_row.iter_mut().zip(source_row.chunks(2)) {
-                        *self_pixel = (bytes[1] as u16) << 8 | (bytes[0] as u16);
-                    }
+                1 => for (self_pixel, source_pixel) in
+                    self_row.iter_mut().zip(source_row.iter())
+                {
+                    *self_pixel = *source_pixel as u16;
+                },
+                2 => for (self_pixel, bytes) in
+                    self_row.iter_mut().zip(source_row.chunks(2))
+                {
+                    *self_pixel = (bytes[1] as u16) << 8 | (bytes[0] as u16);
                 },
 
                 _ => {}
@@ -89,7 +94,7 @@ pub struct PlaneSlice<'a> {
 impl<'a> PlaneSlice<'a> {
     pub fn as_slice(&'a self) -> &'a [u16] {
         let stride = self.plane.cfg.stride;
-        &self.plane.data[self.y*stride+self.x..]
+        &self.plane.data[self.y * stride + self.x..]
     }
 
     /// A slice starting i pixels above the current one.
@@ -97,7 +102,7 @@ impl<'a> PlaneSlice<'a> {
         PlaneSlice {
             plane: self.plane,
             x: self.x,
-            y: self.y - i,
+            y: self.y - i
         }
     }
 
@@ -106,14 +111,14 @@ impl<'a> PlaneSlice<'a> {
         PlaneSlice {
             plane: self.plane,
             x: self.x - i,
-            y: self.y,
+            y: self.y
         }
     }
 
     pub fn p(&self, add_x: usize, add_y: usize) -> u16 {
         let new_y = self.y + add_y;
         let new_x = self.x + add_x;
-        self.plane.data[new_y*self.plane.cfg.stride + new_x]
+        self.plane.data[new_y * self.plane.cfg.stride + new_x]
     }
 }
 
@@ -126,7 +131,7 @@ pub struct PlaneMutSlice<'a> {
 impl<'a> PlaneMutSlice<'a> {
     pub fn as_mut_slice(&'a mut self) -> &'a mut [u16] {
         let stride = self.plane.cfg.stride;
-        &mut self.plane.data[self.y*stride+self.x..]
+        &mut self.plane.data[self.y * stride + self.x..]
     }
 
     // FIXME: code duplication with PlaneSlice
@@ -136,7 +141,7 @@ impl<'a> PlaneMutSlice<'a> {
         PlaneSlice {
             plane: self.plane,
             x: self.x,
-            y: self.y - i,
+            y: self.y - i
         }
     }
 
@@ -145,13 +150,13 @@ impl<'a> PlaneMutSlice<'a> {
         PlaneSlice {
             plane: self.plane,
             x: self.x - i,
-            y: self.y,
+            y: self.y
         }
     }
 
     pub fn p(&self, add_x: usize, add_y: usize) -> u16 {
         let new_y = self.y + add_y;
         let new_x = self.x + add_x;
-        self.plane.data[new_y*self.plane.cfg.stride + new_x]
+        self.plane.data[new_y * self.plane.cfg.stride + new_x]
     }
 }

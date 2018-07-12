@@ -10,20 +10,20 @@
 
 #![allow(non_camel_case_types)]
 
-use BlockSize;
-use FrameInvariants;
-use FrameState;
-use FrameType;
-use encode_block;
-use write_tx_blocks;
 use context::*;
 use ec::OD_BITRES;
+use encode_block;
 use partition::*;
 use plane::*;
 use predict::{RAV1E_INTRA_MODES, RAV1E_INTRA_MODES_MINIMAL};
 use quantize::dc_q;
 use std;
 use std::vec::Vec;
+use write_tx_blocks;
+use BlockSize;
+use FrameInvariants;
+use FrameState;
+use FrameType;
 
 #[derive(Clone)]
 pub struct RDOOutput {
@@ -54,10 +54,11 @@ fn sse_wxh(src1: &PlaneSlice, src2: &PlaneSlice, w: usize, h: usize) -> u64 {
 }
 
 // Compute the rate-distortion cost for an encode
-fn compute_rd_cost(fi: &FrameInvariants, fs: &FrameState,
-                   w_y: usize, h_y: usize, w_uv: usize, h_uv: usize,
-                   partition_start_x: usize, partition_start_y: usize,
-                   bo: &BlockOffset, bit_cost: u32) -> f64 {
+fn compute_rd_cost(
+    fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize,
+    w_uv: usize, h_uv: usize, partition_start_x: usize,
+    partition_start_y: usize, bo: &BlockOffset, bit_cost: u32
+) -> f64 {
     let q = dc_q(fi.qindex) as f64;
 
     // Convert q into Q0 precision, given that libaom quantizers are Q3
@@ -69,22 +70,29 @@ fn compute_rd_cost(fi: &FrameInvariants, fs: &FrameState,
 
     // Compute distortion
     let po = bo.plane_offset(&fs.input.planes[0].cfg);
-    let mut distortion = sse_wxh(&fs.input.planes[0].slice(&po),
-                                 &fs.rec.planes[0].slice(&po),
-                                 w_y, h_y);
+    let mut distortion = sse_wxh(
+        &fs.input.planes[0].slice(&po),
+        &fs.rec.planes[0].slice(&po),
+        w_y,
+        h_y
+    );
 
     // Add chroma distortion only when it is available
     if w_uv > 0 && h_uv > 0 {
         for p in 1..3 {
-            let sb_offset = bo.sb_offset().plane_offset(&fs.input.planes[p].cfg);
+            let sb_offset =
+                bo.sb_offset().plane_offset(&fs.input.planes[p].cfg);
             let po = PlaneOffset {
                 x: sb_offset.x + partition_start_x,
                 y: sb_offset.y + partition_start_y
             };
 
-            distortion += sse_wxh(&fs.input.planes[p].slice(&po),
-                                  &fs.rec.planes[p].slice(&po),
-                                  w_uv, h_uv);
+            distortion += sse_wxh(
+                &fs.input.planes[p].slice(&po),
+                &fs.rec.planes[p].slice(&po),
+                w_uv,
+                h_uv
+            );
         }
     };
 
@@ -97,8 +105,10 @@ fn compute_rd_cost(fi: &FrameInvariants, fs: &FrameState,
 }
 
 // RDO-based mode decision
-pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
-                         bsize: BlockSize, bo: &BlockOffset) -> RDOOutput {
+pub fn rdo_mode_decision(
+    fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
+    bsize: BlockSize, bo: &BlockOffset
+) -> RDOOutput {
     let mut best_mode_luma = PredictionMode::DC_PRED;
     let mut best_mode_chroma = PredictionMode::DC_PRED;
     let mut best_skip = false;
@@ -109,7 +119,11 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
     let w = bsize.width();
     let h = bsize.height();
 
-    let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
+    let PlaneConfig {
+        xdec,
+        ydec,
+        ..
+    } = fs.input.planes[1].cfg;
 
     let mut w_uv = w >> xdec;
     let mut h_uv = h >> ydec;
@@ -140,18 +154,39 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
         };
 
         for &luma_mode in mode_set {
-            if fi.frame_type == FrameType::KEY && luma_mode >= PredictionMode::NEARESTMV {
+            if fi.frame_type == FrameType::KEY
+                && luma_mode >= PredictionMode::NEARESTMV
+            {
                 break;
             }
 
             if is_chroma_block && fi.speed <= 3 {
                 // Find the best chroma prediction mode for the current luma prediction mode
                 for &chroma_mode in RAV1E_INTRA_MODES {
-                    encode_block(fi, fs, cw, luma_mode, chroma_mode, bsize, bo, skip);
+                    encode_block(
+                        fi,
+                        fs,
+                        cw,
+                        luma_mode,
+                        chroma_mode,
+                        bsize,
+                        bo,
+                        skip
+                    );
 
                     let cost = cw.w.tell_frac() - tell;
-                    let rd = compute_rd_cost(fi, fs, w, h, w_uv, h_uv,
-                                             partition_start_x, partition_start_y, bo, cost);
+                    let rd = compute_rd_cost(
+                        fi,
+                        fs,
+                        w,
+                        h,
+                        w_uv,
+                        h_uv,
+                        partition_start_x,
+                        partition_start_y,
+                        bo,
+                        cost
+                    );
 
                     if rd < best_rd {
                         best_rd = rd;
@@ -163,11 +198,23 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
                     cw.rollback(&checkpoint);
                 }
             } else {
-                encode_block(fi, fs, cw, luma_mode, luma_mode, bsize, bo, skip);
+                encode_block(
+                    fi, fs, cw, luma_mode, luma_mode, bsize, bo, skip,
+                );
 
                 let cost = cw.w.tell_frac() - tell;
-                let rd = compute_rd_cost(fi, fs, w, h, w_uv, h_uv,
-                                         partition_start_x, partition_start_y, bo, cost);
+                let rd = compute_rd_cost(
+                    fi,
+                    fs,
+                    w,
+                    h,
+                    w_uv,
+                    h_uv,
+                    partition_start_x,
+                    partition_start_y,
+                    bo,
+                    cost
+                );
 
                 if rd < best_rd {
                     best_rd = rd;
@@ -191,16 +238,19 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
             pred_mode_luma: best_mode_luma,
             pred_mode_chroma: best_mode_chroma,
             rd_cost: best_rd,
-            skip: best_skip }]
+            skip: best_skip
+        }]
     };
 
     rdo_output
 }
 
 // RDO-based intra frame transform type decision
-pub fn rdo_tx_type_decision(fi: &FrameInvariants, fs: &mut FrameState,
-                            cw: &mut ContextWriter, mode: PredictionMode, bsize: BlockSize,
-                            bo: &BlockOffset, tx_size: TxSize, tx_set_type: TxSetType) -> TxType {
+pub fn rdo_tx_type_decision(
+    fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
+    mode: PredictionMode, bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize,
+    tx_set_type: TxSetType
+) -> TxType {
     let mut best_type = TxType::DCT_DCT;
     let mut best_rd = std::f64::MAX;
     let tell = cw.w.tell_frac();
@@ -209,7 +259,11 @@ pub fn rdo_tx_type_decision(fi: &FrameInvariants, fs: &mut FrameState,
     let w = bsize.width();
     let h = bsize.height();
 
-    let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
+    let PlaneConfig {
+        xdec,
+        ydec,
+        ..
+    } = fs.input.planes[1].cfg;
 
     let mut w_uv = w >> xdec;
     let mut h_uv = h >> ydec;
@@ -230,11 +284,23 @@ pub fn rdo_tx_type_decision(fi: &FrameInvariants, fs: &mut FrameState,
             continue;
         }
 
-        write_tx_blocks(fi, fs, cw, mode, mode, bo, bsize, tx_size, tx_type, false);
+        write_tx_blocks(
+            fi, fs, cw, mode, mode, bo, bsize, tx_size, tx_type, false,
+        );
 
         let cost = cw.w.tell_frac() - tell;
-        let rd = compute_rd_cost(fi, fs, w, h, w_uv, h_uv,
-                                 partition_start_x, partition_start_y, bo, cost);
+        let rd = compute_rd_cost(
+            fi,
+            fs,
+            w,
+            h,
+            w_uv,
+            h_uv,
+            partition_start_x,
+            partition_start_y,
+            bo,
+            cost
+        );
 
         if rd < best_rd {
             best_rd = rd;
@@ -250,9 +316,10 @@ pub fn rdo_tx_type_decision(fi: &FrameInvariants, fs: &mut FrameState,
 }
 
 // RDO-based single level partitioning decision
-pub fn rdo_partition_decision(fi: &FrameInvariants, fs: &mut FrameState,
-                          cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset,
-                          cached_block: &RDOOutput) -> RDOOutput {
+pub fn rdo_partition_decision(
+    fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
+    bsize: BlockSize, bo: &BlockOffset, cached_block: &RDOOutput
+) -> RDOOutput {
     let max_rd = std::f64::MAX;
 
     let mut best_partition = cached_block.part_type;
@@ -263,7 +330,8 @@ pub fn rdo_partition_decision(fi: &FrameInvariants, fs: &mut FrameState,
 
     for &partition in RAV1E_PARTITION_TYPES {
         // Do not re-encode results we already have
-        if partition == cached_block.part_type && cached_block.rd_cost < max_rd {
+        if partition == cached_block.part_type && cached_block.rd_cost < max_rd
+        {
             continue;
         }
 
@@ -276,10 +344,16 @@ pub fn rdo_partition_decision(fi: &FrameInvariants, fs: &mut FrameState,
                     continue;
                 }
 
-                let mode_decision = cached_block.part_modes.get(0)
-                    .unwrap_or(&rdo_mode_decision(fi, fs, cw, bsize, bo).part_modes[0]).clone();
+                let mode_decision = cached_block
+                    .part_modes
+                    .get(0)
+                    .unwrap_or(
+                        &rdo_mode_decision(fi, fs, cw, bsize, bo).part_modes
+                            [0]
+                    )
+                    .clone();
                 child_modes.push(mode_decision);
-            },
+            }
             PartitionType::PARTITION_SPLIT => {
                 let subsize = get_subsize(bsize, partition);
 
@@ -290,23 +364,49 @@ pub fn rdo_partition_decision(fi: &FrameInvariants, fs: &mut FrameState,
                 let bs = bsize.width_mi();
                 let hbs = bs >> 1; // Half the block size in blocks
 
-                let offset = BlockOffset { x: bo.x, y: bo.y };
-                let mode_decision = rdo_mode_decision(fi, fs, cw, subsize, &offset).part_modes[0].clone();
+                let offset = BlockOffset {
+                    x: bo.x,
+                    y: bo.y
+                };
+                let mode_decision = rdo_mode_decision(
+                    fi, fs, cw, subsize, &offset,
+                ).part_modes[0]
+                    .clone();
                 child_modes.push(mode_decision);
 
-                let offset = BlockOffset { x: bo.x + hbs as usize, y: bo.y };
-                let mode_decision = rdo_mode_decision(fi, fs, cw, subsize, &offset).part_modes[0].clone();
+                let offset = BlockOffset {
+                    x: bo.x + hbs as usize,
+                    y: bo.y
+                };
+                let mode_decision = rdo_mode_decision(
+                    fi, fs, cw, subsize, &offset,
+                ).part_modes[0]
+                    .clone();
                 child_modes.push(mode_decision);
 
-                let offset = BlockOffset { x: bo.x, y: bo.y + hbs as usize };
-                let mode_decision = rdo_mode_decision(fi, fs, cw, subsize, &offset).part_modes[0].clone();
+                let offset = BlockOffset {
+                    x: bo.x,
+                    y: bo.y + hbs as usize
+                };
+                let mode_decision = rdo_mode_decision(
+                    fi, fs, cw, subsize, &offset,
+                ).part_modes[0]
+                    .clone();
                 child_modes.push(mode_decision);
 
-                let offset = BlockOffset { x: bo.x + hbs as usize, y: bo.y + hbs as usize };
-                let mode_decision = rdo_mode_decision(fi, fs, cw, subsize, &offset).part_modes[0].clone();
+                let offset = BlockOffset {
+                    x: bo.x + hbs as usize,
+                    y: bo.y + hbs as usize
+                };
+                let mode_decision = rdo_mode_decision(
+                    fi, fs, cw, subsize, &offset,
+                ).part_modes[0]
+                    .clone();
                 child_modes.push(mode_decision);
-            },
-            _ => { assert!(false); },
+            }
+            _ => {
+                assert!(false);
+            }
         }
 
         rd = child_modes.iter().map(|m| m.rd_cost).sum::<f64>();
@@ -322,9 +422,11 @@ pub fn rdo_partition_decision(fi: &FrameInvariants, fs: &mut FrameState,
 
     assert!(best_rd >= 0_f64);
 
-    let rdo_output = RDOOutput { rd_cost: best_rd,
+    let rdo_output = RDOOutput {
+        rd_cost: best_rd,
         part_type: best_partition,
-        part_modes: best_pred_modes };
+        part_modes: best_pred_modes
+    };
 
     rdo_output
 }
