@@ -63,3 +63,11 @@ make -j8
 * src/bin/rav1e.rs - rav1e command line tool.
 * src/bin/rav1erepl.rs - Command line tool for debugging.
 * aom_build/ - Local submodule of libaom. Some C functions and constants are used directly. Also used for benchmarking and testing.
+
+# Contributing
+
+Check code formatting with [rustfmt](https://github.com/rust-lang-nursery/rustfmt) before submitting a PR.
+
+```
+cargo +nightly fmt -- --check
+```
