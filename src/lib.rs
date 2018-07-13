@@ -67,9 +67,12 @@ impl Frame {
     }
 }
 
-const MAX_NUM_TEMPORAL_LAYERS:usize = 8;
-const MAX_NUM_SPATIAL_LAYERS:usize = 4;
-const MAX_NUM_OPERATING_POINTS:usize = MAX_NUM_TEMPORAL_LAYERS * MAX_NUM_SPATIAL_LAYERS;
+const MAX_NUM_TEMPORAL_LAYERS: usize = 8;
+const MAX_NUM_SPATIAL_LAYERS: usize = 4;
+const MAX_NUM_OPERATING_POINTS: usize = MAX_NUM_TEMPORAL_LAYERS * MAX_NUM_SPATIAL_LAYERS;
+
+const PRIMARY_REF_NONE: u32 = 7;
+const PRIMARY_REF_BITS: u32 = 3;
 
 #[derive(Copy,Clone)]
 pub struct Sequence {
@@ -156,8 +159,8 @@ impl Sequence {
             delta_frame_id_length: 0,
             use_128x128_superblock: false,
             order_hint_bits_minus_1: 0,
-            force_screen_content_tools: 0,
-            force_integer_mv: 2,
+            force_screen_content_tools: 2,  // 2: adaptive
+            force_integer_mv: 2,            // 2: adaptive
             still_picture: false,
             reduced_still_picture_hdr: false,
             monochrome: false,
@@ -240,6 +243,7 @@ pub struct FrameInvariants {
     pub h_in_b: usize,
     pub number: u64,
     pub show_frame: bool,
+    pub showable_frame: bool,
     pub error_resilient: bool,
     pub intra_only: bool,
     pub allow_high_precision_mv: bool,
@@ -252,6 +256,19 @@ pub struct FrameInvariants {
     pub globalmv_transformation_type: [GlobalMVMode; ALTREF_FRAME + 1],
     pub num_tg: usize,
     pub large_scale_tile: bool,
+    pub disable_cdf_update: bool,
+    pub allow_screen_content_tools: u32,
+    pub force_integer_mv: u32,
+    pub primary_ref_frame: u32,
+    pub refresh_frame_flags: u32,  // a bitmask that specifies which
+    // reference frame slots will be updated with the current frame
+    // after it is decoded.
+    pub allow_intrabc: bool,
+    pub use_ref_frame_mvs: bool,
+    pub is_filter_switchable: bool,
+    pub is_motion_mode_switchable: bool,
+    pub disable_frame_end_update_cdf: bool,
+    pub allow_warped_motion: bool,
 }
 
 impl FrameInvariants {
@@ -278,6 +295,7 @@ impl FrameInvariants {
             h_in_b: 2 * height.align_power_of_two_and_shift(3), // MiRows, ((height+7)/8)<<3 >> MI_SIZE_LOG2
             number: 0,
             show_frame: true,
+            showable_frame: true,
             error_resilient: true,
             intra_only: false,
             allow_high_precision_mv: true,
@@ -290,6 +308,17 @@ impl FrameInvariants {
             globalmv_transformation_type: [GlobalMVMode::IDENTITY; ALTREF_FRAME + 1],
             num_tg: 1,
             large_scale_tile: false,
+            disable_cdf_update: true,
+            allow_screen_content_tools: 0,
+            force_integer_mv: 0,
+            primary_ref_frame: PRIMARY_REF_NONE,
+            refresh_frame_flags: 0,
+            allow_intrabc: false,
+            use_ref_frame_mvs: false,
+            is_filter_switchable: false,
+            is_motion_mode_switchable: false, // 0: only the SIMPLE motion mode will be used.
+            disable_frame_end_update_cdf: true,
+            allow_warped_motion: true,
         }
     }
 }
@@ -301,12 +330,12 @@ impl fmt::Display for FrameInvariants{
 }
 
 #[allow(dead_code,non_camel_case_types)]
-#[derive(Debug,PartialEq,EnumIterator)]
+#[derive(Debug,PartialEq,EnumIterator,Clone,Copy)]
 pub enum FrameType {
     KEY,
     INTER,
     INTRA_ONLY,
-    S,
+    SWITCH,
 }
 
 //const REFERENCE_MODES: usize = 3;
@@ -318,6 +347,9 @@ pub enum ReferenceMode {
   COMPOUND = 1,
   SELECT = 2,
 }
+
+const REF_FRAMES: u32 = 8;
+const REF_FRAMES_LOG2: u32 = 3;
 
 /*const NONE_FRAME: isize = -1;
 const INTRA_FRAME: usize = 0;*/
@@ -348,7 +380,7 @@ impl fmt::Display for FrameType{
             FrameType::KEY => write!(f, "Key frame"),
             FrameType::INTER => write!(f, "Inter frame"),
             FrameType::INTRA_ONLY => write!(f, "Intra only frame"),
-            FrameType::S => write!(f, "Switching frame"),
+            FrameType::SWITCH => write!(f, "Switching frame"),
         }
     }
 }
@@ -446,7 +478,7 @@ trait UncompressedHeader {
             -> Result<(usize), std::io::Error>;
     fn write_sequence_header_obu(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
             -> Result<(usize), std::io::Error>;
-    fn write_frame_header_obu(&mut self, seq: &Sequence, fi: &FrameInvariants)
+    fn write_frame_header_obu(&mut self, seq: &Sequence, fi: &mut FrameInvariants)
             -> Result<(usize), std::io::Error>;
     fn write_sequence_header2(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
                                     -> Result<(usize), std::io::Error>;
@@ -675,16 +707,315 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
     }
 
 #[allow(unused)]
-    fn write_frame_header_obu(&mut self, seq: &Sequence, fi: &FrameInvariants)
+    fn write_frame_header_obu(&mut self, seq: &Sequence, fi: &mut FrameInvariants)
         -> Result<(usize), std::io::Error> {
-        let mut size: usize = 0;
+      let mut size: usize = 0;
 
-        // TODO: everthing that is in write_uncompressed_header() will move here;
+      if seq.reduced_still_picture_hdr {
+        assert!(fi.show_existing_frame);
+        assert!(fi.frame_type == FrameType::KEY);
+        assert!(fi.show_frame);
+      } else {
+        if fi.show_existing_frame {
+          self.write_bit(true)?; // show_existing_frame=1
+          self.write(3,0)?; // show last frame
 
-        // TODO: update size
-        // size +=
+          //TODO:
+          /* temporal_point_info();
+            if seq.decoder_model_info_present_flag &&
+              timing_info.equal_picture_interval == 0 {
+            // write frame_presentation_delay;
+          }
+          if seq.frame_id_numbers_present_flag {
+            // write display_frame_id;
+          }*/
 
-        Ok(size)
+          self.byte_align()?;
+          return Ok(size);
+        }
+        self.write_bit(false)?; // show_existing_frame=0
+        //let frame_type = fi.frame_type;
+        self.write(2, fi.frame_type as u32)?;
+        fi.intra_only =
+          if fi.frame_type == FrameType::KEY ||
+            fi.frame_type == FrameType::INTRA_ONLY { true }
+          else { false };
+        self.write_bit(fi.show_frame)?; // show frame
+
+        if fi.show_frame {
+          //TODO:
+          /* temporal_point_info();
+              if seq.decoder_model_info_present_flag &&
+              timing_info.equal_picture_interval == 0 {
+            // write frame_presentation_delay;*/
+        } else {
+          self.write_bit(fi.showable_frame)?;
+        }
+
+        if fi.frame_type == FrameType::SWITCH {
+          assert!(fi.error_resilient);
+        } else {
+          if !(fi.frame_type == FrameType::KEY && fi.show_frame) {
+            self.write_bit(fi.error_resilient)?; // error resilient
+          }
+        }
+      }
+
+      self.write_bit(fi.disable_cdf_update)?;
+
+      if seq.force_screen_content_tools == 2 {
+        self.write_bit(fi.allow_screen_content_tools != 0)?;
+      } else {
+        assert!(fi.allow_screen_content_tools ==
+                seq.force_screen_content_tools);
+      }
+
+      if fi.allow_screen_content_tools == 2 {
+        if seq.force_integer_mv == 2 {
+          self.write_bit(fi.force_integer_mv != 0)?;
+        } else {
+          assert!(fi.force_integer_mv == seq.force_integer_mv);
+        }
+      } else {
+        assert!(fi.allow_screen_content_tools ==
+                seq.force_screen_content_tools);
+      }
+
+      if seq.frame_id_numbers_present_flag {
+        assert!(false); // Not supported by rav1e yet!
+        //TODO:
+        //let frame_id_len = seq.frame_id_length;
+        //self.write(frame_id_len, fi.current_frame_id);
+      }
+
+      let mut frame_size_override_flag = false;
+      if fi.frame_type == FrameType::SWITCH {
+        frame_size_override_flag = true;
+      } else if seq.reduced_still_picture_hdr {
+        frame_size_override_flag = false;
+      } else {
+        self.write_bit(frame_size_override_flag)?; // frame size overhead flag
+      }
+
+      if seq.enable_order_hint {
+        assert!(false); // Not supported by rav1e yet!
+      }
+      if fi.error_resilient || fi.intra_only {
+
+        // NOTE: DO this before encoding started atm.
+        //fi.primary_ref_frame = PRIMARY_REF_NONE;
+      } else {
+        self.write(PRIMARY_REF_BITS, fi.primary_ref_frame)?;
+      }
+
+      if seq.decoder_model_info_present_flag {
+        assert!(false); // Not supported by rav1e yet!
+      }
+
+      if fi.frame_type == FrameType::KEY {
+        if !fi.show_frame {  // unshown keyframe (forward keyframe)
+          assert!(false); // Not supported by rav1e yet!
+          //self.write_bit(REF_FRAMES, fi.refresh_frame_flags)?;
+        } else {
+          //assert!(refresh_frame_mask == 0xFF);
+        }
+      } else { // Inter frame info goes here
+        if fi.intra_only {
+          self.write(REF_FRAMES,0)?; // refresh_frame_flags
+        } else {
+          // TODO: This should be set once inter mode is used
+          self.write(REF_FRAMES,0)?; // refresh_frame_flags
+        }
+      };
+
+      if (!fi.intra_only || fi.refresh_frame_flags != 0xFF) {
+        // Write all ref frame order hints if error_resilient_mode == 1
+        if (fi.error_resilient && seq.enable_order_hint) {
+          assert!(false); // Not supported by rav1e yet!
+          //for _ in 0..REF_FRAMES {
+          //  self.write(order_hint_bits_minus_1,ref_order_hint[i])?; // order_hint
+          //}
+        }
+      }
+
+      // if KEY or INTRA_ONLY frame
+      // FIXME: Not sure whether putting frame/render size here is good idea
+      if fi.intra_only {
+        if frame_size_override_flag {
+          assert!(false); // Not supported by rav1e yet!
+        }
+        if seq.enable_superres {
+          assert!(false); // Not supported by rav1e yet!
+        }
+        self.write_bit(false)?; // render_and_frame_size_different
+        //if render_and_frame_size_different { }
+        if fi.allow_screen_content_tools != 0 && true /* UpscaledWidth == FrameWidth */ {
+          self.write_bit(fi.allow_intrabc)?;
+        }
+      }
+
+      let mut frame_refs_short_signaling = false;
+      if fi.frame_type == FrameType::KEY {
+        // Done by above
+      } else {
+        if fi.intra_only {
+          // Done by above
+        } else {
+          if seq.enable_order_hint {
+            assert!(false); // Not supported by rav1e yet!
+            self.write_bit(frame_refs_short_signaling)?;
+            if frame_refs_short_signaling {
+              assert!(false); // Not supported by rav1e yet!
+            }
+          } else { frame_refs_short_signaling = true; }
+
+          for i in LAST_FRAME..ALTREF_FRAME+1 {
+            if !frame_refs_short_signaling {
+              self.write(REF_FRAMES_LOG2, 0)?;
+            }
+            if seq.frame_id_numbers_present_flag {
+              assert!(false); // Not supported by rav1e yet!
+            }
+          }
+          if fi.error_resilient && frame_size_override_flag {
+            assert!(false); // Not supported by rav1e yet!
+          } else {
+            if frame_size_override_flag {
+               assert!(false); // Not supported by rav1e yet!
+            }
+            if seq.enable_superres {
+              assert!(false); // Not supported by rav1e yet!
+            }
+            self.write_bit(false)?; // render_and_frame_size_different
+            //if render_and_frame_size_different { }
+          }
+           if fi.force_integer_mv != 0 {
+            fi.allow_high_precision_mv = false;
+          } else {
+            self.write_bit(fi.allow_high_precision_mv);
+          }
+          self.write_bit(fi.is_filter_switchable)?;
+          self.write_bit(fi.is_motion_mode_switchable)?;
+          if fi.error_resilient || !seq.enable_ref_frame_mvs {
+            fi.use_ref_frame_mvs = false;
+          } else {
+            self.write_bit(fi.use_ref_frame_mvs)?;
+          }
+        }
+      }
+
+      if seq.reduced_still_picture_hdr || fi.disable_cdf_update {
+        fi.disable_frame_end_update_cdf = true;
+      } else {
+        self.write_bit(fi.disable_frame_end_update_cdf)?;
+      }
+
+      // tile
+      self.write_bit(true)?; // uniform_tile_spacing_flag
+      if fi.width > 64 {
+        // TODO: if tile_cols > 1, write more increment_tile_cols_log2 bits
+        self.write(1,0)?; // tile cols
+      }
+      if fi.height > 64 {
+        // TODO: if tile_rows > 1, write increment_tile_rows_log2 bits
+        self.write(1,0)?; // tile rows
+      }
+      // TODO: if tile_cols * tile_rows > 1 {
+      // write context_update_tile_id and tile_size_bytes_minus_1 }
+
+      // quantization
+      assert!(fi.qindex > 0);
+      self.write(8,fi.qindex as u8)?; // base_q_idx
+      self.write_bit(false)?; // y dc delta q
+      self.write_bit(false)?; // uv dc delta q
+      self.write_bit(false)?; // uv ac delta q
+      self.write_bit(false)?; // no qm
+
+      // segmentation
+      self.write_bit(false)?; // segmentation is disabled
+
+      // delta_q
+      self.write_bit(false)?; // delta_q_present_flag: no delta q
+
+      // loop filter
+      self.write_loop_filter()?;
+      // cdef
+      self.write_cdef()?;
+      // loop restoration
+      // If seq.enable_restoration is false, don't signal about loop restoration
+      if seq.enable_restoration {
+        //self.write(6,0)?; // no y, u or v loop restoration
+      }
+      self.write_bit(false)?; // tx mode == TX_MODE_SELECT ?
+
+      // frame_reference_mode : reference_select?
+      let mut reference_select = false;
+      if !fi.intra_only {
+        reference_select = fi.reference_mode != ReferenceMode::SINGLE;
+        self.write_bit(reference_select)?;
+      }
+
+      let skip_mode_allowed =
+        !(fi.intra_only  || !reference_select || !seq.enable_order_hint);
+      if skip_mode_allowed {
+        self.write_bit(false)?; // skip_mode_present
+      }
+
+      if fi.intra_only || fi.error_resilient || !seq.enable_warped_motion {
+        fi.allow_warped_motion = false;
+      } else {
+        self.write_bit(fi.allow_warped_motion)?; // allow_warped_motion
+      }
+
+      self.write_bit(fi.use_reduced_tx_set)?; // reduced tx
+
+      // global motion
+      if fi.intra_only == false {
+        for i in LAST_FRAME..ALTREF_FRAME+1 {
+          let mode = fi.globalmv_transformation_type[i];
+          self.write_bit(mode != GlobalMVMode::IDENTITY)?;
+          if mode != GlobalMVMode::IDENTITY {
+            self.write_bit(mode == GlobalMVMode::ROTZOOM)?;
+            if mode != GlobalMVMode::ROTZOOM {
+                self.write_bit(mode == GlobalMVMode::TRANSLATION)?;
+            }
+          }
+          match mode {
+            GlobalMVMode::IDENTITY => { /* Nothing to do */ }
+            GlobalMVMode::TRANSLATION => {
+              let mv_x = 0;
+              let mv_x_ref = 0;
+              let mv_y = 0;
+              let mv_y_ref = 0;
+              let bits = 12 - 6 + 3 - !fi.allow_high_precision_mv as u8;
+              let bits_diff = 12 - 3 + fi.allow_high_precision_mv as u8;
+              BCodeWriter::write_s_refsubexpfin(self, (1 << bits) + 1,
+                                                3, mv_x_ref >> bits_diff,
+                                                mv_x >> bits_diff)?;
+              BCodeWriter::write_s_refsubexpfin(self, (1 << bits) + 1,
+                                                3, mv_y_ref >> bits_diff,
+                                                mv_y >> bits_diff)?;
+            }
+            GlobalMVMode::ROTZOOM => unimplemented!(),
+            GlobalMVMode::AFFINE => unimplemented!(),
+          };
+        }
+      }
+
+      if seq.film_grain_params_present && fi.show_frame {
+        assert!(false); // Not supported by rav1e yet!
+      }
+
+      if fi.large_scale_tile {
+        assert!(false); // Not supported by rav1e yet!
+        // write ext_file info
+      }
+      self.byte_align()?;
+
+      // TODO: update size
+      // size +=
+
+      Ok(size)
     }
     // End of OBU Headers
 
@@ -782,7 +1113,7 @@ fn aom_uleb_encode(mut value: u64, coded_value: &mut [u8]) -> usize {
 
 #[allow(unused)]
 fn write_obus(packet: &mut Write, sequence: &mut Sequence,
-                            fi: &FrameInvariants) -> Result<(), std::io::Error> {
+                            fi: &mut FrameInvariants) -> Result<(), std::io::Error> {
     //let mut uch = BitWriter::<BE>::new(packet);
     let obu_extension = 0 as u32;
 
@@ -1406,7 +1737,7 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
     h
 }
 
-fn encode_frame(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameState, last_rec: &Option<Frame>) -> Vec<u8> {
+fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut FrameState, last_rec: &Option<Frame>) -> Vec<u8> {
     let mut packet = Vec::new();
     write_uncompressed_header(&mut packet, sequence, fi).unwrap();
     //write_obus(&mut packet, sequence, fi).unwrap();
@@ -1425,7 +1756,7 @@ fn encode_frame(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameSta
 }
 
 /// Encode and write a frame.
-pub fn process_frame(sequence: &mut Sequence, fi: &FrameInvariants,
+pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
                      output_file: &mut Write,
                      y4m_dec: &mut y4m::Decoder<Box<Read>>,
                      y4m_enc: Option<&mut y4m::Encoder<Box<Write>>>,
@@ -1472,7 +1803,7 @@ pub fn process_frame(sequence: &mut Sequence, fi: &FrameInvariants,
                 _ => panic! ("unknown input bit depth!"),
             }
 
-            let packet = encode_frame(sequence, &fi, &mut fs, &last_rec);
+            let packet = encode_frame(sequence, fi, &mut fs, &last_rec);
             write_ivf_frame(output_file, fi.number, packet.as_ref());
             if let Some(mut y4m_enc) = y4m_enc {
                 let mut rec_y = vec![128 as u8; width*height];
