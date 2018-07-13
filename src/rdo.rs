@@ -9,6 +9,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 #![allow(non_camel_case_types)]
+#![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
 
 use context::*;
 use ec::OD_BITRES;
@@ -98,9 +99,7 @@ fn compute_rd_cost(
   // Compute rate
   let rate = (bit_cost as f64) / ((1 << OD_BITRES) as f64);
 
-  let rd_cost = (distortion as f64) + lambda * rate;
-
-  rd_cost
+  (distortion as f64) + lambda * rate
 }
 
 // RDO-based mode decision
@@ -139,7 +138,7 @@ pub fn rdo_mode_decision(
 
   for &skip in [false, true].iter() {
     // Don't test skipped blocks at higher speed levels
-    if fi.speed > 1 && skip == true {
+    if fi.speed > 1 && skip {
       continue;
     }
 
@@ -218,7 +217,7 @@ pub fn rdo_mode_decision(
 
   assert!(best_rd >= 0_f64);
 
-  let rdo_output = RDOOutput {
+  RDOOutput {
     rd_cost: best_rd,
     part_type: PartitionType::PARTITION_NONE,
     part_modes: vec![RDOPartitionOutput {
@@ -228,9 +227,7 @@ pub fn rdo_mode_decision(
       rd_cost: best_rd,
       skip: best_skip
     }]
-  };
-
-  rdo_output
+  }
 }
 
 // RDO-based intra frame transform type decision
@@ -402,11 +399,9 @@ pub fn rdo_partition_decision(
 
   assert!(best_rd >= 0_f64);
 
-  let rdo_output = RDOOutput {
+  RDOOutput {
     rd_cost: best_rd,
     part_type: best_partition,
     part_modes: best_pred_modes
-  };
-
-  rdo_output
+  }
 }

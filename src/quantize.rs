@@ -7,6 +7,8 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+#![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
+
 use partition::TxSize;
 
 extern {
@@ -15,13 +17,11 @@ extern {
 }
 
 fn get_tx_scale(tx_size: TxSize) -> u8 {
-  let tx_scale = match tx_size {
+  match tx_size {
     TxSize::TX_64X64 => 4,
     TxSize::TX_32X32 => 2,
     _ => 1
-  };
-
-  tx_scale
+  }
 }
 
 pub fn dc_q(qindex: usize) -> i16 {

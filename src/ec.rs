@@ -9,6 +9,9 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 #![allow(non_camel_case_types)]
+#![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
+#![cfg_attr(feature = "cargo-clippy", allow(identity_op))]
+#![cfg_attr(feature = "cargo-clippy", allow(needless_range_loop))]
 
 use bitstream_io::{BitWriter, BE};
 use std;
@@ -197,7 +200,7 @@ impl od_ec_enc {
     let mut out = vec![0 as u8; offs];
     while offs > 0 {
       offs -= 1;
-      c = self.precarry[offs] + c;
+      c += self.precarry[offs];
       out[offs] = c as u8;
       c >>= 8;
     }
@@ -398,20 +401,20 @@ impl<'a> BCodeWriter for BitWriter<'a, BE> {
   fn recenter_nonneg(&mut self, r: u16, v: u16) -> u16 {
     /* Recenters a non-negative literal v around a reference r */
     if v > (r << 1) {
-      return v;
+      v
     } else if v >= r {
-      return (v - r) << 1;
+      (v - r) << 1
     } else {
-      return ((r - v) << 1) - 1;
+      ((r - v) << 1) - 1
     }
   }
   fn recenter_finite_nonneg(&mut self, n: u16, r: u16, v: u16) -> u16 {
     /* Recenters a non-negative literal v in [0, n-1] around a
            reference r also in [0, n-1] */
     if (r << 1) <= n {
-      return self.recenter_nonneg(r, v);
+      self.recenter_nonneg(r, v)
     } else {
-      return self.recenter_nonneg(n - 1 - r, n - 1 - v);
+      self.recenter_nonneg(n - 1 - r, n - 1 - v)
     }
   }
   fn write_quniform(&mut self, n: u16, v: u16) -> Result<(), std::io::Error> {
@@ -422,10 +425,10 @@ impl<'a> BCodeWriter for BitWriter<'a, BE> {
     let l = 31 ^ ((n - 1) + 1).leading_zeros();
     let m = (1 << l) - n;
     if v < m {
-      return self.write(l - 1, v);
+      self.write(l - 1, v)
     } else {
       self.write(l - 1, m + ((v - m) >> 1))?;
-      return self.write_bit(((v - m) & 1) != 0);
+      self.write_bit(((v - m) & 1) != 0)
     }
   }
   fn write_subexpfin(
@@ -447,7 +450,7 @@ impl<'a> BCodeWriter for BitWriter<'a, BE> {
         let t = v >= mk + a;
         self.write_bit(t)?;
         if t {
-          i = i + 1;
+          i += 1;
           mk += a;
         } else {
           return self.write(b as u32, v - mk);
@@ -462,18 +465,18 @@ impl<'a> BCodeWriter for BitWriter<'a, BE> {
            parameter k based on a reference ref also in [0, n-1].
            Recenters symbol around r first and then uses a finite subexponential code. */
     let recentered_v = self.recenter_finite_nonneg(n, r as u16, v as u16);
-    return self.write_subexpfin(n, k, recentered_v);
+    self.write_subexpfin(n, k, recentered_v)
   }
   fn write_s_refsubexpfin(
     &mut self, n: u16, k: u16, r: i16, v: i16
   ) -> Result<(), std::io::Error> {
     /* Signed version of the above function */
-    return self.write_refsubexpfin(
+    self.write_refsubexpfin(
       (n << 1) - 1,
       k,
       r + (n - 1) as i16,
       v + (n - 1) as i16
-    );
+    )
   }
 }
 
