@@ -69,7 +69,22 @@ fn main() {
     // Manually fix the comment so rustdoc won't try to pick them
     format_write(builder, "tests/aom.rs");
 
-    println!("cargo:rerun-if-changed=aom_build/aom/");
+    {
+        use std::fs;
+        fn rerun_dir<P: AsRef<Path>>(dir: P) {
+            for entry in fs::read_dir(dir).unwrap() {
+                let entry = entry.unwrap();
+                let path = entry.path();
+                println!("cargo:rerun-if-changed={}", path.to_string_lossy());
+
+                if path.is_dir() {
+                    rerun_dir(path);
+                }
+            }
+        }
+
+        rerun_dir("aom_build");
+    }
 
     cc::Build::new()
         .file("aom_build/aom/aom_dsp/fwd_txfm.c")
