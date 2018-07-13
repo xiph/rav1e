@@ -19,27 +19,46 @@ fn main() {
     let height = y4m_dec.get_height();
     let framerate = y4m_dec.get_framerate();
     let mut y4m_enc = match files.rec_file.as_mut() {
-        Some(rec_file) => Some(y4m::encode(width, height, framerate).write_header(rec_file).unwrap()),
+        Some(rec_file) => Some(
+            y4m::encode(width, height, framerate)
+                .write_header(rec_file)
+                .unwrap()
+        ),
         None => None
     };
 
-    let mut fi = FrameInvariants::new(width, height, files.quantizer, files.speed);
+    let mut fi =
+        FrameInvariants::new(width, height, files.quantizer, files.speed);
     let sequence = Sequence::new();
-    write_ivf_header(&mut files.output_file, width, height, framerate.num, framerate.den);
+    write_ivf_header(
+        &mut files.output_file,
+        width,
+        height,
+        framerate.num,
+        framerate.den
+    );
 
     let mut last_rec: Option<Frame> = None;
     loop {
         //fi.frame_type = FrameType::KEY;
         fi.frame_type = if fi.number % 30 == 0 {
-                        FrameType::KEY }
-                    else {
-                        FrameType::INTER };
+            FrameType::KEY
+        } else {
+            FrameType::INTER
+        };
 
-        fi.intra_only = fi.frame_type == FrameType::KEY ||
-                                          fi.frame_type == FrameType::INTRA_ONLY;
+        fi.intra_only = fi.frame_type == FrameType::KEY
+            || fi.frame_type == FrameType::INTRA_ONLY;
         fi.use_prev_frame_mvs = !(fi.intra_only || fi.error_resilient);
 
-        if !process_frame(&sequence, &fi, &mut files.output_file, &mut y4m_dec, y4m_enc.as_mut(), &mut last_rec) {
+        if !process_frame(
+            &sequence,
+            &fi,
+            &mut files.output_file,
+            &mut y4m_dec,
+            y4m_enc.as_mut(),
+            &mut last_rec
+        ) {
             break;
         }
         fi.number += 1;

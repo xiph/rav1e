@@ -10,8 +10,8 @@
 
 #![allow(non_camel_case_types)]
 
+use bitstream_io::{BitWriter, BE};
 use std;
-use bitstream_io::{BE, BitWriter};
 
 pub const OD_BITRES: u8 = 3;
 const EC_PROB_SHIFT: u32 = 6;
@@ -19,7 +19,7 @@ const EC_MIN_PROB: u32 = 4;
 
 pub struct Writer {
     enc: od_ec_enc,
-    debug: bool,
+    debug: bool
 }
 
 pub type od_ec_window = u32;
@@ -33,7 +33,7 @@ pub struct od_ec_enc {
     /// The number of values in the current range.
     pub rng: u16,
     /// The number of bits of data in the current value.
-    pub cnt: i16,
+    pub cnt: i16
 }
 
 impl od_ec_enc {
@@ -44,7 +44,7 @@ impl od_ec_enc {
             rng: 0x8000,
             // This is initialized to -9 so that it crosses zero after we've
             // accumulated one byte + one carry bit
-            cnt: -9,
+            cnt: -9
         }
     }
 
@@ -58,10 +58,17 @@ impl od_ec_enc {
         let mut r = self.rng as u32;
         assert!(32768 <= r);
 
-        let mut v = ((r >> 8) * (f as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT);
+        let mut v =
+            ((r >> 8) * (f as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT);
         v += EC_MIN_PROB;
-        if val { l += r - v };
-        r = if val { v } else { r - v };
+        if val {
+            l += r - v
+        };
+        r = if val {
+            v
+        } else {
+            r - v
+        };
 
         self.od_ec_enc_normalize(l, r as u16);
     }
@@ -75,7 +82,16 @@ impl od_ec_enc {
     fn od_ec_encode_cdf_q15(&mut self, s: usize, cdf: &[u16]) {
         assert!(cdf[cdf.len() - 1] == 0);
         let nsyms = cdf.len();
-        self.od_ec_encode_q15(if s > 0 { cdf[s - 1] } else { 32768 }, cdf[s], s, nsyms);
+        self.od_ec_encode_q15(
+            if s > 0 {
+                cdf[s - 1]
+            } else {
+                32768
+            },
+            cdf[s],
+            s,
+            nsyms
+        );
     }
 
     /// Encodes a symbol given its frequency in Q15.
@@ -94,15 +110,18 @@ impl od_ec_enc {
         assert!(fl <= 32768);
         let n = nsyms - 1;
         if fl < 32768 {
-            u = (((r >> 8) * (fl as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT)) +
-                EC_MIN_PROB * (n - (s - 1)) as u32;
-            v = (((r >> 8) * (fh as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT)) +
-                EC_MIN_PROB * (n - (s + 0)) as u32;
+            u = (((r >> 8) * (fl as u32 >> EC_PROB_SHIFT))
+                >> (7 - EC_PROB_SHIFT))
+                + EC_MIN_PROB * (n - (s - 1)) as u32;
+            v = (((r >> 8) * (fh as u32 >> EC_PROB_SHIFT))
+                >> (7 - EC_PROB_SHIFT))
+                + EC_MIN_PROB * (n - (s + 0)) as u32;
             l += r - u;
             r = u - v;
         } else {
-            r -= (((r >> 8) * (fh as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT)) +
-                EC_MIN_PROB * (n - (s + 0)) as u32;
+            r -= (((r >> 8) * (fh as u32 >> EC_PROB_SHIFT))
+                >> (7 - EC_PROB_SHIFT))
+                + EC_MIN_PROB * (n - (s + 0)) as u32;
         }
 
         self.od_ec_enc_normalize(l, r as u16);
@@ -170,8 +189,10 @@ impl od_ec_enc {
                 c -= 8;
                 n >>= 8;
 
-                if s <= 0 { break; }
-            };
+                if s <= 0 {
+                    break;
+                }
+            }
         }
 
         let mut c = 0;
@@ -248,8 +269,9 @@ impl od_ec_enc {
 impl Writer {
     pub fn new() -> Writer {
         use std::env;
-        Writer { enc: od_ec_enc::new(),
-                 debug: env::var_os("RAV1E_DEBUG").is_some()
+        Writer {
+            enc: od_ec_enc::new(),
+            debug: env::var_os("RAV1E_DEBUG").is_some()
         }
     }
     pub fn done(&mut self) -> Vec<u8> {
@@ -262,21 +284,27 @@ impl Writer {
         self.enc.od_ec_encode_bool_q15(val, f)
     }
     fn update_cdf(cdf: &mut [u16], val: u32, nsymbs: usize) {
-        let nsymbs2speed: [usize; 17] = [ 0, 0, 1, 1, 2, 2, 2, 2, 2,
-                                              2, 2, 2, 2, 2, 2, 2, 2 ];
+        let nsymbs2speed: [usize; 17] =
+            [0, 0, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2];
         assert!(nsymbs < 17);
-        let rate = 3 + (cdf[nsymbs] > 15) as usize + (cdf[nsymbs] > 31) as usize +
-                   nsymbs2speed[nsymbs];  // + get_msb(nsymbs);
+        let rate = 3
+            + (cdf[nsymbs] > 15) as usize
+            + (cdf[nsymbs] > 31) as usize
+            + nsymbs2speed[nsymbs]; // + get_msb(nsymbs);
         let mut tmp = 32768;
 
         // Single loop (faster)
         for i in 0..(nsymbs - 1) {
-          tmp = if i as u32 == val { 0 } else { tmp };
-          if tmp < cdf[i] {
-            cdf[i] -= (cdf[i] - tmp) >> rate;
-          } else {
-            cdf[i] += (tmp - cdf[i]) >> rate;
-          }
+            tmp = if i as u32 == val {
+                0
+            } else {
+                tmp
+            };
+            if tmp < cdf[i] {
+                cdf[i] -= (cdf[i] - tmp) >> rate;
+            } else {
+                cdf[i] += (tmp - cdf[i]) >> rate;
+            }
         }
         cdf[nsymbs] += (cdf[nsymbs] < 32) as u16;
     }
@@ -314,14 +342,18 @@ impl Writer {
         let mut length = 0;
 
         while i != 0 {
-          i >>= 1;
-          length += 1;
+            i >>= 1;
+            length += 1;
         }
         assert!(length > 0);
 
-        for _ in 0..length-1 { self.bit(0); };
+        for _ in 0..length - 1 {
+            self.bit(0);
+        }
 
-        for i in (0..length).rev() { self.bit((x >> i) & 0x01); };
+        for i in (0..length).rev() {
+            self.bit((x >> i) & 0x01);
+        }
     }
 
     #[allow(dead_code)]
@@ -353,18 +385,29 @@ impl Writer {
 pub trait BCodeWriter {
     fn recenter_nonneg(&mut self, r: u16, v: u16) -> u16;
     fn recenter_finite_nonneg(&mut self, n: u16, r: u16, v: u16) -> u16;
-    fn write_quniform(&mut self, n: u16, v: u16) -> Result<(), std::io::Error>;
-    fn write_subexpfin(&mut self, n: u16, k: u16, v: u16) -> Result<(), std::io::Error>;
-    fn write_refsubexpfin(&mut self, n: u16, k: u16, r: i16, v: i16) -> Result<(), std::io::Error>;
-    fn write_s_refsubexpfin(&mut self, n: u16, k: u16, r: i16, v: i16) -> Result<(), std::io::Error>;
+    fn write_quniform(&mut self, n: u16, v: u16)
+        -> Result<(), std::io::Error>;
+    fn write_subexpfin(
+        &mut self, n: u16, k: u16, v: u16
+    ) -> Result<(), std::io::Error>;
+    fn write_refsubexpfin(
+        &mut self, n: u16, k: u16, r: i16, v: i16
+    ) -> Result<(), std::io::Error>;
+    fn write_s_refsubexpfin(
+        &mut self, n: u16, k: u16, r: i16, v: i16
+    ) -> Result<(), std::io::Error>;
 }
 
 impl<'a> BCodeWriter for BitWriter<'a, BE> {
     fn recenter_nonneg(&mut self, r: u16, v: u16) -> u16 {
         /* Recenters a non-negative literal v around a reference r */
-        if v > (r << 1) { return v }
-        else if v >= r { return (v - r) << 1 }
-        else { return ((r - v) << 1) - 1; }
+        if v > (r << 1) {
+            return v;
+        } else if v >= r {
+            return (v - r) << 1;
+        } else {
+            return ((r - v) << 1) - 1;
+        }
     }
     fn recenter_finite_nonneg(&mut self, n: u16, r: u16, v: u16) -> u16 {
         /* Recenters a non-negative literal v in [0, n-1] around a
@@ -375,9 +418,13 @@ impl<'a> BCodeWriter for BitWriter<'a, BE> {
             return self.recenter_nonneg(n - 1 - r, n - 1 - v);
         }
     }
-    fn write_quniform(&mut self, n: u16, v: u16) -> Result<(), std::io::Error> {
+    fn write_quniform(
+        &mut self, n: u16, v: u16
+    ) -> Result<(), std::io::Error> {
         /* Encodes a value v in [0, n-1] quasi-uniformly */
-        if n <= 1 { return Ok(()) };
+        if n <= 1 {
+            return Ok(());
+        };
         let l = 31 ^ ((n - 1) + 1).leading_zeros();
         let m = (1 << l) - n;
         if v < m {
@@ -387,12 +434,18 @@ impl<'a> BCodeWriter for BitWriter<'a, BE> {
             return self.write_bit(((v - m) & 1) != 0);
         }
     }
-    fn write_subexpfin(&mut self, n: u16, k: u16, v: u16) -> Result<(), std::io::Error> {
+    fn write_subexpfin(
+        &mut self, n: u16, k: u16, v: u16
+    ) -> Result<(), std::io::Error> {
         /* Finite subexponential code that codes a symbol v in [0, n-1] with parameter k */
         let mut i = 0;
         let mut mk = 0;
         loop {
-            let b = if i > 0 { k + i - 1 } else { k };
+            let b = if i > 0 {
+                k + i - 1
+            } else {
+                k
+            };
             let a = 1 << b;
             if n <= mk + 3 * a {
                 return self.write_quniform(n - mk, v - mk);
@@ -408,16 +461,25 @@ impl<'a> BCodeWriter for BitWriter<'a, BE> {
             }
         }
     }
-    fn write_refsubexpfin(&mut self, n: u16, k: u16, r: i16, v: i16) -> Result<(), std::io::Error> {
+    fn write_refsubexpfin(
+        &mut self, n: u16, k: u16, r: i16, v: i16
+    ) -> Result<(), std::io::Error> {
         /* Finite subexponential code that codes a symbol v in [0, n-1] with
            parameter k based on a reference ref also in [0, n-1].
            Recenters symbol around r first and then uses a finite subexponential code. */
         let recentered_v = self.recenter_finite_nonneg(n, r as u16, v as u16);
         return self.write_subexpfin(n, k, recentered_v);
     }
-    fn write_s_refsubexpfin(&mut self, n: u16, k: u16, r: i16, v: i16) -> Result<(), std::io::Error> {
+    fn write_s_refsubexpfin(
+        &mut self, n: u16, k: u16, r: i16, v: i16
+    ) -> Result<(), std::io::Error> {
         /* Signed version of the above function */
-        return self.write_refsubexpfin((n << 1) - 1, k, r + (n - 1) as i16, v + (n - 1) as i16);
+        return self.write_refsubexpfin(
+            (n << 1) - 1,
+            k,
+            r + (n - 1) as i16,
+            v + (n - 1) as i16
+        );
     }
 }
 
@@ -442,7 +504,7 @@ pub struct od_ec_dec {
     pub dif: od_ec_window,
     pub rng: u16,
     pub cnt: i16,
-    pub error: ::std::os::raw::c_int,
+    pub error: ::std::os::raw::c_int
 }
 
 #[cfg(test)]
@@ -452,23 +514,32 @@ mod test {
 
     struct Reader<'a> {
         dec: od_ec_dec,
-        _dummy: &'a [u8],
+        _dummy: &'a [u8]
     }
 
-    extern "C" {
-        fn od_ec_dec_init(dec: *mut od_ec_dec, buf: *const ::std::os::raw::c_uchar, storage: u32);
-        fn od_ec_decode_bool_q15(dec: *mut od_ec_dec, f: ::std::os::raw::c_uint) -> ::std::os::raw::c_int;
-        fn od_ec_decode_cdf_q15(dec: *mut od_ec_dec, cdf: *const u16, nsyms: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
+    extern {
+        fn od_ec_dec_init(
+            dec: *mut od_ec_dec, buf: *const ::std::os::raw::c_uchar,
+            storage: u32
+        );
+        fn od_ec_decode_bool_q15(
+            dec: *mut od_ec_dec, f: ::std::os::raw::c_uint
+        ) -> ::std::os::raw::c_int;
+        fn od_ec_decode_cdf_q15(
+            dec: *mut od_ec_dec, cdf: *const u16, nsyms: ::std::os::raw::c_int
+        ) -> ::std::os::raw::c_int;
     }
 
     impl<'a> Reader<'a> {
-        fn new(buf: &'a[u8]) -> Self {
+        fn new(buf: &'a [u8]) -> Self {
             let mut r = Reader {
-                dec : unsafe { mem::uninitialized() },
-                _dummy: buf,
+                dec: unsafe { mem::uninitialized() },
+                _dummy: buf
             };
 
-            unsafe { od_ec_dec_init(&mut r.dec, buf.as_ptr(), buf.len() as u32) };
+            unsafe {
+                od_ec_dec_init(&mut r.dec, buf.as_ptr(), buf.len() as u32)
+            };
 
             r
         }
@@ -479,7 +550,13 @@ mod test {
 
         fn cdf(&mut self, icdf: &[u16]) -> i32 {
             let nsyms = icdf.len();
-            unsafe { od_ec_decode_cdf_q15(&mut self.dec, icdf.as_ptr(), nsyms as i32) }
+            unsafe {
+                od_ec_decode_cdf_q15(
+                    &mut self.dec,
+                    icdf.as_ptr(),
+                    nsyms as i32
+                )
+            }
         }
     }
 
@@ -576,6 +653,5 @@ mod test {
         assert_eq!(r.cdf(&cdf), 2);
         assert_eq!(r.cdf(&cdf), 2);
         assert_eq!(r.cdf(&cdf), 2);
-
     }
 }

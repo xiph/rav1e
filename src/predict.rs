@@ -11,9 +11,9 @@
 
 use libc;
 
-use std::mem::*;
-use partition::*;
 use context::MAX_TX_SIZE;
+use partition::*;
+use std::mem::*;
 
 pub static RAV1E_INTRA_MODES: &'static [PredictionMode] = &[
     PredictionMode::DC_PRED,
@@ -26,6 +26,7 @@ pub static RAV1E_INTRA_MODES: &'static [PredictionMode] = &[
 ];
 
 // Intra prediction modes tested at high speed levels
+#[cfg_attr(rustfmt, rustfmt_skip)]
 pub static RAV1E_INTRA_MODES_MINIMAL: &'static [PredictionMode] = &[
     PredictionMode::DC_PRED,
     PredictionMode::H_PRED,
@@ -36,6 +37,7 @@ pub static RAV1E_INTRA_MODES_MINIMAL: &'static [PredictionMode] = &[
 const sm_weight_log2_scale: u8 = 8;
 
 // Smooth predictor weights
+#[cfg_attr(rustfmt, rustfmt_skip)]
 static sm_weight_arrays: [u8; 2 * MAX_TX_SIZE] = [
     // Unused, because we always offset by bs, which is at least 2.
     0, 0,
@@ -62,95 +64,97 @@ extern {
     #[cfg(test)]
     fn highbd_dc_predictor(
         dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
-        bh: libc::c_int, above: *const u16,
-        left: *const u16, bd: libc::c_int);
+        bh: libc::c_int, above: *const u16, left: *const u16, bd: libc::c_int
+    );
 
     fn highbd_dc_left_predictor(
         dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
-        bh: libc::c_int, above: *const u16,
-        left: *const u16, bd: libc::c_int);
+        bh: libc::c_int, above: *const u16, left: *const u16, bd: libc::c_int
+    );
 
     fn highbd_dc_top_predictor(
         dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
-        bh: libc::c_int, above: *const u16,
-        left: *const u16, bd: libc::c_int);
+        bh: libc::c_int, above: *const u16, left: *const u16, bd: libc::c_int
+    );
 
     #[cfg(test)]
     fn highbd_h_predictor(
         dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
-        bh: libc::c_int, above: *const u16,
-        left: *const u16, bd: libc::c_int);
+        bh: libc::c_int, above: *const u16, left: *const u16, bd: libc::c_int
+    );
 
     #[cfg(test)]
     fn highbd_v_predictor(
         dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
-        bh: libc::c_int, above: *const u16,
-        left: *const u16, bd: libc::c_int);
+        bh: libc::c_int, above: *const u16, left: *const u16, bd: libc::c_int
+    );
 
     #[cfg(test)]
     fn highbd_paeth_predictor(
         dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
-        bh: libc::c_int, above: *const u16,
-        left: *const u16, bd: libc::c_int);
+        bh: libc::c_int, above: *const u16, left: *const u16, bd: libc::c_int
+    );
 
     #[cfg(test)]
     fn highbd_smooth_predictor(
         dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
-        bh: libc::c_int, above: *const u16,
-        left: *const u16, bd: libc::c_int);
+        bh: libc::c_int, above: *const u16, left: *const u16, bd: libc::c_int
+    );
 
     #[cfg(test)]
     fn highbd_smooth_h_predictor(
         dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
-        bh: libc::c_int, above: *const u16,
-        left: *const u16, bd: libc::c_int);
+        bh: libc::c_int, above: *const u16, left: *const u16, bd: libc::c_int
+    );
 
     #[cfg(test)]
     fn highbd_smooth_v_predictor(
         dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
-        bh: libc::c_int, above: *const u16,
-        left: *const u16, bd: libc::c_int);
+        bh: libc::c_int, above: *const u16, left: *const u16, bd: libc::c_int
+    );
 }
 
 pub trait Dim {
-    const W : usize;
-    const H : usize;
+    const W: usize;
+    const H: usize;
 }
 
 pub struct Block4x4;
 
 impl Dim for Block4x4 {
-    const W : usize = 4;
-    const H : usize = 4;
+    const W: usize = 4;
+    const H: usize = 4;
 }
 
 pub struct Block8x8;
 
 impl Dim for Block8x8 {
-    const W : usize = 8;
-    const H : usize = 8;
+    const W: usize = 8;
+    const H: usize = 8;
 }
 
 pub struct Block16x16;
 
 impl Dim for Block16x16 {
-    const W : usize = 16;
-    const H : usize = 16;
+    const W: usize = 16;
+    const H: usize = 16;
 }
-
 
 pub struct Block32x32;
 
 impl Dim for Block32x32 {
-    const W : usize = 32;
-    const H : usize = 32;
+    const W: usize = 32;
+    const H: usize = 32;
 }
 
 pub trait Intra: Dim {
-    fn pred_dc(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+    fn pred_dc(
+        output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
+    ) {
         let edges = left[..Self::H].iter().chain(above[..Self::W].iter());
         let len = (Self::W + Self::H) as u32;
-        let avg = ((edges.fold(0, |acc, &v| acc + v as u32) + (len >> 1)) / len) as u16;
+        let avg = ((edges.fold(0, |acc, &v| acc + v as u32) + (len >> 1))
+            / len) as u16;
 
         for line in output.chunks_mut(stride).take(Self::H) {
             for v in &mut line[..Self::W] {
@@ -162,25 +166,46 @@ pub trait Intra: Dim {
     fn pred_dc_128(output: &mut [u16], stride: usize) {
         for y in 0..Self::H {
             for x in 0..Self::W {
-                output[y*stride+x] = 128;
+                output[y * stride + x] = 128;
             }
         }
     }
 
-    fn pred_dc_left(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+    fn pred_dc_left(
+        output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
+    ) {
         unsafe {
-            highbd_dc_left_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, Self::W as libc::c_int, Self::H as libc::c_int, above.as_ptr(), left.as_ptr(), 8);
+            highbd_dc_left_predictor(
+                output.as_mut_ptr(),
+                stride as libc::ptrdiff_t,
+                Self::W as libc::c_int,
+                Self::H as libc::c_int,
+                above.as_ptr(),
+                left.as_ptr(),
+                8
+            );
         }
     }
 
-    fn pred_dc_top(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+    fn pred_dc_top(
+        output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
+    ) {
         unsafe {
-            highbd_dc_top_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, Self::W as libc::c_int, Self::H as libc::c_int, above.as_ptr(), left.as_ptr(), 8);
+            highbd_dc_top_predictor(
+                output.as_mut_ptr(),
+                stride as libc::ptrdiff_t,
+                Self::W as libc::c_int,
+                Self::H as libc::c_int,
+                above.as_ptr(),
+                left.as_ptr(),
+                8
+            );
         }
     }
 
     fn pred_h(output: &mut [u16], stride: usize, left: &[u16]) {
-        for (line, l) in output.chunks_mut(stride).zip(left[..Self::H].iter()) {
+        for (line, l) in output.chunks_mut(stride).zip(left[..Self::H].iter())
+        {
             for v in &mut line[..Self::W] {
                 *v = *l;
             }
@@ -193,10 +218,12 @@ pub trait Intra: Dim {
         }
     }
 
-    fn pred_paeth(output: &mut [u16], stride: usize, above: &[u16], left: &[u16], above_left: u16) {
+    fn pred_paeth(
+        output: &mut [u16], stride: usize, above: &[u16], left: &[u16],
+        above_left: u16
+    ) {
         for r in 0..Self::H {
             for c in 0..Self::W {
-
                 // Top-left pixel is fixed in libaom
                 let raw_top_left = above_left as i32;
                 let raw_left = left[r] as i32;
@@ -221,7 +248,9 @@ pub trait Intra: Dim {
         }
     }
 
-    fn pred_smooth(output: &mut [u16], stride: usize, above: &[u16], left: &[u16], bd: u8) {
+    fn pred_smooth(
+        output: &mut [u16], stride: usize, above: &[u16], left: &[u16], bd: u8
+    ) {
         let below_pred = left[Self::H - 1]; // estimated by bottom-left pixel
         let right_pred = above[Self::W - 1]; // estimated by top-right pixel
         let sm_weights_w = &sm_weight_arrays[Self::W..];
@@ -239,12 +268,7 @@ pub trait Intra: Dim {
 
         for r in 0..Self::H {
             for c in 0..Self::W {
-                let pixels = [
-                    above[c],
-                    below_pred,
-                    left[r],
-                    right_pred
-                ];
+                let pixels = [above[c], below_pred, left[r], right_pred];
 
                 let weights = [
                     sm_weights_h[r] as u16,
@@ -253,22 +277,32 @@ pub trait Intra: Dim {
                     scale - sm_weights_w[c] as u16
                 ];
 
-                assert!(scale >= (sm_weights_h[r] as u16) && scale >= (sm_weights_w[c] as u16));
+                assert!(
+                    scale >= (sm_weights_h[r] as u16)
+                        && scale >= (sm_weights_w[c] as u16)
+                );
 
                 // Sum up weighted pixels
-                let mut this_pred: u32 = weights.iter().zip(pixels.iter())
-                    .map(|(w, p)| (*w as u32) * (*p as u32)).sum();
-                this_pred = (this_pred + (1 << (log2_scale - 1))) >> log2_scale;
+                let mut this_pred: u32 = weights
+                    .iter()
+                    .zip(pixels.iter())
+                    .map(|(w, p)| (*w as u32) * (*p as u32))
+                    .sum();
+                this_pred =
+                    (this_pred + (1 << (log2_scale - 1))) >> log2_scale;
 
                 let output_index = r * stride + c;
 
                 // Clamp the output to the correct bit depth
-                output[output_index] = this_pred.max(0).min((1_u32 << bd) - 1) as u16;
+                output[output_index] =
+                    this_pred.max(0).min((1_u32 << bd) - 1) as u16;
             }
         }
     }
 
-    fn pred_smooth_h(output: &mut [u16], stride: usize, above: &[u16], left: &[u16], bd: u8) {
+    fn pred_smooth_h(
+        output: &mut [u16], stride: usize, above: &[u16], left: &[u16], bd: u8
+    ) {
         let right_pred = above[Self::W - 1]; // estimated by top-right pixel
         let sm_weights = &sm_weight_arrays[Self::W..];
 
@@ -282,24 +316,32 @@ pub trait Intra: Dim {
 
         for r in 0..Self::H {
             for c in 0..Self::W {
-                let pixels = [ left[r], right_pred ];
-                let weights = [ sm_weights[c] as u16, scale - sm_weights[c] as u16 ];
+                let pixels = [left[r], right_pred];
+                let weights =
+                    [sm_weights[c] as u16, scale - sm_weights[c] as u16];
 
                 assert!(scale >= sm_weights[c] as u16);
 
-                let mut this_pred: u32 = weights.iter().zip(pixels.iter())
-                    .map(|(w, p)| (*w as u32) * (*p as u32)).sum();
-                this_pred = (this_pred + (1 << (log2_scale - 1))) >> log2_scale;
+                let mut this_pred: u32 = weights
+                    .iter()
+                    .zip(pixels.iter())
+                    .map(|(w, p)| (*w as u32) * (*p as u32))
+                    .sum();
+                this_pred =
+                    (this_pred + (1 << (log2_scale - 1))) >> log2_scale;
 
                 let output_index = r * stride + c;
 
                 // Clamp the output to the correct bit depth
-                output[output_index] = this_pred.max(0).min((1_u32 << bd) - 1) as u16;
+                output[output_index] =
+                    this_pred.max(0).min((1_u32 << bd) - 1) as u16;
             }
         }
     }
 
-    fn pred_smooth_v(output: &mut [u16], stride: usize, above: &[u16], left: &[u16], bd: u8) {
+    fn pred_smooth_v(
+        output: &mut [u16], stride: usize, above: &[u16], left: &[u16], bd: u8
+    ) {
         let below_pred = left[Self::H - 1]; // estimated by bottom-left pixel
         let sm_weights = &sm_weight_arrays[Self::H..];
 
@@ -313,19 +355,25 @@ pub trait Intra: Dim {
 
         for r in 0..Self::H {
             for c in 0..Self::W {
-                let pixels = [ above[c], below_pred ];
-                let weights = [ sm_weights[r] as u16, scale - sm_weights[r] as u16 ];
+                let pixels = [above[c], below_pred];
+                let weights =
+                    [sm_weights[r] as u16, scale - sm_weights[r] as u16];
 
                 assert!(scale >= sm_weights[r] as u16);
 
-                let mut this_pred: u32 = weights.iter().zip(pixels.iter())
-                    .map(|(w, p)| (*w as u32) * (*p as u32)).sum();
-                this_pred = (this_pred + (1 << (log2_scale - 1))) >> log2_scale;
+                let mut this_pred: u32 = weights
+                    .iter()
+                    .zip(pixels.iter())
+                    .map(|(w, p)| (*w as u32) * (*p as u32))
+                    .sum();
+                this_pred =
+                    (this_pred + (1 << (log2_scale - 1))) >> log2_scale;
 
                 let output_index = r * stride + c;
 
                 // Clamp the output to the correct bit depth
-                output[output_index] = this_pred.max(0).min((1_u32 << bd) - 1) as u16;
+                output[output_index] =
+                    this_pred.max(0).min((1_u32 << bd) - 1) as u16;
             }
         }
     }
@@ -343,7 +391,9 @@ pub mod test {
 
     const MAX_ITER: usize = 50000;
 
-    fn setup_pred(ra: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>, Vec<u16>, Vec<u16>) {
+    fn setup_pred(
+        ra: &mut ChaChaRng
+    ) -> (Vec<u16>, Vec<u16>, Vec<u16>, Vec<u16>) {
         let output = vec![0u16; 32 * 32];
         let above: Vec<u16> = (0..32).map(|_| ra.gen()).collect();
         let left: Vec<u16> = (0..32).map(|_| ra.gen()).collect();
@@ -354,45 +404,115 @@ pub mod test {
         (above, left, o1, o2)
     }
 
-    fn pred_dc_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+    fn pred_dc_4x4(
+        output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
+    ) {
         unsafe {
-            highbd_dc_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, 4, 4, above.as_ptr(), left.as_ptr(), 8);
+            highbd_dc_predictor(
+                output.as_mut_ptr(),
+                stride as libc::ptrdiff_t,
+                4,
+                4,
+                above.as_ptr(),
+                left.as_ptr(),
+                8
+            );
         }
     }
 
-    pub fn pred_h_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+    pub fn pred_h_4x4(
+        output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
+    ) {
         unsafe {
-            highbd_h_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, 4, 4, above.as_ptr(), left.as_ptr(), 8);
+            highbd_h_predictor(
+                output.as_mut_ptr(),
+                stride as libc::ptrdiff_t,
+                4,
+                4,
+                above.as_ptr(),
+                left.as_ptr(),
+                8
+            );
         }
     }
 
-    pub fn pred_v_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+    pub fn pred_v_4x4(
+        output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
+    ) {
         unsafe {
-            highbd_v_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, 4, 4, above.as_ptr(), left.as_ptr(), 8);
+            highbd_v_predictor(
+                output.as_mut_ptr(),
+                stride as libc::ptrdiff_t,
+                4,
+                4,
+                above.as_ptr(),
+                left.as_ptr(),
+                8
+            );
         }
     }
 
-    pub fn pred_paeth_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+    pub fn pred_paeth_4x4(
+        output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
+    ) {
         unsafe {
-            highbd_paeth_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, 4, 4, above.as_ptr(), left.as_ptr(), 8);
+            highbd_paeth_predictor(
+                output.as_mut_ptr(),
+                stride as libc::ptrdiff_t,
+                4,
+                4,
+                above.as_ptr(),
+                left.as_ptr(),
+                8
+            );
         }
     }
 
-    pub fn pred_smooth_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+    pub fn pred_smooth_4x4(
+        output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
+    ) {
         unsafe {
-            highbd_smooth_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, 4, 4, above.as_ptr(), left.as_ptr(), 8);
+            highbd_smooth_predictor(
+                output.as_mut_ptr(),
+                stride as libc::ptrdiff_t,
+                4,
+                4,
+                above.as_ptr(),
+                left.as_ptr(),
+                8
+            );
         }
     }
 
-    pub fn pred_smooth_h_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+    pub fn pred_smooth_h_4x4(
+        output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
+    ) {
         unsafe {
-            highbd_smooth_h_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, 4, 4, above.as_ptr(), left.as_ptr(), 8);
+            highbd_smooth_h_predictor(
+                output.as_mut_ptr(),
+                stride as libc::ptrdiff_t,
+                4,
+                4,
+                above.as_ptr(),
+                left.as_ptr(),
+                8
+            );
         }
     }
 
-    pub fn pred_smooth_v_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+    pub fn pred_smooth_v_4x4(
+        output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
+    ) {
         unsafe {
-            highbd_smooth_v_predictor(output.as_mut_ptr(), stride as libc::ptrdiff_t, 4, 4, above.as_ptr(), left.as_ptr(), 8);
+            highbd_smooth_v_predictor(
+                output.as_mut_ptr(),
+                stride as libc::ptrdiff_t,
+                4,
+                4,
+                above.as_ptr(),
+                left.as_ptr(),
+                8
+            );
         }
     }
 
@@ -524,17 +644,17 @@ pub mod test {
         Block4x4::pred_h(&mut o, 32, &left[..4]);
 
         for l in o.chunks(32).take(4) {
-          for v in l[..4].iter() {
-            assert_eq!(*v, max12bit);
-          }
+            for v in l[..4].iter() {
+                assert_eq!(*v, max12bit);
+            }
         }
 
         Block4x4::pred_v(&mut o, 32, &above[..4]);
 
         for l in o.chunks(32).take(4) {
-          for v in l[..4].iter() {
-            assert_eq!(*v, max12bit);
-          }
+            for v in l[..4].iter() {
+                assert_eq!(*v, max12bit);
+            }
         }
 
         let above_left = unsafe { *above.as_ptr().offset(-1) };
