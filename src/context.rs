@@ -14,6 +14,7 @@
 #![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
 #![cfg_attr(feature = "cargo-clippy", allow(unnecessary_mut_passed))]
 #![cfg_attr(feature = "cargo-clippy", allow(needless_range_loop))]
+#![cfg_attr(feature = "cargo-clippy", allow(collapsible_if))]
 
 use ec;
 use partition::BlockSize::*;
@@ -1319,13 +1320,13 @@ impl BlockContext {
   }
 
   fn reset_left_coeff_context(&mut self, plane: usize) {
-    for c in self.left_coeff_context[plane].iter_mut() {
+    for c in &mut self.left_coeff_context[plane] {
       *c = 0;
     }
   }
 
   fn reset_left_partition_context(&mut self) {
-    for c in self.left_partition_context.iter_mut() {
+    for c in &mut self.left_partition_context {
       *c = 0;
     }
   }
@@ -1660,11 +1661,11 @@ impl ContextWriter {
   }
 
   fn cdf_element_prob(cdf: &[u16], element: usize) -> u16 {
-    return if element > 0 {
+    (if element > 0 {
       cdf[element - 1]
     } else {
       32768
-    } - cdf[element];
+    }) - cdf[element]
   }
 
   fn partition_gather_horz_alike(

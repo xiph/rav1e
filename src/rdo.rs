@@ -136,7 +136,7 @@ pub fn rdo_mode_decision(
   let partition_start_x = (bo.x & LOCAL_BLOCK_MASK) >> xdec << MI_SIZE_LOG2;
   let partition_start_y = (bo.y & LOCAL_BLOCK_MASK) >> ydec << MI_SIZE_LOG2;
 
-  for &skip in [false, true].iter() {
+  for &skip in &[false, true] {
     // Don't test skipped blocks at higher speed levels
     if fi.speed > 1 && skip {
       continue;
