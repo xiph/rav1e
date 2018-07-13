@@ -71,3 +71,8 @@ Check code formatting with [rustfmt](https://github.com/rust-lang-nursery/rustfm
 ```
 cargo +nightly fmt -- --check
 ```
+
+You should also try [clippy](https://github.com/rust-lang-nursery/rust-clippy).
+```
+cargo +nightly clippy
+```

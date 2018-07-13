@@ -11,6 +11,9 @@
 #![allow(non_upper_case_globals)]
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
+#![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
+#![cfg_attr(feature = "cargo-clippy", allow(unnecessary_mut_passed))]
+#![cfg_attr(feature = "cargo-clippy", allow(needless_range_loop))]
 
 use ec;
 use partition::BlockSize::*;
@@ -973,7 +976,7 @@ pub struct CDFContext {
 
 impl CDFContext {
   pub fn new(_qindex: u8) -> CDFContext {
-    let c = CDFContext {
+    CDFContext {
       partition_cdf: default_partition_cdf,
       kf_y_cdf: default_kf_y_mode_cdf,
       y_mode_cdf: default_if_y_mode_cdf,
@@ -1000,9 +1003,7 @@ impl CDFContext {
       coeff_base_eob_cdf: av1_default_coeff_base_eob_multi,
       coeff_base_cdf: av1_default_coeff_base_multi,
       coeff_br_cdf: av1_default_coeff_lps_multi
-    };
-
-    c
+    }
   }
 
   pub fn build_map(&self) -> Vec<(&'static str, usize, usize)> {
@@ -1258,9 +1259,9 @@ impl BlockContext {
       cols: self.cols,
       rows: self.rows,
       above_partition_context: self.above_partition_context.clone(),
-      left_partition_context: self.left_partition_context.clone(),
+      left_partition_context: self.left_partition_context,
       above_coeff_context: self.above_coeff_context.clone(),
-      left_coeff_context: self.left_coeff_context.clone(),
+      left_coeff_context: self.left_coeff_context,
       blocks: vec![vec![Block::default(); 0]; 0]
     }
   }
@@ -1269,9 +1270,9 @@ impl BlockContext {
     self.cols = checkpoint.cols;
     self.rows = checkpoint.rows;
     self.above_partition_context = checkpoint.above_partition_context.clone();
-    self.left_partition_context = checkpoint.left_partition_context.clone();
+    self.left_partition_context = checkpoint.left_partition_context;
     self.above_coeff_context = checkpoint.above_coeff_context.clone();
-    self.left_coeff_context = checkpoint.left_coeff_context.clone();
+    self.left_coeff_context = checkpoint.left_coeff_context;
   }
 
   pub fn at(&mut self, bo: &BlockOffset) -> &mut Block {
@@ -1868,14 +1869,12 @@ impl ContextWriter {
   }
 
   pub fn get_eob_pos_token(&mut self, eob: usize, extra: &mut u32) -> u32 {
-    let t: u32;
-
-    if eob < 33 {
-      t = eob_to_pos_small[eob] as u32;
+    let t = if eob < 33 {
+      eob_to_pos_small[eob] as u32
     } else {
       let e = cmp::min((eob - 1) >> 5, 16);
-      t = eob_to_pos_large[e as usize] as u32;
-    }
+      eob_to_pos_large[e as usize] as u32
+    };
     assert!(eob as i32 >= k_eob_group_start[t as usize] as i32);
     *extra = eob as u32 - k_eob_group_start[t as usize] as u32;
 
@@ -1934,17 +1933,16 @@ impl ContextWriter {
         //   if (row + col < 2) return ctx + 1;
         //   if (row + col < 4) return 5 + ctx + 1;
         //   return 21 + ctx;
-        return ctx
-          + av1_nz_map_ctx_offset[tx_size as usize][coeff_idx] as usize;
+        ctx + av1_nz_map_ctx_offset[tx_size as usize][coeff_idx] as usize
       }
       TX_CLASS_HORIZ => {
         let row = coeff_idx >> bwl;
         let col = coeff_idx - (row << bwl);
-        return ctx + nz_map_ctx_offset_1d[col as usize];
+        ctx + nz_map_ctx_offset_1d[col as usize]
       }
       TX_CLASS_VERT => {
         let row = coeff_idx >> bwl;
-        return ctx + nz_map_ctx_offset_1d[row];
+        ctx + nz_map_ctx_offset_1d[row]
       }
     }
   }
@@ -1968,8 +1966,7 @@ impl ContextWriter {
     let padded_idx = coeff_idx + ((coeff_idx >> bwl) << TX_PAD_HOR_LOG2);
     let stats = self.get_nz_mag(&levels[padded_idx..], bwl, tx_class);
 
-    return self
-      .get_nz_map_ctx_from_stats(stats, coeff_idx, bwl, tx_size, tx_class);
+    self.get_nz_map_ctx_from_stats(stats, coeff_idx, bwl, tx_size, tx_class)
   }
 
   pub fn get_nz_map_contexts(
@@ -2042,7 +2039,7 @@ impl ContextWriter {
       }
     }
 
-    return mag + 14;
+    mag + 14
   }
 
   pub fn get_level_mag_with_txclass(
@@ -2066,7 +2063,7 @@ impl ContextWriter {
   ) {
     let pred_mode = self.bc.get_mode(bo);
     let is_inter = pred_mode >= PredictionMode::NEARESTMV;
-    assert!(is_inter == false);
+    assert!(!is_inter);
     // TODO: If iner mode, scan_order should use inter version of them
     let scan_order =
       &av1_inter_scan_orders[tx_size as usize][tx_type as usize];

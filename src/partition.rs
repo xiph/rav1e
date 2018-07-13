@@ -317,7 +317,7 @@ use plane::*;
 use predict::*;
 
 impl PredictionMode {
-  pub fn predict<'a>(&self, dst: &'a mut PlaneMutSlice<'a>, tx_size: TxSize) {
+  pub fn predict<'a>(self, dst: &'a mut PlaneMutSlice<'a>, tx_size: TxSize) {
     match tx_size {
       TxSize::TX_4X4 => self.predict_inner::<Block4x4>(dst),
       TxSize::TX_8X8 => self.predict_inner::<Block8x8>(dst),
@@ -328,7 +328,7 @@ impl PredictionMode {
   }
 
   #[inline(always)]
-  fn predict_inner<'a, B: Intra>(&self, dst: &'a mut PlaneMutSlice<'a>) {
+  fn predict_inner<'a, B: Intra>(self, dst: &'a mut PlaneMutSlice<'a>) {
     // above and left arrays include above-left sample
     // above array includes above-right samples
     // left array includes below-left samples
@@ -339,18 +339,18 @@ impl PredictionMode {
     let x = dst.x;
     let y = dst.y;
 
-    if self != &PredictionMode::H_PRED && y != 0 {
+    if self != PredictionMode::H_PRED && y != 0 {
       above[1..B::W + 1].copy_from_slice(&dst.go_up(1).as_slice()[..B::W]);
     }
 
-    if self != &PredictionMode::V_PRED && x != 0 {
+    if self != PredictionMode::V_PRED && x != 0 {
       let left_slice = dst.go_left(1);
       for i in 0..B::H {
         left[i + 1] = left_slice.p(0, i);
       }
     }
 
-    if self == &PredictionMode::PAETH_PRED && x != 0 && y != 0 {
+    if self == PredictionMode::PAETH_PRED && x != 0 && y != 0 {
       above[0] = dst.go_up(1).go_left(1).p(0, 0);
       left[0] = above[0];
     }
@@ -359,7 +359,7 @@ impl PredictionMode {
     let above_slice = &above[1..B::W + 1];
     let left_slice = &left[1..B::H + 1];
 
-    match *self {
+    match self {
       PredictionMode::DC_PRED => match (x, y) {
         (0, 0) => B::pred_dc_128(slice, stride),
         (_, 0) => B::pred_dc_left(slice, stride, above_slice, left_slice),

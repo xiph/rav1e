@@ -153,13 +153,13 @@ impl FrameInvariants {
                                  else if speed <= 2 { BlockSize::BLOCK_8X8 }
                                  else if speed <= 3 { BlockSize::BLOCK_16X16 }
                                  else { BlockSize::BLOCK_32X32 };
-        let use_reduced_tx_set = if speed > 1 { true } else { false };
+        let use_reduced_tx_set = speed > 1;
 
         FrameInvariants {
-            qindex: qindex,
-            speed: speed,
-            width: width,
-            height: height,
+            qindex,
+            speed,
+            width,
+            height,
             padded_w: width.align_power_of_two(3),
             padded_h: height.align_power_of_two(3),
             sb_width: width.align_power_of_two_and_shift(6),
@@ -173,10 +173,10 @@ impl FrameInvariants {
             allow_high_precision_mv: true,
             frame_type: FrameType::KEY,
             show_existing_frame: false,
-            use_reduced_tx_set: use_reduced_tx_set,
+            use_reduced_tx_set,
             reference_mode: ReferenceMode::SINGLE,
             use_prev_frame_mvs: false,
-            min_partition_size: min_partition_size,
+            min_partition_size,
             globalmv_transformation_type: [GlobalMVMode::IDENTITY; ALTREF_FRAME + 1],
         }
     }
@@ -233,10 +233,10 @@ const SINGLE_REFS: usize = FWD_REFS + BWD_REFS;
 impl fmt::Display for FrameType{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &FrameType::KEY => write!(f, "Key frame"),
-            &FrameType::INTER => write!(f, "Inter frame"),
-            &FrameType::INTRA_ONLY => write!(f, "Intra only frame"),
-            &FrameType::S => write!(f, "Switching frame"),
+            FrameType::KEY => write!(f, "Key frame"),
+            FrameType::INTER => write!(f, "Inter frame"),
+            FrameType::INTRA_ONLY => write!(f, "Intra only frame"),
+            FrameType::S => write!(f, "Switching frame"),
         }
     }
 }
@@ -291,11 +291,11 @@ impl EncoderConfig {
         EncoderConfig {
             input_file: match matches.value_of("INPUT").unwrap() {
                 "-" => Box::new(std::io::stdin()) as Box<Read>,
-                f @ _ => Box::new(File::open(&f).unwrap()) as Box<Read>
+                f => Box::new(File::open(&f).unwrap()) as Box<Read>
             },
             output_file: match matches.value_of("OUTPUT").unwrap() {
                 "-" => Box::new(std::io::stdout()) as Box<Write>,
-                f @ _ => Box::new(File::create(&f).unwrap()) as Box<Write>
+                f => Box::new(File::create(&f).unwrap()) as Box<Write>
             },
             rec_file: matches.value_of("RECONSTRUCTION").map(|f| {
                 Box::new(File::create(&f).unwrap()) as Box<Write>
@@ -408,10 +408,10 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence,
     }
     */
     if fi.frame_type == FrameType::KEY || fi.frame_type == FrameType::INTRA_ONLY {
-        assert!(fi.intra_only == true);
+        assert!(fi.intra_only);
     }
     if fi.frame_type != FrameType::KEY {
-        if fi.show_frame { assert!(fi.intra_only == false); }
+        if fi.show_frame { assert!(!fi.intra_only); }
         else { bw.write_bit( fi.intra_only )?; };
     };
     bw.write_bit(fi.error_resilient)?; // error resilient
@@ -477,7 +477,7 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence,
 
     bw.write_bit(fi.use_reduced_tx_set)?; // reduced tx
 
-    if fi.intra_only == false {
+    if !fi.intra_only {
         for i in LAST_FRAME..ALTREF_FRAME+1 {
             let mode = fi.globalmv_transformation_type[i];
             bw.write_bit(mode != GlobalMVMode::IDENTITY)?;
@@ -569,7 +569,7 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
     // Reconstruct
     dequantize(fi.qindex, &coeffs, &mut rcoeffs, tx_size);
 
-    inverse_transform_add(&mut rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type);
+    inverse_transform_add(&rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type);
 }
 
 fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
@@ -657,8 +657,8 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
         _ => TxSize::TX_32X32
     };
 
-    let mut bw_uv = bw * tx_size.width_mi() >> xdec;
-    let mut bh_uv = bh * tx_size.height_mi() >> ydec;
+    let mut bw_uv = (bw * tx_size.width_mi()) >> xdec;
+    let mut bh_uv = (bh * tx_size.height_mi()) >> ydec;
 
     if (bw_uv == 0 || bh_uv == 0) && has_chroma(bo, bsize, xdec, ydec) {
         bw_uv = 1;
@@ -682,9 +682,9 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
                 for bx in 0..bw_uv {
                     let tx_bo =
                         BlockOffset {
-                            x: bo.x + (bx * uv_tx_size.width_mi() << xdec) -
+                            x: bo.x + ((bx * uv_tx_size.width_mi()) << xdec) -
                                 ((bw * tx_size.width_mi() == 1) as usize),
-                            y: bo.y + (by * uv_tx_size.height_mi() << ydec) -
+                            y: bo.y + ((by * uv_tx_size.height_mi()) << ydec) -
                                 ((bh * tx_size.height_mi() == 1) as usize)
                         };
 
@@ -721,7 +721,7 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
 
     let mut partition = PartitionType::PARTITION_NONE;
     let mut best_decision = RDOPartitionOutput {
-        rd_cost: rd_cost,
+        rd_cost,
         bo: bo.clone(),
         pred_mode_luma: PredictionMode::DC_PRED,
         pred_mode_chroma: PredictionMode::DC_PRED,
@@ -842,7 +842,7 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut 
 
     match partition {
         PartitionType::PARTITION_NONE => {
-            let part_decision = if rdo_output.part_modes.len() > 0 {
+            let part_decision = if !rdo_output.part_modes.is_empty() {
                     // The optimal prediction mode is known from a previous iteration
                     rdo_output.part_modes[0].clone()
                 } else {
@@ -920,10 +920,10 @@ fn encode_frame(sequence: &Sequence, fi: &FrameInvariants, fs: &mut FrameState, 
     write_uncompressed_header(&mut packet, sequence, fi).unwrap();
     if fi.show_existing_frame {
         match last_rec {
-            &Some(ref rec) => for p in 0..3 {
+            Some(ref rec) => for p in 0..3 {
                 fs.rec.planes[p].data.copy_from_slice(rec.planes[p].data.as_slice());
             },
-            &None => (),
+            None => (),
         }
     } else {
         let tile = encode_tile(fi, fs);
