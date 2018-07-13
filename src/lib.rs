@@ -8,6 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 #![allow(safe_extern_statics)]
+#![cfg_attr(feature = "cargo-clippy", allow(collapsible_if))]
 
 extern crate bitstream_io;
 extern crate backtrace;
@@ -982,33 +983,30 @@ pub fn process_frame(sequence: &Sequence, fi: &FrameInvariants,
 
             let packet = encode_frame(&sequence, &fi, &mut fs, &last_rec);
             write_ivf_frame(output_file, fi.number, packet.as_ref());
-            match y4m_enc {
-                Some(mut y4m_enc) => {
-                    let mut rec_y = vec![128 as u8; width*height];
-                    let mut rec_u = vec![128 as u8; width*height/4];
-                    let mut rec_v = vec![128 as u8; width*height/4];
-                    for (y, line) in rec_y.chunks_mut(width).enumerate() {
-                        for (x, pixel) in line.iter_mut().enumerate() {
-                            let stride = fs.rec.planes[0].cfg.stride;
-                            *pixel = fs.rec.planes[0].data[y*stride+x] as u8;
-                        }
+            if let Some(mut y4m_enc) = y4m_enc {
+                let mut rec_y = vec![128 as u8; width*height];
+                let mut rec_u = vec![128 as u8; width*height/4];
+                let mut rec_v = vec![128 as u8; width*height/4];
+                for (y, line) in rec_y.chunks_mut(width).enumerate() {
+                    for (x, pixel) in line.iter_mut().enumerate() {
+                        let stride = fs.rec.planes[0].cfg.stride;
+                        *pixel = fs.rec.planes[0].data[y*stride+x] as u8;
                     }
-                    for (y, line) in rec_u.chunks_mut(width/2).enumerate() {
-                        for (x, pixel) in line.iter_mut().enumerate() {
-                            let stride = fs.rec.planes[1].cfg.stride;
-                            *pixel = fs.rec.planes[1].data[y*stride+x] as u8;
-                        }
-                    }
-                    for (y, line) in rec_v.chunks_mut(width/2).enumerate() {
-                        for (x, pixel) in line.iter_mut().enumerate() {
-                            let stride = fs.rec.planes[2].cfg.stride;
-                            *pixel = fs.rec.planes[2].data[y*stride+x] as u8;
-                        }
-                    }
-                    let rec_frame = y4m::Frame::new([&rec_y, &rec_u, &rec_v], None);
-                    y4m_enc.write_frame(&rec_frame).unwrap();
                 }
-                None => {}
+                for (y, line) in rec_u.chunks_mut(width/2).enumerate() {
+                    for (x, pixel) in line.iter_mut().enumerate() {
+                        let stride = fs.rec.planes[1].cfg.stride;
+                        *pixel = fs.rec.planes[1].data[y*stride+x] as u8;
+                    }
+                }
+                for (y, line) in rec_v.chunks_mut(width/2).enumerate() {
+                    for (x, pixel) in line.iter_mut().enumerate() {
+                        let stride = fs.rec.planes[2].cfg.stride;
+                        *pixel = fs.rec.planes[2].data[y*stride+x] as u8;
+                    }
+                }
+                let rec_frame = y4m::Frame::new([&rec_y, &rec_u, &rec_v], None);
+                y4m_enc.write_frame(&rec_frame).unwrap();
             }
             *last_rec = Some(fs.rec);
             true
