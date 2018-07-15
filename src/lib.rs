@@ -260,6 +260,10 @@ pub struct FrameInvariants {
     pub allow_screen_content_tools: u32,
     pub force_integer_mv: u32,
     pub primary_ref_frame: u32,
+    pub refresh_frame_flags: u32,  // a bitmask that specifies which
+    // reference frame slots will be updated with the current frame
+    // after it is decoded.
+    pub allow_intrabc: bool,
 }
 
 impl FrameInvariants {
@@ -303,6 +307,8 @@ impl FrameInvariants {
             allow_screen_content_tools: 0,
             force_integer_mv: 0,
             primary_ref_frame: PRIMARY_REF_NONE,
+            refresh_frame_flags: 0,
+            allow_intrabc: false,
         }
     }
 }
@@ -331,6 +337,8 @@ pub enum ReferenceMode {
   COMPOUND = 1,
   SELECT = 2,
 }
+
+const REF_FRAMES: u32 = 8;
 
 /*const NONE_FRAME: isize = -1;
 const INTRA_FRAME: usize = 0;*/
@@ -459,7 +467,7 @@ trait UncompressedHeader {
             -> Result<(usize), std::io::Error>;
     fn write_sequence_header_obu(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
             -> Result<(usize), std::io::Error>;
-    fn write_frame_header_obu(&mut self, seq: &Sequence, fi: &FrameInvariants)
+    fn write_frame_header_obu(&mut self, seq: &Sequence, fi: &mut FrameInvariants)
             -> Result<(usize), std::io::Error>;
     fn write_sequence_header2(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
                                     -> Result<(usize), std::io::Error>;
@@ -688,7 +696,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
     }
 
 #[allow(unused)]
-    fn write_frame_header_obu(&mut self, seq: &Sequence, fi: &FrameInvariants)
+    fn write_frame_header_obu(&mut self, seq: &Sequence, fi: &mut FrameInvariants)
         -> Result<(usize), std::io::Error> {
       let mut size: usize = 0;
 
@@ -715,9 +723,12 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
           return Ok(size);
         }
         self.write_bit(false)?; // show_existing_frame=0
-        let frame_type = fi.frame_type;
-        self.write(2, frame_type as u32)?;
-        //self.write(2, fi.frame_type as u32)?;
+        //let frame_type = fi.frame_type;
+        self.write(2, fi.frame_type as u32)?;
+        fi.intra_only =
+          if fi.frame_type == FrameType::KEY ||
+            fi.frame_type == FrameType::INTRA_ONLY { true }
+          else { false };
         self.write_bit(fi.show_frame)?; // show frame
 
         if fi.show_frame {
@@ -791,17 +802,62 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
       }
 
       if fi.frame_type == FrameType::KEY {
-        self.write_bitdepth_colorspace_sampling()?;
-        self.write_frame_setup()?;
+        if !fi.show_frame {  // unshown keyframe (forward keyframe)
+          assert!(false); // Not supported by rav1e yet!
+          //self.write_bit(REF_FRAMES, fi.refresh_frame_flags);
+        } else {
+          //assert!(refresh_frame_mask == 0xFF);
+        }
       } else { // Inter frame info goes here
         if fi.intra_only {
-          self.write_bitdepth_colorspace_sampling()?;
-          self.write(8,0)?; // refresh_frame_flags
-          self.write_frame_setup()?;
+          self.write(REF_FRAMES,0)?; // refresh_frame_flags
         } else {
-          self.write(8,0)?; // refresh_frame_flags
+          // TODO: This should be set once inter mode is used
+          self.write(REF_FRAMES,0)?; // refresh_frame_flags
+        }
+      };
+
+      if (!fi.intra_only || fi.refresh_frame_flags != 0xFF) {
+        // Write all ref frame order hints if error_resilient_mode == 1
+        if (fi.error_resilient && seq.enable_order_hint) {
+          assert!(false); // Not supported by rav1e yet!
+          //for _ in 0..REF_FRAMES {
+          //  self.write(order_hint_bits_minus_1,ref_order_hint[i])?; // order_hint
+          //}
+        }
+      }
+
+      // if KEY or INTRA_ONLY frame
+      // FIXME: Not sure to have this frame and render size here and share it
+      if fi.intra_only {
+        if frame_size_override_flag {
+          assert!(false); // Not supported by rav1e yet!
+        }
+        if seq.enable_superres {
+          assert!(false); // Not supported by rav1e yet!
+        }
+        self.write_bit(false)?; // render_and_frame_size_different
+        //if render_and_frame_size_different { }
+        if fi.allow_screen_content_tools != 0 && true /* UpscaledWidth == FrameWidth */ {
+          self.write_bit(fi.allow_intrabc);
+        }
+      }
+
+      if fi.frame_type == FrameType::KEY {
+        // Done by above
+      } else {
+        if fi.intra_only {
+          // Done by above
+        } else {
+
+        }
+      }
+
+// TODO: Reuse this code from non-obu
+/*
+        {
           // TODO: More Inter frame info goes here
-          for _ in 0..7 {
+          for _ in 0..REF_FRAMES {
               self.write(3,0)?; // dummy ref_frame = 0 until real MC happens
           }
           self.write_frame_setup()?;
@@ -812,8 +868,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
               self.write_bit(false)?; // do not use_ref_frame_mvs
           }
         }
-      };
-
+*/
       self.write(3,0x0)?; // frame context
       self.write_loop_filter()?;
       self.write(8,fi.qindex as u8)?; // qindex
@@ -985,7 +1040,7 @@ fn aom_uleb_encode(mut value: u64, coded_value: &mut [u8]) -> usize {
 
 #[allow(unused)]
 fn write_obus(packet: &mut Write, sequence: &mut Sequence,
-                            fi: &FrameInvariants) -> Result<(), std::io::Error> {
+                            fi: &mut FrameInvariants) -> Result<(), std::io::Error> {
     //let mut uch = BitWriter::<BE>::new(packet);
     let obu_extension = 0 as u32;
 
