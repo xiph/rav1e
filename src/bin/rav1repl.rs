@@ -51,7 +51,7 @@ fn main() {
           Some("process_frame") => {
             process_frame(
               &mut sequence,
-              &fi,
+              &mut fi,
               &mut files.output_file,
               &mut y4m_dec,
               y4m_enc.as_mut(),
