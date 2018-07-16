@@ -14,7 +14,7 @@ extern crate rand;
 extern crate rav1e;
 
 use bencher::*;
-use rand::{ChaChaRng, Rng};
+use rand::{ChaChaRng, Rng, SeedableRng};
 use rav1e::predict::*;
 
 extern {
@@ -180,7 +180,7 @@ fn setup_pred(ra: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>, Vec<u16>) {
 }
 
 fn intra_dc_pred_native(b: &mut Bencher) {
-  let mut ra = ChaChaRng::new_unseeded();
+  let mut ra = ChaChaRng::from_seed([0; 32]);
   let (above, left, mut output) = setup_pred(&mut ra);
 
   b.iter(|| {
@@ -191,7 +191,7 @@ fn intra_dc_pred_native(b: &mut Bencher) {
 }
 
 fn intra_dc_pred_aom(b: &mut Bencher) {
-  let mut ra = ChaChaRng::new_unseeded();
+  let mut ra = ChaChaRng::from_seed([0; 32]);
   let (above, left, mut output) = setup_pred(&mut ra);
 
   b.iter(|| {
@@ -202,7 +202,7 @@ fn intra_dc_pred_aom(b: &mut Bencher) {
 }
 
 fn intra_h_pred_native(b: &mut Bencher) {
-  let mut ra = ChaChaRng::new_unseeded();
+  let mut ra = ChaChaRng::from_seed([0; 32]);
   let (_above, left, mut output) = setup_pred(&mut ra);
 
   b.iter(|| {
@@ -213,7 +213,7 @@ fn intra_h_pred_native(b: &mut Bencher) {
 }
 
 fn intra_h_pred_aom(b: &mut Bencher) {
-  let mut ra = ChaChaRng::new_unseeded();
+  let mut ra = ChaChaRng::from_seed([0; 32]);
   let (above, left, mut output) = setup_pred(&mut ra);
 
   b.iter(|| {
@@ -224,7 +224,7 @@ fn intra_h_pred_aom(b: &mut Bencher) {
 }
 
 fn intra_v_pred_native(b: &mut Bencher) {
-  let mut ra = ChaChaRng::new_unseeded();
+  let mut ra = ChaChaRng::from_seed([0; 32]);
   let (above, _left, mut output) = setup_pred(&mut ra);
 
   b.iter(|| {
@@ -235,7 +235,7 @@ fn intra_v_pred_native(b: &mut Bencher) {
 }
 
 fn intra_v_pred_aom(b: &mut Bencher) {
-  let mut ra = ChaChaRng::new_unseeded();
+  let mut ra = ChaChaRng::from_seed([0; 32]);
   let (above, left, mut output) = setup_pred(&mut ra);
 
   b.iter(|| {
@@ -246,7 +246,7 @@ fn intra_v_pred_aom(b: &mut Bencher) {
 }
 
 fn intra_paeth_pred_native(b: &mut Bencher) {
-  let mut ra = ChaChaRng::new_unseeded();
+  let mut ra = ChaChaRng::from_seed([0; 32]);
   let (above, left, mut output) = setup_pred(&mut ra);
   let above_left = unsafe { *above.as_ptr().offset(-1) };
 
@@ -264,7 +264,7 @@ fn intra_paeth_pred_native(b: &mut Bencher) {
 }
 
 fn intra_paeth_pred_aom(b: &mut Bencher) {
-  let mut ra = ChaChaRng::new_unseeded();
+  let mut ra = ChaChaRng::from_seed([0; 32]);
   let (above, left, mut output) = setup_pred(&mut ra);
 
   b.iter(|| {
@@ -275,7 +275,7 @@ fn intra_paeth_pred_aom(b: &mut Bencher) {
 }
 
 fn intra_smooth_pred_native(b: &mut Bencher) {
-  let mut ra = ChaChaRng::new_unseeded();
+  let mut ra = ChaChaRng::from_seed([0; 32]);
   let (above, left, mut output) = setup_pred(&mut ra);
 
   b.iter(|| {
@@ -286,7 +286,7 @@ fn intra_smooth_pred_native(b: &mut Bencher) {
 }
 
 fn intra_smooth_pred_aom(b: &mut Bencher) {
-  let mut ra = ChaChaRng::new_unseeded();
+  let mut ra = ChaChaRng::from_seed([0; 32]);
   let (above, left, mut output) = setup_pred(&mut ra);
 
   b.iter(|| {
@@ -297,7 +297,7 @@ fn intra_smooth_pred_aom(b: &mut Bencher) {
 }
 
 fn intra_smooth_h_pred_native(b: &mut Bencher) {
-  let mut ra = ChaChaRng::new_unseeded();
+  let mut ra = ChaChaRng::from_seed([0; 32]);
   let (above, left, mut output) = setup_pred(&mut ra);
 
   b.iter(|| {
@@ -308,7 +308,7 @@ fn intra_smooth_h_pred_native(b: &mut Bencher) {
 }
 
 fn intra_smooth_h_pred_aom(b: &mut Bencher) {
-  let mut ra = ChaChaRng::new_unseeded();
+  let mut ra = ChaChaRng::from_seed([0; 32]);
   let (above, left, mut output) = setup_pred(&mut ra);
 
   b.iter(|| {
@@ -319,7 +319,7 @@ fn intra_smooth_h_pred_aom(b: &mut Bencher) {
 }
 
 fn intra_smooth_v_pred_native(b: &mut Bencher) {
-  let mut ra = ChaChaRng::new_unseeded();
+  let mut ra = ChaChaRng::from_seed([0; 32]);
   let (above, left, mut output) = setup_pred(&mut ra);
 
   b.iter(|| {
@@ -330,7 +330,7 @@ fn intra_smooth_v_pred_native(b: &mut Bencher) {
 }
 
 fn intra_smooth_v_pred_aom(b: &mut Bencher) {
-  let mut ra = ChaChaRng::new_unseeded();
+  let mut ra = ChaChaRng::from_seed([0; 32]);
   let (above, left, mut output) = setup_pred(&mut ra);
 
   b.iter(|| {
