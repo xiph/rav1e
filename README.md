@@ -15,6 +15,7 @@ Even though AV1 is frozen, rav1e does not yet support the final version of the b
 * 4x4 to 32x32 RDO-selected square blocks
 * DC, H, V, Paeth, and smooth prediction modes
 * 4x4 DCT and ADST transforms
+* Variable speed settings
 * ~5 fps encoding @ 480p
 
 # Building
