@@ -362,6 +362,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
     }
     fn write_bitdepth_colorspace_sampling(&mut self) -> Result<(), std::io::Error> {
         self.write(1,0)?; // 8 bit video
+        self.write(1,0)?; // not monochrome
         self.write(4,0)?; // colorspace
         self.write(1,0)?; // color range
         Ok(())
