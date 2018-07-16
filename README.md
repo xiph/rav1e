@@ -6,7 +6,7 @@ The fastest and safest AV1 encoder.
 
 rav1e is an experimental AV1 video encoder. It is designed to eventually cover all use cases, though in its current form it is most suitable for cases where libaom (the reference encoder) is too slow.
 
-Because AV1 is not yet frozen, it relies on an exact decoder version and configuration that is periodically updated.
+AV1 is now frozen, though rav1e is not quite caught up with the release version. For this reason, you must use the libaom in the submodule. rav1e also temporarily uses libaom's transforms and CDF initialization tables.
 
 # Features
 
@@ -15,6 +15,7 @@ Because AV1 is not yet frozen, it relies on an exact decoder version and configu
 * 4x4 to 32x32 RDO-selected square blocks
 * DC, H, V, Paeth, and smooth prediction modes
 * 4x4 DCT and ADST transforms
+* Variable speed settings
 * ~5 fps encoding @ 480p
 
 # Building
