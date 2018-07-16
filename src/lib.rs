@@ -493,11 +493,15 @@ trait UncompressedHeader {
     fn write_loop_filter(&mut self) -> Result<(), std::io::Error>;
     fn write_cdef(&mut self) -> Result<(), std::io::Error>;
 }
-
+#[allow(unused)]
 const OP_POINTS_IDC_BITS:usize = 12;
+#[allow(unused)]
 const LEVEL_MAJOR_MIN:usize = 2;
+#[allow(unused)]
 const LEVEL_MAJOR_BITS:usize = 3;
+#[allow(unused)]
 const LEVEL_MINOR_BITS:usize = 2;
+#[allow(unused)]
 const LEVEL_BITS:usize = LEVEL_MAJOR_BITS + LEVEL_MINOR_BITS;
 const FRAME_ID_LENGTH: usize = 15;
 const DELTA_FRAME_ID_LENGTH: usize = 14;
@@ -510,7 +514,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         self.write(1, 0)?; // forbidden bit.
         self.write(4, obu_type as u32)?;
         self.write_bit(obu_extension != 0)?;
-        self.write(1, 1)?; // obu_has_payload_length_field
+        self.write(1, 0)?; // obu_has_payload_length_field
         self.write(1, 0)?; // reserved
 
         if obu_extension != 0 {
@@ -524,21 +528,22 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
 #[allow(unused)]
     fn write_sequence_header_obu(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
         -> Result<(), std::io::Error> {
-        self.write(3, seq.profile)?; // profile 0, 3 bits
-        self.write(1, 0)?; // still_picture
-        self.write(1, 0)?; // reduced_still_picture
+        self.write(2, seq.profile)?; // profile 0, 3 bits
+        //self.write(1, 0)?; // still_picture
+        //self.write(1, 0)?; // reduced_still_picture
+        self.write(4, 0)?; // level
 
         if seq.reduced_still_picture_hdr {
             assert!(false);
         } else {
-            self.write(1, 0)?; // timing_info_present_flag
+            //self.write(1, 0)?; // timing_info_present_flag
             if false { // if timing_info_present_flag == true
                 assert!(false);
             }
 
-            self.write(1, 0)?; // display_model_info_present_flag
-            self.write(5, 0)?; // operating_points_cnt_minus_1, 5 bits
-
+            //self.write(1, 0)?; // display_model_info_present_flag
+            //self.write(5, 0)?; // operating_points_cnt_minus_1, 5 bits
+            /*
             for i in 0..seq.operating_points_cnt_minus_1 + 1 {
                 self.write(OP_POINTS_IDC_BITS as u32, seq.operating_point_idc[i])?;
                 //let seq_level_idx = 1 as u16;	// NOTE: This comes from minor and major
@@ -557,17 +562,22 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
                     assert!(false); // NOTE: Not supported yet.
                 }
             }
+            */
         }
 
-        self.write_sequence_header2(seq, fi);
+        self.write_sequence_header(fi);
 
-        self.write_color_config(seq)?;
+        self.write_bitdepth_colorspace_sampling();
 
-        self.write_sequence_header2(seq, fi);
+        self.write(1,0)?; // separate uv delta q
 
-        self.write_bit(seq.film_grain_params_present)?;
+        //self.write_color_config(seq)?;
 
-        self.write(1,1)?; // add_trailing_bits
+        //self.write_sequence_header2(seq, fi);
+
+        //self.write_bit(seq.film_grain_params_present)?;
+
+        //self.write(1,1)?; // add_trailing_bits
 
         Ok(())
     }
@@ -1110,22 +1120,15 @@ fn write_obus(packet: &mut Write, sequence: &mut Sequence,
 
     let mut buf1 = Vec::new();
     {
-      let mut bw1 = BitWriter::<BE>::new(&mut buf1);
+        let mut bw1 = BitWriter::<BE>::new(&mut buf1);
+        bw1.write(8,1)?;	// size of payload == 0, one byte
       bw1.write_obu_header(OBU_Type::OBU_TEMPORAL_DELIMITER, obu_extension);
-      bw1.write(8,0)?;	// size of payload == 0, one byte
     }
     packet.write(&buf1).unwrap();
     buf1.clear();
 
     // write sequence header obu if KEY_FRAME, preceded by 4-byte size
     if fi.frame_type == FrameType::KEY {
-        {
-            let mut bw1 = BitWriter::<BE>::new(&mut buf1);
-            bw1.write_obu_header(OBU_Type::OBU_SEQUENCE_HEADER, obu_extension);
-        }
-        packet.write(&buf1).unwrap();
-        buf1.clear();
-
         let mut buf2 = Vec::new();
         {
             let mut bw2 = BitWriter::<BE>::new(&mut buf2);
@@ -1137,10 +1140,17 @@ fn write_obus(packet: &mut Write, sequence: &mut Sequence,
             let mut bw1 = BitWriter::<BE>::new(&mut buf1);
             // uleb128()
             let mut coded_payload_length = [0 as u8; 8];
-            let leb_size = aom_uleb_encode(obu_payload_size, &mut coded_payload_length);
+            let leb_size = aom_uleb_encode(obu_payload_size + 1, &mut coded_payload_length);
             for i in 0..leb_size {
                 bw1.write(8, coded_payload_length[i])?;
             }
+        }
+        packet.write(&buf1).unwrap();
+        buf1.clear();
+
+        {
+            let mut bw1 = BitWriter::<BE>::new(&mut buf1);
+            bw1.write_obu_header(OBU_Type::OBU_SEQUENCE_HEADER, obu_extension);
         }
         packet.write(&buf1).unwrap();
         buf1.clear();
@@ -1150,22 +1160,39 @@ fn write_obus(packet: &mut Write, sequence: &mut Sequence,
     }
 
     let write_frame_header = fi.num_tg > 1 || fi.show_existing_frame;
-
-    // TODO: If # of tiles > 1 or show_existing_frame is true,
-    // write Frame Header OBU here.
-    if write_frame_header {
-        write_frame_header_obu_helper(packet, sequence, fi, OBU_Type::OBU_FRAME_HEADER,
-            obu_extension);
+    let mut buf2 = Vec::new();
+    {
+        write_uncompressed_header(&mut buf2, fi)?;
     }
+    let obu_payload_size = buf2.len() as u64;
+    {
+        let mut bw1 = BitWriter::<BE>::new(&mut buf1);
+        // uleb128()
+        let mut coded_payload_length = [0 as u8; 8];
+        let leb_size = aom_uleb_encode(obu_payload_size + 1, &mut coded_payload_length);
+        for i in 0..leb_size {
+            bw1.write(8, coded_payload_length[i]);
+        }
+    }
+    packet.write(&buf1).unwrap();
+    buf1.clear();
+
+    {
+        let mut bw1 = BitWriter::<BE>::new(&mut buf1);
+        bw1.write_obu_header(OBU_Type::OBU_FRAME_HEADER, obu_extension);
+    }
+    packet.write(&buf1).unwrap();
+    buf1.clear();
+
+    packet.write(&buf2).unwrap();
+    buf2.clear();
 
     Ok(())
 }
 
-fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence,
+fn write_uncompressed_header(packet: &mut Write,
                             fi: &FrameInvariants) -> Result<(), std::io::Error> {
     let mut bw = BitWriter::<BE>::new(packet);
-    bw.write(2,2)?; // AOM_FRAME_MARKER, 0x2
-    bw.write(2,sequence.profile)?; // profile 0
     if fi.show_existing_frame {
         bw.write_bit(true)?; // show_existing_frame=1
         bw.write(3,0)?; // show last frame
@@ -1173,38 +1200,21 @@ fn write_uncompressed_header(packet: &mut Write, sequence: &Sequence,
         return Ok(());
     }
     bw.write_bit(false)?; // show_existing_frame=0
-    bw.write_bit(fi.frame_type == FrameType::INTER)?; // keyframe : 0, inter: 1
+    bw.write(2, fi.frame_type as u32)?;
     bw.write_bit(fi.show_frame)?; // show frame
-    /*
-    if fi.intra_only {
-        bw.write_bit(true)?; // disable intra edge
-    }
-    */
     if fi.frame_type == FrameType::KEY || fi.frame_type == FrameType::INTRA_ONLY {
         assert!(fi.intra_only);
     }
-    if fi.frame_type != FrameType::KEY {
-        if fi.show_frame { assert!(!fi.intra_only); }
-        else { bw.write_bit( fi.intra_only )?; };
-    };
     bw.write_bit(fi.error_resilient)?; // error resilient
-
-    if fi.frame_type == FrameType::KEY || fi.intra_only {
-        bw.write_sequence_header(fi)?;
-    }
 
     //bw.write(8+7,0)?; // frame id
 
     bw.write_bit(false)?; // no override frame size
 
     if fi.frame_type == FrameType::KEY {
-        bw.write_bitdepth_colorspace_sampling()?;
-        bw.write(1,0)?; // separate uv delta q
         bw.write_frame_setup()?;
     } else { // Inter frame info goes here
         if fi.intra_only {
-            bw.write_bitdepth_colorspace_sampling()?;
-            bw.write(1,0)?; // separate uv delta q
             bw.write(8,0)?; // refresh_frame_flags
             bw.write_frame_setup()?;
         } else {
@@ -1685,6 +1695,7 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
     h
 }
 
+#[allow(unused)]
 fn write_tile_group_header(tile_start_and_end_present_flag: bool) ->
     Vec<u8> {
     let mut buf = Vec::new();
@@ -1698,8 +1709,8 @@ fn write_tile_group_header(tile_start_and_end_present_flag: bool) ->
 
 fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut FrameState, last_rec: &Option<Frame>) -> Vec<u8> {
     let mut packet = Vec::new();
-    write_uncompressed_header(&mut packet, sequence, fi).unwrap();
-    //write_obus(&mut packet, sequence, fi).unwrap();
+    //write_uncompressed_header(&mut packet, sequence, fi).unwrap();
+    write_obus(&mut packet, sequence, fi).unwrap();
     if fi.show_existing_frame {
         match last_rec {
             Some(ref rec) => for p in 0..3 {
@@ -1708,44 +1719,28 @@ fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut Fram
             None => (),
         }
     } else {
-        let obu_extension = 0;
+        let tile = encode_tile(fi, fs); // actually tile group
+        let obu_payload_size = tile.len() as u64;
         let mut buf1 = Vec::new();
         {
             let mut bw1 = BitWriter::<BE>::new(&mut buf1);
-            bw1.write_obu_header(OBU_Type::OBU_FRAME, obu_extension).unwrap();
-        }
-        packet.write(&buf1).unwrap();
-        buf1.clear();
-
-        let mut buf2 = Vec::new();
-        {
-            let mut bw2 = BitWriter::<BE>::new(&mut buf2);
-            bw2.write_frame_header_obu(sequence, fi).unwrap();
-            bw2.byte_align().unwrap();
-        }
-
-        // if NumTiles == 1
-        let tile_start_and_end_present_flag = false;
-        let tile_group_header = 
-            write_tile_group_header(tile_start_and_end_present_flag);
-
-        let tile = encode_tile(fi, fs);
-
-        let obu_payload_size =
-            buf2.len() as u64 + tile_group_header.len() as u64 + tile.len() as u64;
-        {
-            let mut bw1 = BitWriter::<BE>::new(&mut buf1);
-            // le()
-            let mut coded_payload_length = [0 as u8; 16];   // 16 bytes for now
-            let leb_size = aom_uleb_encode(obu_payload_size, &mut coded_payload_length);
+            // uleb128()
+            let mut coded_payload_length = [0 as u8; 8];
+            let leb_size = aom_uleb_encode(obu_payload_size + 1, &mut coded_payload_length);
             for i in 0..leb_size {
                 bw1.write(8, coded_payload_length[i]).unwrap();
             }
         }
+        packet.write(&buf1).unwrap();
+        buf1.clear();
 
-        packet.write(&buf1).unwrap();   // payload size
-        packet.write(&buf2).unwrap();
-        packet.write(&tile_group_header).unwrap();
+        {
+            let mut bw1 = BitWriter::<BE>::new(&mut buf1);
+            bw1.write_obu_header(OBU_Type::OBU_TILE_GROUP, 0).unwrap();
+        }
+        packet.write(&buf1).unwrap();
+        buf1.clear();
+
         packet.write(&tile).unwrap();
     }
     packet
