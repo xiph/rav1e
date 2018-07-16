@@ -378,7 +378,7 @@ impl Intra for Block32x32 {}
 #[cfg(test)]
 pub mod test {
   use super::*;
-  use rand::{ChaChaRng, Rng};
+  use rand::{ChaChaRng, Rng, SeedableRng};
 
   const MAX_ITER: usize = 50000;
 
@@ -581,7 +581,7 @@ pub mod test {
 
   #[test]
   fn pred_matches() {
-    let mut ra = ChaChaRng::new_unseeded();
+    let mut ra = ChaChaRng::from_seed([0; 32]);
     for _ in 0..MAX_ITER {
       let (o1, o2) = do_dc_pred(&mut ra);
       assert_eq!(o1, o2);
@@ -608,7 +608,7 @@ pub mod test {
 
   #[test]
   fn pred_same() {
-    let mut ra = ChaChaRng::new_unseeded();
+    let mut ra = ChaChaRng::from_seed([0; 32]);
     for _ in 0..MAX_ITER {
       let (_, o2) = do_dc_pred(&mut ra);
 

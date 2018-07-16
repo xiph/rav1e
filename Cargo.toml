@@ -13,7 +13,7 @@ bitstream-io = "0.6"
 byteorder = "1"
 clap = "2"
 libc = "0.2"
-rand = "0.4"
+rand = "0.5"
 rustyline = { version = "1", optional = true }
 y4m = "0.2"
 enum-iterator-derive = "0.1.1"
