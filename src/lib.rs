@@ -338,6 +338,7 @@ pub enum ReferenceMode {
 }
 
 const REF_FRAMES: u32 = 8;
+const REF_FRAMES_LOG2: u32 = 3;
 
 /*const NONE_FRAME: isize = -1;
 const INTRA_FRAME: usize = 0;*/
@@ -749,10 +750,10 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         }
       }
 
-      self.write_bit(fi.disable_cdf_update);
+      self.write_bit(fi.disable_cdf_update)?;
 
       if seq.force_screen_content_tools == 2 {
-        self.write_bit(fi.allow_screen_content_tools != 0);
+        self.write_bit(fi.allow_screen_content_tools != 0)?;
       } else {
         assert!(fi.allow_screen_content_tools ==
                 seq.force_screen_content_tools);
@@ -760,7 +761,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
 
       if fi.allow_screen_content_tools == 2 {
         if seq.force_integer_mv == 2 {
-          self.write_bit(fi.force_integer_mv != 0);
+          self.write_bit(fi.force_integer_mv != 0)?;
         } else {
           assert!(fi.force_integer_mv == seq.force_integer_mv);
         }
@@ -793,7 +794,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         // NOTE: DO this before encoding started atm.
         //fi.primary_ref_frame = PRIMARY_REF_NONE;
       } else {
-        self.write(PRIMARY_REF_BITS, fi.primary_ref_frame);
+        self.write(PRIMARY_REF_BITS, fi.primary_ref_frame)?;
       }
 
       if seq.decoder_model_info_present_flag {
@@ -803,7 +804,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
       if fi.frame_type == FrameType::KEY {
         if !fi.show_frame {  // unshown keyframe (forward keyframe)
           assert!(false); // Not supported by rav1e yet!
-          //self.write_bit(REF_FRAMES, fi.refresh_frame_flags);
+          //self.write_bit(REF_FRAMES, fi.refresh_frame_flags)?;
         } else {
           //assert!(refresh_frame_mask == 0xFF);
         }
@@ -827,7 +828,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
       }
 
       // if KEY or INTRA_ONLY frame
-      // FIXME: Not sure to have this frame and render size here and share it
+      // FIXME: Not sure whether putting frame/render size here is good idea
       if fi.intra_only {
         if frame_size_override_flag {
           assert!(false); // Not supported by rav1e yet!
@@ -838,16 +839,46 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         self.write_bit(false)?; // render_and_frame_size_different
         //if render_and_frame_size_different { }
         if fi.allow_screen_content_tools != 0 && true /* UpscaledWidth == FrameWidth */ {
-          self.write_bit(fi.allow_intrabc);
+          self.write_bit(fi.allow_intrabc)?;
         }
       }
 
+      let mut frame_refs_short_signaling = false;
       if fi.frame_type == FrameType::KEY {
         // Done by above
       } else {
         if fi.intra_only {
           // Done by above
         } else {
+          if seq.enable_order_hint {
+            assert!(false); // Not supported by rav1e yet!
+            self.write_bit(frame_refs_short_signaling)?;
+            if frame_refs_short_signaling {
+              assert!(false); // Not supported by rav1e yet!
+            }
+          } else { frame_refs_short_signaling = true; }
+
+          for i in LAST_FRAME..ALTREF_FRAME+1 {
+            if !frame_refs_short_signaling {
+              self.write(REF_FRAMES_LOG2, 0)?;
+            }
+            if seq.frame_id_numbers_present_flag {
+              assert!(false); // Not supported by rav1e yet!
+            }
+          }
+          if fi.error_resilient && frame_size_override_flag {
+            assert!(false); // Not supported by rav1e yet!
+          } else {
+            if frame_size_override_flag {
+            assert!(false); // Not supported by rav1e yet!
+            }
+            if seq.enable_superres {
+            assert!(false); // Not supported by rav1e yet!
+            }
+            self.write_bit(false)?; // render_and_frame_size_different
+            //if render_and_frame_size_different { }
+          }
+
 
         }
       }
