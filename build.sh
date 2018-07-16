@@ -42,7 +42,7 @@ git submodule update --init
 cargo clean
 
 # Get configure command from readme
-CONFIGURE_CMD=$(fgrep cmake README.md)
+CONFIGURE_CMD=$(fgrep "cmake ../aom" README.md)
 
 # Wipe and create aom_test folder
 rm -fR $AOM_TEST
