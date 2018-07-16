@@ -262,6 +262,11 @@ pub struct FrameInvariants {
     // reference frame slots will be updated with the current frame
     // after it is decoded.
     pub allow_intrabc: bool,
+    pub use_ref_frame_mvs: bool,
+    pub is_filter_switchable: bool,
+    pub is_motion_mode_switchable: bool,
+    pub disable_frame_end_update_cdf: bool,
+    pub allow_warped_motion: bool,
 }
 
 impl FrameInvariants {
@@ -307,6 +312,11 @@ impl FrameInvariants {
             primary_ref_frame: PRIMARY_REF_NONE,
             refresh_frame_flags: 0,
             allow_intrabc: false,
+            use_ref_frame_mvs: false,
+            is_filter_switchable: false,
+            is_motion_mode_switchable: false, // 0: only the SIMPLE motion mode will be used.
+            disable_frame_end_update_cdf: true,
+            allow_warped_motion: true,
         }
     }
 }
@@ -869,61 +879,95 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
             assert!(false); // Not supported by rav1e yet!
           } else {
             if frame_size_override_flag {
-            assert!(false); // Not supported by rav1e yet!
+               assert!(false); // Not supported by rav1e yet!
             }
             if seq.enable_superres {
-            assert!(false); // Not supported by rav1e yet!
+              assert!(false); // Not supported by rav1e yet!
             }
             self.write_bit(false)?; // render_and_frame_size_different
             //if render_and_frame_size_different { }
           }
-
-
+           if fi.force_integer_mv != 0 {
+            fi.allow_high_precision_mv = false;
+          } else {
+            self.write_bit(fi.allow_high_precision_mv);
+          }
+          self.write_bit(fi.is_filter_switchable)?;
+          self.write_bit(fi.is_motion_mode_switchable)?;
+          if fi.error_resilient || !seq.enable_ref_frame_mvs {
+            fi.use_ref_frame_mvs = false;
+          } else {
+            self.write_bit(fi.use_ref_frame_mvs)?;
+          }
         }
       }
 
-// TODO: Reuse this code from non-obu
-/*
-        {
-          // TODO: More Inter frame info goes here
-          for _ in 0..REF_FRAMES {
-              self.write(3,0)?; // dummy ref_frame = 0 until real MC happens
-          }
-          self.write_frame_setup()?;
-          self.write_bit(fi.allow_high_precision_mv)?;
-          self.write_bit(false)?; // frame_interp_filter is NOT switchable
-          self.write(2,0)?;	// EIGHTTAP_REGULAR
-          if !fi.intra_only && !fi.error_resilient {
-              self.write_bit(false)?; // do not use_ref_frame_mvs
-          }
-        }
-*/
-      self.write(3,0x0)?; // frame context
-      self.write_loop_filter()?;
-      self.write(8,fi.qindex as u8)?; // qindex
+      if seq.reduced_still_picture_hdr || fi.disable_cdf_update {
+        fi.disable_frame_end_update_cdf = true;
+      } else {
+        self.write_bit(fi.disable_frame_end_update_cdf)?;
+      }
+
+      // tile
+      self.write_bit(true)?; // uniform_tile_spacing_flag
+      if fi.width > 64 {
+        // TODO: if tile_cols > 1, write more increment_tile_cols_log2 bits
+        self.write(1,0)?; // tile cols
+      }
+      if fi.height > 64 {
+        // TODO: if tile_rows > 1, write increment_tile_rows_log2 bits
+        self.write(1,0)?; // tile rows
+      }
+      // TODO: if tile_cols * tile_rows > 1 {
+      // write context_update_tile_id and tile_size_bytes_minus_1 }
+
+      // quantization
+      assert!(fi.qindex > 0);
+      self.write(8,fi.qindex as u8)?; // base_q_idx
       self.write_bit(false)?; // y dc delta q
       self.write_bit(false)?; // uv dc delta q
       self.write_bit(false)?; // uv ac delta q
       self.write_bit(false)?; // no qm
-      self.write_bit(false)?; // segmentation off
-      self.write_bit(false)?; // no delta q
+
+      // segmentation
+      self.write_bit(false)?; // segmentation is disabled
+
+      // delta_q
+      self.write_bit(false)?; // delta_q_present_flag: no delta q
+
+      // loop filter
+      self.write_loop_filter()?;
+      // cdef
       self.write_cdef()?;
-      self.write(6,0)?; // no y, u or v loop restoration
-      self.write_bit(false)?; // tx mode select
+      // loop restoration
+      // If seq.enable_restoration is false, don't signal about loop restoration
+      if seq.enable_restoration {
+        //self.write(6,0)?; // no y, u or v loop restoration
+      }
+      self.write_bit(false)?; // tx mode == TX_MODE_SELECT ?
 
-      //fi.reference_mode = ReferenceMode::SINGLE;
-
-      if fi.reference_mode != ReferenceMode::SINGLE {
-          // setup_compound_reference_mode();
+      // frame_reference_mode : reference_select?
+      let mut reference_select = false;
+      if !fi.intra_only {
+        reference_select = fi.reference_mode != ReferenceMode::SINGLE;
+        self.write_bit(reference_select)?;
       }
 
-      if !fi.intra_only {
-        self.write_bit(false)?; } // do not use inter_intra
-      if !fi.intra_only && fi.reference_mode != ReferenceMode::SINGLE {
-        self.write_bit(false)?; } // do not allow_masked_compound
+      let skip_mode_allowed =
+        !(fi.intra_only  || !reference_select || !seq.enable_order_hint);
+      if skip_mode_allowed {
+        self.write_bit(false)?; // skip_mode_present
+      }
+
+      if fi.intra_only || fi.error_resilient || !seq.enable_warped_motion {
+        fi.allow_warped_motion = false;
+      } else {
+        self.write_bit(fi.allow_warped_motion)?; // allow_warped_motion
+      }
 
       self.write_bit(fi.use_reduced_tx_set)?; // reduced tx
 
+      // global motion
       if fi.intra_only == false {
         for i in LAST_FRAME..ALTREF_FRAME+1 {
           let mode = fi.globalmv_transformation_type[i];
@@ -956,16 +1000,14 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         }
       }
 
-      self.write_bit(true)?; // uniform tile spacing
-      if fi.width > 64 {
-          self.write(1,0)?; // tile cols
+      if seq.film_grain_params_present && fi.show_frame {
+        assert!(false); // Not supported by rav1e yet!
       }
-      if fi.height > 64 {
-          self.write(1,0)?; // tile rows
+
+      if fi.large_scale_tile {
+        assert!(false); // Not supported by rav1e yet!
+        // write ext_file info
       }
-      // if tile_cols * tile_rows > 1
-      //.write_bit(true)?; // loop filter across tiles
-      self.write(2,3)?; // tile_size_bytes
       self.byte_align()?;
 
       // TODO: update size
