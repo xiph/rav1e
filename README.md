@@ -28,10 +28,10 @@ git submodule update --init
 
 This is also required everytime you switch branch or pull code and the submodule changed.
 
-In order to build the codec, you need yasm. To install this on Ubuntu or Linux Mint, run:
+In order to build the codec, you need yasm and cmake. To install this on Ubuntu or Linux Mint, run:
 
 ```
-sudo apt install yasm
+sudo apt install yasm cmake
 ```
 
 # Compressing video
