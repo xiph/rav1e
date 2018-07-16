@@ -41,7 +41,6 @@ fn main() {
         .define("CONFIG_ANALYZER", "0")
         .define("CONFIG_Q_ADAPT_PROBS", "0")
         .define("CONFIG_INTRA_EDGE", "0")
-        .define("AOM_TARGET_CPU", "generic")
         .define("ENABLE_DOCS", "0")
         .build();
 
