@@ -29,7 +29,6 @@ fn main() {
     let build_path = Path::new(&cargo_dir).join("aom_build/aom");
 
     let dst = cmake::Config::new(build_path)
-        .define("CONFIG_AV1_ENCODER", "0")
         .define("CONFIG_DEBUG", "1")
         .define("CONFIG_EXPERIMENTAL", "1")
         .define("CONFIG_UNIT_TESTS", "0")
@@ -41,6 +40,7 @@ fn main() {
         .define("CONFIG_LV_MAP", "1")
         .define("CONFIG_ANALYZER", "0")
         .define("CONFIG_Q_ADAPT_PROBS", "0")
+        .define("CONFIG_INTRA_EDGE", "0")
         .define("AOM_TARGET_CPU", "generic")
         .define("ENABLE_DOCS", "0")
         .build();
@@ -86,12 +86,4 @@ fn main() {
 
         rerun_dir("aom_build");
     }
-
-    cc::Build::new()
-        .file("aom_build/aom/aom_dsp/fwd_txfm.c")
-        .file("aom_build/aom/av1/encoder/dct.c")
-        .include("aom_build")
-        .include("aom_build/aom")
-        .flag("-std=c99")
-        .compile("libntr.a");
 }
