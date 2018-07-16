@@ -16,7 +16,7 @@ AV1 is now frozen, though rav1e is not quite caught up with the release version.
 * DC, H, V, Paeth, and smooth prediction modes
 * 4x4 DCT and ADST transforms
 * Variable speed settings
-* ~5 fps encoding @ 480p
+* ~10 fps encoding @ 480p
 
 # Building
 
