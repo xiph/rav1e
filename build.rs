@@ -27,9 +27,17 @@ fn format_write(builder: bindgen::Builder, output: &str) {
 fn main() {
     let cargo_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let build_path = Path::new(&cargo_dir).join("aom_build/aom");
+    let debug = if let Some(v) = env::var("PROFILE").ok() {
+        match v.as_str() {
+            "bench" | "release" => "0",
+            _ => "1",
+        }
+    } else {
+        "0"
+    };
 
     let dst = cmake::Config::new(build_path)
-        .define("CONFIG_DEBUG", "1")
+        .define("CONFIG_DEBUG", debug)
         .define("CONFIG_EXPERIMENTAL", "1")
         .define("CONFIG_UNIT_TESTS", "0")
         .define("CONFIG_EXT_PARTITION", "0")
