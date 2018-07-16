@@ -6,7 +6,7 @@ The fastest and safest AV1 encoder.
 
 rav1e is an experimental AV1 video encoder. It is designed to eventually cover all use cases, though in its current form it is most suitable for cases where libaom (the reference encoder) is too slow.
 
-AV1 is now frozen, though rav1e is not quite caught up with the release version. For this reason, you must use the libaom in the submodule. rav1e also temporarily uses libaom's transforms and CDF initialization tables.
+Even though AV1 is frozen, rav1e does not yet support the final version of the bitstream and the exact version supported is periodically updated.
 
 # Features
 
