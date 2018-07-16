@@ -18,11 +18,41 @@ use partition::TxType;
 // understand what's going on here you should first understand the Perl code
 // in libaom that generates these function bindings.
 
+#[cfg(target_feature = "sse2")]
 extern {
   fn av1_fht4x4_sse2(
     input: *const i16, output: *mut i32, stride: libc::c_int,
     tx_type: *const libc::c_int
   );
+  fn av1_fht8x8_sse2(
+    input: *const i16, output: *mut i32, stride: libc::c_int,
+    tx_type: *const libc::c_int
+  );
+}
+
+#[cfg(target_feature = "sse2")]
+use self::av1_fht4x4_sse2 as av1_fht4x4;
+#[cfg(target_feature = "sse2")]
+use self::av1_fht8x8_sse2 as av1_fht8x8;
+
+#[cfg(not(target_feature = "sse2"))]
+extern {
+  fn av1_fht4x4_c(
+    input: *const i16, output: *mut i32, stride: libc::c_int,
+    tx_type: *const libc::c_int
+  );
+  fn av1_fht8x8_c(
+    input: *const i16, output: *mut i32, stride: libc::c_int,
+    tx_type: *const libc::c_int
+  );
+}
+
+#[cfg(not(target_feature = "sse2"))]
+use self::av1_fht4x4_c as av1_fht4x4;
+#[cfg(not(target_feature = "sse2"))]
+use self::av1_fht8x8_c as av1_fht8x8;
+
+extern {
   static av1_inv_txfm2d_add_4x4: extern fn(
     input: *const i32,
     output: *mut u16,
@@ -30,10 +60,7 @@ extern {
     tx_type: libc::c_int,
     bd: libc::c_int
   );
-  fn av1_fht8x8_sse2(
-    input: *const i16, output: *mut i32, stride: libc::c_int,
-    tx_type: *const libc::c_int
-  );
+
   static av1_inv_txfm2d_add_8x8: extern fn(
     input: *const i32,
     output: *mut u16,
@@ -101,7 +128,7 @@ pub fn inverse_transform_add(
 
 fn fht4x4(input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType) {
   unsafe {
-    av1_fht4x4_sse2(
+    av1_fht4x4(
       input.as_ptr(),
       output.as_mut_ptr(),
       stride as libc::c_int,
@@ -126,7 +153,7 @@ fn iht4x4_add(
 
 fn fht8x8(input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType) {
   unsafe {
-    av1_fht8x8_sse2(
+    av1_fht8x8(
       input.as_ptr(),
       output.as_mut_ptr(),
       stride as libc::c_int,
