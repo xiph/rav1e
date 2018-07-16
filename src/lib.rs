@@ -1065,6 +1065,44 @@ fn aom_uleb_encode(mut value: u64, coded_value: &mut [u8]) -> usize {
 }
 
 #[allow(unused)]
+fn write_frame_header_obu_helper(packet: &mut Write, sequence: &mut Sequence,
+    fi: &mut FrameInvariants, obu_type: OBU_Type, obu_extension: u32) ->
+    Result<(), std::io::Error> {
+
+    let mut buf1 = Vec::new();
+    {
+        let mut bw1 = BitWriter::<BE>::new(&mut buf1);
+        bw1.write_obu_header(obu_type, obu_extension);
+    }
+    packet.write(&buf1).unwrap();
+    buf1.clear();
+
+    let mut buf2 = Vec::new();
+    {
+        let mut bw2 = BitWriter::<BE>::new(&mut buf2);
+        let error = bw2.write_frame_header_obu(sequence, fi);
+        bw2.byte_align()?;
+    }
+    let obu_payload_size = buf2.len() as u64;
+    {
+        let mut bw1 = BitWriter::<BE>::new(&mut buf1);
+        // uleb128()
+        let mut coded_payload_length = [0 as u8; 8];
+        let leb_size = aom_uleb_encode(obu_payload_size, &mut coded_payload_length);
+        for i in 0..leb_size {
+            bw1.write(8, coded_payload_length[i]);
+        }
+    }
+    packet.write(&buf1).unwrap();
+    buf1.clear();
+
+    packet.write(&buf2).unwrap();
+    buf2.clear();
+
+    Ok(())
+}
+
+#[allow(unused)]
 fn write_obus(packet: &mut Write, sequence: &mut Sequence,
                             fi: &mut FrameInvariants) -> Result<(), std::io::Error> {
     //let mut uch = BitWriter::<BE>::new(packet);
@@ -1113,50 +1151,13 @@ fn write_obus(packet: &mut Write, sequence: &mut Sequence,
 
     let write_frame_header = fi.num_tg > 1 || fi.show_existing_frame;
 
+    // TODO: If # of tiles > 1 or show_existing_frame is true,
+    // write Frame Header OBU here.
     if write_frame_header {
-        // TODO: If # of tiles > 1 or show_existing_frame is true,
-        // write Frame Header OBU here.
-        {
-            let mut bw1 = BitWriter::<BE>::new(&mut buf1);
-            bw1.write_obu_header(OBU_Type::OBU_FRAME_HEADER, obu_extension);
-        }
-        packet.write(&buf1).unwrap();
-        buf1.clear();
-
-        let mut buf2 = Vec::new();
-        {
-            let mut bw2 = BitWriter::<BE>::new(&mut buf2);
-            let error = bw2.write_frame_header_obu(sequence, fi);
-            bw2.byte_align()?;
-        }
-        let obu_payload_size = buf2.len() as u64;
-        {
-            let mut bw1 = BitWriter::<BE>::new(&mut buf1);
-            // uleb128()
-            let mut coded_payload_length = [0 as u8; 8];
-            let leb_size = aom_uleb_encode(obu_payload_size, &mut coded_payload_length);
-            for i in 0..leb_size {
-                bw1.write(8, coded_payload_length[i]);
-            }
-        }
-        packet.write(&buf1).unwrap();
-        buf1.clear();
-
-        packet.write(&buf2).unwrap();
-        buf2.clear();
+        write_frame_header_obu_helper(packet, sequence, fi, OBU_Type::OBU_FRAME_HEADER,
+            obu_extension);
     }
 
-    // TODO: Below will be done in encode_tile() but not here.
-/*
-    if (cm->show_existing_frame) {
-        data_size = 0;
-    } else {
-        //  Each tile group obu will be preceded by 4-byte size of the tile group
-        //  obu
-        data_size = write_tiles_in_tg_obus(cpi, data, &saved_wb,
-                                        obu_extension_header, &fh_info);
-    }
-*/
     Ok(())
 }
 
@@ -1696,6 +1697,12 @@ fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut Fram
             None => (),
         }
     } else {
+        let obu_extension = 0;
+        write_frame_header_obu_helper(&mut packet, sequence, fi, OBU_Type::OBU_FRAME,
+            obu_extension).unwrap();
+
+        // TODO: Add write_tile_group_header() here
+
         let tile = encode_tile(fi, fs);
         packet.write(&tile).unwrap();
     }
