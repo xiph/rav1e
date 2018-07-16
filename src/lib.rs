@@ -475,14 +475,14 @@ pub fn write_ivf_frame(output_file: &mut Write, pts: u64, data: &[u8]) {
 trait UncompressedHeader {
     // Start of OBU Headers
     fn write_obu_header(&mut self, obu_type: OBU_Type, obu_extension: u32)
-            -> Result<(usize), std::io::Error>;
+            -> Result<(), std::io::Error>;
     fn write_sequence_header_obu(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
-            -> Result<(usize), std::io::Error>;
+            -> Result<(), std::io::Error>;
     fn write_frame_header_obu(&mut self, seq: &Sequence, fi: &mut FrameInvariants)
-            -> Result<(usize), std::io::Error>;
+            -> Result<(), std::io::Error>;
     fn write_sequence_header2(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
-                                    -> Result<(usize), std::io::Error>;
-    fn write_color_config(&mut self, seq: &mut Sequence) -> Result<(usize), std::io::Error>;
+                                    -> Result<(), std::io::Error>;
+    fn write_color_config(&mut self, seq: &mut Sequence) -> Result<(), std::io::Error>;
     // End of OBU Headers
 
     fn write_frame_size(&mut self, fi: &FrameInvariants) -> Result<(), std::io::Error>;
@@ -506,60 +506,45 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
     // Start of OBU Headers
     // Write OBU Header syntax
     fn write_obu_header(&mut self, obu_type: OBU_Type, obu_extension: u32)
-            -> Result<(usize), std::io::Error>{
-        let mut size: usize = 0;
+            -> Result<(), std::io::Error>{
         self.write(1, 0)?; // forbidden bit.
-        size += 1;
         self.write(4, obu_type as u32)?;
-        size += 4;
         self.write_bit(obu_extension != 0)?;
-        size += 1;
         self.write(1, 1)?; // obu_has_payload_length_field
-        size += 1;
         self.write(1, 0)?; // reserved
-        size += 1;
 
         if obu_extension != 0 {
             assert!(false);
             //self.write(8, obu_extension & 0xFF)?; size += 8;
         }
 
-        size = (size + 7) / 8; // # of written bytes
-        Ok(size)
+        Ok(())
     }
 
 #[allow(unused)]
     fn write_sequence_header_obu(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
-        -> Result<(usize), std::io::Error> {
-        let mut size: usize = 0;
-        // TODO: size should be updated since final size is returned as payload
-
+        -> Result<(), std::io::Error> {
         self.write(3, seq.profile)?; // profile 0, 3 bits
         self.write(1, 0)?; // still_picture
         self.write(1, 0)?; // reduced_still_picture
-        size += 5;
 
         if seq.reduced_still_picture_hdr {
             assert!(false);
         } else {
             self.write(1, 0)?; // timing_info_present_flag
-            size += 1;
             if false { // if timing_info_present_flag == true
                 assert!(false);
             }
 
             self.write(1, 0)?; // display_model_info_present_flag
             self.write(5, 0)?; // operating_points_cnt_minus_1, 5 bits
-            size += 6;
 
             for i in 0..seq.operating_points_cnt_minus_1 + 1 {
                 self.write(OP_POINTS_IDC_BITS as u32, seq.operating_point_idc[i])?;
-                size += OP_POINTS_IDC_BITS as usize;
                 //let seq_level_idx = 1 as u16;	// NOTE: This comes from minor and major
                 let seq_level_idx = 
                     ((seq.level[i][1] - LEVEL_MAJOR_MIN) << LEVEL_MINOR_BITS) + seq.level[i][0]; 
                 self.write(LEVEL_BITS as u32, seq_level_idx as u16)?;
-                size += LEVEL_BITS as usize;
 
                 if seq.level[i][1] > 3 {
                     assert!(false); // NOTE: Not supported yet.
@@ -574,41 +559,26 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
             }
         }
 
-        let mut error = self.write_sequence_header2(seq, fi);
-        let mut data_size = 0;
-        match error {
-            Ok(size) => data_size = size,
-            Err(e) => println!("write_sequence_header2 error: {:?}", e),
-        }
-        size += data_size;
+        self.write_sequence_header2(seq, fi);
 
         self.write_color_config(seq)?;
-        error = self.write_sequence_header2(seq, fi);
-        data_size = 0;
-        match error {
-            Ok(size) => data_size = size,
-            Err(e) => println!("write_color_config error: {:?}", e),
-        }
+
+        self.write_sequence_header2(seq, fi);
 
         self.write_bit(seq.film_grain_params_present)?;
-        size += 1;
 
         self.write(1,1)?; // add_trailing_bits
-        size += 1;
 
-        Ok(size)
+        Ok(())
     }
 
 #[allow(unused)]
     fn write_sequence_header2(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
-        -> Result<(usize), std::io::Error> {
-        let mut size: usize = 0;
-
+        -> Result<(), std::io::Error> {
         self.write(4, seq.num_bits_width - 1)?;
         self.write(4, seq.num_bits_height - 1)?;
         self.write(seq.num_bits_width, (seq.max_frame_width - 1) as u16)?;
         self.write(seq.num_bits_height, (seq.max_frame_height - 1) as u16)?;
-        size += 4 + 4 + seq.num_bits_width as usize + seq.num_bits_height as usize;
 
         if !seq.reduced_still_picture_hdr {
             seq.frame_id_numbers_present_flag =
@@ -617,7 +587,6 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
             seq.delta_frame_id_length = DELTA_FRAME_ID_LENGTH as u32;
 
             self.write_bit(seq.frame_id_numbers_present_flag)?;
-            size += 1;
 
             if seq.frame_id_numbers_present_flag {
               // We must always have delta_frame_id_length < frame_id_length,
@@ -625,14 +594,12 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
               // Avoid wasting bits by using a coding that enforces this restriction.
               self.write(4, seq.delta_frame_id_length - 2)?;
               self.write(3, seq.frame_id_length - seq.delta_frame_id_length - 1)?;
-              size += 4 + 3;
             }
         }
 
         self.write_bit(seq.use_128x128_superblock)?;
         self.write_bit(seq.enable_filter_intra)?;
         self.write_bit(seq.enable_intra_edge_filter)?;
-        size += 3;
 
         if !seq.reduced_still_picture_hdr {
             self.write_bit(seq.enable_interintra_compound)?;
@@ -640,77 +607,61 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
             self.write_bit(seq.enable_warped_motion)?;
             self.write_bit(seq.enable_dual_filter)?;
             self.write_bit(seq.enable_order_hint)?;
-            size += 5;
 
             if seq.enable_order_hint {
               self.write_bit(seq.enable_jnt_comp)?;
               self.write_bit(seq.enable_ref_frame_mvs)?;
-              size += 2;
             }
             if seq.force_screen_content_tools == 2 {
               self.write(1, 1)?;
-              size += 1;
             } else {
               self.write(1, 0)?;
               self.write_bit(seq.force_screen_content_tools != 0)?;
-              size += 2;
             }
             if seq.force_screen_content_tools > 0 {
               if seq.force_integer_mv == 2 {
                 self.write(1, 1)?;
-                size += 1;
               } else {
                 self.write(1, 0)?;
                 self.write_bit(seq.force_integer_mv != 0)?;
-                size += 2;
               }
             } else {
               assert!(seq.force_integer_mv == 2);
             }
             if seq.enable_order_hint {
               self.write(3, seq.order_hint_bits_minus_1)?;
-              size += 3;
             }
         }
 
         self.write_bit(seq.enable_superres)?;
         self.write_bit(seq.enable_cdef)?;
         self.write_bit(seq.enable_restoration)?;
-        size += 3;
 
-        Ok(size)
+        Ok(())
     }
 
 #[allow(unused)]
-    fn write_color_config(&mut self, seq: &mut Sequence) -> Result<(usize), std::io::Error> {
-        let mut size: usize = 0;
-
+    fn write_color_config(&mut self, seq: &mut Sequence) -> Result<(), std::io::Error> {
         self.write(1,0)?; // 8 bit video
         self.write_bit(seq.monochrome)?; 	// monochrome?
         self.write_bit(false)?;  					// No color description present
-        size += 3;
 
         if seq.monochrome {
             assert!(false);
         }
         self.write(1,0)?; // color range
-        size += 1;
 
         if true { // subsampling_x == 1 && cm->subsampling_y == 1
             self.write(2,0)?; // chroma_sample_position == AOM_CSP_UNKNOWN
-            size += 2;
         }
         self.write_bit(seq.separate_uv_delta_q)?;
-        size += 1;
 
-        Ok(size)
+        Ok(())
     }
 
 #[allow(unused)]
     fn write_frame_header_obu(&mut self, seq: &Sequence, fi: &mut FrameInvariants)
-        -> Result<(usize), std::io::Error> {
-      let mut size: usize = 0;
-
+        -> Result<(), std::io::Error> {
       if seq.reduced_still_picture_hdr {
         assert!(fi.show_existing_frame);
         assert!(fi.frame_type == FrameType::KEY);
@@ -731,7 +682,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
           }*/
 
           self.byte_align()?;
-          return Ok(size);
+          return Ok((()));
         }
         self.write_bit(false)?; // show_existing_frame=0
         //let frame_type = fi.frame_type;
@@ -1017,7 +968,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
       // TODO: update size
       // size +=
 
-      Ok(size)
+      Ok(())
     }
     // End of OBU Headers
 
@@ -1139,15 +1090,12 @@ fn write_obus(packet: &mut Write, sequence: &mut Sequence,
 
         let mut buf2 = Vec::new();
         {
-            let mut obu_payload_size = 0 as u64;
             let mut bw2 = BitWriter::<BE>::new(&mut buf2);
-            let error = bw2.write_sequence_header_obu(sequence, fi);
+            bw2.write_sequence_header_obu(sequence, fi);
             bw2.byte_align()?;
-
-            match error {
-                Ok(size) => obu_payload_size = size as u64,
-                Err(e) => println!("obu_payload_size error: {:?}", e),
-            }
+        }
+        let obu_payload_size = buf2.len() as u64;
+        {
             let mut bw1 = BitWriter::<BE>::new(&mut buf1);
             // uleb128()
             let mut coded_payload_length = [0 as u8; 8];
@@ -1177,15 +1125,12 @@ fn write_obus(packet: &mut Write, sequence: &mut Sequence,
 
         let mut buf2 = Vec::new();
         {
-            let mut obu_payload_size = 0 as u64;
             let mut bw2 = BitWriter::<BE>::new(&mut buf2);
             let error = bw2.write_frame_header_obu(sequence, fi);
             bw2.byte_align()?;
-
-            match error {
-                Ok(size) => obu_payload_size = size as u64,
-                Err(e) => println!("obu_payload_size error: {:?}", e),
-            }
+        }
+        let obu_payload_size = buf2.len() as u64;
+        {
             let mut bw1 = BitWriter::<BE>::new(&mut buf1);
             // uleb128()
             let mut coded_payload_length = [0 as u8; 8];
