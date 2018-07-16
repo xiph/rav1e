@@ -1685,19 +1685,15 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
     h
 }
 
-fn write_tile_group_header(packet: &mut Write, tile_start_and_end_present_flag: bool) ->
-    Result<(), std::io::Error> {
+fn write_tile_group_header(tile_start_and_end_present_flag: bool) ->
+    Vec<u8> {
     let mut buf = Vec::new();
-
     {
-      let mut bw = BitWriter::<BE>::new(&mut buf);
-      bw.write_bit(tile_start_and_end_present_flag)?;
-      bw.byte_align()?;
+        let mut bw = BitWriter::<BE>::new(&mut buf);
+        bw.write_bit(tile_start_and_end_present_flag).unwrap();
+        bw.byte_align().unwrap();
     }
-
-    packet.write(&buf).unwrap();
-
-    Ok(())
+    buf.clone()
 }
 
 fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut FrameState, last_rec: &Option<Frame>) -> Vec<u8> {
@@ -1713,28 +1709,41 @@ fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut Fram
         }
     } else {
         let obu_extension = 0;
-        write_frame_header_obu_helper(&mut packet, sequence, fi, OBU_Type::OBU_FRAME,
-            obu_extension).unwrap();
-        // if NumTiles == 1
-        let tile_start_and_end_present_flag = false;
-        write_tile_group_header(&mut packet, tile_start_and_end_present_flag).unwrap();
-
-        let tile = encode_tile(fi, fs);
-
-        // for each tile, encode tile_size_minus_1 using le(TileSizeBytes)
-        let payload_size = tile.len() as u64;
-        let mut coded_payload_length = [0 as u8; 16];
-        let leb_size = aom_uleb_encode(payload_size-1, &mut coded_payload_length);
-
         let mut buf1 = Vec::new();
         {
             let mut bw1 = BitWriter::<BE>::new(&mut buf1);
+            bw1.write_obu_header(OBU_Type::OBU_FRAME, obu_extension).unwrap();
+        }
+        packet.write(&buf1).unwrap();
+        buf1.clear();
+
+        let mut buf2 = Vec::new();
+        {
+            let mut bw2 = BitWriter::<BE>::new(&mut buf2);
+            bw2.write_frame_header_obu(sequence, fi).unwrap();
+            bw2.byte_align().unwrap();
+        }
+
+        // if NumTiles == 1
+        let tile_start_and_end_present_flag = false;
+        let tile_group_header = 
+            write_tile_group_header(tile_start_and_end_present_flag);
+
+        let tile = encode_tile(fi, fs);
+
+        let obu_payload_size = tile.len() as u64 + tile_group_header.len() as u64;
+        {
+            let mut bw1 = BitWriter::<BE>::new(&mut buf1);
+            // le()
+            let mut coded_payload_length = [0 as u8; 16];
+            let leb_size = aom_uleb_encode(obu_payload_size, &mut coded_payload_length);
             for i in 0..leb_size {
                 bw1.write(8, coded_payload_length[i]).unwrap();
             }
         }
-        packet.write(&buf1).unwrap(); // encode tile_size_minus_1, le(TileSizeBytes)
 
+        packet.write(&buf1).unwrap(); // encode tile_size_minus_1, le(TileSizeBytes)
+        packet.write(&tile_group_header).unwrap();
         packet.write(&tile).unwrap();
     }
     packet
