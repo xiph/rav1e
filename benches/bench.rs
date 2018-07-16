@@ -401,6 +401,7 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
         x: sbx,
         y: sby
       };
+      fs.qc.update(fi.qindex, tx_size);
       for p in 1..3 {
         for by in 0..8 {
           for bx in 0..8 {

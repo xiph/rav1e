@@ -32,6 +32,43 @@ pub fn ac_q(qindex: usize) -> i16 {
   unsafe { ac_qlookup_Q3[qindex] }
 }
 
+#[derive(Debug, Default, Clone, Copy)]
+pub struct QuantizationContext {
+    tx_scale: i32,
+    dc_quant: i32,
+    dc_offset: i32,
+
+    ac_quant: i32,
+    ac_offset: i32,
+}
+
+impl QuantizationContext {
+    pub fn update(&mut self, qindex: usize, tx_size: TxSize) {
+      self.tx_scale = get_tx_scale(tx_size) as i32;
+
+      self.dc_quant = dc_q(qindex) as i32;
+      self.ac_quant = ac_q(qindex) as i32;
+
+      // using 21/64=0.328125 as rounding offset. To be tuned
+      self.dc_offset = self.dc_quant * 21 / 64 as i32;
+      self.ac_offset = self.ac_quant * 21 / 64 as i32;
+    }
+
+    #[inline]
+    pub fn quantize(&self, coeffs: &mut [i32]) {
+      coeffs[0] *= self.tx_scale;
+      coeffs[0] += coeffs[0].signum() * self.dc_offset;
+      coeffs[0] /= self.dc_quant;
+
+      for c in coeffs[1..].iter_mut() {
+        *c *= self.tx_scale;
+        *c += c.signum() * self.ac_offset;
+        *c /= self.ac_quant;
+      }
+    }
+}
+
+
 pub fn quantize_in_place(qindex: usize, coeffs: &mut [i32], tx_size: TxSize) {
   let tx_scale = get_tx_scale(tx_size) as i32;
 
