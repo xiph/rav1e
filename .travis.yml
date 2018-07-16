@@ -2,7 +2,6 @@ language: rust
 addons:
   apt:
     packages:
-      - libwxgtk3.0-dev
       - yasm
       - nasm
 
