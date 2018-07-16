@@ -38,7 +38,7 @@ sudo apt install yasm
 Input videos must be 8-bit 4:2:0, in y4m format.
 
 ```
-cargo run --bin rav1e -- input.y4m -o output.ivf
+cargo run --release --bin rav1e -- input.y4m -o output.ivf
 ```
 # Decompressing video
 
