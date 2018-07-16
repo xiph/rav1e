@@ -60,6 +60,7 @@ make -j8
 * src/quantize.rs - Quantization and dequantization functions for coefficients.
 * src/rdo.rs - RDO-related structures and distortion computation functions.
 * src/transform.rs - Implementations of DCT and ADST transforms.
+* src/util.rs - Misc utility code.
 * src/bin/rav1e.rs - rav1e command line tool.
 * src/bin/rav1erepl.rs - Command line tool for debugging.
 * aom_build/ - Local submodule of libaom. Some C functions and constants are used directly. Also used for benchmarking and testing.
