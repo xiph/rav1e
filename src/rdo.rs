@@ -25,6 +25,7 @@ use BlockSize;
 use FrameInvariants;
 use FrameState;
 use FrameType;
+use std::f64;
 
 #[derive(Clone)]
 pub struct RDOOutput {
@@ -40,6 +41,43 @@ pub struct RDOPartitionOutput {
   pub pred_mode_luma: PredictionMode,
   pub pred_mode_chroma: PredictionMode,
   pub skip: bool
+}
+
+fn cdef_dist_wxh_8x8(src1: &PlaneSlice, src2: &PlaneSlice) -> u64 {
+  //TODO: Handle high bit-depth here by setting coeff_shift
+  let coeff_shift = 0;
+  let mut sum_s: i32 = 0;
+  let mut sum_d: i32 = 0;
+  let mut sum_s2: i64 = 0;
+  let mut sum_d2: i64 = 0;
+  let mut sum_sd: i64 = 0;
+  for j in 0..8 {
+    for i in 0..8 {
+      let s = src1.p(i, j) as i32;
+      let d = src2.p(i, j) as i32;
+      sum_s += s;
+      sum_d += d;
+      sum_s2 += (s*s) as i64;
+      sum_d2 += (d*d) as i64;
+      sum_sd += (s*d) as i64;
+    }
+  }
+  let svar = (sum_s2 - ((sum_s as i64 * sum_s as i64 + 32) >> 6)) as f64;
+  let dvar = (sum_d2 - ((sum_d as i64 * sum_d as i64 + 32) >> 6)) as f64;
+  let sse = (sum_d2 + sum_s2 - 2 * sum_sd) as f64;
+  //The two constants were tuned for CDEF, but can probably be better tuned for use in general RDO
+  let ssim_boost = 0.5_f64 * (svar + dvar + (400 << 2 * coeff_shift) as f64) / f64::sqrt((20000 << 4 * coeff_shift) as f64 + svar * dvar);
+  (sse * ssim_boost + 0.5_f64) as u64
+}
+
+fn cdef_dist_wxh(src1: &PlaneSlice, src2: &PlaneSlice, w: usize, h: usize) -> u64 {
+  let mut sum: u64 = 0;
+  for j in 0..h/8 {
+    for i in 0..w/8 {
+      sum += cdef_dist_wxh_8x8(&src1.subslice(i*8, j*8), &src2.subslice(i*8, j*8))
+    }
+  }
+  sum
 }
 
 // Sum of Squared Error for a wxh block
@@ -71,7 +109,7 @@ fn compute_rd_cost(
 
   // Compute distortion
   let po = bo.plane_offset(&fs.input.planes[0].cfg);
-  let mut distortion = sse_wxh(
+  let mut distortion = cdef_dist_wxh(
     &fs.input.planes[0].slice(&po),
     &fs.rec.planes[0].slice(&po),
     w_y,
