@@ -5,13 +5,16 @@ authors = ["Thomas Daede <tdaede@xiph.org>"]
 build = "build.rs"
 include = ["/src/**", "/aom_build/**", "/Cargo.toml"]
 
+[features]
+repl = ["rustyline"]
+
 [dependencies]
 bitstream-io = "0.6"
 byteorder = "1"
 clap = "2"
 libc = "0.2"
 rand = "0.4"
-rustyline = "1"
+rustyline = { version = "1", optional = true }
 y4m = "0.2"
 enum-iterator-derive = "0.1.1"
 backtrace = "0.3"
@@ -24,6 +27,13 @@ pkg-config = "0.3.9"
 
 [dev-dependencies]
 bencher = "0.1.5"
+
+[[bin]]
+name = "rav1e"
+
+[[bin]]
+name = "rav1repl"
+required-features = ["repl"]
 
 [[bench]]
 name = "bench"
