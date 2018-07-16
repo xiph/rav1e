@@ -240,7 +240,7 @@ impl TxSize {
 
 pub const TX_TYPES: usize = 16;
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, PartialOrd)]
 #[repr(C)]
 pub enum TxType {
   DCT_DCT = 0,   // DCT  in both horizontal and vertical
