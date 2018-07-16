@@ -34,6 +34,7 @@ pub mod transform;
 pub mod quantize;
 pub mod predict;
 pub mod rdo;
+pub mod util;
 
 use context::*;
 use partition::*;
@@ -43,6 +44,7 @@ use plane::*;
 use rdo::*;
 use ec::*;
 use std::fmt;
+use util::*;
 
 extern {
     pub fn av1_rtcd();
@@ -533,8 +535,6 @@ fn diff(dst: &mut [i16], src1: &PlaneSlice, src2: &PlaneSlice, width: usize, hei
     }
 }
 
-use std::mem::uninitialized;
-
 // For a transform block,
 // predict, transform, quantize, write coefficients to a bitstream,
 // dequantize, inverse-transform.
@@ -548,29 +548,28 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
 
     if skip { return; }
 
-    let mut residual: [i16; 64*64] = unsafe { uninitialized() };
-    let mut coeffs_storage: [i32; 64*64] = unsafe { uninitialized() };
-    let mut rcoeffs: [i32; 64*64] = unsafe { uninitialized() };
+    let mut residual: AlignedArray<[i16; 64 * 64]> = UninitializedAlignedArray();
+    let mut coeffs_storage: AlignedArray<[i32; 64 * 64]> = UninitializedAlignedArray();
+    let mut rcoeffs: AlignedArray<[i32; 64 * 64]> = UninitializedAlignedArray();
+    let coeffs = &mut coeffs_storage.array[..tx_size.area()];
 
-    let coeffs = &mut coeffs_storage[..tx_size.area()];
-
-    diff(&mut residual,
+    diff(&mut residual.array,
          &fs.input.planes[p].slice(po),
          &rec.slice(po),
          tx_size.width(),
          tx_size.height());
 
 
-    forward_transform(&residual, coeffs, tx_size.width(), tx_size, tx_type);
+    forward_transform(&residual.array, coeffs, tx_size.width(), tx_size, tx_type);
     quantize_in_place(fi.qindex, coeffs, tx_size);
 
     cw.write_coeffs_lv_map(p, bo, &coeffs, tx_size, tx_type, plane_bsize, xdec, ydec,
                             fi.use_reduced_tx_set);
 
     // Reconstruct
-    dequantize(fi.qindex, &coeffs, &mut rcoeffs, tx_size);
+    dequantize(fi.qindex, &coeffs, &mut rcoeffs.array, tx_size);
 
-    inverse_transform_add(&rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type);
+    inverse_transform_add(&rcoeffs.array, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type);
 }
 
 fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
