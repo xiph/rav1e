@@ -978,9 +978,14 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
                 self.write_bit(mode == GlobalMVMode::TRANSLATION)?;
             }
           }
-          match mode {
-            GlobalMVMode::IDENTITY => { /* Nothing to do */ }
-            GlobalMVMode::TRANSLATION => {
+
+          if mode >= GlobalMVMode::ROTZOOM {
+            unimplemented!();
+          }
+          if mode >= GlobalMVMode::AFFINE {
+            unimplemented!();
+          }
+          if mode >= GlobalMVMode::TRANSLATION {
               let mv_x = 0;
               let mv_x_ref = 0;
               let mv_y = 0;
@@ -993,9 +998,6 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
               BCodeWriter::write_s_refsubexpfin(self, (1 << bits) + 1,
                                                 3, mv_y_ref >> bits_diff,
                                                 mv_y >> bits_diff)?;
-            }
-            GlobalMVMode::ROTZOOM => unimplemented!(),
-            GlobalMVMode::AFFINE => unimplemented!(),
           };
         }
       }
