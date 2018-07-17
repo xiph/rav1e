@@ -27,7 +27,7 @@ fn main() {
 
   let mut fi =
     FrameInvariants::new(width, height, files.quantizer, files.speed);
-  let sequence = Sequence::new();
+  let mut sequence = Sequence::new(width, height);
   write_ivf_header(
     &mut files.output_file,
     width,
@@ -50,8 +50,8 @@ fn main() {
     fi.use_prev_frame_mvs = !(fi.intra_only || fi.error_resilient);
 
     if !process_frame(
-      &sequence,
-      &fi,
+      &mut sequence,
+      &mut fi,
       &mut files.output_file,
       &mut y4m_dec,
       y4m_enc.as_mut(),
