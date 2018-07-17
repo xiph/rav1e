@@ -1398,6 +1398,11 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
         _ => TxSize::TX_32X32
     };
 
+    // TODO: Extra condition related to palette mode, see `read_filter_intra_mode_info` in decodemv.c
+    if luma_mode == PredictionMode::DC_PRED && tx_size.width() <= 32 && tx_size.height() <= 32 {
+        cw.write_use_filter_intra(false, tx_size); // Always turn off FILTER_INTRA
+    }
+
     // Luma plane transform type decision
     let tx_set_type = get_ext_tx_set_type(tx_size, is_inter, fi.use_reduced_tx_set);
 

@@ -904,6 +904,7 @@ extern {
   static default_intra_inter_cdf: [[u16; 3]; INTRA_INTER_CONTEXTS];
   static default_angle_delta_cdf:
     [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES];
+  static default_filter_intra_cdfs: [[u16; 3]; TxSize::TX_SIZES_ALL];
 
   static av1_inter_scan_orders: [[SCAN_ORDER; TX_TYPES]; TxSize::TX_SIZES_ALL];
 
@@ -952,6 +953,7 @@ pub struct CDFContext {
   skip_cdfs: [[u16; 3]; SKIP_CONTEXTS],
   intra_inter_cdfs: [[u16; 3]; INTRA_INTER_CONTEXTS],
   angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES],
+  filter_intra_cdfs: [[u16; 3]; TxSize::TX_SIZES_ALL],
 
   // lv_map
   txb_skip_cdf: [[[u16; 3]; TXB_SKIP_CONTEXTS]; TxSize::TX_SIZES],
@@ -987,6 +989,7 @@ impl CDFContext {
       skip_cdfs: default_skip_cdfs,
       intra_inter_cdfs: default_intra_inter_cdf,
       angle_delta_cdf: default_angle_delta_cdf,
+      filter_intra_cdfs: default_filter_intra_cdfs,
 
       // lv_map
       txb_skip_cdf: av1_default_txb_skip_cdf,
@@ -1039,6 +1042,10 @@ impl CDFContext {
       self.angle_delta_cdf.first().unwrap().as_ptr() as usize;
     let angle_delta_cdf_end =
       angle_delta_cdf_start + size_of_val(&self.angle_delta_cdf);
+    let filter_intra_cdfs_start =
+      self.filter_intra_cdfs.first().unwrap().as_ptr() as usize;
+    let filter_intra_cdfs_end =
+      filter_intra_cdfs_start + size_of_val(&self.filter_intra_cdfs);
     let txb_skip_cdf_start =
       self.txb_skip_cdf.first().unwrap().as_ptr() as usize;
     let txb_skip_cdf_end =
@@ -1101,6 +1108,7 @@ impl CDFContext {
       ("skip_cdfs", skip_cdfs_start, skip_cdfs_end),
       ("intra_inter_cdfs", intra_inter_cdfs_start, intra_inter_cdfs_end),
       ("angle_delta_cdf", angle_delta_cdf_start, angle_delta_cdf_end),
+      ("filter_intra_cdfs", filter_intra_cdfs_start, filter_intra_cdfs_end),
       ("txb_skip_cdf", txb_skip_cdf_start, txb_skip_cdf_end),
       ("dc_sign_cdf", dc_sign_cdf_start, dc_sign_cdf_end),
       ("eob_extra_cdf", eob_extra_cdf_start, eob_extra_cdf_end),
@@ -1769,6 +1777,9 @@ impl ContextWriter {
       &mut self.fc.angle_delta_cdf
         [mode as usize - PredictionMode::V_PRED as usize]
     );
+  }
+  pub fn write_use_filter_intra(&mut self, enable: bool, tx_size: TxSize) {
+    symbol!(self, enable as u32, &mut self.fc.filter_intra_cdfs[tx_size as usize]);
   }
 
   pub fn write_tx_type_lv_map(
