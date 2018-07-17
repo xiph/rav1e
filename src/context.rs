@@ -1791,6 +1791,7 @@ impl ContextWriter {
           av1_ext_tx_ind[tx_set_type as usize][tx_type as usize] as u32,
           &mut self.fc.inter_ext_tx_cdf[eset as usize]
             [square_tx_size as usize]
+            [..num_ext_tx_set[tx_set_type as usize] + 1]
         );
       } else {
         let intra_dir = y_mode;
