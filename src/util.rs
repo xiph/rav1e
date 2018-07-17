@@ -15,7 +15,7 @@ struct Align16;
 /// ```
 /// extern crate rav1e;
 /// use rav1e::util::*;
-/// 
+///
 /// let mut x: AlignedArray<[i16; 64 * 64]> = AlignedArray([0; 64 * 64]);
 /// assert!(x.array.as_ptr() as usize % 16 == 0);
 ///
@@ -32,10 +32,7 @@ where
 
 #[allow(non_snake_case)]
 pub fn AlignedArray<ARRAY>(array: ARRAY) -> AlignedArray<ARRAY> {
-  AlignedArray {
-    _alignment: [],
-    array
-  }
+  AlignedArray { _alignment: [], array }
 }
 
 #[allow(non_snake_case)]

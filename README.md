@@ -69,8 +69,21 @@ make -j8
 # Contributing
 
 Check code formatting with [rustfmt](https://github.com/rust-lang-nursery/rustfmt) before submitting a PR.
+rav1e currently uses a [forked version](https://github.com/mbebenita/rustfmt) of rustfmt.
+
+To install rustfmt:
 
 ```
+git clone https://github.com/mbebenita/rustfmt
+cd rustfmt
+cargo +nightly build // Depends on the Rust nightly toolchain. 
+cargo +nightly install -f // Overwrite the installed rustfmt.
+```
+
+then
+
+```
+cd rav1e
 cargo +nightly fmt -- --check
 ```
 

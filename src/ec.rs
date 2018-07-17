@@ -67,11 +67,7 @@ impl od_ec_enc {
     if val {
       l += r - v
     };
-    r = if val {
-      v
-    } else {
-      r - v
-    };
+    r = if val { v } else { r - v };
 
     self.od_ec_enc_normalize(l, r as u16);
   }
@@ -86,11 +82,7 @@ impl od_ec_enc {
     assert!(cdf[cdf.len() - 1] == 0);
     let nsyms = cdf.len();
     self.od_ec_encode_q15(
-      if s > 0 {
-        cdf[s - 1]
-      } else {
-        32768
-      },
+      if s > 0 { cdf[s - 1] } else { 32768 },
       cdf[s],
       s,
       nsyms
@@ -296,11 +288,7 @@ impl Writer {
 
     // Single loop (faster)
     for i in 0..(nsymbs - 1) {
-      tmp = if i as u32 == val {
-        0
-      } else {
-        tmp
-      };
+      tmp = if i as u32 == val { 0 } else { tmp };
       if tmp < cdf[i] {
         cdf[i] -= (cdf[i] - tmp) >> rate;
       } else {
@@ -440,11 +428,7 @@ impl<'a> BCodeWriter for BitWriter<'a, BE> {
     let mut i = 0;
     let mut mk = 0;
     loop {
-      let b = if i > 0 {
-        k + i - 1
-      } else {
-        k
-      };
+      let b = if i > 0 { k + i - 1 } else { k };
       let a = 1 << b;
       if n <= mk + 3 * a {
         return self.write_quniform(n - mk, v - mk);
@@ -530,10 +514,7 @@ mod test {
 
   impl<'a> Reader<'a> {
     fn new(buf: &'a [u8]) -> Self {
-      let mut r = Reader {
-        dec: unsafe { mem::uninitialized() },
-        _dummy: buf
-      };
+      let mut r = Reader { dec: unsafe { mem::uninitialized() }, _dummy: buf };
 
       unsafe { od_ec_dec_init(&mut r.dec, buf.as_ptr(), buf.len() as u32) };
 
