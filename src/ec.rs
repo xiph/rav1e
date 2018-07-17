@@ -283,7 +283,8 @@ impl Writer {
   pub fn bool(&mut self, val: bool, f: u16) {
     self.enc.od_ec_encode_bool_q15(val, f)
   }
-  fn update_cdf(cdf: &mut [u16], val: u32, nsymbs: usize) {
+  fn update_cdf(cdf: &mut [u16], val: u32) {
+    let nsymbs = cdf.len() - 1;
     let nsymbs2speed: [usize; 17] =
       [0, 0, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2];
     assert!(nsymbs < 17);
@@ -308,7 +309,8 @@ impl Writer {
     }
     cdf[nsymbs] += (cdf[nsymbs] < 32) as u16;
   }
-  pub fn symbol(&mut self, s: u32, cdf: &mut [u16], nsymbs: usize) {
+  pub fn symbol(&mut self, s: u32, cdf: &mut [u16]) {
+    let nsymbs = cdf.len() - 1;
     if self.debug {
       use backtrace;
       let mut depth = 3;
@@ -330,7 +332,7 @@ impl Writer {
       });
     }
     self.cdf(s, &cdf[..nsymbs]);
-    Writer::update_cdf(cdf, s, nsymbs);
+    Writer::update_cdf(cdf, s);
   }
   pub fn bit(&mut self, bit: u16) {
     self.enc.od_ec_encode_bool_q15(bit == 1, 16384);

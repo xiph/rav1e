@@ -1619,8 +1619,8 @@ impl FieldMap {
 }
 
 macro_rules! symbol {
-  ($self:ident, $s:expr, $cdf:expr, $nsymbs:expr) => {
-    $self.w.symbol($s, $cdf, $nsymbs);
+  ($self:ident, $s:expr, $cdf:expr) => {
+    $self.w.symbol($s, $cdf);
     if let Some(map) = $self.fc_map.as_ref() {
       map.lookup($cdf.as_ptr() as usize);
     }
@@ -1715,7 +1715,7 @@ impl ContextWriter {
     }
 
     if has_rows && has_cols {
-      symbol!(self, p as u32, partition_cdf, PARTITION_TYPES);
+      symbol!(self, p as u32, partition_cdf);
     } else if !has_rows && has_cols {
       let mut cdf = [0u16; 2];
       ContextWriter::partition_gather_vert_alike(
@@ -1744,12 +1744,12 @@ impl ContextWriter {
     let above_ctx = intra_mode_context[above_mode];
     let left_ctx = intra_mode_context[left_mode];
     let cdf = &mut self.fc.kf_y_cdf[above_ctx][left_ctx];
-    symbol!(self, mode as u32, cdf, INTRA_MODES);
+    symbol!(self, mode as u32, cdf);
   }
   pub fn write_intra_mode(&mut self, bsize: BlockSize, mode: PredictionMode) {
     let cdf =
       &mut self.fc.y_mode_cdf[size_group_lookup[bsize as usize] as usize];
-    symbol!(self, mode as u32, cdf, INTRA_MODES);
+    symbol!(self, mode as u32, cdf);
   }
   pub fn write_intra_uv_mode(
     &mut self, uv_mode: PredictionMode, y_mode: PredictionMode, bs: BlockSize
@@ -1757,9 +1757,9 @@ impl ContextWriter {
     let cdf =
       &mut self.fc.uv_mode_cdf[bs.cfl_allowed() as usize][y_mode as usize];
     if bs.cfl_allowed() {
-      symbol!(self, uv_mode as u32, cdf, UV_INTRA_MODES);
+      symbol!(self, uv_mode as u32, cdf);
     } else {
-      symbol!(self, uv_mode as u32, cdf, UV_INTRA_MODES - 1);
+      symbol!(self, uv_mode as u32, &mut cdf[..UV_INTRA_MODES]);
     }
   }
   pub fn write_angle_delta(&mut self, angle: i8, mode: PredictionMode) {
@@ -1767,8 +1767,7 @@ impl ContextWriter {
       self,
       (angle + MAX_ANGLE_DELTA as i8) as u32,
       &mut self.fc.angle_delta_cdf
-        [mode as usize - PredictionMode::V_PRED as usize],
-      2 * MAX_ANGLE_DELTA + 1
+        [mode as usize - PredictionMode::V_PRED as usize]
     );
   }
 
@@ -1791,8 +1790,8 @@ impl ContextWriter {
           self,
           av1_ext_tx_ind[tx_set_type as usize][tx_type as usize] as u32,
           &mut self.fc.inter_ext_tx_cdf[eset as usize]
-            [square_tx_size as usize],
-          num_ext_tx_set[tx_set_type as usize]
+            [square_tx_size as usize]
+            [..num_ext_tx_set[tx_set_type as usize] + 1]
         );
       } else {
         let intra_dir = y_mode;
@@ -1804,19 +1803,19 @@ impl ContextWriter {
           self,
           av1_ext_tx_ind[tx_set_type as usize][tx_type as usize] as u32,
           &mut self.fc.intra_ext_tx_cdf[eset as usize]
-            [square_tx_size as usize][intra_dir as usize],
-          num_ext_tx_set[tx_set_type as usize]
+            [square_tx_size as usize][intra_dir as usize]
+            [..num_ext_tx_set[tx_set_type as usize] + 1]
         );
       }
     }
   }
   pub fn write_skip(&mut self, bo: &BlockOffset, skip: bool) {
     let ctx = self.bc.skip_context(bo);
-    symbol!(self, skip as u32, &mut self.fc.skip_cdfs[ctx], 2);
+    symbol!(self, skip as u32, &mut self.fc.skip_cdfs[ctx]);
   }
   pub fn write_is_inter(&mut self, bo: &BlockOffset, is_inter: bool) {
     let ctx = self.bc.intra_inter_context(bo);
-    symbol!(self, is_inter as u32, &mut self.fc.intra_inter_cdfs[ctx], 2);
+    symbol!(self, is_inter as u32, &mut self.fc.intra_inter_cdfs[ctx]);
   }
 
   pub fn get_txsize_entropy_ctx(&mut self, tx_size: TxSize) -> usize {
@@ -2094,7 +2093,7 @@ impl ContextWriter {
 
     {
       let cdf = &mut self.fc.txb_skip_cdf[txs_ctx][txb_ctx.txb_skip_ctx];
-      symbol!(self, (eob == 0) as u32, cdf, 2);
+      symbol!(self, (eob == 0) as u32, cdf);
     }
 
     if eob == 0 {
@@ -2144,56 +2143,49 @@ impl ContextWriter {
         symbol!(
           self,
           eob_pt - 1,
-          &mut self.fc.eob_flag_cdf16[plane_type][eob_multi_ctx],
-          5
+          &mut self.fc.eob_flag_cdf16[plane_type][eob_multi_ctx]
         );
       }
       1 => {
         symbol!(
           self,
           eob_pt - 1,
-          &mut self.fc.eob_flag_cdf32[plane_type][eob_multi_ctx],
-          6
+          &mut self.fc.eob_flag_cdf32[plane_type][eob_multi_ctx]
         );
       }
       2 => {
         symbol!(
           self,
           eob_pt - 1,
-          &mut self.fc.eob_flag_cdf64[plane_type][eob_multi_ctx],
-          7
+          &mut self.fc.eob_flag_cdf64[plane_type][eob_multi_ctx]
         );
       }
       3 => {
         symbol!(
           self,
           eob_pt - 1,
-          &mut self.fc.eob_flag_cdf128[plane_type][eob_multi_ctx],
-          8
+          &mut self.fc.eob_flag_cdf128[plane_type][eob_multi_ctx]
         );
       }
       4 => {
         symbol!(
           self,
           eob_pt - 1,
-          &mut self.fc.eob_flag_cdf256[plane_type][eob_multi_ctx],
-          9
+          &mut self.fc.eob_flag_cdf256[plane_type][eob_multi_ctx]
         );
       }
       5 => {
         symbol!(
           self,
           eob_pt - 1,
-          &mut self.fc.eob_flag_cdf512[plane_type][eob_multi_ctx],
-          10
+          &mut self.fc.eob_flag_cdf512[plane_type][eob_multi_ctx]
         );
       }
       _ => {
         symbol!(
           self,
           eob_pt - 1,
-          &mut self.fc.eob_flag_cdf1024[plane_type][eob_multi_ctx],
-          11
+          &mut self.fc.eob_flag_cdf1024[plane_type][eob_multi_ctx]
         );
       }
     };
@@ -2210,8 +2202,7 @@ impl ContextWriter {
       symbol!(
         self,
         bit,
-        &mut self.fc.eob_extra_cdf[txs_ctx][plane_type][eob_pt as usize],
-        2
+        &mut self.fc.eob_extra_cdf[txs_ctx][plane_type][eob_pt as usize]
       );
       for i in 1..eob_offset_bits {
         eob_shift = eob_offset_bits as u16 - 1 - i as u16;
@@ -2253,15 +2244,13 @@ impl ContextWriter {
           self,
           (cmp::min(level, 3) - 1) as u32,
           &mut self.fc.coeff_base_eob_cdf[txs_ctx][plane_type]
-            [coeff_ctx as usize],
-          3
+            [coeff_ctx as usize]
         );
       } else {
         symbol!(
           self,
           (cmp::min(level, 3)) as u32,
-          &mut self.fc.coeff_base_cdf[txs_ctx][plane_type][coeff_ctx as usize],
-          4
+          &mut self.fc.coeff_base_cdf[txs_ctx][plane_type][coeff_ctx as usize]
         );
       }
 
@@ -2288,8 +2277,7 @@ impl ContextWriter {
             k as u32,
             &mut self.fc.coeff_br_cdf
               [cmp::min(txs_ctx, TxSize::TX_32X32 as usize)][plane_type]
-              [br_ctx],
-            BR_CDF_SIZE
+              [br_ctx]
           );
           if k < BR_CDF_SIZE as u16 - 1 {
             break;
@@ -2318,8 +2306,7 @@ impl ContextWriter {
         symbol!(
           self,
           sign,
-          &mut self.fc.dc_sign_cdf[plane_type][txb_ctx.dc_sign_ctx],
-          2
+          &mut self.fc.dc_sign_cdf[plane_type][txb_ctx.dc_sign_ctx]
         );
       } else {
         self.w.bit(sign as u16);
