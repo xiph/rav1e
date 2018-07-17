@@ -13,7 +13,21 @@
 use BlockSize::*;
 use TxSize::*;
 use FrameInvariants;
-use LAST_FRAME;
+
+pub const NONE_FRAME: isize = -1;
+pub const INTRA_FRAME: usize = 0;
+pub const LAST_FRAME: usize = 1;
+pub const LAST2_FRAME: usize = 2;
+pub const LAST3_FRAME: usize = 3;
+pub const GOLDEN_FRAME: usize = 4;
+pub const BWDREF_FRAME: usize = 5;
+pub const ALTREF2_FRAME: usize = 6;
+pub const ALTREF_FRAME: usize = 7;
+
+pub const FWD_REFS: usize = GOLDEN_FRAME - LAST_FRAME + 1;
+pub const BWD_REFS: usize = ALTREF_FRAME - BWDREF_FRAME + 1;
+pub const SINGLE_REFS: usize = FWD_REFS + BWD_REFS;
+pub const TOTAL_REFS_PER_FRAME: usize = ALTREF_FRAME - INTRA_FRAME + 1;
 
 #[derive(Copy, Clone, PartialEq, PartialOrd)]
 pub enum PartitionType {
@@ -303,6 +317,16 @@ pub enum PredictionMode {
   ZERO_ZEROMV,
   NEW_NEWMV
 }
+
+pub const NEWMV_MODE_CONTEXTS: usize = 7;
+pub const GLOBALMV_MODE_CONTEXTS: usize = 2;
+pub const REFMV_MODE_CONTEXTS: usize = 9;
+
+pub const REFMV_OFFSET: usize = 4;
+pub const GLOBALMV_OFFSET: usize = 3;
+pub const NEWMV_CTX_MASK: usize = ((1 << GLOBALMV_OFFSET) - 1);
+pub const GLOBALMV_CTX_MASK: usize = ((1 << (REFMV_OFFSET - GLOBALMV_OFFSET)) - 1);
+pub const REFMV_CTX_MASK: usize = ((1 << (8 - REFMV_OFFSET)) - 1);
 
 pub static RAV1E_PARTITION_TYPES: &'static [PartitionType] =
   &[PartitionType::PARTITION_NONE, PartitionType::PARTITION_SPLIT];

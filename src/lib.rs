@@ -408,7 +408,7 @@ pub const ALL_REF_FRAMES_MASK: u32 = (1 << REF_FRAMES) - 1;
 
 /*const NONE_FRAME: isize = -1;
 const INTRA_FRAME: usize = 0;*/
-const LAST_FRAME: usize = 1;
+//const LAST_FRAME: usize = 1;
 
 /*const LAST2_FRAME: usize = 2;
 const LAST3_FRAME: usize = 3;
@@ -1463,6 +1463,9 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
         cw.write_is_inter(bo, is_inter);
         if !is_inter {
             cw.write_intra_mode(bsize, luma_mode);
+        } else {
+            cw.fill_neighbours_ref_counts(bo);
+            cw.write_ref_frames(bo);
         }
     } else {
         cw.write_intra_mode_kf(bo, luma_mode);
