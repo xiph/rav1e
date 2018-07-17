@@ -47,7 +47,7 @@ fn main() {
         .define("CONFIG_EXT_SKIP", "0")
         .define("CONFIG_LV_MAP", "1")
         .define("CONFIG_ANALYZER", "0")
-        .define("CONFIG_Q_ADAPT_PROBS", "0")
+        .define("CONFIG_Q_ADAPT_PROBS", "1")
         .define("CONFIG_INTRA_EDGE", "0")
         .define("ENABLE_DOCS", "0")
         .build();
