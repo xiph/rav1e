@@ -190,7 +190,8 @@ impl Sequence {
 
 pub struct FrameState {
     pub input: Frame,
-    pub rec: Frame
+    pub rec: Frame,
+    pub qc: QuantizationContext,
 }
 
 impl FrameState {
@@ -198,6 +199,7 @@ impl FrameState {
         FrameState {
             input: Frame::new(fi.padded_w, fi.padded_h),
             rec: Frame::new(fi.padded_w, fi.padded_h),
+            qc: Default::default(),
         }
     }
 }
@@ -1341,7 +1343,7 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
 
 
     forward_transform(&residual.array, coeffs, tx_size.width(), tx_size, tx_type);
-    quantize_in_place(fi.qindex, coeffs, tx_size);
+    fs.qc.quantize(coeffs);
 
     cw.write_coeffs_lv_map(p, bo, &coeffs, tx_size, tx_type, plane_bsize, xdec, ydec,
                             fi.use_reduced_tx_set);
@@ -1417,6 +1419,8 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
 
     let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
+    fs.qc.update(fi.qindex, tx_size);
+
     for by in 0..bh {
         for bx in 0..bw {
             let tx_bo = BlockOffset {
@@ -1454,6 +1458,8 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
         let uv_tx_type = uv_intra_mode_to_tx_type_context(chroma_mode);
         let partition_x = (bo.x & LOCAL_BLOCK_MASK) >> xdec << MI_SIZE_LOG2;
         let partition_y = (bo.y & LOCAL_BLOCK_MASK) >> ydec << MI_SIZE_LOG2;
+
+        fs.qc.update(fi.qindex, uv_tx_size);
 
         for p in 1..3 {
             let sb_offset = bo.sb_offset().plane_offset(&fs.input.planes[p].cfg);
@@ -1762,9 +1768,9 @@ pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
     let y4m_bytes = y4m_dec.get_bytes_per_sample();
     let csp = y4m_dec.get_colorspace();
     match csp {
-        y4m::Colorspace::C420 | 
+        y4m::Colorspace::C420 |
         y4m::Colorspace::C420jpeg |
-        y4m::Colorspace::C420paldv | 
+        y4m::Colorspace::C420paldv |
         y4m::Colorspace::C420mpeg2 => {},
         _ => {
             panic!("Colorspace {:?} is not supported yet.", csp);
