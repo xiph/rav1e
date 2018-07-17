@@ -106,6 +106,9 @@ impl QuantizationContext {
 
       self.ac_quant = ac_q(qindex) as u32;
       self.ac_mul_add = divu_gen(self.ac_quant);
+
+      self.dc_offset = self.dc_quant as i32 * 21 / 64;
+      self.ac_offset = self.ac_quant as i32 * 21 / 64;
     }
 
     #[inline]
