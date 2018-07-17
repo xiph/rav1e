@@ -889,7 +889,7 @@ pub fn uv_intra_mode_to_tx_type_context(pred: PredictionMode) -> TxType {
   intra_mode_to_tx_type_context[uv2y[pred as usize] as usize]
 }
 
-extern {
+extern "C" {
   static default_partition_cdf:
     [[u16; PARTITION_TYPES + 1]; PARTITION_CONTEXTS];
   static default_kf_y_mode_cdf:
@@ -909,28 +909,28 @@ extern {
   static av1_inter_scan_orders: [[SCAN_ORDER; TX_TYPES]; TxSize::TX_SIZES_ALL];
 
   // lv_map
-  static av1_default_txb_skip_cdf:
-    [[[u16; 3]; TXB_SKIP_CONTEXTS]; TxSize::TX_SIZES];
-  static av1_default_dc_sign_cdf:
-    [[[u16; 3]; DC_SIGN_CONTEXTS]; TxSize::TX_SIZES];
-  static av1_default_eob_extra_cdf:
-    [[[[u16; 3]; EOB_COEF_CONTEXTS]; PLANE_TYPES]; TxSize::TX_SIZES];
+  static av1_default_txb_skip_cdfs:
+    [[[[u16; 3]; TXB_SKIP_CONTEXTS]; TxSize::TX_SIZES]; 4];
+  static av1_default_dc_sign_cdfs:
+    [[[[u16; 3]; DC_SIGN_CONTEXTS]; PLANE_TYPES]; 4];
+  static av1_default_eob_extra_cdfs:
+    [[[[[u16; 3]; EOB_COEF_CONTEXTS]; PLANE_TYPES]; TxSize::TX_SIZES]; 4];
 
-  static av1_default_eob_multi16: [[[u16; 5 + 1]; 2]; PLANE_TYPES];
-  static av1_default_eob_multi32: [[[u16; 6 + 1]; 2]; PLANE_TYPES];
-  static av1_default_eob_multi64: [[[u16; 7 + 1]; 2]; PLANE_TYPES];
-  static av1_default_eob_multi128: [[[u16; 8 + 1]; 2]; PLANE_TYPES];
-  static av1_default_eob_multi256: [[[u16; 9 + 1]; 2]; PLANE_TYPES];
-  static av1_default_eob_multi512: [[[u16; 10 + 1]; 2]; PLANE_TYPES];
-  static av1_default_eob_multi1024: [[[u16; 11 + 1]; 2]; PLANE_TYPES];
+  static av1_default_eob_multi16_cdfs: [[[[u16; 5 + 1]; 2]; PLANE_TYPES]; 4];
+  static av1_default_eob_multi32_cdfs: [[[[u16; 6 + 1]; 2]; PLANE_TYPES]; 4];
+  static av1_default_eob_multi64_cdfs: [[[[u16; 7 + 1]; 2]; PLANE_TYPES]; 4];
+  static av1_default_eob_multi128_cdfs: [[[[u16; 8 + 1]; 2]; PLANE_TYPES]; 4];
+  static av1_default_eob_multi256_cdfs: [[[[u16; 9 + 1]; 2]; PLANE_TYPES]; 4];
+  static av1_default_eob_multi512_cdfs: [[[[u16; 10 + 1]; 2]; PLANE_TYPES]; 4];
+  static av1_default_eob_multi1024_cdfs: [[[[u16; 11 + 1]; 2]; PLANE_TYPES]; 4];
 
-  static av1_default_coeff_base_eob_multi:
-    [[[[u16; 3 + 1]; SIG_COEF_CONTEXTS_EOB]; PLANE_TYPES]; TxSize::TX_SIZES];
-  static av1_default_coeff_base_multi:
-    [[[[u16; 4 + 1]; SIG_COEF_CONTEXTS]; PLANE_TYPES]; TxSize::TX_SIZES];
-  static av1_default_coeff_lps_multi: [[[[u16; BR_CDF_SIZE + 1];
+  static av1_default_coeff_base_eob_multi_cdfs:
+    [[[[[u16; 3 + 1]; SIG_COEF_CONTEXTS_EOB]; PLANE_TYPES]; TxSize::TX_SIZES]; 4];
+  static av1_default_coeff_base_multi_cdfs:
+    [[[[[u16; 4 + 1]; SIG_COEF_CONTEXTS]; PLANE_TYPES]; TxSize::TX_SIZES]; 4];
+  static av1_default_coeff_lps_multi_cdfs: [[[[[u16; BR_CDF_SIZE + 1];
     LEVEL_CONTEXTS]; PLANE_TYPES];
-    TxSize::TX_SIZES];
+    TxSize::TX_SIZES]; 4];
 }
 
 #[repr(C)]
@@ -957,7 +957,7 @@ pub struct CDFContext {
 
   // lv_map
   txb_skip_cdf: [[[u16; 3]; TXB_SKIP_CONTEXTS]; TxSize::TX_SIZES],
-  dc_sign_cdf: [[[u16; 3]; DC_SIGN_CONTEXTS]; TxSize::TX_SIZES],
+  dc_sign_cdf: [[[u16; 3]; DC_SIGN_CONTEXTS]; PLANE_TYPES],
   eob_extra_cdf:
     [[[[u16; 3]; EOB_COEF_CONTEXTS]; PLANE_TYPES]; TxSize::TX_SIZES],
 
@@ -978,7 +978,13 @@ pub struct CDFContext {
 }
 
 impl CDFContext {
-  pub fn new(_qindex: u8) -> CDFContext {
+    pub fn new(qindex: u8) -> CDFContext {
+    let qctx = match qindex {
+      0...20 => 0,
+      21...60 => 1,
+      61...120 => 2,
+      _ => 3
+    };
     CDFContext {
       partition_cdf: default_partition_cdf,
       kf_y_cdf: default_kf_y_mode_cdf,
@@ -992,21 +998,21 @@ impl CDFContext {
       filter_intra_cdfs: default_filter_intra_cdfs,
 
       // lv_map
-      txb_skip_cdf: av1_default_txb_skip_cdf,
-      dc_sign_cdf: av1_default_dc_sign_cdf,
-      eob_extra_cdf: av1_default_eob_extra_cdf,
+      txb_skip_cdf: av1_default_txb_skip_cdfs[qctx],
+      dc_sign_cdf: av1_default_dc_sign_cdfs[qctx],
+      eob_extra_cdf: av1_default_eob_extra_cdfs[qctx],
 
-      eob_flag_cdf16: av1_default_eob_multi16,
-      eob_flag_cdf32: av1_default_eob_multi32,
-      eob_flag_cdf64: av1_default_eob_multi64,
-      eob_flag_cdf128: av1_default_eob_multi128,
-      eob_flag_cdf256: av1_default_eob_multi256,
-      eob_flag_cdf512: av1_default_eob_multi512,
-      eob_flag_cdf1024: av1_default_eob_multi1024,
+      eob_flag_cdf16: av1_default_eob_multi16_cdfs[qctx],
+      eob_flag_cdf32: av1_default_eob_multi32_cdfs[qctx],
+      eob_flag_cdf64: av1_default_eob_multi64_cdfs[qctx],
+      eob_flag_cdf128: av1_default_eob_multi128_cdfs[qctx],
+      eob_flag_cdf256: av1_default_eob_multi256_cdfs[qctx],
+      eob_flag_cdf512: av1_default_eob_multi512_cdfs[qctx],
+      eob_flag_cdf1024: av1_default_eob_multi1024_cdfs[qctx],
 
-      coeff_base_eob_cdf: av1_default_coeff_base_eob_multi,
-      coeff_base_cdf: av1_default_coeff_base_multi,
-      coeff_br_cdf: av1_default_coeff_lps_multi
+      coeff_base_eob_cdf: av1_default_coeff_base_eob_multi_cdfs[qctx],
+      coeff_base_cdf: av1_default_coeff_base_multi_cdfs[qctx],
+      coeff_br_cdf: av1_default_coeff_lps_multi_cdfs[qctx]
     }
   }
 

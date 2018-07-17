@@ -115,7 +115,7 @@ pub enum TxSize {
 
 impl TxSize {
   /// Number of square transform sizes
-  pub const TX_SIZES: usize = 4;
+  pub const TX_SIZES: usize = 5;
 
   /// Number of transform sizes (including non-square sizes)
   pub const TX_SIZES_ALL: usize = 14 + 5;
