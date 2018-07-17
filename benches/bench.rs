@@ -361,16 +361,10 @@ pub fn write_b() -> Vec<TestDescAndFn> {
   let mut benches = ::std::vec::Vec::new();
   for &tx_size in &[TxSize::TX_4X4, TxSize::TX_8X8] {
     for &qi in &[20, 55] {
-      let w = WriteB {
-        tx_size,
-        qi
-      };
+      let w = WriteB { tx_size, qi };
       let n = format!("write_b_bench({:?}, {})", tx_size, qi);
       benches.push(TestDescAndFn {
-        desc: TestDesc {
-          name: Cow::from(n),
-          ignore: false
-        },
+        desc: TestDesc { name: Cow::from(n), ignore: false },
         testfn: TestFn::DynBenchFn(Box::new(w))
       });
     }
@@ -397,19 +391,13 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
 
   b.iter(|| {
     for &mode in RAV1E_INTRA_MODES {
-      let sbo = SuperBlockOffset {
-        x: sbx,
-        y: sby
-      };
+      let sbo = SuperBlockOffset { x: sbx, y: sby };
       fs.qc.update(fi.qindex, tx_size);
       for p in 1..3 {
         for by in 0..8 {
           for bx in 0..8 {
             let bo = sbo.block_offset(bx, by);
-            let tx_bo = BlockOffset {
-              x: bo.x + bx,
-              y: bo.y + by
-            };
+            let tx_bo = BlockOffset { x: bo.x + bx, y: bo.y + by };
             let po = tx_bo.plane_offset(&fs.input.planes[p].cfg);
             encode_tx_block(
               &mut fi,

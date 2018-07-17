@@ -39,11 +39,8 @@ fn main() {
   let mut last_rec: Option<Frame> = None;
   loop {
     //fi.frame_type = FrameType::KEY;
-    fi.frame_type = if fi.number % 30 == 0 {
-      FrameType::KEY
-    } else {
-      FrameType::INTER
-    };
+    fi.frame_type =
+      if fi.number % 30 == 0 { FrameType::KEY } else { FrameType::INTER };
 
     fi.intra_only = fi.frame_type == FrameType::KEY
       || fi.frame_type == FrameType::INTRA_ONLY;

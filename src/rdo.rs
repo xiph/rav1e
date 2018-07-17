@@ -117,11 +117,7 @@ pub fn rdo_mode_decision(
   let w = bsize.width();
   let h = bsize.height();
 
-  let PlaneConfig {
-    xdec,
-    ydec,
-    ..
-  } = fs.input.planes[1].cfg;
+  let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
   let mut w_uv = w >> xdec;
   let mut h_uv = h >> ydec;
@@ -244,11 +240,7 @@ pub fn rdo_tx_type_decision(
   let w = bsize.width();
   let h = bsize.height();
 
-  let PlaneConfig {
-    xdec,
-    ydec,
-    ..
-  } = fs.input.planes[1].cfg;
+  let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
   let mut w_uv = w >> xdec;
   let mut h_uv = h >> ydec;
@@ -345,37 +337,26 @@ pub fn rdo_partition_decision(
         let bs = bsize.width_mi();
         let hbs = bs >> 1; // Half the block size in blocks
 
-        let offset = BlockOffset {
-          x: bo.x,
-          y: bo.y
-        };
+        let offset = BlockOffset { x: bo.x, y: bo.y };
         let mode_decision = rdo_mode_decision(fi, fs, cw, subsize, &offset)
           .part_modes[0]
           .clone();
         child_modes.push(mode_decision);
 
-        let offset = BlockOffset {
-          x: bo.x + hbs as usize,
-          y: bo.y
-        };
+        let offset = BlockOffset { x: bo.x + hbs as usize, y: bo.y };
         let mode_decision = rdo_mode_decision(fi, fs, cw, subsize, &offset)
           .part_modes[0]
           .clone();
         child_modes.push(mode_decision);
 
-        let offset = BlockOffset {
-          x: bo.x,
-          y: bo.y + hbs as usize
-        };
+        let offset = BlockOffset { x: bo.x, y: bo.y + hbs as usize };
         let mode_decision = rdo_mode_decision(fi, fs, cw, subsize, &offset)
           .part_modes[0]
           .clone();
         child_modes.push(mode_decision);
 
-        let offset = BlockOffset {
-          x: bo.x + hbs as usize,
-          y: bo.y + hbs as usize
-        };
+        let offset =
+          BlockOffset { x: bo.x + hbs as usize, y: bo.y + hbs as usize };
         let mode_decision = rdo_mode_decision(fi, fs, cw, subsize, &offset)
           .part_modes[0]
           .clone();

@@ -31,28 +31,16 @@ impl Plane {
   pub fn new(width: usize, height: usize, xdec: usize, ydec: usize) -> Plane {
     Plane {
       data: vec![128; width * height],
-      cfg: PlaneConfig {
-        stride: width,
-        xdec,
-        ydec
-      }
+      cfg: PlaneConfig { stride: width, xdec, ydec }
     }
   }
 
   pub fn slice<'a>(&'a self, po: &PlaneOffset) -> PlaneSlice<'a> {
-    PlaneSlice {
-      plane: self,
-      x: po.x,
-      y: po.y
-    }
+    PlaneSlice { plane: self, x: po.x, y: po.y }
   }
 
   pub fn mut_slice<'a>(&'a mut self, po: &PlaneOffset) -> PlaneMutSlice<'a> {
-    PlaneMutSlice {
-      plane: self,
-      x: po.x,
-      y: po.y
-    }
+    PlaneMutSlice { plane: self, x: po.x, y: po.y }
   }
 
   pub fn p(&self, x: usize, y: usize) -> u16 {
@@ -98,20 +86,12 @@ impl<'a> PlaneSlice<'a> {
 
   /// A slice starting i pixels above the current one.
   pub fn go_up(&'a self, i: usize) -> PlaneSlice<'a> {
-    PlaneSlice {
-      plane: self.plane,
-      x: self.x,
-      y: self.y - i
-    }
+    PlaneSlice { plane: self.plane, x: self.x, y: self.y - i }
   }
 
   /// A slice starting i pixels to the left of the current one.
   pub fn go_left(&'a self, i: usize) -> PlaneSlice<'a> {
-    PlaneSlice {
-      plane: self.plane,
-      x: self.x - i,
-      y: self.y
-    }
+    PlaneSlice { plane: self.plane, x: self.x - i, y: self.y }
   }
 
   pub fn p(&self, add_x: usize, add_y: usize) -> u16 {
@@ -137,20 +117,12 @@ impl<'a> PlaneMutSlice<'a> {
 
   /// A slice starting i pixels above the current one.
   pub fn go_up(&'a self, i: usize) -> PlaneSlice<'a> {
-    PlaneSlice {
-      plane: self.plane,
-      x: self.x,
-      y: self.y - i
-    }
+    PlaneSlice { plane: self.plane, x: self.x, y: self.y - i }
   }
 
   /// A slice starting i pixels to the left of the current one.
   pub fn go_left(&'a self, i: usize) -> PlaneSlice<'a> {
-    PlaneSlice {
-      plane: self.plane,
-      x: self.x - i,
-      y: self.y
-    }
+    PlaneSlice { plane: self.plane, x: self.x - i, y: self.y }
   }
 
   pub fn p(&self, add_x: usize, add_y: usize) -> u16 {
