@@ -19,6 +19,12 @@ pub enum PartitionType {
   PARTITION_HORZ,
   PARTITION_VERT,
   PARTITION_SPLIT,
+  PARTITION_HORZ_A,  // HORZ split and the top partition is split again
+  PARTITION_HORZ_B,  // HORZ split and the bottom partition is split again
+  PARTITION_VERT_A,  // VERT split and the left partition is split again
+  PARTITION_VERT_B,  // VERT split and the right partition is split again
+  PARTITION_HORZ_4,  // 4:1 horizontal partition
+  PARTITION_VERT_4,  // 4:1 vertical partition
   PARTITION_INVALID
 }
 
@@ -37,23 +43,28 @@ pub enum BlockSize {
   BLOCK_32X64,
   BLOCK_64X32,
   BLOCK_64X64,
+  BLOCK_64X128,
+  BLOCK_128X64,
+  BLOCK_128X128,
   BLOCK_4X16,
   BLOCK_16X4,
   BLOCK_8X32,
   BLOCK_32X8,
   BLOCK_16X64,
   BLOCK_64X16,
+  BLOCK_32X128,
+  BLOCK_128X32,
   BLOCK_INVALID
 }
 
 impl BlockSize {
-  pub const BLOCK_SIZES_ALL: usize = 19;
+  pub const BLOCK_SIZES_ALL: usize = 24;
 
   const BLOCK_SIZE_WIDTH_LOG2: [usize; BlockSize::BLOCK_SIZES_ALL] =
-    [2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 2, 4, 3, 5, 4, 6];
+    [2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 2, 4, 3, 5, 4, 6, 5, 7];
 
   const BLOCK_SIZE_HEIGHT_LOG2: [usize; BlockSize::BLOCK_SIZES_ALL] =
-    [2, 3, 2, 3, 4, 3, 4, 5, 4, 5, 6, 5, 6, 4, 2, 5, 3, 6, 4];
+    [2, 3, 2, 3, 4, 3, 4, 5, 4, 5, 6, 5, 6, 7, 6, 7, 4, 2, 5, 3, 6, 4, 7, 5];
 
   pub fn cfl_allowed(self) -> bool {
     // TODO: fix me when enabling EXT_PARTITION_TYPES
