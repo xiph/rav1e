@@ -85,11 +85,7 @@ impl<'a> PlaneSlice<'a> {
   }
 
   pub fn subslice(&'a self, xo: usize, yo: usize) -> PlaneSlice<'a> {
-    PlaneSlice {
-      plane: self.plane,
-      x: self.x+xo,
-      y: self.y+yo
-    }
+    PlaneSlice { plane: self.plane, x: self.x + xo, y: self.y + yo }
   }
 
   /// A slice starting i pixels above the current one.
