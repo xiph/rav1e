@@ -1025,6 +1025,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         -> Result<(), std::io::Error> {
         self.write_frame_size(fi)?;
         self.write(1,0)?; // don't use frame ids
+        self.write(1,0)?; // use_128x128_superblock = 0
         self.write(1,0)?; // screen content tools forced
         self.write(1,0)?; // screen content tools forced off
         Ok(())
