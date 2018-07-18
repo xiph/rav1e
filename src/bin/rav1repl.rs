@@ -17,22 +17,21 @@ use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
 fn main() {
-  let mut files = EncoderConfig::from_cli();
-  let mut y4m_dec = y4m::decode(&mut files.input_file).unwrap();
+  let (mut io, config) = EncoderConfig::from_cli();
+  let mut y4m_dec = y4m::decode(&mut io.input).unwrap();
   let width = y4m_dec.get_width();
   let height = y4m_dec.get_height();
   let framerate = y4m_dec.get_framerate();
-  let mut y4m_enc = match files.rec_file.as_mut() {
-    Some(rec_file) => Some(
-      y4m::encode(width, height, framerate).write_header(rec_file).unwrap()
-    ),
+  let mut y4m_enc = match io.rec.as_mut() {
+    Some(rec) =>
+      Some(y4m::encode(width, height, framerate).write_header(rec).unwrap()),
     None => None
   };
   let mut fi =
-    FrameInvariants::new(width, height, files.quantizer, files.speed);
+    FrameInvariants::new(width, height, config.quantizer, config.speed);
   let mut sequence = Sequence::new(width, height);
   write_ivf_header(
-    &mut files.output_file,
+    &mut io.output,
     fi.padded_w,
     fi.padded_h,
     framerate.num,
@@ -52,13 +51,13 @@ fn main() {
             process_frame(
               &mut sequence,
               &mut fi,
-              &mut files.output_file,
+              &mut io.output,
               &mut y4m_dec,
               y4m_enc.as_mut(),
               &mut last_rec
             );
             fi.number += 1;
-            if fi.number == files.limit {
+            if fi.number == config.limit {
               break;
             }
           }

@@ -394,11 +394,13 @@ impl fmt::Display for FrameType{
     }
 }
 
+pub struct EncoderIO {
+    pub input: Box<Read>,
+    pub output: Box<Write>,
+    pub rec: Option<Box<Write>>,
+}
 
 pub struct EncoderConfig {
-    pub input_file: Box<Read>,
-    pub output_file: Box<Write>,
-    pub rec_file: Option<Box<Write>>,
     pub limit: u64,
     pub quantizer: usize,
     pub speed: usize,
@@ -406,7 +408,7 @@ pub struct EncoderConfig {
 }
 
 impl EncoderConfig {
-    pub fn from_cli() -> EncoderConfig {
+    pub fn from_cli() -> (EncoderIO, EncoderConfig) {
         let matches = App::new("rav1e")
             .version("0.1.0")
             .about("AV1 video encoder")
@@ -448,23 +450,29 @@ impl EncoderConfig {
                 .case_insensitive(true))
             .get_matches();
 
-        EncoderConfig {
-            input_file: match matches.value_of("INPUT").unwrap() {
+
+        let io = EncoderIO {
+            input: match matches.value_of("INPUT").unwrap() {
                 "-" => Box::new(std::io::stdin()) as Box<Read>,
                 f => Box::new(File::open(&f).unwrap()) as Box<Read>
             },
-            output_file: match matches.value_of("OUTPUT").unwrap() {
+            output: match matches.value_of("OUTPUT").unwrap() {
                 "-" => Box::new(std::io::stdout()) as Box<Write>,
                 f => Box::new(File::create(&f).unwrap()) as Box<Write>
             },
-            rec_file: matches.value_of("RECONSTRUCTION").map(|f| {
+            rec: matches.value_of("RECONSTRUCTION").map(|f| {
                 Box::new(File::create(&f).unwrap()) as Box<Write>
-            }),
+            })
+        };
+
+        let config = EncoderConfig {
             limit: matches.value_of("LIMIT").unwrap().parse().unwrap(),
             quantizer: matches.value_of("QP").unwrap().parse().unwrap(),
             speed: matches.value_of("SPEED").unwrap().parse().unwrap(),
             tune: matches.value_of("TUNE").unwrap().parse().unwrap()
-        }
+        };
+
+        (io, config)
     }
 }
 
