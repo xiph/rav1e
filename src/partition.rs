@@ -314,7 +314,7 @@ pub enum PredictionMode {
   NEW_NEARESTMV,
   NEAR_NEWMV,
   NEW_NEARMV,
-  ZERO_ZEROMV,
+  GLOBAL_GLOBALMV,
   NEW_NEWMV
 }
 

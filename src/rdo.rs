@@ -16,12 +16,13 @@ use ec::OD_BITRES;
 use encode_block;
 use partition::*;
 use plane::*;
-use predict::{RAV1E_INTRA_MODES, RAV1E_INTRA_MODES_MINIMAL};
+use predict::{RAV1E_INTRA_MODES, RAV1E_INTRA_MODES_MINIMAL, RAV1E_INTER_MODES};
 use quantize::dc_q;
 use std;
 use std::f64;
 use std::vec::Vec;
 use write_tx_blocks;
+use write_tx_tree;
 use BlockSize;
 use FrameInvariants;
 use FrameState;
@@ -194,12 +195,14 @@ pub fn rdo_mode_decision(
 
   let checkpoint = cw.checkpoint();
 
-  // Exclude complex prediction modes at higher speed levels
-  let mode_set = if fi.config.speed <= 3 {
-    RAV1E_INTRA_MODES
-  } else {
-    RAV1E_INTRA_MODES_MINIMAL
-  };
+    // Exclude complex prediction modes at higher speed levels
+    let mode_set = if fi.config.speed <= 3 {
+      (if fi.frame_type == FrameType::INTER { RAV1E_INTER_MODES }
+       else { RAV1E_INTRA_MODES })
+    } else {
+      (if fi.frame_type == FrameType::INTER { RAV1E_INTER_MODES }
+      else { RAV1E_INTRA_MODES_MINIMAL })
+    };
 
   for &luma_mode in mode_set {
     if fi.frame_type == FrameType::KEY
@@ -305,6 +308,7 @@ pub fn rdo_tx_type_decision(
 
   let partition_start_x = (bo.x & LOCAL_BLOCK_MASK) >> xdec << MI_SIZE_LOG2;
   let partition_start_y = (bo.y & LOCAL_BLOCK_MASK) >> ydec << MI_SIZE_LOG2;
+  let is_inter = mode >= PredictionMode::NEARESTMV;
 
   let checkpoint = cw.checkpoint();
 
@@ -314,9 +318,15 @@ pub fn rdo_tx_type_decision(
       continue;
     }
 
-    write_tx_blocks(
-      fi, fs, cw, mode, mode, bo, bsize, tx_size, tx_type, false,
-    );
+    if is_inter {
+      write_tx_tree(
+        fi, fs, cw, mode, mode, bo, bsize, tx_size, tx_type, false,
+      );
+    }  else {
+      write_tx_blocks(
+        fi, fs, cw, mode, mode, bo, bsize, tx_size, tx_type, false,
+      );
+    }
 
     let cost = cw.w.tell_frac() - tell;
     let rd = compute_rd_cost(
