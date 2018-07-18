@@ -40,7 +40,6 @@ fn main() {
         .define("CONFIG_DEBUG", debug)
         .define("CONFIG_EXPERIMENTAL", "1")
         .define("CONFIG_UNIT_TESTS", "0")
-        .define("CONFIG_EXT_PARTITION", "0")
         .define("CONFIG_EXT_PARTITION_TYPES", "0")
         .define("CONFIG_OBU", "1")
         .define("CONFIG_FILTER_INTRA", "1")
