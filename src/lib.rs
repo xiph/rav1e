@@ -558,6 +558,8 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         //self.write(1, 0)?; // reduced_still_picture
         self.write(4, 0)?; // level
 
+        self.write(2, 0)?; // # of enhancement_layers = 0
+
         if seq.reduced_still_picture_hdr {
             assert!(false);
         } else {

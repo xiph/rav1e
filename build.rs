@@ -47,6 +47,7 @@ fn main() {
         .define("CONFIG_ANALYZER", "0")
         .define("CONFIG_Q_ADAPT_PROBS", "1")
         .define("CONFIG_INTRA_EDGE", "0")
+        .define("CONFIG_SCALABILITY", "1")
         .define("ENABLE_DOCS", "0")
         .build();
 
