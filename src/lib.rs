@@ -12,6 +12,7 @@
 
 extern crate bitstream_io;
 extern crate backtrace;
+#[macro_use]
 extern crate clap;
 extern crate libc;
 extern crate rand;
@@ -73,6 +74,12 @@ const MAX_NUM_OPERATING_POINTS: usize = MAX_NUM_TEMPORAL_LAYERS * MAX_NUM_SPATIA
 
 const PRIMARY_REF_NONE: u32 = 7;
 const PRIMARY_REF_BITS: u32 = 3;
+
+arg_enum!{
+    pub enum Tune {
+        Psnr
+    }
+}
 
 #[derive(Copy,Clone)]
 pub struct Sequence {
@@ -394,7 +401,8 @@ pub struct EncoderConfig {
     pub rec_file: Option<Box<Write>>,
     pub limit: u64,
     pub quantizer: usize,
-    pub speed: usize
+    pub speed: usize,
+    pub tune: Tune
 }
 
 impl EncoderConfig {
@@ -432,6 +440,12 @@ impl EncoderConfig {
                 .long("speed")
                 .takes_value(true)
                 .default_value("3"))
+            .arg(Arg::with_name("TUNE")
+                .help("Psychovisual tuning")
+                .long("tune")
+                .possible_values(&Tune::variants())
+                .default_value("psnr")
+                .case_insensitive(true))
             .get_matches();
 
         EncoderConfig {
@@ -448,7 +462,8 @@ impl EncoderConfig {
             }),
             limit: matches.value_of("LIMIT").unwrap().parse().unwrap(),
             quantizer: matches.value_of("QP").unwrap().parse().unwrap(),
-            speed: matches.value_of("SPEED").unwrap().parse().unwrap()
+            speed: matches.value_of("SPEED").unwrap().parse().unwrap(),
+            tune: matches.value_of("TUNE").unwrap().parse().unwrap()
         }
     }
 }
