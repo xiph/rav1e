@@ -936,6 +936,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
       let skip_mode_allowed =
         !(fi.intra_only  || !reference_select || !seq.enable_order_hint);
       if skip_mode_allowed {
+        assert!(false, "skip_mode_params() is not fully implemented");
         self.write_bit(false)?; // skip_mode_present
       }
 
