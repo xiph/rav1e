@@ -76,9 +76,10 @@ const PRIMARY_REF_NONE: u32 = 7;
 const PRIMARY_REF_BITS: u32 = 3;
 
 arg_enum!{
-    #[derive(Copy, Clone, Debug)]
+    #[derive(Copy, Clone, Debug, PartialEq)]
     pub enum Tune {
-        Psnr
+        Psnr,
+        Psychovisual
     }
 }
 
@@ -460,7 +461,7 @@ impl EncoderConfig {
                 .takes_value(true)
                 .default_value("3"))
             .arg(Arg::with_name("TUNE")
-                .help("Psychovisual tuning")
+                .help("Quality tuning")
                 .long("tune")
                 .possible_values(&Tune::variants())
                 .default_value("psnr")
