@@ -22,6 +22,7 @@ const EC_MIN_PROB: u32 = 4;
 
 pub struct Writer {
   enc: od_ec_enc,
+  #[cfg(debug)]
   debug: bool
 }
 
@@ -260,10 +261,11 @@ impl od_ec_enc {
 
 impl Writer {
   pub fn new() -> Writer {
-    use std::env;
+    // use std::env;
     Writer {
       enc: od_ec_enc::new(),
-      debug: env::var_os("RAV1E_DEBUG").is_some()
+      #[cfg(debug)]
+      debug: std::env::var_os("RAV1E_DEBUG").is_some()
     }
   }
   pub fn done(&mut self) -> Vec<u8> {
@@ -297,27 +299,36 @@ impl Writer {
     }
     cdf[nsymbs] += (cdf[nsymbs] < 32) as u16;
   }
+
+  #[cfg(debug)]
+  fn print_backtrace(&self, s: u32) {
+    use backtrace;
+    let mut depth = 3;
+    backtrace::trace(|frame| {
+      let ip = frame.ip();
+
+      depth -= 1;
+
+      if depth == 0 {
+        backtrace::resolve(ip, |symbol| {
+          if let Some(name) = symbol.name() {
+            eprintln!("Writing symbol {} from {}", s, name);
+          }
+        });
+        false
+      } else {
+        true
+      }
+    });
+  }
+
   pub fn symbol(&mut self, s: u32, cdf: &mut [u16]) {
     let nsymbs = cdf.len() - 1;
-    if self.debug {
-      use backtrace;
-      let mut depth = 3;
-      backtrace::trace(|frame| {
-        let ip = frame.ip();
-
-        depth -= 1;
-
-        if depth == 0 {
-          backtrace::resolve(ip, |symbol| {
-            if let Some(name) = symbol.name() {
-              eprintln!("Writing symbol {} from {}", s, name);
-            }
-          });
-          false
-        } else {
-          true
-        }
-      });
+    #[cfg(debug)]
+    {
+      if self.debug {
+        self.print_backtrace(s);
+      }
     }
     self.cdf(s, &cdf[..nsymbs]);
     Writer::update_cdf(cdf, s);

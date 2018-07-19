@@ -1449,8 +1449,10 @@ impl FieldMap {
 macro_rules! symbol {
   ($self:ident, $s:expr, $cdf:expr) => {
     $self.w.symbol($s, $cdf);
-    if let Some(map) = $self.fc_map.as_ref() {
-      map.lookup($cdf.as_ptr() as usize);
+    #[cfg(debug)] {
+      if let Some(map) = $self.fc_map.as_ref() {
+        map.lookup($cdf.as_ptr() as usize);
+      }
     }
   };
 }
@@ -1466,23 +1468,26 @@ pub struct ContextWriter {
   pub w: ec::Writer,
   pub bc: BlockContext,
   fc: CDFContext,
+  #[cfg(debug)]
   fc_map: Option<FieldMap> // For debugging purposes
 }
 
 impl ContextWriter {
   pub fn new(w: ec::Writer, fc: CDFContext, bc: BlockContext) -> Self {
-    use std::env;
-
+    #[allow(unused_mut)]
     let mut cw = ContextWriter {
       w,
       fc,
       bc,
+      #[cfg(debug)]
       fc_map: Default::default()
     };
-    if env::var_os("RAV1E_DEBUG").is_some() {
-      cw.fc_map = Some(FieldMap {
-        map: cw.fc.build_map()
-      });
+    #[cfg(debug)] {
+      if std::env::var_os("RAV1E_DEBUG").is_some() {
+        cw.fc_map = Some(FieldMap {
+          map: cw.fc.build_map()
+        });
+      }
     }
 
     cw
@@ -2180,10 +2185,12 @@ impl ContextWriter {
     self.w.rollback(&checkpoint.w);
     self.fc = checkpoint.fc.clone();
     self.bc.rollback(&checkpoint.bc);
-    if self.fc_map.is_some() {
-      self.fc_map = Some(FieldMap {
-        map: self.fc.build_map()
-      });
+    #[cfg(debug)] {
+      if self.fc_map.is_some() {
+        self.fc_map = Some(FieldMap {
+          map: self.fc.build_map()
+        });
+      }
     }
   }
 }
