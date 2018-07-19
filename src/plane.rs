@@ -117,7 +117,19 @@ impl<'a> PlaneMutSlice<'a> {
     &mut self.plane.data[self.y * stride + self.x..]
   }
 
-  // FIXME: code duplication with PlaneSlice
+  pub fn offset(&self, add_x: usize, add_y: usize) -> &[u16] {
+    let new_y = self.y + add_y;
+    let new_x = self.x + add_x;
+    &self.plane.data[new_y * self.plane.cfg.stride + new_x ..]
+  }
+
+  pub fn offset_as_mutable(&'a mut self, add_x: usize, add_y: usize) -> &'a mut [u16] {
+    let new_y = self.y + add_y;
+    let new_x = self.x + add_x;
+    &mut self.plane.data[new_y * self.plane.cfg.stride + new_x ..]
+  }
+
+    // FIXME: code duplication with PlaneSlice
 
   /// A slice starting i pixels above the current one.
   pub fn go_up(&'a self, i: usize) -> PlaneSlice<'a> {
