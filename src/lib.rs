@@ -285,6 +285,10 @@ pub struct FrameInvariants {
     pub is_motion_mode_switchable: bool,
     pub disable_frame_end_update_cdf: bool,
     pub allow_warped_motion: bool,
+    pub cdef_damping: u8,
+    pub cdef_bits: u8,
+    pub cdef_y_strength: u8,
+    pub cdef_uv_strength: u8,
     pub config: EncoderConfig,
 }
 
@@ -334,6 +338,10 @@ impl FrameInvariants {
             is_motion_mode_switchable: false, // 0: only the SIMPLE motion mode will be used.
             disable_frame_end_update_cdf: true,
             allow_warped_motion: true,
+            cdef_damping: 3,
+            cdef_bits: 0,
+            cdef_y_strength: 7*4+3,
+            cdef_uv_strength: 7*4+3,
             config,
         }
     }
@@ -535,7 +543,7 @@ trait UncompressedHeader {
     fn write_bitdepth_colorspace_sampling(&mut self) -> Result<(), std::io::Error>;
     fn write_frame_setup(&mut self) -> Result<(), std::io::Error>;
     fn write_loop_filter(&mut self) -> Result<(), std::io::Error>;
-    fn write_cdef(&mut self) -> Result<(), std::io::Error>;
+    fn write_cdef(&mut self, fi: &FrameInvariants) -> Result<(), std::io::Error>;
 }
 #[allow(unused)]
 const OP_POINTS_IDC_BITS:usize = 12;
@@ -947,7 +955,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
       // loop filter
       self.write_loop_filter()?;
       // cdef
-      self.write_cdef()?;
+      self.write_cdef(fi)?;
       // loop restoration
       // If seq.enable_restoration is false, don't signal about loop restoration
       if seq.enable_restoration {
@@ -1069,12 +1077,17 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         self.write(3,0)?; // loop filter sharpness
         self.write_bit(false) // loop filter deltas enabled
     }
-    fn write_cdef(&mut self) -> Result<(), std::io::Error> {
-        self.write(2,0)?; // cdef clpf damping
-        self.write(2,0)?; // cdef bits
+    fn write_cdef(&mut self, fi: &FrameInvariants) -> Result<(), std::io::Error> {
+        assert!(fi.cdef_damping >= 3);
+        assert!(fi.cdef_damping <= 6);
+        self.write(2, fi.cdef_damping - 3)?;
+        assert!(fi.cdef_bits == 0); // temporary limitation
+        self.write(2,fi.cdef_bits)?; // cdef bits
         for _ in 0..1 {
-            self.write(6,7*4+3)?; // cdef y strength
-            self.write(6,7*4+3)?; // cdef uv strength
+            assert!(fi.cdef_y_strength<64);
+            assert!(fi.cdef_uv_strength<64);
+            self.write(6,fi.cdef_y_strength)?; // cdef y strength
+            self.write(6,fi.cdef_uv_strength)?; // cdef uv strength
         }
         Ok(())
     }
@@ -1291,7 +1304,7 @@ fn write_uncompressed_header(packet: &mut Write,
     bw.write_bit(false)?; // no qm
     bw.write_bit(false)?; // segmentation off
     bw.write_bit(false)?; // no delta q
-    bw.write_cdef()?;
+    bw.write_cdef(fi)?;
     bw.write(6,0)?; // no y, u or v loop restoration
     bw.write_bit(false)?; // tx mode select
 
@@ -1777,7 +1790,7 @@ fn cdef_find_dir(input: &[u16], stride: usize, var: &mut i32, coeff_shift: i32) 
 }
 
 const CDEF_VERY_LARGE: u16 = 30000;
-const CDEF_SEC_STRENGTHS: i32 = 4;
+const CDEF_SEC_STRENGTHS: u8 = 4;
 fn msb(x: i32) -> i32 {
     31 ^ (x.leading_zeros() as i32)
 }
@@ -1880,13 +1893,18 @@ fn adjust_strength(strength: i32, var: i32) -> i32 {
 fn cdef_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockContext) {
     let bit_depth = 8;
     let coeff_shift = bit_depth - 8;
-    let cdef_pri_strength = (7*4+3) / CDEF_SEC_STRENGTHS;
-    let mut cdef_sec_strength = (7*4+3) % CDEF_SEC_STRENGTHS;
-    if cdef_sec_strength == 3 {
-        cdef_sec_strength += 1;
+    let cdef_pri_y_strength = (fi.cdef_y_strength / CDEF_SEC_STRENGTHS) as i32;
+    let mut cdef_sec_y_strength = (fi.cdef_y_strength % CDEF_SEC_STRENGTHS) as i32;
+    let cdef_pri_uv_strength = (fi.cdef_uv_strength / CDEF_SEC_STRENGTHS) as i32;
+    let mut cdef_sec_uv_strength = (fi.cdef_uv_strength % CDEF_SEC_STRENGTHS) as i32;
+    if cdef_sec_y_strength == 3 {
+        cdef_sec_y_strength += 1;
     }
-    let cdef_pri_damping = 3;
-    let cdef_sec_damping = cdef_pri_damping;
+    if cdef_sec_uv_strength == 3 {
+        cdef_sec_uv_strength += 1;
+    }
+    let cdef_pri_damping = fi.cdef_damping as i32;
+    let cdef_sec_damping = cdef_pri_damping as i32;
 
     // Each filter block is 64x64, except right and/or bottom for non-multiple-of-64 sizes.
     // FIXME: 128x128 SB support will break this, we need FilterBlockOffset etc.
@@ -1973,15 +1991,16 @@ fn cdef_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockContext) {
                             if p==0 {
                                 dir = cdef_find_dir(cdef_slice.offset((8*bx>>xdec)+2,(8*by>>ydec)+2),
                                                     cdef_stride, &mut var, coeff_shift);
-                                local_pri_strength = adjust_strength(cdef_pri_strength << coeff_shift, var);
-                                local_sec_strength = cdef_sec_strength << coeff_shift;
+                                local_pri_strength = adjust_strength(cdef_pri_y_strength << coeff_shift, var);
+                                local_sec_strength = cdef_sec_y_strength << coeff_shift;
+                                local_dir = if cdef_pri_y_strength != 0 {dir as usize} else {0};
                             } else {
-                                local_pri_strength = cdef_pri_strength << coeff_shift;
-                                local_sec_strength = cdef_sec_strength << coeff_shift;
+                                local_pri_strength = cdef_pri_uv_strength << coeff_shift;
+                                local_sec_strength = cdef_sec_uv_strength << coeff_shift;
                                 local_pri_damping -= 1;
                                 local_sec_damping -= 1;
+                                local_dir = if cdef_pri_uv_strength != 0 {dir as usize} else {0};
                             }
-                            local_dir = if cdef_pri_strength != 0 {dir as usize} else {0};
                         }
                             
                         let mut xsize = (fi.padded_w as i32 - 8*bx as i32 >> xdec as i32) - rec_po.x as i32;
