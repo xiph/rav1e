@@ -76,8 +76,15 @@ const PRIMARY_REF_NONE: u32 = 7;
 const PRIMARY_REF_BITS: u32 = 3;
 
 arg_enum!{
+    #[derive(Copy, Clone, Debug)]
     pub enum Tune {
         Psnr
+    }
+}
+
+impl Default for Tune {
+    fn default() -> Self {
+        Tune::Psnr
     }
 }
 
@@ -240,8 +247,6 @@ impl Fixed for usize {
 // Frame Invariants are invariant inside a frame
 #[allow(dead_code)]
 pub struct FrameInvariants {
-    pub qindex: usize,
-    pub speed: usize,
     pub width: usize,
     pub height: usize,
     pub padded_w: usize,
@@ -278,22 +283,21 @@ pub struct FrameInvariants {
     pub is_motion_mode_switchable: bool,
     pub disable_frame_end_update_cdf: bool,
     pub allow_warped_motion: bool,
+    pub config: EncoderConfig,
 }
 
 impl FrameInvariants {
-    pub fn new(width: usize, height: usize, qindex: usize, speed: usize) -> FrameInvariants {
+    pub fn new(width: usize, height: usize, config: EncoderConfig) -> FrameInvariants {
         // Speed level decides the minimum partition size, i.e. higher speed --> larger min partition size,
         // with exception that SBs on right or bottom frame borders split down to BLOCK_4X4.
         // At speed = 0, RDO search is exhaustive.
-        let min_partition_size = if speed <= 1 { BlockSize::BLOCK_4X4 }
-                                 else if speed <= 2 { BlockSize::BLOCK_8X8 }
-                                 else if speed <= 3 { BlockSize::BLOCK_16X16 }
+        let min_partition_size = if config.speed <= 1 { BlockSize::BLOCK_4X4 }
+                                 else if config.speed <= 2 { BlockSize::BLOCK_8X8 }
+                                 else if config.speed <= 3 { BlockSize::BLOCK_16X16 }
                                  else { BlockSize::BLOCK_32X32 };
-        let use_reduced_tx_set = speed > 1;
+        let use_reduced_tx_set = config.speed > 1;
 
         FrameInvariants {
-            qindex,
-            speed,
             width,
             height,
             padded_w: width.align_power_of_two(3),
@@ -328,6 +332,7 @@ impl FrameInvariants {
             is_motion_mode_switchable: false, // 0: only the SIMPLE motion mode will be used.
             disable_frame_end_update_cdf: true,
             allow_warped_motion: true,
+            config,
         }
     }
 }
@@ -400,11 +405,23 @@ pub struct EncoderIO {
     pub rec: Option<Box<Write>>,
 }
 
+#[derive(Copy, Clone, Debug)]
 pub struct EncoderConfig {
     pub limit: u64,
     pub quantizer: usize,
     pub speed: usize,
     pub tune: Tune
+}
+
+impl Default for EncoderConfig {
+    fn default() -> Self {
+        EncoderConfig {
+            limit: 0,
+            quantizer: 0,
+            speed: 0,
+            tune: Tune::Psnr,
+        }
+    }
 }
 
 impl EncoderConfig {
@@ -912,8 +929,8 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
       // write context_update_tile_id and tile_size_bytes_minus_1 }
 
       // quantization
-      assert!(fi.qindex > 0);
-      self.write(8,fi.qindex as u8)?; // base_q_idx
+      assert!(fi.config.quantizer > 0);
+      self.write(8,fi.config.quantizer as u8)?; // base_q_idx
       self.write_bit(false)?; // y dc delta q
       self.write_bit(false)?; // uv dc delta q
       self.write_bit(false)?; // uv ac delta q
@@ -1265,7 +1282,7 @@ fn write_uncompressed_header(packet: &mut Write,
 
     bw.write(3,0x0)?; // frame context
     bw.write_loop_filter()?;
-    bw.write(8,fi.qindex as u8)?; // qindex
+    bw.write(8,fi.config.quantizer as u8)?; // qindex
     bw.write_bit(false)?; // y dc delta q
     bw.write_bit(false)?; // uv dc delta q
     bw.write_bit(false)?; // uv ac delta q
@@ -1376,7 +1393,7 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
                             fi.use_reduced_tx_set);
 
     // Reconstruct
-    dequantize(fi.qindex, &coeffs, &mut rcoeffs.array, tx_size);
+    dequantize(fi.config.quantizer, &coeffs, &mut rcoeffs.array, tx_size);
 
     inverse_transform_add(&rcoeffs.array, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type);
 }
@@ -1433,7 +1450,7 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
     // Luma plane transform type decision
     let tx_set_type = get_ext_tx_set_type(tx_size, is_inter, fi.use_reduced_tx_set);
 
-    let tx_type = if tx_set_type > TxSetType::EXT_TX_SET_DCTONLY && fi.speed <= 3 {
+    let tx_type = if tx_set_type > TxSetType::EXT_TX_SET_DCTONLY && fi.config.speed <= 3 {
         // FIXME: there is one redundant transform type decision per encoded block
         rdo_tx_type_decision(fi, fs, cw, luma_mode, bsize, bo, tx_size, tx_set_type)
     } else {
@@ -1451,7 +1468,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
 
     let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
-    fs.qc.update(fi.qindex, tx_size);
+    fs.qc.update(fi.config.quantizer, tx_size);
 
     for by in 0..bh {
         for bx in 0..bw {
@@ -1491,7 +1508,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
         let partition_x = (bo.x & LOCAL_BLOCK_MASK) >> xdec << MI_SIZE_LOG2;
         let partition_y = (bo.y & LOCAL_BLOCK_MASK) >> ydec << MI_SIZE_LOG2;
 
-        fs.qc.update(fi.qindex, uv_tx_size);
+        fs.qc.update(fi.config.quantizer, uv_tx_size);
 
         for p in 1..3 {
             let sb_offset = bo.sb_offset().plane_offset(&fs.input.planes[p].cfg);
@@ -1708,7 +1725,7 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut 
 
 fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
     let w = ec::Writer::new();
-    let fc = CDFContext::new(fi.qindex as u8);
+    let fc = CDFContext::new(fi.config.quantizer as u8);
     let bc = BlockContext::new(fi.w_in_b, fi.h_in_b);
     let mut cw = ContextWriter::new(w, fc,  bc);
 
@@ -1720,7 +1737,7 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
             let bo = sbo.block_offset(0, 0);
 
             // Encode SuperBlock
-            if fi.speed == 0 {
+            if fi.config.speed == 0 {
                 encode_partition_bottomup(fi, fs, &mut cw, BlockSize::BLOCK_64X64, &bo);
             }
             else {

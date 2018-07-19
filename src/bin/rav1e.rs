@@ -24,8 +24,7 @@ fn main() {
     None => None
   };
 
-  let mut fi =
-    FrameInvariants::new(width, height, config.quantizer, config.speed);
+  let mut fi = FrameInvariants::new(width, height, config);
   let mut sequence = Sequence::new(width, height);
   write_ivf_header(
     &mut io.output,
