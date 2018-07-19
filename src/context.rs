@@ -978,8 +978,8 @@ pub struct CDFContext {
 }
 
 impl CDFContext {
-    pub fn new(qindex: u8) -> CDFContext {
-    let qctx = match qindex {
+    pub fn new(quantizer: u8) -> CDFContext {
+    let qctx = match quantizer {
       0...20 => 0,
       21...60 => 1,
       61...120 => 2,

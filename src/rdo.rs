@@ -106,7 +106,7 @@ fn compute_rd_cost(
   h_uv: usize, partition_start_x: usize, partition_start_y: usize,
   bo: &BlockOffset, bit_cost: u32
 ) -> f64 {
-  let q = dc_q(fi.qindex) as f64;
+  let q = dc_q(fi.config.quantizer) as f64;
 
   // Convert q into Q0 precision, given that libaom quantizers are Q3
   let q0 = q / 8.0_f64;
@@ -180,14 +180,14 @@ pub fn rdo_mode_decision(
 
   for &skip in &[false, true] {
     // Don't test skipped blocks at higher speed levels
-    if fi.speed > 1 && skip {
+    if fi.config.speed > 1 && skip {
       continue;
     }
 
     let checkpoint = cw.checkpoint();
 
     // Exclude complex prediction modes at higher speed levels
-    let mode_set = if fi.speed <= 3 {
+    let mode_set = if fi.config.speed <= 3 {
       RAV1E_INTRA_MODES
     } else {
       RAV1E_INTRA_MODES_MINIMAL
@@ -200,7 +200,7 @@ pub fn rdo_mode_decision(
         break;
       }
 
-      if is_chroma_block && fi.speed <= 3 {
+      if is_chroma_block && fi.config.speed <= 3 {
         // Find the best chroma prediction mode for the current luma prediction mode
         for &chroma_mode in RAV1E_INTRA_MODES {
           encode_block(fi, fs, cw, luma_mode, chroma_mode, bsize, bo, skip);
