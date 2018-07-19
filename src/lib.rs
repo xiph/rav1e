@@ -25,6 +25,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use bitstream_io::{BE, LE, BitWriter};
 use clap::{App, Arg};
+use std::cmp;
 
 // for benchmarking purpose
 pub mod ec;
@@ -189,7 +190,7 @@ impl Sequence {
             enable_ref_frame_mvs: false,
             enable_warped_motion: false,
             enable_superres: false,
-            enable_cdef: false,
+            enable_cdef: true,
             enable_restoration: false,
             operating_points_cnt_minus_1: 0,
             operating_point_idc: operating_point_idc,
@@ -1072,8 +1073,8 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         self.write(2,0)?; // cdef clpf damping
         self.write(2,0)?; // cdef bits
         for _ in 0..1 {
-            self.write(6,7)?; // cdef y strength
-            self.write(6,7)?; // cdef uv strength
+            self.write(6,7*4+3)?; // cdef y strength
+            self.write(6,7*4+3)?; // cdef uv strength
         }
         Ok(())
     }
@@ -1746,6 +1747,8 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
             }
         }
     }
+    /* TODO: Don't apply if lossless */
+    cdef_frame(fi, &mut fs.rec, &mut cw.bc);
     let mut h = cw.w.done();
     h.push(0); // superframe anti emulation
     h
@@ -1765,24 +1768,107 @@ fn write_tile_group_header(tile_start_and_end_present_flag: bool) ->
 
 extern {
     fn cdef_find_dir_c(input: *const u16, stride: libc::c_int, var: *mut i32, coeff_shift: libc::c_int) -> libc::c_int;
-    fn cdef_filter_block_c(dst8: *mut u8, dst16: *mut u16, dstride: libc::c_int, input: *const u16, pri_strength: libc::c_int,
-                           sec_strength: libc::c_int, dir: libc::c_int, pri_damping: libc::c_int, sec_damping: libc::c_int,
-                           bsize: libc::c_int, max_unused: libc::c_int, coeff_shift: libc::c_int);
 }
 
-fn cdef_find_dir(input: &[u16], stride: usize, var: &mut [[i32; 8]; 8], coeff_shift: usize) -> i32 {
+fn cdef_find_dir(input: &[u16], stride: usize, var: &mut i32, coeff_shift: i32) -> i32 {
     unsafe {
-        cdef_find_dir_c(input.as_ptr(), stride as libc::c_int, var[0].as_mut_ptr(), coeff_shift as libc::c_int)
+        cdef_find_dir_c(input.as_ptr(), stride as libc::c_int, var, coeff_shift as libc::c_int)
     }
 }
 
-fn cdef_filter_block(dst: &mut [u16], dstride: usize, input: &[u16], pri_strength: i32, sec_strength: i32, dir: i32, pri_damping: i32,
-                     sec_damping: i32, bsize: i32, max_unused: i32, coeff_shift: i32) {
-    unsafe {
-        cdef_filter_block_c(0 as *mut u8, dst.as_mut_ptr(), dstride as libc::c_int, input.as_ptr(), pri_strength as libc::c_int,
-                            sec_strength as libc::c_int, dir as libc::c_int, pri_damping as libc::c_int, sec_damping as libc::c_int,
-                            bsize as libc::c_int, max_unused as libc::c_int, coeff_shift as libc::c_int);
+const CDEF_VERY_LARGE: u16 = 30000;
+const CDEF_SEC_STRENGTHS: i32 = 4;
+fn msb(x: i32) -> i32 {
+    31 ^ (x.leading_zeros() as i32)
+}
+
+fn constrain(diff: i32, threshold: i32, damping: i32) -> i32 {
+    if threshold != 0 {
+        let shift = cmp::max(0, damping - msb(threshold));
+        let magnitude = cmp::min(diff.abs(), cmp::max(0, threshold - (diff.abs() >> shift)));
+        if diff < 0 {
+            -1 * magnitude
+        } else {
+            magnitude
+        }   
+    } else {
+        0
     }
+}
+
+// Unlike the AOM code, our block addressing points to the UL corner
+// of the 2-pixel padding around the block, not the block itself.
+// The destination is unpadded.
+fn cdef_filter_block(dst: &mut [u16], dstride: i32, input: &[u16], istride: i32,
+                     pri_strength: i32, sec_strength: i32, dir: usize, pri_damping: i32,
+                     sec_damping: i32, xsize: i32, ysize: i32, coeff_shift: i32) {
+
+    let cdef_pri_taps = [[4, 2], [3, 3]];
+    let cdef_sec_taps = [[2, 1], [2, 1]];
+    let pri_taps = cdef_pri_taps[((pri_strength >> coeff_shift) & 1) as usize];
+    let sec_taps = cdef_sec_taps[((pri_strength >> coeff_shift) & 1) as usize];
+    let cdef_directions = [[-1 * istride + 1, -2 * istride + 2 ],
+                           [ 0 * istride + 1, -1 * istride + 2 ],
+                           [ 0 * istride + 1,  0 * istride + 2 ],
+                           [ 0 * istride + 1,  1 * istride + 2 ],
+                           [ 1 * istride + 1,  2 * istride + 2 ],
+                           [ 1 * istride + 0,  2 * istride + 1 ],
+                           [ 1 * istride + 0,  2 * istride + 0 ],
+                           [ 1 * istride + 0,  2 * istride - 1 ]];
+    for i in 0..ysize {
+        for j in 0..xsize {
+            let x = input[((i+2) * istride + j+2) as usize];
+            let mut sum = 0 as i32;
+            let mut max = x;
+            let mut min = x;
+            for k in 0..2usize {
+                let p0 = input[((i+2)*istride + j+2 + cdef_directions[dir][k]) as usize];
+                let p1 = input[((i+2)*istride + j+2 - cdef_directions[dir][k]) as usize];
+                sum += pri_taps[k] * constrain(p0 as i32 - x as i32, pri_strength, pri_damping);
+                sum += pri_taps[k] * constrain(p1 as i32 - x as i32, pri_strength, pri_damping);
+                if p0 != CDEF_VERY_LARGE {
+                    max = cmp::max(p0, max);
+                }
+                if p1 != CDEF_VERY_LARGE {
+                    max = cmp::max(p1, max);
+                }
+                min = cmp::min(p0, min);
+                min = cmp::min(p1, min);
+                let s0 = input[((i+2) * istride + j+2 + cdef_directions[(dir + 2) & 7][k]) as usize];
+                let s1 = input[((i+2) * istride + j+2 - cdef_directions[(dir + 2) & 7][k]) as usize];
+                let s2 = input[((i+2) * istride + j+2 + cdef_directions[(dir + 6) & 7][k]) as usize];
+                let s3 = input[((i+2) * istride + j+2 - cdef_directions[(dir + 6) & 7][k]) as usize];
+                if s0 != CDEF_VERY_LARGE {
+                    max = cmp::max(s0, max);
+                }
+                if s1 != CDEF_VERY_LARGE {
+                    max = cmp::max(s1, max);
+                }
+                if s2 != CDEF_VERY_LARGE {
+                    max = cmp::max(s2, max);
+                }
+                if s3 != CDEF_VERY_LARGE {
+                    max = cmp::max(s3, max);
+                }
+                min = cmp::min(s0, min);
+                min = cmp::min(s1, min);
+                min = cmp::min(s2, min);
+                min = cmp::min(s3, min);
+                sum += sec_taps[k] * constrain(s0 as i32 - x as i32, sec_strength, sec_damping);
+                sum += sec_taps[k] * constrain(s1 as i32 - x as i32, sec_strength, sec_damping);
+                sum += sec_taps[k] * constrain(s2 as i32 - x as i32, sec_strength, sec_damping);
+                sum += sec_taps[k] * constrain(s3 as i32 - x as i32, sec_strength, sec_damping);
+            }
+            dst[(i * dstride + j) as usize] = clamp(x as i32 + ((8 + sum - (sum < 0) as i32) >> 4),
+                                                    min as i32, max as i32) as u16;
+        }
+    }
+}
+
+// We use the variance of an 8x8 block to adjust the effective filter strength.
+fn adjust_strength(strength: i32, var: i32) -> i32 {
+    let i = if (var >> 6) != 0 {cmp::min(msb(var >> 6), 12)} else {0};
+    if var!=0 {strength * (4 + i) + 8 >> 4} else {0}
 }
 
 // Input to this process is the array CurrFrame of reconstructed samples.
@@ -1791,64 +1877,133 @@ fn cdef_filter_block(dst: &mut [u16], dstride: usize, input: &[u16], pri_strengt
 // CDEF parameters are stored for each 64 by 64 block of pixels.
 // The CDEF filter is applied on each 8 by 8 block of pixels.
 // Reference: http://av1-spec.argondesign.com/av1-spec/av1-spec.html#cdef-process
-fn cdef_frame(fi: &FrameInvariants, rec: &mut Frame) {
-    // var can be ignored for now since its only used for variable strength
-    let mut var: [[i32; 8]; 8] = [[0; 8]; 8];
+fn cdef_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockContext) {
     let bit_depth = 8;
     let coeff_shift = bit_depth - 8;
-    let cdef_pri_strength = 7;
-    let cdef_sec_strength = 0;
-    // pri_damping and sec_damping are initted to 3 + (base_qindex >> 6) in libaom
-    let cdef_pri_damping = 3 + (fi.qindex >> 6) as i32;
+    let cdef_pri_strength = (7*4+3) / CDEF_SEC_STRENGTHS;
+    let mut cdef_sec_strength = (7*4+3) % CDEF_SEC_STRENGTHS;
+    if cdef_sec_strength == 3 {
+        cdef_sec_strength += 1;
+    }
+    let cdef_pri_damping = 3;
     let cdef_sec_damping = cdef_pri_damping;
 
-    let mut cdef_frame = Frame::new(fi.padded_w, fi.padded_h);
-
-    // Each filter block is 64x64, except right and/or bottom for non-multiple-
-    // of-64 sizes.
+    // Each filter block is 64x64, except right and/or bottom for non-multiple-of-64 sizes.
     // FIXME: 128x128 SB support will break this, we need FilterBlockOffset etc.
-    // only include whole 64X64 blocks for now, otherwise we would use fi.sb_{width, height} directly
-    let fb_height = fi.padded_h / 64;
-    let fb_width = fi.padded_w / 64;
-    for fby in 0..fb_height {
-        for fbx in 0..fb_width {
-            // eprintln!("sb_width:{} sb_height:{} fbx:{} fby:{}", fi.sb_width, fi.sb_height, fbx, fby);
-            let sbo = SuperBlockOffset { x: fbx, y: fby };
-            // Each direction block is 8x8
-            for p in 0..1 {
-                for by in 0..8 {
-                    for bx in 0..8 {
-                        let stride = rec.planes[p].cfg.stride;
-                        // FIXME: calculate this offset correctly
-                        let cdef_bo = sbo.block_offset(bx << 1, by << 1);
-                        let po = cdef_bo.plane_offset(&rec.planes[p].cfg);
-                        let dir = cdef_find_dir(&rec.planes[p].data[po.y*stride + po.x..], stride, &mut var, coeff_shift);
-                        // TODO: handle BLOCK_4X8 and BLOCK_8X4
-                        cdef_filter_block(&mut cdef_frame.planes[p].data[po.y*stride + po.x..], stride,
-                                          &rec.planes[p].data[po.y*stride + po.x..], cdef_pri_strength, cdef_sec_strength, dir,
-                                          cdef_pri_damping, cdef_sec_damping, 3 /* BLOCK_8X8*/, (256 << coeff_shift) - 1,
-                                          coeff_shift as i32);
-                        for chroma_p in 1..3 {
-                            let chroma_stride = rec.planes[chroma_p].cfg.stride;
-                            // FIXME: calculate this offset correctly
-                            let cdef_chroma_bo = sbo.block_offset(bx, by);
-                            let chroma_po = cdef_chroma_bo.plane_offset(&rec.planes[chroma_p].cfg);
-                            // TODO: handle BLOCK_4X8 and BLOCK_8X4
-                            cdef_filter_block(&mut cdef_frame.planes[chroma_p].data[chroma_po.y*chroma_stride + chroma_po.x..], chroma_stride,
-                                          &rec.planes[chroma_p].data[chroma_po.y*chroma_stride + chroma_po.x..], cdef_pri_strength, cdef_sec_strength, dir,
-                                          cdef_pri_damping, cdef_sec_damping, 3 /* BLOCK_8X8*/, (256 << coeff_shift) - 1,
-                                          coeff_shift as i32);
-                        }
-                        // eprintln!("bx:{} by:{} box:{} boy:{} pox:{} poy:{} dir:{}", bx, by, cdef_bo.x, cdef_bo.y, po.x, po.y, dir);
+    let fb_height = (fi.padded_h + 63) / 64;
+    let fb_width = (fi.padded_w + 63) / 64;
+
+    // Construct a padded copy of the reconstructed frame.
+    let mut padded_px: [[usize; 2]; 3] = [[0; 2]; 3];
+    for p in 0..3 {
+        padded_px[p][0] =  (fb_width*64 >> rec.planes[p].cfg.xdec) + 4;
+        padded_px[p][1] =  (fb_height*64 >> rec.planes[p].cfg.ydec) + 4;
+    }
+    let mut cdef_frame = Frame {
+        planes: [
+            Plane::new(padded_px[0][0], padded_px[0][1], rec.planes[0].cfg.xdec, rec.planes[0].cfg.ydec),
+            Plane::new(padded_px[1][0], padded_px[1][1], rec.planes[1].cfg.xdec, rec.planes[1].cfg.ydec),
+            Plane::new(padded_px[2][0], padded_px[2][1], rec.planes[2].cfg.xdec, rec.planes[2].cfg.ydec)
+        ]
+    };
+    for p in 0..3 {
+        let rec_w = fi.padded_w >> rec.planes[p].cfg.xdec;
+        let rec_h = fi.padded_h >> rec.planes[p].cfg.ydec;
+        for row in 0..padded_px[p][1] {
+            // pad first two elements of current row
+            {
+                let mut cdef_slice = cdef_frame.planes[p].mut_slice(&PlaneOffset { x: 0, y: row});
+                let mut cdef_row = &mut cdef_slice.as_mut_slice()[..2];
+                cdef_row[0] = CDEF_VERY_LARGE;
+                cdef_row[1] = CDEF_VERY_LARGE;
+            }
+            // pad out end of current row
+            {
+                let mut cdef_slice = cdef_frame.planes[p].mut_slice(&PlaneOffset { x: rec_w+2, y: row });
+                let mut cdef_row = &mut cdef_slice.as_mut_slice()[..padded_px[p][0]-rec_w-2];
+                for x in cdef_row {
+                    *x = CDEF_VERY_LARGE;
+                }
+            }
+            // copy current row from rec if we're in data, or pad if we're in first two rows/last N rows
+            {
+                let mut cdef_slice = cdef_frame.planes[p].mut_slice(&PlaneOffset { x: 2, y: row });
+                let mut cdef_row = &mut cdef_slice.as_mut_slice()[..rec_w];
+                if row < 2 || row >= rec_h+2 {
+                    for x in cdef_row {
+                        *x = CDEF_VERY_LARGE;
                     }
+                } else {
+                    let rec_stride = rec.planes[p].cfg.stride;
+                    cdef_row.copy_from_slice(&rec.planes[p].data[(row-2)*rec_stride..(row-1)*rec_stride]);
                 }
             }
         }
     }
 
-    // overwrite rec with cdef_frame
-    for p in 0..3 {
-        rec.planes[p].data.copy_from_slice(cdef_frame.planes[p].data.as_slice());
+    // Perform actual CDEF, using the padded copy as source, and the input rec vector as destination.
+    for fby in 0..fb_height {
+        for fbx in 0..fb_width {
+            let sbo = SuperBlockOffset { x: fbx, y: fby };
+            // Each direction block is 8x8 in y, potentially smaller if subsampled in chroma
+            for by in 0..8 {
+                for bx in 0..8 {
+                    let mut dir = 0;
+                    let mut var: i32 = 0;
+                    let skip = bc.at(&sbo.block_offset(bx, by)).skip;
+                    for p in 0..3 {
+                        let mut rec_plane = &mut rec.planes[p];
+                        let mut cdef_plane = &mut cdef_frame.planes[p];
+                        let xdec = cdef_plane.cfg.xdec;
+                        let ydec = cdef_plane.cfg.ydec;
+                        let rec_stride = rec_plane.cfg.stride;
+                        let rec_po = sbo.plane_offset(&rec_plane.cfg);
+                        let mut rec_slice = &mut rec_plane.mut_slice(&rec_po);
+                        let cdef_stride = cdef_plane.cfg.stride;
+                        let cdef_po = sbo.plane_offset(&cdef_plane.cfg);
+                        let cdef_slice = &cdef_plane.mut_slice(&cdef_po);
+
+                        let mut local_pri_strength = 0;
+                        let mut local_sec_strength = 0;
+                        let mut local_pri_damping:i32 = cdef_pri_damping + coeff_shift;
+                        let mut local_sec_damping:i32 = cdef_sec_damping + coeff_shift;
+                        let mut local_dir:usize = 0;
+                            
+                        if !skip {
+                            if p==0 {
+                                dir = cdef_find_dir(cdef_slice.offset((8*bx>>xdec)+2,(8*by>>ydec)+2),
+                                                    cdef_stride, &mut var, coeff_shift);
+                                local_pri_strength = adjust_strength(cdef_pri_strength << coeff_shift, var);
+                                local_sec_strength = cdef_sec_strength << coeff_shift;
+                            } else {
+                                local_pri_strength = cdef_pri_strength << coeff_shift;
+                                local_sec_strength = cdef_sec_strength << coeff_shift;
+                                local_pri_damping -= 1;
+                                local_sec_damping -= 1;
+                            }
+                            local_dir = if cdef_pri_strength != 0 {dir as usize} else {0};
+                        }
+                            
+                        let mut xsize = (fi.padded_w as i32 - 8*bx as i32 >> xdec as i32) - rec_po.x as i32;
+                        let mut ysize = (fi.padded_h as i32 - 8*by as i32 >> ydec as i32) - rec_po.y as i32;
+                        if xsize > (8>>xdec) {
+                            xsize = 8 >> xdec;
+                        }
+                        if ysize > (8>>ydec) {
+                            ysize = 8 >> ydec;
+                        }
+                        if xsize > 0 && ysize > 0 {
+                            cdef_filter_block(rec_slice.offset_as_mutable(8*bx>>xdec,8*by>>ydec), rec_stride as i32,
+                                              cdef_slice.offset(8*bx>>xdec,8*by>>ydec), cdef_stride as i32, 
+                                              local_pri_strength, local_sec_strength, local_dir,
+                                              local_pri_damping, local_sec_damping,
+                                              8 >> xdec, 8 >> ydec,
+                                              coeff_shift as i32);
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1887,8 +2042,6 @@ fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut Fram
         buf1.clear();
 
         packet.write(&tile).unwrap();
-        /* TODO: Don't apply if lossless */
-        cdef_frame(fi, &mut fs.rec);
     }
     packet
 }
