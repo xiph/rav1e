@@ -56,11 +56,11 @@ impl od_ec_enc {
   /// `val`: The value to encode (0 or 1).
   /// `f`: The probability that the val is one, scaled by 32768.
   fn od_ec_encode_bool_q15(&mut self, val: bool, f: u16) {
-    assert!(0 < f);
-    assert!(f < 32768);
+    debug_assert!(0 < f);
+    debug_assert!(f < 32768);
     let mut l = self.low;
     let mut r = self.rng as u32;
-    assert!(32768 <= r);
+    debug_assert!(32768 <= r);
 
     let mut v =
       ((r >> 8) * (f as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT);
@@ -80,7 +80,7 @@ impl od_ec_enc {
   ///       The values must be monotonically non-decreasing, and the last value
   ///       must be exactly 32768. There should be at most 16 values.
   fn od_ec_encode_cdf_q15(&mut self, s: usize, cdf: &[u16]) {
-    assert!(cdf[cdf.len() - 1] == 0);
+    debug_assert!(cdf[cdf.len() - 1] == 0);
     let nsyms = cdf.len();
     self.od_ec_encode_q15(
       if s > 0 { cdf[s - 1] } else { 32768 },
@@ -100,10 +100,10 @@ impl od_ec_enc {
     let mut r = self.rng as u32;
     let u: u32;
     let v: u32;
-    assert!(32768 <= r);
+    debug_assert!(32768 <= r);
 
-    assert!(fh <= fl);
-    assert!(fl <= 32768);
+    debug_assert!(fh <= fl);
+    debug_assert!(fl <= 32768);
     let n = nsyms - 1;
     if fl < 32768 {
       u = (((r >> 8) * (fl as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT))
@@ -281,7 +281,7 @@ impl Writer {
     let nsymbs = cdf.len() - 1;
     let nsymbs2speed: [usize; 17] =
       [0, 0, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2];
-    assert!(nsymbs < 17);
+    debug_assert!(nsymbs < 17);
     let rate = 3
       + (cdf[nsymbs] > 15) as usize
       + (cdf[nsymbs] > 31) as usize
@@ -346,7 +346,7 @@ impl Writer {
       i >>= 1;
       length += 1;
     }
-    assert!(length > 0);
+    debug_assert!(length > 0);
 
     for _ in 0..length - 1 {
       self.bit(0);
