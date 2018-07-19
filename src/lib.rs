@@ -1779,20 +1779,84 @@ fn write_tile_group_header(tile_start_and_end_present_flag: bool) ->
     buf.clone()
 }
 
-extern {
-    fn cdef_find_dir_c(input: *const u16, stride: libc::c_int, var: *mut i32, coeff_shift: libc::c_int) -> libc::c_int;
-}
-
-fn cdef_find_dir(input: &[u16], stride: usize, var: &mut i32, coeff_shift: i32) -> i32 {
-    unsafe {
-        cdef_find_dir_c(input.as_ptr(), stride as libc::c_int, var, coeff_shift as libc::c_int)
-    }
-}
-
 const CDEF_VERY_LARGE: u16 = 30000;
 const CDEF_SEC_STRENGTHS: u8 = 4;
+
 fn msb(x: i32) -> i32 {
     31 ^ (x.leading_zeros() as i32)
+}
+
+// Instead of dividing by n between 2 and 8, we multiply by 3*5*7*8/n.
+// The output is then 840 times larger, but we don't care for finding
+// the max. */
+const CDEF_DIV_TABLE: [i32; 9] = [ 0, 840, 420, 280, 210, 168, 140, 120, 105 ];
+
+// Detect direction. 0 means 45-degree up-right, 2 is horizontal, and so on.
+// The search minimizes the weighted variance along all the lines in a
+// particular direction, i.e. the squared error between the input and a
+// "predicted" block where each pixel is replaced by the average along a line
+// in a particular direction. Since each direction have the same sum(x^2) term,
+// that term is never computed. See Section 2, step 2, of:
+// http://jmvalin.ca/notes/intra_paint.pdf
+fn cdef_find_dir(img: &[u16], stride: usize, var: &mut i32, coeff_shift: i32) -> i32 {
+    let mut cost: [i32; 8] = [0; 8];
+    let mut partial: [[i32; 15]; 8] = [[0; 15]; 8];
+    let mut best_cost: i32 = 0;
+    let mut best_dir = 0;
+    for i in 0..8 {
+        for j in 0..8 {
+            // We subtract 128 here to reduce the maximum range of the squared
+            // partial sums. 
+            let x = (img[i * stride + j] as i32 >> coeff_shift) - 128;
+            partial[0][i + j] += x;
+            partial[1][i + j / 2] += x;
+            partial[2][i] += x;
+            partial[3][3 + i - j / 2] += x;
+            partial[4][7 + i - j] += x;
+            partial[5][3 - i / 2 + j] += x;
+            partial[6][j] += x;
+            partial[7][i / 2 + j] += x;
+        }
+    }
+    for i in 0..8 {
+        cost[2] += partial[2][i] * partial[2][i];
+        cost[6] += partial[6][i] * partial[6][i];
+    }
+    cost[2] *= CDEF_DIV_TABLE[8];
+    cost[6] *= CDEF_DIV_TABLE[8];
+    for i in 0..7 {
+        cost[0] += (partial[0][i]*partial[0][i] +
+                    partial[0][14-i]*partial[0][14-i]) * CDEF_DIV_TABLE[i + 1];
+        cost[4] += (partial[4][i]*partial[4][i] +
+                    partial[4][14-i]*partial[4][14-i]) * CDEF_DIV_TABLE[i + 1];
+    }
+    cost[0] += partial[0][7] * partial[0][7] * CDEF_DIV_TABLE[8];
+    cost[4] += partial[4][7] * partial[4][7] * CDEF_DIV_TABLE[8];
+    let mut i = 1;
+    while i<8 {
+        for j in 0..5 {
+            cost[i] += partial[i][3 + j] * partial[i][3 + j];
+        }
+        cost[i] *= CDEF_DIV_TABLE[8];
+        for j in 0..3 {
+            cost[i] += (partial[i][j]*partial[i][j] +
+                        partial[i][10-j]*partial[i][10-j]) * CDEF_DIV_TABLE[2 * j + 2];
+        }
+        i+=2;
+    }
+    for i in 0..8 {
+        if cost[i] > best_cost {
+            best_cost = cost[i];
+            best_dir = i;
+        }
+    }
+    // Difference between the optimal variance and the variance along the
+    // orthogonal direction. Again, the sum(x^2) terms cancel out. 
+    // We'd normally divide by 840, but dividing by 1024 is close enough
+    // for what we're going to do with this. */
+    *var = (best_cost - cost[(best_dir + 4) & 7]) >> 10;
+        
+    best_dir as i32
 }
 
 fn constrain(diff: i32, threshold: i32, damping: i32) -> i32 {
@@ -1989,7 +2053,7 @@ fn cdef_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockContext) {
                             
                         if !skip {
                             if p==0 {
-                                dir = cdef_find_dir(cdef_slice.offset((8*bx>>xdec)+2,(8*by>>ydec)+2),
+                                dir = cdef_find_dir(cdef_slice.offset((8*bx>>xdec)+2,(8*by>>ydec)+2), 
                                                     cdef_stride, &mut var, coeff_shift);
                                 local_pri_strength = adjust_strength(cdef_pri_y_strength << coeff_shift, var);
                                 local_sec_strength = cdef_sec_y_strength << coeff_shift;
