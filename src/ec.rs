@@ -289,12 +289,12 @@ impl Writer {
     let mut tmp = 32768;
 
     // Single loop (faster)
-    for i in 0..(nsymbs - 1) {
+    for (i, v) in cdf[..nsymbs - 1].iter_mut().enumerate() {
       tmp = if i as u32 == val { 0 } else { tmp };
-      if tmp < cdf[i] {
-        cdf[i] -= (cdf[i] - tmp) >> rate;
+      if tmp < *v {
+        *v -= (*v - tmp) >> rate;
       } else {
-        cdf[i] += (tmp - cdf[i]) >> rate;
+        *v += (tmp - *v) >> rate;
       }
     }
     cdf[nsymbs] += (cdf[nsymbs] < 32) as u16;
