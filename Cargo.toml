@@ -7,6 +7,7 @@ include = ["/src/**", "/aom_build/**", "/Cargo.toml"]
 
 [features]
 repl = ["rustyline"]
+decode_test = ["bindgen"]
 
 [dependencies]
 bitstream-io = "0.6"
@@ -21,8 +22,8 @@ backtrace = "0.3"
 [build-dependencies]
 cc = "1"
 cmake = "0.1.29"
-bindgen = "0.33"
 pkg-config = "0.3.9"
+bindgen = { version = "0.33", optional = true }
 
 [dev-dependencies]
 bencher = "0.1.5"

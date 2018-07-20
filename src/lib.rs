@@ -348,6 +348,14 @@ impl FrameInvariants {
             config,
         }
     }
+
+    pub fn new_frame_state(&self) -> FrameState {
+        FrameState {
+            input: Frame::new(self.padded_w, self.padded_h),
+            rec: Frame::new(self.padded_w, self.padded_h),
+            qc: Default::default(),
+        }
+    }
 }
 
 impl fmt::Display for FrameInvariants{
@@ -430,7 +438,7 @@ impl Default for EncoderConfig {
     fn default() -> Self {
         EncoderConfig {
             limit: 0,
-            quantizer: 0,
+            quantizer: 100,
             speed: 0,
             tune: Tune::Psnr,
         }
@@ -604,8 +612,8 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
             for i in 0..seq.operating_points_cnt_minus_1 + 1 {
                 self.write(OP_POINTS_IDC_BITS as u32, seq.operating_point_idc[i])?;
                 //let seq_level_idx = 1 as u16;	// NOTE: This comes from minor and major
-                let seq_level_idx = 
-                    ((seq.level[i][1] - LEVEL_MAJOR_MIN) << LEVEL_MINOR_BITS) + seq.level[i][0]; 
+                let seq_level_idx =
+                    ((seq.level[i][1] - LEVEL_MAJOR_MIN) << LEVEL_MINOR_BITS) + seq.level[i][0];
                 self.write(LEVEL_BITS as u32, seq_level_idx as u16)?;
 
                 if seq.level[i][1] > 3 {
@@ -1402,7 +1410,6 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
          &rec.slice(po),
          tx_size.width(),
          tx_size.height());
-
 
     forward_transform(&residual.array, coeffs, tx_size.width(), tx_size, tx_type);
     fs.qc.quantize(coeffs);
@@ -2213,5 +2220,184 @@ pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
             true
         },
         _ => false
+    }
+}
+
+
+// #[cfg(test)]
+#[cfg(feature="decode_test")]
+mod aom;
+
+#[cfg(all(test, feature="decode_test"))]
+mod test_encode_decode {
+    use super::*;
+    use rand::{ChaChaRng, Rng, SeedableRng};
+    use aom::*;
+    use std::mem;
+
+    fn fill_frame(ra: &mut ChaChaRng, frame: &mut Frame) {
+        for plane in frame.planes.iter_mut() {
+            let stride = plane.cfg.stride;
+            for row in plane.data.chunks_mut(stride) {
+                for mut pixel in row {
+                    let v: u8 = ra.gen();
+                    *pixel = v as u16;
+                }
+            }
+        }
+    }
+
+    struct AomDecoder {
+        dec: aom_codec_ctx,
+    }
+
+    fn setup_decoder(w: usize, h: usize) -> AomDecoder {
+        unsafe {
+            let interface = aom::aom_codec_av1_dx();
+            let mut dec: AomDecoder = mem::uninitialized();
+            let cfg = aom_codec_dec_cfg_t  {
+                threads: 1,
+                w: w as u32,
+                h: h as u32,
+                allow_lowbitdepth: 1,
+                cfg: cfg_options { ext_partition: 1 }
+            };
+
+            let ret = aom_codec_dec_init_ver(&mut dec.dec, interface, &cfg, 0, AOM_DECODER_ABI_VERSION as i32);
+            if ret != 0 {
+                panic!("Cannot instantiate the decoder {}", ret);
+            }
+
+            dec
+        }
+    }
+
+    impl Drop for AomDecoder {
+        fn drop(&mut self) {
+            unsafe { aom_codec_destroy(&mut self.dec) };
+        }
+
+    }
+
+    fn setup_encoder(w: usize, h: usize, speed: usize, quantizer: usize) -> (FrameInvariants, Sequence) {
+        unsafe {
+            av1_rtcd();
+            aom_dsp_rtcd();
+        }
+
+        let config = EncoderConfig {
+            quantizer: quantizer,
+            speed: speed,
+            ..Default::default()
+        };
+        let mut fi = FrameInvariants::new(w, h, config);
+
+        fi.use_reduced_tx_set = true;
+        // fi.min_partition_size =
+        let seq = Sequence::new(w, h);
+
+        (fi, seq)
+    }
+
+    // TODO: support non-multiple-of-16 dimensions
+    static DIMENSION_OFFSETS: &[(usize, usize)] = &[(0, 0), (16, 16)];
+
+    #[test]
+    #[ignore]
+    fn speed() {
+        let quantizer = 100;
+        let limit = 5;
+        let w = 64;
+        let h = 80;
+
+        for b in DIMENSION_OFFSETS.iter() {
+            for s in 0 .. 10 {
+                encode_decode(w + b.0, h + b.1, s, quantizer, limit);
+            }
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn quantizer() {
+        let limit = 5;
+        let w = 64;
+        let h = 80;
+        let speed = 4;
+
+        for b in DIMENSION_OFFSETS.iter() {
+            for &q in [80, 100, 120].iter() {
+                encode_decode(w + b.0, h + b.1, speed, q, limit);
+            }
+        }
+    }
+
+    fn encode_decode(w:usize, h:usize, speed: usize, quantizer: usize, limit: usize) {
+        use std::ptr;
+        let mut ra = ChaChaRng::from_seed([0; 32]);
+
+        let mut dec = setup_decoder(w, h);
+        let (mut fi, mut seq) = setup_encoder(w, h, speed, quantizer);
+
+        println!("Encoding {}x{} speed {} quantizer {}", w, h, speed, quantizer);
+
+        let mut last_rec: Option<Frame> = None;
+
+        let mut iter: aom_codec_iter_t = ptr::null_mut();
+
+        for _ in 0 .. limit {
+            let mut fs = fi.new_frame_state();
+            fill_frame(&mut ra, &mut fs.input);
+
+            fi.frame_type = if fi.number % 30 == 0 { FrameType::KEY } else { FrameType::INTER };
+
+            fi.intra_only = fi.frame_type == FrameType::KEY || fi.frame_type == FrameType::INTRA_ONLY;
+            fi.use_prev_frame_mvs = !(fi.intra_only || fi.error_resilient);
+            println!("Encoding frame {}", fi.number);
+            let packet = encode_frame(&mut seq, &mut fi, &mut fs, &last_rec);
+            println!("Encoded.");
+            last_rec = Some(fs.rec);
+
+            let mut corrupted_count = 0;
+            unsafe {
+                println!("Decoding frame {}", fi.number);
+                let ret = aom_codec_decode(&mut dec.dec, packet.as_ptr(), packet.len() as u32, ptr::null_mut());
+                println!("Decoded. -> {}", ret);
+                if ret != 0 {
+                    use std::ffi::CStr;
+                    let error_msg = aom_codec_error(&mut dec.dec);
+                    println!("  Decode codec_decode failed: {}", CStr::from_ptr(error_msg).to_string_lossy());
+                    let detail = aom_codec_error_detail(&mut dec.dec);
+                    if !detail.is_null() {
+                        println!("  Decode codec_decode failed {}", CStr::from_ptr(detail).to_string_lossy());
+                    }
+
+                    corrupted_count += 1;
+                }
+
+                if ret == 0 {
+                    loop {
+                        println!("Retrieving frame");
+                        let img = aom_codec_get_frame(&mut dec.dec, &mut iter);
+                        println!("Retrieved.");
+                        if img.is_null() {
+                            break;
+                        }
+                        let mut corrupted = 0;
+                        let ret = aom_codec_control_(&mut dec.dec, aom_dec_control_id_AOMD_GET_FRAME_CORRUPTED as i32, &mut corrupted);
+                        if ret != 0 {
+                            use std::ffi::CStr;
+                            let detail = aom_codec_error_detail(&mut dec.dec);
+                            panic!("Decode codec_control failed {}", CStr::from_ptr(detail).to_string_lossy());
+                        }
+                        corrupted_count += corrupted;
+                    }
+                }
+            }
+
+            assert_eq!(corrupted_count, 0);
+
+            fi.number += 1;
+        }
     }
 }
