@@ -22,7 +22,7 @@ pub enum PartitionType {
   PARTITION_INVALID
 }
 
-#[derive(Copy, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
 pub enum BlockSize {
   BLOCK_4X4,
   BLOCK_4X8,

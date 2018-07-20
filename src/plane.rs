@@ -10,6 +10,7 @@
 #![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
 
 /// Plane-specific configuration.
+#[derive(Debug)]
 pub struct PlaneConfig {
   pub stride: usize,
   pub xdec: usize,
@@ -17,11 +18,13 @@ pub struct PlaneConfig {
 }
 
 /// Absolute offset in pixels inside a plane
+#[derive(Debug)]
 pub struct PlaneOffset {
   pub x: usize,
   pub y: usize
 }
 
+#[derive(Debug)]
 pub struct Plane {
   pub data: Vec<u16>,
   pub cfg: PlaneConfig

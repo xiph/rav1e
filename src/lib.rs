@@ -53,6 +53,7 @@ extern {
     pub fn aom_dsp_rtcd();
 }
 
+#[derive(Debug)]
 pub struct Frame {
     pub planes: [Plane; 3]
 }
@@ -204,6 +205,7 @@ impl Sequence {
     }
 }
 
+#[derive(Debug)]
 pub struct FrameState {
     pub input: Frame,
     pub rec: Frame,
@@ -248,6 +250,7 @@ impl Fixed for usize {
 
 // Frame Invariants are invariant inside a frame
 #[allow(dead_code)]
+#[derive(Debug)]
 pub struct FrameInvariants {
     pub width: usize,
     pub height: usize,
