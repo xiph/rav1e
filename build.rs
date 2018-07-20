@@ -38,17 +38,20 @@ fn main() {
 
     let dst = cmake::Config::new(build_path)
         .define("CONFIG_DEBUG", debug)
-        .define("CONFIG_EXPERIMENTAL", "1")
-        .define("CONFIG_UNIT_TESTS", "0")
         .define("CONFIG_EXT_PARTITION_TYPES", "0")
+        .define("CONFIG_INTRA_EDGE2", "0")
         .define("CONFIG_OBU", "1")
         .define("CONFIG_FILTER_INTRA", "1")
+        .define("CONFIG_MONO_VIDEO", "1")
+        .define("CONFIG_Q_ADAPT_PROBS", "1")
+        .define("CONFIG_SCALABILITY", "1")
+        .define("CONFIG_OBU_SIZING", "1")
+        .define("CONFIG_TIMING_INFO_IN_SEQ_HEADERS", "0")
+        .define("CONFIG_FILM_GRAIN", "0")
         .define("CONFIG_LV_MAP", "1")
         .define("CONFIG_ANALYZER", "0")
-        .define("CONFIG_Q_ADAPT_PROBS", "1")
-        .define("CONFIG_INTRA_EDGE", "0")
-        .define("CONFIG_SCALABILITY", "1")
         .define("ENABLE_DOCS", "0")
+        .define("CONFIG_UNIT_TESTS", "0")
         .build();
 
     // Dirty hack to force a rebuild whenever the defaults are changed upstream
