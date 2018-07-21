@@ -91,3 +91,8 @@ You should also try [clippy](https://github.com/rust-lang-nursery/rust-clippy).
 ```
 cargo +nightly clippy
 ```
+
+# Getting in Touch
+
+Come chat with us on the IRC channel #daala on Freenode! If you don't have IRC set
+up you can easily connect from your [web browser](http://webchat.freenode.net/?channels=%23daala).
