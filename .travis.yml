@@ -16,5 +16,6 @@ script:
     - |
         cargo build --verbose &&
         cargo test --verbose &&
+        cargo test --verbose --release --features=decode_test -- --ignored &&
         cargo bench --verbose &&
         cargo doc --verbose
