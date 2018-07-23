@@ -51,13 +51,13 @@ const DIRECTIONAL_MODES: usize = 8;
 const KF_MODE_CONTEXTS: usize = 5;
 
 const TX_SIZES: usize = 4;
-const TX_SET_TYPES: usize = 9;
+const TX_SETS: usize = 9;
 const TX_SETS_INTRA: usize = 3;
 const TX_SETS_INTER: usize = 4;
 // Number of transform types in each set type
-static num_tx_set: [usize; TX_SET_TYPES] =
+static num_tx_set: [usize; TX_SETS] =
   [1, 2, 5, 7, 7, 10, 12, 16, 16];
-pub static av1_ext_tx_used: [[usize; TX_TYPES]; TX_SET_TYPES] = [
+pub static av1_tx_used: [[usize; TX_TYPES]; TX_SETS] = [
   [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
   [1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
@@ -70,13 +70,13 @@ pub static av1_ext_tx_used: [[usize; TX_TYPES]; TX_SET_TYPES] = [
 ];
 
 // Maps set types above to the indices used for intra
-static tx_set_index_intra: [i8; TX_SET_TYPES] =
+static tx_set_index_intra: [i8; TX_SETS] =
   [0, -1, 2, -1, 1, -1, -1, -1, -1];
 // Maps set types above to the indices used for inter
-static tx_set_index_inter: [i8; TX_SET_TYPES] =
+static tx_set_index_inter: [i8; TX_SETS] =
   [0, 3, -1, -1, -1, -1, 2, -1, 1];
 
-static av1_ext_tx_ind: [[usize; TX_TYPES]; TX_SET_TYPES] = [
+static av1_tx_ind: [[usize; TX_TYPES]; TX_SETS] = [
   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   [1, 3, 4, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -603,7 +603,7 @@ pub fn has_chroma(
     && ((bo.y & 0x01) == 1 || (bh & 0x01) == 0 || subsampling_y == 0)
 }
 
-pub fn get_ext_tx_set_type(
+pub fn get_tx_set(
   tx_size: TxSize, is_inter: bool, use_reduced_set: bool
 ) -> TxSet {
   let tx_size_sqr_up = tx_size.sqr_up();
@@ -637,10 +637,10 @@ pub fn get_ext_tx_set_type(
   }
 }
 
-fn get_ext_tx_set(
+fn get_tx_set_index(
   tx_size: TxSize, is_inter: bool, use_reduced_set: bool
 ) -> i8 {
-  let set_type = get_ext_tx_set_type(tx_size, is_inter, use_reduced_set);
+  let set_type = get_tx_set(tx_size, is_inter, use_reduced_set);
 
   if is_inter {
     tx_set_index_inter[set_type as usize]
@@ -1599,22 +1599,22 @@ impl ContextWriter {
     is_inter: bool, use_reduced_tx_set: bool
   ) {
     let square_tx_size = tx_size.sqr();
-    let tx_set_type =
-      get_ext_tx_set_type(tx_size, is_inter, use_reduced_tx_set);
-    let num_tx_types = num_tx_set[tx_set_type as usize];
+    let tx_set =
+      get_tx_set(tx_size, is_inter, use_reduced_tx_set);
+    let num_tx_types = num_tx_set[tx_set as usize];
 
     if num_tx_types > 1 {
-      let eset = get_ext_tx_set(tx_size, is_inter, use_reduced_tx_set);
-      assert!(eset > 0);
-      assert!(av1_ext_tx_used[tx_set_type as usize][tx_type as usize] != 0);
+      let tx_set_index = get_tx_set_index(tx_size, is_inter, use_reduced_tx_set);
+      assert!(tx_set_index > 0);
+      assert!(av1_tx_used[tx_set as usize][tx_type as usize] != 0);
 
       if is_inter {
         symbol!(
           self,
-          av1_ext_tx_ind[tx_set_type as usize][tx_type as usize] as u32,
-          &mut self.fc.inter_ext_tx_cdf[eset as usize]
+          av1_tx_ind[tx_set as usize][tx_type as usize] as u32,
+          &mut self.fc.inter_ext_tx_cdf[tx_set_index as usize]
             [square_tx_size as usize]
-            [..num_tx_set[tx_set_type as usize] + 1]
+            [..num_tx_set[tx_set as usize] + 1]
         );
       } else {
         let intra_dir = y_mode;
@@ -1624,10 +1624,10 @@ impl ContextWriter {
 
         symbol!(
           self,
-          av1_ext_tx_ind[tx_set_type as usize][tx_type as usize] as u32,
-          &mut self.fc.intra_ext_tx_cdf[eset as usize]
+          av1_tx_ind[tx_set as usize][tx_type as usize] as u32,
+          &mut self.fc.intra_ext_tx_cdf[tx_set_index as usize]
             [square_tx_size as usize][intra_dir as usize]
-            [..num_tx_set[tx_set_type as usize] + 1]
+            [..num_tx_set[tx_set as usize] + 1]
         );
       }
     }
