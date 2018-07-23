@@ -1465,7 +1465,7 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
     // Luma plane transform type decision
     let tx_set_type = get_ext_tx_set_type(tx_size, is_inter, fi.use_reduced_tx_set);
 
-    let tx_type = if tx_set_type > TxSetType::EXT_TX_SET_DCTONLY && fi.config.speed <= 3 {
+    let tx_type = if tx_set_type > TxSetType::TX_SET_DCTONLY && fi.config.speed <= 3 {
         // FIXME: there is one redundant transform type decision per encoded block
         rdo_tx_type_decision(fi, fs, cw, luma_mode, bsize, bo, tx_size, tx_set_type)
     } else {

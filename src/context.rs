@@ -50,14 +50,14 @@ const MAX_ANGLE_DELTA: usize = 3;
 const DIRECTIONAL_MODES: usize = 8;
 const KF_MODE_CONTEXTS: usize = 5;
 
-const EXT_TX_SIZES: usize = 4;
-const EXT_TX_SET_TYPES: usize = 9;
-const EXT_TX_SETS_INTRA: usize = 3;
-const EXT_TX_SETS_INTER: usize = 4;
+const TX_SIZES: usize = 4;
+const TX_SET_TYPES: usize = 9;
+const TX_SETS_INTRA: usize = 3;
+const TX_SETS_INTER: usize = 4;
 // Number of transform types in each set type
-static num_ext_tx_set: [usize; EXT_TX_SET_TYPES] =
+static num_ext_tx_set: [usize; TX_SET_TYPES] =
   [1, 2, 5, 7, 7, 10, 12, 16, 16];
-pub static av1_ext_tx_used: [[usize; TX_TYPES]; EXT_TX_SET_TYPES] = [
+pub static av1_ext_tx_used: [[usize; TX_TYPES]; TX_SET_TYPES] = [
   [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
   [1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
@@ -68,28 +68,15 @@ pub static av1_ext_tx_used: [[usize; TX_TYPES]; EXT_TX_SET_TYPES] = [
   [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
   [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 ];
-// Maps intra set index to the set type
-/*static ext_tx_set_type_intra: [TxSetType; EXT_TX_SETS_INTRA] = [
-    TxSetType::EXT_TX_SET_DCTONLY,
-    TxSetType::EXT_TX_SET_DTT4_IDTX_1DDCT,
-    TxSetType::EXT_TX_SET_DTT4_IDTX
-];*/
-// Maps inter set index to the set type
-#[allow(dead_code)]
-static ext_tx_set_type_inter: [TxSetType; EXT_TX_SETS_INTER] = [
-  TxSetType::EXT_TX_SET_DCTONLY,
-  TxSetType::EXT_TX_SET_ALL16,
-  TxSetType::EXT_TX_SET_DTT9_IDTX_1DDCT,
-  TxSetType::EXT_TX_SET_DCT_IDTX
-];
+
 // Maps set types above to the indices used for intra
-static ext_tx_set_index_intra: [i8; EXT_TX_SET_TYPES] =
+static ext_tx_set_index_intra: [i8; TX_SET_TYPES] =
   [0, -1, 2, -1, 1, -1, -1, -1, -1];
 // Maps set types above to the indices used for inter
-static ext_tx_set_index_inter: [i8; EXT_TX_SET_TYPES] =
+static ext_tx_set_index_inter: [i8; TX_SET_TYPES] =
   [0, 3, -1, -1, -1, -1, 2, -1, 1];
 
-static av1_ext_tx_ind: [[usize; TX_TYPES]; EXT_TX_SET_TYPES] = [
+static av1_ext_tx_ind: [[usize; TX_TYPES]; TX_SET_TYPES] = [
   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   [1, 3, 4, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -622,30 +609,30 @@ pub fn get_ext_tx_set_type(
   let tx_size_sqr_up = tx_size.sqr_up();
   let tx_size_sqr = tx_size.sqr();
   if tx_size_sqr > TxSize::TX_32X32 {
-    TxSetType::EXT_TX_SET_DCTONLY
+    TxSetType::TX_SET_DCTONLY
   } else if tx_size_sqr_up == TxSize::TX_32X32 {
     if is_inter {
-      TxSetType::EXT_TX_SET_DCT_IDTX
+      TxSetType::TX_SET_DCT_IDTX
     } else {
-      TxSetType::EXT_TX_SET_DCTONLY
+      TxSetType::TX_SET_DCTONLY
     }
   } else if use_reduced_set {
     if is_inter {
-      TxSetType::EXT_TX_SET_DCT_IDTX
+      TxSetType::TX_SET_DCT_IDTX
     } else {
-      TxSetType::EXT_TX_SET_DTT4_IDTX
+      TxSetType::TX_SET_DTT4_IDTX
     }
   } else if is_inter {
     if tx_size_sqr == TxSize::TX_16X16 {
-      TxSetType::EXT_TX_SET_DTT9_IDTX_1DDCT
+      TxSetType::TX_SET_DTT9_IDTX_1DDCT
     } else {
-      TxSetType::EXT_TX_SET_ALL16
+      TxSetType::TX_SET_ALL16
     }
   } else {
     if tx_size_sqr == TxSize::TX_16X16 {
-      TxSetType::EXT_TX_SET_DTT4_IDTX
+      TxSetType::TX_SET_DTT4_IDTX
     } else {
-      TxSetType::EXT_TX_SET_DTT4_IDTX_1DDCT
+      TxSetType::TX_SET_DTT4_IDTX_1DDCT
     }
   }
 }
@@ -711,9 +698,9 @@ extern "C" {
   static default_if_y_mode_cdf: [[u16; INTRA_MODES + 1]; BLOCK_SIZE_GROUPS];
   static default_uv_mode_cdf: [[[u16; UV_INTRA_MODES + 1]; INTRA_MODES]; 2];
   static default_intra_ext_tx_cdf:
-    [[[[u16; TX_TYPES + 1]; INTRA_MODES]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA];
+    [[[[u16; TX_TYPES + 1]; INTRA_MODES]; TX_SIZES]; TX_SETS_INTRA];
   static default_inter_ext_tx_cdf:
-    [[[u16; TX_TYPES + 1]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA];
+    [[[u16; TX_TYPES + 1]; TX_SIZES]; TX_SETS_INTRA];
   static default_skip_cdfs: [[u16; 3]; SKIP_CONTEXTS];
   static default_intra_inter_cdf: [[u16; 3]; INTRA_INTER_CONTEXTS];
   static default_angle_delta_cdf:
@@ -762,8 +749,8 @@ pub struct CDFContext {
   y_mode_cdf: [[u16; INTRA_MODES + 1]; BLOCK_SIZE_GROUPS],
   uv_mode_cdf: [[[u16; UV_INTRA_MODES + 1]; INTRA_MODES]; 2],
   intra_ext_tx_cdf:
-    [[[[u16; TX_TYPES + 1]; INTRA_MODES]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA],
-  inter_ext_tx_cdf: [[[u16; TX_TYPES + 1]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA],
+    [[[[u16; TX_TYPES + 1]; INTRA_MODES]; TX_SIZES]; TX_SETS_INTRA],
+  inter_ext_tx_cdf: [[[u16; TX_TYPES + 1]; TX_SIZES]; TX_SETS_INTRA],
   skip_cdfs: [[u16; 3]; SKIP_CONTEXTS],
   intra_inter_cdfs: [[u16; 3]; INTRA_INTER_CONTEXTS],
   angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES],
