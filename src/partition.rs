@@ -386,7 +386,7 @@ impl PredictionMode {
 }
 
 #[derive(Copy, Clone, PartialEq, PartialOrd)]
-pub enum TxSetType {
+pub enum TxSet {
   // DCT only
   TX_SET_DCTONLY,
   // DCT + Identity only

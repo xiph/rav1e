@@ -288,7 +288,7 @@ pub fn rdo_mode_decision(
 pub fn rdo_tx_type_decision(
   fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
   mode: PredictionMode, bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize,
-  tx_set_type: TxSetType
+  tx_set_type: TxSet
 ) -> TxType {
   let mut best_type = TxType::DCT_DCT;
   let mut best_rd = std::f64::MAX;
