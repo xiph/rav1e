@@ -50,14 +50,14 @@ const MAX_ANGLE_DELTA: usize = 3;
 const DIRECTIONAL_MODES: usize = 8;
 const KF_MODE_CONTEXTS: usize = 5;
 
-const EXT_TX_SIZES: usize = 4;
-const EXT_TX_SET_TYPES: usize = 9;
-const EXT_TX_SETS_INTRA: usize = 3;
-const EXT_TX_SETS_INTER: usize = 4;
+const TX_SIZES: usize = 4;
+const TX_SETS: usize = 9;
+const TX_SETS_INTRA: usize = 3;
+const TX_SETS_INTER: usize = 4;
 // Number of transform types in each set type
-static num_ext_tx_set: [usize; EXT_TX_SET_TYPES] =
+static num_tx_set: [usize; TX_SETS] =
   [1, 2, 5, 7, 7, 10, 12, 16, 16];
-pub static av1_ext_tx_used: [[usize; TX_TYPES]; EXT_TX_SET_TYPES] = [
+pub static av1_tx_used: [[usize; TX_TYPES]; TX_SETS] = [
   [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
   [1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
@@ -68,28 +68,15 @@ pub static av1_ext_tx_used: [[usize; TX_TYPES]; EXT_TX_SET_TYPES] = [
   [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
   [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 ];
-// Maps intra set index to the set type
-/*static ext_tx_set_type_intra: [TxSetType; EXT_TX_SETS_INTRA] = [
-    TxSetType::EXT_TX_SET_DCTONLY,
-    TxSetType::EXT_TX_SET_DTT4_IDTX_1DDCT,
-    TxSetType::EXT_TX_SET_DTT4_IDTX
-];*/
-// Maps inter set index to the set type
-#[allow(dead_code)]
-static ext_tx_set_type_inter: [TxSetType; EXT_TX_SETS_INTER] = [
-  TxSetType::EXT_TX_SET_DCTONLY,
-  TxSetType::EXT_TX_SET_ALL16,
-  TxSetType::EXT_TX_SET_DTT9_IDTX_1DDCT,
-  TxSetType::EXT_TX_SET_DCT_IDTX
-];
+
 // Maps set types above to the indices used for intra
-static ext_tx_set_index_intra: [i8; EXT_TX_SET_TYPES] =
+static tx_set_index_intra: [i8; TX_SETS] =
   [0, -1, 2, -1, 1, -1, -1, -1, -1];
 // Maps set types above to the indices used for inter
-static ext_tx_set_index_inter: [i8; EXT_TX_SET_TYPES] =
+static tx_set_index_inter: [i8; TX_SETS] =
   [0, 3, -1, -1, -1, -1, 2, -1, 1];
 
-static av1_ext_tx_ind: [[usize; TX_TYPES]; EXT_TX_SET_TYPES] = [
+static av1_tx_ind: [[usize; TX_TYPES]; TX_SETS] = [
   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   [1, 3, 4, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -616,49 +603,49 @@ pub fn has_chroma(
     && ((bo.y & 0x01) == 1 || (bh & 0x01) == 0 || subsampling_y == 0)
 }
 
-pub fn get_ext_tx_set_type(
+pub fn get_tx_set(
   tx_size: TxSize, is_inter: bool, use_reduced_set: bool
-) -> TxSetType {
+) -> TxSet {
   let tx_size_sqr_up = tx_size.sqr_up();
   let tx_size_sqr = tx_size.sqr();
   if tx_size_sqr > TxSize::TX_32X32 {
-    TxSetType::EXT_TX_SET_DCTONLY
+    TxSet::TX_SET_DCTONLY
   } else if tx_size_sqr_up == TxSize::TX_32X32 {
     if is_inter {
-      TxSetType::EXT_TX_SET_DCT_IDTX
+      TxSet::TX_SET_DCT_IDTX
     } else {
-      TxSetType::EXT_TX_SET_DCTONLY
+      TxSet::TX_SET_DCTONLY
     }
   } else if use_reduced_set {
     if is_inter {
-      TxSetType::EXT_TX_SET_DCT_IDTX
+      TxSet::TX_SET_DCT_IDTX
     } else {
-      TxSetType::EXT_TX_SET_DTT4_IDTX
+      TxSet::TX_SET_DTT4_IDTX
     }
   } else if is_inter {
     if tx_size_sqr == TxSize::TX_16X16 {
-      TxSetType::EXT_TX_SET_DTT9_IDTX_1DDCT
+      TxSet::TX_SET_DTT9_IDTX_1DDCT
     } else {
-      TxSetType::EXT_TX_SET_ALL16
+      TxSet::TX_SET_ALL16
     }
   } else {
     if tx_size_sqr == TxSize::TX_16X16 {
-      TxSetType::EXT_TX_SET_DTT4_IDTX
+      TxSet::TX_SET_DTT4_IDTX
     } else {
-      TxSetType::EXT_TX_SET_DTT4_IDTX_1DDCT
+      TxSet::TX_SET_DTT4_IDTX_1DDCT
     }
   }
 }
 
-fn get_ext_tx_set(
+fn get_tx_set_index(
   tx_size: TxSize, is_inter: bool, use_reduced_set: bool
 ) -> i8 {
-  let set_type = get_ext_tx_set_type(tx_size, is_inter, use_reduced_set);
+  let set_type = get_tx_set(tx_size, is_inter, use_reduced_set);
 
   if is_inter {
-    ext_tx_set_index_inter[set_type as usize]
+    tx_set_index_inter[set_type as usize]
   } else {
-    ext_tx_set_index_intra[set_type as usize]
+    tx_set_index_intra[set_type as usize]
   }
 }
 
@@ -711,9 +698,9 @@ extern "C" {
   static default_if_y_mode_cdf: [[u16; INTRA_MODES + 1]; BLOCK_SIZE_GROUPS];
   static default_uv_mode_cdf: [[[u16; UV_INTRA_MODES + 1]; INTRA_MODES]; 2];
   static default_intra_ext_tx_cdf:
-    [[[[u16; TX_TYPES + 1]; INTRA_MODES]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA];
+    [[[[u16; TX_TYPES + 1]; INTRA_MODES]; TX_SIZES]; TX_SETS_INTRA];
   static default_inter_ext_tx_cdf:
-    [[[u16; TX_TYPES + 1]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA];
+    [[[u16; TX_TYPES + 1]; TX_SIZES]; TX_SETS_INTRA];
   static default_skip_cdfs: [[u16; 3]; SKIP_CONTEXTS];
   static default_intra_inter_cdf: [[u16; 3]; INTRA_INTER_CONTEXTS];
   static default_angle_delta_cdf:
@@ -761,9 +748,9 @@ pub struct CDFContext {
   kf_y_cdf: [[[u16; INTRA_MODES + 1]; KF_MODE_CONTEXTS]; KF_MODE_CONTEXTS],
   y_mode_cdf: [[u16; INTRA_MODES + 1]; BLOCK_SIZE_GROUPS],
   uv_mode_cdf: [[[u16; UV_INTRA_MODES + 1]; INTRA_MODES]; 2],
-  intra_ext_tx_cdf:
-    [[[[u16; TX_TYPES + 1]; INTRA_MODES]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA],
-  inter_ext_tx_cdf: [[[u16; TX_TYPES + 1]; EXT_TX_SIZES]; EXT_TX_SETS_INTRA],
+  intra_tx_cdf:
+    [[[[u16; TX_TYPES + 1]; INTRA_MODES]; TX_SIZES]; TX_SETS_INTRA],
+  inter_tx_cdf: [[[u16; TX_TYPES + 1]; TX_SIZES]; TX_SETS_INTRA],
   skip_cdfs: [[u16; 3]; SKIP_CONTEXTS],
   intra_inter_cdfs: [[u16; 3]; INTRA_INTER_CONTEXTS],
   angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES],
@@ -804,8 +791,8 @@ impl CDFContext {
       kf_y_cdf: default_kf_y_mode_cdf,
       y_mode_cdf: default_if_y_mode_cdf,
       uv_mode_cdf: default_uv_mode_cdf,
-      intra_ext_tx_cdf: default_intra_ext_tx_cdf,
-      inter_ext_tx_cdf: default_inter_ext_tx_cdf,
+      intra_tx_cdf: default_intra_ext_tx_cdf,
+      inter_tx_cdf: default_inter_ext_tx_cdf,
       skip_cdfs: default_skip_cdfs,
       intra_inter_cdfs: default_intra_inter_cdf,
       angle_delta_cdf: default_angle_delta_cdf,
@@ -844,14 +831,14 @@ impl CDFContext {
     let uv_mode_cdf_start =
       self.uv_mode_cdf.first().unwrap().as_ptr() as usize;
     let uv_mode_cdf_end = uv_mode_cdf_start + size_of_val(&self.uv_mode_cdf);
-    let intra_ext_tx_cdf_start =
-      self.intra_ext_tx_cdf.first().unwrap().as_ptr() as usize;
-    let intra_ext_tx_cdf_end =
-      intra_ext_tx_cdf_start + size_of_val(&self.intra_ext_tx_cdf);
-    let inter_ext_tx_cdf_start =
-      self.inter_ext_tx_cdf.first().unwrap().as_ptr() as usize;
-    let inter_ext_tx_cdf_end =
-      inter_ext_tx_cdf_start + size_of_val(&self.inter_ext_tx_cdf);
+    let intra_tx_cdf_start =
+      self.intra_tx_cdf.first().unwrap().as_ptr() as usize;
+    let intra_tx_cdf_end =
+      intra_tx_cdf_start + size_of_val(&self.intra_tx_cdf);
+    let inter_tx_cdf_start =
+      self.inter_tx_cdf.first().unwrap().as_ptr() as usize;
+    let inter_tx_cdf_end =
+      inter_tx_cdf_start + size_of_val(&self.inter_tx_cdf);
     let skip_cdfs_start = self.skip_cdfs.first().unwrap().as_ptr() as usize;
     let skip_cdfs_end = skip_cdfs_start + size_of_val(&self.skip_cdfs);
     let intra_inter_cdfs_start =
@@ -923,8 +910,8 @@ impl CDFContext {
       ("kf_y_cdf", kf_y_cdf_start, kf_y_cdf_end),
       ("y_mode_cdf", y_mode_cdf_start, y_mode_cdf_end),
       ("uv_mode_cdf", uv_mode_cdf_start, uv_mode_cdf_end),
-      ("intra_ext_tx_cdf", intra_ext_tx_cdf_start, intra_ext_tx_cdf_end),
-      ("inter_ext_tx_cdf", inter_ext_tx_cdf_start, inter_ext_tx_cdf_end),
+      ("intra_tx_cdf", intra_tx_cdf_start, intra_tx_cdf_end),
+      ("inter_tx_cdf", inter_tx_cdf_start, inter_tx_cdf_end),
       ("skip_cdfs", skip_cdfs_start, skip_cdfs_end),
       ("intra_inter_cdfs", intra_inter_cdfs_start, intra_inter_cdfs_end),
       ("angle_delta_cdf", angle_delta_cdf_start, angle_delta_cdf_end),
@@ -1607,27 +1594,27 @@ impl ContextWriter {
     symbol!(self, enable as u32, &mut self.fc.filter_intra_cdfs[tx_size as usize]);
   }
 
-  pub fn write_tx_type_lv_map(
+  pub fn write_tx_type(
     &mut self, tx_size: TxSize, tx_type: TxType, y_mode: PredictionMode,
     is_inter: bool, use_reduced_tx_set: bool
   ) {
     let square_tx_size = tx_size.sqr();
-    let tx_set_type =
-      get_ext_tx_set_type(tx_size, is_inter, use_reduced_tx_set);
-    let num_tx_types = num_ext_tx_set[tx_set_type as usize];
+    let tx_set =
+      get_tx_set(tx_size, is_inter, use_reduced_tx_set);
+    let num_tx_types = num_tx_set[tx_set as usize];
 
     if num_tx_types > 1 {
-      let eset = get_ext_tx_set(tx_size, is_inter, use_reduced_tx_set);
-      assert!(eset > 0);
-      assert!(av1_ext_tx_used[tx_set_type as usize][tx_type as usize] != 0);
+      let tx_set_index = get_tx_set_index(tx_size, is_inter, use_reduced_tx_set);
+      assert!(tx_set_index > 0);
+      assert!(av1_tx_used[tx_set as usize][tx_type as usize] != 0);
 
       if is_inter {
         symbol!(
           self,
-          av1_ext_tx_ind[tx_set_type as usize][tx_type as usize] as u32,
-          &mut self.fc.inter_ext_tx_cdf[eset as usize]
+          av1_tx_ind[tx_set as usize][tx_type as usize] as u32,
+          &mut self.fc.inter_tx_cdf[tx_set_index as usize]
             [square_tx_size as usize]
-            [..num_ext_tx_set[tx_set_type as usize] + 1]
+            [..num_tx_set[tx_set as usize] + 1]
         );
       } else {
         let intra_dir = y_mode;
@@ -1637,10 +1624,10 @@ impl ContextWriter {
 
         symbol!(
           self,
-          av1_ext_tx_ind[tx_set_type as usize][tx_type as usize] as u32,
-          &mut self.fc.intra_ext_tx_cdf[eset as usize]
+          av1_tx_ind[tx_set as usize][tx_type as usize] as u32,
+          &mut self.fc.intra_tx_cdf[tx_set_index as usize]
             [square_tx_size as usize][intra_dir as usize]
-            [..num_ext_tx_set[tx_set_type as usize] + 1]
+            [..num_tx_set[tx_set as usize] + 1]
         );
       }
     }
@@ -1673,17 +1660,6 @@ impl ContextWriter {
     }
   }
 
-  // TODO: Figure out where this function is supposed to be used!?
-/*    pub fn get_tx_type(&mut self, tx_size: TxSize, is_inter: bool,
-                            use_reduced_set: bool) -> TxType {
-        let tx_set_type = get_ext_tx_set_type(tx_size, is_inter, use_reduced_set);
-
-        // TODO: Implement av1_get_tx_type() here
-        let tx_type = TxType::DCT_DCT;
-
-        tx_type
-    }
-*/
   pub fn av1_get_adjusted_tx_size(&mut self, tx_size: TxSize) -> TxSize {
     // TODO: Enable below commented out block if TX64X64 is enabled.
 /*
@@ -1957,7 +1933,7 @@ impl ContextWriter {
 
     // Signal tx_type for luma plane only
     if plane == 0 {
-      self.write_tx_type_lv_map(
+      self.write_tx_type(
         tx_size,
         tx_type,
         pred_mode,

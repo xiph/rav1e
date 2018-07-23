@@ -288,7 +288,7 @@ pub fn rdo_mode_decision(
 pub fn rdo_tx_type_decision(
   fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
   mode: PredictionMode, bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize,
-  tx_set_type: TxSetType
+  tx_set: TxSet
 ) -> TxType {
   let mut best_type = TxType::DCT_DCT;
   let mut best_rd = std::f64::MAX;
@@ -315,7 +315,7 @@ pub fn rdo_tx_type_decision(
 
   for &tx_type in RAV1E_TX_TYPES {
     // Skip unsupported transform types
-    if av1_ext_tx_used[tx_set_type as usize][tx_type as usize] == 0 {
+    if av1_tx_used[tx_set as usize][tx_type as usize] == 0 {
       continue;
     }
 
