@@ -60,8 +60,21 @@ extern {
     tx_type: libc::c_int,
     bd: libc::c_int
   );
-
+  fn av1_inv_txfm2d_add_4x4_c(
+    input: *const i32,
+    output: *mut u16,
+    stride: libc::c_int,
+    tx_type: libc::c_int,
+    bd: libc::c_int
+  );
   static av1_inv_txfm2d_add_8x8: extern fn(
+    input: *const i32,
+    output: *mut u16,
+    stride: libc::c_int,
+    tx_type: libc::c_int,
+    bd: libc::c_int
+  ) -> ();
+  fn av1_inv_txfm2d_add_8x8_c(
     input: *const i32,
     output: *mut u16,
     stride: libc::c_int,
@@ -92,6 +105,13 @@ extern {
     tx_type: *const libc::c_int
   );
   static av1_inv_txfm2d_add_32x32: extern fn(
+    input: *const i32,
+    output: *mut u16,
+    stride: libc::c_int,
+    tx_type: libc::c_int,
+    bd: libc::c_int
+  );
+  fn av1_inv_txfm2d_add_32x32_c(
     input: *const i32,
     output: *mut u16,
     stride: libc::c_int,
@@ -140,14 +160,27 @@ fn fht4x4(input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType) {
 fn iht4x4_add(
   input: &[i32], output: &mut [u16], stride: usize, tx_type: TxType
 ) {
-  unsafe {
-    av1_inv_txfm2d_add_4x4(
-      input.as_ptr(),
-      output.as_mut_ptr(),
-      stride as libc::c_int,
-      tx_type as libc::c_int,
-      8
-    );
+  // SIMD code may assert for transform types beyond TxType::IDTX.
+  if tx_type < TxType::IDTX {
+    unsafe {
+      av1_inv_txfm2d_add_4x4(
+        input.as_ptr(),
+        output.as_mut_ptr(),
+        stride as libc::c_int,
+        tx_type as libc::c_int,
+        8
+      );
+    }
+  } else {
+    unsafe {
+      av1_inv_txfm2d_add_4x4_c(
+        input.as_ptr(),
+        output.as_mut_ptr(),
+        stride as libc::c_int,
+        tx_type as libc::c_int,
+        8
+      );
+    }
   }
 }
 
@@ -165,14 +198,27 @@ fn fht8x8(input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType) {
 fn iht8x8_add(
   input: &[i32], output: &mut [u16], stride: usize, tx_type: TxType
 ) {
-  unsafe {
-    av1_inv_txfm2d_add_8x8(
-      input.as_ptr(),
-      output.as_mut_ptr(),
-      stride as libc::c_int,
-      tx_type as libc::c_int,
-      8
-    );
+  // SIMD code may assert for transform types beyond TxType::IDTX.
+  if tx_type < TxType::IDTX {
+    unsafe {
+      av1_inv_txfm2d_add_8x8(
+        input.as_ptr(),
+        output.as_mut_ptr(),
+        stride as libc::c_int,
+        tx_type as libc::c_int,
+        8
+      );
+    }
+  } else {
+    unsafe {
+      av1_inv_txfm2d_add_8x8_c(
+        input.as_ptr(),
+        output.as_mut_ptr(),
+        stride as libc::c_int,
+        tx_type as libc::c_int,
+        8
+      );
+    }
   }
 }
 
@@ -231,12 +277,23 @@ fn iht32x32_add(
   input: &[i32], output: &mut [u16], stride: usize, tx_type: TxType
 ) {
   unsafe {
-    av1_inv_txfm2d_add_32x32(
-      input.as_ptr(),
-      output.as_mut_ptr(),
-      stride as libc::c_int,
-      tx_type as libc::c_int,
-      8
-    );
+    if tx_type < TxType::IDTX {
+      // SIMDI code may assert for transform types beyond TxType::IDTX.
+      av1_inv_txfm2d_add_32x32(
+        input.as_ptr(),
+        output.as_mut_ptr(),
+        stride as libc::c_int,
+        tx_type as libc::c_int,
+        8
+      );
+    } else {
+      av1_inv_txfm2d_add_32x32_c(
+        input.as_ptr(),
+        output.as_mut_ptr(),
+        stride as libc::c_int,
+        tx_type as libc::c_int,
+        8
+      );
+    }
   }
 }
