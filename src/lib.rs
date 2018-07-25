@@ -384,8 +384,9 @@ pub enum ReferenceMode {
   SELECT = 2,
 }
 
-const REF_FRAMES: u32 = 8;
-const REF_FRAMES_LOG2: u32 = 3;
+pub const REF_FRAMES: u32 = 8;
+pub const REF_FRAMES_LOG2: u32 = 3;
+pub const ALL_REF_FRAMES_MASK: u32 = (1 << REF_FRAMES) - 1;
 
 /*const NONE_FRAME: isize = -1;
 const INTRA_FRAME: usize = 0;*/
@@ -844,10 +845,11 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
           assert!(false); // Not supported by rav1e yet!
           //self.write_bit(REF_FRAMES, fi.refresh_frame_flags)?;
         } else {
-          //assert!(refresh_frame_mask == 0xFF);
+          //assert!(refresh_frame_mask == ALL_REF_FRAMES_MASK);
         }
       } else { // Inter frame info goes here
         if fi.intra_only {
+          assert!(fi.refresh_frame_flags != ALL_REF_FRAMES_MASK);
           self.write(REF_FRAMES, fi.refresh_frame_flags)?;
         } else {
           // TODO: This should be set once inter mode is used
@@ -855,7 +857,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         }
       };
 
-      if (!fi.intra_only || fi.refresh_frame_flags != 0xFF) {
+      if (!fi.intra_only || fi.refresh_frame_flags != ALL_REF_FRAMES_MASK) {
         // Write all ref frame order hints if error_resilient_mode == 1
         if (fi.error_resilient && seq.enable_order_hint) {
           assert!(false); // Not supported by rav1e yet!
@@ -2145,7 +2147,7 @@ fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut Fram
 pub fn update_rec_buffer(fi: &FrameInvariants, rec_buffer: &mut [Option<Rc<Frame>>],
                          fs: FrameState) {
   let rfs = Rc::new(fs.rec);
-  for i in 0..8 {
+  for i in 0..(REF_FRAMES as usize) {
     if (fi.refresh_frame_flags & (1 << i)) != 0 {
       rec_buffer[i] = Some(Rc::clone(&rfs));
     }
@@ -2362,7 +2364,7 @@ mod test_encode_decode {
             fill_frame(&mut ra, &mut fs.input);
 
             fi.frame_type = if fi.number % 30 == 0 { FrameType::KEY } else { FrameType::INTER };
-            fi.refresh_frame_flags = if fi.frame_type == FrameType::KEY { 0xff } else { 1 };
+            fi.refresh_frame_flags = if fi.frame_type == FrameType::KEY { ALL_REF_FRAMES_MASK } else { 1 };
 
             fi.intra_only = fi.frame_type == FrameType::KEY || fi.frame_type == FrameType::INTRA_ONLY;
             fi.use_prev_frame_mvs = !(fi.intra_only || fi.error_resilient);
