@@ -11,6 +11,7 @@ extern crate rav1e;
 extern crate y4m;
 
 use rav1e::*;
+use std::rc::Rc;
 
 fn main() {
   let (mut io, config) = EncoderConfig::from_cli();
@@ -34,12 +35,13 @@ fn main() {
     framerate.den
   );
 
-  let mut last_rec: Option<Frame> = None;
+  let mut rec_buffer: [Option<Rc<Frame>>; (REF_FRAMES as usize)] = [None, None, None, None, None, None, None, None];
   loop {
     //fi.frame_type = FrameType::KEY;
     fi.frame_type =
       if fi.number % 30 == 0 { FrameType::KEY } else { FrameType::INTER };
 
+    fi.refresh_frame_flags = if fi.frame_type == FrameType::KEY { ALL_REF_FRAMES_MASK } else { 1 };
     fi.intra_only = fi.frame_type == FrameType::KEY
       || fi.frame_type == FrameType::INTRA_ONLY;
     fi.use_prev_frame_mvs = !(fi.intra_only || fi.error_resilient);
@@ -50,7 +52,7 @@ fn main() {
       &mut io.output,
       &mut y4m_dec,
       y4m_enc.as_mut(),
-      &mut last_rec
+      &mut rec_buffer
     ) {
       break;
     }
