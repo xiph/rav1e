@@ -26,6 +26,7 @@ use std::io::prelude::*;
 use bitstream_io::{BE, LE, BitWriter};
 use clap::{App, Arg};
 use std::cmp;
+use std::rc::Rc;
 
 // for benchmarking purpose
 pub mod ec;
@@ -847,10 +848,10 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         }
       } else { // Inter frame info goes here
         if fi.intra_only {
-          self.write(REF_FRAMES,0)?; // refresh_frame_flags
+          self.write(REF_FRAMES, fi.refresh_frame_flags)?;
         } else {
           // TODO: This should be set once inter mode is used
-          self.write(REF_FRAMES,0)?; // refresh_frame_flags
+          self.write(REF_FRAMES, fi.refresh_frame_flags)?;
         }
       };
 
@@ -1287,10 +1288,10 @@ fn write_uncompressed_header(packet: &mut Write,
         bw.write_frame_setup()?;
     } else { // Inter frame info goes here
         if fi.intra_only {
-            bw.write(8,0)?; // refresh_frame_flags
+            bw.write(8, fi.refresh_frame_flags)?;
             bw.write_frame_setup()?;
         } else {
-            bw.write(8,0)?; // refresh_frame_flags
+            bw.write(8, fi.refresh_frame_flags)?;
             // TODO: More Inter frame info goes here
             for _ in 0..7 {
                 bw.write(3,0)?; // dummy ref_frame = 0 until real MC happens
@@ -2102,12 +2103,12 @@ fn cdef_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockContext) {
     }
 }
 
-fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut FrameState, last_rec: &Option<Frame>) -> Vec<u8> {
+fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut FrameState, rec_buffer: &[Option<Rc<Frame>>]) -> Vec<u8> {
     let mut packet = Vec::new();
     //write_uncompressed_header(&mut packet, sequence, fi).unwrap();
     write_obus(&mut packet, sequence, fi).unwrap();
     if fi.show_existing_frame {
-        match last_rec {
+        match rec_buffer[0] {
             Some(ref rec) => for p in 0..3 {
                 fs.rec.planes[p].data.copy_from_slice(rec.planes[p].data.as_slice());
             },
@@ -2146,7 +2147,7 @@ pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
                      output_file: &mut Write,
                      y4m_dec: &mut y4m::Decoder<Box<Read>>,
                      y4m_enc: Option<&mut y4m::Encoder<Box<Write>>>,
-                     last_rec: &mut Option<Frame>) -> bool {
+                     rec_buffer: &mut [Option<Rc<Frame>>]) -> bool {
     unsafe {
         av1_rtcd();
         aom_dsp_rtcd();
@@ -2189,7 +2190,7 @@ pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
                 _ => panic! ("unknown input bit depth!"),
             }
 
-            let packet = encode_frame(sequence, fi, &mut fs, &last_rec);
+            let packet = encode_frame(sequence, fi, &mut fs, rec_buffer);
             write_ivf_frame(output_file, fi.number, packet.as_ref());
             if let Some(mut y4m_enc) = y4m_enc {
                 let mut rec_y = vec![128 as u8; width*height];
@@ -2216,7 +2217,13 @@ pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
                 let rec_frame = y4m::Frame::new([&rec_y, &rec_u, &rec_v], None);
                 y4m_enc.write_frame(&rec_frame).unwrap();
             }
-            *last_rec = Some(fs.rec);
+
+            let rfs = Rc::new(fs.rec);
+            for i in 0..8 {
+              if (fi.refresh_frame_flags & (1 << i)) != 0 {
+                rec_buffer[i] = Some(Rc::clone(&rfs));
+              }
+            }
             true
         },
         _ => false
@@ -2341,7 +2348,7 @@ mod test_encode_decode {
 
         println!("Encoding {}x{} speed {} quantizer {}", w, h, speed, quantizer);
 
-        let mut last_rec: Option<Frame> = None;
+        let mut rec_buffer: [Option<Rc<Frame>>; 8] = [None, None, None, None, None, None, None, None];
 
         let mut iter: aom_codec_iter_t = ptr::null_mut();
 
@@ -2350,11 +2357,12 @@ mod test_encode_decode {
             fill_frame(&mut ra, &mut fs.input);
 
             fi.frame_type = if fi.number % 30 == 0 { FrameType::KEY } else { FrameType::INTER };
+            fi.refresh_frame_flags = if fi.frame_type == FrameType::KEY { 0xff } else { 1 };
 
             fi.intra_only = fi.frame_type == FrameType::KEY || fi.frame_type == FrameType::INTRA_ONLY;
             fi.use_prev_frame_mvs = !(fi.intra_only || fi.error_resilient);
             println!("Encoding frame {}", fi.number);
-            let packet = encode_frame(&mut seq, &mut fi, &mut fs, &last_rec);
+            let packet = encode_frame(&mut seq, &mut fi, &mut fs, &rec_buffer);
             println!("Encoded.");
             last_rec = Some(fs.rec);
 
