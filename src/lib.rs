@@ -2142,6 +2142,16 @@ fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut Fram
     packet
 }
 
+pub fn update_rec_buffer(fi: &FrameInvariants, rec_buffer: &mut [Option<Rc<Frame>>],
+                         fs: FrameState) {
+  let rfs = Rc::new(fs.rec);
+  for i in 0..8 {
+    if (fi.refresh_frame_flags & (1 << i)) != 0 {
+      rec_buffer[i] = Some(Rc::clone(&rfs));
+    }
+  }
+}
+
 /// Encode and write a frame.
 pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
                      output_file: &mut Write,
@@ -2218,12 +2228,7 @@ pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
                 y4m_enc.write_frame(&rec_frame).unwrap();
             }
 
-            let rfs = Rc::new(fs.rec);
-            for i in 0..8 {
-              if (fi.refresh_frame_flags & (1 << i)) != 0 {
-                rec_buffer[i] = Some(Rc::clone(&rfs));
-              }
-            }
+            update_rec_buffer(fi, rec_buffer, fs);
             true
         },
         _ => false
@@ -2364,7 +2369,7 @@ mod test_encode_decode {
             println!("Encoding frame {}", fi.number);
             let packet = encode_frame(&mut seq, &mut fi, &mut fs, &rec_buffer);
             println!("Encoded.");
-            last_rec = Some(fs.rec);
+            update_rec_buffer(&fi, &mut rec_buffer, fs);
 
             let mut corrupted_count = 0;
             unsafe {
