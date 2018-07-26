@@ -190,58 +190,28 @@ pub fn rdo_mode_decision(
   let partition_start_x = (bo.x & LOCAL_BLOCK_MASK) >> xdec << MI_SIZE_LOG2;
   let partition_start_y = (bo.y & LOCAL_BLOCK_MASK) >> ydec << MI_SIZE_LOG2;
 
-  for &skip in &[false, true] {
-    // Don't test skipped blocks at higher speed levels
-    if fi.config.speed > 1 && skip {
-      continue;
+  let skip = false;
+
+  let checkpoint = cw.checkpoint();
+
+  // Exclude complex prediction modes at higher speed levels
+  let mode_set = if fi.config.speed <= 3 {
+    RAV1E_INTRA_MODES
+  } else {
+    RAV1E_INTRA_MODES_MINIMAL
+  };
+
+  for &luma_mode in mode_set {
+    if fi.frame_type == FrameType::KEY
+      && luma_mode >= PredictionMode::NEARESTMV
+    {
+      break;
     }
 
-    let checkpoint = cw.checkpoint();
-
-    // Exclude complex prediction modes at higher speed levels
-    let mode_set = if fi.config.speed <= 3 {
-      RAV1E_INTRA_MODES
-    } else {
-      RAV1E_INTRA_MODES_MINIMAL
-    };
-
-    for &luma_mode in mode_set {
-      if fi.frame_type == FrameType::KEY
-        && luma_mode >= PredictionMode::NEARESTMV
-      {
-        break;
-      }
-
-      if is_chroma_block && fi.config.speed <= 3 {
-        // Find the best chroma prediction mode for the current luma prediction mode
-        for &chroma_mode in RAV1E_INTRA_MODES {
-          encode_block(fi, fs, cw, luma_mode, chroma_mode, bsize, bo, skip);
-
-          let cost = cw.w.tell_frac() - tell;
-          let rd = compute_rd_cost(
-            fi,
-            fs,
-            w,
-            h,
-            w_uv,
-            h_uv,
-            partition_start_x,
-            partition_start_y,
-            bo,
-            cost
-          );
-
-          if rd < best_rd {
-            best_rd = rd;
-            best_mode_luma = luma_mode;
-            best_mode_chroma = chroma_mode;
-            best_skip = skip;
-          }
-
-          cw.rollback(&checkpoint);
-        }
-      } else {
-        encode_block(fi, fs, cw, luma_mode, luma_mode, bsize, bo, skip);
+    if is_chroma_block && fi.config.speed <= 3 {
+      // Find the best chroma prediction mode for the current luma prediction mode
+      for &chroma_mode in RAV1E_INTRA_MODES {
+        encode_block(fi, fs, cw, luma_mode, chroma_mode, bsize, bo, skip);
 
         let cost = cw.w.tell_frac() - tell;
         let rd = compute_rd_cost(
@@ -260,12 +230,37 @@ pub fn rdo_mode_decision(
         if rd < best_rd {
           best_rd = rd;
           best_mode_luma = luma_mode;
-          best_mode_chroma = luma_mode;
+          best_mode_chroma = chroma_mode;
           best_skip = skip;
         }
 
         cw.rollback(&checkpoint);
       }
+    } else {
+      encode_block(fi, fs, cw, luma_mode, luma_mode, bsize, bo, skip);
+
+      let cost = cw.w.tell_frac() - tell;
+      let rd = compute_rd_cost(
+        fi,
+        fs,
+        w,
+        h,
+        w_uv,
+        h_uv,
+        partition_start_x,
+        partition_start_y,
+        bo,
+        cost
+      );
+
+      if rd < best_rd {
+        best_rd = rd;
+        best_mode_luma = luma_mode;
+        best_mode_chroma = luma_mode;
+        best_skip = skip;
+      }
+
+      cw.rollback(&checkpoint);
     }
   }
 
