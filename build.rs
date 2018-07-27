@@ -26,7 +26,7 @@ fn main() {
     let dst = cmake::Config::new(build_path)
         .define("CONFIG_DEBUG", debug)
         .define("CONFIG_EXT_PARTITION_TYPES", "1")
-        .define("CONFIG_INTRA_EDGE2", "0")
+        .define("CONFIG_INTRA_EDGE2", "1")
         .define("CONFIG_OBU", "1")
         .define("CONFIG_FILTER_INTRA", "1")
         .define("CONFIG_MONO_VIDEO", "1")

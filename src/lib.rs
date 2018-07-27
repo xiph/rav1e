@@ -1283,6 +1283,9 @@ fn write_uncompressed_header(packet: &mut Write,
     }
     bw.write_bit(fi.error_resilient)?; // error resilient
 
+    if fi.intra_only {
+        bw.write_bit(true)?; // disable_intra_edge_filter = true
+    }
     //bw.write(8+7,0)?; // frame id
 
     bw.write_bit(false)?; // no override frame size
