@@ -1098,16 +1098,18 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         self.write_bit(false) // loop filter deltas enabled
     }
     fn write_frame_cdef(&mut self, fi: &FrameInvariants) -> Result<(), std::io::Error> {
-        assert!(fi.cdef_damping >= 3);
-        assert!(fi.cdef_damping <= 6);
-        self.write(2, fi.cdef_damping - 3)?;
-        assert!(fi.cdef_bits < 4);
-        self.write(2,fi.cdef_bits)?; // cdef bits
-        for i in 0..(1<<fi.cdef_bits) {
-            assert!(fi.cdef_y_strengths[i]<64);
-            assert!(fi.cdef_uv_strengths[i]<64);
-            self.write(6,fi.cdef_y_strengths[i])?; // cdef y strength
-            self.write(6,fi.cdef_uv_strengths[i])?; // cdef uv strength
+        if fi.sequence.enable_cdef {
+            assert!(fi.cdef_damping >= 3);
+            assert!(fi.cdef_damping <= 6);
+            self.write(2, fi.cdef_damping - 3)?;
+            assert!(fi.cdef_bits < 4);
+            self.write(2,fi.cdef_bits)?; // cdef bits
+            for i in 0..(1<<fi.cdef_bits) {
+                assert!(fi.cdef_y_strengths[i]<64);
+                assert!(fi.cdef_uv_strengths[i]<64);
+                self.write(6,fi.cdef_y_strengths[i])?; // cdef y strength
+                self.write(6,fi.cdef_uv_strengths[i])?; // cdef uv strength
+            }
         }
         Ok(())
     }
@@ -1441,8 +1443,10 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
 
     cw.bc.set_skip(bo, bsize, skip);
     cw.write_skip(bo, skip);
-    cw.bc.set_cdef(bo, bsize, cdef_index);
-    cw.write_block_cdef(bo, skip, cdef_index, fi.cdef_bits);
+    if fi.sequence.enable_cdef {
+        cw.bc.set_cdef(bo, bsize, cdef_index);
+        cw.write_block_cdef(bo, skip, cdef_index, fi.cdef_bits);
+    }
 
     if fi.frame_type == FrameType::INTER {
         cw.write_is_inter(bo, is_inter);
