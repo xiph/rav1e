@@ -45,7 +45,7 @@ const MAX_SB_SQUARE: usize = (MAX_SB_SIZE * MAX_SB_SIZE);
 pub const MAX_TX_SIZE: usize = 32;
 const MAX_TX_SQUARE: usize = MAX_TX_SIZE * MAX_TX_SIZE;
 
-const INTRA_MODES: usize = 13;
+pub const INTRA_MODES: usize = 13;
 const UV_INTRA_MODES: usize = 14;
 const BLOCK_SIZE_GROUPS: usize = 4;
 const MAX_ANGLE_DELTA: usize = 3;
