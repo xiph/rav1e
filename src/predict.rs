@@ -16,6 +16,7 @@ use libc;
 use context::MAX_TX_SIZE;
 use partition::*;
 use std::mem::*;
+use context::INTRA_MODES;
 
 pub static RAV1E_INTRA_MODES: &'static [PredictionMode] = &[
   PredictionMode::DC_PRED,
@@ -60,6 +61,33 @@ static sm_weight_arrays: [u8; 2 * MAX_TX_SIZE] = [
     150, 144, 138, 133, 127, 121, 116, 111, 106, 101, 96, 91, 86, 82, 77, 73, 69,
     65, 61, 57, 54, 50, 47, 44, 41, 38, 35, 32, 29, 27, 25, 22, 20, 18, 16, 15,
     13, 12, 10, 9, 8, 7, 6, 6, 5, 5, 4, 4, 4,*/
+];
+
+
+const NEED_LEFT: u8 = 1 << 1;
+const NEED_ABOVE: u8 = 1 << 2;
+const NEED_ABOVERIGHT: u8 = 1 << 3;
+const NEED_ABOVELEFT: u8 = 1 << 4;
+const NEED_BOTTOMLEFT: u8 = 1 << 5;
+
+/*const INTRA_EDGE_FILT: usize = 3;
+const INTRA_EDGE_TAPS: usize = 5;
+const MAX_UPSAMPLE_SZ: usize = 16;*/
+
+pub static extend_modes: [u8; INTRA_MODES] = [
+  NEED_ABOVE | NEED_LEFT,                   // DC
+  NEED_ABOVE,                               // V
+  NEED_LEFT,                                // H
+  NEED_ABOVE | NEED_ABOVERIGHT,             // D45
+  NEED_LEFT | NEED_ABOVE | NEED_ABOVELEFT,  // D135
+  NEED_LEFT | NEED_ABOVE | NEED_ABOVELEFT,  // D113
+  NEED_LEFT | NEED_ABOVE | NEED_ABOVELEFT,  // D157
+  NEED_LEFT | NEED_BOTTOMLEFT,              // D203
+  NEED_ABOVE | NEED_ABOVERIGHT,             // D67
+  NEED_LEFT | NEED_ABOVE,                   // SMOOTH
+  NEED_LEFT | NEED_ABOVE,                   // SMOOTH_V
+  NEED_LEFT | NEED_ABOVE,                   // SMOOTH_H
+  NEED_LEFT | NEED_ABOVE | NEED_ABOVELEFT,  // PAETH
 ];
 
 extern {
