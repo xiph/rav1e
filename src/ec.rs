@@ -159,17 +159,11 @@ impl od_ec_enc {
     // We output the minimum number of bits that ensures that the symbols encoded
     // thus far will be decoded correctly regardless of the bits that follow.
     let l = self.low;
-    let r = self.rng as u32;
     let mut c = self.cnt;
-    let mut s = 9;
-    let mut m = 0x7FFF;
-    let mut e = (l + m) & !m;
+    let mut s = 10;
+    let m = 0x3FFF;
+    let mut e = ((l + m) & !m) | (m + 1);
 
-    while (e | m) >= l + r {
-      s += 1;
-      m >>= 1;
-      e = (l + m) & !m;
-    }
     s += c;
 
     if s > 0 {
