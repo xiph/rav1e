@@ -10,7 +10,7 @@
 #![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
 
 /// Plane-specific configuration.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PlaneConfig {
   pub stride: usize,
   pub width: usize,
@@ -26,7 +26,7 @@ pub struct PlaneOffset {
   pub y: usize
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Plane {
   pub data: Vec<u16>,
   pub cfg: PlaneConfig
