@@ -2023,17 +2023,18 @@ mod test_encode_decode {
     }
 
     static DIMENSIONS: &[(usize, usize)] = &[(2, 2), (4, 4), (8, 8), 
-        (16, 16), (32, 32), (64, 64), (128, 128), 
-        (256, 256), (512, 512), (1024, 1024)];
+        (16, 16), (32, 32), (64, 64), (128, 128), (256, 256), 
+        (512, 512), (1024, 1024), (2048, 2048)];
 
     #[test]
     #[ignore]
     fn dimensions() {
         let quantizer = 100;
-        let limit = 2;
+        let limit = 1;
+        let speed = 4;
         
         for (w, h) in DIMENSIONS.iter() {
-            encode_decode(*w, *h, 0, quantizer, limit);
+            encode_decode(*w, *h, speed, quantizer, limit);
         }
     }
 
