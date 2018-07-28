@@ -55,7 +55,7 @@ extern {
     pub fn aom_dsp_rtcd();
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Frame {
     pub planes: [Plane; 3]
 }
@@ -1939,6 +1939,7 @@ mod test_encode_decode {
     use rand::{ChaChaRng, Rng, SeedableRng};
     use aom::*;
     use std::mem;
+    use std::collections::VecDeque;
 
     fn fill_frame(ra: &mut ChaChaRng, frame: &mut Frame) {
         for plane in frame.planes.iter_mut() {
@@ -2037,6 +2038,38 @@ mod test_encode_decode {
         }
     }
 
+    fn compare_plane(rec: &[u8], rec_stride: usize,
+                     dec: &[u8], dec_stride: usize,
+                     width: usize, height: usize) {
+        for line in rec.chunks(rec_stride)
+            .zip(dec.chunks(dec_stride)).take(height) {
+            assert_eq!(&line.0[..width], &line.1[..width]);
+        }
+    }
+
+    fn compare_img(img: *const aom_image_t, frame: &Frame) {
+        use std::slice;
+        let img = unsafe { *img };
+        let img_iter = img.planes.iter().zip(img.stride.iter());
+
+        for (img_plane, frame_plane) in img_iter.zip(frame.planes.iter()) {
+            let w = frame_plane.cfg.width;
+            let h = frame_plane.cfg.height;
+            let rec_stride = frame_plane.cfg.stride;
+            let dec_stride = *img_plane.1 as usize;
+
+            let dec = unsafe {
+                let data = *img_plane.0 as *const u8;
+                let size = dec_stride * h;
+                slice::from_raw_parts(data, size)
+            };
+
+            let rec: Vec<u8> = frame_plane.data.iter().map(|&v| v as u8).collect();
+
+            compare_plane(&rec[..], rec_stride, dec, dec_stride, w, h);
+        }
+    }
+
     fn encode_decode(w:usize, h:usize, speed: usize, quantizer: usize, limit: usize) {
         use std::ptr;
         let mut ra = ChaChaRng::from_seed([0; 32]);
@@ -2050,6 +2083,8 @@ mod test_encode_decode {
 
         let mut iter: aom_codec_iter_t = ptr::null_mut();
 
+        let mut rec_fifo = VecDeque::new();
+
         for _ in 0 .. limit {
             let mut fs = fi.new_frame_state();
             fill_frame(&mut ra, &mut fs.input);
@@ -2062,6 +2097,9 @@ mod test_encode_decode {
             println!("Encoding frame {}", fi.number);
             let packet = encode_frame(&mut seq, &mut fi, &mut fs, &rec_buffer);
             println!("Encoded.");
+
+            rec_fifo.push_back(fs.rec.clone());
+
             update_rec_buffer(&fi, &mut rec_buffer, fs);
 
             let mut corrupted_count = 0;
@@ -2097,6 +2135,9 @@ mod test_encode_decode {
                             panic!("Decode codec_control failed {}", CStr::from_ptr(detail).to_string_lossy());
                         }
                         corrupted_count += corrupted;
+
+                        let rec = rec_fifo.pop_front().unwrap();
+                        compare_img(img, &rec);
                     }
                 }
             }
