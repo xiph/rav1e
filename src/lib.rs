@@ -1401,7 +1401,7 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
                   p: usize, bo: &BlockOffset, mode: PredictionMode, tx_size: TxSize, tx_type: TxType,
                   plane_bsize: BlockSize, po: &PlaneOffset, skip: bool) {
     let rec = &mut fs.rec.planes[p];
-    let PlaneConfig { stride, xdec, ydec } = fs.input.planes[p].cfg;
+    let PlaneConfig { stride, xdec, ydec, .. } = fs.input.planes[p].cfg;
 
     mode.predict(&mut rec.mut_slice(po), tx_size);
 

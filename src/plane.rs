@@ -13,6 +13,8 @@
 #[derive(Debug)]
 pub struct PlaneConfig {
   pub stride: usize,
+  pub width: usize,
+  pub height: usize,
   pub xdec: usize,
   pub ydec: usize
 }
@@ -34,7 +36,7 @@ impl Plane {
   pub fn new(width: usize, height: usize, xdec: usize, ydec: usize) -> Plane {
     Plane {
       data: vec![128; width * height],
-      cfg: PlaneConfig { stride: width, xdec, ydec }
+      cfg: PlaneConfig { stride: width, width, height, xdec, ydec }
     }
   }
 
