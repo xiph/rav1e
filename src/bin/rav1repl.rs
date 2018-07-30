@@ -52,8 +52,7 @@ fn main() {
               &mut fi,
               &mut io.output,
               &mut y4m_dec,
-              y4m_enc.as_mut(),
-              &mut last_rec
+              y4m_enc.as_mut()
             );
             fi.number += 1;
             if fi.number == config.limit {

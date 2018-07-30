@@ -11,7 +11,6 @@ extern crate rav1e;
 extern crate y4m;
 
 use rav1e::*;
-use std::rc::Rc;
 
 fn main() {
   let (mut io, config) = EncoderConfig::from_cli();
@@ -35,7 +34,6 @@ fn main() {
     framerate.den
   );
 
-  let mut rec_buffer: [Option<Rc<Frame>>; (REF_FRAMES as usize)] = [None, None, None, None, None, None, None, None];
   loop {
     //fi.frame_type = FrameType::KEY;
     fi.frame_type =
@@ -51,8 +49,7 @@ fn main() {
       &mut fi,
       &mut io.output,
       &mut y4m_dec,
-      y4m_enc.as_mut(),
-      &mut rec_buffer
+      y4m_enc.as_mut()
     ) {
       break;
     }
