@@ -224,32 +224,6 @@ impl FrameState {
     }
 }
 
-trait Fixed {
-    fn floor_log2(&self, n: usize) -> usize;
-    fn ceil_log2(&self, n: usize) -> usize;
-    fn align_power_of_two(&self, n: usize) -> usize;
-    fn align_power_of_two_and_shift(&self, n: usize) -> usize;
-}
-
-impl Fixed for usize {
-    #[inline]
-    fn floor_log2(&self, n: usize) -> usize {
-        self & !((1 << n) - 1)
-    }
-    #[inline]
-    fn ceil_log2(&self, n: usize) -> usize {
-        (self + (1 << n) - 1).floor_log2(n)
-    }
-    #[inline]
-    fn align_power_of_two(&self, n: usize) -> usize {
-        self.ceil_log2(n)
-    }
-    #[inline]
-    fn align_power_of_two_and_shift(&self, n: usize) -> usize {
-        (self + (1 << n) - 1) >> n
-    }
-}
-
 // Frame Invariants are invariant inside a frame
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -2006,7 +1980,7 @@ mod test_encode_decode {
     }
 
     // TODO: support non-multiple-of-16 dimensions
-    static DIMENSION_OFFSETS: &[(usize, usize)] = &[(0, 0), (16, 16)];
+    static DIMENSION_OFFSETS: &[(usize, usize)] = &[(0, 0), (4, 4), (8, 8), (16, 16)];
 
     #[test]
     #[ignore]
