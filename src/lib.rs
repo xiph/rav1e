@@ -93,7 +93,7 @@ impl Default for Tune {
     }
 }
 
-#[derive(Copy,Clone)]
+#[derive(Copy,Clone,Debug)]
 pub struct Sequence {
   // OBU Sequence header of AV1
     pub profile: u8,
@@ -253,7 +253,7 @@ impl Fixed for usize {
 // Frame Invariants are invariant inside a frame
 #[allow(dead_code)]
 #[derive(Debug)]
-pub struct FrameInvariants {
+pub struct FrameInvariants<'b> {
     pub width: usize,
     pub height: usize,
     pub padded_w: usize,
@@ -292,13 +292,14 @@ pub struct FrameInvariants {
     pub allow_warped_motion: bool,
     pub cdef_damping: u8,
     pub cdef_bits: u8,
-    pub cdef_y_strength: u8,
-    pub cdef_uv_strength: u8,
+    pub cdef_y_strengths: [u8; 8],
+    pub cdef_uv_strengths: [u8; 8],
     pub config: EncoderConfig,
+    pub sequence: &'b mut Sequence
 }
 
-impl FrameInvariants {
-    pub fn new(width: usize, height: usize, config: EncoderConfig) -> FrameInvariants {
+impl <'b> FrameInvariants <'b>{
+    pub fn new(width: usize, height: usize, config: EncoderConfig, sequence: &'b mut Sequence) -> FrameInvariants {
         // Speed level decides the minimum partition size, i.e. higher speed --> larger min partition size,
         // with exception that SBs on right or bottom frame borders split down to BLOCK_4X4.
         // At speed = 0, RDO search is exhaustive.
@@ -344,10 +345,11 @@ impl FrameInvariants {
             disable_frame_end_update_cdf: true,
             allow_warped_motion: true,
             cdef_damping: 3,
-            cdef_bits: 0,
-            cdef_y_strength: 7*4+3,
-            cdef_uv_strength: 7*4+3,
+            cdef_bits: 3,
+            cdef_y_strengths: [0*4+0, 1*4+0, 2*4+1, 3*4+1, 5*4+2, 7*4+3, 10*4+3, 13*4+3],
+            cdef_uv_strengths: [0*4+0, 1*4+0, 2*4+1, 3*4+1, 5*4+2, 7*4+3, 10*4+3, 13*4+3],
             config,
+            sequence
         }
     }
 
@@ -360,7 +362,7 @@ impl FrameInvariants {
     }
 }
 
-impl fmt::Display for FrameInvariants{
+impl <'b> fmt::Display for FrameInvariants <'b>{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Frame {} - {}", self.number, self.frame_type)
     }
@@ -542,11 +544,11 @@ trait UncompressedHeader {
     // Start of OBU Headers
     fn write_obu_header(&mut self, obu_type: OBU_Type, obu_extension: u32)
             -> Result<(), std::io::Error>;
-    fn write_sequence_header_obu(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
+    fn write_sequence_header_obu(&mut self, fi: &FrameInvariants)
             -> Result<(), std::io::Error>;
-    fn write_frame_header_obu(&mut self, seq: &Sequence, fi: &mut FrameInvariants)
+    fn write_frame_header_obu(&mut self, fi: &mut FrameInvariants)
             -> Result<(), std::io::Error>;
-    fn write_sequence_header2(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
+    fn write_sequence_header2(&mut self, fi: &mut FrameInvariants)
                                     -> Result<(), std::io::Error>;
     fn write_color_config(&mut self, seq: &mut Sequence) -> Result<(), std::io::Error>;
     // End of OBU Headers
@@ -557,7 +559,7 @@ trait UncompressedHeader {
     fn write_bitdepth_colorspace_sampling(&mut self) -> Result<(), std::io::Error>;
     fn write_frame_setup(&mut self) -> Result<(), std::io::Error>;
     fn write_loop_filter(&mut self) -> Result<(), std::io::Error>;
-    fn write_cdef(&mut self, fi: &FrameInvariants) -> Result<(), std::io::Error>;
+    fn write_frame_cdef(&mut self, fi: &FrameInvariants) -> Result<(), std::io::Error>;
 }
 #[allow(unused)]
 const OP_POINTS_IDC_BITS:usize = 12;
@@ -592,8 +594,9 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
     }
 
 #[allow(unused)]
-    fn write_sequence_header_obu(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
-        -> Result<(), std::io::Error> {
+    fn write_sequence_header_obu(&mut self, fi: &FrameInvariants)
+            -> Result<(), std::io::Error> {
+        let mut seq = &fi.sequence;
         self.write(2, seq.profile)?; // profile 0, 3 bits
         //self.write(1, 0)?; // still_picture
         //self.write(1, 0)?; // reduced_still_picture
@@ -651,8 +654,9 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
     }
 
 #[allow(unused)]
-    fn write_sequence_header2(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
-        -> Result<(), std::io::Error> {
+    fn write_sequence_header2(&mut self, fi: &mut FrameInvariants)
+            -> Result<(), std::io::Error> {
+        let mut seq = &mut fi.sequence;
         self.write(4, seq.num_bits_width - 1)?;
         self.write(4, seq.num_bits_height - 1)?;
         self.write(seq.num_bits_width, (seq.max_frame_width - 1) as u16)?;
@@ -738,8 +742,9 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
     }
 
 #[allow(unused)]
-    fn write_frame_header_obu(&mut self, seq: &Sequence, fi: &mut FrameInvariants)
-        -> Result<(), std::io::Error> {
+    fn write_frame_header_obu(&mut self, fi: &mut FrameInvariants)
+       -> Result<(), std::io::Error> {
+      let mut seq = &fi.sequence;
       if seq.reduced_still_picture_hdr {
         assert!(fi.show_existing_frame);
         assert!(fi.frame_type == FrameType::KEY);
@@ -970,7 +975,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
       // loop filter
       self.write_loop_filter()?;
       // cdef
-      self.write_cdef(fi)?;
+      self.write_frame_cdef(fi)?;
       // loop restoration
       // If seq.enable_restoration is false, don't signal about loop restoration
       if seq.enable_restoration {
@@ -1092,17 +1097,19 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         self.write(3,0)?; // loop filter sharpness
         self.write_bit(false) // loop filter deltas enabled
     }
-    fn write_cdef(&mut self, fi: &FrameInvariants) -> Result<(), std::io::Error> {
-        assert!(fi.cdef_damping >= 3);
-        assert!(fi.cdef_damping <= 6);
-        self.write(2, fi.cdef_damping - 3)?;
-        assert!(fi.cdef_bits == 0); // temporary limitation
-        self.write(2,fi.cdef_bits)?; // cdef bits
-        for _ in 0..1 {
-            assert!(fi.cdef_y_strength<64);
-            assert!(fi.cdef_uv_strength<64);
-            self.write(6,fi.cdef_y_strength)?; // cdef y strength
-            self.write(6,fi.cdef_uv_strength)?; // cdef uv strength
+    fn write_frame_cdef(&mut self, fi: &FrameInvariants) -> Result<(), std::io::Error> {
+        if fi.sequence.enable_cdef {
+            assert!(fi.cdef_damping >= 3);
+            assert!(fi.cdef_damping <= 6);
+            self.write(2, fi.cdef_damping - 3)?;
+            assert!(fi.cdef_bits < 4);
+            self.write(2,fi.cdef_bits)?; // cdef bits
+            for i in 0..(1<<fi.cdef_bits) {
+                assert!(fi.cdef_y_strengths[i]<64);
+                assert!(fi.cdef_uv_strengths[i]<64);
+                self.write(6,fi.cdef_y_strengths[i])?; // cdef y strength
+                self.write(6,fi.cdef_uv_strengths[i])?; // cdef uv strength
+            }
         }
         Ok(())
     }
@@ -1166,7 +1173,7 @@ fn write_frame_header_obu_helper(packet: &mut Write, sequence: &mut Sequence,
     let mut buf2 = Vec::new();
     {
         let mut bw2 = BitWriter::<BE>::new(&mut buf2);
-        bw2.write_frame_header_obu(sequence, fi);
+        bw2.write_frame_header_obu(fi);
         bw2.byte_align()?;
     }
     let obu_payload_size = buf2.len() as u64;
@@ -1189,8 +1196,7 @@ fn write_frame_header_obu_helper(packet: &mut Write, sequence: &mut Sequence,
 }
 
 #[allow(unused)]
-fn write_obus(packet: &mut Write, sequence: &mut Sequence,
-                            fi: &mut FrameInvariants) -> Result<(), std::io::Error> {
+fn write_obus(packet: &mut Write, fi: &mut FrameInvariants) -> Result<(), std::io::Error> {
     //let mut uch = BitWriter::<BE>::new(packet);
     let obu_extension = 0 as u32;
 
@@ -1208,7 +1214,7 @@ fn write_obus(packet: &mut Write, sequence: &mut Sequence,
         let mut buf2 = Vec::new();
         {
             let mut bw2 = BitWriter::<BE>::new(&mut buf2);
-            bw2.write_sequence_header_obu(sequence, fi);
+            bw2.write_sequence_header_obu(fi);
             bw2.byte_align()?;
         }
         let obu_payload_size = buf2.len() as u64;
@@ -1322,7 +1328,7 @@ fn write_uncompressed_header(packet: &mut Write,
     bw.write_bit(false)?; // no qm
     bw.write_bit(false)?; // segmentation off
     bw.write_bit(false)?; // no delta q
-    bw.write_cdef(fi)?;
+    bw.write_frame_cdef(fi)?;
     bw.write(6,0)?; // no y, u or v loop restoration
     bw.write_bit(false)?; // tx mode select
 
@@ -1432,11 +1438,15 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
 
 fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
             luma_mode: PredictionMode, chroma_mode: PredictionMode,
-            bsize: BlockSize, bo: &BlockOffset, skip: bool) {
+            bsize: BlockSize, bo: &BlockOffset, skip: bool, cdef_index: u8) {
     let is_inter = luma_mode >= PredictionMode::NEARESTMV;
 
     cw.bc.set_skip(bo, bsize, skip);
     cw.write_skip(bo, skip);
+    if fi.sequence.enable_cdef {
+        cw.bc.set_cdef(bo, bsize, cdef_index);
+        cw.write_block_cdef(bo, skip, cdef_index, fi.cdef_bits);
+    }
 
     if fi.frame_type == FrameType::INTER {
         cw.write_is_inter(bo, is_inter);
@@ -1569,7 +1579,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
 }
 
 fn encode_partition_bottomup(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
-bsize: BlockSize, bo: &BlockOffset) -> f64 {
+                             bsize: BlockSize, bo: &BlockOffset) -> f64 {
     let mut rd_cost = std::f64::MAX;
 
     if bo.x >= cw.bc.cols || bo.y >= cw.bc.rows {
@@ -1599,6 +1609,7 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
     let mut subsize: BlockSize;
 
     let checkpoint = cw.checkpoint();
+    let cdef_index = 5;  // The hardwired cdef index is temporary
 
     // Code the whole block
     if !must_split {
@@ -1607,13 +1618,12 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
         if bsize >= BlockSize::BLOCK_8X8 {
             cw.write_partition(bo, partition, bsize);
         }
-
-        let mode_decision = rdo_mode_decision(fi, fs, cw, bsize, bo).part_modes[0].clone();
+        let mode_decision = rdo_mode_decision(fi, fs, cw, bsize, bo, cdef_index).part_modes[0].clone();
         let (mode_luma, mode_chroma) = (mode_decision.pred_mode_luma, mode_decision.pred_mode_chroma);
         let skip = mode_decision.skip;
         rd_cost = mode_decision.rd_cost;
 
-        encode_block(fi, fs, cw, mode_luma, mode_chroma, bsize, bo, skip);
+        encode_block(fi, fs, cw, mode_luma, mode_chroma, bsize, bo, skip, cdef_index);
 
         best_decision = mode_decision;
     }
@@ -1649,7 +1659,7 @@ bsize: BlockSize, bo: &BlockOffset) -> f64 {
             // FIXME: redundant block re-encode
             let (mode_luma, mode_chroma) = (best_decision.pred_mode_luma, best_decision.pred_mode_chroma);
             let skip = best_decision.skip;
-            encode_block(fi, fs, cw, mode_luma, mode_chroma, bsize, bo, skip);
+            encode_block(fi, fs, cw, mode_luma, mode_chroma, bsize, bo, skip, cdef_index);
         }
     }
 
@@ -1683,13 +1693,14 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut 
         part_modes: std::vec::Vec::new()
     });
     let partition: PartitionType;
+    let cdef_index = 5;  // The hardwired cdef index is temporary
 
     if must_split {
         // Oversized blocks are split automatically
         partition = PartitionType::PARTITION_SPLIT;
     } else if bsize > fi.min_partition_size {
         // Blocks of sizes within the supported range are subjected to a partitioning decision
-        rdo_output = rdo_partition_decision(fi, fs, cw, bsize, bo, &rdo_output);
+        rdo_output = rdo_partition_decision(fi, fs, cw, bsize, bo, &rdo_output, cdef_index);
         partition = rdo_output.part_type;
     } else {
         // Blocks of sizes below the supported range are encoded directly
@@ -1714,14 +1725,14 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut 
                     rdo_output.part_modes[0].clone()
                 } else {
                     // Make a prediction mode decision for blocks encoded with no rdo_partition_decision call (e.g. edges)
-                    rdo_mode_decision(fi, fs, cw, bsize, bo).part_modes[0].clone()
+                    rdo_mode_decision(fi, fs, cw, bsize, bo, cdef_index).part_modes[0].clone()
                 };
 
             let (mode_luma, mode_chroma) = (part_decision.pred_mode_luma, part_decision.pred_mode_chroma);
             let skip = part_decision.skip;
 
             // FIXME: every final block that has gone through the RDO decision process is encoded twice
-            encode_block(fi, fs, cw, mode_luma, mode_chroma, bsize, bo, skip);
+            encode_block(fi, fs, cw, mode_luma, mode_chroma, bsize, bo, skip, cdef_index);
         },
         PartitionType::PARTITION_SPLIT => {
             if rdo_output.part_modes.len() >= 4 {
@@ -1778,7 +1789,9 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
         }
     }
     /* TODO: Don't apply if lossless */
-    cdef_frame(fi, &mut fs.rec, &mut cw.bc);
+    if fi.sequence.enable_cdef {
+        cdef_frame(fi, &mut fs.rec, &mut cw.bc);
+    }
     let mut h = cw.w.done();
     h.push(0); // superframe anti emulation
     h
@@ -1796,10 +1809,10 @@ fn write_tile_group_header(tile_start_and_end_present_flag: bool) ->
     buf.clone()
 }
 
-fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut FrameState, rec_buffer: &[Option<Rc<Frame>>]) -> Vec<u8> {
+fn encode_frame(fi: &mut FrameInvariants, fs: &mut FrameState, rec_buffer: &[Option<Rc<Frame>>]) -> Vec<u8> {
     let mut packet = Vec::new();
     //write_uncompressed_header(&mut packet, sequence, fi).unwrap();
-    write_obus(&mut packet, sequence, fi).unwrap();
+    write_obus(&mut packet, fi).unwrap();
     if fi.show_existing_frame {
         match rec_buffer[0] {
             Some(ref rec) => for p in 0..3 {
@@ -1846,7 +1859,7 @@ pub fn update_rec_buffer(fi: &FrameInvariants, rec_buffer: &mut [Option<Rc<Frame
 }
 
 /// Encode and write a frame.
-pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
+pub fn process_frame(fi: &mut FrameInvariants,
                      output_file: &mut Write,
                      y4m_dec: &mut y4m::Decoder<Box<Read>>,
                      y4m_enc: Option<&mut y4m::Encoder<Box<Write>>>,
@@ -1893,7 +1906,7 @@ pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
                 _ => panic! ("unknown input bit depth!"),
             }
 
-            let packet = encode_frame(sequence, fi, &mut fs, rec_buffer);
+            let packet = encode_frame(fi, &mut fs, rec_buffer);
             write_ivf_frame(output_file, fi.number, packet.as_ref());
             if let Some(mut y4m_enc) = y4m_enc {
                 let mut rec_y = vec![128 as u8; width*height];
@@ -1985,7 +1998,7 @@ mod test_encode_decode {
 
     }
 
-    fn setup_encoder(w: usize, h: usize, speed: usize, quantizer: usize) -> (FrameInvariants, Sequence) {
+    fn setup_encoder(w: usize, h: usize, speed: usize, quantizer: usize) -> FrameInvariants<'a> {
         unsafe {
             av1_rtcd();
             aom_dsp_rtcd();
@@ -1996,13 +2009,13 @@ mod test_encode_decode {
             speed: speed,
             ..Default::default()
         };
-        let mut fi = FrameInvariants::new(w, h, config);
+        let mut seq = Sequence::new(w, h);
+        let mut fi = FrameInvariants::new(w, h, config, &mut seq);
 
         fi.use_reduced_tx_set = true;
         // fi.min_partition_size =
-        let seq = Sequence::new(w, h);
 
-        (fi, seq)
+        fi
     }
 
     // TODO: support non-multiple-of-16 dimensions
@@ -2091,7 +2104,7 @@ mod test_encode_decode {
         let mut ra = ChaChaRng::from_seed([0; 32]);
 
         let mut dec = setup_decoder(w, h);
-        let (mut fi, mut seq) = setup_encoder(w, h, speed, quantizer);
+        let mut fi = setup_encoder(w, h, speed, quantizer);
 
         println!("Encoding {}x{} speed {} quantizer {}", w, h, speed, quantizer);
 
@@ -2111,7 +2124,7 @@ mod test_encode_decode {
             fi.intra_only = fi.frame_type == FrameType::KEY || fi.frame_type == FrameType::INTRA_ONLY;
             fi.use_prev_frame_mvs = !(fi.intra_only || fi.error_resilient);
             println!("Encoding frame {}", fi.number);
-            let packet = encode_frame(&mut seq, &mut fi, &mut fs, &rec_buffer);
+            let packet = encode_frame(&mut fi, &mut fs, &rec_buffer);
             println!("Encoded.");
 
             rec_fifo.push_back(fs.rec.clone());

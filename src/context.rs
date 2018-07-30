@@ -1160,7 +1160,8 @@ pub struct Block {
   pub mode: PredictionMode,
   pub bsize: BlockSize,
   pub partition: PartitionType,
-  pub skip: bool
+  pub skip: bool,
+  pub cdef_index: u8
 }
 
 impl Block {
@@ -1169,7 +1170,8 @@ impl Block {
       mode: PredictionMode::DC_PRED,
       bsize: BlockSize::BLOCK_64X64,
       partition: PartitionType::PARTITION_NONE,
-      skip: false
+      skip: false,
+      cdef_index: 0
     }
   }
   pub fn is_inter(&self) -> bool {
@@ -1186,6 +1188,7 @@ pub struct TXB_CTX {
 pub struct BlockContext {
   pub cols: usize,
   pub rows: usize,
+  pub cdef_coded: bool,
   above_partition_context: Vec<u8>,
   left_partition_context: [u8; MAX_MIB_SIZE],
   above_coeff_context: [Vec<u8>; PLANES],
@@ -1201,6 +1204,7 @@ impl BlockContext {
     BlockContext {
       cols,
       rows,
+      cdef_coded: false,
       above_partition_context: vec![0; aligned_cols],
       left_partition_context: [0; MAX_MIB_SIZE],
       above_coeff_context: [
@@ -1217,6 +1221,7 @@ impl BlockContext {
     BlockContext {
       cols: self.cols,
       rows: self.rows,
+      cdef_coded: self.cdef_coded,
       above_partition_context: self.above_partition_context.clone(),
       left_partition_context: self.left_partition_context,
       above_coeff_context: self.above_coeff_context.clone(),
@@ -1228,6 +1233,7 @@ impl BlockContext {
   pub fn rollback(&mut self, checkpoint: &BlockContext) {
     self.cols = checkpoint.cols;
     self.rows = checkpoint.rows;
+    self.cdef_coded = checkpoint.cdef_coded;
     self.above_partition_context = checkpoint.above_partition_context.clone();
     self.left_partition_context = checkpoint.left_partition_context;
     self.above_coeff_context = checkpoint.above_coeff_context.clone();
@@ -1417,6 +1423,17 @@ impl BlockContext {
     for y in 0..bh {
       for x in 0..bw {
         self.blocks[bo.y + y as usize][bo.x + x as usize].skip = skip;
+      }
+    }
+  }
+
+  pub fn set_cdef(&mut self, bo: &BlockOffset, bsize: BlockSize, cdef_index: u8) {
+    let bw = bsize.width_mi();
+    let bh = bsize.height_mi();
+
+    for y in 0..bh {
+      for x in 0..bw {
+        self.blocks[bo.y + y as usize][bo.x + x as usize].cdef_index = cdef_index;
       }
     }
   }
@@ -1818,6 +1835,20 @@ impl ContextWriter {
     let ctx = self.bc.skip_context(bo);
     symbol!(self, skip as u32, &mut self.fc.skip_cdfs[ctx]);
   }
+
+  pub fn write_block_cdef(&mut self, bo: &BlockOffset, skip: bool, strength_index: u8, bits: u8) {
+    // Starting a new superblock-- we have to keep track as we don't code
+    // a cdef strength until the first non-skip block
+    let block_mask = (1<<SUPERBLOCK_TO_BLOCK_SHIFT) - 1;
+    if (bo.x & block_mask) == 0 && (bo.y & block_mask) == 0 {
+      self.bc.cdef_coded = false;
+    }
+    if !self.bc.cdef_coded && !skip {
+      self.bc.cdef_coded = true;
+      self.w.literal(bits, strength_index as u32);
+    }
+  }
+
   pub fn write_is_inter(&mut self, bo: &BlockOffset, is_inter: bool) {
     let ctx = self.bc.intra_inter_context(bo);
     symbol!(self, is_inter as u32, &mut self.fc.intra_inter_cdfs[ctx]);
