@@ -9,6 +9,8 @@
 
 #![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
 
+use util::*;
+
 /// Plane-specific configuration.
 #[derive(Debug, Clone)]
 pub struct PlaneConfig {
@@ -34,9 +36,10 @@ pub struct Plane {
 
 impl Plane {
   pub fn new(width: usize, height: usize, xdec: usize, ydec: usize) -> Plane {
+    let stride = width.align_power_of_two(4); // Force 16 byte alignment.
     Plane {
-      data: vec![128; width * height],
-      cfg: PlaneConfig { stride: width, width, height, xdec, ydec }
+      data: vec![128; stride * height],
+      cfg: PlaneConfig { stride, width, height, xdec, ydec }
     }
   }
 
