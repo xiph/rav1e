@@ -292,7 +292,7 @@ pub enum PredictionMode {
   PAETH_PRED,
   NEARESTMV,
   NEARMV,
-  ZEROMV,
+  GLOBALMV,
   NEWMV,
   // Compound ref compound modes
   NEAREST_NEARESTMV,
@@ -407,7 +407,7 @@ impl PredictionMode {
   pub fn predict_inter<'a>(self, fi: &FrameInvariants, p: usize, po: &PlaneOffset,
                            dst: &'a mut PlaneMutSlice<'a>, tx_size: TxSize) {
     assert!(!self.is_intra());
-    assert!(self == PredictionMode::ZEROMV); // Other modes not implemented
+    assert!(self == PredictionMode::GLOBALMV); // Other modes not implemented
 
     let ref_frame_idx = LAST_FRAME;
 
