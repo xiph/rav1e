@@ -68,6 +68,7 @@ make -j8
 
 # Contributing
 
+## Coding style
 Check code formatting with [rustfmt](https://github.com/rust-lang-nursery/rustfmt) before submitting a PR.
 rav1e currently uses a [forked version](https://github.com/mbebenita/rustfmt) of rustfmt.
 
@@ -90,6 +91,17 @@ cargo +nightly fmt -- --check
 You should also try [clippy](https://github.com/rust-lang-nursery/rust-clippy).
 ```
 cargo +nightly clippy
+```
+
+## Testing
+Run unit tests with:
+```
+cargo test
+```
+
+Run encode-decode integration tests with:
+```
+cargo test --release --features=decode_test -- --ignored
 ```
 
 # Getting in Touch
