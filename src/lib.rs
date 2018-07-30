@@ -513,6 +513,13 @@ impl EncoderConfig {
             tune: matches.value_of("TUNE").unwrap().parse().unwrap()
         };
 
+        // Validate arguments
+        if config.quantizer == 0 {
+            unimplemented!();
+        } else if config.quantizer > 255 || config.speed > 10 {
+            panic!("argument out of range");
+        }
+
         (io, config)
     }
 }
