@@ -12,7 +12,8 @@
 
 use BlockSize::*;
 use TxSize::*;
-use ReferenceFramesSet;
+use FrameInvariants;
+use LAST_FRAME;
 
 #[derive(Copy, Clone, PartialEq, PartialOrd)]
 pub enum PartitionType {
@@ -403,12 +404,14 @@ impl PredictionMode {
     self >= PredictionMode::V_PRED && self <= PredictionMode::D63_PRED
   }
 
-  pub fn predict_inter<'a>(self, rfs: &ReferenceFramesSet, p: usize, po: &PlaneOffset,
+  pub fn predict_inter<'a>(self, fi: &FrameInvariants, p: usize, po: &PlaneOffset,
                            dst: &'a mut PlaneMutSlice<'a>, tx_size: TxSize) {
     assert!(!self.is_intra());
     assert!(self == PredictionMode::ZEROMV); // Other modes not implemented
 
-    match rfs.frames[0] {
+    let ref_frame_idx = LAST_FRAME;
+
+    match fi.rec_buffer.frames[fi.ref_frames[ref_frame_idx - LAST_FRAME]] {
       Some(ref rec) => {
         let ref_stride = rec.planes[p].cfg.stride;
         let src = rec.planes[p].slice(po);

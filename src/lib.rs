@@ -308,6 +308,7 @@ pub struct FrameInvariants {
     pub cdef_y_strengths: [u8; 8],
     pub cdef_uv_strengths: [u8; 8],
     pub config: EncoderConfig,
+    pub ref_frames: [usize; INTER_REFS_PER_FRAME],
     pub rec_buffer: ReferenceFramesSet,
 }
 
@@ -362,6 +363,7 @@ impl FrameInvariants {
             cdef_y_strengths: [0*4+0, 1*4+0, 2*4+1, 3*4+1, 5*4+2, 7*4+3, 10*4+3, 13*4+3],
             cdef_uv_strengths: [0*4+0, 1*4+0, 2*4+1, 3*4+1, 5*4+2, 7*4+3, 10*4+3, 13*4+3],
             config,
+            ref_frames: [0; INTER_REFS_PER_FRAME],
             rec_buffer: ReferenceFramesSet::new()
         }
     }
@@ -414,10 +416,10 @@ const GOLDEN_FRAME: usize = 4;
 const BWDREF_FRAME: usize = 5;
 const ALTREF2_FRAME: usize = 6;*/
 const ALTREF_FRAME: usize = 7;
-/*const LAST_REF_FRAMES: usize = LAST3_FRAME - LAST_FRAME + 1;
+//const LAST_REF_FRAMES: usize = LAST3_FRAME - LAST_FRAME + 1;
 
 const INTER_REFS_PER_FRAME: usize = ALTREF_FRAME - LAST_FRAME + 1;
-const TOTAL_REFS_PER_FRAME: usize = ALTREF_FRAME - INTRA_FRAME + 1;
+/*const TOTAL_REFS_PER_FRAME: usize = ALTREF_FRAME - INTRA_FRAME + 1;
 
 const FWD_REFS: usize = GOLDEN_FRAME - LAST_FRAME + 1;
 //const FWD_RF_OFFSET(ref) (ref - LAST_FRAME)
@@ -924,7 +926,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
 
           for i in LAST_FRAME..ALTREF_FRAME+1 {
             if !frame_refs_short_signaling {
-              self.write(REF_FRAMES_LOG2, 0)?;
+              self.write(REF_FRAMES_LOG2, fi.ref_frames[i] as u8)?;
             }
             if seq.frame_id_numbers_present_flag {
               assert!(false); // Not supported by rav1e yet!
@@ -1451,7 +1453,7 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
     if mode.is_intra() {
       mode.predict_intra(&mut rec.mut_slice(po), tx_size);
     } else {
-      mode.predict_inter(&fi.rec_buffer, p, po, &mut rec.mut_slice(po), tx_size);
+      mode.predict_inter(fi, p, po, &mut rec.mut_slice(po), tx_size);
     }
 
     if skip { return; }
