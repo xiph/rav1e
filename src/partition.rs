@@ -12,6 +12,7 @@
 
 use BlockSize::*;
 use TxSize::*;
+use ReferenceFramesSet;
 
 #[derive(Copy, Clone, PartialEq, PartialOrd)]
 pub enum PartitionType {
@@ -329,18 +330,20 @@ use plane::*;
 use predict::*;
 
 impl PredictionMode {
-  pub fn predict<'a>(self, dst: &'a mut PlaneMutSlice<'a>, tx_size: TxSize) {
+  pub fn predict_intra<'a>(self, dst: &'a mut PlaneMutSlice<'a>, tx_size: TxSize) {
+    assert!(self.is_intra());
+
     match tx_size {
-      TxSize::TX_4X4 => self.predict_inner::<Block4x4>(dst),
-      TxSize::TX_8X8 => self.predict_inner::<Block8x8>(dst),
-      TxSize::TX_16X16 => self.predict_inner::<Block16x16>(dst),
-      TxSize::TX_32X32 => self.predict_inner::<Block32x32>(dst),
+      TxSize::TX_4X4 => self.predict_intra_inner::<Block4x4>(dst),
+      TxSize::TX_8X8 => self.predict_intra_inner::<Block8x8>(dst),
+      TxSize::TX_16X16 => self.predict_intra_inner::<Block16x16>(dst),
+      TxSize::TX_32X32 => self.predict_intra_inner::<Block32x32>(dst),
       _ => unimplemented!()
     }
   }
 
   #[inline(always)]
-  fn predict_inner<'a, B: Intra>(self, dst: &'a mut PlaneMutSlice<'a>) {
+  fn predict_intra_inner<'a, B: Intra>(self, dst: &'a mut PlaneMutSlice<'a>) {
     // above and left arrays include above-left sample
     // above array includes above-right samples
     // left array includes below-left samples
@@ -392,8 +395,37 @@ impl PredictionMode {
     }
   }
 
+  pub fn is_intra(self) -> bool {
+    return self < PredictionMode::NEARESTMV;
+  }
+
   pub fn is_directional(self) -> bool {
     self >= PredictionMode::V_PRED && self <= PredictionMode::D63_PRED
+  }
+
+  pub fn predict_inter<'a>(self, rfs: &ReferenceFramesSet, p: usize, po: &PlaneOffset,
+                           dst: &'a mut PlaneMutSlice<'a>, tx_size: TxSize) {
+    assert!(!self.is_intra());
+    assert!(self == PredictionMode::ZEROMV); // Other modes not implemented
+
+    match rfs.frames[0] {
+      Some(ref rec) => {
+        let ref_stride = rec.planes[p].cfg.stride;
+        let src = rec.planes[p].slice(po);
+        let ref_slice = src.as_slice();
+        let stride = dst.plane.cfg.stride;
+        let slice = dst.as_mut_slice();
+        for r in 0..tx_size.height() {
+          for c in 0..tx_size.width() {
+            let input_index = r * ref_stride + c;
+            let output_index = r * stride + c;
+            slice[output_index] = ref_slice[input_index];
+          }
+        }
+      },
+      None => (),
+    }
+
   }
 }
 
