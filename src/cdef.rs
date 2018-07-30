@@ -243,7 +243,7 @@ pub fn cdef_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockContext) 
                     }
                 } else {
                     let rec_stride = rec.planes[p].cfg.stride;
-                    cdef_row.copy_from_slice(&rec.planes[p].data[(row-2)*rec_stride..(row-1)*rec_stride]);
+                    cdef_row.copy_from_slice(&rec.planes[p].data[(row-2)*rec_stride..(row-1)*rec_stride][..rec_w]);
                 }
             }
         }
