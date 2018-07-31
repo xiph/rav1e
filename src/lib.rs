@@ -2089,6 +2089,18 @@ mod test_encode_decode {
         }
     }
 
+    #[test]
+    #[ignore]
+    fn odd_size_frame_with_full_rdo() {
+        let limit = 2;
+        let w = 256 + 32 + 16 + 5;
+        let h = 256 + 16 + 5;
+        let speed = 0;
+        let qindex = 100;
+
+        encode_decode(w, h, speed, qindex, limit);
+    }
+
     fn compare_plane(rec: &[u8], rec_stride: usize,
                      dec: &[u8], dec_stride: usize,
                      width: usize, height: usize) {
