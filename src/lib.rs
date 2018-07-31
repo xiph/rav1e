@@ -584,11 +584,11 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
     // Write OBU Header syntax
     fn write_obu_header(&mut self, obu_type: OBU_Type, obu_extension: u32)
             -> Result<(), std::io::Error>{
-        self.write(1, 0)?; // forbidden bit.
+        self.write_bit(false)?; // forbidden bit.
         self.write(4, obu_type as u32)?;
         self.write_bit(obu_extension != 0)?;
-        self.write(1, 0)?; // obu_has_payload_length_field
-        self.write(1, 0)?; // reserved
+        self.write_bit(false)?; // obu_has_payload_length_field
+        self.write_bit(false)?; // reserved
 
         if obu_extension != 0 {
             assert!(false);
@@ -602,8 +602,8 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
     fn write_sequence_header_obu(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
         -> Result<(), std::io::Error> {
         self.write(2, seq.profile)?; // profile 0, 3 bits
-        //self.write(1, 0)?; // still_picture
-        //self.write(1, 0)?; // reduced_still_picture
+        //self.write_bit(false)?; // still_picture
+        //self.write_bit(false)?; // reduced_still_picture
         self.write(4, 0)?; // level
 
         self.write(2, 0)?; // # of enhancement_layers = 0
@@ -611,12 +611,12 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         if seq.reduced_still_picture_hdr {
             assert!(false);
         } else {
-            //self.write(1, 0)?; // timing_info_present_flag
+            //self.write_bit(false)?; // timing_info_present_flag
             if false { // if timing_info_present_flag == true
                 assert!(false);
             }
 
-            //self.write(1, 0)?; // display_model_info_present_flag
+            //self.write_bit(false)?; // display_model_info_present_flag
             //self.write(5, 0)?; // operating_points_cnt_minus_1, 5 bits
             /*
             for i in 0..seq.operating_points_cnt_minus_1 + 1 {
@@ -628,7 +628,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
 
                 if seq.level[i][1] > 3 {
                     assert!(false); // NOTE: Not supported yet.
-                    //self.write(1, seq.tier[i])?;
+                    //self.write_bit(seq.tier[i])?;
                 }
                 if seq.decoder_model_info_present_flag {
                     assert!(false); // NOTE: Not supported yet.
@@ -644,13 +644,13 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
 
         self.write_bitdepth_colorspace_sampling();
 
-        self.write(1,0)?; // separate uv delta q
+        self.write_bit(false)?; // separate uv delta q
 
         self.write_bit(false)?; // film grain params present
 
         //self.write_sequence_header2(seq, fi);
 
-        //self.write(1,1)?; // add_trailing_bits
+        //self.write_bit(true)?; // add_trailing_bits
 
         Ok(())
     }
@@ -696,16 +696,16 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
               self.write_bit(seq.enable_ref_frame_mvs)?;
             }
             if seq.force_screen_content_tools == 2 {
-              self.write(1, 1)?;
+              self.write_bit(true)?;
             } else {
-              self.write(1, 0)?;
+              self.write_bit(false)?;
               self.write_bit(seq.force_screen_content_tools != 0)?;
             }
             if seq.force_screen_content_tools > 0 {
               if seq.force_integer_mv == 2 {
-                self.write(1, 1)?;
+                self.write_bit(true)?;
               } else {
-                self.write(1, 0)?;
+                self.write_bit(false)?;
                 self.write_bit(seq.force_integer_mv != 0)?;
               }
             } else {
