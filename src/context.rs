@@ -848,9 +848,9 @@ extern "C" {
   static default_intra_inter_cdf: [[u16; 3]; INTRA_INTER_CONTEXTS];
   static default_angle_delta_cdf:
     [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES];
-  static default_filter_intra_cdfs: [[u16; 3]; TxSize::TX_SIZES_ALL];
+  static default_filter_intra_cdfs: [[u16; 3]; BlockSize::BLOCK_SIZES_ALL];
 
-  static av1_inter_scan_orders: [[SCAN_ORDER; TX_TYPES]; TxSize::TX_SIZES_ALL];
+  static av1_scan_orders: [[SCAN_ORDER; TX_TYPES]; TxSize::TX_SIZES_ALL];
 
   // lv_map
   static av1_default_txb_skip_cdfs:
@@ -897,7 +897,7 @@ pub struct CDFContext {
   skip_cdfs: [[u16; 3]; SKIP_CONTEXTS],
   intra_inter_cdfs: [[u16; 3]; INTRA_INTER_CONTEXTS],
   angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES],
-  filter_intra_cdfs: [[u16; 3]; TxSize::TX_SIZES_ALL],
+  filter_intra_cdfs: [[u16; 3]; BlockSize::BLOCK_SIZES_ALL],
 
   // lv_map
   txb_skip_cdf: [[[u16; 3]; TXB_SKIP_CONTEXTS]; TxSize::TX_SIZES],
@@ -1160,7 +1160,8 @@ pub struct Block {
   pub mode: PredictionMode,
   pub bsize: BlockSize,
   pub partition: PartitionType,
-  pub skip: bool
+  pub skip: bool,
+  pub cdef_index: u8
 }
 
 impl Block {
@@ -1169,7 +1170,8 @@ impl Block {
       mode: PredictionMode::DC_PRED,
       bsize: BlockSize::BLOCK_64X64,
       partition: PartitionType::PARTITION_NONE,
-      skip: false
+      skip: false,
+      cdef_index: 0
     }
   }
   pub fn is_inter(&self) -> bool {
@@ -1186,6 +1188,7 @@ pub struct TXB_CTX {
 pub struct BlockContext {
   pub cols: usize,
   pub rows: usize,
+  pub cdef_coded: bool,
   above_partition_context: Vec<u8>,
   left_partition_context: [u8; MAX_MIB_SIZE],
   above_coeff_context: [Vec<u8>; PLANES],
@@ -1201,6 +1204,7 @@ impl BlockContext {
     BlockContext {
       cols,
       rows,
+      cdef_coded: false,
       above_partition_context: vec![0; aligned_cols],
       left_partition_context: [0; MAX_MIB_SIZE],
       above_coeff_context: [
@@ -1217,6 +1221,7 @@ impl BlockContext {
     BlockContext {
       cols: self.cols,
       rows: self.rows,
+      cdef_coded: self.cdef_coded,
       above_partition_context: self.above_partition_context.clone(),
       left_partition_context: self.left_partition_context,
       above_coeff_context: self.above_coeff_context.clone(),
@@ -1228,6 +1233,7 @@ impl BlockContext {
   pub fn rollback(&mut self, checkpoint: &BlockContext) {
     self.cols = checkpoint.cols;
     self.rows = checkpoint.rows;
+    self.cdef_coded = checkpoint.cdef_coded;
     self.above_partition_context = checkpoint.above_partition_context.clone();
     self.left_partition_context = checkpoint.left_partition_context;
     self.above_coeff_context = checkpoint.above_coeff_context.clone();
@@ -1417,6 +1423,17 @@ impl BlockContext {
     for y in 0..bh {
       for x in 0..bw {
         self.blocks[bo.y + y as usize][bo.x + x as usize].skip = skip;
+      }
+    }
+  }
+
+  pub fn set_cdef(&mut self, bo: &BlockOffset, bsize: BlockSize, cdef_index: u8) {
+    let bw = bsize.width_mi();
+    let bh = bsize.height_mi();
+
+    for y in 0..bh {
+      for x in 0..bw {
+        self.blocks[bo.y + y as usize][bo.x + x as usize].cdef_index = cdef_index;
       }
     }
   }
@@ -1772,8 +1789,8 @@ impl ContextWriter {
         [mode as usize - PredictionMode::V_PRED as usize]
     );
   }
-  pub fn write_use_filter_intra(&mut self, enable: bool, tx_size: TxSize) {
-    symbol!(self, enable as u32, &mut self.fc.filter_intra_cdfs[tx_size as usize]);
+  pub fn write_use_filter_intra(&mut self, enable: bool, block_size: BlockSize) {
+    symbol!(self, enable as u32, &mut self.fc.filter_intra_cdfs[block_size as usize]);
   }
 
   pub fn write_tx_type(
@@ -1818,6 +1835,20 @@ impl ContextWriter {
     let ctx = self.bc.skip_context(bo);
     symbol!(self, skip as u32, &mut self.fc.skip_cdfs[ctx]);
   }
+
+  pub fn write_block_cdef(&mut self, bo: &BlockOffset, skip: bool, strength_index: u8, bits: u8) {
+    // Starting a new superblock-- we have to keep track as we don't code
+    // a cdef strength until the first non-skip block
+    let block_mask = (1<<SUPERBLOCK_TO_BLOCK_SHIFT) - 1;
+    if (bo.x & block_mask) == 0 && (bo.y & block_mask) == 0 {
+      self.bc.cdef_coded = false;
+    }
+    if !self.bc.cdef_coded && !skip {
+      self.bc.cdef_coded = true;
+      self.w.literal(bits, strength_index as u32);
+    }
+  }
+
   pub fn write_is_inter(&mut self, bo: &BlockOffset, is_inter: bool) {
     let ctx = self.bc.intra_inter_context(bo);
     symbol!(self, is_inter as u32, &mut self.fc.intra_inter_cdfs[ctx]);
@@ -2062,7 +2093,7 @@ impl ContextWriter {
     assert!(!is_inter);
     // TODO: If iner mode, scan_order should use inter version of them
     let scan_order =
-      &av1_inter_scan_orders[tx_size as usize][tx_type as usize];
+      &av1_scan_orders[tx_size as usize][tx_type as usize];
     let scan = scan_order.scan;
     let mut coeffs_storage = [0 as i32; 32 * 32];
     let coeffs = &mut coeffs_storage[..tx_size.area()];
@@ -2226,9 +2257,6 @@ impl ContextWriter {
 
     let bwl = self.get_txb_bwl(tx_size);
 
-    let mut update_pos = [0; MAX_TX_SQUARE];
-    let mut num_updates = 0;
-
     for c in (0..eob).rev() {
       let pos = scan[c];
       let coeff_ctx = coeff_contexts[pos as usize];
@@ -2310,18 +2338,13 @@ impl ContextWriter {
       // save extra golomb codes for separate loop
       if level > (COEFF_BASE_RANGE + NUM_BASE_LEVELS) as u32 {
         let pos = scan[c];
-        update_pos[num_updates] = pos;
-        num_updates += 1;
+        self.w.write_golomb(
+          coeffs_in[pos as usize].abs() as u16
+            - COEFF_BASE_RANGE as u16
+            - 1
+            - NUM_BASE_LEVELS as u16
+        );
       }
-    }
-
-    for i in 0..num_updates {
-      self.w.write_golomb(
-        coeffs_in[update_pos[i] as usize].abs() as u16
-          - COEFF_BASE_RANGE as u16
-          - 1
-          - NUM_BASE_LEVELS as u16
-      );
     }
 
     cul_level = cmp::min(COEFF_CONTEXT_MASK as u32, cul_level);
