@@ -646,9 +646,11 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
 
         self.write_bit(false)?; // separate uv delta q
 
-        self.write_bit(false)?; // film grain params present
+        //self.write_color_config(seq)?;
 
         //self.write_sequence_header2(seq, fi);
+
+        //self.write_bit(seq.film_grain_params_present)?;
 
         //self.write_bit(true)?; // add_trailing_bits
 
