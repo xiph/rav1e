@@ -34,7 +34,7 @@ fn main() {
         .define("CONFIG_SCALABILITY", "1")
         .define("CONFIG_OBU_SIZING", "1")
         .define("CONFIG_TIMING_INFO_IN_SEQ_HEADERS", "0")
-        .define("CONFIG_FILM_GRAIN", "0")
+        .define("CONFIG_FILM_GRAIN", "1")
         .define("CONFIG_LV_MAP", "1")
         .define("CONFIG_ANALYZER", "0")
         .define("ENABLE_DOCS", "0")
