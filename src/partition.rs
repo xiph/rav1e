@@ -118,6 +118,7 @@ impl BlockSize {
 
 /// Transform Size
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[repr(C)]
 pub enum TxSize {
   TX_4X4,
   TX_8X8,

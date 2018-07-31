@@ -159,17 +159,11 @@ impl od_ec_enc {
     // We output the minimum number of bits that ensures that the symbols encoded
     // thus far will be decoded correctly regardless of the bits that follow.
     let l = self.low;
-    let r = self.rng as u32;
     let mut c = self.cnt;
-    let mut s = 9;
-    let mut m = 0x7FFF;
-    let mut e = (l + m) & !m;
+    let mut s = 10;
+    let m = 0x3FFF;
+    let mut e = ((l + m) & !m) | (m + 1);
 
-    while (e | m) >= l + r {
-      s += 1;
-      m >>= 1;
-      e = (l + m) & !m;
-    }
     s += c;
 
     if s > 0 {
@@ -333,8 +327,15 @@ impl Writer {
     self.cdf(s, &cdf[..nsymbs]);
     Writer::update_cdf(cdf, s);
   }
+
   pub fn bit(&mut self, bit: u16) {
     self.enc.od_ec_encode_bool_q15(bit == 1, 16384);
+  }
+
+  pub fn literal(&mut self, bits: u8, s: u32) {
+    for bit in (0..bits).rev() {
+        self.enc.od_ec_encode_bool_q15((1 & (s >> bit)) == 1, 16384);
+    }
   }
 
   pub fn write_golomb(&mut self, level: u16) {

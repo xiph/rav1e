@@ -46,7 +46,7 @@ cargo run --release --bin rav1e -- input.y4m -o output.ivf
 ```
 mkdir aom_test
 cd aom_test
-cmake ../aom_build/aom -DAOM_TARGET_CPU=generic -DCONFIG_AV1_ENCODER=0 -DCONFIG_UNIT_TESTS=0 -DENABLE_DOCS=0 -DCONFIG_EXT_PARTITION_TYPES=1 -DCONFIG_INTRA_EDGE2=1 -DCONFIG_OBU=1 -DCONFIG_FILTER_INTRA=1 -DCONFIG_MONO_VIDEO=1 -DCONFIG_Q_ADAPT_PROBS=1 -DCONFIG_SCALABILITY=1 -DCONFIG_OBU_SIZING=1 -DCONFIG_TIMING_INFO_IN_SEQ_HEADERS=0 -DCONFIG_FILM_GRAIN=0
+cmake ../aom_build/aom -DAOM_TARGET_CPU=generic -DCONFIG_AV1_ENCODER=0 -DCONFIG_UNIT_TESTS=0 -DENABLE_DOCS=0 -DCONFIG_LOWBITDEPTH=1
 make -j8
 ./aomdec ../output.ivf -o output.y4m
 ```
@@ -68,6 +68,7 @@ make -j8
 
 # Contributing
 
+## Coding style
 Check code formatting with [rustfmt](https://github.com/rust-lang-nursery/rustfmt) before submitting a PR.
 rav1e currently uses a [forked version](https://github.com/mbebenita/rustfmt) of rustfmt.
 
@@ -90,6 +91,17 @@ cargo +nightly fmt -- --check
 You should also try [clippy](https://github.com/rust-lang-nursery/rust-clippy).
 ```
 cargo +nightly clippy
+```
+
+## Testing
+Run unit tests with:
+```
+cargo test
+```
+
+Run encode-decode integration tests with:
+```
+cargo test --release --features=decode_test -- --ignored
 ```
 
 # Getting in Touch

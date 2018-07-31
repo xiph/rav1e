@@ -252,7 +252,7 @@ pub trait Intra: Dim {
   }
 
   fn pred_smooth(
-    output: &mut [u16], stride: usize, above: &[u16], left: &[u16], bd: u8
+    output: &mut [u16], stride: usize, above: &[u16], left: &[u16], _bd: u8
   ) {
     let below_pred = left[Self::H - 1]; // estimated by bottom-left pixel
     let right_pred = above[Self::W - 1]; // estimated by top-right pixel
@@ -296,13 +296,13 @@ pub trait Intra: Dim {
         let output_index = r * stride + c;
 
         // Clamp the output to the correct bit depth
-        output[output_index] = this_pred.max(0).min((1_u32 << bd) - 1) as u16;
+        output[output_index] = this_pred as u16;
       }
     }
   }
 
   fn pred_smooth_h(
-    output: &mut [u16], stride: usize, above: &[u16], left: &[u16], bd: u8
+    output: &mut [u16], stride: usize, above: &[u16], left: &[u16], _bd: u8
   ) {
     let right_pred = above[Self::W - 1]; // estimated by top-right pixel
     let sm_weights = &sm_weight_arrays[Self::W..];
@@ -332,13 +332,13 @@ pub trait Intra: Dim {
         let output_index = r * stride + c;
 
         // Clamp the output to the correct bit depth
-        output[output_index] = this_pred.max(0).min((1_u32 << bd) - 1) as u16;
+        output[output_index] = this_pred as u16;
       }
     }
   }
 
   fn pred_smooth_v(
-    output: &mut [u16], stride: usize, above: &[u16], left: &[u16], bd: u8
+    output: &mut [u16], stride: usize, above: &[u16], left: &[u16], _bd: u8
   ) {
     let below_pred = left[Self::H - 1]; // estimated by bottom-left pixel
     let sm_weights = &sm_weight_arrays[Self::H..];
@@ -368,7 +368,7 @@ pub trait Intra: Dim {
         let output_index = r * stride + c;
 
         // Clamp the output to the correct bit depth
-        output[output_index] = this_pred.max(0).min((1_u32 << bd) - 1) as u16;
+        output[output_index] = this_pred as u16;
       }
     }
   }
