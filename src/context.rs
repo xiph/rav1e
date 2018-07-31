@@ -1647,6 +1647,7 @@ pub struct ContextWriterCheckpoint {
   pub bc: BlockContext
 }
 
+#[derive(Clone)]
 pub struct ContextWriter {
   pub bc: BlockContext,
   fc: CDFContext,

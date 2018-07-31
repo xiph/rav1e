@@ -20,6 +20,7 @@ pub const OD_BITRES: u8 = 3;
 const EC_PROB_SHIFT: u32 = 6;
 const EC_MIN_PROB: u32 = 4;
 
+#[derive(Clone)]
 pub struct Writer {
   enc: od_ec_enc,
   #[cfg(debug)]
@@ -28,7 +29,7 @@ pub struct Writer {
 
 pub type od_ec_window = u32;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct od_ec_enc {
   /// A buffer for output bytes with their associated carry flags.
   pub precarry: Vec<u16>,
@@ -37,7 +38,15 @@ pub struct od_ec_enc {
   /// The number of values in the current range.
   pub rng: u16,
   /// The number of bits of data in the current value.
-  pub cnt: i16
+  pub cnt: i16,
+  /// Are we recording for replay?
+  pub recordp: bool,
+  /// A buffer for probabilities
+  pub fl: Vec<u16>,
+  /// A buffer for probabilities
+  pub fh: Vec<u16>,
+  /// Buffer for symbols
+  pub nms: Vec<u16>,
 }
 
 impl od_ec_enc {
@@ -48,7 +57,24 @@ impl od_ec_enc {
       rng: 0x8000,
       // This is initialized to -9 so that it crosses zero after we've
       // accumulated one byte + one carry bit
-      cnt: -9
+      cnt: -9,
+      recordp: false,
+      fl: Vec::new(),
+      fh: Vec::new(),
+      nms: Vec::new()
+    }
+  }
+
+  fn new_recorder() -> od_ec_enc {
+    od_ec_enc {
+      precarry: Vec::new(),
+      low: 0,
+      rng: 0x8000,
+      cnt: -9,
+      recordp: true,
+      fl: Vec::new(),
+      fh: Vec::new(),
+      nms: Vec::new()
     }
   }
 
@@ -66,9 +92,21 @@ impl od_ec_enc {
       ((r >> 8) * (f as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT);
     v += EC_MIN_PROB;
     if val {
-      l += r - v
-    };
-    r = if val { v } else { r - v };
+      if self.recordp {
+        self.fl.push(f);
+        self.fh.push(0);
+        self.nms.push(1);
+      }
+      l += r - v;
+      r = v;
+    } else {
+      if self.recordp {
+        self.fl.push(32768);
+        self.fh.push(f);
+        self.nms.push(0);
+      }
+      r -= v;
+    }
 
     self.od_ec_enc_normalize(l, r as u16);
   }
@@ -85,8 +123,7 @@ impl od_ec_enc {
     self.od_ec_encode_q15(
       if s > 0 { cdf[s - 1] } else { 32768 },
       cdf[s],
-      s,
-      nsyms
+      nsyms - s
     );
   }
 
@@ -95,7 +132,7 @@ impl od_ec_enc {
   ///       before the one to be encoded.
   /// `fh`: 32768 moinus the cumulative frequency of all symbols up to and
   ///       including the one to be encoded.
-  fn od_ec_encode_q15(&mut self, fl: u16, fh: u16, s: usize, nsyms: usize) {
+  fn od_ec_encode_q15(&mut self, fl: u16, fh: u16, nms: usize) {
     let mut l = self.low;
     let mut r = self.rng as u32;
     let u: u32;
@@ -104,17 +141,23 @@ impl od_ec_enc {
 
     debug_assert!(fh <= fl);
     debug_assert!(fl <= 32768);
-    let n = nsyms - 1;
+
+    if self.recordp {
+      self.fl.push(fl);
+      self.fh.push(fh);
+      self.nms.push(nms as u16);
+    }
+
     if fl < 32768 {
       u = (((r >> 8) * (fl as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT))
-        + EC_MIN_PROB * (n - (s - 1)) as u32;
+        + EC_MIN_PROB * nms as u32;
       v = (((r >> 8) * (fh as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT))
-        + EC_MIN_PROB * (n - (s + 0)) as u32;
+        + EC_MIN_PROB * (nms - 1) as u32;
       l += r - u;
       r = u - v;
     } else {
       r -= (((r >> 8) * (fh as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT))
-        + EC_MIN_PROB * (n - (s + 0)) as u32;
+        + EC_MIN_PROB * (nms - 1) as u32;
     }
 
     self.od_ec_enc_normalize(l, r as u16);
@@ -251,6 +294,15 @@ impl od_ec_enc {
     }
     nbits - l
   }
+
+  /// Replay our contents into the passed-in od_ec_enc writer
+  pub fn od_ec_enc_replay(&mut self, dest: &mut od_ec_enc) {
+    if self.recordp {
+        for i in 0..self.fl.len() {
+            dest.od_ec_encode_q15(self.fl[i],self.fh[i],self.nms[i] as usize);
+        }
+    }
+  }
 }
 
 impl Writer {
@@ -262,8 +314,19 @@ impl Writer {
       debug: std::env::var_os("RAV1E_DEBUG").is_some()
     }
   }
+  pub fn new_recorder() -> Writer {
+    // use std::env;
+    Writer {
+      enc: od_ec_enc::new_recorder(),
+      #[cfg(debug)]
+      debug: std::env::var_os("RAV1E_DEBUG").is_some()
+    }
+  }
   pub fn done(&mut self) -> Vec<u8> {
     self.enc.od_ec_enc_done()
+  }
+  pub fn replay(&mut self, dest: &mut Writer){
+    self.enc.od_ec_enc_replay(&mut dest.enc);
   }
   pub fn cdf(&mut self, s: u32, cdf: &[u16]) {
     self.enc.od_ec_encode_cdf_q15(s as usize, cdf)
@@ -329,12 +392,12 @@ impl Writer {
   }
 
   pub fn bit(&mut self, bit: u16) {
-    self.enc.od_ec_encode_bool_q15(bit == 1, 16384);
+    self.bool(bit == 1, 16384);
   }
 
   pub fn literal(&mut self, bits: u8, s: u32) {
     for bit in (0..bits).rev() {
-      self.enc.od_ec_encode_bool_q15((1 & (s >> bit)) == 1, 16384);
+      self.bit(1 & (s >> bit), 16384);
     }
   }
 
@@ -372,7 +435,9 @@ impl Writer {
       precarry_len: self.enc.precarry.len(),
       low: self.enc.low,
       rng: self.enc.rng,
-      cnt: self.enc.cnt
+      cnt: self.enc.cnt,
+      recordp: self.enc.recordp,
+      rec_len: self.enc.fl.len(),
     }
   }
 
@@ -381,6 +446,10 @@ impl Writer {
     self.enc.low = checkpoint.low;
     self.enc.rng = checkpoint.rng;
     self.enc.cnt = checkpoint.cnt;
+    self.enc.recordp = checkpoint.recordp;
+    self.enc.fl.truncate(checkpoint.rec_len);
+    self.enc.fh.truncate(checkpoint.rec_len);
+    self.enc.nms.truncate(checkpoint.rec_len);
   }
 }
 
@@ -483,7 +552,9 @@ pub struct WriterCheckpoint {
   precarry_len: usize,
   low: od_ec_window,
   rng: u16,
-  cnt: i16
+  cnt: i16,
+  recordp: bool,
+  rec_len: usize,
 }
 
 #[repr(C)]
