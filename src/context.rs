@@ -848,9 +848,9 @@ extern "C" {
   static default_intra_inter_cdf: [[u16; 3]; INTRA_INTER_CONTEXTS];
   static default_angle_delta_cdf:
     [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES];
-  static default_filter_intra_cdfs: [[u16; 3]; TxSize::TX_SIZES_ALL];
+  static default_filter_intra_cdfs: [[u16; 3]; BlockSize::BLOCK_SIZES_ALL];
 
-  static av1_inter_scan_orders: [[SCAN_ORDER; TX_TYPES]; TxSize::TX_SIZES_ALL];
+  static av1_scan_orders: [[SCAN_ORDER; TX_TYPES]; TxSize::TX_SIZES_ALL];
 
   // lv_map
   static av1_default_txb_skip_cdfs:
@@ -897,7 +897,7 @@ pub struct CDFContext {
   skip_cdfs: [[u16; 3]; SKIP_CONTEXTS],
   intra_inter_cdfs: [[u16; 3]; INTRA_INTER_CONTEXTS],
   angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES],
-  filter_intra_cdfs: [[u16; 3]; TxSize::TX_SIZES_ALL],
+  filter_intra_cdfs: [[u16; 3]; BlockSize::BLOCK_SIZES_ALL],
 
   // lv_map
   txb_skip_cdf: [[[u16; 3]; TXB_SKIP_CONTEXTS]; TxSize::TX_SIZES],
@@ -1789,8 +1789,8 @@ impl ContextWriter {
         [mode as usize - PredictionMode::V_PRED as usize]
     );
   }
-  pub fn write_use_filter_intra(&mut self, enable: bool, tx_size: TxSize) {
-    symbol!(self, enable as u32, &mut self.fc.filter_intra_cdfs[tx_size as usize]);
+  pub fn write_use_filter_intra(&mut self, enable: bool, block_size: BlockSize) {
+    symbol!(self, enable as u32, &mut self.fc.filter_intra_cdfs[block_size as usize]);
   }
 
   pub fn write_tx_type(
@@ -2093,7 +2093,7 @@ impl ContextWriter {
     assert!(!is_inter);
     // TODO: If iner mode, scan_order should use inter version of them
     let scan_order =
-      &av1_inter_scan_orders[tx_size as usize][tx_type as usize];
+      &av1_scan_orders[tx_size as usize][tx_type as usize];
     let scan = scan_order.scan;
     let mut coeffs_storage = [0 as i32; 32 * 32];
     let coeffs = &mut coeffs_storage[..tx_size.area()];
@@ -2257,9 +2257,6 @@ impl ContextWriter {
 
     let bwl = self.get_txb_bwl(tx_size);
 
-    let mut update_pos = [0; MAX_TX_SQUARE];
-    let mut num_updates = 0;
-
     for c in (0..eob).rev() {
       let pos = scan[c];
       let coeff_ctx = coeff_contexts[pos as usize];
@@ -2341,18 +2338,13 @@ impl ContextWriter {
       // save extra golomb codes for separate loop
       if level > (COEFF_BASE_RANGE + NUM_BASE_LEVELS) as u32 {
         let pos = scan[c];
-        update_pos[num_updates] = pos;
-        num_updates += 1;
+        self.w.write_golomb(
+          coeffs_in[pos as usize].abs() as u16
+            - COEFF_BASE_RANGE as u16
+            - 1
+            - NUM_BASE_LEVELS as u16
+        );
       }
-    }
-
-    for i in 0..num_updates {
-      self.w.write_golomb(
-        coeffs_in[update_pos[i] as usize].abs() as u16
-          - COEFF_BASE_RANGE as u16
-          - 1
-          - NUM_BASE_LEVELS as u16
-      );
     }
 
     cul_level = cmp::min(COEFF_CONTEXT_MASK as u32, cul_level);
