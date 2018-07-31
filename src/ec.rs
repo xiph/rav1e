@@ -333,8 +333,15 @@ impl Writer {
     self.cdf(s, &cdf[..nsymbs]);
     Writer::update_cdf(cdf, s);
   }
+
   pub fn bit(&mut self, bit: u16) {
     self.enc.od_ec_encode_bool_q15(bit == 1, 16384);
+  }
+
+  pub fn literal(&mut self, bits: u8, s: u32) {
+    for bit in (0..bits).rev() {
+        self.enc.od_ec_encode_bool_q15((1 & (s >> bit)) == 1, 16384);
+    }
   }
 
   pub fn write_golomb(&mut self, level: u16) {
