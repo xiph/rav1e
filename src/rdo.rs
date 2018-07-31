@@ -195,23 +195,19 @@ pub fn rdo_mode_decision(
 
   let checkpoint = cw.checkpoint();
 
-    // Exclude complex prediction modes at higher speed levels
-    let mode_set = if fi.config.speed <= 3 {
-      (if fi.frame_type == FrameType::INTER { RAV1E_INTER_MODES }
-       else { RAV1E_INTRA_MODES })
-    } else {
-      (if fi.frame_type == FrameType::INTER { RAV1E_INTER_MODES }
-      else { RAV1E_INTRA_MODES_MINIMAL })
-    };
+  // Exclude complex prediction modes at higher speed levels
+  let mode_set = if fi.config.speed <= 3 {
+    (if fi.frame_type == FrameType::INTER { RAV1E_INTER_MODES }
+      else { RAV1E_INTRA_MODES })
+  } else {
+    (if fi.frame_type == FrameType::INTER { RAV1E_INTER_MODES }
+    else { RAV1E_INTRA_MODES_MINIMAL })
+  };
 
   for &luma_mode in mode_set {
-    if fi.frame_type == FrameType::KEY
-      && luma_mode >= PredictionMode::NEARESTMV
-    {
-      break;
-    }
+    assert!(fi.frame_type == FrameType::INTER || luma_mode.is_intra());
 
-    if is_chroma_block && fi.config.speed <= 3 {
+    if is_chroma_block && fi.config.speed <= 3 && luma_mode.is_intra() {
       // Find the best chroma prediction mode for the current luma prediction mode
       for &chroma_mode in RAV1E_INTRA_MODES {
         encode_block(fi, fs, cw, luma_mode, chroma_mode, bsize, bo, skip);

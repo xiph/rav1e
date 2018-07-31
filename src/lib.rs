@@ -1453,7 +1453,7 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
 fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
             luma_mode: PredictionMode, chroma_mode: PredictionMode,
             bsize: BlockSize, bo: &BlockOffset, skip: bool) {
-    let is_inter = luma_mode >= PredictionMode::NEARESTMV;
+    let is_inter = !luma_mode.is_intra();
 
     cw.bc.set_skip(bo, bsize, skip);
     cw.write_skip(bo, skip);
@@ -1461,13 +1461,14 @@ fn encode_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWrite
     if fi.frame_type == FrameType::INTER {
         cw.write_is_inter(bo, is_inter);
         if is_inter {
+            cw.fill_neighbours_ref_counts(bo);
+            cw.bc.set_ref_frame(bo, bsize, LAST_FRAME);
+            cw.write_ref_frames(bo);
             // FIXME: Check if mode_context = 51 is correct
             let mode_context = 51 as usize;
             // NOTE: Until rav1e supports other inter modes than GLOBALMV
             assert!(luma_mode == PredictionMode::GLOBALMV);
             cw.write_inter_mode(luma_mode, mode_context);
-            cw.fill_neighbours_ref_counts(bo);
-            cw.write_ref_frames(bo);
         } else {
             cw.write_intra_mode(bsize, luma_mode);
         }

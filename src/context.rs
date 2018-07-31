@@ -1455,6 +1455,17 @@ impl BlockContext {
     }
   }
 
+  pub fn set_ref_frame(&mut self, bo: &BlockOffset, bsize: BlockSize, r: usize) {
+    let bw = bsize.width_mi();
+    let bh = bsize.height_mi();
+
+    for y in 0..bh {
+      for x in 0..bw {
+        self.blocks[bo.y + y as usize][bo.x + x as usize].ref_frames[0] = r;
+      }
+    }
+  }
+
   // The mode info data structure has a one element border above and to the
   // left of the entries corresponding to real macroblocks.
   // The prediction flags in these dummy entries are initialized to 0.
@@ -1811,7 +1822,7 @@ impl ContextWriter {
   }
 
   pub fn fill_neighbours_ref_counts(&mut self, bo: &BlockOffset) {
-      let mut ref_counts = self.bc.at(bo).neighbors_ref_counts;
+      let mut ref_counts = [0; TOTAL_REFS_PER_FRAME];
 
       let above_b = self.bc.above_of(bo);
       let left_b = self.bc.left_of(bo);
@@ -1829,6 +1840,7 @@ impl ContextWriter {
           ref_counts[left_b.ref_frames[1] as usize] += 1;
         }
       }
+      self.bc.at(bo).neighbors_ref_counts = ref_counts;
   }
 
   fn get_ref_frame_ctx_b0(&mut self, bo: &BlockOffset) -> usize {
@@ -1934,6 +1946,7 @@ impl ContextWriter {
 
   pub fn write_ref_frames(&mut self, bo: &BlockOffset) {
     let rf = self.bc.at(bo).ref_frames;
+    assert!(rf[0] == LAST_FRAME);
 
     /* TODO: Handle multiple references */
 
@@ -2029,6 +2042,7 @@ impl ContextWriter {
   }
   pub fn write_is_inter(&mut self, bo: &BlockOffset, is_inter: bool) {
     let ctx = self.bc.intra_inter_context(bo);
+    assert!(ctx == 0); // This holds true for now
     symbol!(self, is_inter as u32, &mut self.fc.intra_inter_cdfs[ctx]);
   }
 
