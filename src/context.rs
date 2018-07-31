@@ -16,7 +16,7 @@
 #![cfg_attr(feature = "cargo-clippy", allow(needless_range_loop))]
 #![cfg_attr(feature = "cargo-clippy", allow(collapsible_if))]
 
-use ec;
+use ec::Writer;
 use partition::BlockSize::*;
 use partition::PredictionMode::*;
 use partition::TxType::*;
@@ -1594,8 +1594,8 @@ impl FieldMap {
 }
 
 macro_rules! symbol {
-  ($self:ident, $s:expr, $cdf:expr) => {
-    $self.w.symbol($s, $cdf);
+  ($self:ident, $w:ident, $s:expr, $cdf:expr) => {
+    $w.symbol($s, $cdf);
     #[cfg(debug)] {
       if let Some(map) = $self.fc_map.as_ref() {
         map.lookup($cdf.as_ptr() as usize);
@@ -1606,13 +1606,11 @@ macro_rules! symbol {
 
 #[derive(Clone)]
 pub struct ContextWriterCheckpoint {
-  pub w: ec::WriterCheckpoint,
   pub fc: CDFContext,
   pub bc: BlockContext
 }
 
 pub struct ContextWriter {
-  pub w: ec::Writer,
   pub bc: BlockContext,
   fc: CDFContext,
   #[cfg(debug)]
@@ -1620,10 +1618,9 @@ pub struct ContextWriter {
 }
 
 impl ContextWriter {
-  pub fn new(w: ec::Writer, fc: CDFContext, bc: BlockContext) -> Self {
+  pub fn new(fc: CDFContext, bc: BlockContext) -> Self {
     #[allow(unused_mut)]
     let mut cw = ContextWriter {
-      w,
       fc,
       bc,
       #[cfg(debug)]
@@ -1713,7 +1710,7 @@ impl ContextWriter {
   }
 
   pub fn write_partition(
-    &mut self, bo: &BlockOffset, p: PartitionType, bsize: BlockSize
+    &mut self, w: &mut Writer, bo: &BlockOffset, p: PartitionType, bsize: BlockSize
   ) {
     assert!(bsize >= BlockSize::BLOCK_8X8 );
     let hbs = bsize.width_mi() / 2;
@@ -1732,7 +1729,7 @@ impl ContextWriter {
     }
 
     if has_rows && has_cols {
-      symbol!(self, p as u32, partition_cdf);
+      symbol!(self, w, p as u32, partition_cdf);
     } else if !has_rows && has_cols {
       assert!(bsize > BlockSize::BLOCK_8X8);
       let mut cdf = [0u16; 2];
@@ -1741,7 +1738,7 @@ impl ContextWriter {
         partition_cdf,
         bsize
       );
-      self.w.cdf((p == PartitionType::PARTITION_SPLIT) as u32, &cdf);
+      w.cdf((p == PartitionType::PARTITION_SPLIT) as u32, &cdf);
     } else {
       assert!(bsize > BlockSize::BLOCK_8X8);
       let mut cdf = [0u16; 2];
@@ -1750,11 +1747,11 @@ impl ContextWriter {
         partition_cdf,
         bsize
       );
-      self.w.cdf((p == PartitionType::PARTITION_SPLIT) as u32, &cdf);
+      w.cdf((p == PartitionType::PARTITION_SPLIT) as u32, &cdf);
     }
   }
   pub fn write_intra_mode_kf(
-    &mut self, bo: &BlockOffset, mode: PredictionMode
+    &mut self, w: &mut Writer, bo: &BlockOffset, mode: PredictionMode
   ) {
     static intra_mode_context: [usize; INTRA_MODES] =
       [0, 1, 2, 3, 4, 4, 4, 4, 3, 0, 1, 2, 0];
@@ -1763,38 +1760,39 @@ impl ContextWriter {
     let above_ctx = intra_mode_context[above_mode];
     let left_ctx = intra_mode_context[left_mode];
     let cdf = &mut self.fc.kf_y_cdf[above_ctx][left_ctx];
-    symbol!(self, mode as u32, cdf);
+    symbol!(self, w, mode as u32, cdf);
   }
-  pub fn write_intra_mode(&mut self, bsize: BlockSize, mode: PredictionMode) {
+  pub fn write_intra_mode(&mut self, w: &mut Writer, bsize: BlockSize, mode: PredictionMode) {
     let cdf =
       &mut self.fc.y_mode_cdf[size_group_lookup[bsize as usize] as usize];
-    symbol!(self, mode as u32, cdf);
+    symbol!(self, w, mode as u32, cdf);
   }
   pub fn write_intra_uv_mode(
-    &mut self, uv_mode: PredictionMode, y_mode: PredictionMode, bs: BlockSize
+    &mut self, w: &mut Writer, uv_mode: PredictionMode, y_mode: PredictionMode, bs: BlockSize
   ) {
     let cdf =
       &mut self.fc.uv_mode_cdf[bs.cfl_allowed() as usize][y_mode as usize];
     if bs.cfl_allowed() {
-      symbol!(self, uv_mode as u32, cdf);
+      symbol!(self, w, uv_mode as u32, cdf);
     } else {
-      symbol!(self, uv_mode as u32, &mut cdf[..UV_INTRA_MODES]);
+      symbol!(self, w, uv_mode as u32, &mut cdf[..UV_INTRA_MODES]);
     }
   }
-  pub fn write_angle_delta(&mut self, angle: i8, mode: PredictionMode) {
+  pub fn write_angle_delta(&mut self, w: &mut Writer, angle: i8, mode: PredictionMode) {
     symbol!(
       self,
+      w,
       (angle + MAX_ANGLE_DELTA as i8) as u32,
       &mut self.fc.angle_delta_cdf
         [mode as usize - PredictionMode::V_PRED as usize]
     );
   }
-  pub fn write_use_filter_intra(&mut self, enable: bool, block_size: BlockSize) {
-    symbol!(self, enable as u32, &mut self.fc.filter_intra_cdfs[block_size as usize]);
+  pub fn write_use_filter_intra(&mut self, w: &mut Writer, enable: bool, block_size: BlockSize) {
+    symbol!(self, w, enable as u32, &mut self.fc.filter_intra_cdfs[block_size as usize]);
   }
 
   pub fn write_tx_type(
-    &mut self, tx_size: TxSize, tx_type: TxType, y_mode: PredictionMode,
+    &mut self, w: &mut Writer, tx_size: TxSize, tx_type: TxType, y_mode: PredictionMode,
     is_inter: bool, use_reduced_tx_set: bool
   ) {
     let square_tx_size = tx_size.sqr();
@@ -1810,6 +1808,7 @@ impl ContextWriter {
       if is_inter {
         symbol!(
           self,
+          w,
           av1_tx_ind[tx_set as usize][tx_type as usize] as u32,
           &mut self.fc.inter_tx_cdf[tx_set_index as usize]
             [square_tx_size as usize]
@@ -1823,6 +1822,7 @@ impl ContextWriter {
 
         symbol!(
           self,
+          w,
           av1_tx_ind[tx_set as usize][tx_type as usize] as u32,
           &mut self.fc.intra_tx_cdf[tx_set_index as usize]
             [square_tx_size as usize][intra_dir as usize]
@@ -1831,12 +1831,12 @@ impl ContextWriter {
       }
     }
   }
-  pub fn write_skip(&mut self, bo: &BlockOffset, skip: bool) {
+  pub fn write_skip(&mut self, w: &mut Writer, bo: &BlockOffset, skip: bool) {
     let ctx = self.bc.skip_context(bo);
-    symbol!(self, skip as u32, &mut self.fc.skip_cdfs[ctx]);
+    symbol!(self, w, skip as u32, &mut self.fc.skip_cdfs[ctx]);
   }
 
-  pub fn write_block_cdef(&mut self, bo: &BlockOffset, skip: bool, strength_index: u8, bits: u8) {
+  pub fn write_block_cdef(&mut self, w: &mut Writer, bo: &BlockOffset, skip: bool, strength_index: u8, bits: u8) {
     // Starting a new superblock-- we have to keep track as we don't code
     // a cdef strength until the first non-skip block
     let block_mask = (1<<SUPERBLOCK_TO_BLOCK_SHIFT) - 1;
@@ -1845,13 +1845,13 @@ impl ContextWriter {
     }
     if !self.bc.cdef_coded && !skip {
       self.bc.cdef_coded = true;
-      self.w.literal(bits, strength_index as u32);
+      w.literal(bits, strength_index as u32);
     }
   }
 
-  pub fn write_is_inter(&mut self, bo: &BlockOffset, is_inter: bool) {
+  pub fn write_is_inter(&mut self, w: &mut Writer, bo: &BlockOffset, is_inter: bool) {
     let ctx = self.bc.intra_inter_context(bo);
-    symbol!(self, is_inter as u32, &mut self.fc.intra_inter_cdfs[ctx]);
+    symbol!(self, w, is_inter as u32, &mut self.fc.intra_inter_cdfs[ctx]);
   }
 
   pub fn get_txsize_entropy_ctx(&mut self, tx_size: TxSize) -> usize {
@@ -2084,7 +2084,7 @@ impl ContextWriter {
   }
 
   pub fn write_coeffs_lv_map(
-    &mut self, plane: usize, bo: &BlockOffset, coeffs_in: &[i32],
+    &mut self, w: &mut Writer, plane: usize, bo: &BlockOffset, coeffs_in: &[i32],
     tx_size: TxSize, tx_type: TxType, plane_bsize: BlockSize, xdec: usize,
     ydec: usize, use_reduced_tx_set: bool
   ) {
@@ -2120,7 +2120,7 @@ impl ContextWriter {
 
     {
       let cdf = &mut self.fc.txb_skip_cdf[txs_ctx][txb_ctx.txb_skip_ctx];
-      symbol!(self, (eob == 0) as u32, cdf);
+      symbol!(self, w, (eob == 0) as u32, cdf);
     }
 
     if eob == 0 {
@@ -2147,6 +2147,7 @@ impl ContextWriter {
     // Signal tx_type for luma plane only
     if plane == 0 {
       self.write_tx_type(
+        w,
         tx_size,
         tx_type,
         pred_mode,
@@ -2169,6 +2170,7 @@ impl ContextWriter {
       0 => {
         symbol!(
           self,
+          w,
           eob_pt - 1,
           &mut self.fc.eob_flag_cdf16[plane_type][eob_multi_ctx]
         );
@@ -2176,6 +2178,7 @@ impl ContextWriter {
       1 => {
         symbol!(
           self,
+          w,
           eob_pt - 1,
           &mut self.fc.eob_flag_cdf32[plane_type][eob_multi_ctx]
         );
@@ -2183,6 +2186,7 @@ impl ContextWriter {
       2 => {
         symbol!(
           self,
+          w,
           eob_pt - 1,
           &mut self.fc.eob_flag_cdf64[plane_type][eob_multi_ctx]
         );
@@ -2190,6 +2194,7 @@ impl ContextWriter {
       3 => {
         symbol!(
           self,
+          w,
           eob_pt - 1,
           &mut self.fc.eob_flag_cdf128[plane_type][eob_multi_ctx]
         );
@@ -2197,6 +2202,7 @@ impl ContextWriter {
       4 => {
         symbol!(
           self,
+          w,
           eob_pt - 1,
           &mut self.fc.eob_flag_cdf256[plane_type][eob_multi_ctx]
         );
@@ -2204,6 +2210,7 @@ impl ContextWriter {
       5 => {
         symbol!(
           self,
+          w,
           eob_pt - 1,
           &mut self.fc.eob_flag_cdf512[plane_type][eob_multi_ctx]
         );
@@ -2211,6 +2218,7 @@ impl ContextWriter {
       _ => {
         symbol!(
           self,
+          w,
           eob_pt - 1,
           &mut self.fc.eob_flag_cdf1024[plane_type][eob_multi_ctx]
         );
@@ -2228,6 +2236,7 @@ impl ContextWriter {
       } as u32;
       symbol!(
         self,
+        w,
         bit,
         &mut self.fc.eob_extra_cdf[txs_ctx][plane_type][eob_pt as usize]
       );
@@ -2238,7 +2247,7 @@ impl ContextWriter {
         } else {
           0
         };
-        self.w.bit(bit as u16);
+        w.bit(bit as u16);
       }
     }
 
@@ -2266,6 +2275,7 @@ impl ContextWriter {
       if c == eob - 1 {
         symbol!(
           self,
+          w,
           (cmp::min(level, 3) - 1) as u32,
           &mut self.fc.coeff_base_eob_cdf[txs_ctx][plane_type]
             [coeff_ctx as usize]
@@ -2273,6 +2283,7 @@ impl ContextWriter {
       } else {
         symbol!(
           self,
+          w,
           (cmp::min(level, 3)) as u32,
           &mut self.fc.coeff_base_cdf[txs_ctx][plane_type][coeff_ctx as usize]
         );
@@ -2298,6 +2309,7 @@ impl ContextWriter {
           let k = cmp::min(base_range - idx as u16, BR_CDF_SIZE as u16 - 1);
           symbol!(
             self,
+            w,
             k as u32,
             &mut self.fc.coeff_br_cdf
               [cmp::min(txs_ctx, TxSize::TX_32X32 as usize)][plane_type]
@@ -2329,16 +2341,17 @@ impl ContextWriter {
       if c == 0 {
         symbol!(
           self,
+          w,
           sign,
           &mut self.fc.dc_sign_cdf[plane_type][txb_ctx.dc_sign_ctx]
         );
       } else {
-        self.w.bit(sign as u16);
+        w.bit(sign as u16);
       }
       // save extra golomb codes for separate loop
       if level > (COEFF_BASE_RANGE + NUM_BASE_LEVELS) as u32 {
         let pos = scan[c];
-        self.w.write_golomb(
+        w.write_golomb(
           coeffs_in[pos as usize].abs() as u16
             - COEFF_BASE_RANGE as u16
             - 1
@@ -2356,14 +2369,12 @@ impl ContextWriter {
 
   pub fn checkpoint(&mut self) -> ContextWriterCheckpoint {
     ContextWriterCheckpoint {
-      w: self.w.checkpoint(),
       fc: self.fc.clone(),
       bc: self.bc.checkpoint()
     }
   }
 
   pub fn rollback(&mut self, checkpoint: &ContextWriterCheckpoint) {
-    self.w.rollback(&checkpoint.w);
     self.fc = checkpoint.fc.clone();
     self.bc.rollback(&checkpoint.bc);
     #[cfg(debug)] {
