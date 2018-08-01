@@ -43,6 +43,7 @@ fn cdef_find_dir(img: &[u16], stride: usize, var: &mut i32, coeff_shift: i32) ->
         for j in 0..8 {
             // We subtract 128 here to reduce the maximum range of the squared
             // partial sums. 
+            debug_assert!((img[i * stride + j] >> coeff_shift) <= 255);
             let x = (img[i * stride + j] as i32 >> coeff_shift) - 128;
             partial[0][i + j] += x;
             partial[1][i + j / 2] += x;
