@@ -1260,6 +1260,19 @@ impl BlockContext {
     }
   }
 
+  pub fn for_each<F>(&mut self, bo: &BlockOffset, bsize: BlockSize, f: F) -> ()
+  where
+    F: Fn(&mut Block) -> ()
+  {
+    let bw = bsize.width_mi();
+    let bh = bsize.height_mi();
+    for y in 0..bh {
+      for x in 0..bw {
+        f(&mut self.blocks[bo.y + y as usize][bo.x + x as usize]);
+      }
+    }
+  }
+
   pub fn set_dc_sign(&mut self, cul_level: &mut u32, dc_val: i32) {
     if dc_val < 0 {
       *cul_level |= 1 << COEFF_CONTEXT_BITS;
@@ -1349,14 +1362,7 @@ impl BlockContext {
   pub fn set_mode(
     &mut self, bo: &BlockOffset, bsize: BlockSize, mode: PredictionMode
   ) {
-    let bw = bsize.width_mi();
-    let bh = bsize.height_mi();
-
-    for y in 0..bh {
-      for x in 0..bw {
-        self.blocks[bo.y + y as usize][bo.x + x as usize].mode = mode;
-      }
-    }
+    self.for_each(bo, bsize, |block| block.mode = mode);
   }
 
   pub fn get_mode(&mut self, bo: &BlockOffset) -> PredictionMode {
@@ -1417,25 +1423,11 @@ impl BlockContext {
   }
 
   pub fn set_skip(&mut self, bo: &BlockOffset, bsize: BlockSize, skip: bool) {
-    let bw = bsize.width_mi();
-    let bh = bsize.height_mi();
-
-    for y in 0..bh {
-      for x in 0..bw {
-        self.blocks[bo.y + y as usize][bo.x + x as usize].skip = skip;
-      }
-    }
+    self.for_each(bo, bsize, |block| block.skip = skip);
   }
 
   pub fn set_cdef(&mut self, bo: &BlockOffset, bsize: BlockSize, cdef_index: u8) {
-    let bw = bsize.width_mi();
-    let bh = bsize.height_mi();
-
-    for y in 0..bh {
-      for x in 0..bw {
-        self.blocks[bo.y + y as usize][bo.x + x as usize].cdef_index = cdef_index;
-      }
-    }
+    self.for_each(bo, bsize, |block| block.cdef_index = cdef_index);
   }
 
   // The mode info data structure has a one element border above and to the
