@@ -617,13 +617,14 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
     fn write_sequence_header_obu(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
         -> Result<(), std::io::Error> {
         self.write(3, seq.profile)?; // profile 0, 3 bits
-        self.write_bit(false)?; // still_picture
-        //self.write_bit(false)?; // reduced_still_picture
+        self.write(1, 0)?; // still_picture
+        self.write(1, 0)?; // reduced_still_picture
+        self.write_bit(false)?; // display model present
+        self.write_bit(false)?; // no timing info present
         self.write(5, 0)?; // one operating point
         self.write(12,0)?; // idc
-        self.write(4, 0)?; // level
-        self.write_bit(false)?; // no rate model
-
+        self.write(5, 0)?; // level
+        //self.write_bit(false)?; // no rate model
         if seq.reduced_still_picture_hdr {
             assert!(false);
         } else {
@@ -660,9 +661,11 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
 
         self.write_bitdepth_colorspace_sampling();
 
-        self.write_bit(false)?; // separate uv delta q
-        
-        self.write_bit(false)?; // no timing info present
+        self.write(1,0)?; // separate uv delta q
+      //self.write_bit(false)?; // no decoder model present
+        //self.write_color_config(seq)?;
+
+        //self.write_sequence_header2(seq, fi);
 
         self.write_bit(seq.film_grain_params_present)?;
 
@@ -1318,7 +1321,9 @@ fn write_uncompressed_header(packet: &mut Write,
     if fi.frame_type == FrameType::KEY || fi.frame_type == FrameType::INTRA_ONLY {
         assert!(fi.intra_only);
     }
-    bw.write_bit(fi.error_resilient)?; // error resilient
+    if fi.frame_type != FrameType::KEY {
+        bw.write_bit(fi.error_resilient)?; // error resilient
+    }
     if fi.intra_only {
     //    bw.write_bit(true)?; // disable_intra_edge_filter = true
     }
@@ -2175,7 +2180,7 @@ mod test_encode_decode {
             let mut corrupted_count = 0;
             unsafe {
                 println!("Decoding frame {}", fi.number);
-                let ret = aom_codec_decode(&mut dec.dec, packet.as_ptr(), packet.len() as u32, ptr::null_mut());
+                let ret = aom_codec_decode(&mut dec.dec, packet.as_ptr(), packet.len(), ptr::null_mut());
                 println!("Decoded. -> {}", ret);
                 if ret != 0 {
                     use std::ffi::CStr;
