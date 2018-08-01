@@ -34,39 +34,16 @@ struct TxfmParam {
   eob: libc::c_int
 }
 
-#[cfg(target_feature = "sse2")]
 extern {
-  fn av1_fht4x4_sse2(
+  fn av1_fwd_txfm2d_4x4_c(
     input: *const i16, output: *mut i32, stride: libc::c_int,
-    tx_type: *const libc::c_int
+    tx_type: libc::c_int, bd: libc::c_int
   );
-  fn av1_fht8x8_sse2(
+  fn av1_fwd_txfm2d_8x8_c(
     input: *const i16, output: *mut i32, stride: libc::c_int,
-    tx_type: *const libc::c_int
+    tx_type: libc::c_int, bd: libc::c_int
   );
 }
-
-#[cfg(target_feature = "sse2")]
-use self::av1_fht4x4_sse2 as av1_fht4x4;
-#[cfg(target_feature = "sse2")]
-use self::av1_fht8x8_sse2 as av1_fht8x8;
-
-#[cfg(not(target_feature = "sse2"))]
-extern {
-  fn av1_fht4x4_c(
-    input: *const i16, output: *mut i32, stride: libc::c_int,
-    tx_type: *const libc::c_int
-  );
-  fn av1_fht8x8_c(
-    input: *const i16, output: *mut i32, stride: libc::c_int,
-    tx_type: *const libc::c_int
-  );
-}
-
-#[cfg(not(target_feature = "sse2"))]
-use self::av1_fht4x4_c as av1_fht4x4;
-#[cfg(not(target_feature = "sse2"))]
-use self::av1_fht8x8_c as av1_fht8x8;
 
 extern "C" {
   static av1_inv_txfm2d_add_4x4: extern fn(
@@ -164,11 +141,12 @@ pub fn inverse_transform_add(
 
 fn fht4x4(input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType) {
   unsafe {
-    av1_fht4x4(
+    av1_fwd_txfm2d_4x4_c(
       input.as_ptr(),
       output.as_mut_ptr(),
       stride as libc::c_int,
-      &(tx_type as i32) as *const libc::c_int
+      tx_type as libc::c_int,
+      8
     );
   }
 }
@@ -202,11 +180,12 @@ fn iht4x4_add(
 
 fn fht8x8(input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType) {
   unsafe {
-    av1_fht8x8(
+    av1_fwd_txfm2d_8x8_c(
       input.as_ptr(),
       output.as_mut_ptr(),
       stride as libc::c_int,
-      &(tx_type as i32) as *const libc::c_int
+      tx_type as libc::c_int,
+      8
     );
   }
 }
