@@ -378,21 +378,65 @@ impl PredictionMode {
     let stride = dst.plane.cfg.stride;
     let x = dst.x;
     let y = dst.y;
+    // TODO: pass bd (bitdepth) as a parameter
+    let bd = 8;
+    let base = 128 << (bd - 8);
 
-    if self != PredictionMode::H_PRED && y != 0 {
-      above[1..B::W + 1].copy_from_slice(&dst.go_up(1).as_slice()[..B::W]);
+    if y != 0 {
+      if self != PredictionMode::H_PRED {
+        above[1..B::W + 1].copy_from_slice(&dst.go_up(1).as_slice()[..B::W]);
+      } else if self == PredictionMode::H_PRED &&  x == 0 {
+        for i in 0..B::W {
+          above[i+1] = dst.go_up(1).p(0, 0);
+        }
+      }
     }
 
-    if self != PredictionMode::V_PRED && x != 0 {
-      let left_slice = dst.go_left(1);
-      for i in 0..B::H {
-        left[i + 1] = left_slice.p(0, i);
+    if x != 0 {
+      if self != PredictionMode::V_PRED {
+        let left_slice = dst.go_left(1);
+        for i in 0..B::H {
+          left[i + 1] = left_slice.p(0, i);
+        }
+      } else if self == PredictionMode::V_PRED && y == 0 {
+        for i in 0..B::H {
+          left[i + 1] = dst.go_left(1).p(0, 0);
+          // FIXME(yushin): Figure out why below does not work??
+          //left[i + 1] = dst.go_left(1).plane.data[0];
+        }
       }
     }
 
     if self == PredictionMode::PAETH_PRED && x != 0 && y != 0 {
       above[0] = dst.go_up(1).go_left(1).p(0, 0);
-      left[0] = above[0];
+    }
+
+    if self == PredictionMode::SMOOTH_H_PRED ||
+      self == PredictionMode::SMOOTH_V_PRED ||
+      self == PredictionMode::SMOOTH_PRED ||
+      self == PredictionMode::PAETH_PRED {
+      if x == 0 && y != 0 {
+        for i in 0..B::H {
+          left[i + 1] = dst.go_up(1).p(0, 0);
+        }
+      }
+      if x != 0 && y == 0 {
+        for i in 0..B::W {
+          above[i + 1] = dst.go_left(1).p(0, 0);
+        }
+      }
+    }
+
+    if self == PredictionMode::PAETH_PRED {
+      if x == 0 && y != 0 {
+        above[0] = dst.go_up(1).p(0, 0);
+      }
+      if x != 0 && y == 0 {
+        above[0] = dst.go_left(1).p(0, 0);
+      }
+      if x == 0 && y == 0 {
+        above[0] = base;
+      }      
     }
 
     let slice = dst.as_mut_slice();
@@ -406,8 +450,16 @@ impl PredictionMode {
         (0, _) => B::pred_dc_top(slice, stride, above_slice, left_slice),
         _ => B::pred_dc(slice, stride, above_slice, left_slice)
       },
-      PredictionMode::H_PRED => B::pred_h(slice, stride, left_slice),
-      PredictionMode::V_PRED => B::pred_v(slice, stride, above_slice),
+      PredictionMode::H_PRED => match (x, y) {
+        (0, 0) => B::pred_h(slice, stride, left_slice),
+        (0, _) => B::pred_h(slice, stride, above_slice),
+        (_, _) => B::pred_h(slice, stride, left_slice),
+      },
+      PredictionMode::V_PRED => match (x, y) {
+        (0, 0) => B::pred_v(slice, stride, above_slice),
+        (_, 0) => B::pred_v(slice, stride, left_slice),
+        (_, _) => B::pred_v(slice, stride, above_slice),
+      },
       PredictionMode::PAETH_PRED =>
         B::pred_paeth(slice, stride, above_slice, left_slice, above[0]),
       PredictionMode::SMOOTH_PRED =>
