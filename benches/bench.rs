@@ -9,341 +9,20 @@
 
 #[macro_use]
 extern crate bencher;
-extern crate libc;
 extern crate rand;
 extern crate rav1e;
 
+mod predict;
+
 use bencher::*;
-use rand::{ChaChaRng, Rng, SeedableRng};
-use rav1e::predict::*;
-
-extern {
-  fn highbd_dc_predictor(
-    dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int, bh: libc::c_int,
-    above: *const u16, left: *const u16, bd: libc::c_int
-  );
-
-  fn highbd_h_predictor(
-    dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int, bh: libc::c_int,
-    above: *const u16, left: *const u16, bd: libc::c_int
-  );
-
-  fn highbd_v_predictor(
-    dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int, bh: libc::c_int,
-    above: *const u16, left: *const u16, bd: libc::c_int
-  );
-
-  fn highbd_paeth_predictor(
-    dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int, bh: libc::c_int,
-    above: *const u16, left: *const u16, bd: libc::c_int
-  );
-
-  fn highbd_smooth_predictor(
-    dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int, bh: libc::c_int,
-    above: *const u16, left: *const u16, bd: libc::c_int
-  );
-
-  fn highbd_smooth_h_predictor(
-    dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int, bh: libc::c_int,
-    above: *const u16, left: *const u16, bd: libc::c_int
-  );
-
-  fn highbd_smooth_v_predictor(
-    dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int, bh: libc::c_int,
-    above: *const u16, left: *const u16, bd: libc::c_int
-  );
-}
-
-#[inline(always)]
-fn pred_dc_4x4(
-  output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
-) {
-  unsafe {
-    highbd_dc_predictor(
-      output.as_mut_ptr(),
-      stride as libc::ptrdiff_t,
-      4,
-      4,
-      above.as_ptr(),
-      left.as_ptr(),
-      8
-    );
-  }
-}
-
-#[inline(always)]
-fn pred_h_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
-  unsafe {
-    highbd_h_predictor(
-      output.as_mut_ptr(),
-      stride as libc::ptrdiff_t,
-      4,
-      4,
-      above.as_ptr(),
-      left.as_ptr(),
-      8
-    );
-  }
-}
-
-#[inline(always)]
-fn pred_v_4x4(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
-  unsafe {
-    highbd_v_predictor(
-      output.as_mut_ptr(),
-      stride as libc::ptrdiff_t,
-      4,
-      4,
-      above.as_ptr(),
-      left.as_ptr(),
-      8
-    );
-  }
-}
-
-#[inline(always)]
-fn pred_paeth_4x4(
-  output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
-) {
-  unsafe {
-    highbd_paeth_predictor(
-      output.as_mut_ptr(),
-      stride as libc::ptrdiff_t,
-      4,
-      4,
-      above.as_ptr(),
-      left.as_ptr(),
-      8
-    );
-  }
-}
-
-#[inline(always)]
-fn pred_smooth_4x4(
-  output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
-) {
-  unsafe {
-    highbd_smooth_predictor(
-      output.as_mut_ptr(),
-      stride as libc::ptrdiff_t,
-      4,
-      4,
-      above.as_ptr(),
-      left.as_ptr(),
-      8
-    );
-  }
-}
-
-#[inline(always)]
-fn pred_smooth_h_4x4(
-  output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
-) {
-  unsafe {
-    highbd_smooth_h_predictor(
-      output.as_mut_ptr(),
-      stride as libc::ptrdiff_t,
-      4,
-      4,
-      above.as_ptr(),
-      left.as_ptr(),
-      8
-    );
-  }
-}
-
-#[inline(always)]
-fn pred_smooth_v_4x4(
-  output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
-) {
-  unsafe {
-    highbd_smooth_v_predictor(
-      output.as_mut_ptr(),
-      stride as libc::ptrdiff_t,
-      4,
-      4,
-      above.as_ptr(),
-      left.as_ptr(),
-      8
-    );
-  }
-}
-
-const MAX_ITER: usize = 50000;
-
-fn setup_pred(ra: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>, Vec<u16>) {
-  let output = vec![0u16; 32 * 32];
-  let above: Vec<u16> = (0..32).map(|_| ra.gen()).collect();
-  let left: Vec<u16> = (0..32).map(|_| ra.gen()).collect();
-
-  (above, left, output)
-}
-
-fn intra_dc_pred_native(b: &mut Bencher) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
-  let (above, left, mut output) = setup_pred(&mut ra);
-
-  b.iter(|| {
-    for _ in 0..MAX_ITER {
-      Block4x4::pred_dc(&mut output, 32, &above[..4], &left[..4]);
-    }
-  })
-}
-
-fn intra_dc_pred_aom(b: &mut Bencher) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
-  let (above, left, mut output) = setup_pred(&mut ra);
-
-  b.iter(|| {
-    for _ in 0..MAX_ITER {
-      pred_dc_4x4(&mut output, 32, &above[..4], &left[..4]);
-    }
-  })
-}
-
-fn intra_h_pred_native(b: &mut Bencher) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
-  let (_above, left, mut output) = setup_pred(&mut ra);
-
-  b.iter(|| {
-    for _ in 0..MAX_ITER {
-      Block4x4::pred_h(&mut output, 32, &left[..4]);
-    }
-  })
-}
-
-fn intra_h_pred_aom(b: &mut Bencher) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
-  let (above, left, mut output) = setup_pred(&mut ra);
-
-  b.iter(|| {
-    for _ in 0..MAX_ITER {
-      pred_h_4x4(&mut output, 32, &above[..4], &left[..4]);
-    }
-  })
-}
-
-fn intra_v_pred_native(b: &mut Bencher) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
-  let (above, _left, mut output) = setup_pred(&mut ra);
-
-  b.iter(|| {
-    for _ in 0..MAX_ITER {
-      Block4x4::pred_v(&mut output, 32, &above[..4]);
-    }
-  })
-}
-
-fn intra_v_pred_aom(b: &mut Bencher) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
-  let (above, left, mut output) = setup_pred(&mut ra);
-
-  b.iter(|| {
-    for _ in 0..MAX_ITER {
-      pred_v_4x4(&mut output, 32, &above[..4], &left[..4]);
-    }
-  })
-}
-
-fn intra_paeth_pred_native(b: &mut Bencher) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
-  let (above, left, mut output) = setup_pred(&mut ra);
-  let above_left = unsafe { *above.as_ptr().offset(-1) };
-
-  b.iter(|| {
-    for _ in 0..MAX_ITER {
-      Block4x4::pred_paeth(
-        &mut output,
-        32,
-        &above[..4],
-        &left[..4],
-        above_left
-      );
-    }
-  })
-}
-
-fn intra_paeth_pred_aom(b: &mut Bencher) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
-  let (above, left, mut output) = setup_pred(&mut ra);
-
-  b.iter(|| {
-    for _ in 0..MAX_ITER {
-      pred_paeth_4x4(&mut output, 32, &above[..4], &left[..4]);
-    }
-  })
-}
-
-fn intra_smooth_pred_native(b: &mut Bencher) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
-  let (above, left, mut output) = setup_pred(&mut ra);
-
-  b.iter(|| {
-    for _ in 0..MAX_ITER {
-      Block4x4::pred_smooth(&mut output, 32, &above[..4], &left[..4], 8);
-    }
-  })
-}
-
-fn intra_smooth_pred_aom(b: &mut Bencher) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
-  let (above, left, mut output) = setup_pred(&mut ra);
-
-  b.iter(|| {
-    for _ in 0..MAX_ITER {
-      pred_smooth_4x4(&mut output, 32, &above[..4], &left[..4]);
-    }
-  })
-}
-
-fn intra_smooth_h_pred_native(b: &mut Bencher) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
-  let (above, left, mut output) = setup_pred(&mut ra);
-
-  b.iter(|| {
-    for _ in 0..MAX_ITER {
-      Block4x4::pred_smooth_h(&mut output, 32, &above[..4], &left[..4], 8);
-    }
-  })
-}
-
-fn intra_smooth_h_pred_aom(b: &mut Bencher) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
-  let (above, left, mut output) = setup_pred(&mut ra);
-
-  b.iter(|| {
-    for _ in 0..MAX_ITER {
-      pred_smooth_h_4x4(&mut output, 32, &above[..4], &left[..4]);
-    }
-  })
-}
-
-fn intra_smooth_v_pred_native(b: &mut Bencher) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
-  let (above, left, mut output) = setup_pred(&mut ra);
-
-  b.iter(|| {
-    for _ in 0..MAX_ITER {
-      Block4x4::pred_smooth_v(&mut output, 32, &above[..4], &left[..4], 8);
-    }
-  })
-}
-
-fn intra_smooth_v_pred_aom(b: &mut Bencher) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
-  let (above, left, mut output) = setup_pred(&mut ra);
-
-  b.iter(|| {
-    for _ in 0..MAX_ITER {
-      pred_smooth_v_4x4(&mut output, 32, &above[..4], &left[..4]);
-    }
-  })
-}
-
+use rav1e::*;
 use rav1e::context::*;
 use rav1e::ec;
 use rav1e::partition::*;
-use rav1e::*;
+use rav1e::predict::*;
+
+#[cfg(feature = "comparative_bench")]
+mod comparative;
 
 struct WriteB {
   tx_size: TxSize,
@@ -423,21 +102,18 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
 }
 
 benchmark_group!(
-  intra,
-  intra_dc_pred_native,
-  intra_dc_pred_aom,
-  intra_h_pred_native,
-  intra_h_pred_aom,
-  intra_v_pred_native,
-  intra_v_pred_aom,
-  intra_paeth_pred_native,
-  intra_paeth_pred_aom,
-  intra_smooth_pred_native,
-  intra_smooth_pred_aom,
-  intra_smooth_h_pred_native,
-  intra_smooth_h_pred_aom,
-  intra_smooth_v_pred_native,
-  intra_smooth_v_pred_aom
+  intra_prediction,
+  predict::intra_dc_4x4,
+  predict::intra_h_4x4,
+  predict::intra_v_4x4,
+  predict::intra_paeth_4x4,
+  predict::intra_smooth_4x4,
+  predict::intra_smooth_h_4x4,
+  predict::intra_smooth_v_4x4
 );
 
-benchmark_main!(intra, write_b);
+#[cfg(feature = "comparative_bench")]
+benchmark_main!(comparative::intra_prediction);
+
+#[cfg(not(feature = "comparative_bench"))]
+benchmark_main!(write_b, intra_prediction);
