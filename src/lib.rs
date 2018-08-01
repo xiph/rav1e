@@ -1445,7 +1445,7 @@ fn diff(dst: &mut [i16], src1: &PlaneSlice, src2: &PlaneSlice, width: usize, hei
 // dequantize, inverse-transform.
 pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
                   p: usize, bo: &BlockOffset, mode: PredictionMode, tx_size: TxSize, tx_type: TxType,
-                  plane_bsize: BlockSize, po: &PlaneOffset, skip: bool, is_inter: bool) {
+                  plane_bsize: BlockSize, po: &PlaneOffset, skip: bool) {
     let rec = &mut fs.rec.planes[p];
     let PlaneConfig { stride, xdec, ydec, .. } = fs.input.planes[p].cfg;
 
@@ -1498,8 +1498,8 @@ fn encode_block(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState, cw: &
             cw.fill_neighbours_ref_counts(bo);
             cw.bc.set_ref_frame(bo, bsize, LAST_FRAME);
             cw.write_ref_frames(bo);
-            // FIXME: Check if mode_context = 51 is correct
-            let mode_context = 51 as usize;
+            // FIXME: need more generic context derivation
+            let mode_context = if bo.x == 0 && bo.y == 0 { 0 } else if bo.x ==0 || bo.y == 0 { 51 } else { 85 };
             // NOTE: Until rav1e supports other inter modes than GLOBALMV
             assert!(luma_mode == PredictionMode::GLOBALMV);
             cw.write_inter_mode(luma_mode, mode_context);
@@ -1569,7 +1569,6 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
     let bh = bsize.height_mi() / tx_size.height_mi();
 
     let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
-    let is_inter = luma_mode >= PredictionMode::NEARESTMV;
 
     fs.qc.update(fi.config.quantizer, tx_size);
 
@@ -1582,7 +1581,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
 
             let po = tx_bo.plane_offset(&fs.input.planes[0].cfg);
             encode_tx_block(fi, fs, cw, 0, &tx_bo, luma_mode, tx_size, tx_type,
-                            bsize, &po, skip, is_inter);
+                            bsize, &po, skip);
         }
     }
 
@@ -1633,7 +1632,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
                     };
 
                     encode_tx_block(fi, fs, cw, p, &tx_bo, chroma_mode, uv_tx_size, uv_tx_type,
-                                    plane_bsize, &po, skip, is_inter);
+                                    plane_bsize, &po, skip);
                 }
             }
         }
@@ -1653,8 +1652,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
     fs.qc.update(fi.config.quantizer, tx_size);
 
     let po = bo.plane_offset(&fs.input.planes[0].cfg);
-    encode_tx_block(fi, fs, cw, 0, &bo, luma_mode, tx_size, tx_type, bsize, &po, skip,
-                    true);
+    encode_tx_block(fi, fs, cw, 0, &bo, luma_mode, tx_size, tx_type, bsize, &po, skip);
 
     // these are only valid for 4:2:0
     let uv_tx_size = match bsize {
@@ -1693,7 +1691,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
             };
 
             encode_tx_block(fi, fs, cw, p, &bo, chroma_mode, uv_tx_size, uv_tx_type,
-                            plane_bsize, &po, skip, true);
+                            plane_bsize, &po, skip);
         }
     }
 }

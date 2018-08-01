@@ -866,7 +866,7 @@ extern "C" {
     [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES];
   static default_filter_intra_cdfs: [[u16; 3]; BlockSize::BLOCK_SIZES_ALL];
 
-  static default_single_ref_cdf: [[[u16; 2 + 1]; REF_CONTEXTS]; SINGLE_REFS - 1];
+  static default_single_ref_cdf: [[[u16; 2 + 1]; SINGLE_REFS - 1]; REF_CONTEXTS];
   static av1_scan_orders: [[SCAN_ORDER; TX_TYPES]; TxSize::TX_SIZES_ALL];
 
   // lv_map
@@ -916,10 +916,9 @@ pub struct CDFContext {
   inter_tx_cdf: [[[u16; TX_TYPES + 1]; TX_SIZES]; TX_SETS_INTER],
   skip_cdfs: [[u16; 3]; SKIP_CONTEXTS],
   intra_inter_cdfs: [[u16; 3]; INTRA_INTER_CONTEXTS],
-  single_ref_cdfs: [[[u16; 3]; 3]; SINGLE_REFS - 1],
   angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES],
   filter_intra_cdfs: [[u16; 3]; BlockSize::BLOCK_SIZES_ALL],
-  single_ref_cdf: [[[u16; 2 + 1]; REF_CONTEXTS]; SINGLE_REFS - 1],
+  single_ref_cdfs: [[[u16; 2 + 1]; SINGLE_REFS - 1]; REF_CONTEXTS],
 
   // lv_map
   txb_skip_cdf: [[[u16; 3]; TXB_SKIP_CONTEXTS]; TxSize::TX_SIZES],
@@ -963,10 +962,9 @@ impl CDFContext {
       inter_tx_cdf: default_inter_ext_tx_cdf,
       skip_cdfs: default_skip_cdfs,
       intra_inter_cdfs: default_intra_inter_cdf,
-      single_ref_cdfs: default_single_ref_cdf,
       angle_delta_cdf: default_angle_delta_cdf,
       filter_intra_cdfs: default_filter_intra_cdfs,
-      single_ref_cdf: default_single_ref_cdf,
+      single_ref_cdfs: default_single_ref_cdf,
 
       // lv_map
       txb_skip_cdf: av1_default_txb_skip_cdfs[qctx],
@@ -1970,40 +1968,39 @@ impl ContextWriter {
     let b0_ctx = self.get_ref_frame_ctx_b0(bo);
     let b0 = rf[0] <= ALTREF_FRAME && rf[0] >= BWDREF_FRAME;
 
-    symbol!(self, b0 as u32, &mut self.fc.single_ref_cdfs[0][b0_ctx]);
+    symbol!(self, b0 as u32, &mut self.fc.single_ref_cdfs[b0_ctx][0]);
     if b0 {
       let b1_ctx = self.get_pred_ctx_brfarf2_or_arf(bo);
       let b1 = rf[0] == ALTREF_FRAME;
 
-      symbol!(self, b1 as u32, &mut self.fc.single_ref_cdfs[1][b1_ctx]);
+      symbol!(self, b1 as u32, &mut self.fc.single_ref_cdfs[b1_ctx][1]);
       if !b1 {
         let b5_ctx = self.get_pred_ctx_brf_or_arf2(bo);
         let b5 = rf[0] == ALTREF2_FRAME;
 
-        symbol!(self, b5 as u32, &mut self.fc.single_ref_cdfs[5][b5_ctx]);
+        symbol!(self, b5 as u32, &mut self.fc.single_ref_cdfs[b5_ctx][5]);
       }
     } else {
       let b2_ctx = self.get_pred_ctx_ll2_or_l3gld(bo);
       let b2 = rf[0] == LAST3_FRAME || rf[0] == GOLDEN_FRAME;
 
-      symbol!(self, b2 as u32, &mut self.fc.single_ref_cdfs[2][b2_ctx]);
+      symbol!(self, b2 as u32, &mut self.fc.single_ref_cdfs[b2_ctx][2]);
       if !b2 {
         let b3_ctx = self.get_pred_ctx_last_or_last2(bo);
         let b3 = rf[0] != LAST_FRAME;
 
-        symbol!(self, b3 as u32, &mut self.fc.single_ref_cdfs[3][b3_ctx]);
+        symbol!(self, b3 as u32, &mut self.fc.single_ref_cdfs[b3_ctx][3]);
       } else {
         let b4_ctx = self.get_pred_ctx_last3_or_gold(bo);
         let b4 = rf[0] != LAST3_FRAME;
 
-        symbol!(self, b4 as u32, &mut self.fc.single_ref_cdfs[4][b4_ctx]);
+        symbol!(self, b4 as u32, &mut self.fc.single_ref_cdfs[b4_ctx][4]);
       }
     }
   }
 
   pub fn write_inter_mode(&mut self, mode: PredictionMode, ctx: usize) {
     let newmv_ctx = ctx & NEWMV_CTX_MASK;
-
     symbol!(self, (mode != PredictionMode::NEWMV) as u32, &mut self.fc.newmv_cdf[newmv_ctx]);
     if mode != PredictionMode::NEWMV {
       let zeromv_ctx = (ctx >> GLOBALMV_OFFSET) & GLOBALMV_CTX_MASK;
