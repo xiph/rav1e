@@ -80,7 +80,7 @@ pub struct ReferenceFramesSet {
 impl ReferenceFramesSet {
     pub fn new() -> ReferenceFramesSet {
         ReferenceFramesSet {
-            frames: [None, None, None, None, None, None, None, None]
+            frames: Default::default()
         }
     }
 }
