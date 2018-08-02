@@ -17,13 +17,12 @@ use ec::Writer;
 use encode_block;
 use partition::*;
 use plane::*;
-use predict::{RAV1E_INTRA_MODES, RAV1E_INTRA_MODES_MINIMAL, RAV1E_INTER_MODES};
+use predict::{RAV1E_INTRA_MODES, RAV1E_INTRA_MODES_MINIMAL};
 use quantize::dc_q;
 use std;
 use std::f64;
 use std::vec::Vec;
 use write_tx_blocks;
-use write_tx_tree;
 use BlockSize;
 use FrameInvariants;
 use FrameState;
@@ -201,17 +200,19 @@ pub fn rdo_mode_decision(
 
   // Exclude complex prediction modes at higher speed levels
   let mode_set = if fi.config.speed <= 3 {
-    (if fi.frame_type == FrameType::INTER { RAV1E_INTER_MODES }
-      else { RAV1E_INTRA_MODES })
+    RAV1E_INTRA_MODES
   } else {
-    (if fi.frame_type == FrameType::INTER { RAV1E_INTER_MODES }
-    else { RAV1E_INTRA_MODES_MINIMAL })
+    RAV1E_INTRA_MODES_MINIMAL
   };
 
   for &luma_mode in mode_set {
-    assert!(fi.frame_type == FrameType::INTER || luma_mode.is_intra());
+    if fi.frame_type == FrameType::KEY
+      && luma_mode >= PredictionMode::NEARESTMV
+    {
+      break;
+    }
 
-    if is_chroma_block && fi.config.speed <= 3 && luma_mode.is_intra() {
+    if is_chroma_block && fi.config.speed <= 3 {
       // Find the best chroma prediction mode for the current luma prediction mode
       for &chroma_mode in RAV1E_INTRA_MODES {
         encode_block(seq, fi, fs, cw, wr, luma_mode, chroma_mode, bsize, bo, skip, cdef_index);
@@ -311,7 +312,6 @@ pub fn rdo_tx_type_decision(
 
   let partition_start_x = (bo.x & LOCAL_BLOCK_MASK) >> xdec << MI_SIZE_LOG2;
   let partition_start_y = (bo.y & LOCAL_BLOCK_MASK) >> ydec << MI_SIZE_LOG2;
-  let is_inter = mode >= PredictionMode::NEARESTMV;
 
   let cw_checkpoint = cw.checkpoint();
   let w_checkpoint = wr.checkpoint();
@@ -322,15 +322,9 @@ pub fn rdo_tx_type_decision(
       continue;
     }
 
-    if is_inter {
-      write_tx_tree(
-        fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false,
-      );
-    }  else {
-      write_tx_blocks(
-        fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false,
-      );
-    }
+    write_tx_blocks(
+      fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false,
+    );
 
     let cost = wr.tell_frac() - tell;
     let rd = compute_rd_cost(
