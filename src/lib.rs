@@ -72,6 +72,19 @@ impl Frame {
     }
 }
 
+#[derive(Debug)]
+pub struct ReferenceFramesSet {
+    pub frames: [Option<Rc<Frame>>; (REF_FRAMES as usize)]
+}
+
+impl ReferenceFramesSet {
+    pub fn new() -> ReferenceFramesSet {
+        ReferenceFramesSet {
+            frames: [None, None, None, None, None, None, None, None]
+        }
+    }
+}
+
 const MAX_NUM_TEMPORAL_LAYERS: usize = 8;
 const MAX_NUM_SPATIAL_LAYERS: usize = 4;
 const MAX_NUM_OPERATING_POINTS: usize = MAX_NUM_TEMPORAL_LAYERS * MAX_NUM_SPATIAL_LAYERS;
@@ -295,6 +308,7 @@ pub struct FrameInvariants {
     pub cdef_y_strengths: [u8; 8],
     pub cdef_uv_strengths: [u8; 8],
     pub config: EncoderConfig,
+    pub rec_buffer: ReferenceFramesSet,
 }
 
 impl FrameInvariants {
@@ -348,6 +362,7 @@ impl FrameInvariants {
             cdef_y_strengths: [0*4+0, 1*4+0, 2*4+1, 3*4+1, 5*4+2, 7*4+3, 10*4+3, 13*4+3],
             cdef_uv_strengths: [0*4+0, 1*4+0, 2*4+1, 3*4+1, 5*4+2, 7*4+3, 10*4+3, 13*4+3],
             config,
+            rec_buffer: ReferenceFramesSet::new()
         }
     }
 
@@ -1838,12 +1853,12 @@ fn write_tile_group_header(tile_start_and_end_present_flag: bool) ->
     buf.clone()
 }
 
-fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut FrameState, rec_buffer: &[Option<Rc<Frame>>]) -> Vec<u8> {
+fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
     let mut packet = Vec::new();
     //write_uncompressed_header(&mut packet, sequence, fi).unwrap();
     write_obus(&mut packet, sequence, fi).unwrap();
     if fi.show_existing_frame {
-        match rec_buffer[0] {
+        match fi.rec_buffer.frames[0] {
             Some(ref rec) => for p in 0..3 {
                 fs.rec.planes[p].data.copy_from_slice(rec.planes[p].data.as_slice());
             },
@@ -1878,12 +1893,11 @@ fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut Fram
     packet
 }
 
-pub fn update_rec_buffer(fi: &FrameInvariants, rec_buffer: &mut [Option<Rc<Frame>>],
-                         fs: FrameState) {
+pub fn update_rec_buffer(fi: &mut FrameInvariants, fs: FrameState) {
   let rfs = Rc::new(fs.rec);
   for i in 0..(REF_FRAMES as usize) {
     if (fi.refresh_frame_flags & (1 << i)) != 0 {
-      rec_buffer[i] = Some(Rc::clone(&rfs));
+      fi.rec_buffer.frames[i] = Some(Rc::clone(&rfs));
     }
   }
 }
@@ -1892,8 +1906,7 @@ pub fn update_rec_buffer(fi: &FrameInvariants, rec_buffer: &mut [Option<Rc<Frame
 pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
                      output_file: &mut Write,
                      y4m_dec: &mut y4m::Decoder<Box<Read>>,
-                     y4m_enc: Option<&mut y4m::Encoder<Box<Write>>>,
-                     rec_buffer: &mut [Option<Rc<Frame>>]) -> bool {
+                     y4m_enc: Option<&mut y4m::Encoder<Box<Write>>>) -> bool {
     unsafe {
         av1_rtcd();
         aom_dsp_rtcd();
@@ -1936,7 +1949,7 @@ pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
                 _ => panic! ("unknown input bit depth!"),
             }
 
-            let packet = encode_frame(sequence, fi, &mut fs, rec_buffer);
+            let packet = encode_frame(sequence, fi, &mut fs);
             write_ivf_frame(output_file, fi.number, packet.as_ref());
             if let Some(mut y4m_enc) = y4m_enc {
                 let mut rec_y = vec![128 as u8; width*height];
@@ -1964,7 +1977,7 @@ pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
                 y4m_enc.write_frame(&rec_frame).unwrap();
             }
 
-            update_rec_buffer(fi, rec_buffer, fs);
+            update_rec_buffer(fi, fs);
             true
         },
         _ => false
@@ -2138,8 +2151,6 @@ mod test_encode_decode {
 
         println!("Encoding {}x{} speed {} quantizer {}", w, h, speed, quantizer);
 
-        let mut rec_buffer: [Option<Rc<Frame>>; 8] = [None, None, None, None, None, None, None, None];
-
         let mut iter: aom_codec_iter_t = ptr::null_mut();
 
         let mut rec_fifo = VecDeque::new();
@@ -2154,12 +2165,12 @@ mod test_encode_decode {
             fi.intra_only = fi.frame_type == FrameType::KEY || fi.frame_type == FrameType::INTRA_ONLY;
             fi.use_prev_frame_mvs = !(fi.intra_only || fi.error_resilient);
             println!("Encoding frame {}", fi.number);
-            let packet = encode_frame(&mut seq, &mut fi, &mut fs, &rec_buffer);
+            let packet = encode_frame(&mut seq, &mut fi, &mut fs);
             println!("Encoded.");
 
             rec_fifo.push_back(fs.rec.clone());
 
-            update_rec_buffer(&fi, &mut rec_buffer, fs);
+            update_rec_buffer(&mut fi, fs);
 
             let mut corrupted_count = 0;
             unsafe {
