@@ -24,7 +24,7 @@ backtrace = "0.3"
 cc = "1"
 cmake = "0.1.29"
 pkg-config = "0.3.9"
-bindgen = { version = "0.33", optional = true }
+bindgen = { version = "0.37", optional = true }
 
 [dev-dependencies]
 bencher = "0.1.5"
