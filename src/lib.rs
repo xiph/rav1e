@@ -80,7 +80,7 @@ pub struct ReferenceFramesSet {
 impl ReferenceFramesSet {
     pub fn new() -> ReferenceFramesSet {
         ReferenceFramesSet {
-            frames: [None, None, None, None, None, None, None, None]
+            frames: Default::default()
         }
     }
 }
@@ -600,11 +600,11 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
     // Write OBU Header syntax
     fn write_obu_header(&mut self, obu_type: OBU_Type, obu_extension: u32)
             -> Result<(), std::io::Error>{
-        self.write(1, 0)?; // forbidden bit.
+        self.write_bit(false)?; // forbidden bit.
         self.write(4, obu_type as u32)?;
         self.write_bit(obu_extension != 0)?;
-        self.write(1, 1)?; // obu_has_payload_length_field
-        self.write(1, 0)?; // reserved
+        self.write_bit(true)?; // obu_has_payload_length_field
+        self.write_bit(false)?; // reserved
 
         if obu_extension != 0 {
             assert!(false);
@@ -619,21 +619,22 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         -> Result<(), std::io::Error> {
         self.write(3, seq.profile)?; // profile 0, 3 bits
         self.write(1, 0)?; // still_picture
-        //self.write(1, 0)?; // reduced_still_picture
+        self.write(1, 0)?; // reduced_still_picture
+        self.write_bit(false)?; // display model present
+        self.write_bit(false)?; // no timing info present
         self.write(5, 0)?; // one operating point
         self.write(12,0)?; // idc
-        self.write(4, 0)?; // level
-        self.write_bit(false)?; // no rate model
-
+        self.write(5, 0)?; // level
+        //self.write_bit(false)?; // no rate model
         if seq.reduced_still_picture_hdr {
             assert!(false);
         } else {
-            //self.write(1, 0)?; // timing_info_present_flag
+            //self.write_bit(false)?; // timing_info_present_flag
             if false { // if timing_info_present_flag == true
                 assert!(false);
             }
 
-            //self.write(1, 0)?; // display_model_info_present_flag
+            //self.write_bit(false)?; // display_model_info_present_flag
             //self.write(5, 0)?; // operating_points_cnt_minus_1, 5 bits
             /*
             for i in 0..seq.operating_points_cnt_minus_1 + 1 {
@@ -645,7 +646,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
 
                 if seq.level[i][1] > 3 {
                     assert!(false); // NOTE: Not supported yet.
-                    //self.write(1, seq.tier[i])?;
+                    //self.write_bit(seq.tier[i])?;
                 }
                 if seq.decoder_model_info_present_flag {
                     assert!(false); // NOTE: Not supported yet.
@@ -662,14 +663,14 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         self.write_bitdepth_colorspace_sampling();
 
         self.write(1,0)?; // separate uv delta q
-        self.write_bit(false)?; // no timing info present
+      //self.write_bit(false)?; // no decoder model present
         //self.write_color_config(seq)?;
 
         //self.write_sequence_header2(seq, fi);
 
         self.write_bit(seq.film_grain_params_present)?;
 
-        self.write(1,1)?; // add_trailing_bits
+        self.write_bit(true)?; // add_trailing_bits
 
         Ok(())
     }
@@ -715,16 +716,16 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
               self.write_bit(seq.enable_ref_frame_mvs)?;
             }
             if seq.force_screen_content_tools == 2 {
-              self.write(1, 1)?;
+              self.write_bit(true)?;
             } else {
-              self.write(1, 0)?;
+              self.write_bit(false)?;
               self.write_bit(seq.force_screen_content_tools != 0)?;
             }
             if seq.force_screen_content_tools > 0 {
               if seq.force_integer_mv == 2 {
-                self.write(1, 1)?;
+                self.write_bit(true)?;
               } else {
-                self.write(1, 0)?;
+                self.write_bit(false)?;
                 self.write_bit(seq.force_integer_mv != 0)?;
               }
             } else {
@@ -744,14 +745,14 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
 
 #[allow(unused)]
     fn write_color_config(&mut self, seq: &mut Sequence) -> Result<(), std::io::Error> {
-        self.write(1,0)?; // 8 bit video
+        self.write_bit(false)?; // 8 bit video
         self.write_bit(seq.monochrome)?; 	// monochrome?
         self.write_bit(false)?;  					// No color description present
 
         if seq.monochrome {
             assert!(false);
         }
-        self.write(1,0)?; // color range
+        self.write_bit(false)?; // color range
 
         if true { // subsampling_x == 1 && cm->subsampling_y == 1
             self.write(2,0)?; // chroma_sample_position == AOM_CSP_UNKNOWN
@@ -968,11 +969,11 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
       self.write_bit(true)?; // uniform_tile_spacing_flag
       if fi.width > 64 {
         // TODO: if tile_cols > 1, write more increment_tile_cols_log2 bits
-        self.write(1,0)?; // tile cols
+        self.write_bit(false)?; // tile cols
       }
       if fi.height > 64 {
         // TODO: if tile_rows > 1, write increment_tile_rows_log2 bits
-        self.write(1,0)?; // tile rows
+        self.write_bit(false)?; // tile rows
       }
       // TODO: if tile_cols * tile_rows > 1 {
       // write context_update_tile_id and tile_size_bytes_minus_1 }
@@ -1092,8 +1093,8 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
   fn write_sequence_header(&mut self, fi: &FrameInvariants)
         -> Result<(), std::io::Error> {
         self.write_frame_size(fi)?;
-        self.write(1,0)?; // don't use frame ids
-        self.write(1,0)?; // use_128x128_superblock = 0
+        self.write_bit(false)?; // don't use frame ids
+        self.write_bit(false)?; // use_128x128_superblock = 0
         self.write_bit(true)?; // disable intra edge filter
         self.write_bit(true)?; // allow filter intra
         self.write_bit(false)?; // interintra_compound
@@ -1101,18 +1102,18 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         self.write_bit(false)?; // warped_motion
         self.write_bit(false)?; // dual_filter
         self.write_bit(false)?; // order_hint
-        self.write(1,0)?; // screen content tools forced
-        self.write(1,0)?; // screen content tools forced off
-        self.write(1,0)?; // no superres
+        self.write_bit(false)?; // screen content tools forced
+        self.write_bit(false)?; // screen content tools forced off
+        self.write_bit(false)?; // no superres
         self.write_bit(true)?; // cdef
         self.write_bit(true)?; // lr
         Ok(())
     }
     fn write_bitdepth_colorspace_sampling(&mut self) -> Result<(), std::io::Error> {
-        self.write(1,0)?; // 8 bit video
-        self.write(1,0)?; // not monochrome
-      self.write(1,0)?; // no color description
-      self.write(1,0)?; // range
+        self.write_bit(false)?; // 8 bit video
+        self.write_bit(false)?; // not monochrome
+      self.write_bit(false)?; // no color description
+      self.write_bit(false)?; // range
       self.write(2,0)?; // chroma sample position
         Ok(())
     }
@@ -1321,7 +1322,9 @@ fn write_uncompressed_header(packet: &mut Write,
     if fi.frame_type == FrameType::KEY || fi.frame_type == FrameType::INTRA_ONLY {
         assert!(fi.intra_only);
     }
-    bw.write_bit(fi.error_resilient)?; // error resilient
+    if fi.frame_type != FrameType::KEY {
+        bw.write_bit(fi.error_resilient)?; // error resilient
+    }
     if fi.intra_only {
     //    bw.write_bit(true)?; // disable_intra_edge_filter = true
     }
@@ -1360,10 +1363,10 @@ fn write_uncompressed_header(packet: &mut Write,
 
     bw.write_bit(true)?; // uniform tile spacing
     if fi.width > 64 {
-        bw.write(1,0)?; // tile cols
+        bw.write_bit(false)?; // tile cols
     }
     if fi.height > 64 {
-        bw.write(1,0)?; // tile rows
+        bw.write_bit(false)?; // tile rows
     }
     bw.write(8,fi.config.quantizer as u8)?; // qindex
     bw.write_bit(false)?; // y dc delta q
@@ -2159,9 +2162,9 @@ mod test_encode_decode {
         }
     }
 
-    static DIMENSIONS: &[(usize, usize)] = &[/*(2, 2), (4, 4), */(8, 8), 
+    static DIMENSIONS: &[(usize, usize)] = &[/*(2, 2), (4, 4),*/ (8, 8), 
         (16, 16), (32, 32), (64, 64), (128, 128), (256, 256), 
-        (512, 512), (1024, 1024)/*, (2048, 2048)*/];
+        (512, 512), (1024, 1024), (2048, 2048)];
 
     #[test]
     #[ignore]
@@ -2255,7 +2258,7 @@ mod test_encode_decode {
             let mut corrupted_count = 0;
             unsafe {
                 println!("Decoding frame {}", fi.number);
-                let ret = aom_codec_decode(&mut dec.dec, packet.as_ptr(), packet.len() as u32, ptr::null_mut());
+                let ret = aom_codec_decode(&mut dec.dec, packet.as_ptr(), packet.len(), ptr::null_mut());
                 println!("Decoded. -> {}", ret);
                 if ret != 0 {
                     use std::ffi::CStr;

@@ -463,11 +463,11 @@ impl PredictionMode {
       PredictionMode::PAETH_PRED =>
         B::pred_paeth(slice, stride, above_slice, left_slice, above[0]),
       PredictionMode::SMOOTH_PRED =>
-        B::pred_smooth(slice, stride, above_slice, left_slice, 8),
+        B::pred_smooth(slice, stride, above_slice, left_slice),
       PredictionMode::SMOOTH_H_PRED =>
-        B::pred_smooth_h(slice, stride, above_slice, left_slice, 8),
+        B::pred_smooth_h(slice, stride, above_slice, left_slice),
       PredictionMode::SMOOTH_V_PRED =>
-        B::pred_smooth_v(slice, stride, above_slice, left_slice, 8),
+        B::pred_smooth_v(slice, stride, above_slice, left_slice),
       _ => unimplemented!()
     }
   }

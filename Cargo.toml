@@ -8,6 +8,7 @@ include = ["/src/**", "/aom_build/**", "/Cargo.toml"]
 [features]
 repl = ["rustyline"]
 decode_test = ["bindgen"]
+comparative_bench = []
 
 [dependencies]
 bitstream-io = "0.6"

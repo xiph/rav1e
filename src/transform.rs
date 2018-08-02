@@ -18,28 +18,20 @@ use partition::TxType;
 // understand what's going on here you should first understand the Perl code
 // in libaom that generates these function bindings.
 
-#[repr(C)]
-struct TxfmParam {
-  // for both forward and inverse transforms
-  tx_type: TxType,
-  tx_size: TxSize,
-  lossless: libc::c_int,
-  bd: libc::c_int,
-  // are the pixel buffers octets or shorts?  This should collapse to
-  // bd==8 implies !is_hbd, but that's not certain right now.
-  is_hbd: libc::c_int,
-  //tx_set_type: TxSetType,
-  tx_set_type: libc::c_int, // hack: I don't know why we need set type?
-  // for inverse transforms only
-  eob: libc::c_int
-}
-
 extern {
   fn av1_fwd_txfm2d_4x4_c(
     input: *const i16, output: *mut i32, stride: libc::c_int,
     tx_type: libc::c_int, bd: libc::c_int
   );
   fn av1_fwd_txfm2d_8x8_c(
+    input: *const i16, output: *mut i32, stride: libc::c_int,
+    tx_type: libc::c_int, bd: libc::c_int
+  );
+  fn av1_fwd_txfm2d_16x16_c(
+    input: *const i16, output: *mut i32, stride: libc::c_int,
+    tx_type: libc::c_int, bd: libc::c_int
+  );
+  fn av1_fwd_txfm2d_32x32_c(
     input: *const i16, output: *mut i32, stride: libc::c_int,
     tx_type: libc::c_int, bd: libc::c_int
   );
@@ -74,12 +66,6 @@ extern "C" {
     tx_type: libc::c_int,
     bd: libc::c_int
   ) -> ();
-  fn av1_fht16x16_c(
-    input: *const i16,
-    output: *mut i32,
-    stride: libc::c_int,
-    txfm_param: *mut TxfmParam
-  );
   static av1_inv_txfm2d_add_16x16: extern fn(
     input: *const i32,
     output: *mut u16,
@@ -90,12 +76,6 @@ extern "C" {
   fn av1_inv_txfm2d_add_16x16_c(
     input: *const i32, output: *mut u16, stride: libc::c_int,
     tx_type: libc::c_int, bd: libc::c_int
-  );
-  fn av1_fht32x32_sse2(
-    input: *const i16,
-    output: *mut i32,
-    stride: libc::c_int,
-    txfm_pram: *mut TxfmParam
   );
   static av1_inv_txfm2d_add_32x32: extern fn(
     input: *const i32,
@@ -220,21 +200,13 @@ fn iht8x8_add(
 fn fht16x16(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType
 ) {
-  let mut p = TxfmParam {
-    tx_type,
-    tx_size: TxSize::TX_16X16,
-    lossless: 0,
-    bd: 8,
-    is_hbd: 1,
-    tx_set_type: 0,
-    eob: 0
-  };
   unsafe {
-    av1_fht16x16_c(
+    av1_fwd_txfm2d_16x16_c(
       input.as_ptr(),
       output.as_mut_ptr(),
       stride as libc::c_int,
-      &mut p
+      tx_type as libc::c_int,
+      8
     );
   }
 }
@@ -267,21 +239,13 @@ fn iht16x16_add(
 fn fht32x32(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType
 ) {
-  let mut p = TxfmParam {
-    tx_type,
-    tx_size: TxSize::TX_32X32,
-    lossless: 0,
-    bd: 8,
-    is_hbd: 1,
-    tx_set_type: 0,
-    eob: 0
-  };
   unsafe {
-    av1_fht32x32_sse2(
+    av1_fwd_txfm2d_32x32_c(
       input.as_ptr(),
       output.as_mut_ptr(),
       stride as libc::c_int,
-      &mut p
+      tx_type as libc::c_int,
+      8
     );
   }
 }

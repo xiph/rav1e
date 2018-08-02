@@ -459,7 +459,7 @@ const INTRA_INTER_CONTEXTS: usize = 4;
 // Level Map
 const TXB_SKIP_CONTEXTS: usize =  13;
 
-const EOB_COEF_CONTEXTS: usize =  22;
+const EOB_COEF_CONTEXTS: usize =  9;
 
 const SIG_COEF_CONTEXTS_2D: usize =  26;
 const SIG_COEF_CONTEXTS_1D: usize =  16;
@@ -2449,7 +2449,7 @@ impl ContextWriter {
         self,
         w,
         bit,
-        &mut self.fc.eob_extra_cdf[txs_ctx][plane_type][eob_pt as usize]
+        &mut self.fc.eob_extra_cdf[txs_ctx][plane_type][(eob_pt - 3) as usize]
       );
       for i in 1..eob_offset_bits {
         eob_shift = eob_offset_bits as u16 - 1 - i as u16;
