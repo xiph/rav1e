@@ -12,22 +12,6 @@
 
 use BlockSize::*;
 use TxSize::*;
-use FrameInvariants;
-
-pub const NONE_FRAME: isize = -1;
-pub const INTRA_FRAME: usize = 0;
-pub const LAST_FRAME: usize = 1;
-pub const LAST2_FRAME: usize = 2;
-pub const LAST3_FRAME: usize = 3;
-pub const GOLDEN_FRAME: usize = 4;
-pub const BWDREF_FRAME: usize = 5;
-pub const ALTREF2_FRAME: usize = 6;
-pub const ALTREF_FRAME: usize = 7;
-
-pub const FWD_REFS: usize = GOLDEN_FRAME - LAST_FRAME + 1;
-pub const BWD_REFS: usize = ALTREF_FRAME - BWDREF_FRAME + 1;
-pub const SINGLE_REFS: usize = FWD_REFS + BWD_REFS;
-pub const TOTAL_REFS_PER_FRAME: usize = ALTREF_FRAME - INTRA_FRAME + 1;
 
 #[derive(Copy, Clone, PartialEq, PartialOrd)]
 pub enum PartitionType {
@@ -306,7 +290,7 @@ pub enum PredictionMode {
   PAETH_PRED,
   NEARESTMV,
   NEARMV,
-  GLOBALMV,
+  ZEROMV,
   NEWMV,
   // Compound ref compound modes
   NEAREST_NEARESTMV,
@@ -315,19 +299,9 @@ pub enum PredictionMode {
   NEW_NEARESTMV,
   NEAR_NEWMV,
   NEW_NEARMV,
-  GLOBAL_GLOBALMV,
+  ZERO_ZEROMV,
   NEW_NEWMV
 }
-
-pub const NEWMV_MODE_CONTEXTS: usize = 7;
-pub const GLOBALMV_MODE_CONTEXTS: usize = 2;
-pub const REFMV_MODE_CONTEXTS: usize = 9;
-
-pub const REFMV_OFFSET: usize = 4;
-pub const GLOBALMV_OFFSET: usize = 3;
-pub const NEWMV_CTX_MASK: usize = ((1 << GLOBALMV_OFFSET) - 1);
-pub const GLOBALMV_CTX_MASK: usize = ((1 << (REFMV_OFFSET - GLOBALMV_OFFSET)) - 1);
-pub const REFMV_CTX_MASK: usize = ((1 << (8 - REFMV_OFFSET)) - 1);
 
 pub static RAV1E_PARTITION_TYPES: &'static [PartitionType] =
   &[PartitionType::PARTITION_NONE, PartitionType::PARTITION_SPLIT];
@@ -355,20 +329,18 @@ use plane::*;
 use predict::*;
 
 impl PredictionMode {
-  pub fn predict_intra<'a>(self, dst: &'a mut PlaneMutSlice<'a>, tx_size: TxSize) {
-    assert!(self.is_intra());
-
+  pub fn predict<'a>(self, dst: &'a mut PlaneMutSlice<'a>, tx_size: TxSize) {
     match tx_size {
-      TxSize::TX_4X4 => self.predict_intra_inner::<Block4x4>(dst),
-      TxSize::TX_8X8 => self.predict_intra_inner::<Block8x8>(dst),
-      TxSize::TX_16X16 => self.predict_intra_inner::<Block16x16>(dst),
-      TxSize::TX_32X32 => self.predict_intra_inner::<Block32x32>(dst),
+      TxSize::TX_4X4 => self.predict_inner::<Block4x4>(dst),
+      TxSize::TX_8X8 => self.predict_inner::<Block8x8>(dst),
+      TxSize::TX_16X16 => self.predict_inner::<Block16x16>(dst),
+      TxSize::TX_32X32 => self.predict_inner::<Block32x32>(dst),
       _ => unimplemented!()
     }
   }
 
   #[inline(always)]
-  fn predict_intra_inner<'a, B: Intra>(self, dst: &'a mut PlaneMutSlice<'a>) {
+  fn predict_inner<'a, B: Intra>(self, dst: &'a mut PlaneMutSlice<'a>) {
     // above and left arrays include above-left sample
     // above array includes above-right samples
     // left array includes below-left samples
@@ -472,39 +444,8 @@ impl PredictionMode {
     }
   }
 
-  pub fn is_intra(self) -> bool {
-    return self < PredictionMode::NEARESTMV;
-  }
-
   pub fn is_directional(self) -> bool {
     self >= PredictionMode::V_PRED && self <= PredictionMode::D63_PRED
-  }
-
-  pub fn predict_inter<'a>(self, fi: &FrameInvariants, p: usize, po: &PlaneOffset,
-                           dst: &'a mut PlaneMutSlice<'a>, tx_size: TxSize) {
-    assert!(!self.is_intra());
-    assert!(self == PredictionMode::GLOBALMV); // Other modes not implemented
-
-    let ref_frame_idx = LAST_FRAME;
-
-    match fi.rec_buffer.frames[fi.ref_frames[ref_frame_idx - LAST_FRAME]] {
-      Some(ref rec) => {
-        let ref_stride = rec.planes[p].cfg.stride;
-        let src = rec.planes[p].slice(po);
-        let ref_slice = src.as_slice();
-        let stride = dst.plane.cfg.stride;
-        let slice = dst.as_mut_slice();
-        for r in 0..tx_size.height() {
-          for c in 0..tx_size.width() {
-            let input_index = r * ref_stride + c;
-            let output_index = r * stride + c;
-            slice[output_index] = ref_slice[input_index];
-          }
-        }
-      },
-      None => (),
-    }
-
   }
 }
 

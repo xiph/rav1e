@@ -282,7 +282,6 @@ pub struct FrameInvariants {
     pub cdef_y_strengths: [u8; 8],
     pub cdef_uv_strengths: [u8; 8],
     pub config: EncoderConfig,
-    pub ref_frames: [usize; INTER_REFS_PER_FRAME],
     pub rec_buffer: ReferenceFramesSet,
 }
 
@@ -337,7 +336,6 @@ impl FrameInvariants {
             cdef_y_strengths: [0*4+0, 1*4+0, 2*4+1, 3*4+1, 5*4+2, 7*4+3, 10*4+3, 13*4+3],
             cdef_uv_strengths: [0*4+0, 1*4+0, 2*4+1, 3*4+1, 5*4+2, 7*4+3, 10*4+3, 13*4+3],
             config,
-            ref_frames: [0; INTER_REFS_PER_FRAME],
             rec_buffer: ReferenceFramesSet::new()
         }
     }
@@ -376,31 +374,32 @@ pub enum ReferenceMode {
   SELECT = 2,
 }
 
-const REF_CONTEXTS: usize = 3;
-
-const REF_FRAMES: u32 = 8;
-const REF_FRAMES_LOG2: u32 = 3;
+pub const REF_FRAMES: u32 = 8;
+pub const REF_FRAMES_LOG2: u32 = 3;
 pub const ALL_REF_FRAMES_MASK: u32 = (1 << REF_FRAMES) - 1;
 
-//const NONE_FRAME: isize = -1;
-//const INTRA_FRAME: usize = 0;
-//const LAST_FRAME: usize = 1;
-//const LAST2_FRAME: usize = 2;
-//const LAST3_FRAME: usize = 3;
+/*const NONE_FRAME: isize = -1;
+const INTRA_FRAME: usize = 0;*/
+const LAST_FRAME: usize = 1;
+
+/*const LAST2_FRAME: usize = 2;
+const LAST3_FRAME: usize = 3;
 const GOLDEN_FRAME: usize = 4;
 const BWDREF_FRAME: usize = 5;
-//const ALTREF2_FRAME: usize = 6;
+const ALTREF2_FRAME: usize = 6;*/
 const ALTREF_FRAME: usize = 7;
-//const LAST_REF_FRAMES: usize = LAST3_FRAME - LAST_FRAME + 1;
+/*const LAST_REF_FRAMES: usize = LAST3_FRAME - LAST_FRAME + 1;
+
 const INTER_REFS_PER_FRAME: usize = ALTREF_FRAME - LAST_FRAME + 1;
-//const TOTAL_REFS_PER_FRAME: usize = ALTREF_FRAME - INTRA_FRAME + 1;
+const TOTAL_REFS_PER_FRAME: usize = ALTREF_FRAME - INTRA_FRAME + 1;
+
 const FWD_REFS: usize = GOLDEN_FRAME - LAST_FRAME + 1;
 //const FWD_RF_OFFSET(ref) (ref - LAST_FRAME)
 const BWD_REFS: usize = ALTREF_FRAME - BWDREF_FRAME + 1;
 //const BWD_RF_OFFSET(ref) (ref - BWDREF_FRAME)
 
 const SINGLE_REFS: usize = FWD_REFS + BWD_REFS;
-
+*/
 
 impl fmt::Display for FrameType{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -900,7 +899,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
 
           for i in LAST_FRAME..ALTREF_FRAME+1 {
             if !frame_refs_short_signaling {
-              self.write(REF_FRAMES_LOG2, fi.ref_frames[i] as u8)?;
+              self.write(REF_FRAMES_LOG2, 0)?;
             }
             if seq.frame_id_numbers_present_flag {
               assert!(false); // Not supported by rav1e yet!
@@ -1426,11 +1425,7 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
     let rec = &mut fs.rec.planes[p];
     let PlaneConfig { stride, xdec, ydec, .. } = fs.input.planes[p].cfg;
 
-    if mode.is_intra() {
-      mode.predict_intra(&mut rec.mut_slice(po), tx_size);
-    } else {
-      mode.predict_inter(fi, p, po, &mut rec.mut_slice(po), tx_size);
-    }
+    mode.predict(&mut rec.mut_slice(po), tx_size);
 
     if skip { return; }
 
@@ -1461,7 +1456,7 @@ fn encode_block(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
             cw: &mut ContextWriter, w: &mut Writer,
             luma_mode: PredictionMode, chroma_mode: PredictionMode,
             bsize: BlockSize, bo: &BlockOffset, skip: bool, cdef_index: u8) {
-    let is_inter = !luma_mode.is_intra();
+    let is_inter = luma_mode >= PredictionMode::NEARESTMV;
 
     cw.bc.set_skip(bo, bsize, skip);
     cw.write_skip(w, bo, skip);
@@ -1472,16 +1467,7 @@ fn encode_block(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
 
     if fi.frame_type == FrameType::INTER {
         cw.write_is_inter(w, bo, is_inter);
-        if is_inter {
-            cw.fill_neighbours_ref_counts(bo);
-            cw.bc.set_ref_frame(bo, bsize, LAST_FRAME);
-            cw.write_ref_frames(w, bo);
-            // FIXME: need more generic context derivation
-            let mode_context = if bo.x == 0 && bo.y == 0 { 0 } else if bo.x ==0 || bo.y == 0 { 51 } else { 85 };
-            // NOTE: Until rav1e supports other inter modes than GLOBALMV
-            assert!(luma_mode == PredictionMode::GLOBALMV);
-            cw.write_inter_mode(w, luma_mode, mode_context);
-        } else {
+        if !is_inter {
             cw.write_intra_mode(w, bsize, luma_mode);
         }
     } else {
@@ -1496,7 +1482,7 @@ fn encode_block(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
         cw.write_angle_delta(w, 0, luma_mode);
     }
 
-      if has_chroma(bo, bsize, xdec, ydec) && !is_inter {
+    if has_chroma(bo, bsize, xdec, ydec) {
         cw.write_intra_uv_mode(w, chroma_mode, luma_mode, bsize);
         if chroma_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
             cw.write_angle_delta(w, 0, chroma_mode);
@@ -1530,14 +1516,7 @@ fn encode_block(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
         TxType::DCT_DCT
     };
 
-    // if inter, predict here
-    //mode.predict(&mut rec.mut_slice(po), tx_size);
-
-    if is_inter {
-        write_tx_tree(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip); // i.e. var-tx if inter mode
-    } else {
-        write_tx_blocks(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip);
-    }
+    write_tx_blocks(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip);
 }
 
 pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
@@ -1613,63 +1592,6 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
                                     plane_bsize, &po, skip);
                 }
             }
-        }
-    }
-}
-
-// FIXME: For now, assume tx_mode is LARGEST_TX, so var-tx is not implemented yet
-// but only one tx block exist for a inter mode partition.
-pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter, w: &mut Writer,
-                       luma_mode: PredictionMode, chroma_mode: PredictionMode, bo: &BlockOffset,
-                       bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool) {
-    let bw = bsize.width_mi() / tx_size.width_mi();
-    let bh = bsize.height_mi() / tx_size.height_mi();
-
-    let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
-
-    fs.qc.update(fi.config.quantizer, tx_size);
-
-    let po = bo.plane_offset(&fs.input.planes[0].cfg);
-    encode_tx_block(fi, fs, cw, w, 0, &bo, luma_mode, tx_size, tx_type, bsize, &po, skip);
-
-    // these are only valid for 4:2:0
-    let uv_tx_size = match bsize {
-        BlockSize::BLOCK_4X4 | BlockSize::BLOCK_8X8 => TxSize::TX_4X4,
-        BlockSize::BLOCK_16X16 => TxSize::TX_8X8,
-        BlockSize::BLOCK_32X32 => TxSize::TX_16X16,
-        _ => TxSize::TX_32X32
-    };
-
-    let mut bw_uv = (bw * tx_size.width_mi()) >> xdec;
-    let mut bh_uv = (bh * tx_size.height_mi()) >> ydec;
-
-    if (bw_uv == 0 || bh_uv == 0) && has_chroma(bo, bsize, xdec, ydec) {
-        bw_uv = 1;
-        bh_uv = 1;
-    }
-
-    bw_uv /= uv_tx_size.width_mi();
-    bh_uv /= uv_tx_size.height_mi();
-
-    let plane_bsize = get_plane_block_size(bsize, xdec, ydec);
-
-    if bw_uv > 0 && bh_uv > 0 {
-        let uv_tx_type = tx_type;   // if inter mode, uv_tx_type == tx_type
-        let partition_x = (bo.x & LOCAL_BLOCK_MASK) >> xdec << MI_SIZE_LOG2;
-        let partition_y = (bo.y & LOCAL_BLOCK_MASK) >> ydec << MI_SIZE_LOG2;
-
-        fs.qc.update(fi.config.quantizer, uv_tx_size);
-
-        for p in 1..3 {
-            let sb_offset = bo.sb_offset().plane_offset(&fs.input.planes[p].cfg);
-
-            let po = PlaneOffset {
-                x: sb_offset.x + partition_x,
-                y: sb_offset.y + partition_y
-            };
-
-            encode_tx_block(fi, fs, cw, w, p, &bo, chroma_mode, uv_tx_size, uv_tx_type,
-                            plane_bsize, &po, skip);
         }
     }
 }
