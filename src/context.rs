@@ -2298,7 +2298,7 @@ impl ContextWriter {
     &mut self, w: &mut Writer, plane: usize, bo: &BlockOffset, coeffs_in: &[i32],
     tx_size: TxSize, tx_type: TxType, plane_bsize: BlockSize, xdec: usize,
     ydec: usize, use_reduced_tx_set: bool
-  ) {
+  ) -> bool {
     let pred_mode = self.bc.get_mode(bo);
     let is_inter = pred_mode >= PredictionMode::NEARESTMV;
     //assert!(!is_inter);
@@ -2336,7 +2336,7 @@ impl ContextWriter {
 
     if eob == 0 {
       self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, 0);
-      return;
+      return false;
     }
 
     let mut levels_buf = [0 as u8; TX_PAD_2D];
@@ -2576,6 +2576,7 @@ impl ContextWriter {
     self.bc.set_dc_sign(&mut cul_level, coeffs[0]);
 
     self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, cul_level as u8);
+    true
   }
 
   pub fn checkpoint(&mut self) -> ContextWriterCheckpoint {

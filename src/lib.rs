@@ -1448,7 +1448,7 @@ fn diff(dst: &mut [i16], src1: &PlaneSlice, src2: &PlaneSlice, width: usize, hei
 // dequantize, inverse-transform.
 pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter, w: &mut Writer,
                   p: usize, bo: &BlockOffset, mode: PredictionMode, tx_size: TxSize, tx_type: TxType,
-                  plane_bsize: BlockSize, po: &PlaneOffset, skip: bool) {
+                  plane_bsize: BlockSize, po: &PlaneOffset, skip: bool) -> bool {
     let rec = &mut fs.rec.planes[p];
     let PlaneConfig { stride, xdec, ydec, .. } = fs.input.planes[p].cfg;
 
@@ -1458,7 +1458,7 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
       mode.predict_inter(fi, p, po, &mut rec.mut_slice(po), tx_size);
     }
 
-    if skip { return; }
+    if skip { return false; }
 
     let mut residual: AlignedArray<[i16; 64 * 64]> = UninitializedAlignedArray();
     let mut coeffs_storage: AlignedArray<[i32; 64 * 64]> = UninitializedAlignedArray();
@@ -1474,13 +1474,14 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
     forward_transform(&residual.array, coeffs, tx_size.width(), tx_size, tx_type);
     fs.qc.quantize(coeffs);
 
-    cw.write_coeffs_lv_map(w, p, bo, &coeffs, tx_size, tx_type, plane_bsize, xdec, ydec,
+    let has_coeff = cw.write_coeffs_lv_map(w, p, bo, &coeffs, tx_size, tx_type, plane_bsize, xdec, ydec,
                             fi.use_reduced_tx_set);
 
     // Reconstruct
     dequantize(fi.config.quantizer, &coeffs, &mut rcoeffs.array, tx_size);
 
     inverse_transform_add(&rcoeffs.array, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type);
+    has_coeff
 }
 
 fn encode_block(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
@@ -1656,7 +1657,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
     fs.qc.update(fi.config.quantizer, tx_size);
 
     let po = bo.plane_offset(&fs.input.planes[0].cfg);
-    encode_tx_block(fi, fs, cw, w, 0, &bo, luma_mode, tx_size, tx_type, bsize, &po, skip);
+    let has_coeff = encode_tx_block(fi, fs, cw, w, 0, &bo, luma_mode, tx_size, tx_type, bsize, &po, skip);
 
     // these are only valid for 4:2:0
     let uv_tx_size = match bsize {
@@ -1680,7 +1681,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
     let plane_bsize = get_plane_block_size(bsize, xdec, ydec);
 
     if bw_uv > 0 && bh_uv > 0 {
-        let uv_tx_type = tx_type;   // if inter mode, uv_tx_type == tx_type
+        let uv_tx_type = if has_coeff {tx_type} else {TxType::DCT_DCT}; // if inter mode, uv_tx_type == tx_type
         let partition_x = (bo.x & LOCAL_BLOCK_MASK) >> xdec << MI_SIZE_LOG2;
         let partition_y = (bo.y & LOCAL_BLOCK_MASK) >> ydec << MI_SIZE_LOG2;
 
@@ -1689,12 +1690,17 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
         for p in 1..3 {
             let sb_offset = bo.sb_offset().plane_offset(&fs.input.planes[p].cfg);
 
+            let tx_bo = BlockOffset {
+                x: bo.x  - ((bw * tx_size.width_mi() == 1) as usize),
+                y: bo.y  - ((bh * tx_size.height_mi() == 1) as usize)
+            };
+
             let po = PlaneOffset {
                 x: sb_offset.x + partition_x,
                 y: sb_offset.y + partition_y
             };
 
-            encode_tx_block(fi, fs, cw, w, p, &bo, chroma_mode, uv_tx_size, uv_tx_type,
+            encode_tx_block(fi, fs, cw, w, p, &tx_bo, chroma_mode, uv_tx_size, uv_tx_type,
                             plane_bsize, &po, skip);
         }
     }
