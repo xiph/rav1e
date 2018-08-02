@@ -357,9 +357,9 @@ impl PredictionMode {
     if y != 0 {
       if self != PredictionMode::H_PRED {
         above[1..B::W + 1].copy_from_slice(&dst.go_up(1).as_slice()[..B::W]);
-      } else if self == PredictionMode::H_PRED &&  x == 0 {
+      } else if self == PredictionMode::H_PRED && x == 0 {
         for i in 0..B::W {
-          above[i+1] = dst.go_up(1).p(0, 0);
+          above[i + 1] = dst.go_up(1).p(0, 0);
         }
       }
     }
@@ -425,12 +425,12 @@ impl PredictionMode {
       PredictionMode::H_PRED => match (x, y) {
         (0, 0) => B::pred_h(slice, stride, left_slice),
         (0, _) => B::pred_h(slice, stride, above_slice),
-        (_, _) => B::pred_h(slice, stride, left_slice),
+        (_, _) => B::pred_h(slice, stride, left_slice)
       },
       PredictionMode::V_PRED => match (x, y) {
         (0, 0) => B::pred_v(slice, stride, above_slice),
         (_, 0) => B::pred_v(slice, stride, left_slice),
-        (_, _) => B::pred_v(slice, stride, above_slice),
+        (_, _) => B::pred_v(slice, stride, above_slice)
       },
       PredictionMode::PAETH_PRED =>
         B::pred_paeth(slice, stride, above_slice, left_slice, above[0]),

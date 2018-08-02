@@ -334,7 +334,7 @@ impl Writer {
 
   pub fn literal(&mut self, bits: u8, s: u32) {
     for bit in (0..bits).rev() {
-        self.enc.od_ec_encode_bool_q15((1 & (s >> bit)) == 1, 16384);
+      self.enc.od_ec_encode_bool_q15((1 & (s >> bit)) == 1, 16384);
     }
   }
 

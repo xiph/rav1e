@@ -15,6 +15,7 @@ ignore = [
     "src/context.rs", # Partial
     # "src/ec.rs", # Clean
     "src/lib.rs", # Did not clean yet to avoid conflicts with open PRs.
+    "src/cdef.rs", # Did not try to clean yet.
     # "src/partition.rs", # Clean
     # "src/plane.rs", # Clean
     # "src/predict.rs", # Clean
@@ -26,4 +27,7 @@ ignore = [
     # "src/bin/rav1repl.rs", # Clean
     # "src/util.rs", # Clean
     "tests/aom.rs",
+    "benches/bench.rs",
+    "benches/predict.rs",
+    "benches/comparative/predict.rs",
 ]

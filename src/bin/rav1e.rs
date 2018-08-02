@@ -39,7 +39,8 @@ fn main() {
     fi.frame_type =
       if fi.number % 30 == 0 { FrameType::KEY } else { FrameType::INTER };
 
-    fi.refresh_frame_flags = if fi.frame_type == FrameType::KEY { ALL_REF_FRAMES_MASK } else { 1 };
+    fi.refresh_frame_flags =
+      if fi.frame_type == FrameType::KEY { ALL_REF_FRAMES_MASK } else { 1 };
     fi.intra_only = fi.frame_type == FrameType::KEY
       || fi.frame_type == FrameType::INTRA_ONLY;
     fi.use_prev_frame_mvs = !(fi.intra_only || fi.error_resilient);
