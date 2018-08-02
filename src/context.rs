@@ -24,6 +24,9 @@ use partition::*;
 use plane::*;
 use std::*;
 
+use REF_CONTEXTS;
+use SINGLE_REFS;
+
 const PLANES: usize = 3;
 
 const PARTITION_PLOFFSET: usize = 4;
@@ -47,6 +50,10 @@ const MAX_TX_SQUARE: usize = MAX_TX_SIZE * MAX_TX_SIZE;
 
 pub const INTRA_MODES: usize = 13;
 const UV_INTRA_MODES: usize = 14;
+const NEWMV_MODE_CONTEXTS: usize = 7;
+const GLOBALMV_MODE_CONTEXTS: usize = 2;
+const REFMV_MODE_CONTEXTS: usize = 9;
+
 const BLOCK_SIZE_GROUPS: usize = 4;
 const MAX_ANGLE_DELTA: usize = 3;
 const DIRECTIONAL_MODES: usize = 8;
@@ -57,6 +64,12 @@ const TX_SIZES: usize = 4;
 const TX_SETS: usize = 9;
 const TX_SETS_INTRA: usize = 3;
 const TX_SETS_INTER: usize = 4;
+
+const GLOBALMV_OFFSET: usize = 3;
+const REFMV_OFFSET: usize = 4;
+
+const NEWMV_CTX_MASK: usize = ((1 << GLOBALMV_OFFSET) - 1);
+const GLOBALMV_CTX_MASK: usize = ((1 << (REFMV_OFFSET - GLOBALMV_OFFSET)) - 1);
 
 // Number of transform types in each set type
 static num_tx_set: [usize; TX_SETS] =
@@ -75,7 +88,7 @@ pub static av1_tx_used: [[usize; TX_TYPES]; TX_SETS] = [
 
 // Maps set types above to the indices used for intra
 static tx_set_index_intra: [i8; TX_SETS] =
-  [0, -1, 2, -1, 1, -1, -1, -1, -1];
+  [0, -1, 2, -1, 1, -1, -1, -1, -16];
 // Maps set types above to the indices used for inter
 static tx_set_index_inter: [i8; TX_SETS] =
   [0, 3, -1, -1, -1, -1, 2, -1, 1];
@@ -840,6 +853,9 @@ extern "C" {
     [[[u16; INTRA_MODES + 1]; KF_MODE_CONTEXTS]; KF_MODE_CONTEXTS];
   static default_if_y_mode_cdf: [[u16; INTRA_MODES + 1]; BLOCK_SIZE_GROUPS];
   static default_uv_mode_cdf: [[[u16; UV_INTRA_MODES + 1]; INTRA_MODES]; 2];
+  static default_newmv_cdf: [[u16; 2 + 1]; NEWMV_MODE_CONTEXTS];
+  static default_zeromv_cdf: [[u16; 2 + 1]; GLOBALMV_MODE_CONTEXTS];
+  static default_refmv_cdf: [[u16; 2 + 1]; REFMV_MODE_CONTEXTS];
   static default_intra_ext_tx_cdf:
     [[[[u16; TX_TYPES + 1]; INTRA_MODES]; TX_SIZES]; TX_SETS_INTRA];
   static default_inter_ext_tx_cdf:
@@ -850,6 +866,7 @@ extern "C" {
     [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES];
   static default_filter_intra_cdfs: [[u16; 3]; BlockSize::BLOCK_SIZES_ALL];
 
+  static default_single_ref_cdf: [[[u16; 2 + 1]; SINGLE_REFS - 1]; REF_CONTEXTS];
   static av1_scan_orders: [[SCAN_ORDER; TX_TYPES]; TxSize::TX_SIZES_ALL];
 
   // lv_map
@@ -891,6 +908,9 @@ pub struct CDFContext {
   kf_y_cdf: [[[u16; INTRA_MODES + 1]; KF_MODE_CONTEXTS]; KF_MODE_CONTEXTS],
   y_mode_cdf: [[u16; INTRA_MODES + 1]; BLOCK_SIZE_GROUPS],
   uv_mode_cdf: [[[u16; UV_INTRA_MODES + 1]; INTRA_MODES]; 2],
+  newmv_cdf: [[u16; 2 + 1]; NEWMV_MODE_CONTEXTS],
+  zeromv_cdf: [[u16; 2 + 1]; GLOBALMV_MODE_CONTEXTS],
+  refmv_cdf: [[u16; 2 + 1]; REFMV_MODE_CONTEXTS],
   intra_tx_cdf:
     [[[[u16; TX_TYPES + 1]; INTRA_MODES]; TX_SIZES]; TX_SETS_INTRA],
   inter_tx_cdf: [[[u16; TX_TYPES + 1]; TX_SIZES]; TX_SETS_INTER],
@@ -898,6 +918,7 @@ pub struct CDFContext {
   intra_inter_cdfs: [[u16; 3]; INTRA_INTER_CONTEXTS],
   angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES],
   filter_intra_cdfs: [[u16; 3]; BlockSize::BLOCK_SIZES_ALL],
+  single_ref_cdfs: [[[u16; 2 + 1]; SINGLE_REFS - 1]; REF_CONTEXTS],
 
   // lv_map
   txb_skip_cdf: [[[u16; 3]; TXB_SKIP_CONTEXTS]; TxSize::TX_SIZES],
@@ -934,12 +955,16 @@ impl CDFContext {
       kf_y_cdf: default_kf_y_mode_cdf,
       y_mode_cdf: default_if_y_mode_cdf,
       uv_mode_cdf: default_uv_mode_cdf,
+      newmv_cdf: default_newmv_cdf,
+      zeromv_cdf: default_zeromv_cdf,
+      refmv_cdf: default_refmv_cdf,
       intra_tx_cdf: default_intra_ext_tx_cdf,
       inter_tx_cdf: default_inter_ext_tx_cdf,
       skip_cdfs: default_skip_cdfs,
       intra_inter_cdfs: default_intra_inter_cdf,
       angle_delta_cdf: default_angle_delta_cdf,
       filter_intra_cdfs: default_filter_intra_cdfs,
+      single_ref_cdfs: default_single_ref_cdf,
 
       // lv_map
       txb_skip_cdf: av1_default_txb_skip_cdfs[qctx],
@@ -1161,6 +1186,8 @@ pub struct Block {
   pub bsize: BlockSize,
   pub partition: PartitionType,
   pub skip: bool,
+  pub ref_frames: [usize; 2],
+  pub neighbors_ref_counts: [usize; TOTAL_REFS_PER_FRAME],
   pub cdef_index: u8
 }
 
@@ -1171,11 +1198,16 @@ impl Block {
       bsize: BlockSize::BLOCK_64X64,
       partition: PartitionType::PARTITION_NONE,
       skip: false,
+      ref_frames: [INTRA_FRAME; 2],
+      neighbors_ref_counts: [0; TOTAL_REFS_PER_FRAME],
       cdef_index: 0
     }
   }
   pub fn is_inter(&self) -> bool {
     self.mode >= PredictionMode::NEARESTMV
+  }
+  pub fn has_second_ref(&self) -> bool {
+    self.ref_frames[1] > INTRA_FRAME
   }
 }
 
@@ -1424,6 +1456,17 @@ impl BlockContext {
 
   pub fn set_skip(&mut self, bo: &BlockOffset, bsize: BlockSize, skip: bool) {
     self.for_each(bo, bsize, |block| block.skip = skip);
+  }
+
+  pub fn set_ref_frame(&mut self, bo: &BlockOffset, bsize: BlockSize, r: usize) {
+    let bw = bsize.width_mi();
+    let bh = bsize.height_mi();
+
+    for y in 0..bh {
+      for x in 0..bw {
+        self.blocks[bo.y + y as usize][bo.x + x as usize].ref_frames[0] = r;
+      }
+    }
   }
 
   pub fn set_cdef(&mut self, bo: &BlockOffset, bsize: BlockSize, cdef_index: u8) {
@@ -1783,6 +1826,182 @@ impl ContextWriter {
     symbol!(self, w, enable as u32, &mut self.fc.filter_intra_cdfs[block_size as usize]);
   }
 
+  pub fn fill_neighbours_ref_counts(&mut self, bo: &BlockOffset) {
+      let mut ref_counts = [0; TOTAL_REFS_PER_FRAME];
+
+      let above_b = self.bc.above_of(bo);
+      let left_b = self.bc.left_of(bo);
+
+      if bo.y > 0 && above_b.is_inter() {
+        ref_counts[above_b.ref_frames[0] as usize] += 1;
+        if above_b.has_second_ref() {
+          ref_counts[above_b.ref_frames[1] as usize] += 1;
+        }
+      }
+
+      if bo.x > 0 && left_b.is_inter() {
+        ref_counts[left_b.ref_frames[0] as usize] += 1;
+        if left_b.has_second_ref() {
+          ref_counts[left_b.ref_frames[1] as usize] += 1;
+        }
+      }
+      self.bc.at(bo).neighbors_ref_counts = ref_counts;
+  }
+
+  fn get_ref_frame_ctx_b0(&mut self, bo: &BlockOffset) -> usize {
+    let ref_counts = self.bc.at(bo).neighbors_ref_counts;
+
+    let fwd_cnt = ref_counts[LAST_FRAME] + ref_counts[LAST2_FRAME] +
+                  ref_counts[LAST3_FRAME] + ref_counts[GOLDEN_FRAME];
+
+    let bwd_cnt = ref_counts[BWDREF_FRAME] + ref_counts[ALTREF2_FRAME] +
+                  ref_counts[ALTREF_FRAME];
+
+    if fwd_cnt == bwd_cnt {
+      return 1;
+    } else if fwd_cnt < bwd_cnt {
+      return 0;
+    } else {
+      return 2;
+    }
+  }
+
+  fn get_pred_ctx_brfarf2_or_arf(&mut self, bo: &BlockOffset) -> usize {
+    let ref_counts = self.bc.at(bo).neighbors_ref_counts;
+
+    let brfarf2_count = ref_counts[BWDREF_FRAME] +
+                        ref_counts[ALTREF2_FRAME];
+
+    let arf_count = ref_counts[ALTREF_FRAME];
+
+    if brfarf2_count == arf_count {
+      return 1;
+    } else if brfarf2_count < arf_count {
+      return 0;
+    } else {
+      return 2;
+    }
+  }
+
+  fn get_pred_ctx_ll2_or_l3gld(&mut self, bo: &BlockOffset) -> usize {
+    let ref_counts = self.bc.at(bo).neighbors_ref_counts;
+
+    let l_l2_count = ref_counts[LAST_FRAME] +
+                        ref_counts[LAST2_FRAME];
+
+    let l3_gold_count = ref_counts[LAST3_FRAME] +
+                        ref_counts[GOLDEN_FRAME];
+
+    if l_l2_count == l3_gold_count {
+      return 1;
+    } else if l_l2_count < l3_gold_count {
+      return 0;
+    } else {
+      return 2;
+    }
+  }
+
+  fn get_pred_ctx_last_or_last2(&mut self, bo: &BlockOffset) -> usize {
+    let ref_counts = self.bc.at(bo).neighbors_ref_counts;
+
+    let l_count = ref_counts[LAST_FRAME];
+
+    let l2_count = ref_counts[LAST2_FRAME];
+
+    if l_count == l2_count {
+      return 1;
+    } else if l_count < l2_count {
+      return 0;
+    } else {
+      return 2;
+    }
+  }
+
+  fn get_pred_ctx_last3_or_gold(&mut self, bo: &BlockOffset) -> usize {
+    let ref_counts = self.bc.at(bo).neighbors_ref_counts;
+
+    let l3_count = ref_counts[LAST3_FRAME];
+
+    let gold_count = ref_counts[GOLDEN_FRAME];
+
+    if l3_count == gold_count {
+      return 1;
+    } else if l3_count < gold_count {
+      return 0;
+    } else {
+      return 2;
+    }
+  }
+
+  fn get_pred_ctx_brf_or_arf2(&mut self, bo: &BlockOffset) -> usize {
+    let ref_counts = self.bc.at(bo).neighbors_ref_counts;
+
+    let brf_count = ref_counts[BWDREF_FRAME];
+
+    let arf2_count = ref_counts[ALTREF2_FRAME];
+
+    if brf_count == arf2_count {
+      return 1;
+    } else if brf_count < arf2_count {
+      return 0;
+    } else {
+      return 2;
+    }
+  }
+
+  pub fn write_ref_frames(&mut self, w: &mut Writer, bo: &BlockOffset) {
+    let rf = self.bc.at(bo).ref_frames;
+    assert!(rf[0] == LAST_FRAME);
+
+    /* TODO: Handle multiple references */
+
+    let b0_ctx = self.get_ref_frame_ctx_b0(bo);
+    let b0 = rf[0] <= ALTREF_FRAME && rf[0] >= BWDREF_FRAME;
+
+    symbol!(self, w, b0 as u32, &mut self.fc.single_ref_cdfs[b0_ctx][0]);
+    if b0 {
+      let b1_ctx = self.get_pred_ctx_brfarf2_or_arf(bo);
+      let b1 = rf[0] == ALTREF_FRAME;
+
+      symbol!(self, w, b1 as u32, &mut self.fc.single_ref_cdfs[b1_ctx][1]);
+      if !b1 {
+        let b5_ctx = self.get_pred_ctx_brf_or_arf2(bo);
+        let b5 = rf[0] == ALTREF2_FRAME;
+
+        symbol!(self, w, b5 as u32, &mut self.fc.single_ref_cdfs[b5_ctx][5]);
+      }
+    } else {
+      let b2_ctx = self.get_pred_ctx_ll2_or_l3gld(bo);
+      let b2 = rf[0] == LAST3_FRAME || rf[0] == GOLDEN_FRAME;
+
+      symbol!(self, w, b2 as u32, &mut self.fc.single_ref_cdfs[b2_ctx][2]);
+      if !b2 {
+        let b3_ctx = self.get_pred_ctx_last_or_last2(bo);
+        let b3 = rf[0] != LAST_FRAME;
+
+        symbol!(self, w, b3 as u32, &mut self.fc.single_ref_cdfs[b3_ctx][3]);
+      } else {
+        let b4_ctx = self.get_pred_ctx_last3_or_gold(bo);
+        let b4 = rf[0] != LAST3_FRAME;
+
+        symbol!(self, w, b4 as u32, &mut self.fc.single_ref_cdfs[b4_ctx][4]);
+      }
+    }
+  }
+
+  pub fn write_inter_mode(&mut self, w: &mut Writer, mode: PredictionMode, ctx: usize) {
+    let newmv_ctx = ctx & NEWMV_CTX_MASK;
+    symbol!(self, w, (mode != PredictionMode::NEWMV) as u32, &mut self.fc.newmv_cdf[newmv_ctx]);
+    if mode != PredictionMode::NEWMV {
+      let zeromv_ctx = (ctx >> GLOBALMV_OFFSET) & GLOBALMV_CTX_MASK;
+      symbol!(self, w, (mode != PredictionMode::GLOBALMV) as u32, &mut self.fc.zeromv_cdf[zeromv_ctx]);
+      if mode != PredictionMode::GLOBALMV {
+        let refmv_ctx = (ctx >> REFMV_OFFSET) & REFMV_CTX_MASK;
+        symbol!(self, w, (mode != PredictionMode::NEARESTMV) as u32, &mut self.fc.refmv_cdf[refmv_ctx]);
+      }
+    }
+  }
+
   pub fn write_tx_type(
     &mut self, w: &mut Writer, tx_size: TxSize, tx_type: TxType, y_mode: PredictionMode,
     is_inter: bool, use_reduced_tx_set: bool
@@ -2082,8 +2301,8 @@ impl ContextWriter {
   ) {
     let pred_mode = self.bc.get_mode(bo);
     let is_inter = pred_mode >= PredictionMode::NEARESTMV;
-    assert!(!is_inter);
-    // TODO: If iner mode, scan_order should use inter version of them
+    //assert!(!is_inter);
+    // Note: Both intra and inter mode uses inter scan order. Surprised?
     let scan_order =
       &av1_scan_orders[tx_size as usize][tx_type as usize];
     let scan = scan_order.scan;

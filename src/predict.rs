@@ -36,6 +36,10 @@ pub static RAV1E_INTRA_MODES_MINIMAL: &'static [PredictionMode] = &[
     PredictionMode::V_PRED
 ];
 
+pub static RAV1E_INTER_MODES: &'static [PredictionMode] = &[
+  PredictionMode::GLOBALMV,
+];
+
 // Weights are quadratic from '1' to '1 / block_size', scaled by 2^sm_weight_log2_scale.
 const sm_weight_log2_scale: u8 = 8;
 
@@ -406,6 +410,10 @@ pub trait Intra: Dim {
       }
     }
   }
+}
+
+pub trait Inter: Dim {
+
 }
 
 impl Intra for Block4x4 {}
