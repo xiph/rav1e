@@ -20,18 +20,18 @@ rav1e temporarily uses libaom's transforms and CDF initialization tables, but is
 
 # Building
 
-This repository uses a git submodule, to initialize it, do:
+This repository uses a git submodule. To initialize it, run:
 
 ```
 git submodule update --init
 ```
 
-This is also required everytime you switch branch or pull code and the submodule changed.
+This is also required every time you switch branches or pull a submodule change.
 
-In order to build the codec, you need yasm and cmake. To install this on Ubuntu or Linux Mint, run:
+In order to build the codec, you need perl, yasm and cmake. To install this on Ubuntu or Linux Mint, run:
 
 ```
-sudo apt install yasm cmake
+sudo apt install perl yasm cmake
 ```
 
 # Compressing video
