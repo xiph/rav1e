@@ -39,13 +39,11 @@ fn main() {
     #[cfg(feature = "decode_test")] {
         use std::io::Write;
 
+        let out_dir = env::var("OUT_DIR").unwrap();
+
         let headers = _libs.include_paths.clone();
 
         let mut builder = bindgen::builder()
-            .raw_line("#![allow(dead_code)]")
-            .raw_line("#![allow(non_camel_case_types)]")
-            .raw_line("#![allow(non_snake_case)]")
-            .raw_line("#![allow(non_upper_case_globals)]")
             .blacklist_type("max_align_t")
             .rustfmt_bindings(false)
             .header("data/aom.h");
@@ -62,7 +60,9 @@ fn main() {
             .replace("/**", "/*")
             .replace("/*!", "/*");
 
-        let mut file = fs::File::create("src/aom.rs").unwrap();
+        let dest_path = Path::new(&out_dir).join("aom.rs");
+
+        let mut file = fs::File::create(dest_path).unwrap();
 
         let _ = file.write(s.as_bytes());
     }

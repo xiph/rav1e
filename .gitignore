@@ -3,4 +3,3 @@ target
 Cargo.lock
 *.y4m
 *.ivf
-aom.rs
