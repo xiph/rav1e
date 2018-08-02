@@ -35,12 +35,17 @@ pub struct Plane {
 }
 
 impl Plane {
+  /// Stride alignment in bytes.
+  const STRIDE_ALIGNMENT_LOG2: usize = 4;
+
+  /// Data alignment in bytes.
+  const DATA_ALIGNMENT_LOG2: usize = 4;
+
   pub fn new(width: usize, height: usize, xdec: usize, ydec: usize) -> Plane {
-    let stride = width.align_power_of_two(4); // Force 16 byte alignment.
-    Plane {
-      data: vec![128; stride * height],
-      cfg: PlaneConfig { stride, width, height, xdec, ydec }
-    }
+    let stride = width.align_power_of_two(Plane::STRIDE_ALIGNMENT_LOG2 - 1);
+    let data = vec![128u16; stride * height];
+    assert!(is_aligned(data.as_ptr(), Plane::DATA_ALIGNMENT_LOG2));
+    Plane { data, cfg: PlaneConfig { stride, width, height, xdec, ydec } }
   }
 
   pub fn slice<'a>(&'a self, po: &PlaneOffset) -> PlaneSlice<'a> {
