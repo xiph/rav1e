@@ -28,10 +28,10 @@ git submodule update --init
 
 This is also required every time you switch branches or pull a submodule change.
 
-In order to build the codec, you need perl, yasm and cmake. To install this on Ubuntu or Linux Mint, run:
+In order to build and link to the codec, you need Perl, Yasm, CMake, and pkg-config. To install this on Ubuntu or Linux Mint, run:
 
 ```
-sudo apt install perl yasm cmake
+sudo apt install perl yasm cmake pkg-config
 ```
 
 # Compressing video
