@@ -1428,8 +1428,6 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
 
     if mode.is_intra() {
       mode.predict_intra(&mut rec.mut_slice(po), tx_size);
-    } else {
-      mode.predict_inter(fi, p, po, &mut rec.mut_slice(po), tx_size);
     }
 
     if skip { return false; }
@@ -1497,7 +1495,7 @@ fn encode_block(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
         cw.write_angle_delta(w, 0, luma_mode);
     }
 
-      if has_chroma(bo, bsize, xdec, ydec) && !is_inter {
+    if has_chroma(bo, bsize, xdec, ydec) && !is_inter {
         cw.write_intra_uv_mode(w, chroma_mode, luma_mode, bsize);
         if chroma_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
             cw.write_angle_delta(w, 0, chroma_mode);
@@ -1531,10 +1529,30 @@ fn encode_block(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
         TxType::DCT_DCT
     };
 
-    // if inter, predict here
-    //mode.predict(&mut rec.mut_slice(po), tx_size);
-
     if is_inter {
+        // Inter mode prediction can take place once for a whole partition,
+        // instead of each tx-block.
+        let num_planes = 1 + if has_chroma(bo, bsize, xdec, ydec) { 2 } else { 0 };
+        for p in 0..num_planes {
+            let plane_bsize = if p == 0 { bsize }
+            else { get_plane_block_size(bsize, xdec, ydec) };
+
+            let po = if p == 0 {
+                bo.plane_offset(&fs.input.planes[0].cfg)
+            } else {
+                let partition_x = (bo.x & LOCAL_BLOCK_MASK) >> xdec << MI_SIZE_LOG2;
+                let partition_y = (bo.y & LOCAL_BLOCK_MASK) >> ydec << MI_SIZE_LOG2;
+                let sb_offset = bo.sb_offset().plane_offset(&fs.input.planes[p].cfg);
+                 PlaneOffset {
+                    x: sb_offset.x + partition_x,
+                    y: sb_offset.y + partition_y
+                }
+            };
+
+            let rec = &mut fs.rec.planes[p];
+
+            luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), plane_bsize);
+        }
         write_tx_tree(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip); // i.e. var-tx if inter mode
     } else {
         write_tx_blocks(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip);

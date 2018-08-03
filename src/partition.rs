@@ -481,7 +481,7 @@ impl PredictionMode {
   }
 
   pub fn predict_inter<'a>(self, fi: &FrameInvariants, p: usize, po: &PlaneOffset,
-                           dst: &'a mut PlaneMutSlice<'a>, tx_size: TxSize) {
+                           dst: &'a mut PlaneMutSlice<'a>, plane_size: BlockSize) {
     assert!(!self.is_intra());
     assert!(self == PredictionMode::GLOBALMV); // Other modes not implemented
 
@@ -494,8 +494,8 @@ impl PredictionMode {
         let ref_slice = src.as_slice();
         let stride = dst.plane.cfg.stride;
         let slice = dst.as_mut_slice();
-        for r in 0..tx_size.height() {
-          for c in 0..tx_size.width() {
+        for r in 0..plane_size.height() {
+          for c in 0..plane_size.width() {
             let input_index = r * ref_stride + c;
             let output_index = r * stride + c;
             slice[output_index] = ref_slice[input_index];
