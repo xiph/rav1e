@@ -77,6 +77,9 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
       for p in 1..3 {
         for by in 0..8 {
           for bx in 0..8 {
+            // For ex, 8x8 tx should be applied to even numbered (bx,by)
+            if (tx_size.width_mi() >> 1) & bx != 0 ||
+              (tx_size.height_mi() >> 1) & by != 0 { continue; };
             let bo = sbo.block_offset(bx, by);
             let tx_bo = BlockOffset { x: bo.x + bx, y: bo.y + by };
             let po = tx_bo.plane_offset(&fs.input.planes[p].cfg);
