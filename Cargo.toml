@@ -22,7 +22,7 @@ enum-iterator-derive = "0.1.1"
 backtrace = "0.3"
 
 [build-dependencies]
-cmake = { git = "https://github.com/alexcrichton/cmake-rs", rev = "4998d28" }
+cmake = "0.1.32"
 
 [target.'cfg(unix)'.build-dependencies]
 pkg-config = "0.3.12"
