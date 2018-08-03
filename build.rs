@@ -8,9 +8,8 @@ extern crate pkg_config;
 extern crate bindgen;
 
 use std::env;
-use std::path::Path;
-#[cfg(unix)]
 use std::fs;
+use std::path::Path;
 
 fn main() {
     if cfg!(windows) && cfg!(feature = "decode_test") {
