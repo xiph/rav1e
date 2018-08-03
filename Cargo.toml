@@ -8,8 +8,8 @@ autobenches = false
 
 [features]
 repl = ["rustyline"]
-decode_test = ["bindgen"]
 comparative_bench = []
+decode_test = ["bindgen"]
 
 [dependencies]
 bitstream-io = "0.6"
@@ -22,8 +22,9 @@ enum-iterator-derive = "0.1.1"
 backtrace = "0.3"
 
 [build-dependencies]
-cc = "1"
 cmake = { git = "https://github.com/alexcrichton/cmake-rs", rev = "4998d28" }
+
+[target.'cfg(unix)'.build-dependencies]
 pkg-config = "0.3.12"
 bindgen = { version = "0.37", optional = true }
 
