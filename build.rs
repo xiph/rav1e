@@ -16,15 +16,15 @@ fn main() {
     let build_path = Path::new(&cargo_dir).join("aom_build/aom");
     let debug = if let Some(v) = env::var("PROFILE").ok() {
         match v.as_str() {
-            "bench" | "release" => "0",
-            _ => "1",
+            "bench" | "release" => false,
+            _ => true,
         }
     } else {
-        "0"
+        false
     };
 
     let dst = cmake::Config::new(build_path)
-        .define("CONFIG_DEBUG", debug)
+        .define("CONFIG_DEBUG", (debug as u8).to_string())
         .define("CONFIG_ANALYZER", "0")
         .define("ENABLE_DOCS", "0")
         .define("ENABLE_TESTS", "0")
@@ -35,7 +35,12 @@ fn main() {
     let _ = fs::remove_file(dst.join("build/CMakeCache.txt"));
 
     if cfg!(windows) {
-        println!("cargo:rustc-link-search=native={}", dst.join("build/Release").to_str().unwrap());
+        let bin_dir = if debug {
+            "Debug"
+        } else {
+            "Release"
+        };
+        println!("cargo:rustc-link-search=native={}", dst.join("build").join(bin_dir).to_str().unwrap());
         println!("cargo:rustc-link-lib=static=aom");
     } else {
         env::set_var("PKG_CONFIG_PATH", dst.join("lib/pkgconfig"));
