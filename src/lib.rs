@@ -2176,9 +2176,9 @@ mod test_encode_decode {
     #[test]
     #[ignore]
     fn odd_size_frame_with_full_rdo() {
-        let limit = 2;
-        let w = 256 + 32 + 16 + 5;
-        let h = 256 + 16 + 5;
+        let limit = 3;
+        let w = 512 + 32 + 16 + 5;
+        let h = 512 + 16 + 5;
         let speed = 0;
         let qindex = 100;
 
