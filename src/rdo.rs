@@ -107,8 +107,7 @@ fn sse_wxh(src1: &PlaneSlice, src2: &PlaneSlice, w: usize, h: usize) -> u64 {
 // Compute the rate-distortion cost for an encode
 fn compute_rd_cost(
   fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize, w_uv: usize,
-  h_uv: usize, partition_start_x: usize, partition_start_y: usize,
-  bo: &BlockOffset, bit_cost: u32
+  h_uv: usize, bo: &BlockOffset, bit_cost: u32
 ) -> f64 {
   let q = dc_q(fi.config.quantizer) as f64;
 
@@ -142,11 +141,7 @@ fn compute_rd_cost(
   // Add chroma distortion only when it is available
   if w_uv > 0 && h_uv > 0 {
     for p in 1..3 {
-      let sb_offset = bo.sb_offset().plane_offset(&fs.input.planes[p].cfg);
-      let po = PlaneOffset {
-        x: sb_offset.x + partition_start_x,
-        y: sb_offset.y + partition_start_y
-      };
+      let po = bo.plane_offset(&fs.input.planes[p].cfg);
 
       distortion += sse_wxh(
         &fs.input.planes[p].slice(&po),
@@ -191,9 +186,6 @@ pub fn rdo_mode_decision(
     h_uv = 4;
   }
 
-  let partition_start_x = (bo.x & LOCAL_BLOCK_MASK) >> xdec << MI_SIZE_LOG2;
-  let partition_start_y = (bo.y & LOCAL_BLOCK_MASK) >> ydec << MI_SIZE_LOG2;
-
   let skip = false;
 
   let cw_checkpoint = cw.checkpoint();
@@ -224,8 +216,6 @@ pub fn rdo_mode_decision(
           h,
           w_uv,
           h_uv,
-          partition_start_x,
-          partition_start_y,
           bo,
           cost
         );
@@ -251,8 +241,6 @@ pub fn rdo_mode_decision(
         h,
         w_uv,
         h_uv,
-        partition_start_x,
-        partition_start_y,
         bo,
         cost
       );
@@ -309,8 +297,6 @@ pub fn rdo_tx_type_decision(
     h_uv = 4;
   }
 
-  let partition_start_x = (bo.x & LOCAL_BLOCK_MASK) >> xdec << MI_SIZE_LOG2;
-  let partition_start_y = (bo.y & LOCAL_BLOCK_MASK) >> ydec << MI_SIZE_LOG2;
   let is_inter = mode >= PredictionMode::NEARESTMV;
 
   let cw_checkpoint = cw.checkpoint();
@@ -340,8 +326,6 @@ pub fn rdo_tx_type_decision(
       h,
       w_uv,
       h_uv,
-      partition_start_x,
-      partition_start_y,
       bo,
       cost
     );

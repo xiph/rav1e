@@ -1537,17 +1537,7 @@ fn encode_block(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
             let plane_bsize = if p == 0 { bsize }
             else { get_plane_block_size(bsize, xdec, ydec) };
 
-            let po = if p == 0 {
-                bo.plane_offset(&fs.input.planes[0].cfg)
-            } else {
-                let partition_x = (bo.x & LOCAL_BLOCK_MASK) >> xdec << MI_SIZE_LOG2;
-                let partition_y = (bo.y & LOCAL_BLOCK_MASK) >> ydec << MI_SIZE_LOG2;
-                let sb_offset = bo.sb_offset().plane_offset(&fs.input.planes[p].cfg);
-                 PlaneOffset {
-                    x: sb_offset.x + partition_x,
-                    y: sb_offset.y + partition_y
-                }
-            };
+            let po = bo.plane_offset(&fs.input.planes[p].cfg);
 
             let rec = &mut fs.rec.planes[p];
 
@@ -1605,14 +1595,9 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
 
     if bw_uv > 0 && bh_uv > 0 {
         let uv_tx_type = uv_intra_mode_to_tx_type_context(chroma_mode);
-        let partition_x = (bo.x & LOCAL_BLOCK_MASK) >> xdec << MI_SIZE_LOG2;
-        let partition_y = (bo.y & LOCAL_BLOCK_MASK) >> ydec << MI_SIZE_LOG2;
-
         fs.qc.update(fi.config.quantizer, uv_tx_size, chroma_mode.is_intra());
 
         for p in 1..3 {
-            let sb_offset = bo.sb_offset().plane_offset(&fs.input.planes[p].cfg);
-
             for by in 0..bh_uv {
                 for bx in 0..bw_uv {
                     let tx_bo =
@@ -1623,10 +1608,9 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
                                 ((bh * tx_size.height_mi() == 1) as usize)
                         };
 
-                    let po = PlaneOffset {
-                        x: sb_offset.x + partition_x + bx * uv_tx_size.width(),
-                        y: sb_offset.y + partition_y + by * uv_tx_size.height()
-                    };
+                    let mut po = bo.plane_offset(&fs.input.planes[p].cfg);
+                    po.x += bx * uv_tx_size.width();
+                    po.y += by * uv_tx_size.height();
 
                     encode_tx_block(fi, fs, cw, w, p, &tx_bo, chroma_mode, uv_tx_size, uv_tx_type,
                                     plane_bsize, &po, skip);
@@ -1674,23 +1658,16 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
 
     if bw_uv > 0 && bh_uv > 0 {
         let uv_tx_type = if has_coeff {tx_type} else {TxType::DCT_DCT}; // if inter mode, uv_tx_type == tx_type
-        let partition_x = (bo.x & LOCAL_BLOCK_MASK) >> xdec << MI_SIZE_LOG2;
-        let partition_y = (bo.y & LOCAL_BLOCK_MASK) >> ydec << MI_SIZE_LOG2;
 
         fs.qc.update(fi.config.quantizer, uv_tx_size, chroma_mode.is_intra());
 
         for p in 1..3 {
-            let sb_offset = bo.sb_offset().plane_offset(&fs.input.planes[p].cfg);
-
             let tx_bo = BlockOffset {
                 x: bo.x  - ((bw * tx_size.width_mi() == 1) as usize),
                 y: bo.y  - ((bh * tx_size.height_mi() == 1) as usize)
             };
 
-            let po = PlaneOffset {
-                x: sb_offset.x + partition_x,
-                y: sb_offset.y + partition_y
-            };
+            let po = bo.plane_offset(&fs.input.planes[p].cfg);
 
             encode_tx_block(fi, fs, cw, w, p, &tx_bo, chroma_mode, uv_tx_size, uv_tx_type,
                             plane_bsize, &po, skip);
