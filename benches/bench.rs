@@ -59,7 +59,7 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
   let config =
     EncoderConfig { quantizer: qindex, speed: 10, ..Default::default() };
   let mut fi = FrameInvariants::new(1024, 1024, config);
-  let mut w = ec::Writer::new();
+  let mut w = ec::WriterEncoder::new();
   let fc = CDFContext::new(fi.config.quantizer as u8);
   let bc = BlockContext::new(fi.sb_width * 16, fi.sb_height * 16);
   let mut fs = FrameState::new(&fi);
