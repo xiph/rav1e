@@ -51,14 +51,14 @@ fn main() {
     
     #[cfg(unix)] {
         env::set_var("PKG_CONFIG_PATH", dst.join("lib/pkgconfig"));
-        let libs = pkg_config::Config::new().statik(true).probe("aom").unwrap();
+        let _libs = pkg_config::Config::new().statik(true).probe("aom").unwrap();
 
         #[cfg(feature = "decode_test")] {
             use std::io::Write;
 
             let out_dir = env::var("OUT_DIR").unwrap();
 
-            let headers = libs.include_paths.clone();
+            let headers = _libs.include_paths.clone();
 
             let mut builder = bindgen::builder()
                 .blacklist_type("max_align_t")
@@ -81,11 +81,10 @@ fn main() {
 
             let mut file = fs::File::create(dest_path).unwrap();
 
-            file.write(s.as_bytes());
+            let _ = file.write(s.as_bytes());
         }
     }
 
-    use std::fs;
     fn rerun_dir<P: AsRef<Path>>(dir: P) {
         for entry in fs::read_dir(dir).unwrap() {
             let entry = entry.unwrap();
