@@ -23,7 +23,7 @@ backtrace = "0.3"
 
 [build-dependencies]
 cc = "1"
-cmake = "0.1.32"
+cmake = { git = "https://github.com/alexcrichton/cmake-rs", rev = "4998d28" }
 pkg-config = "0.3.12"
 bindgen = { version = "0.37", optional = true }
 
