@@ -11,7 +11,7 @@ use std::path::Path;
 
 use std::fs;
 
-fn main() {
+fn main() {    
     let cargo_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let build_path = Path::new(&cargo_dir).join("aom_build/aom");
     let debug = if let Some(v) = env::var("PROFILE").ok() {
@@ -27,14 +27,20 @@ fn main() {
         .define("CONFIG_DEBUG", debug)
         .define("CONFIG_ANALYZER", "0")
         .define("ENABLE_DOCS", "0")
-        .define("CONFIG_UNIT_TESTS", "0")
+        .define("ENABLE_TESTS", "0")
+        .no_build_target(cfg!(windows))
         .build();
 
     // Dirty hack to force a rebuild whenever the defaults are changed upstream
     let _ = fs::remove_file(dst.join("build/CMakeCache.txt"));
 
-    env::set_var("PKG_CONFIG_PATH", dst.join("lib/pkgconfig"));
-    let _libs = pkg_config::Config::new().statik(true).probe("aom").unwrap();
+    if cfg!(windows) {
+        println!("cargo:rustc-link-search=native={}", dst.join("build/Release").to_str().unwrap());
+        println!("cargo:rustc-link-lib=static=aom");
+    } else {
+        env::set_var("PKG_CONFIG_PATH", dst.join("lib/pkgconfig"));
+        pkg_config::Config::new().statik(true).probe("aom").unwrap();
+    }
 
     #[cfg(feature = "decode_test")] {
         use std::io::Write;
