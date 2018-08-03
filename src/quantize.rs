@@ -101,7 +101,7 @@ mod test {
 }
 
 impl QuantizationContext {
-  pub fn update(&mut self, qindex: usize, tx_size: TxSize) {
+  pub fn update(&mut self, qindex: usize, tx_size: TxSize, is_intra: bool) {
     self.tx_scale = get_tx_scale(tx_size) as i32;
 
     self.dc_quant = dc_q(qindex) as u32;
@@ -110,8 +110,8 @@ impl QuantizationContext {
     self.ac_quant = ac_q(qindex) as u32;
     self.ac_mul_add = divu_gen(self.ac_quant);
 
-    self.dc_offset = self.dc_quant as i32 * 21 / 64;
-    self.ac_offset = self.ac_quant as i32 * 21 / 64;
+    self.dc_offset = self.dc_quant as i32 * (if is_intra {21} else {15}) / 64;
+    self.ac_offset = self.ac_quant as i32 * (if is_intra {21} else {15}) / 64;
   }
 
   #[inline]

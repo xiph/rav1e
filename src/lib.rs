@@ -1550,7 +1550,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
 
     let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
-    fs.qc.update(fi.config.quantizer, tx_size);
+    fs.qc.update(fi.config.quantizer, tx_size, luma_mode.is_intra());
 
     for by in 0..bh {
         for bx in 0..bw {
@@ -1590,7 +1590,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
         let partition_x = (bo.x & LOCAL_BLOCK_MASK) >> xdec << MI_SIZE_LOG2;
         let partition_y = (bo.y & LOCAL_BLOCK_MASK) >> ydec << MI_SIZE_LOG2;
 
-        fs.qc.update(fi.config.quantizer, uv_tx_size);
+        fs.qc.update(fi.config.quantizer, uv_tx_size, chroma_mode.is_intra());
 
         for p in 1..3 {
             let sb_offset = bo.sb_offset().plane_offset(&fs.input.planes[p].cfg);
@@ -1628,7 +1628,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
 
     let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
-    fs.qc.update(fi.config.quantizer, tx_size);
+    fs.qc.update(fi.config.quantizer, tx_size, luma_mode.is_intra());
 
     let po = bo.plane_offset(&fs.input.planes[0].cfg);
     let has_coeff = encode_tx_block(fi, fs, cw, w, 0, &bo, luma_mode, tx_size, tx_type, bsize, &po, skip);
@@ -1659,7 +1659,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
         let partition_x = (bo.x & LOCAL_BLOCK_MASK) >> xdec << MI_SIZE_LOG2;
         let partition_y = (bo.y & LOCAL_BLOCK_MASK) >> ydec << MI_SIZE_LOG2;
 
-        fs.qc.update(fi.config.quantizer, uv_tx_size);
+        fs.qc.update(fi.config.quantizer, uv_tx_size, chroma_mode.is_intra());
 
         for p in 1..3 {
             let sb_offset = bo.sb_offset().plane_offset(&fs.input.planes[p].cfg);
