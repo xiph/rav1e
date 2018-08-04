@@ -1,7 +1,6 @@
 // build.rs
 
 extern crate cmake;
-#[cfg(unix)]
 extern crate pkg_config;
 #[cfg(unix)]
 #[cfg(feature = "decode_test")]
@@ -39,13 +38,18 @@ fn main() {
     let _ = fs::remove_file(dst.join("build/CMakeCache.txt"));
 
     #[cfg(windows)] {
-        let bin_dir = if debug {
-            "Debug"
-        } else {
-            "Release"
-        };
-        println!("cargo:rustc-link-search=native={}", dst.join("build").join(bin_dir).to_str().unwrap());
-        println!("cargo:rustc-link-lib=static=aom");
+        if dst.join("lib/pkgconfig").join("aom.pc").exists() {
+            env::set_var("PKG_CONFIG_PATH", dst.join("lib/pkgconfig"));
+            pkg_config::Config::new().statik(true).probe("aom").unwrap();
+        } else { // MSVC
+            let bin_dir = if debug {
+                "Debug"
+            } else {
+                "Release"
+            };
+            println!("cargo:rustc-link-search=native={}", dst.join("build").join(bin_dir).to_str().unwrap());
+            println!("cargo:rustc-link-lib=static=aom");
+        }
     }
     
     #[cfg(unix)] {
