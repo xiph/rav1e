@@ -80,6 +80,9 @@ fn cdef_dist_wxh_8x8(src1: &PlaneSlice, src2: &PlaneSlice) -> u64 {
 fn cdef_dist_wxh(
   src1: &PlaneSlice, src2: &PlaneSlice, w: usize, h: usize
 ) -> u64 {
+  assert!(w & 0x7 == 0);
+  assert!(h & 0x7 == 0);
+
   let mut sum: u64 = 0;
   for j in 0..h / 8 {
     for i in 0..w / 8 {
