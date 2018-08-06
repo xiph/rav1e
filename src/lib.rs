@@ -1524,7 +1524,7 @@ fn encode_block(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
 
     let tx_type = if tx_set > TxSet::TX_SET_DCTONLY && fi.config.speed <= 3 {
         // FIXME: there is one redundant transform type decision per encoded block
-        rdo_tx_type_decision(fi, fs, cw, w, luma_mode, bsize, bo, tx_size, tx_set)
+        rdo_tx_type_decision(fi, fs, cw, luma_mode, bsize, bo, tx_size, tx_set)
     } else {
         TxType::DCT_DCT
     };
@@ -1717,7 +1717,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         if bsize >= BlockSize::BLOCK_8X8 {
             cw.write_partition(w, bo, partition, bsize);
         }
-        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, w, bsize, bo, cdef_index).part_modes[0].clone();
+        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, bsize, bo, cdef_index).part_modes[0].clone();
         let (mode_luma, mode_chroma) = (mode_decision.pred_mode_luma, mode_decision.pred_mode_chroma);
         let skip = mode_decision.skip;
         rd_cost = mode_decision.rd_cost;
@@ -1802,7 +1802,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
         partition = PartitionType::PARTITION_SPLIT;
     } else if bsize > fi.min_partition_size {
         // Blocks of sizes within the supported range are subjected to a partitioning decision
-        rdo_output = rdo_partition_decision(seq, fi, fs, cw, w, bsize, bo, &rdo_output, cdef_index);
+        rdo_output = rdo_partition_decision(seq, fi, fs, cw, bsize, bo, &rdo_output, cdef_index);
         partition = rdo_output.part_type;
     } else {
         // Blocks of sizes below the supported range are encoded directly
@@ -1827,7 +1827,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
                     rdo_output.part_modes[0].clone()
                 } else {
                     // Make a prediction mode decision for blocks encoded with no rdo_partition_decision call (e.g. edges)
-                    rdo_mode_decision(seq, fi, fs, cw, w, bsize, bo, cdef_index).part_modes[0].clone()
+                    rdo_mode_decision(seq, fi, fs, cw, bsize, bo, cdef_index).part_modes[0].clone()
                 };
 
             let (mode_luma, mode_chroma) = (part_decision.pred_mode_luma, part_decision.pred_mode_chroma);
