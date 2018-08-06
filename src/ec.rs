@@ -23,7 +23,7 @@ type ec_window = u32;
 
 /// Public trait interface to a bitstream writer; can be used either
 /// to record tokens for later writing (using a new::WriterRecorder()
-/// as a Writer) or to write atual final bits out using a range
+/// as a Writer) or to write actual final bits out using a range
 /// encoder (using a new::WriterEncoder() as a Writer).  A
 /// WriterRecorder's contents can be replayed into a WriterEncoder.
 pub trait Writer {
@@ -39,9 +39,9 @@ pub trait Writer {
   fn literal(&mut self, bits: u8, s: u32);
   /// Write passed level as a golomb code
   fn write_golomb(&mut self, level: u16);
-  /// Return current length of range-coded bitsream in integer bits
+  /// Return current length of range-coded bitstream in integer bits
   fn tell(&mut self) -> u32;
-  /// Return currrent length of range-coded bitsream in fractional
+  /// Return currrent length of range-coded bitstream in fractional
   /// bits with OD_BITRES decimal precision
   fn tell_frac(&mut self) -> u32;
   /// Save current point in coding/recording to a checkpoint  
@@ -59,9 +59,9 @@ pub trait StorageBackend {
   fn store(&mut self, l: ec_window, r: u16);
   /// Return byte-length of encoded stream to date  
   fn stream_bytes(&mut self) -> usize;
-  /// Backend implenetaiton of checkpoint to pass through Writer interface  
+  /// Backend implementation of checkpoint to pass through Writer interface  
   fn checkpoint(&mut self) -> WriterCheckpoint;
-  /// Backend implenetaiton of rollback to pass through Writer interface  
+  /// Backend implementation of rollback to pass through Writer interface  
   fn rollback(&mut self, &WriterCheckpoint);
 }
 
@@ -127,7 +127,7 @@ impl WriterEncoder {
 
 /// The Recorder does not produce a range-coded bitstream, but it
 /// still tracks the range coding progress like in an Encoder, as it
-/// neds to be able to report bit costs for RDO decsions.  It stores a
+/// neds to be able to report bit costs for RDO decisions.  It stores a
 /// pair of mostly-computed range coding values per token recorded.
 impl StorageBackend for WriterBase<WriterRecorder> {
   fn store(&mut self, l: ec_window, r: u16) {
@@ -312,9 +312,9 @@ impl<S> WriterBase<S>{
   }
 }
 
-/// Replay implemenetation specific to the Recorder
+/// Replay implementation specific to the Recorder
 impl WriterBase<WriterRecorder> {
-  /// Replays the partiall-computer range tokens out of the Recorder's
+  /// Replays the partially-computed range tokens out of the Recorder's
   /// storage and into the passed in Writer, which may be an Encoder
   /// or another Recorder.  Clears the Recorder after replay.
   pub fn replay(&mut self, dest: &mut StorageBackend) {
