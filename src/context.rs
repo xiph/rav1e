@@ -1471,8 +1471,16 @@ impl BlockContext {
     }
   }
 
-  pub fn set_cdef(&mut self, bo: &BlockOffset, bsize: BlockSize, cdef_index: u8) {
-    self.for_each(bo, bsize, |block| block.cdef_index = cdef_index);
+  pub fn set_cdef(&mut self, sbo: &SuperBlockOffset, cdef_index: u8) {
+    let bo = sbo.block_offset(0, 0);
+    let bw = cmp::min (bo.x + 8, self.blocks[bo.y as usize].len());
+    let bh = cmp::min (bo.y + 8, self.blocks.len());
+
+    for y in bo.y..bh {
+      for x in bo.x..bw {
+        self.blocks[y as usize][x as usize].cdef_index = cdef_index;
+      }
+    }
   }
 
   // The mode info data structure has a one element border above and to the
@@ -2050,17 +2058,8 @@ impl ContextWriter {
     symbol_with_update!(self, w, skip as u32, &mut self.fc.skip_cdfs[ctx]);
   }
 
-  pub fn write_block_cdef(&mut self, w: &mut Writer, bo: &BlockOffset, skip: bool, strength_index: u8, bits: u8) {
-    // Starting a new superblock-- we have to keep track as we don't code
-    // a cdef strength until the first non-skip block
-    let block_mask = (1<<SUPERBLOCK_TO_BLOCK_SHIFT) - 1;
-    if (bo.x & block_mask) == 0 && (bo.y & block_mask) == 0 {
-      self.bc.cdef_coded = false;
-    }
-    if !self.bc.cdef_coded && !skip {
-      self.bc.cdef_coded = true;
-      w.literal(bits, strength_index as u32);
-    }
+  pub fn write_cdef(&mut self, w: &mut Writer, strength_index: u8, bits: u8) {
+    w.literal(bits, strength_index as u32);
   }
 
   pub fn write_is_inter(&mut self, w: &mut Writer, bo: &BlockOffset, is_inter: bool) {

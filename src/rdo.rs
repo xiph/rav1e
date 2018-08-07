@@ -15,7 +15,8 @@ use context::*;
 use ec::OD_BITRES;
 use ec::Writer;
 use ec::WriterCounter;
-use encode_block;
+use encode_block_a;
+use encode_block_b;
 use partition::*;
 use plane::*;
 use predict::{RAV1E_INTRA_MODES, RAV1E_INTRA_MODES_MINIMAL, RAV1E_INTER_MODES};
@@ -165,8 +166,7 @@ fn compute_rd_cost(
 // RDO-based mode decision
 pub fn rdo_mode_decision(
   seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
-  bsize: BlockSize, bo: &BlockOffset, cdef_index: u8
-) -> RDOOutput {
+  bsize: BlockSize, bo: &BlockOffset) -> RDOOutput {
   let mut best_mode_luma = PredictionMode::DC_PRED;
   let mut best_mode_chroma = PredictionMode::DC_PRED;
   let mut best_skip = false;
@@ -210,7 +210,8 @@ pub fn rdo_mode_decision(
         let mut wr: &mut Writer = &mut WriterCounter::new();
         let tell = wr.tell_frac();
         
-        encode_block(seq, fi, fs, cw, wr, luma_mode, chroma_mode, bsize, bo, skip, cdef_index);
+        encode_block_a(seq, cw, wr, bsize, bo, skip);
+        encode_block_b(fi, fs, cw, wr, luma_mode, chroma_mode, bsize, bo, skip);
 
         let cost = wr.tell_frac() - tell;
         let rd = compute_rd_cost(
@@ -236,7 +237,8 @@ pub fn rdo_mode_decision(
     } else {
       let mut wr: &mut Writer = &mut WriterCounter::new();
       let tell = wr.tell_frac();
-      encode_block(seq, fi, fs, cw, wr, luma_mode, luma_mode, bsize, bo, skip, cdef_index);
+      encode_block_a(seq, cw, wr, bsize, bo, skip);
+      encode_block_b(fi, fs, cw, wr, luma_mode, luma_mode, bsize, bo, skip);
 
       let cost = wr.tell_frac() - tell;
       let rd = compute_rd_cost(
@@ -349,8 +351,7 @@ pub fn rdo_tx_type_decision(
 // RDO-based single level partitioning decision
 pub fn rdo_partition_decision(
   seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
-  bsize: BlockSize, bo: &BlockOffset, cached_block: &RDOOutput, cdef_index: u8
-) -> RDOOutput {
+  bsize: BlockSize, bo: &BlockOffset, cached_block: &RDOOutput) -> RDOOutput {
   let max_rd = std::f64::MAX;
 
   let mut best_partition = cached_block.part_type;
@@ -377,7 +378,7 @@ pub fn rdo_partition_decision(
         let mode_decision = cached_block
           .part_modes
           .get(0)
-          .unwrap_or(&rdo_mode_decision(seq, fi, fs, cw, bsize, bo, cdef_index).part_modes[0])
+          .unwrap_or(&rdo_mode_decision(seq, fi, fs, cw, bsize, bo).part_modes[0])
           .clone();
         child_modes.push(mode_decision);
       }
@@ -392,26 +393,26 @@ pub fn rdo_partition_decision(
         let hbs = bs >> 1; // Half the block size in blocks
 
         let offset = BlockOffset { x: bo.x, y: bo.y };
-        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, subsize, &offset, cdef_index)
+        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, subsize, &offset)
           .part_modes[0]
           .clone();
         child_modes.push(mode_decision);
 
         let offset = BlockOffset { x: bo.x + hbs as usize, y: bo.y };
-        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, subsize, &offset, cdef_index)
+        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, subsize, &offset)
           .part_modes[0]
           .clone();
         child_modes.push(mode_decision);
 
         let offset = BlockOffset { x: bo.x, y: bo.y + hbs as usize };
-        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, subsize, &offset, cdef_index)
+        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, subsize, &offset)
           .part_modes[0]
           .clone();
         child_modes.push(mode_decision);
 
         let offset =
           BlockOffset { x: bo.x + hbs as usize, y: bo.y + hbs as usize };
-        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, subsize, &offset, cdef_index)
+        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, subsize, &offset)
           .part_modes[0]
           .clone();
         child_modes.push(mode_decision);
