@@ -44,7 +44,7 @@ pub enum PartitionType {
   PARTITION_INVALID
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Ord, Eq)]
 pub enum BlockSize {
   BLOCK_4X4,
   BLOCK_4X8,
