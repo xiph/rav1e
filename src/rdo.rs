@@ -14,6 +14,7 @@
 use context::*;
 use ec::OD_BITRES;
 use ec::Writer;
+use ec::WriterCounter;
 use encode_block;
 use partition::*;
 use plane::*;
@@ -163,15 +164,13 @@ fn compute_rd_cost(
 
 // RDO-based mode decision
 pub fn rdo_mode_decision(
-  seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
-  cw: &mut ContextWriter, wr: &mut Writer,
+  seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
   bsize: BlockSize, bo: &BlockOffset, cdef_index: u8
 ) -> RDOOutput {
   let mut best_mode_luma = PredictionMode::DC_PRED;
   let mut best_mode_chroma = PredictionMode::DC_PRED;
   let mut best_skip = false;
   let mut best_rd = std::f64::MAX;
-  let tell = wr.tell_frac();
 
   // Get block luma and chroma dimensions
   let w = bsize.width();
@@ -192,7 +191,6 @@ pub fn rdo_mode_decision(
   let skip = false;
 
   let cw_checkpoint = cw.checkpoint();
-  let w_checkpoint = wr.checkpoint();
 
   // Exclude complex prediction modes at higher speed levels
   let mode_set = if fi.config.speed <= 3 {
@@ -209,6 +207,9 @@ pub fn rdo_mode_decision(
     if is_chroma_block && fi.config.speed <= 3 && luma_mode.is_intra() {
       // Find the best chroma prediction mode for the current luma prediction mode
       for &chroma_mode in RAV1E_INTRA_MODES {
+        let mut wr: &mut Writer = &mut WriterCounter::new();
+        let tell = wr.tell_frac();
+        
         encode_block(seq, fi, fs, cw, wr, luma_mode, chroma_mode, bsize, bo, skip, cdef_index);
 
         let cost = wr.tell_frac() - tell;
@@ -231,9 +232,10 @@ pub fn rdo_mode_decision(
         }
 
         cw.rollback(&cw_checkpoint);
-        wr.rollback(&w_checkpoint);
       }
     } else {
+      let mut wr: &mut Writer = &mut WriterCounter::new();
+      let tell = wr.tell_frac();
       encode_block(seq, fi, fs, cw, wr, luma_mode, luma_mode, bsize, bo, skip, cdef_index);
 
       let cost = wr.tell_frac() - tell;
@@ -256,7 +258,6 @@ pub fn rdo_mode_decision(
       }
 
       cw.rollback(&cw_checkpoint);
-      wr.rollback(&w_checkpoint);
     }
   }
 
@@ -277,14 +278,12 @@ pub fn rdo_mode_decision(
 
 // RDO-based intra frame transform type decision
 pub fn rdo_tx_type_decision(
-  fi: &FrameInvariants, fs: &mut FrameState,
-  cw: &mut ContextWriter, wr: &mut Writer,
+  fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
   mode: PredictionMode, bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize,
   tx_set: TxSet
 ) -> TxType {
   let mut best_type = TxType::DCT_DCT;
   let mut best_rd = std::f64::MAX;
-  let tell = wr.tell_frac();
 
   // Get block luma and chroma dimensions
   let w = bsize.width();
@@ -303,7 +302,6 @@ pub fn rdo_tx_type_decision(
   let is_inter = mode >= PredictionMode::NEARESTMV;
 
   let cw_checkpoint = cw.checkpoint();
-  let w_checkpoint = wr.checkpoint();
 
   for &tx_type in RAV1E_TX_TYPES {
     // Skip unsupported transform types
@@ -311,6 +309,8 @@ pub fn rdo_tx_type_decision(
       continue;
     }
 
+    let mut wr: &mut Writer = &mut WriterCounter::new();
+    let tell = wr.tell_frac();
     if is_inter {
       write_tx_tree(
         fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false,
@@ -339,7 +339,6 @@ pub fn rdo_tx_type_decision(
     }
 
     cw.rollback(&cw_checkpoint);
-    wr.rollback(&w_checkpoint);
   }
 
   assert!(best_rd >= 0_f64);
@@ -349,8 +348,7 @@ pub fn rdo_tx_type_decision(
 
 // RDO-based single level partitioning decision
 pub fn rdo_partition_decision(
-  seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
-  cw: &mut ContextWriter, wr: &mut Writer,
+  seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
   bsize: BlockSize, bo: &BlockOffset, cached_block: &RDOOutput, cdef_index: u8
 ) -> RDOOutput {
   let max_rd = std::f64::MAX;
@@ -360,7 +358,6 @@ pub fn rdo_partition_decision(
   let mut best_pred_modes = cached_block.part_modes.clone();
 
   let cw_checkpoint = cw.checkpoint();
-  let w_checkpoint = wr.checkpoint();
 
   for &partition in RAV1E_PARTITION_TYPES {
     // Do not re-encode results we already have
@@ -380,7 +377,7 @@ pub fn rdo_partition_decision(
         let mode_decision = cached_block
           .part_modes
           .get(0)
-          .unwrap_or(&rdo_mode_decision(seq, fi, fs, cw, wr, bsize, bo, cdef_index).part_modes[0])
+          .unwrap_or(&rdo_mode_decision(seq, fi, fs, cw, bsize, bo, cdef_index).part_modes[0])
           .clone();
         child_modes.push(mode_decision);
       }
@@ -395,26 +392,26 @@ pub fn rdo_partition_decision(
         let hbs = bs >> 1; // Half the block size in blocks
 
         let offset = BlockOffset { x: bo.x, y: bo.y };
-        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, wr, subsize, &offset, cdef_index)
+        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, subsize, &offset, cdef_index)
           .part_modes[0]
           .clone();
         child_modes.push(mode_decision);
 
         let offset = BlockOffset { x: bo.x + hbs as usize, y: bo.y };
-        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, wr, subsize, &offset, cdef_index)
+        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, subsize, &offset, cdef_index)
           .part_modes[0]
           .clone();
         child_modes.push(mode_decision);
 
         let offset = BlockOffset { x: bo.x, y: bo.y + hbs as usize };
-        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, wr, subsize, &offset, cdef_index)
+        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, subsize, &offset, cdef_index)
           .part_modes[0]
           .clone();
         child_modes.push(mode_decision);
 
         let offset =
           BlockOffset { x: bo.x + hbs as usize, y: bo.y + hbs as usize };
-        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, wr, subsize, &offset, cdef_index)
+        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, subsize, &offset, cdef_index)
           .part_modes[0]
           .clone();
         child_modes.push(mode_decision);
@@ -433,7 +430,6 @@ pub fn rdo_partition_decision(
     }
 
     cw.rollback(&cw_checkpoint);
-    wr.rollback(&w_checkpoint);
   }
 
   assert!(best_rd >= 0_f64);

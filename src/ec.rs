@@ -21,11 +21,13 @@ const EC_PROB_SHIFT: u32 = 6;
 const EC_MIN_PROB: u32 = 4;
 type ec_window = u32;
 
-/// Public trait interface to a bitstream writer; can be used either
-/// to record tokens for later writing (using a new::WriterRecorder()
-/// as a Writer) or to write actual final bits out using a range
-/// encoder (using a new::WriterEncoder() as a Writer).  A
-/// WriterRecorder's contents can be replayed into a WriterEncoder.
+/// Public trait interface to a bitstream Writer: a Counter can be
+/// used to count bits for cost analysis without actually storing
+/// anything (using a new::WriterCounter() as a Writer), to record
+/// tokens for later writing (using a new::WriterRecorder() as a
+/// Writer) to write actual final bits out using a range encoder
+/// (using a new::WriterEncoder() as a Writer).  A WriterRecorder's
+/// contents can be replayed into a WriterEncoder.
 pub trait Writer {
   /// Write a symbol s, using the passed in cdf reference; leaves cdf unchanged
   fn symbol(&mut self, s: u32, cdf: &[u16]);
@@ -78,11 +80,17 @@ pub struct WriterBase<S> {
 }
 
 #[derive(Debug, Clone)]
+pub struct WriterCounter {
+  /// Bytes that would be shifted out to date
+  bytes: usize
+}
+
+#[derive(Debug, Clone)]
 pub struct WriterRecorder {
   /// Storage for tokens
   storage: Vec<(ec_window, u16)>,
   /// Bytes that would be shifted out to date
-  bytes: usize  
+  bytes: usize
 }
 
 #[derive(Debug, Clone)]
@@ -105,6 +113,15 @@ pub struct WriterCheckpoint {
   cnt: i16,
 }
 
+/// Constructor for a counting Writer
+impl WriterCounter {
+  pub fn new () -> WriterBase<WriterCounter> {
+    WriterBase::new(WriterCounter {
+      bytes: 0
+    })
+  }
+}
+
 /// Constructor for a recording Writer
 impl WriterRecorder {
   pub fn new () -> WriterBase<WriterRecorder> {
@@ -122,6 +139,44 @@ impl WriterEncoder {
       precarry: Vec::new(),
       low: 0
     })
+  }
+}
+
+/// The Counter stores nothing we write to it, it merely counts the
+/// bit usage like in an Encoder for cost analysis.
+impl StorageBackend for WriterBase<WriterCounter> {
+  fn store(&mut self, _l: ec_window, r: u16) {
+    let d = 16 - WriterBase::<Self>::ilog_nz(r);
+    let mut c = self.cnt;
+    let mut s = c + (d as i16);
+
+    if s >= 0 {
+      c += 16;
+      if s >= 8 {
+        self.s.bytes += 1;
+        c -= 8;
+      }
+      self.s.bytes += 1;
+      s = c + (d as i16) - 24;
+    }
+    self.rng = r << d;
+    self.cnt = s;
+  }
+  fn stream_bytes(&mut self) -> usize {
+      self.s.bytes
+  }
+  fn checkpoint(&mut self) -> WriterCheckpoint {
+    WriterCheckpoint {
+      stream_bytes: self.s.bytes,
+      backend_var: 0,
+      rng: self.rng,
+      cnt: self.cnt,
+    }
+  }
+  fn rollback(&mut self, checkpoint: &WriterCheckpoint) {
+    self.rng = checkpoint.rng;
+    self.cnt = checkpoint.cnt;
+    self.s.bytes = checkpoint.stream_bytes;
   }
 }
 
