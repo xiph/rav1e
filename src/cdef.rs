@@ -191,9 +191,8 @@ fn adjust_strength(strength: i32, var: i32) -> i32 {
 // CDEF parameters are stored for each 64 by 64 block of pixels.
 // The CDEF filter is applied on each 8 by 8 block of pixels.
 // Reference: http://av1-spec.argondesign.com/av1-spec/av1-spec.html#cdef-process
-pub fn cdef_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockContext) {
-    let bit_depth = 8;
-    let coeff_shift = bit_depth - 8;
+pub fn cdef_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockContext, bit_depth: usize) {
+    let coeff_shift = bit_depth as i32 - 8;
     let cdef_damping = fi.cdef_damping as i32;
 
     // Each filter block is 64x64, except right and/or bottom for non-multiple-of-64 sizes.

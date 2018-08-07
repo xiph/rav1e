@@ -355,20 +355,20 @@ use plane::*;
 use predict::*;
 
 impl PredictionMode {
-  pub fn predict_intra<'a>(self, dst: &'a mut PlaneMutSlice<'a>, tx_size: TxSize) {
+  pub fn predict_intra<'a>(self, dst: &'a mut PlaneMutSlice<'a>, tx_size: TxSize, bit_depth: usize) {
     assert!(self.is_intra());
 
     match tx_size {
-      TxSize::TX_4X4 => self.predict_intra_inner::<Block4x4>(dst),
-      TxSize::TX_8X8 => self.predict_intra_inner::<Block8x8>(dst),
-      TxSize::TX_16X16 => self.predict_intra_inner::<Block16x16>(dst),
-      TxSize::TX_32X32 => self.predict_intra_inner::<Block32x32>(dst),
+      TxSize::TX_4X4 => self.predict_intra_inner::<Block4x4>(dst, bit_depth),
+      TxSize::TX_8X8 => self.predict_intra_inner::<Block8x8>(dst, bit_depth),
+      TxSize::TX_16X16 => self.predict_intra_inner::<Block16x16>(dst, bit_depth),
+      TxSize::TX_32X32 => self.predict_intra_inner::<Block32x32>(dst, bit_depth),
       _ => unimplemented!()
     }
   }
 
   #[inline(always)]
-  fn predict_intra_inner<'a, B: Intra>(self, dst: &'a mut PlaneMutSlice<'a>) {
+  fn predict_intra_inner<'a, B: Intra>(self, dst: &'a mut PlaneMutSlice<'a>, bit_depth: usize) {
     // above and left arrays include above-left sample
     // above array includes above-right samples
     // left array includes below-left samples
@@ -378,8 +378,8 @@ impl PredictionMode {
     let stride = dst.plane.cfg.stride;
     let x = dst.x;
     let y = dst.y;
-    // TODO: pass bd (bitdepth) as a parameter
-    let bd = 8;
+
+    let bd = bit_depth;
     let base = 128 << (bd - 8);
 
     if y != 0 {
@@ -446,8 +446,8 @@ impl PredictionMode {
     match self {
       PredictionMode::DC_PRED => match (x, y) {
         (0, 0) => B::pred_dc_128(slice, stride),
-        (_, 0) => B::pred_dc_left(slice, stride, above_slice, left_slice),
-        (0, _) => B::pred_dc_top(slice, stride, above_slice, left_slice),
+        (_, 0) => B::pred_dc_left(slice, stride, above_slice, left_slice, bit_depth),
+        (0, _) => B::pred_dc_top(slice, stride, above_slice, left_slice, bit_depth),
         _ => B::pred_dc(slice, stride, above_slice, left_slice)
       },
       PredictionMode::H_PRED => match (x, y) {
