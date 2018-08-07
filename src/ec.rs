@@ -58,7 +58,7 @@ pub trait Writer {
 /// interface' support.
 pub trait StorageBackend {
   /// Store partially-computed range code into given storage backend
-  fn store(&mut self, l: ec_window, r: u16);
+  fn store(&mut self, fl: u16, fh: u16, nms: u16);
   /// Return byte-length of encoded stream to date  
   fn stream_bytes(&mut self) -> usize;
   /// Backend implementation of checkpoint to pass through Writer interface  
@@ -88,7 +88,7 @@ pub struct WriterCounter {
 #[derive(Debug, Clone)]
 pub struct WriterRecorder {
   /// Storage for tokens
-  storage: Vec<(ec_window, u16)>,
+  storage: Vec<(u16, u16, u16)>,
   /// Bytes that would be shifted out to date
   bytes: usize
 }
@@ -145,7 +145,8 @@ impl WriterEncoder {
 /// The Counter stores nothing we write to it, it merely counts the
 /// bit usage like in an Encoder for cost analysis.
 impl StorageBackend for WriterBase<WriterCounter> {
-  fn store(&mut self, _l: ec_window, r: u16) {
+  fn store(&mut self, fl: u16, fh: u16, nms: u16) {
+    let (_l, r) = self.lr_compute(fl, fh, nms);
     let d = 16 - WriterBase::<Self>::ilog_nz(r);
     let mut c = self.cnt;
     let mut s = c + (d as i16);
@@ -185,7 +186,8 @@ impl StorageBackend for WriterBase<WriterCounter> {
 /// neds to be able to report bit costs for RDO decisions.  It stores a
 /// pair of mostly-computed range coding values per token recorded.
 impl StorageBackend for WriterBase<WriterRecorder> {
-  fn store(&mut self, l: ec_window, r: u16) {
+  fn store(&mut self, fl: u16, fh: u16, nms: u16) {
+    let (_l, r) = self.lr_compute(fl, fh, nms);
     let d = 16 - WriterBase::<Self>::ilog_nz(r);
     let mut c = self.cnt;
     let mut s = c + (d as i16);
@@ -201,7 +203,7 @@ impl StorageBackend for WriterBase<WriterRecorder> {
     }
     self.rng = r << d;
     self.cnt = s;
-    self.s.storage.push((l,r));
+    self.s.storage.push((fl, fh, nms));
   }
   fn stream_bytes(&mut self) -> usize {
       self.s.bytes
@@ -227,7 +229,8 @@ impl StorageBackend for WriterBase<WriterRecorder> {
 /// tokens, only the resulting bitstream, and so it cannot be replayed
 /// (only checkpointed and rolled back).
 impl StorageBackend for WriterBase<WriterEncoder> {
-  fn store(&mut self, l: ec_window, r: u16) {
+  fn store(&mut self, fl: u16, fh: u16, nms: u16) {
+    let (l, r) = self.lr_compute(fl, fh, nms);
     let mut low = l + self.s.low;
     let mut c = self.cnt;
     let d = 16 - WriterBase::<Self>::ilog_nz(r);
@@ -280,6 +283,24 @@ impl<S> WriterBase<S>{
       cnt: -9,
       debug: false, 
       s: storage
+    }
+  }
+  /// Compute low and range values from token cdf values and local state
+  fn lr_compute (&mut self, fl: u16, fh: u16, nms: u16) -> (ec_window, u16){
+    let u: u32;
+    let v: u32;
+    let mut r = self.rng as u32;
+    debug_assert!(32768 <= r); 
+    if fl < 32768 {
+      u = (((r >> 8) * (fl as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT))
+            + EC_MIN_PROB * nms as u32;
+      v = (((r >> 8) * (fh as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT))
+            + EC_MIN_PROB * (nms - 1) as u32;
+      (r - u, (u - v) as u16)
+    } else {
+        r -= (((r >> 8) * (fh as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT))
+            + EC_MIN_PROB * (nms - 1) as u32;
+        (0, r as u16)
     }
   }
   /// Given the current total integer number of bits used and the current value of
@@ -374,9 +395,11 @@ impl WriterBase<WriterRecorder> {
   /// or another Recorder.  Clears the Recorder after replay.
   pub fn replay(&mut self, dest: &mut StorageBackend) {
     for i in 0..self.s.storage.len() {
-      let (l, r) = self.s.storage[i];
-      dest.store(l, r);
+      let (fl, fh, nms) = self.s.storage[i];
+      dest.store(fl, fh, nms);
     }
+    self.rng = 0x8000;
+    self.cnt = -9;
     self.s.storage.truncate(0);
     self.s.bytes = 0;
   }
@@ -466,24 +489,7 @@ impl<S> Writer for WriterBase<S> where WriterBase<S>: StorageBackend {
     let fh = cdf[s as usize];
     debug_assert!(fh <= fl);
     debug_assert!(fl <= 32768);
-
-    let u: u32;
-    let v: u32;
-    let mut l = 0;
-    let mut r = self.rng as u32;
-    debug_assert!(32768 <= r); 
-    if fl < 32768 {
-      u = (((r >> 8) * (fl as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT))
-            + EC_MIN_PROB * nms as u32;
-      v = (((r >> 8) * (fh as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT))
-            + EC_MIN_PROB * (nms - 1) as u32;
-      l += r - u;
-      r = u - v;
-    } else {
-        r -= (((r >> 8) * (fh as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT))
-            + EC_MIN_PROB * (nms - 1) as u32;
-    }
-    self.store(l, r as u16);
+    self.store(fl, fh, nms as u16);
   }
   /// Encodes a symbol given a cumulative distribution function (CDF)
   /// table in Q15, then updates the CDF probabilities to relect we've
