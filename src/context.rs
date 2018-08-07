@@ -1097,11 +1097,14 @@ impl BlockOffset {
 pub struct Block {
   pub mode: PredictionMode,
   pub bsize: BlockSize,
+  pub sb_type: BlockSize,
   pub partition: PartitionType,
   pub skip: bool,
   pub ref_frames: [usize; 2],
   pub neighbors_ref_counts: [usize; TOTAL_REFS_PER_FRAME],
-  pub cdef_index: u8
+  pub cdef_index: u8,
+  pub n8_w: usize, /* block width in the unit of mode_info */
+  pub n8_h: usize, /* block height in the unit of mode_info */
 }
 
 impl Block {
@@ -1109,11 +1112,14 @@ impl Block {
     Block {
       mode: PredictionMode::DC_PRED,
       bsize: BlockSize::BLOCK_64X64,
+      sb_type: BlockSize::BLOCK_64X64,
       partition: PartitionType::PARTITION_NONE,
       skip: false,
       ref_frames: [INTRA_FRAME; 2],
       neighbors_ref_counts: [0; TOTAL_REFS_PER_FRAME],
-      cdef_index: 0
+      cdef_index: 0,
+      n8_w: BlockSize::MI_SIZE_WIDE[BLOCK_64X64 as usize],
+      n8_h: BlockSize::MI_SIZE_HIGH[BLOCK_64X64 as usize],
     }
   }
   pub fn is_inter(&self) -> bool {
@@ -1746,6 +1752,164 @@ impl ContextWriter {
   }
   pub fn write_use_filter_intra(&mut self, w: &mut dyn Writer, enable: bool, block_size: BlockSize) {
     symbol_with_update!(self, w, enable as u32, &mut self.fc.filter_intra_cdfs[block_size as usize]);
+  }
+
+  fn get_mvref_ref_frames(&mut self, ref_frame: usize) -> ([usize; 2], usize) {
+    let ref_frame_map: [[usize; 2]; TOTAL_COMP_REFS] = [
+      [ LAST_FRAME,  BWDREF_FRAME  ], [ LAST2_FRAME,  BWDREF_FRAME  ],
+      [ LAST3_FRAME, BWDREF_FRAME  ], [ GOLDEN_FRAME, BWDREF_FRAME  ],
+      [ LAST_FRAME,  ALTREF2_FRAME ], [ LAST2_FRAME,  ALTREF2_FRAME ],
+      [ LAST3_FRAME, ALTREF2_FRAME ], [ GOLDEN_FRAME, ALTREF2_FRAME ],
+      [ LAST_FRAME,  ALTREF_FRAME  ], [ LAST2_FRAME,  ALTREF_FRAME  ],
+      [ LAST3_FRAME, ALTREF_FRAME  ], [ GOLDEN_FRAME, ALTREF_FRAME  ],
+      [ LAST_FRAME,  LAST2_FRAME   ], [ LAST_FRAME,   LAST3_FRAME   ],
+      [ LAST_FRAME,  GOLDEN_FRAME  ], [ BWDREF_FRAME, ALTREF_FRAME  ],
+
+      // NOTE: Following reference frame pairs are not supported to be explicitly
+      //       signalled, but they are possibly chosen by the use of skip_mode,
+      //       which may use the most recent one-sided reference frame pair.
+      [ LAST2_FRAME, LAST3_FRAME   ], [  LAST2_FRAME, GOLDEN_FRAME  ],
+      [ LAST3_FRAME, GOLDEN_FRAME  ], [ BWDREF_FRAME, ALTREF2_FRAME ],
+      [ ALTREF2_FRAME, ALTREF_FRAME ]
+    ];
+
+    if ref_frame >= REF_FRAMES {
+      return ([ ref_frame_map[ref_frame - REF_FRAMES][0],
+               ref_frame_map[ref_frame - REF_FRAMES][1] ], 2)
+    } else {
+      return ([ ref_frame, 0 ], 1)
+    }
+  }
+
+  fn find_valid_row_offs(&mut self, row_offset: isize, mi_row: usize, mi_rows: usize) -> isize {
+    if /* !tile->tg_horz_boundary */ true {
+      cmp::min(cmp::max(row_offset, -(mi_row as isize)), (mi_rows - mi_row - 1) as isize)
+    } else {
+      0
+      /* TODO: for tiling */
+    }
+  }
+
+  fn find_valid_col_offs(&mut self, row_offset: isize, mi_col: usize) -> isize {
+    row_offset
+  }
+
+  fn add_ref_mv_candidate(&mut self, bo: &BlockOffset) {
+    if !self.bc.at(bo).is_inter() { /* For intrabc */
+      return;
+    }
+
+    let index = 0;
+
+    if rf[1] == NONE_FRAME {
+      for i in 0..2 {
+        if cand.ref_frame[i] == rf[0] {
+          
+        }
+      }
+    } else {
+      if cand->ref_frame[0] == rf[0] && cand->ref_frame[1] == rf[1] {
+      
+      }
+    }
+  }
+
+  fn scan_row_mbmi(&mut self, bo: &BlockOffset) {
+
+    let end_mi = cmp::min(self.bc.at(bo).n8_w, mi_cols - mi_col);
+    end_mi = cmp::min(end_mi, BlockSize::MI_SIZE_WIDE[BLOCK_64X64 as usize]);
+    let n8_w_8 = BlockSize::MI_SIZE_WIDE[BLOCK_8X8 as usize];
+    let n8_w_16 = BlockSize::MI_SIZE_WIDE[BLOCK_16X16 as usize];
+    let col_offset = 0;
+    let shift = 0;
+
+    if row_offset.abs() > 1 {
+      col_offset = 1;
+      if ((mi_col & 0x01) != 0) && (self.bc.at(bo).n8_w < n8_w_8) {
+        col_offset -= 1;
+      }
+    }
+
+    let use_step_16 = self.bc.at(bo).n8_w >= 16;
+
+    for i in 0..end_mi {
+      let cand = self.bc.at((col_offset + i, row_offset));
+      let n8_w = BlockSize::MI_SIZE_WIDE[cand.sb_type as usize];
+      let len = cmp::min(self.bc.at(bo).n8_w, n8_w);
+      if use_step_16 {
+        len = cmp::max(n8_w_16, len);
+      } else {
+        len = cmp::max(len, n8_w_8);
+      }
+
+      let weight = 2;
+      if self.bc.at(bo).n8_w >= n8_w_8 && self.bc.at(bo).n8_w <= x8_w {
+        let inc = cmp::min(-max_row_offs + row_offset + 1, BlockSize::MI_SIZE_HIGH[cand.sb_type as usize]);
+        weight = cmp::max(weight, inc << shift);
+        processed_rows = inc - row_offset - 1;
+      }
+
+      self.add_ref_mv_candidate(bo);
+
+      i += len;
+    }
+  }
+
+  fn setupp_mvref_list(&mut self, bo: &BlockOffset, mi_row: usize, mi_col: usize, mi_rows:usize) {
+    let (rf, rf_num) = self.get_mvref_ref_frames(INTRA_FRAME);
+
+    let mut max_row_offs = 0 as isize;
+    let row_adj = (self.bc.at(bo).n8_h < BlockSize::MI_SIZE_HIGH[BLOCK_8X8 as usize]) && (mi_row & 0x01) != 0x0;
+
+    let mut max_col_offs = 0 as isize;
+    let col_adj = (self.bc.at(bo).n8_w < BlockSize::MI_SIZE_WIDE[BLOCK_8X8 as usize]) && (mi_col & 0x01) != 0x0;
+
+    let up_avail = bo.y > 0;
+    let left_avail = bo.x > 0;
+
+    if up_avail {
+      max_row_offs = -((MVREF_ROW_COLS as isize) << 1) + row_adj as isize;
+
+      if self.bc.at(bo).n8_h < BlockSize::MI_SIZE_HIGH[BLOCK_8X8 as usize] {
+        max_row_offs = -(2 << 1) + row_adj as isize;
+      }
+
+      max_row_offs = self.find_valid_row_offs(max_row_offs, mi_row, mi_rows);
+    }
+
+    if up_avail {
+      max_col_offs = -((MVREF_ROW_COLS as isize) << 1) + col_adj as isize;
+
+      if self.bc.at(bo).n8_w < BlockSize::MI_SIZE_WIDE[BLOCK_8X8 as usize] {
+        max_col_offs = -(2 << 1) + col_adj as isize;
+      }
+
+      max_col_offs = self.find_valid_col_offs(max_col_offs, mi_col);
+    }
+
+    if max_row_offs.abs() >= 1 {
+      
+    }
+  }
+
+  pub fn find_mvrefs(&mut self, bo: &BlockOffset) {
+    let ref_frame = INTRA_FRAME;
+
+    if ref_frame < REF_FRAMES {
+      if ref_frame != INTRA_FRAME {
+        /* TODO: convert global mv to an mv here */
+      } else {
+        /* TODO: set the global mv ref to invalid here */
+      }
+    }
+
+    if ref_frame != INTRA_FRAME {
+      /* TODO: Set zeromv ref to the converted global motion vector */
+    } else {
+      /* TODO: Set the zeromv ref to 0 */
+    }
+
+    
   }
 
   pub fn fill_neighbours_ref_counts(&mut self, bo: &BlockOffset) {
