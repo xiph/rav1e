@@ -26,6 +26,7 @@ use std::io::prelude::*;
 use bitstream_io::{BE, LE, BitWriter};
 use clap::{App, Arg};
 use std::rc::Rc;
+use std::*;
 
 // for benchmarking purpose
 pub mod ec;
@@ -291,10 +292,18 @@ impl FrameInvariants {
         // Speed level decides the minimum partition size, i.e. higher speed --> larger min partition size,
         // with exception that SBs on right or bottom frame borders split down to BLOCK_4X4.
         // At speed = 0, RDO search is exhaustive.
-        let min_partition_size = if config.speed <= 1 { BlockSize::BLOCK_4X4 }
+        let mut min_partition_size = if config.speed <= 1 { BlockSize::BLOCK_4X4 }
                                  else if config.speed <= 2 { BlockSize::BLOCK_8X8 }
                                  else if config.speed <= 3 { BlockSize::BLOCK_16X16 }
                                  else { BlockSize::BLOCK_32X32 };
+
+        if config.tune == Tune::Psychovisual {
+            if min_partition_size < BlockSize::BLOCK_8X8 {
+                // TODO: Display message that min partition size is enforced to 8x8
+                min_partition_size = BlockSize::BLOCK_8X8;
+                println!("If tune=Psychovisual is used, min partition size is enforced to 8x8");
+            }
+        }
         let use_reduced_tx_set = config.speed > 1;
 
         FrameInvariants {
@@ -474,7 +483,7 @@ impl EncoderConfig {
                 .takes_value(true)
                 .default_value("3"))
             .arg(Arg::with_name("TUNE")
-                .help("Quality tuning")
+                .help("Quality tuning (Will enforce partition sizes >= 8x8)")
                 .long("tune")
                 .possible_values(&Tune::variants())
                 .default_value("psnr")
