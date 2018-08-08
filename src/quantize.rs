@@ -10,10 +10,16 @@
 #![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
 
 use partition::TxSize;
+use std::mem;
 
 extern {
   static dc_qlookup_Q3: [i16; 256];
-  static ac_qlookup_Q3: [i16; 256];
+  static dc_qlookup_10_Q3: [i16; 256];
+  static dc_qlookup_12_Q3: [i16; 256];
+
+  static ac_qlookup_Q3: [i16; 256];  
+  static ac_qlookup_10_Q3: [i16; 256];
+  static ac_qlookup_12_Q3: [i16; 256];
 }
 
 fn get_tx_scale(tx_size: TxSize) -> u8 {
@@ -24,12 +30,26 @@ fn get_tx_scale(tx_size: TxSize) -> u8 {
   }
 }
 
-pub fn dc_q(qindex: usize) -> i16 {
-  unsafe { dc_qlookup_Q3[qindex] }
+pub fn dc_q(qindex: usize, bit_depth: usize) -> i16 {
+  let &table = match bit_depth {
+    8 => &dc_qlookup_Q3,
+    10 => &dc_qlookup_10_Q3,
+    12 => &dc_qlookup_12_Q3,
+    _ => unimplemented!()
+  };
+
+  table[qindex]
 }
 
-pub fn ac_q(qindex: usize) -> i16 {
-  unsafe { ac_qlookup_Q3[qindex] }
+pub fn ac_q(qindex: usize, bit_depth: usize) -> i16 {
+  let &table = match bit_depth {
+    8 => &ac_qlookup_Q3,
+    10 => &ac_qlookup_10_Q3,
+    12 => &ac_qlookup_12_Q3,
+    _ => unimplemented!()
+  };
+
+  table[qindex]
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -43,8 +63,6 @@ pub struct QuantizationContext {
   ac_offset: i32,
   ac_mul_add: (u32, u32, u32)
 }
-
-use std::mem;
 
 fn divu_gen(d: u32) -> (u32, u32, u32) {
   let nbits = (mem::size_of_val(&d) as u64) * 8;
@@ -101,13 +119,13 @@ mod test {
 }
 
 impl QuantizationContext {
-  pub fn update(&mut self, qindex: usize, tx_size: TxSize, is_intra: bool) {
+  pub fn update(&mut self, qindex: usize, tx_size: TxSize, is_intra: bool, bit_depth: usize) {
     self.tx_scale = get_tx_scale(tx_size) as i32;
 
-    self.dc_quant = dc_q(qindex) as u32;
+    self.dc_quant = dc_q(qindex, bit_depth) as u32;
     self.dc_mul_add = divu_gen(self.dc_quant);
 
-    self.ac_quant = ac_q(qindex) as u32;
+    self.ac_quant = ac_q(qindex, bit_depth) as u32;
     self.ac_mul_add = divu_gen(self.ac_quant);
 
     self.dc_offset = self.dc_quant as i32 * (if is_intra {21} else {15}) / 64;
@@ -128,11 +146,11 @@ impl QuantizationContext {
   }
 }
 
-pub fn quantize_in_place(qindex: usize, coeffs: &mut [i32], tx_size: TxSize) {
+pub fn quantize_in_place(qindex: usize, coeffs: &mut [i32], tx_size: TxSize, bit_depth: usize) {
   let tx_scale = get_tx_scale(tx_size) as i32;
 
-  let dc_quant = dc_q(qindex) as i32;
-  let ac_quant = ac_q(qindex) as i32;
+  let dc_quant = dc_q(qindex, bit_depth) as i32;
+  let ac_quant = ac_q(qindex, bit_depth) as i32;
 
   // using 21/64=0.328125 as rounding offset. To be tuned
   let dc_offset = dc_quant * 21 / 64 as i32;
@@ -150,12 +168,12 @@ pub fn quantize_in_place(qindex: usize, coeffs: &mut [i32], tx_size: TxSize) {
 }
 
 pub fn dequantize(
-  qindex: usize, coeffs: &[i32], rcoeffs: &mut [i32], tx_size: TxSize
+  qindex: usize, coeffs: &[i32], rcoeffs: &mut [i32], tx_size: TxSize, bit_depth: usize
 ) {
   let tx_scale = get_tx_scale(tx_size) as i32;
 
-  rcoeffs[0] = (coeffs[0] * dc_q(qindex) as i32) / tx_scale;
-  let ac_quant = ac_q(qindex) as i32;
+  rcoeffs[0] = (coeffs[0] * dc_q(qindex, bit_depth) as i32) / tx_scale;
+  let ac_quant = ac_q(qindex, bit_depth) as i32;
 
   for (r, &c) in rcoeffs.iter_mut().zip(coeffs.iter()).skip(1) {
     *r = c * ac_quant / tx_scale;

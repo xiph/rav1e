@@ -1036,35 +1036,6 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         Ok(())
     }
 
-    fn write_sequence_header(&mut self, fi: &FrameInvariants)
-        -> Result<(), std::io::Error> {
-        self.write_frame_size(fi)?;
-        self.write_bit(false)?; // don't use frame ids
-        self.write_bit(false)?; // use_128x128_superblock = 0
-        self.write_bit(true)?; // disable intra edge filter
-        self.write_bit(true)?; // allow filter intra
-        self.write_bit(false)?; // interintra_compound
-        self.write_bit(false)?; // masked_compound
-        self.write_bit(false)?; // warped_motion
-        self.write_bit(false)?; // dual_filter
-        self.write_bit(false)?; // order_hint
-        self.write_bit(false)?; // screen content tools forced
-        self.write_bit(false)?; // screen content tools forced off
-        self.write_bit(false)?; // no superres
-        self.write_bit(true)?; // cdef
-        self.write_bit(true)?; // lr
-        Ok(())
-    }
-
-    fn write_bitdepth_colorspace_sampling(&mut self, seq: &Sequence) -> Result<(), std::io::Error> {
-        self.write_bit(seq.bit_depth > 8)?; // 8 bit video
-        self.write_bit(false)?; // not monochrome
-        self.write_bit(false)?; // no color description
-        self.write_bit(false)?; // range
-        self.write(2,0)?; // chroma sample position
-        Ok(())
-    }
-
     fn write_frame_setup(&mut self) -> Result<(), std::io::Error> {
         self.write_bit(false)?; // no superres
         //self.write_bit(false)?; // scaling active
@@ -1424,7 +1395,7 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
                             fi.use_reduced_tx_set);
 
     // Reconstruct
-    dequantize(fi.config.quantizer, &coeffs, &mut rcoeffs.array, tx_size);
+    dequantize(fi.config.quantizer, &coeffs, &mut rcoeffs.array, tx_size, bit_depth);
 
     inverse_transform_add(&rcoeffs.array, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
     has_coeff
@@ -1444,7 +1415,7 @@ fn encode_block_a(seq: &Sequence,
 fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
                  cw: &mut ContextWriter, w: &mut Writer,
                  luma_mode: PredictionMode, chroma_mode: PredictionMode,
-                 bsize: BlockSize, bo: &BlockOffset, skip: bool) {
+                 bsize: BlockSize, bo: &BlockOffset, skip: bool, bit_depth: usize) {
     let is_inter = !luma_mode.is_intra();
 
     if fi.frame_type == FrameType::INTER {
@@ -1502,7 +1473,7 @@ fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
 
     let tx_type = if tx_set > TxSet::TX_SET_DCTONLY && fi.config.speed <= 3 {
         // FIXME: there is one redundant transform type decision per encoded block
-        rdo_tx_type_decision(fi, fs, cw, luma_mode, bsize, bo, tx_size, tx_set, seq.bit_depth)
+        rdo_tx_type_decision(fi, fs, cw, luma_mode, bsize, bo, tx_size, tx_set, bit_depth)
     } else {
         TxType::DCT_DCT
     };
@@ -1521,9 +1492,9 @@ fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
 
             luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), plane_bsize);
         }
-        write_tx_tree(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, seq.bit_depth); // i.e. var-tx if inter mode
+        write_tx_tree(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth); // i.e. var-tx if inter mode
     } else {
-        write_tx_blocks(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, seq.bit_depth);
+        write_tx_blocks(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth);
     }
 }
 
@@ -1536,7 +1507,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
 
     let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
-    fs.qc.update(fi.config.quantizer, tx_size, luma_mode.is_intra());
+    fs.qc.update(fi.config.quantizer, tx_size, luma_mode.is_intra(), bit_depth);
 
     for by in 0..bh {
         for bx in 0..bw {
@@ -1573,7 +1544,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
 
     if bw_uv > 0 && bh_uv > 0 {
         let uv_tx_type = uv_intra_mode_to_tx_type_context(chroma_mode);
-        fs.qc.update(fi.config.quantizer, uv_tx_size, chroma_mode.is_intra());
+        fs.qc.update(fi.config.quantizer, uv_tx_size, chroma_mode.is_intra(), bit_depth);
 
         for p in 1..3 {
             for by in 0..bh_uv {
@@ -1608,7 +1579,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
 
     let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
-    fs.qc.update(fi.config.quantizer, tx_size, luma_mode.is_intra());
+    fs.qc.update(fi.config.quantizer, tx_size, luma_mode.is_intra(), bit_depth);
 
     let po = bo.plane_offset(&fs.input.planes[0].cfg);
     let has_coeff = encode_tx_block(fi, fs, cw, w, 0, &bo, luma_mode, tx_size, tx_type, bsize, &po, skip, bit_depth);
@@ -1637,7 +1608,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
     if bw_uv > 0 && bh_uv > 0 {
         let uv_tx_type = if has_coeff {tx_type} else {TxType::DCT_DCT}; // if inter mode, uv_tx_type == tx_type
 
-        fs.qc.update(fi.config.quantizer, uv_tx_size, chroma_mode.is_intra());
+        fs.qc.update(fi.config.quantizer, uv_tx_size, chroma_mode.is_intra(), bit_depth);
 
         for p in 1..3 {
             let tx_bo = BlockOffset {
@@ -1705,7 +1676,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         cdef_coded = encode_block_a(seq, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                                    bsize, bo, skip);
         encode_block_b(fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
-                       mode_luma, mode_chroma, bsize, bo, skip);
+                       mode_luma, mode_chroma, bsize, bo, skip, seq.bit_depth);
 
         best_decision = mode_decision;
     }
@@ -1755,7 +1726,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             cdef_coded = encode_block_a(seq, cw, if cdef_coded {w_post_cdef} else {w_pre_cdef},
                                        bsize, bo, skip);
             encode_block_b(fi, fs, cw, if cdef_coded {w_post_cdef} else {w_pre_cdef},
-                          mode_luma, mode_chroma, bsize, bo, skip);
+                          mode_luma, mode_chroma, bsize, bo, skip, seq.bit_depth);
         }
     }
 
@@ -1833,7 +1804,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
             cdef_coded = encode_block_a(seq, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                          bsize, bo, skip);
             encode_block_b(fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
-                          mode_luma, mode_chroma, bsize, bo, skip);
+                          mode_luma, mode_chroma, bsize, bo, skip, seq.bit_depth);
         },
         PartitionType::PARTITION_SPLIT => {
             if rdo_output.part_modes.len() >= 4 {

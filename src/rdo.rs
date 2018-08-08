@@ -115,7 +115,7 @@ fn compute_rd_cost(
   fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize, w_uv: usize,
   h_uv: usize, bo: &BlockOffset, bit_cost: u32, bit_depth: usize
 ) -> f64 {
-  let q = dc_q(fi.config.quantizer) as f64;
+  let q = dc_q(fi.config.quantizer, bit_depth) as f64;
 
   // Convert q into Q0 precision, given that libaom quantizers are Q3
   let q0 = q / 8.0_f64;
@@ -213,7 +213,7 @@ pub fn rdo_mode_decision(
         let tell = wr.tell_frac();
         
         encode_block_a(seq, cw, wr, bsize, bo, skip);
-        encode_block_b(fi, fs, cw, wr, luma_mode, chroma_mode, bsize, bo, skip);
+        encode_block_b(fi, fs, cw, wr, luma_mode, chroma_mode, bsize, bo, skip, seq.bit_depth);
 
         let cost = wr.tell_frac() - tell;
         let rd = compute_rd_cost(
@@ -241,7 +241,7 @@ pub fn rdo_mode_decision(
       let mut wr: &mut Writer = &mut WriterCounter::new();
       let tell = wr.tell_frac();
       encode_block_a(seq, cw, wr, bsize, bo, skip);
-      encode_block_b(fi, fs, cw, wr, luma_mode, luma_mode, bsize, bo, skip);
+      encode_block_b(fi, fs, cw, wr, luma_mode, luma_mode, bsize, bo, skip, seq.bit_depth);
 
       let cost = wr.tell_frac() - tell;
       let rd = compute_rd_cost(
