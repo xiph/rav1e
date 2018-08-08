@@ -258,7 +258,7 @@ pub fn cdef_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockContext) 
             for by in 0..8 {
                 for bx in 0..8 {
                     let block_offset = sbo.block_offset(bx, by);
-                    if block_offset.x < bc.cols && block_offset.y < bc.rows {
+                    if block_offset.x+bx < bc.cols && block_offset.y+by < bc.rows {
                         let skip = bc.at(&block_offset).skip;
                         if !skip {
                             let mut dir = 0;
@@ -282,46 +282,36 @@ pub fn cdef_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockContext) 
                                 let mut cdef_plane = &mut cdef_frame.planes[p];
                                 let xdec = cdef_plane.cfg.xdec;
                                 let ydec = cdef_plane.cfg.ydec;
-                                let mut xsize = (fi.padded_w as i32 - 8*bx as i32 >> xdec as i32) - rec_po.x as i32;
-                                let mut ysize = (fi.padded_h as i32 - 8*by as i32 >> ydec as i32) - rec_po.y as i32;
-                                if xsize > (8>>xdec) {
-                                    xsize = 8 >> xdec;
-                                }
-                                if ysize > (8>>ydec) {
-                                    ysize = 8 >> ydec;
-                                }
-                                if xsize > 0 && ysize > 0 {
-                                    let rec_stride = rec_plane.cfg.stride;
-                                    let mut rec_slice = &mut rec_plane.mut_slice(&rec_po);
-                                    let cdef_stride = cdef_plane.cfg.stride;
-                                    let cdef_po = sbo.plane_offset(&cdef_plane.cfg);
-                                    let cdef_slice = &cdef_plane.mut_slice(&cdef_po);
 
-                                    let mut local_pri_strength;
-                                    let mut local_sec_strength;
-                                    let mut local_damping: i32 = cdef_damping + coeff_shift;
-                                    let mut local_dir: usize;
+                                let rec_stride = rec_plane.cfg.stride;
+                                let mut rec_slice = &mut rec_plane.mut_slice(&rec_po);
+                                let cdef_stride = cdef_plane.cfg.stride;
+                                let cdef_po = sbo.plane_offset(&cdef_plane.cfg);
+                                let cdef_slice = &cdef_plane.mut_slice(&cdef_po);
 
-                                    if p==0 {
-                                        dir = cdef_find_dir(cdef_slice.offset((8*bx>>xdec)+2,(8*by>>ydec)+2),
-                                                            cdef_stride, &mut var, coeff_shift);
-                                        local_pri_strength = adjust_strength(cdef_pri_y_strength << coeff_shift, var);
-                                        local_sec_strength = cdef_sec_y_strength << coeff_shift;
-                                        local_dir = if cdef_pri_y_strength != 0 {dir as usize} else {0};
-                                    } else {
-                                        local_pri_strength = cdef_pri_uv_strength << coeff_shift;
-                                        local_sec_strength = cdef_sec_uv_strength << coeff_shift;
-                                        local_damping -= 1;
-                                        local_dir = if cdef_pri_uv_strength != 0 {dir as usize} else {0};
-                                    }
+                                let mut local_pri_strength;
+                                let mut local_sec_strength;
+                                let mut local_damping: i32 = cdef_damping + coeff_shift;
+                                let mut local_dir: usize;
 
-                                    cdef_filter_block(rec_slice.offset_as_mutable(8*bx>>xdec,8*by>>ydec), rec_stride as i32,
-                                                      cdef_slice.offset(8*bx>>xdec,8*by>>ydec), cdef_stride as i32, 
-                                                      local_pri_strength, local_sec_strength, local_dir,
-                                                      local_damping, local_damping,
-                                                      xsize, ysize,
-                                                      coeff_shift as i32);
+                                if p==0 {
+                                    dir = cdef_find_dir(cdef_slice.offset((8*bx>>xdec)+2,(8*by>>ydec)+2),
+                                                        cdef_stride, &mut var, coeff_shift);
+                                    local_pri_strength = adjust_strength(cdef_pri_y_strength << coeff_shift, var);
+                                    local_sec_strength = cdef_sec_y_strength << coeff_shift;
+                                    local_dir = if cdef_pri_y_strength != 0 {dir as usize} else {0};
+                                } else {
+                                    local_pri_strength = cdef_pri_uv_strength << coeff_shift;
+                                    local_sec_strength = cdef_sec_uv_strength << coeff_shift;
+                                    local_damping -= 1;
+                                    local_dir = if cdef_pri_uv_strength != 0 {dir as usize} else {0};
                                 }
+
+                                cdef_filter_block(rec_slice.offset_as_mutable(8*bx>>xdec,8*by>>ydec), rec_stride as i32,
+                                                  cdef_slice.offset(8*bx>>xdec,8*by>>ydec), cdef_stride as i32, 
+                                                  local_pri_strength, local_sec_strength, local_dir,
+                                                  local_damping, local_damping,
+                                                  8>>xdec, 8>>ydec, coeff_shift as i32);
                             }
                         }
                     }
