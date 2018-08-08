@@ -254,7 +254,6 @@ pub struct FrameInvariants {
     pub sb_height: usize,
     pub w_in_b: usize,
     pub h_in_b: usize,
-    pub bit_depth: usize,
     pub number: u64,
     pub show_frame: bool,
     pub showable_frame: bool,
@@ -320,7 +319,6 @@ impl FrameInvariants {
             sb_height: height.align_power_of_two_and_shift(6),
             w_in_b: 2 * width.align_power_of_two_and_shift(3), // MiCols, ((width+7)/8)<<3 >> MI_SIZE_LOG2
             h_in_b: 2 * height.align_power_of_two_and_shift(3), // MiRows, ((height+7)/8)<<3 >> MI_SIZE_LOG2
-            bit_depth: 8,
             number: 0,
             show_frame: true,
             showable_frame: true,

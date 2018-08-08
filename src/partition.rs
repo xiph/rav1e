@@ -372,15 +372,15 @@ impl PredictionMode {
     // above and left arrays include above-left sample
     // above array includes above-right samples
     // left array includes below-left samples
-    let above = &mut [127u16; 2 * MAX_TX_SIZE + 1][..B::W + B::H + 1];
-    let left = &mut [129u16; 2 * MAX_TX_SIZE + 1][..B::H + B::W + 1];
+    let bd = bit_depth;
+    let base = 128 << (bd - 8);
+
+    let above = &mut [(base - 1) as u16; 2 * MAX_TX_SIZE + 1][..B::W + B::H + 1];
+    let left = &mut [(base + 1) as u16; 2 * MAX_TX_SIZE + 1][..B::H + B::W + 1];
 
     let stride = dst.plane.cfg.stride;
     let x = dst.x;
     let y = dst.y;
-
-    let bd = bit_depth;
-    let base = 128 << (bd - 8);
 
     if y != 0 {
       if self != PredictionMode::H_PRED {
