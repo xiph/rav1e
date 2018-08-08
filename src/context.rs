@@ -2885,3 +2885,155 @@ impl ContextWriter {
     }
   }
 }
+
+/* Symbols for coding magnitude class of nonzero components */
+const MV_CLASSES:usize = 11;
+
+// MV Class Types
+const MV_CLASS_0: usize = 0;   /* (0, 2]     integer pel */
+const MV_CLASS_1: usize = 1;   /* (2, 4]     integer pel */
+const MV_CLASS_2: usize = 2;   /* (4, 8]     integer pel */
+const MV_CLASS_3: usize = 3;   /* (8, 16]    integer pel */
+const MV_CLASS_4: usize = 4;   /* (16, 32]   integer pel */
+const MV_CLASS_5: usize = 5;   /* (32, 64]   integer pel */
+const MV_CLASS_6: usize = 6;   /* (64, 128]  integer pel */
+const MV_CLASS_7: usize = 7;   /* (128, 256] integer pel */
+const MV_CLASS_8: usize = 8;   /* (256, 512] integer pel */
+const MV_CLASS_9: usize = 9;   /* (512, 1024] integer pel */
+const MV_CLASS_10: usize = 10; /* (1024,2048] integer pel */
+
+const CLASS0_BITS: usize = 1; /* bits at integer precision for class 0 */
+const CLASS0_SIZE: usize = (1 << CLASS0_BITS);
+const MV_OFFSET_BITS: usize = (MV_CLASSES + CLASS0_BITS - 2);
+const MV_BITS_CONTEXTS: usize = 6;
+const MV_FP_SIZE: usize = 4;
+
+const MV_MAX_BITS: usize = (MV_CLASSES + CLASS0_BITS + 2);
+const MV_MAX: usize = ((1 << MV_MAX_BITS) - 1);
+const MV_VALS: usize = ((MV_MAX << 1) + 1);
+
+const MV_IN_USE_BITS: usize = 14;
+const MV_UPP: i32 = (1 << MV_IN_USE_BITS);
+const MV_LOW: i32 = (-(1 << MV_IN_USE_BITS));
+
+
+pub struct nmv_component {
+  classes_cdf: [u16; MV_CLASSES + 1],
+  class0_fp_cdf: [[u16; MV_FP_SIZE + 1]; CLASS0_SIZE],
+  fp_cdf: [u16; MV_FP_SIZE + 1],
+  sign_cdf: [u16; 2 + 1],
+  class0_hp_cdf: [u16; 2 + 1],
+  hp_cdf: [u16; 2 + 1],
+  class0_cdf: [u16; CLASS0_SIZE + 1],
+  bits_cdf: [[u16; 2 + 1]; MV_OFFSET_BITS],
+}
+
+pub struct nmv_context {
+  joints_cdf: [u16; MV_JOINTS + 1],
+  comps: [nmv_component; 2],
+}
+
+pub struct MV {
+  row : i16,
+  col : i16,
+}
+
+#[inline(always)]
+pub fn av1_get_mv_joint(mv: &MV) -> MvJointType {
+  if mv.row == 0 {
+    if mv.col == 0 { MvJointType::MV_JOINT_ZERO } else { MvJointType::MV_JOINT_HNZVZ }
+  } else {
+    if mv.col == 0 { MvJointType::MV_JOINT_HZVNZ } else { MvJointType::MV_JOINT_HNZVNZ }
+  }
+}
+#[inline(always)]
+pub fn mv_joint_vertical(joint_type: MvJointType) -> bool {
+  joint_type == MvJointType::MV_JOINT_HZVNZ || joint_type == MvJointType::MV_JOINT_HNZVNZ
+}
+#[inline(always)]
+pub fn mv_joint_horizontal(joint_type: MvJointType ) -> bool {
+  joint_type == MvJointType::MV_JOINT_HNZVZ || joint_type == MvJointType::MV_JOINT_HNZVNZ
+}
+#[inline(always)]
+pub fn mv_class_base(mv_class: usize) -> u32 {
+  if mv_class != MV_CLASS_0 {
+    (CLASS0_SIZE << (mv_class as usize + 2)) as u32 }
+  else { 0 }
+}
+#[inline(always)]
+// If n != 0, returns the floor of log base 2 of n. If n == 0, returns 0.
+pub fn log_in_base_2(n: u32) -> u8 {
+  32 - n.leading_zeros() as u8
+}
+#[inline(always)]
+pub fn get_mv_class(z: u32, offset: &mut u32) -> usize {
+  let c =
+    if z >= CLASS0_SIZE as u32 * 4096 { MV_CLASS_10 }
+    else { log_in_base_2(z >> 3) as usize };
+
+  *offset = z - mv_class_base(c);
+  c
+}
+
+pub fn encode_mv_component(w: &mut Writer, comp: i32, 
+  mvcomp: &mut nmv_component, precision: MvSubpelPrecision) {
+  assert!(comp != 0);
+  let mut offset: u32 = 0;
+  let sign: u32 = if comp < 0 { 1 } else { 0 };
+  let mag: u32 = if sign == 1 { -comp as u32 } else { comp as u32 };
+  let mv_class = get_mv_class(mag - 1, &mut offset);
+  let d = offset >> 3;         // int mv data
+  let fr = (offset >> 1) & 3;  // fractional mv data
+  let hp = offset & 1;         // high precision mv data
+
+  // Sign
+  w.symbol_with_update(sign, &mut mvcomp.sign_cdf);
+
+  // Class
+  w.symbol_with_update(mv_class as u32, &mut mvcomp.classes_cdf);
+
+  // Integer bits
+  if mv_class == MV_CLASS_0 {
+    w.symbol_with_update(d, &mut mvcomp.class0_cdf);
+  } else {
+    let n = mv_class + CLASS0_BITS - 1;  // number of bits
+    for i in 0..n {
+      w.symbol_with_update((d >> i) & 1, &mut mvcomp.bits_cdf[i]);
+    }
+  }
+  // Fractional bits
+  if precision > MvSubpelPrecision::MV_SUBPEL_NONE {
+    w.symbol_with_update(
+        fr,
+        if mv_class == MV_CLASS_0 { &mut mvcomp.class0_fp_cdf[d as usize] }
+        else { &mut mvcomp.fp_cdf });
+  }
+
+  // High precision bit
+  if precision > MvSubpelPrecision::MV_SUBPEL_LOW_PRECISION {
+    w.symbol_with_update(
+        hp, 
+        if mv_class == MV_CLASS_0 { &mut mvcomp.class0_hp_cdf }
+        else { &mut mvcomp.hp_cdf});
+  }
+}
+
+pub fn av1_encode_mv(w: &mut Writer,
+                   mv: &MV, ref_mv: &MV,
+                   mvctx: &mut nmv_context, mut usehp: MvSubpelPrecision) {
+  let diff = MV { row: mv.row - ref_mv.row, col: mv.col - ref_mv.col };
+  let j: MvJointType = av1_get_mv_joint(&diff);
+
+  // TODO: pass fi.force_integer_mv to this function
+  if false /*fi.force_integer_mv*/ {
+    usehp = MvSubpelPrecision::MV_SUBPEL_NONE;
+  }
+  w.symbol_with_update(j as u32, &mut mvctx.joints_cdf);
+
+  if mv_joint_vertical(j) {
+    encode_mv_component(w, diff.row as i32, &mut mvctx.comps[0], usehp);
+  }
+  if mv_joint_horizontal(j) {
+    encode_mv_component(w, diff.col as i32, &mut mvctx.comps[1], usehp);
+  }
+}
