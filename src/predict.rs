@@ -197,10 +197,10 @@ pub trait Intra: Dim {
   }
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
-  fn pred_dc_128(output: &mut [u16], stride: usize) {
+  fn pred_dc_128(output: &mut [u16], stride: usize, bit_depth: usize) {
     for y in 0..Self::H {
       for x in 0..Self::W {
-        output[y * stride + x] = 128;
+        output[y * stride + x] = 128 << (bit_depth - 8);
       }
     }
   }

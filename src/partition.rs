@@ -436,6 +436,7 @@ impl PredictionMode {
       }
       if x == 0 && y == 0 {
         above[0] = base;
+        left[0] = base;
       }      
     }
 
@@ -445,7 +446,7 @@ impl PredictionMode {
 
     match self {
       PredictionMode::DC_PRED => match (x, y) {
-        (0, 0) => B::pred_dc_128(slice, stride),
+        (0, 0) => B::pred_dc_128(slice, stride, bit_depth),
         (_, 0) => B::pred_dc_left(slice, stride, above_slice, left_slice, bit_depth),
         (0, _) => B::pred_dc_top(slice, stride, above_slice, left_slice, bit_depth),
         _ => B::pred_dc(slice, stride, above_slice, left_slice)

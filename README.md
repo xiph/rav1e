@@ -38,7 +38,7 @@ On Windows, pkg-config is not required. A Perl distribution such as Strawberry P
 
 # Compressing video
 
-Input videos must be 8-bit 4:2:0, in y4m format.
+Input videos must be 8- or 10-bit 4:2:0, in y4m format.
 
 ```
 cargo run --release --bin rav1e -- input.y4m -o output.ivf

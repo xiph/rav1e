@@ -1962,6 +1962,8 @@ pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
     let y4m_bits = y4m_dec.get_bit_depth();
     let y4m_bytes = y4m_dec.get_bytes_per_sample();
     let csp = y4m_dec.get_colorspace();
+
+    // TODO implement C420p12 in y4m or change crates to support 12-bit input
     match csp {
         y4m::Colorspace::C420 |
         y4m::Colorspace::C420jpeg |
@@ -2080,7 +2082,7 @@ mod test_encode_decode {
 
     }
 
-    fn setup_encoder(w: usize, h: usize, speed: usize, quantizer: usize) -> (FrameInvariants, Sequence) {
+    fn setup_encoder(w: usize, h: usize, speed: usize, quantizer: usize, bit_depth: usize) -> (FrameInvariants, Sequence) {
         unsafe {
             av1_rtcd();
             aom_dsp_rtcd();
@@ -2095,7 +2097,7 @@ mod test_encode_decode {
 
         fi.use_reduced_tx_set = true;
         // fi.min_partition_size =
-        let seq = Sequence::new(w, h);
+        let seq = Sequence::new(w, h, 8);
 
         (fi, seq)
     }
@@ -2113,7 +2115,7 @@ mod test_encode_decode {
 
         for b in DIMENSION_OFFSETS.iter() {
             for s in 0 .. 10 {
-                encode_decode(w + b.0, h + b.1, s, quantizer, limit);
+                encode_decode(w + b.0, h + b.1, s, quantizer, limit, 8);
             }
         }
     }
@@ -2130,7 +2132,7 @@ mod test_encode_decode {
         let speed = 4;
         
         for (w, h) in DIMENSIONS.iter() {
-            encode_decode(*w, *h, speed, quantizer, limit);
+            encode_decode(*w, *h, speed, quantizer, limit, 8);
         }
     }
 
@@ -2144,7 +2146,7 @@ mod test_encode_decode {
 
         for b in DIMENSION_OFFSETS.iter() {
             for &q in [80, 100, 120].iter() {
-                encode_decode(w + b.0, h + b.1, speed, q, limit);
+                encode_decode(w + b.0, h + b.1, speed, q, limit, 8);
             }
         }
     }
@@ -2158,7 +2160,24 @@ mod test_encode_decode {
         let speed = 0;
         let qindex = 100;
 
-        encode_decode(w, h, speed, qindex, limit);
+        encode_decode(w, h, speed, qindex, limit, 8);
+    }
+
+    #[test]
+    #[ignore]
+    fn high_bd() {
+        let quantizer = 100;
+        let limit = 3; // Include inter frames
+        let speed = 0; // Test as many tools as possible
+        let w = 64;
+        let h = 80;
+
+        // 10-bit
+        encode_decode(w, h, speed, quantizer, limit, 10);
+
+        // 12-bit
+        // TODO uncomment when 12-bit input is supported in y4m
+        //encode_decode(w + b.0, h + b.1, s, quantizer, limit, 12);
     }
 
     fn compare_plane(rec: &[u8], rec_stride: usize,
@@ -2193,12 +2212,12 @@ mod test_encode_decode {
         }
     }
 
-    fn encode_decode(w:usize, h:usize, speed: usize, quantizer: usize, limit: usize) {
+    fn encode_decode(w:usize, h:usize, speed: usize, quantizer: usize, limit: usize, bit_depth: usize) {
         use std::ptr;
         let mut ra = ChaChaRng::from_seed([0; 32]);
 
         let mut dec = setup_decoder(w, h);
-        let (mut fi, mut seq) = setup_encoder(w, h, speed, quantizer);
+        let (mut fi, mut seq) = setup_encoder(w, h, speed, quantizer, bit_depth);
 
         println!("Encoding {}x{} speed {} quantizer {}", w, h, speed, quantizer);
 
