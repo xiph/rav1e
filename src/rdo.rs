@@ -441,3 +441,9 @@ pub fn rdo_partition_decision(
     part_modes: best_pred_modes
   }
 }
+
+pub fn rdo_cdef_decision(sbo: &SuperBlockOffset, fi: &FrameInvariants, fs: &FrameState) -> u8 {
+  for cdef_index in 0..(1<<fi.cdef_bits) {
+  }
+  5
+}
