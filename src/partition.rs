@@ -350,6 +350,24 @@ pub enum GlobalMVMode {
   AFFINE = 3       // affine, 6-parameter
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+pub enum MvSubpelPrecision {
+  MV_SUBPEL_NONE = -1,
+  MV_SUBPEL_LOW_PRECISION = 0,
+  MV_SUBPEL_HIGH_PRECISION,
+}
+
+/* Symbols for coding which components are zero jointly */
+pub const MV_JOINTS:usize = 4;
+
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+pub enum MvJointType {
+  MV_JOINT_ZERO = 0,   /* Zero vector */
+  MV_JOINT_HNZVZ = 1,  /* Vert zero, hor nonzero */
+  MV_JOINT_HZVNZ = 2,  /* Hor zero, vert nonzero */
+  MV_JOINT_HNZVNZ = 3, /* Both components nonzero */
+}
+
 use context::*;
 use plane::*;
 use predict::*;
