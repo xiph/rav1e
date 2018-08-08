@@ -1662,7 +1662,7 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
             }
 
             if cw.bc.cdef_coded {
-                let cdef_index = 5;  // The hardwired cdef index is temporary; real RDO is next
+                let cdef_index = rdo_cdef_decision(&sbo, fi, fs);
                 // CDEF index must be written in the middle, we can code it now
                 cw.write_cdef(&mut w, cdef_index, fi.cdef_bits);
                 cw.bc.set_cdef(&sbo, cdef_index);
@@ -1673,7 +1673,7 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
     }
     /* TODO: Don't apply if lossless */
     if sequence.enable_cdef {
-        cdef_frame(fi, &mut fs.rec, &mut cw.bc);
+        cdef_filter_frame(fi, &mut fs.rec, &mut cw.bc, sequence.bit_depth);
     }
 
     let mut h = w.done();

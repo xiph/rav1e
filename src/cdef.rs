@@ -174,7 +174,7 @@ fn cdef_filter_block(dst: &mut [u16], dstride: i32, input: &[u16], istride: i32,
                 sum += sec_taps[k] * constrain(s3 as i32 - x as i32, sec_strength, sec_damping);
             }
             dst[(i * dstride + j) as usize] = clamp(x as i32 + ((8 + sum - (sum < 0) as i32) >> 4),
-                                                    min as i32, max as i32) as u16;
+                                                                min as i32, max as i32) as u16;
         }
     }
 }
@@ -185,16 +185,92 @@ fn adjust_strength(strength: i32, var: i32) -> i32 {
     if var!=0 {strength * (4 + i) + 8 >> 4} else {0}
 }
 
+// We assume in is padded, and the area we'll write out is at least as
+// large as the unpadded area of in
+// cdef_index is taken from the block context
+pub fn cdef_filter_superblock(fi: &FrameInvariants,
+                              in_frame: &mut Frame,
+                              out_frame: &mut Frame,
+                              bc: &mut BlockContext,
+                              sbo: &SuperBlockOffset,
+                              bit_depth: usize,
+                              cdef_index: u8) {
+    let coeff_shift = bit_depth as i32 - 8;
+    let cdef_damping = fi.cdef_damping as i32;
+    let cdef_y_strength = fi.cdef_y_strengths[cdef_index as usize];
+    let cdef_uv_strength = fi.cdef_uv_strengths[cdef_index as usize];
+    let cdef_pri_y_strength = (cdef_y_strength / CDEF_SEC_STRENGTHS) as i32;
+    let mut cdef_sec_y_strength = (cdef_y_strength % CDEF_SEC_STRENGTHS) as i32;
+    let cdef_pri_uv_strength = (cdef_uv_strength / CDEF_SEC_STRENGTHS) as i32;
+    let mut cdef_sec_uv_strength = (cdef_uv_strength % CDEF_SEC_STRENGTHS) as i32;
+    if cdef_sec_y_strength == 3 {
+        cdef_sec_y_strength += 1;
+    }
+    if cdef_sec_uv_strength == 3 {
+        cdef_sec_uv_strength += 1;
+    }
+
+    // Each direction block is 8x8 in y, potentially smaller if subsampled in chroma
+    for by in 0..8 {
+        for bx in 0..8 {
+            let block_offset = sbo.block_offset(bx, by);
+            if block_offset.x+bx < bc.cols && block_offset.y+by < bc.rows {
+                let skip = bc.at(&block_offset).skip;
+                if !skip {
+                    let mut dir = 0;
+                    let mut var: i32 = 0;
+                    for p in 0..3 {
+                        let mut out_plane = &mut out_frame.planes[p];
+                        let out_po = sbo.plane_offset(&out_plane.cfg);
+                        let mut in_plane = &mut in_frame.planes[p];
+                        let in_po = sbo.plane_offset(&in_plane.cfg);
+                        let xdec = in_plane.cfg.xdec;
+                        let ydec = in_plane.cfg.ydec;
+
+                        let in_stride = in_plane.cfg.stride;
+                        let in_slice = &in_plane.mut_slice(&in_po);
+                        let out_stride = out_plane.cfg.stride;
+                        let mut out_slice = &mut out_plane.mut_slice(&out_po);
+                            
+                        let mut local_pri_strength;
+                        let mut local_sec_strength;
+                        let mut local_damping: i32 = cdef_damping + coeff_shift;
+                        let mut local_dir: usize;
+                            
+                        if p==0 {
+                            dir = cdef_find_dir(in_slice.offset((8*bx>>xdec)+2,(8*by>>ydec)+2),
+                                                in_stride, &mut var, coeff_shift);
+                            local_pri_strength = adjust_strength(cdef_pri_y_strength << coeff_shift, var);
+                            local_sec_strength = cdef_sec_y_strength << coeff_shift;
+                            local_dir = if cdef_pri_y_strength != 0 {dir as usize} else {0};
+                        } else {
+                            local_pri_strength = cdef_pri_uv_strength << coeff_shift;
+                            local_sec_strength = cdef_sec_uv_strength << coeff_shift;
+                            local_damping -= 1;
+                            local_dir = if cdef_pri_uv_strength != 0 {dir as usize} else {0};
+                        }
+                            
+                        cdef_filter_block(out_slice.offset_as_mutable(8*bx>>xdec,8*by>>ydec),
+                                          out_stride as i32,
+                                          in_slice.offset(8*bx>>xdec,8*by>>ydec),
+                                          in_stride as i32, 
+                                          local_pri_strength, local_sec_strength, local_dir,
+                                          local_damping, local_damping,
+                                          8 >> xdec, 8 >> ydec, coeff_shift as i32);
+                    }
+                }
+            }
+        }
+    }
+}
+
 // Input to this process is the array CurrFrame of reconstructed samples.
 // Output from this process is the array CdefFrame containing deringed samples.
 // The purpose of CDEF is to perform deringing based on the detected direction of blocks.
 // CDEF parameters are stored for each 64 by 64 block of pixels.
 // The CDEF filter is applied on each 8 by 8 block of pixels.
 // Reference: http://av1-spec.argondesign.com/av1-spec/av1-spec.html#cdef-process
-pub fn cdef_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockContext) {
-    let bit_depth = 8;
-    let coeff_shift = bit_depth - 8;
-    let cdef_damping = fi.cdef_damping as i32;
+pub fn cdef_filter_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockContext, bit_depth: usize) {
 
     // Each filter block is 64x64, except right and/or bottom for non-multiple-of-64 sizes.
     // FIXME: 128x128 SB support will break this, we need FilterBlockOffset etc.
@@ -253,70 +329,8 @@ pub fn cdef_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockContext) 
     for fby in 0..fb_height {
         for fbx in 0..fb_width {
             let sbo = SuperBlockOffset { x: fbx, y: fby };
-            let cdef_index = bc.at(&sbo.block_offset(0,0)).cdef_index;
-            let cdef_y_strength = fi.cdef_y_strengths[cdef_index as usize];
-            let cdef_uv_strength = fi.cdef_uv_strengths[cdef_index as usize];
-            let cdef_pri_y_strength = (cdef_y_strength / CDEF_SEC_STRENGTHS) as i32;
-            let mut cdef_sec_y_strength = (cdef_y_strength % CDEF_SEC_STRENGTHS) as i32;
-            let cdef_pri_uv_strength = (cdef_uv_strength / CDEF_SEC_STRENGTHS) as i32;
-            let mut cdef_sec_uv_strength = (cdef_uv_strength % CDEF_SEC_STRENGTHS) as i32;
-            if cdef_sec_y_strength == 3 {
-                cdef_sec_y_strength += 1;
-            }
-            if cdef_sec_uv_strength == 3 {
-                cdef_sec_uv_strength += 1;
-            }
-
-            // Each direction block is 8x8 in y, potentially smaller if subsampled in chroma
-            for by in 0..8 {
-                for bx in 0..8 {
-                    let block_offset = sbo.block_offset(bx, by);
-                    if block_offset.x+bx < bc.cols && block_offset.y+by < bc.rows {
-                        let skip = bc.at(&block_offset).skip;
-                        if !skip {
-                            let mut dir = 0;
-                            let mut var: i32 = 0;
-                            for p in 0..3 {
-                                let mut rec_plane = &mut rec.planes[p];
-                                let rec_po = sbo.plane_offset(&rec_plane.cfg);
-                                let mut cdef_plane = &mut cdef_frame.planes[p];
-                                let xdec = cdef_plane.cfg.xdec;
-                                let ydec = cdef_plane.cfg.ydec;
-
-                                let rec_stride = rec_plane.cfg.stride;
-                                let mut rec_slice = &mut rec_plane.mut_slice(&rec_po);
-                                let cdef_stride = cdef_plane.cfg.stride;
-                                let cdef_po = sbo.plane_offset(&cdef_plane.cfg);
-                                let cdef_slice = &cdef_plane.mut_slice(&cdef_po);
-
-                                let mut local_pri_strength;
-                                let mut local_sec_strength;
-                                let mut local_damping: i32 = cdef_damping + coeff_shift;
-                                let mut local_dir: usize;
-
-                                if p==0 {
-                                    dir = cdef_find_dir(cdef_slice.offset((8*bx>>xdec)+2,(8*by>>ydec)+2),
-                                                        cdef_stride, &mut var, coeff_shift);
-                                    local_pri_strength = adjust_strength(cdef_pri_y_strength << coeff_shift, var);
-                                    local_sec_strength = cdef_sec_y_strength << coeff_shift;
-                                    local_dir = if cdef_pri_y_strength != 0 {dir as usize} else {0};
-                                } else {
-                                    local_pri_strength = cdef_pri_uv_strength << coeff_shift;
-                                    local_sec_strength = cdef_sec_uv_strength << coeff_shift;
-                                    local_damping -= 1;
-                                    local_dir = if cdef_pri_uv_strength != 0 {dir as usize} else {0};
-                                }
-
-                                cdef_filter_block(rec_slice.offset_as_mutable(8*bx>>xdec,8*by>>ydec), rec_stride as i32,
-                                                  cdef_slice.offset(8*bx>>xdec,8*by>>ydec), cdef_stride as i32, 
-                                                  local_pri_strength, local_sec_strength, local_dir,
-                                                  local_damping, local_damping,
-                                                  8>>xdec, 8>>ydec, coeff_shift as i32);
-                            }
-                        }
-                    }
-                }
-            }
+            let cdef_index = bc.at(&sbo.block_offset(0, 0)).cdef_index;
+            cdef_filter_superblock(fi, &mut cdef_frame, rec, bc, &sbo, bit_depth, cdef_index);
         }
     }
 }
