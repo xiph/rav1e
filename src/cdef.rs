@@ -253,6 +253,19 @@ pub fn cdef_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockContext) 
     for fby in 0..fb_height {
         for fbx in 0..fb_width {
             let sbo = SuperBlockOffset { x: fbx, y: fby };
+            let cdef_index = bc.at(&sbo.block_offset(0,0)).cdef_index;
+            let cdef_y_strength = fi.cdef_y_strengths[cdef_index as usize];
+            let cdef_uv_strength = fi.cdef_uv_strengths[cdef_index as usize];
+            let cdef_pri_y_strength = (cdef_y_strength / CDEF_SEC_STRENGTHS) as i32;
+            let mut cdef_sec_y_strength = (cdef_y_strength % CDEF_SEC_STRENGTHS) as i32;
+            let cdef_pri_uv_strength = (cdef_uv_strength / CDEF_SEC_STRENGTHS) as i32;
+            let mut cdef_sec_uv_strength = (cdef_uv_strength % CDEF_SEC_STRENGTHS) as i32;
+            if cdef_sec_y_strength == 3 {
+                cdef_sec_y_strength += 1;
+            }
+            if cdef_sec_uv_strength == 3 {
+                cdef_sec_uv_strength += 1;
+            }
 
             // Each direction block is 8x8 in y, potentially smaller if subsampled in chroma
             for by in 0..8 {
@@ -263,19 +276,6 @@ pub fn cdef_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockContext) 
                         if !skip {
                             let mut dir = 0;
                             let mut var: i32 = 0;
-                            let cdef_index = bc.at(&block_offset).cdef_index;
-                            let cdef_y_strength = fi.cdef_y_strengths[cdef_index as usize];
-                            let cdef_uv_strength = fi.cdef_uv_strengths[cdef_index as usize];
-                            let cdef_pri_y_strength = (cdef_y_strength / CDEF_SEC_STRENGTHS) as i32;
-                            let mut cdef_sec_y_strength = (cdef_y_strength % CDEF_SEC_STRENGTHS) as i32;
-                            let cdef_pri_uv_strength = (cdef_uv_strength / CDEF_SEC_STRENGTHS) as i32;
-                            let mut cdef_sec_uv_strength = (cdef_uv_strength % CDEF_SEC_STRENGTHS) as i32;
-                            if cdef_sec_y_strength == 3 {
-                                cdef_sec_y_strength += 1;
-                            }
-                            if cdef_sec_uv_strength == 3 {
-                                cdef_sec_uv_strength += 1;
-                            }
                             for p in 0..3 {
                                 let mut rec_plane = &mut rec.planes[p];
                                 let rec_po = sbo.plane_offset(&rec_plane.cfg);
