@@ -688,7 +688,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
     }
 
     fn write_color_config(&mut self, seq: &mut Sequence) -> Result<(), std::io::Error> {
-        self.write_bit(seq.bit_depth > 8)?; // 8 bit video
+        self.write_bit(seq.bit_depth > 8)?; // high bit depth
         self.write_bit(seq.monochrome)?; // monochrome?
         self.write_bit(false)?; // No color description present
 
@@ -1776,7 +1776,8 @@ pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
         y4m::Colorspace::C420jpeg |
         y4m::Colorspace::C420paldv |
         y4m::Colorspace::C420mpeg2 |
-        y4m::Colorspace::C420p10 => {},
+        y4m::Colorspace::C420p10 |
+        y4m::Colorspace::C420p12 => {},
         _ => {
             panic!("Colorspace {:?} is not supported yet.", csp);
         },
@@ -1904,7 +1905,7 @@ mod test_encode_decode {
 
         fi.use_reduced_tx_set = true;
         // fi.min_partition_size =
-        let seq = Sequence::new(w, h, 8);
+        let seq = Sequence::new(w, h, bit_depth);
 
         (fi, seq)
     }
@@ -1983,12 +1984,12 @@ mod test_encode_decode {
         encode_decode(w, h, speed, quantizer, limit, 10);
 
         // 12-bit
-        // TODO uncomment when 12-bit input is supported in y4m
-        //encode_decode(w + b.0, h + b.1, s, quantizer, limit, 12);
+        // FIXME corrupt
+        //encode_decode(w, h, speed, quantizer, limit, 12);
     }
 
-    fn compare_plane(rec: &[u8], rec_stride: usize,
-                     dec: &[u8], dec_stride: usize,
+    fn compare_plane<T: Ord + std::fmt::Debug>(rec: &[T], rec_stride: usize,
+                     dec: &[T], dec_stride: usize,
                      width: usize, height: usize) {
         for line in rec.chunks(rec_stride)
             .zip(dec.chunks(dec_stride)).take(height) {
@@ -1996,7 +1997,7 @@ mod test_encode_decode {
         }
     }
 
-    fn compare_img(img: *const aom_image_t, frame: &Frame) {
+    fn compare_img(img: *const aom_image_t, frame: &Frame, bit_depth: usize) {
         use std::slice;
         let img = unsafe { *img };
         let img_iter = img.planes.iter().zip(img.stride.iter());
@@ -2005,21 +2006,38 @@ mod test_encode_decode {
             let w = frame_plane.cfg.width;
             let h = frame_plane.cfg.height;
             let rec_stride = frame_plane.cfg.stride;
-            let dec_stride = *img_plane.1 as usize;
 
-            let dec = unsafe {
-                let data = *img_plane.0 as *const u8;
-                let size = dec_stride * h;
-                slice::from_raw_parts(data, size)
-            };
+            if bit_depth > 8 {
+                let dec_stride = *img_plane.1 as usize / 2;
 
-            let rec: Vec<u8> = frame_plane.data.iter().map(|&v| v as u8).collect();
+                let dec = unsafe {
+                    let data = *img_plane.0 as *const u16;
+                    let size = dec_stride * h;
+                
+                    slice::from_raw_parts(data, size)
+                };
 
-            compare_plane(&rec[..], rec_stride, dec, dec_stride, w, h);
+                let rec: Vec<u16> = frame_plane.data.iter().map(|&v| v).collect();
+
+                compare_plane::<u16>(&rec[..], rec_stride, dec, dec_stride, w, h);
+            } else {
+                let dec_stride = *img_plane.1 as usize;
+
+                let dec = unsafe {
+                    let data = *img_plane.0 as *const u8;
+                    let size = dec_stride * h;
+                
+                    slice::from_raw_parts(data, size)
+                };
+
+                let rec: Vec<u8> = frame_plane.data.iter().map(|&v| v as u8).collect();
+
+                compare_plane::<u8>(&rec[..], rec_stride, dec, dec_stride, w, h);
+            }
         }
     }
 
-    fn encode_decode(w:usize, h:usize, speed: usize, quantizer: usize, limit: usize, bit_depth: usize) {
+    fn encode_decode(w: usize, h: usize, speed: usize, quantizer: usize, limit: usize, bit_depth: usize) {
         use std::ptr;
         let mut ra = ChaChaRng::from_seed([0; 32]);
 
@@ -2084,7 +2102,7 @@ mod test_encode_decode {
                         corrupted_count += corrupted;
 
                         let rec = rec_fifo.pop_front().unwrap();
-                        compare_img(img, &rec);
+                        compare_img(img, &rec, bit_depth);
                     }
                 }
             }
