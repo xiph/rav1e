@@ -28,7 +28,6 @@ use clap::{App, Arg};
 use std::rc::Rc;
 use std::*;
 
-// for benchmarking purpose
 pub mod ec;
 pub mod partition;
 pub mod plane;
@@ -1791,8 +1790,8 @@ pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
         y4m::Colorspace::C420jpeg |
         y4m::Colorspace::C420paldv |
         y4m::Colorspace::C420mpeg2 |
-        y4m::Colorspace::C420p10 => {}, //|
-        //y4m::Colorspace::C420p12 => {},
+        y4m::Colorspace::C420p10 |
+        y4m::Colorspace::C420p12 => {},
         _ => {
             panic!("Colorspace {:?} is not supported yet.", csp);
         },
@@ -1999,8 +1998,7 @@ mod test_encode_decode {
         encode_decode(w, h, speed, quantizer, limit, 10);
 
         // 12-bit
-        // TODO uncomment once y4m 0.3.0 is released and set in Cargo.toml
-        // encode_decode(w, h, speed, quantizer, limit, 12);
+        encode_decode(w, h, speed, quantizer, limit, 12);
     }
 
     fn compare_plane<T: Ord + std::fmt::Debug>(rec: &[T], rec_stride: usize,
