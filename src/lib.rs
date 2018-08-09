@@ -605,7 +605,8 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         self.write_bit(false)?; // no timing info present
         self.write(5, 0)?; // one operating point
         self.write(12,0)?; // idc
-        self.write(5, 0)?; // level
+        self.write(5, 31)?; // level
+        self.write(1, 0)?; // tier
         if seq.reduced_still_picture_hdr {
             assert!(false);
         }
