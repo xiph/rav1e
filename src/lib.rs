@@ -615,8 +615,6 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
 
         self.write_color_config(seq)?;
 
-        self.write(1,0)?; // separate uv delta q
-
         self.write_bit(seq.film_grain_params_present)?;
 
         self.write_bit(true)?; // add_trailing_bits
@@ -688,18 +686,36 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
     }
 
     fn write_color_config(&mut self, seq: &mut Sequence) -> Result<(), std::io::Error> {
-        self.write_bit(seq.bit_depth > 8)?; // high bit depth
+        let high_bd = seq.bit_depth > 8;
+
+        self.write_bit(high_bd)?; // high bit depth
+
+        if seq.bit_depth == 12 {
+            self.write_bit(true)?; // 12-bit
+        }
+
         self.write_bit(seq.monochrome)?; // monochrome?
         self.write_bit(false)?; // No color description present
 
         if seq.monochrome {
             assert!(false);
         }
+
         self.write_bit(false)?; // color range
 
-        if true { // subsampling_x == 1 && cm->subsampling_y == 1
-            self.write(2,0)?; // chroma_sample_position == AOM_CSP_UNKNOWN
+        if seq.bit_depth == 12 {
+            // always subsampling in both directions, as we only process 4:2:0
+            let subsampling_x = true;
+            self.write_bit(subsampling_x)?;
+
+            if subsampling_x {
+                self.write_bit(true)?; // subsampling_y
+            }
         }
+
+        self.write(2, 0)?; // chroma_sample_position == AOM_CSP_UNKNOWN
+
+        self.write_bit(false)?; // separate uv delta q
 
         Ok(())
     }
@@ -1770,14 +1786,13 @@ pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
     let y4m_bytes = y4m_dec.get_bytes_per_sample();
     let csp = y4m_dec.get_colorspace();
 
-    // TODO implement C420p12 in y4m or change crates to support 12-bit input
     match csp {
         y4m::Colorspace::C420 |
         y4m::Colorspace::C420jpeg |
         y4m::Colorspace::C420paldv |
         y4m::Colorspace::C420mpeg2 |
-        y4m::Colorspace::C420p10 |
-        y4m::Colorspace::C420p12 => {},
+        y4m::Colorspace::C420p10 => {}, //|
+        //y4m::Colorspace::C420p12 => {},
         _ => {
             panic!("Colorspace {:?} is not supported yet.", csp);
         },
@@ -1984,8 +1999,8 @@ mod test_encode_decode {
         encode_decode(w, h, speed, quantizer, limit, 10);
 
         // 12-bit
-        // FIXME corrupt
-        //encode_decode(w, h, speed, quantizer, limit, 12);
+        // TODO uncomment once y4m 0.3.0 is released and set in Cargo.toml
+        // encode_decode(w, h, speed, quantizer, limit, 12);
     }
 
     fn compare_plane<T: Ord + std::fmt::Debug>(rec: &[T], rec_stride: usize,
