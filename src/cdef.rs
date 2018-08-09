@@ -15,7 +15,7 @@ use plane::*;
 use FrameInvariants;
 use Frame;
 
-const CDEF_VERY_LARGE: u16 = 30000;
+pub const CDEF_VERY_LARGE: u16 = 30000;
 const CDEF_SEC_STRENGTHS: u8 = 4;
 
 fn msb(x: i32) -> i32 {
@@ -191,8 +191,9 @@ fn adjust_strength(strength: i32, var: i32) -> i32 {
 pub fn cdef_filter_superblock(fi: &FrameInvariants,
                               in_frame: &mut Frame,
                               out_frame: &mut Frame,
-                              bc: &mut BlockContext,
+                              bc_global: &mut BlockContext,
                               sbo: &SuperBlockOffset,
+                              sbo_global: &SuperBlockOffset,
                               bit_depth: usize,
                               cdef_index: u8) {
     let coeff_shift = bit_depth as i32 - 8;
@@ -213,9 +214,9 @@ pub fn cdef_filter_superblock(fi: &FrameInvariants,
     // Each direction block is 8x8 in y, potentially smaller if subsampled in chroma
     for by in 0..8 {
         for bx in 0..8 {
-            let block_offset = sbo.block_offset(bx, by);
-            if block_offset.x+bx < bc.cols && block_offset.y+by < bc.rows {
-                let skip = bc.at(&block_offset).skip;
+            let global_block_offset = sbo_global.block_offset(bx, by);
+            if global_block_offset.x+bx < bc_global.cols && global_block_offset.y+by < bc_global.rows {
+                let skip = bc_global.at(&global_block_offset).skip;
                 if !skip {
                     let mut dir = 0;
                     let mut var: i32 = 0;
@@ -330,7 +331,7 @@ pub fn cdef_filter_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockCo
         for fbx in 0..fb_width {
             let sbo = SuperBlockOffset { x: fbx, y: fby };
             let cdef_index = bc.at(&sbo.block_offset(0, 0)).cdef_index;
-            cdef_filter_superblock(fi, &mut cdef_frame, rec, bc, &sbo, bit_depth, cdef_index);
+            cdef_filter_superblock(fi, &mut cdef_frame, rec, bc, &sbo, &sbo, bit_depth, cdef_index);
         }
     }
 }

@@ -1662,7 +1662,7 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
             }
 
             if cw.bc.cdef_coded {
-                let cdef_index = rdo_cdef_decision(&sbo, fi, fs);
+                let cdef_index = rdo_cdef_decision(&sbo, fi, fs, &mut cw, sequence.bit_depth);
                 // CDEF index must be written in the middle, we can code it now
                 cw.write_cdef(&mut w, cdef_index, fi.cdef_bits);
                 cw.bc.set_cdef(&sbo, cdef_index);
