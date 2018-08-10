@@ -18,17 +18,14 @@ fn main() {
   let width = y4m_dec.get_width();
   let height = y4m_dec.get_height();
   let framerate = y4m_dec.get_framerate();
-  let bit_depth = y4m_dec.get_bit_depth();
   let mut y4m_enc = match io.rec.as_mut() {
     Some(rec) =>
-      Some(y4m::encode(width, height, framerate)
-		.with_colorspace(y4m_dec.get_colorspace()).write_header(rec).unwrap()),
+      Some(y4m::encode(width, height, framerate).write_header(rec).unwrap()),
     None => None
   };
 
   let mut fi = FrameInvariants::new(width, height, config);
-  
-  let mut sequence = Sequence::new(width, height, bit_depth);
+  let mut sequence = Sequence::new(width, height);
   write_ivf_header(
     &mut io.output,
     width,
