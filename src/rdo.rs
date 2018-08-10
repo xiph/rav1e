@@ -508,13 +508,14 @@ pub fn rdo_cdef_decision(sbo: &SuperBlockOffset, fi: &FrameInvariants,
     // RDO comparisons
     let mut best_index: u8 = 0;
     let mut best_err: u64 = 0;
+    let cdef_dirs = cdef_analyze_superblock(&mut rec_input, bc, &sbo_0, &sbo, bit_depth);
     for cdef_index in 0..(1<<fi.cdef_bits) {
         //for p in 0..3 {
         //    for i in 0..cdef_output.planes[p].data.len() { cdef_output.planes[p].data[i] = CDEF_VERY_LARGE; }
         //}
         // TODO: Don't repeat find_direction over and over; split filter_superblock to run it separately
-        cdef_filter_superblock(fi, &mut rec_input, &mut cdef_output, bc, &sbo_0, &sbo, bit_depth, cdef_index);
-
+        cdef_filter_superblock(fi, &mut rec_input, &mut cdef_output,
+                               bc, &sbo_0, &sbo, bit_depth, cdef_index, &cdef_dirs);
 
         // Rate is constant, compute just distortion
         // Computation is block by block, paying attention to skip flag
