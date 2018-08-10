@@ -214,8 +214,8 @@ pub fn cdef_filter_superblock(fi: &FrameInvariants,
     // Each direction block is 8x8 in y, potentially smaller if subsampled in chroma
     for by in 0..8 {
         for bx in 0..8 {
-            let global_block_offset = sbo_global.block_offset(bx, by);
-            if global_block_offset.x+bx < bc_global.cols && global_block_offset.y+by < bc_global.rows {
+            let global_block_offset = sbo_global.block_offset(bx<<1, by<<1);
+            if global_block_offset.x < bc_global.cols && global_block_offset.y < bc_global.rows {
                 let skip = bc_global.at(&global_block_offset).skip;
                 if !skip {
                     let mut dir = 0;

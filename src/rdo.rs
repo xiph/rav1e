@@ -524,8 +524,8 @@ pub fn rdo_cdef_decision(sbo: &SuperBlockOffset, fi: &FrameInvariants,
         let mut err:u64 = 0;
         for by in 0..8 {
             for bx in 0..8 {
-                let bo = sbo.block_offset(bx, by);
-                if bo.x+bx < bc.cols && bo.y+by < bc.rows {
+                let bo = sbo.block_offset(bx<<1, by<<1);
+                if bo.x < bc.cols && bo.y < bc.rows {
                     let skip = bc.at(&bo).skip;
                     if !skip {
                         for p in 0..3 {
