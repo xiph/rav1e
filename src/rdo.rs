@@ -541,7 +541,7 @@ pub fn rdo_cdef_decision(sbo: &SuperBlockOffset, fi: &FrameInvariants,
                             let ydec = in_plane.cfg.ydec;
 
                             if p==0 {
-                                err += cdef_dist_wxh_8x8(&in_slice, &out_slice, bit_depth);
+                                err += cdef_dist_wxh_8x8(&in_slice, &out_slice);
                             } else {
                                 err += sse_wxh(&in_slice, &out_slice, 8>>xdec, 8>>ydec);
                             }
