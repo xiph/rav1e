@@ -15,7 +15,6 @@ rav1e temporarily uses libaom's transforms and CDF initialization tables, but is
 * 4x4 to 32x32 RDO-selected square blocks
 * DC, H, V, Paeth, and smooth prediction modes
 * 4x4 DCT and ADST transforms
-* 8-, 10- and 12-bit depth color
 * Variable speed settings
 * ~10 fps encoding @ 480p
 
@@ -39,7 +38,7 @@ On Windows, pkg-config is not required. A Perl distribution such as Strawberry P
 
 # Compressing video
 
-Input videos must be in y4m format and have 4:2:0 chroma subsampling.
+Input videos must be 8-bit 4:2:0, in y4m format.
 
 ```
 cargo run --release --bin rav1e -- input.y4m -o output.ivf

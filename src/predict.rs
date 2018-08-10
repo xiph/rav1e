@@ -197,17 +197,17 @@ pub trait Intra: Dim {
   }
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
-  fn pred_dc_128(output: &mut [u16], stride: usize, bit_depth: usize) {
+  fn pred_dc_128(output: &mut [u16], stride: usize) {
     for y in 0..Self::H {
       for x in 0..Self::W {
-        output[y * stride + x] = 128 << (bit_depth - 8);
+        output[y * stride + x] = 128;
       }
     }
   }
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_dc_left(
-    output: &mut [u16], stride: usize, above: &[u16], left: &[u16], bit_depth: usize
+    output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
   ) {
     unsafe {
       highbd_dc_left_predictor(
@@ -217,14 +217,14 @@ pub trait Intra: Dim {
         Self::H as libc::c_int,
         above.as_ptr(),
         left.as_ptr(),
-        bit_depth as libc::c_int
+        8
       );
     }
   }
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_dc_top(
-    output: &mut [u16], stride: usize, above: &[u16], left: &[u16], bit_depth: usize
+    output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
   ) {
     unsafe {
       highbd_dc_top_predictor(
@@ -234,7 +234,7 @@ pub trait Intra: Dim {
         Self::H as libc::c_int,
         above.as_ptr(),
         left.as_ptr(),
-        bit_depth as libc::c_int
+        8
       );
     }
   }
@@ -331,6 +331,7 @@ pub trait Intra: Dim {
 
         let output_index = r * stride + c;
 
+        // Clamp the output to the correct bit depth
         output[output_index] = this_pred as u16;
       }
     }
@@ -367,6 +368,7 @@ pub trait Intra: Dim {
 
         let output_index = r * stride + c;
 
+        // Clamp the output to the correct bit depth
         output[output_index] = this_pred as u16;
       }
     }
@@ -403,6 +405,7 @@ pub trait Intra: Dim {
 
         let output_index = r * stride + c;
 
+        // Clamp the output to the correct bit depth
         output[output_index] = this_pred as u16;
       }
     }

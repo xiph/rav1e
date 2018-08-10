@@ -95,44 +95,44 @@ extern "C" {
 
 pub fn forward_transform(
   input: &[i16], output: &mut [i32], stride: usize, tx_size: TxSize,
-  tx_type: TxType, bit_depth: usize
+  tx_type: TxType
 ) {
   match tx_size {
-    TxSize::TX_4X4 => fht4x4(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_8X8 => fht8x8(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_16X16 => fht16x16(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_32X32 => fht32x32(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_4X4 => fht4x4(input, output, stride, tx_type),
+    TxSize::TX_8X8 => fht8x8(input, output, stride, tx_type),
+    TxSize::TX_16X16 => fht16x16(input, output, stride, tx_type),
+    TxSize::TX_32X32 => fht32x32(input, output, stride, tx_type),
     _ => panic!("unimplemented tx size")
   }
 }
 
 pub fn inverse_transform_add(
   input: &[i32], output: &mut [u16], stride: usize, tx_size: TxSize,
-  tx_type: TxType, bit_depth: usize
+  tx_type: TxType
 ) {
   match tx_size {
-    TxSize::TX_4X4 => iht4x4_add(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_8X8 => iht8x8_add(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_16X16 => iht16x16_add(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_32X32 => iht32x32_add(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_4X4 => iht4x4_add(input, output, stride, tx_type),
+    TxSize::TX_8X8 => iht8x8_add(input, output, stride, tx_type),
+    TxSize::TX_16X16 => iht16x16_add(input, output, stride, tx_type),
+    TxSize::TX_32X32 => iht32x32_add(input, output, stride, tx_type),
     _ => panic!("unimplemented tx size")
   }
 }
 
-fn fht4x4(input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType, bit_depth: usize) {
+fn fht4x4(input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType) {
   unsafe {
     av1_fwd_txfm2d_4x4_c(
       input.as_ptr(),
       output.as_mut_ptr(),
       stride as libc::c_int,
       tx_type as libc::c_int,
-      bit_depth as libc::c_int
+      8
     );
   }
 }
 
 fn iht4x4_add(
-  input: &[i32], output: &mut [u16], stride: usize, tx_type: TxType, bit_depth: usize
+  input: &[i32], output: &mut [u16], stride: usize, tx_type: TxType
 ) {
   // SIMD code may assert for transform types beyond TxType::IDTX.
   if tx_type < TxType::IDTX {
@@ -142,7 +142,7 @@ fn iht4x4_add(
         output.as_mut_ptr(),
         stride as libc::c_int,
         tx_type as libc::c_int,
-        bit_depth as libc::c_int
+        8
       );
     }
   } else {
@@ -152,26 +152,26 @@ fn iht4x4_add(
         output.as_mut_ptr(),
         stride as libc::c_int,
         tx_type as libc::c_int,
-        bit_depth as libc::c_int
+        8
       );
     }
   }
 }
 
-fn fht8x8(input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType, bit_depth: usize) {
+fn fht8x8(input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType) {
   unsafe {
     av1_fwd_txfm2d_8x8_c(
       input.as_ptr(),
       output.as_mut_ptr(),
       stride as libc::c_int,
       tx_type as libc::c_int,
-      bit_depth as libc::c_int
+      8
     );
   }
 }
 
 fn iht8x8_add(
-  input: &[i32], output: &mut [u16], stride: usize, tx_type: TxType, bit_depth: usize
+  input: &[i32], output: &mut [u16], stride: usize, tx_type: TxType
 ) {
   // SIMD code may assert for transform types beyond TxType::IDTX.
   if tx_type < TxType::IDTX {
@@ -181,7 +181,7 @@ fn iht8x8_add(
         output.as_mut_ptr(),
         stride as libc::c_int,
         tx_type as libc::c_int,
-        bit_depth as libc::c_int
+        8
       );
     }
   } else {
@@ -191,14 +191,14 @@ fn iht8x8_add(
         output.as_mut_ptr(),
         stride as libc::c_int,
         tx_type as libc::c_int,
-        bit_depth as libc::c_int
+        8
       );
     }
   }
 }
 
 fn fht16x16(
-  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType, bit_depth: usize
+  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType
 ) {
   unsafe {
     av1_fwd_txfm2d_16x16_c(
@@ -206,13 +206,13 @@ fn fht16x16(
       output.as_mut_ptr(),
       stride as libc::c_int,
       tx_type as libc::c_int,
-      bit_depth as libc::c_int
+      8
     );
   }
 }
 
 fn iht16x16_add(
-  input: &[i32], output: &mut [u16], stride: usize, tx_type: TxType, bit_depth: usize
+  input: &[i32], output: &mut [u16], stride: usize, tx_type: TxType
 ) {
   unsafe {
     if tx_type < TxType::IDTX {
@@ -222,7 +222,7 @@ fn iht16x16_add(
         output.as_mut_ptr(),
         stride as libc::c_int,
         tx_type as libc::c_int,
-        bit_depth as libc::c_int
+        8
       );
     } else {
       av1_inv_txfm2d_add_16x16_c(
@@ -230,14 +230,14 @@ fn iht16x16_add(
         output.as_mut_ptr(),
         stride as libc::c_int,
         tx_type as libc::c_int,
-        bit_depth as libc::c_int
+        8
       );
     }
   }
 }
 
 fn fht32x32(
-  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType, bit_depth: usize
+  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType
 ) {
   unsafe {
     av1_fwd_txfm2d_32x32_c(
@@ -245,13 +245,13 @@ fn fht32x32(
       output.as_mut_ptr(),
       stride as libc::c_int,
       tx_type as libc::c_int,
-      bit_depth as libc::c_int
+      8
     );
   }
 }
 
 fn iht32x32_add(
-  input: &[i32], output: &mut [u16], stride: usize, tx_type: TxType, bit_depth: usize
+  input: &[i32], output: &mut [u16], stride: usize, tx_type: TxType
 ) {
   unsafe {
     if tx_type < TxType::IDTX {
@@ -261,7 +261,7 @@ fn iht32x32_add(
         output.as_mut_ptr(),
         stride as libc::c_int,
         tx_type as libc::c_int,
-        bit_depth as libc::c_int
+        8
       );
     } else {
       av1_inv_txfm2d_add_32x32_c(
@@ -269,7 +269,7 @@ fn iht32x32_add(
         output.as_mut_ptr(),
         stride as libc::c_int,
         tx_type as libc::c_int,
-        bit_depth as libc::c_int
+        8
       );
     }
   }
