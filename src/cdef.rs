@@ -15,6 +15,11 @@ use plane::*;
 use FrameInvariants;
 use Frame;
 
+pub struct CdefDirections {
+    dir: [[u8; 8]; 8],
+    var: [[i32; 8]; 8]
+}
+
 pub const CDEF_VERY_LARGE: u16 = 30000;
 const CDEF_SEC_STRENGTHS: u8 = 4;
 
@@ -185,6 +190,43 @@ fn adjust_strength(strength: i32, var: i32) -> i32 {
     if var!=0 {strength * (4 + i) + 8 >> 4} else {0}
 }
 
+// For convenience of use alongside cdef_filter_superblock, we assume
+// in_frame is padded.  Blocks are not scanned outside the block
+// boundaries (padding is untouched here).
+
+pub fn cdef_analyze_superblock(in_frame: &mut Frame,
+                               bc_global: &mut BlockContext,
+                               sbo: &SuperBlockOffset,
+                               sbo_global: &SuperBlockOffset,
+                               bit_depth: usize) -> CdefDirections {
+    let coeff_shift = bit_depth as i32 - 8;
+    let mut dir: CdefDirections = CdefDirections {dir: [[0; 8]; 8], var: [[0; 8]; 8]};
+    // Each direction block is 8x8 in y, and direction computation only looks at y
+    for by in 0..8 {
+        for bx in 0..8 {
+            // The bc and global SBO are only to determine frame
+            // boundaries and skips in the event we're passing in a
+            // single-SB copy 'frame' that represents some superblock
+            // in the main frame.
+            let global_block_offset = sbo_global.block_offset(bx<<1, by<<1);
+            if global_block_offset.x < bc_global.cols && global_block_offset.y < bc_global.rows {
+                let skip = bc_global.at(&global_block_offset).skip;
+                if !skip {
+                    let mut var: i32 = 0;
+                    let mut in_plane = &mut in_frame.planes[0];
+                    let in_po = sbo.plane_offset(&in_plane.cfg);
+                    let in_stride = in_plane.cfg.stride;
+                    let in_slice = &in_plane.mut_slice(&in_po);
+                    dir.dir[bx][by] = cdef_find_dir(in_slice.offset(8*bx+2,8*by+2),
+                                                    in_stride, &mut var, coeff_shift) as u8;
+                    dir.var[bx][by] = var;
+                }
+            }
+        }
+    }
+    dir
+}
+
 // We assume in is padded, and the area we'll write out is at least as
 // large as the unpadded area of in
 // cdef_index is taken from the block context
@@ -195,7 +237,8 @@ pub fn cdef_filter_superblock(fi: &FrameInvariants,
                               sbo: &SuperBlockOffset,
                               sbo_global: &SuperBlockOffset,
                               bit_depth: usize,
-                              cdef_index: u8) {
+                              cdef_index: u8,
+                              cdef_dirs: &CdefDirections) {
     let coeff_shift = bit_depth as i32 - 8;
     let cdef_damping = fi.cdef_damping as i32;
     let cdef_y_strength = fi.cdef_y_strengths[cdef_index as usize];
@@ -218,8 +261,8 @@ pub fn cdef_filter_superblock(fi: &FrameInvariants,
             if global_block_offset.x+bx < bc_global.cols && global_block_offset.y+by < bc_global.rows {
                 let skip = bc_global.at(&global_block_offset).skip;
                 if !skip {
-                    let mut dir = 0;
-                    let mut var: i32 = 0;
+                    let dir = cdef_dirs.dir[bx][by];
+                    let var = cdef_dirs.var[bx][by];
                     for p in 0..3 {
                         let mut out_plane = &mut out_frame.planes[p];
                         let out_po = sbo.plane_offset(&out_plane.cfg);
@@ -239,8 +282,6 @@ pub fn cdef_filter_superblock(fi: &FrameInvariants,
                         let mut local_dir: usize;
                             
                         if p==0 {
-                            dir = cdef_find_dir(in_slice.offset((8*bx>>xdec)+2,(8*by>>ydec)+2),
-                                                in_stride, &mut var, coeff_shift);
                             local_pri_strength = adjust_strength(cdef_pri_y_strength << coeff_shift, var);
                             local_sec_strength = cdef_sec_y_strength << coeff_shift;
                             local_dir = if cdef_pri_y_strength != 0 {dir as usize} else {0};
@@ -331,7 +372,8 @@ pub fn cdef_filter_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockCo
         for fbx in 0..fb_width {
             let sbo = SuperBlockOffset { x: fbx, y: fby };
             let cdef_index = bc.at(&sbo.block_offset(0, 0)).cdef_index;
-            cdef_filter_superblock(fi, &mut cdef_frame, rec, bc, &sbo, &sbo, bit_depth, cdef_index);
+            let cdef_dirs = cdef_analyze_superblock(&mut cdef_frame, bc, &sbo, &sbo, bit_depth);
+            cdef_filter_superblock(fi, &mut cdef_frame, rec, bc, &sbo, &sbo, bit_depth, cdef_index, &cdef_dirs);
         }
     }
 }
