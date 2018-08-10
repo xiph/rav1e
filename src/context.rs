@@ -1473,9 +1473,9 @@ impl BlockContext {
 
   pub fn set_cdef(&mut self, sbo: &SuperBlockOffset, cdef_index: u8) {
     let bo = sbo.block_offset(0, 0);
-    let bw = cmp::min (bo.x + 8, self.blocks[bo.y as usize].len());
-    let bh = cmp::min (bo.y + 8, self.blocks.len());
-
+    // Checkme: Is 16 still the right block unit for 128x128 superblocks?
+    let bw = cmp::min (bo.x + MAX_MIB_SIZE, self.blocks[bo.y as usize].len());
+    let bh = cmp::min (bo.y + MAX_MIB_SIZE, self.blocks.len());
     for y in bo.y..bh {
       for x in bo.x..bw {
         self.blocks[y as usize][x as usize].cdef_index = cdef_index;
