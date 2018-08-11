@@ -21,6 +21,8 @@ extern crate y4m;
 #[macro_use]
 extern crate enum_iterator_derive;
 
+extern crate num_traits;
+
 use std::fs::File;
 use std::io::prelude::*;
 use bitstream_io::{BE, LE, BitWriter};
