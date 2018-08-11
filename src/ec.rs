@@ -46,9 +46,9 @@ pub trait Writer {
   /// Return currrent length of range-coded bitstream in fractional
   /// bits with OD_BITRES decimal precision
   fn tell_frac(&mut self) -> u32;
-  /// Save current point in coding/recording to a checkpoint  
+  /// Save current point in coding/recording to a checkpoint
   fn checkpoint(&mut self) -> WriterCheckpoint;
-  /// Restore saved position in coding/recording from a checkpoint  
+  /// Restore saved position in coding/recording from a checkpoint
   fn rollback(&mut self, &WriterCheckpoint);
 }
 
@@ -59,11 +59,11 @@ pub trait Writer {
 pub trait StorageBackend {
   /// Store partially-computed range code into given storage backend
   fn store(&mut self, fl: u16, fh: u16, nms: u16);
-  /// Return byte-length of encoded stream to date  
+  /// Return byte-length of encoded stream to date
   fn stream_bytes(&mut self) -> usize;
-  /// Backend implementation of checkpoint to pass through Writer interface  
+  /// Backend implementation of checkpoint to pass through Writer interface
   fn checkpoint(&mut self) -> WriterCheckpoint;
-  /// Backend implementation of rollback to pass through Writer interface  
+  /// Backend implementation of rollback to pass through Writer interface
   fn rollback(&mut self, &WriterCheckpoint);
 }
 
@@ -103,9 +103,9 @@ pub struct WriterEncoder {
 
 #[derive(Clone)]
 pub struct WriterCheckpoint {
-  /// Byte length coded/recorded to date  
+  /// Byte length coded/recorded to date
   stream_bytes: usize,
-  /// To be defined by backend  
+  /// To be defined by backend
   backend_var: usize,
   /// Saved number of values in the current range.
   rng: u16,
@@ -215,7 +215,7 @@ impl StorageBackend for WriterBase<WriterRecorder> {
       rng: self.rng,
       cnt: self.cnt,
     }
-  }    
+  }
   fn rollback(&mut self, checkpoint: &WriterCheckpoint) {
     self.rng = checkpoint.rng;
     self.cnt = checkpoint.cnt;
@@ -281,7 +281,7 @@ impl<S> WriterBase<S>{
     WriterBase {
       rng: 0x8000,
       cnt: -9,
-      debug: false, 
+      debug: false,
       s: storage
     }
   }
@@ -290,7 +290,7 @@ impl<S> WriterBase<S>{
     let u: u32;
     let v: u32;
     let mut r = self.rng as u32;
-    debug_assert!(32768 <= r); 
+    debug_assert!(32768 <= r);
     if fl < 32768 {
       u = (((r >> 8) * (fl as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT))
             + EC_MIN_PROB * nms as u32;
@@ -493,7 +493,7 @@ impl<S> Writer for WriterBase<S> where WriterBase<S>: StorageBackend {
   }
   /// Encodes a symbol given a cumulative distribution function (CDF)
   /// table in Q15, then updates the CDF probabilities to relect we've
-  /// written one more symbol 's'.  
+  /// written one more symbol 's'.
   /// `s`: The index of the symbol to encode.
   /// `cdf`: The CDF, such that symbol s falls in the range
   ///        `[s > 0 ? cdf[s - 1] : 0, cdf[s])`.
@@ -561,7 +561,7 @@ impl<S> Writer for WriterBase<S> where WriterBase<S>: StorageBackend {
     StorageBackend::checkpoint(self)
   }
   /// Roll back a given Writer to the state saved in the WriterCheckpoint
-  /// 'wc': Saved Writer state/posiiton to restore  
+  /// 'wc': Saved Writer state/posiiton to restore
   fn rollback (&mut self, wc: &WriterCheckpoint) {
     StorageBackend::rollback(self,wc)
   }
