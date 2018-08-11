@@ -25,6 +25,10 @@ fn main() {
     None => None
   };
 
+  if bit_depth > 8 && y4m_enc.is_some() {
+    unimplemented!("Reconstruction output is not yet available for high bit depths.");
+  }
+
   let mut fi = FrameInvariants::new(width, height, config);
   
   let mut sequence = Sequence::new(width, height, bit_depth);
