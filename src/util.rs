@@ -89,3 +89,14 @@ pub fn clamp<T: PartialOrd>(input: T, min: T, max: T) -> T {
       return input;
   }
 }
+
+use num_traits::PrimInt;
+use std::mem::size_of;
+
+pub trait ILog : PrimInt {
+    fn ilog(self) -> Self {
+        Self::from(size_of::<Self>() * 8 - self.leading_zeros() as usize).unwrap()
+    }
+}
+
+impl<T> ILog for T where T: PrimInt {}

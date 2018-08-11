@@ -14,6 +14,7 @@
 #![cfg_attr(feature = "cargo-clippy", allow(needless_range_loop))]
 
 use bitstream_io::{BitWriter, BE};
+use util::ILog;
 use std;
 
 pub const OD_BITRES: u8 = 3;
@@ -147,7 +148,7 @@ impl WriterEncoder {
 impl StorageBackend for WriterBase<WriterCounter> {
   fn store(&mut self, fl: u16, fh: u16, nms: u16) {
     let (_l, r) = self.lr_compute(fl, fh, nms);
-    let d = 16 - WriterBase::<Self>::ilog_nz(r);
+    let d = 16 - r.ilog();
     let mut c = self.cnt;
     let mut s = c + (d as i16);
 
@@ -188,7 +189,7 @@ impl StorageBackend for WriterBase<WriterCounter> {
 impl StorageBackend for WriterBase<WriterRecorder> {
   fn store(&mut self, fl: u16, fh: u16, nms: u16) {
     let (_l, r) = self.lr_compute(fl, fh, nms);
-    let d = 16 - WriterBase::<Self>::ilog_nz(r);
+    let d = 16 - r.ilog();
     let mut c = self.cnt;
     let mut s = c + (d as i16);
 
@@ -233,7 +234,7 @@ impl StorageBackend for WriterBase<WriterEncoder> {
     let (l, r) = self.lr_compute(fl, fh, nms);
     let mut low = l + self.s.low;
     let mut c = self.cnt;
-    let d = 16 - WriterBase::<Self>::ilog_nz(r);
+    let d = 16 - r.ilog();
     let mut s = c + (d as i16);
 
     if s >= 0 {
@@ -336,10 +337,6 @@ impl<S> WriterBase<S>{
       rng >>= b;
     }
     nbits - l
-  }
-  /// Simple calculation of position of leading 1 bit.
-  fn ilog_nz(x: u16) -> u16 {
-    16 - (x.leading_zeros() as u16)
   }
   /// Function to update the CDF for Writer calls that do so.
   fn update_cdf(cdf: &mut [u16], val: u32) {
