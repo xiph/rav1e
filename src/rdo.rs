@@ -19,6 +19,7 @@ use encode_block_a;
 use encode_block_b;
 use partition::*;
 use plane::*;
+use cdef::*;
 use predict::{RAV1E_INTRA_MODES, RAV1E_INTRA_MODES_MINIMAL, RAV1E_INTER_MODES};
 use quantize::dc_q;
 use std;
@@ -27,6 +28,7 @@ use std::vec::Vec;
 use write_tx_blocks;
 use write_tx_tree;
 use BlockSize;
+use Frame;
 use FrameInvariants;
 use FrameState;
 use FrameType;
@@ -446,3 +448,121 @@ pub fn rdo_partition_decision(
     part_modes: best_pred_modes
   }
 }
+
+pub fn rdo_cdef_decision(sbo: &SuperBlockOffset, fi: &FrameInvariants,
+                         fs: &FrameState, cw: &mut ContextWriter, bit_depth: usize) -> u8 {
+    // FIXME: 128x128 SB support will break this, we need FilterBlockOffset etc.
+    // Construct a single-superblock-sized frame to test-filter into
+    let sbo_0 = SuperBlockOffset { x: 0, y: 0 };
+    let bc = &mut cw.bc;
+    let mut cdef_output = Frame {
+        planes: [
+            Plane::new(64 >> fs.rec.planes[0].cfg.xdec, 64 >> fs.rec.planes[0].cfg.ydec,
+                       fs.rec.planes[0].cfg.xdec, fs.rec.planes[0].cfg.ydec),
+            Plane::new(64 >> fs.rec.planes[1].cfg.xdec, 64 >> fs.rec.planes[1].cfg.ydec,
+                       fs.rec.planes[1].cfg.xdec, fs.rec.planes[1].cfg.ydec),
+            Plane::new(64 >> fs.rec.planes[2].cfg.xdec, 64 >> fs.rec.planes[2].cfg.ydec,
+                       fs.rec.planes[2].cfg.xdec, fs.rec.planes[2].cfg.ydec),
+        ]
+    };
+    // Construct a padded input
+    let mut rec_input = Frame {
+        planes: [
+            Plane::new((64 >> fs.rec.planes[0].cfg.xdec)+4, (64 >> fs.rec.planes[0].cfg.ydec)+4,
+                       fs.rec.planes[0].cfg.xdec, fs.rec.planes[0].cfg.ydec),
+            Plane::new((64 >> fs.rec.planes[1].cfg.xdec)+4, (64 >> fs.rec.planes[1].cfg.ydec)+4,
+                       fs.rec.planes[1].cfg.xdec, fs.rec.planes[1].cfg.ydec),
+            Plane::new((64 >> fs.rec.planes[2].cfg.xdec)+4, (64 >> fs.rec.planes[2].cfg.ydec)+4,
+                       fs.rec.planes[2].cfg.xdec, fs.rec.planes[2].cfg.ydec),
+        ]
+    };
+    // Copy reconstructed data into padded input
+    for p in 0..3 {
+        let xdec = fs.rec.planes[p].cfg.xdec;
+        let ydec = fs.rec.planes[p].cfg.ydec;
+        let h = fi.padded_h >> ydec;
+        let w = fi.padded_w >> xdec;
+        let offset = sbo.plane_offset(&fs.rec.planes[p].cfg);
+        for y in 0..(64>>ydec)+4 {
+            let mut rec_slice = rec_input.planes[p].mut_slice(&PlaneOffset {x:0, y:y});
+            let mut rec_row = rec_slice.as_mut_slice();
+            if offset.y+y < 2 || offset.y+y >= h+2 {
+                // above or below the frame, fill with flag
+                for x in 0..(64>>xdec)+4 { rec_row[x] = CDEF_VERY_LARGE; }
+            } else {
+                let mut in_slice = fs.rec.planes[p].slice(&PlaneOffset {x:0, y:offset.y+y-2});
+                let mut in_row = in_slice.as_slice();
+                // are we guaranteed to be all in frame this row?
+                if offset.x < 2 || offset.x+(64>>xdec)+2 >= w {
+                    // No; do it the hard way.  off left or right edge, fill with flag.
+                    for x in 0..(64>>xdec)+4 {
+                        if offset.x+x >= 2 && offset.x+x < w+2 {
+                            rec_row[x] = in_row[offset.x+x-2]
+                        } else {
+                            rec_row[x] = CDEF_VERY_LARGE;
+                        }
+                    }
+                }  else  {
+                    // Yes, do it the easy way: just copy
+                    rec_row[0..(64>>xdec)+4].copy_from_slice(&in_row[offset.x-2..offset.x+(64>>xdec)+2]);
+                }
+            }
+        }
+    }
+
+    // RDO comparisons
+    let mut best_index: u8 = 0;
+    let mut best_err: u64 = 0;
+    let cdef_dirs = cdef_analyze_superblock(&mut rec_input, bc, &sbo_0, &sbo, bit_depth);
+    for cdef_index in 0..(1<<fi.cdef_bits) {
+        //for p in 0..3 {
+        //    for i in 0..cdef_output.planes[p].data.len() { cdef_output.planes[p].data[i] = CDEF_VERY_LARGE; }
+        //}
+        // TODO: Don't repeat find_direction over and over; split filter_superblock to run it separately
+        cdef_filter_superblock(fi, &mut rec_input, &mut cdef_output,
+                               bc, &sbo_0, &sbo, bit_depth, cdef_index, &cdef_dirs);
+
+        // Rate is constant, compute just distortion
+        // Computation is block by block, paying attention to skip flag
+
+        // Each direction block is 8x8 in y, potentially smaller if subsampled in chroma
+        // We're dealing only with in-frmae and unpadded planes now
+        let mut err:u64 = 0;
+        for by in 0..8 {
+            for bx in 0..8 {
+                let bo = sbo.block_offset(bx<<1, by<<1);
+                if bo.x < bc.cols && bo.y < bc.rows {
+                    let skip = bc.at(&bo).skip;
+                    if !skip {
+                        for p in 0..3 {
+                            let mut in_plane = &fs.input.planes[p];
+                            let in_po = sbo.block_offset(bx<<1, by<<1).plane_offset(&in_plane.cfg);
+                            let in_slice = in_plane.slice(&in_po);
+
+                            let mut out_plane = &mut cdef_output.planes[p];
+                            let out_po = sbo_0.block_offset(bx<<1, by<<1).plane_offset(&out_plane.cfg);
+                            let out_slice = &out_plane.slice(&out_po);
+                            
+                            let xdec = in_plane.cfg.xdec;
+                            let ydec = in_plane.cfg.ydec;
+
+                            if p==0 {
+                                err += cdef_dist_wxh_8x8(&in_slice, &out_slice, bit_depth);
+                            } else {
+                                err += sse_wxh(&in_slice, &out_slice, 8>>xdec, 8>>ydec);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if cdef_index == 0 || err < best_err {
+            best_err = err;
+            best_index = cdef_index;
+        }
+        
+    }
+    best_index
+}
+

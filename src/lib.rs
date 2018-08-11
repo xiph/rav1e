@@ -605,7 +605,8 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         self.write_bit(false)?; // no timing info present
         self.write(5, 0)?; // one operating point
         self.write(12,0)?; // idc
-        self.write(5, 0)?; // level
+        self.write(5, 31)?; // level
+        self.write(1, 0)?; // tier
         if seq.reduced_still_picture_hdr {
             assert!(false);
         }
@@ -1667,6 +1668,7 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
     let fc = CDFContext::new(fi.config.quantizer as u8);
     let bc = BlockContext::new(fi.w_in_b, fi.h_in_b);
     let mut cw = ContextWriter::new(fc,  bc);
+    let bit_depth = 8;
 
     for sby in 0..fi.sb_height {
         cw.bc.reset_left_contexts();
@@ -1690,7 +1692,7 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
             }
 
             if cw.bc.cdef_coded {
-                let cdef_index = 5;  // The hardwired cdef index is temporary; real RDO is next
+                let cdef_index = rdo_cdef_decision(&sbo, fi, fs, &mut cw, bit_depth);
                 // CDEF index must be written in the middle, we can code it now
                 cw.write_cdef(&mut w, cdef_index, fi.cdef_bits);
                 cw.bc.set_cdef(&sbo, cdef_index);
@@ -1701,7 +1703,7 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
     }
     /* TODO: Don't apply if lossless */
     if sequence.enable_cdef {
-        cdef_frame(fi, &mut fs.rec, &mut cw.bc, sequence.bit_depth);
+        cdef_filter_frame(fi, &mut fs.rec, &mut cw.bc, bit_depth);
     }
 
     let mut h = w.done();
