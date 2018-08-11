@@ -712,7 +712,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
             }
         }
 
-        self.write(2, 0)?; // chroma_sample_position == AOM_CSP_UNKNOWN
+        self.write(2, 0)?; // chroma_sample_position == CSP_UNKNOWN
 
         self.write_bit(false)?; // separate uv delta q
 

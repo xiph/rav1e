@@ -195,12 +195,12 @@ pub fn rdo_mode_decision(
   let cw_checkpoint = cw.checkpoint();
 
   // Exclude complex prediction modes at higher speed levels
-  let mode_set = if fi.config.speed <= 3 {
-    (if fi.frame_type == FrameType::INTER { RAV1E_INTER_MODES }
-      else { RAV1E_INTRA_MODES })
+  let mode_set = if fi.frame_type == FrameType::INTER {
+    RAV1E_INTER_MODES
+  } else if fi.config.speed <= 3 {
+      RAV1E_INTRA_MODES
   } else {
-    (if fi.frame_type == FrameType::INTER { RAV1E_INTER_MODES }
-    else { RAV1E_INTRA_MODES_MINIMAL })
+    RAV1E_INTRA_MODES_MINIMAL
   };
 
   for &luma_mode in mode_set {
