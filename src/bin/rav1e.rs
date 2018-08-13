@@ -9,6 +9,7 @@
 
 extern crate rav1e;
 extern crate y4m;
+extern crate clap;
 
 mod common;
 use common::*;

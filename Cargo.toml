@@ -11,12 +11,12 @@ autobins = false
 repl = ["rustyline", "binaries"]
 comparative_bench = []
 decode_test = ["bindgen"]
-binaries = ["y4m"]
+binaries = ["y4m", "clap"]
 default = ["binaries"]
 
 [dependencies]
 bitstream-io = "0.6"
-clap = "2"
+clap = { version = "2", optional = true }
 libc = "0.2"
 rand = "0.5"
 rustyline = { version = "1", optional = true }

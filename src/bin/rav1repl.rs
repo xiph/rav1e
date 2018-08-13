@@ -9,6 +9,7 @@
 
 extern crate rustyline;
 extern crate y4m;
+extern crate clap;
 
 extern crate rav1e;
 
