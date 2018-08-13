@@ -10,6 +10,9 @@
 extern crate rav1e;
 extern crate y4m;
 
+mod common;
+use common::*;
+
 use rav1e::*;
 
 fn main() {
