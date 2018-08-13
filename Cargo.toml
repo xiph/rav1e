@@ -5,6 +5,7 @@ authors = ["Thomas Daede <tdaede@xiph.org>"]
 build = "build.rs"
 include = ["/src/**", "/aom_build/**", "/Cargo.toml"]
 autobenches = false
+autobins = false
 
 [features]
 repl = ["rustyline"]
