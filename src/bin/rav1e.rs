@@ -21,13 +21,10 @@ fn main() {
   let bit_depth = y4m_dec.get_bit_depth();
   let mut y4m_enc = match io.rec.as_mut() {
     Some(rec) =>
-      Some(y4m::encode(width, height, framerate).write_header(rec).unwrap()),
+      Some(y4m::encode(width, height, framerate)
+        .with_colorspace(y4m_dec.get_colorspace()).write_header(rec).unwrap()),
     None => None
   };
-
-  if bit_depth > 8 && y4m_enc.is_some() {
-    unimplemented!("Reconstruction output is not yet available for high bit depths.");
-  }
 
   let mut fi = FrameInvariants::new(width, height, config);
   
