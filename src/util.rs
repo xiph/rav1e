@@ -7,6 +7,115 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+// Imported from clap, to avoid to depend directly to the crate
+macro_rules! _clap_count_exprs {
+    () => { 0 };
+    ($e:expr) => { 1 };
+    ($e:expr, $($es:expr),+) => { 1 + _clap_count_exprs!($($es),*) };
+}
+macro_rules! arg_enum {
+    (@as_item $($i:item)*) => ($($i)*);
+    (@impls ( $($tts:tt)* ) -> ($e:ident, $($v:ident),+)) => {
+        arg_enum!(@as_item
+        $($tts)*
+
+        impl ::std::str::FromStr for $e {
+            type Err = String;
+
+            fn from_str(s: &str) -> ::std::result::Result<Self,Self::Err> {
+                #[allow(deprecated, unused_imports)]
+                use ::std::ascii::AsciiExt;
+                match s {
+                    $(stringify!($v) |
+                    _ if s.eq_ignore_ascii_case(stringify!($v)) => Ok($e::$v)),+,
+                    _ => Err({
+                        let v = vec![
+                            $(stringify!($v),)+
+                        ];
+                        format!("valid values: {}",
+                            v.join(" ,"))
+                    }),
+                }
+            }
+        }
+        impl ::std::fmt::Display for $e {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+                match *self {
+                    $($e::$v => write!(f, stringify!($v)),)+
+                }
+            }
+        }
+        impl $e {
+            #[allow(dead_code)]
+            pub fn variants() -> [&'static str; _clap_count_exprs!($(stringify!($v)),+)] {
+                [
+                    $(stringify!($v),)+
+                ]
+            }
+        });
+    };
+    ($(#[$($m:meta),+])+ pub enum $e:ident { $($v:ident $(=$val:expr)*,)+ } ) => {
+        arg_enum!(@impls
+            ($(#[$($m),+])+
+            pub enum $e {
+                $($v$(=$val)*),+
+            }) -> ($e, $($v),+)
+        );
+    };
+    ($(#[$($m:meta),+])+ pub enum $e:ident { $($v:ident $(=$val:expr)*),+ } ) => {
+        arg_enum!(@impls
+            ($(#[$($m),+])+
+            pub enum $e {
+                $($v$(=$val)*),+
+            }) -> ($e, $($v),+)
+        );
+    };
+    ($(#[$($m:meta),+])+ enum $e:ident { $($v:ident $(=$val:expr)*,)+ } ) => {
+        arg_enum!(@impls
+            ($(#[$($m),+])+
+             enum $e {
+                 $($v$(=$val)*),+
+             }) -> ($e, $($v),+)
+        );
+    };
+    ($(#[$($m:meta),+])+ enum $e:ident { $($v:ident $(=$val:expr)*),+ } ) => {
+        arg_enum!(@impls
+            ($(#[$($m),+])+
+            enum $e {
+                $($v$(=$val)*),+
+            }) -> ($e, $($v),+)
+        );
+    };
+    (pub enum $e:ident { $($v:ident $(=$val:expr)*,)+ } ) => {
+        arg_enum!(@impls
+            (pub enum $e {
+                $($v$(=$val)*),+
+            }) -> ($e, $($v),+)
+        );
+    };
+    (pub enum $e:ident { $($v:ident $(=$val:expr)*),+ } ) => {
+        arg_enum!(@impls
+            (pub enum $e {
+                $($v$(=$val)*),+
+            }) -> ($e, $($v),+)
+        );
+    };
+    (enum $e:ident { $($v:ident $(=$val:expr)*,)+ } ) => {
+        arg_enum!(@impls
+            (enum $e {
+                $($v$(=$val)*),+
+            }) -> ($e, $($v),+)
+        );
+    };
+    (enum $e:ident { $($v:ident $(=$val:expr)*),+ } ) => {
+        arg_enum!(@impls
+            (enum $e {
+                $($v$(=$val)*),+
+            }) -> ($e, $($v),+)
+        );
+    };
+}
+
 #[repr(align(16))]
 struct Align16;
 

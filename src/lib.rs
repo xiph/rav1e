@@ -12,8 +12,6 @@
 
 extern crate bitstream_io;
 extern crate backtrace;
-#[macro_use]
-extern crate clap;
 extern crate libc;
 extern crate rand;
 
@@ -22,10 +20,8 @@ extern crate enum_iterator_derive;
 
 extern crate num_traits;
 
-use std::fs::File;
 use std::io::prelude::*;
 use bitstream_io::{BE, LE, BitWriter};
-use clap::{App, Arg};
 use std::rc::Rc;
 use std::*;
 
@@ -37,6 +33,7 @@ pub mod transform;
 pub mod quantize;
 pub mod predict;
 pub mod rdo;
+#[macro_use]
 pub mod util;
 pub mod cdef;
 
@@ -185,12 +182,12 @@ impl Sequence {
         assert!(width_bits <= 16);
         assert!(height_bits <= 16);
 
-        let profile = if bit_depth == 12 { 
+        let profile = if bit_depth == 12 {
             2
         } else if chroma_sampling == ChromaSampling::Cs444 {
             1
         } else {
-            0 
+            0
         };
 
         let mut operating_point_idc = [0 as u16; MAX_NUM_OPERATING_POINTS];
@@ -447,12 +444,6 @@ impl fmt::Display for FrameType{
     }
 }
 
-pub struct EncoderIO {
-    pub input: Box<Read>,
-    pub output: Box<Write>,
-    pub rec: Option<Box<Write>>,
-}
-
 #[derive(Copy, Clone, Debug)]
 pub struct EncoderConfig {
     pub limit: u64,
@@ -469,82 +460,6 @@ impl Default for EncoderConfig {
             speed: 0,
             tune: Tune::Psnr,
         }
-    }
-}
-
-impl EncoderConfig {
-    pub fn from_cli() -> (EncoderIO, EncoderConfig) {
-        let matches = App::new("rav1e")
-            .version("0.1.0")
-            .about("AV1 video encoder")
-           .arg(Arg::with_name("INPUT")
-                .help("Uncompressed YUV4MPEG2 video input")
-                .required(true)
-                .index(1))
-            .arg(Arg::with_name("OUTPUT")
-                .help("Compressed AV1 in IVF video output")
-                .short("o")
-                .long("output")
-                .required(true)
-                .takes_value(true))
-            .arg(Arg::with_name("RECONSTRUCTION")
-                .short("r")
-                .takes_value(true))
-            .arg(Arg::with_name("LIMIT")
-                .help("Maximum number of frames to encode")
-                .short("l")
-                .long("limit")
-                .takes_value(true)
-                .default_value("0"))
-            .arg(Arg::with_name("QP")
-                .help("Quantizer (0-255)")
-                .long("quantizer")
-                .takes_value(true)
-                .default_value("100"))
-            .arg(Arg::with_name("SPEED")
-                .help("Speed level (0(slow)-10(fast))")
-                .short("s")
-                .long("speed")
-                .takes_value(true)
-                .default_value("3"))
-            .arg(Arg::with_name("TUNE")
-                .help("Quality tuning (Will enforce partition sizes >= 8x8)")
-                .long("tune")
-                .possible_values(&Tune::variants())
-                .default_value("psnr")
-                .case_insensitive(true))
-            .get_matches();
-
-
-        let io = EncoderIO {
-            input: match matches.value_of("INPUT").unwrap() {
-                "-" => Box::new(std::io::stdin()) as Box<Read>,
-                f => Box::new(File::open(&f).unwrap()) as Box<Read>
-            },
-            output: match matches.value_of("OUTPUT").unwrap() {
-                "-" => Box::new(std::io::stdout()) as Box<Write>,
-                f => Box::new(File::create(&f).unwrap()) as Box<Write>
-            },
-            rec: matches.value_of("RECONSTRUCTION").map(|f| {
-                Box::new(File::create(&f).unwrap()) as Box<Write>
-            })
-        };
-
-        let config = EncoderConfig {
-            limit: matches.value_of("LIMIT").unwrap().parse().unwrap(),
-            quantizer: matches.value_of("QP").unwrap().parse().unwrap(),
-            speed: matches.value_of("SPEED").unwrap().parse().unwrap(),
-            tune: matches.value_of("TUNE").unwrap().parse().unwrap()
-        };
-
-        // Validate arguments
-        if config.quantizer == 0 {
-            unimplemented!();
-        } else if config.quantizer > 255 || config.speed > 10 {
-            panic!("argument out of range");
-        }
-
-        (io, config)
     }
 }
 
@@ -721,7 +636,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         } else {
             unimplemented!(); // 4:4:4 sampling at 8 or 10 bits
         }
-        
+
         self.write_bit(false)?; // No color description present
 
         if seq.monochrome {
@@ -1860,7 +1775,7 @@ mod test_encode_decode {
 
     }
 
-    fn setup_encoder(w: usize, h: usize, speed: usize, quantizer: usize, 
+    fn setup_encoder(w: usize, h: usize, speed: usize, quantizer: usize,
         bit_depth: usize, chroma_sampling: ChromaSampling) -> (FrameInvariants, Sequence) {
         unsafe {
             av1_rtcd();
