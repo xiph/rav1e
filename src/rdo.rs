@@ -52,9 +52,9 @@ pub struct RDOPartitionOutput {
 }
 
 #[allow(unused)]
-fn cdef_dist_wxh_8x8(src1: &PlaneSlice, src2: &PlaneSlice) -> u64 {
-  //TODO: Handle high bit-depth here by setting coeff_shift
-  let coeff_shift = 0;
+fn cdef_dist_wxh_8x8(src1: &PlaneSlice, src2: &PlaneSlice, bit_depth: usize) -> u64 {
+  let coeff_shift = bit_depth - 8;
+  
   let mut sum_s: i32 = 0;
   let mut sum_d: i32 = 0;
   let mut sum_s2: i64 = 0;
@@ -82,7 +82,7 @@ fn cdef_dist_wxh_8x8(src1: &PlaneSlice, src2: &PlaneSlice) -> u64 {
 
 #[allow(unused)]
 fn cdef_dist_wxh(
-  src1: &PlaneSlice, src2: &PlaneSlice, w: usize, h: usize
+  src1: &PlaneSlice, src2: &PlaneSlice, w: usize, h: usize, bit_depth: usize
 ) -> u64 {
   assert!(w & 0x7 == 0);
   assert!(h & 0x7 == 0);
@@ -92,7 +92,8 @@ fn cdef_dist_wxh(
     for i in 0..w / 8 {
       sum += cdef_dist_wxh_8x8(
         &src1.subslice(i * 8, j * 8),
-        &src2.subslice(i * 8, j * 8)
+        &src2.subslice(i * 8, j * 8),
+        bit_depth
       )
     }
   }
@@ -114,9 +115,9 @@ fn sse_wxh(src1: &PlaneSlice, src2: &PlaneSlice, w: usize, h: usize) -> u64 {
 // Compute the rate-distortion cost for an encode
 fn compute_rd_cost(
   fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize, w_uv: usize,
-  h_uv: usize, bo: &BlockOffset, bit_cost: u32
+  h_uv: usize, bo: &BlockOffset, bit_cost: u32, bit_depth: usize
 ) -> f64 {
-  let q = dc_q(fi.config.quantizer) as f64;
+  let q = dc_q(fi.config.quantizer, bit_depth) as f64;
 
   // Convert q into Q0 precision, given that libaom quantizers are Q3
   let q0 = q / 8.0_f64;
@@ -139,7 +140,8 @@ fn compute_rd_cost(
       &fs.input.planes[0].slice(&po),
       &fs.rec.planes[0].slice(&po),
       w_y,
-      h_y
+      h_y,
+      bit_depth
     )
   } else {
     unimplemented!();
@@ -195,12 +197,12 @@ pub fn rdo_mode_decision(
   let cw_checkpoint = cw.checkpoint();
 
   // Exclude complex prediction modes at higher speed levels
-  let mode_set = if fi.config.speed <= 3 {
-    (if fi.frame_type == FrameType::INTER { RAV1E_INTER_MODES }
-      else { RAV1E_INTRA_MODES })
+  let mode_set = if fi.frame_type == FrameType::INTER {
+    RAV1E_INTER_MODES
+  } else if fi.config.speed <= 3 {
+      RAV1E_INTRA_MODES
   } else {
-    (if fi.frame_type == FrameType::INTER { RAV1E_INTER_MODES }
-    else { RAV1E_INTRA_MODES_MINIMAL })
+    RAV1E_INTRA_MODES_MINIMAL
   };
 
   for &luma_mode in mode_set {
@@ -213,7 +215,7 @@ pub fn rdo_mode_decision(
         let tell = wr.tell_frac();
         
         encode_block_a(seq, cw, wr, bsize, bo, skip);
-        encode_block_b(fi, fs, cw, wr, luma_mode, chroma_mode, bsize, bo, skip);
+        encode_block_b(fi, fs, cw, wr, luma_mode, chroma_mode, bsize, bo, skip, seq.bit_depth);
 
         let cost = wr.tell_frac() - tell;
         let rd = compute_rd_cost(
@@ -224,7 +226,8 @@ pub fn rdo_mode_decision(
           w_uv,
           h_uv,
           bo,
-          cost
+          cost,
+          seq.bit_depth
         );
 
         if rd < best_rd {
@@ -240,7 +243,7 @@ pub fn rdo_mode_decision(
       let mut wr: &mut Writer = &mut WriterCounter::new();
       let tell = wr.tell_frac();
       encode_block_a(seq, cw, wr, bsize, bo, skip);
-      encode_block_b(fi, fs, cw, wr, luma_mode, luma_mode, bsize, bo, skip);
+      encode_block_b(fi, fs, cw, wr, luma_mode, luma_mode, bsize, bo, skip, seq.bit_depth);
 
       let cost = wr.tell_frac() - tell;
       let rd = compute_rd_cost(
@@ -251,7 +254,8 @@ pub fn rdo_mode_decision(
         w_uv,
         h_uv,
         bo,
-        cost
+        cost,
+        seq.bit_depth
       );
 
       if rd < best_rd {
@@ -284,7 +288,7 @@ pub fn rdo_mode_decision(
 pub fn rdo_tx_type_decision(
   fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
   mode: PredictionMode, bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize,
-  tx_set: TxSet
+  tx_set: TxSet, bit_depth: usize
 ) -> TxType {
   let mut best_type = TxType::DCT_DCT;
   let mut best_rd = std::f64::MAX;
@@ -317,11 +321,11 @@ pub fn rdo_tx_type_decision(
     let tell = wr.tell_frac();
     if is_inter {
       write_tx_tree(
-        fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false,
+        fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false, bit_depth
       );
     }  else {
       write_tx_blocks(
-        fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false,
+        fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false, bit_depth
       );
     }
 
@@ -334,7 +338,8 @@ pub fn rdo_tx_type_decision(
       w_uv,
       h_uv,
       bo,
-      cost
+      cost,
+      bit_depth
     );
 
     if rd < best_rd {
@@ -542,7 +547,7 @@ pub fn rdo_cdef_decision(sbo: &SuperBlockOffset, fi: &FrameInvariants,
                             let ydec = in_plane.cfg.ydec;
 
                             if p==0 {
-                                err += cdef_dist_wxh_8x8(&in_slice, &out_slice);
+                                err += cdef_dist_wxh_8x8(&in_slice, &out_slice, bit_depth);
                             } else {
                                 err += sse_wxh(&in_slice, &out_slice, 8>>xdec, 8>>ydec);
                             }

@@ -12,6 +12,7 @@
 use std::cmp;
 use context::*;
 use plane::*;
+use util::clamp;
 use FrameInvariants;
 use Frame;
 

@@ -7,7 +7,12 @@ set -e
 
 if [[ -z "${SEQ}" ]]; then
   SEQ=nyan.y4m
+  SEQ10=nyan10.y4m
+  SEQ12=nyan12.y4m
+  
   wget -nc https://mf4.xiph.org/~ltrudeau/videos/nyan.y4m
+  #wget -nc https://people.xiph.org/~tdaede/nyan10.y4m
+  #wget -nc https://people.xiph.org/~tdaede/nyan12.y4m
 fi
 
 
@@ -92,3 +97,12 @@ cmp <(tail -n+2 $DEC_FILE) <(tail -n+2 $REC_FILE)
 # Show decoded sequence
 # --pause
 mpv --loop $DEC_FILE
+
+# Repeat for high bit depth clips
+#cargo run --bin rav1e --release -- $SEQ10 -o $ENC_FILE -s 3
+#${AOM_TEST}/aomdec $ENC_FILE -o $DEC_FILE
+#mpv --loop $DEC_FILE
+
+#cargo run --bin rav1e --release -- $SEQ12 -o $ENC_FILE -s 3
+#${AOM_TEST}/aomdec $ENC_FILE -o $DEC_FILE
+#mpv --loop $DEC_FILE

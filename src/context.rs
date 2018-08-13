@@ -22,6 +22,7 @@ use partition::PredictionMode::*;
 use partition::TxType::*;
 use partition::*;
 use plane::*;
+use util::clamp;
 use std::*;
 
 use REF_CONTEXTS;
@@ -666,16 +667,6 @@ static mag_ref_offset_with_txclass: [[[usize; 2]; CONTEXT_MAG_POSITION_NUM]; 3] 
   [ [ 0, 1 ], [ 1, 0 ], [ 2, 0 ] ] ];
 
 // End of Level Map
-
-pub fn clamp(val: i32, min: i32, max: i32) -> i32 {
-  if val < min {
-    min
-  } else if val > max {
-    max
-  } else {
-    val
-  }
-}
 
 pub fn has_chroma(
   bo: &BlockOffset, bsize: BlockSize, subsampling_x: usize,

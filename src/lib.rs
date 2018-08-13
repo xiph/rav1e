@@ -28,7 +28,6 @@ use clap::{App, Arg};
 use std::rc::Rc;
 use std::*;
 
-// for benchmarking purpose
 pub mod ec;
 pub mod partition;
 pub mod plane;
@@ -111,6 +110,11 @@ impl Default for Tune {
 pub struct Sequence {
   // OBU Sequence header of AV1
     pub profile: u8,
+    pub num_bits_width: u32,
+    pub num_bits_height: u32,
+    pub bit_depth: usize,
+    pub max_frame_width: u32,
+    pub max_frame_height: u32,
     pub frame_id_numbers_present_flag: bool,
     pub frame_id_length: u32,
     pub delta_frame_id_length: u32,
@@ -124,7 +128,7 @@ pub struct Sequence {
                                      // 2 - adaptive
     pub still_picture: bool,               // Video is a single frame still picture
     pub reduced_still_picture_hdr: bool,   // Use reduced header for still picture
-    pub monochrome: bool,                  // Monochorme video
+    pub monochrome: bool,                  // Monochrome video
     pub enable_filter_intra: bool,         // enables/disables filterintra
     pub enable_intra_edge_filter: bool,    // enables/disables corner/edge/upsampling
     pub enable_interintra_compound: bool,  // enables/disables interintra_compound
@@ -160,11 +164,13 @@ pub struct Sequence {
 }
 
 impl Sequence {
-    pub fn new(width: usize, height: usize) -> Sequence {
+    pub fn new(width: usize, height: usize, bit_depth: usize) -> Sequence {
         let width_bits = 32 - (width as u32).leading_zeros();
         let height_bits = 32 - (height as u32).leading_zeros();
         assert!(width_bits <= 16);
         assert!(height_bits <= 16);
+
+        let profile = if bit_depth == 12 { 2 } else { 0 };
 
         let mut operating_point_idc = [0 as u16; MAX_NUM_OPERATING_POINTS];
         let mut level = [[1, 2 as usize]; MAX_NUM_OPERATING_POINTS];
@@ -178,7 +184,12 @@ impl Sequence {
         }
 
         Sequence {
-            profile: 0,
+            profile: profile,
+            num_bits_width: width_bits,
+            num_bits_height: height_bits,
+            bit_depth: bit_depth,
+            max_frame_width: width as u32,
+            max_frame_height: height as u32,
             frame_id_numbers_present_flag: false,
             frame_id_length: 0,
             delta_frame_id_length: 0,
@@ -199,7 +210,7 @@ impl Sequence {
             enable_ref_frame_mvs: false,
             enable_warped_motion: false,
             enable_superres: false,
-            enable_cdef: true,
+            enable_cdef: false,
             enable_restoration: true,
             operating_points_cnt_minus_1: 0,
             operating_point_idc: operating_point_idc,
@@ -604,8 +615,6 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
 
         self.write_color_config(seq)?;
 
-        self.write(1,0)?; // separate uv delta q
-
         self.write_bit(seq.film_grain_params_present)?;
 
         self.write_bit(true)?; // add_trailing_bits
@@ -677,18 +686,36 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
     }
 
     fn write_color_config(&mut self, seq: &mut Sequence) -> Result<(), std::io::Error> {
-        self.write_bit(false)?; // 8 bit video
-        self.write_bit(seq.monochrome)?; 	// monochrome?
-        self.write_bit(false)?;  					// No color description present
+        let high_bd = seq.bit_depth > 8;
+
+        self.write_bit(high_bd)?; // high bit depth
+
+        if seq.bit_depth == 12 {
+            self.write_bit(true)?; // 12-bit
+        }
+
+        self.write_bit(seq.monochrome)?; // monochrome?
+        self.write_bit(false)?; // No color description present
 
         if seq.monochrome {
             assert!(false);
         }
+
         self.write_bit(false)?; // color range
 
-        if true { // subsampling_x == 1 && cm->subsampling_y == 1
-            self.write(2,0)?; // chroma_sample_position == AOM_CSP_UNKNOWN
+        if seq.bit_depth == 12 {
+            // always subsampling in both directions, as we only process 4:2:0
+            let subsampling_x = true;
+            self.write_bit(subsampling_x)?;
+
+            if subsampling_x {
+                self.write_bit(true)?; // subsampling_y
+            }
         }
+
+        self.write(2, 0)?; // chroma_sample_position == CSP_UNKNOWN
+
+        self.write_bit(false)?; // separate uv delta q
 
         Ok(())
     }
@@ -703,7 +730,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
       } else {
         if fi.show_existing_frame {
           self.write_bit(true)?; // show_existing_frame=1
-          self.write(3,0)?; // show last frame
+          self.write(3, 0)?; // show last frame
 
           //TODO:
           /* temporal_point_info();
@@ -1002,12 +1029,14 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         self.write(height_bits, (fi.height - 1) as u16)?;
         Ok(())
     }
+
     fn write_loop_filter(&mut self) -> Result<(), std::io::Error> {
         self.write(6,0)?; // loop filter level 0
         self.write(6,0)?; // loop filter level 1
         self.write(3,0)?; // loop filter sharpness
         self.write_bit(false) // loop filter deltas enabled
     }
+
     fn write_frame_cdef(&mut self, seq: &Sequence, fi: &FrameInvariants) -> Result<(), std::io::Error> {
         if seq.enable_cdef {
             assert!(fi.cdef_damping >= 3);
@@ -1159,12 +1188,12 @@ fn diff(dst: &mut [i16], src1: &PlaneSlice, src2: &PlaneSlice, width: usize, hei
 // dequantize, inverse-transform.
 pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter, w: &mut Writer,
                   p: usize, bo: &BlockOffset, mode: PredictionMode, tx_size: TxSize, tx_type: TxType,
-                  plane_bsize: BlockSize, po: &PlaneOffset, skip: bool) -> bool {
+                  plane_bsize: BlockSize, po: &PlaneOffset, skip: bool, bit_depth: usize) -> bool {
     let rec = &mut fs.rec.planes[p];
     let PlaneConfig { stride, xdec, ydec, .. } = fs.input.planes[p].cfg;
 
     if mode.is_intra() {
-      mode.predict_intra(&mut rec.mut_slice(po), tx_size);
+      mode.predict_intra(&mut rec.mut_slice(po), tx_size, bit_depth);
     }
 
     if skip { return false; }
@@ -1180,16 +1209,16 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
          tx_size.width(),
          tx_size.height());
 
-    forward_transform(&residual.array, coeffs, tx_size.width(), tx_size, tx_type);
+    forward_transform(&residual.array, coeffs, tx_size.width(), tx_size, tx_type, bit_depth);
     fs.qc.quantize(coeffs);
 
     let has_coeff = cw.write_coeffs_lv_map(w, p, bo, &coeffs, tx_size, tx_type, plane_bsize, xdec, ydec,
                             fi.use_reduced_tx_set);
 
     // Reconstruct
-    dequantize(fi.config.quantizer, &coeffs, &mut rcoeffs.array, tx_size);
+    dequantize(fi.config.quantizer, &coeffs, &mut rcoeffs.array, tx_size, bit_depth);
 
-    inverse_transform_add(&rcoeffs.array, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type);
+    inverse_transform_add(&rcoeffs.array, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
     has_coeff
 }
 
@@ -1207,7 +1236,7 @@ fn encode_block_a(seq: &Sequence,
 fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
                  cw: &mut ContextWriter, w: &mut Writer,
                  luma_mode: PredictionMode, chroma_mode: PredictionMode,
-                 bsize: BlockSize, bo: &BlockOffset, skip: bool) {
+                 bsize: BlockSize, bo: &BlockOffset, skip: bool, bit_depth: usize) {
     let is_inter = !luma_mode.is_intra();
 
     if fi.frame_type == FrameType::INTER {
@@ -1265,7 +1294,7 @@ fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
 
     let tx_type = if tx_set > TxSet::TX_SET_DCTONLY && fi.config.speed <= 3 {
         // FIXME: there is one redundant transform type decision per encoded block
-        rdo_tx_type_decision(fi, fs, cw, luma_mode, bsize, bo, tx_size, tx_set)
+        rdo_tx_type_decision(fi, fs, cw, luma_mode, bsize, bo, tx_size, tx_set, bit_depth)
     } else {
         TxType::DCT_DCT
     };
@@ -1284,22 +1313,22 @@ fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
 
             luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), plane_bsize);
         }
-        write_tx_tree(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip); // i.e. var-tx if inter mode
+        write_tx_tree(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth); // i.e. var-tx if inter mode
     } else {
-        write_tx_blocks(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip);
+        write_tx_blocks(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth);
     }
 }
 
 pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
                        cw: &mut ContextWriter, w: &mut Writer,
                        luma_mode: PredictionMode, chroma_mode: PredictionMode, bo: &BlockOffset,
-                       bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool) {
+                       bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool, bit_depth: usize) {
     let bw = bsize.width_mi() / tx_size.width_mi();
     let bh = bsize.height_mi() / tx_size.height_mi();
 
     let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
-    fs.qc.update(fi.config.quantizer, tx_size, luma_mode.is_intra());
+    fs.qc.update(fi.config.quantizer, tx_size, luma_mode.is_intra(), bit_depth);
 
     for by in 0..bh {
         for bx in 0..bw {
@@ -1309,7 +1338,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
             };
 
             let po = tx_bo.plane_offset(&fs.input.planes[0].cfg);
-            encode_tx_block(fi, fs, cw, w, 0, &tx_bo, luma_mode, tx_size, tx_type, bsize, &po, skip);
+            encode_tx_block(fi, fs, cw, w, 0, &tx_bo, luma_mode, tx_size, tx_type, bsize, &po, skip, bit_depth);
         }
     }
 
@@ -1336,7 +1365,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
 
     if bw_uv > 0 && bh_uv > 0 {
         let uv_tx_type = uv_intra_mode_to_tx_type_context(chroma_mode);
-        fs.qc.update(fi.config.quantizer, uv_tx_size, chroma_mode.is_intra());
+        fs.qc.update(fi.config.quantizer, uv_tx_size, chroma_mode.is_intra(), bit_depth);
 
         for p in 1..3 {
             for by in 0..bh_uv {
@@ -1354,7 +1383,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
                     po.y += by * uv_tx_size.height();
 
                     encode_tx_block(fi, fs, cw, w, p, &tx_bo, chroma_mode, uv_tx_size, uv_tx_type,
-                                    plane_bsize, &po, skip);
+                                    plane_bsize, &po, skip, bit_depth);
                 }
             }
         }
@@ -1365,16 +1394,16 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
 // but only one tx block exist for a inter mode partition.
 pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter, w: &mut Writer,
                        luma_mode: PredictionMode, chroma_mode: PredictionMode, bo: &BlockOffset,
-                       bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool) {
+                       bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool, bit_depth: usize) {
     let bw = bsize.width_mi() / tx_size.width_mi();
     let bh = bsize.height_mi() / tx_size.height_mi();
 
     let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
-    fs.qc.update(fi.config.quantizer, tx_size, luma_mode.is_intra());
+    fs.qc.update(fi.config.quantizer, tx_size, luma_mode.is_intra(), bit_depth);
 
     let po = bo.plane_offset(&fs.input.planes[0].cfg);
-    let has_coeff = encode_tx_block(fi, fs, cw, w, 0, &bo, luma_mode, tx_size, tx_type, bsize, &po, skip);
+    let has_coeff = encode_tx_block(fi, fs, cw, w, 0, &bo, luma_mode, tx_size, tx_type, bsize, &po, skip, bit_depth);
 
     // these are only valid for 4:2:0
     let uv_tx_size = match bsize {
@@ -1400,7 +1429,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
     if bw_uv > 0 && bh_uv > 0 {
         let uv_tx_type = if has_coeff {tx_type} else {TxType::DCT_DCT}; // if inter mode, uv_tx_type == tx_type
 
-        fs.qc.update(fi.config.quantizer, uv_tx_size, chroma_mode.is_intra());
+        fs.qc.update(fi.config.quantizer, uv_tx_size, chroma_mode.is_intra(), bit_depth);
 
         for p in 1..3 {
             let tx_bo = BlockOffset {
@@ -1411,7 +1440,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
             let po = bo.plane_offset(&fs.input.planes[p].cfg);
 
             encode_tx_block(fi, fs, cw, w, p, &tx_bo, chroma_mode, uv_tx_size, uv_tx_type,
-                            plane_bsize, &po, skip);
+                            plane_bsize, &po, skip, bit_depth);
         }
     }
 }
@@ -1468,7 +1497,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         cdef_coded = encode_block_a(seq, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                                    bsize, bo, skip);
         encode_block_b(fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
-                       mode_luma, mode_chroma, bsize, bo, skip);
+                       mode_luma, mode_chroma, bsize, bo, skip, seq.bit_depth);
 
         best_decision = mode_decision;
     }
@@ -1518,7 +1547,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             cdef_coded = encode_block_a(seq, cw, if cdef_coded {w_post_cdef} else {w_pre_cdef},
                                        bsize, bo, skip);
             encode_block_b(fi, fs, cw, if cdef_coded {w_post_cdef} else {w_pre_cdef},
-                          mode_luma, mode_chroma, bsize, bo, skip);
+                          mode_luma, mode_chroma, bsize, bo, skip, seq.bit_depth);
         }
     }
 
@@ -1596,7 +1625,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
             cdef_coded = encode_block_a(seq, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                          bsize, bo, skip);
             encode_block_b(fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
-                          mode_luma, mode_chroma, bsize, bo, skip);
+                          mode_luma, mode_chroma, bsize, bo, skip, seq.bit_depth);
         },
         PartitionType::PARTITION_SPLIT => {
             if rdo_output.part_modes.len() >= 4 {
@@ -1757,11 +1786,14 @@ pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
     let y4m_bits = y4m_dec.get_bit_depth();
     let y4m_bytes = y4m_dec.get_bytes_per_sample();
     let csp = y4m_dec.get_colorspace();
+
     match csp {
         y4m::Colorspace::C420 |
         y4m::Colorspace::C420jpeg |
         y4m::Colorspace::C420paldv |
-        y4m::Colorspace::C420mpeg2 => {},
+        y4m::Colorspace::C420mpeg2 |
+        y4m::Colorspace::C420p10 |
+        y4m::Colorspace::C420p12 => {},
         _ => {
             panic!("Colorspace {:?} is not supported yet.", csp);
         },
@@ -1773,47 +1805,69 @@ pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
             let y4m_v = y4m_frame.get_v_plane();
             eprintln!("{}", fi);
             let mut fs = FrameState::new(&fi);
-            fs.input.planes[0].copy_from_raw_u8(&y4m_y, width*y4m_bytes, y4m_bytes);
-            fs.input.planes[1].copy_from_raw_u8(&y4m_u, width*y4m_bytes/2, y4m_bytes);
-            fs.input.planes[2].copy_from_raw_u8(&y4m_v, width*y4m_bytes/2, y4m_bytes);
+            fs.input.planes[0].copy_from_raw_u8(&y4m_y, width * y4m_bytes, y4m_bytes);
+            fs.input.planes[1].copy_from_raw_u8(&y4m_u, width * y4m_bytes / 2, y4m_bytes);
+            fs.input.planes[2].copy_from_raw_u8(&y4m_v, width * y4m_bytes / 2, y4m_bytes);
 
-            // We cannot currently encode > 8 bit input!
             match y4m_bits {
-                8 => {},
-                10 | 12 => {
-                    for plane in 0..3 {
-                        for row in fs.input.planes[plane].data.chunks_mut(fs.rec.planes[plane].cfg.stride) {
-                            for col in row.iter_mut() { *col >>= y4m_bits-8 }
-                        }
-                    }
-                },
+                8 | 10 | 12 => {},
                 _ => panic! ("unknown input bit depth!"),
             }
 
             let packet = encode_frame(sequence, fi, &mut fs);
             write_ivf_frame(output_file, fi.number, packet.as_ref());
             if let Some(mut y4m_enc) = y4m_enc {
-                let mut rec_y = vec![128 as u8; width*height];
-                let mut rec_u = vec![128 as u8; width*height/4];
-                let mut rec_v = vec![128 as u8; width*height/4];
-                for (y, line) in rec_y.chunks_mut(width).enumerate() {
-                    for (x, pixel) in line.iter_mut().enumerate() {
-                        let stride = fs.rec.planes[0].cfg.stride;
-                        *pixel = fs.rec.planes[0].data[y*stride+x] as u8;
+                let pitch_y = if sequence.bit_depth > 8 {
+                    width * 2
+                } else {
+                    width
+                };
+                let pitch_uv = pitch_y / 2;
+
+                let (mut rec_y, mut rec_u, mut rec_v) = (
+                    vec![128u8; pitch_y * height],
+                    vec![128u8; pitch_uv * (height / 2)],
+                    vec![128u8; pitch_uv * (height / 2)]);
+                
+                let (stride_y, stride_u, stride_v) = (
+                    fs.rec.planes[0].cfg.stride,
+                    fs.rec.planes[1].cfg.stride,
+                    fs.rec.planes[2].cfg.stride);
+
+                for (line, line_out) in fs.rec.planes[0].data.chunks(stride_y).zip(rec_y.chunks_mut(pitch_y)) {
+                    if sequence.bit_depth > 8 {
+                        unsafe { 
+                            line_out.copy_from_slice(
+                                slice::from_raw_parts::<u8>(line.as_ptr() as (*const u8), pitch_y)); 
+                        }
+                    } else {
+                        line_out.copy_from_slice(
+                            &line.iter().map(|&v| v as u8).collect::<Vec<u8>>()[..pitch_y]);
                     }
                 }
-                for (y, line) in rec_u.chunks_mut(width/2).enumerate() {
-                    for (x, pixel) in line.iter_mut().enumerate() {
-                        let stride = fs.rec.planes[1].cfg.stride;
-                        *pixel = fs.rec.planes[1].data[y*stride+x] as u8;
+                for (line, line_out) in fs.rec.planes[1].data.chunks(stride_u).zip(rec_u.chunks_mut(pitch_uv)) {
+                    if sequence.bit_depth > 8 {
+                        unsafe { 
+                            line_out.copy_from_slice(
+                                slice::from_raw_parts::<u8>(line.as_ptr() as (*const u8), pitch_uv)); 
+                        }
+                    } else {
+                        line_out.copy_from_slice(
+                            &line.iter().map(|&v| v as u8).collect::<Vec<u8>>()[..pitch_uv]);
                     }
                 }
-                for (y, line) in rec_v.chunks_mut(width/2).enumerate() {
-                    for (x, pixel) in line.iter_mut().enumerate() {
-                        let stride = fs.rec.planes[2].cfg.stride;
-                        *pixel = fs.rec.planes[2].data[y*stride+x] as u8;
+                for (line, line_out) in fs.rec.planes[2].data.chunks(stride_v).zip(rec_v.chunks_mut(pitch_uv)) {
+                    if sequence.bit_depth > 8 {
+                        unsafe { 
+                            line_out.copy_from_slice(
+                                slice::from_raw_parts::<u8>(line.as_ptr() as (*const u8), pitch_uv)); 
+                        }
+                    } else {
+                        line_out.copy_from_slice(
+                            &line.iter().map(|&v| v as u8).collect::<Vec<u8>>()[..pitch_uv]);
                     }
                 }
+
                 let rec_frame = y4m::Frame::new([&rec_y, &rec_u, &rec_v], None);
                 y4m_enc.write_frame(&rec_frame).unwrap();
             }
@@ -1882,7 +1936,7 @@ mod test_encode_decode {
 
     }
 
-    fn setup_encoder(w: usize, h: usize, speed: usize, quantizer: usize) -> (FrameInvariants, Sequence) {
+    fn setup_encoder(w: usize, h: usize, speed: usize, quantizer: usize, bit_depth: usize) -> (FrameInvariants, Sequence) {
         unsafe {
             av1_rtcd();
             aom_dsp_rtcd();
@@ -1897,7 +1951,7 @@ mod test_encode_decode {
 
         fi.use_reduced_tx_set = true;
         // fi.min_partition_size =
-        let seq = Sequence::new(w, h);
+        let seq = Sequence::new(w, h, bit_depth);
 
         (fi, seq)
     }
@@ -1915,7 +1969,7 @@ mod test_encode_decode {
 
         for b in DIMENSION_OFFSETS.iter() {
             for s in 0 .. 10 {
-                encode_decode(w + b.0, h + b.1, s, quantizer, limit);
+                encode_decode(w + b.0, h + b.1, s, quantizer, limit, 8);
             }
         }
     }
@@ -1932,7 +1986,7 @@ mod test_encode_decode {
         let speed = 4;
         
         for (w, h) in DIMENSIONS.iter() {
-            encode_decode(*w, *h, speed, quantizer, limit);
+            encode_decode(*w, *h, speed, quantizer, limit, 8);
         }
     }
 
@@ -1946,7 +2000,7 @@ mod test_encode_decode {
 
         for b in DIMENSION_OFFSETS.iter() {
             for &q in [80, 100, 120].iter() {
-                encode_decode(w + b.0, h + b.1, speed, q, limit);
+                encode_decode(w + b.0, h + b.1, speed, q, limit, 8);
             }
         }
     }
@@ -1960,11 +2014,27 @@ mod test_encode_decode {
         let speed = 0;
         let qindex = 100;
 
-        encode_decode(w, h, speed, qindex, limit);
+        encode_decode(w, h, speed, qindex, limit, 8);
     }
 
-    fn compare_plane(rec: &[u8], rec_stride: usize,
-                     dec: &[u8], dec_stride: usize,
+    #[test]
+    #[ignore]
+    fn high_bd() {
+        let quantizer = 100;
+        let limit = 3; // Include inter frames
+        let speed = 0; // Test as many tools as possible
+        let w = 64;
+        let h = 80;
+
+        // 10-bit
+        encode_decode(w, h, speed, quantizer, limit, 10);
+
+        // 12-bit
+        encode_decode(w, h, speed, quantizer, limit, 12);
+    }
+
+    fn compare_plane<T: Ord + std::fmt::Debug>(rec: &[T], rec_stride: usize,
+                     dec: &[T], dec_stride: usize,
                      width: usize, height: usize) {
         for line in rec.chunks(rec_stride)
             .zip(dec.chunks(dec_stride)).take(height) {
@@ -1972,7 +2042,7 @@ mod test_encode_decode {
         }
     }
 
-    fn compare_img(img: *const aom_image_t, frame: &Frame) {
+    fn compare_img(img: *const aom_image_t, frame: &Frame, bit_depth: usize) {
         use std::slice;
         let img = unsafe { *img };
         let img_iter = img.planes.iter().zip(img.stride.iter());
@@ -1981,26 +2051,43 @@ mod test_encode_decode {
             let w = frame_plane.cfg.width;
             let h = frame_plane.cfg.height;
             let rec_stride = frame_plane.cfg.stride;
-            let dec_stride = *img_plane.1 as usize;
 
-            let dec = unsafe {
-                let data = *img_plane.0 as *const u8;
-                let size = dec_stride * h;
-                slice::from_raw_parts(data, size)
-            };
+            if bit_depth > 8 {
+                let dec_stride = *img_plane.1 as usize / 2;
 
-            let rec: Vec<u8> = frame_plane.data.iter().map(|&v| v as u8).collect();
+                let dec = unsafe {
+                    let data = *img_plane.0 as *const u16;
+                    let size = dec_stride * h;
+                
+                    slice::from_raw_parts(data, size)
+                };
 
-            compare_plane(&rec[..], rec_stride, dec, dec_stride, w, h);
+                let rec: Vec<u16> = frame_plane.data.iter().map(|&v| v).collect();
+
+                compare_plane::<u16>(&rec[..], rec_stride, dec, dec_stride, w, h);
+            } else {
+                let dec_stride = *img_plane.1 as usize;
+
+                let dec = unsafe {
+                    let data = *img_plane.0 as *const u8;
+                    let size = dec_stride * h;
+                
+                    slice::from_raw_parts(data, size)
+                };
+
+                let rec: Vec<u8> = frame_plane.data.iter().map(|&v| v as u8).collect();
+
+                compare_plane::<u8>(&rec[..], rec_stride, dec, dec_stride, w, h);
+            }
         }
     }
 
-    fn encode_decode(w:usize, h:usize, speed: usize, quantizer: usize, limit: usize) {
+    fn encode_decode(w: usize, h: usize, speed: usize, quantizer: usize, limit: usize, bit_depth: usize) {
         use std::ptr;
         let mut ra = ChaChaRng::from_seed([0; 32]);
 
         let mut dec = setup_decoder(w, h);
-        let (mut fi, mut seq) = setup_encoder(w, h, speed, quantizer);
+        let (mut fi, mut seq) = setup_encoder(w, h, speed, quantizer, bit_depth);
 
         println!("Encoding {}x{} speed {} quantizer {}", w, h, speed, quantizer);
 
@@ -2060,7 +2147,7 @@ mod test_encode_decode {
                         corrupted_count += corrupted;
 
                         let rec = rec_fifo.pop_front().unwrap();
-                        compare_img(img, &rec);
+                        compare_img(img, &rec, bit_depth);
                     }
                 }
             }
