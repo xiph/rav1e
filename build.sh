@@ -99,10 +99,12 @@ cmp <(tail -n+2 $DEC_FILE) <(tail -n+2 $REC_FILE)
 mpv --loop $DEC_FILE
 
 # Repeat for high bit depth clips
-#cargo run --bin rav1e --release -- $SEQ10 -o $ENC_FILE -s 3
+#cargo run --bin rav1e --release -- $SEQ10 -o $ENC_FILE -s 3 -r $REC_FILE
 #${AOM_TEST}/aomdec $ENC_FILE -o $DEC_FILE
+#cmp <(tail -n+2 $DEC_FILE) <(tail -n+2 $REC_FILE)
 #mpv --loop $DEC_FILE
 
-#cargo run --bin rav1e --release -- $SEQ12 -o $ENC_FILE -s 3
+#cargo run --bin rav1e --release -- $SEQ12 -o $ENC_FILE -s 3 -r $REC_FILE
 #${AOM_TEST}/aomdec $ENC_FILE -o $DEC_FILE
+#cmp <(tail -n+2 $DEC_FILE) <(tail -n+2 $REC_FILE)
 #mpv --loop $DEC_FILE

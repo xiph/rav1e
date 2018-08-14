@@ -226,7 +226,7 @@ impl Sequence {
             enable_ref_frame_mvs: false,
             enable_warped_motion: false,
             enable_superres: false,
-            enable_cdef: bit_depth == 8,
+            enable_cdef: true,
             enable_restoration: true,
             operating_points_cnt_minus_1: 0,
             operating_point_idc: operating_point_idc,
@@ -1607,12 +1607,11 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
     }
 }
 
-fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
+fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameState, bit_depth: usize) -> Vec<u8> {
     let mut w = ec::WriterEncoder::new();
     let fc = CDFContext::new(fi.config.quantizer as u8);
     let bc = BlockContext::new(fi.w_in_b, fi.h_in_b);
     let mut cw = ContextWriter::new(fc,  bc);
-    let bit_depth = 8;
 
     for sby in 0..fi.sb_height {
         cw.bc.reset_left_contexts();
@@ -1679,7 +1678,8 @@ pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut 
             None => (),
         }
     } else {
-        let tile = encode_tile(sequence, fi, fs); // actually tile group
+        let bit_depth = sequence.bit_depth;
+        let tile = encode_tile(sequence, fi, fs, bit_depth); // actually tile group
 
         let mut buf1 = Vec::new();
         {
