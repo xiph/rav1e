@@ -21,7 +21,6 @@ libc = "0.2"
 rand = "0.5"
 rustyline = { version = "1", optional = true }
 y4m = { version = "0.3", optional = true }
-enum-iterator-derive = "0.1.1"
 backtrace = "0.3"
 num-traits = "0.2"
 

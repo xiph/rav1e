@@ -15,9 +15,6 @@ extern crate backtrace;
 extern crate libc;
 extern crate rand;
 
-#[macro_use]
-extern crate enum_iterator_derive;
-
 extern crate num_traits;
 
 use std::io::prelude::*;
@@ -389,7 +386,7 @@ impl fmt::Display for FrameInvariants{
 }
 
 #[allow(dead_code,non_camel_case_types)]
-#[derive(Debug,PartialEq,EnumIterator,Clone,Copy)]
+#[derive(Debug,PartialEq,Clone,Copy)]
 pub enum FrameType {
     KEY,
     INTER,
@@ -400,7 +397,7 @@ pub enum FrameType {
 //const REFERENCE_MODES: usize = 3;
 
 #[allow(dead_code,non_camel_case_types)]
-#[derive(Debug,PartialEq,EnumIterator)]
+#[derive(Debug,PartialEq)]
 pub enum ReferenceMode {
   SINGLE = 0,
   COMPOUND = 1,
