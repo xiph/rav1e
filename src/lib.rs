@@ -178,30 +178,11 @@ pub struct Sequence {
 }
 
 impl Sequence {
-    pub fn new(width: usize, height: usize, color_space: y4m::Colorspace) -> Sequence {
-        let bit_depth = color_space.get_bit_depth();
+    pub fn new(width: usize, height: usize, bit_depth: usize, chroma_sampling: ChromaSampling) -> Sequence {
         let width_bits = 32 - (width as u32).leading_zeros();
         let height_bits = 32 - (height as u32).leading_zeros();
         assert!(width_bits <= 16);
         assert!(height_bits <= 16);
-
-        let chroma_sampling = match color_space {
-            y4m::Colorspace::C420 |
-            y4m::Colorspace::C420jpeg |
-            y4m::Colorspace::C420paldv |
-            y4m::Colorspace::C420mpeg2 |
-            y4m::Colorspace::C420p10 |
-            y4m::Colorspace::C420p12 => ChromaSampling::Cs420,
-            y4m::Colorspace::C422 |
-            y4m::Colorspace::C422p10 |
-            y4m::Colorspace::C422p12 => ChromaSampling::Cs422,
-            y4m::Colorspace::C444 |
-            y4m::Colorspace::C444p10 |
-            y4m::Colorspace::C444p12 => ChromaSampling::Cs444,
-            _ => {
-                panic!("Chroma sampling unknown for the specified color space.")
-            }
-        };
 
         let profile = if bit_depth == 12 { 
             2
@@ -749,7 +730,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         self.write_bit(false)?; // color range
 
         let subsampling_x = seq.chroma_sampling != ChromaSampling::Cs444;
-        let subsampling_y = seq.chroma_sampling != ChromaSampling::Cs420;
+        let subsampling_y = seq.chroma_sampling == ChromaSampling::Cs420;
 
         if seq.bit_depth == 12 {
             self.write_bit(subsampling_x)?;
@@ -759,7 +740,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
             }
         }
 
-        if subsampling_y {
+        if !subsampling_y {
             unimplemented!(); // 4:2:2 or 4:4:4 sampling
         }
 
@@ -1986,8 +1967,8 @@ mod test_encode_decode {
 
     }
 
-    fn setup_encoder(w: usize, h: usize, speed: usize, quantizer: usize, color_space: y4m::Colorspace) -> 
-        (FrameInvariants, Sequence) {
+    fn setup_encoder(w: usize, h: usize, speed: usize, quantizer: usize, 
+        bit_depth: usize, chroma_sampling: ChromaSampling) -> (FrameInvariants, Sequence) {
         unsafe {
             av1_rtcd();
             aom_dsp_rtcd();
@@ -2002,7 +1983,7 @@ mod test_encode_decode {
 
         fi.use_reduced_tx_set = true;
         // fi.min_partition_size =
-        let seq = Sequence::new(w, h, color_space);
+        let seq = Sequence::new(w, h, bit_depth, chroma_sampling);
 
         (fi, seq)
     }
@@ -2081,7 +2062,7 @@ mod test_encode_decode {
         encode_decode(w, h, speed, quantizer, limit, 10);
 
         // 12-bit
-        //encode_decode(w, h, speed, quantizer, limit, 12);
+        encode_decode(w, h, speed, quantizer, limit, 12);
     }
 
     fn compare_plane<T: Ord + std::fmt::Debug>(rec: &[T], rec_stride: usize,
@@ -2138,7 +2119,7 @@ mod test_encode_decode {
         let mut ra = ChaChaRng::from_seed([0; 32]);
 
         let mut dec = setup_decoder(w, h);
-        let (mut fi, mut seq) = setup_encoder(w, h, speed, quantizer, y4m::Colorspace::C420jpeg);
+        let (mut fi, mut seq) = setup_encoder(w, h, speed, quantizer, bit_depth, ChromaSampling::Cs420);
 
         println!("Encoding {}x{} speed {} quantizer {}", w, h, speed, quantizer);
 

@@ -27,8 +27,26 @@ fn main() {
   };
 
   let mut fi = FrameInvariants::new(width, height, config);
+
+  let chroma_sampling = match color_space {
+    y4m::Colorspace::C420 |
+    y4m::Colorspace::C420jpeg |
+    y4m::Colorspace::C420paldv |
+    y4m::Colorspace::C420mpeg2 |
+    y4m::Colorspace::C420p10 |
+    y4m::Colorspace::C420p12 => ChromaSampling::Cs420,
+    y4m::Colorspace::C422 |
+    y4m::Colorspace::C422p10 |
+    y4m::Colorspace::C422p12 => ChromaSampling::Cs422,
+    y4m::Colorspace::C444 |
+    y4m::Colorspace::C444p10 |
+    y4m::Colorspace::C444p12 => ChromaSampling::Cs444,
+    _ => {
+        panic!("Chroma sampling unknown for the specified color space.")
+    }
+  };
   
-  let mut sequence = Sequence::new(width, height, color_space);
+  let mut sequence = Sequence::new(width, height, color_space.get_bit_depth(), chroma_sampling);
   write_ivf_header(
     &mut io.output,
     width,
