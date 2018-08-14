@@ -856,9 +856,9 @@ pub struct CDFContext {
 impl CDFContext {
     pub fn new(quantizer: u8) -> CDFContext {
     let qctx = match quantizer {
-      0...20 => 0,
-      21...60 => 1,
-      61...120 => 2,
+      0..=20 => 0,
+      21..=60 => 1,
+      61..=120 => 2,
       _ => 3
     };
     CDFContext {
@@ -1667,7 +1667,7 @@ impl ContextWriter {
   }
 
   pub fn write_partition(
-    &mut self, w: &mut Writer, bo: &BlockOffset, p: PartitionType, bsize: BlockSize
+    &mut self, w: &mut dyn Writer, bo: &BlockOffset, p: PartitionType, bsize: BlockSize
   ) {
     assert!(bsize >= BlockSize::BLOCK_8X8 );
     let hbs = bsize.width_mi() / 2;
@@ -1708,7 +1708,7 @@ impl ContextWriter {
     }
   }
   pub fn write_intra_mode_kf(
-    &mut self, w: &mut Writer, bo: &BlockOffset, mode: PredictionMode
+    &mut self, w: &mut dyn Writer, bo: &BlockOffset, mode: PredictionMode
   ) {
     static intra_mode_context: [usize; INTRA_MODES] =
       [0, 1, 2, 3, 4, 4, 4, 4, 3, 0, 1, 2, 0];
@@ -1719,13 +1719,13 @@ impl ContextWriter {
     let cdf = &mut self.fc.kf_y_cdf[above_ctx][left_ctx];
     symbol_with_update!(self, w, mode as u32, cdf);
   }
-  pub fn write_intra_mode(&mut self, w: &mut Writer, bsize: BlockSize, mode: PredictionMode) {
+  pub fn write_intra_mode(&mut self, w: &mut dyn Writer, bsize: BlockSize, mode: PredictionMode) {
     let cdf =
       &mut self.fc.y_mode_cdf[size_group_lookup[bsize as usize] as usize];
     symbol_with_update!(self, w, mode as u32, cdf);
   }
   pub fn write_intra_uv_mode(
-    &mut self, w: &mut Writer, uv_mode: PredictionMode, y_mode: PredictionMode, bs: BlockSize
+    &mut self, w: &mut dyn Writer, uv_mode: PredictionMode, y_mode: PredictionMode, bs: BlockSize
   ) {
     let cdf =
       &mut self.fc.uv_mode_cdf[bs.cfl_allowed() as usize][y_mode as usize];
@@ -1735,7 +1735,7 @@ impl ContextWriter {
       symbol_with_update!(self, w, uv_mode as u32, &mut cdf[..UV_INTRA_MODES]);
     }
   }
-  pub fn write_angle_delta(&mut self, w: &mut Writer, angle: i8, mode: PredictionMode) {
+  pub fn write_angle_delta(&mut self, w: &mut dyn Writer, angle: i8, mode: PredictionMode) {
     symbol_with_update!(
       self,
       w,
@@ -1744,7 +1744,7 @@ impl ContextWriter {
         [mode as usize - PredictionMode::V_PRED as usize]
     );
   }
-  pub fn write_use_filter_intra(&mut self, w: &mut Writer, enable: bool, block_size: BlockSize) {
+  pub fn write_use_filter_intra(&mut self, w: &mut dyn Writer, enable: bool, block_size: BlockSize) {
     symbol_with_update!(self, w, enable as u32, &mut self.fc.filter_intra_cdfs[block_size as usize]);
   }
 
@@ -1871,7 +1871,7 @@ impl ContextWriter {
     }
   }
 
-  pub fn write_ref_frames(&mut self, w: &mut Writer, bo: &BlockOffset) {
+  pub fn write_ref_frames(&mut self, w: &mut dyn Writer, bo: &BlockOffset) {
     let rf = self.bc.at(bo).ref_frames;
     assert!(rf[0] == LAST_FRAME);
 
@@ -1911,7 +1911,7 @@ impl ContextWriter {
     }
   }
 
-  pub fn write_inter_mode(&mut self, w: &mut Writer, mode: PredictionMode, ctx: usize) {
+  pub fn write_inter_mode(&mut self, w: &mut dyn Writer, mode: PredictionMode, ctx: usize) {
     let newmv_ctx = ctx & NEWMV_CTX_MASK;
     symbol_with_update!(self, w, (mode != PredictionMode::NEWMV) as u32, &mut self.fc.newmv_cdf[newmv_ctx]);
     if mode != PredictionMode::NEWMV {
@@ -1925,7 +1925,7 @@ impl ContextWriter {
   }
 
   pub fn write_tx_type(
-    &mut self, w: &mut Writer, tx_size: TxSize, tx_type: TxType, y_mode: PredictionMode,
+    &mut self, w: &mut dyn Writer, tx_size: TxSize, tx_type: TxType, y_mode: PredictionMode,
     is_inter: bool, use_reduced_tx_set: bool
   ) {
     let square_tx_size = tx_size.sqr();
@@ -1964,16 +1964,16 @@ impl ContextWriter {
       }
     }
   }
-  pub fn write_skip(&mut self, w: &mut Writer, bo: &BlockOffset, skip: bool) {
+  pub fn write_skip(&mut self, w: &mut dyn Writer, bo: &BlockOffset, skip: bool) {
     let ctx = self.bc.skip_context(bo);
     symbol_with_update!(self, w, skip as u32, &mut self.fc.skip_cdfs[ctx]);
   }
 
-  pub fn write_cdef(&mut self, w: &mut Writer, strength_index: u8, bits: u8) {
+  pub fn write_cdef(&mut self, w: &mut dyn Writer, strength_index: u8, bits: u8) {
     w.literal(bits, strength_index as u32);
   }
 
-  pub fn write_is_inter(&mut self, w: &mut Writer, bo: &BlockOffset, is_inter: bool) {
+  pub fn write_is_inter(&mut self, w: &mut dyn Writer, bo: &BlockOffset, is_inter: bool) {
     let ctx = self.bc.intra_inter_context(bo);
     symbol_with_update!(self, w, is_inter as u32, &mut self.fc.intra_inter_cdfs[ctx]);
   }
@@ -2208,7 +2208,7 @@ impl ContextWriter {
   }
 
   pub fn write_coeffs_lv_map(
-    &mut self, w: &mut Writer, plane: usize, bo: &BlockOffset, coeffs_in: &[i32],
+    &mut self, w: &mut dyn Writer, plane: usize, bo: &BlockOffset, coeffs_in: &[i32],
     tx_size: TxSize, tx_type: TxType, plane_bsize: BlockSize, xdec: usize,
     ydec: usize, use_reduced_tx_set: bool
   ) -> bool {
