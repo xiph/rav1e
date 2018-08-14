@@ -106,13 +106,27 @@ impl Default for Tune {
     }
 }
 
-#[derive(Copy,Clone)]
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum ChromaSampling {
+    Cs420,
+    Cs422,
+    Cs444
+}
+
+impl Default for ChromaSampling {
+    fn default() -> Self {
+        ChromaSampling::Cs420
+    }
+}
+
+#[derive(Copy, Clone)]
 pub struct Sequence {
   // OBU Sequence header of AV1
     pub profile: u8,
     pub num_bits_width: u32,
     pub num_bits_height: u32,
     pub bit_depth: usize,
+    pub chroma_sampling: ChromaSampling,
     pub max_frame_width: u32,
     pub max_frame_height: u32,
     pub frame_id_numbers_present_flag: bool,
@@ -164,13 +178,19 @@ pub struct Sequence {
 }
 
 impl Sequence {
-    pub fn new(width: usize, height: usize, bit_depth: usize) -> Sequence {
+    pub fn new(width: usize, height: usize, bit_depth: usize, chroma_sampling: ChromaSampling) -> Sequence {
         let width_bits = 32 - (width as u32).leading_zeros();
         let height_bits = 32 - (height as u32).leading_zeros();
         assert!(width_bits <= 16);
         assert!(height_bits <= 16);
 
-        let profile = if bit_depth == 12 { 2 } else { 0 };
+        let profile = if bit_depth == 12 { 
+            2
+        } else if chroma_sampling == ChromaSampling::Cs444 {
+            1
+        } else {
+            0 
+        };
 
         let mut operating_point_idc = [0 as u16; MAX_NUM_OPERATING_POINTS];
         let mut level = [[1, 2 as usize]; MAX_NUM_OPERATING_POINTS];
@@ -188,6 +208,7 @@ impl Sequence {
             num_bits_width: width_bits,
             num_bits_height: height_bits,
             bit_depth: bit_depth,
+            chroma_sampling: chroma_sampling,
             max_frame_width: width as u32,
             max_frame_height: height as u32,
             frame_id_numbers_present_flag: false,
@@ -598,7 +619,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
 
     fn write_sequence_header_obu(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
         -> Result<(), std::io::Error> {
-        self.write(3, seq.profile)?; // profile 0, 3 bits
+        self.write(3, seq.profile)?; // profile, 3 bits
         self.write(1, 0)?; // still_picture
         self.write(1, 0)?; // reduced_still_picture
         self.write_bit(false)?; // display model present
@@ -694,7 +715,12 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
             self.write_bit(true)?; // 12-bit
         }
 
-        self.write_bit(seq.monochrome)?; // monochrome?
+        if seq.profile != 1 {
+            self.write_bit(seq.monochrome)?; // monochrome?
+        } else {
+            unimplemented!(); // 4:4:4 sampling at 8 or 10 bits
+        }
+        
         self.write_bit(false)?; // No color description present
 
         if seq.monochrome {
@@ -703,14 +729,19 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
 
         self.write_bit(false)?; // color range
 
+        let subsampling_x = seq.chroma_sampling != ChromaSampling::Cs444;
+        let subsampling_y = seq.chroma_sampling == ChromaSampling::Cs420;
+
         if seq.bit_depth == 12 {
-            // always subsampling in both directions, as we only process 4:2:0
-            let subsampling_x = true;
             self.write_bit(subsampling_x)?;
 
             if subsampling_x {
-                self.write_bit(true)?; // subsampling_y
+                self.write_bit(subsampling_y)?;
             }
+        }
+
+        if !subsampling_y {
+            unimplemented!(); // 4:2:2 or 4:4:4 sampling
         }
 
         self.write(2, 0)?; // chroma_sample_position == CSP_UNKNOWN
@@ -1936,7 +1967,8 @@ mod test_encode_decode {
 
     }
 
-    fn setup_encoder(w: usize, h: usize, speed: usize, quantizer: usize, bit_depth: usize) -> (FrameInvariants, Sequence) {
+    fn setup_encoder(w: usize, h: usize, speed: usize, quantizer: usize, 
+        bit_depth: usize, chroma_sampling: ChromaSampling) -> (FrameInvariants, Sequence) {
         unsafe {
             av1_rtcd();
             aom_dsp_rtcd();
@@ -1951,7 +1983,7 @@ mod test_encode_decode {
 
         fi.use_reduced_tx_set = true;
         // fi.min_partition_size =
-        let seq = Sequence::new(w, h, bit_depth);
+        let seq = Sequence::new(w, h, bit_depth, chroma_sampling);
 
         (fi, seq)
     }
@@ -2087,7 +2119,7 @@ mod test_encode_decode {
         let mut ra = ChaChaRng::from_seed([0; 32]);
 
         let mut dec = setup_decoder(w, h);
-        let (mut fi, mut seq) = setup_encoder(w, h, speed, quantizer, bit_depth);
+        let (mut fi, mut seq) = setup_encoder(w, h, speed, quantizer, bit_depth, ChromaSampling::Cs420);
 
         println!("Encoding {}x{} speed {} quantizer {}", w, h, speed, quantizer);
 
