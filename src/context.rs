@@ -1091,6 +1091,16 @@ impl BlockOffset {
   pub fn y_in_sb(&self) -> usize {
     self.y % MAX_MIB_SIZE
   }
+
+  pub fn with_offset(&self, col_offset: i32, row_offset: i32) -> BlockOffset {
+    let x = self.x as i32 + col_offset;
+    let y = self.y as i32 + row_offset;
+
+    BlockOffset {
+      x: x as usize,
+      y: y as usize
+    }
+  }
 }
 
 #[derive(Copy, Clone)]
@@ -1105,6 +1115,7 @@ pub struct Block {
   pub cdef_index: u8,
   pub n8_w: usize, /* block width in the unit of mode_info */
   pub n8_h: usize, /* block height in the unit of mode_info */
+  pub is_sec_rect: bool,
 }
 
 impl Block {
@@ -1120,6 +1131,7 @@ impl Block {
       cdef_index: 0,
       n8_w: BlockSize::MI_SIZE_WIDE[BLOCK_64X64 as usize],
       n8_h: BlockSize::MI_SIZE_HIGH[BLOCK_64X64 as usize],
+      is_sec_rect: false,
     }
   }
   pub fn is_inter(&self) -> bool {
@@ -1792,21 +1804,21 @@ impl ContextWriter {
 
   fn has_tr(&mut self, bo: &BlockOffset) -> bool {
     let sb_mi_size = BlockSize::MI_SIZE_WIDE[BLOCK_64X64 as usize]; /* Assume 64x64 for now */
-    let mask_row = mi_row & (sb_mi_size - 1);
-    let mask_col = mi_col & (sb_mi_size - 1);
-    let bs = self.bc.at(bo).size;
+    let mask_row = bo.y & LOCAL_BLOCK_MASK;
+    let mask_col = bo.x & LOCAL_BLOCK_MASK;
+    let mut bs = cmp::max(self.bc.at(bo).n8_w, self.bc.at(bo).n8_h);
 
     if bs > BlockSize::MI_SIZE_WIDE[BLOCK_64X64 as usize] {
       return false;
     }
 
-    let mut has_tr = !((mask_row & bs) && (mask_col & bs));
+    let mut has_tr = !((mask_row & bs) != 0 && (mask_col & bs) != 0);
 
     /* TODO: assert its a power of two */
 
-    while (bs < sb_mi_size) {
-      if mask_col & bs {
-        if (mask_col & (2 * bs)) && (mask_row & (2 * bs)) {
+    while bs < sb_mi_size {
+      if (mask_col & bs) != 0 {
+        if (mask_col & (2 * bs) != 0) && (mask_row & (2 * bs) != 0) {
           has_tr = false;
           break;
         }
@@ -1818,23 +1830,24 @@ impl ContextWriter {
 
     /* The left hand of two vertical rectangles always has a top right (as the
      * block above will have been decoded) */
-    if (self.bc.at(bo).n8_w < self.bc.at(bo).n8_h) && self.bc.at(bo).is_sec_rect {
-      has_tr = 1;
+    let blk = &self.bc.at(bo);
+    if (blk.n8_w < blk.n8_h) && blk.is_sec_rect {
+      has_tr = true;
     }
 
     /* The bottom of two horizontal rectangles never has a top right (as the block
      * to the right won't have been decoded) */
-    if (self.bc.at(bo).n8_w > self.bc.at(bo).n8_h) && self.bc.at(bo).is_sec_rect {
-      has_tr = 0;
+    if (blk.n8_w > blk.n8_h) && blk.is_sec_rect {
+      has_tr = false;
     }
 
     /* The bottom left square of a Vertical A (in the old format) does
      * not have a top right as it is decoded before the right hand
      * rectangle of the partition */
-    if self.bc.at(bo).partition == PartitionType::PARTITION_VERT_A {
-      if xd->n8_w == xd->n8_h {
-        if mask_row & bs {
-          has_tr = 0;
+    if blk.partition == PartitionType::PARTITION_VERT_A {
+      if blk.n8_w == blk.n8_h {
+        if (mask_row & bs) != 0 {
+          has_tr = false;
         }
       }
     }
@@ -1851,6 +1864,7 @@ impl ContextWriter {
       return;
     }
 
+/*
     let index = 0;
 
     if rf[1] == NONE_FRAME {
@@ -1860,89 +1874,99 @@ impl ContextWriter {
         }
       }
     } else {
-      if cand->ref_frame[0] == rf[0] && cand->ref_frame[1] == rf[1] {
+      if cand.ref_frame[0] == rf[0] && cand.ref_frame[1] == rf[1] {
       
       }
     }
+*/
   }
 
-  fn scan_row_mbmi(&mut self, bo: &BlockOffset) {
+  fn scan_row_mbmi(&mut self, bo: &BlockOffset, row_offset: i32) {
 
-    let end_mi = cmp::min(self.bc.at(bo).n8_w, mi_cols - mi_col);
-    end_mi = cmp::min(end_mi, BlockSize::MI_SIZE_WIDE[BLOCK_64X64 as usize]);
+    let bc = &mut self.bc;
+    let end_mi = cmp::min(cmp::min(bc.at(bo).n8_w, bc.cols - bo.x),
+                          BlockSize::MI_SIZE_WIDE[BLOCK_64X64 as usize]);
     let n8_w_8 = BlockSize::MI_SIZE_WIDE[BLOCK_8X8 as usize];
     let n8_w_16 = BlockSize::MI_SIZE_WIDE[BLOCK_16X16 as usize];
-    let col_offset = 0;
+    let mut col_offset = 0;
     let shift = 0;
+    let max_row_offs = 0; // FIXME
 
     if row_offset.abs() > 1 {
       col_offset = 1;
-      if ((mi_col & 0x01) != 0) && (self.bc.at(bo).n8_w < n8_w_8) {
+      if ((bo.x & 0x01) != 0) && (bc.at(bo).n8_w < n8_w_8) {
         col_offset -= 1;
       }
     }
 
-    let use_step_16 = self.bc.at(bo).n8_w >= 16;
+    let target_n8_w = bc.at(bo).n8_w;
 
-    for i in 0..end_mi {
-      let cand = self.bc.at((col_offset + i, row_offset));
+    let use_step_16 = target_n8_w >= 16;
+
+    for mut i in 0..end_mi {
+      let cand = bc.at(&bo.with_offset(col_offset + i as i32, row_offset));
+
       let n8_w = BlockSize::MI_SIZE_WIDE[cand.sb_type as usize];
-      let len = cmp::min(self.bc.at(bo).n8_w, n8_w);
+      let mut len = cmp::min(target_n8_w, n8_w);
       if use_step_16 {
         len = cmp::max(n8_w_16, len);
       } else {
         len = cmp::max(len, n8_w_8);
       }
 
-      let weight = 2;
-      if self.bc.at(bo).n8_w >= n8_w_8 && self.bc.at(bo).n8_w <= x8_w {
-        let inc = cmp::min(-max_row_offs + row_offset + 1, BlockSize::MI_SIZE_HIGH[cand.sb_type as usize]);
+      let mut weight = 2;
+      if target_n8_w >= n8_w_8 && target_n8_w <= n8_w {
+        let inc = cmp::min(-max_row_offs + row_offset + 1, BlockSize::MI_SIZE_HIGH[cand.sb_type as usize] as i32);
         weight = cmp::max(weight, inc << shift);
-        processed_rows = inc - row_offset - 1; /* Return this somehow */
+        let processed_rows = (inc as i32) - row_offset - 1; /* Return this somehow */
       }
 
-      self.add_ref_mv_candidate(bo);
+      //self.add_ref_mv_candidate(bo);
 
       i += len;
     }
   }
 
-  fn scan_col_mbmi(&mut self, bo: &BlockOffset) {
+  fn scan_col_mbmi(&mut self, bo: &BlockOffset, col_offset: i32) {
 
-    let end_mi = cmp::min(self.bc.at(bo).n8_h, mi_rows - mi_row);
-    end_mi = cmp::min(end_mi, BlockSize::MI_SIZE_WIDE[BLOCK_64X64 as usize]);
-    let n8_w_8 = BlockSize::MI_SIZE_WIDE[BLOCK_8X8 as usize];
-    let n8_w_16 = BlockSize::MI_SIZE_WIDE[BLOCK_16X16 as usize];
-    let row_offset = 0;
+    let bc = &mut self.bc;
+    let end_mi = cmp::min(cmp::min(bc.at(bo).n8_h, bc.rows - bo.y),
+                                   BlockSize::MI_SIZE_WIDE[BLOCK_64X64 as usize]);
+    let n8_h_8 = BlockSize::MI_SIZE_HIGH[BLOCK_8X8 as usize];
+    let n8_h_16 = BlockSize::MI_SIZE_HIGH[BLOCK_16X16 as usize];
+    let mut row_offset = 0;
     let shift = 0;
+    let max_col_offs = 0; // FIXME
 
     if col_offset.abs() > 1 {
       row_offset = 1;
-      if ((mi_col & 0x01) != 0) && (self.bc.at(bo).n8_h < n8_h_8) {
+      if ((bo.y & 0x01) != 0) && (bc.at(bo).n8_h < n8_h_8) {
         row_offset -= 1;
       }
     }
 
-    let use_step_16 = self.bc.at(bo).n8_h >= 16;
+    let target_n8_h = bc.at(bo).n8_h;
 
-    for i in 0..end_mi {
-      let cand = self.bc.at((col_offset, row_offset + i));
+    let use_step_16 = target_n8_h >= 16;
+
+    for mut i in 0..end_mi {
+      let cand = bc.at(&bo.with_offset(col_offset, row_offset + i as i32));
       let n8_h = BlockSize::MI_SIZE_HIGH[cand.sb_type as usize];
-      let len = cmp::min(self.bc.at(bo).n8_h, n8_h);
+      let mut len = cmp::min(target_n8_h, n8_h);
       if use_step_16 {
         len = cmp::max(n8_h_16, len);
       } else {
         len = cmp::max(len, n8_h_8);
       }
 
-      let weight = 2;
-      if self.bc.at(bo).n8_h >= n8_h_8 && self.bc.at(bo).n8_h <= x8_h {
-        let inc = cmp::min(-max_col_offs + col_offset + 1, BlockSize::MI_SIZE_WIDE[cand.sb_type as usize]);
+      let mut weight = 2;
+      if target_n8_h >= n8_h_8 && target_n8_h <= n8_h {
+        let inc = cmp::min(-max_col_offs + col_offset + 1, BlockSize::MI_SIZE_WIDE[cand.sb_type as usize] as i32);
         weight = cmp::max(weight, inc << shift);
-        processed_rows = inc - row_offset - 1; /* Return this somehow */
+        let processed_cols = (inc as i32) - col_offset - 1; /* Return this somehow */
       }
 
-      self.add_ref_mv_candidate(bo);
+      //self.add_ref_mv_candidate(bo);
 
       i += len;
     }
@@ -1987,10 +2011,10 @@ impl ContextWriter {
     }
 
     if max_row_offs.abs() >= 1 {
-      self.scan_row_mbmi(bo);
+      self.scan_row_mbmi(bo, -1);
     }
     if max_col_offs.abs() >= 1 {
-      self.scan_col_mbmi(bo);
+      self.scan_col_mbmi(bo, -1);
     }
     if self.has_tr(bo) {
       self.scan_blk_mbmi(bo);
