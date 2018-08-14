@@ -226,7 +226,7 @@ impl Sequence {
             enable_ref_frame_mvs: false,
             enable_warped_motion: false,
             enable_superres: false,
-            enable_cdef: false,
+            enable_cdef: bit_depth == 8,
             enable_restoration: true,
             operating_points_cnt_minus_1: 0,
             operating_point_idc: operating_point_idc,
@@ -1811,9 +1811,9 @@ mod test_encode_decode {
         }
     }
 
-    static DIMENSIONS: &[(usize, usize)] = &[/*(2, 2), (4, 4),*/ (8, 8),
-        (16, 16), (32, 32), (64, 64), (128, 128), (256, 256),
-        (512, 512), (1024, 1024), (2048, 2048)];
+    static DIMENSIONS: &[(usize, usize)] = &[(8, 8), (16, 16), (32, 32), (64, 64), 
+        (128, 128), (256, 256), (512, 512), (1024, 1024), (2048, 2048), 
+        (258, 258), (260, 260), (262, 262), (264, 264), (265, 265)];
 
     #[test]
     #[ignore]
