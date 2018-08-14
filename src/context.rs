@@ -1978,36 +1978,37 @@ impl ContextWriter {
     self.add_ref_mv_candidate(bo);
   }
 
-  fn setup_mvref_list(&mut self, bo: &BlockOffset, mi_row: usize, mi_col: usize, mi_rows:usize) {
+  fn setup_mvref_list(&mut self, bo: &BlockOffset) {
     let (rf, rf_num) = self.get_mvref_ref_frames(INTRA_FRAME);
 
     let mut max_row_offs = 0 as isize;
-    let row_adj = (self.bc.at(bo).n8_h < BlockSize::MI_SIZE_HIGH[BLOCK_8X8 as usize]) && (mi_row & 0x01) != 0x0;
+    let row_adj = (self.bc.at(bo).n8_h < BlockSize::MI_SIZE_HIGH[BLOCK_8X8 as usize]) && (bo.y & 0x01) != 0x0;
 
     let mut max_col_offs = 0 as isize;
-    let col_adj = (self.bc.at(bo).n8_w < BlockSize::MI_SIZE_WIDE[BLOCK_8X8 as usize]) && (mi_col & 0x01) != 0x0;
+    let col_adj = (self.bc.at(bo).n8_w < BlockSize::MI_SIZE_WIDE[BLOCK_8X8 as usize]) && (bo.x & 0x01) != 0x0;
 
     let up_avail = bo.y > 0;
     let left_avail = bo.x > 0;
 
     if up_avail {
-      max_row_offs = -((MVREF_ROW_COLS as isize) << 1) + row_adj as isize;
+      max_row_offs = -2 * MVREF_ROW_COLS as isize + row_adj as isize;
 
       if self.bc.at(bo).n8_h < BlockSize::MI_SIZE_HIGH[BLOCK_8X8 as usize] {
-        max_row_offs = -(2 << 1) + row_adj as isize;
+        max_row_offs = -2 * 2 + row_adj as isize;
       }
 
-      max_row_offs = self.find_valid_row_offs(max_row_offs, mi_row, mi_rows);
+      let rows = self.bc.rows;
+      max_row_offs = self.find_valid_row_offs(max_row_offs, bo.y, rows);
     }
 
-    if up_avail {
-      max_col_offs = -((MVREF_ROW_COLS as isize) << 1) + col_adj as isize;
+    if left_avail {
+      max_col_offs = -2 * MVREF_ROW_COLS as isize + col_adj as isize;
 
       if self.bc.at(bo).n8_w < BlockSize::MI_SIZE_WIDE[BLOCK_8X8 as usize] {
-        max_col_offs = -(2 << 1) + col_adj as isize;
+        max_col_offs = -2 * 2 + col_adj as isize;
       }
 
-      max_col_offs = self.find_valid_col_offs(max_col_offs, mi_col);
+      max_col_offs = self.find_valid_col_offs(max_col_offs, bo.x);
     }
 
     if max_row_offs.abs() >= 1 {
@@ -2030,9 +2031,7 @@ impl ContextWriter {
     /* TODO: Handle single reference frame extension */
   }
 
-  pub fn find_mvrefs(&mut self, bo: &BlockOffset) {
-    let ref_frame = INTRA_FRAME;
-
+  pub fn find_mvrefs(&mut self, bo: &BlockOffset, ref_frame: usize) {
     if ref_frame < REF_FRAMES {
       if ref_frame != INTRA_FRAME {
         /* TODO: convert global mv to an mv here */
@@ -2047,7 +2046,7 @@ impl ContextWriter {
       /* TODO: Set the zeromv ref to 0 */
     }
 
-    
+    self.setup_mvref_list(bo);
   }
 
   pub fn fill_neighbours_ref_counts(&mut self, bo: &BlockOffset) {

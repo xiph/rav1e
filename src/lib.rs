@@ -1162,10 +1162,12 @@ fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
     if fi.frame_type == FrameType::INTER {
         cw.write_is_inter(w, bo, is_inter);
         if is_inter {
+            let ref_frame = LAST_FRAME;
             cw.fill_neighbours_ref_counts(bo);
-            cw.bc.set_ref_frame(bo, bsize, LAST_FRAME);
+            cw.bc.set_ref_frame(bo, bsize, ref_frame);
             cw.write_ref_frames(w, bo);
             // FIXME: need more generic context derivation
+            cw.find_mvrefs(bo, ref_frame);
             let mode_context = if bo.x == 0 && bo.y == 0 { 0 } else if bo.x ==0 || bo.y == 0 { 51 } else { 85 };
             // NOTE: Until rav1e supports other inter modes than GLOBALMV
             assert!(luma_mode == PredictionMode::GLOBALMV);
