@@ -390,7 +390,7 @@ impl WriterBase<WriterRecorder> {
   /// Replays the partially-computed range tokens out of the Recorder's
   /// storage and into the passed in Writer, which may be an Encoder
   /// or another Recorder.  Clears the Recorder after replay.
-  pub fn replay(&mut self, dest: &mut StorageBackend) {
+  pub fn replay(&mut self, dest: &mut dyn StorageBackend) {
     for i in 0..self.s.storage.len() {
       let (fl, fh, nms) = self.s.storage[i];
       dest.store(fl, fh, nms);

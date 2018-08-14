@@ -52,7 +52,7 @@ pub struct RDOPartitionOutput {
 }
 
 #[allow(unused)]
-fn cdef_dist_wxh_8x8(src1: &PlaneSlice, src2: &PlaneSlice, bit_depth: usize) -> u64 {
+fn cdef_dist_wxh_8x8(src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, bit_depth: usize) -> u64 {
   let coeff_shift = bit_depth - 8;
   
   let mut sum_s: i32 = 0;
@@ -82,7 +82,7 @@ fn cdef_dist_wxh_8x8(src1: &PlaneSlice, src2: &PlaneSlice, bit_depth: usize) -> 
 
 #[allow(unused)]
 fn cdef_dist_wxh(
-  src1: &PlaneSlice, src2: &PlaneSlice, w: usize, h: usize, bit_depth: usize
+  src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, w: usize, h: usize, bit_depth: usize
 ) -> u64 {
   assert!(w & 0x7 == 0);
   assert!(h & 0x7 == 0);
@@ -101,7 +101,7 @@ fn cdef_dist_wxh(
 }
 
 // Sum of Squared Error for a wxh block
-fn sse_wxh(src1: &PlaneSlice, src2: &PlaneSlice, w: usize, h: usize) -> u64 {
+fn sse_wxh(src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, w: usize, h: usize) -> u64 {
   let mut sse: u64 = 0;
   for j in 0..h {
     for i in 0..w {
@@ -211,7 +211,7 @@ pub fn rdo_mode_decision(
     if is_chroma_block && fi.config.speed <= 3 && luma_mode.is_intra() {
       // Find the best chroma prediction mode for the current luma prediction mode
       for &chroma_mode in RAV1E_INTRA_MODES {
-        let mut wr: &mut Writer = &mut WriterCounter::new();
+        let mut wr: &mut dyn Writer = &mut WriterCounter::new();
         let tell = wr.tell_frac();
         
         encode_block_a(seq, cw, wr, bsize, bo, skip);
@@ -240,7 +240,7 @@ pub fn rdo_mode_decision(
         cw.rollback(&cw_checkpoint);
       }
     } else {
-      let mut wr: &mut Writer = &mut WriterCounter::new();
+      let mut wr: &mut dyn Writer = &mut WriterCounter::new();
       let tell = wr.tell_frac();
       encode_block_a(seq, cw, wr, bsize, bo, skip);
       encode_block_b(fi, fs, cw, wr, luma_mode, luma_mode, bsize, bo, skip, seq.bit_depth);
@@ -317,7 +317,7 @@ pub fn rdo_tx_type_decision(
       continue;
     }
 
-    let mut wr: &mut Writer = &mut WriterCounter::new();
+    let mut wr: &mut dyn Writer = &mut WriterCounter::new();
     let tell = wr.tell_frac();
     if is_inter {
       write_tx_tree(

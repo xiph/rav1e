@@ -7,9 +7,9 @@ use std::slice;
 use clap::{App, Arg};
 
 pub struct EncoderIO {
-    pub input: Box<Read>,
-    pub output: Box<Write>,
-    pub rec: Option<Box<Write>>,
+    pub input: Box<dyn Read>,
+    pub output: Box<dyn Write>,
+    pub rec: Option<Box<dyn Write>>,
 }
 
 pub trait FromCli {
@@ -62,15 +62,15 @@ impl FromCli for EncoderConfig {
 
         let io = EncoderIO {
             input: match matches.value_of("INPUT").unwrap() {
-                "-" => Box::new(io::stdin()) as Box<Read>,
-                f => Box::new(File::open(&f).unwrap()) as Box<Read>
+                "-" => Box::new(io::stdin()) as Box<dyn Read>,
+                f => Box::new(File::open(&f).unwrap()) as Box<dyn Read>
             },
             output: match matches.value_of("OUTPUT").unwrap() {
-                "-" => Box::new(io::stdout()) as Box<Write>,
-                f => Box::new(File::create(&f).unwrap()) as Box<Write>
+                "-" => Box::new(io::stdout()) as Box<dyn Write>,
+                f => Box::new(File::create(&f).unwrap()) as Box<dyn Write>
             },
             rec: matches.value_of("RECONSTRUCTION").map(|f| {
-                Box::new(File::create(&f).unwrap()) as Box<Write>
+                Box::new(File::create(&f).unwrap()) as Box<dyn Write>
             })
         };
 
@@ -94,9 +94,9 @@ impl FromCli for EncoderConfig {
 
 /// Encode and write a frame.
 pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
-                     output_file: &mut Write,
-                     y4m_dec: &mut y4m::Decoder<Box<Read>>,
-                     y4m_enc: Option<&mut y4m::Encoder<Box<Write>>>) -> bool {
+                     output_file: &mut dyn Write,
+                     y4m_dec: &mut y4m::Decoder<'_, Box<dyn Read>>,
+                     y4m_enc: Option<&mut y4m::Encoder<'_, Box<dyn Write>>>) -> bool {
     unsafe {
         av1_rtcd();
         aom_dsp_rtcd();

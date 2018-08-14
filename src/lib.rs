@@ -383,7 +383,7 @@ impl FrameInvariants {
 }
 
 impl fmt::Display for FrameInvariants{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Frame {} - {}", self.number, self.frame_type)
     }
 }
@@ -434,7 +434,7 @@ const SINGLE_REFS: usize = FWD_REFS + BWD_REFS;
 
 
 impl fmt::Display for FrameType{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             FrameType::KEY => write!(f, "Key frame"),
             FrameType::INTER => write!(f, "Inter frame"),
@@ -463,7 +463,7 @@ impl Default for EncoderConfig {
     }
 }
 
-pub fn write_ivf_header(output_file: &mut Write, width: usize, height: usize, num: usize, den: usize) {
+pub fn write_ivf_header(output_file: &mut dyn Write, width: usize, height: usize, num: usize, den: usize) {
     let mut bw = BitWriter::<LE>::new(output_file);
     bw.write_bytes(b"DKIF").unwrap();
     bw.write(16, 0).unwrap(); // version
@@ -477,7 +477,7 @@ pub fn write_ivf_header(output_file: &mut Write, width: usize, height: usize, nu
     bw.write(32, 0).unwrap();
 }
 
-pub fn write_ivf_frame(output_file: &mut Write, pts: u64, data: &[u8]) {
+pub fn write_ivf_frame(output_file: &mut dyn Write, pts: u64, data: &[u8]) {
     let mut bw = BitWriter::<LE>::new(output_file);
     bw.write(32, data.len() as u32).unwrap();
     bw.write(64, pts).unwrap();
@@ -1042,7 +1042,7 @@ fn aom_uleb_encode(mut value: u64, coded_value: &mut [u8]) -> usize {
   leb_size
 }
 
-fn write_obus(packet: &mut Write, sequence: &mut Sequence,
+fn write_obus(packet: &mut dyn Write, sequence: &mut Sequence,
                             fi: &mut FrameInvariants) -> Result<(), std::io::Error> {
     //let mut uch = BitWriter::<BE>::new(packet);
     let obu_extension = 0 as u32;
@@ -1122,7 +1122,7 @@ fn write_obus(packet: &mut Write, sequence: &mut Sequence,
 }
 
 /// Write into `dst` the difference between the blocks at `src1` and `src2`
-fn diff(dst: &mut [i16], src1: &PlaneSlice, src2: &PlaneSlice, width: usize, height: usize) {
+fn diff(dst: &mut [i16], src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, width: usize, height: usize) {
     for j in 0..height {
         for i in 0..width {
             dst[j*width + i] = (src1.p(i, j) as i16) - (src2.p(i, j) as i16);
@@ -1133,7 +1133,7 @@ fn diff(dst: &mut [i16], src1: &PlaneSlice, src2: &PlaneSlice, width: usize, hei
 // For a transform block,
 // predict, transform, quantize, write coefficients to a bitstream,
 // dequantize, inverse-transform.
-pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter, w: &mut Writer,
+pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter, w: &mut dyn Writer,
                   p: usize, bo: &BlockOffset, mode: PredictionMode, tx_size: TxSize, tx_type: TxType,
                   plane_bsize: BlockSize, po: &PlaneOffset, skip: bool, bit_depth: usize) -> bool {
     let rec = &mut fs.rec.planes[p];
@@ -1170,7 +1170,7 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
 }
 
 fn encode_block_a(seq: &Sequence,
-                 cw: &mut ContextWriter, w: &mut Writer,
+                 cw: &mut ContextWriter, w: &mut dyn Writer,
                  bsize: BlockSize, bo: &BlockOffset, skip: bool) -> bool {
     cw.bc.set_skip(bo, bsize, skip);
     cw.write_skip(w, bo, skip);
@@ -1181,7 +1181,7 @@ fn encode_block_a(seq: &Sequence,
 }
 
 fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
-                 cw: &mut ContextWriter, w: &mut Writer,
+                 cw: &mut ContextWriter, w: &mut dyn Writer,
                  luma_mode: PredictionMode, chroma_mode: PredictionMode,
                  bsize: BlockSize, bo: &BlockOffset, skip: bool, bit_depth: usize) {
     let is_inter = !luma_mode.is_intra();
@@ -1267,7 +1267,7 @@ fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
 }
 
 pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
-                       cw: &mut ContextWriter, w: &mut Writer,
+                       cw: &mut ContextWriter, w: &mut dyn Writer,
                        luma_mode: PredictionMode, chroma_mode: PredictionMode, bo: &BlockOffset,
                        bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool, bit_depth: usize) {
     let bw = bsize.width_mi() / tx_size.width_mi();
@@ -1339,7 +1339,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
 
 // FIXME: For now, assume tx_mode is LARGEST_TX, so var-tx is not implemented yet
 // but only one tx block exist for a inter mode partition.
-pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter, w: &mut Writer,
+pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter, w: &mut dyn Writer,
                        luma_mode: PredictionMode, chroma_mode: PredictionMode, bo: &BlockOffset,
                        bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool, bit_depth: usize) {
     let bw = bsize.width_mi() / tx_size.width_mi();
@@ -1393,7 +1393,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
 }
 
 fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
-                             cw: &mut ContextWriter, w_pre_cdef: &mut Writer, w_post_cdef: &mut Writer,
+                             cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
                              bsize: BlockSize, bo: &BlockOffset) -> f64 {
     let mut rd_cost = std::f64::MAX;
 
@@ -1432,7 +1432,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         partition = PartitionType::PARTITION_NONE;
 
         if bsize >= BlockSize::BLOCK_8X8 {
-            let w: &mut Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
+            let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
             cw.write_partition(w, bo, partition, bsize);
         }
         let mode_decision = rdo_mode_decision(seq, fi, fs, cw, bsize, bo).part_modes[0].clone();
@@ -1461,7 +1461,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         let nosplit_rd_cost = rd_cost;
 
         if bsize >= BlockSize::BLOCK_8X8 {
-            let w: &mut Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
+            let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
             cw.write_partition(w, bo, partition, bsize);
         }
 
@@ -1483,7 +1483,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             partition = PartitionType::PARTITION_NONE;
 
             if bsize >= BlockSize::BLOCK_8X8 {
-                let w: &mut Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
+                let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
                 cw.write_partition(w, bo, partition, bsize);
             }
 
@@ -1509,7 +1509,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
 }
 
 fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
-            cw: &mut ContextWriter, w_pre_cdef: &mut Writer, w_post_cdef: &mut Writer,
+            cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
             bsize: BlockSize, bo: &BlockOffset, block_output: &Option<RDOOutput>) {
 
     if bo.x >= cw.bc.cols || bo.y >= cw.bc.rows {
@@ -1550,7 +1550,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
     let subsize = get_subsize(bsize, partition);
 
     if bsize >= BlockSize::BLOCK_8X8 {
-        let w: &mut Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
+        let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
         cw.write_partition(w, bo, partition, bsize);
     }
 
