@@ -1092,9 +1092,9 @@ impl BlockOffset {
     self.y % MAX_MIB_SIZE
   }
 
-  pub fn with_offset(&self, col_offset: i32, row_offset: i32) -> BlockOffset {
-    let x = self.x as i32 + col_offset;
-    let y = self.y as i32 + row_offset;
+  pub fn with_offset(&self, col_offset: isize, row_offset: isize) -> BlockOffset {
+    let x = self.x as isize + col_offset;
+    let y = self.y as isize + row_offset;
 
     BlockOffset {
       x: x as usize,
@@ -1881,7 +1881,7 @@ impl ContextWriter {
 */
   }
 
-  fn scan_row_mbmi(&mut self, bo: &BlockOffset, row_offset: i32) {
+  fn scan_row_mbmi(&mut self, bo: &BlockOffset, row_offset: isize) -> bool {
 
     let bc = &mut self.bc;
     let end_mi = cmp::min(cmp::min(bc.at(bo).n8_w, bc.cols - bo.x),
@@ -1904,7 +1904,7 @@ impl ContextWriter {
     let use_step_16 = target_n8_w >= 16;
 
     for mut i in 0..end_mi {
-      let cand = bc.at(&bo.with_offset(col_offset + i as i32, row_offset));
+      let cand = bc.at(&bo.with_offset(col_offset + i as isize, row_offset));
 
       let n8_w = BlockSize::MI_SIZE_WIDE[cand.sb_type as usize];
       let mut len = cmp::min(target_n8_w, n8_w);
@@ -1916,18 +1916,20 @@ impl ContextWriter {
 
       let mut weight = 2;
       if target_n8_w >= n8_w_8 && target_n8_w <= n8_w {
-        let inc = cmp::min(-max_row_offs + row_offset + 1, BlockSize::MI_SIZE_HIGH[cand.sb_type as usize] as i32);
+        let inc = cmp::min(-max_row_offs + row_offset + 1, BlockSize::MI_SIZE_HIGH[cand.sb_type as usize] as isize);
         weight = cmp::max(weight, inc << shift);
-        let processed_rows = (inc as i32) - row_offset - 1; /* Return this somehow */
+        let processed_rows = (inc as isize) - row_offset - 1; /* Return this somehow */
       }
 
       //self.add_ref_mv_candidate(bo);
 
       i += len;
     }
+
+    true
   }
 
-  fn scan_col_mbmi(&mut self, bo: &BlockOffset, col_offset: i32) {
+  fn scan_col_mbmi(&mut self, bo: &BlockOffset, col_offset: isize) -> bool {
 
     let bc = &mut self.bc;
     let end_mi = cmp::min(cmp::min(bc.at(bo).n8_h, bc.rows - bo.y),
@@ -1950,7 +1952,7 @@ impl ContextWriter {
     let use_step_16 = target_n8_h >= 16;
 
     for mut i in 0..end_mi {
-      let cand = bc.at(&bo.with_offset(col_offset, row_offset + i as i32));
+      let cand = bc.at(&bo.with_offset(col_offset, row_offset + i as isize));
       let n8_h = BlockSize::MI_SIZE_HIGH[cand.sb_type as usize];
       let mut len = cmp::min(target_n8_h, n8_h);
       if use_step_16 {
@@ -1961,21 +1963,27 @@ impl ContextWriter {
 
       let mut weight = 2;
       if target_n8_h >= n8_h_8 && target_n8_h <= n8_h {
-        let inc = cmp::min(-max_col_offs + col_offset + 1, BlockSize::MI_SIZE_WIDE[cand.sb_type as usize] as i32);
+        let inc = cmp::min(-max_col_offs + col_offset + 1, BlockSize::MI_SIZE_WIDE[cand.sb_type as usize] as isize);
         weight = cmp::max(weight, inc << shift);
-        let processed_cols = (inc as i32) - col_offset - 1; /* Return this somehow */
+        let processed_cols = (inc as isize) - col_offset - 1; /* Return this somehow */
       }
 
       //self.add_ref_mv_candidate(bo);
 
       i += len;
     }
+
+    true
   }
 
-  fn scan_blk_mbmi(&mut self, bo: &BlockOffset) {
+  fn scan_blk_mbmi(&mut self, bo: &BlockOffset) -> bool {
+    if bo.x >= self.bc.cols || bo.y >= self.bc.rows {
+      return false;
+    }
 
     /* Always assume its within a tile, probably wrong */
     self.add_ref_mv_candidate(bo);
+    true
   }
 
   fn setup_mvref_list(&mut self, bo: &BlockOffset) {
@@ -2011,20 +2019,39 @@ impl ContextWriter {
       max_col_offs = self.find_valid_col_offs(max_col_offs, bo.x);
     }
 
+    let mut row_match = false;
+    let mut col_match = false;
+    let newmv_count = 0;
+
     if max_row_offs.abs() >= 1 {
-      self.scan_row_mbmi(bo, -1);
+      let found_match = self.scan_row_mbmi(bo, -1);
+      row_match |= found_match;
     }
     if max_col_offs.abs() >= 1 {
-      self.scan_col_mbmi(bo, -1);
+      let found_match = self.scan_col_mbmi(bo, -1);
+      col_match |= found_match;
     }
     if self.has_tr(bo) {
-      self.scan_blk_mbmi(bo);
+      let n8_w = self.bc.at(bo).n8_w;
+      let found_match = self.scan_blk_mbmi(&bo.with_offset(n8_w as isize, -1));
+      row_match |= found_match;
     }
+
+    let nearest_match = if row_match { 1 } else { 0 } + if col_match { 1 } else { 0 };
 
     /* TODO: set ref_mv_stack weights to REF_CAT_LEVEL for this ref frame */
 
     /* Scan the second outer area. */
-    self.scan_blk_mbmi(bo);
+    let found_match = self.scan_blk_mbmi(&bo.with_offset(-1, -1));
+    row_match |= found_match;
+
+    let total_match = if row_match { 1 } else { 0 } + if col_match { 1 } else { 0 };
+
+    let mode_context = match nearest_match {
+                         0 =>  cmp::min(total_match, 1) + (total_match << REFMV_OFFSET) ,
+                         1 =>  3 - cmp::min(newmv_count, 1) + ((2 + total_match) << REFMV_OFFSET) ,
+                         _ =>  5 - cmp::min(newmv_count, 1) + (5 << REFMV_OFFSET)
+                       };
 
     /* TODO: Find nearest match and assign nearest and near mvs */
 
