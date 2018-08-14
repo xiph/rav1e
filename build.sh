@@ -66,6 +66,8 @@ fi
 
 # File containing the encoded sequence
 ENC_FILE="enc_file.ivf"
+# File containing the reconstructed sequence
+REC_FILE="rec_file.y4m"
 # File containing the decoded sequence
 DEC_FILE="dec_file.y4m"
 
@@ -73,10 +75,13 @@ DEC_FILE="dec_file.y4m"
 export RUST_BACKTRACE=1
 
 # Build and run encoder
-cargo run --bin rav1e --release -- $SEQ -o $ENC_FILE -s 3
+cargo run --bin rav1e --release -- $SEQ -o $ENC_FILE -s 3 -r $REC_FILE
 
 # Decode
 ${AOM_TEST}/aomdec $ENC_FILE -o $DEC_FILE
+
+# Input/Output compare
+cmp <(tail -n+2 $DEC_FILE) <(tail -n+2 $REC_FILE)
 
 # Daala tools support coming soon
 #DAALA_TOOLS="../daala/tools/"

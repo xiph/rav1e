@@ -22,7 +22,7 @@ fn main() {
   let mut y4m_enc = match io.rec.as_mut() {
     Some(rec) =>
       Some(y4m::encode(width, height, framerate)
-		.with_colorspace(color_space).write_header(rec).unwrap()),
+		    .with_colorspace(color_space).write_header(rec).unwrap()),
     None => None
   };
 

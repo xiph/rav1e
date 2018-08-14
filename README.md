@@ -29,10 +29,10 @@ git submodule update --init
 
 This is also required every time you switch branches or pull a submodule change.
 
-In order to build and link to the codec on UNIX, you need Perl, Yasm, CMake, and pkg-config. To install this on Ubuntu or Linux Mint, run:
+In order to build, test and link to the codec on UNIX, you need Perl, Yasm, CMake, Clang and pkg-config. To install this on Ubuntu or Linux Mint, run:
 
 ```
-sudo apt install perl yasm cmake pkg-config
+sudo apt install perl yasm cmake clang pkg-config
 ```
 
 On Windows, pkg-config is not required. A Perl distribution such as Strawberry Perl, CMake, and a Yasm binary in your system PATH are required.
