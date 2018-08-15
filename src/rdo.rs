@@ -269,6 +269,8 @@ pub fn rdo_mode_decision(
     }
   }
 
+  cw.bc.set_mode(bo, bsize, best_mode_luma);
+
   assert!(best_rd >= 0_f64);
 
   RDOOutput {
