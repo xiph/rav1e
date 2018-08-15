@@ -18,4 +18,3 @@ build: false
 test:
     - git submodule update --init
     - cargo test --verbose
-    - cargo bench --verbose
