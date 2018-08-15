@@ -1986,7 +1986,7 @@ impl ContextWriter {
     true
   }
 
-  fn setup_mvref_list(&mut self, bo: &BlockOffset) {
+  fn setup_mvref_list(&mut self, bo: &BlockOffset) -> usize {
     let (rf, rf_num) = self.get_mvref_ref_frames(INTRA_FRAME);
 
     let mut max_row_offs = 0 as isize;
@@ -2056,9 +2056,11 @@ impl ContextWriter {
     /* TODO: Find nearest match and assign nearest and near mvs */
 
     /* TODO: Handle single reference frame extension */
+
+    mode_context
   }
 
-  pub fn find_mvrefs(&mut self, bo: &BlockOffset, ref_frame: usize) {
+  pub fn find_mvrefs(&mut self, bo: &BlockOffset, ref_frame: usize) -> usize {
     if ref_frame < REF_FRAMES {
       if ref_frame != INTRA_FRAME {
         /* TODO: convert global mv to an mv here */
@@ -2073,7 +2075,8 @@ impl ContextWriter {
       /* TODO: Set the zeromv ref to 0 */
     }
 
-    self.setup_mvref_list(bo);
+    let mode_context = self.setup_mvref_list(bo);
+    mode_context
   }
 
   pub fn fill_neighbours_ref_counts(&mut self, bo: &BlockOffset) {
