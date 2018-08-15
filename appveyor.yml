@@ -1,0 +1,21 @@
+os: Visual Studio 2017
+
+environment:
+    matrix:   
+    - channel: stable
+      target: x86_64-pc-windows-msvc
+
+install:
+    - appveyor DownloadFile https://win.rustup.rs/ -FileName rustup-init.exe
+    - appveyor DownloadFile http://www.tortall.net/projects/yasm/releases/yasm-1.3.0-win64.exe -FileName yasm.exe
+    - rustup-init -yv --default-toolchain %channel% --default-host %target%
+    - set PATH=%PATH%;%USERPROFILE%\.cargo\bin;%APPVEYOR_BUILD_FOLDER%
+    - rustc -vV
+    - cargo -vV
+
+build: false
+
+test:
+    - git submodule update --init
+    - cargo test --verbose
+    - cargo bench --verbose
