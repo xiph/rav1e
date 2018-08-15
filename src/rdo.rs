@@ -200,7 +200,7 @@ pub fn rdo_mode_decision(
   let mode_set = if fi.frame_type == FrameType::INTER {
     RAV1E_INTER_MODES
   } else if fi.config.speed <= 3 {
-      RAV1E_INTRA_MODES
+    RAV1E_INTRA_MODES
   } else {
     RAV1E_INTRA_MODES_MINIMAL
   };
@@ -230,7 +230,9 @@ pub fn rdo_mode_decision(
           seq.bit_depth
         );
 
-        if rd < best_rd {
+
+        if rd < best_rd && (fi.frame_type != FrameType::INTER || luma_mode == PredictionMode::GLOBALMV){
+        //if rd < best_rd {
           best_rd = rd;
           best_mode_luma = luma_mode;
           best_mode_chroma = chroma_mode;
@@ -258,7 +260,8 @@ pub fn rdo_mode_decision(
         seq.bit_depth
       );
 
-      if rd < best_rd {
+      if rd < best_rd && (fi.frame_type != FrameType::INTER || luma_mode == PredictionMode::GLOBALMV){
+      //if rd < best_rd {
         best_rd = rd;
         best_mode_luma = luma_mode;
         best_mode_chroma = luma_mode;
@@ -272,6 +275,8 @@ pub fn rdo_mode_decision(
   cw.bc.set_mode(bo, bsize, best_mode_luma);
 
   assert!(best_rd >= 0_f64);
+
+  cw.bc.set_mode(bo, bsize, best_mode_luma);
 
   RDOOutput {
     rd_cost: best_rd,
