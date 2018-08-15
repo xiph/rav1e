@@ -20,3 +20,7 @@ build_script:
 test_script:
     - git submodule update --init
     - cargo test --verbose
+
+artifacts:
+    - path: target\release\rav1e.exe
+      name: rav1e
