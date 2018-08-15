@@ -404,31 +404,7 @@ pub enum ReferenceMode {
   SELECT = 2,
 }
 
-const REF_CONTEXTS: usize = 3;
-
-const REF_FRAMES: u32 = 8;
-const REF_FRAMES_LOG2: u32 = 3;
 pub const ALL_REF_FRAMES_MASK: u32 = (1 << REF_FRAMES) - 1;
-
-//const NONE_FRAME: isize = -1;
-//const INTRA_FRAME: usize = 0;
-//const LAST_FRAME: usize = 1;
-//const LAST2_FRAME: usize = 2;
-//const LAST3_FRAME: usize = 3;
-const GOLDEN_FRAME: usize = 4;
-const BWDREF_FRAME: usize = 5;
-//const ALTREF2_FRAME: usize = 6;
-const ALTREF_FRAME: usize = 7;
-//const LAST_REF_FRAMES: usize = LAST3_FRAME - LAST_FRAME + 1;
-const INTER_REFS_PER_FRAME: usize = ALTREF_FRAME - LAST_FRAME + 1;
-//const TOTAL_REFS_PER_FRAME: usize = ALTREF_FRAME - INTRA_FRAME + 1;
-const FWD_REFS: usize = GOLDEN_FRAME - LAST_FRAME + 1;
-//const FWD_RF_OFFSET(ref) (ref - LAST_FRAME)
-const BWD_REFS: usize = ALTREF_FRAME - BWDREF_FRAME + 1;
-//const BWD_RF_OFFSET(ref) (ref - BWDREF_FRAME)
-
-const SINGLE_REFS: usize = FWD_REFS + BWD_REFS;
-
 
 impl fmt::Display for FrameType{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

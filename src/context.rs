@@ -51,9 +51,6 @@ const MAX_TX_SQUARE: usize = MAX_TX_SIZE * MAX_TX_SIZE;
 
 pub const INTRA_MODES: usize = 13;
 const UV_INTRA_MODES: usize = 14;
-const NEWMV_MODE_CONTEXTS: usize = 7;
-const GLOBALMV_MODE_CONTEXTS: usize = 2;
-const REFMV_MODE_CONTEXTS: usize = 9;
 
 const BLOCK_SIZE_GROUPS: usize = 4;
 const MAX_ANGLE_DELTA: usize = 3;
@@ -65,12 +62,6 @@ const TX_SIZES: usize = 4;
 const TX_SETS: usize = 9;
 const TX_SETS_INTRA: usize = 3;
 const TX_SETS_INTER: usize = 4;
-
-const GLOBALMV_OFFSET: usize = 3;
-const REFMV_OFFSET: usize = 4;
-
-const NEWMV_CTX_MASK: usize = ((1 << GLOBALMV_OFFSET) - 1);
-const GLOBALMV_CTX_MASK: usize = ((1 << (REFMV_OFFSET - GLOBALMV_OFFSET)) - 1);
 
 // Number of transform types in each set type
 static num_tx_set: [usize; TX_SETS] =
