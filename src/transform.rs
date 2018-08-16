@@ -24,18 +24,18 @@ static COSPI_INV: [i32; 64] = [
 ];
 
 #[inline]
-fn half_btf(w0: i32, in0: i32, w1: i32, in1: i32, bit: i32) -> i32 {
+fn half_btf(w0: i32, in0: i32, w1: i32, in1: i32, bit: usize) -> i32 {
   let result = (w0 * in0) + (w1 * in1);
   round_shift(result, bit)
 }
 
 #[inline]
-fn round_shift(value: i32, bit: i32) -> i32 {
+fn round_shift(value: i32, bit: usize) -> i32 {
   (value + (1 << (bit - 1))) >> bit
 }
 
 #[inline]
-fn clamp_value(value: i32, bit: i32) -> i32 {
+fn clamp_value(value: i32, bit: usize) -> i32 {
   // Do nothing for invalid clamp bit.
   if bit <= 0 {
     value
@@ -46,35 +46,31 @@ fn clamp_value(value: i32, bit: i32) -> i32 {
   }
 }
 
-fn av1_idct4(input: [i32; 4], output: &mut [i32], range: i32) {
+fn av1_idct4(input: [i32; 4], output: &mut [i32], range: usize) {
   let cos_bit = 12;
-  let mut bf0: [i32; 4] = input;
-  let mut bf1: [i32; 4] = [0; 4];
-
   // stage 0
 
   // stage 1
-  bf1[0] = bf0[0];
-  bf1[1] = bf0[2];
-  bf1[2] = bf0[1];
-  bf1[3] = bf0[3];
+  let stg1 = [input[0], input[2], input[1], input[3]];
 
   // stage 2
-  bf0[0] = half_btf(COSPI_INV[32], bf1[0], COSPI_INV[32], bf1[1], cos_bit);
-  bf0[1] = half_btf(COSPI_INV[32], bf1[0], -COSPI_INV[32], bf1[1], cos_bit);
-  bf0[2] = half_btf(COSPI_INV[48], bf1[2], -COSPI_INV[16], bf1[3], cos_bit);
-  bf0[3] = half_btf(COSPI_INV[16], bf1[2], COSPI_INV[48], bf1[3], cos_bit);
+  let stg2 = [
+    half_btf(COSPI_INV[32], stg1[0], COSPI_INV[32], stg1[1], cos_bit),
+    half_btf(COSPI_INV[32], stg1[0], -COSPI_INV[32], stg1[1], cos_bit),
+    half_btf(COSPI_INV[48], stg1[2], -COSPI_INV[16], stg1[3], cos_bit),
+    half_btf(COSPI_INV[16], stg1[2], COSPI_INV[48], stg1[3], cos_bit)
+  ];
 
   // stage 3
-  output[0] = clamp_value(bf0[0] + bf0[3], range);
-  output[1] = clamp_value(bf0[1] + bf0[2], range);
-  output[2] = clamp_value(bf0[1] - bf0[2], range);
-  output[3] = clamp_value(bf0[0] - bf0[3], range);
+  output[0] = clamp_value(stg2[0] + stg2[3], range);
+  output[1] = clamp_value(stg2[1] + stg2[2], range);
+  output[2] = clamp_value(stg2[1] - stg2[2], range);
+  output[3] = clamp_value(stg2[0] - stg2[3], range);
 }
 
-static INV_RANGES: [[i32; 2]; 3] = [[16, 16], [18, 16], [20, 18]];
+static INV_RANGES: [[usize; 2]; 3] = [[16, 16], [18, 16], [20, 18]];
 
-fn get_ranges(bd: usize) -> [i32; 2] {
+fn get_ranges(bd: usize) -> [usize; 2] {
   INV_RANGES[((bd - 8) >> 1)]
 }
 
@@ -83,21 +79,23 @@ fn inv_txfm2d_add_4x4_rs(
 ) {
   let ranges = get_ranges(bd);
   let mut buffer = [0i32; 4 * 4];
-  for r in 0..4 {
-    let input_slice = &input[r * 4..(r + 1) * 4];
-    let buffer_slice = &mut buffer[r * 4..(r + 1) * 4];
+  // perform inv txfm on every row
+  for (input_slice, buffer_slice) in input.chunks(4).zip(buffer.chunks_mut(4))
+  {
     let mut temp_in: [i32; 4] = [0; 4];
-    for c in 0..4 {
-      temp_in[c] = input_slice[c];
+    for (raw, clamped) in input_slice.iter().zip(temp_in.iter_mut()) {
+      *clamped = clamp_value(*raw, bd + 8);
     }
     av1_idct4(temp_in, buffer_slice, ranges[0]);
   }
 
+  // perform inv txfm on every col
   for c in 0..4 {
     let mut temp_in: [i32; 4] = [0; 4];
     let mut temp_out: [i32; 4] = [0; 4];
-    for r in 0..4 {
-      temp_in[r] = buffer[r * 4 + c];
+    for (raw, clamped) in buffer[c..].iter().step_by(4).zip(temp_in.iter_mut())
+    {
+      *clamped = clamp_value(*raw, bd + 8);
     }
     av1_idct4(temp_in, &mut temp_out, ranges[1]);
     for r in 0..4 {
