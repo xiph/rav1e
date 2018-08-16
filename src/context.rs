@@ -1106,8 +1106,6 @@ impl BlockOffset {
 #[derive(Copy, Clone)]
 pub struct Block {
   pub mode: PredictionMode,
-  //pub bsize: BlockSize,
-  //pub sb_type: BlockSize,
   pub partition: PartitionType,
   pub skip: bool,
   pub ref_frames: [usize; 2],
@@ -1122,15 +1120,13 @@ impl Block {
   pub fn default() -> Block {
     Block {
       mode: PredictionMode::DC_PRED,
-      //bsize: BlockSize::BLOCK_64X64,
-      //sb_type: BlockSize::BLOCK_64X64,
       partition: PartitionType::PARTITION_NONE,
       skip: false,
       ref_frames: [INTRA_FRAME; 2],
       neighbors_ref_counts: [0; TOTAL_REFS_PER_FRAME],
       cdef_index: 0,
-      n8_w: BlockSize::MI_SIZE_WIDE[BLOCK_64X64 as usize],
-      n8_h: BlockSize::MI_SIZE_HIGH[BLOCK_64X64 as usize],
+      n8_w: BLOCK_64X64.width_mi(),
+      n8_h: BLOCK_64X64.height_mi(),
       is_sec_rect: false,
     }
   }
