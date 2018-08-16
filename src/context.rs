@@ -1107,7 +1107,7 @@ impl BlockOffset {
 pub struct Block {
   pub mode: PredictionMode,
   //pub bsize: BlockSize,
-  pub sb_type: BlockSize,
+  //pub sb_type: BlockSize,
   pub partition: PartitionType,
   pub skip: bool,
   pub ref_frames: [usize; 2],
@@ -1123,7 +1123,7 @@ impl Block {
     Block {
       mode: PredictionMode::DC_PRED,
       //bsize: BlockSize::BLOCK_64X64,
-      sb_type: BlockSize::BLOCK_64X64,
+      //sb_type: BlockSize::BLOCK_64X64,
       partition: PartitionType::PARTITION_NONE,
       skip: false,
       ref_frames: [INTRA_FRAME; 2],
@@ -1920,7 +1920,7 @@ impl ContextWriter {
     while i < end_mi {
       let cand = bc.at_const(&bo.with_offset(col_offset + i as isize, row_offset));
 
-      let n8_w = BlockSize::MI_SIZE_WIDE[cand.sb_type as usize];
+      let n8_w = cand.n8_w;
       let mut len = cmp::min(target_n8_w, n8_w);
       if use_step_16 {
         len = cmp::max(n8_w_16, len);
@@ -1970,7 +1970,7 @@ impl ContextWriter {
     let mut i = 0;
     while i < end_mi {
       let cand = bc.at_const(&bo.with_offset(col_offset, row_offset + i as isize));
-      let n8_h = BlockSize::MI_SIZE_HIGH[cand.sb_type as usize];
+      let n8_h = cand.n8_h;
       let mut len = cmp::min(target_n8_h, n8_h);
       if use_step_16 {
         len = cmp::max(n8_h_16, len);
