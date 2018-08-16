@@ -1902,7 +1902,7 @@ impl ContextWriter {
     let n8_w_8 = BlockSize::MI_SIZE_WIDE[BLOCK_8X8 as usize];
     let n8_w_16 = BlockSize::MI_SIZE_WIDE[BLOCK_16X16 as usize];
     let mut col_offset = 0;
-    let shift = 0;
+    //let shift = 0;
 
     if row_offset.abs() > 1 {
       col_offset = 1;
@@ -1927,10 +1927,10 @@ impl ContextWriter {
         len = cmp::max(len, n8_w_8);
       }
 
-      let mut weight = 2;
+      //let mut weight = 2;
       if target_n8_w >= n8_w_8 && target_n8_w <= n8_w {
         let inc = cmp::min(-max_row_offs + row_offset + 1, cand.n8_h as isize);
-        weight = cmp::max(weight, inc << shift);
+        //weight = cmp::max(weight, inc << shift);
         *processed_rows = (inc as isize) - row_offset - 1;
       }
 
@@ -1952,7 +1952,7 @@ impl ContextWriter {
     let n8_h_8 = BlockSize::MI_SIZE_HIGH[BLOCK_8X8 as usize];
     let n8_h_16 = BlockSize::MI_SIZE_HIGH[BLOCK_16X16 as usize];
     let mut row_offset = 0;
-    let shift = 0;
+    //let shift = 0;
 
     if col_offset.abs() > 1 {
       row_offset = 1;
@@ -1976,10 +1976,10 @@ impl ContextWriter {
         len = cmp::max(len, n8_h_8);
       }
 
-      let mut weight = 2;
+      //let mut weight = 2;
       if target_n8_h >= n8_h_8 && target_n8_h <= n8_h {
         let inc = cmp::min(-max_col_offs + col_offset + 1, cand.n8_w as isize);
-        weight = cmp::max(weight, inc << shift);
+        //weight = cmp::max(weight, inc << shift);
         *processed_cols = (inc as isize) - col_offset - 1;
       }
 
@@ -2001,7 +2001,7 @@ impl ContextWriter {
   }
 
   fn setup_mvref_list(&mut self, bo: &BlockOffset) -> usize {
-    let (rf, rf_num) = self.get_mvref_ref_frames(INTRA_FRAME);
+    let (_rf, _rf_num) = self.get_mvref_ref_frames(INTRA_FRAME);
 
     let mut max_row_offs = 0 as isize;
     let row_adj = (self.bc.at(bo).n8_h < BlockSize::MI_SIZE_HIGH[BLOCK_8X8 as usize]) && (bo.y & 0x01) != 0x0;
