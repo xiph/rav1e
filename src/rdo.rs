@@ -230,9 +230,7 @@ pub fn rdo_mode_decision(
           seq.bit_depth
         );
 
-
-        if rd < best_rd && (fi.frame_type != FrameType::INTER || luma_mode == PredictionMode::GLOBALMV){
-        //if rd < best_rd {
+        if rd < best_rd {
           best_rd = rd;
           best_mode_luma = luma_mode;
           best_mode_chroma = chroma_mode;
@@ -260,8 +258,7 @@ pub fn rdo_mode_decision(
         seq.bit_depth
       );
 
-      if rd < best_rd && (fi.frame_type != FrameType::INTER || luma_mode == PredictionMode::GLOBALMV){
-      //if rd < best_rd {
+      if rd < best_rd {
         best_rd = rd;
         best_mode_luma = luma_mode;
         best_mode_chroma = luma_mode;

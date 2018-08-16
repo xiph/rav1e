@@ -1106,7 +1106,7 @@ impl BlockOffset {
 #[derive(Copy, Clone)]
 pub struct Block {
   pub mode: PredictionMode,
-  pub bsize: BlockSize,
+  //pub bsize: BlockSize,
   pub sb_type: BlockSize,
   pub partition: PartitionType,
   pub skip: bool,
@@ -1122,7 +1122,7 @@ impl Block {
   pub fn default() -> Block {
     Block {
       mode: PredictionMode::DC_PRED,
-      bsize: BlockSize::BLOCK_64X64,
+      //bsize: BlockSize::BLOCK_64X64,
       sb_type: BlockSize::BLOCK_64X64,
       partition: PartitionType::PARTITION_NONE,
       skip: false,
@@ -1330,6 +1330,12 @@ impl BlockContext {
     &mut self, bo: &BlockOffset, bsize: BlockSize, mode: PredictionMode
   ) {
     self.for_each(bo, bsize, |block| block.mode = mode);
+  }
+
+  pub fn set_size(&mut self, bo: &BlockOffset, bsize: BlockSize) {
+    let n8_w = BlockSize::MI_SIZE_WIDE[bsize as usize];
+    let n8_h = BlockSize::MI_SIZE_HIGH[bsize as usize];
+    self.for_each(bo, bsize, |block| { block.n8_w = n8_w; block.n8_h = n8_h } );
   }
 
   pub fn get_mode(&mut self, bo: &BlockOffset) -> PredictionMode {
@@ -1863,8 +1869,8 @@ impl ContextWriter {
     row_offset
   }
 
-  fn add_ref_mv_candidate(&self, bo: &BlockOffset) -> bool {
-    if !self.bc.at_const(bo).is_inter() { /* For intrabc */
+  fn add_ref_mv_candidate(&self, blk: &Block) -> bool {
+    if !blk.is_inter() { /* For intrabc */
       return false;
     }
 
@@ -1928,7 +1934,7 @@ impl ContextWriter {
         *processed_rows = (inc as isize) - row_offset - 1;
       }
 
-      if self.add_ref_mv_candidate(bo) { found_match = true; }
+      if self.add_ref_mv_candidate(cand) { found_match = true; }
 
       i += len;
     }
@@ -1977,7 +1983,7 @@ impl ContextWriter {
         *processed_cols = (inc as isize) - col_offset - 1;
       }
 
-      if self.add_ref_mv_candidate(bo) { found_match = true; }
+      if self.add_ref_mv_candidate(cand) { found_match = true; }
 
       i += len;
     }
@@ -1991,7 +1997,7 @@ impl ContextWriter {
     }
 
     /* Always assume its within a tile, probably wrong */
-    self.add_ref_mv_candidate(bo)
+    self.add_ref_mv_candidate(self.bc.at_const(bo))
   }
 
   fn setup_mvref_list(&mut self, bo: &BlockOffset) -> usize {

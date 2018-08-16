@@ -1159,6 +1159,9 @@ fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
                  bsize: BlockSize, bo: &BlockOffset, skip: bool, bit_depth: usize) {
     let is_inter = !luma_mode.is_intra();
 
+    cw.bc.set_size(bo, bsize);
+    cw.bc.set_mode(bo, bsize, luma_mode);
+
     if fi.frame_type == FrameType::INTER {
         cw.write_is_inter(w, bo, is_inter);
         if is_inter {
@@ -1177,8 +1180,6 @@ fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
     } else {
         cw.write_intra_mode_kf(w, bo, luma_mode);
     }
-
-    cw.bc.set_mode(bo, bsize, luma_mode);
 
     let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
