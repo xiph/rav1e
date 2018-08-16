@@ -1199,11 +1199,11 @@ impl BlockContext {
     self.left_coeff_context = checkpoint.left_coeff_context;
   }
 
-  pub fn at(&mut self, bo: &BlockOffset) -> &mut Block {
+  pub fn at_mut(&mut self, bo: &BlockOffset) -> &mut Block {
     &mut self.blocks[bo.y][bo.x]
   }
 
-  pub fn at_const(&self, bo: &BlockOffset) -> &Block {
+  pub fn at(&self, bo: &BlockOffset) -> &Block {
     &self.blocks[bo.y][bo.x]
   }
 
@@ -1891,7 +1891,7 @@ impl ContextWriter {
   fn scan_row_mbmi(&mut self, bo: &BlockOffset, row_offset: isize, max_row_offs: isize,
                    processed_rows: &mut isize) -> bool {
     let bc = &self.bc;
-    let target_n8_w = bc.at_const(bo).n8_w;
+    let target_n8_w = bc.at(bo).n8_w;
 
     let end_mi = cmp::min(cmp::min(target_n8_w, bc.cols - bo.x),
                           BlockSize::MI_SIZE_WIDE[BLOCK_64X64 as usize]);
@@ -1913,7 +1913,7 @@ impl ContextWriter {
 
     let mut i = 0;
     while i < end_mi {
-      let cand = bc.at_const(&bo.with_offset(col_offset + i as isize, row_offset));
+      let cand = bc.at(&bo.with_offset(col_offset + i as isize, row_offset));
 
       let n8_w = cand.n8_w;
       let mut len = cmp::min(target_n8_w, n8_w);
@@ -1941,7 +1941,7 @@ impl ContextWriter {
   fn scan_col_mbmi(&mut self, bo: &BlockOffset, col_offset: isize, max_col_offs: isize,
                    processed_cols: &mut isize) -> bool {
     let bc = &self.bc;
-    let target_n8_h = bc.at_const(bo).n8_h;
+    let target_n8_h = bc.at(bo).n8_h;
 
     let end_mi = cmp::min(cmp::min(target_n8_h, bc.rows - bo.y),
                           BlockSize::MI_SIZE_HIGH[BLOCK_64X64 as usize]);
@@ -1963,7 +1963,7 @@ impl ContextWriter {
 
     let mut i = 0;
     while i < end_mi {
-      let cand = bc.at_const(&bo.with_offset(col_offset, row_offset + i as isize));
+      let cand = bc.at(&bo.with_offset(col_offset, row_offset + i as isize));
       let n8_h = cand.n8_h;
       let mut len = cmp::min(target_n8_h, n8_h);
       if use_step_16 {
@@ -1993,7 +1993,7 @@ impl ContextWriter {
     }
 
     /* Always assume its within a tile, probably wrong */
-    self.add_ref_mv_candidate(self.bc.at_const(bo))
+    self.add_ref_mv_candidate(self.bc.at(bo))
   }
 
   fn setup_mvref_list(&mut self, bo: &BlockOffset) -> usize {
@@ -2130,7 +2130,7 @@ impl ContextWriter {
           ref_counts[left_b.ref_frames[1] as usize] += 1;
         }
       }
-      self.bc.at(bo).neighbors_ref_counts = ref_counts;
+      self.bc.at_mut(bo).neighbors_ref_counts = ref_counts;
   }
 
   fn get_ref_frame_ctx_b0(&mut self, bo: &BlockOffset) -> usize {
