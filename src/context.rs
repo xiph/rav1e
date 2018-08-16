@@ -1091,29 +1091,43 @@ impl BlockOffset {
   pub fn y_in_sb(&self) -> usize {
     self.y % MAX_MIB_SIZE
   }
+
+  pub fn with_offset(&self, col_offset: isize, row_offset: isize) -> BlockOffset {
+    let x = self.x as isize + col_offset;
+    let y = self.y as isize + row_offset;
+
+    BlockOffset {
+      x: x as usize,
+      y: y as usize
+    }
+  }
 }
 
 #[derive(Copy, Clone)]
 pub struct Block {
   pub mode: PredictionMode,
-  pub bsize: BlockSize,
   pub partition: PartitionType,
   pub skip: bool,
   pub ref_frames: [usize; 2],
   pub neighbors_ref_counts: [usize; TOTAL_REFS_PER_FRAME],
-  pub cdef_index: u8
+  pub cdef_index: u8,
+  pub n8_w: usize, /* block width in the unit of mode_info */
+  pub n8_h: usize, /* block height in the unit of mode_info */
+  pub is_sec_rect: bool,
 }
 
 impl Block {
   pub fn default() -> Block {
     Block {
       mode: PredictionMode::DC_PRED,
-      bsize: BlockSize::BLOCK_64X64,
       partition: PartitionType::PARTITION_NONE,
       skip: false,
       ref_frames: [INTRA_FRAME; 2],
       neighbors_ref_counts: [0; TOTAL_REFS_PER_FRAME],
-      cdef_index: 0
+      cdef_index: 0,
+      n8_w: BLOCK_64X64.width_mi(),
+      n8_h: BLOCK_64X64.height_mi(),
+      is_sec_rect: false,
     }
   }
   pub fn is_inter(&self) -> bool {
@@ -1187,6 +1201,10 @@ impl BlockContext {
 
   pub fn at(&mut self, bo: &BlockOffset) -> &mut Block {
     &mut self.blocks[bo.y][bo.x]
+  }
+
+  pub fn at_const(&self, bo: &BlockOffset) -> &Block {
+    &self.blocks[bo.y][bo.x]
   }
 
   pub fn above_of(&mut self, bo: &BlockOffset) -> Block {
@@ -1308,6 +1326,12 @@ impl BlockContext {
     &mut self, bo: &BlockOffset, bsize: BlockSize, mode: PredictionMode
   ) {
     self.for_each(bo, bsize, |block| block.mode = mode);
+  }
+
+  pub fn set_size(&mut self, bo: &BlockOffset, bsize: BlockSize) {
+    let n8_w = BlockSize::MI_SIZE_WIDE[bsize as usize];
+    let n8_h = BlockSize::MI_SIZE_HIGH[bsize as usize];
+    self.for_each(bo, bsize, |block| { block.n8_w = n8_w; block.n8_h = n8_h } );
   }
 
   pub fn get_mode(&mut self, bo: &BlockOffset) -> PredictionMode {
@@ -1746,6 +1770,345 @@ impl ContextWriter {
   }
   pub fn write_use_filter_intra(&mut self, w: &mut dyn Writer, enable: bool, block_size: BlockSize) {
     symbol_with_update!(self, w, enable as u32, &mut self.fc.filter_intra_cdfs[block_size as usize]);
+  }
+
+  fn get_mvref_ref_frames(&mut self, ref_frame: usize) -> ([usize; 2], usize) {
+    let ref_frame_map: [[usize; 2]; TOTAL_COMP_REFS] = [
+      [ LAST_FRAME,  BWDREF_FRAME  ], [ LAST2_FRAME,  BWDREF_FRAME  ],
+      [ LAST3_FRAME, BWDREF_FRAME  ], [ GOLDEN_FRAME, BWDREF_FRAME  ],
+      [ LAST_FRAME,  ALTREF2_FRAME ], [ LAST2_FRAME,  ALTREF2_FRAME ],
+      [ LAST3_FRAME, ALTREF2_FRAME ], [ GOLDEN_FRAME, ALTREF2_FRAME ],
+      [ LAST_FRAME,  ALTREF_FRAME  ], [ LAST2_FRAME,  ALTREF_FRAME  ],
+      [ LAST3_FRAME, ALTREF_FRAME  ], [ GOLDEN_FRAME, ALTREF_FRAME  ],
+      [ LAST_FRAME,  LAST2_FRAME   ], [ LAST_FRAME,   LAST3_FRAME   ],
+      [ LAST_FRAME,  GOLDEN_FRAME  ], [ BWDREF_FRAME, ALTREF_FRAME  ],
+
+      // NOTE: Following reference frame pairs are not supported to be explicitly
+      //       signalled, but they are possibly chosen by the use of skip_mode,
+      //       which may use the most recent one-sided reference frame pair.
+      [ LAST2_FRAME, LAST3_FRAME   ], [  LAST2_FRAME, GOLDEN_FRAME  ],
+      [ LAST3_FRAME, GOLDEN_FRAME  ], [ BWDREF_FRAME, ALTREF2_FRAME ],
+      [ ALTREF2_FRAME, ALTREF_FRAME ]
+    ];
+
+    if ref_frame >= REF_FRAMES {
+      return ([ ref_frame_map[ref_frame - REF_FRAMES][0],
+               ref_frame_map[ref_frame - REF_FRAMES][1] ], 2)
+    } else {
+      return ([ ref_frame, 0 ], 1)
+    }
+  }
+
+  fn find_valid_row_offs(&mut self, row_offset: isize, mi_row: usize, mi_rows: usize) -> isize {
+    if /* !tile->tg_horz_boundary */ true {
+      cmp::min(cmp::max(row_offset, -(mi_row as isize)), (mi_rows - mi_row - 1) as isize)
+    } else {
+      0
+      /* TODO: for tiling */
+    }
+  }
+
+  fn has_tr(&mut self, bo: &BlockOffset) -> bool {
+    let sb_mi_size = BlockSize::MI_SIZE_WIDE[BLOCK_64X64 as usize]; /* Assume 64x64 for now */
+    let mask_row = bo.y & LOCAL_BLOCK_MASK;
+    let mask_col = bo.x & LOCAL_BLOCK_MASK;
+    let mut bs = cmp::max(self.bc.at(bo).n8_w, self.bc.at(bo).n8_h);
+
+    if bs > BlockSize::MI_SIZE_WIDE[BLOCK_64X64 as usize] {
+      return false;
+    }
+
+    let mut has_tr = !((mask_row & bs) != 0 && (mask_col & bs) != 0);
+
+    /* TODO: assert its a power of two */
+
+    while bs < sb_mi_size {
+      if (mask_col & bs) != 0 {
+        if (mask_col & (2 * bs) != 0) && (mask_row & (2 * bs) != 0) {
+          has_tr = false;
+          break;
+        }
+      } else {
+        break;
+      }
+      bs <<= 1;
+    }
+
+    /* The left hand of two vertical rectangles always has a top right (as the
+     * block above will have been decoded) */
+    let blk = &self.bc.at(bo);
+    if (blk.n8_w < blk.n8_h) && !blk.is_sec_rect {
+      has_tr = true;
+    }
+
+    /* The bottom of two horizontal rectangles never has a top right (as the block
+     * to the right won't have been decoded) */
+    if (blk.n8_w > blk.n8_h) && blk.is_sec_rect {
+      has_tr = false;
+    }
+
+    /* The bottom left square of a Vertical A (in the old format) does
+     * not have a top right as it is decoded before the right hand
+     * rectangle of the partition */
+    if blk.partition == PartitionType::PARTITION_VERT_A {
+      if blk.n8_w == blk.n8_h {
+        if (mask_row & bs) != 0 {
+          has_tr = false;
+        }
+      }
+    }
+
+    has_tr
+  }
+
+  fn find_valid_col_offs(&mut self, col_offset: isize, mi_col: usize) -> isize {
+    cmp::max(col_offset, -(mi_col as isize))
+  }
+
+  fn add_ref_mv_candidate(&self, blk: &Block) -> bool {
+    if !blk.is_inter() { /* For intrabc */
+      return false;
+    }
+
+/*
+    let index = 0;
+
+    if rf[1] == NONE_FRAME {
+      for i in 0..2 {
+        if cand.ref_frame[i] == rf[0] {
+          
+        }
+      }
+    } else {
+      if cand.ref_frame[0] == rf[0] && cand.ref_frame[1] == rf[1] {
+      
+      }
+    }
+*/
+    true
+  }
+
+  fn scan_row_mbmi(&mut self, bo: &BlockOffset, row_offset: isize, max_row_offs: isize,
+                   processed_rows: &mut isize) -> bool {
+    let bc = &self.bc;
+    let target_n8_w = bc.at_const(bo).n8_w;
+
+    let end_mi = cmp::min(cmp::min(target_n8_w, bc.cols - bo.x),
+                          BlockSize::MI_SIZE_WIDE[BLOCK_64X64 as usize]);
+    let n8_w_8 = BlockSize::MI_SIZE_WIDE[BLOCK_8X8 as usize];
+    let n8_w_16 = BlockSize::MI_SIZE_WIDE[BLOCK_16X16 as usize];
+    let mut col_offset = 0;
+    //let shift = 0;
+
+    if row_offset.abs() > 1 {
+      col_offset = 1;
+      if ((bo.x & 0x01) != 0) && (target_n8_w < n8_w_8) {
+        col_offset -= 1;
+      }
+    }
+
+    let use_step_16 = target_n8_w >= 16;
+
+    let mut found_match = false;
+
+    let mut i = 0;
+    while i < end_mi {
+      let cand = bc.at_const(&bo.with_offset(col_offset + i as isize, row_offset));
+
+      let n8_w = cand.n8_w;
+      let mut len = cmp::min(target_n8_w, n8_w);
+      if use_step_16 {
+        len = cmp::max(n8_w_16, len);
+      } else if row_offset.abs() > 1 {
+        len = cmp::max(len, n8_w_8);
+      }
+
+      //let mut weight = 2;
+      if target_n8_w >= n8_w_8 && target_n8_w <= n8_w {
+        let inc = cmp::min(-max_row_offs + row_offset + 1, cand.n8_h as isize);
+        //weight = cmp::max(weight, inc << shift);
+        *processed_rows = (inc as isize) - row_offset - 1;
+      }
+
+      if self.add_ref_mv_candidate(cand) { found_match = true; }
+
+      i += len;
+    }
+
+    found_match
+  }
+
+  fn scan_col_mbmi(&mut self, bo: &BlockOffset, col_offset: isize, max_col_offs: isize,
+                   processed_cols: &mut isize) -> bool {
+    let bc = &self.bc;
+    let target_n8_h = bc.at_const(bo).n8_h;
+
+    let end_mi = cmp::min(cmp::min(target_n8_h, bc.rows - bo.y),
+                          BlockSize::MI_SIZE_HIGH[BLOCK_64X64 as usize]);
+    let n8_h_8 = BlockSize::MI_SIZE_HIGH[BLOCK_8X8 as usize];
+    let n8_h_16 = BlockSize::MI_SIZE_HIGH[BLOCK_16X16 as usize];
+    let mut row_offset = 0;
+    //let shift = 0;
+
+    if col_offset.abs() > 1 {
+      row_offset = 1;
+      if ((bo.y & 0x01) != 0) && (target_n8_h < n8_h_8) {
+        row_offset -= 1;
+      }
+    }
+
+    let use_step_16 = target_n8_h >= 16;
+
+    let mut found_match = false;
+
+    let mut i = 0;
+    while i < end_mi {
+      let cand = bc.at_const(&bo.with_offset(col_offset, row_offset + i as isize));
+      let n8_h = cand.n8_h;
+      let mut len = cmp::min(target_n8_h, n8_h);
+      if use_step_16 {
+        len = cmp::max(n8_h_16, len);
+      } else if col_offset.abs() > 1 {
+        len = cmp::max(len, n8_h_8);
+      }
+
+      //let mut weight = 2;
+      if target_n8_h >= n8_h_8 && target_n8_h <= n8_h {
+        let inc = cmp::min(-max_col_offs + col_offset + 1, cand.n8_w as isize);
+        //weight = cmp::max(weight, inc << shift);
+        *processed_cols = (inc as isize) - col_offset - 1;
+      }
+
+      if self.add_ref_mv_candidate(cand) { found_match = true; }
+
+      i += len;
+    }
+
+    found_match
+  }
+
+  fn scan_blk_mbmi(&mut self, bo: &BlockOffset) -> bool {
+    if bo.x >= self.bc.cols || bo.y >= self.bc.rows {
+      return false;
+    }
+
+    /* Always assume its within a tile, probably wrong */
+    self.add_ref_mv_candidate(self.bc.at_const(bo))
+  }
+
+  fn setup_mvref_list(&mut self, bo: &BlockOffset) -> usize {
+    let (_rf, _rf_num) = self.get_mvref_ref_frames(INTRA_FRAME);
+
+    let mut max_row_offs = 0 as isize;
+    let row_adj = (self.bc.at(bo).n8_h < BlockSize::MI_SIZE_HIGH[BLOCK_8X8 as usize]) && (bo.y & 0x01) != 0x0;
+
+    let mut max_col_offs = 0 as isize;
+    let col_adj = (self.bc.at(bo).n8_w < BlockSize::MI_SIZE_WIDE[BLOCK_8X8 as usize]) && (bo.x & 0x01) != 0x0;
+
+    let mut processed_rows = 0 as isize;
+    let mut processed_cols = 0 as isize;
+
+    let up_avail = bo.y > 0;
+    let left_avail = bo.x > 0;
+
+    if up_avail {
+      max_row_offs = -2 * MVREF_ROW_COLS as isize + row_adj as isize;
+
+      // limit max offset for small blocks
+      if self.bc.at(bo).n8_h < BlockSize::MI_SIZE_HIGH[BLOCK_8X8 as usize] {
+        max_row_offs = -2 * 2 + row_adj as isize;
+      }
+
+      let rows = self.bc.rows;
+      max_row_offs = self.find_valid_row_offs(max_row_offs, bo.y, rows);
+    }
+
+    if left_avail {
+      max_col_offs = -2 * MVREF_ROW_COLS as isize + col_adj as isize;
+
+      // limit max offset for small blocks
+      if self.bc.at(bo).n8_w < BlockSize::MI_SIZE_WIDE[BLOCK_8X8 as usize] {
+        max_col_offs = -2 * 2 + col_adj as isize;
+      }
+
+      max_col_offs = self.find_valid_col_offs(max_col_offs, bo.x);
+    }
+
+    let mut row_match = false;
+    let mut col_match = false;
+    let newmv_count = 0;
+
+    if max_row_offs.abs() >= 1 {
+      let found_match = self.scan_row_mbmi(bo, -1, max_row_offs, &mut processed_rows);
+      row_match |= found_match;
+    }
+    if max_col_offs.abs() >= 1 {
+      let found_match = self.scan_col_mbmi(bo, -1, max_col_offs, &mut processed_cols);
+      col_match |= found_match;
+    }
+    if self.has_tr(bo) {
+      let n8_w = self.bc.at(bo).n8_w;
+      let found_match = self.scan_blk_mbmi(&bo.with_offset(n8_w as isize, -1));
+      row_match |= found_match;
+    }
+
+    let nearest_match = if row_match { 1 } else { 0 } + if col_match { 1 } else { 0 };
+
+    /* TODO: set ref_mv_stack weights to REF_CAT_LEVEL for this ref frame */
+
+    /* Scan the second outer area. */
+    let found_match = self.scan_blk_mbmi(&bo.with_offset(-1, -1));
+    row_match |= found_match;
+
+    for idx in 2..MVREF_ROW_COLS+1 {
+      let row_offset = -2 * idx as isize + 1 + row_adj as isize;
+      let col_offset = -2 * idx as isize + 1 + col_adj as isize;
+
+      if row_offset.abs() <= max_row_offs.abs() && row_offset.abs() > processed_rows {
+        let found_match = self.scan_row_mbmi(bo, row_offset, max_row_offs, &mut processed_rows);
+        row_match |= found_match;
+      }
+
+      if col_offset.abs() <= max_col_offs.abs() && col_offset.abs() > processed_cols {
+        let found_match = self.scan_col_mbmi(bo, col_offset, max_col_offs, &mut processed_cols);
+        col_match |= found_match;
+      }
+    }
+
+    let total_match = if row_match { 1 } else { 0 } + if col_match { 1 } else { 0 };
+
+    let mode_context = match nearest_match {
+                         0 =>  cmp::min(total_match, 1) + (total_match << REFMV_OFFSET) ,
+                         1 =>  3 - cmp::min(newmv_count, 1) + ((2 + total_match) << REFMV_OFFSET) ,
+                         _ =>  5 - cmp::min(newmv_count, 1) + (5 << REFMV_OFFSET)
+                       };
+
+    // println!("{} {} {} {} {}", bo.x, bo.y, nearest_match, total_match, mode_context);
+
+    /* TODO: Find nearest match and assign nearest and near mvs */
+
+    /* TODO: Handle single reference frame extension */
+
+    mode_context
+  }
+
+  pub fn find_mvrefs(&mut self, bo: &BlockOffset, ref_frame: usize) -> usize {
+    if ref_frame < REF_FRAMES {
+      if ref_frame != INTRA_FRAME {
+        /* TODO: convert global mv to an mv here */
+      } else {
+        /* TODO: set the global mv ref to invalid here */
+      }
+    }
+
+    if ref_frame != INTRA_FRAME {
+      /* TODO: Set zeromv ref to the converted global motion vector */
+    } else {
+      /* TODO: Set the zeromv ref to 0 */
+    }
+
+    let mode_context = self.setup_mvref_list(bo);
+    mode_context
   }
 
   pub fn fill_neighbours_ref_counts(&mut self, bo: &BlockOffset) {

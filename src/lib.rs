@@ -739,17 +739,17 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
       if fi.frame_type == FrameType::KEY {
         if !fi.show_frame {  // unshown keyframe (forward keyframe)
           assert!(false); // Not supported by rav1e yet!
-          self.write(REF_FRAMES, fi.refresh_frame_flags)?;
+          self.write(REF_FRAMES as u32, fi.refresh_frame_flags)?;
         } else {
           assert!(fi.refresh_frame_flags == ALL_REF_FRAMES_MASK);
         }
       } else { // Inter frame info goes here
         if fi.intra_only {
           assert!(fi.refresh_frame_flags != ALL_REF_FRAMES_MASK);
-          self.write(REF_FRAMES, fi.refresh_frame_flags)?;
+          self.write(REF_FRAMES as u32, fi.refresh_frame_flags)?;
         } else {
           // TODO: This should be set once inter mode is used
-          self.write(REF_FRAMES, fi.refresh_frame_flags)?;
+          self.write(REF_FRAMES as u32, fi.refresh_frame_flags)?;
         }
 
       };
@@ -797,7 +797,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
 
           for i in 0..7 {
             if !frame_refs_short_signaling {
-              self.write(REF_FRAMES_LOG2, fi.ref_frames[i] as u8)?;
+              self.write(REF_FRAMES_LOG2 as u32, fi.ref_frames[i] as u8)?;
             }
             if seq.frame_id_numbers_present_flag {
               assert!(false); // Not supported by rav1e yet!
@@ -1159,14 +1159,18 @@ fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
                  bsize: BlockSize, bo: &BlockOffset, skip: bool, bit_depth: usize) {
     let is_inter = !luma_mode.is_intra();
 
+    cw.bc.set_size(bo, bsize);
+    cw.bc.set_mode(bo, bsize, luma_mode);
+
     if fi.frame_type == FrameType::INTER {
         cw.write_is_inter(w, bo, is_inter);
         if is_inter {
+            let ref_frame = LAST_FRAME;
             cw.fill_neighbours_ref_counts(bo);
-            cw.bc.set_ref_frame(bo, bsize, LAST_FRAME);
+            cw.bc.set_ref_frame(bo, bsize, ref_frame);
             cw.write_ref_frames(w, bo);
-            // FIXME: need more generic context derivation
-            let mode_context = if bo.x == 0 && bo.y == 0 { 0 } else if bo.x ==0 || bo.y == 0 { 51 } else { 85 };
+            let mode_context = cw.find_mvrefs(bo, ref_frame);
+            //let mode_context = if bo.x == 0 && bo.y == 0 { 0 } else if bo.x ==0 || bo.y == 0 { 51 } else { 85 };
             // NOTE: Until rav1e supports other inter modes than GLOBALMV
             assert!(luma_mode == PredictionMode::GLOBALMV);
             cw.write_inter_mode(w, luma_mode, mode_context);
@@ -1176,8 +1180,6 @@ fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
     } else {
         cw.write_intra_mode_kf(w, bo, luma_mode);
     }
-
-    cw.bc.set_mode(bo, bsize, luma_mode);
 
     let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 

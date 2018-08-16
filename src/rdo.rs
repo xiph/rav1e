@@ -200,7 +200,7 @@ pub fn rdo_mode_decision(
   let mode_set = if fi.frame_type == FrameType::INTER {
     RAV1E_INTER_MODES
   } else if fi.config.speed <= 3 {
-      RAV1E_INTRA_MODES
+    RAV1E_INTRA_MODES
   } else {
     RAV1E_INTRA_MODES_MINIMAL
   };

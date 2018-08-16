@@ -24,16 +24,33 @@ pub const BWDREF_FRAME: usize = 5;
 pub const ALTREF2_FRAME: usize = 6;
 pub const ALTREF_FRAME: usize = 7;
 
+pub const LAST_LAST2_FRAMES: usize = 0;      // { LAST_FRAME, LAST2_FRAME }
+pub const LAST_LAST3_FRAMES: usize = 1;      // { LAST_FRAME, LAST3_FRAME }
+pub const LAST_GOLDEN_FRAMES: usize = 2;     // { LAST_FRAME, GOLDEN_FRAME }
+pub const BWDREF_ALTREF_FRAMES: usize = 3;   // { BWDREF_FRAME, ALTREF_FRAME }
+pub const LAST2_LAST3_FRAMES: usize = 4;     // { LAST2_FRAME, LAST3_FRAME }
+pub const LAST2_GOLDEN_FRAMES: usize = 5;    // { LAST2_FRAME, GOLDEN_FRAME }
+pub const LAST3_GOLDEN_FRAMES: usize = 6;    // { LAST3_FRAME, GOLDEN_FRAME }
+pub const BWDREF_ALTREF2_FRAMES: usize = 7;  // { BWDREF_FRAME, ALTREF2_FRAME }
+pub const ALTREF2_ALTREF_FRAMES: usize = 8;  // { ALTREF2_FRAME, ALTREF_FRAME }
+pub const TOTAL_UNIDIR_COMP_REFS: usize = 9;
+
+// NOTE: UNIDIR_COMP_REFS is the number of uni-directional reference pairs
+//       that are explicitly signaled.
+pub const UNIDIR_COMP_REFS: usize = BWDREF_ALTREF_FRAMES + 1;
+
 pub const FWD_REFS: usize = GOLDEN_FRAME - LAST_FRAME + 1;
 pub const BWD_REFS: usize = ALTREF_FRAME - BWDREF_FRAME + 1;
 pub const SINGLE_REFS: usize = FWD_REFS + BWD_REFS;
 pub const TOTAL_REFS_PER_FRAME: usize = ALTREF_FRAME - INTRA_FRAME + 1;
 pub const INTER_REFS_PER_FRAME: usize = ALTREF_FRAME - LAST_FRAME + 1;
-//pub const LAST_REF_FRAMES: usize = LAST3_FRAME - LAST_FRAME + 1;
+pub const TOTAL_COMP_REFS: usize = FWD_REFS * BWD_REFS + TOTAL_UNIDIR_COMP_REFS;
+
+pub const REF_FRAMES_LOG2: usize = 3;
+pub const REF_FRAMES: usize = 1 << REF_FRAMES_LOG2;
 
 pub const REF_CONTEXTS: usize = 3;
-pub const REF_FRAMES: u32 = 8;
-pub const REF_FRAMES_LOG2: u32 = 3;
+pub const MVREF_ROW_COLS: usize = 3;
 
 #[derive(Copy, Clone, PartialEq, PartialOrd)]
 pub enum PartitionType {
@@ -87,6 +104,12 @@ impl BlockSize {
 
   const BLOCK_SIZE_HEIGHT_LOG2: [usize; BlockSize::BLOCK_SIZES_ALL] =
     [2, 3, 2, 3, 4, 3, 4, 5, 4, 5, 6, 5, 6, 7, 6, 7, 4, 2, 5, 3, 6, 4, 7, 5];
+
+  pub const MI_SIZE_WIDE: [usize; BlockSize::BLOCK_SIZES_ALL] =
+    [1, 1, 2, 2, 2, 4, 4, 4, 8, 8, 8, 16, 16, 16, 32, 32, 1, 4, 2, 8, 4, 16, 8, 32];
+
+  pub const MI_SIZE_HIGH: [usize; BlockSize::BLOCK_SIZES_ALL] =
+    [1, 2, 1, 2, 4, 2, 4, 8, 4, 8, 16, 8, 16, 32, 16, 32, 4, 1, 8, 2, 16, 4, 32, 8];
 
   pub fn cfl_allowed(self) -> bool {
     // TODO: fix me when enabling EXT_PARTITION_TYPES
