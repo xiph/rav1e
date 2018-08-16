@@ -273,8 +273,6 @@ pub fn rdo_mode_decision(
 
   assert!(best_rd >= 0_f64);
 
-  cw.bc.set_mode(bo, bsize, best_mode_luma);
-
   RDOOutput {
     rd_cost: best_rd,
     part_type: PartitionType::PARTITION_NONE,
