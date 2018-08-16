@@ -1894,7 +1894,6 @@ impl ContextWriter {
 
   fn scan_row_mbmi(&mut self, bo: &BlockOffset, row_offset: isize, max_row_offs: isize,
                    processed_rows: &mut isize) -> bool {
-
     let bc = &self.bc;
     let target_n8_w = bc.at_const(bo).n8_w;
 
@@ -1945,7 +1944,6 @@ impl ContextWriter {
 
   fn scan_col_mbmi(&mut self, bo: &BlockOffset, col_offset: isize, max_col_offs: isize,
                    processed_cols: &mut isize) -> bool {
-
     let bc = &self.bc;
     let target_n8_h = bc.at_const(bo).n8_h;
 
