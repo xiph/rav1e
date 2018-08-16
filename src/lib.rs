@@ -739,17 +739,17 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
       if fi.frame_type == FrameType::KEY {
         if !fi.show_frame {  // unshown keyframe (forward keyframe)
           assert!(false); // Not supported by rav1e yet!
-          self.write(REF_FRAMES, fi.refresh_frame_flags)?;
+          self.write(REF_FRAMES as u32, fi.refresh_frame_flags)?;
         } else {
           assert!(fi.refresh_frame_flags == ALL_REF_FRAMES_MASK);
         }
       } else { // Inter frame info goes here
         if fi.intra_only {
           assert!(fi.refresh_frame_flags != ALL_REF_FRAMES_MASK);
-          self.write(REF_FRAMES, fi.refresh_frame_flags)?;
+          self.write(REF_FRAMES as u32, fi.refresh_frame_flags)?;
         } else {
           // TODO: This should be set once inter mode is used
-          self.write(REF_FRAMES, fi.refresh_frame_flags)?;
+          self.write(REF_FRAMES as u32, fi.refresh_frame_flags)?;
         }
 
       };
@@ -797,7 +797,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
 
           for i in 0..7 {
             if !frame_refs_short_signaling {
-              self.write(REF_FRAMES_LOG2, fi.ref_frames[i] as u8)?;
+              self.write(REF_FRAMES_LOG2 as u32, fi.ref_frames[i] as u8)?;
             }
             if seq.frame_id_numbers_present_flag {
               assert!(false); // Not supported by rav1e yet!

@@ -43,11 +43,13 @@ pub const FWD_REFS: usize = GOLDEN_FRAME - LAST_FRAME + 1;
 pub const BWD_REFS: usize = ALTREF_FRAME - BWDREF_FRAME + 1;
 pub const SINGLE_REFS: usize = FWD_REFS + BWD_REFS;
 pub const TOTAL_REFS_PER_FRAME: usize = ALTREF_FRAME - INTRA_FRAME + 1;
+pub const INTER_REFS_PER_FRAME: usize = ALTREF_FRAME - LAST_FRAME + 1;
 pub const TOTAL_COMP_REFS: usize = FWD_REFS * BWD_REFS + TOTAL_UNIDIR_COMP_REFS;
 
 pub const REF_FRAMES_LOG2: usize = 3;
 pub const REF_FRAMES: usize = 1 << REF_FRAMES_LOG2;
 
+pub const REF_CONTEXTS: usize = 3;
 pub const MVREF_ROW_COLS: usize = 3;
 
 #[derive(Copy, Clone, PartialEq, PartialOrd)]
