@@ -208,42 +208,20 @@ pub fn rdo_mode_decision(
   for &luma_mode in mode_set {
     assert!(fi.frame_type == FrameType::INTER || luma_mode.is_intra());
 
-    if is_chroma_block && fi.config.speed <= 3 && luma_mode.is_intra() {
-      // Find the best chroma prediction mode for the current luma prediction mode
-      for &chroma_mode in RAV1E_INTRA_MODES {
-        let mut wr: &mut dyn Writer = &mut WriterCounter::new();
-        let tell = wr.tell_frac();
-        
-        encode_block_a(seq, cw, wr, bsize, bo, skip);
-        encode_block_b(fi, fs, cw, wr, luma_mode, chroma_mode, bsize, bo, skip, seq.bit_depth);
-
-        let cost = wr.tell_frac() - tell;
-        let rd = compute_rd_cost(
-          fi,
-          fs,
-          w,
-          h,
-          w_uv,
-          h_uv,
-          bo,
-          cost,
-          seq.bit_depth
-        );
-
-        if rd < best_rd {
-          best_rd = rd;
-          best_mode_luma = luma_mode;
-          best_mode_chroma = chroma_mode;
-          best_skip = skip;
-        }
-
-        cw.rollback(&cw_checkpoint);
-      }
+    let same_as_luma_modes = &[ luma_mode ];
+    let mode_set_chroma = if is_chroma_block && fi.config.speed <= 3 && luma_mode.is_intra() {
+      RAV1E_INTRA_MODES
     } else {
+      same_as_luma_modes
+    };
+
+    // Find the best chroma prediction mode for the current luma prediction mode
+    for &chroma_mode in mode_set_chroma {
       let mut wr: &mut dyn Writer = &mut WriterCounter::new();
       let tell = wr.tell_frac();
+
       encode_block_a(seq, cw, wr, bsize, bo, skip);
-      encode_block_b(fi, fs, cw, wr, luma_mode, luma_mode, bsize, bo, skip, seq.bit_depth);
+      encode_block_b(fi, fs, cw, wr, luma_mode, chroma_mode, bsize, bo, skip, seq.bit_depth);
 
       let cost = wr.tell_frac() - tell;
       let rd = compute_rd_cost(
@@ -261,7 +239,7 @@ pub fn rdo_mode_decision(
       if rd < best_rd {
         best_rd = rd;
         best_mode_luma = luma_mode;
-        best_mode_chroma = luma_mode;
+        best_mode_chroma = chroma_mode;
         best_skip = skip;
       }
 
