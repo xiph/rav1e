@@ -1248,8 +1248,6 @@ impl BlockContext {
     &mut self, plane: usize, bo: &BlockOffset, tx_size: TxSize, xdec: usize,
     ydec: usize, value: u8
   ) {
-    // for subsampled planes, coeff contexts are stored sparsely at the moment
-    // so we need to scale our fill by xdec and ydec
     for bx in 0..tx_size.width_mi() {
       self.above_coeff_context[plane][(bo.x >> xdec) + bx] = value;
     }
