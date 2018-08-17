@@ -192,8 +192,6 @@ pub fn rdo_mode_decision(
     h_uv = 4;
   }
 
-  let skip = false;
-
   let cw_checkpoint = cw.checkpoint();
 
   // Exclude complex prediction modes at higher speed levels
@@ -217,33 +215,35 @@ pub fn rdo_mode_decision(
 
     // Find the best chroma prediction mode for the current luma prediction mode
     for &chroma_mode in mode_set_chroma {
-      let mut wr: &mut dyn Writer = &mut WriterCounter::new();
-      let tell = wr.tell_frac();
+      for &skip in &[false, true] {
+        let mut wr: &mut dyn Writer = &mut WriterCounter::new();
+        let tell = wr.tell_frac();
 
-      encode_block_a(seq, cw, wr, bsize, bo, skip);
-      encode_block_b(fi, fs, cw, wr, luma_mode, chroma_mode, bsize, bo, skip, seq.bit_depth);
+        encode_block_a(seq, cw, wr, bsize, bo, skip);
+        encode_block_b(fi, fs, cw, wr, luma_mode, chroma_mode, bsize, bo, skip, seq.bit_depth);
 
-      let cost = wr.tell_frac() - tell;
-      let rd = compute_rd_cost(
-        fi,
-        fs,
-        w,
-        h,
-        w_uv,
-        h_uv,
-        bo,
-        cost,
-        seq.bit_depth
-      );
+        let cost = wr.tell_frac() - tell;
+        let rd = compute_rd_cost(
+          fi,
+          fs,
+          w,
+          h,
+          w_uv,
+          h_uv,
+          bo,
+          cost,
+          seq.bit_depth
+        );
 
-      if rd < best_rd {
-        best_rd = rd;
-        best_mode_luma = luma_mode;
-        best_mode_chroma = chroma_mode;
-        best_skip = skip;
+        if rd < best_rd {
+          best_rd = rd;
+          best_mode_luma = luma_mode;
+          best_mode_chroma = chroma_mode;
+          best_skip = skip;
+        }
+
+        cw.rollback(&cw_checkpoint);
       }
-
-      cw.rollback(&cw_checkpoint);
     }
   }
 
