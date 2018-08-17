@@ -217,6 +217,9 @@ pub fn rdo_mode_decision(
     // Find the best chroma prediction mode for the current luma prediction mode
     for &chroma_mode in mode_set_chroma {
       for &skip in &[false, true] {
+        // Don't skip when using intra modes
+        if skip && luma_mode.is_intra() { continue; }
+
         let mut wr: &mut dyn Writer = &mut WriterCounter::new();
         let tell = wr.tell_frac();
 
