@@ -115,8 +115,7 @@ fn sse_wxh(src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, w: usize, h: usize) -> 
 // Compute the rate-distortion cost for an encode
 fn compute_rd_cost(
   fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize, w_uv: usize,
-  h_uv: usize, bo: &BlockOffset, bit_cost: u32, bit_depth: usize,
-  dist_weight: f64
+  h_uv: usize, bo: &BlockOffset, bit_cost: u32, bit_depth: usize
 ) -> f64 {
   let q = dc_q(fi.config.quantizer, bit_depth) as f64;
 
@@ -165,7 +164,7 @@ fn compute_rd_cost(
   // Compute rate
   let rate = (bit_cost as f64) / ((1 << OD_BITRES) as f64);
 
-  (distortion as f64) * dist_weight + lambda * rate
+  (distortion as f64) + lambda * rate
 }
 
 // RDO-based mode decision
@@ -236,8 +235,7 @@ pub fn rdo_mode_decision(
           h_uv,
           bo,
           cost,
-          seq.bit_depth,
-          if skip { 2.0 } else { 1.0 }
+          seq.bit_depth
         );
 
         if rd < best_rd {
@@ -324,8 +322,7 @@ pub fn rdo_tx_type_decision(
       h_uv,
       bo,
       cost,
-      bit_depth,
-      1.0
+      bit_depth
     );
 
     if rd < best_rd {
