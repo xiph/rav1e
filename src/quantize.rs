@@ -22,11 +22,11 @@ extern {
   static ac_qlookup_12_Q3: [i16; 256];
 }
 
-fn get_tx_scale(tx_size: TxSize) -> u8 {
+fn get_log_tx_scale(tx_size: TxSize) -> i32 {
   match tx_size {
-    TxSize::TX_64X64 => 4,
-    TxSize::TX_32X32 => 2,
-    _ => 1
+    TxSize::TX_64X64 => 2,
+    TxSize::TX_32X32 => 1,
+    _ => 0
   }
 }
 
@@ -54,7 +54,7 @@ pub fn ac_q(qindex: usize, bit_depth: usize) -> i16 {
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct QuantizationContext {
-  tx_scale: i32,
+  log_tx_scale: i32,
   dc_quant: u32,
   dc_offset: i32,
   dc_mul_add: (u32, u32, u32),
@@ -120,7 +120,7 @@ mod test {
 
 impl QuantizationContext {
   pub fn update(&mut self, qindex: usize, tx_size: TxSize, is_intra: bool, bit_depth: usize) {
-    self.tx_scale = get_tx_scale(tx_size) as i32;
+    self.log_tx_scale = get_log_tx_scale(tx_size);
 
     self.dc_quant = dc_q(qindex, bit_depth) as u32;
     self.dc_mul_add = divu_gen(self.dc_quant);
@@ -134,12 +134,12 @@ impl QuantizationContext {
 
   #[inline]
   pub fn quantize(&self, coeffs: &mut [i32]) {
-    coeffs[0] *= self.tx_scale;
+    coeffs[0] <<= self.log_tx_scale;
     coeffs[0] += coeffs[0].signum() * self.dc_offset;
     coeffs[0] = divu_pair(coeffs[0], self.dc_mul_add);
 
     for c in coeffs[1..].iter_mut() {
-      *c *= self.tx_scale;
+      *c <<= self.log_tx_scale;
       *c += c.signum() * self.ac_offset;
       *c = divu_pair(*c, self.ac_mul_add);
     }
@@ -147,7 +147,7 @@ impl QuantizationContext {
 }
 
 pub fn quantize_in_place(qindex: usize, coeffs: &mut [i32], tx_size: TxSize, bit_depth: usize) {
-  let tx_scale = get_tx_scale(tx_size) as i32;
+  let log_tx_scale = get_log_tx_scale(tx_size);
 
   let dc_quant = dc_q(qindex, bit_depth) as i32;
   let ac_quant = ac_q(qindex, bit_depth) as i32;
@@ -156,12 +156,12 @@ pub fn quantize_in_place(qindex: usize, coeffs: &mut [i32], tx_size: TxSize, bit
   let dc_offset = dc_quant * 21 / 64 as i32;
   let ac_offset = ac_quant * 21 / 64 as i32;
 
-  coeffs[0] *= tx_scale;
+  coeffs[0] <<= log_tx_scale;
   coeffs[0] += coeffs[0].signum() * dc_offset;
   coeffs[0] /= dc_quant;
 
   for c in coeffs[1..].iter_mut() {
-    *c *= tx_scale;
+    *c <<= log_tx_scale;
     *c += c.signum() * ac_offset;
     *c /= ac_quant;
   }
@@ -170,12 +170,14 @@ pub fn quantize_in_place(qindex: usize, coeffs: &mut [i32], tx_size: TxSize, bit
 pub fn dequantize(
   qindex: usize, coeffs: &[i32], rcoeffs: &mut [i32], tx_size: TxSize, bit_depth: usize
 ) {
-  let tx_scale = get_tx_scale(tx_size) as i32;
+  let log_tx_scale = get_log_tx_scale(tx_size) as i32;
 
-  rcoeffs[0] = (coeffs[0] * dc_q(qindex, bit_depth) as i32) / tx_scale;
+  let val = coeffs[0] * dc_q(qindex, bit_depth) as i32;
+  rcoeffs[0] = (val + if val < 0 { (1 << log_tx_scale) - 1 } else { 0 }) >> log_tx_scale;
+
   let ac_quant = ac_q(qindex, bit_depth) as i32;
 
   for (r, &c) in rcoeffs.iter_mut().zip(coeffs.iter()).skip(1) {
-    *r = c * ac_quant / tx_scale;
+    *r = (c * ac_quant + if c < 0 { (1 << log_tx_scale) - 1 } else { 0 }) >> log_tx_scale;
   }
 }
