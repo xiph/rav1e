@@ -211,7 +211,11 @@ pub fn cdef_analyze_superblock(in_frame: &mut Frame,
             // in the main frame.
             let global_block_offset = sbo_global.block_offset(bx<<1, by<<1);
             if global_block_offset.x < bc_global.cols && global_block_offset.y < bc_global.rows {
-                let skip = bc_global.at(&global_block_offset).skip;
+                let skip = bc_global.at(&global_block_offset).skip
+                         & bc_global.at(&sbo_global.block_offset(2*bx+1, 2*by)).skip
+                         & bc_global.at(&sbo_global.block_offset(2*bx, 2*by+1)).skip
+                         & bc_global.at(&sbo_global.block_offset(2*bx+1, 2*by+1)).skip;
+
                 if !skip {
                     let mut var: i32 = 0;
                     let mut in_plane = &mut in_frame.planes[0];
@@ -260,7 +264,10 @@ pub fn cdef_filter_superblock(fi: &FrameInvariants,
         for bx in 0..8 {
             let global_block_offset = sbo_global.block_offset(bx<<1, by<<1);
             if global_block_offset.x < bc_global.cols && global_block_offset.y < bc_global.rows {
-                let skip = bc_global.at(&global_block_offset).skip;
+                let skip = bc_global.at(&global_block_offset).skip
+                         & bc_global.at(&sbo_global.block_offset(2*bx+1, 2*by)).skip
+                         & bc_global.at(&sbo_global.block_offset(2*bx, 2*by+1)).skip
+                         & bc_global.at(&sbo_global.block_offset(2*bx+1, 2*by+1)).skip;
                 if !skip {
                     let dir = cdef_dirs.dir[bx][by];
                     let var = cdef_dirs.var[bx][by];
