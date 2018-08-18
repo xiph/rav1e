@@ -84,7 +84,7 @@ fn inv_txfm2d_add_4x4_rs(
   {
     let mut temp_in: [i32; 4] = [0; 4];
     for (raw, clamped) in input_slice.iter().zip(temp_in.iter_mut()) {
-      *clamped = clamp_value(*raw, bd + 8);
+      *clamped = clamp_value(*raw, ranges[0]);
     }
     av1_idct4(temp_in, buffer_slice, ranges[0]);
   }
@@ -95,15 +95,13 @@ fn inv_txfm2d_add_4x4_rs(
     let mut temp_out: [i32; 4] = [0; 4];
     for (raw, clamped) in buffer[c..].iter().step_by(4).zip(temp_in.iter_mut())
     {
-      *clamped = clamp_value(*raw, bd + 8);
+      *clamped = clamp_value(*raw, ranges[1]);
     }
     av1_idct4(temp_in, &mut temp_out, ranges[1]);
-    for r in 0..4 {
-      output[r * stride + c] = clamp(
-        output[r * stride + c] as i32 + round_shift(temp_out[r], 4),
-        0,
-        (1 << bd) - 1
-      ) as u16;
+    for (temp, out) in
+      temp_out.iter().zip(output[c..].iter_mut().step_by(stride).take(4)) {
+      *out =
+        clamp(*out as i32 + round_shift(*temp, 4), 0, (1 << bd) - 1) as u16;
     }
   }
 }
