@@ -11,7 +11,7 @@ use bencher::*;
 use comparative::libc;
 use predict as predict_native;
 use predict::*;
-use rand::{ChaChaRng, SeedableRng};
+use rand::{ChaChaRng, Rng, SeedableRng};
 
 extern {
   fn highbd_dc_predictor(
@@ -47,6 +47,11 @@ extern {
   fn highbd_smooth_v_predictor(
     dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int, bh: libc::c_int,
     above: *const u16, left: *const u16, bd: libc::c_int
+  );
+
+  fn cfl_predict_hbd_c(
+    ac_buf_q3: *const i16, dst: *mut u16, stride: libc::ptrdiff_t,
+    alpha_q3: libc::c_int, bd: libc::c_int, bw: libc::c_int, bh: libc::c_int
   );
 }
 
@@ -121,4 +126,24 @@ pub fn intra_smooth_v_4x4_native(b: &mut Bencher) {
 
 pub fn intra_smooth_v_4x4_aom(b: &mut Bencher) {
   predict_intra_4x4_aom(b, highbd_smooth_v_predictor);
+}
+
+pub fn intra_cfl_4x4_native(b: &mut Bencher) {
+  predict_native::intra_cfl_4x4(b);
+}
+
+pub fn intra_cfl_4x4_aom(b: &mut Bencher) {
+  let mut rng = ChaChaRng::from_seed([0; 32]);
+  let (mut block, _above_context, _left_context) = generate_block(&mut rng);
+  let ac: Vec<i16> = (0..(32 * 32)).map(|_| rng.gen()).collect();
+  let alpha = -1 as i16;
+
+  b.iter(|| {
+    for _ in 0..MAX_ITER {
+      unsafe {
+        cfl_predict_hbd_c(ac.as_ptr(), block.as_mut_ptr(),
+          BLOCK_SIZE.width() as libc::ptrdiff_t, alpha as libc::c_int, 8, 4, 4);
+      }
+    }
+  })
 }

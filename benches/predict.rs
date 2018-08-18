@@ -100,3 +100,16 @@ pub fn intra_smooth_v_4x4(b: &mut Bencher) {
     }
   })
 }
+
+pub fn intra_cfl_4x4(b: &mut Bencher) {
+  let mut rng = ChaChaRng::from_seed([0; 32]);
+  let (mut block, _above, _left) = generate_block(&mut rng);
+  let ac: Vec<i16> = (0..(32 * 32)).map(|_| rng.gen()).collect();
+  let alpha = -1 as i16;
+
+  b.iter(|| {
+    for _ in 0..MAX_ITER {
+      Block4x4::pred_cfl(&mut block, BLOCK_SIZE.width(), &ac, alpha, 8);
+    }
+  })
+}

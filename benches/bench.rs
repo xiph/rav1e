@@ -113,7 +113,8 @@ benchmark_group!(
   predict::intra_paeth_4x4,
   predict::intra_smooth_4x4,
   predict::intra_smooth_h_4x4,
-  predict::intra_smooth_v_4x4
+  predict::intra_smooth_v_4x4,
+  predict::intra_cfl_4x4
 );
 
 #[cfg(feature = "comparative_bench")]
