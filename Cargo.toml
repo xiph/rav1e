@@ -26,9 +26,9 @@ num-traits = "0.2"
 
 [build-dependencies]
 cmake = "0.1.32"
-pkg-config = "0.3.12"
 
 [target.'cfg(unix)'.build-dependencies]
+pkg-config = "0.3.12"
 bindgen = { version = "0.37", optional = true }
 
 [dev-dependencies]
