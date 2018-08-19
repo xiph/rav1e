@@ -25,8 +25,8 @@ use plane::*;
 use util::clamp;
 use std::*;
 
-use REF_CONTEXTS;
-use SINGLE_REFS;
+use self::REF_CONTEXTS;
+use self::SINGLE_REFS;
 
 const PLANES: usize = 3;
 
@@ -1874,12 +1874,12 @@ impl ContextWriter {
     if rf[1] == NONE_FRAME {
       for i in 0..2 {
         if cand.ref_frame[i] == rf[0] {
-          
+
         }
       }
     } else {
       if cand.ref_frame[0] == rf[0] && cand.ref_frame[1] == rf[1] {
-      
+
       }
     }
 */

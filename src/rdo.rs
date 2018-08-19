@@ -27,7 +27,7 @@ use std::f64;
 use std::vec::Vec;
 use write_tx_blocks;
 use write_tx_tree;
-use BlockSize;
+use partition::BlockSize;
 use Frame;
 use FrameInvariants;
 use FrameState;
@@ -54,7 +54,7 @@ pub struct RDOPartitionOutput {
 #[allow(unused)]
 fn cdef_dist_wxh_8x8(src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, bit_depth: usize) -> u64 {
   let coeff_shift = bit_depth - 8;
-  
+
   let mut sum_s: i32 = 0;
   let mut sum_d: i32 = 0;
   let mut sum_s2: i64 = 0;
@@ -526,7 +526,7 @@ pub fn rdo_cdef_decision(sbo: &SuperBlockOffset, fi: &FrameInvariants,
                             let mut out_plane = &mut cdef_output.planes[p];
                             let out_po = sbo_0.block_offset(bx<<1, by<<1).plane_offset(&out_plane.cfg);
                             let out_slice = &out_plane.slice(&out_po);
-                            
+
                             let xdec = in_plane.cfg.xdec;
                             let ydec = in_plane.cfg.ydec;
 
@@ -545,7 +545,7 @@ pub fn rdo_cdef_decision(sbo: &SuperBlockOffset, fi: &FrameInvariants,
             best_err = err;
             best_index = cdef_index;
         }
-        
+
     }
     best_index
 }

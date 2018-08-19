@@ -10,9 +10,9 @@
 #![allow(non_camel_case_types)]
 #![allow(dead_code)]
 
-use BlockSize::*;
-use TxSize::*;
-use FrameInvariants;
+use self::BlockSize::*;
+use self::TxSize::*;
+use encoder::FrameInvariants;
 
 pub const NONE_FRAME: isize = -1;
 pub const INTRA_FRAME: usize = 0;
@@ -466,7 +466,7 @@ impl PredictionMode {
       if x == 0 && y == 0 {
         above[0] = base;
         left[0] = base;
-      }      
+      }
     }
 
     let slice = dst.as_mut_slice();
