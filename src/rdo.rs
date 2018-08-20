@@ -213,7 +213,6 @@ pub fn rdo_mode_decision(
     assert!(fi.frame_type == FrameType::INTER || luma_mode.is_intra());
 
     let same_as_luma_modes = &[ luma_mode ];
-    let same_as_luma_modes = &[ luma_mode ];
     let mode_set_chroma = if is_chroma_block && luma_mode.is_intra() {
       intra_mode_set
     } else {
