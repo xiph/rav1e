@@ -9,10 +9,12 @@
 
 extern crate libc;
 
+use std::cmp;
+
 use partition::TxSize;
 use partition::TxType;
 
-use util::clamp;
+use util::*;
 
 static COSPI_INV: [i32; 64] = [
   4096, 4095, 4091, 4085, 4076, 4065, 4052, 4036, 4017, 3996, 3973, 3948,
@@ -23,6 +25,7 @@ static COSPI_INV: [i32; 64] = [
   201, 101,
 ];
 
+// performs half a butterfly
 #[inline]
 fn half_btf(w0: i32, in0: i32, w1: i32, in1: i32, bit: usize) -> i32 {
   let result = (w0 * in0) + (w1 * in1);
@@ -34,16 +37,12 @@ fn round_shift(value: i32, bit: usize) -> i32 {
   (value + (1 << (bit - 1))) >> bit
 }
 
+// clamps value to a signed integer type of bit bits
 #[inline]
 fn clamp_value(value: i32, bit: usize) -> i32 {
-  // Do nothing for invalid clamp bit.
-  if bit <= 0 {
-    value
-  } else {
-    let max_value: i32 = ((1i64 << (bit - 1)) - 1) as i32;
-    let min_value: i32 = (-(1i64 << (bit - 1))) as i32;
-    clamp(value, min_value, max_value)
-  }
+  let max_value: i32 = ((1i64 << (bit - 1)) - 1) as i32;
+  let min_value: i32 = (-(1i64 << (bit - 1))) as i32;
+  clamp(value, min_value, max_value)
 }
 
 fn av1_idct4(input: [i32; 4], output: &mut [i32], range: usize) {
@@ -68,36 +67,31 @@ fn av1_idct4(input: [i32; 4], output: &mut [i32], range: usize) {
   output[3] = clamp_value(stg2[0] - stg2[3], range);
 }
 
-static INV_RANGES: [[usize; 2]; 3] = [[16, 16], [18, 16], [20, 18]];
-
-fn get_ranges(bd: usize) -> [usize; 2] {
-  INV_RANGES[((bd - 8) >> 1)]
-}
-
 fn inv_txfm2d_add_4x4_rs(
   input: &[i32], output: &mut [u16], stride: usize, bd: usize
 ) {
-  let ranges = get_ranges(bd);
   let mut buffer = [0i32; 4 * 4];
   // perform inv txfm on every row
+  let range = bd + 8;
   for (input_slice, buffer_slice) in input.chunks(4).zip(buffer.chunks_mut(4))
   {
     let mut temp_in: [i32; 4] = [0; 4];
     for (raw, clamped) in input_slice.iter().zip(temp_in.iter_mut()) {
-      *clamped = clamp_value(*raw, ranges[0]);
+      *clamped = clamp_value(*raw, range);
     }
-    av1_idct4(temp_in, buffer_slice, ranges[0]);
+    av1_idct4(temp_in, buffer_slice, range);
   }
 
   // perform inv txfm on every col
+  let range = cmp::max(bd + 6, 16);
   for c in 0..4 {
     let mut temp_in: [i32; 4] = [0; 4];
     let mut temp_out: [i32; 4] = [0; 4];
     for (raw, clamped) in buffer[c..].iter().step_by(4).zip(temp_in.iter_mut())
     {
-      *clamped = clamp_value(*raw, ranges[1]);
+      *clamped = clamp_value(*raw, range);
     }
-    av1_idct4(temp_in, &mut temp_out, ranges[1]);
+    av1_idct4(temp_in, &mut temp_out, range);
     for (temp, out) in
       temp_out.iter().zip(output[c..].iter_mut().step_by(stride).take(4)) {
       *out =
