@@ -114,8 +114,8 @@ fn sse_wxh(src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, w: usize, h: usize) -> 
 
 // Compute the rate-distortion cost for an encode
 fn compute_rd_cost(
-  fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize, w_uv: usize,
-  h_uv: usize, bo: &BlockOffset, bit_cost: u32, bit_depth: usize
+  fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize,
+  is_chroma_block: bool, bo: &BlockOffset, bit_cost: u32, bit_depth: usize
 ) -> f64 {
   let q = dc_q(fi.config.quantizer, bit_depth) as f64;
 
@@ -147,10 +147,23 @@ fn compute_rd_cost(
     unimplemented!();
   };
 
+  let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
+
+  let mask = !(MI_SIZE - 1);
+  let mut w_uv = (w_y >> xdec) & mask;
+  let mut h_uv = (h_y >> ydec) & mask;
+
+  let bo_chroma = BlockOffset { x: bo.x & !xdec, y: bo.y & !ydec };
+
+  if (w_uv == 0 || h_uv == 0) && is_chroma_block {
+    w_uv = MI_SIZE;
+    h_uv = MI_SIZE;
+  }
+
   // Add chroma distortion only when it is available
   if w_uv > 0 && h_uv > 0 {
     for p in 1..3 {
-      let po = bo.plane_offset(&fs.input.planes[p].cfg);
+      let po = bo_chroma.plane_offset(&fs.input.planes[p].cfg);
 
       distortion += sse_wxh(
         &fs.input.planes[p].slice(&po),
@@ -181,16 +194,7 @@ pub fn rdo_mode_decision(
   let h = bsize.height();
 
   let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
-
-  let mut w_uv = (w >> xdec) & !(MI_SIZE - 1);
-  let mut h_uv = (h >> ydec) & !(MI_SIZE - 1);
-
   let is_chroma_block = has_chroma(bo, bsize, xdec, ydec);
-
-  if (w_uv == 0 || h_uv == 0) && is_chroma_block {
-    w_uv = MI_SIZE;
-    h_uv = MI_SIZE;
-  }
 
   let cw_checkpoint = cw.checkpoint();
 
@@ -231,8 +235,7 @@ pub fn rdo_mode_decision(
           fs,
           w,
           h,
-          w_uv,
-          h_uv,
+          is_chroma_block,
           bo,
           cost,
           seq.bit_depth
@@ -281,14 +284,7 @@ pub fn rdo_tx_type_decision(
   let h = bsize.height();
 
   let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
-
-  let mut w_uv = (w >> xdec) & !(MI_SIZE - 1);
-  let mut h_uv = (h >> ydec) & !(MI_SIZE - 1);
-
-  if (w_uv == 0 || h_uv == 0) && has_chroma(bo, bsize, xdec, ydec) {
-    w_uv = MI_SIZE;
-    h_uv = MI_SIZE;
-  }
+  let is_chroma_block = has_chroma(bo, bsize, xdec, ydec);
 
   let is_inter = mode >= PredictionMode::NEARESTMV;
 
@@ -318,8 +314,7 @@ pub fn rdo_tx_type_decision(
       fs,
       w,
       h,
-      w_uv,
-      h_uv,
+      is_chroma_block,
       bo,
       cost,
       bit_depth
