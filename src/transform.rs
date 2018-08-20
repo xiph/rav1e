@@ -9,8 +9,96 @@
 
 extern crate libc;
 
+use std::cmp;
+
 use partition::TxSize;
 use partition::TxType;
+
+use util::*;
+
+static COSPI_INV: [i32; 64] = [
+  4096, 4095, 4091, 4085, 4076, 4065, 4052, 4036, 4017, 3996, 3973, 3948,
+  3920, 3889, 3857, 3822, 3784, 3745, 3703, 3659, 3612, 3564, 3513, 3461,
+  3406, 3349, 3290, 3229, 3166, 3102, 3035, 2967, 2896, 2824, 2751, 2675,
+  2598, 2520, 2440, 2359, 2276, 2191, 2106, 2019, 1931, 1842, 1751, 1660,
+  1567, 1474, 1380, 1285, 1189, 1092, 995, 897, 799, 700, 601, 501, 401, 301,
+  201, 101,
+];
+
+// performs half a butterfly
+#[inline]
+fn half_btf(w0: i32, in0: i32, w1: i32, in1: i32, bit: usize) -> i32 {
+  let result = (w0 * in0) + (w1 * in1);
+  round_shift(result, bit)
+}
+
+#[inline]
+fn round_shift(value: i32, bit: usize) -> i32 {
+  (value + (1 << (bit - 1))) >> bit
+}
+
+// clamps value to a signed integer type of bit bits
+#[inline]
+fn clamp_value(value: i32, bit: usize) -> i32 {
+  let max_value: i32 = ((1i64 << (bit - 1)) - 1) as i32;
+  let min_value: i32 = (-(1i64 << (bit - 1))) as i32;
+  clamp(value, min_value, max_value)
+}
+
+fn av1_idct4(input: [i32; 4], output: &mut [i32], range: usize) {
+  let cos_bit = 12;
+  // stage 0
+
+  // stage 1
+  let stg1 = [input[0], input[2], input[1], input[3]];
+
+  // stage 2
+  let stg2 = [
+    half_btf(COSPI_INV[32], stg1[0], COSPI_INV[32], stg1[1], cos_bit),
+    half_btf(COSPI_INV[32], stg1[0], -COSPI_INV[32], stg1[1], cos_bit),
+    half_btf(COSPI_INV[48], stg1[2], -COSPI_INV[16], stg1[3], cos_bit),
+    half_btf(COSPI_INV[16], stg1[2], COSPI_INV[48], stg1[3], cos_bit)
+  ];
+
+  // stage 3
+  output[0] = clamp_value(stg2[0] + stg2[3], range);
+  output[1] = clamp_value(stg2[1] + stg2[2], range);
+  output[2] = clamp_value(stg2[1] - stg2[2], range);
+  output[3] = clamp_value(stg2[0] - stg2[3], range);
+}
+
+fn inv_txfm2d_add_4x4_rs(
+  input: &[i32], output: &mut [u16], stride: usize, bd: usize
+) {
+  let mut buffer = [0i32; 4 * 4];
+  // perform inv txfm on every row
+  let range = bd + 8;
+  for (input_slice, buffer_slice) in input.chunks(4).zip(buffer.chunks_mut(4))
+  {
+    let mut temp_in: [i32; 4] = [0; 4];
+    for (raw, clamped) in input_slice.iter().zip(temp_in.iter_mut()) {
+      *clamped = clamp_value(*raw, range);
+    }
+    av1_idct4(temp_in, buffer_slice, range);
+  }
+
+  // perform inv txfm on every col
+  let range = cmp::max(bd + 6, 16);
+  for c in 0..4 {
+    let mut temp_in: [i32; 4] = [0; 4];
+    let mut temp_out: [i32; 4] = [0; 4];
+    for (raw, clamped) in buffer[c..].iter().step_by(4).zip(temp_in.iter_mut())
+    {
+      *clamped = clamp_value(*raw, range);
+    }
+    av1_idct4(temp_in, &mut temp_out, range);
+    for (temp, out) in
+      temp_out.iter().zip(output[c..].iter_mut().step_by(stride).take(4)) {
+      *out =
+        clamp(*out as i32 + round_shift(*temp, 4), 0, (1 << bd) - 1) as u16;
+    }
+  }
+}
 
 // In libaom, functions that have more than one specialization use function
 // pointers, so we need to declare them as static fields and call them
@@ -136,14 +224,18 @@ fn iht4x4_add(
 ) {
   // SIMD code may assert for transform types beyond TxType::IDTX.
   if tx_type < TxType::IDTX {
-    unsafe {
-      av1_inv_txfm2d_add_4x4(
-        input.as_ptr(),
-        output.as_mut_ptr(),
-        stride as libc::c_int,
-        tx_type as libc::c_int,
-        bit_depth as libc::c_int
-      );
+    if tx_type == TxType::DCT_DCT {
+      inv_txfm2d_add_4x4_rs(input, output, stride, bit_depth);
+    } else {
+      unsafe {
+        av1_inv_txfm2d_add_4x4(
+          input.as_ptr(),
+          output.as_mut_ptr(),
+          stride as libc::c_int,
+          tx_type as libc::c_int,
+          bit_depth as libc::c_int
+        );
+      }
     }
   } else {
     unsafe {
