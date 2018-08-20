@@ -195,20 +195,27 @@ pub fn rdo_mode_decision(
   let cw_checkpoint = cw.checkpoint();
 
   // Exclude complex prediction modes at higher speed levels
-  let mode_set = if fi.frame_type == FrameType::INTER {
-    RAV1E_INTER_MODES
-  } else if fi.config.speed <= 3 {
+  let intra_mode_set = if (fi.frame_type == FrameType::KEY && fi.config.speed <= 3) ||
+                          (fi.frame_type == FrameType::INTER && fi.config.speed <= 1) {
     RAV1E_INTRA_MODES
   } else {
     RAV1E_INTRA_MODES_MINIMAL
   };
 
-  for &luma_mode in mode_set {
+  let mut mode_set: Vec<PredictionMode> = Vec::new();
+
+  if fi.frame_type == FrameType::INTER {
+    mode_set.extend_from_slice(RAV1E_INTER_MODES);
+  }
+  mode_set.extend_from_slice(intra_mode_set);
+
+  for &luma_mode in &mode_set {
     assert!(fi.frame_type == FrameType::INTER || luma_mode.is_intra());
 
     let same_as_luma_modes = &[ luma_mode ];
-    let mode_set_chroma = if is_chroma_block && fi.config.speed <= 3 && luma_mode.is_intra() {
-      RAV1E_INTRA_MODES
+    let same_as_luma_modes = &[ luma_mode ];
+    let mode_set_chroma = if is_chroma_block && luma_mode.is_intra() {
+      intra_mode_set
     } else {
       same_as_luma_modes
     };
