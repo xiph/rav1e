@@ -182,8 +182,8 @@ pub fn rdo_mode_decision(
 
   let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
-  let mut w_uv = w >> xdec;
-  let mut h_uv = h >> ydec;
+  let mut w_uv = (w >> xdec) & !(MI_SIZE - 1);
+  let mut h_uv = (h >> ydec) & !(MI_SIZE - 1);
 
   let is_chroma_block = has_chroma(bo, bsize, xdec, ydec);
 
@@ -282,8 +282,8 @@ pub fn rdo_tx_type_decision(
 
   let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
-  let mut w_uv = w >> xdec;
-  let mut h_uv = h >> ydec;
+  let mut w_uv = (w >> xdec) & !(MI_SIZE - 1);
+  let mut h_uv = (h >> ydec) & !(MI_SIZE - 1);
 
   if (w_uv == 0 || h_uv == 0) && has_chroma(bo, bsize, xdec, ydec) {
     w_uv = 4;
