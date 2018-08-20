@@ -217,15 +217,14 @@ pub fn rdo_mode_decision(
   for &luma_mode in &mode_set {
     assert!(fi.frame_type == FrameType::INTER || luma_mode.is_intra());
 
-    let same_as_luma_modes = &[ luma_mode ];
-    let mode_set_chroma = if is_chroma_block && luma_mode.is_intra() {
-      intra_mode_set
-    } else {
-      same_as_luma_modes
-    };
+    let mut mode_set_chroma = vec![ luma_mode ];
+
+    if is_chroma_block && luma_mode.is_intra() && luma_mode != PredictionMode::DC_PRED {
+      mode_set_chroma.push(PredictionMode::DC_PRED);
+    }
 
     // Find the best chroma prediction mode for the current luma prediction mode
-    for &chroma_mode in mode_set_chroma {
+    for &chroma_mode in &mode_set_chroma {
       for &skip in &[false, true] {
         // Don't skip when using intra modes
         if skip && luma_mode.is_intra() { continue; }
