@@ -102,6 +102,9 @@ fn cdef_dist_wxh(
 
 // Sum of Squared Error for a wxh block
 fn sse_wxh(src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, w: usize, h: usize) -> u64 {
+  assert!(w & (MI_SIZE - 1) == 0);
+  assert!(h & (MI_SIZE - 1) == 0);
+
   let mut sse: u64 = 0;
   for j in 0..h {
     for i in 0..w {
