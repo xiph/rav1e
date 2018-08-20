@@ -38,7 +38,6 @@ pub static RAV1E_INTRA_MODES_MINIMAL: &'static [PredictionMode] = &[
 
 pub static RAV1E_INTER_MODES: &'static [PredictionMode] = &[
   PredictionMode::GLOBALMV,
-  PredictionMode::DC_PRED,
 ];
 
 // Weights are quadratic from '1' to '1 / block_size', scaled by 2^sm_weight_log2_scale.
