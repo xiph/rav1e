@@ -188,8 +188,8 @@ pub fn rdo_mode_decision(
   let is_chroma_block = has_chroma(bo, bsize, xdec, ydec);
 
   if (w_uv == 0 || h_uv == 0) && is_chroma_block {
-    w_uv = 4;
-    h_uv = 4;
+    w_uv = MI_SIZE;
+    h_uv = MI_SIZE;
   }
 
   let cw_checkpoint = cw.checkpoint();
@@ -286,8 +286,8 @@ pub fn rdo_tx_type_decision(
   let mut h_uv = (h >> ydec) & !(MI_SIZE - 1);
 
   if (w_uv == 0 || h_uv == 0) && has_chroma(bo, bsize, xdec, ydec) {
-    w_uv = 4;
-    h_uv = 4;
+    w_uv = MI_SIZE;
+    h_uv = MI_SIZE;
   }
 
   let is_inter = mode >= PredictionMode::NEARESTMV;
