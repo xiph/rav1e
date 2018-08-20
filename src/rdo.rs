@@ -153,8 +153,6 @@ fn compute_rd_cost(
   let mut w_uv = (w_y >> xdec) & mask;
   let mut h_uv = (h_y >> ydec) & mask;
 
-  let bo_chroma = BlockOffset { x: bo.x & !xdec, y: bo.y & !ydec };
-
   if (w_uv == 0 || h_uv == 0) && is_chroma_block {
     w_uv = MI_SIZE;
     h_uv = MI_SIZE;
@@ -163,7 +161,7 @@ fn compute_rd_cost(
   // Add chroma distortion only when it is available
   if w_uv > 0 && h_uv > 0 {
     for p in 1..3 {
-      let po = bo_chroma.plane_offset(&fs.input.planes[p].cfg);
+      let po = bo.plane_offset(&fs.input.planes[p].cfg);
 
       distortion += sse_wxh(
         &fs.input.planes[p].slice(&po),
