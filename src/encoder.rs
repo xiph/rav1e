@@ -1188,7 +1188,7 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
 
     let tx_type = if tx_set > TxSet::TX_SET_DCTONLY && fi.config.speed <= 3 && !skip {
         // FIXME: there is one redundant transform type decision per encoded block
-        rdo_tx_type_decision(fi, fs, cw, luma_mode, bsize, bo, tx_size, tx_set, bit_depth)
+        rdo_tx_type_decision(fi, fs, cw, luma_mode, chroma_mode, bsize, bo, tx_size, tx_set, bit_depth)
     } else {
         TxType::DCT_DCT
     };
