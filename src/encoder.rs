@@ -1131,7 +1131,7 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
     let is_inter = !luma_mode.is_intra();
     if is_inter { assert!(luma_mode == chroma_mode); };
 
-    cw.bc.set_size(bo, bsize);
+    cw.bc.set_block_size(bo, bsize);
     cw.bc.set_mode(bo, bsize, luma_mode);
 
     if fi.frame_type == FrameType::INTER {
@@ -1166,10 +1166,6 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
         }
     }
 
-    if skip {
-        cw.bc.reset_skip_context(bo, bsize, xdec, ydec);
-    }
-
     // these rules follow TX_MODE_LARGEST
     let tx_size = match bsize {
         BlockSize::BLOCK_4X4 => TxSize::TX_4X4,
@@ -1177,6 +1173,12 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
         BlockSize::BLOCK_16X16 => TxSize::TX_16X16,
         _ => TxSize::TX_32X32
     };
+    cw.bc.set_tx_size(bo, tx_size);
+    // Were we not hardcoded to TX_MODE_LARGEST, block tx size would be written here
+
+    if skip {
+        cw.bc.reset_skip_context(bo, bsize, xdec, ydec);
+    }
 
     // TODO: Extra condition related to palette mode, see `read_filter_intra_mode_info` in decodemv.c
     if luma_mode == PredictionMode::DC_PRED && bsize.width() <= 32 && bsize.height() <= 32 {

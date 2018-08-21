@@ -19,6 +19,7 @@
 use ec::Writer;
 use partition::BlockSize::*;
 use partition::PredictionMode::*;
+use partition::TxSize::*;
 use partition::TxType::*;
 use partition::*;
 use plane::*;
@@ -1113,6 +1114,8 @@ pub struct Block {
   pub cdef_index: u8,
   pub n4_w: usize, /* block width in the unit of mode_info */
   pub n4_h: usize, /* block height in the unit of mode_info */
+  pub tx_w: usize, /* transform width in the unit of mode_info */
+  pub tx_h: usize, /* transform height in the unit of mode_info */
   pub is_sec_rect: bool,
 }
 
@@ -1127,6 +1130,8 @@ impl Block {
       cdef_index: 0,
       n4_w: BLOCK_64X64.width_mi(),
       n4_h: BLOCK_64X64.height_mi(),
+      tx_w: TX_64X64.width_mi(),
+      tx_h: TX_64X64.height_mi(),
       is_sec_rect: false,
     }
   }
@@ -1326,10 +1331,16 @@ impl BlockContext {
     self.for_each(bo, bsize, |block| block.mode = mode);
   }
 
-  pub fn set_size(&mut self, bo: &BlockOffset, bsize: BlockSize) {
+  pub fn set_block_size(&mut self, bo: &BlockOffset, bsize: BlockSize) {
     let n4_w = BlockSize::MI_SIZE_WIDE[bsize as usize];
     let n4_h = BlockSize::MI_SIZE_HIGH[bsize as usize];
     self.for_each(bo, bsize, |block| { block.n4_w = n4_w; block.n4_h = n4_h } );
+  }
+
+  pub fn set_tx_size(&mut self, bo: &BlockOffset, txsize: TxSize) {
+    let tx_w = txsize.width_mi();
+    let tx_h = txsize.height_mi();
+    self.for_each(bo, txsize.block_size(), |block| { block.tx_w = tx_w; block.tx_h = tx_h } );
   }
 
   pub fn get_mode(&mut self, bo: &BlockOffset) -> PredictionMode {
