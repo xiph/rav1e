@@ -1193,6 +1193,8 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
     };
 
     if is_inter {
+      {
+        let mv = &cw.bc.at(bo).mv[0];
         // Inter mode prediction can take place once for a whole partition,
         // instead of each tx-block.
         let num_planes = 1 + if has_chroma(bo, bsize, xdec, ydec) { 2 } else { 0 };
@@ -1204,11 +1206,12 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
 
             let rec = &mut fs.rec.planes[p];
 
-            luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), plane_bsize);
+            luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), plane_bsize, mv);
         }
-        write_tx_tree(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth); // i.e. var-tx if inter mode
+      }
+      write_tx_tree(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth); // i.e. var-tx if inter mode
     } else {
-        write_tx_blocks(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth);
+      write_tx_blocks(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth);
     }
 }
 

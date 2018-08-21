@@ -1109,6 +1109,7 @@ pub struct Block {
   pub partition: PartitionType,
   pub skip: bool,
   pub ref_frames: [usize; 2],
+  pub mv: [MotionVector; 2],
   pub neighbors_ref_counts: [usize; TOTAL_REFS_PER_FRAME],
   pub cdef_index: u8,
   pub n4_w: usize, /* block width in the unit of mode_info */
@@ -1123,6 +1124,7 @@ impl Block {
       partition: PartitionType::PARTITION_NONE,
       skip: false,
       ref_frames: [INTRA_FRAME; 2],
+      mv: [ MotionVector { row:0, col: 0 }; 2],
       neighbors_ref_counts: [0; TOTAL_REFS_PER_FRAME],
       cdef_index: 0,
       n4_w: BLOCK_64X64.width_mi(),
