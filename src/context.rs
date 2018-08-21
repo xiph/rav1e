@@ -808,9 +808,9 @@ extern "C" {
 #[repr(C)]
 pub struct SCAN_ORDER {
   // FIXME: don't hardcode sizes
-  pub scan: &'static [u16; 64 * 64],
-  pub iscan: &'static [u16; 64 * 64],
-  pub neighbors: &'static [u16; ((64 * 64) + 1) * 2]
+  pub scan: &'static [u16; 32 * 32],
+  pub iscan: &'static [u16; 32 * 32],
+  pub neighbors: &'static [u16; ((32 * 32) + 1) * 2]
 }
 
 #[derive(Clone)]
@@ -2482,7 +2482,7 @@ impl ContextWriter {
   }
 
   pub fn get_nz_map_contexts(
-    &mut self, levels: &mut [u8], scan: &[u16; 4096], eob: u16,
+    &mut self, levels: &mut [u8], scan: &[u16; 32*32], eob: u16,
     tx_size: TxSize, tx_class: TxClass, coeff_contexts: &mut [i8]
   ) {
     // TODO: If TX_64X64 is enabled, use av1_get_adjusted_tx_size()
