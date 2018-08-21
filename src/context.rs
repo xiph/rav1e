@@ -1406,6 +1406,17 @@ impl BlockContext {
     }
   }
 
+  pub fn set_motion_vector(&mut self, bo: &BlockOffset, bsize: BlockSize, mv: MotionVector) {
+    let bw = bsize.width_mi();
+    let bh = bsize.height_mi();
+
+    for y in 0..bh {
+      for x in 0..bw {
+        self.blocks[bo.y + y as usize][bo.x + x as usize].mv[0] = mv;
+      }
+    }
+  }
+
   pub fn set_cdef(&mut self, sbo: &SuperBlockOffset, cdef_index: u8) {
     let bo = sbo.block_offset(0, 0);
     // Checkme: Is 16 still the right block unit for 128x128 superblocks?

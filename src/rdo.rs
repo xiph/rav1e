@@ -48,6 +48,8 @@ pub struct RDOPartitionOutput {
   pub bo: BlockOffset,
   pub pred_mode_luma: PredictionMode,
   pub pred_mode_chroma: PredictionMode,
+  pub ref_frame: usize,
+  pub mv: MotionVector,
   pub skip: bool
 }
 
@@ -189,6 +191,8 @@ pub fn rdo_mode_decision(
   let mut best_mode_chroma = PredictionMode::DC_PRED;
   let mut best_skip = false;
   let mut best_rd = std::f64::MAX;
+  let mut best_ref_frame = INTRA_FRAME;
+  let mut best_mv = MotionVector { row: 0, col: 0 };
 
   // Get block luma and chroma dimensions
   let w = bsize.width();
@@ -232,8 +236,11 @@ pub fn rdo_mode_decision(
         let mut wr: &mut dyn Writer = &mut WriterCounter::new();
         let tell = wr.tell_frac();
 
+        let ref_frame = if luma_mode.is_intra() { INTRA_FRAME } else { LAST_FRAME };
+        let mv = MotionVector { row: 0, col: 0 };
+
         encode_block_a(seq, cw, wr, bsize, bo, skip);
-        encode_block_b(fi, fs, cw, wr, luma_mode, chroma_mode, bsize, bo, skip, seq.bit_depth);
+        encode_block_b(fi, fs, cw, wr, luma_mode, chroma_mode, ref_frame, mv, bsize, bo, skip, seq.bit_depth);
 
         let cost = wr.tell_frac() - tell;
         let rd = compute_rd_cost(
@@ -251,6 +258,8 @@ pub fn rdo_mode_decision(
           best_rd = rd;
           best_mode_luma = luma_mode;
           best_mode_chroma = chroma_mode;
+          best_ref_frame = ref_frame;
+          best_mv = mv;
           best_skip = skip;
         }
 
@@ -270,6 +279,8 @@ pub fn rdo_mode_decision(
       bo: bo.clone(),
       pred_mode_luma: best_mode_luma,
       pred_mode_chroma: best_mode_chroma,
+      ref_frame: best_ref_frame,
+      mv: best_mv,
       rd_cost: best_rd,
       skip: best_skip
     }]
