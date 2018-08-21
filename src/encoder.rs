@@ -1144,7 +1144,6 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
             let mode_context = cw.find_mvrefs(bo, ref_frame);
             //let mode_context = if bo.x == 0 && bo.y == 0 { 0 } else if bo.x ==0 || bo.y == 0 { 51 } else { 85 };
             // NOTE: Until rav1e supports other inter modes than GLOBALMV
-            assert!(luma_mode == PredictionMode::GLOBALMV);
             cw.write_inter_mode(w, luma_mode, mode_context);
         } else {
             cw.write_intra_mode(w, bsize, luma_mode);
@@ -1195,6 +1194,7 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
 
     if is_inter {
       {
+        let ref_frame = cw.bc.at(bo).ref_frames[0];
         let mv = &cw.bc.at(bo).mv[0];
         // Inter mode prediction can take place once for a whole partition,
         // instead of each tx-block.
@@ -1207,7 +1207,7 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
 
             let rec = &mut fs.rec.planes[p];
 
-            luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), plane_bsize, mv);
+            luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), plane_bsize, ref_frame, mv);
         }
       }
       write_tx_tree(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth); // i.e. var-tx if inter mode

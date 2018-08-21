@@ -25,6 +25,7 @@ use quantize::dc_q;
 use std;
 use std::f64;
 use std::vec::Vec;
+use rand;
 use write_tx_blocks;
 use write_tx_tree;
 use partition::BlockSize;
@@ -237,7 +238,13 @@ pub fn rdo_mode_decision(
         let tell = wr.tell_frac();
 
         let ref_frame = if luma_mode.is_intra() { INTRA_FRAME } else { LAST_FRAME };
-        let mv = MotionVector { row: 0, col: 0 };
+        let mv = if luma_mode != PredictionMode::NEWMV {
+          MotionVector { row: 0, col: 0 }
+        } else {
+          let r: i16 = (rand::random::<u8>() & 60) as i16 - 32;
+          let c: i16 = (rand::random::<u8>() & 60) as i16 - 32;
+          MotionVector { row: r, col: c }
+        };
 
         encode_block_a(seq, cw, wr, bsize, bo, skip);
         encode_block_b(fi, fs, cw, wr, luma_mode, chroma_mode, ref_frame, mv, bsize, bo, skip, seq.bit_depth);

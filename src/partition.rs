@@ -519,32 +519,34 @@ impl PredictionMode {
 
   pub fn predict_inter<'a>(self, fi: &FrameInvariants, p: usize, po: &PlaneOffset,
                            dst: &'a mut PlaneMutSlice<'a>, plane_size: BlockSize,
-                           mv: &MotionVector) {
+                           ref_frame: usize, mv: &MotionVector) {
     assert!(!self.is_intra());
-    assert!(self == PredictionMode::GLOBALMV); // Other modes not implemented
+    assert!(ref_frame == LAST_FRAME);
 
-    let ref_frame_idx = LAST_FRAME;
-
-    match fi.rec_buffer.frames[fi.ref_frames[ref_frame_idx - LAST_FRAME]] {
+    match fi.rec_buffer.frames[fi.ref_frames[ref_frame - LAST_FRAME]] {
       Some(ref rec) => {
         let rec_cfg = &rec.planes[p].cfg;
-        let ref_stride = rec_cfg.stride;
-        let ref_width = rec_cfg.width;
-        let ref_height = rec_cfg.height;
-        let src = rec.planes[p].slice(po);
-        let ref_slice = src.as_slice();
-        let stride = dst.plane.cfg.stride;
-        let slice = dst.as_mut_slice();
         let shift_row = 2 + rec_cfg.ydec;
         let shift_col = 2 + rec_cfg.xdec;
         let row_offset = mv.row as i32 >> shift_row;
         let col_offset = mv.col as i32 >> shift_col;
+        let ref_width = rec_cfg.width;
+        let ref_height = rec_cfg.height;
+
+        let qo = PlaneOffset {
+          x: cmp::min((ref_width - plane_size.width()) as i32, cmp::max(0, po.x as i32 + col_offset)) as usize,
+          y: cmp::min((ref_height - plane_size.height()) as i32, cmp::max(0, po.y as i32 + row_offset)) as usize
+        };
+
+        let ref_stride = rec_cfg.stride;
+        let src = rec.planes[p].slice(&qo);
+        let ref_slice = src.as_slice();
+        let stride = dst.plane.cfg.stride;
+        let slice = dst.as_mut_slice();
 
         for r in 0..plane_size.height() {
           for c in 0..plane_size.width() {
-            let ri = cmp::min(ref_height as i32, cmp::max(0, r as i32 + row_offset)) as usize;
-            let ci = cmp::min(ref_width as i32, cmp::max(0, c as i32 + col_offset)) as usize;
-            let input_index = ri * ref_stride + ci;
+            let input_index = r * ref_stride + c;
             let output_index = r * stride + c;
             slice[output_index] = ref_slice[input_index];
           }
