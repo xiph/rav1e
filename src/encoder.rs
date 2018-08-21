@@ -225,9 +225,11 @@ impl Sequence {
     }
 }
 
+use std::sync::Arc;
+
 #[derive(Debug)]
 pub struct FrameState {
-    pub input: Frame,
+    pub input: Arc<Frame>,
     pub rec: Frame,
     pub qc: QuantizationContext,
     pub cdfs: CDFContext,
@@ -236,7 +238,7 @@ pub struct FrameState {
 impl FrameState {
     pub fn new(fi: &FrameInvariants) -> FrameState {
         FrameState {
-            input: Frame::new(fi.padded_w, fi.padded_h),
+            input: Arc::new(Frame::new(fi.padded_w, fi.padded_h)),
             rec: Frame::new(fi.padded_w, fi.padded_h),
             qc: Default::default(),
             cdfs: CDFContext::new(0),
@@ -394,7 +396,7 @@ impl FrameInvariants {
 
     pub fn new_frame_state(&self) -> FrameState {
         FrameState {
-            input: Frame::new(self.padded_w, self.padded_h),
+            input: Arc::new(Frame::new(self.padded_w, self.padded_h)),
             rec: Frame::new(self.padded_w, self.padded_h),
             qc: Default::default(),
             cdfs: CDFContext::new(0),

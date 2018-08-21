@@ -3,6 +3,7 @@ use rav1e::*;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
+use std::sync::Arc;
 use std::slice;
 use y4m;
 
@@ -125,9 +126,12 @@ pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
             let y4m_v = y4m_frame.get_v_plane();
             eprintln!("{}", fi);
             let mut fs = FrameState::new(&fi);
-            fs.input.planes[0].copy_from_raw_u8(&y4m_y, width * y4m_bytes, y4m_bytes);
-            fs.input.planes[1].copy_from_raw_u8(&y4m_u, width * y4m_bytes / 2, y4m_bytes);
-            fs.input.planes[2].copy_from_raw_u8(&y4m_v, width * y4m_bytes / 2, y4m_bytes);
+            {
+                let input = Arc::get_mut(&mut fs.input).unwrap();
+                input.planes[0].copy_from_raw_u8(&y4m_y, width * y4m_bytes, y4m_bytes);
+                input.planes[1].copy_from_raw_u8(&y4m_u, width * y4m_bytes / 2, y4m_bytes);
+                input.planes[2].copy_from_raw_u8(&y4m_v, width * y4m_bytes / 2, y4m_bytes);
+            }
 
             match y4m_bits {
                 8 | 10 | 12 => {},

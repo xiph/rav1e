@@ -10,6 +10,7 @@ use super::*;
 use rand::{ChaChaRng, Rng, SeedableRng};
 use std::collections::VecDeque;
 use std::mem;
+use std::sync::Arc;
 
     fn fill_frame(ra: &mut ChaChaRng, frame: &mut Frame) {
         for plane in frame.planes.iter_mut() {
@@ -217,7 +218,7 @@ use std::mem;
 
         for _ in 0 .. limit {
             let mut fs = fi.new_frame_state();
-            fill_frame(&mut ra, &mut fs.input);
+            fill_frame(&mut ra, Arc::get_mut(&mut fs.input).unwrap());
 
             fi.frame_type = if fi.number % 30 == 0 { FrameType::KEY } else { FrameType::INTER };
             fi.refresh_frame_flags = if fi.frame_type == FrameType::KEY { ALL_REF_FRAMES_MASK } else { 1 };
