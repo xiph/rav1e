@@ -310,7 +310,7 @@ pub fn rdo_tx_type_decision(
   let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
   let is_chroma_block = has_chroma(bo, bsize, xdec, ydec);
 
-  let is_inter = mode >= PredictionMode::NEARESTMV;
+  let is_inter = !mode.is_intra();
 
   let cw_checkpoint = cw.checkpoint();
 
@@ -324,7 +324,7 @@ pub fn rdo_tx_type_decision(
     let tell = wr.tell_frac();
     if is_inter {
       write_tx_tree(
-        fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false, bit_depth
+        fi, fs, cw, wr, mode, bo, bsize, tx_size, tx_type, false, bit_depth
       );
     }  else {
       write_tx_blocks(

@@ -1130,6 +1130,7 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
                  ref_frame: usize, mv: MotionVector,
                  bsize: BlockSize, bo: &BlockOffset, skip: bool, bit_depth: usize) {
     let is_inter = !luma_mode.is_intra();
+    if is_inter { assert!(luma_mode == chroma_mode); };
 
     cw.bc.set_size(bo, bsize);
     cw.bc.set_mode(bo, bsize, luma_mode);
@@ -1210,7 +1211,7 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
             luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), plane_bsize, ref_frame, mv);
         }
       }
-      write_tx_tree(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth); // i.e. var-tx if inter mode
+      write_tx_tree(fi, fs, cw, w, luma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth); // i.e. var-tx if inter mode
     } else {
       write_tx_blocks(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth);
     }
@@ -1262,7 +1263,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
 
     if bw_uv > 0 && bh_uv > 0 {
         let uv_tx_type = uv_intra_mode_to_tx_type_context(chroma_mode);
-        fs.qc.update(fi.config.quantizer, uv_tx_size, chroma_mode.is_intra(), bit_depth);
+        fs.qc.update(fi.config.quantizer, uv_tx_size, true, bit_depth);
 
         for p in 1..3 {
             for by in 0..bh_uv {
@@ -1290,7 +1291,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
 // FIXME: For now, assume tx_mode is LARGEST_TX, so var-tx is not implemented yet
 // but only one tx block exist for a inter mode partition.
 pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter, w: &mut dyn Writer,
-                       luma_mode: PredictionMode, chroma_mode: PredictionMode, bo: &BlockOffset,
+                       luma_mode: PredictionMode, bo: &BlockOffset,
                        bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool, bit_depth: usize) {
     let bw = bsize.width_mi() / tx_size.width_mi();
     let bh = bsize.height_mi() / tx_size.height_mi();
@@ -1326,7 +1327,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
     if bw_uv > 0 && bh_uv > 0 {
         let uv_tx_type = if has_coeff {tx_type} else {TxType::DCT_DCT}; // if inter mode, uv_tx_type == tx_type
 
-        fs.qc.update(fi.config.quantizer, uv_tx_size, chroma_mode.is_intra(), bit_depth);
+        fs.qc.update(fi.config.quantizer, uv_tx_size, false, bit_depth);
 
         for p in 1..3 {
             let tx_bo = BlockOffset {
@@ -1336,7 +1337,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
 
             let po = bo.plane_offset(&fs.input.planes[p].cfg);
 
-            encode_tx_block(fi, fs, cw, w, p, &tx_bo, chroma_mode, uv_tx_size, uv_tx_type,
+            encode_tx_block(fi, fs, cw, w, p, &tx_bo, luma_mode, uv_tx_size, uv_tx_type,
                             plane_bsize, &po, skip, bit_depth);
         }
     }
