@@ -1264,6 +1264,10 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
 
     if has_chroma(bo, bsize, xdec, ydec) && !is_inter {
         cw.write_intra_uv_mode(w, chroma_mode, luma_mode, bsize);
+        if chroma_mode.is_cfl() {
+          assert!(bsize.cfl_allowed());
+          cw.write_cfl_alphas(w, 0, 0, 0);
+        }
         if chroma_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
             cw.write_angle_delta(w, 0, chroma_mode);
         }

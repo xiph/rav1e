@@ -334,6 +334,7 @@ pub enum PredictionMode {
   SMOOTH_V_PRED,
   SMOOTH_H_PRED,
   PAETH_PRED,
+  UV_CFL_PRED,
   NEARESTMV,
   NEARMV,
   GLOBALMV,
@@ -529,6 +530,10 @@ impl PredictionMode {
 
   pub fn is_intra(self) -> bool {
     return self < PredictionMode::NEARESTMV;
+  }
+
+  pub fn is_cfl(self) -> bool {
+    self == PredictionMode::UV_CFL_PRED
   }
 
   pub fn is_directional(self) -> bool {
