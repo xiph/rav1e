@@ -1155,7 +1155,9 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
     let PlaneConfig { stride, xdec, ydec, .. } = fs.input.planes[p].cfg;
 
     if mode.is_intra() {
-      mode.predict_intra(&mut rec.mut_slice(po), tx_size, bit_depth);
+      // TODO: plumb ac buffer and alpha parameter
+      let ac = [0i16; 32 * 32];
+      mode.predict_intra(&mut rec.mut_slice(po), tx_size, bit_depth, &ac, 0);
     }
 
     if skip { return false; }

@@ -410,20 +410,30 @@ use plane::*;
 use predict::*;
 
 impl PredictionMode {
-  pub fn predict_intra<'a>(self, dst: &'a mut PlaneMutSlice<'a>, tx_size: TxSize, bit_depth: usize) {
+  pub fn predict_intra<'a>(
+    self, dst: &'a mut PlaneMutSlice<'a>, tx_size: TxSize, bit_depth: usize,
+    ac: &[i16], alpha: i16
+  ) {
     assert!(self.is_intra());
 
     match tx_size {
-      TxSize::TX_4X4 => self.predict_intra_inner::<Block4x4>(dst, bit_depth),
-      TxSize::TX_8X8 => self.predict_intra_inner::<Block8x8>(dst, bit_depth),
-      TxSize::TX_16X16 => self.predict_intra_inner::<Block16x16>(dst, bit_depth),
-      TxSize::TX_32X32 => self.predict_intra_inner::<Block32x32>(dst, bit_depth),
+      TxSize::TX_4X4 =>
+        self.predict_intra_inner::<Block4x4>(dst, bit_depth, ac, alpha),
+      TxSize::TX_8X8 =>
+        self.predict_intra_inner::<Block8x8>(dst, bit_depth, ac, alpha),
+      TxSize::TX_16X16 =>
+        self.predict_intra_inner::<Block16x16>(dst, bit_depth, ac, alpha),
+      TxSize::TX_32X32 =>
+        self.predict_intra_inner::<Block32x32>(dst, bit_depth, ac, alpha),
       _ => unimplemented!()
     }
   }
 
   #[inline(always)]
-  fn predict_intra_inner<'a, B: Intra>(self, dst: &'a mut PlaneMutSlice<'a>, bit_depth: usize) {
+  fn predict_intra_inner<'a, B: Intra>(
+    self, dst: &'a mut PlaneMutSlice<'a>, bit_depth: usize,
+    ac: &[i16], alpha: i16
+  ) {
     // above and left arrays include above-left sample
     // above array includes above-right samples
     // left array includes below-left samples
@@ -500,7 +510,7 @@ impl PredictionMode {
     let left_slice = &left[1..B::H + 1];
 
     match self {
-      PredictionMode::DC_PRED => match (x, y) {
+      PredictionMode::DC_PRED | PredictionMode::UV_CFL_PRED => match (x, y) {
         (0, 0) => B::pred_dc_128(slice, stride, bit_depth),
         (_, 0) => B::pred_dc_left(slice, stride, above_slice, left_slice, bit_depth),
         (0, _) => B::pred_dc_top(slice, stride, above_slice, left_slice, bit_depth),
@@ -525,6 +535,9 @@ impl PredictionMode {
       PredictionMode::SMOOTH_V_PRED =>
         B::pred_smooth_v(slice, stride, above_slice, left_slice),
       _ => unimplemented!()
+    }
+    if self == PredictionMode::UV_CFL_PRED {
+      B::pred_cfl(slice, stride, &ac, alpha, bit_depth);
     }
   }
 
