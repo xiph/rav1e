@@ -310,7 +310,7 @@ impl FrameInvariants {
             showable_frame: true,
             error_resilient: true,
             intra_only: false,
-            allow_high_precision_mv: true,
+            allow_high_precision_mv: false,
             frame_type: FrameType::KEY,
             show_existing_frame: false,
             use_reduced_tx_set,
@@ -1148,7 +1148,14 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
             cw.write_inter_mode(w, luma_mode, mode_context);
             if luma_mode == PredictionMode::NEWMV || luma_mode == PredictionMode::NEW_NEWMV {
               let ref_mv = MotionVector { row: 0, col: 0 };
-              cw.write_mv(w, &mv, &ref_mv, MvSubpelPrecision::MV_SUBPEL_LOW_PRECISION);
+              let mv_precision = if fi.force_integer_mv != 0 {
+                MvSubpelPrecision::MV_SUBPEL_NONE
+              } else if fi.allow_high_precision_mv {
+                MvSubpelPrecision::MV_SUBPEL_HIGH_PRECISION
+              } else {
+                MvSubpelPrecision::MV_SUBPEL_LOW_PRECISION
+              };
+              cw.write_mv(w, &mv, &ref_mv, mv_precision);
             }
         } else {
             cw.write_intra_mode(w, bsize, luma_mode);

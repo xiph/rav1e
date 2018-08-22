@@ -2326,21 +2326,17 @@ impl ContextWriter {
 
   pub fn write_mv(&mut self, w: &mut dyn Writer,
                   mv: &MotionVector, ref_mv: &MotionVector,
-                  mut usehp: MvSubpelPrecision) {
+                  mv_precision: MvSubpelPrecision) {
     let diff = MotionVector { row: mv.row - ref_mv.row, col: mv.col - ref_mv.col };
     let j: MvJointType = av1_get_mv_joint(&diff);
 
-    // TODO: pass fi.force_integer_mv to this function
-    if false /*fi.force_integer_mv*/ {
-      usehp = MvSubpelPrecision::MV_SUBPEL_NONE;
-    }
     w.symbol_with_update(j as u32, &mut self.fc.nmv_context.joints_cdf);
 
     if mv_joint_vertical(j) {
-      encode_mv_component(w, diff.row as i32, &mut self.fc.nmv_context.comps[0], usehp);
+      encode_mv_component(w, diff.row as i32, &mut self.fc.nmv_context.comps[0], mv_precision);
     }
     if mv_joint_horizontal(j) {
-      encode_mv_component(w, diff.col as i32, &mut self.fc.nmv_context.comps[1], usehp);
+      encode_mv_component(w, diff.col as i32, &mut self.fc.nmv_context.comps[1], mv_precision);
     }
   }
 
