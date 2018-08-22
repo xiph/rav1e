@@ -29,7 +29,7 @@ use std::*;
 use self::REF_CONTEXTS;
 use self::SINGLE_REFS;
 
-const PLANES: usize = 3;
+pub const PLANES: usize = 3;
 
 const PARTITION_PLOFFSET: usize = 4;
 const PARTITION_BLOCK_SIZES: usize = 4 + 1;
