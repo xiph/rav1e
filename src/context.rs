@@ -64,7 +64,7 @@ const TX_SETS_INTRA: usize = 3;
 const TX_SETS_INTER: usize = 4;
 
 const MAX_REF_MV_STACK_SIZE: usize = 8;
-const REF_CAT_LEVEL: u32 = 640;
+pub const REF_CAT_LEVEL: u32 = 640;
 
 // Number of transform types in each set type
 static num_tx_set: [usize; TX_SETS] =

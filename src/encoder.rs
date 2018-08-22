@@ -1155,7 +1155,9 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
               for idx in 0..2 {
                 if num_mv_found > idx + 1 {
                   let drl_mode = ref_mv_idx > idx;
-                  let ctx = 0 as usize;  // FIXME
+                  let ctx: usize = (mv_stack[idx].weight < REF_CAT_LEVEL) as usize
+                    + (mv_stack[idx + 1].weight < REF_CAT_LEVEL) as usize;
+
                   cw.write_drl_mode(w, drl_mode, ctx);
                   if !drl_mode { break; }
                 }
