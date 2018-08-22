@@ -376,6 +376,7 @@ const PLANE_TYPES: usize = 2;
 const REF_TYPES: usize = 2;
 const SKIP_CONTEXTS: usize = 3;
 const INTRA_INTER_CONTEXTS: usize = 4;
+const DRL_MODE_CONTEXTS: usize = 3;
 
 // Level Map
 const TXB_SKIP_CONTEXTS: usize =  13;
@@ -826,6 +827,7 @@ extern "C" {
     TxSize::TX_SIZES]; 4];
 
   static default_nmv_context: NMVContext;
+  static default_drl_cdf:[[u16; 2 + 1]; DRL_MODE_CONTEXTS];
 }
 
 #[repr(C)]
@@ -854,6 +856,7 @@ pub struct CDFContext {
   angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES],
   filter_intra_cdfs: [[u16; 3]; BlockSize::BLOCK_SIZES_ALL],
   single_ref_cdfs: [[[u16; 2 + 1]; SINGLE_REFS - 1]; REF_CONTEXTS],
+  drl_cdfs: [[u16; 2 + 1]; DRL_MODE_CONTEXTS],
   nmv_context: NMVContext,
 
   // lv_map
@@ -901,6 +904,7 @@ impl CDFContext {
       angle_delta_cdf: default_angle_delta_cdf,
       filter_intra_cdfs: default_filter_intra_cdfs,
       single_ref_cdfs: default_single_ref_cdf,
+      drl_cdfs: default_drl_cdf,
       nmv_context: default_nmv_context,
 
       // lv_map
@@ -2322,6 +2326,10 @@ impl ContextWriter {
         symbol_with_update!(self, w, (mode != PredictionMode::NEARESTMV) as u32, &mut self.fc.refmv_cdf[refmv_ctx]);
       }
     }
+  }
+
+  pub fn write_drl_mode(&mut self, w: &mut dyn Writer, drl_mode: bool, ctx: usize) {
+    symbol_with_update!(self, w, drl_mode as u32, &mut self.fc.drl_cdfs[ctx]);
   }
 
   pub fn write_mv(&mut self, w: &mut dyn Writer,
