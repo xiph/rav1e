@@ -279,7 +279,7 @@ pub fn rdo_mode_decision(
 // RDO-based intra frame transform type decision
 pub fn rdo_tx_type_decision(
   fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
-  mode: PredictionMode, bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize,
+  luma_mode: PredictionMode, chroma_mode: PredictionMode, bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize,
   tx_set: TxSet, bit_depth: usize
 ) -> TxType {
   let mut best_type = TxType::DCT_DCT;
@@ -292,7 +292,7 @@ pub fn rdo_tx_type_decision(
   let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
   let is_chroma_block = has_chroma(bo, bsize, xdec, ydec);
 
-  let is_inter = !mode.is_intra();
+  let is_inter = !luma_mode.is_intra();
 
   let cw_checkpoint = cw.checkpoint();
 
@@ -306,11 +306,11 @@ pub fn rdo_tx_type_decision(
     let tell = wr.tell_frac();
     if is_inter {
       write_tx_tree(
-        fi, fs, cw, wr, mode, bo, bsize, tx_size, tx_type, false, bit_depth
+        fi, fs, cw, wr, luma_mode, bo, bsize, tx_size, tx_type, false, bit_depth
       );
     }  else {
       write_tx_blocks(
-        fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false, bit_depth
+        fi, fs, cw, wr, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, false, bit_depth
       );
     }
 
