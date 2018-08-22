@@ -29,10 +29,13 @@ use crate::partition::PartitionType::*;
 use crate::header::*;
 
 use bitstream_io::{BitWriter, BigEndian};
+use bincode::{serialize, deserialize};
 use std;
 use std::{fmt, io, mem};
 use std::io::Write;
+use std::io::Read;
 use std::sync::Arc;
+use std::fs::File;
 
 extern {
   pub fn av1_rtcd();
@@ -396,6 +399,7 @@ pub struct FrameState<T: Pixel> {
   pub segmentation: SegmentationState,
   pub restoration: RestorationState,
   pub frame_mvs: Vec<Vec<MotionVector>>,
+  pub t: RDOTracker,
 }
 
 impl<T: Pixel> FrameState<T> {
@@ -422,7 +426,8 @@ impl<T: Pixel> FrameState<T> {
       deblock: Default::default(),
       segmentation: Default::default(),
       restoration: rs,
-      frame_mvs: vec![vec![MotionVector::default(); fi.w_in_b * fi.h_in_b]; REF_FRAMES]
+      frame_mvs: vec![vec![MotionVector::default(); fi.w_in_b * fi.h_in_b]; REF_FRAMES],
+      t: RDOTracker::new()
     }
   }
 }
@@ -538,6 +543,7 @@ pub struct FrameInvariants<T: Pixel> {
   pub me_lambda: f64,
   pub me_range_scale: u8,
   pub use_tx_domain_distortion: bool,
+  pub use_tx_domain_rate: bool,
   pub inter_cfg: Option<InterPropsConfig>,
   pub enable_early_exit: bool,
 }
@@ -562,6 +568,7 @@ impl<T: Pixel> FrameInvariants<T> {
     let min_partition_size = config.speed_settings.min_block_size;
     let use_reduced_tx_set = config.speed_settings.reduced_tx_set;
     let use_tx_domain_distortion = config.tune == Tune::Psnr && config.speed_settings.tx_domain_distortion;
+    let use_tx_domain_rate = config.speed_settings.tx_domain_rate;
 
     let w_in_b = 2 * config.width.align_power_of_two_and_shift(3); // MiCols, ((width+7)/8)<<3 >> MI_SIZE_LOG2
     let h_in_b = 2 * config.height.align_power_of_two_and_shift(3); // MiRows, ((height+7)/8)<<3 >> MI_SIZE_LOG2
@@ -617,6 +624,7 @@ impl<T: Pixel> FrameInvariants<T> {
       me_lambda: 0.0,
       me_range_scale: 1,
       use_tx_domain_distortion,
+      use_tx_domain_rate,
       inter_cfg: None,
       enable_early_exit: true,
       config,
@@ -981,9 +989,14 @@ pub fn encode_tx_block<T: Pixel>(
   let coded_tx_size = av1_get_coded_tx_size(tx_size).area();
   fs.qc.quantize(coeffs, qcoeffs, coded_tx_size);
 
-  let has_coeff = cw.write_coeffs_lv_map(w, p, bo, &qcoeffs, mode, tx_size, tx_type, plane_bsize, xdec, ydec,
-                                         fi.use_reduced_tx_set);
-
+  let tell_coeffs = w.tell_frac();
+  let has_coeff = if !for_rdo_use || rdo_type.needs_coeff_rate() {
+    cw.write_coeffs_lv_map(w, p, bo, &qcoeffs, mode, tx_size, tx_type, plane_bsize, xdec, ydec,
+                           fi.use_reduced_tx_set)
+  } else {
+    true
+  };
+  let cost_coeffs = w.tell_frac() - tell_coeffs;
   // Reconstruct
   dequantize(qidx, qcoeffs, rcoeffs, tx_size, fi.sequence.bit_depth, fi.dc_delta_q[p], fi.ac_delta_q[p]);
 
@@ -1005,6 +1018,15 @@ pub fn encode_tx_block<T: Pixel>(
     let tx_dist_scale_bits = 2*(3 - get_log_tx_scale(tx_size));
     let tx_dist_scale_rounding_offset = 1 << (tx_dist_scale_bits - 1);
     tx_dist = (tx_dist + tx_dist_scale_rounding_offset) >> tx_dist_scale_bits;
+  }
+  if fi.config.train_rdo {
+    fs.t.add_rate(fi.base_q_idx, tx_size, tx_dist as u64, cost_coeffs as u64);
+  }
+
+  if rdo_type == RDOType::TxDistEstRate {
+    // look up rate and distortion in table
+    let estimated_rate = estimate_rate(fi.base_q_idx, tx_size, tx_dist as u64);
+    w.add_bits_frac(estimated_rate as u32);
   }
   (has_coeff, tx_dist)
 }
@@ -1446,7 +1468,8 @@ pub fn write_tx_tree<T: Pixel>(
 pub fn encode_block_with_modes<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
-  bsize: BlockSize, bo: &BlockOffset, mode_decision: &RDOPartitionOutput
+  bsize: BlockSize, bo: &BlockOffset, mode_decision: &RDOPartitionOutput,
+  rdo_type: RDOType
 ) {
   let (mode_luma, mode_chroma) =
     (mode_decision.pred_mode_luma, mode_decision.pred_mode_chroma);
@@ -1469,7 +1492,7 @@ pub fn encode_block_with_modes<T: Pixel>(
                               bsize, bo, skip);
   encode_block_b(fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                  mode_luma, mode_chroma, ref_frames, mvs, bsize, bo, skip, cfl,
-                 tx_size, tx_type, mode_context, &mv_stack, RDOType::PixelDistRealRate, false);
+                 tx_size, tx_type, mode_context, &mv_stack, rdo_type, false);
 }
 
 fn encode_partition_bottomup<T: Pixel>(
@@ -1478,6 +1501,7 @@ fn encode_partition_bottomup<T: Pixel>(
   bo: &BlockOffset, pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5],
   ref_rd_cost: f64
 ) -> (RDOOutput) {
+  let rdo_type = RDOType::PixelDistRealRate;
   let mut rd_cost = std::f64::MAX;
   let mut best_rd = std::f64::MAX;
   let mut rdo_output = RDOOutput {
@@ -1536,7 +1560,7 @@ fn encode_partition_bottomup<T: Pixel>(
 
     if !can_split {
       encode_block_with_modes(fi, fs, cw, w_pre_cdef, w_post_cdef, bsize, bo,
-                              &mode_decision);
+                              &mode_decision, rdo_type);
     }
   }
 
@@ -1652,7 +1676,7 @@ fn encode_partition_bottomup<T: Pixel>(
           let offset = mode.bo.clone();
           // FIXME: redundant block re-encode
           encode_block_with_modes(fi, fs, cw, w_pre_cdef, w_post_cdef,
-                                  mode.bsize, &offset, &mode);
+                                  mode.bsize, &offset, &mode, rdo_type);
         }
       }
   }
@@ -1686,6 +1710,7 @@ fn encode_partition_topdown<T: Pixel>(
   let bsw = bsize.width_mi();
   let bsh = bsize.height_mi();
   let is_square = bsize.is_sqr();
+  let rdo_type = RDOType::PixelDistRealRate;
 
   // Always split if the current partition is too large
   let must_split = (bo.x + bsw as usize > fi.w_in_b ||
@@ -1726,7 +1751,7 @@ fn encode_partition_topdown<T: Pixel>(
       partition_types.push(PartitionType::PARTITION_SPLIT);
     }
     rdo_output = rdo_partition_decision(fi, fs, cw,
-                                        w_pre_cdef, w_post_cdef, bsize, bo, &rdo_output, pmvs, &partition_types);
+                                        w_pre_cdef, w_post_cdef, bsize, bo, &rdo_output, pmvs, &partition_types, rdo_type);
     partition = rdo_output.part_type;
   } else {
     // Blocks of sizes below the supported range are encoded directly
@@ -2059,7 +2084,6 @@ fn encode_tile<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec
   if fs.deblock.levels[0] != 0 || fs.deblock.levels[1] != 0 {
     deblock_filter_frame(fs, &mut cw.bc, fi.sequence.bit_depth);
   }
-  {
     // Until the loop filters are pipelined, we'll need to keep
     // around a copy of both the pre- and post-cdef frame.
     let pre_cdef_frame = fs.rec.clone();
@@ -2072,6 +2096,17 @@ fn encode_tile<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec
     if fi.sequence.enable_restoration {
       fs.restoration.lrf_filter_frame(&mut fs.rec, &pre_cdef_frame, &fi);
     }
+
+  if fi.config.train_rdo {
+    eprintln!("train rdo");
+    if let Ok(mut file) = File::open("rdo.dat") {
+      let mut data = vec![];
+      file.read_to_end(&mut data).unwrap();
+      fs.t.merge_in(&deserialize(data.as_slice()).unwrap());
+    }
+    let mut rdo_file = File::create("rdo.dat").unwrap();
+    rdo_file.write_all(&serialize(&fs.t).unwrap()).unwrap();
+    fs.t.print_code();
   }
 
   fs.cdfs = cw.fc;

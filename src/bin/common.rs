@@ -245,6 +245,10 @@ pub fn parse_cli() -> CliOptions {
         .long("speed-test")
         .takes_value(true)
     )
+    .arg(
+      Arg::with_name("train-rdo")
+        .long("train-rdo")
+    )
     .subcommand(SubCommand::with_name("advanced")
                 .setting(AppSettings::Hidden)
                 .about("Advanced features")
@@ -313,6 +317,7 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
     }
   });
   let bitrate = maybe_bitrate.unwrap_or(0);
+  let train_rdo = matches.is_present("train-rdo");
   if quantizer == 0 {
     unimplemented!("Lossless encoding not yet implemented");
   } else if quantizer > 255 {
@@ -422,7 +427,7 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
   };
   cfg.tune = matches.value_of("TUNE").unwrap().parse().unwrap();
   cfg.low_latency = matches.value_of("LOW_LATENCY").unwrap().parse().unwrap();
-
+  cfg.train_rdo = train_rdo;
   cfg
 }
 
@@ -454,6 +459,9 @@ fn apply_speed_test_cfg(cfg: &mut EncoderConfig, setting: &str) {
     },
     "tx_domain_distortion" => {
       cfg.speed_settings.tx_domain_distortion = true;
+    },
+    "tx_domain_rate" => {
+      cfg.speed_settings.tx_domain_rate = true;
     },
     "encode_bottomup" => {
       cfg.speed_settings.encode_bottomup = true;

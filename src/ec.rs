@@ -78,6 +78,8 @@ pub trait Writer {
   fn checkpoint(&mut self) -> WriterCheckpoint;
   /// Restore saved position in coding/recording from a checkpoint
   fn rollback(&mut self, _: &WriterCheckpoint);
+  /// Add additional bits from rate estimators without coding a real symbol
+  fn add_bits_frac(&mut self, bits_frac: u32);
 }
 
 /// StorageBackend is an internal trait used to tie a specific Writer
@@ -103,6 +105,9 @@ pub struct WriterBase<S> {
   cnt: i16,
   /// Debug enable flag
   debug: bool,
+  /// Extra offset added to tell() and tell_frac() to approximate costs
+  /// of actually coding a symbol
+  fake_bits_frac: u32,
   /// Use-specific storage
   s: S
 }
@@ -298,7 +303,7 @@ impl<S> WriterBase<S> {
   /// Internal constructor called by the subtypes that implement the
   /// actual encoder and Recorder.
   fn new(storage: S) -> Self {
-    WriterBase { rng: 0x8000, cnt: -9, debug: false, s: storage }
+    WriterBase { rng: 0x8000, cnt: -9, debug: false, fake_bits_frac: 0, s: storage }
   }
 
   /// Compute low and range values from token cdf values and local state
@@ -477,6 +482,10 @@ where
   /// `f`: The probability that the val is true, scaled by 32768.
   fn bit(&mut self, bit: u16) {
     self.bool(bit == 1, 16384);
+  }
+  // fake add bits
+  fn add_bits_frac(&mut self, bits_frac: u32) {
+    self.fake_bits_frac += bits_frac
   }
   /// Encode a literal bitstring, bit by bit in MSB order, with flat
   /// probability.
@@ -721,7 +730,7 @@ where
   fn tell(&mut self) -> u32 {
     // The 10 here counteracts the offset of -9 baked into cnt, and adds 1 extra
     // bit, which we reserve for terminating the stream.
-    (((self.stream_bytes() * 8) as i32) + (self.cnt as i32) + 10) as u32
+    (((self.stream_bytes() * 8) as i32) + (self.cnt as i32) + 10) as u32 + (self.fake_bits_frac >> 8)
   }
   /// Returns the number of bits "used" by the encoded symbols so far.
   /// This same number can be computed in either the encoder or the
@@ -731,7 +740,7 @@ where
   ///         This will always be slightly larger than the exact value (e.g., all
   ///          rounding error is in the positive direction).
   fn tell_frac(&mut self) -> u32 {
-    Self::frac_compute(self.tell(), self.rng as u32)
+    Self::frac_compute(self.tell(), self.rng as u32) + self.fake_bits_frac
   }
   /// Save current point in coding/recording to a checkpoint that can
   /// be restored later.  A WriterCheckpoint can be generated for an
