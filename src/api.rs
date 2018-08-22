@@ -10,6 +10,7 @@
 use context::CDFContext;
 use encoder::*;
 use partition::*;
+use rdo::RDOTracker;
 
 use std::collections::VecDeque;
 use std::fmt;
@@ -33,12 +34,13 @@ impl Ratio {
 pub struct EncoderConfig {
   pub quantizer: usize,
   pub speed: usize,
-  pub tune: Tune
+  pub tune: Tune,
+  pub train_rdo: bool,
 }
 
 impl Default for EncoderConfig {
   fn default() -> Self {
-    EncoderConfig { quantizer: 100, speed: 0, tune: Tune::Psnr }
+    EncoderConfig { quantizer: 100, speed: 0, tune: Tune::Psnr, train_rdo: false }
   }
 }
 
@@ -148,7 +150,8 @@ impl Context {
         rec: Frame::new(self.fi.padded_w, self.fi.padded_h),
         qc: Default::default(),
         cdfs: CDFContext::new(0),
-        deblock: Default::default()
+        deblock: Default::default(),
+        t: RDOTracker::new(),
       };
 
       let frame_number_in_segment = self.fi.number % 30;

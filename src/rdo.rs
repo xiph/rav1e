@@ -28,6 +28,7 @@ use quantize::dc_q;
 use std;
 use std::f64;
 use std::vec::Vec;
+use std::iter::*;
 use write_tx_blocks;
 use write_tx_tree;
 use partition::BlockSize;
@@ -37,6 +38,55 @@ use FrameState;
 use FrameType;
 use Tune;
 use Sequence;
+#[derive(Clone, Copy, PartialEq)]
+pub enum RDOType {
+  Fast,
+  Accurate
+}
+pub static RDO_DISTORTION_TABLE: [[u64; rdo_num_bins]; TxSize::TX_SIZES_ALL] = [
+[0,247,280,297,314,328,337,332,332,334,322,314,313,296,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,71,],
+[0,483,606,686,746,790,820,841,857,871,879,885,888,892,895,893,892,896,900,899,899,897,895,883,879,884,876,879,884,876,872,856,873,854,875,855,853,838,816,805,797,821,767,757,748,753,747,99999,99999,95,],
+[0,521,917,1130,1277,1472,1637,1786,1924,2043,2170,2278,2391,2490,2566,2644,2709,2773,2837,2907,2968,3017,3077,3113,3173,3208,3249,3282,3319,3353,3380,3417,3431,3452,3476,3499,3526,3528,3546,3553,3584,3588,3599,3599,3608,3630,3640,3630,3640,3658,],
+[0,99999,671,945,1169,1528,1787,1821,2305,2812,3092,3533,3957,4271,4294,4353,4440,4515,4599,4854,4911,5051,5248,5481,5593,5879,5992,6015,6233,6364,6559,6626,6864,6927,7044,7154,7347,7400,7555,7664,7571,7816,8027,8235,8166,8320,8475,8505,8695,13003,],
+[0,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[0,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[0,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[0,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[0,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[0,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[0,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[0,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[0,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[0,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[0,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[0,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[0,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[0,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[0,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+];
+pub static RDO_RATE_TABLE: [[u64; rdo_num_bins]; TxSize::TX_SIZES_ALL] = [
+[411,614,716,748,755,727,710,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,136,],
+[406,827,1144,1363,1513,1623,1707,1763,1789,1803,1788,1750,1729,1718,1700,1652,1658,1627,1599,1526,1507,1404,1374,1418,1408,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,150,],
+[176,397,780,1166,1528,1885,2232,2531,2817,3110,3395,3672,3931,4155,4379,4573,4710,4880,4999,5102,5237,5324,5424,5498,5570,5646,5704,5779,5858,5866,5958,5949,5984,5959,5988,6036,6023,5935,5939,5980,5866,5840,5921,5791,5786,5815,5703,5678,5676,2246,],
+[135,169,218,315,442,582,833,1134,1387,1699,1972,2366,2698,2919,3231,3557,3924,4195,4496,4724,4968,5363,5614,5831,6139,6437,6704,6879,7284,7630,7889,7951,8274,8481,8746,8992,9252,9434,9739,9763,10311,10438,10524,10963,11005,11341,11644,11565,11825,17430,],
+[99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+[99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,99999,],
+];
+
+
 
 #[derive(Clone)]
 pub struct RDOOutput {
@@ -55,6 +105,145 @@ pub struct RDOPartitionOutput {
   pub ref_frame: usize,
   pub mv: MotionVector,
   pub skip: bool
+}
+
+const rdo_num_bins: usize =  50;
+const rdo_max_bin: usize = 10000;
+const DIST_EST_MAX_BIN: usize = 10000;
+const RATE_EST_MAX_BIN: usize = 20000;
+const rdo_bin_size: u64 = (rdo_max_bin / rdo_num_bins) as u64;
+const DIST_EST_BIN_SIZE: u64 = (DIST_EST_MAX_BIN / rdo_num_bins) as u64;
+const RATE_EST_BIN_SIZE: u64 = (RATE_EST_MAX_BIN / rdo_num_bins) as u64;
+
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct RDOTracker {
+  rate_bins: Vec<Vec<u64>>,
+  rate_counts: Vec<Vec<u64>>,
+  dist_bins: Vec
+        <Vec<u64>>,
+  dist_counts: Vec<Vec<u64>>
+}
+
+impl RDOTracker {
+  pub fn new() -> RDOTracker {
+    RDOTracker {
+      rate_bins: vec![vec![0; rdo_num_bins]; TxSize::TX_SIZES_ALL],
+      rate_counts: vec![vec![0; rdo_num_bins]; TxSize::TX_SIZES_ALL],
+      dist_bins: vec![vec![0; rdo_num_bins]; TxSize::TX_SIZES_ALL],
+      dist_counts: vec![vec![0; rdo_num_bins]; TxSize::TX_SIZES_ALL]
+    }
+  }
+  fn merge_array(new: &mut Vec<u64>, old: &Vec<u64>) {
+    for (n, o) in new.iter_mut().zip(old.iter()) {
+      *n += o;
+    }
+  }
+  fn merge_2d_array(new: &mut Vec<Vec<u64>>, old: &Vec<Vec<u64>>) {
+    for (n, o) in new.iter_mut().zip(old.iter()) {
+      RDOTracker::merge_array(n, o);
+    }
+  }
+  pub fn merge_in(&mut self, input: &RDOTracker) {
+    RDOTracker::merge_2d_array(&mut self.rate_bins, &input.rate_bins);
+    RDOTracker::merge_2d_array(&mut self.rate_counts, &input.rate_counts);
+    RDOTracker::merge_2d_array(&mut self.dist_bins, &input.dist_bins);
+    RDOTracker::merge_2d_array(&mut self.dist_counts, &input.dist_counts);
+  }
+  pub fn add_rate(&mut self, ts: TxSize, fast_distortion: u64, rate: u64) {
+    if fast_distortion != 0 {
+      let bs_index = ts as usize;
+      let bin_idx_tmp = (((fast_distortion as i64 - (RATE_EST_BIN_SIZE as i64) / 2)) as u64 / RATE_EST_BIN_SIZE) as usize;
+      let bin_idx = if bin_idx_tmp >= rdo_num_bins {
+        rdo_num_bins - 1
+      } else {
+        bin_idx_tmp
+      };
+      self.rate_counts[bs_index][bin_idx] += 1;
+      self.rate_bins[bs_index][bin_idx] += rate;
+    }
+  }
+  pub fn estimate_rate(&self, ts: TxSize, fast_distortion: u64) -> u64 {
+    let bs_index = ts as usize;
+    let bin_idx_down = ((fast_distortion) / RATE_EST_BIN_SIZE).min((rdo_num_bins - 2) as u64);
+    let bin_idx_up = (bin_idx_down + 1).min((rdo_num_bins - 1) as u64);
+    let x0 = (bin_idx_down * RATE_EST_BIN_SIZE) as i64;
+    let x1 = (bin_idx_up * RATE_EST_BIN_SIZE) as i64;
+    let y0 = RDO_RATE_TABLE[bs_index][bin_idx_down as usize] as i64;
+    let y1 = RDO_RATE_TABLE[bs_index][bin_idx_up as usize] as i64;
+    let slope = ((y1 - y0) << 8) / (x1 - x0);
+    (y0 + (((fast_distortion as i64 - x0) * slope) >> 8)) as u64
+  }
+  pub fn add_distortion(&mut self, ts: TxSize, fast_distortion: u64, distortion: u64) {
+    if fast_distortion != 0 {
+      let bs_index = ts as usize;
+      let bin_idx_tmp = (((fast_distortion as i64 - (DIST_EST_BIN_SIZE as i64) / 2)) as u64 / DIST_EST_BIN_SIZE) as usize;
+      let bin_idx = if bin_idx_tmp >= rdo_num_bins {
+        rdo_num_bins - 1
+      } else {
+        bin_idx_tmp
+      };
+      self.dist_counts[bs_index][bin_idx] += 1;
+      self.dist_bins[bs_index][bin_idx] += distortion;
+    }
+  }
+  pub fn estimate_distortion(&self, ts: TxSize, fast_distortion: u64) -> u64 {
+    let bs_index = ts as usize;
+    let bin_idx_down = ((fast_distortion) / DIST_EST_BIN_SIZE).min((rdo_num_bins - 2) as u64);
+    let bin_idx_up = (bin_idx_down + 1).min((rdo_num_bins - 1) as u64);
+    let x0 = (bin_idx_down * DIST_EST_BIN_SIZE) as i64;
+    let x1 = (bin_idx_up * DIST_EST_BIN_SIZE) as i64;
+    let y0 = RDO_DISTORTION_TABLE[bs_index][bin_idx_down as usize] as i64;
+    let y1 = RDO_DISTORTION_TABLE[bs_index][bin_idx_up as usize] as i64;
+    let slope = ((y1 - y0) << 8) / (x1 - x0);
+    (y0 + (((fast_distortion as i64 - x0) * slope) >> 8)) as u64
+  }
+  pub fn print_distortion(&self) {
+    let bs_index = TxSize::TX_32X32 as usize;
+    for (bin_idx, (dist_total, dist_count)) in self.dist_bins[bs_index].iter().zip(self.dist_counts[bs_index].iter()).enumerate() {
+      if *dist_count != 0 {
+        println!("{} {}", bin_idx, dist_total / dist_count);
+      }
+    }
+  }
+  pub fn print_rate(&self) {
+    let bs_index = 0;
+    for (bin_idx, (rate_total, rate_count)) in self.rate_bins[bs_index].iter().zip(self.rate_counts[bs_index].iter()).enumerate() {
+      if *rate_count != 0 {
+        println!("{} {}", bin_idx, rate_total / rate_count);
+      }
+    }
+  }
+  pub fn print_code(&self) {
+    println!("pub static RDO_DISTORTION_TABLE: [[u64; rdo_num_bins]; TxSize::TX_SIZES_ALL] = [");
+    for bs_index in 0..TxSize::TX_SIZES_ALL {
+      print!("[");
+      for (bin_idx, (dist_total, dist_count)) in self.dist_bins[bs_index].iter().zip(self.dist_counts[bs_index].iter()).enumerate() {
+        if bin_idx == 0 {
+          print!("0,"); // we know zero SAD equals zero distortion
+        } else if *dist_count > 100 {
+          print!("{},", dist_total / dist_count);
+        } else {
+          print!("99999,"); // ensure mode isn't selected
+        }
+      }
+      println!("],");
+    }
+    println!("];");
+    println!("pub static RDO_RATE_TABLE: [[u64; rdo_num_bins]; TxSize::TX_SIZES_ALL] = [");
+    for bs_index in 0..TxSize::TX_SIZES_ALL {
+        print!("[");
+        for (bin_idx, (rate_total, rate_count)) in self.rate_bins[bs_index].iter().zip(self.rate_counts[bs_index].iter()).enumerate() {
+            if *rate_count > 100 {
+                print!("{},", rate_total / rate_count);
+            } else {
+                print!("99999,");
+            }
+        }
+        println!("],");
+    }
+    println!("];");
+  }
 }
 
 #[allow(unused)]
@@ -135,6 +324,40 @@ fn sse_wxh(
   sse
 }
 
+pub fn compute_fast_distortion(
+  refr: PlaneSlice, pred: PlaneSlice, w_y: usize, h_y: usize) -> u64 {
+    let mut sad = 0 as u32;
+    let mut plane_org = pred;
+    let mut plane_ref = refr;
+
+    for _r in 0..h_y {
+        {
+            let slice_org = plane_org.as_slice_w_width(w_y);
+            let slice_ref = plane_ref.as_slice_w_width(w_y);
+            sad += slice_org.iter().zip(slice_ref).map(|(&a, &b)| (a as i32 - b as i32).abs() as u32).sum::<u32>();
+        }
+        plane_org.y += 1;
+        plane_ref.y += 1;
+    }
+  sad as u64
+}
+
+fn estimate_rd_cost(fi: &FrameInvariants, bit_depth: usize,
+  bit_cost: u32, estimated_distortion: u64
+) -> (u64, f64) {
+  let q = dc_q(fi.config.quantizer as u8, bit_depth) as f64;
+
+  // Convert q into Q0 precision, given that libaom quantizers are Q3
+  let q0 = q / 8.0_f64;
+
+  // Lambda formula from doc/theoretical_results.lyx in the daala repo
+  // Use Q0 quantizer since lambda will be applied to Q0 pixel domain
+  let lambda = q0 * q0 * std::f64::consts::LN_2 / 6.0;
+  // Compute rate
+  let rate = (bit_cost as f64) / ((1 << OD_BITRES) as f64);
+  (estimated_distortion, (estimated_distortion as f64) + lambda * rate)
+}
+
 pub fn get_lambda(fi: &FrameInvariants, bit_depth: usize) -> f64 {
   let q = dc_q(fi.base_q_idx, bit_depth) as f64;
 
@@ -151,7 +374,7 @@ fn compute_rd_cost(
   fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize,
   is_chroma_block: bool, bo: &BlockOffset, bit_cost: u32, bit_depth: usize,
   luma_only: bool
-) -> f64 {
+) -> (u64, f64) {
   let lambda = get_lambda(fi, bit_depth);
 
   // Compute distortion
@@ -190,7 +413,8 @@ fn compute_rd_cost(
   // Add chroma distortion only when it is available
   if w_uv > 0 && h_uv > 0 {
     for p in 1..3 {
-      let po = bo.plane_offset(&fs.input.planes[p].cfg);
+        let po = bo.plane_offset(&fs.input.planes[p].cfg);
+
 
       distortion += sse_wxh(
         &fs.input.planes[p].slice(&po),
@@ -204,7 +428,7 @@ fn compute_rd_cost(
   // Compute rate
   let rate = (bit_cost as f64) / ((1 << OD_BITRES) as f64);
 
-  (distortion as f64) + lambda * rate
+  (distortion,(distortion as f64) + lambda * rate)
 }
 
 pub fn rdo_tx_size_type(
@@ -282,6 +506,9 @@ pub fn rdo_mode_decision(
   pmv: &MotionVector
 ) -> RDOOutput {
   let mut best = EncodingSettings::default();
+  let rdo_type = if fi.config.speed == 0 {
+    RDOType::Accurate
+  } else { RDOType::Fast };
 
   // Get block luma and chroma dimensions
   let w = bsize.width();
@@ -353,7 +580,8 @@ pub fn rdo_mode_decision(
         let tell = wr.tell_frac();
 
         encode_block_a(seq, cw, wr, bsize, bo, skip);
-        encode_block_b(
+        let tell_coeffs = wr.tell_frac();
+        let (fast_distortion, estimated_distortion) = encode_block_b(
           seq,
           fi,
           fs,
@@ -371,22 +599,25 @@ pub fn rdo_mode_decision(
           tx_size,
           tx_type,
           mode_context,
-          mv_stack
+          mv_stack,
+          rdo_type,
         );
-
+        let cost_coeffs = wr.tell_frac() - tell_coeffs;
         let cost = wr.tell_frac() - tell;
-        let rd = compute_rd_cost(
-          fi,
-          fs,
-          w,
-          h,
-          is_chroma_block,
-          bo,
-          cost,
-          seq.bit_depth,
-          false
-        );
-
+        let (distortion, rd) = match rdo_type {
+          RDOType::Accurate => compute_rd_cost(
+            fi,
+            fs,
+            w,
+            h,
+            is_chroma_block,
+            bo,
+            cost,
+            seq.bit_depth,
+            false
+          ),
+          RDOType::Fast => estimate_rd_cost(fi, seq.bit_depth, cost, estimated_distortion)
+        };
         if rd < best.rd {
           best.rd = rd;
           best.mode_luma = luma_mode;
@@ -397,6 +628,10 @@ pub fn rdo_mode_decision(
           best.tx_size = tx_size;
           best.tx_type = tx_type;
         }
+        //let (distortion2, rd2) = estimate_rd_cost(fi, seq.bit_depth, cost, estimated_distortion);
+        //println!("{} {}", distortion, estimated_distortion);
+        fs.t.add_distortion(tx_size, fast_distortion, distortion);
+        fs.t.add_rate(tx_size, fast_distortion, cost_coeffs as u64);
 
         cw.rollback(&cw_checkpoint);
       });
@@ -466,7 +701,8 @@ pub fn rdo_mode_decision(
       false,
       seq.bit_depth,
       CFLParams::new(),
-      true
+      true,
+      rdo_type
     );
     cw.rollback(&cw_checkpoint);
     if let Some(cfl) = rdo_cfl_alpha(fs, bo, bsize, seq.bit_depth) {
@@ -474,7 +710,7 @@ pub fn rdo_mode_decision(
       let tell = wr.tell_frac();
 
       encode_block_a(seq, cw, wr, bsize, bo, best.skip);
-      encode_block_b(
+      let (fast_distortion, estimated_distortion) = encode_block_b(
         seq,
         fi,
         fs,
@@ -492,11 +728,12 @@ pub fn rdo_mode_decision(
         best.tx_size,
         best.tx_type,
         0,
-        &Vec::new()
+        &Vec::new(),
+        rdo_type
       );
 
       let cost = wr.tell_frac() - tell;
-      let rd = compute_rd_cost(
+      let (_, rd) = compute_rd_cost(
         fi,
         fs,
         w,
@@ -620,12 +857,12 @@ pub fn rdo_tx_type_decision(
     }  else {
       let cfl = CFLParams::new(); // Unused
       write_tx_blocks(
-        fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false, bit_depth, cfl, true
+        fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false, bit_depth, cfl, true, RDOType::Accurate
       );
     }
 
     let cost = wr.tell_frac() - tell;
-    let rd = compute_rd_cost(
+    let (_, rd) = compute_rd_cost(
       fi,
       fs,
       w,
@@ -857,3 +1094,28 @@ pub fn rdo_cdef_decision(sbo: &SuperBlockOffset, fi: &FrameInvariants,
     best_index
 }
 
+pub fn get_fast_distortion_tx_block(
+  _fi: &FrameInvariants, fs: &mut FrameState, _cw: &mut ContextWriter,
+  w: &mut dyn Writer, p: usize, _bo: &BlockOffset, mode: PredictionMode,
+  tx_size: TxSize, _tx_type: TxType, _plane_bsize: BlockSize, po: &PlaneOffset,
+  skip: bool, bit_depth: usize, ac: &[i16], alpha: i16
+) -> u64 {
+  let rec = &mut fs.rec.planes[p];
+
+  if mode.is_intra() {
+    mode.predict_intra(&mut rec.mut_slice(po), tx_size, bit_depth, &ac, alpha);
+  }
+
+  let fast_distortion = compute_fast_distortion(fs.input.planes[p].slice(po), rec.slice(po), tx_size.width(), tx_size.height());
+
+  fast_distortion
+}
+
+#[test]
+fn estimate_rate_test() {
+    let t = RDOTracker::new();
+    assert_eq!(t.estimate_rate(TxSize::TX_4X4, 0), 595);
+    assert_eq!(t.estimate_rate(TxSize::TX_4X4, RATE_EST_BIN_SIZE*1), 746);
+    assert_eq!(t.estimate_rate(TxSize::TX_4X4, RATE_EST_BIN_SIZE*2), 691);
+    assert_eq!(t.estimate_rate(TxSize::TX_4X4, RATE_EST_BIN_SIZE/2), 643);
+}

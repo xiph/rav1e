@@ -14,7 +14,9 @@ extern crate bitstream_io;
 extern crate backtrace;
 extern crate libc;
 extern crate rand;
-
+#[macro_use]
+extern crate serde_derive;
+extern crate bincode;
 extern crate num_traits;
 
 pub mod ec;

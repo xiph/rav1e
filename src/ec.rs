@@ -51,6 +51,8 @@ pub trait Writer {
   fn checkpoint(&mut self) -> WriterCheckpoint;
   /// Restore saved position in coding/recording from a checkpoint
   fn rollback(&mut self, &WriterCheckpoint);
+  /// Add fake bits
+  fn add_bits(&mut self, bits: u32);
 }
 
 /// StorageBackend is an internal trait used to tie a specific Writer
@@ -445,6 +447,10 @@ where
   /// `f`: The probability that the val is true, scaled by 32768.
   fn bit(&mut self, bit: u16) {
     self.bool(bit == 1, 16384);
+  }
+  // fake add bits
+  fn add_bits(&mut self, bits: u32) {
+    self.cnt += bits as i16
   }
   /// Encode a literal bitstring, bit by bit in MSB order, with flat
   /// probability.

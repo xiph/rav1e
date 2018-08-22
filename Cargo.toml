@@ -23,6 +23,9 @@ rustyline = { version = "1", optional = true }
 y4m = { version = "0.3", optional = true }
 backtrace = "0.3"
 num-traits = "0.2"
+bincode = "1.0.1"
+serde = "*"
+serde_derive = "*"
 
 [build-dependencies]
 cmake = "0.1.32"

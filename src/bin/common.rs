@@ -57,6 +57,9 @@ pub fn parse_cli() -> (EncoderIO, EncoderConfig, usize) {
         .possible_values(&Tune::variants())
         .default_value("psnr")
         .case_insensitive(true)
+    ).arg(
+      Arg::with_name("train-rdo")
+        .long("train-rdo")
     ).get_matches();
 
   let io = EncoderIO {
@@ -76,7 +79,8 @@ pub fn parse_cli() -> (EncoderIO, EncoderConfig, usize) {
   let config = EncoderConfig {
     quantizer: matches.value_of("QP").unwrap().parse().unwrap(),
     speed: matches.value_of("SPEED").unwrap().parse().unwrap(),
-    tune: matches.value_of("TUNE").unwrap().parse().unwrap()
+    tune: matches.value_of("TUNE").unwrap().parse().unwrap(),
+    train_rdo: matches.is_present("train-rdo"),
   };
 
   // Validate arguments
