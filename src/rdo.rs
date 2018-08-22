@@ -241,8 +241,8 @@ pub fn rdo_mode_decision(
         let mv = if luma_mode != PredictionMode::NEWMV {
           MotionVector { row: 0, col: 0 }
         } else {
-          let r: i16 = (rand::random::<u8>() & 60) as i16 - 32;
-          let c: i16 = (rand::random::<u8>() & 60) as i16 - 32;
+          let r: i16 = (rand::random::<u8>() & 7*16) as i16 - 4*16;
+          let c: i16 = (rand::random::<u8>() & 7*16) as i16 - 4*16;
           MotionVector { row: r, col: c }
         };
 

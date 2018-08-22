@@ -544,8 +544,8 @@ impl PredictionMode {
     match fi.rec_buffer.frames[fi.ref_frames[ref_frame - LAST_FRAME]] {
       Some(ref rec) => {
         let rec_cfg = &rec.planes[p].cfg;
-        let shift_row = 2 + rec_cfg.ydec;
-        let shift_col = 2 + rec_cfg.xdec;
+        let shift_row = 3 + rec_cfg.ydec;
+        let shift_col = 3 + rec_cfg.xdec;
         let row_offset = mv.row as i32 >> shift_row;
         let col_offset = mv.col as i32 >> shift_col;
         let ref_width = rec_cfg.width;
