@@ -551,22 +551,15 @@ impl PredictionMode {
         let ref_width = rec_cfg.width;
         let ref_height = rec_cfg.height;
 
-        let qo = PlaneOffset {
-          x: cmp::min((ref_width - plane_size.width()) as i32, cmp::max(0, po.x as i32 + col_offset)) as usize,
-          y: cmp::min((ref_height - plane_size.height()) as i32, cmp::max(0, po.y as i32 + row_offset)) as usize
-        };
-
-        let ref_stride = rec_cfg.stride;
-        let src = rec.planes[p].slice(&qo);
-        let ref_slice = src.as_slice();
         let stride = dst.plane.cfg.stride;
         let slice = dst.as_mut_slice();
 
         for r in 0..plane_size.height() {
           for c in 0..plane_size.width() {
-            let input_index = r * ref_stride + c;
+            let rs = cmp::min(ref_height as i32 - 1, cmp::max(0, po.y as i32 + row_offset + r as i32)) as usize;
+            let cs = cmp::min(ref_width as i32 - 1, cmp::max(0, po.x as i32 + col_offset + c as i32)) as usize;
             let output_index = r * stride + c;
-            slice[output_index] = ref_slice[input_index];
+            slice[output_index] = rec.planes[p].p(cs, rs);
           }
         }
       },
