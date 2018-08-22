@@ -757,6 +757,27 @@ pub fn uv_intra_mode_to_tx_type_context(pred: PredictionMode) -> TxType {
   intra_mode_to_tx_type_context[uv2y[pred as usize] as usize]
 }
 
+#[derive(Clone,Copy)]
+#[repr(C)]
+pub struct NMVComponent {
+  classes_cdf: [u16; MV_CLASSES + 1],
+  class0_fp_cdf: [[u16; MV_FP_SIZE + 1]; CLASS0_SIZE],
+  fp_cdf: [u16; MV_FP_SIZE + 1],
+  sign_cdf: [u16; 2 + 1],
+  class0_hp_cdf: [u16; 2 + 1],
+  hp_cdf: [u16; 2 + 1],
+  class0_cdf: [u16; CLASS0_SIZE + 1],
+  bits_cdf: [[u16; 2 + 1]; MV_OFFSET_BITS],
+}
+
+#[derive(Clone,Copy)]
+#[repr(C)]
+pub struct NMVContext {
+  joints_cdf: [u16; MV_JOINTS + 1],
+  comps: [NMVComponent; 2],
+}
+
+
 extern "C" {
   static default_partition_cdf:
     [[u16; EXT_PARTITION_TYPES + 1]; PARTITION_CONTEXTS];
@@ -803,6 +824,8 @@ extern "C" {
   static av1_default_coeff_lps_multi_cdfs: [[[[[u16; BR_CDF_SIZE + 1];
     LEVEL_CONTEXTS]; PLANE_TYPES];
     TxSize::TX_SIZES]; 4];
+
+  static default_nmv_context: NMVContext;
 }
 
 #[repr(C)]
@@ -812,6 +835,7 @@ pub struct SCAN_ORDER {
   pub iscan: &'static [u16; 32 * 32],
   pub neighbors: &'static [u16; ((32 * 32) + 1) * 2]
 }
+
 
 #[derive(Clone)]
 pub struct CDFContext {
@@ -830,6 +854,7 @@ pub struct CDFContext {
   angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES],
   filter_intra_cdfs: [[u16; 3]; BlockSize::BLOCK_SIZES_ALL],
   single_ref_cdfs: [[[u16; 2 + 1]; SINGLE_REFS - 1]; REF_CONTEXTS],
+  nmv_context: NMVContext,
 
   // lv_map
   txb_skip_cdf: [[[u16; 3]; TXB_SKIP_CONTEXTS]; TxSize::TX_SIZES],
@@ -876,6 +901,7 @@ impl CDFContext {
       angle_delta_cdf: default_angle_delta_cdf,
       filter_intra_cdfs: default_filter_intra_cdfs,
       single_ref_cdfs: default_single_ref_cdf,
+      nmv_context: default_nmv_context,
 
       // lv_map
       txb_skip_cdf: av1_default_txb_skip_cdfs[qctx],
@@ -2298,6 +2324,26 @@ impl ContextWriter {
     }
   }
 
+  pub fn write_mv(&mut self, w: &mut dyn Writer,
+                  mv: &MotionVector, ref_mv: &MotionVector,
+                  mut usehp: MvSubpelPrecision) {
+    let diff = MotionVector { row: mv.row - ref_mv.row, col: mv.col - ref_mv.col };
+    let j: MvJointType = av1_get_mv_joint(&diff);
+
+    // TODO: pass fi.force_integer_mv to this function
+    if false /*fi.force_integer_mv*/ {
+      usehp = MvSubpelPrecision::MV_SUBPEL_NONE;
+    }
+    w.symbol_with_update(j as u32, &mut self.fc.nmv_context.joints_cdf);
+
+    if mv_joint_vertical(j) {
+      encode_mv_component(w, diff.row as i32, &mut self.fc.nmv_context.comps[0], usehp);
+    }
+    if mv_joint_horizontal(j) {
+      encode_mv_component(w, diff.col as i32, &mut self.fc.nmv_context.comps[1], usehp);
+    }
+  }
+
   pub fn write_tx_type(
     &mut self, w: &mut dyn Writer, tx_size: TxSize, tx_type: TxType, y_mode: PredictionMode,
     is_inter: bool, use_reduced_tx_set: bool
@@ -2917,29 +2963,8 @@ const MV_UPP: i32 = (1 << MV_IN_USE_BITS);
 const MV_LOW: i32 = (-(1 << MV_IN_USE_BITS));
 
 
-pub struct nmv_component {
-  classes_cdf: [u16; MV_CLASSES + 1],
-  class0_fp_cdf: [[u16; MV_FP_SIZE + 1]; CLASS0_SIZE],
-  fp_cdf: [u16; MV_FP_SIZE + 1],
-  sign_cdf: [u16; 2 + 1],
-  class0_hp_cdf: [u16; 2 + 1],
-  hp_cdf: [u16; 2 + 1],
-  class0_cdf: [u16; CLASS0_SIZE + 1],
-  bits_cdf: [[u16; 2 + 1]; MV_OFFSET_BITS],
-}
-
-pub struct nmv_context {
-  joints_cdf: [u16; MV_JOINTS + 1],
-  comps: [nmv_component; 2],
-}
-
-pub struct MV {
-  row : i16,
-  col : i16,
-}
-
 #[inline(always)]
-pub fn av1_get_mv_joint(mv: &MV) -> MvJointType {
+pub fn av1_get_mv_joint(mv: &MotionVector) -> MvJointType {
   if mv.row == 0 {
     if mv.col == 0 { MvJointType::MV_JOINT_ZERO } else { MvJointType::MV_JOINT_HNZVZ }
   } else {
@@ -2976,7 +3001,7 @@ pub fn get_mv_class(z: u32, offset: &mut u32) -> usize {
 }
 
 pub fn encode_mv_component(w: &mut Writer, comp: i32, 
-  mvcomp: &mut nmv_component, precision: MvSubpelPrecision) {
+  mvcomp: &mut NMVComponent, precision: MvSubpelPrecision) {
   assert!(comp != 0);
   let mut offset: u32 = 0;
   let sign: u32 = if comp < 0 { 1 } else { 0 };
@@ -3018,22 +3043,3 @@ pub fn encode_mv_component(w: &mut Writer, comp: i32,
   }
 }
 
-pub fn av1_encode_mv(w: &mut Writer,
-                   mv: &MV, ref_mv: &MV,
-                   mvctx: &mut nmv_context, mut usehp: MvSubpelPrecision) {
-  let diff = MV { row: mv.row - ref_mv.row, col: mv.col - ref_mv.col };
-  let j: MvJointType = av1_get_mv_joint(&diff);
-
-  // TODO: pass fi.force_integer_mv to this function
-  if false /*fi.force_integer_mv*/ {
-    usehp = MvSubpelPrecision::MV_SUBPEL_NONE;
-  }
-  w.symbol_with_update(j as u32, &mut mvctx.joints_cdf);
-
-  if mv_joint_vertical(j) {
-    encode_mv_component(w, diff.row as i32, &mut mvctx.comps[0], usehp);
-  }
-  if mv_joint_horizontal(j) {
-    encode_mv_component(w, diff.col as i32, &mut mvctx.comps[1], usehp);
-  }
-}

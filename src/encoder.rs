@@ -1146,6 +1146,10 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
             //let mode_context = if bo.x == 0 && bo.y == 0 { 0 } else if bo.x ==0 || bo.y == 0 { 51 } else { 85 };
             // NOTE: Until rav1e supports other inter modes than GLOBALMV
             cw.write_inter_mode(w, luma_mode, mode_context);
+            if luma_mode == PredictionMode::NEWMV || luma_mode == PredictionMode::NEW_NEWMV {
+              let ref_mv = MotionVector { row: 0, col: 0 };
+              cw.write_mv(w, &mv, &ref_mv, MvSubpelPrecision::MV_SUBPEL_LOW_PRECISION);
+            }
         } else {
             cw.write_intra_mode(w, bsize, luma_mode);
         }
