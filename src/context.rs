@@ -3052,7 +3052,7 @@ pub fn mv_class_base(mv_class: usize) -> u32 {
 #[inline(always)]
 // If n != 0, returns the floor of log base 2 of n. If n == 0, returns 0.
 pub fn log_in_base_2(n: u32) -> u8 {
-  32 - n.leading_zeros() as u8
+  31 - cmp::min(31, n.leading_zeros() as u8)
 }
 #[inline(always)]
 pub fn get_mv_class(z: u32, offset: &mut u32) -> usize {
