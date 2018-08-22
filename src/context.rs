@@ -64,6 +64,7 @@ const TX_SETS_INTRA: usize = 3;
 const TX_SETS_INTER: usize = 4;
 
 const MAX_REF_MV_STACK_SIZE: usize = 8;
+const REF_CAT_LEVEL: u32 = 640;
 
 // Number of transform types in each set type
 static num_tx_set: [usize; TX_SETS] =
@@ -2069,6 +2070,12 @@ impl ContextWriter {
     self.add_ref_mv_candidate(ref_frame, self.bc.at(bo), mv_stack, weight, newmv_count)
   }
 
+  fn add_offset(&mut self, mv_stack: &mut Vec<CandidateMV>) {
+    for mut cand_mv in mv_stack {
+      cand_mv.weight += REF_CAT_LEVEL;
+    }
+  }
+
   fn setup_mvref_list(&mut self, bo: &BlockOffset, ref_frame: usize, mv_stack: &mut Vec<CandidateMV>) -> usize {
     let (_rf, _rf_num) = self.get_mvref_ref_frames(INTRA_FRAME);
 
@@ -2130,7 +2137,7 @@ impl ContextWriter {
 
     let nearest_match = if row_match { 1 } else { 0 } + if col_match { 1 } else { 0 };
 
-    /* TODO: set ref_mv_stack weights to REF_CAT_LEVEL for this ref frame */
+    self.add_offset(mv_stack);
 
     /* Scan the second outer area. */
     let mut far_newmv_count: usize = 0; // won't be used
@@ -2166,6 +2173,19 @@ impl ContextWriter {
     // println!("{} {} {} {} {}", bo.x, bo.y, nearest_match, total_match, mode_context);
 
     /* TODO: Find nearest match and assign nearest and near mvs */
+
+    // Sort MV stack according to weight
+    if mv_stack.len() > 1 {
+      let mut i: usize = 1;
+      while i < mv_stack.len() {
+        let mut j = i;
+        while j > 0 && mv_stack[j - 1].weight < mv_stack[j].weight {
+          mv_stack.swap(j, j - 1);
+          j = j - 1;
+        }
+        i = i + 1;
+      }
+    }
 
     /* TODO: Handle single reference frame extension */
 
