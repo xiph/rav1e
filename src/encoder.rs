@@ -1142,7 +1142,9 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
             cw.bc.set_ref_frame(bo, bsize, ref_frame);
             cw.bc.set_motion_vector(bo, bsize, mv);
             cw.write_ref_frames(w, bo);
-            let mode_context = cw.find_mvrefs(bo, ref_frame);
+
+            let mut mv_stack = Vec::new();
+            let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack);
             //let mode_context = if bo.x == 0 && bo.y == 0 { 0 } else if bo.x ==0 || bo.y == 0 { 51 } else { 85 };
             // NOTE: Until rav1e supports other inter modes than GLOBALMV
             cw.write_inter_mode(w, luma_mode, mode_context);
