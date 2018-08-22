@@ -1151,7 +1151,7 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
 
             if luma_mode == PredictionMode::NEWMV || luma_mode == PredictionMode::NEW_NEWMV {
               let ref_mv_idx = 0;
-              let num_mv_found = 1;  // FIXME
+              let num_mv_found = mv_stack.len();
               for idx in 0..2 {
                 if num_mv_found > idx + 1 {
                   let drl_mode = ref_mv_idx > idx;
@@ -1161,7 +1161,12 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
                 }
               }
 
-              let ref_mv = MotionVector { row: 0, col: 0 };
+              let ref_mv = if num_mv_found > 0 {
+                mv_stack[ref_mv_idx].this_mv
+              } else {
+                MotionVector{ row: 0, col: 0 }
+              };
+
               let mv_precision = if fi.force_integer_mv != 0 {
                 MvSubpelPrecision::MV_SUBPEL_NONE
               } else if fi.allow_high_precision_mv {
