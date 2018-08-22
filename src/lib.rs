@@ -32,6 +32,9 @@ pub mod cdef;
 pub mod encoder;
 pub mod me;
 
+mod api;
+
+pub use api::*;
 pub use encoder::*;
 
 // #[cfg(test)]

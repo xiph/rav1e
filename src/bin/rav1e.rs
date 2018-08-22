@@ -14,16 +14,17 @@ extern crate y4m;
 mod common;
 use common::*;
 
-use rav1e::partition::LAST_FRAME;
 use rav1e::*;
 
 fn main() {
-  let (mut io, config) = EncoderConfig::from_cli();
+  let (mut io, enc) = EncoderConfig::from_cli();
   let mut y4m_dec = y4m::decode(&mut io.input).unwrap();
   let width = y4m_dec.get_width();
   let height = y4m_dec.get_height();
   let framerate = y4m_dec.get_framerate();
   let color_space = y4m_dec.get_colorspace();
+
+  let mut limit = enc.limit;
   let mut y4m_enc = match io.rec.as_mut() {
     Some(rec) => Some(
       y4m::encode(width, height, framerate)
@@ -33,8 +34,6 @@ fn main() {
     ),
     None => None
   };
-
-  let mut fi = FrameInvariants::new(width, height, config);
 
   let chroma_sampling = match color_space {
     y4m::Colorspace::C420
@@ -52,8 +51,12 @@ fn main() {
     _ => panic!("Chroma sampling unknown for the specified color space.")
   };
 
-  let mut sequence =
-    Sequence::new(width, height, color_space.get_bit_depth(), chroma_sampling);
+  let bit_depth = color_space.get_bit_depth();
+
+  let cfg = Config {width, height, bit_depth, chroma_sampling, timebase: Ratio::new(framerate.den, framerate.num), enc };
+
+  let mut ctx = cfg.new_context();
+
   write_ivf_header(
     &mut io.output,
     width,
@@ -63,40 +66,21 @@ fn main() {
   );
 
   loop {
-    fi.frame_type =
-      if fi.number % 30 == 0 { FrameType::KEY } else { FrameType::INTER };
-
-    fi.base_q_idx = if fi.frame_type == FrameType::KEY {
-      let q_boost = 15;
-      fi.config.quantizer.max(1 + q_boost).min(255 + q_boost) - q_boost
-    } else {
-      fi.config.quantizer.max(1).min(255)
-    } as u8;
-
-    fi.refresh_frame_flags =
-      if fi.frame_type == FrameType::KEY { ALL_REF_FRAMES_MASK } else { 1 };
-    fi.intra_only = fi.frame_type == FrameType::KEY
-      || fi.frame_type == FrameType::INTRA_ONLY;
-    fi.primary_ref_frame = if fi.intra_only || fi.error_resilient {
-      PRIMARY_REF_NONE
-    } else {
-      (LAST_FRAME - LAST_FRAME) as u32
-    };
-
     if !process_frame(
-      &mut sequence,
-      &mut fi,
+      &mut ctx,
       &mut io.output,
       &mut y4m_dec,
-      y4m_enc.as_mut()
+      y4m_enc.as_mut(),
     ) {
       break;
     }
-    fi.number += 1;
-    //fi.show_existing_frame = fi.number % 2 == 1;
-    if fi.number == config.limit {
+
+    limit -= 1;
+
+    if limit == 0 {
       break;
     }
+
     io.output.flush().unwrap();
   }
 }

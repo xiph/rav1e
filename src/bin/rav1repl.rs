@@ -22,25 +22,47 @@ use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
 fn main() {
-  let (mut io, config) = EncoderConfig::from_cli();
+  let (mut io, enc) = EncoderConfig::from_cli();
   let mut y4m_dec = y4m::decode(&mut io.input).unwrap();
   let width = y4m_dec.get_width();
   let height = y4m_dec.get_height();
   let framerate = y4m_dec.get_framerate();
+  let color_space = y4m_dec.get_colorspace();
+
   let mut y4m_enc = match io.rec.as_mut() {
     Some(rec) =>
       Some(y4m::encode(width, height, framerate).write_header(rec).unwrap()),
     None => None
   };
-  let mut fi = FrameInvariants::new(width, height, &config);
-  let mut sequence = Sequence::new(width, height);
   write_ivf_header(
     &mut io.output,
-    fi.padded_w,
-    fi.padded_h,
+    width,
+    height,
     framerate.num,
     framerate.den
   );
+
+  let chroma_sampling = match color_space {
+    y4m::Colorspace::C420 |
+    y4m::Colorspace::C420jpeg |
+    y4m::Colorspace::C420paldv |
+    y4m::Colorspace::C420mpeg2 |
+    y4m::Colorspace::C420p10 |
+    y4m::Colorspace::C420p12 => ChromaSampling::Cs420,
+    y4m::Colorspace::C422 |
+    y4m::Colorspace::C422p10 |
+    y4m::Colorspace::C422p12 => ChromaSampling::Cs422,
+    y4m::Colorspace::C444 |
+    y4m::Colorspace::C444p10 |
+    y4m::Colorspace::C444p12 => ChromaSampling::Cs444,
+    _ => {
+        panic!("Chroma sampling unknown for the specified color space.")
+    }
+  };
+  let bit_depth = color_space.get_bit_depth();
+
+  let cfg = Config {width, height, bit_depth, chroma_sampling, timebase: Ratio::new(framerate.den, framerate.num), enc };
+  let mut ctx = cfg.new_context();
 
   let mut rl = Editor::<()>::new();
   let _ = rl.load_history(".rav1e-history");
@@ -52,17 +74,16 @@ fn main() {
         rl.add_history_entry(&line);
         match line.split_whitespace().next() {
           Some("process_frame") => {
-            process_frame(
-              &mut sequence,
-              &mut fi,
+            if !process_frame(
+              &mut ctx,
               &mut io.output,
               &mut y4m_dec,
-              y4m_enc.as_mut()
-            );
-            fi.number += 1;
-            if fi.number == config.limit {
+              y4m_enc.as_mut(),
+            ) {
               break;
             }
+
+            io.output.flush().unwrap();
           }
           Some("quit") => break,
           Some("exit") => break,
