@@ -127,7 +127,7 @@ fn sse_wxh(src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, w: usize, h: usize) -> 
 // Compute the rate-distortion cost for an encode
 fn compute_rd_cost(
   fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize,
-  is_chroma_block: bool, bo: &BlockOffset, bit_cost: u32, bit_depth: usize
+  is_chroma_block: bool, bo: &BlockOffset, bit_cost: u32, bit_depth: usize, luma_only: bool
 ) -> f64 {
   let q = dc_q(fi.config.quantizer, bit_depth) as f64;
 
@@ -159,6 +159,7 @@ fn compute_rd_cost(
     unimplemented!();
   };
 
+  if !luma_only {
   let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
   let mask = !(MI_SIZE - 1);
@@ -183,7 +184,7 @@ fn compute_rd_cost(
       );
     }
   };
-
+  }
   // Compute rate
   let rate = (bit_cost as f64) / ((1 << OD_BITRES) as f64);
 
@@ -277,7 +278,8 @@ pub fn rdo_mode_decision(
             is_chroma_block,
             bo,
             cost,
-            seq.bit_depth
+            seq.bit_depth,
+            false
           );
 
           if rd < best_rd {
@@ -346,12 +348,12 @@ pub fn rdo_tx_type_decision(
     let tell = wr.tell_frac();
     if is_inter {
       write_tx_tree(
-        fi, fs, cw, wr, mode, bo, bsize, tx_size, tx_type, false, bit_depth
+        fi, fs, cw, wr, mode, bo, bsize, tx_size, tx_type, false, bit_depth, true
       );
     }  else {
       let cfl = CFLParams::new(); // Unused
       write_tx_blocks(
-        fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false, bit_depth, cfl
+        fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false, bit_depth, cfl, true
       );
     }
 
@@ -364,7 +366,8 @@ pub fn rdo_tx_type_decision(
       is_chroma_block,
       bo,
       cost,
-      bit_depth
+      bit_depth,
+      true
     );
 
     if rd < best_rd {
