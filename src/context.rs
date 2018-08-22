@@ -1965,7 +1965,6 @@ impl ContextWriter {
     let n4_w_8 = BlockSize::MI_SIZE_WIDE[BLOCK_8X8 as usize];
     let n4_w_16 = BlockSize::MI_SIZE_WIDE[BLOCK_16X16 as usize];
     let mut col_offset = 0;
-    let shift = 0;
 
     if row_offset.abs() > 1 {
       col_offset = 1;
@@ -1993,11 +1992,12 @@ impl ContextWriter {
       let mut weight = 2 as u32;
       if target_n4_w >= n4_w_8 && target_n4_w <= n4_w {
         let inc = cmp::min(-max_row_offs + row_offset + 1, cand.n4_h as isize);
-        weight = cmp::max(weight, (inc as u32) << shift);
+        assert!(inc >= 0);
+        weight = cmp::max(weight, inc as u32);
         *processed_rows = (inc as isize) - row_offset - 1;
       }
 
-      if self.add_ref_mv_candidate(ref_frame, cand, mv_stack, weight, newmv_count) {
+      if self.add_ref_mv_candidate(ref_frame, cand, mv_stack, len as u32 * weight, newmv_count) {
         found_match = true;
       }
 
@@ -2018,7 +2018,6 @@ impl ContextWriter {
     let n4_h_8 = BlockSize::MI_SIZE_HIGH[BLOCK_8X8 as usize];
     let n4_h_16 = BlockSize::MI_SIZE_HIGH[BLOCK_16X16 as usize];
     let mut row_offset = 0;
-    let shift = 0;
 
     if col_offset.abs() > 1 {
       row_offset = 1;
@@ -2045,11 +2044,12 @@ impl ContextWriter {
       let mut weight = 2 as u32;
       if target_n4_h >= n4_h_8 && target_n4_h <= n4_h {
         let inc = cmp::min(-max_col_offs + col_offset + 1, cand.n4_w as isize);
-        weight = cmp::max(weight, (inc as u32) << shift);
+        assert!(inc >= 0);
+        weight = cmp::max(weight, inc as u32);
         *processed_cols = (inc as isize) - col_offset - 1;
       }
 
-      if self.add_ref_mv_candidate(ref_frame, cand, mv_stack, weight, newmv_count) {
+      if self.add_ref_mv_candidate(ref_frame, cand, mv_stack, len as u32 * weight, newmv_count) {
         found_match = true;
       }
 
@@ -2065,7 +2065,7 @@ impl ContextWriter {
       return false;
     }
 
-    let weight = 2 * BLOCK_8X8.width() as u32;
+    let weight = 2 * BLOCK_8X8.width_mi() as u32;
     /* Always assume its within a tile, probably wrong */
     self.add_ref_mv_candidate(ref_frame, self.bc.at(bo), mv_stack, weight, newmv_count)
   }
