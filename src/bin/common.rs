@@ -94,7 +94,7 @@ impl FromCli for EncoderConfig {
 }
 
 /// Encode and write a frame.
-pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
+pub fn process_frame(ctx: &mut Context,
                      output_file: &mut dyn Write,
                      y4m_dec: &mut y4m::Decoder<'_, Box<dyn Read>>,
                      y4m_enc: Option<&mut y4m::Encoder<'_, Box<dyn Write>>>) -> bool {
@@ -102,32 +102,20 @@ pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
         av1_rtcd();
         aom_dsp_rtcd();
     }
-    let width = fi.width;
-    let height = fi.height;
+    let width = y4m_dec.get_width();
+    let height = y4m_dec.get_height();
     let y4m_bits = y4m_dec.get_bit_depth();
     let y4m_bytes = y4m_dec.get_bytes_per_sample();
-    let csp = y4m_dec.get_colorspace();
+    let bit_depth = y4m_dec.get_colorspace().get_bit_depth();
 
-    match csp {
-        y4m::Colorspace::C420 |
-        y4m::Colorspace::C420jpeg |
-        y4m::Colorspace::C420paldv |
-        y4m::Colorspace::C420mpeg2 |
-        y4m::Colorspace::C420p10 |
-        y4m::Colorspace::C420p12 => {},
-        _ => {
-            panic!("Colorspace {:?} is not supported yet.", csp);
-        },
-    }
     match y4m_dec.read_frame() {
         Ok(y4m_frame) => {
             let y4m_y = y4m_frame.get_y_plane();
             let y4m_u = y4m_frame.get_u_plane();
             let y4m_v = y4m_frame.get_v_plane();
-            eprintln!("{}", fi);
-            let mut fs = FrameState::new(&fi);
+            let mut input = ctx.new_frame();
             {
-                let input = Arc::get_mut(&mut fs.input).unwrap();
+                let input = Arc::get_mut(&mut input).unwrap();
                 input.planes[0].copy_from_raw_u8(&y4m_y, width * y4m_bytes, y4m_bytes);
                 input.planes[1].copy_from_raw_u8(&y4m_u, width * y4m_bytes / 2, y4m_bytes);
                 input.planes[2].copy_from_raw_u8(&y4m_v, width * y4m_bytes / 2, y4m_bytes);
@@ -138,10 +126,12 @@ pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
                 _ => panic! ("unknown input bit depth!"),
             }
 
-            let packet = encode_frame(sequence, fi, &mut fs);
-            write_ivf_frame(output_file, fi.number, packet.as_ref());
+            let _ = ctx.send_frame(input);
+
+            let pkt = ctx.receive_packet().unwrap();
+            write_ivf_frame(output_file, pkt.number as u64, pkt.data.as_ref());
             if let Some(mut y4m_enc) = y4m_enc {
-                let pitch_y = if sequence.bit_depth > 8 {
+                let pitch_y = if bit_depth > 8 {
                     width * 2
                 } else {
                     width
@@ -154,12 +144,12 @@ pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
                     vec![128u8; pitch_uv * (height / 2)]);
 
                 let (stride_y, stride_u, stride_v) = (
-                    fs.rec.planes[0].cfg.stride,
-                    fs.rec.planes[1].cfg.stride,
-                    fs.rec.planes[2].cfg.stride);
+                    pkt.rec.planes[0].cfg.stride,
+                    pkt.rec.planes[1].cfg.stride,
+                    pkt.rec.planes[2].cfg.stride);
 
-                for (line, line_out) in fs.rec.planes[0].data_origin().chunks(stride_y).zip(rec_y.chunks_mut(pitch_y)) {
-                    if sequence.bit_depth > 8 {
+                for (line, line_out) in pkt.rec.planes[0].data_origin().chunks(stride_y).zip(rec_y.chunks_mut(pitch_y)) {
+                    if bit_depth > 8 {
                         unsafe {
                             line_out.copy_from_slice(
                                 slice::from_raw_parts::<u8>(line.as_ptr() as (*const u8), pitch_y));
@@ -169,8 +159,8 @@ pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
                             &line.iter().map(|&v| v as u8).collect::<Vec<u8>>()[..pitch_y]);
                     }
                 }
-                for (line, line_out) in fs.rec.planes[1].data_origin().chunks(stride_u).zip(rec_u.chunks_mut(pitch_uv)) {
-                    if sequence.bit_depth > 8 {
+                for (line, line_out) in pkt.rec.planes[1].data_origin().chunks(stride_u).zip(rec_u.chunks_mut(pitch_uv)) {
+                    if bit_depth > 8 {
                         unsafe {
                             line_out.copy_from_slice(
                                 slice::from_raw_parts::<u8>(line.as_ptr() as (*const u8), pitch_uv));
@@ -180,8 +170,8 @@ pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
                             &line.iter().map(|&v| v as u8).collect::<Vec<u8>>()[..pitch_uv]);
                     }
                 }
-                for (line, line_out) in fs.rec.planes[2].data_origin().chunks(stride_v).zip(rec_v.chunks_mut(pitch_uv)) {
-                    if sequence.bit_depth > 8 {
+                for (line, line_out) in pkt.rec.planes[2].data_origin().chunks(stride_v).zip(rec_v.chunks_mut(pitch_uv)) {
+                    if bit_depth > 8 {
                         unsafe {
                             line_out.copy_from_slice(
                                 slice::from_raw_parts::<u8>(line.as_ptr() as (*const u8), pitch_uv));
@@ -196,8 +186,6 @@ pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
                 y4m_enc.write_frame(&rec_frame).unwrap();
             }
 
-            fs.rec.pad();
-            update_rec_buffer(fi, fs);
             true
         },
         _ => false
