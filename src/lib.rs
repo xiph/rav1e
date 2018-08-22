@@ -11,6 +11,7 @@
 
 #[macro_use]
 extern crate serde_derive;
+extern crate bincode;
 
 #[cfg(all(test, feature="decode_test_dav1d"))]
 extern crate dav1d_sys;
@@ -26,6 +27,7 @@ pub mod transform;
 pub mod quantize;
 pub mod predict;
 pub mod rdo;
+pub mod rdo_tables;
 #[macro_use]
 pub mod util;
 pub mod context;

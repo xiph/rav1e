@@ -36,6 +36,7 @@ dav1d-sys = { version = "0.1.2", optional = true }
 scan_fmt = { version = "0.1.3", optional = true }
 ivf = { path = "ivf/", optional = true }
 rayon = "1.0"
+bincode = "=1.0.1"
 
 [build-dependencies]
 cmake = { version = "0.1", optional = true }

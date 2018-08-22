@@ -78,6 +78,7 @@ pub struct EncoderConfig {
   pub pass: Option<u8>,
   pub show_psnr: bool,
   pub stats_file: Option<PathBuf>,
+  pub train_rdo: bool,
 }
 
 impl Default for EncoderConfig {
@@ -112,6 +113,7 @@ impl EncoderConfig {
       pass: None,
       show_psnr: false,
       stats_file: None,
+      train_rdo: false
     }
   }
 }
@@ -123,6 +125,7 @@ pub struct SpeedSettings {
   pub fast_deblock: bool,
   pub reduced_tx_set: bool,
   pub tx_domain_distortion: bool,
+  pub tx_domain_rate: bool,
   pub encode_bottomup: bool,
   pub rdo_tx_decision: bool,
   pub prediction_modes: PredictionModesSetting,
@@ -139,6 +142,7 @@ impl Default for SpeedSettings {
       fast_deblock: false,
       reduced_tx_set: false,
       tx_domain_distortion: false,
+      tx_domain_rate: false,
       encode_bottomup: false,
       rdo_tx_decision: false,
       prediction_modes: PredictionModesSetting::Simple,
@@ -157,6 +161,7 @@ impl SpeedSettings {
       fast_deblock: Self::fast_deblock_preset(speed),
       reduced_tx_set: Self::reduced_tx_set_preset(speed),
       tx_domain_distortion: Self::tx_domain_distortion_preset(speed),
+      tx_domain_rate: Self::tx_domain_rate_preset(speed),
       encode_bottomup: Self::encode_bottomup_preset(speed),
       rdo_tx_decision: Self::rdo_tx_decision_preset(speed),
       prediction_modes: Self::prediction_modes_preset(speed),
@@ -197,6 +202,10 @@ impl SpeedSettings {
   /// TX domain distortion is always faster, with no significant quality change
   fn tx_domain_distortion_preset(_speed: usize) -> bool {
     true
+  }
+
+  fn tx_domain_rate_preset(_speed: usize) -> bool {
+    false
   }
 
   fn encode_bottomup_preset(speed: usize) -> bool {
