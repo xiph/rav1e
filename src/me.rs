@@ -43,7 +43,7 @@ pub fn motion_estimation(fi: &FrameInvariants, fs: &mut FrameState, bsize: Block
         for x in (x_lo..x_hi).step_by(2) {
 
           let mut sad = 0;
-          let sref = rec.planes[0].slice(&PlaneOffset { x: x_lo, y: y_lo });
+          let sref = rec.planes[0].slice(&PlaneOffset { x: x, y: y });
           let slice_ref = sref.as_slice();
 
           for r in 0..blk_h {
@@ -59,7 +59,7 @@ pub fn motion_estimation(fi: &FrameInvariants, fs: &mut FrameState, bsize: Block
 
           if sad < lowest_sad {
             lowest_sad = sad;
-            best_mv = MotionVector { row: 8*(y as i16 - bo.y as i16), col: 8*(x as i16 - bo.x as i16) }
+            best_mv = MotionVector { row: 8*(y as i16 - po.y as i16), col: 8*(x as i16 - po.x as i16) }
           }
 
         }
