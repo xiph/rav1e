@@ -69,6 +69,7 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
 
   let sbx = 0;
   let sby = 0;
+  let ac = &[0i16; 32 * 32];
 
   b.iter(|| {
     for &mode in RAV1E_INTRA_MODES {
@@ -96,7 +97,9 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
               tx_size.block_size(),
               &po,
               false,
-              8
+              8,
+              ac,
+              0
             );
           }
         }

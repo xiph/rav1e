@@ -1148,17 +1148,16 @@ fn diff(dst: &mut [i16], src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, width: us
 // For a transform block,
 // predict, transform, quantize, write coefficients to a bitstream,
 // dequantize, inverse-transform.
-pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter, w: &mut dyn Writer,
-                  p: usize, bo: &BlockOffset, mode: PredictionMode, tx_size: TxSize, tx_type: TxType,
-                  plane_bsize: BlockSize, po: &PlaneOffset, skip: bool, bit_depth: usize) -> bool {
+pub fn encode_tx_block(
+  fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
+  w: &mut dyn Writer, p: usize, bo: &BlockOffset, mode: PredictionMode,
+  tx_size: TxSize, tx_type: TxType, plane_bsize: BlockSize, po: &PlaneOffset,
+  skip: bool, bit_depth: usize, ac: &[i16], alpha: i16
+) -> bool {
     let rec = &mut fs.rec.planes[p];
     let PlaneConfig { stride, xdec, ydec, .. } = fs.input.planes[p].cfg;
 
     if mode.is_intra() {
-      // TODO: plumb ac buffer and CfL parameters
-      let cfl = CFLParams::new();
-      let ac = [0i16; 32 * 32];
-      let alpha = if p == 0 { 0 } else { cfl.alpha(p - 1) } as i16;
       mode.predict_intra(&mut rec.mut_slice(po), tx_size, bit_depth, &ac, alpha);
     }
 
@@ -1357,6 +1356,38 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
     }
 }
 
+fn luma_ac(
+  ac: &mut [i16], fs: &mut FrameState, bo: &BlockOffset, bsize: BlockSize
+) {
+  let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
+  let plane_bsize = get_plane_block_size(bsize, xdec, ydec);
+  let po = bo.plane_offset(&fs.input.planes[0].cfg);
+  let rec = &fs.rec.planes[0];
+  let luma = &rec.slice(&po);
+
+  let mut sum: i32 = 0;
+  for sub_y in 0..plane_bsize.height() {
+    for sub_x in 0..plane_bsize.width() {
+      let y = sub_y << ydec;
+      let x = sub_x << xdec;
+      let sample = ((luma.p(x, y)
+        + luma.p(x + 1, y)
+        + luma.p(x, y + 1)
+        + luma.p(x + 1, y + 1))
+        << 1) as i16;
+      ac[sub_y * 32 + sub_x] = sample;
+      sum += sample as i32;
+    }
+  }
+  let shift = plane_bsize.width_log2() + plane_bsize.height_log2();
+  let average = ((sum + (1 << (shift - 1))) >> shift) as i16;
+  for sub_y in 0..plane_bsize.height() {
+    for sub_x in 0..plane_bsize.width() {
+      ac[sub_y * 32 + sub_x] -= average;
+    }
+  }
+}
+
 pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
                        cw: &mut ContextWriter, w: &mut dyn Writer,
                        luma_mode: PredictionMode, chroma_mode: PredictionMode, bo: &BlockOffset,
@@ -1365,6 +1396,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
     let bh = bsize.height_mi() / tx_size.height_mi();
 
     let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
+    let ac = &mut [0i16; 32 * 32];
 
     fs.qc.update(fi.config.quantizer, tx_size, luma_mode.is_intra(), bit_depth);
 
@@ -1376,7 +1408,10 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
             };
 
             let po = tx_bo.plane_offset(&fs.input.planes[0].cfg);
-            encode_tx_block(fi, fs, cw, w, 0, &tx_bo, luma_mode, tx_size, tx_type, bsize, &po, skip, bit_depth);
+            encode_tx_block(
+              fi, fs, cw, w, 0, &tx_bo, luma_mode, tx_size, tx_type, bsize, &po,
+              skip, bit_depth, ac, 0,
+            );
         }
     }
 
@@ -1401,11 +1436,17 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
 
     let plane_bsize = get_plane_block_size(bsize, xdec, ydec);
 
+    if chroma_mode.is_cfl() {
+      luma_ac(ac, fs, bo, bsize);
+    }
+
     if bw_uv > 0 && bh_uv > 0 {
+        let cfl = CFLParams::new();
         let uv_tx_type = uv_intra_mode_to_tx_type_context(chroma_mode);
         fs.qc.update(fi.config.quantizer, uv_tx_size, true, bit_depth);
 
         for p in 1..3 {
+            let alpha = cfl.alpha(p - 1) as i16;
             for by in 0..bh_uv {
                 for bx in 0..bw_uv {
                     let tx_bo =
@@ -1421,7 +1462,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
                     po.y += by * uv_tx_size.height();
 
                     encode_tx_block(fi, fs, cw, w, p, &tx_bo, chroma_mode, uv_tx_size, uv_tx_type,
-                                    plane_bsize, &po, skip, bit_depth);
+                                    plane_bsize, &po, skip, bit_depth, ac, alpha);
                 }
             }
         }
@@ -1437,11 +1478,15 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
     let bh = bsize.height_mi() / tx_size.height_mi();
 
     let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
+    let ac = &[0i16; 32 * 32];
 
     fs.qc.update(fi.config.quantizer, tx_size, luma_mode.is_intra(), bit_depth);
 
     let po = bo.plane_offset(&fs.input.planes[0].cfg);
-    let has_coeff = encode_tx_block(fi, fs, cw, w, 0, &bo, luma_mode, tx_size, tx_type, bsize, &po, skip, bit_depth);
+    let has_coeff = encode_tx_block(
+      fi, fs, cw, w, 0, &bo, luma_mode, tx_size, tx_type, bsize, &po, skip,
+      bit_depth, ac, 0,
+    );
 
     // these are only valid for 4:2:0
     let uv_tx_size = match bsize {
@@ -1478,7 +1523,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
             let po = bo.plane_offset(&fs.input.planes[p].cfg);
 
             encode_tx_block(fi, fs, cw, w, p, &tx_bo, luma_mode, uv_tx_size, uv_tx_type,
-                            plane_bsize, &po, skip, bit_depth);
+                            plane_bsize, &po, skip, bit_depth, ac, 0);
         }
     }
 }
