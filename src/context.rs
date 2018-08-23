@@ -786,29 +786,6 @@ pub struct NMVContext {
   comps: [NMVComponent; 2],
 }
 
-const CFL_SIGN_ZERO: u8 = 0;
-const CFL_SIGNS: u8 = 3;
-
-fn cfl_sign_u(joint_sign: u8) -> u8 {
-  (joint_sign + 1) / CFL_SIGNS
-}
-
-fn cfl_sign_v(joint_sign: u8) -> u8 {
-  (joint_sign + 1) % CFL_SIGNS
-}
-
-fn cfl_swap_signs(joint_sign: u8) -> u8 {
-  cfl_sign_v(joint_sign) * CFL_SIGNS + cfl_sign_u(joint_sign) - 1
-}
-
-fn cfl_context_u(joint_sign: u8) -> usize {
-  (joint_sign + 1 - CFL_SIGNS) as usize
-}
-
-fn cfl_context_v(joint_sign: u8) -> usize {
-  cfl_context_u(cfl_swap_signs(joint_sign))
-}
-
 extern "C" {
   static default_partition_cdf:
     [[u16; EXT_PARTITION_TYPES + 1]; PARTITION_CONTEXTS];
@@ -1104,6 +1081,41 @@ mod test {
     };
     let f = &cdf.partition_cdf[2];
     cdf_map.lookup(f.as_ptr() as usize);
+  }
+
+  use super::CFLSign;
+  use super::CFLSign::*;
+
+  static cfl_alpha_signs: [[CFLSign; 2]; 8] = [
+    [ CFL_SIGN_ZERO, CFL_SIGN_NEG ],
+    [ CFL_SIGN_ZERO, CFL_SIGN_POS ],
+    [ CFL_SIGN_NEG, CFL_SIGN_ZERO ],
+    [ CFL_SIGN_NEG, CFL_SIGN_NEG ],
+    [ CFL_SIGN_NEG, CFL_SIGN_POS ],
+    [ CFL_SIGN_POS, CFL_SIGN_ZERO ],
+    [ CFL_SIGN_POS, CFL_SIGN_NEG ],
+    [ CFL_SIGN_POS, CFL_SIGN_POS ]
+  ];
+
+  static cfl_context: [[usize; 8]; 2] = [
+    [ 0, 0, 0, 1, 2, 3, 4, 5 ],
+    [ 0, 3, 0, 1, 4, 0, 2, 5 ]
+  ];
+
+  #[test]
+  fn cfl_joint_sign() {
+    use super::*;
+
+    let cfl = &mut CFLParams::new();
+    for (joint_sign, &signs) in cfl_alpha_signs.iter().enumerate() {
+      cfl.sign = signs;
+      assert!(cfl.joint_sign() as usize == joint_sign);
+      for uv in 0..2 {
+        if signs[uv] != CFL_SIGN_ZERO {
+          assert!(cfl.context(uv) == cfl_context[uv][joint_sign]);
+        }
+      }
+    }
   }
 }
 
@@ -1653,6 +1665,47 @@ impl BlockContext {
   }
 }
 
+#[derive(Copy, Clone, PartialEq)]
+pub enum CFLSign {
+  CFL_SIGN_ZERO = 0,
+  CFL_SIGN_NEG = 1,
+  CFL_SIGN_POS = 2
+}
+
+use context::CFLSign::*;
+const CFL_SIGNS: usize = 3;
+static cfl_sign_value: [i32; CFL_SIGNS] = [ 0, -1, 1 ];
+
+#[derive(Copy, Clone)]
+pub struct CFLParams {
+  sign: [CFLSign; 2],
+  scale: [u8; 2]
+}
+
+impl CFLParams {
+  pub fn new() -> CFLParams {
+    CFLParams {
+      sign: [CFL_SIGN_ZERO; 2],
+      scale: [0u8; 2]
+    }
+  }
+  pub fn joint_sign(&self) -> u32 {
+    assert!(self.sign[0] != CFL_SIGN_ZERO || self.sign[1] != CFL_SIGN_ZERO);
+    (self.sign[0] as u32) * (CFL_SIGNS as u32) + (self.sign[1] as u32) - 1
+  }
+  pub fn context(&self, uv: usize) -> usize {
+    assert!(self.sign[uv] != CFL_SIGN_ZERO);
+    (self.sign[uv] as usize - 1) * CFL_SIGNS + (self.sign[1 - uv] as usize)
+  }
+  pub fn index(&self, uv: usize) -> u32 {
+    assert!(self.sign[uv] != CFL_SIGN_ZERO && self.scale[uv] != 0);
+    (self.scale[uv] - 1) as u32
+  }
+  pub fn alpha(&self, uv: usize) -> i32 {
+    cfl_sign_value[self.sign[uv] as usize] * (self.scale[uv] as i32)
+  }
+}
+
 #[derive(Debug, Default)]
 struct FieldMap {
   map: Vec<(&'static str, usize, usize)>
@@ -1860,15 +1913,12 @@ impl ContextWriter {
       symbol_with_update!(self, w, uv_mode as u32, &mut cdf[..UV_INTRA_MODES]);
     }
   }
-  pub fn write_cfl_alphas(
-    &mut self, w: &mut dyn Writer, joint_sign: u8, idx_u: u32, idx_v: u32
-  ) {
-    symbol_with_update!(self, w, joint_sign.into(), &mut self.fc.cfl_sign_cdf);
-    if cfl_sign_u(joint_sign) != CFL_SIGN_ZERO {
-      symbol_with_update!(self, w, idx_u, &mut self.fc.cfl_alpha_cdf[cfl_context_u(joint_sign)]);
-    }
-    if cfl_sign_v(joint_sign) != CFL_SIGN_ZERO {
-      symbol_with_update!(self, w, idx_v, &mut self.fc.cfl_alpha_cdf[cfl_context_v(joint_sign)]);
+  pub fn write_cfl_alphas(&mut self, w: &mut dyn Writer, cfl: &CFLParams) {
+    symbol_with_update!(self, w, cfl.joint_sign(), &mut self.fc.cfl_sign_cdf);
+    for uv in 0..2 {
+      if cfl.sign[uv] != CFL_SIGN_ZERO {
+        symbol_with_update!(self, w, cfl.index(uv), &mut self.fc.cfl_alpha_cdf[cfl.context(uv)]);
+      }
     }
   }
   pub fn write_angle_delta(&mut self, w: &mut dyn Writer, angle: i8, mode: PredictionMode) {

@@ -1155,9 +1155,11 @@ pub fn encode_tx_block(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Conte
     let PlaneConfig { stride, xdec, ydec, .. } = fs.input.planes[p].cfg;
 
     if mode.is_intra() {
-      // TODO: plumb ac buffer and alpha parameter
+      // TODO: plumb ac buffer and CfL parameters
+      let cfl = CFLParams::new();
       let ac = [0i16; 32 * 32];
-      mode.predict_intra(&mut rec.mut_slice(po), tx_size, bit_depth, &ac, 0);
+      let alpha = if p == 0 { 0 } else { cfl.alpha(p - 1) } as i16;
+      mode.predict_intra(&mut rec.mut_slice(po), tx_size, bit_depth, &ac, alpha);
     }
 
     if skip { return false; }
@@ -1268,7 +1270,8 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
         cw.write_intra_uv_mode(w, chroma_mode, luma_mode, bsize);
         if chroma_mode.is_cfl() {
           assert!(bsize.cfl_allowed());
-          cw.write_cfl_alphas(w, 0, 0, 0);
+          let cfl = CFLParams::new();
+          cw.write_cfl_alphas(w, &cfl);
         }
         if chroma_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
             cw.write_angle_delta(w, 0, chroma_mode);
