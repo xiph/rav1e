@@ -536,7 +536,7 @@ impl PredictionMode {
   }
 
   pub fn predict_inter<'a>(self, fi: &FrameInvariants, p: usize, po: &PlaneOffset,
-                           dst: &'a mut PlaneMutSlice<'a>, plane_size: BlockSize,
+                           dst: &'a mut PlaneMutSlice<'a>, width: usize, height: usize,
                            ref_frame: usize, mv: &MotionVector) {
     assert!(!self.is_intra());
     assert!(ref_frame == LAST_FRAME);
@@ -554,8 +554,8 @@ impl PredictionMode {
         let stride = dst.plane.cfg.stride;
         let slice = dst.as_mut_slice();
 
-        for r in 0..plane_size.height() {
-          for c in 0..plane_size.width() {
+        for r in 0..height {
+          for c in 0..width {
             let rs = cmp::min(ref_height as i32 - 1, cmp::max(0, po.y as i32 + row_offset + r as i32)) as usize;
             let cs = cmp::min(ref_width as i32 - 1, cmp::max(0, po.x as i32 + col_offset + c as i32)) as usize;
             let output_index = r * stride + c;

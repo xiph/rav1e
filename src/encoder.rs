@@ -1313,7 +1313,33 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
 
             let rec = &mut fs.rec.planes[p];
 
-            luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), plane_bsize, ref_frame, mv);
+            // TODO: make more generic to handle 2xN and Nx2 MC
+            if p > 0 && bsize == BlockSize::BLOCK_4X4 {
+              let mv0 = &cw.bc.at(&bo.with_offset(-1,-1)).mv[0];
+              let mv1 = &cw.bc.at(&bo.with_offset(0,-1)).mv[0];
+              let po1 = PlaneOffset { x: po.x+2, y: po.y };
+              let mv2 = &cw.bc.at(&bo.with_offset(-1,0)).mv[0];
+              let po2 = PlaneOffset { x: po.x, y: po.y+2 };
+              let po3 = PlaneOffset { x: po.x+2, y: po.y+2 };
+              let some_use_intra = cw.bc.at(&bo.with_offset(-1,-1)).mode.is_intra()
+                || cw.bc.at(&bo.with_offset(0,-1)).mode.is_intra()
+                || cw.bc.at(&bo.with_offset(-1,0)).mode.is_intra();
+
+              if some_use_intra {
+                luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), plane_bsize.width(),
+                                        plane_bsize.height(), ref_frame, mv);
+              } else {
+                luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), 2, 2, ref_frame, mv0);
+                luma_mode.predict_inter(fi, p, &po1, &mut rec.mut_slice(&po1), 2, 2, ref_frame, mv1);
+                luma_mode.predict_inter(fi, p, &po2, &mut rec.mut_slice(&po2), 2, 2, ref_frame, mv2);
+                luma_mode.predict_inter(fi, p, &po3, &mut rec.mut_slice(&po3), 2, 2, ref_frame, mv);
+              }
+            }
+            else
+            {
+              luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), plane_bsize.width(),
+                                      plane_bsize.height(), ref_frame, mv);
+            }
         }
       }
       write_tx_tree(fi, fs, cw, w, luma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth); // i.e. var-tx if inter mode
