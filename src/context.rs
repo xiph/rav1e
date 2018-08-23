@@ -1685,8 +1685,8 @@ pub struct CFLParams {
 impl CFLParams {
   pub fn new() -> CFLParams {
     CFLParams {
-      sign: [CFL_SIGN_ZERO; 2],
-      scale: [0u8; 2]
+      sign: [CFL_SIGN_NEG, CFL_SIGN_ZERO],
+      scale: [1, 0]
     }
   }
   pub fn joint_sign(&self) -> u32 {

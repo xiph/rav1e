@@ -1202,7 +1202,8 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
                  cw: &mut ContextWriter, w: &mut dyn Writer,
                  luma_mode: PredictionMode, chroma_mode: PredictionMode,
                  ref_frame: usize, mv: MotionVector,
-                 bsize: BlockSize, bo: &BlockOffset, skip: bool, bit_depth: usize) {
+                 bsize: BlockSize, bo: &BlockOffset, skip: bool, bit_depth: usize,
+                 cfl: &CFLParams) {
     let is_inter = !luma_mode.is_intra();
     if is_inter { assert!(luma_mode == chroma_mode); };
 
@@ -1269,8 +1270,7 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
         cw.write_intra_uv_mode(w, chroma_mode, luma_mode, bsize);
         if chroma_mode.is_cfl() {
           assert!(bsize.cfl_allowed());
-          let cfl = CFLParams::new();
-          cw.write_cfl_alphas(w, &cfl);
+          cw.write_cfl_alphas(w, cfl);
         }
         if chroma_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
             cw.write_angle_delta(w, 0, chroma_mode);
@@ -1352,7 +1352,7 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
       }
       write_tx_tree(fi, fs, cw, w, luma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth); // i.e. var-tx if inter mode
     } else {
-      write_tx_blocks(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth);
+      write_tx_blocks(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth, cfl);
     }
 }
 
@@ -1391,7 +1391,8 @@ fn luma_ac(
 pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
                        cw: &mut ContextWriter, w: &mut dyn Writer,
                        luma_mode: PredictionMode, chroma_mode: PredictionMode, bo: &BlockOffset,
-                       bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool, bit_depth: usize) {
+                       bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool, bit_depth: usize,
+                       cfl: &CFLParams) {
     let bw = bsize.width_mi() / tx_size.width_mi();
     let bh = bsize.height_mi() / tx_size.height_mi();
 
@@ -1441,7 +1442,6 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
     }
 
     if bw_uv > 0 && bh_uv > 0 {
-        let cfl = CFLParams::new();
         let uv_tx_type = uv_intra_mode_to_tx_type_context(chroma_mode);
         fs.qc.update(fi.config.quantizer, uv_tx_size, true, bit_depth);
 
@@ -1575,6 +1575,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         }
         let mode_decision = rdo_mode_decision(seq, fi, fs, cw, bsize, bo).part_modes[0].clone();
         let (mode_luma, mode_chroma) = (mode_decision.pred_mode_luma, mode_decision.pred_mode_chroma);
+        let cfl = &CFLParams::new();
         let ref_frame = mode_decision.ref_frame;
         let mv = mode_decision.mv;
         let skip = mode_decision.skip;
@@ -1584,7 +1585,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         cdef_coded = encode_block_a(seq, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                                    bsize, bo, skip);
         encode_block_b(fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
-                       mode_luma, mode_chroma, ref_frame, mv, bsize, bo, skip, seq.bit_depth);
+                       mode_luma, mode_chroma, ref_frame, mv, bsize, bo, skip, seq.bit_depth, cfl);
 
         best_decision = mode_decision;
     }
@@ -1629,6 +1630,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
 
             // FIXME: redundant block re-encode
             let (mode_luma, mode_chroma) = (best_decision.pred_mode_luma, best_decision.pred_mode_chroma);
+            let cfl = &CFLParams::new();
             let ref_frame = best_decision.ref_frame;
             let mv = best_decision.mv;
             let skip = best_decision.skip;
@@ -1636,7 +1638,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             cdef_coded = encode_block_a(seq, cw, if cdef_coded {w_post_cdef} else {w_pre_cdef},
                                        bsize, bo, skip);
             encode_block_b(fi, fs, cw, if cdef_coded {w_post_cdef} else {w_pre_cdef},
-                          mode_luma, mode_chroma, ref_frame, mv, bsize, bo, skip, seq.bit_depth);
+                          mode_luma, mode_chroma, ref_frame, mv, bsize, bo, skip, seq.bit_depth, cfl);
         }
     }
 
@@ -1707,6 +1709,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
                 };
 
             let (mode_luma, mode_chroma) = (part_decision.pred_mode_luma, part_decision.pred_mode_chroma);
+            let cfl = &CFLParams::new();
             let skip = part_decision.skip;
             let ref_frame = part_decision.ref_frame;
             let mv = part_decision.mv;
@@ -1716,7 +1719,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
             cdef_coded = encode_block_a(seq, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                          bsize, bo, skip);
             encode_block_b(fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
-                          mode_luma, mode_chroma, ref_frame, mv, bsize, bo, skip, seq.bit_depth);
+                          mode_luma, mode_chroma, ref_frame, mv, bsize, bo, skip, seq.bit_depth, cfl);
         },
         PartitionType::PARTITION_SPLIT => {
             if rdo_output.part_modes.len() >= 4 {
