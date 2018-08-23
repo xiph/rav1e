@@ -228,6 +228,13 @@ pub fn rdo_mode_decision(
       mode_set_chroma.push(PredictionMode::DC_PRED);
     }
 
+    let ref_frame = if luma_mode.is_intra() { INTRA_FRAME } else { LAST_FRAME };
+    let mv = if luma_mode != PredictionMode::NEWMV {
+      MotionVector { row: 0, col: 0 }
+    } else {
+      motion_estimation(fi, fs, bsize, bo, ref_frame)
+    };
+
     // Find the best chroma prediction mode for the current luma prediction mode
     for &chroma_mode in &mode_set_chroma {
       for &skip in &[false, true] {
@@ -237,12 +244,6 @@ pub fn rdo_mode_decision(
         let mut wr: &mut dyn Writer = &mut WriterCounter::new();
         let tell = wr.tell_frac();
 
-        let ref_frame = if luma_mode.is_intra() { INTRA_FRAME } else { LAST_FRAME };
-        let mv = if luma_mode != PredictionMode::NEWMV {
-          MotionVector { row: 0, col: 0 }
-        } else {
-          motion_estimation(fi, fs, bsize, bo, ref_frame)
-        };
 
         encode_block_a(seq, cw, wr, bsize, bo, skip);
         encode_block_b(fi, fs, cw, wr, luma_mode, chroma_mode, ref_frame, mv, bsize, bo, skip, seq.bit_depth);
