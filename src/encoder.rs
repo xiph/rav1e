@@ -240,6 +240,9 @@ pub struct DeblockState {
     pub ref_deltas: [i8; REF_FRAMES],
     pub mode_deltas_enabled: bool,
     pub mode_deltas: [i8; 2],
+    pub block_deltas_enabled: bool,
+    pub block_delta_shift: u8,
+    pub block_delta_multi: bool,
 }
 
 impl Default for DeblockState {
@@ -252,7 +255,10 @@ impl Default for DeblockState {
             ref_deltas_enabled: false,
             ref_deltas: [1, 0, 0, 0, 0, -1, -1, -1],
             mode_deltas_enabled: false,
-            mode_deltas: [0, 0]
+            mode_deltas: [0, 0],
+            block_deltas_enabled: false,
+            block_delta_shift: 0,
+            block_delta_multi: false
         }
     }
 }
@@ -301,6 +307,7 @@ pub struct FrameInvariants {
     pub cdef_bits: u8,
     pub cdef_y_strengths: [u8; 8],
     pub cdef_uv_strengths: [u8; 8],
+    pub delta_q_present: bool,
     pub config: EncoderConfig,
     pub ref_frames: [usize; INTER_REFS_PER_FRAME],
     pub rec_buffer: ReferenceFramesSet,
@@ -365,6 +372,7 @@ impl FrameInvariants {
             cdef_bits: 3,
             cdef_y_strengths: [0*4+0, 1*4+0, 2*4+1, 3*4+1, 5*4+2, 7*4+3, 10*4+3, 13*4+3],
             cdef_uv_strengths: [0*4+0, 1*4+0, 2*4+1, 3*4+1, 5*4+2, 7*4+3, 10*4+3, 13*4+3],
+            delta_q_present: false,
             config,
             ref_frames: [0; INTER_REFS_PER_FRAME],
             rec_buffer: ReferenceFramesSet::new(),
@@ -473,7 +481,8 @@ trait UncompressedHeader {
     // End of OBU Headers
 
     fn write_frame_size(&mut self, fi: &FrameInvariants) -> io::Result<()>;
-    fn write_deblock_filter(&mut self, fi: &FrameInvariants) -> io::Result<()>;
+    fn write_deblock_filter_a(&mut self, fi: &FrameInvariants) -> io::Result<()>;
+    fn write_deblock_filter_b(&mut self, fi: &FrameInvariants) -> io::Result<()>;
     fn write_frame_cdef(&mut self, seq: &Sequence, fi: &FrameInvariants) -> io::Result<()>;
 }
 #[allow(unused)]
@@ -861,8 +870,14 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
       // delta_q
       self.write_bit(false)?; // delta_q_present_flag: no delta q
 
-      // loop deblocking filter
-      self.write_deblock_filter(fi)?;
+      // delta_lf_params in the spec
+      self.write_deblock_filter_a(fi)?;
+
+      // code for features not yet implemented....
+
+      // loop_filter_params in the spec
+      self.write_deblock_filter_b(fi)?;
+
       // cdef
       self.write_frame_cdef(seq, fi)?;
       // loop restoration
@@ -952,7 +967,20 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         Ok(())
     }
 
-    fn write_deblock_filter(&mut self, fi: &FrameInvariants) -> io::Result<()> {
+    fn write_deblock_filter_a(&mut self, fi: &FrameInvariants) -> io::Result<()> {
+        if fi.delta_q_present {
+            if !fi.allow_intrabc {
+                self.write_bit(fi.deblock.block_deltas_enabled)?;
+            }
+            if fi.deblock.block_deltas_enabled {
+                self.write(2,fi.deblock.block_delta_shift)?;
+                self.write_bit(fi.deblock.block_delta_multi)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn write_deblock_filter_b(&mut self, fi: &FrameInvariants) -> io::Result<()> {
         assert!(fi.deblock.levels[0] < 64);
         self.write(6, fi.deblock.levels[0])?; // loop deblocking filter level 0
         assert!(fi.deblock.levels[1] < 64);
