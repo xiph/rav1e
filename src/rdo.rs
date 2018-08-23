@@ -12,6 +12,7 @@
 #![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
 
 use context::*;
+use me::*;
 use ec::OD_BITRES;
 use ec::Writer;
 use ec::WriterCounter;
@@ -25,7 +26,6 @@ use quantize::dc_q;
 use std;
 use std::f64;
 use std::vec::Vec;
-use rand;
 use write_tx_blocks;
 use write_tx_tree;
 use partition::BlockSize;
@@ -241,9 +241,7 @@ pub fn rdo_mode_decision(
         let mv = if luma_mode != PredictionMode::NEWMV {
           MotionVector { row: 0, col: 0 }
         } else {
-          let r: i16 = (rand::random::<u8>() & 7*16) as i16 - 4*16;
-          let c: i16 = (rand::random::<u8>() & 7*16) as i16 - 4*16;
-          MotionVector { row: r, col: c }
+          motion_estimation(fi, fs, bsize, bo, ref_frame)
         };
 
         encode_block_a(seq, cw, wr, bsize, bo, skip);
