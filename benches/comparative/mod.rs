@@ -26,5 +26,7 @@ benchmark_group!(
   predict::intra_smooth_h_4x4_native,
   predict::intra_smooth_h_4x4_aom,
   predict::intra_smooth_v_4x4_native,
-  predict::intra_smooth_v_4x4_aom
+  predict::intra_smooth_v_4x4_aom,
+  predict::intra_cfl_4x4_native,
+  predict::intra_cfl_4x4_aom
 );

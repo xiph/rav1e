@@ -53,6 +53,10 @@ const MAX_TX_SQUARE: usize = MAX_TX_SIZE * MAX_TX_SIZE;
 pub const INTRA_MODES: usize = 13;
 const UV_INTRA_MODES: usize = 14;
 
+const CFL_JOINT_SIGNS: usize = 8;
+const CFL_ALPHA_CONTEXTS: usize = 6;
+const CFL_ALPHABET_SIZE: usize = 16;
+
 const BLOCK_SIZE_GROUPS: usize = 4;
 const MAX_ANGLE_DELTA: usize = 3;
 const DIRECTIONAL_MODES: usize = 8;
@@ -782,7 +786,6 @@ pub struct NMVContext {
   comps: [NMVComponent; 2],
 }
 
-
 extern "C" {
   static default_partition_cdf:
     [[u16; EXT_PARTITION_TYPES + 1]; PARTITION_CONTEXTS];
@@ -790,6 +793,8 @@ extern "C" {
     [[[u16; INTRA_MODES + 1]; KF_MODE_CONTEXTS]; KF_MODE_CONTEXTS];
   static default_if_y_mode_cdf: [[u16; INTRA_MODES + 1]; BLOCK_SIZE_GROUPS];
   static default_uv_mode_cdf: [[[u16; UV_INTRA_MODES + 1]; INTRA_MODES]; 2];
+  static default_cfl_sign_cdf: [u16; CFL_JOINT_SIGNS + 1];
+  static default_cfl_alpha_cdf: [[u16; CFL_ALPHABET_SIZE + 1]; CFL_ALPHA_CONTEXTS];
   static default_newmv_cdf: [[u16; 2 + 1]; NEWMV_MODE_CONTEXTS];
   static default_zeromv_cdf: [[u16; 2 + 1]; GLOBALMV_MODE_CONTEXTS];
   static default_refmv_cdf: [[u16; 2 + 1]; REFMV_MODE_CONTEXTS];
@@ -855,6 +860,8 @@ pub struct CDFContext {
   kf_y_cdf: [[[u16; INTRA_MODES + 1]; KF_MODE_CONTEXTS]; KF_MODE_CONTEXTS],
   y_mode_cdf: [[u16; INTRA_MODES + 1]; BLOCK_SIZE_GROUPS],
   uv_mode_cdf: [[[u16; UV_INTRA_MODES + 1]; INTRA_MODES]; 2],
+  cfl_sign_cdf: [u16; CFL_JOINT_SIGNS + 1],
+  cfl_alpha_cdf: [[u16; CFL_ALPHABET_SIZE + 1]; CFL_ALPHA_CONTEXTS],
   newmv_cdf: [[u16; 2 + 1]; NEWMV_MODE_CONTEXTS],
   zeromv_cdf: [[u16; 2 + 1]; GLOBALMV_MODE_CONTEXTS],
   refmv_cdf: [[u16; 2 + 1]; REFMV_MODE_CONTEXTS],
@@ -904,6 +911,8 @@ impl CDFContext {
       kf_y_cdf: default_kf_y_mode_cdf,
       y_mode_cdf: default_if_y_mode_cdf,
       uv_mode_cdf: default_uv_mode_cdf,
+      cfl_sign_cdf: default_cfl_sign_cdf,
+      cfl_alpha_cdf: default_cfl_alpha_cdf,
       newmv_cdf: default_newmv_cdf,
       zeromv_cdf: default_zeromv_cdf,
       refmv_cdf: default_refmv_cdf,
@@ -950,6 +959,12 @@ impl CDFContext {
     let uv_mode_cdf_start =
       self.uv_mode_cdf.first().unwrap().as_ptr() as usize;
     let uv_mode_cdf_end = uv_mode_cdf_start + size_of_val(&self.uv_mode_cdf);
+    let cfl_sign_cdf_start = self.cfl_sign_cdf.as_ptr() as usize;
+    let cfl_sign_cdf_end = cfl_sign_cdf_start + size_of_val(&self.cfl_sign_cdf);
+    let cfl_alpha_cdf_start =
+      self.cfl_alpha_cdf.first().unwrap().as_ptr() as usize;
+    let cfl_alpha_cdf_end =
+      cfl_alpha_cdf_start + size_of_val(&self.cfl_alpha_cdf);
     let intra_tx_cdf_start =
       self.intra_tx_cdf.first().unwrap().as_ptr() as usize;
     let intra_tx_cdf_end =
@@ -1029,6 +1044,8 @@ impl CDFContext {
       ("kf_y_cdf", kf_y_cdf_start, kf_y_cdf_end),
       ("y_mode_cdf", y_mode_cdf_start, y_mode_cdf_end),
       ("uv_mode_cdf", uv_mode_cdf_start, uv_mode_cdf_end),
+      ("cfl_sign_cdf", cfl_sign_cdf_start, cfl_sign_cdf_end),
+      ("cfl_alpha_cdf", cfl_alpha_cdf_start, cfl_alpha_cdf_end),
       ("intra_tx_cdf", intra_tx_cdf_start, intra_tx_cdf_end),
       ("inter_tx_cdf", inter_tx_cdf_start, inter_tx_cdf_end),
       ("skip_cdfs", skip_cdfs_start, skip_cdfs_end),
@@ -1064,6 +1081,41 @@ mod test {
     };
     let f = &cdf.partition_cdf[2];
     cdf_map.lookup(f.as_ptr() as usize);
+  }
+
+  use super::CFLSign;
+  use super::CFLSign::*;
+
+  static cfl_alpha_signs: [[CFLSign; 2]; 8] = [
+    [ CFL_SIGN_ZERO, CFL_SIGN_NEG ],
+    [ CFL_SIGN_ZERO, CFL_SIGN_POS ],
+    [ CFL_SIGN_NEG, CFL_SIGN_ZERO ],
+    [ CFL_SIGN_NEG, CFL_SIGN_NEG ],
+    [ CFL_SIGN_NEG, CFL_SIGN_POS ],
+    [ CFL_SIGN_POS, CFL_SIGN_ZERO ],
+    [ CFL_SIGN_POS, CFL_SIGN_NEG ],
+    [ CFL_SIGN_POS, CFL_SIGN_POS ]
+  ];
+
+  static cfl_context: [[usize; 8]; 2] = [
+    [ 0, 0, 0, 1, 2, 3, 4, 5 ],
+    [ 0, 3, 0, 1, 4, 0, 2, 5 ]
+  ];
+
+  #[test]
+  fn cfl_joint_sign() {
+    use super::*;
+
+    let cfl = &mut CFLParams::new();
+    for (joint_sign, &signs) in cfl_alpha_signs.iter().enumerate() {
+      cfl.sign = signs;
+      assert!(cfl.joint_sign() as usize == joint_sign);
+      for uv in 0..2 {
+        if signs[uv] != CFL_SIGN_ZERO {
+          assert!(cfl.context(uv) == cfl_context[uv][joint_sign]);
+        }
+      }
+    }
   }
 }
 
@@ -1613,6 +1665,47 @@ impl BlockContext {
   }
 }
 
+#[derive(Copy, Clone, PartialEq)]
+pub enum CFLSign {
+  CFL_SIGN_ZERO = 0,
+  CFL_SIGN_NEG = 1,
+  CFL_SIGN_POS = 2
+}
+
+use context::CFLSign::*;
+const CFL_SIGNS: usize = 3;
+static cfl_sign_value: [i32; CFL_SIGNS] = [ 0, -1, 1 ];
+
+#[derive(Copy, Clone)]
+pub struct CFLParams {
+  sign: [CFLSign; 2],
+  scale: [u8; 2]
+}
+
+impl CFLParams {
+  pub fn new() -> CFLParams {
+    CFLParams {
+      sign: [CFL_SIGN_NEG, CFL_SIGN_ZERO],
+      scale: [1, 0]
+    }
+  }
+  pub fn joint_sign(&self) -> u32 {
+    assert!(self.sign[0] != CFL_SIGN_ZERO || self.sign[1] != CFL_SIGN_ZERO);
+    (self.sign[0] as u32) * (CFL_SIGNS as u32) + (self.sign[1] as u32) - 1
+  }
+  pub fn context(&self, uv: usize) -> usize {
+    assert!(self.sign[uv] != CFL_SIGN_ZERO);
+    (self.sign[uv] as usize - 1) * CFL_SIGNS + (self.sign[1 - uv] as usize)
+  }
+  pub fn index(&self, uv: usize) -> u32 {
+    assert!(self.sign[uv] != CFL_SIGN_ZERO && self.scale[uv] != 0);
+    (self.scale[uv] - 1) as u32
+  }
+  pub fn alpha(&self, uv: usize) -> i32 {
+    cfl_sign_value[self.sign[uv] as usize] * (self.scale[uv] as i32)
+  }
+}
+
 #[derive(Debug, Default)]
 struct FieldMap {
   map: Vec<(&'static str, usize, usize)>
@@ -1818,6 +1911,14 @@ impl ContextWriter {
       symbol_with_update!(self, w, uv_mode as u32, cdf);
     } else {
       symbol_with_update!(self, w, uv_mode as u32, &mut cdf[..UV_INTRA_MODES]);
+    }
+  }
+  pub fn write_cfl_alphas(&mut self, w: &mut dyn Writer, cfl: &CFLParams) {
+    symbol_with_update!(self, w, cfl.joint_sign(), &mut self.fc.cfl_sign_cdf);
+    for uv in 0..2 {
+      if cfl.sign[uv] != CFL_SIGN_ZERO {
+        symbol_with_update!(self, w, cfl.index(uv), &mut self.fc.cfl_alpha_cdf[cfl.context(uv)]);
+      }
     }
   }
   pub fn write_angle_delta(&mut self, w: &mut dyn Writer, angle: i8, mode: PredictionMode) {
