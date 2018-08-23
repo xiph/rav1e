@@ -228,6 +228,10 @@ pub fn rdo_mode_decision(
       mode_set_chroma.push(PredictionMode::DC_PRED);
     }
 
+    if is_chroma_block && luma_mode.is_intra() && bsize.cfl_allowed() && !bsize.is_sub8x8() {
+      mode_set_chroma.push(PredictionMode::UV_CFL_PRED);
+    }
+
     let ref_frame = if luma_mode.is_intra() { INTRA_FRAME } else { LAST_FRAME };
     let mv = if luma_mode != PredictionMode::NEWMV {
       MotionVector { row: 0, col: 0 }

@@ -144,6 +144,10 @@ impl BlockSize {
   pub fn is_sqr(self) -> bool {
     self.width_log2() == self.height_log2()
   }
+
+  pub fn is_sub8x8(self) -> bool {
+    self.width_log2().min(self.height_log2()) < 3
+  }
 }
 
 /// Transform Size
