@@ -41,14 +41,14 @@ impl Frame {
 #[derive(Debug)]
 pub struct ReferenceFramesSet {
     pub frames: [Option<Rc<Frame>>; (REF_FRAMES as usize)],
-    pub loop_filter: [DeblockState; (REF_FRAMES as usize)]
+    pub deblock: [DeblockState; (REF_FRAMES as usize)]
 }
 
 impl ReferenceFramesSet {
     pub fn new() -> ReferenceFramesSet {
         ReferenceFramesSet {
             frames: Default::default(),
-            loop_filter: Default::default()
+            deblock: Default::default()
         }
     }
 }
@@ -304,7 +304,7 @@ pub struct FrameInvariants {
     pub config: EncoderConfig,
     pub ref_frames: [usize; INTER_REFS_PER_FRAME],
     pub rec_buffer: ReferenceFramesSet,
-    pub loop_filter: DeblockState
+    pub deblock: DeblockState
 }
 
 impl FrameInvariants {
@@ -368,7 +368,7 @@ impl FrameInvariants {
             config,
             ref_frames: [0; INTER_REFS_PER_FRAME],
             rec_buffer: ReferenceFramesSet::new(),
-            loop_filter: Default::default()
+            deblock: Default::default()
         }
     }
 
@@ -473,7 +473,7 @@ trait UncompressedHeader {
     // End of OBU Headers
 
     fn write_frame_size(&mut self, fi: &FrameInvariants) -> io::Result<()>;
-    fn write_loop_filter(&mut self, fi: &FrameInvariants) -> io::Result<()>;
+    fn write_deblock_filter(&mut self, fi: &FrameInvariants) -> io::Result<()>;
     fn write_frame_cdef(&mut self, seq: &Sequence, fi: &FrameInvariants) -> io::Result<()>;
 }
 #[allow(unused)]
@@ -861,8 +861,8 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
       // delta_q
       self.write_bit(false)?; // delta_q_present_flag: no delta q
 
-      // loop filter
-      self.write_loop_filter(fi)?;
+      // loop deblocking filter
+      self.write_deblock_filter(fi)?;
       // cdef
       self.write_frame_cdef(seq, fi)?;
       // loop restoration
@@ -952,46 +952,46 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         Ok(())
     }
 
-    fn write_loop_filter(&mut self, fi: &FrameInvariants) -> io::Result<()> {
-        assert!(fi.loop_filter.levels[0] < 64);
-        self.write(6, fi.loop_filter.levels[0])?; // loop filter level 0
-        assert!(fi.loop_filter.levels[1] < 64);
-        self.write(6, fi.loop_filter.levels[1])?; // loop filter level 1
-        if PLANES > 1 && (fi.loop_filter.levels[0] > 0 || fi.loop_filter.levels[1] > 0) {
-            assert!(fi.loop_filter.levels[2] < 64);
-            self.write(6, fi.loop_filter.levels[2])?; // loop filter level 2
-            assert!(fi.loop_filter.levels[3] < 64);
-            self.write(6, fi.loop_filter.levels[3])?; // loop filter level 3
+    fn write_deblock_filter(&mut self, fi: &FrameInvariants) -> io::Result<()> {
+        assert!(fi.deblock.levels[0] < 64);
+        self.write(6, fi.deblock.levels[0])?; // loop deblocking filter level 0
+        assert!(fi.deblock.levels[1] < 64);
+        self.write(6, fi.deblock.levels[1])?; // loop deblocking filter level 1
+        if PLANES > 1 && (fi.deblock.levels[0] > 0 || fi.deblock.levels[1] > 0) {
+            assert!(fi.deblock.levels[2] < 64);
+            self.write(6, fi.deblock.levels[2])?; // loop deblocking filter level 2
+            assert!(fi.deblock.levels[3] < 64);
+            self.write(6, fi.deblock.levels[3])?; // loop deblocking filter level 3
         }
-        self.write(3,0)?; // loop filter sharpness
-        self.write_bit(fi.loop_filter.deltas_enabled)?; // loop filter deltas enabled
-        if fi.loop_filter.deltas_enabled {
-            self.write_bit(fi.loop_filter.delta_updates_enabled)?; // deltas updates enabled
-            if fi.loop_filter.delta_updates_enabled {
+        self.write(3,0)?; // deblocking filter sharpness
+        self.write_bit(fi.deblock.deltas_enabled)?; // loop deblocking filter deltas enabled
+        if fi.deblock.deltas_enabled {
+            self.write_bit(fi.deblock.delta_updates_enabled)?; // deltas updates enabled
+            if fi.deblock.delta_updates_enabled {
                 // conditionally write ref delta updates
                 let prev_ref_deltas = if fi.primary_ref_frame == PRIMARY_REF_NONE {
                     [1, 0, 0, 0, 0, -1, -1, -1]
                 } else {
-                    fi.rec_buffer.loop_filter[fi.ref_frames[fi.primary_ref_frame as usize]].ref_deltas
+                    fi.rec_buffer.deblock[fi.ref_frames[fi.primary_ref_frame as usize]].ref_deltas
                 };
                 for i in 0..REF_FRAMES {
-                    let update = fi.loop_filter.ref_deltas[i] != prev_ref_deltas[i];
+                    let update = fi.deblock.ref_deltas[i] != prev_ref_deltas[i];
                     self.write_bit(update)?;
                     if update {
-                        self.write_signed(7,fi.loop_filter.ref_deltas[i])?;
+                        self.write_signed(7,fi.deblock.ref_deltas[i])?;
                     }
                 }
                 // conditionally write mode delta updates
                 let prev_mode_deltas = if fi.primary_ref_frame == PRIMARY_REF_NONE {
                     [0, 0]
                 } else {
-                    fi.rec_buffer.loop_filter[fi.ref_frames[fi.primary_ref_frame as usize]].mode_deltas
+                    fi.rec_buffer.deblock[fi.ref_frames[fi.primary_ref_frame as usize]].mode_deltas
                 };
                 for i in 0..2 {
-                    let update = fi.loop_filter.mode_deltas[i] != prev_mode_deltas[i];
+                    let update = fi.deblock.mode_deltas[i] != prev_mode_deltas[i];
                     self.write_bit(update)?;
                     if update {
-                        self.write_signed(7,fi.loop_filter.mode_deltas[i])?;
+                        self.write_signed(7,fi.deblock.mode_deltas[i])?;
                     }
                 }
             }
@@ -1867,7 +1867,7 @@ pub fn update_rec_buffer(fi: &mut FrameInvariants, fs: FrameState) {
   for i in 0..(REF_FRAMES as usize) {
     if (fi.refresh_frame_flags & (1 << i)) != 0 {
       fi.rec_buffer.frames[i] = Some(Rc::clone(&rfs));
-      fi.rec_buffer.loop_filter[i] = fi.loop_filter.clone();
+      fi.rec_buffer.deblock[i] = fi.deblock.clone();
     }
   }
 }
