@@ -12,6 +12,7 @@
 #![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
 
 use context::*;
+use me::*;
 use ec::OD_BITRES;
 use ec::Writer;
 use ec::WriterCounter;
@@ -48,6 +49,8 @@ pub struct RDOPartitionOutput {
   pub bo: BlockOffset,
   pub pred_mode_luma: PredictionMode,
   pub pred_mode_chroma: PredictionMode,
+  pub ref_frame: usize,
+  pub mv: MotionVector,
   pub skip: bool
 }
 
@@ -189,6 +192,8 @@ pub fn rdo_mode_decision(
   let mut best_mode_chroma = PredictionMode::DC_PRED;
   let mut best_skip = false;
   let mut best_rd = std::f64::MAX;
+  let mut best_ref_frame = INTRA_FRAME;
+  let mut best_mv = MotionVector { row: 0, col: 0 };
 
   // Get block luma and chroma dimensions
   let w = bsize.width();
@@ -223,6 +228,13 @@ pub fn rdo_mode_decision(
       mode_set_chroma.push(PredictionMode::DC_PRED);
     }
 
+    let ref_frame = if luma_mode.is_intra() { INTRA_FRAME } else { LAST_FRAME };
+    let mv = if luma_mode != PredictionMode::NEWMV {
+      MotionVector { row: 0, col: 0 }
+    } else {
+      motion_estimation(fi, fs, bsize, bo, ref_frame)
+    };
+
     // Find the best chroma prediction mode for the current luma prediction mode
     for &chroma_mode in &mode_set_chroma {
       for &skip in &[false, true] {
@@ -232,8 +244,9 @@ pub fn rdo_mode_decision(
         let mut wr: &mut dyn Writer = &mut WriterCounter::new();
         let tell = wr.tell_frac();
 
+
         encode_block_a(seq, cw, wr, bsize, bo, skip);
-        encode_block_b(fi, fs, cw, wr, luma_mode, chroma_mode, bsize, bo, skip, seq.bit_depth);
+        encode_block_b(fi, fs, cw, wr, luma_mode, chroma_mode, ref_frame, mv, bsize, bo, skip, seq.bit_depth);
 
         let cost = wr.tell_frac() - tell;
         let rd = compute_rd_cost(
@@ -251,6 +264,8 @@ pub fn rdo_mode_decision(
           best_rd = rd;
           best_mode_luma = luma_mode;
           best_mode_chroma = chroma_mode;
+          best_ref_frame = ref_frame;
+          best_mv = mv;
           best_skip = skip;
         }
 
@@ -270,6 +285,8 @@ pub fn rdo_mode_decision(
       bo: bo.clone(),
       pred_mode_luma: best_mode_luma,
       pred_mode_chroma: best_mode_chroma,
+      ref_frame: best_ref_frame,
+      mv: best_mv,
       rd_cost: best_rd,
       skip: best_skip
     }]

@@ -64,6 +64,9 @@ const TX_SETS: usize = 9;
 const TX_SETS_INTRA: usize = 3;
 const TX_SETS_INTER: usize = 4;
 
+const MAX_REF_MV_STACK_SIZE: usize = 8;
+pub const REF_CAT_LEVEL: u32 = 640;
+
 // Number of transform types in each set type
 static num_tx_set: [usize; TX_SETS] =
   [1, 2, 5, 7, 7, 10, 12, 16, 16];
@@ -377,6 +380,7 @@ const PLANE_TYPES: usize = 2;
 const REF_TYPES: usize = 2;
 const SKIP_CONTEXTS: usize = 3;
 const INTRA_INTER_CONTEXTS: usize = 4;
+const DRL_MODE_CONTEXTS: usize = 3;
 
 // Level Map
 const TXB_SKIP_CONTEXTS: usize =  13;
@@ -758,6 +762,27 @@ pub fn uv_intra_mode_to_tx_type_context(pred: PredictionMode) -> TxType {
   intra_mode_to_tx_type_context[uv2y[pred as usize] as usize]
 }
 
+#[derive(Clone,Copy)]
+#[repr(C)]
+pub struct NMVComponent {
+  classes_cdf: [u16; MV_CLASSES + 1],
+  class0_fp_cdf: [[u16; MV_FP_SIZE + 1]; CLASS0_SIZE],
+  fp_cdf: [u16; MV_FP_SIZE + 1],
+  sign_cdf: [u16; 2 + 1],
+  class0_hp_cdf: [u16; 2 + 1],
+  hp_cdf: [u16; 2 + 1],
+  class0_cdf: [u16; CLASS0_SIZE + 1],
+  bits_cdf: [[u16; 2 + 1]; MV_OFFSET_BITS],
+}
+
+#[derive(Clone,Copy)]
+#[repr(C)]
+pub struct NMVContext {
+  joints_cdf: [u16; MV_JOINTS + 1],
+  comps: [NMVComponent; 2],
+}
+
+
 extern "C" {
   static default_partition_cdf:
     [[u16; EXT_PARTITION_TYPES + 1]; PARTITION_CONTEXTS];
@@ -804,6 +829,9 @@ extern "C" {
   static av1_default_coeff_lps_multi_cdfs: [[[[[u16; BR_CDF_SIZE + 1];
     LEVEL_CONTEXTS]; PLANE_TYPES];
     TxSize::TX_SIZES]; 4];
+
+  static default_nmv_context: NMVContext;
+  static default_drl_cdf:[[u16; 2 + 1]; DRL_MODE_CONTEXTS];
 }
 
 #[repr(C)]
@@ -812,6 +840,13 @@ pub struct SCAN_ORDER {
   pub scan: &'static [u16; 32 * 32],
   pub iscan: &'static [u16; 32 * 32],
   pub neighbors: &'static [u16; ((32 * 32) + 1) * 2]
+}
+
+#[derive(Clone)]
+pub struct CandidateMV {
+  pub this_mv: MotionVector,
+  pub comp_mv: MotionVector,
+  pub weight: u32
 }
 
 #[derive(Clone)]
@@ -831,6 +866,8 @@ pub struct CDFContext {
   angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES],
   filter_intra_cdfs: [[u16; 3]; BlockSize::BLOCK_SIZES_ALL],
   single_ref_cdfs: [[[u16; 2 + 1]; SINGLE_REFS - 1]; REF_CONTEXTS],
+  drl_cdfs: [[u16; 2 + 1]; DRL_MODE_CONTEXTS],
+  nmv_context: NMVContext,
 
   // lv_map
   txb_skip_cdf: [[[u16; 3]; TXB_SKIP_CONTEXTS]; TxSize::TX_SIZES],
@@ -877,6 +914,8 @@ impl CDFContext {
       angle_delta_cdf: default_angle_delta_cdf,
       filter_intra_cdfs: default_filter_intra_cdfs,
       single_ref_cdfs: default_single_ref_cdf,
+      drl_cdfs: default_drl_cdf,
+      nmv_context: default_nmv_context,
 
       // lv_map
       txb_skip_cdf: av1_default_txb_skip_cdfs[qctx],
@@ -1030,7 +1069,7 @@ mod test {
 
 const SUPERBLOCK_TO_PLANE_SHIFT: usize = MAX_SB_SIZE_LOG2;
 const SUPERBLOCK_TO_BLOCK_SHIFT: usize = MAX_MIB_SIZE_LOG2;
-const BLOCK_TO_PLANE_SHIFT: usize = MI_SIZE_LOG2;
+pub const BLOCK_TO_PLANE_SHIFT: usize = MI_SIZE_LOG2;
 pub const LOCAL_BLOCK_MASK: usize = (1 << SUPERBLOCK_TO_BLOCK_SHIFT) - 1;
 
 /// Absolute offset in superblocks inside a plane, where a superblock is defined
@@ -1110,6 +1149,7 @@ pub struct Block {
   pub partition: PartitionType,
   pub skip: bool,
   pub ref_frames: [usize; 2],
+  pub mv: [MotionVector; 2],
   pub neighbors_ref_counts: [usize; TOTAL_REFS_PER_FRAME],
   pub cdef_index: u8,
   pub n4_w: usize, /* block width in the unit of mode_info */
@@ -1126,6 +1166,7 @@ impl Block {
       partition: PartitionType::PARTITION_NONE,
       skip: false,
       ref_frames: [INTRA_FRAME; 2],
+      mv: [ MotionVector { row:0, col: 0 }; 2],
       neighbors_ref_counts: [0; TOTAL_REFS_PER_FRAME],
       cdef_index: 0,
       n4_w: BLOCK_64X64.width_mi(),
@@ -1411,6 +1452,17 @@ impl BlockContext {
     for y in 0..bh {
       for x in 0..bw {
         self.blocks[bo.y + y as usize][bo.x + x as usize].ref_frames[0] = r;
+      }
+    }
+  }
+
+  pub fn set_motion_vector(&mut self, bo: &BlockOffset, bsize: BlockSize, mv: MotionVector) {
+    let bw = bsize.width_mi();
+    let bh = bsize.height_mi();
+
+    for y in 0..bh {
+      for x in 0..bw {
+        self.blocks[bo.y + y as usize][bo.x + x as usize].mv[0] = mv;
       }
     }
   }
@@ -1874,31 +1926,48 @@ impl ContextWriter {
     cmp::max(col_offset, -(mi_col as isize))
   }
 
-  fn add_ref_mv_candidate(&self, blk: &Block) -> bool {
+  fn find_matching_mv(&self, blk: &Block, mv_stack: &mut Vec<CandidateMV>, weight: u32) -> bool {
+    for mut mv_cand in mv_stack {
+      if blk.mv[0].row == mv_cand.this_mv.row && blk.mv[0].col == mv_cand.this_mv.col {
+        mv_cand.weight += weight;
+        return true;
+      }
+    }
+    false
+  }
+
+  fn add_ref_mv_candidate(&self, ref_frame: usize, blk: &Block, mv_stack: &mut Vec<CandidateMV>,
+                          weight: u32, newmv_count: &mut usize) -> bool {
     if !blk.is_inter() { /* For intrabc */
       return false;
     }
 
-/*
-    let index = 0;
+    if blk.ref_frames[0] == ref_frame {
+      let found_match = self.find_matching_mv(blk, mv_stack, weight);
 
-    if rf[1] == NONE_FRAME {
-      for i in 0..2 {
-        if cand.ref_frame[i] == rf[0] {
+      if !found_match && mv_stack.len() < MAX_REF_MV_STACK_SIZE {
+        let mv_cand = CandidateMV {
+          this_mv: blk.mv[0],
+          comp_mv: blk.mv[1],
+          weight: weight
+        };
 
-        }
+        mv_stack.push(mv_cand);
       }
+
+      if blk.mode == PredictionMode::NEWMV {
+        *newmv_count += 1;
+      }
+
+      true
     } else {
-      if cand.ref_frame[0] == rf[0] && cand.ref_frame[1] == rf[1] {
-
-      }
+      false
     }
-*/
-    true
   }
 
   fn scan_row_mbmi(&mut self, bo: &BlockOffset, row_offset: isize, max_row_offs: isize,
-                   processed_rows: &mut isize) -> bool {
+                   processed_rows: &mut isize, ref_frame: usize,
+                   mv_stack: &mut Vec<CandidateMV>, newmv_count: &mut usize) -> bool {
     let bc = &self.bc;
     let target_n4_w = bc.at(bo).n4_w;
 
@@ -1907,7 +1976,6 @@ impl ContextWriter {
     let n4_w_8 = BlockSize::MI_SIZE_WIDE[BLOCK_8X8 as usize];
     let n4_w_16 = BlockSize::MI_SIZE_WIDE[BLOCK_16X16 as usize];
     let mut col_offset = 0;
-    //let shift = 0;
 
     if row_offset.abs() > 1 {
       col_offset = 1;
@@ -1932,14 +2000,17 @@ impl ContextWriter {
         len = cmp::max(len, n4_w_8);
       }
 
-      //let mut weight = 2;
+      let mut weight = 2 as u32;
       if target_n4_w >= n4_w_8 && target_n4_w <= n4_w {
         let inc = cmp::min(-max_row_offs + row_offset + 1, cand.n4_h as isize);
-        //weight = cmp::max(weight, inc << shift);
+        assert!(inc >= 0);
+        weight = cmp::max(weight, inc as u32);
         *processed_rows = (inc as isize) - row_offset - 1;
       }
 
-      if self.add_ref_mv_candidate(cand) { found_match = true; }
+      if self.add_ref_mv_candidate(ref_frame, cand, mv_stack, len as u32 * weight, newmv_count) {
+        found_match = true;
+      }
 
       i += len;
     }
@@ -1948,7 +2019,8 @@ impl ContextWriter {
   }
 
   fn scan_col_mbmi(&mut self, bo: &BlockOffset, col_offset: isize, max_col_offs: isize,
-                   processed_cols: &mut isize) -> bool {
+                   processed_cols: &mut isize, ref_frame: usize,
+                   mv_stack: &mut Vec<CandidateMV>, newmv_count: &mut usize) -> bool {
     let bc = &self.bc;
     let target_n4_h = bc.at(bo).n4_h;
 
@@ -1957,7 +2029,6 @@ impl ContextWriter {
     let n4_h_8 = BlockSize::MI_SIZE_HIGH[BLOCK_8X8 as usize];
     let n4_h_16 = BlockSize::MI_SIZE_HIGH[BLOCK_16X16 as usize];
     let mut row_offset = 0;
-    //let shift = 0;
 
     if col_offset.abs() > 1 {
       row_offset = 1;
@@ -1981,14 +2052,17 @@ impl ContextWriter {
         len = cmp::max(len, n4_h_8);
       }
 
-      //let mut weight = 2;
+      let mut weight = 2 as u32;
       if target_n4_h >= n4_h_8 && target_n4_h <= n4_h {
         let inc = cmp::min(-max_col_offs + col_offset + 1, cand.n4_w as isize);
-        //weight = cmp::max(weight, inc << shift);
+        assert!(inc >= 0);
+        weight = cmp::max(weight, inc as u32);
         *processed_cols = (inc as isize) - col_offset - 1;
       }
 
-      if self.add_ref_mv_candidate(cand) { found_match = true; }
+      if self.add_ref_mv_candidate(ref_frame, cand, mv_stack, len as u32 * weight, newmv_count) {
+        found_match = true;
+      }
 
       i += len;
     }
@@ -1996,16 +2070,24 @@ impl ContextWriter {
     found_match
   }
 
-  fn scan_blk_mbmi(&mut self, bo: &BlockOffset) -> bool {
+  fn scan_blk_mbmi(&mut self, bo: &BlockOffset, ref_frame: usize,
+                   mv_stack: &mut Vec<CandidateMV>, newmv_count: &mut usize) -> bool {
     if bo.x >= self.bc.cols || bo.y >= self.bc.rows {
       return false;
     }
 
+    let weight = 2 * BLOCK_8X8.width_mi() as u32;
     /* Always assume its within a tile, probably wrong */
-    self.add_ref_mv_candidate(self.bc.at(bo))
+    self.add_ref_mv_candidate(ref_frame, self.bc.at(bo), mv_stack, weight, newmv_count)
   }
 
-  fn setup_mvref_list(&mut self, bo: &BlockOffset) -> usize {
+  fn add_offset(&mut self, mv_stack: &mut Vec<CandidateMV>) {
+    for mut cand_mv in mv_stack {
+      cand_mv.weight += REF_CAT_LEVEL;
+    }
+  }
+
+  fn setup_mvref_list(&mut self, bo: &BlockOffset, ref_frame: usize, mv_stack: &mut Vec<CandidateMV>) -> usize {
     let (_rf, _rf_num) = self.get_mvref_ref_frames(INTRA_FRAME);
 
     let mut max_row_offs = 0 as isize;
@@ -2045,28 +2127,33 @@ impl ContextWriter {
 
     let mut row_match = false;
     let mut col_match = false;
-    let newmv_count = 0;
+    let mut newmv_count: usize = 0;
 
     if max_row_offs.abs() >= 1 {
-      let found_match = self.scan_row_mbmi(bo, -1, max_row_offs, &mut processed_rows);
+      let found_match = self.scan_row_mbmi(bo, -1, max_row_offs, &mut processed_rows, ref_frame, mv_stack,
+                                           &mut newmv_count);
       row_match |= found_match;
     }
     if max_col_offs.abs() >= 1 {
-      let found_match = self.scan_col_mbmi(bo, -1, max_col_offs, &mut processed_cols);
+      let found_match = self.scan_col_mbmi(bo, -1, max_col_offs, &mut processed_cols, ref_frame, mv_stack,
+                                           &mut newmv_count);
       col_match |= found_match;
     }
     if self.has_tr(bo) {
       let n4_w = self.bc.at(bo).n4_w;
-      let found_match = self.scan_blk_mbmi(&bo.with_offset(n4_w as isize, -1));
+      let found_match = self.scan_blk_mbmi(&bo.with_offset(n4_w as isize, -1), ref_frame, mv_stack,
+                                           &mut newmv_count);
       row_match |= found_match;
     }
 
     let nearest_match = if row_match { 1 } else { 0 } + if col_match { 1 } else { 0 };
 
-    /* TODO: set ref_mv_stack weights to REF_CAT_LEVEL for this ref frame */
+    self.add_offset(mv_stack);
 
     /* Scan the second outer area. */
-    let found_match = self.scan_blk_mbmi(&bo.with_offset(-1, -1));
+    let mut far_newmv_count: usize = 0; // won't be used
+
+    let found_match = self.scan_blk_mbmi(&bo.with_offset(-1, -1), ref_frame, mv_stack, &mut far_newmv_count);
     row_match |= found_match;
 
     for idx in 2..MVREF_ROW_COLS+1 {
@@ -2074,12 +2161,14 @@ impl ContextWriter {
       let col_offset = -2 * idx as isize + 1 + col_adj as isize;
 
       if row_offset.abs() <= max_row_offs.abs() && row_offset.abs() > processed_rows {
-        let found_match = self.scan_row_mbmi(bo, row_offset, max_row_offs, &mut processed_rows);
+        let found_match = self.scan_row_mbmi(bo, row_offset, max_row_offs, &mut processed_rows, ref_frame, mv_stack,
+                                             &mut far_newmv_count);
         row_match |= found_match;
       }
 
       if col_offset.abs() <= max_col_offs.abs() && col_offset.abs() > processed_cols {
-        let found_match = self.scan_col_mbmi(bo, col_offset, max_col_offs, &mut processed_cols);
+        let found_match = self.scan_col_mbmi(bo, col_offset, max_col_offs, &mut processed_cols, ref_frame, mv_stack,
+                                             &mut far_newmv_count);
         col_match |= found_match;
       }
     }
@@ -2096,12 +2185,26 @@ impl ContextWriter {
 
     /* TODO: Find nearest match and assign nearest and near mvs */
 
+    // Sort MV stack according to weight
+    if mv_stack.len() > 1 {
+      let mut i: usize = 1;
+      while i < mv_stack.len() {
+        let mut j = i;
+        while j > 0 && mv_stack[j - 1].weight < mv_stack[j].weight {
+          mv_stack.swap(j, j - 1);
+          j = j - 1;
+        }
+        i = i + 1;
+      }
+    }
+
     /* TODO: Handle single reference frame extension */
 
     mode_context
   }
 
-  pub fn find_mvrefs(&mut self, bo: &BlockOffset, ref_frame: usize) -> usize {
+  pub fn find_mvrefs(&mut self, bo: &BlockOffset, ref_frame: usize,
+                     mv_stack: &mut Vec<CandidateMV>) -> usize {
     if ref_frame < REF_FRAMES {
       if ref_frame != INTRA_FRAME {
         /* TODO: convert global mv to an mv here */
@@ -2116,7 +2219,7 @@ impl ContextWriter {
       /* TODO: Set the zeromv ref to 0 */
     }
 
-    let mode_context = self.setup_mvref_list(bo);
+    let mode_context = self.setup_mvref_list(bo, ref_frame, mv_stack);
     mode_context
   }
 
@@ -2293,6 +2396,26 @@ impl ContextWriter {
         let refmv_ctx = (ctx >> REFMV_OFFSET) & REFMV_CTX_MASK;
         symbol_with_update!(self, w, (mode != PredictionMode::NEARESTMV) as u32, &mut self.fc.refmv_cdf[refmv_ctx]);
       }
+    }
+  }
+
+  pub fn write_drl_mode(&mut self, w: &mut dyn Writer, drl_mode: bool, ctx: usize) {
+    symbol_with_update!(self, w, drl_mode as u32, &mut self.fc.drl_cdfs[ctx]);
+  }
+
+  pub fn write_mv(&mut self, w: &mut dyn Writer,
+                  mv: &MotionVector, ref_mv: &MotionVector,
+                  mv_precision: MvSubpelPrecision) {
+    let diff = MotionVector { row: mv.row - ref_mv.row, col: mv.col - ref_mv.col };
+    let j: MvJointType = av1_get_mv_joint(&diff);
+
+    w.symbol_with_update(j as u32, &mut self.fc.nmv_context.joints_cdf);
+
+    if mv_joint_vertical(j) {
+      encode_mv_component(w, diff.row as i32, &mut self.fc.nmv_context.comps[0], mv_precision);
+    }
+    if mv_joint_horizontal(j) {
+      encode_mv_component(w, diff.col as i32, &mut self.fc.nmv_context.comps[1], mv_precision);
     }
   }
 
@@ -2915,29 +3038,8 @@ const MV_UPP: i32 = (1 << MV_IN_USE_BITS);
 const MV_LOW: i32 = (-(1 << MV_IN_USE_BITS));
 
 
-pub struct nmv_component {
-  classes_cdf: [u16; MV_CLASSES + 1],
-  class0_fp_cdf: [[u16; MV_FP_SIZE + 1]; CLASS0_SIZE],
-  fp_cdf: [u16; MV_FP_SIZE + 1],
-  sign_cdf: [u16; 2 + 1],
-  class0_hp_cdf: [u16; 2 + 1],
-  hp_cdf: [u16; 2 + 1],
-  class0_cdf: [u16; CLASS0_SIZE + 1],
-  bits_cdf: [[u16; 2 + 1]; MV_OFFSET_BITS],
-}
-
-pub struct nmv_context {
-  joints_cdf: [u16; MV_JOINTS + 1],
-  comps: [nmv_component; 2],
-}
-
-pub struct MV {
-  row : i16,
-  col : i16,
-}
-
 #[inline(always)]
-pub fn av1_get_mv_joint(mv: &MV) -> MvJointType {
+pub fn av1_get_mv_joint(mv: &MotionVector) -> MvJointType {
   if mv.row == 0 {
     if mv.col == 0 { MvJointType::MV_JOINT_ZERO } else { MvJointType::MV_JOINT_HNZVZ }
   } else {
@@ -2961,7 +3063,7 @@ pub fn mv_class_base(mv_class: usize) -> u32 {
 #[inline(always)]
 // If n != 0, returns the floor of log base 2 of n. If n == 0, returns 0.
 pub fn log_in_base_2(n: u32) -> u8 {
-  32 - n.leading_zeros() as u8
+  31 - cmp::min(31, n.leading_zeros() as u8)
 }
 #[inline(always)]
 pub fn get_mv_class(z: u32, offset: &mut u32) -> usize {
@@ -2974,7 +3076,7 @@ pub fn get_mv_class(z: u32, offset: &mut u32) -> usize {
 }
 
 pub fn encode_mv_component(w: &mut Writer, comp: i32, 
-  mvcomp: &mut nmv_component, precision: MvSubpelPrecision) {
+  mvcomp: &mut NMVComponent, precision: MvSubpelPrecision) {
   assert!(comp != 0);
   let mut offset: u32 = 0;
   let sign: u32 = if comp < 0 { 1 } else { 0 };
@@ -3016,22 +3118,3 @@ pub fn encode_mv_component(w: &mut Writer, comp: i32,
   }
 }
 
-pub fn av1_encode_mv(w: &mut Writer,
-                   mv: &MV, ref_mv: &MV,
-                   mvctx: &mut nmv_context, mut usehp: MvSubpelPrecision) {
-  let diff = MV { row: mv.row - ref_mv.row, col: mv.col - ref_mv.col };
-  let j: MvJointType = av1_get_mv_joint(&diff);
-
-  // TODO: pass fi.force_integer_mv to this function
-  if false /*fi.force_integer_mv*/ {
-    usehp = MvSubpelPrecision::MV_SUBPEL_NONE;
-  }
-  w.symbol_with_update(j as u32, &mut mvctx.joints_cdf);
-
-  if mv_joint_vertical(j) {
-    encode_mv_component(w, diff.row as i32, &mut mvctx.comps[0], usehp);
-  }
-  if mv_joint_horizontal(j) {
-    encode_mv_component(w, diff.col as i32, &mut mvctx.comps[1], usehp);
-  }
-}

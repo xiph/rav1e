@@ -29,6 +29,7 @@ pub mod rdo;
 pub mod util;
 pub mod cdef;
 pub mod encoder;
+pub mod me;
 
 pub use encoder::*;
 
