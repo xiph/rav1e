@@ -1335,18 +1335,18 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
 
               if some_use_intra {
                 luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), plane_bsize.width(),
-                                        plane_bsize.height(), ref_frame, mv);
+                                        plane_bsize.height(), ref_frame, mv, bit_depth);
               } else {
-                luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), 2, 2, ref_frame, mv0);
-                luma_mode.predict_inter(fi, p, &po1, &mut rec.mut_slice(&po1), 2, 2, ref_frame, mv1);
-                luma_mode.predict_inter(fi, p, &po2, &mut rec.mut_slice(&po2), 2, 2, ref_frame, mv2);
-                luma_mode.predict_inter(fi, p, &po3, &mut rec.mut_slice(&po3), 2, 2, ref_frame, mv);
+                luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), 2, 2, ref_frame, mv0, bit_depth);
+                luma_mode.predict_inter(fi, p, &po1, &mut rec.mut_slice(&po1), 2, 2, ref_frame, mv1, bit_depth);
+                luma_mode.predict_inter(fi, p, &po2, &mut rec.mut_slice(&po2), 2, 2, ref_frame, mv2, bit_depth);
+                luma_mode.predict_inter(fi, p, &po3, &mut rec.mut_slice(&po3), 2, 2, ref_frame, mv, bit_depth);
               }
             }
             else
             {
               luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), plane_bsize.width(),
-                                      plane_bsize.height(), ref_frame, mv);
+                                      plane_bsize.height(), ref_frame, mv, bit_depth);
             }
         }
       }
