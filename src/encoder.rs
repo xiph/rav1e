@@ -1203,7 +1203,7 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
                  luma_mode: PredictionMode, chroma_mode: PredictionMode,
                  ref_frame: usize, mv: MotionVector,
                  bsize: BlockSize, bo: &BlockOffset, skip: bool, bit_depth: usize,
-                 cfl: &CFLParams) {
+                 cfl: CFLParams) {
     let is_inter = !luma_mode.is_intra();
     if is_inter { assert!(luma_mode == chroma_mode); };
 
@@ -1396,7 +1396,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
                        cw: &mut ContextWriter, w: &mut dyn Writer,
                        luma_mode: PredictionMode, chroma_mode: PredictionMode, bo: &BlockOffset,
                        bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool, bit_depth: usize,
-                       cfl: &CFLParams) {
+                       cfl: CFLParams) {
     let bw = bsize.width_mi() / tx_size.width_mi();
     let bh = bsize.height_mi() / tx_size.height_mi();
 
@@ -1450,7 +1450,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
         fs.qc.update(fi.config.quantizer, uv_tx_size, true, bit_depth);
 
         for p in 1..3 {
-            let alpha = cfl.alpha(p - 1) as i16;
+            let alpha = cfl.alpha(p - 1);
             for by in 0..bh_uv {
                 for bx in 0..bw_uv {
                     let tx_bo =
@@ -1557,6 +1557,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         bo: bo.clone(),
         pred_mode_luma: PredictionMode::DC_PRED,
         pred_mode_chroma: PredictionMode::DC_PRED,
+        pred_cfl_params: CFLParams::new(),
         ref_frame: INTRA_FRAME,
         mv: MotionVector { row: 0, col: 0},
         skip: false
@@ -1579,7 +1580,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         }
         let mode_decision = rdo_mode_decision(seq, fi, fs, cw, bsize, bo).part_modes[0].clone();
         let (mode_luma, mode_chroma) = (mode_decision.pred_mode_luma, mode_decision.pred_mode_chroma);
-        let cfl = &CFLParams::new();
+        let cfl = mode_decision.pred_cfl_params;
         let ref_frame = mode_decision.ref_frame;
         let mv = mode_decision.mv;
         let skip = mode_decision.skip;
@@ -1634,7 +1635,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
 
             // FIXME: redundant block re-encode
             let (mode_luma, mode_chroma) = (best_decision.pred_mode_luma, best_decision.pred_mode_chroma);
-            let cfl = &CFLParams::new();
+            let cfl = best_decision.pred_cfl_params;
             let ref_frame = best_decision.ref_frame;
             let mv = best_decision.mv;
             let skip = best_decision.skip;
@@ -1713,7 +1714,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
                 };
 
             let (mode_luma, mode_chroma) = (part_decision.pred_mode_luma, part_decision.pred_mode_chroma);
-            let cfl = &CFLParams::new();
+            let cfl = part_decision.pred_cfl_params;
             let skip = part_decision.skip;
             let ref_frame = part_decision.ref_frame;
             let mv = part_decision.mv;

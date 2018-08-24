@@ -1106,7 +1106,7 @@ mod test {
   fn cfl_joint_sign() {
     use super::*;
 
-    let cfl = &mut CFLParams::new();
+    let mut cfl = CFLParams::new();
     for (joint_sign, &signs) in cfl_alpha_signs.iter().enumerate() {
       cfl.sign = signs;
       assert!(cfl.joint_sign() as usize == joint_sign);
@@ -1672,9 +1672,15 @@ pub enum CFLSign {
   CFL_SIGN_POS = 2
 }
 
+impl CFLSign {
+  pub fn from_alpha(a: i16) -> CFLSign {
+    [ CFL_SIGN_NEG, CFL_SIGN_ZERO, CFL_SIGN_POS ][(a.signum() + 1) as usize]
+  }
+}
+
 use context::CFLSign::*;
 const CFL_SIGNS: usize = 3;
-static cfl_sign_value: [i32; CFL_SIGNS] = [ 0, -1, 1 ];
+static cfl_sign_value: [i16; CFL_SIGNS] = [ 0, -1, 1 ];
 
 #[derive(Copy, Clone)]
 pub struct CFLParams {
@@ -1701,8 +1707,14 @@ impl CFLParams {
     assert!(self.sign[uv] != CFL_SIGN_ZERO && self.scale[uv] != 0);
     (self.scale[uv] - 1) as u32
   }
-  pub fn alpha(&self, uv: usize) -> i32 {
-    cfl_sign_value[self.sign[uv] as usize] * (self.scale[uv] as i32)
+  pub fn alpha(&self, uv: usize) -> i16 {
+    cfl_sign_value[self.sign[uv] as usize] * (self.scale[uv] as i16)
+  }
+  pub fn from_alpha(u: i16, v: i16) -> CFLParams {
+    CFLParams {
+      sign: [ CFLSign::from_alpha(u), CFLSign::from_alpha(v) ],
+      scale: [ u.abs() as u8, v.abs() as u8 ]
+    }
   }
 }
 
@@ -1913,7 +1925,7 @@ impl ContextWriter {
       symbol_with_update!(self, w, uv_mode as u32, &mut cdf[..UV_INTRA_MODES]);
     }
   }
-  pub fn write_cfl_alphas(&mut self, w: &mut dyn Writer, cfl: &CFLParams) {
+  pub fn write_cfl_alphas(&mut self, w: &mut dyn Writer, cfl: CFLParams) {
     symbol_with_update!(self, w, cfl.joint_sign(), &mut self.fc.cfl_sign_cdf);
     for uv in 0..2 {
       if cfl.sign[uv] != CFL_SIGN_ZERO {
