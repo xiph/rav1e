@@ -2287,17 +2287,7 @@ impl ContextWriter {
     /* TODO: Find nearest match and assign nearest and near mvs */
 
     // Sort MV stack according to weight
-    if mv_stack.len() > 1 {
-      let mut i: usize = 1;
-      while i < mv_stack.len() {
-        let mut j = i;
-        while j > 0 && mv_stack[j - 1].weight < mv_stack[j].weight {
-          mv_stack.swap(j, j - 1);
-          j = j - 1;
-        }
-        i = i + 1;
-      }
-    }
+    mv_stack.sort_by(|a, b| b.weight.cmp(&a.weight));
 
     /* TODO: Handle single reference frame extension */
 
