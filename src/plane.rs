@@ -97,6 +97,12 @@ impl<'a> PlaneSlice<'a> {
     &self.plane.data[self.y * stride + self.x..]
   }
 
+  pub fn as_slice_w_width(&'a self, width: usize) -> &'a [u16] {
+    let stride = self.plane.cfg.stride;
+    let base = self.y * stride + self.x;
+    &self.plane.data[base .. base + width]
+  }
+
   pub fn subslice(&'a self, xo: usize, yo: usize) -> PlaneSlice<'a> {
     PlaneSlice { plane: self.plane, x: self.x + xo, y: self.y + yo }
   }

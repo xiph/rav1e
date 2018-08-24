@@ -31,30 +31,26 @@ pub fn motion_estimation(fi: &FrameInvariants, fs: &mut FrameState, bsize: Block
       let y_lo = cmp::max(0, po.y as isize - range as isize) as usize;
       let y_hi = cmp::min(fs.input.planes[0].cfg.height - blk_h, po.y + range);
 
-      let sorg = fs.input.planes[0].slice(&po);
-      let slice_org = sorg.as_slice();
       let stride_org = fs.input.planes[0].cfg.stride;
       let stride_ref = rec.planes[0].cfg.stride;
 
-      let mut lowest_sad = 128*128*4096 as usize;
+      let mut lowest_sad = 128*128*4096 as u32;
       let mut best_mv = MotionVector { row: 0, col: 0 };
 
       for y in (y_lo..y_hi).step_by(2) {
         for x in (x_lo..x_hi).step_by(2) {
+          let mut sad = 0 as u32;
+          let mut plane_org = fs.input.planes[0].slice(&po);
+          let mut plane_ref = rec.planes[0].slice(&PlaneOffset { x: x, y: y });
 
-          let mut sad = 0;
-          let sref = rec.planes[0].slice(&PlaneOffset { x: x, y: y });
-          let slice_ref = sref.as_slice();
-
-          for r in 0..blk_h {
-            for c in 0..blk_w {
-              let org_index = r * stride_org + c;
-              let ref_index = r * stride_ref + c;
-              let a = slice_org[org_index];
-              let b = slice_ref[ref_index];
-              let delta = b as isize - a as isize;
-              sad += delta.abs() as usize;
+          for _r in 0..blk_h {
+            {
+              let slice_org = plane_org.as_slice_w_width(blk_w);
+              let slice_ref = plane_ref.as_slice_w_width(blk_w);
+              sad += slice_org.iter().zip(slice_ref).map(|(&a, &b)| (a as i32 - b as i32).abs() as u32).sum::<u32>();
             }
+            plane_org.y += 1;
+            plane_ref.y += 1;
           }
 
           if sad < lowest_sad {
@@ -65,7 +61,7 @@ pub fn motion_estimation(fi: &FrameInvariants, fs: &mut FrameState, bsize: Block
         }
       }
       best_mv
-    }
+    },
 
     None => MotionVector { row: 0, col : 0 }
   }
