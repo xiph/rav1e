@@ -10,11 +10,9 @@
 use std::cmp;
 use FrameInvariants;
 use FrameState;
-use partition::BlockSize;
+use partition::*;
 use context::BlockOffset;
-use partition::MotionVector;
-use partition::LAST_FRAME;
-use plane::PlaneOffset;
+use plane::*;
 use context::BLOCK_TO_PLANE_SHIFT;
 
 pub fn motion_estimation(fi: &FrameInvariants, fs: &mut FrameState, bsize: BlockSize,
@@ -57,6 +55,48 @@ pub fn motion_estimation(fi: &FrameInvariants, fs: &mut FrameState, bsize: Block
 
         }
       }
+
+      let mode = PredictionMode::NEWMV;
+      let mut tmp_plane = Plane::new(blk_w, blk_h, 0, 0);
+
+      for step in [4, 2].iter() {
+        let center_mv_h = best_mv;
+        for i in 0..3 {
+          for j in 0..3 {
+            // Skip the center point that was already tested
+            if i == 1 && j == 1 { continue; }
+
+            let cand_mv = MotionVector { row: center_mv_h.row + step*(i as i16 - 1),
+            col: center_mv_h.col + step*(j as i16 - 1) };
+
+            {
+              let tmp_slice = &mut tmp_plane.mut_slice(&PlaneOffset { x:0, y:0 });
+
+              mode.predict_inter(fi, 0, &po, tmp_slice, blk_w, blk_h, ref_frame, &cand_mv, 8);
+            }
+
+            let mut sad = 0 as u32;
+            let mut plane_org = fs.input.planes[0].slice(&po);
+            let mut plane_ref = tmp_plane.slice(&PlaneOffset { x:0, y:0 });
+
+            for _r in 0..blk_h {
+              {
+                let slice_org = plane_org.as_slice_w_width(blk_w);
+                let slice_ref = plane_ref.as_slice_w_width(blk_w);
+                sad += slice_org.iter().zip(slice_ref).map(|(&a, &b)| (a as i32 - b as i32).abs() as u32).sum::<u32>();
+              }
+              plane_org.y += 1;
+              plane_ref.y += 1;
+            }
+
+            if sad < lowest_sad {
+              lowest_sad = sad;
+              best_mv = cand_mv;
+            }
+          }
+        }
+      }
+
       best_mv
     },
 
