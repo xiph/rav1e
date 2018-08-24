@@ -31,9 +31,6 @@ pub fn motion_estimation(fi: &FrameInvariants, fs: &mut FrameState, bsize: Block
       let y_lo = cmp::max(0, po.y as isize - range as isize) as usize;
       let y_hi = cmp::min(fs.input.planes[0].cfg.height - blk_h, po.y + range);
 
-      let stride_org = fs.input.planes[0].cfg.stride;
-      let stride_ref = rec.planes[0].cfg.stride;
-
       let mut lowest_sad = 128*128*4096 as u32;
       let mut best_mv = MotionVector { row: 0, col: 0 };
 
