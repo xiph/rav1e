@@ -1361,7 +1361,11 @@ fn luma_ac(
 ) {
   let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
   let plane_bsize = get_plane_block_size(bsize, xdec, ydec);
-  let po = bo.plane_offset(&fs.input.planes[0].cfg);
+  let po = if bsize.is_sub8x8() {
+    bo.with_offset(-1, -1).plane_offset(&fs.input.planes[0].cfg)
+  } else {
+    bo.plane_offset(&fs.input.planes[0].cfg)
+  };
   let rec = &fs.rec.planes[0];
   let luma = &rec.slice(&po);
 
