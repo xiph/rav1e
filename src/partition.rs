@@ -398,6 +398,69 @@ pub enum MvSubpelPrecision {
   MV_SUBPEL_HIGH_PRECISION,
 }
 
+const SUBPEL_FILTERS: [[[i32; 8]; 16]; 6] = [
+  [
+    [ 0, 0, 0, 128, 0, 0, 0, 0 ],      [ 0, 2, -6, 126, 8, -2, 0, 0 ],
+    [ 0, 2, -10, 122, 18, -4, 0, 0 ],  [ 0, 2, -12, 116, 28, -8, 2, 0 ],
+    [ 0, 2, -14, 110, 38, -10, 2, 0 ], [ 0, 2, -14, 102, 48, -12, 2, 0 ],
+    [ 0, 2, -16, 94, 58, -12, 2, 0 ],  [ 0, 2, -14, 84, 66, -12, 2, 0 ],
+    [ 0, 2, -14, 76, 76, -14, 2, 0 ],  [ 0, 2, -12, 66, 84, -14, 2, 0 ],
+    [ 0, 2, -12, 58, 94, -16, 2, 0 ],  [ 0, 2, -12, 48, 102, -14, 2, 0 ],
+    [ 0, 2, -10, 38, 110, -14, 2, 0 ], [ 0, 2, -8, 28, 116, -12, 2, 0 ],
+    [ 0, 0, -4, 18, 122, -10, 2, 0 ],  [ 0, 0, -2, 8, 126, -6, 2, 0 ]
+  ],
+  [
+    [ 0, 0, 0, 128, 0, 0, 0, 0 ],     [ 0, 2, 28, 62, 34, 2, 0, 0 ],
+    [ 0, 0, 26, 62, 36, 4, 0, 0 ],    [ 0, 0, 22, 62, 40, 4, 0, 0 ],
+    [ 0, 0, 20, 60, 42, 6, 0, 0 ],    [ 0, 0, 18, 58, 44, 8, 0, 0 ],
+    [ 0, 0, 16, 56, 46, 10, 0, 0 ],   [ 0, -2, 16, 54, 48, 12, 0, 0 ],
+    [ 0, -2, 14, 52, 52, 14, -2, 0 ], [ 0, 0, 12, 48, 54, 16, -2, 0 ],
+    [ 0, 0, 10, 46, 56, 16, 0, 0 ],   [ 0, 0, 8, 44, 58, 18, 0, 0 ],
+    [ 0, 0, 6, 42, 60, 20, 0, 0 ],    [ 0, 0, 4, 40, 62, 22, 0, 0 ],
+    [ 0, 0, 4, 36, 62, 26, 0, 0 ],    [ 0, 0, 2, 34, 62, 28, 2, 0 ]
+  ],
+  [
+    [ 0, 0, 0, 128, 0, 0, 0, 0 ],         [ -2, 2, -6, 126, 8, -2, 2, 0 ],
+    [ -2, 6, -12, 124, 16, -6, 4, -2 ],   [ -2, 8, -18, 120, 26, -10, 6, -2 ],
+    [ -4, 10, -22, 116, 38, -14, 6, -2 ], [ -4, 10, -22, 108, 48, -18, 8, -2 ],
+    [ -4, 10, -24, 100, 60, -20, 8, -2 ], [ -4, 10, -24, 90, 70, -22, 10, -2 ],
+    [ -4, 12, -24, 80, 80, -24, 12, -4 ], [ -2, 10, -22, 70, 90, -24, 10, -4 ],
+    [ -2, 8, -20, 60, 100, -24, 10, -4 ], [ -2, 8, -18, 48, 108, -22, 10, -4 ],
+    [ -2, 6, -14, 38, 116, -22, 10, -4 ], [ -2, 6, -10, 26, 120, -18, 8, -2 ],
+    [ -2, 4, -6, 16, 124, -12, 6, -2 ],   [ 0, 2, -2, 8, 126, -6, 2, -2 ]
+  ],
+  [
+    [ 0, 0, 0, 128, 0, 0, 0, 0 ],  [ 0, 0, 0, 120, 8, 0, 0, 0 ],
+    [ 0, 0, 0, 112, 16, 0, 0, 0 ], [ 0, 0, 0, 104, 24, 0, 0, 0 ],
+    [ 0, 0, 0, 96, 32, 0, 0, 0 ],  [ 0, 0, 0, 88, 40, 0, 0, 0 ],
+    [ 0, 0, 0, 80, 48, 0, 0, 0 ],  [ 0, 0, 0, 72, 56, 0, 0, 0 ],
+    [ 0, 0, 0, 64, 64, 0, 0, 0 ],  [ 0, 0, 0, 56, 72, 0, 0, 0 ],
+    [ 0, 0, 0, 48, 80, 0, 0, 0 ],  [ 0, 0, 0, 40, 88, 0, 0, 0 ],
+    [ 0, 0, 0, 32, 96, 0, 0, 0 ],  [ 0, 0, 0, 24, 104, 0, 0, 0 ],
+    [ 0, 0, 0, 16, 112, 0, 0, 0 ], [ 0, 0, 0, 8, 120, 0, 0, 0 ]
+  ],
+  [
+    [ 0, 0, 0, 128, 0, 0, 0, 0 ],     [ 0, 0, -4, 126, 8, -2, 0, 0 ],
+    [ 0, 0, -8, 122, 18, -4, 0, 0 ],  [ 0, 0, -10, 116, 28, -6, 0, 0 ],
+    [ 0, 0, -12, 110, 38, -8, 0, 0 ], [ 0, 0, -12, 102, 48, -10, 0, 0 ],
+    [ 0, 0, -14, 94, 58, -10, 0, 0 ], [ 0, 0, -12, 84, 66, -10, 0, 0 ],
+    [ 0, 0, -12, 76, 76, -12, 0, 0 ], [ 0, 0, -10, 66, 84, -12, 0, 0 ],
+    [ 0, 0, -10, 58, 94, -14, 0, 0 ], [ 0, 0, -10, 48, 102, -12, 0, 0 ],
+    [ 0, 0, -8, 38, 110, -12, 0, 0 ], [ 0, 0, -6, 28, 116, -10, 0, 0 ],
+    [ 0, 0, -4, 18, 122, -8, 0, 0 ],  [ 0, 0, -2, 8, 126, -4, 0, 0 ]
+  ],
+  [
+    [ 0, 0, 0, 128, 0, 0, 0, 0 ],   [ 0, 0, 30, 62, 34, 2, 0, 0 ],
+    [ 0, 0, 26, 62, 36, 4, 0, 0 ],  [ 0, 0, 22, 62, 40, 4, 0, 0 ],
+    [ 0, 0, 20, 60, 42, 6, 0, 0 ],  [ 0, 0, 18, 58, 44, 8, 0, 0 ],
+    [ 0, 0, 16, 56, 46, 10, 0, 0 ], [ 0, 0, 14, 54, 48, 12, 0, 0 ],
+    [ 0, 0, 12, 52, 52, 12, 0, 0 ], [ 0, 0, 12, 48, 54, 14, 0, 0 ],
+    [ 0, 0, 10, 46, 56, 16, 0, 0 ], [ 0, 0, 8, 44, 58, 18, 0, 0 ],
+    [ 0, 0, 6, 42, 60, 20, 0, 0 ],  [ 0, 0, 4, 40, 62, 22, 0, 0 ],
+    [ 0, 0, 4, 36, 62, 26, 0, 0 ],  [ 0, 0, 2, 34, 62, 30, 0, 0 ]
+  ]
+];
+
 /* Symbols for coding which components are zero jointly */
 pub const MV_JOINTS:usize = 4;
 
@@ -559,7 +622,7 @@ impl PredictionMode {
 
   pub fn predict_inter<'a>(self, fi: &FrameInvariants, p: usize, po: &PlaneOffset,
                            dst: &'a mut PlaneMutSlice<'a>, width: usize, height: usize,
-                           ref_frame: usize, mv: &MotionVector) {
+ref_frame: usize, mv: &MotionVector, bit_depth: usize) {
     assert!(!self.is_intra());
     assert!(ref_frame == LAST_FRAME);
 
@@ -570,18 +633,86 @@ impl PredictionMode {
         let shift_col = 3 + rec_cfg.xdec;
         let row_offset = mv.row as i32 >> shift_row;
         let col_offset = mv.col as i32 >> shift_col;
+        let row_frac = (mv.row as i32 - (row_offset << shift_row)) << (4 - shift_row);
+        let col_frac = (mv.col as i32 - (col_offset << shift_col)) << (4 - shift_col);
         let ref_width = rec_cfg.width;
         let ref_height = rec_cfg.height;
 
         let stride = dst.plane.cfg.stride;
         let slice = dst.as_mut_slice();
 
-        for r in 0..height {
-          for c in 0..width {
-            let rs = cmp::min(ref_height as i32 - 1, cmp::max(0, po.y as i32 + row_offset + r as i32)) as usize;
-            let cs = cmp::min(ref_width as i32 - 1, cmp::max(0, po.x as i32 + col_offset + c as i32)) as usize;
+        let max_sample_val = ((1 << bit_depth) - 1) as i32;
+        let y_filter_idx = if height <= 4 { 4 } else { 0 };
+        let x_filter_idx = if width <= 4 { 4 } else { 0 };
+
+        match (col_frac, row_frac) {
+        (0,0) => {
+          for r in 0..height {
+            for c in 0..width {
+              let rs = cmp::min(ref_height as i32 - 1, cmp::max(0, po.y as i32 + row_offset + r as i32)) as usize;
+              let cs = cmp::min(ref_width as i32 - 1, cmp::max(0, po.x as i32 + col_offset + c as i32)) as usize;
+              let output_index = r * stride + c;
+              slice[output_index] = rec.planes[p].p(cs, rs);
+            }
+          }
+        }
+        (0,_) => {
+          for r in 0..height {
+            for c in 0..width {
+              let mut sum: i32 = 0;
+              for k in 0..8 {
+                let rs = cmp::min(ref_height as i32 - 1, cmp::max(0, po.y as i32 + row_offset + r as i32 - 3 + k as i32)) as usize;
+                let cs = cmp::min(ref_width as i32 - 1, cmp::max(0, po.x as i32 + col_offset + c as i32)) as usize;
+                sum += rec.planes[p].p(cs, rs) as i32 * SUBPEL_FILTERS[y_filter_idx][row_frac as usize][k];
+              }
+              let output_index = r * stride + c;
+              let val = ((sum + 64) >> 7).max(0).min(max_sample_val);
+              slice[output_index] = val as u16;
+            }
+          }
+        }
+        (_,0) => {
+          for r in 0..height {
+            for c in 0..width {
+            let mut sum: i32 = 0;
+            for k in 0..8 {
+              let rs = cmp::min(ref_height as i32 - 1, cmp::max(0, po.y as i32 + row_offset + r as i32)) as usize;
+              let cs = cmp::min(ref_width as i32 - 1, cmp::max(0, po.x as i32 + col_offset + c as i32 - 3 + k as i32)) as usize;
+              sum += rec.planes[p].p(cs, rs) as i32 * SUBPEL_FILTERS[x_filter_idx][col_frac as usize][k];
+            }
             let output_index = r * stride + c;
-            slice[output_index] = rec.planes[p].p(cs, rs);
+            let val = ((((sum + 4) >> 3) + 8) >> 4).max(0).min(max_sample_val);
+            slice[output_index] = val as u16;
+            }
+          }
+        }
+        (_,_) => {
+          let mut intermediate = [[0 as i16; 128]; 128+7];
+
+          for r in 0..height+7 {
+            for c in 0..width {
+              let mut sum: i32 = 0;
+              for k in 0..8 {
+                let rs = cmp::min(ref_height as i32 - 1, cmp::max(0, po.y as i32 + row_offset + r as i32 - 3)) as usize;
+                let cs = cmp::min(ref_width as i32 - 1, cmp::max(0, po.x as i32 + col_offset + c as i32 - 3 + k as i32)) as usize;
+                sum += rec.planes[p].p(cs, rs) as i32 * SUBPEL_FILTERS[x_filter_idx][col_frac as usize][k];
+              }
+              let val = (sum + 4) >> 3;
+              intermediate[r][c] = val as i16;
+            }
+          }
+
+          for r in 0..height {
+            for c in 0..width {
+              let mut sum: i32 = 0;
+              for k in 0..8 {
+                sum += intermediate[r + k][c] as i32 * SUBPEL_FILTERS[y_filter_idx][row_frac as usize][k];
+              }
+              let output_index = r * stride + c;
+              let val = ((sum + 8) >> 4).max(0).min(max_sample_val);
+              slice[output_index] = val as u16;
+              }
+            }
           }
         }
       },
