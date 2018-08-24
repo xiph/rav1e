@@ -622,7 +622,7 @@ impl PredictionMode {
 
   pub fn predict_inter<'a>(self, fi: &FrameInvariants, p: usize, po: &PlaneOffset,
                            dst: &'a mut PlaneMutSlice<'a>, width: usize, height: usize,
-ref_frame: usize, mv: &MotionVector, bit_depth: usize) {
+                           ref_frame: usize, mv: &MotionVector, bit_depth: usize) {
     assert!(!self.is_intra());
     assert!(ref_frame == LAST_FRAME);
 
@@ -709,7 +709,7 @@ ref_frame: usize, mv: &MotionVector, bit_depth: usize) {
                 sum += intermediate[r + k][c] as i32 * SUBPEL_FILTERS[y_filter_idx][row_frac as usize][k];
               }
               let output_index = r * stride + c;
-              let val = ((sum + 8) >> 4).max(0).min(max_sample_val);
+              let val = ((sum + 1024) >> 11).max(0).min(max_sample_val);
               slice[output_index] = val as u16;
               }
             }
