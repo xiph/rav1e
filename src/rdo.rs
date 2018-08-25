@@ -111,10 +111,15 @@ fn sse_wxh(src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, w: usize, h: usize) -> 
 
   let mut sse: u64 = 0;
   for j in 0..h {
-    for i in 0..w {
-      let dist = (src1.p(i, j) as i16 - src2.p(i, j) as i16) as i64;
-      sse += (dist * dist) as u64;
-    }
+    let src1j = src1.subslice(0, j);
+    let src2j = src2.subslice(0, j);
+    let s1 = src1j.as_slice_w_width(w);
+    let s2 = src2j.as_slice_w_width(w);
+
+    let row_sse = s1.iter().zip(s2)
+      .map(|(&a, &b)| { let c = (a as i16 - b as i16) as i32; (c * c) as u32 })
+      .sum::<u32>();
+    sse += row_sse as u64;
   }
   sse
 }
