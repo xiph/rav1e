@@ -24,6 +24,7 @@ use partition::TxType::*;
 use partition::*;
 use plane::*;
 use util::clamp;
+use util::msb;
 use std::*;
 
 use self::REF_CONTEXTS;
@@ -70,6 +71,11 @@ const TX_SETS_INTER: usize = 4;
 
 const MAX_REF_MV_STACK_SIZE: usize = 8;
 pub const REF_CAT_LEVEL: u32 = 640;
+
+const FRAME_LF_COUNT: usize = 4;
+const MAX_LOOP_FILTER: usize = 63;
+const DELTA_LF_SMALL: u32 = 3;
+const DELTA_LF_PROBS: usize = DELTA_LF_SMALL as usize;
 
 // Number of transform types in each set type
 static num_tx_set: [usize; TX_SETS] =
@@ -810,6 +816,8 @@ extern "C" {
 
   static default_single_ref_cdf: [[[u16; 2 + 1]; SINGLE_REFS - 1]; REF_CONTEXTS];
   static av1_scan_orders: [[SCAN_ORDER; TX_TYPES]; TxSize::TX_SIZES_ALL];
+  static default_delta_lf_multi_cdf: [[u16; DELTA_LF_PROBS + 1 + 1]; FRAME_LF_COUNT];
+  static default_delta_lf_cdf: [u16; DELTA_LF_PROBS + 1 + 1];
 
   // lv_map
   static av1_default_txb_skip_cdfs:
@@ -875,6 +883,8 @@ pub struct CDFContext {
   single_ref_cdfs: [[[u16; 2 + 1]; SINGLE_REFS - 1]; REF_CONTEXTS],
   drl_cdfs: [[u16; 2 + 1]; DRL_MODE_CONTEXTS],
   nmv_context: NMVContext,
+  deblock_delta_multi_cdf: [[u16; DELTA_LF_PROBS + 1 + 1]; FRAME_LF_COUNT],
+  deblock_delta_cdf: [u16; DELTA_LF_PROBS + 1 + 1],
 
   // lv_map
   txb_skip_cdf: [[[u16; 3]; TXB_SKIP_CONTEXTS]; TxSize::TX_SIZES],
@@ -925,6 +935,8 @@ impl CDFContext {
       single_ref_cdfs: default_single_ref_cdf,
       drl_cdfs: default_drl_cdf,
       nmv_context: default_nmv_context,
+      deblock_delta_multi_cdf: default_delta_lf_multi_cdf,
+      deblock_delta_cdf: default_delta_lf_cdf,
 
       // lv_map
       txb_skip_cdf: av1_default_txb_skip_cdfs[qctx],
@@ -987,6 +999,19 @@ impl CDFContext {
       self.filter_intra_cdfs.first().unwrap().as_ptr() as usize;
     let filter_intra_cdfs_end =
       filter_intra_cdfs_start + size_of_val(&self.filter_intra_cdfs);
+    let deblock_delta_multi_cdf_start =
+      self.deblock_delta_multi_cdf.first().unwrap().as_ptr() as usize;
+    let deblock_delta_multi_cdf_end =
+      deblock_delta_multi_cdf_start + size_of_val(&self.deblock_delta_multi_cdf);
+    let deblock_delta_cdf_start =
+      self.deblock_delta_cdf.as_ptr() as usize;
+    let deblock_delta_cdf_end =
+      deblock_delta_cdf_start + size_of_val(&self.deblock_delta_cdf);
+    let filter_intra_cdf_start =
+      self.filter_intra_cdfs.first().unwrap().as_ptr() as usize;
+    let filter_intra_cdfs_end =
+      filter_intra_cdfs_start + size_of_val(&self.filter_intra_cdfs);
+
     let txb_skip_cdf_start =
       self.txb_skip_cdf.first().unwrap().as_ptr() as usize;
     let txb_skip_cdf_end =
@@ -1052,6 +1077,8 @@ impl CDFContext {
       ("intra_inter_cdfs", intra_inter_cdfs_start, intra_inter_cdfs_end),
       ("angle_delta_cdf", angle_delta_cdf_start, angle_delta_cdf_end),
       ("filter_intra_cdfs", filter_intra_cdfs_start, filter_intra_cdfs_end),
+      ("deblock_delta_multi_cdf", deblock_delta_multi_cdf_start, deblock_delta_multi_cdf_end),
+      ("deblock_delta_cdf", deblock_delta_cdf_start, deblock_delta_cdf_end),
       ("txb_skip_cdf", txb_skip_cdf_start, txb_skip_cdf_end),
       ("dc_sign_cdf", dc_sign_cdf_start, dc_sign_cdf_end),
       ("eob_extra_cdf", eob_extra_cdf_start, eob_extra_cdf_end),
@@ -1209,6 +1236,10 @@ pub struct Block {
   pub tx_w: usize, /* transform width in the unit of mode_info */
   pub tx_h: usize, /* transform height in the unit of mode_info */
   pub is_sec_rect: bool,
+  // The block-level deblock_deltas are left-shifted by
+  // fi.deblock.block_delta_shift and added to the frame-configured
+  // deltas
+  pub deblock_deltas: [i8; FRAME_LF_COUNT]
 }
 
 impl Block {
@@ -1226,6 +1257,7 @@ impl Block {
       tx_w: TX_64X64.width_mi(),
       tx_h: TX_64X64.height_mi(),
       is_sec_rect: false,
+      deblock_deltas: [0, 0, 0, 0]
     }
   }
   pub fn is_inter(&self) -> bool {
@@ -1246,6 +1278,7 @@ pub struct BlockContext {
   pub cols: usize,
   pub rows: usize,
   pub cdef_coded: bool,
+  pub code_deltas: bool,
   above_partition_context: Vec<u8>,
   left_partition_context: [u8; MAX_MIB_SIZE],
   above_coeff_context: [Vec<u8>; PLANES],
@@ -1262,6 +1295,7 @@ impl BlockContext {
       cols,
       rows,
       cdef_coded: false,
+      code_deltas: false,
       above_partition_context: vec![0; aligned_cols],
       left_partition_context: [0; MAX_MIB_SIZE],
       above_coeff_context: [
@@ -1279,6 +1313,7 @@ impl BlockContext {
       cols: self.cols,
       rows: self.rows,
       cdef_coded: self.cdef_coded,
+      code_deltas: self.code_deltas,
       above_partition_context: self.above_partition_context.clone(),
       left_partition_context: self.left_partition_context,
       above_coeff_context: self.above_coeff_context.clone(),
@@ -2569,6 +2604,32 @@ impl ContextWriter {
 
   pub fn write_cdef(&mut self, w: &mut dyn Writer, strength_index: u8, bits: u8) {
     w.literal(bits, strength_index as u32);
+  }
+
+  pub fn write_block_deblock_deltas(&mut self, w: &mut dyn Writer,
+                                    bo: &BlockOffset, multi: bool) {
+      let block = self.bc.at(bo);
+      let deltas = if multi { FRAME_LF_COUNT + PLANES - 3 } else { 1 };
+      for i in 0..deltas {
+          let delta = block.deblock_deltas[i];
+          let abs:u32 = delta.abs() as u32;
+
+          if multi {
+              symbol_with_update!(self, w, cmp::min(abs, DELTA_LF_SMALL),
+                                  &mut self.fc.deblock_delta_multi_cdf[i]);
+          } else {
+              symbol_with_update!(self, w, cmp::min(abs, DELTA_LF_SMALL),
+                                  &mut self.fc.deblock_delta_cdf);
+          };
+          if abs >= DELTA_LF_SMALL {
+              let bits = msb(abs as i32 - 1) as u32;
+              w.literal(3, bits - 1);
+              w.literal(bits as u8, abs - (1<<bits) - 1);
+          }
+          if abs > 0 {
+              w.bool(delta < 0, 16384);
+          }
+      }
   }
 
   pub fn write_is_inter(&mut self, w: &mut dyn Writer, bo: &BlockOffset, is_inter: bool) {

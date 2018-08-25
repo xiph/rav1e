@@ -261,7 +261,7 @@ pub fn rdo_mode_decision(
 
 
           encode_block_a(seq, cw, wr, bsize, bo, skip);
-          encode_block_b(fi, fs, cw, wr, luma_mode, chroma_mode, ref_frame, mv, bsize, bo, skip, seq.bit_depth, cfl);
+          encode_block_b(seq, fi, fs, cw, wr, luma_mode, chroma_mode, ref_frame, mv, bsize, bo, skip, seq.bit_depth, cfl);
 
           let cost = wr.tell_frac() - tell;
           let rd = compute_rd_cost(

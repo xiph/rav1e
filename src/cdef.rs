@@ -13,6 +13,7 @@ use std::cmp;
 use context::*;
 use plane::*;
 use util::clamp;
+use util::msb;
 use FrameInvariants;
 use Frame;
 
@@ -23,10 +24,6 @@ pub struct CdefDirections {
 
 pub const CDEF_VERY_LARGE: u16 = 30000;
 const CDEF_SEC_STRENGTHS: u8 = 4;
-
-fn msb(x: i32) -> i32 {
-    31 ^ (x.leading_zeros() as i32)
-}
 
 // Instead of dividing by n between 2 and 8, we multiply by 3*5*7*8/n.
 // The output is then 840 times larger, but we don't care for finding
