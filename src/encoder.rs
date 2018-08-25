@@ -340,7 +340,7 @@ impl FrameInvariants {
             showable_frame: true,
             error_resilient: true,
             intra_only: false,
-            allow_high_precision_mv: false,
+            allow_high_precision_mv: true,
             frame_type: FrameType::KEY,
             show_existing_frame: false,
             use_reduced_tx_set,
