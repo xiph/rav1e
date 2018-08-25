@@ -1226,7 +1226,7 @@ pub fn encode_block_a(seq: &Sequence,
     cw.bc.cdef_coded
 }
 
-pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
+pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
                  cw: &mut ContextWriter, w: &mut dyn Writer,
                  luma_mode: PredictionMode, chroma_mode: PredictionMode,
                  ref_frame: usize, mv: MotionVector,
@@ -1234,9 +1234,18 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
                  cfl: CFLParams) {
     let is_inter = !luma_mode.is_intra();
     if is_inter { assert!(luma_mode == chroma_mode); };
-
+    let sb_size = if seq.use_128x128_superblock {
+        BlockSize::BLOCK_128X128
+    } else {
+        BlockSize::BLOCK_64X64
+    };
     cw.bc.set_block_size(bo, bsize);
     cw.bc.set_mode(bo, bsize, luma_mode);
+    //write_q_deltas();
+    if cw.bc.code_deltas && fi.deblock.block_deltas_enabled && (bsize < sb_size || !skip) {
+        cw.write_block_deblock_deltas(w, bo, fi.deblock.block_delta_multi);
+    }
+    cw.bc.code_deltas = false;
 
     if fi.frame_type == FrameType::INTER {
         cw.write_is_inter(w, bo, is_inter);
@@ -1617,7 +1626,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
 
         cdef_coded = encode_block_a(seq, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                                    bsize, bo, skip);
-        encode_block_b(fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
+        encode_block_b(seq, fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                        mode_luma, mode_chroma, ref_frame, mv, bsize, bo, skip, seq.bit_depth, cfl);
 
         best_decision = mode_decision;
@@ -1670,7 +1679,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             let mut cdef_coded = cw.bc.cdef_coded;
             cdef_coded = encode_block_a(seq, cw, if cdef_coded {w_post_cdef} else {w_pre_cdef},
                                        bsize, bo, skip);
-            encode_block_b(fi, fs, cw, if cdef_coded {w_post_cdef} else {w_pre_cdef},
+            encode_block_b(seq, fi, fs, cw, if cdef_coded {w_post_cdef} else {w_pre_cdef},
                           mode_luma, mode_chroma, ref_frame, mv, bsize, bo, skip, seq.bit_depth, cfl);
         }
     }
@@ -1751,7 +1760,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
             // FIXME: every final block that has gone through the RDO decision process is encoded twice
             cdef_coded = encode_block_a(seq, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                          bsize, bo, skip);
-            encode_block_b(fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
+            encode_block_b(seq, fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                           mode_luma, mode_chroma, ref_frame, mv, bsize, bo, skip, seq.bit_depth, cfl);
         },
         PartitionType::PARTITION_SPLIT => {
@@ -1804,6 +1813,7 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
             let sbo = SuperBlockOffset { x: sbx, y: sby };
             let bo = sbo.block_offset(0, 0);
             cw.bc.cdef_coded = false;
+            cw.bc.code_deltas = fi.delta_q_present;
 
             // Encode SuperBlock
             if fi.config.speed == 0 {

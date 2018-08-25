@@ -209,3 +209,9 @@ pub trait ILog : PrimInt {
 }
 
 impl<T> ILog for T where T: PrimInt {}
+
+pub fn msb(x: i32) -> i32 {
+    debug_assert!(x>0);
+    31 ^ (x.leading_zeros() as i32)
+}
+
