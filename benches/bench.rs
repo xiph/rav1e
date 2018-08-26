@@ -8,13 +8,13 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 #[macro_use]
-extern crate bencher;
+extern crate criterion;
 extern crate rand;
 extern crate rav1e;
 
 mod predict;
 
-use bencher::*;
+use criterion::*;
 use rav1e::*;
 use rav1e::context::*;
 use rav1e::ec;
@@ -24,31 +24,13 @@ use rav1e::predict::*;
 #[cfg(feature = "comparative_bench")]
 mod comparative;
 
-struct WriteB {
-  tx_size: TxSize,
-  qi: usize
-}
-
-impl TDynBenchFn for WriteB {
-  fn run(&self, b: &mut Bencher) {
-    write_b_bench(b, self.tx_size, self.qi);
-  }
-}
-
-pub fn write_b() -> Vec<TestDescAndFn> {
-  use std::borrow::Cow;
-  let mut benches = ::std::vec::Vec::new();
+fn write_b(c: &mut Criterion) {
   for &tx_size in &[TxSize::TX_4X4, TxSize::TX_8X8] {
     for &qi in &[20, 55] {
-      let w = WriteB { tx_size, qi };
       let n = format!("write_b_bench({:?}, {})", tx_size, qi);
-      benches.push(TestDescAndFn {
-        desc: TestDesc { name: Cow::from(n), ignore: false },
-        testfn: TestFn::DynBenchFn(Box::new(w))
-      });
+      c.bench_function(&n, move |b| write_b_bench(b, tx_size, qi));
     }
   }
-  benches
 }
 
 fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
@@ -108,20 +90,15 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
   });
 }
 
-benchmark_group!(
+criterion_group!(
   intra_prediction,
-  predict::intra_dc_4x4,
-  predict::intra_h_4x4,
-  predict::intra_v_4x4,
-  predict::intra_paeth_4x4,
-  predict::intra_smooth_4x4,
-  predict::intra_smooth_h_4x4,
-  predict::intra_smooth_v_4x4,
-  predict::intra_cfl_4x4
+  predict::pred_bench,
 );
 
+criterion_group!(write_block, write_b);
+
 #[cfg(feature = "comparative_bench")]
-benchmark_main!(comparative::intra_prediction);
+criterion_main!(comparative::intra_prediction);
 
 #[cfg(not(feature = "comparative_bench"))]
-benchmark_main!(write_b, intra_prediction);
+criterion_main!(write_block, intra_prediction);

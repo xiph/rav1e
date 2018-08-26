@@ -32,7 +32,7 @@ pkg-config = "0.3.12"
 bindgen = { version = "0.37", optional = true }
 
 [dev-dependencies]
-bencher = "0.1.5"
+criterion = "0.2"
 
 [[bin]]
 name = "rav1e"

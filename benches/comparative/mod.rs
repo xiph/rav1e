@@ -11,22 +11,9 @@ extern crate libc;
 
 mod predict;
 
-benchmark_group!(
+use criterion::Criterion;
+
+criterion_group!(
   intra_prediction,
-  predict::intra_dc_4x4_native,
-  predict::intra_dc_4x4_aom,
-  predict::intra_h_4x4_native,
-  predict::intra_h_4x4_aom,
-  predict::intra_v_4x4_native,
-  predict::intra_v_4x4_aom,
-  predict::intra_paeth_4x4_native,
-  predict::intra_paeth_4x4_aom,
-  predict::intra_smooth_4x4_native,
-  predict::intra_smooth_4x4_aom,
-  predict::intra_smooth_h_4x4_native,
-  predict::intra_smooth_h_4x4_aom,
-  predict::intra_smooth_v_4x4_native,
-  predict::intra_smooth_v_4x4_aom,
-  predict::intra_cfl_4x4_native,
-  predict::intra_cfl_4x4_aom
+  predict::intra_bench,
 );
