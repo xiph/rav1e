@@ -36,7 +36,7 @@ pub fn motion_estimation(fi: &FrameInvariants, fs: &mut FrameState, bsize: Block
         for x in (x_lo..x_hi).step_by(1) {
           let mut sad = 0 as u32;
           let mut plane_org = fs.input.planes[0].slice(&po);
-          let mut plane_ref = rec.planes[0].slice(&PlaneOffset { x: x, y: y });
+          let mut plane_ref = rec.frame.planes[0].slice(&PlaneOffset { x: x, y: y });
 
           for _r in 0..blk_h {
             {

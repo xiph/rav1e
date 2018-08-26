@@ -628,7 +628,7 @@ impl PredictionMode {
 
     match fi.rec_buffer.frames[fi.ref_frames[ref_frame - LAST_FRAME]] {
       Some(ref rec) => {
-        let rec_cfg = &rec.planes[p].cfg;
+        let rec_cfg = &rec.frame.planes[p].cfg;
         let shift_row = 3 + rec_cfg.ydec;
         let shift_col = 3 + rec_cfg.xdec;
         let row_offset = mv.row as i32 >> shift_row;
@@ -652,7 +652,7 @@ impl PredictionMode {
               let rs = cmp::min(ref_height as i32 - 1, cmp::max(0, po.y as i32 + row_offset + r as i32)) as usize;
               let cs = cmp::min(ref_width as i32 - 1, cmp::max(0, po.x as i32 + col_offset + c as i32)) as usize;
               let output_index = r * stride + c;
-              slice[output_index] = rec.planes[p].p(cs, rs);
+              slice[output_index] = rec.frame.planes[p].p(cs, rs);
             }
           }
         }
@@ -663,7 +663,7 @@ impl PredictionMode {
               for k in 0..8 {
                 let rs = cmp::min(ref_height as i32 - 1, cmp::max(0, po.y as i32 + row_offset + r as i32 - 3 + k as i32)) as usize;
                 let cs = cmp::min(ref_width as i32 - 1, cmp::max(0, po.x as i32 + col_offset + c as i32)) as usize;
-                sum += rec.planes[p].p(cs, rs) as i32 * SUBPEL_FILTERS[y_filter_idx][row_frac as usize][k];
+                sum += rec.frame.planes[p].p(cs, rs) as i32 * SUBPEL_FILTERS[y_filter_idx][row_frac as usize][k];
               }
               let output_index = r * stride + c;
               let val = ((sum + 64) >> 7).max(0).min(max_sample_val);
@@ -678,7 +678,7 @@ impl PredictionMode {
             for k in 0..8 {
               let rs = cmp::min(ref_height as i32 - 1, cmp::max(0, po.y as i32 + row_offset + r as i32)) as usize;
               let cs = cmp::min(ref_width as i32 - 1, cmp::max(0, po.x as i32 + col_offset + c as i32 - 3 + k as i32)) as usize;
-              sum += rec.planes[p].p(cs, rs) as i32 * SUBPEL_FILTERS[x_filter_idx][col_frac as usize][k];
+              sum += rec.frame.planes[p].p(cs, rs) as i32 * SUBPEL_FILTERS[x_filter_idx][col_frac as usize][k];
             }
             let output_index = r * stride + c;
             let val = ((((sum + 4) >> 3) + 8) >> 4).max(0).min(max_sample_val);
@@ -695,7 +695,7 @@ impl PredictionMode {
               for k in 0..8 {
                 let rs = cmp::min(ref_height as i32 - 1, cmp::max(0, po.y as i32 + row_offset + r as i32 - 3)) as usize;
                 let cs = cmp::min(ref_width as i32 - 1, cmp::max(0, po.x as i32 + col_offset + c as i32 - 3 + k as i32)) as usize;
-                sum += rec.planes[p].p(cs, rs) as i32 * SUBPEL_FILTERS[x_filter_idx][col_frac as usize][k];
+                sum += rec.frame.planes[p].p(cs, rs) as i32 * SUBPEL_FILTERS[x_filter_idx][col_frac as usize][k];
               }
               let val = (sum + 4) >> 3;
               intermediate[r][c] = val as i16;
