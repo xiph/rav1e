@@ -15,6 +15,7 @@ use context::BlockOffset;
 use plane::*;
 use context::BLOCK_TO_PLANE_SHIFT;
 
+#[inline(always)]
 pub fn get_sad(plane_org: &mut PlaneSlice, plane_ref: &mut PlaneSlice, blk_h: usize, blk_w: usize) -> u32 {
   let mut sum = 0 as u32;
 
