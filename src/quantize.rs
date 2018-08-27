@@ -171,13 +171,13 @@ pub fn dequantize(
   qindex: usize, coeffs: &[i32], rcoeffs: &mut [i32], tx_size: TxSize, bit_depth: usize
 ) {
   let log_tx_scale = get_log_tx_scale(tx_size) as i32;
+  let offset = (1 << log_tx_scale) - 1;
 
-  let val = coeffs[0] * dc_q(qindex, bit_depth) as i32;
-  rcoeffs[0] = (val + if val < 0 { (1 << log_tx_scale) - 1 } else { 0 }) >> log_tx_scale;
-
+  let dc_quant = dc_q(qindex, bit_depth) as i32;
   let ac_quant = ac_q(qindex, bit_depth) as i32;
 
-  for (r, &c) in rcoeffs.iter_mut().zip(coeffs.iter()).skip(1) {
-    *r = (c * ac_quant + if c < 0 { (1 << log_tx_scale) - 1 } else { 0 }) >> log_tx_scale;
+  for (i, (r, &c)) in rcoeffs.iter_mut().zip(coeffs.iter()).enumerate() {
+    let quant = if i == 0 { dc_quant } else { ac_quant };
+    *r = (c * quant + ((c >> 31) & offset)) >> log_tx_scale;
   }
 }
