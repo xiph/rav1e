@@ -59,7 +59,12 @@ pub fn motion_estimation(fi: &FrameInvariants, fs: &mut FrameState, bsize: Block
       let mode = PredictionMode::NEWMV;
       let mut tmp_plane = Plane::new(blk_w, blk_h, 0, 0);
 
-      for step in [4, 2].iter() {
+      let mut steps = vec![4, 2];
+      if fi.allow_high_precision_mv {
+        steps.push(1);
+      }
+
+      for step in steps {
         let center_mv_h = best_mv;
         for i in 0..3 {
           for j in 0..3 {
