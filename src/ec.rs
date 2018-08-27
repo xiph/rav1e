@@ -341,25 +341,17 @@ impl<S> WriterBase<S>{
   /// Function to update the CDF for Writer calls that do so.
   fn update_cdf(cdf: &mut [u16], val: u32) {
     let nsymbs = cdf.len() - 1;
-    let nsymbs2speed: [usize; 17] =
-      [0, 0, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2];
-    debug_assert!(nsymbs < 17);
-    let rate = 3
-      + (cdf[nsymbs] > 15) as usize
-      + (cdf[nsymbs] > 31) as usize
-      + nsymbs2speed[nsymbs]; // + get_msb(nsymbs);
-    let mut tmp = 32768;
+    let rate = 3 + (nsymbs >> 1).min(2) + (cdf[nsymbs] >> 4) as usize;
+    cdf[nsymbs] += 1 - (cdf[nsymbs] >> 5);
 
     // Single loop (faster)
     for (i, v) in cdf[..nsymbs - 1].iter_mut().enumerate() {
-      tmp = if i as u32 == val { 0 } else { tmp };
-      if tmp < *v {
-        *v -= (*v - tmp) >> rate;
+      if i as u32 >= val {
+        *v -= *v >> rate;
       } else {
-        *v += (tmp - *v) >> rate;
+        *v += (32768 - *v) >> rate;
       }
     }
-    cdf[nsymbs] += (cdf[nsymbs] < 32) as u16;
   }
 
   #[cfg(debug)]
