@@ -959,16 +959,16 @@ impl CDFContext {
 
   pub fn reset_counts(&mut self) {
     macro_rules! reset_1d {
-      ($field:expr) => (let l = $field.len(); $field[l-1] = 0; )
+      ($field:expr) => (let r = $field.last_mut().unwrap(); *r = 0;)
     }
     macro_rules! reset_2d {
-      ($field:expr) => (for mut x in $field.iter_mut() { let l = x.len(); x[l-1] = 0; })
+      ($field:expr) => (for mut x in $field.iter_mut() { reset_1d!(x); })
     }
     macro_rules! reset_3d {
-      ($field:expr) => (for mut x in $field.iter_mut() { for mut y in x.iter_mut() { let l = y.len(); y[l-1] = 0; }})
+      ($field:expr) => (for mut x in $field.iter_mut() { reset_2d!(x); })
     }
     macro_rules! reset_4d {
-      ($field:expr) => (for mut x in $field.iter_mut() { for mut y in x.iter_mut() { for mut z in y.iter_mut() {let l = z.len(); z[l-1] = 0; }}})
+      ($field:expr) => (for mut x in $field.iter_mut() { reset_3d!(x); })
     }
 
     for i in 0..4 { self.partition_cdf[i][4] = 0; }
