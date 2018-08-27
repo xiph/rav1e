@@ -1276,7 +1276,18 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
             cw.write_inter_mode(w, luma_mode, mode_context);
 
             if luma_mode == PredictionMode::NEWMV || luma_mode == PredictionMode::NEW_NEWMV {
-              let ref_mv_idx = 0;
+              let mut ref_mv_idx = 0;
+
+              // select a reasonable MV predictor
+              let mut best_dist = (1 as usize) << 17;
+              for (i, mv_cand) in mv_stack.iter().take(3).enumerate() {
+                let dist = (mv_cand.this_mv.row - mv.row).abs() as usize + (mv_cand.this_mv.col - mv.col).abs() as usize;
+                if dist < best_dist {
+                  best_dist = dist;
+                  ref_mv_idx = i;
+                }
+              }
+
               let num_mv_found = mv_stack.len();
               for idx in 0..2 {
                 if num_mv_found > idx + 1 {
