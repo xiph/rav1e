@@ -990,8 +990,8 @@ impl CDFContext {
 
     for i in 0..TX_SIZES {
       for j in 0..INTRA_MODES {
-        self.intra_tx_cdf[1][i][j][5] = 0;
-        self.intra_tx_cdf[2][i][j][7] = 0;
+        self.intra_tx_cdf[1][i][j][7] = 0;
+        self.intra_tx_cdf[2][i][j][5] = 0;
       }
       self.inter_tx_cdf[1][i][16] = 0;
       self.inter_tx_cdf[2][i][12] = 0;
