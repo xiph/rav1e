@@ -1166,11 +1166,17 @@ fn write_obus(packet: &mut dyn io::Write, sequence: &mut Sequence,
 
 /// Write into `dst` the difference between the blocks at `src1` and `src2`
 fn diff(dst: &mut [i16], src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, width: usize, height: usize) {
-    for j in 0..height {
-        for i in 0..width {
-            dst[j*width + i] = (src1.p(i, j) as i16) - (src2.p(i, j) as i16);
-        }
+  let src1_stride = src1.plane.cfg.stride;
+  let src2_stride = src2.plane.cfg.stride;
+
+  for ((l, s1), s2) in dst.chunks_mut(width)
+                        .zip(src1.as_slice().chunks(src1_stride))
+                        .zip(src2.as_slice().chunks(src2_stride))
+                        .take(height) {
+    for ((r, v1), v2) in l.iter_mut().zip(s1).zip(s2) {
+      *r = *v1 as i16 - *v2 as i16;
     }
+  }
 }
 
 // For a transform block,
