@@ -957,6 +957,86 @@ impl CDFContext {
     }
   }
 
+  pub fn reset_counts(&mut self) {
+    macro_rules! reset_1d {
+      ($field:expr) => (let r = $field.last_mut().unwrap(); *r = 0;)
+    }
+    macro_rules! reset_2d {
+      ($field:expr) => (for mut x in $field.iter_mut() { reset_1d!(x); })
+    }
+    macro_rules! reset_3d {
+      ($field:expr) => (for mut x in $field.iter_mut() { reset_2d!(x); })
+    }
+    macro_rules! reset_4d {
+      ($field:expr) => (for mut x in $field.iter_mut() { reset_3d!(x); })
+    }
+
+    for i in 0..4 { self.partition_cdf[i][4] = 0; }
+    for i in 4..16 { self.partition_cdf[i][10] = 0; }
+    for i in 16..20 { self.partition_cdf[i][8] = 0; }
+
+    reset_3d!(self.kf_y_cdf);
+    reset_2d!(self.y_mode_cdf);
+
+    for i in 0..INTRA_MODES {
+      self.uv_mode_cdf[0][i][UV_INTRA_MODES - 1] = 0;
+      self.uv_mode_cdf[1][i][UV_INTRA_MODES] = 0;
+    }
+    reset_1d!(self.cfl_sign_cdf);
+    reset_2d!(self.cfl_alpha_cdf);
+    reset_2d!(self.newmv_cdf);
+    reset_2d!(self.zeromv_cdf);
+    reset_2d!(self.refmv_cdf);
+
+    for i in 0..TX_SIZES {
+      for j in 0..INTRA_MODES {
+        self.intra_tx_cdf[1][i][j][7] = 0;
+        self.intra_tx_cdf[2][i][j][5] = 0;
+      }
+      self.inter_tx_cdf[1][i][16] = 0;
+      self.inter_tx_cdf[2][i][12] = 0;
+      self.inter_tx_cdf[3][i][2] = 0;
+    }
+
+    reset_2d!(self.skip_cdfs);
+    reset_2d!(self.intra_inter_cdfs);
+    reset_2d!(self.angle_delta_cdf);
+    reset_2d!(self.filter_intra_cdfs);
+    reset_3d!(self.single_ref_cdfs);
+    reset_2d!(self.drl_cdfs);
+    reset_2d!(self.deblock_delta_multi_cdf);
+    reset_1d!(self.deblock_delta_cdf);
+
+    reset_1d!(self.nmv_context.joints_cdf);
+    for i in 0..2 {
+      reset_1d!(self.nmv_context.comps[i].classes_cdf);
+      reset_2d!(self.nmv_context.comps[i].class0_fp_cdf);
+      reset_1d!(self.nmv_context.comps[i].fp_cdf);
+      reset_1d!(self.nmv_context.comps[i].sign_cdf);
+      reset_1d!(self.nmv_context.comps[i].class0_hp_cdf);
+      reset_1d!(self.nmv_context.comps[i].hp_cdf);
+      reset_1d!(self.nmv_context.comps[i].class0_cdf);
+      reset_2d!(self.nmv_context.comps[i].bits_cdf);
+    }
+
+    // lv_map
+    reset_3d!(self.txb_skip_cdf);
+    reset_3d!(self.dc_sign_cdf);
+    reset_4d!(self.eob_extra_cdf);
+
+    reset_3d!(self.eob_flag_cdf16);
+    reset_3d!(self.eob_flag_cdf32);
+    reset_3d!(self.eob_flag_cdf64);
+    reset_3d!(self.eob_flag_cdf128);
+    reset_3d!(self.eob_flag_cdf256);
+    reset_3d!(self.eob_flag_cdf512);
+    reset_3d!(self.eob_flag_cdf1024);
+
+    reset_4d!(self.coeff_base_eob_cdf);
+    reset_4d!(self.coeff_base_cdf);
+    reset_4d!(self.coeff_br_cdf);
+  }
+
   pub fn build_map(&self) -> Vec<(&'static str, usize, usize)> {
     use std::mem::size_of_val;
 
@@ -1093,6 +1173,12 @@ impl CDFContext {
       ("coeff_base_cdf", coeff_base_cdf_start, coeff_base_cdf_end),
       ("coeff_br_cdf", coeff_br_cdf_start, coeff_br_cdf_end),
     ]
+  }
+}
+
+impl fmt::Debug for CDFContext {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "CDFContext contains too many numbers to print :-(")
   }
 }
 
@@ -1794,7 +1880,7 @@ pub struct ContextWriterCheckpoint {
 #[derive(Clone)]
 pub struct ContextWriter {
   pub bc: BlockContext,
-  fc: CDFContext,
+  pub fc: CDFContext,
   #[cfg(debug)]
   fc_map: Option<FieldMap> // For debugging purposes
 }

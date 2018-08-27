@@ -38,9 +38,15 @@ impl Frame {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ReferenceFrame {
+  pub frame: Frame,
+  pub cdfs: CDFContext,
+}
+
 #[derive(Debug)]
 pub struct ReferenceFramesSet {
-    pub frames: [Option<Rc<Frame>>; (REF_FRAMES as usize)],
+    pub frames: [Option<Rc<ReferenceFrame>>; (REF_FRAMES as usize)],
     pub deblock: [DeblockState; (REF_FRAMES as usize)]
 }
 
@@ -57,7 +63,7 @@ const MAX_NUM_TEMPORAL_LAYERS: usize = 8;
 const MAX_NUM_SPATIAL_LAYERS: usize = 4;
 const MAX_NUM_OPERATING_POINTS: usize = MAX_NUM_TEMPORAL_LAYERS * MAX_NUM_SPATIAL_LAYERS;
 
-const PRIMARY_REF_NONE: u32 = 7;
+pub const PRIMARY_REF_NONE: u32 = 7;
 const PRIMARY_REF_BITS: u32 = 3;
 
 arg_enum!{
@@ -218,6 +224,7 @@ pub struct FrameState {
     pub input: Frame,
     pub rec: Frame,
     pub qc: QuantizationContext,
+    pub cdfs: CDFContext,
 }
 
 impl FrameState {
@@ -226,6 +233,7 @@ impl FrameState {
             input: Frame::new(fi.padded_w, fi.padded_h),
             rec: Frame::new(fi.padded_w, fi.padded_h),
             qc: Default::default(),
+            cdfs: CDFContext::new(0),
         }
     }
 }
@@ -345,7 +353,7 @@ impl FrameInvariants {
             number: 0,
             show_frame: true,
             showable_frame: true,
-            error_resilient: true,
+            error_resilient: false,
             intra_only: false,
             allow_high_precision_mv: false,
             frame_type: FrameType::KEY,
@@ -385,6 +393,7 @@ impl FrameInvariants {
             input: Frame::new(self.padded_w, self.padded_h),
             rec: Frame::new(self.padded_w, self.padded_h),
             qc: Default::default(),
+            cdfs: CDFContext::new(0),
         }
     }
 }
@@ -1801,7 +1810,16 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
 
 fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameState, bit_depth: usize) -> Vec<u8> {
     let mut w = WriterEncoder::new();
-    let fc = CDFContext::new(fi.config.quantizer as u8);
+
+    let fc = if fi.primary_ref_frame == PRIMARY_REF_NONE {
+      CDFContext::new(fi.config.quantizer as u8)
+    } else {
+      match fi.rec_buffer.frames[fi.ref_frames[fi.primary_ref_frame as usize]] {
+        Some(ref rec) => rec.cdfs.clone(),
+        None => CDFContext::new(fi.config.quantizer as u8)
+      }
+    };
+
     let bc = BlockContext::new(fi.w_in_b, fi.h_in_b);
     let mut cw = ContextWriter::new(fc,  bc);
 
@@ -1842,6 +1860,9 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
         cdef_filter_frame(fi, &mut fs.rec, &mut cw.bc, bit_depth);
     }
 
+    fs.cdfs = cw.fc.clone();
+    fs.cdfs.reset_counts();
+
     let mut h = w.done();
     h.push(0); // superframe anti emulation
     h
@@ -1866,7 +1887,7 @@ pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut 
     if fi.show_existing_frame {
         match fi.rec_buffer.frames[0] {
             Some(ref rec) => for p in 0..3 {
-                fs.rec.planes[p].data.copy_from_slice(rec.planes[p].data.as_slice());
+                fs.rec.planes[p].data.copy_from_slice(rec.frame.planes[p].data.as_slice());
             },
             None => (),
         }
@@ -1901,7 +1922,7 @@ pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut 
 }
 
 pub fn update_rec_buffer(fi: &mut FrameInvariants, fs: FrameState) {
-  let rfs = Rc::new(fs.rec);
+  let rfs = Rc::new(ReferenceFrame { frame: fs.rec, cdfs: fs.cdfs } );
   for i in 0..(REF_FRAMES as usize) {
     if (fi.refresh_frame_flags & (1 << i)) != 0 {
       fi.rec_buffer.frames[i] = Some(Rc::clone(&rfs));
