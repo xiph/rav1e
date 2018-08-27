@@ -862,7 +862,7 @@ pub struct CandidateMV {
   pub weight: u32
 }
 
-#[derive(Clone)]
+#[derive(Clone,Copy)]
 pub struct CDFContext {
   partition_cdf: [[u16; EXT_PARTITION_TYPES + 1]; PARTITION_CONTEXTS],
   kf_y_cdf: [[[u16; INTRA_MODES + 1]; KF_MODE_CONTEXTS]; KF_MODE_CONTEXTS],
@@ -3159,7 +3159,7 @@ impl ContextWriter {
   }
 
   pub fn rollback(&mut self, checkpoint: &ContextWriterCheckpoint) {
-    self.fc = checkpoint.fc.clone();
+    self.fc = checkpoint.fc;
     self.bc.rollback(&checkpoint.bc);
     #[cfg(debug)] {
       if self.fc_map.is_some() {
