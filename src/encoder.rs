@@ -8,6 +8,7 @@ use rdo::*;
 use ec::*;
 use std::fmt;
 use util::*;
+use deblock::*;
 use cdef::*;
 
 use bitstream_io::{BE, LE, BitWriter};
@@ -240,13 +241,11 @@ impl FrameState {
 
 #[derive(Copy, Clone, Debug)]
 pub struct DeblockState {
-    pub levels: [u8; PLANES+1],
+    pub levels: [u8; PLANES+1],  // Y vertical edges, Y horizontal, U, V
     pub sharpness: u8,
     pub deltas_enabled: bool,
     pub delta_updates_enabled: bool,
-    pub ref_deltas_enabled: bool,
     pub ref_deltas: [i8; REF_FRAMES],
-    pub mode_deltas_enabled: bool,
     pub mode_deltas: [i8; 2],
     pub block_deltas_enabled: bool,
     pub block_delta_shift: u8,
@@ -256,13 +255,11 @@ pub struct DeblockState {
 impl Default for DeblockState {
     fn default() -> Self {
         DeblockState {
-            levels: [0; PLANES+1],
+            levels: [8,8,4,4],
             sharpness: 0,
-            deltas_enabled: false,
+            deltas_enabled: false, // requires delta_q_enabled
             delta_updates_enabled: false,
-            ref_deltas_enabled: false,
             ref_deltas: [1, 0, 0, 0, 0, -1, -1, -1],
-            mode_deltas_enabled: false,
             mode_deltas: [0, 0],
             block_deltas_enabled: false,
             block_delta_shift: 0,
@@ -1000,7 +997,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
             assert!(fi.deblock.levels[3] < 64);
             self.write(6, fi.deblock.levels[3])?; // loop deblocking filter level 3
         }
-        self.write(3,0)?; // deblocking filter sharpness
+        self.write(3,fi.deblock.sharpness)?; // deblocking filter sharpness
         self.write_bit(fi.deblock.deltas_enabled)?; // loop deblocking filter deltas enabled
         if fi.deblock.deltas_enabled {
             self.write_bit(fi.deblock.delta_updates_enabled)?; // deltas updates enabled
@@ -1890,6 +1887,10 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
                 w_post_cdef.replay(&mut w);
             }
         }
+    }
+    /* TODO: Don't apply if lossless */
+    if fi.deblock.levels[0] != 0 || fi.deblock.levels[1] != 0 {
+        deblock_filter_frame(fi, &mut fs.rec, &mut cw.bc, bit_depth);
     }
     /* TODO: Don't apply if lossless */
     if sequence.enable_cdef {

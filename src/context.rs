@@ -72,8 +72,8 @@ const TX_SETS_INTER: usize = 4;
 const MAX_REF_MV_STACK_SIZE: usize = 8;
 pub const REF_CAT_LEVEL: u32 = 640;
 
-const FRAME_LF_COUNT: usize = 4;
-const MAX_LOOP_FILTER: usize = 63;
+pub const FRAME_LF_COUNT: usize = 4;
+pub const MAX_LOOP_FILTER: usize = 63;
 const DELTA_LF_SMALL: u32 = 3;
 const DELTA_LF_PROBS: usize = DELTA_LF_SMALL as usize;
 
