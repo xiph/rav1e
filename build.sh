@@ -4,6 +4,8 @@
 set -e
 
 #SEQ=!!!!! ENTER YOUR FAVORITE Y4M HERE !!!!!
+#SEQ=/Users/bossen/Movies/yuv/objective-1-fast/ducks_take_off_1080p50_60f.y4m
+SEQ=/Users/bossen/Movies/yuv/objective-1-fast/blue_sky_360p_60f.y4m
 
 if [[ -z "${SEQ}" ]]; then
   SEQ=nyan.y4m
