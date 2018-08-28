@@ -471,9 +471,9 @@ pub trait Intra: Dim {
   ) {
     if alpha == 0 { return; }
     assert!(32 >= Self::W);
-    assert!(ac.len() >= 32 * Self::H);
+    assert!(ac.len() >= 32 * (Self::H - 1) + Self::W);
     assert!(stride >= Self::W);
-    assert!(output.len() >= stride * Self::H);
+    assert!(output.len() >= stride * (Self::H - 1) + Self::W);
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     unsafe {
       return Self::pred_cfl_ssse3(output, stride, ac, alpha, bit_depth);
