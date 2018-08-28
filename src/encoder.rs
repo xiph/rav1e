@@ -1245,7 +1245,7 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
                  luma_mode: PredictionMode, chroma_mode: PredictionMode,
                  ref_frame: usize, mv: MotionVector,
                  bsize: BlockSize, bo: &BlockOffset, skip: bool, bit_depth: usize,
-                 cfl: CFLParams) {
+                 cfl: CFLParams, tx_size: TxSize, tx_type: TxType) {
     let is_inter = !luma_mode.is_intra();
     if is_inter { assert!(luma_mode == chroma_mode); };
     let sb_size = if seq.use_128x128_superblock {
@@ -1328,16 +1328,6 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
         }
     }
 
-    // these rules follow TX_MODE_LARGEST
-    let tx_size = match bsize {
-        BlockSize::BLOCK_4X4 => TxSize::TX_4X4,
-        BlockSize::BLOCK_8X8 => TxSize::TX_8X8,
-        BlockSize::BLOCK_16X16 => TxSize::TX_16X16,
-        _ => TxSize::TX_32X32
-    };
-    cw.bc.set_tx_size(bo, tx_size);
-    // Were we not hardcoded to TX_MODE_LARGEST, block tx size would be written here
-
     if skip {
         cw.bc.reset_skip_context(bo, bsize, xdec, ydec);
     }
@@ -1346,16 +1336,6 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
     if luma_mode == PredictionMode::DC_PRED && bsize.width() <= 32 && bsize.height() <= 32 {
         cw.write_use_filter_intra(w,false, bsize); // Always turn off FILTER_INTRA
     }
-
-    // Luma plane transform type decision
-    let tx_set = get_tx_set(tx_size, is_inter, fi.use_reduced_tx_set);
-
-    let tx_type = if tx_set > TxSet::TX_SET_DCTONLY && fi.config.speed <= 3 && !skip {
-        // FIXME: there is one redundant transform type decision per encoded block
-        rdo_tx_type_decision(fi, fs, cw, luma_mode, bsize, bo, tx_size, tx_set, bit_depth)
-    } else {
-        TxType::DCT_DCT
-    };
 
     if is_inter {
       {
@@ -1643,10 +1623,14 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         let mut cdef_coded = cw.bc.cdef_coded;
         rd_cost = mode_decision.rd_cost;
 
+        let (tx_size, tx_type) =
+          rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, skip);
+
         cdef_coded = encode_block_a(seq, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                                    bsize, bo, skip);
         encode_block_b(seq, fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
-                       mode_luma, mode_chroma, ref_frame, mv, bsize, bo, skip, seq.bit_depth, cfl);
+                       mode_luma, mode_chroma, ref_frame, mv, bsize, bo, skip, seq.bit_depth, cfl,
+                       tx_size, tx_type);
 
         best_decision = mode_decision;
     }
@@ -1696,10 +1680,14 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             let mv = best_decision.mv;
             let skip = best_decision.skip;
             let mut cdef_coded = cw.bc.cdef_coded;
+            let (tx_size, tx_type) =
+                rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, skip);
+
             cdef_coded = encode_block_a(seq, cw, if cdef_coded {w_post_cdef} else {w_pre_cdef},
                                        bsize, bo, skip);
             encode_block_b(seq, fi, fs, cw, if cdef_coded {w_post_cdef} else {w_pre_cdef},
-                          mode_luma, mode_chroma, ref_frame, mv, bsize, bo, skip, seq.bit_depth, cfl);
+                          mode_luma, mode_chroma, ref_frame, mv, bsize, bo, skip, seq.bit_depth, cfl,
+                          tx_size, tx_type);
         }
     }
 
@@ -1775,12 +1763,15 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
             let ref_frame = part_decision.ref_frame;
             let mv = part_decision.mv;
             let mut cdef_coded = cw.bc.cdef_coded;
+            let (tx_size, tx_type) =
+                rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, skip);
 
             // FIXME: every final block that has gone through the RDO decision process is encoded twice
             cdef_coded = encode_block_a(seq, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                          bsize, bo, skip);
             encode_block_b(seq, fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
-                          mode_luma, mode_chroma, ref_frame, mv, bsize, bo, skip, seq.bit_depth, cfl);
+                          mode_luma, mode_chroma, ref_frame, mv, bsize, bo, skip, seq.bit_depth, cfl,
+                          tx_size, tx_type);
         },
         PartitionType::PARTITION_SPLIT => {
             if rdo_output.part_modes.len() >= 4 {
