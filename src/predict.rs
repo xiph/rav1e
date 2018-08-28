@@ -38,6 +38,7 @@ pub static RAV1E_INTRA_MODES_MINIMAL: &'static [PredictionMode] = &[
 
 pub static RAV1E_INTER_MODES: &'static [PredictionMode] = &[
   PredictionMode::GLOBALMV,
+  PredictionMode::NEARESTMV,
   PredictionMode::NEWMV,
 ];
 

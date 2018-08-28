@@ -1245,7 +1245,7 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
                  luma_mode: PredictionMode, chroma_mode: PredictionMode,
                  ref_frame: usize, mv: MotionVector,
                  bsize: BlockSize, bo: &BlockOffset, skip: bool, bit_depth: usize,
-                 cfl: CFLParams) {
+                 cfl: CFLParams, mode_context: usize, mv_stack: &Vec<CandidateMV>) {
     let is_inter = !luma_mode.is_intra();
     if is_inter { assert!(luma_mode == chroma_mode); };
     let sb_size = if seq.use_128x128_superblock {
@@ -1269,8 +1269,6 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
             cw.bc.set_motion_vector(bo, bsize, mv);
             cw.write_ref_frames(w, bo);
 
-            let mut mv_stack = Vec::new();
-            let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack);
             //let mode_context = if bo.x == 0 && bo.y == 0 { 0 } else if bo.x ==0 || bo.y == 0 { 51 } else { 85 };
             // NOTE: Until rav1e supports other inter modes than GLOBALMV
             cw.write_inter_mode(w, luma_mode, mode_context);
@@ -1638,10 +1636,14 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         let mut cdef_coded = cw.bc.cdef_coded;
         rd_cost = mode_decision.rd_cost;
 
+        let mut mv_stack = Vec::new();
+        let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack, bsize, false);
+
         cdef_coded = encode_block_a(seq, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                                    bsize, bo, skip);
         encode_block_b(seq, fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
-                       mode_luma, mode_chroma, ref_frame, mv, bsize, bo, skip, seq.bit_depth, cfl);
+                       mode_luma, mode_chroma, ref_frame, mv, bsize, bo, skip, seq.bit_depth, cfl,
+                       mode_context, &mv_stack);
 
         best_decision = mode_decision;
     }
@@ -1691,10 +1693,14 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             let mv = best_decision.mv;
             let skip = best_decision.skip;
             let mut cdef_coded = cw.bc.cdef_coded;
+            let mut mv_stack = Vec::new();
+            let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack, bsize, false);
+
             cdef_coded = encode_block_a(seq, cw, if cdef_coded {w_post_cdef} else {w_pre_cdef},
                                        bsize, bo, skip);
             encode_block_b(seq, fi, fs, cw, if cdef_coded {w_post_cdef} else {w_pre_cdef},
-                          mode_luma, mode_chroma, ref_frame, mv, bsize, bo, skip, seq.bit_depth, cfl);
+                          mode_luma, mode_chroma, ref_frame, mv, bsize, bo, skip, seq.bit_depth, cfl,
+                          mode_context, &mv_stack);
         }
     }
 
@@ -1771,11 +1777,15 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
             let mv = part_decision.mv;
             let mut cdef_coded = cw.bc.cdef_coded;
 
+            let mut mv_stack = Vec::new();
+            let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack, bsize, false);
+
             // FIXME: every final block that has gone through the RDO decision process is encoded twice
             cdef_coded = encode_block_a(seq, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                          bsize, bo, skip);
             encode_block_b(seq, fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
-                          mode_luma, mode_chroma, ref_frame, mv, bsize, bo, skip, seq.bit_depth, cfl);
+                          mode_luma, mode_chroma, ref_frame, mv, bsize, bo, skip, seq.bit_depth, cfl,
+                          mode_context, &mv_stack);
         },
         PartitionType::PARTITION_SPLIT => {
             if rdo_output.part_modes.len() >= 4 {
