@@ -443,8 +443,8 @@ pub trait Intra: Dim {
     let max = _mm_set1_epi16((1 << bit_depth) - 1);
 
     for j in 0..Self::H {
-      let luma = ac.as_ptr().offset(stride as isize * j as isize);
-      let line = output.as_mut_ptr().offset(32 * j as isize);
+      let luma = ac.as_ptr().offset((32 * j) as isize);
+      let line = output.as_mut_ptr().offset((stride * j) as isize);
 
       let mut i = 0isize;
       while (i as usize) < Self::W {
