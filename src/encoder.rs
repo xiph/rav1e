@@ -1302,6 +1302,20 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
                 MvSubpelPrecision::MV_SUBPEL_LOW_PRECISION
               };
               cw.write_mv(w, &mv, &ref_mv, mv_precision);
+            } else if luma_mode == PredictionMode::NEARMV {
+              let ref_mv_idx = 1;
+              let num_mv_found = mv_stack.len();
+              assert!(num_mv_found >= 2);
+              for idx in 1..4 {
+                if num_mv_found > idx + 1 {
+                  let drl_mode = ref_mv_idx > idx;
+                  let ctx: usize = (mv_stack[idx].weight < REF_CAT_LEVEL) as usize
+                    + (mv_stack[idx + 1].weight < REF_CAT_LEVEL) as usize;
+
+                  cw.write_drl_mode(w, drl_mode, ctx);
+                  if !drl_mode { break; }
+                }
+              }
             }
         } else {
             cw.write_intra_mode(w, bsize, luma_mode);
