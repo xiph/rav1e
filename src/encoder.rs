@@ -1386,7 +1386,7 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
     }
 }
 
-fn luma_ac(
+pub fn luma_ac(
   ac: &mut [i16], fs: &mut FrameState, bo: &BlockOffset, bsize: BlockSize
 ) {
   let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
@@ -1452,7 +1452,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
 
     if luma_only { return };
 
-    // these are only valid for 4:2:0
+    // TODO: these are only valid for 4:2:0
     let uv_tx_size = match bsize {
         BlockSize::BLOCK_4X4 | BlockSize::BLOCK_8X8 => TxSize::TX_4X4,
         BlockSize::BLOCK_16X16 => TxSize::TX_8X8,
@@ -1527,7 +1527,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
 
     if luma_only { return };
 
-    // these are only valid for 4:2:0
+    // TODO: these are only valid for 4:2:0
     let uv_tx_size = match bsize {
         BlockSize::BLOCK_4X4 | BlockSize::BLOCK_8X8 => TxSize::TX_4X4,
         BlockSize::BLOCK_16X16 => TxSize::TX_8X8,
