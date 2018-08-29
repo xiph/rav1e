@@ -1387,7 +1387,7 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
     }
 }
 
-fn luma_ac(
+pub fn luma_ac(
   ac: &mut [i16], fs: &mut FrameState, bo: &BlockOffset, bsize: BlockSize
 ) {
   let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
