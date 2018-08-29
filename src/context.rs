@@ -1087,10 +1087,6 @@ impl CDFContext {
       self.deblock_delta_cdf.as_ptr() as usize;
     let deblock_delta_cdf_end =
       deblock_delta_cdf_start + size_of_val(&self.deblock_delta_cdf);
-    let filter_intra_cdf_start =
-      self.filter_intra_cdfs.first().unwrap().as_ptr() as usize;
-    let filter_intra_cdfs_end =
-      filter_intra_cdfs_start + size_of_val(&self.filter_intra_cdfs);
 
     let txb_skip_cdf_start =
       self.txb_skip_cdf.first().unwrap().as_ptr() as usize;

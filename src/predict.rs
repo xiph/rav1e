@@ -18,6 +18,11 @@ use partition::*;
 use std::mem::*;
 use context::INTRA_MODES;
 
+#[cfg(target_arch = "x86")]
+use std::arch::x86::*;
+#[cfg(target_arch = "x86_64")]
+use std::arch::x86_64::*;
+
 pub static RAV1E_INTRA_MODES: &'static [PredictionMode] = &[
   PredictionMode::DC_PRED,
   PredictionMode::H_PRED,
@@ -427,11 +432,54 @@ pub trait Intra: Dim {
     }
   }
 
+  #[target_feature(enable = "ssse3")]
+  #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+  unsafe fn pred_cfl_ssse3(
+    output: &mut [u16], stride: usize, ac: &[i16], alpha: i16,
+    bit_depth: usize
+  ) {
+    let alpha_sign = _mm_set1_epi16(alpha);
+    let alpha_q12 = _mm_slli_epi16(_mm_abs_epi16(alpha_sign), 9);
+    let dc_q0 = _mm_set1_epi16(*output.as_ptr() as i16);
+    let max = _mm_set1_epi16((1 << bit_depth) - 1);
+
+    for j in 0..Self::H {
+      let luma = ac.as_ptr().offset((32 * j) as isize);
+      let line = output.as_mut_ptr().offset((stride * j) as isize);
+
+      let mut i = 0isize;
+      while (i as usize) < Self::W {
+        let ac_q3 = _mm_loadu_si128(luma.offset(i) as *const _);
+        let ac_sign = _mm_sign_epi16(alpha_sign, ac_q3);
+        let abs_scaled_luma_q0 = _mm_mulhrs_epi16(_mm_abs_epi16(ac_q3), alpha_q12);
+        let scaled_luma_q0 = _mm_sign_epi16(abs_scaled_luma_q0, ac_sign);
+        let pred = _mm_add_epi16(scaled_luma_q0, dc_q0);
+        let res = _mm_min_epi16(max, _mm_max_epi16(pred, _mm_setzero_si128()));
+        if Self::W == 4 {
+          _mm_storel_epi64(line.offset(i) as *mut _, res);
+        } else {
+          _mm_storeu_si128(line.offset(i) as *mut _, res);
+        }
+        i += 8;
+      }
+    }
+  }
+
   #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_cfl(
     output: &mut [u16], stride: usize, ac: &[i16], alpha: i16,
     bit_depth: usize
   ) {
+    if alpha == 0 { return; }
+    assert!(32 >= Self::W);
+    assert!(ac.len() >= 32 * (Self::H - 1) + Self::W);
+    assert!(stride >= Self::W);
+    assert!(output.len() >= stride * (Self::H - 1) + Self::W);
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    unsafe {
+      return Self::pred_cfl_ssse3(output, stride, ac, alpha, bit_depth);
+    }
+
     let sample_max = (1 << bit_depth) - 1;
     let avg = output[0] as i32;
 
@@ -668,20 +716,25 @@ pub mod test {
   }
 
   fn setup_cfl_pred(
-    ra: &mut ChaChaRng
+    ra: &mut ChaChaRng, bit_depth: usize
   ) -> (Vec<u16>, Vec<u16>, Vec<i16>, i16, Vec<u16>, Vec<u16>) {
     let o1 = vec![0u16; 32 * 32];
     let o2 = vec![0u16; 32 * 32];
-    let above: Vec<u16> = (0..32).map(|_| ra.gen()).collect();
-    let left: Vec<u16> = (0..32).map(|_| ra.gen()).collect();
-    let ac: Vec<i16> = (0..(32 * 32)).map(|_| ra.gen()).collect();
+    let max: u16 = (1 << bit_depth) - 1;
+    let above: Vec<u16> = (0..32).map(|_| ra.gen())
+      .map(|v: u16| v & max).collect();
+    let left: Vec<u16> = (0..32).map(|_| ra.gen())
+      .map(|v: u16| v & max).collect();
+    let luma_max: i16 = (1 << (bit_depth + 3)) - 1;
+    let ac: Vec<i16> = (0..(32 * 32)).map(|_| ra.gen())
+      .map(|v: i16| (v & luma_max) - (luma_max >> 1)).collect();
     let alpha = -1 as i16;
 
     (above, left, ac, alpha, o1, o2)
   }
 
   fn do_cfl_pred(ra: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>) {
-    let (above, left, ac, alpha, mut o1, mut o2) = setup_cfl_pred(ra);
+    let (above, left, ac, alpha, mut o1, mut o2) = setup_cfl_pred(ra, 8);
 
     pred_dc_4x4(&mut o1, 32, &above[..4], &left[..4]);
     Block4x4::pred_dc(&mut o2, 32, &above[..4], &left[..4]);

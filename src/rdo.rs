@@ -127,7 +127,7 @@ fn sse_wxh(src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, w: usize, h: usize) -> 
 // Compute the rate-distortion cost for an encode
 fn compute_rd_cost(
   fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize,
-  is_chroma_block: bool, bo: &BlockOffset, bit_cost: u32, bit_depth: usize
+  is_chroma_block: bool, bo: &BlockOffset, bit_cost: u32, bit_depth: usize, luma_only: bool
 ) -> f64 {
   let q = dc_q(fi.config.quantizer, bit_depth) as f64;
 
@@ -159,6 +159,7 @@ fn compute_rd_cost(
     unimplemented!();
   };
 
+  if !luma_only {
   let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
   let mask = !(MI_SIZE - 1);
@@ -183,11 +184,42 @@ fn compute_rd_cost(
       );
     }
   };
-
+  }
   // Compute rate
   let rate = (bit_cost as f64) / ((1 << OD_BITRES) as f64);
 
   (distortion as f64) + lambda * rate
+}
+
+pub fn rdo_tx_size_type(seq: &Sequence, fi: &FrameInvariants,
+  fs: &mut FrameState, cw: &mut ContextWriter, bsize: BlockSize,
+  bo: &BlockOffset, luma_mode: PredictionMode, skip: bool)
+  -> (TxSize, TxType) {
+  // these rules follow TX_MODE_LARGEST
+  let tx_size = match bsize {
+      BlockSize::BLOCK_4X4 => TxSize::TX_4X4,
+      BlockSize::BLOCK_8X8 => TxSize::TX_8X8,
+      BlockSize::BLOCK_16X16 => TxSize::TX_16X16,
+      _ => TxSize::TX_32X32
+  };
+  cw.bc.set_tx_size(bo, tx_size);
+  // Were we not hardcoded to TX_MODE_LARGEST, block tx size would be written here
+
+  // Luma plane transform type decision
+  let is_inter = !luma_mode.is_intra();
+  let tx_set = get_tx_set(tx_size, is_inter, fi.use_reduced_tx_set);
+
+  cw.bc.set_block_size(bo, bsize);
+  cw.bc.set_mode(bo, bsize, luma_mode);
+
+  let tx_type = if tx_set > TxSet::TX_SET_DCTONLY && fi.config.speed <= 3 && !skip {
+      // FIXME: there is one redundant transform type decision per encoded block
+      rdo_tx_type_decision(fi, fs, cw, luma_mode, bsize, bo, tx_size, tx_set, seq.bit_depth)
+  } else {
+      TxType::DCT_DCT
+  };
+
+  (tx_size, tx_type)
 }
 
 // RDO-based mode decision
@@ -249,6 +281,9 @@ pub fn rdo_mode_decision(
       _ => MotionVector { row: 0, col: 0 }
     };
 
+    let (tx_size, tx_type) =
+      rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, luma_mode, false);
+
     // Find the best chroma prediction mode for the current luma prediction mode
     for &chroma_mode in &mode_set_chroma {
       let mut cfl_alpha_set = vec![ [-1, 0], [-1, 1], [-1, -1], [1, -1], [0, -1], [1, 0], [0, 1], [1, 1] ];
@@ -267,10 +302,9 @@ pub fn rdo_mode_decision(
           let mut wr: &mut dyn Writer = &mut WriterCounter::new();
           let tell = wr.tell_frac();
 
-
           encode_block_a(seq, cw, wr, bsize, bo, skip);
-          encode_block_b(seq, fi, fs, cw, wr, luma_mode, chroma_mode, ref_frame, mv, bsize, bo, skip, seq.bit_depth,
-                         cfl, mode_context, &mv_stack);
+          encode_block_b(seq, fi, fs, cw, wr, luma_mode, chroma_mode,
+            ref_frame, mv, bsize, bo, skip, seq.bit_depth, cfl, tx_size, tx_type, mode_context, &mv_stack);
 
           let cost = wr.tell_frac() - tell;
           let rd = compute_rd_cost(
@@ -281,7 +315,8 @@ pub fn rdo_mode_decision(
             is_chroma_block,
             bo,
             cost,
-            seq.bit_depth
+            seq.bit_depth,
+            false
           );
 
           if rd < best_rd {
@@ -351,12 +386,12 @@ pub fn rdo_tx_type_decision(
     let tell = wr.tell_frac();
     if is_inter {
       write_tx_tree(
-        fi, fs, cw, wr, mode, bo, bsize, tx_size, tx_type, false, bit_depth
+        fi, fs, cw, wr, mode, bo, bsize, tx_size, tx_type, false, bit_depth, true
       );
     }  else {
       let cfl = CFLParams::new(); // Unused
       write_tx_blocks(
-        fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false, bit_depth, cfl
+        fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false, bit_depth, cfl, true
       );
     }
 
@@ -369,7 +404,8 @@ pub fn rdo_tx_type_decision(
       is_chroma_block,
       bo,
       cost,
-      bit_depth
+      bit_depth,
+      true
     );
 
     if rd < best_rd {
