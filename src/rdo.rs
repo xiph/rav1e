@@ -356,7 +356,7 @@ pub fn rdo_mode_decision(
 fn rdo_cfl_alpha(
   fs: &mut FrameState, bo: &BlockOffset, bsize: BlockSize, bit_depth: usize
 ) -> CFLParams {
-  // these are only valid for 4:2:0
+  // TODO: these are only valid for 4:2:0
   let uv_tx_size = match bsize {
       BlockSize::BLOCK_4X4 | BlockSize::BLOCK_8X8 => TxSize::TX_4X4,
       BlockSize::BLOCK_16X16 => TxSize::TX_8X8,
