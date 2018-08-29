@@ -2331,7 +2331,7 @@ impl ContextWriter {
     let (_rf, _rf_num) = self.get_mvref_ref_frames(INTRA_FRAME);
 
     let target_n4_h = bsize.height_mi();
-    let target_n4_w = bsize.height_mi();
+    let target_n4_w = bsize.width_mi();
 
     let mut max_row_offs = 0 as isize;
     let row_adj = (target_n4_h < BlockSize::MI_SIZE_HIGH[BLOCK_8X8 as usize]) && (bo.y & 0x01) != 0x0;
