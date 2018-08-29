@@ -288,14 +288,6 @@ pub fn rdo_mode_decision(
       if chroma_mode == PredictionMode::UV_CFL_PRED {
         if !best_mode_chroma.is_intra() { continue; }
         let mut wr: &mut dyn Writer = &mut WriterCounter::new();
-        // these rules follow TX_MODE_LARGEST
-        let tx_size = match bsize {
-            BlockSize::BLOCK_4X4 => TxSize::TX_4X4,
-            BlockSize::BLOCK_8X8 => TxSize::TX_8X8,
-            BlockSize::BLOCK_16X16 => TxSize::TX_16X16,
-            _ => TxSize::TX_32X32
-        };
-        let tx_type = TxType::DCT_DCT;
         write_tx_blocks(
           fi, fs, cw, wr, luma_mode, luma_mode, bo, bsize, tx_size, tx_type, false, seq.bit_depth, cfl, true
         );
