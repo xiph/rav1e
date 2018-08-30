@@ -126,11 +126,7 @@ fn sse_wxh(src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, w: usize, h: usize) -> 
   sse
 }
 
-// Compute the rate-distortion cost for an encode
-fn compute_rd_cost(
-  fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize,
-  is_chroma_block: bool, bo: &BlockOffset, bit_cost: u32, bit_depth: usize, luma_only: bool
-) -> f64 {
+pub fn get_lambda(fi: &FrameInvariants, bit_depth: usize) -> f64 {
   let q = dc_q(fi.config.quantizer, bit_depth) as f64;
 
   // Convert q into Q0 precision, given that libaom quantizers are Q3
@@ -138,7 +134,15 @@ fn compute_rd_cost(
 
   // Lambda formula from doc/theoretical_results.lyx in the daala repo
   // Use Q0 quantizer since lambda will be applied to Q0 pixel domain
-  let lambda = q0 * q0 * std::f64::consts::LN_2 / 6.0;
+  q0 * q0 * std::f64::consts::LN_2 / 6.0
+}
+
+// Compute the rate-distortion cost for an encode
+fn compute_rd_cost(
+  fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize,
+  is_chroma_block: bool, bo: &BlockOffset, bit_cost: u32, bit_depth: usize, luma_only: bool
+) -> f64 {
+  let lambda = get_lambda(fi, bit_depth);
 
   // Compute distortion
   let po = bo.plane_offset(&fs.input.planes[0].cfg);
