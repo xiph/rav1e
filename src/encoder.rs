@@ -1610,9 +1610,13 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
     if !must_split {
         partition = PartitionType::PARTITION_NONE;
 
+        let mut cost: f64 = 0.0;
+
         if bsize >= BlockSize::BLOCK_8X8 {
             let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
+            let tell = w.tell_frac();
             cw.write_partition(w, bo, partition, bsize);
+            cost = (w.tell_frac() - tell) as f64 * get_lambda(fi, seq.bit_depth)/ ((1 << OD_BITRES) as f64);
         }
         let mode_decision = rdo_mode_decision(seq, fi, fs, cw, bsize, bo).part_modes[0].clone();
         let (mode_luma, mode_chroma) = (mode_decision.pred_mode_luma, mode_decision.pred_mode_chroma);
@@ -1621,7 +1625,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         let mv = mode_decision.mv;
         let skip = mode_decision.skip;
         let mut cdef_coded = cw.bc.cdef_coded;
-        rd_cost = mode_decision.rd_cost;
+        rd_cost = mode_decision.rd_cost + cost;
 
         let (tx_size, tx_type) =
           rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, skip);
@@ -1646,13 +1650,17 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
 
         let nosplit_rd_cost = rd_cost;
 
+        rd_cost = 0.0;
+
         if bsize >= BlockSize::BLOCK_8X8 {
             let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
+            let tell = w.tell_frac();
             cw.write_partition(w, bo, partition, bsize);
+            rd_cost = (w.tell_frac() - tell) as f64 * get_lambda(fi, seq.bit_depth)/ ((1 << OD_BITRES) as f64);
         }
 
-        rd_cost = encode_partition_bottomup(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, subsize,
-                                            bo);
+        rd_cost += encode_partition_bottomup(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, subsize,
+                                             bo);
         rd_cost += encode_partition_bottomup(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, subsize,
                                              &BlockOffset { x: bo.x + hbs as usize, y: bo.y });
         rd_cost += encode_partition_bottomup(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, subsize,
