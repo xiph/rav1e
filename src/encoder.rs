@@ -1667,8 +1667,6 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
 
         // Recode the full block if it is more efficient
         if !must_split && nosplit_rd_cost < rd_cost {
-            rd_cost = nosplit_rd_cost;
-
             cw.rollback(&cw_checkpoint);
             w_pre_cdef.rollback(&w_pre_checkpoint);
             w_post_cdef.rollback(&w_post_checkpoint);
