@@ -19,6 +19,7 @@ use ec::WriterCounter;
 use luma_ac;
 use encode_block_a;
 use encode_block_b;
+use motion_compensate;
 use partition::*;
 use plane::*;
 use cdef::*;
@@ -278,6 +279,8 @@ pub fn rdo_mode_decision(
     } else {
       motion_estimation(fi, fs, bsize, bo, ref_frame)
     };
+
+    motion_compensate(fi, fs, cw, luma_mode, ref_frame, mv, bsize, bo, seq.bit_depth);
 
     let (tx_size, tx_type) =
       rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, luma_mode, false);
