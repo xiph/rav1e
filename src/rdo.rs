@@ -280,6 +280,12 @@ pub fn rdo_mode_decision(
       motion_estimation(fi, fs, bsize, bo, ref_frame)
     };
 
+    if !luma_mode.is_intra() {
+      cw.fill_neighbours_ref_counts(bo);
+      cw.bc.set_ref_frame(bo, bsize, ref_frame);
+      cw.bc.set_motion_vector(bo, bsize, mv);
+    }
+
     let (tx_size, tx_type) =
       rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, luma_mode, false);
 
