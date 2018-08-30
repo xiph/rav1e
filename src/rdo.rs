@@ -27,6 +27,7 @@ use quantize::dc_q;
 use std;
 use std::f64;
 use std::vec::Vec;
+use inter_pred;
 use write_tx_blocks;
 use write_tx_tree;
 use partition::BlockSize;
@@ -279,6 +280,12 @@ pub fn rdo_mode_decision(
       motion_estimation(fi, fs, bsize, bo, ref_frame)
     };
 
+    if !luma_mode.is_intra() {
+      cw.fill_neighbours_ref_counts(bo);
+      cw.bc.set_ref_frame(bo, bsize, ref_frame);
+      cw.bc.set_motion_vector(bo, bsize, mv);
+    }
+
     let (tx_size, tx_type) =
       rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, luma_mode, false);
 
@@ -430,6 +437,7 @@ pub fn rdo_tx_type_decision(
     let mut wr: &mut dyn Writer = &mut WriterCounter::new();
     let tell = wr.tell_frac();
     if is_inter {
+      inter_pred(fi, fs, cw, mode, bsize, bo, bit_depth);
       write_tx_tree(
         fi, fs, cw, wr, mode, bo, bsize, tx_size, tx_type, false, bit_depth, true
       );
