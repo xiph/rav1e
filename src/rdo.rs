@@ -428,8 +428,6 @@ pub fn rdo_tx_type_decision(
 
   let cw_checkpoint = cw.checkpoint();
 
-  if is_inter { inter_pred(fi, fs, cw, mode, bsize, bo, bit_depth); }
-
   for &tx_type in RAV1E_TX_TYPES {
     // Skip unsupported transform types
     if av1_tx_used[tx_set as usize][tx_type as usize] == 0 {
@@ -439,6 +437,7 @@ pub fn rdo_tx_type_decision(
     let mut wr: &mut dyn Writer = &mut WriterCounter::new();
     let tell = wr.tell_frac();
     if is_inter {
+      inter_pred(fi, fs, cw, mode, bsize, bo, bit_depth);
       write_tx_tree(
         fi, fs, cw, wr, mode, bo, bsize, tx_size, tx_type, false, bit_depth, true
       );
