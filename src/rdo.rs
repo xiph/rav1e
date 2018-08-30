@@ -27,6 +27,7 @@ use quantize::dc_q;
 use std;
 use std::f64;
 use std::vec::Vec;
+use inter_pred;
 use write_tx_blocks;
 use write_tx_tree;
 use partition::BlockSize;
@@ -420,6 +421,8 @@ pub fn rdo_tx_type_decision(
   let is_inter = !mode.is_intra();
 
   let cw_checkpoint = cw.checkpoint();
+
+  if is_inter { inter_pred(fi, fs, cw, mode, bsize, bo, bit_depth); }
 
   for &tx_type in RAV1E_TX_TYPES {
     // Skip unsupported transform types
