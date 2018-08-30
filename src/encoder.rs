@@ -1628,10 +1628,8 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         let mut cdef_coded = cw.bc.cdef_coded;
         rd_cost = mode_decision.rd_cost;
 
-        motion_compensate(fi, fs, cw, mode_luma, ref_frame, mv, bsize, bo, seq.bit_depth);
-
         let (tx_size, tx_type) =
-          rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, skip);
+          rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, ref_frame, mv, skip);
 
         cdef_coded = encode_block_a(seq, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                                    bsize, bo, skip);
@@ -1688,10 +1686,8 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             let skip = best_decision.skip;
             let mut cdef_coded = cw.bc.cdef_coded;
 
-            motion_compensate(fi, fs, cw, mode_luma, ref_frame, mv, bsize, bo, seq.bit_depth);
-
             let (tx_size, tx_type) =
-                rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, skip);
+                rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, ref_frame, mv, skip);
 
             cdef_coded = encode_block_a(seq, cw, if cdef_coded {w_post_cdef} else {w_pre_cdef},
                                        bsize, bo, skip);
@@ -1774,10 +1770,8 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
             let mv = part_decision.mv;
             let mut cdef_coded = cw.bc.cdef_coded;
 
-            motion_compensate(fi, fs, cw, mode_luma, ref_frame, mv, bsize, bo, seq.bit_depth);
-
             let (tx_size, tx_type) =
-                rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, skip);
+                rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, ref_frame, mv, skip);
 
             // FIXME: every final block that has gone through the RDO decision process is encoded twice
             cdef_coded = encode_block_a(seq, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},

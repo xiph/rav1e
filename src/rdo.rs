@@ -195,7 +195,7 @@ fn compute_rd_cost(
 
 pub fn rdo_tx_size_type(seq: &Sequence, fi: &FrameInvariants,
   fs: &mut FrameState, cw: &mut ContextWriter, bsize: BlockSize,
-  bo: &BlockOffset, luma_mode: PredictionMode, skip: bool)
+  bo: &BlockOffset, luma_mode: PredictionMode, ref_frame: usize, mv: MotionVector, skip: bool)
   -> (TxSize, TxType) {
   // these rules follow TX_MODE_LARGEST
   let tx_size = match bsize {
@@ -216,7 +216,7 @@ pub fn rdo_tx_size_type(seq: &Sequence, fi: &FrameInvariants,
 
   let tx_type = if tx_set > TxSet::TX_SET_DCTONLY && fi.config.speed <= 3 && !skip {
       // FIXME: there is one redundant transform type decision per encoded block
-      rdo_tx_type_decision(fi, fs, cw, luma_mode, bsize, bo, tx_size, tx_set, seq.bit_depth)
+      rdo_tx_type_decision(fi, fs, cw, luma_mode, ref_frame, mv, bsize, bo, tx_size, tx_set, seq.bit_depth)
   } else {
       TxType::DCT_DCT
   };
@@ -280,10 +280,8 @@ pub fn rdo_mode_decision(
       motion_estimation(fi, fs, bsize, bo, ref_frame)
     };
 
-    motion_compensate(fi, fs, cw, luma_mode, ref_frame, mv, bsize, bo, seq.bit_depth);
-
     let (tx_size, tx_type) =
-      rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, luma_mode, false);
+      rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, luma_mode, ref_frame, mv, false);
 
     // Find the best chroma prediction mode for the current luma prediction mode
     for &chroma_mode in &mode_set_chroma {
@@ -407,7 +405,7 @@ fn rdo_cfl_alpha(
 // RDO-based intra frame transform type decision
 pub fn rdo_tx_type_decision(
   fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
-  mode: PredictionMode, bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize,
+  mode: PredictionMode, ref_frame: usize, mv: MotionVector, bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize,
   tx_set: TxSet, bit_depth: usize
 ) -> TxType {
   let mut best_type = TxType::DCT_DCT;
@@ -429,6 +427,8 @@ pub fn rdo_tx_type_decision(
     if av1_tx_used[tx_set as usize][tx_type as usize] == 0 {
       continue;
     }
+
+    motion_compensate(fi, fs, cw, mode, ref_frame, mv, bsize, bo, bit_depth);
 
     let mut wr: &mut dyn Writer = &mut WriterCounter::new();
     let tell = wr.tell_frac();
