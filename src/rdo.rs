@@ -292,10 +292,12 @@ pub fn rdo_mode_decision(
       let mut cfl = CFLParams::new();
       if chroma_mode == PredictionMode::UV_CFL_PRED {
         if !best_mode_chroma.is_intra() { continue; }
+        let cw_checkpoint = cw.checkpoint();
         let mut wr: &mut dyn Writer = &mut WriterCounter::new();
         write_tx_blocks(
           fi, fs, cw, wr, luma_mode, luma_mode, bo, bsize, tx_size, tx_type, false, seq.bit_depth, cfl, true
         );
+        cw.rollback(&cw_checkpoint);
         cfl = rdo_cfl_alpha(fs, bo, bsize, seq.bit_depth);
       }
 
