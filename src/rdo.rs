@@ -264,9 +264,6 @@ pub fn rdo_mode_decision(
   }
   mode_set.extend_from_slice(intra_mode_set);
 
-  let mut mv_stack = Vec::new();
-  let mode_context = cw.find_mvrefs(bo, LAST_FRAME, &mut mv_stack, bsize, false);
-
   for &luma_mode in &mode_set {
     assert!(fi.frame_type == FrameType::INTER || luma_mode.is_intra());
 
@@ -281,10 +278,10 @@ pub fn rdo_mode_decision(
     }
 
     let ref_frame = if luma_mode.is_intra() { INTRA_FRAME } else { LAST_FRAME };
-    let mv = match luma_mode {
-      PredictionMode::NEWMV => motion_estimation(fi, fs, bsize, bo, ref_frame),
-      PredictionMode::NEARESTMV => if mv_stack.len() > 0 { mv_stack[0].this_mv } else { MotionVector { row: 0, col: 0 } },
-      _ => MotionVector { row: 0, col: 0 }
+    let mv = if luma_mode != PredictionMode::NEWMV {
+      MotionVector { row: 0, col: 0 }
+    } else {
+      motion_estimation(fi, fs, bsize, bo, ref_frame)
     };
 
     let (tx_size, tx_type) =
@@ -313,7 +310,7 @@ pub fn rdo_mode_decision(
 
         encode_block_a(seq, cw, wr, bsize, bo, skip);
         encode_block_b(seq, fi, fs, cw, wr, luma_mode, chroma_mode,
-          ref_frame, mv, bsize, bo, skip, seq.bit_depth, cfl, tx_size, tx_type, mode_context, &mv_stack);
+          ref_frame, mv, bsize, bo, skip, seq.bit_depth, cfl, tx_size, tx_type);
 
         let cost = wr.tell_frac() - tell;
         let rd = compute_rd_cost(
@@ -344,7 +341,6 @@ pub fn rdo_mode_decision(
   }
 
   cw.bc.set_mode(bo, bsize, best_mode_luma);
-  cw.bc.set_motion_vector(bo, bsize, best_mv);
 
   assert!(best_rd >= 0_f64);
 
