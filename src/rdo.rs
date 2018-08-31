@@ -19,6 +19,7 @@ use ec::WriterCounter;
 use luma_ac;
 use encode_block_a;
 use encode_block_b;
+use motion_compensate;
 use partition::*;
 use plane::*;
 use cdef::*;
@@ -125,11 +126,7 @@ fn sse_wxh(src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, w: usize, h: usize) -> 
   sse
 }
 
-// Compute the rate-distortion cost for an encode
-fn compute_rd_cost(
-  fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize,
-  is_chroma_block: bool, bo: &BlockOffset, bit_cost: u32, bit_depth: usize, luma_only: bool
-) -> f64 {
+pub fn get_lambda(fi: &FrameInvariants, bit_depth: usize) -> f64 {
   let q = dc_q(fi.config.quantizer, bit_depth) as f64;
 
   // Convert q into Q0 precision, given that libaom quantizers are Q3
@@ -137,7 +134,15 @@ fn compute_rd_cost(
 
   // Lambda formula from doc/theoretical_results.lyx in the daala repo
   // Use Q0 quantizer since lambda will be applied to Q0 pixel domain
-  let lambda = q0 * q0 * std::f64::consts::LN_2 / 6.0;
+  q0 * q0 * std::f64::consts::LN_2 / 6.0
+}
+
+// Compute the rate-distortion cost for an encode
+fn compute_rd_cost(
+  fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize,
+  is_chroma_block: bool, bo: &BlockOffset, bit_cost: u32, bit_depth: usize, luma_only: bool
+) -> f64 {
+  let lambda = get_lambda(fi, bit_depth);
 
   // Compute distortion
   let po = bo.plane_offset(&fs.input.planes[0].cfg);
@@ -194,7 +199,7 @@ fn compute_rd_cost(
 
 pub fn rdo_tx_size_type(seq: &Sequence, fi: &FrameInvariants,
   fs: &mut FrameState, cw: &mut ContextWriter, bsize: BlockSize,
-  bo: &BlockOffset, luma_mode: PredictionMode, skip: bool)
+  bo: &BlockOffset, luma_mode: PredictionMode, ref_frame: usize, mv: MotionVector, skip: bool)
   -> (TxSize, TxType) {
   // these rules follow TX_MODE_LARGEST
   let tx_size = match bsize {
@@ -215,7 +220,7 @@ pub fn rdo_tx_size_type(seq: &Sequence, fi: &FrameInvariants,
 
   let tx_type = if tx_set > TxSet::TX_SET_DCTONLY && fi.config.speed <= 3 && !skip {
       // FIXME: there is one redundant transform type decision per encoded block
-      rdo_tx_type_decision(fi, fs, cw, luma_mode, bsize, bo, tx_size, tx_set, seq.bit_depth)
+      rdo_tx_type_decision(fi, fs, cw, luma_mode, ref_frame, mv, bsize, bo, tx_size, tx_set, seq.bit_depth)
   } else {
       TxType::DCT_DCT
   };
@@ -283,7 +288,7 @@ pub fn rdo_mode_decision(
     };
 
     let (tx_size, tx_type) =
-      rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, luma_mode, false);
+      rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, luma_mode, ref_frame, mv, false);
 
     // Find the best chroma prediction mode for the current luma prediction mode
     for &chroma_mode in &mode_set_chroma {
@@ -408,7 +413,7 @@ fn rdo_cfl_alpha(
 // RDO-based intra frame transform type decision
 pub fn rdo_tx_type_decision(
   fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
-  mode: PredictionMode, bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize,
+  mode: PredictionMode, ref_frame: usize, mv: MotionVector, bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize,
   tx_set: TxSet, bit_depth: usize
 ) -> TxType {
   let mut best_type = TxType::DCT_DCT;
@@ -430,6 +435,8 @@ pub fn rdo_tx_type_decision(
     if av1_tx_used[tx_set as usize][tx_type as usize] == 0 {
       continue;
     }
+
+    motion_compensate(fi, fs, cw, mode, ref_frame, mv, bsize, bo, bit_depth);
 
     let mut wr: &mut dyn Writer = &mut WriterCounter::new();
     let tell = wr.tell_frac();
