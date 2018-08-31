@@ -1803,7 +1803,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
 
             if mode_luma == PredictionMode::NEARESTMV &&
                 (mv_stack.len() > 0 && (mv_stack[0].this_mv.row != mv.row || mv_stack[0].this_mv.col != mv.col) ||
-                 (0 != mv.row || 0 != mv.col)) {
+                 mv_stack.len() == 0 && (0 != mv.row || 0 != mv.col)) {
               mode_luma = PredictionMode::NEWMV;
               mode_chroma = PredictionMode::NEWMV;
             }
