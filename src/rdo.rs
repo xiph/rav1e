@@ -16,8 +16,10 @@ use me::*;
 use ec::OD_BITRES;
 use ec::Writer;
 use ec::WriterCounter;
+use luma_ac;
 use encode_block_a;
 use encode_block_b;
+use motion_compensate;
 use partition::*;
 use plane::*;
 use cdef::*;
@@ -124,11 +126,7 @@ fn sse_wxh(src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, w: usize, h: usize) -> 
   sse
 }
 
-// Compute the rate-distortion cost for an encode
-fn compute_rd_cost(
-  fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize,
-  is_chroma_block: bool, bo: &BlockOffset, bit_cost: u32, bit_depth: usize, luma_only: bool
-) -> f64 {
+pub fn get_lambda(fi: &FrameInvariants, bit_depth: usize) -> f64 {
   let q = dc_q(fi.config.quantizer, bit_depth) as f64;
 
   // Convert q into Q0 precision, given that libaom quantizers are Q3
@@ -136,7 +134,15 @@ fn compute_rd_cost(
 
   // Lambda formula from doc/theoretical_results.lyx in the daala repo
   // Use Q0 quantizer since lambda will be applied to Q0 pixel domain
-  let lambda = q0 * q0 * std::f64::consts::LN_2 / 6.0;
+  q0 * q0 * std::f64::consts::LN_2 / 6.0
+}
+
+// Compute the rate-distortion cost for an encode
+fn compute_rd_cost(
+  fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize,
+  is_chroma_block: bool, bo: &BlockOffset, bit_cost: u32, bit_depth: usize, luma_only: bool
+) -> f64 {
+  let lambda = get_lambda(fi, bit_depth);
 
   // Compute distortion
   let po = bo.plane_offset(&fs.input.planes[0].cfg);
@@ -193,7 +199,7 @@ fn compute_rd_cost(
 
 pub fn rdo_tx_size_type(seq: &Sequence, fi: &FrameInvariants,
   fs: &mut FrameState, cw: &mut ContextWriter, bsize: BlockSize,
-  bo: &BlockOffset, luma_mode: PredictionMode, skip: bool)
+  bo: &BlockOffset, luma_mode: PredictionMode, ref_frame: usize, mv: MotionVector, skip: bool)
   -> (TxSize, TxType) {
   // these rules follow TX_MODE_LARGEST
   let tx_size = match bsize {
@@ -214,7 +220,7 @@ pub fn rdo_tx_size_type(seq: &Sequence, fi: &FrameInvariants,
 
   let tx_type = if tx_set > TxSet::TX_SET_DCTONLY && fi.config.speed <= 3 && !skip {
       // FIXME: there is one redundant transform type decision per encoded block
-      rdo_tx_type_decision(fi, fs, cw, luma_mode, bsize, bo, tx_size, tx_set, seq.bit_depth)
+      rdo_tx_type_decision(fi, fs, cw, luma_mode, ref_frame, mv, bsize, bo, tx_size, tx_set, seq.bit_depth)
   } else {
       TxType::DCT_DCT
   };
@@ -285,55 +291,57 @@ pub fn rdo_mode_decision(
     };
 
     let (tx_size, tx_type) =
-      rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, luma_mode, false);
+      rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, luma_mode, ref_frame, mv, false);
 
     // Find the best chroma prediction mode for the current luma prediction mode
     for &chroma_mode in &mode_set_chroma {
-      let mut cfl_alpha_set = vec![ [-1, 0], [-1, 1], [-1, -1], [1, -1], [0, -1], [1, 0], [0, 1], [1, 1] ];
-      if chroma_mode != PredictionMode::UV_CFL_PRED {
-        cfl_alpha_set.truncate(1);
-      } else if !best_mode_chroma.is_intra() {
-        continue;
+      let mut cfl = CFLParams::new();
+      if chroma_mode == PredictionMode::UV_CFL_PRED {
+        if !best_mode_chroma.is_intra() { continue; }
+        let cw_checkpoint = cw.checkpoint();
+        let mut wr: &mut dyn Writer = &mut WriterCounter::new();
+        write_tx_blocks(
+          fi, fs, cw, wr, luma_mode, luma_mode, bo, bsize, tx_size, tx_type, false, seq.bit_depth, cfl, true
+        );
+        cw.rollback(&cw_checkpoint);
+        cfl = rdo_cfl_alpha(fs, bo, bsize, seq.bit_depth);
       }
-      for &[alpha_u, alpha_v] in &cfl_alpha_set {
-        let cfl = CFLParams::from_alpha(alpha_u, alpha_v);
 
-        for &skip in &[false, true] {
-          // Don't skip when using intra modes
-          if skip && luma_mode.is_intra() { continue; }
+      for &skip in &[false, true] {
+        // Don't skip when using intra modes
+        if skip && luma_mode.is_intra() { continue; }
 
-          let mut wr: &mut dyn Writer = &mut WriterCounter::new();
-          let tell = wr.tell_frac();
+        let mut wr: &mut dyn Writer = &mut WriterCounter::new();
+        let tell = wr.tell_frac();
 
-          encode_block_a(seq, cw, wr, bsize, bo, skip);
-          encode_block_b(seq, fi, fs, cw, wr, luma_mode, chroma_mode,
-            ref_frame, mv, bsize, bo, skip, seq.bit_depth, cfl, tx_size, tx_type, mode_context, &mv_stack);
+        encode_block_a(seq, cw, wr, bsize, bo, skip);
+        encode_block_b(seq, fi, fs, cw, wr, luma_mode, chroma_mode,
+          ref_frame, mv, bsize, bo, skip, seq.bit_depth, cfl, tx_size, tx_type, mode_context, &mv_stack);
 
-          let cost = wr.tell_frac() - tell;
-          let rd = compute_rd_cost(
-            fi,
-            fs,
-            w,
-            h,
-            is_chroma_block,
-            bo,
-            cost,
-            seq.bit_depth,
-            false
-          );
+        let cost = wr.tell_frac() - tell;
+        let rd = compute_rd_cost(
+          fi,
+          fs,
+          w,
+          h,
+          is_chroma_block,
+          bo,
+          cost,
+          seq.bit_depth,
+          false
+        );
 
-          if rd < best_rd {
-            best_rd = rd;
-            best_mode_luma = luma_mode;
-            best_mode_chroma = chroma_mode;
-            best_cfl_params = cfl;
-            best_ref_frame = ref_frame;
-            best_mv = mv;
-            best_skip = skip;
-          }
-
-          cw.rollback(&cw_checkpoint);
+        if rd < best_rd {
+          best_rd = rd;
+          best_mode_luma = luma_mode;
+          best_mode_chroma = chroma_mode;
+          best_cfl_params = cfl;
+          best_ref_frame = ref_frame;
+          best_mv = mv;
+          best_skip = skip;
         }
+
+        cw.rollback(&cw_checkpoint);
       }
     }
   }
@@ -359,10 +367,58 @@ pub fn rdo_mode_decision(
   }
 }
 
+fn rdo_cfl_alpha(
+  fs: &mut FrameState, bo: &BlockOffset, bsize: BlockSize, bit_depth: usize
+) -> CFLParams {
+  // TODO: these are only valid for 4:2:0
+  let uv_tx_size = match bsize {
+      BlockSize::BLOCK_4X4 | BlockSize::BLOCK_8X8 => TxSize::TX_4X4,
+      BlockSize::BLOCK_16X16 => TxSize::TX_8X8,
+      BlockSize::BLOCK_32X32 => TxSize::TX_16X16,
+      _ => TxSize::TX_32X32
+  };
+
+  let mut ac = [0i16; 32 * 32];
+  luma_ac(&mut ac, fs, bo, bsize);
+  let mut alpha_sse = [[0u64; 33]; 2];
+  for p in 1..3 {
+    let rec = &mut fs.rec.planes[p];
+    let input = &fs.input.planes[p];
+    let po = bo.plane_offset(&fs.input.planes[p].cfg);
+    for alpha in -16..17 {
+      PredictionMode::UV_CFL_PRED.predict_intra(
+        &mut rec.mut_slice(&po), uv_tx_size, bit_depth, &ac, alpha);
+      alpha_sse[(p - 1) as usize][(alpha + 16) as usize] = sse_wxh(
+        &input.slice(&po),
+        &rec.slice(&po),
+        uv_tx_size.width(),
+        uv_tx_size.height()
+      );
+    }
+  }
+
+  let mut best_cfl = CFLParams::new();
+  let mut best_rd = std::u64::MAX;
+  for alpha_u in -16..17 {
+    for alpha_v in -16..17 {
+      if alpha_u == 0 && alpha_v == 0 { continue; }
+      let cfl = CFLParams::from_alpha(alpha_u, alpha_v);
+      let rd = alpha_sse[0][(alpha_u + 16) as usize] +
+        alpha_sse[1][(alpha_v + 16) as usize];
+      if rd < best_rd {
+        best_rd = rd;
+        best_cfl = cfl;
+      }
+    }
+  }
+
+  best_cfl
+}
+
 // RDO-based intra frame transform type decision
 pub fn rdo_tx_type_decision(
   fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
-  mode: PredictionMode, bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize,
+  mode: PredictionMode, ref_frame: usize, mv: MotionVector, bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize,
   tx_set: TxSet, bit_depth: usize
 ) -> TxType {
   let mut best_type = TxType::DCT_DCT;
@@ -384,6 +440,8 @@ pub fn rdo_tx_type_decision(
     if av1_tx_used[tx_set as usize][tx_type as usize] == 0 {
       continue;
     }
+
+    motion_compensate(fi, fs, cw, mode, ref_frame, mv, bsize, bo, bit_depth);
 
     let mut wr: &mut dyn Writer = &mut WriterCounter::new();
     let tell = wr.tell_frac();
