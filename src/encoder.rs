@@ -1348,6 +1348,14 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
                 MvSubpelPrecision::MV_SUBPEL_LOW_PRECISION
               };
               cw.write_mv(w, &mv, &ref_mv, mv_precision);
+            } else if luma_mode == PredictionMode::NEARESTMV {
+              if mv_stack.len() > 0 {
+                assert!(mv_stack[0].this_mv.row == mv.row);
+                assert!(mv_stack[0].this_mv.col == mv.col);
+              } else {
+                assert!(0 == mv.row);
+                assert!(0 == mv.col);
+              }
             }
         } else {
             cw.write_intra_mode(w, bsize, luma_mode);
@@ -1770,7 +1778,9 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
 
     match partition {
         PartitionType::PARTITION_NONE => {
-            let part_decision = if !rdo_output.part_modes.is_empty() {
+            // FIXME: For now always redo RDO since prior RDO may have relied on inaccurate
+            // neighbours
+            let part_decision = if !rdo_output.part_modes.is_empty() && false {
                     // The optimal prediction mode is known from a previous iteration
                     rdo_output.part_modes[0].clone()
                 } else {
