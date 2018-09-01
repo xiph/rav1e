@@ -451,7 +451,8 @@ pub trait Intra: Dim {
       while (i as usize) < Self::W {
         let ac_q3 = _mm_loadu_si128(luma.offset(i) as *const _);
         let ac_sign = _mm_sign_epi16(alpha_sign, ac_q3);
-        let abs_scaled_luma_q0 = _mm_mulhrs_epi16(_mm_abs_epi16(ac_q3), alpha_q12);
+        let abs_scaled_luma_q0 =
+          _mm_mulhrs_epi16(_mm_abs_epi16(ac_q3), alpha_q12);
         let scaled_luma_q0 = _mm_sign_epi16(abs_scaled_luma_q0, ac_sign);
         let pred = _mm_add_epi16(scaled_luma_q0, dc_q0);
         let res = _mm_min_epi16(max, _mm_max_epi16(pred, _mm_setzero_si128()));
@@ -470,14 +471,20 @@ pub trait Intra: Dim {
     output: &mut [u16], stride: usize, ac: &[i16], alpha: i16,
     bit_depth: usize
   ) {
-    if alpha == 0 { return; }
+    if alpha == 0 {
+      return;
+    }
     assert!(32 >= Self::W);
     assert!(ac.len() >= 32 * (Self::H - 1) + Self::W);
     assert!(stride >= Self::W);
     assert!(output.len() >= stride * (Self::H - 1) + Self::W);
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    unsafe {
-      return Self::pred_cfl_ssse3(output, stride, ac, alpha, bit_depth);
+    {
+      if is_x86_feature_detected!("ssse3") {
+        return unsafe {
+          Self::pred_cfl_ssse3(output, stride, ac, alpha, bit_depth)
+        };
+      }
     }
 
     let sample_max = (1 << bit_depth) - 1;
@@ -721,13 +728,15 @@ pub mod test {
     let o1 = vec![0u16; 32 * 32];
     let o2 = vec![0u16; 32 * 32];
     let max: u16 = (1 << bit_depth) - 1;
-    let above: Vec<u16> = (0..32).map(|_| ra.gen())
-      .map(|v: u16| v & max).collect();
-    let left: Vec<u16> = (0..32).map(|_| ra.gen())
-      .map(|v: u16| v & max).collect();
+    let above: Vec<u16> =
+      (0..32).map(|_| ra.gen()).map(|v: u16| v & max).collect();
+    let left: Vec<u16> =
+      (0..32).map(|_| ra.gen()).map(|v: u16| v & max).collect();
     let luma_max: i16 = (1 << (bit_depth + 3)) - 1;
-    let ac: Vec<i16> = (0..(32 * 32)).map(|_| ra.gen())
-      .map(|v: i16| (v & luma_max) - (luma_max >> 1)).collect();
+    let ac: Vec<i16> = (0..(32 * 32))
+      .map(|_| ra.gen())
+      .map(|v: i16| (v & luma_max) - (luma_max >> 1))
+      .collect();
     let alpha = -1 as i16;
 
     (above, left, ac, alpha, o1, o2)

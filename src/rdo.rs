@@ -294,14 +294,21 @@ pub fn rdo_mode_decision(
     for &chroma_mode in &mode_set_chroma {
       let mut cfl = CFLParams::new();
       if chroma_mode == PredictionMode::UV_CFL_PRED {
-        if !best_mode_chroma.is_intra() { continue; }
+        if !best_mode_chroma.is_intra() {
+          continue;
+        }
         let cw_checkpoint = cw.checkpoint();
         let mut wr: &mut dyn Writer = &mut WriterCounter::new();
         write_tx_blocks(
           fi, fs, cw, wr, luma_mode, luma_mode, bo, bsize, tx_size, tx_type, false, seq.bit_depth, cfl, true
         );
         cw.rollback(&cw_checkpoint);
-        cfl = rdo_cfl_alpha(fs, bo, bsize, seq.bit_depth);
+        match rdo_cfl_alpha(fs, bo, bsize, seq.bit_depth) {
+          Some(params) => {
+            cfl = params;
+          }
+          None => continue
+        }
       }
 
       for &skip in &[false, true] {
@@ -364,52 +371,47 @@ pub fn rdo_mode_decision(
   }
 }
 
-fn rdo_cfl_alpha(
+pub fn rdo_cfl_alpha(
   fs: &mut FrameState, bo: &BlockOffset, bsize: BlockSize, bit_depth: usize
-) -> CFLParams {
+) -> Option<CFLParams> {
   // TODO: these are only valid for 4:2:0
   let uv_tx_size = match bsize {
-      BlockSize::BLOCK_4X4 | BlockSize::BLOCK_8X8 => TxSize::TX_4X4,
-      BlockSize::BLOCK_16X16 => TxSize::TX_8X8,
-      BlockSize::BLOCK_32X32 => TxSize::TX_16X16,
-      _ => TxSize::TX_32X32
+    BlockSize::BLOCK_4X4 | BlockSize::BLOCK_8X8 => TxSize::TX_4X4,
+    BlockSize::BLOCK_16X16 => TxSize::TX_8X8,
+    BlockSize::BLOCK_32X32 => TxSize::TX_16X16,
+    _ => TxSize::TX_32X32
   };
 
   let mut ac = [0i16; 32 * 32];
   luma_ac(&mut ac, fs, bo, bsize);
-  let mut alpha_sse = [[0u64; 33]; 2];
-  for p in 1..3 {
-    let rec = &mut fs.rec.planes[p];
-    let input = &fs.input.planes[p];
-    let po = bo.plane_offset(&fs.input.planes[p].cfg);
-    for alpha in -16..17 {
-      PredictionMode::UV_CFL_PRED.predict_intra(
-        &mut rec.mut_slice(&po), uv_tx_size, bit_depth, &ac, alpha);
-      alpha_sse[(p - 1) as usize][(alpha + 16) as usize] = sse_wxh(
-        &input.slice(&po),
-        &rec.slice(&po),
-        uv_tx_size.width(),
-        uv_tx_size.height()
-      );
-    }
-  }
+  let best_alpha: Vec<i16> = (1..3)
+    .map(|p| {
+      let rec = &mut fs.rec.planes[p];
+      let input = &fs.input.planes[p];
+      let po = bo.plane_offset(&fs.input.planes[p].cfg);
+      (-16i16..17i16)
+        .min_by_key(|&alpha| {
+          PredictionMode::UV_CFL_PRED.predict_intra(
+            &mut rec.mut_slice(&po),
+            uv_tx_size,
+            bit_depth,
+            &ac,
+            alpha
+          );
+          sse_wxh(
+            &input.slice(&po),
+            &rec.slice(&po),
+            uv_tx_size.width(),
+            uv_tx_size.height()
+          )
+        }).unwrap()
+    }).collect();
 
-  let mut best_cfl = CFLParams::new();
-  let mut best_rd = std::u64::MAX;
-  for alpha_u in -16..17 {
-    for alpha_v in -16..17 {
-      if alpha_u == 0 && alpha_v == 0 { continue; }
-      let cfl = CFLParams::from_alpha(alpha_u, alpha_v);
-      let rd = alpha_sse[0][(alpha_u + 16) as usize] +
-        alpha_sse[1][(alpha_v + 16) as usize];
-      if rd < best_rd {
-        best_rd = rd;
-        best_cfl = cfl;
-      }
-    }
+  if best_alpha[0] == 0 && best_alpha[1] == 0 {
+    None
+  } else {
+    Some(CFLParams::from_alpha(best_alpha[0], best_alpha[1]))
   }
-
-  best_cfl
 }
 
 // RDO-based intra frame transform type decision
