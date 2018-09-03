@@ -1351,7 +1351,6 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
             } else if luma_mode == PredictionMode::NEARMV {
               let ref_mv_idx = 1;
               let num_mv_found = mv_stack.len();
-              assert!(num_mv_found >= 2);
               for idx in 1..4 {
                 if num_mv_found > idx + 1 {
                   let drl_mode = ref_mv_idx > idx;
@@ -1361,6 +1360,13 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
                   cw.write_drl_mode(w, drl_mode, ctx);
                   if !drl_mode { break; }
                 }
+              }
+              if mv_stack.len() > 1 {
+                assert!(mv_stack[ref_mv_idx].this_mv.row == mv.row);
+                assert!(mv_stack[ref_mv_idx].this_mv.col == mv.col);
+              } else {
+                assert!(0 == mv.row);
+                assert!(0 == mv.col);
               }
             } else if luma_mode == PredictionMode::NEARESTMV {
               if mv_stack.len() > 0 {
@@ -1821,6 +1827,12 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
             if mode_luma == PredictionMode::NEARESTMV &&
                 (mv_stack.len() > 0 && (mv_stack[0].this_mv.row != mv.row || mv_stack[0].this_mv.col != mv.col) ||
                  mv_stack.len() == 0 && (0 != mv.row || 0 != mv.col)) {
+              mode_luma = PredictionMode::NEWMV;
+              mode_chroma = PredictionMode::NEWMV;
+            }
+            if mode_luma == PredictionMode::NEARMV &&
+                (mv_stack.len() > 1 && (mv_stack[1].this_mv.row != mv.row || mv_stack[1].this_mv.col != mv.col) ||
+                 mv_stack.len() <= 1 && (0 != mv.row || 0 != mv.col)) {
               mode_luma = PredictionMode::NEWMV;
               mode_chroma = PredictionMode::NEWMV;
             }

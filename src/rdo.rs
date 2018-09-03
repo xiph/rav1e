@@ -270,8 +270,6 @@ pub fn rdo_mode_decision(
   for &luma_mode in &mode_set {
     assert!(fi.frame_type == FrameType::INTER || luma_mode.is_intra());
 
-    if luma_mode == PredictionMode::NEARMV && mv_stack.len() < 2 { continue; }
-
     let mut mode_set_chroma = vec![ luma_mode ];
 
     if is_chroma_block && luma_mode.is_intra() && luma_mode != PredictionMode::DC_PRED {
