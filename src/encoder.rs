@@ -1362,6 +1362,14 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
                   if !drl_mode { break; }
                 }
               }
+            } else if luma_mode == PredictionMode::NEARESTMV {
+              if mv_stack.len() > 0 {
+                assert!(mv_stack[0].this_mv.row == mv.row);
+                assert!(mv_stack[0].this_mv.col == mv.col);
+              } else {
+                assert!(0 == mv.row);
+                assert!(0 == mv.col);
+              }
             }
         } else {
             cw.write_intra_mode(w, bsize, luma_mode);
@@ -1795,7 +1803,9 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
                     rdo_mode_decision(seq, fi, fs, cw, bsize, bo).part_modes[0].clone()
                 };
 
-            let (mode_luma, mode_chroma) = (part_decision.pred_mode_luma, part_decision.pred_mode_chroma);
+            let mut mode_luma = part_decision.pred_mode_luma;
+            let mut mode_chroma = part_decision.pred_mode_chroma;
+
             let cfl = part_decision.pred_cfl_params;
             let skip = part_decision.skip;
             let ref_frame = part_decision.ref_frame;
@@ -1808,8 +1818,12 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
             let mut mv_stack = Vec::new();
             let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack, bsize, false);
 
-            let mut mv_stack = Vec::new();
-            let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack, bsize, false);
+            if mode_luma == PredictionMode::NEARESTMV &&
+                (mv_stack.len() > 0 && (mv_stack[0].this_mv.row != mv.row || mv_stack[0].this_mv.col != mv.col) ||
+                 mv_stack.len() == 0 && (0 != mv.row || 0 != mv.col)) {
+              mode_luma = PredictionMode::NEWMV;
+              mode_chroma = PredictionMode::NEWMV;
+            }
 
             // FIXME: every final block that has gone through the RDO decision process is encoded twice
             cdef_coded = encode_block_a(seq, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
