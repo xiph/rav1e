@@ -17,6 +17,7 @@ mod predict;
 use criterion::*;
 use rav1e::*;
 use rav1e::context::*;
+use rav1e::cdef::cdef_filter_frame;
 use rav1e::ec;
 use rav1e::partition::*;
 use rav1e::predict::*;
@@ -90,15 +91,33 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
   });
 }
 
+fn cdef_frame(c: &mut Criterion) {
+  let w = 128;
+  let h = 128;
+  let n = format!("cdef_frame({}, {})", w, h);
+  c.bench_function(&n, move |b| cdef_frame_bench(b, w, h));
+}
+
+fn cdef_frame_bench(b: &mut Bencher, w: usize, h: usize) {
+  let config =
+    EncoderConfig { quantizer: 100, speed: 10, ..Default::default() };
+  let fi = FrameInvariants::new(w, h, config);
+  let mut bc = BlockContext::new(fi.sb_width * 16, fi.sb_height * 16);
+  let mut fs = FrameState::new(&fi);
+
+  b.iter(|| cdef_filter_frame(&fi, &mut fs.rec, &mut bc, 8));
+}
+
 criterion_group!(
   intra_prediction,
   predict::pred_bench,
 );
 
+criterion_group!(cdef, cdef_frame);
 criterion_group!(write_block, write_b);
 
 #[cfg(feature = "comparative_bench")]
 criterion_main!(comparative::intra_prediction);
 
 #[cfg(not(feature = "comparative_bench"))]
-criterion_main!(write_block, intra_prediction);
+criterion_main!(write_block, intra_prediction, cdef);
