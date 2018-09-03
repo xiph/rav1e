@@ -340,7 +340,9 @@ pub enum PredictionMode {
   PAETH_PRED,
   UV_CFL_PRED,
   NEARESTMV,
-  NEARMV,
+  NEAR0MV,
+  NEAR1MV,
+  NEAR2MV,
   GLOBALMV,
   NEWMV,
   // Compound ref compound modes

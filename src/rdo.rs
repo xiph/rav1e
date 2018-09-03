@@ -270,6 +270,9 @@ pub fn rdo_mode_decision(
   for &luma_mode in &mode_set {
     assert!(fi.frame_type == FrameType::INTER || luma_mode.is_intra());
 
+    if luma_mode == PredictionMode::NEAR1MV && mv_stack.len() < 3 { continue; }
+    if luma_mode == PredictionMode::NEAR2MV && mv_stack.len() < 4 { continue; }
+
     let mut mode_set_chroma = vec![ luma_mode ];
 
     if is_chroma_block && luma_mode.is_intra() && luma_mode != PredictionMode::DC_PRED {
@@ -284,7 +287,8 @@ pub fn rdo_mode_decision(
     let mv = match luma_mode {
       PredictionMode::NEWMV => motion_estimation(fi, fs, bsize, bo, ref_frame),
       PredictionMode::NEARESTMV => if mv_stack.len() > 0 { mv_stack[0].this_mv } else { MotionVector { row: 0, col: 0 } },
-      PredictionMode::NEARMV => if mv_stack.len() > 1 { mv_stack[1].this_mv } else { MotionVector { row: 0, col: 0 } },
+      PredictionMode::NEAR0MV => if mv_stack.len() > 1 { mv_stack[1].this_mv } else { MotionVector { row: 0, col: 0 } },
+      PredictionMode::NEAR1MV | PredictionMode::NEAR2MV => mv_stack[luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].this_mv,
       _ => MotionVector { row: 0, col: 0 }
     };
 

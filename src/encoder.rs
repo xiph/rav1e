@@ -1348,10 +1348,12 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
                 MvSubpelPrecision::MV_SUBPEL_LOW_PRECISION
               };
               cw.write_mv(w, &mv, &ref_mv, mv_precision);
-            } else if luma_mode == PredictionMode::NEARMV {
-              let ref_mv_idx = 1;
+            } else if luma_mode >= PredictionMode::NEAR0MV && luma_mode <= PredictionMode::NEAR2MV {
+              let ref_mv_idx = luma_mode as usize - PredictionMode::NEAR0MV as usize + 1;
               let num_mv_found = mv_stack.len();
-              for idx in 1..4 {
+              if luma_mode != PredictionMode::NEAR0MV { assert!(num_mv_found > ref_mv_idx); }
+
+              for idx in 1..3 {
                 if num_mv_found > idx + 1 {
                   let drl_mode = ref_mv_idx > idx;
                   let ctx: usize = (mv_stack[idx].weight < REF_CAT_LEVEL) as usize
@@ -1830,11 +1832,18 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
               mode_luma = PredictionMode::NEWMV;
               mode_chroma = PredictionMode::NEWMV;
             }
-            if mode_luma == PredictionMode::NEARMV &&
+            if mode_luma == PredictionMode::NEAR0MV &&
                 (mv_stack.len() > 1 && (mv_stack[1].this_mv.row != mv.row || mv_stack[1].this_mv.col != mv.col) ||
                  mv_stack.len() <= 1 && (0 != mv.row || 0 != mv.col)) {
               mode_luma = PredictionMode::NEWMV;
               mode_chroma = PredictionMode::NEWMV;
+            }
+            if mode_luma == PredictionMode::NEAR1MV || mode_luma == PredictionMode::NEAR2MV {
+              let idx = mode_luma as usize - PredictionMode::NEAR0MV as usize + 1;
+              if mv_stack.len() <= idx || mv_stack[idx].this_mv.row != mv.row || mv_stack[idx].this_mv.col != mv.col {
+                mode_luma = PredictionMode::NEWMV;
+                mode_chroma = PredictionMode::NEWMV;
+              }
             }
 
             // FIXME: every final block that has gone through the RDO decision process is encoded twice
