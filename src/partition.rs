@@ -633,8 +633,7 @@ impl PredictionMode {
         let col_offset = mv.col as i32 >> shift_col;
         let row_frac = (mv.row as i32 - (row_offset << shift_row)) << (4 - shift_row);
         let col_frac = (mv.col as i32 - (col_offset << shift_col)) << (4 - shift_col);
-        let ref_width = rec_cfg.width;
-        let ref_height = rec_cfg.height;
+        let ref_stride = rec_cfg.stride;
 
         let stride = dst.plane.cfg.stride;
         let slice = dst.as_mut_slice();
@@ -645,23 +644,25 @@ impl PredictionMode {
 
         match (col_frac, row_frac) {
         (0,0) => {
+          let qo = PlaneOffset { x: po.x + col_offset as isize, y: po.y + row_offset as isize };
+          let ps = rec.frame.planes[p].slice(&qo);
+          let s = ps.as_slice_clamped();
           for r in 0..height {
             for c in 0..width {
-              let rs = cmp::min(ref_height as i32 - 1, cmp::max(0, po.y as i32 + row_offset + r as i32)) as usize;
-              let cs = cmp::min(ref_width as i32 - 1, cmp::max(0, po.x as i32 + col_offset + c as i32)) as usize;
               let output_index = r * stride + c;
-              slice[output_index] = rec.frame.planes[p].p(cs, rs);
+              slice[output_index] = s[r * ref_stride + c];
             }
           }
         }
         (0,_) => {
+          let qo = PlaneOffset { x: po.x + col_offset as isize, y: po.y + row_offset as isize - 3 };
+          let ps = rec.frame.planes[p].slice(&qo);
+          let s = ps.as_slice_clamped();
           for r in 0..height {
             for c in 0..width {
               let mut sum: i32 = 0;
               for k in 0..8 {
-                let rs = cmp::min(ref_height as i32 - 1, cmp::max(0, po.y as i32 + row_offset + r as i32 - 3 + k as i32)) as usize;
-                let cs = cmp::min(ref_width as i32 - 1, cmp::max(0, po.x as i32 + col_offset + c as i32)) as usize;
-                sum += rec.frame.planes[p].p(cs, rs) as i32 * SUBPEL_FILTERS[y_filter_idx][row_frac as usize][k];
+                sum += s[(r + k) * ref_stride + c] as i32 * SUBPEL_FILTERS[y_filter_idx][row_frac as usize][k];
               }
               let output_index = r * stride + c;
               let val = ((sum + 64) >> 7).max(0).min(max_sample_val);
@@ -670,13 +671,14 @@ impl PredictionMode {
           }
         }
         (_,0) => {
+          let qo = PlaneOffset { x: po.x + col_offset as isize - 3, y: po.y + row_offset as isize };
+          let ps = rec.frame.planes[p].slice(&qo);
+          let s = ps.as_slice_clamped();
           for r in 0..height {
             for c in 0..width {
             let mut sum: i32 = 0;
             for k in 0..8 {
-              let rs = cmp::min(ref_height as i32 - 1, cmp::max(0, po.y as i32 + row_offset + r as i32)) as usize;
-              let cs = cmp::min(ref_width as i32 - 1, cmp::max(0, po.x as i32 + col_offset + c as i32 - 3 + k as i32)) as usize;
-              sum += rec.frame.planes[p].p(cs, rs) as i32 * SUBPEL_FILTERS[x_filter_idx][col_frac as usize][k];
+              sum += s[r * ref_stride + (c + k)] as i32 * SUBPEL_FILTERS[x_filter_idx][col_frac as usize][k];
             }
             let output_index = r * stride + c;
             let val = ((((sum + 4) >> 3) + 8) >> 4).max(0).min(max_sample_val);
@@ -687,13 +689,14 @@ impl PredictionMode {
         (_,_) => {
           let mut intermediate = [[0 as i16; 128]; 128+7];
 
+          let qo = PlaneOffset { x: po.x + col_offset as isize - 3, y: po.y + row_offset as isize - 3 };
+          let ps = rec.frame.planes[p].slice(&qo);
+          let s = ps.as_slice_clamped();
           for r in 0..height+7 {
             for c in 0..width {
               let mut sum: i32 = 0;
               for k in 0..8 {
-                let rs = cmp::min(ref_height as i32 - 1, cmp::max(0, po.y as i32 + row_offset + r as i32 - 3)) as usize;
-                let cs = cmp::min(ref_width as i32 - 1, cmp::max(0, po.x as i32 + col_offset + c as i32 - 3 + k as i32)) as usize;
-                sum += rec.frame.planes[p].p(cs, rs) as i32 * SUBPEL_FILTERS[x_filter_idx][col_frac as usize][k];
+                sum += s[r * ref_stride + (c + k)] as i32 * SUBPEL_FILTERS[x_filter_idx][col_frac as usize][k];
               }
               let val = (sum + 4) >> 3;
               intermediate[r][c] = val as i16;
