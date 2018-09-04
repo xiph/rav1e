@@ -40,10 +40,10 @@ pub fn motion_estimation(fi: &FrameInvariants, fs: &mut FrameState, bsize: Block
       let range = 16 as isize;
       let blk_w = bsize.width();
       let blk_h = bsize.height();
-      let x_lo = (po.x - range).max(0);
-      let x_hi = (po.x + range).min((fs.input.planes[0].cfg.width - blk_w) as isize);
-      let y_lo = (po.y - range).max(0);
-      let y_hi = (po.y + range).min((fs.input.planes[0].cfg.height - blk_h) as isize);
+      let x_lo = po.x - range;
+      let x_hi = po.x + range;
+      let y_lo = po.y - range;
+      let y_hi = po.y + range;
 
       let mut lowest_sad = 128*128*4096 as u32;
       let mut best_mv = MotionVector { row: 0, col: 0 };
