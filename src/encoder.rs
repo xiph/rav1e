@@ -36,6 +36,12 @@ impl Frame {
             ]
         }
     }
+
+    pub fn pad(&mut self) {
+        for p in self.planes.iter_mut() {
+            p.pad();
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

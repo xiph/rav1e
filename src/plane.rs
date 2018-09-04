@@ -54,6 +54,49 @@ impl Plane {
     Plane { data, cfg: PlaneConfig { stride, alloc_height, width, height, xdec, ydec, xorigin, yorigin } }
   }
 
+  pub fn pad(&mut self) {
+    let xorigin = self.cfg.xorigin;
+    let yorigin = self.cfg.yorigin;
+    let stride = self.cfg.stride;
+    let width = self.cfg.width;
+    let height = self.cfg.height;
+
+
+    if xorigin > 0 {
+      for y in 0..height {
+        let mut ps = self.mut_slice(&PlaneOffset { x: -(xorigin as isize), y: y as isize });
+        let s = ps.as_mut_slice_w_width(xorigin + 1);
+        let fill_val = s[xorigin];
+        for val in s[..xorigin].iter_mut() { *val = fill_val; }
+      }
+    }
+
+    if xorigin + width < stride {
+      for y in 0..height {
+        let mut ps = self.mut_slice(&PlaneOffset { x: width as isize - 1, y: y as isize });
+        let s = ps.as_mut_slice_w_width(stride - xorigin - width + 1);
+        let fill_val = s[0];
+        for val in s[1..].iter_mut() { *val = fill_val; }
+      }
+    }
+
+    if yorigin > 0 {
+      let mut ps = self.mut_slice(&PlaneOffset { x: -(xorigin as isize), y: -(yorigin as isize) });
+      let (s1, s2) = ps.as_mut_slice().split_at_mut(yorigin*stride);
+      for y in 0 .. yorigin {
+        s1[y*stride..y*stride+stride].copy_from_slice(&s2[..stride]);
+      }
+    }
+
+    if yorigin + height < self.cfg.alloc_height {
+      let mut ps = self.mut_slice(&PlaneOffset { x: -(xorigin as isize), y: height as isize - 1 });
+      let (s2, s1) = ps.as_mut_slice().split_at_mut(stride);
+      for y in 0 .. yorigin {
+        s1[y*stride..y*stride+stride].copy_from_slice(&s2[..stride]);
+      }
+    }
+  }
+
   pub fn slice<'a>(&'a self, po: &PlaneOffset) -> PlaneSlice<'a> {
     PlaneSlice { plane: self, x: po.x, y: po.y }
   }
@@ -63,7 +106,7 @@ impl Plane {
   }
 
   pub fn p(&self, x: usize, y: usize) -> u16 {
-    self.data[y * self.cfg.stride + x]
+    self.data[(y + self.cfg.yorigin) * self.cfg.stride + (x + self.cfg.xorigin)]
   }
 
   pub fn data_origin(&self) -> &[u16] {
@@ -151,6 +194,17 @@ impl<'a> PlaneMutSlice<'a> {
     let base = (self.y + self.plane.cfg.yorigin as isize) as usize * stride + (self.x + self.plane.cfg.xorigin as isize) as usize;
     &mut self.plane.data[base..]
   }
+
+  pub fn as_mut_slice_w_width(&'a mut self, width: usize) -> &'a mut [u16] {
+    let stride = self.plane.cfg.stride;
+    let y = self.y + self.plane.cfg.yorigin as isize;
+    let x = self.x + self.plane.cfg.xorigin as isize;
+    assert!(y >= 0);
+    assert!(x >= 0);
+    let base = y as usize * stride + x as usize;
+    &mut self.plane.data[base .. base + width]
+  }
+
 
   pub fn offset(&self, add_x: usize, add_y: usize) -> &[u16] {
     let new_y = (self.y + add_y as isize + self.plane.cfg.yorigin as isize) as usize;

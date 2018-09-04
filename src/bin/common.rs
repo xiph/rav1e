@@ -192,6 +192,7 @@ pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
                 y4m_enc.write_frame(&rec_frame).unwrap();
             }
 
+            fs.rec.pad();
             update_rec_buffer(fi, fs);
             true
         },
