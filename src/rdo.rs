@@ -582,30 +582,30 @@ pub fn rdo_cdef_decision(sbo: &SuperBlockOffset, fi: &FrameInvariants,
     let mut cdef_output = Frame {
         planes: [
             Plane::new(64 >> fs.rec.planes[0].cfg.xdec, 64 >> fs.rec.planes[0].cfg.ydec,
-                       fs.rec.planes[0].cfg.xdec, fs.rec.planes[0].cfg.ydec),
+                       fs.rec.planes[0].cfg.xdec, fs.rec.planes[0].cfg.ydec, 0, 0),
             Plane::new(64 >> fs.rec.planes[1].cfg.xdec, 64 >> fs.rec.planes[1].cfg.ydec,
-                       fs.rec.planes[1].cfg.xdec, fs.rec.planes[1].cfg.ydec),
+                       fs.rec.planes[1].cfg.xdec, fs.rec.planes[1].cfg.ydec, 0, 0),
             Plane::new(64 >> fs.rec.planes[2].cfg.xdec, 64 >> fs.rec.planes[2].cfg.ydec,
-                       fs.rec.planes[2].cfg.xdec, fs.rec.planes[2].cfg.ydec),
+                       fs.rec.planes[2].cfg.xdec, fs.rec.planes[2].cfg.ydec, 0, 0),
         ]
     };
     // Construct a padded input
     let mut rec_input = Frame {
         planes: [
             Plane::new((64 >> fs.rec.planes[0].cfg.xdec)+4, (64 >> fs.rec.planes[0].cfg.ydec)+4,
-                       fs.rec.planes[0].cfg.xdec, fs.rec.planes[0].cfg.ydec),
+                       fs.rec.planes[0].cfg.xdec, fs.rec.planes[0].cfg.ydec, 0, 0),
             Plane::new((64 >> fs.rec.planes[1].cfg.xdec)+4, (64 >> fs.rec.planes[1].cfg.ydec)+4,
-                       fs.rec.planes[1].cfg.xdec, fs.rec.planes[1].cfg.ydec),
+                       fs.rec.planes[1].cfg.xdec, fs.rec.planes[1].cfg.ydec, 0, 0),
             Plane::new((64 >> fs.rec.planes[2].cfg.xdec)+4, (64 >> fs.rec.planes[2].cfg.ydec)+4,
-                       fs.rec.planes[2].cfg.xdec, fs.rec.planes[2].cfg.ydec),
+                       fs.rec.planes[2].cfg.xdec, fs.rec.planes[2].cfg.ydec, 0, 0),
         ]
     };
     // Copy reconstructed data into padded input
     for p in 0..3 {
         let xdec = fs.rec.planes[p].cfg.xdec;
         let ydec = fs.rec.planes[p].cfg.ydec;
-        let h = fi.padded_h >> ydec;
-        let w = fi.padded_w >> xdec;
+        let h = fi.padded_h as isize >> ydec;
+        let w = fi.padded_w as isize >> xdec;
         let offset = sbo.plane_offset(&fs.rec.planes[p].cfg);
         for y in 0..(64>>ydec)+4 {
             let mut rec_slice = rec_input.planes[p].mut_slice(&PlaneOffset {x:0, y:y});
@@ -621,14 +621,14 @@ pub fn rdo_cdef_decision(sbo: &SuperBlockOffset, fi: &FrameInvariants,
                     // No; do it the hard way.  off left or right edge, fill with flag.
                     for x in 0..(64>>xdec)+4 {
                         if offset.x+x >= 2 && offset.x+x < w+2 {
-                            rec_row[x] = in_row[offset.x+x-2]
+                            rec_row[x as usize] = in_row[(offset.x+x-2) as usize]
                         } else {
-                            rec_row[x] = CDEF_VERY_LARGE;
+                            rec_row[x as usize] = CDEF_VERY_LARGE;
                         }
                     }
                 }  else  {
                     // Yes, do it the easy way: just copy
-                    rec_row[0..(64>>xdec)+4].copy_from_slice(&in_row[offset.x-2..offset.x+(64>>xdec)+2]);
+                    rec_row[0..(64>>xdec)+4].copy_from_slice(&in_row[(offset.x-2) as usize..(offset.x+(64>>xdec)+2) as usize]);
                 }
             }
         }

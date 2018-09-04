@@ -1253,8 +1253,8 @@ impl SuperBlockOffset {
   /// Offset of the top-left pixel of this block.
   pub fn plane_offset(&self, plane: &PlaneConfig) -> PlaneOffset {
     PlaneOffset {
-      x: self.x << (SUPERBLOCK_TO_PLANE_SHIFT - plane.xdec),
-      y: self.y << (SUPERBLOCK_TO_PLANE_SHIFT - plane.ydec)
+      x: (self.x as isize) << (SUPERBLOCK_TO_PLANE_SHIFT - plane.xdec),
+      y: (self.y as isize) << (SUPERBLOCK_TO_PLANE_SHIFT - plane.ydec)
     }
   }
 }
@@ -1284,8 +1284,8 @@ impl BlockOffset {
     let y_offset = self.y & LOCAL_BLOCK_MASK;
 
     PlaneOffset {
-        x: po.x + (x_offset >> plane.xdec << BLOCK_TO_PLANE_SHIFT),
-        y: po.y + (y_offset >> plane.ydec << BLOCK_TO_PLANE_SHIFT)
+        x: po.x + (x_offset as isize >> plane.xdec << BLOCK_TO_PLANE_SHIFT),
+        y: po.y + (y_offset as isize >> plane.ydec << BLOCK_TO_PLANE_SHIFT)
     }
   }
 

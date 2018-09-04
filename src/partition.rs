@@ -533,8 +533,6 @@ impl PredictionMode {
       } else if self == PredictionMode::V_PRED && y == 0 {
         for i in 0..B::H {
           left[i + 1] = dst.go_left(1).p(0, 0);
-          // FIXME(yushin): Figure out why below does not work??
-          //left[i + 1] = dst.go_left(1).plane.data[0];
         }
       }
     }
