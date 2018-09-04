@@ -50,7 +50,7 @@ cargo run --release --bin rav1e -- input.y4m -o output.ivf
 ```
 # Decompressing video
 
-Encoder output should be compatible with any AV1 decoder compliant with the v1.0.0 specification.  Uou can also build the included compatible aomdec using the following:
+Encoder output should be compatible with any AV1 decoder compliant with the v1.0.0 specification. You can also build the included compatible aomdec using the following:
 
 ```
 mkdir aom_test
