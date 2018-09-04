@@ -10,7 +10,6 @@
 #![allow(non_camel_case_types)]
 #![allow(dead_code)]
 
-use std::cmp;
 use self::BlockSize::*;
 use self::TxSize::*;
 use encoder::FrameInvariants;
@@ -687,35 +686,37 @@ impl PredictionMode {
           }
         }
         (_,_) => {
-          let mut intermediate = [[0 as i16; 128]; 128+7];
+          let mut intermediate = [0 as i16; 8 * (128 + 7)];
 
           let qo = PlaneOffset { x: po.x + col_offset as isize - 3, y: po.y + row_offset as isize - 3 };
           let ps = rec.frame.planes[p].slice(&qo);
           let s = ps.as_slice_clamped();
-          for r in 0..height+7 {
-            for c in 0..width {
-              let mut sum: i32 = 0;
-              for k in 0..8 {
-                sum += s[r * ref_stride + (c + k)] as i32 * SUBPEL_FILTERS[x_filter_idx][col_frac as usize][k];
+          for cg in (0..width).step_by(8) {
+            for r in 0..height+7 {
+              for c in cg..(cg+8).min(width) {
+                let mut sum: i32 = 0;
+                for k in 0..8 {
+                  sum += s[r * ref_stride + (c + k)] as i32 * SUBPEL_FILTERS[x_filter_idx][col_frac as usize][k];
+                }
+                let val = (sum + 4) >> 3;
+                intermediate[8 * r + (c - cg)] = val as i16;
               }
-              let val = (sum + 4) >> 3;
-              intermediate[r][c] = val as i16;
             }
-          }
 
-          for r in 0..height {
-            for c in 0..width {
-              let mut sum: i32 = 0;
-              for k in 0..8 {
-                sum += intermediate[r + k][c] as i32 * SUBPEL_FILTERS[y_filter_idx][row_frac as usize][k];
-              }
-              let output_index = r * stride + c;
-              let val = ((sum + 1024) >> 11).max(0).min(max_sample_val);
-              slice[output_index] = val as u16;
+            for r in 0..height {
+              for c in cg..(cg+8).min(width) {
+                let mut sum: i32 = 0;
+                for k in 0..8 {
+                  sum += intermediate[8 * (r + k) + c - cg] as i32 * SUBPEL_FILTERS[y_filter_idx][row_frac as usize][k];
+                }
+                let output_index = r * stride + c;
+                let val = ((sum + 1024) >> 11).max(0).min(max_sample_val);
+                slice[output_index] = val as u16;
               }
             }
           }
         }
+      }
       },
       None => (),
     }
