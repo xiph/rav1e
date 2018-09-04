@@ -11,7 +11,7 @@ use util::*;
 use cdef::*;
 
 use bitstream_io::{BE, LE, BitWriter};
-use std::rc::Rc;
+use std::sync::Arc;
 use std::io::*;
 use std::io;
 use std;
@@ -46,7 +46,7 @@ pub struct ReferenceFrame {
 
 #[derive(Debug)]
 pub struct ReferenceFramesSet {
-    pub frames: [Option<Rc<ReferenceFrame>>; (REF_FRAMES as usize)],
+    pub frames: [Option<Arc<ReferenceFrame>>; (REF_FRAMES as usize)],
     pub deblock: [DeblockState; (REF_FRAMES as usize)]
 }
 
@@ -219,7 +219,7 @@ impl Sequence {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FrameState {
     pub input: Frame,
     pub rec: Frame,
@@ -1965,10 +1965,10 @@ pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut 
 }
 
 pub fn update_rec_buffer(fi: &mut FrameInvariants, fs: FrameState) {
-  let rfs = Rc::new(ReferenceFrame { frame: fs.rec, cdfs: fs.cdfs } );
+  let rfs = Arc::new(ReferenceFrame { frame: fs.rec, cdfs: fs.cdfs } );
   for i in 0..(REF_FRAMES as usize) {
     if (fi.refresh_frame_flags & (1 << i)) != 0 {
-      fi.rec_buffer.frames[i] = Some(Rc::clone(&rfs));
+      fi.rec_buffer.frames[i] = Some(Arc::clone(&rfs));
       fi.rec_buffer.deblock[i] = fi.deblock.clone();
     }
   }
