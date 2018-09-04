@@ -267,7 +267,9 @@ pub fn rdo_mode_decision(
   let mut mv_stack = Vec::new();
   let mode_context = cw.find_mvrefs(bo, LAST_FRAME, &mut mv_stack, bsize, false);
 
-  for &luma_mode in &mode_set {
+//  for &luma_mode in &mode_set {
+//  mode_set.par_iter().for_each(|&luma_mode| {
+  mode_set.iter().for_each(|&luma_mode| {
     assert!(fi.frame_type == FrameType::INTER || luma_mode.is_intra());
 
     let mut mode_set_chroma = vec![ luma_mode ];
@@ -291,12 +293,12 @@ pub fn rdo_mode_decision(
       rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, luma_mode, ref_frame, mv, false);
 
     // Find the best chroma prediction mode for the current luma prediction mode
-    for &chroma_mode in &mode_set_chroma {
+    mode_set_chroma.iter().for_each(|&chroma_mode| {
       let mut cfl = CFLParams::new();
       if chroma_mode == PredictionMode::UV_CFL_PRED {
-        if !best_mode_chroma.is_intra() { continue; }
+        if !best_mode_chroma.is_intra() { return; }
         let cw_checkpoint = cw.checkpoint();
-        let mut wr: &mut dyn Writer = &mut WriterCounter::new();
+        let wr: &mut dyn Writer = &mut WriterCounter::new();
         write_tx_blocks(
           fi, fs, cw, wr, luma_mode, luma_mode, bo, bsize, tx_size, tx_type, false, seq.bit_depth, cfl, true
         );
@@ -304,11 +306,11 @@ pub fn rdo_mode_decision(
         cfl = rdo_cfl_alpha(fs, bo, bsize, seq.bit_depth);
       }
 
-      for &skip in &[false, true] {
+      let best = [false, true].iter().map(|&skip| {
         // Don't skip when using intra modes
-        if skip && luma_mode.is_intra() { continue; }
+        if skip && luma_mode.is_intra() { return (best_rd, best_mode_luma, best_mode_chroma, best_cfl_params, best_ref_frame, best_mv, best_skip); }
 
-        let mut wr: &mut dyn Writer = &mut WriterCounter::new();
+        let wr: &mut dyn Writer = &mut WriterCounter::new();
         let tell = wr.tell_frac();
 
         encode_block_a(seq, cw, wr, bsize, bo, skip);
@@ -328,20 +330,27 @@ pub fn rdo_mode_decision(
           false
         );
 
-        if rd < best_rd {
-          best_rd = rd;
-          best_mode_luma = luma_mode;
-          best_mode_chroma = chroma_mode;
-          best_cfl_params = cfl;
-          best_ref_frame = ref_frame;
-          best_mv = mv;
-          best_skip = skip;
-        }
-
         cw.rollback(&cw_checkpoint);
-      }
-    }
-  }
+
+        (rd, luma_mode, chroma_mode, cfl, ref_frame, mv, skip)
+      }).fold((best_rd, best_mode_luma, best_mode_chroma, best_cfl_params, best_ref_frame, best_mv, best_skip),
+        |best, cur| {
+        if cur.0 < best.0 {
+          cur
+        } else {
+          best
+        }
+      });
+
+      best_rd = best.0;
+      best_mode_luma = best.1;
+      best_mode_chroma = best.2;
+      best_cfl_params = best.3;
+      best_ref_frame = best.4;
+      best_mv = best.5;
+      best_skip = best.6;
+    });
+  });
 
   cw.bc.set_mode(bo, bsize, best_mode_luma);
   cw.bc.set_motion_vector(bo, bsize, best_mv);
