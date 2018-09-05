@@ -295,29 +295,40 @@ pub fn rdo_mode_decision(
       rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, luma_mode, ref_frame, mv, false);
 
     // Find the best chroma prediction mode for the current luma prediction mode
-    mode_set_chroma.iter().for_each(|&chroma_mode| {
+    let best = mode_set_chroma.iter().flat_map(|&chroma_mode| {
+      let fs = &mut fs.clone();
+      let cw = &mut cw.clone();
+
       let mut cfl = CFLParams::new();
       if chroma_mode == PredictionMode::UV_CFL_PRED {
-        if !best_mode_chroma.is_intra() { return; }
-        let cw_checkpoint = cw.checkpoint();
-        let wr: &mut dyn Writer = &mut WriterCounter::new();
-        write_tx_blocks(
-          fi, fs, cw, wr, luma_mode, luma_mode, bo, bsize, tx_size, tx_type, false, seq.bit_depth, cfl, true
-        );
-        cw.rollback(&cw_checkpoint);
-        cfl = rdo_cfl_alpha(fs, bo, bsize, seq.bit_depth);
+        if best_mode_chroma.is_intra() {
+            let cw_checkpoint = cw.checkpoint();
+            let wr: &mut dyn Writer = &mut WriterCounter::new();
+            write_tx_blocks(
+              fi, fs, cw, wr, luma_mode, luma_mode, bo, bsize, tx_size, tx_type, false, seq.bit_depth, cfl, true
+            );
+            cw.rollback(&cw_checkpoint);
+            cfl = rdo_cfl_alpha(fs, bo, bsize, seq.bit_depth);
+        }
       }
 
       // Don't skip when using intra modes
-      let skip_modes: &[bool] = if luma_mode.is_intra() {
-        &[false]
+      let skip_modes: &[bool] = if chroma_mode == PredictionMode::UV_CFL_PRED && !best_mode_chroma.is_intra() {
+          &[]
       } else {
-        &[false, true]
+        if luma_mode.is_intra() {
+          &[false]
+        } else {
+          &[false, true]
+        }
       };
 
-      let best = skip_modes.iter().map(|&skip| {
+      skip_modes.iter().map(|&skip| {
+        let chroma_mode = chroma_mode.clone();
+
         let wr: &mut dyn Writer = &mut WriterCounter::new();
         let tell = wr.tell_frac();
+
 
         encode_block_a(seq, cw, wr, bsize, bo, skip);
         encode_block_b(seq, fi, fs, cw, wr, luma_mode, chroma_mode,
@@ -339,8 +350,8 @@ pub fn rdo_mode_decision(
         cw.rollback(&cw_checkpoint);
 
         (rd, luma_mode, chroma_mode, cfl, ref_frame, mv, skip)
-      }).max_by(|a, b| a.0.partial_cmp(&b.0).unwrap()).unwrap();
-
+      }).collect::<Vec<_>>().into_iter() // FIXME
+    }).max_by(|a, b| a.0.partial_cmp(&b.0).unwrap()).unwrap();
       best_rd = best.0;
       best_mode_luma = best.1;
       best_mode_chroma = best.2;
@@ -348,7 +359,6 @@ pub fn rdo_mode_decision(
       best_ref_frame = best.4;
       best_mv = best.5;
       best_skip = best.6;
-    });
   });
 
   cw.bc.set_mode(bo, bsize, best_mode_luma);
