@@ -308,10 +308,14 @@ pub fn rdo_mode_decision(
         cfl = rdo_cfl_alpha(fs, bo, bsize, seq.bit_depth);
       }
 
-      let best = [false, true].iter().map(|&skip| {
-        // Don't skip when using intra modes
-        if skip && luma_mode.is_intra() { return (best_rd, best_mode_luma, best_mode_chroma, best_cfl_params, best_ref_frame, best_mv, best_skip); }
+      // Don't skip when using intra modes
+      let skip_modes: &[bool] = if luma_mode.is_intra() {
+        &[false]
+      } else {
+        &[false, true]
+      };
 
+      let best = skip_modes.iter().map(|&skip| {
         let wr: &mut dyn Writer = &mut WriterCounter::new();
         let tell = wr.tell_frac();
 
