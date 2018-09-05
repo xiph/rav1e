@@ -333,14 +333,7 @@ pub fn rdo_mode_decision(
         cw.rollback(&cw_checkpoint);
 
         (rd, luma_mode, chroma_mode, cfl, ref_frame, mv, skip)
-      }).fold((best_rd, best_mode_luma, best_mode_chroma, best_cfl_params, best_ref_frame, best_mv, best_skip),
-        |best, cur| {
-        if cur.0 < best.0 {
-          cur
-        } else {
-          best
-        }
-      });
+      }).max_by(|a, b| a.0.partial_cmp(&b.0).unwrap()).unwrap();
 
       best_rd = best.0;
       best_mode_luma = best.1;
