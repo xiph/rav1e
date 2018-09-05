@@ -22,6 +22,7 @@ use encode_block_b;
 use motion_compensate;
 use partition::*;
 use plane::*;
+use util::*;
 use cdef::*;
 use predict::{RAV1E_INTRA_MODES, RAV1E_INTRA_MODES_MINIMAL, RAV1E_INTER_MODES};
 use quantize::dc_q;
@@ -490,6 +491,28 @@ pub fn rdo_cfl_alpha(
   }
 }
 
+fn save_mc_blk(dst: &mut [u16], src: &PlaneSlice<'_>, width: usize, height: usize) {
+  let src_stride = src.plane.cfg.stride;
+
+  for (l, s) in dst.chunks_mut(width).take(height)
+                   .zip(src.as_slice().chunks(src_stride)) {
+    for (r, v) in l.iter_mut().zip(s) {
+      *r = *v as u16;
+    }
+  }
+}
+
+fn restore_mc_blk<'a>(dst: &'a mut PlaneMutSlice<'a>, src: &[u16], width: usize, height: usize) {
+  let dst_stride = dst.plane.cfg.stride;
+
+  for (l, s) in dst.as_mut_slice().chunks_mut(dst_stride).take(height)
+                   .zip(src.chunks(width)) {
+    for (r, v) in l.iter_mut().zip(s) {
+      *r = *v;
+    }
+  }
+}
+
 // RDO-based transform type decision
 pub fn rdo_tx_type_decision(
   fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
@@ -510,13 +533,46 @@ pub fn rdo_tx_type_decision(
 
   let cw_checkpoint = cw.checkpoint();
 
+  let mut mc_block: AlignedArray<[[u16; 64 * 64]; 3]> = UninitializedAlignedArray();
+
+  // If inter mode, save motion compensated pixles since it will be overriden by write_tx_tree()
+  if is_inter {
+    motion_compensate(fi, fs, cw, mode, ref_frame, mv, bsize, bo, bit_depth);
+
+    // Save Motion Compensated pixels
+    let num_planes = 1 + if is_chroma_block { 2 } else { 0 };
+
+    for p in 0..num_planes {
+      let plane_bsize = if p == 0 { bsize }
+      else { get_plane_block_size(bsize, xdec, ydec) };
+      let po = bo.plane_offset(&fs.input.planes[p].cfg);
+      let rec = &fs.rec.planes[p];
+
+      save_mc_blk(&mut mc_block.array[p], &rec.slice(&po),
+        plane_bsize.width(), plane_bsize.height());
+    }
+  }
+
   for &tx_type in RAV1E_TX_TYPES {
     // Skip unsupported transform types
     if av1_tx_used[tx_set as usize][tx_type as usize] == 0 {
       continue;
     }
 
-    motion_compensate(fi, fs, cw, mode, ref_frame, mv, bsize, bo, bit_depth);
+    if is_inter {
+      // Restore Motion Compensated pixels
+      let num_planes = 1 + if is_chroma_block { 2 } else { 0 };
+
+      for p in 0..num_planes {
+        let plane_bsize = if p == 0 { bsize }
+        else { get_plane_block_size(bsize, xdec, ydec) };
+        let po = bo.plane_offset(&fs.input.planes[p].cfg);
+        let rec = &mut fs.rec.planes[p];
+
+        restore_mc_blk(&mut rec.mut_slice(&po), &mc_block.array[p],
+          plane_bsize.width(), plane_bsize.height());
+      }
+    }
 
     let mut wr: &mut dyn Writer = &mut WriterCounter::new();
     let tell = wr.tell_frac();
