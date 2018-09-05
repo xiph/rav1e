@@ -7,7 +7,6 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use std::cmp;
 use FrameInvariants;
 use FrameState;
 use partition::*;
@@ -37,14 +36,14 @@ pub fn motion_estimation(fi: &FrameInvariants, fs: &mut FrameState, bsize: Block
 
   match fi.rec_buffer.frames[fi.ref_frames[ref_frame - LAST_FRAME]] {
     Some(ref rec) => {
-      let po = PlaneOffset { x: bo.x << BLOCK_TO_PLANE_SHIFT, y: bo.y << BLOCK_TO_PLANE_SHIFT };
-      let range = 16 as usize;
+      let po = PlaneOffset { x: (bo.x as isize) << BLOCK_TO_PLANE_SHIFT, y: (bo.y as isize) << BLOCK_TO_PLANE_SHIFT };
+      let range = 16 as isize;
       let blk_w = bsize.width();
       let blk_h = bsize.height();
-      let x_lo = cmp::max(0, po.x as isize - range as isize) as usize;
-      let x_hi = cmp::min(fs.input.planes[0].cfg.width - blk_w, po.x + range);
-      let y_lo = cmp::max(0, po.y as isize - range as isize) as usize;
-      let y_hi = cmp::min(fs.input.planes[0].cfg.height - blk_h, po.y + range);
+      let x_lo = po.x - range;
+      let x_hi = po.x + range;
+      let y_lo = po.y - range;
+      let y_hi = po.y + range;
 
       let mut lowest_sad = 128*128*4096 as u32;
       let mut best_mv = MotionVector { row: 0, col: 0 };
@@ -65,7 +64,7 @@ pub fn motion_estimation(fi: &FrameInvariants, fs: &mut FrameState, bsize: Block
       }
 
       let mode = PredictionMode::NEWMV;
-      let mut tmp_plane = Plane::new(blk_w, blk_h, 0, 0);
+      let mut tmp_plane = Plane::new(blk_w, blk_h, 0, 0, 0, 0);
 
       let mut steps = vec![4, 2];
       if fi.allow_high_precision_mv {

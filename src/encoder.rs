@@ -30,10 +30,16 @@ impl Frame {
     pub fn new(width: usize, height:usize) -> Frame {
         Frame {
             planes: [
-                Plane::new(width, height, 0, 0),
-                Plane::new(width/2, height/2, 1, 1),
-                Plane::new(width/2, height/2, 1, 1)
+                Plane::new(width, height, 0, 0, 128+8, 128+8),
+                Plane::new(width/2, height/2, 1, 1, 64+8, 64+8),
+                Plane::new(width/2, height/2, 1, 1, 64+8, 64+8)
             ]
+        }
+    }
+
+    pub fn pad(&mut self) {
+        for p in self.planes.iter_mut() {
+            p.pad();
         }
     }
 }
@@ -1507,8 +1513,8 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
                         };
 
                     let mut po = bo.plane_offset(&fs.input.planes[p].cfg);
-                    po.x += bx * uv_tx_size.width();
-                    po.y += by * uv_tx_size.height();
+                    po.x += (bx * uv_tx_size.width()) as isize;
+                    po.y += (by * uv_tx_size.height()) as isize;
 
                     encode_tx_block(fi, fs, cw, w, p, &tx_bo, chroma_mode, uv_tx_size, uv_tx_type,
                                     plane_bsize, &po, skip, bit_depth, ac, alpha);

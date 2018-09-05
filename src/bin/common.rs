@@ -154,7 +154,7 @@ pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
                     fs.rec.planes[1].cfg.stride,
                     fs.rec.planes[2].cfg.stride);
 
-                for (line, line_out) in fs.rec.planes[0].data.chunks(stride_y).zip(rec_y.chunks_mut(pitch_y)) {
+                for (line, line_out) in fs.rec.planes[0].data_origin().chunks(stride_y).zip(rec_y.chunks_mut(pitch_y)) {
                     if sequence.bit_depth > 8 {
                         unsafe {
                             line_out.copy_from_slice(
@@ -165,7 +165,7 @@ pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
                             &line.iter().map(|&v| v as u8).collect::<Vec<u8>>()[..pitch_y]);
                     }
                 }
-                for (line, line_out) in fs.rec.planes[1].data.chunks(stride_u).zip(rec_u.chunks_mut(pitch_uv)) {
+                for (line, line_out) in fs.rec.planes[1].data_origin().chunks(stride_u).zip(rec_u.chunks_mut(pitch_uv)) {
                     if sequence.bit_depth > 8 {
                         unsafe {
                             line_out.copy_from_slice(
@@ -176,7 +176,7 @@ pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
                             &line.iter().map(|&v| v as u8).collect::<Vec<u8>>()[..pitch_uv]);
                     }
                 }
-                for (line, line_out) in fs.rec.planes[2].data.chunks(stride_v).zip(rec_v.chunks_mut(pitch_uv)) {
+                for (line, line_out) in fs.rec.planes[2].data_origin().chunks(stride_v).zip(rec_v.chunks_mut(pitch_uv)) {
                     if sequence.bit_depth > 8 {
                         unsafe {
                             line_out.copy_from_slice(
@@ -192,6 +192,7 @@ pub fn process_frame(sequence: &mut Sequence, fi: &mut FrameInvariants,
                 y4m_enc.write_frame(&rec_frame).unwrap();
             }
 
+            fs.rec.pad();
             update_rec_buffer(fi, fs);
             true
         },

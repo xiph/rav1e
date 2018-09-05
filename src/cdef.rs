@@ -339,9 +339,9 @@ pub fn cdef_filter_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockCo
     }
     let mut cdef_frame = Frame {
         planes: [
-            Plane::new(padded_px[0][0], padded_px[0][1], rec.planes[0].cfg.xdec, rec.planes[0].cfg.ydec),
-            Plane::new(padded_px[1][0], padded_px[1][1], rec.planes[1].cfg.xdec, rec.planes[1].cfg.ydec),
-            Plane::new(padded_px[2][0], padded_px[2][1], rec.planes[2].cfg.xdec, rec.planes[2].cfg.ydec)
+            Plane::new(padded_px[0][0], padded_px[0][1], rec.planes[0].cfg.xdec, rec.planes[0].cfg.ydec, 0, 0),
+            Plane::new(padded_px[1][0], padded_px[1][1], rec.planes[1].cfg.xdec, rec.planes[1].cfg.ydec, 0, 0),
+            Plane::new(padded_px[2][0], padded_px[2][1], rec.planes[2].cfg.xdec, rec.planes[2].cfg.ydec, 0, 0)
         ]
     };
     for p in 0..3 {
@@ -350,14 +350,14 @@ pub fn cdef_filter_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockCo
         for row in 0..padded_px[p][1] {
             // pad first two elements of current row
             {
-                let mut cdef_slice = cdef_frame.planes[p].mut_slice(&PlaneOffset { x: 0, y: row});
+                let mut cdef_slice = cdef_frame.planes[p].mut_slice(&PlaneOffset { x: 0, y: row as isize });
                 let mut cdef_row = &mut cdef_slice.as_mut_slice()[..2];
                 cdef_row[0] = CDEF_VERY_LARGE;
                 cdef_row[1] = CDEF_VERY_LARGE;
             }
             // pad out end of current row
             {
-                let mut cdef_slice = cdef_frame.planes[p].mut_slice(&PlaneOffset { x: rec_w+2, y: row });
+                let mut cdef_slice = cdef_frame.planes[p].mut_slice(&PlaneOffset { x: rec_w as isize + 2, y: row as isize });
                 let mut cdef_row = &mut cdef_slice.as_mut_slice()[..padded_px[p][0]-rec_w-2];
                 for x in cdef_row {
                     *x = CDEF_VERY_LARGE;
@@ -365,7 +365,7 @@ pub fn cdef_filter_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockCo
             }
             // copy current row from rec if we're in data, or pad if we're in first two rows/last N rows
             {
-                let mut cdef_slice = cdef_frame.planes[p].mut_slice(&PlaneOffset { x: 2, y: row });
+                let mut cdef_slice = cdef_frame.planes[p].mut_slice(&PlaneOffset { x: 2, y: row as isize });
                 let mut cdef_row = &mut cdef_slice.as_mut_slice()[..rec_w];
                 if row < 2 || row >= rec_h+2 {
                     for x in cdef_row {
@@ -373,7 +373,7 @@ pub fn cdef_filter_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockCo
                     }
                 } else {
                     let rec_stride = rec.planes[p].cfg.stride;
-                    cdef_row.copy_from_slice(&rec.planes[p].data[(row-2)*rec_stride..(row-1)*rec_stride][..rec_w]);
+                    cdef_row.copy_from_slice(&rec.planes[p].data_origin()[(row-2)*rec_stride..(row-1)*rec_stride][..rec_w]);
                 }
             }
         }
