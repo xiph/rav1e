@@ -1219,7 +1219,7 @@ pub fn encode_tx_block(
     forward_transform(&residual.array, coeffs, tx_size.width(), tx_size, tx_type, bit_depth);
     fs.qc.quantize(coeffs);
 
-    let has_coeff = cw.write_coeffs_lv_map(w, p, bo, &coeffs, tx_size, tx_type, plane_bsize, xdec, ydec,
+    let has_coeff = cw.write_coeffs_lv_map(w, p, bo, &coeffs, mode, tx_size, tx_type, plane_bsize, xdec, ydec,
                             fi.use_reduced_tx_set);
 
     // Reconstruct
