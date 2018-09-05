@@ -57,8 +57,8 @@ fn deblock_params(fi: &FrameInvariants, bc: &mut BlockContext, in_bo: &BlockOffs
                   p: &mut Plane, pli: usize, pass: usize, block_edge: bool, bd: usize) ->
     (usize, usize, u8, u16, u16, u16) {
     let mut bo = in_bo.clone();
-    let w = p.cfg.width;
-    let h = p.cfg.height;
+    let w = p.cfg.width as isize;
+    let h = p.cfg.height as isize;
     let xdec = p.cfg.xdec;
     let ydec = p.cfg.ydec;
     let po = bo.plane_offset(&p.cfg);
