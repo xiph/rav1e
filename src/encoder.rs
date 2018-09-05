@@ -1239,22 +1239,15 @@ pub fn motion_compensate(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
   // Inter mode prediction can take place once for a whole partition,
   // instead of each tx-block.
   let num_planes = 1 + if has_chroma(bo, bsize, xdec, ydec) { 2 } else { 0 };
+
   for p in 0..num_planes {
     let plane_bsize = if p == 0 { bsize }
     else { get_plane_block_size(bsize, xdec, ydec) };
 
     let po = bo.plane_offset(&fs.input.planes[p].cfg);
-
     let rec = &mut fs.rec.planes[p];
-
     // TODO: make more generic to handle 2xN and Nx2 MC
     if p > 0 && bsize == BlockSize::BLOCK_4X4 {
-      let mv0 = &cw.bc.at(&bo.with_offset(-1,-1)).mv[0];
-      let mv1 = &cw.bc.at(&bo.with_offset(0,-1)).mv[0];
-      let po1 = PlaneOffset { x: po.x+2, y: po.y };
-      let mv2 = &cw.bc.at(&bo.with_offset(-1,0)).mv[0];
-      let po2 = PlaneOffset { x: po.x, y: po.y+2 };
-      let po3 = PlaneOffset { x: po.x+2, y: po.y+2 };
       let some_use_intra = cw.bc.at(&bo.with_offset(-1,-1)).mode.is_intra()
         || cw.bc.at(&bo.with_offset(0,-1)).mode.is_intra()
         || cw.bc.at(&bo.with_offset(-1,0)).mode.is_intra();
@@ -1263,6 +1256,14 @@ pub fn motion_compensate(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
         luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), plane_bsize.width(),
         plane_bsize.height(), ref_frame, &mv, bit_depth);
       } else {
+        assert!(xdec == 1 && ydec == 1);
+        // TODO: these are only valid for 4:2:0
+        let mv0 = &cw.bc.at(&bo.with_offset(-1,-1)).mv[0];
+        let mv1 = &cw.bc.at(&bo.with_offset(0,-1)).mv[0];
+        let po1 = PlaneOffset { x: po.x+2, y: po.y };
+        let mv2 = &cw.bc.at(&bo.with_offset(-1,0)).mv[0];
+        let po2 = PlaneOffset { x: po.x, y: po.y+2 };
+        let po3 = PlaneOffset { x: po.x+2, y: po.y+2 };
         luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), 2, 2, ref_frame, mv0, bit_depth);
         luma_mode.predict_inter(fi, p, &po1, &mut rec.mut_slice(&po1), 2, 2, ref_frame, mv1, bit_depth);
         luma_mode.predict_inter(fi, p, &po2, &mut rec.mut_slice(&po2), 2, 2, ref_frame, mv2, bit_depth);
@@ -1300,6 +1301,10 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
     } else {
         BlockSize::BLOCK_64X64
     };
+    let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
+    if skip {
+        cw.bc.reset_skip_context(bo, bsize, xdec, ydec);
+    }
     cw.bc.set_block_size(bo, bsize);
     cw.bc.set_mode(bo, bsize, luma_mode);
     //write_q_deltas();
@@ -1364,36 +1369,30 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
         cw.write_intra_mode_kf(w, bo, luma_mode);
     }
 
-    let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
-
-    if luma_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
-        cw.write_angle_delta(w, 0, luma_mode);
-    }
-
-    if has_chroma(bo, bsize, xdec, ydec) && !is_inter {
-        cw.write_intra_uv_mode(w, chroma_mode, luma_mode, bsize);
-        if chroma_mode.is_cfl() {
-          assert!(bsize.cfl_allowed());
-          cw.write_cfl_alphas(w, cfl);
+    if !is_inter {
+        if luma_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
+            cw.write_angle_delta(w, 0, luma_mode);
         }
-        if chroma_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
-            cw.write_angle_delta(w, 0, chroma_mode);
+        if has_chroma(bo, bsize, xdec, ydec) {
+            cw.write_intra_uv_mode(w, chroma_mode, luma_mode, bsize);
+            if chroma_mode.is_cfl() {
+                assert!(bsize.cfl_allowed());
+                cw.write_cfl_alphas(w, cfl);
+            }
+            if chroma_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
+                cw.write_angle_delta(w, 0, chroma_mode);
+            }
         }
-    }
-
-    if skip {
-        cw.bc.reset_skip_context(bo, bsize, xdec, ydec);
-    }
-
-    // TODO: Extra condition related to palette mode, see `read_filter_intra_mode_info` in decodemv.c
-    if luma_mode == PredictionMode::DC_PRED && bsize.width() <= 32 && bsize.height() <= 32 {
-        cw.write_use_filter_intra(w,false, bsize); // Always turn off FILTER_INTRA
+        // TODO: Extra condition related to palette mode, see `read_filter_intra_mode_info` in decodemv.c
+        if luma_mode == PredictionMode::DC_PRED && bsize.width() <= 32 && bsize.height() <= 32 {
+            cw.write_use_filter_intra(w,false, bsize); // Always turn off FILTER_INTRA
+        }
     }
 
     motion_compensate(fi, fs, cw, luma_mode, ref_frame, mv, bsize, bo, bit_depth);
 
     if is_inter {
-      write_tx_tree(fi, fs, cw, w, luma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth, false); // i.e. var-tx if inter mode
+      write_tx_tree(fi, fs, cw, w, luma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth, false);
     } else {
       write_tx_blocks(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth, cfl, false);
     }

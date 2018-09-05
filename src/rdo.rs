@@ -219,7 +219,6 @@ pub fn rdo_tx_size_type(seq: &Sequence, fi: &FrameInvariants,
   cw.bc.set_mode(bo, bsize, luma_mode);
 
   let tx_type = if tx_set > TxSet::TX_SET_DCTONLY && fi.config.speed <= 3 && !skip {
-      // FIXME: there is one redundant transform type decision per encoded block
       rdo_tx_type_decision(fi, fs, cw, luma_mode, ref_frame, mv, bsize, bo, tx_size, tx_set, seq.bit_depth)
   } else {
       TxType::DCT_DCT
@@ -412,7 +411,7 @@ fn rdo_cfl_alpha(
   best_cfl
 }
 
-// RDO-based intra frame transform type decision
+// RDO-based transform type decision
 pub fn rdo_tx_type_decision(
   fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
   mode: PredictionMode, ref_frame: usize, mv: MotionVector, bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize,
