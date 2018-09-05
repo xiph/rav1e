@@ -1308,6 +1308,9 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
     };
     cw.bc.set_block_size(bo, bsize);
     cw.bc.set_mode(bo, bsize, luma_mode);
+    cw.bc.set_ref_frame(bo, bsize, ref_frame);
+    cw.bc.set_motion_vector(bo, bsize, mv);
+
     //write_q_deltas();
     if cw.bc.code_deltas && fi.deblock.block_deltas_enabled && (bsize < sb_size || !skip) {
         cw.write_block_deblock_deltas(w, bo, fi.deblock.block_delta_multi);
@@ -1318,8 +1321,6 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
         cw.write_is_inter(w, bo, is_inter);
         if is_inter {
             cw.fill_neighbours_ref_counts(bo);
-            cw.bc.set_ref_frame(bo, bsize, ref_frame);
-            cw.bc.set_motion_vector(bo, bsize, mv);
             cw.write_ref_frames(w, bo);
 
             //let mode_context = if bo.x == 0 && bo.y == 0 { 0 } else if bo.x ==0 || bo.y == 0 { 51 } else { 85 };

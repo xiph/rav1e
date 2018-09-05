@@ -264,9 +264,6 @@ pub fn rdo_mode_decision(
   }
   mode_set.extend_from_slice(intra_mode_set);
 
-  let mut mv_stack = Vec::new();
-  let mode_context = cw.find_mvrefs(bo, LAST_FRAME, &mut mv_stack, bsize, false);
-
   for &luma_mode in &mode_set {
     assert!(fi.frame_type == FrameType::INTER || luma_mode.is_intra());
 
@@ -280,7 +277,13 @@ pub fn rdo_mode_decision(
       mode_set_chroma.push(PredictionMode::UV_CFL_PRED);
     }
 
-    let ref_frame = if luma_mode.is_intra() { INTRA_FRAME } else { LAST_FRAME };
+
+    let ref_frame_set = if luma_mode.is_intra() { vec![INTRA_FRAME] } else { vec![LAST_FRAME, ALTREF_FRAME] };
+    for &ref_frame in ref_frame_set.iter() {
+
+    let mut mv_stack = Vec::new();
+    let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack, bsize, false);
+
     let mv = match luma_mode {
       PredictionMode::NEWMV => motion_estimation(fi, fs, bsize, bo, ref_frame),
       PredictionMode::NEARESTMV => if mv_stack.len() > 0 { mv_stack[0].this_mv } else { MotionVector { row: 0, col: 0 } },
@@ -347,10 +350,12 @@ pub fn rdo_mode_decision(
 
         cw.rollback(&cw_checkpoint);
       }
+      }
     }
   }
 
   cw.bc.set_mode(bo, bsize, best_mode_luma);
+  cw.bc.set_ref_frame(bo, bsize, best_ref_frame);
   cw.bc.set_motion_vector(bo, bsize, best_mv);
 
   assert!(best_rd >= 0_f64);

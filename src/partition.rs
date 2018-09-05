@@ -621,7 +621,6 @@ impl PredictionMode {
                            dst: &'a mut PlaneMutSlice<'a>, width: usize, height: usize,
                            ref_frame: usize, mv: &MotionVector, bit_depth: usize) {
     assert!(!self.is_intra());
-    assert!(ref_frame == LAST_FRAME);
 
     match fi.rec_buffer.frames[fi.ref_frames[ref_frame - LAST_FRAME]] {
       Some(ref rec) => {
