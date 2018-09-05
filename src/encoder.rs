@@ -322,7 +322,8 @@ pub struct FrameInvariants {
     pub config: EncoderConfig,
     pub ref_frames: [usize; INTER_REFS_PER_FRAME],
     pub rec_buffer: ReferenceFramesSet,
-    pub deblock: DeblockState
+    pub deblock: DeblockState,
+    pub base_q_idx: u8,
 }
 
 impl FrameInvariants {
@@ -387,7 +388,8 @@ impl FrameInvariants {
             config,
             ref_frames: [0; INTER_REFS_PER_FRAME],
             rec_buffer: ReferenceFramesSet::new(),
-            deblock: Default::default()
+            deblock: Default::default(),
+            base_q_idx: config.quantizer as u8,
         }
     }
 
@@ -869,8 +871,8 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
       // write context_update_tile_id and tile_size_bytes_minus_1 }
 
       // quantization
-      assert!(fi.config.quantizer > 0);
-      self.write(8,fi.config.quantizer as u8)?; // base_q_idx
+      assert!(fi.base_q_idx > 0);
+      self.write(8, fi.base_q_idx)?; // base_q_idx
       self.write_bit(false)?; // y dc delta q
       self.write_bit(false)?; // uv dc delta q
       self.write_bit(false)?; // uv ac delta q
@@ -1226,7 +1228,7 @@ pub fn encode_tx_block(
                             fi.use_reduced_tx_set);
 
     // Reconstruct
-    dequantize(fi.config.quantizer, &coeffs, &mut rcoeffs.array, tx_size, bit_depth);
+    dequantize(fi.base_q_idx, &coeffs, &mut rcoeffs.array, tx_size, bit_depth);
 
     inverse_transform_add(&rcoeffs.array, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
     has_coeff
@@ -1448,7 +1450,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
     let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
     let ac = &mut [0i16; 32 * 32];
 
-    fs.qc.update(fi.config.quantizer, tx_size, luma_mode.is_intra(), bit_depth);
+    fs.qc.update(fi.base_q_idx, tx_size, luma_mode.is_intra(), bit_depth);
 
     for by in 0..bh {
         for bx in 0..bw {
@@ -1494,7 +1496,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
 
     if bw_uv > 0 && bh_uv > 0 {
         let uv_tx_type = uv_intra_mode_to_tx_type_context(chroma_mode);
-        fs.qc.update(fi.config.quantizer, uv_tx_size, true, bit_depth);
+        fs.qc.update(fi.base_q_idx, uv_tx_size, true, bit_depth);
 
         for p in 1..3 {
             let alpha = cfl.alpha(p - 1);
@@ -1532,7 +1534,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
     let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
     let ac = &[0i16; 32 * 32];
 
-    fs.qc.update(fi.config.quantizer, tx_size, luma_mode.is_intra(), bit_depth);
+    fs.qc.update(fi.base_q_idx, tx_size, luma_mode.is_intra(), bit_depth);
 
     let po = bo.plane_offset(&fs.input.planes[0].cfg);
     let has_coeff = encode_tx_block(
@@ -1566,7 +1568,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
     if bw_uv > 0 && bh_uv > 0 {
         let uv_tx_type = if has_coeff {tx_type} else {TxType::DCT_DCT}; // if inter mode, uv_tx_type == tx_type
 
-        fs.qc.update(fi.config.quantizer, uv_tx_size, false, bit_depth);
+        fs.qc.update(fi.base_q_idx, uv_tx_size, false, bit_depth);
 
         for p in 1..3 {
             let tx_bo = BlockOffset {
@@ -1857,11 +1859,11 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
     let mut w = WriterEncoder::new();
 
     let fc = if fi.primary_ref_frame == PRIMARY_REF_NONE {
-      CDFContext::new(fi.config.quantizer as u8)
+      CDFContext::new(fi.base_q_idx)
     } else {
       match fi.rec_buffer.frames[fi.ref_frames[fi.primary_ref_frame as usize]] {
         Some(ref rec) => rec.cdfs.clone(),
-        None => CDFContext::new(fi.config.quantizer as u8)
+        None => CDFContext::new(fi.base_q_idx)
       }
     };
 
