@@ -65,14 +65,16 @@ fn main() {
     fi.frame_type =
       if fi.number % 30 == 0 { FrameType::KEY } else { FrameType::INTER };
 
+    let slot_idx = fi.number % 30 % 4;
+
     fi.refresh_frame_flags =
-      if fi.frame_type == FrameType::KEY { ALL_REF_FRAMES_MASK } else { 1 << (fi.number % 4) };
+      if fi.frame_type == FrameType::KEY { ALL_REF_FRAMES_MASK } else { 1 << slot_idx };
     fi.intra_only = fi.frame_type == FrameType::KEY
       || fi.frame_type == FrameType::INTRA_ONLY;
     fi.primary_ref_frame =
       if fi.intra_only || fi.error_resilient { PRIMARY_REF_NONE } else { (LAST_FRAME - LAST_FRAME) as u32 };
-    fi.ref_frames[LAST_FRAME - LAST_FRAME] = (fi.number as usize - 1 + 4) % 4;
-    fi.ref_frames[ALTREF_FRAME - LAST_FRAME] = (fi.number as usize - 2 + 4) % 4;
+    fi.ref_frames[LAST_FRAME - LAST_FRAME] = (slot_idx as usize - 1 + 4) % 4;
+    fi.ref_frames[ALTREF_FRAME - LAST_FRAME] = 0;
 
     if !process_frame(
       &mut sequence,
