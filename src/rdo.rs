@@ -228,6 +228,8 @@ pub fn rdo_tx_size_type(seq: &Sequence, fi: &FrameInvariants,
   (tx_size, tx_type)
 }
 
+use rayon::prelude::*;
+
 // RDO-based mode decision
 pub fn rdo_mode_decision(
   seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,

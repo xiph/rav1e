@@ -16,6 +16,7 @@ extern crate libc;
 extern crate rand;
 
 extern crate num_traits;
+extern crate rayon;
 
 pub mod ec;
 pub mod partition;
