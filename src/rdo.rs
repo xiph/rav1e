@@ -278,7 +278,9 @@ pub fn rdo_mode_decision(
     }
 
 
-    let ref_frame_set = if luma_mode.is_intra() { vec![INTRA_FRAME] } else { vec![LAST_FRAME, ALTREF_FRAME] };
+    let mut ref_frame_set = if luma_mode.is_intra() { vec![INTRA_FRAME] } else { vec![LAST_FRAME] };
+    if !luma_mode.is_intra() && fi.config.speed <= 2 { ref_frame_set.push(ALTREF_FRAME); }
+
     for &ref_frame in ref_frame_set.iter() {
 
     let mut mv_stack = Vec::new();

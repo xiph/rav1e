@@ -74,7 +74,7 @@ fn main() {
     fi.primary_ref_frame =
       if fi.intra_only || fi.error_resilient { PRIMARY_REF_NONE } else { (LAST_FRAME - LAST_FRAME) as u32 };
     fi.ref_frames[LAST_FRAME - LAST_FRAME] = (slot_idx as usize - 1 + 4) % 4;
-    fi.ref_frames[ALTREF_FRAME - LAST_FRAME] = 0;
+    fi.ref_frames[ALTREF_FRAME - LAST_FRAME] = (slot_idx as usize - 2 + 4) % 4;
 
     if !process_frame(
       &mut sequence,
