@@ -295,7 +295,7 @@ pub fn rdo_mode_decision(
       rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, luma_mode, ref_frame, mv, false);
 
     // Find the best chroma prediction mode for the current luma prediction mode
-    let best = mode_set_chroma.iter().flat_map(|&chroma_mode| {
+    let best = mode_set_chroma.par_iter().flat_map(|&chroma_mode| {
       let fs = &mut fs.clone();
       let cw = &mut cw.clone();
 
@@ -325,6 +325,8 @@ pub fn rdo_mode_decision(
 
       skip_modes.iter().map(|&skip| {
         let chroma_mode = chroma_mode.clone();
+        // let cw = &mut cw.clone();
+        // let fs = &mut fs.clone();
 
         let wr: &mut dyn Writer = &mut WriterCounter::new();
         let tell = wr.tell_frac();
@@ -350,7 +352,7 @@ pub fn rdo_mode_decision(
         cw.rollback(&cw_checkpoint);
 
         (rd, luma_mode, chroma_mode, cfl, ref_frame, mv, skip)
-      }).collect::<Vec<_>>().into_iter() // FIXME
+      }).collect::<Vec<_>>().into_par_iter() // FIXME
     }).max_by(|a, b| a.0.partial_cmp(&b.0).unwrap()).unwrap();
       best_rd = best.0;
       best_mode_luma = best.1;
