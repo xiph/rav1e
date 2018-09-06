@@ -64,13 +64,13 @@ fn main() {
     fi.frame_type =
       if fi.number % 30 == 0 { FrameType::KEY } else { FrameType::INTER };
 
-    let slot_idx = fi.number % 30 % 4;
+    let slot_idx = fi.number % 30 % 8;
 
     fi.base_q_idx =
       if fi.frame_type == FrameType::KEY {
         let q_boost = 15;
         fi.config.quantizer.max(1 + q_boost).min(255 + q_boost) - q_boost
-      } else if slot_idx == 0 {
+      } else if slot_idx == 0 || slot_idx == 4 {
         fi.config.quantizer.max(1).min(255)
       } else {
         let q_drop = 5;
@@ -83,8 +83,8 @@ fn main() {
       || fi.frame_type == FrameType::INTRA_ONLY;
     fi.primary_ref_frame =
       if fi.intra_only || fi.error_resilient { PRIMARY_REF_NONE } else { (LAST_FRAME - LAST_FRAME) as u32 };
-    fi.ref_frames[LAST_FRAME - LAST_FRAME] = (slot_idx as usize - 1 + 4) % 4;
-    fi.ref_frames[ALTREF_FRAME - LAST_FRAME] = 0;
+    fi.ref_frames[LAST_FRAME - LAST_FRAME] = (8 + slot_idx as usize - 1) & 7;
+    fi.ref_frames[ALTREF_FRAME - LAST_FRAME] = (8 + slot_idx as usize - 2) & 4;
 
     if !process_frame(
       &mut sequence,
