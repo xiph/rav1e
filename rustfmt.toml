@@ -28,7 +28,7 @@ ignore = [
     # "src/bin/rav1repl.rs", # Clean
     # "src/util.rs", # Clean
     "tests/aom.rs",
-    "benches/bench.rs",
-    "benches/predict.rs",
-    "benches/comparative/predict.rs",
+    # "benches/bench.rs",
+    # "benches/predict.rs",
+    # "benches/comparative/predict.rs",
 ]
