@@ -13,7 +13,4 @@ mod predict;
 
 use criterion::Criterion;
 
-criterion_group!(
-  intra_prediction,
-  predict::intra_bench,
-);
+criterion_group!(intra_prediction, predict::intra_bench);

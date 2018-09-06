@@ -7,22 +7,29 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use context::BlockOffset;
+use context::BLOCK_TO_PLANE_SHIFT;
+use partition::*;
+use plane::*;
 use FrameInvariants;
 use FrameState;
-use partition::*;
-use context::BlockOffset;
-use plane::*;
-use context::BLOCK_TO_PLANE_SHIFT;
 
 #[inline(always)]
-pub fn get_sad(plane_org: &mut PlaneSlice, plane_ref: &mut PlaneSlice, blk_h: usize, blk_w: usize) -> u32 {
+pub fn get_sad(
+  plane_org: &mut PlaneSlice, plane_ref: &mut PlaneSlice, blk_h: usize,
+  blk_w: usize
+) -> u32 {
   let mut sum = 0 as u32;
 
   for _r in 0..blk_h {
     {
       let slice_org = plane_org.as_slice_w_width(blk_w);
       let slice_ref = plane_ref.as_slice_w_width(blk_w);
-      sum += slice_org.iter().zip(slice_ref).map(|(&a, &b)| (a as i32 - b as i32).abs() as u32).sum::<u32>();
+      sum += slice_org
+        .iter()
+        .zip(slice_ref)
+        .map(|(&a, &b)| (a as i32 - b as i32).abs() as u32)
+        .sum::<u32>();
     }
     plane_org.y += 1;
     plane_ref.y += 1;

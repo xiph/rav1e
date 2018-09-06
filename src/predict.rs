@@ -13,10 +13,10 @@
 
 use libc;
 
+use context::INTRA_MODES;
 use context::MAX_TX_SIZE;
 use partition::*;
 use std::mem::*;
-use context::INTRA_MODES;
 
 #[cfg(target_arch = "x86")]
 use std::arch::x86::*;
@@ -44,7 +44,7 @@ pub static RAV1E_INTRA_MODES_MINIMAL: &'static [PredictionMode] = &[
 pub static RAV1E_INTER_MODES: &'static [PredictionMode] = &[
   PredictionMode::GLOBALMV,
   PredictionMode::NEARESTMV,
-  PredictionMode::NEWMV,
+  PredictionMode::NEWMV
 ];
 
 // Weights are quadratic from '1' to '1 / block_size', scaled by 2^sm_weight_log2_scale.
@@ -74,7 +74,6 @@ static sm_weight_arrays: [u8; 2 * MAX_TX_SIZE] = [
     13, 12, 10, 9, 8, 7, 6, 6, 5, 5, 4, 4, 4,*/
 ];
 
-
 const NEED_LEFT: u8 = 1 << 1;
 const NEED_ABOVE: u8 = 1 << 2;
 const NEED_ABOVERIGHT: u8 = 1 << 3;
@@ -86,19 +85,19 @@ const INTRA_EDGE_TAPS: usize = 5;
 const MAX_UPSAMPLE_SZ: usize = 16;*/
 
 pub static extend_modes: [u8; INTRA_MODES] = [
-  NEED_ABOVE | NEED_LEFT,                   // DC
-  NEED_ABOVE,                               // V
-  NEED_LEFT,                                // H
-  NEED_ABOVE | NEED_ABOVERIGHT,             // D45
-  NEED_LEFT | NEED_ABOVE | NEED_ABOVELEFT,  // D135
-  NEED_LEFT | NEED_ABOVE | NEED_ABOVELEFT,  // D113
-  NEED_LEFT | NEED_ABOVE | NEED_ABOVELEFT,  // D157
-  NEED_LEFT | NEED_BOTTOMLEFT,              // D203
-  NEED_ABOVE | NEED_ABOVERIGHT,             // D67
-  NEED_LEFT | NEED_ABOVE,                   // SMOOTH
-  NEED_LEFT | NEED_ABOVE,                   // SMOOTH_V
-  NEED_LEFT | NEED_ABOVE,                   // SMOOTH_H
-  NEED_LEFT | NEED_ABOVE | NEED_ABOVELEFT,  // PAETH
+  NEED_ABOVE | NEED_LEFT,                  // DC
+  NEED_ABOVE,                              // V
+  NEED_LEFT,                               // H
+  NEED_ABOVE | NEED_ABOVERIGHT,            // D45
+  NEED_LEFT | NEED_ABOVE | NEED_ABOVELEFT, // D135
+  NEED_LEFT | NEED_ABOVE | NEED_ABOVELEFT, // D113
+  NEED_LEFT | NEED_ABOVE | NEED_ABOVELEFT, // D157
+  NEED_LEFT | NEED_BOTTOMLEFT,             // D203
+  NEED_ABOVE | NEED_ABOVERIGHT,            // D67
+  NEED_LEFT | NEED_ABOVE,                  // SMOOTH
+  NEED_LEFT | NEED_ABOVE,                  // SMOOTH_V
+  NEED_LEFT | NEED_ABOVE,                  // SMOOTH_H
+  NEED_LEFT | NEED_ABOVE | NEED_ABOVELEFT  // PAETH
 ];
 
 extern {
@@ -231,7 +230,8 @@ pub trait Intra: Dim {
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_dc_left(
-    output: &mut [u16], stride: usize, above: &[u16], left: &[u16], bit_depth: usize
+    output: &mut [u16], stride: usize, above: &[u16], left: &[u16],
+    bit_depth: usize
   ) {
     unsafe {
       highbd_dc_left_predictor(
@@ -248,7 +248,8 @@ pub trait Intra: Dim {
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_dc_top(
-    output: &mut [u16], stride: usize, above: &[u16], left: &[u16], bit_depth: usize
+    output: &mut [u16], stride: usize, above: &[u16], left: &[u16],
+    bit_depth: usize
   ) {
     unsafe {
       highbd_dc_top_predictor(
@@ -501,9 +502,7 @@ pub trait Intra: Dim {
   }
 }
 
-pub trait Inter: Dim {
-
-}
+pub trait Inter: Dim {}
 
 impl Intra for Block4x4 {}
 impl Intra for Block8x8 {}

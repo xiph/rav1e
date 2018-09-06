@@ -1,10 +1,10 @@
-use y4m;
+use clap::{App, Arg};
 use rav1e::*;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 use std::slice;
-use clap::{App, Arg};
+use y4m;
 
 pub struct EncoderIO {
     pub input: Box<dyn Read>,
