@@ -127,7 +127,7 @@ fn sse_wxh(src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, w: usize, h: usize) -> 
 }
 
 pub fn get_lambda(fi: &FrameInvariants, bit_depth: usize) -> f64 {
-  let q = dc_q(fi.config.quantizer, bit_depth) as f64;
+  let q = dc_q(fi.base_q_idx, bit_depth) as f64;
 
   // Convert q into Q0 precision, given that libaom quantizers are Q3
   let q0 = q / 8.0_f64;
@@ -215,11 +215,7 @@ pub fn rdo_tx_size_type(seq: &Sequence, fi: &FrameInvariants,
   let is_inter = !luma_mode.is_intra();
   let tx_set = get_tx_set(tx_size, is_inter, fi.use_reduced_tx_set);
 
-  cw.bc.set_block_size(bo, bsize);
-  cw.bc.set_mode(bo, bsize, luma_mode);
-
   let tx_type = if tx_set > TxSet::TX_SET_DCTONLY && fi.config.speed <= 3 && !skip {
-      // FIXME: there is one redundant transform type decision per encoded block
       rdo_tx_type_decision(fi, fs, cw, luma_mode, ref_frame, mv, bsize, bo, tx_size, tx_set, seq.bit_depth)
   } else {
       TxType::DCT_DCT
@@ -421,7 +417,7 @@ pub fn rdo_cfl_alpha(
   }
 }
 
-// RDO-based intra frame transform type decision
+// RDO-based transform type decision
 pub fn rdo_tx_type_decision(
   fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
   mode: PredictionMode, ref_frame: usize, mv: MotionVector, bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize,

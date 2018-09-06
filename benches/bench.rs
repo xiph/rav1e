@@ -44,7 +44,7 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
     EncoderConfig { quantizer: qindex, speed: 10, ..Default::default() };
   let mut fi = FrameInvariants::new(1024, 1024, config);
   let mut w = ec::WriterEncoder::new();
-  let fc = CDFContext::new(fi.config.quantizer as u8);
+  let fc = CDFContext::new(fi.base_q_idx);
   let bc = BlockContext::new(fi.sb_width * 16, fi.sb_height * 16);
   let mut fs = FrameState::new(&fi);
   let mut cw = ContextWriter::new(fc, bc);
@@ -58,7 +58,7 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
   b.iter(|| {
     for &mode in RAV1E_INTRA_MODES {
       let sbo = SuperBlockOffset { x: sbx, y: sby };
-      fs.qc.update(fi.config.quantizer, tx_size, mode.is_intra(), 8);
+      fs.qc.update(fi.base_q_idx, tx_size, mode.is_intra(), 8);
       for p in 1..3 {
         for by in 0..8 {
           for bx in 0..8 {

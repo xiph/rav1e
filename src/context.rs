@@ -3018,10 +3018,10 @@ impl ContextWriter {
 
   pub fn write_coeffs_lv_map(
     &mut self, w: &mut dyn Writer, plane: usize, bo: &BlockOffset, coeffs_in: &[i32],
+    pred_mode: PredictionMode,
     tx_size: TxSize, tx_type: TxType, plane_bsize: BlockSize, xdec: usize,
     ydec: usize, use_reduced_tx_set: bool
   ) -> bool {
-    let pred_mode = self.bc.get_mode(bo);
     let is_inter = pred_mode >= PredictionMode::NEARESTMV;
     //assert!(!is_inter);
     // Note: Both intra and inter mode uses inter scan order. Surprised?

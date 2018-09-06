@@ -61,12 +61,18 @@ fn main() {
   );
 
   loop {
-    //fi.frame_type = FrameType::KEY;
     fi.frame_type =
       if fi.number % 30 == 0 { FrameType::KEY } else { FrameType::INTER };
 
-    let slot_idx = fi.number % 30 % 4;
+    fi.base_q_idx =
+      if fi.frame_type == FrameType::KEY {
+        let q_boost = 15;
+        fi.config.quantizer.max(1 + q_boost).min(255 + q_boost) - q_boost
+      } else {
+        fi.config.quantizer.max(1).min(255)
+      } as u8;
 
+    let slot_idx = fi.number % 30 % 4;
     fi.refresh_frame_flags =
       if fi.frame_type == FrameType::KEY { ALL_REF_FRAMES_MASK } else { 1 << slot_idx };
     fi.intra_only = fi.frame_type == FrameType::KEY
