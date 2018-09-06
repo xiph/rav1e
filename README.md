@@ -10,7 +10,7 @@ rav1e temporarily uses libaom's transforms and CDF initialization tables, but is
 
 # Features
 
-* Intra frames
+* Intra and inter frames
 * 64x64 superblocks
 * 4x4 to 32x32 RDO-selected square blocks
 * DC, H, V, Paeth, and smooth prediction modes
@@ -18,6 +18,10 @@ rav1e temporarily uses libaom's transforms and CDF initialization tables, but is
 * 8-, 10- and 12-bit depth color
 * Variable speed settings
 * ~10 fps encoding @ 480p
+
+# Windows builds
+
+Automated AppVeyor builds can be found [here](https://ci.appveyor.com/project/tdaede/rav1e/history). Click on a build (it is recommended you select a build based on "master"), then click ARTIFACTS to reveal the rav1e.exe download link.
 
 # Building
 
@@ -46,6 +50,8 @@ cargo run --release --bin rav1e -- input.y4m -o output.ivf
 ```
 # Decompressing video
 
+Encoder output should be compatible with any AV1 decoder compliant with the v1.0.0 specification. You can also build the included compatible aomdec using the following:
+
 ```
 mkdir aom_test
 cd aom_test
@@ -73,25 +79,37 @@ make -j8
 
 ## Coding style
 Check code formatting with [rustfmt](https://github.com/rust-lang-nursery/rustfmt) before submitting a PR.
-rav1e currently uses a [forked version](https://github.com/mbebenita/rustfmt) of rustfmt.
+rav1e currently uses the nightly version of rustfmt.
 
-To install rustfmt:
+To install nightly:
 
 ```
-git clone https://github.com/mbebenita/rustfmt
-cd rustfmt
-cargo +nightly build // Depends on the Rust nightly toolchain. 
-cargo +nightly install -f // Overwrite the installed rustfmt.
+rustup install nightly
+```
+
+To install the nightly version of rustfmt:
+
+```
+rustup component add rustfmt-preview --toolchain nightly
 ```
 
 then
 
 ```
-cd rav1e
 cargo +nightly fmt -- --check
 ```
 
 You should also try [clippy](https://github.com/rust-lang-nursery/rust-clippy).
+Rust also uses nightly for clippy.
+
+To install clippy:
+
+```
+rustup component add clippy-preview --toolchain nightly
+```
+
+then
+
 ```
 cargo +nightly clippy
 ```

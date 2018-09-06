@@ -7,9 +7,9 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+extern crate clap;
 extern crate rustyline;
 extern crate y4m;
-extern crate clap;
 
 extern crate rav1e;
 

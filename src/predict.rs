@@ -13,10 +13,10 @@
 
 use libc;
 
+use context::INTRA_MODES;
 use context::MAX_TX_SIZE;
 use partition::*;
 use std::mem::*;
-use context::INTRA_MODES;
 
 #[cfg(target_arch = "x86")]
 use std::arch::x86::*;
@@ -47,7 +47,7 @@ pub static RAV1E_INTER_MODES: &'static [PredictionMode] = &[
   PredictionMode::NEAR0MV,
   PredictionMode::NEAR1MV,
   PredictionMode::NEAR2MV,
-  PredictionMode::NEWMV,
+  PredictionMode::NEWMV
 ];
 
 // Weights are quadratic from '1' to '1 / block_size', scaled by 2^sm_weight_log2_scale.
@@ -77,7 +77,6 @@ static sm_weight_arrays: [u8; 2 * MAX_TX_SIZE] = [
     13, 12, 10, 9, 8, 7, 6, 6, 5, 5, 4, 4, 4,*/
 ];
 
-
 const NEED_LEFT: u8 = 1 << 1;
 const NEED_ABOVE: u8 = 1 << 2;
 const NEED_ABOVERIGHT: u8 = 1 << 3;
@@ -89,19 +88,19 @@ const INTRA_EDGE_TAPS: usize = 5;
 const MAX_UPSAMPLE_SZ: usize = 16;*/
 
 pub static extend_modes: [u8; INTRA_MODES] = [
-  NEED_ABOVE | NEED_LEFT,                   // DC
-  NEED_ABOVE,                               // V
-  NEED_LEFT,                                // H
-  NEED_ABOVE | NEED_ABOVERIGHT,             // D45
-  NEED_LEFT | NEED_ABOVE | NEED_ABOVELEFT,  // D135
-  NEED_LEFT | NEED_ABOVE | NEED_ABOVELEFT,  // D113
-  NEED_LEFT | NEED_ABOVE | NEED_ABOVELEFT,  // D157
-  NEED_LEFT | NEED_BOTTOMLEFT,              // D203
-  NEED_ABOVE | NEED_ABOVERIGHT,             // D67
-  NEED_LEFT | NEED_ABOVE,                   // SMOOTH
-  NEED_LEFT | NEED_ABOVE,                   // SMOOTH_V
-  NEED_LEFT | NEED_ABOVE,                   // SMOOTH_H
-  NEED_LEFT | NEED_ABOVE | NEED_ABOVELEFT,  // PAETH
+  NEED_ABOVE | NEED_LEFT,                  // DC
+  NEED_ABOVE,                              // V
+  NEED_LEFT,                               // H
+  NEED_ABOVE | NEED_ABOVERIGHT,            // D45
+  NEED_LEFT | NEED_ABOVE | NEED_ABOVELEFT, // D135
+  NEED_LEFT | NEED_ABOVE | NEED_ABOVELEFT, // D113
+  NEED_LEFT | NEED_ABOVE | NEED_ABOVELEFT, // D157
+  NEED_LEFT | NEED_BOTTOMLEFT,             // D203
+  NEED_ABOVE | NEED_ABOVERIGHT,            // D67
+  NEED_LEFT | NEED_ABOVE,                  // SMOOTH
+  NEED_LEFT | NEED_ABOVE,                  // SMOOTH_V
+  NEED_LEFT | NEED_ABOVE,                  // SMOOTH_H
+  NEED_LEFT | NEED_ABOVE | NEED_ABOVELEFT  // PAETH
 ];
 
 extern {
@@ -234,7 +233,8 @@ pub trait Intra: Dim {
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_dc_left(
-    output: &mut [u16], stride: usize, above: &[u16], left: &[u16], bit_depth: usize
+    output: &mut [u16], stride: usize, above: &[u16], left: &[u16],
+    bit_depth: usize
   ) {
     unsafe {
       highbd_dc_left_predictor(
@@ -251,7 +251,8 @@ pub trait Intra: Dim {
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_dc_top(
-    output: &mut [u16], stride: usize, above: &[u16], left: &[u16], bit_depth: usize
+    output: &mut [u16], stride: usize, above: &[u16], left: &[u16],
+    bit_depth: usize
   ) {
     unsafe {
       highbd_dc_top_predictor(
@@ -454,7 +455,8 @@ pub trait Intra: Dim {
       while (i as usize) < Self::W {
         let ac_q3 = _mm_loadu_si128(luma.offset(i) as *const _);
         let ac_sign = _mm_sign_epi16(alpha_sign, ac_q3);
-        let abs_scaled_luma_q0 = _mm_mulhrs_epi16(_mm_abs_epi16(ac_q3), alpha_q12);
+        let abs_scaled_luma_q0 =
+          _mm_mulhrs_epi16(_mm_abs_epi16(ac_q3), alpha_q12);
         let scaled_luma_q0 = _mm_sign_epi16(abs_scaled_luma_q0, ac_sign);
         let pred = _mm_add_epi16(scaled_luma_q0, dc_q0);
         let res = _mm_min_epi16(max, _mm_max_epi16(pred, _mm_setzero_si128()));
@@ -473,14 +475,20 @@ pub trait Intra: Dim {
     output: &mut [u16], stride: usize, ac: &[i16], alpha: i16,
     bit_depth: usize
   ) {
-    if alpha == 0 { return; }
+    if alpha == 0 {
+      return;
+    }
     assert!(32 >= Self::W);
     assert!(ac.len() >= 32 * (Self::H - 1) + Self::W);
     assert!(stride >= Self::W);
     assert!(output.len() >= stride * (Self::H - 1) + Self::W);
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    unsafe {
-      return Self::pred_cfl_ssse3(output, stride, ac, alpha, bit_depth);
+    {
+      if is_x86_feature_detected!("ssse3") {
+        return unsafe {
+          Self::pred_cfl_ssse3(output, stride, ac, alpha, bit_depth)
+        };
+      }
     }
 
     let sample_max = (1 << bit_depth) - 1;
@@ -497,9 +505,7 @@ pub trait Intra: Dim {
   }
 }
 
-pub trait Inter: Dim {
-
-}
+pub trait Inter: Dim {}
 
 impl Intra for Block4x4 {}
 impl Intra for Block8x8 {}
@@ -724,13 +730,15 @@ pub mod test {
     let o1 = vec![0u16; 32 * 32];
     let o2 = vec![0u16; 32 * 32];
     let max: u16 = (1 << bit_depth) - 1;
-    let above: Vec<u16> = (0..32).map(|_| ra.gen())
-      .map(|v: u16| v & max).collect();
-    let left: Vec<u16> = (0..32).map(|_| ra.gen())
-      .map(|v: u16| v & max).collect();
+    let above: Vec<u16> =
+      (0..32).map(|_| ra.gen()).map(|v: u16| v & max).collect();
+    let left: Vec<u16> =
+      (0..32).map(|_| ra.gen()).map(|v: u16| v & max).collect();
     let luma_max: i16 = (1 << (bit_depth + 3)) - 1;
-    let ac: Vec<i16> = (0..(32 * 32)).map(|_| ra.gen())
-      .map(|v: i16| (v & luma_max) - (luma_max >> 1)).collect();
+    let ac: Vec<i16> = (0..(32 * 32))
+      .map(|_| ra.gen())
+      .map(|v: i16| (v & luma_max) - (luma_max >> 1))
+      .collect();
     let alpha = -1 as i16;
 
     (above, left, ac, alpha, o1, o2)

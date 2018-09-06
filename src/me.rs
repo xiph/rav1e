@@ -7,23 +7,29 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use std::cmp;
+use context::BlockOffset;
+use context::BLOCK_TO_PLANE_SHIFT;
+use partition::*;
+use plane::*;
 use FrameInvariants;
 use FrameState;
-use partition::*;
-use context::BlockOffset;
-use plane::*;
-use context::BLOCK_TO_PLANE_SHIFT;
 
 #[inline(always)]
-pub fn get_sad(plane_org: &mut PlaneSlice, plane_ref: &mut PlaneSlice, blk_h: usize, blk_w: usize) -> u32 {
+pub fn get_sad(
+  plane_org: &mut PlaneSlice, plane_ref: &mut PlaneSlice, blk_h: usize,
+  blk_w: usize
+) -> u32 {
   let mut sum = 0 as u32;
 
   for _r in 0..blk_h {
     {
       let slice_org = plane_org.as_slice_w_width(blk_w);
       let slice_ref = plane_ref.as_slice_w_width(blk_w);
-      sum += slice_org.iter().zip(slice_ref).map(|(&a, &b)| (a as i32 - b as i32).abs() as u32).sum::<u32>();
+      sum += slice_org
+        .iter()
+        .zip(slice_ref)
+        .map(|(&a, &b)| (a as i32 - b as i32).abs() as u32)
+        .sum::<u32>();
     }
     plane_org.y += 1;
     plane_ref.y += 1;
@@ -37,20 +43,20 @@ pub fn motion_estimation(fi: &FrameInvariants, fs: &mut FrameState, bsize: Block
 
   match fi.rec_buffer.frames[fi.ref_frames[ref_frame - LAST_FRAME]] {
     Some(ref rec) => {
-      let po = PlaneOffset { x: bo.x << BLOCK_TO_PLANE_SHIFT, y: bo.y << BLOCK_TO_PLANE_SHIFT };
-      let range = 16 as usize;
+      let po = PlaneOffset { x: (bo.x as isize) << BLOCK_TO_PLANE_SHIFT, y: (bo.y as isize) << BLOCK_TO_PLANE_SHIFT };
+      let range = 32 as isize;
       let blk_w = bsize.width();
       let blk_h = bsize.height();
-      let x_lo = cmp::max(0, po.x as isize - range as isize) as usize;
-      let x_hi = cmp::min(fs.input.planes[0].cfg.width - blk_w, po.x + range);
-      let y_lo = cmp::max(0, po.y as isize - range as isize) as usize;
-      let y_hi = cmp::min(fs.input.planes[0].cfg.height - blk_h, po.y + range);
+      let x_lo = po.x - range;
+      let x_hi = po.x + range;
+      let y_lo = po.y - range;
+      let y_hi = po.y + range;
 
       let mut lowest_sad = 128*128*4096 as u32;
       let mut best_mv = MotionVector { row: 0, col: 0 };
 
-      for y in (y_lo..y_hi).step_by(1) {
-        for x in (x_lo..x_hi).step_by(1) {
+      for y in (y_lo..y_hi).step_by(2) {
+        for x in (x_lo..x_hi).step_by(2) {
           let mut plane_org = fs.input.planes[0].slice(&po);
           let mut plane_ref = rec.frame.planes[0].slice(&PlaneOffset { x: x, y: y });
 
@@ -65,9 +71,9 @@ pub fn motion_estimation(fi: &FrameInvariants, fs: &mut FrameState, bsize: Block
       }
 
       let mode = PredictionMode::NEWMV;
-      let mut tmp_plane = Plane::new(blk_w, blk_h, 0, 0);
+      let mut tmp_plane = Plane::new(blk_w, blk_h, 0, 0, 0, 0);
 
-      let mut steps = vec![4, 2];
+      let mut steps = vec![8, 4, 2];
       if fi.allow_high_precision_mv {
         steps.push(1);
       }

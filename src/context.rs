@@ -72,8 +72,8 @@ const TX_SETS_INTER: usize = 4;
 const MAX_REF_MV_STACK_SIZE: usize = 8;
 pub const REF_CAT_LEVEL: u32 = 640;
 
-const FRAME_LF_COUNT: usize = 4;
-const MAX_LOOP_FILTER: usize = 63;
+pub const FRAME_LF_COUNT: usize = 4;
+pub const MAX_LOOP_FILTER: usize = 63;
 const DELTA_LF_SMALL: u32 = 3;
 const DELTA_LF_PROBS: usize = DELTA_LF_SMALL as usize;
 
@@ -1253,8 +1253,8 @@ impl SuperBlockOffset {
   /// Offset of the top-left pixel of this block.
   pub fn plane_offset(&self, plane: &PlaneConfig) -> PlaneOffset {
     PlaneOffset {
-      x: self.x << (SUPERBLOCK_TO_PLANE_SHIFT - plane.xdec),
-      y: self.y << (SUPERBLOCK_TO_PLANE_SHIFT - plane.ydec)
+      x: (self.x as isize) << (SUPERBLOCK_TO_PLANE_SHIFT - plane.xdec),
+      y: (self.y as isize) << (SUPERBLOCK_TO_PLANE_SHIFT - plane.ydec)
     }
   }
 }
@@ -1284,8 +1284,8 @@ impl BlockOffset {
     let y_offset = self.y & LOCAL_BLOCK_MASK;
 
     PlaneOffset {
-        x: po.x + (x_offset >> plane.xdec << BLOCK_TO_PLANE_SHIFT),
-        y: po.y + (y_offset >> plane.ydec << BLOCK_TO_PLANE_SHIFT)
+        x: po.x + (x_offset as isize >> plane.xdec << BLOCK_TO_PLANE_SHIFT),
+        y: po.y + (y_offset as isize >> plane.ydec << BLOCK_TO_PLANE_SHIFT)
     }
   }
 
@@ -2960,10 +2960,10 @@ impl ContextWriter {
 
   pub fn write_coeffs_lv_map(
     &mut self, w: &mut dyn Writer, plane: usize, bo: &BlockOffset, coeffs_in: &[i32],
+    pred_mode: PredictionMode,
     tx_size: TxSize, tx_type: TxType, plane_bsize: BlockSize, xdec: usize,
     ydec: usize, use_reduced_tx_set: bool
   ) -> bool {
-    let pred_mode = self.bc.get_mode(bo);
     let is_inter = pred_mode >= PredictionMode::NEARESTMV;
     //assert!(!is_inter);
     // Note: Both intra and inter mode uses inter scan order. Surprised?

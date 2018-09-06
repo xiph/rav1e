@@ -10,7 +10,6 @@
 #![allow(non_camel_case_types)]
 #![allow(dead_code)]
 
-use std::cmp;
 use self::BlockSize::*;
 use self::TxSize::*;
 use encoder::FrameInvariants;
@@ -25,15 +24,15 @@ pub const BWDREF_FRAME: usize = 5;
 pub const ALTREF2_FRAME: usize = 6;
 pub const ALTREF_FRAME: usize = 7;
 
-pub const LAST_LAST2_FRAMES: usize = 0;      // { LAST_FRAME, LAST2_FRAME }
-pub const LAST_LAST3_FRAMES: usize = 1;      // { LAST_FRAME, LAST3_FRAME }
-pub const LAST_GOLDEN_FRAMES: usize = 2;     // { LAST_FRAME, GOLDEN_FRAME }
-pub const BWDREF_ALTREF_FRAMES: usize = 3;   // { BWDREF_FRAME, ALTREF_FRAME }
-pub const LAST2_LAST3_FRAMES: usize = 4;     // { LAST2_FRAME, LAST3_FRAME }
-pub const LAST2_GOLDEN_FRAMES: usize = 5;    // { LAST2_FRAME, GOLDEN_FRAME }
-pub const LAST3_GOLDEN_FRAMES: usize = 6;    // { LAST3_FRAME, GOLDEN_FRAME }
-pub const BWDREF_ALTREF2_FRAMES: usize = 7;  // { BWDREF_FRAME, ALTREF2_FRAME }
-pub const ALTREF2_ALTREF_FRAMES: usize = 8;  // { ALTREF2_FRAME, ALTREF_FRAME }
+pub const LAST_LAST2_FRAMES: usize = 0; // { LAST_FRAME, LAST2_FRAME }
+pub const LAST_LAST3_FRAMES: usize = 1; // { LAST_FRAME, LAST3_FRAME }
+pub const LAST_GOLDEN_FRAMES: usize = 2; // { LAST_FRAME, GOLDEN_FRAME }
+pub const BWDREF_ALTREF_FRAMES: usize = 3; // { BWDREF_FRAME, ALTREF_FRAME }
+pub const LAST2_LAST3_FRAMES: usize = 4; // { LAST2_FRAME, LAST3_FRAME }
+pub const LAST2_GOLDEN_FRAMES: usize = 5; // { LAST2_FRAME, GOLDEN_FRAME }
+pub const LAST3_GOLDEN_FRAMES: usize = 6; // { LAST3_FRAME, GOLDEN_FRAME }
+pub const BWDREF_ALTREF2_FRAMES: usize = 7; // { BWDREF_FRAME, ALTREF2_FRAME }
+pub const ALTREF2_ALTREF_FRAMES: usize = 8; // { ALTREF2_FRAME, ALTREF_FRAME }
 pub const TOTAL_UNIDIR_COMP_REFS: usize = 9;
 
 // NOTE: UNIDIR_COMP_REFS is the number of uni-directional reference pairs
@@ -45,7 +44,8 @@ pub const BWD_REFS: usize = ALTREF_FRAME - BWDREF_FRAME + 1;
 pub const SINGLE_REFS: usize = FWD_REFS + BWD_REFS;
 pub const TOTAL_REFS_PER_FRAME: usize = ALTREF_FRAME - INTRA_FRAME + 1;
 pub const INTER_REFS_PER_FRAME: usize = ALTREF_FRAME - LAST_FRAME + 1;
-pub const TOTAL_COMP_REFS: usize = FWD_REFS * BWD_REFS + TOTAL_UNIDIR_COMP_REFS;
+pub const TOTAL_COMP_REFS: usize =
+  FWD_REFS * BWD_REFS + TOTAL_UNIDIR_COMP_REFS;
 
 pub const REF_FRAMES_LOG2: usize = 3;
 pub const REF_FRAMES: usize = 1 << REF_FRAMES_LOG2;
@@ -59,12 +59,12 @@ pub enum PartitionType {
   PARTITION_HORZ,
   PARTITION_VERT,
   PARTITION_SPLIT,
-  PARTITION_HORZ_A,  // HORZ split and the top partition is split again
-  PARTITION_HORZ_B,  // HORZ split and the bottom partition is split again
-  PARTITION_VERT_A,  // VERT split and the left partition is split again
-  PARTITION_VERT_B,  // VERT split and the right partition is split again
-  PARTITION_HORZ_4,  // 4:1 horizontal partition
-  PARTITION_VERT_4,  // 4:1 vertical partition
+  PARTITION_HORZ_A, // HORZ split and the top partition is split again
+  PARTITION_HORZ_B, // HORZ split and the bottom partition is split again
+  PARTITION_VERT_A, // VERT split and the left partition is split again
+  PARTITION_VERT_B, // VERT split and the right partition is split again
+  PARTITION_HORZ_4, // 4:1 horizontal partition
+  PARTITION_VERT_4, // 4:1 vertical partition
   PARTITION_INVALID
 }
 
@@ -106,11 +106,15 @@ impl BlockSize {
   const BLOCK_SIZE_HEIGHT_LOG2: [usize; BlockSize::BLOCK_SIZES_ALL] =
     [2, 3, 2, 3, 4, 3, 4, 5, 4, 5, 6, 5, 6, 7, 6, 7, 4, 2, 5, 3, 6, 4, 7, 5];
 
-  pub const MI_SIZE_WIDE: [usize; BlockSize::BLOCK_SIZES_ALL] =
-    [1, 1, 2, 2, 2, 4, 4, 4, 8, 8, 8, 16, 16, 16, 32, 32, 1, 4, 2, 8, 4, 16, 8, 32];
+  pub const MI_SIZE_WIDE: [usize; BlockSize::BLOCK_SIZES_ALL] = [
+    1, 1, 2, 2, 2, 4, 4, 4, 8, 8, 8, 16, 16, 16, 32, 32, 1, 4, 2, 8, 4, 16, 8,
+    32,
+  ];
 
-  pub const MI_SIZE_HIGH: [usize; BlockSize::BLOCK_SIZES_ALL] =
-    [1, 2, 1, 2, 4, 2, 4, 8, 4, 8, 16, 8, 16, 32, 16, 32, 4, 1, 8, 2, 16, 4, 32, 8];
+  pub const MI_SIZE_HIGH: [usize; BlockSize::BLOCK_SIZES_ALL] = [
+    1, 2, 1, 2, 4, 2, 4, 8, 4, 8, 16, 8, 16, 32, 16, 32, 4, 1, 8, 2, 16, 4,
+    32, 8,
+  ];
 
   pub fn cfl_allowed(self) -> bool {
     // TODO: fix me when enabling EXT_PARTITION_TYPES
@@ -359,7 +363,7 @@ pub enum PredictionMode {
 #[derive(Copy, Clone)]
 pub struct MotionVector {
   pub row: i16,
-  pub col: i16,
+  pub col: i16
 }
 
 pub const NEWMV_MODE_CONTEXTS: usize = 7;
@@ -369,7 +373,8 @@ pub const REFMV_MODE_CONTEXTS: usize = 9;
 pub const REFMV_OFFSET: usize = 4;
 pub const GLOBALMV_OFFSET: usize = 3;
 pub const NEWMV_CTX_MASK: usize = ((1 << GLOBALMV_OFFSET) - 1);
-pub const GLOBALMV_CTX_MASK: usize = ((1 << (REFMV_OFFSET - GLOBALMV_OFFSET)) - 1);
+pub const GLOBALMV_CTX_MASK: usize =
+  ((1 << (REFMV_OFFSET - GLOBALMV_OFFSET)) - 1);
 pub const REFMV_CTX_MASK: usize = ((1 << (8 - REFMV_OFFSET)) - 1);
 
 pub static RAV1E_PARTITION_TYPES: &'static [PartitionType] =
@@ -397,81 +402,129 @@ pub enum GlobalMVMode {
 pub enum MvSubpelPrecision {
   MV_SUBPEL_NONE = -1,
   MV_SUBPEL_LOW_PRECISION = 0,
-  MV_SUBPEL_HIGH_PRECISION,
+  MV_SUBPEL_HIGH_PRECISION
 }
 
 const SUBPEL_FILTERS: [[[i32; 8]; 16]; 6] = [
   [
-    [ 0, 0, 0, 128, 0, 0, 0, 0 ],      [ 0, 2, -6, 126, 8, -2, 0, 0 ],
-    [ 0, 2, -10, 122, 18, -4, 0, 0 ],  [ 0, 2, -12, 116, 28, -8, 2, 0 ],
-    [ 0, 2, -14, 110, 38, -10, 2, 0 ], [ 0, 2, -14, 102, 48, -12, 2, 0 ],
-    [ 0, 2, -16, 94, 58, -12, 2, 0 ],  [ 0, 2, -14, 84, 66, -12, 2, 0 ],
-    [ 0, 2, -14, 76, 76, -14, 2, 0 ],  [ 0, 2, -12, 66, 84, -14, 2, 0 ],
-    [ 0, 2, -12, 58, 94, -16, 2, 0 ],  [ 0, 2, -12, 48, 102, -14, 2, 0 ],
-    [ 0, 2, -10, 38, 110, -14, 2, 0 ], [ 0, 2, -8, 28, 116, -12, 2, 0 ],
-    [ 0, 0, -4, 18, 122, -10, 2, 0 ],  [ 0, 0, -2, 8, 126, -6, 2, 0 ]
+    [0, 0, 0, 128, 0, 0, 0, 0],
+    [0, 2, -6, 126, 8, -2, 0, 0],
+    [0, 2, -10, 122, 18, -4, 0, 0],
+    [0, 2, -12, 116, 28, -8, 2, 0],
+    [0, 2, -14, 110, 38, -10, 2, 0],
+    [0, 2, -14, 102, 48, -12, 2, 0],
+    [0, 2, -16, 94, 58, -12, 2, 0],
+    [0, 2, -14, 84, 66, -12, 2, 0],
+    [0, 2, -14, 76, 76, -14, 2, 0],
+    [0, 2, -12, 66, 84, -14, 2, 0],
+    [0, 2, -12, 58, 94, -16, 2, 0],
+    [0, 2, -12, 48, 102, -14, 2, 0],
+    [0, 2, -10, 38, 110, -14, 2, 0],
+    [0, 2, -8, 28, 116, -12, 2, 0],
+    [0, 0, -4, 18, 122, -10, 2, 0],
+    [0, 0, -2, 8, 126, -6, 2, 0]
   ],
   [
-    [ 0, 0, 0, 128, 0, 0, 0, 0 ],     [ 0, 2, 28, 62, 34, 2, 0, 0 ],
-    [ 0, 0, 26, 62, 36, 4, 0, 0 ],    [ 0, 0, 22, 62, 40, 4, 0, 0 ],
-    [ 0, 0, 20, 60, 42, 6, 0, 0 ],    [ 0, 0, 18, 58, 44, 8, 0, 0 ],
-    [ 0, 0, 16, 56, 46, 10, 0, 0 ],   [ 0, -2, 16, 54, 48, 12, 0, 0 ],
-    [ 0, -2, 14, 52, 52, 14, -2, 0 ], [ 0, 0, 12, 48, 54, 16, -2, 0 ],
-    [ 0, 0, 10, 46, 56, 16, 0, 0 ],   [ 0, 0, 8, 44, 58, 18, 0, 0 ],
-    [ 0, 0, 6, 42, 60, 20, 0, 0 ],    [ 0, 0, 4, 40, 62, 22, 0, 0 ],
-    [ 0, 0, 4, 36, 62, 26, 0, 0 ],    [ 0, 0, 2, 34, 62, 28, 2, 0 ]
+    [0, 0, 0, 128, 0, 0, 0, 0],
+    [0, 2, 28, 62, 34, 2, 0, 0],
+    [0, 0, 26, 62, 36, 4, 0, 0],
+    [0, 0, 22, 62, 40, 4, 0, 0],
+    [0, 0, 20, 60, 42, 6, 0, 0],
+    [0, 0, 18, 58, 44, 8, 0, 0],
+    [0, 0, 16, 56, 46, 10, 0, 0],
+    [0, -2, 16, 54, 48, 12, 0, 0],
+    [0, -2, 14, 52, 52, 14, -2, 0],
+    [0, 0, 12, 48, 54, 16, -2, 0],
+    [0, 0, 10, 46, 56, 16, 0, 0],
+    [0, 0, 8, 44, 58, 18, 0, 0],
+    [0, 0, 6, 42, 60, 20, 0, 0],
+    [0, 0, 4, 40, 62, 22, 0, 0],
+    [0, 0, 4, 36, 62, 26, 0, 0],
+    [0, 0, 2, 34, 62, 28, 2, 0]
   ],
   [
-    [ 0, 0, 0, 128, 0, 0, 0, 0 ],         [ -2, 2, -6, 126, 8, -2, 2, 0 ],
-    [ -2, 6, -12, 124, 16, -6, 4, -2 ],   [ -2, 8, -18, 120, 26, -10, 6, -2 ],
-    [ -4, 10, -22, 116, 38, -14, 6, -2 ], [ -4, 10, -22, 108, 48, -18, 8, -2 ],
-    [ -4, 10, -24, 100, 60, -20, 8, -2 ], [ -4, 10, -24, 90, 70, -22, 10, -2 ],
-    [ -4, 12, -24, 80, 80, -24, 12, -4 ], [ -2, 10, -22, 70, 90, -24, 10, -4 ],
-    [ -2, 8, -20, 60, 100, -24, 10, -4 ], [ -2, 8, -18, 48, 108, -22, 10, -4 ],
-    [ -2, 6, -14, 38, 116, -22, 10, -4 ], [ -2, 6, -10, 26, 120, -18, 8, -2 ],
-    [ -2, 4, -6, 16, 124, -12, 6, -2 ],   [ 0, 2, -2, 8, 126, -6, 2, -2 ]
+    [0, 0, 0, 128, 0, 0, 0, 0],
+    [-2, 2, -6, 126, 8, -2, 2, 0],
+    [-2, 6, -12, 124, 16, -6, 4, -2],
+    [-2, 8, -18, 120, 26, -10, 6, -2],
+    [-4, 10, -22, 116, 38, -14, 6, -2],
+    [-4, 10, -22, 108, 48, -18, 8, -2],
+    [-4, 10, -24, 100, 60, -20, 8, -2],
+    [-4, 10, -24, 90, 70, -22, 10, -2],
+    [-4, 12, -24, 80, 80, -24, 12, -4],
+    [-2, 10, -22, 70, 90, -24, 10, -4],
+    [-2, 8, -20, 60, 100, -24, 10, -4],
+    [-2, 8, -18, 48, 108, -22, 10, -4],
+    [-2, 6, -14, 38, 116, -22, 10, -4],
+    [-2, 6, -10, 26, 120, -18, 8, -2],
+    [-2, 4, -6, 16, 124, -12, 6, -2],
+    [0, 2, -2, 8, 126, -6, 2, -2]
   ],
   [
-    [ 0, 0, 0, 128, 0, 0, 0, 0 ],  [ 0, 0, 0, 120, 8, 0, 0, 0 ],
-    [ 0, 0, 0, 112, 16, 0, 0, 0 ], [ 0, 0, 0, 104, 24, 0, 0, 0 ],
-    [ 0, 0, 0, 96, 32, 0, 0, 0 ],  [ 0, 0, 0, 88, 40, 0, 0, 0 ],
-    [ 0, 0, 0, 80, 48, 0, 0, 0 ],  [ 0, 0, 0, 72, 56, 0, 0, 0 ],
-    [ 0, 0, 0, 64, 64, 0, 0, 0 ],  [ 0, 0, 0, 56, 72, 0, 0, 0 ],
-    [ 0, 0, 0, 48, 80, 0, 0, 0 ],  [ 0, 0, 0, 40, 88, 0, 0, 0 ],
-    [ 0, 0, 0, 32, 96, 0, 0, 0 ],  [ 0, 0, 0, 24, 104, 0, 0, 0 ],
-    [ 0, 0, 0, 16, 112, 0, 0, 0 ], [ 0, 0, 0, 8, 120, 0, 0, 0 ]
+    [0, 0, 0, 128, 0, 0, 0, 0],
+    [0, 0, 0, 120, 8, 0, 0, 0],
+    [0, 0, 0, 112, 16, 0, 0, 0],
+    [0, 0, 0, 104, 24, 0, 0, 0],
+    [0, 0, 0, 96, 32, 0, 0, 0],
+    [0, 0, 0, 88, 40, 0, 0, 0],
+    [0, 0, 0, 80, 48, 0, 0, 0],
+    [0, 0, 0, 72, 56, 0, 0, 0],
+    [0, 0, 0, 64, 64, 0, 0, 0],
+    [0, 0, 0, 56, 72, 0, 0, 0],
+    [0, 0, 0, 48, 80, 0, 0, 0],
+    [0, 0, 0, 40, 88, 0, 0, 0],
+    [0, 0, 0, 32, 96, 0, 0, 0],
+    [0, 0, 0, 24, 104, 0, 0, 0],
+    [0, 0, 0, 16, 112, 0, 0, 0],
+    [0, 0, 0, 8, 120, 0, 0, 0]
   ],
   [
-    [ 0, 0, 0, 128, 0, 0, 0, 0 ],     [ 0, 0, -4, 126, 8, -2, 0, 0 ],
-    [ 0, 0, -8, 122, 18, -4, 0, 0 ],  [ 0, 0, -10, 116, 28, -6, 0, 0 ],
-    [ 0, 0, -12, 110, 38, -8, 0, 0 ], [ 0, 0, -12, 102, 48, -10, 0, 0 ],
-    [ 0, 0, -14, 94, 58, -10, 0, 0 ], [ 0, 0, -12, 84, 66, -10, 0, 0 ],
-    [ 0, 0, -12, 76, 76, -12, 0, 0 ], [ 0, 0, -10, 66, 84, -12, 0, 0 ],
-    [ 0, 0, -10, 58, 94, -14, 0, 0 ], [ 0, 0, -10, 48, 102, -12, 0, 0 ],
-    [ 0, 0, -8, 38, 110, -12, 0, 0 ], [ 0, 0, -6, 28, 116, -10, 0, 0 ],
-    [ 0, 0, -4, 18, 122, -8, 0, 0 ],  [ 0, 0, -2, 8, 126, -4, 0, 0 ]
+    [0, 0, 0, 128, 0, 0, 0, 0],
+    [0, 0, -4, 126, 8, -2, 0, 0],
+    [0, 0, -8, 122, 18, -4, 0, 0],
+    [0, 0, -10, 116, 28, -6, 0, 0],
+    [0, 0, -12, 110, 38, -8, 0, 0],
+    [0, 0, -12, 102, 48, -10, 0, 0],
+    [0, 0, -14, 94, 58, -10, 0, 0],
+    [0, 0, -12, 84, 66, -10, 0, 0],
+    [0, 0, -12, 76, 76, -12, 0, 0],
+    [0, 0, -10, 66, 84, -12, 0, 0],
+    [0, 0, -10, 58, 94, -14, 0, 0],
+    [0, 0, -10, 48, 102, -12, 0, 0],
+    [0, 0, -8, 38, 110, -12, 0, 0],
+    [0, 0, -6, 28, 116, -10, 0, 0],
+    [0, 0, -4, 18, 122, -8, 0, 0],
+    [0, 0, -2, 8, 126, -4, 0, 0]
   ],
   [
-    [ 0, 0, 0, 128, 0, 0, 0, 0 ],   [ 0, 0, 30, 62, 34, 2, 0, 0 ],
-    [ 0, 0, 26, 62, 36, 4, 0, 0 ],  [ 0, 0, 22, 62, 40, 4, 0, 0 ],
-    [ 0, 0, 20, 60, 42, 6, 0, 0 ],  [ 0, 0, 18, 58, 44, 8, 0, 0 ],
-    [ 0, 0, 16, 56, 46, 10, 0, 0 ], [ 0, 0, 14, 54, 48, 12, 0, 0 ],
-    [ 0, 0, 12, 52, 52, 12, 0, 0 ], [ 0, 0, 12, 48, 54, 14, 0, 0 ],
-    [ 0, 0, 10, 46, 56, 16, 0, 0 ], [ 0, 0, 8, 44, 58, 18, 0, 0 ],
-    [ 0, 0, 6, 42, 60, 20, 0, 0 ],  [ 0, 0, 4, 40, 62, 22, 0, 0 ],
-    [ 0, 0, 4, 36, 62, 26, 0, 0 ],  [ 0, 0, 2, 34, 62, 30, 0, 0 ]
+    [0, 0, 0, 128, 0, 0, 0, 0],
+    [0, 0, 30, 62, 34, 2, 0, 0],
+    [0, 0, 26, 62, 36, 4, 0, 0],
+    [0, 0, 22, 62, 40, 4, 0, 0],
+    [0, 0, 20, 60, 42, 6, 0, 0],
+    [0, 0, 18, 58, 44, 8, 0, 0],
+    [0, 0, 16, 56, 46, 10, 0, 0],
+    [0, 0, 14, 54, 48, 12, 0, 0],
+    [0, 0, 12, 52, 52, 12, 0, 0],
+    [0, 0, 12, 48, 54, 14, 0, 0],
+    [0, 0, 10, 46, 56, 16, 0, 0],
+    [0, 0, 8, 44, 58, 18, 0, 0],
+    [0, 0, 6, 42, 60, 20, 0, 0],
+    [0, 0, 4, 40, 62, 22, 0, 0],
+    [0, 0, 4, 36, 62, 26, 0, 0],
+    [0, 0, 2, 34, 62, 30, 0, 0]
   ]
 ];
 
 /* Symbols for coding which components are zero jointly */
-pub const MV_JOINTS:usize = 4;
+pub const MV_JOINTS: usize = 4;
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 pub enum MvJointType {
   MV_JOINT_ZERO = 0,   /* Zero vector */
   MV_JOINT_HNZVZ = 1,  /* Vert zero, hor nonzero */
   MV_JOINT_HZVNZ = 2,  /* Hor zero, vert nonzero */
-  MV_JOINT_HNZVNZ = 3, /* Both components nonzero */
+  MV_JOINT_HNZVNZ = 3  /* Both components nonzero */
 }
 
 use context::*;
@@ -500,8 +553,8 @@ impl PredictionMode {
 
   #[inline(always)]
   fn predict_intra_inner<'a, B: Intra>(
-    self, dst: &'a mut PlaneMutSlice<'a>, bit_depth: usize,
-    ac: &[i16], alpha: i16
+    self, dst: &'a mut PlaneMutSlice<'a>, bit_depth: usize, ac: &[i16],
+    alpha: i16
   ) {
     // above and left arrays include above-left sample
     // above array includes above-right samples
@@ -509,8 +562,10 @@ impl PredictionMode {
     let bd = bit_depth;
     let base = 128 << (bd - 8);
 
-    let above = &mut [(base - 1) as u16; 2 * MAX_TX_SIZE + 1][..B::W + B::H + 1];
-    let left = &mut [(base + 1) as u16; 2 * MAX_TX_SIZE + 1][..B::H + B::W + 1];
+    let above =
+      &mut [(base - 1) as u16; 2 * MAX_TX_SIZE + 1][..B::W + B::H + 1];
+    let left =
+      &mut [(base + 1) as u16; 2 * MAX_TX_SIZE + 1][..B::H + B::W + 1];
 
     let stride = dst.plane.cfg.stride;
     let x = dst.x;
@@ -535,8 +590,6 @@ impl PredictionMode {
       } else if self == PredictionMode::V_PRED && y == 0 {
         for i in 0..B::H {
           left[i + 1] = dst.go_left(1).p(0, 0);
-          // FIXME(yushin): Figure out why below does not work??
-          //left[i + 1] = dst.go_left(1).plane.data[0];
         }
       }
     }
@@ -545,10 +598,11 @@ impl PredictionMode {
       above[0] = dst.go_up(1).go_left(1).p(0, 0);
     }
 
-    if self == PredictionMode::SMOOTH_H_PRED ||
-      self == PredictionMode::SMOOTH_V_PRED ||
-      self == PredictionMode::SMOOTH_PRED ||
-      self == PredictionMode::PAETH_PRED {
+    if self == PredictionMode::SMOOTH_H_PRED
+      || self == PredictionMode::SMOOTH_V_PRED
+      || self == PredictionMode::SMOOTH_PRED
+      || self == PredictionMode::PAETH_PRED
+    {
       if x == 0 && y != 0 {
         for i in 0..B::H {
           left[i + 1] = dst.go_up(1).p(0, 0);
@@ -581,8 +635,10 @@ impl PredictionMode {
     match self {
       PredictionMode::DC_PRED | PredictionMode::UV_CFL_PRED => match (x, y) {
         (0, 0) => B::pred_dc_128(slice, stride, bit_depth),
-        (_, 0) => B::pred_dc_left(slice, stride, above_slice, left_slice, bit_depth),
-        (0, _) => B::pred_dc_top(slice, stride, above_slice, left_slice, bit_depth),
+        (_, 0) =>
+          B::pred_dc_left(slice, stride, above_slice, left_slice, bit_depth),
+        (0, _) =>
+          B::pred_dc_top(slice, stride, above_slice, left_slice, bit_depth),
         _ => B::pred_dc(slice, stride, above_slice, left_slice)
       },
       PredictionMode::H_PRED => match (x, y) {
@@ -622,9 +678,11 @@ impl PredictionMode {
     self >= PredictionMode::V_PRED && self <= PredictionMode::D63_PRED
   }
 
-  pub fn predict_inter<'a>(self, fi: &FrameInvariants, p: usize, po: &PlaneOffset,
-                           dst: &'a mut PlaneMutSlice<'a>, width: usize, height: usize,
-                           ref_frame: usize, mv: &MotionVector, bit_depth: usize) {
+  pub fn predict_inter<'a>(
+    self, fi: &FrameInvariants, p: usize, po: &PlaneOffset,
+    dst: &'a mut PlaneMutSlice<'a>, width: usize, height: usize,
+    ref_frame: usize, mv: &MotionVector, bit_depth: usize
+  ) {
     assert!(!self.is_intra());
     assert!(ref_frame == LAST_FRAME);
 
@@ -635,10 +693,11 @@ impl PredictionMode {
         let shift_col = 3 + rec_cfg.xdec;
         let row_offset = mv.row as i32 >> shift_row;
         let col_offset = mv.col as i32 >> shift_col;
-        let row_frac = (mv.row as i32 - (row_offset << shift_row)) << (4 - shift_row);
-        let col_frac = (mv.col as i32 - (col_offset << shift_col)) << (4 - shift_col);
-        let ref_width = rec_cfg.width;
-        let ref_height = rec_cfg.height;
+        let row_frac =
+          (mv.row as i32 - (row_offset << shift_row)) << (4 - shift_row);
+        let col_frac =
+          (mv.col as i32 - (col_offset << shift_col)) << (4 - shift_col);
+        let ref_stride = rec_cfg.stride;
 
         let stride = dst.plane.cfg.stride;
         let slice = dst.as_mut_slice();
@@ -648,79 +707,101 @@ impl PredictionMode {
         let x_filter_idx = if width <= 4 { 4 } else { 0 };
 
         match (col_frac, row_frac) {
-        (0,0) => {
-          for r in 0..height {
-            for c in 0..width {
-              let rs = cmp::min(ref_height as i32 - 1, cmp::max(0, po.y as i32 + row_offset + r as i32)) as usize;
-              let cs = cmp::min(ref_width as i32 - 1, cmp::max(0, po.x as i32 + col_offset + c as i32)) as usize;
-              let output_index = r * stride + c;
-              slice[output_index] = rec.frame.planes[p].p(cs, rs);
-            }
-          }
-        }
-        (0,_) => {
-          for r in 0..height {
-            for c in 0..width {
-              let mut sum: i32 = 0;
-              for k in 0..8 {
-                let rs = cmp::min(ref_height as i32 - 1, cmp::max(0, po.y as i32 + row_offset + r as i32 - 3 + k as i32)) as usize;
-                let cs = cmp::min(ref_width as i32 - 1, cmp::max(0, po.x as i32 + col_offset + c as i32)) as usize;
-                sum += rec.frame.planes[p].p(cs, rs) as i32 * SUBPEL_FILTERS[y_filter_idx][row_frac as usize][k];
+          (0, 0) => {
+            let qo = PlaneOffset {
+              x: po.x + col_offset as isize,
+              y: po.y + row_offset as isize
+            };
+            let ps = rec.frame.planes[p].slice(&qo);
+            let s = ps.as_slice_clamped();
+            for r in 0..height {
+              for c in 0..width {
+                let output_index = r * stride + c;
+                slice[output_index] = s[r * ref_stride + c];
               }
-              let output_index = r * stride + c;
-              let val = ((sum + 64) >> 7).max(0).min(max_sample_val);
-              slice[output_index] = val as u16;
             }
           }
-        }
-        (_,0) => {
-          for r in 0..height {
-            for c in 0..width {
-            let mut sum: i32 = 0;
-            for k in 0..8 {
-              let rs = cmp::min(ref_height as i32 - 1, cmp::max(0, po.y as i32 + row_offset + r as i32)) as usize;
-              let cs = cmp::min(ref_width as i32 - 1, cmp::max(0, po.x as i32 + col_offset + c as i32 - 3 + k as i32)) as usize;
-              sum += rec.frame.planes[p].p(cs, rs) as i32 * SUBPEL_FILTERS[x_filter_idx][col_frac as usize][k];
-            }
-            let output_index = r * stride + c;
-            let val = ((((sum + 4) >> 3) + 8) >> 4).max(0).min(max_sample_val);
-            slice[output_index] = val as u16;
+          (0, _) => {
+            let qo = PlaneOffset {
+              x: po.x + col_offset as isize,
+              y: po.y + row_offset as isize - 3
+            };
+            let ps = rec.frame.planes[p].slice(&qo);
+            let s = ps.as_slice_clamped();
+            for r in 0..height {
+              for c in 0..width {
+                let mut sum: i32 = 0;
+                for k in 0..8 {
+                  sum += s[(r + k) * ref_stride + c] as i32
+                    * SUBPEL_FILTERS[y_filter_idx][row_frac as usize][k];
+                }
+                let output_index = r * stride + c;
+                let val = ((sum + 64) >> 7).max(0).min(max_sample_val);
+                slice[output_index] = val as u16;
+              }
             }
           }
-        }
-        (_,_) => {
-          let mut intermediate = [[0 as i16; 128]; 128+7];
+          (_, 0) => {
+            let qo = PlaneOffset {
+              x: po.x + col_offset as isize - 3,
+              y: po.y + row_offset as isize
+            };
+            let ps = rec.frame.planes[p].slice(&qo);
+            let s = ps.as_slice_clamped();
+            for r in 0..height {
+              for c in 0..width {
+                let mut sum: i32 = 0;
+                for k in 0..8 {
+                  sum += s[r * ref_stride + (c + k)] as i32
+                    * SUBPEL_FILTERS[x_filter_idx][col_frac as usize][k];
+                }
+                let output_index = r * stride + c;
+                let val =
+                  ((((sum + 4) >> 3) + 8) >> 4).max(0).min(max_sample_val);
+                slice[output_index] = val as u16;
+              }
+            }
+          }
+          (_, _) => {
+            let mut intermediate = [0 as i16; 8 * (128 + 7)];
 
-          for r in 0..height+7 {
-            for c in 0..width {
-              let mut sum: i32 = 0;
-              for k in 0..8 {
-                let rs = cmp::min(ref_height as i32 - 1, cmp::max(0, po.y as i32 + row_offset + r as i32 - 3)) as usize;
-                let cs = cmp::min(ref_width as i32 - 1, cmp::max(0, po.x as i32 + col_offset + c as i32 - 3 + k as i32)) as usize;
-                sum += rec.frame.planes[p].p(cs, rs) as i32 * SUBPEL_FILTERS[x_filter_idx][col_frac as usize][k];
+            let qo = PlaneOffset {
+              x: po.x + col_offset as isize - 3,
+              y: po.y + row_offset as isize - 3
+            };
+            let ps = rec.frame.planes[p].slice(&qo);
+            let s = ps.as_slice_clamped();
+            for cg in (0..width).step_by(8) {
+              for r in 0..height + 7 {
+                for c in cg..(cg + 8).min(width) {
+                  let mut sum: i32 = 0;
+                  for k in 0..8 {
+                    sum += s[r * ref_stride + (c + k)] as i32 * SUBPEL_FILTERS
+                      [x_filter_idx][col_frac as usize][k];
+                  }
+                  let val = (sum + 4) >> 3;
+                  intermediate[8 * r + (c - cg)] = val as i16;
+                }
               }
-              let val = (sum + 4) >> 3;
-              intermediate[r][c] = val as i16;
-            }
-          }
 
-          for r in 0..height {
-            for c in 0..width {
-              let mut sum: i32 = 0;
-              for k in 0..8 {
-                sum += intermediate[r + k][c] as i32 * SUBPEL_FILTERS[y_filter_idx][row_frac as usize][k];
-              }
-              let output_index = r * stride + c;
-              let val = ((sum + 1024) >> 11).max(0).min(max_sample_val);
-              slice[output_index] = val as u16;
+              for r in 0..height {
+                for c in cg..(cg + 8).min(width) {
+                  let mut sum: i32 = 0;
+                  for k in 0..8 {
+                    sum += intermediate[8 * (r + k) + c - cg] as i32
+                      * SUBPEL_FILTERS[y_filter_idx][row_frac as usize][k];
+                  }
+                  let output_index = r * stride + c;
+                  let val = ((sum + 1024) >> 11).max(0).min(max_sample_val);
+                  slice[output_index] = val as u16;
+                }
               }
             }
           }
         }
-      },
-      None => (),
+      }
+      None => ()
     }
-
   }
 }
 

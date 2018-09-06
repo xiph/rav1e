@@ -1,20 +1,20 @@
-
-use context::*;
-use partition::*;
-use transform::*;
-use quantize::*;
-use plane::*;
-use rdo::*;
-use ec::*;
-use std::fmt;
-use util::*;
 use cdef::*;
+use context::*;
+use deblock::*;
+use ec::*;
+use partition::*;
+use plane::*;
+use quantize::*;
+use rdo::*;
+use std::fmt;
+use transform::*;
+use util::*;
 
-use bitstream_io::{BE, LE, BitWriter};
-use std::rc::Rc;
-use std::io::*;
-use std::io;
+use bitstream_io::{BitWriter, BE, LE};
 use std;
+use std::io;
+use std::io::*;
+use std::rc::Rc;
 
 extern {
     pub fn av1_rtcd();
@@ -30,10 +30,16 @@ impl Frame {
     pub fn new(width: usize, height:usize) -> Frame {
         Frame {
             planes: [
-                Plane::new(width, height, 0, 0),
-                Plane::new(width/2, height/2, 1, 1),
-                Plane::new(width/2, height/2, 1, 1)
+                Plane::new(width, height, 0, 0, 128+8, 128+8),
+                Plane::new(width/2, height/2, 1, 1, 64+8, 64+8),
+                Plane::new(width/2, height/2, 1, 1, 64+8, 64+8)
             ]
+        }
+    }
+
+    pub fn pad(&mut self) {
+        for p in self.planes.iter_mut() {
+            p.pad();
         }
     }
 }
@@ -41,7 +47,7 @@ impl Frame {
 #[derive(Debug, Clone)]
 pub struct ReferenceFrame {
   pub frame: Frame,
-  pub cdfs: CDFContext,
+  pub cdfs: CDFContext
 }
 
 #[derive(Debug)]
@@ -240,13 +246,11 @@ impl FrameState {
 
 #[derive(Copy, Clone, Debug)]
 pub struct DeblockState {
-    pub levels: [u8; PLANES+1],
+    pub levels: [u8; PLANES+1],  // Y vertical edges, Y horizontal, U, V
     pub sharpness: u8,
     pub deltas_enabled: bool,
     pub delta_updates_enabled: bool,
-    pub ref_deltas_enabled: bool,
     pub ref_deltas: [i8; REF_FRAMES],
-    pub mode_deltas_enabled: bool,
     pub mode_deltas: [i8; 2],
     pub block_deltas_enabled: bool,
     pub block_delta_shift: u8,
@@ -256,13 +260,11 @@ pub struct DeblockState {
 impl Default for DeblockState {
     fn default() -> Self {
         DeblockState {
-            levels: [0; PLANES+1],
+            levels: [8,8,4,4],
             sharpness: 0,
-            deltas_enabled: false,
+            deltas_enabled: false, // requires delta_q_enabled
             delta_updates_enabled: false,
-            ref_deltas_enabled: false,
             ref_deltas: [1, 0, 0, 0, 0, -1, -1, -1],
-            mode_deltas_enabled: false,
             mode_deltas: [0, 0],
             block_deltas_enabled: false,
             block_delta_shift: 0,
@@ -319,7 +321,8 @@ pub struct FrameInvariants {
     pub config: EncoderConfig,
     pub ref_frames: [usize; INTER_REFS_PER_FRAME],
     pub rec_buffer: ReferenceFramesSet,
-    pub deblock: DeblockState
+    pub deblock: DeblockState,
+    pub base_q_idx: u8,
 }
 
 impl FrameInvariants {
@@ -384,7 +387,8 @@ impl FrameInvariants {
             config,
             ref_frames: [0; INTER_REFS_PER_FRAME],
             rec_buffer: ReferenceFramesSet::new(),
-            deblock: Default::default()
+            deblock: Default::default(),
+            base_q_idx: config.quantizer as u8,
         }
     }
 
@@ -866,8 +870,8 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
       // write context_update_tile_id and tile_size_bytes_minus_1 }
 
       // quantization
-      assert!(fi.config.quantizer > 0);
-      self.write(8,fi.config.quantizer as u8)?; // base_q_idx
+      assert!(fi.base_q_idx > 0);
+      self.write(8, fi.base_q_idx)?; // base_q_idx
       self.write_bit(false)?; // y dc delta q
       self.write_bit(false)?; // uv dc delta q
       self.write_bit(false)?; // uv ac delta q
@@ -1000,7 +1004,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
             assert!(fi.deblock.levels[3] < 64);
             self.write(6, fi.deblock.levels[3])?; // loop deblocking filter level 3
         }
-        self.write(3,0)?; // deblocking filter sharpness
+        self.write(3,fi.deblock.sharpness)?; // deblocking filter sharpness
         self.write_bit(fi.deblock.deltas_enabled)?; // loop deblocking filter deltas enabled
         if fi.deblock.deltas_enabled {
             self.write_bit(fi.deblock.delta_updates_enabled)?; // deltas updates enabled
@@ -1219,11 +1223,11 @@ pub fn encode_tx_block(
     forward_transform(&residual.array, coeffs, tx_size.width(), tx_size, tx_type, bit_depth);
     fs.qc.quantize(coeffs);
 
-    let has_coeff = cw.write_coeffs_lv_map(w, p, bo, &coeffs, tx_size, tx_type, plane_bsize, xdec, ydec,
+    let has_coeff = cw.write_coeffs_lv_map(w, p, bo, &coeffs, mode, tx_size, tx_type, plane_bsize, xdec, ydec,
                             fi.use_reduced_tx_set);
 
     // Reconstruct
-    dequantize(fi.config.quantizer, &coeffs, &mut rcoeffs.array, tx_size, bit_depth);
+    dequantize(fi.base_q_idx, &coeffs, &mut rcoeffs.array, tx_size, bit_depth);
 
     inverse_transform_add(&rcoeffs.array, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
     has_coeff
@@ -1239,22 +1243,15 @@ pub fn motion_compensate(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
   // Inter mode prediction can take place once for a whole partition,
   // instead of each tx-block.
   let num_planes = 1 + if has_chroma(bo, bsize, xdec, ydec) { 2 } else { 0 };
+
   for p in 0..num_planes {
     let plane_bsize = if p == 0 { bsize }
     else { get_plane_block_size(bsize, xdec, ydec) };
 
     let po = bo.plane_offset(&fs.input.planes[p].cfg);
-
     let rec = &mut fs.rec.planes[p];
-
     // TODO: make more generic to handle 2xN and Nx2 MC
     if p > 0 && bsize == BlockSize::BLOCK_4X4 {
-      let mv0 = &cw.bc.at(&bo.with_offset(-1,-1)).mv[0];
-      let mv1 = &cw.bc.at(&bo.with_offset(0,-1)).mv[0];
-      let po1 = PlaneOffset { x: po.x+2, y: po.y };
-      let mv2 = &cw.bc.at(&bo.with_offset(-1,0)).mv[0];
-      let po2 = PlaneOffset { x: po.x, y: po.y+2 };
-      let po3 = PlaneOffset { x: po.x+2, y: po.y+2 };
       let some_use_intra = cw.bc.at(&bo.with_offset(-1,-1)).mode.is_intra()
         || cw.bc.at(&bo.with_offset(0,-1)).mode.is_intra()
         || cw.bc.at(&bo.with_offset(-1,0)).mode.is_intra();
@@ -1263,6 +1260,14 @@ pub fn motion_compensate(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
         luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), plane_bsize.width(),
         plane_bsize.height(), ref_frame, &mv, bit_depth);
       } else {
+        assert!(xdec == 1 && ydec == 1);
+        // TODO: these are only valid for 4:2:0
+        let mv0 = &cw.bc.at(&bo.with_offset(-1,-1)).mv[0];
+        let mv1 = &cw.bc.at(&bo.with_offset(0,-1)).mv[0];
+        let po1 = PlaneOffset { x: po.x+2, y: po.y };
+        let mv2 = &cw.bc.at(&bo.with_offset(-1,0)).mv[0];
+        let po2 = PlaneOffset { x: po.x, y: po.y+2 };
+        let po3 = PlaneOffset { x: po.x+2, y: po.y+2 };
         luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), 2, 2, ref_frame, mv0, bit_depth);
         luma_mode.predict_inter(fi, p, &po1, &mut rec.mut_slice(&po1), 2, 2, ref_frame, mv1, bit_depth);
         luma_mode.predict_inter(fi, p, &po2, &mut rec.mut_slice(&po2), 2, 2, ref_frame, mv2, bit_depth);
@@ -1300,6 +1305,10 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
     } else {
         BlockSize::BLOCK_64X64
     };
+    let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
+    if skip {
+        cw.bc.reset_skip_context(bo, bsize, xdec, ydec);
+    }
     cw.bc.set_block_size(bo, bsize);
     cw.bc.set_mode(bo, bsize, luma_mode);
     //write_q_deltas();
@@ -1386,36 +1395,30 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
         cw.write_intra_mode_kf(w, bo, luma_mode);
     }
 
-    let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
-
-    if luma_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
-        cw.write_angle_delta(w, 0, luma_mode);
-    }
-
-    if has_chroma(bo, bsize, xdec, ydec) && !is_inter {
-        cw.write_intra_uv_mode(w, chroma_mode, luma_mode, bsize);
-        if chroma_mode.is_cfl() {
-          assert!(bsize.cfl_allowed());
-          cw.write_cfl_alphas(w, cfl);
+    if !is_inter {
+        if luma_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
+            cw.write_angle_delta(w, 0, luma_mode);
         }
-        if chroma_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
-            cw.write_angle_delta(w, 0, chroma_mode);
+        if has_chroma(bo, bsize, xdec, ydec) {
+            cw.write_intra_uv_mode(w, chroma_mode, luma_mode, bsize);
+            if chroma_mode.is_cfl() {
+                assert!(bsize.cfl_allowed());
+                cw.write_cfl_alphas(w, cfl);
+            }
+            if chroma_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
+                cw.write_angle_delta(w, 0, chroma_mode);
+            }
         }
-    }
-
-    if skip {
-        cw.bc.reset_skip_context(bo, bsize, xdec, ydec);
-    }
-
-    // TODO: Extra condition related to palette mode, see `read_filter_intra_mode_info` in decodemv.c
-    if luma_mode == PredictionMode::DC_PRED && bsize.width() <= 32 && bsize.height() <= 32 {
-        cw.write_use_filter_intra(w,false, bsize); // Always turn off FILTER_INTRA
+        // TODO: Extra condition related to palette mode, see `read_filter_intra_mode_info` in decodemv.c
+        if luma_mode == PredictionMode::DC_PRED && bsize.width() <= 32 && bsize.height() <= 32 {
+            cw.write_use_filter_intra(w,false, bsize); // Always turn off FILTER_INTRA
+        }
     }
 
     motion_compensate(fi, fs, cw, luma_mode, ref_frame, mv, bsize, bo, bit_depth);
 
     if is_inter {
-      write_tx_tree(fi, fs, cw, w, luma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth, false); // i.e. var-tx if inter mode
+      write_tx_tree(fi, fs, cw, w, luma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth, false);
     } else {
       write_tx_blocks(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth, cfl, false);
     }
@@ -1468,7 +1471,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
     let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
     let ac = &mut [0i16; 32 * 32];
 
-    fs.qc.update(fi.config.quantizer, tx_size, luma_mode.is_intra(), bit_depth);
+    fs.qc.update(fi.base_q_idx, tx_size, luma_mode.is_intra(), bit_depth);
 
     for by in 0..bh {
         for bx in 0..bw {
@@ -1514,7 +1517,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
 
     if bw_uv > 0 && bh_uv > 0 {
         let uv_tx_type = uv_intra_mode_to_tx_type_context(chroma_mode);
-        fs.qc.update(fi.config.quantizer, uv_tx_size, true, bit_depth);
+        fs.qc.update(fi.base_q_idx, uv_tx_size, true, bit_depth);
 
         for p in 1..3 {
             let alpha = cfl.alpha(p - 1);
@@ -1529,8 +1532,8 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
                         };
 
                     let mut po = bo.plane_offset(&fs.input.planes[p].cfg);
-                    po.x += bx * uv_tx_size.width();
-                    po.y += by * uv_tx_size.height();
+                    po.x += (bx * uv_tx_size.width()) as isize;
+                    po.y += (by * uv_tx_size.height()) as isize;
 
                     encode_tx_block(fi, fs, cw, w, p, &tx_bo, chroma_mode, uv_tx_size, uv_tx_type,
                                     plane_bsize, &po, skip, bit_depth, ac, alpha);
@@ -1552,7 +1555,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
     let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
     let ac = &[0i16; 32 * 32];
 
-    fs.qc.update(fi.config.quantizer, tx_size, luma_mode.is_intra(), bit_depth);
+    fs.qc.update(fi.base_q_idx, tx_size, luma_mode.is_intra(), bit_depth);
 
     let po = bo.plane_offset(&fs.input.planes[0].cfg);
     let has_coeff = encode_tx_block(
@@ -1586,7 +1589,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
     if bw_uv > 0 && bh_uv > 0 {
         let uv_tx_type = if has_coeff {tx_type} else {TxType::DCT_DCT}; // if inter mode, uv_tx_type == tx_type
 
-        fs.qc.update(fi.config.quantizer, uv_tx_size, false, bit_depth);
+        fs.qc.update(fi.base_q_idx, uv_tx_size, false, bit_depth);
 
         for p in 1..3 {
             let tx_bo = BlockOffset {
@@ -1893,11 +1896,11 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
     let mut w = WriterEncoder::new();
 
     let fc = if fi.primary_ref_frame == PRIMARY_REF_NONE {
-      CDFContext::new(fi.config.quantizer as u8)
+      CDFContext::new(fi.base_q_idx)
     } else {
       match fi.rec_buffer.frames[fi.ref_frames[fi.primary_ref_frame as usize]] {
         Some(ref rec) => rec.cdfs.clone(),
-        None => CDFContext::new(fi.config.quantizer as u8)
+        None => CDFContext::new(fi.base_q_idx)
       }
     };
 
@@ -1935,6 +1938,10 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
                 w_post_cdef.replay(&mut w);
             }
         }
+    }
+    /* TODO: Don't apply if lossless */
+    if fi.deblock.levels[0] != 0 || fi.deblock.levels[1] != 0 {
+        deblock_filter_frame(fi, &mut fs.rec, &mut cw.bc, bit_depth);
     }
     /* TODO: Don't apply if lossless */
     if sequence.enable_cdef {
