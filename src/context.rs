@@ -72,8 +72,8 @@ const TX_SETS_INTER: usize = 4;
 const MAX_REF_MV_STACK_SIZE: usize = 8;
 pub const REF_CAT_LEVEL: u32 = 640;
 
-const FRAME_LF_COUNT: usize = 4;
-const MAX_LOOP_FILTER: usize = 63;
+pub const FRAME_LF_COUNT: usize = 4;
+pub const MAX_LOOP_FILTER: usize = 63;
 const DELTA_LF_SMALL: u32 = 3;
 const DELTA_LF_PROBS: usize = DELTA_LF_SMALL as usize;
 
@@ -1087,10 +1087,6 @@ impl CDFContext {
       self.deblock_delta_cdf.as_ptr() as usize;
     let deblock_delta_cdf_end =
       deblock_delta_cdf_start + size_of_val(&self.deblock_delta_cdf);
-    let filter_intra_cdf_start =
-      self.filter_intra_cdfs.first().unwrap().as_ptr() as usize;
-    let filter_intra_cdfs_end =
-      filter_intra_cdfs_start + size_of_val(&self.filter_intra_cdfs);
 
     let txb_skip_cdf_start =
       self.txb_skip_cdf.first().unwrap().as_ptr() as usize;
@@ -1257,8 +1253,8 @@ impl SuperBlockOffset {
   /// Offset of the top-left pixel of this block.
   pub fn plane_offset(&self, plane: &PlaneConfig) -> PlaneOffset {
     PlaneOffset {
-      x: self.x << (SUPERBLOCK_TO_PLANE_SHIFT - plane.xdec),
-      y: self.y << (SUPERBLOCK_TO_PLANE_SHIFT - plane.ydec)
+      x: (self.x as isize) << (SUPERBLOCK_TO_PLANE_SHIFT - plane.xdec),
+      y: (self.y as isize) << (SUPERBLOCK_TO_PLANE_SHIFT - plane.ydec)
     }
   }
 }
@@ -1288,8 +1284,8 @@ impl BlockOffset {
     let y_offset = self.y & LOCAL_BLOCK_MASK;
 
     PlaneOffset {
-        x: po.x + (x_offset >> plane.xdec << BLOCK_TO_PLANE_SHIFT),
-        y: po.y + (y_offset >> plane.ydec << BLOCK_TO_PLANE_SHIFT)
+        x: po.x + (x_offset as isize >> plane.xdec << BLOCK_TO_PLANE_SHIFT),
+        y: po.y + (y_offset as isize >> plane.ydec << BLOCK_TO_PLANE_SHIFT)
     }
   }
 
@@ -2103,11 +2099,14 @@ impl ContextWriter {
     }
   }
 
-  fn has_tr(&mut self, bo: &BlockOffset) -> bool {
+  fn has_tr(&mut self, bo: &BlockOffset, bsize: BlockSize, is_sec_rect: bool) -> bool {
     let sb_mi_size = BlockSize::MI_SIZE_WIDE[BLOCK_64X64 as usize]; /* Assume 64x64 for now */
     let mask_row = bo.y & LOCAL_BLOCK_MASK;
     let mask_col = bo.x & LOCAL_BLOCK_MASK;
-    let mut bs = cmp::max(self.bc.at(bo).n4_w, self.bc.at(bo).n4_h);
+    let target_n4_w = bsize.width_mi();
+    let target_n4_h = bsize.height_mi();
+
+    let mut bs = target_n4_w.max(target_n4_h);
 
     if bs > BlockSize::MI_SIZE_WIDE[BLOCK_64X64 as usize] {
       return false;
@@ -2131,20 +2130,20 @@ impl ContextWriter {
 
     /* The left hand of two vertical rectangles always has a top right (as the
      * block above will have been decoded) */
-    let blk = &self.bc.at(bo);
-    if (blk.n4_w < blk.n4_h) && !blk.is_sec_rect {
+    if (target_n4_w < target_n4_h) && !is_sec_rect {
       has_tr = true;
     }
 
     /* The bottom of two horizontal rectangles never has a top right (as the block
      * to the right won't have been decoded) */
-    if (blk.n4_w > blk.n4_h) && blk.is_sec_rect {
+    if (target_n4_w > target_n4_h) && is_sec_rect {
       has_tr = false;
     }
 
     /* The bottom left square of a Vertical A (in the old format) does
      * not have a top right as it is decoded before the right hand
      * rectangle of the partition */
+/*
     if blk.partition == PartitionType::PARTITION_VERT_A {
       if blk.n4_w == blk.n4_h {
         if (mask_row & bs) != 0 {
@@ -2152,6 +2151,7 @@ impl ContextWriter {
         }
       }
     }
+*/
 
     has_tr
   }
@@ -2201,9 +2201,9 @@ impl ContextWriter {
 
   fn scan_row_mbmi(&mut self, bo: &BlockOffset, row_offset: isize, max_row_offs: isize,
                    processed_rows: &mut isize, ref_frame: usize,
-                   mv_stack: &mut Vec<CandidateMV>, newmv_count: &mut usize) -> bool {
+                   mv_stack: &mut Vec<CandidateMV>, newmv_count: &mut usize, bsize: BlockSize) -> bool {
     let bc = &self.bc;
-    let target_n4_w = bc.at(bo).n4_w;
+    let target_n4_w = bsize.width_mi();
 
     let end_mi = cmp::min(cmp::min(target_n4_w, bc.cols - bo.x),
                           BlockSize::MI_SIZE_WIDE[BLOCK_64X64 as usize]);
@@ -2254,9 +2254,10 @@ impl ContextWriter {
 
   fn scan_col_mbmi(&mut self, bo: &BlockOffset, col_offset: isize, max_col_offs: isize,
                    processed_cols: &mut isize, ref_frame: usize,
-                   mv_stack: &mut Vec<CandidateMV>, newmv_count: &mut usize) -> bool {
+                   mv_stack: &mut Vec<CandidateMV>, newmv_count: &mut usize, bsize: BlockSize) -> bool {
     let bc = &self.bc;
-    let target_n4_h = bc.at(bo).n4_h;
+
+    let target_n4_h = bsize.height_mi();
 
     let end_mi = cmp::min(cmp::min(target_n4_h, bc.rows - bo.y),
                           BlockSize::MI_SIZE_HIGH[BLOCK_64X64 as usize]);
@@ -2321,14 +2322,18 @@ impl ContextWriter {
     }
   }
 
-  fn setup_mvref_list(&mut self, bo: &BlockOffset, ref_frame: usize, mv_stack: &mut Vec<CandidateMV>) -> usize {
+  fn setup_mvref_list(&mut self, bo: &BlockOffset, ref_frame: usize, mv_stack: &mut Vec<CandidateMV>,
+                      bsize: BlockSize, is_sec_rect: bool) -> usize {
     let (_rf, _rf_num) = self.get_mvref_ref_frames(INTRA_FRAME);
 
+    let target_n4_h = bsize.height_mi();
+    let target_n4_w = bsize.width_mi();
+
     let mut max_row_offs = 0 as isize;
-    let row_adj = (self.bc.at(bo).n4_h < BlockSize::MI_SIZE_HIGH[BLOCK_8X8 as usize]) && (bo.y & 0x01) != 0x0;
+    let row_adj = (target_n4_h < BlockSize::MI_SIZE_HIGH[BLOCK_8X8 as usize]) && (bo.y & 0x01) != 0x0;
 
     let mut max_col_offs = 0 as isize;
-    let col_adj = (self.bc.at(bo).n4_w < BlockSize::MI_SIZE_WIDE[BLOCK_8X8 as usize]) && (bo.x & 0x01) != 0x0;
+    let col_adj = (target_n4_w < BlockSize::MI_SIZE_WIDE[BLOCK_8X8 as usize]) && (bo.x & 0x01) != 0x0;
 
     let mut processed_rows = 0 as isize;
     let mut processed_cols = 0 as isize;
@@ -2340,7 +2345,7 @@ impl ContextWriter {
       max_row_offs = -2 * MVREF_ROW_COLS as isize + row_adj as isize;
 
       // limit max offset for small blocks
-      if self.bc.at(bo).n4_h < BlockSize::MI_SIZE_HIGH[BLOCK_8X8 as usize] {
+      if target_n4_h < BlockSize::MI_SIZE_HIGH[BLOCK_8X8 as usize] {
         max_row_offs = -2 * 2 + row_adj as isize;
       }
 
@@ -2352,7 +2357,7 @@ impl ContextWriter {
       max_col_offs = -2 * MVREF_ROW_COLS as isize + col_adj as isize;
 
       // limit max offset for small blocks
-      if self.bc.at(bo).n4_w < BlockSize::MI_SIZE_WIDE[BLOCK_8X8 as usize] {
+      if target_n4_w < BlockSize::MI_SIZE_WIDE[BLOCK_8X8 as usize] {
         max_col_offs = -2 * 2 + col_adj as isize;
       }
 
@@ -2365,17 +2370,16 @@ impl ContextWriter {
 
     if max_row_offs.abs() >= 1 {
       let found_match = self.scan_row_mbmi(bo, -1, max_row_offs, &mut processed_rows, ref_frame, mv_stack,
-                                           &mut newmv_count);
+                                           &mut newmv_count, bsize);
       row_match |= found_match;
     }
     if max_col_offs.abs() >= 1 {
       let found_match = self.scan_col_mbmi(bo, -1, max_col_offs, &mut processed_cols, ref_frame, mv_stack,
-                                           &mut newmv_count);
+                                           &mut newmv_count, bsize);
       col_match |= found_match;
     }
-    if self.has_tr(bo) {
-      let n4_w = self.bc.at(bo).n4_w;
-      let found_match = self.scan_blk_mbmi(&bo.with_offset(n4_w as isize, -1), ref_frame, mv_stack,
+    if self.has_tr(bo, bsize, is_sec_rect) {
+      let found_match = self.scan_blk_mbmi(&bo.with_offset(target_n4_w as isize, -1), ref_frame, mv_stack,
                                            &mut newmv_count);
       row_match |= found_match;
     }
@@ -2396,18 +2400,20 @@ impl ContextWriter {
 
       if row_offset.abs() <= max_row_offs.abs() && row_offset.abs() > processed_rows {
         let found_match = self.scan_row_mbmi(bo, row_offset, max_row_offs, &mut processed_rows, ref_frame, mv_stack,
-                                             &mut far_newmv_count);
+                                             &mut far_newmv_count, bsize);
         row_match |= found_match;
       }
 
       if col_offset.abs() <= max_col_offs.abs() && col_offset.abs() > processed_cols {
         let found_match = self.scan_col_mbmi(bo, col_offset, max_col_offs, &mut processed_cols, ref_frame, mv_stack,
-                                             &mut far_newmv_count);
+                                             &mut far_newmv_count, bsize);
         col_match |= found_match;
       }
     }
 
     let total_match = if row_match { 1 } else { 0 } + if col_match { 1 } else { 0 };
+
+    assert!(total_match >= nearest_match);
 
     let mode_context = match nearest_match {
                          0 =>  cmp::min(total_match, 1) + (total_match << REFMV_OFFSET) ,
@@ -2428,7 +2434,7 @@ impl ContextWriter {
   }
 
   pub fn find_mvrefs(&mut self, bo: &BlockOffset, ref_frame: usize,
-                     mv_stack: &mut Vec<CandidateMV>) -> usize {
+                     mv_stack: &mut Vec<CandidateMV>, bsize: BlockSize, is_sec_rect: bool) -> usize {
     if ref_frame < REF_FRAMES {
       if ref_frame != INTRA_FRAME {
         /* TODO: convert global mv to an mv here */
@@ -2443,7 +2449,7 @@ impl ContextWriter {
       /* TODO: Set the zeromv ref to 0 */
     }
 
-    let mode_context = self.setup_mvref_list(bo, ref_frame, mv_stack);
+    let mode_context = self.setup_mvref_list(bo, ref_frame, mv_stack, bsize, is_sec_rect);
     mode_context
   }
 
@@ -2954,10 +2960,10 @@ impl ContextWriter {
 
   pub fn write_coeffs_lv_map(
     &mut self, w: &mut dyn Writer, plane: usize, bo: &BlockOffset, coeffs_in: &[i32],
+    pred_mode: PredictionMode,
     tx_size: TxSize, tx_type: TxType, plane_bsize: BlockSize, xdec: usize,
     ydec: usize, use_reduced_tx_set: bool
   ) -> bool {
-    let pred_mode = self.bc.get_mode(bo);
     let is_inter = pred_mode >= PredictionMode::NEARESTMV;
     //assert!(!is_inter);
     // Note: Both intra and inter mode uses inter scan order. Surprised?

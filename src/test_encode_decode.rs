@@ -182,7 +182,7 @@ use std::collections::VecDeque;
                     slice::from_raw_parts(data, size)
                 };
 
-                let rec: Vec<u16> = frame_plane.data.iter().map(|&v| v).collect();
+                let rec: Vec<u16> = frame_plane.data_origin().iter().map(|&v| v).collect();
 
                 compare_plane::<u16>(&rec[..], rec_stride, dec, dec_stride, w, h);
             } else {
@@ -195,7 +195,7 @@ use std::collections::VecDeque;
                     slice::from_raw_parts(data, size)
                 };
 
-                let rec: Vec<u8> = frame_plane.data.iter().map(|&v| v as u8).collect();
+                let rec: Vec<u8> = frame_plane.data_origin().iter().map(|&v| v as u8).collect();
 
                 compare_plane::<u8>(&rec[..], rec_stride, dec, dec_stride, w, h);
             }
@@ -227,6 +227,8 @@ use std::collections::VecDeque;
             println!("Encoding frame {}", fi.number);
             let packet = encode_frame(&mut seq, &mut fi, &mut fs);
             println!("Encoded.");
+
+            fs.rec.pad();
 
             rec_fifo.push_back(fs.rec.clone());
 

@@ -10,7 +10,7 @@ rav1e temporarily uses libaom's transforms and CDF initialization tables, but is
 
 # Features
 
-* Intra frames
+* Intra and inter frames
 * 64x64 superblocks
 * 4x4 to 32x32 RDO-selected square blocks
 * DC, H, V, Paeth, and smooth prediction modes
@@ -18,6 +18,10 @@ rav1e temporarily uses libaom's transforms and CDF initialization tables, but is
 * 8-, 10- and 12-bit depth color
 * Variable speed settings
 * ~10 fps encoding @ 480p
+
+# Windows builds
+
+Automated AppVeyor builds can be found [here](https://ci.appveyor.com/project/tdaede/rav1e/history). Click on a build (it is recommended you select a build based on "master"), then click ARTIFACTS to reveal the rav1e.exe download link.
 
 # Building
 
@@ -45,6 +49,8 @@ Input videos must be in y4m format and have 4:2:0 chroma subsampling.
 cargo run --release --bin rav1e -- input.y4m -o output.ivf
 ```
 # Decompressing video
+
+Encoder output should be compatible with any AV1 decoder compliant with the v1.0.0 specification. You can also build the included compatible aomdec using the following:
 
 ```
 mkdir aom_test

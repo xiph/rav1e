@@ -16,6 +16,7 @@ ignore = [
     # "src/ec.rs", # Clean
     "src/lib.rs", # Did not clean yet to avoid conflicts with open PRs.
     "src/cdef.rs", # Did not try to clean yet.
+    "src/deblock.rs", # Did not try to clean yet.
     # "src/partition.rs", # Clean
     # "src/plane.rs", # Clean
     # "src/predict.rs", # Clean

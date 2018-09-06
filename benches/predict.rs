@@ -7,7 +7,7 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use bencher::*;
+use criterion::*;
 use rand::{ChaChaRng, Rng, SeedableRng};
 use rav1e::partition::BlockSize;
 use rav1e::predict::{Block4x4, Intra};
@@ -21,6 +21,17 @@ pub fn generate_block(rng: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>, Vec<u16>) {
   let left_context: Vec<u16> = (0..BLOCK_SIZE.width()).map(|_| rng.gen()).collect();
 
   (block, above_context, left_context)
+}
+
+pub fn pred_bench(c: &mut Criterion) {
+    c.bench_function("intra_dc_4x4", |b| intra_dc_4x4(b));
+    c.bench_function("intra_h_4x4", |b| intra_h_4x4(b));
+    c.bench_function("intra_v_4x4", |b| intra_v_4x4(b));
+    c.bench_function("intra_paeth_4x4", |b| intra_paeth_4x4(b));
+    c.bench_function("intra_smooth_4x4", |b| intra_smooth_4x4(b));
+    c.bench_function("intra_smooth_h_4x4", |b| intra_smooth_h_4x4(b));
+    c.bench_function("intra_smooth_v_4x4", |b| intra_smooth_v_4x4(b));
+    c.bench_function("intra_cfl_4x4", |b| intra_cfl_4x4(b));
 }
 
 pub fn intra_dc_4x4(b: &mut Bencher) {
