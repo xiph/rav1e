@@ -79,25 +79,37 @@ make -j8
 
 ## Coding style
 Check code formatting with [rustfmt](https://github.com/rust-lang-nursery/rustfmt) before submitting a PR.
-rav1e currently uses a [forked version](https://github.com/mbebenita/rustfmt) of rustfmt.
+rav1e currently uses the nightly version of rustfmt.
 
-To install rustfmt:
+To install nightly:
 
 ```
-git clone https://github.com/mbebenita/rustfmt
-cd rustfmt
-cargo +nightly build // Depends on the Rust nightly toolchain. 
-cargo +nightly install -f // Overwrite the installed rustfmt.
+rustup install nightly
+```
+
+To install the nightly version of rustfmt:
+
+```
+rustup component add rustfmt-preview --toolchain nightly
 ```
 
 then
 
 ```
-cd rav1e
 cargo +nightly fmt -- --check
 ```
 
 You should also try [clippy](https://github.com/rust-lang-nursery/rust-clippy).
+Rust also uses nightly for clippy.
+
+To install clippy:
+
+```
+rustup component add clippy-preview --toolchain nightly
+```
+
+then
+
 ```
 cargo +nightly clippy
 ```
