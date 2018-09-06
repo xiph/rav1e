@@ -1335,7 +1335,7 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
               // select a reasonable MV predictor
               let mut best_rate = 200 as usize;
               for (i, mv_cand) in mv_stack.iter().take(3).enumerate() {
-                let mut rate = 2 * i;
+                let mut rate = i;
                 let dy = (mv_cand.this_mv.row - mv.row).abs() as i32;
                 let dx = (mv_cand.this_mv.col - mv.col).abs() as i32;
                 if dx != 0 { rate += 2 * msb(dx) as usize + 2 };
