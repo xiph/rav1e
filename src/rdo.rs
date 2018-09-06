@@ -58,7 +58,9 @@ pub struct RDOPartitionOutput {
 }
 
 #[allow(unused)]
-fn cdef_dist_wxh_8x8(src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, bit_depth: usize) -> u64 {
+fn cdef_dist_wxh_8x8(
+  src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, bit_depth: usize
+) -> u64 {
   let coeff_shift = bit_depth - 8;
 
   let mut sum_s: i32 = 0;
@@ -88,7 +90,8 @@ fn cdef_dist_wxh_8x8(src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, bit_depth: us
 
 #[allow(unused)]
 fn cdef_dist_wxh(
-  src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, w: usize, h: usize, bit_depth: usize
+  src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, w: usize, h: usize,
+  bit_depth: usize
 ) -> u64 {
   assert!(w & 0x7 == 0);
   assert!(h & 0x7 == 0);
@@ -107,7 +110,9 @@ fn cdef_dist_wxh(
 }
 
 // Sum of Squared Error for a wxh block
-fn sse_wxh(src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, w: usize, h: usize) -> u64 {
+fn sse_wxh(
+  src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, w: usize, h: usize
+) -> u64 {
   assert!(w & (MI_SIZE - 1) == 0);
   assert!(h & (MI_SIZE - 1) == 0);
 
@@ -118,9 +123,13 @@ fn sse_wxh(src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, w: usize, h: usize) -> 
     let s1 = src1j.as_slice_w_width(w);
     let s2 = src2j.as_slice_w_width(w);
 
-    let row_sse = s1.iter().zip(s2)
-      .map(|(&a, &b)| { let c = (a as i16 - b as i16) as i32; (c * c) as u32 })
-      .sum::<u32>();
+    let row_sse = s1
+      .iter()
+      .zip(s2)
+      .map(|(&a, &b)| {
+        let c = (a as i16 - b as i16) as i32;
+        (c * c) as u32
+      }).sum::<u32>();
     sse += row_sse as u64;
   }
   sse
@@ -140,7 +149,8 @@ pub fn get_lambda(fi: &FrameInvariants, bit_depth: usize) -> f64 {
 // Compute the rate-distortion cost for an encode
 fn compute_rd_cost(
   fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize,
-  is_chroma_block: bool, bo: &BlockOffset, bit_cost: u32, bit_depth: usize, luma_only: bool
+  is_chroma_block: bool, bo: &BlockOffset, bit_cost: u32, bit_depth: usize,
+  luma_only: bool
 ) -> f64 {
   let lambda = get_lambda(fi, bit_depth);
 
@@ -197,16 +207,17 @@ fn compute_rd_cost(
   (distortion as f64) + lambda * rate
 }
 
-pub fn rdo_tx_size_type(seq: &Sequence, fi: &FrameInvariants,
-  fs: &mut FrameState, cw: &mut ContextWriter, bsize: BlockSize,
-  bo: &BlockOffset, luma_mode: PredictionMode, ref_frame: usize, mv: MotionVector, skip: bool)
-  -> (TxSize, TxType) {
+pub fn rdo_tx_size_type(
+  seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
+  cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset,
+  luma_mode: PredictionMode, ref_frame: usize, mv: MotionVector, skip: bool
+) -> (TxSize, TxType) {
   // these rules follow TX_MODE_LARGEST
   let tx_size = match bsize {
-      BlockSize::BLOCK_4X4 => TxSize::TX_4X4,
-      BlockSize::BLOCK_8X8 => TxSize::TX_8X8,
-      BlockSize::BLOCK_16X16 => TxSize::TX_16X16,
-      _ => TxSize::TX_32X32
+    BlockSize::BLOCK_4X4 => TxSize::TX_4X4,
+    BlockSize::BLOCK_8X8 => TxSize::TX_8X8,
+    BlockSize::BLOCK_16X16 => TxSize::TX_16X16,
+    _ => TxSize::TX_32X32
   };
   cw.bc.set_tx_size(bo, tx_size);
   // Were we not hardcoded to TX_MODE_LARGEST, block tx size would be written here
@@ -215,19 +226,33 @@ pub fn rdo_tx_size_type(seq: &Sequence, fi: &FrameInvariants,
   let is_inter = !luma_mode.is_intra();
   let tx_set = get_tx_set(tx_size, is_inter, fi.use_reduced_tx_set);
 
-  let tx_type = if tx_set > TxSet::TX_SET_DCTONLY && fi.config.speed <= 3 && !skip {
-      rdo_tx_type_decision(fi, fs, cw, luma_mode, ref_frame, mv, bsize, bo, tx_size, tx_set, seq.bit_depth)
-  } else {
+  let tx_type =
+    if tx_set > TxSet::TX_SET_DCTONLY && fi.config.speed <= 3 && !skip {
+      rdo_tx_type_decision(
+        fi,
+        fs,
+        cw,
+        luma_mode,
+        ref_frame,
+        mv,
+        bsize,
+        bo,
+        tx_size,
+        tx_set,
+        seq.bit_depth
+      )
+    } else {
       TxType::DCT_DCT
-  };
+    };
 
   (tx_size, tx_type)
 }
 
 // RDO-based mode decision
 pub fn rdo_mode_decision(
-  seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
-  bsize: BlockSize, bo: &BlockOffset) -> RDOOutput {
+  seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
+  cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset
+) -> RDOOutput {
   let mut best_mode_luma = PredictionMode::DC_PRED;
   let mut best_mode_chroma = PredictionMode::DC_PRED;
   let mut best_cfl_params = CFLParams::new();
@@ -246,8 +271,10 @@ pub fn rdo_mode_decision(
   let cw_checkpoint = cw.checkpoint();
 
   // Exclude complex prediction modes at higher speed levels
-  let intra_mode_set = if (fi.frame_type == FrameType::KEY && fi.config.speed <= 3) ||
-                          (fi.frame_type == FrameType::INTER && fi.config.speed <= 1) {
+  let intra_mode_set = if (fi.frame_type == FrameType::KEY
+    && fi.config.speed <= 3)
+    || (fi.frame_type == FrameType::INTER && fi.config.speed <= 1)
+  {
     RAV1E_INTRA_MODES
   } else {
     RAV1E_INTRA_MODES_MINIMAL
@@ -261,14 +288,18 @@ pub fn rdo_mode_decision(
   mode_set.extend_from_slice(intra_mode_set);
 
   let mut mv_stack = Vec::new();
-  let mode_context = cw.find_mvrefs(bo, LAST_FRAME, &mut mv_stack, bsize, false);
+  let mode_context =
+    cw.find_mvrefs(bo, LAST_FRAME, &mut mv_stack, bsize, false);
 
   for &luma_mode in &mode_set {
     assert!(fi.frame_type == FrameType::INTER || luma_mode.is_intra());
 
-    let mut mode_set_chroma = vec![ luma_mode ];
+    let mut mode_set_chroma = vec![luma_mode];
 
-    if is_chroma_block && luma_mode.is_intra() && luma_mode != PredictionMode::DC_PRED {
+    if is_chroma_block
+      && luma_mode.is_intra()
+      && luma_mode != PredictionMode::DC_PRED
+    {
       mode_set_chroma.push(PredictionMode::DC_PRED);
     }
 
@@ -276,15 +307,21 @@ pub fn rdo_mode_decision(
       mode_set_chroma.push(PredictionMode::UV_CFL_PRED);
     }
 
-    let ref_frame = if luma_mode.is_intra() { INTRA_FRAME } else { LAST_FRAME };
+    let ref_frame =
+      if luma_mode.is_intra() { INTRA_FRAME } else { LAST_FRAME };
     let mv = match luma_mode {
       PredictionMode::NEWMV => motion_estimation(fi, fs, bsize, bo, ref_frame),
-      PredictionMode::NEARESTMV => if mv_stack.len() > 0 { mv_stack[0].this_mv } else { MotionVector { row: 0, col: 0 } },
+      PredictionMode::NEARESTMV => if mv_stack.len() > 0 {
+        mv_stack[0].this_mv
+      } else {
+        MotionVector { row: 0, col: 0 }
+      },
       _ => MotionVector { row: 0, col: 0 }
     };
 
-    let (tx_size, tx_type) =
-      rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, luma_mode, ref_frame, mv, false);
+    let (tx_size, tx_type) = rdo_tx_size_type(
+      seq, fi, fs, cw, bsize, bo, luma_mode, ref_frame, mv, false,
+    );
 
     // Find the best chroma prediction mode for the current luma prediction mode
     for &chroma_mode in &mode_set_chroma {
@@ -296,7 +333,20 @@ pub fn rdo_mode_decision(
         let cw_checkpoint = cw.checkpoint();
         let mut wr: &mut dyn Writer = &mut WriterCounter::new();
         write_tx_blocks(
-          fi, fs, cw, wr, luma_mode, luma_mode, bo, bsize, tx_size, tx_type, false, seq.bit_depth, cfl, true
+          fi,
+          fs,
+          cw,
+          wr,
+          luma_mode,
+          luma_mode,
+          bo,
+          bsize,
+          tx_size,
+          tx_type,
+          false,
+          seq.bit_depth,
+          cfl,
+          true
         );
         cw.rollback(&cw_checkpoint);
         match rdo_cfl_alpha(fs, bo, bsize, seq.bit_depth) {
@@ -309,14 +359,34 @@ pub fn rdo_mode_decision(
 
       for &skip in &[false, true] {
         // Don't skip when using intra modes
-        if skip && luma_mode.is_intra() { continue; }
+        if skip && luma_mode.is_intra() {
+          continue;
+        }
 
         let mut wr: &mut dyn Writer = &mut WriterCounter::new();
         let tell = wr.tell_frac();
 
         encode_block_a(seq, cw, wr, bsize, bo, skip);
-        encode_block_b(seq, fi, fs, cw, wr, luma_mode, chroma_mode,
-          ref_frame, mv, bsize, bo, skip, seq.bit_depth, cfl, tx_size, tx_type, mode_context, &mv_stack);
+        encode_block_b(
+          seq,
+          fi,
+          fs,
+          cw,
+          wr,
+          luma_mode,
+          chroma_mode,
+          ref_frame,
+          mv,
+          bsize,
+          bo,
+          skip,
+          seq.bit_depth,
+          cfl,
+          tx_size,
+          tx_type,
+          mode_context,
+          &mv_stack
+        );
 
         let cost = wr.tell_frac() - tell;
         let rd = compute_rd_cost(
@@ -479,8 +549,10 @@ pub fn rdo_tx_type_decision(
 
 // RDO-based single level partitioning decision
 pub fn rdo_partition_decision(
-  seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
-  bsize: BlockSize, bo: &BlockOffset, cached_block: &RDOOutput) -> RDOOutput {
+  seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
+  cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset,
+  cached_block: &RDOOutput
+) -> RDOOutput {
   let max_rd = std::f64::MAX;
 
   let mut best_partition = cached_block.part_type;
@@ -507,8 +579,9 @@ pub fn rdo_partition_decision(
         let mode_decision = cached_block
           .part_modes
           .get(0)
-          .unwrap_or(&rdo_mode_decision(seq, fi, fs, cw, bsize, bo).part_modes[0])
-          .clone();
+          .unwrap_or(
+            &rdo_mode_decision(seq, fi, fs, cw, bsize, bo).part_modes[0]
+          ).clone();
         child_modes.push(mode_decision);
       }
       PartitionType::PARTITION_SPLIT => {
@@ -522,28 +595,28 @@ pub fn rdo_partition_decision(
         let hbs = bs >> 1; // Half the block size in blocks
 
         let offset = BlockOffset { x: bo.x, y: bo.y };
-        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, subsize, &offset)
-          .part_modes[0]
-          .clone();
+        let mode_decision =
+          rdo_mode_decision(seq, fi, fs, cw, subsize, &offset).part_modes[0]
+            .clone();
         child_modes.push(mode_decision);
 
         let offset = BlockOffset { x: bo.x + hbs as usize, y: bo.y };
-        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, subsize, &offset)
-          .part_modes[0]
-          .clone();
+        let mode_decision =
+          rdo_mode_decision(seq, fi, fs, cw, subsize, &offset).part_modes[0]
+            .clone();
         child_modes.push(mode_decision);
 
         let offset = BlockOffset { x: bo.x, y: bo.y + hbs as usize };
-        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, subsize, &offset)
-          .part_modes[0]
-          .clone();
+        let mode_decision =
+          rdo_mode_decision(seq, fi, fs, cw, subsize, &offset).part_modes[0]
+            .clone();
         child_modes.push(mode_decision);
 
         let offset =
           BlockOffset { x: bo.x + hbs as usize, y: bo.y + hbs as usize };
-        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, subsize, &offset)
-          .part_modes[0]
-          .clone();
+        let mode_decision =
+          rdo_mode_decision(seq, fi, fs, cw, subsize, &offset).part_modes[0]
+            .clone();
         child_modes.push(mode_decision);
       }
       _ => {

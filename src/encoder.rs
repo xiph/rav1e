@@ -1,21 +1,20 @@
-
-use context::*;
-use partition::*;
-use transform::*;
-use quantize::*;
-use plane::*;
-use rdo::*;
-use ec::*;
-use std::fmt;
-use util::*;
-use deblock::*;
 use cdef::*;
+use context::*;
+use deblock::*;
+use ec::*;
+use partition::*;
+use plane::*;
+use quantize::*;
+use rdo::*;
+use std::fmt;
+use transform::*;
+use util::*;
 
-use bitstream_io::{BE, LE, BitWriter};
-use std::rc::Rc;
-use std::io::*;
-use std::io;
+use bitstream_io::{BitWriter, BE, LE};
 use std;
+use std::io;
+use std::io::*;
+use std::rc::Rc;
 
 extern {
     pub fn av1_rtcd();
@@ -48,7 +47,7 @@ impl Frame {
 #[derive(Debug, Clone)]
 pub struct ReferenceFrame {
   pub frame: Frame,
-  pub cdfs: CDFContext,
+  pub cdfs: CDFContext
 }
 
 #[derive(Debug)]

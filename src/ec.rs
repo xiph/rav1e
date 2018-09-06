@@ -14,8 +14,8 @@
 #![cfg_attr(feature = "cargo-clippy", allow(needless_range_loop))]
 
 use bitstream_io::{BitWriter, BE};
-use util::ILog;
 use std;
+use util::ILog;
 
 pub const OD_BITRES: u8 = 3;
 const EC_PROB_SHIFT: u32 = 6;
@@ -99,7 +99,7 @@ pub struct WriterEncoder {
   /// A buffer for output bytes with their associated carry flags.
   precarry: Vec<u16>,
   /// The low end of the current range.
-  low: ec_window,
+  low: ec_window
 }
 
 #[derive(Clone)]
@@ -111,35 +111,27 @@ pub struct WriterCheckpoint {
   /// Saved number of values in the current range.
   rng: u16,
   /// Saved number of bits of data in the current value.
-  cnt: i16,
+  cnt: i16
 }
 
 /// Constructor for a counting Writer
 impl WriterCounter {
-  pub fn new () -> WriterBase<WriterCounter> {
-    WriterBase::new(WriterCounter {
-      bytes: 0
-    })
+  pub fn new() -> WriterBase<WriterCounter> {
+    WriterBase::new(WriterCounter { bytes: 0 })
   }
 }
 
 /// Constructor for a recording Writer
 impl WriterRecorder {
-  pub fn new () -> WriterBase<WriterRecorder> {
-    WriterBase::new(WriterRecorder {
-      storage: Vec::new(),
-      bytes: 0
-    })
+  pub fn new() -> WriterBase<WriterRecorder> {
+    WriterBase::new(WriterRecorder { storage: Vec::new(), bytes: 0 })
   }
 }
 
 /// Constructor for a encoding Writer
 impl WriterEncoder {
-  pub fn new () -> WriterBase<WriterEncoder> {
-    WriterBase::new(WriterEncoder {
-      precarry: Vec::new(),
-      low: 0
-    })
+  pub fn new() -> WriterBase<WriterEncoder> {
+    WriterBase::new(WriterEncoder { precarry: Vec::new(), low: 0 })
   }
 }
 
@@ -165,14 +157,14 @@ impl StorageBackend for WriterBase<WriterCounter> {
     self.cnt = s;
   }
   fn stream_bytes(&mut self) -> usize {
-      self.s.bytes
+    self.s.bytes
   }
   fn checkpoint(&mut self) -> WriterCheckpoint {
     WriterCheckpoint {
       stream_bytes: self.s.bytes,
       backend_var: 0,
       rng: self.rng,
-      cnt: self.cnt,
+      cnt: self.cnt
     }
   }
   fn rollback(&mut self, checkpoint: &WriterCheckpoint) {
@@ -207,14 +199,14 @@ impl StorageBackend for WriterBase<WriterRecorder> {
     self.s.storage.push((fl, fh, nms));
   }
   fn stream_bytes(&mut self) -> usize {
-      self.s.bytes
+    self.s.bytes
   }
   fn checkpoint(&mut self) -> WriterCheckpoint {
     WriterCheckpoint {
       stream_bytes: self.s.bytes,
       backend_var: self.s.storage.len(),
       rng: self.rng,
-      cnt: self.cnt,
+      cnt: self.cnt
     }
   }
   fn rollback(&mut self, checkpoint: &WriterCheckpoint) {
@@ -255,14 +247,14 @@ impl StorageBackend for WriterBase<WriterEncoder> {
     self.cnt = s;
   }
   fn stream_bytes(&mut self) -> usize {
-      self.s.precarry.len()
+    self.s.precarry.len()
   }
   fn checkpoint(&mut self) -> WriterCheckpoint {
     WriterCheckpoint {
-        stream_bytes: self.s.precarry.len(),
-        backend_var: self.s.low as usize,
-        rng: self.rng,
-        cnt: self.cnt,
+      stream_bytes: self.s.precarry.len(),
+      backend_var: self.s.low as usize,
+      rng: self.rng,
+      cnt: self.cnt
     }
   }
   fn rollback(&mut self, checkpoint: &WriterCheckpoint) {
@@ -275,33 +267,28 @@ impl StorageBackend for WriterBase<WriterEncoder> {
 
 /// A few local helper functions needed by the Writer that are not
 /// part of the public interface.
-impl<S> WriterBase<S>{
+impl<S> WriterBase<S> {
   /// Internal constructor called by the subtypes that implement the
   /// actual encoder and Recorder.
   fn new(storage: S) -> Self {
-    WriterBase {
-      rng: 0x8000,
-      cnt: -9,
-      debug: false,
-      s: storage
-    }
+    WriterBase { rng: 0x8000, cnt: -9, debug: false, s: storage }
   }
   /// Compute low and range values from token cdf values and local state
-  fn lr_compute (&mut self, fl: u16, fh: u16, nms: u16) -> (ec_window, u16){
+  fn lr_compute(&mut self, fl: u16, fh: u16, nms: u16) -> (ec_window, u16) {
     let u: u32;
     let v: u32;
     let mut r = self.rng as u32;
     debug_assert!(32768 <= r);
     if fl < 32768 {
       u = (((r >> 8) * (fl as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT))
-            + EC_MIN_PROB * nms as u32;
+        + EC_MIN_PROB * nms as u32;
       v = (((r >> 8) * (fh as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT))
-            + EC_MIN_PROB * (nms - 1) as u32;
+        + EC_MIN_PROB * (nms - 1) as u32;
       (r - u, (u - v) as u16)
     } else {
-        r -= (((r >> 8) * (fh as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT))
-            + EC_MIN_PROB * (nms - 1) as u32;
-        (0, r as u16)
+      r -= (((r >> 8) * (fh as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT))
+        + EC_MIN_PROB * (nms - 1) as u32;
+      (0, r as u16)
     }
   }
   /// Given the current total integer number of bits used and the current value of
@@ -441,14 +428,17 @@ impl WriterBase<WriterEncoder> {
 }
 
 /// Generic/shared implementation for Writers with StorageBackends (ie, Encoders and Recorders)
-impl<S> Writer for WriterBase<S> where WriterBase<S>: StorageBackend {
+impl<S> Writer for WriterBase<S>
+where
+  WriterBase<S>: StorageBackend
+{
   /// Encode a single binary value.
   /// `val`: The value to encode (0 or 1).
   /// `f`: The probability that the val is one, scaled by 32768.
   fn bool(&mut self, val: bool, f: u16) {
     debug_assert!(0 < f);
     debug_assert!(f < 32768);
-    self.symbol(if val {1} else {0}, &[f, 0]);
+    self.symbol(if val { 1 } else { 0 }, &[f, 0]);
   }
   /// Encode a single boolean value.
   /// `val`: The value to encode (false or true).
@@ -473,7 +463,7 @@ impl<S> Writer for WriterBase<S> where WriterBase<S>: StorageBackend {
   ///       must be exactly 32768. There should be at most 16 values.
   fn symbol(&mut self, s: u32, cdf: &[u16]) {
     debug_assert!(cdf[cdf.len() - 1] == 0);
-    let nms =  cdf.len() - s as usize;
+    let nms = cdf.len() - s as usize;
     let fl = if s > 0 { cdf[s as usize - 1] } else { 32768 };
     let fh = cdf[s as usize];
     debug_assert!(fh <= fl);
@@ -546,13 +536,13 @@ impl<S> Writer for WriterBase<S> where WriterBase<S>: StorageBackend {
   /// be restored later.  A WriterCheckpoint can be generated for an
   /// Encoder or Recorder, but can only be used to rollback the Writer
   /// instance from which it was generated.
-  fn checkpoint (&mut self) -> WriterCheckpoint {
+  fn checkpoint(&mut self) -> WriterCheckpoint {
     StorageBackend::checkpoint(self)
   }
   /// Roll back a given Writer to the state saved in the WriterCheckpoint
   /// 'wc': Saved Writer state/posiiton to restore
-  fn rollback (&mut self, wc: &WriterCheckpoint) {
-    StorageBackend::rollback(self,wc)
+  fn rollback(&mut self, wc: &WriterCheckpoint) {
+    StorageBackend::rollback(self, wc)
   }
 }
 

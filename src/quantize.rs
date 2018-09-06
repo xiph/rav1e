@@ -17,7 +17,7 @@ extern {
   static dc_qlookup_10_Q3: [i16; 256];
   static dc_qlookup_12_Q3: [i16; 256];
 
-  static ac_qlookup_Q3: [i16; 256];  
+  static ac_qlookup_Q3: [i16; 256];
   static ac_qlookup_10_Q3: [i16; 256];
   static ac_qlookup_12_Q3: [i16; 256];
 }
@@ -119,7 +119,9 @@ mod test {
 }
 
 impl QuantizationContext {
-  pub fn update(&mut self, qindex: u8, tx_size: TxSize, is_intra: bool, bit_depth: usize) {
+  pub fn update(
+    &mut self, qindex: u8, tx_size: TxSize, is_intra: bool, bit_depth: usize
+  ) {
     self.log_tx_scale = get_log_tx_scale(tx_size);
 
     self.dc_quant = dc_q(qindex, bit_depth) as u32;
@@ -128,8 +130,10 @@ impl QuantizationContext {
     self.ac_quant = ac_q(qindex, bit_depth) as u32;
     self.ac_mul_add = divu_gen(self.ac_quant);
 
-    self.dc_offset = self.dc_quant as i32 * (if is_intra {21} else {15}) / 64;
-    self.ac_offset = self.ac_quant as i32 * (if is_intra {21} else {15}) / 64;
+    self.dc_offset =
+      self.dc_quant as i32 * (if is_intra { 21 } else { 15 }) / 64;
+    self.ac_offset =
+      self.ac_quant as i32 * (if is_intra { 21 } else { 15 }) / 64;
   }
 
   #[inline]
@@ -146,7 +150,9 @@ impl QuantizationContext {
   }
 }
 
-pub fn quantize_in_place(qindex: u8, coeffs: &mut [i32], tx_size: TxSize, bit_depth: usize) {
+pub fn quantize_in_place(
+  qindex: u8, coeffs: &mut [i32], tx_size: TxSize, bit_depth: usize
+) {
   let log_tx_scale = get_log_tx_scale(tx_size);
 
   let dc_quant = dc_q(qindex, bit_depth) as i32;
@@ -168,7 +174,8 @@ pub fn quantize_in_place(qindex: u8, coeffs: &mut [i32], tx_size: TxSize, bit_de
 }
 
 pub fn dequantize(
-  qindex: u8, coeffs: &[i32], rcoeffs: &mut [i32], tx_size: TxSize, bit_depth: usize
+  qindex: u8, coeffs: &[i32], rcoeffs: &mut [i32], tx_size: TxSize,
+  bit_depth: usize
 ) {
   let log_tx_scale = get_log_tx_scale(tx_size) as i32;
   let offset = (1 << log_tx_scale) - 1;
