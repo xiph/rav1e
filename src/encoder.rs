@@ -42,6 +42,16 @@ impl Frame {
             p.pad();
         }
     }
+
+    pub fn window(&self, x: usize, y: usize) -> Frame {
+        Frame {
+            planes: [
+                self.planes[0].window(x, y),
+                self.planes[1].window(x, y),
+                self.planes[2].window(x, y)
+            ]
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -240,6 +250,15 @@ impl FrameState {
             rec: Frame::new(fi.padded_w, fi.padded_h),
             qc: Default::default(),
             cdfs: CDFContext::new(0),
+        }
+    }
+
+    pub fn window(&self, x: usize, y: usize) -> FrameState {
+        FrameState {
+            input: self.input.window(x, y),
+            rec: self.rec.window(x, y),
+            qc: self.qc.clone(),
+            cdfs: self.cdfs.clone()
         }
     }
 }
@@ -1981,3 +2000,35 @@ pub fn update_rec_buffer(fi: &mut FrameInvariants, fs: FrameState) {
   }
 }
 
+#[cfg(test)]
+mod test {
+  #[test]
+  fn frame_state_window() {
+    use super::*;
+    let config = EncoderConfig { ..Default::default() };
+    let fi = FrameInvariants::new(1024, 1024, config);
+    let mut fs = FrameState::new(&fi);
+    for p in fs.rec.planes.iter_mut() {
+      for (i, v) in p
+        .mut_slice(&PlaneOffset { x: 0, y: 0 })
+        .as_mut_slice()
+        .iter_mut()
+        .enumerate()
+      {
+        *v = i as u16;
+      }
+    }
+    let offset = BlockOffset { x: 56, y: 56 };
+    let y_po = offset.plane_offset(&fs.rec.planes[0].cfg);
+    let fs_ = fs.window(y_po.x as usize, y_po.y as usize);
+    for p in 0..3 {
+      assert!(fs_.rec.planes[p].cfg.xorigin < 0);
+      assert!(fs_.rec.planes[p].cfg.yorigin < 0);
+      let po = offset.plane_offset(&fs.rec.planes[p].cfg);
+      assert_eq!(
+        fs.rec.planes[p].slice(&po).as_slice()[..32],
+        fs_.rec.planes[p].slice(&po).as_slice()[..32]
+      );
+    }
+  }
+}
