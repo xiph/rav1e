@@ -1667,9 +1667,6 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         let mut mv_stack = Vec::new();
         let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack, bsize, false);
 
-        let mut mv_stack = Vec::new();
-        let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack, bsize, false);
-
         let (tx_size, tx_type) =
           rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, ref_frame, mv, skip);
 
