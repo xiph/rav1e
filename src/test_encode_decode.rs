@@ -8,8 +8,8 @@ include!(concat!(env!("OUT_DIR"), "/aom.rs"));
 use super::*;
 
 use rand::{ChaChaRng, Rng, SeedableRng};
-use std::mem;
 use std::collections::VecDeque;
+use std::mem;
 
     fn fill_frame(ra: &mut ChaChaRng, frame: &mut Frame) {
         for plane in frame.planes.iter_mut() {
