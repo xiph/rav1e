@@ -494,22 +494,18 @@ pub fn rdo_cfl_alpha(
 fn save_mc_blk(dst: &mut [u16], src: &PlaneSlice<'_>, width: usize, height: usize) {
   let src_stride = src.plane.cfg.stride;
 
-  for (l, s) in dst.chunks_mut(width).take(height)
+  for (line_dst, s) in dst.chunks_mut(width).take(height)
                    .zip(src.as_slice().chunks(src_stride)) {
-    for (r, v) in l.iter_mut().zip(s) {
-      *r = *v as u16;
-    }
+    line_dst.copy_from_slice(&s[..width]);
   }
 }
 
 fn restore_mc_blk<'a>(dst: &'a mut PlaneMutSlice<'a>, src: &[u16], width: usize, height: usize) {
   let dst_stride = dst.plane.cfg.stride;
 
-  for (l, s) in dst.as_mut_slice().chunks_mut(dst_stride).take(height)
+  for (line_dst, s) in dst.as_mut_slice().chunks_mut(dst_stride).take(height)
                    .zip(src.chunks(width)) {
-    for (r, v) in l.iter_mut().zip(s) {
-      *r = *v;
-    }
+    line_dst[..width].copy_from_slice(s);
   }
 }
 
