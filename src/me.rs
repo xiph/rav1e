@@ -38,12 +38,16 @@ pub fn get_sad(
   sum
 }
 
-pub fn motion_estimation(fi: &FrameInvariants, fs: &mut FrameState, bsize: BlockSize,
-                         bo: &BlockOffset, ref_frame: usize) -> MotionVector {
-
+pub fn motion_estimation(
+  fi: &FrameInvariants, fs: &mut FrameState, bsize: BlockSize,
+  bo: &BlockOffset, ref_frame: usize
+) -> MotionVector {
   match fi.rec_buffer.frames[fi.ref_frames[ref_frame - LAST_FRAME]] {
     Some(ref rec) => {
-      let po = PlaneOffset { x: (bo.x as isize) << BLOCK_TO_PLANE_SHIFT, y: (bo.y as isize) << BLOCK_TO_PLANE_SHIFT };
+      let po = PlaneOffset {
+        x: (bo.x as isize) << BLOCK_TO_PLANE_SHIFT,
+        y: (bo.y as isize) << BLOCK_TO_PLANE_SHIFT
+      };
       let range = 32 as isize;
       let blk_w = bsize.width();
       let blk_h = bsize.height();
@@ -52,21 +56,23 @@ pub fn motion_estimation(fi: &FrameInvariants, fs: &mut FrameState, bsize: Block
       let y_lo = po.y - range;
       let y_hi = po.y + range;
 
-      let mut lowest_sad = 128*128*4096 as u32;
+      let mut lowest_sad = 128 * 128 * 4096 as u32;
       let mut best_mv = MotionVector { row: 0, col: 0 };
 
       for y in (y_lo..y_hi).step_by(2) {
         for x in (x_lo..x_hi).step_by(2) {
           let mut plane_org = fs.input.planes[0].slice(&po);
-          let mut plane_ref = rec.frame.planes[0].slice(&PlaneOffset { x: x, y: y });
+          let mut plane_ref = rec.frame.planes[0].slice(&PlaneOffset { x, y });
 
           let sad = get_sad(&mut plane_org, &mut plane_ref, blk_h, blk_w);
 
           if sad < lowest_sad {
             lowest_sad = sad;
-            best_mv = MotionVector { row: 8*(y as i16 - po.y as i16), col: 8*(x as i16 - po.x as i16) }
+            best_mv = MotionVector {
+              row: 8 * (y as i16 - po.y as i16),
+              col: 8 * (x as i16 - po.x as i16)
+            }
           }
-
         }
       }
 
@@ -83,19 +89,26 @@ pub fn motion_estimation(fi: &FrameInvariants, fs: &mut FrameState, bsize: Block
         for i in 0..3 {
           for j in 0..3 {
             // Skip the center point that was already tested
-            if i == 1 && j == 1 { continue; }
+            if i == 1 && j == 1 {
+              continue;
+            }
 
-            let cand_mv = MotionVector { row: center_mv_h.row + step*(i as i16 - 1),
-            col: center_mv_h.col + step*(j as i16 - 1) };
+            let cand_mv = MotionVector {
+              row: center_mv_h.row + step * (i as i16 - 1),
+              col: center_mv_h.col + step * (j as i16 - 1)
+            };
 
             {
-              let tmp_slice = &mut tmp_plane.mut_slice(&PlaneOffset { x:0, y:0 });
+              let tmp_slice =
+                &mut tmp_plane.mut_slice(&PlaneOffset { x: 0, y: 0 });
 
-              mode.predict_inter(fi, 0, &po, tmp_slice, blk_w, blk_h, ref_frame, &cand_mv, 8);
+              mode.predict_inter(
+                fi, 0, &po, tmp_slice, blk_w, blk_h, ref_frame, &cand_mv, 8,
+              );
             }
 
             let mut plane_org = fs.input.planes[0].slice(&po);
-            let mut plane_ref = tmp_plane.slice(&PlaneOffset { x:0, y:0 });
+            let mut plane_ref = tmp_plane.slice(&PlaneOffset { x: 0, y: 0 });
 
             let sad = get_sad(&mut plane_org, &mut plane_ref, blk_h, blk_w);
 
@@ -108,8 +121,8 @@ pub fn motion_estimation(fi: &FrameInvariants, fs: &mut FrameState, bsize: Block
       }
 
       best_mv
-    },
+    }
 
-    None => MotionVector { row: 0, col : 0 }
+    None => MotionVector { row: 0, col: 0 }
   }
 }
