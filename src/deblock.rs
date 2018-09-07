@@ -69,10 +69,12 @@ fn deblock_params(fi: &FrameInvariants, bc: &mut BlockContext, in_bo: &BlockOffs
     }
 
     // This little bit of weirdness is straight out of the spec;
-    // subsamped chroma uses odd mi row/col
+    // subsampled chroma uses odd mi row/col
     bo.x |= xdec;
     bo.y |= ydec;
     let block = bc.at(&bo);
+    // Calculate the 'advances' the upper level loop uses from the
+    // block edge beginning and current tx edge
     let (block_adv, tx_adv) = if pass == 0 {
         (cmp::max(block.n4_w, 1<<xdec), cmp::max(block.tx_w, 1<<xdec))
     } else {
@@ -338,7 +340,7 @@ fn deblock_len14<'a>(slice: &'a mut PlaneMutSlice<'a>, pitch: usize, stride: usi
     }
 }
 
-// Deblock vertical edges in a single plane of a signle 64x64 superblock
+// Deblock vertical edges in a single plane of a single 64x64 superblock
 // Works in-place
 fn deblock_vertical(fi: &FrameInvariants,
                     plane: &mut Plane,
