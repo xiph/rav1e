@@ -1826,24 +1826,22 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
             let mut mv_stack = Vec::new();
             let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack, bsize, false);
 
-            if mode_luma == PredictionMode::NEARESTMV &&
-                (mv_stack.len() > 0 && (mv_stack[0].this_mv.row != mv.row || mv_stack[0].this_mv.col != mv.col) ||
-                 mv_stack.len() == 0 && (0 != mv.row || 0 != mv.col)) {
+            if !mode_luma.is_intra() && mode_luma != PredictionMode::GLOBALMV {
               mode_luma = PredictionMode::NEWMV;
-              mode_chroma = PredictionMode::NEWMV;
-            }
-            if mode_luma == PredictionMode::NEAR0MV &&
-                (mv_stack.len() > 1 && (mv_stack[1].this_mv.row != mv.row || mv_stack[1].this_mv.col != mv.col) ||
-                 mv_stack.len() <= 1 && (0 != mv.row || 0 != mv.col)) {
-              mode_luma = PredictionMode::NEWMV;
-              mode_chroma = PredictionMode::NEWMV;
-            }
-            if mode_luma == PredictionMode::NEAR1MV || mode_luma == PredictionMode::NEAR2MV {
-              let idx = mode_luma as usize - PredictionMode::NEAR0MV as usize + 1;
-              if mv_stack.len() <= idx || mv_stack[idx].this_mv.row != mv.row || mv_stack[idx].this_mv.col != mv.col {
-                mode_luma = PredictionMode::NEWMV;
-                mode_chroma = PredictionMode::NEWMV;
+              for (c, m) in mv_stack.iter().take(4)
+                .zip([PredictionMode::NEARESTMV, PredictionMode::NEAR0MV,
+                      PredictionMode::NEAR1MV, PredictionMode::NEAR2MV].iter()) {
+                if c.this_mv.row == mv.row && c.this_mv.col == mv.col {
+                  mode_luma = *m;
+                }
               }
+              if mode_luma == PredictionMode::NEWMV && mv.row == 0 && mv.col == 0 {
+                mode_luma =
+                  if mv_stack.len() == 0 { PredictionMode::NEARESTMV }
+                  else if mv_stack.len() == 1 { PredictionMode::NEAR0MV }
+                  else { PredictionMode::GLOBALMV };
+              }
+              mode_chroma = mode_luma;
             }
 
             // FIXME: every final block that has gone through the RDO decision process is encoded twice
