@@ -189,29 +189,26 @@ pub fn is_aligned<T>(ptr: *const T, n: usize) -> bool {
 
 pub fn clamp<T: PartialOrd>(input: T, min: T, max: T) -> T {
   if input < min {
-      return min;
-  }
-  else if input > max {
-      return max;
-  }
-  else {
-      return input;
+    return min;
+  } else if input > max {
+    return max;
+  } else {
+    return input;
   }
 }
 
 use num_traits::PrimInt;
 use std::mem::size_of;
 
-pub trait ILog : PrimInt {
-    fn ilog(self) -> Self {
-        Self::from(size_of::<Self>() * 8 - self.leading_zeros() as usize).unwrap()
-    }
+pub trait ILog: PrimInt {
+  fn ilog(self) -> Self {
+    Self::from(size_of::<Self>() * 8 - self.leading_zeros() as usize).unwrap()
+  }
 }
 
 impl<T> ILog for T where T: PrimInt {}
 
 pub fn msb(x: i32) -> i32 {
-    debug_assert!(x>0);
-    31 ^ (x.leading_zeros() as i32)
+  debug_assert!(x > 0);
+  31 ^ (x.leading_zeros() as i32)
 }
-
