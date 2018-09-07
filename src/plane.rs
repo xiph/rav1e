@@ -71,18 +71,18 @@ impl Plane {
     }
   }
 
-  pub fn window(&self, x: usize, y: usize) -> Plane {
+  pub fn window(&self, po: &PlaneOffset) -> Plane {
     assert!(self.cfg.xorigin >= 0 && self.cfg.yorigin >= 0);
+    let x = po.x as usize;
+    let y = po.y as usize;
     let xpad = self.cfg.xorigin as usize;
     let ypad = self.cfg.yorigin as usize;
     let xdec = self.cfg.xdec;
     let ydec = self.cfg.ydec;
-    let x = x.floor_log2(5) >> xdec;
-    let y = y.floor_log2(5) >> ydec;
-    let xorigin = self.cfg.xorigin - x as isize;
-    let yorigin = self.cfg.yorigin - y as isize;
-    let width = 32 >> xdec;
-    let height = 32 >> ydec;
+    let xorigin = self.cfg.xorigin - po.x;
+    let yorigin = self.cfg.yorigin - po.y;
+    let width = 1 << (6 - xdec);
+    let height = 1 << (6 - ydec);
     let stride = (xpad + width + xpad)
       .align_power_of_two(Plane::STRIDE_ALIGNMENT_LOG2 - 1);
     let alloc_height = ypad + height + ypad;

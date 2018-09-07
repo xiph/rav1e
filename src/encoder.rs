@@ -43,12 +43,12 @@ impl Frame {
         }
     }
 
-    pub fn window(&self, x: usize, y: usize) -> Frame {
+    pub fn window(&self, sbo: &SuperBlockOffset) -> Frame {
         Frame {
             planes: [
-                self.planes[0].window(x, y),
-                self.planes[1].window(x, y),
-                self.planes[2].window(x, y)
+                self.planes[0].window(&sbo.plane_offset(&self.planes[0].cfg)),
+                self.planes[1].window(&sbo.plane_offset(&self.planes[1].cfg)),
+                self.planes[2].window(&sbo.plane_offset(&self.planes[2].cfg))
             ]
         }
     }
@@ -253,10 +253,10 @@ impl FrameState {
         }
     }
 
-    pub fn window(&self, x: usize, y: usize) -> FrameState {
+    pub fn window(&self, sbo: &SuperBlockOffset) -> FrameState {
         FrameState {
-            input: self.input.window(x, y),
-            rec: self.rec.window(x, y),
+            input: self.input.window(sbo),
+            rec: self.rec.window(sbo),
             qc: self.qc.clone(),
             cdfs: self.cdfs.clone()
         }
@@ -2019,8 +2019,8 @@ mod test {
       }
     }
     let offset = BlockOffset { x: 56, y: 56 };
-    let y_po = offset.plane_offset(&fs.rec.planes[0].cfg);
-    let fs_ = fs.window(y_po.x as usize, y_po.y as usize);
+    let sbo = offset.sb_offset();
+    let fs_ = fs.window(&sbo);
     for p in 0..3 {
       assert!(fs_.rec.planes[p].cfg.xorigin < 0);
       assert!(fs_.rec.planes[p].cfg.yorigin < 0);
