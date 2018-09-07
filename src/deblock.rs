@@ -57,12 +57,12 @@ fn deblock_params(fi: &FrameInvariants, bc: &mut BlockContext, in_bo: &BlockOffs
                   p: &mut Plane, pli: usize, pass: usize, block_edge: bool, bd: usize) ->
     (usize, usize, u8, u16, u16, u16) {
     let mut bo = in_bo.clone();
-    let w = p.cfg.width as isize;
-    let h = p.cfg.height as isize;
     let xdec = p.cfg.xdec;
     let ydec = p.cfg.ydec;
+    let w = fi.width as isize >> xdec;
+    let h = fi.height as isize >> ydec;
     let po = bo.plane_offset(&p.cfg);
-        
+
     // at or past edge of the frame?  Don't deblock, signal next loop.
     if (po.x >= w) || (po.y >= h) {
         return (0, 0, 0, 0, 0, 0)
@@ -85,6 +85,7 @@ fn deblock_params(fi: &FrameInvariants, bc: &mut BlockContext, in_bo: &BlockOffs
     if (pass == 0 && po.x == 0) || (pass == 1 && po.y == 0) {
         return (tx_adv, block_adv, 0, 0, 0, 0)
     }
+
     // We already know we're not at the upper/left corner, so prev_block is in frame
     let prev_block = bc.at(&bo.with_offset(if pass==0 { -(1 << xdec) } else { 0 },
                                            if pass==0 { 0 } else { -(1 << ydec) }));
