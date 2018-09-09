@@ -676,17 +676,45 @@ impl InvTxfm2D for Block16x16 {
 // in libaom that generates these function bindings.
 
 extern {
+  static av1_fwd_txfm2d_4x4: extern fn(
+    input: *const i16,
+    output: *mut i32,
+    stride: libc::c_int,
+    tx_type: libc::c_int,
+    bd: libc::c_int
+  );
   fn av1_fwd_txfm2d_4x4_c(
     input: *const i16, output: *mut i32, stride: libc::c_int,
     tx_type: libc::c_int, bd: libc::c_int
+  );
+  static av1_fwd_txfm2d_8x8: extern fn(
+    input: *const i16,
+    output: *mut i32,
+    stride: libc::c_int,
+    tx_type: libc::c_int,
+    bd: libc::c_int
   );
   fn av1_fwd_txfm2d_8x8_c(
     input: *const i16, output: *mut i32, stride: libc::c_int,
     tx_type: libc::c_int, bd: libc::c_int
   );
+  static av1_fwd_txfm2d_16x16: extern fn(
+    input: *const i16,
+    output: *mut i32,
+    stride: libc::c_int,
+    tx_type: libc::c_int,
+    bd: libc::c_int
+  );
   fn av1_fwd_txfm2d_16x16_c(
     input: *const i16, output: *mut i32, stride: libc::c_int,
     tx_type: libc::c_int, bd: libc::c_int
+  );
+  static av1_fwd_txfm2d_32x32: extern fn(
+    input: *const i16,
+    output: *mut i32,
+    stride: libc::c_int,
+    tx_type: libc::c_int,
+    bd: libc::c_int
   );
   fn av1_fwd_txfm2d_32x32_c(
     input: *const i16, output: *mut i32, stride: libc::c_int,
@@ -773,14 +801,27 @@ fn fht4x4(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
   bit_depth: usize
 ) {
-  unsafe {
-    av1_fwd_txfm2d_4x4_c(
-      input.as_ptr(),
-      output.as_mut_ptr(),
-      stride as libc::c_int,
-      tx_type as libc::c_int,
-      bit_depth as libc::c_int
-    );
+  // SIMD code may assert for transform types beyond TxType::IDTX.
+  if tx_type < TxType::IDTX {
+    unsafe {
+      av1_fwd_txfm2d_4x4(
+        input.as_ptr(),
+        output.as_mut_ptr(),
+        stride as libc::c_int,
+        tx_type as libc::c_int,
+        bit_depth as libc::c_int
+      );
+    }
+  } else {
+    unsafe {
+      av1_fwd_txfm2d_4x4_c(
+        input.as_ptr(),
+        output.as_mut_ptr(),
+        stride as libc::c_int,
+        tx_type as libc::c_int,
+        bit_depth as libc::c_int
+      );
+    }
   }
 }
 
@@ -820,14 +861,27 @@ fn fht8x8(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
   bit_depth: usize
 ) {
-  unsafe {
-    av1_fwd_txfm2d_8x8_c(
-      input.as_ptr(),
-      output.as_mut_ptr(),
-      stride as libc::c_int,
-      tx_type as libc::c_int,
-      bit_depth as libc::c_int
-    );
+  // SIMD code may assert for transform types beyond TxType::IDTX.
+  if tx_type < TxType::IDTX {
+    unsafe {
+      av1_fwd_txfm2d_8x8(
+        input.as_ptr(),
+        output.as_mut_ptr(),
+        stride as libc::c_int,
+        tx_type as libc::c_int,
+        bit_depth as libc::c_int
+      );
+    }
+  } else {
+    unsafe {
+      av1_fwd_txfm2d_8x8_c(
+        input.as_ptr(),
+        output.as_mut_ptr(),
+        stride as libc::c_int,
+        tx_type as libc::c_int,
+        bit_depth as libc::c_int
+      );
+    }
   }
 }
 
@@ -867,14 +921,27 @@ fn fht16x16(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
   bit_depth: usize
 ) {
-  unsafe {
-    av1_fwd_txfm2d_16x16_c(
-      input.as_ptr(),
-      output.as_mut_ptr(),
-      stride as libc::c_int,
-      tx_type as libc::c_int,
-      bit_depth as libc::c_int
-    );
+  // SIMD code may assert for transform types beyond TxType::IDTX.
+  if tx_type < TxType::IDTX {
+    unsafe {
+      av1_fwd_txfm2d_16x16(
+        input.as_ptr(),
+        output.as_mut_ptr(),
+        stride as libc::c_int,
+        tx_type as libc::c_int,
+        bit_depth as libc::c_int
+      );
+    }
+  } else {
+    unsafe {
+      av1_fwd_txfm2d_16x16_c(
+        input.as_ptr(),
+        output.as_mut_ptr(),
+        stride as libc::c_int,
+        tx_type as libc::c_int,
+        bit_depth as libc::c_int
+      );
+    }
   }
 }
 
@@ -912,14 +979,27 @@ fn fht32x32(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
   bit_depth: usize
 ) {
-  unsafe {
-    av1_fwd_txfm2d_32x32_c(
-      input.as_ptr(),
-      output.as_mut_ptr(),
-      stride as libc::c_int,
-      tx_type as libc::c_int,
-      bit_depth as libc::c_int
-    );
+  // SIMD code may assert for transform types that aren't TxType::DCT_DCT.
+  if tx_type == TxType::DCT_DCT {
+    unsafe {
+      av1_fwd_txfm2d_32x32(
+        input.as_ptr(),
+        output.as_mut_ptr(),
+        stride as libc::c_int,
+        tx_type as libc::c_int,
+        bit_depth as libc::c_int
+      );
+    }
+  } else {
+    unsafe {
+      av1_fwd_txfm2d_32x32_c(
+        input.as_ptr(),
+        output.as_mut_ptr(),
+        stride as libc::c_int,
+        tx_type as libc::c_int,
+        bit_depth as libc::c_int
+      );
+    }
   }
 }
 
