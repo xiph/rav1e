@@ -444,7 +444,7 @@ impl fmt::Display for FrameType{
 
 #[derive(Copy, Clone, Debug)]
 pub struct EncoderConfig {
-    pub limit: u64,
+    pub limit: i64,
     pub quantizer: usize,
     pub speed: usize,
     pub tune: Tune
