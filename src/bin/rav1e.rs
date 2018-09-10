@@ -24,7 +24,7 @@ fn main() {
   let framerate = y4m_dec.get_framerate();
   let color_space = y4m_dec.get_colorspace();
 
-  let mut limit = enc.limit;
+  let mut count = 0;
   let mut y4m_enc = match io.rec.as_mut() {
     Some(rec) => Some(
       y4m::encode(width, height, framerate)
@@ -75,10 +75,11 @@ fn main() {
       break;
     }
 
-    limit -= 1;
 
-    if limit == 0 {
+    if enc.limit != 0 && count >= enc.limit {
       break;
+    } else {
+      count += 1;
     }
 
     io.output.flush().unwrap();
