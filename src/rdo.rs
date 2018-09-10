@@ -292,26 +292,25 @@ pub fn rdo_mode_decision(
     cw.find_mvrefs(bo, LAST_FRAME, &mut mv_stack, bsize, false);
 
   for &luma_mode in &mode_set {
-    assert!(fi.frame_type == FrameType::INTER || luma_mode.is_intra());
+    let luma_mode_is_intra = luma_mode.is_intra();
+    assert!(fi.frame_type == FrameType::INTER || luma_mode_is_intra);
 
     if luma_mode == PredictionMode::NEAR1MV && mv_stack.len() < 3 { continue; }
     if luma_mode == PredictionMode::NEAR2MV && mv_stack.len() < 4 { continue; }
 
     let mut mode_set_chroma = vec![luma_mode];
 
-    if is_chroma_block
-      && luma_mode.is_intra()
-      && luma_mode != PredictionMode::DC_PRED
-    {
-      mode_set_chroma.push(PredictionMode::DC_PRED);
-    }
-
-    if is_chroma_block && luma_mode.is_intra() && bsize.cfl_allowed() {
-      mode_set_chroma.push(PredictionMode::UV_CFL_PRED);
+    if luma_mode_is_intra && is_chroma_block {
+      if luma_mode != PredictionMode::DC_PRED {
+        mode_set_chroma.push(PredictionMode::DC_PRED);
+      }
+      if bsize.cfl_allowed() {
+        mode_set_chroma.push(PredictionMode::UV_CFL_PRED);
+      }
     }
 
     let ref_frame =
-      if luma_mode.is_intra() { INTRA_FRAME } else { LAST_FRAME };
+      if luma_mode_is_intra { INTRA_FRAME } else { LAST_FRAME };
     let mv = match luma_mode {
       PredictionMode::NEWMV => motion_estimation(fi, fs, bsize, bo, ref_frame),
       PredictionMode::NEARESTMV => if mv_stack.len() > 0 {
@@ -369,7 +368,7 @@ pub fn rdo_mode_decision(
 
       for &skip in &[false, true] {
         // Don't skip when using intra modes
-        if skip && luma_mode.is_intra() {
+        if skip && luma_mode_is_intra {
           continue;
         }
 
