@@ -3,6 +3,7 @@ use context::CDFContext;
 use partition::LAST_FRAME;
 
 use std::collections::VecDeque;
+use std::fmt;
 use std::sync::Arc;
 
 // TODO: use the num crate?
@@ -146,5 +147,11 @@ impl Context {
 
   pub fn flush(&mut self) {
     self.frame_q.push_back(None);
+  }
+}
+
+impl fmt::Display for Context {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "Frame {} - {}", self.fi.number, self.fi.frame_type)
   }
 }

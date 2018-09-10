@@ -126,6 +126,7 @@ pub fn process_frame(ctx: &mut Context,
                 _ => panic! ("unknown input bit depth!"),
             }
 
+            eprintln!("{}", ctx);
             let _ = ctx.send_frame(input);
 
             let pkt = ctx.receive_packet().unwrap();
