@@ -500,6 +500,10 @@ pub fn rdo_tx_type_decision(
 
   let cw_checkpoint = cw.checkpoint();
 
+  if is_inter {
+
+  }
+
   for &tx_type in RAV1E_TX_TYPES {
     // Skip unsupported transform types
     if av1_tx_used[tx_set as usize][tx_type as usize] == 0 {
