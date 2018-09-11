@@ -257,7 +257,7 @@ impl FrameState {
 
     pub fn window(&self, sbo: &SuperBlockOffset) -> FrameState {
         FrameState {
-            input: self.input.window(sbo),
+            input: Arc::new(self.input.window(sbo)),
             rec: self.rec.window(sbo),
             qc: self.qc.clone(),
             cdfs: self.cdfs.clone()
