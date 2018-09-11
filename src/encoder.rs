@@ -1955,9 +1955,9 @@ fn write_tile_group_header(tile_start_and_end_present_flag: bool) ->
 
 pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
     let mut packet = Vec::new();
-    //write_uncompressed_header(&mut packet, sequence, fi).unwrap();
-    write_obus(&mut packet, sequence, fi, fs).unwrap();
     if fi.show_existing_frame {
+        //write_uncompressed_header(&mut packet, sequence, fi).unwrap();
+        write_obus(&mut packet, sequence, fi, fs).unwrap();
         match fi.rec_buffer.frames[0] {
             Some(ref rec) => for p in 0..3 {
                 fs.rec.planes[p].data.copy_from_slice(rec.frame.planes[p].data.as_slice());
@@ -1968,6 +1968,8 @@ pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut 
         let bit_depth = sequence.bit_depth;
         let tile = encode_tile(sequence, fi, fs, bit_depth); // actually tile group
 
+        //write_uncompressed_header(&mut packet, sequence, fi).unwrap();
+        write_obus(&mut packet, sequence, fi, fs).unwrap();
         let mut buf1 = Vec::new();
         {
             let mut bw1 = BitWriter::<BE>::new(&mut buf1);
