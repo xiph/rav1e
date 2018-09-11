@@ -42,6 +42,16 @@ impl Frame {
             p.pad();
         }
     }
+
+    pub fn window(&self, sbo: &SuperBlockOffset) -> Frame {
+        Frame {
+            planes: [
+                self.planes[0].window(&sbo.plane_offset(&self.planes[0].cfg)),
+                self.planes[1].window(&sbo.plane_offset(&self.planes[1].cfg)),
+                self.planes[2].window(&sbo.plane_offset(&self.planes[2].cfg))
+            ]
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -225,21 +235,35 @@ impl Sequence {
     }
 }
 
+use std::sync::Arc;
+
 #[derive(Debug)]
 pub struct FrameState {
-    pub input: Frame,
+    pub input: Arc<Frame>,
     pub rec: Frame,
     pub qc: QuantizationContext,
     pub cdfs: CDFContext,
+    pub deblock: DeblockState,
 }
 
 impl FrameState {
     pub fn new(fi: &FrameInvariants) -> FrameState {
         FrameState {
-            input: Frame::new(fi.padded_w, fi.padded_h),
+            input: Arc::new(Frame::new(fi.padded_w, fi.padded_h)),
             rec: Frame::new(fi.padded_w, fi.padded_h),
             qc: Default::default(),
             cdfs: CDFContext::new(0),
+            deblock: Default::default(),
+        }
+    }
+
+    pub fn window(&self, sbo: &SuperBlockOffset) -> FrameState {
+        FrameState {
+            input: Arc::new(self.input.window(sbo)),
+            rec: self.rec.window(sbo),
+            qc: self.qc.clone(),
+            cdfs: self.cdfs.clone(),
+            deblock: self.deblock.clone()
         }
     }
 }
@@ -321,7 +345,6 @@ pub struct FrameInvariants {
     pub config: EncoderConfig,
     pub ref_frames: [usize; INTER_REFS_PER_FRAME],
     pub rec_buffer: ReferenceFramesSet,
-    pub deblock: DeblockState,
     pub base_q_idx: u8,
 }
 
@@ -387,17 +410,17 @@ impl FrameInvariants {
             config,
             ref_frames: [0; INTER_REFS_PER_FRAME],
             rec_buffer: ReferenceFramesSet::new(),
-            deblock: Default::default(),
             base_q_idx: config.quantizer as u8,
         }
     }
 
     pub fn new_frame_state(&self) -> FrameState {
         FrameState {
-            input: Frame::new(self.padded_w, self.padded_h),
+            input: Arc::new(Frame::new(self.padded_w, self.padded_h)),
             rec: Frame::new(self.padded_w, self.padded_h),
             qc: Default::default(),
             cdfs: CDFContext::new(0),
+            deblock: Default::default(),
         }
     }
 }
@@ -486,7 +509,7 @@ trait UncompressedHeader {
             -> io::Result<()>;
     fn write_sequence_header_obu(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
             -> io::Result<()>;
-    fn write_frame_header_obu(&mut self, seq: &Sequence, fi: &FrameInvariants)
+    fn write_frame_header_obu(&mut self, seq: &Sequence, fi: &FrameInvariants, fs: &FrameState)
             -> io::Result<()>;
     fn write_sequence_header(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
                                     -> io::Result<()>;
@@ -494,8 +517,8 @@ trait UncompressedHeader {
     // End of OBU Headers
 
     fn write_frame_size(&mut self, fi: &FrameInvariants) -> io::Result<()>;
-    fn write_deblock_filter_a(&mut self, fi: &FrameInvariants) -> io::Result<()>;
-    fn write_deblock_filter_b(&mut self, fi: &FrameInvariants) -> io::Result<()>;
+    fn write_deblock_filter_a(&mut self, fi: &FrameInvariants, fs: &FrameState) -> io::Result<()>;
+    fn write_deblock_filter_b(&mut self, fi: &FrameInvariants, fs: &FrameState) -> io::Result<()>;
     fn write_frame_cdef(&mut self, seq: &Sequence, fi: &FrameInvariants) -> io::Result<()>;
 }
 #[allow(unused)]
@@ -665,7 +688,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
     }
 
 #[allow(unused)]
-    fn write_frame_header_obu(&mut self, seq: &Sequence, fi: &FrameInvariants)
+    fn write_frame_header_obu(&mut self, seq: &Sequence, fi: &FrameInvariants, fs: &FrameState)
         -> io::Result<()> {
       if seq.reduced_still_picture_hdr {
         assert!(fi.show_existing_frame);
@@ -884,12 +907,12 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
       self.write_bit(false)?; // delta_q_present_flag: no delta q
 
       // delta_lf_params in the spec
-      self.write_deblock_filter_a(fi)?;
+      self.write_deblock_filter_a(fi, fs)?;
 
       // code for features not yet implemented....
 
       // loop_filter_params in the spec
-      self.write_deblock_filter_b(fi)?;
+      self.write_deblock_filter_b(fi, fs)?;
 
       // cdef
       self.write_frame_cdef(seq, fi)?;
@@ -980,35 +1003,35 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
         Ok(())
     }
 
-    fn write_deblock_filter_a(&mut self, fi: &FrameInvariants) -> io::Result<()> {
+    fn write_deblock_filter_a(&mut self, fi: &FrameInvariants, fs: &FrameState) -> io::Result<()> {
         if fi.delta_q_present {
             if !fi.allow_intrabc {
-                self.write_bit(fi.deblock.block_deltas_enabled)?;
+                self.write_bit(fs.deblock.block_deltas_enabled)?;
             }
-            if fi.deblock.block_deltas_enabled {
-                self.write(2,fi.deblock.block_delta_shift)?;
-                self.write_bit(fi.deblock.block_delta_multi)?;
+            if fs.deblock.block_deltas_enabled {
+                self.write(2,fs.deblock.block_delta_shift)?;
+                self.write_bit(fs.deblock.block_delta_multi)?;
             }
         }
         Ok(())
     }
 
-    fn write_deblock_filter_b(&mut self, fi: &FrameInvariants) -> io::Result<()> {
-        assert!(fi.deblock.levels[0] < 64);
-        self.write(6, fi.deblock.levels[0])?; // loop deblocking filter level 0
-        assert!(fi.deblock.levels[1] < 64);
-        self.write(6, fi.deblock.levels[1])?; // loop deblocking filter level 1
-        if PLANES > 1 && (fi.deblock.levels[0] > 0 || fi.deblock.levels[1] > 0) {
-            assert!(fi.deblock.levels[2] < 64);
-            self.write(6, fi.deblock.levels[2])?; // loop deblocking filter level 2
-            assert!(fi.deblock.levels[3] < 64);
-            self.write(6, fi.deblock.levels[3])?; // loop deblocking filter level 3
+    fn write_deblock_filter_b(&mut self, fi: &FrameInvariants, fs: &FrameState) -> io::Result<()> {
+        assert!(fs.deblock.levels[0] < 64);
+        self.write(6, fs.deblock.levels[0])?; // loop deblocking filter level 0
+        assert!(fs.deblock.levels[1] < 64);
+        self.write(6, fs.deblock.levels[1])?; // loop deblocking filter level 1
+        if PLANES > 1 && (fs.deblock.levels[0] > 0 || fs.deblock.levels[1] > 0) {
+            assert!(fs.deblock.levels[2] < 64);
+            self.write(6, fs.deblock.levels[2])?; // loop deblocking filter level 2
+            assert!(fs.deblock.levels[3] < 64);
+            self.write(6, fs.deblock.levels[3])?; // loop deblocking filter level 3
         }
-        self.write(3,fi.deblock.sharpness)?; // deblocking filter sharpness
-        self.write_bit(fi.deblock.deltas_enabled)?; // loop deblocking filter deltas enabled
-        if fi.deblock.deltas_enabled {
-            self.write_bit(fi.deblock.delta_updates_enabled)?; // deltas updates enabled
-            if fi.deblock.delta_updates_enabled {
+        self.write(3,fs.deblock.sharpness)?; // deblocking filter sharpness
+        self.write_bit(fs.deblock.deltas_enabled)?; // loop deblocking filter deltas enabled
+        if fs.deblock.deltas_enabled {
+            self.write_bit(fs.deblock.delta_updates_enabled)?; // deltas updates enabled
+            if fs.deblock.delta_updates_enabled {
                 // conditionally write ref delta updates
                 let prev_ref_deltas = if fi.primary_ref_frame == PRIMARY_REF_NONE {
                     [1, 0, 0, 0, 0, -1, -1, -1]
@@ -1016,10 +1039,10 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
                     fi.rec_buffer.deblock[fi.ref_frames[fi.primary_ref_frame as usize]].ref_deltas
                 };
                 for i in 0..REF_FRAMES {
-                    let update = fi.deblock.ref_deltas[i] != prev_ref_deltas[i];
+                    let update = fs.deblock.ref_deltas[i] != prev_ref_deltas[i];
                     self.write_bit(update)?;
                     if update {
-                        self.write_signed(7,fi.deblock.ref_deltas[i])?;
+                        self.write_signed(7,fs.deblock.ref_deltas[i])?;
                     }
                 }
                 // conditionally write mode delta updates
@@ -1029,10 +1052,10 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
                     fi.rec_buffer.deblock[fi.ref_frames[fi.primary_ref_frame as usize]].mode_deltas
                 };
                 for i in 0..2 {
-                    let update = fi.deblock.mode_deltas[i] != prev_mode_deltas[i];
+                    let update = fs.deblock.mode_deltas[i] != prev_mode_deltas[i];
                     self.write_bit(update)?;
                     if update {
-                        self.write_signed(7,fi.deblock.mode_deltas[i])?;
+                        self.write_signed(7,fs.deblock.mode_deltas[i])?;
                     }
                 }
             }
@@ -1099,7 +1122,7 @@ fn aom_uleb_encode(mut value: u64, coded_value: &mut [u8]) -> usize {
 }
 
 fn write_obus(packet: &mut dyn io::Write, sequence: &mut Sequence,
-                            fi: &mut FrameInvariants) -> io::Result<()> {
+                            fi: &mut FrameInvariants, fs: &FrameState) -> io::Result<()> {
     //let mut uch = BitWriter::<BE>::new(packet);
     let obu_extension = 0 as u32;
 
@@ -1148,7 +1171,7 @@ fn write_obus(packet: &mut dyn io::Write, sequence: &mut Sequence,
     let mut buf2 = Vec::new();
     {
         let mut bw2 = BitWriter::<BE>::new(&mut buf2);
-        bw2.write_frame_header_obu(sequence, fi)?;
+        bw2.write_frame_header_obu(sequence, fi, fs)?;
     }
 
     {
@@ -1318,8 +1341,8 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
     cw.bc.set_motion_vector(bo, bsize, mv);
 
     //write_q_deltas();
-    if cw.bc.code_deltas && fi.deblock.block_deltas_enabled && (bsize < sb_size || !skip) {
-        cw.write_block_deblock_deltas(w, bo, fi.deblock.block_delta_multi);
+    if cw.bc.code_deltas && fs.deblock.block_deltas_enabled && (bsize < sb_size || !skip) {
+        cw.write_block_deblock_deltas(w, bo, fs.deblock.block_delta_multi);
     }
     cw.bc.code_deltas = false;
 
@@ -1906,8 +1929,9 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
         }
     }
     /* TODO: Don't apply if lossless */
-    if fi.deblock.levels[0] != 0 || fi.deblock.levels[1] != 0 {
-        deblock_filter_frame(fi, &mut fs.rec, &mut cw.bc, bit_depth);
+    deblock_filter_optimize(fi, fs, &mut cw.bc, bit_depth);
+    if fs.deblock.levels[0] != 0 || fs.deblock.levels[1] != 0 {
+        deblock_filter_frame(fi, fs, &mut cw.bc, bit_depth);
     }
     /* TODO: Don't apply if lossless */
     if sequence.enable_cdef {
@@ -1936,9 +1960,9 @@ fn write_tile_group_header(tile_start_and_end_present_flag: bool) ->
 
 pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
     let mut packet = Vec::new();
-    //write_uncompressed_header(&mut packet, sequence, fi).unwrap();
-    write_obus(&mut packet, sequence, fi).unwrap();
     if fi.show_existing_frame {
+        //write_uncompressed_header(&mut packet, sequence, fi).unwrap();
+        write_obus(&mut packet, sequence, fi, fs).unwrap();
         match fi.rec_buffer.frames[0] {
             Some(ref rec) => for p in 0..3 {
                 fs.rec.planes[p].data.copy_from_slice(rec.frame.planes[p].data.as_slice());
@@ -1949,6 +1973,8 @@ pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut 
         let bit_depth = sequence.bit_depth;
         let tile = encode_tile(sequence, fi, fs, bit_depth); // actually tile group
 
+        //write_uncompressed_header(&mut packet, sequence, fi).unwrap();
+        write_obus(&mut packet, sequence, fi, fs).unwrap();
         let mut buf1 = Vec::new();
         {
             let mut bw1 = BitWriter::<BE>::new(&mut buf1);
@@ -1980,8 +2006,40 @@ pub fn update_rec_buffer(fi: &mut FrameInvariants, fs: FrameState) {
   for i in 0..(REF_FRAMES as usize) {
     if (fi.refresh_frame_flags & (1 << i)) != 0 {
       fi.rec_buffer.frames[i] = Some(Rc::clone(&rfs));
-      fi.rec_buffer.deblock[i] = fi.deblock.clone();
+      fi.rec_buffer.deblock[i] = fs.deblock.clone();
     }
   }
 }
 
+#[cfg(test)]
+mod test {
+  #[test]
+  fn frame_state_window() {
+    use super::*;
+    let config = EncoderConfig { ..Default::default() };
+    let fi = FrameInvariants::new(1024, 1024, config);
+    let mut fs = FrameState::new(&fi);
+    for p in fs.rec.planes.iter_mut() {
+      for (i, v) in p
+        .mut_slice(&PlaneOffset { x: 0, y: 0 })
+        .as_mut_slice()
+        .iter_mut()
+        .enumerate()
+      {
+        *v = i as u16;
+      }
+    }
+    let offset = BlockOffset { x: 56, y: 56 };
+    let sbo = offset.sb_offset();
+    let fs_ = fs.window(&sbo);
+    for p in 0..3 {
+      assert!(fs_.rec.planes[p].cfg.xorigin < 0);
+      assert!(fs_.rec.planes[p].cfg.yorigin < 0);
+      let po = offset.plane_offset(&fs.rec.planes[p].cfg);
+      assert_eq!(
+        fs.rec.planes[p].slice(&po).as_slice()[..32],
+        fs_.rec.planes[p].slice(&po).as_slice()[..32]
+      );
+    }
+  }
+}

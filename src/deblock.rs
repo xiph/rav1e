@@ -12,38 +12,41 @@
 use std::cmp;
 use context::*;
 use plane::*;
+use quantize::*;
 use partition::*;
 use partition::PredictionMode::*;
 use util::clamp;
 use FrameInvariants;
-use Frame;
+use FrameType;
+use FrameState;
+use DeblockState;
 
-fn deblock_level(fi: &FrameInvariants, block: &Block, pli: usize, pass: usize) -> u8 {
+fn deblock_level(deblock: &DeblockState, block: &Block, pli: usize, pass: usize) -> u8 {
     let mode = block.mode;
     let reference = block.ref_frames[0]; 
     let mode_type = if mode >= NEARESTMV && mode != GLOBALMV && mode!= GLOBAL_GLOBALMV {1} else {0};
     let idx = if pli == 0 { pass } else { pli+1 };
     // By-block filter strength delta, if the feature is active.
-    let block_delta = if fi.deblock.block_delta_multi {
-        block.deblock_deltas[ idx ] << fi.deblock.block_delta_shift
+    let block_delta = if deblock.block_delta_multi {
+        block.deblock_deltas[ idx ] << deblock.block_delta_shift
     } else {
-        block.deblock_deltas[ 0 ] << fi.deblock.block_delta_shift
+        block.deblock_deltas[ 0 ] << deblock.block_delta_shift
     };
 
     // Add to frame-specified filter strength (Y-vertical, Y-horizontal, U, V)
-    let level = clamp(block_delta + fi.deblock.levels[idx] as i8, 0, MAX_LOOP_FILTER as i8) as u8;
+    let level = clamp(block_delta + deblock.levels[idx] as i8, 0, MAX_LOOP_FILTER as i8) as u8;
     // if fi.seg_feaure_active {
     // rav1e does not yet support segments or segment features
     // }
 
     // Are delta modifiers for specific references and modes active?  If so, add them too.
-    if fi.deblock.deltas_enabled {
+    if deblock.deltas_enabled {
         let l5 = level >> 5;
-        clamp (level as i32 + ((fi.deblock.ref_deltas[reference] as i32) << l5) +
+        clamp (level as i32 + ((deblock.ref_deltas[reference] as i32) << l5) +
                if reference == INTRA_FRAME {
                    0
                } else {
-                   (fi.deblock.mode_deltas[mode_type] as i32) << l5
+                   (deblock.mode_deltas[mode_type] as i32) << l5
                }, 0, MAX_LOOP_FILTER as i32) as u8
     } else {
         level
@@ -53,26 +56,28 @@ fn deblock_level(fi: &FrameInvariants, block: &Block, pli: usize, pass: usize) -
 // Must be called on a tx edge; returns filter setup, location of next
 // tx edge for loop index advancement, and current size along loop
 // axis in the event block size != tx size
-fn deblock_params(fi: &FrameInvariants, bc: &mut BlockContext, in_bo: &BlockOffset,
+fn deblock_params(fi: &FrameInvariants, deblock: &DeblockState, bc: &mut BlockContext, in_bo: &BlockOffset,
                   p: &mut Plane, pli: usize, pass: usize, block_edge: bool, bd: usize) ->
     (usize, usize, u8, u16, u16, u16) {
     let mut bo = in_bo.clone();
-    let w = p.cfg.width as isize;
-    let h = p.cfg.height as isize;
     let xdec = p.cfg.xdec;
     let ydec = p.cfg.ydec;
+    let w = fi.width as isize >> xdec;
+    let h = fi.height as isize >> ydec;
     let po = bo.plane_offset(&p.cfg);
-        
+
     // at or past edge of the frame?  Don't deblock, signal next loop.
     if (po.x >= w) || (po.y >= h) {
         return (0, 0, 0, 0, 0, 0)
     }
 
     // This little bit of weirdness is straight out of the spec;
-    // subsamped chroma uses odd mi row/col
+    // subsampled chroma uses odd mi row/col
     bo.x |= xdec;
     bo.y |= ydec;
     let block = bc.at(&bo);
+    // Calculate the 'advances' the upper level loop uses from the
+    // block edge beginning and current tx edge
     let (block_adv, tx_adv) = if pass == 0 {
         (cmp::max(block.n4_w, 1<<xdec), cmp::max(block.tx_w, 1<<xdec))
     } else {
@@ -83,6 +88,7 @@ fn deblock_params(fi: &FrameInvariants, bc: &mut BlockContext, in_bo: &BlockOffs
     if (pass == 0 && po.x == 0) || (pass == 1 && po.y == 0) {
         return (tx_adv, block_adv, 0, 0, 0, 0)
     }
+
     // We already know we're not at the upper/left corner, so prev_block is in frame
     let prev_block = bc.at(&bo.with_offset(if pass==0 { -(1 << xdec) } else { 0 },
                                            if pass==0 { 0 } else { -(1 << ydec) }));
@@ -94,8 +100,8 @@ fn deblock_params(fi: &FrameInvariants, bc: &mut BlockContext, in_bo: &BlockOffs
         return (tx_adv, block_adv, 0, 0, 0, 0)
     }
 
-    let mut level = deblock_level(fi, block, pli, pass) as u16;
-    if level == 0 { level = deblock_level(fi, prev_block, pli, pass) as u16; }
+    let mut level = deblock_level(deblock, block, pli, pass) as u16;
+    if level == 0 { level = deblock_level(deblock, prev_block, pli, pass) as u16; }
     if level == 0 {
         // When level == 0, the filter is a no-op even if it runs
         (tx_adv, block_adv, 0, 0, 0, 0)
@@ -112,9 +118,9 @@ fn deblock_params(fi: &FrameInvariants, bc: &mut BlockContext, in_bo: &BlockOffs
         // directly.
         let filter_len = cmp::min( if pli==0 {14} else {6}, cmp::min(tx_size, prev_tx_size)<<MI_SIZE_LOG2);
 
-        let shift = if fi.deblock.sharpness > 4 { 2 } else if fi.deblock.sharpness > 0 { 1 } else { 0 };
-        let limit = if fi.deblock.sharpness > 0 {
-            clamp(level>>shift, 1, 9 - fi.deblock.sharpness as u16)
+        let shift = if deblock.sharpness > 4 { 2 } else if deblock.sharpness > 0 { 1 } else { 0 };
+        let limit = if deblock.sharpness > 0 {
+            clamp(level>>shift, 1, 9 - deblock.sharpness as u16)
         } else {
             cmp::max(1, level>>shift)
         };
@@ -338,9 +344,10 @@ fn deblock_len14<'a>(slice: &'a mut PlaneMutSlice<'a>, pitch: usize, stride: usi
     }
 }
 
-// Deblock vertical edges in a single plane of a signle 64x64 superblock
+// Deblock vertical edges in a single plane of a single 64x64 superblock
 // Works in-place
 fn deblock_vertical(fi: &FrameInvariants,
+                    deblock: &DeblockState,
                     plane: &mut Plane,
                     pli: usize,
                     bc: &mut BlockContext,
@@ -356,7 +363,7 @@ fn deblock_vertical(fi: &FrameInvariants,
         while tx < MAX_MIB_SIZE {
             let bo = sbo.block_offset(tx, y);
             let (tx_adv, block_adv, filter_len, blimit, limit, thresh) =
-                deblock_params(fi, bc, &bo, plane, pli, 0, bx == tx, bit_depth);
+                deblock_params(fi, deblock, bc, &bo, plane, pli, 0, bx == tx, bit_depth);
             if filter_len > 0 {
                 let po = bo.plane_offset(&plane.cfg);
                 let mut slice = plane.mut_slice(&po);
@@ -391,6 +398,7 @@ fn deblock_vertical(fi: &FrameInvariants,
 // Deblock horizontal edges in a single plane of a signle 64x64 superblock
 // Works in-place
 fn deblock_horizontal(fi: &FrameInvariants,
+                      deblock: &DeblockState,
                       plane: &mut Plane,
                       pli: usize,
                       bc: &mut BlockContext,
@@ -406,7 +414,7 @@ fn deblock_horizontal(fi: &FrameInvariants,
         while ty < MAX_MIB_SIZE {
             let bo = sbo.block_offset(x, ty);
             let (tx_adv, block_adv, filter_len, blimit, limit, thresh) =
-                deblock_params(fi, bc, &bo, plane, pli, 1, by == ty, bit_depth);
+                deblock_params(fi, deblock, bc, &bo, plane, pli, 1, by == ty, bit_depth);
             if filter_len > 0 {
                 let po = bo.plane_offset(&plane.cfg);
                 let mut slice = plane.mut_slice(&po);
@@ -439,16 +447,17 @@ fn deblock_horizontal(fi: &FrameInvariants,
 }
 
 // Deblocks all edges, vertical and horizontal, in a single plane
-pub fn deblock_plane(fi: &FrameInvariants, plane: &mut Plane, pli: usize, bc: &mut BlockContext, bit_depth: usize) {
+pub fn deblock_plane(fi: &FrameInvariants, deblock: &DeblockState, plane: &mut Plane,
+                     pli: usize, bc: &mut BlockContext, bit_depth: usize) {
     // Each filter block is 64x64, except right and/or bottom for non-multiple-of-64 sizes.
     // FIXME: 128x128 SB support will break this, we need FilterBlockOffset etc.
     let fb_height = (fi.padded_h + 63) / 64;
     let fb_width = (fi.padded_w + 63) / 64;
 
     match pli {
-        0 => if fi.deblock.levels[0] == 0 && fi.deblock.levels[1] == 0 {return},
-        1 => if fi.deblock.levels[2] == 0 {return},
-        2 => if fi.deblock.levels[3] == 0 {return},
+        0 => if deblock.levels[0] == 0 && deblock.levels[1] == 0 {return},
+        1 => if deblock.levels[2] == 0 {return},
+        2 => if deblock.levels[3] == 0 {return},
         _ => {return}
     }
       
@@ -458,21 +467,56 @@ pub fn deblock_plane(fi: &FrameInvariants, plane: &mut Plane, pli: usize, bc: &m
         for col in 0..fb_width {
             let sbo = SuperBlockOffset { x: col, y: row };
             // filter vertical edges
-            deblock_vertical(fi, plane, pli, bc, &sbo, bit_depth);
+            deblock_vertical(fi, deblock, plane, pli, bc, &sbo, bit_depth);
         }
     }
     for row in 0..fb_height {
         for col in 0..fb_width {
             let sbo = SuperBlockOffset { x: col, y: row };
             // filter horizontal edges
-            deblock_horizontal(fi, plane, pli, bc, &sbo, bit_depth);
+            deblock_horizontal(fi, deblock, plane, pli, bc, &sbo, bit_depth);
         }
     }
 }
 
 // Deblocks all edges in all planes of a frame
-pub fn deblock_filter_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockContext, bit_depth: usize) {
+pub fn deblock_filter_frame(fi: &FrameInvariants, fs: &mut FrameState,
+                            bc: &mut BlockContext, bit_depth: usize) {
     for p in 0..PLANES {
-        deblock_plane(fi, &mut rec.planes[p], p, bc, bit_depth);
+        deblock_plane(fi, &fs.deblock, &mut fs.rec.planes[p], p, bc, bit_depth);
     }
+}
+
+pub fn deblock_filter_optimize(fi: &FrameInvariants, fs: &mut FrameState,
+                               _bc: &mut BlockContext, bit_depth: usize) {
+    let q = ac_q(fi.base_q_idx, bit_depth) as i32;
+    let level = clamp (match bit_depth {
+        8 => {
+            if fi.frame_type == FrameType::KEY {
+                q * 17563 - 421574 + (1<<18>>1) >> 18
+            } else {
+                q * 6017 + 650707 + (1<<18>>1) >> 18
+            }
+        }
+        10 => {
+            if fi.frame_type == FrameType::KEY {
+                (q * 20723 + 4060632 + (1<<20>>1) >> 20) - 4
+            } else {
+                q * 20723 + 4060632 + (1<<20>>1) >> 20
+            }
+        }
+        12 => {
+            if fi.frame_type == FrameType::KEY {
+                (q * 20723 + 16242526 + (1<<22>>1) >> 22) - 4
+            } else {
+                q * 20723 + 16242526 + (1<<22>>1) >> 22
+            }
+        }
+        _ => {assert!(false); 0}
+    }, 0, MAX_LOOP_FILTER as i32) as u8;
+
+    fs.deblock.levels[0] = level;
+    fs.deblock.levels[1] = level;
+    fs.deblock.levels[2] = level;
+    fs.deblock.levels[3] = level;
 }

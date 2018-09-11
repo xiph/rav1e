@@ -10,6 +10,7 @@ use super::*;
 use rand::{ChaChaRng, Rng, SeedableRng};
 use std::collections::VecDeque;
 use std::mem;
+use std::sync::Arc;
 
     fn fill_frame(ra: &mut ChaChaRng, frame: &mut Frame) {
         for plane in frame.planes.iter_mut() {
@@ -56,24 +57,28 @@ use std::mem;
     }
 
     fn setup_encoder(w: usize, h: usize, speed: usize, quantizer: usize,
-        bit_depth: usize, chroma_sampling: ChromaSampling) -> (FrameInvariants, Sequence) {
+        bit_depth: usize, chroma_sampling: ChromaSampling) -> Context {
         unsafe {
             av1_rtcd();
             aom_dsp_rtcd();
         }
 
-        let config = EncoderConfig {
+        let enc = EncoderConfig {
             quantizer: quantizer,
             speed: speed,
             ..Default::default()
         };
-        let mut fi = FrameInvariants::new(w, h, config);
 
-        fi.use_reduced_tx_set = true;
-        // fi.min_partition_size =
-        let seq = Sequence::new(w, h, bit_depth, chroma_sampling);
+        let cfg = Config {
+            width: w,
+            height: h,
+            bit_depth,
+            chroma_sampling,
+            timebase: Ratio::new(1, 1000),
+            enc,
+        };
 
-        (fi, seq)
+        cfg.new_context()
     }
 
     // TODO: support non-multiple-of-16 dimensions
@@ -207,7 +212,7 @@ use std::mem;
         let mut ra = ChaChaRng::from_seed([0; 32]);
 
         let mut dec = setup_decoder(w, h);
-        let (mut fi, mut seq) = setup_encoder(w, h, speed, quantizer, bit_depth, ChromaSampling::Cs420);
+        let mut ctx = setup_encoder(w, h, speed, quantizer, bit_depth, ChromaSampling::Cs420);
 
         println!("Encoding {}x{} speed {} quantizer {}", w, h, speed, quantizer);
 
@@ -216,27 +221,20 @@ use std::mem;
         let mut rec_fifo = VecDeque::new();
 
         for _ in 0 .. limit {
-            let mut fs = fi.new_frame_state();
-            fill_frame(&mut ra, &mut fs.input);
+            let mut input = ctx.new_frame();
+            fill_frame(&mut ra, Arc::get_mut(&mut input).unwrap());
 
-            fi.frame_type = if fi.number % 30 == 0 { FrameType::KEY } else { FrameType::INTER };
-            fi.refresh_frame_flags = if fi.frame_type == FrameType::KEY { ALL_REF_FRAMES_MASK } else { 1 };
+            let _ = ctx.send_frame(input);
+            let pkt = ctx.receive_packet().unwrap();
+            println!("Encoded packet {}", pkt.number);
 
-            fi.intra_only = fi.frame_type == FrameType::KEY || fi.frame_type == FrameType::INTRA_ONLY;
-            fi.use_prev_frame_mvs = !(fi.intra_only || fi.error_resilient);
-            println!("Encoding frame {}", fi.number);
-            let packet = encode_frame(&mut seq, &mut fi, &mut fs);
-            println!("Encoded.");
+            rec_fifo.push_back(pkt.rec.clone());
 
-            fs.rec.pad();
-
-            rec_fifo.push_back(fs.rec.clone());
-
-            update_rec_buffer(&mut fi, fs);
+            let packet = pkt.data;
 
             let mut corrupted_count = 0;
             unsafe {
-                println!("Decoding frame {}", fi.number);
+                println!("Decoding frame {}", pkt.number);
                 let ret = aom_codec_decode(&mut dec.dec, packet.as_ptr(), packet.len(), ptr::null_mut());
                 println!("Decoded. -> {}", ret);
                 if ret != 0 {
@@ -275,7 +273,5 @@ use std::mem;
             }
 
             assert_eq!(corrupted_count, 0);
-
-            fi.number += 1;
         }
     }
