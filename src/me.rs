@@ -60,9 +60,9 @@ pub fn motion_estimation(
       let x_max = (cols - bo.x - blk_w / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_w;
       let y_min = -(bo.y as isize) * (8 * MI_SIZE) as isize - border_h;
       let y_max = (rows - bo.y - blk_h / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_h;
-      let x_lo = po.x - (range.max(x_min / 8));
+      let x_lo = po.x + ((-range).max(x_min / 8));
       let x_hi = po.x + (range.min(x_max / 8));
-      let y_lo = po.y - (range.max(y_min / 8));
+      let y_lo = po.y + ((-range).max(y_min / 8));
       let y_hi = po.y + (range.min(y_max / 8));
 
       let mut lowest_sad = 128 * 128 * 4096 as u32;
