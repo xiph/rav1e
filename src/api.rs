@@ -92,6 +92,7 @@ impl Context {
         rec: Frame::new(self.fi.padded_w, self.fi.padded_h),
         qc: Default::default(),
         cdfs: CDFContext::new(0),
+        deblock: Default::default(),
       };
 
       self.fi.frame_type = if self.fi.number % 30 == 0 {
