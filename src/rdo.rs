@@ -603,9 +603,6 @@ pub fn rdo_partition_decision(
           continue;
         }
         pmv = best_pred_modes[0].mv;
-        if pmv.row != 0 || pmv.col != 0 {
-          let _b = 0;
-        }
 
         assert!(best_pred_modes.len() <= 4);
         let bs = bsize.width_mi();
