@@ -75,11 +75,10 @@ fn main() {
       break;
     }
 
+    count += 1;
 
     if enc.limit != 0 && count >= enc.limit {
       break;
-    } else {
-      count += 1;
     }
 
     io.output.flush().unwrap();
