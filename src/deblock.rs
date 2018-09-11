@@ -12,6 +12,7 @@
 use std::cmp;
 use context::*;
 use plane::*;
+use quantize::*;
 use partition::*;
 use partition::PredictionMode::*;
 use util::clamp;
@@ -484,4 +485,38 @@ pub fn deblock_filter_frame(fi: &FrameInvariants, fs: &mut FrameState,
     for p in 0..PLANES {
         deblock_plane(fi, &fs.deblock, &mut fs.rec.planes[p], p, bc, bit_depth);
     }
+}
+
+pub fn deblock_filter_optimize(fi: &FrameInvariants, fs: &mut FrameState,
+                               _bc: &mut BlockContext, bit_depth: usize) {
+    let q = ac_q(fi.base_q_idx, bit_depth) as i32;
+    let level = clamp (match bit_depth {
+        8 => {
+            if fi.frame_type == FrameType::KEY {
+                q * 17563 - 421574 + (1<<18>>1) >> 18
+            } else {
+                q * 6017 + 650707 + (1<<18>>1) >> 18
+            }
+        }
+        10 => {
+            if fi.frame_type == FrameType::KEY {
+                (q * 20723 + 4060632 + (1<<20>>1) >> 20) - 4
+            } else {
+                q * 20723 + 4060632 + (1<<20>>1) >> 20
+            }
+        }
+        12 => {
+            if fi.frame_type == FrameType::KEY {
+                (q * 20723 + 16242526 + (1<<22>>1) >> 22) - 4
+            } else {
+                q * 20723 + 16242526 + (1<<22>>1) >> 22
+            }
+        }
+        _ => {assert!(false); 0}
+    }, 0, MAX_LOOP_FILTER as i32) as u8;
+
+    fs.deblock.levels[0] = level;
+    fs.deblock.levels[1] = level;
+    fs.deblock.levels[2] = level;
+    fs.deblock.levels[3] = level;
 }
