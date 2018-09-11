@@ -252,7 +252,7 @@ pub fn rdo_tx_size_type(
 pub fn rdo_mode_decision(
   seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
   cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset,
-  priori_mv: &MotionVector
+  pmv: &MotionVector
 ) -> RDOOutput {
   let mut best_mode_luma = PredictionMode::DC_PRED;
   let mut best_mode_chroma = PredictionMode::DC_PRED;
@@ -314,7 +314,7 @@ pub fn rdo_mode_decision(
     let ref_frame =
       if luma_mode.is_intra() { INTRA_FRAME } else { LAST_FRAME };
     let mv = match luma_mode {
-      PredictionMode::NEWMV => motion_estimation(fi, fs, bsize, bo, ref_frame, priori_mv),
+      PredictionMode::NEWMV => motion_estimation(fi, fs, bsize, bo, ref_frame, pmv),
       PredictionMode::NEARESTMV => if mv_stack.len() > 0 {
         mv_stack[0].this_mv
       } else {
