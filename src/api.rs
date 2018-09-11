@@ -121,7 +121,7 @@ impl Context {
       } else if slot_idx == 0 || slot_idx == 4 {
         self.fi.config.quantizer.max(1).min(255)
       } else {
-        let q_drop = 5;
+        let q_drop = 15;
         self.fi.config.quantizer.min(255 - q_drop) + q_drop
       } as u8;
 
