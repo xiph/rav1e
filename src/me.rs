@@ -49,7 +49,12 @@ pub fn motion_estimation(
         x: (bo.x as isize) << BLOCK_TO_PLANE_SHIFT,
         y: (bo.y as isize) << BLOCK_TO_PLANE_SHIFT
       };
-      let range = 32 as isize;
+      let mut range = 32 as isize;
+      let mut step = 2;
+      if bsize < BlockSize::BLOCK_32X32 {
+        range = 16;
+        step = 1;
+      }
       let blk_w = bsize.width();
       let blk_h = bsize.height();
       let border_w = 128 + blk_w as isize * 8;
@@ -66,8 +71,8 @@ pub fn motion_estimation(
       let mut lowest_sad = 128 * 128 * 4096 as u32;
       let mut best_mv = MotionVector { row: 0, col: 0 };
 
-      for y in (y_lo..y_hi).step_by(2) {
-        for x in (x_lo..x_hi).step_by(2) {
+      for y in (y_lo..y_hi).step_by(step) {
+        for x in (x_lo..x_hi).step_by(step) {
           let mut plane_org = fs.input.planes[0].slice(&po);
           let mut plane_ref = rec.frame.planes[0].slice(&PlaneOffset { x, y });
 
@@ -85,8 +90,12 @@ pub fn motion_estimation(
 
       let mode = PredictionMode::NEWMV;
       let mut tmp_plane = Plane::new(blk_w, blk_h, 0, 0, 0, 0);
-
-      let mut steps = vec![8, 4, 2];
+      let mut steps = vec![];
+      if bsize >= BlockSize::BLOCK_32X32 {
+        steps.push(8);
+      }
+      steps.push(4);
+      steps.push(2);
       if fi.allow_high_precision_mv {
         steps.push(1);
       }
