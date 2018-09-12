@@ -52,18 +52,19 @@ pub fn motion_estimation(
       let range = 32 as isize;
       let blk_w = bsize.width();
       let blk_h = bsize.height();
-      let border_w = 128 + blk_w as isize * 8;
-      let border_h = 128 + blk_h as isize * 8;
-      let cols = (rec.frame.planes[0].cfg.width + MI_SIZE - 1) / MI_SIZE;
-      let rows = (rec.frame.planes[0].cfg.height + MI_SIZE - 1) / MI_SIZE;
-      let x_min = -(bo.x as isize) * (8 * MI_SIZE) as isize - border_w;
-      let x_max = (cols - bo.x - blk_w / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_w;
-      let y_min = -(bo.y as isize) * (8 * MI_SIZE) as isize - border_h;
-      let y_max = (rows - bo.y - blk_h / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_h;
-      let x_lo = po.x + ((-range).max(x_min / 8));
-      let x_hi = po.x + (range.min(x_max / 8));
-      let y_lo = po.y + ((-range).max(y_min / 8));
-      let y_hi = po.y + (range.min(y_max / 8));
+
+      let border_w = 16 + blk_w as isize; // in full pel unit
+      let border_h = 16 + blk_h as isize;
+
+      let x_lo = po.x - range;
+      let x_hi = po.x + range;
+      let y_lo = po.y - range;
+      let y_hi = po.y + range;
+
+      let x_lo = x_lo.max(-border_w);
+      let x_hi = x_hi.min((fi.w_in_b * MI_SIZE) as isize + border_w);
+      let y_lo = y_lo.max(-border_h);
+      let y_hi = y_hi.min((fi.h_in_b * MI_SIZE) as isize + border_h);
 
       let mut lowest_sad = 128 * 128 * 4096 as u32;
       let mut best_mv = MotionVector { row: 0, col: 0 };
@@ -92,6 +93,11 @@ pub fn motion_estimation(
       if fi.allow_high_precision_mv {
         steps.push(1);
       }
+
+      let x_min = 8 * (-(bo.x as isize) * MI_SIZE as isize - border_w);
+      let x_max = 8 * ((fi.w_in_b - bo.x - blk_w / MI_SIZE) as isize * MI_SIZE as isize + border_w);
+      let y_min = 8 * (-(bo.y as isize) * MI_SIZE as isize - border_h);
+      let y_max = 8 * ((fi.h_in_b - bo.y - blk_h / MI_SIZE) as isize * MI_SIZE as isize + border_h);
 
       for step in steps {
         let center_mv_h = best_mv;
