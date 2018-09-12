@@ -94,10 +94,11 @@ pub fn motion_estimation(
         steps.push(1);
       }
 
-      let x_min = 8 * (-(bo.x as isize) * MI_SIZE as isize - border_w);
-      let x_max = 8 * ((fi.w_in_b - bo.x - blk_w / MI_SIZE) as isize * MI_SIZE as isize + border_w);
-      let y_min = 8 * (-(bo.y as isize) * MI_SIZE as isize - border_h);
-      let y_max = 8 * ((fi.h_in_b - bo.y - blk_h / MI_SIZE) as isize * MI_SIZE as isize + border_h);
+      // AV1 normative min and max MV range outside a frame border, in 1/8 pel.
+      let min_mv_x = 8 * (-(bo.x as isize) * MI_SIZE as isize - border_w);
+      let max_mv_x = 8 * ((fi.w_in_b - bo.x - blk_w / MI_SIZE) as isize * MI_SIZE as isize + border_w);
+      let min_mv_y = 8 * (-(bo.y as isize) * MI_SIZE as isize - border_h);
+      let max_mv_y = 8 * ((fi.h_in_b - bo.y - blk_h / MI_SIZE) as isize * MI_SIZE as isize + border_h);
 
       for step in steps {
         let center_mv_h = best_mv;
@@ -113,10 +114,10 @@ pub fn motion_estimation(
               col: center_mv_h.col + step * (j as i16 - 1)
             };
 
-            if (cand_mv.col as isize) < x_min || (cand_mv.col as isize) > x_max {
+            if (cand_mv.col as isize) < min_mv_x || (cand_mv.col as isize) > max_mv_x {
               continue;
             }
-            if (cand_mv.row as isize) < y_min || (cand_mv.row as isize) > y_max {
+            if (cand_mv.row as isize) < min_mv_y || (cand_mv.row as isize) > max_mv_y {
               continue;
             }
 
