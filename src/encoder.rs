@@ -1380,6 +1380,28 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
                 MvSubpelPrecision::MV_SUBPEL_LOW_PRECISION
               };
               cw.write_mv(w, &mv, &ref_mv, mv_precision);
+            } else if luma_mode >= PredictionMode::NEAR0MV && luma_mode <= PredictionMode::NEAR2MV {
+              let ref_mv_idx = luma_mode as usize - PredictionMode::NEAR0MV as usize + 1;
+              let num_mv_found = mv_stack.len();
+              if luma_mode != PredictionMode::NEAR0MV { assert!(num_mv_found > ref_mv_idx); }
+
+              for idx in 1..3 {
+                if num_mv_found > idx + 1 {
+                  let drl_mode = ref_mv_idx > idx;
+                  let ctx: usize = (mv_stack[idx].weight < REF_CAT_LEVEL) as usize
+                    + (mv_stack[idx + 1].weight < REF_CAT_LEVEL) as usize;
+
+                  cw.write_drl_mode(w, drl_mode, ctx);
+                  if !drl_mode { break; }
+                }
+              }
+              if mv_stack.len() > 1 {
+                assert!(mv_stack[ref_mv_idx].this_mv.row == mv.row);
+                assert!(mv_stack[ref_mv_idx].this_mv.col == mv.col);
+              } else {
+                assert!(0 == mv.row);
+                assert!(0 == mv.col);
+              }
             } else if luma_mode == PredictionMode::NEARESTMV {
               if mv_stack.len() > 0 {
                 assert!(mv_stack[0].this_mv.row == mv.row);
@@ -1827,11 +1849,22 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
             let mut mv_stack = Vec::new();
             let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack, bsize, false);
 
-            if mode_luma == PredictionMode::NEARESTMV &&
-                (mv_stack.len() > 0 && (mv_stack[0].this_mv.row != mv.row || mv_stack[0].this_mv.col != mv.col) ||
-                 mv_stack.len() == 0 && (0 != mv.row || 0 != mv.col)) {
+            if !mode_luma.is_intra() && mode_luma != PredictionMode::GLOBALMV {
               mode_luma = PredictionMode::NEWMV;
-              mode_chroma = PredictionMode::NEWMV;
+              for (c, m) in mv_stack.iter().take(4)
+                .zip([PredictionMode::NEARESTMV, PredictionMode::NEAR0MV,
+                      PredictionMode::NEAR1MV, PredictionMode::NEAR2MV].iter()) {
+                if c.this_mv.row == mv.row && c.this_mv.col == mv.col {
+                  mode_luma = *m;
+                }
+              }
+              if mode_luma == PredictionMode::NEWMV && mv.row == 0 && mv.col == 0 {
+                mode_luma =
+                  if mv_stack.len() == 0 { PredictionMode::NEARESTMV }
+                  else if mv_stack.len() == 1 { PredictionMode::NEAR0MV }
+                  else { PredictionMode::GLOBALMV };
+              }
+              mode_chroma = mode_luma;
             }
 
             // FIXME: every final block that has gone through the RDO decision process is encoded twice
