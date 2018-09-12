@@ -69,7 +69,14 @@ pub enum EncoderStatus {
 pub struct Packet {
   pub data: Vec<u8>,
   pub rec: Frame,
-  pub number: usize
+  pub number: usize,
+  pub frame_type: FrameType
+}
+
+impl fmt::Display for Packet {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "Frame {} - {} - {} bytes", self.number, self.frame_type, self.data.len())
+  }
 }
 
 impl Context {
@@ -139,7 +146,7 @@ impl Context {
 
       update_rec_buffer(&mut self.fi, fs);
 
-      Ok(Packet { data, rec, number })
+      Ok(Packet { data, rec, number, frame_type: self.fi.frame_type })
     } else {
       unimplemented!("Flushing not implemented")
     }
