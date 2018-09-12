@@ -126,10 +126,9 @@ pub fn process_frame(ctx: &mut Context,
                 _ => panic! ("unknown input bit depth!"),
             }
 
-            eprintln!("{}", ctx);
             let _ = ctx.send_frame(input);
-
             let pkt = ctx.receive_packet().unwrap();
+            eprintln!("{}", pkt);
             write_ivf_frame(output_file, pkt.number as u64, pkt.data.as_ref());
             if let Some(mut y4m_enc) = y4m_enc {
                 let pitch_y = if bit_depth > 8 {
