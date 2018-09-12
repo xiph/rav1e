@@ -62,9 +62,9 @@ pub fn motion_estimation(
       let y_hi = po.y + range;
 
       let x_lo = x_lo.max(-border_w);
-      let x_hi = x_hi.min((fi.w_in_b * MI_SIZE) as isize + border_w);
+      let x_hi = x_hi.min((fi.w_in_b * MI_SIZE) as isize + border_w - blk_w as isize);
       let y_lo = y_lo.max(-border_h);
-      let y_hi = y_hi.min((fi.h_in_b * MI_SIZE) as isize + border_h);
+      let y_hi = y_hi.min((fi.h_in_b * MI_SIZE) as isize + border_h - blk_h as isize);
 
       let mut lowest_sad = 128 * 128 * 4096 as u32;
       let mut best_mv = MotionVector { row: 0, col: 0 };
