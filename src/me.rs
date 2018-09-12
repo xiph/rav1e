@@ -54,16 +54,14 @@ pub fn motion_estimation(
       let blk_h = bsize.height();
       let border_w = 128 + blk_w as isize * 8;
       let border_h = 128 + blk_h as isize * 8;
-      let cols = (rec.frame.planes[0].cfg.width + MI_SIZE - 1) / MI_SIZE;
-      let rows = (rec.frame.planes[0].cfg.height + MI_SIZE - 1) / MI_SIZE;
-      let x_min = -(bo.x as isize) * (8 * MI_SIZE) as isize - border_w;
-      let x_max = (cols - bo.x - blk_w / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_w;
-      let y_min = -(bo.y as isize) * (8 * MI_SIZE) as isize - border_h;
-      let y_max = (rows - bo.y - blk_h / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_h;
-      let x_lo = po.x + ((-range).max(x_min / 8));
-      let x_hi = po.x + (range.min(x_max / 8));
-      let y_lo = po.y + ((-range).max(y_min / 8));
-      let y_hi = po.y + (range.min(y_max / 8));
+      let mvx_min = -(bo.x as isize) * (8 * MI_SIZE) as isize - border_w;
+      let mvx_max = (fi.w_in_b - bo.x - blk_w / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_w;
+      let mvy_min = -(bo.y as isize) * (8 * MI_SIZE) as isize - border_h;
+      let mvy_max = (fi.h_in_b - bo.y - blk_h / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_h;
+      let x_lo = po.x + ((-range).max(mvx_min / 8));
+      let x_hi = po.x + (range.min(mvx_max / 8));
+      let y_lo = po.y + ((-range).max(mvy_min / 8));
+      let y_hi = po.y + (range.min(mvy_max / 8));
 
       let mut lowest_sad = 128 * 128 * 4096 as u32;
       let mut best_mv = MotionVector { row: 0, col: 0 };
@@ -107,10 +105,10 @@ pub fn motion_estimation(
               col: center_mv_h.col + step * (j as i16 - 1)
             };
 
-            if (cand_mv.col as isize) < x_min || (cand_mv.col as isize) > x_max {
+            if (cand_mv.col as isize) < mvx_min || (cand_mv.col as isize) > mvx_max {
               continue;
             }
-            if (cand_mv.row as isize) < y_min || (cand_mv.row as isize) > y_max {
+            if (cand_mv.row as isize) < mvy_min || (cand_mv.row as isize) > mvy_max {
               continue;
             }
 
