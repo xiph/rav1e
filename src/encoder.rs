@@ -1258,14 +1258,14 @@ pub fn encode_tx_block(
 
 pub fn motion_compensate(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
                          luma_mode: PredictionMode, ref_frame: usize, mv: MotionVector,
-                         bsize: BlockSize, bo: &BlockOffset, bit_depth: usize) {
+                         bsize: BlockSize, bo: &BlockOffset, bit_depth: usize, luma_only: bool) {
   if luma_mode.is_intra() { return; }
 
   let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
   // Inter mode prediction can take place once for a whole partition,
   // instead of each tx-block.
-  let num_planes = 1 + if has_chroma(bo, bsize, xdec, ydec) { 2 } else { 0 };
+  let num_planes = 1 + if has_chroma(bo, bsize, xdec, ydec) && !luma_only { 2 } else { 0 };
 
   for p in 0..num_planes {
     let plane_bsize = if p == 0 { bsize }
@@ -1438,7 +1438,7 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
         }
     }
 
-    motion_compensate(fi, fs, cw, luma_mode, ref_frame, mv, bsize, bo, bit_depth);
+    motion_compensate(fi, fs, cw, luma_mode, ref_frame, mv, bsize, bo, bit_depth, false);
 
     if is_inter {
       write_tx_tree(fi, fs, cw, w, luma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth, false);
