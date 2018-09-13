@@ -1678,7 +1678,8 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             cw.write_partition(w, bo, partition, bsize);
             cost = (w.tell_frac() - tell) as f64 * get_lambda(fi, seq.bit_depth)/ ((1 << OD_BITRES) as f64);
         }
-        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, bsize, bo).part_modes[0].clone();
+        let pmv = MotionVector { row: 0, col: 0 };
+        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, bsize, bo, &pmv).part_modes[0].clone();
         let (mode_luma, mode_chroma) = (mode_decision.pred_mode_luma, mode_decision.pred_mode_chroma);
         let cfl = mode_decision.pred_cfl_params;
         let ref_frame = mode_decision.ref_frame;
@@ -1818,6 +1819,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
 
     let hbs = bs >> 1; // Half the block size in blocks
     let subsize = get_subsize(bsize, partition);
+    let pmv =  MotionVector { row: 0, col: 0 };
 
     if bsize >= BlockSize::BLOCK_8X8 {
         let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
@@ -1831,7 +1833,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
                     rdo_output.part_modes[0].clone()
                 } else {
                     // Make a prediction mode decision for blocks encoded with no rdo_partition_decision call (e.g. edges)
-                    rdo_mode_decision(seq, fi, fs, cw, bsize, bo).part_modes[0].clone()
+                    rdo_mode_decision(seq, fi, fs, cw, bsize, bo, &pmv).part_modes[0].clone()
                 };
 
             let mut mode_luma = part_decision.pred_mode_luma;

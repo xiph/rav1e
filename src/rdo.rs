@@ -251,7 +251,8 @@ pub fn rdo_tx_size_type(
 // RDO-based mode decision
 pub fn rdo_mode_decision(
   seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
-  cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset
+  cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset,
+  pmv: &MotionVector
 ) -> RDOOutput {
   let mut best_mode_luma = PredictionMode::DC_PRED;
   let mut best_mode_chroma = PredictionMode::DC_PRED;
@@ -312,7 +313,7 @@ pub fn rdo_mode_decision(
     let ref_frame =
       if luma_mode_is_intra { INTRA_FRAME } else { LAST_FRAME };
     let mv = match luma_mode {
-      PredictionMode::NEWMV => motion_estimation(fi, fs, bsize, bo, ref_frame),
+      PredictionMode::NEWMV => motion_estimation(fi, fs, bsize, bo, ref_frame, pmv),
       PredictionMode::NEARESTMV => if mv_stack.len() > 0 {
         mv_stack[0].this_mv
       } else {
@@ -578,6 +579,7 @@ pub fn rdo_partition_decision(
 
     let mut rd: f64;
     let mut child_modes = std::vec::Vec::new();
+    let mut pmv =  MotionVector { row: 0, col: 0 };
 
     match partition {
       PartitionType::PARTITION_NONE => {
@@ -589,7 +591,7 @@ pub fn rdo_partition_decision(
           .part_modes
           .get(0)
           .unwrap_or(
-            &rdo_mode_decision(seq, fi, fs, cw, bsize, bo).part_modes[0]
+            &rdo_mode_decision(seq, fi, fs, cw, bsize, bo, &pmv).part_modes[0]
           ).clone();
         child_modes.push(mode_decision);
       }
@@ -599,32 +601,33 @@ pub fn rdo_partition_decision(
         if subsize == BlockSize::BLOCK_INVALID {
           continue;
         }
+        pmv = best_pred_modes[0].mv;
 
+        assert!(best_pred_modes.len() <= 4);
         let bs = bsize.width_mi();
         let hbs = bs >> 1; // Half the block size in blocks
-
         let offset = BlockOffset { x: bo.x, y: bo.y };
         let mode_decision =
-          rdo_mode_decision(seq, fi, fs, cw, subsize, &offset).part_modes[0]
+          rdo_mode_decision(seq, fi, fs, cw, subsize, &offset, &pmv).part_modes[0]
             .clone();
         child_modes.push(mode_decision);
 
         let offset = BlockOffset { x: bo.x + hbs as usize, y: bo.y };
         let mode_decision =
-          rdo_mode_decision(seq, fi, fs, cw, subsize, &offset).part_modes[0]
+          rdo_mode_decision(seq, fi, fs, cw, subsize, &offset, &pmv).part_modes[0]
             .clone();
         child_modes.push(mode_decision);
 
         let offset = BlockOffset { x: bo.x, y: bo.y + hbs as usize };
         let mode_decision =
-          rdo_mode_decision(seq, fi, fs, cw, subsize, &offset).part_modes[0]
+          rdo_mode_decision(seq, fi, fs, cw, subsize, &offset, &pmv).part_modes[0]
             .clone();
         child_modes.push(mode_decision);
 
         let offset =
           BlockOffset { x: bo.x + hbs as usize, y: bo.y + hbs as usize };
         let mode_decision =
-          rdo_mode_decision(seq, fi, fs, cw, subsize, &offset).part_modes[0]
+          rdo_mode_decision(seq, fi, fs, cw, subsize, &offset, &pmv).part_modes[0]
             .clone();
         child_modes.push(mode_decision);
       }

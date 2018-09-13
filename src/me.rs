@@ -41,7 +41,7 @@ pub fn get_sad(
 
 pub fn motion_estimation(
   fi: &FrameInvariants, fs: &mut FrameState, bsize: BlockSize,
-  bo: &BlockOffset, ref_frame: usize
+  bo: &BlockOffset, ref_frame: usize, pmv: &MotionVector
 ) -> MotionVector {
   match fi.rec_buffer.frames[fi.ref_frames[ref_frame - LAST_FRAME]] {
     Some(ref rec) => {
@@ -58,10 +58,10 @@ pub fn motion_estimation(
       let mvx_max = (fi.w_in_b - bo.x - blk_w / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_w;
       let mvy_min = -(bo.y as isize) * (8 * MI_SIZE) as isize - border_h;
       let mvy_max = (fi.h_in_b - bo.y - blk_h / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_h;
-      let x_lo = po.x + ((-range).max(mvx_min / 8));
-      let x_hi = po.x + (range.min(mvx_max / 8));
-      let y_lo = po.y + ((-range).max(mvy_min / 8));
-      let y_hi = po.y + (range.min(mvy_max / 8));
+      let x_lo = po.x + ((-range + (pmv.col / 8) as isize).max(mvx_min / 8));
+      let x_hi = po.x + ((range + (pmv.col / 8) as isize).min(mvx_max / 8));
+      let y_lo = po.y + ((-range + (pmv.row / 8) as isize).max(mvy_min / 8));
+      let y_hi = po.y + ((range + (pmv.row / 8) as isize).min(mvy_max / 8));
 
       let mut lowest_sad = 128 * 128 * 4096 as u32;
       let mut best_mv = MotionVector { row: 0, col: 0 };
