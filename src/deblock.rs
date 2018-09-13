@@ -462,20 +462,22 @@ pub fn deblock_plane(fi: &FrameInvariants, deblock: &DeblockState, plane: &mut P
     }
       
     // filter vertical and horizontal edges by super block.
-    // TODO: once it's working, do it in one pass
     for row in 0..fb_height {
         for col in 0..fb_width {
-            let sbo = SuperBlockOffset { x: col, y: row };
             // filter vertical edges
-            deblock_vertical(fi, deblock, plane, pli, bc, &sbo, bit_depth);
+            {
+                let sbo = SuperBlockOffset { x: col, y: row };
+                deblock_vertical(fi, deblock, plane, pli, bc, &sbo, bit_depth);
+            }
+            // filter horizontal edges.  Filters are ordered, so it's always 1 SB behind.
+            if col > 0 {
+                let sbo = SuperBlockOffset { x: col-1, y: row };
+                deblock_horizontal(fi, deblock, plane, pli, bc, &sbo, bit_depth);
+            }
         }
-    }
-    for row in 0..fb_height {
-        for col in 0..fb_width {
-            let sbo = SuperBlockOffset { x: col, y: row };
-            // filter horizontal edges
-            deblock_horizontal(fi, deblock, plane, pli, bc, &sbo, bit_depth);
-        }
+        // filter last horizontal stragglers.
+        let sbo = SuperBlockOffset { x: fb_width-1, y: row };
+        deblock_horizontal(fi, deblock, plane, pli, bc, &sbo, bit_depth);
     }
 }
 
