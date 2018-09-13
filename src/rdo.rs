@@ -491,8 +491,11 @@ pub fn rdo_cfl_alpha(
   }
 }
 
-fn save_plane_blk(dst: &mut [u16], src: &PlaneSlice<'_>, width: usize, height: usize) {
-  let src_stride = src.plane.cfg.stride;
+fn save_plane_blk(dst: &mut [u16], src_plane: &Plane,
+  bo: &BlockOffset, width: usize, height: usize) {
+  let po = bo.plane_offset(&src_plane.cfg);
+  let src_stride = src_plane.cfg.stride;
+  let src = &src_plane.slice(&po);
 
   for (line_dst, s) in dst.chunks_mut(width).take(height)
                    .zip(src.as_slice().chunks(src_stride)) {
@@ -500,8 +503,11 @@ fn save_plane_blk(dst: &mut [u16], src: &PlaneSlice<'_>, width: usize, height: u
   }
 }
 
-fn restore_plane_blk<'a>(dst: &'a mut PlaneMutSlice<'a>, src: &[u16], width: usize, height: usize) {
-  let dst_stride = dst.plane.cfg.stride;
+fn restore_plane_blk<'a>(dst_plane: &mut Plane, src: &[u16],
+  bo: &BlockOffset, width: usize, height: usize) {
+  let po = bo.plane_offset(&dst_plane.cfg);
+  let dst_stride = dst_plane.cfg.stride;
+  let dst = &mut dst_plane.mut_slice(&po);
 
   for (line_dst, s) in dst.as_mut_slice().chunks_mut(dst_stride).take(height)
                    .zip(src.chunks(width)) {
@@ -534,32 +540,28 @@ pub fn rdo_tx_type_decision(
   // If inter mode, save motion compensated pixles since it will be overriden by write_tx_tree()
   if is_inter {
     motion_compensate(fi, fs, cw, mode, ref_frame, mv, bsize, bo, bit_depth, true);
-
     // Save Motion Compensated pixels, luma only
-    let po = bo.plane_offset(&fs.input.planes[0].cfg);
-    let rec = &fs.rec.planes[0];
-    save_plane_blk(&mut mc_block.array, &rec.slice(&po), bsize.width(), bsize.height());
+    save_plane_blk(&mut mc_block.array, &fs.rec.planes[0], bo, w, h);
   }
+
+  let mut dirty_mc_pixels: bool = false;
 
   for &tx_type in RAV1E_TX_TYPES {
     // Skip unsupported transform types
     if av1_tx_used[tx_set as usize][tx_type as usize] == 0 {
       continue;
     }
-
-    if is_inter {
+    if is_inter && dirty_mc_pixels {
       // Restore Motion Compensated pixels, luma only
-      let po = bo.plane_offset(&fs.input.planes[0].cfg);
-      let rec = &mut fs.rec.planes[0];
-      restore_plane_blk(&mut rec.mut_slice(&po), &mc_block.array, bsize.width(), bsize.height());
+      restore_plane_blk(&mut fs.rec.planes[0], &mc_block.array, bo, w, h);
     }
-
     let mut wr: &mut dyn Writer = &mut WriterCounter::new();
     let tell = wr.tell_frac();
     if is_inter {
       write_tx_tree(
         fi, fs, cw, wr, mode, bo, bsize, tx_size, tx_type, false, bit_depth, true
       );
+      dirty_mc_pixels = true;
     }  else {
       let cfl = CFLParams::new(); // Unused
       write_tx_blocks(
