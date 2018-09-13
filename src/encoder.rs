@@ -1723,9 +1723,14 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             rd_cost = (w.tell_frac() - tell) as f64 * get_lambda(fi, seq.bit_depth)/ ((1 << OD_BITRES) as f64);
         }
 
-        {
-            let mut split = |offset: &BlockOffset| {
-                rd_cost += encode_partition_bottomup(
+        let partitions = [
+            bo,
+            &BlockOffset{ x: bo.x + hbs as usize, y: bo.y },
+            &BlockOffset{ x: bo.x, y: bo.y + hbs as usize },
+            &BlockOffset{ x: bo.x + hbs as usize, y: bo.y + hbs as usize }
+        ];
+        rd_cost += partitions.iter().map(|&offset| {
+                encode_partition_bottomup(
                     seq,
                     fi,
                     fs,
@@ -1734,13 +1739,8 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
                     w_post_cdef,
                     subsize,
                     offset
-                );
-            };
-            split(bo);
-            split(&BlockOffset { x: bo.x + hbs as usize, y: bo.y });
-            split(&BlockOffset { x: bo.x, y: bo.y + hbs as usize });
-            split(&BlockOffset { x: bo.x + hbs as usize, y: bo.y + hbs as usize });
-        }
+                )
+            }).sum::<f64>();
 
         // Recode the full block if it is more efficient
         if !must_split && nosplit_rd_cost < rd_cost {
@@ -1903,23 +1903,25 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
                 }
             }
             else {
-                let mut split = |offset: &BlockOffset| {
-                    encode_partition_topdown(
-                        seq,
-                        fi,
-                        fs,
-                        cw,
-                        w_pre_cdef,
-                        w_post_cdef,
-                        subsize,
-                        offset,
-                        &None
-                    );
-                };
-                split(bo);
-                split(&BlockOffset{x: bo.x + hbs as usize, y: bo.y});
-                split(&BlockOffset{x: bo.x, y: bo.y + hbs as usize});
-                split(&BlockOffset{x: bo.x + hbs as usize, y: bo.y + hbs as usize});
+                let partitions = [
+                    bo,
+                    &BlockOffset{ x: bo.x + hbs as usize, y: bo.y },
+                    &BlockOffset{ x: bo.x, y: bo.y + hbs as usize },
+                    &BlockOffset{ x: bo.x + hbs as usize, y: bo.y + hbs as usize }
+                ];
+                partitions.iter().for_each(|&offset| {
+                        encode_partition_topdown(
+                            seq,
+                            fi,
+                            fs,
+                            cw,
+                            w_pre_cdef,
+                            w_post_cdef,
+                            subsize,
+                            offset,
+                            &None
+                        );
+                    });
             }
         },
         _ => { assert!(false); },

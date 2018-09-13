@@ -606,17 +606,21 @@ pub fn rdo_partition_decision(
         assert!(best_pred_modes.len() <= 4);
         let bs = bsize.width_mi();
         let hbs = bs >> 1; // Half the block size in blocks
-        let mut split = |offset: BlockOffset| {
-          let mode_decision =
-            rdo_mode_decision(seq, fi, fs, cw, subsize, &offset, &pmv)
-              .part_modes[0]
-              .clone();
-          child_modes.push(mode_decision);
-        };
-        split(BlockOffset { x: bo.x, y: bo.y });
-        split(BlockOffset { x: bo.x + hbs as usize, y: bo.y });
-        split(BlockOffset { x: bo.x, y: bo.y + hbs as usize });
-        split(BlockOffset { x: bo.x + hbs as usize, y: bo.y + hbs as usize });
+        let partitions = [
+          bo,
+          &BlockOffset{ x: bo.x + hbs as usize, y: bo.y },
+          &BlockOffset{ x: bo.x, y: bo.y + hbs as usize },
+          &BlockOffset{ x: bo.x + hbs as usize, y: bo.y + hbs as usize }
+        ];
+        child_modes.extend(
+          partitions
+            .iter()
+            .map(|&offset| {
+              rdo_mode_decision(seq, fi, fs, cw, subsize, &offset, &pmv)
+                .part_modes[0]
+                .clone()
+            }).collect::<Vec<_>>()
+        );
       }
       _ => {
         assert!(false);
