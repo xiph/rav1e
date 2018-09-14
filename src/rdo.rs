@@ -294,12 +294,12 @@ pub fn rdo_mode_decision(
   let mode_context =
     cw.find_mvrefs(bo, LAST_FRAME, &mut mv_stack, bsize, false);
 
-  for &luma_mode in &mode_set {
+  mode_set.iter().for_each(|&luma_mode| {
     let luma_mode_is_intra = luma_mode.is_intra();
     assert!(fi.frame_type == FrameType::INTER || luma_mode_is_intra);
 
-    if luma_mode == PredictionMode::NEAR1MV && mv_stack.len() < 3 { continue; }
-    if luma_mode == PredictionMode::NEAR2MV && mv_stack.len() < 4 { continue; }
+    if luma_mode == PredictionMode::NEAR1MV && mv_stack.len() < 3 { return; }
+    if luma_mode == PredictionMode::NEAR2MV && mv_stack.len() < 4 { return; }
 
     let mut mode_set_chroma = vec![luma_mode];
 
@@ -392,12 +392,12 @@ pub fn rdo_mode_decision(
         cw.rollback(&cw_checkpoint);
       }
     }
-  }
+  });
 
   if best_mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
     let chroma_mode = PredictionMode::UV_CFL_PRED;
     let cw_checkpoint = cw.checkpoint();
-    let mut wr: &mut dyn Writer = &mut WriterCounter::new();
+    let wr: &mut dyn Writer = &mut WriterCounter::new();
     write_tx_blocks(
       fi,
       fs,
