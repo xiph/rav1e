@@ -294,9 +294,6 @@ pub fn rdo_mode_decision(
     let luma_mode_is_intra = luma_mode.is_intra();
     assert!(fi.frame_type == FrameType::INTER || luma_mode_is_intra);
 
-    if luma_mode == PredictionMode::NEAR1MV && mv_stack.len() < 3 { continue; }
-    if luma_mode == PredictionMode::NEAR2MV && mv_stack.len() < 4 { continue; }
-
     let mut mode_set_chroma = vec![luma_mode];
 
     if luma_mode_is_intra && is_chroma_block {
@@ -312,6 +309,9 @@ pub fn rdo_mode_decision(
 
     let mut mv_stack = Vec::new();
     let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack, bsize, false);
+
+    if luma_mode == PredictionMode::NEAR1MV && mv_stack.len() < 3 { continue; }
+    if luma_mode == PredictionMode::NEAR2MV && mv_stack.len() < 4 { continue; }
 
     let mv = match luma_mode {
       PredictionMode::NEWMV => motion_estimation(fi, fs, bsize, bo, ref_frame, pmv),
@@ -440,8 +440,8 @@ pub fn rdo_mode_decision(
         cfl,
         best_tx_size,
         best_tx_type,
-        mode_context,
-        &mv_stack
+        0,
+        &Vec::new()
       );
 
       let cost = wr.tell_frac() - tell;
