@@ -109,7 +109,7 @@ impl Context {
         FrameType::INTER
       };
 
-      let slot_idx = self.fi.number % 30 % 8;
+      let slot_idx = self.fi.number % 30 % REF_FRAMES as u64;
 
       self.fi.refresh_frame_flags = if self.fi.frame_type == FrameType::KEY {
         ALL_REF_FRAMES_MASK
@@ -122,10 +122,13 @@ impl Context {
       // self.fi.use_prev_frame_mvs =
       //  !(self.fi.intra_only || self.fi.error_resilient);
 
+      let log_boost_frequency = 2; // Higher quality frame every 4 frames
+      assert!(log_boost_frequency >= 0 && log_boost_frequency <= 2);
+      let boost_frequency = 1 << log_boost_frequency;
       self.fi.base_q_idx = if self.fi.frame_type == FrameType::KEY {
         let q_boost = 15;
         self.fi.config.quantizer.max(1 + q_boost).min(255 + q_boost) - q_boost
-      } else if slot_idx == 0 || slot_idx == 4 {
+      } else if slot_idx & (boost_frequency - 1) == 0 {
         self.fi.config.quantizer.max(1).min(255)
       } else {
         let q_drop = 15;
@@ -138,8 +141,8 @@ impl Context {
         (LAST_FRAME - LAST_FRAME) as u32
       };
 
-      self.fi.ref_frames[LAST_FRAME - LAST_FRAME] = (8 + slot_idx as usize - 1) & 7;
-      self.fi.ref_frames[ALTREF_FRAME - LAST_FRAME] = (8 + slot_idx as usize - 2) & 4;
+      self.fi.ref_frames[LAST_FRAME - LAST_FRAME] = (REF_FRAMES + slot_idx as usize - 1) & (REF_FRAMES - 1);
+      self.fi.ref_frames[ALTREF_FRAME - LAST_FRAME] = (REF_FRAMES + slot_idx as usize - 2) & boost_frequency as usize;
 
       let data = encode_frame(&mut self.seq, &mut self.fi, &mut fs);
 
