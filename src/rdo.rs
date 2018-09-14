@@ -261,6 +261,8 @@ pub fn rdo_mode_decision(
   let mut best_rd = std::f64::MAX;
   let mut best_ref_frame = INTRA_FRAME;
   let mut best_mv = MotionVector { row: 0, col: 0 };
+  let mut best_tx_size = TxSize::TX_4X4;
+  let mut best_tx_type = TxType::DCT_DCT;
 
   // Get block luma and chroma dimensions
   let w = bsize.width();
@@ -305,9 +307,6 @@ pub fn rdo_mode_decision(
       if luma_mode != PredictionMode::DC_PRED {
         mode_set_chroma.push(PredictionMode::DC_PRED);
       }
-      if bsize.cfl_allowed() {
-        mode_set_chroma.push(PredictionMode::UV_CFL_PRED);
-      }
     }
 
     let ref_frame =
@@ -335,38 +334,6 @@ pub fn rdo_mode_decision(
 
     // Find the best chroma prediction mode for the current luma prediction mode
     for &chroma_mode in &mode_set_chroma {
-      let mut cfl = CFLParams::new();
-      if chroma_mode == PredictionMode::UV_CFL_PRED {
-        if !best_mode_chroma.is_intra() {
-          continue;
-        }
-        let cw_checkpoint = cw.checkpoint();
-        let mut wr: &mut dyn Writer = &mut WriterCounter::new();
-        write_tx_blocks(
-          fi,
-          fs,
-          cw,
-          wr,
-          luma_mode,
-          luma_mode,
-          bo,
-          bsize,
-          tx_size,
-          tx_type,
-          false,
-          seq.bit_depth,
-          cfl,
-          true
-        );
-        cw.rollback(&cw_checkpoint);
-        match rdo_cfl_alpha(fs, bo, bsize, seq.bit_depth) {
-          Some(params) => {
-            cfl = params;
-          }
-          None => continue
-        }
-      }
-
       for &skip in &[false, true] {
         // Don't skip when using intra modes
         if skip && luma_mode_is_intra {
@@ -391,7 +358,7 @@ pub fn rdo_mode_decision(
           bo,
           skip,
           seq.bit_depth,
-          cfl,
+          CFLParams::new(),
           tx_size,
           tx_type,
           mode_context,
@@ -415,14 +382,85 @@ pub fn rdo_mode_decision(
           best_rd = rd;
           best_mode_luma = luma_mode;
           best_mode_chroma = chroma_mode;
-          best_cfl_params = cfl;
           best_ref_frame = ref_frame;
           best_mv = mv;
           best_skip = skip;
+          best_tx_size = tx_size;
+          best_tx_type = tx_type;
         }
 
         cw.rollback(&cw_checkpoint);
       }
+    }
+  }
+
+  if best_mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
+    let chroma_mode = PredictionMode::UV_CFL_PRED;
+    let cw_checkpoint = cw.checkpoint();
+    let mut wr: &mut dyn Writer = &mut WriterCounter::new();
+    write_tx_blocks(
+      fi,
+      fs,
+      cw,
+      wr,
+      best_mode_luma,
+      best_mode_luma,
+      bo,
+      bsize,
+      best_tx_size,
+      best_tx_type,
+      false,
+      seq.bit_depth,
+      CFLParams::new(),
+      true
+    );
+    cw.rollback(&cw_checkpoint);
+    if let Some(cfl) = rdo_cfl_alpha(fs, bo, bsize, seq.bit_depth) {
+      let mut wr: &mut dyn Writer = &mut WriterCounter::new();
+      let tell = wr.tell_frac();
+
+      encode_block_a(seq, cw, wr, bsize, bo, best_skip);
+      encode_block_b(
+        seq,
+        fi,
+        fs,
+        cw,
+        wr,
+        best_mode_luma,
+        chroma_mode,
+        best_ref_frame,
+        best_mv,
+        bsize,
+        bo,
+        best_skip,
+        seq.bit_depth,
+        cfl,
+        best_tx_size,
+        best_tx_type,
+        mode_context,
+        &mv_stack
+      );
+
+      let cost = wr.tell_frac() - tell;
+      let rd = compute_rd_cost(
+        fi,
+        fs,
+        w,
+        h,
+        is_chroma_block,
+        bo,
+        cost,
+        seq.bit_depth,
+        false
+      );
+
+      if rd < best_rd {
+        best_rd = rd;
+        best_mode_chroma = chroma_mode;
+        best_cfl_params = cfl;
+      }
+
+      cw.rollback(&cw_checkpoint);
     }
   }
 
