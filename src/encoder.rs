@@ -1384,6 +1384,28 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
                 MvSubpelPrecision::MV_SUBPEL_LOW_PRECISION
               };
               cw.write_mv(w, &mv, &ref_mv, mv_precision);
+            } else if luma_mode >= PredictionMode::NEAR0MV && luma_mode <= PredictionMode::NEAR2MV {
+              let ref_mv_idx = luma_mode as usize - PredictionMode::NEAR0MV as usize + 1;
+              let num_mv_found = mv_stack.len();
+              if luma_mode != PredictionMode::NEAR0MV { assert!(num_mv_found > ref_mv_idx); }
+
+              for idx in 1..3 {
+                if num_mv_found > idx + 1 {
+                  let drl_mode = ref_mv_idx > idx;
+                  let ctx: usize = (mv_stack[idx].weight < REF_CAT_LEVEL) as usize
+                    + (mv_stack[idx + 1].weight < REF_CAT_LEVEL) as usize;
+
+                  cw.write_drl_mode(w, drl_mode, ctx);
+                  if !drl_mode { break; }
+                }
+              }
+              if mv_stack.len() > 1 {
+                assert!(mv_stack[ref_mv_idx].this_mv.row == mv.row);
+                assert!(mv_stack[ref_mv_idx].this_mv.col == mv.col);
+              } else {
+                assert!(0 == mv.row);
+                assert!(0 == mv.col);
+              }
             } else if luma_mode == PredictionMode::NEARESTMV {
               if mv_stack.len() > 0 {
                 assert!(mv_stack[0].this_mv.row == mv.row);
@@ -1660,7 +1682,8 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             cw.write_partition(w, bo, partition, bsize);
             cost = (w.tell_frac() - tell) as f64 * get_lambda(fi, seq.bit_depth)/ ((1 << OD_BITRES) as f64);
         }
-        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, bsize, bo).part_modes[0].clone();
+        let pmv = MotionVector { row: 0, col: 0 };
+        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, bsize, bo, &pmv).part_modes[0].clone();
         let (mode_luma, mode_chroma) = (mode_decision.pred_mode_luma, mode_decision.pred_mode_chroma);
         let cfl = mode_decision.pred_cfl_params;
         let ref_frame = mode_decision.ref_frame;
@@ -1704,14 +1727,24 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             rd_cost = (w.tell_frac() - tell) as f64 * get_lambda(fi, seq.bit_depth)/ ((1 << OD_BITRES) as f64);
         }
 
-        rd_cost += encode_partition_bottomup(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, subsize,
-                                             bo);
-        rd_cost += encode_partition_bottomup(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, subsize,
-                                             &BlockOffset { x: bo.x + hbs as usize, y: bo.y });
-        rd_cost += encode_partition_bottomup(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, subsize,
-                                             &BlockOffset { x: bo.x, y: bo.y + hbs as usize });
-        rd_cost += encode_partition_bottomup(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, subsize,
-                                             &BlockOffset { x: bo.x + hbs as usize, y: bo.y + hbs as usize });
+        let partitions = [
+            bo,
+            &BlockOffset{ x: bo.x + hbs as usize, y: bo.y },
+            &BlockOffset{ x: bo.x, y: bo.y + hbs as usize },
+            &BlockOffset{ x: bo.x + hbs as usize, y: bo.y + hbs as usize }
+        ];
+        rd_cost += partitions.iter().map(|&offset| {
+                encode_partition_bottomup(
+                    seq,
+                    fi,
+                    fs,
+                    cw,
+                    w_pre_cdef,
+                    w_post_cdef,
+                    subsize,
+                    offset
+                )
+            }).sum::<f64>();
 
         // Recode the full block if it is more efficient
         if !must_split && nosplit_rd_cost < rd_cost {
@@ -1800,6 +1833,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
 
     let hbs = bs >> 1; // Half the block size in blocks
     let subsize = get_subsize(bsize, partition);
+    let pmv =  MotionVector { row: 0, col: 0 };
 
     if bsize >= BlockSize::BLOCK_8X8 {
         let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
@@ -1813,7 +1847,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
                     rdo_output.part_modes[0].clone()
                 } else {
                     // Make a prediction mode decision for blocks encoded with no rdo_partition_decision call (e.g. edges)
-                    rdo_mode_decision(seq, fi, fs, cw, bsize, bo).part_modes[0].clone()
+                    rdo_mode_decision(seq, fi, fs, cw, bsize, bo, &pmv).part_modes[0].clone()
                 };
 
             let mut mode_luma = part_decision.pred_mode_luma;
@@ -1831,11 +1865,22 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
             let mut mv_stack = Vec::new();
             let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack, bsize, false);
 
-            if mode_luma == PredictionMode::NEARESTMV &&
-                (mv_stack.len() > 0 && (mv_stack[0].this_mv.row != mv.row || mv_stack[0].this_mv.col != mv.col) ||
-                 mv_stack.len() == 0 && (0 != mv.row || 0 != mv.col)) {
+            if !mode_luma.is_intra() && mode_luma != PredictionMode::GLOBALMV {
               mode_luma = PredictionMode::NEWMV;
-              mode_chroma = PredictionMode::NEWMV;
+              for (c, m) in mv_stack.iter().take(4)
+                .zip([PredictionMode::NEARESTMV, PredictionMode::NEAR0MV,
+                      PredictionMode::NEAR1MV, PredictionMode::NEAR2MV].iter()) {
+                if c.this_mv.row == mv.row && c.this_mv.col == mv.col {
+                  mode_luma = *m;
+                }
+              }
+              if mode_luma == PredictionMode::NEWMV && mv.row == 0 && mv.col == 0 {
+                mode_luma =
+                  if mv_stack.len() == 0 { PredictionMode::NEARESTMV }
+                  else if mv_stack.len() == 1 { PredictionMode::NEAR0MV }
+                  else { PredictionMode::GLOBALMV };
+              }
+              mode_chroma = mode_luma;
             }
 
             // FIXME: every final block that has gone through the RDO decision process is encoded twice
@@ -1862,14 +1907,25 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
                 }
             }
             else {
-                encode_partition_topdown(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, subsize,
-                                         bo, &None);
-                encode_partition_topdown(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, subsize,
-                                         &BlockOffset{x: bo.x + hbs as usize, y: bo.y}, &None);
-                encode_partition_topdown(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, subsize,
-                                         &BlockOffset{x: bo.x, y: bo.y + hbs as usize}, &None);
-                encode_partition_topdown(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, subsize,
-                                         &BlockOffset{x: bo.x + hbs as usize, y: bo.y + hbs as usize}, &None);
+                let partitions = [
+                    bo,
+                    &BlockOffset{ x: bo.x + hbs as usize, y: bo.y },
+                    &BlockOffset{ x: bo.x, y: bo.y + hbs as usize },
+                    &BlockOffset{ x: bo.x + hbs as usize, y: bo.y + hbs as usize }
+                ];
+                partitions.iter().for_each(|&offset| {
+                        encode_partition_topdown(
+                            seq,
+                            fi,
+                            fs,
+                            cw,
+                            w_pre_cdef,
+                            w_post_cdef,
+                            subsize,
+                            offset,
+                            &None
+                        );
+                    });
             }
         },
         _ => { assert!(false); },

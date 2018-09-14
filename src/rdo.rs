@@ -251,7 +251,8 @@ pub fn rdo_tx_size_type(
 // RDO-based mode decision
 pub fn rdo_mode_decision(
   seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
-  cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset
+  cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset,
+  pmv: &MotionVector
 ) -> RDOOutput {
   let mut best_mode_luma = PredictionMode::DC_PRED;
   let mut best_mode_chroma = PredictionMode::DC_PRED;
@@ -260,6 +261,8 @@ pub fn rdo_mode_decision(
   let mut best_rd = std::f64::MAX;
   let mut best_ref_frame = INTRA_FRAME;
   let mut best_mv = MotionVector { row: 0, col: 0 };
+  let mut best_tx_size = TxSize::TX_4X4;
+  let mut best_tx_type = TxType::DCT_DCT;
 
   // Get block luma and chroma dimensions
   let w = bsize.width();
@@ -288,23 +291,22 @@ pub fn rdo_mode_decision(
   mode_set.extend_from_slice(intra_mode_set);
 
   for &luma_mode in &mode_set {
-    assert!(fi.frame_type == FrameType::INTER || luma_mode.is_intra());
+    let luma_mode_is_intra = luma_mode.is_intra();
+    assert!(fi.frame_type == FrameType::INTER || luma_mode_is_intra);
+
+    if luma_mode == PredictionMode::NEAR1MV && mv_stack.len() < 3 { continue; }
+    if luma_mode == PredictionMode::NEAR2MV && mv_stack.len() < 4 { continue; }
 
     let mut mode_set_chroma = vec![luma_mode];
 
-    if is_chroma_block
-      && luma_mode.is_intra()
-      && luma_mode != PredictionMode::DC_PRED
-    {
-      mode_set_chroma.push(PredictionMode::DC_PRED);
+    if luma_mode_is_intra && is_chroma_block {
+      if luma_mode != PredictionMode::DC_PRED {
+        mode_set_chroma.push(PredictionMode::DC_PRED);
+      }
     }
 
-    if is_chroma_block && luma_mode.is_intra() && bsize.cfl_allowed() {
-      mode_set_chroma.push(PredictionMode::UV_CFL_PRED);
-    }
-
-    let mut ref_frame_set = if luma_mode.is_intra() { vec![INTRA_FRAME] } else { vec![LAST_FRAME] };
-    if !luma_mode.is_intra() && fi.config.speed <= 2 { ref_frame_set.push(ALTREF_FRAME); }
+    let mut ref_frame_set = if luma_mode_is_intra { vec![INTRA_FRAME] } else { vec![LAST_FRAME] };
+    if !luma_mode_is_intra && fi.config.speed <= 2 { ref_frame_set.push(ALTREF_FRAME); }
 
     for &ref_frame in ref_frame_set.iter() {
 
@@ -312,12 +314,19 @@ pub fn rdo_mode_decision(
     let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack, bsize, false);
 
     let mv = match luma_mode {
-      PredictionMode::NEWMV => motion_estimation(fi, fs, bsize, bo, ref_frame),
+      PredictionMode::NEWMV => motion_estimation(fi, fs, bsize, bo, ref_frame, pmv),
       PredictionMode::NEARESTMV => if mv_stack.len() > 0 {
         mv_stack[0].this_mv
       } else {
         MotionVector { row: 0, col: 0 }
       },
+      PredictionMode::NEAR0MV => if mv_stack.len() > 1 {
+        mv_stack[1].this_mv
+      } else {
+        MotionVector { row: 0, col: 0 }
+      },
+      PredictionMode::NEAR1MV | PredictionMode::NEAR2MV =>
+          mv_stack[luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].this_mv,
       _ => MotionVector { row: 0, col: 0 }
     };
 
@@ -327,41 +336,9 @@ pub fn rdo_mode_decision(
 
     // Find the best chroma prediction mode for the current luma prediction mode
     for &chroma_mode in &mode_set_chroma {
-      let mut cfl = CFLParams::new();
-      if chroma_mode == PredictionMode::UV_CFL_PRED {
-        if !best_mode_chroma.is_intra() {
-          continue;
-        }
-        let cw_checkpoint = cw.checkpoint();
-        let mut wr: &mut dyn Writer = &mut WriterCounter::new();
-        write_tx_blocks(
-          fi,
-          fs,
-          cw,
-          wr,
-          luma_mode,
-          luma_mode,
-          bo,
-          bsize,
-          tx_size,
-          tx_type,
-          false,
-          seq.bit_depth,
-          cfl,
-          true
-        );
-        cw.rollback(&cw_checkpoint);
-        match rdo_cfl_alpha(fs, bo, bsize, seq.bit_depth) {
-          Some(params) => {
-            cfl = params;
-          }
-          None => continue
-        }
-      }
-
       for &skip in &[false, true] {
         // Don't skip when using intra modes
-        if skip && luma_mode.is_intra() {
+        if skip && luma_mode_is_intra {
           continue;
         }
 
@@ -383,7 +360,7 @@ pub fn rdo_mode_decision(
           bo,
           skip,
           seq.bit_depth,
-          cfl,
+          CFLParams::new(),
           tx_size,
           tx_type,
           mode_context,
@@ -407,15 +384,86 @@ pub fn rdo_mode_decision(
           best_rd = rd;
           best_mode_luma = luma_mode;
           best_mode_chroma = chroma_mode;
-          best_cfl_params = cfl;
           best_ref_frame = ref_frame;
           best_mv = mv;
           best_skip = skip;
+          best_tx_size = tx_size;
+          best_tx_type = tx_type;
         }
 
         cw.rollback(&cw_checkpoint);
       }
       }
+    }
+  }
+
+  if best_mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
+    let chroma_mode = PredictionMode::UV_CFL_PRED;
+    let cw_checkpoint = cw.checkpoint();
+    let mut wr: &mut dyn Writer = &mut WriterCounter::new();
+    write_tx_blocks(
+      fi,
+      fs,
+      cw,
+      wr,
+      best_mode_luma,
+      best_mode_luma,
+      bo,
+      bsize,
+      best_tx_size,
+      best_tx_type,
+      false,
+      seq.bit_depth,
+      CFLParams::new(),
+      true
+    );
+    cw.rollback(&cw_checkpoint);
+    if let Some(cfl) = rdo_cfl_alpha(fs, bo, bsize, seq.bit_depth) {
+      let mut wr: &mut dyn Writer = &mut WriterCounter::new();
+      let tell = wr.tell_frac();
+
+      encode_block_a(seq, cw, wr, bsize, bo, best_skip);
+      encode_block_b(
+        seq,
+        fi,
+        fs,
+        cw,
+        wr,
+        best_mode_luma,
+        chroma_mode,
+        best_ref_frame,
+        best_mv,
+        bsize,
+        bo,
+        best_skip,
+        seq.bit_depth,
+        cfl,
+        best_tx_size,
+        best_tx_type,
+        mode_context,
+        &mv_stack
+      );
+
+      let cost = wr.tell_frac() - tell;
+      let rd = compute_rd_cost(
+        fi,
+        fs,
+        w,
+        h,
+        is_chroma_block,
+        bo,
+        cost,
+        seq.bit_depth,
+        false
+      );
+
+      if rd < best_rd {
+        best_rd = rd;
+        best_mode_chroma = chroma_mode;
+        best_cfl_params = cfl;
+      }
+
+      cw.rollback(&cw_checkpoint);
     }
   }
 
@@ -573,6 +621,7 @@ pub fn rdo_partition_decision(
 
     let mut rd: f64;
     let mut child_modes = std::vec::Vec::new();
+    let mut pmv =  MotionVector { row: 0, col: 0 };
 
     match partition {
       PartitionType::PARTITION_NONE => {
@@ -584,7 +633,7 @@ pub fn rdo_partition_decision(
           .part_modes
           .get(0)
           .unwrap_or(
-            &rdo_mode_decision(seq, fi, fs, cw, bsize, bo).part_modes[0]
+            &rdo_mode_decision(seq, fi, fs, cw, bsize, bo, &pmv).part_modes[0]
           ).clone();
         child_modes.push(mode_decision);
       }
@@ -594,34 +643,26 @@ pub fn rdo_partition_decision(
         if subsize == BlockSize::BLOCK_INVALID {
           continue;
         }
+        pmv = best_pred_modes[0].mv;
 
+        assert!(best_pred_modes.len() <= 4);
         let bs = bsize.width_mi();
         let hbs = bs >> 1; // Half the block size in blocks
-
-        let offset = BlockOffset { x: bo.x, y: bo.y };
-        let mode_decision =
-          rdo_mode_decision(seq, fi, fs, cw, subsize, &offset).part_modes[0]
-            .clone();
-        child_modes.push(mode_decision);
-
-        let offset = BlockOffset { x: bo.x + hbs as usize, y: bo.y };
-        let mode_decision =
-          rdo_mode_decision(seq, fi, fs, cw, subsize, &offset).part_modes[0]
-            .clone();
-        child_modes.push(mode_decision);
-
-        let offset = BlockOffset { x: bo.x, y: bo.y + hbs as usize };
-        let mode_decision =
-          rdo_mode_decision(seq, fi, fs, cw, subsize, &offset).part_modes[0]
-            .clone();
-        child_modes.push(mode_decision);
-
-        let offset =
-          BlockOffset { x: bo.x + hbs as usize, y: bo.y + hbs as usize };
-        let mode_decision =
-          rdo_mode_decision(seq, fi, fs, cw, subsize, &offset).part_modes[0]
-            .clone();
-        child_modes.push(mode_decision);
+        let partitions = [
+          bo,
+          &BlockOffset{ x: bo.x + hbs as usize, y: bo.y },
+          &BlockOffset{ x: bo.x, y: bo.y + hbs as usize },
+          &BlockOffset{ x: bo.x + hbs as usize, y: bo.y + hbs as usize }
+        ];
+        child_modes.extend(
+          partitions
+            .iter()
+            .map(|&offset| {
+              rdo_mode_decision(seq, fi, fs, cw, subsize, &offset, &pmv)
+                .part_modes[0]
+                .clone()
+            }).collect::<Vec<_>>()
+        );
       }
       _ => {
         assert!(false);

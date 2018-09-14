@@ -2485,6 +2485,20 @@ impl ContextWriter {
 
     /* TODO: Handle single reference frame extension */
 
+    // clamp mvs
+    for mv in mv_stack {
+      let blk_w = bsize.width();
+      let blk_h = bsize.height();
+      let border_w = 128 + blk_w as isize * 8;
+      let border_h = 128 + blk_h as isize * 8;
+      let mvx_min = -(bo.x as isize) * (8 * MI_SIZE) as isize - border_w;
+      let mvx_max = (self.bc.cols - bo.x - blk_w / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_w;
+      let mvy_min = -(bo.y as isize) * (8 * MI_SIZE) as isize - border_h;
+      let mvy_max = (self.bc.rows - bo.y - blk_h / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_h;
+      mv.this_mv.row = (mv.this_mv.row as isize).max(mvy_min).min(mvy_max) as i16;
+      mv.this_mv.col = (mv.this_mv.col as isize).max(mvx_min).min(mvx_max) as i16;
+    }
+
     mode_context
   }
 

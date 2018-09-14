@@ -15,13 +15,13 @@ extern crate rav1e;
 mod predict;
 
 use criterion::*;
-use rav1e::*;
-use rav1e::context::*;
 use rav1e::cdef::cdef_filter_frame;
+use rav1e::context::*;
 use rav1e::ec;
 use rav1e::partition::*;
 use rav1e::predict::*;
 use rav1e::rdo::rdo_cfl_alpha;
+use rav1e::*;
 
 #[cfg(feature = "comparative_bench")]
 mod comparative;
@@ -63,8 +63,11 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
         for by in 0..8 {
           for bx in 0..8 {
             // For ex, 8x8 tx should be applied to even numbered (bx,by)
-            if (tx_size.width_mi() >> 1) & bx != 0 ||
-              (tx_size.height_mi() >> 1) & by != 0 { continue; };
+            if (tx_size.width_mi() >> 1) & bx != 0
+              || (tx_size.height_mi() >> 1) & by != 0
+            {
+              continue;
+            };
             let bo = sbo.block_offset(bx, by);
             let tx_bo = BlockOffset { x: bo.x + bx, y: bo.y + by };
             let po = tx_bo.plane_offset(&fs.input.planes[p].cfg);
@@ -130,10 +133,7 @@ fn cfl_rdo_bench(b: &mut Bencher, bsize: BlockSize) {
   b.iter(|| rdo_cfl_alpha(&mut fs, &offset, bsize, 8))
 }
 
-criterion_group!(
-  intra_prediction,
-  predict::pred_bench,
-);
+criterion_group!(intra_prediction, predict::pred_bench,);
 
 criterion_group!(cfl, cfl_rdo);
 criterion_group!(cdef, cdef_frame);
