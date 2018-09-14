@@ -302,8 +302,15 @@ pub fn rdo_mode_decision(
       }
     }
 
-    let mut ref_frame_set = if luma_mode_is_intra { vec![INTRA_FRAME] } else { vec![LAST_FRAME] };
-    if !luma_mode_is_intra && fi.config.speed <= 2 { ref_frame_set.push(ALTREF_FRAME); }
+    let ref_frame_set: &[usize] = if luma_mode.is_intra() {
+      &[INTRA_FRAME]
+    } else {
+      if fi.config.speed <= 2 {
+        &[LAST_FRAME]
+      } else {
+        &[LAST_FRAME, ALTREF_FRAME]
+      }
+    };
 
     for &ref_frame in ref_frame_set.iter() {
 
