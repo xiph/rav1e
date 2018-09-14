@@ -17,21 +17,23 @@ pub const BLOCK_SIZE: BlockSize = BlockSize::BLOCK_32X32;
 
 pub fn generate_block(rng: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>, Vec<u16>) {
   let block = vec![0u16; BLOCK_SIZE.width() * BLOCK_SIZE.height()];
-  let above_context: Vec<u16> = (0..BLOCK_SIZE.height()).map(|_| rng.gen()).collect();
-  let left_context: Vec<u16> = (0..BLOCK_SIZE.width()).map(|_| rng.gen()).collect();
+  let above_context: Vec<u16> =
+    (0..BLOCK_SIZE.height()).map(|_| rng.gen()).collect();
+  let left_context: Vec<u16> =
+    (0..BLOCK_SIZE.width()).map(|_| rng.gen()).collect();
 
   (block, above_context, left_context)
 }
 
 pub fn pred_bench(c: &mut Criterion) {
-    c.bench_function("intra_dc_4x4", |b| intra_dc_4x4(b));
-    c.bench_function("intra_h_4x4", |b| intra_h_4x4(b));
-    c.bench_function("intra_v_4x4", |b| intra_v_4x4(b));
-    c.bench_function("intra_paeth_4x4", |b| intra_paeth_4x4(b));
-    c.bench_function("intra_smooth_4x4", |b| intra_smooth_4x4(b));
-    c.bench_function("intra_smooth_h_4x4", |b| intra_smooth_h_4x4(b));
-    c.bench_function("intra_smooth_v_4x4", |b| intra_smooth_v_4x4(b));
-    c.bench_function("intra_cfl_4x4", |b| intra_cfl_4x4(b));
+  c.bench_function("intra_dc_4x4", |b| intra_dc_4x4(b));
+  c.bench_function("intra_h_4x4", |b| intra_h_4x4(b));
+  c.bench_function("intra_v_4x4", |b| intra_v_4x4(b));
+  c.bench_function("intra_paeth_4x4", |b| intra_paeth_4x4(b));
+  c.bench_function("intra_smooth_4x4", |b| intra_smooth_4x4(b));
+  c.bench_function("intra_smooth_h_4x4", |b| intra_smooth_h_4x4(b));
+  c.bench_function("intra_smooth_v_4x4", |b| intra_smooth_v_4x4(b));
+  c.bench_function("intra_cfl_4x4", |b| intra_cfl_4x4(b));
 }
 
 pub fn intra_dc_4x4(b: &mut Bencher) {
@@ -40,7 +42,12 @@ pub fn intra_dc_4x4(b: &mut Bencher) {
 
   b.iter(|| {
     for _ in 0..MAX_ITER {
-      Block4x4::pred_dc(&mut block, BLOCK_SIZE.width(), &above[..4], &left[..4]);
+      Block4x4::pred_dc(
+        &mut block,
+        BLOCK_SIZE.width(),
+        &above[..4],
+        &left[..4]
+      );
     }
   })
 }
@@ -74,7 +81,13 @@ pub fn intra_paeth_4x4(b: &mut Bencher) {
 
   b.iter(|| {
     for _ in 0..MAX_ITER {
-      Block4x4::pred_paeth(&mut block, BLOCK_SIZE.width(), &above[..4], &left[..4], above_left);
+      Block4x4::pred_paeth(
+        &mut block,
+        BLOCK_SIZE.width(),
+        &above[..4],
+        &left[..4],
+        above_left
+      );
     }
   })
 }
@@ -85,7 +98,12 @@ pub fn intra_smooth_4x4(b: &mut Bencher) {
 
   b.iter(|| {
     for _ in 0..MAX_ITER {
-      Block4x4::pred_smooth(&mut block, BLOCK_SIZE.width(), &above[..4], &left[..4]);
+      Block4x4::pred_smooth(
+        &mut block,
+        BLOCK_SIZE.width(),
+        &above[..4],
+        &left[..4]
+      );
     }
   })
 }
@@ -96,7 +114,12 @@ pub fn intra_smooth_h_4x4(b: &mut Bencher) {
 
   b.iter(|| {
     for _ in 0..MAX_ITER {
-      Block4x4::pred_smooth_h(&mut block, BLOCK_SIZE.width(), &above[..4], &left[..4]);
+      Block4x4::pred_smooth_h(
+        &mut block,
+        BLOCK_SIZE.width(),
+        &above[..4],
+        &left[..4]
+      );
     }
   })
 }
@@ -107,7 +130,12 @@ pub fn intra_smooth_v_4x4(b: &mut Bencher) {
 
   b.iter(|| {
     for _ in 0..MAX_ITER {
-      Block4x4::pred_smooth_v(&mut block, BLOCK_SIZE.width(), &above[..4], &left[..4]);
+      Block4x4::pred_smooth_v(
+        &mut block,
+        BLOCK_SIZE.width(),
+        &above[..4],
+        &left[..4]
+      );
     }
   })
 }
