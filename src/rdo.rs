@@ -306,9 +306,9 @@ pub fn rdo_mode_decision(
       &[INTRA_FRAME]
     } else {
       if fi.config.speed <= 2 {
-        &[LAST_FRAME]
-      } else {
         &[LAST_FRAME, ALTREF_FRAME]
+      } else {
+        &[LAST_FRAME]
       }
     };
 

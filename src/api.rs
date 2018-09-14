@@ -122,7 +122,12 @@ impl Context {
       // self.fi.use_prev_frame_mvs =
       //  !(self.fi.intra_only || self.fi.error_resilient);
 
-      let log_boost_frequency = 2; // Higher quality frame every 4 frames
+      let log_boost_frequency = if self.fi.config.speed <= 2 {
+        2 // Higher quality frame every 4 frames
+      } else {
+        0 // No boosting with single reference frame
+      };
+
       assert!(log_boost_frequency >= 0 && log_boost_frequency <= 2);
       let boost_frequency = 1 << log_boost_frequency;
       self.fi.base_q_idx = if self.fi.frame_type == FrameType::KEY {
