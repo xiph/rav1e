@@ -2459,10 +2459,9 @@ impl ContextWriter {
       let h4 = bsize.height_mi().min(16).min(self.bc.rows - bo.y);
       let num4x4 = w4.min(h4);
 
-      for pass in 0..2 {
-        if pass == 0 && !up_avail { continue; }
-        if pass == 1 && !left_avail { continue; }
+      let passes = if up_avail { 0 } else { 1 } .. if left_avail { 2 } else { 1 };
 
+      for pass in passes {
         let mut idx = 0;
         while idx < num4x4 && mv_stack.len() < 2 {
           let rbo = if pass == 0 {
