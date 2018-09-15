@@ -23,7 +23,7 @@ use motion_compensate;
 use partition::*;
 use plane::*;
 use cdef::*;
-use predict::{RAV1E_INTRA_MODES, RAV1E_INTRA_MODES_MINIMAL, RAV1E_INTER_MODES};
+use predict::{RAV1E_INTRA_MODES, RAV1E_INTRA_MODES_MINIMAL, RAV1E_INTER_MODES_MINIMAL};
 use quantize::dc_q;
 use std;
 use std::f64;
@@ -303,22 +303,24 @@ pub fn rdo_mode_decision(
   };
 
   let mut mode_set: Vec<PredictionMode> = Vec::new();
-
-  if fi.frame_type == FrameType::INTER {
-    mode_set.extend_from_slice(RAV1E_INTER_MODES);
-  }
-  mode_set.extend_from_slice(intra_mode_set);
-
   let mut mv_stack = Vec::new();
   let mode_context =
     cw.find_mvrefs(bo, LAST_FRAME, &mut mv_stack, bsize, false);
 
+  if fi.frame_type == FrameType::INTER {
+    mode_set.extend_from_slice(RAV1E_INTER_MODES_MINIMAL);
+    if mv_stack.len() >= 3 {
+        mode_set.push(PredictionMode::NEAR1MV);
+    }
+    if mv_stack.len() >= 4 {
+        mode_set.push(PredictionMode::NEAR2MV);
+    }
+  }
+  mode_set.extend_from_slice(intra_mode_set);
+
   mode_set.iter().for_each(|&luma_mode| {
     let luma_mode_is_intra = luma_mode.is_intra();
     assert!(fi.frame_type == FrameType::INTER || luma_mode_is_intra);
-
-    if luma_mode == PredictionMode::NEAR1MV && mv_stack.len() < 3 { return; }
-    if luma_mode == PredictionMode::NEAR2MV && mv_stack.len() < 4 { return; }
 
     let mut mode_set_chroma = vec![luma_mode];
 
