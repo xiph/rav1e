@@ -332,18 +332,9 @@ pub fn rdo_mode_decision(
       seq, fi, fs, cw, bsize, bo, luma_mode, ref_frame, mv, false,
     );
 
-    let all_skips = [false, true];
-
-    // Don't skip when using intra modes
-    let skips = if luma_mode_is_intra {
-        &all_skips[..1]
-    } else {
-        &all_skips[..]
-    };
-
     // Find the best chroma prediction mode for the current luma prediction mode
-    mode_set_chroma.iter().for_each(|&chroma_mode| {
-      skips.iter().for_each(|&skip| {
+    let mut chroma_rdo = |skip: bool| {
+      mode_set_chroma.iter().for_each(|&chroma_mode| {
         let wr: &mut dyn Writer = &mut WriterCounter::new();
         let tell = wr.tell_frac();
 
@@ -395,7 +386,13 @@ pub fn rdo_mode_decision(
 
         cw.rollback(&cw_checkpoint);
       });
-    });
+    };
+
+    chroma_rdo(false);
+    // Don't skip when using intra modes
+    if !luma_mode_is_intra {
+        chroma_rdo(true);
+    };
   });
 
   if best_mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
