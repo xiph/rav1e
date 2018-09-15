@@ -342,7 +342,7 @@ pub fn rdo_mode_decision(
     };
 
     // Find the best chroma prediction mode for the current luma prediction mode
-    for &chroma_mode in &mode_set_chroma {
+    mode_set_chroma.iter().for_each(|&chroma_mode| {
       skips.iter().for_each(|&skip| {
         let wr: &mut dyn Writer = &mut WriterCounter::new();
         let tell = wr.tell_frac();
@@ -395,7 +395,7 @@ pub fn rdo_mode_decision(
 
         cw.rollback(&cw_checkpoint);
       });
-    }
+    });
   });
 
   if best_mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
