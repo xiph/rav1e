@@ -301,6 +301,9 @@ pub fn rdo_mode_decision(
     if luma_mode == PredictionMode::NEAR1MV && mv_stack.len() < 3 { continue; }
     if luma_mode == PredictionMode::NEAR2MV && mv_stack.len() < 4 { continue; }
 
+    // Don't search intra if skipping is best
+    if luma_mode_is_intra && best_skip { continue; }
+
     let mut mode_set_chroma = vec![luma_mode];
 
     if luma_mode_is_intra && is_chroma_block {
