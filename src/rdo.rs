@@ -316,9 +316,8 @@ pub fn rdo_mode_decision(
         mode_set.push(PredictionMode::NEAR2MV);
     }
   }
-  mode_set.extend_from_slice(intra_mode_set);
 
-  mode_set.iter().for_each(|&luma_mode| {
+  let luma_rdo = |&luma_mode: &PredictionMode, fs: &mut FrameState, cw: &mut ContextWriter, best: &mut EncodingSettings| {
     let luma_mode_is_intra = luma_mode.is_intra();
     assert!(fi.frame_type == FrameType::INTER || luma_mode_is_intra);
 
@@ -414,7 +413,10 @@ pub fn rdo_mode_decision(
     if !luma_mode_is_intra {
         chroma_rdo(true);
     };
-  });
+  };
+
+  mode_set.iter().for_each(|luma_mode| luma_rdo(luma_mode, fs, cw, &mut best));
+  intra_mode_set.iter().for_each(|luma_mode| luma_rdo(luma_mode, fs, cw, &mut best));
 
   if best.mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
     let chroma_mode = PredictionMode::UV_CFL_PRED;
