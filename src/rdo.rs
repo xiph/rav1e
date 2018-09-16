@@ -416,7 +416,9 @@ pub fn rdo_mode_decision(
   };
 
   mode_set.iter().for_each(|luma_mode| luma_rdo(luma_mode, fs, cw, &mut best));
-  intra_mode_set.iter().for_each(|luma_mode| luma_rdo(luma_mode, fs, cw, &mut best));
+  if !best.skip {
+    intra_mode_set.iter().for_each(|luma_mode| luma_rdo(luma_mode, fs, cw, &mut best));
+  }
 
   if best.mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
     let chroma_mode = PredictionMode::UV_CFL_PRED;
