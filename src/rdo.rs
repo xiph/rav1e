@@ -23,7 +23,7 @@ use motion_compensate;
 use partition::*;
 use plane::*;
 use cdef::*;
-use predict::{RAV1E_INTRA_MODES, RAV1E_INTRA_MODES_MINIMAL, RAV1E_INTER_MODES};
+use predict::{RAV1E_INTRA_MODES, RAV1E_INTRA_MODES_MINIMAL, RAV1E_INTER_MODES_MINIMAL};
 use quantize::dc_q;
 use std;
 use std::f64;
@@ -303,50 +303,22 @@ pub fn rdo_mode_decision(
   };
 
   let mut mode_set: Vec<PredictionMode> = Vec::new();
-
-  if fi.frame_type == FrameType::INTER {
-    mode_set.extend_from_slice(RAV1E_INTER_MODES);
-  }
-  mode_set.extend_from_slice(intra_mode_set);
-
   let mut mv_stack = Vec::new();
   let mode_context =
     cw.find_mvrefs(bo, LAST_FRAME, &mut mv_stack, bsize, false);
 
-  mode_set.iter().for_each(|&luma_mode| {
-    let luma_mode_is_intra = luma_mode.is_intra();
-    assert!(fi.frame_type == FrameType::INTER || luma_mode_is_intra);
-
-    if luma_mode == PredictionMode::NEAR1MV && mv_stack.len() < 3 { return; }
-    if luma_mode == PredictionMode::NEAR2MV && mv_stack.len() < 4 { return; }
-
-    let mut mode_set_chroma = vec![luma_mode];
-
-    if luma_mode_is_intra && is_chroma_block {
-      if luma_mode != PredictionMode::DC_PRED {
-        mode_set_chroma.push(PredictionMode::DC_PRED);
-      }
+  if fi.frame_type == FrameType::INTER {
+    mode_set.extend_from_slice(RAV1E_INTER_MODES_MINIMAL);
+    if mv_stack.len() >= 3 {
+        mode_set.push(PredictionMode::NEAR1MV);
     }
+    if mv_stack.len() >= 4 {
+        mode_set.push(PredictionMode::NEAR2MV);
+    }
+  }
 
-    let ref_frame =
-      if luma_mode_is_intra { INTRA_FRAME } else { LAST_FRAME };
-    let mv = match luma_mode {
-      PredictionMode::NEWMV => motion_estimation(fi, fs, bsize, bo, ref_frame, pmv),
-      PredictionMode::NEARESTMV => if mv_stack.len() > 0 {
-        mv_stack[0].this_mv
-      } else {
-        MotionVector { row: 0, col: 0 }
-      },
-      PredictionMode::NEAR0MV => if mv_stack.len() > 1 {
-        mv_stack[1].this_mv
-      } else {
-        MotionVector { row: 0, col: 0 }
-      },
-      PredictionMode::NEAR1MV | PredictionMode::NEAR2MV =>
-          mv_stack[luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].this_mv,
-      _ => MotionVector { row: 0, col: 0 }
-    };
-
+  let luma_rdo = |luma_mode: PredictionMode, fs: &mut FrameState, cw: &mut ContextWriter, best: &mut EncodingSettings,
+    mv: MotionVector, ref_frame: usize, mode_set_chroma: &[PredictionMode], luma_mode_is_intra: bool| {
     let (tx_size, tx_type) = rdo_tx_size_type(
       seq, fi, fs, cw, bsize, bo, luma_mode, ref_frame, mv, false,
     );
@@ -412,7 +384,40 @@ pub fn rdo_mode_decision(
     if !luma_mode_is_intra {
         chroma_rdo(true);
     };
+  };
+
+  mode_set.iter().for_each(|&luma_mode| {
+    let ref_frame = LAST_FRAME;
+    let mv = match luma_mode {
+      PredictionMode::NEWMV => motion_estimation(fi, fs, bsize, bo, ref_frame, pmv),
+      PredictionMode::NEARESTMV => if mv_stack.len() > 0 {
+        mv_stack[0].this_mv
+      } else {
+        MotionVector { row: 0, col: 0 }
+      },
+      PredictionMode::NEAR0MV => if mv_stack.len() > 1 {
+        mv_stack[1].this_mv
+      } else {
+        MotionVector { row: 0, col: 0 }
+      },
+      PredictionMode::NEAR1MV | PredictionMode::NEAR2MV =>
+          mv_stack[luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].this_mv,
+      _ => MotionVector { row: 0, col: 0 }
+    };
+    let mode_set_chroma = vec![luma_mode];
+
+    luma_rdo(luma_mode, fs, cw, &mut best, mv, ref_frame, &mode_set_chroma, false);
   });
+  if !best.skip {
+    intra_mode_set.iter().for_each(|&luma_mode| {
+      let mv = MotionVector { row: 0, col: 0 };
+      let mut mode_set_chroma = vec![luma_mode];
+      if is_chroma_block && luma_mode != PredictionMode::DC_PRED {
+        mode_set_chroma.push(PredictionMode::DC_PRED);
+      }
+      luma_rdo(luma_mode, fs, cw, &mut best, mv, INTRA_FRAME, &mode_set_chroma, true);
+    });
+  }
 
   if best.mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
     let chroma_mode = PredictionMode::UV_CFL_PRED;

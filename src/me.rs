@@ -40,7 +40,7 @@ pub fn get_sad(
 }
 
 pub fn motion_estimation(
-  fi: &FrameInvariants, fs: &mut FrameState, bsize: BlockSize,
+  fi: &FrameInvariants, fs: &FrameState, bsize: BlockSize,
   bo: &BlockOffset, ref_frame: usize, pmv: &MotionVector
 ) -> MotionVector {
   match fi.rec_buffer.frames[fi.ref_frames[ref_frame - LAST_FRAME]] {
