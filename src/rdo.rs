@@ -317,37 +317,8 @@ pub fn rdo_mode_decision(
     }
   }
 
-  let luma_rdo = |&luma_mode: &PredictionMode, fs: &mut FrameState, cw: &mut ContextWriter, best: &mut EncodingSettings| {
-    let luma_mode_is_intra = luma_mode.is_intra();
-    assert!(fi.frame_type == FrameType::INTER || luma_mode_is_intra);
-
-    let mut mode_set_chroma = vec![luma_mode];
-
-    if luma_mode_is_intra && is_chroma_block {
-      if luma_mode != PredictionMode::DC_PRED {
-        mode_set_chroma.push(PredictionMode::DC_PRED);
-      }
-    }
-
-    let ref_frame =
-      if luma_mode_is_intra { INTRA_FRAME } else { LAST_FRAME };
-    let mv = match luma_mode {
-      PredictionMode::NEWMV => motion_estimation(fi, fs, bsize, bo, ref_frame, pmv),
-      PredictionMode::NEARESTMV => if mv_stack.len() > 0 {
-        mv_stack[0].this_mv
-      } else {
-        MotionVector { row: 0, col: 0 }
-      },
-      PredictionMode::NEAR0MV => if mv_stack.len() > 1 {
-        mv_stack[1].this_mv
-      } else {
-        MotionVector { row: 0, col: 0 }
-      },
-      PredictionMode::NEAR1MV | PredictionMode::NEAR2MV =>
-          mv_stack[luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].this_mv,
-      _ => MotionVector { row: 0, col: 0 }
-    };
-
+  let luma_rdo = |luma_mode: PredictionMode, fs: &mut FrameState, cw: &mut ContextWriter, best: &mut EncodingSettings,
+    mv: MotionVector, ref_frame: usize, mode_set_chroma: &[PredictionMode], luma_mode_is_intra: bool| {
     let (tx_size, tx_type) = rdo_tx_size_type(
       seq, fi, fs, cw, bsize, bo, luma_mode, ref_frame, mv, false,
     );
@@ -415,9 +386,37 @@ pub fn rdo_mode_decision(
     };
   };
 
-  mode_set.iter().for_each(|luma_mode| luma_rdo(luma_mode, fs, cw, &mut best));
+  mode_set.iter().for_each(|&luma_mode| {
+    let ref_frame = LAST_FRAME;
+    let mv = match luma_mode {
+      PredictionMode::NEWMV => motion_estimation(fi, fs, bsize, bo, ref_frame, pmv),
+      PredictionMode::NEARESTMV => if mv_stack.len() > 0 {
+        mv_stack[0].this_mv
+      } else {
+        MotionVector { row: 0, col: 0 }
+      },
+      PredictionMode::NEAR0MV => if mv_stack.len() > 1 {
+        mv_stack[1].this_mv
+      } else {
+        MotionVector { row: 0, col: 0 }
+      },
+      PredictionMode::NEAR1MV | PredictionMode::NEAR2MV =>
+          mv_stack[luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].this_mv,
+      _ => MotionVector { row: 0, col: 0 }
+    };
+    let mode_set_chroma = vec![luma_mode];
+
+    luma_rdo(luma_mode, fs, cw, &mut best, mv, ref_frame, &mode_set_chroma, false);
+  });
   if !best.skip {
-    intra_mode_set.iter().for_each(|luma_mode| luma_rdo(luma_mode, fs, cw, &mut best));
+    intra_mode_set.iter().for_each(|&luma_mode| {
+      let mv = MotionVector { row: 0, col: 0 };
+      let mut mode_set_chroma = vec![luma_mode];
+      if is_chroma_block && luma_mode != PredictionMode::DC_PRED {
+        mode_set_chroma.push(PredictionMode::DC_PRED);
+      }
+      luma_rdo(luma_mode, fs, cw, &mut best, mv, INTRA_FRAME, &mode_set_chroma, true);
+    });
   }
 
   if best.mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
