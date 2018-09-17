@@ -309,11 +309,13 @@ pub fn rdo_mode_decision(
 
   if fi.frame_type == FrameType::INTER {
     mode_set.extend_from_slice(RAV1E_INTER_MODES_MINIMAL);
-    if mv_stack.len() >= 3 {
-        mode_set.push(PredictionMode::NEAR1MV);
-    }
-    if mv_stack.len() >= 4 {
-        mode_set.push(PredictionMode::NEAR2MV);
+    if fi.config.speed <= 2 {
+      if mv_stack.len() >= 3 {
+          mode_set.push(PredictionMode::NEAR1MV);
+      }
+      if mv_stack.len() >= 4 {
+          mode_set.push(PredictionMode::NEAR2MV);
+      }
     }
   }
 
