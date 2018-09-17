@@ -56,6 +56,7 @@ impl Frame {
 
 #[derive(Debug, Clone)]
 pub struct ReferenceFrame {
+  pub order_hint: u32,
   pub frame: Frame,
   pub cdfs: CDFContext
 }
@@ -216,7 +217,7 @@ impl Sequence {
             enable_interintra_compound: false,
             enable_masked_compound: false,
             enable_dual_filter: false,
-            enable_order_hint: false,
+            enable_order_hint: true,
             enable_jnt_comp: false,
             enable_ref_frame_mvs: false,
             enable_warped_motion: false,
@@ -310,6 +311,7 @@ pub struct FrameInvariants {
     pub w_in_b: usize,
     pub h_in_b: usize,
     pub number: u64,
+    pub order_hint: u32,
     pub show_frame: bool,
     pub showable_frame: bool,
     pub error_resilient: bool,
@@ -377,6 +379,7 @@ impl FrameInvariants {
             w_in_b: 2 * width.align_power_of_two_and_shift(3), // MiCols, ((width+7)/8)<<3 >> MI_SIZE_LOG2
             h_in_b: 2 * height.align_power_of_two_and_shift(3), // MiRows, ((height+7)/8)<<3 >> MI_SIZE_LOG2
             number: 0,
+            order_hint: 0,
             show_frame: true,
             showable_frame: true,
             error_resilient: false,
@@ -772,8 +775,11 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
       }
 
       if seq.enable_order_hint {
-        assert!(false); // Not supported by rav1e yet!
+        let n = seq.order_hint_bits_minus_1 + 1;
+        let mask = (1 << n) - 1;
+        self.write(n, fi.order_hint & mask)?;
       }
+
       if fi.error_resilient || fi.intra_only {
       } else {
         self.write(PRIMARY_REF_BITS, fi.primary_ref_frame)?;
@@ -835,7 +841,6 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
           // Done by above
         } else {
           if seq.enable_order_hint {
-            assert!(false); // Not supported by rav1e yet!
             self.write_bit(frame_refs_short_signaling)?;
             if frame_refs_short_signaling {
               assert!(false); // Not supported by rav1e yet!
@@ -2054,7 +2059,7 @@ pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut 
 }
 
 pub fn update_rec_buffer(fi: &mut FrameInvariants, fs: FrameState) {
-  let rfs = Rc::new(ReferenceFrame { frame: fs.rec, cdfs: fs.cdfs } );
+  let rfs = Rc::new(ReferenceFrame { order_hint: fi.order_hint, frame: fs.rec, cdfs: fs.cdfs } );
   for i in 0..(REF_FRAMES as usize) {
     if (fi.refresh_frame_flags & (1 << i)) != 0 {
       fi.rec_buffer.frames[i] = Some(Rc::clone(&rfs));

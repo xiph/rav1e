@@ -103,7 +103,9 @@ impl Context {
         deblock: Default::default(),
       };
 
-      self.fi.frame_type = if self.fi.number % 30 == 0 {
+      self.fi.order_hint = (self.fi.number % 30) as u32;
+
+      self.fi.frame_type = if self.fi.order_hint == 0 {
         FrameType::KEY
       } else {
         FrameType::INTER
