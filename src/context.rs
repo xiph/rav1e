@@ -26,6 +26,7 @@ use plane::*;
 use util::clamp;
 use util::msb;
 use std::*;
+use entropymode::*;
 
 use self::REF_CONTEXTS;
 use self::SINGLE_REFS;
@@ -35,7 +36,7 @@ pub const PLANES: usize = 3;
 const PARTITION_PLOFFSET: usize = 4;
 const PARTITION_BLOCK_SIZES: usize = 4 + 1;
 const PARTITION_CONTEXTS_PRIMARY: usize = PARTITION_BLOCK_SIZES * PARTITION_PLOFFSET;
-const PARTITION_CONTEXTS: usize = PARTITION_CONTEXTS_PRIMARY;
+pub const PARTITION_CONTEXTS: usize = PARTITION_CONTEXTS_PRIMARY;
 pub const PARTITION_TYPES: usize = 4;
 
 pub const MI_SIZE_LOG2: usize = 2;
@@ -52,30 +53,36 @@ pub const MAX_TX_SIZE: usize = 32;
 const MAX_TX_SQUARE: usize = MAX_TX_SIZE * MAX_TX_SIZE;
 
 pub const INTRA_MODES: usize = 13;
-const UV_INTRA_MODES: usize = 14;
+pub const UV_INTRA_MODES: usize = 14;
 
-const CFL_JOINT_SIGNS: usize = 8;
-const CFL_ALPHA_CONTEXTS: usize = 6;
-const CFL_ALPHABET_SIZE: usize = 16;
+pub const CFL_JOINT_SIGNS: usize = 8;
+pub const CFL_ALPHA_CONTEXTS: usize = 6;
+pub const CFL_ALPHABET_SIZE: usize = 16;
+pub const SKIP_MODE_CONTEXTS: usize = 3;
+pub const COMP_INDEX_CONTEXTS: usize = 6;
+pub const COMP_GROUP_IDX_CONTEXTS: usize = 6;
 
-const BLOCK_SIZE_GROUPS: usize = 4;
-const MAX_ANGLE_DELTA: usize = 3;
-const DIRECTIONAL_MODES: usize = 8;
-const KF_MODE_CONTEXTS: usize = 5;
+pub const BLOCK_SIZE_GROUPS: usize = 4;
+pub const MAX_ANGLE_DELTA: usize = 3;
+pub const DIRECTIONAL_MODES: usize = 8;
+pub const KF_MODE_CONTEXTS: usize = 5;
 
-const EXT_PARTITION_TYPES: usize = 10;
-const TX_SIZES: usize = 4;
-const TX_SETS: usize = 9;
-const TX_SETS_INTRA: usize = 3;
-const TX_SETS_INTER: usize = 4;
-
+pub const EXT_PARTITION_TYPES: usize = 10;
+pub const TX_SIZES: usize = 4;
+pub const TX_SETS: usize = 9;
+pub const TX_SETS_INTRA: usize = 3;
+pub const TX_SETS_INTER: usize = 4;
+pub const TXFM_PARTITION_CONTEXTS: usize = ((TX_SIZES - TxSize::TX_8X8 as usize) * 6 - 3);
 const MAX_REF_MV_STACK_SIZE: usize = 8;
 pub const REF_CAT_LEVEL: u32 = 640;
 
 pub const FRAME_LF_COUNT: usize = 4;
 pub const MAX_LOOP_FILTER: usize = 63;
 const DELTA_LF_SMALL: u32 = 3;
-const DELTA_LF_PROBS: usize = DELTA_LF_SMALL as usize;
+pub const DELTA_LF_PROBS: usize = DELTA_LF_SMALL as usize;
+
+const DELTA_Q_SMALL: u32 = 3;
+pub const DELTA_Q_PROBS: usize = DELTA_Q_SMALL as usize;
 
 // Number of transform types in each set type
 static num_tx_set: [usize; TX_SETS] =
@@ -388,9 +395,13 @@ pub static subsize_lookup: [[BlockSize; BlockSize::BLOCK_SIZES_ALL]; EXT_PARTITI
 
 const PLANE_TYPES: usize = 2;
 const REF_TYPES: usize = 2;
-const SKIP_CONTEXTS: usize = 3;
-const INTRA_INTER_CONTEXTS: usize = 4;
-const DRL_MODE_CONTEXTS: usize = 3;
+pub const SKIP_CONTEXTS: usize = 3;
+pub const INTRA_INTER_CONTEXTS: usize = 4;
+pub const INTER_MODE_CONTEXTS: usize = 8;
+pub const DRL_MODE_CONTEXTS: usize = 3;
+pub const COMP_INTER_CONTEXTS: usize = 5;
+pub const COMP_REF_TYPE_CONTEXTS: usize = 5;
+pub const UNI_COMP_REF_CONTEXTS: usize = 3;
 
 // Level Map
 const TXB_SKIP_CONTEXTS: usize =  13;
@@ -747,6 +758,7 @@ static intra_mode_to_tx_type_context: [TxType; INTRA_MODES] = [
   ADST_ADST, // PAETH
 ];
 
+
 static uv2y: [PredictionMode; UV_INTRA_MODES] = [
   DC_PRED,       // UV_DC_PRED
   V_PRED,        // UV_V_PRED
@@ -793,25 +805,24 @@ pub struct NMVContext {
 }
 
 extern "C" {
-  static default_partition_cdf:
-    [[u16; EXT_PARTITION_TYPES + 1]; PARTITION_CONTEXTS];
-  static default_kf_y_mode_cdf:
-    [[[u16; INTRA_MODES + 1]; KF_MODE_CONTEXTS]; KF_MODE_CONTEXTS];
-  static default_if_y_mode_cdf: [[u16; INTRA_MODES + 1]; BLOCK_SIZE_GROUPS];
-  static default_uv_mode_cdf: [[[u16; UV_INTRA_MODES + 1]; INTRA_MODES]; 2];
-  static default_cfl_sign_cdf: [u16; CFL_JOINT_SIGNS + 1];
-  static default_cfl_alpha_cdf: [[u16; CFL_ALPHABET_SIZE + 1]; CFL_ALPHA_CONTEXTS];
-  static default_newmv_cdf: [[u16; 2 + 1]; NEWMV_MODE_CONTEXTS];
-  static default_zeromv_cdf: [[u16; 2 + 1]; GLOBALMV_MODE_CONTEXTS];
+//  static default_partition_cdf:
+//    [[u16; EXT_PARTITION_TYPES + 1]; PARTITION_CONTEXTS];
+  //static default_kf_y_mode_cdf: [[[u16; INTRA_MODES + 1]; KF_MODE_CONTEXTS]; KF_MODE_CONTEXTS];
+  //static default_if_y_mode_cdf: [[u16; INTRA_MODES + 1]; BLOCK_SIZE_GROUPS];
+  //static default_uv_mode_cdf: [[[u16; UV_INTRA_MODES + 1]; INTRA_MODES]; 2];
+  //static default_cfl_sign_cdf: [u16; CFL_JOINT_SIGNS + 1];
+  //static default_cfl_alpha_cdf: [[u16; CFL_ALPHABET_SIZE + 1]; CFL_ALPHA_CONTEXTS];
+  //static default_newmv_cdf: [[u16; 2 + 1]; NEWMV_MODE_CONTEXTS];
+  //static default_zeromv_cdf: [[u16; 2 + 1]; GLOBALMV_MODE_CONTEXTS];
   static default_refmv_cdf: [[u16; 2 + 1]; REFMV_MODE_CONTEXTS];
-  static default_intra_ext_tx_cdf:
-    [[[[u16; TX_TYPES + 1]; INTRA_MODES]; TX_SIZES]; TX_SETS_INTRA];
-  static default_inter_ext_tx_cdf:
-    [[[u16; TX_TYPES + 1]; TX_SIZES]; TX_SETS_INTER];
+  //static default_intra_ext_tx_cdf:
+  //  [[[[u16; TX_TYPES + 1]; INTRA_MODES]; TX_SIZES]; TX_SETS_INTRA];
+  //static default_inter_ext_tx_cdf:
+  //  [[[u16; TX_TYPES + 1]; TX_SIZES]; TX_SETS_INTER];
   static default_skip_cdfs: [[u16; 3]; SKIP_CONTEXTS];
   static default_intra_inter_cdf: [[u16; 3]; INTRA_INTER_CONTEXTS];
-  static default_angle_delta_cdf:
-    [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES];
+  //static default_angle_delta_cdf:
+  //  [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES];
   static default_filter_intra_cdfs: [[u16; 3]; BlockSize::BLOCK_SIZES_ALL];
 
   static default_single_ref_cdf: [[[u16; 2 + 1]; SINGLE_REFS - 1]; REF_CONTEXTS];

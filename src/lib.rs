@@ -19,6 +19,7 @@ extern crate num_traits;
 
 pub mod ec;
 pub mod partition;
+pub mod entropymode;
 pub mod plane;
 pub mod context;
 pub mod transform;
