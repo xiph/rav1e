@@ -1,3 +1,13 @@
+
+// Copyright (c) 2018, The rav1e contributors. All rights reserved
+//
+// This source code is subject to the terms of the BSD 2 Clause License and
+// the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
+// was not distributed with this source code in the LICENSE file, you can
+// obtain it at www.aomedia.org/license/software. If the Alliance for Open
+// Media Patent License 1.0 was not distributed with this source code in the
+// PATENTS file, you can obtain it at www.aomedia.org/license/patent.
+
 #![allow(non_upper_case_globals)]
 
 use context::*;
@@ -22,16 +32,6 @@ const TX_SIZE_LUMA_MIN:usize = TxSize::TX_4X4 as usize;
 const TX_SIZE_CTX_MIN: usize = (TX_SIZE_LUMA_MIN + 1);
 const MAX_TX_CATS: usize = (TxSize::TX_SIZES - TX_SIZE_CTX_MIN);
 const MAX_TX_DEPTH: usize = 2;
-
-
-
-
-
-const MAX_COLOR_CONTEXT_HASH: usize = 8;
-static palette_color_index_context_lookup: [i32; MAX_COLOR_CONTEXT_HASH + 1] = [-1, -1, 0, -1, -1, 4, 3, 2, 1];
-
-//pub fn av1_get_palette_color_index_context
-
 
 // LUTS ---------------------
 
