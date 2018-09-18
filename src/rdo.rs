@@ -309,11 +309,13 @@ pub fn rdo_mode_decision(
 
   if fi.frame_type == FrameType::INTER {
     mode_set.extend_from_slice(RAV1E_INTER_MODES_MINIMAL);
-    if mv_stack.len() >= 3 {
-        mode_set.push(PredictionMode::NEAR1MV);
-    }
-    if mv_stack.len() >= 4 {
-        mode_set.push(PredictionMode::NEAR2MV);
+    if fi.config.speed <= 2 {
+      if mv_stack.len() >= 3 {
+          mode_set.push(PredictionMode::NEAR1MV);
+      }
+      if mv_stack.len() >= 4 {
+          mode_set.push(PredictionMode::NEAR2MV);
+      }
     }
   }
 
@@ -579,7 +581,7 @@ pub fn rdo_tx_type_decision(
       continue;
     }
 
-    motion_compensate(fi, fs, cw, mode, ref_frame, mv, bsize, bo, bit_depth);
+    motion_compensate(fi, fs, cw, mode, ref_frame, mv, bsize, bo, bit_depth, true);
 
     let mut wr: &mut dyn Writer = &mut WriterCounter::new();
     let tell = wr.tell_frac();
