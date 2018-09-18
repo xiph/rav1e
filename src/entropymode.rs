@@ -24,25 +24,22 @@ const MAX_TX_CATS: usize = (TxSize::TX_SIZES - TX_SIZE_CTX_MIN);
 const MAX_TX_DEPTH: usize = 2;
 
 
+
+
+
+const MAX_COLOR_CONTEXT_HASH: usize = 8;
+static palette_color_index_context_lookup: [i32; MAX_COLOR_CONTEXT_HASH + 1] = [-1, -1, 0, -1, -1, 4, 3, 2, 1];
+
+//pub fn av1_get_palette_color_index_context
+
+
+// LUTS ---------------------
+
 // The spec indicates that BLOCK_SIZES should be 22, but BLOCK_SIZES_ALL is defined as 24 in the rust code.
 // There are also two additional symbols that do not appear in the spec: BLOCK_128X32 and BLOCK_32X128.
 
 const BLOCK_SIZES:usize = BlockSize::BLOCK_SIZES_ALL - 2;
 
-//TODO: Nice to have (although I wasnt able to find a way to do it yet in rust): zero-fill arrays that are
-// shorter than required.  Need const fn (Rust Issue #24111) or const generics (Rust RFC #2000)
-macro_rules! cdf {
-    ($($x:expr),+) =>  {[$(32768 - $x),+, 0, 0]}
-}
-
-macro_rules! cdf_size {
-    ($x:expr) => ($x+1);
-}
-
-
-//
-//
-// constants
 pub static default_kf_y_mode_cdf: [[[u16; cdf_size!(INTRA_MODES)]; KF_MODE_CONTEXTS]; KF_MODE_CONTEXTS] = 
     [[
      cdf!(15588, 17027, 19338, 20218, 20682, 21110, 21825, 23244, 24189, 28165, 29093, 30466),

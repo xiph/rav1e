@@ -27,6 +27,7 @@ use util::clamp;
 use util::msb;
 use std::*;
 use entropymode::*;
+use token_cdfs::*;
 
 use self::REF_CONTEXTS;
 use self::SINGLE_REFS;
@@ -396,7 +397,7 @@ pub static subsize_lookup: [[BlockSize; BlockSize::BLOCK_SIZES_ALL]; EXT_PARTITI
   ]
 ];
 
-const PLANE_TYPES: usize = 2;
+pub const PLANE_TYPES: usize = 2;
 const REF_TYPES: usize = 2;
 pub const SKIP_CONTEXTS: usize = 3;
 pub const INTRA_INTER_CONTEXTS: usize = 4;
@@ -407,25 +408,25 @@ pub const COMP_REF_TYPE_CONTEXTS: usize = 5;
 pub const UNI_COMP_REF_CONTEXTS: usize = 3;
 
 // Level Map
-const TXB_SKIP_CONTEXTS: usize =  13;
+pub const TXB_SKIP_CONTEXTS: usize =  13;
 
-const EOB_COEF_CONTEXTS: usize =  9;
+pub const EOB_COEF_CONTEXTS: usize =  9;
 
 const SIG_COEF_CONTEXTS_2D: usize =  26;
 const SIG_COEF_CONTEXTS_1D: usize =  16;
-const SIG_COEF_CONTEXTS_EOB: usize =  4;
-const SIG_COEF_CONTEXTS: usize = SIG_COEF_CONTEXTS_2D + SIG_COEF_CONTEXTS_1D;
+pub const SIG_COEF_CONTEXTS_EOB: usize =  4;
+pub const SIG_COEF_CONTEXTS: usize = SIG_COEF_CONTEXTS_2D + SIG_COEF_CONTEXTS_1D;
 
 const COEFF_BASE_CONTEXTS: usize = SIG_COEF_CONTEXTS;
-const DC_SIGN_CONTEXTS: usize =  3;
+pub const DC_SIGN_CONTEXTS: usize =  3;
 
 const BR_TMP_OFFSET: usize =  12;
 const BR_REF_CAT: usize =  4;
-const LEVEL_CONTEXTS: usize =  21;
+pub const LEVEL_CONTEXTS: usize =  21;
 
-const NUM_BASE_LEVELS: usize =  2;
+pub const NUM_BASE_LEVELS: usize =  2;
 
-const BR_CDF_SIZE: usize = 4;
+pub const BR_CDF_SIZE: usize = 4;
 const COEFF_BASE_RANGE: usize = 4 * (BR_CDF_SIZE - 1);
 
 const COEFF_CONTEXT_BITS: usize = 6;
@@ -811,29 +812,6 @@ extern "C" {
   static av1_scan_orders: [[SCAN_ORDER; TX_TYPES]; TxSize::TX_SIZES_ALL];
 
   // lv_map
-  static av1_default_txb_skip_cdfs:
-    [[[[u16; 3]; TXB_SKIP_CONTEXTS]; TxSize::TX_SIZES]; 4];
-  static av1_default_dc_sign_cdfs:
-    [[[[u16; 3]; DC_SIGN_CONTEXTS]; PLANE_TYPES]; 4];
-  static av1_default_eob_extra_cdfs:
-    [[[[[u16; 3]; EOB_COEF_CONTEXTS]; PLANE_TYPES]; TxSize::TX_SIZES]; 4];
-
-  static av1_default_eob_multi16_cdfs: [[[[u16; 5 + 1]; 2]; PLANE_TYPES]; 4];
-  static av1_default_eob_multi32_cdfs: [[[[u16; 6 + 1]; 2]; PLANE_TYPES]; 4];
-  static av1_default_eob_multi64_cdfs: [[[[u16; 7 + 1]; 2]; PLANE_TYPES]; 4];
-  static av1_default_eob_multi128_cdfs: [[[[u16; 8 + 1]; 2]; PLANE_TYPES]; 4];
-  static av1_default_eob_multi256_cdfs: [[[[u16; 9 + 1]; 2]; PLANE_TYPES]; 4];
-  static av1_default_eob_multi512_cdfs: [[[[u16; 10 + 1]; 2]; PLANE_TYPES]; 4];
-  static av1_default_eob_multi1024_cdfs: [[[[u16; 11 + 1]; 2]; PLANE_TYPES]; 4];
-
-  static av1_default_coeff_base_eob_multi_cdfs:
-    [[[[[u16; 3 + 1]; SIG_COEF_CONTEXTS_EOB]; PLANE_TYPES]; TxSize::TX_SIZES]; 4];
-  static av1_default_coeff_base_multi_cdfs:
-    [[[[[u16; 4 + 1]; SIG_COEF_CONTEXTS]; PLANE_TYPES]; TxSize::TX_SIZES]; 4];
-  static av1_default_coeff_lps_multi_cdfs: [[[[[u16; BR_CDF_SIZE + 1];
-    LEVEL_CONTEXTS]; PLANE_TYPES];
-    TxSize::TX_SIZES]; 4];
-
   static default_nmv_context: NMVContext;
 }
 
