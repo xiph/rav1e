@@ -68,11 +68,14 @@ pub const DIRECTIONAL_MODES: usize = 8;
 pub const KF_MODE_CONTEXTS: usize = 5;
 
 pub const EXT_PARTITION_TYPES: usize = 10;
-pub const TX_SIZES: usize = 4;
+
+//pub const TX_SIZES: usize = TxSize::TX_SIZES;
+pub const EXT_TX_SIZES: usize = 4;
+
 pub const TX_SETS: usize = 9;
 pub const TX_SETS_INTRA: usize = 3;
 pub const TX_SETS_INTER: usize = 4;
-pub const TXFM_PARTITION_CONTEXTS: usize = ((TX_SIZES - TxSize::TX_8X8 as usize) * 6 - 3);
+pub const TXFM_PARTITION_CONTEXTS: usize = ((TxSize::TX_SIZES - TxSize::TX_8X8 as usize) * 6 - 3);
 const MAX_REF_MV_STACK_SIZE: usize = 8;
 pub const REF_CAT_LEVEL: u32 = 640;
 
@@ -805,30 +808,7 @@ pub struct NMVContext {
 }
 
 extern "C" {
-//  static default_partition_cdf:
-//    [[u16; EXT_PARTITION_TYPES + 1]; PARTITION_CONTEXTS];
-  //static default_kf_y_mode_cdf: [[[u16; INTRA_MODES + 1]; KF_MODE_CONTEXTS]; KF_MODE_CONTEXTS];
-  //static default_if_y_mode_cdf: [[u16; INTRA_MODES + 1]; BLOCK_SIZE_GROUPS];
-  //static default_uv_mode_cdf: [[[u16; UV_INTRA_MODES + 1]; INTRA_MODES]; 2];
-  //static default_cfl_sign_cdf: [u16; CFL_JOINT_SIGNS + 1];
-  //static default_cfl_alpha_cdf: [[u16; CFL_ALPHABET_SIZE + 1]; CFL_ALPHA_CONTEXTS];
-  //static default_newmv_cdf: [[u16; 2 + 1]; NEWMV_MODE_CONTEXTS];
-  //static default_zeromv_cdf: [[u16; 2 + 1]; GLOBALMV_MODE_CONTEXTS];
-  static default_refmv_cdf: [[u16; 2 + 1]; REFMV_MODE_CONTEXTS];
-  //static default_intra_ext_tx_cdf:
-  //  [[[[u16; TX_TYPES + 1]; INTRA_MODES]; TX_SIZES]; TX_SETS_INTRA];
-  //static default_inter_ext_tx_cdf:
-  //  [[[u16; TX_TYPES + 1]; TX_SIZES]; TX_SETS_INTER];
-  static default_skip_cdfs: [[u16; 3]; SKIP_CONTEXTS];
-  static default_intra_inter_cdf: [[u16; 3]; INTRA_INTER_CONTEXTS];
-  //static default_angle_delta_cdf:
-  //  [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES];
-  static default_filter_intra_cdfs: [[u16; 3]; BlockSize::BLOCK_SIZES_ALL];
-
-  static default_single_ref_cdf: [[[u16; 2 + 1]; SINGLE_REFS - 1]; REF_CONTEXTS];
   static av1_scan_orders: [[SCAN_ORDER; TX_TYPES]; TxSize::TX_SIZES_ALL];
-  static default_delta_lf_multi_cdf: [[u16; DELTA_LF_PROBS + 1 + 1]; FRAME_LF_COUNT];
-  static default_delta_lf_cdf: [u16; DELTA_LF_PROBS + 1 + 1];
 
   // lv_map
   static av1_default_txb_skip_cdfs:
@@ -855,7 +835,6 @@ extern "C" {
     TxSize::TX_SIZES]; 4];
 
   static default_nmv_context: NMVContext;
-  static default_drl_cdf:[[u16; 2 + 1]; DRL_MODE_CONTEXTS];
 }
 
 #[repr(C)]
@@ -885,12 +864,12 @@ pub struct CDFContext {
   zeromv_cdf: [[u16; 2 + 1]; GLOBALMV_MODE_CONTEXTS],
   refmv_cdf: [[u16; 2 + 1]; REFMV_MODE_CONTEXTS],
   intra_tx_cdf:
-    [[[[u16; TX_TYPES + 1]; INTRA_MODES]; TX_SIZES]; TX_SETS_INTRA],
-  inter_tx_cdf: [[[u16; TX_TYPES + 1]; TX_SIZES]; TX_SETS_INTER],
+    [[[[u16; TX_TYPES + 1]; INTRA_MODES]; EXT_TX_SIZES]; TX_SETS_INTRA],
+  inter_tx_cdf: [[[u16; TX_TYPES + 1]; EXT_TX_SIZES]; TX_SETS_INTER],
   skip_cdfs: [[u16; 3]; SKIP_CONTEXTS],
   intra_inter_cdfs: [[u16; 3]; INTRA_INTER_CONTEXTS],
   angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES],
-  filter_intra_cdfs: [[u16; 3]; BlockSize::BLOCK_SIZES_ALL],
+  filter_intra_cdfs: [[u16; 3]; BlockSize::BLOCK_SIZES_ALL-2], // NOTE: BLOCK_SIZES_ALL is currently 24, in the spec it is 22.
   single_ref_cdfs: [[[u16; 2 + 1]; SINGLE_REFS - 1]; REF_CONTEXTS],
   drl_cdfs: [[u16; 2 + 1]; DRL_MODE_CONTEXTS],
   nmv_context: NMVContext,
@@ -999,7 +978,7 @@ impl CDFContext {
     reset_2d!(self.zeromv_cdf);
     reset_2d!(self.refmv_cdf);
 
-    for i in 0..TX_SIZES {
+    for i in 0..EXT_TX_SIZES {
       for j in 0..INTRA_MODES {
         self.intra_tx_cdf[1][i][j][7] = 0;
         self.intra_tx_cdf[2][i][j][5] = 0;
