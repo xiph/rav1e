@@ -22,25 +22,30 @@ use FrameState;
 use DeblockState;
 
 fn deblock_level(deblock: &DeblockState, block: &Block, pli: usize, pass: usize) -> u8 {
-    let mode = block.mode;
-    let reference = block.ref_frames[0]; 
-    let mode_type = if mode >= NEARESTMV && mode != GLOBALMV && mode!= GLOBAL_GLOBALMV {1} else {0};
     let idx = if pli == 0 { pass } else { pli+1 };
-    // By-block filter strength delta, if the feature is active.
-    let block_delta = if deblock.block_delta_multi {
-        block.deblock_deltas[ idx ] << deblock.block_delta_shift
-    } else {
-        block.deblock_deltas[ 0 ] << deblock.block_delta_shift
-    };
+    let mut level = deblock.levels[idx];
 
-    // Add to frame-specified filter strength (Y-vertical, Y-horizontal, U, V)
-    let level = clamp(block_delta + deblock.levels[idx] as i8, 0, MAX_LOOP_FILTER as i8) as u8;
+    if deblock.block_deltas_enabled {
+        // By-block filter strength delta, if the feature is active.
+        let block_delta = if deblock.block_delta_multi {
+            block.deblock_deltas[ idx ] << deblock.block_delta_shift
+        } else {
+            block.deblock_deltas[ 0 ] << deblock.block_delta_shift
+        };
+
+        // Add to frame-specified filter strength (Y-vertical, Y-horizontal, U, V)
+        level = clamp(block_delta + level as i8, 0, MAX_LOOP_FILTER as i8) as u8;
+    }
+
     // if fi.seg_feaure_active {
     // rav1e does not yet support segments or segment features
     // }
 
     // Are delta modifiers for specific references and modes active?  If so, add them too.
     if deblock.deltas_enabled {
+        let mode = block.mode;
+        let reference = block.ref_frames[0];
+        let mode_type = if mode >= NEARESTMV && mode != GLOBALMV && mode!= GLOBAL_GLOBALMV {1} else {0};
         let l5 = level >> 5;
         clamp (level as i32 + ((deblock.ref_deltas[reference] as i32) << l5) +
                if reference == INTRA_FRAME {
