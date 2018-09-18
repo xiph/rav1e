@@ -122,13 +122,7 @@ fn deblock_params(fi: &FrameInvariants, deblock: &DeblockState, bc: &mut BlockCo
         // filter_length, we simply construct a filter_length
         // directly.
         let filter_len = cmp::min( if pli==0 {14} else {6}, cmp::min(tx_size, prev_tx_size)<<MI_SIZE_LOG2);
-
-        let shift = if deblock.sharpness > 4 { 2 } else if deblock.sharpness > 0 { 1 } else { 0 };
-        let limit = if deblock.sharpness > 0 {
-            clamp(level>>shift, 1, 9 - deblock.sharpness as u16)
-        } else {
-            cmp::max(1, level>>shift)
-        };
+        let limit = cmp::max(1, level);
         let blimit = 2 * (level+2) + limit;
         let thresh = level >> 4;
 
