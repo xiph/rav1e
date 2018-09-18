@@ -1645,7 +1645,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
 
 fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
                              cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
-                             bsize: BlockSize, bo: &BlockOffset) -> f64 {
+                             bsize: BlockSize, bo: &BlockOffset, pmv: &MotionVector) -> f64 {
     let mut rd_cost = std::f64::MAX;
 
     if bo.x >= cw.bc.cols || bo.y >= cw.bc.rows {
@@ -1693,8 +1693,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             cw.write_partition(w, bo, partition, bsize);
             cost = (w.tell_frac() - tell) as f64 * get_lambda(fi, seq.bit_depth)/ ((1 << OD_BITRES) as f64);
         }
-        let pmv = MotionVector { row: 0, col: 0 };
-        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, bsize, bo, &pmv).part_modes[0].clone();
+        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, bsize, bo, pmv).part_modes[0].clone();
         let (mode_luma, mode_chroma) = (mode_decision.pred_mode_luma, mode_decision.pred_mode_chroma);
         let cfl = mode_decision.pred_cfl_params;
         let ref_frame = mode_decision.ref_frame;
@@ -1753,7 +1752,8 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
                     w_pre_cdef,
                     w_post_cdef,
                     subsize,
-                    offset
+                    offset,
+                    &best_decision.mv
                 )
             }).sum::<f64>();
 
@@ -1975,9 +1975,10 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
 
             // Encode SuperBlock
             if fi.config.speed == 0 {
+                let pmv = MotionVector { row: 0, col: 0 };
                 encode_partition_bottomup(sequence, fi, fs, &mut cw,
                                           &mut w, &mut w_post_cdef,
-                                          BlockSize::BLOCK_64X64, &bo);
+                                          BlockSize::BLOCK_64X64, &bo, &pmv);
             }
             else {
                 encode_partition_topdown(sequence, fi, fs, &mut cw,
