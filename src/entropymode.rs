@@ -37,7 +37,7 @@ const MAX_TX_DEPTH: usize = 2;
 // The spec indicates that BLOCK_SIZES should be 22, but BLOCK_SIZES_ALL is defined as 24 in the rust code.
 // There are also two additional symbols that do not appear in the spec: BLOCK_128X32 and BLOCK_32X128.
 
-const BLOCK_SIZES:usize = BlockSize::BLOCK_SIZES_ALL - 2;
+const BLOCK_SIZES:usize = BlockSize::BLOCK_SIZES_ALL;
 
 pub static default_kf_y_mode_cdf: [[[u16; cdf_size!(INTRA_MODES)]; KF_MODE_CONTEXTS]; KF_MODE_CONTEXTS] = 
     [[

@@ -822,7 +822,7 @@ pub struct CDFContext {
   skip_cdfs: [[u16; 3]; SKIP_CONTEXTS],
   intra_inter_cdfs: [[u16; 3]; INTRA_INTER_CONTEXTS],
   angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES],
-  filter_intra_cdfs: [[u16; 3]; BlockSize::BLOCK_SIZES_ALL-2], // NOTE: BLOCK_SIZES_ALL is currently 24, in the spec it is 22.
+  filter_intra_cdfs: [[u16; 3]; BlockSize::BLOCK_SIZES_ALL],
   single_ref_cdfs: [[[u16; 2 + 1]; SINGLE_REFS - 1]; REF_CONTEXTS],
   drl_cdfs: [[u16; 2 + 1]; DRL_MODE_CONTEXTS],
   nmv_context: NMVContext,
