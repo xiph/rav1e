@@ -142,8 +142,8 @@ pub const default_partition_cdf: [[u16;cdf_size!(EXT_PARTITION_TYPES)]; PARTITIO
       cdf!(711, 966, 1172, 32448, 32538, 32617, 32664, CDFMAX, CDFMAX)];
 
 
-pub static default_intra_ext_tx_cdf: [[[[u16;cdf_size!(TX_TYPES)]; INTRA_MODES]; EXT_TX_SIZES]; TX_SETS_INTRA] = [
-        [[[0;cdf_size!(TX_TYPES)]; INTRA_MODES]; EXT_TX_SIZES],
+pub static default_intra_ext_tx_cdf: [[[[u16;cdf_size!(TX_TYPES)]; INTRA_MODES]; TX_SIZE_SQR_CONTEXTS]; TX_SETS_INTRA] = [
+        [[[0;cdf_size!(TX_TYPES)]; INTRA_MODES]; TX_SIZE_SQR_CONTEXTS],
         [[ 
           cdf!(1535, 8035, 9461, 12751, 23467, 27825, CDFMAX, CDFMAX, CDFMAX, CDFMAX, CDFMAX, CDFMAX, CDFMAX, CDFMAX, CDFMAX),
           cdf!(564, 3335, 9709, 10870, 18143, 28094, CDFMAX, CDFMAX, CDFMAX, CDFMAX, CDFMAX, CDFMAX, CDFMAX, CDFMAX, CDFMAX),
@@ -260,9 +260,9 @@ pub static default_intra_ext_tx_cdf: [[[[u16;cdf_size!(TX_TYPES)]; INTRA_MODES];
         ]]
     ];
 
-pub static default_inter_ext_tx_cdf: [[[u16;cdf_size!(TX_TYPES)]; EXT_TX_SIZES]; TX_SETS_INTER] = 
+pub static default_inter_ext_tx_cdf: [[[u16;cdf_size!(TX_TYPES)]; TX_SIZE_SQR_CONTEXTS]; TX_SETS_INTER] = 
     [
-        [[0;cdf_size!(TX_TYPES)]; EXT_TX_SIZES],
+        [[0;cdf_size!(TX_TYPES)]; TX_SIZE_SQR_CONTEXTS],
         [
           cdf!(4458, 5560, 7695, 9709, 13330, 14789, 17537, 20266, 21504, 22848, 23934, 25474, 27727, 28915, 30631),
           cdf!(1645, 2573, 4778, 5711, 7807, 8622, 10522, 15357, 17674, 20408, 22517, 25010, 27116, 28856, 30749),

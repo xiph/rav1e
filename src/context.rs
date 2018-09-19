@@ -70,8 +70,7 @@ pub const KF_MODE_CONTEXTS: usize = 5;
 
 pub const EXT_PARTITION_TYPES: usize = 10;
 
-//pub const TX_SIZES: usize = TxSize::TX_SIZES;
-pub const EXT_TX_SIZES: usize = 4;
+pub const TX_SIZE_SQR_CONTEXTS: usize = TxSize::TX_SIZES as usize - 1; // 64X64 is currently unused
 
 pub const TX_SETS: usize = 9;
 pub const TX_SETS_INTRA: usize = 3;
@@ -842,8 +841,8 @@ pub struct CDFContext {
   zeromv_cdf: [[u16; 2 + 1]; GLOBALMV_MODE_CONTEXTS],
   refmv_cdf: [[u16; 2 + 1]; REFMV_MODE_CONTEXTS],
   intra_tx_cdf:
-    [[[[u16; TX_TYPES + 1]; INTRA_MODES]; EXT_TX_SIZES]; TX_SETS_INTRA],
-  inter_tx_cdf: [[[u16; TX_TYPES + 1]; EXT_TX_SIZES]; TX_SETS_INTER],
+    [[[[u16; TX_TYPES + 1]; INTRA_MODES]; TX_SIZE_SQR_CONTEXTS]; TX_SETS_INTRA],
+  inter_tx_cdf: [[[u16; TX_TYPES + 1]; TX_SIZE_SQR_CONTEXTS]; TX_SETS_INTER],
   skip_cdfs: [[u16; 3]; SKIP_CONTEXTS],
   intra_inter_cdfs: [[u16; 3]; INTRA_INTER_CONTEXTS],
   angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES],
@@ -956,7 +955,7 @@ impl CDFContext {
     reset_2d!(self.zeromv_cdf);
     reset_2d!(self.refmv_cdf);
 
-    for i in 0..EXT_TX_SIZES {
+    for i in 0..TX_SIZE_SQR_CONTEXTS {
       for j in 0..INTRA_MODES {
         self.intra_tx_cdf[1][i][j][7] = 0;
         self.intra_tx_cdf[2][i][j][5] = 0;
