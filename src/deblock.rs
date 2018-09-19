@@ -21,11 +21,10 @@ use FrameType;
 use FrameState;
 use DeblockState;
 
-fn deblock_level(deblock: &DeblockState, block: &Block, pli: usize, pass: usize) -> u8 {
+fn deblock_adjusted_level(deblock: &DeblockState, block: &Block, pli: usize, pass: usize) -> u8 {
     let idx = if pli == 0 { pass } else { pli+1 };
-    let mut level = deblock.levels[idx];
 
-    if deblock.block_deltas_enabled {
+    let level = if deblock.block_deltas_enabled {
         // By-block filter strength delta, if the feature is active.
         let block_delta = if deblock.block_delta_multi {
             block.deblock_deltas[ idx ] << deblock.block_delta_shift
@@ -34,8 +33,10 @@ fn deblock_level(deblock: &DeblockState, block: &Block, pli: usize, pass: usize)
         };
 
         // Add to frame-specified filter strength (Y-vertical, Y-horizontal, U, V)
-        level = clamp(block_delta + level as i8, 0, MAX_LOOP_FILTER as i8) as u8;
-    }
+        clamp(block_delta + deblock.levels[idx] as i8, 0, MAX_LOOP_FILTER as i8) as u8
+    } else {
+        deblock.levels[idx]
+    };
 
     // if fi.seg_feaure_active {
     // rav1e does not yet support segments or segment features
@@ -63,35 +64,26 @@ fn deblock_level(deblock: &DeblockState, block: &Block, pli: usize, pass: usize)
 // axis in the event block size != tx size
 fn deblock_params(fi: &FrameInvariants, deblock: &DeblockState, bc: &mut BlockContext, in_bo: &BlockOffset,
                   p: &mut Plane, pli: usize, pass: usize, block_edge: bool, bd: usize) ->
-    (usize, usize, u8, u16, u16, u16) {
-    let mut bo = in_bo.clone();
+    (u8, u16, u16, u16) {
     let xdec = p.cfg.xdec;
     let ydec = p.cfg.ydec;
     let w = fi.width as isize >> xdec;
     let h = fi.height as isize >> ydec;
-    let po = bo.plane_offset(&p.cfg);
+    let po = in_bo.plane_offset(&p.cfg);
 
     // at or past edge of the frame?  Don't deblock, signal next loop.
     if (po.x >= w) || (po.y >= h) {
-        return (0, 0, 0, 0, 0, 0)
+        return (0, 0, 0, 0)
     }
 
     // This little bit of weirdness is straight out of the spec;
     // subsampled chroma uses odd mi row/col
-    bo.x |= xdec;
-    bo.y |= ydec;
+    let bo = BlockOffset{x: in_bo.x | xdec, y: in_bo.y | ydec};
     let block = bc.at(&bo);
-    // Calculate the 'advances' the upper level loop uses from the
-    // block edge beginning and current tx edge
-    let (block_adv, tx_adv) = if pass == 0 {
-        (cmp::max(block.n4_w, 1<<xdec), cmp::max(block.tx_w, 1<<xdec))
-    } else {
-        (cmp::max(block.n4_h, 1<<ydec), cmp::max(block.tx_h, 1<<ydec))
-    };
     
     // upper/left edge skipped
     if (pass == 0 && po.x == 0) || (pass == 1 && po.y == 0) {
-        return (tx_adv, block_adv, 0, 0, 0, 0)
+        return (0, 0, 0, 0)
     }
 
     // We already know we're not at the upper/left corner, so prev_block is in frame
@@ -102,14 +94,14 @@ fn deblock_params(fi: &FrameInvariants, deblock: &DeblockState, bc: &mut BlockCo
     // filter application is conditional on skip and block edge
     if !(block_edge || !block.skip || !prev_block.skip ||
          block.ref_frames[0] <= INTRA_FRAME || prev_block.ref_frames[0] <= INTRA_FRAME) {
-        return (tx_adv, block_adv, 0, 0, 0, 0)
+        return (0, 0, 0, 0)
     }
 
-    let mut level = deblock_level(deblock, block, pli, pass) as u16;
-    if level == 0 { level = deblock_level(deblock, prev_block, pli, pass) as u16; }
-    if level == 0 {
+    let mut level = deblock_adjusted_level(deblock, block, pli, pass) as u16;
+    if level == 0 { level = deblock_adjusted_level(deblock, prev_block, pli, pass) as u16; }
+    if level <= 0 {
         // When level == 0, the filter is a no-op even if it runs
-        (tx_adv, block_adv, 0, 0, 0, 0)
+        (0, 0, 0, 0)
     } else {
         // Filter active; set up the rest
         let (tx_size, prev_tx_size) = if pass == 0 {
@@ -122,11 +114,10 @@ fn deblock_params(fi: &FrameInvariants, deblock: &DeblockState, bc: &mut BlockCo
         // filter_length, we simply construct a filter_length
         // directly.
         let filter_len = cmp::min( if pli==0 {14} else {6}, cmp::min(tx_size, prev_tx_size)<<MI_SIZE_LOG2);
-        let limit = cmp::max(1, level);
-        let blimit = 2 * (level+2) + limit;
+        let blimit = 3 * level + 4;
         let thresh = level >> 4;
 
-        (tx_adv, block_adv, filter_len as u8, blimit << (bd - 8), limit << (bd - 8), thresh << (bd - 8))
+        (filter_len as u8, blimit << (bd - 8), level << (bd - 8), thresh << (bd - 8))
     }
 }
 
@@ -343,60 +334,36 @@ fn deblock_len14<'a>(slice: &'a mut PlaneMutSlice<'a>, pitch: usize, stride: usi
     }
 }
 
-// Deblock vertical edges in a single plane of a single 64x64 superblock
+// Deblock edges in a single plane of a single 64x64 superblock
 // Works in-place
-fn deblock_vertical(fi: &FrameInvariants,
-                    deblock: &DeblockState,
-                    plane: &mut Plane,
-                    pli: usize,
-                    bc: &mut BlockContext,
-                    sbo: &SuperBlockOffset,
-                    bit_depth: usize) {
-    
-    let ydec = plane.cfg.ydec;
-    let stride = plane.cfg.stride;
- 
-    for y in (0..MAX_MIB_SIZE).step_by(1 << ydec) {
-        let mut bx = 0;
-        let mut tx = 0;
-        while tx < MAX_MIB_SIZE {
-            let bo = sbo.block_offset(tx, y);
-            let (tx_adv, block_adv, filter_len, blimit, limit, thresh) =
-                deblock_params(fi, deblock, bc, &bo, plane, pli, 0, bx == tx, bit_depth);
-            if filter_len > 0 {
-                let po = bo.plane_offset(&plane.cfg);
-                let mut slice = plane.mut_slice(&po);
-                match filter_len {
-                    4 => {
-                        slice.x -= 2;
-                        deblock_len4(&mut slice, 1, stride, blimit, limit, thresh, bit_depth);
-                    },
-                    6 => {
-                        slice.x -= 3;
-                        deblock_len6(&mut slice, 1, stride, blimit, limit, thresh, bit_depth);
-                    },
-                    8 => {
-                        slice.x -= 4;
-                        deblock_len8(&mut slice, 1, stride, blimit, limit, thresh, bit_depth);
-                    },
-                    14 => {
-                        slice.x -= 7;
-                        deblock_len14(&mut slice, 1, stride, blimit, limit, thresh, bit_depth);
-                        },
-                    _ => {}
-                }
-            } else {
-                if tx_adv==0 {break};
-            }
-            tx += tx_adv;
-            if bx + block_adv == tx {bx = tx};
-        }
-    }
-}
-                 
-// Deblock horizontal edges in a single plane of a signle 64x64 superblock
-// Works in-place
-fn deblock_horizontal(fi: &FrameInvariants,
+
+// deblock_superblock uses a different prcessing boundary convention
+// with respect to the superblock, as compared to libaom, in order to
+// get the vertical and horizontal passes more tightly coupled in
+// memory.
+
+// In libaom, the edges that are deblocked for a given block offset
+// are the left-hand vertical edge (pass 0) or the upper horizontal
+// edge (pass 2).  Rav1e uses that convention internally when dealing
+// with individual transform blocks.
+
+// Libaom follows the same convention within superblocks; in eeach
+// pass, the uppermost or leftmost edge of a superblock are deblocked,
+// leaving the lower/right hand edge unprocessed (to be handled by the
+// next superblock deblocking call).  The version of deblocking in
+// libaom that runs V and H 'simultaneously' has the horizontal
+// deblocking lag the vertical by a full superblock.
+
+// Vertical edge deblocking must always preceed the horizontal
+// deblocking for any given filtered pixel. Rav1e deblocks
+// simultaneously at a sub-superblock level, thus it alters the
+// convention to deblocking to the righthand-most and upper-most edges
+// of a superblock, and leaving the left-hand and lower edges
+// unprocessed.  The left-hand edge would have been deblocked by the
+// previous superblock deblocking call, and the lower edge will be
+// deblocked by the next call, as in libaom.
+
+fn deblock_superblock(fi: &FrameInvariants,
                       deblock: &DeblockState,
                       plane: &mut Plane,
                       pli: usize,
@@ -405,42 +372,80 @@ fn deblock_horizontal(fi: &FrameInvariants,
                       bit_depth: usize) {
     
     let xdec = plane.cfg.xdec;
+    let ydec = plane.cfg.ydec;
     let stride = plane.cfg.stride;
- 
-    for x in (0..MAX_MIB_SIZE).step_by(1 << xdec) {
-        let mut by = 0;
-        let mut ty = 0;
-        while ty < MAX_MIB_SIZE {
-            let bo = sbo.block_offset(x, ty);
-            let (tx_adv, block_adv, filter_len, blimit, limit, thresh) =
-                deblock_params(fi, deblock, bc, &bo, plane, pli, 1, by == ty, bit_depth);
-            if filter_len > 0 {
-                let po = bo.plane_offset(&plane.cfg);
-                let mut slice = plane.mut_slice(&po);
-                match filter_len {
-                    4 => {
-                        slice.y -= 2;
-                        deblock_len4(&mut slice, stride, 1, blimit, limit, thresh, bit_depth);
-                    },
-                    6 => {
-                        slice.y -= 3;
-                        deblock_len6(&mut slice, stride, 1, blimit, limit, thresh, bit_depth);
-                    },
-                    8 => {
-                        slice.y -= 4;
-                        deblock_len8(&mut slice, stride, 1, blimit, limit, thresh, bit_depth);
-                    },
-                    14 => {
-                        slice.y -= 7;
-                        deblock_len14(&mut slice, stride, 1, blimit, limit, thresh, bit_depth);
-                    },
-                    _ => {}
+    let bo0 = sbo.block_offset(0, 0);
+
+    // row loop is oversized by 1 iteration; vertical edge processing
+    // ignores the last, horizontal edge processing ignores the first.
+    for yi in (0..MAX_MIB_SIZE + (1 << ydec)).step_by(1 << ydec) {
+        let y_v = yi + bo0.y;
+        // Vertical edges along one MISIZE row
+        if yi < MAX_MIB_SIZE && y_v < bc.rows {
+            let mut bx = bo0.x;
+            let mut tx = bo0.x;
+            // for vertical edges, the col iteration is also
+            // oversized; we skip over the left edge and process the
+            // right edge.
+            while tx < cmp::min(bo0.x + MAX_MIB_SIZE + 1, bc.cols) {
+                let bo = BlockOffset{x: tx, y: y_v};
+                let (block_adv, tx_adv) = {
+                    let block = bc.at(&bo);
+                    (cmp::max(block.n4_w, 1<<xdec), cmp::max(block.tx_w, 1<<xdec))
+                };
+                if tx > bo0.x { // skip processing the left edge
+                    let (filter_len, blimit, limit, thresh) =
+                        deblock_params(fi, deblock, bc, &bo, plane, pli, 0, bx == tx, bit_depth);            
+                    if filter_len > 0 {
+                        let po = bo.plane_offset(&plane.cfg);
+                        let mut slice = plane.mut_slice(&po);
+                        slice.x -= (filter_len>>1) as isize;
+                        match filter_len {
+                            4 => { deblock_len4(&mut slice, 1, stride, blimit, limit, thresh, bit_depth); },
+                            6 => { deblock_len6(&mut slice, 1, stride, blimit, limit, thresh, bit_depth); },
+                            8 => { deblock_len8(&mut slice, 1, stride, blimit, limit, thresh, bit_depth); },
+                            14 => { deblock_len14(&mut slice, 1, stride, blimit, limit, thresh, bit_depth); },
+                            _ => {}
+                        }
+                    }
                 }
-            } else {
-                if tx_adv==0 {break};
+                tx += tx_adv;
+                if bx + block_adv == tx {bx = tx};
             }
-            ty += tx_adv;
-            if by + block_adv == ty {by = ty};
+        }
+        // Horizontal edges along one MI_SIZE row, lagging the
+        // vertical by two rows to start, one row to end to ensure we have a minimum of 7
+        // filtered rows of pixels (in fact, we have 8).
+        let y_h = y_v - (1 << ydec);
+        if yi > 0 && y_h < bc.rows {
+            let mut bx = bo0.x;
+            for tx in (bo0.x..cmp::min(bo0.x + MAX_MIB_SIZE, bc.cols)).step_by(1 << xdec) {
+                let bo = BlockOffset{x: tx, y: y_h};
+                let (block_adv, block_edge, tx_edge) = {
+                    let block = bc.at(&bo);
+                    (cmp::max(block.n4_w, 1<<xdec),
+                     bo.y & (block.n4_h - 1) == 0,
+                     bo.y & (block.tx_h - 1) == 0)
+                };
+                // Are we actually on a transform edge?
+                if tx_edge {
+                    let (filter_len, blimit, limit, thresh) =
+                        deblock_params(fi, deblock, bc, &bo, plane, pli, 1, block_edge, bit_depth);            
+                    if filter_len > 0 {
+                        let po = bo.plane_offset(&plane.cfg);
+                        let mut slice = plane.mut_slice(&po);
+                        slice.y -= (filter_len>>1) as isize;
+                        match filter_len {
+                            4 => { deblock_len4(&mut slice, stride, 1, blimit, limit, thresh, bit_depth); },
+                            6 => { deblock_len6(&mut slice, stride, 1, blimit, limit, thresh, bit_depth); },
+                            8 => { deblock_len8(&mut slice, stride, 1, blimit, limit, thresh, bit_depth); },
+                            14 => { deblock_len14(&mut slice, stride, 1, blimit, limit, thresh, bit_depth); },
+                            _ => {}
+                        }
+                    }
+                }
+                if bx + block_adv == tx {bx = tx};
+            }
         }
     }
 }
@@ -463,20 +468,9 @@ pub fn deblock_plane(fi: &FrameInvariants, deblock: &DeblockState, plane: &mut P
     // filter vertical and horizontal edges by super block.
     for row in 0..fb_height {
         for col in 0..fb_width {
-            // filter vertical edges
-            {
-                let sbo = SuperBlockOffset { x: col, y: row };
-                deblock_vertical(fi, deblock, plane, pli, bc, &sbo, bit_depth);
-            }
-            // filter horizontal edges.  Filters are ordered, so it's always 1 SB behind.
-            if col > 0 {
-                let sbo = SuperBlockOffset { x: col-1, y: row };
-                deblock_horizontal(fi, deblock, plane, pli, bc, &sbo, bit_depth);
-            }
+            let sbo = SuperBlockOffset { x: col, y: row };
+            deblock_superblock(fi, deblock, plane, pli, bc, &sbo, bit_depth);
         }
-        // filter last horizontal stragglers.
-        let sbo = SuperBlockOffset { x: fb_width-1, y: row };
-        deblock_horizontal(fi, deblock, plane, pli, bc, &sbo, bit_depth);
     }
 }
 
