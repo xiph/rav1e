@@ -34,11 +34,6 @@ const MAX_TX_DEPTH: usize = 2;
 
 // LUTS ---------------------
 
-// The spec indicates that BLOCK_SIZES should be 22, but BLOCK_SIZES_ALL is defined as 24 in the rust code.
-// There are also two additional symbols that do not appear in the spec: BLOCK_128X32 and BLOCK_32X128.
-
-const BLOCK_SIZES:usize = BlockSize::BLOCK_SIZES_ALL;
-
 pub static default_kf_y_mode_cdf: [[[u16; cdf_size!(INTRA_MODES)]; KF_MODE_CONTEXTS]; KF_MODE_CONTEXTS] = 
     [[
      cdf!(15588, 17027, 19338, 20218, 20682, 21110, 21825, 23244, 24189, 28165, 29093, 30466),
@@ -346,7 +341,7 @@ pub static
           cdf!(4238, 11537, 25926) ];
 
 pub static
-    default_wedge_interintra_cdf: [[u16; cdf_size!(2)]; BLOCK_SIZES] = [
+    default_wedge_interintra_cdf: [[u16; cdf_size!(2)]; BlockSize::BLOCK_SIZES_ALL] = [
       cdf!(16384), cdf!(16384), cdf!(16384),
       cdf!(20036), cdf!(24957), cdf!(26704),
       cdf!(27530), cdf!(29564), cdf!(29444),
@@ -358,7 +353,7 @@ pub static
     ];
 
 pub static
-    default_compound_type_cdf: [[u16; cdf_size!(CompoundType::COMPOUND_TYPES as usize - 1)]; BLOCK_SIZES as usize] = [
+    default_compound_type_cdf: [[u16; cdf_size!(CompoundType::COMPOUND_TYPES as usize - 1)]; BlockSize::BLOCK_SIZES_ALL as usize] = [
       cdf!(16384), cdf!(16384), cdf!(16384),
       cdf!(23431), cdf!(13171), cdf!(11470),
       cdf!(9770),  cdf!(9100),  cdf!(8233),
@@ -369,7 +364,7 @@ pub static
       cdf!(16384)
     ];
 
-pub static default_wedge_idx_cdf: [[u16; cdf_size!(16)]; BLOCK_SIZES] =
+pub static default_wedge_idx_cdf: [[u16; cdf_size!(16)]; BlockSize::BLOCK_SIZES_ALL] =
     [ cdf!(2048, 4096, 6144, 8192, 10240, 12288, 14336, 16384, 18432, 20480, 22528, 24576, 26624, 28672, 30720),
       cdf!(2048, 4096, 6144, 8192, 10240, 12288, 14336, 16384, 18432, 20480, 22528, 24576, 26624, 28672, 30720),
       cdf!(2048, 4096, 6144, 8192, 10240, 12288, 14336, 16384, 18432, 20480, 22528, 24576, 26624, 28672, 30720),
@@ -393,7 +388,7 @@ pub static default_wedge_idx_cdf: [[u16; cdf_size!(16)]; BLOCK_SIZES] =
       cdf!(2048, 4096, 6144, 8192, 10240, 12288, 14336, 16384, 18432, 20480, 22528, 24576, 26624, 28672, 30720),
       cdf!(2048, 4096, 6144, 8192, 10240, 12288, 14336, 16384, 18432, 20480, 22528, 24576, 26624, 28672, 30720) ];
 
-pub static default_motion_mode_cdf: [[u16; cdf_size!(MotionMode::MOTION_MODES as usize)]; BLOCK_SIZES as usize] = 
+pub static default_motion_mode_cdf: [[u16; cdf_size!(MotionMode::MOTION_MODES as usize)]; BlockSize::BLOCK_SIZES_ALL as usize] = 
                      [ cdf!(10923, 21845), cdf!(10923, 21845),
                        cdf!(10923, 21845), cdf!(7651, 24760),
                        cdf!(4738, 24765),  cdf!(5391, 25528),
@@ -406,7 +401,7 @@ pub static default_motion_mode_cdf: [[u16; cdf_size!(MotionMode::MOTION_MODES as
                        cdf!(28799, 31390), cdf!(26431, 30774),
                        cdf!(28973, 31594), cdf!(29742, 31203) ];
 
-pub static default_obmc_cdf: [[u16; cdf_size!(2)]; BLOCK_SIZES] = [
+pub static default_obmc_cdf: [[u16; cdf_size!(2)]; BlockSize::BLOCK_SIZES_ALL] = [
   cdf!(16384), cdf!(16384), cdf!(16384),
   cdf!(10437), cdf!(9371),  cdf!(9301),
   cdf!(17432), cdf!(14423), cdf!(15142),
@@ -649,7 +644,7 @@ pub static default_intrabc_cdf: [u16; cdf_size!(2)] = cdf!(30531);
 
 pub static default_filter_intra_mode_cdf: [u16; cdf_size!(FilterIntraMode::FILTER_INTRA_MODES as usize)] = cdf!(8949, 12776, 17211, 29558);
 
-pub static default_filter_intra_cdfs: [[u16; cdf_size!(2)]; BLOCK_SIZES] = [ cdf!(4621),  cdf!(6743),  cdf!(5893),
+pub static default_filter_intra_cdfs: [[u16; cdf_size!(2)]; BlockSize::BLOCK_SIZES_ALL] = [ cdf!(4621),  cdf!(6743),  cdf!(5893),
             cdf!(7866),  cdf!(12551), cdf!(9394),
             cdf!(12408), cdf!(14301), cdf!(12756),
             cdf!(22343), cdf!(16384), cdf!(16384),
