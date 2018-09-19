@@ -122,7 +122,7 @@ impl Context {
         FrameType::INTER
       };
 
-      let slot_idx = self.fi.number % 30 % REF_FRAMES as u64;
+      let slot_idx = frame_number_in_segment % REF_FRAMES as u64;
 
       self.fi.refresh_frame_flags = if self.fi.frame_type == FrameType::KEY {
         ALL_REF_FRAMES_MASK

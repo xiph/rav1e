@@ -313,12 +313,13 @@ pub fn rdo_mode_decision(
   };
 
   let mut mode_set: Vec<(PredictionMode, usize)> = Vec::new();
-  let mut mv_stack = [Vec::new(), Vec::new()];
-  let mut mode_contexts = [0, 0];
+  let mut mv_stack = Vec::new();
+  let mut mode_contexts = Vec::new();
 
   for (i, &ref_frame) in ref_frame_set.iter().enumerate() {
-    mode_contexts[i] =
-      cw.find_mvrefs(bo, ref_frame, &mut mv_stack[i], bsize, false);
+    let mut mvs: Vec<CandidateMV> = Vec::new();
+    mode_contexts.push(cw.find_mvrefs(bo, ref_frame, &mut mvs, bsize, false));
+    mv_stack.push(mvs);
 
     if fi.frame_type == FrameType::INTER {
       for &x in RAV1E_INTER_MODES_MINIMAL {
@@ -406,8 +407,7 @@ pub fn rdo_mode_decision(
   };
 
 
-  mode_set.iter().for_each(|&x| {
-let (luma_mode, i): (PredictionMode, usize) = x;
+  mode_set.iter().for_each(|&(luma_mode, i)| {
     let mv = match luma_mode {
       PredictionMode::NEWMV => motion_estimation(fi, fs, bsize, bo, ref_frame_set[i], pmv),
       PredictionMode::NEARESTMV => if mv_stack[i].len() > 0 {
