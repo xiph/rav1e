@@ -92,28 +92,24 @@ pub enum BlockSize {
   BLOCK_32X8,
   BLOCK_16X64,
   BLOCK_64X16,
-  BLOCK_32X128,
-  BLOCK_128X32,
   BLOCK_INVALID
 }
 
 impl BlockSize {
-  pub const BLOCK_SIZES_ALL: usize = 24;
+  pub const BLOCK_SIZES_ALL: usize = 22;
 
   const BLOCK_SIZE_WIDTH_LOG2: [usize; BlockSize::BLOCK_SIZES_ALL] =
-    [2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 2, 4, 3, 5, 4, 6, 5, 7];
+    [2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 2, 4, 3, 5, 4, 6];
 
   const BLOCK_SIZE_HEIGHT_LOG2: [usize; BlockSize::BLOCK_SIZES_ALL] =
-    [2, 3, 2, 3, 4, 3, 4, 5, 4, 5, 6, 5, 6, 7, 6, 7, 4, 2, 5, 3, 6, 4, 7, 5];
+    [2, 3, 2, 3, 4, 3, 4, 5, 4, 5, 6, 5, 6, 7, 6, 7, 4, 2, 5, 3, 6, 4];
 
   pub const MI_SIZE_WIDE: [usize; BlockSize::BLOCK_SIZES_ALL] = [
-    1, 1, 2, 2, 2, 4, 4, 4, 8, 8, 8, 16, 16, 16, 32, 32, 1, 4, 2, 8, 4, 16, 8,
-    32,
+    1, 1, 2, 2, 2, 4, 4, 4, 8, 8, 8, 16, 16, 16, 32, 32, 1, 4, 2, 8, 4, 16
   ];
 
   pub const MI_SIZE_HIGH: [usize; BlockSize::BLOCK_SIZES_ALL] = [
-    1, 2, 1, 2, 4, 2, 4, 8, 4, 8, 16, 8, 16, 32, 16, 32, 4, 1, 8, 2, 16, 4,
-    32, 8,
+    1, 2, 1, 2, 4, 2, 4, 8, 4, 8, 16, 8, 16, 32, 16, 32, 4, 1, 8, 2, 16, 4
   ];
 
   pub fn cfl_allowed(self) -> bool {

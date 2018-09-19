@@ -23,7 +23,7 @@ use motion_compensate;
 use partition::*;
 use plane::*;
 use cdef::*;
-use predict::{RAV1E_INTRA_MODES, RAV1E_INTRA_MODES_MINIMAL, RAV1E_INTER_MODES};
+use predict::{RAV1E_INTRA_MODES, RAV1E_INTRA_MODES_MINIMAL, RAV1E_INTER_MODES_MINIMAL};
 use quantize::dc_q;
 use std;
 use std::f64;
@@ -248,21 +248,40 @@ pub fn rdo_tx_size_type(
   (tx_size, tx_type)
 }
 
+struct EncodingSettings {
+  mode_luma: PredictionMode,
+  mode_chroma: PredictionMode,
+  cfl_params: CFLParams,
+  skip: bool,
+  rd: f64,
+  ref_frame: usize,
+  mv: MotionVector,
+  tx_size: TxSize,
+  tx_type: TxType
+}
+
+impl Default for EncodingSettings {
+  fn default() -> Self {
+    EncodingSettings {
+      mode_luma: PredictionMode::DC_PRED,
+      mode_chroma: PredictionMode::DC_PRED,
+      cfl_params: CFLParams::new(),
+      skip: false,
+      rd: std::f64::MAX,
+      ref_frame: INTRA_FRAME,
+      mv: MotionVector { row: 0, col: 0 },
+      tx_size: TxSize::TX_4X4,
+      tx_type: TxType::DCT_DCT
+    }
+  }
+}
 // RDO-based mode decision
 pub fn rdo_mode_decision(
   seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
   cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset,
   pmv: &MotionVector
 ) -> RDOOutput {
-  let mut best_mode_luma = PredictionMode::DC_PRED;
-  let mut best_mode_chroma = PredictionMode::DC_PRED;
-  let mut best_cfl_params = CFLParams::new();
-  let mut best_skip = false;
-  let mut best_rd = std::f64::MAX;
-  let mut best_ref_frame = INTRA_FRAME;
-  let mut best_mv = MotionVector { row: 0, col: 0 };
-  let mut best_tx_size = TxSize::TX_4X4;
-  let mut best_tx_type = TxType::DCT_DCT;
+  let mut best = EncodingSettings::default();
 
   // Get block luma and chroma dimensions
   let w = bsize.width();
@@ -283,73 +302,50 @@ pub fn rdo_mode_decision(
     RAV1E_INTRA_MODES_MINIMAL
   };
 
-  let mut mode_set: Vec<PredictionMode> = Vec::new();
+  let ref_frame_set: &[usize] = if fi.frame_type == FrameType::KEY {
+    &[INTRA_FRAME]
+  } else {
+    if fi.config.speed <= 2 {
+      &[LAST_FRAME, ALTREF_FRAME]
+    } else {
+      &[LAST_FRAME]
+    }
+  };
 
-  if fi.frame_type == FrameType::INTER {
-    mode_set.extend_from_slice(RAV1E_INTER_MODES);
-  }
-  mode_set.extend_from_slice(intra_mode_set);
+  let mut mode_set: Vec<(PredictionMode, usize)> = Vec::new();
+  let mut mv_stack = [Vec::new(), Vec::new()];
+  let mut mode_contexts = [0, 0];
 
-  for &luma_mode in &mode_set {
-    let luma_mode_is_intra = luma_mode.is_intra();
-    assert!(fi.frame_type == FrameType::INTER || luma_mode_is_intra);
+  for (i, &ref_frame) in ref_frame_set.iter().enumerate() {
+    mode_contexts[i] =
+      cw.find_mvrefs(bo, ref_frame, &mut mv_stack[i], bsize, false);
 
-    let mut mode_set_chroma = vec![luma_mode];
-
-    if luma_mode_is_intra && is_chroma_block {
-      if luma_mode != PredictionMode::DC_PRED {
-        mode_set_chroma.push(PredictionMode::DC_PRED);
+    if fi.frame_type == FrameType::INTER {
+      for &x in RAV1E_INTER_MODES_MINIMAL {
+        mode_set.push((x, i));
+      }
+      if fi.config.speed <= 2 {
+        if mv_stack.len() >= 3 {
+          mode_set.push((PredictionMode::NEAR1MV, i));
+        }
+        if mv_stack.len() >= 4 {
+          mode_set.push((PredictionMode::NEAR2MV, i));
+        }
       }
     }
+  }
 
-    let ref_frame_set: &[usize] = if luma_mode.is_intra() {
-      &[INTRA_FRAME]
-    } else {
-      if fi.config.speed <= 2 {
-        &[LAST_FRAME, ALTREF_FRAME]
-      } else {
-        &[LAST_FRAME]
-      }
-    };
-
-    for &ref_frame in ref_frame_set.iter() {
-
-    let mut mv_stack = Vec::new();
-    let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack, bsize, false);
-
-    if luma_mode == PredictionMode::NEAR1MV && mv_stack.len() < 3 { continue; }
-    if luma_mode == PredictionMode::NEAR2MV && mv_stack.len() < 4 { continue; }
-
-    let mv = match luma_mode {
-      PredictionMode::NEWMV => motion_estimation(fi, fs, bsize, bo, ref_frame, pmv),
-      PredictionMode::NEARESTMV => if mv_stack.len() > 0 {
-        mv_stack[0].this_mv
-      } else {
-        MotionVector { row: 0, col: 0 }
-      },
-      PredictionMode::NEAR0MV => if mv_stack.len() > 1 {
-        mv_stack[1].this_mv
-      } else {
-        MotionVector { row: 0, col: 0 }
-      },
-      PredictionMode::NEAR1MV | PredictionMode::NEAR2MV =>
-          mv_stack[luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].this_mv,
-      _ => MotionVector { row: 0, col: 0 }
-    };
-
+  let luma_rdo = |luma_mode: PredictionMode, fs: &mut FrameState, cw: &mut ContextWriter, best: &mut EncodingSettings,
+    mv: MotionVector, ref_frame: usize, mode_set_chroma: &[PredictionMode], luma_mode_is_intra: bool,
+    i: usize| {
     let (tx_size, tx_type) = rdo_tx_size_type(
       seq, fi, fs, cw, bsize, bo, luma_mode, ref_frame, mv, false,
     );
 
     // Find the best chroma prediction mode for the current luma prediction mode
-    for &chroma_mode in &mode_set_chroma {
-      for &skip in &[false, true] {
-        // Don't skip when using intra modes
-        if skip && luma_mode_is_intra {
-          continue;
-        }
-
-        let mut wr: &mut dyn Writer = &mut WriterCounter::new();
+    let mut chroma_rdo = |skip: bool| {
+      mode_set_chroma.iter().for_each(|&chroma_mode| {
+        let wr: &mut dyn Writer = &mut WriterCounter::new();
         let tell = wr.tell_frac();
 
         encode_block_a(seq, cw, wr, bsize, bo, skip);
@@ -370,8 +366,8 @@ pub fn rdo_mode_decision(
           CFLParams::new(),
           tx_size,
           tx_type,
-          mode_context,
-          &mv_stack
+          mode_contexts[i],
+          &mv_stack[i]
         );
 
         let cost = wr.tell_frac() - tell;
@@ -387,38 +383,77 @@ pub fn rdo_mode_decision(
           false
         );
 
-        if rd < best_rd {
-          best_rd = rd;
-          best_mode_luma = luma_mode;
-          best_mode_chroma = chroma_mode;
-          best_ref_frame = ref_frame;
-          best_mv = mv;
-          best_skip = skip;
-          best_tx_size = tx_size;
-          best_tx_type = tx_type;
+        if rd < best.rd {
+          best.rd = rd;
+          best.mode_luma = luma_mode;
+          best.mode_chroma = chroma_mode;
+          best.ref_frame = ref_frame;
+          best.mv = mv;
+          best.skip = skip;
+          best.tx_size = tx_size;
+          best.tx_type = tx_type;
         }
 
         cw.rollback(&cw_checkpoint);
+      });
+    };
+
+    chroma_rdo(false);
+    // Don't skip when using intra modes
+    if !luma_mode_is_intra {
+        chroma_rdo(true);
+    };
+  };
+
+
+  mode_set.iter().for_each(|&x| {
+let (luma_mode, i): (PredictionMode, usize) = x;
+    let mv = match luma_mode {
+      PredictionMode::NEWMV => motion_estimation(fi, fs, bsize, bo, ref_frame_set[i], pmv),
+      PredictionMode::NEARESTMV => if mv_stack[i].len() > 0 {
+        mv_stack[i][0].this_mv
+      } else {
+        MotionVector { row: 0, col: 0 }
+      },
+      PredictionMode::NEAR0MV => if mv_stack[i].len() > 1 {
+        mv_stack[i][1].this_mv
+      } else {
+        MotionVector { row: 0, col: 0 }
+      },
+      PredictionMode::NEAR1MV | PredictionMode::NEAR2MV =>
+          mv_stack[i][luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].this_mv,
+      _ => MotionVector { row: 0, col: 0 }
+    };
+    let mode_set_chroma = vec![luma_mode];
+
+    luma_rdo(luma_mode, fs, cw, &mut best, mv, ref_frame_set[i], &mode_set_chroma, false, i);
+  });
+  if !best.skip {
+    intra_mode_set.iter().for_each(|&luma_mode| {
+      let mv = MotionVector { row: 0, col: 0 };
+      let mut mode_set_chroma = vec![luma_mode];
+      if is_chroma_block && luma_mode != PredictionMode::DC_PRED {
+        mode_set_chroma.push(PredictionMode::DC_PRED);
       }
-      }
-    }
+      luma_rdo(luma_mode, fs, cw, &mut best, mv, INTRA_FRAME, &mode_set_chroma, true, 0);
+    });
   }
 
-  if best_mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
+  if best.mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
     let chroma_mode = PredictionMode::UV_CFL_PRED;
     let cw_checkpoint = cw.checkpoint();
-    let mut wr: &mut dyn Writer = &mut WriterCounter::new();
+    let wr: &mut dyn Writer = &mut WriterCounter::new();
     write_tx_blocks(
       fi,
       fs,
       cw,
       wr,
-      best_mode_luma,
-      best_mode_luma,
+      best.mode_luma,
+      best.mode_luma,
       bo,
       bsize,
-      best_tx_size,
-      best_tx_type,
+      best.tx_size,
+      best.tx_type,
       false,
       seq.bit_depth,
       CFLParams::new(),
@@ -429,24 +464,24 @@ pub fn rdo_mode_decision(
       let mut wr: &mut dyn Writer = &mut WriterCounter::new();
       let tell = wr.tell_frac();
 
-      encode_block_a(seq, cw, wr, bsize, bo, best_skip);
+      encode_block_a(seq, cw, wr, bsize, bo, best.skip);
       encode_block_b(
         seq,
         fi,
         fs,
         cw,
         wr,
-        best_mode_luma,
+        best.mode_luma,
         chroma_mode,
-        best_ref_frame,
-        best_mv,
+        best.ref_frame,
+        best.mv,
         bsize,
         bo,
-        best_skip,
+        best.skip,
         seq.bit_depth,
         cfl,
-        best_tx_size,
-        best_tx_type,
+        best.tx_size,
+        best.tx_type,
         0,
         &Vec::new()
       );
@@ -464,34 +499,34 @@ pub fn rdo_mode_decision(
         false
       );
 
-      if rd < best_rd {
-        best_rd = rd;
-        best_mode_chroma = chroma_mode;
-        best_cfl_params = cfl;
+      if rd < best.rd {
+        best.rd = rd;
+        best.mode_chroma = chroma_mode;
+        best.cfl_params = cfl;
       }
 
       cw.rollback(&cw_checkpoint);
     }
   }
 
-  cw.bc.set_mode(bo, bsize, best_mode_luma);
-  cw.bc.set_ref_frame(bo, bsize, best_ref_frame);
-  cw.bc.set_motion_vector(bo, bsize, best_mv);
+  cw.bc.set_mode(bo, bsize, best.mode_luma);
+  cw.bc.set_ref_frame(bo, bsize, best.ref_frame);
+  cw.bc.set_motion_vector(bo, bsize, best.mv);
 
-  assert!(best_rd >= 0_f64);
+  assert!(best.rd >= 0_f64);
 
   RDOOutput {
-    rd_cost: best_rd,
+    rd_cost: best.rd,
     part_type: PartitionType::PARTITION_NONE,
     part_modes: vec![RDOPartitionOutput {
       bo: bo.clone(),
-      pred_mode_luma: best_mode_luma,
-      pred_mode_chroma: best_mode_chroma,
-      pred_cfl_params: best_cfl_params,
-      ref_frame: best_ref_frame,
-      mv: best_mv,
-      rd_cost: best_rd,
-      skip: best_skip
+      pred_mode_luma: best.mode_luma,
+      pred_mode_chroma: best.mode_chroma,
+      pred_cfl_params: best.cfl_params,
+      ref_frame: best.ref_frame,
+      mv: best.mv,
+      rd_cost: best.rd,
+      skip: best.skip
     }]
   }
 }
@@ -565,7 +600,7 @@ pub fn rdo_tx_type_decision(
       continue;
     }
 
-    motion_compensate(fi, fs, cw, mode, ref_frame, mv, bsize, bo, bit_depth);
+    motion_compensate(fi, fs, cw, mode, ref_frame, mv, bsize, bo, bit_depth, true);
 
     let mut wr: &mut dyn Writer = &mut WriterCounter::new();
     let tell = wr.tell_frac();

@@ -1,3 +1,12 @@
+// Copyright (c) 2018, The rav1e contributors. All rights reserved
+//
+// This source code is subject to the terms of the BSD 2 Clause License and
+// the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
+// was not distributed with this source code in the LICENSE file, you can
+// obtain it at www.aomedia.org/license/software. If the Alliance for Open
+// Media Patent License 1.0 was not distributed with this source code in the
+// PATENTS file, you can obtain it at www.aomedia.org/license/patent.
+
 use encoder::*;
 use context::CDFContext;
 use partition::*;
@@ -103,7 +112,11 @@ impl Context {
         deblock: Default::default(),
       };
 
-      self.fi.frame_type = if self.fi.number % 30 == 0 {
+      let frame_number_in_segment = self.fi.number % 30;
+
+      self.fi.order_hint = frame_number_in_segment as u32;
+
+      self.fi.frame_type = if frame_number_in_segment == 0 {
         FrameType::KEY
       } else {
         FrameType::INTER
