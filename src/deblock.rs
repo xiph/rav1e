@@ -416,35 +416,37 @@ fn deblock_superblock(fi: &FrameInvariants,
         // Horizontal edges along one MI_SIZE row, lagging the
         // vertical by two rows to start, one row to end to ensure we have a minimum of 7
         // filtered rows of pixels (in fact, we have 8).
-        let y_h = y_v - (1 << ydec);
-        if yi > 0 && y_h < bc.rows {
-            let mut bx = bo0.x;
-            for tx in (bo0.x..cmp::min(bo0.x + MAX_MIB_SIZE, bc.cols)).step_by(1 << xdec) {
-                let bo = BlockOffset{x: tx, y: y_h};
-                let (block_adv, block_edge, tx_edge) = {
-                    let block = bc.at(&bo);
-                    (cmp::max(block.n4_w, 1<<xdec),
-                     bo.y & (block.n4_h - 1) == 0,
-                     bo.y & (block.tx_h - 1) == 0)
-                };
-                // Are we actually on a transform edge?
-                if tx_edge {
-                    let (filter_len, blimit, limit, thresh) =
-                        deblock_params(fi, deblock, bc, &bo, plane, pli, 1, block_edge, bit_depth);            
-                    if filter_len > 0 {
-                        let po = bo.plane_offset(&plane.cfg);
-                        let mut slice = plane.mut_slice(&po);
-                        slice.y -= (filter_len>>1) as isize;
-                        match filter_len {
-                            4 => { deblock_len4(&mut slice, stride, 1, blimit, limit, thresh, bit_depth); },
-                            6 => { deblock_len6(&mut slice, stride, 1, blimit, limit, thresh, bit_depth); },
-                            8 => { deblock_len8(&mut slice, stride, 1, blimit, limit, thresh, bit_depth); },
-                            14 => { deblock_len14(&mut slice, stride, 1, blimit, limit, thresh, bit_depth); },
-                            _ => {}
+        if yi > 0 {
+            let y_h = y_v - (1 << ydec);
+            if y_h < bc.rows {
+                let mut bx = bo0.x;
+                for tx in (bo0.x..cmp::min(bo0.x + MAX_MIB_SIZE, bc.cols)).step_by(1 << xdec) {
+                    let bo = BlockOffset{x: tx, y: y_h};
+                    let (block_adv, block_edge, tx_edge) = {
+                        let block = bc.at(&bo);
+                        (cmp::max(block.n4_w, 1<<xdec),
+                         bo.y & (block.n4_h - 1) == 0,
+                         bo.y & (block.tx_h - 1) == 0)
+                    };
+                    // Are we actually on a transform edge?
+                    if tx_edge {
+                        let (filter_len, blimit, limit, thresh) =
+                            deblock_params(fi, deblock, bc, &bo, plane, pli, 1, block_edge, bit_depth);
+                        if filter_len > 0 {
+                            let po = bo.plane_offset(&plane.cfg);
+                            let mut slice = plane.mut_slice(&po);
+                            slice.y -= (filter_len>>1) as isize;
+                            match filter_len {
+                                4 => { deblock_len4(&mut slice, stride, 1, blimit, limit, thresh, bit_depth); },
+                                6 => { deblock_len6(&mut slice, stride, 1, blimit, limit, thresh, bit_depth); },
+                                8 => { deblock_len8(&mut slice, stride, 1, blimit, limit, thresh, bit_depth); },
+                                14 => { deblock_len14(&mut slice, stride, 1, blimit, limit, thresh, bit_depth); },
+                                _ => {}
+                            }
                         }
                     }
+                    if bx + block_adv == tx {bx = tx};
                 }
-                if bx + block_adv == tx {bx = tx};
             }
         }
     }
