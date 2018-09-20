@@ -54,7 +54,9 @@ pub struct RDOPartitionOutput {
   pub pred_cfl_params: CFLParams,
   pub ref_frame: usize,
   pub mv: MotionVector,
-  pub skip: bool
+  pub skip: bool,
+  pub tx_size: TxSize,
+  pub tx_type: TxType,
 }
 
 #[allow(unused)]
@@ -537,7 +539,9 @@ pub fn rdo_mode_decision(
       ref_frame: best.ref_frame,
       mv: best.mv,
       rd_cost: best.rd,
-      skip: best.skip
+      skip: best.skip,
+      tx_size: best.tx_size,
+      tx_type: best.tx_type,
     }]
   }
 }
