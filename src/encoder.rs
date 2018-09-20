@@ -856,7 +856,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
             }
           }
 
-          for i in 0..7 {
+          for i in 0..INTER_REFS_PER_FRAME {
             if !frame_refs_short_signaling {
               self.write(REF_FRAMES_LOG2 as u32, fi.ref_frames[i] as u8)?;
             }
