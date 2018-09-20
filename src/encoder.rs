@@ -1999,7 +1999,7 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
     /* TODO: Don't apply if lossless */
     deblock_filter_optimize(fi, fs, &mut cw.bc, bit_depth);
     if fs.deblock.levels[0] != 0 || fs.deblock.levels[1] != 0 {
-        deblock_filter_frame(fi, fs, &mut cw.bc, bit_depth);
+        deblock_filter_frame(fs, &mut cw.bc, bit_depth);
     }
     /* TODO: Don't apply if lossless */
     if sequence.enable_cdef {
