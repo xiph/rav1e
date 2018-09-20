@@ -356,6 +356,65 @@ pub enum PredictionMode {
   NEW_NEWMV
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+pub enum InterIntraMode {
+  II_DC_PRED,
+  II_V_PRED,
+  II_H_PRED,
+  II_SMOOTH_PRED,
+  INTERINTRA_MODES
+}
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+pub enum CompoundType {
+  COMPOUND_AVERAGE,
+  COMPOUND_WEDGE,
+  COMPOUND_DIFFWTD,
+  COMPOUND_TYPES,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+pub enum MotionMode {
+  SIMPLE_TRANSLATION,
+  OBMC_CAUSAL,    // 2-sided OBMC
+  WARPED_CAUSAL,  // 2-sided WARPED
+  MOTION_MODES
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+pub enum PaletteSize {
+  TWO_COLORS,
+  THREE_COLORS,
+  FOUR_COLORS,
+  FIVE_COLORS,
+  SIX_COLORS,
+  SEVEN_COLORS,
+  EIGHT_COLORS,
+  PALETTE_SIZES
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+pub enum PaletteColor {
+  PALETTE_COLOR_ONE,
+  PALETTE_COLOR_TWO,
+  PALETTE_COLOR_THREE,
+  PALETTE_COLOR_FOUR,
+  PALETTE_COLOR_FIVE,
+  PALETTE_COLOR_SIX,
+  PALETTE_COLOR_SEVEN,
+  PALETTE_COLOR_EIGHT,
+  PALETTE_COLORS
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+pub enum FilterIntraMode {
+  FILTER_DC_PRED,
+  FILTER_V_PRED,
+  FILTER_H_PRED,
+  FILTER_D157_PRED,
+  FILTER_PAETH_PRED,
+  FILTER_INTRA_MODES
+}
+
 #[derive(Copy, Clone)]
 pub struct MotionVector {
   pub row: i16,
@@ -364,7 +423,8 @@ pub struct MotionVector {
 
 pub const NEWMV_MODE_CONTEXTS: usize = 7;
 pub const GLOBALMV_MODE_CONTEXTS: usize = 2;
-pub const REFMV_MODE_CONTEXTS: usize = 9;
+pub const REFMV_MODE_CONTEXTS: usize = 6;
+pub const INTER_COMPOUND_MODES: usize = (1 + PredictionMode::NEW_NEWMV as usize - PredictionMode::NEAREST_NEARESTMV as usize);
 
 pub const REFMV_OFFSET: usize = 4;
 pub const GLOBALMV_OFFSET: usize = 3;
