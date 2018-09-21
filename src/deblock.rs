@@ -59,56 +59,65 @@ fn deblock_adjusted_level(deblock: &DeblockState, block: &Block, pli: usize, ver
     }
 }
 
-// Must be called on a tx edge; returns filter setup, location of next
-// tx edge for loop index advancement, and current size along loop
-// axis in the event block size != tx size
-fn deblock_params(deblock: &DeblockState, bc: &BlockContext, in_bo: &BlockOffset,
-                  p: &mut Plane, pli: usize, vertical: bool, block_edge: bool, bd: usize) ->
-    (u8, u16, u16, u16) {
+fn deblock_left<'a>(bc: &'a BlockContext, in_bo: &BlockOffset, p: &mut Plane) -> &'a Block {
     let xdec = p.cfg.xdec;
     let ydec = p.cfg.ydec;
 
     // This little bit of weirdness is straight out of the spec;
     // subsampled chroma uses odd mi row/col
     let bo = BlockOffset{x: in_bo.x | xdec, y: in_bo.y | ydec};
-    let block = bc.at(&bo);
+
+    // We already know we're not at the upper/left corner, so prev_block is in frame
+    bc.at(&bo.with_offset(-1 << xdec, 0))
+}
+
+fn deblock_up<'a>(bc: &'a BlockContext, in_bo: &BlockOffset, p: &mut Plane) -> &'a Block {
+    let xdec = p.cfg.xdec;
+    let ydec = p.cfg.ydec;
+
+    // This little bit of weirdness is straight out of the spec;
+    // subsampled chroma uses odd mi row/col
+    let bo = BlockOffset{x: in_bo.x | xdec, y: in_bo.y | ydec};
     
     // We already know we're not at the upper/left corner, so prev_block is in frame
-    let prev_block = bc.at(&bo.with_offset(if vertical { -(1 << xdec) } else { 0 },
-                                           if vertical { 0 } else { -(1 << ydec) }));
+    bc.at(&bo.with_offset(0, -1 << ydec))
+}
+
+// Must be called on a tx edge, and not on a frame edge.  This is enforced above the call.
+fn deblock_size(block: &Block, prev_block: &Block, p: &mut Plane, pli: usize,
+                vertical: bool, block_edge: bool) -> u8 {
+    let xdec = p.cfg.xdec;
+    let ydec = p.cfg.ydec;
 
     // filter application is conditional on skip and block edge
     if !(block_edge || !block.skip || !prev_block.skip ||
          block.ref_frames[0] <= INTRA_FRAME || prev_block.ref_frames[0] <= INTRA_FRAME) {
-        return (0, 0, 0, 0)
-    }
-
-    let mut level = deblock_adjusted_level(deblock, block, pli, vertical) as u16;
-    if level == 0 { level = deblock_adjusted_level(deblock, prev_block, pli, vertical) as u16; }
-    if level <= 0 {
-        // When level == 0, the filter is a no-op even if it runs
-        (0, 0, 0, 0)
+        0
     } else {
-        // Filter active; set up the rest
         let (tx_size, prev_tx_size) = if vertical {
             (cmp::max(block.tx_w>>xdec, 1), cmp::max(prev_block.tx_w>>xdec, 1))
         } else {
             (cmp::max(block.tx_h>>ydec, 1), cmp::max(prev_block.tx_h>>ydec, 1))
         };
 
-        // Rather than computing a filterSize and then later a
-        // filter_length, we simply construct a filter_length
-        // directly.
-        let filter_len = cmp::min( if pli==0 {14} else {6}, cmp::min(tx_size, prev_tx_size)<<MI_SIZE_LOG2);
-        let blimit = 3 * level + 4;
-        let thresh = level >> 4;
+        cmp::min( if pli==0 {14} else {6}, cmp::min(tx_size, prev_tx_size) << MI_SIZE_LOG2) as u8
+    }
+}
 
-        (filter_len as u8, blimit << (bd - 8), level << (bd - 8), thresh << (bd - 8))
+// Must be called on a tx edge
+fn deblock_level(deblock: &DeblockState, block: &Block, prev_block: &Block,
+                 pli: usize, vertical: bool) -> u16 {
+
+    let level = deblock_adjusted_level(deblock, block, pli, vertical) as u16;
+    if level == 0 {
+        deblock_adjusted_level(deblock, prev_block, pli, vertical) as u16
+    } else {
+        level
     }
 }
 
 fn filter_narrow(thresh: u16, bd: usize, data: &mut [u16], pitch: usize,
-            p1: i32, p0: i32, q0: i32, q1: i32) {
+                 p1: i32, p0: i32, q0: i32, q1: i32) {
     let shift = bd - 8;
     let hev =  (p1 - p0).abs() as u16 > thresh || (q1 - q0).abs() as u16 > thresh;
     let base_filter = clamp (if hev { clamp(p1 - q1, -128<<shift, (128<<shift) - 1) } else { 0 } +
@@ -163,10 +172,12 @@ fn filter_wide14(data: &mut [u16], pitch: usize,
 }   
 
 // Assumes slice[0] is set 2 taps back from the edge
-fn deblock_len4<'a>(slice: &'a mut PlaneMutSlice<'a>, pitch: usize, stride: usize,
-                 blimit: u16, limit: u16, thresh: u16, bd: usize) {
+fn deblock_len4<'a>(slice: &'a mut PlaneMutSlice<'a>, pitch: usize, stride: usize, level: u16, bd: usize) {
     let mut s = 0;
     let data = slice.as_mut_slice();
+    let blimit = 3 * level + 4 << bd - 8;
+    let limit = level << bd - 8;
+    let thresh = level >> 4 << bd - 8;
     for _i in 0..4 {
         let p = &mut data[s..];
         let p1 = p[0] as i32;
@@ -184,9 +195,11 @@ fn deblock_len4<'a>(slice: &'a mut PlaneMutSlice<'a>, pitch: usize, stride: usiz
 }
 
 // Assumes slice[0] is set 3 taps back from the edge
-fn deblock_len6<'a>(slice: &'a mut PlaneMutSlice<'a>, pitch: usize, stride: usize,
-                 blimit: u16, limit: u16, thresh: u16, bd: usize) {
+fn deblock_len6<'a>(slice: &'a mut PlaneMutSlice<'a>, pitch: usize, stride: usize, level: u16, bd: usize) {
     let mut s = 0;
+    let blimit = 3 * level + 4 << bd - 8;
+    let limit = level << bd - 8;
+    let thresh = level >> 4 << bd - 8;
     let flat = 1 << bd - 8;
     let data = slice.as_mut_slice();
     for _i in 0..4 {
@@ -220,9 +233,11 @@ fn deblock_len6<'a>(slice: &'a mut PlaneMutSlice<'a>, pitch: usize, stride: usiz
 }
 
 // Assumes slice[0] is set 4 taps back from the edge
-fn deblock_len8<'a>(slice: &'a mut PlaneMutSlice<'a>, pitch: usize, stride: usize,
-                 blimit: u16, limit: u16, thresh: u16, bd: usize) {
+fn deblock_len8<'a>(slice: &'a mut PlaneMutSlice<'a>, pitch: usize, stride: usize, level: u16, bd: usize) {
     let mut s = 0;
+    let blimit = 3 * level + 4 << bd - 8;
+    let limit = level << bd - 8;
+    let thresh = level >> 4 << bd - 8;
     let flat = 1 << bd - 8;
     let data = slice.as_mut_slice();
     for _i in 0..4 {
@@ -262,9 +277,11 @@ fn deblock_len8<'a>(slice: &'a mut PlaneMutSlice<'a>, pitch: usize, stride: usiz
 }
 
 // Assumes slice[0] is set 7 taps back from the edge
-fn deblock_len14<'a>(slice: &'a mut PlaneMutSlice<'a>, pitch: usize, stride: usize,
-                 blimit: u16, limit: u16, thresh: u16, bd: usize) {
+fn deblock_len14<'a>(slice: &'a mut PlaneMutSlice<'a>, pitch: usize, stride: usize, level: u16, bd: usize) {
     let mut s = 0;
+    let blimit = 3 * level + 4 << bd - 8;
+    let limit = level << bd - 8;
+    let thresh = level >> 4 << bd - 8;
     let flat = 1 << bd - 8;
     let data = slice.as_mut_slice();
     for _i in 0..4 {
@@ -329,18 +346,20 @@ fn filter_v_edge(deblock: &DeblockState,
     let block = bc.at(&bo);
     let tx_edge = bo.x & (block.tx_w - 1) == 0;
     if tx_edge {
+        let prev_block = deblock_left(bc, bo, p);
         let block_edge = bo.x & (block.n4_w - 1) == 0;
-        let (filter_len, blimit, limit, thresh) = deblock_params(deblock, bc, bo, p, pli, true, block_edge, bd);
-        if filter_len > 0 {
+        let filter_size = deblock_size(block, prev_block, p, pli, true, block_edge);
+        if filter_size > 0 {
+            let level = deblock_level(deblock, block, prev_block, pli, true);
             let po = bo.plane_offset(&p.cfg);
             let stride = p.cfg.stride;
             let mut slice = p.mut_slice(&po);
-            slice.x -= (filter_len>>1) as isize;
-            match filter_len {
-                4 => { deblock_len4(&mut slice, 1, stride, blimit, limit, thresh, bd); },
-                6 => { deblock_len6(&mut slice, 1, stride, blimit, limit, thresh, bd); },
-                8 => { deblock_len8(&mut slice, 1, stride, blimit, limit, thresh, bd); },
-                14 => { deblock_len14(&mut slice, 1, stride, blimit, limit, thresh, bd); },
+            slice.x -= (filter_size>>1) as isize;
+            match filter_size {
+                4 => { deblock_len4(&mut slice, 1, stride, level, bd); },
+                6 => { deblock_len6(&mut slice, 1, stride, level, bd); },
+                8 => { deblock_len8(&mut slice, 1, stride, level, bd); },
+                14 => { deblock_len14(&mut slice, 1, stride, level, bd); },
                 _ => {}
             }
         }
@@ -356,18 +375,20 @@ fn filter_h_edge(deblock: &DeblockState,
     let block = bc.at(&bo);
     let tx_edge = bo.y & (block.tx_h - 1) == 0;
     if tx_edge {
+        let prev_block = deblock_up(bc, bo, p);
         let block_edge = bo.y & (block.n4_h - 1) == 0;
-        let (filter_len, blimit, limit, thresh) = deblock_params(deblock, bc, bo, p, pli, false, block_edge, bd);
-        if filter_len > 0 {
+        let filter_size = deblock_size(block, prev_block, p, pli, false, block_edge);
+        if filter_size > 0 {
+            let level = deblock_level(deblock, block, prev_block, pli, false);
             let po = bo.plane_offset(&p.cfg);
             let stride = p.cfg.stride;
             let mut slice = p.mut_slice(&po);
-            slice.y -= (filter_len>>1) as isize;
-            match filter_len {
-                4 => { deblock_len4(&mut slice, stride, 1, blimit, limit, thresh, bd); },
-                6 => { deblock_len6(&mut slice, stride, 1, blimit, limit, thresh, bd); },
-                8 => { deblock_len8(&mut slice, stride, 1, blimit, limit, thresh, bd); },
-                14 => { deblock_len14(&mut slice, stride, 1, blimit, limit, thresh, bd); },
+            slice.y -= (filter_size>>1) as isize;
+            match filter_size {
+                4 => { deblock_len4(&mut slice, stride, 1, level, bd); },
+                6 => { deblock_len6(&mut slice, stride, 1, level, bd); },
+                8 => { deblock_len8(&mut slice, stride, 1, level, bd); },
+                14 => { deblock_len14(&mut slice, stride, 1, level, bd); },
                 _ => {}
             }
         }
