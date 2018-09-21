@@ -15,17 +15,16 @@ use plane::*;
 use FrameInvariants;
 use FrameState;
 
-#[inline(always)]
-pub fn get_sad(
+fn get_sad_generic(
   plane_org: &mut PlaneSlice, plane_ref: &mut PlaneSlice, blk_h: usize,
-  blk_w: usize
+  blk_w: usize, x_offset: usize
 ) -> u32 {
   let mut sum = 0 as u32;
 
   for _r in 0..blk_h {
     {
-      let slice_org = plane_org.as_slice_w_width(blk_w);
-      let slice_ref = plane_ref.as_slice_w_width(blk_w);
+      let slice_org = &plane_org.as_slice_w_width(blk_w)[x_offset..];
+      let slice_ref = &plane_ref.as_slice_w_width(blk_w)[x_offset..];
       sum += slice_org
         .iter()
         .zip(slice_ref)
@@ -37,6 +36,79 @@ pub fn get_sad(
   }
 
   sum
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "avx2")]
+unsafe fn get_sad_avx2(
+  plane_org: &mut PlaneSlice, plane_ref: &mut PlaneSlice, blk_h: usize,
+  blk_w: usize
+) -> u32 {
+  #[cfg(target_arch = "x86")]
+  use std::arch::x86::*;
+  #[cfg(target_arch = "x86_64")]
+  use std::arch::x86_64::*;
+
+  let mut sum = 0 as u32;
+  let size;
+
+  {
+    let slice_org = plane_org.as_slice_w_width(blk_w);
+    let slice_ref = plane_ref.as_slice_w_width(blk_w);
+    size = ::std::cmp::min(slice_org.len(), slice_ref.len()) as isize;
+
+    let mut ptr_org = slice_org.as_ptr();
+    let mut ptr_ref = slice_ref.as_ptr();
+
+    let mut v32x8sum = _mm256_set1_epi8(0);
+
+    for _r in 0..blk_h {
+      let mut pos = 0;
+      while pos <= size-8 {
+        let v16x8org = _mm_load_si128(ptr_org.offset(pos) as *const _);
+        let v16x8ref = _mm_load_si128(ptr_ref.offset(pos) as *const _);
+        let v32x8org = _mm256_cvtepu16_epi32(v16x8org);
+        let v32x8ref = _mm256_cvtepu16_epi32(v16x8ref);
+        let v32x8diff = _mm256_sub_epi32(v32x8org, v32x8ref);
+        let v32x8abs = _mm256_abs_epi32(v32x8diff);
+        v32x8sum = _mm256_add_epi32(v32x8abs, v32x8sum);
+
+        pos += 8;
+      }
+
+      ptr_org = ptr_org.add(plane_org.plane.cfg.stride);
+      ptr_ref = ptr_ref.add(plane_ref.plane.cfg.stride);
+    }
+
+    let v32x4lower = _mm256_castsi256_si128(v32x8sum);
+    let v32x4upper = _mm256_extracti128_si256(v32x8sum, 1);
+    let mut v32x4sum = _mm_hadd_epi32(v32x4lower, v32x4upper);
+    v32x4sum = _mm_hadd_epi32(v32x4sum, v32x4sum);
+    sum += _mm_extract_epi32(v32x4sum, 0) as u32;
+    sum += _mm_extract_epi32(v32x4sum, 1) as u32;
+  }
+
+  let remaining = (size % 8) as usize;
+  if remaining != 0 {
+    sum += get_sad_generic(plane_org, plane_ref, blk_h, blk_w, blk_w - remaining);
+  } else {
+    plane_org.y += blk_h as isize;
+    plane_ref.y += blk_h as isize;
+  }
+
+  sum
+}
+
+#[inline(always)]
+pub fn get_sad(
+  plane_org: &mut PlaneSlice, plane_ref: &mut PlaneSlice, blk_h: usize,
+  blk_w: usize
+) -> u32 {
+  return if is_x86_feature_detected!("avx2") {
+    unsafe { get_sad_avx2(plane_org, plane_ref, blk_h, blk_w) }
+  } else {
+    get_sad_generic(plane_org, plane_ref, blk_h, blk_w, 0)
+  }
 }
 
 pub fn motion_estimation(
