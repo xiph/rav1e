@@ -60,6 +60,22 @@ make -j8
 ./aomdec ../output.ivf -o output.y4m
 ```
 
+# Using the AOMAnalyzer
+
+## Local Analyzer
+
+1. Download the [AOM Analyzer](http://aomanalyzer.org).
+2. Download [inspect.js](https://people.xiph.org/~mbebenita/analyzer/inspect.js) and [inspect.wasm](https://people.xiph.org/~mbebenita/analyzer/inspect.wasm) and save them in the same directory.
+3. Run the analyzer: `AOMAnalyzer path_to_inspect.js output.ivf`
+
+## Online Analyzer
+
+If your `.ivf` file is hosted somewhere (and CORS is enabled on your web server) you can use:
+
+```
+https://arewecompressedyet.com/analyzer/?d=https://people.xiph.org/~mbebenita/analyzer/inspect.js&f=path_to_output.ivf
+```
+
 # Design
 
 * src/context.rs - High-level functions that write symbols to the bitstream, and maintain context.
