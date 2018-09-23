@@ -1724,7 +1724,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         w_post_cdef.rollback(&w_post_checkpoint);
 
         partition = PartitionType::PARTITION_SPLIT;
-        subsize = get_subsize(bsize, partition);
+        subsize = bsize.subsize(partition);
 
         let nosplit_rd_cost = rd_cost;
 
@@ -1794,7 +1794,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         }
     }
 
-    subsize = get_subsize(bsize, partition);
+    subsize = bsize.subsize(partition);
 
     if bsize >= BlockSize::BLOCK_8X8 &&
         (bsize == BlockSize::BLOCK_8X8 || partition != PartitionType::PARTITION_SPLIT) {
@@ -1843,7 +1843,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
             partition < PartitionType::PARTITION_INVALID);
 
     let hbs = bs >> 1; // Half the block size in blocks
-    let subsize = get_subsize(bsize, partition);
+    let subsize = bsize.subsize(partition);
     let pmv =  MotionVector { row: 0, col: 0 };
 
     if bsize >= BlockSize::BLOCK_8X8 {

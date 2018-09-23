@@ -661,7 +661,7 @@ pub fn rdo_partition_decision(
         child_modes.push(mode_decision);
       }
       PartitionType::PARTITION_SPLIT => {
-        let subsize = get_subsize(bsize, partition);
+        let subsize = bsize.subsize(partition);
 
         if subsize == BlockSize::BLOCK_INVALID {
           continue;
