@@ -148,6 +148,185 @@ impl BlockSize {
   pub fn is_sub8x8(self) -> bool {
     self.width_log2().min(self.height_log2()) < 3
   }
+
+  const SUBSIZE_LOOKUP: [[BlockSize; BlockSize::BLOCK_SIZES_ALL]; EXT_PARTITION_TYPES] =
+  [
+    [ // PARTITION_NONE
+      //                            4X4
+                                    BLOCK_4X4,
+      // 4X8,        8X4,           8X8
+      BLOCK_4X8,     BLOCK_8X4,     BLOCK_8X8,
+      // 8X16,       16X8,          16X16
+      BLOCK_8X16,    BLOCK_16X8,    BLOCK_16X16,
+      // 16X32,      32X16,         32X32
+      BLOCK_16X32,   BLOCK_32X16,   BLOCK_32X32,
+      // 32X64,      64X32,         64X64
+      BLOCK_32X64,   BLOCK_64X32,   BLOCK_64X64,
+      // 64x128,     128x64,        128x128
+      BLOCK_64X128,  BLOCK_128X64,  BLOCK_128X128,
+      // 4X16,       16X4,          8X32
+      BLOCK_4X16,    BLOCK_16X4,    BLOCK_8X32,
+      // 32X8,       16X64,         64X16
+      BLOCK_32X8,    BLOCK_16X64,   BLOCK_64X16
+    ], [  // PARTITION_HORZ
+      //                            4X4
+                                    BLOCK_INVALID,
+      // 4X8,        8X4,           8X8
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_8X4,
+      // 8X16,       16X8,          16X16
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_16X8,
+      // 16X32,      32X16,         32X32
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_32X16,
+      // 32X64,      64X32,         64X64
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_64X32,
+      // 64x128,     128x64,        128x128
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_128X64,
+      // 4X16,       16X4,          8X32
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
+      // 32X8,       16X64,         64X16
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID
+    ], [  // PARTITION_VERT
+      //                            4X4
+                                    BLOCK_INVALID,
+      // 4X8,        8X4,           8X8
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_4X8,
+      // 8X16,       16X8,          16X16
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_8X16,
+      // 16X32,      32X16,         32X32
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_16X32,
+      // 32X64,      64X32,         64X64
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_32X64,
+      // 64x128,     128x64,        128x128
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_64X128,
+      // 4X16,       16X4,          8X32
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
+      // 32X8,       16X64,         64X16
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID
+    ], [  // PARTITION_SPLIT
+      //                            4X4
+                                    BLOCK_INVALID,
+      // 4X8,        8X4,           8X8
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_4X4,
+      // 8X16,       16X8,          16X16
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_8X8,
+      // 16X32,      32X16,         32X32
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_16X16,
+      // 32X64,      64X32,         64X64
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_32X32,
+      // 64x128,     128x64,        128x128
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_64X64,
+      // 4X16,       16X4,          8X32
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
+      // 32X8,       16X64,         64X16
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID
+    ], [  // PARTITION_HORZ_A
+      //                            4X4
+                                    BLOCK_INVALID,
+      // 4X8,        8X4,           8X8
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_8X4,
+      // 8X16,       16X8,          16X16
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_16X8,
+      // 16X32,      32X16,         32X32
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_32X16,
+      // 32X64,      64X32,         64X64
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_64X32,
+      // 64x128,     128x64,        128x128
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_128X64,
+      // 4X16,       16X4,          8X32
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
+      // 32X8,       16X64,         64X16
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
+    ], [  // PARTITION_HORZ_B
+      //                            4X4
+                                    BLOCK_INVALID,
+      // 4X8,        8X4,           8X8
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_8X4,
+      // 8X16,       16X8,          16X16
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_16X8,
+      // 16X32,      32X16,         32X32
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_32X16,
+      // 32X64,      64X32,         64X64
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_64X32,
+      // 64x128,     128x64,        128x128
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_128X64,
+      // 4X16,       16X4,          8X32
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
+      // 32X8,       16X64,         64X16
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID
+    ], [  // PARTITION_VERT_A
+      //                            4X4
+                                    BLOCK_INVALID,
+      // 4X8,        8X4,           8X8
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_4X8,
+      // 8X16,       16X8,          16X16
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_8X16,
+      // 16X32,      32X16,         32X32
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_16X32,
+      // 32X64,      64X32,         64X64
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_32X64,
+      // 64x128,     128x64,        128x128
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_64X128,
+      // 4X16,       16X4,          8X32
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
+      // 32X8,       16X64,         64X16
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID
+    ], [  // PARTITION_VERT_B
+      //                            4X4
+                                    BLOCK_INVALID,
+      // 4X8,        8X4,           8X8
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_4X8,
+      // 8X16,       16X8,          16X16
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_8X16,
+      // 16X32,      32X16,         32X32
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_16X32,
+      // 32X64,      64X32,         64X64
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_32X64,
+      // 64x128,     128x64,        128x128
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_64X128,
+      // 4X16,       16X4,          8X32
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
+      // 32X8,       16X64,         64X16
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID
+    ], [  // PARTITION_HORZ_4
+      //                            4X4
+                                    BLOCK_INVALID,
+      // 4X8,        8X4,           8X8
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
+      // 8X16,       16X8,          16X16
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_16X4,
+      // 16X32,      32X16,         32X32
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_32X8,
+      // 32X64,      64X32,         64X64
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_64X16,
+      // 64x128,     128x64,        128x128
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
+      // 4X16,       16X4,          8X32
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
+      // 32X8,       16X64,         64X16
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID
+    ], [  // PARTITION_VERT_4
+      //                            4X4
+                                    BLOCK_INVALID,
+      // 4X8,        8X4,           8X8
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
+      // 8X16,       16X8,          16X16
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_4X16,
+      // 16X32,      32X16,         32X32
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_8X32,
+      // 32X64,      64X32,         64X64
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_16X64,
+      // 64x128,     128x64,        128x128
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
+      // 4X16,       16X4,          8X32
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
+      // 32X8,       16X64,         64X16
+      BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID
+    ]
+  ];
+
+  pub fn subsize(self, partition: PartitionType) -> BlockSize {
+    BlockSize::SUBSIZE_LOOKUP[partition as usize][self as usize]
+  }
 }
 
 /// Transform Size
@@ -883,8 +1062,4 @@ pub enum TxSet {
   TX_SET_ALL16_16X16,
   // Discrete Trig transforms w/ flip (9) + Identity (1) + 1D Hor/Ver (6)
   TX_SET_ALL16
-}
-
-pub fn get_subsize(bsize: BlockSize, partition: PartitionType) -> BlockSize {
-  subsize_lookup[partition as usize][bsize as usize]
 }
