@@ -104,21 +104,13 @@ impl BlockSize {
   const BLOCK_SIZE_HEIGHT_LOG2: [usize; BlockSize::BLOCK_SIZES_ALL] =
     [2, 3, 2, 3, 4, 3, 4, 5, 4, 5, 6, 5, 6, 7, 6, 7, 4, 2, 5, 3, 6, 4];
 
-  pub const MI_SIZE_WIDE: [usize; BlockSize::BLOCK_SIZES_ALL] = [
-    1, 1, 2, 2, 2, 4, 4, 4, 8, 8, 8, 16, 16, 16, 32, 32, 1, 4, 2, 8, 4, 16
-  ];
-
-  pub const MI_SIZE_HIGH: [usize; BlockSize::BLOCK_SIZES_ALL] = [
-    1, 2, 1, 2, 4, 2, 4, 8, 4, 8, 16, 8, 16, 32, 16, 32, 4, 1, 8, 2, 16, 4
-  ];
-
   pub fn cfl_allowed(self) -> bool {
     // TODO: fix me when enabling EXT_PARTITION_TYPES
     self <= BlockSize::BLOCK_32X32
   }
 
   pub fn width(self) -> usize {
-    1 << BlockSize::BLOCK_SIZE_WIDTH_LOG2[self as usize]
+    1 << self.width_log2()
   }
 
   pub fn width_log2(self) -> usize {
@@ -130,7 +122,7 @@ impl BlockSize {
   }
 
   pub fn height(self) -> usize {
-    1 << BlockSize::BLOCK_SIZE_HEIGHT_LOG2[self as usize]
+    1 << self.height_log2()
   }
 
   pub fn height_log2(self) -> usize {

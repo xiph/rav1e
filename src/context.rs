@@ -1310,8 +1310,8 @@ impl BlockContext {
   }
 
   pub fn set_block_size(&mut self, bo: &BlockOffset, bsize: BlockSize) {
-    let n4_w = BlockSize::MI_SIZE_WIDE[bsize as usize];
-    let n4_h = BlockSize::MI_SIZE_HIGH[bsize as usize];
+    let n4_w = bsize.width_mi();
+    let n4_h = bsize.height_mi();
     self.for_each(bo, bsize, |block| { block.n4_w = n4_w; block.n4_h = n4_h } );
   }
 
@@ -1868,7 +1868,7 @@ impl ContextWriter {
   }
 
   fn has_tr(&mut self, bo: &BlockOffset, bsize: BlockSize, is_sec_rect: bool) -> bool {
-    let sb_mi_size = BlockSize::MI_SIZE_WIDE[BLOCK_64X64 as usize]; /* Assume 64x64 for now */
+    let sb_mi_size = BLOCK_64X64.width_mi(); /* Assume 64x64 for now */
     let mask_row = bo.y & LOCAL_BLOCK_MASK;
     let mask_col = bo.x & LOCAL_BLOCK_MASK;
     let target_n4_w = bsize.width_mi();
@@ -1876,7 +1876,7 @@ impl ContextWriter {
 
     let mut bs = target_n4_w.max(target_n4_h);
 
-    if bs > BlockSize::MI_SIZE_WIDE[BLOCK_64X64 as usize] {
+    if bs > BLOCK_64X64.width_mi() {
       return false;
     }
 
@@ -1974,9 +1974,9 @@ impl ContextWriter {
     let target_n4_w = bsize.width_mi();
 
     let end_mi = cmp::min(cmp::min(target_n4_w, bc.cols - bo.x),
-                          BlockSize::MI_SIZE_WIDE[BLOCK_64X64 as usize]);
-    let n4_w_8 = BlockSize::MI_SIZE_WIDE[BLOCK_8X8 as usize];
-    let n4_w_16 = BlockSize::MI_SIZE_WIDE[BLOCK_16X16 as usize];
+                          BLOCK_64X64.width_mi());
+    let n4_w_8 = BLOCK_8X8.width_mi();
+    let n4_w_16 = BLOCK_16X16.width_mi();
     let mut col_offset = 0;
 
     if row_offset.abs() > 1 {
@@ -2028,9 +2028,9 @@ impl ContextWriter {
     let target_n4_h = bsize.height_mi();
 
     let end_mi = cmp::min(cmp::min(target_n4_h, bc.rows - bo.y),
-                          BlockSize::MI_SIZE_HIGH[BLOCK_64X64 as usize]);
-    let n4_h_8 = BlockSize::MI_SIZE_HIGH[BLOCK_8X8 as usize];
-    let n4_h_16 = BlockSize::MI_SIZE_HIGH[BLOCK_16X16 as usize];
+                          BLOCK_64X64.height_mi());
+    let n4_h_8 = BLOCK_8X8.height_mi();
+    let n4_h_16 = BLOCK_16X16.height_mi();
     let mut row_offset = 0;
 
     if col_offset.abs() > 1 {
@@ -2098,10 +2098,10 @@ impl ContextWriter {
     let target_n4_w = bsize.width_mi();
 
     let mut max_row_offs = 0 as isize;
-    let row_adj = (target_n4_h < BlockSize::MI_SIZE_HIGH[BLOCK_8X8 as usize]) && (bo.y & 0x01) != 0x0;
+    let row_adj = (target_n4_h < BLOCK_8X8.height_mi()) && (bo.y & 0x01) != 0x0;
 
     let mut max_col_offs = 0 as isize;
-    let col_adj = (target_n4_w < BlockSize::MI_SIZE_WIDE[BLOCK_8X8 as usize]) && (bo.x & 0x01) != 0x0;
+    let col_adj = (target_n4_w < BLOCK_8X8.width_mi()) && (bo.x & 0x01) != 0x0;
 
     let mut processed_rows = 0 as isize;
     let mut processed_cols = 0 as isize;
@@ -2113,7 +2113,7 @@ impl ContextWriter {
       max_row_offs = -2 * MVREF_ROW_COLS as isize + row_adj as isize;
 
       // limit max offset for small blocks
-      if target_n4_h < BlockSize::MI_SIZE_HIGH[BLOCK_8X8 as usize] {
+      if target_n4_h < BLOCK_8X8.height_mi() {
         max_row_offs = -2 * 2 + row_adj as isize;
       }
 
@@ -2125,7 +2125,7 @@ impl ContextWriter {
       max_col_offs = -2 * MVREF_ROW_COLS as isize + col_adj as isize;
 
       // limit max offset for small blocks
-      if target_n4_w < BlockSize::MI_SIZE_WIDE[BLOCK_8X8 as usize] {
+      if target_n4_w < BLOCK_8X8.width_mi() {
         max_col_offs = -2 * 2 + col_adj as isize;
       }
 
