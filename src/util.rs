@@ -116,6 +116,16 @@ macro_rules! arg_enum {
     };
 }
 
+//TODO: Nice to have (although I wasnt able to find a way to do it yet in rust): zero-fill arrays that are
+// shorter than required.  Need const fn (Rust Issue #24111) or const generics (Rust RFC #2000)
+macro_rules! cdf {
+    ($($x:expr),+) =>  {[$(32768 - $x),+, 0, 0]}
+}
+
+macro_rules! cdf_size {
+    ($x:expr) => ($x+1);
+}
+
 #[repr(align(16))]
 struct Align16;
 

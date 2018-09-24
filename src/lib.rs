@@ -27,6 +27,8 @@ pub mod predict;
 pub mod rdo;
 #[macro_use]
 pub mod util;
+pub mod entropymode;
+pub mod token_cdfs;
 pub mod deblock;
 pub mod cdef;
 pub mod encoder;

@@ -580,10 +580,10 @@ fn av1_iidentity16(input: &[i32], output: &mut [i32], _range: usize) {
   }
 }
 
-static INV_TXFM_FNS: [[Option<fn(&[i32], &mut [i32], usize)>; 3]; 3] = [
-  [Some(av1_idct4), Some(av1_idct8), Some(av1_idct16)],
-  [Some(av1_iadst4), Some(av1_iadst8), Some(av1_iadst16)],
-  [Some(av1_iidentity4), Some(av1_iidentity8), Some(av1_iidentity16)]
+static INV_TXFM_FNS: [[fn(&[i32], &mut [i32], usize); 3]; 3] = [
+  [av1_idct4, av1_idct8, av1_idct16],
+  [av1_iadst4, av1_iadst8, av1_iadst16],
+  [av1_iidentity4, av1_iidentity8, av1_iidentity16]
 ];
 
 enum TxType1D {
@@ -621,7 +621,7 @@ trait InvTxfm2D: Dim {
     // perform inv txfm on every row
     let range = bd + 8;
     let txfm_fn =
-      INV_TXFM_FNS[tx_types_1d.1 as usize][Self::W.ilog() - 3].unwrap();
+      INV_TXFM_FNS[tx_types_1d.1 as usize][Self::W.ilog() - 3];
     for (input_slice, buffer_slice) in
       input.chunks(Self::W).zip(buffer.chunks_mut(Self::W))
     {
@@ -635,7 +635,7 @@ trait InvTxfm2D: Dim {
     // perform inv txfm on every col
     let range = cmp::max(bd + 6, 16);
     let txfm_fn =
-      INV_TXFM_FNS[tx_types_1d.0 as usize][Self::H.ilog() - 3].unwrap();
+      INV_TXFM_FNS[tx_types_1d.0 as usize][Self::H.ilog() - 3];
     for c in 0..Self::H {
       let mut temp_in: [i32; 64] = [0; 64];
       let mut temp_out: [i32; 64] = [0; 64];
