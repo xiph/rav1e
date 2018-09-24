@@ -122,10 +122,17 @@ fn hev4(thresh: i32, p1: i32, p0: i32, q0: i32, q1: i32) -> bool {
 
 // four taps, 4 outputs (two are trivial)
 fn filter_narrow2(p1: i32, p0: i32, q0: i32, q1: i32, shift: usize) -> [i32; 4] {
-    let outer_filter = clamp(p1 - q1, -128 << shift, (128 << shift) - 1);
-    let base_filter = clamp(outer_filter + 3 * (q0 - p0), -128 << shift, (128 << shift) - 1);
-    let filter1 = clamp(base_filter + 4, -128 << shift, (128 << shift)-1) >> 3;
-    let filter2 = clamp(base_filter + 3, -128 << shift, (128 << shift)-1) >> 3;
+    let filter0 = clamp(p1 - q1, -128 << shift, (128 << shift) - 1);
+    let filter1 = clamp(filter0 + 3*(q0 - p0) + 4, -128 << shift, (128 << shift)-1) >> 3;
+    // be certain our optimization removing a clamp is sound
+    debug_assert!( { let base = clamp(filter0 + 3 * (q0 - p0), -128 << shift, (128 << shift) - 1);
+                     let test = clamp(base + 4, -128 << shift, (128 << shift)-1) >> 3;
+                     filter1 == test } );
+    let filter2 = clamp(filter0 + 3*(q0 - p0) + 3, -128 << shift, (128 << shift)-1) >> 3;
+    // be certain our optimization removing a clamp is sound
+    debug_assert!( { let base = clamp(filter0 + 3 * (q0 - p0), -128 << shift, (128 << shift) - 1);
+                     let test = clamp(base + 3, -128 << shift, (128 << shift)-1) >> 3;
+                     filter2 == test } );
     [p1,
      clamp(p0 + filter2, 0, (256 << shift)-1),
      clamp(q0 - filter1, 0, (256 << shift)-1),
@@ -134,9 +141,16 @@ fn filter_narrow2(p1: i32, p0: i32, q0: i32, q1: i32, shift: usize) -> [i32; 4] 
 
 // four taps, 4 outputs
 fn filter_narrow4(p1: i32, p0: i32, q0: i32, q1: i32, shift: usize) -> [i32; 4] {
-    let base_filter = clamp(3 * (q0 - p0), -128 << shift, (128 << shift) - 1);
-    let filter1 = clamp(base_filter + 4, -128 << shift, (128 << shift)-1) >> 3;
-    let filter2 = clamp(base_filter + 3, -128 << shift, (128 << shift)-1) >> 3;
+    let filter1 = clamp(3 * (q0 - p0) + 4, -128 << shift, (128 << shift)-1) >> 3;
+    // be certain our optimization removing a clamp is sound
+    debug_assert!( { let base = clamp(3 * (q0 - p0), -128 << shift, (128 << shift) - 1);
+                     let test = clamp(base + 4, -128 << shift, (128 << shift)-1) >> 3;
+                     filter1 == test } );
+    let filter2 = clamp(3 * (q0 - p0) + 3, -128 << shift, (128 << shift)-1) >> 3;
+    // be certain our optimization removing a clamp is sound
+    debug_assert!( { let base = clamp(3 * (q0 - p0), -128 << shift, (128 << shift) - 1);
+                     let test = clamp(base + 3, -128 << shift, (128 << shift)-1) >> 3;
+                     filter2 == test } );
     let filter3 = filter1 + 1 >> 1;
     [clamp(p1 + filter3, 0, (256 << shift)-1),
      clamp(p0 + filter2, 0, (256 << shift)-1),
