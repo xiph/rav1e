@@ -160,12 +160,21 @@ fn compute_rd_cost(
   // Compute distortion
   let po = bo.plane_offset(&fs.input.planes[0].cfg);
   let mut distortion = if fi.config.tune == Tune::Psnr {
-    sse_wxh(
-      &fs.input.planes[0].slice(&po),
-      &fs.rec.planes[0].slice(&po),
-      w_y,
-      h_y
-    )
+    if fi.use_tx_domain_distortion {
+      sse_wxh(
+        &fs.input.planes[0].slice(&po),
+        &fs.rec.planes[0].slice(&po),
+        w_y,
+        h_y
+      )
+    } else {
+      sse_wxh(
+        &fs.input.planes[0].slice(&po),
+        &fs.rec.planes[0].slice(&po),
+        w_y,
+        h_y
+      )
+    }
   } else if fi.config.tune == Tune::Psychovisual {
     cdef_dist_wxh(
       &fs.input.planes[0].slice(&po),

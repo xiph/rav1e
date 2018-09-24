@@ -128,15 +128,15 @@ impl QuantizationContext {
   }
 
   #[inline]
-  pub fn quantize(&self, coeffs: &mut [i32]) {
-    coeffs[0] <<= self.log_tx_scale;
-    coeffs[0] += coeffs[0].signum() * self.dc_offset;
-    coeffs[0] = divu_pair(coeffs[0], self.dc_mul_add);
+  pub fn quantize(&self, coeffs: &[i32], qcoeffs: &mut [i32]) {
+    qcoeffs[0] = coeffs[0] << self.log_tx_scale;
+    qcoeffs[0] += qcoeffs[0].signum() * self.dc_offset;
+    qcoeffs[0] = divu_pair(coeffs[0], self.dc_mul_add);
 
-    for c in coeffs[1..].iter_mut() {
-      *c <<= self.log_tx_scale;
-      *c += c.signum() * self.ac_offset;
-      *c = divu_pair(*c, self.ac_mul_add);
+    for (qc, c) in qcoeffs.iter_mut().zip(coeffs.iter()) {
+      *qc = *c << self.log_tx_scale;
+      *qc += qc.signum() * self.ac_offset;
+      *qc = divu_pair(*c, self.ac_mul_add);
     }
   }
 }
