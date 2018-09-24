@@ -135,7 +135,9 @@ impl Context {
       // self.fi.use_prev_frame_mvs =
       //  !(self.fi.intra_only || self.fi.error_resilient);
 
-      let log_boost_frequency = if self.fi.config.speed <= 2 {
+      let use_multiple_ref_frames = self.fi.config.speed <= 2;
+
+      let log_boost_frequency = if use_multiple_ref_frames {
         2 // Higher quality frame every 4 frames
       } else {
         0 // No boosting with single reference frame
@@ -154,7 +156,11 @@ impl Context {
       } as u8;
 
       let first_ref_frame = LAST_FRAME;
-      let second_ref_frame = ALTREF_FRAME;
+      let second_ref_frame = if use_multiple_ref_frames {
+        ALTREF_FRAME
+      } else {
+        NONE_FRAME
+      };
 
       self.fi.primary_ref_frame = if self.fi.intra_only || self.fi.error_resilient {
         PRIMARY_REF_NONE
@@ -162,8 +168,13 @@ impl Context {
         (first_ref_frame - LAST_FRAME) as u32
       };
 
-      self.fi.ref_frames[first_ref_frame - LAST_FRAME] = (REF_FRAMES + slot_idx as usize - 1) & (REF_FRAMES - 1);
-      self.fi.ref_frames[second_ref_frame - LAST_FRAME] = (REF_FRAMES + slot_idx as usize - 2) & boost_frequency as usize;
+      for i in 0..INTER_REFS_PER_FRAME {
+        self.fi.ref_frames[i] = if i == second_ref_frame - LAST_FRAME {
+          (REF_FRAMES + slot_idx as usize - 2) & boost_frequency as usize
+        } else {
+          (REF_FRAMES + slot_idx as usize - 1) & (REF_FRAMES - 1)
+        };
+      }
 
       let data = encode_frame(&mut self.seq, &mut self.fi, &mut fs);
 

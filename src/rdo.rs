@@ -302,43 +302,46 @@ pub fn rdo_mode_decision(
     RAV1E_INTRA_MODES_MINIMAL
   };
 
-  let ref_frame_set: &[usize] = if fi.frame_type == FrameType::KEY {
-    &[INTRA_FRAME]
-  } else {
-    if fi.config.speed <= 2 {
-      &[LAST_FRAME, ALTREF_FRAME]
-    } else {
-      &[LAST_FRAME]
+  let mut ref_frame_set = Vec::new();
+  let mut ref_slot_set = Vec::new();
+
+  if fi.frame_type == FrameType::INTER {
+    for i in LAST_FRAME..NONE_FRAME {
+      if !ref_slot_set.contains(&fi.ref_frames[i - LAST_FRAME]) {
+        ref_frame_set.push(i);
+        ref_slot_set.push(fi.ref_frames[i - LAST_FRAME]);
+      }
     }
-  };
+    assert!(ref_frame_set.len() != 0);
+  }
 
   let mut mode_set: Vec<(PredictionMode, usize)> = Vec::new();
-  let mut mv_stack = Vec::new();
+  let mut mv_stacks = Vec::new();
   let mut mode_contexts = Vec::new();
 
   for (i, &ref_frame) in ref_frame_set.iter().enumerate() {
     let mut mvs: Vec<CandidateMV> = Vec::new();
     mode_contexts.push(cw.find_mvrefs(bo, ref_frame, &mut mvs, bsize, false));
-    mv_stack.push(mvs);
 
     if fi.frame_type == FrameType::INTER {
       for &x in RAV1E_INTER_MODES_MINIMAL {
         mode_set.push((x, i));
       }
       if fi.config.speed <= 2 {
-        if mv_stack.len() >= 3 {
+        if mvs.len() >= 3 {
           mode_set.push((PredictionMode::NEAR1MV, i));
         }
-        if mv_stack.len() >= 4 {
+        if mvs.len() >= 4 {
           mode_set.push((PredictionMode::NEAR2MV, i));
         }
       }
     }
+    mv_stacks.push(mvs);
   }
 
   let luma_rdo = |luma_mode: PredictionMode, fs: &mut FrameState, cw: &mut ContextWriter, best: &mut EncodingSettings,
     mv: MotionVector, ref_frame: usize, mode_set_chroma: &[PredictionMode], luma_mode_is_intra: bool,
-    i: usize| {
+    mode_context: usize, mv_stack: &Vec<CandidateMV>| {
     let (tx_size, tx_type) = rdo_tx_size_type(
       seq, fi, fs, cw, bsize, bo, luma_mode, ref_frame, mv, false,
     );
@@ -367,8 +370,8 @@ pub fn rdo_mode_decision(
           CFLParams::new(),
           tx_size,
           tx_type,
-          mode_contexts[i],
-          &mv_stack[i]
+          mode_context,
+          mv_stack
         );
 
         let cost = wr.tell_frac() - tell;
@@ -406,28 +409,33 @@ pub fn rdo_mode_decision(
     };
   };
 
+  if fi.frame_type != FrameType::INTER {
+    assert!(mode_set.len() == 0);
+  }
 
   mode_set.iter().for_each(|&(luma_mode, i)| {
     let mv = match luma_mode {
       PredictionMode::NEWMV => motion_estimation(fi, fs, bsize, bo, ref_frame_set[i], pmv),
-      PredictionMode::NEARESTMV => if mv_stack[i].len() > 0 {
-        mv_stack[i][0].this_mv
+      PredictionMode::NEARESTMV => if mv_stacks[i].len() > 0 {
+        mv_stacks[i][0].this_mv
       } else {
         MotionVector { row: 0, col: 0 }
       },
-      PredictionMode::NEAR0MV => if mv_stack[i].len() > 1 {
-        mv_stack[i][1].this_mv
+      PredictionMode::NEAR0MV => if mv_stacks[i].len() > 1 {
+        mv_stacks[i][1].this_mv
       } else {
         MotionVector { row: 0, col: 0 }
       },
       PredictionMode::NEAR1MV | PredictionMode::NEAR2MV =>
-          mv_stack[i][luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].this_mv,
+          mv_stacks[i][luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].this_mv,
       _ => MotionVector { row: 0, col: 0 }
     };
     let mode_set_chroma = vec![luma_mode];
 
-    luma_rdo(luma_mode, fs, cw, &mut best, mv, ref_frame_set[i], &mode_set_chroma, false, i);
+    luma_rdo(luma_mode, fs, cw, &mut best, mv, ref_frame_set[i], &mode_set_chroma, false,
+             mode_contexts[i], &mv_stacks[i]);
   });
+
   if !best.skip {
     intra_mode_set.iter().for_each(|&luma_mode| {
       let mv = MotionVector { row: 0, col: 0 };
@@ -435,7 +443,8 @@ pub fn rdo_mode_decision(
       if is_chroma_block && luma_mode != PredictionMode::DC_PRED {
         mode_set_chroma.push(PredictionMode::DC_PRED);
       }
-      luma_rdo(luma_mode, fs, cw, &mut best, mv, INTRA_FRAME, &mode_set_chroma, true, 0);
+      luma_rdo(luma_mode, fs, cw, &mut best, mv, INTRA_FRAME, &mode_set_chroma, true,
+               0, &Vec::new());
     });
   }
 

@@ -14,7 +14,7 @@ use self::BlockSize::*;
 use self::TxSize::*;
 use encoder::FrameInvariants;
 
-pub const NONE_FRAME: isize = -1;
+pub const NONE_FRAME: usize = 8;
 pub const INTRA_FRAME: usize = 0;
 pub const LAST_FRAME: usize = 1;
 pub const LAST2_FRAME: usize = 2;
