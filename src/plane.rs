@@ -220,10 +220,36 @@ impl Plane {
   }
 }
 
+#[derive(Clone, Copy)]
 pub struct PlaneSlice<'a> {
   pub plane: &'a Plane,
   pub x: isize,
   pub y: isize
+}
+
+pub struct IterWidth<'a> {
+    ps: PlaneSlice<'a>,
+    width: usize,
+}
+
+// TODO: Implement more methods
+impl<'a> Iterator for IterWidth<'a> {
+    type Item = &'a [u16];
+
+    #[inline]
+    fn next(&mut self) -> Option<&'a [u16]> {
+        let x = self.ps.plane.cfg.xorigin + self.ps.x;
+        let y = self.ps.plane.cfg.yorigin + self.ps.y;
+        let stride = self.ps.plane.cfg.stride;
+        let base = y as usize * stride + x as usize;
+
+        if self.ps.plane.data.len() < base + self.width {
+            None
+        } else {
+            self.ps.y += 1;
+            Some(&self.ps.plane.data[base..base + self.width])
+        }
+    }
 }
 
 impl<'a> PlaneSlice<'a> {
@@ -250,6 +276,10 @@ impl<'a> PlaneSlice<'a> {
     let base = (self.y + self.plane.cfg.yorigin) as usize * stride
       + (self.x + self.plane.cfg.xorigin) as usize;
     &self.plane.data[base..base + width]
+  }
+
+  pub fn iter_width(&self, width: usize) -> IterWidth<'a> {
+    IterWidth { ps: *self, width }
   }
 
   pub fn subslice(&'a self, xo: usize, yo: usize) -> PlaneSlice<'a> {

@@ -39,6 +39,26 @@ pub fn get_sad(
   sum
 }
 
+#[inline(always)]
+pub fn get_sad_iter(
+  plane_org: &mut PlaneSlice, plane_ref: &mut PlaneSlice, blk_h: usize,
+  blk_w: usize
+) -> u32 {
+  let mut sum = 0 as u32;
+
+  let org_iter = plane_org.iter_width(blk_w);
+  let ref_iter = plane_ref.iter_width(blk_w);
+
+  for (slice_org, slice_ref) in org_iter.take(blk_h).zip(ref_iter) {
+      sum += slice_org
+        .iter()
+        .zip(slice_ref)
+        .map(|(&a, &b)| (a as i32 - b as i32).abs() as u32)
+        .sum::<u32>();
+  }
+
+  sum
+}
 pub fn motion_estimation(
   fi: &FrameInvariants, fs: &FrameState, bsize: BlockSize,
   bo: &BlockOffset, ref_frame: usize, pmv: &MotionVector
