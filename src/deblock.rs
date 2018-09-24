@@ -21,7 +21,7 @@ use FrameType;
 use FrameState;
 use DeblockState;
 
-fn deblock_adjusted_level(deblock: &DeblockState, block: &Block, pli: usize, vertical: bool) -> u8 {
+fn deblock_adjusted_level(deblock: &DeblockState, block: &Block, pli: usize, vertical: bool) -> i32 {
     let idx = if pli == 0 { if vertical { 0 } else { 1 } } else { pli+1 };
 
     let level = if deblock.block_deltas_enabled {
@@ -53,9 +53,9 @@ fn deblock_adjusted_level(deblock: &DeblockState, block: &Block, pli: usize, ver
                    0
                } else {
                    (deblock.mode_deltas[mode_type] as i32) << l5
-               }, 0, MAX_LOOP_FILTER as i32) as u8
+               }, 0, MAX_LOOP_FILTER as i32)
     } else {
-        level
+        level as i32
     }
 }
 
@@ -85,7 +85,7 @@ fn deblock_up<'a>(bc: &'a BlockContext, in_bo: &BlockOffset, p: &mut Plane) -> &
 
 // Must be called on a tx edge, and not on a frame edge.  This is enforced above the call.
 fn deblock_size(block: &Block, prev_block: &Block, p: &mut Plane, pli: usize,
-                vertical: bool, block_edge: bool) -> u8 {
+                vertical: bool, block_edge: bool) -> i32 {
     let xdec = p.cfg.xdec;
     let ydec = p.cfg.ydec;
 
@@ -100,148 +100,185 @@ fn deblock_size(block: &Block, prev_block: &Block, p: &mut Plane, pli: usize,
             (cmp::max(block.tx_h>>ydec, 1), cmp::max(prev_block.tx_h>>ydec, 1))
         };
 
-        cmp::min( if pli==0 {14} else {6}, cmp::min(tx_size, prev_tx_size) << MI_SIZE_LOG2) as u8
+        cmp::min( if pli==0 {14} else {6}, cmp::min(tx_size, prev_tx_size) << MI_SIZE_LOG2) as i32
     }
 }
 
 // Must be called on a tx edge
 fn deblock_level(deblock: &DeblockState, block: &Block, prev_block: &Block,
-                 pli: usize, vertical: bool) -> u16 {
+                 pli: usize, vertical: bool) -> i32 {
 
-    let level = deblock_adjusted_level(deblock, block, pli, vertical) as u16;
+    let level = deblock_adjusted_level(deblock, block, pli, vertical);
     if level == 0 {
-        deblock_adjusted_level(deblock, prev_block, pli, vertical) as u16
+        deblock_adjusted_level(deblock, prev_block, pli, vertical)
     } else {
         level
     }
 }
 
-fn filter_narrow(thresh: u16, bd: usize, data: &mut [u16], pitch: usize,
-                 p1: i32, p0: i32, q0: i32, q1: i32) {
-    let shift = bd - 8;
-    let hev =  (p1 - p0).abs() as u16 > thresh || (q1 - q0).abs() as u16 > thresh;
-    let base_filter = clamp (if hev { clamp(p1 - q1, -128<<shift, (128<<shift) - 1) } else { 0 } +
-                             3 * (q0 - p0), -128<<shift, (128<<shift) - 1);
-    
-    // Inner taps
-    let filter1 = clamp(base_filter + 4, -128<<shift, (128<<shift)-1) >> 3;
-    let filter2 = clamp(base_filter + 3, -128<<shift, (128<<shift)-1) >> 3;
-    data[pitch] = clamp(p0 + filter2, 0, (256<<shift)-1) as u16;
-    data[pitch*2] = clamp(q0 - filter1, 0, (256<<shift)-1) as u16;
-    if !hev {
-        // Outer taps
-        let filter3 = filter1 + 1 >> 1;
-        data[0] = clamp(p1 + filter3, 0, (256<<shift)-1) as u16;
-        data[pitch*3] = clamp(q1 - filter3, 0, (256<<shift)-1) as u16;
-    }
+fn hev4(thresh: i32, p1: i32, p0: i32, q0: i32, q1: i32) -> bool {
+    (p1 - p0).abs() > thresh || (q1 - q0).abs() > thresh
 }
 
-fn filter_wide6(data: &mut [u16], pitch: usize,
-            p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32) {
-    data[pitch]   = (p2*3 + p1*2 + p0*2 + q0 + (1<<2) >> 3) as u16;
-    data[pitch*2] = (p2 + p1*2 + p0*2 + q0*2 + q1 + (1<<2) >> 3) as u16;
-    data[pitch*3] = (p1 + p0*2 + q0*2 + q1*2 + q2 + (1<<2) >> 3) as u16;
-    data[pitch*4] = (p0 + q0*2 + q1*2 + q2*3 + (1<<2) >> 3) as u16;
+// four taps, 4 outputs (two are trivial)
+fn filter_narrow2(p1: i32, p0: i32, q0: i32, q1: i32, shift: usize) -> [i32; 4] {
+    let outer_filter = clamp(p1 - q1, -128 << shift, (128 << shift) - 1);
+    let base_filter = clamp(outer_filter + 3 * (q0 - p0), -128 << shift, (128 << shift) - 1);
+    let filter1 = clamp(base_filter + 4, -128 << shift, (128 << shift)-1) >> 3;
+    let filter2 = clamp(base_filter + 3, -128 << shift, (128 << shift)-1) >> 3;
+    [p1,
+     clamp(p0 + filter2, 0, (256 << shift)-1),
+     clamp(q0 - filter1, 0, (256 << shift)-1),
+     q1]
 }
 
-fn filter_wide8(data: &mut [u16], pitch: usize,
-            p3: i32, p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32, q3: i32) {
-    data[pitch]   = (p3*3 + p2*2 + p1 + p0 + q0 + (1<<2) >> 3) as u16;
-    data[pitch*2] = (p3*2 + p2 + p1*2 + p0 + q0 + q1 + (1<<2) >> 3) as u16;
-    data[pitch*3] = (p3 + p2 + p1 + p0*2 + q0 + q1 + q2 + (1<<2) >> 3) as u16;
-    data[pitch*4] = (p2 + p1 + p0 + q0*2 + q1 + q2 + q3 + (1<<2) >> 3) as u16;
-    data[pitch*5] = (p1 + p0 + q0 + q1*2 + q2 + q3*2 + (1<<2) >> 3) as u16;
-    data[pitch*6] = (p0 + q0 + q1 + q2*2 + q3*3 + (1<<2) >> 3) as u16;
+// four taps, 4 outputs
+fn filter_narrow4(p1: i32, p0: i32, q0: i32, q1: i32, shift: usize) -> [i32; 4] {
+    let base_filter = clamp(3 * (q0 - p0), -128 << shift, (128 << shift) - 1);
+    let filter1 = clamp(base_filter + 4, -128 << shift, (128 << shift)-1) >> 3;
+    let filter2 = clamp(base_filter + 3, -128 << shift, (128 << shift)-1) >> 3;
+    let filter3 = filter1 + 1 >> 1;
+    [clamp(p1 + filter3, 0, (256 << shift)-1),
+     clamp(p0 + filter2, 0, (256 << shift)-1),
+     clamp(q0 - filter1, 0, (256 << shift)-1),
+     clamp(q1 - filter3, 0, (256 << shift)-1)]
 }
 
-fn filter_wide14(data: &mut [u16], pitch: usize,
-             p6: i32, p5: i32, p4: i32, p3: i32, p2: i32, p1: i32, p0: i32,
-             q0: i32, q1: i32, q2: i32, q3: i32, q4: i32, q5: i32, q6: i32) {
-    data[pitch]   = (p6*7 + p5*2 + p4*2 + p3 + p2 + p1 + p0 + q0 + (1<<3) >> 4) as u16;
-    data[pitch*2] = (p6*5 + p5*2 + p4*2 + p3*2 + p2 + p1 + p0 + q0 + q1 + (1<<3) >> 4) as u16;
-    data[pitch*3] = (p6*4 + p5 + p4*2 + p3*2 + p2*2 + p1 + p0 + q0 + q1 + q2 + (1<<3) >> 4) as u16;
-    data[pitch*4] = (p6*3 + p5 + p4 + p3*2 + p2*2 + p1*2 + p0 + q0 + q1 + q2 + q3 + (1<<3) >> 4) as u16;
-    data[pitch*5] = (p6*2 + p5 + p4 + p3 + p2*2 + p1*2 + p0*2 + q0 + q1 + q2 + q3 + q4 + (1<<3) >> 4) as u16;
-    data[pitch*6] = (p6 + p5 + p4 + p3 + p2 + p1*2 + p0*2 + q0*2 + q1 + q2 + q3 + q4 + q5 + (1<<3) >> 4) as u16;
-    data[pitch*7] = (p5 + p4 + p3 + p2 + p1 + p0*2 + q0*2 + q1*2 + q2 + q3 + q4 + q5 + q6 + (1<<3) >> 4) as u16;
-    data[pitch*8] = (p4 + p3 + p2 + p1 + p0 + q0*2 + q1*2 + q2*2 + q3 + q4 + q5 + q6*2 + (1<<3) >> 4) as u16;
-    data[pitch*9] = (p3 + p2 + p1 + p0 + q0 + q1*2 + q2*2 + q3*2 + q4 + q5 + q6*3 + (1<<3) >> 4) as u16;
-    data[pitch*10] = (p2 + p1 + p0 + q0 + q1 + q2*2 + q3*2 + q4*2 + q5 + q6*4 + (1<<3) >> 4) as u16;
-    data[pitch*11] = (p1 + p0 + q0 + q1 + q2 + q3*2 + q4*2 + q5*2 + q6*5 + (1<<3) >> 4) as u16;
-    data[pitch*12] = (p0 + q0 + q1 + q2 + q3 + q4*2 + q5*2 + q6*7 + (1<<3) >> 4) as u16;
+// six taps, 4 outputs
+#[cfg_attr(rustfmt, rustfmt_skip)]
+fn filter_wide6(p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32) -> [i32; 4] {
+    [p2*3 + p1*2 + p0*2 + q0   + (1<<2) >> 3,
+     p2   + p1*2 + p0*2 + q0*2 + q1   + (1<<2) >> 3,
+            p1   + p0*2 + q0*2 + q1*2 + q2   + (1<<2) >> 3,
+                   p0   + q0*2 + q1*2 + q2*3 + (1<<2) >> 3]
+}
+
+// eight taps, 6 outputs
+#[cfg_attr(rustfmt, rustfmt_skip)]
+fn filter_wide8(p3: i32, p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32, q3: i32) -> [i32; 6] {
+    [p3*3 + p2*2 + p1   + p0   + q0   + (1<<2) >> 3,
+     p3*2 + p2   + p1*2 + p0   + q0   + q1   + (1<<2) >> 3,
+     p3   + p2   + p1   + p0*2 + q0   + q1   + q2   +(1<<2) >> 3,
+            p2   + p1   + p0   + q0*2 + q1   + q2   + q3   + (1<<2) >> 3,
+                   p1   + p0   + q0   + q1*2 + q2   + q3*2 + (1<<2) >> 3,
+                          p0   + q0   + q1   + q2*2 + q3*3 + (1<<2) >> 3]
+}
+
+// fourteen taps, 12 outputs
+#[cfg_attr(rustfmt, rustfmt_skip)]
+fn filter_wide14(p6: i32, p5: i32, p4: i32, p3: i32, p2: i32, p1: i32, p0: i32,
+                 q0: i32, q1: i32, q2: i32, q3: i32, q4: i32, q5: i32, q6: i32) -> [i32; 12] {
+    [p6*7 + p5*2 + p4*2 + p3   + p2   + p1   + p0   + q0   + (1<<3) >> 4,
+     p6*5 + p5*2 + p4*2 + p3*2 + p2   + p1   + p0   + q0   + q1   + (1<<3) >> 4,
+     p6*4 + p5   + p4*2 + p3*2 + p2*2 + p1   + p0   + q0   + q1   + q2   + (1<<3) >> 4,
+     p6*3 + p5   + p4   + p3*2 + p2*2 + p1*2 + p0   + q0   + q1   + q2   + q3   + (1<<3) >> 4,
+     p6*2 + p5   + p4   + p3   + p2*2 + p1*2 + p0*2 + q0   + q1   + q2   + q3   + q4   + (1<<3) >> 4,
+     p6   + p5   + p4   + p3   + p2   + p1*2 + p0*2 + q0*2 + q1   + q2   + q3   + q4   + q5   + (1<<3) >> 4,
+            p5   + p4   + p3   + p2   + p1   + p0*2 + q0*2 + q1*2 + q2   + q3   + q4   + q5   + q6 + (1<<3) >> 4,
+                   p4   + p3   + p2   + p1   + p0   + q0*2 + q1*2 + q2*2 + q3   + q4   + q5   + q6*2 + (1<<3) >> 4,
+                          p3   + p2   + p1   + p0   + q0   + q1*2 + q2*2 + q3*2 + q4   + q5   + q6*3 + (1<<3) >> 4,
+                                 p2   + p1   + p0   + q0   + q1   + q2*2 + q3*2 + q4*2 + q5   + q6*4 + (1<<3) >> 4,
+                                        p1   + p0   + q0   + q1   + q2   + q3*2 + q4*2 + q5*2 + q6*5 + (1<<3) >> 4,
+                                               p0   + q0   + q1   + q2   + q3   + q4*2 + q5*2 + q6*7 + (1<<3) >> 4]
 }   
 
-// Assumes slice[0] is set 2 taps back from the edge
-fn deblock_len4<'a>(slice: &'a mut PlaneMutSlice<'a>, pitch: usize, stride: usize, level: u16, bd: usize) {
+fn mask4(blimit: i32, limit: i32, p1: i32, p0: i32, q0: i32, q1: i32) -> bool {
+    (p1 - p0).abs() <= limit &&
+        (q1 - q0).abs() <= limit &&
+        (p0 - q0).abs() * 2 + (p1 - q1).abs() / 2 <= blimit
+}
+
+fn stride_copy(dst: &mut [u16], src: &[i32], pitch: usize) {
+    for (dst, src) in dst.iter_mut().step_by(pitch).take(src.len()).zip(src) { *dst = *src as u16 };
+}
+
+// Assumes rec[0] is set 2 taps back from the edge
+fn deblock_size4(rec: &mut[u16], pitch: usize, stride: usize, level: i32, bd: usize) {
     let mut s = 0;
-    let data = slice.as_mut_slice();
     let blimit = 3 * level + 4 << bd - 8;
     let limit = level << bd - 8;
     let thresh = level >> 4 << bd - 8;
     for _i in 0..4 {
-        let p = &mut data[s..];
+        let p = &mut rec[s..];
         let p1 = p[0] as i32;
         let p0 = p[pitch] as i32;
         let q0 = p[pitch*2] as i32;
         let q1 = p[pitch*3] as i32;
-        // 'mask' test
-        if (p1 - p0).abs() as u16 <= limit &&
-            (q1 - q0).abs() as u16 <= limit &&
-            (p0 - q0).abs() as u16 * 2 + (p1 - q1).abs() as u16 / 2 <= blimit {
-                filter_narrow(thresh, bd, p, pitch, p1, p0, q0, q1);
+        if mask4(blimit, limit, p1, p0, q0, q1) {
+            let x;
+            if hev4(thresh, p1, p0, q0, q1) {
+                x = filter_narrow2(p1, p0, q0, q1, bd - 8);
+            } else {
+                x = filter_narrow4(p1, p0, q0, q1, bd - 8);
             }
+            stride_copy(p, &x, pitch);
+        }
         s += stride;
     }
 }
 
+fn mask6(blimit: i32, limit: i32, p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32) -> bool {
+    (p2 - p1).abs() <= limit && (p1 - p0).abs() <= limit &&
+        (q2 - q1).abs() <= limit && (q1 - q0).abs() <= limit &&
+        (p0 - q0).abs() * 2 + (p1 - q1).abs() / 2 <= blimit
+}
+
+fn flat6(flat: i32, p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32) -> bool {
+    (p1 - p0).abs() <= flat && (q1 - q0).abs() <= flat &&
+        (p2 - p0).abs() <= flat && (q2 - q0).abs() <= flat
+}
+
 // Assumes slice[0] is set 3 taps back from the edge
-fn deblock_len6<'a>(slice: &'a mut PlaneMutSlice<'a>, pitch: usize, stride: usize, level: u16, bd: usize) {
+fn deblock_size6(rec: &mut[u16], pitch: usize, stride: usize, level: i32, bd: usize) {
     let mut s = 0;
     let blimit = 3 * level + 4 << bd - 8;
     let limit = level << bd - 8;
     let thresh = level >> 4 << bd - 8;
     let flat = 1 << bd - 8;
-    let data = slice.as_mut_slice();
     for _i in 0..4 {
-        let p = &mut data[s..];
+        let p = &mut rec[s..];
         let p2 = p[0] as i32;
         let p1 = p[pitch] as i32;
         let p0 = p[pitch*2] as i32;
         let q0 = p[pitch*3] as i32;
         let q1 = p[pitch*4] as i32;
         let q2 = p[pitch*5] as i32;
-        // 'mask' test
-        if (p2 - p1).abs() as u16 <= limit &&
-            (p1 - p0).abs() as u16 <= limit &&
-            (q1 - q0).abs() as u16 <= limit &&
-            (q2 - q1).abs() as u16 <= limit &&
-            (p0 - q0).abs() as u16 * 2 + (p1 - q1).abs() as u16 / 2 <= blimit {
-                // 'flat' test
-                if (p1 - p0).abs() as u16 <= flat &&
-                    (q1 - q0).abs() as u16 <= flat &&
-                    (p2 - p0).abs() as u16 <= flat &&
-                    (q2 - q0).abs() as u16 <= flat {
-                        // sufficiently flat, run wide filter
-                        filter_wide6(p, pitch, p2, p1, p0, q0, q1, q2);
-                    } else {
-                        // insufficiently flat, run narrow filter
-                        filter_narrow(thresh, bd, &mut p[pitch..], pitch, p1, p0, q0, q1);
-                    }
+        if mask6(blimit, limit, p2, p1, p0, q0, q1, q2) {
+            let x;
+            if flat6(flat, p2, p1, p0, q0, q1, q2) {
+                x = filter_wide6(p2, p1, p0, q0, q1, q2);
+            } else if hev4(thresh, p1, p0, q0, q1) {
+                x = filter_narrow2(p1, p0, q0, q1, bd - 8);
+            } else {
+                x = filter_narrow4(p1, p0, q0, q1, bd - 8);
             }
+            stride_copy(&mut p[pitch..], &x, pitch);
+        }
         s += stride;
     }
 }
 
-// Assumes slice[0] is set 4 taps back from the edge
-fn deblock_len8<'a>(slice: &'a mut PlaneMutSlice<'a>, pitch: usize, stride: usize, level: u16, bd: usize) {
+fn mask8(blimit: i32, limit: i32, p3: i32, p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32, q3: i32) -> bool {
+    (p3 - p2).abs() <= limit && (p2 - p1).abs() <= limit && (p1 - p0).abs() <= limit &&
+        (q3 - q2).abs() <= limit && (q2 - q1).abs() <= limit && (q1 - q0).abs() <= limit &&
+        (p0 - q0).abs() * 2 + (p1 - q1).abs() / 2 <= blimit
+}
+
+fn flat8(flat: i32, p3:i32, p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32, q3: i32) -> bool {
+    (p1 - p0).abs() <= flat && (q1 - q0).abs() <= flat &&
+        (p2 - p0).abs() <= flat && (q2 - q0).abs() <= flat &&
+        (p3 - p0).abs() <= flat && (q3 - q0).abs() <= flat
+}
+
+// Assumes rec[0] is set 4 taps back from the edge
+fn deblock_size8(rec: &mut[u16], pitch: usize, stride: usize, level: i32, bd: usize) {
     let mut s = 0;
     let blimit = 3 * level + 4 << bd - 8;
     let limit = level << bd - 8;
     let thresh = level >> 4 << bd - 8;
     let flat = 1 << bd - 8;
-    let data = slice.as_mut_slice();
     for _i in 0..4 {
-        let p = &mut data[s..];
+        let p = &mut rec[s..];
         let p3 = p[0] as i32;
         let p2 = p[pitch] as i32;
         let p1 = p[pitch*2] as i32;
@@ -250,42 +287,39 @@ fn deblock_len8<'a>(slice: &'a mut PlaneMutSlice<'a>, pitch: usize, stride: usiz
         let q1 = p[pitch*5] as i32;
         let q2 = p[pitch*6] as i32;
         let q3 = p[pitch*7] as i32;
-        // 'mask' test
-        if (p3 - p2).abs() as u16 <= limit &&
-            (p2 - p1).abs() as u16 <= limit &&
-            (p1 - p0).abs() as u16 <= limit &&
-            (q1 - q0).abs() as u16 <= limit &&
-            (q2 - q1).abs() as u16 <= limit &&
-            (q3 - q2).abs() as u16 <= limit &&
-            (p0 - q0).abs() as u16 * 2 + (p1 - q1).abs() as u16 / 2 <= blimit {
-                // 'flat' test
-                if (p1 - p0).abs() as u16 <= flat &&
-                    (q1 - q0).abs() as u16 <= flat &&
-                    (p2 - p0).abs() as u16 <= flat &&
-                    (q2 - q0).abs() as u16 <= flat &&
-                    (p3 - p0).abs() as u16 <= flat &&
-                    (q3 - q0).abs() as u16 <= flat {
-                        // sufficiently flat, run wide filter
-                        filter_wide8(p, pitch, p3, p2, p1, p0, q0, q1, q2, q3);
-                    } else {
-                        // insufficiently flat, run narrow filter
-                        filter_narrow(thresh, bd, &mut p[pitch*2..], pitch, p1, p0, q0, q1);
-                    }
+        if mask8(blimit, limit, p3, p2, p1, p0, q0, q1, q2, q3) {
+            if flat8(flat, p3, p2, p1, p0, q0, q1, q2, q3) {
+                let x = filter_wide8(p3, p2, p1, p0, q0, q1, q2, q3);
+                stride_copy(&mut p[pitch..], &x, pitch);
+            } else {
+                let x;
+                if hev4(thresh, p1, p0, q0, q1) {
+                    x = filter_narrow2(p1, p0, q0, q1, bd - 8);
+                } else {
+                    x = filter_narrow4(p1, p0, q0, q1, bd - 8);
+                }
+                stride_copy(&mut p[pitch*2..], &x, pitch);
             }
+        }
         s += stride;
     }
 }
 
-// Assumes slice[0] is set 7 taps back from the edge
-fn deblock_len14<'a>(slice: &'a mut PlaneMutSlice<'a>, pitch: usize, stride: usize, level: u16, bd: usize) {
+fn flat14_outer(flat: i32, p6: i32, p5: i32, p4: i32, p0: i32, q0: i32, q4: i32, q5: i32, q6: i32) -> bool {
+    (p4 - p0).abs() <= flat && (q4 - q0).abs() <= flat &&
+        (p5 - p0).abs() <= flat && (q5 - q0).abs() <= flat &&
+        (p6 - p0).abs() <= flat && (q6 - q0).abs() <= flat
+}
+
+// Assumes slice[0] is set 7 taps back from the edge, accumulates 12 pixels
+fn deblock_size14(rec: &mut[u16], pitch: usize, stride: usize, level: i32, bd: usize) {
     let mut s = 0;
     let blimit = 3 * level + 4 << bd - 8;
     let limit = level << bd - 8;
     let thresh = level >> 4 << bd - 8;
     let flat = 1 << bd - 8;
-    let data = slice.as_mut_slice();
     for _i in 0..4 {
-        let p = &mut data[s..];
+        let p = &mut rec[s..];
         let p6 = p[0] as i32;
         let p5 = p[pitch] as i32;
         let p4 = p[pitch*2] as i32;
@@ -301,38 +335,30 @@ fn deblock_len14<'a>(slice: &'a mut PlaneMutSlice<'a>, pitch: usize, stride: usi
         let q5 = p[pitch*12] as i32;
         let q6 = p[pitch*13] as i32;
         // 'mask' test
-        if (p3 - p2).abs() as u16 <= limit &&
-            (p2 - p1).abs() as u16 <= limit &&
-            (p1 - p0).abs() as u16 <= limit &&
-            (q1 - q0).abs() as u16 <= limit &&
-            (q2 - q1).abs() as u16 <= limit &&
-            (q3 - q2).abs() as u16 <= limit &&
-            (p0 - q0).abs() as u16 * 2 + (p1 - q1).abs() as u16 / 2 <= blimit {
-                // 'flat' test (inner pixel flatness)
-                if (p1 - p0).abs() as u16 <= flat &&
-                    (q1 - q0).abs() as u16 <= flat &&
-                    (p2 - p0).abs() as u16 <= flat &&
-                    (q2 - q0).abs() as u16 <= flat &&
-                    (p3 - p0).abs() as u16 <= flat &&
-                    (q3 - q0).abs() as u16 <= flat {
-                        // 'flat2' test (outer pixel flatness)
-                        if (p4 - p0).abs() as u16 <= flat &&
-                            (q4 - q0).abs() as u16 <= flat &&
-                            (p5 - p0).abs() as u16 <= flat &&
-                            (q5 - q0).abs() as u16 <= flat &&
-                            (p6 - p0).abs() as u16 <= flat &&
-                            (q6 - q0).abs() as u16 <= flat {
-                                // sufficient flatness across 14 pixel width; run full-width filter
-                                filter_wide14(p, pitch, p6, p5, p4, p3, p2, p1, p0, q0, q1, q2, q3, q4, q5, q6);
-                            } else {
-                                // Only sufficient flatness across inner 8 pixels; run 8-tap wide filter
-                                filter_wide8(&mut p[pitch*3..], pitch, p3, p2, p1, p0, q0, q1, q2, q3);
-                            }
-                    } else {
-                        // insufficient flatness; run narrow filter
-                        filter_narrow(thresh, bd, &mut p[pitch*5..], pitch, p1, p0, q0, q1);
-                    }
+        if mask8(blimit, limit, p3, p2, p1, p0, q0, q1, q2, q3) {
+            // inner flatness test
+            if flat8(flat, p3, p2, p1, p0, q0, q1, q2, q3) {
+                // outer flatness test
+                if flat14_outer(flat, p6, p5, p4, p0, q0, q4, q5, q6) {
+                    // sufficient flatness across 14 pixel width; run full-width filter
+                    let x = filter_wide14(p6, p5, p4, p3, p2, p1, p0, q0, q1, q2, q3, q4, q5, q6);
+                    stride_copy(&mut p[pitch..], &x, pitch);
+                } else {
+                    // only flat in inner area, run 8-tap
+                    let x = filter_wide8(p3, p2, p1, p0, q0, q1, q2, q3);
+                    stride_copy(&mut p[pitch*4..], &x, pitch);
+                }
+            } else {
+                // not flat, run narrow filter
+                let x;
+                if hev4(thresh, p1, p0, q0, q1) {
+                    x = filter_narrow2(p1, p0, q0, q1, bd - 8);
+                } else {
+                    x = filter_narrow4(p1, p0, q0, q1, bd - 8);
+                }
+                stride_copy(&mut p[pitch*5..], &x, pitch);
             }
+        }
         s += stride;
     }
 }
@@ -353,14 +379,15 @@ fn filter_v_edge(deblock: &DeblockState,
             let level = deblock_level(deblock, block, prev_block, pli, true);
             let po = bo.plane_offset(&p.cfg);
             let stride = p.cfg.stride;
-            let mut slice = p.mut_slice(&po);
-            slice.x -= (filter_size>>1) as isize;
+            let mut plane_slice = p.mut_slice(&po);
+            plane_slice.x -= (filter_size>>1) as isize;
+            let slice = plane_slice.as_mut_slice();
             match filter_size {
-                4 => { deblock_len4(&mut slice, 1, stride, level, bd); },
-                6 => { deblock_len6(&mut slice, 1, stride, level, bd); },
-                8 => { deblock_len8(&mut slice, 1, stride, level, bd); },
-                14 => { deblock_len14(&mut slice, 1, stride, level, bd); },
-                _ => {}
+                4 => { deblock_size4(slice, 1, stride, level, bd); },
+                6 => { deblock_size6(slice, 1, stride, level, bd); },
+                8 => { deblock_size8(slice, 1, stride, level, bd); },
+                14 => { deblock_size14(slice, 1, stride, level, bd); },
+                _ => {unreachable!()}
             }
         }
     }
@@ -382,14 +409,15 @@ fn filter_h_edge(deblock: &DeblockState,
             let level = deblock_level(deblock, block, prev_block, pli, false);
             let po = bo.plane_offset(&p.cfg);
             let stride = p.cfg.stride;
-            let mut slice = p.mut_slice(&po);
-            slice.y -= (filter_size>>1) as isize;
+            let mut plane_slice = p.mut_slice(&po);
+            plane_slice.y -= (filter_size>>1) as isize;
+            let slice = plane_slice.as_mut_slice(); 
             match filter_size {
-                4 => { deblock_len4(&mut slice, stride, 1, level, bd); },
-                6 => { deblock_len6(&mut slice, stride, 1, level, bd); },
-                8 => { deblock_len8(&mut slice, stride, 1, level, bd); },
-                14 => { deblock_len14(&mut slice, stride, 1, level, bd); },
-                _ => {}
+                4 => { deblock_size4(slice, stride, 1, level, bd); },
+                6 => { deblock_size6(slice, stride, 1, level, bd); },
+                8 => { deblock_size8(slice, stride, 1, level, bd); },
+                14 => { deblock_size14(slice, stride, 1, level, bd); },
+                _ => {unreachable!()}
             }
         }
     }
