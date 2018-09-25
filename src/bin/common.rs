@@ -58,6 +58,16 @@ impl FromCli for EncoderConfig {
                 .possible_values(&Tune::variants())
                 .default_value("psnr")
                 .case_insensitive(true))
+            .arg(Arg::with_name("TILEROWS")
+                .help("Number of tile rows log2")
+                .long("tile-rows")
+                .takes_value(true)
+                .default_value("0"))
+            .arg(Arg::with_name("TILECOLS")
+                .help("Number of tile columns log2")
+                .long("tile-cols")
+                .takes_value(true)
+                .default_value("0"))
             .get_matches();
 
 
@@ -79,14 +89,21 @@ impl FromCli for EncoderConfig {
             limit: matches.value_of("LIMIT").unwrap().parse().unwrap(),
             quantizer: matches.value_of("QP").unwrap().parse().unwrap(),
             speed: matches.value_of("SPEED").unwrap().parse().unwrap(),
-            tune: matches.value_of("TUNE").unwrap().parse().unwrap()
+            tune: matches.value_of("TUNE").unwrap().parse().unwrap(),
+            tile_rows: matches.value_of("TILEROWS").unwrap().parse().unwrap(),
+            tile_cols: matches.value_of("TILECOLS").unwrap().parse().unwrap(),
         };
 
         // Validate arguments
         if config.quantizer == 0 {
             unimplemented!();
-        } else if config.quantizer > 255 || config.speed > 10 {
+        } else if config.quantizer > 255 || config.speed > 10 || config.tile_rows > 6 || config.tile_cols > 6 {
             panic!("argument out of range");
+        }
+
+        // TODO: Remove when we support tiles
+        if config.tile_rows != 0 || config.tile_cols != 0 {
+            panic!("only single tile supported");
         }
 
         (io, config)

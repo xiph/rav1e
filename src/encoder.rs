@@ -480,7 +480,9 @@ pub struct EncoderConfig {
     pub limit: u64,
     pub quantizer: usize,
     pub speed: usize,
-    pub tune: Tune
+    pub tune: Tune,
+    pub tile_rows: u8,
+    pub tile_cols: u8,
 }
 
 impl Default for EncoderConfig {
@@ -490,6 +492,8 @@ impl Default for EncoderConfig {
             quantizer: 100,
             speed: 0,
             tune: Tune::Psnr,
+            tile_rows: 0,
+            tile_cols: 0,
         }
     }
 }
