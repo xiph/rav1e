@@ -140,3 +140,73 @@ pub fn motion_estimation(
     None => MotionVector { row: 0, col: 0 }
   }
 }
+
+#[cfg(test)]
+pub mod test {
+  use super::*;
+
+  // Generate plane data for get_sad_same()
+  fn setup_sad() -> (Plane, Plane) {
+    let mut input_plane = Plane::new(640, 480, 0, 0, 128 + 8, 128 + 8);
+    let mut rec_plane = input_plane.clone();
+    
+    for (i, row) in input_plane.data.chunks_mut(input_plane.cfg.stride).enumerate() {
+      for (j, mut pixel) in row.into_iter().enumerate() {
+        *pixel = ((j + i) % 256) as u16;
+      }
+    }
+
+    for (i, row) in rec_plane.data.chunks_mut(rec_plane.cfg.stride).enumerate() {
+      for (j, mut pixel) in row.into_iter().enumerate() {
+        *pixel = ((j as i32 - i as i32) % 256) as u16;
+      }
+    }
+
+    (input_plane, rec_plane)
+  }
+
+  // Regression and validation test for SAD computation
+  #[test]
+  fn get_sad_same() {
+    use partition::BlockSize;
+    use partition::BlockSize::*;
+
+    let blocks: Vec<(BlockSize, u32)> = vec![
+      (BLOCK_4X4, 393592),
+      (BLOCK_4X8, 395176),
+      (BLOCK_8X4, 1440456),
+      (BLOCK_8X8, 1835664),
+      (BLOCK_8X16, 1842256),
+      (BLOCK_16X8, 6022352),
+      (BLOCK_16X16, 7864736),
+      (BLOCK_16X32, 7893152),
+      (BLOCK_32X16, 24605344),
+      (BLOCK_32X32, 32499008),
+      (BLOCK_32X64, 32629056),
+      (BLOCK_64X32, 99412288),
+      (BLOCK_64X64, 132043392),
+      (BLOCK_64X128, 132621248),
+      (BLOCK_128X64, 399430272),
+      (BLOCK_128X128, 532067552),
+      (BLOCK_4X16, 398344),
+      (BLOCK_16X4, 3533800),
+      (BLOCK_8X32, 1855440),
+      (BLOCK_32X8, 14392656),
+      (BLOCK_16X64, 7949984),
+      (BLOCK_64X16, 58061984),
+    ];
+
+    let (input_plane, rec_plane) = setup_sad();
+
+    for block in blocks {
+        let bsw = block.0.width();
+        let bsh = block.0.height();
+        let po = PlaneOffset { x: 40, y: 40 };
+
+        let mut input_slice = input_plane.slice(&po);
+        let mut rec_slice = rec_plane.slice(&po);
+
+        assert_eq!(block.1, get_sad(&mut input_slice, &mut rec_slice, bsw, bsh));
+    }
+  }
+}
