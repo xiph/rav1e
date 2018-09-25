@@ -55,7 +55,7 @@ Encoder output should be compatible with any AV1 decoder compliant with the v1.0
 ```
 mkdir aom_test
 cd aom_test
-cmake ../aom_build/aom -DAOM_TARGET_CPU=generic -DCONFIG_AV1_ENCODER=0 -DCONFIG_UNIT_TESTS=0 -DENABLE_DOCS=0 -DCONFIG_LOWBITDEPTH=1
+cmake ../aom_build/aom -DAOM_TARGET_CPU=generic -DCONFIG_AV1_ENCODER=0 -DENABLE_TESTS=0 -DENABLE_DOCS=0 -DCONFIG_LOWBITDEPTH=1
 make -j8
 ./aomdec ../output.ivf -o output.y4m
 ```
