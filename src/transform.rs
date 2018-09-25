@@ -39,6 +39,14 @@ fn half_btf(w0: i32, in0: i32, w1: i32, in1: i32, bit: usize) -> i32 {
   round_shift(result, bit)
 }
 
+// performs full butterfly rotation by PI/4
+#[inline]
+fn full_btf_sqrt2(in0: i32, in1: i32, bit: usize) -> (i32, i32) {
+  let a = (in0 + in1) * COSPI_INV[32];
+  let b = (in0 - in1) * COSPI_INV[32];
+  (round_shift(a, bit), round_shift(b, bit))
+}
+
 #[inline]
 fn round_shift(value: i32, bit: usize) -> i32 {
   if bit <= 0 {
@@ -64,9 +72,11 @@ fn av1_idct4(input: &[i32], output: &mut [i32], range: usize) {
   let stg1 = [input[0], input[2], input[1], input[3]];
 
   // stage 2
+  // TODO: can we inline the return tuple
+  let (a, b) = full_btf_sqrt2(stg1[0], stg1[1], cos_bit);
   let stg2 = [
-    half_btf(COSPI_INV[32], stg1[0], COSPI_INV[32], stg1[1], cos_bit),
-    half_btf(COSPI_INV[32], stg1[0], -COSPI_INV[32], stg1[1], cos_bit),
+    a,
+    b,
     half_btf(COSPI_INV[48], stg1[2], -COSPI_INV[16], stg1[3], cos_bit),
     half_btf(COSPI_INV[16], stg1[2], COSPI_INV[48], stg1[3], cos_bit)
   ];
@@ -159,10 +169,11 @@ fn av1_idct8(input: &[i32], output: &mut [i32], range: usize) {
   ];
 
   // stage 4
+  let (a, b) = full_btf_sqrt2(stg3[2], stg3[1], cos_bit);
   let stg4 = [
     stg3[0],
-    half_btf(-COSPI_INV[32], stg3[1], COSPI_INV[32], stg3[2], cos_bit),
-    half_btf(COSPI_INV[32], stg3[1], COSPI_INV[32], stg3[2], cos_bit),
+    b,
+    a,
     stg3[3]
   ];
 
@@ -236,15 +247,17 @@ fn av1_iadst8(input: &[i32], output: &mut [i32], range: usize) {
   ];
 
   // stage 6
+  let (a, b) = full_btf_sqrt2(stg5[2], stg5[3], cos_bit);
+  let (c, d) = full_btf_sqrt2(stg5[6], stg5[7], cos_bit);
   let stg6 = [
     stg5[0],
     stg5[1],
-    half_btf(COSPI_INV[32], stg5[2], COSPI_INV[32], stg5[3], cos_bit),
-    half_btf(COSPI_INV[32], stg5[2], -COSPI_INV[32], stg5[3], cos_bit),
+    a,
+    b,
     stg5[4],
     stg5[5],
-    half_btf(COSPI_INV[32], stg5[6], COSPI_INV[32], stg5[7], cos_bit),
-    half_btf(COSPI_INV[32], stg5[6], -COSPI_INV[32], stg5[7], cos_bit)
+    c,
+    d,
   ];
 
   // stage 7
@@ -331,13 +344,15 @@ fn av1_idct16(input: &[i32], output: &mut [i32], range: usize) {
   ];
 
   // stage 6
+  let (a, b) = full_btf_sqrt2(stg5[5], stg5[2], cos_bit);
+  let (c, d) = full_btf_sqrt2(stg5[4], stg5[3], cos_bit);
   let stg6 = [
     stg5[0],
     stg5[1],
-    half_btf(-COSPI_INV[32], stg5[2], COSPI_INV[32], stg5[5], cos_bit),
-    half_btf(-COSPI_INV[32], stg5[3], COSPI_INV[32], stg5[4], cos_bit),
-    half_btf(COSPI_INV[32], stg5[3], COSPI_INV[32], stg5[4], cos_bit),
-    half_btf(COSPI_INV[32], stg5[2], COSPI_INV[32], stg5[5], cos_bit),
+    b,
+    d,
+    c,
+    a,
     stg5[6],
     stg5[7]
   ];
@@ -493,23 +508,27 @@ fn av1_iadst16(input: &[i32], output: &mut [i32], range: usize) {
   ];
 
   // stage 8
+  let (a, b) = full_btf_sqrt2(stg7[2], stg7[3], cos_bit);
+  let (c, d) = full_btf_sqrt2(stg7[6], stg7[7], cos_bit);
+  let (e, f) = full_btf_sqrt2(stg7[10], stg7[11], cos_bit);
+  let (g, h) = full_btf_sqrt2(stg7[14], stg7[15], cos_bit);
   let stg8 = [
     stg7[0],
     stg7[1],
-    half_btf(COSPI_INV[32], stg7[2], COSPI_INV[32], stg7[3], cos_bit),
-    half_btf(COSPI_INV[32], stg7[2], -COSPI_INV[32], stg7[3], cos_bit),
+    a,
+    b,
     stg7[4],
     stg7[5],
-    half_btf(COSPI_INV[32], stg7[6], COSPI_INV[32], stg7[7], cos_bit),
-    half_btf(COSPI_INV[32], stg7[6], -COSPI_INV[32], stg7[7], cos_bit),
+    c,
+    d,
     stg7[8],
     stg7[9],
-    half_btf(COSPI_INV[32], stg7[10], COSPI_INV[32], stg7[11], cos_bit),
-    half_btf(COSPI_INV[32], stg7[10], -COSPI_INV[32], stg7[11], cos_bit),
+    e,
+    f,
     stg7[12],
     stg7[13],
-    half_btf(COSPI_INV[32], stg7[14], COSPI_INV[32], stg7[15], cos_bit),
-    half_btf(COSPI_INV[32], stg7[14], -COSPI_INV[32], stg7[15], cos_bit)
+    g,
+    h,
   ];
 
   // stage 9
