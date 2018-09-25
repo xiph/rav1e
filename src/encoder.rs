@@ -1948,7 +1948,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
     }
 }
 
-fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameState, bit_depth: usize) -> Vec<u8> {
+fn encode_tile_group(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameState, bit_depth: usize) -> Vec<u8> {
     let mut w = WriterEncoder::new();
 
     let fc = if fi.primary_ref_frame == PRIMARY_REF_NONE {
@@ -2039,7 +2039,7 @@ pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut 
         }
     } else {
         let bit_depth = sequence.bit_depth;
-        let tile = encode_tile(sequence, fi, fs, bit_depth); // actually tile group
+        let tile = encode_tile_group(sequence, fi, fs, bit_depth);
 
         //write_uncompressed_header(&mut packet, sequence, fi).unwrap();
         write_obus(&mut packet, sequence, fi, fs).unwrap();
