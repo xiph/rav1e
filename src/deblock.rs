@@ -116,10 +116,6 @@ fn deblock_level(deblock: &DeblockState, block: &Block, prev_block: &Block,
     }
 }
 
-fn hev4(thresh: i32, p1: i32, p0: i32, q0: i32, q1: i32) -> bool {
-    (p1 - p0).abs() > thresh || (q1 - q0).abs() > thresh
-}
-
 // four taps, 4 outputs (two are trivial)
 fn filter_narrow2(p1: i32, p0: i32, q0: i32, q1: i32, shift: usize) -> [i32; 4] {
     let filter0 = clamp(p1 - q1, -128 << shift, (128 << shift) - 1);
@@ -196,34 +192,58 @@ fn filter_wide14(p6: i32, p5: i32, p4: i32, p3: i32, p2: i32, p1: i32, p0: i32,
                                                p0   + q0   + q1   + q2   + q3   + q4*2 + q5*2 + q6*7 + (1<<3) >> 4]
 }   
 
-fn mask4(blimit: i32, limit: i32, p1: i32, p0: i32, q0: i32, q1: i32) -> bool {
-    (p1 - p0).abs() <= limit &&
-        (q1 - q0).abs() <= limit &&
-        (p0 - q0).abs() * 2 + (p1 - q1).abs() / 2 <= blimit
-}
-
 fn stride_copy(dst: &mut [u16], src: &[i32], pitch: usize) {
     for (dst, src) in dst.iter_mut().step_by(pitch).take(src.len()).zip(src) { *dst = *src as u16 };
+}
+
+fn _level_to_limit(level: i32, shift: usize) -> i32 {
+    level << shift
+}
+
+fn limit_to_level(limit: i32, shift: usize) -> i32 {
+    limit + (1 << shift) - 1 >> shift
+}
+
+fn _level_to_blimit(level: i32, shift: usize) -> i32 {
+    3 * level + 4 << shift
+}
+
+fn blimit_to_level(blimit: i32, shift: usize) -> i32 {
+    ((blimit + (1 << shift) - 1 >> shift) - 2) / 3
+}
+
+fn _level_to_thresh(level: i32, shift: usize) -> i32 {
+    level >> 4 << shift
+}
+
+fn thresh_to_level(thresh: i32, shift: usize) -> i32 {
+    thresh + (1 << shift) - 1 >> shift << 4
+}
+
+fn nhev4(p1: i32, p0: i32, q0: i32, q1: i32, shift: usize) -> i32 {
+    thresh_to_level(cmp::max((p1 - p0).abs(), (q1 - q0).abs()), shift)
+}
+
+fn mask4(p1: i32, p0: i32, q0: i32, q1: i32, shift: usize) -> i32 {
+    cmp::max(limit_to_level(cmp::max((p1 - p0).abs(), (q1 - q0).abs()), shift),
+             blimit_to_level((p0 - q0).abs() * 2 + (p1 - q1).abs() / 2, shift))
 }
 
 // Assumes rec[0] is set 2 taps back from the edge
 fn deblock_size4(rec: &mut[u16], pitch: usize, stride: usize, level: i32, bd: usize) {
     let mut s = 0;
-    let blimit = 3 * level + 4 << bd - 8;
-    let limit = level << bd - 8;
-    let thresh = level >> 4 << bd - 8;
     for _i in 0..4 {
         let p = &mut rec[s..];
         let p1 = p[0] as i32;
         let p0 = p[pitch] as i32;
         let q0 = p[pitch*2] as i32;
         let q1 = p[pitch*3] as i32;
-        if mask4(blimit, limit, p1, p0, q0, q1) {
+        if mask4(p1, p0, q0, q1, bd - 8) <= level {
             let x;
-            if hev4(thresh, p1, p0, q0, q1) {
-                x = filter_narrow2(p1, p0, q0, q1, bd - 8);
-            } else {
+            if nhev4(p1, p0, q0, q1, bd - 8) <= level {
                 x = filter_narrow4(p1, p0, q0, q1, bd - 8);
+            } else {
+                x = filter_narrow2(p1, p0, q0, q1, bd - 8);
             }
             stride_copy(p, &x, pitch);
         }
@@ -231,23 +251,23 @@ fn deblock_size4(rec: &mut[u16], pitch: usize, stride: usize, level: i32, bd: us
     }
 }
 
-fn mask6(blimit: i32, limit: i32, p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32) -> bool {
-    (p2 - p1).abs() <= limit && (p1 - p0).abs() <= limit &&
-        (q2 - q1).abs() <= limit && (q1 - q0).abs() <= limit &&
-        (p0 - q0).abs() * 2 + (p1 - q1).abs() / 2 <= blimit
+fn mask6(p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32, shift: usize) -> i32 {
+    cmp::max( limit_to_level(cmp::max((p2 - p1).abs(),
+                                      cmp::max((p1 - p0).abs(),
+                                               cmp::max((q2 - q1).abs(),
+                                                        (q1 - q0).abs()))), shift),
+              blimit_to_level((p0 - q0).abs() * 2 + (p1 - q1).abs() / 2, shift))
 }
 
-fn flat6(flat: i32, p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32) -> bool {
-    (p1 - p0).abs() <= flat && (q1 - q0).abs() <= flat &&
-        (p2 - p0).abs() <= flat && (q2 - q0).abs() <= flat
+fn flat6(p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32) -> i32 {
+    cmp::max((p1 - p0).abs(),
+             cmp::max((q1 - q0).abs(),
+                      cmp::max((p2 - p0).abs(),(q2 - q0).abs())))
 }
 
 // Assumes slice[0] is set 3 taps back from the edge
 fn deblock_size6(rec: &mut[u16], pitch: usize, stride: usize, level: i32, bd: usize) {
     let mut s = 0;
-    let blimit = 3 * level + 4 << bd - 8;
-    let limit = level << bd - 8;
-    let thresh = level >> 4 << bd - 8;
     let flat = 1 << bd - 8;
     for _i in 0..4 {
         let p = &mut rec[s..];
@@ -257,14 +277,14 @@ fn deblock_size6(rec: &mut[u16], pitch: usize, stride: usize, level: i32, bd: us
         let q0 = p[pitch*3] as i32;
         let q1 = p[pitch*4] as i32;
         let q2 = p[pitch*5] as i32;
-        if mask6(blimit, limit, p2, p1, p0, q0, q1, q2) {
+        if mask6(p2, p1, p0, q0, q1, q2, bd - 8) <= level {
             let x;
-            if flat6(flat, p2, p1, p0, q0, q1, q2) {
+            if flat6(p2, p1, p0, q0, q1, q2) <= flat {
                 x = filter_wide6(p2, p1, p0, q0, q1, q2);
-            } else if hev4(thresh, p1, p0, q0, q1) {
-                x = filter_narrow2(p1, p0, q0, q1, bd - 8);
-            } else {
+            } else if nhev4(p1, p0, q0, q1, bd - 8) <= level {
                 x = filter_narrow4(p1, p0, q0, q1, bd - 8);
+            } else {
+                x = filter_narrow2(p1, p0, q0, q1, bd - 8);
             }
             stride_copy(&mut p[pitch..], &x, pitch);
         }
@@ -272,24 +292,27 @@ fn deblock_size6(rec: &mut[u16], pitch: usize, stride: usize, level: i32, bd: us
     }
 }
 
-fn mask8(blimit: i32, limit: i32, p3: i32, p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32, q3: i32) -> bool {
-    (p3 - p2).abs() <= limit && (p2 - p1).abs() <= limit && (p1 - p0).abs() <= limit &&
-        (q3 - q2).abs() <= limit && (q2 - q1).abs() <= limit && (q1 - q0).abs() <= limit &&
-        (p0 - q0).abs() * 2 + (p1 - q1).abs() / 2 <= blimit
+fn mask8(p3: i32, p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32, q3: i32, shift: usize) -> i32 {
+    cmp::max(limit_to_level(cmp::max((p3 - p2).abs(),
+                                     cmp::max((p2 - p1).abs(),
+                                              cmp::max((p1 - p0).abs(),
+                                                       cmp::max((q3 - q2).abs(),
+                                                                cmp::max((q2 - q1).abs(),
+                                                                         (q1 - q0).abs()))))), shift),
+             blimit_to_level((p0 - q0).abs() * 2 + (p1 - q1).abs() / 2, shift))
 }
 
-fn flat8(flat: i32, p3:i32, p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32, q3: i32) -> bool {
-    (p1 - p0).abs() <= flat && (q1 - q0).abs() <= flat &&
-        (p2 - p0).abs() <= flat && (q2 - q0).abs() <= flat &&
-        (p3 - p0).abs() <= flat && (q3 - q0).abs() <= flat
+fn flat8(p3:i32, p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32, q3: i32) -> i32 {
+    cmp::max((p1 - p0).abs(),
+             cmp::max((q1 - q0).abs(),
+                      cmp::max((p2 - p0).abs(),
+                               cmp::max((q2 - q0).abs(),
+                                        cmp::max((p3 - p0).abs(), (q3 - q0).abs())))))
 }
 
 // Assumes rec[0] is set 4 taps back from the edge
 fn deblock_size8(rec: &mut[u16], pitch: usize, stride: usize, level: i32, bd: usize) {
     let mut s = 0;
-    let blimit = 3 * level + 4 << bd - 8;
-    let limit = level << bd - 8;
-    let thresh = level >> 4 << bd - 8;
     let flat = 1 << bd - 8;
     for _i in 0..4 {
         let p = &mut rec[s..];
@@ -301,16 +324,16 @@ fn deblock_size8(rec: &mut[u16], pitch: usize, stride: usize, level: i32, bd: us
         let q1 = p[pitch*5] as i32;
         let q2 = p[pitch*6] as i32;
         let q3 = p[pitch*7] as i32;
-        if mask8(blimit, limit, p3, p2, p1, p0, q0, q1, q2, q3) {
-            if flat8(flat, p3, p2, p1, p0, q0, q1, q2, q3) {
+        if mask8(p3, p2, p1, p0, q0, q1, q2, q3, bd - 8) <= level {
+            if flat8(p3, p2, p1, p0, q0, q1, q2, q3) <= flat {
                 let x = filter_wide8(p3, p2, p1, p0, q0, q1, q2, q3);
                 stride_copy(&mut p[pitch..], &x, pitch);
             } else {
                 let x;
-                if hev4(thresh, p1, p0, q0, q1) {
-                    x = filter_narrow2(p1, p0, q0, q1, bd - 8);
-                } else {
+                if nhev4(p1, p0, q0, q1, bd - 8) <= level {
                     x = filter_narrow4(p1, p0, q0, q1, bd - 8);
+                } else {
+                    x = filter_narrow2(p1, p0, q0, q1, bd - 8);
                 }
                 stride_copy(&mut p[pitch*2..], &x, pitch);
             }
@@ -319,18 +342,17 @@ fn deblock_size8(rec: &mut[u16], pitch: usize, stride: usize, level: i32, bd: us
     }
 }
 
-fn flat14_outer(flat: i32, p6: i32, p5: i32, p4: i32, p0: i32, q0: i32, q4: i32, q5: i32, q6: i32) -> bool {
-    (p4 - p0).abs() <= flat && (q4 - q0).abs() <= flat &&
-        (p5 - p0).abs() <= flat && (q5 - q0).abs() <= flat &&
-        (p6 - p0).abs() <= flat && (q6 - q0).abs() <= flat
+fn flat14_outer(p6: i32, p5: i32, p4: i32, p0: i32, q0: i32, q4: i32, q5: i32, q6: i32) -> i32 {
+    cmp::max((p4 - p0).abs(),
+             cmp::max((q4 - q0).abs(),
+                      cmp::max((p5 - p0).abs(),
+                               cmp::max((q5 - q0).abs(),
+                                        cmp::max((p6 - p0).abs(),(q6 - q0).abs())))))
 }
 
 // Assumes slice[0] is set 7 taps back from the edge, accumulates 12 pixels
 fn deblock_size14(rec: &mut[u16], pitch: usize, stride: usize, level: i32, bd: usize) {
     let mut s = 0;
-    let blimit = 3 * level + 4 << bd - 8;
-    let limit = level << bd - 8;
-    let thresh = level >> 4 << bd - 8;
     let flat = 1 << bd - 8;
     for _i in 0..4 {
         let p = &mut rec[s..];
@@ -349,11 +371,11 @@ fn deblock_size14(rec: &mut[u16], pitch: usize, stride: usize, level: i32, bd: u
         let q5 = p[pitch*12] as i32;
         let q6 = p[pitch*13] as i32;
         // 'mask' test
-        if mask8(blimit, limit, p3, p2, p1, p0, q0, q1, q2, q3) {
+        if mask8(p3, p2, p1, p0, q0, q1, q2, q3, bd - 8) <= level {
             // inner flatness test
-            if flat8(flat, p3, p2, p1, p0, q0, q1, q2, q3) {
+            if flat8(p3, p2, p1, p0, q0, q1, q2, q3) <= flat {
                 // outer flatness test
-                if flat14_outer(flat, p6, p5, p4, p0, q0, q4, q5, q6) {
+                if flat14_outer(p6, p5, p4, p0, q0, q4, q5, q6) <= flat {
                     // sufficient flatness across 14 pixel width; run full-width filter
                     let x = filter_wide14(p6, p5, p4, p3, p2, p1, p0, q0, q1, q2, q3, q4, q5, q6);
                     stride_copy(&mut p[pitch..], &x, pitch);
@@ -365,10 +387,10 @@ fn deblock_size14(rec: &mut[u16], pitch: usize, stride: usize, level: i32, bd: u
             } else {
                 // not flat, run narrow filter
                 let x;
-                if hev4(thresh, p1, p0, q0, q1) {
-                    x = filter_narrow2(p1, p0, q0, q1, bd - 8);
-                } else {
+                if nhev4(p1, p0, q0, q1, bd - 8) <= level {
                     x = filter_narrow4(p1, p0, q0, q1, bd - 8);
+                } else {
+                    x = filter_narrow2(p1, p0, q0, q1, bd - 8);
                 }
                 stride_copy(&mut p[pitch*5..], &x, pitch);
             }
@@ -535,7 +557,7 @@ pub fn deblock_filter_optimize(fi: &FrameInvariants, fs: &mut FrameState,
         _ => {assert!(false); 0}
     }, 0, MAX_LOOP_FILTER as i32) as u8;
 
-    fs.deblock.levels[0] = 0;
+    fs.deblock.levels[0] = level;
     fs.deblock.levels[1] = level;
     fs.deblock.levels[2] = level;
     fs.deblock.levels[3] = level;
