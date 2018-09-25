@@ -130,61 +130,51 @@ fn av1_iidentity4(input: &[i32], output: &mut [i32], _range: usize) {
 }
 
 pub fn av1_idct8(input: &[i32], output: &mut [i32], range: usize) {
-  // TODO: call idct4
+  // call idct4
+  let temp_in = [ input[0], input[2], input[4], input[6] ];
+  let mut temp_out: [i32; 4] = [0; 4];
+  av1_idct4(&temp_in, &mut temp_out, range);
+
   let cos_bit = 12;
+
   // stage 0
 
   // stage 1
-  let stg1 = [
-    input[0], input[4], input[2], input[6], input[1], input[5], input[3],
-    input[7],
-  ];
+  let stg1 = [ input[1], input[5], input[3], input[7] ];
 
   // stage 2
   let stg2 = [
-    stg1[0],
-    stg1[1],
-    stg1[2],
-    stg1[3],
-    half_btf(COSPI_INV[56], stg1[4], -COSPI_INV[8], stg1[7], cos_bit),
-    half_btf(COSPI_INV[24], stg1[5], -COSPI_INV[40], stg1[6], cos_bit),
-    half_btf(COSPI_INV[40], stg1[5], COSPI_INV[24], stg1[6], cos_bit),
-    half_btf(COSPI_INV[8], stg1[4], COSPI_INV[56], stg1[7], cos_bit)
+    half_btf(COSPI_INV[56], stg1[0], -COSPI_INV[8], stg1[3], cos_bit),
+    half_btf(COSPI_INV[24], stg1[1], -COSPI_INV[40], stg1[2], cos_bit),
+    half_btf(COSPI_INV[40], stg1[1], COSPI_INV[24], stg1[2], cos_bit),
+    half_btf(COSPI_INV[8], stg1[0], COSPI_INV[56], stg1[3], cos_bit)
   ];
 
   // stage 3
   let stg3 = [
-    half_btf(COSPI_INV[32], stg2[0], COSPI_INV[32], stg2[1], cos_bit),
-    half_btf(COSPI_INV[32], stg2[0], -COSPI_INV[32], stg2[1], cos_bit),
-    half_btf(COSPI_INV[48], stg2[2], -COSPI_INV[16], stg2[3], cos_bit),
-    half_btf(COSPI_INV[16], stg2[2], COSPI_INV[48], stg2[3], cos_bit),
-    clamp_value(stg2[4] + stg2[5], range),
-    clamp_value(stg2[4] - stg2[5], range),
-    clamp_value(-stg2[6] + stg2[7], range),
-    clamp_value(stg2[6] + stg2[7], range)
+    clamp_value(stg2[0] + stg2[1], range),
+    clamp_value(stg2[0] - stg2[1], range),
+    clamp_value(-stg2[2] + stg2[3], range),
+    clamp_value(stg2[2] + stg2[3], range)
   ];
 
   // stage 4
   let stg4 = [
-    clamp_value(stg3[0] + stg3[3], range),
-    clamp_value(stg3[1] + stg3[2], range),
-    clamp_value(stg3[1] - stg3[2], range),
-    clamp_value(stg3[0] - stg3[3], range),
-    stg3[4],
-    half_btf(-COSPI_INV[32], stg3[5], COSPI_INV[32], stg3[6], cos_bit),
-    half_btf(COSPI_INV[32], stg3[5], COSPI_INV[32], stg3[6], cos_bit),
-    stg3[7]
+    stg3[0],
+    half_btf(-COSPI_INV[32], stg3[1], COSPI_INV[32], stg3[2], cos_bit),
+    half_btf(COSPI_INV[32], stg3[1], COSPI_INV[32], stg3[2], cos_bit),
+    stg3[3]
   ];
 
   // stage 5
-  output[0] = clamp_value(stg4[0] + stg4[7], range);
-  output[1] = clamp_value(stg4[1] + stg4[6], range);
-  output[2] = clamp_value(stg4[2] + stg4[5], range);
-  output[3] = clamp_value(stg4[3] + stg4[4], range);
-  output[4] = clamp_value(stg4[3] - stg4[4], range);
-  output[5] = clamp_value(stg4[2] - stg4[5], range);
-  output[6] = clamp_value(stg4[1] - stg4[6], range);
-  output[7] = clamp_value(stg4[0] - stg4[7], range);
+  output[0] = clamp_value(temp_out[0] + stg4[3], range);
+  output[1] = clamp_value(temp_out[1] + stg4[2], range);
+  output[2] = clamp_value(temp_out[2] + stg4[1], range);
+  output[3] = clamp_value(temp_out[3] + stg4[0], range);
+  output[4] = clamp_value(temp_out[3] - stg4[0], range);
+  output[5] = clamp_value(temp_out[2] - stg4[1], range);
+  output[6] = clamp_value(temp_out[1] - stg4[2], range);
+  output[7] = clamp_value(temp_out[0] - stg4[3], range);
 }
 
 fn av1_iadst8(input: &[i32], output: &mut [i32], range: usize) {
