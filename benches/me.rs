@@ -41,11 +41,11 @@ fn bench_get_sad(b: &mut Bencher, bs: &BlockSize) {
   let rec_plane = new_plane(&mut ra, w, h);
   let po = PlaneOffset { x: 0, y: 0 };
 
-  let mut plane_org = input_plane.slice(&po);
-  let mut plane_ref = rec_plane.slice(&po);
+  let plane_org = input_plane.slice(&po);
+  let plane_ref = rec_plane.slice(&po);
 
   b.iter(|| {
-      let _ = me::get_sad(&mut plane_org, &mut plane_ref, bsw, bsh);
+      let _ = me::get_sad(&plane_org, &plane_ref, bsw, bsh);
   })
 }
 
