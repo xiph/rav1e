@@ -22,30 +22,6 @@ pub fn get_sad(
 ) -> u32 {
   let mut sum = 0 as u32;
 
-  for _r in 0..blk_h {
-    {
-      let slice_org = plane_org.as_slice_w_width(blk_w);
-      let slice_ref = plane_ref.as_slice_w_width(blk_w);
-      sum += slice_org
-        .iter()
-        .zip(slice_ref)
-        .map(|(&a, &b)| (a as i32 - b as i32).abs() as u32)
-        .sum::<u32>();
-    }
-    plane_org.y += 1;
-    plane_ref.y += 1;
-  }
-
-  sum
-}
-
-#[inline(always)]
-pub fn get_sad_iter(
-  plane_org: &mut PlaneSlice, plane_ref: &mut PlaneSlice, blk_h: usize,
-  blk_w: usize
-) -> u32 {
-  let mut sum = 0 as u32;
-
   let org_iter = plane_org.iter_width(blk_w);
   let ref_iter = plane_ref.iter_width(blk_w);
 

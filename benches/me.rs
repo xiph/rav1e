@@ -46,28 +46,6 @@ fn bench_get_sad(b: &mut Bencher, bs: &BlockSize) {
 
   b.iter(|| {
       let _ = me::get_sad(&mut plane_org, &mut plane_ref, bsw, bsh);
-      plane_org.y = 0;
-      plane_ref.y = 0;
-  })
-}
-
-fn bench_get_sad_iter(b: &mut Bencher, bs: &BlockSize) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
-  let bsw = bs.width();
-  let bsh = bs.height();
-  let w = 640;
-  let h = 480;
-  let input_plane = new_plane(&mut ra, w, h);
-  let rec_plane = new_plane(&mut ra, w, h);
-  let po = PlaneOffset { x: 0, y: 0 };
-
-  let mut plane_org = input_plane.slice(&po);
-  let mut plane_ref = rec_plane.slice(&po);
-
-  b.iter(|| {
-      let _ = me::get_sad_iter(&mut plane_org, &mut plane_ref, bsw, bsh);
-      plane_org.y = 0;
-      plane_ref.y = 0;
   })
 }
 
@@ -98,6 +76,5 @@ pub fn get_sad(c: &mut Criterion) {
     BLOCK_64X16,
   ];
 
-  c.bench_function_over_inputs("get_sad", bench_get_sad, blocks.clone());
-  c.bench_function_over_inputs("get_sad_iter", bench_get_sad_iter, blocks);
+  c.bench_function_over_inputs("get_sad", bench_get_sad, blocks);
 }
