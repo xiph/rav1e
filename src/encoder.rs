@@ -856,7 +856,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
             }
           }
 
-          for i in 0..7 {
+          for i in 0..INTER_REFS_PER_FRAME {
             if !frame_refs_short_signaling {
               self.write(REF_FRAMES_LOG2 as u32, fi.ref_frames[i] as u8)?;
             }
@@ -1301,14 +1301,17 @@ pub fn motion_compensate(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
         assert!(xdec == 1 && ydec == 1);
         // TODO: these are only valid for 4:2:0
         let mv0 = &cw.bc.at(&bo.with_offset(-1,-1)).mv[0];
+        let rf0 = cw.bc.at(&bo.with_offset(-1,-1)).ref_frames[0];
         let mv1 = &cw.bc.at(&bo.with_offset(0,-1)).mv[0];
+        let rf1 = cw.bc.at(&bo.with_offset(0,-1)).ref_frames[0];
         let po1 = PlaneOffset { x: po.x+2, y: po.y };
         let mv2 = &cw.bc.at(&bo.with_offset(-1,0)).mv[0];
+        let rf2 = cw.bc.at(&bo.with_offset(-1,0)).ref_frames[0];
         let po2 = PlaneOffset { x: po.x, y: po.y+2 };
         let po3 = PlaneOffset { x: po.x+2, y: po.y+2 };
-        luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), 2, 2, ref_frame, mv0, bit_depth);
-        luma_mode.predict_inter(fi, p, &po1, &mut rec.mut_slice(&po1), 2, 2, ref_frame, mv1, bit_depth);
-        luma_mode.predict_inter(fi, p, &po2, &mut rec.mut_slice(&po2), 2, 2, ref_frame, mv2, bit_depth);
+        luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), 2, 2, rf0, mv0, bit_depth);
+        luma_mode.predict_inter(fi, p, &po1, &mut rec.mut_slice(&po1), 2, 2, rf1, mv1, bit_depth);
+        luma_mode.predict_inter(fi, p, &po2, &mut rec.mut_slice(&po2), 2, 2, rf2, mv2, bit_depth);
         luma_mode.predict_inter(fi, p, &po3, &mut rec.mut_slice(&po3), 2, 2, ref_frame, &mv, bit_depth);
       }
     } else {
@@ -1349,6 +1352,9 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
     }
     cw.bc.set_block_size(bo, bsize);
     cw.bc.set_mode(bo, bsize, luma_mode);
+    cw.bc.set_ref_frame(bo, bsize, ref_frame);
+    cw.bc.set_motion_vector(bo, bsize, mv);
+
     //write_q_deltas();
     if cw.bc.code_deltas && fs.deblock.block_deltas_enabled && (bsize < sb_size || !skip) {
         cw.write_block_deblock_deltas(w, bo, fs.deblock.block_delta_multi);
@@ -1359,8 +1365,6 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
         cw.write_is_inter(w, bo, is_inter);
         if is_inter {
             cw.fill_neighbours_ref_counts(bo);
-            cw.bc.set_ref_frame(bo, bsize, ref_frame);
-            cw.bc.set_motion_vector(bo, bsize, mv);
             cw.write_ref_frames(w, bo);
 
             //let mode_context = if bo.x == 0 && bo.y == 0 { 0 } else if bo.x ==0 || bo.y == 0 { 51 } else { 85 };

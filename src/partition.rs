@@ -14,7 +14,7 @@ use self::BlockSize::*;
 use self::TxSize::*;
 use encoder::FrameInvariants;
 
-pub const NONE_FRAME: isize = -1;
+pub const NONE_FRAME: usize = 8;
 pub const INTRA_FRAME: usize = 0;
 pub const LAST_FRAME: usize = 1;
 pub const LAST2_FRAME: usize = 2;
@@ -911,7 +911,6 @@ impl PredictionMode {
     ref_frame: usize, mv: &MotionVector, bit_depth: usize
   ) {
     assert!(!self.is_intra());
-    assert!(ref_frame == LAST_FRAME);
 
     match fi.rec_buffer.frames[fi.ref_frames[ref_frame - LAST_FRAME]] {
       Some(ref rec) => {

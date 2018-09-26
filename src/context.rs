@@ -1928,7 +1928,16 @@ impl ContextWriter {
     cmp::max(col_offset, -(mi_col as isize))
   }
 
-  fn find_matching_mv(&self, blk: &Block, mv_stack: &mut Vec<CandidateMV>, weight: u32) -> bool {
+  fn find_matching_mv(&self, blk: &Block, mv_stack: &mut Vec<CandidateMV>) -> bool {
+    for mv_cand in mv_stack {
+      if blk.mv[0].row == mv_cand.this_mv.row && blk.mv[0].col == mv_cand.this_mv.col {
+        return true;
+      }
+    }
+    false
+  }
+
+  fn find_matching_mv_and_update_weight(&self, blk: &Block, mv_stack: &mut Vec<CandidateMV>, weight: u32) -> bool {
     for mut mv_cand in mv_stack {
       if blk.mv[0].row == mv_cand.this_mv.row && blk.mv[0].col == mv_cand.this_mv.col {
         mv_cand.weight += weight;
@@ -1945,7 +1954,7 @@ impl ContextWriter {
     }
 
     if blk.ref_frames[0] == ref_frame {
-      let found_match = self.find_matching_mv(blk, mv_stack, weight);
+      let found_match = self.find_matching_mv_and_update_weight(blk, mv_stack, weight);
 
       if !found_match && mv_stack.len() < MAX_REF_MV_STACK_SIZE {
         let mv_cand = CandidateMV {
@@ -1964,6 +1973,21 @@ impl ContextWriter {
       true
     } else {
       false
+    }
+  }
+
+  fn add_extra_mv_candidate(&self, blk: &Block, mv_stack: &mut Vec<CandidateMV>) {
+    for cand_list in 0..2 {
+      if blk.ref_frames[cand_list] > INTRA_FRAME {
+        if !self.find_matching_mv(blk, mv_stack) {
+          let mv_cand = CandidateMV {
+            this_mv: blk.mv[0],
+            comp_mv: blk.mv[1],
+            weight: 2
+          };
+          mv_stack.push(mv_cand);
+        }
+      }
     }
   }
 
@@ -2193,8 +2217,38 @@ impl ContextWriter {
 
     /* TODO: Find nearest match and assign nearest and near mvs */
 
-    // Sort MV stack according to weight
+    // 7.10.2.11 Sort MV stack according to weight
     mv_stack.sort_by(|a, b| b.weight.cmp(&a.weight));
+
+    if mv_stack.len() < 2 {
+      // 7.10.2.12 Extra search process
+
+      let w4 = bsize.width_mi().min(16).min(self.bc.cols - bo.x);
+      let h4 = bsize.height_mi().min(16).min(self.bc.rows - bo.y);
+      let num4x4 = w4.min(h4);
+
+      let passes = if up_avail { 0 } else { 1 } .. if left_avail { 2 } else { 1 };
+
+      for pass in passes {
+        let mut idx = 0;
+        while idx < num4x4 && mv_stack.len() < 2 {
+          let rbo = if pass == 0 {
+            bo.with_offset(idx as isize, -1)
+          } else {
+            bo.with_offset(-1, idx as isize)
+          };
+
+          let blk = &self.bc.at(&rbo);
+          self.add_extra_mv_candidate(blk, mv_stack);
+
+          idx += if pass == 0 {
+            blk.n4_w
+          } else {
+            blk.n4_h
+          };
+        }
+      }
+    }
 
     /* TODO: Handle single reference frame extension */
 
@@ -2229,6 +2283,10 @@ impl ContextWriter {
       /* TODO: Set zeromv ref to the converted global motion vector */
     } else {
       /* TODO: Set the zeromv ref to 0 */
+    }
+
+    if ref_frame <= INTRA_FRAME {
+      return 0;
     }
 
     let mode_context = self.setup_mvref_list(bo, ref_frame, mv_stack, bsize, is_sec_rect);
@@ -2360,7 +2418,6 @@ impl ContextWriter {
 
   pub fn write_ref_frames(&mut self, w: &mut dyn Writer, bo: &BlockOffset) {
     let rf = self.bc.at(bo).ref_frames;
-    assert!(rf[0] == LAST_FRAME);
 
     /* TODO: Handle multiple references */
 
