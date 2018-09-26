@@ -39,6 +39,14 @@ fn half_btf(w0: i32, in0: i32, w1: i32, in1: i32, bit: usize) -> i32 {
   round_shift(result, bit)
 }
 
+// performs full butterfly rotation by PI/4
+#[inline]
+fn full_btf_sqrt2(in0: i32, in1: i32, bit: usize) -> (i32, i32) {
+  let a = (in0 + in1) * COSPI_INV[32];
+  let b = (in0 - in1) * COSPI_INV[32];
+  (round_shift(a, bit), round_shift(b, bit))
+}
+
 #[inline]
 fn round_shift(value: i32, bit: usize) -> i32 {
   if bit <= 0 {
@@ -64,9 +72,11 @@ fn av1_idct4(input: &[i32], output: &mut [i32], range: usize) {
   let stg1 = [input[0], input[2], input[1], input[3]];
 
   // stage 2
+  // TODO: can we inline the return tuple
+  let (a, b) = full_btf_sqrt2(stg1[0], stg1[1], cos_bit);
   let stg2 = [
-    half_btf(COSPI_INV[32], stg1[0], COSPI_INV[32], stg1[1], cos_bit),
-    half_btf(COSPI_INV[32], stg1[0], -COSPI_INV[32], stg1[1], cos_bit),
+    a,
+    b,
     half_btf(COSPI_INV[48], stg1[2], -COSPI_INV[16], stg1[3], cos_bit),
     half_btf(COSPI_INV[16], stg1[2], COSPI_INV[48], stg1[3], cos_bit)
   ];
@@ -130,61 +140,52 @@ fn av1_iidentity4(input: &[i32], output: &mut [i32], _range: usize) {
 }
 
 fn av1_idct8(input: &[i32], output: &mut [i32], range: usize) {
-  // TODO: call idct4
+  // call idct4
+  let temp_in = [ input[0], input[2], input[4], input[6] ];
+  let mut temp_out: [i32; 4] = [0; 4];
+  av1_idct4(&temp_in, &mut temp_out, range);
+
   let cos_bit = 12;
+
   // stage 0
 
   // stage 1
-  let stg1 = [
-    input[0], input[4], input[2], input[6], input[1], input[5], input[3],
-    input[7],
-  ];
+  let stg1 = [ input[1], input[5], input[3], input[7] ];
 
   // stage 2
   let stg2 = [
-    stg1[0],
-    stg1[1],
-    stg1[2],
-    stg1[3],
-    half_btf(COSPI_INV[56], stg1[4], -COSPI_INV[8], stg1[7], cos_bit),
-    half_btf(COSPI_INV[24], stg1[5], -COSPI_INV[40], stg1[6], cos_bit),
-    half_btf(COSPI_INV[40], stg1[5], COSPI_INV[24], stg1[6], cos_bit),
-    half_btf(COSPI_INV[8], stg1[4], COSPI_INV[56], stg1[7], cos_bit)
+    half_btf(COSPI_INV[56], stg1[0], -COSPI_INV[8], stg1[3], cos_bit),
+    half_btf(COSPI_INV[24], stg1[1], -COSPI_INV[40], stg1[2], cos_bit),
+    half_btf(COSPI_INV[40], stg1[1], COSPI_INV[24], stg1[2], cos_bit),
+    half_btf(COSPI_INV[8], stg1[0], COSPI_INV[56], stg1[3], cos_bit)
   ];
 
   // stage 3
   let stg3 = [
-    half_btf(COSPI_INV[32], stg2[0], COSPI_INV[32], stg2[1], cos_bit),
-    half_btf(COSPI_INV[32], stg2[0], -COSPI_INV[32], stg2[1], cos_bit),
-    half_btf(COSPI_INV[48], stg2[2], -COSPI_INV[16], stg2[3], cos_bit),
-    half_btf(COSPI_INV[16], stg2[2], COSPI_INV[48], stg2[3], cos_bit),
-    clamp_value(stg2[4] + stg2[5], range),
-    clamp_value(stg2[4] - stg2[5], range),
-    clamp_value(-stg2[6] + stg2[7], range),
-    clamp_value(stg2[6] + stg2[7], range)
+    clamp_value(stg2[0] + stg2[1], range),
+    clamp_value(stg2[0] - stg2[1], range),
+    clamp_value(-stg2[2] + stg2[3], range),
+    clamp_value(stg2[2] + stg2[3], range)
   ];
 
   // stage 4
+  let (a, b) = full_btf_sqrt2(stg3[2], stg3[1], cos_bit);
   let stg4 = [
-    clamp_value(stg3[0] + stg3[3], range),
-    clamp_value(stg3[1] + stg3[2], range),
-    clamp_value(stg3[1] - stg3[2], range),
-    clamp_value(stg3[0] - stg3[3], range),
-    stg3[4],
-    half_btf(-COSPI_INV[32], stg3[5], COSPI_INV[32], stg3[6], cos_bit),
-    half_btf(COSPI_INV[32], stg3[5], COSPI_INV[32], stg3[6], cos_bit),
-    stg3[7]
+    stg3[0],
+    b,
+    a,
+    stg3[3]
   ];
 
   // stage 5
-  output[0] = clamp_value(stg4[0] + stg4[7], range);
-  output[1] = clamp_value(stg4[1] + stg4[6], range);
-  output[2] = clamp_value(stg4[2] + stg4[5], range);
-  output[3] = clamp_value(stg4[3] + stg4[4], range);
-  output[4] = clamp_value(stg4[3] - stg4[4], range);
-  output[5] = clamp_value(stg4[2] - stg4[5], range);
-  output[6] = clamp_value(stg4[1] - stg4[6], range);
-  output[7] = clamp_value(stg4[0] - stg4[7], range);
+  output[0] = clamp_value(temp_out[0] + stg4[3], range);
+  output[1] = clamp_value(temp_out[1] + stg4[2], range);
+  output[2] = clamp_value(temp_out[2] + stg4[1], range);
+  output[3] = clamp_value(temp_out[3] + stg4[0], range);
+  output[4] = clamp_value(temp_out[3] - stg4[0], range);
+  output[5] = clamp_value(temp_out[2] - stg4[1], range);
+  output[6] = clamp_value(temp_out[1] - stg4[2], range);
+  output[7] = clamp_value(temp_out[0] - stg4[3], range);
 }
 
 fn av1_iadst8(input: &[i32], output: &mut [i32], range: usize) {
@@ -246,15 +247,17 @@ fn av1_iadst8(input: &[i32], output: &mut [i32], range: usize) {
   ];
 
   // stage 6
+  let (a, b) = full_btf_sqrt2(stg5[2], stg5[3], cos_bit);
+  let (c, d) = full_btf_sqrt2(stg5[6], stg5[7], cos_bit);
   let stg6 = [
     stg5[0],
     stg5[1],
-    half_btf(COSPI_INV[32], stg5[2], COSPI_INV[32], stg5[3], cos_bit),
-    half_btf(COSPI_INV[32], stg5[2], -COSPI_INV[32], stg5[3], cos_bit),
+    a,
+    b,
     stg5[4],
     stg5[5],
-    half_btf(COSPI_INV[32], stg5[6], COSPI_INV[32], stg5[7], cos_bit),
-    half_btf(COSPI_INV[32], stg5[6], -COSPI_INV[32], stg5[7], cos_bit)
+    c,
+    d,
   ];
 
   // stage 7
@@ -275,74 +278,57 @@ fn av1_iidentity8(input: &[i32], output: &mut [i32], _range: usize) {
 }
 
 fn av1_idct16(input: &[i32], output: &mut [i32], range: usize) {
+  // call idct8
+  let temp_in = [
+    input[0], input[2], input[4], input[6], input[8], input[10], input[12],
+    input[14]
+  ];
+  let mut temp_out: [i32; 8] = [0; 8];
+  av1_idct8(&temp_in, &mut temp_out, range);
+
   let cos_bit = 12;
   // stage 0
 
   // stage 1
   let stg1 = [
-    input[0], input[8], input[4], input[12], input[2], input[10], input[6],
-    input[14], input[1], input[9], input[5], input[13], input[3], input[11],
-    input[7], input[15],
+    input[1], input[9], input[5], input[13], input[3], input[11], input[7],
+    input[15]
   ];
 
   // stage 2
   let stg2 = [
-    stg1[0],
-    stg1[1],
-    stg1[2],
-    stg1[3],
-    stg1[4],
-    stg1[5],
-    stg1[6],
-    stg1[7],
-    half_btf(COSPI_INV[60], stg1[8], -COSPI_INV[4], stg1[15], cos_bit),
-    half_btf(COSPI_INV[28], stg1[9], -COSPI_INV[36], stg1[14], cos_bit),
-    half_btf(COSPI_INV[44], stg1[10], -COSPI_INV[20], stg1[13], cos_bit),
-    half_btf(COSPI_INV[12], stg1[11], -COSPI_INV[52], stg1[12], cos_bit),
-    half_btf(COSPI_INV[52], stg1[11], COSPI_INV[12], stg1[12], cos_bit),
-    half_btf(COSPI_INV[20], stg1[10], COSPI_INV[44], stg1[13], cos_bit),
-    half_btf(COSPI_INV[36], stg1[9], COSPI_INV[28], stg1[14], cos_bit),
-    half_btf(COSPI_INV[4], stg1[8], COSPI_INV[60], stg1[15], cos_bit)
+    half_btf(COSPI_INV[60], stg1[0], -COSPI_INV[4], stg1[7], cos_bit),
+    half_btf(COSPI_INV[28], stg1[1], -COSPI_INV[36], stg1[6], cos_bit),
+    half_btf(COSPI_INV[44], stg1[2], -COSPI_INV[20], stg1[5], cos_bit),
+    half_btf(COSPI_INV[12], stg1[3], -COSPI_INV[52], stg1[4], cos_bit),
+    half_btf(COSPI_INV[52], stg1[3], COSPI_INV[12], stg1[4], cos_bit),
+    half_btf(COSPI_INV[20], stg1[2], COSPI_INV[44], stg1[5], cos_bit),
+    half_btf(COSPI_INV[36], stg1[1], COSPI_INV[28], stg1[6], cos_bit),
+    half_btf(COSPI_INV[4], stg1[0], COSPI_INV[60], stg1[7], cos_bit)
   ];
 
   // stage 3
   let stg3 = [
-    stg2[0],
-    stg2[1],
-    stg2[2],
-    stg2[3],
-    half_btf(COSPI_INV[56], stg2[4], -COSPI_INV[8], stg2[7], cos_bit),
-    half_btf(COSPI_INV[24], stg2[5], -COSPI_INV[40], stg2[6], cos_bit),
-    half_btf(COSPI_INV[40], stg2[5], COSPI_INV[24], stg2[6], cos_bit),
-    half_btf(COSPI_INV[8], stg2[4], COSPI_INV[56], stg2[7], cos_bit),
-    clamp_value(stg2[8] + stg2[9], range),
-    clamp_value(stg2[8] - stg2[9], range),
-    clamp_value(-stg2[10] + stg2[11], range),
-    clamp_value(stg2[10] + stg2[11], range),
-    clamp_value(stg2[12] + stg2[13], range),
-    clamp_value(stg2[12] - stg2[13], range),
-    clamp_value(-stg2[14] + stg2[15], range),
-    clamp_value(stg2[14] + stg2[15], range)
+    clamp_value(stg2[0] + stg2[1], range),
+    clamp_value(stg2[0] - stg2[1], range),
+    clamp_value(-stg2[2] + stg2[3], range),
+    clamp_value(stg2[2] + stg2[3], range),
+    clamp_value(stg2[4] + stg2[5], range),
+    clamp_value(stg2[4] - stg2[5], range),
+    clamp_value(-stg2[6] + stg2[7], range),
+    clamp_value(stg2[6] + stg2[7], range)
   ];
 
   // stage 4
   let stg4 = [
-    half_btf(COSPI_INV[32], stg3[0], COSPI_INV[32], stg3[1], cos_bit),
-    half_btf(COSPI_INV[32], stg3[0], -COSPI_INV[32], stg3[1], cos_bit),
-    half_btf(COSPI_INV[48], stg3[2], -COSPI_INV[16], stg3[3], cos_bit),
-    half_btf(COSPI_INV[16], stg3[2], COSPI_INV[48], stg3[3], cos_bit),
-    clamp_value(stg3[4] + stg3[5], range),
-    clamp_value(stg3[4] - stg3[5], range),
-    clamp_value(-stg3[6] + stg3[7], range),
-    clamp_value(stg3[6] + stg3[7], range),
-    stg3[8],
-    half_btf(-COSPI_INV[16], stg3[9], COSPI_INV[48], stg3[14], cos_bit),
-    half_btf(-COSPI_INV[48], stg3[10], -COSPI_INV[16], stg3[13], cos_bit),
-    stg3[11],
-    stg3[12],
-    half_btf(-COSPI_INV[16], stg3[10], COSPI_INV[48], stg3[13], cos_bit),
-    half_btf(COSPI_INV[48], stg3[9], COSPI_INV[16], stg3[14], cos_bit),
-    stg3[15]
+    stg3[0],
+    half_btf(-COSPI_INV[16], stg3[1], COSPI_INV[48], stg3[6], cos_bit),
+    half_btf(-COSPI_INV[48], stg3[2], -COSPI_INV[16], stg3[5], cos_bit),
+    stg3[3],
+    stg3[4],
+    half_btf(-COSPI_INV[16], stg3[2], COSPI_INV[48], stg3[5], cos_bit),
+    half_btf(COSPI_INV[48], stg3[1], COSPI_INV[16], stg3[6], cos_bit),
+    stg3[7]
   ];
 
   // stage 5
@@ -351,57 +337,43 @@ fn av1_idct16(input: &[i32], output: &mut [i32], range: usize) {
     clamp_value(stg4[1] + stg4[2], range),
     clamp_value(stg4[1] - stg4[2], range),
     clamp_value(stg4[0] - stg4[3], range),
-    stg4[4],
-    half_btf(-COSPI_INV[32], stg4[5], COSPI_INV[32], stg4[6], cos_bit),
-    half_btf(COSPI_INV[32], stg4[5], COSPI_INV[32], stg4[6], cos_bit),
-    stg4[7],
-    clamp_value(stg4[8] + stg4[11], range),
-    clamp_value(stg4[9] + stg4[10], range),
-    clamp_value(stg4[9] - stg4[10], range),
-    clamp_value(stg4[8] - stg4[11], range),
-    clamp_value(-stg4[12] + stg4[15], range),
-    clamp_value(-stg4[13] + stg4[14], range),
-    clamp_value(stg4[13] + stg4[14], range),
-    clamp_value(stg4[12] + stg4[15], range)
+    clamp_value(-stg4[4] + stg4[7], range),
+    clamp_value(-stg4[5] + stg4[6], range),
+    clamp_value(stg4[5] + stg4[6], range),
+    clamp_value(stg4[4] + stg4[7], range)
   ];
 
   // stage 6
+  let (a, b) = full_btf_sqrt2(stg5[5], stg5[2], cos_bit);
+  let (c, d) = full_btf_sqrt2(stg5[4], stg5[3], cos_bit);
   let stg6 = [
-    clamp_value(stg5[0] + stg5[7], range),
-    clamp_value(stg5[1] + stg5[6], range),
-    clamp_value(stg5[2] + stg5[5], range),
-    clamp_value(stg5[3] + stg5[4], range),
-    clamp_value(stg5[3] - stg5[4], range),
-    clamp_value(stg5[2] - stg5[5], range),
-    clamp_value(stg5[1] - stg5[6], range),
-    clamp_value(stg5[0] - stg5[7], range),
-    stg5[8],
-    stg5[9],
-    half_btf(-COSPI_INV[32], stg5[10], COSPI_INV[32], stg5[13], cos_bit),
-    half_btf(-COSPI_INV[32], stg5[11], COSPI_INV[32], stg5[12], cos_bit),
-    half_btf(COSPI_INV[32], stg5[11], COSPI_INV[32], stg5[12], cos_bit),
-    half_btf(COSPI_INV[32], stg5[10], COSPI_INV[32], stg5[13], cos_bit),
-    stg5[14],
-    stg5[15]
+    stg5[0],
+    stg5[1],
+    b,
+    d,
+    c,
+    a,
+    stg5[6],
+    stg5[7]
   ];
 
   // stage 7
-  output[0] = clamp_value(stg6[0] + stg6[15], range);
-  output[1] = clamp_value(stg6[1] + stg6[14], range);
-  output[2] = clamp_value(stg6[2] + stg6[13], range);
-  output[3] = clamp_value(stg6[3] + stg6[12], range);
-  output[4] = clamp_value(stg6[4] + stg6[11], range);
-  output[5] = clamp_value(stg6[5] + stg6[10], range);
-  output[6] = clamp_value(stg6[6] + stg6[9], range);
-  output[7] = clamp_value(stg6[7] + stg6[8], range);
-  output[8] = clamp_value(stg6[7] - stg6[8], range);
-  output[9] = clamp_value(stg6[6] - stg6[9], range);
-  output[10] = clamp_value(stg6[5] - stg6[10], range);
-  output[11] = clamp_value(stg6[4] - stg6[11], range);
-  output[12] = clamp_value(stg6[3] - stg6[12], range);
-  output[13] = clamp_value(stg6[2] - stg6[13], range);
-  output[14] = clamp_value(stg6[1] - stg6[14], range);
-  output[15] = clamp_value(stg6[0] - stg6[15], range);
+  output[0] = clamp_value(temp_out[0] + stg6[7], range);
+  output[1] = clamp_value(temp_out[1] + stg6[6], range);
+  output[2] = clamp_value(temp_out[2] + stg6[5], range);
+  output[3] = clamp_value(temp_out[3] + stg6[4], range);
+  output[4] = clamp_value(temp_out[4] + stg6[3], range);
+  output[5] = clamp_value(temp_out[5] + stg6[2], range);
+  output[6] = clamp_value(temp_out[6] + stg6[1], range);
+  output[7] = clamp_value(temp_out[7] + stg6[0], range);
+  output[8] = clamp_value(temp_out[7] - stg6[0], range);
+  output[9] = clamp_value(temp_out[6] - stg6[1], range);
+  output[10] = clamp_value(temp_out[5] - stg6[2], range);
+  output[11] = clamp_value(temp_out[4] - stg6[3], range);
+  output[12] = clamp_value(temp_out[3] - stg6[4], range);
+  output[13] = clamp_value(temp_out[2] - stg6[5], range);
+  output[14] = clamp_value(temp_out[1] - stg6[6], range);
+  output[15] = clamp_value(temp_out[0] - stg6[7], range);
 }
 
 fn av1_iadst16(input: &[i32], output: &mut [i32], range: usize) {
@@ -536,23 +508,27 @@ fn av1_iadst16(input: &[i32], output: &mut [i32], range: usize) {
   ];
 
   // stage 8
+  let (a, b) = full_btf_sqrt2(stg7[2], stg7[3], cos_bit);
+  let (c, d) = full_btf_sqrt2(stg7[6], stg7[7], cos_bit);
+  let (e, f) = full_btf_sqrt2(stg7[10], stg7[11], cos_bit);
+  let (g, h) = full_btf_sqrt2(stg7[14], stg7[15], cos_bit);
   let stg8 = [
     stg7[0],
     stg7[1],
-    half_btf(COSPI_INV[32], stg7[2], COSPI_INV[32], stg7[3], cos_bit),
-    half_btf(COSPI_INV[32], stg7[2], -COSPI_INV[32], stg7[3], cos_bit),
+    a,
+    b,
     stg7[4],
     stg7[5],
-    half_btf(COSPI_INV[32], stg7[6], COSPI_INV[32], stg7[7], cos_bit),
-    half_btf(COSPI_INV[32], stg7[6], -COSPI_INV[32], stg7[7], cos_bit),
+    c,
+    d,
     stg7[8],
     stg7[9],
-    half_btf(COSPI_INV[32], stg7[10], COSPI_INV[32], stg7[11], cos_bit),
-    half_btf(COSPI_INV[32], stg7[10], -COSPI_INV[32], stg7[11], cos_bit),
+    e,
+    f,
     stg7[12],
     stg7[13],
-    half_btf(COSPI_INV[32], stg7[14], COSPI_INV[32], stg7[15], cos_bit),
-    half_btf(COSPI_INV[32], stg7[14], -COSPI_INV[32], stg7[15], cos_bit)
+    g,
+    h,
   ];
 
   // stage 9
