@@ -13,6 +13,7 @@ extern crate rand;
 extern crate rav1e;
 
 mod predict;
+mod transform;
 mod me;
 
 use criterion::*;
@@ -23,6 +24,8 @@ use rav1e::partition::*;
 use rav1e::predict::*;
 use rav1e::rdo::rdo_cfl_alpha;
 use rav1e::*;
+
+use transform::transform;
 
 #[cfg(feature = "comparative_bench")]
 mod comparative;
@@ -145,4 +148,4 @@ criterion_group!(me, me::get_sad);
 criterion_main!(comparative::intra_prediction);
 
 #[cfg(not(feature = "comparative_bench"))]
-criterion_main!(write_block, intra_prediction, cdef, cfl, me);
+criterion_main!(write_block, intra_prediction, cdef, cfl, me, transform);
