@@ -56,7 +56,7 @@ fn clamp_value(value: i32, bit: usize) -> i32 {
   clamp(value, min_value, max_value)
 }
 
-fn av1_idct4(input: &[i32], output: &mut [i32], range: usize) {
+pub fn av1_idct4(input: &[i32], output: &mut [i32], range: usize) {
   let cos_bit = 12;
   // stage 0
 
@@ -129,7 +129,7 @@ fn av1_iidentity4(input: &[i32], output: &mut [i32], _range: usize) {
   }
 }
 
-fn av1_idct8(input: &[i32], output: &mut [i32], range: usize) {
+pub fn av1_idct8(input: &[i32], output: &mut [i32], range: usize) {
   // TODO: call idct4
   let cos_bit = 12;
   // stage 0
