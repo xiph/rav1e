@@ -391,17 +391,19 @@ fn filter_v_edge(deblock: &DeblockState,
         let filter_size = deblock_size(block, prev_block, p, pli, true, block_edge);
         if filter_size > 0 {
             let level = deblock_level(deblock, block, prev_block, pli, true);
-            let po = bo.plane_offset(&p.cfg);
-            let stride = p.cfg.stride;
-            let mut plane_slice = p.mut_slice(&po);
-            plane_slice.x -= (filter_size>>1) as isize;
-            let slice = plane_slice.as_mut_slice();
-            match filter_size {
-                4 => { deblock_size4(slice, 1, stride, level, bd); },
-                6 => { deblock_size6(slice, 1, stride, level, bd); },
-                8 => { deblock_size8(slice, 1, stride, level, bd); },
-                14 => { deblock_size14(slice, 1, stride, level, bd); },
-                _ => {unreachable!()}
+            if level > 0 {
+                let po = bo.plane_offset(&p.cfg);
+                let stride = p.cfg.stride;
+                let mut plane_slice = p.mut_slice(&po);
+                plane_slice.x -= (filter_size>>1) as isize;
+                let slice = plane_slice.as_mut_slice();
+                match filter_size {
+                    4 => { deblock_size4(slice, 1, stride, level, bd); },
+                    6 => { deblock_size6(slice, 1, stride, level, bd); },
+                    8 => { deblock_size8(slice, 1, stride, level, bd); },
+                    14 => { deblock_size14(slice, 1, stride, level, bd); },
+                    _ => {unreachable!()}
+                }
             }
         }
     }
@@ -421,17 +423,19 @@ fn filter_h_edge(deblock: &DeblockState,
         let filter_size = deblock_size(block, prev_block, p, pli, false, block_edge);
         if filter_size > 0 {
             let level = deblock_level(deblock, block, prev_block, pli, false);
-            let po = bo.plane_offset(&p.cfg);
-            let stride = p.cfg.stride;
-            let mut plane_slice = p.mut_slice(&po);
-            plane_slice.y -= (filter_size>>1) as isize;
-            let slice = plane_slice.as_mut_slice(); 
-            match filter_size {
-                4 => { deblock_size4(slice, stride, 1, level, bd); },
+            if level > 0 {
+                let po = bo.plane_offset(&p.cfg);
+                let stride = p.cfg.stride;
+                let mut plane_slice = p.mut_slice(&po);
+                plane_slice.y -= (filter_size>>1) as isize;
+                let slice = plane_slice.as_mut_slice(); 
+                match filter_size {
+                    4 => { deblock_size4(slice, stride, 1, level, bd); },
                 6 => { deblock_size6(slice, stride, 1, level, bd); },
-                8 => { deblock_size8(slice, stride, 1, level, bd); },
-                14 => { deblock_size14(slice, stride, 1, level, bd); },
-                _ => {unreachable!()}
+                    8 => { deblock_size8(slice, stride, 1, level, bd); },
+                    14 => { deblock_size14(slice, stride, 1, level, bd); },
+                    _ => {unreachable!()}
+                }
             }
         }
     }
@@ -531,7 +535,7 @@ pub fn deblock_filter_optimize(fi: &FrameInvariants, fs: &mut FrameState,
         _ => {assert!(false); 0}
     }, 0, MAX_LOOP_FILTER as i32) as u8;
 
-    fs.deblock.levels[0] = level;
+    fs.deblock.levels[0] = 0;
     fs.deblock.levels[1] = level;
     fs.deblock.levels[2] = level;
     fs.deblock.levels[3] = level;
