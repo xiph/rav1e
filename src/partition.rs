@@ -931,7 +931,7 @@ impl PredictionMode {
         let max_sample_val = ((1 << bit_depth) - 1) as i32;
         let y_filter_idx = if height <= 4 { 4 } else { 0 };
         let x_filter_idx = if width <= 4 { 4 } else { 0 };
-        let (shift_1, shift_2) = {
+        let shifts = {
           let shift_offset = if bit_depth == 12 { 2 } else { 0 };
           (3 + shift_offset, 11 - shift_offset)
         };
@@ -988,9 +988,10 @@ impl PredictionMode {
                     * SUBPEL_FILTERS[x_filter_idx][col_frac as usize][k];
                 }
                 let output_index = r * stride + c;
-                let val = round_shift(round_shift(sum, shift_1), shift_2 - 7)
-                  .max(0)
-                  .min(max_sample_val);
+                let val =
+                  round_shift(round_shift(sum, shifts.0), shifts.1 - 7)
+                    .max(0)
+                    .min(max_sample_val);
                 slice[output_index] = val as u16;
               }
             }
@@ -1012,7 +1013,7 @@ impl PredictionMode {
                     sum += s[r * ref_stride + (c + k)] as i32 * SUBPEL_FILTERS
                       [x_filter_idx][col_frac as usize][k];
                   }
-                  let val = round_shift(sum, shift_1);
+                  let val = round_shift(sum, shifts.0);
                   intermediate[8 * r + (c - cg)] = val as i16;
                 }
               }
@@ -1026,7 +1027,7 @@ impl PredictionMode {
                   }
                   let output_index = r * stride + c;
                   let val =
-                    round_shift(sum, shift_2).max(0).min(max_sample_val);
+                    round_shift(sum, shifts.1).max(0).min(max_sample_val);
                   slice[output_index] = val as u16;
                 }
               }
