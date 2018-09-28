@@ -43,25 +43,30 @@ fn main() {
   );
 
   let chroma_sampling = match color_space {
-    y4m::Colorspace::C420 |
-    y4m::Colorspace::C420jpeg |
-    y4m::Colorspace::C420paldv |
-    y4m::Colorspace::C420mpeg2 |
-    y4m::Colorspace::C420p10 |
-    y4m::Colorspace::C420p12 => ChromaSampling::Cs420,
-    y4m::Colorspace::C422 |
-    y4m::Colorspace::C422p10 |
-    y4m::Colorspace::C422p12 => ChromaSampling::Cs422,
-    y4m::Colorspace::C444 |
-    y4m::Colorspace::C444p10 |
-    y4m::Colorspace::C444p12 => ChromaSampling::Cs444,
-    _ => {
-        panic!("Chroma sampling unknown for the specified color space.")
-    }
+    y4m::Colorspace::C420
+    | y4m::Colorspace::C420jpeg
+    | y4m::Colorspace::C420paldv
+    | y4m::Colorspace::C420mpeg2
+    | y4m::Colorspace::C420p10
+    | y4m::Colorspace::C420p12 => ChromaSampling::Cs420,
+    y4m::Colorspace::C422
+    | y4m::Colorspace::C422p10
+    | y4m::Colorspace::C422p12 => ChromaSampling::Cs422,
+    y4m::Colorspace::C444
+    | y4m::Colorspace::C444p10
+    | y4m::Colorspace::C444p12 => ChromaSampling::Cs444,
+    _ => panic!("Chroma sampling unknown for the specified color space.")
   };
   let bit_depth = color_space.get_bit_depth();
 
-  let cfg = Config {width, height, bit_depth, chroma_sampling, timebase: Ratio::new(framerate.den, framerate.num), enc };
+  let cfg = Config {
+    width,
+    height,
+    bit_depth,
+    chroma_sampling,
+    timebase: Ratio::new(framerate.den, framerate.num),
+    enc
+  };
   let mut ctx = cfg.new_context();
 
   let mut rl = Editor::<()>::new();
@@ -78,7 +83,7 @@ fn main() {
               &mut ctx,
               &mut io.output,
               &mut y4m_dec,
-              y4m_enc.as_mut(),
+              y4m_enc.as_mut()
             ) {
               break;
             }

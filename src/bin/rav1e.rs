@@ -53,7 +53,14 @@ fn main() {
 
   let bit_depth = color_space.get_bit_depth();
 
-  let cfg = Config {width, height, bit_depth, chroma_sampling, timebase: Ratio::new(framerate.den, framerate.num), enc };
+  let cfg = Config {
+    width,
+    height,
+    bit_depth,
+    chroma_sampling,
+    timebase: Ratio::new(framerate.den, framerate.num),
+    enc
+  };
 
   let mut ctx = cfg.new_context();
 
@@ -66,12 +73,8 @@ fn main() {
   );
 
   loop {
-    if !process_frame(
-      &mut ctx,
-      &mut io.output,
-      &mut y4m_dec,
-      y4m_enc.as_mut(),
-    ) {
+    if !process_frame(&mut ctx, &mut io.output, &mut y4m_dec, y4m_enc.as_mut())
+    {
       break;
     }
 
