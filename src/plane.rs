@@ -232,7 +232,6 @@ pub struct IterWidth<'a> {
     width: usize,
 }
 
-// TODO: Implement more methods
 impl<'a> Iterator for IterWidth<'a> {
     type Item = &'a [u16];
 
@@ -250,7 +249,19 @@ impl<'a> Iterator for IterWidth<'a> {
             Some(&self.ps.plane.data[base..base + self.width])
         }
     }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let size = self.ps.plane.cfg.height - self.ps.y as usize;
+
+        (size, Some(size))
+    }
 }
+
+impl<'a> ExactSizeIterator for IterWidth<'a> { }
+
+use std::iter::FusedIterator;
+impl<'a> FusedIterator for IterWidth<'a> { }
 
 impl<'a> PlaneSlice<'a> {
   pub fn as_slice(&'a self) -> &'a [u16] {
