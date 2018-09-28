@@ -141,7 +141,7 @@ impl BlockSize {
     self.width_log2().min(self.height_log2()) < 3
   }
 
-  #[rustfmt::skip]
+  #[cfg_attr(rustfmt, rustfmt_skip)]
   const SUBSIZE_LOOKUP: [[BlockSize; BlockSize::BLOCK_SIZES_ALL];
     EXT_PARTITION_TYPES] = [
     // PARTITION_NONE
