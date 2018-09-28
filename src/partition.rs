@@ -141,9 +141,11 @@ impl BlockSize {
     self.width_log2().min(self.height_log2()) < 3
   }
 
-  const SUBSIZE_LOOKUP: [[BlockSize; BlockSize::BLOCK_SIZES_ALL]; EXT_PARTITION_TYPES] =
-  [
-    [ // PARTITION_NONE
+  #[cfg_attr(rustfmt, rustfmt_skip)]
+  const SUBSIZE_LOOKUP: [[BlockSize; BlockSize::BLOCK_SIZES_ALL];
+    EXT_PARTITION_TYPES] = [
+    // PARTITION_NONE
+    [
       //                            4X4
                                     BLOCK_4X4,
       // 4X8,        8X4,           8X8
@@ -160,7 +162,9 @@ impl BlockSize {
       BLOCK_4X16,    BLOCK_16X4,    BLOCK_8X32,
       // 32X8,       16X64,         64X16
       BLOCK_32X8,    BLOCK_16X64,   BLOCK_64X16
-    ], [  // PARTITION_HORZ
+    ],
+    // PARTITION_HORZ
+    [
       //                            4X4
                                     BLOCK_INVALID,
       // 4X8,        8X4,           8X8
@@ -177,7 +181,9 @@ impl BlockSize {
       BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
       // 32X8,       16X64,         64X16
       BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID
-    ], [  // PARTITION_VERT
+    ],
+    // PARTITION_VERT
+    [
       //                            4X4
                                     BLOCK_INVALID,
       // 4X8,        8X4,           8X8
@@ -194,7 +200,9 @@ impl BlockSize {
       BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
       // 32X8,       16X64,         64X16
       BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID
-    ], [  // PARTITION_SPLIT
+    ],
+    // PARTITION_SPLIT
+    [
       //                            4X4
                                     BLOCK_INVALID,
       // 4X8,        8X4,           8X8
@@ -211,7 +219,9 @@ impl BlockSize {
       BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
       // 32X8,       16X64,         64X16
       BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID
-    ], [  // PARTITION_HORZ_A
+    ],
+    // PARTITION_HORZ_A
+    [
       //                            4X4
                                     BLOCK_INVALID,
       // 4X8,        8X4,           8X8
@@ -228,7 +238,9 @@ impl BlockSize {
       BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
       // 32X8,       16X64,         64X16
       BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
-    ], [  // PARTITION_HORZ_B
+    ],
+    // PARTITION_HORZ_B
+    [
       //                            4X4
                                     BLOCK_INVALID,
       // 4X8,        8X4,           8X8
@@ -245,7 +257,9 @@ impl BlockSize {
       BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
       // 32X8,       16X64,         64X16
       BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID
-    ], [  // PARTITION_VERT_A
+    ],
+    // PARTITION_VERT_A
+    [
       //                            4X4
                                     BLOCK_INVALID,
       // 4X8,        8X4,           8X8
@@ -262,7 +276,9 @@ impl BlockSize {
       BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
       // 32X8,       16X64,         64X16
       BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID
-    ], [  // PARTITION_VERT_B
+    ],
+    // PARTITION_VERT_B
+    [
       //                            4X4
                                     BLOCK_INVALID,
       // 4X8,        8X4,           8X8
@@ -279,7 +295,9 @@ impl BlockSize {
       BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
       // 32X8,       16X64,         64X16
       BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID
-    ], [  // PARTITION_HORZ_4
+    ],
+    // PARTITION_HORZ_4
+    [
       //                            4X4
                                     BLOCK_INVALID,
       // 4X8,        8X4,           8X8
@@ -296,7 +314,9 @@ impl BlockSize {
       BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID,
       // 32X8,       16X64,         64X16
       BLOCK_INVALID, BLOCK_INVALID, BLOCK_INVALID
-    ], [  // PARTITION_VERT_4
+    ],
+    // PARTITION_VERT_4
+    [
       //                            4X4
                                     BLOCK_INVALID,
       // 4X8,        8X4,           8X8
