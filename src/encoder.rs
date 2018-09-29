@@ -95,6 +95,7 @@ const PRIMARY_REF_BITS: u32 = 3;
 
 arg_enum!{
     #[derive(Copy, Clone, Debug, PartialEq)]
+    #[repr(C)]
     pub enum Tune {
         Psnr,
         Psychovisual
@@ -108,6 +109,7 @@ impl Default for Tune {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
+#[repr(C)]
 pub enum ChromaSampling {
     Cs420,
     Cs422,
@@ -446,6 +448,7 @@ impl fmt::Display for FrameInvariants{
 
 #[allow(dead_code,non_camel_case_types)]
 #[derive(Debug,PartialEq,Clone,Copy)]
+#[repr(C)]
 pub enum FrameType {
     KEY,
     INTER,
