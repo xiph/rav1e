@@ -28,26 +28,44 @@ impl Ratio {
   }
 }
 
-/// Here we store all the information we might receive from the cli
+#[derive(Copy, Clone, Debug)]
+pub struct EncoderConfig {
+  pub quantizer: usize,
+  pub speed: usize,
+  pub tune: Tune
+}
+
+impl Default for EncoderConfig {
+  fn default() -> Self {
+    EncoderConfig { quantizer: 100, speed: 0, tune: Tune::Psnr }
+  }
+}
+
+/// Frame-specific information
 #[derive(Clone, Copy, Debug)]
-pub struct Config {
+pub struct FrameInfo {
   pub width: usize,
   pub height: usize,
   pub bit_depth: usize,
-  pub chroma_sampling: ChromaSampling,
+  pub chroma_sampling: ChromaSampling
+}
+
+/// Contain all the encoder configuration
+#[derive(Clone, Copy, Debug)]
+pub struct Config {
+  pub frame_info: FrameInfo,
   pub timebase: Ratio,
   pub enc: EncoderConfig
 }
 
 impl Config {
   pub fn new_context(&self) -> Context {
-    let fi = FrameInvariants::new(self.width, self.height, self.enc.clone());
-    let seq = Sequence::new(
-      self.width,
-      self.height,
-      self.bit_depth,
-      self.chroma_sampling
+    let fi = FrameInvariants::new(
+      self.frame_info.width,
+      self.frame_info.height,
+      self.enc.clone()
     );
+    let seq = Sequence::new(&self.frame_info);
 
     unsafe {
         av1_rtcd();
