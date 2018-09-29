@@ -22,7 +22,7 @@ use rustyline::error::ReadlineError;
 use rustyline::Editor;
 
 fn main() {
-  let (mut io, enc) = EncoderConfig::from_cli();
+  let (mut io, enc, _) = parse_cli();
   let mut y4m_dec = y4m::decode(&mut io.input).unwrap();
   let width = y4m_dec.get_width();
   let height = y4m_dec.get_height();

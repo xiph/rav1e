@@ -477,7 +477,6 @@ impl fmt::Display for FrameType{
 
 #[derive(Copy, Clone, Debug)]
 pub struct EncoderConfig {
-    pub limit: u64,
     pub quantizer: usize,
     pub speed: usize,
     pub tune: Tune
@@ -486,7 +485,6 @@ pub struct EncoderConfig {
 impl Default for EncoderConfig {
     fn default() -> Self {
         EncoderConfig {
-            limit: 0,
             quantizer: 100,
             speed: 0,
             tune: Tune::Psnr,
