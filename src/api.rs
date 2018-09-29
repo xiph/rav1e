@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 // TODO: use the num crate?
 #[derive(Clone, Copy, Debug)]
+#[repr(C)]
 pub struct Ratio {
   pub num: usize,
   pub den: usize
