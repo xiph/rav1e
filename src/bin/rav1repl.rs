@@ -60,10 +60,7 @@ fn main() {
   let bit_depth = color_space.get_bit_depth();
 
   let cfg = Config {
-    width,
-    height,
-    bit_depth,
-    chroma_sampling,
+    frame_info: FrameInfo { width, height, bit_depth, chroma_sampling },
     timebase: Ratio::new(framerate.den, framerate.num),
     enc
   };
