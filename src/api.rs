@@ -60,6 +60,18 @@ pub struct Config {
 }
 
 impl Config {
+  pub fn parse(&mut self, key: &str, value: &str) -> Result<(), EncoderStatus> {
+    use self::EncoderStatus::*;
+    match key {
+        "quantizer" => self.enc.quantizer = value.parse().map_err(|_e| ParseError)?,
+        "speed" => self.enc.speed = value.parse().map_err(|_e| ParseError)?,
+        "tune" => self.enc.tune = value.parse().map_err(|_e| ParseError)?,
+        _ => return Err(InvalidKey)
+    }
+
+    Ok(())
+  }
+
   pub fn new_context(&self) -> Context {
     let fi = FrameInvariants::new(
       self.frame_info.width,
@@ -91,7 +103,9 @@ pub enum EncoderStatus {
   /// There are enough Frames queue
   EnoughData,
   ///
-  Failure
+  Failure,
+  InvalidKey,
+  ParseError
 }
 
 pub struct Packet {
