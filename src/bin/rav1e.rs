@@ -17,7 +17,7 @@ use common::*;
 use rav1e::*;
 
 fn main() {
-  let (mut io, enc) = EncoderConfig::from_cli();
+  let (mut io, enc, limit) = parse_cli();
   let mut y4m_dec = y4m::decode(&mut io.input).unwrap();
   let width = y4m_dec.get_width();
   let height = y4m_dec.get_height();
@@ -80,7 +80,7 @@ fn main() {
 
     count += 1;
 
-    if enc.limit != 0 && count >= enc.limit {
+    if limit != 0 && count >= limit {
       break;
     }
 
