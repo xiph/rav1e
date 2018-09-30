@@ -33,7 +33,7 @@
 #include "src/arm/asm.S"
 
 .macro  movrel rd, val, offset=0
-#if defined(PIC) && defined(__APPLE__)
+#if defined(__APPLE__)
   .if \offset < 0
     adrp        \rd, \val@PAGE
     add         \rd, \rd, \val@PAGEOFF
