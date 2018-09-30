@@ -11,7 +11,7 @@ use encoder::*;
 use context::CDFContext;
 use partition::*;
 
-use std::collections::VecDeque;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
 
@@ -54,7 +54,7 @@ impl Config {
         aom_dsp_rtcd();
     }
 
-    Context { fi, seq, frame_count: 0, idx: 0, frame_q: VecDeque::new() }
+    Context { fi, seq, frame_count: 0, idx: 0, frame_q: BTreeMap::new() }
   }
 }
 
@@ -64,7 +64,7 @@ pub struct Context {
   //    timebase: Ratio,
   frame_count: u64,
   idx: u64,
-  frame_q: VecDeque<(u64, Option<Arc<Frame>>)> //    packet_q: VecDeque<Packet>
+  frame_q: BTreeMap<u64, Option<Arc<Frame>>> //    packet_q: VecDeque<Packet>
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -99,7 +99,7 @@ impl Context {
   where
     F: Into<Option<Arc<Frame>>>
   {
-    self.frame_q.push_back((self.frame_count, frame.into()));
+    self.frame_q.insert(self.frame_count, frame.into());
     self.frame_count = self.frame_count + 1;
     Ok(())
   }
@@ -195,18 +195,10 @@ impl Context {
 
       Ok(Packet { data, rec, number: self.fi.number, frame_type: self.fi.frame_type })
     } else {
-      let mut j: Option<usize> = None;
-      for (i, f) in self.frame_q.iter().enumerate() {
-        if f.0 == self.fi.number {
-          j = Some(i);
-        }
-      }
-      if let Some(k) = j {
+      if let Some(f) = self.frame_q.remove(&self.fi.number) {
         self.idx = self.idx + 1;
 
-        let f = self.frame_q.remove(k).unwrap();
-
-        if let Some(frame) = f.1 {
+        if let Some(frame) = f {
           let mut fs = FrameState {
             input: frame,
             rec: Frame::new(self.fi.padded_w, self.fi.padded_h),
@@ -235,7 +227,7 @@ impl Context {
   }
 
   pub fn flush(&mut self) {
-    self.frame_q.push_back((self.frame_count, None));
+    self.frame_q.insert(self.frame_count, None);
     self.frame_count = self.frame_count + 1;
   }
 }
