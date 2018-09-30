@@ -328,6 +328,7 @@ pub struct FrameInvariants {
     pub allow_high_precision_mv: bool,
     pub frame_type: FrameType,
     pub show_existing_frame: bool,
+    pub frame_to_show_map_idx: u32,
     pub use_reduced_tx_set: bool,
     pub reference_mode: ReferenceMode,
     pub use_prev_frame_mvs: bool,
@@ -396,6 +397,7 @@ impl FrameInvariants {
             allow_high_precision_mv: false,
             frame_type: FrameType::KEY,
             show_existing_frame: false,
+            frame_to_show_map_idx: 0,
             use_reduced_tx_set,
             reference_mode: ReferenceMode::SINGLE,
             use_prev_frame_mvs: false,
@@ -709,7 +711,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
       } else {
         if fi.show_existing_frame {
           self.write_bit(true)?; // show_existing_frame=1
-          self.write(3, 0)?; // show last frame
+          self.write(3, fi.frame_to_show_map_idx)?;
 
           //TODO:
           /* temporal_point_info();
@@ -721,6 +723,7 @@ impl<'a> UncompressedHeader for BitWriter<'a, BE> {
             // write display_frame_id;
           }*/
 
+          self.write_bit(true)?; // trailing bit
           self.byte_align()?;
           return Ok((()));
         }
@@ -2035,7 +2038,7 @@ pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut 
     if fi.show_existing_frame {
         //write_uncompressed_header(&mut packet, sequence, fi).unwrap();
         write_obus(&mut packet, sequence, fi, fs).unwrap();
-        match fi.rec_buffer.frames[0] {
+        match fi.rec_buffer.frames[fi.frame_to_show_map_idx as usize] {
             Some(ref rec) => for p in 0..3 {
                 fs.rec.planes[p].data.copy_from_slice(rec.frame.planes[p].data.as_slice());
             },

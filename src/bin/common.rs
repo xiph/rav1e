@@ -103,6 +103,7 @@ impl FromCli for EncoderConfig {
 }
 
 /// Encode and write a frame.
+/// returns wheter done with sequence
 pub fn process_frame(
   ctx: &mut Context, output_file: &mut dyn Write,
   y4m_dec: &mut y4m::Decoder<'_, Box<dyn Read>>,
@@ -118,6 +119,7 @@ pub fn process_frame(
   let y4m_bytes = y4m_dec.get_bytes_per_sample();
   let bit_depth = y4m_dec.get_colorspace().get_bit_depth();
 
+  let read_frame =
   match y4m_dec.read_frame() {
     Ok(y4m_frame) => {
       let y4m_y = y4m_frame.get_y_plane();
@@ -145,10 +147,24 @@ pub fn process_frame(
       }
 
       let _ = ctx.send_frame(input);
-      let pkt = ctx.receive_packet().unwrap();
+      true
+    }
+    _ => {
+      ctx.flush();
+      false
+    }
+  };
+
+  let y4m_enc_uw = y4m_enc.unwrap();
+
+  let mut has_data = true;
+  while has_data {
+    let pkt_wrapped = ctx.receive_packet();
+    match pkt_wrapped {
+    Ok(pkt) => {
       eprintln!("{}", pkt);
       write_ivf_frame(output_file, pkt.number as u64, pkt.data.as_ref());
-      if let Some(mut y4m_enc) = y4m_enc {
+      if let Some(rec) = pkt.rec {
         let pitch_y = if bit_depth > 8 { width * 2 } else { width };
         let pitch_uv = pitch_y / 2;
 
@@ -159,12 +175,12 @@ pub fn process_frame(
         );
 
         let (stride_y, stride_u, stride_v) = (
-          pkt.rec.planes[0].cfg.stride,
-          pkt.rec.planes[1].cfg.stride,
-          pkt.rec.planes[2].cfg.stride
+          rec.planes[0].cfg.stride,
+          rec.planes[1].cfg.stride,
+          rec.planes[2].cfg.stride
         );
 
-        for (line, line_out) in pkt.rec.planes[0]
+        for (line, line_out) in rec.planes[0]
           .data_origin()
           .chunks(stride_y)
           .zip(rec_y.chunks_mut(pitch_y))
@@ -182,7 +198,7 @@ pub fn process_frame(
             );
           }
         }
-        for (line, line_out) in pkt.rec.planes[1]
+        for (line, line_out) in rec.planes[1]
           .data_origin()
           .chunks(stride_u)
           .zip(rec_u.chunks_mut(pitch_uv))
@@ -200,7 +216,7 @@ pub fn process_frame(
             );
           }
         }
-        for (line, line_out) in pkt.rec.planes[2]
+        for (line, line_out) in rec.planes[2]
           .data_origin()
           .chunks(stride_v)
           .zip(rec_v.chunks_mut(pitch_uv))
@@ -220,11 +236,11 @@ pub fn process_frame(
         }
 
         let rec_frame = y4m::Frame::new([&rec_y, &rec_u, &rec_v], None);
-        y4m_enc.write_frame(&rec_frame).unwrap();
+        y4m_enc_uw.write_frame(&rec_frame).unwrap();
       }
-
-      true
+    },
+    _ => { has_data = false; }
     }
-    _ => false
   }
+  read_frame
 }
