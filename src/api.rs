@@ -107,7 +107,7 @@ impl Context {
   pub fn frame_properties(&mut self, idx: u64) {
     let key_frame_interval: u64 = 30;
 
-    let num_hidden_frames_in_segment: u64 = (key_frame_interval + 2) / 4;
+    let num_hidden_frames_in_segment: u64 = (key_frame_interval + 1) / 4;
     let segment_len = key_frame_interval + num_hidden_frames_in_segment;
 
     let idx_in_segment = idx % segment_len;
@@ -155,7 +155,6 @@ impl Context {
       let second_ref_frame = ALTREF_FRAME;
 
       self.fi.primary_ref_frame = (first_ref_frame - LAST_FRAME) as u32;
-      self.fi.number = segment_idx * key_frame_interval + self.fi.order_hint as u64;
 
       for i in 0..INTER_REFS_PER_FRAME {
         self.fi.ref_frames[i] = if i == second_ref_frame - LAST_FRAME {
@@ -164,6 +163,13 @@ impl Context {
           (slot_idx as usize + 7) & 4
         };
       }
+
+      if self.fi.order_hint >= key_frame_interval as u32 {
+        assert!(idx_in_group == 0);
+        self.fi.order_hint = key_frame_interval as u32 - 1;
+        self.fi.show_frame = key_frame_interval == 4 * group_idx + 1;
+      }
+      self.fi.number = segment_idx * key_frame_interval + self.fi.order_hint as u64;
     }
   }
 
@@ -187,7 +193,7 @@ impl Context {
       // TODO avoid the clone by having rec Arc.
       let rec = if self.fi.show_frame { Some(fs.rec.clone()) } else { None };
 
-      Ok(Packet { data, rec, number: self.idx, frame_type: self.fi.frame_type })
+      Ok(Packet { data, rec, number: self.fi.number, frame_type: self.fi.frame_type })
     } else {
       let mut j: Option<usize> = None;
       for (i, f) in self.frame_q.iter().enumerate() {
@@ -218,7 +224,7 @@ impl Context {
 
           update_rec_buffer(&mut self.fi, fs);
 
-          Ok(Packet { data, rec, number: self.idx, frame_type: self.fi.frame_type })
+          Ok(Packet { data, rec, number: self.fi.number, frame_type: self.fi.frame_type })
         } else {
           Err(EncoderStatus::NeedMoreData)
         }
