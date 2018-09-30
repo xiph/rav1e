@@ -167,7 +167,7 @@ impl Context {
       if self.fi.order_hint >= key_frame_interval as u32 {
         assert!(idx_in_group == 0);
         self.fi.order_hint = key_frame_interval as u32 - 1;
-        self.fi.show_frame = key_frame_interval == 4 * group_idx + 1;
+        self.fi.show_frame = key_frame_interval == 4 * group_idx + 2;
       }
       self.fi.number = segment_idx * key_frame_interval + self.fi.order_hint as u64;
     }
