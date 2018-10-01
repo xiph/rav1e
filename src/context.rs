@@ -28,6 +28,7 @@ use util::msb;
 use std::*;
 use entropymode::*;
 use token_cdfs::*;
+use encoder::FrameInvariants;
 
 use self::REF_CONTEXTS;
 use self::SINGLE_REFS;
@@ -1928,9 +1929,9 @@ impl ContextWriter {
     cmp::max(col_offset, -(mi_col as isize))
   }
 
-  fn find_matching_mv(&self, blk: &Block, mv_stack: &mut Vec<CandidateMV>) -> bool {
+  fn find_matching_mv(&self, mv: &MotionVector, mv_stack: &mut Vec<CandidateMV>) -> bool {
     for mv_cand in mv_stack {
-      if blk.mv[0].row == mv_cand.this_mv.row && blk.mv[0].col == mv_cand.this_mv.col {
+      if mv.row == mv_cand.this_mv.row && mv.col == mv_cand.this_mv.col {
         return true;
       }
     }
@@ -1976,13 +1977,26 @@ impl ContextWriter {
     }
   }
 
-  fn add_extra_mv_candidate(&self, blk: &Block, mv_stack: &mut Vec<CandidateMV>) {
+  fn add_extra_mv_candidate(
+    &self,
+    blk: &Block,
+    ref_frame: usize,
+    mv_stack: &mut Vec<CandidateMV>,
+    fi: &FrameInvariants
+  ) {
     for cand_list in 0..2 {
       if blk.ref_frames[cand_list] > INTRA_FRAME {
-        if !self.find_matching_mv(blk, mv_stack) {
+        let mut mv = blk.mv[0];
+        if fi.ref_frame_sign_bias[blk.ref_frames[cand_list] - LAST_FRAME] !=
+        fi.ref_frame_sign_bias[ref_frame - LAST_FRAME] {
+          mv.row = -mv.row;
+          mv.col = -mv.col;
+        }
+
+        if !self.find_matching_mv(&mv, mv_stack) {
           let mv_cand = CandidateMV {
-            this_mv: blk.mv[0],
-            comp_mv: blk.mv[1],
+            this_mv: mv,
+            comp_mv: mv,
             weight: 2
           };
           mv_stack.push(mv_cand);
@@ -2115,7 +2129,7 @@ impl ContextWriter {
   }
 
   fn setup_mvref_list(&mut self, bo: &BlockOffset, ref_frame: usize, mv_stack: &mut Vec<CandidateMV>,
-                      bsize: BlockSize, is_sec_rect: bool) -> usize {
+                      bsize: BlockSize, is_sec_rect: bool, fi: &FrameInvariants) -> usize {
     let (_rf, _rf_num) = self.get_mvref_ref_frames(INTRA_FRAME);
 
     let target_n4_h = bsize.height_mi();
@@ -2239,7 +2253,7 @@ impl ContextWriter {
           };
 
           let blk = &self.bc.at(&rbo);
-          self.add_extra_mv_candidate(blk, mv_stack);
+          self.add_extra_mv_candidate(blk, ref_frame, mv_stack, fi);
 
           idx += if pass == 0 {
             blk.n4_w
@@ -2270,7 +2284,8 @@ impl ContextWriter {
   }
 
   pub fn find_mvrefs(&mut self, bo: &BlockOffset, ref_frame: usize,
-                     mv_stack: &mut Vec<CandidateMV>, bsize: BlockSize, is_sec_rect: bool) -> usize {
+                     mv_stack: &mut Vec<CandidateMV>, bsize: BlockSize, is_sec_rect: bool,
+                     fi: &FrameInvariants) -> usize {
     if ref_frame < REF_FRAMES {
       if ref_frame != INTRA_FRAME {
         /* TODO: convert global mv to an mv here */
@@ -2289,7 +2304,7 @@ impl ContextWriter {
       return 0;
     }
 
-    let mode_context = self.setup_mvref_list(bo, ref_frame, mv_stack, bsize, is_sec_rect);
+    let mode_context = self.setup_mvref_list(bo, ref_frame, mv_stack, bsize, is_sec_rect, fi);
     mode_context
   }
 

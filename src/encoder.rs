@@ -243,6 +243,12 @@ impl Sequence {
             separate_uv_delta_q: false,
         }
     }
+
+    pub fn get_relative_dist(&self, a: u32, b: u32) -> i32 {
+        let diff = a as i32 - b as i32;
+        let m = 1 << self.order_hint_bits_minus_1;
+        (diff & (m - 1)) - (diff & m)
+    }
 }
 
 use std::sync::Arc;
@@ -356,6 +362,7 @@ pub struct FrameInvariants {
     pub delta_q_present: bool,
     pub config: EncoderConfig,
     pub ref_frames: [usize; INTER_REFS_PER_FRAME],
+    pub ref_frame_sign_bias: [bool; INTER_REFS_PER_FRAME],
     pub rec_buffer: ReferenceFramesSet,
     pub base_q_idx: u8,
 }
@@ -423,6 +430,7 @@ impl FrameInvariants {
             delta_q_present: false,
             config,
             ref_frames: [0; INTER_REFS_PER_FRAME],
+            ref_frame_sign_bias: [false; INTER_REFS_PER_FRAME],
             rec_buffer: ReferenceFramesSet::new(),
             base_q_idx: config.quantizer as u8,
         }
@@ -437,6 +445,7 @@ impl FrameInvariants {
             deblock: Default::default(),
         }
     }
+
 }
 
 impl fmt::Display for FrameInvariants{
@@ -1710,7 +1719,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         rd_cost = mode_decision.rd_cost + cost;
 
         let mut mv_stack = Vec::new();
-        let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack, bsize, false);
+        let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack, bsize, false, fi);
 
         let (tx_size, tx_type) =
           rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, ref_frame, mv, skip);
@@ -1788,7 +1797,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             let mut cdef_coded = cw.bc.cdef_coded;
 
             let mut mv_stack = Vec::new();
-            let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack, bsize, false);
+            let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack, bsize, false, fi);
 
             let (tx_size, tx_type) =
                 rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, ref_frame, mv, skip);
@@ -1881,7 +1890,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
                 rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, ref_frame, mv, skip);
 
             let mut mv_stack = Vec::new();
-            let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack, bsize, false);
+            let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack, bsize, false, fi);
 
             if !mode_luma.is_intra() && mode_luma != PredictionMode::GLOBALMV {
               mode_luma = PredictionMode::NEWMV;
@@ -2045,6 +2054,20 @@ pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut 
             None => (),
         }
     } else {
+        if !fi.intra_only {
+            for i in 0..INTER_REFS_PER_FRAME {
+                fi.ref_frame_sign_bias[i] =
+                if !sequence.enable_order_hint {
+                    false
+                } else if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[i]] {
+                    let hint = rec.order_hint;
+                    sequence.get_relative_dist(hint, fi.order_hint) > 0
+                } else {
+                    false
+                };
+            }
+        }
+
         let bit_depth = sequence.bit_depth;
         let tile = encode_tile(sequence, fi, fs, bit_depth); // actually tile group
 
