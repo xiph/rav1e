@@ -107,8 +107,10 @@ impl Context {
   pub fn frame_properties(&mut self, idx: u64) -> bool {
     let key_frame_interval: u64 = 30;
 
-    let group_len = 6;
-    let segment_len = 1 + (key_frame_interval - 1 + 3) / 4 * group_len;
+    let pyramid_depth = 1;
+    let group_src_len = 1 << pyramid_depth;
+    let group_len = group_src_len + pyramid_depth;
+    let segment_len = 1 + (key_frame_interval - 1 + group_src_len - 1) / group_src_len * group_len;
 
     let idx_in_segment = idx % segment_len;
     let segment_idx = idx / segment_len;
@@ -134,16 +136,22 @@ impl Context {
 
       self.fi.frame_type = FrameType::INTER;
       self.fi.intra_only = false;
-      let order_hint_table: [u32; 6] = [4, 2, 1, 2, 3, 4];
-      let lvl_table: [u32; 6] = [0, 1, 2, 1, 2, 1];
 
-      self.fi.order_hint = 4 * group_idx as u32 + order_hint_table[idx_in_group as usize];
+      self.fi.order_hint = (group_src_len * group_idx +
+        if idx_in_group < pyramid_depth {
+          group_src_len >> idx_in_group
+        } else {
+          idx_in_group - pyramid_depth + 1
+        }) as u32;
       if self.fi.order_hint >= key_frame_interval as u32 {
         return false;
       }
+
       let slot_idx = self.fi.order_hint % REF_FRAMES as u32;
-      self.fi.show_frame = idx_in_group >= 2;
-      self.fi.show_existing_frame = idx_in_group == 5 || idx_in_group == 3;
+      self.fi.show_frame = idx_in_group >= pyramid_depth;
+      self.fi.show_existing_frame = self.fi.show_frame &&
+        (idx_in_group - pyramid_depth + 1).count_ones() == 1 &&
+        idx_in_group != pyramid_depth;
       self.fi.frame_to_show_map_idx = slot_idx;
       self.fi.refresh_frame_flags = if self.fi.show_existing_frame {
         0
@@ -151,7 +159,11 @@ impl Context {
         1 << slot_idx
       };
 
-      let lvl = lvl_table[idx_in_group as usize];
+      let lvl = if idx_in_group < pyramid_depth {
+        idx_in_group
+      } else {
+        pyramid_depth - (idx_in_group - pyramid_depth + 1).trailing_zeros() as u64
+      };
       let q_drop = 15 * lvl as usize;
       self.fi.base_q_idx = (self.fi.config.quantizer.min(255 - q_drop) + q_drop) as u8;
 
@@ -162,10 +174,10 @@ impl Context {
 
       for i in 0..INTER_REFS_PER_FRAME {
         self.fi.ref_frames[i] = if i == second_ref_frame - LAST_FRAME {
-          (slot_idx as usize + (4 >> lvl)) & 7
+          (slot_idx as u64 + if lvl == 0 { 6 * group_src_len } else { group_src_len >> lvl }) & 7
         } else {
-          (slot_idx as usize - (4 >> lvl)) & 7
-        };
+          (slot_idx as u64 - (group_src_len >> lvl)) & 7
+        } as usize;
       }
 
       self.fi.number = segment_idx * key_frame_interval + self.fi.order_hint as u64;
