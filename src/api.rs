@@ -104,11 +104,11 @@ impl Context {
     Ok(())
   }
 
-  pub fn frame_properties(&mut self, idx: u64) {
+  pub fn frame_properties(&mut self, idx: u64) -> bool {
     let key_frame_interval: u64 = 30;
 
-    let num_hidden_frames_in_segment: u64 = (key_frame_interval + 1) / 4;
-    let segment_len = key_frame_interval + num_hidden_frames_in_segment;
+    let group_len = 6;
+    let segment_len = 1 + (key_frame_interval - 1 + 3) / 4 * group_len;
 
     let idx_in_segment = idx % segment_len;
     let segment_idx = idx / segment_len;
@@ -129,28 +129,32 @@ impl Context {
         self.fi.ref_frames[i] = 0;
       }
     } else {
-      let idx_in_group = (idx_in_segment - 1) % 5;
-      let group_idx = (idx_in_segment - 1) / 5;
+      let idx_in_group = (idx_in_segment - 1) % group_len;
+      let group_idx = (idx_in_segment - 1) / group_len;
 
       self.fi.frame_type = FrameType::INTER;
       self.fi.intra_only = false;
-      self.fi.order_hint = (4 * group_idx + if idx_in_group == 0 { 4 } else { idx_in_group }) as u32;
+      let order_hint_table: [u32; 6] = [4, 2, 1, 2, 3, 4];
+      let lvl_table: [u32; 6] = [0, 1, 2, 1, 2, 1];
+
+      self.fi.order_hint = 4 * group_idx as u32 + order_hint_table[idx_in_group as usize];
+      if self.fi.order_hint >= key_frame_interval as u32 {
+        return false;
+      }
       let slot_idx = self.fi.order_hint % REF_FRAMES as u32;
-      self.fi.show_frame = idx_in_group != 0;
-      self.fi.show_existing_frame = idx_in_group == 4;
+      self.fi.show_frame = idx_in_group >= 2;
+      self.fi.show_existing_frame = idx_in_group == 5 || idx_in_group == 3;
       self.fi.frame_to_show_map_idx = slot_idx;
       self.fi.refresh_frame_flags = if self.fi.show_existing_frame {
         0
       } else {
         1 << slot_idx
       };
-      let high_quality_frame = idx_in_group % 4 == 0;
-      self.fi.base_q_idx = if high_quality_frame {
-        self.fi.config.quantizer.max(1).min(255)
-      } else {
-        let q_drop = 15;
-        self.fi.config.quantizer.min(255 - q_drop) + q_drop
-      } as u8;
+
+      let lvl = lvl_table[idx_in_group as usize];
+      let q_drop = 15 * lvl as usize;
+      self.fi.base_q_idx = (self.fi.config.quantizer.min(255 - q_drop) + q_drop) as u8;
+
       let first_ref_frame = LAST_FRAME;
       let second_ref_frame = ALTREF_FRAME;
 
@@ -158,24 +162,24 @@ impl Context {
 
       for i in 0..INTER_REFS_PER_FRAME {
         self.fi.ref_frames[i] = if i == second_ref_frame - LAST_FRAME {
-          (slot_idx as usize + 3) & 4
+          (slot_idx as usize + (4 >> lvl)) & 7
         } else {
-          (slot_idx as usize + 7) & 4
+          (slot_idx as usize - (4 >> lvl)) & 7
         };
       }
 
-      if self.fi.order_hint >= key_frame_interval as u32 {
-        assert!(idx_in_group == 0);
-        self.fi.order_hint = key_frame_interval as u32 - 1;
-        self.fi.show_frame = key_frame_interval == 4 * group_idx + 2;
-      }
       self.fi.number = segment_idx * key_frame_interval + self.fi.order_hint as u64;
     }
+
+    true
   }
 
   pub fn receive_packet(&mut self) -> Result<Packet, EncoderStatus> {
-    let idx = self.idx;
-    self.frame_properties(idx);
+    let mut idx = self.idx;
+    while !self.frame_properties(idx) {
+      self.idx = self.idx + 1;
+      idx = self.idx;
+    }
 
     if self.fi.show_existing_frame {
       self.idx = self.idx + 1;
