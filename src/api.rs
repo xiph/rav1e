@@ -168,9 +168,9 @@ impl Context {
       self.fi.base_q_idx = (self.fi.config.quantizer.min(255 - q_drop) + q_drop) as u8;
 
       let first_ref_frame = LAST_FRAME;
-      let second_ref_frame = ALTREF_FRAME;
+      let second_ref_frame = if idx_in_group == 0 { LAST2_FRAME } else { ALTREF_FRAME };
 
-      self.fi.primary_ref_frame = (first_ref_frame - LAST_FRAME) as u32;
+      self.fi.primary_ref_frame = PRIMARY_REF_NONE; //(first_ref_frame - LAST_FRAME) as u32;
 
       for i in 0..INTER_REFS_PER_FRAME {
         self.fi.ref_frames[i] = if i == second_ref_frame - LAST_FRAME {
