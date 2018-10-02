@@ -82,10 +82,7 @@ fn setup_encoder(
   let enc = EncoderConfig { quantizer, speed, ..Default::default() };
 
   let cfg = Config {
-    width: w,
-    height: h,
-    bit_depth,
-    chroma_sampling,
+    frame_info: FrameInfo { width: w, height: h, bit_depth, chroma_sampling },
     timebase: Ratio::new(1, 1000),
     enc
   };

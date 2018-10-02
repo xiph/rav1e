@@ -7,6 +7,7 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use api::*;
 use cdef::*;
 use context::*;
 use deblock::*;
@@ -94,6 +95,7 @@ const PRIMARY_REF_BITS: u32 = 3;
 
 arg_enum!{
     #[derive(Copy, Clone, Debug, PartialEq)]
+    #[repr(C)]
     pub enum Tune {
         Psnr,
         Psychovisual
@@ -107,6 +109,7 @@ impl Default for Tune {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
+#[repr(C)]
 pub enum ChromaSampling {
     Cs420,
     Cs422,
@@ -178,15 +181,15 @@ pub struct Sequence {
 }
 
 impl Sequence {
-    pub fn new(width: usize, height: usize, bit_depth: usize, chroma_sampling: ChromaSampling) -> Sequence {
-        let width_bits = 32 - (width as u32).leading_zeros();
-        let height_bits = 32 - (height as u32).leading_zeros();
+    pub fn new(info: &FrameInfo) -> Sequence {
+        let width_bits = 32 - (info.width as u32).leading_zeros();
+        let height_bits = 32 - (info.height as u32).leading_zeros();
         assert!(width_bits <= 16);
         assert!(height_bits <= 16);
 
-        let profile = if bit_depth == 12 {
+        let profile = if info.bit_depth == 12 {
             2
-        } else if chroma_sampling == ChromaSampling::Cs444 {
+        } else if info.chroma_sampling == ChromaSampling::Cs444 {
             1
         } else {
             0
@@ -207,10 +210,10 @@ impl Sequence {
             profile: profile,
             num_bits_width: width_bits,
             num_bits_height: height_bits,
-            bit_depth: bit_depth,
-            chroma_sampling: chroma_sampling,
-            max_frame_width: width as u32,
-            max_frame_height: height as u32,
+            bit_depth: info.bit_depth,
+            chroma_sampling: info.chroma_sampling,
+            max_frame_width: info.width as u32,
+            max_frame_height: info.height as u32,
             frame_id_numbers_present_flag: false,
             frame_id_length: 0,
             delta_frame_id_length: 0,
@@ -456,6 +459,7 @@ impl fmt::Display for FrameInvariants{
 
 #[allow(dead_code,non_camel_case_types)]
 #[derive(Debug,PartialEq,Clone,Copy)]
+#[repr(C)]
 pub enum FrameType {
     KEY,
     INTER,
@@ -482,25 +486,6 @@ impl fmt::Display for FrameType{
             FrameType::INTER => write!(f, "Inter frame"),
             FrameType::INTRA_ONLY => write!(f, "Intra only frame"),
             FrameType::SWITCH => write!(f, "Switching frame"),
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct EncoderConfig {
-    pub limit: u64,
-    pub quantizer: usize,
-    pub speed: usize,
-    pub tune: Tune
-}
-
-impl Default for EncoderConfig {
-    fn default() -> Self {
-        EncoderConfig {
-            limit: 0,
-            quantizer: 100,
-            speed: 0,
-            tune: Tune::Psnr,
         }
     }
 }

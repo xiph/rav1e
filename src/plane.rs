@@ -220,11 +220,48 @@ impl Plane {
   }
 }
 
+#[derive(Clone, Copy)]
 pub struct PlaneSlice<'a> {
   pub plane: &'a Plane,
   pub x: isize,
   pub y: isize
 }
+
+pub struct IterWidth<'a> {
+    ps: PlaneSlice<'a>,
+    width: usize,
+}
+
+impl<'a> Iterator for IterWidth<'a> {
+    type Item = &'a [u16];
+
+    #[inline]
+    fn next(&mut self) -> Option<&'a [u16]> {
+        let x = self.ps.plane.cfg.xorigin + self.ps.x;
+        let y = self.ps.plane.cfg.yorigin + self.ps.y;
+        let stride = self.ps.plane.cfg.stride;
+        let base = y as usize * stride + x as usize;
+
+        if self.ps.plane.data.len() < base + self.width {
+            None
+        } else {
+            self.ps.y += 1;
+            Some(&self.ps.plane.data[base..base + self.width])
+        }
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let size = self.ps.plane.cfg.height - self.ps.y as usize;
+
+        (size, Some(size))
+    }
+}
+
+impl<'a> ExactSizeIterator for IterWidth<'a> { }
+
+use std::iter::FusedIterator;
+impl<'a> FusedIterator for IterWidth<'a> { }
 
 impl<'a> PlaneSlice<'a> {
   pub fn as_slice(&'a self) -> &'a [u16] {
@@ -250,6 +287,10 @@ impl<'a> PlaneSlice<'a> {
     let base = (self.y + self.plane.cfg.yorigin) as usize * stride
       + (self.x + self.plane.cfg.xorigin) as usize;
     &self.plane.data[base..base + width]
+  }
+
+  pub fn iter_width(&self, width: usize) -> IterWidth<'a> {
+    IterWidth { ps: *self, width }
   }
 
   pub fn subslice(&'a self, xo: usize, yo: usize) -> PlaneSlice<'a> {

@@ -17,7 +17,7 @@ use common::*;
 use rav1e::*;
 
 fn main() {
-  let (mut io, enc) = EncoderConfig::from_cli();
+  let (mut io, enc, limit) = parse_cli();
   let mut y4m_dec = y4m::decode(&mut io.input).unwrap();
   let width = y4m_dec.get_width();
   let height = y4m_dec.get_height();
@@ -54,10 +54,7 @@ fn main() {
   let bit_depth = color_space.get_bit_depth();
 
   let cfg = Config {
-    width,
-    height,
-    bit_depth,
-    chroma_sampling,
+    frame_info: FrameInfo { width, height, bit_depth, chroma_sampling },
     timebase: Ratio::new(framerate.den, framerate.num),
     enc
   };
@@ -80,7 +77,7 @@ fn main() {
 
     count += 1;
 
-    if enc.limit != 0 && count >= enc.limit {
+    if limit != 0 && count >= limit {
       break;
     }
 

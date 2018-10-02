@@ -17,28 +17,24 @@ use FrameState;
 
 #[inline(always)]
 pub fn get_sad(
-  plane_org: &mut PlaneSlice, plane_ref: &mut PlaneSlice, blk_h: usize,
+  plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize,
   blk_w: usize
 ) -> u32 {
   let mut sum = 0 as u32;
 
-  for _r in 0..blk_h {
-    {
-      let slice_org = plane_org.as_slice_w_width(blk_w);
-      let slice_ref = plane_ref.as_slice_w_width(blk_w);
+  let org_iter = plane_org.iter_width(blk_w);
+  let ref_iter = plane_ref.iter_width(blk_w);
+
+  for (slice_org, slice_ref) in org_iter.take(blk_h).zip(ref_iter) {
       sum += slice_org
         .iter()
         .zip(slice_ref)
         .map(|(&a, &b)| (a as i32 - b as i32).abs() as u32)
         .sum::<u32>();
-    }
-    plane_org.y += 1;
-    plane_ref.y += 1;
   }
 
   sum
 }
-
 pub fn motion_estimation(
   fi: &FrameInvariants, fs: &FrameState, bsize: BlockSize,
   bo: &BlockOffset, ref_frame: usize, pmv: &MotionVector
@@ -68,10 +64,10 @@ pub fn motion_estimation(
 
       for y in (y_lo..y_hi).step_by(2) {
         for x in (x_lo..x_hi).step_by(2) {
-          let mut plane_org = fs.input.planes[0].slice(&po);
-          let mut plane_ref = rec.frame.planes[0].slice(&PlaneOffset { x, y });
+          let plane_org = fs.input.planes[0].slice(&po);
+          let plane_ref = rec.frame.planes[0].slice(&PlaneOffset { x, y });
 
-          let sad = get_sad(&mut plane_org, &mut plane_ref, blk_h, blk_w);
+          let sad = get_sad(&plane_org, &plane_ref, blk_h, blk_w);
 
           if sad < lowest_sad {
             lowest_sad = sad;
@@ -121,10 +117,10 @@ pub fn motion_estimation(
               );
             }
 
-            let mut plane_org = fs.input.planes[0].slice(&po);
-            let mut plane_ref = tmp_plane.slice(&PlaneOffset { x: 0, y: 0 });
+            let plane_org = fs.input.planes[0].slice(&po);
+            let plane_ref = tmp_plane.slice(&PlaneOffset { x: 0, y: 0 });
 
-            let sad = get_sad(&mut plane_org, &mut plane_ref, blk_h, blk_w);
+            let sad = get_sad(&plane_org, &plane_ref, blk_h, blk_w);
 
             if sad < lowest_sad {
               lowest_sad = sad;

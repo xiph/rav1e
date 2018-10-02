@@ -7,8 +7,8 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use encoder::*;
 use context::CDFContext;
+use encoder::*;
 use partition::*;
 
 use std::collections::BTreeMap;
@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 // TODO: use the num crate?
 #[derive(Clone, Copy, Debug)]
+#[repr(C)]
 pub struct Ratio {
   pub num: usize,
   pub den: usize
@@ -28,30 +29,60 @@ impl Ratio {
   }
 }
 
-/// Here we store all the information we might receive from the cli
+#[derive(Copy, Clone, Debug)]
+pub struct EncoderConfig {
+  pub quantizer: usize,
+  pub speed: usize,
+  pub tune: Tune
+}
+
+impl Default for EncoderConfig {
+  fn default() -> Self {
+    EncoderConfig { quantizer: 100, speed: 0, tune: Tune::Psnr }
+  }
+}
+
+/// Frame-specific information
 #[derive(Clone, Copy, Debug)]
-pub struct Config {
+pub struct FrameInfo {
   pub width: usize,
   pub height: usize,
   pub bit_depth: usize,
-  pub chroma_sampling: ChromaSampling,
+  pub chroma_sampling: ChromaSampling
+}
+
+/// Contain all the encoder configuration
+#[derive(Clone, Copy, Debug)]
+pub struct Config {
+  pub frame_info: FrameInfo,
   pub timebase: Ratio,
   pub enc: EncoderConfig
 }
 
 impl Config {
+  pub fn parse(&mut self, key: &str, value: &str) -> Result<(), EncoderStatus> {
+    use self::EncoderStatus::*;
+    match key {
+        "quantizer" => self.enc.quantizer = value.parse().map_err(|_e| ParseError)?,
+        "speed" => self.enc.speed = value.parse().map_err(|_e| ParseError)?,
+        "tune" => self.enc.tune = value.parse().map_err(|_e| ParseError)?,
+        _ => return Err(InvalidKey)
+    }
+
+    Ok(())
+  }
+
   pub fn new_context(&self) -> Context {
-    let fi = FrameInvariants::new(self.width, self.height, self.enc.clone());
-    let seq = Sequence::new(
-      self.width,
-      self.height,
-      self.bit_depth,
-      self.chroma_sampling
+    let fi = FrameInvariants::new(
+      self.frame_info.width,
+      self.frame_info.height,
+      self.enc.clone()
     );
+    let seq = Sequence::new(&self.frame_info);
 
     unsafe {
-        av1_rtcd();
-        aom_dsp_rtcd();
+      av1_rtcd();
+      aom_dsp_rtcd();
     }
 
     Context { fi, seq, frame_count: 0, idx: 0, frame_q: BTreeMap::new() }
@@ -74,7 +105,9 @@ pub enum EncoderStatus {
   /// There are enough Frames queue
   EnoughData,
   ///
-  Failure
+  Failure,
+  InvalidKey,
+  ParseError
 }
 
 pub struct Packet {
@@ -86,7 +119,13 @@ pub struct Packet {
 
 impl fmt::Display for Packet {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "Frame {} - {} - {} bytes", self.number, self.frame_type, self.data.len())
+    write!(
+      f,
+      "Frame {} - {} - {} bytes",
+      self.number,
+      self.frame_type,
+      self.data.len()
+    )
   }
 }
 
