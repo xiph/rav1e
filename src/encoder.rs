@@ -1363,9 +1363,12 @@ pub fn encode_tx_block(
     // Reconstruct
     dequantize(fi.base_q_idx, qcoeffs, &mut rcoeffs.array, tx_size, bit_depth);
 
+    let mut tx_dist: u32 = 0;
+    let mut dist: u64 = 0;
+    let mut diff: i64 = 0;
     // Store tx-domain distortion of this block
     if fi.use_tx_domain_distortion {
-        let tx_dist = coeffs
+        tx_dist = coeffs
             .iter()
             .zip(&rcoeffs.array[..tx_size.area()])
             .map(|(&a, &b)| {
@@ -1374,6 +1377,23 @@ pub fn encode_tx_block(
             }).sum::<u32>();
     }
     inverse_transform_add(&rcoeffs.array, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
+
+    // For debug only
+    if fi.use_tx_domain_distortion {
+        // Compute distortion
+ //use rdo::sse_wxh;
+        dist =
+            //TODO: Repalce this function for tx domain distortion
+            sse_wxh(
+            &fs.input.planes[p].slice(po),
+            &rec.slice(po),
+            tx_size.width(),
+            tx_size.height(),
+            );
+        assert!(tx_size.area() >= 16);
+        //debug: compare pixel-domain and tx-domain distortions
+        diff = ((dist  - (tx_dist >> 4) as u64) / tx_size.area() as u64) as i64;
+    }
     has_coeff
 }
 
