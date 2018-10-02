@@ -169,12 +169,15 @@ impl Context {
 
       let first_ref_frame = LAST_FRAME;
       let second_ref_frame = if idx_in_group == 0 { LAST2_FRAME } else { ALTREF_FRAME };
+      let ref_in_previous_group = LAST3_FRAME;
 
-      self.fi.primary_ref_frame = PRIMARY_REF_NONE; //(first_ref_frame - LAST_FRAME) as u32;
+      self.fi.primary_ref_frame = (ref_in_previous_group - LAST_FRAME) as u32;
 
       for i in 0..INTER_REFS_PER_FRAME {
         self.fi.ref_frames[i] = if i == second_ref_frame - LAST_FRAME {
           (slot_idx as u64 + if lvl == 0 { 6 * group_src_len } else { group_src_len >> lvl }) & 7
+        } else if i == ref_in_previous_group - LAST_FRAME {
+          (slot_idx as u64 - group_src_len) & 7
         } else {
           (slot_idx as u64 - (group_src_len >> lvl)) & 7
         } as usize;
