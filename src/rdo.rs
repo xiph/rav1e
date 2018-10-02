@@ -149,6 +149,14 @@ pub fn get_lambda(fi: &FrameInvariants, bit_depth: usize) -> f64 {
   q0 * q0 * std::f64::consts::LN_2 / 6.0
 }
 
+pub fn get_tx_lambda(fi: &FrameInvariants, bit_depth: usize) -> f64 {
+  let q = dc_q(fi.base_q_idx, bit_depth) as f64;
+
+  // Lambda formula from doc/theoretical_results.lyx in the daala repo
+  // Use Q0 quantizer since lambda will be applied to Q0 pixel domain
+  q * q * std::f64::consts::LN_2 / 6.0
+}
+
 // Compute the rate-distortion cost for an encode
 fn compute_rd_cost(
   fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize,
@@ -160,21 +168,12 @@ fn compute_rd_cost(
   // Compute distortion
   let po = bo.plane_offset(&fs.input.planes[0].cfg);
   let mut distortion = if fi.config.tune == Tune::Psnr {
-    if fi.use_tx_domain_distortion {
-      sse_wxh(
-        &fs.input.planes[0].slice(&po),
-        &fs.rec.planes[0].slice(&po),
-        w_y,
-        h_y
-      )
-    } else {
-      sse_wxh(
-        &fs.input.planes[0].slice(&po),
-        &fs.rec.planes[0].slice(&po),
-        w_y,
-        h_y
-      )
-    }
+    sse_wxh(
+      &fs.input.planes[0].slice(&po),
+      &fs.rec.planes[0].slice(&po),
+      w_y,
+      h_y
+    )
   } else if fi.config.tune == Tune::Psychovisual {
     cdef_dist_wxh(
       &fs.input.planes[0].slice(&po),
@@ -204,6 +203,59 @@ fn compute_rd_cost(
     for p in 1..3 {
       let po = bo.plane_offset(&fs.input.planes[p].cfg);
 
+      distortion += sse_wxh(
+        &fs.input.planes[p].slice(&po),
+        &fs.rec.planes[p].slice(&po),
+        w_uv,
+        h_uv
+      );
+    }
+  };
+  }
+  // Compute rate
+  let rate = (bit_cost as f64) / ((1 << OD_BITRES) as f64);
+
+  (distortion as f64) + lambda * rate
+}
+
+// Compute the rate-distortion cost for an encode
+fn compute_tx_rd_cost(
+  fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize,
+  is_chroma_block: bool, bo: &BlockOffset, bit_cost: u32, bit_depth: usize,
+  luma_only: bool
+) -> f64 {
+  assert!(fi.config.tune == Tune::Psnr);
+  let lambda = get_tx_lambda(fi, bit_depth);
+
+  // Compute distortion
+  let po = bo.plane_offset(&fs.input.planes[0].cfg);
+  let mut distortion =
+    //TODO: Repalce this function for tx domain distortion
+    sse_wxh(
+      &fs.input.planes[0].slice(&po),
+      &fs.rec.planes[0].slice(&po),
+      w_y,
+      h_y
+    );
+
+  if !luma_only {
+  let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
+
+  let mask = !(MI_SIZE - 1);
+  let mut w_uv = (w_y >> xdec) & mask;
+  let mut h_uv = (h_y >> ydec) & mask;
+
+  if (w_uv == 0 || h_uv == 0) && is_chroma_block {
+    w_uv = MI_SIZE;
+    h_uv = MI_SIZE;
+  }
+
+  // Add chroma distortion only when it is available
+  if w_uv > 0 && h_uv > 0 {
+    for p in 1..3 {
+      let po = bo.plane_offset(&fs.input.planes[p].cfg);
+
+      //TODO: Repalce this function for tx domain distortion
       distortion += sse_wxh(
         &fs.input.planes[p].slice(&po),
         &fs.rec.planes[p].slice(&po),
@@ -422,18 +474,31 @@ pub fn rdo_mode_decision(
         );
 
         let cost = wr.tell_frac() - tell;
-        let rd = compute_rd_cost(
-          fi,
-          fs,
-          w,
-          h,
-          is_chroma_block,
-          bo,
-          cost,
-          seq.bit_depth,
-          false
-        );
-
+        let rd = if fi.use_tx_domain_distortion {
+          compute_tx_rd_cost(
+            fi,
+            fs,
+            w,
+            h,
+            is_chroma_block,
+            bo,
+            cost,
+            seq.bit_depth,
+            false
+          )
+        } else {
+          compute_rd_cost(
+            fi,
+            fs,
+            w,
+            h,
+            is_chroma_block,
+            bo,
+            cost,
+            seq.bit_depth,
+            false
+          )
+        };
         if rd < best.rd {
         //if rd < best.rd || luma_mode == PredictionMode::NEW_NEWMV {
           best.rd = rd;
