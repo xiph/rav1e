@@ -1344,9 +1344,10 @@ pub fn encode_tx_block(
     let mut residual: AlignedArray<[i16; 64 * 64]> = UninitializedAlignedArray();
     let mut coeffs_storage: AlignedArray<[i32; 64 * 64]> = UninitializedAlignedArray();
     let mut qcoeffs_storage: AlignedArray<[i32; 64 * 64]> = UninitializedAlignedArray();
-    let mut rcoeffs: AlignedArray<[i32; 64 * 64]> = UninitializedAlignedArray();
+    let mut rcoeffs_storage: AlignedArray<[i32; 64 * 64]> = UninitializedAlignedArray();
     let coeffs = &mut coeffs_storage.array[..tx_size.area()];
     let qcoeffs = &mut qcoeffs_storage.array[..tx_size.area()];
+    let rcoeffs = &mut rcoeffs_storage.array[..tx_size.area()];
 
     diff(&mut residual.array,
          &fs.input.planes[p].slice(po),
@@ -1361,7 +1362,9 @@ pub fn encode_tx_block(
                             fi.use_reduced_tx_set);
 
     // Reconstruct
-    dequantize(fi.base_q_idx, qcoeffs, &mut rcoeffs.array, tx_size, bit_depth);
+    dequantize(fi.base_q_idx, qcoeffs, rcoeffs, tx_size, bit_depth);
+
+    inverse_transform_add(rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
 
     let mut tx_dist: u32 = 0;
     let mut dist: u64 = 0;
@@ -1370,18 +1373,17 @@ pub fn encode_tx_block(
     if fi.use_tx_domain_distortion {
         tx_dist = coeffs
             .iter()
-            .zip(&rcoeffs.array[..tx_size.area()])
-            .map(|(&a, &b)| {
-                let c = (a as i16 - b as i16) as i32;
+            .zip(rcoeffs)
+            .map(|(a, b)| {
+                let c = (*a as i16 - *b as i16) as i32;
                 (c * c) as u32
             }).sum::<u32>();
     }
-    inverse_transform_add(&rcoeffs.array, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
+    //inverse_transform_add(rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
 
     // For debug only
     if fi.use_tx_domain_distortion {
-        // Compute distortion
- //use rdo::sse_wxh;
+        // Compute pixel-domain distortion
         dist =
             //TODO: Repalce this function for tx domain distortion
             sse_wxh(
@@ -1392,7 +1394,7 @@ pub fn encode_tx_block(
             );
         assert!(tx_size.area() >= 16);
         //debug: compare pixel-domain and tx-domain distortions
-        diff = ((dist  - (tx_dist >> 4) as u64) / tx_size.area() as u64) as i64;
+        diff = ((dist as i64 - (tx_dist >> 4) as i64) / tx_size.area() as i64) as i64;
     }
     has_coeff
 }
