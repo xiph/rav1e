@@ -29,7 +29,7 @@ pub fn get_sad(
       sum += slice_org
         .iter()
         .zip(slice_ref)
-        .map(|(&a, &b)| (a as i32 - b as i32).abs() as u32)
+        .map(|(a, b)| (*a as i32 - *b as i32).abs() as u32)
         .sum::<u32>();
   }
 
