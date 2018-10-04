@@ -126,8 +126,8 @@ fn sse_wxh(
     let row_sse = s1
       .iter()
       .zip(s2)
-      .map(|(&a, &b)| {
-        let c = (a as i16 - b as i16) as i32;
+      .map(|(a, b)| {
+        let c = (*a as i16 - *b as i16) as i32;
         (c * c) as u32
       }).sum::<u32>();
     sse += row_sse as u64;
