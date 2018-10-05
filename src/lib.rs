@@ -27,6 +27,7 @@ pub mod transform;
 pub mod quantize;
 pub mod predict;
 pub mod rdo;
+pub mod rdo_tables;
 #[macro_use]
 pub mod util;
 pub mod entropymode;
