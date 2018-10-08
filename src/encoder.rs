@@ -20,7 +20,7 @@ use std::fmt;
 use transform::*;
 use util::*;
 
-use bitstream_io::{BitWriter, BE, LE};
+use bitstream_io::{BitWriter, BigEndian, LittleEndian};
 use std;
 use std::io;
 use std::io::*;
@@ -480,7 +480,7 @@ impl fmt::Display for FrameType{
 }
 
 pub fn write_ivf_header(output_file: &mut dyn io::Write, width: usize, height: usize, num: usize, den: usize) {
-    let mut bw = BitWriter::<LE>::new(output_file);
+    let mut bw = BitWriter::endian(output_file, LittleEndian);
     bw.write_bytes(b"DKIF").unwrap();
     bw.write(16, 0).unwrap(); // version
     bw.write(16, 32).unwrap(); // version
@@ -494,7 +494,7 @@ pub fn write_ivf_header(output_file: &mut dyn io::Write, width: usize, height: u
 }
 
 pub fn write_ivf_frame(output_file: &mut dyn io::Write, pts: u64, data: &[u8]) {
-    let mut bw = BitWriter::<LE>::new(output_file);
+    let mut bw = BitWriter::endian(output_file, LittleEndian);
     bw.write(32, data.len() as u32).unwrap();
     bw.write(64, pts).unwrap();
     bw.write_bytes(data).unwrap();
@@ -531,7 +531,7 @@ const LEVEL_BITS:usize = LEVEL_MAJOR_BITS + LEVEL_MINOR_BITS;
 const FRAME_ID_LENGTH: usize = 15;
 const DELTA_FRAME_ID_LENGTH: usize = 14;
 
-impl<'a> UncompressedHeader for BitWriter<'a, BE> {
+impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     // Start of OBU Headers
     // Write OBU Header syntax
     fn write_obu_header(&mut self, obu_type: OBU_Type, obu_extension: u32)
@@ -1122,12 +1122,12 @@ fn aom_uleb_encode(mut value: u64, coded_value: &mut [u8]) -> usize {
 
 fn write_obus(packet: &mut dyn io::Write, sequence: &mut Sequence,
                             fi: &mut FrameInvariants, fs: &FrameState) -> io::Result<()> {
-    //let mut uch = BitWriter::<BE>::new(packet);
+    //let mut uch = BitWriter::endian(packet, BigEndian);
     let obu_extension = 0 as u32;
 
     let mut buf1 = Vec::new();
     {
-        let mut bw1 = BitWriter::<BE>::new(&mut buf1);
+        let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
       bw1.write_obu_header(OBU_Type::OBU_TEMPORAL_DELIMITER, obu_extension)?;
       bw1.write(8,0)?;	// size of payload == 0, one byte
     }
@@ -1138,13 +1138,13 @@ fn write_obus(packet: &mut dyn io::Write, sequence: &mut Sequence,
     if fi.frame_type == FrameType::KEY {
         let mut buf2 = Vec::new();
         {
-            let mut bw2 = BitWriter::<BE>::new(&mut buf2);
+            let mut bw2 = BitWriter::endian(&mut buf2, BigEndian);
             bw2.write_sequence_header_obu(sequence, fi)?;
             bw2.byte_align()?;
         }
 
         {
-            let mut bw1 = BitWriter::<BE>::new(&mut buf1);
+            let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
             bw1.write_obu_header(OBU_Type::OBU_SEQUENCE_HEADER, obu_extension)?;
         }
         packet.write(&buf1).unwrap();
@@ -1152,7 +1152,7 @@ fn write_obus(packet: &mut dyn io::Write, sequence: &mut Sequence,
 
         let obu_payload_size = buf2.len() as u64;
         {
-            let mut bw1 = BitWriter::<BE>::new(&mut buf1);
+            let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
             // uleb128()
             let mut coded_payload_length = [0 as u8; 8];
             let leb_size = aom_uleb_encode(obu_payload_size, &mut coded_payload_length);
@@ -1169,12 +1169,12 @@ fn write_obus(packet: &mut dyn io::Write, sequence: &mut Sequence,
 
     let mut buf2 = Vec::new();
     {
-        let mut bw2 = BitWriter::<BE>::new(&mut buf2);
+        let mut bw2 = BitWriter::endian(&mut buf2, BigEndian);
         bw2.write_frame_header_obu(sequence, fi, fs)?;
     }
 
     {
-        let mut bw1 = BitWriter::<BE>::new(&mut buf1);
+        let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
         bw1.write_obu_header(OBU_Type::OBU_FRAME_HEADER, obu_extension)?;
     }
     packet.write(&buf1).unwrap();
@@ -1182,7 +1182,7 @@ fn write_obus(packet: &mut dyn io::Write, sequence: &mut Sequence,
 
     let obu_payload_size = buf2.len() as u64;
     {
-        let mut bw1 = BitWriter::<BE>::new(&mut buf1);
+        let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
         // uleb128()
         let mut coded_payload_length = [0 as u8; 8];
         let leb_size = aom_uleb_encode(obu_payload_size, &mut coded_payload_length);
@@ -2008,7 +2008,7 @@ fn write_tile_group_header(tile_start_and_end_present_flag: bool) ->
     Vec<u8> {
     let mut buf = Vec::new();
     {
-        let mut bw = BitWriter::<BE>::new(&mut buf);
+        let mut bw = BitWriter::endian(&mut buf, BigEndian);
         bw.write_bit(tile_start_and_end_present_flag).unwrap();
         bw.byte_align().unwrap();
     }
@@ -2034,7 +2034,7 @@ pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut 
         write_obus(&mut packet, sequence, fi, fs).unwrap();
         let mut buf1 = Vec::new();
         {
-            let mut bw1 = BitWriter::<BE>::new(&mut buf1);
+            let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
             bw1.write_obu_header(OBU_Type::OBU_TILE_GROUP, 0).unwrap();
         }
         packet.write(&buf1).unwrap();
@@ -2042,7 +2042,7 @@ pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut 
 
         let obu_payload_size = tile.len() as u64;
         {
-            let mut bw1 = BitWriter::<BE>::new(&mut buf1);
+            let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
             // uleb128()
             let mut coded_payload_length = [0 as u8; 8];
             let leb_size = aom_uleb_encode(obu_payload_size, &mut coded_payload_length);

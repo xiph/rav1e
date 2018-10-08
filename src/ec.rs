@@ -13,8 +13,9 @@
 #![cfg_attr(feature = "cargo-clippy", allow(identity_op))]
 #![cfg_attr(feature = "cargo-clippy", allow(needless_range_loop))]
 
-use bitstream_io::{BitWriter, BE};
+use bitstream_io::{BitWriter, BigEndian};
 use std;
+use std::io;
 use util::ILog;
 
 pub const OD_BITRES: u8 = 3;
@@ -561,7 +562,7 @@ pub trait BCodeWriter {
   ) -> Result<(), std::io::Error>;
 }
 
-impl<'a> BCodeWriter for BitWriter<'a, BE> {
+impl<W: io::Write> BCodeWriter for BitWriter<W, BigEndian> {
   fn recenter_nonneg(&mut self, r: u16, v: u16) -> u16 {
     /* Recenters a non-negative literal v around a reference r */
     if v > (r << 1) {
