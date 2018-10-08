@@ -146,9 +146,11 @@ impl Context {
   pub fn frame_properties(&mut self, idx: u64) -> bool {
     let key_frame_interval: u64 = 30;
 
-    let pyramid_depth = 1;
+    let reorder = false;
+
+    let pyramid_depth = if reorder { 1 } else { 0 };
     let group_src_len = 1 << pyramid_depth;
-    let group_len = group_src_len + pyramid_depth;
+    let group_len = group_src_len + if reorder { pyramid_depth } else { 0 };
     let segment_len = 1 + (key_frame_interval - 1 + group_src_len - 1) / group_src_len * group_len;
 
     let idx_in_segment = idx % segment_len;
@@ -177,7 +179,7 @@ impl Context {
       self.fi.intra_only = false;
 
       self.fi.order_hint = (group_src_len * group_idx +
-        if idx_in_group < pyramid_depth {
+        if reorder && idx_in_group < pyramid_depth {
           group_src_len >> idx_in_group
         } else {
           idx_in_group - pyramid_depth + 1
@@ -187,8 +189,8 @@ impl Context {
       }
 
       let slot_idx = self.fi.order_hint % REF_FRAMES as u32;
-      self.fi.show_frame = idx_in_group >= pyramid_depth;
-      self.fi.show_existing_frame = self.fi.show_frame &&
+      self.fi.show_frame = !reorder || idx_in_group >= pyramid_depth;
+      self.fi.show_existing_frame = self.fi.show_frame && reorder &&
         (idx_in_group - pyramid_depth + 1).count_ones() == 1 &&
         idx_in_group != pyramid_depth;
       self.fi.frame_to_show_map_idx = slot_idx;
@@ -198,7 +200,9 @@ impl Context {
         1 << slot_idx
       };
 
-      let lvl = if idx_in_group < pyramid_depth {
+      let lvl = if !reorder {
+        0
+      } else if idx_in_group < pyramid_depth {
         idx_in_group
       } else {
         pyramid_depth - (idx_in_group - pyramid_depth + 1).trailing_zeros() as u64
@@ -207,7 +211,7 @@ impl Context {
       self.fi.base_q_idx = (self.fi.config.quantizer.min(255 - q_drop) + q_drop) as u8;
 
       let first_ref_frame = LAST_FRAME;
-      let second_ref_frame = if idx_in_group == 0 { LAST2_FRAME } else { ALTREF_FRAME };
+      let second_ref_frame = if !reorder || idx_in_group == 0 { LAST2_FRAME } else { ALTREF_FRAME };
       let ref_in_previous_group = LAST3_FRAME;
 
       self.fi.primary_ref_frame = (ref_in_previous_group - LAST_FRAME) as u32;
