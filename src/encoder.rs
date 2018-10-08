@@ -1364,13 +1364,15 @@ pub fn encode_tx_block(
     // Reconstruct
     dequantize(fi.base_q_idx, qcoeffs, rcoeffs, tx_size, bit_depth);
 
-    inverse_transform_add(rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
+    if !fi.use_tx_domain_distortion {
+        inverse_transform_add(rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
+    } else {
+        let mut tx_dist: u32 = 0;
 
-    let mut tx_dist: u32 = 0;
-    let mut dist: u64 = 0;
-    let mut diff: i64 = 0;
-    // Store tx-domain distortion of this block
-    if fi.use_tx_domain_distortion {
+        // For DEBUG: compare pixel-domain and tx-domain distortions
+        inverse_transform_add(rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
+
+        // Store tx-domain distortion of this block
         tx_dist = coeffs
             .iter()
             .zip(rcoeffs)
@@ -1378,12 +1380,15 @@ pub fn encode_tx_block(
                 let c = (*a as i16 - *b as i16) as i32;
                 (c * c) as u32
             }).sum::<u32>();
-    }
-    //inverse_transform_add(rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
 
-    // For debug only
-    if fi.use_tx_domain_distortion {
+        // For DEBUG: compare pixel-domain and tx-domain distortions
         // Compute pixel-domain distortion
+        // FIXME: Want to do inverseT here but rustc says: rcoeffs is moved by above .zip(rcoeffs) so cannot borrow rcoeffs again here
+        //inverse_transform_add(rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
+        let mut dist: u64 = 0;
+        let mut diff: i64 = 0;
+        let mut diff_mean: i64 = 0;
+        let tx_dist_scale_bits = 2*(3 - get_log_tx_scale(tx_size));
         dist =
             //TODO: Repalce this function for tx domain distortion
             sse_wxh(
@@ -1393,8 +1398,10 @@ pub fn encode_tx_block(
             tx_size.height(),
             );
         assert!(tx_size.area() >= 16);
-        //debug: compare pixel-domain and tx-domain distortions
-        diff = ((dist as i64 - (tx_dist >> 4) as i64) / tx_size.area() as i64) as i64;
+
+        diff = (dist as i64 - (tx_dist >> tx_dist_scale_bits) as i64) as i64;
+        diff_mean = (diff / tx_size.area() as i64) as i64;
+
     }
     has_coeff
 }

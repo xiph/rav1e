@@ -13,7 +13,7 @@
 use partition::TxSize;
 use std::mem;
 
-fn get_log_tx_scale(tx_size: TxSize) -> i32 {
+pub fn get_log_tx_scale(tx_size: TxSize) -> i32 {
   match tx_size {
     TxSize::TX_64X64 => 2,
     TxSize::TX_32X32 => 1,
