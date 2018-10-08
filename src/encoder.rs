@@ -1401,7 +1401,7 @@ pub fn encode_tx_block(
 
         diff = (dist as i64 - (tx_dist >> tx_dist_scale_bits) as i64) as i64;
         diff_mean = (diff / tx_size.area() as i64) as i64;
-
+        let tmp = 0;
     }
     has_coeff
 }
