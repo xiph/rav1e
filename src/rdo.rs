@@ -66,20 +66,20 @@ pub struct RDOPartitionOutput {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RDOTracker {
-  rate_bins: Vec<Vec<u64>>,
-  rate_counts: Vec<Vec<u64>>,
-  dist_bins: Vec
-        <Vec<u64>>,
-  dist_counts: Vec<Vec<u64>>
+  rate_bins: Vec<Vec<Vec<u64>>>,
+  rate_counts: Vec<Vec<Vec<u64>>>,
+  dist_bins: Vec<Vec
+        <Vec<u64>>>,
+  dist_counts: Vec<Vec<Vec<u64>>>
 }
 
 impl RDOTracker {
   pub fn new() -> RDOTracker {
     RDOTracker {
-      rate_bins: vec![vec![0; rdo_num_bins]; TxSize::TX_SIZES_ALL],
-      rate_counts: vec![vec![0; rdo_num_bins]; TxSize::TX_SIZES_ALL],
-      dist_bins: vec![vec![0; rdo_num_bins]; TxSize::TX_SIZES_ALL],
-      dist_counts: vec![vec![0; rdo_num_bins]; TxSize::TX_SIZES_ALL]
+      rate_bins: vec![vec![vec![0; rdo_num_bins]; TxSize::TX_SIZES_ALL]; RDO_QUANT_BINS],
+      rate_counts: vec![vec![vec![0; rdo_num_bins]; TxSize::TX_SIZES_ALL]; RDO_QUANT_BINS],
+      dist_bins: vec![vec![vec![0; rdo_num_bins]; TxSize::TX_SIZES_ALL]; RDO_QUANT_BINS],
+      dist_counts: vec![vec![vec![0; rdo_num_bins]; TxSize::TX_SIZES_ALL]; RDO_QUANT_BINS],
     }
   }
   fn merge_array(new: &mut Vec<u64>, old: &Vec<u64>) {
@@ -92,103 +92,104 @@ impl RDOTracker {
       RDOTracker::merge_array(n, o);
     }
   }
-  pub fn merge_in(&mut self, input: &RDOTracker) {
-    RDOTracker::merge_2d_array(&mut self.rate_bins, &input.rate_bins);
-    RDOTracker::merge_2d_array(&mut self.rate_counts, &input.rate_counts);
-    RDOTracker::merge_2d_array(&mut self.dist_bins, &input.dist_bins);
-    RDOTracker::merge_2d_array(&mut self.dist_counts, &input.dist_counts);
+  fn merge_3d_array(new: &mut Vec<Vec<Vec<u64>>>, old: &Vec<Vec<Vec<u64>>>) {
+    for (n, o) in new.iter_mut().zip(old.iter()) {
+      RDOTracker::merge_2d_array(n, o);
+    }
   }
-  pub fn add_rate(&mut self, ts: TxSize, fast_distortion: u64, rate: u64) {
+  pub fn merge_in(&mut self, input: &RDOTracker) {
+    RDOTracker::merge_3d_array(&mut self.rate_bins, &input.rate_bins);
+    RDOTracker::merge_3d_array(&mut self.rate_counts, &input.rate_counts);
+    RDOTracker::merge_3d_array(&mut self.dist_bins, &input.dist_bins);
+    RDOTracker::merge_3d_array(&mut self.dist_counts, &input.dist_counts);
+  }
+  pub fn add_rate(&mut self, qindex: u8, ts: TxSize, fast_distortion: u64, rate: u64) {
     if fast_distortion != 0 {
       let bs_index = ts as usize;
+      let q_bin_idx = (qindex as usize)/RDO_QUANT_DIV;
       let bin_idx_tmp = (((fast_distortion as i64 - (RATE_EST_BIN_SIZE as i64) / 2)) as u64 / RATE_EST_BIN_SIZE) as usize;
       let bin_idx = if bin_idx_tmp >= rdo_num_bins {
         rdo_num_bins - 1
       } else {
         bin_idx_tmp
       };
-      self.rate_counts[bs_index][bin_idx] += 1;
-      self.rate_bins[bs_index][bin_idx] += rate;
+      self.rate_counts[q_bin_idx][bs_index][bin_idx] += 1;
+      self.rate_bins[q_bin_idx][bs_index][bin_idx] += rate;
     }
   }
-  pub fn estimate_rate(&self, ts: TxSize, fast_distortion: u64) -> u64 {
+  pub fn estimate_rate(&self, qindex: u8, ts: TxSize, fast_distortion: u64) -> u64 {
     let bs_index = ts as usize;
+    let q_bin_idx = (qindex as usize)/RDO_QUANT_DIV;
     let bin_idx_down = ((fast_distortion) / RATE_EST_BIN_SIZE).min((rdo_num_bins - 2) as u64);
     let bin_idx_up = (bin_idx_down + 1).min((rdo_num_bins - 1) as u64);
     let x0 = (bin_idx_down * RATE_EST_BIN_SIZE) as i64;
     let x1 = (bin_idx_up * RATE_EST_BIN_SIZE) as i64;
-    let y0 = RDO_RATE_TABLE[bs_index][bin_idx_down as usize] as i64;
-    let y1 = RDO_RATE_TABLE[bs_index][bin_idx_up as usize] as i64;
+    let y0 = RDO_RATE_TABLE[q_bin_idx][bs_index][bin_idx_down as usize] as i64;
+    let y1 = RDO_RATE_TABLE[q_bin_idx][bs_index][bin_idx_up as usize] as i64;
     let slope = ((y1 - y0) << 8) / (x1 - x0);
     (y0 + (((fast_distortion as i64 - x0) * slope) >> 8)) as u64
   }
-  pub fn add_distortion(&mut self, ts: TxSize, fast_distortion: u64, distortion: u64) {
+  pub fn add_distortion(&mut self, qindex: u8, ts: TxSize, fast_distortion: u64, distortion: u64) {
     if fast_distortion != 0 {
       let bs_index = ts as usize;
+      let q_bin_idx = (qindex as usize)/RDO_QUANT_DIV;
       let bin_idx_tmp = (((fast_distortion as i64 - (DIST_EST_BIN_SIZE as i64) / 2)) as u64 / DIST_EST_BIN_SIZE) as usize;
       let bin_idx = if bin_idx_tmp >= rdo_num_bins {
         rdo_num_bins - 1
       } else {
         bin_idx_tmp
       };
-      self.dist_counts[bs_index][bin_idx] += 1;
-      self.dist_bins[bs_index][bin_idx] += distortion;
+      self.dist_counts[q_bin_idx][bs_index][bin_idx] += 1;
+      self.dist_bins[q_bin_idx][bs_index][bin_idx] += distortion;
     }
   }
-  pub fn estimate_distortion(&self, ts: TxSize, fast_distortion: u64) -> u64 {
+  pub fn estimate_distortion(&self, qindex: u8, ts: TxSize, fast_distortion: u64) -> u64 {
     let bs_index = ts as usize;
+    let q_bin_idx = (qindex as usize)/RDO_QUANT_DIV;
     let bin_idx_down = ((fast_distortion) / DIST_EST_BIN_SIZE).min((rdo_num_bins - 2) as u64);
     let bin_idx_up = (bin_idx_down + 1).min((rdo_num_bins - 1) as u64);
     let x0 = (bin_idx_down * DIST_EST_BIN_SIZE) as i64;
     let x1 = (bin_idx_up * DIST_EST_BIN_SIZE) as i64;
-    let y0 = RDO_DISTORTION_TABLE[bs_index][bin_idx_down as usize] as i64;
-    let y1 = RDO_DISTORTION_TABLE[bs_index][bin_idx_up as usize] as i64;
+    let y0 = RDO_DISTORTION_TABLE[q_bin_idx][bs_index][bin_idx_down as usize] as i64;
+    let y1 = RDO_DISTORTION_TABLE[q_bin_idx][bs_index][bin_idx_up as usize] as i64;
     let slope = ((y1 - y0) << 8) / (x1 - x0);
     (y0 + (((fast_distortion as i64 - x0) * slope) >> 8)) as u64
   }
-  pub fn print_distortion(&self) {
-    let bs_index = TxSize::TX_32X32 as usize;
-    for (bin_idx, (dist_total, dist_count)) in self.dist_bins[bs_index].iter().zip(self.dist_counts[bs_index].iter()).enumerate() {
-      if *dist_count != 0 {
-        println!("{} {}", bin_idx, dist_total / dist_count);
-      }
-    }
-  }
-  pub fn print_rate(&self) {
-    let bs_index = 0;
-    for (bin_idx, (rate_total, rate_count)) in self.rate_bins[bs_index].iter().zip(self.rate_counts[bs_index].iter()).enumerate() {
-      if *rate_count != 0 {
-        println!("{} {}", bin_idx, rate_total / rate_count);
-      }
-    }
-  }
   pub fn print_code(&self) {
-    println!("pub static RDO_DISTORTION_TABLE: [[u64; rdo_num_bins]; TxSize::TX_SIZES_ALL] = [");
-    for bs_index in 0..TxSize::TX_SIZES_ALL {
+    println!("pub static RDO_DISTORTION_TABLE: [[[u64; rdo_num_bins]; TxSize::TX_SIZES_ALL]; RDO_QUANT_BINS] = [");
+    for q_bin in 0..RDO_QUANT_BINS {
       print!("[");
-      for (bin_idx, (dist_total, dist_count)) in self.dist_bins[bs_index].iter().zip(self.dist_counts[bs_index].iter()).enumerate() {
-        if bin_idx == 0 {
-          print!("0,"); // we know zero SAD equals zero distortion
-        } else if *dist_count > 100 {
-          print!("{},", dist_total / dist_count);
-        } else {
-          print!("99999,"); // ensure mode isn't selected
+      for bs_index in 0..TxSize::TX_SIZES_ALL {
+        print!("[");
+        for (bin_idx, (dist_total, dist_count)) in self.dist_bins[q_bin][bs_index].iter().zip(self.dist_counts[q_bin][bs_index].iter()).enumerate() {
+          if bin_idx == 0 {
+            print!("0,"); // we know zero SAD equals zero distortion
+          } else if *dist_count > 100 {
+            print!("{},", dist_total / dist_count);
+          } else {
+            print!("99999,"); // ensure mode isn't selected
+          }
         }
+        println!("],");
       }
       println!("],");
     }
     println!("];");
-    println!("pub static RDO_RATE_TABLE: [[u64; rdo_num_bins]; TxSize::TX_SIZES_ALL] = [");
-    for bs_index in 0..TxSize::TX_SIZES_ALL {
+    println!("pub static RDO_RATE_TABLE: [[[u64; rdo_num_bins]; TxSize::TX_SIZES_ALL]; RDO_QUANT_BINS] = [");
+    for q_bin in 0..RDO_QUANT_BINS {
+      print!("[");
+      for bs_index in 0..TxSize::TX_SIZES_ALL {
         print!("[");
-        for (bin_idx, (rate_total, rate_count)) in self.rate_bins[bs_index].iter().zip(self.rate_counts[bs_index].iter()).enumerate() {
-            if *rate_count > 100 {
-                print!("{},", rate_total / rate_count);
-            } else {
-                print!("99999,");
-            }
+        for (bin_idx, (rate_total, rate_count)) in self.rate_bins[q_bin][bs_index].iter().zip(self.rate_counts[q_bin][bs_index].iter()).enumerate() {
+          if *rate_count > 100 {
+            print!("{},", rate_total / rate_count);
+          } else {
+            print!("99999,");
+          }
         }
         println!("],");
+      }
+      println!("],");
     }
     println!("];");
   }
@@ -578,8 +579,8 @@ pub fn rdo_mode_decision(
         }
         //let (distortion2, rd2) = estimate_rd_cost(fi, seq.bit_depth, cost, estimated_distortion);
         //println!("{} {}", distortion, estimated_distortion);
-        fs.t.add_distortion(tx_size, fast_distortion, distortion);
-        fs.t.add_rate(tx_size, fast_distortion, cost_coeffs as u64);
+        fs.t.add_distortion(fi.base_q_idx, tx_size, fast_distortion, distortion);
+        fs.t.add_rate(fi.base_q_idx, tx_size, fast_distortion, cost_coeffs as u64);
 
         cw.rollback(&cw_checkpoint);
       });

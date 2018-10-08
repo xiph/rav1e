@@ -1606,8 +1606,8 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
     }
     if rdo_type == RDOType::Fast{
       // look up rate and distortion in table
-      let estimated_rate = fs.t.estimate_rate(tx_size, fast_distortion);
-      estimated_distortion = fs.t.estimate_distortion(tx_size, fast_distortion);
+      let estimated_rate = fs.t.estimate_rate(fi.base_q_idx, tx_size, fast_distortion);
+      estimated_distortion = fs.t.estimate_distortion(fi.base_q_idx, tx_size, fast_distortion);
       w.add_bits((estimated_rate >> 3) as u32);
     }
     (fast_distortion, estimated_distortion)
