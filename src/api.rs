@@ -147,6 +147,7 @@ impl Context {
     let key_frame_interval: u64 = 30;
 
     let reorder = false;
+    let multiref = reorder || self.fi.config.speed <= 2;
 
     let pyramid_depth = if reorder { 1 } else { 0 };
     let group_src_len = 1 << pyramid_depth;
@@ -211,7 +212,13 @@ impl Context {
       self.fi.base_q_idx = (self.fi.config.quantizer.min(255 - q_drop) + q_drop) as u8;
 
       let first_ref_frame = LAST_FRAME;
-      let second_ref_frame = if !reorder || idx_in_group == 0 { LAST2_FRAME } else { ALTREF_FRAME };
+      let second_ref_frame = if !multiref {
+        NONE_FRAME
+      } else if !reorder || idx_in_group == 0 {
+        LAST2_FRAME
+      } else {
+        ALTREF_FRAME
+      };
       let ref_in_previous_group = LAST3_FRAME;
 
       self.fi.primary_ref_frame = (ref_in_previous_group - LAST_FRAME) as u32;
