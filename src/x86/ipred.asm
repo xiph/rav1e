@@ -28,8 +28,12 @@
 
 %if ARCH_X86_64
 
-SECTION_RODATA
+SECTION_RODATA 32
 
+paeth_shuf:  db  7,  7,  7,  7,  3,  3,  3,  3,  6,  6,  6,  6,  2,  2,  2,  2
+             db  5,  5,  5,  5,  1,  1,  1,  1,  4,  4,  4,  4,  0,  0,  0,  0
+
+pb_1:   times 4 db 1
 pb_128: times 4 db 128
 
 %macro JMP_TABLE 3-*
@@ -44,10 +48,11 @@ pb_128: times 4 db 128
 
 %define ipred_dc_splat_avx2_table (ipred_dc_avx2_table + 10*4)
 
-JMP_TABLE ipred_dc,      avx2, h4, h8, h16, h32, h64, w4, w8, w16, w32, w64, \
-                               s4-10*4, s8-10*4, s16-10*4, s32-10*4, s64-10*4
-JMP_TABLE ipred_dc_left, avx2, h4, h8, h16, h32, h64
-JMP_TABLE ipred_h,       avx2, w4, w8, w16, w32, w64
+JMP_TABLE ipred_paeth,    avx2, w4, w8, w16, w32, w64
+JMP_TABLE ipred_dc,       avx2, h4, h8, h16, h32, h64, w4, w8, w16, w32, w64, \
+                                s4-10*4, s8-10*4, s16-10*4, s32-10*4, s64-10*4
+JMP_TABLE ipred_dc_left,  avx2, h4, h8, h16, h32, h64
+JMP_TABLE ipred_h,        avx2, w4, w8, w16, w32, w64
 
 SECTION .text
 
@@ -394,6 +399,148 @@ INIT_YMM avx2
     lea                dstq, [dstq+strideq*4]
     sub                  hd, 4
     jg .w64
+    RET
+
+%macro PAETH 2 ; top, ldiff
+    pavgb                m1, m%1, m3 ; Calculating tldiff normally requires
+    pxor                 m0, m%1, m3 ; 10-bit intermediates, but we can do it
+    pand                 m0, m4      ; in 8-bit with some tricks which avoids
+    psubusb              m2, m5, m1  ; having to unpack everything to 16-bit.
+    psubb                m1, m0
+    psubusb              m1, m5
+    por                  m1, m2
+    paddusb              m1, m1
+    por                  m1, m0      ; min(tldiff, 255)
+    psubusb              m2, m5, m3
+    psubusb              m0, m3, m5
+    por                  m2, m0      ; tdiff
+    pminub               m2, m%2
+    pcmpeqb              m0, m%2, m2 ; ldiff <= tdiff
+    vpblendvb            m0, m%1, m3, m0
+    pminub               m1, m2
+    pcmpeqb              m1, m2      ; ldiff <= tldiff || tdiff <= tldiff
+    vpblendvb            m0, m5, m0, m1
+%endmacro
+
+cglobal ipred_paeth, 3, 6, 9, dst, stride, tl, w, h
+    lea                  r5, [ipred_paeth_avx2_table]
+    tzcnt                wd, wm
+    vpbroadcastb         m5, [tlq]   ; topleft
+    movifnidn            hd, hm
+    movsxd               wq, [r5+wq*4]
+    vpbroadcastd         m4, [r5-ipred_paeth_avx2_table+pb_1]
+    add                  wq, r5
+    jmp                  wq
+.w4:
+    vpbroadcastd         m6, [tlq+1] ; top
+    mova                 m8, [r5-ipred_paeth_avx2_table+paeth_shuf]
+    lea                  r3, [strideq*3]
+    psubusb              m7, m5, m6
+    psubusb              m0, m6, m5
+    por                  m7, m0      ; ldiff
+.w4_loop:
+    sub                 tlq, 8
+    vpbroadcastq         m3, [tlq]
+    pshufb               m3, m8      ; left
+    PAETH                 6, 7
+    vextracti128        xm1, m0, 1
+    movd   [dstq+strideq*0], xm0
+    pextrd [dstq+strideq*1], xm0, 2
+    movd   [dstq+strideq*2], xm1
+    pextrd [dstq+r3       ], xm1, 2
+    cmp                  hd, 4
+    je .ret
+    lea                dstq, [dstq+strideq*4]
+    pextrd [dstq+strideq*0], xm0, 1
+    pextrd [dstq+strideq*1], xm0, 3
+    pextrd [dstq+strideq*2], xm1, 1
+    pextrd [dstq+r3       ], xm1, 3
+    lea                dstq, [dstq+strideq*4]
+    sub                  hd, 8
+    jg .w4_loop
+.ret:
+    RET
+ALIGN function_align
+.w8:
+    vpbroadcastq         m6, [tlq+1]
+    mova                 m8, [r5-ipred_paeth_avx2_table+paeth_shuf]
+    lea                  r3, [strideq*3]
+    psubusb              m7, m5, m6
+    psubusb              m0, m6, m5
+    por                  m7, m0
+.w8_loop:
+    sub                 tlq, 4
+    vpbroadcastd         m3, [tlq]
+    pshufb               m3, m8
+    PAETH                 6, 7
+    vextracti128        xm1, m0, 1
+    movq   [dstq+strideq*0], xm0
+    movhps [dstq+strideq*1], xm0
+    movq   [dstq+strideq*2], xm1
+    movhps [dstq+r3       ], xm1
+    lea                dstq, [dstq+strideq*4]
+    sub                  hd, 4
+    jg .w8_loop
+    RET
+ALIGN function_align
+.w16:
+    vbroadcasti128       m6, [tlq+1]
+    mova                xm8, xm4 ; lower half = 1, upper half = 0
+    psubusb              m7, m5, m6
+    psubusb              m0, m6, m5
+    por                  m7, m0
+.w16_loop:
+    sub                 tlq, 2
+    vpbroadcastd         m3, [tlq]
+    pshufb               m3, m8
+    PAETH                 6, 7
+    mova         [dstq+strideq*0], xm0
+    vextracti128 [dstq+strideq*1], m0, 1
+    lea                dstq, [dstq+strideq*2]
+    sub                  hd, 2
+    jg .w16_loop
+    RET
+ALIGN function_align
+.w32:
+    movu                 m6, [tlq+1]
+    psubusb              m7, m5, m6
+    psubusb              m0, m6, m5
+    por                  m7, m0
+.w32_loop:
+    dec                 tlq
+    vpbroadcastb         m3, [tlq]
+    PAETH                 6, 7
+    mova             [dstq], m0
+    add                dstq, strideq
+    dec                  hd
+    jg .w32_loop
+    RET
+ALIGN function_align
+.w64:
+    movu                 m6, [tlq+ 1]
+    movu                 m7, [tlq+33]
+%if WIN64
+    movaps              r4m, xmm9
+%endif
+    psubusb              m8, m5, m6
+    psubusb              m0, m6, m5
+    psubusb              m9, m5, m7
+    psubusb              m1, m7, m5
+    por                  m8, m0
+    por                  m9, m1
+.w64_loop:
+    dec                 tlq
+    vpbroadcastb         m3, [tlq]
+    PAETH                 6, 8
+    mova        [dstq+32*0], m0
+    PAETH                 7, 9
+    mova        [dstq+32*1], m0
+    add                dstq, strideq
+    dec                  hd
+    jg .w64_loop
+%if WIN64
+    movaps             xmm9, r4m
+%endif
     RET
 
 %endif
