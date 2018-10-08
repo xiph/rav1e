@@ -15,11 +15,81 @@ use plane::*;
 use FrameInvariants;
 use FrameState;
 
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "avx2")]
+unsafe fn get_sad_avx2(
+  plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize, blk_w: usize
+) -> u32 {
+  #[cfg(target_arch = "x86")]
+  use std::arch::x86::*;
+  #[cfg(target_arch = "x86_64")]
+  use std::arch::x86_64::*;
+  let org_stride: isize = plane_org.plane.cfg.stride as isize;
+  let ref_stride: isize = plane_ref.plane.cfg.stride as isize;
+  let mut sums = _mm256_setzero_si256();
+
+  for r in (0..blk_h).step_by(4) {
+    for c in (0..blk_w).step_by(16) {
+      let org_slice = plane_org.subslice(c, r);
+      let ref_slice = plane_ref.subslice(c, r);
+      let org_ptr = org_slice.as_slice().as_ptr();
+      let ref_ptr = ref_slice.as_slice().as_ptr();
+      // load 4 vectors of org and ref
+      let load_org = |index| {
+        _mm256_loadu_si256(org_ptr.offset(index * org_stride) as *const _)
+      };
+      let org_tuple = (load_org(0), load_org(1), load_org(2), load_org(3));
+      let load_ref = |index| {
+        _mm256_loadu_si256(ref_ptr.offset(index * ref_stride) as *const _)
+      };
+      let ref_tuple = (load_ref(0), load_ref(1), load_ref(2), load_ref(3));
+
+      // take the absolute values of each vector
+      let sub_abs = |a, b| _mm256_abs_epi16(_mm256_sub_epi16(a, b));
+      let abs_diff = (
+        sub_abs(org_tuple.0, ref_tuple.0),
+        sub_abs(org_tuple.1, ref_tuple.1),
+        sub_abs(org_tuple.2, ref_tuple.2),
+        sub_abs(org_tuple.3, ref_tuple.3)
+      );
+
+      // sum in 16-bits
+      let sums16 = _mm256_add_epi16(
+        _mm256_add_epi16(abs_diff.0, abs_diff.1),
+        _mm256_add_epi16(abs_diff.2, abs_diff.3)
+      );
+
+      // convert to 32-bits and add
+      sums = _mm256_add_epi32(
+        sums,
+        _mm256_add_epi32(
+          _mm256_unpacklo_epi16(sums16, _mm256_setzero_si256()),
+          _mm256_unpackhi_epi16(sums16, _mm256_setzero_si256())
+        )
+      );
+    }
+  }
+
+  // reduce sums to a single value
+  sums = _mm256_add_epi32(sums, _mm256_bsrli_epi128(sums, 8));
+  sums = _mm256_add_epi32(sums, _mm256_bsrli_epi128(sums, 4));
+  _mm_cvtsi128_si32(_mm_add_epi32(
+    _mm256_castsi256_si128(sums),
+    _mm256_extracti128_si256(sums, 1)
+  )) as u32
+}
+
 #[inline(always)]
 pub fn get_sad(
   plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize,
   blk_w: usize
 ) -> u32 {
+  #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+  {
+    if is_x86_feature_detected!("avx2") && blk_w >= 16 && blk_h >= 4 {
+      return unsafe { get_sad_avx2(plane_org, plane_ref, blk_h, blk_w) };
+    }
+  }
   let mut sum = 0 as u32;
 
   let org_iter = plane_org.iter_width(blk_w);
@@ -35,6 +105,7 @@ pub fn get_sad(
 
   sum
 }
+
 pub fn motion_estimation(
   fi: &FrameInvariants, fs: &FrameState, bsize: BlockSize,
   bo: &BlockOffset, ref_frame: usize, pmv: &MotionVector
