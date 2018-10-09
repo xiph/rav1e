@@ -15,7 +15,7 @@ binaries = ["y4m", "clap"]
 default = ["binaries"]
 
 [dependencies]
-bitstream-io = "0.6"
+bitstream-io = "0.8"
 clap = { version = "2", optional = true }
 libc = "0.2"
 rand = "0.5"
