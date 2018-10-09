@@ -96,7 +96,7 @@ pub fn parse_cli() -> (EncoderIO, EncoderConfig, usize) {
 pub fn process_frame(
   ctx: &mut Context, output_file: &mut dyn Write,
   y4m_dec: &mut y4m::Decoder<'_, Box<dyn Read>>,
-  y4m_enc: Option<&mut y4m::Encoder<'_, Box<dyn Write>>>
+  mut y4m_enc: Option<&mut y4m::Encoder<'_, Box<dyn Write>>>
 ) -> bool {
   unsafe {
     av1_rtcd();
@@ -144,8 +144,6 @@ pub fn process_frame(
     }
   };
 
-  let y4m_enc_uw = y4m_enc.unwrap();
-
   let mut has_data = true;
   while has_data {
     let pkt_wrapped = ctx.receive_packet();
@@ -153,6 +151,7 @@ pub fn process_frame(
     Ok(pkt) => {
       eprintln!("{}", pkt);
       write_ivf_frame(output_file, pkt.number as u64, pkt.data.as_ref());
+      if let Some(y4m_enc_uw) = y4m_enc.as_mut() {
       if let Some(rec) = pkt.rec {
         let pitch_y = if bit_depth > 8 { width * 2 } else { width };
         let pitch_uv = pitch_y / 2;
@@ -226,6 +225,7 @@ pub fn process_frame(
 
         let rec_frame = y4m::Frame::new([&rec_y, &rec_u, &rec_v], None);
         y4m_enc_uw.write_frame(&rec_frame).unwrap();
+      }
       }
     },
     _ => { has_data = false; }
