@@ -1341,21 +1341,22 @@ pub fn encode_tx_block(
 
     if skip { return false; }
 
-    let mut residual: AlignedArray<[i16; 64 * 64]> = UninitializedAlignedArray();
+    let mut residual_storage: AlignedArray<[i16; 64 * 64]> = UninitializedAlignedArray();
     let mut coeffs_storage: AlignedArray<[i32; 64 * 64]> = UninitializedAlignedArray();
     let mut qcoeffs_storage: AlignedArray<[i32; 64 * 64]> = UninitializedAlignedArray();
     let mut rcoeffs_storage: AlignedArray<[i32; 64 * 64]> = UninitializedAlignedArray();
+    let residual = &mut residual_storage.array[..tx_size.area()];
     let coeffs = &mut coeffs_storage.array[..tx_size.area()];
     let qcoeffs = &mut qcoeffs_storage.array[..tx_size.area()];
     let rcoeffs = &mut rcoeffs_storage.array[..tx_size.area()];
 
-    diff(&mut residual.array,
+    diff(residual,
          &fs.input.planes[p].slice(po),
          &rec.slice(po),
          tx_size.width(),
          tx_size.height());
 
-    forward_transform(&residual.array, coeffs, tx_size.width(), tx_size, tx_type, bit_depth);
+    forward_transform(residual, coeffs, tx_size.width(), tx_size, tx_type, bit_depth);
     fs.qc.quantize(coeffs, qcoeffs);
 
     let has_coeff = cw.write_coeffs_lv_map(w, p, bo, &qcoeffs, mode, tx_size, tx_type, plane_bsize, xdec, ydec,
@@ -1389,9 +1390,9 @@ pub fn encode_tx_block(
         let mut diff: i64 = 0;
         let mut diff_mean: i64 = 0;
         let tx_dist_scale_bits = 2*(3 - get_log_tx_scale(tx_size));
-        dist =
-            //TODO: Repalce this function for tx domain distortion
-            sse_wxh(
+        let tx_dist_scale_offset = 1 << (tx_dist_scale_bits - 1);
+
+        dist = sse_wxh(
             &fs.input.planes[p].slice(po),
             &rec.slice(po),
             tx_size.width(),
@@ -1399,9 +1400,21 @@ pub fn encode_tx_block(
             );
         assert!(tx_size.area() >= 16);
 
-        diff = (dist as i64 - (tx_dist >> tx_dist_scale_bits) as i64) as i64;
+        diff = (dist as i64 - ((tx_dist + tx_dist_scale_offset) >> tx_dist_scale_bits) as i64) as i64;
         diff_mean = (diff / tx_size.area() as i64) as i64;
         let tmp = 0;
+
+        // Check the residual (i.e. prediction error) vectors in pixel- and tx-domain
+        let pix_vec_len = ss_i16(residual);
+        let pix_vec_len_sqrt = (pix_vec_len as f64).sqrt();
+        let tx_vec_len = (ss_i32(coeffs) + tx_dist_scale_offset as u64) >> tx_dist_scale_bits;
+        let tx_vec_len_sqrt = (tx_vec_len as f64).sqrt();
+        let diff_residue : i64 = (pix_vec_len as i64 - tx_vec_len as i64) as i64;
+        let diff_residue_mean = diff_residue / tx_size.area() as i64;
+        let diff_residue_sqrt : i64 = (pix_vec_len_sqrt - tx_vec_len_sqrt) as i64;
+        //assert!(diff_mean == 0);
+        //assert!(diff_residue_mean == 0);
+        assert!(diff_residue_sqrt == 0);
     }
     has_coeff
 }

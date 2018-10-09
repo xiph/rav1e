@@ -138,6 +138,16 @@ pub fn sse_wxh(
   sse
 }
 
+// vector length of i16 vector
+pub fn ss_i16(src: &[i16]) -> u64 {
+  src.iter().map(|&a| (a * a) as u64).sum::<u64>()
+}
+
+// vector length of i32 vector
+pub fn ss_i32(src: &[i32]) -> u64 {
+  src.iter().map(|&a| (a * a) as u64).sum::<u64>()
+}
+
 pub fn get_lambda(fi: &FrameInvariants, bit_depth: usize) -> f64 {
   let q = dc_q(fi.base_q_idx, bit_depth) as f64;
 
