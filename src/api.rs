@@ -11,7 +11,7 @@ use context::CDFContext;
 use encoder::*;
 use partition::*;
 
-use std::collections::VecDeque;
+use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
 
@@ -85,7 +85,7 @@ impl Config {
       aom_dsp_rtcd();
     }
 
-    Context { fi, seq, frame_q: VecDeque::new() }
+    Context { fi, seq, frame_count: 0, idx: 0, frame_q: BTreeMap::new() }
   }
 }
 
@@ -93,7 +93,9 @@ pub struct Context {
   fi: FrameInvariants,
   seq: Sequence,
   //    timebase: Ratio,
-  frame_q: VecDeque<Option<Arc<Frame>>> //    packet_q: VecDeque<Packet>
+  frame_count: u64,
+  idx: u64,
+  frame_q: BTreeMap<u64, Option<Arc<Frame>>> //    packet_q: VecDeque<Packet>
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -110,8 +112,8 @@ pub enum EncoderStatus {
 
 pub struct Packet {
   pub data: Vec<u8>,
-  pub rec: Frame,
-  pub number: usize,
+  pub rec: Option<Frame>,
+  pub number: u64,
   pub frame_type: FrameType
 }
 
@@ -136,7 +138,8 @@ impl Context {
   where
     F: Into<Option<Arc<Frame>>>
   {
-    self.frame_q.push_back(frame.into());
+    self.frame_q.insert(self.frame_count, frame.into());
+    self.frame_count = self.frame_count + 1;
     Ok(())
   }
 
@@ -170,100 +173,161 @@ impl Context {
     sequence_header_inner(&self.seq).unwrap()
   }
 
-  pub fn receive_packet(&mut self) -> Result<Packet, EncoderStatus> {
-    let f = self.frame_q.pop_front().ok_or(EncoderStatus::NeedMoreData)?;
-    if let Some(frame) = f {
-      let mut fs = FrameState {
-        input: frame,
-        rec: Frame::new(self.fi.padded_w, self.fi.padded_h),
-        qc: Default::default(),
-        cdfs: CDFContext::new(0),
-        deblock: Default::default()
-      };
+  pub fn frame_properties(&mut self, idx: u64) -> bool {
+    let key_frame_interval: u64 = 30;
 
-      let frame_number_in_segment = self.fi.number % 30;
+    let reorder = false;
+    let multiref = reorder || self.fi.config.speed <= 2;
 
-      self.fi.order_hint = frame_number_in_segment as u32;
+    let pyramid_depth = if reorder { 1 } else { 0 };
+    let group_src_len = 1 << pyramid_depth;
+    let group_len = group_src_len + if reorder { pyramid_depth } else { 0 };
+    let segment_len = 1 + (key_frame_interval - 1 + group_src_len - 1) / group_src_len * group_len;
 
-      self.fi.frame_type = if frame_number_in_segment == 0 {
-        FrameType::KEY
-      } else {
-        FrameType::INTER
-      };
+    let idx_in_segment = idx % segment_len;
+    let segment_idx = idx / segment_len;
 
-      let slot_idx = frame_number_in_segment % REF_FRAMES as u64;
+    if idx_in_segment == 0 {
+      self.fi.frame_type = FrameType::KEY;
+      self.fi.intra_only = true;
+      self.fi.order_hint = 0;
+      self.fi.refresh_frame_flags = ALL_REF_FRAMES_MASK;
+      self.fi.show_frame = true;
+      self.fi.show_existing_frame = false;
+      self.fi.frame_to_show_map_idx = 0;
+      let q_boost = 15;
+      self.fi.base_q_idx = (self.fi.config.quantizer.max(1 + q_boost).min(255 + q_boost) - q_boost) as u8;
+      self.fi.primary_ref_frame = PRIMARY_REF_NONE;
+      self.fi.number = segment_idx * key_frame_interval;
+      for i in 0..INTER_REFS_PER_FRAME {
+        self.fi.ref_frames[i] = 0;
+      }
+    } else {
+      let idx_in_group = (idx_in_segment - 1) % group_len;
+      let group_idx = (idx_in_segment - 1) / group_len;
 
-      self.fi.refresh_frame_flags = if self.fi.frame_type == FrameType::KEY {
-        ALL_REF_FRAMES_MASK
+      self.fi.frame_type = FrameType::INTER;
+      self.fi.intra_only = false;
+
+      self.fi.order_hint = (group_src_len * group_idx +
+        if reorder && idx_in_group < pyramid_depth {
+          group_src_len >> idx_in_group
+        } else {
+          idx_in_group - pyramid_depth + 1
+        }) as u32;
+      if self.fi.order_hint >= key_frame_interval as u32 {
+        return false;
+      }
+
+      let slot_idx = self.fi.order_hint % REF_FRAMES as u32;
+      self.fi.show_frame = !reorder || idx_in_group >= pyramid_depth;
+      self.fi.show_existing_frame = self.fi.show_frame && reorder &&
+        (idx_in_group - pyramid_depth + 1).count_ones() == 1 &&
+        idx_in_group != pyramid_depth;
+      self.fi.frame_to_show_map_idx = slot_idx;
+      self.fi.refresh_frame_flags = if self.fi.show_existing_frame {
+        0
       } else {
         1 << slot_idx
       };
 
-      self.fi.intra_only = self.fi.frame_type == FrameType::KEY
-        || self.fi.frame_type == FrameType::INTRA_ONLY;
-      // self.fi.use_prev_frame_mvs =
-      //  !(self.fi.intra_only || self.fi.error_resilient);
-
-      let use_multiple_ref_frames = self.fi.config.speed <= 2;
-
-      let log_boost_frequency = if use_multiple_ref_frames {
-        2 // Higher quality frame every 4 frames
+      let lvl = if !reorder {
+        0
+      } else if idx_in_group < pyramid_depth {
+        idx_in_group
       } else {
-        0 // No boosting with single reference frame
+        pyramid_depth - (idx_in_group - pyramid_depth + 1).trailing_zeros() as u64
       };
-
-      assert!(log_boost_frequency >= 0 && log_boost_frequency <= 2);
-      let boost_frequency = 1 << log_boost_frequency;
-      self.fi.base_q_idx = if self.fi.frame_type == FrameType::KEY {
-        let q_boost = 15;
-        self.fi.config.quantizer.max(1 + q_boost).min(255 + q_boost) - q_boost
-      } else if slot_idx & (boost_frequency - 1) == 0 {
-        self.fi.config.quantizer.max(1).min(255)
-      } else {
-        let q_drop = 15;
-        self.fi.config.quantizer.min(255 - q_drop) + q_drop
-      } as u8;
+      let q_drop = 15 * lvl as usize;
+      self.fi.base_q_idx = (self.fi.config.quantizer.min(255 - q_drop) + q_drop) as u8;
 
       let first_ref_frame = LAST_FRAME;
-      let second_ref_frame =
-        if use_multiple_ref_frames { ALTREF_FRAME } else { NONE_FRAME };
+      let second_ref_frame = if !multiref {
+        NONE_FRAME
+      } else if !reorder || idx_in_group == 0 {
+        LAST2_FRAME
+      } else {
+        ALTREF_FRAME
+      };
+      let ref_in_previous_group = LAST3_FRAME;
 
-      self.fi.primary_ref_frame =
-        if self.fi.intra_only || self.fi.error_resilient {
-          PRIMARY_REF_NONE
-        } else {
-          (first_ref_frame - LAST_FRAME) as u32
-        };
+      self.fi.primary_ref_frame = (ref_in_previous_group - LAST_FRAME) as u32;
 
       for i in 0..INTER_REFS_PER_FRAME {
         self.fi.ref_frames[i] = if i == second_ref_frame - LAST_FRAME {
-          (REF_FRAMES + slot_idx as usize - 2) & boost_frequency as usize
+          (slot_idx as u64 + if lvl == 0 { 6 * group_src_len } else { group_src_len >> lvl }) & 7
+        } else if i == ref_in_previous_group - LAST_FRAME {
+          (slot_idx as u64 - group_src_len) & 7
         } else {
-          (REF_FRAMES + slot_idx as usize - 1) & (REF_FRAMES - 1)
-        };
+          (slot_idx as u64 - (group_src_len >> lvl)) & 7
+        } as usize;
       }
+
+      self.fi.number = segment_idx * key_frame_interval + self.fi.order_hint as u64;
+    }
+
+    true
+  }
+
+  pub fn receive_packet(&mut self) -> Result<Packet, EncoderStatus> {
+    let mut idx = self.idx;
+    while !self.frame_properties(idx) {
+      self.idx = self.idx + 1;
+      idx = self.idx;
+    }
+
+    if self.fi.show_existing_frame {
+      self.idx = self.idx + 1;
+
+      let mut fs = FrameState {
+        input: Arc::new(Frame::new(self.fi.padded_w, self.fi.padded_h)), // dummy
+        rec: Frame::new(self.fi.padded_w, self.fi.padded_h),
+        qc: Default::default(),
+        cdfs: CDFContext::new(0),
+        deblock: Default::default(),
+      };
 
       let data = encode_frame(&mut self.seq, &mut self.fi, &mut fs);
 
-      let number = self.fi.number as usize;
-
-      self.fi.number += 1;
-
-      fs.rec.pad();
-
       // TODO avoid the clone by having rec Arc.
-      let rec = fs.rec.clone();
+      let rec = if self.fi.show_frame { Some(fs.rec.clone()) } else { None };
 
-      update_rec_buffer(&mut self.fi, fs);
-
-      Ok(Packet { data, rec, number, frame_type: self.fi.frame_type })
+      Ok(Packet { data, rec, number: self.fi.number, frame_type: self.fi.frame_type })
     } else {
-      unimplemented!("Flushing not implemented")
+      if let Some(f) = self.frame_q.remove(&self.fi.number) {
+        self.idx = self.idx + 1;
+
+        if let Some(frame) = f {
+          let mut fs = FrameState {
+            input: frame,
+            rec: Frame::new(self.fi.padded_w, self.fi.padded_h),
+            qc: Default::default(),
+            cdfs: CDFContext::new(0),
+            deblock: Default::default(),
+          };
+
+          let data = encode_frame(&mut self.seq, &mut self.fi, &mut fs);
+
+          fs.rec.pad();
+
+          // TODO avoid the clone by having rec Arc.
+          let rec = if self.fi.show_frame { Some(fs.rec.clone()) } else { None };
+
+          update_rec_buffer(&mut self.fi, fs);
+
+          Ok(Packet { data, rec, number: self.fi.number, frame_type: self.fi.frame_type })
+        } else {
+          Err(EncoderStatus::NeedMoreData)
+        }
+      } else {
+        Err(EncoderStatus::NeedMoreData)
+      }
     }
   }
 
   pub fn flush(&mut self) {
-    self.frame_q.push_back(None);
+    self.frame_q.insert(self.frame_count, None);
+    self.frame_count = self.frame_count + 1;
   }
 }
 

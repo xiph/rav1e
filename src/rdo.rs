@@ -307,6 +307,8 @@ pub fn rdo_mode_decision(
 
   if fi.frame_type == FrameType::INTER {
     for i in LAST_FRAME..NONE_FRAME {
+      // Don't search LAST3 since it's used only for probs
+      if i == LAST3_FRAME { continue; }
       if !ref_slot_set.contains(&fi.ref_frames[i - LAST_FRAME]) {
         ref_frame_set.push(i);
         ref_slot_set.push(fi.ref_frames[i - LAST_FRAME]);
@@ -321,7 +323,7 @@ pub fn rdo_mode_decision(
 
   for (i, &ref_frame) in ref_frame_set.iter().enumerate() {
     let mut mvs: Vec<CandidateMV> = Vec::new();
-    mode_contexts.push(cw.find_mvrefs(bo, ref_frame, &mut mvs, bsize, false));
+    mode_contexts.push(cw.find_mvrefs(bo, ref_frame, &mut mvs, bsize, false, fi));
 
     if fi.frame_type == FrameType::INTER {
       for &x in RAV1E_INTER_MODES_MINIMAL {

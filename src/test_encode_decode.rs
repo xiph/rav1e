@@ -254,71 +254,80 @@ fn encode_decode(
     fill_frame(&mut ra, Arc::get_mut(&mut input).unwrap());
 
     let _ = ctx.send_frame(input);
-    let pkt = ctx.receive_packet().unwrap();
-    println!("Encoded packet {}", pkt.number);
 
-    rec_fifo.push_back(pkt.rec.clone());
-
-    let packet = pkt.data;
-
+    let mut done = false;
     let mut corrupted_count = 0;
-    unsafe {
-      println!("Decoding frame {}", pkt.number);
-      let ret = aom_codec_decode(
-        &mut dec.dec,
-        packet.as_ptr(),
-        packet.len(),
-        ptr::null_mut()
-      );
-      println!("Decoded. -> {}", ret);
-      if ret != 0 {
-        use std::ffi::CStr;
-        let error_msg = aom_codec_error(&mut dec.dec);
-        println!(
-          "  Decode codec_decode failed: {}",
-          CStr::from_ptr(error_msg).to_string_lossy()
-        );
-        let detail = aom_codec_error_detail(&mut dec.dec);
-        if !detail.is_null() {
-          println!(
-            "  Decode codec_decode failed {}",
-            CStr::from_ptr(detail).to_string_lossy()
-          );
+    while !done {
+      let res = ctx.receive_packet();
+      if let Ok(pkt) = res {
+        println!("Encoded packet {}", pkt.number);
+
+        if let Some(pkt_rec) = pkt.rec {
+          rec_fifo.push_back(pkt_rec.clone());
         }
 
-        corrupted_count += 1;
-      }
+        let packet = pkt.data;
 
-      if ret == 0 {
-        loop {
-          println!("Retrieving frame");
-          let img = aom_codec_get_frame(&mut dec.dec, &mut iter);
-          println!("Retrieved.");
-          if img.is_null() {
-            break;
-          }
-          let mut corrupted = 0;
-          let ret = aom_codec_control_(
+        unsafe {
+          println!("Decoding frame {}", pkt.number);
+          let ret = aom_codec_decode(
             &mut dec.dec,
-            aom_dec_control_id_AOMD_GET_FRAME_CORRUPTED as i32,
-            &mut corrupted
+            packet.as_ptr(),
+            packet.len(),
+            ptr::null_mut()
           );
+          println!("Decoded. -> {}", ret);
           if ret != 0 {
             use std::ffi::CStr;
-            let detail = aom_codec_error_detail(&mut dec.dec);
-            panic!(
-              "Decode codec_control failed {}",
-              CStr::from_ptr(detail).to_string_lossy()
+            let error_msg = aom_codec_error(&mut dec.dec);
+            println!(
+              "  Decode codec_decode failed: {}",
+              CStr::from_ptr(error_msg).to_string_lossy()
             );
-          }
-          corrupted_count += corrupted;
+            let detail = aom_codec_error_detail(&mut dec.dec);
+            if !detail.is_null() {
+              println!(
+                "  Decode codec_decode failed {}",
+                CStr::from_ptr(detail).to_string_lossy()
+              );
+            }
 
-          let rec = rec_fifo.pop_front().unwrap();
-          compare_img(img, &rec, bit_depth);
+            corrupted_count += 1;
+          }
+
+          if ret == 0 {
+            loop {
+              println!("Retrieving frame");
+              let img = aom_codec_get_frame(&mut dec.dec, &mut iter);
+              println!("Retrieved.");
+              if img.is_null() {
+                break;
+              }
+              let mut corrupted = 0;
+              let ret = aom_codec_control_(
+                &mut dec.dec,
+                aom_dec_control_id_AOMD_GET_FRAME_CORRUPTED as i32,
+                &mut corrupted
+              );
+              if ret != 0 {
+                use std::ffi::CStr;
+                let detail = aom_codec_error_detail(&mut dec.dec);
+                panic!(
+                  "Decode codec_control failed {}",
+                  CStr::from_ptr(detail).to_string_lossy()
+                );
+              }
+              corrupted_count += corrupted;
+
+              let rec = rec_fifo.pop_front().unwrap();
+              compare_img(img, &rec, bit_depth);
+            }
+          }
         }
+      } else {
+        done = true;
       }
     }
-
     assert_eq!(corrupted_count, 0);
   }
 }
