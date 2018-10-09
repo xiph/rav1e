@@ -6,12 +6,32 @@ extern crate pkg_config;
 #[cfg(unix)]
 #[cfg(feature = "decode_test")]
 extern crate bindgen;
+#[cfg(target_arch = "x86_64")]
+extern crate nasm_rs;
 
 use std::env;
 use std::fs;
+use std::fs::File;
+use std::io::Write;
 use std::path::Path;
 
 fn main() {
+    if cfg!(target_arch = "x86_64") {
+        let out_dir = env::var("OUT_DIR").unwrap();
+        {
+            let dest_path = Path::new(&out_dir).join("config.asm");
+            let mut config_file = File::create(dest_path).unwrap();
+            config_file.write(b"	%define ARCH_X86_32 0\n").unwrap();
+            config_file.write(b" %define ARCH_X86_64 1\n").unwrap();
+            config_file.write(b"	%define PIC 1\n").unwrap();
+            config_file.write(b" %define STACK_ALIGNMENT 32\n").unwrap();
+        }
+        let mut config_include_arg = String::from("-I");
+        config_include_arg.push_str(&out_dir);
+        config_include_arg.push('/');
+        nasm_rs::compile_library_args("rav1easm", &["src/x86/mc.asm"], &[&config_include_arg, "-Isrc/"]);
+    }
+
     if cfg!(windows) && cfg!(feature = "decode_test") {
         panic!("Unsupported feature on this platform!");
     }

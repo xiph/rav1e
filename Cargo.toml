@@ -27,6 +27,9 @@ num-traits = "0.2"
 [build-dependencies]
 cmake = "0.1.32"
 
+[target.'cfg(target_arch = "x86_64")'.build-dependencies]
+nasm-rs = { git = "https://github.com/tdaede/nasm-rs.git" }
+
 [target.'cfg(unix)'.build-dependencies]
 pkg-config = "0.3.12"
 bindgen = { version = "0.37", optional = true }
