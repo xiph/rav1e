@@ -39,10 +39,15 @@ criterion = "0.2"
 
 [[bin]]
 name = "rav1e"
+bench = false
 
 [[bin]]
 name = "rav1repl"
 required-features = ["repl"]
+bench = false
+
+[lib]
+bench = false
 
 [[bench]]
 name = "bench"
