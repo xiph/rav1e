@@ -1,3 +1,10 @@
+//! # C API for rav1e
+//!
+//! [rav1e](https://github.com/xiph/rav1e/) is an [AV1](https://aomediacodec.github.io/av1-spec/)
+//! encoder written in [Rust](https://rust-lang.org)
+//!
+//! This is the C-compatible API to it
+
 extern crate rav1e;
 
 use std::slice;
@@ -7,6 +14,10 @@ use std::ffi::CStr;
 use std::os::raw::c_char;
 use std::os::raw::c_int;
 
+/// Raw video Frame
+///
+/// It can be allocated throught rav1e_frame_new(), populated using rav1e_frame_fill_plane()
+/// and freed using rav1e_frame_drop().
 pub struct RaFrame(Arc<rav1e::Frame>);
 
 pub struct RaConfig {
@@ -25,7 +36,7 @@ type RaFrameType = rav1e::FrameType;
 pub struct RaPacket {
     pub data: *const u8,
     pub len: usize,
-    pub number: usize,
+    pub number: u64,
     pub frame_type: RaFrameType,
 }
 
@@ -152,6 +163,18 @@ pub unsafe extern "C" fn rav1e_receive_packet(
 #[no_mangle]
 pub unsafe extern fn rav1e_packet_drop(pkt: *mut RaPacket) {
     let _ = Box::from_raw(pkt);
+}
+
+#[no_mangle]
+pub unsafe extern fn rav1e_container_sequence_header(ctx: *mut RaContext, len: *mut usize) -> *mut u8 {
+    let buf = (*ctx).ctx.container_sequence_header();
+
+    *len = buf.len();
+    Box::into_raw(buf.into_boxed_slice()) as *mut u8
+}
+
+pub unsafe extern fn rav1e_container_sequence_header_drop(sequence: *mut u8) {
+    let _ = Box::from_raw(sequence);
 }
 
 #[no_mangle]
