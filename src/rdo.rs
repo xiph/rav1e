@@ -346,7 +346,7 @@ pub fn rdo_mode_decision(
   let luma_rdo = |luma_mode: PredictionMode, fs: &mut FrameState, cw: &mut ContextWriter, best: &mut EncodingSettings,
     mv: MotionVector, ref_frame: usize, mode_set_chroma: &[PredictionMode], luma_mode_is_intra: bool,
     mode_context: usize, mv_stack: &Vec<CandidateMV>| {
-    let (tx_size, tx_type) = rdo_tx_size_type(
+    let (tx_size, mut tx_type) = rdo_tx_size_type(
       seq, fi, fs, cw, bsize, bo, luma_mode, ref_frame, mv, false,
     );
 
@@ -355,6 +355,8 @@ pub fn rdo_mode_decision(
       mode_set_chroma.iter().for_each(|&chroma_mode| {
         let wr: &mut dyn Writer = &mut WriterCounter::new();
         let tell = wr.tell_frac();
+
+        if skip { tx_type = TxType::DCT_DCT; };
 
         encode_block_a(seq, cw, wr, bsize, bo, skip);
         encode_block_b(
