@@ -148,13 +148,19 @@ pub mod test {
     
     for (i, row) in input_plane.data.chunks_mut(input_plane.cfg.stride).enumerate() {
       for (j, mut pixel) in row.into_iter().enumerate() {
-        *pixel = ((j + i) % 256) as u16;
+        let val = ((j + i) as i32 & 255i32) as u16;
+        assert!(val >= u8::min_value().into() && 
+            val <= u8::max_value().into());
+        *pixel = val;
       }
     }
 
     for (i, row) in rec_plane.data.chunks_mut(rec_plane.cfg.stride).enumerate() {
       for (j, mut pixel) in row.into_iter().enumerate() {
-        *pixel = ((j as i32 - i as i32) % 256) as u16;
+        let val = (j as i32 - i as i32 & 255i32) as u16;
+        assert!(val >= u8::min_value().into() && 
+            val <= u8::max_value().into());
+        *pixel = val;
       }
     }
 
@@ -168,28 +174,28 @@ pub mod test {
     use partition::BlockSize::*;
 
     let blocks: Vec<(BlockSize, u32)> = vec![
-      (BLOCK_4X4, 393592),
-      (BLOCK_4X8, 395176),
-      (BLOCK_8X4, 1440456),
-      (BLOCK_8X8, 1835664),
-      (BLOCK_8X16, 1842256),
-      (BLOCK_16X8, 6022352),
-      (BLOCK_16X16, 7864736),
-      (BLOCK_16X32, 7893152),
-      (BLOCK_32X16, 24605344),
-      (BLOCK_32X32, 32499008),
-      (BLOCK_32X64, 32629056),
-      (BLOCK_64X32, 99412288),
-      (BLOCK_64X64, 132043392),
-      (BLOCK_64X128, 132621248),
-      (BLOCK_128X64, 399430272),
-      (BLOCK_128X128, 532067552),
-      (BLOCK_4X16, 398344),
-      (BLOCK_16X4, 3533800),
-      (BLOCK_8X32, 1855440),
-      (BLOCK_32X8, 14392656),
-      (BLOCK_16X64, 7949984),
-      (BLOCK_64X16, 58061984),
+      (BLOCK_4X4, 1912),
+      (BLOCK_4X8, 3496),
+      (BLOCK_8X4, 4296),
+      (BLOCK_8X8, 7824),
+      (BLOCK_8X16, 14416),
+      (BLOCK_16X8, 16592),
+      (BLOCK_16X16, 31136),
+      (BLOCK_16X32, 59552),
+      (BLOCK_32X16, 60064),
+      (BLOCK_32X32, 120128),
+      (BLOCK_32X64, 250176),
+      (BLOCK_64X32, 186688),
+      (BLOCK_64X64, 438912),
+      (BLOCK_64X128, 1016768),
+      (BLOCK_128X64, 654272),
+      (BLOCK_128X128, 1689792),
+      (BLOCK_4X16, 6664),
+      (BLOCK_16X4, 8680),
+      (BLOCK_8X32, 27600),
+      (BLOCK_32X8, 31056),
+      (BLOCK_16X64, 116384),
+      (BLOCK_64X16, 93344),
     ];
 
     let (input_plane, rec_plane) = setup_sad();
