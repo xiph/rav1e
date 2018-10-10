@@ -1707,6 +1707,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
 
         debug_assert!((tx_size, tx_type) ==
             rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, ref_frame, mv, skip));
+        cw.bc.set_tx_size(bo, tx_size);
 
         rd_cost = mode_decision.rd_cost + cost;
 
@@ -1788,6 +1789,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
 
             debug_assert!((tx_size, tx_type) ==
                 rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, ref_frame, mv, skip));
+            cw.bc.set_tx_size(bo, tx_size);
 
             let mut mv_stack = Vec::new();
             let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack, bsize, false, fi);
