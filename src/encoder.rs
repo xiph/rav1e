@@ -1878,6 +1878,9 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
             let mv = part_decision.mv;
             let mut cdef_coded = cw.bc.cdef_coded;
 
+            // NOTE: Cannot avoid calling rdo_tx_size_type() here again,
+            // because, with top-down partition RDO, the neighnoring contexts
+            // of current partition can change, i.e. neighboring partitions can split down more.
             let (tx_size, tx_type) =
                 rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, ref_frame, mv, skip);
 
