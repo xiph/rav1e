@@ -3322,7 +3322,7 @@ pub static av1_default_scan_orders: [SCAN_ORDER; TxSize::TX_SIZES] = [
   }
 ];
 
-
+#[cfg_attr(rustfmt, rustfmt_skip)]
 pub static av1_scan_orders: [[SCAN_ORDER; TX_TYPES]; TxSize::TX_SIZES_ALL] = [
 	[
 		// TX_4X4
