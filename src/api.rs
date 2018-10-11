@@ -257,10 +257,10 @@ impl Context {
         self.fi.ref_frames[i] = if i == second_ref_frame - LAST_FRAME {
           (slot_idx as u64 + if lvl == 0 { 6 * group_src_len } else { group_src_len >> lvl }) & 7
         } else if i == ref_in_previous_group - LAST_FRAME {
-          assert!(((slot_idx as u64 - group_src_len) & 7) >= 0);
+          assert!((slot_idx as u64 - group_src_len) >= 0);
           (slot_idx as u64 - group_src_len) & 7
         } else {
-          assert!(((slot_idx as u64 - (group_src_len >> lvl)) & 7) >= 0);
+          assert!((slot_idx as u64 - (group_src_len >> lvl)) >= 0);
           (slot_idx as u64 - (group_src_len >> lvl)) & 7
         } as usize;
       }
