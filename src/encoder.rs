@@ -1672,7 +1672,9 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         pred_cfl_params: CFLParams::new(),
         ref_frame: INTRA_FRAME,
         mv: MotionVector { row: 0, col: 0},
-        skip: false
+        skip: false,
+        tx_size: TxSize::TX_4X4,
+        tx_type: TxType::DCT_DCT,
     }; // Best decision that is not PARTITION_SPLIT
 
     let hbs = bs >> 1; // Half the block size in blocks
@@ -1701,13 +1703,16 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         let mv = mode_decision.mv;
         let skip = mode_decision.skip;
         let mut cdef_coded = cw.bc.cdef_coded;
+        let (tx_size, tx_type) = (mode_decision.tx_size, mode_decision.tx_type);
+
+        debug_assert!((tx_size, tx_type) ==
+            rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, ref_frame, mv, skip));
+        cw.bc.set_tx_size(bo, tx_size);
+
         rd_cost = mode_decision.rd_cost + cost;
 
         let mut mv_stack = Vec::new();
         let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack, bsize, false, fi);
-
-        let (tx_size, tx_type) =
-          rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, ref_frame, mv, skip);
 
         cdef_coded = encode_block_a(seq, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                                    bsize, bo, skip);
@@ -1780,12 +1785,14 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             let mv = best_decision.mv;
             let skip = best_decision.skip;
             let mut cdef_coded = cw.bc.cdef_coded;
+            let (tx_size, tx_type) = (best_decision.tx_size, best_decision.tx_type);
+
+            debug_assert!((tx_size, tx_type) ==
+                rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, ref_frame, mv, skip));
+            cw.bc.set_tx_size(bo, tx_size);
 
             let mut mv_stack = Vec::new();
             let mode_context = cw.find_mvrefs(bo, ref_frame, &mut mv_stack, bsize, false, fi);
-
-            let (tx_size, tx_type) =
-                rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, ref_frame, mv, skip);
 
             cdef_coded = encode_block_a(seq, cw, if cdef_coded {w_post_cdef} else {w_pre_cdef},
                                        bsize, bo, skip);
