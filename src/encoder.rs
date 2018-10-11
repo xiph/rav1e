@@ -1390,7 +1390,7 @@ pub fn encode_tx_block(
         let mut diff: i64 = 0;
         let mut diff_mean: i64 = 0;
         let tx_dist_scale_bits = 2*(3 - get_log_tx_scale(tx_size));
-        let tx_dist_scale_offset = 1 << (tx_dist_scale_bits - 1);
+        let tx_dist_scale_rounding_offset = 1 << (tx_dist_scale_bits - 1);
 
         dist = sse_wxh(
             &fs.input.planes[p].slice(po),
@@ -1400,21 +1400,20 @@ pub fn encode_tx_block(
             );
         assert!(tx_size.area() >= 16);
 
-        diff = (dist as i64 - ((tx_dist + tx_dist_scale_offset) >> tx_dist_scale_bits) as i64) as i64;
+        diff = (dist as i64 - ((tx_dist + tx_dist_scale_rounding_offset) >> tx_dist_scale_bits) as i64) as i64;
         diff_mean = (diff / tx_size.area() as i64) as i64;
-        let tmp = 0;
 
-        // Check the residual (i.e. prediction error) vectors in pixel- and tx-domain
-        let pix_vec_len = ss_i16(residual);
-        let pix_vec_len_sqrt = (pix_vec_len as f64).sqrt();
-        let tx_vec_len = (ss_i32(coeffs) + tx_dist_scale_offset as u64) >> tx_dist_scale_bits;
+        // Compare the residual (i.e. prediction error) vectors in pixel- and tx-domain
+        //let pix_vec_len = ss_i16(residual);
+        //let pix_vec_len_sqrt = (pix_vec_len as f64).sqrt();
+        let tx_vec_len = (ss_i32(coeffs) + tx_dist_scale_rounding_offset as u64) >> tx_dist_scale_bits;
         let tx_vec_len_sqrt = (tx_vec_len as f64).sqrt();
-        let diff_residue : i64 = (pix_vec_len as i64 - tx_vec_len as i64) as i64;
-        let diff_residue_mean = diff_residue / tx_size.area() as i64;
-        let diff_residue_sqrt : i64 = (pix_vec_len_sqrt - tx_vec_len_sqrt) as i64;
+        //let diff_residue : i64 = (pix_vec_len as i64 - tx_vec_len as i64) as i64;
+        //let diff_residue_mean = diff_residue / tx_size.area() as i64;
+        //let diff_residue_sqrt : i64 = (pix_vec_len_sqrt - tx_vec_len_sqrt) as i64;
         //assert!(diff_mean == 0);
         //assert!(diff_residue_mean == 0);
-        assert!(diff_residue_sqrt == 0);
+        //assert!(diff_residue_sqrt <= 2);
     }
     has_coeff
 }
