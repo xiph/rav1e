@@ -140,7 +140,7 @@ pub fn sse_wxh(
 
 // vector length of i16 vector
 pub fn ss_i16(src: &[i16]) -> u64 {
-  src.iter().map(|&a| (a * a) as u64).sum::<u64>()
+  src.iter().map(|&a| (a as i32 * a as i32) as u64).sum::<u64>()
 }
 
 // vector length of i32 vector

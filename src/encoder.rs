@@ -1331,7 +1331,7 @@ pub fn encode_tx_block(
   w: &mut dyn Writer, p: usize, bo: &BlockOffset, mode: PredictionMode,
   tx_size: TxSize, tx_type: TxType, plane_bsize: BlockSize, po: &PlaneOffset,
   skip: bool, bit_depth: usize, ac: &[i16], alpha: i16
-) -> bool {
+) -> (bool, u64) {
     let rec = &mut fs.rec.planes[p];
     let PlaneConfig { stride, xdec, ydec, .. } = fs.input.planes[p].cfg;
 
@@ -1339,7 +1339,7 @@ pub fn encode_tx_block(
       mode.predict_intra(&mut rec.mut_slice(po), tx_size, bit_depth, &ac, alpha);
     }
 
-    if skip { return false; }
+    if skip { return (false, 0); }
 
     let mut residual_storage: AlignedArray<[i16; 64 * 64]> = UninitializedAlignedArray();
     let mut coeffs_storage: AlignedArray<[i32; 64 * 64]> = UninitializedAlignedArray();
@@ -1365,11 +1365,11 @@ pub fn encode_tx_block(
     // Reconstruct
     dequantize(fi.base_q_idx, qcoeffs, rcoeffs, tx_size, bit_depth);
 
+    let mut tx_dist: u64 = 0;
+
     if !fi.use_tx_domain_distortion {
         inverse_transform_add(rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
     } else {
-        let mut tx_dist: u32 = 0;
-
         // For DEBUG: compare pixel-domain and tx-domain distortions
         inverse_transform_add(rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
 
@@ -1379,9 +1379,9 @@ pub fn encode_tx_block(
             .zip(rcoeffs)
             .map(|(a, b)| {
                 let c = (*a as i16 - *b as i16) as i32;
-                (c * c) as u32
-            }).sum::<u32>();
-
+                (c * c) as u64
+            }).sum::<u64>();
+        /*
         // For DEBUG: compare pixel-domain and tx-domain distortions
         // Compute pixel-domain distortion
         // FIXME: Want to do inverseT here but rustc says: rcoeffs is moved by above .zip(rcoeffs) so cannot borrow rcoeffs again here
@@ -1404,18 +1404,21 @@ pub fn encode_tx_block(
         diff_mean = (diff / tx_size.area() as i64) as i64;
 
         // Compare the residual (i.e. prediction error) vectors in pixel- and tx-domain
-        //let pix_vec_len = ss_i16(residual);
-        //let pix_vec_len_sqrt = (pix_vec_len as f64).sqrt();
+        let pix_vec_len = ss_i16(residual);
+        let pix_vec_len_sqrt = (pix_vec_len as f64).sqrt();
         let tx_vec_len = (ss_i32(coeffs) + tx_dist_scale_rounding_offset as u64) >> tx_dist_scale_bits;
         let tx_vec_len_sqrt = (tx_vec_len as f64).sqrt();
         //let diff_residue : i64 = (pix_vec_len as i64 - tx_vec_len as i64) as i64;
         //let diff_residue_mean = diff_residue / tx_size.area() as i64;
-        //let diff_residue_sqrt : i64 = (pix_vec_len_sqrt - tx_vec_len_sqrt) as i64;
+        let diff_residue_sqrt : i64 = (pix_vec_len_sqrt - tx_vec_len_sqrt) as i64;
         //assert!(diff_mean == 0);
         //assert!(diff_residue_mean == 0);
         //assert!(diff_residue_sqrt <= 2);
+        if /*tx_size.width() <= 8 &&*/ /* tx_type != TxType::IDTX &&*/ diff_residue_sqrt > 0 {
+          let wow = true;
+        }*/
     }
-    has_coeff
+    (has_coeff, tx_dist)
 }
 
 pub fn motion_compensate(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
@@ -1762,7 +1765,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
     fs.qc.update(fi.base_q_idx, tx_size, luma_mode.is_intra(), bit_depth);
 
     let po = bo.plane_offset(&fs.input.planes[0].cfg);
-    let has_coeff = encode_tx_block(
+    let (has_coeff, _) = encode_tx_block(
       fi, fs, cw, w, 0, &bo, luma_mode, tx_size, tx_type, bsize, &po, skip,
       bit_depth, ac, 0,
     );
