@@ -39,7 +39,7 @@ pub fn motion_estimation(
   fi: &FrameInvariants, fs: &FrameState, bsize: BlockSize,
   bo: &BlockOffset, ref_frame: usize, pmv: &MotionVector
 ) -> MotionVector {
-  match fi.rec_buffer.frames[fi.ref_frames[ref_frame - LAST_FRAME]] {
+  match fi.rec_buffer.frames[fi.ref_frames[ref_frame - LAST_FRAME] as usize] {
     Some(ref rec) => {
       let po = PlaneOffset {
         x: (bo.x as isize) << BLOCK_TO_PLANE_SHIFT,

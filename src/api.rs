@@ -253,14 +253,16 @@ impl Context {
 
       self.fi.primary_ref_frame = (ref_in_previous_group - LAST_FRAME) as u32;
 
+      assert!(group_src_len <= REF_FRAMES as u64);
       for i in 0..INTER_REFS_PER_FRAME {
-        self.fi.ref_frames[i] = if i == second_ref_frame - LAST_FRAME {
-          (slot_idx as u64 + if lvl == 0 { 6 * group_src_len } else { group_src_len >> lvl }) & 7
+        self.fi.ref_frames[i] = (slot_idx as u8 +
+        if i == second_ref_frame - LAST_FRAME {
+          if lvl == 0 { (REF_FRAMES as u64 - 2) * group_src_len } else { group_src_len >> lvl }
         } else if i == ref_in_previous_group - LAST_FRAME {
-          (slot_idx as u64 - group_src_len) & 7
+          REF_FRAMES as u64 - group_src_len
         } else {
-          (slot_idx as u64 - (group_src_len >> lvl)) & 7
-        } as usize;
+          REF_FRAMES as u64 - (group_src_len >> lvl)
+        } as u8) & 7;
       }
 
       self.fi.number = segment_idx * key_frame_interval + self.fi.order_hint as u64;
