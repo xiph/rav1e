@@ -932,7 +932,7 @@ impl PredictionMode {
   ) {
     assert!(!self.is_intra());
 
-    match fi.rec_buffer.frames[fi.ref_frames[ref_frame - LAST_FRAME]] {
+    match fi.rec_buffer.frames[fi.ref_frames[ref_frame - LAST_FRAME] as usize] {
       Some(ref rec) => {
         let rec_cfg = &rec.frame.planes[p].cfg;
         let shift_row = 3 + rec_cfg.ydec;

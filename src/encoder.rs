@@ -364,7 +364,7 @@ pub struct FrameInvariants {
     pub cdef_uv_strengths: [u8; 8],
     pub delta_q_present: bool,
     pub config: EncoderConfig,
-    pub ref_frames: [usize; INTER_REFS_PER_FRAME],
+    pub ref_frames: [u8; INTER_REFS_PER_FRAME],
     pub ref_frame_sign_bias: [bool; INTER_REFS_PER_FRAME],
     pub rec_buffer: ReferenceFramesSet,
     pub base_q_idx: u8,
@@ -1047,7 +1047,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
                 let prev_ref_deltas = if fi.primary_ref_frame == PRIMARY_REF_NONE {
                     [1, 0, 0, 0, 0, -1, -1, -1]
                 } else {
-                    fi.rec_buffer.deblock[fi.ref_frames[fi.primary_ref_frame as usize]].ref_deltas
+                    fi.rec_buffer.deblock[fi.ref_frames[fi.primary_ref_frame as usize] as usize].ref_deltas
                 };
                 for i in 0..REF_FRAMES {
                     let update = fs.deblock.ref_deltas[i] != prev_ref_deltas[i];
@@ -1060,7 +1060,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
                 let prev_mode_deltas = if fi.primary_ref_frame == PRIMARY_REF_NONE {
                     [0, 0]
                 } else {
-                    fi.rec_buffer.deblock[fi.ref_frames[fi.primary_ref_frame as usize]].mode_deltas
+                    fi.rec_buffer.deblock[fi.ref_frames[fi.primary_ref_frame as usize] as usize].mode_deltas
                 };
                 for i in 0..2 {
                     let update = fs.deblock.mode_deltas[i] != prev_mode_deltas[i];
@@ -1965,7 +1965,7 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
     let fc = if fi.primary_ref_frame == PRIMARY_REF_NONE {
       CDFContext::new(fi.base_q_idx)
     } else {
-      match fi.rec_buffer.frames[fi.ref_frames[fi.primary_ref_frame as usize]] {
+      match fi.rec_buffer.frames[fi.ref_frames[fi.primary_ref_frame as usize] as usize] {
         Some(ref rec) => rec.cdfs.clone(),
         None => CDFContext::new(fi.base_q_idx)
       }
@@ -2054,7 +2054,7 @@ pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut 
                 fi.ref_frame_sign_bias[i] =
                 if !sequence.enable_order_hint {
                     false
-                } else if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[i]] {
+                } else if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[i] as usize] {
                     let hint = rec.order_hint;
                     sequence.get_relative_dist(hint, fi.order_hint) > 0
                 } else {
