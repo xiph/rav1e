@@ -218,7 +218,7 @@ impl Sequence {
             frame_id_length: 0,
             delta_frame_id_length: 0,
             use_128x128_superblock: false,
-            order_hint_bits_minus_1: 0,
+            order_hint_bits_minus_1: 1,
             force_screen_content_tools: 0,
             force_integer_mv: 2,
             still_picture: false,
@@ -251,6 +251,59 @@ impl Sequence {
         let diff = a as i32 - b as i32;
         let m = 1 << self.order_hint_bits_minus_1;
         (diff & (m - 1)) - (diff & m)
+    }
+
+    pub fn get_skip_mode_allowed(&self, fi: &FrameInvariants, reference_select: bool) -> bool {
+      if fi.intra_only || !reference_select || !self.enable_order_hint {
+        false
+      } else {
+        let mut forward_idx: isize = -1;
+        let mut backward_idx: isize = -1;
+        let mut forward_hint = 0;
+        let mut backward_hint = 0;
+        for i in 0..INTER_REFS_PER_FRAME {
+          if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[i]] {
+            let ref_hint = rec.order_hint;
+            if self.get_relative_dist(ref_hint, fi.order_hint) < 0 {
+              if forward_idx < 0 || self.get_relative_dist(ref_hint, forward_hint) > 0 {
+                forward_idx = i as isize;
+                forward_hint = ref_hint;
+              }
+            } else if self.get_relative_dist(ref_hint, fi.order_hint) > 0 {
+              if backward_idx < 0 || self.get_relative_dist(ref_hint, backward_hint) > 0 {
+                backward_idx = i as isize;
+                backward_hint = ref_hint;
+              }
+            }
+          }
+        }
+        if forward_idx < 0 {
+          false
+        } else if backward_idx >= 0 {
+          // set skip_mode_frame
+          true
+        } else {
+          let mut second_forward_idx: isize = -1;
+          let mut second_forward_hint = 0;
+          for i in 0..INTER_REFS_PER_FRAME {
+            if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[i]] {
+              let ref_hint = rec.order_hint;
+              if self.get_relative_dist(ref_hint, forward_hint) < 0 {
+                if second_forward_idx < 0 || self.get_relative_dist(ref_hint, second_forward_hint) > 0 {
+                  second_forward_idx = i as isize;
+                  second_forward_hint = ref_hint;
+                }
+              }
+            }
+          }
+          if second_forward_idx < 0 {
+            false
+          } else {
+            // set skip_mode_frame
+            true
+          }
+        }
+      }
     }
 }
 
@@ -939,10 +992,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         self.write_bit(reference_select)?;
       }
 
-      let skip_mode_allowed =
-        !(fi.intra_only  || !reference_select || !seq.enable_order_hint);
+      let skip_mode_allowed = seq.get_skip_mode_allowed(fi, reference_select);
       if skip_mode_allowed {
-        unimplemented!();
         self.write_bit(false)?; // skip_mode_present
       }
 
@@ -1362,7 +1413,7 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
         cw.write_is_inter(w, bo, is_inter);
         if is_inter {
             cw.fill_neighbours_ref_counts(bo);
-            cw.write_ref_frames(w, bo);
+            cw.write_ref_frames(w, fi, bo);
 
             //let mode_context = if bo.x == 0 && bo.y == 0 { 0 } else if bo.x ==0 || bo.y == 0 { 51 } else { 85 };
             // NOTE: Until rav1e supports other inter modes than GLOBALMV

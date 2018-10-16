@@ -1125,7 +1125,7 @@ pub static default_obmc_cdf: [[u16; cdf_size!(2)];
 pub static default_intra_inter_cdf: [[u16; cdf_size!(2)];
   INTRA_INTER_CONTEXTS] = [cdf!(806), cdf!(16662), cdf!(20186), cdf!(26538)];
 
-pub static default_comp_inter_cdf: [[u16; cdf_size!(2)]; COMP_INTER_CONTEXTS] =
+pub static default_comp_mode_cdf: [[u16; cdf_size!(2)]; COMP_INTER_CONTEXTS] =
   [cdf!(26828), cdf!(24035), cdf!(12031), cdf!(10640), cdf!(2901)];
 
 pub static default_comp_ref_type_cdf: [[u16; cdf_size!(2)];

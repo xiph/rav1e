@@ -30,6 +30,7 @@ use entropymode::*;
 use token_cdfs::*;
 use encoder::FrameInvariants;
 use scan_order::*;
+use encoder::ReferenceMode;
 
 use self::REF_CONTEXTS;
 use self::SINGLE_REFS;
@@ -692,6 +693,7 @@ pub struct CDFContext {
   intra_inter_cdfs: [[u16; 3]; INTRA_INTER_CONTEXTS],
   angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES],
   filter_intra_cdfs: [[u16; 3]; BlockSize::BLOCK_SIZES_ALL],
+  comp_mode_cdf: [[u16; 3]; COMP_INTER_CONTEXTS],
   single_ref_cdfs: [[[u16; 2 + 1]; SINGLE_REFS - 1]; REF_CONTEXTS],
   drl_cdfs: [[u16; 2 + 1]; DRL_MODE_CONTEXTS],
   nmv_context: NMVContext,
@@ -744,6 +746,7 @@ impl CDFContext {
       intra_inter_cdfs: default_intra_inter_cdf,
       angle_delta_cdf: default_angle_delta_cdf,
       filter_intra_cdfs: default_filter_intra_cdfs,
+      comp_mode_cdf: default_comp_mode_cdf,
       single_ref_cdfs: default_single_ref_cdf,
       drl_cdfs: default_drl_cdf,
       nmv_context: default_nmv_context,
@@ -814,6 +817,7 @@ impl CDFContext {
     reset_2d!(self.intra_inter_cdfs);
     reset_2d!(self.angle_delta_cdf);
     reset_2d!(self.filter_intra_cdfs);
+    reset_2d!(self.comp_mode_cdf);
     reset_3d!(self.single_ref_cdfs);
     reset_2d!(self.drl_cdfs);
     reset_2d!(self.deblock_delta_multi_cdf);
@@ -891,6 +895,10 @@ impl CDFContext {
       self.filter_intra_cdfs.first().unwrap().as_ptr() as usize;
     let filter_intra_cdfs_end =
       filter_intra_cdfs_start + size_of_val(&self.filter_intra_cdfs);
+    let comp_mode_cdf_start =
+      self.comp_mode_cdf.first().unwrap().as_ptr() as usize;
+    let comp_mode_cdf_end =
+      comp_mode_cdf_start + size_of_val(&self.comp_mode_cdf);
     let deblock_delta_multi_cdf_start =
       self.deblock_delta_multi_cdf.first().unwrap().as_ptr() as usize;
     let deblock_delta_multi_cdf_end =
@@ -965,6 +973,7 @@ impl CDFContext {
       ("intra_inter_cdfs", intra_inter_cdfs_start, intra_inter_cdfs_end),
       ("angle_delta_cdf", angle_delta_cdf_start, angle_delta_cdf_end),
       ("filter_intra_cdfs", filter_intra_cdfs_start, filter_intra_cdfs_end),
+      ("comp_mode_cdf", comp_mode_cdf_start, comp_mode_cdf_end),
       ("deblock_delta_multi_cdf", deblock_delta_multi_cdf_start, deblock_delta_multi_cdf_end),
       ("deblock_delta_cdf", deblock_delta_cdf_start, deblock_delta_cdf_end),
       ("txb_skip_cdf", txb_skip_cdf_start, txb_skip_cdf_end),
@@ -2474,10 +2483,56 @@ impl ContextWriter {
     }
   }
 
-  pub fn write_ref_frames(&mut self, w: &mut dyn Writer, bo: &BlockOffset) {
+  fn get_comp_mode_ctx(&self, fi: &FrameInvariants, bo: &BlockOffset) -> usize {
+    let avail_left = bo.x > 0;
+    let avail_up = bo.y > 0;
+    let bo_left = bo.with_offset(-1, 0);
+    let bo_up = bo.with_offset(0, -1);
+    let left_single = true; // FIXME
+    let above_single = true; // FIXME
+    let left_intra = avail_left && self.bc.at(&bo_left).ref_frames[0] == INTRA_FRAME;
+    let above_intra = avail_up && self.bc.at(&bo_up).ref_frames[0] == INTRA_FRAME;
+    let left_backward = avail_left && !left_intra &&
+      fi.ref_frame_sign_bias[self.bc.at(&bo_left).ref_frames[0] - LAST_FRAME];
+    let above_backward = avail_up && !above_intra &&
+      fi.ref_frame_sign_bias[self.bc.at(&bo_up).ref_frames[0] - LAST_FRAME];
+
+    if avail_left && avail_up {
+      if above_single && left_single {
+        (above_backward ^ left_backward) as usize
+      } else if above_single {
+        2 + (above_backward || above_intra) as usize
+      } else if left_single {
+        2 + (left_backward || left_intra) as usize
+      } else {
+        4
+      }
+    } else if avail_up {
+      if above_single {
+        above_backward as usize
+      } else {
+        3
+      }
+    } else if avail_left {
+      if left_single {
+        left_backward as usize
+      } else {
+        3
+      }
+    } else {
+      1
+    }
+  }
+
+  pub fn write_ref_frames(&mut self, w: &mut dyn Writer, fi: &FrameInvariants, bo: &BlockOffset) {
     let rf = self.bc.at(bo).ref_frames;
+    let sz = self.bc.at(bo).n4_w.min(self.bc.at(bo).n4_h);
 
     /* TODO: Handle multiple references */
+    if fi.reference_mode != ReferenceMode::SINGLE && sz >= 2 {
+      let ctx = self.get_comp_mode_ctx(fi, bo);
+      symbol_with_update!(self, w, 0, &mut self.fc.comp_mode_cdf[ctx]);
+    }
 
     let b0_ctx = self.get_ref_frame_ctx_b0(bo);
     let b0 = rf[0] <= ALTREF_FRAME && rf[0] >= BWDREF_FRAME;
