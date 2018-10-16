@@ -965,21 +965,22 @@ impl PredictionMode {
   pub fn predict_inter<'a>(
     self, fi: &FrameInvariants, p: usize, po: &PlaneOffset,
     dst: &'a mut PlaneMutSlice<'a>, width: usize, height: usize,
-    ref_frame: usize, mv: &MotionVector, bit_depth: usize
+    ref_frames: &[usize; 2], mvs: &[MotionVector; 2], bit_depth: usize
   ) {
     assert!(!self.is_intra());
+    assert!(ref_frames[1] == NONE_FRAME);
 
-    match fi.rec_buffer.frames[fi.ref_frames[ref_frame - LAST_FRAME] as usize] {
+    match fi.rec_buffer.frames[fi.ref_frames[ref_frames[0] - LAST_FRAME] as usize] {
       Some(ref rec) => {
         let rec_cfg = &rec.frame.planes[p].cfg;
         let shift_row = 3 + rec_cfg.ydec;
         let shift_col = 3 + rec_cfg.xdec;
-        let row_offset = mv.row as i32 >> shift_row;
-        let col_offset = mv.col as i32 >> shift_col;
+        let row_offset = mvs[0].row as i32 >> shift_row;
+        let col_offset = mvs[0].col as i32 >> shift_col;
         let row_frac =
-          (mv.row as i32 - (row_offset << shift_row)) << (4 - shift_row);
+          (mvs[0].row as i32 - (row_offset << shift_row)) << (4 - shift_row);
         let col_frac =
-          (mv.col as i32 - (col_offset << shift_col)) << (4 - shift_col);
+          (mvs[0].col as i32 - (col_offset << shift_col)) << (4 - shift_col);
         let ref_stride = rec_cfg.stride;
 
         let stride = dst.plane.cfg.stride;

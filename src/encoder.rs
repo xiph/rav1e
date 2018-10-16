@@ -262,7 +262,7 @@ impl Sequence {
         let mut forward_hint = 0;
         let mut backward_hint = 0;
         for i in 0..INTER_REFS_PER_FRAME {
-          if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[i]] {
+          if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[i] as usize] {
             let ref_hint = rec.order_hint;
             if self.get_relative_dist(ref_hint, fi.order_hint) < 0 {
               if forward_idx < 0 || self.get_relative_dist(ref_hint, forward_hint) > 0 {
@@ -286,7 +286,7 @@ impl Sequence {
           let mut second_forward_idx: isize = -1;
           let mut second_forward_hint = 0;
           for i in 0..INTER_REFS_PER_FRAME {
-            if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[i]] {
+            if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[i] as usize] {
               let ref_hint = rec.order_hint;
               if self.get_relative_dist(ref_hint, forward_hint) < 0 {
                 if second_forward_idx < 0 || self.get_relative_dist(ref_hint, second_forward_hint) > 0 {
@@ -1344,27 +1344,27 @@ pub fn motion_compensate(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
 
       if some_use_intra {
         luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), plane_bsize.width(),
-        plane_bsize.height(), ref_frames[0], &mvs[0], bit_depth);
+          plane_bsize.height(), ref_frames, &mvs, bit_depth);
       } else {
         assert!(xdec == 1 && ydec == 1);
         // TODO: these are only valid for 4:2:0
-        let mv0 = &cw.bc.at(&bo.with_offset(-1,-1)).mv[0];
-        let rf0 = cw.bc.at(&bo.with_offset(-1,-1)).ref_frames[0];
-        let mv1 = &cw.bc.at(&bo.with_offset(0,-1)).mv[0];
-        let rf1 = cw.bc.at(&bo.with_offset(0,-1)).ref_frames[0];
+        let mv0 = &cw.bc.at(&bo.with_offset(-1,-1)).mv;
+        let rf0 = &cw.bc.at(&bo.with_offset(-1,-1)).ref_frames;
+        let mv1 = &cw.bc.at(&bo.with_offset(0,-1)).mv;
+        let rf1 = &cw.bc.at(&bo.with_offset(0,-1)).ref_frames;
         let po1 = PlaneOffset { x: po.x+2, y: po.y };
-        let mv2 = &cw.bc.at(&bo.with_offset(-1,0)).mv[0];
-        let rf2 = cw.bc.at(&bo.with_offset(-1,0)).ref_frames[0];
+        let mv2 = &cw.bc.at(&bo.with_offset(-1,0)).mv;
+        let rf2 = &cw.bc.at(&bo.with_offset(-1,0)).ref_frames;
         let po2 = PlaneOffset { x: po.x, y: po.y+2 };
         let po3 = PlaneOffset { x: po.x+2, y: po.y+2 };
         luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), 2, 2, rf0, mv0, bit_depth);
         luma_mode.predict_inter(fi, p, &po1, &mut rec.mut_slice(&po1), 2, 2, rf1, mv1, bit_depth);
         luma_mode.predict_inter(fi, p, &po2, &mut rec.mut_slice(&po2), 2, 2, rf2, mv2, bit_depth);
-        luma_mode.predict_inter(fi, p, &po3, &mut rec.mut_slice(&po3), 2, 2, ref_frames[0], &mvs[0], bit_depth);
+        luma_mode.predict_inter(fi, p, &po3, &mut rec.mut_slice(&po3), 2, 2, ref_frames, mvs, bit_depth);
       }
     } else {
       luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), plane_bsize.width(),
-      plane_bsize.height(), ref_frames[0], &mvs[0], bit_depth);
+        plane_bsize.height(), ref_frames, &mvs, bit_depth);
     }
   }
 }
