@@ -3284,42 +3284,13 @@ static av1_default_iscan_32x32 : [u16; 1024] = [
   978,  979,  995,  996,  1008, 1009, 1017, 1018, 1022, 1023
 ];
 
-// static av1_default_scan_orders : [SCAN_ORDER; TxSize.TX_SIZES] = {
-//   { default_scan_4x4, av1_default_iscan_4x4, default_scan_4x4_neighbors },
-//   { default_scan_8x8, av1_default_iscan_8x8, default_scan_8x8_neighbors },
-//   { default_scan_16x16, av1_default_iscan_16x16, default_scan_16x16_neighbors },
-//   { default_scan_32x32, av1_default_iscan_32x32, default_scan_32x32_neighbors },
-//   // Half of the coefficients of tx64 at higher frequencies are set to
-//   // zeros. So tx32's scan order is used.
-//   { default_scan_32x32, av1_default_iscan_32x32, default_scan_32x32_neighbors },
-// };
-
+#[cfg_attr(rustfmt, rustfmt_skip)]
 pub static av1_default_scan_orders: [SCAN_ORDER; TxSize::TX_SIZES] = [
-  SCAN_ORDER {
-    scan: &default_scan_4x4,
-    iscan: &av1_default_iscan_4x4,
-    neighbors: &default_scan_4x4_neighbors
-  },
-  SCAN_ORDER {
-    scan: &default_scan_8x8,
-    iscan: &av1_default_iscan_8x8,
-    neighbors: &default_scan_8x8_neighbors
-  },
-  SCAN_ORDER {
-    scan: &default_scan_16x16,
-    iscan: &av1_default_iscan_16x16,
-    neighbors: &default_scan_16x16_neighbors
-  },
-  SCAN_ORDER {
-    scan: &default_scan_32x32,
-    iscan: &av1_default_iscan_32x32,
-    neighbors: &default_scan_32x32_neighbors
-  },
-  SCAN_ORDER {
-    scan: &default_scan_32x32,
-    iscan: &av1_default_iscan_32x32,
-    neighbors: &default_scan_32x32_neighbors
-  }
+  SCAN_ORDER { scan: &default_scan_4x4, iscan: &av1_default_iscan_4x4, neighbors: &default_scan_4x4_neighbors },
+  SCAN_ORDER { scan: &default_scan_8x8, iscan: &av1_default_iscan_8x8, neighbors: &default_scan_8x8_neighbors },
+  SCAN_ORDER { scan: &default_scan_16x16, iscan: &av1_default_iscan_16x16, neighbors: &default_scan_16x16_neighbors },
+  SCAN_ORDER { scan: &default_scan_32x32, iscan: &av1_default_iscan_32x32, neighbors: &default_scan_32x32_neighbors },
+  SCAN_ORDER { scan: &default_scan_32x32, iscan: &av1_default_iscan_32x32, neighbors: &default_scan_32x32_neighbors }
 ];
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
