@@ -231,49 +231,59 @@ fn compute_rd_cost(
 // Compute the rate-distortion cost for an encode
 fn compute_tx_rd_cost(
   fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize,
-  is_chroma_block: bool, bo: &BlockOffset, bit_cost: u32, bit_depth: usize,
-  luma_only: bool
+  is_chroma_block: bool, bo: &BlockOffset, bit_cost: u32, tx_dist: u64,
+  bit_depth: usize,
+  skip: bool, luma_only: bool
 ) -> f64 {
   assert!(fi.config.tune == Tune::Psnr);
-  let lambda = get_tx_lambda(fi, bit_depth);
+  //let lambda = get_tx_lambda(fi, bit_depth);
+  let lambda = get_lambda(fi, bit_depth);
 
   // Compute distortion
-  let po = bo.plane_offset(&fs.input.planes[0].cfg);
-  let mut distortion =
+  let mut distortion = if skip {
+    let po = bo.plane_offset(&fs.input.planes[0].cfg);
+
     //TODO: Repalce this function for tx domain distortion
     sse_wxh(
       &fs.input.planes[0].slice(&po),
       &fs.rec.planes[0].slice(&po),
       w_y,
       h_y
-    );
+    )
+  } else {
+    tx_dist
+  };
 
   if !luma_only {
-  let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
+    if skip {
+      let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
-  let mask = !(MI_SIZE - 1);
-  let mut w_uv = (w_y >> xdec) & mask;
-  let mut h_uv = (h_y >> ydec) & mask;
+      let mask = !(MI_SIZE - 1);
+      let mut w_uv = (w_y >> xdec) & mask;
+      let mut h_uv = (h_y >> ydec) & mask;
 
-  if (w_uv == 0 || h_uv == 0) && is_chroma_block {
-    w_uv = MI_SIZE;
-    h_uv = MI_SIZE;
-  }
+      if (w_uv == 0 || h_uv == 0) && is_chroma_block {
+        w_uv = MI_SIZE;
+        h_uv = MI_SIZE;
+      }
 
-  // Add chroma distortion only when it is available
-  if w_uv > 0 && h_uv > 0 {
-    for p in 1..3 {
-      let po = bo.plane_offset(&fs.input.planes[p].cfg);
+      // Add chroma distortion only when it is available
+      if w_uv > 0 && h_uv > 0 {
+        for p in 1..3 {
+          let po = bo.plane_offset(&fs.input.planes[p].cfg);
 
-      //TODO: Repalce this function for tx domain distortion
-      distortion += sse_wxh(
-        &fs.input.planes[p].slice(&po),
-        &fs.rec.planes[p].slice(&po),
-        w_uv,
-        h_uv
-      );
+          //TODO: Repalce this function for tx domain distortion
+          distortion += sse_wxh(
+            &fs.input.planes[p].slice(&po),
+            &fs.rec.planes[p].slice(&po),
+            w_uv,
+            h_uv
+          );
+        }
+      }
+    } else {
+
     }
-  };
   }
   // Compute rate
   let rate = (bit_cost as f64) / ((1 << OD_BITRES) as f64);
@@ -462,6 +472,7 @@ pub fn rdo_mode_decision(
         if skip { tx_type = TxType::DCT_DCT; };
 
         encode_block_a(seq, cw, wr, bsize, bo, skip);
+        let tx_dist =
         encode_block_b(
           seq,
           fi,
@@ -493,7 +504,9 @@ pub fn rdo_mode_decision(
             is_chroma_block,
             bo,
             cost,
+            tx_dist,
             seq.bit_depth,
+            skip,
             false
           )
         } else {
@@ -601,6 +614,7 @@ pub fn rdo_mode_decision(
       let tell = wr.tell_frac();
 
       encode_block_a(seq, cw, wr, bsize, bo, best.skip);
+      let tx_dist =
       encode_block_b(
         seq,
         fi,
@@ -623,17 +637,33 @@ pub fn rdo_mode_decision(
       );
 
       let cost = wr.tell_frac() - tell;
-      let rd = compute_rd_cost(
-        fi,
-        fs,
-        w,
-        h,
-        is_chroma_block,
-        bo,
-        cost,
-        seq.bit_depth,
-        false
-      );
+      let rd = if fi.use_tx_domain_distortion {
+        compute_tx_rd_cost(
+          fi,
+          fs,
+          w,
+          h,
+          is_chroma_block,
+          bo,
+          cost,
+          tx_dist,
+          seq.bit_depth,
+          best.skip,
+          false
+        )
+      } else {
+        compute_rd_cost(
+          fi,
+          fs,
+          w,
+          h,
+          is_chroma_block,
+          bo,
+          cost,
+          seq.bit_depth,
+          false
+        )
+      };
 
       if rd < best.rd {
         best.rd = rd;
@@ -742,30 +772,45 @@ pub fn rdo_tx_type_decision(
 
     let mut wr: &mut dyn Writer = &mut WriterCounter::new();
     let tell = wr.tell_frac();
-    if is_inter {
+    let tx_dist = if is_inter {
       write_tx_tree(
         fi, fs, cw, wr, mode, bo, bsize, tx_size, tx_type, false, bit_depth, true
-      );
+      )
     }  else {
       let cfl = CFLParams::new(); // Unused
       write_tx_blocks(
         fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false, bit_depth, cfl, true
-      );
-    }
+      )
+    };
 
     let cost = wr.tell_frac() - tell;
-    let rd = compute_rd_cost(
-      fi,
-      fs,
-      w,
-      h,
-      is_chroma_block,
-      bo,
-      cost,
-      bit_depth,
-      true
-    );
-
+      let rd = if fi.use_tx_domain_distortion {
+        compute_tx_rd_cost(
+          fi,
+          fs,
+          w,
+          h,
+          is_chroma_block,
+          bo,
+          cost,
+          tx_dist,
+          bit_depth,
+          false,
+          true
+        )
+      } else {
+        compute_rd_cost(
+          fi,
+          fs,
+          w,
+          h,
+          is_chroma_block,
+          bo,
+          cost,
+          bit_depth,
+          true
+        )
+    };
     if rd < best_rd {
       best_rd = rd;
       best_type = tx_type;

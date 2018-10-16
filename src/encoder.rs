@@ -1381,6 +1381,11 @@ pub fn encode_tx_block(
                 let c = (*a as i16 - *b as i16) as i32;
                 (c * c) as u64
             }).sum::<u64>();
+
+        let tx_dist_scale_bits = 2*(3 - get_log_tx_scale(tx_size));
+        let tx_dist_scale_rounding_offset = 1 << (tx_dist_scale_bits - 1);
+        tx_dist = (tx_dist + tx_dist_scale_rounding_offset) >> tx_dist_scale_bits;
+
         /*
         // For DEBUG: compare pixel-domain and tx-domain distortions
         // Compute pixel-domain distortion
@@ -1489,7 +1494,7 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
                  ref_frames: &[usize; 2], mvs: &[MotionVector; 2],
                  bsize: BlockSize, bo: &BlockOffset, skip: bool, bit_depth: usize,
                  cfl: CFLParams, tx_size: TxSize, tx_type: TxType,
-                 mode_context: usize, mv_stack: &Vec<CandidateMV>) {
+                 mode_context: usize, mv_stack: &Vec<CandidateMV>) -> u64 {
     let is_inter = !luma_mode.is_intra();
     if is_inter { assert!(luma_mode == chroma_mode); };
     let sb_size = if seq.use_128x128_superblock {
@@ -1625,9 +1630,9 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
     motion_compensate(fi, fs, cw, luma_mode, ref_frames, mvs, bsize, bo, bit_depth, false);
 
     if is_inter {
-      write_tx_tree(fi, fs, cw, w, luma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth, false);
+      write_tx_tree(fi, fs, cw, w, luma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth, false)
     } else {
-      write_tx_blocks(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth, cfl, false);
+      write_tx_blocks(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth, cfl, false)
     }
 }
 
@@ -1671,12 +1676,13 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
                        cw: &mut ContextWriter, w: &mut dyn Writer,
                        luma_mode: PredictionMode, chroma_mode: PredictionMode, bo: &BlockOffset,
                        bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool, bit_depth: usize,
-                       cfl: CFLParams, luma_only: bool) {
+                       cfl: CFLParams, luma_only: bool) -> u64 {
     let bw = bsize.width_mi() / tx_size.width_mi();
     let bh = bsize.height_mi() / tx_size.height_mi();
 
     let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
     let ac = &mut [0i16; 32 * 32];
+    let mut tx_dist: u64 = 0;
 
     fs.qc.update(fi.base_q_idx, tx_size, luma_mode.is_intra(), bit_depth);
 
@@ -1688,14 +1694,16 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
             };
 
             let po = tx_bo.plane_offset(&fs.input.planes[0].cfg);
+            let (_, dist) =
             encode_tx_block(
               fi, fs, cw, w, 0, &tx_bo, luma_mode, tx_size, tx_type, bsize, &po,
               skip, bit_depth, ac, 0,
             );
+            tx_dist += dist;
         }
     }
 
-    if luma_only { return };
+    if luma_only { return tx_dist };
 
     // TODO: these are only valid for 4:2:0
     let uv_tx_size = match bsize {
@@ -1741,13 +1749,16 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
                     let mut po = bo.plane_offset(&fs.input.planes[p].cfg);
                     po.x += (bx * uv_tx_size.width()) as isize;
                     po.y += (by * uv_tx_size.height()) as isize;
-
+                    let (_, dist) =
                     encode_tx_block(fi, fs, cw, w, p, &tx_bo, chroma_mode, uv_tx_size, uv_tx_type,
                                     plane_bsize, &po, skip, bit_depth, ac, alpha);
+                    tx_dist += dist;
                 }
             }
         }
     }
+
+    tx_dist
 }
 
 // FIXME: For now, assume tx_mode is LARGEST_TX, so var-tx is not implemented yet
@@ -1755,22 +1766,24 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
 pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter, w: &mut dyn Writer,
                        luma_mode: PredictionMode, bo: &BlockOffset,
                        bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool, bit_depth: usize,
-                       luma_only: bool) {
+                       luma_only: bool) -> u64 {
     let bw = bsize.width_mi() / tx_size.width_mi();
     let bh = bsize.height_mi() / tx_size.height_mi();
 
     let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
     let ac = &[0i16; 32 * 32];
+    let mut tx_dist: u64 = 0;
 
     fs.qc.update(fi.base_q_idx, tx_size, luma_mode.is_intra(), bit_depth);
 
     let po = bo.plane_offset(&fs.input.planes[0].cfg);
-    let (has_coeff, _) = encode_tx_block(
+    let (has_coeff, dist) = encode_tx_block(
       fi, fs, cw, w, 0, &bo, luma_mode, tx_size, tx_type, bsize, &po, skip,
       bit_depth, ac, 0,
     );
+    tx_dist += dist;
 
-    if luma_only { return };
+    if luma_only { return tx_dist };
 
     // TODO: these are only valid for 4:2:0
     let uv_tx_size = match bsize {
@@ -1805,11 +1818,14 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
             };
 
             let po = bo.plane_offset(&fs.input.planes[p].cfg);
-
+            let (_, dist) =
             encode_tx_block(fi, fs, cw, w, p, &tx_bo, luma_mode, uv_tx_size, uv_tx_type,
                             plane_bsize, &po, skip, bit_depth, ac, 0);
+            tx_dist += dist;
         }
     }
+
+    tx_dist
 }
 
 fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
