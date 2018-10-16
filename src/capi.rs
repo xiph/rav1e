@@ -18,37 +18,62 @@ use std::os::raw::c_int;
 ///
 /// It can be allocated throught rav1e_frame_new(), populated using rav1e_frame_fill_plane()
 /// and freed using rav1e_frame_drop().
-pub struct RaFrame(Arc<rav1e::Frame>);
+pub struct Frame(Arc<rav1e::Frame>);
 
-pub struct RaConfig {
+type EncoderStatus=rav1e::EncoderStatus;
+
+/// Encoder configuration
+///
+/// Instantiate it using rav1e_config_default() and fine-tune it using
+/// rav1e_config_parse().
+///
+/// Use rav1e_config_drop() to free its memory.
+pub struct Config {
     cfg: rav1e::Config,
-    last_err: Option<rav1e::EncoderStatus>,
+    last_err: Option<EncoderStatus>,
 }
 
-pub struct RaContext {
+/// Encoder context
+///
+/// Contains the encoding state, it is created by rav1e_context_new() using an
+/// Encoder configuration.
+///
+/// Use rav1e_context_drop() to free its memory.
+pub struct Context {
     ctx: rav1e::Context,
-    last_err: Option<rav1e::EncoderStatus>,
+    last_err: Option<EncoderStatus>,
 }
 
-type RaFrameType = rav1e::FrameType;
+type FrameType = rav1e::FrameType;
 
+/// Encoded Packet
+///
+/// The encoded packets are retrieved using rav1e_receive_packet().
+///
+/// Use rav1e_packet_drop() to free its memory.
 #[repr(C)]
-pub struct RaPacket {
+pub struct Packet {
+    /// Encoded data buffer
     pub data: *const u8,
+    /// Encoded data buffer size
     pub len: usize,
+    /// Frame sequence number
     pub number: u64,
-    pub frame_type: RaFrameType,
+    /// Frame type
+    pub frame_type: FrameType,
 }
 
+type ChromaSampling=rav1e::ChromaSampling;
+type Ratio=rav1e::Ratio;
 
 #[no_mangle]
 pub unsafe extern "C" fn rav1e_config_default(
     width: usize,
     height: usize,
     bit_depth: usize,
-    chroma_sampling: rav1e::ChromaSampling,
-    timebase: rav1e::Ratio,
-) -> *mut RaConfig {
+    chroma_sampling: ChromaSampling,
+    timebase: Ratio,
+) -> *mut Config {
     let cfg = rav1e::Config {
         frame_info: rav1e::FrameInfo {
             width,
@@ -60,7 +85,7 @@ pub unsafe extern "C" fn rav1e_config_default(
         enc: Default::default(),
     };
 
-    let c = Box::new(RaConfig {
+    let c = Box::new(Config {
         cfg,
         last_err: None,
     });
@@ -69,13 +94,21 @@ pub unsafe extern "C" fn rav1e_config_default(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn rav1e_config_drop(cfg: *mut RaConfig) {
+pub unsafe extern "C" fn rav1e_config_drop(cfg: *mut Config) {
     let _ = Box::from_raw(cfg);
 }
 
+/// Set a configuration parameter using its key and value
+///
+/// Available keys and values
+/// - "quantizer": 0-255, default 100
+/// - "speed": 0-10, default 3
+/// - "tune": "psnr"-"psychovisual", default "psnr"
+///
+/// Returns a negative value on non-zero.
 #[no_mangle]
 pub unsafe extern "C" fn rav1e_config_parse(
-    cfg: *mut RaConfig,
+    cfg: *mut Config,
     key: *const c_char,
     value: *const c_char,
 ) -> c_int {
@@ -92,9 +125,12 @@ pub unsafe extern "C" fn rav1e_config_parse(
         .unwrap_or(-1)
 }
 
+/// Generate a new encoding context from a populated encoder configuration
+///
+/// Multiple contexts can be generated through it.
 #[no_mangle]
-pub unsafe extern "C" fn rav1e_context_new(cfg: *const RaConfig) -> *mut RaContext {
-    let ctx = RaContext {
+pub unsafe extern "C" fn rav1e_context_new(cfg: *const Config) -> *mut Context {
+    let ctx = Context {
         ctx: (*cfg).cfg.new_context(),
         last_err: None,
     };
@@ -103,25 +139,35 @@ pub unsafe extern "C" fn rav1e_context_new(cfg: *const RaConfig) -> *mut RaConte
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn rav1e_context_drop(ctx: *mut RaContext) {
+pub unsafe extern "C" fn rav1e_context_drop(ctx: *mut Context) {
     let _ = Box::from_raw(ctx);
 }
 
+/// Produce a new frame from the encoding context
+///
+/// It must be populated using rav1e_frame_fill_plane().
+///
+/// The frame is reference counted and must be released passing it to rav1e_frame_drop(),
+/// see rav1e_send_frame().
 #[no_mangle]
-pub unsafe extern "C" fn rav1e_frame_new(ctx: *const RaContext) -> *mut RaFrame {
+pub unsafe extern "C" fn rav1e_frame_new(ctx: *const Context) -> *mut Frame {
     let f = (*ctx).ctx.new_frame();
-    let frame = Box::new(RaFrame(f));
+    let frame = Box::new(Frame(f));
 
     Box::into_raw(frame)
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn rav1e_frame_drop(ctx: *mut RaFrame) {
+pub unsafe extern "C" fn rav1e_frame_drop(ctx: *mut Frame) {
     let _ = Arc::from_raw(ctx);
 }
 
+/// Send the frame for encoding
+///
+/// The function increases the frame internal reference count and it can be passed multiple
+/// times to different rav1e_send_frame().
 #[no_mangle]
-pub unsafe extern "C" fn rav1e_send_frame(ctx: *mut RaContext, frame: *const RaFrame) -> c_int {
+pub unsafe extern "C" fn rav1e_send_frame(ctx: *mut Context, frame: *const Frame) -> c_int {
     let frame = if frame.is_null() {
         None
     } else {
@@ -138,17 +184,18 @@ pub unsafe extern "C" fn rav1e_send_frame(ctx: *mut RaContext, frame: *const RaF
         .unwrap_or(-1)
 }
 
+/// Receive encoded data
 #[no_mangle]
 pub unsafe extern "C" fn rav1e_receive_packet(
-    ctx: *mut RaContext,
-    pkt: *mut *mut RaPacket,
+    ctx: *mut Context,
+    pkt: *mut *mut Packet,
 ) -> c_int {
     (*ctx)
         .ctx
         .receive_packet()
         .map(|p| {
             (*ctx).last_err = None;
-            let packet = RaPacket {
+            let packet = Packet {
                 data: p.data.as_ptr(),
                 len: p.data.len(),
                 number: p.number,
@@ -161,12 +208,15 @@ pub unsafe extern "C" fn rav1e_receive_packet(
 }
 
 #[no_mangle]
-pub unsafe extern fn rav1e_packet_drop(pkt: *mut RaPacket) {
+pub unsafe extern fn rav1e_packet_drop(pkt: *mut Packet) {
     let _ = Box::from_raw(pkt);
 }
 
+/// Produce a sequence header matching the current encoding context
+///
+/// Its format is compatible with the AV1 Matroska and ISOBMFF specification.
 #[no_mangle]
-pub unsafe extern fn rav1e_container_sequence_header(ctx: *mut RaContext, len: *mut usize) -> *mut u8 {
+pub unsafe extern fn rav1e_container_sequence_header(ctx: *mut Context, len: *mut usize) -> *mut u8 {
     let buf = (*ctx).ctx.container_sequence_header();
 
     *len = buf.len();
@@ -177,9 +227,14 @@ pub unsafe extern fn rav1e_container_sequence_header_drop(sequence: *mut u8) {
     let _ = Box::from_raw(sequence);
 }
 
+
+/// Fill a frame plane
+///
+/// Currently the frame contains 3 frames, the first is luminance followed by
+/// chrominance.
 #[no_mangle]
 pub unsafe extern "C" fn rav1e_frame_fill_plane(
-    frame: *mut RaFrame,
+    frame: *mut Frame,
     plane: usize,
     data: *const u8,
     data_len: usize,
