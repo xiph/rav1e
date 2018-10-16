@@ -51,6 +51,7 @@ fn main() {
         .define("CONFIG_DEBUG", (debug as u8).to_string())
         .define("CONFIG_ANALYZER", "0")
         .define("ENABLE_DOCS", "0")
+        .define("ENABLE_NASM", "1")
         .define("ENABLE_TESTS", "0")
         .no_build_target(cfg!(windows))
         .build();
