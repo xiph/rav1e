@@ -52,8 +52,8 @@ pub struct RDOPartitionOutput {
   pub pred_mode_luma: PredictionMode,
   pub pred_mode_chroma: PredictionMode,
   pub pred_cfl_params: CFLParams,
-  pub ref_frame: usize,
-  pub mv: MotionVector,
+  pub ref_frames: [usize; 2],
+  pub mvs: [MotionVector; 2],
   pub skip: bool,
   pub tx_size: TxSize,
   pub tx_type: TxType,
@@ -212,7 +212,7 @@ fn compute_rd_cost(
 pub fn rdo_tx_size_type(
   seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
   cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset,
-  luma_mode: PredictionMode, ref_frame: usize, mv: MotionVector, skip: bool
+  luma_mode: PredictionMode, ref_frames: &[usize; 2], mvs: &[MotionVector; 2], skip: bool
 ) -> (TxSize, TxType) {
   // these rules follow TX_MODE_LARGEST
   let tx_size = match bsize {
@@ -235,8 +235,8 @@ pub fn rdo_tx_size_type(
         fs,
         cw,
         luma_mode,
-        ref_frame,
-        mv,
+        ref_frames,
+        mvs,
         bsize,
         bo,
         tx_size,
@@ -256,8 +256,8 @@ struct EncodingSettings {
   cfl_params: CFLParams,
   skip: bool,
   rd: f64,
-  ref_frame: usize,
-  mv: MotionVector,
+  ref_frames: [usize; 2],
+  mvs: [MotionVector; 2],
   tx_size: TxSize,
   tx_type: TxType
 }
@@ -270,8 +270,8 @@ impl Default for EncodingSettings {
       cfl_params: CFLParams::new(),
       skip: false,
       rd: std::f64::MAX,
-      ref_frame: INTRA_FRAME,
-      mv: MotionVector { row: 0, col: 0 },
+      ref_frames: [INTRA_FRAME, NONE_FRAME],
+      mvs: [MotionVector { row: 0, col: 0 }; 2],
       tx_size: TxSize::TX_4X4,
       tx_type: TxType::DCT_DCT
     }
@@ -346,8 +346,11 @@ pub fn rdo_mode_decision(
   let luma_rdo = |luma_mode: PredictionMode, fs: &mut FrameState, cw: &mut ContextWriter, best: &mut EncodingSettings,
     mv: MotionVector, ref_frame: usize, mode_set_chroma: &[PredictionMode], luma_mode_is_intra: bool,
     mode_context: usize, mv_stack: &Vec<CandidateMV>| {
+    let mvs = &[mv, MotionVector{ row: 0, col: 0 }];
+    let ref_frames = &[ref_frame, NONE_FRAME];
+
     let (tx_size, mut tx_type) = rdo_tx_size_type(
-      seq, fi, fs, cw, bsize, bo, luma_mode, ref_frame, mv, false,
+      seq, fi, fs, cw, bsize, bo, luma_mode, ref_frames, mvs, false,
     );
 
     // Find the best chroma prediction mode for the current luma prediction mode
@@ -367,8 +370,8 @@ pub fn rdo_mode_decision(
           wr,
           luma_mode,
           chroma_mode,
-          ref_frame,
-          mv,
+          ref_frames,
+          mvs,
           bsize,
           bo,
           skip,
@@ -397,8 +400,8 @@ pub fn rdo_mode_decision(
           best.rd = rd;
           best.mode_luma = luma_mode;
           best.mode_chroma = chroma_mode;
-          best.ref_frame = ref_frame;
-          best.mv = mv;
+          best.ref_frames = *ref_frames;
+          best.mvs = *mvs;
           best.skip = skip;
           best.tx_size = tx_size;
           best.tx_type = tx_type;
@@ -488,8 +491,8 @@ pub fn rdo_mode_decision(
         wr,
         best.mode_luma,
         chroma_mode,
-        best.ref_frame,
-        best.mv,
+        &best.ref_frames,
+        &best.mvs,
         bsize,
         bo,
         best.skip,
@@ -525,8 +528,8 @@ pub fn rdo_mode_decision(
   }
 
   cw.bc.set_mode(bo, bsize, best.mode_luma);
-  cw.bc.set_ref_frame(bo, bsize, best.ref_frame);
-  cw.bc.set_motion_vector(bo, bsize, best.mv);
+  cw.bc.set_ref_frames(bo, bsize, &best.ref_frames);
+  cw.bc.set_motion_vectors(bo, bsize, &best.mvs);
 
   assert!(best.rd >= 0_f64);
 
@@ -538,8 +541,8 @@ pub fn rdo_mode_decision(
       pred_mode_luma: best.mode_luma,
       pred_mode_chroma: best.mode_chroma,
       pred_cfl_params: best.cfl_params,
-      ref_frame: best.ref_frame,
-      mv: best.mv,
+      ref_frames: best.ref_frames,
+      mvs: best.mvs,
       rd_cost: best.rd,
       skip: best.skip,
       tx_size: best.tx_size,
@@ -594,7 +597,7 @@ pub fn rdo_cfl_alpha(
 // RDO-based transform type decision
 pub fn rdo_tx_type_decision(
   fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
-  mode: PredictionMode, ref_frame: usize, mv: MotionVector, bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize,
+  mode: PredictionMode, ref_frames: &[usize; 2], mvs: &[MotionVector; 2], bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize,
   tx_set: TxSet, bit_depth: usize
 ) -> TxType {
   let mut best_type = TxType::DCT_DCT;
@@ -617,7 +620,7 @@ pub fn rdo_tx_type_decision(
       continue;
     }
 
-    motion_compensate(fi, fs, cw, mode, ref_frame, mv, bsize, bo, bit_depth, true);
+    motion_compensate(fi, fs, cw, mode, ref_frames, mvs, bsize, bo, bit_depth, true);
 
     let mut wr: &mut dyn Writer = &mut WriterCounter::new();
     let tell = wr.tell_frac();
@@ -702,7 +705,7 @@ pub fn rdo_partition_decision(
         if subsize == BlockSize::BLOCK_INVALID {
           continue;
         }
-        pmv = best_pred_modes[0].mv;
+        pmv = best_pred_modes[0].mvs[0];
 
         assert!(best_pred_modes.len() <= 4);
         let bs = bsize.width_mi();

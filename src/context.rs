@@ -1167,7 +1167,7 @@ impl Block {
     self.mode >= PredictionMode::NEARESTMV
   }
   pub fn has_second_ref(&self) -> bool {
-    self.ref_frames[1] > INTRA_FRAME
+    self.ref_frames[1] > INTRA_FRAME && self.ref_frames[1] != NONE_FRAME
   }
 }
 
@@ -1435,24 +1435,26 @@ impl BlockContext {
     self.for_each(bo, bsize, |block| block.skip = skip);
   }
 
-  pub fn set_ref_frame(&mut self, bo: &BlockOffset, bsize: BlockSize, r: usize) {
+  pub fn set_ref_frames(&mut self, bo: &BlockOffset, bsize: BlockSize, r: &[usize; 2]) {
     let bw = bsize.width_mi();
     let bh = bsize.height_mi();
 
     for y in 0..bh {
       for x in 0..bw {
-        self.blocks[bo.y + y as usize][bo.x + x as usize].ref_frames[0] = r;
+        self.blocks[bo.y + y as usize][bo.x + x as usize].ref_frames[0] = r[0];
+        self.blocks[bo.y + y as usize][bo.x + x as usize].ref_frames[1] = r[1];
       }
     }
   }
 
-  pub fn set_motion_vector(&mut self, bo: &BlockOffset, bsize: BlockSize, mv: MotionVector) {
+  pub fn set_motion_vectors(&mut self, bo: &BlockOffset, bsize: BlockSize, mvs: &[MotionVector; 2]) {
     let bw = bsize.width_mi();
     let bh = bsize.height_mi();
 
     for y in 0..bh {
       for x in 0..bw {
-        self.blocks[bo.y + y as usize][bo.x + x as usize].mv[0] = mv;
+        self.blocks[bo.y + y as usize][bo.x + x as usize].mv[0] = mvs[0];
+        self.blocks[bo.y + y as usize][bo.x + x as usize].mv[1] = mvs[1];
       }
     }
   }
@@ -2037,7 +2039,7 @@ impl ContextWriter {
     fi: &FrameInvariants
   ) {
     for cand_list in 0..2 {
-      if blk.ref_frames[cand_list] > INTRA_FRAME {
+      if blk.ref_frames[cand_list] > INTRA_FRAME && blk.ref_frames[cand_list] != NONE_FRAME {
         let mut mv = blk.mv[0];
         if fi.ref_frame_sign_bias[blk.ref_frames[cand_list] - LAST_FRAME] !=
         fi.ref_frame_sign_bias[ref_frame - LAST_FRAME] {
@@ -2338,6 +2340,7 @@ impl ContextWriter {
   pub fn find_mvrefs(&mut self, bo: &BlockOffset, ref_frame: usize,
                      mv_stack: &mut Vec<CandidateMV>, bsize: BlockSize, is_sec_rect: bool,
                      fi: &FrameInvariants) -> usize {
+    assert!(ref_frame != NONE_FRAME);
     if ref_frame < REF_FRAMES {
       if ref_frame != INTRA_FRAME {
         /* TODO: convert global mv to an mv here */
