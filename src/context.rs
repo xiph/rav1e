@@ -694,6 +694,9 @@ pub struct CDFContext {
   angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES],
   filter_intra_cdfs: [[u16; 3]; BlockSize::BLOCK_SIZES_ALL],
   comp_mode_cdf: [[u16; 3]; COMP_INTER_CONTEXTS],
+  comp_ref_type_cdf: [[u16; 3]; COMP_REF_TYPE_CONTEXTS],
+  comp_ref_cdf: [[[u16; 3]; FWD_REFS - 1]; REF_CONTEXTS],
+  comp_bwd_ref_cdf: [[[u16; 3]; BWD_REFS - 1]; REF_CONTEXTS],
   single_ref_cdfs: [[[u16; 2 + 1]; SINGLE_REFS - 1]; REF_CONTEXTS],
   drl_cdfs: [[u16; 2 + 1]; DRL_MODE_CONTEXTS],
   nmv_context: NMVContext,
@@ -747,6 +750,9 @@ impl CDFContext {
       angle_delta_cdf: default_angle_delta_cdf,
       filter_intra_cdfs: default_filter_intra_cdfs,
       comp_mode_cdf: default_comp_mode_cdf,
+      comp_ref_type_cdf: default_comp_ref_type_cdf,
+      comp_ref_cdf: default_comp_ref_cdf,
+      comp_bwd_ref_cdf: default_comp_bwdref_cdf,
       single_ref_cdfs: default_single_ref_cdf,
       drl_cdfs: default_drl_cdf,
       nmv_context: default_nmv_context,
@@ -818,6 +824,9 @@ impl CDFContext {
     reset_2d!(self.angle_delta_cdf);
     reset_2d!(self.filter_intra_cdfs);
     reset_2d!(self.comp_mode_cdf);
+    reset_2d!(self.comp_ref_type_cdf);
+    reset_3d!(self.comp_ref_cdf);
+    reset_3d!(self.comp_bwd_ref_cdf);
     reset_3d!(self.single_ref_cdfs);
     reset_2d!(self.drl_cdfs);
     reset_2d!(self.deblock_delta_multi_cdf);
@@ -899,6 +908,18 @@ impl CDFContext {
       self.comp_mode_cdf.first().unwrap().as_ptr() as usize;
     let comp_mode_cdf_end =
       comp_mode_cdf_start + size_of_val(&self.comp_mode_cdf);
+    let comp_ref_type_cdf_start =
+      self.comp_ref_type_cdf.first().unwrap().as_ptr() as usize;
+    let comp_ref_type_cdf_end =
+      comp_ref_type_cdf_start + size_of_val(&self.comp_ref_type_cdf);
+    let comp_ref_cdf_start =
+      self.comp_ref_cdf.first().unwrap().as_ptr() as usize;
+    let comp_ref_cdf_end =
+      comp_ref_cdf_start + size_of_val(&self.comp_ref_cdf);
+    let comp_bwd_ref_cdf_start =
+      self.comp_bwd_ref_cdf.first().unwrap().as_ptr() as usize;
+    let comp_bwd_ref_cdf_end =
+      comp_bwd_ref_cdf_start + size_of_val(&self.comp_bwd_ref_cdf);
     let deblock_delta_multi_cdf_start =
       self.deblock_delta_multi_cdf.first().unwrap().as_ptr() as usize;
     let deblock_delta_multi_cdf_end =
@@ -974,6 +995,9 @@ impl CDFContext {
       ("angle_delta_cdf", angle_delta_cdf_start, angle_delta_cdf_end),
       ("filter_intra_cdfs", filter_intra_cdfs_start, filter_intra_cdfs_end),
       ("comp_mode_cdf", comp_mode_cdf_start, comp_mode_cdf_end),
+      ("comp_ref_type_cdf", comp_ref_type_cdf_start, comp_ref_type_cdf_end),
+      ("comp_ref_cdf", comp_ref_cdf_start, comp_ref_cdf_end),
+      ("comp_bwd_ref_cdf", comp_bwd_ref_cdf_start, comp_bwd_ref_cdf_end),
       ("deblock_delta_multi_cdf", deblock_delta_multi_cdf_start, deblock_delta_multi_cdf_end),
       ("deblock_delta_cdf", deblock_delta_cdf_start, deblock_delta_cdf_end),
       ("txb_skip_cdf", txb_skip_cdf_start, txb_skip_cdf_end),
@@ -2385,6 +2409,16 @@ impl ContextWriter {
       self.bc.at_mut(bo).neighbors_ref_counts = ref_counts;
   }
 
+  fn ref_count_ctx(counts0: usize, counts1: usize) -> usize {
+    if counts0 < counts1 {
+      0
+    } else if counts0 == counts1 {
+      1
+    } else {
+      2
+    }
+  }
+
   fn get_ref_frame_ctx_b0(&mut self, bo: &BlockOffset) -> usize {
     let ref_counts = self.bc.at(bo).neighbors_ref_counts;
 
@@ -2394,96 +2428,52 @@ impl ContextWriter {
     let bwd_cnt = ref_counts[BWDREF_FRAME] + ref_counts[ALTREF2_FRAME] +
                   ref_counts[ALTREF_FRAME];
 
-    if fwd_cnt == bwd_cnt {
-      return 1;
-    } else if fwd_cnt < bwd_cnt {
-      return 0;
-    } else {
-      return 2;
-    }
+    ContextWriter::ref_count_ctx(fwd_cnt, bwd_cnt)
   }
 
   fn get_pred_ctx_brfarf2_or_arf(&mut self, bo: &BlockOffset) -> usize {
     let ref_counts = self.bc.at(bo).neighbors_ref_counts;
 
-    let brfarf2_count = ref_counts[BWDREF_FRAME] +
-                        ref_counts[ALTREF2_FRAME];
-
+    let brfarf2_count = ref_counts[BWDREF_FRAME] + ref_counts[ALTREF2_FRAME];
     let arf_count = ref_counts[ALTREF_FRAME];
 
-    if brfarf2_count == arf_count {
-      return 1;
-    } else if brfarf2_count < arf_count {
-      return 0;
-    } else {
-      return 2;
-    }
+    ContextWriter::ref_count_ctx(brfarf2_count, arf_count)
   }
 
   fn get_pred_ctx_ll2_or_l3gld(&mut self, bo: &BlockOffset) -> usize {
     let ref_counts = self.bc.at(bo).neighbors_ref_counts;
 
-    let l_l2_count = ref_counts[LAST_FRAME] +
-                        ref_counts[LAST2_FRAME];
+    let l_l2_count = ref_counts[LAST_FRAME] + ref_counts[LAST2_FRAME];
+    let l3_gold_count = ref_counts[LAST3_FRAME] + ref_counts[GOLDEN_FRAME];
 
-    let l3_gold_count = ref_counts[LAST3_FRAME] +
-                        ref_counts[GOLDEN_FRAME];
-
-    if l_l2_count == l3_gold_count {
-      return 1;
-    } else if l_l2_count < l3_gold_count {
-      return 0;
-    } else {
-      return 2;
-    }
+    ContextWriter::ref_count_ctx(l_l2_count, l3_gold_count)
   }
 
   fn get_pred_ctx_last_or_last2(&mut self, bo: &BlockOffset) -> usize {
     let ref_counts = self.bc.at(bo).neighbors_ref_counts;
 
     let l_count = ref_counts[LAST_FRAME];
-
     let l2_count = ref_counts[LAST2_FRAME];
 
-    if l_count == l2_count {
-      return 1;
-    } else if l_count < l2_count {
-      return 0;
-    } else {
-      return 2;
-    }
+    ContextWriter::ref_count_ctx(l_count, l2_count)
   }
 
   fn get_pred_ctx_last3_or_gold(&mut self, bo: &BlockOffset) -> usize {
     let ref_counts = self.bc.at(bo).neighbors_ref_counts;
 
     let l3_count = ref_counts[LAST3_FRAME];
-
     let gold_count = ref_counts[GOLDEN_FRAME];
 
-    if l3_count == gold_count {
-      return 1;
-    } else if l3_count < gold_count {
-      return 0;
-    } else {
-      return 2;
-    }
+    ContextWriter::ref_count_ctx(l3_count, gold_count)
   }
 
   fn get_pred_ctx_brf_or_arf2(&mut self, bo: &BlockOffset) -> usize {
     let ref_counts = self.bc.at(bo).neighbors_ref_counts;
 
     let brf_count = ref_counts[BWDREF_FRAME];
-
     let arf2_count = ref_counts[ALTREF2_FRAME];
 
-    if brf_count == arf2_count {
-      return 1;
-    } else if brf_count < arf2_count {
-      return 0;
-    } else {
-      return 2;
-    }
+    ContextWriter::ref_count_ctx(brf_count, arf2_count)
   }
 
   fn get_comp_mode_ctx(&self, fi: &FrameInvariants, bo: &BlockOffset) -> usize {
@@ -2527,46 +2517,138 @@ impl ContextWriter {
     }
   }
 
+  fn get_comp_ref_type_ctx(&self, fi: &FrameInvariants, bo: &BlockOffset) -> usize {
+    fn is_samedir_ref_pair(ref0: usize, ref1: usize) -> bool {
+      (ref0 >= BWDREF_FRAME) == (ref1 >= BWDREF_FRAME)
+    }
+
+    let avail_left = bo.x > 0;
+    let avail_up = bo.y > 0;
+    let bo_left = bo.with_offset(-1, 0);
+    let bo_up = bo.with_offset(0, -1);
+    let above0 = if avail_up { self.bc.at(&bo_up).ref_frames[0] } else { LAST_FRAME };
+    let above1 = if avail_up { self.bc.at(&bo_up).ref_frames[1] } else { LAST_FRAME };
+    let left0 = if avail_left { self.bc.at(&bo_up).ref_frames[0] } else { LAST_FRAME };
+    let left1 = if avail_left { self.bc.at(&bo_up).ref_frames[1] } else { LAST_FRAME };
+    let left_single = true; // FIXME
+    let above_single = true; // FIXME
+    let left_intra = avail_left && self.bc.at(&bo_left).ref_frames[0] == INTRA_FRAME;
+    let above_intra = avail_up && self.bc.at(&bo_up).ref_frames[0] == INTRA_FRAME;
+    let above_comp_inter = avail_up && !above_intra && !above_single;
+    let left_comp_inter = avail_left && !left_intra && !left_single;
+    let above_uni_comp = above_comp_inter && is_samedir_ref_pair(above0, above1);
+    let left_uni_comp = left_comp_inter && is_samedir_ref_pair(left0, left1);
+
+    if avail_up && !above_intra && avail_left && !left_intra {
+      let samedir = is_samedir_ref_pair(above0, left0);
+
+      if !above_comp_inter && !left_comp_inter {
+        1 + 2 * samedir as usize
+      } else if !above_comp_inter {
+        if !left_uni_comp { 1 } else { 3 + samedir as usize }
+      } else if !left_comp_inter {
+        if !above_uni_comp { 1 } else { 3 + samedir as usize }
+      } else {
+        if !above_uni_comp && !left_uni_comp {
+          0
+        } else if !above_uni_comp || !left_uni_comp {
+          2
+        } else {
+          3 + ((above0 == BWDREF_FRAME) == (left0 == BWDREF_FRAME)) as usize
+        }
+      }
+    } else if avail_up && avail_left {
+      if above_comp_inter {
+        1 + 2 * above_uni_comp as usize
+      } else if left_comp_inter {
+        1 + 2 * left_uni_comp as usize
+      } else {
+        2
+      }
+    } else if above_comp_inter {
+      4 * above_uni_comp as usize
+    } else if left_comp_inter {
+      4 * left_uni_comp as usize
+    } else {
+      2
+    }
+  }
+
   pub fn write_ref_frames(&mut self, w: &mut dyn Writer, fi: &FrameInvariants, bo: &BlockOffset) {
     let rf = self.bc.at(bo).ref_frames;
     let sz = self.bc.at(bo).n4_w.min(self.bc.at(bo).n4_h);
 
     /* TODO: Handle multiple references */
+    let comp_mode = self.bc.at(bo).has_second_ref();
+
     if fi.reference_mode != ReferenceMode::SINGLE && sz >= 2 {
       let ctx = self.get_comp_mode_ctx(fi, bo);
-      symbol_with_update!(self, w, 0, &mut self.fc.comp_mode_cdf[ctx]);
+      symbol_with_update!(self, w, comp_mode as u32, &mut self.fc.comp_mode_cdf[ctx]);
+    } else {
+      assert!(!comp_mode);
     }
 
-    let b0_ctx = self.get_ref_frame_ctx_b0(bo);
-    let b0 = rf[0] <= ALTREF_FRAME && rf[0] >= BWDREF_FRAME;
+    if comp_mode {
+      let comp_ref_type = 1 as u32; // bidir
+      let ctx = self.get_comp_ref_type_ctx(fi, bo);
+      symbol_with_update!(self, w, comp_ref_type, &mut self.fc.comp_ref_type_cdf[ctx]);
 
-    symbol_with_update!(self, w, b0 as u32, &mut self.fc.single_ref_cdfs[b0_ctx][0]);
-    if b0 {
-      let b1_ctx = self.get_pred_ctx_brfarf2_or_arf(bo);
-      let b1 = rf[0] == ALTREF_FRAME;
-
-      symbol_with_update!(self, w, b1 as u32, &mut self.fc.single_ref_cdfs[b1_ctx][1]);
-      if !b1 {
-        let b5_ctx = self.get_pred_ctx_brf_or_arf2(bo);
-        let b5 = rf[0] == ALTREF2_FRAME;
-
-        symbol_with_update!(self, w, b5 as u32, &mut self.fc.single_ref_cdfs[b5_ctx][5]);
+      if comp_ref_type == 0 {
+        unimplemented!();
+      } else {
+        let compref = rf[0] == GOLDEN_FRAME || rf[0] == LAST3_FRAME;
+        let ctx = self.get_pred_ctx_ll2_or_l3gld(bo);
+        symbol_with_update!(self, w, compref as u32, &mut self.fc.comp_ref_cdf[ctx][0]);
+        if !compref {
+          let compref_p1 = rf[0] == LAST2_FRAME;
+          let ctx = self.get_pred_ctx_last_or_last2(bo);
+          symbol_with_update!(self, w, compref_p1 as u32, &mut self.fc.comp_ref_cdf[ctx][1]);
+        } else {
+          let compref_p2 = rf[0] == GOLDEN_FRAME;
+          let ctx = self.get_pred_ctx_last3_or_gold(bo);
+          symbol_with_update!(self, w, compref_p2 as u32, &mut self.fc.comp_ref_cdf[ctx][2]);
+        }
+        let comp_bwdref = rf[1] == ALTREF_FRAME;
+        let ctx = self.get_pred_ctx_brfarf2_or_arf(bo);
+        symbol_with_update!(self, w, comp_bwdref as u32, &mut self.fc.comp_bwd_ref_cdf[ctx][0]);
+        if !comp_bwdref {
+          let comp_bwdref_p1 = rf[1] == ALTREF2_FRAME;
+          let ctx = self.get_pred_ctx_brf_or_arf2(bo);
+          symbol_with_update!(self, w, comp_bwdref_p1 as u32, &mut self.fc.comp_bwd_ref_cdf[ctx][1]);
+        }
       }
     } else {
-      let b2_ctx = self.get_pred_ctx_ll2_or_l3gld(bo);
-      let b2 = rf[0] == LAST3_FRAME || rf[0] == GOLDEN_FRAME;
+      let b0_ctx = self.get_ref_frame_ctx_b0(bo);
+      let b0 = rf[0] <= ALTREF_FRAME && rf[0] >= BWDREF_FRAME;
 
-      symbol_with_update!(self, w, b2 as u32, &mut self.fc.single_ref_cdfs[b2_ctx][2]);
-      if !b2 {
-        let b3_ctx = self.get_pred_ctx_last_or_last2(bo);
-        let b3 = rf[0] != LAST_FRAME;
+      symbol_with_update!(self, w, b0 as u32, &mut self.fc.single_ref_cdfs[b0_ctx][0]);
+      if b0 {
+        let b1_ctx = self.get_pred_ctx_brfarf2_or_arf(bo);
+        let b1 = rf[0] == ALTREF_FRAME;
 
-        symbol_with_update!(self, w, b3 as u32, &mut self.fc.single_ref_cdfs[b3_ctx][3]);
+        symbol_with_update!(self, w, b1 as u32, &mut self.fc.single_ref_cdfs[b1_ctx][1]);
+        if !b1 {
+          let b5_ctx = self.get_pred_ctx_brf_or_arf2(bo);
+          let b5 = rf[0] == ALTREF2_FRAME;
+
+          symbol_with_update!(self, w, b5 as u32, &mut self.fc.single_ref_cdfs[b5_ctx][5]);
+        }
       } else {
-        let b4_ctx = self.get_pred_ctx_last3_or_gold(bo);
-        let b4 = rf[0] != LAST3_FRAME;
+        let b2_ctx = self.get_pred_ctx_ll2_or_l3gld(bo);
+        let b2 = rf[0] == LAST3_FRAME || rf[0] == GOLDEN_FRAME;
 
-        symbol_with_update!(self, w, b4 as u32, &mut self.fc.single_ref_cdfs[b4_ctx][4]);
+        symbol_with_update!(self, w, b2 as u32, &mut self.fc.single_ref_cdfs[b2_ctx][2]);
+        if !b2 {
+          let b3_ctx = self.get_pred_ctx_last_or_last2(bo);
+          let b3 = rf[0] != LAST_FRAME;
+
+          symbol_with_update!(self, w, b3 as u32, &mut self.fc.single_ref_cdfs[b3_ctx][3]);
+        } else {
+          let b4_ctx = self.get_pred_ctx_last3_or_gold(bo);
+          let b4 = rf[0] != LAST3_FRAME;
+
+          symbol_with_update!(self, w, b4 as u32, &mut self.fc.single_ref_cdfs[b4_ctx][4]);
+        }
       }
     }
   }

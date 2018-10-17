@@ -344,11 +344,8 @@ pub fn rdo_mode_decision(
   }
 
   let luma_rdo = |luma_mode: PredictionMode, fs: &mut FrameState, cw: &mut ContextWriter, best: &mut EncodingSettings,
-    mv: MotionVector, ref_frame: usize, mode_set_chroma: &[PredictionMode], luma_mode_is_intra: bool,
+    mvs: &[MotionVector; 2], ref_frames: &[usize; 2], mode_set_chroma: &[PredictionMode], luma_mode_is_intra: bool,
     mode_context: usize, mv_stack: &Vec<CandidateMV>| {
-    let mvs = &[mv, MotionVector{ row: 0, col: 0 }];
-    let ref_frames = &[ref_frame, NONE_FRAME];
-
     let (tx_size, mut tx_type) = rdo_tx_size_type(
       seq, fi, fs, cw, bsize, bo, luma_mode, ref_frames, mvs, false,
     );
@@ -441,18 +438,21 @@ pub fn rdo_mode_decision(
     };
     let mode_set_chroma = vec![luma_mode];
 
-    luma_rdo(luma_mode, fs, cw, &mut best, mv, ref_frame_set[i], &mode_set_chroma, false,
+    let mvs = &[mv, MotionVector { row: 0, col: 0 }];
+    let ref_frames = &[ref_frame_set[i], NONE_FRAME];
+    luma_rdo(luma_mode, fs, cw, &mut best, mvs, ref_frames, &mode_set_chroma, false,
              mode_contexts[i], &mv_stacks[i]);
   });
 
   if !best.skip {
     intra_mode_set.iter().for_each(|&luma_mode| {
-      let mv = MotionVector { row: 0, col: 0 };
+      let mvs = &[MotionVector { row: 0, col: 0 }; 2];
+      let ref_frames = &[INTRA_FRAME, NONE_FRAME];
       let mut mode_set_chroma = vec![luma_mode];
       if is_chroma_block && luma_mode != PredictionMode::DC_PRED {
         mode_set_chroma.push(PredictionMode::DC_PRED);
       }
-      luma_rdo(luma_mode, fs, cw, &mut best, mv, INTRA_FRAME, &mode_set_chroma, true,
+      luma_rdo(luma_mode, fs, cw, &mut best, mvs, ref_frames, &mode_set_chroma, true,
                0, &Vec::new());
     });
   }
