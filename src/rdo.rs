@@ -491,7 +491,8 @@ pub fn rdo_mode_decision(
           tx_size,
           tx_type,
           mode_context,
-          mv_stack
+          mv_stack,
+          true
         );
 
         let cost = wr.tell_frac() - tell;
@@ -606,7 +607,8 @@ pub fn rdo_mode_decision(
       false,
       seq.bit_depth,
       CFLParams::new(),
-      true
+      true,
+      false
     );
     cw.rollback(&cw_checkpoint);
     if let Some(cfl) = rdo_cfl_alpha(fs, bo, bsize, seq.bit_depth) {
@@ -633,7 +635,8 @@ pub fn rdo_mode_decision(
         best.tx_size,
         best.tx_type,
         0,
-        &Vec::new()
+        &Vec::new(),
+        true
       );
 
       let cost = wr.tell_frac() - tell;
@@ -774,12 +777,12 @@ pub fn rdo_tx_type_decision(
     let tell = wr.tell_frac();
     let tx_dist = if is_inter {
       write_tx_tree(
-        fi, fs, cw, wr, mode, bo, bsize, tx_size, tx_type, false, bit_depth, true
+        fi, fs, cw, wr, mode, bo, bsize, tx_size, tx_type, false, bit_depth, true, true
       )
     }  else {
       let cfl = CFLParams::new(); // Unused
       write_tx_blocks(
-        fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false, bit_depth, cfl, true
+        fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false, bit_depth, cfl, true, true
       )
     };
 
