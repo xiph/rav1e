@@ -968,132 +968,172 @@ impl PredictionMode {
     ref_frames: &[usize; 2], mvs: &[MotionVector; 2], bit_depth: usize
   ) {
     assert!(!self.is_intra());
-    assert!(ref_frames[1] == NONE_FRAME);
 
-    match fi.rec_buffer.frames[fi.ref_frames[ref_frames[0] - LAST_FRAME] as usize] {
-      Some(ref rec) => {
-        let rec_cfg = &rec.frame.planes[p].cfg;
-        let shift_row = 3 + rec_cfg.ydec;
-        let shift_col = 3 + rec_cfg.xdec;
-        let row_offset = mvs[0].row as i32 >> shift_row;
-        let col_offset = mvs[0].col as i32 >> shift_col;
-        let row_frac =
-          (mvs[0].row as i32 - (row_offset << shift_row)) << (4 - shift_row);
-        let col_frac =
-          (mvs[0].col as i32 - (col_offset << shift_col)) << (4 - shift_col);
-        let ref_stride = rec_cfg.stride;
+    let is_compound = ref_frames[1] > INTRA_FRAME && ref_frames[1] != NONE_FRAME;
 
-        let stride = dst.plane.cfg.stride;
-        let slice = dst.as_mut_slice();
+    let stride = dst.plane.cfg.stride;
+    let slice = dst.as_mut_slice();
 
-        let max_sample_val = ((1 << bit_depth) - 1) as i32;
-        let y_filter_idx = if height <= 4 { 4 } else { 0 };
-        let x_filter_idx = if width <= 4 { 4 } else { 0 };
-        let shifts = {
-          let shift_offset = if bit_depth == 12 { 2 } else { 0 };
-          (3 + shift_offset, 11 - shift_offset)
-        };
-        let round_shift =
-          |n, shift| -> i32 { (n + (1 << (shift - 1))) >> shift };
+    for i in 0..(1 + is_compound as usize) {
+      match fi.rec_buffer.frames[fi.ref_frames[ref_frames[i] - LAST_FRAME] as usize] {
+        Some(ref rec) => {
+          let rec_cfg = &rec.frame.planes[p].cfg;
+          let shift_row = 3 + rec_cfg.ydec;
+          let shift_col = 3 + rec_cfg.xdec;
+          let row_offset = mvs[0].row as i32 >> shift_row;
+          let col_offset = mvs[0].col as i32 >> shift_col;
+          let row_frac =
+            (mvs[0].row as i32 - (row_offset << shift_row)) << (4 - shift_row);
+          let col_frac =
+            (mvs[0].col as i32 - (col_offset << shift_col)) << (4 - shift_col);
+          let ref_stride = rec_cfg.stride;
 
-        match (col_frac, row_frac) {
-          (0, 0) => {
-            let qo = PlaneOffset {
-              x: po.x + col_offset as isize,
-              y: po.y + row_offset as isize
-            };
-            let ps = rec.frame.planes[p].slice(&qo);
-            let s = ps.as_slice_clamped();
-            for r in 0..height {
-              for c in 0..width {
-                let output_index = r * stride + c;
-                slice[output_index] = s[r * ref_stride + c];
-              }
-            }
-          }
-          (0, _) => {
-            let qo = PlaneOffset {
-              x: po.x + col_offset as isize,
-              y: po.y + row_offset as isize - 3
-            };
-            let ps = rec.frame.planes[p].slice(&qo);
-            let s = ps.as_slice_clamped();
-            for r in 0..height {
-              for c in 0..width {
-                let mut sum: i32 = 0;
-                for k in 0..8 {
-                  sum += s[(r + k) * ref_stride + c] as i32
-                    * SUBPEL_FILTERS[y_filter_idx][row_frac as usize][k];
-                }
-                let output_index = r * stride + c;
-                let val = round_shift(sum, 7).max(0).min(max_sample_val);
-                slice[output_index] = val as u16;
-              }
-            }
-          }
-          (_, 0) => {
-            let qo = PlaneOffset {
-              x: po.x + col_offset as isize - 3,
-              y: po.y + row_offset as isize
-            };
-            let ps = rec.frame.planes[p].slice(&qo);
-            let s = ps.as_slice_clamped();
-            for r in 0..height {
-              for c in 0..width {
-                let mut sum: i32 = 0;
-                for k in 0..8 {
-                  sum += s[r * ref_stride + (c + k)] as i32
-                    * SUBPEL_FILTERS[x_filter_idx][col_frac as usize][k];
-                }
-                let output_index = r * stride + c;
-                let val =
-                  round_shift(round_shift(sum, shifts.0), shifts.1 - 7)
-                    .max(0)
-                    .min(max_sample_val);
-                slice[output_index] = val as u16;
-              }
-            }
-          }
-          (_, _) => {
-            let mut intermediate = [0 as i16; 8 * (128 + 7)];
+          let max_sample_val = ((1 << bit_depth) - 1) as i32;
+          let y_filter_idx = if height <= 4 { 4 } else { 0 };
+          let x_filter_idx = if width <= 4 { 4 } else { 0 };
+          let shifts = {
+            let shift_offset = if bit_depth == 12 { 2 } else { 0 };
+            let inter_round0 = 3 + shift_offset;
+            let inter_round1 = if is_compound { 7 } else { 11 } - shift_offset;
+            (inter_round0, inter_round1, 14 - inter_round0 - inter_round1)
+          };
+          let round_shift =
+            |n, shift| -> i32 { (n + (1 << (shift - 1))) >> shift };
 
-            let qo = PlaneOffset {
-              x: po.x + col_offset as isize - 3,
-              y: po.y + row_offset as isize - 3
-            };
-            let ps = rec.frame.planes[p].slice(&qo);
-            let s = ps.as_slice_clamped();
-            for cg in (0..width).step_by(8) {
-              for r in 0..height + 7 {
-                for c in cg..(cg + 8).min(width) {
-                  let mut sum: i32 = 0;
-                  for k in 0..8 {
-                    sum += s[r * ref_stride + (c + k)] as i32 * SUBPEL_FILTERS
-                      [x_filter_idx][col_frac as usize][k];
-                  }
-                  let val = round_shift(sum, shifts.0);
-                  intermediate[8 * r + (c - cg)] = val as i16;
-                }
-              }
-
+          match (col_frac, row_frac) {
+            (0, 0) => {
+              let qo = PlaneOffset {
+                x: po.x + col_offset as isize,
+                y: po.y + row_offset as isize
+              };
+              let ps = rec.frame.planes[p].slice(&qo);
+              let s = ps.as_slice_clamped();
               for r in 0..height {
-                for c in cg..(cg + 8).min(width) {
+                for c in 0..width {
+                  let output_index = r * stride + c;
+                  let mut val = s[r * ref_stride + c] as i32;
+                  if is_compound {
+                    val = val << shifts.2;
+                    if i == 1 {
+                      val = val + slice[output_index] as i32 - 32768;
+                      val = val >> shifts.2 + 1;
+                      val = val.max(0).min(max_sample_val);
+                    } else {
+                      val = val + 32768;
+                    }
+                  }
+                  slice[output_index] = val as u16;
+                }
+              }
+            }
+            (0, _) => {
+              let qo = PlaneOffset {
+                x: po.x + col_offset as isize,
+                y: po.y + row_offset as isize - 3
+              };
+              let ps = rec.frame.planes[p].slice(&qo);
+              let s = ps.as_slice_clamped();
+              for r in 0..height {
+                for c in 0..width {
                   let mut sum: i32 = 0;
                   for k in 0..8 {
-                    sum += intermediate[8 * (r + k) + c - cg] as i32
+                    sum += s[(r + k) * ref_stride + c] as i32
                       * SUBPEL_FILTERS[y_filter_idx][row_frac as usize][k];
                   }
                   let output_index = r * stride + c;
-                  let val =
-                    round_shift(sum, shifts.1).max(0).min(max_sample_val);
+                  let mut val = round_shift(sum, shifts.0 + shifts.1 - 7);
+                  if is_compound && i == 1 {
+                    val = val + slice[output_index] as i32 - 32768;
+                    val = val >> shifts.2 + 1;
+                    val = val.max(0).min(max_sample_val);
+                  } else if !is_compound {
+                    val = val.max(0).min(max_sample_val);
+                  } else {
+                    val = val + 32768;
+                  }
                   slice[output_index] = val as u16;
+                }
+              }
+            }
+            (_, 0) => {
+              let qo = PlaneOffset {
+                x: po.x + col_offset as isize - 3,
+                y: po.y + row_offset as isize
+              };
+              let ps = rec.frame.planes[p].slice(&qo);
+              let s = ps.as_slice_clamped();
+              for r in 0..height {
+                for c in 0..width {
+                  let mut sum: i32 = 0;
+                  for k in 0..8 {
+                    sum += s[r * ref_stride + (c + k)] as i32
+                      * SUBPEL_FILTERS[x_filter_idx][col_frac as usize][k];
+                  }
+                  let output_index = r * stride + c;
+                  let mut val = round_shift(round_shift(sum, shifts.0) << 7, shifts.1);
+                  if is_compound && i == 1 {
+                    val = val + slice[output_index] as i32 - 32768;
+                    val = val >> shifts.2 + 1;
+                    val = val.max(0).min(max_sample_val);
+                  } else if !is_compound {
+                    val = val.max(0).min(max_sample_val);
+                  } else {
+                    val = val + 32768;
+                  }
+                  slice[output_index] = val as u16;
+                }
+              }
+            }
+            (_, _) => {
+              let mut intermediate = [0 as i16; 8 * (128 + 7)];
+
+              let qo = PlaneOffset {
+                x: po.x + col_offset as isize - 3,
+                y: po.y + row_offset as isize - 3
+              };
+              let ps = rec.frame.planes[p].slice(&qo);
+              let s = ps.as_slice_clamped();
+              for cg in (0..width).step_by(8) {
+                for r in 0..height + 7 {
+                  for c in cg..(cg + 8).min(width) {
+                    let mut sum: i32 = 0;
+                    for k in 0..8 {
+                      sum += s[r * ref_stride + (c + k)] as i32 * SUBPEL_FILTERS
+                        [x_filter_idx][col_frac as usize][k];
+                    }
+                    let val = round_shift(sum, shifts.0);
+                    intermediate[8 * r + (c - cg)] = val as i16;
+                  }
+                }
+
+                for r in 0..height {
+                  for c in cg..(cg + 8).min(width) {
+                    let mut sum: i32 = 0;
+                    for k in 0..8 {
+                      sum += intermediate[8 * (r + k) + c - cg] as i32
+                        * SUBPEL_FILTERS[y_filter_idx][row_frac as usize][k];
+                    }
+                    let output_index = r * stride + c;
+                    let mut val = round_shift(sum, shifts.1);
+                    if is_compound && i == 1 {
+                      val = val + slice[output_index] as i32 - 32768;
+                      val = val >> shifts.2 + 1;
+                      val = val.max(0).min(max_sample_val);
+                    } else if !is_compound {
+                      val = val.max(0).min(max_sample_val);
+                    } else {
+                      val = val + 32768;
+                    }
+
+                    slice[output_index] = val as u16;
+                  }
                 }
               }
             }
           }
         }
+        None => ()
       }
-      None => ()
     }
   }
 }
