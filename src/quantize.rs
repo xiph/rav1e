@@ -141,8 +141,9 @@ impl QuantizationContext {
   }
 }
 
-pub fn quantize_in_place(
-  qindex: u8, coeffs: &mut [i32], tx_size: TxSize, bit_depth: usize
+// quantization without using Multiplication Factor
+pub fn quantize_wo_mf(
+  qindex: u8, coeffs: &[i32], qcoeffs: &mut [i32], tx_size: TxSize, bit_depth: usize
 ) {
   let log_tx_scale = get_log_tx_scale(tx_size);
 
@@ -153,14 +154,14 @@ pub fn quantize_in_place(
   let dc_offset = dc_quant * 21 / 64 as i32;
   let ac_offset = ac_quant * 21 / 64 as i32;
 
-  coeffs[0] <<= log_tx_scale;
-  coeffs[0] += coeffs[0].signum() * dc_offset;
-  coeffs[0] /= dc_quant;
+  qcoeffs[0] = coeffs[0] << log_tx_scale;
+  qcoeffs[0] += qcoeffs[0].signum() * dc_offset;
+  qcoeffs[0] /= dc_quant;
 
-  for c in coeffs[1..].iter_mut() {
-    *c <<= log_tx_scale;
-    *c += c.signum() * ac_offset;
-    *c /= ac_quant;
+  for (qc, c) in qcoeffs[1..].iter_mut().zip(coeffs[1..].iter()) {
+    *qc = *c << log_tx_scale;
+    *qc += qc.signum() * ac_offset;
+    *qc /= ac_quant;
   }
 }
 
