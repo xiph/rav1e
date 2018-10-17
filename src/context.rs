@@ -699,6 +699,7 @@ pub struct CDFContext {
   comp_bwd_ref_cdf: [[[u16; 3]; BWD_REFS - 1]; REF_CONTEXTS],
   single_ref_cdfs: [[[u16; 2 + 1]; SINGLE_REFS - 1]; REF_CONTEXTS],
   drl_cdfs: [[u16; 2 + 1]; DRL_MODE_CONTEXTS],
+  compound_mode_cdf: [[u16; INTER_COMPOUND_MODES + 1]; INTER_MODE_CONTEXTS],
   nmv_context: NMVContext,
   deblock_delta_multi_cdf: [[u16; DELTA_LF_PROBS + 1 + 1]; FRAME_LF_COUNT],
   deblock_delta_cdf: [u16; DELTA_LF_PROBS + 1 + 1],
@@ -755,6 +756,7 @@ impl CDFContext {
       comp_bwd_ref_cdf: default_comp_bwdref_cdf,
       single_ref_cdfs: default_single_ref_cdf,
       drl_cdfs: default_drl_cdf,
+      compound_mode_cdf: default_compound_mode_cdf,
       nmv_context: default_nmv_context,
       deblock_delta_multi_cdf: default_delta_lf_multi_cdf,
       deblock_delta_cdf: default_delta_lf_cdf,
@@ -829,6 +831,7 @@ impl CDFContext {
     reset_3d!(self.comp_bwd_ref_cdf);
     reset_3d!(self.single_ref_cdfs);
     reset_2d!(self.drl_cdfs);
+    reset_2d!(self.compound_mode_cdf);
     reset_2d!(self.deblock_delta_multi_cdf);
     reset_1d!(self.deblock_delta_cdf);
 
@@ -2343,13 +2346,13 @@ impl ContextWriter {
 
     assert!(total_match >= nearest_match);
 
+    // mode_context contains both newmv_context and refmv_context, where newmv_context
+    // lies in the REF_MVOFFSET least significant bits
     let mode_context = match nearest_match {
-                         0 =>  cmp::min(total_match, 1) + (total_match << REFMV_OFFSET) ,
-                         1 =>  3 - cmp::min(newmv_count, 1) + ((2 + total_match) << REFMV_OFFSET) ,
-                         _ =>  5 - cmp::min(newmv_count, 1) + (5 << REFMV_OFFSET)
-                       };
-
-    // println!("{} {} {} {} {}", bo.x, bo.y, nearest_match, total_match, mode_context);
+      0 =>  cmp::min(total_match, 1) + (total_match << REFMV_OFFSET),
+      1 =>  3 - cmp::min(newmv_count, 1) + ((2 + total_match) << REFMV_OFFSET),
+      _ =>  5 - cmp::min(newmv_count, 1) + (5 << REFMV_OFFSET)
+    };
 
     /* TODO: Find nearest match and assign nearest and near mvs */
 
@@ -2702,7 +2705,23 @@ impl ContextWriter {
     }
   }
 
-  pub fn write_compound_mode(&mut self, w: &mut dyn Writer, mode: PredictionMode, ctx: usize) {
+  pub fn write_compound_mode(
+    &mut self, w: &mut dyn Writer, mode: PredictionMode, ctx: usize,
+  ) {
+    let newmv_ctx = ctx & NEWMV_CTX_MASK;
+    let refmv_ctx = (ctx >> REFMV_OFFSET) & REFMV_CTX_MASK;
+
+    let ctx = if refmv_ctx < 2 {
+      newmv_ctx.min(1)
+    } else if refmv_ctx < 4 {
+      (newmv_ctx + 1).min(4)
+    } else {
+      (newmv_ctx.max(1) + 3).min(7)
+    };
+
+    assert!(mode >= PredictionMode::NEAREST_NEARESTMV);
+    let val = mode as u32 - PredictionMode::NEAREST_NEARESTMV as u32;
+    symbol_with_update!(self, w, val, &mut self.fc.compound_mode_cdf[ctx]);
   }
 
   pub fn write_inter_mode(&mut self, w: &mut dyn Writer, mode: PredictionMode, ctx: usize) {

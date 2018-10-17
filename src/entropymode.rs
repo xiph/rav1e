@@ -899,7 +899,7 @@ pub static default_refmv_cdf: [[u16; cdf_size!(2)]; REFMV_MODE_CONTEXTS] = [
 pub static default_drl_cdf: [[u16; cdf_size!(2)]; DRL_MODE_CONTEXTS] =
   [cdf!(13104), cdf!(24560), cdf!(18945)];
 
-pub static default_inter_compound_mode_cdf: [[u16;
+pub static default_compound_mode_cdf: [[u16;
   cdf_size!(INTER_COMPOUND_MODES)];
   INTER_MODE_CONTEXTS] = [
   cdf!(7760, 13823, 15808, 17641, 19156, 20666, 26891),
