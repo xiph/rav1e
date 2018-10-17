@@ -2476,19 +2476,24 @@ impl ContextWriter {
     ContextWriter::ref_count_ctx(brf_count, arf2_count)
   }
 
-  fn get_comp_mode_ctx(&self, fi: &FrameInvariants, bo: &BlockOffset) -> usize {
+  fn get_comp_mode_ctx(&self, bo: &BlockOffset) -> usize {
+    fn check_backward(ref_frame: usize) -> bool {
+      ref_frame >= BWDREF_FRAME && ref_frame <= ALTREF_FRAME
+    }
     let avail_left = bo.x > 0;
     let avail_up = bo.y > 0;
     let bo_left = bo.with_offset(-1, 0);
     let bo_up = bo.with_offset(0, -1);
-    let left_single = true; // FIXME
-    let above_single = true; // FIXME
-    let left_intra = avail_left && self.bc.at(&bo_left).ref_frames[0] == INTRA_FRAME;
-    let above_intra = avail_up && self.bc.at(&bo_up).ref_frames[0] == INTRA_FRAME;
-    let left_backward = avail_left && !left_intra &&
-      fi.ref_frame_sign_bias[self.bc.at(&bo_left).ref_frames[0] - LAST_FRAME];
-    let above_backward = avail_up && !above_intra &&
-      fi.ref_frame_sign_bias[self.bc.at(&bo_up).ref_frames[0] - LAST_FRAME];
+    let above0 = if avail_up { self.bc.at(&bo_up).ref_frames[0] } else { INTRA_FRAME };
+    let above1 = if avail_up { self.bc.at(&bo_up).ref_frames[1] } else { NONE_FRAME };
+    let left0 = if avail_left { self.bc.at(&bo_left).ref_frames[0] } else { INTRA_FRAME };
+    let left1 = if avail_left { self.bc.at(&bo_left).ref_frames[1] } else { NONE_FRAME };
+    let left_single = left1 == NONE_FRAME;
+    let above_single = above1 == NONE_FRAME;
+    let left_intra = left0 == INTRA_FRAME;
+    let above_intra = above0 == INTRA_FRAME;
+    let left_backward = check_backward(left0);
+    let above_backward = check_backward(above0);
 
     if avail_left && avail_up {
       if above_single && left_single {
@@ -2517,7 +2522,7 @@ impl ContextWriter {
     }
   }
 
-  fn get_comp_ref_type_ctx(&self, fi: &FrameInvariants, bo: &BlockOffset) -> usize {
+  fn get_comp_ref_type_ctx(&self, bo: &BlockOffset) -> usize {
     fn is_samedir_ref_pair(ref0: usize, ref1: usize) -> bool {
       (ref0 >= BWDREF_FRAME) == (ref1 >= BWDREF_FRAME)
     }
@@ -2526,14 +2531,14 @@ impl ContextWriter {
     let avail_up = bo.y > 0;
     let bo_left = bo.with_offset(-1, 0);
     let bo_up = bo.with_offset(0, -1);
-    let above0 = if avail_up { self.bc.at(&bo_up).ref_frames[0] } else { LAST_FRAME };
-    let above1 = if avail_up { self.bc.at(&bo_up).ref_frames[1] } else { LAST_FRAME };
-    let left0 = if avail_left { self.bc.at(&bo_up).ref_frames[0] } else { LAST_FRAME };
-    let left1 = if avail_left { self.bc.at(&bo_up).ref_frames[1] } else { LAST_FRAME };
-    let left_single = true; // FIXME
-    let above_single = true; // FIXME
-    let left_intra = avail_left && self.bc.at(&bo_left).ref_frames[0] == INTRA_FRAME;
-    let above_intra = avail_up && self.bc.at(&bo_up).ref_frames[0] == INTRA_FRAME;
+    let above0 = if avail_up { self.bc.at(&bo_up).ref_frames[0] } else { INTRA_FRAME };
+    let above1 = if avail_up { self.bc.at(&bo_up).ref_frames[1] } else { NONE_FRAME };
+    let left0 = if avail_left { self.bc.at(&bo_left).ref_frames[0] } else { INTRA_FRAME };
+    let left1 = if avail_left { self.bc.at(&bo_left).ref_frames[1] } else { NONE_FRAME };
+    let left_single = left1 == NONE_FRAME;
+    let above_single = above1 == NONE_FRAME;
+    let left_intra = left0 == INTRA_FRAME;
+    let above_intra = above0 == INTRA_FRAME;
     let above_comp_inter = avail_up && !above_intra && !above_single;
     let left_comp_inter = avail_left && !left_intra && !left_single;
     let above_uni_comp = above_comp_inter && is_samedir_ref_pair(above0, above1);
@@ -2582,7 +2587,7 @@ impl ContextWriter {
     let comp_mode = self.bc.at(bo).has_second_ref();
 
     if fi.reference_mode != ReferenceMode::SINGLE && sz >= 2 {
-      let ctx = self.get_comp_mode_ctx(fi, bo);
+      let ctx = self.get_comp_mode_ctx(bo);
       symbol_with_update!(self, w, comp_mode as u32, &mut self.fc.comp_mode_cdf[ctx]);
     } else {
       assert!(!comp_mode);
@@ -2590,7 +2595,7 @@ impl ContextWriter {
 
     if comp_mode {
       let comp_ref_type = 1 as u32; // bidir
-      let ctx = self.get_comp_ref_type_ctx(fi, bo);
+      let ctx = self.get_comp_ref_type_ctx(bo);
       symbol_with_update!(self, w, comp_ref_type, &mut self.fc.comp_ref_type_cdf[ctx]);
 
       if comp_ref_type == 0 {
