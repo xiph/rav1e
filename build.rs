@@ -11,12 +11,12 @@ extern crate nasm_rs;
 
 use std::env;
 use std::fs;
-use std::fs::File;
-use std::io::Write;
 use std::path::Path;
 
 fn main() {
-    if cfg!(target_arch = "x86_64") {
+    #[cfg(target_arch = "x86_64")] {
+        use std::fs::File;
+        use std::io::Write;
         let out_dir = env::var("OUT_DIR").unwrap();
         {
             let dest_path = Path::new(&out_dir).join("config.asm");
