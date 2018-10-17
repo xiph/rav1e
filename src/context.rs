@@ -2026,12 +2026,47 @@ impl ContextWriter {
     false
   }
 
+  fn find_matching_comp_mv_and_update_weight(&self, mvs: &[MotionVector; 2], mv_stack: &mut Vec<CandidateMV>, weight: u32) -> bool {
+    for mut mv_cand in mv_stack {
+      if mvs[0].row == mv_cand.this_mv.row && mvs[0].col == mv_cand.this_mv.col &&
+        mvs[1].row == mv_cand.comp_mv.row && mvs[1].col == mv_cand.comp_mv.col {
+        mv_cand.weight += weight;
+        return true;
+      }
+    }
+    false
+  }
+
   fn add_ref_mv_candidate(&self, ref_frames: &[usize; 2], blk: &Block, mv_stack: &mut Vec<CandidateMV>,
                           weight: u32, newmv_count: &mut usize, is_compound: bool) -> bool {
     if !blk.is_inter() { /* For intrabc */
       false
     } else if is_compound {
-      unimplemented!();
+      if blk.ref_frames[0] == ref_frames[0] && blk.ref_frames[1] == ref_frames[1] {
+        let found_match = self.find_matching_comp_mv_and_update_weight(&blk.mv, mv_stack, weight);
+
+        if !found_match && mv_stack.len() < MAX_REF_MV_STACK_SIZE {
+          let mv_cand = CandidateMV {
+            this_mv: blk.mv[0],
+            comp_mv: blk.mv[1],
+            weight: weight
+          };
+
+          mv_stack.push(mv_cand);
+        }
+
+        if blk.mode == PredictionMode::NEW_NEWMV ||
+          blk.mode == PredictionMode::NEAREST_NEWMV ||
+          blk.mode == PredictionMode::NEW_NEARESTMV ||
+          blk.mode == PredictionMode::NEAR_NEWMV ||
+          blk.mode == PredictionMode::NEW_NEARMV {
+          *newmv_count += 1;
+        }
+
+        true
+      } else {
+        false
+      }
     } else {
       let mut found = false;
       for i in 0..2 {
@@ -2665,6 +2700,9 @@ impl ContextWriter {
         }
       }
     }
+  }
+
+  pub fn write_compound_mode(&mut self, w: &mut dyn Writer, mode: PredictionMode, ctx: usize) {
   }
 
   pub fn write_inter_mode(&mut self, w: &mut dyn Writer, mode: PredictionMode, ctx: usize) {

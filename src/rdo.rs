@@ -37,6 +37,7 @@ use FrameState;
 use FrameType;
 use Tune;
 use Sequence;
+use encoder::ReferenceMode;
 
 #[derive(Clone)]
 pub struct RDOOutput {
@@ -304,7 +305,7 @@ pub fn rdo_mode_decision(
     RAV1E_INTRA_MODES_MINIMAL
   };
 
-  let mut ref_frame_set = Vec::new();
+  let mut ref_frames_set = Vec::new();
   let mut ref_slot_set = Vec::new();
   let mut mvs_from_me = Vec::new();
 
@@ -313,37 +314,52 @@ pub fn rdo_mode_decision(
       // Don't search LAST3 since it's used only for probs
       if i == LAST3_FRAME { continue; }
       if !ref_slot_set.contains(&fi.ref_frames[i - LAST_FRAME]) {
-        ref_frame_set.push(i);
+        ref_frames_set.push([i, NONE_FRAME]);
         ref_slot_set.push(fi.ref_frames[i - LAST_FRAME]);
-        mvs_from_me.push(motion_estimation(fi, fs, bsize, bo, i, pmv));
+        mvs_from_me.push([motion_estimation(fi, fs, bsize, bo, i, pmv), MotionVector { row: 0, col: 0 }]);
       }
     }
-    assert!(ref_frame_set.len() != 0);
+    assert!(ref_frames_set.len() != 0);
   }
 
   let mut mode_set: Vec<(PredictionMode, usize)> = Vec::new();
   let mut mv_stacks = Vec::new();
   let mut mode_contexts = Vec::new();
 
-  for (i, &ref_frame) in ref_frame_set.iter().enumerate() {
-    let mut mvs: Vec<CandidateMV> = Vec::new();
-    let ref_frames = [ref_frame, NONE_FRAME];
-    mode_contexts.push(cw.find_mvrefs(bo, &ref_frames, &mut mvs, bsize, false, fi, false));
+  for (i, &ref_frames) in ref_frames_set.iter().enumerate() {
+    let mut mv_stack: Vec<CandidateMV> = Vec::new();
+    mode_contexts.push(cw.find_mvrefs(bo, &ref_frames, &mut mv_stack, bsize, false, fi, false));
 
     if fi.frame_type == FrameType::INTER {
       for &x in RAV1E_INTER_MODES_MINIMAL {
         mode_set.push((x, i));
       }
       if fi.config.speed <= 2 {
-        if mvs.len() >= 3 {
+        if mv_stack.len() >= 3 {
           mode_set.push((PredictionMode::NEAR1MV, i));
         }
-        if mvs.len() >= 4 {
+        if mv_stack.len() >= 4 {
           mode_set.push((PredictionMode::NEAR2MV, i));
         }
       }
     }
-    mv_stacks.push(mvs);
+    mv_stacks.push(mv_stack);
+  }
+
+  let sz = bsize.width_mi().min(bsize.height_mi());
+
+  if fi.frame_type == FrameType::INTER && fi.reference_mode != ReferenceMode::SINGLE && sz >= 2 {
+    // Adding compound candidate
+    // FIXME make this more flexible and less hardcoded
+    let ref_frames = [LAST_FRAME, ALTREF_FRAME];
+    ref_frames_set.push(ref_frames);
+    let mv0 = mvs_from_me[0][0];
+    let mv1 = mvs_from_me[1][1];
+    mvs_from_me.push([mv0, mv1]);
+    let mut mv_stack: Vec<CandidateMV> = Vec::new();
+    mode_contexts.push(cw.find_mvrefs(bo, &ref_frames, &mut mv_stack, bsize, false, fi, true));
+    mode_set.push((PredictionMode::NEW_NEWMV, ref_frames_set.len() - 1));
+    mv_stacks.push(mv_stack);
   }
 
   let luma_rdo = |luma_mode: PredictionMode, fs: &mut FrameState, cw: &mut ContextWriter, best: &mut EncodingSettings,
@@ -424,7 +440,7 @@ pub fn rdo_mode_decision(
 
   mode_set.iter().for_each(|&(luma_mode, i)| {
     let mvs = match luma_mode {
-      PredictionMode::NEWMV => [mvs_from_me[i], MotionVector { row: 0, col: 0 }],
+      PredictionMode::NEWMV | PredictionMode::NEW_NEWMV => mvs_from_me[i],
       PredictionMode::NEARESTMV => if mv_stacks[i].len() > 0 {
         [mv_stacks[i][0].this_mv, mv_stacks[i][0].comp_mv]
       } else {
@@ -442,8 +458,7 @@ pub fn rdo_mode_decision(
     };
     let mode_set_chroma = vec![luma_mode];
 
-    let ref_frames = &[ref_frame_set[i], NONE_FRAME];
-    luma_rdo(luma_mode, fs, cw, &mut best, &mvs, ref_frames, &mode_set_chroma, false,
+    luma_rdo(luma_mode, fs, cw, &mut best, &mvs, &ref_frames_set[i], &mode_set_chroma, false,
              mode_contexts[i], &mv_stacks[i]);
   });
 

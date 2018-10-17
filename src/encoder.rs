@@ -1387,7 +1387,6 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
                  bsize: BlockSize, bo: &BlockOffset, skip: bool, bit_depth: usize,
                  cfl: CFLParams, tx_size: TxSize, tx_type: TxType,
                  mode_context: usize, mv_stack: &Vec<CandidateMV>) {
-    assert!(ref_frames[1] == NONE_FRAME);
     let is_inter = !luma_mode.is_intra();
     if is_inter { assert!(luma_mode == chroma_mode); };
     let sb_size = if seq.use_128x128_superblock {
@@ -1416,9 +1415,12 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
             cw.fill_neighbours_ref_counts(bo);
             cw.write_ref_frames(w, fi, bo);
 
-            //let mode_context = if bo.x == 0 && bo.y == 0 { 0 } else if bo.x ==0 || bo.y == 0 { 51 } else { 85 };
             // NOTE: Until rav1e supports other inter modes than GLOBALMV
-            cw.write_inter_mode(w, luma_mode, mode_context);
+            if luma_mode >= PredictionMode::NEAREST_NEARESTMV {
+                cw.write_compound_mode(w, luma_mode, mode_context);
+            } else {
+                cw.write_inter_mode(w, luma_mode, mode_context);
+            }
 
             if luma_mode == PredictionMode::NEWMV || luma_mode == PredictionMode::NEW_NEWMV {
               let ref_mv_idx = 0;
@@ -1434,10 +1436,10 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
                 }
               }
 
-              let ref_mv = if num_mv_found > 0 {
-                mv_stack[ref_mv_idx].this_mv
+              let ref_mvs = if num_mv_found > 0 {
+                [mv_stack[ref_mv_idx].this_mv, mv_stack[ref_mv_idx].comp_mv]
               } else {
-                MotionVector{ row: 0, col: 0 }
+                [MotionVector{ row: 0, col: 0 }; 2]
               };
 
               let mv_precision = if fi.force_integer_mv != 0 {
@@ -1447,7 +1449,10 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
               } else {
                 MvSubpelPrecision::MV_SUBPEL_LOW_PRECISION
               };
-              cw.write_mv(w, &mvs[0], &ref_mv, mv_precision);
+              cw.write_mv(w, &mvs[0], &ref_mvs[0], mv_precision);
+              if luma_mode == PredictionMode::NEW_NEWMV {
+                cw.write_mv(w, &mvs[1], &ref_mvs[1], mv_precision);
+              }
             } else if luma_mode >= PredictionMode::NEAR0MV && luma_mode <= PredictionMode::NEAR2MV {
               let ref_mv_idx = luma_mode as usize - PredictionMode::NEAR0MV as usize + 1;
               let num_mv_found = mv_stack.len();
