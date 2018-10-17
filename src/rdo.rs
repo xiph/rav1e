@@ -327,7 +327,8 @@ pub fn rdo_mode_decision(
 
   for (i, &ref_frame) in ref_frame_set.iter().enumerate() {
     let mut mvs: Vec<CandidateMV> = Vec::new();
-    mode_contexts.push(cw.find_mvrefs(bo, ref_frame, &mut mvs, bsize, false, fi));
+    let ref_frames = [ref_frame, NONE_FRAME];
+    mode_contexts.push(cw.find_mvrefs(bo, &ref_frames, &mut mvs, bsize, false, fi, false));
 
     if fi.frame_type == FrameType::INTER {
       for &x in RAV1E_INTER_MODES_MINIMAL {

@@ -2016,9 +2016,9 @@ impl ContextWriter {
     false
   }
 
-  fn find_matching_mv_and_update_weight(&self, blk: &Block, mv_stack: &mut Vec<CandidateMV>, weight: u32) -> bool {
+  fn find_matching_mv_and_update_weight(&self, mv: &MotionVector, mv_stack: &mut Vec<CandidateMV>, weight: u32) -> bool {
     for mut mv_cand in mv_stack {
-      if blk.mv[0].row == mv_cand.this_mv.row && blk.mv[0].col == mv_cand.this_mv.col {
+      if mv.row == mv_cand.this_mv.row && mv.col == mv_cand.this_mv.col {
         mv_cand.weight += weight;
         return true;
       }
@@ -2026,32 +2026,36 @@ impl ContextWriter {
     false
   }
 
-  fn add_ref_mv_candidate(&self, ref_frame: usize, blk: &Block, mv_stack: &mut Vec<CandidateMV>,
-                          weight: u32, newmv_count: &mut usize) -> bool {
+  fn add_ref_mv_candidate(&self, ref_frames: &[usize; 2], blk: &Block, mv_stack: &mut Vec<CandidateMV>,
+                          weight: u32, newmv_count: &mut usize, is_compound: bool) -> bool {
     if !blk.is_inter() { /* For intrabc */
-      return false;
-    }
-
-    if blk.ref_frames[0] == ref_frame {
-      let found_match = self.find_matching_mv_and_update_weight(blk, mv_stack, weight);
-
-      if !found_match && mv_stack.len() < MAX_REF_MV_STACK_SIZE {
-        let mv_cand = CandidateMV {
-          this_mv: blk.mv[0],
-          comp_mv: blk.mv[1],
-          weight: weight
-        };
-
-        mv_stack.push(mv_cand);
-      }
-
-      if blk.mode == PredictionMode::NEWMV {
-        *newmv_count += 1;
-      }
-
-      true
-    } else {
       false
+    } else if is_compound {
+      unimplemented!();
+    } else {
+      let mut found = false;
+      for i in 0..2 {
+        if blk.ref_frames[i] == ref_frames[0] {
+          let found_match = self.find_matching_mv_and_update_weight(&blk.mv[i], mv_stack, weight);
+
+          if !found_match && mv_stack.len() < MAX_REF_MV_STACK_SIZE {
+            let mv_cand = CandidateMV {
+              this_mv: blk.mv[i],
+              comp_mv: MotionVector { row: 0, col: 0 },
+              weight: weight
+            };
+
+            mv_stack.push(mv_cand);
+          }
+
+          if blk.mode == PredictionMode::NEWMV {
+            *newmv_count += 1;
+          }
+
+          found = true;
+        }
+      }
+      found
     }
   }
 
@@ -2084,8 +2088,9 @@ impl ContextWriter {
   }
 
   fn scan_row_mbmi(&mut self, bo: &BlockOffset, row_offset: isize, max_row_offs: isize,
-                   processed_rows: &mut isize, ref_frame: usize,
-                   mv_stack: &mut Vec<CandidateMV>, newmv_count: &mut usize, bsize: BlockSize) -> bool {
+                   processed_rows: &mut isize, ref_frames: &[usize; 2],
+                   mv_stack: &mut Vec<CandidateMV>, newmv_count: &mut usize, bsize: BlockSize,
+                   is_compound: bool) -> bool {
     let bc = &self.bc;
     let target_n4_w = bsize.width_mi();
 
@@ -2126,7 +2131,7 @@ impl ContextWriter {
         *processed_rows = (inc as isize) - row_offset - 1;
       }
 
-      if self.add_ref_mv_candidate(ref_frame, cand, mv_stack, len as u32 * weight, newmv_count) {
+      if self.add_ref_mv_candidate(ref_frames, cand, mv_stack, len as u32 * weight, newmv_count, is_compound) {
         found_match = true;
       }
 
@@ -2137,8 +2142,9 @@ impl ContextWriter {
   }
 
   fn scan_col_mbmi(&mut self, bo: &BlockOffset, col_offset: isize, max_col_offs: isize,
-                   processed_cols: &mut isize, ref_frame: usize,
-                   mv_stack: &mut Vec<CandidateMV>, newmv_count: &mut usize, bsize: BlockSize) -> bool {
+                   processed_cols: &mut isize, ref_frames: &[usize; 2],
+                   mv_stack: &mut Vec<CandidateMV>, newmv_count: &mut usize, bsize: BlockSize,
+                   is_compound: bool) -> bool {
     let bc = &self.bc;
 
     let target_n4_h = bsize.height_mi();
@@ -2179,7 +2185,7 @@ impl ContextWriter {
         *processed_cols = (inc as isize) - col_offset - 1;
       }
 
-      if self.add_ref_mv_candidate(ref_frame, cand, mv_stack, len as u32 * weight, newmv_count) {
+      if self.add_ref_mv_candidate(ref_frames, cand, mv_stack, len as u32 * weight, newmv_count, is_compound) {
         found_match = true;
       }
 
@@ -2189,15 +2195,16 @@ impl ContextWriter {
     found_match
   }
 
-  fn scan_blk_mbmi(&mut self, bo: &BlockOffset, ref_frame: usize,
-                   mv_stack: &mut Vec<CandidateMV>, newmv_count: &mut usize) -> bool {
+  fn scan_blk_mbmi(&mut self, bo: &BlockOffset, ref_frames: &[usize; 2],
+                   mv_stack: &mut Vec<CandidateMV>, newmv_count: &mut usize,
+                   is_compound: bool) -> bool {
     if bo.x >= self.bc.cols || bo.y >= self.bc.rows {
       return false;
     }
 
     let weight = 2 * BLOCK_8X8.width_mi() as u32;
     /* Always assume its within a tile, probably wrong */
-    self.add_ref_mv_candidate(ref_frame, self.bc.at(bo), mv_stack, weight, newmv_count)
+    self.add_ref_mv_candidate(ref_frames, self.bc.at(bo), mv_stack, weight, newmv_count, is_compound)
   }
 
   fn add_offset(&mut self, mv_stack: &mut Vec<CandidateMV>) {
@@ -2206,8 +2213,8 @@ impl ContextWriter {
     }
   }
 
-  fn setup_mvref_list(&mut self, bo: &BlockOffset, ref_frame: usize, mv_stack: &mut Vec<CandidateMV>,
-                      bsize: BlockSize, is_sec_rect: bool, fi: &FrameInvariants) -> usize {
+  fn setup_mvref_list(&mut self, bo: &BlockOffset, ref_frames: &[usize; 2], mv_stack: &mut Vec<CandidateMV>,
+                      bsize: BlockSize, is_sec_rect: bool, fi: &FrameInvariants, is_compound: bool) -> usize {
     let (_rf, _rf_num) = self.get_mvref_ref_frames(INTRA_FRAME);
 
     let target_n4_h = bsize.height_mi();
@@ -2253,18 +2260,18 @@ impl ContextWriter {
     let mut newmv_count: usize = 0;
 
     if max_row_offs.abs() >= 1 {
-      let found_match = self.scan_row_mbmi(bo, -1, max_row_offs, &mut processed_rows, ref_frame, mv_stack,
-                                           &mut newmv_count, bsize);
+      let found_match = self.scan_row_mbmi(bo, -1, max_row_offs, &mut processed_rows, ref_frames, mv_stack,
+                                           &mut newmv_count, bsize, is_compound);
       row_match |= found_match;
     }
     if max_col_offs.abs() >= 1 {
-      let found_match = self.scan_col_mbmi(bo, -1, max_col_offs, &mut processed_cols, ref_frame, mv_stack,
-                                           &mut newmv_count, bsize);
+      let found_match = self.scan_col_mbmi(bo, -1, max_col_offs, &mut processed_cols, ref_frames, mv_stack,
+                                           &mut newmv_count, bsize, is_compound);
       col_match |= found_match;
     }
     if self.has_tr(bo, bsize, is_sec_rect) {
-      let found_match = self.scan_blk_mbmi(&bo.with_offset(target_n4_w as isize, -1), ref_frame, mv_stack,
-                                           &mut newmv_count);
+      let found_match = self.scan_blk_mbmi(&bo.with_offset(target_n4_w as isize, -1), ref_frames, mv_stack,
+                                           &mut newmv_count, is_compound);
       row_match |= found_match;
     }
 
@@ -2275,7 +2282,9 @@ impl ContextWriter {
     /* Scan the second outer area. */
     let mut far_newmv_count: usize = 0; // won't be used
 
-    let found_match = self.scan_blk_mbmi(&bo.with_offset(-1, -1), ref_frame, mv_stack, &mut far_newmv_count);
+    let found_match = self.scan_blk_mbmi(
+      &bo.with_offset(-1, -1), ref_frames, mv_stack, &mut far_newmv_count, is_compound
+    );
     row_match |= found_match;
 
     for idx in 2..MVREF_ROW_COLS+1 {
@@ -2283,14 +2292,14 @@ impl ContextWriter {
       let col_offset = -2 * idx as isize + 1 + col_adj as isize;
 
       if row_offset.abs() <= max_row_offs.abs() && row_offset.abs() > processed_rows {
-        let found_match = self.scan_row_mbmi(bo, row_offset, max_row_offs, &mut processed_rows, ref_frame, mv_stack,
-                                             &mut far_newmv_count, bsize);
+        let found_match = self.scan_row_mbmi(bo, row_offset, max_row_offs, &mut processed_rows, ref_frames, mv_stack,
+                                             &mut far_newmv_count, bsize, is_compound);
         row_match |= found_match;
       }
 
       if col_offset.abs() <= max_col_offs.abs() && col_offset.abs() > processed_cols {
-        let found_match = self.scan_col_mbmi(bo, col_offset, max_col_offs, &mut processed_cols, ref_frame, mv_stack,
-                                             &mut far_newmv_count, bsize);
+        let found_match = self.scan_col_mbmi(bo, col_offset, max_col_offs, &mut processed_cols, ref_frames, mv_stack,
+                                             &mut far_newmv_count, bsize, is_compound);
         col_match |= found_match;
       }
     }
@@ -2331,7 +2340,7 @@ impl ContextWriter {
           };
 
           let blk = &self.bc.at(&rbo);
-          self.add_extra_mv_candidate(blk, ref_frame, mv_stack, fi);
+          self.add_extra_mv_candidate(blk, ref_frames[0], mv_stack, fi);
 
           idx += if pass == 0 {
             blk.n4_w
@@ -2361,29 +2370,29 @@ impl ContextWriter {
     mode_context
   }
 
-  pub fn find_mvrefs(&mut self, bo: &BlockOffset, ref_frame: usize,
+  pub fn find_mvrefs(&mut self, bo: &BlockOffset, ref_frames: &[usize; 2],
                      mv_stack: &mut Vec<CandidateMV>, bsize: BlockSize, is_sec_rect: bool,
-                     fi: &FrameInvariants) -> usize {
-    assert!(ref_frame != NONE_FRAME);
-    if ref_frame < REF_FRAMES {
-      if ref_frame != INTRA_FRAME {
+                     fi: &FrameInvariants, is_compound: bool) -> usize {
+    assert!(ref_frames[0] != NONE_FRAME);
+    if ref_frames[0] < REF_FRAMES {
+      if ref_frames[0] != INTRA_FRAME {
         /* TODO: convert global mv to an mv here */
       } else {
         /* TODO: set the global mv ref to invalid here */
       }
     }
 
-    if ref_frame != INTRA_FRAME {
+    if ref_frames[0] != INTRA_FRAME {
       /* TODO: Set zeromv ref to the converted global motion vector */
     } else {
       /* TODO: Set the zeromv ref to 0 */
     }
 
-    if ref_frame <= INTRA_FRAME {
+    if ref_frames[0] <= INTRA_FRAME {
       return 0;
     }
 
-    let mode_context = self.setup_mvref_list(bo, ref_frame, mv_stack, bsize, is_sec_rect, fi);
+    let mode_context = self.setup_mvref_list(bo, ref_frames, mv_stack, bsize, is_sec_rect, fi, is_compound);
     mode_context
   }
 

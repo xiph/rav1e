@@ -1765,7 +1765,8 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
           rd_cost = mode_decision.rd_cost + cost;
 
           let mut mv_stack = Vec::new();
-          let mode_context = cw.find_mvrefs(bo, ref_frames[0], &mut mv_stack, bsize, false, fi);
+          let is_compound = ref_frames[1] != NONE_FRAME;
+          let mode_context = cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, false, fi, is_compound);
 
           cdef_coded = encode_block_a(seq, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                                      bsize, bo, skip);
@@ -1845,7 +1846,8 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             cw.bc.set_tx_size(bo, tx_size);
 
             let mut mv_stack = Vec::new();
-            let mode_context = cw.find_mvrefs(bo, ref_frames[0], &mut mv_stack, bsize, false, fi);
+            let is_compound = ref_frames[1] != NONE_FRAME;
+            let mode_context = cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, false, fi, is_compound);
 
             cdef_coded = encode_block_a(seq, cw, if cdef_coded {w_post_cdef} else {w_pre_cdef},
                                        bsize, bo, skip);
@@ -1938,7 +1940,8 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
                 rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, ref_frames, mvs, skip);
 
             let mut mv_stack = Vec::new();
-            let mode_context = cw.find_mvrefs(bo, ref_frames[0], &mut mv_stack, bsize, false, fi);
+            let is_compound = ref_frames[1] != NONE_FRAME;
+            let mode_context = cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, false, fi, is_compound);
 
             if !mode_luma.is_intra() && mode_luma != PredictionMode::GLOBALMV {
               mode_luma = PredictionMode::NEWMV;
