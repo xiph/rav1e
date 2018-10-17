@@ -355,7 +355,8 @@ pub fn rdo_mode_decision(
     ref_frames_set.push(ref_frames);
     let mv0 = mvs_from_me[0][0];
     let mv1 = mvs_from_me[1][1];
-    mvs_from_me.push([mv0, mv1]);
+    //mvs_from_me.push([mv0, mv1]);
+    mvs_from_me.push([MotionVector{row:0,col:0};2]);
     let mut mv_stack: Vec<CandidateMV> = Vec::new();
     mode_contexts.push(cw.find_mvrefs(bo, &ref_frames, &mut mv_stack, bsize, false, fi, true));
     mode_set.push((PredictionMode::NEW_NEWMV, ref_frames_set.len() - 1));
@@ -413,6 +414,7 @@ pub fn rdo_mode_decision(
         );
 
         if rd < best.rd {
+        //if rd < best.rd || luma_mode == PredictionMode::NEW_NEWMV {
           best.rd = rd;
           best.mode_luma = luma_mode;
           best.mode_chroma = chroma_mode;

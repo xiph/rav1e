@@ -2100,26 +2100,55 @@ impl ContextWriter {
   fn add_extra_mv_candidate(
     &self,
     blk: &Block,
-    ref_frame: usize,
+    ref_frames: &[usize; 2],
     mv_stack: &mut Vec<CandidateMV>,
-    fi: &FrameInvariants
+    fi: &FrameInvariants,
+    is_compound: bool,
+    ref_id_count: &mut [usize; 2],
+    ref_id_mvs: &mut [[MotionVector; 2]; 2],
+    ref_diff_count: &mut [usize; 2],
+    ref_diff_mvs: &mut [[MotionVector; 2]; 2],
   ) {
-    for cand_list in 0..2 {
-      if blk.ref_frames[cand_list] > INTRA_FRAME && blk.ref_frames[cand_list] != NONE_FRAME {
-        let mut mv = blk.mv[0];
-        if fi.ref_frame_sign_bias[blk.ref_frames[cand_list] - LAST_FRAME] !=
-        fi.ref_frame_sign_bias[ref_frame - LAST_FRAME] {
-          mv.row = -mv.row;
-          mv.col = -mv.col;
+    if is_compound {
+      for cand_list in 0..2 {
+        let cand_ref = blk.ref_frames[cand_list];
+        if cand_ref > INTRA_FRAME && cand_ref != NONE_FRAME {
+          for list in 0..2 {
+            let mut cand_mv = blk.mv[cand_list];
+            if cand_ref == ref_frames[list] && ref_id_count[list] < 2 {
+              ref_id_mvs[list][ref_id_count[list]] = cand_mv;
+              ref_id_count[list] = ref_id_count[list] + 1;
+            } else if ref_diff_count[list] < 2 {
+              if fi.ref_frame_sign_bias[cand_ref - LAST_FRAME] !=
+                fi.ref_frame_sign_bias[ref_frames[list] - LAST_FRAME] {
+                cand_mv.row = -cand_mv.row;
+                cand_mv.col = -cand_mv.col;
+              }
+              ref_diff_mvs[list][ref_diff_count[list]] = cand_mv;
+              ref_diff_count[list] = ref_diff_count[list] + 1;
+            }
+          }
         }
+      }
+    } else {
+      for cand_list in 0..2 {
+        let cand_ref = blk.ref_frames[cand_list];
+        if cand_ref > INTRA_FRAME && cand_ref != NONE_FRAME {
+          let mut mv = blk.mv[cand_list];
+          if fi.ref_frame_sign_bias[blk.ref_frames[cand_list] - LAST_FRAME] !=
+            fi.ref_frame_sign_bias[ref_frames[0] - LAST_FRAME] {
+            mv.row = -mv.row;
+            mv.col = -mv.col;
+          }
 
-        if !self.find_matching_mv(&mv, mv_stack) {
-          let mv_cand = CandidateMV {
-            this_mv: mv,
-            comp_mv: mv,
-            weight: 2
-          };
-          mv_stack.push(mv_cand);
+          if !self.find_matching_mv(&mv, mv_stack) {
+            let mv_cand = CandidateMV {
+              this_mv: mv,
+              comp_mv: MotionVector { row: 0, col: 0 },
+              weight: 2
+            };
+            mv_stack.push(mv_cand);
+          }
         }
       }
     }
@@ -2368,6 +2397,11 @@ impl ContextWriter {
 
       let passes = if up_avail { 0 } else { 1 } .. if left_avail { 2 } else { 1 };
 
+      let mut ref_id_count = [0 as usize; 2];
+      let mut ref_diff_count = [0 as usize; 2];
+      let mut ref_id_mvs = [[MotionVector { row: 0, col: 0 }; 2]; 2];
+      let mut ref_diff_mvs = [[MotionVector { row: 0, col: 0 }; 2]; 2];
+
       for pass in passes {
         let mut idx = 0;
         while idx < num4x4 && mv_stack.len() < 2 {
@@ -2378,13 +2412,63 @@ impl ContextWriter {
           };
 
           let blk = &self.bc.at(&rbo);
-          self.add_extra_mv_candidate(blk, ref_frames[0], mv_stack, fi);
+          self.add_extra_mv_candidate(
+            blk, ref_frames, mv_stack, fi, is_compound,
+            &mut ref_id_count, &mut ref_id_mvs, &mut ref_diff_count, &mut ref_diff_mvs
+          );
 
           idx += if pass == 0 {
             blk.n4_w
           } else {
             blk.n4_h
           };
+        }
+      }
+
+      if is_compound {
+        let mut combined_mvs = [[MotionVector { row: 0, col: 0}; 2]; 2];
+
+        for list in 0..2 {
+          let mut comp_count = 0;
+          for idx in 0..ref_id_count[list] {
+            combined_mvs[comp_count][list] = ref_id_mvs[list][idx];
+            comp_count = comp_count + 1;
+          }
+          for idx in 0..ref_diff_count[list] {
+            if comp_count < 2 {
+              combined_mvs[comp_count][list] = ref_diff_mvs[list][idx];
+              comp_count = comp_count + 1;
+            }
+          }
+        }
+
+        if mv_stack.len() == 1 {
+          let mv_cand = if combined_mvs[0][0].row == mv_stack[0].this_mv.row &&
+            combined_mvs[0][0].col == mv_stack[0].this_mv.col &&
+            combined_mvs[0][1].row == mv_stack[0].comp_mv.row &&
+            combined_mvs[0][1].col == mv_stack[0].comp_mv.col {
+            CandidateMV {
+              this_mv: combined_mvs[1][0],
+              comp_mv: combined_mvs[1][1],
+              weight: 2
+            }
+          } else {
+            CandidateMV {
+              this_mv: combined_mvs[0][0],
+              comp_mv: combined_mvs[0][1],
+              weight: 2
+            }
+          };
+          mv_stack.push(mv_cand);
+        } else {
+          for idx in 0..2 {
+            let mv_cand = CandidateMV {
+              this_mv: combined_mvs[idx][0],
+              comp_mv: combined_mvs[idx][1],
+              weight: 2
+            };
+            mv_stack.push(mv_cand);
+          }
         }
       }
     }
@@ -2571,7 +2655,7 @@ impl ContextWriter {
 
   fn get_comp_ref_type_ctx(&self, bo: &BlockOffset) -> usize {
     fn is_samedir_ref_pair(ref0: usize, ref1: usize) -> bool {
-      (ref0 >= BWDREF_FRAME) == (ref1 >= BWDREF_FRAME)
+      (ref0 >= BWDREF_FRAME && ref0 != NONE_FRAME) == (ref1 >= BWDREF_FRAME && ref1 != NONE_FRAME)
     }
 
     let avail_left = bo.x > 0;
