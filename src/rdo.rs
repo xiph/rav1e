@@ -306,6 +306,7 @@ pub fn rdo_mode_decision(
 
   let mut ref_frame_set = Vec::new();
   let mut ref_slot_set = Vec::new();
+  let mut mvs_from_me = Vec::new();
 
   if fi.frame_type == FrameType::INTER {
     for i in LAST_FRAME..NONE_FRAME {
@@ -314,6 +315,7 @@ pub fn rdo_mode_decision(
       if !ref_slot_set.contains(&fi.ref_frames[i - LAST_FRAME]) {
         ref_frame_set.push(i);
         ref_slot_set.push(fi.ref_frames[i - LAST_FRAME]);
+        mvs_from_me.push(motion_estimation(fi, fs, bsize, bo, i, pmv));
       }
     }
     assert!(ref_frame_set.len() != 0);
@@ -420,27 +422,27 @@ pub fn rdo_mode_decision(
   }
 
   mode_set.iter().for_each(|&(luma_mode, i)| {
-    let mv = match luma_mode {
-      PredictionMode::NEWMV => motion_estimation(fi, fs, bsize, bo, ref_frame_set[i], pmv),
+    let mvs = match luma_mode {
+      PredictionMode::NEWMV => [mvs_from_me[i], MotionVector { row: 0, col: 0 }],
       PredictionMode::NEARESTMV => if mv_stacks[i].len() > 0 {
-        mv_stacks[i][0].this_mv
+        [mv_stacks[i][0].this_mv, mv_stacks[i][0].comp_mv]
       } else {
-        MotionVector { row: 0, col: 0 }
+        [MotionVector { row: 0, col: 0 }; 2]
       },
       PredictionMode::NEAR0MV => if mv_stacks[i].len() > 1 {
-        mv_stacks[i][1].this_mv
+        [mv_stacks[i][1].this_mv, mv_stacks[i][1].comp_mv]
       } else {
-        MotionVector { row: 0, col: 0 }
+        [MotionVector { row: 0, col: 0 }; 2]
       },
       PredictionMode::NEAR1MV | PredictionMode::NEAR2MV =>
-          mv_stacks[i][luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].this_mv,
-      _ => MotionVector { row: 0, col: 0 }
+          [mv_stacks[i][luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].this_mv,
+          mv_stacks[i][luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].comp_mv],
+      _ => [MotionVector { row: 0, col: 0 }; 2]
     };
     let mode_set_chroma = vec![luma_mode];
 
-    let mvs = &[mv, MotionVector { row: 0, col: 0 }];
     let ref_frames = &[ref_frame_set[i], NONE_FRAME];
-    luma_rdo(luma_mode, fs, cw, &mut best, mvs, ref_frames, &mode_set_chroma, false,
+    luma_rdo(luma_mode, fs, cw, &mut best, &mvs, ref_frames, &mode_set_chroma, false,
              mode_contexts[i], &mv_stacks[i]);
   });
 
