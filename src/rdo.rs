@@ -492,7 +492,7 @@ pub fn rdo_mode_decision(
           tx_type,
           mode_context,
           mv_stack,
-          true
+          false
         );
 
         let cost = wr.tell_frac() - tell;
@@ -636,7 +636,7 @@ pub fn rdo_mode_decision(
         best.tx_type,
         0,
         &Vec::new(),
-        true
+        false
       );
 
       let cost = wr.tell_frac() - tell;
