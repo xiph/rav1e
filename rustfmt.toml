@@ -22,7 +22,7 @@ ignore = [
     # "src/predict.rs", # Clean
     # "src/quantize.rs", # Clean
     # "src/rdo.rs", # Clean
-    # "src/transform.rs", # Clean
+    # "src/transform/mod.rs", # Clean
     # "benches/bench.rs", # Clean
     # "src/bin/rav1e.rs", # Clean
     # "src/bin/rav1repl.rs", # Clean

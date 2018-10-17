@@ -383,6 +383,10 @@ impl TxSize {
     TX_SIZE_WIDTH_LOG2[self as usize]
   }
 
+  pub fn width_index(self) -> usize {
+    return self.width_log2() - Self::smallest_width_log2();
+  }
+
   pub fn smallest_width_log2() -> usize {
     TX_4X4.width_log2()
   }
@@ -395,6 +399,14 @@ impl TxSize {
     const TX_SIZE_HEIGHT_LOG2: [usize; TxSize::TX_SIZES_ALL] =
       [2, 3, 4, 5, 6, 3, 2, 4, 3, 5, 4, 6, 5, 4, 2, 5, 3, 6, 4];
     TX_SIZE_HEIGHT_LOG2[self as usize]
+  }
+
+  pub fn height_index(self) -> usize {
+    return self.height_log2() - Self::smallest_height_log2();
+  }
+
+  pub fn smallest_height_log2() -> usize {
+    TX_4X4.height_log2()
   }
 
   pub fn width_mi(self) -> usize {
@@ -489,11 +501,36 @@ impl TxSize {
         ];
     TX_SIZE_SQR_UP[self as usize]
   }
+
+  pub fn by_dims(w: usize, h: usize) -> TxSize {
+    match (w, h) {
+      (4, 4) => TxSize::TX_4X4,
+      (8, 8) => TxSize::TX_8X8,
+      (16, 16) => TxSize::TX_16X16,
+      (32, 32) => TxSize::TX_32X32,
+      (64, 64) => TxSize::TX_64X64,
+      (4, 8) => TxSize::TX_4X8,
+      (8, 4) => TxSize::TX_8X4,
+      (8, 16) => TxSize::TX_8X16,
+      (16, 8) => TxSize::TX_16X8,
+      (16, 32) => TxSize::TX_16X32,
+      (32, 16) => TxSize::TX_32X16,
+      (32, 64) => TxSize::TX_32X64,
+      (64, 32) => TxSize::TX_64X32,
+      (4, 16) => TxSize::TX_4X16,
+      (16, 4) => TxSize::TX_16X4,
+      (8, 32) => TxSize::TX_8X32,
+      (32, 8) => TxSize::TX_32X8,
+      (16, 64) => TxSize::TX_16X64,
+      (64, 16) => TxSize::TX_64X16,
+      _ => unreachable!()
+    }
+  }
 }
 
 pub const TX_TYPES: usize = 16;
 
-#[derive(Copy, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
 #[repr(C)]
 pub enum TxType {
   DCT_DCT = 0,   // DCT  in both horizontal and vertical
