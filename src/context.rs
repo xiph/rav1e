@@ -29,6 +29,7 @@ use std::*;
 use entropymode::*;
 use token_cdfs::*;
 use encoder::FrameInvariants;
+use scan_order::*;
 
 use self::REF_CONTEXTS;
 use self::SINGLE_REFS;
@@ -610,18 +611,10 @@ pub struct NMVContext {
 }
 
 extern "C" {
-  static av1_scan_orders: [[SCAN_ORDER; TX_TYPES]; TxSize::TX_SIZES_ALL];
+  //static av1_scan_orders: [[SCAN_ORDER; TX_TYPES]; TxSize::TX_SIZES_ALL];
 
   // lv_map
   static default_nmv_context: NMVContext;
-}
-
-#[repr(C)]
-pub struct SCAN_ORDER {
-  // FIXME: don't hardcode sizes
-  pub scan: &'static [u16; 32 * 32],
-  pub iscan: &'static [u16; 32 * 32],
-  pub neighbors: &'static [u16; ((32 * 32) + 1) * 2]
 }
 
 #[derive(Clone)]
@@ -2726,7 +2719,7 @@ impl ContextWriter {
   }
 
   pub fn get_nz_map_contexts(
-    &mut self, levels: &mut [u8], scan: &[u16; 32*32], eob: u16,
+    &mut self, levels: &mut [u8], scan: &[u16], eob: u16,
     tx_size: TxSize, tx_class: TxClass, coeff_contexts: &mut [i8]
   ) {
     // TODO: If TX_64X64 is enabled, use av1_get_adjusted_tx_size()
