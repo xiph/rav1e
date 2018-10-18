@@ -353,8 +353,10 @@ pub fn rdo_mode_decision(
     // FIXME make this more flexible and less hardcoded
     let ref_frames = [LAST_FRAME, ALTREF_FRAME];
     ref_frames_set.push(ref_frames);
+    assert!(ref_frames_set[0][0] == ref_frames[0]);
+    assert!(ref_frames_set[1][0] == ref_frames[1]);
     let mv0 = mvs_from_me[0][0];
-    let mv1 = mvs_from_me[1][1];
+    let mv1 = mvs_from_me[1][0];
     mvs_from_me.push([mv0, mv1]);
     let mut mv_stack: Vec<CandidateMV> = Vec::new();
     mode_contexts.push(cw.find_mvrefs(bo, &ref_frames, &mut mv_stack, bsize, false, fi, true));
@@ -412,8 +414,8 @@ pub fn rdo_mode_decision(
           false
         );
 
-        if rd < best.rd {
-        //if rd < best.rd || luma_mode == PredictionMode::NEW_NEWMV {
+        //if rd < best.rd {
+        if rd < best.rd || luma_mode == PredictionMode::NEW_NEWMV {
           best.rd = rd;
           best.mode_luma = luma_mode;
           best.mode_chroma = chroma_mode;
