@@ -176,7 +176,7 @@ impl Context {
   pub fn frame_properties(&mut self, idx: u64) -> bool {
     let key_frame_interval: u64 = 30;
 
-    let reorder = true;
+    let reorder = false;
     let multiref = reorder || self.fi.config.speed <= 2;
 
     let pyramid_depth = if reorder { 2 } else { 0 };
@@ -264,7 +264,7 @@ impl Context {
         } as u8) & 7;
       }
 
-      self.fi.reference_mode = if multiref && reorder && idx_in_group != 0 && false {
+      self.fi.reference_mode = if multiref && reorder && idx_in_group != 0 {
         ReferenceMode::SELECT
       } else {
         ReferenceMode::SINGLE
