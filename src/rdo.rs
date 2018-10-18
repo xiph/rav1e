@@ -414,8 +414,8 @@ pub fn rdo_mode_decision(
           false
         );
 
-        //if rd < best.rd {
-        if rd < best.rd || luma_mode == PredictionMode::NEW_NEWMV {
+        if rd < best.rd {
+        //if rd < best.rd || luma_mode == PredictionMode::NEW_NEWMV {
           best.rd = rd;
           best.mode_luma = luma_mode;
           best.mode_chroma = chroma_mode;

@@ -2086,7 +2086,12 @@ impl ContextWriter {
             mv_stack.push(mv_cand);
           }
 
-          if blk.mode == PredictionMode::NEWMV {
+          if blk.mode == PredictionMode::NEW_NEWMV ||
+            blk.mode == PredictionMode::NEAREST_NEWMV ||
+            blk.mode == PredictionMode::NEW_NEARESTMV ||
+            blk.mode == PredictionMode::NEAR_NEWMV ||
+            blk.mode == PredictionMode::NEW_NEARMV ||
+            blk.mode == PredictionMode::NEWMV {
             *newmv_count += 1;
           }
 
@@ -2135,7 +2140,7 @@ impl ContextWriter {
         let cand_ref = blk.ref_frames[cand_list];
         if cand_ref > INTRA_FRAME && cand_ref != NONE_FRAME {
           let mut mv = blk.mv[cand_list];
-          if fi.ref_frame_sign_bias[blk.ref_frames[cand_list] - LAST_FRAME] !=
+          if fi.ref_frame_sign_bias[cand_ref - LAST_FRAME] !=
             fi.ref_frame_sign_bias[ref_frames[0] - LAST_FRAME] {
             mv.row = -mv.row;
             mv.col = -mv.col;
