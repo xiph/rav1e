@@ -270,6 +270,7 @@ impl Context {
         ReferenceMode::SINGLE
       };
       self.fi.number = segment_idx * key_frame_interval + self.fi.order_hint as u64;
+      self.fi.me_range_scale = (group_src_len >> lvl) as u8;
     }
 
     true

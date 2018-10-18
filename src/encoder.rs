@@ -421,6 +421,7 @@ pub struct FrameInvariants {
     pub ref_frame_sign_bias: [bool; INTER_REFS_PER_FRAME],
     pub rec_buffer: ReferenceFramesSet,
     pub base_q_idx: u8,
+    pub me_range_scale: u8,
 }
 
 impl FrameInvariants {
@@ -489,6 +490,7 @@ impl FrameInvariants {
             ref_frame_sign_bias: [false; INTER_REFS_PER_FRAME],
             rec_buffer: ReferenceFramesSet::new(),
             base_q_idx: config.quantizer as u8,
+            me_range_scale: 1,
         }
     }
 
