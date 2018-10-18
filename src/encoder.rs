@@ -1370,7 +1370,7 @@ pub fn encode_tx_block(
     if !fi.use_tx_domain_distortion || !for_rdo_use {
         inverse_transform_add(rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
     } else {
-        //inverse_transform_add(rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
+        inverse_transform_add(rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
 
         // Store tx-domain distortion of this block
         tx_dist = coeffs
