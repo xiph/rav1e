@@ -1422,9 +1422,10 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
                 cw.write_inter_mode(w, luma_mode, mode_context);
             }
 
+            let ref_mv_idx = 0;
+            let num_mv_found = mv_stack.len();
+
             if luma_mode == PredictionMode::NEWMV || luma_mode == PredictionMode::NEW_NEWMV {
-              let ref_mv_idx = 0;
-              let num_mv_found = mv_stack.len();
               if luma_mode == PredictionMode::NEW_NEWMV { assert!(num_mv_found >= 2); }
               for idx in 0..2 {
                 if num_mv_found > idx + 1 {
@@ -1435,27 +1436,34 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
                   if !drl_mode { break; }
                 }
               }
+            }
 
-              let ref_mvs = if num_mv_found > 0 {
-                [mv_stack[ref_mv_idx].this_mv, mv_stack[ref_mv_idx].comp_mv]
-              } else {
-                [MotionVector{ row: 0, col: 0 }; 2]
-              };
+            let ref_mvs = if num_mv_found > 0 {
+              [mv_stack[ref_mv_idx].this_mv, mv_stack[ref_mv_idx].comp_mv]
+            } else {
+              [MotionVector{ row: 0, col: 0 }; 2]
+            };
 
-              let mv_precision = if fi.force_integer_mv != 0 {
-                MvSubpelPrecision::MV_SUBPEL_NONE
-              } else if fi.allow_high_precision_mv {
-                MvSubpelPrecision::MV_SUBPEL_HIGH_PRECISION
-              } else {
-                MvSubpelPrecision::MV_SUBPEL_LOW_PRECISION
-              };
+            let mv_precision = if fi.force_integer_mv != 0 {
+              MvSubpelPrecision::MV_SUBPEL_NONE
+            } else if fi.allow_high_precision_mv {
+              MvSubpelPrecision::MV_SUBPEL_HIGH_PRECISION
+            } else {
+              MvSubpelPrecision::MV_SUBPEL_LOW_PRECISION
+            };
+
+            if luma_mode == PredictionMode::NEWMV ||
+                luma_mode == PredictionMode::NEW_NEWMV ||
+                luma_mode == PredictionMode::NEW_NEARESTMV {
               cw.write_mv(w, &mvs[0], &ref_mvs[0], mv_precision);
-              if luma_mode == PredictionMode::NEW_NEWMV {
-                cw.write_mv(w, &mvs[1], &ref_mvs[1], mv_precision);
-              }
-            } else if luma_mode >= PredictionMode::NEAR0MV && luma_mode <= PredictionMode::NEAR2MV {
+            }
+            if luma_mode == PredictionMode::NEW_NEWMV ||
+                luma_mode == PredictionMode::NEAREST_NEWMV {
+              cw.write_mv(w, &mvs[1], &ref_mvs[1], mv_precision);
+            }
+
+            if luma_mode >= PredictionMode::NEAR0MV && luma_mode <= PredictionMode::NEAR2MV {
               let ref_mv_idx = luma_mode as usize - PredictionMode::NEAR0MV as usize + 1;
-              let num_mv_found = mv_stack.len();
               if luma_mode != PredictionMode::NEAR0MV { assert!(num_mv_found > ref_mv_idx); }
 
               for idx in 1..3 {
@@ -1949,22 +1957,26 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
             let mode_context = cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, false, fi, is_compound);
 
             // TODO proper remap when is_compound is true
-            if !mode_luma.is_intra() && mode_luma != PredictionMode::GLOBALMV {
-                if is_compound {
-                    mode_luma = PredictionMode::NEW_NEWMV;
-                    for (c, m) in mv_stack.iter().take(1)
-                    .zip([PredictionMode::NEAREST_NEARESTMV].iter()) {
-                        if c.this_mv.row == mvs[0].row && c.this_mv.col == mvs[0].col &&
-                            c.comp_mv.row == mvs[1].row && c.comp_mv.col == mvs[1].col {
-                            mode_luma = *m;
-                        }
-                    }
-                    if mode_luma == PredictionMode::NEW_NEWMV && mvs[0].row == 0 && mvs[0].col == 0 &&
+            if !mode_luma.is_intra() {
+                if is_compound && mode_luma != PredictionMode::GLOBAL_GLOBALMV {
+                    let match0 = mv_stack[0].this_mv.row == mvs[0].row && mv_stack[0].this_mv.col == mvs[0].col;
+                    let match1 = mv_stack[0].comp_mv.row == mvs[1].row && mv_stack[0].comp_mv.col == mvs[1].col;
+
+                    mode_luma = if match0 && match1 {
+                        PredictionMode::NEAREST_NEARESTMV
+                    } else if match0 {
+                        PredictionMode::NEAREST_NEWMV
+                    } else if match1 {
+                        PredictionMode::NEW_NEARESTMV
+                    } else {
+                        PredictionMode::NEW_NEWMV
+                    };
+                    if mode_luma != PredictionMode::NEAREST_NEARESTMV && mvs[0].row == 0 && mvs[0].col == 0 &&
                         mvs[1].row == 0 && mvs[1].col == 0 {
                         mode_luma = PredictionMode::GLOBAL_GLOBALMV;
                     }
                     mode_chroma = mode_luma;
-                } else {
+                } else if !is_compound && mode_luma != PredictionMode::GLOBALMV {
                     mode_luma = PredictionMode::NEWMV;
                     for (c, m) in mv_stack.iter().take(4)
                     .zip([PredictionMode::NEARESTMV, PredictionMode::NEAR0MV,

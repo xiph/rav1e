@@ -360,8 +360,11 @@ pub fn rdo_mode_decision(
     mvs_from_me.push([mv0, mv1]);
     let mut mv_stack: Vec<CandidateMV> = Vec::new();
     mode_contexts.push(cw.find_mvrefs(bo, &ref_frames, &mut mv_stack, bsize, false, fi, true));
-    mode_set.push((PredictionMode::NEW_NEWMV, ref_frames_set.len() - 1));
+    mode_set.push((PredictionMode::GLOBAL_GLOBALMV, ref_frames_set.len() - 1));
     mode_set.push((PredictionMode::NEAREST_NEARESTMV, ref_frames_set.len() - 1));
+    mode_set.push((PredictionMode::NEW_NEWMV, ref_frames_set.len() - 1));
+    mode_set.push((PredictionMode::NEAREST_NEWMV, ref_frames_set.len() - 1));
+    mode_set.push((PredictionMode::NEW_NEARESTMV, ref_frames_set.len() - 1));
     mv_stacks.push(mv_stack);
   }
 
@@ -458,6 +461,8 @@ pub fn rdo_mode_decision(
       PredictionMode::NEAR1MV | PredictionMode::NEAR2MV =>
           [mv_stacks[i][luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].this_mv,
           mv_stacks[i][luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].comp_mv],
+      PredictionMode::NEAREST_NEWMV => [mv_stacks[i][0].this_mv, mvs_from_me[i][1]],
+      PredictionMode::NEW_NEARESTMV => [mvs_from_me[i][0], mv_stacks[i][0].comp_mv],
       _ => [MotionVector { row: 0, col: 0 }; 2]
     };
     let mode_set_chroma = vec![luma_mode];
