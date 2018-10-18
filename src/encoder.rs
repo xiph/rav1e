@@ -1403,6 +1403,8 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
     cw.bc.set_ref_frames(bo, bsize, ref_frames);
     cw.bc.set_motion_vectors(bo, bsize, mvs);
 
+    if ref_frames[1] != NONE_FRAME { assert!(luma_mode == PredictionMode::NEW_NEWMV); }
+
     //write_q_deltas();
     if cw.bc.code_deltas && fs.deblock.block_deltas_enabled && (bsize < sb_size || !skip) {
         cw.write_block_deblock_deltas(w, bo, fs.deblock.block_delta_multi);
@@ -1417,6 +1419,7 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
 
             // NOTE: Until rav1e supports other inter modes than GLOBALMV
             if luma_mode >= PredictionMode::NEAREST_NEARESTMV {
+                assert!(luma_mode == PredictionMode::NEW_NEWMV);
                 cw.write_compound_mode(w, luma_mode, mode_context);
             } else {
                 cw.write_inter_mode(w, luma_mode, mode_context);
@@ -1425,12 +1428,12 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
             if luma_mode == PredictionMode::NEWMV || luma_mode == PredictionMode::NEW_NEWMV {
               let ref_mv_idx = 0;
               let num_mv_found = mv_stack.len();
+              if luma_mode == PredictionMode::NEW_NEWMV { assert!(num_mv_found >= 2); }
               for idx in 0..2 {
                 if num_mv_found > idx + 1 {
                   let drl_mode = ref_mv_idx > idx;
                   let ctx: usize = (mv_stack[idx].weight < REF_CAT_LEVEL) as usize
                     + (mv_stack[idx + 1].weight < REF_CAT_LEVEL) as usize;
-
                   cw.write_drl_mode(w, drl_mode, ctx);
                   if !drl_mode { break; }
                 }
@@ -1948,7 +1951,8 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
             let is_compound = ref_frames[1] != NONE_FRAME;
             let mode_context = cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, false, fi, is_compound);
 
-            if !mode_luma.is_intra() && mode_luma != PredictionMode::GLOBALMV {
+            // TODO proper remap when is_compound is true
+            if !mode_luma.is_intra() && mode_luma != PredictionMode::GLOBALMV && !is_compound {
               mode_luma = PredictionMode::NEWMV;
               for (c, m) in mv_stack.iter().take(4)
                 .zip([PredictionMode::NEARESTMV, PredictionMode::NEAR0MV,
