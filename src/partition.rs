@@ -1016,7 +1016,7 @@ impl PredictionMode {
                     val = val << shifts.2;
                     if i == 1 {
                       val = val + slice[output_index] as i32 - 32768;
-                      val = val >> shifts.2 + 1;
+                      val = round_shift(val, shifts.2 + 1);
                       val = val.max(0).min(max_sample_val);
                     } else {
                       val = val + 32768;
@@ -1044,7 +1044,7 @@ impl PredictionMode {
                   let mut val = round_shift(sum, shifts.0 + shifts.1 - 7);
                   if is_compound && i == 1 {
                     val = val + slice[output_index] as i32 - 32768;
-                    val = val >> shifts.2 + 1;
+                    val = round_shift(val, shifts.2 + 1);
                     val = val.max(0).min(max_sample_val);
                   } else if !is_compound {
                     val = val.max(0).min(max_sample_val);
@@ -1073,7 +1073,7 @@ impl PredictionMode {
                   let mut val = round_shift(round_shift(sum, shifts.0) << 7, shifts.1);
                   if is_compound && i == 1 {
                     val = val + slice[output_index] as i32 - 32768;
-                    val = val >> shifts.2 + 1;
+                    val = round_shift(val, shifts.2 + 1);
                     val = val.max(0).min(max_sample_val);
                   } else if !is_compound {
                     val = val.max(0).min(max_sample_val);
@@ -1117,7 +1117,7 @@ impl PredictionMode {
                     let mut val = round_shift(sum, shifts.1);
                     if is_compound && i == 1 {
                       val = val + slice[output_index] as i32 - 32768;
-                      val = val >> shifts.2 + 1;
+                      val = round_shift(val, shifts.2 + 1);
                       val = val.max(0).min(max_sample_val);
                     } else if !is_compound {
                       val = val.max(0).min(max_sample_val);
