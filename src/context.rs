@@ -2489,6 +2489,8 @@ impl ContextWriter {
       let mvy_max = (self.bc.rows - bo.y - blk_h / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_h;
       mv.this_mv.row = (mv.this_mv.row as isize).max(mvy_min).min(mvy_max) as i16;
       mv.this_mv.col = (mv.this_mv.col as isize).max(mvx_min).min(mvx_max) as i16;
+      mv.comp_mv.row = (mv.comp_mv.row as isize).max(mvy_min).min(mvy_max) as i16;
+      mv.comp_mv.col = (mv.comp_mv.col as isize).max(mvx_min).min(mvx_max) as i16;
     }
 
     mode_context
