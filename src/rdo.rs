@@ -361,6 +361,7 @@ pub fn rdo_mode_decision(
     let mut mv_stack: Vec<CandidateMV> = Vec::new();
     mode_contexts.push(cw.find_mvrefs(bo, &ref_frames, &mut mv_stack, bsize, false, fi, true));
     mode_set.push((PredictionMode::NEW_NEWMV, ref_frames_set.len() - 1));
+    mode_set.push((PredictionMode::NEAREST_NEARESTMV, ref_frames_set.len() - 1));
     mv_stacks.push(mv_stack);
   }
 
@@ -444,7 +445,7 @@ pub fn rdo_mode_decision(
   mode_set.iter().for_each(|&(luma_mode, i)| {
     let mvs = match luma_mode {
       PredictionMode::NEWMV | PredictionMode::NEW_NEWMV => mvs_from_me[i],
-      PredictionMode::NEARESTMV => if mv_stacks[i].len() > 0 {
+      PredictionMode::NEARESTMV | PredictionMode::NEAREST_NEARESTMV => if mv_stacks[i].len() > 0 {
         [mv_stacks[i][0].this_mv, mv_stacks[i][0].comp_mv]
       } else {
         [MotionVector { row: 0, col: 0 }; 2]

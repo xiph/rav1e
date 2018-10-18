@@ -1403,8 +1403,6 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
     cw.bc.set_ref_frames(bo, bsize, ref_frames);
     cw.bc.set_motion_vectors(bo, bsize, mvs);
 
-    if ref_frames[1] != NONE_FRAME { assert!(luma_mode == PredictionMode::NEW_NEWMV); }
-
     //write_q_deltas();
     if cw.bc.code_deltas && fs.deblock.block_deltas_enabled && (bsize < sb_size || !skip) {
         cw.write_block_deblock_deltas(w, bo, fs.deblock.block_delta_multi);
@@ -1419,7 +1417,6 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
 
             // NOTE: Until rav1e supports other inter modes than GLOBALMV
             if luma_mode >= PredictionMode::NEAREST_NEARESTMV {
-                assert!(luma_mode == PredictionMode::NEW_NEWMV);
                 cw.write_compound_mode(w, luma_mode, mode_context);
             } else {
                 cw.write_inter_mode(w, luma_mode, mode_context);
