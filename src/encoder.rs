@@ -1949,22 +1949,38 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
             let mode_context = cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, false, fi, is_compound);
 
             // TODO proper remap when is_compound is true
-            if !mode_luma.is_intra() && mode_luma != PredictionMode::GLOBALMV && !is_compound {
-              mode_luma = PredictionMode::NEWMV;
-              for (c, m) in mv_stack.iter().take(4)
-                .zip([PredictionMode::NEARESTMV, PredictionMode::NEAR0MV,
-                      PredictionMode::NEAR1MV, PredictionMode::NEAR2MV].iter()) {
-                if c.this_mv.row == mvs[0].row && c.this_mv.col == mvs[0].col {
-                  mode_luma = *m;
+            if !mode_luma.is_intra() && mode_luma != PredictionMode::GLOBALMV {
+                if is_compound {
+                    mode_luma = PredictionMode::NEW_NEWMV;
+                    for (c, m) in mv_stack.iter().take(1)
+                    .zip([PredictionMode::NEAREST_NEARESTMV].iter()) {
+                        if c.this_mv.row == mvs[0].row && c.this_mv.col == mvs[0].col &&
+                            c.comp_mv.row == mvs[1].row && c.comp_mv.col == mvs[1].col {
+                            mode_luma = *m;
+                        }
+                    }
+                    if mode_luma == PredictionMode::NEW_NEWMV && mvs[0].row == 0 && mvs[0].col == 0 &&
+                        mvs[1].row == 0 && mvs[1].col == 0 {
+                        mode_luma = PredictionMode::GLOBAL_GLOBALMV;
+                    }
+                    mode_chroma = mode_luma;
+                } else {
+                    mode_luma = PredictionMode::NEWMV;
+                    for (c, m) in mv_stack.iter().take(4)
+                    .zip([PredictionMode::NEARESTMV, PredictionMode::NEAR0MV,
+                            PredictionMode::NEAR1MV, PredictionMode::NEAR2MV].iter()) {
+                        if c.this_mv.row == mvs[0].row && c.this_mv.col == mvs[0].col {
+                            mode_luma = *m;
+                        }
+                    }
+                    if mode_luma == PredictionMode::NEWMV && mvs[0].row == 0 && mvs[0].col == 0 {
+                        mode_luma =
+                            if mv_stack.len() == 0 { PredictionMode::NEARESTMV }
+                            else if mv_stack.len() == 1 { PredictionMode::NEAR0MV }
+                            else { PredictionMode::GLOBALMV };
+                    }
+                    mode_chroma = mode_luma;
                 }
-              }
-              if mode_luma == PredictionMode::NEWMV && mvs[0].row == 0 && mvs[0].col == 0 {
-                mode_luma =
-                  if mv_stack.len() == 0 { PredictionMode::NEARESTMV }
-                  else if mv_stack.len() == 1 { PredictionMode::NEAR0MV }
-                  else { PredictionMode::GLOBALMV };
-              }
-              mode_chroma = mode_luma;
             }
 
             // FIXME: every final block that has gone through the RDO decision process is encoded twice
