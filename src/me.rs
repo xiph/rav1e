@@ -143,8 +143,8 @@ pub fn estimate_motion_ss4(
 ) -> Option<MotionVector> {
   if let Some(ref rec) = fi.rec_buffer.frames[ref_idx] {
     let po = PlaneOffset {
-      x: (bo.x as isize) << BLOCK_TO_PLANE_SHIFT >> 2,
-      y: (bo.y as isize) << BLOCK_TO_PLANE_SHIFT >> 2
+      x: (bo.x as isize).min(fi.w_in_b as isize - 64/4) << BLOCK_TO_PLANE_SHIFT >> 2,
+      y: (bo.y as isize).min(fi.h_in_b as isize - 64/4) << BLOCK_TO_PLANE_SHIFT >> 2
     };
     let range = 32 * fi.me_range_scale as isize;
     let blk_w = 64 >> 2;
@@ -191,8 +191,8 @@ pub fn estimate_motion_ss2(
 ) -> Option<MotionVector> {
   if let Some(ref rec) = fi.rec_buffer.frames[ref_idx] {
     let po = PlaneOffset {
-      x: (bo.x as isize) << BLOCK_TO_PLANE_SHIFT >> 1,
-      y: (bo.y as isize) << BLOCK_TO_PLANE_SHIFT >> 1
+      x: (bo.x as isize).min(fi.w_in_b as isize - 32/4) << BLOCK_TO_PLANE_SHIFT >> 1,
+      y: (bo.y as isize).min(fi.h_in_b as isize - 32/4) << BLOCK_TO_PLANE_SHIFT >> 1
     };
     let range = 16 * fi.me_range_scale as isize;
     let blk_w = 32 >> 1;
