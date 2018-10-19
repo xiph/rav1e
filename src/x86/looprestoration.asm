@@ -81,11 +81,13 @@ cglobal wiener_filter_h, 8, 12, 16, dst, left, src, stride, fh, w, h, edge
     test       leftq, leftq ; left == NULL for the edge-extended bottom/top
     jz .load_left_combined
     movd         xm0, [leftq]
+    add        leftq, 4
     pinsrd       xm0, [srcq], 1
     pslldq       xm0, 9
     jmp .left_load_done
 .load_left_combined:
-    movq         xm0, [srcq-5]
+    movq         xm0, [srcq-3]
+    pslldq       xm0, 10
     jmp .left_load_done
 .emu_left:
     movd         xm0, [srcq]
@@ -195,6 +197,7 @@ cglobal wiener_filter_v, 7, 10, 16, dst, stride, mid, w, h, fv, edge
     vpbroadcastd m12, [pd_1024]
 
     DEFINE_ARGS dst, stride, mid, w, h, ylim, edge, y, mptr, dstptr
+    mov        ylimd, edged
     and        ylimd, 8 ; have_bottom
     shr        ylimd, 2
     sub        ylimd, 3
