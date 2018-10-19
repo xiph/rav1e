@@ -10,6 +10,7 @@
 use context::CDFContext;
 use encoder::*;
 use partition::*;
+use plane::*;
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -293,6 +294,8 @@ impl Context {
 
       let mut fs = FrameState {
         input: Arc::new(Frame::new(self.fi.padded_w, self.fi.padded_h)), // dummy
+        input_hres: Plane::new(self.fi.padded_w/2, self.fi.padded_h/2, 1, 1, (128+8)/2, (128+8)/2),
+        input_qres: Plane::new(self.fi.padded_w/4, self.fi.padded_h/4, 2, 2, (128+8)/4, (128+8)/4),
         rec: Frame::new(self.fi.padded_w, self.fi.padded_h),
         qc: Default::default(),
         cdfs: CDFContext::new(0),
@@ -312,6 +315,8 @@ impl Context {
         if let Some(frame) = f {
           let mut fs = FrameState {
             input: frame,
+            input_hres: Plane::new(self.fi.padded_w/2, self.fi.padded_h/2, 1, 1, (128+8)/2, (128+8)/2),
+            input_qres: Plane::new(self.fi.padded_w/4, self.fi.padded_h/4, 2, 2, (128+8)/4, (128+8)/4),
             rec: Frame::new(self.fi.padded_w, self.fi.padded_h),
             qc: Default::default(),
             cdfs: CDFContext::new(0),

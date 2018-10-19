@@ -313,6 +313,8 @@ use std::sync::Arc;
 #[derive(Debug)]
 pub struct FrameState {
     pub input: Arc<Frame>,
+    pub input_hres: Plane, // half-resolution version of input luma
+    pub input_qres: Plane, // quarter-resolution version of input luma
     pub rec: Frame,
     pub qc: QuantizationContext,
     pub cdfs: CDFContext,
@@ -323,6 +325,8 @@ impl FrameState {
     pub fn new(fi: &FrameInvariants) -> FrameState {
         FrameState {
             input: Arc::new(Frame::new(fi.padded_w, fi.padded_h)),
+            input_hres: Plane::new(fi.padded_w/2, fi.padded_h/2, 1, 1, (128+8)/2, (128+8)/2),
+            input_qres: Plane::new(fi.padded_w/4, fi.padded_h/4, 2, 2, (128+8)/4, (128+8)/4),
             rec: Frame::new(fi.padded_w, fi.padded_h),
             qc: Default::default(),
             cdfs: CDFContext::new(0),
@@ -333,6 +337,8 @@ impl FrameState {
     pub fn window(&self, sbo: &SuperBlockOffset) -> FrameState {
         FrameState {
             input: Arc::new(self.input.window(sbo)),
+            input_hres: self.input_hres.window(&sbo.plane_offset(&self.input_hres.cfg)),
+            input_qres: self.input_qres.window(&sbo.plane_offset(&self.input_qres.cfg)),
             rec: self.rec.window(sbo),
             qc: self.qc.clone(),
             cdfs: self.cdfs.clone(),
@@ -503,6 +509,8 @@ impl FrameInvariants {
     pub fn new_frame_state(&self) -> FrameState {
         FrameState {
             input: Arc::new(Frame::new(self.padded_w, self.padded_h)),
+            input_hres: Plane::new(self.padded_w/2, self.padded_h/2, 1, 1, (128+8)/2, (128+8)/2),
+            input_qres: Plane::new(self.padded_w/4, self.padded_h/4, 2, 2, (128+8)/4, (128+8)/4),
             rec: Frame::new(self.padded_w, self.padded_h),
             qc: Default::default(),
             cdfs: CDFContext::new(0),
@@ -2251,6 +2259,11 @@ pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut 
                 };
             }
         }
+
+        fs.input_hres.downsample_from(&fs.input.planes[0]);
+        fs.input_hres.pad();
+        fs.input_qres.downsample_from(&fs.input_hres);
+        fs.input_qres.pad();
 
         let bit_depth = sequence.bit_depth;
         let tile = encode_tile(sequence, fi, fs, bit_depth); // actually tile group
