@@ -93,6 +93,7 @@ JMP_TABLE ipred_h,        avx2, w4, w8, w16, w32, w64
 JMP_TABLE ipred_cfl,      avx2, h4, h8, h16, h32, w4, w8, w16, w32, \
                                 s4-8*4, s8-8*4, s16-8*4, s32-8*4
 JMP_TABLE ipred_cfl_left, avx2, h4, h8, h16, h32
+JMP_TABLE pal_pred,       avx2, w4, w8, w16, w32, w64
 
 SECTION .text
 
@@ -1514,5 +1515,83 @@ cglobal ipred_cfl_128, 3, 7, 6, dst, stride, tl, w, h, ac, alpha
     add                  wq, t0
     movifnidn           acq, acmp
     jmp                  wq
+
+cglobal pal_pred, 4, 6, 5, dst, stride, pal, idx, w, h
+    vbroadcasti128       m4, [palq]
+    lea                  r2, [pal_pred_avx2_table]
+    tzcnt                wd, wm
+    movifnidn            hd, hm
+    movsxd               wq, [r2+wq*4]
+    packuswb             m4, m4
+    add                  wq, r2
+    lea                  r2, [strideq*3]
+    jmp                  wq
+.w4:
+    pshufb              xm0, xm4, [idxq]
+    add                idxq, 16
+    movd   [dstq+strideq*0], xm0
+    pextrd [dstq+strideq*1], xm0, 1
+    pextrd [dstq+strideq*2], xm0, 2
+    pextrd [dstq+r2       ], xm0, 3
+    lea                dstq, [dstq+strideq*4]
+    sub                  hd, 4
+    jg .w4
+    RET
+ALIGN function_align
+.w8:
+    pshufb              xm0, xm4, [idxq+16*0]
+    pshufb              xm1, xm4, [idxq+16*1]
+    add                idxq, 16*2
+    movq   [dstq+strideq*0], xm0
+    movhps [dstq+strideq*1], xm0
+    movq   [dstq+strideq*2], xm1
+    movhps [dstq+r2       ], xm1
+    lea                dstq, [dstq+strideq*4]
+    sub                  hd, 4
+    jg .w8
+    RET
+ALIGN function_align
+.w16:
+    pshufb               m0, m4, [idxq+32*0]
+    pshufb               m1, m4, [idxq+32*1]
+    add                idxq, 32*2
+    mova         [dstq+strideq*0], xm0
+    vextracti128 [dstq+strideq*1], m0, 1
+    mova         [dstq+strideq*2], xm1
+    vextracti128 [dstq+r2       ], m1, 1
+    lea                dstq, [dstq+strideq*4]
+    sub                  hd, 4
+    jg .w16
+    RET
+ALIGN function_align
+.w32:
+    pshufb               m0, m4, [idxq+32*0]
+    pshufb               m1, m4, [idxq+32*1]
+    pshufb               m2, m4, [idxq+32*2]
+    pshufb               m3, m4, [idxq+32*3]
+    add                idxq, 32*4
+    mova   [dstq+strideq*0], m0
+    mova   [dstq+strideq*1], m1
+    mova   [dstq+strideq*2], m2
+    mova   [dstq+r2       ], m3
+    lea                dstq, [dstq+strideq*4]
+    sub                  hd, 4
+    jg .w32
+    RET
+ALIGN function_align
+.w64:
+    pshufb               m0, m4, [idxq+32*0]
+    pshufb               m1, m4, [idxq+32*1]
+    pshufb               m2, m4, [idxq+32*2]
+    pshufb               m3, m4, [idxq+32*3]
+    add                idxq, 32*4
+    mova [dstq+strideq*0+32*0], m0
+    mova [dstq+strideq*0+32*1], m1
+    mova [dstq+strideq*1+32*0], m2
+    mova [dstq+strideq*1+32*1], m3
+    lea                dstq, [dstq+strideq*2]
+    sub                  hd, 2
+    jg .w64
+    RET
 
 %endif
