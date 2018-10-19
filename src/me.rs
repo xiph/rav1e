@@ -194,7 +194,7 @@ pub fn estimate_motion_ss2(
       x: (bo.x as isize) << BLOCK_TO_PLANE_SHIFT >> 1,
       y: (bo.y as isize) << BLOCK_TO_PLANE_SHIFT >> 1
     };
-    let range = 32;
+    let range = 16 * fi.me_range_scale as isize;
     let blk_w = 32 >> 1;
     let blk_h = 32 >> 1;
     let border_w = 128 + blk_w as isize * 8;
