@@ -146,9 +146,9 @@ pub fn estimate_motion_ss4(
       x: (bo.x as isize).min(fi.w_in_b as isize - 64/4) << BLOCK_TO_PLANE_SHIFT >> 2,
       y: (bo.y as isize).min(fi.h_in_b as isize - 64/4) << BLOCK_TO_PLANE_SHIFT >> 2
     };
-    let range = 32 * fi.me_range_scale as isize;
-    let blk_w = 64 >> 2;
-    let blk_h = 64 >> 2;
+    let range = 64 * fi.me_range_scale as isize;
+    let blk_w = 64;
+    let blk_h = 64;
     let border_w = 128 + blk_w as isize * 8;
     let border_h = 128 + blk_h as isize * 8;
     let mvx_min = -(bo.x as isize) * (8 * MI_SIZE) as isize - border_w;
@@ -168,7 +168,7 @@ pub fn estimate_motion_ss4(
         let plane_org = fs.input_qres.slice(&po);
         let plane_ref = rec.input_qres.slice(&PlaneOffset { x, y });
 
-        let sad = get_sad(&plane_org, &plane_ref, blk_h, blk_w);
+        let sad = get_sad(&plane_org, &plane_ref, blk_h >> 2, blk_w >> 2);
 
         if sad < lowest_sad {
           lowest_sad = sad;
@@ -195,8 +195,8 @@ pub fn estimate_motion_ss2(
       y: (bo.y as isize).min(fi.h_in_b as isize - 32/4) << BLOCK_TO_PLANE_SHIFT >> 1
     };
     let range = 16 * fi.me_range_scale as isize;
-    let blk_w = 32 >> 1;
-    let blk_h = 32 >> 1;
+    let blk_w = 32;
+    let blk_h = 32;
     let border_w = 128 + blk_w as isize * 8;
     let border_h = 128 + blk_h as isize * 8;
     let mvx_min = -(bo.x as isize) * (8 * MI_SIZE) as isize - border_w;
@@ -216,7 +216,7 @@ pub fn estimate_motion_ss2(
         let plane_org = fs.input_hres.slice(&po);
         let plane_ref = rec.input_hres.slice(&PlaneOffset { x, y });
 
-        let sad = get_sad(&plane_org, &plane_ref, blk_h, blk_w);
+        let sad = get_sad(&plane_org, &plane_ref, blk_h >> 1, blk_w >> 1);
 
         if sad < lowest_sad {
           lowest_sad = sad;
