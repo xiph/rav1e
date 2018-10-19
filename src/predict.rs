@@ -50,6 +50,14 @@ pub static RAV1E_INTER_MODES_MINIMAL: &'static [PredictionMode] = &[
   PredictionMode::NEWMV
 ];
 
+pub static RAV1E_INTER_COMPOUND_MODES: &'static [PredictionMode] = &[
+  PredictionMode::GLOBAL_GLOBALMV,
+  PredictionMode::NEAREST_NEARESTMV,
+  PredictionMode::NEW_NEWMV,
+  PredictionMode::NEAREST_NEWMV,
+  PredictionMode::NEW_NEARESTMV
+];
+
 // Weights are quadratic from '1' to '1 / block_size', scaled by 2^sm_weight_log2_scale.
 const sm_weight_log2_scale: u8 = 8;
 

@@ -23,7 +23,7 @@ use motion_compensate;
 use partition::*;
 use plane::*;
 use cdef::*;
-use predict::{RAV1E_INTRA_MODES, RAV1E_INTRA_MODES_MINIMAL, RAV1E_INTER_MODES_MINIMAL};
+use predict::{RAV1E_INTRA_MODES, RAV1E_INTRA_MODES_MINIMAL, RAV1E_INTER_MODES_MINIMAL, RAV1E_INTER_COMPOUND_MODES};
 use quantize::dc_q;
 use std;
 use std::f64;
@@ -367,11 +367,9 @@ pub fn rdo_mode_decision(
         mvs_from_me.push([mv0, mv1]);
         let mut mv_stack: Vec<CandidateMV> = Vec::new();
         mode_contexts.push(cw.find_mvrefs(bo, &ref_frames, &mut mv_stack, bsize, false, fi, true));
-        mode_set.push((PredictionMode::GLOBAL_GLOBALMV, ref_frames_set.len() - 1));
-        mode_set.push((PredictionMode::NEAREST_NEARESTMV, ref_frames_set.len() - 1));
-        mode_set.push((PredictionMode::NEW_NEWMV, ref_frames_set.len() - 1));
-        mode_set.push((PredictionMode::NEAREST_NEWMV, ref_frames_set.len() - 1));
-        mode_set.push((PredictionMode::NEW_NEARESTMV, ref_frames_set.len() - 1));
+        for &x in RAV1E_INTER_COMPOUND_MODES {
+          mode_set.push((x, ref_frames_set.len() - 1));
+        }
         mv_stacks.push(mv_stack);
       }
     }
