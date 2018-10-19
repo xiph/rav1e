@@ -20,6 +20,7 @@ use rdo::*;
 use std::fmt;
 use transform::*;
 use util::*;
+use me::*;
 
 use bitstream_io::{BitWriter, BigEndian, LittleEndian};
 use std;
@@ -1805,7 +1806,8 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
 
 fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
                              cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
-                             bsize: BlockSize, bo: &BlockOffset, pmv: &MotionVector) -> f64 {
+                             bsize: BlockSize, bo: &BlockOffset, pmvs: &[Option<MotionVector>; REF_FRAMES]
+) -> f64 {
     let mut rd_cost = std::f64::MAX;
 
     if bo.x >= cw.bc.cols || bo.y >= cw.bc.rows {
@@ -1855,7 +1857,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             cw.write_partition(w, bo, partition, bsize);
             cost = (w.tell_frac() - tell) as f64 * get_lambda(fi, seq.bit_depth)/ ((1 << OD_BITRES) as f64);
         }
-        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, bsize, bo, pmv).part_modes[0].clone();
+        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, bsize, bo, pmvs).part_modes[0].clone();
         let (mode_luma, mode_chroma) = (mode_decision.pred_mode_luma, mode_decision.pred_mode_chroma);
         let cfl = mode_decision.pred_cfl_params;
         {
@@ -1920,7 +1922,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
                     w_post_cdef,
                     subsize,
                     offset,
-                    &best_decision.mvs[0]
+                    pmvs//&best_decision.mvs[0]
                 )
             }).sum::<f64>();
 
@@ -1976,7 +1978,9 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
 
 fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
             cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
-            bsize: BlockSize, bo: &BlockOffset, block_output: &Option<RDOOutput>) {
+            bsize: BlockSize, bo: &BlockOffset, block_output: &Option<RDOOutput>,
+            pmvs: &[Option<MotionVector>; REF_FRAMES]
+) {
 
     if bo.x >= cw.bc.cols || bo.y >= cw.bc.rows {
         return;
@@ -2001,7 +2005,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
         partition = PartitionType::PARTITION_SPLIT;
     } else if bsize > fi.min_partition_size {
         // Blocks of sizes within the supported range are subjected to a partitioning decision
-        rdo_output = rdo_partition_decision(seq, fi, fs, cw, bsize, bo, &rdo_output);
+        rdo_output = rdo_partition_decision(seq, fi, fs, cw, bsize, bo, &rdo_output, pmvs);
         partition = rdo_output.part_type;
     } else {
         // Blocks of sizes below the supported range are encoded directly
@@ -2014,7 +2018,6 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
 
     let hbs = bs >> 1; // Half the block size in blocks
     let subsize = bsize.subsize(partition);
-    let pmv =  MotionVector { row: 0, col: 0 };
 
     if bsize >= BlockSize::BLOCK_8X8 {
         let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
@@ -2028,7 +2031,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
                     rdo_output.part_modes[0].clone()
                 } else {
                     // Make a prediction mode decision for blocks encoded with no rdo_partition_decision call (e.g. edges)
-                    rdo_mode_decision(seq, fi, fs, cw, bsize, bo, &pmv).part_modes[0].clone()
+                    rdo_mode_decision(seq, fi, fs, cw, bsize, bo, pmvs).part_modes[0].clone()
                 };
 
             let mut mode_luma = part_decision.pred_mode_luma;
@@ -2109,7 +2112,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
                         &Some(RDOOutput {
                             rd_cost: mode.rd_cost,
                             part_type: PartitionType::PARTITION_NONE,
-                            part_modes: vec![mode] }));
+                            part_modes: vec![mode] }), pmvs);
                 }
             }
             else {
@@ -2129,7 +2132,8 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
                             w_post_cdef,
                             subsize,
                             offset,
-                            &None
+                            &None,
+                            pmvs
                         );
                     });
             }
@@ -2172,17 +2176,25 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
             cw.bc.cdef_coded = false;
             cw.bc.code_deltas = fi.delta_q_present;
 
+            // Do subsampled ME
+            let mut pmvs: [Option<MotionVector>; REF_FRAMES] = [None; REF_FRAMES];
+            for i in 0..INTER_REFS_PER_FRAME {
+                let r = fi.ref_frames[i] as usize;
+                if pmvs[r].is_none() {
+                    pmvs[r] = estimate_motion_ss4(fi, fs, r, &bo);
+                }
+            }
+
             // Encode SuperBlock
             if fi.config.speed == 0 {
-                let pmv = MotionVector { row: 0, col: 0 };
                 encode_partition_bottomup(sequence, fi, fs, &mut cw,
                                           &mut w_pre_cdef, &mut w_post_cdef,
-                                          BlockSize::BLOCK_64X64, &bo, &pmv);
+                                          BlockSize::BLOCK_64X64, &bo, &pmvs);
             }
             else {
                 encode_partition_topdown(sequence, fi, fs, &mut cw,
                                          &mut w_pre_cdef, &mut w_post_cdef,
-                                         BlockSize::BLOCK_64X64, &bo, &None);
+                                         BlockSize::BLOCK_64X64, &bo, &None, &pmvs);
             }
 
             // CDEF has to be decisded before loop restoration, but coded after

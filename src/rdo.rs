@@ -340,7 +340,7 @@ impl Default for EncodingSettings {
 pub fn rdo_mode_decision(
   seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
   cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset,
-  pmv: &MotionVector
+  pmvs: &[Option<MotionVector>; REF_FRAMES]
 ) -> RDOOutput {
   let mut best = EncodingSettings::default();
 
@@ -381,8 +381,10 @@ pub fn rdo_mode_decision(
           bwdref = Some(ref_frames_set.len());
         }
         ref_frames_set.push([i, NONE_FRAME]);
-        ref_slot_set.push(fi.ref_frames[i - LAST_FRAME]);
-        mvs_from_me.push([motion_estimation(fi, fs, bsize, bo, i, pmv), MotionVector { row: 0, col: 0 }]);
+        let slot_idx = fi.ref_frames[i - LAST_FRAME];
+        ref_slot_set.push(slot_idx);
+        let pmv = pmvs[slot_idx as usize].unwrap();
+        mvs_from_me.push([motion_estimation(fi, fs, bsize, bo, i, &pmv), MotionVector { row: 0, col: 0 }]);
       }
     }
     assert!(ref_frames_set.len() != 0);
@@ -794,7 +796,7 @@ pub fn rdo_tx_type_decision(
 pub fn rdo_partition_decision(
   seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
   cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset,
-  cached_block: &RDOOutput
+  cached_block: &RDOOutput, pmvs: &[Option<MotionVector>; REF_FRAMES]
 ) -> RDOOutput {
   let max_rd = std::f64::MAX;
 
@@ -812,7 +814,6 @@ pub fn rdo_partition_decision(
 
     let mut rd: f64;
     let mut child_modes = std::vec::Vec::new();
-    let mut pmv =  MotionVector { row: 0, col: 0 };
 
     match partition {
       PartitionType::PARTITION_NONE => {
@@ -824,7 +825,7 @@ pub fn rdo_partition_decision(
           .part_modes
           .get(0)
           .unwrap_or(
-            &rdo_mode_decision(seq, fi, fs, cw, bsize, bo, &pmv).part_modes[0]
+            &rdo_mode_decision(seq, fi, fs, cw, bsize, bo, pmvs).part_modes[0]
           ).clone();
         child_modes.push(mode_decision);
       }
@@ -834,7 +835,7 @@ pub fn rdo_partition_decision(
         if subsize == BlockSize::BLOCK_INVALID {
           continue;
         }
-        pmv = best_pred_modes[0].mvs[0];
+        //pmv = best_pred_modes[0].mvs[0];
 
         assert!(best_pred_modes.len() <= 4);
         let bs = bsize.width_mi();
@@ -849,7 +850,7 @@ pub fn rdo_partition_decision(
           partitions
             .iter()
             .map(|&offset| {
-              rdo_mode_decision(seq, fi, fs, cw, subsize, &offset, &pmv)
+              rdo_mode_decision(seq, fi, fs, cw, subsize, &offset, pmvs)
                 .part_modes[0]
                 .clone()
             }).collect::<Vec<_>>()
