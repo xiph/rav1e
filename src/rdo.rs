@@ -308,12 +308,20 @@ pub fn rdo_mode_decision(
   let mut ref_frames_set = Vec::new();
   let mut ref_slot_set = Vec::new();
   let mut mvs_from_me = Vec::new();
+  let mut fwdref = None;
+  let mut bwdref = None;
 
   if fi.frame_type == FrameType::INTER {
     for i in LAST_FRAME..NONE_FRAME {
       // Don't search LAST3 since it's used only for probs
       if i == LAST3_FRAME { continue; }
       if !ref_slot_set.contains(&fi.ref_frames[i - LAST_FRAME]) {
+        if fwdref == None && i < BWDREF_FRAME {
+          fwdref = Some(ref_frames_set.len());
+        }
+        if bwdref == None && i >= BWDREF_FRAME {
+          bwdref = Some(ref_frames_set.len());
+        }
         ref_frames_set.push([i, NONE_FRAME]);
         ref_slot_set.push(fi.ref_frames[i - LAST_FRAME]);
         mvs_from_me.push([motion_estimation(fi, fs, bsize, bo, i, pmv), MotionVector { row: 0, col: 0 }]);
@@ -350,22 +358,23 @@ pub fn rdo_mode_decision(
 
   if fi.frame_type == FrameType::INTER && fi.reference_mode != ReferenceMode::SINGLE && sz >= 2 {
     // Adding compound candidate
-    // FIXME make this more flexible and less hardcoded
-    let ref_frames = [LAST_FRAME, ALTREF_FRAME];
-    ref_frames_set.push(ref_frames);
-    assert!(ref_frames_set[0][0] == ref_frames[0]);
-    assert!(ref_frames_set[1][0] == ref_frames[1]);
-    let mv0 = mvs_from_me[0][0];
-    let mv1 = mvs_from_me[1][0];
-    mvs_from_me.push([mv0, mv1]);
-    let mut mv_stack: Vec<CandidateMV> = Vec::new();
-    mode_contexts.push(cw.find_mvrefs(bo, &ref_frames, &mut mv_stack, bsize, false, fi, true));
-    mode_set.push((PredictionMode::GLOBAL_GLOBALMV, ref_frames_set.len() - 1));
-    mode_set.push((PredictionMode::NEAREST_NEARESTMV, ref_frames_set.len() - 1));
-    mode_set.push((PredictionMode::NEW_NEWMV, ref_frames_set.len() - 1));
-    mode_set.push((PredictionMode::NEAREST_NEWMV, ref_frames_set.len() - 1));
-    mode_set.push((PredictionMode::NEW_NEARESTMV, ref_frames_set.len() - 1));
-    mv_stacks.push(mv_stack);
+    if let Some(r0) = fwdref {
+      if let Some(r1) = bwdref {
+        let ref_frames = [ref_frames_set[r0][0], ref_frames_set[r1][0]];
+        ref_frames_set.push(ref_frames);
+        let mv0 = mvs_from_me[r0][0];
+        let mv1 = mvs_from_me[r1][0];
+        mvs_from_me.push([mv0, mv1]);
+        let mut mv_stack: Vec<CandidateMV> = Vec::new();
+        mode_contexts.push(cw.find_mvrefs(bo, &ref_frames, &mut mv_stack, bsize, false, fi, true));
+        mode_set.push((PredictionMode::GLOBAL_GLOBALMV, ref_frames_set.len() - 1));
+        mode_set.push((PredictionMode::NEAREST_NEARESTMV, ref_frames_set.len() - 1));
+        mode_set.push((PredictionMode::NEW_NEWMV, ref_frames_set.len() - 1));
+        mode_set.push((PredictionMode::NEAREST_NEWMV, ref_frames_set.len() - 1));
+        mode_set.push((PredictionMode::NEW_NEARESTMV, ref_frames_set.len() - 1));
+        mv_stacks.push(mv_stack);
+      }
+    }
   }
 
   let luma_rdo = |luma_mode: PredictionMode, fs: &mut FrameState, cw: &mut ContextWriter, best: &mut EncodingSettings,
