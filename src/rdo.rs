@@ -340,7 +340,7 @@ impl Default for EncodingSettings {
 pub fn rdo_mode_decision(
   seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
   cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset,
-  pmvs: &[Option<MotionVector>; REF_FRAMES]
+  pmvs: &[Option<MotionVector>]
 ) -> RDOOutput {
   let mut best = EncodingSettings::default();
 
@@ -796,7 +796,7 @@ pub fn rdo_tx_type_decision(
 pub fn rdo_partition_decision(
   seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
   cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset,
-  cached_block: &RDOOutput, pmvs: &[Option<MotionVector>; REF_FRAMES]
+  cached_block: &RDOOutput, pmvs: &[Option<MotionVector>; 5*REF_FRAMES]
 ) -> RDOOutput {
   let max_rd = std::f64::MAX;
 
@@ -821,11 +821,14 @@ pub fn rdo_partition_decision(
           continue;
         }
 
+        let pmv_idx = ((bo.x & 32) >> 5) + ((bo.y & 32) >> 4) + 1;
+        let spmvs = &pmvs[REF_FRAMES*pmv_idx..REF_FRAMES*(pmv_idx+1)];
+
         let mode_decision = cached_block
           .part_modes
           .get(0)
           .unwrap_or(
-            &rdo_mode_decision(seq, fi, fs, cw, bsize, bo, pmvs).part_modes[0]
+            &rdo_mode_decision(seq, fi, fs, cw, bsize, bo, spmvs).part_modes[0]
           ).clone();
         child_modes.push(mode_decision);
       }
@@ -846,11 +849,19 @@ pub fn rdo_partition_decision(
           &BlockOffset{ x: bo.x, y: bo.y + hbs as usize },
           &BlockOffset{ x: bo.x + hbs as usize, y: bo.y + hbs as usize }
         ];
+
+        let pmv_idx = if bsize > BlockSize::BLOCK_32X32 {
+            0
+        } else {
+            ((bo.x & 32) >> 5) + ((bo.y & 32) >> 4) + 1
+        };
+        let spmvs = &pmvs[REF_FRAMES*pmv_idx..REF_FRAMES*(pmv_idx+1)];
+
         child_modes.extend(
           partitions
             .iter()
             .map(|&offset| {
-              rdo_mode_decision(seq, fi, fs, cw, subsize, &offset, pmvs)
+              rdo_mode_decision(seq, fi, fs, cw, subsize, &offset, spmvs)
                 .part_modes[0]
                 .clone()
             }).collect::<Vec<_>>()

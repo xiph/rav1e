@@ -1806,7 +1806,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
 
 fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
                              cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
-                             bsize: BlockSize, bo: &BlockOffset, pmvs: &[Option<MotionVector>; REF_FRAMES]
+                             bsize: BlockSize, bo: &BlockOffset, pmvs: &[Option<MotionVector>; 5*REF_FRAMES]
 ) -> f64 {
     let mut rd_cost = std::f64::MAX;
 
@@ -1857,7 +1857,15 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             cw.write_partition(w, bo, partition, bsize);
             cost = (w.tell_frac() - tell) as f64 * get_lambda(fi, seq.bit_depth)/ ((1 << OD_BITRES) as f64);
         }
-        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, bsize, bo, pmvs).part_modes[0].clone();
+
+        let pmv_idx = if bsize > BlockSize::BLOCK_32X32 {
+            0
+        } else {
+            ((bo.x & 32) >> 5) + ((bo.y & 32) >> 4) + 1
+        };
+        let spmvs = &pmvs[REF_FRAMES*pmv_idx..REF_FRAMES*(pmv_idx+1)];
+
+        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, bsize, bo, spmvs).part_modes[0].clone();
         let (mode_luma, mode_chroma) = (mode_decision.pred_mode_luma, mode_decision.pred_mode_chroma);
         let cfl = mode_decision.pred_cfl_params;
         {
@@ -1979,7 +1987,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
 fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
             cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
             bsize: BlockSize, bo: &BlockOffset, block_output: &Option<RDOOutput>,
-            pmvs: &[Option<MotionVector>; REF_FRAMES]
+            pmvs: &[Option<MotionVector>; 5*REF_FRAMES]
 ) {
 
     if bo.x >= cw.bc.cols || bo.y >= cw.bc.rows {
@@ -2030,8 +2038,15 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
                     // The optimal prediction mode is known from a previous iteration
                     rdo_output.part_modes[0].clone()
                 } else {
+                    let pmv_idx = if bsize > BlockSize::BLOCK_32X32 {
+                        0
+                    } else {
+                        ((bo.x & 32) >> 5) + ((bo.y & 32) >> 4) + 1
+                    };
+                    let spmvs = &pmvs[REF_FRAMES*pmv_idx..REF_FRAMES*(pmv_idx+1)];
+
                     // Make a prediction mode decision for blocks encoded with no rdo_partition_decision call (e.g. edges)
-                    rdo_mode_decision(seq, fi, fs, cw, bsize, bo, pmvs).part_modes[0].clone()
+                    rdo_mode_decision(seq, fi, fs, cw, bsize, bo, spmvs).part_modes[0].clone()
                 };
 
             let mut mode_luma = part_decision.pred_mode_luma;
@@ -2177,11 +2192,17 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
             cw.bc.code_deltas = fi.delta_q_present;
 
             // Do subsampled ME
-            let mut pmvs: [Option<MotionVector>; REF_FRAMES] = [None; REF_FRAMES];
+            let mut pmvs: [Option<MotionVector>; 5*REF_FRAMES] = [None; 5*REF_FRAMES];
             for i in 0..INTER_REFS_PER_FRAME {
                 let r = fi.ref_frames[i] as usize;
                 if pmvs[r].is_none() {
                     pmvs[r] = estimate_motion_ss4(fi, fs, r, &bo);
+                    if let Some(pmv) = pmvs[r] {
+                        pmvs[r + 1*REF_FRAMES] = estimate_motion_ss2(fi, fs, r, &sbo.block_offset(0, 0), &pmv);
+                        pmvs[r + 2*REF_FRAMES] = estimate_motion_ss2(fi, fs, r, &sbo.block_offset(8, 0), &pmv);
+                        pmvs[r + 3*REF_FRAMES] = estimate_motion_ss2(fi, fs, r, &sbo.block_offset(0, 8), &pmv);
+                        pmvs[r + 4*REF_FRAMES] = estimate_motion_ss2(fi, fs, r, &sbo.block_offset(8, 8), &pmv);
+                    }
                 }
             }
 
