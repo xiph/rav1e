@@ -69,6 +69,8 @@ impl Frame {
 pub struct ReferenceFrame {
   pub order_hint: u32,
   pub frame: Frame,
+  pub input_hres: Plane,
+  pub input_qres: Plane,
   pub cdfs: CDFContext
 }
 
@@ -2297,7 +2299,15 @@ pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut 
 }
 
 pub fn update_rec_buffer(fi: &mut FrameInvariants, fs: FrameState) {
-  let rfs = Rc::new(ReferenceFrame { order_hint: fi.order_hint, frame: fs.rec, cdfs: fs.cdfs } );
+  let rfs = Rc::new(
+    ReferenceFrame {
+      order_hint: fi.order_hint,
+      frame: fs.rec,
+      input_hres: fs.input_hres,
+      input_qres: fs.input_qres,
+      cdfs: fs.cdfs
+    }
+  );
   for i in 0..(REF_FRAMES as usize) {
     if (fi.refresh_frame_flags & (1 << i)) != 0 {
       fi.rec_buffer.frames[i] = Some(Rc::clone(&rfs));
