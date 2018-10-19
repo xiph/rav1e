@@ -36,7 +36,6 @@ pb_14x0_1_2: times 14 db 0
 pb_0_to_15_min_n: db 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 13, 13
                   db 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 14
 pb_15: times 16 db 15
-pw_128: times 2 dw 128
 pw_2048: times 2 dw 2048
 pw_16380: times 2 dw 16380
 pw_0_128: dw 0, 128
@@ -50,8 +49,6 @@ cglobal wiener_filter_h, 8, 12, 16, dst, left, src, stride, fh, w, h, edge
     vpbroadcastb m14, [fhq+2]
     vpbroadcastb m13, [fhq+4]
     vpbroadcastw m12, [fhq+6]
-    vpbroadcastd  m9, [pw_128]
-    paddw        m12, m9
     vpbroadcastd m11, [pw_2048]
     vpbroadcastd m10, [pw_16380]
     lea          r11, [pb_right_ext_mask]
@@ -153,17 +150,20 @@ cglobal wiener_filter_h, 8, 12, 16, dst, left, src, stride, fh, w, h, edge
     pmaddubsw     m3, m14
     pmaddubsw     m7, m13
     pmaddubsw     m4, m13
-    pmullw        m6, m12
-    pmullw        m5, m12
-    ; note that m6/5 are unsigned here, whereas the others are signed
-    psubw         m0, m10
-    psubw         m2, m10
     paddw         m0, m8
     paddw         m2, m3
+    psllw         m8, m6, 7
+    psllw         m3, m5, 7
+    psubw         m8, m10
+    psubw         m3, m10
+    pmullw        m6, m12
+    pmullw        m5, m12
     paddw         m0, m7
     paddw         m2, m4
     paddw         m0, m6
     paddw         m2, m5
+    paddsw        m0, m8
+    paddsw        m2, m3
     psraw         m0, 3
     psraw         m2, 3
     paddw         m0, m11
