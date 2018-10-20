@@ -13,8 +13,8 @@ use partition::TX_TYPES;
 
 use util::*;
 
-use self::forward::*;
-use self::inverse::*;
+pub use self::forward::*;
+pub use self::inverse::*;
 
 // Blocks
 use predict::*;

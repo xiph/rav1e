@@ -17,7 +17,7 @@ static SINPI_INV: [i32; 5] = [0, 1321, 2482, 3344, 3803];
 
 const INV_COS_BIT: usize = 12;
 
-fn av1_idct4(input: &[i32], output: &mut [i32], range: usize) {
+pub fn av1_idct4(input: &[i32], output: &mut [i32], range: usize) {
   // stage 1
   let stg1 = [input[0], input[2], input[1], input[3]];
 
@@ -87,7 +87,7 @@ fn av1_iidentity4(input: &[i32], output: &mut [i32], _range: usize) {
   }
 }
 
-fn av1_idct8(input: &[i32], output: &mut [i32], range: usize) {
+pub fn av1_idct8(input: &[i32], output: &mut [i32], range: usize) {
   // call idct4
   let temp_in = [input[0], input[2], input[4], input[6]];
   let mut temp_out: [i32; 4] = [0; 4];
