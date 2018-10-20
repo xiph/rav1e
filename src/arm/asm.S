@@ -30,6 +30,30 @@
 
 #include "config.h"
 
+#if ARCH_ARM
+    .syntax unified
+#ifdef __ELF__
+    .fpu neon
+    .eabi_attribute 10, 0           // suppress Tag_FP_arch
+    .eabi_attribute 12, 0           // suppress Tag_Advanced_SIMD_arch
+#endif
+
+#ifdef _WIN32
+#define CONFIG_THUMB 1
+#else
+#define CONFIG_THUMB 0
+#endif
+
+#if CONFIG_THUMB
+    .thumb
+#define A @
+#define T
+#else
+#define A
+#define T @
+#endif
+#endif
+
 #ifndef PRIVATE_PREFIX
 #define PRIVATE_PREFIX dav1d_
 #endif
