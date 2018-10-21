@@ -91,4 +91,10 @@ EXTERN\name:
 \name:
 .endm
 
+#ifdef __APPLE__
+#define L(x) L ## x
+#else
+#define L(x) .L ## x
+#endif
+
 #endif /* __DAV1D_SRC_ARM_ASM_S__ */
