@@ -920,7 +920,7 @@ impl PredictionMode {
       PredictionMode::DC_PRED | PredictionMode::UV_CFL_PRED => match (x, y) {
         (0, 0) => B::pred_dc_128(slice, stride, bit_depth),
         (_, 0) =>
-          B::pred_dc_left(slice, stride, above_slice, left_slice, bit_depth),
+          B::pred_dc_left(slice, stride, above_slice, left_slice),
         (0, _) =>
           B::pred_dc_top(slice, stride, above_slice, left_slice),
         _ => B::pred_dc(slice, stride, above_slice, left_slice)

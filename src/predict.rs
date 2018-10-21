@@ -11,6 +11,7 @@
 #![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
 #![cfg_attr(feature = "cargo-clippy", allow(needless_range_loop))]
 
+#[cfg(test)]
 use libc;
 
 use context::INTRA_MODES;
@@ -108,6 +109,7 @@ extern {
     above: *const u16, left: *const u16, bd: libc::c_int
   );
 
+  #[cfg(test)]
   fn highbd_dc_left_predictor(
     dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int, bh: libc::c_int,
     above: *const u16, left: *const u16, bd: libc::c_int
@@ -232,19 +234,12 @@ pub trait Intra: Dim {
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_dc_left(
-    output: &mut [u16], stride: usize, above: &[u16], left: &[u16],
-    bit_depth: usize
+    output: &mut [u16], stride: usize, _above: &[u16], left: &[u16]
   ) {
-    unsafe {
-      highbd_dc_left_predictor(
-        output.as_mut_ptr(),
-        stride as libc::ptrdiff_t,
-        Self::W as libc::c_int,
-        Self::H as libc::c_int,
-        above.as_ptr(),
-        left.as_ptr(),
-        bit_depth as libc::c_int
-      );
+    let sum = left[..Self::W].iter().fold(0u32, |acc, &v| acc + v as u32);
+    let avg = ((sum + (Self::W >> 1) as u32) / Self::W as u32) as u16;
+    for line in output.chunks_mut(stride).take(Self::H) {
+      line[..Self::W].iter_mut().for_each(|v| *v = avg);
     }
   }
 
@@ -540,6 +535,22 @@ pub mod test {
     }
   }
 
+  fn pred_dc_left_4x4(
+    output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
+  ) {
+    unsafe {
+      highbd_dc_left_predictor(
+        output.as_mut_ptr(),
+        stride as libc::ptrdiff_t,
+        4,
+        4,
+        above.as_ptr(),
+        left.as_ptr(),
+        8
+      );
+    }
+  }
+
   fn pred_dc_top_4x4(
     output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
   ) {
@@ -677,6 +688,15 @@ pub mod test {
     (o1, o2)
   }
 
+  fn do_dc_left_pred(ra: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>) {
+    let (above, left, mut o1, mut o2) = setup_pred(ra);
+
+    pred_dc_left_4x4(&mut o1, 32, &above[..4], &left[..4]);
+    Block4x4::pred_dc_left(&mut o2, 32, &above[..4], &left[..4]);
+
+    (o1, o2)
+  }
+
   fn do_dc_top_pred(ra: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>) {
     let (above, left, mut o1, mut o2) = setup_pred(ra);
 
@@ -786,6 +806,9 @@ pub mod test {
     let mut ra = ChaChaRng::from_seed([0; 32]);
     for _ in 0..MAX_ITER {
       let (o1, o2) = do_dc_pred(&mut ra);
+      assert_eq!(o1, o2);
+
+      let (o1, o2) = do_dc_left_pred(&mut ra);
       assert_eq!(o1, o2);
 
       let (o1, o2) = do_dc_top_pred(&mut ra);
