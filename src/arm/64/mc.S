@@ -112,7 +112,7 @@ function \type\()_8bpc_neon, export=1
         \type           v4,  v0,  v1
         ldrh            w4,  [x7, x4, lsl #1]
         \type           v5,  v2,  v3
-        sub             x7,  x7,  w4, uxth
+        sub             x7,  x7,  w4, uxtw
         br              x7
 4:
         cmp             w5,  #4
