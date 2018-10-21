@@ -850,18 +850,20 @@ pub fn rdo_partition_decision(
           &BlockOffset{ x: bo.x + hbs as usize, y: bo.y + hbs as usize }
         ];
 
-        let pmv_idx = if bsize > BlockSize::BLOCK_32X32 {
-            0
-        } else {
-            ((bo.x & 32) >> 5) + ((bo.y & 32) >> 4) + 1
-        };
-        let spmvs = &pmvs[REF_FRAMES*pmv_idx..REF_FRAMES*(pmv_idx+1)];
+        let pmv_idxs = partitions.iter().map(|&offset| {
+          if subsize > BlockSize::BLOCK_32X32 {
+              0
+          } else {
+              ((offset.x & 32) >> 5) + ((offset.y & 32) >> 4) + 1
+          }
+        }).collect::<Vec<_>>();
 
         child_modes.extend(
           partitions
-            .iter()
-            .map(|&offset| {
-              rdo_mode_decision(seq, fi, fs, cw, subsize, &offset, spmvs)
+            .iter().zip(pmv_idxs)
+            .map(|(&offset, pmv_idx)| {
+              rdo_mode_decision(seq, fi, fs, cw, subsize, &offset,
+                &pmvs[REF_FRAMES*pmv_idx..REF_FRAMES*(pmv_idx+1)])
                 .part_modes[0]
                 .clone()
             }).collect::<Vec<_>>()
