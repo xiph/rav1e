@@ -11,7 +11,6 @@
 #![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
 #![cfg_attr(feature = "cargo-clippy", allow(needless_range_loop))]
 
-#[cfg(test)]
 use libc;
 use num_traits::*;
 
@@ -217,6 +216,14 @@ fn get_scaled_luma_q0(alpha_q3: i16, ac_pred_q3: i16) -> i32 {
   }
 }
 
+#[cfg(all(target_arch = "x86_64", not(windows)))]
+extern {
+  fn rav1e_ipred_dc_128_avx2(
+    dst: *mut u8, stride: libc::ptrdiff_t, topleft: *const u8,
+    width: libc::c_int, height: libc::c_int, angle: libc::c_int
+  );
+}
+
 // TODO: rename the type bounds later
 pub trait Intra<T>: Dim
 where
@@ -241,6 +248,22 @@ where
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_dc_128(output: &mut [T], stride: usize, bit_depth: usize) {
+    #[cfg(all(target_arch = "x86_64", not(windows)))]
+    {
+      use std::ptr;
+      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
+        return unsafe {
+          rav1e_ipred_dc_128_avx2(
+            output.as_mut_ptr() as *mut _,
+            stride as libc::ptrdiff_t,
+            ptr::null(),
+            Self::W as libc::c_int,
+            Self::H as libc::c_int,
+            0
+          )
+        };
+      }
+    }
     for y in 0..Self::H {
       for x in 0..Self::W {
         output[y * stride + x] = (128u32 << (bit_depth - 8)).as_();
@@ -871,6 +894,18 @@ pub mod test {
 
       let (o1, o2) = do_cfl_pred(&mut ra);
       assert_eq!(o1, o2);
+    }
+  }
+
+  #[test]
+  fn pred_matches_u8() {
+    let row128 = [128u8; 32];
+    let mut o = vec![0u8; 32 * 32];
+
+    Block4x4::pred_dc_128(&mut o, 32, 8);
+
+    for l in o.chunks(32).take(4) {
+      assert_eq!(l[..4], row128[..4]);
     }
   }
 

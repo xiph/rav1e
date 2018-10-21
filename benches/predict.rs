@@ -25,8 +25,19 @@ pub fn generate_block(rng: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>, Vec<u16>) {
   (block, above_context, left_context)
 }
 
+pub fn generate_block_u8(rng: &mut ChaChaRng) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+  let block = vec![0u8; BLOCK_SIZE.width() * BLOCK_SIZE.height()];
+  let above_context: Vec<u8> =
+    (0..BLOCK_SIZE.height()).map(|_| rng.gen()).collect();
+  let left_context: Vec<u8> =
+    (0..BLOCK_SIZE.width()).map(|_| rng.gen()).collect();
+
+  (block, above_context, left_context)
+}
+
 pub fn pred_bench(c: &mut Criterion) {
   c.bench_function("intra_dc_4x4", |b| intra_dc_4x4(b));
+  c.bench_function("intra_dc_128_4x4_u8", |b| intra_dc_128_4x4_u8(b));
   c.bench_function("intra_dc_left_4x4", |b| intra_dc_left_4x4(b));
   c.bench_function("intra_dc_top_4x4", |b| intra_dc_top_4x4(b));
   c.bench_function("intra_h_4x4", |b| intra_h_4x4(b));
@@ -49,6 +60,21 @@ pub fn intra_dc_4x4(b: &mut Bencher) {
         BLOCK_SIZE.width(),
         &above[..4],
         &left[..4]
+      );
+    }
+  })
+}
+
+pub fn intra_dc_128_4x4_u8(b: &mut Bencher) {
+  let mut ra = ChaChaRng::from_seed([0; 32]);
+  let (mut block, above, left) = generate_block_u8(&mut ra);
+
+  b.iter(|| {
+    for _ in 0..MAX_ITER {
+      Block4x4::pred_dc_128(
+        &mut block,
+        BLOCK_SIZE.width(),
+        8
       );
     }
   })
