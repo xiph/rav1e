@@ -27,6 +27,7 @@ pub fn generate_block(rng: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>, Vec<u16>) {
 
 pub fn pred_bench(c: &mut Criterion) {
   c.bench_function("intra_dc_4x4", |b| intra_dc_4x4(b));
+  c.bench_function("intra_dc_top_4x4", |b| intra_dc_top_4x4(b));
   c.bench_function("intra_h_4x4", |b| intra_h_4x4(b));
   c.bench_function("intra_v_4x4", |b| intra_v_4x4(b));
   c.bench_function("intra_paeth_4x4", |b| intra_paeth_4x4(b));
@@ -43,6 +44,22 @@ pub fn intra_dc_4x4(b: &mut Bencher) {
   b.iter(|| {
     for _ in 0..MAX_ITER {
       Block4x4::pred_dc(
+        &mut block,
+        BLOCK_SIZE.width(),
+        &above[..4],
+        &left[..4]
+      );
+    }
+  })
+}
+
+pub fn intra_dc_top_4x4(b: &mut Bencher) {
+  let mut ra = ChaChaRng::from_seed([0; 32]);
+  let (mut block, above, left) = generate_block(&mut ra);
+
+  b.iter(|| {
+    for _ in 0..MAX_ITER {
+      Block4x4::pred_dc_top(
         &mut block,
         BLOCK_SIZE.width(),
         &above[..4],
