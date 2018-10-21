@@ -14,22 +14,27 @@ use std::fs;
 use std::path::Path;
 
 fn main() {
-    #[cfg(target_arch = "x86_64")] {
+    #[cfg(all(target_arch = "x86_64", not(windows)))] {
         use std::fs::File;
         use std::io::Write;
         let out_dir = env::var("OUT_DIR").unwrap();
         {
             let dest_path = Path::new(&out_dir).join("config.asm");
             let mut config_file = File::create(dest_path).unwrap();
+            config_file.write(b"	%define private_prefix rav1e\n").unwrap();
             config_file.write(b"	%define ARCH_X86_32 0\n").unwrap();
             config_file.write(b" %define ARCH_X86_64 1\n").unwrap();
             config_file.write(b"	%define PIC 1\n").unwrap();
             config_file.write(b" %define STACK_ALIGNMENT 32\n").unwrap();
+            if cfg!(target_os="macos") {
+              config_file.write(b" %define PREFIX 1\n").unwrap();
+            }
         }
         let mut config_include_arg = String::from("-I");
         config_include_arg.push_str(&out_dir);
         config_include_arg.push('/');
-        nasm_rs::compile_library_args("rav1easm", &["src/x86/mc.asm"], &[&config_include_arg, "-Isrc/"]);
+        nasm_rs::compile_library_args("rav1easm", &["src/x86/ipred.asm"], &[&config_include_arg, "-Isrc/"]);
+        println!("cargo:rustc-link-lib=static=rav1easm");
     }
 
     if cfg!(windows) && cfg!(feature = "decode_test") {
