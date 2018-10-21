@@ -241,7 +241,6 @@ impl Context {
       let q_drop = 15 * lvl as usize;
       self.fi.base_q_idx = (self.fi.config.quantizer.min(255 - q_drop) + q_drop) as u8;
 
-      let first_ref_frame = LAST_FRAME;
       let second_ref_frame = if !multiref {
         NONE_FRAME
       } else if !reorder || idx_in_group == 0 {
