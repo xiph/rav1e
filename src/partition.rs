@@ -836,7 +836,7 @@ impl PredictionMode {
   }
 
   #[inline(always)]
-  fn predict_intra_inner<'a, B: Intra>(
+  fn predict_intra_inner<'a, B: Intra<u16>>(
     self, dst: &'a mut PlaneMutSlice<'a>, bit_depth: usize, ac: &[i16],
     alpha: i16
   ) {

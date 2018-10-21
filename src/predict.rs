@@ -13,6 +13,7 @@
 
 #[cfg(test)]
 use libc;
+use num_traits::*;
 
 use context::INTRA_MODES;
 use context::MAX_TX_SIZE;
@@ -208,13 +209,20 @@ fn get_scaled_luma_q0(alpha_q3: i16, ac_pred_q3: i16) -> i32 {
   }
 }
 
-pub trait Intra: Dim {
+// TODO: rename the type bounds later
+pub trait Intra<T>: Dim
+where
+  T: PrimInt + Into<u32> + Into<i32> + 'static,
+  i32: AsPrimitive<T>,
+  u32: AsPrimitive<T>,
+  usize: AsPrimitive<T>
+{
   #[cfg_attr(feature = "comparative_bench", inline(never))]
-  fn pred_dc(output: &mut [u16], stride: usize, above: &[u16], left: &[u16]) {
+  fn pred_dc(output: &mut [T], stride: usize, above: &[T], left: &[T]) {
     let edges = left[..Self::H].iter().chain(above[..Self::W].iter());
     let len = (Self::W + Self::H) as u32;
     let avg =
-      ((edges.fold(0, |acc, &v| acc + v as u32) + (len >> 1)) / len) as u16;
+      ((edges.fold(0u32, |acc, &v| { let v: u32 = v.into(); v + acc }) + (len >> 1)) / len).as_();
 
     for line in output.chunks_mut(stride).take(Self::H) {
       for v in &mut line[..Self::W] {
@@ -224,20 +232,18 @@ pub trait Intra: Dim {
   }
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
-  fn pred_dc_128(output: &mut [u16], stride: usize, bit_depth: usize) {
+  fn pred_dc_128(output: &mut [T], stride: usize, bit_depth: usize) {
     for y in 0..Self::H {
       for x in 0..Self::W {
-        output[y * stride + x] = 128 << (bit_depth - 8);
+        output[y * stride + x] = (128u32 << (bit_depth - 8)).as_();
       }
     }
   }
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
-  fn pred_dc_left(
-    output: &mut [u16], stride: usize, _above: &[u16], left: &[u16]
-  ) {
-    let sum = left[..Self::W].iter().fold(0u32, |acc, &v| acc + v as u32);
-    let avg = ((sum + (Self::W >> 1) as u32) / Self::W as u32) as u16;
+  fn pred_dc_left(output: &mut [T], stride: usize, _above: &[T], left: &[T]) {
+    let sum = left[..Self::W].iter().fold(0u32, |acc, &v| { let v: u32 = v.into(); v + acc });
+    let avg = ((sum + (Self::W >> 1) as u32) / Self::W as u32).as_();
     for line in output.chunks_mut(stride).take(Self::H) {
       line[..Self::W].iter_mut().for_each(|v| *v = avg);
     }
@@ -245,17 +251,17 @@ pub trait Intra: Dim {
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_dc_top(
-    output: &mut [u16], stride: usize, above: &[u16], _left: &[u16]
+    output: &mut [T], stride: usize, above: &[T], _left: &[T]
   ) {
-    let sum = above[..Self::W].iter().fold(0u32, |acc, &v| acc + v as u32);
-    let avg = ((sum + (Self::W >> 1) as u32) / Self::W as u32) as u16;
+    let sum = above[..Self::W].iter().fold(0u32, |acc, &v| { let v: u32 = v.into(); v + acc });
+    let avg = ((sum + (Self::W >> 1) as u32) / Self::W as u32).as_();
     for line in output.chunks_mut(stride).take(Self::H) {
       line[..Self::W].iter_mut().for_each(|v| *v = avg);
     }
   }
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
-  fn pred_h(output: &mut [u16], stride: usize, left: &[u16]) {
+  fn pred_h(output: &mut [T], stride: usize, left: &[T]) {
     for (line, l) in output.chunks_mut(stride).zip(left[..Self::H].iter()) {
       for v in &mut line[..Self::W] {
         *v = *l;
@@ -264,7 +270,7 @@ pub trait Intra: Dim {
   }
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
-  fn pred_v(output: &mut [u16], stride: usize, above: &[u16]) {
+  fn pred_v(output: &mut [T], stride: usize, above: &[T]) {
     for line in output.chunks_mut(stride).take(Self::H) {
       line[..Self::W].clone_from_slice(&above[..Self::W])
     }
@@ -272,15 +278,15 @@ pub trait Intra: Dim {
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_paeth(
-    output: &mut [u16], stride: usize, above: &[u16], left: &[u16],
-    above_left: u16
+    output: &mut [T], stride: usize, above: &[T], left: &[T],
+    above_left: T
   ) {
     for r in 0..Self::H {
       for c in 0..Self::W {
         // Top-left pixel is fixed in libaom
-        let raw_top_left = above_left as i32;
-        let raw_left = left[r] as i32;
-        let raw_top = above[c] as i32;
+        let raw_top_left: i32 = above_left.into();
+        let raw_left: i32 = left[r].into();
+        let raw_top: i32 = above[c].into();
 
         let p_base = raw_top + raw_left - raw_top_left;
         let p_left = (p_base - raw_left).abs();
@@ -291,11 +297,11 @@ pub trait Intra: Dim {
 
         // Return nearest to base of left, top and top_left
         if p_left <= p_top && p_left <= p_top_left {
-          output[output_index] = raw_left as u16;
+          output[output_index] = raw_left.as_();
         } else if p_top <= p_top_left {
-          output[output_index] = raw_top as u16;
+          output[output_index] = raw_top.as_();
         } else {
-          output[output_index] = raw_top_left as u16;
+          output[output_index] = raw_top_left.as_();
         }
       }
     }
@@ -311,7 +317,7 @@ pub trait Intra: Dim {
     let sm_weights_h = &sm_weight_arrays[Self::H..];
 
     let log2_scale = 1 + sm_weight_log2_scale;
-    let scale = 1_u16 << sm_weight_log2_scale as u16;
+    let scale = 1_u16 << sm_weight_log2_scale;
 
     // Weights sanity checks
     assert!((sm_weights_w[0] as u16) < scale);
@@ -494,10 +500,15 @@ pub trait Intra: Dim {
 
 pub trait Inter: Dim {}
 
-impl Intra for Block4x4 {}
-impl Intra for Block8x8 {}
-impl Intra for Block16x16 {}
-impl Intra for Block32x32 {}
+impl Intra<u8> for Block4x4 {}
+impl Intra<u8> for Block8x8 {}
+impl Intra<u8> for Block16x16 {}
+impl Intra<u8> for Block32x32 {}
+
+impl Intra<u16> for Block4x4 {}
+impl Intra<u16> for Block8x8 {}
+impl Intra<u16> for Block16x16 {}
+impl Intra<u16> for Block32x32 {}
 
 #[cfg(test)]
 pub mod test {
