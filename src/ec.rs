@@ -641,62 +641,100 @@ impl<W: io::Write> BCodeWriter for BitWriter<W, BigEndian> {
   }
 }
 
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct od_ec_dec {
-  pub buf: *const ::std::os::raw::c_uchar,
-  pub eptr: *const ::std::os::raw::c_uchar,
-  pub end_window: ec_window,
-  pub nend_bits: ::std::os::raw::c_int,
-  pub tell_offs: i32,
-  pub end: *const ::std::os::raw::c_uchar,
-  pub bptr: *const ::std::os::raw::c_uchar,
-  pub dif: ec_window,
-  pub rng: u16,
-  pub cnt: i16,
-  pub error: ::std::os::raw::c_int
-}
-
 #[cfg(test)]
 mod test {
   use super::*;
-  use std::mem;
+  const WINDOW_SIZE: i16 = 32;
+  const LOTS_OF_BITS: i16 = 0x4000;
 
+  #[derive(Debug)]
   struct Reader<'a> {
-    dec: od_ec_dec,
-    _dummy: &'a [u8]
-  }
-
-  extern {
-    fn od_ec_dec_init(
-      dec: *mut od_ec_dec, buf: *const ::std::os::raw::c_uchar, storage: u32
-    );
-    fn od_ec_decode_bool_q15(
-      dec: *mut od_ec_dec, f: ::std::os::raw::c_uint
-    ) -> ::std::os::raw::c_int;
-    fn od_ec_decode_cdf_q15(
-      dec: *mut od_ec_dec, cdf: *const u16, nsyms: ::std::os::raw::c_int
-    ) -> ::std::os::raw::c_int;
+    buf: &'a [u8],
+    bptr: usize,
+    dif: ec_window,
+    rng: u16,
+    cnt: i16,
   }
 
   impl<'a> Reader<'a> {
     fn new(buf: &'a [u8]) -> Self {
-      let mut r = Reader { dec: unsafe { mem::uninitialized() }, _dummy: buf };
-
-      unsafe { od_ec_dec_init(&mut r.dec, buf.as_ptr(), buf.len() as u32) };
-
+      let mut r = Reader {
+        buf,
+        bptr: 0,
+        dif: (1 << (WINDOW_SIZE - 1)) - 1,
+        rng: 0x8000,
+        cnt: -15,
+      };
+      r.refill();
       r
     }
 
+    fn refill(&mut self) {
+      let mut s = WINDOW_SIZE - 9 - (self.cnt + 15);
+      while s >= 0 && self.bptr < self.buf.len() {
+        assert!(s <= WINDOW_SIZE - 8);
+        self.dif ^= (self.buf[self.bptr] as ec_window) << s;
+        self.cnt += 8;
+        s -= 8;
+        self.bptr += 1;
+      }
+      if self.bptr >= self.buf.len() {
+        self.cnt = LOTS_OF_BITS;
+      }
+    }
+
+    fn normalize(&mut self, dif: ec_window, rng: u32) {
+      assert!(rng <= 65536);
+      let d = rng.leading_zeros() - 16;
+      //let d = 16 - (32-rng.leading_zeros());
+      //msb(rng) = 31-rng.leading_zeros();
+      self.cnt -= d as i16;
+      /*This is equivalent to shifting in 1's instead of 0's.*/
+      self.dif = ((dif + 1) << d) - 1;
+      self.rng = (rng << d) as u16;
+      if self.cnt < 0 {
+        self.refill()
+      }
+    }
+
     fn bool(&mut self, f: u32) -> bool {
-      unsafe { od_ec_decode_bool_q15(&mut self.dec, f) != 0 }
+      assert!(f < 32768);
+      let r = self.rng as u32;
+      assert!(self.dif >> (WINDOW_SIZE - 16) < r);
+      assert!(32768 <= r);
+      let v = ((r >> 8) * (f >> EC_PROB_SHIFT) >> (7 - EC_PROB_SHIFT)) + EC_MIN_PROB;
+      let vw = v << (WINDOW_SIZE - 16);
+      let (dif, rng, ret) = if self.dif >= vw {
+        (self.dif - vw, r - v, false)
+      } else {
+        (self.dif, v, true)
+      };
+      self.normalize(dif, rng);
+      ret
     }
 
     fn symbol(&mut self, icdf: &[u16]) -> i32 {
-      let nsyms = icdf.len();
-      unsafe {
-        od_ec_decode_cdf_q15(&mut self.dec, icdf.as_ptr(), nsyms as i32)
+      let r = self.rng as u32;
+      assert!(self.dif >> (WINDOW_SIZE - 16) < r);
+      assert!(32768 <= r);
+      let n = icdf.len() as u32 - 1;
+      let c = self.dif >> (WINDOW_SIZE - 16);
+      let mut v = self.rng as u32;
+      let mut ret = 0i32;
+      let mut u = v;
+      v = (r >> 8) * (icdf[ret as usize] as u32 >> EC_PROB_SHIFT) >> (7 - EC_PROB_SHIFT);
+      v += EC_MIN_PROB * (n - ret as u32);
+      while c < v {
+        u = v;
+        ret += 1;
+        v = (r >> 8) * (icdf[ret as usize] as u32 >> EC_PROB_SHIFT) >> (7 - EC_PROB_SHIFT);
+        v += EC_MIN_PROB * (n - ret as u32);
       }
+      assert!(v < u);
+      assert!(u <= r);
+      let new_dif = self.dif - (v << (WINDOW_SIZE - 16));
+      self.normalize(new_dif, u - v);
+      ret
     }
   }
 
