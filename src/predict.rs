@@ -432,12 +432,13 @@ where
   #[target_feature(enable = "ssse3")]
   #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
   unsafe fn pred_cfl_ssse3(
-    output: &mut [u16], stride: usize, ac: &[i16], alpha: i16,
+    output: &mut [T], stride: usize, ac: &[i16], alpha: i16,
     bit_depth: usize
   ) {
     let alpha_sign = _mm_set1_epi16(alpha);
     let alpha_q12 = _mm_slli_epi16(_mm_abs_epi16(alpha_sign), 9);
-    let dc_q0 = _mm_set1_epi16(*output.as_ptr() as i16);
+    let dc_scalar: u32 = (*output.as_ptr()).into();
+    let dc_q0 = _mm_set1_epi16(dc_scalar as i16);
     let max = _mm_set1_epi16((1 << bit_depth) - 1);
 
     for j in 0..Self::H {
@@ -445,6 +446,7 @@ where
       let line = output.as_mut_ptr().offset((stride * j) as isize);
 
       let mut i = 0isize;
+      let mut last = _mm_setzero_si128();
       while (i as usize) < Self::W {
         let ac_q3 = _mm_loadu_si128(luma.offset(i) as *const _);
         let ac_sign = _mm_sign_epi16(alpha_sign, ac_q3);
@@ -452,11 +454,27 @@ where
           _mm_mulhrs_epi16(_mm_abs_epi16(ac_q3), alpha_q12);
         let scaled_luma_q0 = _mm_sign_epi16(abs_scaled_luma_q0, ac_sign);
         let pred = _mm_add_epi16(scaled_luma_q0, dc_q0);
-        let res = _mm_min_epi16(max, _mm_max_epi16(pred, _mm_setzero_si128()));
-        if Self::W == 4 {
-          _mm_storel_epi64(line.offset(i) as *mut _, res);
+        if size_of::<T>() == 1 {
+          if Self::W < 16 {
+            let res = _mm_packus_epi16(pred, pred);
+            if Self::W == 4 {
+               *(line.offset(i) as *mut i32) = _mm_cvtsi128_si32(res);
+            } else {
+              _mm_storel_epi64(line.offset(i) as *mut _, res);
+            }
+          } else if (i & 15) == 0 {
+            last = pred;
+          } else {
+            let res = _mm_packus_epi16(last, pred);
+            _mm_storeu_si128(line.offset(i - 8) as *mut _, res);
+          }
         } else {
-          _mm_storeu_si128(line.offset(i) as *mut _, res);
+          let res = _mm_min_epi16(max, _mm_max_epi16(pred, _mm_setzero_si128()));
+          if Self::W == 4 {
+            _mm_storel_epi64(line.offset(i) as *mut _, res);
+          } else {
+            _mm_storeu_si128(line.offset(i) as *mut _, res);
+          }
         }
         i += 8;
       }
@@ -465,7 +483,7 @@ where
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_cfl(
-    output: &mut [u16], stride: usize, ac: &[i16], alpha: i16,
+    output: &mut [T], stride: usize, ac: &[i16], alpha: i16,
     bit_depth: usize
   ) {
     if alpha == 0 {
@@ -485,14 +503,14 @@ where
     }
 
     let sample_max = (1 << bit_depth) - 1;
-    let avg = output[0] as i32;
+    let avg: i32 = output[0].into();
 
     for (line, luma) in
       output.chunks_mut(stride).zip(ac.chunks(32)).take(Self::H)
     {
       for (v, &l) in line[..Self::W].iter_mut().zip(luma[..Self::W].iter()) {
         *v =
-          (avg + get_scaled_luma_q0(alpha, l)).max(0).min(sample_max) as u16;
+          (avg + get_scaled_luma_q0(alpha, l)).max(0).min(sample_max).as_();
       }
     }
   }
