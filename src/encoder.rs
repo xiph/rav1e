@@ -1367,7 +1367,8 @@ pub fn encode_tx_block(
 
     let mut tx_dist: u64 = 0;
 
-    if !fi.use_tx_domain_distortion || !for_rdo_use {
+    //if !fi.use_tx_domain_distortion || !for_rdo_use {
+    if !fi.use_tx_domain_distortion {
         inverse_transform_add(rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
     } else {
         inverse_transform_add(rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
