@@ -309,7 +309,7 @@ where
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_smooth(
-    output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
+    output: &mut [T], stride: usize, above: &[T], left: &[T]
   ) {
     let below_pred = left[Self::H - 1]; // estimated by bottom-left pixel
     let right_pred = above[Self::W - 1]; // estimated by top-right pixel
@@ -346,20 +346,20 @@ where
         let mut this_pred: u32 = weights
           .iter()
           .zip(pixels.iter())
-          .map(|(w, p)| (*w as u32) * (*p as u32))
+          .map(|(w, p)| { let p: u32 = (*p).into(); (*w as u32) * p })
           .sum();
         this_pred = (this_pred + (1 << (log2_scale - 1))) >> log2_scale;
 
         let output_index = r * stride + c;
 
-        output[output_index] = this_pred as u16;
+        output[output_index] = this_pred.as_();
       }
     }
   }
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_smooth_h(
-    output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
+    output: &mut [T], stride: usize, above: &[T], left: &[T]
   ) {
     let right_pred = above[Self::W - 1]; // estimated by top-right pixel
     let sm_weights = &sm_weight_arrays[Self::W..];
@@ -382,20 +382,20 @@ where
         let mut this_pred: u32 = weights
           .iter()
           .zip(pixels.iter())
-          .map(|(w, p)| (*w as u32) * (*p as u32))
+          .map(|(w, p)| { let p: u32 = (*p).into(); (*w as u32) * p })
           .sum();
         this_pred = (this_pred + (1 << (log2_scale - 1))) >> log2_scale;
 
         let output_index = r * stride + c;
 
-        output[output_index] = this_pred as u16;
+        output[output_index] = this_pred.as_();
       }
     }
   }
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_smooth_v(
-    output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
+    output: &mut [T], stride: usize, above: &[T], left: &[T]
   ) {
     let below_pred = left[Self::H - 1]; // estimated by bottom-left pixel
     let sm_weights = &sm_weight_arrays[Self::H..];
@@ -418,13 +418,13 @@ where
         let mut this_pred: u32 = weights
           .iter()
           .zip(pixels.iter())
-          .map(|(w, p)| (*w as u32) * (*p as u32))
+          .map(|(w, p)| { let p: u32 = (*p).into(); (*w as u32) * p })
           .sum();
         this_pred = (this_pred + (1 << (log2_scale - 1))) >> log2_scale;
 
         let output_index = r * stride + c;
 
-        output[output_index] = this_pred as u16;
+        output[output_index] = this_pred.as_();
       }
     }
   }
