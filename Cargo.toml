@@ -16,7 +16,7 @@ default = ["binaries"]
 
 [dependencies]
 bitstream-io = "0.8"
-clap = { version = "2", optional = true }
+clap = { version = "2", optional = true, default-features = false }
 libc = "0.2"
 rand = "0.5"
 rustyline = { version = "1", optional = true }
