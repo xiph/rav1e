@@ -179,7 +179,7 @@ impl Context {
     let reorder = false;
     let multiref = reorder || self.fi.config.speed <= 2;
 
-    let pyramid_depth = if reorder { 1 } else { 0 };
+    let pyramid_depth = if reorder { 2 } else { 0 };
     let group_src_len = 1 << pyramid_depth;
     let group_len = group_src_len + if reorder { pyramid_depth } else { 0 };
     let segment_len = 1 + (key_frame_interval - 1 + group_src_len - 1) / group_src_len * group_len;
@@ -264,7 +264,13 @@ impl Context {
         } as u8) & 7;
       }
 
+      self.fi.reference_mode = if multiref && reorder && idx_in_group != 0 {
+        ReferenceMode::SELECT
+      } else {
+        ReferenceMode::SINGLE
+      };
       self.fi.number = segment_idx * key_frame_interval + self.fi.order_hint as u64;
+      self.fi.me_range_scale = (group_src_len >> lvl) as u8;
     }
 
     true

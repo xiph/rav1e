@@ -23,7 +23,7 @@ use motion_compensate;
 use partition::*;
 use plane::*;
 use cdef::*;
-use predict::{RAV1E_INTRA_MODES, RAV1E_INTRA_MODES_MINIMAL, RAV1E_INTER_MODES_MINIMAL};
+use predict::{RAV1E_INTRA_MODES, RAV1E_INTRA_MODES_MINIMAL, RAV1E_INTER_MODES_MINIMAL, RAV1E_INTER_COMPOUND_MODES};
 use quantize::dc_q;
 use std;
 use std::f64;
@@ -37,6 +37,7 @@ use FrameState;
 use FrameType;
 use Tune;
 use Sequence;
+use encoder::ReferenceMode;
 
 #[derive(Clone)]
 pub struct RDOOutput {
@@ -52,8 +53,8 @@ pub struct RDOPartitionOutput {
   pub pred_mode_luma: PredictionMode,
   pub pred_mode_chroma: PredictionMode,
   pub pred_cfl_params: CFLParams,
-  pub ref_frame: usize,
-  pub mv: MotionVector,
+  pub ref_frames: [usize; 2],
+  pub mvs: [MotionVector; 2],
   pub skip: bool,
   pub tx_size: TxSize,
   pub tx_type: TxType,
@@ -212,7 +213,7 @@ fn compute_rd_cost(
 pub fn rdo_tx_size_type(
   seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
   cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset,
-  luma_mode: PredictionMode, ref_frame: usize, mv: MotionVector, skip: bool
+  luma_mode: PredictionMode, ref_frames: &[usize; 2], mvs: &[MotionVector; 2], skip: bool
 ) -> (TxSize, TxType) {
   // these rules follow TX_MODE_LARGEST
   let tx_size = match bsize {
@@ -235,8 +236,8 @@ pub fn rdo_tx_size_type(
         fs,
         cw,
         luma_mode,
-        ref_frame,
-        mv,
+        ref_frames,
+        mvs,
         bsize,
         bo,
         tx_size,
@@ -256,8 +257,8 @@ struct EncodingSettings {
   cfl_params: CFLParams,
   skip: bool,
   rd: f64,
-  ref_frame: usize,
-  mv: MotionVector,
+  ref_frames: [usize; 2],
+  mvs: [MotionVector; 2],
   tx_size: TxSize,
   tx_type: TxType
 }
@@ -270,8 +271,8 @@ impl Default for EncodingSettings {
       cfl_params: CFLParams::new(),
       skip: false,
       rd: std::f64::MAX,
-      ref_frame: INTRA_FRAME,
-      mv: MotionVector { row: 0, col: 0 },
+      ref_frames: [INTRA_FRAME, NONE_FRAME],
+      mvs: [MotionVector { row: 0, col: 0 }; 2],
       tx_size: TxSize::TX_4X4,
       tx_type: TxType::DCT_DCT
     }
@@ -304,50 +305,81 @@ pub fn rdo_mode_decision(
     RAV1E_INTRA_MODES_MINIMAL
   };
 
-  let mut ref_frame_set = Vec::new();
+  let mut ref_frames_set = Vec::new();
   let mut ref_slot_set = Vec::new();
+  let mut mvs_from_me = Vec::new();
+  let mut fwdref = None;
+  let mut bwdref = None;
 
   if fi.frame_type == FrameType::INTER {
     for i in LAST_FRAME..NONE_FRAME {
       // Don't search LAST3 since it's used only for probs
       if i == LAST3_FRAME { continue; }
       if !ref_slot_set.contains(&fi.ref_frames[i - LAST_FRAME]) {
-        ref_frame_set.push(i);
+        if fwdref == None && i < BWDREF_FRAME {
+          fwdref = Some(ref_frames_set.len());
+        }
+        if bwdref == None && i >= BWDREF_FRAME {
+          bwdref = Some(ref_frames_set.len());
+        }
+        ref_frames_set.push([i, NONE_FRAME]);
         ref_slot_set.push(fi.ref_frames[i - LAST_FRAME]);
+        mvs_from_me.push([motion_estimation(fi, fs, bsize, bo, i, pmv), MotionVector { row: 0, col: 0 }]);
       }
     }
-    assert!(ref_frame_set.len() != 0);
+    assert!(ref_frames_set.len() != 0);
   }
 
   let mut mode_set: Vec<(PredictionMode, usize)> = Vec::new();
   let mut mv_stacks = Vec::new();
   let mut mode_contexts = Vec::new();
 
-  for (i, &ref_frame) in ref_frame_set.iter().enumerate() {
-    let mut mvs: Vec<CandidateMV> = Vec::new();
-    mode_contexts.push(cw.find_mvrefs(bo, ref_frame, &mut mvs, bsize, false, fi));
+  for (i, &ref_frames) in ref_frames_set.iter().enumerate() {
+    let mut mv_stack: Vec<CandidateMV> = Vec::new();
+    mode_contexts.push(cw.find_mvrefs(bo, &ref_frames, &mut mv_stack, bsize, false, fi, false));
 
     if fi.frame_type == FrameType::INTER {
       for &x in RAV1E_INTER_MODES_MINIMAL {
         mode_set.push((x, i));
       }
       if fi.config.speed <= 2 {
-        if mvs.len() >= 3 {
+        if mv_stack.len() >= 3 {
           mode_set.push((PredictionMode::NEAR1MV, i));
         }
-        if mvs.len() >= 4 {
+        if mv_stack.len() >= 4 {
           mode_set.push((PredictionMode::NEAR2MV, i));
         }
       }
     }
-    mv_stacks.push(mvs);
+    mv_stacks.push(mv_stack);
+  }
+
+  let sz = bsize.width_mi().min(bsize.height_mi());
+
+  if fi.frame_type == FrameType::INTER && fi.reference_mode != ReferenceMode::SINGLE && sz >= 2 {
+    // Adding compound candidate
+    if let Some(r0) = fwdref {
+      if let Some(r1) = bwdref {
+        let ref_frames = [ref_frames_set[r0][0], ref_frames_set[r1][0]];
+        ref_frames_set.push(ref_frames);
+        let mv0 = mvs_from_me[r0][0];
+        let mv1 = mvs_from_me[r1][0];
+        mvs_from_me.push([mv0, mv1]);
+        let mut mv_stack: Vec<CandidateMV> = Vec::new();
+        mode_contexts.push(cw.find_mvrefs(bo, &ref_frames, &mut mv_stack, bsize, false, fi, true));
+        for &x in RAV1E_INTER_COMPOUND_MODES {
+          mode_set.push((x, ref_frames_set.len() - 1));
+        }
+        mv_stacks.push(mv_stack);
+      }
+    }
   }
 
   let luma_rdo = |luma_mode: PredictionMode, fs: &mut FrameState, cw: &mut ContextWriter, best: &mut EncodingSettings,
-    mv: MotionVector, ref_frame: usize, mode_set_chroma: &[PredictionMode], luma_mode_is_intra: bool,
+    mvs: &[MotionVector; 2], ref_frames: &[usize; 2], mode_set_chroma: &[PredictionMode], luma_mode_is_intra: bool,
     mode_context: usize, mv_stack: &Vec<CandidateMV>| {
     let (tx_size, mut tx_type) = rdo_tx_size_type(
-      seq, fi, fs, cw, bsize, bo, luma_mode, ref_frame, mv, false,
+      seq, fi, fs, cw, bsize, bo, luma_mode, ref_frames, mvs, false,
     );
 
     // Find the best chroma prediction mode for the current luma prediction mode
@@ -367,8 +399,8 @@ pub fn rdo_mode_decision(
           wr,
           luma_mode,
           chroma_mode,
-          ref_frame,
-          mv,
+          ref_frames,
+          mvs,
           bsize,
           bo,
           skip,
@@ -394,11 +426,12 @@ pub fn rdo_mode_decision(
         );
 
         if rd < best.rd {
+        //if rd < best.rd || luma_mode == PredictionMode::NEW_NEWMV {
           best.rd = rd;
           best.mode_luma = luma_mode;
           best.mode_chroma = chroma_mode;
-          best.ref_frame = ref_frame;
-          best.mv = mv;
+          best.ref_frames = *ref_frames;
+          best.mvs = *mvs;
           best.skip = skip;
           best.tx_size = tx_size;
           best.tx_type = tx_type;
@@ -420,36 +453,40 @@ pub fn rdo_mode_decision(
   }
 
   mode_set.iter().for_each(|&(luma_mode, i)| {
-    let mv = match luma_mode {
-      PredictionMode::NEWMV => motion_estimation(fi, fs, bsize, bo, ref_frame_set[i], pmv),
-      PredictionMode::NEARESTMV => if mv_stacks[i].len() > 0 {
-        mv_stacks[i][0].this_mv
+    let mvs = match luma_mode {
+      PredictionMode::NEWMV | PredictionMode::NEW_NEWMV => mvs_from_me[i],
+      PredictionMode::NEARESTMV | PredictionMode::NEAREST_NEARESTMV => if mv_stacks[i].len() > 0 {
+        [mv_stacks[i][0].this_mv, mv_stacks[i][0].comp_mv]
       } else {
-        MotionVector { row: 0, col: 0 }
+        [MotionVector { row: 0, col: 0 }; 2]
       },
       PredictionMode::NEAR0MV => if mv_stacks[i].len() > 1 {
-        mv_stacks[i][1].this_mv
+        [mv_stacks[i][1].this_mv, mv_stacks[i][1].comp_mv]
       } else {
-        MotionVector { row: 0, col: 0 }
+        [MotionVector { row: 0, col: 0 }; 2]
       },
       PredictionMode::NEAR1MV | PredictionMode::NEAR2MV =>
-          mv_stacks[i][luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].this_mv,
-      _ => MotionVector { row: 0, col: 0 }
+          [mv_stacks[i][luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].this_mv,
+          mv_stacks[i][luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].comp_mv],
+      PredictionMode::NEAREST_NEWMV => [mv_stacks[i][0].this_mv, mvs_from_me[i][1]],
+      PredictionMode::NEW_NEARESTMV => [mvs_from_me[i][0], mv_stacks[i][0].comp_mv],
+      _ => [MotionVector { row: 0, col: 0 }; 2]
     };
     let mode_set_chroma = vec![luma_mode];
 
-    luma_rdo(luma_mode, fs, cw, &mut best, mv, ref_frame_set[i], &mode_set_chroma, false,
+    luma_rdo(luma_mode, fs, cw, &mut best, &mvs, &ref_frames_set[i], &mode_set_chroma, false,
              mode_contexts[i], &mv_stacks[i]);
   });
 
   if !best.skip {
     intra_mode_set.iter().for_each(|&luma_mode| {
-      let mv = MotionVector { row: 0, col: 0 };
+      let mvs = &[MotionVector { row: 0, col: 0 }; 2];
+      let ref_frames = &[INTRA_FRAME, NONE_FRAME];
       let mut mode_set_chroma = vec![luma_mode];
       if is_chroma_block && luma_mode != PredictionMode::DC_PRED {
         mode_set_chroma.push(PredictionMode::DC_PRED);
       }
-      luma_rdo(luma_mode, fs, cw, &mut best, mv, INTRA_FRAME, &mode_set_chroma, true,
+      luma_rdo(luma_mode, fs, cw, &mut best, mvs, ref_frames, &mode_set_chroma, true,
                0, &Vec::new());
     });
   }
@@ -488,8 +525,8 @@ pub fn rdo_mode_decision(
         wr,
         best.mode_luma,
         chroma_mode,
-        best.ref_frame,
-        best.mv,
+        &best.ref_frames,
+        &best.mvs,
         bsize,
         bo,
         best.skip,
@@ -525,8 +562,8 @@ pub fn rdo_mode_decision(
   }
 
   cw.bc.set_mode(bo, bsize, best.mode_luma);
-  cw.bc.set_ref_frame(bo, bsize, best.ref_frame);
-  cw.bc.set_motion_vector(bo, bsize, best.mv);
+  cw.bc.set_ref_frames(bo, bsize, &best.ref_frames);
+  cw.bc.set_motion_vectors(bo, bsize, &best.mvs);
 
   assert!(best.rd >= 0_f64);
 
@@ -538,8 +575,8 @@ pub fn rdo_mode_decision(
       pred_mode_luma: best.mode_luma,
       pred_mode_chroma: best.mode_chroma,
       pred_cfl_params: best.cfl_params,
-      ref_frame: best.ref_frame,
-      mv: best.mv,
+      ref_frames: best.ref_frames,
+      mvs: best.mvs,
       rd_cost: best.rd,
       skip: best.skip,
       tx_size: best.tx_size,
@@ -594,7 +631,7 @@ pub fn rdo_cfl_alpha(
 // RDO-based transform type decision
 pub fn rdo_tx_type_decision(
   fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
-  mode: PredictionMode, ref_frame: usize, mv: MotionVector, bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize,
+  mode: PredictionMode, ref_frames: &[usize; 2], mvs: &[MotionVector; 2], bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize,
   tx_set: TxSet, bit_depth: usize
 ) -> TxType {
   let mut best_type = TxType::DCT_DCT;
@@ -617,7 +654,7 @@ pub fn rdo_tx_type_decision(
       continue;
     }
 
-    motion_compensate(fi, fs, cw, mode, ref_frame, mv, bsize, bo, bit_depth, true);
+    motion_compensate(fi, fs, cw, mode, ref_frames, mvs, bsize, bo, bit_depth, true);
 
     let mut wr: &mut dyn Writer = &mut WriterCounter::new();
     let tell = wr.tell_frac();
@@ -702,7 +739,7 @@ pub fn rdo_partition_decision(
         if subsize == BlockSize::BLOCK_INVALID {
           continue;
         }
-        pmv = best_pred_modes[0].mv;
+        pmv = best_pred_modes[0].mvs[0];
 
         assert!(best_pred_modes.len() <= 4);
         let bs = bsize.width_mi();

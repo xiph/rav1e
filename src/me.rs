@@ -45,7 +45,7 @@ pub fn motion_estimation(
         x: (bo.x as isize) << BLOCK_TO_PLANE_SHIFT,
         y: (bo.y as isize) << BLOCK_TO_PLANE_SHIFT
       };
-      let range = 32 as isize;
+      let range = 32 * fi.me_range_scale as isize;
       let blk_w = bsize.width();
       let blk_h = bsize.height();
       let border_w = 128 + blk_w as isize * 8;
@@ -113,7 +113,8 @@ pub fn motion_estimation(
                 &mut tmp_plane.mut_slice(&PlaneOffset { x: 0, y: 0 });
 
               mode.predict_inter(
-                fi, 0, &po, tmp_slice, blk_w, blk_h, ref_frame, &cand_mv, 8,
+                fi, 0, &po, tmp_slice, blk_w, blk_h, &[ref_frame, NONE_FRAME],
+                &[cand_mv, MotionVector{ row: 0, col: 0 }], 8,
               );
             }
 
