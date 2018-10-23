@@ -231,7 +231,7 @@ fn compute_rd_cost(
 // Compute the rate-distortion cost for an encode
 fn compute_tx_rd_cost(
   fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize,
-  is_chroma_block: bool, bo: &BlockOffset, bit_cost: u32, tx_dist: u64,
+  is_chroma_block: bool, bo: &BlockOffset, bit_cost: u32, tx_dist: i64,
   bit_depth: usize,
   skip: bool, luma_only: bool
 ) -> f64 {
@@ -243,7 +243,6 @@ fn compute_tx_rd_cost(
   let mut distortion = if skip {
     let po = bo.plane_offset(&fs.input.planes[0].cfg);
 
-    //TODO: Repalce this function for tx domain distortion
     sse_wxh(
       &fs.input.planes[0].slice(&po),
       &fs.rec.planes[0].slice(&po),
@@ -251,7 +250,8 @@ fn compute_tx_rd_cost(
       h_y
     )
   } else {
-    tx_dist
+    assert!(tx_dist >= 0);
+    tx_dist as u64
   };
 
   if !luma_only {
@@ -272,7 +272,6 @@ fn compute_tx_rd_cost(
         for p in 1..3 {
           let po = bo.plane_offset(&fs.input.planes[p].cfg);
 
-          //TODO: Repalce this function for tx domain distortion
           distortion += sse_wxh(
             &fs.input.planes[p].slice(&po),
             &fs.rec.planes[p].slice(&po),
@@ -492,7 +491,7 @@ pub fn rdo_mode_decision(
           tx_type,
           mode_context,
           mv_stack,
-          false
+          true
         );
 
         let cost = wr.tell_frac() - tell;
@@ -636,7 +635,7 @@ pub fn rdo_mode_decision(
         best.tx_type,
         0,
         &Vec::new(),
-        false
+        true
       );
 
       let cost = wr.tell_frac() - tell;
