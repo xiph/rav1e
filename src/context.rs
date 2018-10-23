@@ -1468,8 +1468,7 @@ impl BlockContext {
 
     for y in 0..bh {
       for x in 0..bw {
-        self.blocks[bo.y + y as usize][bo.x + x as usize].ref_frames[0] = r[0];
-        self.blocks[bo.y + y as usize][bo.x + x as usize].ref_frames[1] = r[1];
+        self.blocks[bo.y + y as usize][bo.x + x as usize].ref_frames = *r;
       }
     }
   }
@@ -1480,8 +1479,7 @@ impl BlockContext {
 
     for y in 0..bh {
       for x in 0..bw {
-        self.blocks[bo.y + y as usize][bo.x + x as usize].mv[0] = mvs[0];
-        self.blocks[bo.y + y as usize][bo.x + x as usize].mv[1] = mvs[1];
+        self.blocks[bo.y + y as usize][bo.x + x as usize].mv = *mvs;
       }
     }
   }
