@@ -187,7 +187,7 @@ pub fn estimate_motion_ss4(
 }
 
 pub fn estimate_motion_ss2(
-  fi: &FrameInvariants, fs: &FrameState, ref_idx: usize, bo: &BlockOffset, pmv: &MotionVector
+  fi: &FrameInvariants, fs: &FrameState, ref_idx: usize, bo: &BlockOffset, pmvs: &[Option<MotionVector>; 3]
 ) -> Option<MotionVector> {
   if let Some(ref rec) = fi.rec_buffer.frames[ref_idx] {
     let po = PlaneOffset {
@@ -203,26 +203,31 @@ pub fn estimate_motion_ss2(
     let mvx_max = (fi.w_in_b - bo.x - blk_w / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_w;
     let mvy_min = -(bo.y as isize) * (8 * MI_SIZE) as isize - border_h;
     let mvy_max = (fi.h_in_b - bo.y - blk_h / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_h;
-    let x_lo = po.x + (((pmv.col as isize / 8 - range).max(mvx_min / 8)) >> 1);
-    let x_hi = po.x + (((pmv.col as isize / 8 + range).min(mvx_max / 8)) >> 1);
-    let y_lo = po.y + (((pmv.row as isize / 8 - range).max(mvy_min / 8)) >> 1);
-    let y_hi = po.y + (((pmv.row as isize / 8 + range).min(mvy_max / 8)) >> 1);
 
     let mut lowest_sad = 16 * 16 * 4096 as u32;
     let mut best_mv = MotionVector { row: 0, col: 0 };
 
-    for y in y_lo..y_hi {
-      for x in x_lo..x_hi {
-        let plane_org = fs.input_hres.slice(&po);
-        let plane_ref = rec.input_hres.slice(&PlaneOffset { x, y });
+    for omv in pmvs.iter() {
+      if let Some(pmv) = omv {
+        let x_lo = po.x + (((pmv.col as isize / 8 - range).max(mvx_min / 8)) >> 1);
+        let x_hi = po.x + (((pmv.col as isize / 8 + range).min(mvx_max / 8)) >> 1);
+        let y_lo = po.y + (((pmv.row as isize / 8 - range).max(mvy_min / 8)) >> 1);
+        let y_hi = po.y + (((pmv.row as isize / 8 + range).min(mvy_max / 8)) >> 1);
 
-        let sad = get_sad(&plane_org, &plane_ref, blk_h >> 1, blk_w >> 1);
+        for y in y_lo..y_hi {
+          for x in x_lo..x_hi {
+            let plane_org = fs.input_hres.slice(&po);
+            let plane_ref = rec.input_hres.slice(&PlaneOffset { x, y });
 
-        if sad < lowest_sad {
-          lowest_sad = sad;
-          best_mv = MotionVector {
-            row: 16 * (y as i16 - po.y as i16),
-            col: 16 * (x as i16 - po.x as i16)
+            let sad = get_sad(&plane_org, &plane_ref, blk_h >> 1, blk_w >> 1);
+
+            if sad < lowest_sad {
+              lowest_sad = sad;
+              best_mv = MotionVector {
+                row: 16 * (y as i16 - po.y as i16),
+                col: 16 * (x as i16 - po.x as i16)
+              }
+            }
           }
         }
       }

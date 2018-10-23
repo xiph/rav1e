@@ -2179,6 +2179,25 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
     let rc = RestorationContext::new(fi.sb_width, fi.sb_height);
     let mut cw = ContextWriter::new(fc, bc, rc);
 
+    // initial coarse ME loop
+    let mut frame_pmvs = Vec::new();
+
+    for sby in 0..fi.sb_height {
+        for sbx in 0..fi.sb_width {
+            let sbo = SuperBlockOffset { x: sbx, y: sby };
+            let bo = sbo.block_offset(0, 0);
+            let mut pmvs: [Option<MotionVector>; REF_FRAMES] = [None; REF_FRAMES];
+            for i in 0..INTER_REFS_PER_FRAME {
+                let r = fi.ref_frames[i] as usize;
+                if pmvs[r].is_none() {
+                    pmvs[r] = estimate_motion_ss4(fi, fs, r, &bo);
+                }
+            }
+            frame_pmvs.push(pmvs);
+        }
+    }
+
+    // main loop
     for sby in 0..fi.sb_height {
         cw.bc.reset_left_contexts();
 
@@ -2196,12 +2215,33 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
             for i in 0..INTER_REFS_PER_FRAME {
                 let r = fi.ref_frames[i] as usize;
                 if pmvs[r].is_none() {
-                    pmvs[r] = estimate_motion_ss4(fi, fs, r, &bo);
+                    pmvs[r] = frame_pmvs[sby * fi.sb_width + sbx][r];
                     if let Some(pmv) = pmvs[r] {
-                        pmvs[r + 1*REF_FRAMES] = estimate_motion_ss2(fi, fs, r, &sbo.block_offset(0, 0), &pmv);
-                        pmvs[r + 2*REF_FRAMES] = estimate_motion_ss2(fi, fs, r, &sbo.block_offset(8, 0), &pmv);
-                        pmvs[r + 3*REF_FRAMES] = estimate_motion_ss2(fi, fs, r, &sbo.block_offset(0, 8), &pmv);
-                        pmvs[r + 4*REF_FRAMES] = estimate_motion_ss2(fi, fs, r, &sbo.block_offset(8, 8), &pmv);
+                        let pmv_w = if sbx > 0 {
+                            frame_pmvs[sby * fi.sb_width + sbx - 1][r]
+                        } else {
+                            None
+                        };
+                        let pmv_e = if sbx < fi.sb_width - 1 {
+                            frame_pmvs[sby * fi.sb_width + sbx + 1][r]
+                        } else {
+                            None
+                        };
+                        let pmv_n = if sby > 0 {
+                            frame_pmvs[sby * fi.sb_width + sbx - fi.sb_width][r]
+                        } else {
+                            None
+                        };
+                        let pmv_s = if sby < fi.sb_height - 1 {
+                            frame_pmvs[sby * fi.sb_width + sbx + fi.sb_width][r]
+                        } else {
+                            None
+                        };
+
+                        pmvs[r + 1*REF_FRAMES] = estimate_motion_ss2(fi, fs, r, &sbo.block_offset(0, 0), &[Some(pmv), pmv_w, pmv_n]);
+                        pmvs[r + 2*REF_FRAMES] = estimate_motion_ss2(fi, fs, r, &sbo.block_offset(8, 0), &[Some(pmv), pmv_e, pmv_n]);
+                        pmvs[r + 3*REF_FRAMES] = estimate_motion_ss2(fi, fs, r, &sbo.block_offset(0, 8), &[Some(pmv), pmv_w, pmv_s]);
+                        pmvs[r + 4*REF_FRAMES] = estimate_motion_ss2(fi, fs, r, &sbo.block_offset(8, 8), &[Some(pmv), pmv_e, pmv_s]);
                     }
                 }
             }
