@@ -85,7 +85,7 @@ impl Config {
       aom_dsp_rtcd();
     }
 
-    Context { fi, seq, frame_count: 0, idx: 0, frame_q: BTreeMap::new() }
+    Context { fi, seq, frame_count: 0, idx: 0, frame_q: BTreeMap::new(), packet_data: Vec::new() }
   }
 }
 
@@ -95,7 +95,8 @@ pub struct Context {
   //    timebase: Ratio,
   frame_count: u64,
   idx: u64,
-  frame_q: BTreeMap<u64, Option<Arc<Frame>>> //    packet_q: VecDeque<Packet>
+  frame_q: BTreeMap<u64, Option<Arc<Frame>>>, //    packet_q: VecDeque<Packet>
+  packet_data: Vec<u8>
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -314,6 +315,7 @@ impl Context {
           };
 
           let data = encode_frame(&mut self.seq, &mut self.fi, &mut fs);
+          self.packet_data.extend(data);
 
           fs.rec.pad();
 
@@ -322,7 +324,13 @@ impl Context {
 
           update_rec_buffer(&mut self.fi, fs);
 
-          Ok(Packet { data, rec, number: self.fi.number, frame_type: self.fi.frame_type })
+          if self.fi.show_frame {
+            let data = self.packet_data.clone();
+            self.packet_data = Vec::new();
+            Ok(Packet { data, rec, number: self.fi.number, frame_type: self.fi.frame_type })
+          } else {
+            Err(EncoderStatus::NeedMoreData)
+          }
         } else {
           Err(EncoderStatus::NeedMoreData)
         }
