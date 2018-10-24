@@ -31,6 +31,7 @@ pub mod entropymode;
 pub mod token_cdfs;
 pub mod deblock;
 pub mod cdef;
+pub mod lrf;
 pub mod encoder;
 pub mod me;
 pub mod scan_order;
