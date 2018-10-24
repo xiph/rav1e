@@ -28,6 +28,8 @@ use std::io;
 use std::io::*;
 use std::rc::Rc;
 
+pub const MAX_SB_SIZE: usize = 128;
+
 extern {
     pub fn av1_rtcd();
     pub fn aom_dsp_rtcd();
@@ -42,9 +44,21 @@ impl Frame {
     pub fn new(width: usize, height:usize) -> Frame {
         Frame {
             planes: [
-                Plane::new(width, height, 0, 0, 128+8, 128+8),
-                Plane::new(width/2, height/2, 1, 1, 64+8, 64+8),
-                Plane::new(width/2, height/2, 1, 1, 64+8, 64+8)
+                Plane::new(
+                    width, height,
+                    0, 0,
+                    MAX_SB_SIZE + SUBPEL_FILTER_SIZE, MAX_SB_SIZE + SUBPEL_FILTER_SIZE
+                ),
+                Plane::new(
+                    width/2, height/2,
+                    1, 1,
+                    MAX_SB_SIZE/2 + SUBPEL_FILTER_SIZE, MAX_SB_SIZE/2 + SUBPEL_FILTER_SIZE
+                ),
+                Plane::new(
+                    width/2, height/2,
+                    1, 1,
+                    MAX_SB_SIZE/2 + SUBPEL_FILTER_SIZE, MAX_SB_SIZE/2 + SUBPEL_FILTER_SIZE
+                )
             ]
         }
     }
@@ -328,8 +342,16 @@ impl FrameState {
     pub fn new(fi: &FrameInvariants) -> FrameState {
         FrameState {
             input: Arc::new(Frame::new(fi.padded_w, fi.padded_h)),
-            input_hres: Plane::new(fi.padded_w/2, fi.padded_h/2, 1, 1, (128+8)/2, (128+8)/2),
-            input_qres: Plane::new(fi.padded_w/4, fi.padded_h/4, 2, 2, (128+8)/4, (128+8)/4),
+            input_hres: Plane::new(
+                fi.padded_w/2, fi.padded_h/2,
+                1, 1,
+                (MAX_SB_SIZE + SUBPEL_FILTER_SIZE) / 2, (MAX_SB_SIZE + SUBPEL_FILTER_SIZE) / 2
+            ),
+            input_qres: Plane::new(
+                fi.padded_w/4, fi.padded_h/4,
+                2, 2,
+                (MAX_SB_SIZE + SUBPEL_FILTER_SIZE) / 4, (MAX_SB_SIZE + SUBPEL_FILTER_SIZE) / 4
+            ),
             rec: Frame::new(fi.padded_w, fi.padded_h),
             qc: Default::default(),
             cdfs: CDFContext::new(0),
@@ -512,8 +534,16 @@ impl FrameInvariants {
     pub fn new_frame_state(&self) -> FrameState {
         FrameState {
             input: Arc::new(Frame::new(self.padded_w, self.padded_h)),
-            input_hres: Plane::new(self.padded_w/2, self.padded_h/2, 1, 1, (128+8)/2, (128+8)/2),
-            input_qres: Plane::new(self.padded_w/4, self.padded_h/4, 2, 2, (128+8)/4, (128+8)/4),
+            input_hres: Plane::new(
+                self.padded_w/2, self.padded_h/2,
+                1, 1,
+                (MAX_SB_SIZE + SUBPEL_FILTER_SIZE ) / 2, (MAX_SB_SIZE + SUBPEL_FILTER_SIZE) / 2
+            ),
+            input_qres: Plane::new(
+                self.padded_w/4, self.padded_h/4,
+                2, 2,
+                (MAX_SB_SIZE + SUBPEL_FILTER_SIZE) / 4, (MAX_SB_SIZE + SUBPEL_FILTER_SIZE) / 4
+            ),
             rec: Frame::new(self.padded_w, self.padded_h),
             qc: Default::default(),
             cdfs: CDFContext::new(0),
