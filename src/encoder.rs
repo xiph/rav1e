@@ -9,6 +9,7 @@
 
 use api::*;
 use cdef::*;
+use lrf::*;
 use context::*;
 use deblock::*;
 use ec::*;
@@ -415,6 +416,7 @@ pub struct FrameInvariants {
     pub cdef_bits: u8,
     pub cdef_y_strengths: [u8; 8],
     pub cdef_uv_strengths: [u8; 8],
+    pub lrf_types: [u8; PLANES],
     pub delta_q_present: bool,
     pub config: EncoderConfig,
     pub ref_frames: [u8; INTER_REFS_PER_FRAME],
@@ -484,6 +486,7 @@ impl FrameInvariants {
             cdef_bits: 3,
             cdef_y_strengths: [0*4+0, 1*4+0, 2*4+1, 3*4+1, 5*4+2, 7*4+3, 10*4+3, 13*4+3],
             cdef_uv_strengths: [0*4+0, 1*4+0, 2*4+1, 3*4+1, 5*4+2, 7*4+3, 10*4+3, 13*4+3],
+            lrf_types: [RESTORE_NONE, RESTORE_NONE, RESTORE_NONE],
             delta_q_present: false,
             config,
             ref_frames: [0; INTER_REFS_PER_FRAME],
@@ -583,6 +586,7 @@ trait UncompressedHeader {
     fn write_deblock_filter_a(&mut self, fi: &FrameInvariants, fs: &FrameState) -> io::Result<()>;
     fn write_deblock_filter_b(&mut self, fi: &FrameInvariants, fs: &FrameState) -> io::Result<()>;
     fn write_frame_cdef(&mut self, seq: &Sequence, fi: &FrameInvariants) -> io::Result<()>;
+    fn write_frame_lrf(&mut self, seq: &Sequence, fi: &FrameInvariants) -> io::Result<()>;
 }
 #[allow(unused)]
 const OP_POINTS_IDC_BITS:usize = 12;
@@ -982,10 +986,10 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
       // cdef
       self.write_frame_cdef(seq, fi)?;
+
       // loop restoration
-      if seq.enable_restoration {
-          self.write(6,0)?; // no y, u or v loop restoration
-      }
+      self.write_frame_lrf(seq,fi)?;
+
       self.write_bit(false)?; // tx mode == TX_MODE_SELECT ?
 
       let mut reference_select = false;
@@ -1142,6 +1146,43 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
             }
         }
         Ok(())
+    }
+
+    fn write_frame_lrf(&mut self, seq: &Sequence, fi: &FrameInvariants) -> io::Result<()> {
+      if !seq.enable_restoration || fi.allow_intrabc { // || self.lossless
+        self.write(6,0)?; // no y, u or v loop restoration        
+      } else {
+        let mut use_lrf = false;
+        let mut use_chroma_lrf = false;
+        for i in 0..PLANES {
+          self.write(2,fi.lrf_types[i])?; // filter type by plane
+          if fi.lrf_types[i] != RESTORE_NONE {
+            use_lrf = true;
+            if i > 0 { use_chroma_lrf = true; }
+          }
+        }
+        if use_lrf {
+          // At present, we're locked to a restoration unit size equal to superblock size.
+          // Signal as such.
+          if seq.use_128x128_superblock {
+            self.write(1,0)?; // do not double the restoration unit from 128x128
+          } else {
+            self.write(1,0)?; // do not double the restoration unit from 64x64
+          }
+
+          if use_chroma_lrf {
+            // until we're able to support restoration units larger than
+            // the chroma superblock size, we can't perform LRF for
+            // anything other than 4:4:4 and 4:2:0
+            assert!(seq.chroma_sampling == ChromaSampling::Cs444 ||
+                   seq.chroma_sampling == ChromaSampling::Cs420);
+            if seq.chroma_sampling == ChromaSampling::Cs420 {
+              self.write(1,1)?; // halve the chroma restoration unit in both directions
+            }
+          }
+        }
+      }
+      Ok(())
     }
 }
 
