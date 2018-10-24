@@ -2111,7 +2111,9 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
         cw.bc.reset_left_contexts();
 
         for sbx in 0..fi.sb_width {
+            let mut w_pre_cdef = WriterRecorder::new();
             let mut w_post_cdef = WriterRecorder::new();
+            let mut cdef_index = 0;
             let sbo = SuperBlockOffset { x: sbx, y: sby };
             let bo = sbo.block_offset(0, 0);
             cw.bc.cdef_coded = false;
@@ -2121,20 +2123,31 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
             if fi.config.speed == 0 {
                 let pmv = MotionVector { row: 0, col: 0 };
                 encode_partition_bottomup(sequence, fi, fs, &mut cw,
-                                          &mut w, &mut w_post_cdef,
+                                          &mut w_pre_cdef, &mut w_post_cdef,
                                           BlockSize::BLOCK_64X64, &bo, &pmv);
             }
             else {
                 encode_partition_topdown(sequence, fi, fs, &mut cw,
-                                         &mut w, &mut w_post_cdef,
+                                         &mut w_pre_cdef, &mut w_post_cdef,
                                          BlockSize::BLOCK_64X64, &bo, &None);
             }
 
+            // CDEF has to be decisded before loop restoration, but coded after
             if cw.bc.cdef_coded {
-                let cdef_index = rdo_cdef_decision(&sbo, fi, fs, &mut cw, bit_depth);
+                cdef_index = rdo_cdef_decision(&sbo, fi, fs, &mut cw, bit_depth);
+                cw.bc.set_cdef(&sbo, cdef_index);
+            }
+
+            // loop restoration must be decided last... but coded first.
+            if sequence.enable_restoration {
+            }
+
+            // Once loop restoration is coded, we can replay the initial block bits
+            w_pre_cdef.replay(&mut w);
+
+            if cw.bc.cdef_coded {
                 // CDEF index must be written in the middle, we can code it now
                 cw.write_cdef(&mut w, cdef_index, fi.cdef_bits);
-                cw.bc.set_cdef(&sbo, cdef_index);
                 // ...and then finally code what comes after the CDEF index
                 w_post_cdef.replay(&mut w);
             }
