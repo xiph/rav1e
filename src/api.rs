@@ -31,8 +31,8 @@ impl Ratio {
 
 #[derive(Copy, Clone, Debug)]
 pub struct EncoderConfig {
-  pub compound: bool,
   pub key_frame_interval: u64,
+  pub low_latency: bool,
   pub quantizer: usize,
   pub speed: usize,
   pub tune: Tune
@@ -40,7 +40,7 @@ pub struct EncoderConfig {
 
 impl Default for EncoderConfig {
   fn default() -> Self {
-    EncoderConfig { compound: false, key_frame_interval: 30, quantizer: 100, speed: 0, tune: Tune::Psnr,  }
+    EncoderConfig { key_frame_interval: 30, low_latency: false, quantizer: 100, speed: 0, tune: Tune::Psnr  }
   }
 }
 
@@ -65,7 +65,7 @@ impl Config {
   pub fn parse(&mut self, key: &str, value: &str) -> Result<(), EncoderStatus> {
     use self::EncoderStatus::*;
     match key {
-      "compound" => self.enc.compound = value.parse().map_err(|_e| ParseError)?,
+      "low_latency" => self.enc.low_latency = value.parse().map_err(|_e| ParseError)?,
       "key_frame_interval" => self.enc.key_frame_interval = value.parse().map_err(|_e| ParseError)?,
       "quantizer" => self.enc.quantizer = value.parse().map_err(|_e| ParseError)?,
       "speed" => self.enc.speed = value.parse().map_err(|_e| ParseError)?,
@@ -180,7 +180,7 @@ impl Context {
   pub fn frame_properties(&mut self, idx: u64) -> bool {
     let key_frame_interval: u64 = self.fi.config.key_frame_interval;
 
-    let reorder = self.fi.config.compound;
+    let reorder = self.fi.config.low_latency;
     let multiref = reorder || self.fi.config.speed <= 2;
 
     let pyramid_depth = if reorder { 2 } else { 0 };
