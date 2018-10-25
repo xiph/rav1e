@@ -2105,7 +2105,9 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
     };
 
     let bc = BlockContext::new(fi.w_in_b, fi.h_in_b);
-    let mut cw = ContextWriter::new(fc,  bc);
+    // For now, restoration unit size is locked to superblock size. 
+    let rc = RestorationContext::new(fi.sb_width, fi.sb_height);
+    let mut cw = ContextWriter::new(fc, bc, rc);
 
     for sby in 0..fi.sb_height {
         cw.bc.reset_left_contexts();
@@ -2138,7 +2140,7 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
                 cw.bc.set_cdef(&sbo, cdef_index);
             }
 
-            // loop restoration must be decided last... but coded first.
+            // loop restoration must be decided last but coded before anything else
             if sequence.enable_restoration {
             }
 

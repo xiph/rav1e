@@ -14,3 +14,11 @@ pub const RESTORE_SWITCHABLE: u8 = 1;
 pub const RESTORE_WIENER: u8 = 2;
 pub const RESTORE_SGRPROJ: u8 = 3;
 
+
+pub const WIENER_TAPS_MIN: [i8; 3] = [ -5, -23, -17 ];
+pub const WIENER_TAPS_MID: [i8; 3] = [ 3, -7, 15 ];
+pub const WIENER_TAPS_MAX: [i8; 3] = [ 10, 8, 46 ];
+
+pub const SGR_XQD_MIN: [i8; 2] = [ -96, -32 ];
+pub const SGR_XQD_MID: [i8; 2] = [ -32, 31 ];
+pub const SGR_XQD_MAX: [i8; 2] = [ 31, 95 ];

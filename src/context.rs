@@ -22,6 +22,8 @@ use partition::PredictionMode::*;
 use partition::TxSize::*;
 use partition::TxType::*;
 use partition::*;
+use lrf::WIENER_TAPS_MID;
+use lrf::SGR_XQD_MID;
 use plane::*;
 use util::clamp;
 use util::msb;
@@ -1630,6 +1632,53 @@ impl BlockContext {
   }
 }
 
+#[derive(Copy, Clone)]
+pub enum RestorationFilter {
+  None,
+  Wiener { coeffs: [[i8; 2]; 3] },
+  Sgr { xqd: [i8; 2] },
+}
+
+impl RestorationFilter {
+  pub fn default() -> RestorationFilter {
+    RestorationFilter::None
+  }
+}
+
+#[derive(Copy, Clone)]
+pub struct RestorationUnit {
+  pub params: RestorationFilter,
+}
+
+impl RestorationUnit {
+  pub fn default() -> RestorationUnit {
+    RestorationUnit {
+      params: RestorationFilter::default()
+    }
+  }
+}
+
+#[derive(Clone, Default)]
+pub struct RestorationContext {
+  pub cols: usize,
+  pub rows: usize,
+  pub wiener_ref: [[[i8; 3]; 2]; PLANES],
+  pub sgr_ref: [[i8; 2]; PLANES],
+  pub units: Vec<Vec<Vec<RestorationUnit>>>
+}
+
+impl RestorationContext {
+  pub fn new(cols: usize, rows: usize) -> RestorationContext {
+    RestorationContext {
+      cols,
+      rows,
+      wiener_ref: [[WIENER_TAPS_MID; 2]; PLANES],
+      sgr_ref: [SGR_XQD_MID; PLANES],
+      units: vec![vec![vec![RestorationUnit::default(); cols]; rows]; PLANES]
+    }
+  }
+}
+
 #[derive(Copy, Clone, PartialEq)]
 pub enum CFLSign {
   CFL_SIGN_ZERO = 0,
@@ -1725,16 +1774,18 @@ pub struct ContextWriterCheckpoint {
 pub struct ContextWriter {
   pub bc: BlockContext,
   pub fc: CDFContext,
+  pub rc: RestorationContext,
   #[cfg(debug)]
   fc_map: Option<FieldMap> // For debugging purposes
 }
 
 impl ContextWriter {
-  pub fn new(fc: CDFContext, bc: BlockContext) -> Self {
+  pub fn new(fc: CDFContext, bc: BlockContext, rc: RestorationContext) -> Self {
     #[allow(unused_mut)]
     let mut cw = ContextWriter {
       fc,
       bc,
+      rc,
       #[cfg(debug)]
       fc_map: Default::default()
     };
