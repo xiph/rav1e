@@ -96,6 +96,7 @@
 
 .macro bidir_fn type
 function \type\()_8bpc_neon, export=1
+        clz             w4,  w4
 .ifc \type, w_avg
         dup             v30.8h, w6
         neg             v30.8h, v30.8h
@@ -104,9 +105,8 @@ function \type\()_8bpc_neon, export=1
 .ifc \type, mask
         movi            v31.16b, #256-2
 .endif
-        rbit            w4,  w4
         adr             x7,  L(\type\()_tbl)
-        clz             w4,  w4
+        sub             w4,  w4,  #24
         \type           v4,  v0,  v1
         ldrh            w4,  [x7, x4, lsl #1]
         \type           v5,  v2,  v3
@@ -218,13 +218,12 @@ function \type\()_8bpc_neon, export=1
 0:
         ret
 L(\type\()_tbl):
-        .hword 0, 0
-        .hword L(\type\()_tbl) -    4b
-        .hword L(\type\()_tbl) -    8b
-        .hword L(\type\()_tbl) -  160b
-        .hword L(\type\()_tbl) -  320b
-        .hword L(\type\()_tbl) -  640b
         .hword L(\type\()_tbl) - 1280b
+        .hword L(\type\()_tbl) -  640b
+        .hword L(\type\()_tbl) -  320b
+        .hword L(\type\()_tbl) -  160b
+        .hword L(\type\()_tbl) -    8b
+        .hword L(\type\()_tbl) -    4b
 endfunc
 .endm
 
