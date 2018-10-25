@@ -1371,7 +1371,7 @@ pub fn encode_tx_block(
     //if !fi.use_tx_domain_distortion {
         inverse_transform_add(rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
     } else {
-        inverse_transform_add(rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
+        //inverse_transform_add(rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
 
         // Store tx-domain distortion of this block
         tx_dist = coeffs
@@ -1647,6 +1647,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
     let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
     let ac = &mut [0i16; 32 * 32];
     let mut tx_dist: i64 = 0;
+    let do_chroma = has_chroma(bo, bsize, xdec, ydec);
 
     fs.qc.update(fi.base_q_idx, tx_size, luma_mode.is_intra(), bit_depth);
 
@@ -1681,7 +1682,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
     let mut bw_uv = (bw * tx_size.width_mi()) >> xdec;
     let mut bh_uv = (bh * tx_size.height_mi()) >> ydec;
 
-    if (bw_uv == 0 || bh_uv == 0) && has_chroma(bo, bsize, xdec, ydec) {
+    if (bw_uv == 0 || bh_uv == 0) && do_chroma {
         bw_uv = 1;
         bh_uv = 1;
     }

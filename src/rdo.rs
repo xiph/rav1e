@@ -635,25 +635,13 @@ pub fn rdo_mode_decision(
         best.tx_type,
         0,
         &Vec::new(),
-        true
+        false // For CFL, luma should be always reconstructed.
       );
 
       let cost = wr.tell_frac() - tell;
-      let rd = if fi.use_tx_domain_distortion {
-        compute_tx_rd_cost(
-          fi,
-          fs,
-          w,
-          h,
-          is_chroma_block,
-          bo,
-          cost,
-          tx_dist,
-          seq.bit_depth,
-          best.skip,
-          false
-        )
-      } else {
+
+      // For CFL, tx-domain distortion is not an option.
+      let rd = 
         compute_rd_cost(
           fi,
           fs,
@@ -664,8 +652,7 @@ pub fn rdo_mode_decision(
           cost,
           seq.bit_depth,
           false
-        )
-      };
+        );
 
       if rd < best.rd {
         best.rd = rd;
