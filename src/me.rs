@@ -35,6 +35,18 @@ pub fn get_sad(
 
   sum
 }
+
+fn get_mv_range(fi: &FrameInvariants, bo: &BlockOffset, blk_w: usize, blk_h: usize) -> (isize, isize, isize, isize) {
+  let border_w = 128 + blk_w as isize * 8;
+  let border_h = 128 + blk_h as isize * 8;
+  let mvx_min = -(bo.x as isize) * (8 * MI_SIZE) as isize - border_w;
+  let mvx_max = (fi.w_in_b - bo.x - blk_w / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_w;
+  let mvy_min = -(bo.y as isize) * (8 * MI_SIZE) as isize - border_h;
+  let mvy_max = (fi.h_in_b - bo.y - blk_h / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_h;
+
+  (mvx_min, mvx_max, mvy_min, mvy_max)
+}
+
 pub fn motion_estimation(
   fi: &FrameInvariants, fs: &FrameState, bsize: BlockSize,
   bo: &BlockOffset, ref_frame: usize, pmv: &MotionVector
@@ -48,12 +60,7 @@ pub fn motion_estimation(
       let range = 16;
       let blk_w = bsize.width();
       let blk_h = bsize.height();
-      let border_w = 128 + blk_w as isize * 8;
-      let border_h = 128 + blk_h as isize * 8;
-      let mvx_min = -(bo.x as isize) * (8 * MI_SIZE) as isize - border_w;
-      let mvx_max = (fi.w_in_b - bo.x - blk_w / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_w;
-      let mvy_min = -(bo.y as isize) * (8 * MI_SIZE) as isize - border_h;
-      let mvy_max = (fi.h_in_b - bo.y - blk_h / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_h;
+      let (mvx_min, mvx_max, mvy_min, mvy_max) = get_mv_range(fi, bo, blk_w, blk_h);
       let x_lo = po.x + ((-range + (pmv.col / 8) as isize).max(mvx_min / 8));
       let x_hi = po.x + ((range + (pmv.col / 8) as isize).min(mvx_max / 8));
       let y_lo = po.y + ((-range + (pmv.row / 8) as isize).max(mvy_min / 8));
@@ -158,12 +165,7 @@ pub fn estimate_motion_ss4(
     let range = 64 * fi.me_range_scale as isize;
     let blk_w = 64;
     let blk_h = 64;
-    let border_w = 128 + blk_w as isize * 8;
-    let border_h = 128 + blk_h as isize * 8;
-    let mvx_min = -(bo.x as isize) * (8 * MI_SIZE) as isize - border_w;
-    let mvx_max = (fi.w_in_b - bo.x - blk_w / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_w;
-    let mvy_min = -(bo.y as isize) * (8 * MI_SIZE) as isize - border_h;
-    let mvy_max = (fi.h_in_b - bo.y - blk_h / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_h;
+    let (mvx_min, mvx_max, mvy_min, mvy_max) = get_mv_range(fi, bo, blk_w, blk_h);
     let x_lo = po.x + (((-range).max(mvx_min / 8)) >> 2);
     let x_hi = po.x + (((range).min(mvx_max / 8)) >> 2);
     let y_lo = po.y + (((-range).max(mvy_min / 8)) >> 2);
@@ -194,12 +196,7 @@ pub fn estimate_motion_ss2(
     let range = 16;
     let blk_w = 32;
     let blk_h = 32;
-    let border_w = 128 + blk_w as isize * 8;
-    let border_h = 128 + blk_h as isize * 8;
-    let mvx_min = -(bo.x as isize) * (8 * MI_SIZE) as isize - border_w;
-    let mvx_max = (fi.w_in_b - bo.x - blk_w / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_w;
-    let mvy_min = -(bo.y as isize) * (8 * MI_SIZE) as isize - border_h;
-    let mvy_max = (fi.h_in_b - bo.y - blk_h / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_h;
+    let (mvx_min, mvx_max, mvy_min, mvy_max) = get_mv_range(fi, bo, blk_w, blk_h);
 
     let mut lowest_sad = 16 * 16 * 4096 as u32;
     let mut best_mv = MotionVector { row: 0, col: 0 };
