@@ -27,8 +27,6 @@
 
 #include "src/arm/asm.S"
 
-#if BITDEPTH == 8
-
 .macro avg dst, t0, t1
         ld1             {\t0\().8h},   [x2],  16
         ld1             {\t1\().8h},   [x3],  16
@@ -233,5 +231,3 @@ endfunc
 bidir_fn avg
 bidir_fn w_avg
 bidir_fn mask
-
-#endif /* BITDEPTH == 8 */
