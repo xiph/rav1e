@@ -12,7 +12,6 @@ use rand::{ChaChaRng, Rng, SeedableRng};
 use rav1e::partition::BlockSize;
 use rav1e::predict::{Block4x4, Intra};
 
-pub const MAX_ITER: usize = 50000;
 pub const BLOCK_SIZE: BlockSize = BlockSize::BLOCK_32X32;
 
 pub fn generate_block(rng: &mut ChaChaRng) -> (Vec<u16>, Vec<u16>, Vec<u16>) {
@@ -54,29 +53,16 @@ pub fn intra_dc_4x4(b: &mut Bencher) {
   let (mut block, above, left) = generate_block(&mut ra);
 
   b.iter(|| {
-    for _ in 0..MAX_ITER {
-      Block4x4::pred_dc(
-        &mut block,
-        BLOCK_SIZE.width(),
-        &above[..4],
-        &left[..4]
-      );
-    }
+    Block4x4::pred_dc(&mut block, BLOCK_SIZE.width(), &above[..4], &left[..4]);
   })
 }
 
 pub fn intra_dc_128_4x4_u8(b: &mut Bencher) {
   let mut ra = ChaChaRng::from_seed([0; 32]);
-  let (mut block, above, left) = generate_block_u8(&mut ra);
+  let (mut block, _above, _left) = generate_block_u8(&mut ra);
 
   b.iter(|| {
-    for _ in 0..MAX_ITER {
-      Block4x4::pred_dc_128(
-        &mut block,
-        BLOCK_SIZE.width(),
-        8
-      );
-    }
+    Block4x4::pred_dc_128(&mut block, BLOCK_SIZE.width(), 8);
   })
 }
 
@@ -85,14 +71,12 @@ pub fn intra_dc_left_4x4(b: &mut Bencher) {
   let (mut block, above, left) = generate_block(&mut ra);
 
   b.iter(|| {
-    for _ in 0..MAX_ITER {
-      Block4x4::pred_dc_left(
-        &mut block,
-        BLOCK_SIZE.width(),
-        &above[..4],
-        &left[..4]
-      );
-    }
+    Block4x4::pred_dc_left(
+      &mut block,
+      BLOCK_SIZE.width(),
+      &above[..4],
+      &left[..4]
+    );
   })
 }
 
@@ -101,14 +85,12 @@ pub fn intra_dc_top_4x4(b: &mut Bencher) {
   let (mut block, above, left) = generate_block(&mut ra);
 
   b.iter(|| {
-    for _ in 0..MAX_ITER {
-      Block4x4::pred_dc_top(
-        &mut block,
-        BLOCK_SIZE.width(),
-        &above[..4],
-        &left[..4]
-      );
-    }
+    Block4x4::pred_dc_top(
+      &mut block,
+      BLOCK_SIZE.width(),
+      &above[..4],
+      &left[..4]
+    );
   })
 }
 
@@ -117,9 +99,7 @@ pub fn intra_h_4x4(b: &mut Bencher) {
   let (mut block, _above, left) = generate_block(&mut rng);
 
   b.iter(|| {
-    for _ in 0..MAX_ITER {
-      Block4x4::pred_h(&mut block, BLOCK_SIZE.width(), &left[..4]);
-    }
+    Block4x4::pred_h(&mut block, BLOCK_SIZE.width(), &left[..4]);
   })
 }
 
@@ -128,9 +108,7 @@ pub fn intra_v_4x4(b: &mut Bencher) {
   let (mut block, above, _left) = generate_block(&mut rng);
 
   b.iter(|| {
-    for _ in 0..MAX_ITER {
-      Block4x4::pred_v(&mut block, BLOCK_SIZE.width(), &above[..4]);
-    }
+    Block4x4::pred_v(&mut block, BLOCK_SIZE.width(), &above[..4]);
   })
 }
 
@@ -140,15 +118,13 @@ pub fn intra_paeth_4x4(b: &mut Bencher) {
   let above_left = unsafe { *above.as_ptr().offset(-1) };
 
   b.iter(|| {
-    for _ in 0..MAX_ITER {
-      Block4x4::pred_paeth(
-        &mut block,
-        BLOCK_SIZE.width(),
-        &above[..4],
-        &left[..4],
-        above_left
-      );
-    }
+    Block4x4::pred_paeth(
+      &mut block,
+      BLOCK_SIZE.width(),
+      &above[..4],
+      &left[..4],
+      above_left
+    );
   })
 }
 
@@ -157,14 +133,12 @@ pub fn intra_smooth_4x4(b: &mut Bencher) {
   let (mut block, above, left) = generate_block(&mut rng);
 
   b.iter(|| {
-    for _ in 0..MAX_ITER {
-      Block4x4::pred_smooth(
-        &mut block,
-        BLOCK_SIZE.width(),
-        &above[..4],
-        &left[..4]
-      );
-    }
+    Block4x4::pred_smooth(
+      &mut block,
+      BLOCK_SIZE.width(),
+      &above[..4],
+      &left[..4]
+    );
   })
 }
 
@@ -173,14 +147,12 @@ pub fn intra_smooth_h_4x4(b: &mut Bencher) {
   let (mut block, above, left) = generate_block(&mut rng);
 
   b.iter(|| {
-    for _ in 0..MAX_ITER {
-      Block4x4::pred_smooth_h(
-        &mut block,
-        BLOCK_SIZE.width(),
-        &above[..4],
-        &left[..4]
-      );
-    }
+    Block4x4::pred_smooth_h(
+      &mut block,
+      BLOCK_SIZE.width(),
+      &above[..4],
+      &left[..4]
+    );
   })
 }
 
@@ -189,14 +161,12 @@ pub fn intra_smooth_v_4x4(b: &mut Bencher) {
   let (mut block, above, left) = generate_block(&mut rng);
 
   b.iter(|| {
-    for _ in 0..MAX_ITER {
-      Block4x4::pred_smooth_v(
-        &mut block,
-        BLOCK_SIZE.width(),
-        &above[..4],
-        &left[..4]
-      );
-    }
+    Block4x4::pred_smooth_v(
+      &mut block,
+      BLOCK_SIZE.width(),
+      &above[..4],
+      &left[..4]
+    );
   })
 }
 
@@ -207,8 +177,6 @@ pub fn intra_cfl_4x4(b: &mut Bencher) {
   let alpha = -1 as i16;
 
   b.iter(|| {
-    for _ in 0..MAX_ITER {
-      Block4x4::pred_cfl(&mut block, BLOCK_SIZE.width(), &ac, alpha, 8);
-    }
+    Block4x4::pred_cfl(&mut block, BLOCK_SIZE.width(), &ac, alpha, 8);
   })
 }

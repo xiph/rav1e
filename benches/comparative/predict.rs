@@ -70,20 +70,16 @@ fn predict_intra_4x4_aom(
   let mut rng = ChaChaRng::from_seed([0; 32]);
   let (mut block, above_context, left_context) = generate_block(&mut rng);
 
-  b.iter(|| {
-    for _ in 0..MAX_ITER {
-      unsafe {
-        predictor(
-          block.as_mut_ptr(),
-          BLOCK_SIZE.width() as libc::ptrdiff_t,
-          4,
-          4,
-          above_context.as_ptr(),
-          left_context.as_ptr(),
-          8
-        );
-      }
-    }
+  b.iter(|| unsafe {
+    predictor(
+      block.as_mut_ptr(),
+      BLOCK_SIZE.width() as libc::ptrdiff_t,
+      4,
+      4,
+      above_context.as_ptr(),
+      left_context.as_ptr(),
+      8
+    );
   })
 }
 
@@ -190,19 +186,15 @@ pub fn intra_cfl_4x4_aom(b: &mut Bencher) {
   let ac: Vec<i16> = (0..(32 * 32)).map(|_| rng.gen()).collect();
   let alpha = -1 as i16;
 
-  b.iter(|| {
-    for _ in 0..MAX_ITER {
-      unsafe {
-        cfl_predict_hbd_c(
-          ac.as_ptr(),
-          block.as_mut_ptr(),
-          BLOCK_SIZE.width() as libc::ptrdiff_t,
-          alpha as libc::c_int,
-          8,
-          4,
-          4
-        );
-      }
-    }
+  b.iter(|| unsafe {
+    cfl_predict_hbd_c(
+      ac.as_ptr(),
+      block.as_mut_ptr(),
+      BLOCK_SIZE.width() as libc::ptrdiff_t,
+      alpha as libc::c_int,
+      8,
+      4,
+      4
+    );
   })
 }
