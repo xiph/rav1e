@@ -51,6 +51,18 @@ pub fn parse_cli() -> (EncoderIO, EncoderConfig, usize) {
         .takes_value(true)
         .default_value("3")
     ).arg(
+      Arg::with_name("KEYFRAME_INTERVAL")
+        .help("Keyframe interval")
+        .long("keyframe_interval")
+        .takes_value(true)
+        .default_value("30")
+    ).arg(
+      Arg::with_name("COMPOUND")
+        .help("Compount mode. true or false")
+        .long("compound")
+        .takes_value(true)
+        .default_value("false")
+    ).arg(
       Arg::with_name("TUNE")
         .help("Quality tuning (Will enforce partition sizes >= 8x8)")
         .long("tune")
@@ -74,6 +86,8 @@ pub fn parse_cli() -> (EncoderIO, EncoderConfig, usize) {
   };
 
   let config = EncoderConfig {
+    compound: matches.value_of("COMPOUND").unwrap().parse().unwrap(),
+    key_frame_interval: matches.value_of("KEYFRAME_INTERVAL").unwrap().parse().unwrap(),
     quantizer: matches.value_of("QP").unwrap().parse().unwrap(),
     speed: matches.value_of("SPEED").unwrap().parse().unwrap(),
     tune: matches.value_of("TUNE").unwrap().parse().unwrap()
