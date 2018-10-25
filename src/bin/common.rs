@@ -53,7 +53,8 @@ pub fn parse_cli() -> (EncoderIO, EncoderConfig, usize) {
     ).arg(
       Arg::with_name("KEYFRAME_INTERVAL")
         .help("Keyframe interval")
-        .long("keyframe_interval")
+        .short("I")
+        .long("keyint")
         .takes_value(true)
         .default_value("30")
     ).arg(
