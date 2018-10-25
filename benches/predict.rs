@@ -34,18 +34,35 @@ pub fn generate_block_u8(rng: &mut ChaChaRng) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
   (block, above_context, left_context)
 }
 
+pub fn bench_pred_fn<F>(c: &mut Criterion, id: &str, f: F)
+where
+  F: FnMut(&mut Bencher) + 'static
+{
+  let b = Benchmark::new(id, f);
+  c.bench(
+    id,
+    if id.ends_with("_4x4_u8") {
+      b.throughput(Throughput::Bytes(16))
+    } else if id.ends_with("_4x4") {
+      b.throughput(Throughput::Bytes(32))
+    } else {
+      b
+    }
+  );
+}
+
 pub fn pred_bench(c: &mut Criterion) {
-  c.bench_function("intra_dc_4x4", |b| intra_dc_4x4(b));
-  c.bench_function("intra_dc_128_4x4_u8", |b| intra_dc_128_4x4_u8(b));
-  c.bench_function("intra_dc_left_4x4", |b| intra_dc_left_4x4(b));
-  c.bench_function("intra_dc_top_4x4", |b| intra_dc_top_4x4(b));
-  c.bench_function("intra_h_4x4", |b| intra_h_4x4(b));
-  c.bench_function("intra_v_4x4", |b| intra_v_4x4(b));
-  c.bench_function("intra_paeth_4x4", |b| intra_paeth_4x4(b));
-  c.bench_function("intra_smooth_4x4", |b| intra_smooth_4x4(b));
-  c.bench_function("intra_smooth_h_4x4", |b| intra_smooth_h_4x4(b));
-  c.bench_function("intra_smooth_v_4x4", |b| intra_smooth_v_4x4(b));
-  c.bench_function("intra_cfl_4x4", |b| intra_cfl_4x4(b));
+  bench_pred_fn(c, "intra_dc_4x4", intra_dc_4x4);
+  bench_pred_fn(c, "intra_dc_128_4x4_u8", intra_dc_128_4x4_u8);
+  bench_pred_fn(c, "intra_dc_left_4x4", intra_dc_left_4x4);
+  bench_pred_fn(c, "intra_dc_top_4x4", intra_dc_top_4x4);
+  bench_pred_fn(c, "intra_h_4x4", intra_h_4x4);
+  bench_pred_fn(c, "intra_v_4x4", intra_v_4x4);
+  bench_pred_fn(c, "intra_paeth_4x4", intra_paeth_4x4);
+  bench_pred_fn(c, "intra_smooth_4x4", intra_smooth_4x4);
+  bench_pred_fn(c, "intra_smooth_h_4x4", intra_smooth_h_4x4);
+  bench_pred_fn(c, "intra_smooth_v_4x4", intra_smooth_v_4x4);
+  bench_pred_fn(c, "intra_cfl_4x4", intra_cfl_4x4);
 }
 
 pub fn intra_dc_4x4(b: &mut Bencher) {
