@@ -154,18 +154,27 @@ fn full_search(x_lo: isize, x_hi: isize, y_lo: isize, y_hi: isize, blk_h: usize,
   }
 }
 
+// Adjust block offset such that entire block lies within frame boundaries
+fn adjust_bo(bo: &BlockOffset, fi: &FrameInvariants, blk_w: usize, blk_h: usize) -> BlockOffset {
+  BlockOffset {
+    x: (bo.x as isize).min(fi.w_in_b as isize - blk_w as isize / 4).max(0) as usize,
+    y: (bo.y as isize).min(fi.h_in_b as isize - blk_h as isize / 4).max(0) as usize
+  }
+}
+
 pub fn estimate_motion_ss4(
   fi: &FrameInvariants, fs: &FrameState, ref_idx: usize, bo: &BlockOffset
 ) -> Option<MotionVector> {
   if let Some(ref rec) = fi.rec_buffer.frames[ref_idx] {
-    let po = PlaneOffset {
-      x: (bo.x as isize).min(fi.w_in_b as isize - 64/4) << BLOCK_TO_PLANE_SHIFT >> 2,
-      y: (bo.y as isize).min(fi.h_in_b as isize - 64/4) << BLOCK_TO_PLANE_SHIFT >> 2
-    };
-    let range = 64 * fi.me_range_scale as isize;
     let blk_w = 64;
     let blk_h = 64;
-    let (mvx_min, mvx_max, mvy_min, mvy_max) = get_mv_range(fi, bo, blk_w, blk_h);
+    let bo_adj = adjust_bo(bo, fi, blk_w, blk_h);
+    let po = PlaneOffset {
+      x: (bo_adj.x as isize) << BLOCK_TO_PLANE_SHIFT >> 2,
+      y: (bo_adj.y as isize) << BLOCK_TO_PLANE_SHIFT >> 2
+    };
+    let range = 64 * fi.me_range_scale as isize;
+    let (mvx_min, mvx_max, mvy_min, mvy_max) = get_mv_range(fi, &bo_adj, blk_w, blk_h);
     let x_lo = po.x + (((-range).max(mvx_min / 8)) >> 2);
     let x_hi = po.x + (((range).min(mvx_max / 8)) >> 2);
     let y_lo = po.y + (((-range).max(mvy_min / 8)) >> 2);
@@ -189,14 +198,15 @@ pub fn estimate_motion_ss2(
   fi: &FrameInvariants, fs: &FrameState, ref_idx: usize, bo: &BlockOffset, pmvs: &[Option<MotionVector>; 3]
 ) -> Option<MotionVector> {
   if let Some(ref rec) = fi.rec_buffer.frames[ref_idx] {
-    let po = PlaneOffset {
-      x: (bo.x as isize).min(fi.w_in_b as isize - 32/4) << BLOCK_TO_PLANE_SHIFT >> 1,
-      y: (bo.y as isize).min(fi.h_in_b as isize - 32/4) << BLOCK_TO_PLANE_SHIFT >> 1
-    };
-    let range = 16;
     let blk_w = 32;
     let blk_h = 32;
-    let (mvx_min, mvx_max, mvy_min, mvy_max) = get_mv_range(fi, bo, blk_w, blk_h);
+    let bo_adj = adjust_bo(bo, fi, blk_w, blk_h);
+    let po = PlaneOffset {
+      x: (bo_adj.x as isize) << BLOCK_TO_PLANE_SHIFT >> 1,
+      y: (bo_adj.y as isize) << BLOCK_TO_PLANE_SHIFT >> 1
+    };
+    let range = 16;
+    let (mvx_min, mvx_max, mvy_min, mvy_max) = get_mv_range(fi, &bo_adj, blk_w, blk_h);
 
     let mut lowest_sad = 16 * 16 * 4096 as u32;
     let mut best_mv = MotionVector { row: 0, col: 0 };
