@@ -38,6 +38,8 @@ pub struct Frame {
     pub planes: [Plane; 3]
 }
 
+const FRAME_MARGIN: usize = 16 + SUBPEL_FILTER_SIZE;
+
 impl Frame {
     pub fn new(width: usize, height:usize) -> Frame {
         Frame {
@@ -45,17 +47,17 @@ impl Frame {
                 Plane::new(
                     width, height,
                     0, 0,
-                    MAX_SB_SIZE + SUBPEL_FILTER_SIZE, MAX_SB_SIZE + SUBPEL_FILTER_SIZE
+                    MAX_SB_SIZE + FRAME_MARGIN, MAX_SB_SIZE + FRAME_MARGIN
                 ),
                 Plane::new(
                     width/2, height/2,
                     1, 1,
-                    MAX_SB_SIZE/2 + SUBPEL_FILTER_SIZE, MAX_SB_SIZE/2 + SUBPEL_FILTER_SIZE
+                    MAX_SB_SIZE/2 + FRAME_MARGIN, MAX_SB_SIZE/2 + FRAME_MARGIN
                 ),
                 Plane::new(
                     width/2, height/2,
                     1, 1,
-                    MAX_SB_SIZE/2 + SUBPEL_FILTER_SIZE, MAX_SB_SIZE/2 + SUBPEL_FILTER_SIZE
+                    MAX_SB_SIZE/2 + FRAME_MARGIN, MAX_SB_SIZE/2 + FRAME_MARGIN
                 )
             ]
         }
@@ -347,12 +349,12 @@ impl FrameState {
             input_hres: Plane::new(
                 fi.padded_w/2, fi.padded_h/2,
                 1, 1,
-                (MAX_SB_SIZE + SUBPEL_FILTER_SIZE) / 2, (MAX_SB_SIZE + SUBPEL_FILTER_SIZE) / 2
+                (MAX_SB_SIZE + FRAME_MARGIN) / 2, (MAX_SB_SIZE + FRAME_MARGIN) / 2
             ),
             input_qres: Plane::new(
                 fi.padded_w/4, fi.padded_h/4,
                 2, 2,
-                (MAX_SB_SIZE + SUBPEL_FILTER_SIZE) / 4, (MAX_SB_SIZE + SUBPEL_FILTER_SIZE) / 4
+                (MAX_SB_SIZE + FRAME_MARGIN) / 4, (MAX_SB_SIZE + FRAME_MARGIN) / 4
             ),
             rec: Frame::new(fi.padded_w, fi.padded_h),
             qc: Default::default(),
