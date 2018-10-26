@@ -62,7 +62,7 @@ pub fn parse_cli() -> (EncoderIO, EncoderConfig, usize) {
         .help("low latency mode. true or false")
         .long("low_latency")
         .takes_value(true)
-        .default_value("false")
+        .default_value("true")
     ).arg(
       Arg::with_name("TUNE")
         .help("Quality tuning (Will enforce partition sizes >= 8x8)")

@@ -40,7 +40,7 @@ pub struct EncoderConfig {
 
 impl Default for EncoderConfig {
   fn default() -> Self {
-    EncoderConfig { key_frame_interval: 30, low_latency: false, quantizer: 100, speed: 0, tune: Tune::Psnr  }
+    EncoderConfig { key_frame_interval: 30, low_latency: true, quantizer: 100, speed: 0, tune: Tune::Psnr  }
   }
 }
 
@@ -181,7 +181,7 @@ impl Context {
   pub fn frame_properties(&mut self, idx: u64) -> bool {
     let key_frame_interval: u64 = self.fi.config.key_frame_interval;
 
-    let reorder = self.fi.config.low_latency;
+    let reorder = !self.fi.config.low_latency;
     let multiref = reorder || self.fi.config.speed <= 2;
 
     let pyramid_depth = if reorder { 2 } else { 0 };
