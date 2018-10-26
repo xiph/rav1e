@@ -51,6 +51,19 @@ pub fn parse_cli() -> (EncoderIO, EncoderConfig, usize) {
         .takes_value(true)
         .default_value("3")
     ).arg(
+      Arg::with_name("KEYFRAME_INTERVAL")
+        .help("Keyframe interval")
+        .short("I")
+        .long("keyint")
+        .takes_value(true)
+        .default_value("30")
+    ).arg(
+      Arg::with_name("LOW_LATENCY")
+        .help("low latency mode. true or false")
+        .long("low_latency")
+        .takes_value(true)
+        .default_value("false")
+    ).arg(
       Arg::with_name("TUNE")
         .help("Quality tuning (Will enforce partition sizes >= 8x8)")
         .long("tune")
@@ -74,6 +87,8 @@ pub fn parse_cli() -> (EncoderIO, EncoderConfig, usize) {
   };
 
   let config = EncoderConfig {
+    key_frame_interval: matches.value_of("KEYFRAME_INTERVAL").unwrap().parse().unwrap(),
+    low_latency: matches.value_of("LOW_LATENCY").unwrap().parse().unwrap(),
     quantizer: matches.value_of("QP").unwrap().parse().unwrap(),
     speed: matches.value_of("SPEED").unwrap().parse().unwrap(),
     tune: matches.value_of("TUNE").unwrap().parse().unwrap()
