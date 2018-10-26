@@ -129,4 +129,6 @@ EXTERN\name:
 #define L(x) .L ## x
 #endif
 
+#define X(x) CONCAT(EXTERN, x)
+
 #endif /* __DAV1D_SRC_ARM_ASM_S__ */
