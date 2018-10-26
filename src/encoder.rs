@@ -445,8 +445,7 @@ impl FrameInvariants {
             }
         }
         let use_reduced_tx_set = config.speed > 1;
-
-        let use_tx_domain_distortion = config.tune == Tune::Psnr && true;
+        let use_tx_domain_distortion = config.tune == Tune::Psnr && config.speed >= 1;
 
         FrameInvariants {
             width,
