@@ -159,14 +159,6 @@ pub fn get_lambda(fi: &FrameInvariants, bit_depth: usize) -> f64 {
   q0 * q0 * std::f64::consts::LN_2 / 6.0
 }
 
-pub fn get_tx_lambda(fi: &FrameInvariants, bit_depth: usize) -> f64 {
-  let q = dc_q(fi.base_q_idx, bit_depth) as f64;
-
-  // Lambda formula from doc/theoretical_results.lyx in the daala repo
-  // Use Q0 quantizer since lambda will be applied to Q0 pixel domain
-  q * q * std::f64::consts::LN_2 / 6.0
-}
-
 // Compute the rate-distortion cost for an encode
 fn compute_rd_cost(
   fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize,
@@ -236,7 +228,7 @@ fn compute_tx_rd_cost(
   skip: bool, luma_only: bool
 ) -> f64 {
   assert!(fi.config.tune == Tune::Psnr);
-  //let lambda = get_tx_lambda(fi, bit_depth);
+
   let lambda = get_lambda(fi, bit_depth);
 
   // Compute distortion
@@ -254,34 +246,30 @@ fn compute_tx_rd_cost(
     tx_dist as u64
   };
 
-  if !luma_only {
-    if skip {
-      let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
+  if !luma_only && skip {
+    let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
-      let mask = !(MI_SIZE - 1);
-      let mut w_uv = (w_y >> xdec) & mask;
-      let mut h_uv = (h_y >> ydec) & mask;
+    let mask = !(MI_SIZE - 1);
+    let mut w_uv = (w_y >> xdec) & mask;
+    let mut h_uv = (h_y >> ydec) & mask;
 
-      if (w_uv == 0 || h_uv == 0) && is_chroma_block {
-        w_uv = MI_SIZE;
-        h_uv = MI_SIZE;
+    if (w_uv == 0 || h_uv == 0) && is_chroma_block {
+      w_uv = MI_SIZE;
+      h_uv = MI_SIZE;
+    }
+
+    // Add chroma distortion only when it is available
+    if w_uv > 0 && h_uv > 0 {
+      for p in 1..3 {
+        let po = bo.plane_offset(&fs.input.planes[p].cfg);
+
+        distortion += sse_wxh(
+          &fs.input.planes[p].slice(&po),
+          &fs.rec.planes[p].slice(&po),
+          w_uv,
+          h_uv
+        );
       }
-
-      // Add chroma distortion only when it is available
-      if w_uv > 0 && h_uv > 0 {
-        for p in 1..3 {
-          let po = bo.plane_offset(&fs.input.planes[p].cfg);
-
-          distortion += sse_wxh(
-            &fs.input.planes[p].slice(&po),
-            &fs.rec.planes[p].slice(&po),
-            w_uv,
-            h_uv
-          );
-        }
-      }
-    } else {
-
     }
   }
   // Compute rate
@@ -615,7 +603,6 @@ pub fn rdo_mode_decision(
       let tell = wr.tell_frac();
 
       encode_block_a(seq, cw, wr, bsize, bo, best.skip);
-      let tx_dist =
       encode_block_b(
         seq,
         fi,

@@ -1339,7 +1339,7 @@ pub fn encode_tx_block(
       mode.predict_intra(&mut rec.mut_slice(po), tx_size, bit_depth, &ac, alpha);
     }
 
-    if skip { return (false, 0); }
+    if skip { return (false, -1); }
 
     let mut residual_storage: AlignedArray<[i16; 64 * 64]> = UninitializedAlignedArray();
     let mut coeffs_storage: AlignedArray<[i32; 64 * 64]> = UninitializedAlignedArray();
@@ -1368,17 +1368,14 @@ pub fn encode_tx_block(
     let mut tx_dist: i64 = -1;
 
     if !fi.use_tx_domain_distortion || !for_rdo_use {
-    //if !fi.use_tx_domain_distortion {
         inverse_transform_add(rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
     } else {
-        //inverse_transform_add(rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
-
         // Store tx-domain distortion of this block
         tx_dist = coeffs
             .iter()
             .zip(rcoeffs)
             .map(|(a, b)| {
-                let c = (*a as i16 - *b as i16) as i32;
+                let c = *a as i32 - *b as i32;
                 (c * c) as u64
             }).sum::<u64>() as i64;
 
@@ -1748,7 +1745,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
       fi, fs, cw, w, 0, &bo, luma_mode, tx_size, tx_type, bsize, &po, skip,
       bit_depth, ac, 0, for_rdo_use
     );
-    assert!(!for_rdo_use || dist >= 0);
+    assert!(!for_rdo_use || skip || dist >= 0);
     tx_dist += dist;
 
     if luma_only { return tx_dist };
@@ -1789,7 +1786,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
             let (_, dist) =
             encode_tx_block(fi, fs, cw, w, p, &tx_bo, luma_mode, uv_tx_size, uv_tx_type,
                             plane_bsize, &po, skip, bit_depth, ac, 0, for_rdo_use);
-            assert!(!for_rdo_use || dist >= 0);
+            assert!(!for_rdo_use || skip || dist >= 0);
             tx_dist += dist;
         }
     }
