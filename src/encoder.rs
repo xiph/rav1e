@@ -496,7 +496,7 @@ impl FrameInvariants {
             rec_buffer: ReferenceFramesSet::new(),
             base_q_idx: config.quantizer as u8,
             me_range_scale: 1,
-            use_tx_domain_distortion: true,
+            use_tx_domain_distortion: use_tx_domain_distortion,
         }
     }
 
@@ -1660,7 +1660,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
               fi, fs, cw, w, 0, &tx_bo, luma_mode, tx_size, tx_type, bsize, &po,
               skip, bit_depth, ac, 0, for_rdo_use
             );
-            assert!(!for_rdo_use || dist >= 0);
+            assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
             tx_dist += dist;
         }
     }
@@ -1714,7 +1714,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
                     let (_, dist) =
                     encode_tx_block(fi, fs, cw, w, p, &tx_bo, chroma_mode, uv_tx_size, uv_tx_type,
                                     plane_bsize, &po, skip, bit_depth, ac, alpha, for_rdo_use);
-                    assert!(!for_rdo_use || dist >= 0);
+                    assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
                     tx_dist += dist;
                 }
             }
@@ -1744,7 +1744,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
       fi, fs, cw, w, 0, &bo, luma_mode, tx_size, tx_type, bsize, &po, skip,
       bit_depth, ac, 0, for_rdo_use
     );
-    assert!(!for_rdo_use || skip || dist >= 0);
+    assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
     tx_dist += dist;
 
     if luma_only { return tx_dist };
@@ -1785,7 +1785,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
             let (_, dist) =
             encode_tx_block(fi, fs, cw, w, p, &tx_bo, luma_mode, uv_tx_size, uv_tx_type,
                             plane_bsize, &po, skip, bit_depth, ac, 0, for_rdo_use);
-            assert!(!for_rdo_use || skip || dist >= 0);
+            assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
             tx_dist += dist;
         }
     }
