@@ -293,7 +293,9 @@ where
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_h(output: &mut [T], stride: usize, left: &[T]) {
-    for (line, l) in output.chunks_mut(stride).zip(left[..Self::H].iter()) {
+    for (line, l) in
+      output.chunks_mut(stride).zip(left[..Self::H].iter().rev())
+    {
       for v in &mut line[..Self::W] {
         *v = *l;
       }
@@ -316,7 +318,7 @@ where
       for c in 0..Self::W {
         // Top-left pixel is fixed in libaom
         let raw_top_left: i32 = above_left.into();
-        let raw_left: i32 = left[r].into();
+        let raw_left: i32 = left[Self::H - 1 - r].into();
         let raw_top: i32 = above[c].into();
 
         let p_base = raw_top + raw_left - raw_top_left;
@@ -342,7 +344,7 @@ where
   fn pred_smooth(
     output: &mut [T], stride: usize, above: &[T], left: &[T]
   ) {
-    let below_pred = left[Self::H - 1]; // estimated by bottom-left pixel
+    let below_pred = left[0]; // estimated by bottom-left pixel
     let right_pred = above[Self::W - 1]; // estimated by top-right pixel
     let sm_weights_w = &sm_weight_arrays[Self::W..];
     let sm_weights_h = &sm_weight_arrays[Self::H..];
@@ -359,7 +361,7 @@ where
 
     for r in 0..Self::H {
       for c in 0..Self::W {
-        let pixels = [above[c], below_pred, left[r], right_pred];
+        let pixels = [above[c], below_pred, left[Self::H - 1 - r], right_pred];
 
         let weights = [
           sm_weights_h[r] as u16,
@@ -405,7 +407,7 @@ where
 
     for r in 0..Self::H {
       for c in 0..Self::W {
-        let pixels = [left[r], right_pred];
+        let pixels = [left[Self::H - 1 - r], right_pred];
         let weights = [sm_weights[c] as u16, scale - sm_weights[c] as u16];
 
         assert!(scale >= sm_weights[c] as u16);
@@ -428,7 +430,7 @@ where
   fn pred_smooth_v(
     output: &mut [T], stride: usize, above: &[T], left: &[T]
   ) {
-    let below_pred = left[Self::H - 1]; // estimated by bottom-left pixel
+    let below_pred = left[0]; // estimated by bottom-left pixel
     let sm_weights = &sm_weight_arrays[Self::H..];
 
     let log2_scale = sm_weight_log2_scale;
@@ -630,6 +632,8 @@ pub mod test {
   pub fn pred_h_4x4(
     output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
   ) {
+    let mut left = left.to_vec();
+    left.reverse();
     unsafe {
       highbd_h_predictor(
         output.as_mut_ptr(),
@@ -662,6 +666,8 @@ pub mod test {
   pub fn pred_paeth_4x4(
     output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
   ) {
+    let mut left = left.to_vec();
+    left.reverse();
     unsafe {
       highbd_paeth_predictor(
         output.as_mut_ptr(),
@@ -678,6 +684,8 @@ pub mod test {
   pub fn pred_smooth_4x4(
     output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
   ) {
+    let mut left = left.to_vec();
+    left.reverse();
     unsafe {
       highbd_smooth_predictor(
         output.as_mut_ptr(),
@@ -694,6 +702,8 @@ pub mod test {
   pub fn pred_smooth_h_4x4(
     output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
   ) {
+    let mut left = left.to_vec();
+    left.reverse();
     unsafe {
       highbd_smooth_h_predictor(
         output.as_mut_ptr(),
@@ -710,6 +720,8 @@ pub mod test {
   pub fn pred_smooth_v_4x4(
     output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
   ) {
+    let mut left = left.to_vec();
+    left.reverse();
     unsafe {
       highbd_smooth_v_predictor(
         output.as_mut_ptr(),

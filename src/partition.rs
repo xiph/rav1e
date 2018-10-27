@@ -814,6 +814,7 @@ pub enum MvJointType {
 use context::*;
 use plane::*;
 use predict::*;
+use util::*;
 
 impl PredictionMode {
   pub fn predict_intra<'a>(
@@ -840,103 +841,85 @@ impl PredictionMode {
     self, dst: &'a mut PlaneMutSlice<'a>, bit_depth: usize, ac: &[i16],
     alpha: i16
   ) {
-    // above and left arrays include above-left sample
-    // above array includes above-right samples
-    // left array includes below-left samples
-    let bd = bit_depth;
-    let base = 128 << (bd - 8);
+    let base = 128u16 << (bit_depth - 8);
 
-    let above =
-      &mut [(base - 1) as u16; 2 * MAX_TX_SIZE + 1][..B::W + B::H + 1];
-    let left =
-      &mut [(base + 1) as u16; 2 * MAX_TX_SIZE + 1][..B::H + B::W + 1];
+    let mut edge_buf: AlignedArray<[u16; 2 * MAX_TX_SIZE + 1]> =
+      UninitializedAlignedArray();
+    // left pixels are order from bottom to top and right-aligned
+    let (left, not_left) = edge_buf.array.split_at_mut(MAX_TX_SIZE);
+    let (top_left, above) = not_left.split_at_mut(1);
 
     let stride = dst.plane.cfg.stride;
     let x = dst.x;
     let y = dst.y;
 
-    if y != 0 {
-      if self != PredictionMode::H_PRED {
-        above[1..B::W + 1].copy_from_slice(&dst.go_up(1).as_slice()[..B::W]);
-      } else if self == PredictionMode::H_PRED && x == 0 {
-        for i in 0..B::W {
-          above[i + 1] = dst.go_up(1).p(0, 0);
-        }
-      }
-    }
+    let mode: PredictionMode = match self {
+      PredictionMode::PAETH_PRED => match (x, y) {
+        (0, 0) => PredictionMode::DC_PRED,
+        (_, 0) => PredictionMode::H_PRED,
+        (0, _) => PredictionMode::V_PRED,
+        _ => PredictionMode::PAETH_PRED
+      },
+      PredictionMode::UV_CFL_PRED => PredictionMode::DC_PRED,
+      _ => self
+    };
 
-    if x != 0 {
-      if self != PredictionMode::V_PRED {
+    // Needs left
+    if mode != PredictionMode::V_PRED
+      && (mode != PredictionMode::DC_PRED || x != 0)
+    {
+      if x != 0 {
         let left_slice = dst.go_left(1);
         for i in 0..B::H {
-          left[i + 1] = left_slice.p(0, i);
+          left[MAX_TX_SIZE - B::H + i] = left_slice.p(0, B::H - 1 - i);
         }
-      } else if self == PredictionMode::V_PRED && y == 0 {
-        for i in 0..B::H {
-          left[i + 1] = dst.go_left(1).p(0, 0);
+      } else {
+        let val = if y != 0 { dst.go_up(1).p(0, 0) } else { base + 1 };
+        for v in left[MAX_TX_SIZE - B::H..].iter_mut() {
+          *v = val
         }
       }
     }
 
-    if self == PredictionMode::PAETH_PRED && x != 0 && y != 0 {
-      above[0] = dst.go_up(1).go_left(1).p(0, 0);
+    // Needs top-left
+    if mode == PredictionMode::PAETH_PRED {
+      top_left[0] = match (x, y) {
+        (0, 0) => base,
+        (_, 0) => dst.go_left(1).p(0, 0),
+        (0, _) => dst.go_up(1).p(0, 0),
+        _ => dst.go_up(1).go_left(1).p(0, 0)
+      };
     }
 
-    if self == PredictionMode::SMOOTH_H_PRED
-      || self == PredictionMode::SMOOTH_V_PRED
-      || self == PredictionMode::SMOOTH_PRED
-      || self == PredictionMode::PAETH_PRED
+    // Needs top
+    if mode != PredictionMode::H_PRED
+      && (mode != PredictionMode::DC_PRED || y != 0)
     {
-      if x == 0 && y != 0 {
-        for i in 0..B::H {
-          left[i + 1] = dst.go_up(1).p(0, 0);
+      if y != 0 {
+        above[..B::W].copy_from_slice(&dst.go_up(1).as_slice()[..B::W]);
+      } else {
+        let val = if x != 0 { dst.go_left(1).p(0, 0) } else { base - 1 };
+        for v in above[..B::W].iter_mut() {
+          *v = val
         }
-      }
-      if x != 0 && y == 0 {
-        for i in 0..B::W {
-          above[i + 1] = dst.go_left(1).p(0, 0);
-        }
-      }
-    }
-
-    if self == PredictionMode::PAETH_PRED {
-      if x == 0 && y != 0 {
-        above[0] = dst.go_up(1).p(0, 0);
-      }
-      if x != 0 && y == 0 {
-        above[0] = dst.go_left(1).p(0, 0);
-      }
-      if x == 0 && y == 0 {
-        above[0] = base;
-        left[0] = base;
       }
     }
 
     let slice = dst.as_mut_slice();
-    let above_slice = &above[1..B::W + 1];
-    let left_slice = &left[1..B::H + 1];
+    let above_slice = &above[..B::W];
+    let left_slice = &left[MAX_TX_SIZE - B::H..];
 
-    match self {
-      PredictionMode::DC_PRED | PredictionMode::UV_CFL_PRED => match (x, y) {
+    match mode {
+      PredictionMode::DC_PRED => match (x, y) {
         (0, 0) => B::pred_dc_128(slice, stride, bit_depth),
-        (_, 0) =>
-          B::pred_dc_left(slice, stride, above_slice, left_slice),
-        (0, _) =>
-          B::pred_dc_top(slice, stride, above_slice, left_slice),
+        (_, 0) => B::pred_dc_left(slice, stride, above_slice, left_slice),
+        (0, _) => B::pred_dc_top(slice, stride, above_slice, left_slice),
         _ => B::pred_dc(slice, stride, above_slice, left_slice)
       },
-      PredictionMode::H_PRED => match (x, y) {
-        (0, 0) => B::pred_h(slice, stride, left_slice),
-        (0, _) => B::pred_h(slice, stride, above_slice),
-        (_, _) => B::pred_h(slice, stride, left_slice)
-      },
-      PredictionMode::V_PRED => match (x, y) {
-        (0, 0) => B::pred_v(slice, stride, above_slice),
-        (_, 0) => B::pred_v(slice, stride, left_slice),
-        (_, _) => B::pred_v(slice, stride, above_slice)
-      },
+      PredictionMode::H_PRED => B::pred_h(slice, stride, left_slice),
+      PredictionMode::V_PRED => B::pred_v(slice, stride, above_slice),
       PredictionMode::PAETH_PRED =>
-        B::pred_paeth(slice, stride, above_slice, left_slice, above[0]),
+        B::pred_paeth(slice, stride, above_slice, left_slice, top_left[0]),
       PredictionMode::SMOOTH_PRED =>
         B::pred_smooth(slice, stride, above_slice, left_slice),
       PredictionMode::SMOOTH_H_PRED =>
