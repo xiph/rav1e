@@ -113,7 +113,7 @@ fn cdef_dist_wxh(
 }
 
 // Sum of Squared Error for a wxh block
-fn sse_wxh(
+pub fn sse_wxh(
   src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, w: usize, h: usize
 ) -> u64 {
   assert!(w & (MI_SIZE - 1) == 0);
@@ -203,6 +203,64 @@ fn compute_rd_cost(
       );
     }
   };
+  }
+  // Compute rate
+  let rate = (bit_cost as f64) / ((1 << OD_BITRES) as f64);
+
+  (distortion as f64) + lambda * rate
+}
+
+// Compute the rate-distortion cost for an encode
+fn compute_tx_rd_cost(
+  fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize,
+  is_chroma_block: bool, bo: &BlockOffset, bit_cost: u32, tx_dist: i64,
+  bit_depth: usize,
+  skip: bool, luma_only: bool
+) -> f64 {
+  assert!(fi.config.tune == Tune::Psnr);
+
+  let lambda = get_lambda(fi, bit_depth);
+
+  // Compute distortion
+  let mut distortion = if skip {
+    let po = bo.plane_offset(&fs.input.planes[0].cfg);
+
+    sse_wxh(
+      &fs.input.planes[0].slice(&po),
+      &fs.rec.planes[0].slice(&po),
+      w_y,
+      h_y
+    )
+  } else {
+    assert!(tx_dist >= 0);
+    tx_dist as u64
+  };
+
+  if !luma_only && skip {
+    let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
+
+    let mask = !(MI_SIZE - 1);
+    let mut w_uv = (w_y >> xdec) & mask;
+    let mut h_uv = (h_y >> ydec) & mask;
+
+    if (w_uv == 0 || h_uv == 0) && is_chroma_block {
+      w_uv = MI_SIZE;
+      h_uv = MI_SIZE;
+    }
+
+    // Add chroma distortion only when it is available
+    if w_uv > 0 && h_uv > 0 {
+      for p in 1..3 {
+        let po = bo.plane_offset(&fs.input.planes[p].cfg);
+
+        distortion += sse_wxh(
+          &fs.input.planes[p].slice(&po),
+          &fs.rec.planes[p].slice(&po),
+          w_uv,
+          h_uv
+        );
+      }
+    }
   }
   // Compute rate
   let rate = (bit_cost as f64) / ((1 << OD_BITRES) as f64);
@@ -391,6 +449,7 @@ pub fn rdo_mode_decision(
         if skip { tx_type = TxType::DCT_DCT; };
 
         encode_block_a(seq, cw, wr, bsize, bo, skip);
+        let tx_dist =
         encode_block_b(
           seq,
           fi,
@@ -409,22 +468,38 @@ pub fn rdo_mode_decision(
           tx_size,
           tx_type,
           mode_context,
-          mv_stack
+          mv_stack,
+          true
         );
 
         let cost = wr.tell_frac() - tell;
-        let rd = compute_rd_cost(
-          fi,
-          fs,
-          w,
-          h,
-          is_chroma_block,
-          bo,
-          cost,
-          seq.bit_depth,
-          false
-        );
-
+        let rd = if fi.use_tx_domain_distortion {
+          compute_tx_rd_cost(
+            fi,
+            fs,
+            w,
+            h,
+            is_chroma_block,
+            bo,
+            cost,
+            tx_dist,
+            seq.bit_depth,
+            skip,
+            false
+          )
+        } else {
+          compute_rd_cost(
+            fi,
+            fs,
+            w,
+            h,
+            is_chroma_block,
+            bo,
+            cost,
+            seq.bit_depth,
+            false
+          )
+        };
         if rd < best.rd {
         //if rd < best.rd || luma_mode == PredictionMode::NEW_NEWMV {
           best.rd = rd;
@@ -509,7 +584,8 @@ pub fn rdo_mode_decision(
       false,
       seq.bit_depth,
       CFLParams::new(),
-      true
+      true,
+      false
     );
     cw.rollback(&cw_checkpoint);
     if let Some(cfl) = rdo_cfl_alpha(fs, bo, bsize, seq.bit_depth) {
@@ -535,21 +611,25 @@ pub fn rdo_mode_decision(
         best.tx_size,
         best.tx_type,
         0,
-        &Vec::new()
+        &Vec::new(),
+        false // For CFL, luma should be always reconstructed.
       );
 
       let cost = wr.tell_frac() - tell;
-      let rd = compute_rd_cost(
-        fi,
-        fs,
-        w,
-        h,
-        is_chroma_block,
-        bo,
-        cost,
-        seq.bit_depth,
-        false
-      );
+
+      // For CFL, tx-domain distortion is not an option.
+      let rd = 
+        compute_rd_cost(
+          fi,
+          fs,
+          w,
+          h,
+          is_chroma_block,
+          bo,
+          cost,
+          seq.bit_depth,
+          false
+        );
 
       if rd < best.rd {
         best.rd = rd;
@@ -658,30 +738,45 @@ pub fn rdo_tx_type_decision(
 
     let mut wr: &mut dyn Writer = &mut WriterCounter::new();
     let tell = wr.tell_frac();
-    if is_inter {
+    let tx_dist = if is_inter {
       write_tx_tree(
-        fi, fs, cw, wr, mode, bo, bsize, tx_size, tx_type, false, bit_depth, true
-      );
+        fi, fs, cw, wr, mode, bo, bsize, tx_size, tx_type, false, bit_depth, true, true
+      )
     }  else {
       let cfl = CFLParams::new(); // Unused
       write_tx_blocks(
-        fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false, bit_depth, cfl, true
-      );
-    }
+        fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false, bit_depth, cfl, true, true
+      )
+    };
 
     let cost = wr.tell_frac() - tell;
-    let rd = compute_rd_cost(
-      fi,
-      fs,
-      w,
-      h,
-      is_chroma_block,
-      bo,
-      cost,
-      bit_depth,
-      true
-    );
-
+      let rd = if fi.use_tx_domain_distortion {
+        compute_tx_rd_cost(
+          fi,
+          fs,
+          w,
+          h,
+          is_chroma_block,
+          bo,
+          cost,
+          tx_dist,
+          bit_depth,
+          false,
+          true
+        )
+      } else {
+        compute_rd_cost(
+          fi,
+          fs,
+          w,
+          h,
+          is_chroma_block,
+          bo,
+          cost,
+          bit_depth,
+          true
+        )
+    };
     if rd < best_rd {
       best_rd = rd;
       best_type = tx_type;

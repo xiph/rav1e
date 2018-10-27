@@ -13,7 +13,7 @@
 use partition::TxSize;
 use std::mem;
 
-fn get_log_tx_scale(tx_size: TxSize) -> i32 {
+pub fn get_log_tx_scale(tx_size: TxSize) -> i32 {
   match tx_size {
     TxSize::TX_64X64 => 2,
     TxSize::TX_32X32 => 1,
@@ -128,21 +128,22 @@ impl QuantizationContext {
   }
 
   #[inline]
-  pub fn quantize(&self, coeffs: &mut [i32]) {
-    coeffs[0] <<= self.log_tx_scale;
-    coeffs[0] += coeffs[0].signum() * self.dc_offset;
-    coeffs[0] = divu_pair(coeffs[0], self.dc_mul_add);
+  pub fn quantize(&self, coeffs: &[i32], qcoeffs: &mut [i32]) {
+    qcoeffs[0] = coeffs[0] << self.log_tx_scale;
+    qcoeffs[0] += qcoeffs[0].signum() * self.dc_offset;
+    qcoeffs[0] = divu_pair(qcoeffs[0], self.dc_mul_add);
 
-    for c in coeffs[1..].iter_mut() {
-      *c <<= self.log_tx_scale;
-      *c += c.signum() * self.ac_offset;
-      *c = divu_pair(*c, self.ac_mul_add);
+    for (qc, c) in qcoeffs[1..].iter_mut().zip(coeffs[1..].iter()) {
+      *qc = *c << self.log_tx_scale;
+      *qc += qc.signum() * self.ac_offset;
+      *qc = divu_pair(*qc, self.ac_mul_add);
     }
   }
 }
 
-pub fn quantize_in_place(
-  qindex: u8, coeffs: &mut [i32], tx_size: TxSize, bit_depth: usize
+// quantization without using Multiplication Factor
+pub fn quantize_wo_mf(
+  qindex: u8, coeffs: &[i32], qcoeffs: &mut [i32], tx_size: TxSize, bit_depth: usize
 ) {
   let log_tx_scale = get_log_tx_scale(tx_size);
 
@@ -153,14 +154,14 @@ pub fn quantize_in_place(
   let dc_offset = dc_quant * 21 / 64 as i32;
   let ac_offset = ac_quant * 21 / 64 as i32;
 
-  coeffs[0] <<= log_tx_scale;
-  coeffs[0] += coeffs[0].signum() * dc_offset;
-  coeffs[0] /= dc_quant;
+  qcoeffs[0] = coeffs[0] << log_tx_scale;
+  qcoeffs[0] += qcoeffs[0].signum() * dc_offset;
+  qcoeffs[0] /= dc_quant;
 
-  for c in coeffs[1..].iter_mut() {
-    *c <<= log_tx_scale;
-    *c += c.signum() * ac_offset;
-    *c /= ac_quant;
+  for (qc, c) in qcoeffs[1..].iter_mut().zip(coeffs[1..].iter()) {
+    *qc = *c << log_tx_scale;
+    *qc += qc.signum() * ac_offset;
+    *qc /= ac_quant;
   }
 }
 
