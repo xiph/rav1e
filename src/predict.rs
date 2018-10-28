@@ -110,68 +110,6 @@ pub static extend_modes: [u8; INTRA_MODES] = [
   NEED_LEFT | NEED_ABOVE | NEED_ABOVELEFT  // PAETH
 ];
 
-extern {
-  #[cfg(test)]
-  fn highbd_dc_predictor(
-    dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int, bh: libc::c_int,
-    above: *const u16, left: *const u16, bd: libc::c_int
-  );
-
-  #[cfg(test)]
-  fn highbd_dc_left_predictor(
-    dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int, bh: libc::c_int,
-    above: *const u16, left: *const u16, bd: libc::c_int
-  );
-
-  #[cfg(test)]
-  fn highbd_dc_top_predictor(
-    dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int, bh: libc::c_int,
-    above: *const u16, left: *const u16, bd: libc::c_int
-  );
-
-  #[cfg(test)]
-  fn highbd_h_predictor(
-    dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int, bh: libc::c_int,
-    above: *const u16, left: *const u16, bd: libc::c_int
-  );
-
-  #[cfg(test)]
-  fn highbd_v_predictor(
-    dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int, bh: libc::c_int,
-    above: *const u16, left: *const u16, bd: libc::c_int
-  );
-
-  #[cfg(test)]
-  fn highbd_paeth_predictor(
-    dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int, bh: libc::c_int,
-    above: *const u16, left: *const u16, bd: libc::c_int
-  );
-
-  #[cfg(test)]
-  fn highbd_smooth_predictor(
-    dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int, bh: libc::c_int,
-    above: *const u16, left: *const u16, bd: libc::c_int
-  );
-
-  #[cfg(test)]
-  fn highbd_smooth_h_predictor(
-    dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int, bh: libc::c_int,
-    above: *const u16, left: *const u16, bd: libc::c_int
-  );
-
-  #[cfg(test)]
-  fn highbd_smooth_v_predictor(
-    dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int, bh: libc::c_int,
-    above: *const u16, left: *const u16, bd: libc::c_int
-  );
-
-  #[cfg(test)]
-  fn cfl_predict_hbd_c(
-    ac_buf_q3: *const i16, dst: *mut u16, stride: libc::ptrdiff_t,
-    alpha_q3: libc::c_int, bd: libc::c_int, bw: libc::c_int, bh: libc::c_int
-  );
-}
-
 pub trait Dim {
   const W: usize;
   const H: usize;
@@ -581,158 +519,52 @@ pub mod test {
     (above, left, o1, o2)
   }
 
-  fn pred_dc_4x4(
-    output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
-  ) {
-    unsafe {
-      highbd_dc_predictor(
-        output.as_mut_ptr(),
-        stride as libc::ptrdiff_t,
-        4,
-        4,
-        above.as_ptr(),
-        left.as_ptr(),
-        8
-      );
-    }
+  macro_rules! wrap_aom_pred_fn {
+    ($fn_4x4:ident, $aom_fn:ident) => {
+      extern {
+        fn $aom_fn(
+          dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
+          bh: libc::c_int, above: *const u16, left: *const u16,
+          bd: libc::c_int
+        );
+      }
+
+      fn $fn_4x4(
+        output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
+      ) {
+        let mut left = left.to_vec();
+        left.reverse();
+        unsafe {
+          $aom_fn(
+            output.as_mut_ptr(),
+            stride as libc::ptrdiff_t,
+            4,
+            4,
+            above.as_ptr(),
+            left.as_ptr(),
+            8
+          );
+        }
+      }
+    };
   }
 
-  fn pred_dc_left_4x4(
-    output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
-  ) {
-    unsafe {
-      highbd_dc_left_predictor(
-        output.as_mut_ptr(),
-        stride as libc::ptrdiff_t,
-        4,
-        4,
-        above.as_ptr(),
-        left.as_ptr(),
-        8
-      );
-    }
-  }
+  wrap_aom_pred_fn!(pred_dc_4x4, highbd_dc_predictor);
+  wrap_aom_pred_fn!(pred_dc_left_4x4, highbd_dc_left_predictor);
+  wrap_aom_pred_fn!(pred_dc_top_4x4, highbd_dc_top_predictor);
+  wrap_aom_pred_fn!(pred_h_4x4, highbd_h_predictor);
+  wrap_aom_pred_fn!(pred_v_4x4, highbd_v_predictor);
+  wrap_aom_pred_fn!(pred_paeth_4x4, highbd_paeth_predictor);
+  wrap_aom_pred_fn!(pred_smooth_4x4, highbd_smooth_predictor);
+  wrap_aom_pred_fn!(pred_smooth_h_4x4, highbd_smooth_h_predictor);
+  wrap_aom_pred_fn!(pred_smooth_v_4x4, highbd_smooth_v_predictor);
 
-  fn pred_dc_top_4x4(
-    output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
-  ) {
-    unsafe {
-      highbd_dc_top_predictor(
-        output.as_mut_ptr(),
-        stride as libc::ptrdiff_t,
-        4,
-        4,
-        above.as_ptr(),
-        left.as_ptr(),
-        8
-      );
-    }
-  }
-
-  pub fn pred_h_4x4(
-    output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
-  ) {
-    let mut left = left.to_vec();
-    left.reverse();
-    unsafe {
-      highbd_h_predictor(
-        output.as_mut_ptr(),
-        stride as libc::ptrdiff_t,
-        4,
-        4,
-        above.as_ptr(),
-        left.as_ptr(),
-        8
-      );
-    }
-  }
-
-  pub fn pred_v_4x4(
-    output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
-  ) {
-    unsafe {
-      highbd_v_predictor(
-        output.as_mut_ptr(),
-        stride as libc::ptrdiff_t,
-        4,
-        4,
-        above.as_ptr(),
-        left.as_ptr(),
-        8
-      );
-    }
-  }
-
-  pub fn pred_paeth_4x4(
-    output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
-  ) {
-    let mut left = left.to_vec();
-    left.reverse();
-    unsafe {
-      highbd_paeth_predictor(
-        output.as_mut_ptr(),
-        stride as libc::ptrdiff_t,
-        4,
-        4,
-        above.as_ptr(),
-        left.as_ptr(),
-        8
-      );
-    }
-  }
-
-  pub fn pred_smooth_4x4(
-    output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
-  ) {
-    let mut left = left.to_vec();
-    left.reverse();
-    unsafe {
-      highbd_smooth_predictor(
-        output.as_mut_ptr(),
-        stride as libc::ptrdiff_t,
-        4,
-        4,
-        above.as_ptr(),
-        left.as_ptr(),
-        8
-      );
-    }
-  }
-
-  pub fn pred_smooth_h_4x4(
-    output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
-  ) {
-    let mut left = left.to_vec();
-    left.reverse();
-    unsafe {
-      highbd_smooth_h_predictor(
-        output.as_mut_ptr(),
-        stride as libc::ptrdiff_t,
-        4,
-        4,
-        above.as_ptr(),
-        left.as_ptr(),
-        8
-      );
-    }
-  }
-
-  pub fn pred_smooth_v_4x4(
-    output: &mut [u16], stride: usize, above: &[u16], left: &[u16]
-  ) {
-    let mut left = left.to_vec();
-    left.reverse();
-    unsafe {
-      highbd_smooth_v_predictor(
-        output.as_mut_ptr(),
-        stride as libc::ptrdiff_t,
-        4,
-        4,
-        above.as_ptr(),
-        left.as_ptr(),
-        8
-      );
-    }
+  extern {
+    fn cfl_predict_hbd_c(
+      ac_buf_q3: *const i16, dst: *mut u16, stride: libc::ptrdiff_t,
+      alpha_q3: libc::c_int, bd: libc::c_int, bw: libc::c_int,
+      bh: libc::c_int
+    );
   }
 
   pub fn pred_cfl_4x4(
@@ -911,14 +743,66 @@ pub mod test {
 
   #[test]
   fn pred_matches_u8() {
-    let row128 = [128u8; 32];
-    let mut o = vec![0u8; 32 * 32];
-
-    Block4x4::pred_dc_128(&mut o, 32, 8);
-
-    for l in o.chunks(32).take(4) {
-      assert_eq!(l[..4], row128[..4]);
+    use util::*;
+    let mut edge_buf: AlignedArray<[u8; 2 * MAX_TX_SIZE + 1]> =
+      UninitializedAlignedArray();
+    for i in 0..edge_buf.array.len() {
+      edge_buf.array[i] = i.as_();
     }
+    let left = &edge_buf.array[MAX_TX_SIZE - 4..MAX_TX_SIZE];
+    let above = &edge_buf.array[MAX_TX_SIZE + 1..MAX_TX_SIZE + 5];
+    let top_left = edge_buf.array[MAX_TX_SIZE];
+
+    let stride = 4;
+    let mut output = vec![0u8; 4 * 4];
+
+    Block4x4::pred_dc(&mut output, stride, above, left);
+    assert_eq!(output, [32u8; 16]);
+
+    Block4x4::pred_dc_top(&mut output, stride, above, left);
+    assert_eq!(output, [35u8; 16]);
+
+    Block4x4::pred_dc_left(&mut output, stride, above, left);
+    assert_eq!(output, [30u8; 16]);
+
+    Block4x4::pred_dc_128(&mut output, stride, 8);
+    assert_eq!(output, [128u8; 16]);
+
+    Block4x4::pred_v(&mut output, stride, above);
+    assert_eq!(
+      output,
+      [33, 34, 35, 36, 33, 34, 35, 36, 33, 34, 35, 36, 33, 34, 35, 36]
+    );
+
+    Block4x4::pred_h(&mut output, stride, left);
+    assert_eq!(
+      output,
+      [31, 31, 31, 31, 30, 30, 30, 30, 29, 29, 29, 29, 28, 28, 28, 28]
+    );
+
+    Block4x4::pred_paeth(&mut output, stride, above, left, top_left);
+    assert_eq!(
+      output,
+      [32, 34, 35, 36, 30, 32, 32, 36, 29, 32, 32, 32, 28, 28, 32, 32]
+    );
+
+    Block4x4::pred_smooth(&mut output, stride, above, left);
+    assert_eq!(
+      output,
+      [32, 34, 35, 35, 30, 32, 33, 34, 29, 31, 32, 32, 29, 30, 32, 32]
+    );
+
+    Block4x4::pred_smooth_h(&mut output, stride, above, left);
+    assert_eq!(
+      output,
+      [31, 33, 34, 35, 30, 33, 34, 35, 29, 32, 34, 34, 28, 31, 33, 34]
+    );
+
+    Block4x4::pred_smooth_v(&mut output, stride, above, left);
+    assert_eq!(
+      output,
+      [33, 34, 35, 36, 31, 31, 32, 33, 30, 30, 30, 31, 29, 30, 30, 30]
+    );
   }
 
   #[test]
