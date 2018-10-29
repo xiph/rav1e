@@ -36,8 +36,320 @@ pd_04261537: dd 0, 4, 2, 6, 1, 5, 3, 7
 shufw_6543210x: db 12, 13, 10, 11, 8, 9, 6, 7, 4, 5, 2, 3, 0, 1, 14, 15
 shufw_210xxxxx: db 4, 5, 2, 3, 0, 1, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
 pw_128: times 2 dw 128
+pw_2048: times 2 dw 2048
+tap_table: dw 4, 2, 3, 3, 2, 1, 2, 1
+           db -1 * 16 + 1, -2 * 16 + 2
+           db  0 * 16 + 1, -1 * 16 + 2
+           db  0 * 16 + 1,  0 * 16 + 2
+           db  0 * 16 + 1,  1 * 16 + 2
+           db  1 * 16 + 1,  2 * 16 + 2
+           db  1 * 16 + 0,  2 * 16 + 1
+           db  1 * 16 + 0,  2 * 16 + 0
+           db  1 * 16 + 0,  2 * 16 - 1
+           ; the last 6 are repeats of the first 6 so we don't need to & 7
+           db -1 * 16 + 1, -2 * 16 + 2
+           db  0 * 16 + 1, -1 * 16 + 2
+           db  0 * 16 + 1,  0 * 16 + 2
+           db  0 * 16 + 1,  1 * 16 + 2
+           db  1 * 16 + 1,  2 * 16 + 2
+           db  1 * 16 + 0,  2 * 16 + 1
 
 SECTION .text
+
+INIT_YMM avx2
+cglobal cdef_filter_8x8, 4, 9, 16, 26 * 16, dst, stride, left, top, \
+                                            pri, sec, stride3, dst4, edge
+%define px rsp+32+2*32
+    pcmpeqw        m14, m14
+    psrlw          m14, 1                   ; 0x7fff
+    mov          edged, r8m
+
+    ; prepare pixel buffers - body/right
+    lea          dst4q, [dstq+strideq*4]
+    lea       stride3q, [strideq*3]
+    test         edged, 2                   ; have_right
+    jz .no_right
+    pmovzxbw        m1, [dstq+strideq*0]
+    pmovzxbw        m2, [dstq+strideq*1]
+    pmovzxbw        m3, [dstq+strideq*2]
+    pmovzxbw        m4, [dstq+stride3q]
+    movu     [px+0*32], m1
+    movu     [px+1*32], m2
+    movu     [px+2*32], m3
+    movu     [px+3*32], m4
+    pmovzxbw        m1, [dst4q+strideq*0]
+    pmovzxbw        m2, [dst4q+strideq*1]
+    pmovzxbw        m3, [dst4q+strideq*2]
+    pmovzxbw        m4, [dst4q+stride3q]
+    movu     [px+4*32], m1
+    movu     [px+5*32], m2
+    movu     [px+6*32], m3
+    movu     [px+7*32], m4
+    jmp .body_done
+.no_right:
+    pmovzxbw       xm1, [dstq+strideq*0]
+    pmovzxbw       xm2, [dstq+strideq*1]
+    pmovzxbw       xm3, [dstq+strideq*2]
+    pmovzxbw       xm4, [dstq+stride3q]
+    movu     [px+0*32], xm1
+    movu     [px+1*32], xm2
+    movu     [px+2*32], xm3
+    movu     [px+3*32], xm4
+    movd  [px+0*32+16], xm14
+    movd  [px+1*32+16], xm14
+    movd  [px+2*32+16], xm14
+    movd  [px+3*32+16], xm14
+    pmovzxbw       xm1, [dst4q+strideq*0]
+    pmovzxbw       xm2, [dst4q+strideq*1]
+    pmovzxbw       xm3, [dst4q+strideq*2]
+    pmovzxbw       xm4, [dst4q+stride3q]
+    movu     [px+4*32], xm1
+    movu     [px+5*32], xm2
+    movu     [px+6*32], xm3
+    movu     [px+7*32], xm4
+    movd  [px+4*32+16], xm14
+    movd  [px+5*32+16], xm14
+    movd  [px+6*32+16], xm14
+    movd  [px+7*32+16], xm14
+.body_done:
+
+    ; top
+    DEFINE_ARGS dst, stride, left, top2, pri, sec, top1, dummy, edge
+    test         edged, 4                    ; have_top
+    jz .no_top
+    mov          top1q, [top2q+0*gprsize]
+    mov          top2q, [top2q+1*gprsize]
+    test         edged, 1                    ; have_left
+    jz .top_no_left
+    test         edged, 2                    ; have_right
+    jz .top_no_right
+    pmovzxbw        m1, [top1q-4]
+    pmovzxbw        m2, [top2q-4]
+    movu   [px-2*32-8], m1
+    movu   [px-1*32-8], m2
+    jmp .top_done
+.top_no_right:
+    pmovzxbw        m1, [top1q-8]
+    pmovzxbw        m2, [top2q-8]
+    movu  [px-2*32-16], m1
+    movu  [px-1*32-16], m2
+    movd  [px-2*32+16], xm14
+    movd  [px-1*32+16], xm14
+    jmp .top_done
+.top_no_left:
+    test         edged, 2                   ; have_right
+    jz .top_no_left_right
+    pmovzxbw        m1, [top1q]
+    pmovzxbw        m2, [top2q]
+    movu   [px-2*32+0], m1
+    movu   [px-1*32+0], m2
+    movd   [px-2*32-4], xm14
+    movd   [px-1*32-4], xm14
+    jmp .top_done
+.top_no_left_right:
+    pmovzxbw       xm1, [top1q]
+    pmovzxbw       xm2, [top2q]
+    movu   [px-2*32+0], xm1
+    movu   [px-1*32+0], xm2
+    movd   [px-2*32-4], xm14
+    movd   [px-1*32-4], xm14
+    movd  [px-2*32+16], xm14
+    movd  [px-1*32+16], xm14
+    jmp .top_done
+.no_top:
+    movu   [px-2*32-8], m14
+    movu   [px-1*32-8], m14
+.top_done:
+
+    ; left
+    test         edged, 1                   ; have_left
+    jz .no_left
+    pmovzxbw       xm1, [leftq+ 0]
+    pmovzxbw       xm2, [leftq+ 8]
+    movd   [px+0*32-4], xm1
+    pextrd [px+1*32-4], xm1, 1
+    pextrd [px+2*32-4], xm1, 2
+    pextrd [px+3*32-4], xm1, 3
+    movd   [px+4*32-4], xm2
+    pextrd [px+5*32-4], xm2, 1
+    pextrd [px+6*32-4], xm2, 2
+    pextrd [px+7*32-4], xm2, 3
+    jmp .left_done
+.no_left:
+    movd   [px+0*32-4], xm14
+    movd   [px+1*32-4], xm14
+    movd   [px+2*32-4], xm14
+    movd   [px+3*32-4], xm14
+    movd   [px+4*32-4], xm14
+    movd   [px+5*32-4], xm14
+    movd   [px+6*32-4], xm14
+    movd   [px+7*32-4], xm14
+.left_done:
+
+    ; bottom
+    DEFINE_ARGS dst, stride, dst8, dummy1, pri, sec, dummy2, dummy3, edge
+    test         edged, 8                   ; have_bottom
+    jz .no_bottom
+    lea          dst8q, [dstq+8*strideq]
+    test         edged, 1                   ; have_left
+    jz .bottom_no_left
+    test         edged, 2                   ; have_right
+    jz .bottom_no_right
+    pmovzxbw        m1, [dst8q-4]
+    pmovzxbw        m2, [dst8q+strideq-4]
+    movu   [px+8*32-8], m1
+    movu   [px+9*32-8], m2
+    jmp .bottom_done
+.bottom_no_right:
+    pmovzxbw        m1, [dst8q-8]
+    pmovzxbw        m2, [dst8q+strideq-8]
+    movu  [px+8*32-16], m1
+    movu  [px+9*32-16], m2
+    movd  [px+7*32+16], xm14                ; overwritten by previous movu
+    movd  [px+8*32+16], xm14
+    movd  [px+9*32+16], xm14
+    jmp .bottom_done
+.bottom_no_left:
+    test          edged, 2                  ; have_right
+    jz .bottom_no_left_right
+    pmovzxbw        m1, [dst8q]
+    pmovzxbw        m2, [dst8q+strideq]
+    movu   [px+8*32+0], m1
+    movu   [px+9*32+0], m2
+    movd   [px+8*32-4], xm14
+    movd   [px+9*32-4], xm14
+    jmp .bottom_done
+.bottom_no_left_right:
+    pmovzxbw       xm1, [dst8q]
+    pmovzxbw       xm2, [dst8q+strideq]
+    movu   [px+8*32+0], xm1
+    movu   [px+9*32+0], xm2
+    movd   [px+8*32-4], xm14
+    movd   [px+9*32-4], xm14
+    movd  [px+8*32+16], xm14
+    movd  [px+9*32+16], xm14
+    jmp .bottom_done
+.no_bottom:
+    movu   [px+8*32-8], m14
+    movu   [px+9*32-8], m14
+.bottom_done:
+
+    ; actual filter
+    DEFINE_ARGS dst, stride, pridmp, damping, pri, sec, secdmp
+%undef edged
+    movifnidn     prid, prim
+    movifnidn     secd, secm
+    mov       dampingd, r7m
+
+    mov        pridmpd, prid
+    mov        secdmpd, secd
+    or         pridmpd, 1
+    or         secdmpd, 1
+    lzcnt      pridmpd, pridmpd
+    lzcnt      secdmpd, secdmpd
+    lea        pridmpd, [pridmpd+dampingd-31]
+    lea        secdmpd, [secdmpd+dampingd-31]
+    xor       dampingd, dampingd
+    test       pridmpd, pridmpd
+    cmovl      pridmpd, dampingd
+    test       secdmpd, secdmpd
+    cmovl      secdmpd, dampingd
+    mov        [rsp+0], pridmpq                 ; pri_shift
+    mov        [rsp+8], secdmpq                 ; sec_shift
+
+    ; pri/sec_taps[k] [4 total]
+    DEFINE_ARGS dst, stride, tap, dummy, pri, sec
+    movd           xm0, prid
+    movd           xm1, secd
+    vpbroadcastw    m0, xm0                     ; pri_strength
+    vpbroadcastw    m1, xm1                     ; sec_strength
+    and           prid, 1
+    and           secd, 1
+    lea           tapq, [tap_table]
+    lea           priq, [tapq+priq*4]           ; pri_taps
+    lea           secq, [tapq+secq*4+8]         ; sec_taps
+
+    ; off1/2/3[k] [6 total] from [tapq+16+(dir+0/2/6)*2+k]
+    DEFINE_ARGS dst, stride, tap, dir, pri, sec
+    mov           dird, r6m
+    lea           tapq, [tapq+dirq*2+16]
+    DEFINE_ARGS dst, stride, dir, h, pri, sec, stk, off, k
+    mov             hd, 4
+    lea           stkq, [px]
+    pxor           m13, m13
+.v_loop:
+    mov             kd, 1
+    mova           xm4, [stkq+32*0]             ; px
+    vinserti128     m4, [stkq+32*1], 1
+    pxor           m15, m15                     ; sum
+    mova            m7, m4                      ; max
+    mova            m8, m4                      ; min
+.k_loop:
+    vpbroadcastw    m2, [priq+kq*2]             ; pri_taps
+    vpbroadcastw    m3, [secq+kq*2]             ; sec_taps
+
+%macro ACCUMULATE_TAP 4 ; tap_offset, shift, strength, mul_tap
+    ; load p0/p1
+    movsx         offq, byte [dirq+kq+%1]       ; off1
+    movu           xm5, [stkq+offq*2+32*0]      ; p0
+    vinserti128     m5, [stkq+offq*2+32*1], 1
+    neg           offq                          ; -off1
+    movu           xm6, [stkq+offq*2+32*0]      ; p1
+    vinserti128     m6, [stkq+offq*2+32*1], 1
+    pcmpeqw         m9, m14, m5
+    pcmpeqw        m10, m14, m6
+    pandn           m9, m5
+    pandn          m10, m6
+    pmaxsw          m7, m9                      ; max after p0
+    pminsw          m8, m5                      ; min after p0
+    pmaxsw          m7, m10                     ; max after p1
+    pminsw          m8, m6                      ; min after p1
+
+    ; accumulate sum[m15] over p0/p1
+    psubw           m5, m4                      ; diff_p0(p0 - px)
+    psubw           m6, m4                      ; diff_p1(p1 - px)
+    pabsw           m9, m5
+    pabsw          m10, m6
+    psraw          m11, m9,  %2
+    psraw          m12, m10, %2
+    psubw          m11, %3, m11
+    psubw          m12, %3, m12
+    pmaxsw         m11, m13
+    pmaxsw         m12, m13
+    pminsw         m11, m9
+    pminsw         m12, m10
+    psignw         m11, m5                      ; constrain(diff_p0)
+    psignw         m12, m6                      ; constrain(diff_p1)
+    pmullw         m11, %4                      ; constrain(diff_p0) * pri_taps
+    pmullw         m12, %4                      ; constrain(diff_p1) * pri_taps
+    paddw          m15, m11
+    paddw          m15, m12
+%endmacro
+
+    ACCUMULATE_TAP 0*2, [rsp+0], m0, m2
+    ACCUMULATE_TAP 2*2, [rsp+8], m1, m3
+    ACCUMULATE_TAP 6*2, [rsp+8], m1, m3
+
+    dec             kq
+    jge .k_loop
+
+    vpbroadcastd   m12, [pw_2048]
+    pcmpgtw        m11, m13, m15
+    paddw          m15, m11
+    pmulhrsw       m15, m12
+    paddw           m4, m15
+    pminsw          m4, m7
+    pmaxsw          m4, m8
+    packuswb        m4, m4
+    vextracti128   xm5, m4, 1
+    movq [dstq+strideq*0], xm4
+    movq [dstq+strideq*1], xm5
+    lea           dstq, [dstq+strideq*2]
+    add           stkq, 32*2
+    dec             hd
+    jg .v_loop
+
+    RET
 
 INIT_YMM avx2
 cglobal cdef_dir, 3, 4, 15, src, stride, var, stride3
