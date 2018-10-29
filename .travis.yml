@@ -1,5 +1,7 @@
 language: rust
-
+addons:
+  apt:
+    packages: binutils-dev libcurl4-openssl-dev zlib1g-dev libdw-dev libiberty-dev
 before_install:
     - wget -O cmake.sh https://cmake.org/files/v3.10/cmake-3.10.2-Linux-x86_64.sh
     - sudo sh cmake.sh --skip-license --exclude-subdir --prefix=/usr
@@ -14,10 +16,19 @@ before_install:
     - make
     - sudo make install
     - nasm --version
+    - cd ..
+    - wget -O kcov.tar.gz https://github.com/SimonKagstrom/kcov/archive/v36.tar.gz
+    - tar -xvf kcov.tar.gz
+    - cd kcov-36
+    - mkdir .build && cd .build
+    - cmake .. && make && sudo make install
+    - kcov --version
+    - cargo install cargo-kcov
 script:
     - |
         cargo build --verbose &&
         cargo test --verbose &&
         cargo test --verbose --release --features=decode_test -- --ignored &&
         cargo bench --verbose &&
-        cargo doc --verbose
+        cargo doc --verbose &&
+        cargo kcov --coveralls --features=decode_test -- --verify --exclude-pattern=$HOME/.cargo,aom_build,.h
