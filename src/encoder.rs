@@ -2203,7 +2203,8 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
             for i in 0..INTER_REFS_PER_FRAME {
                 let r = fi.ref_frames[i] as usize;
                 if pmvs[r].is_none() {
-                    pmvs[r] = estimate_motion_ss4(fi, fs, r, &bo);
+                    assert!(!sequence.use_128x128_superblock);
+                    pmvs[r] = estimate_motion_ss4(fi, fs, BlockSize::BLOCK_64X64, r, &bo);
                 }
             }
             frame_pmvs.push(pmvs);
@@ -2251,10 +2252,19 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
                             None
                         };
 
-                        pmvs[1][r] = estimate_motion_ss2(fi, fs, r, &sbo.block_offset(0, 0), &[Some(pmv), pmv_w, pmv_n]);
-                        pmvs[2][r] = estimate_motion_ss2(fi, fs, r, &sbo.block_offset(8, 0), &[Some(pmv), pmv_e, pmv_n]);
-                        pmvs[3][r] = estimate_motion_ss2(fi, fs, r, &sbo.block_offset(0, 8), &[Some(pmv), pmv_w, pmv_s]);
-                        pmvs[4][r] = estimate_motion_ss2(fi, fs, r, &sbo.block_offset(8, 8), &[Some(pmv), pmv_e, pmv_s]);
+                        assert!(!sequence.use_128x128_superblock);
+                        pmvs[1][r] = estimate_motion_ss2(
+                            fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(0, 0), &[Some(pmv), pmv_w, pmv_n]
+                        );
+                        pmvs[2][r] = estimate_motion_ss2(
+                            fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(8, 0), &[Some(pmv), pmv_e, pmv_n]
+                        );
+                        pmvs[3][r] = estimate_motion_ss2(
+                            fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(0, 8), &[Some(pmv), pmv_w, pmv_s]
+                        );
+                        pmvs[4][r] = estimate_motion_ss2(
+                            fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(8, 8), &[Some(pmv), pmv_e, pmv_s]
+                        );
                     }
                 }
             }

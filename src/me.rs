@@ -163,11 +163,11 @@ fn adjust_bo(bo: &BlockOffset, fi: &FrameInvariants, blk_w: usize, blk_h: usize)
 }
 
 pub fn estimate_motion_ss4(
-  fi: &FrameInvariants, fs: &FrameState, ref_idx: usize, bo: &BlockOffset
+  fi: &FrameInvariants, fs: &FrameState, bsize: BlockSize, ref_idx: usize, bo: &BlockOffset
 ) -> Option<MotionVector> {
   if let Some(ref rec) = fi.rec_buffer.frames[ref_idx] {
-    let blk_w = 64;
-    let blk_h = 64;
+    let blk_w = bsize.width();
+    let blk_h = bsize.height();
     let bo_adj = adjust_bo(bo, fi, blk_w, blk_h);
     let po = PlaneOffset {
       x: (bo_adj.x as isize) << BLOCK_TO_PLANE_SHIFT >> 2,
@@ -180,7 +180,7 @@ pub fn estimate_motion_ss4(
     let y_lo = po.y + (((-range).max(mvy_min / 8)) >> 2);
     let y_hi = po.y + (((range).min(mvy_max / 8)) >> 2);
 
-    let mut lowest_sad = 16 * 16 * 4096 as u32;
+    let mut lowest_sad = ((blk_w >> 2) * (blk_h >> 2) * 4096) as u32;
     let mut best_mv = MotionVector { row: 0, col: 0 };
 
     full_search(
@@ -195,11 +195,11 @@ pub fn estimate_motion_ss4(
 }
 
 pub fn estimate_motion_ss2(
-  fi: &FrameInvariants, fs: &FrameState, ref_idx: usize, bo: &BlockOffset, pmvs: &[Option<MotionVector>; 3]
+  fi: &FrameInvariants, fs: &FrameState, bsize: BlockSize, ref_idx: usize, bo: &BlockOffset, pmvs: &[Option<MotionVector>; 3]
 ) -> Option<MotionVector> {
   if let Some(ref rec) = fi.rec_buffer.frames[ref_idx] {
-    let blk_w = 32;
-    let blk_h = 32;
+    let blk_w = bsize.width();
+    let blk_h = bsize.height();
     let bo_adj = adjust_bo(bo, fi, blk_w, blk_h);
     let po = PlaneOffset {
       x: (bo_adj.x as isize) << BLOCK_TO_PLANE_SHIFT >> 1,
@@ -208,7 +208,7 @@ pub fn estimate_motion_ss2(
     let range = 16;
     let (mvx_min, mvx_max, mvy_min, mvy_max) = get_mv_range(fi, &bo_adj, blk_w, blk_h);
 
-    let mut lowest_sad = 16 * 16 * 4096 as u32;
+    let mut lowest_sad = ((blk_w >> 1) * (blk_h >> 1) * 4096) as u32;
     let mut best_mv = MotionVector { row: 0, col: 0 };
 
     for omv in pmvs.iter() {
