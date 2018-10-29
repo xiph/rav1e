@@ -218,6 +218,29 @@ impl Plane {
       }
     }
   }
+
+  pub fn downsample_from(&mut self, src: &Plane) {
+    let width = self.cfg.width;
+    let height = self.cfg.height;
+
+    assert!(width * 2 == src.cfg.width);
+    assert!(height * 2 == src.cfg.height);
+
+    for row in 0..height {
+      let mut dst_slice = self.mut_slice(&PlaneOffset{ x: 0, y: row as isize });
+      let mut dst = dst_slice.as_mut_slice();
+
+      for col in 0..width {
+        let mut sum = 0;
+        sum = sum + src.p(2*col, 2*row);
+        sum = sum + src.p(2*col+1, 2*row);
+        sum = sum + src.p(2*col, 2*row+1);
+        sum = sum + src.p(2*col+1, 2*row+1);
+        let avg = (sum + 2) >> 2;
+        dst[col] = avg;
+      }
+    }
+  }
 }
 
 #[derive(Clone, Copy)]

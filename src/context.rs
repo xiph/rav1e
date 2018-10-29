@@ -52,7 +52,7 @@ pub const MAX_MIB_SIZE: usize = (1 << MAX_MIB_SIZE_LOG2);
 pub const MAX_MIB_MASK: usize = (MAX_MIB_SIZE - 1);
 
 const MAX_SB_SIZE_LOG2: usize = 6;
-const MAX_SB_SIZE: usize = (1 << MAX_SB_SIZE_LOG2);
+pub const MAX_SB_SIZE: usize = (1 << MAX_SB_SIZE_LOG2);
 const MAX_SB_SQUARE: usize = (MAX_SB_SIZE * MAX_SB_SIZE);
 
 pub const MAX_TX_SIZE: usize = 32;

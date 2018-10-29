@@ -7,7 +7,6 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use context::CDFContext;
 use encoder::*;
 use partition::*;
 
@@ -291,13 +290,7 @@ impl Context {
     if self.fi.show_existing_frame {
       self.idx = self.idx + 1;
 
-      let mut fs = FrameState {
-        input: Arc::new(Frame::new(self.fi.padded_w, self.fi.padded_h)), // dummy
-        rec: Frame::new(self.fi.padded_w, self.fi.padded_h),
-        qc: Default::default(),
-        cdfs: CDFContext::new(0),
-        deblock: Default::default(),
-      };
+      let mut fs = FrameState::new(&self.fi);
 
       let data = encode_frame(&mut self.seq, &mut self.fi, &mut fs);
 
@@ -310,13 +303,7 @@ impl Context {
         self.idx = self.idx + 1;
 
         if let Some(frame) = f {
-          let mut fs = FrameState {
-            input: frame,
-            rec: Frame::new(self.fi.padded_w, self.fi.padded_h),
-            qc: Default::default(),
-            cdfs: CDFContext::new(0),
-            deblock: Default::default(),
-          };
+          let mut fs = FrameState::new_with_frame(&self.fi, frame);
 
           let data = encode_frame(&mut self.seq, &mut self.fi, &mut fs);
           self.packet_data.extend(data);

@@ -35,6 +35,18 @@ pub fn get_sad(
 
   sum
 }
+
+fn get_mv_range(fi: &FrameInvariants, bo: &BlockOffset, blk_w: usize, blk_h: usize) -> (isize, isize, isize, isize) {
+  let border_w = 128 + blk_w as isize * 8;
+  let border_h = 128 + blk_h as isize * 8;
+  let mvx_min = -(bo.x as isize) * (8 * MI_SIZE) as isize - border_w;
+  let mvx_max = (fi.w_in_b - bo.x - blk_w / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_w;
+  let mvy_min = -(bo.y as isize) * (8 * MI_SIZE) as isize - border_h;
+  let mvy_max = (fi.h_in_b - bo.y - blk_h / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_h;
+
+  (mvx_min, mvx_max, mvy_min, mvy_max)
+}
+
 pub fn motion_estimation(
   fi: &FrameInvariants, fs: &FrameState, bsize: BlockSize,
   bo: &BlockOffset, ref_frame: usize, pmv: &MotionVector
@@ -45,15 +57,10 @@ pub fn motion_estimation(
         x: (bo.x as isize) << BLOCK_TO_PLANE_SHIFT,
         y: (bo.y as isize) << BLOCK_TO_PLANE_SHIFT
       };
-      let range = 32 * fi.me_range_scale as isize;
+      let range = 16;
       let blk_w = bsize.width();
       let blk_h = bsize.height();
-      let border_w = 128 + blk_w as isize * 8;
-      let border_h = 128 + blk_h as isize * 8;
-      let mvx_min = -(bo.x as isize) * (8 * MI_SIZE) as isize - border_w;
-      let mvx_max = (fi.w_in_b - bo.x - blk_w / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_w;
-      let mvy_min = -(bo.y as isize) * (8 * MI_SIZE) as isize - border_h;
-      let mvy_max = (fi.h_in_b - bo.y - blk_h / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_h;
+      let (mvx_min, mvx_max, mvy_min, mvy_max) = get_mv_range(fi, bo, blk_w, blk_h);
       let x_lo = po.x + ((-range + (pmv.col / 8) as isize).max(mvx_min / 8));
       let x_hi = po.x + ((range + (pmv.col / 8) as isize).min(mvx_max / 8));
       let y_lo = po.y + ((-range + (pmv.row / 8) as isize).max(mvy_min / 8));
@@ -62,22 +69,10 @@ pub fn motion_estimation(
       let mut lowest_sad = 128 * 128 * 4096 as u32;
       let mut best_mv = MotionVector { row: 0, col: 0 };
 
-      for y in (y_lo..y_hi).step_by(2) {
-        for x in (x_lo..x_hi).step_by(2) {
-          let plane_org = fs.input.planes[0].slice(&po);
-          let plane_ref = rec.frame.planes[0].slice(&PlaneOffset { x, y });
-
-          let sad = get_sad(&plane_org, &plane_ref, blk_h, blk_w);
-
-          if sad < lowest_sad {
-            lowest_sad = sad;
-            best_mv = MotionVector {
-              row: 8 * (y as i16 - po.y as i16),
-              col: 8 * (x as i16 - po.x as i16)
-            }
-          }
-        }
-      }
+      full_search(
+        x_lo, x_hi, y_lo, y_hi, blk_h, blk_w,
+        &fs.input.planes[0], &rec.frame.planes[0], &mut best_mv, &mut lowest_sad, &po, 2
+      );
 
       let mode = PredictionMode::NEWMV;
       let mut tmp_plane = Plane::new(blk_w, blk_h, 0, 0, 0, 0);
@@ -135,6 +130,104 @@ pub fn motion_estimation(
     }
 
     None => MotionVector { row: 0, col: 0 }
+  }
+}
+
+fn full_search(x_lo: isize, x_hi: isize, y_lo: isize, y_hi: isize, blk_h: usize, blk_w: usize,
+    p_org: &Plane, p_ref: &Plane, best_mv: &mut MotionVector, lowest_sad: &mut u32,
+    po: &PlaneOffset, step: usize) {
+  for y in (y_lo..y_hi).step_by(step) {
+    for x in (x_lo..x_hi).step_by(step) {
+      let plane_org = p_org.slice(po);
+      let plane_ref = p_ref.slice(&PlaneOffset { x, y });
+
+      let sad = get_sad(&plane_org, &plane_ref, blk_h, blk_w);
+
+      if sad < *lowest_sad {
+        *lowest_sad = sad;
+        *best_mv = MotionVector {
+          row: 8 * (y as i16 - po.y as i16),
+          col: 8 * (x as i16 - po.x as i16)
+        }
+      }
+    }
+  }
+}
+
+// Adjust block offset such that entire block lies within frame boundaries
+fn adjust_bo(bo: &BlockOffset, fi: &FrameInvariants, blk_w: usize, blk_h: usize) -> BlockOffset {
+  BlockOffset {
+    x: (bo.x as isize).min(fi.w_in_b as isize - blk_w as isize / 4).max(0) as usize,
+    y: (bo.y as isize).min(fi.h_in_b as isize - blk_h as isize / 4).max(0) as usize
+  }
+}
+
+pub fn estimate_motion_ss4(
+  fi: &FrameInvariants, fs: &FrameState, bsize: BlockSize, ref_idx: usize, bo: &BlockOffset
+) -> Option<MotionVector> {
+  if let Some(ref rec) = fi.rec_buffer.frames[ref_idx] {
+    let blk_w = bsize.width();
+    let blk_h = bsize.height();
+    let bo_adj = adjust_bo(bo, fi, blk_w, blk_h);
+    let po = PlaneOffset {
+      x: (bo_adj.x as isize) << BLOCK_TO_PLANE_SHIFT >> 2,
+      y: (bo_adj.y as isize) << BLOCK_TO_PLANE_SHIFT >> 2
+    };
+    let range = 64 * fi.me_range_scale as isize;
+    let (mvx_min, mvx_max, mvy_min, mvy_max) = get_mv_range(fi, &bo_adj, blk_w, blk_h);
+    let x_lo = po.x + (((-range).max(mvx_min / 8)) >> 2);
+    let x_hi = po.x + (((range).min(mvx_max / 8)) >> 2);
+    let y_lo = po.y + (((-range).max(mvy_min / 8)) >> 2);
+    let y_hi = po.y + (((range).min(mvy_max / 8)) >> 2);
+
+    let mut lowest_sad = ((blk_w >> 2) * (blk_h >> 2) * 4096) as u32;
+    let mut best_mv = MotionVector { row: 0, col: 0 };
+
+    full_search(
+      x_lo, x_hi, y_lo, y_hi, blk_h >> 2, blk_w >> 2,
+      &fs.input_qres, &rec.input_qres, &mut best_mv, &mut lowest_sad, &po, 1
+    );
+
+    Some(MotionVector { row: best_mv.row * 4, col: best_mv.col * 4 })
+  } else {
+    None
+  }
+}
+
+pub fn estimate_motion_ss2(
+  fi: &FrameInvariants, fs: &FrameState, bsize: BlockSize, ref_idx: usize, bo: &BlockOffset, pmvs: &[Option<MotionVector>; 3]
+) -> Option<MotionVector> {
+  if let Some(ref rec) = fi.rec_buffer.frames[ref_idx] {
+    let blk_w = bsize.width();
+    let blk_h = bsize.height();
+    let bo_adj = adjust_bo(bo, fi, blk_w, blk_h);
+    let po = PlaneOffset {
+      x: (bo_adj.x as isize) << BLOCK_TO_PLANE_SHIFT >> 1,
+      y: (bo_adj.y as isize) << BLOCK_TO_PLANE_SHIFT >> 1
+    };
+    let range = 16;
+    let (mvx_min, mvx_max, mvy_min, mvy_max) = get_mv_range(fi, &bo_adj, blk_w, blk_h);
+
+    let mut lowest_sad = ((blk_w >> 1) * (blk_h >> 1) * 4096) as u32;
+    let mut best_mv = MotionVector { row: 0, col: 0 };
+
+    for omv in pmvs.iter() {
+      if let Some(pmv) = omv {
+        let x_lo = po.x + (((pmv.col as isize / 8 - range).max(mvx_min / 8)) >> 1);
+        let x_hi = po.x + (((pmv.col as isize / 8 + range).min(mvx_max / 8)) >> 1);
+        let y_lo = po.y + (((pmv.row as isize / 8 - range).max(mvy_min / 8)) >> 1);
+        let y_hi = po.y + (((pmv.row as isize / 8 + range).min(mvy_max / 8)) >> 1);
+
+        full_search(
+          x_lo, x_hi, y_lo, y_hi, blk_h >> 1, blk_w >> 1,
+          &fs.input_hres, &rec.input_hres, &mut best_mv, &mut lowest_sad, &po, 1
+        );
+      }
+    }
+
+    Some(MotionVector { row: best_mv.row * 2, col: best_mv.col * 2 })
+  } else {
+    None
   }
 }
 

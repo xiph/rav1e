@@ -689,7 +689,9 @@ pub enum MvSubpelPrecision {
   MV_SUBPEL_HIGH_PRECISION
 }
 
-const SUBPEL_FILTERS: [[[i32; 8]; 16]; 6] = [
+pub const SUBPEL_FILTER_SIZE: usize = 8;
+
+const SUBPEL_FILTERS: [[[i32; SUBPEL_FILTER_SIZE]; 16]; 6] = [
   [
     [0, 0, 0, 128, 0, 0, 0, 0],
     [0, 2, -6, 126, 8, -2, 0, 0],
