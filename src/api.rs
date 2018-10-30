@@ -17,14 +17,14 @@ use std::sync::Arc;
 // TODO: use the num crate?
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]
-pub struct Ratio {
-  pub num: usize,
-  pub den: usize
+pub struct Rational {
+  pub num: u64,
+  pub den: u64
 }
 
-impl Ratio {
-  pub fn new(num: usize, den: usize) -> Self {
-    Ratio { num, den }
+impl Rational {
+  pub fn new(num: u64, den: u64) -> Self {
+    Rational { num, den }
   }
 }
 
@@ -56,7 +56,7 @@ pub struct FrameInfo {
 #[derive(Clone, Copy, Debug)]
 pub struct Config {
   pub frame_info: FrameInfo,
-  pub timebase: Ratio,
+  pub timebase: Rational,
   pub enc: EncoderConfig
 }
 
@@ -95,7 +95,7 @@ impl Config {
 pub struct Context {
   fi: FrameInvariants,
   seq: Sequence,
-  //    timebase: Ratio,
+  //    timebase: Rational,
   frame_count: u64,
   idx: u64,
   frame_q: BTreeMap<u64, Option<Arc<Frame>>>, //    packet_q: VecDeque<Packet>

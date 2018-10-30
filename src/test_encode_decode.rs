@@ -83,7 +83,7 @@ fn setup_encoder(
 
   let cfg = Config {
     frame_info: FrameInfo { width: w, height: h, bit_depth, chroma_sampling },
-    timebase: Ratio::new(1, 1000),
+    timebase: Rational::new(1, 1000),
     enc
   };
 
