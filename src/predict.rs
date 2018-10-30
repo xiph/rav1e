@@ -155,12 +155,29 @@ fn get_scaled_luma_q0(alpha_q3: i16, ac_pred_q3: i16) -> i32 {
 }
 
 #[cfg(all(target_arch = "x86_64", not(windows)))]
-extern {
-  fn rav1e_ipred_dc_128_avx2(
-    dst: *mut u8, stride: libc::ptrdiff_t, topleft: *const u8,
-    width: libc::c_int, height: libc::c_int, angle: libc::c_int
-  );
+macro_rules! decl_angular_ipred_fn {
+  ($f:ident) => {
+    extern {
+      fn $f(
+        dst: *mut u8, stride: libc::ptrdiff_t, topleft: *const u8,
+        width: libc::c_int, height: libc::c_int, angle: libc::c_int
+      );
+    }
+  };
 }
+
+#[cfg(all(target_arch = "x86_64", not(windows)))]
+decl_angular_ipred_fn!(rav1e_ipred_dc_avx2);
+#[cfg(all(target_arch = "x86_64", not(windows)))]
+decl_angular_ipred_fn!(rav1e_ipred_dc_128_avx2);
+#[cfg(all(target_arch = "x86_64", not(windows)))]
+decl_angular_ipred_fn!(rav1e_ipred_dc_left_avx2);
+#[cfg(all(target_arch = "x86_64", not(windows)))]
+decl_angular_ipred_fn!(rav1e_ipred_dc_top_avx2);
+#[cfg(all(target_arch = "x86_64", not(windows)))]
+decl_angular_ipred_fn!(rav1e_ipred_h_avx2);
+#[cfg(all(target_arch = "x86_64", not(windows)))]
+decl_angular_ipred_fn!(rav1e_ipred_v_avx2);
 
 // TODO: rename the type bounds later
 pub trait Intra<T>: Dim
@@ -172,6 +189,21 @@ where
 {
   #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_dc(output: &mut [T], stride: usize, above: &[T], left: &[T]) {
+    #[cfg(all(target_arch = "x86_64", not(windows)))]
+    {
+      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
+        return unsafe {
+          rav1e_ipred_dc_avx2(
+            output.as_mut_ptr() as *mut _,
+            stride as libc::ptrdiff_t,
+            above.as_ptr().offset(-1) as *const _,
+            Self::W as libc::c_int,
+            Self::H as libc::c_int,
+            0
+          )
+        };
+      }
+    }
     let edges = left[..Self::H].iter().chain(above[..Self::W].iter());
     let len = (Self::W + Self::H) as u32;
     let avg =
@@ -211,6 +243,21 @@ where
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_dc_left(output: &mut [T], stride: usize, _above: &[T], left: &[T]) {
+    #[cfg(all(target_arch = "x86_64", not(windows)))]
+    {
+      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
+        return unsafe {
+          rav1e_ipred_dc_left_avx2(
+            output.as_mut_ptr() as *mut _,
+            stride as libc::ptrdiff_t,
+            left.as_ptr().offset(Self::H as isize) as *const _,
+            Self::W as libc::c_int,
+            Self::H as libc::c_int,
+            0
+          )
+        };
+      }
+    }
     let sum = left[..Self::W].iter().fold(0u32, |acc, &v| { let v: u32 = v.into(); v + acc });
     let avg = ((sum + (Self::W >> 1) as u32) / Self::W as u32).as_();
     for line in output.chunks_mut(stride).take(Self::H) {
@@ -219,9 +266,22 @@ where
   }
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
-  fn pred_dc_top(
-    output: &mut [T], stride: usize, above: &[T], _left: &[T]
-  ) {
+  fn pred_dc_top(output: &mut [T], stride: usize, above: &[T], _left: &[T]) {
+    #[cfg(all(target_arch = "x86_64", not(windows)))]
+    {
+      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
+        return unsafe {
+          rav1e_ipred_dc_top_avx2(
+            output.as_mut_ptr() as *mut _,
+            stride as libc::ptrdiff_t,
+            above.as_ptr().offset(-1) as *const _,
+            Self::W as libc::c_int,
+            Self::H as libc::c_int,
+            0
+          )
+        };
+      }
+    }
     let sum = above[..Self::W].iter().fold(0u32, |acc, &v| { let v: u32 = v.into(); v + acc });
     let avg = ((sum + (Self::W >> 1) as u32) / Self::W as u32).as_();
     for line in output.chunks_mut(stride).take(Self::H) {
@@ -231,6 +291,21 @@ where
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_h(output: &mut [T], stride: usize, left: &[T]) {
+    #[cfg(all(target_arch = "x86_64", not(windows)))]
+    {
+      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
+        return unsafe {
+          rav1e_ipred_h_avx2(
+            output.as_mut_ptr() as *mut _,
+            stride as libc::ptrdiff_t,
+            left.as_ptr().offset(Self::H as isize) as *const _,
+            Self::W as libc::c_int,
+            Self::H as libc::c_int,
+            0
+          )
+        };
+      }
+    }
     for (line, l) in
       output.chunks_mut(stride).zip(left[..Self::H].iter().rev())
     {
@@ -242,6 +317,21 @@ where
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_v(output: &mut [T], stride: usize, above: &[T]) {
+    #[cfg(all(target_arch = "x86_64", not(windows)))]
+    {
+      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
+        return unsafe {
+          rav1e_ipred_v_avx2(
+            output.as_mut_ptr() as *mut _,
+            stride as libc::ptrdiff_t,
+            above.as_ptr().offset(-1) as *const _,
+            Self::W as libc::c_int,
+            Self::H as libc::c_int,
+            0
+          )
+        };
+      }
+    }
     for line in output.chunks_mut(stride).take(Self::H) {
       line[..Self::W].clone_from_slice(&above[..Self::W])
     }
