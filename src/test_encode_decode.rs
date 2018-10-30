@@ -139,7 +139,6 @@ fn dimensions() {
 }
 
 #[test]
-#[ignore]
 fn quantizer() {
   let limit = 5;
   let w = 64;
@@ -166,7 +165,6 @@ fn odd_size_frame_with_full_rdo() {
 }
 
 #[test]
-#[ignore]
 fn high_bd() {
   let quantizer = 100;
   let limit = 3; // Include inter frames

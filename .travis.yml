@@ -27,8 +27,7 @@ before_install:
 script:
     - |
         cargo build --verbose &&
-        cargo test --verbose &&
         cargo test --verbose --release --features=decode_test -- --ignored &&
         cargo bench --verbose &&
         cargo doc --verbose &&
-        cargo kcov --coveralls --features=decode_test -- --verify --exclude-pattern=$HOME/.cargo,aom_build,.h
+        cargo kcov --coveralls --features=decode_test -- --verify --exclude-pattern=$HOME/.cargo,aom_build,.h,test
