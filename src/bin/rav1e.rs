@@ -55,7 +55,7 @@ fn main() {
 
   let cfg = Config {
     frame_info: FrameInfo { width, height, bit_depth, chroma_sampling },
-    timebase: Ratio::new(framerate.den, framerate.num),
+    timebase: Rational::new(framerate.den as u64, framerate.num as u64),
     enc
   };
 
