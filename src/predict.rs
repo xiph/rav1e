@@ -176,6 +176,14 @@ decl_angular_ipred_fn!(rav1e_ipred_dc_top_avx2);
 decl_angular_ipred_fn!(rav1e_ipred_h_avx2);
 #[cfg(all(target_arch = "x86_64", not(windows)))]
 decl_angular_ipred_fn!(rav1e_ipred_v_avx2);
+#[cfg(all(target_arch = "x86_64", not(windows)))]
+decl_angular_ipred_fn!(rav1e_ipred_paeth_avx2);
+#[cfg(all(target_arch = "x86_64", not(windows)))]
+decl_angular_ipred_fn!(rav1e_ipred_smooth_avx2);
+#[cfg(all(target_arch = "x86_64", not(windows)))]
+decl_angular_ipred_fn!(rav1e_ipred_smooth_h_avx2);
+#[cfg(all(target_arch = "x86_64", not(windows)))]
+decl_angular_ipred_fn!(rav1e_ipred_smooth_v_avx2);
 
 // TODO: rename the type bounds later
 pub trait Intra<T>: Dim
@@ -340,6 +348,21 @@ where
     output: &mut [T], stride: usize, above: &[T], left: &[T],
     above_left: T
   ) {
+    #[cfg(all(target_arch = "x86_64", not(windows)))]
+    {
+      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
+        return unsafe {
+          rav1e_ipred_paeth_avx2(
+            output.as_mut_ptr() as *mut _,
+            stride as libc::ptrdiff_t,
+            above.as_ptr().offset(-1) as *const _,
+            Self::W as libc::c_int,
+            Self::H as libc::c_int,
+            0
+          )
+        };
+      }
+    }
     for r in 0..Self::H {
       for c in 0..Self::W {
         // Top-left pixel is fixed in libaom
@@ -370,6 +393,21 @@ where
   fn pred_smooth(
     output: &mut [T], stride: usize, above: &[T], left: &[T]
   ) {
+    #[cfg(all(target_arch = "x86_64", not(windows)))]
+    {
+      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
+        return unsafe {
+          rav1e_ipred_smooth_avx2(
+            output.as_mut_ptr() as *mut _,
+            stride as libc::ptrdiff_t,
+            above.as_ptr().offset(-1) as *const _,
+            Self::W as libc::c_int,
+            Self::H as libc::c_int,
+            0
+          )
+        };
+      }
+    }
     let below_pred = left[0]; // estimated by bottom-left pixel
     let right_pred = above[Self::W - 1]; // estimated by top-right pixel
     let sm_weights_w = &sm_weight_arrays[Self::W..];
@@ -420,6 +458,21 @@ where
   fn pred_smooth_h(
     output: &mut [T], stride: usize, above: &[T], left: &[T]
   ) {
+    #[cfg(all(target_arch = "x86_64", not(windows)))]
+    {
+      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
+        return unsafe {
+          rav1e_ipred_smooth_h_avx2(
+            output.as_mut_ptr() as *mut _,
+            stride as libc::ptrdiff_t,
+            above.as_ptr().offset(-1) as *const _,
+            Self::W as libc::c_int,
+            Self::H as libc::c_int,
+            0
+          )
+        };
+      }
+    }
     let right_pred = above[Self::W - 1]; // estimated by top-right pixel
     let sm_weights = &sm_weight_arrays[Self::W..];
 
@@ -456,6 +509,21 @@ where
   fn pred_smooth_v(
     output: &mut [T], stride: usize, above: &[T], left: &[T]
   ) {
+    #[cfg(all(target_arch = "x86_64", not(windows)))]
+    {
+      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
+        return unsafe {
+          rav1e_ipred_smooth_v_avx2(
+            output.as_mut_ptr() as *mut _,
+            stride as libc::ptrdiff_t,
+            above.as_ptr().offset(-1) as *const _,
+            Self::W as libc::c_int,
+            Self::H as libc::c_int,
+            0
+          )
+        };
+      }
+    }
     let below_pred = left[0]; // estimated by bottom-left pixel
     let sm_weights = &sm_weight_arrays[Self::H..];
 
