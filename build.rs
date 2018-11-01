@@ -35,6 +35,8 @@ fn main() {
         config_include_arg.push('/');
         nasm_rs::compile_library_args("rav1easm", &["src/x86/ipred.asm"], &[&config_include_arg, "-Isrc/"]);
         println!("cargo:rustc-link-lib=static=rav1easm");
+        rerun_dir("src/x86");
+        rerun_dir("src/ext/x86");
     }
 
     if cfg!(windows) && cfg!(feature = "decode_test") {
