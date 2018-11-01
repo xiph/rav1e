@@ -276,7 +276,6 @@ impl Context {
       // reuse probability estimates from previous frames only in top level frames
       self.fi.primary_ref_frame = if lvl > 0 { PRIMARY_REF_NONE } else { (ref_in_previous_group - LAST_FRAME) as u32 };
 
-      assert!(group_src_len <= REF_FRAMES as u64);
       for i in 0..INTER_REFS_PER_FRAME {
         self.fi.ref_frames[i] = if lvl == 0 {
           if i == second_ref_frame - LAST_FRAME {
