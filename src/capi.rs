@@ -3,9 +3,10 @@
 //! [rav1e](https://github.com/xiph/rav1e/) is an [AV1](https://aomediacodec.github.io/av1-spec/)
 //! encoder written in [Rust](https://rust-lang.org)
 //!
-//! This is the C-compatible API to it
+//! This is the C-compatible API
 
 extern crate rav1e;
+extern crate libc;
 
 use std::slice;
 use std::sync::Arc;
@@ -13,6 +14,9 @@ use std::sync::Arc;
 use std::ffi::CStr;
 use std::os::raw::c_char;
 use std::os::raw::c_int;
+
+use libc::size_t;
+use libc::ptrdiff_t;
 
 /// Raw video Frame
 ///
@@ -56,7 +60,7 @@ pub struct Packet {
     /// Encoded data buffer
     pub data: *const u8,
     /// Encoded data buffer size
-    pub len: u64,
+    pub len: size_t,
     /// Frame sequence number
     pub number: u64,
     /// Frame type
@@ -197,7 +201,7 @@ pub unsafe extern "C" fn rav1e_receive_packet(
             (*ctx).last_err = None;
             let packet = Packet {
                 data: p.data.as_ptr(),
-                len: p.data.len() as u64,
+                len: p.data.len(),
                 number: p.number,
                 frame_type: p.frame_type,
             };
@@ -215,8 +219,10 @@ pub unsafe extern fn rav1e_packet_unref(pkt: *mut Packet) {
 /// Produce a sequence header matching the current encoding context
 ///
 /// Its format is compatible with the AV1 Matroska and ISOBMFF specification.
+///
+/// Use rav1e_container_sequence_header_unref() to free it.
 #[no_mangle]
-pub unsafe extern fn rav1e_container_sequence_header(ctx: *mut Context, buf_size: *mut usize) -> *mut u8 {
+pub unsafe extern fn rav1e_container_sequence_header(ctx: *mut Context, buf_size: *mut size_t) -> *mut u8 {
     let buf = (*ctx).ctx.container_sequence_header();
 
     *buf_size = buf.len();
@@ -228,24 +234,30 @@ pub unsafe extern fn rav1e_container_sequence_header_unref(sequence: *mut u8) {
     let _ = Box::from_raw(sequence);
 }
 
-
 /// Fill a frame plane
 ///
 /// Currently the frame contains 3 planes, the first is luminance followed by
 /// chrominance.
 ///
 /// The data is copied and this function has to be called for each plane.
+///
+/// frame: A frame provided by rav1e_frame_new()
+/// plane: The index of the plane starting from 0
+/// data: The data to be copied
+/// data_len: Lenght of the buffer
+/// stride: Plane line in bytes, including padding
+/// bytewidth: Number of bytes per component, either 1 or 2
 #[no_mangle]
 pub unsafe extern "C" fn rav1e_frame_fill_plane(
     frame: *mut Frame,
-    plane: usize,
+    plane: c_int,
     data: *const u8,
-    data_len: usize,
-    stride: usize,
-    bytewidth: usize,
+    data_len: size_t,
+    stride: ptrdiff_t,
+    bytewidth: c_int,
 ) {
     let input = Arc::get_mut(&mut (*frame).0).unwrap();
-    let data_slice = slice::from_raw_parts(data, data_len);
+    let data_slice = slice::from_raw_parts(data, data_len as usize);
 
-    input.planes[plane].copy_from_raw_u8(data_slice, stride, bytewidth);
+    input.planes[plane as usize].copy_from_raw_u8(data_slice, stride as usize, bytewidth as usize);
 }
