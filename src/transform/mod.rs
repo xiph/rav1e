@@ -279,3 +279,88 @@ pub fn inverse_transform_add(
     _ => panic!("unimplemented tx size")
   }
 }
+
+#[cfg(test)]
+mod test {
+  use super::*;
+  use rand::random;
+
+  fn test_roundtrip(tx_size: TxSize, tx_type: TxType) {
+    let mut src_storage = [0u16; 64 * 64];
+    let src = &mut src_storage[..tx_size.area()];
+    let mut dst_storage = [0u16; 64 * 64];
+    let dst = &mut dst_storage[..tx_size.area()];
+    let mut res_storage = [0i16; 64 * 64];
+    let res = &mut res_storage[..tx_size.area()];
+    let mut freq_storage = [0i32; 64 * 64];
+    let freq = &mut freq_storage[..tx_size.area()];
+    for ((r, s), d) in res.iter_mut().zip(src.iter_mut()).zip(dst.iter_mut()) {
+      *s = random::<u8>() as u16;
+      *d = random::<u8>() as u16;
+      *r = (*s as i16) - (*d as i16);
+    }
+    forward_transform(res, freq, tx_size.width(), tx_size, tx_type, 8);
+    inverse_transform_add(freq, dst, tx_size.width(), tx_size, tx_type, 8);
+
+    for (s, d) in src.iter().zip(dst) {
+      assert!(i16::abs((*s as i16) - (*d as i16)) <= 1);
+    }
+  }
+
+  #[test]
+  fn roundtrips() {
+    use partition::TxSize::*;
+    use partition::TxType::*;
+    let combinations = vec![
+      (TX_4X4, DCT_DCT),
+      (TX_4X4, ADST_DCT),
+      (TX_4X4, DCT_ADST),
+      (TX_4X4, ADST_ADST),
+      (TX_4X4, IDTX),
+      (TX_4X4, V_DCT),
+      (TX_4X4, H_DCT),
+      (TX_4X4, V_ADST),
+      (TX_4X4, H_ADST),
+      (TX_8X8, DCT_DCT),
+      (TX_8X8, ADST_DCT),
+      (TX_8X8, DCT_ADST),
+      (TX_8X8, ADST_ADST),
+      (TX_8X8, IDTX),
+      (TX_8X8, V_DCT),
+      (TX_8X8, H_DCT),
+      (TX_8X8, V_ADST),
+      (TX_8X8, H_ADST),
+      (TX_16X16, DCT_DCT),
+      (TX_16X16, ADST_DCT),
+      (TX_16X16, DCT_ADST),
+      (TX_16X16, ADST_ADST),
+      (TX_16X16, IDTX),
+      (TX_16X16, V_DCT),
+      (TX_16X16, H_DCT),
+      (TX_16X16, V_ADST),
+      (TX_16X16, H_ADST),
+      (TX_32X32, DCT_DCT),
+      //(TX_32X32, ADST_DCT),
+      //(TX_32X32, DCT_ADST),
+      //(TX_32X32, ADST_ADST),
+      (TX_32X32, IDTX),
+      (TX_32X32, V_DCT),
+      (TX_32X32, H_DCT),
+      //(TX_32X32, V_ADST),
+      //(TX_32X32, H_ADST),
+      //(TX_64X64, DCT_DCT),
+      //(TX_64X64, ADST_DCT),
+      //(TX_64X64, DCT_ADST),
+      //(TX_64X64, ADST_ADST),
+      //(TX_64X64, IDTX),
+      //(TX_64X64, V_DCT),
+      //(TX_64X64, H_DCT),
+      //(TX_64X64, V_ADST),
+      //(TX_64X64, H_ADST),
+    ];
+    for (tx_size, tx_type) in combinations {
+      println!("Testing combination {:?}, {:?}", tx_size, tx_type);
+      test_roundtrip(tx_size, tx_type);
+    }
+  }
+}
