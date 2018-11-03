@@ -11,6 +11,7 @@
 #![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
 #![cfg_attr(feature = "cargo-clippy", allow(needless_range_loop))]
 
+#[cfg(all(target_arch = "x86_64", not(windows)))]
 use libc;
 use num_traits::*;
 
@@ -586,7 +587,7 @@ impl Intra<u16> for Block8x8 {}
 impl Intra<u16> for Block16x16 {}
 impl Intra<u16> for Block32x32 {}
 
-#[cfg(test)]
+#[cfg(all(test, feature = "aom"))]
 pub mod test {
   use super::*;
   use rand::{ChaChaRng, Rng, SeedableRng};

@@ -1,5 +1,6 @@
 // build.rs
 
+#[cfg(feature = "aom")]
 extern crate cmake;
 #[cfg(unix)]
 extern crate pkg_config;
@@ -9,9 +10,23 @@ extern crate bindgen;
 #[cfg(target_arch = "x86_64")]
 extern crate nasm_rs;
 
+#[allow(unused_imports)]
 use std::env;
 use std::fs;
 use std::path::Path;
+
+#[allow(dead_code)]
+fn rerun_dir<P: AsRef<Path>>(dir: P) {
+    for entry in fs::read_dir(dir).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        println!("cargo:rerun-if-changed={}", path.to_string_lossy());
+
+        if path.is_dir() {
+            rerun_dir(path);
+        }
+    }
+}
 
 fn main() {
     #[cfg(all(target_arch = "x86_64", not(windows)))] {
@@ -42,7 +57,7 @@ fn main() {
     if cfg!(windows) && cfg!(feature = "decode_test") {
         panic!("Unsupported feature on this platform!");
     }
-
+    #[cfg(feature = "aom")] {
     let cargo_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let build_path = Path::new(&cargo_dir).join("aom_build/aom");
     let debug = if let Some(v) = env::var("PROFILE").ok() {
@@ -108,18 +123,6 @@ fn main() {
             let _ = file.write(s.as_bytes());
         }
     }
-
-    fn rerun_dir<P: AsRef<Path>>(dir: P) {
-        for entry in fs::read_dir(dir).unwrap() {
-            let entry = entry.unwrap();
-            let path = entry.path();
-            println!("cargo:rerun-if-changed={}", path.to_string_lossy());
-
-            if path.is_dir() {
-                rerun_dir(path);
-            }
-        }
-    }
-
     rerun_dir("aom_build");
+    }
 }

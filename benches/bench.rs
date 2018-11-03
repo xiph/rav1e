@@ -40,6 +40,7 @@ fn write_b(c: &mut Criterion) {
 }
 
 fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
+  #[cfg(feature = "aom")]
   unsafe {
     av1_rtcd();
     aom_dsp_rtcd();
@@ -51,7 +52,7 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
   let fc = CDFContext::new(fi.base_q_idx);
   let bc = BlockContext::new(fi.sb_width * 16, fi.sb_height * 16);
   let mut fs = FrameState::new(&fi);
-  // For now, restoration unit size is locked to superblock size. 
+  // For now, restoration unit size is locked to superblock size.
   let rc = RestorationContext::new(fi.sb_width, fi.sb_height);
   let mut cw = ContextWriter::new(fc, bc, rc);
 

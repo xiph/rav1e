@@ -83,6 +83,7 @@ impl Config {
     );
     let seq = Sequence::new(&self.frame_info);
 
+    #[cfg(feature = "aom")]
     unsafe {
       av1_rtcd();
       aom_dsp_rtcd();
