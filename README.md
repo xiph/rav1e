@@ -26,6 +26,10 @@ Automated AppVeyor builds can be found [here](https://ci.appveyor.com/project/td
 
 # Building
 
+**rav1e** can optionally use a local copy of `libaom` to run some extended tests and some `x86_64`-specific optimizations require a recent version of NASM.
+
+## Internal libaom setup
+
 This repository uses a git submodule. To initialize it, run:
 
 ```
