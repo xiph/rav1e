@@ -14,6 +14,7 @@ use partition::*;
 use plane::*;
 use FrameInvariants;
 use FrameState;
+use util::*;
 
 use libc;
 
@@ -47,13 +48,27 @@ unsafe fn sad_ssse3(plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize
   // TODO: stride *2??? What is the correct way to do this?
   let org_stride = plane_org.plane.cfg.stride as libc::ptrdiff_t * 2;
   let ref_stride = plane_ref.plane.cfg.stride as libc::ptrdiff_t * 2;
-  for r in (0..blk_h).step_by(32) {
-    for c in (0..blk_w).step_by(32) {
+  assert!(blk_h >= 4 && blk_w >= 4);
+  let step_size = blk_h.min(blk_w).min(32);
+  let func = match step_size.ilog() {
+    3 => rav1e_sad_4x4_ssse3,
+    4 => rav1e_sad_8x8_ssse3,
+    5 => rav1e_sad_16x16_ssse3,
+    6 => rav1e_sad_32x32_ssse3,
+    _ => rav1e_sad_32x32_ssse3
+  };
+  if blk_h == blk_w && blk_h <= 32 {
+    let org_ptr = plane_org.as_slice().as_ptr();
+    let ref_ptr = plane_ref.as_slice().as_ptr();
+    return func(org_ptr, org_stride, ref_ptr, ref_stride);
+  }
+  for r in (0..blk_h).step_by(step_size) {
+    for c in (0..blk_w).step_by(step_size) {
       let org_slice = plane_org.subslice(c, r);
       let ref_slice = plane_ref.subslice(c, r);
       let org_ptr = org_slice.as_slice().as_ptr();
       let ref_ptr = ref_slice.as_slice().as_ptr();
-      sum += rav1e_sad_32x32_ssse3(org_ptr, org_stride, ref_ptr, ref_stride);
+      sum += func(org_ptr, org_stride, ref_ptr, ref_stride);
     }
   }
   return sum;
@@ -66,7 +81,7 @@ pub fn get_sad(
 ) -> u32 {
   #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
   {
-    if is_x86_feature_detected!("ssse3") && blk_h >= 32 && blk_w >= 32 {
+    if is_x86_feature_detected!("ssse3") && blk_h >= 4 && blk_w >= 4 {
       return unsafe { sad_ssse3(plane_org, plane_ref, blk_h, blk_w) };
     }
   }
