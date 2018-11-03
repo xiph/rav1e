@@ -113,10 +113,6 @@ pub fn process_frame(
   y4m_dec: &mut y4m::Decoder<'_, Box<dyn Read>>,
   mut y4m_enc: Option<&mut y4m::Encoder<'_, Box<dyn Write>>>
 ) -> bool {
-  unsafe {
-    av1_rtcd();
-    aom_dsp_rtcd();
-  }
   let width = y4m_dec.get_width();
   let height = y4m_dec.get_height();
   let y4m_bits = y4m_dec.get_bit_depth();
