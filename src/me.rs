@@ -41,7 +41,7 @@ extern {
   ) -> u32;
 }
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), not(windows)))]
 #[target_feature(enable = "ssse3")]
 unsafe fn sad_ssse3(plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize, blk_w: usize) -> u32 {
   let mut sum = 0 as u32;
@@ -79,7 +79,7 @@ pub fn get_sad(
   plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize,
   blk_w: usize
 ) -> u32 {
-  #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+  #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), not(windows)))]
   {
     if is_x86_feature_detected!("ssse3") && blk_h >= 4 && blk_w >= 4 {
       return unsafe { sad_ssse3(plane_org, plane_ref, blk_h, blk_w) };
