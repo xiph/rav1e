@@ -488,7 +488,7 @@ cglobal sgr_calc_ab1, 4, 6, 14, a, b, w, h, s
     movd         xm8, sd
     vpbroadcastd  m8, xm8
 %else
-    vpbroadcastd  m8, sd
+    vpbroadcastd  m8, sm
 %endif
     vpbroadcastd  m9, [pd_0x80000]
     vpbroadcastd m10, [pd_255]
@@ -914,7 +914,7 @@ cglobal sgr_calc_ab2, 4, 6, 14, a, b, w, h, s
     movd         xm8, sd
     vpbroadcastd  m8, xm8
 %else
-    vpbroadcastd  m8, sd
+    vpbroadcastd  m8, sm
 %endif
     vpbroadcastd  m9, [pd_0x80000]
     vpbroadcastd m10, [pd_255]
