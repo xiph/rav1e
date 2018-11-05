@@ -224,12 +224,16 @@ impl Context {
         return false;
       }
 
+      fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
+        pyramid_depth - (pos | (1 << pyramid_depth)).trailing_zeros() as u64
+      }
+
       let lvl = if !reorder {
         0
       } else if idx_in_group < pyramid_depth {
         idx_in_group
       } else {
-        pyramid_depth - (idx_in_group - pyramid_depth + 1).trailing_zeros() as u64
+        pos_to_lvl(idx_in_group - pyramid_depth + 1, pyramid_depth)
       };
 
       // Frames with lvl == 0 are stored in slots 0..4 and frames with higher values
@@ -276,7 +280,7 @@ impl Context {
         } else {
           if i == second_ref_frame - LAST_FRAME {
             let oh = self.fi.order_hint + (group_src_len as u32 >> lvl);
-            let lvl2 = pyramid_depth - oh.trailing_zeros().min(pyramid_depth as u32) as u64;
+            let lvl2 = pos_to_lvl(oh as u64, pyramid_depth);
             if lvl2 == 0 {
               ((oh >> pyramid_depth) % 4) as u8
             } else {
@@ -290,7 +294,7 @@ impl Context {
             }
           } else {
             let oh = self.fi.order_hint - (group_src_len as u32 >> lvl);
-            let lvl1 = pyramid_depth - oh.trailing_zeros().min(pyramid_depth as u32) as u64;
+            let lvl1 = pos_to_lvl(oh as u64, pyramid_depth);
             if lvl1 == 0 {
               ((oh >> pyramid_depth) % 4) as u8
             } else {
