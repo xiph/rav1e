@@ -225,6 +225,13 @@ impl Context {
       }
 
       fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
+        // Derive level within pyramid for a frame with a given coding order position
+        // For example, with a pyramid of depth 2, the 2 least significant bits of the
+        // position determine the level:
+        // 00 -> 0
+        // 01 -> 2
+        // 10 -> 1
+        // 11 -> 2
         pyramid_depth - (pos | (1 << pyramid_depth)).trailing_zeros() as u64
       }
 
