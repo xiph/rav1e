@@ -45,7 +45,7 @@ fn bench_get_sad(b: &mut Bencher, bs: &BlockSize) {
   let plane_ref = rec_plane.slice(&po);
 
   b.iter(|| {
-      let _ = me::get_sad(&plane_org, &plane_ref, bsw, bsh);
+      let _ = black_box(me::get_sad(&plane_org, &plane_ref, bsw, bsh));
   })
 }
 
