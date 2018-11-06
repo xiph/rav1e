@@ -805,7 +805,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
           self.write_bit(true)?; // trailing bit
           self.byte_align()?;
-          return Ok((()));
+          return Ok(());
         }
         self.write_bit(false)?; // show_existing_frame=0
         self.write(2, fi.frame_type as u32)?;
@@ -1237,7 +1237,7 @@ fn aom_uleb_size_in_bytes(mut value: u64) -> usize {
     value = value >> 7;
     if value == 0 { break; }
   }
-  return size;
+  size
 }
 
 fn aom_uleb_encode(mut value: u64, coded_value: &mut [u8]) -> usize {
@@ -1814,7 +1814,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
         }
     }
 
-    return tx_dist
+    tx_dist
 }
 
 fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
