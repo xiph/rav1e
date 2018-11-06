@@ -18,6 +18,7 @@ use num_traits::*;
 use context::INTRA_MODES;
 use context::MAX_TX_SIZE;
 use partition::*;
+use util::*;
 use std::mem::*;
 
 #[cfg(target_arch = "x86")]
@@ -185,10 +186,9 @@ decl_angular_ipred_fn!(rav1e_ipred_smooth_h_avx2);
 #[cfg(all(target_arch = "x86_64", not(windows)))]
 decl_angular_ipred_fn!(rav1e_ipred_smooth_v_avx2);
 
-// TODO: rename the type bounds later
 pub trait Intra<T>: Dim
 where
-  T: PrimInt + Into<u32> + Into<i32> + 'static,
+  T: Pixel,
   i32: AsPrimitive<T>,
   u32: AsPrimitive<T>,
   usize: AsPrimitive<T>
