@@ -210,6 +210,9 @@ pub fn clamp<T: PartialOrd>(input: T, min: T, max: T) -> T {
 use num_traits::PrimInt;
 use std::mem::size_of;
 
+pub trait Pixel: PrimInt + Into<u32> + Into<i32> + 'static {}
+impl<T> Pixel for T where T: PrimInt + Into<u32> + Into<i32> + 'static {}
+
 pub trait ILog: PrimInt {
   fn ilog(self) -> Self {
     Self::from(size_of::<Self>() * 8 - self.leading_zeros() as usize).unwrap()
