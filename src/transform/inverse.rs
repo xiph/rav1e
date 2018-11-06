@@ -848,7 +848,7 @@ trait InvTxfm2D: Dim {
         .zip(output[c..].iter_mut().step_by(stride).take(Self::H))
       {
         *out =
-          clamp(*out as i32 + round_shift(*temp, 4), 0, (1 << bd) - 1) as u16;
+          clamp(i32::from(*out) + round_shift(*temp, 4), 0, (1 << bd) - 1) as u16;
       }
     }
   }

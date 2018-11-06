@@ -142,7 +142,7 @@ fn half_btf(w0: i32, in0: i32, w1: i32, in1: i32, bit: usize) -> i32 {
 
 #[inline]
 fn round_shift(value: i32, bit: usize) -> i32 {
-  if bit <= 0 {
+  if bit == 0 {
     value
   } else {
     (value + (1 << (bit - 1))) >> bit
@@ -176,13 +176,12 @@ fn av1_round_shift_array_rs(arr: &mut [i32], size: usize, bit: i8) {
   }
   if bit > 0 {
     let bit = bit as usize;
-    for i in 0..size {
-      arr[i] = round_shift(arr[i], bit);
+    for val in &mut arr[..size] {
+      *val = round_shift(*val, bit);
     }
   } else {
-    for i in 0..size {
-      arr[i] =
-        clamp((1 << (-bit)) * arr[i], i32::min_value(), i32::max_value());
+    for val in &mut arr[..size] {
+      *val = clamp((1 << (-bit)) * (*val), i32::min_value(), i32::max_value());
     }
   }
 }

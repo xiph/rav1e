@@ -225,7 +225,7 @@ impl Sequence {
         }
 
         Sequence {
-            profile: profile,
+            profile,
             num_bits_width: width_bits,
             num_bits_height: height_bits,
             bit_depth: info.bit_depth,
@@ -255,11 +255,11 @@ impl Sequence {
             enable_cdef: true,
             enable_restoration: true,
             operating_points_cnt_minus_1: 0,
-            operating_point_idc: operating_point_idc,
+            operating_point_idc,
             display_model_info_present_flag: false,
             decoder_model_info_present_flag: false,
-            level: level,
-            tier: tier,
+            level,
+            tier,
             film_grain_params_present: false,
             separate_uv_delta_q: false,
         }
@@ -369,9 +369,9 @@ impl FrameState {
             input_hres: self.input_hres.window(&sbo.plane_offset(&self.input_hres.cfg)),
             input_qres: self.input_qres.window(&sbo.plane_offset(&self.input_qres.cfg)),
             rec: self.rec.window(sbo),
-            qc: self.qc.clone(),
-            cdfs: self.cdfs.clone(),
-            deblock: self.deblock.clone()
+            qc: self.qc,
+            cdfs: self.cdfs,
+            deblock: self.deblock
         }
     }
 }
@@ -805,7 +805,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
           self.write_bit(true)?; // trailing bit
           self.byte_align()?;
-          return Ok((()));
+          return Ok(());
         }
         self.write_bit(false)?; // show_existing_frame=0
         self.write(2, fi.frame_type as u32)?;
@@ -920,7 +920,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         }
         self.write_bit(false)?; // render_and_frame_size_different
         //if render_and_frame_size_different { }
-        if fi.allow_screen_content_tools != 0 && true /* UpscaledWidth == FrameWidth */ {
+        if fi.allow_screen_content_tools != 0 /* && UpscaledWidth == FrameWidth */ {
           self.write_bit(fi.allow_intrabc)?;
         }
       }
@@ -1039,7 +1039,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
       // global motion
       if !fi.intra_only {
-          for i in LAST_FRAME..ALTREF_FRAME+1 {
+          for i in LAST_FRAME..=ALTREF_FRAME {
               let mode = fi.globalmv_transformation_type[i];
               self.write_bit(mode != GlobalMVMode::IDENTITY)?;
               if mode != GlobalMVMode::IDENTITY {
@@ -1234,20 +1234,20 @@ fn aom_uleb_size_in_bytes(mut value: u64) -> usize {
   let mut size = 0;
   loop {
     size += 1;
-    value = value >> 7;
+    value >>= 7;
     if value == 0 { break; }
   }
-  return size;
+  size
 }
 
 fn aom_uleb_encode(mut value: u64, coded_value: &mut [u8]) -> usize {
   let leb_size = aom_uleb_size_in_bytes(value);
 
-  for i in 0..leb_size {
+  for coded_byte in &mut coded_value[..leb_size] {
     let mut byte = (value & 0x7f) as u8;
     value >>= 7;
     if value != 0 { byte |= 0x80 };  // Signal that more bytes follow.
-    coded_value[i] = byte;
+    *coded_byte = byte;
   }
 
   leb_size
@@ -1260,11 +1260,11 @@ fn write_obus(packet: &mut dyn io::Write, sequence: &mut Sequence,
 
     let mut buf1 = Vec::new();
     {
-        let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
+      let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
       bw1.write_obu_header(OBU_Type::OBU_TEMPORAL_DELIMITER, obu_extension)?;
       bw1.write(8,0)?;	// size of payload == 0, one byte
     }
-    packet.write(&buf1).unwrap();
+    packet.write_all(&buf1).unwrap();
     buf1.clear();
 
     // write sequence header obu if KEY_FRAME, preceded by 4-byte size
@@ -1280,7 +1280,7 @@ fn write_obus(packet: &mut dyn io::Write, sequence: &mut Sequence,
             let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
             bw1.write_obu_header(OBU_Type::OBU_SEQUENCE_HEADER, obu_extension)?;
         }
-        packet.write(&buf1).unwrap();
+        packet.write_all(&buf1).unwrap();
         buf1.clear();
 
         let obu_payload_size = buf2.len() as u64;
@@ -1289,14 +1289,14 @@ fn write_obus(packet: &mut dyn io::Write, sequence: &mut Sequence,
             // uleb128()
             let mut coded_payload_length = [0 as u8; 8];
             let leb_size = aom_uleb_encode(obu_payload_size, &mut coded_payload_length);
-            for i in 0..leb_size {
-                bw1.write(8, coded_payload_length[i])?;
+            for byte in &coded_payload_length[..leb_size] {
+                bw1.write(8, *byte)?;
             }
         }
-        packet.write(&buf1).unwrap();
+        packet.write_all(&buf1).unwrap();
         buf1.clear();
 
-        packet.write(&buf2).unwrap();
+        packet.write_all(&buf2).unwrap();
         buf2.clear();
     }
 
@@ -1310,7 +1310,7 @@ fn write_obus(packet: &mut dyn io::Write, sequence: &mut Sequence,
         let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
         bw1.write_obu_header(OBU_Type::OBU_FRAME_HEADER, obu_extension)?;
     }
-    packet.write(&buf1).unwrap();
+    packet.write_all(&buf1).unwrap();
     buf1.clear();
 
     let obu_payload_size = buf2.len() as u64;
@@ -1319,14 +1319,14 @@ fn write_obus(packet: &mut dyn io::Write, sequence: &mut Sequence,
         // uleb128()
         let mut coded_payload_length = [0 as u8; 8];
         let leb_size = aom_uleb_encode(obu_payload_size, &mut coded_payload_length);
-        for i in 0..leb_size {
-            bw1.write(8, coded_payload_length[i])?;
+        for byte in &coded_payload_length[..leb_size] {
+            bw1.write(8, *byte)?;
         }
     }
-    packet.write(&buf1).unwrap();
+    packet.write_all(&buf1).unwrap();
     buf1.clear();
 
-    packet.write(&buf2).unwrap();
+    packet.write_all(&buf2).unwrap();
     buf2.clear();
 
     Ok(())
@@ -1477,7 +1477,7 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
                  ref_frames: &[usize; 2], mvs: &[MotionVector; 2],
                  bsize: BlockSize, bo: &BlockOffset, skip: bool, bit_depth: usize,
                  cfl: CFLParams, tx_size: TxSize, tx_type: TxType,
-                 mode_context: usize, mv_stack: &Vec<CandidateMV>, for_rdo_use: bool)
+                 mode_context: usize, mv_stack: &[CandidateMV], for_rdo_use: bool)
                  -> i64 {
     let is_inter = !luma_mode.is_intra();
     if is_inter { assert!(luma_mode == chroma_mode); };
@@ -1547,11 +1547,11 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
             if luma_mode == PredictionMode::NEWMV ||
                 luma_mode == PredictionMode::NEW_NEWMV ||
                 luma_mode == PredictionMode::NEW_NEARESTMV {
-              cw.write_mv(w, &mvs[0], &ref_mvs[0], mv_precision);
+              cw.write_mv(w, mvs[0], ref_mvs[0], mv_precision);
             }
             if luma_mode == PredictionMode::NEW_NEWMV ||
                 luma_mode == PredictionMode::NEAREST_NEWMV {
-              cw.write_mv(w, &mvs[1], &ref_mvs[1], mv_precision);
+              cw.write_mv(w, mvs[1], ref_mvs[1], mv_precision);
             }
 
             if luma_mode >= PredictionMode::NEAR0MV && luma_mode <= PredictionMode::NEAR2MV {
@@ -1576,7 +1576,7 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
                 assert!(0 == mvs[0].col);
               }
             } else if luma_mode == PredictionMode::NEARESTMV {
-              if mv_stack.len() > 0 {
+              if !mv_stack.is_empty() {
                 assert!(mv_stack[0].this_mv.row == mvs[0].row);
                 assert!(mv_stack[0].this_mv.col == mvs[0].col);
               } else {
@@ -1644,7 +1644,7 @@ pub fn luma_ac(
         + luma.p(x + 1, y + 1))
         << 1) as i16;
       ac[sub_y * 32 + sub_x] = sample;
-      sum += sample as i32;
+      sum += i32::from(sample);
     }
   }
   let shift = plane_bsize.width_log2() + plane_bsize.height_log2();
@@ -1862,14 +1862,14 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
     if !must_split {
         partition = PartitionType::PARTITION_NONE;
 
-        let mut cost: f64 = 0.0;
-
-        if bsize >= BlockSize::BLOCK_8X8 {
+        let cost = if bsize >= BlockSize::BLOCK_8X8 {
             let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
             let tell = w.tell_frac();
             cw.write_partition(w, bo, partition, bsize);
-            cost = (w.tell_frac() - tell) as f64 * get_lambda(fi, seq.bit_depth)/ ((1 << OD_BITRES) as f64);
-        }
+            (w.tell_frac() - tell) as f64 * get_lambda(fi, seq.bit_depth)/ ((1 << OD_BITRES) as f64)
+        } else {
+            0.0
+        };
 
         let pmv_idx = if bsize > BlockSize::BLOCK_32X32 {
             0
@@ -1924,7 +1924,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
             let tell = w.tell_frac();
             cw.write_partition(w, bo, partition, bsize);
-            rd_cost = (w.tell_frac() - tell) as f64 * get_lambda(fi, seq.bit_depth)/ ((1 << OD_BITRES) as f64);
+            rd_cost = f64::from(w.tell_frac() - tell) * get_lambda(fi, seq.bit_depth) / f64::from(1 << OD_BITRES);
         }
 
         let partitions = [
@@ -2182,7 +2182,7 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
       CDFContext::new(fi.base_q_idx)
     } else {
       match fi.rec_buffer.frames[fi.ref_frames[fi.primary_ref_frame as usize] as usize] {
-        Some(ref rec) => rec.cdfs.clone(),
+        Some(ref rec) => rec.cdfs,
         None => CDFContext::new(fi.base_q_idx)
       }
     };
@@ -2312,7 +2312,7 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
         cdef_filter_frame(fi, &mut fs.rec, &mut cw.bc, bit_depth);
     }
 
-    fs.cdfs = cw.fc.clone();
+    fs.cdfs = cw.fc;
     fs.cdfs.reset_counts();
 
     let mut h = w.done();
@@ -2337,11 +2337,10 @@ pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut 
     if fi.show_existing_frame {
         //write_uncompressed_header(&mut packet, sequence, fi).unwrap();
         write_obus(&mut packet, sequence, fi, fs).unwrap();
-        match fi.rec_buffer.frames[fi.frame_to_show_map_idx as usize] {
-            Some(ref rec) => for p in 0..3 {
+        if let Some(ref rec) = fi.rec_buffer.frames[fi.frame_to_show_map_idx as usize] {
+            for p in 0..3 {
                 fs.rec.planes[p].data.copy_from_slice(rec.frame.planes[p].data.as_slice());
-            },
-            None => (),
+            }
         }
     } else {
         if !fi.intra_only {
@@ -2373,7 +2372,7 @@ pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut 
             let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
             bw1.write_obu_header(OBU_Type::OBU_TILE_GROUP, 0).unwrap();
         }
-        packet.write(&buf1).unwrap();
+        packet.write_all(&buf1).unwrap();
         buf1.clear();
 
         let obu_payload_size = tile.len() as u64;
@@ -2382,14 +2381,14 @@ pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut 
             // uleb128()
             let mut coded_payload_length = [0 as u8; 8];
             let leb_size = aom_uleb_encode(obu_payload_size, &mut coded_payload_length);
-            for i in 0..leb_size {
-                bw1.write(8, coded_payload_length[i]).unwrap();
+            for byte in &coded_payload_length[..leb_size] {
+                bw1.write(8, *byte).unwrap();
             }
         }
-        packet.write(&buf1).unwrap();
+        packet.write_all(&buf1).unwrap();
         buf1.clear();
 
-      packet.write(&tile).unwrap();
+      packet.write_all(&tile).unwrap();
     }
     packet
 }
@@ -2407,7 +2406,7 @@ pub fn update_rec_buffer(fi: &mut FrameInvariants, fs: FrameState) {
   for i in 0..(REF_FRAMES as usize) {
     if (fi.refresh_frame_flags & (1 << i)) != 0 {
       fi.rec_buffer.frames[i] = Some(Rc::clone(&rfs));
-      fi.rec_buffer.deblock[i] = fs.deblock.clone();
+      fi.rec_buffer.deblock[i] = fs.deblock;
     }
   }
 }

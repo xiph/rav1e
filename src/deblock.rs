@@ -66,12 +66,12 @@ fn deblock_adjusted_level(
       };
     let l5 = level >> 5;
     clamp(
-      level as i32
-        + ((deblock.ref_deltas[reference] as i32) << l5)
+      i32::from(level)
+        + (i32::from(deblock.ref_deltas[reference]) << l5)
         + if reference == INTRA_FRAME {
           0
         } else {
-          (deblock.mode_deltas[mode_type] as i32) << l5
+          i32::from(deblock.mode_deltas[mode_type]) << l5
         },
       0,
       MAX_LOOP_FILTER as i32
@@ -121,8 +121,8 @@ fn deblock_size(
   if !(block_edge
     || !block.skip
     || !prev_block.skip
-    || block.ref_frames[0] <= INTRA_FRAME
-    || prev_block.ref_frames[0] <= INTRA_FRAME)
+    || block.ref_frames[0] == INTRA_FRAME
+    || prev_block.ref_frames[0] == INTRA_FRAME)
   {
     0
   } else {
@@ -220,7 +220,7 @@ fn filter_narrow4_4(
     let test = clamp(base + 3, -128 << shift, (128 << shift) - 1) >> 3;
     filter2 == test
   });
-  let filter3 = filter1 + 1 >> 1;
+  let filter3 = (filter1 + 1) >> 1;
   [
     clamp(p1 + filter3, 0, (256 << shift) - 1),
     clamp(p0 + filter2, 0, (256 << shift) - 1),
@@ -252,10 +252,10 @@ fn filter_wide6_4(
   p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32
 ) -> [i32; 4] {
   [
-    p2*3 + p1*2 + p0*2 + q0   + (1<<2) >> 3,
-    p2   + p1*2 + p0*2 + q0*2 + q1   + (1<<2) >> 3,
-           p1   + p0*2 + q0*2 + q1*2 + q2   + (1<<2) >> 3,
-                  p0   + q0*2 + q1*2 + q2*3 + (1<<2) >> 3
+    (p2*3 + p1*2 + p0*2 + q0   + (1<<2))               >> 3,
+    (p2   + p1*2 + p0*2 + q0*2 + q1   + (1<<2))        >> 3,
+           (p1   + p0*2 + q0*2 + q1*2 + q2   + (1<<2)) >> 3,
+                  (p0   + q0*2 + q1*2 + q2*3 + (1<<2)) >> 3
   ]
 }
 
@@ -265,12 +265,12 @@ fn filter_wide8_6(
   p3: i32, p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32, q3: i32
 ) -> [i32; 6] {
   [
-    p3*3 + p2*2 + p1   + p0   + q0   + (1<<2) >> 3,
-    p3*2 + p2   + p1*2 + p0   + q0   + q1   + (1<<2) >> 3,
-    p3   + p2   + p1   + p0*2 + q0   + q1   + q2   +(1<<2) >> 3,
-           p2   + p1   + p0   + q0*2 + q1   + q2   + q3   + (1<<2) >> 3,
-                  p1   + p0   + q0   + q1*2 + q2   + q3*2 + (1<<2) >> 3,
-                         p0   + q0   + q1   + q2*2 + q3*3 + (1<<2) >> 3
+    (p3*3 + p2*2 + p1   + p0   + q0   + (1<<2))                      >> 3,
+    (p3*2 + p2   + p1*2 + p0   + q0   + q1   + (1<<2))               >> 3,
+    (p3   + p2   + p1   + p0*2 + q0   + q1   + q2   +(1<<2))         >> 3,
+           (p2   + p1   + p0   + q0*2 + q1   + q2   + q3   + (1<<2)) >> 3,
+                  (p1   + p0   + q0   + q1*2 + q2   + q3*2 + (1<<2)) >> 3,
+                         (p0   + q0   + q1   + q2*2 + q3*3 + (1<<2)) >> 3
   ]
 }
 
@@ -290,18 +290,18 @@ fn filter_wide14_12(
   q1: i32, q2: i32, q3: i32, q4: i32, q5: i32, q6: i32
 ) -> [i32; 12] {
   [
-    p6*7 + p5*2 + p4*2 + p3   + p2   + p1   + p0   + q0   + (1<<3) >> 4,
-    p6*5 + p5*2 + p4*2 + p3*2 + p2   + p1   + p0   + q0   + q1   + (1<<3) >> 4,
-    p6*4 + p5   + p4*2 + p3*2 + p2*2 + p1   + p0   + q0   + q1   + q2   + (1<<3) >> 4,
-    p6*3 + p5   + p4   + p3*2 + p2*2 + p1*2 + p0   + q0   + q1   + q2   + q3   + (1<<3) >> 4,
-    p6*2 + p5   + p4   + p3   + p2*2 + p1*2 + p0*2 + q0   + q1   + q2   + q3   + q4   + (1<<3) >> 4,
-    p6   + p5   + p4   + p3   + p2   + p1*2 + p0*2 + q0*2 + q1   + q2   + q3   + q4   + q5   + (1<<3) >> 4,
-           p5   + p4   + p3   + p2   + p1   + p0*2 + q0*2 + q1*2 + q2   + q3   + q4   + q5   + q6 + (1<<3) >> 4,
-                  p4   + p3   + p2   + p1   + p0   + q0*2 + q1*2 + q2*2 + q3   + q4   + q5   + q6*2 + (1<<3) >> 4,
-                         p3   + p2   + p1   + p0   + q0   + q1*2 + q2*2 + q3*2 + q4   + q5   + q6*3 + (1<<3) >> 4,
-                                p2   + p1   + p0   + q0   + q1   + q2*2 + q3*2 + q4*2 + q5   + q6*4 + (1<<3) >> 4,
-                                       p1   + p0   + q0   + q1   + q2   + q3*2 + q4*2 + q5*2 + q6*5 + (1<<3) >> 4,
-                                              p0   + q0   + q1   + q2   + q3   + q4*2 + q5*2 + q6*7 + (1<<3) >> 4
+    (p6*7 + p5*2 + p4*2 + p3   + p2   + p1   + p0   + q0   + (1<<3))                                           >> 4,
+    (p6*5 + p5*2 + p4*2 + p3*2 + p2   + p1   + p0   + q0   + q1   + (1<<3))                                    >> 4,
+    (p6*4 + p5   + p4*2 + p3*2 + p2*2 + p1   + p0   + q0   + q1   + q2   + (1<<3))                             >> 4,
+    (p6*3 + p5   + p4   + p3*2 + p2*2 + p1*2 + p0   + q0   + q1   + q2   + q3   + (1<<3))                      >> 4,
+    (p6*2 + p5   + p4   + p3   + p2*2 + p1*2 + p0*2 + q0   + q1   + q2   + q3   + q4   + (1<<3))               >> 4,
+    (p6   + p5   + p4   + p3   + p2   + p1*2 + p0*2 + q0*2 + q1   + q2   + q3   + q4   + q5   + (1<<3))        >> 4,
+           (p5   + p4   + p3   + p2   + p1   + p0*2 + q0*2 + q1*2 + q2   + q3   + q4   + q5   + q6 + (1<<3))   >> 4,
+                  (p4   + p3   + p2   + p1   + p0   + q0*2 + q1*2 + q2*2 + q3   + q4   + q5   + q6*2 + (1<<3)) >> 4,
+                         (p3   + p2   + p1   + p0   + q0   + q1*2 + q2*2 + q3*2 + q4   + q5   + q6*3 + (1<<3)) >> 4,
+                                (p2   + p1   + p0   + q0   + q1   + q2*2 + q3*2 + q4*2 + q5   + q6*4 + (1<<3)) >> 4,
+                                       (p1   + p0   + q0   + q1   + q2   + q3*2 + q4*2 + q5*2 + q6*5 + (1<<3)) >> 4,
+                                              (p0   + q0   + q1   + q2   + q3   + q4*2 + q5*2 + q6*7 + (1<<3)) >> 4
   ]
 }
 
@@ -314,9 +314,9 @@ fn stride_copy(dst: &mut [u16], src: &[i32], pitch: usize) {
 fn stride_sse(a: &[u16], b: &[i32], pitch: usize) -> i64 {
   let mut acc: i32 = 0;
   for (a, b) in a.iter().step_by(pitch).take(b.len()).zip(b) {
-    acc += (*a as i32 - *b) * (*a as i32 - *b)
+    acc += (i32::from(*a) - *b) * (i32::from(*a) - *b)
   }
-  acc as i64
+  i64::from(acc)
 }
 
 fn _level_to_limit(level: i32, shift: usize) -> i32 {
@@ -324,15 +324,15 @@ fn _level_to_limit(level: i32, shift: usize) -> i32 {
 }
 
 fn limit_to_level(limit: i32, shift: usize) -> i32 {
-  limit + (1 << shift) - 1 >> shift
+  (limit + (1 << shift) - 1) >> shift
 }
 
 fn _level_to_blimit(level: i32, shift: usize) -> i32 {
-  3 * level + 4 << shift
+  (3 * level + 4) << shift
 }
 
 fn blimit_to_level(blimit: i32, shift: usize) -> i32 {
-  ((blimit + (1 << shift) - 1 >> shift) - 2) / 3
+  (((blimit + (1 << shift) - 1) >> shift) - 2) / 3
 }
 
 fn _level_to_thresh(level: i32, shift: usize) -> i32 {
@@ -340,7 +340,7 @@ fn _level_to_thresh(level: i32, shift: usize) -> i32 {
 }
 
 fn thresh_to_level(thresh: i32, shift: usize) -> i32 {
-  thresh + (1 << shift) - 1 >> shift << 4
+  (thresh + (1 << shift) - 1) >> shift << 4
 }
 
 fn nhev4(p1: i32, p0: i32, q0: i32, q1: i32, shift: usize) -> usize {
@@ -361,17 +361,16 @@ fn deblock_size4(
   let mut s = 0;
   for _i in 0..4 {
     let p = &mut rec[s..];
-    let p1 = p[0] as i32;
-    let p0 = p[pitch] as i32;
-    let q0 = p[pitch * 2] as i32;
-    let q1 = p[pitch * 3] as i32;
+    let p1 = i32::from(p[0]);
+    let p0 = i32::from(p[pitch]);
+    let q0 = i32::from(p[pitch * 2]);
+    let q1 = i32::from(p[pitch * 3]);
     if mask4(p1, p0, q0, q1, bd - 8) <= level {
-      let x;
-      if nhev4(p1, p0, q0, q1, bd - 8) <= level {
-        x = filter_narrow4_4(p1, p0, q0, q1, bd - 8);
+      let x = if nhev4(p1, p0, q0, q1, bd - 8) <= level {
+        filter_narrow4_4(p1, p0, q0, q1, bd - 8)
       } else {
-        x = filter_narrow2_4(p1, p0, q0, q1, bd - 8);
-      }
+        filter_narrow2_4(p1, p0, q0, q1, bd - 8)
+      };
       stride_copy(p, &x, pitch);
     }
     s += stride;
@@ -390,10 +389,10 @@ fn sse_size4(
   for _i in 0..4 {
     let p = &rec[rec_s..]; // four taps
     let a = &src[src_s..]; // four pixels to compare
-    let p1 = p[0] as i32;
-    let p0 = p[rec_pitch] as i32;
-    let q0 = p[rec_pitch * 2] as i32;
-    let q1 = p[rec_pitch * 3] as i32;
+    let p1 = i32::from(p[0]);
+    let p0 = i32::from(p[rec_pitch]);
+    let q0 = i32::from(p[rec_pitch * 2]);
+    let q1 = i32::from(p[rec_pitch * 3]);
 
     // three possibilities: no filter, narrow2 and narrow4
     // All possibilities produce four outputs
@@ -458,15 +457,15 @@ fn deblock_size6(
   rec: &mut [u16], pitch: usize, stride: usize, level: usize, bd: usize
 ) {
   let mut s = 0;
-  let flat = 1 << bd - 8;
+  let flat = 1 << (bd - 8);
   for _i in 0..4 {
     let p = &mut rec[s..];
-    let p2 = p[0] as i32;
-    let p1 = p[pitch] as i32;
-    let p0 = p[pitch * 2] as i32;
-    let q0 = p[pitch * 3] as i32;
-    let q1 = p[pitch * 4] as i32;
-    let q2 = p[pitch * 5] as i32;
+    let p2 = i32::from(p[0]);
+    let p1 = i32::from(p[pitch]);
+    let p0 = i32::from(p[pitch * 2]);
+    let q0 = i32::from(p[pitch * 3]);
+    let q1 = i32::from(p[pitch * 4]);
+    let q2 = i32::from(p[pitch * 5]);
     if mask6(p2, p1, p0, q0, q1, q2, bd - 8) <= level {
       let x;
       if flat6(p2, p1, p0, q0, q1, q2) <= flat {
@@ -491,16 +490,16 @@ fn sse_size6(
 ) {
   let mut rec_s = 0;
   let mut src_s = 0;
-  let flat = 1 << bd - 8;
+  let flat = 1 << (bd - 8);
   for _i in 0..4 {
     let p = &rec[rec_s..]; // six taps
     let a = &src[src_s + src_pitch..]; // four pixels to compare so offset one forward
-    let p2 = p[0] as i32;
-    let p1 = p[rec_pitch] as i32;
-    let p0 = p[rec_pitch * 2] as i32;
-    let q0 = p[rec_pitch * 3] as i32;
-    let q1 = p[rec_pitch * 4] as i32;
-    let q2 = p[rec_pitch * 5] as i32;
+    let p2 = i32::from(p[0]);
+    let p1 = i32::from(p[rec_pitch]);
+    let p0 = i32::from(p[rec_pitch * 2]);
+    let q0 = i32::from(p[rec_pitch * 3]);
+    let q1 = i32::from(p[rec_pitch * 4]);
+    let q2 = i32::from(p[rec_pitch * 5]);
 
     // Four possibilities: no filter, wide6, narrow2 and narrow4
     // All possibilities produce four outputs
@@ -598,17 +597,17 @@ fn deblock_size8(
   rec: &mut [u16], pitch: usize, stride: usize, level: usize, bd: usize
 ) {
   let mut s = 0;
-  let flat = 1 << bd - 8;
+  let flat = 1 << (bd - 8);
   for _i in 0..4 {
     let p = &mut rec[s..];
-    let p3 = p[0] as i32;
-    let p2 = p[pitch] as i32;
-    let p1 = p[pitch * 2] as i32;
-    let p0 = p[pitch * 3] as i32;
-    let q0 = p[pitch * 4] as i32;
-    let q1 = p[pitch * 5] as i32;
-    let q2 = p[pitch * 6] as i32;
-    let q3 = p[pitch * 7] as i32;
+    let p3 = i32::from(p[0]);
+    let p2 = i32::from(p[pitch]);
+    let p1 = i32::from(p[pitch * 2]);
+    let p0 = i32::from(p[pitch * 3]);
+    let q0 = i32::from(p[pitch * 4]);
+    let q1 = i32::from(p[pitch * 5]);
+    let q2 = i32::from(p[pitch * 6]);
+    let q3 = i32::from(p[pitch * 7]);
     if mask8(p3, p2, p1, p0, q0, q1, q2, q3, bd - 8) <= level {
       let x: [i32; 6];
       if flat8(p3, p2, p1, p0, q0, q1, q2, q3) <= flat {
@@ -635,18 +634,18 @@ fn sse_size8(
 ) {
   let mut rec_s = 0;
   let mut src_s = 0;
-  let flat = 1 << bd - 8;
+  let flat = 1 << (bd - 8);
   for _i in 0..4 {
     let p = &rec[rec_s..]; // eight taps
     let a = &src[src_s + src_pitch..]; // six pixels to compare so offset one forward
-    let p3 = p[0] as i32;
-    let p2 = p[rec_pitch] as i32;
-    let p1 = p[rec_pitch * 2] as i32;
-    let p0 = p[rec_pitch * 3] as i32;
-    let q0 = p[rec_pitch * 4] as i32;
-    let q1 = p[rec_pitch * 5] as i32;
-    let q2 = p[rec_pitch * 6] as i32;
-    let q3 = p[rec_pitch * 7] as i32;
+    let p3 = i32::from(p[0]);
+    let p2 = i32::from(p[rec_pitch]);
+    let p1 = i32::from(p[rec_pitch * 2]);
+    let p0 = i32::from(p[rec_pitch * 3]);
+    let q0 = i32::from(p[rec_pitch * 4]);
+    let q1 = i32::from(p[rec_pitch * 5]);
+    let q2 = i32::from(p[rec_pitch * 6]);
+    let q3 = i32::from(p[rec_pitch * 7]);
 
     // Four possibilities: no filter, wide8, narrow2 and narrow4
     let none: [_; 6] = [p2, p1, p0, q0, q1, q2];
@@ -720,23 +719,23 @@ fn deblock_size14(
   rec: &mut [u16], pitch: usize, stride: usize, level: usize, bd: usize
 ) {
   let mut s = 0;
-  let flat = 1 << bd - 8;
+  let flat = 1 << (bd - 8);
   for _i in 0..4 {
     let p = &mut rec[s..];
-    let p6 = p[0] as i32;
-    let p5 = p[pitch] as i32;
-    let p4 = p[pitch * 2] as i32;
-    let p3 = p[pitch * 3] as i32;
-    let p2 = p[pitch * 4] as i32;
-    let p1 = p[pitch * 5] as i32;
-    let p0 = p[pitch * 6] as i32;
-    let q0 = p[pitch * 7] as i32;
-    let q1 = p[pitch * 8] as i32;
-    let q2 = p[pitch * 9] as i32;
-    let q3 = p[pitch * 10] as i32;
-    let q4 = p[pitch * 11] as i32;
-    let q5 = p[pitch * 12] as i32;
-    let q6 = p[pitch * 13] as i32;
+    let p6 = i32::from(p[0]);
+    let p5 = i32::from(p[pitch]);
+    let p4 = i32::from(p[pitch * 2]);
+    let p3 = i32::from(p[pitch * 3]);
+    let p2 = i32::from(p[pitch * 4]);
+    let p1 = i32::from(p[pitch * 5]);
+    let p0 = i32::from(p[pitch * 6]);
+    let q0 = i32::from(p[pitch * 7]);
+    let q1 = i32::from(p[pitch * 8]);
+    let q2 = i32::from(p[pitch * 9]);
+    let q3 = i32::from(p[pitch * 10]);
+    let q4 = i32::from(p[pitch * 11]);
+    let q5 = i32::from(p[pitch * 12]);
+    let q6 = i32::from(p[pitch * 13]);
     // 'mask' test
     if mask8(p3, p2, p1, p0, q0, q1, q2, q3, bd - 8) <= level {
       let x: [i32; 12];
@@ -803,24 +802,24 @@ fn sse_size14(
 ) {
   let mut rec_s = 0;
   let mut src_s = 0;
-  let flat = 1 << bd - 8;
+  let flat = 1 << (bd - 8);
   for _i in 0..4 {
     let p = &rec[rec_s..]; // 14 taps
     let a = &src[src_s + src_pitch..]; // 12 pixels to compare so offset one forward
-    let p6 = p[0] as i32;
-    let p5 = p[rec_pitch] as i32;
-    let p4 = p[rec_pitch * 2] as i32;
-    let p3 = p[rec_pitch * 3] as i32;
-    let p2 = p[rec_pitch * 4] as i32;
-    let p1 = p[rec_pitch * 5] as i32;
-    let p0 = p[rec_pitch * 6] as i32;
-    let q0 = p[rec_pitch * 7] as i32;
-    let q1 = p[rec_pitch * 8] as i32;
-    let q2 = p[rec_pitch * 9] as i32;
-    let q3 = p[rec_pitch * 10] as i32;
-    let q4 = p[rec_pitch * 11] as i32;
-    let q5 = p[rec_pitch * 12] as i32;
-    let q6 = p[rec_pitch * 13] as i32;
+    let p6 = i32::from(p[0]);
+    let p5 = i32::from(p[rec_pitch]);
+    let p4 = i32::from(p[rec_pitch * 2]);
+    let p3 = i32::from(p[rec_pitch * 3]);
+    let p2 = i32::from(p[rec_pitch * 4]);
+    let p1 = i32::from(p[rec_pitch * 5]);
+    let p0 = i32::from(p[rec_pitch * 6]);
+    let q0 = i32::from(p[rec_pitch * 7]);
+    let q1 = i32::from(p[rec_pitch * 8]);
+    let q2 = i32::from(p[rec_pitch * 9]);
+    let q3 = i32::from(p[rec_pitch * 10]);
+    let q4 = i32::from(p[rec_pitch * 11]);
+    let q5 = i32::from(p[rec_pitch * 12]);
+    let q6 = i32::from(p[rec_pitch * 13]);
 
     // Five possibilities: no filter, wide14, wide8, narrow2 and narrow4
     let none: [i32; 12] = [p5, p4, p3, p2, p1, p0, q0, q1, q2, q3, q4, q5];
@@ -1344,26 +1343,26 @@ pub fn deblock_filter_optimize(
   bit_depth: usize
 ) {
   if fi.config.speed > 3 {
-    let q = ac_q(fi.base_q_idx, bit_depth) as i32;
+    let q = i32::from(ac_q(fi.base_q_idx, bit_depth));
     let level = clamp(
       match bit_depth {
         8 =>
           if fi.frame_type == FrameType::KEY {
-            q * 17563 - 421574 + (1 << 18 >> 1) >> 18
+            (q * 17563 - 421_574 + (1 << 18 >> 1)) >> 18
           } else {
-            q * 6017 + 650707 + (1 << 18 >> 1) >> 18
+            (q * 6017 + 650_707 + (1 << 18 >> 1)) >> 18
           },
         10 =>
           if fi.frame_type == FrameType::KEY {
-            (q * 20723 + 4060632 + (1 << 20 >> 1) >> 20) - 4
+            ((q * 20723 + 4_060_632 + (1 << 20 >> 1)) >> 20) - 4
           } else {
-            q * 20723 + 4060632 + (1 << 20 >> 1) >> 20
+            (q * 20723 + 4_060_632 + (1 << 20 >> 1)) >> 20
           },
         12 =>
           if fi.frame_type == FrameType::KEY {
-            (q * 20723 + 16242526 + (1 << 22 >> 1) >> 22) - 4
+            ((q * 20723 + 16_242_526 + (1 << 22 >> 1)) >> 22) - 4
           } else {
-            q * 20723 + 16242526 + (1 << 22 >> 1) >> 22
+            (q * 20723 + 16_242_526 + (1 << 22 >> 1)) >> 22
           },
         _ => {
           assert!(false);

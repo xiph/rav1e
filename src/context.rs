@@ -1288,7 +1288,7 @@ impl BlockContext {
     }
   }
 
-  pub fn for_each<F>(&mut self, bo: &BlockOffset, bsize: BlockSize, f: F) -> ()
+  pub fn for_each<F>(&mut self, bo: &BlockOffset, bsize: BlockSize, f: F)
   where
     F: Fn(&mut Block) -> ()
   {
@@ -1709,19 +1709,19 @@ impl CFLParams {
       scale: [1, 0]
     }
   }
-  pub fn joint_sign(&self) -> u32 {
+  pub fn joint_sign(self) -> u32 {
     assert!(self.sign[0] != CFL_SIGN_ZERO || self.sign[1] != CFL_SIGN_ZERO);
     (self.sign[0] as u32) * (CFL_SIGNS as u32) + (self.sign[1] as u32) - 1
   }
-  pub fn context(&self, uv: usize) -> usize {
+  pub fn context(self, uv: usize) -> usize {
     assert!(self.sign[uv] != CFL_SIGN_ZERO);
     (self.sign[uv] as usize - 1) * CFL_SIGNS + (self.sign[1 - uv] as usize)
   }
-  pub fn index(&self, uv: usize) -> u32 {
+  pub fn index(self, uv: usize) -> u32 {
     assert!(self.sign[uv] != CFL_SIGN_ZERO && self.scale[uv] != 0);
     (self.scale[uv] - 1) as u32
   }
-  pub fn alpha(&self, uv: usize) -> i16 {
+  pub fn alpha(self, uv: usize) -> i16 {
     cfl_sign_value[self.sign[uv] as usize] * (self.scale[uv] as i16)
   }
   pub fn from_alpha(u: i16, v: i16) -> CFLParams {
@@ -1882,7 +1882,7 @@ impl ContextWriter {
     let ctx = self.bc.partition_plane_context(&bo, bsize);
     assert!(ctx < PARTITION_CONTEXTS);
     let partition_cdf = if bsize <= BlockSize::BLOCK_8X8 {
-      &mut self.fc.partition_cdf[ctx][..PARTITION_TYPES+1]
+      &mut self.fc.partition_cdf[ctx][..=PARTITION_TYPES]
     } else {
       &mut self.fc.partition_cdf[ctx]
     };
@@ -1982,10 +1982,9 @@ impl ContextWriter {
     ];
 
     if ref_frame >= REF_FRAMES {
-      return ([ ref_frame_map[ref_frame - REF_FRAMES][0],
-               ref_frame_map[ref_frame - REF_FRAMES][1] ], 2)
+      ([ ref_frame_map[ref_frame - REF_FRAMES][0], ref_frame_map[ref_frame - REF_FRAMES][1] ], 2)
     } else {
-      return ([ ref_frame, 0 ], 1)
+      ([ ref_frame, 0 ], 1)
     }
   }
 
@@ -2059,7 +2058,7 @@ impl ContextWriter {
     cmp::max(col_offset, -(mi_col as isize))
   }
 
-  fn find_matching_mv(&self, mv: &MotionVector, mv_stack: &mut Vec<CandidateMV>) -> bool {
+  fn find_matching_mv(&self, mv: MotionVector, mv_stack: &mut Vec<CandidateMV>) -> bool {
     for mv_cand in mv_stack {
       if mv.row == mv_cand.this_mv.row && mv.col == mv_cand.this_mv.col {
         return true;
@@ -2101,7 +2100,7 @@ impl ContextWriter {
           let mv_cand = CandidateMV {
             this_mv: blk.mv[0],
             comp_mv: blk.mv[1],
-            weight: weight
+            weight
           };
 
           mv_stack.push(mv_cand);
@@ -2195,7 +2194,7 @@ impl ContextWriter {
             mv.col = -mv.col;
           }
 
-          if !self.find_matching_mv(&mv, mv_stack) {
+          if !self.find_matching_mv(mv, mv_stack) {
             let mv_cand = CandidateMV {
               this_mv: mv,
               comp_mv: MotionVector { row: 0, col: 0 },
@@ -2408,7 +2407,7 @@ impl ContextWriter {
     );
     row_match |= found_match;
 
-    for idx in 2..MVREF_ROW_COLS+1 {
+    for idx in 2..=MVREF_ROW_COLS {
       let row_offset = -2 * idx as isize + 1 + row_adj as isize;
       let col_offset = -2 * idx as isize + 1 + col_adj as isize;
 
@@ -2568,12 +2567,11 @@ impl ContextWriter {
       /* TODO: Set the zeromv ref to 0 */
     }
 
-    if ref_frames[0] <= INTRA_FRAME {
+    if ref_frames[0] == INTRA_FRAME {
       return 0;
     }
 
-    let mode_context = self.setup_mvref_list(bo, ref_frames, mv_stack, bsize, is_sec_rect, fi, is_compound);
-    mode_context
+    self.setup_mvref_list(bo, ref_frames, mv_stack, bsize, is_sec_rect, fi, is_compound)
   }
 
   pub fn fill_neighbours_ref_counts(&mut self, bo: &BlockOffset) {
@@ -2884,10 +2882,10 @@ impl ContextWriter {
   }
 
   pub fn write_mv(&mut self, w: &mut dyn Writer,
-                  mv: &MotionVector, ref_mv: &MotionVector,
+                  mv: MotionVector, ref_mv: MotionVector,
                   mv_precision: MvSubpelPrecision) {
     let diff = MotionVector { row: mv.row - ref_mv.row, col: mv.col - ref_mv.col };
-    let j: MvJointType = av1_get_mv_joint(&diff);
+    let j: MvJointType = av1_get_mv_joint(diff);
 
     w.symbol_with_update(j as u32, &mut self.fc.nmv_context.joints_cdf);
 
@@ -2920,7 +2918,7 @@ impl ContextWriter {
           av1_tx_ind[tx_set as usize][tx_type as usize] as u32,
           &mut self.fc.inter_tx_cdf[tx_set_index as usize]
             [square_tx_size as usize]
-            [..num_tx_set[tx_set as usize] + 1]
+            [..=num_tx_set[tx_set as usize]]
         );
       } else {
         let intra_dir = y_mode;
@@ -2934,7 +2932,7 @@ impl ContextWriter {
           av1_tx_ind[tx_set as usize][tx_type as usize] as u32,
           &mut self.fc.intra_tx_cdf[tx_set_index as usize]
             [square_tx_size as usize][intra_dir as usize]
-            [..num_tx_set[tx_set as usize] + 1]
+            [..=num_tx_set[tx_set as usize]]
         );
       }
     }
@@ -3085,7 +3083,7 @@ impl ContextWriter {
         // if (row + col < 2) return ctx + 1;
         // if (row + col < 4) return 5 + ctx + 1;
         // return 21 + ctx;
-        return ctx + av1_nz_map_ctx_offset[tx_size as usize][cmp::min(row, 4)][cmp::min(col, 4)] as usize;
+        ctx + av1_nz_map_ctx_offset[tx_size as usize][cmp::min(row, 4)][cmp::min(col, 4)] as usize
       }
       TX_CLASS_HORIZ => {
         let row = coeff_idx >> bwl;
@@ -3495,7 +3493,7 @@ impl ContextWriter {
 
   pub fn checkpoint(&mut self) -> ContextWriterCheckpoint {
     ContextWriterCheckpoint {
-      fc: self.fc.clone(),
+      fc: self.fc,
       bc: self.bc.checkpoint()
     }
   }
@@ -3545,7 +3543,7 @@ const MV_LOW: i32 = (-(1 << MV_IN_USE_BITS));
 
 
 #[inline(always)]
-pub fn av1_get_mv_joint(mv: &MotionVector) -> MvJointType {
+pub fn av1_get_mv_joint(mv: MotionVector) -> MvJointType {
   if mv.row == 0 {
     if mv.col == 0 { MvJointType::MV_JOINT_ZERO } else { MvJointType::MV_JOINT_HNZVZ }
   } else {

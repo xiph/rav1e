@@ -59,7 +59,7 @@ fn divu_gen(d: u32) -> (u32, u32, u32) {
   let nbits = (mem::size_of_val(&d) as u64) * 8;
   let m = nbits - d.leading_zeros() as u64 - 1;
   if (d & (d - 1)) == 0 {
-    (0xFFFFFFFF, 0xFFFFFFFF, m as u32)
+    (0xFFFF_FFFF, 0xFFFF_FFFF, m as u32)
   } else {
     let d = d as u64;
     let t = (1u64 << (m + nbits)) / d;

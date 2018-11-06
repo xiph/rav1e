@@ -86,8 +86,8 @@ fn cdef_dist_wxh_8x8(
   let dvar = (sum_d2 - ((sum_d as i64 * sum_d as i64 + 32) >> 6)) as f64;
   let sse = (sum_d2 + sum_s2 - 2 * sum_sd) as f64;
   //The two constants were tuned for CDEF, but can probably be better tuned for use in general RDO
-  let ssim_boost = 0.5_f64 * (svar + dvar + (400 << 2 * coeff_shift) as f64)
-    / f64::sqrt((20000 << 4 * coeff_shift) as f64 + svar * dvar);
+  let ssim_boost = 0.5_f64 * (svar + dvar + (400 << (2 * coeff_shift)) as f64)
+    / f64::sqrt((20000 << (4 * coeff_shift)) as f64 + svar * dvar);
   (sse * ssim_boost + 0.5_f64) as u64
 }
 
@@ -96,8 +96,8 @@ fn cdef_dist_wxh(
   src1: &PlaneSlice<'_>, src2: &PlaneSlice<'_>, w: usize, h: usize,
   bit_depth: usize
 ) -> u64 {
-  assert!(w & 0x7 == 0);
-  assert!(h & 0x7 == 0);
+  assert!(w.trailing_zeros() >= 3);
+  assert!(h.trailing_zeros() >= 3);
 
   let mut sum: u64 = 0;
   for j in 0..h / 8 {
@@ -159,50 +159,47 @@ fn compute_rd_cost(
 
   // Compute distortion
   let po = bo.plane_offset(&fs.input.planes[0].cfg);
-  let mut distortion = if fi.config.tune == Tune::Psnr {
-    sse_wxh(
+  let mut distortion = match fi.config.tune {
+    Tune::Psnr => sse_wxh(
       &fs.input.planes[0].slice(&po),
       &fs.rec.planes[0].slice(&po),
       w_y,
       h_y
-    )
-  } else if fi.config.tune == Tune::Psychovisual {
-    cdef_dist_wxh(
+    ),
+    Tune::Psychovisual => cdef_dist_wxh(
       &fs.input.planes[0].slice(&po),
       &fs.rec.planes[0].slice(&po),
       w_y,
       h_y,
       bit_depth
     )
-  } else {
-    unimplemented!();
   };
 
   if !luma_only {
-  let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
+    let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
-  let mask = !(MI_SIZE - 1);
-  let mut w_uv = (w_y >> xdec) & mask;
-  let mut h_uv = (h_y >> ydec) & mask;
+    let mask = !(MI_SIZE - 1);
+    let mut w_uv = (w_y >> xdec) & mask;
+    let mut h_uv = (h_y >> ydec) & mask;
 
-  if (w_uv == 0 || h_uv == 0) && is_chroma_block {
-    w_uv = MI_SIZE;
-    h_uv = MI_SIZE;
-  }
-
-  // Add chroma distortion only when it is available
-  if w_uv > 0 && h_uv > 0 {
-    for p in 1..3 {
-      let po = bo.plane_offset(&fs.input.planes[p].cfg);
-
-      distortion += sse_wxh(
-        &fs.input.planes[p].slice(&po),
-        &fs.rec.planes[p].slice(&po),
-        w_uv,
-        h_uv
-      );
+    if (w_uv == 0 || h_uv == 0) && is_chroma_block {
+      w_uv = MI_SIZE;
+      h_uv = MI_SIZE;
     }
-  };
+
+    // Add chroma distortion only when it is available
+    if w_uv > 0 && h_uv > 0 {
+      for p in 1..3 {
+        let po = bo.plane_offset(&fs.input.planes[p].cfg);
+
+        distortion += sse_wxh(
+          &fs.input.planes[p].slice(&po),
+          &fs.rec.planes[p].slice(&po),
+          w_uv,
+          h_uv
+        );
+      }
+    };
   }
   // Compute rate
   let rate = (bit_cost as f64) / ((1 << OD_BITRES) as f64);
@@ -384,10 +381,10 @@ pub fn rdo_mode_decision(
         let slot_idx = fi.ref_frames[i - LAST_FRAME];
         ref_slot_set.push(slot_idx);
         let pmv = pmvs[slot_idx as usize].unwrap();
-        mvs_from_me.push([motion_estimation(fi, fs, bsize, bo, i, &pmv), MotionVector { row: 0, col: 0 }]);
+        mvs_from_me.push([motion_estimation(fi, fs, bsize, bo, i, pmv), MotionVector { row: 0, col: 0 }]);
       }
     }
-    assert!(ref_frames_set.len() != 0);
+    assert!(!ref_frames_set.is_empty());
   }
 
   let mut mode_set: Vec<(PredictionMode, usize)> = Vec::new();
@@ -538,13 +535,13 @@ pub fn rdo_mode_decision(
   };
 
   if fi.frame_type != FrameType::INTER {
-    assert!(mode_set.len() == 0);
+    assert!(mode_set.is_empty());
   }
 
   mode_set.iter().for_each(|&(luma_mode, i)| {
     let mvs = match luma_mode {
       PredictionMode::NEWMV | PredictionMode::NEW_NEWMV => mvs_from_me[i],
-      PredictionMode::NEARESTMV | PredictionMode::NEAREST_NEARESTMV => if mv_stacks[i].len() > 0 {
+      PredictionMode::NEARESTMV | PredictionMode::NEAREST_NEARESTMV => if !mv_stacks[i].is_empty() {
         [mv_stacks[i][0].this_mv, mv_stacks[i][0].comp_mv]
       } else {
         [MotionVector { row: 0, col: 0 }; 2]
@@ -941,11 +938,11 @@ pub fn rdo_cdef_decision(sbo: &SuperBlockOffset, fi: &FrameInvariants,
         let w = fi.padded_w as isize >> xdec;
         let offset = sbo.plane_offset(&fs.rec.planes[p].cfg);
         for y in 0..(64>>ydec)+4 {
-            let mut rec_slice = rec_input.planes[p].mut_slice(&PlaneOffset {x:0, y:y});
+            let mut rec_slice = rec_input.planes[p].mut_slice(&PlaneOffset {x:0, y});
             let mut rec_row = rec_slice.as_mut_slice();
             if offset.y+y < 2 || offset.y+y >= h+2 {
                 // above or below the frame, fill with flag
-                for x in 0..(64>>xdec)+4 { rec_row[x] = CDEF_VERY_LARGE; }
+                for val in &mut rec_row[..(64>>xdec)+4] { *val = CDEF_VERY_LARGE; }
             } else {
                 let mut in_slice = fs.rec.planes[p].slice(&PlaneOffset {x:0, y:offset.y+y-2});
                 let mut in_row = in_slice.as_slice();

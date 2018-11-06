@@ -569,8 +569,8 @@ where
     let max = _mm_set1_epi16((1 << bit_depth) - 1);
 
     for j in 0..Self::H {
-      let luma = ac.as_ptr().offset((32 * j) as isize);
-      let line = output.as_mut_ptr().offset((stride * j) as isize);
+      let luma = ac.as_ptr().add(32 * j);
+      let line = output.as_mut_ptr().add(stride * j);
 
       let mut i = 0isize;
       let mut last = _mm_setzero_si128();

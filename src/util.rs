@@ -194,16 +194,16 @@ impl Fixed for usize {
 
 /// Check alignment.
 pub fn is_aligned<T>(ptr: *const T, n: usize) -> bool {
-  return ((ptr as usize) & ((1 << n) - 1)) == 0;
+  ((ptr as usize) & ((1 << n) - 1)) == 0
 }
 
 pub fn clamp<T: PartialOrd>(input: T, min: T, max: T) -> T {
   if input < min {
-    return min;
+    min
   } else if input > max {
-    return max;
+    max
   } else {
-    return input;
+    input
   }
 }
 

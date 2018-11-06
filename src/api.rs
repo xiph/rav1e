@@ -79,7 +79,7 @@ impl Config {
     let fi = FrameInvariants::new(
       self.frame_info.width,
       self.frame_info.height,
-      self.enc.clone()
+      self.enc
     );
     let seq = Sequence::new(&self.frame_info);
 
@@ -144,7 +144,7 @@ impl Context {
     F: Into<Option<Arc<Frame>>>
   {
     self.frame_q.insert(self.frame_count, frame.into());
-    self.frame_count = self.frame_count + 1;
+    self.frame_count += 1;
     Ok(())
   }
 
@@ -241,7 +241,7 @@ impl Context {
       } else if idx_in_group < pyramid_depth {
         idx_in_group
       } else {
-        pyramid_depth - (idx_in_group - pyramid_depth + 1).trailing_zeros() as u64
+        pyramid_depth - u64::from((idx_in_group - pyramid_depth + 1).trailing_zeros())
       };
       let q_drop = 15 * lvl as usize;
       self.fi.base_q_idx = (self.fi.config.quantizer.min(255 - q_drop) + q_drop) as u8;
@@ -274,7 +274,7 @@ impl Context {
       } else {
         ReferenceMode::SINGLE
       };
-      self.fi.number = segment_idx * key_frame_interval + self.fi.order_hint as u64;
+      self.fi.number = segment_idx * key_frame_interval + u64::from(self.fi.order_hint);
       self.fi.me_range_scale = (group_src_len >> lvl) as u8;
     }
 
@@ -284,12 +284,12 @@ impl Context {
   pub fn receive_packet(&mut self) -> Result<Packet, EncoderStatus> {
     let mut idx = self.idx;
     while !self.frame_properties(idx) {
-      self.idx = self.idx + 1;
+      self.idx += 1;
       idx = self.idx;
     }
 
     if self.fi.show_existing_frame {
-      self.idx = self.idx + 1;
+      self.idx += 1;
 
       let mut fs = FrameState::new(&self.fi);
 
@@ -301,7 +301,7 @@ impl Context {
       Ok(Packet { data, rec, number: self.fi.number, frame_type: self.fi.frame_type })
     } else {
       if let Some(f) = self.frame_q.remove(&self.fi.number) {
-        self.idx = self.idx + 1;
+        self.idx += 1;
 
         if let Some(frame) = f {
           let mut fs = FrameState::new_with_frame(&self.fi, frame);
@@ -334,7 +334,7 @@ impl Context {
 
   pub fn flush(&mut self) {
     self.frame_q.insert(self.frame_count, None);
-    self.frame_count = self.frame_count + 1;
+    self.frame_count += 1;
   }
 }
 

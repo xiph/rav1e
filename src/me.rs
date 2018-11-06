@@ -29,7 +29,7 @@ pub fn get_sad(
       sum += slice_org
         .iter()
         .zip(slice_ref)
-        .map(|(&a, &b)| (a as i32 - b as i32).abs() as u32)
+        .map(|(&a, &b)| (i32::from(a) - i32::from(b)).abs() as u32)
         .sum::<u32>();
   }
 
@@ -49,7 +49,7 @@ fn get_mv_range(fi: &FrameInvariants, bo: &BlockOffset, blk_w: usize, blk_h: usi
 
 pub fn motion_estimation(
   fi: &FrameInvariants, fs: &FrameState, bsize: BlockSize,
-  bo: &BlockOffset, ref_frame: usize, pmv: &MotionVector
+  bo: &BlockOffset, ref_frame: usize, pmv: MotionVector
 ) -> MotionVector {
   match fi.rec_buffer.frames[fi.ref_frames[ref_frame - LAST_FRAME] as usize] {
     Some(ref rec) => {

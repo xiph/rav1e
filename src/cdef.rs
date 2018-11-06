@@ -47,7 +47,7 @@ fn cdef_find_dir(img: &[u16], stride: usize, var: &mut i32, coeff_shift: i32) ->
             // We subtract 128 here to reduce the maximum range of the squared
             // partial sums. 
             debug_assert!((img[i * stride + j] >> coeff_shift) <= 255);
-            let x = (img[i * stride + j] as i32 >> coeff_shift) - 128;
+            let x = (i32::from(img[i * stride + j]) >> coeff_shift) - 128;
             partial[0][i + j] += x;
             partial[1][i + j / 2] += x;
             partial[2][i] += x;
@@ -146,8 +146,8 @@ unsafe fn cdef_filter_block(dst: &mut [u16], dstride: isize, input: &[u16],
             for k in 0..2usize {
                 let p0 = *ptr_in.offset(cdef_directions[dir][k]);
                 let p1 = *ptr_in.offset(-cdef_directions[dir][k]);
-                sum += pri_taps[k] * constrain(p0 as i32 - x as i32, pri_strength, pri_damping);
-                sum += pri_taps[k] * constrain(p1 as i32 - x as i32, pri_strength, pri_damping);
+                sum += pri_taps[k] * constrain(i32::from(p0) - i32::from(x), pri_strength, pri_damping);
+                sum += pri_taps[k] * constrain(i32::from(p1) - i32::from(x), pri_strength, pri_damping);
                 if p0 != CDEF_VERY_LARGE {
                     max = cmp::max(p0, max);
                 }
@@ -176,13 +176,13 @@ unsafe fn cdef_filter_block(dst: &mut [u16], dstride: isize, input: &[u16],
                 min = cmp::min(s1, min);
                 min = cmp::min(s2, min);
                 min = cmp::min(s3, min);
-                sum += sec_taps[k] * constrain(s0 as i32 - x as i32, sec_strength, sec_damping);
-                sum += sec_taps[k] * constrain(s1 as i32 - x as i32, sec_strength, sec_damping);
-                sum += sec_taps[k] * constrain(s2 as i32 - x as i32, sec_strength, sec_damping);
-                sum += sec_taps[k] * constrain(s3 as i32 - x as i32, sec_strength, sec_damping);
+                sum += sec_taps[k] * constrain(i32::from(s0) - i32::from(x), sec_strength, sec_damping);
+                sum += sec_taps[k] * constrain(i32::from(s1) - i32::from(x), sec_strength, sec_damping);
+                sum += sec_taps[k] * constrain(i32::from(s2) - i32::from(x), sec_strength, sec_damping);
+                sum += sec_taps[k] * constrain(i32::from(s3) - i32::from(x), sec_strength, sec_damping);
             }
-            *ptr_out = clamp(x as i32 + ((8 + sum - (sum < 0) as i32) >> 4), min as i32,
-                             max as i32) as u16;
+            *ptr_out = clamp(i32::from(x) + ((8 + sum - (sum < 0) as i32) >> 4), i32::from(min),
+                             i32::from(max)) as u16;
         }
     }
 }
@@ -190,7 +190,7 @@ unsafe fn cdef_filter_block(dst: &mut [u16], dstride: isize, input: &[u16],
 // We use the variance of an 8x8 block to adjust the effective filter strength.
 fn adjust_strength(strength: i32, var: i32) -> i32 {
     let i = if (var >> 6) != 0 {cmp::min(msb(var >> 6), 12)} else {0};
-    if var!=0 {strength * (4 + i) + 8 >> 4} else {0}
+    if var!=0 {(strength * (4 + i) + 8) >> 4} else {0}
 }
 
 // For convenience of use alongside cdef_filter_superblock, we assume
@@ -247,13 +247,13 @@ pub fn cdef_filter_superblock(fi: &FrameInvariants,
                               cdef_index: u8,
                               cdef_dirs: &CdefDirections) {
     let coeff_shift = bit_depth as i32 - 8;
-    let cdef_damping = fi.cdef_damping as i32;
+    let cdef_damping = i32::from(fi.cdef_damping);
     let cdef_y_strength = fi.cdef_y_strengths[cdef_index as usize];
     let cdef_uv_strength = fi.cdef_uv_strengths[cdef_index as usize];
-    let cdef_pri_y_strength = (cdef_y_strength / CDEF_SEC_STRENGTHS) as i32;
-    let mut cdef_sec_y_strength = (cdef_y_strength % CDEF_SEC_STRENGTHS) as i32;
-    let cdef_pri_uv_strength = (cdef_uv_strength / CDEF_SEC_STRENGTHS) as i32;
-    let mut cdef_sec_uv_strength = (cdef_uv_strength % CDEF_SEC_STRENGTHS) as i32;
+    let cdef_pri_y_strength = i32::from(cdef_y_strength / CDEF_SEC_STRENGTHS);
+    let mut cdef_sec_y_strength = i32::from(cdef_y_strength % CDEF_SEC_STRENGTHS);
+    let cdef_pri_uv_strength = i32::from(cdef_uv_strength / CDEF_SEC_STRENGTHS);
+    let mut cdef_sec_uv_strength = i32::from(cdef_uv_strength % CDEF_SEC_STRENGTHS);
     if cdef_sec_y_strength == 3 {
         cdef_sec_y_strength += 1;
     }
@@ -303,9 +303,9 @@ pub fn cdef_filter_superblock(fi: &FrameInvariants,
                         }
                             
                         unsafe {
-                            cdef_filter_block(out_slice.offset_as_mutable(8*bx>>xdec,8*by>>ydec),
+                            cdef_filter_block(out_slice.offset_as_mutable((8*bx)>>xdec,(8*by)>>ydec),
                                               out_stride as isize,
-                                              in_slice.offset(8*bx>>xdec,8*by>>ydec),
+                                              in_slice.offset((8*bx)>>xdec,(8*by)>>ydec),
                                               in_stride as isize,
                                               local_pri_strength, local_sec_strength, local_dir,
                                               local_damping, local_damping,
@@ -334,8 +334,8 @@ pub fn cdef_filter_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockCo
     // Construct a padded copy of the reconstructed frame.
     let mut padded_px: [[usize; 2]; 3] = [[0; 2]; 3];
     for p in 0..3 {
-        padded_px[p][0] =  (fb_width*64 >> rec.planes[p].cfg.xdec) + 4;
-        padded_px[p][1] =  (fb_height*64 >> rec.planes[p].cfg.ydec) + 4;
+        padded_px[p][0] =  ((fb_width*64) >> rec.planes[p].cfg.xdec) + 4;
+        padded_px[p][1] =  ((fb_height*64) >> rec.planes[p].cfg.ydec) + 4;
     }
     let mut cdef_frame = Frame {
         planes: [
