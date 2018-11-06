@@ -30,7 +30,6 @@ use std::f64;
 use std::vec::Vec;
 use write_tx_blocks;
 use write_tx_tree;
-use partition::BlockSize;
 use Frame;
 use FrameInvariants;
 use FrameState;
@@ -39,6 +38,7 @@ use Tune;
 use Sequence;
 use encoder::ReferenceMode;
 use api::PredictionModesSetting;
+use partition::PartitionType::*;
 
 #[derive(Clone)]
 pub struct RDOOutput {
@@ -849,9 +849,9 @@ pub fn rdo_partition_decision(
           ).clone();
         child_modes.push(mode_decision);
       }
-      PartitionType::PARTITION_SPLIT |
-      PartitionType::PARTITION_HORZ |
-      PartitionType::PARTITION_VERT => {
+      PARTITION_SPLIT |
+      PARTITION_HORZ |
+      PARTITION_VERT => {
         let subsize = bsize.subsize(partition);
 
         if subsize == BlockSize::BLOCK_INVALID {
@@ -870,13 +870,13 @@ pub fn rdo_partition_decision(
 
         let mut partitions = vec![ bo ];
 
-        if hbsw < bsize.width_mi() {
+        if partition == PARTITION_VERT || partition == PARTITION_SPLIT {
           partitions.push(&p1);
         };
-        if hbsh < bsize.height_mi() {
+        if partition == PARTITION_HORZ || partition == PARTITION_SPLIT {
           partitions.push(&p2);
         };
-        if hbsw < bsize.width_mi() && hbsh < bsize.height_mi() {
+        if partition == PARTITION_SPLIT {
           partitions.push(&p3);
         };
 

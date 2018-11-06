@@ -21,6 +21,7 @@ use std::fmt;
 use transform::*;
 use util::*;
 use me::*;
+use partition::PartitionType::*;
 
 use bitstream_io::{BitWriter, BigEndian, LittleEndian};
 use std;
@@ -2008,12 +2009,14 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
         return;
     }
 
-    let bs = bsize.width_mi();
+    let bsw = bsize.width_mi();
+    let bsh = bsize.height_mi();
+    let is_square = bsw == bsh;
 
     // Always split if the current partition is too large
-    let must_split = bo.x + bs as usize > fi.w_in_b ||
-        bo.y + bs as usize > fi.h_in_b ||
-        bsize > BlockSize::BLOCK_64X64;
+    let must_split = (bo.x + bsw as usize > fi.w_in_b ||
+        bo.y + bsh as usize > fi.h_in_b ||
+        bsize > BlockSize::BLOCK_64X64) && is_square;
 
     let mut rdo_output = block_output.clone().unwrap_or(RDOOutput {
         part_type: PartitionType::PARTITION_INVALID,
@@ -2025,7 +2028,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
     if must_split {
         // Oversized blocks are split automatically
         partition = PartitionType::PARTITION_SPLIT;
-    } else if bsize > fi.min_partition_size {
+    } else if bsize > fi.min_partition_size && is_square {
         // Blocks of sizes within the supported range are subjected to a partitioning decision
         rdo_output = rdo_partition_decision(seq, fi, fs, cw, bsize, bo, &rdo_output, pmvs);
         partition = rdo_output.part_type;
@@ -2034,11 +2037,9 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
         partition = PartitionType::PARTITION_NONE;
     }
 
-    assert!(bsize.width_mi() == bsize.height_mi());
     assert!(PartitionType::PARTITION_NONE <= partition &&
             partition < PartitionType::PARTITION_INVALID);
 
-    let hbs = bs >> 1; // Half the block size in blocks
     let subsize = bsize.subsize(partition);
 
     if bsize >= BlockSize::BLOCK_8X8 {
@@ -2128,8 +2129,13 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
                           mode_luma, mode_chroma, ref_frames, mvs, bsize, bo, skip, seq.bit_depth, cfl,
                           tx_size, tx_type, mode_context, &mv_stack, false);
         },
-        PartitionType::PARTITION_SPLIT => {
-            if rdo_output.part_modes.len() >= 4 {
+        PARTITION_SPLIT |
+        PARTITION_HORZ |
+        PARTITION_VERT => {
+            let num_modes = if partition == PARTITION_SPLIT { 4 }
+                            else { 2 };
+
+            if rdo_output.part_modes.len() >= num_modes {
                 // The optimal prediction modes for each split block is known from an rdo_partition_decision() call
                 assert!(subsize != BlockSize::BLOCK_INVALID);
 
@@ -2145,12 +2151,25 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
                 }
             }
             else {
-                let partitions = [
-                    bo,
-                    &BlockOffset{ x: bo.x + hbs as usize, y: bo.y },
-                    &BlockOffset{ x: bo.x, y: bo.y + hbs as usize },
-                    &BlockOffset{ x: bo.x + hbs as usize, y: bo.y + hbs as usize }
-                ];
+                let hbsw = subsize.width_mi(); // Half the block size width in blocks
+                let hbsh = subsize.height_mi(); // Half the block size height in blocks
+
+                let p1 = BlockOffset{ x: bo.x + hbsw as usize, y: bo.y };
+                let p2 = BlockOffset{ x: bo.x, y: bo.y + hbsh as usize };
+                let p3 = BlockOffset{ x: bo.x + hbsw as usize, y: bo.y + hbsh as usize };
+
+                let mut partitions = vec![ bo ];
+
+                if partition == PARTITION_VERT || partition == PARTITION_SPLIT {
+                partitions.push(&p1);
+                };
+                if partition == PARTITION_HORZ || partition == PARTITION_SPLIT {
+                partitions.push(&p2);
+                };
+                if partition == PARTITION_SPLIT {
+                partitions.push(&p3);
+                };
+
                 partitions.iter().for_each(|&offset| {
                         encode_partition_topdown(
                             seq,
