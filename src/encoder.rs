@@ -1264,7 +1264,7 @@ fn write_obus(packet: &mut dyn io::Write, sequence: &mut Sequence,
       bw1.write_obu_header(OBU_Type::OBU_TEMPORAL_DELIMITER, obu_extension)?;
       bw1.write(8,0)?;	// size of payload == 0, one byte
     }
-    packet.write(&buf1).unwrap();
+    packet.write_all(&buf1).unwrap();
     buf1.clear();
 
     // write sequence header obu if KEY_FRAME, preceded by 4-byte size
@@ -1280,7 +1280,7 @@ fn write_obus(packet: &mut dyn io::Write, sequence: &mut Sequence,
             let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
             bw1.write_obu_header(OBU_Type::OBU_SEQUENCE_HEADER, obu_extension)?;
         }
-        packet.write(&buf1).unwrap();
+        packet.write_all(&buf1).unwrap();
         buf1.clear();
 
         let obu_payload_size = buf2.len() as u64;
@@ -1293,10 +1293,10 @@ fn write_obus(packet: &mut dyn io::Write, sequence: &mut Sequence,
                 bw1.write(8, coded_payload_length[i])?;
             }
         }
-        packet.write(&buf1).unwrap();
+        packet.write_all(&buf1).unwrap();
         buf1.clear();
 
-        packet.write(&buf2).unwrap();
+        packet.write_all(&buf2).unwrap();
         buf2.clear();
     }
 
@@ -1310,7 +1310,7 @@ fn write_obus(packet: &mut dyn io::Write, sequence: &mut Sequence,
         let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
         bw1.write_obu_header(OBU_Type::OBU_FRAME_HEADER, obu_extension)?;
     }
-    packet.write(&buf1).unwrap();
+    packet.write_all(&buf1).unwrap();
     buf1.clear();
 
     let obu_payload_size = buf2.len() as u64;
@@ -1323,10 +1323,10 @@ fn write_obus(packet: &mut dyn io::Write, sequence: &mut Sequence,
             bw1.write(8, coded_payload_length[i])?;
         }
     }
-    packet.write(&buf1).unwrap();
+    packet.write_all(&buf1).unwrap();
     buf1.clear();
 
-    packet.write(&buf2).unwrap();
+    packet.write_all(&buf2).unwrap();
     buf2.clear();
 
     Ok(())
@@ -2373,7 +2373,7 @@ pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut 
             let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
             bw1.write_obu_header(OBU_Type::OBU_TILE_GROUP, 0).unwrap();
         }
-        packet.write(&buf1).unwrap();
+        packet.write_all(&buf1).unwrap();
         buf1.clear();
 
         let obu_payload_size = tile.len() as u64;
@@ -2386,10 +2386,10 @@ pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut 
                 bw1.write(8, coded_payload_length[i]).unwrap();
             }
         }
-        packet.write(&buf1).unwrap();
+        packet.write_all(&buf1).unwrap();
         buf1.clear();
 
-      packet.write(&tile).unwrap();
+      packet.write_all(&tile).unwrap();
     }
     packet
 }
