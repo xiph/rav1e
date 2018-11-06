@@ -79,7 +79,7 @@ impl Config {
     let fi = FrameInvariants::new(
       self.frame_info.width,
       self.frame_info.height,
-      self.enc.clone()
+      self.enc
     );
     let seq = Sequence::new(&self.frame_info);
 

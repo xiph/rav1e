@@ -369,9 +369,9 @@ impl FrameState {
             input_hres: self.input_hres.window(&sbo.plane_offset(&self.input_hres.cfg)),
             input_qres: self.input_qres.window(&sbo.plane_offset(&self.input_qres.cfg)),
             rec: self.rec.window(sbo),
-            qc: self.qc.clone(),
-            cdfs: self.cdfs.clone(),
-            deblock: self.deblock.clone()
+            qc: self.qc,
+            cdfs: self.cdfs,
+            deblock: self.deblock
         }
     }
 }
@@ -2182,7 +2182,7 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
       CDFContext::new(fi.base_q_idx)
     } else {
       match fi.rec_buffer.frames[fi.ref_frames[fi.primary_ref_frame as usize] as usize] {
-        Some(ref rec) => rec.cdfs.clone(),
+        Some(ref rec) => rec.cdfs,
         None => CDFContext::new(fi.base_q_idx)
       }
     };
@@ -2312,7 +2312,7 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
         cdef_filter_frame(fi, &mut fs.rec, &mut cw.bc, bit_depth);
     }
 
-    fs.cdfs = cw.fc.clone();
+    fs.cdfs = cw.fc;
     fs.cdfs.reset_counts();
 
     let mut h = w.done();
@@ -2407,7 +2407,7 @@ pub fn update_rec_buffer(fi: &mut FrameInvariants, fs: FrameState) {
   for i in 0..(REF_FRAMES as usize) {
     if (fi.refresh_frame_flags & (1 << i)) != 0 {
       fi.rec_buffer.frames[i] = Some(Rc::clone(&rfs));
-      fi.rec_buffer.deblock[i] = fs.deblock.clone();
+      fi.rec_buffer.deblock[i] = fs.deblock;
     }
   }
 }
