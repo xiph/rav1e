@@ -2383,7 +2383,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
 
     let bsw = bsize.width_mi();
     let bsh = bsize.height_mi();
-    let is_square = bsw == bsh;
+    let is_square = bsize.is_sqr();
 
     // Always split if the current partition is too large
     let must_split = (bo.x + bsw as usize > fi.w_in_b ||
@@ -2415,7 +2415,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
 
     let subsize = bsize.subsize(partition);
 
-    if bsize >= BlockSize::BLOCK_8X8 {
+    if bsize >= BlockSize::BLOCK_8X8 && is_square {
         let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
         cw.write_partition(w, bo, partition, bsize);
     }
