@@ -3493,7 +3493,7 @@ impl ContextWriter {
 
   pub fn checkpoint(&mut self) -> ContextWriterCheckpoint {
     ContextWriterCheckpoint {
-      fc: self.fc.clone(),
+      fc: self.fc,
       bc: self.bc.checkpoint()
     }
   }
