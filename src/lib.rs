@@ -31,6 +31,7 @@ pub mod context;
 pub mod entropymode;
 pub mod token_cdfs;
 pub mod deblock;
+pub mod segmentation;
 pub mod cdef;
 pub mod lrf;
 pub mod encoder;

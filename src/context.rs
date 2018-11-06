@@ -262,6 +262,25 @@ pub enum TxClass {
   TX_CLASS_VERT = 2
 }
 
+#[derive(Copy, Clone, PartialEq)]
+pub enum SegLvl {
+  SEG_LVL_ALT_Q = 0,       /* Use alternate Quantizer .... */
+  SEG_LVL_ALT_LF_Y_V = 1,  /* Use alternate loop filter value on y plane vertical */
+  SEG_LVL_ALT_LF_Y_H = 2,  /* Use alternate loop filter value on y plane horizontal */
+  SEG_LVL_ALT_LF_U = 3,    /* Use alternate loop filter value on u plane */
+  SEG_LVL_ALT_LF_V = 4,    /* Use alternate loop filter value on v plane */
+  SEG_LVL_REF_FRAME = 5,   /* Optional Segment reference frame */
+  SEG_LVL_SKIP = 6,        /* Optional Segment (0,0) + skip mode */
+  SEG_LVL_GLOBALMV = 7,
+  SEG_LVL_MAX = 8
+}
+
+pub const seg_feature_bits: [u32; SegLvl::SEG_LVL_MAX as usize] =
+  [ 8, 6, 6, 6, 6, 3, 0, 0 ];
+
+pub const seg_feature_is_signed: [bool; SegLvl::SEG_LVL_MAX as usize] =
+    [ true, true, true, true, true, false, false, false, ];
+
 use context::TxClass::*;
 
 static tx_type_to_class: [TxClass; TX_TYPES] = [
@@ -702,6 +721,7 @@ pub struct CDFContext {
   nmv_context: NMVContext,
   deblock_delta_multi_cdf: [[u16; DELTA_LF_PROBS + 1 + 1]; FRAME_LF_COUNT],
   deblock_delta_cdf: [u16; DELTA_LF_PROBS + 1 + 1],
+  spatial_segmentation_cdfs: [[u16; 8 + 1]; 3],
 
   // lv_map
   txb_skip_cdf: [[[u16; 3]; TXB_SKIP_CONTEXTS]; TxSize::TX_SIZES],
@@ -759,6 +779,7 @@ impl CDFContext {
       nmv_context: default_nmv_context,
       deblock_delta_multi_cdf: default_delta_lf_multi_cdf,
       deblock_delta_cdf: default_delta_lf_cdf,
+      spatial_segmentation_cdfs: default_spatial_pred_seg_tree_cdf,
 
       // lv_map
       txb_skip_cdf: av1_default_txb_skip_cdfs[qctx],
@@ -833,6 +854,7 @@ impl CDFContext {
     reset_2d!(self.compound_mode_cdf);
     reset_2d!(self.deblock_delta_multi_cdf);
     reset_1d!(self.deblock_delta_cdf);
+    reset_2d!(self.spatial_segmentation_cdfs);
 
     reset_1d!(self.nmv_context.joints_cdf);
     for i in 0..2 {
@@ -930,6 +952,10 @@ impl CDFContext {
       self.deblock_delta_cdf.as_ptr() as usize;
     let deblock_delta_cdf_end =
       deblock_delta_cdf_start + size_of_val(&self.deblock_delta_cdf);
+    let spatial_segmentation_cdfs_start =
+      self.spatial_segmentation_cdfs.first().unwrap().as_ptr() as usize;
+    let spatial_segmentation_cdfs_end =
+      spatial_segmentation_cdfs_start + size_of_val(&self.spatial_segmentation_cdfs);
 
     let txb_skip_cdf_start =
       self.txb_skip_cdf.first().unwrap().as_ptr() as usize;
@@ -1002,6 +1028,7 @@ impl CDFContext {
       ("comp_bwd_ref_cdf", comp_bwd_ref_cdf_start, comp_bwd_ref_cdf_end),
       ("deblock_delta_multi_cdf", deblock_delta_multi_cdf_start, deblock_delta_multi_cdf_end),
       ("deblock_delta_cdf", deblock_delta_cdf_start, deblock_delta_cdf_end),
+      ("spatial_segmentation_cdfs", spatial_segmentation_cdfs_start, spatial_segmentation_cdfs_end),
       ("txb_skip_cdf", txb_skip_cdf_start, txb_skip_cdf_end),
       ("dc_sign_cdf", dc_sign_cdf_start, dc_sign_cdf_end),
       ("eob_extra_cdf", eob_extra_cdf_start, eob_extra_cdf_end),
@@ -1168,7 +1195,8 @@ pub struct Block {
   // The block-level deblock_deltas are left-shifted by
   // fi.deblock.block_delta_shift and added to the frame-configured
   // deltas
-  pub deblock_deltas: [i8; FRAME_LF_COUNT]
+  pub deblock_deltas: [i8; FRAME_LF_COUNT],
+  pub segmentation_idx: u8
 }
 
 impl Block {
@@ -1186,7 +1214,8 @@ impl Block {
       tx_w: TX_64X64.width_mi(),
       tx_h: TX_64X64.height_mi(),
       is_sec_rect: false,
-      deblock_deltas: [0, 0, 0, 0]
+      deblock_deltas: [0, 0, 0, 0],
+      segmentation_idx: 0,
     }
   }
   pub fn is_inter(&self) -> bool {
@@ -1208,6 +1237,8 @@ pub struct BlockContext {
   pub rows: usize,
   pub cdef_coded: bool,
   pub code_deltas: bool,
+  pub update_seg: bool,
+  pub preskip_segid: bool,
   above_partition_context: Vec<u8>,
   left_partition_context: [u8; MAX_MIB_SIZE],
   above_coeff_context: [Vec<u8>; PLANES],
@@ -1225,6 +1256,8 @@ impl BlockContext {
       rows,
       cdef_coded: false,
       code_deltas: false,
+      update_seg: false,
+      preskip_segid: true,
       above_partition_context: vec![0; aligned_cols],
       left_partition_context: [0; MAX_MIB_SIZE],
       above_coeff_context: [
@@ -1243,6 +1276,8 @@ impl BlockContext {
       rows: self.rows,
       cdef_coded: self.cdef_coded,
       code_deltas: self.code_deltas,
+      update_seg: self.update_seg,
+      preskip_segid: self.preskip_segid,
       above_partition_context: self.above_partition_context.clone(),
       left_partition_context: self.left_partition_context,
       above_coeff_context: self.above_coeff_context.clone(),
@@ -1280,6 +1315,14 @@ impl BlockContext {
   pub fn left_of(&mut self, bo: &BlockOffset) -> Block {
     if bo.x > 0 {
       self.blocks[bo.y][bo.x - 1]
+    } else {
+      Block::default()
+    }
+  }
+
+  pub fn above_left_of(&mut self, bo: &BlockOffset) -> Block {
+    if bo.x > 0 && bo.y > 0 {
+      self.blocks[bo.y - 1][bo.x - 1]
     } else {
       Block::default()
     }
@@ -1459,6 +1502,10 @@ impl BlockContext {
 
   pub fn set_skip(&mut self, bo: &BlockOffset, bsize: BlockSize, skip: bool) {
     self.for_each(bo, bsize, |block| block.skip = skip);
+  }
+
+  pub fn set_segmentation_idx(&mut self, bo: &BlockOffset, bsize: BlockSize, idx: u8) {
+    self.for_each(bo, bsize, |block| block.segmentation_idx = idx);
   }
 
   pub fn set_ref_frames(&mut self, bo: &BlockOffset, bsize: BlockSize, r: [usize; 2]) {
@@ -2951,6 +2998,85 @@ impl ContextWriter {
   pub fn write_skip(&mut self, w: &mut dyn Writer, bo: &BlockOffset, skip: bool) {
     let ctx = self.bc.skip_context(bo);
     symbol_with_update!(self, w, skip as u32, &mut self.fc.skip_cdfs[ctx]);
+  }
+
+  fn get_segment_pred(&mut self, bo: &BlockOffset) -> ( u8, u8 ) {
+    let mut prev_ul = -1;
+    let mut prev_u  = -1;
+    let mut prev_l  = -1;
+    if bo.x > 0 && bo.y > 0 {
+      prev_ul = self.bc.above_left_of(bo).segmentation_idx as i8;
+    }
+    if bo.y > 0 {
+      prev_u  = self.bc.above_of(bo).segmentation_idx as i8;
+    }
+    if bo.x > 0 {
+      prev_l  = self.bc.left_of(bo).segmentation_idx as i8;
+    }
+
+    /* Pick CDF index based on number of matching/out-of-bounds segment IDs. */
+    let cdf_index: u8;
+    if prev_ul < 0 || prev_u < 0 || prev_l < 0 { /* Edge case */
+      cdf_index = 0;
+    } else if (prev_ul == prev_u) && (prev_ul == prev_l) {
+      cdf_index = 2;
+    } else if (prev_ul == prev_u) || (prev_ul == prev_l) || (prev_u == prev_l) {
+      cdf_index = 1;
+    } else {
+      cdf_index = 0;
+    }
+
+    /* If 2 or more are identical returns that as predictor, otherwise prev_l. */
+    let r: i8;
+    if prev_u == -1 {  /* edge case */
+      r = if prev_l == -1 { 0 } else { prev_l };
+    } else if prev_l == -1 {  /* edge case */
+      r = prev_u;
+    } else {
+      r = if prev_ul == prev_u { prev_u } else { prev_l };
+    }
+    ( r as u8, cdf_index )
+  }
+
+  fn neg_interleave(&mut self, x: i32, r: i32, max: i32) -> i32 {
+    assert!(x < max);
+    if r == 0 {
+      return x;
+    } else if r >= (max - 1) {
+      return -x + max - 1;
+    }
+    let diff = x - r;
+    if 2 * r < max {
+      if diff.abs() <= r {
+        if diff > 0 {
+          return (diff << 1) - 1;
+        } else {
+          return (-diff) << 1;
+        }
+      }
+      x
+    } else {
+      if diff.abs() < (max - r) {
+        if diff > 0 {
+          return (diff << 1) - 1;
+        } else {
+          return (-diff) << 1;
+        }
+      }
+      (max - x) - 1
+    }
+  }
+
+  pub fn write_segmentation(&mut self, w: &mut dyn Writer, bo: &BlockOffset,
+                            bsize: BlockSize, skip: bool, last_active_segid: u8) {
+    let ( pred, cdf_index ) = self.get_segment_pred(bo);
+    if skip {
+      self.bc.set_segmentation_idx(bo, bsize, pred);
+      return;
+    }
+    let seg_idx = self.bc.at(bo).segmentation_idx;
+    let coded_id = self.neg_interleave(seg_idx as i32, pred as i32, (last_active_segid + 1) as i32);
+    symbol_with_update!(self, w, coded_id as u32, &mut self.fc.spatial_segmentation_cdfs[cdf_index as usize]);
   }
 
   pub fn write_cdef(&mut self, w: &mut dyn Writer, strength_index: u8, bits: u8) {

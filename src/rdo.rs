@@ -467,7 +467,7 @@ pub fn rdo_mode_decision(
 
         if skip { tx_type = TxType::DCT_DCT; };
 
-        encode_block_a(seq, cw, wr, bsize, bo, skip);
+        encode_block_a(seq, fs, cw, wr, bsize, bo, skip);
         let tx_dist =
         encode_block_b(
           seq,
@@ -611,7 +611,7 @@ pub fn rdo_mode_decision(
       let mut wr: &mut dyn Writer = &mut WriterCounter::new();
       let tell = wr.tell_frac();
 
-      encode_block_a(seq, cw, wr, bsize, bo, best.skip);
+      encode_block_a(seq, fs, cw, wr, bsize, bo, best.skip);
       encode_block_b(
         seq,
         fi,
