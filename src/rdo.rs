@@ -849,7 +849,9 @@ pub fn rdo_partition_decision(
           ).clone();
         child_modes.push(mode_decision);
       }
-      PartitionType::PARTITION_SPLIT => {
+      PartitionType::PARTITION_SPLIT |
+      PartitionType::PARTITION_HORZ |
+      PartitionType::PARTITION_VERT => {
         let subsize = bsize.subsize(partition);
 
         if subsize == BlockSize::BLOCK_INVALID {
@@ -858,14 +860,25 @@ pub fn rdo_partition_decision(
         //pmv = best_pred_modes[0].mvs[0];
 
         assert!(best_pred_modes.len() <= 4);
-        let bs = bsize.width_mi();
-        let hbs = bs >> 1; // Half the block size in blocks
-        let partitions = [
-          bo,
-          &BlockOffset{ x: bo.x + hbs as usize, y: bo.y },
-          &BlockOffset{ x: bo.x, y: bo.y + hbs as usize },
-          &BlockOffset{ x: bo.x + hbs as usize, y: bo.y + hbs as usize }
-        ];
+
+        let hbsw = subsize.width_mi(); // Half the block size width in blocks
+        let hbsh = subsize.height_mi(); // Half the block size height in blocks
+
+        let p1 = BlockOffset{ x: bo.x + hbsw as usize, y: bo.y };
+        let p2 = BlockOffset{ x: bo.x, y: bo.y + hbsh as usize };
+        let p3 = BlockOffset{ x: bo.x + hbsw as usize, y: bo.y + hbsh as usize };
+
+        let mut partitions = vec![ bo ];
+
+        if hbsw < bsize.width_mi() {
+          partitions.push(&p1);
+        };
+        if hbsh < bsize.height_mi() {
+          partitions.push(&p2);
+        };
+        if hbsw < bsize.width_mi() && hbsh < bsize.height_mi() {
+          partitions.push(&p3);
+        };
 
         let pmv_idxs = partitions.iter().map(|&offset| {
           if subsize > BlockSize::BLOCK_32X32 {
