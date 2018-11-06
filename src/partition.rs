@@ -384,7 +384,7 @@ impl TxSize {
   }
 
   pub fn width_index(self) -> usize {
-    return self.width_log2() - Self::smallest_width_log2();
+    self.width_log2() - Self::smallest_width_log2()
   }
 
   pub fn smallest_width_log2() -> usize {
@@ -402,7 +402,7 @@ impl TxSize {
   }
 
   pub fn height_index(self) -> usize {
-    return self.height_log2() - Self::smallest_height_log2();
+    self.height_log2() - Self::smallest_height_log2()
   }
 
   pub fn smallest_height_log2() -> usize {
@@ -936,7 +936,7 @@ impl PredictionMode {
   }
 
   pub fn is_intra(self) -> bool {
-    return self < PredictionMode::NEARESTMV;
+    self < PredictionMode::NEARESTMV
   }
 
   pub fn is_cfl(self) -> bool {

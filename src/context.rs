@@ -1288,7 +1288,7 @@ impl BlockContext {
     }
   }
 
-  pub fn for_each<F>(&mut self, bo: &BlockOffset, bsize: BlockSize, f: F) -> ()
+  pub fn for_each<F>(&mut self, bo: &BlockOffset, bsize: BlockSize, f: F)
   where
     F: Fn(&mut Block) -> ()
   {
@@ -1982,10 +1982,9 @@ impl ContextWriter {
     ];
 
     if ref_frame >= REF_FRAMES {
-      return ([ ref_frame_map[ref_frame - REF_FRAMES][0],
-               ref_frame_map[ref_frame - REF_FRAMES][1] ], 2)
+      ([ ref_frame_map[ref_frame - REF_FRAMES][0], ref_frame_map[ref_frame - REF_FRAMES][1] ], 2)
     } else {
-      return ([ ref_frame, 0 ], 1)
+      ([ ref_frame, 0 ], 1)
     }
   }
 
@@ -2572,8 +2571,7 @@ impl ContextWriter {
       return 0;
     }
 
-    let mode_context = self.setup_mvref_list(bo, ref_frames, mv_stack, bsize, is_sec_rect, fi, is_compound);
-    mode_context
+    self.setup_mvref_list(bo, ref_frames, mv_stack, bsize, is_sec_rect, fi, is_compound)
   }
 
   pub fn fill_neighbours_ref_counts(&mut self, bo: &BlockOffset) {
@@ -3085,7 +3083,7 @@ impl ContextWriter {
         // if (row + col < 2) return ctx + 1;
         // if (row + col < 4) return 5 + ctx + 1;
         // return 21 + ctx;
-        return ctx + av1_nz_map_ctx_offset[tx_size as usize][cmp::min(row, 4)][cmp::min(col, 4)] as usize;
+        ctx + av1_nz_map_ctx_offset[tx_size as usize][cmp::min(row, 4)][cmp::min(col, 4)] as usize
       }
       TX_CLASS_HORIZ => {
         let row = coeff_idx >> bwl;
