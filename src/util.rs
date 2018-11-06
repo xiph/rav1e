@@ -207,10 +207,10 @@ pub fn clamp<T: PartialOrd>(input: T, min: T, max: T) -> T {
   }
 }
 
-use num_traits::PrimInt;
+use num_traits::*;
 use std::mem::size_of;
 
-pub trait Pixel: PrimInt + Into<u32> + Into<i32> + 'static {}
+pub trait Pixel: PrimInt + Into<u32> + Into<i32> + AsPrimitive<i32> + 'static {}
 impl Pixel for u8 {}
 impl Pixel for u16 {}
 
