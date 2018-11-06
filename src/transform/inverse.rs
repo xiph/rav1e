@@ -1,7 +1,8 @@
 use super::*;
 
 use std::cmp;
-
+use util::clamp;
+use num_traits::*;
 use partition::TxType;
 
 static COSPI_INV: [i32; 64] = [
@@ -1495,18 +1496,18 @@ static INV_TXFM_FNS: [[fn(&[i32], &mut [i32], usize); 5]; 4] = [
 trait InvTxfm2D: Dim {
   const INTERMEDIATE_SHIFT: usize;
 
-  fn inv_txfm2d_add(
-    input: &[i32], output: &mut [u16], stride: usize, tx_type: TxType,
+  fn inv_txfm2d_add<T>(
+    input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
     bd: usize
-  ) {
+  ) where T: Pixel, i32: AsPrimitive<T>{
     // TODO: Implement SSE version
     Self::inv_txfm2d_add_rs(input, output, stride, tx_type, bd);
   }
 
-  fn inv_txfm2d_add_rs(
-    input: &[i32], output: &mut [u16], stride: usize, tx_type: TxType,
+  fn inv_txfm2d_add_rs<T>(
+    input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
     bd: usize
-  ) {
+  ) where T: Pixel, i32: AsPrimitive<T> {
     let buffer = &mut [0i32; 64 * 64][..Self::W * Self::H];
     let tx_types_1d = get_1d_tx_types(tx_type)
       .expect("TxType not supported by rust txfm code.");
@@ -1541,7 +1542,7 @@ trait InvTxfm2D: Dim {
         .zip(output[c..].iter_mut().step_by(stride).take(Self::H))
       {
         *out =
-          clamp(*out as i32 + round_shift(*temp, 4), 0, (1 << bd) - 1) as u16;
+          clamp((*out).as_() + round_shift(*temp, 4), 0, (1 << bd) - 1).as_();
       }
     }
   }
@@ -1567,10 +1568,10 @@ impl InvTxfm2D for Block64x64 {
   const INTERMEDIATE_SHIFT: usize = 2;
 }
 
-pub fn iht4x4_add(
-  input: &[i32], output: &mut [u16], stride: usize, tx_type: TxType,
+pub fn iht4x4_add<T>(
+  input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
   bit_depth: usize
-) {
+) where T: Pixel, i32: AsPrimitive<T> {
   // SIMD code may assert for transform types beyond TxType::IDTX.
   if tx_type < TxType::IDTX {
     Block4x4::inv_txfm2d_add(input, output, stride, tx_type, bit_depth);
@@ -1579,10 +1580,10 @@ pub fn iht4x4_add(
   }
 }
 
-pub fn iht8x8_add(
-  input: &[i32], output: &mut [u16], stride: usize, tx_type: TxType,
+pub fn iht8x8_add<T>(
+  input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
   bit_depth: usize
-) {
+) where T: Pixel, i32: AsPrimitive<T> {
   if tx_type < TxType::IDTX {
     Block8x8::inv_txfm2d_add(input, output, stride, tx_type, bit_depth);
   } else {
@@ -1590,10 +1591,10 @@ pub fn iht8x8_add(
   }
 }
 
-pub fn iht16x16_add(
-  input: &[i32], output: &mut [u16], stride: usize, tx_type: TxType,
+pub fn iht16x16_add<T>(
+  input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
   bit_depth: usize
-) {
+) where T: Pixel, i32: AsPrimitive<T> {
   if tx_type < TxType::IDTX {
     // SSE C code asserts for transform types beyond TxType::IDTX.
     Block16x16::inv_txfm2d_add(input, output, stride, tx_type, bit_depth);
@@ -1602,22 +1603,22 @@ pub fn iht16x16_add(
   }
 }
 
-pub fn iht32x32_add(
-  input: &[i32], output: &mut [u16], stride: usize, tx_type: TxType,
+pub fn iht32x32_add<T>(
+  input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
   bit_depth: usize
-) {
+) where T: Pixel, i32: AsPrimitive<T> {
   if tx_type < TxType::IDTX {
-    // SIMD code may assert for transform types beyond TxType::IDTX.
+    // SSE C code asserts for transform types beyond TxType::IDTX.
     Block32x32::inv_txfm2d_add(input, output, stride, tx_type, bit_depth);
   } else {
     Block32x32::inv_txfm2d_add_rs(input, output, stride, tx_type, bit_depth);
   }
 }
 
-pub fn iht64x64_add(
-  input: &[i32], output: &mut [u16], stride: usize, tx_type: TxType,
+pub fn iht64x64_add<T>(
+  input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
   bit_depth: usize
-) {
+) where T: Pixel, i32: AsPrimitive<T> {
   assert!(tx_type == TxType::DCT_DCT);
   let mut tmp = [0 as i32; 4096];
 
