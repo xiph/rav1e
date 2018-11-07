@@ -75,12 +75,11 @@ static sm_weight_arrays: [u8; 2 * MAX_TX_SIZE] = [
     // bs = 32
     255, 240, 225, 210, 196, 182, 169, 157, 145, 133, 122, 111, 101, 92, 83, 74,
     66, 59, 52, 45, 39, 34, 29, 25, 21, 17, 14, 12, 10, 9, 8, 8,
-    // TODO: enable extra weights for TX64X64
     // bs = 64
-    /*255, 248, 240, 233, 225, 218, 210, 203, 196, 189, 182, 176, 169, 163, 156,
+    255, 248, 240, 233, 225, 218, 210, 203, 196, 189, 182, 176, 169, 163, 156,
     150, 144, 138, 133, 127, 121, 116, 111, 106, 101, 96, 91, 86, 82, 77, 73, 69,
     65, 61, 57, 54, 50, 47, 44, 41, 38, 35, 32, 29, 27, 25, 22, 20, 18, 16, 15,
-    13, 12, 10, 9, 8, 7, 6, 6, 5, 5, 4, 4, 4,*/
+    13, 12, 10, 9, 8, 7, 6, 6, 5, 5, 4, 4, 4,
 ];
 
 const NEED_LEFT: u8 = 1 << 1;
@@ -140,6 +139,13 @@ pub struct Block32x32;
 impl Dim for Block32x32 {
   const W: usize = 32;
   const H: usize = 32;
+}
+
+pub struct Block64x64;
+
+impl Dim for Block64x64 {
+  const W: usize = 64;
+  const H: usize = 64;
 }
 
 #[inline(always)]
@@ -649,11 +655,13 @@ impl Intra<u8> for Block4x4 {}
 impl Intra<u8> for Block8x8 {}
 impl Intra<u8> for Block16x16 {}
 impl Intra<u8> for Block32x32 {}
+impl Intra<u8> for Block64x64 {}
 
 impl Intra<u16> for Block4x4 {}
 impl Intra<u16> for Block8x8 {}
 impl Intra<u16> for Block16x16 {}
 impl Intra<u16> for Block32x32 {}
+impl Intra<u16> for Block64x64 {}
 
 #[cfg(all(test, feature = "aom"))]
 pub mod test {
@@ -903,7 +911,7 @@ pub mod test {
     let mut edge_buf: AlignedArray<[u8; 2 * MAX_TX_SIZE + 1]> =
       UninitializedAlignedArray();
     for i in 0..edge_buf.array.len() {
-      edge_buf.array[i] = i.as_();
+      edge_buf.array[i] = (i + 32).saturating_sub(MAX_TX_SIZE).as_();
     }
     let left = &edge_buf.array[MAX_TX_SIZE - 4..MAX_TX_SIZE];
     let above = &edge_buf.array[MAX_TX_SIZE + 1..MAX_TX_SIZE + 5];
