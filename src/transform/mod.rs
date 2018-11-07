@@ -258,6 +258,7 @@ pub fn forward_transform(
     TxSize::TX_8X8 => fht8x8(input, output, stride, tx_type, bit_depth),
     TxSize::TX_16X16 => fht16x16(input, output, stride, tx_type, bit_depth),
     TxSize::TX_32X32 => fht32x32(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_64X64 => fht64x64(input, output, stride, tx_type, bit_depth),
     _ => panic!("unimplemented tx size")
   }
 }
@@ -273,6 +274,8 @@ pub fn inverse_transform_add(
       iht16x16_add(input, output, stride, tx_type, bit_depth),
     TxSize::TX_32X32 =>
       iht32x32_add(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_64X64 =>
+      iht64x64_add(input, output, stride, tx_type, bit_depth),
     _ => panic!("unimplemented tx size")
   }
 }

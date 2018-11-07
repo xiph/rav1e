@@ -1992,6 +1992,7 @@ impl FwdTxfm2D for Block4x4 {}
 impl FwdTxfm2D for Block8x8 {}
 impl FwdTxfm2D for Block16x16 {}
 impl FwdTxfm2D for Block32x32 {}
+impl FwdTxfm2D for Block64x64 {}
 
 pub fn fht4x4(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
@@ -2038,5 +2039,21 @@ pub fn fht32x32(
     Block32x32::fwd_txfm2d(input, output, stride, tx_type, bit_depth);
   } else {
     Block32x32::fwd_txfm2d_rs(input, output, stride, tx_type, bit_depth);
+  }
+}
+
+pub fn fht64x64(
+  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) {
+  assert!(tx_type == TxType::DCT_DCT);
+  let mut tmp = [0 as i32; 4096];
+
+  Block64x64::fwd_txfm2d(input, &mut tmp, stride, tx_type, bit_depth);
+
+  for i in 0..2 {
+    for (row_out, row_in) in output[2048*i..].chunks_mut(32).zip(tmp[32*i..].chunks(64)).take(64) {
+      row_out.copy_from_slice(&row_in[..32]);
+    }
   }
 }

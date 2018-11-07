@@ -278,7 +278,8 @@ pub fn rdo_tx_size_type(
     BlockSize::BLOCK_4X4 => TxSize::TX_4X4,
     BlockSize::BLOCK_8X8 => TxSize::TX_8X8,
     BlockSize::BLOCK_16X16 => TxSize::TX_16X16,
-    _ => TxSize::TX_32X32
+    BlockSize::BLOCK_32X32 => TxSize::TX_32X32,
+    _ => TxSize::TX_64X64
   };
   cw.bc.set_tx_size(bo, tx_size);
   // Were we not hardcoded to TX_MODE_LARGEST, block tx size would be written here
@@ -829,7 +830,7 @@ pub fn rdo_partition_decision(
 
     match partition {
       PartitionType::PARTITION_NONE => {
-        if bsize > BlockSize::BLOCK_32X32 {
+        if bsize > BlockSize::BLOCK_64X64 {
           continue;
         }
 

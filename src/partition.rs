@@ -834,6 +834,8 @@ impl PredictionMode {
         self.predict_intra_inner::<Block16x16>(dst, bit_depth, ac, alpha),
       TxSize::TX_32X32 =>
         self.predict_intra_inner::<Block32x32>(dst, bit_depth, ac, alpha),
+      TxSize::TX_64X64 =>
+        self.predict_intra_inner::<Block64x64>(dst, bit_depth, ac, alpha),
       _ => unimplemented!()
     }
   }

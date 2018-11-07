@@ -470,7 +470,8 @@ impl FrameInvariants {
         let mut min_partition_size = if config.speed <= 1 { BlockSize::BLOCK_4X4 }
                                  else if config.speed <= 2 { BlockSize::BLOCK_8X8 }
                                  else if config.speed <= 3 { BlockSize::BLOCK_16X16 }
-                                 else { BlockSize::BLOCK_32X32 };
+                                 else if config.speed <= 4 { BlockSize::BLOCK_32X32 }
+                                 else { BlockSize::BLOCK_64X64 };
 
         if config.tune == Tune::Psychovisual {
             if min_partition_size < BlockSize::BLOCK_8X8 {
@@ -1717,7 +1718,11 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
     }
 
     if bw_uv > 0 && bh_uv > 0 {
-        let uv_tx_type = uv_intra_mode_to_tx_type_context(chroma_mode);
+        let uv_tx_type = if uv_tx_size == TxSize::TX_32X32 {
+            TxType::DCT_DCT
+        } else {
+            uv_intra_mode_to_tx_type_context(chroma_mode)
+        };
         fs.qc.update(fi.base_q_idx, uv_tx_size, true, bit_depth);
 
         for p in 1..3 {
@@ -1832,7 +1837,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
     // Always split if the current partition is too large
     let must_split = bo.x + bs as usize > fi.w_in_b ||
         bo.y + bs as usize > fi.h_in_b ||
-        bsize >= BlockSize::BLOCK_64X64;
+        bsize > BlockSize::BLOCK_64X64;
 
     // must_split overrides the minimum partition size when applicable
     let can_split = bsize > fi.min_partition_size || must_split;
@@ -2012,7 +2017,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
     // Always split if the current partition is too large
     let must_split = bo.x + bs as usize > fi.w_in_b ||
         bo.y + bs as usize > fi.h_in_b ||
-        bsize >= BlockSize::BLOCK_64X64;
+        bsize > BlockSize::BLOCK_64X64;
 
     let mut rdo_output = block_output.clone().unwrap_or(RDOOutput {
         part_type: PartitionType::PARTITION_INVALID,

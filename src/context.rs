@@ -55,7 +55,7 @@ const MAX_SB_SIZE_LOG2: usize = 6;
 pub const MAX_SB_SIZE: usize = (1 << MAX_SB_SIZE_LOG2);
 const MAX_SB_SQUARE: usize = (MAX_SB_SIZE * MAX_SB_SIZE);
 
-pub const MAX_TX_SIZE: usize = 32;
+pub const MAX_TX_SIZE: usize = 64;
 const MAX_TX_SQUARE: usize = MAX_TX_SIZE * MAX_TX_SIZE;
 
 pub const INTRA_MODES: usize = 13;
@@ -2997,23 +2997,33 @@ impl ContextWriter {
   }
 
   pub fn av1_get_adjusted_tx_size(&mut self, tx_size: TxSize) -> TxSize {
-    // TODO: Enable below commented out block if TX64X64 is enabled.
-/*
-      if tx_size == TX_64X64 || tx_size == TX_64X32 || tx_size == TX_32X64 {
-        return TX_32X32
-      }
-      if (tx_size == TX_16X64) {
-        return TX_16X32
-      }
-      if (tx_size == TX_64X16) {
-        return TX_32X16
-      }
-*/
+    if tx_size == TX_64X64 || tx_size == TX_64X32 || tx_size == TX_32X64 {
+      return TX_32X32
+    }
+    if tx_size == TX_16X64 {
+      return TX_16X32
+    }
+    if tx_size == TX_64X16 {
+      return TX_32X16
+    }
+
     tx_size
   }
 
   pub fn get_txb_bwl(&mut self, tx_size: TxSize) -> usize {
     self.av1_get_adjusted_tx_size(tx_size).width_log2()
+  }
+
+  pub fn get_txb_wide(&mut self, tx_size: TxSize) -> usize {
+    let adjusted_tx_size = self.av1_get_adjusted_tx_size(tx_size);
+
+    return adjusted_tx_size.width()
+  }
+
+  pub fn get_txb_height(&mut self, tx_size: TxSize) -> usize {
+    let adjusted_tx_size = self.av1_get_adjusted_tx_size(tx_size);
+
+    return adjusted_tx_size.height()
   }
 
   pub fn get_eob_pos_token(&mut self, eob: usize, extra: &mut u32) -> u32 {
@@ -3123,9 +3133,8 @@ impl ContextWriter {
     &mut self, levels: &mut [u8], scan: &[u16], eob: u16,
     tx_size: TxSize, tx_class: TxClass, coeff_contexts: &mut [i8]
   ) {
-    // TODO: If TX_64X64 is enabled, use av1_get_adjusted_tx_size()
-    let bwl = tx_size.width_log2();
-    let height = tx_size.height();
+    let bwl = self.get_txb_bwl(tx_size);
+    let height = self.get_txb_height(tx_size);
     for i in 0..eob {
       let pos = scan[i as usize];
       coeff_contexts[pos as usize] = self.get_nz_map_ctx(
@@ -3218,11 +3227,13 @@ impl ContextWriter {
     let scan_order =
       &av1_scan_orders[tx_size as usize][tx_type as usize];
     let scan = scan_order.scan;
-    let mut coeffs_storage = [0 as i32; 32 * 32];
-    let coeffs = &mut coeffs_storage[..tx_size.area()];
+    let width = self.get_txb_wide(tx_size);
+    let height = self.get_txb_height(tx_size);
+    let mut coeffs_storage = [0 as i32; 32*32];
+    let coeffs = &mut coeffs_storage[..width*height];
     let mut cul_level = 0 as u32;
 
-    for i in 0..tx_size.area() {
+    for i in 0..width*height {
       coeffs[i] = coeffs_in[scan[i] as usize];
       cul_level += coeffs[i].abs() as u32;
     }
@@ -3255,8 +3266,8 @@ impl ContextWriter {
 
     self.txb_init_levels(
       coeffs_in,
-      tx_size.width(),
-      tx_size.height(),
+      width,
+      height,
       &mut levels_buf
     );
 
@@ -3266,6 +3277,8 @@ impl ContextWriter {
     } else {
       1
     } as usize;
+
+    assert!(tx_size <= TX_32X32 || tx_type == DCT_DCT);
 
     // Signal tx_type for luma plane only
     if plane == 0 {
@@ -3376,7 +3389,7 @@ impl ContextWriter {
 
     let mut coeff_contexts = [0 as i8; MAX_TX_SQUARE];
     let levels =
-      &mut levels_buf[TX_PAD_TOP * (tx_size.width() + TX_PAD_HOR)..];
+      &mut levels_buf[TX_PAD_TOP * (width + TX_PAD_HOR)..];
 
     self.get_nz_map_contexts(
       levels,
