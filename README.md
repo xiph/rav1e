@@ -11,7 +11,7 @@ rav1e is an experimental AV1 video encoder. It is designed to eventually cover a
 
 * Intra and inter frames
 * 64x64 superblocks
-* 4x4 to 32x32 RDO-selected square blocks
+* 4x4 to 64x64 RDO-selected square blocks
 * DC, H, V, Paeth, and smooth prediction modes
 * 4x4 DCT and ADST transforms
 * 8-, 10- and 12-bit depth color
