@@ -950,7 +950,7 @@ impl PredictionMode {
   pub fn predict_inter<'a>(
     self, fi: &FrameInvariants, p: usize, po: &PlaneOffset,
     dst: &'a mut PlaneMutSlice<'a>, width: usize, height: usize,
-    ref_frames: &[usize; 2], mvs: &[MotionVector; 2], bit_depth: usize
+    ref_frames: &[usize; 2], mvs: [MotionVector; 2], bit_depth: usize
   ) {
     assert!(!self.is_intra());
 

@@ -1410,7 +1410,7 @@ pub fn encode_tx_block(
 }
 
 pub fn motion_compensate(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
-                         luma_mode: PredictionMode, ref_frames: &[usize; 2], mvs: &[MotionVector; 2],
+                         luma_mode: PredictionMode, ref_frames: &[usize; 2], mvs: [MotionVector; 2],
                          bsize: BlockSize, bo: &BlockOffset, bit_depth: usize,
                          luma_only: bool) {
   if luma_mode.is_intra() { return; }
@@ -1435,16 +1435,16 @@ pub fn motion_compensate(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
 
       if some_use_intra {
         luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), plane_bsize.width(),
-          plane_bsize.height(), ref_frames, &mvs, bit_depth);
+          plane_bsize.height(), ref_frames, mvs, bit_depth);
       } else {
         assert!(xdec == 1 && ydec == 1);
         // TODO: these are only valid for 4:2:0
-        let mv0 = &cw.bc.at(&bo.with_offset(-1,-1)).mv;
+        let mv0 = cw.bc.at(&bo.with_offset(-1,-1)).mv;
         let rf0 = &cw.bc.at(&bo.with_offset(-1,-1)).ref_frames;
-        let mv1 = &cw.bc.at(&bo.with_offset(0,-1)).mv;
+        let mv1 = cw.bc.at(&bo.with_offset(0,-1)).mv;
         let rf1 = &cw.bc.at(&bo.with_offset(0,-1)).ref_frames;
         let po1 = PlaneOffset { x: po.x+2, y: po.y };
-        let mv2 = &cw.bc.at(&bo.with_offset(-1,0)).mv;
+        let mv2 = cw.bc.at(&bo.with_offset(-1,0)).mv;
         let rf2 = &cw.bc.at(&bo.with_offset(-1,0)).ref_frames;
         let po2 = PlaneOffset { x: po.x, y: po.y+2 };
         let po3 = PlaneOffset { x: po.x+2, y: po.y+2 };
@@ -1455,7 +1455,7 @@ pub fn motion_compensate(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
       }
     } else {
       luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), plane_bsize.width(),
-        plane_bsize.height(), ref_frames, &mvs, bit_depth);
+        plane_bsize.height(), ref_frames, mvs, bit_depth);
     }
   }
 }
@@ -1474,10 +1474,10 @@ pub fn encode_block_a(seq: &Sequence,
 pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
                  cw: &mut ContextWriter, w: &mut dyn Writer,
                  luma_mode: PredictionMode, chroma_mode: PredictionMode,
-                 ref_frames: &[usize; 2], mvs: &[MotionVector; 2],
+                 ref_frames: &[usize; 2], mvs: [MotionVector; 2],
                  bsize: BlockSize, bo: &BlockOffset, skip: bool, bit_depth: usize,
                  cfl: CFLParams, tx_size: TxSize, tx_type: TxType,
-                 mode_context: usize, mv_stack: &Vec<CandidateMV>, for_rdo_use: bool)
+                 mode_context: usize, mv_stack: &[CandidateMV], for_rdo_use: bool)
                  -> i64 {
     let is_inter = !luma_mode.is_intra();
     if is_inter { assert!(luma_mode == chroma_mode); };
@@ -1547,11 +1547,11 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
             if luma_mode == PredictionMode::NEWMV ||
                 luma_mode == PredictionMode::NEW_NEWMV ||
                 luma_mode == PredictionMode::NEW_NEARESTMV {
-              cw.write_mv(w, &mvs[0], &ref_mvs[0], mv_precision);
+              cw.write_mv(w, mvs[0], ref_mvs[0], mv_precision);
             }
             if luma_mode == PredictionMode::NEW_NEWMV ||
                 luma_mode == PredictionMode::NEAREST_NEWMV {
-              cw.write_mv(w, &mvs[1], &ref_mvs[1], mv_precision);
+              cw.write_mv(w, mvs[1], ref_mvs[1], mv_precision);
             }
 
             if luma_mode >= PredictionMode::NEAR0MV && luma_mode <= PredictionMode::NEAR2MV {
@@ -1883,7 +1883,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         let cfl = mode_decision.pred_cfl_params;
         {
           let ref_frames = &mode_decision.ref_frames;
-          let mvs = &mode_decision.mvs;
+          let mvs = mode_decision.mvs;
           let skip = mode_decision.skip;
           let mut cdef_coded = cw.bc.cdef_coded;
           let (tx_size, tx_type) = (mode_decision.tx_size, mode_decision.tx_type);
@@ -1966,7 +1966,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             let (mode_luma, mode_chroma) = (best_decision.pred_mode_luma, best_decision.pred_mode_chroma);
             let cfl = best_decision.pred_cfl_params;
             let ref_frames = &best_decision.ref_frames;
-            let mvs = &best_decision.mvs;
+            let mvs = best_decision.mvs;
             let skip = best_decision.skip;
             let mut cdef_coded = cw.bc.cdef_coded;
             let (tx_size, tx_type) = (best_decision.tx_size, best_decision.tx_type);
@@ -2068,7 +2068,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
             let cfl = part_decision.pred_cfl_params;
             let skip = part_decision.skip;
             let ref_frames = &part_decision.ref_frames;
-            let mvs = &part_decision.mvs;
+            let mvs = part_decision.mvs;
             let mut cdef_coded = cw.bc.cdef_coded;
 
             // NOTE: Cannot avoid calling rdo_tx_size_type() here again,
