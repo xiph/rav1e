@@ -79,7 +79,8 @@ fn setup_encoder(
     aom_dsp_rtcd();
   }
 
-  let enc = EncoderConfig { quantizer, speed, ..Default::default() };
+  let mut enc = EncoderConfig::with_speed_preset(speed);
+  enc.quantizer = quantizer;
 
   let cfg = Config {
     frame_info: FrameInfo { width: w, height: h, bit_depth, chroma_sampling },

@@ -1,4 +1,4 @@
-use clap::{App, Arg};
+use clap::{App, Arg, ArgMatches};
 use rav1e::*;
 use std::fmt;
 use std::fs::File;
@@ -101,27 +101,31 @@ pub fn parse_cli() -> CliOptions {
       .map(|f| Box::new(File::create(&f).unwrap()) as Box<dyn Write>)
   };
 
-  let config = EncoderConfig {
-    key_frame_interval: matches.value_of("KEYFRAME_INTERVAL").unwrap().parse().unwrap(),
-    low_latency: matches.value_of("LOW_LATENCY").unwrap().parse().unwrap(),
-    quantizer: matches.value_of("QP").unwrap().parse().unwrap(),
-    speed: matches.value_of("SPEED").unwrap().parse().unwrap(),
-    tune: matches.value_of("TUNE").unwrap().parse().unwrap()
-  };
-
-  // Validate arguments
-  if config.quantizer == 0 {
-    unimplemented!();
-  } else if config.quantizer > 255 || config.speed > 10 {
-    panic!("argument out of range");
-  }
-
   CliOptions {
     io,
-    enc: config,
+    enc: parse_config(&matches),
     limit: matches.value_of("LIMIT").unwrap().parse().unwrap(),
     verbose: matches.is_present("VERBOSE"),
   }
+}
+
+fn parse_config(matches: &ArgMatches) -> EncoderConfig {
+  let speed = matches.value_of("SPEED").unwrap().parse().unwrap();
+  let quantizer = matches.value_of("QP").unwrap().parse().unwrap();
+
+  // Validate arguments
+  if quantizer == 0 {
+    unimplemented!("Lossless encoding not yet implemented");
+  } else if quantizer > 255 || speed > 10 {
+    panic!("argument out of range");
+  }
+
+  let mut cfg = EncoderConfig::with_speed_preset(speed);
+  cfg.key_frame_interval = matches.value_of("KEYFRAME_INTERVAL").unwrap().parse().unwrap();
+  cfg.low_latency = matches.value_of("LOW_LATENCY").unwrap().parse().unwrap();
+  cfg.tune = matches.value_of("TUNE").unwrap().parse().unwrap();
+  cfg.quantizer = quantizer;
+  cfg
 }
 
 #[derive(Debug, Clone, Copy)]

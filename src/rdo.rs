@@ -38,6 +38,7 @@ use FrameType;
 use Tune;
 use Sequence;
 use encoder::ReferenceMode;
+use api::PredictionModesSetting;
 
 #[derive(Clone)]
 pub struct RDOOutput {
@@ -289,7 +290,7 @@ pub fn rdo_tx_size_type(
   let tx_set = get_tx_set(tx_size, is_inter, fi.use_reduced_tx_set);
 
   let tx_type =
-    if tx_set > TxSet::TX_SET_DCTONLY && fi.config.speed <= 3 && !skip {
+    if tx_set > TxSet::TX_SET_DCTONLY && fi.config.speed_settings.rdo_tx_decision && !skip {
       rdo_tx_type_decision(
         fi,
         fs,
@@ -356,8 +357,8 @@ pub fn rdo_mode_decision(
 
   // Exclude complex prediction modes at higher speed levels
   let intra_mode_set = if (fi.frame_type == FrameType::KEY
-    && fi.config.speed <= 3)
-    || (fi.frame_type == FrameType::INTER && fi.config.speed <= 1)
+    && fi.config.speed_settings.prediction_modes >= PredictionModesSetting::ComplexKeyframes)
+    || (fi.frame_type == FrameType::INTER && fi.config.speed_settings.prediction_modes >= PredictionModesSetting::ComplexAll)
   {
     RAV1E_INTRA_MODES
   } else {
@@ -409,7 +410,7 @@ pub fn rdo_mode_decision(
       if mv_stack.len() >= 2 {
         mode_set.push((PredictionMode::GLOBALMV, i));
       }
-      let include_near_mvs = fi.config.speed <= 2;
+      let include_near_mvs = fi.config.speed_settings.include_near_mvs;
       if include_near_mvs {
         if mv_stack.len() >= 3 {
           mode_set.push((PredictionMode::NEAR1MV, i));

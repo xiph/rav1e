@@ -1343,7 +1343,7 @@ pub fn deblock_filter_optimize(
   fi: &FrameInvariants, fs: &mut FrameState, bc: &mut BlockContext,
   bit_depth: usize
 ) {
-  if fi.config.speed > 3 {
+  if fi.config.speed_settings.fast_deblock {
     let q = ac_q(fi.base_q_idx, bit_depth) as i32;
     let level = clamp(
       match bit_depth {
