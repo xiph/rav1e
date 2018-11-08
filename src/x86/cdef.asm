@@ -37,7 +37,7 @@ shufw_6543210x: db 12, 13, 10, 11, 8, 9, 6, 7, 4, 5, 2, 3, 0, 1, 14, 15
 shufw_210xxxxx: db 4, 5, 2, 3, 0, 1, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
 pw_128: times 2 dw 128
 pw_2048: times 2 dw 2048
-tap_table: dw 4, 2, 3, 3, 2, 1, 2, 1
+tap_table: dw 4, 2, 3, 3, 2, 1
            db -1 * 16 + 1, -2 * 16 + 2
            db  0 * 16 + 1, -1 * 16 + 2
            db  0 * 16 + 1,  0 * 16 + 2
@@ -371,15 +371,14 @@ cglobal cdef_filter_%1x%2, 4, 9, 16, 2 * 16 + (%2+4)*%3, \
     vpbroadcastw    m0, xm0                     ; pri_strength
     vpbroadcastw    m1, xm1                     ; sec_strength
     and           prid, 1
-    and           secd, 1
     lea           tapq, [tap_table]
     lea           priq, [tapq+priq*4]           ; pri_taps
-    lea           secq, [tapq+secq*4+8]         ; sec_taps
+    lea           secq, [tapq+8]                ; sec_taps
 
-    ; off1/2/3[k] [6 total] from [tapq+16+(dir+0/2/6)*2+k]
+    ; off1/2/3[k] [6 total] from [tapq+12+(dir+0/2/6)*2+k]
     DEFINE_ARGS dst, stride, tap, dir, pri, sec, stride3
     mov           dird, r6m
-    lea           tapq, [tapq+dirq*2+16]
+    lea           tapq, [tapq+dirq*2+12]
 %if %1*%2*2/mmsize > 1
     DEFINE_ARGS dst, stride, dir, stk, pri, sec, h, off, k
     mov             hd, %1*%2*2/mmsize
