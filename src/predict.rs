@@ -256,7 +256,7 @@ where
           rav1e_ipred_dc_left_avx2(
             output.as_mut_ptr() as *mut _,
             stride as libc::ptrdiff_t,
-            left.as_ptr().offset(Self::H as isize) as *const _,
+            left.as_ptr().add(Self::H) as *const _,
             Self::W as libc::c_int,
             Self::H as libc::c_int,
             0
@@ -304,7 +304,7 @@ where
           rav1e_ipred_h_avx2(
             output.as_mut_ptr() as *mut _,
             stride as libc::ptrdiff_t,
-            left.as_ptr().offset(Self::H as isize) as *const _,
+            left.as_ptr().add(Self::H) as *const _,
             Self::W as libc::c_int,
             Self::H as libc::c_int,
             0
@@ -569,8 +569,8 @@ where
     let max = _mm_set1_epi16((1 << bit_depth) - 1);
 
     for j in 0..Self::H {
-      let luma = ac.as_ptr().offset((32 * j) as isize);
-      let line = output.as_mut_ptr().offset((stride * j) as isize);
+      let luma = ac.as_ptr().add(32 * j);
+      let line = output.as_mut_ptr().add(stride * j);
 
       let mut i = 0isize;
       let mut last = _mm_setzero_si128();
