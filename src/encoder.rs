@@ -1691,10 +1691,18 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
 
     // TODO: these are only valid for 4:2:0
     let uv_tx_size = match bsize {
-        BlockSize::BLOCK_4X4 | BlockSize::BLOCK_8X8 => TxSize::TX_4X4,
+        BlockSize::BLOCK_4X4 | BlockSize::BLOCK_4X8 |
+        BlockSize::BLOCK_8X8 | BlockSize::BLOCK_8X4 => TxSize::TX_4X4,
         BlockSize::BLOCK_16X16 => TxSize::TX_8X8,
         BlockSize::BLOCK_32X32 => TxSize::TX_16X16,
-        _ => TxSize::TX_32X32
+        BlockSize::BLOCK_8X16 => TxSize::TX_4X8,
+        BlockSize::BLOCK_16X8 => TxSize::TX_8X4,
+        BlockSize::BLOCK_16X32 => TxSize::TX_8X16,
+        BlockSize::BLOCK_32X16 => TxSize::TX_16X8,
+        BlockSize::BLOCK_32X64 => TxSize::TX_16X32,
+        BlockSize::BLOCK_64X32 => TxSize::TX_32X16,
+        BlockSize::BLOCK_64X64 => TxSize::TX_32X32,
+        _ => unimplemented!()
     };
 
     let mut bw_uv = (bw * tx_size.width_mi()) >> xdec;
@@ -1777,10 +1785,18 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
 
     // TODO: these are only valid for 4:2:0
     let uv_tx_size = match bsize {
-        BlockSize::BLOCK_4X4 | BlockSize::BLOCK_8X8 => TxSize::TX_4X4,
+        BlockSize::BLOCK_4X4 | BlockSize::BLOCK_4X8 |
+        BlockSize::BLOCK_8X8 | BlockSize::BLOCK_8X4 => TxSize::TX_4X4,
         BlockSize::BLOCK_16X16 => TxSize::TX_8X8,
         BlockSize::BLOCK_32X32 => TxSize::TX_16X16,
-        _ => TxSize::TX_32X32
+        BlockSize::BLOCK_8X16 => TxSize::TX_4X8,
+        BlockSize::BLOCK_16X8 => TxSize::TX_8X4,
+        BlockSize::BLOCK_16X32 => TxSize::TX_8X16,
+        BlockSize::BLOCK_32X16 => TxSize::TX_16X8,
+        BlockSize::BLOCK_32X64 => TxSize::TX_16X32,
+        BlockSize::BLOCK_64X32 => TxSize::TX_32X16,
+        BlockSize::BLOCK_64X64 => TxSize::TX_32X32,
+        _ => unimplemented!()
     };
 
     let mut bw_uv = (bw * tx_size.width_mi()) >> xdec;
