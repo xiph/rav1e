@@ -224,7 +224,32 @@ impl Context {
         return false;
       }
 
-      let slot_idx = self.fi.order_hint % REF_FRAMES as u32;
+      fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
+        // Derive level within pyramid for a frame with a given coding order position
+        // For example, with a pyramid of depth 2, the 2 least significant bits of the
+        // position determine the level:
+        // 00 -> 0
+        // 01 -> 2
+        // 10 -> 1
+        // 11 -> 2
+        pyramid_depth - (pos | (1 << pyramid_depth)).trailing_zeros() as u64
+      }
+
+      let lvl = if !reorder {
+        0
+      } else if idx_in_group < pyramid_depth {
+        idx_in_group
+      } else {
+        pos_to_lvl(idx_in_group - pyramid_depth + 1, pyramid_depth)
+      };
+
+      // Frames with lvl == 0 are stored in slots 0..4 and frames with higher values
+      // of lvl in slots 4..8
+      let slot_idx = if lvl == 0 {
+        (self.fi.order_hint >> pyramid_depth) % 4 as u32
+      } else {
+        3 + lvl as u32
+      };
       self.fi.show_frame = !reorder || idx_in_group >= pyramid_depth;
       self.fi.show_existing_frame = self.fi.show_frame && reorder &&
         (idx_in_group - pyramid_depth + 1).count_ones() == 1 &&
@@ -236,13 +261,6 @@ impl Context {
         1 << slot_idx
       };
 
-      let lvl = if !reorder {
-        0
-      } else if idx_in_group < pyramid_depth {
-        idx_in_group
-      } else {
-        pyramid_depth - (idx_in_group - pyramid_depth + 1).trailing_zeros() as u64
-      };
       let q_drop = 15 * lvl as usize;
       self.fi.base_q_idx = (self.fi.config.quantizer.min(255 - q_drop) + q_drop) as u8;
 
@@ -255,18 +273,41 @@ impl Context {
       };
       let ref_in_previous_group = LAST3_FRAME;
 
-      self.fi.primary_ref_frame = (ref_in_previous_group - LAST_FRAME) as u32;
+      // reuse probability estimates from previous frames only in top level frames
+      self.fi.primary_ref_frame = if lvl > 0 { PRIMARY_REF_NONE } else { (ref_in_previous_group - LAST_FRAME) as u32 };
 
-      assert!(group_src_len <= REF_FRAMES as u64);
       for i in 0..INTER_REFS_PER_FRAME {
-        self.fi.ref_frames[i] = (slot_idx as u8 +
-        if i == second_ref_frame - LAST_FRAME {
-          if lvl == 0 { (REF_FRAMES as u64 - 2) * group_src_len } else { group_src_len >> lvl }
-        } else if i == ref_in_previous_group - LAST_FRAME {
-          REF_FRAMES as u64 - group_src_len
+        self.fi.ref_frames[i] = if lvl == 0 {
+          if i == second_ref_frame - LAST_FRAME {
+            (slot_idx + 4 - 2) as u8 % 4
+          } else {
+            (slot_idx + 4 - 1) as u8 % 4
+          }
         } else {
-          REF_FRAMES as u64 - (group_src_len >> lvl)
-        } as u8) & 7;
+          if i == second_ref_frame - LAST_FRAME {
+            let oh = self.fi.order_hint + (group_src_len as u32 >> lvl);
+            let lvl2 = pos_to_lvl(oh as u64, pyramid_depth);
+            if lvl2 == 0 {
+              ((oh >> pyramid_depth) % 4) as u8
+            } else {
+              3 + lvl2 as u8
+            }
+          } else if i == ref_in_previous_group - LAST_FRAME {
+            if lvl == 0 {
+              (slot_idx + 4 - 1) as u8 % 4
+            } else {
+              slot_idx as u8
+            }
+          } else {
+            let oh = self.fi.order_hint - (group_src_len as u32 >> lvl);
+            let lvl1 = pos_to_lvl(oh as u64, pyramid_depth);
+            if lvl1 == 0 {
+              ((oh >> pyramid_depth) % 4) as u8
+            } else {
+              3 + lvl1 as u8
+            }
+          }
+        }
       }
 
       self.fi.reference_mode = if multiref && reorder && idx_in_group != 0 {

@@ -236,7 +236,7 @@ impl Sequence {
             frame_id_length: 0,
             delta_frame_id_length: 0,
             use_128x128_superblock: false,
-            order_hint_bits_minus_1: 3,
+            order_hint_bits_minus_1: 5,
             force_screen_content_tools: 0,
             force_integer_mv: 2,
             still_picture: false,
