@@ -288,8 +288,17 @@ pub fn rdo_tx_size_type(
     BlockSize::BLOCK_4X4 => TxSize::TX_4X4,
     BlockSize::BLOCK_8X8 => TxSize::TX_8X8,
     BlockSize::BLOCK_16X16 => TxSize::TX_16X16,
+    BlockSize::BLOCK_4X8 => TxSize::TX_4X8,
+    BlockSize::BLOCK_8X4 => TxSize::TX_8X4,
+    BlockSize::BLOCK_8X16 => TxSize::TX_8X16,
+    BlockSize::BLOCK_16X8 => TxSize::TX_16X8,
+    BlockSize::BLOCK_16X32 => TxSize::TX_16X32,
+    BlockSize::BLOCK_32X16 => TxSize::TX_32X16,
     BlockSize::BLOCK_32X32 => TxSize::TX_32X32,
-    _ => TxSize::TX_64X64
+    BlockSize::BLOCK_32X64 => TxSize::TX_32X64,
+    BlockSize::BLOCK_64X32 => TxSize::TX_64X32,
+    BlockSize::BLOCK_64X64 => TxSize::TX_64X64,
+    _ => unimplemented!()
   };
   cw.bc.set_tx_size(bo, tx_size);
   // Were we not hardcoded to TX_MODE_LARGEST, block tx size would be written here
