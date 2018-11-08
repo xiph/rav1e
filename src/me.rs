@@ -49,7 +49,7 @@ fn get_mv_range(fi: &FrameInvariants, bo: &BlockOffset, blk_w: usize, blk_h: usi
 
 pub fn motion_estimation(
   fi: &FrameInvariants, fs: &FrameState, bsize: BlockSize,
-  bo: &BlockOffset, ref_frame: usize, pmv: &MotionVector
+  bo: &BlockOffset, ref_frame: usize, pmv: MotionVector
 ) -> MotionVector {
   match fi.rec_buffer.frames[fi.ref_frames[ref_frame - LAST_FRAME] as usize] {
     Some(ref rec) => {
@@ -109,7 +109,7 @@ pub fn motion_estimation(
 
               mode.predict_inter(
                 fi, 0, &po, tmp_slice, blk_w, blk_h, &[ref_frame, NONE_FRAME],
-                &[cand_mv, MotionVector{ row: 0, col: 0 }], 8,
+                [cand_mv, MotionVector{ row: 0, col: 0 }], 8,
               );
             }
 

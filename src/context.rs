@@ -1475,13 +1475,13 @@ impl BlockContext {
     }
   }
 
-  pub fn set_motion_vectors(&mut self, bo: &BlockOffset, bsize: BlockSize, mvs: &[MotionVector; 2]) {
+  pub fn set_motion_vectors(&mut self, bo: &BlockOffset, bsize: BlockSize, mvs: [MotionVector; 2]) {
     let bw = bsize.width_mi();
     let bh = bsize.height_mi();
 
     for y in 0..bh {
       for x in 0..bw {
-        self.blocks[bo.y + y as usize][bo.x + x as usize].mv = *mvs;
+        self.blocks[bo.y + y as usize][bo.x + x as usize].mv = mvs;
       }
     }
   }
@@ -1709,19 +1709,19 @@ impl CFLParams {
       scale: [1, 0]
     }
   }
-  pub fn joint_sign(&self) -> u32 {
+  pub fn joint_sign(self) -> u32 {
     assert!(self.sign[0] != CFL_SIGN_ZERO || self.sign[1] != CFL_SIGN_ZERO);
     (self.sign[0] as u32) * (CFL_SIGNS as u32) + (self.sign[1] as u32) - 1
   }
-  pub fn context(&self, uv: usize) -> usize {
+  pub fn context(self, uv: usize) -> usize {
     assert!(self.sign[uv] != CFL_SIGN_ZERO);
     (self.sign[uv] as usize - 1) * CFL_SIGNS + (self.sign[1 - uv] as usize)
   }
-  pub fn index(&self, uv: usize) -> u32 {
+  pub fn index(self, uv: usize) -> u32 {
     assert!(self.sign[uv] != CFL_SIGN_ZERO && self.scale[uv] != 0);
     (self.scale[uv] - 1) as u32
   }
-  pub fn alpha(&self, uv: usize) -> i16 {
+  pub fn alpha(self, uv: usize) -> i16 {
     cfl_sign_value[self.sign[uv] as usize] * (self.scale[uv] as i16)
   }
   pub fn from_alpha(u: i16, v: i16) -> CFLParams {
@@ -2058,7 +2058,7 @@ impl ContextWriter {
     cmp::max(col_offset, -(mi_col as isize))
   }
 
-  fn find_matching_mv(&self, mv: &MotionVector, mv_stack: &mut Vec<CandidateMV>) -> bool {
+  fn find_matching_mv(&self, mv: MotionVector, mv_stack: &mut Vec<CandidateMV>) -> bool {
     for mv_cand in mv_stack {
       if mv.row == mv_cand.this_mv.row && mv.col == mv_cand.this_mv.col {
         return true;
@@ -2067,7 +2067,7 @@ impl ContextWriter {
     false
   }
 
-  fn find_matching_mv_and_update_weight(&self, mv: &MotionVector, mv_stack: &mut Vec<CandidateMV>, weight: u32) -> bool {
+  fn find_matching_mv_and_update_weight(&self, mv: MotionVector, mv_stack: &mut Vec<CandidateMV>, weight: u32) -> bool {
     for mut mv_cand in mv_stack {
       if mv.row == mv_cand.this_mv.row && mv.col == mv_cand.this_mv.col {
         mv_cand.weight += weight;
@@ -2077,7 +2077,7 @@ impl ContextWriter {
     false
   }
 
-  fn find_matching_comp_mv_and_update_weight(&self, mvs: &[MotionVector; 2], mv_stack: &mut Vec<CandidateMV>, weight: u32) -> bool {
+  fn find_matching_comp_mv_and_update_weight(&self, mvs: [MotionVector; 2], mv_stack: &mut Vec<CandidateMV>, weight: u32) -> bool {
     for mut mv_cand in mv_stack {
       if mvs[0].row == mv_cand.this_mv.row && mvs[0].col == mv_cand.this_mv.col &&
         mvs[1].row == mv_cand.comp_mv.row && mvs[1].col == mv_cand.comp_mv.col {
@@ -2094,7 +2094,7 @@ impl ContextWriter {
       false
     } else if is_compound {
       if blk.ref_frames[0] == ref_frames[0] && blk.ref_frames[1] == ref_frames[1] {
-        let found_match = self.find_matching_comp_mv_and_update_weight(&blk.mv, mv_stack, weight);
+        let found_match = self.find_matching_comp_mv_and_update_weight(blk.mv, mv_stack, weight);
 
         if !found_match && mv_stack.len() < MAX_REF_MV_STACK_SIZE {
           let mv_cand = CandidateMV {
@@ -2122,7 +2122,7 @@ impl ContextWriter {
       let mut found = false;
       for i in 0..2 {
         if blk.ref_frames[i] == ref_frames[0] {
-          let found_match = self.find_matching_mv_and_update_weight(&blk.mv[i], mv_stack, weight);
+          let found_match = self.find_matching_mv_and_update_weight(blk.mv[i], mv_stack, weight);
 
           if !found_match && mv_stack.len() < MAX_REF_MV_STACK_SIZE {
             let mv_cand = CandidateMV {
@@ -2194,7 +2194,7 @@ impl ContextWriter {
             mv.col = -mv.col;
           }
 
-          if !self.find_matching_mv(&mv, mv_stack) {
+          if !self.find_matching_mv(mv, mv_stack) {
             let mv_cand = CandidateMV {
               this_mv: mv,
               comp_mv: MotionVector { row: 0, col: 0 },
@@ -2882,10 +2882,10 @@ impl ContextWriter {
   }
 
   pub fn write_mv(&mut self, w: &mut dyn Writer,
-                  mv: &MotionVector, ref_mv: &MotionVector,
+                  mv: MotionVector, ref_mv: MotionVector,
                   mv_precision: MvSubpelPrecision) {
     let diff = MotionVector { row: mv.row - ref_mv.row, col: mv.col - ref_mv.col };
-    let j: MvJointType = av1_get_mv_joint(&diff);
+    let j: MvJointType = av1_get_mv_joint(diff);
 
     w.symbol_with_update(j as u32, &mut self.fc.nmv_context.joints_cdf);
 
@@ -3543,7 +3543,7 @@ const MV_LOW: i32 = (-(1 << MV_IN_USE_BITS));
 
 
 #[inline(always)]
-pub fn av1_get_mv_joint(mv: &MotionVector) -> MvJointType {
+pub fn av1_get_mv_joint(mv: MotionVector) -> MvJointType {
   if mv.row == 0 {
     if mv.col == 0 { MvJointType::MV_JOINT_ZERO } else { MvJointType::MV_JOINT_HNZVZ }
   } else {

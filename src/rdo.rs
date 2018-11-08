@@ -271,7 +271,7 @@ fn compute_tx_rd_cost(
 pub fn rdo_tx_size_type(
   seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
   cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset,
-  luma_mode: PredictionMode, ref_frames: &[usize; 2], mvs: &[MotionVector; 2], skip: bool
+  luma_mode: PredictionMode, ref_frames: &[usize; 2], mvs: [MotionVector; 2], skip: bool
 ) -> (TxSize, TxType) {
   // these rules follow TX_MODE_LARGEST
   let tx_size = match bsize {
@@ -384,7 +384,7 @@ pub fn rdo_mode_decision(
         let slot_idx = fi.ref_frames[i - LAST_FRAME];
         ref_slot_set.push(slot_idx);
         let pmv = pmvs[slot_idx as usize].unwrap();
-        mvs_from_me.push([motion_estimation(fi, fs, bsize, bo, i, &pmv), MotionVector { row: 0, col: 0 }]);
+        mvs_from_me.push([motion_estimation(fi, fs, bsize, bo, i, pmv), MotionVector { row: 0, col: 0 }]);
       }
     }
     assert!(ref_frames_set.len() != 0);
@@ -448,7 +448,7 @@ pub fn rdo_mode_decision(
   }
 
   let luma_rdo = |luma_mode: PredictionMode, fs: &mut FrameState, cw: &mut ContextWriter, best: &mut EncodingSettings,
-    mvs: &[MotionVector; 2], ref_frames: &[usize; 2], mode_set_chroma: &[PredictionMode], luma_mode_is_intra: bool,
+    mvs: [MotionVector; 2], ref_frames: &[usize; 2], mode_set_chroma: &[PredictionMode], luma_mode_is_intra: bool,
     mode_context: usize, mv_stack: &Vec<CandidateMV>| {
     let (tx_size, mut tx_type) = rdo_tx_size_type(
       seq, fi, fs, cw, bsize, bo, luma_mode, ref_frames, mvs, false,
@@ -520,7 +520,7 @@ pub fn rdo_mode_decision(
           best.mode_luma = luma_mode;
           best.mode_chroma = chroma_mode;
           best.ref_frames = *ref_frames;
-          best.mvs = *mvs;
+          best.mvs = mvs;
           best.skip = skip;
           best.tx_size = tx_size;
           best.tx_type = tx_type;
@@ -563,13 +563,13 @@ pub fn rdo_mode_decision(
     };
     let mode_set_chroma = vec![luma_mode];
 
-    luma_rdo(luma_mode, fs, cw, &mut best, &mvs, &ref_frames_set[i], &mode_set_chroma, false,
+    luma_rdo(luma_mode, fs, cw, &mut best, mvs, &ref_frames_set[i], &mode_set_chroma, false,
              mode_contexts[i], &mv_stacks[i]);
   });
 
   if !best.skip {
     intra_mode_set.iter().for_each(|&luma_mode| {
-      let mvs = &[MotionVector { row: 0, col: 0 }; 2];
+      let mvs = [MotionVector { row: 0, col: 0 }; 2];
       let ref_frames = &[INTRA_FRAME, NONE_FRAME];
       let mut mode_set_chroma = vec![luma_mode];
       if is_chroma_block && luma_mode != PredictionMode::DC_PRED {
@@ -616,7 +616,7 @@ pub fn rdo_mode_decision(
         best.mode_luma,
         chroma_mode,
         &best.ref_frames,
-        &best.mvs,
+        best.mvs,
         bsize,
         bo,
         best.skip,
@@ -657,7 +657,7 @@ pub fn rdo_mode_decision(
 
   cw.bc.set_mode(bo, bsize, best.mode_luma);
   cw.bc.set_ref_frames(bo, bsize, &best.ref_frames);
-  cw.bc.set_motion_vectors(bo, bsize, &best.mvs);
+  cw.bc.set_motion_vectors(bo, bsize, best.mvs);
 
   assert!(best.rd >= 0_f64);
 
@@ -725,7 +725,7 @@ pub fn rdo_cfl_alpha(
 // RDO-based transform type decision
 pub fn rdo_tx_type_decision(
   fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
-  mode: PredictionMode, ref_frames: &[usize; 2], mvs: &[MotionVector; 2], bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize,
+  mode: PredictionMode, ref_frames: &[usize; 2], mvs: [MotionVector; 2], bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize,
   tx_set: TxSet, bit_depth: usize
 ) -> TxType {
   let mut best_type = TxType::DCT_DCT;
