@@ -467,11 +467,7 @@ impl FrameInvariants {
         // Speed level decides the minimum partition size, i.e. higher speed --> larger min partition size,
         // with exception that SBs on right or bottom frame borders split down to BLOCK_4X4.
         // At speed = 0, RDO search is exhaustive.
-        let mut min_partition_size = if config.speed <= 1 { BlockSize::BLOCK_4X4 }
-                                 else if config.speed <= 2 { BlockSize::BLOCK_8X8 }
-                                 else if config.speed <= 3 { BlockSize::BLOCK_16X16 }
-                                 else if config.speed <= 4 { BlockSize::BLOCK_32X32 }
-                                 else { BlockSize::BLOCK_64X64 };
+        let mut min_partition_size = config.speed_settings.min_block_size;
 
         if config.tune == Tune::Psychovisual {
             if min_partition_size < BlockSize::BLOCK_8X8 {
@@ -480,8 +476,8 @@ impl FrameInvariants {
                 println!("If tune=Psychovisual is used, min partition size is enforced to 8x8");
             }
         }
-        let use_reduced_tx_set = config.speed > 1;
-        let use_tx_domain_distortion = config.tune == Tune::Psnr && config.speed >= 1;
+        let use_reduced_tx_set = config.speed_settings.reduced_tx_set;
+        let use_tx_domain_distortion = config.tune == Tune::Psnr && config.speed_settings.tx_domain_distortion;
 
         FrameInvariants {
             width,
@@ -2275,7 +2271,7 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
             }
 
             // Encode SuperBlock
-            if fi.config.speed == 0 {
+            if fi.config.speed_settings.encode_bottomup {
                 encode_partition_bottomup(sequence, fi, fs, &mut cw,
                                           &mut w_pre_cdef, &mut w_post_cdef,
                                           BlockSize::BLOCK_64X64, &bo, &pmvs);

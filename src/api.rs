@@ -33,14 +33,115 @@ pub struct EncoderConfig {
   pub key_frame_interval: u64,
   pub low_latency: bool,
   pub quantizer: usize,
-  pub speed: usize,
-  pub tune: Tune
+  pub tune: Tune,
+  pub speed_settings: SpeedSettings,
 }
 
 impl Default for EncoderConfig {
   fn default() -> Self {
-    EncoderConfig { key_frame_interval: 30, low_latency: true, quantizer: 100, speed: 0, tune: Tune::Psnr  }
+    const DEFAULT_SPEED: usize = 3;
+    Self::with_speed_preset(DEFAULT_SPEED)
   }
+}
+
+impl EncoderConfig {
+  pub fn with_speed_preset(speed: usize) -> Self {
+    EncoderConfig {
+      key_frame_interval: 30,
+      low_latency: true,
+      quantizer: 100,
+      tune: Tune::Psnr,
+      speed_settings: SpeedSettings::from_preset(speed)
+    }
+  }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct SpeedSettings {
+  pub min_block_size: BlockSize,
+  pub multiref: bool,
+  pub fast_deblock: bool,
+  pub reduced_tx_set: bool,
+  pub tx_domain_distortion: bool,
+  pub encode_bottomup: bool,
+  pub rdo_tx_decision: bool,
+  pub prediction_modes: PredictionModesSetting,
+  pub include_near_mvs: bool,
+}
+
+impl SpeedSettings {
+  pub fn from_preset(speed: usize) -> Self {
+    SpeedSettings {
+      min_block_size: Self::min_block_size_preset(speed),
+      multiref: Self::multiref_preset(speed),
+      fast_deblock: Self::fast_deblock_preset(speed),
+      reduced_tx_set: Self::reduced_tx_set_preset(speed),
+      tx_domain_distortion: Self::tx_domain_distortion_preset(speed),
+      encode_bottomup: Self::encode_bottomup_preset(speed),
+      rdo_tx_decision: Self::rdo_tx_decision_preset(speed),
+      prediction_modes: Self::prediction_modes_preset(speed),
+      include_near_mvs: Self::include_near_mvs_preset(speed),
+    }
+  }
+
+  fn min_block_size_preset(speed: usize) -> BlockSize {
+    if speed <= 1 {
+      BlockSize::BLOCK_4X4
+    } else if speed <= 2 {
+      BlockSize::BLOCK_8X8
+    } else if speed <= 3 {
+      BlockSize::BLOCK_16X16
+    } else if speed <= 4 {
+      BlockSize::BLOCK_32X32
+    } else {
+      BlockSize::BLOCK_64X64
+    }
+  }
+
+  fn multiref_preset(speed: usize) -> bool {
+    speed <= 2
+  }
+
+  fn fast_deblock_preset(speed: usize) -> bool {
+    speed >= 4
+  }
+
+  fn reduced_tx_set_preset(speed: usize) -> bool {
+    speed >= 2
+  }
+
+  fn tx_domain_distortion_preset(speed: usize) -> bool {
+    speed >= 1
+  }
+
+  fn encode_bottomup_preset(speed: usize) -> bool {
+    speed == 0
+  }
+
+  fn rdo_tx_decision_preset(speed: usize) -> bool {
+    speed <= 3
+  }
+
+  fn prediction_modes_preset(speed: usize) -> PredictionModesSetting {
+    if speed <= 1 {
+      PredictionModesSetting::ComplexAll
+    } else if speed <= 3 {
+      PredictionModesSetting::ComplexKeyframes
+    } else {
+      PredictionModesSetting::Simple
+    }
+  }
+
+  fn include_near_mvs_preset(speed: usize) -> bool {
+    speed <= 2
+  }
+}
+
+#[derive(Clone, Copy, Debug, PartialOrd, PartialEq)]
+pub enum PredictionModesSetting {
+  Simple,
+  ComplexKeyframes,
+  ComplexAll,
 }
 
 /// Frame-specific information
@@ -67,7 +168,7 @@ impl Config {
       "low_latency" => self.enc.low_latency = value.parse().map_err(|_e| ParseError)?,
       "key_frame_interval" => self.enc.key_frame_interval = value.parse().map_err(|_e| ParseError)?,
       "quantizer" => self.enc.quantizer = value.parse().map_err(|_e| ParseError)?,
-      "speed" => self.enc.speed = value.parse().map_err(|_e| ParseError)?,
+      "speed" => self.enc.speed_settings = SpeedSettings::from_preset(value.parse().map_err(|_e| ParseError)?),
       "tune" => self.enc.tune = value.parse().map_err(|_e| ParseError)?,
       _ => return Err(InvalidKey)
     }
@@ -182,7 +283,7 @@ impl Context {
     let key_frame_interval: u64 = self.fi.config.key_frame_interval;
 
     let reorder = !self.fi.config.low_latency;
-    let multiref = reorder || self.fi.config.speed <= 2;
+    let multiref = reorder || self.fi.config.speed_settings.multiref;
 
     let pyramid_depth = if reorder { 2 } else { 0 };
     let group_src_len = 1 << pyramid_depth;

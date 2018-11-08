@@ -47,7 +47,7 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
     aom_dsp_rtcd();
   }
   let config =
-    EncoderConfig { quantizer: qindex, speed: 10, ..Default::default() };
+    EncoderConfig { quantizer: qindex, speed_settings: SpeedSettings::from_preset(10), ..Default::default() };
   let mut fi = FrameInvariants::new(1024, 1024, config);
   let mut w = ec::WriterEncoder::new();
   let fc = CDFContext::new(fi.base_q_idx);
@@ -113,7 +113,7 @@ fn cdef_frame(c: &mut Criterion) {
 
 fn cdef_frame_bench(b: &mut Bencher, w: usize, h: usize) {
   let config =
-    EncoderConfig { quantizer: 100, speed: 10, ..Default::default() };
+    EncoderConfig { quantizer: 100, speed_settings: SpeedSettings::from_preset(10), ..Default::default() };
   let fi = FrameInvariants::new(w, h, config);
   let mut bc = BlockContext::new(fi.sb_width * 16, fi.sb_height * 16);
   let mut fs = FrameState::new(&fi);
@@ -135,7 +135,7 @@ fn cfl_rdo(c: &mut Criterion) {
 
 fn cfl_rdo_bench(b: &mut Bencher, bsize: BlockSize) {
   let config =
-    EncoderConfig { quantizer: 100, speed: 10, ..Default::default() };
+    EncoderConfig { quantizer: 100, speed_settings: SpeedSettings::from_preset(10), ..Default::default() };
   let fi = FrameInvariants::new(1024, 1024, config);
   let mut fs = FrameState::new(&fi);
   let offset = BlockOffset { x: 1, y: 1 };
