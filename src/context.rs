@@ -1464,13 +1464,13 @@ impl BlockContext {
     self.for_each(bo, bsize, |block| block.skip = skip);
   }
 
-  pub fn set_ref_frames(&mut self, bo: &BlockOffset, bsize: BlockSize, r: &[usize; 2]) {
+  pub fn set_ref_frames(&mut self, bo: &BlockOffset, bsize: BlockSize, r: [usize; 2]) {
     let bw = bsize.width_mi();
     let bh = bsize.height_mi();
 
     for y in 0..bh {
       for x in 0..bw {
-        self.blocks[bo.y + y as usize][bo.x + x as usize].ref_frames = *r;
+        self.blocks[bo.y + y as usize][bo.x + x as usize].ref_frames = r;
       }
     }
   }
@@ -2088,7 +2088,7 @@ impl ContextWriter {
     false
   }
 
-  fn add_ref_mv_candidate(&self, ref_frames: &[usize; 2], blk: &Block, mv_stack: &mut Vec<CandidateMV>,
+  fn add_ref_mv_candidate(&self, ref_frames: [usize; 2], blk: &Block, mv_stack: &mut Vec<CandidateMV>,
                           weight: u32, newmv_count: &mut usize, is_compound: bool) -> bool {
     if !blk.is_inter() { /* For intrabc */
       false
@@ -2153,7 +2153,7 @@ impl ContextWriter {
   fn add_extra_mv_candidate(
     &self,
     blk: &Block,
-    ref_frames: &[usize; 2],
+    ref_frames: [usize; 2],
     mv_stack: &mut Vec<CandidateMV>,
     fi: &FrameInvariants,
     is_compound: bool,
@@ -2208,7 +2208,7 @@ impl ContextWriter {
   }
 
   fn scan_row_mbmi(&mut self, bo: &BlockOffset, row_offset: isize, max_row_offs: isize,
-                   processed_rows: &mut isize, ref_frames: &[usize; 2],
+                   processed_rows: &mut isize, ref_frames: [usize; 2],
                    mv_stack: &mut Vec<CandidateMV>, newmv_count: &mut usize, bsize: BlockSize,
                    is_compound: bool) -> bool {
     let bc = &self.bc;
@@ -2262,7 +2262,7 @@ impl ContextWriter {
   }
 
   fn scan_col_mbmi(&mut self, bo: &BlockOffset, col_offset: isize, max_col_offs: isize,
-                   processed_cols: &mut isize, ref_frames: &[usize; 2],
+                   processed_cols: &mut isize, ref_frames: [usize; 2],
                    mv_stack: &mut Vec<CandidateMV>, newmv_count: &mut usize, bsize: BlockSize,
                    is_compound: bool) -> bool {
     let bc = &self.bc;
@@ -2315,7 +2315,7 @@ impl ContextWriter {
     found_match
   }
 
-  fn scan_blk_mbmi(&mut self, bo: &BlockOffset, ref_frames: &[usize; 2],
+  fn scan_blk_mbmi(&mut self, bo: &BlockOffset, ref_frames: [usize; 2],
                    mv_stack: &mut Vec<CandidateMV>, newmv_count: &mut usize,
                    is_compound: bool) -> bool {
     if bo.x >= self.bc.cols || bo.y >= self.bc.rows {
@@ -2333,7 +2333,7 @@ impl ContextWriter {
     }
   }
 
-  fn setup_mvref_list(&mut self, bo: &BlockOffset, ref_frames: &[usize; 2], mv_stack: &mut Vec<CandidateMV>,
+  fn setup_mvref_list(&mut self, bo: &BlockOffset, ref_frames: [usize; 2], mv_stack: &mut Vec<CandidateMV>,
                       bsize: BlockSize, is_sec_rect: bool, fi: &FrameInvariants, is_compound: bool) -> usize {
     let (_rf, _rf_num) = self.get_mvref_ref_frames(INTRA_FRAME);
 
@@ -2549,7 +2549,7 @@ impl ContextWriter {
     mode_context
   }
 
-  pub fn find_mvrefs(&mut self, bo: &BlockOffset, ref_frames: &[usize; 2],
+  pub fn find_mvrefs(&mut self, bo: &BlockOffset, ref_frames: [usize; 2],
                      mv_stack: &mut Vec<CandidateMV>, bsize: BlockSize, is_sec_rect: bool,
                      fi: &FrameInvariants, is_compound: bool) -> usize {
     assert!(ref_frames[0] != NONE_FRAME);

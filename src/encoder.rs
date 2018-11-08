@@ -1411,7 +1411,7 @@ pub fn encode_tx_block(
 }
 
 pub fn motion_compensate(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
-                         luma_mode: PredictionMode, ref_frames: &[usize; 2], mvs: [MotionVector; 2],
+                         luma_mode: PredictionMode, ref_frames: [usize; 2], mvs: [MotionVector; 2],
                          bsize: BlockSize, bo: &BlockOffset, bit_depth: usize,
                          luma_only: bool) {
   if luma_mode.is_intra() { return; }
@@ -1441,12 +1441,12 @@ pub fn motion_compensate(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
         assert!(xdec == 1 && ydec == 1);
         // TODO: these are only valid for 4:2:0
         let mv0 = cw.bc.at(&bo.with_offset(-1,-1)).mv;
-        let rf0 = &cw.bc.at(&bo.with_offset(-1,-1)).ref_frames;
+        let rf0 = cw.bc.at(&bo.with_offset(-1,-1)).ref_frames;
         let mv1 = cw.bc.at(&bo.with_offset(0,-1)).mv;
-        let rf1 = &cw.bc.at(&bo.with_offset(0,-1)).ref_frames;
+        let rf1 = cw.bc.at(&bo.with_offset(0,-1)).ref_frames;
         let po1 = PlaneOffset { x: po.x+2, y: po.y };
         let mv2 = cw.bc.at(&bo.with_offset(-1,0)).mv;
-        let rf2 = &cw.bc.at(&bo.with_offset(-1,0)).ref_frames;
+        let rf2 = cw.bc.at(&bo.with_offset(-1,0)).ref_frames;
         let po2 = PlaneOffset { x: po.x, y: po.y+2 };
         let po3 = PlaneOffset { x: po.x+2, y: po.y+2 };
         luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), 2, 2, rf0, mv0, bit_depth);
@@ -1475,7 +1475,7 @@ pub fn encode_block_a(seq: &Sequence,
 pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
                  cw: &mut ContextWriter, w: &mut dyn Writer,
                  luma_mode: PredictionMode, chroma_mode: PredictionMode,
-                 ref_frames: &[usize; 2], mvs: [MotionVector; 2],
+                 ref_frames: [usize; 2], mvs: [MotionVector; 2],
                  bsize: BlockSize, bo: &BlockOffset, skip: bool, bit_depth: usize,
                  cfl: CFLParams, tx_size: TxSize, tx_type: TxType,
                  mode_context: usize, mv_stack: &[CandidateMV], for_rdo_use: bool)
@@ -1887,7 +1887,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         let (mode_luma, mode_chroma) = (mode_decision.pred_mode_luma, mode_decision.pred_mode_chroma);
         let cfl = mode_decision.pred_cfl_params;
         {
-          let ref_frames = &mode_decision.ref_frames;
+          let ref_frames = mode_decision.ref_frames;
           let mvs = mode_decision.mvs;
           let skip = mode_decision.skip;
           let mut cdef_coded = cw.bc.cdef_coded;
@@ -1970,7 +1970,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             // FIXME: redundant block re-encode
             let (mode_luma, mode_chroma) = (best_decision.pred_mode_luma, best_decision.pred_mode_chroma);
             let cfl = best_decision.pred_cfl_params;
-            let ref_frames = &best_decision.ref_frames;
+            let ref_frames = best_decision.ref_frames;
             let mvs = best_decision.mvs;
             let skip = best_decision.skip;
             let mut cdef_coded = cw.bc.cdef_coded;
@@ -2072,7 +2072,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
 
             let cfl = part_decision.pred_cfl_params;
             let skip = part_decision.skip;
-            let ref_frames = &part_decision.ref_frames;
+            let ref_frames = part_decision.ref_frames;
             let mvs = part_decision.mvs;
             let mut cdef_coded = cw.bc.cdef_coded;
 
