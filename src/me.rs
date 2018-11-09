@@ -20,32 +20,32 @@ use libc;
 
 #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), not(windows)))]
 extern {
-  fn rav1e_sad_4x4_ssse3(
+  fn rav1e_sad_4x4_hbd_ssse3(
     src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
     dst_stride: libc::ptrdiff_t
   ) -> u32;
 
-  fn rav1e_sad_8x8_ssse3(
+  fn rav1e_sad_8x8_hbd10_ssse3(
     src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
     dst_stride: libc::ptrdiff_t
   ) -> u32;
 
-  fn rav1e_sad_16x16_ssse3(
+  fn rav1e_sad_16x16_hbd_ssse3(
     src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
     dst_stride: libc::ptrdiff_t
   ) -> u32;
 
-  fn rav1e_sad_32x32_ssse3(
+  fn rav1e_sad_32x32_hbd10_ssse3(
     src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
     dst_stride: libc::ptrdiff_t
   ) -> u32;
 
-  fn rav1e_sad_64x64_ssse3(
+  fn rav1e_sad_64x64_hbd10_ssse3(
     src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
     dst_stride: libc::ptrdiff_t
   ) -> u32;
 
-  fn rav1e_sad_128x128_ssse3(
+  fn rav1e_sad_128x128_hbd10_ssse3(
     src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
     dst_stride: libc::ptrdiff_t
   ) -> u32;
@@ -61,13 +61,13 @@ unsafe fn sad_ssse3(plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize
   assert!(blk_h >= 4 && blk_w >= 4);
   let step_size = blk_h.min(blk_w).min(64);
   let func = match step_size.ilog() {
-    3 => rav1e_sad_4x4_ssse3,
-    4 => rav1e_sad_8x8_ssse3,
-    5 => rav1e_sad_16x16_ssse3,
-    6 => rav1e_sad_32x32_ssse3,
-    7 => rav1e_sad_64x64_ssse3,
-    8 => rav1e_sad_128x128_ssse3,
-    _ => rav1e_sad_128x128_ssse3
+    3 => rav1e_sad_4x4_hbd_ssse3,
+    4 => rav1e_sad_8x8_hbd10_ssse3,
+    5 => rav1e_sad_16x16_hbd_ssse3,
+    6 => rav1e_sad_32x32_hbd10_ssse3,
+    7 => rav1e_sad_64x64_hbd10_ssse3,
+    8 => rav1e_sad_128x128_hbd10_ssse3,
+    _ => rav1e_sad_128x128_hbd10_ssse3
   };
   if blk_h == blk_w && blk_h <= 32 {
     let org_ptr = plane_org.as_slice().as_ptr();

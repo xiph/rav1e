@@ -24,8 +24,8 @@ SECTION .text
 %endmacro
 
 INIT_XMM ssse3
-cglobal sad_4x4, 4, 6, 8, src, src_stride, dst, dst_stride, \
-                          src_stride3, dst_stride3
+cglobal sad_4x4_hbd, 4, 6, 8, src, src_stride, dst, dst_stride, \
+                              src_stride3, dst_stride3
     lea       src_stride3q, [src_strideq*3]
     lea       dst_stride3q, [dst_strideq*3]
     movq                m0, [srcq]
@@ -58,8 +58,8 @@ cglobal sad_4x4, 4, 6, 8, src, src_stride, dst, dst_stride, \
 ; this should be a 10-bit version
 ; 10-bit only
 INIT_XMM ssse3
-cglobal sad_8x8, 4, 7, 9, src, src_stride, dst, dst_stride, \
-                          src_stride3, dst_stride3, cnt
+cglobal sad_8x8_hbd10, 4, 7, 9, src, src_stride, dst, dst_stride, \
+                                src_stride3, dst_stride3, cnt
     lea       src_stride3q, [src_strideq*3]
     lea       dst_stride3q, [dst_strideq*3]
     mov               cntd, 2
@@ -97,8 +97,8 @@ cglobal sad_8x8, 4, 7, 9, src, src_stride, dst, dst_stride, \
     RET
 
 INIT_XMM ssse3
-cglobal sad_16x16, 4, 5, 9, src, src_stride, dst, dst_stride, \
-                            cnt
+cglobal sad_16x16_hbd, 4, 5, 9, src, src_stride, dst, dst_stride, \
+                                cnt
     mov               cntd, 8
     %define            sum  m0
     pxor               sum, sum
@@ -135,8 +135,8 @@ cglobal sad_16x16, 4, 5, 9, src, src_stride, dst, dst_stride, \
 
 ;10 bit only
 INIT_XMM ssse3
-cglobal sad_32x32, 4, 5, 10, src, src_stride, dst, dst_stride, \
-                             cnt
+cglobal sad_32x32_hbd10, 4, 5, 10, src, src_stride, dst, dst_stride, \
+                                   cnt
     mov               cntd, 32
 ; Accumulate onto multiple registers to avoid overflowing before converting
 ;   to 32-bits.
@@ -179,7 +179,7 @@ cglobal sad_32x32, 4, 5, 10, src, src_stride, dst, dst_stride, \
 
 ;10 bit only
 INIT_XMM ssse3
-cglobal sad_64x16_internal, 0, 5, 13, src, src_stride, dst, dst_stride, cnt
+cglobal sad_64x16_hbd10_internal, 0, 5, 13, src, src_stride, dst, dst_stride, cnt
     mov               cntd, 16
 ; Accumulate onto multiple registers to avoid overflowing before converting
 ;   to 32-bits.
@@ -238,8 +238,8 @@ cglobal sad_64x16_internal, 0, 5, 13, src, src_stride, dst, dst_stride, cnt
 
 ;10 bit only
 INIT_XMM ssse3
-cglobal sad_64x64, 4, 5, 13, src, src_stride, dst, dst_stride, \
-                             cnt
+cglobal sad_64x64_hbd10, 4, 5, 13, src, src_stride, dst, dst_stride, \
+                                   cnt
     pxor                m0, m0
 ; Repeatable call a function that accumulates sad from horizontal slices of the
 ;   block onto m0. Each call increases src and dst as it runs allowing the next
@@ -247,10 +247,10 @@ cglobal sad_64x64, 4, 5, 13, src, src_stride, dst, dst_stride, \
 ; It should be noted that in the process of converting from 16 to 32-bits, the
 ;   function performs (-1*a) + (-1*b) on pairs of horizontal words. This is
 ;   corrected for by negating the final output.
-    call sad_64x16_internal
-    call sad_64x16_internal
-    call sad_64x16_internal
-    call sad_64x16_internal
+    call sad_64x16_hbd10_internal
+    call sad_64x16_hbd10_internal
+    call sad_64x16_hbd10_internal
+    call sad_64x16_hbd10_internal
 ; Horizontal reduction
     movhlps             m1, m0
     paddd               m0, m1
@@ -263,7 +263,7 @@ cglobal sad_64x64, 4, 5, 13, src, src_stride, dst, dst_stride, \
 
 ;10 bit only
 INIT_XMM ssse3
-cglobal sad_128x8_internal, 0, 6, 13, src, src_stride, dst, dst_stride, cnt1, cnt2
+cglobal sad_128x8_hbd10_internal, 0, 6, 13, src, src_stride, dst, dst_stride, cnt1, cnt2
     mov              cnt1d, 8
 ; Accumulate onto multiple registers to avoid overflowing before converting
 ;   to 32-bits.
@@ -316,8 +316,8 @@ cglobal sad_128x8_internal, 0, 6, 13, src, src_stride, dst, dst_stride, cnt1, cn
 
 ;10 bit only
 INIT_XMM ssse3
-cglobal sad_128x128, 4, 7, 13, src, src_stride, dst, dst_stride, \
-                               cnt1, cnt2, cnt
+cglobal sad_128x128_hbd10, 4, 7, 13, src, src_stride, dst, dst_stride, \
+                                     cnt1, cnt2, cnt
     pxor                m0, m0
 ; Repeatable call a function that accumulates sad from horizontal slices of the
 ;   block onto m0. Each call increases src and dst as it runs allowing the next
@@ -327,7 +327,7 @@ cglobal sad_128x128, 4, 7, 13, src, src_stride, dst, dst_stride, \
 ;   corrected for by negating the final output.
     mov               cntd, 16
     .loop
-    call sad_128x8_internal
+    call sad_128x8_hbd10_internal
     dec              cntd
     jg .loop
 ; Horizontal reduction
