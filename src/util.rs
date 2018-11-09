@@ -211,7 +211,8 @@ use num_traits::PrimInt;
 use std::mem::size_of;
 
 pub trait Pixel: PrimInt + Into<u32> + Into<i32> + 'static {}
-impl<T> Pixel for T where T: PrimInt + Into<u32> + Into<i32> + 'static {}
+impl Pixel for u8 {}
+impl Pixel for u16 {}
 
 pub trait ILog: PrimInt {
   fn ilog(self) -> Self {
