@@ -76,14 +76,11 @@ fn main() {
         rl.add_history_entry(&line);
         match line.split_whitespace().next() {
           Some("process_frame") => {
-            if !process_frame(
-              &mut ctx,
-              &mut io.output,
-              &mut y4m_dec,
-              y4m_enc.as_mut()
-            ) {
-              break;
-            }
+            match process_frame(&mut ctx, &mut io.output, &mut y4m_dec, y4m_enc.as_mut()) {
+              Ok(Some(frame_info)) => eprintln!("{}", frame_info),
+              Ok(_) => (),
+              Err(_) => break,
+            };
 
             io.output.flush().unwrap();
           }
