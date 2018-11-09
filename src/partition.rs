@@ -836,6 +836,37 @@ impl PredictionMode {
         self.predict_intra_inner::<Block32x32>(dst, bit_depth, ac, alpha),
       TxSize::TX_64X64 =>
         self.predict_intra_inner::<Block64x64>(dst, bit_depth, ac, alpha),
+
+      TxSize::TX_4X8 =>
+        self.predict_intra_inner::<Block4x8>(dst, bit_depth, ac, alpha),
+      TxSize::TX_8X4 =>
+        self.predict_intra_inner::<Block8x4>(dst, bit_depth, ac, alpha),
+      TxSize::TX_8X16 =>
+        self.predict_intra_inner::<Block8x16>(dst, bit_depth, ac, alpha),
+      TxSize::TX_16X8 =>
+        self.predict_intra_inner::<Block16x8>(dst, bit_depth, ac, alpha),
+      TxSize::TX_16X32 =>
+        self.predict_intra_inner::<Block16x32>(dst, bit_depth, ac, alpha),
+      TxSize::TX_32X16 =>
+        self.predict_intra_inner::<Block32x16>(dst, bit_depth, ac, alpha),
+      TxSize::TX_32X64 =>
+        self.predict_intra_inner::<Block32x64>(dst, bit_depth, ac, alpha),
+      TxSize::TX_64X32 =>
+        self.predict_intra_inner::<Block64x32>(dst, bit_depth, ac, alpha),
+
+      TxSize::TX_4X16 =>
+        self.predict_intra_inner::<Block4x16>(dst, bit_depth, ac, alpha),
+      TxSize::TX_16X4 =>
+        self.predict_intra_inner::<Block16x4>(dst, bit_depth, ac, alpha),
+      TxSize::TX_8X32 =>
+        self.predict_intra_inner::<Block8x32>(dst, bit_depth, ac, alpha),
+      TxSize::TX_32X8 =>
+        self.predict_intra_inner::<Block32x8>(dst, bit_depth, ac, alpha),
+      TxSize::TX_16X64 =>
+        self.predict_intra_inner::<Block16x64>(dst, bit_depth, ac, alpha),
+      TxSize::TX_64X16 =>
+        self.predict_intra_inner::<Block64x16>(dst, bit_depth, ac, alpha),
+
       _ => unimplemented!()
     }
   }
