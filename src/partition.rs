@@ -141,6 +141,16 @@ impl BlockSize {
     self.width_log2().min(self.height_log2()) < 3
   }
 
+  pub fn larger_than(self, other: BlockSize) -> bool {
+    (self.width() > other.width() && self.height() >= other.height()) ||
+    (self.width() >= other.width() && self.height() > other.height())
+  }
+
+  pub fn lte(self, other: BlockSize) -> bool {
+    self.larger_than(other) ||
+    (self.width() == other.width() && self.height() == other.height())
+  }
+
   #[cfg_attr(rustfmt, rustfmt_skip)]
   const SUBSIZE_LOOKUP: [[BlockSize; BlockSize::BLOCK_SIZES_ALL];
     EXT_PARTITION_TYPES] = [
