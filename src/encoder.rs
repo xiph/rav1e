@@ -2206,7 +2206,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
     // Always split if the current partition is too large
     let must_split = bo.x + bs as usize > fi.w_in_b ||
         bo.y + bs as usize > fi.h_in_b ||
-        bsize > BlockSize::BLOCK_64X64;
+        bsize.greater_than(BlockSize::BLOCK_64X64);
 
     // must_split overrides the minimum partition size when applicable
     let can_split = bsize > fi.min_partition_size || must_split;
@@ -2238,7 +2238,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
 
         let mut cost: f64 = 0.0;
 
-        if bsize >= BlockSize::BLOCK_8X8 {
+        if bsize.gte(BlockSize::BLOCK_8X8) {
             let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
             let tell = w.tell_frac();
             cw.write_partition(w, bo, partition, bsize);
@@ -2294,7 +2294,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
 
         rd_cost = 0.0;
 
-        if bsize >= BlockSize::BLOCK_8X8 {
+        if bsize.gte(BlockSize::BLOCK_8X8) {
             let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
             let tell = w.tell_frac();
             cw.write_partition(w, bo, partition, bsize);
@@ -2331,7 +2331,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
 
             partition = PartitionType::PARTITION_NONE;
 
-            if bsize >= BlockSize::BLOCK_8X8 {
+            if bsize.gte(BlockSize::BLOCK_8X8) {
                 let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
                 cw.write_partition(w, bo, partition, bsize);
             }
@@ -2363,7 +2363,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
 
     subsize = bsize.subsize(partition);
 
-    if bsize >= BlockSize::BLOCK_8X8 &&
+    if bsize.gte(BlockSize::BLOCK_8X8) &&
         (bsize == BlockSize::BLOCK_8X8 || partition != PartitionType::PARTITION_SPLIT) {
         cw.bc.update_partition_context(bo, subsize, bsize);
     }
@@ -2388,7 +2388,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
     // Always split if the current partition is too large
     let must_split = (bo.x + bsw as usize > fi.w_in_b ||
         bo.y + bsh as usize > fi.h_in_b ||
-        bsize > BlockSize::BLOCK_64X64) && is_square;
+        bsize.greater_than(BlockSize::BLOCK_64X64)) && is_square;
 
     let mut rdo_output = block_output.clone().unwrap_or(RDOOutput {
         part_type: PartitionType::PARTITION_INVALID,
@@ -2415,7 +2415,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
 
     let subsize = bsize.subsize(partition);
 
-    if bsize >= BlockSize::BLOCK_8X8 && is_square {
+    if bsize.gte(BlockSize::BLOCK_8X8) && is_square {
         let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
         cw.write_partition(w, bo, partition, bsize);
     }
@@ -2562,7 +2562,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
         _ => { assert!(false); },
     }
 
-    if bsize >= BlockSize::BLOCK_8X8 &&
+    if bsize.gte(BlockSize::BLOCK_8X8) &&
         (bsize == BlockSize::BLOCK_8X8 || partition != PartitionType::PARTITION_SPLIT) {
             cw.bc.update_partition_context(bo, subsize, bsize);
     }

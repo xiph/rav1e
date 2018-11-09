@@ -218,6 +218,16 @@ impl BlockSize {
 
     (offset_x, offset_y)
   }
+  
+  pub fn greater_than(self, other: BlockSize) -> bool {
+    (self.width() > other.width() && self.height() >= other.height()) ||
+    (self.width() >= other.width() && self.height() > other.height())
+  }
+
+  pub fn gte(self, other: BlockSize) -> bool {
+    self.greater_than(other) ||
+    (self.width() == other.width() && self.height() == other.height())
+  }
 
   #[cfg_attr(rustfmt, rustfmt_skip)]
   const SUBSIZE_LOOKUP: [[BlockSize; BlockSize::BLOCK_SIZES_ALL];
