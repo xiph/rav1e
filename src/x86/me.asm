@@ -1,4 +1,12 @@
-; TODO: License
+; Copyright (c) 2018, The rav1e contributors. All rights reserved
+;
+; This source code is subject to the terms of the BSD 2 Clause License and
+; the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
+; was not distributed with this source code in the LICENSE file, you can
+; obtain it at www.aomedia.org/license/software. If the Alliance for Open
+; Media Patent License 1.0 was not distributed with this source code in the
+; PATENTS file, you can obtain it at www.aomedia.org/license/patent.
+
 %include "config.asm"
 %include "ext/x86/x86inc.asm"
 
@@ -155,6 +163,130 @@ cglobal sad_32x32, 4, 5, 10, src, src_stride, dst, dst_stride, \
     pshufd              m1, m0, q1111
     paddd               m0, m1
     movd               eax, m0
+    RET
+
+INIT_XMM ssse3
+cglobal sad_64x16_internal, 0, 5, 13, src, src_stride, dst, dst_stride, cnt
+    mov               cntd, 16
+    pxor                m1, m1
+    pxor                m2, m2
+    pxor                m3, m3
+    pxor                m4, m4
+.loop:
+    movu                m5, [srcq]
+    movu                m6, [srcq+16]
+    movu                m7, [srcq+32]
+    movu                m8, [srcq+48]
+    movu                m9, [dstq]
+    movu               m10, [dstq+16]
+    movu               m11, [dstq+32]
+    movu               m12, [dstq+48]
+    W_ABS_DIFF m5, m6, m7, m8, m9, m10, m11, m12
+    paddw               m1, m5
+    paddw               m2, m6
+    paddw               m3, m7
+    paddw               m4, m8
+    movu                m5, [srcq+64]
+    movu                m6, [srcq+80]
+    movu                m7, [srcq+96]
+    movu                m8, [srcq+112]
+    lea               srcq, [srcq+src_strideq]
+    movu                m9, [dstq+64]
+    movu               m10, [dstq+80]
+    movu               m11, [dstq+96]
+    movu               m12, [dstq+112]
+    lea               dstq, [dstq+dst_strideq]
+    W_ABS_DIFF m5, m6, m7, m8, m9, m10, m11, m12
+    paddw               m1, m5
+    paddw               m2, m6
+    paddw               m3, m7
+    paddw               m4, m8
+    dec               cntd
+    jg .loop
+    pcmpeqd             m5, m5
+    pmaddwd             m1, m5
+    pmaddwd             m2, m5
+    pmaddwd             m3, m5
+    pmaddwd             m4, m5
+    paddd               m1, m2
+    paddd               m3, m4
+    paddd               m0, m1
+    paddd               m0, m3
+    RET
+
+INIT_XMM ssse3
+cglobal sad_64x64, 4, 5, 13, 16 src, src_stride, dst, dst_stride, \
+                             cnt
+    pxor                m0, m0
+    call sad_64x16_internal
+    call sad_64x16_internal
+    call sad_64x16_internal
+    call sad_64x16_internal
+    movhlps             m1, m0
+    paddd               m0, m1
+    pshufd              m1, m0, q1111
+    paddd               m0, m1
+    movd               eax, m0
+    neg                eax
+    RET
+
+INIT_XMM ssse3
+cglobal sad_128x8_internal, 0, 6, 13, src, src_stride, dst, dst_stride, cnt1, cnt2
+    mov              cnt1d, 8
+    pxor                m1, m1
+    pxor                m2, m2
+    pxor                m3, m3
+    pxor                m4, m4
+.outer_loop:
+    mov              cnt2d, 4
+.inner_loop:
+    movu                m5, [srcq]
+    movu                m6, [srcq+16]
+    movu                m7, [srcq+32]
+    movu                m8, [srcq+48]
+    lea               srcq, [srcq+64]
+    movu                m9, [dstq]
+    movu               m10, [dstq+16]
+    movu               m11, [dstq+32]
+    movu               m12, [dstq+48]
+    lea               dstq, [dstq+64]
+    W_ABS_DIFF m5, m6, m7, m8, m9, m10, m11, m12
+    paddw               m1, m5
+    paddw               m2, m6
+    paddw               m3, m7
+    paddw               m4, m8
+    dec              cnt2d
+    jg .inner_loop
+    lea               srcq, [srcq+src_strideq-256]
+    lea               dstq, [dstq+dst_strideq-256]
+    dec              cnt1d
+    jg .outer_loop
+    pcmpeqd             m5, m5
+    pmaddwd             m1, m5
+    pmaddwd             m2, m5
+    pmaddwd             m3, m5
+    pmaddwd             m4, m5
+    paddd               m1, m2
+    paddd               m3, m4
+    paddd               m0, m1
+    paddd               m0, m3
+    RET
+
+INIT_XMM ssse3
+cglobal sad_128x128, 4, 7, 13, src, src_stride, dst, dst_stride, \
+                               cnt1, cnt2, cnt
+    mov               cntd, 16
+    pxor                m0, m0
+    .loop
+    call sad_128x8_internal
+    dec              cntd
+    jg .loop
+    movhlps             m1, m0
+    paddd               m0, m1
+    pshufd              m1, m0, q1111
+    paddd               m0, m1
+    movd               eax, m0
+    neg                eax
     RET
 
 %endif
