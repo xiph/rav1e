@@ -36,15 +36,20 @@ cglobal sad_4x4, 4, 6, 8, src, src_stride, dst, dst_stride, \
     movq                m5, [dstq+dst_strideq*1]
     movq                m6, [dstq+dst_strideq*2]
     movq                m7, [dstq+dst_stride3q]
-    W_ABS_DIFF m0, m1, m2, m3, m4, m5, m6, m7 
-    paddw               m0, m1
+    W_ABS_DIFF m0, m1, m2, m3, m4, m5, m6, m7
+; Don't convert to 32 bit integers: 4*4 abs diffs of 12-bits fits in 16 bits.
+; Accumulate onto m0
+    %define            sum  m0
+    paddw              sum, m1
     paddw               m2, m3
-    paddw               m0, m2
-    pshuflw             m1, m0, q2323
-    paddw               m0, m1
-    pshuflw             m1, m0, q1111
-    paddw               m0, m1
-    movd               eax, m0
+    paddw              sum, m2
+; Horizontal reduction
+    pshuflw             m1, sum, q2323
+    paddw              sum, m1
+    pshuflw             m1, sum, q1111
+    paddw              sum, m1
+    movd               eax, sum
+; Convert to 16-bits since the upper half of eax is dirty
     movzx              eax, ax
     RET
 
@@ -71,13 +76,15 @@ cglobal sad_8x8, 4, 7, 9, src, src_stride, dst, dst_stride, \
     movu                m7, [dstq+dst_strideq*2]
     movu                m8, [dstq+dst_stride3q]
     lea               dstq, [dstq+dst_strideq*4]
-    W_ABS_DIFF m1, m2, m3, m4, m5, m6, m7, m8 
+    W_ABS_DIFF m1, m2, m3, m4, m5, m6, m7, m8
     paddw               m1, m2
     paddw               m3, m4
     paddw              sum, m1
     paddw              sum, m3
     dec               cntd
     jg .loop
+; Don't convert to 32 bit integers: 8*8 abs diffs of 10-bits fits in 16 bits.
+; Horizontal reduction
     movhlps             m1, sum
     paddw              sum, m1
     pshuflw             m1, sum, q2323
@@ -85,6 +92,7 @@ cglobal sad_8x8, 4, 7, 9, src, src_stride, dst, dst_stride, \
     pshuflw             m1, sum, q1111
     paddw              sum, m1
     movd               eax, m0
+; Convert to 16-bits since the upper half of eax is dirty
     movzx              eax, ax
     RET
 
@@ -105,18 +113,19 @@ cglobal sad_16x16, 4, 5, 9, src, src_stride, dst, dst_stride, \
     movu                m7, [dstq+dst_strideq]
     movu                m8, [dstq+dst_strideq+16]
     lea               dstq, [dstq+dst_strideq*2]
-    W_ABS_DIFF m1, m2, m3, m4, m5, m6, m7, m8 
+    W_ABS_DIFF m1, m2, m3, m4, m5, m6, m7, m8
     paddw               m1, m2
     paddw               m3, m4
     paddw              sum, m1
     paddw              sum, m3
     dec               cntd
     jg .loop
-; convert to 32-bit
+; Convert to 32-bits
     pxor                m1, m1
     punpcklwd           m2, sum, m1
     punpckhwd          sum, m1
     paddd              sum, m2
+; Horizontal reduction
     movhlps             m1, sum
     paddd              sum, m1
     pshufd              m1, sum, q1111
@@ -129,6 +138,8 @@ INIT_XMM ssse3
 cglobal sad_32x32, 4, 5, 10, src, src_stride, dst, dst_stride, \
                              cnt
     mov               cntd, 32
+; Accumulate onto multiple registers to avoid overflowing before converting
+;   to 32-bits.
     pxor                m0, m0
     pxor                m1, m1
 .loop:
@@ -142,14 +153,14 @@ cglobal sad_32x32, 4, 5, 10, src, src_stride, dst, dst_stride, \
     movu                m8, [dstq+32]
     movu                m9, [dstq+48]
     lea               dstq, [dstq+dst_strideq]
-    W_ABS_DIFF m2, m3, m4, m5, m6, m7, m8, m9 
+    W_ABS_DIFF m2, m3, m4, m5, m6, m7, m8, m9
     paddw               m2, m3
     paddw               m4, m5
     paddw               m0, m2
     paddw               m1, m4
     dec               cntd
     jg .loop
-; convert to 32-bit
+; Convert to 32-bits
     pxor                m2, m2
     punpcklwd           m3, m0, m2
     punpckhwd           m0, m2
@@ -158,6 +169,7 @@ cglobal sad_32x32, 4, 5, 10, src, src_stride, dst, dst_stride, \
     punpckhwd           m1, m2
     paddd               m1, m3
     paddd               m0, m1
+; Horizontal reduction
     movhlps             m1, m0
     paddd               m0, m1
     pshufd              m1, m0, q1111
@@ -165,9 +177,13 @@ cglobal sad_32x32, 4, 5, 10, src, src_stride, dst, dst_stride, \
     movd               eax, m0
     RET
 
+;10 bit only
 INIT_XMM ssse3
 cglobal sad_64x16_internal, 0, 5, 13, src, src_stride, dst, dst_stride, cnt
     mov               cntd, 16
+; Accumulate onto multiple registers to avoid overflowing before converting
+;   to 32-bits.
+; In this case, we need to be able to able to fit into 16-bit SIGNED integers.
     pxor                m1, m1
     pxor                m2, m2
     pxor                m3, m3
@@ -182,6 +198,7 @@ cglobal sad_64x16_internal, 0, 5, 13, src, src_stride, dst, dst_stride, cnt
     movu               m11, [dstq+32]
     movu               m12, [dstq+48]
     W_ABS_DIFF m5, m6, m7, m8, m9, m10, m11, m12
+; Evenly distribute abs diffs among the registers we use for accumulation.
     paddw               m1, m5
     paddw               m2, m6
     paddw               m3, m7
@@ -197,47 +214,66 @@ cglobal sad_64x16_internal, 0, 5, 13, src, src_stride, dst, dst_stride, cnt
     movu               m12, [dstq+112]
     lea               dstq, [dstq+dst_strideq]
     W_ABS_DIFF m5, m6, m7, m8, m9, m10, m11, m12
+; Evenly distribute abs diffs among the registers we use for accumulation.
     paddw               m1, m5
     paddw               m2, m6
     paddw               m3, m7
     paddw               m4, m8
     dec               cntd
     jg .loop
+; Convert to 32-bits by performing (-1*a) + (-1*b) on pairs of horizontal words.
+;   This has to be corrected for later.
+; TODO: punpck might be faster since we only have to do it half as much.
     pcmpeqd             m5, m5
     pmaddwd             m1, m5
     pmaddwd             m2, m5
     pmaddwd             m3, m5
     pmaddwd             m4, m5
+; Reduce from 4 to 2 regisers, then add them to m0
     paddd               m1, m2
     paddd               m3, m4
     paddd               m0, m1
     paddd               m0, m3
     RET
 
+;10 bit only
 INIT_XMM ssse3
-cglobal sad_64x64, 4, 5, 13, 16 src, src_stride, dst, dst_stride, \
+cglobal sad_64x64, 4, 5, 13, src, src_stride, dst, dst_stride, \
                              cnt
     pxor                m0, m0
+; Repeatable call a function that accumulates sad from horizontal slices of the
+;   block onto m0. Each call increases src and dst as it runs allowing the next
+;   call to carry on from where the previous call left off.
+; It should be noted that in the process of converting from 16 to 32-bits, the
+;   function performs (-1*a) + (-1*b) on pairs of horizontal words. This is
+;   corrected for by negating the final output.
     call sad_64x16_internal
     call sad_64x16_internal
     call sad_64x16_internal
     call sad_64x16_internal
+; Horizontal reduction
     movhlps             m1, m0
     paddd               m0, m1
     pshufd              m1, m0, q1111
     paddd               m0, m1
     movd               eax, m0
+; Negate reverse the change in sign cause by converting to 32-bits.
     neg                eax
     RET
 
+;10 bit only
 INIT_XMM ssse3
 cglobal sad_128x8_internal, 0, 6, 13, src, src_stride, dst, dst_stride, cnt1, cnt2
     mov              cnt1d, 8
+; Accumulate onto multiple registers to avoid overflowing before converting
+;   to 32-bits.
+; In this case, we need to be able to able to fit into 16-bit SIGNED integers.
     pxor                m1, m1
     pxor                m2, m2
     pxor                m3, m3
     pxor                m4, m4
 .outer_loop:
+; Iterate over columns in this row.
     mov              cnt2d, 4
 .inner_loop:
     movu                m5, [srcq]
@@ -251,41 +287,56 @@ cglobal sad_128x8_internal, 0, 6, 13, src, src_stride, dst, dst_stride, cnt1, cn
     movu               m12, [dstq+48]
     lea               dstq, [dstq+64]
     W_ABS_DIFF m5, m6, m7, m8, m9, m10, m11, m12
+; Evenly distribute abs diffs among the registers we use for accumulation.
     paddw               m1, m5
     paddw               m2, m6
     paddw               m3, m7
     paddw               m4, m8
     dec              cnt2d
     jg .inner_loop
+; When iterating to the next row, subtract the columns we iterated by.
     lea               srcq, [srcq+src_strideq-256]
     lea               dstq, [dstq+dst_strideq-256]
     dec              cnt1d
     jg .outer_loop
+; Convert to 32-bits by performing (-1*a) + (-1*b) on pairs of horizontal words.
+;   This has to be corrected for later.
+; TODO: punpck might be faster since we only have to do it half as much.
     pcmpeqd             m5, m5
     pmaddwd             m1, m5
     pmaddwd             m2, m5
     pmaddwd             m3, m5
     pmaddwd             m4, m5
+; Reduce from 4 to 2 regisers, then add them to m0
     paddd               m1, m2
     paddd               m3, m4
     paddd               m0, m1
     paddd               m0, m3
     RET
 
+;10 bit only
 INIT_XMM ssse3
 cglobal sad_128x128, 4, 7, 13, src, src_stride, dst, dst_stride, \
                                cnt1, cnt2, cnt
-    mov               cntd, 16
     pxor                m0, m0
+; Repeatable call a function that accumulates sad from horizontal slices of the
+;   block onto m0. Each call increases src and dst as it runs allowing the next
+;   call to carry on from where the previous call left off.
+; It should be noted that in the process of converting from 16 to 32-bits, the
+;   function performs (-1*a) + (-1*b) on pairs of horizontal words. This is
+;   corrected for by negating the final output.
+    mov               cntd, 16
     .loop
     call sad_128x8_internal
     dec              cntd
     jg .loop
+; Horizontal reduction
     movhlps             m1, m0
     paddd               m0, m1
     pshufd              m1, m0, q1111
     paddd               m0, m1
     movd               eax, m0
+; Negate reverse the change in sign cause by converting to 32-bits.
     neg                eax
     RET
 
