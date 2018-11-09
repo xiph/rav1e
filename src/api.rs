@@ -122,6 +122,18 @@ pub struct Packet {
   pub frame_type: FrameType
 }
 
+impl fmt::Display for Packet {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(
+      f,
+      "Frame {} - {} - {} bytes",
+      self.number,
+      self.frame_type,
+      self.data.len()
+    )
+  }
+}
+
 impl Context {
   pub fn new_frame(&self) -> Arc<Frame> {
     Arc::new(Frame::new(self.fi.padded_w, self.fi.padded_h))
