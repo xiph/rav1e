@@ -14,18 +14,19 @@ extern crate y4m;
 mod common;
 use common::*;
 
+use std::io;
+use std::io::Write;
 use rav1e::*;
 
 fn main() {
-  let (mut io, enc, limit) = parse_cli();
-  let mut y4m_dec = y4m::decode(&mut io.input).unwrap();
+  let mut cli = parse_cli();
+  let mut y4m_dec = y4m::decode(&mut cli.io.input).unwrap();
   let width = y4m_dec.get_width();
   let height = y4m_dec.get_height();
   let framerate = y4m_dec.get_framerate();
   let color_space = y4m_dec.get_colorspace();
 
-  let mut count = 0;
-  let mut y4m_enc = match io.rec.as_mut() {
+  let mut y4m_enc = match cli.io.rec.as_mut() {
     Some(rec) => Some(
       y4m::encode(width, height, framerate)
         .with_colorspace(color_space)
@@ -56,31 +57,49 @@ fn main() {
   let cfg = Config {
     frame_info: FrameInfo { width, height, bit_depth, chroma_sampling },
     timebase: Rational::new(framerate.den as u64, framerate.num as u64),
-    enc
+    enc: cli.enc
   };
 
   let mut ctx = cfg.new_context();
 
+  let stderr = io::stderr();
+  let mut err = stderr.lock();
+
+  let _ = writeln!(err, "{}x{} @ {}/{} fps", width, height, framerate.num, framerate.den);
+
   write_ivf_header(
-    &mut io.output,
+    &mut cli.io.output,
     width,
     height,
     framerate.num,
     framerate.den
   );
 
+  let mut progress = ProgressInfo::new(
+    framerate,
+    if cli.limit == 0 { None } else { Some(cli.limit) }
+  );
+
   loop {
-    if !process_frame(&mut ctx, &mut io.output, &mut y4m_dec, y4m_enc.as_mut())
-    {
+    match process_frame(&mut ctx, &mut cli.io.output, &mut y4m_dec, y4m_enc.as_mut()) {
+      Ok(Some(frame_info)) => {
+        progress.add_frame(frame_info);
+        let _ = if cli.verbose {
+          writeln!(err, "{} - {}", frame_info, progress)
+        } else {
+          write!(err, "\r{}                    ", progress)
+        };
+      },
+      Ok(_) => (),
+      Err(_) => break,
+    };
+
+    if cli.limit != 0 && progress.frames_encoded() >= cli.limit {
       break;
     }
 
-    count += 1;
-
-    if limit != 0 && count >= limit {
-      break;
-    }
-
-    io.output.flush().unwrap();
+    cli.io.output.flush().unwrap();
   }
+
+  let _ = write!(err, "\n{}\n", progress.print_stats());
 }
