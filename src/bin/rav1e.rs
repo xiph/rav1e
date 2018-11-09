@@ -9,7 +9,6 @@
 
 extern crate clap;
 extern crate rav1e;
-extern crate termion;
 extern crate y4m;
 
 mod common;
@@ -17,7 +16,6 @@ use common::*;
 
 use std::io;
 use std::io::Write;
-use termion::clear;
 use rav1e::*;
 
 fn main() {
@@ -89,7 +87,7 @@ fn main() {
         let _ = if cli.verbose {
           writeln!(err, "{} - {}", frame_info, progress)
         } else {
-          write!(err, "{}\r{}",  clear::CurrentLine, progress)
+          write!(err, "\r{}                    ", progress)
         };
       },
       Ok(_) => (),
