@@ -16,6 +16,7 @@ mod predict;
 mod transform;
 mod me;
 
+use std::time::Duration;
 use criterion::*;
 use rav1e::cdef::cdef_filter_frame;
 use rav1e::context::*;
@@ -146,7 +147,10 @@ criterion_group!(intra_prediction, predict::pred_bench,);
 criterion_group!(cfl, cfl_rdo);
 criterion_group!(cdef, cdef_frame);
 criterion_group!(write_block, write_b);
-criterion_group!(me, me::get_sad);
+criterion_group!{ name = me;
+                  config = Criterion::default().warm_up_time(Duration::new(1,0));
+                  targets = me::get_sad
+}
 
 #[cfg(feature = "comparative_bench")]
 criterion_main!(comparative::intra_prediction);
