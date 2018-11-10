@@ -12,9 +12,9 @@ use context::BLOCK_TO_PLANE_SHIFT;
 use context::MI_SIZE;
 use partition::*;
 use plane::*;
+use util::*;
 use FrameInvariants;
 use FrameState;
-use util::*;
 
 use libc;
 
@@ -53,13 +53,17 @@ extern {
 
 #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), not(windows)))]
 #[target_feature(enable = "ssse3")]
-unsafe fn sad_ssse3(plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize, blk_w: usize) -> u32 {
+unsafe fn sad_ssse3(
+  plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize, blk_w: usize,
+  bit_depth: usize
+) -> u32 {
   let mut sum = 0 as u32;
   // TODO: stride *2??? What is the correct way to do this?
   let org_stride = plane_org.plane.cfg.stride as libc::ptrdiff_t * 2;
   let ref_stride = plane_ref.plane.cfg.stride as libc::ptrdiff_t * 2;
   assert!(blk_h >= 4 && blk_w >= 4);
-  let step_size = blk_h.min(blk_w).min(64);
+  let step_size =
+    blk_h.min(blk_w).min(if (bit_depth <= 10) { 128 } else { 4 });
   let func = match step_size.ilog() {
     3 => rav1e_sad_4x4_hbd_ssse3,
     4 => rav1e_sad_8x8_hbd10_ssse3,
@@ -88,13 +92,15 @@ unsafe fn sad_ssse3(plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize
 
 #[inline(always)]
 pub fn get_sad(
-  plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize,
-  blk_w: usize
+  plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize, blk_w: usize,
+  bit_depth: usize
 ) -> u32 {
   #[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), not(windows)))]
   {
     if is_x86_feature_detected!("ssse3") && blk_h >= 4 && blk_w >= 4 {
-      return unsafe { sad_ssse3(plane_org, plane_ref, blk_h, blk_w) };
+      return unsafe {
+        sad_ssse3(plane_org, plane_ref, blk_h, blk_w, bit_depth)
+      };
     }
   }
   let mut sum = 0 as u32;
@@ -125,8 +131,8 @@ fn get_mv_range(fi: &FrameInvariants, bo: &BlockOffset, blk_w: usize, blk_h: usi
 }
 
 pub fn motion_estimation(
-  fi: &FrameInvariants, fs: &FrameState, bsize: BlockSize,
-  bo: &BlockOffset, ref_frame: usize, pmv: MotionVector
+  fi: &FrameInvariants, fs: &FrameState, bsize: BlockSize, bo: &BlockOffset,
+  ref_frame: usize, pmv: MotionVector, bit_depth: usize
 ) -> MotionVector {
   match fi.rec_buffer.frames[fi.ref_frames[ref_frame - LAST_FRAME] as usize] {
     Some(ref rec) => {
@@ -147,8 +153,19 @@ pub fn motion_estimation(
       let mut best_mv = MotionVector { row: 0, col: 0 };
 
       full_search(
-        x_lo, x_hi, y_lo, y_hi, blk_h, blk_w,
-        &fs.input.planes[0], &rec.frame.planes[0], &mut best_mv, &mut lowest_sad, &po, 2
+        x_lo,
+        x_hi,
+        y_lo,
+        y_hi,
+        blk_h,
+        blk_w,
+        &fs.input.planes[0],
+        &rec.frame.planes[0],
+        &mut best_mv,
+        &mut lowest_sad,
+        &po,
+        2,
+        bit_depth
       );
 
       let mode = PredictionMode::NEWMV;
@@ -193,7 +210,7 @@ pub fn motion_estimation(
             let plane_org = fs.input.planes[0].slice(&po);
             let plane_ref = tmp_plane.slice(&PlaneOffset { x: 0, y: 0 });
 
-            let sad = get_sad(&plane_org, &plane_ref, blk_h, blk_w);
+            let sad = get_sad(&plane_org, &plane_ref, blk_h, blk_w, bit_depth);
 
             if sad < lowest_sad {
               lowest_sad = sad;
@@ -210,15 +227,17 @@ pub fn motion_estimation(
   }
 }
 
-fn full_search(x_lo: isize, x_hi: isize, y_lo: isize, y_hi: isize, blk_h: usize, blk_w: usize,
-    p_org: &Plane, p_ref: &Plane, best_mv: &mut MotionVector, lowest_sad: &mut u32,
-    po: &PlaneOffset, step: usize) {
+fn full_search(
+  x_lo: isize, x_hi: isize, y_lo: isize, y_hi: isize, blk_h: usize,
+  blk_w: usize, p_org: &Plane, p_ref: &Plane, best_mv: &mut MotionVector,
+  lowest_sad: &mut u32, po: &PlaneOffset, step: usize, bit_depth: usize
+) {
   for y in (y_lo..y_hi).step_by(step) {
     for x in (x_lo..x_hi).step_by(step) {
       let plane_org = p_org.slice(po);
       let plane_ref = p_ref.slice(&PlaneOffset { x, y });
 
-      let sad = get_sad(&plane_org, &plane_ref, blk_h, blk_w);
+      let sad = get_sad(&plane_org, &plane_ref, blk_h, blk_w, bit_depth);
 
       if sad < *lowest_sad {
         *lowest_sad = sad;
@@ -240,7 +259,8 @@ fn adjust_bo(bo: &BlockOffset, fi: &FrameInvariants, blk_w: usize, blk_h: usize)
 }
 
 pub fn estimate_motion_ss4(
-  fi: &FrameInvariants, fs: &FrameState, bsize: BlockSize, ref_idx: usize, bo: &BlockOffset
+  fi: &FrameInvariants, fs: &FrameState, bsize: BlockSize, ref_idx: usize,
+  bo: &BlockOffset, bit_depth: usize
 ) -> Option<MotionVector> {
   if let Some(ref rec) = fi.rec_buffer.frames[ref_idx] {
     let blk_w = bsize.width();
@@ -261,8 +281,19 @@ pub fn estimate_motion_ss4(
     let mut best_mv = MotionVector { row: 0, col: 0 };
 
     full_search(
-      x_lo, x_hi, y_lo, y_hi, blk_h >> 2, blk_w >> 2,
-      &fs.input_qres, &rec.input_qres, &mut best_mv, &mut lowest_sad, &po, 1
+      x_lo,
+      x_hi,
+      y_lo,
+      y_hi,
+      blk_h >> 2,
+      blk_w >> 2,
+      &fs.input_qres,
+      &rec.input_qres,
+      &mut best_mv,
+      &mut lowest_sad,
+      &po,
+      1,
+      bit_depth
     );
 
     Some(MotionVector { row: best_mv.row * 4, col: best_mv.col * 4 })
@@ -272,7 +303,8 @@ pub fn estimate_motion_ss4(
 }
 
 pub fn estimate_motion_ss2(
-  fi: &FrameInvariants, fs: &FrameState, bsize: BlockSize, ref_idx: usize, bo: &BlockOffset, pmvs: &[Option<MotionVector>; 3]
+  fi: &FrameInvariants, fs: &FrameState, bsize: BlockSize, ref_idx: usize,
+  bo: &BlockOffset, pmvs: &[Option<MotionVector>; 3], bit_depth: usize
 ) -> Option<MotionVector> {
   if let Some(ref rec) = fi.rec_buffer.frames[ref_idx] {
     let blk_w = bsize.width();
@@ -296,8 +328,19 @@ pub fn estimate_motion_ss2(
         let y_hi = po.y + (((pmv.row as isize / 8 + range).min(mvy_max / 8)) >> 1);
 
         full_search(
-          x_lo, x_hi, y_lo, y_hi, blk_h >> 1, blk_w >> 1,
-          &fs.input_hres, &rec.input_hres, &mut best_mv, &mut lowest_sad, &po, 1
+          x_lo,
+          x_hi,
+          y_lo,
+          y_hi,
+          blk_h >> 1,
+          blk_w >> 1,
+          &fs.input_hres,
+          &rec.input_hres,
+          &mut best_mv,
+          &mut lowest_sad,
+          &po,
+          1,
+          bit_depth
         );
       }
     }
@@ -369,17 +412,21 @@ pub mod test {
       (BLOCK_64X16, 93344),
     ];
 
+    let bit_depth: usize = 8;
     let (input_plane, rec_plane) = setup_sad();
 
     for block in blocks {
-        let bsw = block.0.width();
-        let bsh = block.0.height();
-        let po = PlaneOffset { x: 40, y: 40 };
+      let bsw = block.0.width();
+      let bsh = block.0.height();
+      let po = PlaneOffset { x: 40, y: 40 };
 
-        let mut input_slice = input_plane.slice(&po);
-        let mut rec_slice = rec_plane.slice(&po);
+      let mut input_slice = input_plane.slice(&po);
+      let mut rec_slice = rec_plane.slice(&po);
 
-        assert_eq!(block.1, get_sad(&mut input_slice, &mut rec_slice, bsw, bsh));
+      assert_eq!(
+        block.1,
+        get_sad(&mut input_slice, &mut rec_slice, bsw, bsh, bit_depth)
+      );
     }
   }
 }

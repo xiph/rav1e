@@ -2209,7 +2209,7 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
                 let r = fi.ref_frames[i] as usize;
                 if pmvs[r].is_none() {
                     assert!(!sequence.use_128x128_superblock);
-                    pmvs[r] = estimate_motion_ss4(fi, fs, BlockSize::BLOCK_64X64, r, &bo);
+                    pmvs[r] = estimate_motion_ss4(fi, fs, BlockSize::BLOCK_64X64, r, &bo, sequence.bit_depth);
                 }
             }
             frame_pmvs.push(pmvs);
@@ -2259,16 +2259,16 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
 
                         assert!(!sequence.use_128x128_superblock);
                         pmvs[1][r] = estimate_motion_ss2(
-                            fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(0, 0), &[Some(pmv), pmv_w, pmv_n]
+                            fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(0, 0), &[Some(pmv), pmv_w, pmv_n], sequence.bit_depth
                         );
                         pmvs[2][r] = estimate_motion_ss2(
-                            fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(8, 0), &[Some(pmv), pmv_e, pmv_n]
+                            fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(8, 0), &[Some(pmv), pmv_e, pmv_n], sequence.bit_depth
                         );
                         pmvs[3][r] = estimate_motion_ss2(
-                            fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(0, 8), &[Some(pmv), pmv_w, pmv_s]
+                            fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(0, 8), &[Some(pmv), pmv_w, pmv_s], sequence.bit_depth
                         );
                         pmvs[4][r] = estimate_motion_ss2(
-                            fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(8, 8), &[Some(pmv), pmv_e, pmv_s]
+                            fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(8, 8), &[Some(pmv), pmv_e, pmv_s], sequence.bit_depth
                         );
                     }
                 }
