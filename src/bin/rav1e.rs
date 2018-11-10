@@ -82,15 +82,16 @@ fn main() {
 
   loop {
     match process_frame(&mut ctx, &mut cli.io.output, &mut y4m_dec, y4m_enc.as_mut()) {
-      Ok(Some(frame_info)) => {
-        progress.add_frame(frame_info);
-        let _ = if cli.verbose {
-          writeln!(err, "{} - {}", frame_info, progress)
-        } else {
-          write!(err, "\r{}                    ", progress)
-        };
+      Ok(frame_info) => {
+        for frame in frame_info {
+          progress.add_frame(frame);
+          let _ = if cli.verbose {
+            writeln!(err, "{} - {}", frame, progress)
+          } else {
+            write!(err, "\r{}                    ", progress)
+          };
+        }
       },
-      Ok(_) => (),
       Err(_) => break,
     };
 
