@@ -4,7 +4,6 @@ use std::fmt;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
-use std::ops::Add;
 use std::slice;
 use std::sync::Arc;
 use std::time::Instant;
@@ -146,19 +145,6 @@ impl From<Packet> for FrameSummary {
   }
 }
 
-impl Add<Packet> for FrameSummary {
-  type Output = FrameSummary;
-
-  fn add(self, rhs: Packet) -> <Self as Add<Packet>>::Output {
-    assert!(rhs.number == self.number);
-    Self {
-      size: self.size + rhs.data.len(),
-      number: self.number,
-      frame_type: self.frame_type,
-    }
-  }
-}
-
 impl fmt::Display for FrameSummary {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(
@@ -177,7 +163,7 @@ pub fn process_frame(
   ctx: &mut Context, output_file: &mut dyn Write,
   y4m_dec: &mut y4m::Decoder<'_, Box<dyn Read>>,
   mut y4m_enc: Option<&mut y4m::Encoder<'_, Box<dyn Write>>>
-) -> Result<Option<FrameSummary>, ()> {
+) -> Result<Vec<FrameSummary>, ()> {
   let width = y4m_dec.get_width();
   let height = y4m_dec.get_height();
   let y4m_bits = y4m_dec.get_bit_depth();
@@ -221,7 +207,7 @@ pub fn process_frame(
   };
 
   let mut has_data = true;
-  let mut frame_summary = None;
+  let mut frame_summaries = Vec::new();
   while has_data {
     let pkt_wrapped = ctx.receive_packet();
     match pkt_wrapped {
@@ -303,17 +289,13 @@ pub fn process_frame(
             y4m_enc_uw.write_frame(&rec_frame).unwrap();
           }
         }
-        if frame_summary.is_none() {
-          frame_summary = Some(pkt.into());
-        } else {
-          frame_summary = frame_summary.map(|f| f + pkt);
-        }
+        frame_summaries.push(pkt.into());
       },
       _ => { has_data = false; }
     }
   }
   if read_frame {
-    Ok(frame_summary)
+    Ok(frame_summaries)
   } else {
     Err(())
   }
