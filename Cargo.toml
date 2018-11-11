@@ -24,6 +24,7 @@ rustyline = { version = "1", optional = true }
 y4m = { version = "0.3", optional = true }
 backtrace = "0.3"
 num-traits = "0.2"
+paste = "0.1"
 
 [build-dependencies]
 cmake = { version = "0.1", optional = true }

@@ -113,137 +113,32 @@ pub trait Dim {
   const H: usize;
 }
 
-pub struct Block4x4;
+macro_rules! block_dimension {
+  ($W:expr, $H:expr) => {
+    paste::item! {
+      pub struct [<Block $W x $H>];
 
-impl Dim for Block4x4 {
-  const W: usize = 4;
-  const H: usize = 4;
+      impl Dim for [<Block $W x $H>] {
+        const W: usize = $W;
+        const H: usize = $H;
+      }
+    }
+  };
 }
 
-pub struct Block8x8;
-
-impl Dim for Block8x8 {
-  const W: usize = 8;
-  const H: usize = 8;
+macro_rules! blocks_dimension {
+  ($(($W:expr, $H:expr)),+) => {
+    $(
+      block_dimension! { $W, $H }
+    )*
+  }
 }
 
-pub struct Block16x16;
-
-impl Dim for Block16x16 {
-  const W: usize = 16;
-  const H: usize = 16;
-}
-
-pub struct Block32x32;
-
-impl Dim for Block32x32 {
-  const W: usize = 32;
-  const H: usize = 32;
-}
-
-pub struct Block64x64;
-
-impl Dim for Block64x64 {
-  const W: usize = 64;
-  const H: usize = 64;
-}
-
-pub struct Block4x8;
-
-impl Dim for Block4x8 {
-  const W: usize = 4;
-  const H: usize = 8;
-}
-
-pub struct Block8x4;
-
-impl Dim for Block8x4 {
-  const W: usize = 8;
-  const H: usize = 4;
-}
-
-pub struct Block8x16;
-
-impl Dim for Block8x16 {
-  const W: usize = 8;
-  const H: usize = 16;
-}
-
-pub struct Block16x8;
-
-impl Dim for Block16x8 {
-  const W: usize = 16;
-  const H: usize = 8;
-}
-
-pub struct Block16x32;
-
-impl Dim for Block16x32 {
-  const W: usize = 16;
-  const H: usize = 32;
-}
-
-pub struct Block32x16;
-
-impl Dim for Block32x16 {
-  const W: usize = 32;
-  const H: usize = 16;
-}
-
-pub struct Block32x64;
-
-impl Dim for Block32x64 {
-  const W: usize = 32;
-  const H: usize = 64;
-}
-pub struct Block64x32;
-
-impl Dim for Block64x32 {
-  const W: usize = 64;
-  const H: usize = 32;
-}
-
-pub struct Block4x16;
-
-impl Dim for Block4x16 {
-  const W: usize = 4;
-  const H: usize = 16;
-}
-
-pub struct Block16x4;
-
-impl Dim for Block16x4 {
-  const W: usize = 16;
-  const H: usize = 4;
-}
-
-pub struct Block8x32;
-
-impl Dim for Block8x32 {
-  const W: usize = 8;
-  const H: usize = 32;
-}
-
-pub struct Block32x8;
-
-impl Dim for Block32x8 {
-  const W: usize = 32;
-  const H: usize = 8;
-}
-
-pub struct Block16x64;
-
-impl Dim for Block16x64 {
-  const W: usize = 16;
-  const H: usize = 64;
-}
-
-pub struct Block64x16;
-
-impl Dim for Block64x16 {
-  const W: usize = 64;
-  const H: usize = 16;
-}
+blocks_dimension! { (4, 4), (8, 8), (16, 16), (32, 32), (64, 64) }
+blocks_dimension! { (4, 8), (8, 16), (16, 32), (32, 64) }
+blocks_dimension! { (8, 4), (16, 8), (32, 16), (64, 32) }
+blocks_dimension! { (4, 16), (8, 32), (16, 64) }
+blocks_dimension! { (16, 4), (32, 8), (64, 16) }
 
 #[inline(always)]
 fn get_scaled_luma_q0(alpha_q3: i16, ac_pred_q3: i16) -> i32 {
