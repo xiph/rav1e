@@ -55,7 +55,6 @@ cglobal sad_4x4_hbd, 4, 6, 8, src, src_stride, dst, dst_stride, \
 
 %if ARCH_X86_64
 
-; this should be a 10-bit version
 ; 10-bit only
 INIT_XMM ssse3
 cglobal sad_8x8_hbd10, 4, 7, 9, src, src_stride, dst, dst_stride, \
