@@ -73,11 +73,6 @@ unsafe fn sad_ssse3(
     8 => rav1e_sad_128x128_hbd10_ssse3,
     _ => rav1e_sad_128x128_hbd10_ssse3
   };
-  if blk_h == blk_w && blk_h <= 32 {
-    let org_ptr = plane_org.as_slice().as_ptr();
-    let ref_ptr = plane_ref.as_slice().as_ptr();
-    return func(org_ptr, org_stride, ref_ptr, ref_stride);
-  }
   for r in (0..blk_h).step_by(step_size) {
     for c in (0..blk_w).step_by(step_size) {
       let org_slice = plane_org.subslice(c, r);
