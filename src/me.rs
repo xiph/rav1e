@@ -63,7 +63,7 @@ unsafe fn sad_ssse3(
   let ref_stride = plane_ref.plane.cfg.stride as libc::ptrdiff_t * 2;
   assert!(blk_h >= 4 && blk_w >= 4);
   let step_size =
-    blk_h.min(blk_w).min(if (bit_depth <= 10) { 128 } else { 4 });
+    blk_h.min(blk_w).min(if bit_depth <= 10 { 128 } else { 4 });
   let func = match step_size.ilog() {
     3 => rav1e_sad_4x4_hbd_ssse3,
     4 => rav1e_sad_8x8_hbd10_ssse3,
