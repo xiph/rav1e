@@ -122,6 +122,9 @@ macro_rules! block_dimension {
         const W: usize = $W;
         const H: usize = $H;
       }
+
+      impl Intra<u8> for [<Block $W x $H>] {}
+      impl Intra<u16> for [<Block $W x $H>] {}
     }
   };
 }
@@ -642,50 +645,6 @@ where
 }
 
 pub trait Inter: Dim {}
-
-impl Intra<u8> for Block4x4 {}
-impl Intra<u8> for Block8x8 {}
-impl Intra<u8> for Block16x16 {}
-impl Intra<u8> for Block32x32 {}
-impl Intra<u8> for Block64x64 {}
-
-impl Intra<u8> for Block4x8 {}
-impl Intra<u8> for Block8x4 {}
-impl Intra<u8> for Block8x16 {}
-impl Intra<u8> for Block16x8 {}
-impl Intra<u8> for Block16x32 {}
-impl Intra<u8> for Block32x16 {}
-impl Intra<u8> for Block32x64 {}
-impl Intra<u8> for Block64x32 {}
-
-impl Intra<u8> for Block4x16 {}
-impl Intra<u8> for Block16x4 {}
-impl Intra<u8> for Block8x32 {}
-impl Intra<u8> for Block32x8 {}
-impl Intra<u8> for Block16x64 {}
-impl Intra<u8> for Block64x16 {}
-
-impl Intra<u16> for Block4x4 {}
-impl Intra<u16> for Block8x8 {}
-impl Intra<u16> for Block16x16 {}
-impl Intra<u16> for Block32x32 {}
-impl Intra<u16> for Block64x64 {}
-
-impl Intra<u16> for Block4x8 {}
-impl Intra<u16> for Block8x4 {}
-impl Intra<u16> for Block8x16 {}
-impl Intra<u16> for Block16x8 {}
-impl Intra<u16> for Block16x32 {}
-impl Intra<u16> for Block32x16 {}
-impl Intra<u16> for Block32x64 {}
-impl Intra<u16> for Block64x32 {}
-
-impl Intra<u16> for Block4x16 {}
-impl Intra<u16> for Block16x4 {}
-impl Intra<u16> for Block8x32 {}
-impl Intra<u16> for Block32x8 {}
-impl Intra<u16> for Block16x64 {}
-impl Intra<u16> for Block64x16 {}
 
 #[cfg(all(test, feature = "aom"))]
 pub mod test {
