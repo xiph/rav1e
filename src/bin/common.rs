@@ -171,39 +171,46 @@ pub fn process_frame(
   let bit_depth = y4m_dec.get_colorspace().get_bit_depth();
 
   let read_frame =
-  match y4m_dec.read_frame() {
-    Ok(y4m_frame) => {
-      let y4m_y = y4m_frame.get_y_plane();
-      let y4m_u = y4m_frame.get_u_plane();
-      let y4m_v = y4m_frame.get_v_plane();
-      let mut input = ctx.new_frame();
-      {
-        let input = Arc::get_mut(&mut input).unwrap();
-        input.planes[0].copy_from_raw_u8(&y4m_y, width * y4m_bytes, y4m_bytes);
-        input.planes[1].copy_from_raw_u8(
-          &y4m_u,
-          width * y4m_bytes / 2,
-          y4m_bytes
-        );
-        input.planes[2].copy_from_raw_u8(
-          &y4m_v,
-          width * y4m_bytes / 2,
-          y4m_bytes
-        );
-      }
+  if ctx.needs_more_frames(ctx.get_frame_count()) {
+    match y4m_dec.read_frame() {
+      Ok(y4m_frame) => {
+        let y4m_y = y4m_frame.get_y_plane();
+        let y4m_u = y4m_frame.get_u_plane();
+        let y4m_v = y4m_frame.get_v_plane();
+        let mut input = ctx.new_frame();
+        {
+          let input = Arc::get_mut(&mut input).unwrap();
+          input.planes[0].copy_from_raw_u8(&y4m_y, width * y4m_bytes, y4m_bytes);
+          input.planes[1].copy_from_raw_u8(
+            &y4m_u,
+            width * y4m_bytes / 2,
+            y4m_bytes
+          );
+          input.planes[2].copy_from_raw_u8(
+            &y4m_v,
+            width * y4m_bytes / 2,
+            y4m_bytes
+          );
+        }
 
-      match y4m_bits {
-        8 | 10 | 12 => {}
-        _ => panic!("unknown input bit depth!")
-      }
+        match y4m_bits {
+          8 | 10 | 12 => {}
+          _ => panic!("unknown input bit depth!")
+        }
 
-      let _ = ctx.send_frame(input);
-      true
+        let _ = ctx.send_frame(input);
+        true
+      }
+      _ => {
+        let frames_to_be_coded = ctx.get_frame_count();
+        ctx.set_frames_to_be_coded(frames_to_be_coded);
+        ctx.flush();
+        false
+      }
     }
-    _ => {
-      ctx.flush();
-      false
-    }
+  } else {
+    ctx.flush();
+    false
   };
 
   let mut has_data = true;
@@ -294,11 +301,7 @@ pub fn process_frame(
       _ => { has_data = false; }
     }
   }
-  if read_frame {
-    Ok(frame_summaries)
-  } else {
-    Err(())
-  }
+  Ok(frame_summaries)
 }
 
 #[derive(Debug, Clone)]
