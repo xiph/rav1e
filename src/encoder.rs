@@ -2169,22 +2169,13 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
             else {
                 let hbsw = subsize.width_mi(); // Half the block size width in blocks
                 let hbsh = subsize.height_mi(); // Half the block size height in blocks
-
-                let p1 = BlockOffset{ x: bo.x + hbsw as usize, y: bo.y };
-                let p2 = BlockOffset{ x: bo.x, y: bo.y + hbsh as usize };
-                let p3 = BlockOffset{ x: bo.x + hbsw as usize, y: bo.y + hbsh as usize };
-
-                let mut partitions = vec![ bo ];
-
-                if partition == PARTITION_VERT || partition == PARTITION_SPLIT {
-                partitions.push(&p1);
-                };
-                if partition == PARTITION_HORZ || partition == PARTITION_SPLIT {
-                partitions.push(&p2);
-                };
-                if partition == PARTITION_SPLIT {
-                partitions.push(&p3);
-                };
+                let four_partitions = [
+                bo,
+                &BlockOffset{ x: bo.x + hbsw as usize, y: bo.y },
+                &BlockOffset{ x: bo.x, y: bo.y + hbsh as usize },
+                &BlockOffset{ x: bo.x + hbsw as usize, y: bo.y + hbsh as usize }
+                ];
+                let partitions = get_sub_partitions(&four_partitions, partition);
 
                 partitions.iter().for_each(|&offset| {
                         encode_partition_topdown(

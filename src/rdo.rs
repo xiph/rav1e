@@ -826,6 +826,23 @@ pub fn rdo_tx_type_decision(
   best_type
 }
 
+pub fn get_sub_partitions<'a>(four_partitions: &[&'a BlockOffset; 4],
+   partition: PartitionType) -> Vec<&'a BlockOffset> {
+  let mut partitions = vec![ four_partitions[0] ];
+
+  if partition == PARTITION_VERT || partition == PARTITION_SPLIT {
+    partitions.push(four_partitions[1]);
+  };
+  if partition == PARTITION_HORZ || partition == PARTITION_SPLIT {
+    partitions.push(four_partitions[2]);
+  };
+  if partition == PARTITION_SPLIT {
+    partitions.push(four_partitions[3]);
+  };
+
+  partitions
+}
+
 // RDO-based single level partitioning decision
 pub fn rdo_partition_decision(
   seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
@@ -880,22 +897,13 @@ pub fn rdo_partition_decision(
 
         let hbsw = subsize.width_mi(); // Half the block size width in blocks
         let hbsh = subsize.height_mi(); // Half the block size height in blocks
-
-        let p1 = BlockOffset{ x: bo.x + hbsw as usize, y: bo.y };
-        let p2 = BlockOffset{ x: bo.x, y: bo.y + hbsh as usize };
-        let p3 = BlockOffset{ x: bo.x + hbsw as usize, y: bo.y + hbsh as usize };
-
-        let mut partitions = vec![ bo ];
-
-        if partition == PARTITION_VERT || partition == PARTITION_SPLIT {
-          partitions.push(&p1);
-        };
-        if partition == PARTITION_HORZ || partition == PARTITION_SPLIT {
-          partitions.push(&p2);
-        };
-        if partition == PARTITION_SPLIT {
-          partitions.push(&p3);
-        };
+        let four_partitions = [
+          bo,
+          &BlockOffset{ x: bo.x + hbsw as usize, y: bo.y },
+          &BlockOffset{ x: bo.x, y: bo.y + hbsh as usize },
+          &BlockOffset{ x: bo.x + hbsw as usize, y: bo.y + hbsh as usize }
+        ];
+        let partitions = get_sub_partitions(&four_partitions, partition);
 
         let pmv_idxs = partitions.iter().map(|&offset| {
           if subsize > BlockSize::BLOCK_32X32 {
