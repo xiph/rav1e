@@ -80,6 +80,8 @@ fn main() {
     if cli.limit == 0 { None } else { Some(cli.limit) }
   );
 
+  ctx.set_frames_to_be_coded(cli.limit as u64);
+
   loop {
     match process_frame(&mut ctx, &mut cli.io.output, &mut y4m_dec, y4m_enc.as_mut()) {
       Ok(frame_info) => {
@@ -95,7 +97,7 @@ fn main() {
       Err(_) => break,
     };
 
-    if cli.limit != 0 && progress.frames_encoded() >= cli.limit {
+    if !ctx.needs_more_frames(progress.frames_encoded() as u64) {
       break;
     }
 

@@ -190,7 +190,7 @@ impl Config {
       aom_dsp_rtcd();
     }
 
-    Context { fi, seq, frame_count: 0, idx: 0, frame_q: BTreeMap::new(), packet_data: Vec::new() }
+    Context { fi, seq, frame_count: 0, frames_to_be_coded: 0, idx: 0, frame_q: BTreeMap::new(), packet_data: Vec::new() }
   }
 }
 
@@ -199,6 +199,7 @@ pub struct Context {
   seq: Sequence,
   //    timebase: Rational,
   frame_count: u64,
+  frames_to_be_coded: u64,
   idx: u64,
   frame_q: BTreeMap<u64, Option<Arc<Frame>>>, //    packet_q: VecDeque<Packet>
   packet_data: Vec<u8>
@@ -247,6 +248,18 @@ impl Context {
     self.frame_q.insert(self.frame_count, frame.into());
     self.frame_count = self.frame_count + 1;
     Ok(())
+  }
+
+  pub fn get_frame_count(&self) -> u64 {
+    self.frame_count
+  }
+
+  pub fn set_frames_to_be_coded(&mut self, frames_to_be_coded: u64) {
+    self.frames_to_be_coded = frames_to_be_coded;
+  }
+
+  pub fn needs_more_frames(&self, frame_count: u64) -> bool {
+    self.frames_to_be_coded == 0 || frame_count < self.frames_to_be_coded
   }
 
   pub fn container_sequence_header(&mut self) -> Vec<u8> {
@@ -428,6 +441,11 @@ impl Context {
     while !self.frame_properties(idx) {
       self.idx = self.idx + 1;
       idx = self.idx;
+    }
+
+    if !self.needs_more_frames(self.fi.number) {
+      self.idx = self.idx + 1;
+      return Err(EncoderStatus::EnoughData)
     }
 
     if self.fi.show_existing_frame {
