@@ -3238,15 +3238,9 @@ impl ContextWriter {
       cul_level += coeffs[i].abs() as u32;
     }
 
-    let mut eob = 0;
-
-    if cul_level != 0 {
-      for (i, v) in coeffs.iter().enumerate() {
-        if *v != 0 {
-          eob = i + 1;
-        }
-      }
-    }
+    let eob = if cul_level == 0 { 0 } else {
+      coeffs.iter().rposition(|&v| v != 0).map(|i| i + 1).unwrap_or(0)
+    };
 
     let txs_ctx = self.get_txsize_entropy_ctx(tx_size);
     let txb_ctx =
@@ -3302,64 +3296,20 @@ impl ContextWriter {
       1
     };
 
-    match eob_multi_size {
-      0 => {
-        symbol_with_update!(
-          self,
-          w,
-          eob_pt - 1,
-          &mut self.fc.eob_flag_cdf16[plane_type][eob_multi_ctx]
-        );
+    symbol_with_update!(
+      self,
+      w,
+      eob_pt - 1,
+      match eob_multi_size {
+        0 => &mut self.fc.eob_flag_cdf16[plane_type][eob_multi_ctx],
+        1 => &mut self.fc.eob_flag_cdf32[plane_type][eob_multi_ctx],
+        2 => &mut self.fc.eob_flag_cdf64[plane_type][eob_multi_ctx],
+        3 => &mut self.fc.eob_flag_cdf128[plane_type][eob_multi_ctx],
+        4 => &mut self.fc.eob_flag_cdf256[plane_type][eob_multi_ctx],
+        5 => &mut self.fc.eob_flag_cdf512[plane_type][eob_multi_ctx],
+        _ => &mut self.fc.eob_flag_cdf1024[plane_type][eob_multi_ctx],
       }
-      1 => {
-        symbol_with_update!(
-          self,
-          w,
-          eob_pt - 1,
-          &mut self.fc.eob_flag_cdf32[plane_type][eob_multi_ctx]
-        );
-      }
-      2 => {
-        symbol_with_update!(
-          self,
-          w,
-          eob_pt - 1,
-          &mut self.fc.eob_flag_cdf64[plane_type][eob_multi_ctx]
-        );
-      }
-      3 => {
-        symbol_with_update!(
-          self,
-          w,
-          eob_pt - 1,
-          &mut self.fc.eob_flag_cdf128[plane_type][eob_multi_ctx]
-        );
-      }
-      4 => {
-        symbol_with_update!(
-          self,
-          w,
-          eob_pt - 1,
-          &mut self.fc.eob_flag_cdf256[plane_type][eob_multi_ctx]
-        );
-      }
-      5 => {
-        symbol_with_update!(
-          self,
-          w,
-          eob_pt - 1,
-          &mut self.fc.eob_flag_cdf512[plane_type][eob_multi_ctx]
-        );
-      }
-      _ => {
-        symbol_with_update!(
-          self,
-          w,
-          eob_pt - 1,
-          &mut self.fc.eob_flag_cdf1024[plane_type][eob_multi_ctx]
-        );
-      }
-    };
+    );
 
     let eob_offset_bits = k_eob_offset_bits[eob_pt as usize];
 
@@ -3464,16 +3414,15 @@ impl ContextWriter {
     for c in 0..eob {
       let v = coeffs_in[scan[c] as usize];
       let level = v.abs() as u32;
+      if level == 0 {
+        continue;
+      }
+
       let sign = if v < 0 {
         1
       } else {
         0
       };
-
-      if level == 0 {
-        continue;
-      }
-
       if c == 0 {
         symbol_with_update!(
           self,
