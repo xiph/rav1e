@@ -176,10 +176,8 @@ cglobal sad_32x32_hbd10, 4, 5, 10, src, src_stride, dst, dst_stride, \
     movd               eax, m0
     RET
 
-;10 bit only
-INIT_XMM ssse3
-cglobal sad_64x16_hbd10_internal, 0, 5, 13, src, src_stride, dst, dst_stride, cnt
-    mov               cntd, 16
+%macro SAD_64X16_HBD10_INTERNAL 1
+    mov                 %1, 16
 ; Accumulate onto multiple registers to avoid overflowing before converting
 ;   to 32-bits.
 ; In this case, we need to be able to able to fit into 16-bit SIGNED integers.
@@ -187,7 +185,7 @@ cglobal sad_64x16_hbd10_internal, 0, 5, 13, src, src_stride, dst, dst_stride, cn
     pxor                m2, m2
     pxor                m3, m3
     pxor                m4, m4
-.loop:
+.innerloop:
     movu                m5, [srcq]
     movu                m6, [srcq+16]
     movu                m7, [srcq+32]
@@ -218,8 +216,8 @@ cglobal sad_64x16_hbd10_internal, 0, 5, 13, src, src_stride, dst, dst_stride, cn
     paddw               m2, m6
     paddw               m3, m7
     paddw               m4, m8
-    dec               cntd
-    jg .loop
+    dec                 %1
+    jg .innerloop
 ; Convert to 32-bits by performing (-1*a) + (-1*b) on pairs of horizontal words.
 ;   This has to be corrected for later.
 ; TODO: punpck might be faster since we only have to do it half as much.
@@ -233,23 +231,24 @@ cglobal sad_64x16_hbd10_internal, 0, 5, 13, src, src_stride, dst, dst_stride, cn
     paddd               m3, m4
     paddd               m0, m1
     paddd               m0, m3
-    RET
+%endmacro
 
 ;10 bit only
 INIT_XMM ssse3
 cglobal sad_64x64_hbd10, 4, 5, 13, src, src_stride, dst, dst_stride, \
-                                   cnt
+                                   cnt1, cnt2
     pxor                m0, m0
-; Repeatable call a function that accumulates sad from horizontal slices of the
-;   block onto m0. Each call increases src and dst as it runs allowing the next
-;   call to carry on from where the previous call left off.
+; Repeatably accumulates sad from horizontal slices of the block onto m0. Each
+;   call increases src and dst as it runs allowing the next call to carry on
+;   from where the previous call left off.
 ; It should be noted that in the process of converting from 16 to 32-bits, the
 ;   function performs (-1*a) + (-1*b) on pairs of horizontal words. This is
 ;   corrected for by negating the final output.
-    call sad_64x16_hbd10_internal
-    call sad_64x16_hbd10_internal
-    call sad_64x16_hbd10_internal
-    call sad_64x16_hbd10_internal
+    mov               cnt1d, 4
+    .loop
+    SAD_64X16_HBD10_INTERNAL cnt2d
+    dec               cnt1d
+    jg .loop
 ; Horizontal reduction
     movhlps             m1, m0
     paddd               m0, m1
@@ -260,10 +259,8 @@ cglobal sad_64x64_hbd10, 4, 5, 13, src, src_stride, dst, dst_stride, \
     neg                eax
     RET
 
-;10 bit only
-INIT_XMM ssse3
-cglobal sad_128x8_hbd10_internal, 0, 6, 13, src, src_stride, dst, dst_stride, cnt1, cnt2
-    mov              cnt1d, 8
+%macro SAD_128X8_HBD10_INTERNAL 2
+    mov                 %1, 8
 ; Accumulate onto multiple registers to avoid overflowing before converting
 ;   to 32-bits.
 ; In this case, we need to be able to able to fit into 16-bit SIGNED integers.
@@ -273,7 +270,7 @@ cglobal sad_128x8_hbd10_internal, 0, 6, 13, src, src_stride, dst, dst_stride, cn
     pxor                m4, m4
 .outer_loop:
 ; Iterate over columns in this row.
-    mov              cnt2d, 4
+    mov                 %2, 4
 .inner_loop:
     movu                m5, [srcq]
     movu                m6, [srcq+16]
@@ -291,12 +288,12 @@ cglobal sad_128x8_hbd10_internal, 0, 6, 13, src, src_stride, dst, dst_stride, cn
     paddw               m2, m6
     paddw               m3, m7
     paddw               m4, m8
-    dec              cnt2d
+    dec                 %2
     jg .inner_loop
 ; When iterating to the next row, subtract the columns we iterated by.
     lea               srcq, [srcq+src_strideq-256]
     lea               dstq, [dstq+dst_strideq-256]
-    dec              cnt1d
+    dec                 %1
     jg .outer_loop
 ; Convert to 32-bits by performing (-1*a) + (-1*b) on pairs of horizontal words.
 ;   This has to be corrected for later.
@@ -311,23 +308,23 @@ cglobal sad_128x8_hbd10_internal, 0, 6, 13, src, src_stride, dst, dst_stride, cn
     paddd               m3, m4
     paddd               m0, m1
     paddd               m0, m3
-    RET
+%endmacro
 
 ;10 bit only
 INIT_XMM ssse3
 cglobal sad_128x128_hbd10, 4, 7, 13, src, src_stride, dst, dst_stride, \
-                                     cnt1, cnt2, cnt
+                                     cnt1, cnt2, cnt3
     pxor                m0, m0
-; Repeatable call a function that accumulates sad from horizontal slices of the
-;   block onto m0. Each call increases src and dst as it runs allowing the next
-;   call to carry on from where the previous call left off.
+; Repeatably accumulates sad from horizontal slices of the block onto m0. Each
+;   call increases src and dst as it runs allowing the next call to carry on
+;   from where the previous call left off.
 ; It should be noted that in the process of converting from 16 to 32-bits, the
 ;   function performs (-1*a) + (-1*b) on pairs of horizontal words. This is
 ;   corrected for by negating the final output.
-    mov               cntd, 16
+    mov              cnt1d, 16
     .loop
-    call sad_128x8_hbd10_internal
-    dec              cntd
+    SAD_128X8_HBD10_INTERNAL cnt2d, cnt3d
+    dec              cnt1d
     jg .loop
 ; Horizontal reduction
     movhlps             m1, m0
