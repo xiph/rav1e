@@ -259,7 +259,22 @@ pub fn forward_transform(
     TxSize::TX_16X16 => fht16x16(input, output, stride, tx_type, bit_depth),
     TxSize::TX_32X32 => fht32x32(input, output, stride, tx_type, bit_depth),
     TxSize::TX_64X64 => fht64x64(input, output, stride, tx_type, bit_depth),
-    _ => panic!("unimplemented tx size")
+
+    TxSize::TX_4X8 => fht4x8(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_8X4 => fht8x4(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_8X16 => fht8x16(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_16X8 => fht16x8(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_16X32 => fht16x32(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_32X16 => fht32x16(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_32X64 => fht32x64(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_64X32 => fht64x32(input, output, stride, tx_type, bit_depth),
+
+    TxSize::TX_4X16 => fht4x16(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_16X4 => fht16x4(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_8X32 => fht8x32(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_32X8 => fht32x8(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_16X64 => fht16x64(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_64X16 => fht64x16(input, output, stride, tx_type, bit_depth),
   }
 }
 
@@ -276,7 +291,22 @@ pub fn inverse_transform_add(
       iht32x32_add(input, output, stride, tx_type, bit_depth),
     TxSize::TX_64X64 =>
       iht64x64_add(input, output, stride, tx_type, bit_depth),
-    _ => panic!("unimplemented tx size")
+
+    TxSize::TX_4X8 => iht4x8_add(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_8X4 => iht8x4_add(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_8X16 => iht8x16_add(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_16X8 => iht16x8_add(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_16X32 => iht16x32_add(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_32X16 => iht32x16_add(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_32X64 => iht32x64_add(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_64X32 => iht64x32_add(input, output, stride, tx_type, bit_depth),
+
+    TxSize::TX_4X16 => iht4x16_add(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_16X4 => iht16x4_add(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_8X32 => iht8x32_add(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_32X8 => iht32x8_add(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_16X64 => iht16x64_add(input, output, stride, tx_type, bit_depth),
+    TxSize::TX_64X16 => iht64x16_add(input, output, stride, tx_type, bit_depth),
   }
 }
 
