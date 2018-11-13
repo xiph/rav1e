@@ -69,8 +69,15 @@ pub fn parse_cli() -> CliOptions {
         .takes_value(true)
         .default_value("3")
     ).arg(
+      Arg::with_name("MIN_KEYFRAME_INTERVAL")
+        .help("Minimum interval between keyframes")
+        .short("i")
+        .long("min-keyint")
+        .takes_value(true)
+        .default_value("12")
+    ).arg(
       Arg::with_name("KEYFRAME_INTERVAL")
-        .help("Keyframe interval")
+        .help("Maximum interval between keyframes")
         .short("I")
         .long("keyint")
         .takes_value(true)
@@ -120,16 +127,21 @@ pub fn parse_cli() -> CliOptions {
 fn parse_config(matches: &ArgMatches) -> EncoderConfig {
   let speed = matches.value_of("SPEED").unwrap().parse().unwrap();
   let quantizer = matches.value_of("QP").unwrap().parse().unwrap();
+  let min_interval = matches.value_of("MIN_KEYFRAME_INTERVAL").unwrap().parse().unwrap();
+  let max_interval = matches.value_of("KEYFRAME_INTERVAL").unwrap().parse().unwrap();
 
   // Validate arguments
   if quantizer == 0 {
     unimplemented!("Lossless encoding not yet implemented");
   } else if quantizer > 255 || speed > 10 {
     panic!("argument out of range");
+  } else if min_interval > max_interval {
+    panic!("Maximum keyframe interval must be greater than or equal to minimum keyframe interval");
   }
 
   let mut cfg = EncoderConfig::with_speed_preset(speed);
-  cfg.key_frame_interval = matches.value_of("KEYFRAME_INTERVAL").unwrap().parse().unwrap();
+  cfg.max_key_frame_interval = min_interval;
+  cfg.max_key_frame_interval = max_interval;
   cfg.low_latency = matches.value_of("LOW_LATENCY").unwrap().parse().unwrap();
   cfg.tune = matches.value_of("TUNE").unwrap().parse().unwrap();
   cfg.quantizer = quantizer;
@@ -207,23 +219,19 @@ pub fn process_frame(
         }
 
         let _ = ctx.send_frame(input);
-        true
       }
       _ => {
         let frames_to_be_coded = ctx.get_frame_count();
         ctx.set_frames_to_be_coded(frames_to_be_coded);
         ctx.flush();
-        false
       }
     }
   } else {
     ctx.flush();
-    false
   };
 
-  let mut has_data = true;
   let mut frame_summaries = Vec::new();
-  while has_data {
+  loop {
     let pkt_wrapped = ctx.receive_packet();
     match pkt_wrapped {
       Ok(pkt) => {
@@ -306,7 +314,7 @@ pub fn process_frame(
         }
         frame_summaries.push(pkt.into());
       },
-      _ => { has_data = false; }
+      _ => { break; }
     }
   }
   Ok(frame_summaries)

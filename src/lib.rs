@@ -37,6 +37,7 @@ pub mod lrf;
 pub mod encoder;
 pub mod me;
 pub mod scan_order;
+pub mod scenechange;
 
 mod api;
 

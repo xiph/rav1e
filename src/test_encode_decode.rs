@@ -72,7 +72,8 @@ impl Drop for AomDecoder {
 
 fn setup_encoder(
   w: usize, h: usize, speed: usize, quantizer: usize, bit_depth: usize,
-  chroma_sampling: ChromaSampling
+  chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
+  low_latency: bool
 ) -> Context {
   unsafe {
     av1_rtcd();
@@ -81,6 +82,9 @@ fn setup_encoder(
 
   let mut enc = EncoderConfig::with_speed_preset(speed);
   enc.quantizer = quantizer;
+  enc.min_key_frame_interval = min_keyint;
+  enc.max_key_frame_interval = max_keyint;
+  enc.low_latency = low_latency;
 
   let cfg = Config {
     frame_info: FrameInfo { width: w, height: h, bit_depth, chroma_sampling },
@@ -105,7 +109,7 @@ fn speed() {
 
   for b in DIMENSION_OFFSETS.iter() {
     for s in 0..10 {
-      encode_decode(w + b.0, h + b.1, s, quantizer, limit, 8);
+      encode_decode(w + b.0, h + b.1, s, quantizer, limit, 8, 15, 15, true);
     }
   }
 }
@@ -135,7 +139,7 @@ fn dimensions() {
   let speed = 4;
 
   for (w, h) in DIMENSIONS.iter() {
-    encode_decode(*w, *h, speed, quantizer, limit, 8);
+    encode_decode(*w, *h, speed, quantizer, limit, 8, 15, 15, true);
   }
 }
 
@@ -148,8 +152,32 @@ fn quantizer() {
 
   for b in DIMENSION_OFFSETS.iter() {
     for &q in [80, 100, 120].iter() {
-      encode_decode(w + b.0, h + b.1, speed, q, limit, 8);
+      encode_decode(w + b.0, h + b.1, speed, q, limit, 8, 15, 15, true);
     }
+  }
+}
+
+#[test]
+fn keyframes() {
+  let limit = 12;
+  let w = 64;
+  let h = 80;
+  let speed = 10;
+  let q = 100;
+
+  encode_decode(w, h, speed, q, limit, 8, 6, 6, true);
+}
+
+#[test]
+fn reordering() {
+  let limit = 12;
+  let w = 64;
+  let h = 80;
+  let speed = 10;
+  let q = 100;
+
+  for keyint in &[4, 5, 6] {
+    encode_decode(w, h, speed, q, limit, 8, *keyint, *keyint, false);
   }
 }
 
@@ -162,7 +190,7 @@ fn odd_size_frame_with_full_rdo() {
   let speed = 0;
   let qindex = 100;
 
-  encode_decode(w, h, speed, qindex, limit, 8);
+  encode_decode(w, h, speed, qindex, limit, 8, 15, 15, true);
 }
 
 #[test]
@@ -174,10 +202,10 @@ fn high_bd() {
   let h = 80;
 
   // 10-bit
-  encode_decode(w, h, speed, quantizer, limit, 10);
+  encode_decode(w, h, speed, quantizer, limit, 10, 15, 15, true);
 
   // 12-bit
-  encode_decode(w, h, speed, quantizer, limit, 12);
+  encode_decode(w, h, speed, quantizer, limit, 12, 15, 15, true);
 }
 
 fn compare_plane<T: Ord + std::fmt::Debug>(
@@ -233,14 +261,15 @@ fn compare_img(img: *const aom_image_t, frame: &Frame, bit_depth: usize, width: 
 
 fn encode_decode(
   w: usize, h: usize, speed: usize, quantizer: usize, limit: usize,
-  bit_depth: usize
+  bit_depth: usize, min_keyint: u64, max_keyint: u64, low_latency: bool
 ) {
   use std::ptr;
   let mut ra = ChaChaRng::from_seed([0; 32]);
 
   let mut dec = setup_decoder(w, h);
   let mut ctx =
-    setup_encoder(w, h, speed, quantizer, bit_depth, ChromaSampling::Cs420);
+    setup_encoder(w, h, speed, quantizer, bit_depth, ChromaSampling::Cs420,
+                  min_keyint, max_keyint, low_latency);
 
   println!("Encoding {}x{} speed {} quantizer {}", w, h, speed, quantizer);
 
