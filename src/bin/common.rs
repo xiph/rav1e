@@ -170,7 +170,6 @@ pub fn process_frame(
   let y4m_bytes = y4m_dec.get_bytes_per_sample();
   let bit_depth = y4m_dec.get_colorspace().get_bit_depth();
 
-  let read_frame =
   if ctx.needs_more_frames(ctx.get_frame_count()) {
     match y4m_dec.read_frame() {
       Ok(y4m_frame) => {
