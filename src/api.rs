@@ -10,9 +10,11 @@
 use encoder::*;
 use partition::*;
 
+use std::cmp;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
+use scenechange::SceneChangeDetector;
 
 // TODO: use the num crate?
 #[derive(Clone, Copy, Debug)]
@@ -30,7 +32,10 @@ impl Rational {
 
 #[derive(Copy, Clone, Debug)]
 pub struct EncoderConfig {
-  pub key_frame_interval: u64,
+  /// The *minimum* interval between two keyframes
+  pub min_key_frame_interval: u64,
+  /// The *maximum* interval between two keyframes
+  pub max_key_frame_interval: u64,
   pub low_latency: bool,
   pub quantizer: usize,
   pub tune: Tune,
@@ -47,7 +52,8 @@ impl Default for EncoderConfig {
 impl EncoderConfig {
   pub fn with_speed_preset(speed: usize) -> Self {
     EncoderConfig {
-      key_frame_interval: 240,
+      min_key_frame_interval: 12,
+      max_key_frame_interval: 240,
       low_latency: true,
       quantizer: 100,
       tune: Tune::Psnr,
@@ -166,7 +172,8 @@ impl Config {
     use self::EncoderStatus::*;
     match key {
       "low_latency" => self.enc.low_latency = value.parse().map_err(|_e| ParseError)?,
-      "key_frame_interval" => self.enc.key_frame_interval = value.parse().map_err(|_e| ParseError)?,
+      "min_key_frame_interval" => self.enc.min_key_frame_interval = value.parse().map_err(|_e| ParseError)?,
+      "key_frame_interval" => self.enc.max_key_frame_interval = value.parse().map_err(|_e| ParseError)?,
       "quantizer" => self.enc.quantizer = value.parse().map_err(|_e| ParseError)?,
       "speed" => self.enc.speed_settings = SpeedSettings::from_preset(value.parse().map_err(|_e| ParseError)?),
       "tune" => self.enc.tune = value.parse().map_err(|_e| ParseError)?,
@@ -190,7 +197,19 @@ impl Config {
       aom_dsp_rtcd();
     }
 
-    Context { fi, seq, frame_count: 0, frames_to_be_coded: 0, idx: 0, frame_q: BTreeMap::new(), packet_data: Vec::new() }
+    Context {
+      fi,
+      seq,
+      frame_count: 0,
+      frames_to_be_coded: 0,
+      idx: 0,
+      frame_q: BTreeMap::new(),
+      packet_data: Vec::new(),
+      segment_start_idx: 0,
+      segment_start_frame: 0,
+      frame_types: BTreeMap::new(),
+      keyframe_detector: SceneChangeDetector::new(&self.frame_info),
+    }
   }
 }
 
@@ -202,7 +221,11 @@ pub struct Context {
   frames_to_be_coded: u64,
   idx: u64,
   frame_q: BTreeMap<u64, Option<Arc<Frame>>>, //    packet_q: VecDeque<Packet>
-  packet_data: Vec<u8>
+  packet_data: Vec<u8>,
+  segment_start_idx: u64,
+  segment_start_frame: u64,
+  frame_types: BTreeMap<u64, FrameType>,
+  keyframe_detector: SceneChangeDetector,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -236,6 +259,22 @@ impl fmt::Display for Packet {
   }
 }
 
+#[derive(Debug, Clone, Copy)]
+enum FramePropsStatus {
+  FramePastSegmentEnd,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct InterPropsConfig {
+  reorder: bool,
+  multiref: bool,
+  pyramid_depth: u64,
+  group_src_len: u64,
+  group_len: u64,
+  idx_in_group: u64,
+  group_idx: u64,
+}
+
 impl Context {
   pub fn new_frame(&self) -> Arc<Frame> {
     Arc::new(Frame::new(self.fi.padded_w, self.fi.padded_h))
@@ -245,7 +284,9 @@ impl Context {
   where
     F: Into<Option<Arc<Frame>>>
   {
-    self.frame_q.insert(self.frame_count, frame.into());
+    let idx = self.frame_count;
+    self.frame_q.insert(idx, frame.into());
+    self.save_frame_type(idx);
     self.frame_count = self.frame_count + 1;
     Ok(())
   }
@@ -292,164 +333,229 @@ impl Context {
     sequence_header_inner(&self.seq).unwrap()
   }
 
-  pub fn frame_properties(&mut self, idx: u64) -> bool {
-    let key_frame_interval: u64 = self.fi.config.key_frame_interval;
+  fn setup_key_frame_properties(&mut self) {
+    self.fi.frame_type = FrameType::KEY;
+    self.fi.intra_only = true;
+    self.fi.order_hint = 0;
+    self.fi.refresh_frame_flags = ALL_REF_FRAMES_MASK;
+    self.fi.show_frame = true;
+    self.fi.show_existing_frame = false;
+    self.fi.frame_to_show_map_idx = 0;
+    let q_boost = 15;
+    self.fi.base_q_idx = (self.fi.config.quantizer.max(1 + q_boost).min(255 + q_boost) - q_boost) as u8;
+    self.fi.primary_ref_frame = PRIMARY_REF_NONE;
+    self.fi.number = self.segment_start_frame;
+    for i in 0..INTER_REFS_PER_FRAME {
+      self.fi.ref_frames[i] = 0;
+    }
+  }
 
+  fn get_inter_props_cfg(&mut self, idx_in_segment: u64) -> InterPropsConfig {
     let reorder = !self.fi.config.low_latency;
     let multiref = reorder || self.fi.config.speed_settings.multiref;
 
     let pyramid_depth = if reorder { 2 } else { 0 };
     let group_src_len = 1 << pyramid_depth;
     let group_len = group_src_len + if reorder { pyramid_depth } else { 0 };
-    let segment_len = 1 + (key_frame_interval - 1 + group_src_len - 1) / group_src_len * group_len;
 
-    let idx_in_segment = idx % segment_len;
-    let segment_idx = idx / segment_len;
+    let idx_in_group = (idx_in_segment - 1) % group_len;
+    let group_idx = (idx_in_segment - 1) / group_len;
 
-    if idx_in_segment == 0 {
-      self.fi.frame_type = FrameType::KEY;
-      self.fi.intra_only = true;
-      self.fi.order_hint = 0;
-      self.fi.refresh_frame_flags = ALL_REF_FRAMES_MASK;
-      self.fi.show_frame = true;
+    InterPropsConfig {
+      reorder,
+      multiref,
+      pyramid_depth,
+      group_src_len,
+      group_len,
+      idx_in_group,
+      group_idx,
+    }
+  }
+
+  fn next_keyframe(&self) -> u64 {
+    let next_detected = self.frame_types.iter()
+      .find(|(&i, &ty)| ty == FrameType::KEY && i > self.segment_start_frame)
+      .map(|(&i, _)| i);
+    let next_limit = self.segment_start_frame + self.fi.config.max_key_frame_interval;
+    if next_detected.is_none() {
+      return next_limit;
+    }
+    cmp::min(next_detected.unwrap(), next_limit)
+  }
+
+  fn setup_inter_frame_properties(&mut self, cfg: &InterPropsConfig) -> Result<(), FramePropsStatus> {
+    self.fi.frame_type = FrameType::INTER;
+    self.fi.intra_only = false;
+
+    self.fi.order_hint = (cfg.group_src_len * cfg.group_idx +
+      if cfg.reorder && cfg.idx_in_group < cfg.pyramid_depth {
+        cfg.group_src_len >> cfg.idx_in_group
+      } else {
+        cfg.idx_in_group - cfg.pyramid_depth + 1
+      }) as u32;
+    let number = self.segment_start_frame + self.fi.order_hint as u64;
+    if number >= self.next_keyframe() {
       self.fi.show_existing_frame = false;
-      self.fi.frame_to_show_map_idx = 0;
-      let q_boost = 15;
-      self.fi.base_q_idx = (self.fi.config.quantizer.max(1 + q_boost).min(255 + q_boost) - q_boost) as u8;
-      self.fi.primary_ref_frame = PRIMARY_REF_NONE;
-      self.fi.number = segment_idx * key_frame_interval;
-      for i in 0..INTER_REFS_PER_FRAME {
-        self.fi.ref_frames[i] = 0;
-      }
+      self.fi.show_frame = false;
+      return Err(FramePropsStatus::FramePastSegmentEnd);
+    }
+
+    fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
+      // Derive level within pyramid for a frame with a given coding order position
+      // For example, with a pyramid of depth 2, the 2 least significant bits of the
+      // position determine the level:
+      // 00 -> 0
+      // 01 -> 2
+      // 10 -> 1
+      // 11 -> 2
+      pyramid_depth - (pos | (1 << pyramid_depth)).trailing_zeros() as u64
+    }
+
+    let lvl = if !cfg.reorder {
+      0
+    } else if cfg.idx_in_group < cfg.pyramid_depth {
+      cfg.idx_in_group
     } else {
-      let idx_in_group = (idx_in_segment - 1) % group_len;
-      let group_idx = (idx_in_segment - 1) / group_len;
+      pos_to_lvl(cfg.idx_in_group - cfg.pyramid_depth + 1, cfg.pyramid_depth)
+    };
 
-      self.fi.frame_type = FrameType::INTER;
-      self.fi.intra_only = false;
+    // Frames with lvl == 0 are stored in slots 0..4 and frames with higher values
+    // of lvl in slots 4..8
+    let slot_idx = if lvl == 0 {
+      (self.fi.order_hint >> cfg.pyramid_depth) % 4 as u32
+    } else {
+      3 + lvl as u32
+    };
+    self.fi.show_frame = !cfg.reorder || cfg.idx_in_group >= cfg.pyramid_depth;
+    self.fi.show_existing_frame = self.fi.show_frame && cfg.reorder &&
+      (cfg.idx_in_group - cfg.pyramid_depth + 1).count_ones() == 1 &&
+      cfg.idx_in_group != cfg.pyramid_depth;
+    self.fi.frame_to_show_map_idx = slot_idx;
+    self.fi.refresh_frame_flags = if self.fi.show_existing_frame {
+      0
+    } else {
+      1 << slot_idx
+    };
 
-      self.fi.order_hint = (group_src_len * group_idx +
-        if reorder && idx_in_group < pyramid_depth {
-          group_src_len >> idx_in_group
+    let q_drop = 15 * lvl as usize;
+    self.fi.base_q_idx = (self.fi.config.quantizer.min(255 - q_drop) + q_drop) as u8;
+
+    let second_ref_frame = if !cfg.multiref {
+      NONE_FRAME
+    } else if !cfg.reorder || cfg.idx_in_group == 0 {
+      LAST2_FRAME
+    } else {
+      ALTREF_FRAME
+    };
+    let ref_in_previous_group = LAST3_FRAME;
+
+    // reuse probability estimates from previous frames only in top level frames
+    self.fi.primary_ref_frame = if lvl > 0 { PRIMARY_REF_NONE } else { (ref_in_previous_group - LAST_FRAME) as u32 };
+
+    for i in 0..INTER_REFS_PER_FRAME {
+      self.fi.ref_frames[i] = if lvl == 0 {
+        if i == second_ref_frame - LAST_FRAME {
+          (slot_idx + 4 - 2) as u8 % 4
         } else {
-          idx_in_group - pyramid_depth + 1
-        }) as u32;
-      if self.fi.order_hint >= key_frame_interval as u32 {
-        return false;
-      }
-
-      fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
-        // Derive level within pyramid for a frame with a given coding order position
-        // For example, with a pyramid of depth 2, the 2 least significant bits of the
-        // position determine the level:
-        // 00 -> 0
-        // 01 -> 2
-        // 10 -> 1
-        // 11 -> 2
-        pyramid_depth - (pos | (1 << pyramid_depth)).trailing_zeros() as u64
-      }
-
-      let lvl = if !reorder {
-        0
-      } else if idx_in_group < pyramid_depth {
-        idx_in_group
+          (slot_idx + 4 - 1) as u8 % 4
+        }
       } else {
-        pos_to_lvl(idx_in_group - pyramid_depth + 1, pyramid_depth)
-      };
-
-      // Frames with lvl == 0 are stored in slots 0..4 and frames with higher values
-      // of lvl in slots 4..8
-      let slot_idx = if lvl == 0 {
-        (self.fi.order_hint >> pyramid_depth) % 4 as u32
-      } else {
-        3 + lvl as u32
-      };
-      self.fi.show_frame = !reorder || idx_in_group >= pyramid_depth;
-      self.fi.show_existing_frame = self.fi.show_frame && reorder &&
-        (idx_in_group - pyramid_depth + 1).count_ones() == 1 &&
-        idx_in_group != pyramid_depth;
-      self.fi.frame_to_show_map_idx = slot_idx;
-      self.fi.refresh_frame_flags = if self.fi.show_existing_frame {
-        0
-      } else {
-        1 << slot_idx
-      };
-
-      let q_drop = 15 * lvl as usize;
-      self.fi.base_q_idx = (self.fi.config.quantizer.min(255 - q_drop) + q_drop) as u8;
-
-      let second_ref_frame = if !multiref {
-        NONE_FRAME
-      } else if !reorder || idx_in_group == 0 {
-        LAST2_FRAME
-      } else {
-        ALTREF_FRAME
-      };
-      let ref_in_previous_group = LAST3_FRAME;
-
-      // reuse probability estimates from previous frames only in top level frames
-      self.fi.primary_ref_frame = if lvl > 0 { PRIMARY_REF_NONE } else { (ref_in_previous_group - LAST_FRAME) as u32 };
-
-      for i in 0..INTER_REFS_PER_FRAME {
-        self.fi.ref_frames[i] = if lvl == 0 {
-          if i == second_ref_frame - LAST_FRAME {
-            (slot_idx + 4 - 2) as u8 % 4
+        if i == second_ref_frame - LAST_FRAME {
+          let oh = self.fi.order_hint + (cfg.group_src_len as u32 >> lvl);
+          let lvl2 = pos_to_lvl(oh as u64, cfg.pyramid_depth);
+          if lvl2 == 0 {
+            ((oh >> cfg.pyramid_depth) % 4) as u8
           } else {
+            3 + lvl2 as u8
+          }
+        } else if i == ref_in_previous_group - LAST_FRAME {
+          if lvl == 0 {
             (slot_idx + 4 - 1) as u8 % 4
+          } else {
+            slot_idx as u8
           }
         } else {
-          if i == second_ref_frame - LAST_FRAME {
-            let oh = self.fi.order_hint + (group_src_len as u32 >> lvl);
-            let lvl2 = pos_to_lvl(oh as u64, pyramid_depth);
-            if lvl2 == 0 {
-              ((oh >> pyramid_depth) % 4) as u8
-            } else {
-              3 + lvl2 as u8
-            }
-          } else if i == ref_in_previous_group - LAST_FRAME {
-            if lvl == 0 {
-              (slot_idx + 4 - 1) as u8 % 4
-            } else {
-              slot_idx as u8
-            }
+          let oh = self.fi.order_hint - (cfg.group_src_len as u32 >> lvl);
+          let lvl1 = pos_to_lvl(oh as u64, cfg.pyramid_depth);
+          if lvl1 == 0 {
+            ((oh >> cfg.pyramid_depth) % 4) as u8
           } else {
-            let oh = self.fi.order_hint - (group_src_len as u32 >> lvl);
-            let lvl1 = pos_to_lvl(oh as u64, pyramid_depth);
-            if lvl1 == 0 {
-              ((oh >> pyramid_depth) % 4) as u8
-            } else {
-              3 + lvl1 as u8
-            }
+            3 + lvl1 as u8
           }
         }
       }
-
-      self.fi.reference_mode = if multiref && reorder && idx_in_group != 0 {
-        ReferenceMode::SELECT
-      } else {
-        ReferenceMode::SINGLE
-      };
-      self.fi.number = segment_idx * key_frame_interval + self.fi.order_hint as u64;
-      self.fi.me_range_scale = (group_src_len >> lvl) as u8;
     }
 
-    true
+    self.fi.reference_mode = if cfg.multiref && cfg.reorder && cfg.idx_in_group != 0 {
+      ReferenceMode::SELECT
+    } else {
+      ReferenceMode::SINGLE
+    };
+    self.fi.number = number;
+    self.fi.me_range_scale = (cfg.group_src_len >> lvl) as u8;
+    Ok(())
+  }
+
+  fn frame_properties(&mut self, idx: u64) -> Result<(), FramePropsStatus> {
+    if idx == 0 {
+      // The first frame will always be a key frame
+      self.setup_key_frame_properties();
+      return Ok(());
+    }
+
+    // Initially set up the frame as an inter frame.
+    // We need to determine what the frame number is before we can
+    // look up the frame type. If reordering is enabled, the idx
+    // may not match the frame number.
+    let idx_in_segment = idx - self.segment_start_idx;
+    if idx_in_segment > 0 {
+      let inter_props = self.get_inter_props_cfg(idx_in_segment);
+      if let Err(FramePropsStatus::FramePastSegmentEnd) = self.setup_inter_frame_properties(&inter_props) {
+        let start_frame = self.next_keyframe();
+        if !inter_props.reorder || ((idx_in_segment - 1) % inter_props.group_len == 0 && self.fi.number == (start_frame - 1)) {
+          self.segment_start_idx = idx;
+          self.segment_start_frame = start_frame;
+          self.fi.number = start_frame;
+        } else {
+          return Err(FramePropsStatus::FramePastSegmentEnd);
+        }
+      }
+    }
+
+    // Now that we know the frame number, look up the correct frame type
+    let frame_type = self.frame_types.get(&self.fi.number).cloned();
+    if let Some(frame_type) = frame_type {
+      if frame_type == FrameType::KEY {
+        self.segment_start_idx = idx;
+        self.segment_start_frame = self.fi.number;
+      }
+      self.fi.frame_type = frame_type;
+
+      let idx_in_segment = idx - self.segment_start_idx;
+      if idx_in_segment == 0 {
+        self.setup_key_frame_properties();
+      } else {
+        let inter_props = self.get_inter_props_cfg(idx_in_segment);
+        self.setup_inter_frame_properties(&inter_props)?;
+      }
+    }
+    Ok(())
   }
 
   pub fn receive_packet(&mut self) -> Result<Packet, EncoderStatus> {
     let mut idx = self.idx;
-    while !self.frame_properties(idx) {
-      self.idx = self.idx + 1;
+    while self.frame_properties(idx).is_err() {
+      self.idx += 1;
       idx = self.idx;
     }
 
     if !self.needs_more_frames(self.fi.number) {
-      self.idx = self.idx + 1;
+      self.idx += 1;
       return Err(EncoderStatus::EnoughData)
     }
 
     if self.fi.show_existing_frame {
-      self.idx = self.idx + 1;
+      self.idx += 1;
 
       let mut fs = FrameState::new(&self.fi);
 
@@ -461,7 +567,7 @@ impl Context {
       Ok(Packet { data, rec, number: self.fi.number, frame_type: self.fi.frame_type })
     } else {
       if let Some(f) = self.frame_q.remove(&self.fi.number) {
-        self.idx = self.idx + 1;
+        self.idx += 1;
 
         if let Some(frame) = f {
           let mut fs = FrameState::new_with_frame(&self.fi, frame);
@@ -495,6 +601,38 @@ impl Context {
   pub fn flush(&mut self) {
     self.frame_q.insert(self.frame_count, None);
     self.frame_count = self.frame_count + 1;
+  }
+
+  fn save_frame_type(&mut self, idx: u64) {
+    let frame_type = self.determine_frame_type(idx);
+    self.frame_types.insert(idx, frame_type);
+  }
+
+  fn determine_frame_type(&mut self, idx: u64) -> FrameType {
+    if idx == 0 {
+      return FrameType::KEY;
+    }
+
+    let prev_keyframe = *self.frame_types.iter().rfind(|(_, &ty)| ty == FrameType::KEY).unwrap().0;
+    let frame = self.frame_q.get(&idx).cloned().unwrap();
+    if let Some(frame) = frame {
+      let distance = idx - prev_keyframe;
+      if distance < self.fi.config.min_key_frame_interval {
+        if distance + 1 == self.fi.config.min_key_frame_interval {
+          // Run the detector for the current frame, so that it will contain this frame's information
+          // to compare against the next frame. We can ignore the results for this frame.
+          self.keyframe_detector.detect_scene_change(frame, idx as usize);
+        }
+        return FrameType::INTER;
+      }
+      if distance >= self.fi.config.max_key_frame_interval {
+        return FrameType::KEY;
+      }
+      if self.keyframe_detector.detect_scene_change(frame, idx as usize) {
+        return FrameType::KEY;
+      }
+    }
+    FrameType::INTER
   }
 }
 
