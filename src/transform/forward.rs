@@ -2051,9 +2051,7 @@ pub fn fht64x64(
 
   Block64x64::fwd_txfm2d(input, &mut tmp, stride, tx_type, bit_depth);
 
-  for i in 0..2 {
-    for (row_out, row_in) in output[2048*i..].chunks_mut(32).zip(tmp[32*i..].chunks(64)).take(64) {
-      row_out.copy_from_slice(&row_in[..32]);
-    }
+  for (row_out, row_in) in output.chunks_mut(32).zip(tmp.chunks(64)).take(32) {
+    row_out.copy_from_slice(&row_in[..32]);
   }
 }

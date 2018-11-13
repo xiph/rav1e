@@ -1764,6 +1764,20 @@ macro_rules! symbol_with_update {
   };
 }
 
+pub fn av1_get_coded_tx_size(tx_size: TxSize) -> TxSize {
+  if tx_size == TX_64X64 || tx_size == TX_64X32 || tx_size == TX_32X64 {
+    return TX_32X32
+  }
+  if tx_size == TX_16X64 {
+    return TX_16X32
+  }
+  if tx_size == TX_64X16 {
+    return TX_32X16
+  }
+
+  tx_size
+}
+
 #[derive(Clone)]
 pub struct ContextWriterCheckpoint {
   pub fc: CDFContext,
@@ -2996,7 +3010,7 @@ impl ContextWriter {
     }
   }
 
-  pub fn av1_get_adjusted_tx_size(&mut self, tx_size: TxSize) -> TxSize {
+  pub fn av1_get_coded_tx_size(&mut self, tx_size: TxSize) -> TxSize {
     if tx_size == TX_64X64 || tx_size == TX_64X32 || tx_size == TX_32X64 {
       return TX_32X32
     }
@@ -3011,19 +3025,7 @@ impl ContextWriter {
   }
 
   pub fn get_txb_bwl(&mut self, tx_size: TxSize) -> usize {
-    self.av1_get_adjusted_tx_size(tx_size).width_log2()
-  }
-
-  pub fn get_txb_wide(&mut self, tx_size: TxSize) -> usize {
-    let adjusted_tx_size = self.av1_get_adjusted_tx_size(tx_size);
-
-    return adjusted_tx_size.width()
-  }
-
-  pub fn get_txb_height(&mut self, tx_size: TxSize) -> usize {
-    let adjusted_tx_size = self.av1_get_adjusted_tx_size(tx_size);
-
-    return adjusted_tx_size.height()
+    av1_get_coded_tx_size(tx_size).width_log2()
   }
 
   pub fn get_eob_pos_token(&mut self, eob: usize, extra: &mut u32) -> u32 {
@@ -3134,7 +3136,7 @@ impl ContextWriter {
     tx_size: TxSize, tx_class: TxClass, coeff_contexts: &mut [i8]
   ) {
     let bwl = self.get_txb_bwl(tx_size);
-    let height = self.get_txb_height(tx_size);
+    let height = av1_get_coded_tx_size(tx_size).height();
     for i in 0..eob {
       let pos = scan[i as usize];
       coeff_contexts[pos as usize] = self.get_nz_map_ctx(
@@ -3227,8 +3229,8 @@ impl ContextWriter {
     let scan_order =
       &av1_scan_orders[tx_size as usize][tx_type as usize];
     let scan = scan_order.scan;
-    let width = self.get_txb_wide(tx_size);
-    let height = self.get_txb_height(tx_size);
+    let width = av1_get_coded_tx_size(tx_size).width();
+    let height = av1_get_coded_tx_size(tx_size).height();
     let mut coeffs_storage = [0 as i32; 32*32];
     let coeffs = &mut coeffs_storage[..width*height];
     let mut cul_level = 0 as u32;
