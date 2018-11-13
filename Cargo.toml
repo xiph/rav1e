@@ -23,6 +23,7 @@ rand = "0.5"
 rustyline = { version = "1", optional = true }
 y4m = { version = "0.3", optional = true }
 backtrace = "0.3"
+syn = "^0.15.20"
 num-traits = "0.2"
 paste = "0.1"
 
