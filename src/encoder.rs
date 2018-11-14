@@ -1173,9 +1173,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     }
 
     fn write_frame_lrf(&mut self, seq: &Sequence, fi: &FrameInvariants) -> io::Result<()> {
-      if !seq.enable_restoration || fi.allow_intrabc { // || self.lossless
-        self.write(6,0)?; // no y, u or v loop restoration        
-      } else {
+      if seq.enable_restoration && !fi.allow_intrabc { // && !self.lossless
         let mut use_lrf = false;
         let mut use_chroma_lrf = false;
         for i in 0..PLANES {
