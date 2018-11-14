@@ -37,6 +37,7 @@ fn bench_get_sad(b: &mut Bencher, bs: &BlockSize) {
   let bsh = bs.height();
   let w = 640;
   let h = 480;
+  let bit_depth = 10;
   let input_plane = new_plane(&mut ra, w, h);
   let rec_plane = new_plane(&mut ra, w, h);
   let po = PlaneOffset { x: 0, y: 0 };
@@ -45,7 +46,8 @@ fn bench_get_sad(b: &mut Bencher, bs: &BlockSize) {
   let plane_ref = rec_plane.slice(&po);
 
   b.iter(|| {
-      let _ = black_box(me::get_sad(&plane_org, &plane_ref, bsw, bsh));
+    let _ =
+      black_box(me::get_sad(&plane_org, &plane_ref, bsw, bsh, bit_depth));
   })
 }
 

@@ -386,7 +386,10 @@ pub fn rdo_mode_decision(
         let slot_idx = fi.ref_frames[i - LAST_FRAME];
         ref_slot_set.push(slot_idx);
         let pmv = pmvs[slot_idx as usize].unwrap();
-        mvs_from_me.push([motion_estimation(fi, fs, bsize, bo, i, pmv), MotionVector { row: 0, col: 0 }]);
+        mvs_from_me.push([
+          motion_estimation(fi, fs, bsize, bo, i, pmv, seq.bit_depth),
+          MotionVector { row: 0, col: 0 }
+        ]);
       }
     }
     assert!(ref_frames_set.len() != 0);
