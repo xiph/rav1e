@@ -389,7 +389,7 @@ impl ProgressInfo {
     Intra Only: {:>6}    avg size: {:>7} B\n\
     Switch:     {:>6}    avg size: {:>7} B",
       key, key_size / key,
-      inter, if inter == 0 { 0 } else { inter_size / inter },
+      inter, inter_size.checked_div(inter).ok_or(0),
       ionly, ionly_size / key,
       switch, switch_size / key
     )
