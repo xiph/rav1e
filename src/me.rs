@@ -357,11 +357,11 @@ pub mod test {
   fn setup_sad() -> (Plane, Plane) {
     let mut input_plane = Plane::new(640, 480, 0, 0, 128 + 8, 128 + 8);
     let mut rec_plane = input_plane.clone();
-    
+
     for (i, row) in input_plane.data.chunks_mut(input_plane.cfg.stride).enumerate() {
       for (j, mut pixel) in row.into_iter().enumerate() {
         let val = ((j + i) as i32 & 255i32) as u16;
-        assert!(val >= u8::min_value().into() && 
+        assert!(val >= u8::min_value().into() &&
             val <= u8::max_value().into());
         *pixel = val;
       }
@@ -370,7 +370,7 @@ pub mod test {
     for (i, row) in rec_plane.data.chunks_mut(rec_plane.cfg.stride).enumerate() {
       for (j, mut pixel) in row.into_iter().enumerate() {
         let val = (j as i32 - i as i32 & 255i32) as u16;
-        assert!(val >= u8::min_value().into() && 
+        assert!(val >= u8::min_value().into() &&
             val <= u8::max_value().into());
         *pixel = val;
       }
