@@ -189,14 +189,14 @@ fn compare_plane<T: Ord + std::fmt::Debug>(
   }
 }
 
-fn compare_img(img: *const aom_image_t, frame: &Frame, bit_depth: usize) {
+fn compare_img(img: *const aom_image_t, frame: &Frame, bit_depth: usize, width: usize, height: usize) {
   use std::slice;
   let img = unsafe { *img };
   let img_iter = img.planes.iter().zip(img.stride.iter());
 
   for (img_plane, frame_plane) in img_iter.zip(frame.planes.iter()) {
-    let w = frame_plane.cfg.width;
-    let h = frame_plane.cfg.height;
+    let w = width >> frame_plane.cfg.xdec;
+    let h = height >> frame_plane.cfg.ydec;
     let rec_stride = frame_plane.cfg.stride;
 
     if bit_depth > 8 {
@@ -319,7 +319,7 @@ fn encode_decode(
               corrupted_count += corrupted;
 
               let rec = rec_fifo.pop_front().unwrap();
-              compare_img(img, &rec, bit_depth);
+              compare_img(img, &rec, bit_depth, w, h);
             }
           }
         }

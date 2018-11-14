@@ -469,7 +469,7 @@ impl Context {
           let data = encode_frame(&mut self.seq, &mut self.fi, &mut fs);
           self.packet_data.extend(data);
 
-          fs.rec.pad();
+          fs.rec.pad(self.fi.width, self.fi.height);
 
           // TODO avoid the clone by having rec Arc.
           let rec = if self.fi.show_frame { Some(fs.rec.clone()) } else { None };

@@ -109,13 +109,13 @@ impl Plane {
     }
   }
 
-  pub fn pad(&mut self) {
+  pub fn pad(&mut self, w: usize, h: usize) {
     assert!(self.cfg.xorigin >= 0 && self.cfg.yorigin >= 0);
     let xorigin = self.cfg.xorigin as usize;
     let yorigin = self.cfg.yorigin as usize;
     let stride = self.cfg.stride;
-    let width = self.cfg.width;
-    let height = self.cfg.height;
+    let width = w >> self.cfg.xdec;
+    let height = h >> self.cfg.ydec;
 
     if xorigin > 0 {
       for y in 0..height {
