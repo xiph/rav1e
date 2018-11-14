@@ -18,7 +18,7 @@ use FrameState;
 
 use libc;
 
-#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), not(windows)))]
+#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), not(windows), feature = "nasm"))]
 extern {
   fn rav1e_sad_4x4_hbd_ssse3(
     src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
@@ -26,7 +26,7 @@ extern {
   ) -> u32;
 }
 
-#[cfg(all(target_arch = "x86_64", not(windows)))]
+#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
 extern {
   fn rav1e_sad_8x8_hbd10_ssse3(
     src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
@@ -54,7 +54,7 @@ extern {
   ) -> u32;
 }
 
-#[cfg(all(target_arch = "x86_64", not(windows)))]
+#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
 #[target_feature(enable = "ssse3")]
 unsafe fn sad_ssse3(
   plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize, blk_w: usize,
@@ -93,7 +93,7 @@ pub fn get_sad(
   plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize, blk_w: usize,
   bit_depth: usize
 ) -> u32 {
-  #[cfg(all(target_arch = "x86_64", not(windows)))]
+  #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
   {
     if is_x86_feature_detected!("ssse3") && blk_h >= 4 && blk_w >= 4 {
       return unsafe {
