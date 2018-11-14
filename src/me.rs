@@ -15,118 +15,117 @@ use plane::*;
 use FrameInvariants;
 use FrameState;
 
-
 #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
 mod nasm {
-use libc;
-use util::*;
-use plane::*;
+  use libc;
+  use plane::*;
+  use util::*;
 
-extern {
-  fn rav1e_sad_4x4_hbd_ssse3(
-    src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
-    dst_stride: libc::ptrdiff_t
-  ) -> u32;
+  extern {
+    fn rav1e_sad_4x4_hbd_ssse3(
+      src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
+      dst_stride: libc::ptrdiff_t
+    ) -> u32;
 
-  fn rav1e_sad_8x8_hbd10_ssse3(
-    src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
-    dst_stride: libc::ptrdiff_t
-  ) -> u32;
+    fn rav1e_sad_8x8_hbd10_ssse3(
+      src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
+      dst_stride: libc::ptrdiff_t
+    ) -> u32;
 
-  fn rav1e_sad_16x16_hbd_ssse3(
-    src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
-    dst_stride: libc::ptrdiff_t
-  ) -> u32;
+    fn rav1e_sad_16x16_hbd_ssse3(
+      src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
+      dst_stride: libc::ptrdiff_t
+    ) -> u32;
 
-  fn rav1e_sad_32x32_hbd10_ssse3(
-    src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
-    dst_stride: libc::ptrdiff_t
-  ) -> u32;
+    fn rav1e_sad_32x32_hbd10_ssse3(
+      src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
+      dst_stride: libc::ptrdiff_t
+    ) -> u32;
 
-  fn rav1e_sad_64x64_hbd10_ssse3(
-    src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
-    dst_stride: libc::ptrdiff_t
-  ) -> u32;
+    fn rav1e_sad_64x64_hbd10_ssse3(
+      src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
+      dst_stride: libc::ptrdiff_t
+    ) -> u32;
 
-  fn rav1e_sad_128x128_hbd10_ssse3(
-    src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
-    dst_stride: libc::ptrdiff_t
-  ) -> u32;
-}
-
-#[target_feature(enable = "ssse3")]
-unsafe fn sad_ssse3(
-  plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize, blk_w: usize,
-  bit_depth: usize
-) -> u32 {
-  let mut sum = 0 as u32;
-  // TODO: stride *2??? What is the correct way to do this?
-  let org_stride = plane_org.plane.cfg.stride as libc::ptrdiff_t * 2;
-  let ref_stride = plane_ref.plane.cfg.stride as libc::ptrdiff_t * 2;
-  assert!(blk_h >= 4 && blk_w >= 4);
-  let step_size =
-    blk_h.min(blk_w).min(if bit_depth <= 10 { 128 } else { 4 });
-  let func = match step_size.ilog() {
-    3 => rav1e_sad_4x4_hbd_ssse3,
-    4 => rav1e_sad_8x8_hbd10_ssse3,
-    5 => rav1e_sad_16x16_hbd_ssse3,
-    6 => rav1e_sad_32x32_hbd10_ssse3,
-    7 => rav1e_sad_64x64_hbd10_ssse3,
-    8 => rav1e_sad_128x128_hbd10_ssse3,
-    _ => rav1e_sad_128x128_hbd10_ssse3
-  };
-  for r in (0..blk_h).step_by(step_size) {
-    for c in (0..blk_w).step_by(step_size) {
-      let org_slice = plane_org.subslice(c, r);
-      let ref_slice = plane_ref.subslice(c, r);
-      let org_ptr = org_slice.as_slice().as_ptr();
-      let ref_ptr = ref_slice.as_slice().as_ptr();
-      sum += func(org_ptr, org_stride, ref_ptr, ref_stride);
-    }
+    fn rav1e_sad_128x128_hbd10_ssse3(
+      src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
+      dst_stride: libc::ptrdiff_t
+    ) -> u32;
   }
-  return sum;
-}
 
-#[inline(always)]
-pub fn get_sad(
-  plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize, blk_w: usize,
-  bit_depth: usize
-) -> u32 {
-  #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
-  {
-    if is_x86_feature_detected!("ssse3") && blk_h >= 4 && blk_w >= 4 {
-      return unsafe {
-        sad_ssse3(plane_org, plane_ref, blk_h, blk_w, bit_depth)
-      };
+  #[target_feature(enable = "ssse3")]
+  unsafe fn sad_ssse3(
+    plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize,
+    blk_w: usize, bit_depth: usize
+  ) -> u32 {
+    let mut sum = 0 as u32;
+    // TODO: stride *2??? What is the correct way to do this?
+    let org_stride = plane_org.plane.cfg.stride as libc::ptrdiff_t * 2;
+    let ref_stride = plane_ref.plane.cfg.stride as libc::ptrdiff_t * 2;
+    assert!(blk_h >= 4 && blk_w >= 4);
+    let step_size =
+      blk_h.min(blk_w).min(if bit_depth <= 10 { 128 } else { 4 });
+    let func = match step_size.ilog() {
+      3 => rav1e_sad_4x4_hbd_ssse3,
+      4 => rav1e_sad_8x8_hbd10_ssse3,
+      5 => rav1e_sad_16x16_hbd_ssse3,
+      6 => rav1e_sad_32x32_hbd10_ssse3,
+      7 => rav1e_sad_64x64_hbd10_ssse3,
+      8 => rav1e_sad_128x128_hbd10_ssse3,
+      _ => rav1e_sad_128x128_hbd10_ssse3
+    };
+    for r in (0..blk_h).step_by(step_size) {
+      for c in (0..blk_w).step_by(step_size) {
+        let org_slice = plane_org.subslice(c, r);
+        let ref_slice = plane_ref.subslice(c, r);
+        let org_ptr = org_slice.as_slice().as_ptr();
+        let ref_ptr = ref_slice.as_slice().as_ptr();
+        sum += func(org_ptr, org_stride, ref_ptr, ref_stride);
+      }
     }
+    return sum;
   }
-  super::native::get_sad(plane_org, plane_ref, blk_h, blk_w, bit_depth)
-}
+
+  #[inline(always)]
+  pub fn get_sad(
+    plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize,
+    blk_w: usize, bit_depth: usize
+  ) -> u32 {
+    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+    {
+      if is_x86_feature_detected!("ssse3") && blk_h >= 4 && blk_w >= 4 {
+        return unsafe {
+          sad_ssse3(plane_org, plane_ref, blk_h, blk_w, bit_depth)
+        };
+      }
+    }
+    super::native::get_sad(plane_org, plane_ref, blk_h, blk_w, bit_depth)
+  }
 }
 
 mod native {
-use plane::*;
+  use plane::*;
 
-#[inline(always)]
-pub fn get_sad(
-  plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize, blk_w: usize,
-  _bit_depth: usize
-) -> u32 {
-  let mut sum = 0 as u32;
+  #[inline(always)]
+  pub fn get_sad(
+    plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize,
+    blk_w: usize, _bit_depth: usize
+  ) -> u32 {
+    let mut sum = 0 as u32;
 
-  let org_iter = plane_org.iter_width(blk_w);
-  let ref_iter = plane_ref.iter_width(blk_w);
+    let org_iter = plane_org.iter_width(blk_w);
+    let ref_iter = plane_ref.iter_width(blk_w);
 
-  for (slice_org, slice_ref) in org_iter.take(blk_h).zip(ref_iter) {
+    for (slice_org, slice_ref) in org_iter.take(blk_h).zip(ref_iter) {
       sum += slice_org
         .iter()
         .zip(slice_ref)
         .map(|(&a, &b)| (a as i32 - b as i32).abs() as u32)
         .sum::<u32>();
-  }
+    }
 
-  sum
-}
+    sum
+  }
 }
 
 #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
