@@ -63,9 +63,9 @@ impl Frame {
         }
     }
 
-    pub fn pad(&mut self) {
+    pub fn pad(&mut self, w: usize, h: usize) {
         for p in self.planes.iter_mut() {
-            p.pad();
+            p.pad(w, h);
         }
     }
 
@@ -2358,9 +2358,9 @@ pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut 
         }
 
         fs.input_hres.downsample_from(&fs.input.planes[0]);
-        fs.input_hres.pad();
+        fs.input_hres.pad(fi.width, fi.height);
         fs.input_qres.downsample_from(&fs.input_hres);
-        fs.input_qres.pad();
+        fs.input_qres.pad(fi.width, fi.height);
 
         let bit_depth = sequence.bit_depth;
         let tile = encode_tile(sequence, fi, fs, bit_depth); // actually tile group
