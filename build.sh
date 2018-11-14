@@ -5,12 +5,12 @@ set -e
 
 #SEQ=!!!!! ENTER YOUR FAVORITE Y4M HERE !!!!!
 
-IS_RELEASE=0
+IS_RELEASE=1
 
 for arg in "$@"; do
   shift
   case "$arg" in
-    "--release") IS_RELEASE=1 ;;
+    "--debug") IS_RELEASE=0 ;;
     *)        set -- "$@" "$arg"
   esac
 done
