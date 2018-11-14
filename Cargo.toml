@@ -42,6 +42,7 @@ criterion = "0.2"
 
 [[bin]]
 name = "rav1e"
+required-features = ["binaries"]
 bench = false
 
 [[bin]]
