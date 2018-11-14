@@ -12,22 +12,22 @@ use context::BLOCK_TO_PLANE_SHIFT;
 use context::MI_SIZE;
 use partition::*;
 use plane::*;
-use util::*;
 use FrameInvariants;
 use FrameState;
 
-use libc;
 
-#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), not(windows), feature = "nasm"))]
+#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+mod nasm {
+use libc;
+use util::*;
+use plane::*;
+
 extern {
   fn rav1e_sad_4x4_hbd_ssse3(
     src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
     dst_stride: libc::ptrdiff_t
   ) -> u32;
-}
 
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
-extern {
   fn rav1e_sad_8x8_hbd10_ssse3(
     src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
     dst_stride: libc::ptrdiff_t
@@ -54,7 +54,6 @@ extern {
   ) -> u32;
 }
 
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
 #[target_feature(enable = "ssse3")]
 unsafe fn sad_ssse3(
   plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize, blk_w: usize,
@@ -101,6 +100,18 @@ pub fn get_sad(
       };
     }
   }
+  super::native::get_sad(plane_org, plane_ref, blk_h, blk_w, bit_depth)
+}
+}
+
+mod native {
+use plane::*;
+
+#[inline(always)]
+pub fn get_sad(
+  plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize, blk_w: usize,
+  _bit_depth: usize
+) -> u32 {
   let mut sum = 0 as u32;
 
   let org_iter = plane_org.iter_width(blk_w);
@@ -116,6 +127,13 @@ pub fn get_sad(
 
   sum
 }
+}
+
+#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+pub use self::nasm::get_sad;
+
+#[cfg(any(not(target_arch = "x86_64"), windows, not(feature = "nasm")))]
+pub use self::native::get_sad;
 
 fn get_mv_range(fi: &FrameInvariants, bo: &BlockOffset, blk_w: usize, blk_h: usize) -> (isize, isize, isize, isize) {
   let border_w = 128 + blk_w as isize * 8;
