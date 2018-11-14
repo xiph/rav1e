@@ -341,8 +341,8 @@ impl ProgressInfo {
   }
 
   pub fn encoding_fps(&self) -> f64 {
-    let seconds = Instant::now().duration_since(self.time_started).as_secs();
-    self.frame_info.len() as f64 / seconds as f64
+    let duration = Instant::now().duration_since(self.time_started);
+    self.frame_info.len() as f64 / (duration.as_secs() as f64 + duration.subsec_millis() as f64 / 1000f64)
   }
 
   pub fn video_fps(&self) -> f64 {
