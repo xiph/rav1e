@@ -133,7 +133,7 @@ impl QuantizationContext {
     qcoeffs[0] += qcoeffs[0].signum() * self.dc_offset;
     qcoeffs[0] = divu_pair(qcoeffs[0], self.dc_mul_add);
 
-    for (qc, c) in qcoeffs[1..].iter_mut().zip(coeffs[1..].iter()).take(coded_tx_size) {
+    for (qc, c) in qcoeffs[1..].iter_mut().zip(coeffs[1..].iter()).take(coded_tx_size-1) {
       *qc = *c << self.log_tx_scale;
       *qc += qc.signum() * self.ac_offset;
       *qc = divu_pair(*qc, self.ac_mul_add);

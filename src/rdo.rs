@@ -489,7 +489,8 @@ pub fn rdo_mode_decision(
         );
 
         let cost = wr.tell_frac() - tell;
-        let rd = if fi.use_tx_domain_distortion {
+        let rd = if fi.use_tx_domain_distortion &&
+          av1_get_coded_tx_size(tx_size) == tx_size {
           compute_tx_rd_cost(
             fi,
             fs,
@@ -766,7 +767,8 @@ pub fn rdo_tx_type_decision(
     };
 
     let cost = wr.tell_frac() - tell;
-      let rd = if fi.use_tx_domain_distortion {
+      let rd = if fi.use_tx_domain_distortion && 
+        av1_get_coded_tx_size(tx_size) == tx_size {
         compute_tx_rd_cost(
           fi,
           fs,

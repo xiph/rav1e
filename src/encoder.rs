@@ -1389,7 +1389,7 @@ pub fn encode_tx_block(
 
     let mut tx_dist: i64 = -1;
 
-    if !fi.use_tx_domain_distortion || !for_rdo_use {
+    if !fi.use_tx_domain_distortion || !for_rdo_use || av1_get_coded_tx_size(tx_size) != tx_size {
         inverse_transform_add(rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
     } else {
         // Store tx-domain distortion of this block
@@ -1683,7 +1683,8 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
               fi, fs, cw, w, 0, &tx_bo, luma_mode, tx_size, tx_type, bsize, &po,
               skip, bit_depth, ac, 0, for_rdo_use
             );
-            assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
+            assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip ||
+              av1_get_coded_tx_size(tx_size) != tx_size || dist >= 0);
             tx_dist += dist;
         }
     }
@@ -1741,7 +1742,8 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
                     let (_, dist) =
                     encode_tx_block(fi, fs, cw, w, p, &tx_bo, chroma_mode, uv_tx_size, uv_tx_type,
                                     plane_bsize, &po, skip, bit_depth, ac, alpha, for_rdo_use);
-                    assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
+                    assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip ||
+                      av1_get_coded_tx_size(uv_tx_size) != uv_tx_size || dist >= 0);
                     tx_dist += dist;
                 }
             }
@@ -1771,7 +1773,8 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
       fi, fs, cw, w, 0, &bo, luma_mode, tx_size, tx_type, bsize, &po, skip,
       bit_depth, ac, 0, for_rdo_use
     );
-    assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
+    assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip ||
+      av1_get_coded_tx_size(tx_size) != tx_size || dist >= 0);
     tx_dist += dist;
 
     if luma_only { return tx_dist };
@@ -1812,7 +1815,8 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
             let (_, dist) =
             encode_tx_block(fi, fs, cw, w, p, &tx_bo, luma_mode, uv_tx_size, uv_tx_type,
                             plane_bsize, &po, skip, bit_depth, ac, 0, for_rdo_use);
-            assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
+            assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip ||
+              av1_get_coded_tx_size(uv_tx_size) != uv_tx_size || dist >= 0);
             tx_dist += dist;
         }
     }
