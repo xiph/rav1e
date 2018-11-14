@@ -75,7 +75,7 @@ pub const KF_MODE_CONTEXTS: usize = 5;
 
 pub const EXT_PARTITION_TYPES: usize = 10;
 
-pub const TX_SIZE_SQR_CONTEXTS: usize = TxSize::TX_SIZES as usize - 1; // 64X64 is currently unused
+pub const TX_SIZE_SQR_CONTEXTS: usize = 4; // Coded tx_size <= 32x32, so is the # of CDF contexts from tx sizes
 
 pub const TX_SETS: usize = 9;
 pub const TX_SETS_INTRA: usize = 3;
