@@ -12,8 +12,9 @@ repl = ["rustyline", "binaries"]
 comparative_bench = ["aom"]
 decode_test = ["bindgen", "aom"]
 binaries = ["y4m", "clap"]
-default = ["binaries"]
+default = ["binaries", "nasm"]
 aom = ["cmake"]
+nasm = ["nasm-rs"]
 
 [dependencies]
 bitstream-io = "0.8"
@@ -31,7 +32,7 @@ paste = "0.1"
 cmake = { version = "0.1", optional = true }
 
 [target.'cfg(target_arch = "x86_64")'.build-dependencies]
-nasm-rs = { git = "https://github.com/tdaede/nasm-rs.git" }
+nasm-rs = { git = "https://github.com/tdaede/nasm-rs.git", optional = true }
 
 [target.'cfg(unix)'.build-dependencies]
 pkg-config = "0.3.12"

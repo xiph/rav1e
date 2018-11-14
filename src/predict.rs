@@ -11,7 +11,7 @@
 #![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
 #![cfg_attr(feature = "cargo-clippy", allow(needless_range_loop))]
 
-#[cfg(all(target_arch = "x86_64", not(windows)))]
+#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
 use libc;
 use num_traits::*;
 
@@ -154,7 +154,7 @@ fn get_scaled_luma_q0(alpha_q3: i16, ac_pred_q3: i16) -> i32 {
   }
 }
 
-#[cfg(all(target_arch = "x86_64", not(windows)))]
+#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
 macro_rules! decl_angular_ipred_fn {
   ($f:ident) => {
     extern {
@@ -166,25 +166,25 @@ macro_rules! decl_angular_ipred_fn {
   };
 }
 
-#[cfg(all(target_arch = "x86_64", not(windows)))]
+#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
 decl_angular_ipred_fn!(rav1e_ipred_dc_avx2);
-#[cfg(all(target_arch = "x86_64", not(windows)))]
+#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
 decl_angular_ipred_fn!(rav1e_ipred_dc_128_avx2);
-#[cfg(all(target_arch = "x86_64", not(windows)))]
+#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
 decl_angular_ipred_fn!(rav1e_ipred_dc_left_avx2);
-#[cfg(all(target_arch = "x86_64", not(windows)))]
+#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
 decl_angular_ipred_fn!(rav1e_ipred_dc_top_avx2);
-#[cfg(all(target_arch = "x86_64", not(windows)))]
+#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
 decl_angular_ipred_fn!(rav1e_ipred_h_avx2);
-#[cfg(all(target_arch = "x86_64", not(windows)))]
+#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
 decl_angular_ipred_fn!(rav1e_ipred_v_avx2);
-#[cfg(all(target_arch = "x86_64", not(windows)))]
+#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
 decl_angular_ipred_fn!(rav1e_ipred_paeth_avx2);
-#[cfg(all(target_arch = "x86_64", not(windows)))]
+#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
 decl_angular_ipred_fn!(rav1e_ipred_smooth_avx2);
-#[cfg(all(target_arch = "x86_64", not(windows)))]
+#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
 decl_angular_ipred_fn!(rav1e_ipred_smooth_h_avx2);
-#[cfg(all(target_arch = "x86_64", not(windows)))]
+#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
 decl_angular_ipred_fn!(rav1e_ipred_smooth_v_avx2);
 
 pub trait Intra<T>: Dim
@@ -196,7 +196,7 @@ where
 {
   #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_dc(output: &mut [T], stride: usize, above: &[T], left: &[T]) {
-    #[cfg(all(target_arch = "x86_64", not(windows)))]
+    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
         return unsafe {
@@ -225,7 +225,7 @@ where
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_dc_128(output: &mut [T], stride: usize, bit_depth: usize) {
-    #[cfg(all(target_arch = "x86_64", not(windows)))]
+    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
       use std::ptr;
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
@@ -250,7 +250,7 @@ where
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_dc_left(output: &mut [T], stride: usize, _above: &[T], left: &[T]) {
-    #[cfg(all(target_arch = "x86_64", not(windows)))]
+    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
         return unsafe {
@@ -274,7 +274,7 @@ where
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_dc_top(output: &mut [T], stride: usize, above: &[T], _left: &[T]) {
-    #[cfg(all(target_arch = "x86_64", not(windows)))]
+    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
         return unsafe {
@@ -298,7 +298,7 @@ where
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_h(output: &mut [T], stride: usize, left: &[T]) {
-    #[cfg(all(target_arch = "x86_64", not(windows)))]
+    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
         return unsafe {
@@ -324,7 +324,7 @@ where
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_v(output: &mut [T], stride: usize, above: &[T]) {
-    #[cfg(all(target_arch = "x86_64", not(windows)))]
+    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
         return unsafe {
@@ -349,7 +349,7 @@ where
     output: &mut [T], stride: usize, above: &[T], left: &[T],
     above_left: T
   ) {
-    #[cfg(all(target_arch = "x86_64", not(windows)))]
+    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
         return unsafe {
@@ -394,7 +394,7 @@ where
   fn pred_smooth(
     output: &mut [T], stride: usize, above: &[T], left: &[T]
   ) {
-    #[cfg(all(target_arch = "x86_64", not(windows)))]
+    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
         return unsafe {
@@ -459,7 +459,7 @@ where
   fn pred_smooth_h(
     output: &mut [T], stride: usize, above: &[T], left: &[T]
   ) {
-    #[cfg(all(target_arch = "x86_64", not(windows)))]
+    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
         return unsafe {
@@ -510,7 +510,7 @@ where
   fn pred_smooth_v(
     output: &mut [T], stride: usize, above: &[T], left: &[T]
   ) {
-    #[cfg(all(target_arch = "x86_64", not(windows)))]
+    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
         return unsafe {

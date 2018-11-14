@@ -7,7 +7,7 @@ extern crate pkg_config;
 #[cfg(unix)]
 #[cfg(feature = "decode_test")]
 extern crate bindgen;
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 extern crate nasm_rs;
 
 #[allow(unused_imports)]
@@ -29,7 +29,7 @@ fn rerun_dir<P: AsRef<Path>>(dir: P) {
 }
 
 fn main() {
-    #[cfg(all(target_arch = "x86_64", not(windows)))] {
+    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))] {
         use std::fs::File;
         use std::io::Write;
         let out_dir = env::var("OUT_DIR").unwrap();
