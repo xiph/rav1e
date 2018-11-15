@@ -128,19 +128,19 @@ impl QuantizationContext {
   }
 
   #[inline]
-  pub fn quantize(&self, coeffs: &[i32], qcoeffs: &mut [i32]) {
+  pub fn quantize(&self, coeffs: &[i32], qcoeffs: &mut [i32], coded_tx_size: usize) {
     qcoeffs[0] = coeffs[0] << self.log_tx_scale;
     qcoeffs[0] += qcoeffs[0].signum() * self.dc_offset;
     qcoeffs[0] = divu_pair(qcoeffs[0], self.dc_mul_add);
 
-    for (qc, c) in qcoeffs[1..].iter_mut().zip(coeffs[1..].iter()).take(1024) {
+    for (qc, c) in qcoeffs[1..].iter_mut().zip(coeffs[1..].iter()).take(coded_tx_size - 1) {
       *qc = *c << self.log_tx_scale;
       *qc += qc.signum() * self.ac_offset;
       *qc = divu_pair(*qc, self.ac_mul_add);
     }
 
-    if qcoeffs.len() > 1024 {
-      for qc in qcoeffs[1024..].iter_mut() {
+    if qcoeffs.len() > coded_tx_size {
+      for qc in qcoeffs[coded_tx_size..].iter_mut() {
         *qc = 0;
       }
     }

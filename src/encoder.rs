@@ -1375,7 +1375,9 @@ pub fn encode_tx_block(
          tx_size.height());
 
     forward_transform(residual, coeffs, tx_size.width(), tx_size, tx_type, bit_depth);
-    fs.qc.quantize(coeffs, qcoeffs);
+
+    let coded_tx_size = av1_get_coded_tx_size(tx_size).area();
+    fs.qc.quantize(coeffs, qcoeffs, coded_tx_size);
 
     let has_coeff = cw.write_coeffs_lv_map(w, p, bo, &qcoeffs, mode, tx_size, tx_type, plane_bsize, xdec, ydec,
                             fi.use_reduced_tx_set);
