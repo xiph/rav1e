@@ -1556,81 +1556,26 @@ Transform_Row_Shift[ TX_SIZES_ALL ] = {
   1, 1, 1, 1, 1, 1, 2, 2, 2, 2
 }*/
 
-impl InvTxfm2D for Block4x4 {
-  const INTERMEDIATE_SHIFT: usize = 0;
+macro_rules! impl_inv_txs {
+  ($(($W:expr, $H:expr)),+ $SH:expr) => {
+    $(
+      paste::item! {
+        impl InvTxfm2D for [<Block $W x $H>] {
+          const INTERMEDIATE_SHIFT: usize = $SH;
+        }
+      }
+    )*
+  }
 }
 
-impl InvTxfm2D for Block8x8 {
-  const INTERMEDIATE_SHIFT: usize = 1;
-}
+impl_inv_txs! { (4, 4), (4, 8), (8, 4) 0 }
 
-impl InvTxfm2D for Block16x16 {
-  const INTERMEDIATE_SHIFT: usize = 2;
-}
+impl_inv_txs! { (8, 8), (8, 16), (16, 8) 1 }
+impl_inv_txs! { (4, 16), (16, 4), (16, 32), (32, 16) 1 }
+impl_inv_txs! { (32, 64), (64, 32) 1 }
 
-impl InvTxfm2D for Block32x32 {
-  const INTERMEDIATE_SHIFT: usize = 2;
-}
-
-impl InvTxfm2D for Block64x64 {
-  const INTERMEDIATE_SHIFT: usize = 2;
-}
-
-impl InvTxfm2D for Block4x8 {
-  const INTERMEDIATE_SHIFT: usize = 0;
-}
-
-impl InvTxfm2D for Block8x4 {
-  const INTERMEDIATE_SHIFT: usize = 0;
-}
-
-impl InvTxfm2D for Block8x16 {
-  const INTERMEDIATE_SHIFT: usize = 1;
-}
-
-impl InvTxfm2D for Block16x8 {
-  const INTERMEDIATE_SHIFT: usize = 1;
-}
-
-impl InvTxfm2D for Block16x32 {
-  const INTERMEDIATE_SHIFT: usize = 1;
-}
-
-impl InvTxfm2D for Block32x16 {
-  const INTERMEDIATE_SHIFT: usize = 1;
-}
-
-impl InvTxfm2D for Block32x64 {
-  const INTERMEDIATE_SHIFT: usize = 1;
-}
-
-impl InvTxfm2D for Block64x32 {
-  const INTERMEDIATE_SHIFT: usize = 1;
-}
-
-impl InvTxfm2D for Block4x16 {
-  const INTERMEDIATE_SHIFT: usize = 1;
-}
-
-impl InvTxfm2D for Block16x4 {
-  const INTERMEDIATE_SHIFT: usize = 1;
-}
-
-impl InvTxfm2D for Block8x32 {
-  const INTERMEDIATE_SHIFT: usize = 2;
-}
-
-impl InvTxfm2D for Block32x8 {
-  const INTERMEDIATE_SHIFT: usize = 2;
-}
-
-impl InvTxfm2D for Block16x64 {
-  const INTERMEDIATE_SHIFT: usize = 2;
-}
-
-impl InvTxfm2D for Block64x16 {
-  const INTERMEDIATE_SHIFT: usize = 2;
-}
+impl_inv_txs! { (16, 16), (16, 64), (64, 16), (64, 64) 2 }
+impl_inv_txs! { (32, 32), (8, 32), (32, 8) 2 }
 
 pub fn iht4x4_add<T>(
   input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
