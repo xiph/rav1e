@@ -47,30 +47,40 @@ ACTUAL_VERSION=$(git submodule status | xargs)
 AOM_TEST="aom_test"
 if [[ "$ACTUAL_VERSION" != "$EXPECTED_VERSION" ]] || [[ ! -f ./${AOM_TEST}/aomdec ]]; then
 
-# Store current version to file
-echo $ACTUAL_VERSION > $GITHASH
+    # Store current version to file
+    echo $ACTUAL_VERSION > $GITHASH
 
-# Update aombuild
-git submodule update --init
+    # Update aombuild
+    git submodule update --init
 
-# Clean project files
-cargo clean
+    # Clean project files
+    cargo clean
 
-# Get configure command from readme
-CONFIGURE_CMD=$(fgrep "cmake ../aom" README.md)
+    # Get configure command from readme
+    CONFIGURE_CMD=$(fgrep "cmake ../aom" README.md)
 
-# Wipe and create aom_test folder
-rm -fR $AOM_TEST
-mkdir -p $AOM_TEST
-pushd $AOM_TEST
+    # Handle cases where the cmake binary is absent or named differently
+    if ! [ -x "$(command -v cmake)" ]; then
+        if ! [ -x "$(command -v cmake3)" ]; then
+            echo "\`cmake\` is required to build libaom. Aborting." >&2
+            exit 1
+        fi
 
-echo CONFIGURE COMMAND
-echo $CONFIGURE_CMD
-eval $CONFIGURE_CMD
+        CONFIGURE_CMD=${CONFIGURE_CMD/cmake/cmake3}
+    fi
 
-# auto detect the number of cores and parallel build
-make -j$(nproc --all)
-popd
+    # Wipe and create aom_test folder
+    rm -fR $AOM_TEST
+    mkdir -p $AOM_TEST
+    pushd $AOM_TEST
+
+    echo CONFIGURE COMMAND
+    echo $CONFIGURE_CMD
+    eval $CONFIGURE_CMD
+
+    # auto detect the number of cores and parallel build
+    make -j$(nproc --all)
+    popd
 
 fi
 
