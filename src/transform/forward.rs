@@ -2126,16 +2126,24 @@ pub fn fht16x32(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
   bit_depth: usize
 ) {
-    assert!(tx_type == TxType::DCT_DCT);
-    Block16x32::fwd_txfm2d(input, output, stride, tx_type, bit_depth);
+    assert!(tx_type == TxType::DCT_DCT || tx_type == TxType::IDTX);
+    if tx_type == TxType::DCT_DCT {
+      Block16x32::fwd_txfm2d(input, output, stride, tx_type, bit_depth);
+    } else {
+      Block16x32::fwd_txfm2d_rs(input, output, stride, tx_type, bit_depth);
+    }
 }
 
 pub fn fht32x16(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
   bit_depth: usize
 ) {
-    assert!(tx_type == TxType::DCT_DCT);
-    Block32x16::fwd_txfm2d(input, output, stride, tx_type, bit_depth);
+    assert!(tx_type == TxType::DCT_DCT || tx_type == TxType::IDTX);
+    if tx_type == TxType::DCT_DCT {
+      Block32x16::fwd_txfm2d(input, output, stride, tx_type, bit_depth);
+    } else {
+      Block32x16::fwd_txfm2d_rs(input, output, stride, tx_type, bit_depth);
+    }
 }
 
 pub fn fht32x64(
@@ -2198,15 +2206,23 @@ pub fn fht8x32(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
   bit_depth: usize
 ) {
-    assert!(tx_type == TxType::DCT_DCT);
-    Block8x32::fwd_txfm2d(input, output, stride, tx_type, bit_depth);
+    assert!(tx_type == TxType::DCT_DCT || tx_type == TxType::IDTX);
+    if tx_type == TxType::DCT_DCT {
+      Block8x32::fwd_txfm2d(input, output, stride, tx_type, bit_depth);
+    } else {
+      Block8x32::fwd_txfm2d_rs(input, output, stride, tx_type, bit_depth);
+    }
 }
 pub fn fht32x8(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
   bit_depth: usize
 ) {
-  assert!(tx_type == TxType::DCT_DCT);
-  Block32x8::fwd_txfm2d(input, output, stride, tx_type, bit_depth);
+  assert!(tx_type == TxType::DCT_DCT || tx_type == TxType::IDTX);
+  if tx_type == TxType::DCT_DCT {
+    Block32x8::fwd_txfm2d(input, output, stride, tx_type, bit_depth);
+  } else {
+    Block32x8::fwd_txfm2d_rs(input, output, stride, tx_type, bit_depth);
+  }
 }
 
 pub fn fht16x64(
