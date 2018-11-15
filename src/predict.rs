@@ -265,8 +265,8 @@ where
         };
       }
     }
-    let sum = left[..Self::W].iter().fold(0u32, |acc, &v| { let v: u32 = v.into(); v + acc });
-    let avg = ((sum + (Self::W >> 1) as u32) / Self::W as u32).as_();
+    let sum = left[..Self::H].iter().fold(0u32, |acc, &v| { let v: u32 = v.into(); v + acc });
+    let avg = ((sum + (Self::H >> 1) as u32) / Self::H as u32).as_();
     for line in output.chunks_mut(stride).take(Self::H) {
       line[..Self::W].iter_mut().for_each(|v| *v = avg);
     }
