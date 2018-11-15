@@ -488,32 +488,6 @@ impl TxSize {
     TX_SIZE_SQR[self as usize]
   }
 
-  pub fn sqr_up(self) -> TxSize {
-    #[cfg_attr(rustfmt, rustfmt_skip)]
-        const TX_SIZE_SQR_UP: [TxSize; TxSize::TX_SIZES_ALL] = [
-            TX_4X4,
-            TX_8X8,
-            TX_16X16,
-            TX_32X32,
-            TX_64X64,
-            TX_8X8,
-            TX_8X8,
-            TX_16X16,
-            TX_16X16,
-            TX_32X32,
-            TX_32X32,
-            TX_64X64,
-            TX_64X64,
-            TX_16X16,
-            TX_16X16,
-            TX_32X32,
-            TX_32X32,
-            TX_64X64,
-            TX_64X64
-        ];
-    TX_SIZE_SQR_UP[self as usize]
-  }
-
   pub fn by_dims(w: usize, h: usize) -> TxSize {
     match (w, h) {
       (4, 4) => TxSize::TX_4X4,

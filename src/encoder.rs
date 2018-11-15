@@ -1723,7 +1723,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
     }
 
     if bw_uv > 0 && bh_uv > 0 {
-        let uv_tx_type = if uv_tx_size == TxSize::TX_32X32 {
+        let uv_tx_type = if uv_tx_size.width() >= 32 || uv_tx_size.height() >= 32 {
             TxType::DCT_DCT
         } else {
             uv_intra_mode_to_tx_type_context(chroma_mode)
