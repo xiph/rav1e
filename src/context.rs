@@ -3395,8 +3395,6 @@ impl ContextWriter {
       1
     } as usize;
 
-    assert!(tx_size <= TX_32X32 || tx_type == DCT_DCT);
-
     // Signal tx_type for luma plane only
     if plane == 0 {
       self.write_tx_type(

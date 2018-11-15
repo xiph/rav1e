@@ -327,6 +327,8 @@ pub fn rdo_tx_size_type(
       TxType::DCT_DCT
     };
 
+  assert!(tx_size.sqr() <= TxSize::TX_32X32 || tx_type == TxType::DCT_DCT);
+
   (tx_size, tx_type)
 }
 
