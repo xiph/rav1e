@@ -106,7 +106,9 @@ cargo run --bin rav1e $BUILD_TYPE -- $SEQ -o $ENC_FILE -s 3 -r $REC_FILE
 ${AOM_TEST}/aomdec $ENC_FILE -o $DEC_FILE
 
 # Input/Output compare
-cmp <(tail -n+2 $DEC_FILE) <(tail -n+2 $REC_FILE)
+tail -n+2 $DEC_FILE > /tmp/dec_file
+tail -n+2 $REC_FILE > /tmp/rec_file
+cmp /tmp/dec_file /tmp/rec_file
 
 # Daala tools support coming soon
 #DAALA_TOOLS="../daala/tools/"
