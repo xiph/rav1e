@@ -508,11 +508,11 @@ pub fn has_chroma(
 pub fn get_tx_set(
   tx_size: TxSize, is_inter: bool, use_reduced_set: bool
 ) -> TxSet {
-  let tx_size_sqr_up = tx_size.sqr_up();
   let tx_size_sqr = tx_size.sqr();
-  if tx_size_sqr > TxSize::TX_32X32 {
+
+  if tx_size.width() >= 64 || tx_size.height() >= 64 {
     TxSet::TX_SET_DCTONLY
-  } else if tx_size_sqr_up == TxSize::TX_32X32 {
+  } else if tx_size_sqr == TxSize::TX_32X32 {
     if is_inter {
       TxSet::TX_SET_DCT_IDTX
     } else {
@@ -2992,7 +2992,7 @@ impl ContextWriter {
   }
 
   pub fn get_txsize_entropy_ctx(&mut self, tx_size: TxSize) -> usize {
-    (tx_size.sqr() as usize + tx_size.sqr() as usize + 1) >> 1
+    (tx_size.sqr() as usize + tx_size.sqr_up() as usize + 1) >> 1
   }
 
   pub fn txb_init_levels(
