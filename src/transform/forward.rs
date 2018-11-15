@@ -1988,27 +1988,21 @@ trait FwdTxfm2D: Dim {
   }
 }
 
-impl FwdTxfm2D for Block4x4 {}
-impl FwdTxfm2D for Block8x8 {}
-impl FwdTxfm2D for Block16x16 {}
-impl FwdTxfm2D for Block32x32 {}
-impl FwdTxfm2D for Block64x64 {}
+macro_rules! impl_fwd_txs {
+  ($(($W:expr, $H:expr)),+) => {
+    $(
+      paste::item! {
+        impl FwdTxfm2D for [<Block $W x $H>] {}
+      }
+    )*
+  }
+}
 
-impl FwdTxfm2D for Block4x8 {}
-impl FwdTxfm2D for Block8x4 {}
-impl FwdTxfm2D for Block8x16 {}
-impl FwdTxfm2D for Block16x8 {}
-impl FwdTxfm2D for Block16x32 {}
-impl FwdTxfm2D for Block32x16 {}
-impl FwdTxfm2D for Block32x64 {}
-impl FwdTxfm2D for Block64x32 {}
-
-impl FwdTxfm2D for Block4x16 {}
-impl FwdTxfm2D for Block16x4 {}
-impl FwdTxfm2D for Block8x32 {}
-impl FwdTxfm2D for Block32x8 {}
-impl FwdTxfm2D for Block16x64 {}
-impl FwdTxfm2D for Block64x16 {}
+impl_fwd_txs! { (4, 4), (8, 8), (16, 16), (32, 32), (64, 64) }
+impl_fwd_txs! { (4, 8), (8, 16), (16, 32), (32, 64) }
+impl_fwd_txs! { (8, 4), (16, 8), (32, 16), (64, 32) }
+impl_fwd_txs! { (4, 16), (8, 32), (16, 64) }
+impl_fwd_txs! { (16, 4), (32, 8), (64, 16) }
 
 pub fn fht4x4(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
