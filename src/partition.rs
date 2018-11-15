@@ -350,6 +350,7 @@ pub enum TxSize {
   TX_16X16,
   TX_32X32,
   TX_64X64,
+
   TX_4X8,
   TX_8X4,
   TX_8X16,
@@ -358,6 +359,7 @@ pub enum TxSize {
   TX_32X16,
   TX_32X64,
   TX_64X32,
+
   TX_4X16,
   TX_16X4,
   TX_8X32,

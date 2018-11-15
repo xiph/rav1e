@@ -1994,6 +1994,22 @@ impl FwdTxfm2D for Block16x16 {}
 impl FwdTxfm2D for Block32x32 {}
 impl FwdTxfm2D for Block64x64 {}
 
+impl FwdTxfm2D for Block4x8 {}
+impl FwdTxfm2D for Block8x4 {}
+impl FwdTxfm2D for Block8x16 {}
+impl FwdTxfm2D for Block16x8 {}
+impl FwdTxfm2D for Block16x32 {}
+impl FwdTxfm2D for Block32x16 {}
+impl FwdTxfm2D for Block32x64 {}
+impl FwdTxfm2D for Block64x32 {}
+
+impl FwdTxfm2D for Block4x16 {}
+impl FwdTxfm2D for Block16x4 {}
+impl FwdTxfm2D for Block8x32 {}
+impl FwdTxfm2D for Block32x8 {}
+impl FwdTxfm2D for Block16x64 {}
+impl FwdTxfm2D for Block64x16 {}
+
 pub fn fht4x4(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
   bit_depth: usize
@@ -2053,6 +2069,173 @@ pub fn fht64x64(
 
   for i in 0..2 {
     for (row_out, row_in) in output[2048*i..].chunks_mut(32).zip(tmp[32*i..].chunks(64)).take(64) {
+      row_out.copy_from_slice(&row_in[..32]);
+    }
+  }
+}
+
+pub fn fht4x8(
+  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) {
+  // SIMD code may assert for transform types beyond TxType::IDTX.
+  if tx_type < TxType::IDTX {
+    Block4x8::fwd_txfm2d(input, output, stride, tx_type, bit_depth);
+  } else {
+    Block4x8::fwd_txfm2d_rs(input, output, stride, tx_type, bit_depth);
+  }
+}
+
+pub fn fht8x4(
+  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) {
+  // SIMD code may assert for transform types beyond TxType::IDTX.
+  if tx_type < TxType::IDTX {
+    Block8x4::fwd_txfm2d(input, output, stride, tx_type, bit_depth);
+  } else {
+    Block8x4::fwd_txfm2d_rs(input, output, stride, tx_type, bit_depth);
+  }
+}
+
+pub fn fht8x16(
+  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) {
+  // SIMD code may assert for transform types beyond TxType::IDTX.
+  if tx_type < TxType::IDTX {
+    Block8x16::fwd_txfm2d(input, output, stride, tx_type, bit_depth);
+  } else {
+    Block8x16::fwd_txfm2d_rs(input, output, stride, tx_type, bit_depth);
+  }
+}
+
+pub fn fht16x8(
+  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) {
+  // SIMD code may assert for transform types beyond TxType::IDTX.
+  if tx_type < TxType::IDTX {
+    Block16x8::fwd_txfm2d(input, output, stride, tx_type, bit_depth);
+  } else {
+    Block16x8::fwd_txfm2d_rs(input, output, stride, tx_type, bit_depth);
+  }
+}
+
+pub fn fht16x32(
+  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) {
+    assert!(tx_type == TxType::DCT_DCT);
+    Block16x32::fwd_txfm2d(input, output, stride, tx_type, bit_depth);
+}
+
+pub fn fht32x16(
+  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) {
+    assert!(tx_type == TxType::DCT_DCT);
+    Block32x16::fwd_txfm2d(input, output, stride, tx_type, bit_depth);
+}
+
+pub fn fht32x64(
+  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) {
+  assert!(tx_type == TxType::DCT_DCT);
+  let mut tmp = [0 as i32; 2048];
+
+  Block32x64::fwd_txfm2d(input, &mut tmp, stride, tx_type, bit_depth);
+
+  for (row_out, row_in) in output.chunks_mut(32).
+    zip(tmp.chunks(32)).take(64) {
+    row_out.copy_from_slice(&row_in[..32]);
+  }
+}
+
+pub fn fht64x32(
+  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) {
+  assert!(tx_type == TxType::DCT_DCT);
+  let mut tmp = [0 as i32; 2048];
+
+  Block64x32::fwd_txfm2d(input, &mut tmp, stride, tx_type, bit_depth);
+
+  for i in 0..2 {
+    for (row_out, row_in) in output[1024*i..].chunks_mut(32).
+      zip(tmp[32*i..].chunks(64)).take(32) {
+      row_out.copy_from_slice(&row_in[..32]);
+    }
+  }
+}
+
+pub fn fht4x16(
+  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) {
+  // SIMD code may assert for transform types beyond TxType::IDTX.
+  if tx_type < TxType::IDTX {
+    Block4x16::fwd_txfm2d(input, output, stride, tx_type, bit_depth);
+  } else {
+    Block4x16::fwd_txfm2d_rs(input, output, stride, tx_type, bit_depth);
+  }
+}
+
+pub fn fht16x4(
+  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) {
+  // SIMD code may assert for transform types beyond TxType::IDTX.
+  if tx_type < TxType::IDTX {
+    Block16x4::fwd_txfm2d(input, output, stride, tx_type, bit_depth);
+  } else {
+    Block16x4::fwd_txfm2d_rs(input, output, stride, tx_type, bit_depth);
+  }
+}
+
+pub fn fht8x32(
+  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) {
+    assert!(tx_type == TxType::DCT_DCT);
+    Block8x32::fwd_txfm2d(input, output, stride, tx_type, bit_depth);
+}
+pub fn fht32x8(
+  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) {
+  assert!(tx_type == TxType::DCT_DCT);
+  Block32x8::fwd_txfm2d(input, output, stride, tx_type, bit_depth);
+}
+
+pub fn fht16x64(
+  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) {
+  assert!(tx_type == TxType::DCT_DCT);
+  let mut tmp = [0 as i32; 1024];
+
+  Block16x64::fwd_txfm2d(input, &mut tmp, stride, tx_type, bit_depth);
+
+  for (row_out, row_in) in output.chunks_mut(16).
+    zip(tmp.chunks(16)).take(64) {
+    row_out.copy_from_slice(&row_in[..16]);
+  }
+}
+
+pub fn fht64x16(
+  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) {
+  assert!(tx_type == TxType::DCT_DCT);
+  let mut tmp = [0 as i32; 1024];
+
+  Block64x16::fwd_txfm2d(input, &mut tmp, stride, tx_type, bit_depth);
+
+  for i in 0..2 {
+    for (row_out, row_in) in output[512*i..].chunks_mut(32).
+      zip(tmp[32*i..].chunks(64)).take(16) {
       row_out.copy_from_slice(&row_in[..32]);
     }
   }

@@ -1548,6 +1548,14 @@ trait InvTxfm2D: Dim {
   }
 }
 
+/* From AV1 Spec.
+https://aomediacodec.github.io/av1-spec/#2d-inverse-transform-process
+
+Transform_Row_Shift[ TX_SIZES_ALL ] = {
+  0, 1, 2, 2, 2, 0, 0, 1, 1,
+  1, 1, 1, 1, 1, 1, 2, 2, 2, 2
+}*/
+
 impl InvTxfm2D for Block4x4 {
   const INTERMEDIATE_SHIFT: usize = 0;
 }
@@ -1565,6 +1573,62 @@ impl InvTxfm2D for Block32x32 {
 }
 
 impl InvTxfm2D for Block64x64 {
+  const INTERMEDIATE_SHIFT: usize = 2;
+}
+
+impl InvTxfm2D for Block4x8 {
+  const INTERMEDIATE_SHIFT: usize = 0;
+}
+
+impl InvTxfm2D for Block8x4 {
+  const INTERMEDIATE_SHIFT: usize = 0;
+}
+
+impl InvTxfm2D for Block8x16 {
+  const INTERMEDIATE_SHIFT: usize = 1;
+}
+
+impl InvTxfm2D for Block16x8 {
+  const INTERMEDIATE_SHIFT: usize = 1;
+}
+
+impl InvTxfm2D for Block16x32 {
+  const INTERMEDIATE_SHIFT: usize = 1;
+}
+
+impl InvTxfm2D for Block32x16 {
+  const INTERMEDIATE_SHIFT: usize = 1;
+}
+
+impl InvTxfm2D for Block32x64 {
+  const INTERMEDIATE_SHIFT: usize = 1;
+}
+
+impl InvTxfm2D for Block64x32 {
+  const INTERMEDIATE_SHIFT: usize = 1;
+}
+
+impl InvTxfm2D for Block4x16 {
+  const INTERMEDIATE_SHIFT: usize = 1;
+}
+
+impl InvTxfm2D for Block16x4 {
+  const INTERMEDIATE_SHIFT: usize = 1;
+}
+
+impl InvTxfm2D for Block8x32 {
+  const INTERMEDIATE_SHIFT: usize = 2;
+}
+
+impl InvTxfm2D for Block32x8 {
+  const INTERMEDIATE_SHIFT: usize = 2;
+}
+
+impl InvTxfm2D for Block16x64 {
+  const INTERMEDIATE_SHIFT: usize = 2;
+}
+
+impl InvTxfm2D for Block64x16 {
   const INTERMEDIATE_SHIFT: usize = 2;
 }
 
@@ -1627,4 +1691,162 @@ pub fn iht64x64_add<T>(
   }
 
   Block64x64::inv_txfm2d_add(&tmp, output, stride, tx_type, bit_depth);
+}
+
+pub fn iht4x8_add<T>(
+  input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) where T: Pixel, i32: AsPrimitive<T> {
+  if tx_type < TxType::IDTX {
+    Block4x8::inv_txfm2d_add(input, output, stride, tx_type, bit_depth);
+  } else {
+    Block4x8::inv_txfm2d_add_rs(input, output, stride, tx_type, bit_depth);
+  }
+}
+
+pub fn iht8x4_add<T>(
+  input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) where T: Pixel, i32: AsPrimitive<T> {
+  if tx_type < TxType::IDTX {
+    Block8x4::inv_txfm2d_add(input, output, stride, tx_type, bit_depth);
+  } else {
+    Block8x4::inv_txfm2d_add_rs(input, output, stride, tx_type, bit_depth);
+  }
+}
+
+pub fn iht8x16_add<T>(
+  input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) where T: Pixel, i32: AsPrimitive<T> {
+  if tx_type < TxType::IDTX {
+    // SSE C code asserts for transform types beyond TxType::IDTX.
+    Block8x16::inv_txfm2d_add(input, output, stride, tx_type, bit_depth);
+  } else {
+    Block8x16::inv_txfm2d_add_rs(input, output, stride, tx_type, bit_depth);
+  }
+}
+
+pub fn iht16x8_add<T>(
+  input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) where T: Pixel, i32: AsPrimitive<T> {
+  if tx_type < TxType::IDTX {
+    // SSE C code asserts for transform types beyond TxType::IDTX.
+    Block16x8::inv_txfm2d_add(input, output, stride, tx_type, bit_depth);
+  } else {
+    Block16x8::inv_txfm2d_add_rs(input, output, stride, tx_type, bit_depth);
+  }
+}
+
+pub fn iht16x32_add<T>(
+  input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) where T: Pixel, i32: AsPrimitive<T> {
+  assert!(tx_type == TxType::DCT_DCT);
+  Block16x32::inv_txfm2d_add(input, output, stride, tx_type, bit_depth);
+}
+
+pub fn iht32x16_add<T>(
+  input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) where T: Pixel, i32: AsPrimitive<T> {
+  assert!(tx_type == TxType::DCT_DCT);
+  Block32x16::inv_txfm2d_add(input, output, stride, tx_type, bit_depth);
+}
+
+pub fn iht32x64_add<T>(
+  input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) where T: Pixel, i32: AsPrimitive<T> {
+  assert!(tx_type == TxType::DCT_DCT);
+  let mut tmp = [0 as i32; 2048];
+
+  for (row_out, row_in) in tmp.chunks_mut(32).zip(input.chunks(32)).take(32) {
+    row_out[..32].copy_from_slice(row_in);
+  }
+
+  Block32x64::inv_txfm2d_add(&tmp, output, stride, tx_type, bit_depth);
+}
+
+pub fn iht64x32_add<T>(
+  input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) where T: Pixel, i32: AsPrimitive<T> {
+  assert!(tx_type == TxType::DCT_DCT);
+  let mut tmp = [0 as i32; 2048];
+
+  for (row_out, row_in) in tmp.chunks_mut(64).zip(input.chunks(32)).take(32) {
+    row_out[..32].copy_from_slice(row_in);
+  }
+
+  Block64x32::inv_txfm2d_add(&tmp, output, stride, tx_type, bit_depth);
+}
+
+pub fn iht4x16_add<T>(
+  input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) where T: Pixel, i32: AsPrimitive<T> {
+  if tx_type < TxType::IDTX {
+    // SSE C code asserts for transform types beyond TxType::IDTX.
+    Block4x16::inv_txfm2d_add(input, output, stride, tx_type, bit_depth);
+  } else {
+    Block4x16::inv_txfm2d_add_rs(input, output, stride, tx_type, bit_depth);
+  }
+}
+
+pub fn iht16x4_add<T>(
+  input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) where T: Pixel, i32: AsPrimitive<T> {
+  if tx_type < TxType::IDTX {
+    // SSE C code asserts for transform types beyond TxType::IDTX.
+    Block16x4::inv_txfm2d_add(input, output, stride, tx_type, bit_depth);
+  } else {
+    Block16x4::inv_txfm2d_add_rs(input, output, stride, tx_type, bit_depth);
+  }
+}
+
+pub fn iht8x32_add<T>(
+  input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) where T: Pixel, i32: AsPrimitive<T> {
+  assert!(tx_type == TxType::DCT_DCT);
+  Block8x32::inv_txfm2d_add(input, output, stride, tx_type, bit_depth);
+}
+
+pub fn iht32x8_add<T>(
+  input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) where T: Pixel, i32: AsPrimitive<T> {
+  assert!(tx_type == TxType::DCT_DCT);
+  Block32x8::inv_txfm2d_add(input, output, stride, tx_type, bit_depth);
+}
+
+pub fn iht16x64_add<T>(
+  input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) where T: Pixel, i32: AsPrimitive<T> {
+  assert!(tx_type == TxType::DCT_DCT);
+  let mut tmp = [0 as i32; 1024];
+
+  for (row_out, row_in) in tmp.chunks_mut(16).zip(input.chunks(16)).take(32) {
+    row_out[..16].copy_from_slice(row_in);
+  }
+
+  Block16x64::inv_txfm2d_add(&tmp, output, stride, tx_type, bit_depth);
+}
+
+pub fn iht64x16_add<T>(
+  input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
+  bit_depth: usize
+) where T: Pixel, i32: AsPrimitive<T> {
+  assert!(tx_type == TxType::DCT_DCT);
+  let mut tmp = [0 as i32; 1024];
+
+  for (row_out, row_in) in tmp.chunks_mut(64).zip(input.chunks(32)).take(16) {
+    row_out[..32].copy_from_slice(row_in);
+  }
+
+  Block64x16::inv_txfm2d_add(&tmp, output, stride, tx_type, bit_depth);
 }
