@@ -14,6 +14,7 @@ use partition::*;
 use plane::*;
 use FrameInvariants;
 use FrameState;
+use rdo::get_lambda_sqrt;
 
 #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
 mod nasm {
@@ -147,7 +148,7 @@ fn get_mv_range(fi: &FrameInvariants, bo: &BlockOffset, blk_w: usize, blk_h: usi
 
 pub fn motion_estimation(
   fi: &FrameInvariants, fs: &FrameState, bsize: BlockSize, bo: &BlockOffset,
-  ref_frame: usize, pmv: MotionVector, bit_depth: usize
+  ref_frame: usize, cmv: MotionVector, bit_depth: usize, pmv: &[MotionVector; 2]
 ) -> MotionVector {
   match fi.rec_buffer.frames[fi.ref_frames[ref_frame - LAST_FRAME] as usize] {
     Some(ref rec) => {
@@ -159,13 +160,16 @@ pub fn motion_estimation(
       let blk_w = bsize.width();
       let blk_h = bsize.height();
       let (mvx_min, mvx_max, mvy_min, mvy_max) = get_mv_range(fi, bo, blk_w, blk_h);
-      let x_lo = po.x + ((-range + (pmv.col / 8) as isize).max(mvx_min / 8));
-      let x_hi = po.x + ((range + (pmv.col / 8) as isize).min(mvx_max / 8));
-      let y_lo = po.y + ((-range + (pmv.row / 8) as isize).max(mvy_min / 8));
-      let y_hi = po.y + ((range + (pmv.row / 8) as isize).min(mvy_max / 8));
+      let x_lo = po.x + ((-range + (cmv.col / 8) as isize).max(mvx_min / 8));
+      let x_hi = po.x + ((range + (cmv.col / 8) as isize).min(mvx_max / 8));
+      let y_lo = po.y + ((-range + (cmv.row / 8) as isize).max(mvy_min / 8));
+      let y_hi = po.y + ((range + (cmv.row / 8) as isize).min(mvy_max / 8));
 
-      let mut lowest_sad = 128 * 128 * 4096 as u32;
+      let mut lowest_cost = std::u32::MAX;
       let mut best_mv = MotionVector { row: 0, col: 0 };
+
+      // 0.5 is a fudge factor
+      let lambda = (get_lambda_sqrt(fi, bit_depth) * 256.0 * 0.5) as u32;
 
       full_search(
         x_lo,
@@ -177,10 +181,13 @@ pub fn motion_estimation(
         &fs.input.planes[0],
         &rec.frame.planes[0],
         &mut best_mv,
-        &mut lowest_sad,
+        &mut lowest_cost,
         &po,
         2,
-        bit_depth
+        bit_depth,
+        lambda,
+        pmv,
+        fi.allow_high_precision_mv
       );
 
       let mode = PredictionMode::NEWMV;
@@ -234,8 +241,13 @@ pub fn motion_estimation(
 
             let sad = get_sad(&plane_org, &plane_ref, blk_h, blk_w, bit_depth);
 
-            if sad < lowest_sad {
-              lowest_sad = sad;
+            let rate1 = get_mv_rate(cand_mv, pmv[0], fi.allow_high_precision_mv);
+            let rate2 = get_mv_rate(cand_mv, pmv[1], fi.allow_high_precision_mv);
+            let rate = rate1.min(rate2 + 1);
+            let cost = 256 * sad + rate * lambda;
+
+            if cost < lowest_cost {
+              lowest_cost = cost;
               best_mv = cand_mv;
             }
           }
@@ -252,7 +264,8 @@ pub fn motion_estimation(
 fn full_search(
   x_lo: isize, x_hi: isize, y_lo: isize, y_hi: isize, blk_h: usize,
   blk_w: usize, p_org: &Plane, p_ref: &Plane, best_mv: &mut MotionVector,
-  lowest_sad: &mut u32, po: &PlaneOffset, step: usize, bit_depth: usize
+  lowest_cost: &mut u32, po: &PlaneOffset, step: usize, bit_depth: usize,
+  lambda: u32, pmv: &[MotionVector; 2], allow_high_precision_mv: bool
 ) {
   for y in (y_lo..y_hi).step_by(step) {
     for x in (x_lo..x_hi).step_by(step) {
@@ -261,12 +274,19 @@ fn full_search(
 
       let sad = get_sad(&plane_org, &plane_ref, blk_h, blk_w, bit_depth);
 
-      if sad < *lowest_sad {
-        *lowest_sad = sad;
-        *best_mv = MotionVector {
-          row: 8 * (y as i16 - po.y as i16),
-          col: 8 * (x as i16 - po.x as i16)
-        }
+      let mv = MotionVector {
+        row: 8 * (y as i16 - po.y as i16),
+        col: 8 * (x as i16 - po.x as i16)
+      };
+
+      let rate1 = get_mv_rate(mv, pmv[0], allow_high_precision_mv);
+      let rate2 = get_mv_rate(mv, pmv[1], allow_high_precision_mv);
+      let rate = rate1.min(rate2 + 1);
+      let cost = 256 * sad + rate * lambda;
+
+      if cost < *lowest_cost {
+        *lowest_cost = cost;
+        *best_mv = mv;
       }
     }
   }
@@ -278,6 +298,19 @@ fn adjust_bo(bo: &BlockOffset, fi: &FrameInvariants, blk_w: usize, blk_h: usize)
     x: (bo.x as isize).min(fi.w_in_b as isize - blk_w as isize / 4).max(0) as usize,
     y: (bo.y as isize).min(fi.h_in_b as isize - blk_h as isize / 4).max(0) as usize
   }
+}
+
+fn get_mv_rate(a: MotionVector, b: MotionVector, allow_high_precision_mv: bool) -> u32 {
+  fn diff_to_rate(diff: i16, allow_high_precision_mv: bool) -> u32 {
+    let d = if allow_high_precision_mv { diff } else { diff >> 1 };
+    if d == 0 {
+      0
+    } else {
+      2 * (16 - d.abs().leading_zeros())
+    }
+  }
+
+  diff_to_rate(a.row - b.row, allow_high_precision_mv) + diff_to_rate(a.col - b.col, allow_high_precision_mv)
 }
 
 pub fn estimate_motion_ss4(
@@ -299,8 +332,11 @@ pub fn estimate_motion_ss4(
     let y_lo = po.y + (((-range).max(mvy_min / 8)) >> 2);
     let y_hi = po.y + (((range).min(mvy_max / 8)) >> 2);
 
-    let mut lowest_sad = ((blk_w >> 2) * (blk_h >> 2) * 4096) as u32;
+    let mut lowest_cost = std::u32::MAX;
     let mut best_mv = MotionVector { row: 0, col: 0 };
+
+    // Divide by 16 to account for subsampling, 0.125 is a fudge factor
+    let lambda = (get_lambda_sqrt(fi, bit_depth) * 256.0 / 16.0 * 0.125) as u32;
 
     full_search(
       x_lo,
@@ -312,10 +348,13 @@ pub fn estimate_motion_ss4(
       &fs.input_qres,
       &rec.input_qres,
       &mut best_mv,
-      &mut lowest_sad,
+      &mut lowest_cost,
       &po,
       1,
-      bit_depth
+      bit_depth,
+      lambda,
+      &[MotionVector { row: 0, col: 0 }; 2],
+      fi.allow_high_precision_mv
     );
 
     Some(MotionVector { row: best_mv.row * 4, col: best_mv.col * 4 })
@@ -339,8 +378,11 @@ pub fn estimate_motion_ss2(
     let range = 16;
     let (mvx_min, mvx_max, mvy_min, mvy_max) = get_mv_range(fi, &bo_adj, blk_w, blk_h);
 
-    let mut lowest_sad = ((blk_w >> 1) * (blk_h >> 1) * 4096) as u32;
+    let mut lowest_cost = std::u32::MAX;
     let mut best_mv = MotionVector { row: 0, col: 0 };
+
+    // Divide by 4 to account for subsampling, 0.125 is a fudge factor
+    let lambda = (get_lambda_sqrt(fi, bit_depth) * 256.0 / 4.0 * 0.125) as u32;
 
     for omv in pmvs.iter() {
       if let Some(pmv) = omv {
@@ -359,10 +401,13 @@ pub fn estimate_motion_ss2(
           &fs.input_hres,
           &rec.input_hres,
           &mut best_mv,
-          &mut lowest_sad,
+          &mut lowest_cost,
           &po,
           1,
-          bit_depth
+          bit_depth,
+          lambda,
+          &[MotionVector { row: 0, col: 0 }; 2],
+          fi.allow_high_precision_mv
         );
       }
     }
