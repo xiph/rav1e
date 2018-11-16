@@ -1697,7 +1697,7 @@ pub fn iht16x32_add<T>(
   input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
   bit_depth: usize
 ) where T: Pixel, i32: AsPrimitive<T> {
-  assert!(tx_type == TxType::DCT_DCT);
+  assert!(tx_type == TxType::DCT_DCT || tx_type == TxType::IDTX);
   Block16x32::inv_txfm2d_add(input, output, stride, tx_type, bit_depth);
 }
 
@@ -1705,7 +1705,7 @@ pub fn iht32x16_add<T>(
   input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
   bit_depth: usize
 ) where T: Pixel, i32: AsPrimitive<T> {
-  assert!(tx_type == TxType::DCT_DCT);
+  assert!(tx_type == TxType::DCT_DCT || tx_type == TxType::IDTX);
   Block32x16::inv_txfm2d_add(input, output, stride, tx_type, bit_depth);
 }
 
@@ -1765,7 +1765,7 @@ pub fn iht8x32_add<T>(
   input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
   bit_depth: usize
 ) where T: Pixel, i32: AsPrimitive<T> {
-  assert!(tx_type == TxType::DCT_DCT);
+  assert!(tx_type == TxType::DCT_DCT || tx_type == TxType::IDTX);
   Block8x32::inv_txfm2d_add(input, output, stride, tx_type, bit_depth);
 }
 
@@ -1773,7 +1773,7 @@ pub fn iht32x8_add<T>(
   input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
   bit_depth: usize
 ) where T: Pixel, i32: AsPrimitive<T> {
-  assert!(tx_type == TxType::DCT_DCT);
+  assert!(tx_type == TxType::DCT_DCT || tx_type == TxType::IDTX);
   Block32x8::inv_txfm2d_add(input, output, stride, tx_type, bit_depth);
 }
 
