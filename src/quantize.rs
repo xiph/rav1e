@@ -14,11 +14,13 @@ use partition::TxSize;
 use std::mem;
 
 pub fn get_log_tx_scale(tx_size: TxSize) -> i32 {
-  match tx_size {
-    TxSize::TX_64X64 => 2,
-    TxSize::TX_32X32 => 1,
-    _ => 0
-  }
+  let num_pixels = tx_size.area();
+  let mut shift_bits = 0;
+
+  if num_pixels > 256 { shift_bits += 1; };
+  if num_pixels > 1024 { shift_bits += 1; };
+
+  shift_bits
 }
 
 pub fn dc_q(qindex: u8, bit_depth: usize) -> i16 {
