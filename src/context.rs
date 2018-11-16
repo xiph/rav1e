@@ -508,11 +508,12 @@ pub fn has_chroma(
 pub fn get_tx_set(
   tx_size: TxSize, is_inter: bool, use_reduced_set: bool
 ) -> TxSet {
+  let tx_size_sqr_up = tx_size.sqr_up();
   let tx_size_sqr = tx_size.sqr();
 
   if tx_size.width() >= 64 || tx_size.height() >= 64 {
     TxSet::TX_SET_DCTONLY
-  } else if tx_size_sqr == TxSize::TX_32X32 {
+  } else if tx_size_sqr_up == TxSize::TX_32X32 {
     if is_inter {
       TxSet::TX_SET_DCT_IDTX
     } else {
