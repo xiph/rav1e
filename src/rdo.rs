@@ -150,6 +150,17 @@ pub fn get_lambda(fi: &FrameInvariants, bit_depth: usize) -> f64 {
   q0 * q0 * std::f64::consts::LN_2 / 6.0
 }
 
+pub fn get_lambda_sqrt(fi: &FrameInvariants, bit_depth: usize) -> f64 {
+  let q = dc_q(fi.base_q_idx, bit_depth) as f64;
+
+  // Convert q into Q0 precision, given that libaom quantizers are Q3
+  let q0 = q / 8.0_f64;
+
+  // Lambda formula from doc/theoretical_results.lyx in the daala repo
+  // Use Q0 quantizer since lambda will be applied to Q0 pixel domain
+  q0 * (std::f64::consts::LN_2 / 6.0).sqrt()
+}
+
 // Compute the rate-distortion cost for an encode
 fn compute_rd_cost(
   fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize,
@@ -385,11 +396,6 @@ pub fn rdo_mode_decision(
         ref_frames_set.push([i, NONE_FRAME]);
         let slot_idx = fi.ref_frames[i - LAST_FRAME];
         ref_slot_set.push(slot_idx);
-        let pmv = pmvs[slot_idx as usize].unwrap();
-        mvs_from_me.push([
-          motion_estimation(fi, fs, bsize, bo, i, pmv, seq.bit_depth),
-          MotionVector { row: 0, col: 0 }
-        ]);
       }
     }
     assert!(ref_frames_set.len() != 0);
@@ -404,6 +410,15 @@ pub fn rdo_mode_decision(
     mode_contexts.push(cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, false, fi, false));
 
     if fi.frame_type == FrameType::INTER {
+      let mut pmv = [MotionVector{ row: 0, col: 0 }; 2];
+      if mv_stack.len() > 0 { pmv[0] = mv_stack[0].this_mv; }
+      if mv_stack.len() > 1 { pmv[1] = mv_stack[1].this_mv; }
+      let cmv = pmvs[ref_slot_set[i] as usize].unwrap();
+      mvs_from_me.push([
+        motion_estimation(fi, fs, bsize, bo, ref_frames[0], cmv, seq.bit_depth, &pmv),
+        MotionVector { row: 0, col: 0 }
+      ]);
+
       for &x in RAV1E_INTER_MODES_MINIMAL {
         mode_set.push((x, i));
       }
