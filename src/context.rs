@@ -586,10 +586,6 @@ static uv2y: [PredictionMode; UV_INTRA_MODES] = [
   DC_PRED        // CFL_PRED
 ];
 
-pub fn y_intra_mode_to_tx_type_context(pred: PredictionMode) -> TxType {
-  intra_mode_to_tx_type_context[pred as usize]
-}
-
 pub fn uv_intra_mode_to_tx_type_context(pred: PredictionMode) -> TxType {
   intra_mode_to_tx_type_context[uv2y[pred as usize] as usize]
 }
