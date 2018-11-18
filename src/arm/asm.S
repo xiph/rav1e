@@ -54,6 +54,14 @@
 #endif
 #endif
 
+#if !defined(PIC)
+#if defined(__PIC__)
+#define PIC __PIC__
+#elif defined(__pic__)
+#define PIC __pic__
+#endif
+#endif
+
 #ifndef PRIVATE_PREFIX
 #define PRIVATE_PREFIX dav1d_
 #endif
