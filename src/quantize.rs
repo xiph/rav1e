@@ -15,12 +15,8 @@ use std::mem;
 
 pub fn get_log_tx_scale(tx_size: TxSize) -> i32 {
   let num_pixels = tx_size.area();
-  let mut shift_bits = 0;
 
-  if num_pixels > 256 { shift_bits += 1; };
-  if num_pixels > 1024 { shift_bits += 1; };
-
-  shift_bits
+  i32::from(num_pixels > 256) + i32::from(num_pixels > 1024)
 }
 
 pub fn dc_q(qindex: u8, bit_depth: usize) -> i16 {
