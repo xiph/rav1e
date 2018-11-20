@@ -89,6 +89,7 @@ fn divu_pair(x: i32, d: (u32, u32, u32)) -> i32 {
 #[cfg(test)]
 mod test {
   use super::*;
+  use partition::TxSize::*;
   #[test]
   fn test_divu_pair() {
     for d in 1..1024 {
@@ -104,6 +105,33 @@ mod test {
       dc_qlookup_Q3.iter().map(|&v| divu_gen(v as u32)).collect();
 
     println!("{:?}", b);
+  }
+  #[test]
+  fn test_tx_log_scale() {
+    let tx_sizes = [
+      (TX_4X4, 0),
+      (TX_8X8, 0),
+      (TX_16X16, 0),
+      (TX_32X32, 1),
+      (TX_64X64, 2),
+      (TX_4X8, 0),
+      (TX_8X4, 0),
+      (TX_8X16, 0),
+      (TX_16X8, 0),
+      (TX_16X32, 1),
+      (TX_32X16, 1),
+      (TX_32X64, 2),
+      (TX_64X32, 2),
+      (TX_4X16, 0),
+      (TX_16X4, 0),
+      (TX_8X32, 0),
+      (TX_32X8, 0),
+      (TX_16X64, 1),
+      (TX_64X16, 1),
+    ];
+    for &tx_size in tx_sizes.iter() {
+      assert!(tx_size.1 == get_log_tx_scale(tx_size.0));
+    }
   }
 }
 
