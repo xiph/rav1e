@@ -812,7 +812,8 @@ pub fn rdo_tx_type_decision(
 // RDO-based single level partitioning decision
 pub fn rdo_partition_decision(
   seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
-  cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset,
+  cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
+  bsize: BlockSize, bo: &BlockOffset,
   cached_block: &RDOOutput, pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5]
 ) -> RDOOutput {
   let max_rd = std::f64::MAX;
@@ -875,16 +876,49 @@ pub fn rdo_partition_decision(
           }
         }).collect::<Vec<_>>();
 
+        let cw_checkpoint = cw.checkpoint();
+        let w_pre_checkpoint = w_pre_cdef.checkpoint();
+        let w_post_checkpoint = w_post_cdef.checkpoint();
+
         child_modes.extend(
           partitions
             .iter().zip(pmv_idxs)
             .map(|(&offset, pmv_idx)| {
+              let mode_decision =
               rdo_mode_decision(seq, fi, fs, cw, subsize, &offset,
                 &pmvs[pmv_idx])
                 .part_modes[0]
-                .clone()
+                .clone();
+
+                let (mode_luma, mode_chroma) = (mode_decision.pred_mode_luma, mode_decision.pred_mode_chroma);
+                let bo = offset;
+
+                let cfl = mode_decision.pred_cfl_params;
+                {
+                  let ref_frames = mode_decision.ref_frames;
+                  let mvs = mode_decision.mvs;
+                  let skip = mode_decision.skip;
+                  let mut cdef_coded = cw.bc.cdef_coded;
+                  let (tx_size, tx_type) = (mode_decision.tx_size, mode_decision.tx_type);
+
+                  cw.bc.set_tx_size(bo, tx_size);
+
+                  let mut mv_stack = Vec::new();
+                  let is_compound = ref_frames[1] != NONE_FRAME;
+                  let mode_context = cw.find_mvrefs(bo, ref_frames, &mut mv_stack, subsize, false, fi, is_compound);
+
+                  cdef_coded = encode_block_a(seq, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
+                                            subsize, bo, skip);
+                  encode_block_b(seq, fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
+                                mode_luma, mode_chroma, ref_frames, mvs, subsize, bo, skip, seq.bit_depth, cfl,
+                                tx_size, tx_type, mode_context, &mv_stack, false);
+                }
+                mode_decision
             }).collect::<Vec<_>>()
         );
+        cw.rollback(&cw_checkpoint);
+        w_pre_cdef.rollback(&w_pre_checkpoint);
+        w_post_cdef.rollback(&w_post_checkpoint);
       }
       _ => {
         assert!(false);
