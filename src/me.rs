@@ -217,8 +217,15 @@ pub fn motion_estimation(
                 &mut tmp_plane.mut_slice(&PlaneOffset { x: 0, y: 0 });
 
               mode.predict_inter(
-                fi, 0, &po, tmp_slice, blk_w, blk_h, [ref_frame, NONE_FRAME],
-                [cand_mv, MotionVector{ row: 0, col: 0 }], 8,
+                fi,
+                0,
+                &po,
+                tmp_slice,
+                blk_w,
+                blk_h,
+                [ref_frame, NONE_FRAME],
+                [cand_mv, MotionVector { row: 0, col: 0 }],
+                bit_depth
               );
             }
 
