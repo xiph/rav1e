@@ -2027,7 +2027,8 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
         partition = PartitionType::PARTITION_SPLIT;
     } else if bsize > fi.min_partition_size {
         // Blocks of sizes within the supported range are subjected to a partitioning decision
-        rdo_output = rdo_partition_decision(seq, fi, fs, cw, bsize, bo, &rdo_output, pmvs);
+        rdo_output = rdo_partition_decision(seq, fi, fs, cw,
+            w_pre_cdef, w_post_cdef, bsize, bo, &rdo_output, pmvs);
         partition = rdo_output.part_type;
     } else {
         // Blocks of sizes below the supported range are encoded directly
