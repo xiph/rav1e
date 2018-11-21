@@ -1879,7 +1879,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         };
         let spmvs = &pmvs[pmv_idx];
 
-        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, bsize, bo, spmvs).part_modes[0].clone();
+        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, bsize, bo, spmvs, false).part_modes[0].clone();
         let (mode_luma, mode_chroma) = (mode_decision.pred_mode_luma, mode_decision.pred_mode_chroma);
         let cfl = mode_decision.pred_cfl_params;
         {
@@ -2060,7 +2060,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
                     let spmvs = &pmvs[pmv_idx];
 
                     // Make a prediction mode decision for blocks encoded with no rdo_partition_decision call (e.g. edges)
-                    rdo_mode_decision(seq, fi, fs, cw, bsize, bo, spmvs).part_modes[0].clone()
+                    rdo_mode_decision(seq, fi, fs, cw, bsize, bo, spmvs, false).part_modes[0].clone()
                 };
 
             let mut mode_luma = part_decision.pred_mode_luma;

@@ -342,7 +342,7 @@ impl Default for EncodingSettings {
 pub fn rdo_mode_decision(
   seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
   cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset,
-  pmvs: &[Option<MotionVector>]
+  pmvs: &[Option<MotionVector>], needs_rec: bool
 ) -> RDOOutput {
   let mut best = EncodingSettings::default();
 
@@ -488,11 +488,11 @@ pub fn rdo_mode_decision(
           tx_type,
           mode_context,
           mv_stack,
-          true
+          !needs_rec
         );
 
         let cost = wr.tell_frac() - tell;
-        let rd = if fi.use_tx_domain_distortion {
+        let rd = if fi.use_tx_domain_distortion && !needs_rec {
           compute_tx_rd_cost(
             fi,
             fs,
@@ -845,7 +845,7 @@ pub fn rdo_partition_decision(
           .part_modes
           .get(0)
           .unwrap_or(
-            &rdo_mode_decision(seq, fi, fs, cw, bsize, bo, spmvs).part_modes[0]
+            &rdo_mode_decision(seq, fi, fs, cw, bsize, bo, spmvs, false).part_modes[0]
           ).clone();
         child_modes.push(mode_decision);
       }
@@ -880,7 +880,7 @@ pub fn rdo_partition_decision(
             .iter().zip(pmv_idxs)
             .map(|(&offset, pmv_idx)| {
               rdo_mode_decision(seq, fi, fs, cw, subsize, &offset,
-                &pmvs[pmv_idx])
+                &pmvs[pmv_idx], true)
                 .part_modes[0]
                 .clone()
             }).collect::<Vec<_>>()
