@@ -907,7 +907,7 @@ pub fn rdo_partition_decision(
                   let is_compound = ref_frames[1] != NONE_FRAME;
                   let mode_context = cw.find_mvrefs(bo, ref_frames, &mut mv_stack, subsize, false, fi, is_compound);
 
-                  cdef_coded = encode_block_a(seq, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
+                  cdef_coded = encode_block_a(seq, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                                             subsize, bo, skip);
                   encode_block_b(seq, fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                                 mode_luma, mode_chroma, ref_frames, mvs, subsize, bo, skip, seq.bit_depth, cfl,
