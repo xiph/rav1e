@@ -77,7 +77,7 @@ fn main() {
         match line.split_whitespace().next() {
           Some("process_frame") => {
             match process_frame(&mut ctx, &mut io.output, &mut y4m_dec, y4m_enc.as_mut()) {
-              Ok(Some(frame_info)) => frame_info.iter().for_each(|frame| eprintln!("{}", frame)),
+              Ok(frame_info) => frame_info.iter().for_each(|frame| eprintln!("{}", frame)),
               Err(_) => break,
             };
 
