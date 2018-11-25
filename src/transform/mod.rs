@@ -136,8 +136,16 @@ fn get_rect_tx_log_ratio(col: usize, row: usize) -> i8 {
 // performs half a butterfly
 #[inline]
 fn half_btf(w0: i32, in0: i32, w1: i32, in1: i32, bit: usize) -> i32 {
-  let result = (w0 * in0) + (w1 * in1);
-  round_shift(result, bit)
+  use std::num::Wrapping;
+  // Ensure defined behaviour for when w0*in0 + w1*in1 is negative and
+  //   overflows, but w0*in0 + w1*in1 + rounding isn't.
+  let result = Wrapping(w0 * in0) + Wrapping(w1 * in1);
+  // Implement a version of round_shift with wrapping
+  if bit <= 0 {
+    result.0
+  } else {
+    (result + Wrapping(1 << (bit - 1))).0 >> bit
+  }
 }
 
 #[inline]
