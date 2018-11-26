@@ -47,7 +47,7 @@ impl Default for EncoderConfig {
 impl EncoderConfig {
   pub fn with_speed_preset(speed: usize) -> Self {
     EncoderConfig {
-      key_frame_interval: 30,
+      key_frame_interval: 60,
       low_latency: true,
       quantizer: 100,
       tune: Tune::Psnr,
