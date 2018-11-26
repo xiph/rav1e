@@ -74,7 +74,7 @@ pub fn parse_cli() -> CliOptions {
         .short("I")
         .long("keyint")
         .takes_value(true)
-        .default_value("30")
+        .default_value("240")
     ).arg(
       Arg::with_name("LOW_LATENCY")
         .help("low latency mode. true or false")
