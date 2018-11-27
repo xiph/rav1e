@@ -36,6 +36,7 @@ pub mod cdef;
 pub mod lrf;
 pub mod encoder;
 pub mod me;
+pub mod metrics;
 pub mod scan_order;
 pub mod scenechange;
 

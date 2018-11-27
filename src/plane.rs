@@ -241,6 +241,54 @@ impl Plane {
       }
     }
   }
+
+  /// Iterates over the pixels in the `Plane`, skipping stride data.
+  pub fn iter(&self) -> PlaneIter {
+    PlaneIter::new(self)
+  }
+}
+
+#[derive(Debug)]
+pub struct PlaneIter<'a> {
+  plane: &'a Plane,
+  y: usize,
+  x: usize,
+}
+
+impl<'a> PlaneIter<'a> {
+  pub fn new(plane: &'a Plane) -> Self {
+    PlaneIter {
+      plane,
+      y: 0,
+      x: 0,
+    }
+  }
+
+  fn width(&self) -> usize {
+    self.plane.cfg.width
+  }
+
+  fn height(&self) -> usize {
+    self.plane.cfg.height
+  }
+}
+
+impl<'a> Iterator for PlaneIter<'a> {
+  type Item = u16;
+
+  fn next(&mut self) -> Option<<Self as Iterator>::Item> {
+    if self.y == self.height() - 1 && self.x == self.width() - 1 {
+      return None;
+    }
+    let pixel = self.plane.p(self.x, self.y);
+    if self.x == self.width() - 1 {
+      self.x = 0;
+      self.y += 1;
+    } else {
+      self.x += 1;
+    }
+    Some(pixel)
+  }
 }
 
 #[derive(Clone, Copy)]
