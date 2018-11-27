@@ -15,6 +15,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
 use scenechange::SceneChangeDetector;
+use metrics::calculate_frame_psnr;
 
 // TODO: use the num crate?
 #[derive(Clone, Copy, Debug)]
@@ -40,6 +41,7 @@ pub struct EncoderConfig {
   pub quantizer: usize,
   pub tune: Tune,
   pub speed_settings: SpeedSettings,
+  pub show_psnr: bool,
 }
 
 impl Default for EncoderConfig {
@@ -57,7 +59,8 @@ impl EncoderConfig {
       low_latency: true,
       quantizer: 100,
       tune: Tune::Psnr,
-      speed_settings: SpeedSettings::from_preset(speed)
+      speed_settings: SpeedSettings::from_preset(speed),
+      show_psnr: false,
     }
   }
 }
@@ -244,7 +247,9 @@ pub struct Packet {
   pub data: Vec<u8>,
   pub rec: Option<Frame>,
   pub number: u64,
-  pub frame_type: FrameType
+  pub frame_type: FrameType,
+  /// PSNR for Y, U, and V planes
+  pub psnr: Option<(f64, f64, f64)>,
 }
 
 impl fmt::Display for Packet {
@@ -563,14 +568,20 @@ impl Context {
 
       // TODO avoid the clone by having rec Arc.
       let rec = if self.fi.show_frame { Some(fs.rec.clone()) } else { None };
+      let mut psnr = None;
+      if self.fi.config.show_psnr {
+        if let Some(ref rec) = rec {
+          psnr = Some(calculate_frame_psnr(&*fs.input, rec, self.seq.bit_depth));
+        }
+      }
 
-      Ok(Packet { data, rec, number: self.fi.number, frame_type: self.fi.frame_type })
+      Ok(Packet { data, rec, number: self.fi.number, frame_type: self.fi.frame_type, psnr })
     } else {
       if let Some(f) = self.frame_q.remove(&self.fi.number) {
         self.idx += 1;
 
         if let Some(frame) = f {
-          let mut fs = FrameState::new_with_frame(&self.fi, frame);
+          let mut fs = FrameState::new_with_frame(&self.fi, frame.clone());
 
           let data = encode_frame(&mut self.seq, &mut self.fi, &mut fs);
           self.packet_data.extend(data);
@@ -585,7 +596,15 @@ impl Context {
           if self.fi.show_frame {
             let data = self.packet_data.clone();
             self.packet_data = Vec::new();
-            Ok(Packet { data, rec, number: self.fi.number, frame_type: self.fi.frame_type })
+
+            let mut psnr = None;
+            if self.fi.config.show_psnr {
+              if let Some(ref rec) = rec {
+                psnr = Some(calculate_frame_psnr(&*frame, rec, self.seq.bit_depth));
+              }
+            }
+
+            Ok(Packet { data, rec, number: self.fi.number, frame_type: self.fi.frame_type, psnr })
           } else {
             Err(EncoderStatus::NeedMoreData)
           }

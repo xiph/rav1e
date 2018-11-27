@@ -77,7 +77,8 @@ fn main() {
 
   let mut progress = ProgressInfo::new(
     framerate,
-    if cli.limit == 0 { None } else { Some(cli.limit) }
+    if cli.limit == 0 { None } else { Some(cli.limit) },
+      cfg.enc.show_psnr
   );
 
   ctx.set_frames_to_be_coded(cli.limit as u64);

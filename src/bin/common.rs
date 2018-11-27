@@ -100,6 +100,10 @@ pub fn parse_cli() -> CliOptions {
         .help("verbose logging, output info for every frame")
         .long("verbose")
         .short("v")
+    ).arg(
+      Arg::with_name("PSNR")
+        .help("calculate and display PSNR metrics")
+        .long("psnr")
     ).get_matches();
 
   let io = EncoderIO {
@@ -145,6 +149,7 @@ fn parse_config(matches: &ArgMatches) -> EncoderConfig {
   cfg.low_latency = matches.value_of("LOW_LATENCY").unwrap().parse().unwrap();
   cfg.tune = matches.value_of("TUNE").unwrap().parse().unwrap();
   cfg.quantizer = quantizer;
+  cfg.show_psnr = matches.is_present("PSNR");
   cfg
 }
 
@@ -153,7 +158,9 @@ pub struct FrameSummary {
   /// Frame size in bytes
   pub size: usize,
   pub number: u64,
-  pub frame_type: FrameType
+  pub frame_type: FrameType,
+  /// PSNR for Y, U, and V planes
+  pub psnr: Option<(f64, f64, f64)>,
 }
 
 impl From<Packet> for FrameSummary {
@@ -162,6 +169,7 @@ impl From<Packet> for FrameSummary {
       size: packet.data.len(),
       number: packet.number,
       frame_type: packet.frame_type,
+      psnr: packet.psnr,
     }
   }
 }
@@ -170,10 +178,13 @@ impl fmt::Display for FrameSummary {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(
       f,
-      "Frame {} - {} - {} bytes",
+      "Frame {} - {} - {} bytes{}",
       self.number,
       self.frame_type,
-      self.size
+      self.size,
+      if let Some(psnr) = self.psnr {
+        format!(" - PSNR: Y: {:.4}  Cb: {:.4}  Cr: {:.4}", psnr.0, psnr.1, psnr.2)
+      } else { String::new() }
     )
   }
 }
@@ -335,16 +346,19 @@ pub struct ProgressInfo {
   /// This value will be updated in the CLI very frequently, so we cache the previous value
   /// to reduce the overall complexity.
   encoded_size: usize,
+  /// Whether to display PSNR statistics during and at end of encode
+  show_psnr: bool,
 }
 
 impl ProgressInfo {
-  pub fn new(frame_rate: y4m::Ratio, total_frames: Option<usize>) -> Self {
+  pub fn new(frame_rate: y4m::Ratio, total_frames: Option<usize>, show_psnr: bool) -> Self {
     Self {
       frame_rate,
       total_frames,
       time_started: Instant::now(),
       frame_info: Vec::with_capacity(total_frames.unwrap_or_default()),
       encoded_size: 0,
+      show_psnr,
     }
   }
 
@@ -404,11 +418,20 @@ impl ProgressInfo {
     Key Frames: {:>6}    avg size: {:>7} B\n\
     Inter:      {:>6}    avg size: {:>7} B\n\
     Intra Only: {:>6}    avg size: {:>7} B\n\
-    Switch:     {:>6}    avg size: {:>7} B",
+    Switch:     {:>6}    avg size: {:>7} B\
+    {}",
       key, key_size / key,
       inter, inter_size.checked_div(inter).unwrap_or(0),
       ionly, ionly_size / key,
-      switch, switch_size / key
+      switch, switch_size / key,
+      if self.show_psnr {
+        let psnr_y = self.frame_info.iter().map(|fi| fi.psnr.unwrap().0).sum::<f64>() / self.frame_info.len() as f64;
+        let psnr_u = self.frame_info.iter().map(|fi| fi.psnr.unwrap().1).sum::<f64>() / self.frame_info.len() as f64;
+        let psnr_v = self.frame_info.iter().map(|fi| fi.psnr.unwrap().2).sum::<f64>() / self.frame_info.len() as f64;
+        format!("\nMean PSNR: Y: {:.4}  Cb: {:.4}  Cr: {:.4}  Avg: {:.4}",
+                psnr_y, psnr_u, psnr_v,
+                (psnr_y + psnr_u + psnr_v) / 3.0)
+      } else { String::new() }
     )
   }
 }
