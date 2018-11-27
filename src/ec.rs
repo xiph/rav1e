@@ -17,6 +17,7 @@ use bitstream_io::{BitWriter, BigEndian};
 use std;
 use std::io;
 use util::ILog;
+use util::msb;
 
 pub const OD_BITRES: u8 = 3;
 const EC_PROB_SHIFT: u32 = 6;
@@ -43,6 +44,16 @@ pub trait Writer {
   fn literal(&mut self, bits: u8, s: u32);
   /// Write passed level as a golomb code
   fn write_golomb(&mut self, level: u16);
+  /// Write a value v in [0, n-1] quasi-uniformly
+  fn write_quniform(&mut self, n: u32, v: u32);
+  /// Write symbol v in [0, n-1] with parameter k as finite subexponential
+  fn write_subexp(&mut self, n: u32, k: u8, v: u32);
+  /// Write symbol v in [0, n-1] with parameter k as finite
+  /// subexponential based on a reference ref also in [0, n-1].
+  fn write_unsigned_subexp_with_ref(&mut self, v: u32, mx: u32, k: u8, r: u32);
+  /// Write symbol v in [-(n-1), n-1] with parameter k as finite
+  /// subexponential based on a reference ref also in [-(n-1), n-1].
+  fn write_signed_subexp_with_ref(&mut self, v: i32, low: i32, high: i32, k: u8, r: i32);
   /// Return current length of range-coded bitstream in integer bits
   fn tell(&mut self) -> u32;
   /// Return currrent length of range-coded bitstream in fractional
@@ -344,6 +355,9 @@ impl<S> WriterBase<S> {
       }
     }
   }
+  fn recenter(r: u32, v: u32) -> u32 {
+    if v > (r << 1) {v} else if v >= r {v - r << 1} else {(r - v << 1) - 1}
+  }
 
   #[cfg(debug)]
   fn print_backtrace(&self, s: u32) {
@@ -513,6 +527,70 @@ where
       self.bit((x >> i) & 0x01);
     }
   }
+  /// Write a value v in [0, n-1] quasi-uniformly
+  /// n: size of interval
+  /// v: value to encode
+  fn write_quniform(&mut self, n: u32, v: u32) {
+    if n > 1 {
+      let l = msb(n as i32) as u8 + 1;
+      let m = (1 << l) - n;
+      if v < m {
+        self.literal(l-1, v);
+      } else {
+        self.literal(l-1, m + (v-m >> 1));
+        self.literal(1, (v-m) & 1);
+      }
+    }
+  }
+  /// Write symbol v in [0, n-1] with parameter k as finite subexponential
+  /// n: size of interval
+  /// k: 'parameter'
+  /// v: value to encode
+  fn write_subexp(&mut self, n: u32, k: u8, v: u32) {
+    let mut i = 0;
+    let mut mk = 0;
+    loop {
+      let b = if i != 0 {k + i - 1} else {k};
+      let a = 1 << b;
+      if n <= mk + 3 * a {
+        self.write_quniform(n - mk, v - mk);
+        break;
+      } else {
+        let t = v >= mk + a;
+        self.bool(t, 16384);
+        if t {
+          i += 1;
+          mk += a;
+        } else {
+          self.literal(b, v - mk);
+          break;
+        }
+      }
+    }
+  }
+  /// Write symbol v in [0, n-1] with parameter k as finite
+  /// subexponential based on a reference ref also in [0, n-1].
+  /// v: value to encode
+  /// n: size of interval
+  /// k: 'parameter'
+  /// r: reference
+  fn write_unsigned_subexp_with_ref(&mut self, v: u32, n: u32, k: u8, r: u32) {
+    if (r << 1) <= n {
+      self.write_subexp(n, k, Self::recenter(r, v));
+    } else {
+      self.write_subexp(n, k, Self::recenter(n-1-r, n-1-v));
+    }
+  }
+  /// Write symbol v in [-(n-1), n-1] with parameter k as finite
+  /// subexponential based on a reference ref also in [-(n-1), n-1].
+  /// v: value to encode
+  /// n: size of interval
+  /// k: 'parameter'
+  /// r: reference
+  fn write_signed_subexp_with_ref(&mut self, v: i32, low: i32, high: i32, k: u8, r: i32) {
+    self.write_unsigned_subexp_with_ref((v - low) as u32, (high - low) as u32, k, (r - low) as u32);
+  }
+
   /// Returns the number of bits "used" by the encoded symbols so far.
   /// This same number can be computed in either the encoder or the
   /// decoder, and is suitable for making coding decisions.  The value

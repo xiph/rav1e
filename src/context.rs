@@ -19,12 +19,12 @@
 use ec::Writer;
 use encoder::{FrameInvariants, ReferenceMode};
 use entropymode::*;
-use lrf::{WIENER_TAPS_MID, SGR_XQD_MID};
-use partition::*;
 use partition::BlockSize::*;
 use partition::PredictionMode::*;
 use partition::TxSize::*;
 use partition::TxType::*;
+use partition::*;
+use lrf::*;
 use plane::*;
 use scan_order::*;
 use token_cdfs::*;
@@ -717,6 +717,9 @@ pub struct CDFContext {
   deblock_delta_multi_cdf: [[u16; DELTA_LF_PROBS + 1 + 1]; FRAME_LF_COUNT],
   deblock_delta_cdf: [u16; DELTA_LF_PROBS + 1 + 1],
   spatial_segmentation_cdfs: [[u16; 8 + 1]; 3],
+  lrf_switchable_cdf: [u16; 3+1],
+  lrf_sgrproj_cdf: [u16; 2+1],
+  lrf_wiener_cdf: [u16; 2+1],
 
   // lv_map
   txb_skip_cdf: [[[u16; 3]; TXB_SKIP_CONTEXTS]; TxSize::TX_SIZES],
@@ -775,6 +778,9 @@ impl CDFContext {
       deblock_delta_multi_cdf: default_delta_lf_multi_cdf,
       deblock_delta_cdf: default_delta_lf_cdf,
       spatial_segmentation_cdfs: default_spatial_pred_seg_tree_cdf,
+      lrf_switchable_cdf: default_switchable_restore_cdf,
+      lrf_sgrproj_cdf: default_sgrproj_restore_cdf,
+      lrf_wiener_cdf: default_wiener_restore_cdf,
 
       // lv_map
       txb_skip_cdf: av1_default_txb_skip_cdfs[qctx],
@@ -850,6 +856,9 @@ impl CDFContext {
     reset_2d!(self.deblock_delta_multi_cdf);
     reset_1d!(self.deblock_delta_cdf);
     reset_2d!(self.spatial_segmentation_cdfs);
+    reset_1d!(self.lrf_switchable_cdf);
+    reset_1d!(self.lrf_sgrproj_cdf);
+    reset_1d!(self.lrf_wiener_cdf);
 
     reset_1d!(self.nmv_context.joints_cdf);
     for i in 0..2 {
@@ -951,6 +960,18 @@ impl CDFContext {
       self.spatial_segmentation_cdfs.first().unwrap().as_ptr() as usize;
     let spatial_segmentation_cdfs_end =
       spatial_segmentation_cdfs_start + size_of_val(&self.spatial_segmentation_cdfs);
+    let lrf_switchable_cdf_start =
+      self.lrf_switchable_cdf.as_ptr() as usize;
+    let lrf_switchable_cdf_end =
+      lrf_switchable_cdf_start + size_of_val(&self.lrf_switchable_cdf);
+    let lrf_sgrproj_cdf_start =
+      self.lrf_sgrproj_cdf.as_ptr() as usize;
+    let lrf_sgrproj_cdf_end =
+      lrf_sgrproj_cdf_start + size_of_val(&self.lrf_sgrproj_cdf);
+    let lrf_wiener_cdf_start =
+      self.lrf_wiener_cdf.as_ptr() as usize;
+    let lrf_wiener_cdf_end =
+      lrf_wiener_cdf_start + size_of_val(&self.lrf_wiener_cdf);
 
     let txb_skip_cdf_start =
       self.txb_skip_cdf.first().unwrap().as_ptr() as usize;
@@ -1024,6 +1045,9 @@ impl CDFContext {
       ("deblock_delta_multi_cdf", deblock_delta_multi_cdf_start, deblock_delta_multi_cdf_end),
       ("deblock_delta_cdf", deblock_delta_cdf_start, deblock_delta_cdf_end),
       ("spatial_segmentation_cdfs", spatial_segmentation_cdfs_start, spatial_segmentation_cdfs_end),
+      ("lrf_switchable_cdf", lrf_switchable_cdf_start, lrf_switchable_cdf_end),
+      ("lrf_sgrproj_cdf", lrf_sgrproj_cdf_start, lrf_sgrproj_cdf_end),
+      ("lrf_wiener_cdf", lrf_wiener_cdf_start, lrf_wiener_cdf_end),
       ("txb_skip_cdf", txb_skip_cdf_start, txb_skip_cdf_end),
       ("dc_sign_cdf", dc_sign_cdf_start, dc_sign_cdf_end),
       ("eob_extra_cdf", eob_extra_cdf_start, eob_extra_cdf_end),
@@ -1672,53 +1696,6 @@ impl BlockContext {
   }
 }
 
-#[derive(Copy, Clone)]
-pub enum RestorationFilter {
-  None,
-  Wiener { coeffs: [[i8; 2]; 3] },
-  Sgr { xqd: [i8; 2] },
-}
-
-impl RestorationFilter {
-  pub fn default() -> RestorationFilter {
-    RestorationFilter::None
-  }
-}
-
-#[derive(Copy, Clone)]
-pub struct RestorationUnit {
-  pub params: RestorationFilter,
-}
-
-impl RestorationUnit {
-  pub fn default() -> RestorationUnit {
-    RestorationUnit {
-      params: RestorationFilter::default()
-    }
-  }
-}
-
-#[derive(Clone, Default)]
-pub struct RestorationContext {
-  pub cols: usize,
-  pub rows: usize,
-  pub wiener_ref: [[[i8; 3]; 2]; PLANES],
-  pub sgr_ref: [[i8; 2]; PLANES],
-  pub units: Vec<Vec<Vec<RestorationUnit>>>
-}
-
-impl RestorationContext {
-  pub fn new(cols: usize, rows: usize) -> RestorationContext {
-    RestorationContext {
-      cols,
-      rows,
-      wiener_ref: [[WIENER_TAPS_MID; 2]; PLANES],
-      sgr_ref: [SGR_XQD_MID; PLANES],
-      units: vec![vec![vec![RestorationUnit::default(); cols]; rows]; PLANES]
-    }
-  }
-}
-
 #[derive(Copy, Clone, PartialEq)]
 pub enum CFLSign {
   CFL_SIGN_ZERO = 0,
@@ -1828,18 +1805,16 @@ pub struct ContextWriterCheckpoint {
 pub struct ContextWriter {
   pub bc: BlockContext,
   pub fc: CDFContext,
-  pub rc: RestorationContext,
   #[cfg(debug)]
   fc_map: Option<FieldMap> // For debugging purposes
 }
 
 impl ContextWriter {
-  pub fn new(fc: CDFContext, bc: BlockContext, rc: RestorationContext) -> Self {
+  pub fn new(fc: CDFContext, bc: BlockContext) -> Self {
     #[allow(unused_mut)]
     let mut cw = ContextWriter {
       fc,
       bc,
-      rc,
       #[cfg(debug)]
       fc_map: Default::default()
     };
@@ -3073,6 +3048,91 @@ impl ContextWriter {
     let seg_idx = self.bc.at(bo).segmentation_idx;
     let coded_id = self.neg_interleave(seg_idx as i32, pred as i32, (last_active_segid + 1) as i32);
     symbol_with_update!(self, w, coded_id as u32, &mut self.fc.spatial_segmentation_cdfs[cdf_index as usize]);
+  }
+
+  pub fn write_lrf(&mut self, w: &mut dyn Writer, fi: &FrameInvariants, rs: &mut RestorationState,
+                   sbo: &SuperBlockOffset) {
+    if !fi.allow_intrabc { // TODO: also disallow if lossless
+      for pli in 0..PLANES {
+        let code;
+        let rp = &mut rs.plane[pli];
+        {
+          let ru = &mut rp.restoration_unit_as_mut(sbo);
+          code = !ru.coded;
+          ru.coded = true;
+        }
+        if code {
+          match rp.restoration_unit_as_mut(sbo).filter {
+            RestorationFilter::None => {
+              match rp.lrf_type {
+                RESTORE_WIENER => {
+                  symbol_with_update!(self, w, 0, &mut self.fc.lrf_wiener_cdf);
+                }
+                RESTORE_SGRPROJ => {
+                  symbol_with_update!(self, w, 0, &mut self.fc.lrf_sgrproj_cdf);
+                }
+                RESTORE_SWITCHABLE => {
+                  symbol_with_update!(self, w, RESTORE_NONE as u32, &mut self.fc.lrf_switchable_cdf);
+                }
+                RESTORE_NONE => {}
+                _ => unreachable!()
+              }
+            }
+            RestorationFilter::Sgrproj{set, xqd} => {
+              match rs.lrf_type[pli] {
+                RESTORE_SGRPROJ => {
+                  symbol_with_update!(self, w, 1, &mut self.fc.lrf_sgrproj_cdf);
+                }
+                RESTORE_SWITCHABLE => {
+                  symbol_with_update!(self, w, RESTORE_SGRPROJ as u32, &mut self.fc.lrf_switchable_cdf);
+                }
+                _ => unreachable!()
+              }
+              w.literal(SGRPROJ_PARAMS_BITS, set as u32);
+              for i in 0..2 {
+                let r = SGRPROJ_PARAMS_RADIUS[set as usize][i];
+                let min = SGRPROJ_XQD_MIN[i] as i32;
+                let max = SGRPROJ_XQD_MAX[i] as i32;
+                if r>0 {
+                  w.write_signed_subexp_with_ref(xqd[i] as i32, min, max+1, SGRPROJ_PRJ_SUBEXP_K,
+                                                 rp.sgrproj_ref[i] as i32);
+                  rp.sgrproj_ref[i] = xqd[i];
+                } else {
+                  // Nothing written, just update the reference
+                  if i==0 {
+                    rp.sgrproj_ref[0] = 0;
+                  } else {
+                    rp.sgrproj_ref[1] =
+                      clamp((1 << SGRPROJ_PRJ_BITS) - rp.sgrproj_ref[0], min as i8, max as i8);
+                  }
+                }
+              }
+            }
+            RestorationFilter::Wiener{coeffs} => {
+              match rs.lrf_type[pli] {
+                RESTORE_WIENER => {
+                  symbol_with_update!(self, w, 1, &mut self.fc.lrf_wiener_cdf);
+                }
+                RESTORE_SWITCHABLE => {
+                  symbol_with_update!(self, w, RESTORE_WIENER as u32, &mut self.fc.lrf_switchable_cdf);
+                }
+                _ => unreachable!()
+              }
+              for pass in 0..2 {
+                let first_coeff = if pli==0 {0} else {1};
+                for i in first_coeff..3 {
+                  let min = WIENER_TAPS_MIN[i] as i32;
+                  let max = WIENER_TAPS_MAX[i] as i32;
+                  w.write_signed_subexp_with_ref(coeffs[pass][i] as i32, min, max+1, (i+1) as u8,
+                                                 rp.wiener_ref[pass][i] as i32);
+                  rp.wiener_ref[pass][i] = coeffs[pass][i];
+                }
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
   pub fn write_cdef(&mut self, w: &mut dyn Writer, strength_index: u8, bits: u8) {
