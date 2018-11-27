@@ -575,7 +575,6 @@ pub struct FrameInvariants {
     pub cdef_bits: u8,
     pub cdef_y_strengths: [u8; 8],
     pub cdef_uv_strengths: [u8; 8],
-    pub lrf_types: [u8; PLANES],
     pub delta_q_present: bool,
     pub config: EncoderConfig,
     pub ref_frames: [u8; INTER_REFS_PER_FRAME],
@@ -647,7 +646,6 @@ impl FrameInvariants {
             cdef_bits: 3,
             cdef_y_strengths: [0*4+0, 1*4+0, 2*4+1, 3*4+1, 5*4+2, 7*4+3, 10*4+3, 13*4+3],
             cdef_uv_strengths: [0*4+0, 1*4+0, 2*4+1, 3*4+1, 5*4+2, 7*4+3, 10*4+3, 13*4+3],
-            lrf_types: [RESTORE_NONE, RESTORE_NONE, RESTORE_NONE],
             delta_q_present: false,
             config,
             ref_frames: [0; INTER_REFS_PER_FRAME],
@@ -901,7 +899,8 @@ trait UncompressedHeader {
             -> io::Result<()>;
     fn write_sequence_header_obu(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
             -> io::Result<()>;
-    fn write_frame_header_obu(&mut self, seq: &Sequence, fi: &FrameInvariants, fs: &FrameState)
+    fn write_frame_header_obu(&mut self, seq: &Sequence, fi: &FrameInvariants, fs: &FrameState,
+                              rs: &RestorationState)
             -> io::Result<()>;
     fn write_sequence_header(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
                                     -> io::Result<()>;
@@ -912,7 +911,7 @@ trait UncompressedHeader {
     fn write_deblock_filter_a(&mut self, fi: &FrameInvariants, fs: &FrameState) -> io::Result<()>;
     fn write_deblock_filter_b(&mut self, fi: &FrameInvariants, fs: &FrameState) -> io::Result<()>;
     fn write_frame_cdef(&mut self, seq: &Sequence, fi: &FrameInvariants) -> io::Result<()>;
-    fn write_frame_lrf(&mut self, seq: &Sequence, fi: &FrameInvariants) -> io::Result<()>;
+    fn write_frame_lrf(&mut self, seq: &Sequence, fi: &FrameInvariants, rs: &RestorationState) -> io::Result<()>;
     fn write_segment_data(&mut self, fi: &FrameInvariants, fs: &FrameState) -> io::Result<()>;
     fn write_delta_q(&mut self, delta_q: i8) -> io::Result<()>;
 }
@@ -1088,7 +1087,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     }
 
 #[allow(unused)]
-    fn write_frame_header_obu(&mut self, seq: &Sequence, fi: &FrameInvariants, fs: &FrameState)
+    fn write_frame_header_obu(&mut self, seq: &Sequence, fi: &FrameInvariants, fs: &FrameState,
+                              rs: &RestorationState)
         -> io::Result<()> {
       if seq.reduced_still_picture_hdr {
         assert!(fi.show_existing_frame);
@@ -1337,7 +1337,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       self.write_frame_cdef(seq, fi)?;
 
       // loop restoration
-      self.write_frame_lrf(seq,fi)?;
+      self.write_frame_lrf(seq, fi, rs)?;
 
       self.write_bit(false)?; // tx mode == TX_MODE_SELECT ?
 
@@ -1497,34 +1497,30 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         Ok(())
     }
 
-    fn write_frame_lrf(&mut self, seq: &Sequence, fi: &FrameInvariants) -> io::Result<()> {
+    fn write_frame_lrf(&mut self, seq: &Sequence, fi: &FrameInvariants,
+                       rs: &RestorationState) -> io::Result<()> {
       if seq.enable_restoration && !fi.allow_intrabc { // && !self.lossless
         let mut use_lrf = false;
         let mut use_chroma_lrf = false;
         for i in 0..PLANES {
-          self.write(2,fi.lrf_types[i])?; // filter type by plane
-          if fi.lrf_types[i] != RESTORE_NONE {
+          self.write(2,rs.lrf_type[i])?; // filter type by plane
+          if rs.lrf_type[i] != RESTORE_NONE {
             use_lrf = true;
             if i > 0 { use_chroma_lrf = true; }
           }
         }
         if use_lrf {
-          // At present, we're locked to a restoration unit size equal to superblock size.
-          // Signal as such.
-          if seq.use_128x128_superblock {
-            self.write(1,0)?; // do not double the restoration unit from 128x128
-          } else {
-            self.write(1,0)?; // do not double the restoration unit from 64x64
+          // The Y shift value written here indicates shift up from superblock size
+          if !seq.use_128x128_superblock {
+            self.write(1, if rs.unit_size[0] > 64 {1} else {0})?;
+          }
+          if rs.unit_size[0] > 64 {
+            self.write(1, if rs.unit_size[0] > 128 {1} else {0})?;
           }
 
           if use_chroma_lrf {
-            // until we're able to support restoration units larger than
-            // the chroma superblock size, we can't perform LRF for
-            // anything other than 4:4:4 and 4:2:0
-            assert!(seq.chroma_sampling == ChromaSampling::Cs444 ||
-                   seq.chroma_sampling == ChromaSampling::Cs420);
             if seq.chroma_sampling == ChromaSampling::Cs420 {
-              self.write(1,1)?; // halve the chroma restoration unit in both directions
+              self.write(1, if rs.unit_size[0] > rs.unit_size[1] {1} else {0})?;
             }
           }
         }
@@ -1615,13 +1611,14 @@ fn aom_uleb_encode(mut value: u64, coded_value: &mut [u8]) -> usize {
 }
 
 fn write_obus(packet: &mut dyn io::Write, sequence: &mut Sequence,
-                            fi: &mut FrameInvariants, fs: &FrameState) -> io::Result<()> {
+              fi: &mut FrameInvariants, fs: &FrameState, rs: &RestorationState)
+         -> io::Result<()> {
     //let mut uch = BitWriter::endian(packet, BigEndian);
     let obu_extension = 0 as u32;
 
     let mut buf1 = Vec::new();
     {
-        let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
+      let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
       bw1.write_obu_header(OBU_Type::OBU_TEMPORAL_DELIMITER, obu_extension)?;
       bw1.write(8,0)?;	// size of payload == 0, one byte
     }
@@ -1664,7 +1661,7 @@ fn write_obus(packet: &mut dyn io::Write, sequence: &mut Sequence,
     let mut buf2 = Vec::new();
     {
         let mut bw2 = BitWriter::endian(&mut buf2, BigEndian);
-        bw2.write_frame_header_obu(sequence, fi, fs)?;
+        bw2.write_frame_header_obu(sequence, fi, fs, rs)?;
     }
 
     {
@@ -2571,7 +2568,8 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
     }
 }
 
-fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameState, bit_depth: usize) -> Vec<u8> {
+fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameState,
+               rs: &mut RestorationState, bit_depth: usize) -> Vec<u8> {
     let mut w = WriterEncoder::new();
 
     let fc = if fi.primary_ref_frame == PRIMARY_REF_NONE {
@@ -2585,8 +2583,7 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
 
     let bc = BlockContext::new(fi.w_in_b, fi.h_in_b);
     // For now, restoration unit size is locked to superblock size.
-    let rc = RestorationContext::new(fi.sb_width, fi.sb_height);
-    let mut cw = ContextWriter::new(fc, bc, rc);
+    let mut cw = ContextWriter::new(fc, bc);
 
     // initial coarse ME loop
     let mut frame_pmvs = Vec::new();
@@ -2685,6 +2682,8 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
 
             // loop restoration must be decided last but coded before anything else
             if sequence.enable_restoration {
+                rs.lrf_optimize_superblock(&sbo, fi, fs, &mut cw, bit_depth);
+                cw.write_lrf(&mut w, fi, rs, &sbo);
             }
 
             // Once loop restoration is coded, we can replay the initial block bits
@@ -2703,9 +2702,19 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
     if fs.deblock.levels[0] != 0 || fs.deblock.levels[1] != 0 {
         deblock_filter_frame(fs, &mut cw.bc, bit_depth);
     }
-    /* TODO: Don't apply if lossless */
-    if sequence.enable_cdef {
+    {
+      // Until the loop filters are pipelined, we'll need to keep
+      // around a copy of both the pre- and post-cdef frame.
+      let pre_cdef_frame = fs.rec.clone();
+
+      /* TODO: Don't apply if lossless */
+      if sequence.enable_cdef {
         cdef_filter_frame(fi, &mut fs.rec, &mut cw.bc, bit_depth);
+      }
+      /* TODO: Don't apply if lossless */
+      if sequence.enable_restoration {
+        rs.lrf_filter_frame(fs, &pre_cdef_frame, &cw.bc, bit_depth);
+      }
     }
 
     fs.cdfs = cw.fc;
@@ -2730,9 +2739,10 @@ fn write_tile_group_header(tile_start_and_end_present_flag: bool) ->
 
 pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
     let mut packet = Vec::new();
+    let mut rs = RestorationState::new(sequence, &fs.input);
     if fi.show_existing_frame {
         //write_uncompressed_header(&mut packet, sequence, fi).unwrap();
-        write_obus(&mut packet, sequence, fi, fs).unwrap();
+        write_obus(&mut packet, sequence, fi, fs, &rs).unwrap();
         match fi.rec_buffer.frames[fi.frame_to_show_map_idx as usize] {
             Some(ref rec) => for p in 0..3 {
                 fs.rec.planes[p].data.copy_from_slice(rec.frame.planes[p].data.as_slice());
@@ -2763,10 +2773,10 @@ pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut 
 
         segmentation_optimize(fi, fs);
 
-        let tile = encode_tile(sequence, fi, fs, bit_depth); // actually tile group
+        let tile = encode_tile(sequence, fi, fs, &mut rs, bit_depth); // actually tile group
 
         //write_uncompressed_header(&mut packet, sequence, fi).unwrap();
-        write_obus(&mut packet, sequence, fi, fs).unwrap();
+        write_obus(&mut packet, sequence, fi, fs, &rs).unwrap();
         let mut buf1 = Vec::new();
         {
             let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
