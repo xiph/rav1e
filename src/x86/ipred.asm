@@ -68,7 +68,9 @@ ipred_h_shuf: db  7,  7,  7,  7,  3,  3,  3,  3,  5,  5,  5,  5,  1,  1,  1,  1
               db  6,  6,  6,  6,  2,  2,  2,  2,  4,  4,  4,  4,  0,  0,  0,  0
 
 pb_1:   times 4 db 1
+pb_2:   times 4 db 2
 pb_128: times 4 db 128
+pw_1:   times 2 dw 1
 pw_8:   times 2 dw 8
 pw_128: times 2 dw 128
 pw_255: times 2 dw 255
@@ -1781,6 +1783,101 @@ cglobal ipred_cfl_128, 3, 7, 6, dst, stride, tl, w, h, ac, alpha
     add                  wq, t0
     movifnidn           acq, acmp
     jmp                  wq
+
+cglobal ipred_cfl_ac_420, 6, 10, 5, ac, y, stride, wpad, hpad, w, h
+    shl               wpadd, 2
+    shl               hpadd, 2
+    mov                 r9d, hm
+    mov                 r6d, wd
+    movsxd               wq, wd
+    add                  yq, strideq
+    mov                  r7, acq
+    sub                 r6d, wpadd
+    sub                 r9d, hpadd
+    mov                 r8d, r9d
+    vpbroadcastd        xm2, [pb_2]
+.dec_rows:
+    mov                  r3, yq
+    xor                  r4, r4
+    sub                  r3, strideq
+.dec_cols:
+    movq                xm0, [r3+r4*2]
+    movq                xm1, [yq+r4*2]
+    pmaddubsw           xm0, xm2
+    pmaddubsw           xm1, xm2
+    paddw               xm0, xm1
+    movq          [r7+r4*2], xm0
+    add                  r4, 4
+    cmp                 r6d, r4d
+    jg .dec_cols
+    lea                  r7, [r7+wq*2]
+    lea                  yq, [yq+strideq*2]
+    dec                 r8d
+    jg .dec_rows
+    cmp                 r6d, wd
+    je .wpad_end
+    mov                  r7, acq
+    lea                  r1, [r6q+r6q]
+.wpad_rows:
+    vpbroadcastw        xm0, [r7+r1-2]
+    mov                 r2q, r6q
+.wpad_cols:
+    movq         [r7+r2q*2], xm0
+    add                 r2q, 4
+    cmp                  wd, r2d
+    jg .wpad_cols
+    lea                  r7, [r7+wq*2]
+    dec                 r9d
+    jg .wpad_rows
+.wpad_end:
+    bsf                 r3d, hm
+    shlx                r6d, wd, r3d
+    neg                  wd
+    bsf                 r3d, r6d
+    movsxd               wq, wd
+    add                  wq, wq
+    movsxd              r2q, r6d
+    lea                 r2q, [acq+r2q*2]
+.hpad_loop:
+    cmp                 r2q, r7
+    jbe .hpad_end
+    mov                  r1, [r7+wq]
+    add                  r7, 8
+    mov              [r7-8], r1
+    jmp .hpad_loop
+.hpad_end:
+    mov                  r1, acq
+    pxor                 m1, m1
+    vpbroadcastd         m3, [pw_1]
+.sum_loop:
+    movdqu               m0, [r1]
+    add                  r1, 32
+    cmp                 r2q, r1
+    pmaddwd              m0, m3
+    paddd                m1, m0
+    ja .sum_loop
+    vextracti128        xm0, m1, 1
+    sar                 r6d, 1
+    movd                xm4, r6d
+    mov                 r6d, r3d
+    paddd               xm0, xm1
+    punpckhqdq          xm1, xm0, xm0
+    paddd               xm1, xm0
+    vbroadcastss        xm0, xm4
+    psrlq               xm2, xm1, 32
+    movq                xm4, r6q
+    paddd               xm0, xm2
+    paddd               xm0, xm1
+    psrld               xm0, xm4
+    vpbroadcastw         m0, xm0
+.sub_loop:
+    movdqu               m1, [acq]
+    add                 acq, 32
+    psubw                m1, m0
+    movdqu         [acq-32], m1
+    cmp                 r2q, acq
+    ja .sub_loop
+    RET
 
 cglobal pal_pred, 4, 6, 5, dst, stride, pal, idx, w, h
     vbroadcasti128       m4, [palq]
