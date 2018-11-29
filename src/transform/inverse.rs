@@ -1536,7 +1536,7 @@ trait InvTxfm2D: Dim {
     // perform inv txfm on every col
     let range = cmp::max(bd + 6, 16);
     let txfm_fn = INV_TXFM_FNS[tx_types_1d.0 as usize][Self::H.ilog() - 3];
-    for c in 0..Self::H {
+    for c in 0..Self::W {
       let mut temp_in: [i32; 64] = [0; 64];
       let mut temp_out: [i32; 64] = [0; 64];
       for (raw, clamped) in
