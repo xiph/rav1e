@@ -1518,6 +1518,7 @@ trait InvTxfm2D: Dim {
     bd: usize
   ) where T: Pixel, i32: AsPrimitive<T> {
     let buffer = &mut [0i32; 64 * 64][..Self::W * Self::H];
+    let rect_type = get_rect_tx_log_ratio(Self::W, Self::H);
     let tx_types_1d = get_1d_tx_types(tx_type)
       .expect("TxType not supported by rust txfm code.");
     // perform inv txfm on every row
@@ -1528,7 +1529,11 @@ trait InvTxfm2D: Dim {
     {
       let mut temp_in: [i32; 64] = [0; 64];
       for (raw, clamped) in input_slice.iter().zip(temp_in.iter_mut()) {
-        *clamped = clamp_value(*raw, range);
+        let mut val = *raw;
+        if rect_type.abs() == 1 {
+          val = round_shift(*raw * INV_SQRT2, SQRT2_BITS);
+        }
+        *clamped = clamp_value(val, range);
       }
       txfm_fn(&temp_in, buffer_slice, range);
     }
