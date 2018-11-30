@@ -29,9 +29,11 @@
 
 SECTION_RODATA 16
 
+pb_64:   times 16 db 64
 pw_8:    times 8 dw 8
 pw_26:   times 8 dw 26
 pw_258:  times 8 dw 258
+pw_512:  times 8 dw 512
 pw_1024: times 8 dw 1024
 pw_2048: times 8 dw 2048
 
@@ -52,6 +54,7 @@ BIDIR_JMP_TABLE avg_ssse3,        4, 8, 16, 32, 64, 128
 BIDIR_JMP_TABLE w_avg_ssse3,      4, 8, 16, 32, 64, 128
 BIDIR_JMP_TABLE mask_ssse3,       4, 8, 16, 32, 64, 128
 BIDIR_JMP_TABLE w_mask_420_ssse3, 4, 8, 16, 16, 16, 16
+BIDIR_JMP_TABLE blend_ssse3,      4, 8, 16, 32
 
 SECTION .text
 
@@ -427,3 +430,92 @@ cglobal w_mask_420, 4, 7, 8, dst, stride, tmp1, tmp2, w, mask, stride3
 %undef loop_w
 %undef orig_w
 %undef hd
+
+%macro BLEND 2; a, b
+    psubb                m3, m4, m0 ; m3 = (64 - m)
+    punpcklbw            m2, m3, m0 ; {m;(64-m)}[7..0]
+    punpckhbw            m3, m0     ; {m;(64-m)}[15..8]
+    punpcklbw            m0, %1, %2 ; {b;a}[7..0]
+    punpckhbw            %1, %2     ; {b;a}[15..8]
+    pmaddubsw            m0, m2     ; {b*m + (64-m)*a}[7..0] u16
+    pmaddubsw            %1, m3     ; {b*m + (64-m)*a}[15..8] u16
+    pmulhrsw             m0, m5     ; {((b*m + (64-m)*a) + 1) / 32}[7..0] u16
+    pmulhrsw             %1, m5     ; {((b*m + (64-m)*a) + 1) / 32}[15..8] u16
+    packuswb             m0, %1     ; {blendpx}[15..0] u8
+%endmacro
+
+cglobal blend, 3, 7, 7, dst, ds, tmp, w, h, mask
+%define base r6-blend_ssse3_table
+    lea                  r6, [blend_ssse3_table]
+    tzcnt                wd, wm
+    movifnidn            hd, hm
+    movifnidn         maskq, maskmp
+    movsxd               wq, dword [r6+wq*4]
+    mova                 m4, [base+pb_64]
+    mova                 m5, [base+pw_512]
+    add                  wq, r6
+    lea                  r6, [dsq*3]
+    jmp                  wq
+.w4:
+    movq                 m0, [maskq]; m
+    movd                 m1, [dstq+dsq*0] ; a
+    movd                 m6, [dstq+dsq*1]
+    punpckldq            m1, m6
+    movq                 m6, [tmpq] ; b
+    psubb                m3, m4, m0 ; m3 = (64 - m)
+    punpcklbw            m2, m3, m0 ; {m;(64-m)}[7..0]
+    punpcklbw            m1, m6    ; {b;a}[7..0]
+    pmaddubsw            m1, m2    ; {b*m[0] + (64-m[0])*a}[7..0] u16
+    pmulhrsw             m1, m5    ; {((b*m[0] + (64-m[0])*a) + 1) / 32}[7..0] u16
+    packuswb             m1, m0    ; {blendpx}[15..0] u8
+    movd       [dstq+dsq*0], m1
+    psrlq                m1, 32
+    movd       [dstq+dsq*1], m1
+    add               maskq, 8
+    add                tmpq, 8
+    lea                dstq, [dstq+dsq*2] ; dst_stride * 2
+    sub                  hd, 2
+    jg .w4
+    RET
+.w8:
+    mova                 m0, [maskq]; m
+    movq                 m1, [dstq+dsq*0] ; a
+    movhps               m1, [dstq+dsq*1]
+    mova                 m6, [tmpq] ; b
+    BLEND                m1, m6
+    movq       [dstq+dsq*0], m0
+    movhps     [dstq+dsq*1], m0
+    add               maskq, 16
+    add                tmpq, 16
+    lea                dstq, [dstq+dsq*2] ; dst_stride * 2
+    sub                  hd, 2
+    jg .w8
+    RET
+.w16:
+    mova                 m0, [maskq]; m
+    mova                 m1, [dstq] ; a
+    mova                 m6, [tmpq] ; b
+    BLEND                m1, m6
+    mova             [dstq], m0
+    add               maskq, 16
+    add                tmpq, 16
+    add                dstq, dsq ; dst_stride
+    dec                  hd
+    jg .w16
+    RET
+.w32:
+    %assign i 0
+    %rep 2
+    mova                 m0, [maskq+16*i]; m
+    mova                 m1, [dstq+16*i] ; a
+    mova                 m6, [tmpq+16*i] ; b
+    BLEND                m1, m6
+    mova        [dstq+i*16], m0
+    %assign i i+1
+    %endrep
+    add               maskq, 32
+    add                tmpq, 32
+    add                dstq, dsq ; dst_stride
+    dec                  hd
+    jg .w32
+    RET
