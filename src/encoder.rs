@@ -26,7 +26,7 @@ use me::*;
 use bitstream_io::{BitWriter, BigEndian, LittleEndian};
 use std;
 use std::io;
-use std::io::*;
+use std::io::Write;
 use std::rc::Rc;
 
 extern {
@@ -149,7 +149,7 @@ pub struct ReferenceFrame {
   pub cdfs: CDFContext
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ReferenceFramesSet {
     pub frames: [Option<Rc<ReferenceFrame>>; (REF_FRAMES as usize)],
     pub deblock: [DeblockState; (REF_FRAMES as usize)]
@@ -495,7 +495,7 @@ impl Default for SegmentationState {
 
 // Frame Invariants are invariant inside a frame
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FrameInvariants {
     pub width: usize,
     pub height: usize,
@@ -548,6 +548,7 @@ pub struct FrameInvariants {
     pub base_q_idx: u8,
     pub me_range_scale: u8,
     pub use_tx_domain_distortion: bool,
+    pub inter_cfg: Option<InterPropsConfig>,
 }
 
 impl FrameInvariants {
@@ -617,14 +618,187 @@ impl FrameInvariants {
             base_q_idx: config.quantizer as u8,
             me_range_scale: 1,
             use_tx_domain_distortion: use_tx_domain_distortion,
+            inter_cfg: None,
         }
     }
+
+  pub fn new_key_frame(previous_fi: &Self, segment_start_frame: u64) -> Self {
+    let mut fi = previous_fi.clone();
+    fi.frame_type = FrameType::KEY;
+    fi.intra_only = true;
+    fi.inter_cfg = None;
+    fi.order_hint = 0;
+    fi.refresh_frame_flags = ALL_REF_FRAMES_MASK;
+    fi.show_frame = true;
+    fi.show_existing_frame = false;
+    fi.frame_to_show_map_idx = 0;
+    let q_boost = 15;
+    fi.base_q_idx = (fi.config.quantizer.max(1 + q_boost).min(255 + q_boost) - q_boost) as u8;
+    fi.primary_ref_frame = PRIMARY_REF_NONE;
+    fi.number = segment_start_frame;
+    for i in 0..INTER_REFS_PER_FRAME {
+      fi.ref_frames[i] = 0;
+    }
+    fi
+  }
+
+  fn apply_inter_props_cfg(&mut self, idx_in_segment: u64) {
+    let reorder = !self.config.low_latency;
+    let multiref = reorder || self.config.speed_settings.multiref;
+
+    let pyramid_depth = if reorder { 2 } else { 0 };
+    let group_src_len = 1 << pyramid_depth;
+    let group_len = group_src_len + if reorder { pyramid_depth } else { 0 };
+
+    let idx_in_group = (idx_in_segment - 1) % group_len;
+    let group_idx = (idx_in_segment - 1) / group_len;
+
+    self.inter_cfg = Some(InterPropsConfig {
+      reorder,
+      multiref,
+      pyramid_depth,
+      group_src_len,
+      group_len,
+      idx_in_group,
+      group_idx,
+    })
+  }
+
+  /// Returns the created FrameInvariants along with a bool indicating success.
+  /// This interface provides simpler usage, because we always need the produced
+  /// FrameInvariants regardless of success or failure.
+  pub fn new_inter_frame(previous_fi: &Self, segment_start_frame: u64, idx_in_segment: u64, next_keyframe: u64) -> (Self, bool) {
+    let mut fi = previous_fi.clone();
+    fi.frame_type = FrameType::INTER;
+    fi.intra_only = false;
+    fi.apply_inter_props_cfg(idx_in_segment);
+    let inter_cfg = fi.inter_cfg.unwrap();
+
+    fi.order_hint = (inter_cfg.group_src_len * inter_cfg.group_idx +
+      if inter_cfg.reorder && inter_cfg.idx_in_group < inter_cfg.pyramid_depth {
+        inter_cfg.group_src_len >> inter_cfg.idx_in_group
+      } else {
+        inter_cfg.idx_in_group - inter_cfg.pyramid_depth + 1
+      }) as u32;
+    let number = segment_start_frame + fi.order_hint as u64;
+    if number >= next_keyframe {
+      fi.show_existing_frame = false;
+      fi.show_frame = false;
+      return (fi, false);
+    }
+
+    fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
+      // Derive level within pyramid for a frame with a given coding order position
+      // For example, with a pyramid of depth 2, the 2 least significant bits of the
+      // position determine the level:
+      // 00 -> 0
+      // 01 -> 2
+      // 10 -> 1
+      // 11 -> 2
+      pyramid_depth - (pos | (1 << pyramid_depth)).trailing_zeros() as u64
+    }
+
+    let lvl = if !inter_cfg.reorder {
+      0
+    } else if inter_cfg.idx_in_group < inter_cfg.pyramid_depth {
+      inter_cfg.idx_in_group
+    } else {
+      pos_to_lvl(inter_cfg.idx_in_group - inter_cfg.pyramid_depth + 1, inter_cfg.pyramid_depth)
+    };
+
+    // Frames with lvl == 0 are stored in slots 0..4 and frames with higher values
+    // of lvl in slots 4..8
+    let slot_idx = if lvl == 0 {
+      (fi.order_hint >> inter_cfg.pyramid_depth) % 4 as u32
+    } else {
+      3 + lvl as u32
+    };
+    fi.show_frame = !inter_cfg.reorder || inter_cfg.idx_in_group >= inter_cfg.pyramid_depth;
+    fi.show_existing_frame = fi.show_frame && inter_cfg.reorder &&
+      (inter_cfg.idx_in_group - inter_cfg.pyramid_depth + 1).count_ones() == 1 &&
+      inter_cfg.idx_in_group != inter_cfg.pyramid_depth;
+    fi.frame_to_show_map_idx = slot_idx;
+    fi.refresh_frame_flags = if fi.show_existing_frame {
+      0
+    } else {
+      1 << slot_idx
+    };
+
+    let q_drop = 15 * lvl as usize;
+    fi.base_q_idx = (fi.config.quantizer.min(255 - q_drop) + q_drop) as u8;
+
+    let second_ref_frame = if !inter_cfg.multiref {
+      NONE_FRAME
+    } else if !inter_cfg.reorder || inter_cfg.idx_in_group == 0 {
+      LAST2_FRAME
+    } else {
+      ALTREF_FRAME
+    };
+    let ref_in_previous_group = LAST3_FRAME;
+
+    // reuse probability estimates from previous frames only in top level frames
+    fi.primary_ref_frame = if lvl > 0 { PRIMARY_REF_NONE } else { (ref_in_previous_group - LAST_FRAME) as u32 };
+
+    for i in 0..INTER_REFS_PER_FRAME {
+      fi.ref_frames[i] = if lvl == 0 {
+        if i == second_ref_frame - LAST_FRAME {
+          (slot_idx + 4 - 2) as u8 % 4
+        } else {
+          (slot_idx + 4 - 1) as u8 % 4
+        }
+      } else {
+        if i == second_ref_frame - LAST_FRAME {
+          let oh = fi.order_hint + (inter_cfg.group_src_len as u32 >> lvl);
+          let lvl2 = pos_to_lvl(oh as u64, inter_cfg.pyramid_depth);
+          if lvl2 == 0 {
+            ((oh >> inter_cfg.pyramid_depth) % 4) as u8
+          } else {
+            3 + lvl2 as u8
+          }
+        } else if i == ref_in_previous_group - LAST_FRAME {
+          if lvl == 0 {
+            (slot_idx + 4 - 1) as u8 % 4
+          } else {
+            slot_idx as u8
+          }
+        } else {
+          let oh = fi.order_hint - (inter_cfg.group_src_len as u32 >> lvl);
+          let lvl1 = pos_to_lvl(oh as u64, inter_cfg.pyramid_depth);
+          if lvl1 == 0 {
+            ((oh >> inter_cfg.pyramid_depth) % 4) as u8
+          } else {
+            3 + lvl1 as u8
+          }
+        }
+      }
+    }
+
+    fi.reference_mode = if inter_cfg.multiref && inter_cfg.reorder && inter_cfg.idx_in_group != 0 {
+      ReferenceMode::SELECT
+    } else {
+      ReferenceMode::SINGLE
+    };
+    fi.number = number;
+    fi.me_range_scale = (inter_cfg.group_src_len >> lvl) as u8;
+    (fi, true)
+  }
 }
 
 impl fmt::Display for FrameInvariants{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Frame {} - {}", self.number, self.frame_type)
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct InterPropsConfig {
+  pub reorder: bool,
+  pub multiref: bool,
+  pub pyramid_depth: u64,
+  pub group_src_len: u64,
+  pub group_len: u64,
+  pub idx_in_group: u64,
+  pub group_idx: u64,
 }
 
 #[allow(dead_code,non_camel_case_types)]
@@ -640,7 +814,7 @@ pub enum FrameType {
 //const REFERENCE_MODES: usize = 3;
 
 #[allow(dead_code,non_camel_case_types)]
-#[derive(Debug,PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ReferenceMode {
   SINGLE = 0,
   COMPOUND = 1,
