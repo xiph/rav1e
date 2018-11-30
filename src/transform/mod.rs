@@ -23,7 +23,8 @@ mod forward;
 mod inverse;
 
 static SQRT2_BITS: usize = 12;
-static SQRT2: i32 = 5793;
+static SQRT2: i32 = 5793;       // 2^12 * sqrt(2)
+static INV_SQRT2: i32 = 2896;   // 2^12 / sqrt(2)
 
 static COS_BIT_MIN: usize = 10;
 
@@ -111,23 +112,23 @@ fn sinpi_arr(n: usize) -> &'static [i32; 5] {
 
 /// Utility function that returns the log of the ratio of the col and row sizes.
 #[inline]
-fn get_rect_tx_log_ratio(col: usize, row: usize) -> i8 {
+pub fn get_rect_tx_log_ratio(col: usize, row: usize) -> i8 {
   if col == row {
-    return 0;
+    return 0
   }
   if col > row {
     if col == row * 2 {
-      return 1;
+      return 1
     }
     if col == row * 4 {
-      return 2;
+      return 2
     }
   }
   if row == col * 2 {
-    return -1;
+    return -1
   }
   if row == col * 4 {
-    return -2;
+    return -2
   }
 
   panic!("Unsupported transform size");
