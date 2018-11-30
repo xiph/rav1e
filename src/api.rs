@@ -264,22 +264,6 @@ impl fmt::Display for Packet {
   }
 }
 
-#[derive(Debug, Clone, Copy)]
-enum FramePropsStatus {
-  FramePastSegmentEnd,
-}
-
-#[derive(Debug, Clone, Copy)]
-struct InterPropsConfig {
-  reorder: bool,
-  multiref: bool,
-  pyramid_depth: u64,
-  group_src_len: u64,
-  group_len: u64,
-  idx_in_group: u64,
-  group_idx: u64,
-}
-
 impl Context {
   pub fn new_frame(&self) -> Arc<Frame> {
     Arc::new(Frame::new(self.fi.padded_w, self.fi.padded_h))
@@ -338,45 +322,6 @@ impl Context {
     sequence_header_inner(&self.seq).unwrap()
   }
 
-  fn setup_key_frame_properties(&mut self) {
-    self.fi.frame_type = FrameType::KEY;
-    self.fi.intra_only = true;
-    self.fi.order_hint = 0;
-    self.fi.refresh_frame_flags = ALL_REF_FRAMES_MASK;
-    self.fi.show_frame = true;
-    self.fi.show_existing_frame = false;
-    self.fi.frame_to_show_map_idx = 0;
-    let q_boost = 15;
-    self.fi.base_q_idx = (self.fi.config.quantizer.max(1 + q_boost).min(255 + q_boost) - q_boost) as u8;
-    self.fi.primary_ref_frame = PRIMARY_REF_NONE;
-    self.fi.number = self.segment_start_frame;
-    for i in 0..INTER_REFS_PER_FRAME {
-      self.fi.ref_frames[i] = 0;
-    }
-  }
-
-  fn get_inter_props_cfg(&mut self, idx_in_segment: u64) -> InterPropsConfig {
-    let reorder = !self.fi.config.low_latency;
-    let multiref = reorder || self.fi.config.speed_settings.multiref;
-
-    let pyramid_depth = if reorder { 2 } else { 0 };
-    let group_src_len = 1 << pyramid_depth;
-    let group_len = group_src_len + if reorder { pyramid_depth } else { 0 };
-
-    let idx_in_group = (idx_in_segment - 1) % group_len;
-    let group_idx = (idx_in_segment - 1) / group_len;
-
-    InterPropsConfig {
-      reorder,
-      multiref,
-      pyramid_depth,
-      group_src_len,
-      group_len,
-      idx_in_group,
-      group_idx,
-    }
-  }
-
   fn next_keyframe(&self) -> u64 {
     let next_detected = self.frame_types.iter()
       .find(|(&i, &ty)| ty == FrameType::KEY && i > self.segment_start_frame)
@@ -388,123 +333,10 @@ impl Context {
     cmp::min(next_detected.unwrap(), next_limit)
   }
 
-  fn setup_inter_frame_properties(&mut self, cfg: &InterPropsConfig) -> Result<(), FramePropsStatus> {
-    self.fi.frame_type = FrameType::INTER;
-    self.fi.intra_only = false;
-
-    self.fi.order_hint = (cfg.group_src_len * cfg.group_idx +
-      if cfg.reorder && cfg.idx_in_group < cfg.pyramid_depth {
-        cfg.group_src_len >> cfg.idx_in_group
-      } else {
-        cfg.idx_in_group - cfg.pyramid_depth + 1
-      }) as u32;
-    let number = self.segment_start_frame + self.fi.order_hint as u64;
-    if number >= self.next_keyframe() {
-      self.fi.show_existing_frame = false;
-      self.fi.show_frame = false;
-      return Err(FramePropsStatus::FramePastSegmentEnd);
-    }
-
-    fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
-      // Derive level within pyramid for a frame with a given coding order position
-      // For example, with a pyramid of depth 2, the 2 least significant bits of the
-      // position determine the level:
-      // 00 -> 0
-      // 01 -> 2
-      // 10 -> 1
-      // 11 -> 2
-      pyramid_depth - (pos | (1 << pyramid_depth)).trailing_zeros() as u64
-    }
-
-    let lvl = if !cfg.reorder {
-      0
-    } else if cfg.idx_in_group < cfg.pyramid_depth {
-      cfg.idx_in_group
-    } else {
-      pos_to_lvl(cfg.idx_in_group - cfg.pyramid_depth + 1, cfg.pyramid_depth)
-    };
-
-    // Frames with lvl == 0 are stored in slots 0..4 and frames with higher values
-    // of lvl in slots 4..8
-    let slot_idx = if lvl == 0 {
-      (self.fi.order_hint >> cfg.pyramid_depth) % 4 as u32
-    } else {
-      3 + lvl as u32
-    };
-    self.fi.show_frame = !cfg.reorder || cfg.idx_in_group >= cfg.pyramid_depth;
-    self.fi.show_existing_frame = self.fi.show_frame && cfg.reorder &&
-      (cfg.idx_in_group - cfg.pyramid_depth + 1).count_ones() == 1 &&
-      cfg.idx_in_group != cfg.pyramid_depth;
-    self.fi.frame_to_show_map_idx = slot_idx;
-    self.fi.refresh_frame_flags = if self.fi.show_existing_frame {
-      0
-    } else {
-      1 << slot_idx
-    };
-
-    let q_drop = 15 * lvl as usize;
-    self.fi.base_q_idx = (self.fi.config.quantizer.min(255 - q_drop) + q_drop) as u8;
-
-    let second_ref_frame = if !cfg.multiref {
-      NONE_FRAME
-    } else if !cfg.reorder || cfg.idx_in_group == 0 {
-      LAST2_FRAME
-    } else {
-      ALTREF_FRAME
-    };
-    let ref_in_previous_group = LAST3_FRAME;
-
-    // reuse probability estimates from previous frames only in top level frames
-    self.fi.primary_ref_frame = if lvl > 0 { PRIMARY_REF_NONE } else { (ref_in_previous_group - LAST_FRAME) as u32 };
-
-    for i in 0..INTER_REFS_PER_FRAME {
-      self.fi.ref_frames[i] = if lvl == 0 {
-        if i == second_ref_frame - LAST_FRAME {
-          (slot_idx + 4 - 2) as u8 % 4
-        } else {
-          (slot_idx + 4 - 1) as u8 % 4
-        }
-      } else {
-        if i == second_ref_frame - LAST_FRAME {
-          let oh = self.fi.order_hint + (cfg.group_src_len as u32 >> lvl);
-          let lvl2 = pos_to_lvl(oh as u64, cfg.pyramid_depth);
-          if lvl2 == 0 {
-            ((oh >> cfg.pyramid_depth) % 4) as u8
-          } else {
-            3 + lvl2 as u8
-          }
-        } else if i == ref_in_previous_group - LAST_FRAME {
-          if lvl == 0 {
-            (slot_idx + 4 - 1) as u8 % 4
-          } else {
-            slot_idx as u8
-          }
-        } else {
-          let oh = self.fi.order_hint - (cfg.group_src_len as u32 >> lvl);
-          let lvl1 = pos_to_lvl(oh as u64, cfg.pyramid_depth);
-          if lvl1 == 0 {
-            ((oh >> cfg.pyramid_depth) % 4) as u8
-          } else {
-            3 + lvl1 as u8
-          }
-        }
-      }
-    }
-
-    self.fi.reference_mode = if cfg.multiref && cfg.reorder && cfg.idx_in_group != 0 {
-      ReferenceMode::SELECT
-    } else {
-      ReferenceMode::SINGLE
-    };
-    self.fi.number = number;
-    self.fi.me_range_scale = (cfg.group_src_len >> lvl) as u8;
-    Ok(())
-  }
-
-  fn frame_properties(&mut self, idx: u64) -> Result<(), FramePropsStatus> {
+  fn set_frame_properties(&mut self, idx: u64) -> Result<(), ()> {
     if idx == 0 {
       // The first frame will always be a key frame
-      self.setup_key_frame_properties();
+      self.fi = FrameInvariants::new_key_frame(&self.fi,0);
       return Ok(());
     }
 
@@ -514,15 +346,16 @@ impl Context {
     // may not match the frame number.
     let idx_in_segment = idx - self.segment_start_idx;
     if idx_in_segment > 0 {
-      let inter_props = self.get_inter_props_cfg(idx_in_segment);
-      if let Err(FramePropsStatus::FramePastSegmentEnd) = self.setup_inter_frame_properties(&inter_props) {
-        let start_frame = self.next_keyframe();
-        if !inter_props.reorder || ((idx_in_segment - 1) % inter_props.group_len == 0 && self.fi.number == (start_frame - 1)) {
+      let next_keyframe = self.next_keyframe();
+      let (fi, success) = FrameInvariants::new_inter_frame(&self.fi, self.segment_start_frame, idx_in_segment, next_keyframe);
+      self.fi = fi;
+      if !success {
+        if !self.fi.inter_cfg.unwrap().reorder || ((idx_in_segment - 1) % self.fi.inter_cfg.unwrap().group_len == 0 && self.fi.number == (next_keyframe - 1)) {
           self.segment_start_idx = idx;
-          self.segment_start_frame = start_frame;
-          self.fi.number = start_frame;
+          self.segment_start_frame = next_keyframe;
+          self.fi.number = next_keyframe;
         } else {
-          return Err(FramePropsStatus::FramePastSegmentEnd);
+          return Err(());
         }
       }
     }
@@ -538,10 +371,14 @@ impl Context {
 
       let idx_in_segment = idx - self.segment_start_idx;
       if idx_in_segment == 0 {
-        self.setup_key_frame_properties();
+        self.fi = FrameInvariants::new_key_frame(&self.fi, self.segment_start_frame);
       } else {
-        let inter_props = self.get_inter_props_cfg(idx_in_segment);
-        self.setup_inter_frame_properties(&inter_props)?;
+        let next_keyframe = self.next_keyframe();
+        let (fi, success) = FrameInvariants::new_inter_frame(&self.fi, self.segment_start_frame, idx_in_segment, next_keyframe);
+        self.fi = fi;
+        if !success {
+          return Err(());
+        }
       }
     }
     Ok(())
@@ -549,7 +386,7 @@ impl Context {
 
   pub fn receive_packet(&mut self) -> Result<Packet, EncoderStatus> {
     let mut idx = self.idx;
-    while self.frame_properties(idx).is_err() {
+    while self.set_frame_properties(idx).is_err() {
       self.idx += 1;
       idx = self.idx;
     }
