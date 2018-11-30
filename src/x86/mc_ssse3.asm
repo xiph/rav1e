@@ -29,6 +29,23 @@
 
 SECTION_RODATA 16
 
+; dav1d_obmc_masks[] with 64-x interleaved
+obmc_masks: db  0,  0,  0,  0
+            ; 2 @4
+            db 45, 19, 64,  0
+            ; 4 @8
+            db 39, 25, 50, 14, 59,  5, 64,  0
+            ; 8 @16
+            db 36, 28, 42, 22, 48, 16, 53, 11, 57,  7, 61,  3, 64,  0, 64,  0
+            ; 16 @32
+            db 34, 30, 37, 27, 40, 24, 43, 21, 46, 18, 49, 15, 52, 12, 54, 10
+            db 56,  8, 58,  6, 60,  4, 61,  3, 64,  0, 64,  0, 64,  0, 64,  0
+            ; 32 @64
+            db 33, 31, 35, 29, 36, 28, 38, 26, 40, 24, 41, 23, 43, 21, 44, 20
+            db 45, 19, 47, 17, 48, 16, 50, 14, 51, 13, 52, 12, 53, 11, 55,  9
+            db 56,  8, 57,  7, 58,  6, 59,  5, 60,  4, 60,  4, 61,  3, 62,  2
+            db 64,  0, 64,  0, 64,  0, 64,  0, 64,  0, 64,  0, 64,  0, 64,  0
+
 pb_64:   times 16 db 64
 pw_8:    times 8 dw 8
 pw_26:   times 8 dw 26
@@ -55,6 +72,7 @@ BIDIR_JMP_TABLE w_avg_ssse3,      4, 8, 16, 32, 64, 128
 BIDIR_JMP_TABLE mask_ssse3,       4, 8, 16, 32, 64, 128
 BIDIR_JMP_TABLE w_mask_420_ssse3, 4, 8, 16, 16, 16, 16
 BIDIR_JMP_TABLE blend_ssse3,      4, 8, 16, 32
+BIDIR_JMP_TABLE blend_v_ssse3, 2, 4, 8, 16, 32
 
 SECTION .text
 
@@ -431,17 +449,21 @@ cglobal w_mask_420, 4, 7, 8, dst, stride, tmp1, tmp2, w, mask, stride3
 %undef orig_w
 %undef hd
 
+%macro BLEND_64M 4; a, b, mask1, mask2
+    punpcklbw            m0, %1, %2; {b;a}[7..0]
+    punpckhbw            %1, %2    ; {b;a}[15..8]
+    pmaddubsw            m0, %3    ; {b*m[0] + (64-m[0])*a}[7..0] u16
+    pmaddubsw            %1, %4    ; {b*m[1] + (64-m[1])*a}[15..8] u16
+    pmulhrsw             m0, m5    ; {((b*m[0] + (64-m[0])*a) + 1) / 32}[7..0] u16
+    pmulhrsw             %1, m5    ; {((b*m[1] + (64-m[0])*a) + 1) / 32}[15..8] u16
+    packuswb             m0, %1    ; {blendpx}[15..0] u8
+%endmacro
+
 %macro BLEND 2; a, b
     psubb                m3, m4, m0 ; m3 = (64 - m)
     punpcklbw            m2, m3, m0 ; {m;(64-m)}[7..0]
     punpckhbw            m3, m0     ; {m;(64-m)}[15..8]
-    punpcklbw            m0, %1, %2 ; {b;a}[7..0]
-    punpckhbw            %1, %2     ; {b;a}[15..8]
-    pmaddubsw            m0, m2     ; {b*m + (64-m)*a}[7..0] u16
-    pmaddubsw            %1, m3     ; {b*m + (64-m)*a}[15..8] u16
-    pmulhrsw             m0, m5     ; {((b*m + (64-m)*a) + 1) / 32}[7..0] u16
-    pmulhrsw             %1, m5     ; {((b*m + (64-m)*a) + 1) / 32}[15..8] u16
-    packuswb             m0, %1     ; {blendpx}[15..0] u8
+    BLEND_64M            %1, %2, m2, m3
 %endmacro
 
 cglobal blend, 3, 7, 7, dst, ds, tmp, w, h, mask
@@ -518,4 +540,106 @@ cglobal blend, 3, 7, 7, dst, ds, tmp, w, h, mask
     add                dstq, dsq ; dst_stride
     dec                  hd
     jg .w32
+    RET
+
+cglobal blend_v, 3, 6, 8, dst, ds, tmp, w, h, mask
+%define base r5-blend_v_ssse3_table
+    lea                  r5, [blend_v_ssse3_table]
+    tzcnt                wd, wm
+    movifnidn            hd, hm
+    movsxd               wq, dword [r5+wq*4]
+    mova                 m5, [base+pw_512]
+    add                  wq, r5
+    add               maskq, obmc_masks-blend_v_ssse3_table
+    jmp                  wq
+.w2:
+    movd                 m3, [maskq+4]
+    punpckldq            m3, m3
+    ; 2 mask blend is provided for 4 pixels / 2 lines
+.w2_loop:
+    movd                 m1, [dstq+dsq*0] ; a {..;a;a}
+    pinsrw               m1, [dstq+dsq*1], 1
+    movd                 m2, [tmpq] ; b
+    punpcklbw            m0, m1, m2; {b;a}[7..0]
+    pmaddubsw            m0, m3    ; {b*m + (64-m)*a}[7..0] u16
+    pmulhrsw             m0, m5    ; {((b*m + (64-m)*a) + 1) / 32}[7..0] u16
+    packuswb             m0, m1    ; {blendpx}[8..0] u8
+    movd                r3d, m0
+    mov        [dstq+dsq*0], r3w
+    shr                 r3d, 16
+    mov        [dstq+dsq*1], r3w
+    add                tmpq, 2*2
+    lea                dstq, [dstq + dsq * 2]
+    sub                  hd, 2
+    jg .w2_loop
+    RET
+.w4:
+    movddup              m3, [maskq+8]
+    ; 4 mask blend is provided for 8 pixels / 2 lines
+.w4_loop:
+    movd                 m1, [dstq+dsq*0] ; a
+    movd                 m2, [dstq+dsq*1] ;
+    punpckldq            m1, m2
+    movq                 m2, [tmpq] ; b
+    punpcklbw            m1, m2    ; {b;a}[7..0]
+    pmaddubsw            m1, m3    ; {b*m + (64-m)*a}[7..0] u16
+    pmulhrsw             m1, m5    ; {((b*m + (64-m)*a) + 1) / 32}[7..0] u16
+    packuswb             m1, m1    ; {blendpx}[8..0] u8
+    movd             [dstq], m1
+    psrlq                m1, 32
+    movd       [dstq+dsq*1], m1
+    add                tmpq, 2*4
+    lea                dstq, [dstq+dsq*2]
+    sub                  hd, 2
+    jg .w4_loop
+    RET
+.w8:
+    mova                 m3, [maskq+16]
+    ; 8 mask blend is provided for 16 pixels
+.w8_loop:
+    movq                 m1, [dstq+dsq*0] ; a
+    movhps               m1, [dstq+dsq*1]
+    mova                 m2, [tmpq]; b
+    BLEND_64M            m1, m2, m3, m3
+    movq       [dstq+dsq*0], m0
+    punpckhqdq           m0, m0
+    movq       [dstq+dsq*1], m0
+    add                tmpq, 16
+    lea                dstq, [dstq+dsq*2]
+    sub                  hd, 2
+    jg .w8_loop
+    RET
+.w16:
+    ; 16 mask blend is provided for 32 pixels
+    mova                  m3, [maskq+32] ; obmc_masks_16[0] (64-m[0])
+    mova                  m4, [maskq+48] ; obmc_masks_16[1] (64-m[1])
+.w16_loop:
+    mova                 m1, [dstq] ; a
+    mova                 m2, [tmpq] ; b
+    BLEND_64M            m1, m2, m3, m4
+    mova             [dstq], m0
+    add                tmpq, 16
+    add                dstq, dsq
+    dec                  hd
+    jg .w16_loop
+    RET
+.w32:
+    mova                 m3, [maskq+64 ] ; obmc_masks_32[0] (64-m[0])
+    mova                 m4, [maskq+80 ] ; obmc_masks_32[1] (64-m[1])
+    mova                 m6, [maskq+96 ] ; obmc_masks_32[2] (64-m[2])
+    mova                 m7, [maskq+112] ; obmc_masks_32[3] (64-m[3])
+    ; 16 mask blend is provided for 64 pixels
+.w32_loop:
+    mova                 m1, [dstq+16*0] ; a
+    mova                 m2, [tmpq+16*0] ; b
+    BLEND_64M            m1, m2, m3, m4
+    mova        [dstq+16*0], m0
+    mova                 m1, [dstq+16*1] ; a
+    mova                 m2, [tmpq+16*1] ; b
+    BLEND_64M            m1, m2, m6, m7
+    mova        [dstq+16*1], m0
+    add                tmpq, 32
+    add                dstq, dsq
+    dec                  hd
+    jg .w32_loop
     RET
