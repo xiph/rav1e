@@ -153,16 +153,17 @@ fn parse_config(matches: &ArgMatches) -> EncoderConfig {
   cfg.tune = matches.value_of("TUNE").unwrap().parse().unwrap();
   cfg.quantizer = quantizer;
   cfg.show_psnr = matches.is_present("PSNR");
+
   cfg
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct FrameSummary {
-  /// Frame size in bytes
+  // Frame size in bytes
   pub size: usize,
   pub number: u64,
   pub frame_type: FrameType,
-  /// PSNR for Y, U, and V planes
+  // PSNR for Y, U, and V planes
   pub psnr: Option<(f64, f64, f64)>,
 }
 
@@ -192,8 +193,8 @@ impl fmt::Display for FrameSummary {
   }
 }
 
-/// Encode and write a frame.
-/// Returns frame information in a `Result`.
+// Encode and write a frame.
+// Returns frame information in a `Result`.
 pub fn process_frame(
   ctx: &mut Context, output_file: &mut dyn Write,
   y4m_dec: &mut y4m::Decoder<'_, Box<dyn Read>>,
@@ -336,20 +337,20 @@ pub fn process_frame(
 
 #[derive(Debug, Clone)]
 pub struct ProgressInfo {
-  /// Frame rate of the video
+  // Frame rate of the video
   frame_rate: y4m::Ratio,
-  /// The length of the whole video, in frames, if known
+  // The length of the whole video, in frames, if known
   total_frames: Option<usize>,
-  /// The time the encode was started
+  // The time the encode was started
   time_started: Instant,
-  /// List of frames encoded so far
+  // List of frames encoded so far
   frame_info: Vec<FrameSummary>,
-  /// Video size so far in bytes.
-  ///
-  /// This value will be updated in the CLI very frequently, so we cache the previous value
-  /// to reduce the overall complexity.
+  // Video size so far in bytes.
+  //
+  // This value will be updated in the CLI very frequently, so we cache the previous value
+  // to reduce the overall complexity.
   encoded_size: usize,
-  /// Whether to display PSNR statistics during and at end of encode
+  // Whether to display PSNR statistics during and at end of encode
   show_psnr: bool,
 }
 
@@ -383,28 +384,28 @@ impl ProgressInfo {
     self.frame_rate.num as f64 / self.frame_rate.den as f64
   }
 
-  /// Returns the bitrate of the frames so far, in bits/second
+  // Returns the bitrate of the frames so far, in bits/second
   pub fn bitrate(&self) -> usize {
     let bits = self.encoded_size * 8;
     let seconds = self.frame_info.len() as f64 / self.video_fps();
     (bits as f64 / seconds) as usize
   }
 
-  /// Estimates the final filesize in bytes, if the number of frames is known
+  // Estimates the final filesize in bytes, if the number of frames is known
   pub fn estimated_size(&self) -> usize {
     self.total_frames
       .map(|frames| self.encoded_size * frames / self.frames_encoded())
       .unwrap_or_default()
   }
 
-  /// Number of frames of given type which appear in the video
+  // Number of frames of given type which appear in the video
   pub fn get_frame_type_count(&self, frame_type: FrameType) -> usize {
     self.frame_info.iter()
       .filter(|frame| frame.frame_type == frame_type)
       .count()
   }
 
-  /// Size in bytes of all frames of given frame type
+  // Size in bytes of all frames of given frame type
   pub fn get_frame_type_size(&self, frame_type: FrameType) -> usize {
     self.frame_info.iter()
       .filter(|frame| frame.frame_type == frame_type)
