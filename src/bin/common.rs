@@ -47,8 +47,11 @@ pub fn parse_cli() -> CliOptions {
         .long("output")
         .required(true)
         .takes_value(true)
-    ).arg(Arg::with_name("RECONSTRUCTION").short("r").takes_value(true))
-    .arg(
+    ).arg(
+      Arg::with_name("RECONSTRUCTION")
+        .short("r")
+        .takes_value(true)
+    ).arg(
       Arg::with_name("LIMIT")
         .help("Maximum number of frames to encode")
         .short("l")
