@@ -570,7 +570,7 @@ where
     let max = _mm_set1_epi16((1 << bit_depth) - 1);
 
     for j in 0..Self::H {
-      let luma = ac.as_ptr().add(32 * j);
+      let luma = ac.as_ptr().add(Self::W * j);
       let line = output.as_mut_ptr().add(stride * j);
 
       let mut i = 0isize;
@@ -634,7 +634,7 @@ where
     let avg: i32 = output[0].into();
 
     for (line, luma) in
-      output.chunks_mut(stride).zip(ac.chunks(32)).take(Self::H)
+      output.chunks_mut(stride).zip(ac.chunks(Self::W)).take(Self::H)
     {
       for (v, &l) in line[..Self::W].iter_mut().zip(luma[..Self::W].iter()) {
         *v =
@@ -717,9 +717,13 @@ pub mod test {
   pub fn pred_cfl_4x4(
     output: &mut [u16], stride: usize, ac: &[i16], alpha: i16, bd: i32
   ) {
+    let mut ac32 = [0; 4*32];
+    for (l32, l) in ac32.chunks_mut(32).zip(ac.chunks(4).take(4)) {
+        l32[..4].copy_from_slice(&l);
+    }
     unsafe {
       cfl_predict_hbd_c(
-        ac.as_ptr(),
+        ac32.as_ptr(),
         output.as_mut_ptr(),
         stride as libc::ptrdiff_t,
         alpha as libc::c_int,

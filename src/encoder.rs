@@ -1953,7 +1953,7 @@ pub fn luma_ac(
         + luma.p(x, y + 1)
         + luma.p(x + 1, y + 1))
         << 1) as i16;
-      ac[sub_y * 32 + sub_x] = sample;
+      ac[sub_y * plane_bsize.width() + sub_x] = sample;
       sum += sample as i32;
     }
   }
@@ -1961,7 +1961,7 @@ pub fn luma_ac(
   let average = ((sum + (1 << (shift - 1))) >> shift) as i16;
   for sub_y in 0..plane_bsize.height() {
     for sub_x in 0..plane_bsize.width() {
-      ac[sub_y * 32 + sub_x] -= average;
+      ac[sub_y * plane_bsize.width() + sub_x] -= average;
     }
   }
 }
