@@ -900,7 +900,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         self.write_bit(false)?; // reserved
 
         if obu_extension != 0 {
-            assert!(false);
+            unimplemented!();
             //self.write(8, obu_extension & 0xFF)?; size += 8;
         }
 
@@ -919,7 +919,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         self.write(5, 31)?; // level
         self.write(1, 0)?; // tier
         if seq.reduced_still_picture_hdr {
-            assert!(false);
+            unimplemented!();
         }
 
         self.write_sequence_header(seq, fi)?;
@@ -999,25 +999,23 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     fn write_color_config(&mut self, seq: &mut Sequence) -> io::Result<()> {
         let high_bd = seq.bit_depth > 8;
 
-        self.write_bit(high_bd)?; // high bit depth
+        self.write_bit(high_bd)?;
 
         if seq.bit_depth == 12 {
-            self.write_bit(true)?; // 12-bit
+            self.write_bit(true)?;
         }
 
         if seq.profile != 1 {
-            self.write_bit(seq.monochrome)?; // monochrome?
-        } else {
-            unimplemented!(); // 4:4:4 sampling at 8 or 10 bits
+            self.write_bit(seq.monochrome)?;
         }
 
-        self.write_bit(false)?; // No color description present
+        self.write_bit(false)?; // color description present flag
 
         if seq.monochrome {
-            assert!(false);
+            unimplemented!();
         }
 
-        self.write_bit(false)?; // color range
+        self.write_bit(false)?; // full color range
 
         let subsampling_x = seq.chroma_sampling != ChromaSampling::Cs444;
         let subsampling_y = seq.chroma_sampling == ChromaSampling::Cs420;
@@ -1036,7 +1034,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
         self.write(2, 0)?; // chroma_sample_position == CSP_UNKNOWN
 
-        self.write_bit(false)?; // separate uv delta q
+        self.write_bit(false)?; // separate U/V delta quantizers
 
         Ok(())
     }
@@ -1049,8 +1047,9 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         assert!(fi.frame_type == FrameType::KEY);
         assert!(fi.show_frame);
       } else {
+        self.write_bit(fi.show_existing_frame)?;
+
         if fi.show_existing_frame {
-          self.write_bit(true)?; // show_existing_frame=1
           self.write(3, fi.frame_to_show_map_idx)?;
 
           //TODO:
@@ -1067,7 +1066,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
           self.byte_align()?;
           return Ok(());
         }
-        self.write_bit(false)?; // show_existing_frame=0
+
         self.write(2, fi.frame_type as u32)?;
         self.write_bit(fi.show_frame)?; // show frame
 
@@ -1111,7 +1110,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       }
 
       if seq.frame_id_numbers_present_flag {
-        assert!(false); // Not supported by rav1e yet!
+        unimplemented!();
+
         //TODO:
         //let frame_id_len = seq.frame_id_length;
         //self.write(frame_id_len, fi.current_frame_id);
@@ -1138,12 +1138,12 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       }
 
       if seq.decoder_model_info_present_flag {
-        assert!(false); // Not supported by rav1e yet!
+        unimplemented!();
       }
 
       if fi.frame_type == FrameType::KEY {
         if !fi.show_frame {  // unshown keyframe (forward keyframe)
-          assert!(false); // Not supported by rav1e yet!
+          unimplemented!();
           self.write(REF_FRAMES as u32, fi.refresh_frame_flags)?;
         } else {
           assert!(fi.refresh_frame_flags == ALL_REF_FRAMES_MASK);
@@ -1162,7 +1162,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       if (!fi.intra_only || fi.refresh_frame_flags != ALL_REF_FRAMES_MASK) {
         // Write all ref frame order hints if error_resilient_mode == 1
         if (fi.error_resilient && seq.enable_order_hint) {
-          assert!(false); // Not supported by rav1e yet!
+          unimplemented!();
           //for _ in 0..REF_FRAMES {
           //  self.write(order_hint_bits_minus_1,ref_order_hint[i])?; // order_hint
           //}
@@ -1173,10 +1173,10 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       // FIXME: Not sure whether putting frame/render size here is good idea
       if fi.intra_only {
         if frame_size_override_flag {
-          assert!(false); // Not supported by rav1e yet!
+          unimplemented!();
         }
         if seq.enable_superres {
-          assert!(false); // Not supported by rav1e yet!
+          unimplemented!();
         }
         self.write_bit(false)?; // render_and_frame_size_different
         //if render_and_frame_size_different { }
@@ -1195,7 +1195,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
           if seq.enable_order_hint {
             self.write_bit(frame_refs_short_signaling)?;
             if frame_refs_short_signaling {
-              assert!(false); // Not supported by rav1e yet!
+              unimplemented!();
             }
           }
 
@@ -1204,17 +1204,17 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
               self.write(REF_FRAMES_LOG2 as u32, fi.ref_frames[i] as u8)?;
             }
             if seq.frame_id_numbers_present_flag {
-              assert!(false); // Not supported by rav1e yet!
+              unimplemented!();
             }
           }
           if fi.error_resilient && frame_size_override_flag {
-            assert!(false); // Not supported by rav1e yet!
+            unimplemented!();
           } else {
             if frame_size_override_flag {
-               assert!(false); // Not supported by rav1e yet!
+               unimplemented!();
             }
             if seq.enable_superres {
-              assert!(false); // Not supported by rav1e yet!
+              unimplemented!();
             }
             self.write_bit(false)?; // render_and_frame_size_different
           }
