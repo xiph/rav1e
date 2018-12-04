@@ -825,25 +825,23 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     fn write_color_config(&mut self, seq: &mut Sequence) -> io::Result<()> {
         let high_bd = seq.bit_depth > 8;
 
-        self.write_bit(high_bd)?; // high bit depth
+        self.write_bit(high_bd)?;
 
         if seq.bit_depth == 12 {
-            self.write_bit(true)?; // 12-bit
+            self.write_bit(true)?;
         }
 
         if seq.profile != 1 {
-            self.write_bit(seq.monochrome)?; // monochrome?
-        } else {
-            unimplemented!(); // 4:4:4 sampling at 8 or 10 bits
+            self.write_bit(seq.monochrome)?;
         }
 
-        self.write_bit(false)?; // No color description present
+        self.write_bit(false)?; // color description present flag
 
         if seq.monochrome {
             assert!(false);
         }
 
-        self.write_bit(false)?; // color range
+        self.write_bit(false)?; // full color range
 
         let subsampling_x = seq.chroma_sampling != ChromaSampling::Cs444;
         let subsampling_y = seq.chroma_sampling == ChromaSampling::Cs420;
@@ -862,7 +860,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
         self.write(2, 0)?; // chroma_sample_position == CSP_UNKNOWN
 
-        self.write_bit(false)?; // separate uv delta q
+        self.write_bit(false)?; // separate U/V delta quantizers
 
         Ok(())
     }
@@ -875,8 +873,9 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         assert!(fi.frame_type == FrameType::KEY);
         assert!(fi.show_frame);
       } else {
+        self.write_bit(fi.show_existing_frame)?;
+
         if fi.show_existing_frame {
-          self.write_bit(true)?; // show_existing_frame=1
           self.write(3, fi.frame_to_show_map_idx)?;
 
           //TODO:
@@ -893,7 +892,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
           self.byte_align()?;
           return Ok(());
         }
-        self.write_bit(false)?; // show_existing_frame=0
+
         self.write(2, fi.frame_type as u32)?;
         self.write_bit(fi.show_frame)?; // show frame
 
