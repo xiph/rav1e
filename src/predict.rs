@@ -20,6 +20,8 @@ use context::MAX_TX_SIZE;
 use partition::*;
 use util::*;
 use std::mem::*;
+#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+use std::ptr;
 
 #[cfg(target_arch = "x86")]
 use std::arch::x86::*;
@@ -187,6 +189,28 @@ decl_angular_ipred_fn!(rav1e_ipred_smooth_h_avx2);
 #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
 decl_angular_ipred_fn!(rav1e_ipred_smooth_v_avx2);
 
+#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+macro_rules! decl_cfl_pred_fn {
+  ($f:ident) => {
+    extern {
+      fn $f(
+        dst: *mut u8, stride: libc::ptrdiff_t, topleft: *const u8,
+        width: libc::c_int, height: libc::c_int, ac: *const u8,
+        alpha: libc::c_int
+      );
+    }
+  };
+}
+
+#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+decl_cfl_pred_fn!(rav1e_ipred_cfl_avx2);
+#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+decl_cfl_pred_fn!(rav1e_ipred_cfl_128_avx2);
+#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+decl_cfl_pred_fn!(rav1e_ipred_cfl_left_avx2);
+#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+decl_cfl_pred_fn!(rav1e_ipred_cfl_top_avx2);
+
 pub trait Intra<T>: Dim
 where
   T: Pixel,
@@ -227,7 +251,6 @@ where
   fn pred_dc_128(output: &mut [T], stride: usize, bit_depth: usize) {
     #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
-      use std::ptr;
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
         return unsafe {
           rav1e_ipred_dc_128_avx2(
@@ -646,6 +669,22 @@ where
     output: &mut [T], stride: usize, ac: &[i16], alpha: i16, bit_depth: usize,
     above: &[T], left: &[T]
   ) {
+    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+    {
+      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
+        return unsafe {
+          rav1e_ipred_cfl_avx2(
+            output.as_mut_ptr() as *mut _,
+            stride as libc::ptrdiff_t,
+            above.as_ptr().offset(-1) as *const _,
+            Self::W as libc::c_int,
+            Self::H as libc::c_int,
+            ac.as_ptr() as *const _,
+            alpha as libc::c_int
+          )
+        }
+      }
+    }
     Self::pred_dc(output, stride, above, left);
     Self::pred_cfl_inner(output, stride, &ac, alpha, bit_depth);
   }
@@ -653,6 +692,22 @@ where
   fn pred_cfl_128(
     output: &mut [T], stride: usize, ac: &[i16], alpha: i16, bit_depth: usize
   ) {
+    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+    {
+      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
+        return unsafe {
+          rav1e_ipred_cfl_128_avx2(
+            output.as_mut_ptr() as *mut _,
+            stride as libc::ptrdiff_t,
+            ptr::null(),
+            Self::W as libc::c_int,
+            Self::H as libc::c_int,
+            ac.as_ptr() as *const _,
+            alpha as libc::c_int
+          )
+        }
+      }
+    }
     Self::pred_dc_128(output, stride, bit_depth);
     Self::pred_cfl_inner(output, stride, &ac, alpha, bit_depth);
   }
@@ -661,6 +716,22 @@ where
     output: &mut [T], stride: usize, ac: &[i16], alpha: i16, bit_depth: usize,
     above: &[T], left: &[T]
   ) {
+    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+    {
+      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
+        return unsafe {
+          rav1e_ipred_cfl_left_avx2(
+            output.as_mut_ptr() as *mut _,
+            stride as libc::ptrdiff_t,
+            above.as_ptr().offset(-1) as *const _,
+            Self::W as libc::c_int,
+            Self::H as libc::c_int,
+            ac.as_ptr() as *const _,
+            alpha as libc::c_int
+          )
+        }
+      }
+    }
     Self::pred_dc_left(output, stride, above, left);
     Self::pred_cfl_inner(output, stride, &ac, alpha, bit_depth);
   }
@@ -669,6 +740,22 @@ where
     output: &mut [T], stride: usize, ac: &[i16], alpha: i16, bit_depth: usize,
     above: &[T], left: &[T]
   ) {
+    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+    {
+      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
+        return unsafe {
+          rav1e_ipred_cfl_top_avx2(
+            output.as_mut_ptr() as *mut _,
+            stride as libc::ptrdiff_t,
+            above.as_ptr().offset(-1) as *const _,
+            Self::W as libc::c_int,
+            Self::H as libc::c_int,
+            ac.as_ptr() as *const _,
+            alpha as libc::c_int
+          )
+        }
+      }
+    }
     Self::pred_dc_top(output, stride, above, left);
     Self::pred_cfl_inner(output, stride, &ac, alpha, bit_depth);
   }
