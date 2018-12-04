@@ -36,21 +36,7 @@ fn main() {
     None => None
   };
 
-  let (chroma_sampling, chroma_sample_position) = match color_space {
-    y4m::Colorspace::C420jpeg
-    | y4m::Colorspace::C420paldv => (ChromaSampling::Cs420, ChromaSamplePosition::Unknown),
-    y4m::Colorspace::C420mpeg2 => (ChromaSampling::Cs420, ChromaSamplePosition::Vertical),
-    y4m::Colorspace::C420
-    | y4m::Colorspace::C420p10
-    | y4m::Colorspace::C420p12 => (ChromaSampling::Cs420, ChromaSamplePosition::Colocated),
-    y4m::Colorspace::C422
-    | y4m::Colorspace::C422p10
-    | y4m::Colorspace::C422p12 => (ChromaSampling::Cs422, ChromaSamplePosition::Colocated),
-    y4m::Colorspace::C444
-    | y4m::Colorspace::C444p10
-    | y4m::Colorspace::C444p12 => (ChromaSampling::Cs444, ChromaSamplePosition::Colocated),
-    _ => panic!("Chroma characteristics unknown for the specified color space.")
-  };
+  let (chroma_sampling, chroma_sample_position) = map_y4m_color_space(color_space);
 
   let bit_depth = color_space.get_bit_depth();
 
