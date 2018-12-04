@@ -726,7 +726,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         self.write_bit(false)?; // reserved
 
         if obu_extension != 0 {
-            assert!(false);
+            unimplemented!();
             //self.write(8, obu_extension & 0xFF)?; size += 8;
         }
 
@@ -745,7 +745,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         self.write(5, 31)?; // level
         self.write(1, 0)?; // tier
         if seq.reduced_still_picture_hdr {
-            assert!(false);
+            unimplemented!();
         }
 
         self.write_sequence_header(seq, fi)?;
@@ -838,7 +838,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         self.write_bit(false)?; // color description present flag
 
         if seq.monochrome {
-            assert!(false);
+            unimplemented!();
         }
 
         self.write_bit(false)?; // full color range
@@ -936,7 +936,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       }
 
       if seq.frame_id_numbers_present_flag {
-        assert!(false); // Not supported by rav1e yet!
+        unimplemented!();
+
         //TODO:
         //let frame_id_len = seq.frame_id_length;
         //self.write(frame_id_len, fi.current_frame_id);
@@ -963,12 +964,12 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       }
 
       if seq.decoder_model_info_present_flag {
-        assert!(false); // Not supported by rav1e yet!
+        unimplemented!();
       }
 
       if fi.frame_type == FrameType::KEY {
         if !fi.show_frame {  // unshown keyframe (forward keyframe)
-          assert!(false); // Not supported by rav1e yet!
+          unimplemented!();
           self.write(REF_FRAMES as u32, fi.refresh_frame_flags)?;
         } else {
           assert!(fi.refresh_frame_flags == ALL_REF_FRAMES_MASK);
@@ -987,7 +988,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       if (!fi.intra_only || fi.refresh_frame_flags != ALL_REF_FRAMES_MASK) {
         // Write all ref frame order hints if error_resilient_mode == 1
         if (fi.error_resilient && seq.enable_order_hint) {
-          assert!(false); // Not supported by rav1e yet!
+          unimplemented!();
           //for _ in 0..REF_FRAMES {
           //  self.write(order_hint_bits_minus_1,ref_order_hint[i])?; // order_hint
           //}
@@ -998,10 +999,10 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       // FIXME: Not sure whether putting frame/render size here is good idea
       if fi.intra_only {
         if frame_size_override_flag {
-          assert!(false); // Not supported by rav1e yet!
+          unimplemented!();
         }
         if seq.enable_superres {
-          assert!(false); // Not supported by rav1e yet!
+          unimplemented!();
         }
         self.write_bit(false)?; // render_and_frame_size_different
         //if render_and_frame_size_different { }
@@ -1020,7 +1021,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
           if seq.enable_order_hint {
             self.write_bit(frame_refs_short_signaling)?;
             if frame_refs_short_signaling {
-              assert!(false); // Not supported by rav1e yet!
+              unimplemented!();
             }
           }
 
@@ -1029,17 +1030,17 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
               self.write(REF_FRAMES_LOG2 as u32, fi.ref_frames[i] as u8)?;
             }
             if seq.frame_id_numbers_present_flag {
-              assert!(false); // Not supported by rav1e yet!
+              unimplemented!();
             }
           }
           if fi.error_resilient && frame_size_override_flag {
-            assert!(false); // Not supported by rav1e yet!
+            unimplemented!();
           } else {
             if frame_size_override_flag {
-               assert!(false); // Not supported by rav1e yet!
+               unimplemented!();
             }
             if seq.enable_superres {
-              assert!(false); // Not supported by rav1e yet!
+              unimplemented!();
             }
             self.write_bit(false)?; // render_and_frame_size_different
           }
