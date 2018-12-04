@@ -200,6 +200,20 @@ impl Default for ChromaSampling {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+#[repr(C)]
+pub enum ChromaSamplePosition {
+    Unknown,
+    Vertical,
+    Colocated
+}
+
+impl Default for ChromaSamplePosition {
+    fn default() -> Self {
+        ChromaSamplePosition::Unknown
+    }
+}
+
 #[derive(Copy, Clone)]
 pub struct Sequence {
   // OBU Sequence header of AV1
@@ -208,6 +222,7 @@ pub struct Sequence {
     pub num_bits_height: u32,
     pub bit_depth: usize,
     pub chroma_sampling: ChromaSampling,
+    pub chroma_sample_position: ChromaSamplePosition,
     pub max_frame_width: u32,
     pub max_frame_height: u32,
     pub frame_id_numbers_present_flag: bool,
@@ -290,6 +305,7 @@ impl Sequence {
             num_bits_height: height_bits,
             bit_depth: info.bit_depth,
             chroma_sampling: info.chroma_sampling,
+            chroma_sample_position: info.chroma_sample_position,
             max_frame_width: info.width as u32,
             max_frame_height: info.height as u32,
             frame_id_numbers_present_flag: false,
@@ -860,7 +876,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
             unimplemented!(); // 4:2:2 or 4:4:4 sampling
         }
 
-        self.write(2, 0)?; // chroma_sample_position == CSP_UNKNOWN
+        self.write(2, seq.chroma_sample_position as u32)?;
 
         self.write_bit(false)?; // separate uv delta q
 
