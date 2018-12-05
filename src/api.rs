@@ -159,7 +159,8 @@ pub struct FrameInfo {
   pub width: usize,
   pub height: usize,
   pub bit_depth: usize,
-  pub chroma_sampling: ChromaSampling
+  pub chroma_sampling: ChromaSampling,
+  pub chroma_sample_position: ChromaSamplePosition
 }
 
 /// Contain all the encoder configuration

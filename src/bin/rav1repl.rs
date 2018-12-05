@@ -42,25 +42,11 @@ fn main() {
     framerate.den
   );
 
-  let chroma_sampling = match color_space {
-    y4m::Colorspace::C420
-    | y4m::Colorspace::C420jpeg
-    | y4m::Colorspace::C420paldv
-    | y4m::Colorspace::C420mpeg2
-    | y4m::Colorspace::C420p10
-    | y4m::Colorspace::C420p12 => ChromaSampling::Cs420,
-    y4m::Colorspace::C422
-    | y4m::Colorspace::C422p10
-    | y4m::Colorspace::C422p12 => ChromaSampling::Cs422,
-    y4m::Colorspace::C444
-    | y4m::Colorspace::C444p10
-    | y4m::Colorspace::C444p12 => ChromaSampling::Cs444,
-    _ => panic!("Chroma sampling unknown for the specified color space.")
-  };
+  let (chroma_sampling, chroma_sample_position) = map_y4m_color_space(color_space);
   let bit_depth = color_space.get_bit_depth();
 
   let cfg = Config {
-    frame_info: FrameInfo { width, height, bit_depth, chroma_sampling },
+    frame_info: FrameInfo { width, height, bit_depth, chroma_sampling, chroma_sample_position },
     timebase: Rational::new(framerate.den as u64, framerate.num as u64),
     enc
   };
