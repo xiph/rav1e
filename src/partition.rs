@@ -895,14 +895,20 @@ impl PredictionMode {
         (0, _) => PredictionMode::V_PRED,
         _ => PredictionMode::PAETH_PRED
       },
-      PredictionMode::UV_CFL_PRED => PredictionMode::DC_PRED,
+      PredictionMode::UV_CFL_PRED =>
+        if alpha == 0 {
+          PredictionMode::DC_PRED
+        } else {
+          self
+        },
       _ => self
     };
 
+    let dc_or_cfl =
+      mode == PredictionMode::DC_PRED || mode == PredictionMode::UV_CFL_PRED;
+
     // Needs left
-    if mode != PredictionMode::V_PRED
-      && (mode != PredictionMode::DC_PRED || x != 0)
-    {
+    if mode != PredictionMode::V_PRED && (!dc_or_cfl || x != 0) {
       if x != 0 {
         let left_slice = dst.go_left(1);
         for i in 0..B::H {
@@ -927,9 +933,7 @@ impl PredictionMode {
     }
 
     // Needs top
-    if mode != PredictionMode::H_PRED
-      && (mode != PredictionMode::DC_PRED || y != 0)
-    {
+    if mode != PredictionMode::H_PRED && (!dc_or_cfl || y != 0) {
       if y != 0 {
         above[..B::W].copy_from_slice(&dst.go_up(1).as_slice()[..B::W]);
       } else {
@@ -951,6 +955,36 @@ impl PredictionMode {
         (0, _) => B::pred_dc_top(slice, stride, above_slice, left_slice),
         _ => B::pred_dc(slice, stride, above_slice, left_slice)
       },
+      PredictionMode::UV_CFL_PRED => match (x, y) {
+        (0, 0) => B::pred_cfl_128(slice, stride, &ac, alpha, bit_depth),
+        (_, 0) => B::pred_cfl_left(
+          slice,
+          stride,
+          &ac,
+          alpha,
+          bit_depth,
+          above_slice,
+          left_slice
+        ),
+        (0, _) => B::pred_cfl_top(
+          slice,
+          stride,
+          &ac,
+          alpha,
+          bit_depth,
+          above_slice,
+          left_slice
+        ),
+        _ => B::pred_cfl(
+          slice,
+          stride,
+          &ac,
+          alpha,
+          bit_depth,
+          above_slice,
+          left_slice
+        )
+      },
       PredictionMode::H_PRED => B::pred_h(slice, stride, left_slice),
       PredictionMode::V_PRED => B::pred_v(slice, stride, above_slice),
       PredictionMode::PAETH_PRED =>
@@ -962,9 +996,6 @@ impl PredictionMode {
       PredictionMode::SMOOTH_V_PRED =>
         B::pred_smooth_v(slice, stride, above_slice, left_slice),
       _ => unimplemented!()
-    }
-    if self == PredictionMode::UV_CFL_PRED {
-      B::pred_cfl(slice, stride, &ac, alpha, bit_depth);
     }
   }
 
