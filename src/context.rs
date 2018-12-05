@@ -1251,6 +1251,9 @@ impl BlockContext {
     // Align power of two
     let aligned_cols = (cols + ((1 << MAX_MIB_SIZE_LOG2) - 1))
       & !((1 << MAX_MIB_SIZE_LOG2) - 1);
+    let above_coeff_context_size =
+      cols << (MI_SIZE_LOG2 - TxSize::width_log2(TxSize::TX_4X4));
+
     BlockContext {
       cols,
       rows,
@@ -1261,9 +1264,9 @@ impl BlockContext {
       above_partition_context: vec![0; aligned_cols],
       left_partition_context: [0; MAX_MIB_SIZE],
       above_coeff_context: [
-        vec![0; cols << (MI_SIZE_LOG2 - TxSize::smallest_width_log2())],
-        vec![0; cols << (MI_SIZE_LOG2 - TxSize::smallest_width_log2())],
-        vec![0; cols << (MI_SIZE_LOG2 - TxSize::smallest_width_log2())]
+        vec![0; above_coeff_context_size],
+        vec![0; above_coeff_context_size],
+        vec![0; above_coeff_context_size]
       ],
       left_coeff_context: [[0; MAX_MIB_SIZE]; PLANES],
       blocks: vec![vec![Block::default(); cols]; rows]
