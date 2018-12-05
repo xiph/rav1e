@@ -12,7 +12,7 @@
 
 use self::BlockSize::*;
 use self::TxSize::*;
-use encoder::FrameInvariants;
+use encoder::{ChromaSampling, FrameInvariants};
 
 pub const NONE_FRAME: usize = 8;
 pub const INTRA_FRAME: usize = 0;
@@ -131,6 +131,73 @@ impl BlockSize {
 
   pub fn height_mi(self) -> usize {
     self.height() >> MI_SIZE_LOG2
+  }
+
+  pub fn tx_size(self) -> TxSize {
+    match self {
+      BLOCK_4X4 => TX_4X4,
+      BLOCK_4X8 => TX_4X8,
+      BLOCK_8X4 => TX_8X4,
+      BLOCK_8X8 => TX_8X8,
+      BLOCK_8X16 => TX_8X16,
+      BLOCK_16X8 => TX_16X8,
+      BLOCK_16X16 => TX_16X16,
+      BLOCK_16X32 => TX_16X32,
+      BLOCK_32X16 => TX_32X16,
+      BLOCK_32X32 => TX_32X32,
+      BLOCK_32X64 => TX_32X64,
+      BLOCK_64X32 => TX_64X32,
+      BLOCK_4X16 => TX_4X16,
+      BLOCK_16X4 => TX_16X4,
+      BLOCK_8X32 => TX_8X32,
+      BLOCK_32X8 => TX_32X8,
+      BLOCK_16X64 => TX_16X64,
+      BLOCK_64X16 => TX_64X16,
+      BLOCK_INVALID => unreachable!(),
+      _ => TX_64X64
+    }
+  }
+
+  pub fn largest_uv_tx_size(self, chroma_sampling: ChromaSampling) -> TxSize {
+    match chroma_sampling {
+      ChromaSampling::Cs444 => match self {
+        BLOCK_64X64 | BLOCK_64X32 | BLOCK_32X64 |
+        BLOCK_128X128 | BLOCK_128X64 | BLOCK_64X128 => TX_32X32,
+        BLOCK_64X16 => TX_32X16,
+        BLOCK_16X64 => TX_16X32,
+        _ => self.tx_size()
+      },
+      ChromaSampling::Cs422 => match self {
+        BLOCK_4X4 | BLOCK_8X4 => TX_4X4,
+        BLOCK_8X8 => TX_4X8,
+        BLOCK_16X8 => TX_8X8,
+        BLOCK_16X16 => TX_8X16,
+        BLOCK_32X16 => TX_16X16,
+        BLOCK_32X32 => TX_16X32,
+        BLOCK_64X32 | BLOCK_64X64 |
+        BLOCK_128X64 | BLOCK_128X128 => TX_32X32,
+        BLOCK_16X4 => TX_8X4,
+        BLOCK_32X8 => TX_16X8,
+        BLOCK_64X16 => TX_32X16,
+        _ => unreachable!() // vertical splits are illegal in 4:2:2
+      },
+      ChromaSampling::Cs420 => match self {
+        BLOCK_4X4 | BLOCK_8X4 | BLOCK_4X8 | BLOCK_8X8 => TX_4X4,
+        BLOCK_8X16 | BLOCK_4X16 => TX_4X8,
+        BLOCK_16X8 | BLOCK_16X4 => TX_8X4,
+        BLOCK_16X16 => TX_8X8,
+        BLOCK_16X32 => TX_8X16,
+        BLOCK_32X16 => TX_16X8,
+        BLOCK_32X32 => TX_16X16,
+        BLOCK_32X64 => TX_16X32,
+        BLOCK_64X32 => TX_32X16,
+        BLOCK_8X32 => TX_4X16,
+        BLOCK_32X8 => TX_16X4,
+        BLOCK_16X64 => TX_8X32,
+        BLOCK_64X16 => TX_32X8,
+        _ => TX_32X32
+      }
+    }
   }
 
   pub fn is_sqr(self) -> bool {

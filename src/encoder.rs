@@ -1940,9 +1940,9 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
     motion_compensate(fi, fs, cw, luma_mode, ref_frames, mvs, bsize, bo, bit_depth, false);
 
     if is_inter {
-      write_tx_tree(fi, fs, cw, w, luma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth, false, for_rdo_use)
+      write_tx_tree(fi, fs, cw, w, luma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth, seq.chroma_sampling, false, for_rdo_use)
     } else {
-      write_tx_blocks(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth, cfl, false, for_rdo_use)
+      write_tx_blocks(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth, seq.chroma_sampling, cfl, false, for_rdo_use)
     }
 }
 
@@ -1986,7 +1986,8 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
                        cw: &mut ContextWriter, w: &mut dyn Writer,
                        luma_mode: PredictionMode, chroma_mode: PredictionMode, bo: &BlockOffset,
                        bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool, bit_depth: usize,
-                       cfl: CFLParams, luma_only: bool, for_rdo_use: bool) -> i64 {
+                       chroma_sampling: ChromaSampling, cfl: CFLParams, luma_only: bool,
+                       for_rdo_use: bool) -> i64 {
     let bw = bsize.width_mi() / tx_size.width_mi();
     let bh = bsize.height_mi() / tx_size.height_mi();
     let qidx = get_qidx(fi, fs, cw, bo);
@@ -2018,13 +2019,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
 
     if luma_only { return tx_dist };
 
-    // TODO: these are only valid for 4:2:0
-    let uv_tx_size = match bsize {
-        BlockSize::BLOCK_4X4 | BlockSize::BLOCK_8X8 => TxSize::TX_4X4,
-        BlockSize::BLOCK_16X16 => TxSize::TX_8X8,
-        BlockSize::BLOCK_32X32 => TxSize::TX_16X16,
-        _ => TxSize::TX_32X32
-    };
+    let uv_tx_size = bsize.largest_uv_tx_size(chroma_sampling);
 
     let mut bw_uv = (bw * tx_size.width_mi()) >> xdec;
     let mut bh_uv = (bh * tx_size.height_mi()) >> ydec;
@@ -2084,7 +2079,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
 pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter, w: &mut dyn Writer,
                        luma_mode: PredictionMode, bo: &BlockOffset,
                        bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool, bit_depth: usize,
-                       luma_only: bool, for_rdo_use: bool) -> i64 {
+                       chroma_sampling: ChromaSampling, luma_only: bool, for_rdo_use: bool) -> i64 {
     let bw = bsize.width_mi() / tx_size.width_mi();
     let bh = bsize.height_mi() / tx_size.height_mi();
     let qidx = get_qidx(fi, fs, cw, bo);
@@ -2105,13 +2100,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
 
     if luma_only { return tx_dist };
 
-    // TODO: these are only valid for 4:2:0
-    let uv_tx_size = match bsize {
-        BlockSize::BLOCK_4X4 | BlockSize::BLOCK_8X8 => TxSize::TX_4X4,
-        BlockSize::BLOCK_16X16 => TxSize::TX_8X8,
-        BlockSize::BLOCK_32X32 => TxSize::TX_16X16,
-        _ => TxSize::TX_32X32
-    };
+    let uv_tx_size = bsize.largest_uv_tx_size(chroma_sampling);
 
     let mut bw_uv = (bw * tx_size.width_mi()) >> xdec;
     let mut bh_uv = (bh * tx_size.height_mi()) >> ydec;

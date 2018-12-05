@@ -37,7 +37,7 @@ use FrameState;
 use FrameType;
 use Tune;
 use Sequence;
-use encoder::ReferenceMode;
+use encoder::{ChromaSampling, ReferenceMode};
 use api::PredictionModesSetting;
 
 #[derive(Clone)]
@@ -313,7 +313,8 @@ pub fn rdo_tx_size_type(
         bo,
         tx_size,
         tx_set,
-        seq.bit_depth
+        seq.bit_depth,
+        seq.chroma_sampling
       )
     } else {
       TxType::DCT_DCT
@@ -617,12 +618,13 @@ pub fn rdo_mode_decision(
       best.tx_type,
       false,
       seq.bit_depth,
+      seq.chroma_sampling,
       CFLParams::new(),
       true,
       false
     );
     cw.rollback(&cw_checkpoint);
-    if let Some(cfl) = rdo_cfl_alpha(fs, bo, bsize, seq.bit_depth) {
+    if let Some(cfl) = rdo_cfl_alpha(fs, bo, bsize, seq.bit_depth, seq.chroma_sampling) {
       let mut wr: &mut dyn Writer = &mut WriterCounter::new();
       let tell = wr.tell_frac();
 
@@ -700,15 +702,9 @@ pub fn rdo_mode_decision(
 }
 
 pub fn rdo_cfl_alpha(
-  fs: &mut FrameState, bo: &BlockOffset, bsize: BlockSize, bit_depth: usize
-) -> Option<CFLParams> {
-  // TODO: these are only valid for 4:2:0
-  let uv_tx_size = match bsize {
-    BlockSize::BLOCK_4X4 | BlockSize::BLOCK_8X8 => TxSize::TX_4X4,
-    BlockSize::BLOCK_16X16 => TxSize::TX_8X8,
-    BlockSize::BLOCK_32X32 => TxSize::TX_16X16,
-    _ => TxSize::TX_32X32
-  };
+  fs: &mut FrameState, bo: &BlockOffset, bsize: BlockSize, bit_depth: usize, 
+  chroma_sampling: ChromaSampling) -> Option<CFLParams> {
+  let uv_tx_size = bsize.largest_uv_tx_size(chroma_sampling);
 
   let mut ac = [0i16; 32 * 32];
   luma_ac(&mut ac, fs, bo, bsize);
@@ -746,7 +742,7 @@ pub fn rdo_cfl_alpha(
 pub fn rdo_tx_type_decision(
   fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
   mode: PredictionMode, ref_frames: [usize; 2], mvs: [MotionVector; 2], bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize,
-  tx_set: TxSet, bit_depth: usize
+  tx_set: TxSet, bit_depth: usize, chroma_sampling: ChromaSampling
 ) -> TxType {
   let mut best_type = TxType::DCT_DCT;
   let mut best_rd = std::f64::MAX;
@@ -774,12 +770,12 @@ pub fn rdo_tx_type_decision(
     let tell = wr.tell_frac();
     let tx_dist = if is_inter {
       write_tx_tree(
-        fi, fs, cw, wr, mode, bo, bsize, tx_size, tx_type, false, bit_depth, true, true
+        fi, fs, cw, wr, mode, bo, bsize, tx_size, tx_type, false, bit_depth, chroma_sampling, true, true
       )
     }  else {
       let cfl = CFLParams::new(); // Unused
       write_tx_blocks(
-        fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false, bit_depth, cfl, true, true
+        fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false, bit_depth, chroma_sampling, cfl, true, true
       )
     };
 
@@ -1076,4 +1072,3 @@ pub fn rdo_cdef_decision(sbo: &SuperBlockOffset, fi: &FrameInvariants,
     }
     best_index
 }
-
