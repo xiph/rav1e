@@ -609,10 +609,8 @@ where
     }
   }
 
-  #[cfg_attr(feature = "comparative_bench", inline(never))]
-  fn pred_cfl(
-    output: &mut [T], stride: usize, ac: &[i16], alpha: i16,
-    bit_depth: usize
+  fn pred_cfl_inner(
+    output: &mut [T], stride: usize, ac: &[i16], alpha: i16, bit_depth: usize
   ) {
     if alpha == 0 {
       return;
@@ -641,6 +639,38 @@ where
           (avg + get_scaled_luma_q0(alpha, l)).max(0).min(sample_max).as_();
       }
     }
+  }
+
+  #[cfg_attr(feature = "comparative_bench", inline(never))]
+  fn pred_cfl(
+    output: &mut [T], stride: usize, ac: &[i16], alpha: i16, bit_depth: usize,
+    above: &[T], left: &[T]
+  ) {
+    Self::pred_dc(output, stride, above, left);
+    Self::pred_cfl_inner(output, stride, &ac, alpha, bit_depth);
+  }
+
+  fn pred_cfl_128(
+    output: &mut [T], stride: usize, ac: &[i16], alpha: i16, bit_depth: usize
+  ) {
+    Self::pred_dc_128(output, stride, bit_depth);
+    Self::pred_cfl_inner(output, stride, &ac, alpha, bit_depth);
+  }
+
+  fn pred_cfl_left(
+    output: &mut [T], stride: usize, ac: &[i16], alpha: i16, bit_depth: usize,
+    above: &[T], left: &[T]
+  ) {
+    Self::pred_dc_left(output, stride, above, left);
+    Self::pred_cfl_inner(output, stride, &ac, alpha, bit_depth);
+  }
+
+  fn pred_cfl_top(
+    output: &mut [T], stride: usize, ac: &[i16], alpha: i16, bit_depth: usize,
+    above: &[T], left: &[T]
+  ) {
+    Self::pred_dc_top(output, stride, above, left);
+    Self::pred_cfl_inner(output, stride, &ac, alpha, bit_depth);
   }
 }
 
@@ -840,10 +870,9 @@ pub mod test {
     let (above, left, ac, alpha, mut o1, mut o2) = setup_cfl_pred(ra, 8);
 
     pred_dc_4x4(&mut o1, 32, &above[..4], &left[..4]);
-    Block4x4::pred_dc(&mut o2, 32, &above[..4], &left[..4]);
-
     pred_cfl_4x4(&mut o1, 32, &ac, alpha, 8);
-    Block4x4::pred_cfl(&mut o2, 32, &ac, alpha, 8);
+
+    Block4x4::pred_cfl(&mut o2, 32, &ac, alpha, 8, &above[..4], &left[..4]);
 
     (o1, o2)
   }
