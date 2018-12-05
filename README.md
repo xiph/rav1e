@@ -141,7 +141,7 @@ cargo test
 
 Run encode-decode integration tests with:
 ```
-cargo test --release --features=decode_test -- --ignored
+cargo test --release --features=decode_test
 ```
 
 Run regular benchmarks with:
