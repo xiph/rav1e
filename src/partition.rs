@@ -141,6 +141,13 @@ impl BlockSize {
     self.width_log2().min(self.height_log2()) < 3
   }
 
+  pub fn sub8x8_offset(self) -> (isize, isize) {
+    let offset_x: isize = if self.width_log2() == 2 { -1 } else { 0 };
+    let offset_y: isize = if self.height_log2() == 2 { -1 } else { 0 };
+
+    (offset_x, offset_y)
+  }
+
   #[cfg_attr(rustfmt, rustfmt_skip)]
   const SUBSIZE_LOOKUP: [[BlockSize; BlockSize::BLOCK_SIZES_ALL];
     EXT_PARTITION_TYPES] = [
