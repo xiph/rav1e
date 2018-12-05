@@ -7,7 +7,6 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-#[macro_use]
 extern crate criterion;
 extern crate rand;
 extern crate rav1e;
