@@ -100,7 +100,6 @@ static DIMENSION_OFFSETS: &[(usize, usize)] =
   &[(0, 0), (4, 4), (8, 8), (16, 16)];
 
 #[test]
-#[ignore]
 fn speed() {
   let quantizer = 100;
   let limit = 5;
@@ -132,7 +131,6 @@ static DIMENSIONS: &[(usize, usize)] = &[
 ];
 
 #[test]
-#[ignore]
 fn dimensions() {
   let quantizer = 100;
   let limit = 1;
@@ -182,7 +180,6 @@ fn reordering() {
 }
 
 #[test]
-#[ignore]
 fn odd_size_frame_with_full_rdo() {
   let limit = 3;
   let w = 512 + 32 + 16 + 5;
