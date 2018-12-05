@@ -474,11 +474,7 @@ impl TxSize {
   }
 
   pub fn height_index(self) -> usize {
-    self.height_log2() - Self::smallest_height_log2()
-  }
-
-  pub fn smallest_height_log2() -> usize {
-    TX_4X4.height_log2()
+    self.height_log2() - TX_4X4.height_log2()
   }
 
   pub fn width_mi(self) -> usize {
