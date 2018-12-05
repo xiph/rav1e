@@ -454,9 +454,13 @@ impl TxSize {
   }
 
   pub fn width_log2(self) -> usize {
-    const TX_SIZE_WIDTH_LOG2: [usize; TxSize::TX_SIZES_ALL] =
-      [2, 3, 4, 5, 6, 2, 3, 3, 4, 4, 5, 5, 6, 2, 4, 3, 5, 4, 6];
-    TX_SIZE_WIDTH_LOG2[self as usize]
+    match self {
+      TX_4X4 | TX_4X8 | TX_4X16 => 2,
+      TX_8X8 | TX_8X4 | TX_8X16 | TX_8X32 => 3,
+      TX_16X16 | TX_16X8 | TX_16X32 | TX_16X4 | TX_16X64 => 4,
+      TX_32X32 | TX_32X16 | TX_32X64 | TX_32X8 => 5,
+      TX_64X64 | TX_64X32 | TX_64X16 => 6
+    }
   }
 
   pub fn width_index(self) -> usize {
@@ -468,9 +472,13 @@ impl TxSize {
   }
 
   pub fn height_log2(self) -> usize {
-    const TX_SIZE_HEIGHT_LOG2: [usize; TxSize::TX_SIZES_ALL] =
-      [2, 3, 4, 5, 6, 3, 2, 4, 3, 5, 4, 6, 5, 4, 2, 5, 3, 6, 4];
-    TX_SIZE_HEIGHT_LOG2[self as usize]
+    match self {
+      TX_4X4 | TX_8X4 | TX_16X4 => 2,
+      TX_8X8 | TX_4X8 | TX_16X8 | TX_32X8 => 3,
+      TX_16X16 | TX_8X16 | TX_32X16 | TX_4X16 | TX_64X16 => 4,
+      TX_32X32 | TX_16X32 | TX_64X32 | TX_8X32 => 5,
+      TX_64X64 | TX_32X64 | TX_16X64 => 6
+    }
   }
 
   pub fn height_index(self) -> usize {
@@ -494,80 +502,47 @@ impl TxSize {
   }
 
   pub fn block_size(self) -> BlockSize {
-    const TX_SIZE_TO_BLOCK_SIZE: [BlockSize; TxSize::TX_SIZES_ALL] = [
-      BLOCK_4X4,   // TX_4X4
-      BLOCK_8X8,   // TX_8X8
-      BLOCK_16X16, // TX_16X16
-      BLOCK_32X32, // TX_32X32
-      BLOCK_64X64,
-      BLOCK_4X8,   // TX_4X8
-      BLOCK_8X4,   // TX_8X4
-      BLOCK_8X16,  // TX_8X16
-      BLOCK_16X8,  // TX_16X8
-      BLOCK_16X32, // TX_16X32
-      BLOCK_32X16, // TX_32X16
-      BLOCK_32X64,
-      BLOCK_64X32,
-      BLOCK_4X16, // TX_4X16
-      BLOCK_16X4, // TX_16X4
-      BLOCK_8X32, // TX_8X32
-      BLOCK_32X8, // TX_32X8
-      BLOCK_16X64,
-      BLOCK_64X16
-    ];
-    TX_SIZE_TO_BLOCK_SIZE[self as usize]
+    match self {
+      TX_4X4 => BLOCK_4X4,
+      TX_8X8 => BLOCK_8X8,
+      TX_16X16 => BLOCK_16X16,
+      TX_32X32 => BLOCK_32X32,
+      TX_64X64 => BLOCK_64X64,
+      TX_4X8 => BLOCK_4X8,
+      TX_8X4 => BLOCK_8X4,
+      TX_8X16 => BLOCK_8X16,
+      TX_16X8 => BLOCK_16X8,
+      TX_16X32 => BLOCK_16X32,
+      TX_32X16 => BLOCK_32X16,
+      TX_32X64 => BLOCK_32X64,
+      TX_64X32 => BLOCK_64X32,
+      TX_4X16 => BLOCK_4X16,
+      TX_16X4 => BLOCK_16X4,
+      TX_8X32 => BLOCK_8X32,
+      TX_32X8 => BLOCK_32X8,
+      TX_16X64 => BLOCK_16X64,
+      TX_64X16 => BLOCK_64X16
+    }
   }
 
   pub fn sqr(self) -> TxSize {
-    #[cfg_attr(rustfmt, rustfmt_skip)]
-        const TX_SIZE_SQR: [TxSize; TxSize::TX_SIZES_ALL] = [
-            TX_4X4,
-            TX_8X8,
-            TX_16X16,
-            TX_32X32,
-            TX_64X64,
-            TX_4X4,
-            TX_4X4,
-            TX_8X8,
-            TX_8X8,
-            TX_16X16,
-            TX_16X16,
-            TX_32X32,
-            TX_32X32,
-            TX_4X4,
-            TX_4X4,
-            TX_8X8,
-            TX_8X8,
-            TX_16X16,
-            TX_16X16
-        ];
-    TX_SIZE_SQR[self as usize]
+    match self {
+      TX_4X4 | TX_4X8 | TX_8X4 | TX_4X16 | TX_16X4 => TX_4X4,
+      TX_8X8 | TX_8X16 | TX_16X8 | TX_8X32 | TX_32X8 => TX_8X8,
+      TX_16X16 | TX_16X32 | TX_32X16 | TX_16X64 | TX_64X16 => TX_16X16,
+      TX_32X32 | TX_32X64 | TX_64X32 => TX_32X32,
+      TX_64X64 => TX_64X64
+    }
   }
 
   pub fn sqr_up(self) -> TxSize {
-    #[cfg_attr(rustfmt, rustfmt_skip)]
-        const TX_SIZE_SQR_UP: [TxSize; TxSize::TX_SIZES_ALL] = [
-            TX_4X4,
-            TX_8X8,
-            TX_16X16,
-            TX_32X32,
-            TX_64X64,
-            TX_8X8,
-            TX_8X8,
-            TX_16X16,
-            TX_16X16,
-            TX_32X32,
-            TX_32X32,
-            TX_64X64,
-            TX_64X64,
-            TX_16X16,
-            TX_16X16,
-            TX_32X32,
-            TX_32X32,
-            TX_64X64,
-            TX_64X64
-        ];
-    TX_SIZE_SQR_UP[self as usize]
+    match self {
+      TX_4X4 => TX_4X4,
+      TX_8X8 | TX_4X8 | TX_8X4 => TX_8X8,
+      TX_16X16 | TX_8X16 | TX_16X8 | TX_4X16 | TX_16X4 => TX_16X16,
+      TX_32X32 | TX_16X32 | TX_32X16 | TX_8X32 | TX_32X8 => TX_32X32,
+      TX_64X64 | TX_32X64 | TX_64X32 | TX_16X64 | TX_64X16 => TX_64X64
+    }
   }
 
   pub fn by_dims(w: usize, h: usize) -> TxSize {
