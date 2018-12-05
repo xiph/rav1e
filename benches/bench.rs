@@ -139,7 +139,7 @@ fn cfl_rdo_bench(b: &mut Bencher, bsize: BlockSize) {
   let fi = FrameInvariants::new(1024, 1024, config);
   let mut fs = FrameState::new(&fi);
   let offset = BlockOffset { x: 1, y: 1 };
-  b.iter(|| rdo_cfl_alpha(&mut fs, &offset, bsize, 8))
+  b.iter(|| rdo_cfl_alpha(&mut fs, &offset, bsize, 8, Default::default()))
 }
 
 criterion_group!(intra_prediction, predict::pred_bench,);
