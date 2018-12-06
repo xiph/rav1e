@@ -239,7 +239,6 @@ pub struct Sequence {
     pub still_picture: bool,               // Video is a single frame still picture
     pub reduced_still_picture_hdr: bool,   // Use reduced header for still picture
     pub monochrome: bool,                  // Monochrome video
-    pub enable_filter_intra: bool,         // enables/disables filterintra
     pub enable_intra_edge_filter: bool,    // enables/disables corner/edge/upsampling
     pub enable_interintra_compound: bool,  // enables/disables interintra_compound
     pub enable_masked_compound: bool,      // enables/disables masked compound
@@ -318,7 +317,6 @@ impl Sequence {
             still_picture: false,
             reduced_still_picture_hdr: false,
             monochrome: false,
-            enable_filter_intra: true,
             enable_intra_edge_filter: true,
             enable_interintra_compound: false,
             enable_masked_compound: false,
@@ -970,7 +968,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         }
 
         self.write_bit(seq.use_128x128_superblock)?;
-        self.write_bit(seq.enable_filter_intra)?;
+        self.write_bit(true)?; // enable filter intra
         self.write_bit(seq.enable_intra_edge_filter)?;
 
         if !seq.reduced_still_picture_hdr {
