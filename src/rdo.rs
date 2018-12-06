@@ -11,34 +11,31 @@
 #![allow(non_camel_case_types)]
 #![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
 
+use api::PredictionModesSetting;
+use cdef::*;
 use context::*;
-use me::*;
-use ec::OD_BITRES;
-use ec::Writer;
-use ec::WriterCounter;
-use luma_ac;
+use ec::{OD_BITRES, Writer, WriterCounter};
+use encoder::{ChromaSampling, ReferenceMode};
 use encode_block_a;
 use encode_block_b;
-use motion_compensate;
-use partition::*;
-use plane::*;
-use cdef::*;
-use predict::{RAV1E_INTRA_MODES, RAV1E_INTRA_MODES_MINIMAL, RAV1E_INTER_MODES_MINIMAL, RAV1E_INTER_COMPOUND_MODES};
-use quantize::dc_q;
-use std;
-use std::f64;
-use std::vec::Vec;
-use write_tx_blocks;
-use write_tx_tree;
-use partition::BlockSize;
 use Frame;
 use FrameInvariants;
 use FrameState;
 use FrameType;
-use Tune;
+use luma_ac;
+use me::*;
+use motion_compensate;
+use partition::*;
+use plane::*;
+use predict::{RAV1E_INTRA_MODES, RAV1E_INTRA_MODES_MINIMAL, RAV1E_INTER_MODES_MINIMAL, RAV1E_INTER_COMPOUND_MODES};
+use quantize::dc_q;
 use Sequence;
-use encoder::{ChromaSampling, ReferenceMode};
-use api::PredictionModesSetting;
+use Tune;
+use write_tx_blocks;
+use write_tx_tree;
+
+use std;
+use std::vec::Vec;
 
 #[derive(Clone)]
 pub struct RDOOutput {

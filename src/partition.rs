@@ -12,7 +12,11 @@
 
 use self::BlockSize::*;
 use self::TxSize::*;
+use context::*;
 use encoder::{ChromaSampling, FrameInvariants};
+use plane::*;
+use predict::*;
+use util::*;
 
 pub const NONE_FRAME: usize = 8;
 pub const INTRA_FRAME: usize = 0;
@@ -855,11 +859,6 @@ pub enum MvJointType {
   MV_JOINT_HZVNZ = 2,  /* Hor zero, vert nonzero */
   MV_JOINT_HNZVNZ = 3  /* Both components nonzero */
 }
-
-use context::*;
-use plane::*;
-use predict::*;
-use util::*;
 
 impl PredictionMode {
   pub fn predict_intra<'a>(

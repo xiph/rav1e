@@ -7,17 +7,12 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use partition::TxSize;
-use partition::TxType;
-use partition::TX_TYPES;
-
-use util::*;
-
 pub use self::forward::*;
 pub use self::inverse::*;
 
-// Blocks
+use partition::{TxSize, TxType, TX_TYPES};
 use predict::*;
+use util::*;
 
 mod forward;
 mod inverse;

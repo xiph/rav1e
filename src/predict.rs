@@ -11,22 +11,20 @@
 #![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
 #![cfg_attr(feature = "cargo-clippy", allow(needless_range_loop))]
 
+use context::{INTRA_MODES, MAX_TX_SIZE};
+use partition::*;
+use util::*;
+
 #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
 use libc;
 use num_traits::*;
-
-use context::INTRA_MODES;
-use context::MAX_TX_SIZE;
-use partition::*;
-use util::*;
-use std::mem::*;
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
-use std::ptr;
-
 #[cfg(target_arch = "x86")]
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
+use std::mem::*;
+#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+use std::ptr;
 
 pub static RAV1E_INTRA_MODES: &'static [PredictionMode] = &[
   PredictionMode::DC_PRED,
@@ -767,6 +765,7 @@ pub trait Inter: Dim {}
 pub mod test {
   use super::*;
   use rand::{ChaChaRng, Rng, SeedableRng};
+  use util::*;
 
   const MAX_ITER: usize = 50000;
 
@@ -1010,7 +1009,6 @@ pub mod test {
 
   #[test]
   fn pred_matches_u8() {
-    use util::*;
     let mut edge_buf: AlignedArray<[u8; 2 * MAX_TX_SIZE + 1]> =
       UninitializedAlignedArray();
     for i in 0..edge_buf.array.len() {

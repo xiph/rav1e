@@ -1,5 +1,6 @@
-use encoder::Frame;
 use api::FrameInfo;
+use encoder::Frame;
+
 use std::sync::Arc;
 
 /// Detects fast cuts using changes in colour and intensity between frames.

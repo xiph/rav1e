@@ -8,11 +8,11 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use super::*;
-
-use std::cmp;
-use util::clamp;
 use num_traits::*;
 use partition::TxType;
+use util::clamp;
+
+use std::cmp;
 
 static COSPI_INV: [i32; 64] = [
   4096, 4095, 4091, 4085, 4076, 4065, 4052, 4036, 4017, 3996, 3973, 3948,

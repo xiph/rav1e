@@ -9,6 +9,7 @@
 
 use criterion::*;
 use partition::*;
+use partition::BlockSize::*;
 use plane::*;
 use rand::{ChaChaRng, Rng, SeedableRng};
 use rav1e::me;
@@ -52,7 +53,6 @@ fn bench_get_sad(b: &mut Bencher, bs: &BlockSize) {
 }
 
 pub fn get_sad(c: &mut Criterion) {
-  use partition::BlockSize::*;
   let blocks = vec![
     BLOCK_4X4,
     BLOCK_4X8,

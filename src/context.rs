@@ -17,25 +17,20 @@
 #![cfg_attr(feature = "cargo-clippy", allow(collapsible_if))]
 
 use ec::Writer;
+use encoder::{FrameInvariants, ReferenceMode};
+use entropymode::*;
+use lrf::{WIENER_TAPS_MID, SGR_XQD_MID};
+use partition::*;
 use partition::BlockSize::*;
 use partition::PredictionMode::*;
 use partition::TxSize::*;
 use partition::TxType::*;
-use partition::*;
-use lrf::WIENER_TAPS_MID;
-use lrf::SGR_XQD_MID;
 use plane::*;
-use util::clamp;
-use util::msb;
-use std::*;
-use entropymode::*;
-use token_cdfs::*;
-use encoder::FrameInvariants;
 use scan_order::*;
-use encoder::ReferenceMode;
+use token_cdfs::*;
+use util::{clamp, msb};
 
-use self::REF_CONTEXTS;
-use self::SINGLE_REFS;
+use std::*;
 
 pub const PLANES: usize = 3;
 

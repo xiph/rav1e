@@ -9,25 +9,25 @@
 
 use api::*;
 use cdef::*;
-use lrf::*;
 use context::*;
 use deblock::*;
-use segmentation::*;
 use ec::*;
+use lrf::*;
+use me::*;
 use partition::*;
 use plane::*;
 use quantize::*;
 use rdo::*;
-use std::fmt;
+use segmentation::*;
 use transform::*;
 use util::*;
-use me::*;
 
 use bitstream_io::{BitWriter, BigEndian, LittleEndian};
 use std;
-use std::io;
+use std::{fmt, io};
 use std::io::Write;
 use std::rc::Rc;
+use std::sync::Arc;
 
 extern {
     pub fn av1_rtcd();
@@ -400,8 +400,6 @@ impl Sequence {
       }
     }
 }
-
-use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct FrameState {
@@ -2760,9 +2758,10 @@ pub fn update_rec_buffer(fi: &mut FrameInvariants, fs: FrameState) {
 
 #[cfg(test)]
 mod test {
+  use super::*;
+
   #[test]
   fn frame_state_window() {
-    use super::*;
     let config = EncoderConfig { ..Default::default() };
     let fi = FrameInvariants::new(1024, 1024, config);
     let mut fs = FrameState::new(&fi);

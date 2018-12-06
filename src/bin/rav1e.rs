@@ -13,10 +13,10 @@ extern crate y4m;
 
 mod common;
 use common::*;
+use rav1e::*;
 
 use std::io;
 use std::io::Write;
-use rav1e::*;
 
 fn main() {
   let mut cli = parse_cli();
