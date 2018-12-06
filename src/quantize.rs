@@ -12,12 +12,20 @@
 
 use partition::TxSize;
 
+use num_traits::*;
+use std::convert::Into;
 use std::mem;
+use std::ops::AddAssign;
 
-pub fn get_log_tx_scale(tx_size: TxSize) -> i32 {
+pub trait Coefficient:
+  PrimInt + Into<i32> + AsPrimitive<i32> + AddAssign + Signed + 'static {}
+impl Coefficient for i16 {}
+impl Coefficient for i32 {}
+
+pub fn get_log_tx_scale(tx_size: TxSize) -> usize {
   let num_pixels = tx_size.area();
 
-  i32::from(num_pixels > 256) + i32::from(num_pixels > 1024)
+  Into::<usize>::into(num_pixels > 256) + Into::<usize>::into(num_pixels > 1024)
 }
 
 pub fn dc_q(qindex: u8, bit_depth: usize) -> i16 {
@@ -44,7 +52,7 @@ pub fn ac_q(qindex: u8, bit_depth: usize) -> i16 {
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct QuantizationContext {
-  log_tx_scale: i32,
+  log_tx_scale: usize,
   dc_quant: u32,
   dc_offset: i32,
   dc_mul_add: (u32, u32, u32),
@@ -156,20 +164,22 @@ impl QuantizationContext {
   }
 
   #[inline]
-  pub fn quantize(&self, coeffs: &[i32], qcoeffs: &mut [i32], coded_tx_size: usize) {
-    qcoeffs[0] = coeffs[0] << self.log_tx_scale;
-    qcoeffs[0] += qcoeffs[0].signum() * self.dc_offset;
-    qcoeffs[0] = divu_pair(qcoeffs[0], self.dc_mul_add);
+  pub fn quantize<T>(&self, coeffs: &[T], qcoeffs: &mut [T], coded_tx_size: usize)
+    where T: Coefficient, i32: AsPrimitive<T>
+  {
+    qcoeffs[0] = coeffs[0] << (self.log_tx_scale as usize);
+    qcoeffs[0] += qcoeffs[0].signum() * self.dc_offset.as_();
+    qcoeffs[0] = divu_pair(qcoeffs[0].as_(), self.dc_mul_add).as_();
 
     for (qc, c) in qcoeffs[1..].iter_mut().zip(coeffs[1..].iter()).take(coded_tx_size - 1) {
       *qc = *c << self.log_tx_scale;
-      *qc += qc.signum() * self.ac_offset;
-      *qc = divu_pair(*qc, self.ac_mul_add);
+      *qc += qc.signum() * self.ac_offset.as_();
+      *qc = divu_pair((*qc).as_(), self.ac_mul_add).as_();
     }
 
     if qcoeffs.len() > coded_tx_size {
       for qc in qcoeffs[coded_tx_size..].iter_mut() {
-        *qc = 0;
+        *qc = 0.as_();
       }
     }
   }
