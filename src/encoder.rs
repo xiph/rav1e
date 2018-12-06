@@ -2527,7 +2527,7 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
     };
 
     let bc = BlockContext::new(fi.w_in_b, fi.h_in_b);
-    // For now, restoration unit size is locked to superblock size. 
+    // For now, restoration unit size is locked to superblock size.
     let rc = RestorationContext::new(fi.sb_width, fi.sb_height);
     let mut cw = ContextWriter::new(fc, bc, rc);
 

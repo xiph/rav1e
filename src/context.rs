@@ -3664,7 +3664,7 @@ pub fn get_mv_class(z: u32, offset: &mut u32) -> usize {
   c
 }
 
-pub fn encode_mv_component(w: &mut Writer, comp: i32, 
+pub fn encode_mv_component(w: &mut Writer, comp: i32,
   mvcomp: &mut NMVComponent, precision: MvSubpelPrecision) {
   assert!(comp != 0);
   let mut offset: u32 = 0;
@@ -3701,7 +3701,7 @@ pub fn encode_mv_component(w: &mut Writer, comp: i32,
   // High precision bit
   if precision > MvSubpelPrecision::MV_SUBPEL_LOW_PRECISION {
     w.symbol_with_update(
-        hp, 
+        hp,
         if mv_class == MV_CLASS_0 { &mut mvcomp.class0_hp_cdf }
         else { &mut mvcomp.hp_cdf});
   }
