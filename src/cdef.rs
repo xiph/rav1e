@@ -9,13 +9,13 @@
 
 #![allow(safe_extern_statics)]
 
-use std::cmp;
 use context::*;
-use plane::*;
-use util::clamp;
-use util::msb;
-use FrameInvariants;
 use Frame;
+use FrameInvariants;
+use plane::*;
+use util::{clamp, msb};
+
+use std::cmp;
 
 pub struct CdefDirections {
     dir: [[u8; 8]; 8],

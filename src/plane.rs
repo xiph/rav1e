@@ -9,6 +9,8 @@
 
 #![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
 
+use std::iter::FusedIterator;
+
 use util::*;
 
 /// Plane-specific configuration.
@@ -331,7 +333,6 @@ impl<'a> Iterator for IterWidth<'a> {
 
 impl<'a> ExactSizeIterator for IterWidth<'a> { }
 
-use std::iter::FusedIterator;
 impl<'a> FusedIterator for IterWidth<'a> { }
 
 impl<'a> PlaneSlice<'a> {

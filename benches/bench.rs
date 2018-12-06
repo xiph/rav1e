@@ -15,17 +15,16 @@ mod predict;
 mod transform;
 mod me;
 
-use std::time::Duration;
-use criterion::*;
+use rav1e::*;
 use rav1e::cdef::cdef_filter_frame;
 use rav1e::context::*;
-use rav1e::ec;
 use rav1e::partition::*;
 use rav1e::predict::*;
 use rav1e::rdo::rdo_cfl_alpha;
-use rav1e::*;
-
 use transform::transform;
+
+use criterion::*;
+use std::time::Duration;
 
 #[cfg(feature = "comparative_bench")]
 mod comparative;

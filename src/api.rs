@@ -7,15 +7,16 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use bitstream_io::*;
 use encoder::*;
-use partition::*;
-
-use std::cmp;
-use std::collections::BTreeMap;
-use std::fmt;
-use std::sync::Arc;
-use scenechange::SceneChangeDetector;
 use metrics::calculate_frame_psnr;
+use partition::*;
+use scenechange::SceneChangeDetector;
+use self::EncoderStatus::*;
+
+use std::{cmp, fmt, io};
+use std::collections::BTreeMap;
+use std::sync::Arc;
 
 // TODO: use the num crate?
 #[derive(Clone, Copy, Debug)]
@@ -173,7 +174,6 @@ pub struct Config {
 
 impl Config {
   pub fn parse(&mut self, key: &str, value: &str) -> Result<(), EncoderStatus> {
-    use self::EncoderStatus::*;
     match key {
       "low_latency" => self.enc.low_latency = value.parse().map_err(|_e| ParseError)?,
       "min_key_frame_interval" => self.enc.min_key_frame_interval = value.parse().map_err(|_e| ParseError)?,

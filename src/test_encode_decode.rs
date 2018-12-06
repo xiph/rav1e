@@ -15,10 +15,10 @@
 include!(concat!(env!("OUT_DIR"), "/aom.rs"));
 
 use super::*;
-
 use rand::{ChaChaRng, Rng, SeedableRng};
+use std::{mem, ptr, slice};
 use std::collections::VecDeque;
-use std::mem;
+use std::ffi::CStr;
 use std::sync::Arc;
 
 fn fill_frame(ra: &mut ChaChaRng, frame: &mut Frame) {
@@ -225,7 +225,6 @@ fn compare_plane<T: Ord + std::fmt::Debug>(
 }
 
 fn compare_img(img: *const aom_image_t, frame: &Frame, bit_depth: usize, width: usize, height: usize) {
-  use std::slice;
   let img = unsafe { *img };
   let img_iter = img.planes.iter().zip(img.stride.iter());
 
@@ -270,7 +269,6 @@ fn encode_decode(
   w: usize, h: usize, speed: usize, quantizer: usize, limit: usize,
   bit_depth: usize, min_keyint: u64, max_keyint: u64, low_latency: bool
 ) {
-  use std::ptr;
   let mut ra = ChaChaRng::from_seed([0; 32]);
 
   let mut dec = setup_decoder(w, h);
@@ -313,7 +311,6 @@ fn encode_decode(
           );
           println!("Decoded. -> {}", ret);
           if ret != 0 {
-            use std::ffi::CStr;
             let error_msg = aom_codec_error(&mut dec.dec);
             println!(
               "  Decode codec_decode failed: {}",
@@ -345,7 +342,6 @@ fn encode_decode(
                 &mut corrupted
               );
               if ret != 0 {
-                use std::ffi::CStr;
                 let detail = aom_codec_error_detail(&mut dec.dec);
                 panic!(
                   "Decode codec_control failed {}",

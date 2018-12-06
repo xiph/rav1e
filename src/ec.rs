@@ -344,7 +344,6 @@ impl<S> WriterBase<S> {
 
   #[cfg(debug)]
   fn print_backtrace(&self, s: u32) {
-    use backtrace;
     let mut depth = 3;
     backtrace::trace(|frame| {
       let ip = frame.ip();
@@ -644,6 +643,7 @@ impl<W: io::Write> BCodeWriter for BitWriter<W, BigEndian> {
 #[cfg(test)]
 mod test {
   use super::*;
+
   const WINDOW_SIZE: i16 = 32;
   const LOTS_OF_BITS: i16 = 0x4000;
 

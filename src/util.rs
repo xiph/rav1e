@@ -7,6 +7,12 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use num_traits::*;
+use std::mem;
+use std::mem::size_of;
+#[allow(deprecated, unused_imports)]
+use ::std::ascii::AsciiExt;
+
 // Imported from clap, to avoid to depend directly to the crate
 macro_rules! _clap_count_exprs {
     () => { 0 };
@@ -23,8 +29,6 @@ macro_rules! arg_enum {
             type Err = String;
 
             fn from_str(s: &str) -> ::std::result::Result<Self,Self::Err> {
-                #[allow(deprecated, unused_imports)]
-                use ::std::ascii::AsciiExt;
                 match s {
                     $(stringify!($v) |
                     _ if s.eq_ignore_ascii_case(stringify!($v)) => Ok($e::$v)),+,
@@ -156,7 +160,6 @@ pub fn AlignedArray<ARRAY>(array: ARRAY) -> AlignedArray<ARRAY> {
 
 #[allow(non_snake_case)]
 pub fn UninitializedAlignedArray<ARRAY>() -> AlignedArray<ARRAY> {
-  use std::mem;
   AlignedArray(unsafe { mem::uninitialized() })
 }
 
@@ -206,9 +209,6 @@ pub fn clamp<T: PartialOrd>(input: T, min: T, max: T) -> T {
     input
   }
 }
-
-use num_traits::*;
-use std::mem::size_of;
 
 pub trait Pixel: PrimInt + Into<u32> + Into<i32> + AsPrimitive<i32> + 'static {}
 impl Pixel for u8 {}

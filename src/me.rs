@@ -7,20 +7,23 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use context::BlockOffset;
-use context::BLOCK_TO_PLANE_SHIFT;
-use context::MI_SIZE;
-use partition::*;
-use plane::*;
+#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+pub use self::nasm::get_sad;
+#[cfg(any(not(target_arch = "x86_64"), windows, not(feature = "nasm")))]
+pub use self::native::get_sad;
+use context::{BlockOffset, BLOCK_TO_PLANE_SHIFT, MI_SIZE};
 use FrameInvariants;
 use FrameState;
+use partition::*;
+use plane::*;
 use rdo::get_lambda_sqrt;
 
 #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
 mod nasm {
-  use libc;
   use plane::*;
   use util::*;
+
+  use libc;
 
   extern {
     fn rav1e_sad_4x4_hbd_ssse3(
@@ -128,12 +131,6 @@ mod native {
     sum
   }
 }
-
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
-pub use self::nasm::get_sad;
-
-#[cfg(any(not(target_arch = "x86_64"), windows, not(feature = "nasm")))]
-pub use self::native::get_sad;
 
 fn get_mv_range(fi: &FrameInvariants, bo: &BlockOffset, blk_w: usize, blk_h: usize) -> (isize, isize, isize, isize) {
   let border_w = 128 + blk_w as isize * 8;
@@ -421,6 +418,8 @@ pub fn estimate_motion_ss2(
 #[cfg(test)]
 pub mod test {
   use super::*;
+  use partition::BlockSize;
+  use partition::BlockSize::*;
 
   // Generate plane data for get_sad_same()
   fn setup_sad() -> (Plane, Plane) {
@@ -451,9 +450,6 @@ pub mod test {
   // Regression and validation test for SAD computation
   #[test]
   fn get_sad_same() {
-    use partition::BlockSize;
-    use partition::BlockSize::*;
-
     let blocks: Vec<(BlockSize, u32)> = vec![
       (BLOCK_4X4, 1912),
       (BLOCK_4X8, 3496),
