@@ -44,30 +44,50 @@ JMP_TABLE      ipred_h,  ssse3, w4, w8, w16, w32, w64
 SECTION .text
 
 
-%macro IPRED_SET   4                                          ; width, store_type, stride, stride size, pshuflw_imm8
-    pshuflw                      m1, m0, %4                   ; extend 8 byte for 2 pos
+%macro IPRED_SET   3                                          ; width, stride, stride size pshuflw_imm8
+    pshuflw                      m1, m0, %3                   ; extend 8 byte for 2 pos
     punpcklqdq                   m1, m1
-    mov%2          [dstq +      %3], m1
+    mova           [dstq +      %2], m1
 %if %1 > 16
-    mov%2          [dstq + 16 + %3], m1
+    mova           [dstq + 16 + %2], m1
 %endif
 %if %1 > 32
-    mov%2          [dstq + 32 + %3], m1
-    mov%2          [dstq + 48 + %3], m1
+    mova           [dstq + 32 + %2], m1
+    mova           [dstq + 48 + %2], m1
 %endif
 %endmacro
 
-%macro IPRED_H   3                                          ; width, loop label, store_type
+%macro IPRED_H 1                                            ; width
     sub                         tlq, 4
     movd                         m0, [tlq]                  ; get 4 bytes of topleft data
     punpcklbw                    m0, m0                     ; extend 2 byte
-    IPRED_SET                    %1, %3,         0, q3333
-    IPRED_SET                    %1, %3,   strideq, q2222
-    IPRED_SET                    %1, %3, strideq*2, q1111
-    IPRED_SET                    %1, %3,  stride3q, q0000
+%if %1 == 4
+    pshuflw                      m1, m0, q2233
+    movd           [dstq+strideq*0], m1
+    psrlq                        m1, 32
+    movd           [dstq+strideq*1], m1
+    pshuflw                      m0, m0, q0011
+    movd           [dstq+strideq*2], m0
+    psrlq                        m0, 32
+    movd           [dstq+stride3q ], m0
+
+%elif %1 == 8
+    punpcklwd                    m0, m0
+    punpckhdq                    m1, m0, m0
+    punpckldq                    m0, m0
+    movq           [dstq+strideq*1], m1
+    movhps         [dstq+strideq*0], m1
+    movq           [dstq+stride3q ], m0
+    movhps         [dstq+strideq*2], m0
+%else
+    IPRED_SET                    %1,         0, q3333
+    IPRED_SET                    %1,   strideq, q2222
+    IPRED_SET                    %1, strideq*2, q1111
+    IPRED_SET                    %1,  stride3q, q0000
+%endif
     lea                        dstq, [dstq+strideq*4]
     sub                          hd, 4
-    jg   %2
+    jg .w%1
     RET
 %endmacro
 
@@ -76,21 +96,17 @@ cglobal ipred_h, 3, 6, 2, dst, stride, tl, w, h, stride3
     lea                          r5, [ipred_h_ssse3_table]
     tzcnt                        wd, wm
     movifnidn                    hd, hm
-%if ARCH_X86_64
     movsxd                       wq, [r5+wq*4]
-%else
-    mov                          wq, [r5+wq*4]
-%endif
     add                          wq, r5
     lea                    stride3q, [strideq*3]
     jmp                          wq
 .w4:
-    IPRED_H                       4,  .w4, d
+    IPRED_H                       4
 .w8:
-    IPRED_H                       8,  .w8, q
+    IPRED_H                       8
 .w16:
-    IPRED_H                      16, .w16, u
+    IPRED_H                      16
 .w32:
-    IPRED_H                      32, .w32, u
+    IPRED_H                      32
 .w64:
-    IPRED_H                      64, .w64, u
+    IPRED_H                      64
