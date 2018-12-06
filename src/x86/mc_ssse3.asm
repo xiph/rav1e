@@ -744,3 +744,373 @@ cglobal blend_h, 3, 7, 6, dst, ds, tmp, w, h, mask
     inc                  hq
     jl .w16_loop0
     RET
+
+; emu_edge args:
+; const intptr_t bw, const intptr_t bh, const intptr_t iw, const intptr_t ih,
+; const intptr_t x, const intptr_t y, pixel *dst, const ptrdiff_t dst_stride,
+; const pixel *ref, const ptrdiff_t ref_stride
+;
+; bw, bh total filled size
+; iw, ih, copied block -> fill bottom, right
+; x, y, offset in bw/bh -> fill top, left
+cglobal emu_edge, 10, 13, 2, bw, bh, iw, ih, x, \
+                             y, dst, dstride, src, sstride, \
+                             bottomext, rightext, blk
+    ; we assume that the buffer (stride) is larger than width, so we can
+    ; safely overwrite by a few bytes
+    pxor                 m1, m1
+
+%if ARCH_X86_64
+ %define reg_zero       r12q
+ %define reg_tmp        r10
+ %define reg_src        srcq
+ %define reg_bottomext  bottomextq
+ %define reg_rightext   rightextq
+ %define reg_blkm       r9m
+%else
+ %define reg_zero       r6
+ %define reg_tmp        r0
+ %define reg_src        r1
+ %define reg_bottomext  r0
+ %define reg_rightext   r1
+ %define reg_blkm       blkm
+%endif
+    ;
+    ; ref += iclip(y, 0, ih - 1) * PXSTRIDE(ref_stride)
+    xor            reg_zero, reg_zero
+    lea             reg_tmp, [ihq-1]
+    cmp                  yq, ihq
+    cmovl           reg_tmp, yq
+    test                 yq, yq
+    cmovl           reg_tmp, reg_zero
+%if ARCH_X86_64
+    imul            reg_tmp, sstrideq
+    add                srcq, reg_tmp
+%else
+    imul            reg_tmp, sstridem
+    mov             reg_src, srcm
+    add             reg_src, reg_tmp
+%endif
+    ;
+    ; ref += iclip(x, 0, iw - 1)
+    lea             reg_tmp, [iwq-1]
+    cmp                  xq, iwq
+    cmovl           reg_tmp, xq
+    test                 xq, xq
+    cmovl           reg_tmp, reg_zero
+    add             reg_src, reg_tmp
+%if ARCH_X86_32
+    mov                srcm, reg_src
+%endif
+    ;
+    ; bottom_ext = iclip(y + bh - ih, 0, bh - 1)
+%if ARCH_X86_32
+    mov                  r1, r1m ; restore bh
+%endif
+    lea       reg_bottomext, [yq+bhq]
+    sub       reg_bottomext, ihq
+    lea                  r3, [bhq-1]
+    cmovl     reg_bottomext, reg_zero
+    ;
+
+    DEFINE_ARGS bw, bh, iw, ih, x, \
+                topext, dst, dstride, src, sstride, \
+                bottomext, rightext, blk
+
+    ; top_ext = iclip(-y, 0, bh - 1)
+    neg             topextq
+    cmovl           topextq, reg_zero
+    cmp       reg_bottomext, bhq
+    cmovge    reg_bottomext, r3
+    cmp             topextq, bhq
+    cmovg           topextq, r3
+ %if ARCH_X86_32
+    mov          bottomextm, reg_bottomext
+    ;
+    ; right_ext = iclip(x + bw - iw, 0, bw - 1)
+    mov                  r0, r0m ; restore bw
+ %endif
+    lea        reg_rightext, [xq+bwq]
+    sub        reg_rightext, iwq
+    lea                  r2, [bwq-1]
+    cmovl      reg_rightext, reg_zero
+
+    DEFINE_ARGS bw, bh, iw, ih, leftext, \
+                topext, dst, dstride, src, sstride, \
+                bottomext, rightext, blk
+
+    ; left_ext = iclip(-x, 0, bw - 1)
+    neg            leftextq
+    cmovl          leftextq, reg_zero
+    cmp        reg_rightext, bwq
+    cmovge     reg_rightext, r2
+ %if ARCH_X86_32
+    mov           rightextm, r1
+ %endif
+    cmp            leftextq, bwq
+    cmovge         leftextq, r2
+
+%undef reg_zero
+%undef reg_tmp
+%undef reg_src
+%undef reg_bottomext
+%undef reg_rightext
+
+    DEFINE_ARGS bw, centerh, centerw, dummy, leftext, \
+                topext, dst, dstride, src, sstride, \
+                bottomext, rightext, blk
+
+    ; center_h = bh - top_ext - bottom_ext
+%if ARCH_X86_64
+    lea                  r3, [bottomextq+topextq]
+    sub            centerhq, r3
+%else
+    mov                   r1, centerhm ; restore r1
+    sub             centerhq, topextq
+    sub             centerhq, bottomextm
+    mov                  r1m, centerhq
+%endif
+    ;
+    ; blk += top_ext * PXSTRIDE(dst_stride)
+    mov                  r2, topextq
+%if ARCH_X86_64
+    imul                 r2, dstrideq
+%else
+    mov                  r6, r6m ; restore dstq
+    imul                 r2, dstridem
+%endif
+    add                dstq, r2
+    mov            reg_blkm, dstq ; save pointer for ext
+    ;
+    ; center_w = bw - left_ext - right_ext
+    mov            centerwq, bwq
+%if ARCH_X86_64
+    lea                  r3, [rightextq+leftextq]
+    sub            centerwq, r3
+%else
+    sub            centerwq, rightextm
+    sub            centerwq, leftextq
+%endif
+
+; vloop Macro
+%macro v_loop 3 ; need_left_ext, need_right_ext, suffix
+  %if ARCH_X86_64
+    %define reg_tmp        r12
+  %else
+    %define reg_tmp        r0
+  %endif
+.v_loop_%3:
+  %if ARCH_X86_32
+    mov                  r0, r0m
+    mov                  r1, r1m
+  %endif
+%if %1
+    test           leftextq, leftextq
+    jz .body_%3
+    ; left extension
+  %if ARCH_X86_64
+    movd                 m0, [srcq]
+  %else
+    mov                  r3, srcm
+    movd                 m0, [r3]
+  %endif
+    pshufb               m0, m1
+    xor                  r3, r3
+.left_loop_%3:
+    mova          [dstq+r3], m0
+    add                  r3, mmsize
+    cmp                  r3, leftextq
+    jl .left_loop_%3
+    ; body
+.body_%3:
+    lea             reg_tmp, [dstq+leftextq]
+%endif
+    xor                  r3, r3
+.body_loop_%3:
+  %if ARCH_X86_64
+    movu                 m0, [srcq+r3]
+  %else
+    mov                  r1, srcm
+    movu                 m0, [r1+r3]
+  %endif
+%if %1
+    movu       [reg_tmp+r3], m0
+%else
+    movu          [dstq+r3], m0
+%endif
+    add                  r3, mmsize
+    cmp                  r3, centerwq
+    jl .body_loop_%3
+%if %2
+    ; right extension
+  %if ARCH_X86_64
+    test          rightextq, rightextq
+  %else
+    mov                  r1, rightextm
+    test                 r1, r1
+  %endif
+    jz .body_loop_end_%3
+%if %1
+    add             reg_tmp, centerwq
+%else
+    lea             reg_tmp, [dstq+centerwq]
+%endif
+  %if ARCH_X86_64
+    movd                 m0, [srcq+centerwq-1]
+  %else
+    mov                  r3, srcm
+    movd                 m0, [r3+centerwq-1]
+  %endif
+    pshufb               m0, m1
+    xor                  r3, r3
+.right_loop_%3:
+    movu       [reg_tmp+r3], m0
+    add                  r3, mmsize
+  %if ARCH_X86_64
+    cmp                  r3, rightextq
+  %else
+    cmp                  r3, rightextm
+  %endif
+    jl .right_loop_%3
+.body_loop_end_%3:
+%endif
+  %if ARCH_X86_64
+    add                dstq, dstrideq
+    add                srcq, sstrideq
+    dec            centerhq
+    jg .v_loop_%3
+  %else
+    add                dstq, dstridem
+    mov                  r0, sstridem
+    add                srcm, r0
+    sub       dword centerhm, 1
+    jg .v_loop_%3
+    mov                  r0, r0m ; restore r0
+  %endif
+%endmacro ; vloop MACRO
+
+    test           leftextq, leftextq
+    jnz .need_left_ext
+ %if ARCH_X86_64
+    test          rightextq, rightextq
+    jnz .need_right_ext
+ %else
+    cmp            leftextq, rightextm ; leftextq == 0
+    jne .need_right_ext
+ %endif
+    v_loop                0, 0, 0
+    jmp .body_done
+
+    ;left right extensions
+.need_left_ext:
+ %if ARCH_X86_64
+    test          rightextq, rightextq
+ %else
+    mov                  r3, rightextm
+    test                 r3, r3
+ %endif
+    jnz .need_left_right_ext
+    v_loop                1, 0, 1
+    jmp .body_done
+
+.need_left_right_ext:
+    v_loop                1, 1, 2
+    jmp .body_done
+
+.need_right_ext:
+    v_loop                0, 1, 3
+
+.body_done:
+; r0 ; bw
+; r1 ;; x loop
+; r4 ;; y loop
+; r5 ; topextq
+; r6 ;dstq
+; r7 ;dstrideq
+; r8 ; srcq
+%if ARCH_X86_64
+ %define reg_dstride    dstrideq
+%else
+ %define reg_dstride    r2
+%endif
+    ;
+    ; bottom edge extension
+ %if ARCH_X86_64
+    test         bottomextq, bottomextq
+    jz .top
+ %else
+    xor                  r1, r1
+    cmp                  r1, bottomextm
+    je .top
+ %endif
+    ;
+ %if ARCH_X86_64
+    mov                srcq, dstq
+    sub                srcq, dstrideq
+    xor                  r1, r1
+ %else
+    mov                  r3, dstq
+    mov         reg_dstride, dstridem
+    sub                  r3, reg_dstride
+    mov                srcm, r3
+ %endif
+    ;
+.bottom_x_loop:
+ %if ARCH_X86_64
+    mova                 m0, [srcq+r1]
+    lea                  r3, [dstq+r1]
+    mov                  r4, bottomextq
+ %else
+    mov                  r3, srcm
+    mova                 m0, [r3+r1]
+    lea                  r3, [dstq+r1]
+    mov                  r4, bottomextm
+ %endif
+    ;
+.bottom_y_loop:
+    mova               [r3], m0
+    add                  r3, reg_dstride
+    dec                  r4
+    jg .bottom_y_loop
+    add                  r1, mmsize
+    cmp                  r1, bwq
+    jl .bottom_x_loop
+
+.top:
+    ; top edge extension
+    test            topextq, topextq
+    jz .end
+%if ARCH_X86_64
+    mov                srcq, reg_blkm
+%else
+    mov                  r3, reg_blkm
+    mov         reg_dstride, dstridem
+%endif
+    mov                dstq, dstm
+    xor                  r1, r1
+    ;
+.top_x_loop:
+%if ARCH_X86_64
+    mova                 m0, [srcq+r1]
+%else
+    mov                  r3, reg_blkm
+    mova                 m0, [r3+r1]
+%endif
+    lea                  r3, [dstq+r1]
+    mov                  r4, topextq
+    ;
+.top_y_loop:
+    mova               [r3], m0
+    add                  r3, reg_dstride
+    dec                  r4
+    jg .top_y_loop
+    add                  r1, mmsize
+    cmp                  r1, bwq
+    jl .top_x_loop
+
+.end:
+    RET
+
+%undef reg_dstride
+%undef reg_blkm
+%undef reg_tmp
