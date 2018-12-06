@@ -153,14 +153,164 @@ pub enum PredictionModesSetting {
   ComplexAll,
 }
 
+#[derive(Debug,Clone,Copy,PartialEq)]
+pub enum MatrixCoefficients {
+    Identity = 0,
+    BT709,
+    Unspecified,
+    Reserved,
+    BT470M,
+    BT470BG,
+    ST170M,
+    ST240M,
+    YCgCo,
+    BT2020NonConstantLuminance,
+    BT2020ConstantLuminance,
+    ST2085,
+    ChromaticityDerivedNonConstantLuminance,
+    ChromaticityDerivedConstantLuminance,
+    ICtCp,
+}
+
+impl fmt::Display for MatrixCoefficients {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            MatrixCoefficients::Identity => write!(f, "Identity"),
+            MatrixCoefficients::BT709 => write!(f, "ITU BT.709"),
+            MatrixCoefficients::Unspecified => write!(f, "Unspecified"),
+            MatrixCoefficients::Reserved => write!(f, "Reserved"),
+            MatrixCoefficients::BT470M => write!(f, "ITU BT.470M"),
+            MatrixCoefficients::BT470BG => write!(f, "ITU BT.470BG"),
+            MatrixCoefficients::ST170M => write!(f, "SMPTE ST-170M"),
+            MatrixCoefficients::ST240M => write!(f, "SMPTE ST-240M"),
+            MatrixCoefficients::YCgCo => write!(f, "YCgCo"),
+            MatrixCoefficients::BT2020NonConstantLuminance => write!(f, "ITU BT.2020 (Non Constant Luminance)"),
+            MatrixCoefficients::BT2020ConstantLuminance => write!(f, "ITU BT.2020 (Constant Luminance)"),
+            MatrixCoefficients::ST2085 => write!(f, "SMPTE ST-2085"),
+            MatrixCoefficients::ChromaticityDerivedNonConstantLuminance => write!(f, "Chromaticity Derived (Non Constant Luminance)"),
+            MatrixCoefficients::ChromaticityDerivedConstantLuminance => write!(f, "Chromaticity Derived (Constant Luminance)"),
+            MatrixCoefficients::ICtCp => write!(f, "ICtCp"),
+        }
+    }
+}
+
+impl Default for MatrixCoefficients {
+    fn default() -> Self {
+        MatrixCoefficients::Unspecified
+    }
+}
+
+#[derive(Debug,Clone,Copy,PartialEq)]
+pub enum ColorPrimaries {
+    Reserved0 = 0,
+    BT709,
+    Unspecified,
+    Reserved,
+    BT470M,
+    BT470BG,
+    ST170M,
+    ST240M,
+    Film,
+    BT2020,
+    ST428,
+    P3DCI,
+    P3Display,
+    Tech3213 = 22,
+}
+
+impl fmt::Display for ColorPrimaries {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            ColorPrimaries::Reserved0 => write!(f, "Identity"),
+            ColorPrimaries::BT709 => write!(f, "ITU BT.709"),
+            ColorPrimaries::Unspecified => write!(f, "Unspecified"),
+            ColorPrimaries::Reserved => write!(f, "Reserved"),
+            ColorPrimaries::BT470M => write!(f, "ITU BT.470M"),
+            ColorPrimaries::BT470BG => write!(f, "ITU BT.470BG"),
+            ColorPrimaries::ST170M => write!(f, "SMPTE ST-170M"),
+            ColorPrimaries::ST240M => write!(f, "SMPTE ST-240M"),
+            ColorPrimaries::Film => write!(f, "Film"),
+            ColorPrimaries::BT2020 => write!(f, "ITU BT.2020"),
+            ColorPrimaries::ST428 => write!(f, "SMPTE ST-428"),
+            ColorPrimaries::P3DCI => write!(f, "DCI P3"),
+            ColorPrimaries::P3Display => write!(f, "Display P3"),
+            ColorPrimaries::Tech3213 => write!(f, "EBU Tech3213"),
+        }
+    }
+}
+
+impl Default for ColorPrimaries {
+    fn default() -> Self {
+        ColorPrimaries::Unspecified
+    }
+}
+
+#[derive(Debug,Clone,Copy,PartialEq)]
+pub enum TransferCharacteristic {
+    Reserved0 = 0,
+    BT1886,
+    Unspecified,
+    Reserved,
+    BT470M,
+    BT470BG,
+    ST170M,
+    ST240M,
+    Linear,
+    Logarithmic100,
+    Logarithmic316,
+    XVYCC,
+    BT1361E,
+    SRGB,
+    BT2020Ten,
+    BT2020Twelve,
+    PerceptualQuantizer,
+    ST428,
+    HybridLogGamma,
+}
+
+impl fmt::Display for TransferCharacteristic {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            TransferCharacteristic::Reserved0 => write!(f, "Identity"),
+            TransferCharacteristic::BT1886 => write!(f, "ITU BT.1886"),
+            TransferCharacteristic::Unspecified => write!(f, "Unspecified"),
+            TransferCharacteristic::Reserved => write!(f, "Reserved"),
+            TransferCharacteristic::BT470M => write!(f, "ITU BT.470M"),
+            TransferCharacteristic::BT470BG => write!(f, "ITU BT.470BG"),
+            TransferCharacteristic::ST170M => write!(f, "SMPTE ST-170M"),
+            TransferCharacteristic::ST240M => write!(f, "SMPTE ST-240M"),
+            TransferCharacteristic::Linear => write!(f, "Linear"),
+            TransferCharacteristic::Logarithmic100 => write!(f, "Logarithmic 100:1 range"),
+            TransferCharacteristic::Logarithmic316 => write!(f, "Logarithmic 316:1 range"),
+            TransferCharacteristic::XVYCC => write!(f, "XVYCC"),
+            TransferCharacteristic::BT1361E => write!(f, "ITU BT.1361 Extended Color Gamut"),
+            TransferCharacteristic::SRGB => write!(f, "sRGB"),
+            TransferCharacteristic::BT2020Ten => write!(f, "ITU BT.2020 for 10bit systems"),
+            TransferCharacteristic::BT2020Twelve => write!(f, "ITU BT.2020 for 12bit systems"),
+            TransferCharacteristic::PerceptualQuantizer => write!(f, "Perceptual Quantizer"),
+            TransferCharacteristic::ST428 => write!(f, "SMPTE ST-428"),
+            TransferCharacteristic::HybridLogGamma => write!(f, "Hybrid Log-Gamma"),
+        }
+    }
+}
+
+impl Default for TransferCharacteristic {
+    fn default() -> Self {
+        TransferCharacteristic::Unspecified
+    }
+}
+
 /// Frame-specific information
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct FrameInfo {
   pub width: usize,
   pub height: usize,
   pub bit_depth: usize,
   pub chroma_sampling: ChromaSampling,
-  pub chroma_sample_position: ChromaSamplePosition
+  pub chroma_sample_position: ChromaSamplePosition,
+  pub primaries: ColorPrimaries,
+  pub transfer: TransferCharacteristic,
+  pub matrix: MatrixCoefficients
 }
 
 /// Contain all the encoder configuration

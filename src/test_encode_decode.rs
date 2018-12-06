@@ -87,13 +87,12 @@ fn setup_encoder(
   enc.low_latency = low_latency;
 
   let cfg = Config {
-    frame_info: FrameInfo { 
-      width: w, 
-      height: h, 
-      bit_depth, 
-      chroma_sampling, 
-      chroma_sample_position: 
-      Default::default() 
+    frame_info: FrameInfo {
+      width: w,
+      height: h,
+      bit_depth,
+      chroma_sampling,
+      ..Default::Default()
     },
     timebase: Rational::new(1, 1000),
     enc
