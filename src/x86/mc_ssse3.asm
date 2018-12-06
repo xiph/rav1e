@@ -27,8 +27,6 @@
 %include "config.asm"
 %include "ext/x86/x86inc.asm"
 
-%if ARCH_X86_64
-
 SECTION_RODATA 16
 
 pw_1024: times 8 dw 1024
@@ -237,15 +235,19 @@ cglobal w_avg, 4, 7, 6, dst, stride, tmp1, tmp2, w, h, stride3
     add               tmp2q, %1*mmsize
 %endmacro
 
+%if ARCH_X86_64
 cglobal mask, 4, 8, 7, dst, stride, tmp1, tmp2, w, h, mask, stride3
-    lea                  r7, [mask_ssse3_table]
-    tzcnt                wd, wm
     movifnidn            hd, hm
-    mov               maskq, maskmp
-    movsxd               wq, dword [r7+wq*4]
+%else
+cglobal mask, 4, 7, 7, dst, stride, tmp1, tmp2, w, mask, stride3
+%define hd dword r5m
+%endif
+    lea                  r6, [mask_ssse3_table]
+    tzcnt                wd, wm
+    movsxd               wq, dword [r6+wq*4]
     pxor                 m4, m4
-    mova                 m5, [pw_2048+r7-mask_ssse3_table]
-    add                  wq, r7
+    mova                 m5, [pw_2048+r6-mask_ssse3_table]
+    add                  wq, r6
+    mov               maskq, r6m
     BIDIR_FN           MASK
-
-%endif ; ARCH_X86_64
+%undef hd
