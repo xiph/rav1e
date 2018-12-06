@@ -405,7 +405,7 @@ pub fn rdo_mode_decision(
 
   for (i, &ref_frames) in ref_frames_set.iter().enumerate() {
     let mut mv_stack: Vec<CandidateMV> = Vec::new();
-    mode_contexts.push(cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, false, fi, false));
+    mode_contexts.push(cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, fi, false));
 
     if fi.frame_type == FrameType::INTER {
       let mut pmv = [MotionVector{ row: 0, col: 0 }; 2];
@@ -456,7 +456,7 @@ pub fn rdo_mode_decision(
         let mv1 = mvs_from_me[r1][0];
         mvs_from_me.push([mv0, mv1]);
         let mut mv_stack: Vec<CandidateMV> = Vec::new();
-        mode_contexts.push(cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, false, fi, true));
+        mode_contexts.push(cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, fi, true));
         for &x in RAV1E_INTER_COMPOUND_MODES {
           mode_set.push((x, ref_frames_set.len() - 1));
         }
@@ -929,7 +929,7 @@ pub fn rdo_partition_decision(
 
                   let mut mv_stack = Vec::new();
                   let is_compound = ref_frames[1] != NONE_FRAME;
-                  let mode_context = cw.find_mvrefs(bo, ref_frames, &mut mv_stack, subsize, false, fi, is_compound);
+                  let mode_context = cw.find_mvrefs(bo, ref_frames, &mut mv_stack, subsize, fi, is_compound);
 
                   if subsize >= BlockSize::BLOCK_8X8 && subsize.is_sqr() {
                     let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
