@@ -2247,7 +2247,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             cost = (w.tell_frac() - tell) as f64 * get_lambda(fi, seq.bit_depth)/ ((1 << OD_BITRES) as f64);
         }
 
-        let pmv_idx = if bsize > BlockSize::BLOCK_32X32 {
+        let pmv_idx = if bsize.greater_than(BlockSize::BLOCK_32X32) {
             0
         } else {
             ((bo.x & 32) >> 5) + ((bo.y & 32) >> 4) + 1
@@ -2428,7 +2428,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
                     // The optimal prediction mode is known from a previous iteration
                     rdo_output.part_modes[0].clone()
                 } else {
-                    let pmv_idx = if bsize > BlockSize::BLOCK_32X32 {
+                    let pmv_idx = if bsize.greater_than(BlockSize::BLOCK_32X32) {
                         0
                     } else {
                         ((bo.x & 32) >> 5) + ((bo.y & 32) >> 4) + 1

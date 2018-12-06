@@ -911,7 +911,7 @@ pub fn rdo_partition_decision(
         let partitions = get_sub_partitions(&four_partitions, partition);
 
         let pmv_idxs = partitions.iter().map(|&offset| {
-          if subsize > BlockSize::BLOCK_32X32 {
+          if subsize.greater_than(BlockSize::BLOCK_32X32) {
               0
           } else {
               ((offset.x & 32) >> 5) + ((offset.y & 32) >> 4) + 1
