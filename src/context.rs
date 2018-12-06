@@ -2055,7 +2055,7 @@ impl ContextWriter {
     }
   }
 
-  fn has_tr(&mut self, bo: &BlockOffset, bsize: BlockSize, is_sec_rect: bool) -> bool {
+  fn has_tr(&mut self, bo: &BlockOffset, bsize: BlockSize, _is_sec_rect: bool) -> bool {
     let sb_mi_size = BLOCK_64X64.width_mi(); /* Assume 64x64 for now */
     let mask_row = bo.y & LOCAL_BLOCK_MASK;
     let mask_col = bo.x & LOCAL_BLOCK_MASK;
@@ -2086,13 +2086,13 @@ impl ContextWriter {
 
     /* The left hand of two vertical rectangles always has a top right (as the
      * block above will have been decoded) */
-    if (target_n4_w < target_n4_h) && !is_sec_rect {
+    if (target_n4_w < target_n4_h) && (bo.x & target_n4_w) == 0 {
       has_tr = true;
     }
 
     /* The bottom of two horizontal rectangles never has a top right (as the block
      * to the right won't have been decoded) */
-    if (target_n4_w > target_n4_h) && is_sec_rect {
+    if (target_n4_w > target_n4_h) && (bo.y & target_n4_h) != 0 {
       has_tr = false;
     }
 
