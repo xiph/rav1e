@@ -45,7 +45,7 @@ fn cdef_find_dir(img: &[u16], stride: usize, var: &mut i32, coeff_shift: i32) ->
     for i in 0..8 {
         for j in 0..8 {
             // We subtract 128 here to reduce the maximum range of the squared
-            // partial sums. 
+            // partial sums.
             debug_assert!((img[i * stride + j] >> coeff_shift) <= 255);
             let x = (img[i * stride + j] as i32 >> coeff_shift) - 128;
             partial[0][i + j] += x;
@@ -91,11 +91,11 @@ fn cdef_find_dir(img: &[u16], stride: usize, var: &mut i32, coeff_shift: i32) ->
         }
     }
     // Difference between the optimal variance and the variance along the
-    // orthogonal direction. Again, the sum(x^2) terms cancel out. 
+    // orthogonal direction. Again, the sum(x^2) terms cancel out.
     // We'd normally divide by 840, but dividing by 1024 is close enough
     // for what we're going to do with this. */
     *var = (best_cost - cost[(best_dir + 4) & 7]) >> 10;
-        
+
     best_dir as i32
 }
 
@@ -107,7 +107,7 @@ fn constrain(diff: i32, threshold: i32, damping: i32) -> i32 {
             -1 * magnitude
         } else {
             magnitude
-        }   
+        }
     } else {
         0
     }
@@ -285,12 +285,12 @@ pub fn cdef_filter_superblock(fi: &FrameInvariants,
                         let in_slice = &in_plane.mut_slice(&in_po);
                         let out_stride = out_plane.cfg.stride;
                         let mut out_slice = &mut out_plane.mut_slice(&out_po);
-                            
+
                         let mut local_pri_strength;
                         let mut local_sec_strength;
                         let mut local_damping: i32 = cdef_damping + coeff_shift;
                         let mut local_dir: usize;
-                            
+
                         if p==0 {
                             local_pri_strength = adjust_strength(cdef_pri_y_strength << coeff_shift, var);
                             local_sec_strength = cdef_sec_y_strength << coeff_shift;
@@ -301,7 +301,7 @@ pub fn cdef_filter_superblock(fi: &FrameInvariants,
                             local_damping -= 1;
                             local_dir = if cdef_pri_uv_strength != 0 {dir as usize} else {0};
                         }
-                            
+
                         unsafe {
                             cdef_filter_block(out_slice.offset_as_mutable(8*bx>>xdec,8*by>>ydec),
                                               out_stride as isize,

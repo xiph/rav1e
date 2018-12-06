@@ -274,6 +274,7 @@ impl<S> WriterBase<S> {
   fn new(storage: S) -> Self {
     WriterBase { rng: 0x8000, cnt: -9, debug: false, s: storage }
   }
+
   /// Compute low and range values from token cdf values and local state
   fn lr_compute(&mut self, fl: u16, fh: u16, nms: u16) -> (ec_window, u16) {
     let u: u32;
@@ -292,6 +293,7 @@ impl<S> WriterBase<S> {
       (0, r as u16)
     }
   }
+
   /// Given the current total integer number of bits used and the current value of
   /// rng, computes the fraction number of bits used to `OD_BITRES` precision.
   /// This is used by `od_ec_enc_tell_frac()` and `od_ec_dec_tell_frac()`.
@@ -326,7 +328,8 @@ impl<S> WriterBase<S> {
     }
     nbits - l
   }
-  /// Function to update the CDF for Writer calls that do so.
+
+  // Function to update the CDF for Writer calls that do so.
   fn update_cdf(cdf: &mut [u16], val: u32) {
     let nsymbs = cdf.len() - 1;
     let rate = 3 + (nsymbs >> 1).min(2) + (cdf[nsymbs] >> 4) as usize;

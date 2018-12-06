@@ -651,7 +651,7 @@ pub fn rdo_mode_decision(
       let cost = wr.tell_frac() - tell;
 
       // For CFL, tx-domain distortion is not an option.
-      let rd = 
+      let rd =
         compute_rd_cost(
           fi,
           fs,
@@ -699,7 +699,7 @@ pub fn rdo_mode_decision(
 }
 
 pub fn rdo_cfl_alpha(
-  fs: &mut FrameState, bo: &BlockOffset, bsize: BlockSize, bit_depth: usize, 
+  fs: &mut FrameState, bo: &BlockOffset, bsize: BlockSize, bit_depth: usize,
   chroma_sampling: ChromaSampling) -> Option<CFLParams> {
   let uv_tx_size = bsize.largest_uv_tx_size(chroma_sampling);
 
