@@ -246,7 +246,7 @@ impl Default for ColorPrimaries {
 }
 
 #[derive(Debug,Clone,Copy,PartialEq)]
-pub enum TransferCharacteristic {
+pub enum TransferCharacteristics {
     Reserved0 = 0,
     BT1886,
     Unspecified,
@@ -268,35 +268,35 @@ pub enum TransferCharacteristic {
     HybridLogGamma,
 }
 
-impl fmt::Display for TransferCharacteristic {
+impl fmt::Display for TransferCharacteristics {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            TransferCharacteristic::Reserved0 => write!(f, "Identity"),
-            TransferCharacteristic::BT1886 => write!(f, "ITU BT.1886"),
-            TransferCharacteristic::Unspecified => write!(f, "Unspecified"),
-            TransferCharacteristic::Reserved => write!(f, "Reserved"),
-            TransferCharacteristic::BT470M => write!(f, "ITU BT.470M"),
-            TransferCharacteristic::BT470BG => write!(f, "ITU BT.470BG"),
-            TransferCharacteristic::ST170M => write!(f, "SMPTE ST-170M"),
-            TransferCharacteristic::ST240M => write!(f, "SMPTE ST-240M"),
-            TransferCharacteristic::Linear => write!(f, "Linear"),
-            TransferCharacteristic::Logarithmic100 => write!(f, "Logarithmic 100:1 range"),
-            TransferCharacteristic::Logarithmic316 => write!(f, "Logarithmic 316:1 range"),
-            TransferCharacteristic::XVYCC => write!(f, "XVYCC"),
-            TransferCharacteristic::BT1361E => write!(f, "ITU BT.1361 Extended Color Gamut"),
-            TransferCharacteristic::SRGB => write!(f, "sRGB"),
-            TransferCharacteristic::BT2020Ten => write!(f, "ITU BT.2020 for 10bit systems"),
-            TransferCharacteristic::BT2020Twelve => write!(f, "ITU BT.2020 for 12bit systems"),
-            TransferCharacteristic::PerceptualQuantizer => write!(f, "Perceptual Quantizer"),
-            TransferCharacteristic::ST428 => write!(f, "SMPTE ST-428"),
-            TransferCharacteristic::HybridLogGamma => write!(f, "Hybrid Log-Gamma"),
+            TransferCharacteristics::Reserved0 => write!(f, "Identity"),
+            TransferCharacteristics::BT1886 => write!(f, "ITU BT.1886"),
+            TransferCharacteristics::Unspecified => write!(f, "Unspecified"),
+            TransferCharacteristics::Reserved => write!(f, "Reserved"),
+            TransferCharacteristics::BT470M => write!(f, "ITU BT.470M"),
+            TransferCharacteristics::BT470BG => write!(f, "ITU BT.470BG"),
+            TransferCharacteristics::ST170M => write!(f, "SMPTE ST-170M"),
+            TransferCharacteristics::ST240M => write!(f, "SMPTE ST-240M"),
+            TransferCharacteristics::Linear => write!(f, "Linear"),
+            TransferCharacteristics::Logarithmic100 => write!(f, "Logarithmic 100:1 range"),
+            TransferCharacteristics::Logarithmic316 => write!(f, "Logarithmic 316:1 range"),
+            TransferCharacteristics::XVYCC => write!(f, "XVYCC"),
+            TransferCharacteristics::BT1361E => write!(f, "ITU BT.1361 Extended Color Gamut"),
+            TransferCharacteristics::SRGB => write!(f, "sRGB"),
+            TransferCharacteristics::BT2020Ten => write!(f, "ITU BT.2020 for 10bit systems"),
+            TransferCharacteristics::BT2020Twelve => write!(f, "ITU BT.2020 for 12bit systems"),
+            TransferCharacteristics::PerceptualQuantizer => write!(f, "Perceptual Quantizer"),
+            TransferCharacteristics::ST428 => write!(f, "SMPTE ST-428"),
+            TransferCharacteristics::HybridLogGamma => write!(f, "Hybrid Log-Gamma"),
         }
     }
 }
 
-impl Default for TransferCharacteristic {
+impl Default for TransferCharacteristics {
     fn default() -> Self {
-        TransferCharacteristic::Unspecified
+        TransferCharacteristics::Unspecified
     }
 }
 
@@ -309,7 +309,7 @@ pub struct FrameInfo {
   pub chroma_sampling: ChromaSampling,
   pub chroma_sample_position: ChromaSamplePosition,
   pub primaries: ColorPrimaries,
-  pub transfer: TransferCharacteristic,
+  pub transfer: TransferCharacteristics,
   pub matrix: MatrixCoefficients
 }
 
