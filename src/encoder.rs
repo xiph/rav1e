@@ -42,7 +42,13 @@ pub struct Frame {
 const FRAME_MARGIN: usize = 16 + SUBPEL_FILTER_SIZE;
 
 impl Frame {
-    pub fn new(width: usize, height:usize) -> Frame {
+    pub fn new(width: usize, height: usize, chroma_sampling: ChromaSampling) -> Frame {
+        let (chroma_width, chroma_height) = match chroma_sampling {
+            ChromaSampling::Cs420 => (width / 2, height / 2),
+            ChromaSampling::Cs422 => (width / 2, height),
+            ChromaSampling::Cs444 => (width, height)
+        };
+
         Frame {
             planes: [
                 Plane::new(
@@ -51,12 +57,12 @@ impl Frame {
                     MAX_SB_SIZE + FRAME_MARGIN, MAX_SB_SIZE + FRAME_MARGIN
                 ),
                 Plane::new(
-                    width/2, height/2,
+                    chroma_width, chroma_height,
                     1, 1,
                     MAX_SB_SIZE/2 + FRAME_MARGIN, MAX_SB_SIZE/2 + FRAME_MARGIN
                 ),
                 Plane::new(
-                    width/2, height/2,
+                    chroma_width, chroma_height,
                     1, 1,
                     MAX_SB_SIZE/2 + FRAME_MARGIN, MAX_SB_SIZE/2 + FRAME_MARGIN
                 )
@@ -414,11 +420,13 @@ pub struct FrameState {
 }
 
 impl FrameState {
-    pub fn new(fi: &FrameInvariants) -> FrameState {
-        FrameState::new_with_frame(fi, Arc::new(Frame::new(fi.padded_w, fi.padded_h)))
+    pub fn new(fi: &FrameInvariants, chroma_sampling: ChromaSampling) -> FrameState {
+        FrameState::new_with_frame(fi, Arc::new(Frame::new(
+            fi.padded_w, fi.padded_h, chroma_sampling)), chroma_sampling)
     }
 
-    pub fn new_with_frame(fi: &FrameInvariants, frame: Arc<Frame>) -> FrameState {
+    pub fn new_with_frame(fi: &FrameInvariants, frame: Arc<Frame>,
+        chroma_sampling: ChromaSampling) -> FrameState {
         FrameState {
             input: frame,
             input_hres: Plane::new(
@@ -431,7 +439,7 @@ impl FrameState {
                 2, 2,
                 (MAX_SB_SIZE + FRAME_MARGIN) / 4, (MAX_SB_SIZE + FRAME_MARGIN) / 4
             ),
-            rec: Frame::new(fi.padded_w, fi.padded_h),
+            rec: Frame::new(fi.padded_w, fi.padded_h, chroma_sampling),
             qc: Default::default(),
             cdfs: CDFContext::new(0),
             deblock: Default::default(),
@@ -2797,7 +2805,7 @@ mod test {
   fn frame_state_window() {
     let config = EncoderConfig { ..Default::default() };
     let fi = FrameInvariants::new(1024, 1024, config);
-    let mut fs = FrameState::new(&fi);
+    let mut fs = FrameState::new(&fi, Default::default());
     for p in fs.rec.planes.iter_mut() {
       for (i, v) in p
         .mut_slice(&PlaneOffset { x: 0, y: 0 })

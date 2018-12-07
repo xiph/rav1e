@@ -358,7 +358,7 @@ impl fmt::Display for Packet {
 
 impl Context {
   pub fn new_frame(&self) -> Arc<Frame> {
-    Arc::new(Frame::new(self.fi.padded_w, self.fi.padded_h))
+    Arc::new(Frame::new(self.fi.padded_w, self.fi.padded_h, self.seq.chroma_sampling))
   }
 
   pub fn send_frame<F>(&mut self, frame: F) -> Result<(), EncoderStatus>
@@ -491,7 +491,7 @@ impl Context {
     if self.fi.show_existing_frame {
       self.idx += 1;
 
-      let mut fs = FrameState::new(&self.fi);
+      let mut fs = FrameState::new(&self.fi, self.seq.chroma_sampling);
 
       let data = encode_frame(&mut self.seq, &mut self.fi, &mut fs);
 
@@ -510,7 +510,8 @@ impl Context {
         self.idx += 1;
 
         if let Some(frame) = f {
-          let mut fs = FrameState::new_with_frame(&self.fi, frame.clone());
+          let mut fs = FrameState::new_with_frame(&self.fi, frame.clone(),
+            self.seq.chroma_sampling);
 
           let data = encode_frame(&mut self.seq, &mut self.fi, &mut fs);
           self.packet_data.extend(data);
