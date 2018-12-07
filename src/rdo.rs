@@ -137,7 +137,7 @@ pub fn sse_wxh(
 }
 
 pub fn get_lambda(fi: &FrameInvariants, bit_depth: usize) -> f64 {
-  let q = dc_q(fi.base_q_idx, fi.y_dc_delta_q, bit_depth) as f64;
+  let q = dc_q(fi.base_q_idx, fi.dc_delta_q[0], bit_depth) as f64;
 
   // Convert q into Q0 precision, given that libaom quantizers are Q3
   let q0 = q / 8.0_f64;
@@ -148,7 +148,7 @@ pub fn get_lambda(fi: &FrameInvariants, bit_depth: usize) -> f64 {
 }
 
 pub fn get_lambda_sqrt(fi: &FrameInvariants, bit_depth: usize) -> f64 {
-  let q = dc_q(fi.base_q_idx, fi.y_dc_delta_q, bit_depth) as f64;
+  let q = dc_q(fi.base_q_idx, fi.dc_delta_q[0], bit_depth) as f64;
 
   // Convert q into Q0 precision, given that libaom quantizers are Q3
   let q0 = q / 8.0_f64;

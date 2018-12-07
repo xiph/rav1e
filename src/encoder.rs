@@ -560,9 +560,8 @@ pub struct FrameInvariants {
     pub ref_frame_sign_bias: [bool; INTER_REFS_PER_FRAME],
     pub rec_buffer: ReferenceFramesSet,
     pub base_q_idx: u8,
-    pub y_dc_delta_q: i8,
-    pub uv_dc_delta_q: i8,
-    pub uv_ac_delta_q: i8,
+    pub dc_delta_q: [i8; 3],
+    pub ac_delta_q: [i8; 3],
     pub me_range_scale: u8,
     pub use_tx_domain_distortion: bool,
     pub inter_cfg: Option<InterPropsConfig>,
@@ -633,9 +632,8 @@ impl FrameInvariants {
             ref_frame_sign_bias: [false; INTER_REFS_PER_FRAME],
             rec_buffer: ReferenceFramesSet::new(),
             base_q_idx: config.quantizer as u8,
-            y_dc_delta_q: 0,
-            uv_dc_delta_q: 0,
-            uv_ac_delta_q: 0,
+            dc_delta_q: [0; 3],
+            ac_delta_q: [0; 3],
             me_range_scale: 1,
             use_tx_domain_distortion: use_tx_domain_distortion,
             inter_cfg: None,
@@ -1062,7 +1060,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
         self.write(2, seq.chroma_sample_position as u32)?;
 
-        self.write_bit(false)?; // separate U/V delta quantizers
+        self.write_bit(seq.separate_uv_delta_q)?;
 
         Ok(())
     }
@@ -1280,9 +1278,23 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       // quantization
       assert!(fi.base_q_idx > 0);
       self.write(8, fi.base_q_idx)?; // base_q_idx
-      self.write_delta_q(fi.y_dc_delta_q)?;
-      self.write_delta_q(fi.uv_dc_delta_q)?;
-      self.write_delta_q(fi.uv_ac_delta_q)?;
+      self.write_delta_q(fi.dc_delta_q[0])?;
+      assert!(fi.ac_delta_q[0] == 0);
+      let diff_uv_delta = seq.separate_uv_delta_q
+        && (fi.dc_delta_q[1] != fi.dc_delta_q[2]
+          || fi.ac_delta_q[1] != fi.ac_delta_q[2]);
+      if seq.separate_uv_delta_q {
+        self.write_bit(diff_uv_delta)?;
+      } else {
+        assert!(fi.dc_delta_q[1] == fi.dc_delta_q[2]);
+        assert!(fi.ac_delta_q[1] == fi.ac_delta_q[2]);
+      }
+      self.write_delta_q(fi.dc_delta_q[1])?;
+      self.write_delta_q(fi.ac_delta_q[1])?;
+      if diff_uv_delta {
+        self.write_delta_q(fi.dc_delta_q[2])?;
+        self.write_delta_q(fi.ac_delta_q[2])?;
+      }
       self.write_bit(false)?; // no qm
 
       // segmentation
@@ -1726,12 +1738,7 @@ pub fn encode_tx_block(
                             fi.use_reduced_tx_set);
 
     // Reconstruct
-    let (dc_delta_q, ac_delta_q) = if p == 0 {
-        (fi.y_dc_delta_q, 0)
-    } else {
-        (fi.uv_dc_delta_q, fi.uv_ac_delta_q)
-    };
-    dequantize(qidx, qcoeffs, rcoeffs, tx_size, bit_depth, dc_delta_q, ac_delta_q);
+    dequantize(qidx, qcoeffs, rcoeffs, tx_size, bit_depth, fi.dc_delta_q[p], fi.ac_delta_q[p]);
 
     let mut tx_dist: i64 = -1;
 
@@ -2043,7 +2050,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
     let mut tx_dist: i64 = 0;
     let do_chroma = has_chroma(bo, bsize, xdec, ydec);
 
-    fs.qc.update(qidx, tx_size, luma_mode.is_intra(), bit_depth, fi.y_dc_delta_q, 0);
+    fs.qc.update(qidx, tx_size, luma_mode.is_intra(), bit_depth, fi.dc_delta_q[0], 0);
 
     for by in 0..bh {
         for bx in 0..bw {
@@ -2090,9 +2097,9 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
         } else {
             uv_intra_mode_to_tx_type_context(chroma_mode)
         };
-        fs.qc.update(fi.base_q_idx, uv_tx_size, true, bit_depth, fi.uv_dc_delta_q, fi.uv_ac_delta_q);
 
         for p in 1..3 {
+            fs.qc.update(fi.base_q_idx, uv_tx_size, true, bit_depth, fi.dc_delta_q[p], fi.ac_delta_q[p]);
             let alpha = cfl.alpha(p - 1);
             for by in 0..bh_uv {
                 for bx in 0..bw_uv {
@@ -2134,7 +2141,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
     let ac = &[0i16; 32 * 32];
     let mut tx_dist: i64 = 0;
 
-    fs.qc.update(qidx, tx_size, luma_mode.is_intra(), bit_depth, fi.y_dc_delta_q, 0);
+    fs.qc.update(qidx, tx_size, luma_mode.is_intra(), bit_depth, fi.dc_delta_q[0], 0);
 
     let po = bo.plane_offset(&fs.input.planes[0].cfg);
     let (has_coeff, dist) = encode_tx_block(
@@ -2164,9 +2171,8 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
     if bw_uv > 0 && bh_uv > 0 {
         let uv_tx_type = if has_coeff {tx_type} else {TxType::DCT_DCT}; // if inter mode, uv_tx_type == tx_type
 
-        fs.qc.update(qidx, uv_tx_size, false, bit_depth, fi.uv_dc_delta_q, fi.uv_ac_delta_q);
-
         for p in 1..3 {
+            fs.qc.update(qidx, uv_tx_size, false, bit_depth, fi.dc_delta_q[p], fi.ac_delta_q[p]);
             let tx_bo = BlockOffset {
                 x: bo.x  - ((bw * tx_size.width_mi() == 1) as usize),
                 y: bo.y  - ((bh * tx_size.height_mi() == 1) as usize)
