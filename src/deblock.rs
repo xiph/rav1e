@@ -1343,7 +1343,7 @@ pub fn deblock_filter_optimize(
   bit_depth: usize
 ) {
   if fi.config.speed_settings.fast_deblock {
-    let q = ac_q(fi.base_q_idx, bit_depth) as i32;
+    let q = ac_q(fi.base_q_idx, 0, bit_depth) as i32;
     let level = clamp(
       match bit_depth {
         8 =>

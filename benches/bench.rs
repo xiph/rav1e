@@ -64,7 +64,7 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
   b.iter(|| {
     for &mode in RAV1E_INTRA_MODES {
       let sbo = SuperBlockOffset { x: sbx, y: sby };
-      fs.qc.update(fi.base_q_idx, tx_size, mode.is_intra(), 8);
+      fs.qc.update(fi.base_q_idx, tx_size, mode.is_intra(), 8, fi.uv_dc_delta_q, fi.uv_ac_delta_q);
       for p in 1..3 {
         for by in 0..8 {
           for bx in 0..8 {

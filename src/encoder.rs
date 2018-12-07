@@ -1726,7 +1726,12 @@ pub fn encode_tx_block(
                             fi.use_reduced_tx_set);
 
     // Reconstruct
-    dequantize(qidx, qcoeffs, rcoeffs, tx_size, bit_depth);
+    let (dc_delta_q, ac_delta_q) = if p == 0 {
+        (fi.y_dc_delta_q, 0)
+    } else {
+        (fi.uv_dc_delta_q, fi.uv_ac_delta_q)
+    };
+    dequantize(qidx, qcoeffs, rcoeffs, tx_size, bit_depth, dc_delta_q, ac_delta_q);
 
     let mut tx_dist: i64 = -1;
 
@@ -2038,7 +2043,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
     let mut tx_dist: i64 = 0;
     let do_chroma = has_chroma(bo, bsize, xdec, ydec);
 
-    fs.qc.update(qidx, tx_size, luma_mode.is_intra(), bit_depth);
+    fs.qc.update(qidx, tx_size, luma_mode.is_intra(), bit_depth, fi.y_dc_delta_q, 0);
 
     for by in 0..bh {
         for bx in 0..bw {
@@ -2085,7 +2090,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
         } else {
             uv_intra_mode_to_tx_type_context(chroma_mode)
         };
-        fs.qc.update(fi.base_q_idx, uv_tx_size, true, bit_depth);
+        fs.qc.update(fi.base_q_idx, uv_tx_size, true, bit_depth, fi.uv_dc_delta_q, fi.uv_ac_delta_q);
 
         for p in 1..3 {
             let alpha = cfl.alpha(p - 1);
@@ -2129,7 +2134,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
     let ac = &[0i16; 32 * 32];
     let mut tx_dist: i64 = 0;
 
-    fs.qc.update(qidx, tx_size, luma_mode.is_intra(), bit_depth);
+    fs.qc.update(qidx, tx_size, luma_mode.is_intra(), bit_depth, fi.y_dc_delta_q, 0);
 
     let po = bo.plane_offset(&fs.input.planes[0].cfg);
     let (has_coeff, dist) = encode_tx_block(
@@ -2159,7 +2164,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
     if bw_uv > 0 && bh_uv > 0 {
         let uv_tx_type = if has_coeff {tx_type} else {TxType::DCT_DCT}; // if inter mode, uv_tx_type == tx_type
 
-        fs.qc.update(qidx, uv_tx_size, false, bit_depth);
+        fs.qc.update(qidx, uv_tx_size, false, bit_depth, fi.uv_dc_delta_q, fi.uv_ac_delta_q);
 
         for p in 1..3 {
             let tx_bo = BlockOffset {
