@@ -558,6 +558,9 @@ pub struct FrameInvariants {
     pub ref_frame_sign_bias: [bool; INTER_REFS_PER_FRAME],
     pub rec_buffer: ReferenceFramesSet,
     pub base_q_idx: u8,
+    pub y_dc_delta_q: i8,
+    pub uv_dc_delta_q: i8,
+    pub uv_ac_delta_q: i8,
     pub me_range_scale: u8,
     pub use_tx_domain_distortion: bool,
     pub inter_cfg: Option<InterPropsConfig>,
@@ -628,6 +631,9 @@ impl FrameInvariants {
             ref_frame_sign_bias: [false; INTER_REFS_PER_FRAME],
             rec_buffer: ReferenceFramesSet::new(),
             base_q_idx: config.quantizer as u8,
+            y_dc_delta_q: 0,
+            uv_dc_delta_q: 0,
+            uv_ac_delta_q: 0,
             me_range_scale: 1,
             use_tx_domain_distortion: use_tx_domain_distortion,
             inter_cfg: None,
@@ -886,6 +892,7 @@ trait UncompressedHeader {
     fn write_frame_cdef(&mut self, seq: &Sequence, fi: &FrameInvariants) -> io::Result<()>;
     fn write_frame_lrf(&mut self, seq: &Sequence, fi: &FrameInvariants) -> io::Result<()>;
     fn write_segment_data(&mut self, fi: &FrameInvariants, fs: &FrameState) -> io::Result<()>;
+    fn write_delta_q(&mut self, delta_q: i8) -> io::Result<()>;
 }
 #[allow(unused)]
 const OP_POINTS_IDC_BITS:usize = 12;
@@ -1264,9 +1271,9 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       // quantization
       assert!(fi.base_q_idx > 0);
       self.write(8, fi.base_q_idx)?; // base_q_idx
-      self.write_bit(false)?; // y dc delta q
-      self.write_bit(false)?; // uv dc delta q
-      self.write_bit(false)?; // uv ac delta q
+      self.write_delta_q(fi.y_dc_delta_q)?;
+      self.write_delta_q(fi.uv_dc_delta_q)?;
+      self.write_delta_q(fi.uv_ac_delta_q)?;
       self.write_bit(false)?; // no qm
 
       // segmentation
@@ -1511,6 +1518,14 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
                     }
                 }
             }
+        }
+        Ok(())
+    }
+
+    fn write_delta_q(&mut self, delta_q: i8) -> io::Result<()> {
+        self.write_bit(delta_q != 0)?;
+        if delta_q != 0 {
+            self.write_signed(6 + 1, delta_q)?;
         }
         Ok(())
     }
