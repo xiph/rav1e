@@ -28,7 +28,7 @@ pub fn get_log_tx_scale(tx_size: TxSize) -> usize {
   Into::<usize>::into(num_pixels > 256) + Into::<usize>::into(num_pixels > 1024)
 }
 
-pub fn dc_q(qindex: u8, bit_depth: usize) -> i16 {
+pub fn dc_q(qindex: u8, delta_q: i8, bit_depth: usize) -> i16 {
   let &table = match bit_depth {
     8 => &dc_qlookup_Q3,
     10 => &dc_qlookup_10_Q3,
@@ -36,10 +36,10 @@ pub fn dc_q(qindex: u8, bit_depth: usize) -> i16 {
     _ => unimplemented!()
   };
 
-  table[qindex as usize]
+  table[(qindex as isize + delta_q as isize).max(0).min(255) as usize]
 }
 
-pub fn ac_q(qindex: u8, bit_depth: usize) -> i16 {
+pub fn ac_q(qindex: u8, delta_q: i8, bit_depth: usize) -> i16 {
   let &table = match bit_depth {
     8 => &ac_qlookup_Q3,
     10 => &ac_qlookup_10_Q3,
@@ -47,7 +47,7 @@ pub fn ac_q(qindex: u8, bit_depth: usize) -> i16 {
     _ => unimplemented!()
   };
 
-  table[qindex as usize]
+  table[(qindex as isize + delta_q as isize).max(0).min(255) as usize]
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -147,14 +147,15 @@ mod test {
 
 impl QuantizationContext {
   pub fn update(
-    &mut self, qindex: u8, tx_size: TxSize, is_intra: bool, bit_depth: usize
+    &mut self, qindex: u8, tx_size: TxSize, is_intra: bool, bit_depth: usize,
+    dc_delta_q: i8, ac_delta_q: i8
   ) {
     self.log_tx_scale = get_log_tx_scale(tx_size);
 
-    self.dc_quant = dc_q(qindex, bit_depth) as u32;
+    self.dc_quant = dc_q(qindex, dc_delta_q, bit_depth) as u32;
     self.dc_mul_add = divu_gen(self.dc_quant);
 
-    self.ac_quant = ac_q(qindex, bit_depth) as u32;
+    self.ac_quant = ac_q(qindex, ac_delta_q, bit_depth) as u32;
     self.ac_mul_add = divu_gen(self.ac_quant);
 
     self.dc_offset =
@@ -187,12 +188,13 @@ impl QuantizationContext {
 
 // quantization without using Multiplication Factor
 pub fn quantize_wo_mf(
-  qindex: u8, coeffs: &[i32], qcoeffs: &mut [i32], tx_size: TxSize, bit_depth: usize
+  qindex: u8, coeffs: &[i32], qcoeffs: &mut [i32], tx_size: TxSize, bit_depth: usize,
+  dc_delta_q: i8, ac_delta_q: i8
 ) {
   let log_tx_scale = get_log_tx_scale(tx_size);
 
-  let dc_quant = dc_q(qindex, bit_depth) as i32;
-  let ac_quant = ac_q(qindex, bit_depth) as i32;
+  let dc_quant = dc_q(qindex, dc_delta_q, bit_depth) as i32;
+  let ac_quant = ac_q(qindex, ac_delta_q, bit_depth) as i32;
 
   // using 21/64=0.328125 as rounding offset. To be tuned
   let dc_offset = dc_quant * 21 / 64 as i32;
@@ -211,13 +213,13 @@ pub fn quantize_wo_mf(
 
 pub fn dequantize(
   qindex: u8, coeffs: &[i32], rcoeffs: &mut [i32], tx_size: TxSize,
-  bit_depth: usize
+  bit_depth: usize, dc_delta_q: i8, ac_delta_q: i8
 ) {
   let log_tx_scale = get_log_tx_scale(tx_size) as i32;
   let offset = (1 << log_tx_scale) - 1;
 
-  let dc_quant = dc_q(qindex, bit_depth) as i32;
-  let ac_quant = ac_q(qindex, bit_depth) as i32;
+  let dc_quant = dc_q(qindex, dc_delta_q, bit_depth) as i32;
+  let ac_quant = ac_q(qindex, ac_delta_q, bit_depth) as i32;
 
   for (i, (r, &c)) in rcoeffs.iter_mut().zip(coeffs.iter()).enumerate() {
     let quant = if i == 0 { dc_quant } else { ac_quant };
