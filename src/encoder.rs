@@ -215,13 +215,6 @@ impl Default for ChromaSamplePosition {
 }
 
 #[derive(Copy, Clone)]
-pub struct ColorDescription {
-    color_primaries: ColorPrimaries,
-    transfer_characteristics: TransferCharacteristics,
-    matrix_coefficients: MatrixCoefficients
-}
-
-#[derive(Copy, Clone)]
 pub struct Sequence {
     // OBU Sequence header of AV1
     pub profile: u8,
@@ -949,7 +942,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
         self.write_bit(seq.film_grain_params_present)?;
 
-        self.write_bit(true)?; // add_trailing_bits
+        self.write_bit(true)?; // trailing bit
 
         Ok(())
     }
@@ -1030,19 +1023,17 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
             self.write_bit(seq.monochrome)?;
         }
 
-        let color_description_present = seq.color_description.is_some();
-        self.write_bit(color_description_present)?;
+        if seq.monochrome {
+            unimplemented!();
+        }
 
-        if color_description_present {
-            let color_description = seq.color_description.unwrap();
-
+        if let Some(color_description) = seq.color_description {
+            self.write_bit(true)?; // color description present
             self.write(8, color_description.color_primaries as u8)?;
             self.write(8, color_description.transfer_characteristics as u8)?;
             self.write(8, color_description.matrix_coefficients as u8)?;
-        }
-
-        if seq.monochrome {
-            unimplemented!();
+        } else {
+            self.write_bit(false)?; // no color description present
         }
 
         self.write_bit(false)?; // full color range

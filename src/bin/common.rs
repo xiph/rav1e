@@ -8,6 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use clap::{App, Arg, ArgMatches};
+use {ColorPrimaries, TransferCharacteristics, MatrixCoefficients};
 use rav1e::*;
 
 use std::{fmt, io, slice};
@@ -98,6 +99,27 @@ pub fn parse_cli() -> CliOptions {
         .default_value("psnr")
         .case_insensitive(true)
     ).arg(
+      Arg::with_name("COLOR_PRIMARIES")
+      .help("Color primaries used to describe color parameters.")
+      .long("primaries")
+      .possible_values(&ColorPrimaries::variants())
+      .default_value("unspecified")
+      .case_insensitive(true)
+    ).arg(
+      Arg::with_name("TRANSFER_CHARACTERISTICS")
+      .help("Transfer characteristics used to describe color parameters.")
+      .long("transfer")
+      .possible_values(&TransferCharacteristics::variants())
+      .default_value("unspecified")
+      .case_insensitive(true)
+    ).arg(
+      Arg::with_name("MATRIX_COEFFICIENTS")
+      .help("Color primaries used to describe color parameters.")
+      .long("matrix")
+      .possible_values(&MatrixCoefficients::variants())
+      .default_value("unspecified")
+      .case_insensitive(true)
+    ).arg(
       Arg::with_name("VERBOSE")
         .help("verbose logging, output info for every frame")
         .long("verbose")
@@ -145,11 +167,27 @@ fn parse_config(matches: &ArgMatches) -> EncoderConfig {
     panic!("Maximum keyframe interval must be greater than or equal to minimum keyframe interval");
   }
 
+  let color_primaries = matches.value_of("COLOR_PRIMARIES").unwrap().parse().unwrap_or_default();
+  let transfer_characteristics = matches.value_of("TRANSFER_CHARACTERISTICS").unwrap().parse().unwrap_or_default();
+  let matrix_coefficients = matches.value_of("MATRIX_COEFFICIENTS").unwrap().parse().unwrap_or_default();
+
   let mut cfg = EncoderConfig::with_speed_preset(speed);
   cfg.max_key_frame_interval = min_interval;
   cfg.max_key_frame_interval = max_interval;
   cfg.low_latency = matches.value_of("LOW_LATENCY").unwrap().parse().unwrap();
   cfg.tune = matches.value_of("TUNE").unwrap().parse().unwrap();
+  cfg.color_description = if color_primaries == ColorPrimaries::Unspecified &&
+    transfer_characteristics == TransferCharacteristics::Unspecified &&
+    matrix_coefficients == MatrixCoefficients::Unspecified {
+      // No need to set a color description with all parameters unspecified.
+      None
+    } else {
+      Some(ColorDescription {
+        color_primaries,
+        transfer_characteristics,
+        matrix_coefficients
+      })
+    };
   cfg.quantizer = quantizer;
   cfg.show_psnr = matches.is_present("PSNR");
 
