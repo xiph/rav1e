@@ -855,7 +855,12 @@ pub fn rdo_partition_decision(
           continue;
         }
 
-        let pmv_idx = ((bo.x & 32) >> 5) + ((bo.y & 32) >> 4) + 1;
+        let pmv_idx = if bsize > BlockSize::BLOCK_32X32 {
+          0
+        } else {
+          ((bo.x & 32) >> 5) + ((bo.y & 32) >> 4) + 1
+        };
+
         let spmvs = &pmvs[pmv_idx];
 
         let mode_decision = cached_block
