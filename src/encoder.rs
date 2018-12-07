@@ -2398,14 +2398,34 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
         part_modes: Vec::new()
     });
     let partition: PartitionType;
-
+    let mut split_vert = false;
+    let mut split_horz = false;
     if must_split {
+        let mut cbw = fi.w_in_b - bo.x; // clipped block width, i.e. having effective pixels
+        if cbw > 16 { cbw = bsw; };
+        let mut cbh = fi.h_in_b - bo.y;
+        if cbh > 16 { cbh = bsh; };
+
+        if cbw == bsw/2 && cbh == bsh { split_vert = true; }
+        if cbh == bsh/2 && cbw == bsw { split_horz = true; }
+    }
+
+    if must_split && (!split_vert && !split_horz) {
         // Oversized blocks are split automatically
         partition = PartitionType::PARTITION_SPLIT;
-    } else if bsize > fi.min_partition_size && is_square {
+    } else if must_split || (bsize > fi.min_partition_size && is_square) {
         // Blocks of sizes within the supported range are subjected to a partitioning decision
+        let mut partition_types: Vec<PartitionType> = Vec::new();
+        if must_split {
+            partition_types.push(PartitionType::PARTITION_SPLIT);
+            if split_horz { partition_types.push(PartitionType::PARTITION_HORZ); };
+            if split_vert { partition_types.push(PartitionType::PARTITION_VERT); };
+        }
+        else {
+            partition_types.append(&mut RAV1E_PARTITION_TYPES.to_vec());
+        }
         rdo_output = rdo_partition_decision(seq, fi, fs, cw,
-            w_pre_cdef, w_post_cdef, bsize, bo, &rdo_output, pmvs);
+            w_pre_cdef, w_post_cdef, bsize, bo, &rdo_output, pmvs, &partition_types);
         partition = rdo_output.part_type;
     } else {
         // Blocks of sizes below the supported range are encoded directly
@@ -2507,8 +2527,8 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
         PARTITION_SPLIT |
         PARTITION_HORZ |
         PARTITION_VERT => {
-            let num_modes = if partition == PARTITION_SPLIT { 4 }
-                            else { 2 };
+            let num_modes = if partition == PARTITION_SPLIT { 1 }
+                            else { 1 };
 
             if rdo_output.part_modes.len() >= num_modes {
                 // The optimal prediction modes for each split block is known from an rdo_partition_decision() call

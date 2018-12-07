@@ -838,13 +838,39 @@ pub fn get_sub_partitions<'a>(four_partitions: &[&'a BlockOffset; 4],
   let mut partitions = vec![ four_partitions[0] ];
 
   if partition == PARTITION_VERT || partition == PARTITION_SPLIT {
-    partitions.push(four_partitions[1]);
+     partitions.push(four_partitions[1]);
   };
   if partition == PARTITION_HORZ || partition == PARTITION_SPLIT {
-    partitions.push(four_partitions[2]);
+     partitions.push(four_partitions[2]);
   };
   if partition == PARTITION_SPLIT {
-    partitions.push(four_partitions[3]);
+     partitions.push(four_partitions[3]);
+  };
+
+  partitions
+}
+
+pub fn get_sub_partitions_with_border_check<'a>(four_partitions: &[&'a BlockOffset; 4],
+   partition: PartitionType, fi: &FrameInvariants, subsize: BlockSize) -> Vec<&'a BlockOffset> {
+  let mut partitions = vec![ four_partitions[0] ];
+
+  let hbsw = subsize.width_mi(); // Half the block size width in blocks
+  let hbsh = subsize.height_mi(); // Half the block size height in blocks
+
+  if partition == PARTITION_VERT || partition == PARTITION_SPLIT {
+    if four_partitions[1].x + hbsw as usize <= fi.w_in_b &&
+      four_partitions[1].y + hbsh as usize <= fi.h_in_b {
+        partitions.push(four_partitions[1]); }
+  };
+  if partition == PARTITION_HORZ || partition == PARTITION_SPLIT {
+    if four_partitions[2].x + hbsw as usize <= fi.w_in_b &&
+      four_partitions[2].y + hbsh as usize <= fi.h_in_b {
+        partitions.push(four_partitions[2]); }
+  };
+  if partition == PARTITION_SPLIT {
+    if four_partitions[3].x + hbsw as usize <= fi.w_in_b &&
+      four_partitions[3].y + hbsh as usize <= fi.h_in_b {
+        partitions.push(four_partitions[3]); }
   };
 
   partitions
@@ -855,13 +881,14 @@ pub fn rdo_partition_decision(
   seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
   cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
   bsize: BlockSize, bo: &BlockOffset,
-  cached_block: &RDOOutput, pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5]
+  cached_block: &RDOOutput, pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5],
+  partition_types: &Vec<PartitionType>,
 ) -> RDOOutput {
   let mut best_partition = cached_block.part_type;
   let mut best_rd = cached_block.rd_cost;
   let mut best_pred_modes = cached_block.part_modes.clone();
 
-  for &partition in RAV1E_PARTITION_TYPES {
+  for &partition in partition_types {
     // Do not re-encode results we already have
     if partition == cached_block.part_type {
       continue;
@@ -908,7 +935,7 @@ pub fn rdo_partition_decision(
           &BlockOffset{ x: bo.x, y: bo.y + hbsh as usize },
           &BlockOffset{ x: bo.x + hbsw as usize, y: bo.y + hbsh as usize }
         ];
-        let partitions = get_sub_partitions(&four_partitions, partition);
+        let partitions = get_sub_partitions_with_border_check(&four_partitions, partition, fi, subsize);
 
         let pmv_idxs = partitions.iter().map(|&offset| {
           if subsize.greater_than(BlockSize::BLOCK_32X32) {
