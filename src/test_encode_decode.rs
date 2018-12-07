@@ -92,8 +92,7 @@ fn setup_encoder(
       height: h,
       bit_depth,
       chroma_sampling,
-      chroma_sample_position:
-      Default::default()
+      ..Default::default()
     },
     timebase: Rational::new(1, 1000),
     enc
