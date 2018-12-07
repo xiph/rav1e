@@ -45,8 +45,5 @@ mod api;
 pub use api::*;
 pub use encoder::*;
 
-// #[cfg(test)]
 #[cfg(all(test, feature="decode_test"))]
 mod test_encode_decode;
-
-

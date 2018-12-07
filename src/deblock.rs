@@ -10,17 +10,16 @@
 #![allow(safe_extern_statics)]
 
 use context::*;
-use partition::PredictionMode::*;
-use partition::*;
-use plane::*;
-use quantize::*;
-use std::cmp;
-use util::clamp;
-use util::ILog;
 use DeblockState;
 use FrameInvariants;
 use FrameState;
 use FrameType;
+use partition::*;
+use partition::PredictionMode::*;
+use plane::*;
+use quantize::*;
+use std::cmp;
+use util::{clamp, ILog};
 
 fn deblock_adjusted_level(
   deblock: &DeblockState, block: &Block, pli: usize, vertical: bool

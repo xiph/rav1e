@@ -8,9 +8,10 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use comparative::libc;
-use criterion::*;
 use predict as predict_native;
 use predict::*;
+
+use criterion::*;
 use rand::{ChaChaRng, Rng, SeedableRng};
 
 extern {

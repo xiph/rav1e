@@ -11,6 +11,7 @@
 #![allow(non_upper_case_globals)]
 
 use partition::TxSize;
+
 use std::mem;
 
 pub fn get_log_tx_scale(tx_size: TxSize) -> i32 {
@@ -90,6 +91,7 @@ fn divu_pair(x: i32, d: (u32, u32, u32)) -> i32 {
 mod test {
   use super::*;
   use partition::TxSize::*;
+
   #[test]
   fn test_divu_pair() {
     for d in 1..1024 {

@@ -7,15 +7,16 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use bitstream_io::*;
 use encoder::*;
-use partition::*;
-
-use std::cmp;
-use std::collections::BTreeMap;
-use std::fmt;
-use std::sync::Arc;
-use scenechange::SceneChangeDetector;
 use metrics::calculate_frame_psnr;
+use partition::*;
+use scenechange::SceneChangeDetector;
+use self::EncoderStatus::*;
+
+use std::{cmp, fmt, io};
+use std::collections::BTreeMap;
+use std::sync::Arc;
 
 // TODO: use the num crate?
 #[derive(Clone, Copy, Debug)]
@@ -323,7 +324,6 @@ pub struct Config {
 
 impl Config {
   pub fn parse(&mut self, key: &str, value: &str) -> Result<(), EncoderStatus> {
-    use self::EncoderStatus::*;
     match key {
       "low_latency" => self.enc.low_latency = value.parse().map_err(|_e| ParseError)?,
       "min_key_frame_interval" => self.enc.min_key_frame_interval = value.parse().map_err(|_e| ParseError)?,
@@ -444,29 +444,29 @@ impl Context {
   }
 
   pub fn container_sequence_header(&mut self) -> Vec<u8> {
-    use bitstream_io::*;
-    use std::io;
     fn sequence_header_inner(seq: &Sequence) -> io::Result<Vec<u8>> {
       let mut buf = Vec::new();
-      {
-      let mut bw = BitWriter::endian(&mut buf, BigEndian);
-      bw.write_bit(true)?; // marker
-      bw.write(7, 1)?; // version
-      bw.write(3, seq.profile)?;
-      bw.write(5, 32)?; // level
-      bw.write_bit(false)?; // tier
-      bw.write_bit(seq.bit_depth > 8)?; // high_bitdepth
-      bw.write_bit(seq.bit_depth == 12)?; // twelve_bit
-      bw.write_bit(seq.bit_depth == 1)?; // monochrome
-      bw.write_bit(seq.bit_depth == 12)?; // twelve_bit
-      bw.write_bit(seq.chroma_sampling != ChromaSampling::Cs444)?; // chroma_subsampling_x
-      bw.write_bit(seq.chroma_sampling == ChromaSampling::Cs420)?; // chroma_subsampling_y
-      bw.write(2, 0)?; // sample_position
-      bw.write(3, 0)?; // reserved
-      bw.write_bit(false)?; // initial_presentation_delay_present
 
-      bw.write(4, 0)?; // reserved
+      {
+        let mut bw = BitWriter::endian(&mut buf, BigEndian);
+        bw.write_bit(true)?; // marker
+        bw.write(7, 1)?; // version
+        bw.write(3, seq.profile)?;
+        bw.write(5, 32)?; // level
+        bw.write_bit(false)?; // tier
+        bw.write_bit(seq.bit_depth > 8)?; // high_bitdepth
+        bw.write_bit(seq.bit_depth == 12)?; // twelve_bit
+        bw.write_bit(seq.bit_depth == 1)?; // monochrome
+        bw.write_bit(seq.bit_depth == 12)?; // twelve_bit
+        bw.write_bit(seq.chroma_sampling != ChromaSampling::Cs444)?; // chroma_subsampling_x
+        bw.write_bit(seq.chroma_sampling == ChromaSampling::Cs420)?; // chroma_subsampling_y
+        bw.write(2, 0)?; // sample_position
+        bw.write(3, 0)?; // reserved
+        bw.write_bit(false)?; // initial_presentation_delay_present
+
+        bw.write(4, 0)?; // reserved
       }
+
       Ok(buf)
     }
 

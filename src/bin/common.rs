@@ -9,11 +9,10 @@
 
 use clap::{App, Arg, ArgMatches};
 use rav1e::*;
-use std::fmt;
+
+use std::{fmt, io, slice};
 use std::fs::File;
-use std::io;
 use std::io::prelude::*;
-use std::slice;
 use std::sync::Arc;
 use std::time::Instant;
 use y4m;

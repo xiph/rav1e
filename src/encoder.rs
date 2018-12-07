@@ -9,25 +9,25 @@
 
 use api::*;
 use cdef::*;
-use lrf::*;
 use context::*;
 use deblock::*;
-use segmentation::*;
 use ec::*;
+use lrf::*;
+use me::*;
 use partition::*;
 use plane::*;
 use quantize::*;
 use rdo::*;
-use std::fmt;
+use segmentation::*;
 use transform::*;
 use util::*;
-use me::*;
 
 use bitstream_io::{BitWriter, BigEndian, LittleEndian};
 use std;
-use std::io;
+use std::{fmt, io};
 use std::io::Write;
 use std::rc::Rc;
+use std::sync::Arc;
 
 extern {
     pub fn av1_rtcd();
@@ -239,7 +239,6 @@ pub struct Sequence {
     pub still_picture: bool,               // Video is a single frame still picture
     pub reduced_still_picture_hdr: bool,   // Use reduced header for still picture
     pub monochrome: bool,                  // Monochrome video
-    pub enable_filter_intra: bool,         // enables/disables filterintra
     pub enable_intra_edge_filter: bool,    // enables/disables corner/edge/upsampling
     pub enable_interintra_compound: bool,  // enables/disables interintra_compound
     pub enable_masked_compound: bool,      // enables/disables masked compound
@@ -318,7 +317,6 @@ impl Sequence {
             still_picture: false,
             reduced_still_picture_hdr: false,
             monochrome: false,
-            enable_filter_intra: true,
             enable_intra_edge_filter: true,
             enable_interintra_compound: false,
             enable_masked_compound: false,
@@ -400,8 +398,6 @@ impl Sequence {
       }
     }
 }
-
-use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct FrameState {
@@ -970,7 +966,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         }
 
         self.write_bit(seq.use_128x128_superblock)?;
-        self.write_bit(seq.enable_filter_intra)?;
+        self.write_bit(true)?; // enable filter intra
         self.write_bit(seq.enable_intra_edge_filter)?;
 
         if !seq.reduced_still_picture_hdr {
@@ -2238,7 +2234,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
 
           let mut mv_stack = Vec::new();
           let is_compound = ref_frames[1] != NONE_FRAME;
-          let mode_context = cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, false, fi, is_compound);
+          let mode_context = cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, fi, is_compound);
 
           cdef_coded = encode_block_a(seq, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                                      bsize, bo, skip);
@@ -2319,7 +2315,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
 
             let mut mv_stack = Vec::new();
             let is_compound = ref_frames[1] != NONE_FRAME;
-            let mode_context = cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, false, fi, is_compound);
+            let mode_context = cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, fi, is_compound);
 
             cdef_coded = encode_block_a(seq, fs, cw, if cdef_coded {w_post_cdef} else {w_pre_cdef},
                                        bsize, bo, skip);
@@ -2422,7 +2418,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
 
             let mut mv_stack = Vec::new();
             let is_compound = ref_frames[1] != NONE_FRAME;
-            let mode_context = cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, false, fi, is_compound);
+            let mode_context = cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, fi, is_compound);
 
             // TODO proper remap when is_compound is true
             if !mode_luma.is_intra() {
@@ -2531,7 +2527,7 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
     };
 
     let bc = BlockContext::new(fi.w_in_b, fi.h_in_b);
-    // For now, restoration unit size is locked to superblock size. 
+    // For now, restoration unit size is locked to superblock size.
     let rc = RestorationContext::new(fi.sb_width, fi.sb_height);
     let mut cw = ContextWriter::new(fc, bc, rc);
 
@@ -2760,9 +2756,10 @@ pub fn update_rec_buffer(fi: &mut FrameInvariants, fs: FrameState) {
 
 #[cfg(test)]
 mod test {
+  use super::*;
+
   #[test]
   fn frame_state_window() {
-    use super::*;
     let config = EncoderConfig { ..Default::default() };
     let fi = FrameInvariants::new(1024, 1024, config);
     let mut fs = FrameState::new(&fi);

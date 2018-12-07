@@ -10,12 +10,11 @@
 extern crate clap;
 extern crate rustyline;
 extern crate y4m;
-
 extern crate rav1e;
 
 mod common;
-use common::*;
 
+use common::*;
 use rav1e::*;
 
 use rustyline::error::ReadlineError;

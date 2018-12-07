@@ -11,34 +11,31 @@
 #![allow(non_camel_case_types)]
 #![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
 
+use api::PredictionModesSetting;
+use cdef::*;
 use context::*;
-use me::*;
-use ec::OD_BITRES;
-use ec::Writer;
-use ec::WriterCounter;
-use luma_ac;
+use ec::{OD_BITRES, Writer, WriterCounter};
+use encoder::{ChromaSampling, ReferenceMode};
 use encode_block_a;
 use encode_block_b;
-use motion_compensate;
-use partition::*;
-use plane::*;
-use cdef::*;
-use predict::{RAV1E_INTRA_MODES, RAV1E_INTRA_MODES_MINIMAL, RAV1E_INTER_MODES_MINIMAL, RAV1E_INTER_COMPOUND_MODES};
-use quantize::dc_q;
-use std;
-use std::f64;
-use std::vec::Vec;
-use write_tx_blocks;
-use write_tx_tree;
-use partition::BlockSize;
 use Frame;
 use FrameInvariants;
 use FrameState;
 use FrameType;
-use Tune;
+use luma_ac;
+use me::*;
+use motion_compensate;
+use partition::*;
+use plane::*;
+use predict::{RAV1E_INTRA_MODES, RAV1E_INTRA_MODES_MINIMAL, RAV1E_INTER_MODES_MINIMAL, RAV1E_INTER_COMPOUND_MODES};
+use quantize::dc_q;
 use Sequence;
-use encoder::{ChromaSampling, ReferenceMode};
-use api::PredictionModesSetting;
+use Tune;
+use write_tx_blocks;
+use write_tx_tree;
+
+use std;
+use std::vec::Vec;
 
 #[derive(Clone)]
 pub struct RDOOutput {
@@ -408,7 +405,7 @@ pub fn rdo_mode_decision(
 
   for (i, &ref_frames) in ref_frames_set.iter().enumerate() {
     let mut mv_stack: Vec<CandidateMV> = Vec::new();
-    mode_contexts.push(cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, false, fi, false));
+    mode_contexts.push(cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, fi, false));
 
     if fi.frame_type == FrameType::INTER {
       let mut pmv = [MotionVector{ row: 0, col: 0 }; 2];
@@ -459,7 +456,7 @@ pub fn rdo_mode_decision(
         let mv1 = mvs_from_me[r1][0];
         mvs_from_me.push([mv0, mv1]);
         let mut mv_stack: Vec<CandidateMV> = Vec::new();
-        mode_contexts.push(cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, false, fi, true));
+        mode_contexts.push(cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, fi, true));
         for &x in RAV1E_INTER_COMPOUND_MODES {
           mode_set.push((x, ref_frames_set.len() - 1));
         }
@@ -482,6 +479,10 @@ pub fn rdo_mode_decision(
         let tell = wr.tell_frac();
 
         if skip { tx_type = TxType::DCT_DCT; };
+
+        if bsize >= BlockSize::BLOCK_8X8 && bsize.is_sqr() {
+          cw.write_partition(wr, bo, PartitionType::PARTITION_NONE, bsize);
+        }
 
         encode_block_a(seq, fs, cw, wr, bsize, bo, skip);
         let tx_dist =
@@ -654,7 +655,7 @@ pub fn rdo_mode_decision(
       let cost = wr.tell_frac() - tell;
 
       // For CFL, tx-domain distortion is not an option.
-      let rd = 
+      let rd =
         compute_rd_cost(
           fi,
           fs,
@@ -702,7 +703,7 @@ pub fn rdo_mode_decision(
 }
 
 pub fn rdo_cfl_alpha(
-  fs: &mut FrameState, bo: &BlockOffset, bsize: BlockSize, bit_depth: usize, 
+  fs: &mut FrameState, bo: &BlockOffset, bsize: BlockSize, bit_depth: usize,
   chroma_sampling: ChromaSampling) -> Option<CFLParams> {
   let uv_tx_size = bsize.largest_uv_tx_size(chroma_sampling);
 
@@ -834,12 +835,16 @@ pub fn rdo_partition_decision(
   let mut best_pred_modes = cached_block.part_modes.clone();
 
   let cw_checkpoint = cw.checkpoint();
+  let w_pre_checkpoint = w_pre_cdef.checkpoint();
+  let w_post_checkpoint = w_post_cdef.checkpoint();
 
   for &partition in RAV1E_PARTITION_TYPES {
     // Do not re-encode results we already have
     if partition == cached_block.part_type && cached_block.rd_cost < max_rd {
       continue;
     }
+
+    let mut cost: f64 = 0.0;
 
     let mut rd: f64;
     let mut child_modes = std::vec::Vec::new();
@@ -867,6 +872,14 @@ pub fn rdo_partition_decision(
         if subsize == BlockSize::BLOCK_INVALID {
           continue;
         }
+
+        if bsize >= BlockSize::BLOCK_8X8 {
+          let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
+          let tell = w.tell_frac();
+          cw.write_partition(w, bo, partition, bsize);
+          cost = (w.tell_frac() - tell) as f64 * get_lambda(fi, seq.bit_depth)/ ((1 << OD_BITRES) as f64);
+        }
+
         //pmv = best_pred_modes[0].mvs[0];
 
         assert!(best_pred_modes.len() <= 4);
@@ -916,7 +929,12 @@ pub fn rdo_partition_decision(
 
                   let mut mv_stack = Vec::new();
                   let is_compound = ref_frames[1] != NONE_FRAME;
-                  let mode_context = cw.find_mvrefs(bo, ref_frames, &mut mv_stack, subsize, false, fi, is_compound);
+                  let mode_context = cw.find_mvrefs(bo, ref_frames, &mut mv_stack, subsize, fi, is_compound);
+
+                  if subsize >= BlockSize::BLOCK_8X8 && subsize.is_sqr() {
+                    let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
+                    cw.write_partition(w, bo, PartitionType::PARTITION_NONE, subsize);
+                  }
 
                   cdef_coded = encode_block_a(seq, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                                             subsize, bo, skip);
@@ -936,7 +954,12 @@ pub fn rdo_partition_decision(
       }
     }
 
-    rd = child_modes.iter().map(|m| m.rd_cost).sum::<f64>();
+
+    cw.rollback(&cw_checkpoint);
+    w_pre_cdef.rollback(&w_pre_checkpoint);
+    w_post_cdef.rollback(&w_post_checkpoint);
+
+    rd = cost + child_modes.iter().map(|m| m.rd_cost).sum::<f64>();
 
     if rd < best_rd {
       best_rd = rd;

@@ -8,11 +8,9 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use super::*;
+use partition::{TxSize, TxType};
 
 use std::cmp;
-
-use partition::TxSize;
-use partition::TxType;
 
 const MAX_TXFM_STAGE_NUM: usize = 12;
 const MAX_TXWH_IDX: usize = 5;

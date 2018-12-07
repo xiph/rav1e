@@ -17,25 +17,20 @@
 #![cfg_attr(feature = "cargo-clippy", allow(collapsible_if))]
 
 use ec::Writer;
+use encoder::{FrameInvariants, ReferenceMode};
+use entropymode::*;
+use lrf::{WIENER_TAPS_MID, SGR_XQD_MID};
+use partition::*;
 use partition::BlockSize::*;
 use partition::PredictionMode::*;
 use partition::TxSize::*;
 use partition::TxType::*;
-use partition::*;
-use lrf::WIENER_TAPS_MID;
-use lrf::SGR_XQD_MID;
 use plane::*;
-use util::clamp;
-use util::msb;
-use std::*;
-use entropymode::*;
-use token_cdfs::*;
-use encoder::FrameInvariants;
 use scan_order::*;
-use encoder::ReferenceMode;
+use token_cdfs::*;
+use util::{clamp, msb};
 
-use self::REF_CONTEXTS;
-use self::SINGLE_REFS;
+use std::*;
 
 pub const PLANES: usize = 3;
 
@@ -1191,7 +1186,6 @@ pub struct Block {
   pub n4_h: usize, /* block height in the unit of mode_info */
   pub tx_w: usize, /* transform width in the unit of mode_info */
   pub tx_h: usize, /* transform height in the unit of mode_info */
-  pub is_sec_rect: bool,
   // The block-level deblock_deltas are left-shifted by
   // fi.deblock.block_delta_shift and added to the frame-configured
   // deltas
@@ -1213,7 +1207,6 @@ impl Block {
       n4_h: BLOCK_64X64.height_mi(),
       tx_w: TX_64X64.width_mi(),
       tx_h: TX_64X64.height_mi(),
-      is_sec_rect: false,
       deblock_deltas: [0, 0, 0, 0],
       segmentation_idx: 0,
     }
@@ -2058,7 +2051,7 @@ impl ContextWriter {
     }
   }
 
-  fn has_tr(&mut self, bo: &BlockOffset, bsize: BlockSize, _is_sec_rect: bool) -> bool {
+  fn has_tr(&mut self, bo: &BlockOffset, bsize: BlockSize) -> bool {
     let sb_mi_size = BLOCK_64X64.width_mi(); /* Assume 64x64 for now */
     let mask_row = bo.y & LOCAL_BLOCK_MASK;
     let mask_col = bo.x & LOCAL_BLOCK_MASK;
@@ -2395,7 +2388,7 @@ impl ContextWriter {
   }
 
   fn setup_mvref_list(&mut self, bo: &BlockOffset, ref_frames: [usize; 2], mv_stack: &mut Vec<CandidateMV>,
-                      bsize: BlockSize, is_sec_rect: bool, fi: &FrameInvariants, is_compound: bool) -> usize {
+                      bsize: BlockSize, fi: &FrameInvariants, is_compound: bool) -> usize {
     let (_rf, _rf_num) = self.get_mvref_ref_frames(INTRA_FRAME);
 
     let target_n4_h = bsize.height_mi();
@@ -2450,7 +2443,7 @@ impl ContextWriter {
                                            &mut newmv_count, bsize, is_compound);
       col_match |= found_match;
     }
-    if self.has_tr(bo, bsize, is_sec_rect) {
+    if self.has_tr(bo, bsize) {
       let found_match = self.scan_blk_mbmi(&bo.with_offset(target_n4_w as isize, -1), ref_frames, mv_stack,
                                            &mut newmv_count, is_compound);
       row_match |= found_match;
@@ -2611,7 +2604,7 @@ impl ContextWriter {
   }
 
   pub fn find_mvrefs(&mut self, bo: &BlockOffset, ref_frames: [usize; 2],
-                     mv_stack: &mut Vec<CandidateMV>, bsize: BlockSize, is_sec_rect: bool,
+                     mv_stack: &mut Vec<CandidateMV>, bsize: BlockSize,
                      fi: &FrameInvariants, is_compound: bool) -> usize {
     assert!(ref_frames[0] != NONE_FRAME);
     if ref_frames[0] < REF_FRAMES {
@@ -2632,7 +2625,7 @@ impl ContextWriter {
       return 0;
     }
 
-    self.setup_mvref_list(bo, ref_frames, mv_stack, bsize, is_sec_rect, fi, is_compound)
+    self.setup_mvref_list(bo, ref_frames, mv_stack, bsize, fi, is_compound)
   }
 
   pub fn fill_neighbours_ref_counts(&mut self, bo: &BlockOffset) {
@@ -3669,7 +3662,7 @@ pub fn get_mv_class(z: u32, offset: &mut u32) -> usize {
   c
 }
 
-pub fn encode_mv_component(w: &mut Writer, comp: i32, 
+pub fn encode_mv_component(w: &mut Writer, comp: i32,
   mvcomp: &mut NMVComponent, precision: MvSubpelPrecision) {
   assert!(comp != 0);
   let mut offset: u32 = 0;
@@ -3706,7 +3699,7 @@ pub fn encode_mv_component(w: &mut Writer, comp: i32,
   // High precision bit
   if precision > MvSubpelPrecision::MV_SUBPEL_LOW_PRECISION {
     w.symbol_with_update(
-        hp, 
+        hp,
         if mv_class == MV_CLASS_0 { &mut mvcomp.class0_hp_cdf }
         else { &mut mvcomp.hp_cdf});
   }
