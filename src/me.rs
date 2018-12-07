@@ -157,10 +157,10 @@ pub fn motion_estimation(
       let blk_w = bsize.width();
       let blk_h = bsize.height();
       let (mvx_min, mvx_max, mvy_min, mvy_max) = get_mv_range(fi, bo, blk_w, blk_h);
-      let x_lo = po.x + ((-range + (cmv.col / 8) as isize).max(mvx_min / 8));
-      let x_hi = po.x + ((range + (cmv.col / 8) as isize).min(mvx_max / 8));
-      let y_lo = po.y + ((-range + (cmv.row / 8) as isize).max(mvy_min / 8));
-      let y_hi = po.y + ((range + (cmv.row / 8) as isize).min(mvy_max / 8));
+      let x_lo = po.x + ((-range + (cmv.col / 8) as isize).max(mvx_min / 8).min(mvx_max / 8));
+      let x_hi = po.x + ((range + (cmv.col / 8) as isize).max(mvx_min / 8).min(mvx_max / 8));
+      let y_lo = po.y + ((-range + (cmv.row / 8) as isize).max(mvy_min / 8).min(mvy_max / 8));
+      let y_hi = po.y + ((range + (cmv.row / 8) as isize).max(mvy_min / 8).min(mvy_max / 8));
 
       let mut lowest_cost = std::u32::MAX;
       let mut best_mv = MotionVector { row: 0, col: 0 };
@@ -264,8 +264,8 @@ fn full_search(
   lowest_cost: &mut u32, po: &PlaneOffset, step: usize, bit_depth: usize,
   lambda: u32, pmv: &[MotionVector; 2], allow_high_precision_mv: bool
 ) {
-  for y in (y_lo..y_hi).step_by(step) {
-    for x in (x_lo..x_hi).step_by(step) {
+  for y in (y_lo..=y_hi).step_by(step) {
+    for x in (x_lo..=x_hi).step_by(step) {
       let plane_org = p_org.slice(po);
       let plane_ref = p_ref.slice(&PlaneOffset { x, y });
 
@@ -384,10 +384,10 @@ pub fn estimate_motion_ss2(
 
     for omv in pmvs.iter() {
       if let Some(pmv) = omv {
-        let x_lo = po.x + (((pmv.col as isize / 8 - range).max(mvx_min / 8)) >> 1);
-        let x_hi = po.x + (((pmv.col as isize / 8 + range).min(mvx_max / 8)) >> 1);
-        let y_lo = po.y + (((pmv.row as isize / 8 - range).max(mvy_min / 8)) >> 1);
-        let y_hi = po.y + (((pmv.row as isize / 8 + range).min(mvy_max / 8)) >> 1);
+        let x_lo = po.x + (((pmv.col as isize / 8 - range).max(mvx_min / 8).min(mvx_max / 8)) >> 1);
+        let x_hi = po.x + (((pmv.col as isize / 8 + range).max(mvx_min / 8).min(mvx_max / 8)) >> 1);
+        let y_lo = po.y + (((pmv.row as isize / 8 - range).max(mvy_min / 8).min(mvy_max / 8)) >> 1);
+        let y_hi = po.y + (((pmv.row as isize / 8 + range).max(mvy_min / 8).min(mvy_max / 8)) >> 1);
 
         full_search(
           x_lo,
