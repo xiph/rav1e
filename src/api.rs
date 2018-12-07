@@ -249,10 +249,7 @@ pub struct FrameInfo {
   pub height: usize,
   pub bit_depth: usize,
   pub chroma_sampling: ChromaSampling,
-  pub chroma_sample_position: ChromaSamplePosition,
-  pub primaries: ColorPrimaries,
-  pub transfer: TransferCharacteristics,
-  pub matrix: MatrixCoefficients
+  pub chroma_sample_position: ChromaSamplePosition
 }
 
 /// Contain all the encoder configuration
