@@ -215,14 +215,22 @@ impl Default for ChromaSamplePosition {
 }
 
 #[derive(Copy, Clone)]
+pub struct ColorDescription {
+    color_primaries: ColorPrimaries,
+    transfer_characteristics: TransferCharacteristics,
+    matrix_coefficients: MatrixCoefficients
+}
+
+#[derive(Copy, Clone)]
 pub struct Sequence {
-  // OBU Sequence header of AV1
+    // OBU Sequence header of AV1
     pub profile: u8,
     pub num_bits_width: u32,
     pub num_bits_height: u32,
     pub bit_depth: usize,
     pub chroma_sampling: ChromaSampling,
     pub chroma_sample_position: ChromaSamplePosition,
+    pub color_description: Option<ColorDescription>,
     pub max_frame_width: u32,
     pub max_frame_height: u32,
     pub frame_id_numbers_present_flag: bool,
@@ -305,6 +313,7 @@ impl Sequence {
             bit_depth: info.bit_depth,
             chroma_sampling: info.chroma_sampling,
             chroma_sample_position: info.chroma_sample_position,
+            color_description: None,
             max_frame_width: info.width as u32,
             max_frame_height: info.height as u32,
             frame_id_numbers_present_flag: false,
@@ -1021,7 +1030,16 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
             self.write_bit(seq.monochrome)?;
         }
 
-        self.write_bit(false)?; // color description present flag
+        let color_description_present = seq.color_description.is_some();
+        self.write_bit(color_description_present)?;
+
+        if color_description_present {
+            let color_description = seq.color_description.unwrap();
+
+            self.write(8, color_description.color_primaries as u8)?;
+            self.write(8, color_description.transfer_characteristics as u8)?;
+            self.write(8, color_description.matrix_coefficients as u8)?;
+        }
 
         if seq.monochrome {
             unimplemented!();
