@@ -50,7 +50,7 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
   let mut w = ec::WriterEncoder::new();
   let fc = CDFContext::new(fi.base_q_idx);
   let bc = BlockContext::new(fi.sb_width * 16, fi.sb_height * 16);
-  let mut fs = FrameState::new(&fi);
+  let mut fs = FrameState::new(&fi, Default::default());
   // For now, restoration unit size is locked to superblock size.
   let rc = RestorationContext::new(fi.sb_width, fi.sb_height);
   let mut cw = ContextWriter::new(fc, bc, rc);
@@ -114,7 +114,7 @@ fn cdef_frame_bench(b: &mut Bencher, w: usize, h: usize) {
     EncoderConfig { quantizer: 100, speed_settings: SpeedSettings::from_preset(10), ..Default::default() };
   let fi = FrameInvariants::new(w, h, config);
   let mut bc = BlockContext::new(fi.sb_width * 16, fi.sb_height * 16);
-  let mut fs = FrameState::new(&fi);
+  let mut fs = FrameState::new(&fi, Default::default());
 
   b.iter(|| cdef_filter_frame(&fi, &mut fs.rec, &mut bc, 8));
 }
@@ -135,7 +135,7 @@ fn cfl_rdo_bench(b: &mut Bencher, bsize: BlockSize) {
   let config =
     EncoderConfig { quantizer: 100, speed_settings: SpeedSettings::from_preset(10), ..Default::default() };
   let fi = FrameInvariants::new(1024, 1024, config);
-  let mut fs = FrameState::new(&fi);
+  let mut fs = FrameState::new(&fi, Default::default());
   let offset = BlockOffset { x: 1, y: 1 };
   b.iter(|| rdo_cfl_alpha(&mut fs, &offset, bsize, 8, Default::default()))
 }
