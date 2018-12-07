@@ -259,7 +259,8 @@ pub fn process_frame(
   let height = y4m_dec.get_height();
   let y4m_bits = y4m_dec.get_bit_depth();
   let y4m_bytes = y4m_dec.get_bytes_per_sample();
-  let bit_depth = y4m_dec.get_colorspace().get_bit_depth();
+  let y4m_color_space = y4m_dec.get_colorspace();
+  let bit_depth = y4m_color_space.get_bit_depth();
 
   if ctx.needs_more_frames(ctx.get_frame_count()) {
     match y4m_dec.read_frame() {
@@ -309,12 +310,16 @@ pub fn process_frame(
         if let Some(y4m_enc_uw) = y4m_enc.as_mut() {
           if let Some(ref rec) = pkt.rec {
             let pitch_y = if bit_depth > 8 { width * 2 } else { width };
-            let pitch_uv = pitch_y / 2;
+            let (pitch_uv, height_uv) = match map_y4m_color_space(y4m_color_space).0 {
+              ChromaSampling::Cs420 => (pitch_y / 2, height / 2),
+              ChromaSampling::Cs422 => (pitch_y / 2, height),
+              ChromaSampling::Cs444 => (pitch_y, height)
+            };
 
             let (mut rec_y, mut rec_u, mut rec_v) = (
               vec![128u8; pitch_y * height],
-              vec![128u8; pitch_uv * (height / 2)],
-              vec![128u8; pitch_uv * (height / 2)]
+              vec![128u8; pitch_uv * height_uv],
+              vec![128u8; pitch_uv * height_uv]
             );
 
             let (stride_y, stride_u, stride_v) = (
