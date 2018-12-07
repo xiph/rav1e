@@ -67,7 +67,10 @@ pub struct Packet {
     pub frame_type: FrameType,
 }
 
+type ChromaSamplePosition=rav1e::ChromaSamplePosition;
 type ChromaSampling=rav1e::ChromaSampling;
+type ColorDescription=rav1e::ColorDescription;
+type EncoderConfig=rav1e::EncoderConfig;
 type Rational=rav1e::Rational;
 
 #[no_mangle]
@@ -76,17 +79,23 @@ pub unsafe extern "C" fn rav1e_config_default(
     height: u32,
     bit_depth: u8,
     chroma_sampling: ChromaSampling,
+    chroma_sample_position: ChromaSamplePosition,
+    color_description: Option<ColorDescription>,
     timebase: Rational,
 ) -> *mut Config {
+    let mut enc: EncoderConfig = Default::default();
+    enc.color_description = color_description;
+
     let cfg = rav1e::Config {
         frame_info: rav1e::FrameInfo {
             width: width as usize,
             height: height as usize,
             bit_depth: bit_depth as usize,
             chroma_sampling,
+            chroma_sample_position,
         },
         timebase,
-        enc: Default::default(),
+        enc,
     };
 
     let c = Box::new(Config {
