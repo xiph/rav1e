@@ -105,22 +105,48 @@ fn setup_encoder(
 static DIMENSION_OFFSETS: &[(usize, usize)] =
   &[(0, 0), (4, 4), (8, 8), (16, 16)];
 
-#[test]
-#[ignore]
-fn speed() {
+fn speed(s: usize) {
   let quantizer = 100;
   let limit = 5;
   let w = 64;
   let h = 80;
 
   for b in DIMENSION_OFFSETS.iter() {
-    for s in 0..10 {
       encode_decode(w + b.0, h + b.1, s, quantizer, limit, 8, 15, 15, true);
-    }
   }
 }
 
-static DIMENSIONS: &[(usize, usize)] = &[
+macro_rules! test_speeds {
+  ($($S:expr),+) => {
+    $(
+        paste::item!{
+            #[test]
+            #[ignore]
+            fn [<speed_ $S>]() {
+                speed($S)
+            }
+        }
+    )*
+  }
+}
+
+test_speeds!{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 }
+
+macro_rules! test_dimensions {
+  ($(($W:expr, $H:expr)),+) => {
+    $(
+        paste::item!{
+            #[test]
+            #[ignore]
+            fn [<dimension_ $W x $H>]() {
+                dimension($W, $H)
+            }
+        }
+    )*
+  }
+}
+
+test_dimensions!{
   (8, 8),
   (16, 16),
   (32, 32),
@@ -135,18 +161,14 @@ static DIMENSIONS: &[(usize, usize)] = &[
   (262, 262),
   (264, 264),
   (265, 265)
-];
+}
 
-#[test]
-#[ignore]
-fn dimensions() {
+fn dimension(w: usize, h: usize) {
   let quantizer = 100;
   let limit = 1;
   let speed = 4;
 
-  for (w, h) in DIMENSIONS.iter() {
-    encode_decode(*w, *h, speed, quantizer, limit, 8, 15, 15, true);
-  }
+  encode_decode(w, h, speed, quantizer, limit, 8, 15, 15, true);
 }
 
 #[test]
