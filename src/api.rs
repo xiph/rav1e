@@ -158,6 +158,7 @@ pub enum PredictionModesSetting {
 
 arg_enum!{
   #[derive(Debug, Clone, Copy, PartialEq)]
+  #[repr(C)]
   pub enum MatrixCoefficients {
       Identity = 0,
       BT709,
@@ -184,6 +185,7 @@ impl Default for MatrixCoefficients {
 
 arg_enum!{
   #[derive(Debug,Clone,Copy,PartialEq)]
+  #[repr(C)]
   pub enum ColorPrimaries {
       BT709 = 1,
       Unspecified,
@@ -208,6 +210,7 @@ impl Default for ColorPrimaries {
 
 arg_enum!{
   #[derive(Debug,Clone,Copy,PartialEq)]
+  #[repr(C)]
   pub enum TransferCharacteristics {
       BT1886 = 1,
       Unspecified,
