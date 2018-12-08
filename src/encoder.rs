@@ -43,11 +43,11 @@ const FRAME_MARGIN: usize = 16 + SUBPEL_FILTER_SIZE;
 
 impl Frame {
     pub fn new(width: usize, height: usize, chroma_sampling: ChromaSampling) -> Frame {
-        let (chroma_width, chroma_height) = match chroma_sampling {
-            ChromaSampling::Cs420 => (width / 2, height / 2),
-            ChromaSampling::Cs422 => (width / 2, height),
-            ChromaSampling::Cs444 => (width, height)
-        };
+        let chroma_sampling_period = chroma_sampling.sampling_period();
+        let (chroma_width, chroma_height) = (
+            width / chroma_sampling_period.0,
+            height / chroma_sampling_period.1
+        );
 
         Frame {
             planes: [
@@ -203,6 +203,17 @@ pub enum ChromaSampling {
 impl Default for ChromaSampling {
     fn default() -> Self {
         ChromaSampling::Cs420
+    }
+}
+
+impl ChromaSampling {
+    // Provides the sampling period in the horizontal and vertical axes.
+    pub fn sampling_period(self) -> (usize, usize) {
+        match self {
+            ChromaSampling::Cs420 => (2, 2),
+            ChromaSampling::Cs422 => (2, 1),
+            ChromaSampling::Cs444 => (1, 1)
+        }
     }
 }
 

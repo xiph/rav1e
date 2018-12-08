@@ -310,11 +310,11 @@ pub fn process_frame(
         if let Some(y4m_enc_uw) = y4m_enc.as_mut() {
           if let Some(ref rec) = pkt.rec {
             let pitch_y = if bit_depth > 8 { width * 2 } else { width };
-            let (pitch_uv, height_uv) = match map_y4m_color_space(y4m_color_space).0 {
-              ChromaSampling::Cs420 => (pitch_y / 2, height / 2),
-              ChromaSampling::Cs422 => (pitch_y / 2, height),
-              ChromaSampling::Cs444 => (pitch_y, height)
-            };
+            let chroma_sampling_period = map_y4m_color_space(y4m_color_space).0.sampling_period();
+            let (pitch_uv, height_uv) = (
+              pitch_y / chroma_sampling_period.0,
+              height / chroma_sampling_period.1
+            );
 
             let (mut rec_y, mut rec_u, mut rec_v) = (
               vec![128u8; pitch_y * height],
