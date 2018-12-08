@@ -69,8 +69,9 @@ pub struct Packet {
 
 type ChromaSamplePosition=rav1e::ChromaSamplePosition;
 type ChromaSampling=rav1e::ChromaSampling;
-type ColorDescription=rav1e::ColorDescription;
-type EncoderConfig=rav1e::EncoderConfig;
+/* type MatrixCoefficients=rav1e::MatrixCoefficients;
+type ColorPrimaries=rav1e::ColorPrimaries;
+type TransferCharacteristics=rav1e::TransferCharacteristics; */
 type Rational=rav1e::Rational;
 
 #[no_mangle]
@@ -80,12 +81,8 @@ pub unsafe extern "C" fn rav1e_config_default(
     bit_depth: u8,
     chroma_sampling: ChromaSampling,
     chroma_sample_position: ChromaSamplePosition,
-    color_description: Option<ColorDescription>,
     timebase: Rational,
 ) -> *mut Config {
-    let mut enc: EncoderConfig = Default::default();
-    enc.color_description = color_description;
-
     let cfg = rav1e::Config {
         frame_info: rav1e::FrameInfo {
             width: width as usize,
@@ -95,7 +92,7 @@ pub unsafe extern "C" fn rav1e_config_default(
             chroma_sample_position,
         },
         timebase,
-        enc,
+        enc: Default::default(),
     };
 
     let c = Box::new(Config {
@@ -105,6 +102,21 @@ pub unsafe extern "C" fn rav1e_config_default(
 
     Box::into_raw(c)
 }
+
+/*
+#[no_mangle]
+pub unsafe extern "C" fn rav1e_config_set_color_description(cfg: *mut Config,
+                                                            matrix: MatrixCoefficients,
+                                                            primaries: ColorPrimaries,
+                                                            transfer: TransferCharacteristics)
+{
+    (*cfg).cfg.enc.color_description = Some(rav1e::ColorDescription {
+        matrix_coefficients: matrix,
+        color_primaries: primaries,
+        transfer_characteristics: transfer,
+    });
+}
+*/
 
 #[no_mangle]
 pub unsafe extern "C" fn rav1e_config_unref(cfg: *mut Config) {
