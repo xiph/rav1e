@@ -2382,7 +2382,6 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
     if bo.x >= cw.bc.cols || bo.y >= cw.bc.rows {
         return;
     }
-
     let bsw = bsize.width_mi();
     let bsh = bsize.height_mi();
     let is_square = bsize.is_sqr();
@@ -2401,10 +2400,8 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
     let mut split_vert = false;
     let mut split_horz = false;
     if must_split {
-        let mut cbw = fi.w_in_b - bo.x; // clipped block width, i.e. having effective pixels
-        if cbw > 16 { cbw = bsw; };
-        let mut cbh = fi.h_in_b - bo.y;
-        if cbh > 16 { cbh = bsh; };
+        let cbw = (fi.w_in_b - bo.x).min(bsw); // clipped block width, i.e. having effective pixels
+        let cbh = (fi.h_in_b - bo.y).min(bsh);
 
         if cbw == bsw/2 && cbh == bsh { split_vert = true; }
         if cbh == bsh/2 && cbw == bsw { split_horz = true; }
