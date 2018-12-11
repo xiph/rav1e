@@ -2419,7 +2419,9 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
             if split_vert { partition_types.push(PartitionType::PARTITION_VERT); };
         }
         else {
-            partition_types.append(&mut RAV1E_PARTITION_TYPES.to_vec());
+            //partition_types.append(&mut RAV1E_PARTITION_TYPES.to_vec());
+            partition_types.push(PartitionType::PARTITION_NONE);
+            partition_types.push(PartitionType::PARTITION_SPLIT);
         }
         rdo_output = rdo_partition_decision(seq, fi, fs, cw,
             w_pre_cdef, w_post_cdef, bsize, bo, &rdo_output, pmvs, &partition_types);
