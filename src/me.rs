@@ -322,12 +322,13 @@ pub fn estimate_motion_ss4(
       x: (bo_adj.x as isize) << BLOCK_TO_PLANE_SHIFT >> 2,
       y: (bo_adj.y as isize) << BLOCK_TO_PLANE_SHIFT >> 2
     };
-    let range = 64 * fi.me_range_scale as isize;
+    let range_x = 192 * fi.me_range_scale as isize;
+    let range_y = 64 * fi.me_range_scale as isize;
     let (mvx_min, mvx_max, mvy_min, mvy_max) = get_mv_range(fi, &bo_adj, blk_w, blk_h);
-    let x_lo = po.x + (((-range).max(mvx_min / 8)) >> 2);
-    let x_hi = po.x + (((range).min(mvx_max / 8)) >> 2);
-    let y_lo = po.y + (((-range).max(mvy_min / 8)) >> 2);
-    let y_hi = po.y + (((range).min(mvy_max / 8)) >> 2);
+    let x_lo = po.x + (((-range_x).max(mvx_min / 8)) >> 2);
+    let x_hi = po.x + (((range_x).min(mvx_max / 8)) >> 2);
+    let y_lo = po.y + (((-range_y).max(mvy_min / 8)) >> 2);
+    let y_hi = po.y + (((range_y).min(mvy_max / 8)) >> 2);
 
     let mut lowest_cost = std::u32::MAX;
     let mut best_mv = MotionVector { row: 0, col: 0 };
