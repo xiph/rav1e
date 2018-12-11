@@ -2242,11 +2242,13 @@ pub fn encode_block_with_modes(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fr
 fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
                              cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
                              bsize: BlockSize, bo: &BlockOffset, pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5]
-) -> f64 {
+) -> (f64, Option<RDOPartitionOutput>) {
     let mut rd_cost = std::f64::MAX;
+    let mut best_rd = std::f64::MAX;
+    let mut best_pred_modes: Vec<RDOPartitionOutput> = Vec::new();
 
     if bo.x >= cw.bc.cols || bo.y >= cw.bc.rows {
-        return rd_cost;
+        return (rd_cost, None);
     }
 
     let bsw = bsize.width_mi();
@@ -2261,10 +2263,12 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
     // must_split overrides the minimum partition size when applicable
     let can_split = (bsize > fi.min_partition_size && is_square) || must_split;
 
-    let mut partition = PartitionType::PARTITION_NONE;
+    let mut partition = PartitionType::PARTITION_INVALID;
+    let mut best_partition = partition;
     let mut best_decision = RDOPartitionOutput {
         rd_cost,
         bo: bo.clone(),
+        bsize: bsize,
         pred_mode_luma: PredictionMode::DC_PRED,
         pred_mode_chroma: PredictionMode::DC_PRED,
         pred_cfl_params: CFLParams::new(),
@@ -2281,12 +2285,14 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
     let mut subsize: BlockSize;
 
     // Code the whole block
+    // TODO(yushin): Try move PARTITION_NONE to below partition loop
     if !must_split {
         partition = PartitionType::PARTITION_NONE;
+        best_partition = partition;
 
         let mut cost: f64 = 0.0;
 
-        if bsize.gte(BlockSize::BLOCK_8X8) {
+        if bsize.gte(BlockSize::BLOCK_8X8) && is_square {
             let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
             let tell = w.tell_frac();
             cw.write_partition(w, bo, partition, bsize);
@@ -2303,44 +2309,67 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         let mode_decision = rdo_mode_decision(seq, fi, fs, cw, bsize, bo, spmvs, false).part_modes[0].clone();
 
         rd_cost = mode_decision.rd_cost + cost;
+        best_rd = rd_cost;
 
         encode_block_with_modes(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, bsize, bo,
                             &mode_decision);
+
         best_decision = mode_decision;
+        best_pred_modes.push(best_decision.clone());
     }
 
     // Code a split partition and compare RD costs
     if can_split {
-        cw.rollback(&cw_checkpoint);
-        w_pre_cdef.rollback(&w_pre_checkpoint);
-        w_post_cdef.rollback(&w_post_checkpoint);
+        for &partition in RAV1E_PARTITION_TYPES {
+            if partition == PartitionType::PARTITION_NONE {
+                continue;
+            }
+            assert!(bsw == bsh);
+            if must_split {
+                /*if partition == PartitionType::PARTITION_HORZ ||
+                    partition == PartitionType::PARTITION_VERT {
+                    continue;
+                }*/
+                let cbw = (fi.w_in_b - bo.x).min(bsw); // clipped block width, i.e. having effective pixels
+                let cbh = (fi.h_in_b - bo.y).min(bsh);
+                let mut split_vert = false;
+                let mut split_horz = false;
+                if cbw == bsw/2 && cbh == bsh { split_vert = true; }
+                if cbh == bsh/2 && cbw == bsw { split_horz = true; }
+                if !split_horz {
+                    if partition == PartitionType::PARTITION_HORZ { continue; };
+                }
+                if !split_vert {
+                    if partition == PartitionType::PARTITION_VERT { continue; };
+                }
+            }
+            cw.rollback(&cw_checkpoint);
+            w_pre_cdef.rollback(&w_pre_checkpoint);
+            w_post_cdef.rollback(&w_post_checkpoint);
 
-        let nosplit_rd_cost = rd_cost;
-        partition = PartitionType::PARTITION_SPLIT;
-        {
-        subsize = bsize.subsize(partition);
-        let hbsw = subsize.width_mi(); // Half the block size width in blocks
-        let hbsh = subsize.height_mi(); // Half the block size height in blocks
+            subsize = bsize.subsize(partition);
+            let hbsw = subsize.width_mi(); // Half the block size width in blocks
+            let hbsh = subsize.height_mi(); // Half the block size height in blocks
+            let mut child_modes: Vec<RDOPartitionOutput> = Vec::new();
+            rd_cost = 0.0;
 
-        rd_cost = 0.0;
+            if bsize.gte(BlockSize::BLOCK_8X8) {
+                let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
+                let tell = w.tell_frac();
+                cw.write_partition(w, bo, partition, bsize);
+                rd_cost = (w.tell_frac() - tell) as f64 * get_lambda(fi, seq.bit_depth)/ ((1 << OD_BITRES) as f64);
+            }
 
-        if bsize.gte(BlockSize::BLOCK_8X8) {
-            let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
-            let tell = w.tell_frac();
-            cw.write_partition(w, bo, partition, bsize);
-            rd_cost = (w.tell_frac() - tell) as f64 * get_lambda(fi, seq.bit_depth)/ ((1 << OD_BITRES) as f64);
-        }
+            let four_partitions = [
+                bo,
+                &BlockOffset{ x: bo.x + hbsw as usize, y: bo.y },
+                &BlockOffset{ x: bo.x, y: bo.y + hbsh as usize },
+                &BlockOffset{ x: bo.x + hbsw as usize, y: bo.y + hbsh as usize }
+            ];
+            let partitions = get_sub_partitions(&four_partitions, partition);
 
-        let four_partitions = [
-            bo,
-            &BlockOffset{ x: bo.x + hbsw as usize, y: bo.y },
-            &BlockOffset{ x: bo.x, y: bo.y + hbsh as usize },
-            &BlockOffset{ x: bo.x + hbsw as usize, y: bo.y + hbsh as usize }
-        ];
-        let partitions = get_sub_partitions(&four_partitions, partition);
-
-        rd_cost += partitions.iter().map(|&offset| {
-                encode_partition_bottomup(
+            partitions.iter().for_each(|&offset| {
+                if let (cost, Some(mode_decision)) = encode_partition_bottomup(
                     seq,
                     fi,
                     fs,
@@ -2350,39 +2379,50 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
                     subsize,
                     offset,
                     pmvs//&best_decision.mvs[0]
-                )
-            }).sum::<f64>();
+                ) {
+                    rd_cost += cost;
+                    child_modes.push(mode_decision);
+                }
+            });
+
+            if rd_cost < best_rd {
+                best_rd = rd_cost;
+                best_partition = partition;
+                best_pred_modes = child_modes.clone();
+            }
         }
 
-        // Recode the full block if it is more efficient
-        if !must_split && nosplit_rd_cost < rd_cost {
-            rd_cost = nosplit_rd_cost;
-
+        // If the best partition is not PARTITION_SPLIT, recode it
+        if best_partition != PartitionType::PARTITION_SPLIT {
             cw.rollback(&cw_checkpoint);
             w_pre_cdef.rollback(&w_pre_checkpoint);
             w_post_cdef.rollback(&w_post_checkpoint);
 
-            partition = PartitionType::PARTITION_NONE;
+            assert!(best_partition != PartitionType::PARTITION_NONE || !must_split);
+            let subsize = bsize.subsize(best_partition);
 
             if bsize.gte(BlockSize::BLOCK_8X8) {
                 let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
-                cw.write_partition(w, bo, partition, bsize);
+                cw.write_partition(w, bo, best_partition, bsize);
             }
-
-            // FIXME: redundant block re-encode
-            encode_block_with_modes(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, bsize, bo,
-                                &best_decision);
+            for mode in best_pred_modes {
+                assert!(subsize == mode.bsize);
+                let offset = mode.bo.clone();
+                // FIXME: redundant block re-encode
+                encode_block_with_modes(seq, fi, fs, cw, w_pre_cdef, w_post_cdef,
+                                        mode.bsize, &offset, &mode);
+            }
         }
     }
 
-    subsize = bsize.subsize(partition);
+    subsize = bsize.subsize(best_partition);
 
     if bsize.gte(BlockSize::BLOCK_8X8) &&
-        (bsize == BlockSize::BLOCK_8X8 || partition != PartitionType::PARTITION_SPLIT) {
+        (bsize == BlockSize::BLOCK_8X8 || best_partition != PartitionType::PARTITION_SPLIT) {
         cw.bc.update_partition_context(bo, subsize, bsize);
     }
 
-    rd_cost
+    (best_rd, Some(best_decision))
 }
 
 fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
