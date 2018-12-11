@@ -18,6 +18,7 @@ use ec::{OD_BITRES, Writer, WriterCounter};
 use encoder::{ChromaSampling, ReferenceMode};
 use encode_block_a;
 use encode_block_b;
+use encode_block_helper1;
 use Frame;
 use FrameInvariants;
 use FrameState;
@@ -966,34 +967,13 @@ pub fn rdo_partition_decision(
                 .part_modes[0]
                 .clone();
 
-                let (mode_luma, mode_chroma) = (mode_decision.pred_mode_luma, mode_decision.pred_mode_chroma);
-                let bo = offset;
-
-                let cfl = mode_decision.pred_cfl_params;
-                {
-                  let ref_frames = mode_decision.ref_frames;
-                  let mvs = mode_decision.mvs;
-                  let skip = mode_decision.skip;
-                  let mut cdef_coded = cw.bc.cdef_coded;
-                  let (tx_size, tx_type) = (mode_decision.tx_size, mode_decision.tx_type);
-
-                  cw.bc.set_tx_size(bo, tx_size);
-
-                  let mut mv_stack = Vec::new();
-                  let is_compound = ref_frames[1] != NONE_FRAME;
-                  let mode_context = cw.find_mvrefs(bo, ref_frames, &mut mv_stack, subsize, fi, is_compound);
-
-                  if subsize >= BlockSize::BLOCK_8X8 && subsize.is_sqr() {
-                    let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
-                    cw.write_partition(w, bo, PartitionType::PARTITION_NONE, subsize);
-                  }
-
-                  cdef_coded = encode_block_a(seq, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
-                                            subsize, bo, skip);
-                  encode_block_b(seq, fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
-                                mode_luma, mode_chroma, ref_frames, mvs, subsize, bo, skip, seq.bit_depth, cfl,
-                                tx_size, tx_type, mode_context, &mv_stack, false);
+                if subsize >= BlockSize::BLOCK_8X8 && subsize.is_sqr() {
+                  let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
+                  cw.write_partition(w, offset, PartitionType::PARTITION_NONE, subsize);
                 }
+
+                encode_block_helper1(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, subsize,
+                                    offset, &mode_decision);
                 mode_decision
             }).collect::<Vec<_>>()
         );

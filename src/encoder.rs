@@ -2212,6 +2212,33 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
     tx_dist
 }
 
+pub fn encode_block_helper1(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
+    cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
+    bsize: BlockSize, bo: &BlockOffset, mode_decision: &RDOPartitionOutput) {
+    let (mode_luma, mode_chroma) =
+        (mode_decision.pred_mode_luma, mode_decision.pred_mode_chroma);
+    let cfl = mode_decision.pred_cfl_params;
+    let ref_frames = mode_decision.ref_frames;
+    let mvs = mode_decision.mvs;
+    let skip = mode_decision.skip;
+    let mut cdef_coded = cw.bc.cdef_coded;
+    let (tx_size, tx_type) = (mode_decision.tx_size, mode_decision.tx_type);
+
+    debug_assert!((tx_size, tx_type) ==
+        rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, ref_frames, mvs, skip));
+    cw.bc.set_tx_size(bo, tx_size);
+
+    let mut mv_stack = Vec::new();
+    let is_compound = ref_frames[1] != NONE_FRAME;
+    let mode_context = cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, fi, is_compound);
+
+    cdef_coded = encode_block_a(seq, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
+                                bsize, bo, skip);
+    encode_block_b(seq, fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
+                    mode_luma, mode_chroma, ref_frames, mvs, bsize, bo, skip, seq.bit_depth, cfl,
+                    tx_size, tx_type, mode_context, &mv_stack, false);
+}
+
 fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
                              cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
                              bsize: BlockSize, bo: &BlockOffset, pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5]
@@ -2222,15 +2249,17 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         return rd_cost;
     }
 
-    let bs = bsize.width_mi();
+    let bsw = bsize.width_mi();
+    let bsh = bsize.height_mi();
+    let is_square = bsize.is_sqr();
 
     // Always split if the current partition is too large
-    let must_split = bo.x + bs as usize > fi.w_in_b ||
-        bo.y + bs as usize > fi.h_in_b ||
-        bsize.greater_than(BlockSize::BLOCK_64X64);
+    let must_split = (bo.x + bsw as usize > fi.w_in_b ||
+        bo.y + bsh as usize > fi.h_in_b ||
+        bsize.greater_than(BlockSize::BLOCK_64X64)) && is_square;
 
     // must_split overrides the minimum partition size when applicable
-    let can_split = bsize > fi.min_partition_size || must_split;
+    let can_split = (bsize > fi.min_partition_size && is_square) || must_split;
 
     let mut partition = PartitionType::PARTITION_NONE;
     let mut best_decision = RDOPartitionOutput {
@@ -2246,12 +2275,10 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         tx_type: TxType::DCT_DCT,
     }; // Best decision that is not PARTITION_SPLIT
 
-    let hbs = bs >> 1; // Half the block size in blocks
-    let mut subsize: BlockSize;
-
     let cw_checkpoint = cw.checkpoint();
     let w_pre_checkpoint = w_pre_cdef.checkpoint();
     let w_post_checkpoint = w_post_cdef.checkpoint();
+    let mut subsize: BlockSize;
 
     // Code the whole block
     if !must_split {
@@ -2274,31 +2301,11 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         let spmvs = &pmvs[pmv_idx];
 
         let mode_decision = rdo_mode_decision(seq, fi, fs, cw, bsize, bo, spmvs, false).part_modes[0].clone();
-        let (mode_luma, mode_chroma) = (mode_decision.pred_mode_luma, mode_decision.pred_mode_chroma);
-        let cfl = mode_decision.pred_cfl_params;
-        {
-          let ref_frames = mode_decision.ref_frames;
-          let mvs = mode_decision.mvs;
-          let skip = mode_decision.skip;
-          let mut cdef_coded = cw.bc.cdef_coded;
-          let (tx_size, tx_type) = (mode_decision.tx_size, mode_decision.tx_type);
 
-          debug_assert!((tx_size, tx_type) ==
-              rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, ref_frames, mvs, skip));
-          cw.bc.set_tx_size(bo, tx_size);
+        rd_cost = mode_decision.rd_cost + cost;
 
-          rd_cost = mode_decision.rd_cost + cost;
-
-          let mut mv_stack = Vec::new();
-          let is_compound = ref_frames[1] != NONE_FRAME;
-          let mode_context = cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, fi, is_compound);
-
-          cdef_coded = encode_block_a(seq, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
-                                     bsize, bo, skip);
-          encode_block_b(seq, fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
-                         mode_luma, mode_chroma, ref_frames, mvs, bsize, bo, skip, seq.bit_depth, cfl,
-                         tx_size, tx_type, mode_context, &mv_stack, false);
-        }
+        encode_block_helper1(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, bsize, bo,
+                            &mode_decision);
         best_decision = mode_decision;
     }
 
@@ -2308,10 +2315,12 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         w_pre_cdef.rollback(&w_pre_checkpoint);
         w_post_cdef.rollback(&w_post_checkpoint);
 
-        partition = PartitionType::PARTITION_SPLIT;
-        subsize = bsize.subsize(partition);
-
         let nosplit_rd_cost = rd_cost;
+        partition = PartitionType::PARTITION_SPLIT;
+        {
+        subsize = bsize.subsize(partition);
+        let hbsw = subsize.width_mi(); // Half the block size width in blocks
+        let hbsh = subsize.height_mi(); // Half the block size height in blocks
 
         rd_cost = 0.0;
 
@@ -2322,12 +2331,14 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             rd_cost = (w.tell_frac() - tell) as f64 * get_lambda(fi, seq.bit_depth)/ ((1 << OD_BITRES) as f64);
         }
 
-        let partitions = [
+        let four_partitions = [
             bo,
-            &BlockOffset{ x: bo.x + hbs as usize, y: bo.y },
-            &BlockOffset{ x: bo.x, y: bo.y + hbs as usize },
-            &BlockOffset{ x: bo.x + hbs as usize, y: bo.y + hbs as usize }
+            &BlockOffset{ x: bo.x + hbsw as usize, y: bo.y },
+            &BlockOffset{ x: bo.x, y: bo.y + hbsh as usize },
+            &BlockOffset{ x: bo.x + hbsw as usize, y: bo.y + hbsh as usize }
         ];
+        let partitions = get_sub_partitions(&four_partitions, partition);
+
         rd_cost += partitions.iter().map(|&offset| {
                 encode_partition_bottomup(
                     seq,
@@ -2341,6 +2352,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
                     pmvs//&best_decision.mvs[0]
                 )
             }).sum::<f64>();
+        }
 
         // Recode the full block if it is more efficient
         if !must_split && nosplit_rd_cost < rd_cost {
@@ -2358,27 +2370,8 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             }
 
             // FIXME: redundant block re-encode
-            let (mode_luma, mode_chroma) = (best_decision.pred_mode_luma, best_decision.pred_mode_chroma);
-            let cfl = best_decision.pred_cfl_params;
-            let ref_frames = best_decision.ref_frames;
-            let mvs = best_decision.mvs;
-            let skip = best_decision.skip;
-            let mut cdef_coded = cw.bc.cdef_coded;
-            let (tx_size, tx_type) = (best_decision.tx_size, best_decision.tx_type);
-
-            debug_assert!((tx_size, tx_type) ==
-                rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, ref_frames, mvs, skip));
-            cw.bc.set_tx_size(bo, tx_size);
-
-            let mut mv_stack = Vec::new();
-            let is_compound = ref_frames[1] != NONE_FRAME;
-            let mode_context = cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, fi, is_compound);
-
-            cdef_coded = encode_block_a(seq, fs, cw, if cdef_coded {w_post_cdef} else {w_pre_cdef},
-                                       bsize, bo, skip);
-            encode_block_b(seq, fi, fs, cw, if cdef_coded {w_post_cdef} else {w_pre_cdef},
-                          mode_luma, mode_chroma, ref_frames, mvs, bsize, bo, skip, seq.bit_depth, cfl,
-                          tx_size, tx_type, mode_context, &mv_stack, false);
+            encode_block_helper1(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, bsize, bo,
+                                &best_decision);
         }
     }
 
