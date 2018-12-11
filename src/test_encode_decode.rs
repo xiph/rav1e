@@ -137,7 +137,6 @@ macro_rules! test_dimensions {
     $(
         paste::item!{
             #[test]
-            #[ignore]
             fn [<dimension_ $W x $H>]() {
                 dimension($W, $H)
             }
