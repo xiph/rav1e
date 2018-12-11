@@ -69,9 +69,9 @@ pub struct Packet {
 
 type ChromaSamplePosition=rav1e::ChromaSamplePosition;
 type ChromaSampling=rav1e::ChromaSampling;
-/* type MatrixCoefficients=rav1e::MatrixCoefficients;
+type MatrixCoefficients=rav1e::MatrixCoefficients;
 type ColorPrimaries=rav1e::ColorPrimaries;
-type TransferCharacteristics=rav1e::TransferCharacteristics; */
+type TransferCharacteristics=rav1e::TransferCharacteristics;
 type Rational=rav1e::Rational;
 
 #[no_mangle]
@@ -103,7 +103,6 @@ pub unsafe extern "C" fn rav1e_config_default(
     Box::into_raw(c)
 }
 
-/*
 #[no_mangle]
 pub unsafe extern "C" fn rav1e_config_set_color_description(cfg: *mut Config,
                                                             matrix: MatrixCoefficients,
@@ -116,7 +115,6 @@ pub unsafe extern "C" fn rav1e_config_set_color_description(cfg: *mut Config,
         transfer_characteristics: transfer,
     });
 }
-*/
 
 #[no_mangle]
 pub unsafe extern "C" fn rav1e_config_unref(cfg: *mut Config) {
