@@ -36,6 +36,7 @@ use write_tx_tree;
 
 use std;
 use std::vec::Vec;
+use partition::PartitionType::*;
 
 #[derive(Clone)]
 pub struct RDOOutput {
@@ -287,8 +288,17 @@ pub fn rdo_tx_size_type(
     BlockSize::BLOCK_4X4 => TxSize::TX_4X4,
     BlockSize::BLOCK_8X8 => TxSize::TX_8X8,
     BlockSize::BLOCK_16X16 => TxSize::TX_16X16,
+    BlockSize::BLOCK_4X8 => TxSize::TX_4X8,
+    BlockSize::BLOCK_8X4 => TxSize::TX_8X4,
+    BlockSize::BLOCK_8X16 => TxSize::TX_8X16,
+    BlockSize::BLOCK_16X8 => TxSize::TX_16X8,
+    BlockSize::BLOCK_16X32 => TxSize::TX_16X32,
+    BlockSize::BLOCK_32X16 => TxSize::TX_32X16,
     BlockSize::BLOCK_32X32 => TxSize::TX_32X32,
-    _ => TxSize::TX_64X64
+    BlockSize::BLOCK_32X64 => TxSize::TX_32X64,
+    BlockSize::BLOCK_64X32 => TxSize::TX_64X32,
+    BlockSize::BLOCK_64X64 => TxSize::TX_64X64,
+    _ => unimplemented!()
   };
   cw.bc.set_tx_size(bo, tx_size);
   // Were we not hardcoded to TX_MODE_LARGEST, block tx size would be written here
@@ -316,6 +326,8 @@ pub fn rdo_tx_size_type(
     } else {
       TxType::DCT_DCT
     };
+
+  assert!(tx_size.sqr() <= TxSize::TX_32X32 || tx_type == TxType::DCT_DCT);
 
   (tx_size, tx_type)
 }
@@ -821,18 +833,62 @@ pub fn rdo_tx_type_decision(
   best_type
 }
 
+pub fn get_sub_partitions<'a>(four_partitions: &[&'a BlockOffset; 4],
+   partition: PartitionType) -> Vec<&'a BlockOffset> {
+  let mut partitions = vec![ four_partitions[0] ];
+
+  if partition == PARTITION_VERT || partition == PARTITION_SPLIT {
+     partitions.push(four_partitions[1]);
+  };
+  if partition == PARTITION_HORZ || partition == PARTITION_SPLIT {
+     partitions.push(four_partitions[2]);
+  };
+  if partition == PARTITION_SPLIT {
+     partitions.push(four_partitions[3]);
+  };
+
+  partitions
+}
+
+pub fn get_sub_partitions_with_border_check<'a>(four_partitions: &[&'a BlockOffset; 4],
+   partition: PartitionType, fi: &FrameInvariants, subsize: BlockSize) -> Vec<&'a BlockOffset> {
+  let mut partitions = vec![ four_partitions[0] ];
+
+  let hbsw = subsize.width_mi(); // Half the block size width in blocks
+  let hbsh = subsize.height_mi(); // Half the block size height in blocks
+
+  if partition == PARTITION_VERT || partition == PARTITION_SPLIT {
+    if four_partitions[1].x + hbsw as usize <= fi.w_in_b &&
+      four_partitions[1].y + hbsh as usize <= fi.h_in_b {
+        partitions.push(four_partitions[1]); }
+  };
+  if partition == PARTITION_HORZ || partition == PARTITION_SPLIT {
+    if four_partitions[2].x + hbsw as usize <= fi.w_in_b &&
+      four_partitions[2].y + hbsh as usize <= fi.h_in_b {
+        partitions.push(four_partitions[2]); }
+  };
+  if partition == PARTITION_SPLIT {
+    if four_partitions[3].x + hbsw as usize <= fi.w_in_b &&
+      four_partitions[3].y + hbsh as usize <= fi.h_in_b {
+        partitions.push(four_partitions[3]); }
+  };
+
+  partitions
+}
+
 // RDO-based single level partitioning decision
 pub fn rdo_partition_decision(
   seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
   cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
   bsize: BlockSize, bo: &BlockOffset,
-  cached_block: &RDOOutput, pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5]
+  cached_block: &RDOOutput, pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5],
+  partition_types: &Vec<PartitionType>,
 ) -> RDOOutput {
   let mut best_partition = cached_block.part_type;
   let mut best_rd = cached_block.rd_cost;
   let mut best_pred_modes = cached_block.part_modes.clone();
 
-  for &partition in RAV1E_PARTITION_TYPES {
+  for &partition in partition_types {
     // Do not re-encode results we already have
     if partition == cached_block.part_type {
       continue;
@@ -858,7 +914,9 @@ pub fn rdo_partition_decision(
         let mode_decision = rdo_mode_decision(seq, fi, fs, cw, bsize, bo, spmvs, false).part_modes[0].clone();
         child_modes.push(mode_decision);
       }
-      PartitionType::PARTITION_SPLIT => {
+      PARTITION_SPLIT |
+      PARTITION_HORZ |
+      PARTITION_VERT => {
         let subsize = bsize.subsize(partition);
 
         if subsize == BlockSize::BLOCK_INVALID {
@@ -868,17 +926,19 @@ pub fn rdo_partition_decision(
         //pmv = best_pred_modes[0].mvs[0];
 
         assert!(best_pred_modes.len() <= 4);
-        let bs = bsize.width_mi();
-        let hbs = bs >> 1; // Half the block size in blocks
-        let partitions = [
+
+        let hbsw = subsize.width_mi(); // Half the block size width in blocks
+        let hbsh = subsize.height_mi(); // Half the block size height in blocks
+        let four_partitions = [
           bo,
-          &BlockOffset{ x: bo.x + hbs as usize, y: bo.y },
-          &BlockOffset{ x: bo.x, y: bo.y + hbs as usize },
-          &BlockOffset{ x: bo.x + hbs as usize, y: bo.y + hbs as usize }
+          &BlockOffset{ x: bo.x + hbsw as usize, y: bo.y },
+          &BlockOffset{ x: bo.x, y: bo.y + hbsh as usize },
+          &BlockOffset{ x: bo.x + hbsw as usize, y: bo.y + hbsh as usize }
         ];
+        let partitions = get_sub_partitions_with_border_check(&four_partitions, partition, fi, subsize);
 
         let pmv_idxs = partitions.iter().map(|&offset| {
-          if subsize > BlockSize::BLOCK_32X32 {
+          if subsize.greater_than(BlockSize::BLOCK_32X32) {
               0
           } else {
               ((offset.x & 32) >> 5) + ((offset.y & 32) >> 4) + 1

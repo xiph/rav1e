@@ -1923,6 +1923,7 @@ impl ContextWriter {
     if has_rows && has_cols {
       symbol_with_update!(self, w, p as u32, partition_cdf);
     } else if !has_rows && has_cols {
+      assert!(p == PartitionType::PARTITION_SPLIT || p == PartitionType::PARTITION_HORZ);
       assert!(bsize > BlockSize::BLOCK_8X8);
       let mut cdf = [0u16; 2];
       ContextWriter::partition_gather_vert_alike(
@@ -1932,6 +1933,7 @@ impl ContextWriter {
       );
       w.symbol((p == PartitionType::PARTITION_SPLIT) as u32, &cdf);
     } else {
+      assert!(p == PartitionType::PARTITION_SPLIT || p == PartitionType::PARTITION_VERT);
       assert!(bsize > BlockSize::BLOCK_8X8);
       let mut cdf = [0u16; 2];
       ContextWriter::partition_gather_horz_alike(
@@ -3452,8 +3454,6 @@ impl ContextWriter {
     } else {
       1
     } as usize;
-
-    assert!(tx_size <= TX_32X32 || tx_type == DCT_DCT);
 
     // Signal tx_type for luma plane only
     if plane == 0 {
