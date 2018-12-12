@@ -18,7 +18,7 @@ use ec::{OD_BITRES, Writer, WriterCounter};
 use encoder::{ChromaSampling, ReferenceMode};
 use encode_block_a;
 use encode_block_b;
-use encode_block_helper1;
+use encode_block_with_modes;
 use Frame;
 use FrameInvariants;
 use FrameState;
@@ -972,7 +972,7 @@ pub fn rdo_partition_decision(
                   cw.write_partition(w, offset, PartitionType::PARTITION_NONE, subsize);
                 }
 
-                encode_block_helper1(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, subsize,
+                encode_block_with_modes(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, subsize,
                                     offset, &mode_decision);
                 mode_decision
             }).collect::<Vec<_>>()

@@ -2212,7 +2212,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
     tx_dist
 }
 
-pub fn encode_block_helper1(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
+pub fn encode_block_with_modes(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
     cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
     bsize: BlockSize, bo: &BlockOffset, mode_decision: &RDOPartitionOutput) {
     let (mode_luma, mode_chroma) =
@@ -2304,7 +2304,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
 
         rd_cost = mode_decision.rd_cost + cost;
 
-        encode_block_helper1(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, bsize, bo,
+        encode_block_with_modes(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, bsize, bo,
                             &mode_decision);
         best_decision = mode_decision;
     }
@@ -2370,7 +2370,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             }
 
             // FIXME: redundant block re-encode
-            encode_block_helper1(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, bsize, bo,
+            encode_block_with_modes(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, bsize, bo,
                                 &best_decision);
         }
     }
