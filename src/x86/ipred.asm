@@ -97,6 +97,7 @@ cfl_ac_w8_pad1_shuffle: db 0, 1, 2, 3, 4, 5
 
 pb_1:   times 4 db 1
 pb_2:   times 4 db 2
+pb_4:   times 4 db 4
 pb_8:   times 4 db 8
 pb_12:  times 4 db 12
 pb_14:  times 4 db 14
@@ -141,6 +142,7 @@ JMP_TABLE ipred_cfl,      avx2, h4, h8, h16, h32, w4, w8, w16, w32, \
                                 s4-8*4, s8-8*4, s16-8*4, s32-8*4
 JMP_TABLE ipred_cfl_left, avx2, h4, h8, h16, h32
 JMP_TABLE ipred_cfl_ac_420, avx2, w16_pad1, w16_pad2, w16_pad3
+JMP_TABLE ipred_cfl_ac_422, avx2, w16_pad1, w16_pad2, w16_pad3
 JMP_TABLE pal_pred,       avx2, w4, w8, w16, w32, w64
 
 cextern dr_intra_derivative
@@ -2826,6 +2828,199 @@ cglobal ipred_cfl_ac_420, 4, 9, 5, ac, y, stride, wpad, hpad, w, h, sz, ac_bak
 .calc_avg:
     vpbroadcastd         m2, [pw_1]
     pmaddwd              m0, m4, m2
+    vextracti128        xm1, m0, 1
+    tzcnt               r1d, szd
+    paddd               xm0, xm1
+    movd                xm2, r1d
+    movd                xm3, szd
+    punpckhqdq          xm1, xm0, xm0
+    paddd               xm0, xm1
+    psrad               xm3, 1
+    psrlq               xm1, xm0, 32
+    paddd               xm0, xm3
+    paddd               xm0, xm1
+    psrad               xm0, xm2
+    vpbroadcastw         m0, xm0
+.sub_loop:
+    mova                 m1, [ac_bakq]
+    psubw                m1, m0
+    mova          [ac_bakq], m1
+    add             ac_bakq, 32
+    sub                 szd, 16
+    jg .sub_loop
+    RET
+
+cglobal ipred_cfl_ac_422, 4, 9, 6, ac, y, stride, wpad, hpad, w, h, sz, ac_bak
+    movifnidn         hpadd, hpadm
+    movifnidn            wd, wm
+    mov                  hd, hm
+    mov                 szd, wd
+    mov             ac_bakq, acq
+    imul                szd, hd
+    shl               hpadd, 2
+    sub                  hd, hpadd
+    vpbroadcastd         m2, [pb_4]
+    pxor                 m4, m4
+    pxor                 m5, m5
+    cmp                  wd, 8
+    jg .w16
+    je .w8
+    ; fall-through
+
+    DEFINE_ARGS ac, y, stride, wpad, hpad, stride3, h, sz, ac_bak
+.w4:
+    lea            stride3q, [strideq*3]
+.w4_loop:
+    movq                xm1, [yq]
+    movhps              xm1, [yq+strideq]
+    movq                xm0, [yq+strideq*2]
+    movhps              xm0, [yq+stride3q]
+    pmaddubsw           xm0, xm2
+    pmaddubsw           xm1, xm2
+    mova              [acq], xm1
+    mova           [acq+16], xm0
+    paddw               xm4, xm0
+    paddw               xm5, xm1
+    lea                  yq, [yq+strideq*4]
+    add                 acq, 32
+    sub                  hd, 4
+    jg .w4_loop
+    test              hpadd, hpadd
+    jz .calc_avg
+    vpermq               m0, m0, q1111
+.w4_hpad_loop:
+    mova              [acq], m0
+    paddw                m4, m0
+    add                 acq, 32
+    sub               hpadd, 4
+    jg .w4_hpad_loop
+    jmp .calc_avg
+
+.w8:
+    lea            stride3q, [strideq*3]
+    test              wpadd, wpadd
+    jnz .w8_wpad
+.w8_loop:
+    mova                xm1, [yq]
+    vinserti128          m1, [yq+strideq], 1
+    mova                xm0, [yq+strideq*2]
+    vinserti128          m0, [yq+stride3q], 1
+    pmaddubsw            m0, m2
+    pmaddubsw            m1, m2
+    mova              [acq], m1
+    mova           [acq+32], m0
+    paddw                m4, m0
+    paddw                m5, m1
+    lea                  yq, [yq+strideq*4]
+    add                 acq, 64
+    sub                  hd, 4
+    jg .w8_loop
+    test              hpadd, hpadd
+    jz .calc_avg
+    jmp .w8_hpad
+.w8_wpad:
+    vbroadcasti128       m3, [cfl_ac_w8_pad1_shuffle]
+.w8_wpad_loop:
+    movq                xm1, [yq]
+    vinserti128          m1, [yq+strideq], 1
+    movq                xm0, [yq+strideq*2]
+    vinserti128          m0, [yq+stride3q], 1
+    pmaddubsw            m0, m2
+    pmaddubsw            m1, m2
+    pshufb               m0, m3
+    pshufb               m1, m3
+    mova              [acq], m1
+    mova           [acq+32], m0
+    paddw                m4, m0
+    paddw                m5, m1
+    lea                  yq, [yq+strideq*4]
+    add                 acq, 64
+    sub                  hd, 4
+    jg .w8_wpad_loop
+    test              hpadd, hpadd
+    jz .calc_avg
+.w8_hpad:
+    vpermq               m0, m0, q3232
+.w8_hpad_loop:
+    mova              [acq], m0
+    paddw                m4, m0
+    add                 acq, 32
+    sub               hpadd, 2
+    jg .w8_hpad_loop
+    jmp .calc_avg
+
+.w16:
+    test              wpadd, wpadd
+    jnz .w16_wpad
+.w16_loop:
+    mova                 m1, [yq]
+    mova                 m0, [yq+strideq]
+    pmaddubsw            m0, m2
+    pmaddubsw            m1, m2
+    mova              [acq], m1
+    mova           [acq+32], m0
+    paddw                m4, m0
+    paddw                m5, m1
+    lea                  yq, [yq+strideq*2]
+    add                 acq, 64
+    sub                  hd, 2
+    jg .w16_loop
+    test              hpadd, hpadd
+    jz .calc_avg
+    jmp .w16_hpad_loop
+.w16_wpad:
+    DEFINE_ARGS ac, y, stride, wpad, hpad, iptr, h, sz, ac_bak
+    lea               iptrq, [ipred_cfl_ac_422_avx2_table]
+    shl               wpadd, 2
+    mova                 m3, [iptrq+cfl_ac_w16_pad_shuffle- \
+                              ipred_cfl_ac_422_avx2_table+wpadq*8-32]
+    movsxd            wpadq, [iptrq+wpadq+4]
+    add               iptrq, wpadq
+    jmp iptrq
+.w16_pad3:
+    vpbroadcastq         m1, [yq]
+    vpbroadcastq         m0, [yq+strideq]
+    jmp .w16_wpad_end
+.w16_pad2:
+    vbroadcasti128       m1, [yq]
+    vbroadcasti128       m0, [yq+strideq]
+    jmp .w16_wpad_end
+.w16_pad1:
+    mova                 m1, [yq]
+    mova                 m0, [yq+strideq]
+    ; fall-through
+.w16_wpad_end:
+    pmaddubsw            m0, m2
+    pmaddubsw            m1, m2
+    pshufb               m0, m3
+    pshufb               m1, m3
+    mova              [acq], m1
+    mova           [acq+32], m0
+    paddw                m4, m0
+    paddw                m5, m1
+    lea                  yq, [yq+strideq*2]
+    add                 acq, 64
+    sub                  hd, 2
+    jz .w16_wpad_done
+    jmp iptrq
+.w16_wpad_done:
+    test              hpadd, hpadd
+    jz .calc_avg
+.w16_hpad_loop:
+    mova              [acq], m0
+    mova           [acq+32], m0
+    paddw                m4, m0
+    paddw                m5, m0
+    add                 acq, 64
+    sub               hpadd, 2
+    jg .w16_hpad_loop
+    ; fall-through
+
+.calc_avg:
+    vpbroadcastd         m2, [pw_1]
+    pmaddwd              m5, m5, m2
+    pmaddwd              m0, m4, m2
+    paddd                m0, m5
     vextracti128        xm1, m0, 1
     tzcnt               r1d, szd
     paddd               xm0, xm1
