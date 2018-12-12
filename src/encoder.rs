@@ -673,6 +673,7 @@ impl FrameInvariants {
     fi.frame_to_show_map_idx = 0;
     let q_boost = 15;
     fi.base_q_idx = (fi.config.quantizer.max(1 + q_boost).min(255 + q_boost) - q_boost) as u8;
+    fi.cdef_bits = 3;
     fi.primary_ref_frame = PRIMARY_REF_NONE;
     fi.number = segment_start_frame;
     for i in 0..INTER_REFS_PER_FRAME {
@@ -765,7 +766,7 @@ impl FrameInvariants {
 
     let q_drop = 15 * lvl as usize;
     fi.base_q_idx = (fi.config.quantizer.min(255 - q_drop) + q_drop) as u8;
-
+    fi.cdef_bits = 3 - ((fi.base_q_idx.max(128) - 128) >> 5);
     let second_ref_frame = if !inter_cfg.multiref {
       NONE_FRAME
     } else if !inter_cfg.reorder || inter_cfg.idx_in_group == 0 {
@@ -1489,10 +1490,11 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
             assert!(fi.cdef_bits < 4);
             self.write(2,fi.cdef_bits)?; // cdef bits
             for i in 0..(1<<fi.cdef_bits) {
-                assert!(fi.cdef_y_strengths[i]<64);
-                assert!(fi.cdef_uv_strengths[i]<64);
-                self.write(6,fi.cdef_y_strengths[i])?; // cdef y strength
-                self.write(6,fi.cdef_uv_strengths[i])?; // cdef uv strength
+                let j = i << (3 - fi.cdef_bits);
+                assert!(fi.cdef_y_strengths[j]<64);
+                assert!(fi.cdef_uv_strengths[j]<64);
+                self.write(6,fi.cdef_y_strengths[j])?; // cdef y strength
+                self.write(6,fi.cdef_uv_strengths[j])?; // cdef uv strength
             }
         }
         Ok(())
