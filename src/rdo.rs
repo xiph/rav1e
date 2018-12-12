@@ -734,7 +734,10 @@ pub fn rdo_cfl_alpha(
             uv_tx_size,
             bit_depth,
             &ac,
-            alpha
+            alpha,
+            p,
+            0, // don't care about frame width for CFL prediction
+            0  // don't care about frame height for CFL prediction
           );
           sse_wxh(
             &input.slice(&po),

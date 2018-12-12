@@ -2028,63 +2028,6 @@ impl ContextWriter {
     }
   }
 
-  fn has_tr(&mut self, bo: &BlockOffset, bsize: BlockSize) -> bool {
-    let sb_mi_size = BLOCK_64X64.width_mi(); /* Assume 64x64 for now */
-    let mask_row = bo.y & LOCAL_BLOCK_MASK;
-    let mask_col = bo.x & LOCAL_BLOCK_MASK;
-    let target_n4_w = bsize.width_mi();
-    let target_n4_h = bsize.height_mi();
-
-    let mut bs = target_n4_w.max(target_n4_h);
-
-    if bs > BLOCK_64X64.width_mi() {
-      return false;
-    }
-
-    let mut has_tr = !((mask_row & bs) != 0 && (mask_col & bs) != 0);
-
-    /* TODO: assert its a power of two */
-
-    while bs < sb_mi_size {
-      if (mask_col & bs) != 0 {
-        if (mask_col & (2 * bs) != 0) && (mask_row & (2 * bs) != 0) {
-          has_tr = false;
-          break;
-        }
-      } else {
-        break;
-      }
-      bs <<= 1;
-    }
-
-    /* The left hand of two vertical rectangles always has a top right (as the
-     * block above will have been decoded) */
-    if (target_n4_w < target_n4_h) && (bo.x & target_n4_w) == 0 {
-      has_tr = true;
-    }
-
-    /* The bottom of two horizontal rectangles never has a top right (as the block
-     * to the right won't have been decoded) */
-    if (target_n4_w > target_n4_h) && (bo.y & target_n4_h) != 0 {
-      has_tr = false;
-    }
-
-    /* The bottom left square of a Vertical A (in the old format) does
-     * not have a top right as it is decoded before the right hand
-     * rectangle of the partition */
-/*
-    if blk.partition == PartitionType::PARTITION_VERT_A {
-      if blk.n4_w == blk.n4_h {
-        if (mask_row & bs) != 0 {
-          has_tr = false;
-        }
-      }
-    }
-*/
-
-    has_tr
-  }
-
   fn find_valid_col_offs(&mut self, col_offset: isize, mi_col: usize) -> isize {
     cmp::max(col_offset, -(mi_col as isize))
   }
@@ -2420,7 +2363,7 @@ impl ContextWriter {
                                            &mut newmv_count, bsize, is_compound);
       col_match |= found_match;
     }
-    if self.has_tr(bo, bsize) {
+    if has_tr(bo, bsize) {
       let found_match = self.scan_blk_mbmi(&bo.with_offset(target_n4_w as isize, -1), ref_frames, mv_stack,
                                            &mut newmv_count, is_compound);
       row_match |= found_match;
