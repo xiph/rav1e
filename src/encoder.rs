@@ -340,7 +340,7 @@ impl Sequence {
             still_picture: false,
             reduced_still_picture_hdr: false,
             monochrome: false,
-            enable_intra_edge_filter: true,
+            enable_intra_edge_filter: false,
             enable_interintra_compound: false,
             enable_masked_compound: false,
             enable_dual_filter: false,
@@ -1733,7 +1733,7 @@ pub fn encode_tx_block(
     assert!(tx_size.sqr() <= TxSize::TX_32X32 || tx_type == TxType::DCT_DCT);
 
     if mode.is_intra() {
-      mode.predict_intra(&mut rec.mut_slice(po), tx_size, bit_depth, &ac, alpha);
+      mode.predict_intra(&mut rec.mut_slice(po), tx_size, bit_depth, &ac, alpha, p, fi.w_in_b, fi.h_in_b);
     }
 
     if skip { return (false, -1); }

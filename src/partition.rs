@@ -108,6 +108,34 @@ impl BlockSize {
   const BLOCK_SIZE_HEIGHT_LOG2: [usize; BlockSize::BLOCK_SIZES_ALL] =
     [2, 3, 2, 3, 4, 3, 4, 5, 4, 5, 6, 5, 6, 7, 6, 7, 4, 2, 5, 3, 6, 4];
 
+  pub fn from_width_and_height(w: usize, h: usize) -> BlockSize {
+    match (w, h) {
+      (4, 4) => BLOCK_4X4,
+      (4, 8) => BLOCK_4X8,
+      (8, 4) => BLOCK_8X4,
+      (8, 8) => BLOCK_8X8,
+      (8, 16) => BLOCK_8X16,
+      (16, 8) => BLOCK_16X8,
+      (16, 16) => BLOCK_16X16,
+      (16, 32) => BLOCK_16X32,
+      (32, 16) => BLOCK_32X16,
+      (32, 32) => BLOCK_32X32,
+      (32, 64) => BLOCK_32X64,
+      (64, 32) => BLOCK_64X32,
+      (64, 64) => BLOCK_64X64,
+      (64, 128) => BLOCK_64X128,
+      (128, 64) => BLOCK_128X64,
+      (128, 128) => BLOCK_128X128,
+      (4, 16) => BLOCK_4X16,
+      (16, 4) => BLOCK_16X4,
+      (8, 32) => BLOCK_8X32,
+      (32, 8) => BLOCK_32X8,
+      (16, 64) => BLOCK_16X64,
+      (64, 16) => BLOCK_64X16,
+      _ => unreachable!()
+    }
+  }
+
   pub fn cfl_allowed(self) -> bool {
     // TODO: fix me when enabling EXT_PARTITION_TYPES
     self <= BlockSize::BLOCK_32X32
@@ -874,65 +902,65 @@ pub enum MvJointType {
 impl PredictionMode {
   pub fn predict_intra<'a>(
     self, dst: &'a mut PlaneMutSlice<'a>, tx_size: TxSize, bit_depth: usize,
-    ac: &[i16], alpha: i16
+    ac: &[i16], alpha: i16, p: usize, frame_w_in_b: usize, frame_h_in_b: usize
   ) {
     assert!(self.is_intra());
 
     match tx_size {
       TxSize::TX_4X4 =>
-        self.predict_intra_inner::<Block4x4>(dst, bit_depth, ac, alpha),
+        self.predict_intra_inner::<Block4x4>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
       TxSize::TX_8X8 =>
-        self.predict_intra_inner::<Block8x8>(dst, bit_depth, ac, alpha),
+        self.predict_intra_inner::<Block8x8>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
       TxSize::TX_16X16 =>
-        self.predict_intra_inner::<Block16x16>(dst, bit_depth, ac, alpha),
+        self.predict_intra_inner::<Block16x16>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
       TxSize::TX_32X32 =>
-        self.predict_intra_inner::<Block32x32>(dst, bit_depth, ac, alpha),
+        self.predict_intra_inner::<Block32x32>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
       TxSize::TX_64X64 =>
-        self.predict_intra_inner::<Block64x64>(dst, bit_depth, ac, alpha),
+        self.predict_intra_inner::<Block64x64>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
 
       TxSize::TX_4X8 =>
-        self.predict_intra_inner::<Block4x8>(dst, bit_depth, ac, alpha),
+        self.predict_intra_inner::<Block4x8>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
       TxSize::TX_8X4 =>
-        self.predict_intra_inner::<Block8x4>(dst, bit_depth, ac, alpha),
+        self.predict_intra_inner::<Block8x4>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
       TxSize::TX_8X16 =>
-        self.predict_intra_inner::<Block8x16>(dst, bit_depth, ac, alpha),
+        self.predict_intra_inner::<Block8x16>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
       TxSize::TX_16X8 =>
-        self.predict_intra_inner::<Block16x8>(dst, bit_depth, ac, alpha),
+        self.predict_intra_inner::<Block16x8>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
       TxSize::TX_16X32 =>
-        self.predict_intra_inner::<Block16x32>(dst, bit_depth, ac, alpha),
+        self.predict_intra_inner::<Block16x32>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
       TxSize::TX_32X16 =>
-        self.predict_intra_inner::<Block32x16>(dst, bit_depth, ac, alpha),
+        self.predict_intra_inner::<Block32x16>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
       TxSize::TX_32X64 =>
-        self.predict_intra_inner::<Block32x64>(dst, bit_depth, ac, alpha),
+        self.predict_intra_inner::<Block32x64>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
       TxSize::TX_64X32 =>
-        self.predict_intra_inner::<Block64x32>(dst, bit_depth, ac, alpha),
+        self.predict_intra_inner::<Block64x32>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
 
       TxSize::TX_4X16 =>
-        self.predict_intra_inner::<Block4x16>(dst, bit_depth, ac, alpha),
+        self.predict_intra_inner::<Block4x16>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
       TxSize::TX_16X4 =>
-        self.predict_intra_inner::<Block16x4>(dst, bit_depth, ac, alpha),
+        self.predict_intra_inner::<Block16x4>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
       TxSize::TX_8X32 =>
-        self.predict_intra_inner::<Block8x32>(dst, bit_depth, ac, alpha),
+        self.predict_intra_inner::<Block8x32>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
       TxSize::TX_32X8 =>
-        self.predict_intra_inner::<Block32x8>(dst, bit_depth, ac, alpha),
+        self.predict_intra_inner::<Block32x8>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
       TxSize::TX_16X64 =>
-        self.predict_intra_inner::<Block16x64>(dst, bit_depth, ac, alpha),
+        self.predict_intra_inner::<Block16x64>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
       TxSize::TX_64X16 =>
-        self.predict_intra_inner::<Block64x16>(dst, bit_depth, ac, alpha),
+        self.predict_intra_inner::<Block64x16>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
     }
   }
 
   #[inline(always)]
   fn predict_intra_inner<'a, B: Intra<u16>>(
     self, dst: &'a mut PlaneMutSlice<'a>, bit_depth: usize, ac: &[i16],
-    alpha: i16
+    alpha: i16, p: usize, frame_w_in_b: usize, frame_h_in_b: usize
   ) {
     let base = 128u16 << (bit_depth - 8);
 
-    let mut edge_buf: AlignedArray<[u16; 2 * MAX_TX_SIZE + 1]> =
+    let mut edge_buf: AlignedArray<[u16; 4 * MAX_TX_SIZE + 1]> =
       UninitializedAlignedArray();
     // left pixels are order from bottom to top and right-aligned
-    let (left, not_left) = edge_buf.array.split_at_mut(MAX_TX_SIZE);
+    let (left, not_left) = edge_buf.array.split_at_mut(2*MAX_TX_SIZE);
     let (top_left, above) = not_left.split_at_mut(1);
 
     let stride = dst.plane.cfg.stride;
@@ -963,18 +991,19 @@ impl PredictionMode {
       if x != 0 {
         let left_slice = dst.go_left(1);
         for i in 0..B::H {
-          left[MAX_TX_SIZE - B::H + i] = left_slice.p(0, B::H - 1 - i);
+          left[2*MAX_TX_SIZE - B::H + i] = left_slice.p(0, B::H - 1 - i);
         }
       } else {
         let val = if y != 0 { dst.go_up(1).p(0, 0) } else { base + 1 };
-        for v in left[MAX_TX_SIZE - B::H..].iter_mut() {
+        for v in left[2*MAX_TX_SIZE - B::H..].iter_mut() {
           *v = val
         }
       }
     }
 
     // Needs top-left
-    if mode == PredictionMode::PAETH_PRED {
+    if mode == PredictionMode::PAETH_PRED || mode == PredictionMode::D117_PRED
+     || mode == PredictionMode::D135_PRED || mode == PredictionMode::D153_PRED {
       top_left[0] = match (x, y) {
         (0, 0) => base,
         (_, 0) => dst.go_left(1).p(0, 0),
@@ -990,14 +1019,74 @@ impl PredictionMode {
       } else {
         let val = if x != 0 { dst.go_left(1).p(0, 0) } else { base - 1 };
         for v in above[..B::W].iter_mut() {
-          *v = val
+          *v = val;
+        }
+      }
+    }
+
+    // Needs top right
+    if mode == PredictionMode::D45_PRED || mode == PredictionMode::D63_PRED {
+      let bo = if p == 0 {
+        BlockOffset { x: x as usize / 4, y: y as usize / 4 }
+      } else {
+        BlockOffset { x: x as usize / 2, y: y as usize / 2 }
+      };
+      let bsize = if p == 0 {
+        BlockSize::from_width_and_height(B::W, B::H)
+      } else {
+        BlockSize::from_width_and_height(2*B::W, 2*B::H)
+      };
+      let num_avail = if y != 0 && has_tr(&bo, bsize) {
+        B::H.min((if p == 0 { MI_SIZE } else { MI_SIZE / 2 }) * frame_w_in_b - x as usize - B::W)
+      } else {
+        0
+      };
+      if num_avail > 0 {
+        above[B::W..B::W + num_avail].copy_from_slice(&dst.go_up(1).as_slice()[B::W..B::W + num_avail]);
+      }
+      if num_avail < B::H {
+        let val = above[B::W + num_avail - 1];
+        for v in above[B::W + num_avail..B::W + B::H].iter_mut() {
+          *v = val;
+        }
+      }
+    }
+
+    // Needs bottom left
+    if mode == PredictionMode::D207_PRED {
+      let bo = if p == 0 {
+        BlockOffset { x: x as usize / 4, y: y as usize / 4 }
+      } else {
+        BlockOffset { x: x as usize / 2, y: y as usize / 2 }
+      };
+      let bsize = if p == 0 {
+        BlockSize::from_width_and_height(B::W, B::H)
+      } else {
+        BlockSize::from_width_and_height(2*B::W, 2*B::H)
+      };
+      let num_avail = if x != 0 && has_bl(&bo, bsize) {
+        B::W.min((if p == 0 { MI_SIZE } else { MI_SIZE / 2 }) * frame_h_in_b - y as usize - B::H)
+      } else {
+        0
+      };
+      if num_avail > 0 {
+        let left_slice = dst.go_left(1);
+        for i in 0..num_avail {
+          left[2*MAX_TX_SIZE - B::H - 1 - i] = left_slice.p(0, B::H + i);
+        }
+      }
+      if num_avail < B::W {
+        let val = left[2 * MAX_TX_SIZE - B::H - num_avail];
+        for v in left[(2 * MAX_TX_SIZE - B::H - B::W)..(2 * MAX_TX_SIZE - B::H - num_avail)].iter_mut() {
+          *v = val;
         }
       }
     }
 
     let slice = dst.as_mut_slice();
-    let above_slice = &above[..B::W];
-    let left_slice = &left[MAX_TX_SIZE - B::H..];
+    let above_slice = &above[..B::W + B::H];
+    let left_slice = &left[2 * MAX_TX_SIZE - B::H..];
+    let left_and_left_below_slice = &left[2 * MAX_TX_SIZE - B::H - B::W..];
 
     match mode {
       PredictionMode::DC_PRED => match (x, y) {
@@ -1046,6 +1135,18 @@ impl PredictionMode {
         B::pred_smooth_h(slice, stride, above_slice, left_slice),
       PredictionMode::SMOOTH_V_PRED =>
         B::pred_smooth_v(slice, stride, above_slice, left_slice),
+      PredictionMode::D45_PRED =>
+        B::pred_directional(slice, stride, above_slice, left_and_left_below_slice, top_left, 45, bit_depth),
+      PredictionMode::D135_PRED =>
+        B::pred_directional(slice, stride, above_slice, left_and_left_below_slice, top_left, 135, bit_depth),
+      PredictionMode::D117_PRED =>
+        B::pred_directional(slice, stride, above_slice, left_and_left_below_slice, top_left, 113, bit_depth),
+      PredictionMode::D153_PRED =>
+        B::pred_directional(slice, stride, above_slice, left_and_left_below_slice, top_left, 157, bit_depth),
+      PredictionMode::D207_PRED =>
+        B::pred_directional(slice, stride, above_slice, left_and_left_below_slice, top_left, 203, bit_depth),
+      PredictionMode::D63_PRED =>
+        B::pred_directional(slice, stride, above_slice, left_and_left_below_slice, top_left, 67, bit_depth),
       _ => unimplemented!()
     }
   }
@@ -1260,4 +1361,118 @@ pub enum TxSet {
   TX_SET_ALL16_16X16,
   // Discrete Trig transforms w/ flip (9) + Identity (1) + 1D Hor/Ver (6)
   TX_SET_ALL16
+}
+
+pub fn has_tr(bo: &BlockOffset, bsize: BlockSize) -> bool {
+  let sb_mi_size = BLOCK_64X64.width_mi(); /* Assume 64x64 for now */
+  let mask_row = bo.y & LOCAL_BLOCK_MASK;
+  let mask_col = bo.x & LOCAL_BLOCK_MASK;
+  let target_n4_w = bsize.width_mi();
+  let target_n4_h = bsize.height_mi();
+
+  let mut bs = target_n4_w.max(target_n4_h);
+
+  if bs > BLOCK_64X64.width_mi() {
+    return false;
+  }
+
+  let mut has_tr = !((mask_row & bs) != 0 && (mask_col & bs) != 0);
+
+  /* TODO: assert its a power of two */
+
+  while bs < sb_mi_size {
+    if (mask_col & bs) != 0 {
+      if (mask_col & (2 * bs) != 0) && (mask_row & (2 * bs) != 0) {
+        has_tr = false;
+        break;
+      }
+    } else {
+      break;
+    }
+    bs <<= 1;
+  }
+
+  /* The left hand of two vertical rectangles always has a top right (as the
+    * block above will have been decoded) */
+  if (target_n4_w < target_n4_h) && (bo.x & target_n4_w) == 0 {
+    has_tr = true;
+  }
+
+  /* The bottom of two horizontal rectangles never has a top right (as the block
+    * to the right won't have been decoded) */
+  if (target_n4_w > target_n4_h) && (bo.y & target_n4_h) != 0 {
+    has_tr = false;
+  }
+
+  /* The bottom left square of a Vertical A (in the old format) does
+    * not have a top right as it is decoded before the right hand
+    * rectangle of the partition */
+/*
+  if blk.partition == PartitionType::PARTITION_VERT_A {
+    if blk.n4_w == blk.n4_h {
+      if (mask_row & bs) != 0 {
+        has_tr = false;
+      }
+    }
+  }
+*/
+
+  has_tr
+}
+
+pub fn has_bl(bo: &BlockOffset, bsize: BlockSize) -> bool {
+  let sb_mi_size = BLOCK_64X64.width_mi(); /* Assume 64x64 for now */
+  let mask_row = bo.y & LOCAL_BLOCK_MASK;
+  let mask_col = bo.x & LOCAL_BLOCK_MASK;
+  let target_n4_w = bsize.width_mi();
+  let target_n4_h = bsize.height_mi();
+
+  let mut bs = target_n4_w.max(target_n4_h);
+
+  if bs > BLOCK_64X64.width_mi() {
+    return false;
+  }
+
+  let mut has_bl = (mask_row & bs) == 0 && (mask_col & bs) == 0 && bs < sb_mi_size;
+
+  /* TODO: assert its a power of two */
+
+  while 2 * bs < sb_mi_size {
+    if (mask_col & bs) == 0 {
+      if (mask_col & (2 * bs) == 0) && (mask_row & (2 * bs) == 0) {
+        has_bl = true;
+        break;
+      }
+    } else {
+      break;
+    }
+    bs <<= 1;
+  }
+
+  /* The right hand of two vertical rectangles never has a bottom left (as the
+    * block below won't have been decoded) */
+  if (target_n4_w < target_n4_h) && (bo.x & target_n4_w) != 0 {
+    has_bl = false;
+  }
+
+  /* The top of two horizontal rectangles always has a bottom left (as the block
+    * to the left will have been decoded) */
+  if (target_n4_w > target_n4_h) && (bo.y & target_n4_h) == 0 {
+    has_bl = true;
+  }
+
+  /* The bottom left square of a Vertical A (in the old format) does
+    * not have a top right as it is decoded before the right hand
+    * rectangle of the partition */
+/*
+  if blk.partition == PartitionType::PARTITION_VERT_A {
+    if blk.n4_w == blk.n4_h {
+      if (mask_row & bs) != 0 {
+        has_tr = false;
+      }
+    }
+  }
+*/
+
+  has_bl
 }

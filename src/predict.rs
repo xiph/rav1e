@@ -33,7 +33,13 @@ pub static RAV1E_INTRA_MODES: &'static [PredictionMode] = &[
   PredictionMode::SMOOTH_PRED,
   PredictionMode::SMOOTH_H_PRED,
   PredictionMode::SMOOTH_V_PRED,
-  PredictionMode::PAETH_PRED
+  PredictionMode::PAETH_PRED,
+  PredictionMode::D45_PRED,
+  PredictionMode::D135_PRED,
+  PredictionMode::D117_PRED,
+  PredictionMode::D153_PRED,
+  PredictionMode::D207_PRED,
+  PredictionMode::D63_PRED,
 ];
 
 // Intra prediction modes tested at high speed levels
@@ -757,7 +763,126 @@ where
     Self::pred_dc_top(output, stride, above, left);
     Self::pred_cfl_inner(output, stride, &ac, alpha, bit_depth);
   }
+
+  #[cfg_attr(feature = "comparative_bench", inline(never))]
+  fn pred_directional(
+    output: &mut [T], stride: usize, above: &[T], left: &[T], top_left: &[T], angle: usize, bit_depth: usize
+  ) {
+    let sample_max = ((1 << bit_depth) - 1) as i32;
+    let angle_delta = 0;
+
+    let p_angle = angle; // TODO use Mode_to_Angle
+
+    let upsample_above = 0;
+    let upsample_left = 0;
+
+    let enable_intra_edge_filter = false; // FIXME
+
+    if enable_intra_edge_filter {
+      // TODO
+    }
+
+    fn dr_intra_derivative(p_angle: usize) -> usize {
+      match p_angle {
+        4 => 1023,
+        7 => 547,
+        10 => 372,
+        14 => 273,
+        17 => 215,
+        20 => 178,
+        23 => 151,
+        26 => 132,
+        29 => 116,
+        32 => 102,
+        36 => 90,
+        39 => 80,
+        42 => 71,
+        45 => 64,
+        48 => 57,
+        51 => 51,
+        54 => 45,
+        58 => 40,
+        61 => 35,
+        64 => 31,
+        67 => 27,
+        70 => 23,
+        73 => 19,
+        76 => 15,
+        81 => 11,
+        84 => 7,
+        87 => 3,
+        _ => 0
+      }
+    }
+
+    let dx = if p_angle < 90 {
+      dr_intra_derivative(p_angle)
+    } else if p_angle > 90 && p_angle < 180 {
+      dr_intra_derivative(180 - p_angle)
+    } else {
+      0 // undefined
+    };
+
+    let dy = if p_angle > 90 && p_angle < 180 {
+      dr_intra_derivative(p_angle - 90)
+    } else if p_angle > 180 {
+      dr_intra_derivative(270 - p_angle)
+    } else {
+      0 // undefined
+    };
+
+    if p_angle < 90 {
+      for i in 0..Self::H {
+        for j in 0..Self::W {
+          let idx = (i + 1) * dx;
+          let base = (idx >> (6 - upsample_above)) + (j << upsample_above);
+          let shift = (((idx << upsample_above) >> 1) & 31) as i32;
+          let max_base_x = (Self::H + Self::W - 1) << upsample_above;
+          output[i * stride + j] = if base < max_base_x {
+            let a: i32 = above[base].into();
+            let b: i32 = above[base + 1].into();
+            (a * (32 - shift) + b * shift + 16) >> 5
+          } else {
+            let c: i32 = above[max_base_x].into();
+            c
+          }.max(0).min(sample_max).as_();
+        }
+      }
+    } else if p_angle > 90 && p_angle < 180 {
+      for i in 0..Self::H {
+        for j in 0..Self::W {
+          let idx = (j << 6) as isize - ((i + 1) * dx) as isize;
+          let base = idx >> (6 - upsample_above);
+          if base >= -(1 << upsample_above) {
+            let shift = (((idx << upsample_above) >> 1) & 31) as i32;
+            let a: i32 = if base < 0 { top_left[0] } else { above[base as usize] }.into();
+            let b: i32 = above[(base + 1) as usize].into();
+            output[i * stride + j] = ((a * (32 - shift) + b * shift + 16) >> 5).max(0).min(sample_max).as_();
+          } else {
+            let idx = (i << 6) as isize - ((j + 1) * dy) as isize;
+            let base = idx >> (6 - upsample_left);
+            let shift = (((idx << upsample_left) >> 1) & 31) as i32;
+            let a: i32 = if base < 0 { top_left[0] } else { left[Self::W + Self::H - 1 - base as usize] }.into();
+            let b: i32 = left[Self::W + Self::H - (2 + base) as usize].into();
+            output[i * stride + j] = ((a * (32 - shift) + b * shift + 16) >> 5).max(0).min(sample_max).as_();
+          }
+        }
+      }
+    } else if p_angle > 180 {
+      for i in 0..Self::H {
+        for j in 0..Self::W {
+          let idx = (j + 1) * dy;
+          let base = (idx >> (6 - upsample_left)) + (i << upsample_left);
+          let shift = (((idx << upsample_left) >> 1) & 31) as i32;
+          let a: i32 = left[Self::W + Self::H - 1 - base].into();
+          let b: i32 = left[Self::W + Self::H - 2 - base].into();
+          output[i * stride + j] = ((a * (32 - shift) + b * shift + 16) >> 5).max(0).min(sample_max).as_();
+        }
+      }
+    }
+  }
 }
+
 
 pub trait Inter: Dim {}
 
