@@ -2263,8 +2263,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
     // must_split overrides the minimum partition size when applicable
     let can_split = (bsize > fi.min_partition_size && is_square) || must_split;
 
-    let mut partition = PartitionType::PARTITION_INVALID;
-    let mut best_partition = partition;
+    let mut best_partition = PartitionType::PARTITION_INVALID;
     let mut best_decision = RDOPartitionOutput {
         rd_cost,
         bo: bo.clone(),
@@ -2287,15 +2286,14 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
     // Code the whole block
     // TODO(yushin): Try move PARTITION_NONE to below partition loop
     if !must_split {
-        partition = PartitionType::PARTITION_NONE;
-        best_partition = partition;
+        best_partition = PartitionType::PARTITION_NONE;
 
         let mut cost: f64 = 0.0;
 
         if bsize.gte(BlockSize::BLOCK_8X8) && is_square {
             let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
             let tell = w.tell_frac();
-            cw.write_partition(w, bo, partition, bsize);
+            cw.write_partition(w, bo, best_partition, bsize);
             cost = (w.tell_frac() - tell) as f64 * get_lambda(fi, seq.bit_depth)/ ((1 << OD_BITRES) as f64);
         }
 
@@ -2318,13 +2316,13 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         best_pred_modes.push(best_decision.clone());
     }
 
-    // Code a split partition and compare RD costs
+    // Test all partition types other than PARTITION_NONE by comparing their RD costs
     if can_split {
         for &partition in RAV1E_PARTITION_TYPES {
-            if partition == PartitionType::PARTITION_NONE {
-                continue;
-            }
+            if partition == PartitionType::PARTITION_NONE { continue; }
+
             assert!(bsw == bsh);
+
             if must_split {
                 let cbw = (fi.w_in_b - bo.x).min(bsw); // clipped block width, i.e. having effective pixels
                 let cbh = (fi.h_in_b - bo.y).min(bsh);
@@ -2332,12 +2330,8 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
                 let mut split_horz = false;
                 if cbw == bsw/2 && cbh == bsh { split_vert = true; }
                 if cbh == bsh/2 && cbw == bsw { split_horz = true; }
-                if !split_horz {
-                    if partition == PartitionType::PARTITION_HORZ { continue; };
-                }
-                if !split_vert {
-                    if partition == PartitionType::PARTITION_VERT { continue; };
-                }
+                if !split_horz && partition == PartitionType::PARTITION_HORZ { continue; };
+                if !split_vert && partition == PartitionType::PARTITION_VERT { continue; };
             }
             cw.rollback(&cw_checkpoint);
             w_pre_cdef.rollback(&w_pre_checkpoint);
@@ -2364,6 +2358,9 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             ];
             let partitions = get_sub_partitions(&four_partitions, partition);
 
+            // If either of horz or vert partition types is being tested,
+            // two partitioned rectangles, defined in 'partitions', of the current block
+            // is passed to encode_partition_bottomup()
             partitions.iter().for_each(|&offset| {
                 if let (cost, Some(mode_decision)) = encode_partition_bottomup(
                     seq,
@@ -2912,5 +2909,11 @@ mod test {
         fs_.rec.planes[p].slice(&po).as_slice()[..32]
       );
     }
+  }
+
+  #[test]
+  fn check_partition_types_order() {
+      assert_eq!(RAV1E_PARTITION_TYPES[RAV1E_PARTITION_TYPES.len() - 1],
+                PartitionType::PARTITION_SPLIT);
   }
 }

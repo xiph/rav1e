@@ -57,7 +57,7 @@ pub const REF_FRAMES: usize = 1 << REF_FRAMES_LOG2;
 pub const REF_CONTEXTS: usize = 3;
 pub const MVREF_ROW_COLS: usize = 3;
 
-#[derive(Copy, Clone, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
 pub enum PartitionType {
   PARTITION_NONE,
   PARTITION_HORZ,
