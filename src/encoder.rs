@@ -2241,7 +2241,8 @@ pub fn encode_block_with_modes(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fr
 
 fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
                              cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
-                             bsize: BlockSize, bo: &BlockOffset, pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5]
+                             bsize: BlockSize, bo: &BlockOffset, pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5],
+                             ref_rd_cost: f64
 ) -> (f64, Option<RDOPartitionOutput>) {
     let mut rd_cost = std::f64::MAX;
     let mut best_rd = std::f64::MAX;
@@ -2286,14 +2287,12 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
     // Code the whole block
     // TODO(yushin): Try move PARTITION_NONE to below partition loop
     if !must_split {
-        best_partition = PartitionType::PARTITION_NONE;
-
         let mut cost: f64 = 0.0;
 
         if bsize.gte(BlockSize::BLOCK_8X8) && is_square {
             let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
             let tell = w.tell_frac();
-            cw.write_partition(w, bo, best_partition, bsize);
+            cw.write_partition(w, bo, PartitionType::PARTITION_NONE, bsize);
             cost = (w.tell_frac() - tell) as f64 * get_lambda(fi, seq.bit_depth)/ ((1 << OD_BITRES) as f64);
         }
 
@@ -2307,13 +2306,16 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         let mode_decision = rdo_mode_decision(seq, fi, fs, cw, bsize, bo, spmvs, false).part_modes[0].clone();
 
         rd_cost = mode_decision.rd_cost + cost;
-        best_rd = rd_cost;
 
-        encode_block_with_modes(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, bsize, bo,
-                            &mode_decision);
+        if rd_cost < ref_rd_cost {
+            best_partition = PartitionType::PARTITION_NONE;
+            best_rd = rd_cost;
+            best_decision = mode_decision.clone();
+            best_pred_modes.push(best_decision.clone());
 
-        best_decision = mode_decision;
-        best_pred_modes.push(best_decision.clone());
+            encode_block_with_modes(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, bsize, bo,
+                                &mode_decision);
+        }
     }
 
     // Test all partition types other than PARTITION_NONE by comparing their RD costs
@@ -2361,7 +2363,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             // If either of horz or vert partition types is being tested,
             // two partitioned rectangles, defined in 'partitions', of the current block
             // is passed to encode_partition_bottomup()
-            partitions.iter().for_each(|&offset| {
+            for offset in partitions {
                 if let (cost, Some(mode_decision)) = encode_partition_bottomup(
                     seq,
                     fi,
@@ -2371,14 +2373,16 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
                     w_post_cdef,
                     subsize,
                     offset,
-                    pmvs//&best_decision.mvs[0]
+                    pmvs,//&best_decision.mvs[0]
+                    best_rd
                 ) {
                     rd_cost += cost;
-                    child_modes.push(mode_decision);
+                    if rd_cost > best_rd || rd_cost > ref_rd_cost { continue; }
+                    else { child_modes.push(mode_decision); }
                 }
-            });
+            };
 
-            if rd_cost < best_rd {
+            if rd_cost < best_rd && rd_cost < ref_rd_cost {
                 best_rd = rd_cost;
                 best_partition = partition;
                 best_pred_modes = child_modes.clone();
@@ -2386,7 +2390,8 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         }
 
         // If the best partition is not PARTITION_SPLIT, recode it
-        if best_partition != PartitionType::PARTITION_SPLIT {
+        if best_partition != PartitionType::PARTITION_SPLIT &&
+            best_partition != PartitionType::PARTITION_INVALID {
             cw.rollback(&cw_checkpoint);
             w_pre_cdef.rollback(&w_pre_checkpoint);
             w_post_cdef.rollback(&w_post_checkpoint);
@@ -2408,13 +2413,14 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         }
     }
 
-    subsize = bsize.subsize(best_partition);
+    if best_partition != PartitionType::PARTITION_INVALID {
+        subsize = bsize.subsize(best_partition);
 
-    if bsize.gte(BlockSize::BLOCK_8X8) &&
-        (bsize == BlockSize::BLOCK_8X8 || best_partition != PartitionType::PARTITION_SPLIT) {
-        cw.bc.update_partition_context(bo, subsize, bsize);
+        if bsize.gte(BlockSize::BLOCK_8X8) &&
+            (bsize == BlockSize::BLOCK_8X8 || best_partition != PartitionType::PARTITION_SPLIT) {
+            cw.bc.update_partition_context(bo, subsize, bsize);
+        }
     }
-
     (best_rd, Some(best_decision))
 }
 
@@ -2723,7 +2729,7 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
             if fi.config.speed_settings.encode_bottomup {
                 encode_partition_bottomup(sequence, fi, fs, &mut cw,
                                           &mut w_pre_cdef, &mut w_post_cdef,
-                                          BlockSize::BLOCK_64X64, &bo, &pmvs);
+                                          BlockSize::BLOCK_64X64, &bo, &pmvs, std::f64::MAX);
             }
             else {
                 encode_partition_topdown(sequence, fi, fs, &mut cw,
