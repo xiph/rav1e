@@ -2326,10 +2326,6 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             }
             assert!(bsw == bsh);
             if must_split {
-                /*if partition == PartitionType::PARTITION_HORZ ||
-                    partition == PartitionType::PARTITION_VERT {
-                    continue;
-                }*/
                 let cbw = (fi.w_in_b - bo.x).min(bsw); // clipped block width, i.e. having effective pixels
                 let cbh = (fi.h_in_b - bo.y).min(bsh);
                 let mut split_vert = false;
