@@ -2281,7 +2281,6 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
     let cw_checkpoint = cw.checkpoint();
     let w_pre_checkpoint = w_pre_cdef.checkpoint();
     let w_post_checkpoint = w_post_cdef.checkpoint();
-    let mut subsize: BlockSize;
 
     // Code the whole block
     // TODO(yushin): Try move PARTITION_NONE to below partition loop
@@ -2337,7 +2336,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             w_pre_cdef.rollback(&w_pre_checkpoint);
             w_post_cdef.rollback(&w_post_checkpoint);
 
-            subsize = bsize.subsize(partition);
+            let subsize = bsize.subsize(partition);
             let hbsw = subsize.width_mi(); // Half the block size width in blocks
             let hbsh = subsize.height_mi(); // Half the block size height in blocks
             let mut child_modes: Vec<RDOPartitionOutput> = Vec::new();
@@ -2408,7 +2407,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         }
     }
 
-    subsize = bsize.subsize(best_partition);
+    let subsize = bsize.subsize(best_partition);
 
     if bsize.gte(BlockSize::BLOCK_8X8) &&
         (bsize == BlockSize::BLOCK_8X8 || best_partition != PartitionType::PARTITION_SPLIT) {
