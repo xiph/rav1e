@@ -135,8 +135,8 @@ SECTION .text
     pmulhrsw             m0, [qw_2896x8]     ;high: t1 ;low: t0
 %endif
 
-    psubw                m1, m0, m2          ;high: out2 ;low: out3
-    paddw                m0, m2              ;high: out1 ;low: out0
+    psubsw               m1, m0, m2          ;high: out2 ;low: out3
+    paddsw               m0, m2              ;high: out1 ;low: out0
 %endmacro
 
 %macro IADST4_1D_PACKED 0
