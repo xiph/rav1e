@@ -55,9 +55,15 @@ SECTION .text
 
 %define m(x) mangle(private_prefix %+ _ %+ x %+ SUFFIX)
 
+%if ARCH_X86_64
+%define o(x) x
+%else
+%define o(x) r5-$$+x ; PIC
+%endif
+
 %macro ITX4_END 4-5 2048 ; row[1-4], rnd
 %if %5
-    mova                 m2, [pw_%5]
+    mova                 m2, [o(pw_%5)]
     pmulhrsw             m0, m2
     pmulhrsw             m1, m2
 %endif
@@ -100,18 +106,17 @@ SECTION .text
     ret
 %endmacro
 
-
 ; flags: 1 = swap, 2: coef_regs
 %macro ITX_MUL2X_PACK 5-6 0 ; dst/src, tmp[1], rnd, coef[1-2], flags
 %if %6 & 2
     pmaddwd              m%2, m%4, m%1
     pmaddwd              m%1, m%5
 %elif %6 & 1
-    pmaddwd              m%2, m%1, [pw_%5_%4]
+    pmaddwd              m%2, m%1, [o(pw_%5_%4)]
     pmaddwd              m%1, [pw_%4_m%5]
 %else
-    pmaddwd              m%2, m%1, [pw_%4_m%5]
-    pmaddwd              m%1, [pw_%5_%4]
+    pmaddwd              m%2, m%1, [o(pw_%4_m%5)]
+    pmaddwd              m%1, [o(pw_%5_%4)]
 %endif
     paddd                m%2, m%3
     paddd                m%1, m%3
@@ -126,13 +131,13 @@ SECTION .text
     paddw                m0, m1
     punpcklqdq           m0, m3               ;high: in0-in2 ;low: in0+in2
 
-    mova                 m3, [pd_2048]
+    mova                 m3, [o(pd_2048)]
     ITX_MUL2X_PACK 2, 1, 3, 1567, 3784
 
 %if %0 == 1
     pmulhrsw             m0, m%1
 %else
-    pmulhrsw             m0, [pw_2896x8]     ;high: t1 ;low: t0
+    pmulhrsw             m0, [o(pw_2896x8)]  ;high: t1 ;low: t0
 %endif
 
     psubsw               m1, m0, m2          ;high: out2 ;low: out3
@@ -146,15 +151,14 @@ SECTION .text
     punpckhqdq           m1, m1                    ;
     paddw                m1, m0                    ;low: in0 - in2 + in3
 
-    pmaddwd              m0, m2, [pw_1321_3803]    ;1321 * in0 + 3803 * in2
-    pmaddwd              m2, [pw_2482_m1321]       ;2482 * in0 - 1321 * in2
-    pmaddwd              m4, m3, [pw_3344_2482]    ;3344 * in1 + 2482 * in3
-    pmaddwd              m5, m3, [pw_3344_m3803]   ;3344 * in1 - 3803 * in3
+    pmaddwd              m0, m2, [o(pw_1321_3803)] ;1321 * in0 + 3803 * in2
+    pmaddwd              m2, [o(pw_2482_m1321)]    ;2482 * in0 - 1321 * in2
+    pmaddwd              m4, m3, [o(pw_3344_2482)] ;3344 * in1 + 2482 * in3
+    pmaddwd              m5, m3, [o(pw_3344_m3803)];3344 * in1 - 3803 * in3
     paddd                m4, m0                    ;t0 + t3
-
-    pmaddwd              m3, [pw_m6688_m3803]      ;-2 * 3344 * in1 - 3803 * in3
-    pmulhrsw             m1, [pw_3344x8]           ;low: out2
-    mova                 m0, [pd_2048]
+    pmaddwd              m3, [o(pw_m6688_m3803)]   ;-2 * 3344 * in1 - 3803 * in3
+    pmulhrsw             m1, [o(pw_3344x8)]        ;low: out2
+    mova                 m0, [o(pd_2048)]
     paddd                m2, m0
     paddd                m0, m4                    ;t0 + t3 + 2048
     paddd                m5, m2                    ;t1 + t3 + 2048
@@ -169,9 +173,11 @@ SECTION .text
 %endmacro
 
 %macro INV_TXFM_FN 4 ; type1, type2, fast_thresh, size
-cglobal inv_txfm_add_%1_%2_%4, 4, 5, 0, dst, stride, coeff, eob, tx2
+cglobal inv_txfm_add_%1_%2_%4, 4, 6, 0, dst, stride, coeff, eob, tx2
     %undef cmp
-    lea tx2q, [m(i%2_%4_internal).pass2]
+%if ARCH_X86_32
+    LEA                    r5, $$
+%endif
 %if %3 > 0
     cmp                  eobd, %3
     jle %%end
@@ -179,7 +185,8 @@ cglobal inv_txfm_add_%1_%2_%4, 4, 5, 0, dst, stride, coeff, eob, tx2
     test                 eobd, eobd
     jz %%end
 %endif
-    call i%1_%4_internal
+    lea                  tx2q, [o(m(i%2_%4_internal).pass2)]
+    call m(i%1_%4_internal)
     RET
 ALIGN function_align
 %%end:
@@ -188,10 +195,10 @@ ALIGN function_align
 %macro INV_TXFM_4X4_FN 2-3 -1 ; type1, type2, fast_thresh
     INV_TXFM_FN          %1, %2, %3, 4x4
 %ifidn %1_%2, dct_identity
-    mova                 m0, [pw_2896x8]
+    mova                 m0, [o(pw_2896x8)]
     pmulhrsw             m0, [coeffq]
     paddw                m0, m0
-    pmulhrsw             m0, [pw_5793x4]
+    pmulhrsw             m0, [o(pw_5793x4)]
     punpcklwd            m0, m0
     punpckhdq            m1, m0, m0
     punpckldq            m0, m0
@@ -205,8 +212,8 @@ ALIGN function_align
     punpcklwd            m0, m1
     punpcklqdq           m0, m0
     paddw                m0, m0
-    pmulhrsw             m0, [pw_5793x4]
-    pmulhrsw             m0, [pw_2896x8]
+    pmulhrsw             m0, [o(pw_5793x4)]
+    pmulhrsw             m0, [o(pw_2896x8)]
     mova                 m1, m0
     call m(iadst_4x4_internal).end
     RET
@@ -214,17 +221,17 @@ ALIGN function_align
     pshuflw              m0, [coeffq], q0000
     punpcklqdq           m0, m0
 %ifidn %1, dct
-    mova                 m1, [pw_2896x8]
+    mova                 m1, [o(pw_2896x8)]
     pmulhrsw             m0, m1
 %elifidn %1, adst
-    pmulhrsw             m0, [iadst4_dconly1a]
+    pmulhrsw             m0, [o(iadst4_dconly1a)]
 %elifidn %1, flipadst
-    pmulhrsw             m0, [iadst4_dconly1b]
+    pmulhrsw             m0, [o(iadst4_dconly1b)]
 %endif
     mov            [coeffq], eobd                ;0
 %ifidn %2, dct
 %ifnidn %1, dct
-    pmulhrsw             m0, [pw_2896x8]
+    pmulhrsw             m0, [o(pw_2896x8)]
 %else
     pmulhrsw             m0, m1
 %endif
@@ -232,16 +239,20 @@ ALIGN function_align
     call m(iadst_4x4_internal).end2
     RET
 %else ; adst / flipadst
-    pmulhrsw             m1, m0, [iadst4_dconly2b]
-    pmulhrsw             m0, [iadst4_dconly2a]
+    pmulhrsw             m1, m0, [o(iadst4_dconly2b)]
+    pmulhrsw             m0, [o(iadst4_dconly2a)]
     call m(i%2_4x4_internal).end2
     RET
 %endif
 %endif
 %endmacro
 
-
 INIT_XMM ssse3
+
+INV_TXFM_4X4_FN dct, dct,      0
+INV_TXFM_4X4_FN dct, adst,     0
+INV_TXFM_4X4_FN dct, flipadst, 0
+INV_TXFM_4X4_FN dct, identity, 3
 
 cglobal idct_4x4_internal, 0, 0, 4, dst, stride, coeff, eob, tx2
     mova                 m0, [coeffq+16*0]      ;high: in1 ;low: in0
@@ -249,7 +260,7 @@ cglobal idct_4x4_internal, 0, 0, 4, dst, stride, coeff, eob, tx2
 
     IDCT4_1D_PACKED
 
-    mova                 m2, [deint_shuf]
+    mova                 m2, [o(deint_shuf)]
     shufps               m3, m0, m1, q1331
     shufps               m0, m1, q0220
     pshufb               m0, m2                 ;high: in1 ;low: in0
@@ -265,7 +276,10 @@ cglobal idct_4x4_internal, 0, 0, 4, dst, stride, coeff, eob, tx2
 
     ITX4_END     0, 1, 3, 2
 
-INV_TXFM_4X4_FN dct, dct, 0
+INV_TXFM_4X4_FN adst, dct,      0
+INV_TXFM_4X4_FN adst, adst,     0
+INV_TXFM_4X4_FN adst, flipadst, 0
+INV_TXFM_4X4_FN adst, identity
 
 cglobal iadst_4x4_internal, 0, 0, 6, dst, stride, coeff, eob, tx2
     mova                 m0, [coeffq+16*0]
@@ -294,9 +308,10 @@ ALIGN function_align
     IADST4_1D_PACKED
     ret
 
-INV_TXFM_4X4_FN adst, adst, 0
-INV_TXFM_4X4_FN dct,  adst, 0
-INV_TXFM_4X4_FN adst, dct,  0
+INV_TXFM_4X4_FN flipadst, dct,      0
+INV_TXFM_4X4_FN flipadst, adst,     0
+INV_TXFM_4X4_FN flipadst, flipadst, 0
+INV_TXFM_4X4_FN flipadst, identity
 
 cglobal iflipadst_4x4_internal, 0, 0, 6, dst, stride, coeff, eob, tx2
     mova                 m0, [coeffq+16*0]
@@ -321,16 +336,15 @@ cglobal iflipadst_4x4_internal, 0, 0, 6, dst, stride, coeff, eob, tx2
 .end2:
     ITX4_END              3, 2, 1, 0
 
-INV_TXFM_4X4_FN flipadst, flipadst, 0
-INV_TXFM_4X4_FN flipadst, dct,      0
-INV_TXFM_4X4_FN flipadst, adst,     0
-INV_TXFM_4X4_FN dct,      flipadst, 0
-INV_TXFM_4X4_FN adst,     flipadst, 0
+INV_TXFM_4X4_FN identity, dct,      3
+INV_TXFM_4X4_FN identity, adst
+INV_TXFM_4X4_FN identity, flipadst
+INV_TXFM_4X4_FN identity, identity
 
 cglobal iidentity_4x4_internal, 0, 0, 6, dst, stride, coeff, eob, tx2
     mova                 m0, [coeffq+16*0]
     mova                 m1, [coeffq+16*1]
-    mova                 m2, [pw_5793x4]
+    mova                 m2, [o(pw_5793x4)]
     paddw                m0, m0
     paddw                m1, m1
     pmulhrsw             m0, m2
@@ -343,20 +357,12 @@ cglobal iidentity_4x4_internal, 0, 0, 6, dst, stride, coeff, eob, tx2
     jmp                tx2q
 
 .pass2:
-    mova                 m2, [pw_5793x4]
+    mova                 m2, [o(pw_5793x4)]
     paddw                m0, m0
     paddw                m1, m1
     pmulhrsw             m0, m2
     pmulhrsw             m1, m2
     jmp m(iadst_4x4_internal).end
-
-INV_TXFM_4X4_FN identity, identity
-INV_TXFM_4X4_FN identity, dct,      3
-INV_TXFM_4X4_FN identity, adst
-INV_TXFM_4X4_FN identity, flipadst
-INV_TXFM_4X4_FN dct,      identity, 3
-INV_TXFM_4X4_FN adst,     identity
-INV_TXFM_4X4_FN flipadst, identity
 
 %macro IWHT4_1D_PACKED 0
     punpckhqdq           m3, m0, m1            ;low: in1 high: in3
