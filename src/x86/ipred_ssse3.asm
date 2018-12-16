@@ -93,7 +93,7 @@ SECTION .text
 
 INIT_XMM ssse3
 cglobal ipred_h, 3, 6, 2, dst, stride, tl, w, h, stride3
-    lea                          r5, [ipred_h_ssse3_table]
+    LEA                          r5, ipred_h_ssse3_table
     tzcnt                        wd, wm
     movifnidn                    hd, hm
     movsxd                       wq, [r5+wq*4]

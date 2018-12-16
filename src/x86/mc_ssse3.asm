@@ -186,7 +186,7 @@ DECLARE_REG_TMP 6, 7
 %endmacro
 
 cglobal avg, 4, 7, 3, dst, stride, tmp1, tmp2, w, h, stride3
-    lea                  r6, [avg_ssse3_table]
+    LEA                  r6, avg_ssse3_table
     tzcnt                wd, wm ; leading zeros
     movifnidn            hd, hm ; move h(stack) to h(register) if not already that register
     movsxd               wq, dword [r6+wq*4] ; push table entry matching the tile width (tzcnt) in widen reg
@@ -216,7 +216,7 @@ cglobal avg, 4, 7, 3, dst, stride, tmp1, tmp2, w, h, stride3
 %define W_AVG_INC_PTR AVG_INC_PTR
 
 cglobal w_avg, 4, 7, 6, dst, stride, tmp1, tmp2, w, h, stride3
-    lea                  r6, [w_avg_ssse3_table]
+    LEA                  r6, w_avg_ssse3_table
     tzcnt                wd, wm
     movifnidn            hd, hm
     movd                 m0, r6m
@@ -269,11 +269,12 @@ cglobal mask, 4, 8, 7, dst, stride, tmp1, tmp2, w, h, mask, stride3
 cglobal mask, 4, 7, 7, dst, stride, tmp1, tmp2, w, mask, stride3
 %define hd dword r5m
 %endif
-    lea                  r6, [mask_ssse3_table]
+%define base r6-mask_ssse3_table
+    LEA                  r6, mask_ssse3_table
     tzcnt                wd, wm
     movsxd               wq, dword [r6+wq*4]
     pxor                 m4, m4
-    mova                 m5, [pw_2048+r6-mask_ssse3_table]
+    mova                 m5, [base+pw_2048]
     add                  wq, r6
     mov               maskq, r6m
     BIDIR_FN           MASK
@@ -284,9 +285,9 @@ cglobal mask, 4, 7, 7, dst, stride, tmp1, tmp2, w, mask, stride3
  %define reg_pw_27        m9
  %define reg_pw_2048      m10
 %else
- %define reg_pw_8         [pw_8]
- %define reg_pw_27        [pw_26] ; 64 - 38
- %define reg_pw_2048      [pw_2048]
+ %define reg_pw_8         [base+pw_8]
+ %define reg_pw_27        [base+pw_26] ; 64 - 38
+ %define reg_pw_2048      [base+pw_2048]
 %endif
 
 %macro W_MASK_420_B 2 ; src_offset in bytes, mask_out
@@ -323,63 +324,60 @@ cglobal mask, 4, 7, 7, dst, stride, tmp1, tmp2, w, mask, stride3
     W_MASK_420_B (%1*16), %2
 %endmacro
 
+%define base r6-w_mask_420_ssse3_table
 %if ARCH_X86_64
 ; args: dst, stride, tmp1, tmp2, w, h, mask, sign
-cglobal w_mask_420, 4, 9, 11, dst, stride, tmp1, tmp2, w, h, mask, stride3
-    lea                  r7, [w_mask_420_ssse3_table]
+cglobal w_mask_420, 4, 8, 11, dst, stride, tmp1, tmp2, w, h, mask
+    lea                  r6, [w_mask_420_ssse3_table]
     mov                  wd, wm
-    tzcnt               r8d, wd
+    tzcnt               r7d, wd
     movifnidn            hd, hm
-    mov               maskq, maskmp
     movd                 m0, r7m
     pshuflw              m0, m0, q0000 ; sign
     punpcklqdq           m0, m0
-    movsxd               r8, dword [r7+r8*4]
-    mova           reg_pw_8, [pw_8]
-    mova          reg_pw_27, [pw_26] ; 64 - 38
-    mova        reg_pw_2048, [pw_2048]
-    mova                 m6, [pw_258] ; 64 * 4 + 2
+    movsxd               r7, [r6+r7*4]
+    mova           reg_pw_8, [base+pw_8]
+    mova          reg_pw_27, [base+pw_26] ; 64 - 38
+    mova        reg_pw_2048, [base+pw_2048]
+    mova                 m6, [base+pw_258] ; 64 * 4 + 2
+    add                  r7, r6
+    mov               maskq, maskmp
     psubw                m6, m0
-    add                  r8, r7
     W_MASK_420            0, 4
-    lea            stride3q, [strideq*3]
-    jmp                  r8
-    %define dst_bak      r8
-    %define loop_w       r7
-    %define orig_w       wq
+    jmp                  r7
+    %define loop_w      r7d
 %else
-cglobal w_mask_420, 4, 7, 8, dst, stride, tmp1, tmp2, w, mask, stride3
-    tzcnt               r6d, r4m
-    mov                  wd, w_mask_420_ssse3_table
-    add                  wd, [wq+r6*4]
+cglobal w_mask_420, 4, 7, 8, dst, stride, tmp1, tmp2, w, mask
+    tzcnt                wd, wm
+    LEA                  r6, w_mask_420_ssse3_table
+    mov                  wd, [r6+wq*4]
     mov               maskq, r6mp
     movd                 m0, r7m
     pshuflw              m0, m0, q0000 ; sign
     punpcklqdq           m0, m0
-    mova                 m6, [pw_258] ; 64 * 4 + 2
+    mova                 m6, [base+pw_258] ; 64 * 4 + 2
+    add                  wq, r6
     psubw                m6, m0
     W_MASK_420            0, 4
-    lea            stride3q, [strideq*3]
     jmp                  wd
-    %define dst_bak     r0m
-    %define loop_w      r6q
-    %define orig_w      r4m
-    %define hd    dword r5m
+    %define loop_w dword r0m
+    %define hd     dword r5m
 %endif
 .w4_loop:
     add               tmp1q, 2*16
     add               tmp2q, 2*16
     W_MASK_420            0, 4
-    lea                dstq, [dstq+strideq*4]
+    lea                dstq, [dstq+strideq*2]
     add               maskq, 4
 .w4:
     movd   [dstq          ], m0 ; copy m0[0]
     pshuflw              m1, m0, q1032
     movd   [dstq+strideq*1], m1 ; copy m0[1]
+    lea                dstq, [dstq+strideq*2]
     punpckhqdq           m0, m0
-    movd   [dstq+strideq*2], m0 ; copy m0[2]
+    movd   [dstq+strideq*0], m0 ; copy m0[2]
     psrlq                m0, 32
-    movd   [dstq+stride3q ], m0 ; copy m0[3]
+    movd   [dstq+strideq*1], m0 ; copy m0[3]
     pshufd               m5, m4, q3131; DBDB even lines repeated
     pshufd               m4, m4, q2020; CACA odd lines repeated
     psubw                m1, m6, m4   ; m9 == 64 * 4 + 2
@@ -409,20 +407,19 @@ cglobal w_mask_420, 4, 7, 8, dst, stride, tmp1, tmp2, w, mask, stride3
     jg .w8_loop
     RET
 .w16: ; w32/64/128
-    mov             dst_bak, dstq
-    mov              loop_w, orig_w ; use width as counter
 %if ARCH_X86_32
-    mov                  wq, orig_w ; because we altered it in 32bit setup
+    mov                  wd, wm     ; because we altered it in 32bit setup
 %endif
+    mov              loop_w, wd     ; use width as counter
     jmp .w16ge_inner_loop_first
 .w16ge_loop:
     lea               tmp1q, [tmp1q+wq*2] ; skip even line pixels
     lea               tmp2q, [tmp2q+wq*2] ; skip even line pixels
+    sub                dstq, wq
+    mov              loop_w, wd
     lea                dstq, [dstq+strideq*2]
-    mov             dst_bak, dstq
-    mov              loop_w, orig_w
 .w16ge_inner_loop:
-    W_MASK_420_B           0, 4
+    W_MASK_420_B          0, 4
 .w16ge_inner_loop_first:
     mova   [dstq          ], m0
     W_MASK_420_B       wq*2, 5  ; load matching even line (offset = widthpx * (16+16))
@@ -438,7 +435,6 @@ cglobal w_mask_420, 4, 7, 8, dst, stride, tmp1, tmp2, w, mask, stride3
     add                dstq, 16
     sub              loop_w, 16
     jg .w16ge_inner_loop
-    mov                dstq, dst_bak
     sub                  hd, 2
     jg .w16ge_loop
     RET
@@ -470,7 +466,7 @@ cglobal w_mask_420, 4, 7, 8, dst, stride, tmp1, tmp2, w, mask, stride3
 
 cglobal blend, 3, 7, 7, dst, ds, tmp, w, h, mask
 %define base r6-blend_ssse3_table
-    lea                  r6, [blend_ssse3_table]
+    LEA                  r6, blend_ssse3_table
     tzcnt                wd, wm
     movifnidn            hd, hm
     movifnidn         maskq, maskmp
@@ -546,7 +542,7 @@ cglobal blend, 3, 7, 7, dst, ds, tmp, w, h, mask
 
 cglobal blend_v, 3, 6, 8, dst, ds, tmp, w, h, mask
 %define base r5-blend_v_ssse3_table
-    lea                  r5, [blend_v_ssse3_table]
+    LEA                  r5, blend_v_ssse3_table
     tzcnt                wd, wm
     movifnidn            hd, hm
     movsxd               wq, dword [r5+wq*4]
@@ -646,15 +642,21 @@ cglobal blend_v, 3, 6, 8, dst, ds, tmp, w, h, mask
     jg .w32_loop
     RET
 
-cglobal blend_h, 4, 7, 6, dst, ds, tmp, w, h, mask
-%define base r5-blend_h_ssse3_table
-    lea                  r5, [blend_h_ssse3_table]
+cglobal blend_h, 3, 7, 6, dst, ds, tmp, w, h, mask
+%define base t0-blend_h_ssse3_table
+%if ARCH_X86_32
+    ; We need to keep the PIC pointer for w4, reload wd from stack instead
+    DECLARE_REG_TMP 6
+%else
+    DECLARE_REG_TMP 5
     mov                 r6d, wd
-    tzcnt                wd, wd
+%endif
+    LEA                  t0, blend_h_ssse3_table
+    tzcnt                wd, wm
     mov                  hd, hm
-    movsxd               wq, dword [r5+wq*4]
+    movsxd               wq, dword [t0+wq*4]
     mova                 m5, [base+pw_512]
-    add                  wq, r5
+    add                  wq, t0
     lea               maskq, [base+obmc_masks+hq*4]
     neg                  hq
     jmp                  wq
@@ -678,7 +680,11 @@ cglobal blend_h, 4, 7, 6, dst, ds, tmp, w, h, mask
     jl .w2
     RET
 .w4:
+%if ARCH_X86_32
+    mova                 m3, [base+blend_shuf]
+%else
     mova                 m3, [blend_shuf]
+%endif
 .w4_loop:
     movd                 m0, [dstq+dsq*0]
     movd                 m2, [dstq+dsq*1]
@@ -716,6 +722,9 @@ cglobal blend_h, 4, 7, 6, dst, ds, tmp, w, h, mask
     RET
 ; w16/w32/w64/w128
 .w16:
+%if ARCH_X86_32
+    mov                 r6d, wm
+%endif
     sub                 dsq, r6
 .w16_loop0:
     movd                 m3, [maskq+hq*2]
