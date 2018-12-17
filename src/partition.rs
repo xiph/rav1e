@@ -718,7 +718,6 @@ pub const GLOBALMV_CTX_MASK: usize =
   ((1 << (REFMV_OFFSET - GLOBALMV_OFFSET)) - 1);
 pub const REFMV_CTX_MASK: usize = ((1 << (8 - REFMV_OFFSET)) - 1);
 
-// Caution: PARTITION_SPLIT must be the last entry!
 pub static RAV1E_PARTITION_TYPES: &'static [PartitionType] =
   &[PartitionType::PARTITION_NONE, PartitionType::PARTITION_HORZ,
     PartitionType::PARTITION_VERT, PartitionType::PARTITION_SPLIT];
