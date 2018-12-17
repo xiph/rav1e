@@ -32,7 +32,7 @@
 #include "config.h"
 #include "src/arm/asm.S"
 
-.macro movrel rd, val
+.macro movrel rd, val, offset=0
 #if defined(PIC) && defined(__APPLE__)
     ldr         \rd,  1f
     b           2f
@@ -41,6 +41,11 @@
     .word       3f - (2f + 8)
 2:
     ldr         \rd,  [pc, \rd]
+.if \offset < 0
+    sub         \rd,  \rd,  #-(\offset)
+.elseif \offset > 0
+    add         \rd,  \rd,  #\offset
+.endif
     .non_lazy_symbol_pointer
 3:
     .indirect_symbol \val
@@ -51,12 +56,12 @@
     b           2f
 1:
 @ FIXME: thumb
-    .word       \val - (2f + 8)
+    .word       \val + \offset - (2f + 8)
 2:
     add         \rd,  \rd,  pc
 #else
-    movw        \rd, #:lower16:\val
-    movt        \rd, #:upper16:\val
+    movw        \rd, #:lower16:\val+\offset
+    movt        \rd, #:upper16:\val+\offset
 #endif
 .endm
 
