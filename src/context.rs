@@ -1324,7 +1324,7 @@ impl BlockContext {
     &self.blocks[bo.y][bo.x]
   }
 
-  pub fn above_of(&mut self, bo: &BlockOffset) -> Block {
+  pub fn above_of(&self, bo: &BlockOffset) -> Block {
     if bo.y > 0 {
       self.blocks[bo.y - 1][bo.x]
     } else {
@@ -1332,7 +1332,7 @@ impl BlockContext {
     }
   }
 
-  pub fn left_of(&mut self, bo: &BlockOffset) -> Block {
+  pub fn left_of(&self, bo: &BlockOffset) -> Block {
     if bo.x > 0 {
       self.blocks[bo.y][bo.x - 1]
     } else {
@@ -1944,6 +1944,15 @@ impl ContextWriter {
       w.symbol((p == PartitionType::PARTITION_SPLIT) as u32, &cdf);
     }
   }
+  pub fn get_cdf_intra_mode_kf(&self, bo: &BlockOffset) -> &[u16; INTRA_MODES + 1] {
+    static intra_mode_context: [usize; INTRA_MODES] =
+      [0, 1, 2, 3, 4, 4, 4, 4, 3, 0, 1, 2, 0];
+    let above_mode = self.bc.above_of(bo).mode as usize;
+    let left_mode = self.bc.left_of(bo).mode as usize;
+    let above_ctx = intra_mode_context[above_mode];
+    let left_ctx = intra_mode_context[left_mode];
+    &self.fc.kf_y_cdf[above_ctx][left_ctx]
+  }
   pub fn write_intra_mode_kf(
     &mut self, w: &mut dyn Writer, bo: &BlockOffset, mode: PredictionMode
   ) {
@@ -1955,6 +1964,9 @@ impl ContextWriter {
     let left_ctx = intra_mode_context[left_mode];
     let cdf = &mut self.fc.kf_y_cdf[above_ctx][left_ctx];
     symbol_with_update!(self, w, mode as u32, cdf);
+  }
+  pub fn get_cdf_intra_mode(&self, bsize: BlockSize) -> &[u16; INTRA_MODES + 1] {
+    &self.fc.y_mode_cdf[size_group_lookup[bsize as usize] as usize]
   }
   pub fn write_intra_mode(&mut self, w: &mut dyn Writer, bsize: BlockSize, mode: PredictionMode) {
     let cdf =

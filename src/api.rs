@@ -135,9 +135,9 @@ impl SpeedSettings {
   }
 
   fn prediction_modes_preset(speed: usize) -> PredictionModesSetting {
-    if speed <= 3 {
+    if speed <= 1 {
       PredictionModesSetting::ComplexAll
-    } else if speed <= 4 {
+    } else if speed <= 3 {
       PredictionModesSetting::ComplexKeyframes
     } else {
       PredictionModesSetting::Simple
