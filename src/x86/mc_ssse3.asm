@@ -773,7 +773,7 @@ cglobal emu_edge, 10, 13, 2, bw, bh, iw, ih, x, \
  %define reg_src        r1
  %define reg_bottomext  r0
  %define reg_rightext   r1
- %define reg_blkm       blkm
+ %define reg_blkm       r2m
 %endif
     ;
     ; ref += iclip(y, 0, ih - 1) * PXSTRIDE(ref_stride)
@@ -825,7 +825,7 @@ cglobal emu_edge, 10, 13, 2, bw, bh, iw, ih, x, \
     cmp             topextq, bhq
     cmovg           topextq, r3
  %if ARCH_X86_32
-    mov          bottomextm, reg_bottomext
+    mov                 r4m, reg_bottomext
     ;
     ; right_ext = iclip(x + bw - iw, 0, bw - 1)
     mov                  r0, r0m ; restore bw
@@ -845,7 +845,7 @@ cglobal emu_edge, 10, 13, 2, bw, bh, iw, ih, x, \
     cmp        reg_rightext, bwq
     cmovge     reg_rightext, r2
  %if ARCH_X86_32
-    mov           rightextm, r1
+    mov                 r3m, r1
  %endif
     cmp            leftextq, bwq
     cmovge         leftextq, r2
@@ -867,7 +867,7 @@ cglobal emu_edge, 10, 13, 2, bw, bh, iw, ih, x, \
 %else
     mov                   r1, centerhm ; restore r1
     sub             centerhq, topextq
-    sub             centerhq, bottomextm
+    sub             centerhq, r4m
     mov                  r1m, centerhq
 %endif
     ;
@@ -888,7 +888,7 @@ cglobal emu_edge, 10, 13, 2, bw, bh, iw, ih, x, \
     lea                  r3, [rightextq+leftextq]
     sub            centerwq, r3
 %else
-    sub            centerwq, rightextm
+    sub            centerwq, r3m
     sub            centerwq, leftextq
 %endif
 
@@ -946,7 +946,7 @@ cglobal emu_edge, 10, 13, 2, bw, bh, iw, ih, x, \
   %if ARCH_X86_64
     test          rightextq, rightextq
   %else
-    mov                  r1, rightextm
+    mov                  r1, r3m
     test                 r1, r1
   %endif
     jz .body_loop_end_%3
@@ -969,7 +969,7 @@ cglobal emu_edge, 10, 13, 2, bw, bh, iw, ih, x, \
   %if ARCH_X86_64
     cmp                  r3, rightextq
   %else
-    cmp                  r3, rightextm
+    cmp                  r3, r3m
   %endif
     jl .right_loop_%3
 .body_loop_end_%3:
@@ -995,7 +995,7 @@ cglobal emu_edge, 10, 13, 2, bw, bh, iw, ih, x, \
     test          rightextq, rightextq
     jnz .need_right_ext
  %else
-    cmp            leftextq, rightextm ; leftextq == 0
+    cmp            leftextq, r3m ; leftextq == 0
     jne .need_right_ext
  %endif
     v_loop                0, 0, 0
@@ -1006,7 +1006,7 @@ cglobal emu_edge, 10, 13, 2, bw, bh, iw, ih, x, \
  %if ARCH_X86_64
     test          rightextq, rightextq
  %else
-    mov                  r3, rightextm
+    mov                  r3, r3m
     test                 r3, r3
  %endif
     jnz .need_left_right_ext
@@ -1040,7 +1040,7 @@ cglobal emu_edge, 10, 13, 2, bw, bh, iw, ih, x, \
     jz .top
  %else
     xor                  r1, r1
-    cmp                  r1, bottomextm
+    cmp                  r1, r4m
     je .top
  %endif
     ;
@@ -1064,7 +1064,7 @@ cglobal emu_edge, 10, 13, 2, bw, bh, iw, ih, x, \
     mov                  r3, srcm
     mova                 m0, [r3+r1]
     lea                  r3, [dstq+r1]
-    mov                  r4, bottomextm
+    mov                  r4, r4m
  %endif
     ;
 .bottom_y_loop:
