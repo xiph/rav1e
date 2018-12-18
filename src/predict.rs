@@ -769,7 +769,7 @@ where
     output: &mut [T], stride: usize, above: &[T], left: &[T], top_left: &[T], angle: usize, bit_depth: usize
   ) {
     let sample_max = ((1 << bit_depth) - 1) as i32;
-    let angle_delta = 0;
+    let _angle_delta = 0;
 
     let p_angle = angle; // TODO use Mode_to_Angle
 
