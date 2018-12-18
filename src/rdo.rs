@@ -50,6 +50,7 @@ pub struct RDOOutput {
 pub struct RDOPartitionOutput {
   pub rd_cost: f64,
   pub bo: BlockOffset,
+  pub bsize: BlockSize,
   pub pred_mode_luma: PredictionMode,
   pub pred_mode_chroma: PredictionMode,
   pub pred_cfl_params: CFLParams,
@@ -702,6 +703,7 @@ pub fn rdo_mode_decision(
     part_type: PartitionType::PARTITION_NONE,
     part_modes: vec![RDOPartitionOutput {
       bo: bo.clone(),
+      bsize: bsize,
       pred_mode_luma: best.mode_luma,
       pred_mode_chroma: best.mode_chroma,
       pred_cfl_params: best.cfl_params,
@@ -838,6 +840,9 @@ pub fn get_sub_partitions<'a>(four_partitions: &[&'a BlockOffset; 4],
    partition: PartitionType) -> Vec<&'a BlockOffset> {
   let mut partitions = vec![ four_partitions[0] ];
 
+  if partition == PARTITION_NONE {
+      return partitions;
+  }
   if partition == PARTITION_VERT || partition == PARTITION_SPLIT {
      partitions.push(four_partitions[1]);
   };
@@ -855,6 +860,9 @@ pub fn get_sub_partitions_with_border_check<'a>(four_partitions: &[&'a BlockOffs
    partition: PartitionType, fi: &FrameInvariants, subsize: BlockSize) -> Vec<&'a BlockOffset> {
   let mut partitions = vec![ four_partitions[0] ];
 
+  if partition == PARTITION_NONE {
+      return partitions;
+  }
   let hbsw = subsize.width_mi(); // Half the block size width in blocks
   let hbsh = subsize.height_mi(); // Half the block size height in blocks
 
