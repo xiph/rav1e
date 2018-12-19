@@ -2249,10 +2249,12 @@ ALIGN function_align
     RET
 ALIGN function_align
 .w16:
+%if WIN64
     %assign stack_offset stack_offset - stack_size_padded
     %assign xmm_regs_used 15
     %assign stack_size_padded 0x98
     SUB                 rsp, stack_size_padded
+%endif
     sub                  hd, 2
     TAIL_CALL .w16_main, 0
 .w16_main:
