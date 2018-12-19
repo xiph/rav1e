@@ -2013,9 +2013,8 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
         }
     }
 
-    motion_compensate(fi, fs, cw, luma_mode, ref_frames, mvs, bsize, bo, bit_depth, false);
-
     if is_inter {
+      motion_compensate(fi, fs, cw, luma_mode, ref_frames, mvs, bsize, bo, bit_depth, false);
       write_tx_tree(fi, fs, cw, w, luma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth, seq.chroma_sampling, false, for_rdo_use)
     } else {
       write_tx_blocks(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth, seq.chroma_sampling, cfl, false, for_rdo_use)

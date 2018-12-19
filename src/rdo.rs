@@ -780,7 +780,9 @@ pub fn rdo_tx_type_decision(
       continue;
     }
 
-    motion_compensate(fi, fs, cw, mode, ref_frames, mvs, bsize, bo, bit_depth, true);
+    if is_inter {
+      motion_compensate(fi, fs, cw, mode, ref_frames, mvs, bsize, bo, bit_depth, true);
+    }
 
     let mut wr: &mut dyn Writer = &mut WriterCounter::new();
     let tell = wr.tell_frac();
