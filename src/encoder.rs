@@ -1789,7 +1789,7 @@ pub fn motion_compensate(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
                          luma_mode: PredictionMode, ref_frames: [usize; 2], mvs: [MotionVector; 2],
                          bsize: BlockSize, bo: &BlockOffset, bit_depth: usize,
                          luma_only: bool) {
-  if luma_mode.is_intra() { return; }
+  debug_assert!(!luma_mode.is_intra());
 
   let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
@@ -2013,9 +2013,8 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
         }
     }
 
-    motion_compensate(fi, fs, cw, luma_mode, ref_frames, mvs, bsize, bo, bit_depth, false);
-
     if is_inter {
+      motion_compensate(fi, fs, cw, luma_mode, ref_frames, mvs, bsize, bo, bit_depth, false);
       write_tx_tree(fi, fs, cw, w, luma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth, seq.chroma_sampling, false, for_rdo_use)
     } else {
       write_tx_blocks(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth, seq.chroma_sampling, cfl, false, for_rdo_use)
