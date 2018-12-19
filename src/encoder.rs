@@ -19,6 +19,7 @@ use plane::*;
 use quantize::*;
 use rdo::*;
 use segmentation::*;
+use tile::*;
 use transform::*;
 use util::*;
 use partition::PartitionType::*;
@@ -100,6 +101,10 @@ impl Frame {
     /// `FrameInvariants`.
     pub fn iter(&self) -> PixelIter {
       PixelIter::new(&self.planes)
+    }
+
+    pub fn tile_iter_mut(&mut self, tile_width: usize, tile_height: usize) -> TileIterMut {
+      TileIterMut::from_frame(self, tile_width, tile_height)
     }
 }
 
