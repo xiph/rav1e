@@ -1789,7 +1789,7 @@ pub fn motion_compensate(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
                          luma_mode: PredictionMode, ref_frames: [usize; 2], mvs: [MotionVector; 2],
                          bsize: BlockSize, bo: &BlockOffset, bit_depth: usize,
                          luma_only: bool) {
-  if luma_mode.is_intra() { return; }
+  debug_assert!(!luma_mode.is_intra());
 
   let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
