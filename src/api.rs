@@ -79,6 +79,7 @@ pub struct SpeedSettings {
   pub rdo_tx_decision: bool,
   pub prediction_modes: PredictionModesSetting,
   pub include_near_mvs: bool,
+  pub diamond_motion_estimation: bool,
 }
 
 impl SpeedSettings {
@@ -93,6 +94,7 @@ impl SpeedSettings {
       rdo_tx_decision: Self::rdo_tx_decision_preset(speed),
       prediction_modes: Self::prediction_modes_preset(speed),
       include_near_mvs: Self::include_near_mvs_preset(speed),
+      diamond_motion_estimation: Self::diamond_motion_estimation_preset(speed),
     }
   }
 
@@ -146,6 +148,10 @@ impl SpeedSettings {
 
   fn include_near_mvs_preset(speed: usize) -> bool {
     speed <= 2
+  }
+
+  fn diamond_motion_estimation_preset(speed: usize) -> bool {
+    speed > 9
   }
 }
 
