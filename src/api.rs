@@ -495,8 +495,7 @@ impl Context {
 
       let data = encode_frame(&mut self.seq, &mut self.fi, &mut fs);
 
-      // TODO avoid the clone by having rec Arc.
-      let rec = if self.fi.show_frame { Some(fs.rec.clone()) } else { None };
+      let rec = if self.fi.show_frame { Some(fs.rec) } else { None };
       let mut psnr = None;
       if self.fi.config.show_psnr {
         if let Some(ref rec) = rec {
