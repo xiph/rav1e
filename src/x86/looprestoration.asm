@@ -802,7 +802,7 @@ cglobal sgr_box5_v, 5, 10, 15, sumsq, sum, w, h, edge, x, y, sumsq_ptr, sum_ptr,
     mov        ylimd, edged
     and        ylimd, 8                             ; have_bottom
     shr        ylimd, 2
-    sub        ylimd, 3                             ; -2 if have_bottom=0, else 0
+    sub        ylimd, 3                             ; -3 if have_bottom=0, else -1
 .loop_x:
     lea           yd, [hd+ylimd+2]
     lea   sumsq_ptrq, [sumsqq+xq*4+4-(384+16)*4]
