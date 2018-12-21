@@ -8,8 +8,8 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 #![allow(non_upper_case_globals)]
-#![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
-#![cfg_attr(feature = "cargo-clippy", allow(needless_range_loop))]
+#![allow(clippy::cast_lossless)]
+#![allow(clippy::needless_range_loop)]
 
 use context::{INTRA_MODES, MAX_TX_SIZE};
 use partition::*;

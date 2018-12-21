@@ -9,9 +9,9 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 #![allow(non_camel_case_types)]
-#![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
-#![cfg_attr(feature = "cargo-clippy", allow(identity_op))]
-#![cfg_attr(feature = "cargo-clippy", allow(needless_range_loop))]
+#![allow(clippy::cast_lossless)]
+#![allow(clippy::identity_op)]
+#![allow(clippy::needless_range_loop)]
 
 use bitstream_io::{BitWriter, BigEndian};
 use std;
@@ -355,8 +355,15 @@ impl<S> WriterBase<S> {
       }
     }
   }
+
   fn recenter(r: u32, v: u32) -> u32 {
-    if v > (r << 1) {v} else if v >= r {v - r << 1} else {(r - v << 1) - 1}
+    if v > (r << 1) {
+      v
+    } else if v >= r {
+      (v - r) << 1
+    } else {
+      ((r - v) << 1) - 1
+    }
   }
 
   #[cfg(debug)]
@@ -535,10 +542,10 @@ where
       let l = msb(n as i32) as u8 + 1;
       let m = (1 << l) - n;
       if v < m {
-        self.literal(l-1, v);
+        self.literal(l - 1, v);
       } else {
-        self.literal(l-1, m + (v-m >> 1));
-        self.literal(1, (v-m) & 1);
+        self.literal(l - 1, m + ((v - m) >> 1));
+        self.literal(1, (v - m) & 1);
       }
     }
   }

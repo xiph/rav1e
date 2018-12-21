@@ -103,8 +103,9 @@ fn constrain(diff: i32, threshold: i32, damping: i32) -> i32 {
     if threshold != 0 {
         let shift = cmp::max(0, damping - msb(threshold));
         let magnitude = cmp::min(diff.abs(), cmp::max(0, threshold - (diff.abs() >> shift)));
+        
         if diff < 0 {
-            -1 * magnitude
+            -magnitude
         } else {
             magnitude
         }
@@ -190,7 +191,12 @@ unsafe fn cdef_filter_block(dst: &mut [u16], dstride: isize, input: &[u16],
 // We use the variance of an 8x8 block to adjust the effective filter strength.
 fn adjust_strength(strength: i32, var: i32) -> i32 {
     let i = if (var >> 6) != 0 {cmp::min(msb(var >> 6), 12)} else {0};
-    if var!=0 {strength * (4 + i) + 8 >> 4} else {0}
+
+    if var != 0 {
+        (strength * (4 + i) + 8) >> 4
+    } else {
+        0
+    }
 }
 
 // For convenience of use alongside cdef_filter_superblock, we assume
@@ -288,23 +294,31 @@ pub fn cdef_filter_superblock(fi: &FrameInvariants,
                         let mut local_pri_strength;
                         let mut local_sec_strength;
                         let mut local_damping: i32 = cdef_damping + coeff_shift;
-                        let mut local_dir: usize;
-
-                        if p==0 {
+                        let local_dir = if p == 0 {
                             local_pri_strength = adjust_strength(cdef_pri_y_strength << coeff_shift, var);
                             local_sec_strength = cdef_sec_y_strength << coeff_shift;
-                            local_dir = if cdef_pri_y_strength != 0 {dir as usize} else {0};
+
+                            if cdef_pri_y_strength != 0 {
+                                dir as usize
+                            } else {
+                                0
+                            }
                         } else {
                             local_pri_strength = cdef_pri_uv_strength << coeff_shift;
                             local_sec_strength = cdef_sec_uv_strength << coeff_shift;
                             local_damping -= 1;
-                            local_dir = if cdef_pri_uv_strength != 0 {dir as usize} else {0};
-                        }
+
+                            if cdef_pri_uv_strength != 0 {
+                                dir as usize
+                            } else {
+                                0
+                            }
+                        };
 
                         unsafe {
-                            cdef_filter_block(out_slice.offset_as_mutable(8*bx>>xdec,8*by>>ydec),
+                            cdef_filter_block(out_slice.offset_as_mutable((8 * bx) >> xdec, (8 * by) >> ydec),
                                               out_stride as isize,
-                                              in_slice.offset(8*bx>>xdec,8*by>>ydec),
+                                              in_slice.offset((8 * bx) >> xdec, (8 * by) >> ydec),
                                               in_stride as isize,
                                               local_pri_strength, local_sec_strength, local_dir,
                                               local_damping, local_damping,
@@ -333,8 +347,8 @@ pub fn cdef_filter_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockCo
     // Construct a padded copy of the reconstructed frame.
     let mut padded_px: [[usize; 2]; 3] = [[0; 2]; 3];
     for p in 0..3 {
-        padded_px[p][0] =  (fb_width*64 >> rec.planes[p].cfg.xdec) + 4;
-        padded_px[p][1] =  (fb_height*64 >> rec.planes[p].cfg.ydec) + 4;
+        padded_px[p][0] = ((fb_width * 64) >> rec.planes[p].cfg.xdec) + 4;
+        padded_px[p][1] = ((fb_height * 64) >> rec.planes[p].cfg.ydec) + 4;
     }
     let mut cdef_frame = Frame {
         planes: [

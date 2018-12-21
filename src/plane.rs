@@ -7,7 +7,7 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-#![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
+#![allow(clippy::cast_lossless)]
 
 use std::iter::FusedIterator;
 
@@ -191,10 +191,10 @@ impl Plane {
 
       for col in 0..width {
         let mut sum = 0;
-        sum = sum + src.p(2*col, 2*row);
-        sum = sum + src.p(2*col+1, 2*row);
-        sum = sum + src.p(2*col, 2*row+1);
-        sum = sum + src.p(2*col+1, 2*row+1);
+        sum += src.p(2 * col, 2 * row);
+        sum += src.p(2 * col + 1, 2 * row);
+        sum += src.p(2 * col, 2 * row + 1);
+        sum += src.p(2 * col + 1, 2 * row + 1);
         let avg = (sum + 2) >> 2;
         dst[col] = avg;
       }

@@ -25,7 +25,7 @@ pub fn calculate_frame_psnr(original: &Frame, compressed: &Frame, bit_depth: usi
 /// version.
 fn calculate_plane_psnr(original: &Plane, compressed: &Plane, bit_depth: usize) -> f64 {
   let mse = calculate_plane_mse(original, compressed);
-  if mse <= 0.0000000001 {
+  if mse <= 0.000_000_000_1 {
     return 100.0;
   }
   let max = ((1 << bit_depth) - 1) as f64;

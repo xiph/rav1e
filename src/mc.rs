@@ -235,7 +235,7 @@ pub fn put_8tap<'a>(
   }
 }
 
-pub fn prep_8tap<'a>(
+pub fn prep_8tap(
   tmp: &mut [i16], src: PlaneSlice, width: usize, height: usize,
   col_frac: i32, row_frac: i32, bit_depth: usize, mode: FilterMode
 ) {

@@ -11,10 +11,10 @@
 #![allow(non_upper_case_globals)]
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
-#![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
-#![cfg_attr(feature = "cargo-clippy", allow(unnecessary_mut_passed))]
-#![cfg_attr(feature = "cargo-clippy", allow(needless_range_loop))]
-#![cfg_attr(feature = "cargo-clippy", allow(collapsible_if))]
+#![allow(clippy::cast_lossless)]
+#![allow(clippy::unnecessary_mut_passed)]
+#![allow(clippy::needless_range_loop)]
+#![allow(clippy::collapsible_if)]
 
 use ec::Writer;
 use encoder::{FrameInvariants, ReferenceMode};
@@ -1911,7 +1911,7 @@ impl ContextWriter {
     let ctx = self.bc.partition_plane_context(&bo, bsize);
     assert!(ctx < PARTITION_CONTEXTS);
     let partition_cdf = if bsize <= BlockSize::BLOCK_8X8 {
-      &mut self.fc.partition_cdf[ctx][..PARTITION_TYPES+1]
+      &mut self.fc.partition_cdf[ctx][..=PARTITION_TYPES]
     } else {
       &mut self.fc.partition_cdf[ctx]
     };
@@ -2086,7 +2086,7 @@ impl ContextWriter {
           let mv_cand = CandidateMV {
             this_mv: blk.mv[0],
             comp_mv: blk.mv[1],
-            weight: weight
+            weight
           };
 
           mv_stack.push(mv_cand);
@@ -2114,7 +2114,7 @@ impl ContextWriter {
             let mv_cand = CandidateMV {
               this_mv: blk.mv[i],
               comp_mv: MotionVector { row: 0, col: 0 },
-              weight: weight
+              weight
             };
 
             mv_stack.push(mv_cand);
@@ -2156,7 +2156,7 @@ impl ContextWriter {
             let mut cand_mv = blk.mv[cand_list];
             if cand_ref == ref_frames[list] && ref_id_count[list] < 2 {
               ref_id_mvs[list][ref_id_count[list]] = cand_mv;
-              ref_id_count[list] = ref_id_count[list] + 1;
+              ref_id_count[list] += 1;
             } else if ref_diff_count[list] < 2 {
               if fi.ref_frame_sign_bias[cand_ref - LAST_FRAME] !=
                 fi.ref_frame_sign_bias[ref_frames[list] - LAST_FRAME] {
@@ -2164,7 +2164,7 @@ impl ContextWriter {
                 cand_mv.col = -cand_mv.col;
               }
               ref_diff_mvs[list][ref_diff_count[list]] = cand_mv;
-              ref_diff_count[list] = ref_diff_count[list] + 1;
+              ref_diff_count[list] += 1;
             }
           }
         }
@@ -2393,7 +2393,7 @@ impl ContextWriter {
     );
     row_match |= found_match;
 
-    for idx in 2..MVREF_ROW_COLS+1 {
+    for idx in 2..=MVREF_ROW_COLS {
       let row_offset = -2 * idx as isize + 1 + row_adj as isize;
       let col_offset = -2 * idx as isize + 1 + col_adj as isize;
 
@@ -2471,12 +2471,12 @@ impl ContextWriter {
           let mut comp_count = 0;
           for idx in 0..ref_id_count[list] {
             combined_mvs[comp_count][list] = ref_id_mvs[list][idx];
-            comp_count = comp_count + 1;
+            comp_count += 1;
           }
           for idx in 0..ref_diff_count[list] {
             if comp_count < 2 {
               combined_mvs[comp_count][list] = ref_diff_mvs[list][idx];
-              comp_count = comp_count + 1;
+              comp_count += 1;
             }
           }
         }
@@ -2904,7 +2904,7 @@ impl ContextWriter {
           av1_tx_ind[tx_set as usize][tx_type as usize] as u32,
           &mut self.fc.inter_tx_cdf[tx_set_index as usize]
             [square_tx_size as usize]
-            [..num_tx_set[tx_set as usize] + 1]
+            [..=num_tx_set[tx_set as usize]]
         );
       } else {
         let intra_dir = y_mode;
@@ -2918,7 +2918,7 @@ impl ContextWriter {
           av1_tx_ind[tx_set as usize][tx_type as usize] as u32,
           &mut self.fc.intra_tx_cdf[tx_set_index as usize]
             [square_tx_size as usize][intra_dir as usize]
-            [..num_tx_set[tx_set as usize] + 1]
+            [..=num_tx_set[tx_set as usize]]
         );
       }
     }

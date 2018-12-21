@@ -87,7 +87,7 @@ mod nasm {
         sum += func(org_ptr, org_stride, ref_ptr, ref_stride);
       }
     }
-    return sum;
+    sum
   }
 
   #[inline(always)]

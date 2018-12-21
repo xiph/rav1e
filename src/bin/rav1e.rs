@@ -69,20 +69,15 @@ fn main() {
 
   ctx.set_frames_to_be_coded(cli.limit as u64);
 
-  loop {
-    match process_frame(&mut ctx, &mut cli.io.output, &mut y4m_dec, y4m_enc.as_mut()) {
-      Ok(frame_info) => {
-        for frame in frame_info {
-          progress.add_frame(frame);
-          let _ = if cli.verbose {
-            writeln!(err, "{} - {}", frame, progress)
-          } else {
-            write!(err, "\r{}                    ", progress)
-          };
-        }
-      },
-      Err(_) => break,
-    };
+  while let Ok(frame_info) = process_frame(&mut ctx, &mut cli.io.output, &mut y4m_dec, y4m_enc.as_mut()) {
+    for frame in frame_info {
+      progress.add_frame(frame);
+      let _ = if cli.verbose {
+        writeln!(err, "{} - {}", frame, progress)
+      } else {
+        write!(err, "\r{}                    ", progress)
+      };
+    }
 
     if !ctx.needs_more_frames(progress.frames_encoded() as u64) {
       break;

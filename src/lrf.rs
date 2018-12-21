@@ -83,7 +83,7 @@ fn sgrproj_box_ab(af: &mut[i32; 64+2],
   let n2e = n*n*eps as i32;
   let s = ((1 << SGRPROJ_MTABLE_BITS) + n2e/2) / n2e;
   let xn = cmp::min(r+1, fi.width as isize - x);
-  for row in -1..1+h {
+  for row in -1..=h {
     let mut a:i32 = 0;
     let mut b:i32 = 0;
 
@@ -111,16 +111,16 @@ fn sgrproj_box_ab(af: &mut[i32; 64+2],
         a += c*c;
         b += c;
       }
-      for _xi in xn..r+1 {
+      for _xi in xn..=r {
         let c = src_plane.p(fi.width - 1, ly) as i32;
         a += c*c;
         b += c;
       }
     }
-    a = a + (1 << 2*(bit_depth-8) >> 1) >> 2*(bit_depth-8);
-    let d = b + (1 << bit_depth - 8 >> 1) >> bit_depth - 8;
+    a = (a + (1 << (2 * (bit_depth - 8)) >> 1)) >> (2 * (bit_depth - 8));
+    let d = (b + (1 << (bit_depth - 8) >> 1)) >> (bit_depth - 8);
     let p = cmp::max(0, a*(n as i32) - d*d);
-    let z = p*s + (1 << SGRPROJ_MTABLE_BITS >> 1) >> SGRPROJ_MTABLE_BITS;
+    let z = (p * s + (1 << SGRPROJ_MTABLE_BITS >> 1)) >> SGRPROJ_MTABLE_BITS;
     let a2 = if z >= 255 {
       256
     } else if z == 0 {
@@ -130,7 +130,7 @@ fn sgrproj_box_ab(af: &mut[i32; 64+2],
     };
     let b2 = ((1 << SGRPROJ_SGR_BITS) - a2 ) * b * one_over_n;
     af[(row+1) as usize] = a2;
-    bf[(row+1) as usize] = b2 + (1 << SGRPROJ_RECIP_BITS >> 1) >> SGRPROJ_RECIP_BITS;
+    bf[(row+1) as usize] = (b2 + (1 << SGRPROJ_RECIP_BITS >> 1)) >> SGRPROJ_RECIP_BITS;
   }
 }
 
@@ -165,7 +165,7 @@ fn sgrproj_box_f(af: &[&[i32; 64+2]; 3], bf: &[&[i32; 64+2]; 3], f: &mut[i32; 64
       }
     }
     let v = a * cdeffed.p(x, y+i) as i32 + b;
-    f[i as usize] = v + (1 << shift >> 1) >> shift;
+    f[i as usize] = (v + (1 << shift >> 1)) >> shift;
   }
 }
 
@@ -247,7 +247,7 @@ fn sgrproj_stripe_rdu(set: u8, xqd: [i8; 2], fi: &FrameInvariants,
         for yi in 0..clipped_h {
           let u = (cdeffed_slice.p(xi,yi) as i32) << SGRPROJ_RST_BITS;
           let v = w0*f0[yi] + w1*u + w2*f1[yi];
-          let s = v + (1 << SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS >> 1) >> SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS;
+          let s = (v + (1 << (SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS) >> 1)) >> (SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS);
           out_data[xi + yi*outstride] = clamp(s as u16, 0, (1 << bit_depth) - 1);
         }
       } else {
@@ -256,7 +256,7 @@ fn sgrproj_stripe_rdu(set: u8, xqd: [i8; 2], fi: &FrameInvariants,
         for yi in 0..clipped_h {
           let u = (cdeffed_slice.p(xi,yi) as i32) << SGRPROJ_RST_BITS;
           let v = w0*f0[yi] + w*u;
-          let s = v + (1 << SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS >> 1) >> SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS;
+          let s = (v + (1 << (SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS) >> 1)) >> (SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS);
           out_data[xi + yi*outstride] = clamp(s as u16, 0, (1 << bit_depth) - 1);
         }
       }
@@ -267,9 +267,9 @@ fn sgrproj_stripe_rdu(set: u8, xqd: [i8; 2], fi: &FrameInvariants,
       for yi in 0..clipped_h {
         let u = (cdeffed_slice.p(xi,yi) as i32) << SGRPROJ_RST_BITS;
         let v = w*u + w2*f1[yi];
-        let s = v + (1 << SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS >> 1) >> SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS;
+        let s = (v + (1 << (SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS) >> 1)) >> (SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS);
         out_data[xi + yi*outstride] = clamp(s as u16, 0, (1 << bit_depth) - 1);
-      }      
+      }
     }
   }
 }
@@ -280,8 +280,8 @@ fn wiener_stripe_rdu(coeffs: [[i8; 3]; 2], fi: &FrameInvariants,
   let bit_depth = fi.sequence.bit_depth;
   let round_h = if bit_depth == 12 {5} else {3};
   let round_v = if bit_depth == 12 {9} else {11};
-  let offset = 1 << bit_depth + WIENER_BITS - round_h - 1;
-  let limit = (1 << bit_depth + 1 + WIENER_BITS - round_h) - 1;
+  let offset = 1 << (bit_depth + WIENER_BITS - round_h - 1);
+  let limit = (1 << (bit_depth + 1 + WIENER_BITS - round_h)) - 1;
   
   let mut work: [i32; MAX_SB_SIZE+7] = [0; MAX_SB_SIZE+7];
   let vfilter: [i32; 7] = [ coeffs[0][0] as i32,
@@ -344,7 +344,7 @@ fn wiener_stripe_rdu(coeffs: [[i8; 3]; 2], fi: &FrameInvariants,
         acc += hfilter[i as usize] * src_plane.p(fi.width - 1, ly) as i32;
       }
         
-      acc = acc + (1 << round_h >> 1) >> round_h;
+      acc = (acc + (1 << round_h >> 1)) >> round_h;
       work[(yi-y+3) as usize] = clamp(acc, -offset, limit-offset);
     }
 
@@ -353,7 +353,7 @@ fn wiener_stripe_rdu(coeffs: [[i8; 3]; 2], fi: &FrameInvariants,
       for (i,src) in (0..7).zip(work[wi..wi+7].iter_mut()) {
         acc += vfilter[i] * *src;
       }
-      *dst = clamp(acc + (1 << round_v >> 1) >> round_v, 0, (1 << bit_depth) - 1) as u16;
+      *dst = clamp((acc + (1 << round_v >> 1)) >> round_v, 0, (1 << bit_depth) - 1) as u16;
     }
   }
 }
@@ -480,7 +480,7 @@ impl RestorationState {
 
       for si in 0..stripe_n {
         // stripe y pixel locations must be able to overspan the frame
-        let stripe_start_y = si as isize * 64 - 8 >> ydec;
+        let stripe_start_y = (si as isize * 64 - 8) >> ydec;
         let stripe_size = 64 >> ydec; // one past, unlike spec
       
         // horizontally, go rdu-by-rdu
@@ -496,7 +496,7 @@ impl RestorationState {
           let ruy = (si >> rp.sb_log2).min(rp.rows - 1);
           let ru = &rp.units[ruy][rux];
           match ru.filter {
-            RestorationFilter::Wiener{coeffs} => {          
+            RestorationFilter::Wiener{coeffs} => {
               wiener_stripe_rdu(coeffs, fi,
                                 ru_start_x, ru_size, stripe_start_y, stripe_size,
                                 &cdeffed.planes[pli], &pre_cdef.planes[pli],

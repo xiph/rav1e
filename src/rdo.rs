@@ -9,7 +9,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 #![allow(non_camel_case_types)]
-#![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
+#![allow(clippy::cast_lossless)]
 
 use api::PredictionModesSetting;
 use cdef::*;
@@ -86,8 +86,8 @@ fn cdef_dist_wxh_8x8(
   let dvar = (sum_d2 - ((sum_d as i64 * sum_d as i64 + 32) >> 6)) as f64;
   let sse = (sum_d2 + sum_s2 - 2 * sum_sd) as f64;
   //The two constants were tuned for CDEF, but can probably be better tuned for use in general RDO
-  let ssim_boost = 0.5_f64 * (svar + dvar + (400 << 2 * coeff_shift) as f64)
-    / f64::sqrt((20000 << 4 * coeff_shift) as f64 + svar * dvar);
+  let ssim_boost = 0.5_f64 * (svar + dvar + (400 << (2 * coeff_shift)) as f64)
+    / f64::sqrt((20000 << (4 * coeff_shift)) as f64 + svar * dvar);
   (sse * ssim_boost + 0.5_f64) as u64
 }
 
@@ -395,7 +395,7 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
         ref_slot_set.push(slot_idx);
       }
     }
-    assert!(ref_frames_set.len() != 0);
+    assert!(!ref_frames_set.is_empty());
   }
 
   let mut mode_set: Vec<(PredictionMode, usize)> = Vec::new();
@@ -408,7 +408,7 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
 
     if fi.frame_type == FrameType::INTER {
       let mut pmv = [MotionVector{ row: 0, col: 0 }; 2];
-      if mv_stack.len() > 0 { pmv[0] = mv_stack[0].this_mv; }
+      if !mv_stack.is_empty() { pmv[0] = mv_stack[0].this_mv; }
       if mv_stack.len() > 1 { pmv[1] = mv_stack[1].this_mv; }
       let cmv = pmvs[ref_slot_set[i] as usize].unwrap();
       mvs_from_me.push([
@@ -419,7 +419,7 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
       for &x in RAV1E_INTER_MODES_MINIMAL {
         mode_set.push((x, i));
       }
-      if mv_stack.len() >= 1 {
+      if !mv_stack.is_empty() {
         mode_set.push((PredictionMode::NEAR0MV, i));
       }
       if mv_stack.len() >= 2 {
@@ -555,13 +555,13 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
   };
 
   if fi.frame_type != FrameType::INTER {
-    assert!(mode_set.len() == 0);
+    assert!(mode_set.is_empty());
   }
 
   mode_set.iter().for_each(|&(luma_mode, i)| {
     let mvs = match luma_mode {
       PredictionMode::NEWMV | PredictionMode::NEW_NEWMV => mvs_from_me[i],
-      PredictionMode::NEARESTMV | PredictionMode::NEAREST_NEARESTMV => if mv_stacks[i].len() > 0 {
+      PredictionMode::NEARESTMV | PredictionMode::NEAREST_NEARESTMV => if !mv_stacks[i].is_empty() {
         [mv_stacks[i][0].this_mv, mv_stacks[i][0].comp_mv]
       } else {
         [MotionVector { row: 0, col: 0 }; 2]
@@ -1073,7 +1073,7 @@ pub fn rdo_cdef_decision(sbo: &SuperBlockOffset, fi: &FrameInvariants,
         let w = fi.padded_w as isize >> xdec;
         let offset = sbo.plane_offset(&fs.rec.planes[p].cfg);
         for y in 0..(64>>ydec)+4 {
-            let mut rec_slice = rec_input.planes[p].mut_slice(&PlaneOffset {x:0, y:y});
+            let mut rec_slice = rec_input.planes[p].mut_slice(&PlaneOffset {x:0, y});
             let mut rec_row = rec_slice.as_mut_slice();
             if offset.y+y < 2 || offset.y+y >= h+2 {
                 // above or below the frame, fill with flag

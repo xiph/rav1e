@@ -312,7 +312,7 @@ impl Sequence {
         }
 
         Sequence {
-            profile: profile,
+            profile,
             num_bits_width: width_bits,
             num_bits_height: height_bits,
             bit_depth: info.bit_depth,
@@ -343,11 +343,11 @@ impl Sequence {
             enable_cdef: true,
             enable_restoration: true,
             operating_points_cnt_minus_1: 0,
-            operating_point_idc: operating_point_idc,
+            operating_point_idc,
             display_model_info_present_flag: false,
             decoder_model_info_present_flag: false,
-            level: level,
-            tier: tier,
+            level,
+            tier,
             film_grain_params_present: false,
             separate_uv_delta_q: false,
         }
@@ -639,7 +639,7 @@ impl FrameInvariants {
             dc_delta_q: [0; 3],
             ac_delta_q: [0; 3],
             me_range_scale: 1,
-            use_tx_domain_distortion: use_tx_domain_distortion,
+            use_tx_domain_distortion,
             inter_cfg: None,
         }
     }
@@ -1346,7 +1346,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
       // global motion
       if !fi.intra_only {
-          for i in LAST_FRAME..ALTREF_FRAME+1 {
+          for i in LAST_FRAME..=ALTREF_FRAME {
               let mode = fi.globalmv_transformation_type[i];
               self.write_bit(mode != GlobalMVMode::IDENTITY)?;
               if mode != GlobalMVMode::IDENTITY {
@@ -1577,7 +1577,7 @@ fn aom_uleb_size_in_bytes(mut value: u64) -> usize {
   let mut size = 0;
   loop {
     size += 1;
-    value = value >> 7;
+    value >>= 7;
     if value == 0 { break; }
   }
   size
@@ -1961,7 +1961,7 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
                 assert!(0 == mvs[0].col);
               }
             } else if luma_mode == PredictionMode::NEARESTMV {
-              if mv_stack.len() > 0 {
+              if !mv_stack.is_empty() {
                 assert!(mv_stack[0].this_mv.row == mvs[0].row);
                 assert!(mv_stack[0].this_mv.col == mvs[0].col);
               } else {
@@ -2249,7 +2249,7 @@ fn encode_partition_bottomup(fi: &FrameInvariants, fs: &mut FrameState,
     let mut best_decision = RDOPartitionOutput {
         rd_cost,
         bo: bo.clone(),
-        bsize: bsize,
+        bsize,
         pred_mode_luma: PredictionMode::DC_PRED,
         pred_mode_chroma: PredictionMode::DC_PRED,
         pred_cfl_params: CFLParams::new(),
@@ -2269,14 +2269,14 @@ fn encode_partition_bottomup(fi: &FrameInvariants, fs: &mut FrameState,
     if !must_split {
         best_partition = PartitionType::PARTITION_NONE;
 
-        let mut cost: f64 = 0.0;
-
-        if bsize.gte(BlockSize::BLOCK_8X8) && is_square {
+        let cost = if bsize.gte(BlockSize::BLOCK_8X8) && is_square {
             let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
             let tell = w.tell_frac();
             cw.write_partition(w, bo, best_partition, bsize);
-            cost = (w.tell_frac() - tell) as f64 * get_lambda(fi)/ ((1 << OD_BITRES) as f64);
-        }
+            (w.tell_frac() - tell) as f64 * get_lambda(fi) / ((1 << OD_BITRES) as f64)
+        } else {
+            0.0
+        };
 
         let pmv_idx = if bsize.greater_than(BlockSize::BLOCK_32X32) {
             0
@@ -2533,7 +2533,7 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState,
                     }
                     if mode_luma == PredictionMode::NEWMV && mvs[0].row == 0 && mvs[0].col == 0 {
                         mode_luma =
-                            if mv_stack.len() == 0 { PredictionMode::NEARESTMV }
+                            if mv_stack.is_empty() { PredictionMode::NEARESTMV }
                             else if mv_stack.len() == 1 { PredictionMode::NEAR0MV }
                             else { PredictionMode::GLOBALMV };
                     }
@@ -2776,12 +2776,11 @@ pub fn encode_frame(fi: &mut FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
     let mut packet = Vec::new();
     if fi.show_existing_frame {
         write_obus(&mut packet, fi, fs).unwrap();
-        match fi.rec_buffer.frames[fi.frame_to_show_map_idx as usize] {
-            Some(ref rec) => for p in 0..3 {
+        if let Some(ref rec) = fi.rec_buffer.frames[fi.frame_to_show_map_idx as usize] {
+            for p in 0..3 {
                 fs.rec.planes[p].data.copy_from_slice(rec.frame.planes[p].data.as_slice());
-            },
-            None => (),
-        }
+            }
+        };
     } else {
         if !fi.intra_only {
             for i in 0..INTER_REFS_PER_FRAME {

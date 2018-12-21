@@ -7,7 +7,7 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-#![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
+#![allow(clippy::cast_lossless)]
 #![allow(non_upper_case_globals)]
 
 use partition::TxSize;
@@ -66,7 +66,7 @@ fn divu_gen(d: u32) -> (u32, u32, u32) {
   let nbits = (mem::size_of_val(&d) as u64) * 8;
   let m = nbits - d.leading_zeros() as u64 - 1;
   if (d & (d - 1)) == 0 {
-    (0xFFFFFFFF, 0xFFFFFFFF, m as u32)
+    (0xFFFF_FFFF, 0xFFFF_FFFF, m as u32)
   } else {
     let d = d as u64;
     let t = (1u64 << (m + nbits)) / d;
