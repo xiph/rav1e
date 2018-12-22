@@ -198,9 +198,11 @@ SECTION .text
 %macro INV_TXFM_FN 5+ ; type1, type2, fast_thresh, size, xmm/stack
 cglobal inv_txfm_add_%1_%2_%4, 4, 6, %5, dst, stride, coeff, eob, tx2
     %undef cmp
+    %define %%p1 m(i%1_%4_internal)
 %if ARCH_X86_32
     LEA                    r5, $$
 %endif
+%if has_epilogue
 %if %3 > 0
     cmp                  eobd, %3
     jle %%end
@@ -209,10 +211,23 @@ cglobal inv_txfm_add_%1_%2_%4, 4, 6, %5, dst, stride, coeff, eob, tx2
     jz %%end
 %endif
     lea                  tx2q, [o(m(i%2_%4_internal).pass2)]
-    call m(i%1_%4_internal)
+    call %%p1
     RET
+%%end:
+%else
+    lea                  tx2q, [o(m(i%2_%4_internal).pass2)]
+%if %3 > 0
+    cmp                  eobd, %3
+    jg %%p1
+%elif %3 == 0
+    test                 eobd, eobd
+    jnz %%p1
+%else
+    times ((%%end - %%p1) >> 31) & 1 jmp %%p1
 ALIGN function_align
 %%end:
+%endif
+%endif
 %endmacro
 
 %macro INV_TXFM_4X4_FN 2-3 -1 ; type1, type2, fast_thresh
@@ -225,8 +240,7 @@ ALIGN function_align
     punpcklwd            m0, m0
     punpckhdq            m1, m0, m0
     punpckldq            m0, m0
-    call m(iadst_4x4_internal).end
-    RET
+    TAIL_CALL m(iadst_4x4_internal).end
 %elifidn %1_%2, identity_dct
     mova                 m1, [coeffq+16*0]
     mova                 m2, [coeffq+16*1]
@@ -238,8 +252,7 @@ ALIGN function_align
     pmulhrsw             m0, [o(pw_5793x4)]
     pmulhrsw             m0, [o(pw_2896x8)]
     mova                 m1, m0
-    call m(iadst_4x4_internal).end
-    RET
+    TAIL_CALL m(iadst_4x4_internal).end
 %elif %3 >= 0
     pshuflw              m0, [coeffq], q0000
     punpcklqdq           m0, m0
@@ -259,13 +272,11 @@ ALIGN function_align
     pmulhrsw             m0, m1
 %endif
     mova                 m1, m0
-    call m(iadst_4x4_internal).end2
-    RET
+    TAIL_CALL m(iadst_4x4_internal).end2
 %else ; adst / flipadst
     pmulhrsw             m1, m0, [o(iadst4_dconly2b)]
     pmulhrsw             m0, [o(iadst4_dconly2a)]
-    call m(i%2_4x4_internal).end2
-    RET
+    TAIL_CALL m(i%2_4x4_internal).end2
 %endif
 %endif
 %endmacro
@@ -624,8 +635,7 @@ cglobal inv_txfm_add_wht_wht_4x4, 3, 3, 4, dst, stride, coeff
     punpckldq            m0, m0
     punpckhdq            m3, m2, m2
     punpckldq            m2, m2
-    call m(iadst_4x8_internal).end3
-    RET
+    TAIL_CALL m(iadst_4x8_internal).end3
 %elifidn %1_%2, identity_dct
     movd                 m0, [coeffq+16*0]
     punpcklwd            m0, [coeffq+16*1]
@@ -642,8 +652,7 @@ cglobal inv_txfm_add_wht_wht_4x4, 3, 3, 4, dst, stride, coeff
     mova                 m1, m0
     mova                 m2, m0
     mova                 m3, m0
-    call m(iadst_4x8_internal).end3
-    RET
+    TAIL_CALL m(iadst_4x8_internal).end3
 %elifidn %1_%2, dct_dct
     pshuflw              m0, [coeffq], q0000
     punpcklqdq           m0, m0
@@ -656,8 +665,7 @@ cglobal inv_txfm_add_wht_wht_4x4, 3, 3, 4, dst, stride, coeff
     mova                 m1, m0
     mova                 m2, m0
     mova                 m3, m0
-    call m(iadst_4x8_internal).end4
-    RET
+    TAIL_CALL m(iadst_4x8_internal).end4
 %else ; adst_dct / flipadst_dct
     pshuflw              m0, [coeffq], q0000
     punpcklqdq           m0, m0
@@ -674,8 +682,7 @@ cglobal inv_txfm_add_wht_wht_4x4, 3, 3, 4, dst, stride, coeff
     mova                 m1, m0
     mova                 m2, m0
     mova                 m3, m0
-    call m(iadst_4x8_internal).end4
-    RET
+    TAIL_CALL m(iadst_4x8_internal).end4
 %endif
 %endif
 %endmacro
@@ -923,8 +930,7 @@ cglobal iidentity_4x8_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
 %endif
 %endif
 %endif
-    call m(iadst_8x4_internal).end2
-    RET
+    TAIL_CALL m(iadst_8x4_internal).end2
 %endif
 %endmacro
 

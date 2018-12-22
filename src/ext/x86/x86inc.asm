@@ -682,7 +682,7 @@ DECLARE_ARG 7, 8, 9, 10, 11, 12, 13, 14
 
 BRANCH_INSTR jz, je, jnz, jne, jl, jle, jnl, jnle, jg, jge, jng, jnge, ja, jae, jna, jnae, jb, jbe, jnb, jnbe, jc, jnc, js, jns, jo, jno, jp, jnp
 
-%macro TAIL_CALL 2 ; callee, is_nonadjacent
+%macro TAIL_CALL 1-2 1 ; callee, is_nonadjacent
     %if has_epilogue
         call %1
         RET
