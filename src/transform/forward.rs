@@ -10,9 +10,6 @@
 use super::*;
 use partition::{TxSize, TxType};
 
-const MAX_TXFM_STAGE_NUM: usize = 12;
-const MAX_TXWH_IDX: usize = 5;
-
 type TxfmShift = [i8; 3];
 type TxfmShifts = [TxfmShift; 3];
 
@@ -59,70 +56,6 @@ const FWD_TXFM_SHIFT_LS: [TxfmShifts; TxSize::TX_SIZES_ALL] = [
   FWD_SHIFT_32X8,
   FWD_SHIFT_16X64,
   FWD_SHIFT_64X16
-];
-
-const FWD_COS_BIT_COL: [[i8; MAX_TXWH_IDX]; MAX_TXWH_IDX] = [
-  [13, 13, 13, 0, 0],
-  [13, 13, 13, 12, 0],
-  [13, 13, 13, 12, 13],
-  [0, 13, 13, 12, 13],
-  [0, 0, 13, 12, 13]
-];
-
-const FWD_COS_BIT_ROW: [[i8; MAX_TXWH_IDX]; MAX_TXWH_IDX] = [
-  [13, 13, 12, 0, 0],
-  [13, 13, 13, 12, 0],
-  [13, 13, 12, 13, 12],
-  [0, 12, 13, 12, 11],
-  [0, 0, 12, 11, 10]
-];
-
-const FDCT4_RANGE_MULT2: [i8; 4] = [0, 2, 3, 3];
-const FDCT8_RANGE_MULT2: [i8; 6] = [0, 2, 4, 5, 5, 5];
-const FDCT16_RANGE_MULT2: [i8; 8] = [0, 2, 4, 6, 7, 7, 7, 7];
-const FDCT32_RANGE_MULT2: [i8; 10] = [0, 2, 4, 6, 8, 9, 9, 9, 9, 9];
-const FDCT64_RANGE_MULT2: [i8; 12] =
-  [0, 2, 4, 6, 8, 10, 11, 11, 11, 11, 11, 11];
-
-const FADST4_RANGE_MULT2: [i8; 7] = [0, 2, 4, 3, 3, 3, 3];
-const FADST8_RANGE_MULT2: [i8; 8] = [0, 0, 1, 3, 3, 5, 5, 5];
-const FADST16_RANGE_MULT2: [i8; 10] = [0, 0, 1, 3, 3, 5, 5, 7, 7, 7];
-
-const MAX_FWD_RANGE_MULT2_COL: [i8; 5] = [3, 5, 7, 9, 11];
-
-const FIDTX4_RANGE_MULT2: [i8; 1] = [1];
-const FIDTX8_RANGE_MULT2: [i8; 1] = [2];
-const FIDTX16_RANGE_MULT2: [i8; 1] = [3];
-const FIDTX32_RANGE_MULT2: [i8; 1] = [4];
-
-const FWD_TXFM_RANGE_MULT2_LIST: [&[i8]; TxfmType::TXFM_TYPES] = [
-  &FDCT4_RANGE_MULT2,
-  &FDCT8_RANGE_MULT2,
-  &FDCT16_RANGE_MULT2,
-  &FDCT32_RANGE_MULT2,
-  &FDCT64_RANGE_MULT2,
-  &FADST4_RANGE_MULT2,
-  &FADST8_RANGE_MULT2,
-  &FADST16_RANGE_MULT2,
-  &FIDTX4_RANGE_MULT2,
-  &FIDTX8_RANGE_MULT2,
-  &FIDTX16_RANGE_MULT2,
-  &FIDTX32_RANGE_MULT2
-];
-
-const AV1_TXFM_STAGE_NUM_LIST: [i8; TxfmType::TXFM_TYPES] = [
-  4,  // TXFM_TYPE_DCT4
-  6,  // TXFM_TYPE_DCT8
-  8,  // TXFM_TYPE_DCT16
-  10, // TXFM_TYPE_DCT32
-  12, // TXFM_TYPE_DCT64
-  7,  // TXFM_TYPE_ADST4
-  8,  // TXFM_TYPE_ADST8
-  10, // TXFM_TYPE_ADST16
-  1,  // TXFM_TYPE_IDENTITY4
-  1,  // TXFM_TYPE_IDENTITY8
-  1,  // TXFM_TYPE_IDENTITY16
-  1,  // TXFM_TYPE_IDENTITY32
 ];
 
 type TxfmFunc = Fn(&[i32], &mut [i32]);
@@ -1705,7 +1638,6 @@ enum TxfmType {
 }
 
 impl TxfmType {
-  const TXFM_TYPES: usize = 12;
   const TX_TYPES_1D: usize = 4;
   const AV1_TXFM_TYPE_LS: [[TxfmType; Self::TX_TYPES_1D]; 5] = [
     [TxfmType::DCT4, TxfmType::ADST4, TxfmType::ADST4, TxfmType::Identity4],
@@ -1752,14 +1684,8 @@ struct Txfm2DFlipCfg {
   /// Flip left to right
   lr_flip: bool,
   shift: TxfmShift,
-  cos_bit_col: i8,
-  cos_bit_row: i8,
-  stage_range_col: [i8; MAX_TXFM_STAGE_NUM],
-  stage_range_row: [i8; MAX_TXFM_STAGE_NUM],
   txfm_type_col: TxfmType,
-  txfm_type_row: TxfmType,
-  stage_num_col: usize,
-  stage_num_row: usize
+  txfm_type_row: TxfmType
 }
 
 impl Txfm2DFlipCfg {
@@ -1775,39 +1701,15 @@ impl Txfm2DFlipCfg {
     assert_ne!(txfm_type_col, TxfmType::Invalid);
     assert_ne!(txfm_type_row, TxfmType::Invalid);
     let (ud_flip, lr_flip) = Self::get_flip_cfg(tx_type);
-    let mut cfg = Txfm2DFlipCfg {
+    let cfg = Txfm2DFlipCfg {
       tx_size,
       ud_flip,
       lr_flip,
       shift: FWD_TXFM_SHIFT_LS[tx_size as usize][(bd - 8) / 2],
-      cos_bit_col: FWD_COS_BIT_COL[txw_idx][txh_idx],
-      cos_bit_row: FWD_COS_BIT_ROW[txw_idx][txh_idx],
-      stage_range_col: [0; MAX_TXFM_STAGE_NUM],
-      stage_range_row: [0; MAX_TXFM_STAGE_NUM],
       txfm_type_col,
-      txfm_type_row,
-      stage_num_col: AV1_TXFM_STAGE_NUM_LIST[txfm_type_col as usize] as usize,
-      stage_num_row: AV1_TXFM_STAGE_NUM_LIST[txfm_type_row as usize] as usize
+      txfm_type_row
     };
-    cfg.set_non_scale_range();
     cfg
-  }
-
-  fn set_non_scale_range(&mut self) {
-    let txh_idx = self.tx_size.height_index();
-
-    let range_mult2_col =
-      FWD_TXFM_RANGE_MULT2_LIST[self.txfm_type_col as usize];
-    for i in 0..self.stage_num_col {
-      self.stage_range_col[i] = (range_mult2_col[i] + 1) >> 1;
-    }
-
-    let range_mult2_row =
-      FWD_TXFM_RANGE_MULT2_LIST[self.txfm_type_row as usize];
-    for i in 0..self.stage_num_row {
-      self.stage_range_row[i] =
-        (MAX_FWD_RANGE_MULT2_COL[txh_idx] + range_mult2_row[i] + 1) >> 1;
-    }
   }
 
   /// Determine the flip config, returning (ud_flip, lr_flip)
