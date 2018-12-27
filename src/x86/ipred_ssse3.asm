@@ -29,6 +29,9 @@
 
 SECTION_RODATA 16
 
+pb_128   : times 8 db 128
+pd_32768 : times 1 dd 32768
+
 %macro JMP_TABLE 3-*
     %xdefine %1_%2_table (%%table - 2*4)
     %xdefine %%base mangle(private_prefix %+ _%1_%2)
@@ -44,6 +47,7 @@ SECTION_RODATA 16
 JMP_TABLE ipred_h,       ssse3, w4, w8, w16, w32, w64
 JMP_TABLE ipred_dc,      ssse3, h4, h8, h16, h32, h64, w4, w8, w16, w32, w64, \
                                 s4-10*4, s8-10*4, s16-10*4, s32-10*4, s64-10*4
+JMP_TABLE ipred_dc_left, ssse3, h4, h8, h16, h32, h64
 
 SECTION .text
 
@@ -376,3 +380,93 @@ ALIGN function_align
     sub                          hd, 2
     jg .s64
     RET
+
+;---------------------------------------------------------------------------------------
+;int dav1d_ipred_dc_left_ssse3(pixel *dst, const ptrdiff_t stride, const pixel *const topleft,
+;                                    const int width, const int height, const int a);
+;---------------------------------------------------------------------------------------
+cglobal ipred_dc_left, 3, 7, 6, dst, stride, tl, w, h, stride3
+    LEA                  r5, ipred_dc_left_ssse3_table
+    mov                  hd, hm                ; zero upper half
+    tzcnt               r6d, hd
+    sub                 tlq, hq
+    tzcnt                wd, wm
+    movu                 m0, [tlq]
+    movd                 m3, [r5-ipred_dc_left_ssse3_table+pd_32768]
+    movd                 m2, r6d
+    psrld                m3, m2
+    movsxd               r6, [r5+r6*4]
+    pcmpeqd              m2, m2
+    pmaddubsw            m0, m2
+    add                  r6, r5
+    add                  r5, ipred_dc_splat_ssse3_table-ipred_dc_left_ssse3_table
+    movsxd               wq, [r5+wq*4]
+    add                  wq, r5
+    jmp                  r6
+.h64:
+    movu                 m1, [tlq+48]                           ; unaligned when jumping here from dc_top
+    pmaddubsw            m1, m2
+    paddw                m0, m1
+    movu                 m1, [tlq+32]                           ; unaligned when jumping here from dc_top
+    pmaddubsw            m1, m2
+    paddw                m0, m1
+.h32:
+    movu                 m1, [tlq+16]                           ; unaligned when jumping here from dc_top
+    pmaddubsw            m1, m2
+    paddw                m0, m1
+.h16:
+    pshufd               m1, m0, q3232                          ; psrlq               m1, m0, 16
+    paddw                m0, m1
+.h8:
+    pshuflw              m1, m0, q1032                          ; psrlq               m1, m0, 32
+    paddw                m0, m1
+.h4:
+    pmaddwd              m0, m2
+    pmulhrsw             m0, m3
+    lea            stride3q, [strideq*3]
+    pxor                 m1, m1
+    pshufb               m0, m1
+    mova                 m1, m0
+    mova                 m2, m0
+    mova                 m3, m0
+    jmp                  wq
+
+;---------------------------------------------------------------------------------------
+;int dav1d_ipred_dc_128_ssse3(pixel *dst, const ptrdiff_t stride, const pixel *const topleft,
+;                                    const int width, const int height, const int a);
+;---------------------------------------------------------------------------------------
+cglobal ipred_dc_128, 2, 7, 6, dst, stride, tl, w, h, stride3
+    LEA                  r5, ipred_dc_splat_ssse3_table
+    tzcnt                wd, wm
+    movifnidn            hd, hm
+    movsxd               wq, [r5+wq*4]
+    movddup              m0, [r5-ipred_dc_splat_ssse3_table+pb_128]
+    mova                 m1, m0
+    mova                 m2, m0
+    mova                 m3, m0
+    add                  wq, r5
+    lea            stride3q, [strideq*3]
+    jmp                  wq
+
+;---------------------------------------------------------------------------------------
+;int dav1d_ipred_dc_top_ssse3(pixel *dst, const ptrdiff_t stride, const pixel *const topleft,
+;                                    const int width, const int height, const int a);
+;---------------------------------------------------------------------------------------
+cglobal ipred_dc_top, 3, 7, 6, dst, stride, tl, w, h
+    LEA                  r5, ipred_dc_left_ssse3_table
+    tzcnt                wd, wm
+    inc                 tlq
+    movu                 m0, [tlq]
+    movifnidn            hd, hm
+    movd                 m3, [r5-ipred_dc_left_ssse3_table+pd_32768]
+    movd                 m2, wd
+    psrld                m3, m2
+    movsxd               r6, [r5+wq*4]
+    pcmpeqd              m2, m2
+    pmaddubsw            m0, m2
+    add                  r6, r5
+    add                  r5, ipred_dc_splat_ssse3_table-ipred_dc_left_ssse3_table
+    movsxd               wq, [r5+wq*4]
+    add                  wq, r5
+    jmp                  r6
+
