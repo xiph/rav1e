@@ -240,6 +240,38 @@ mod test {
   }
 
   #[test]
+  fn log_tx_ratios() {
+    let combinations = [
+      (TxSize::TX_4X4, 0),
+      (TxSize::TX_8X8, 0),
+      (TxSize::TX_16X16, 0),
+      (TxSize::TX_32X32, 0),
+      (TxSize::TX_64X64, 0),
+
+      (TxSize::TX_4X8, -1),
+      (TxSize::TX_8X4, 1),
+      (TxSize::TX_8X16, -1),
+      (TxSize::TX_16X8, 1),
+      (TxSize::TX_16X32, -1),
+      (TxSize::TX_32X16, 1),
+      (TxSize::TX_32X64, -1),
+      (TxSize::TX_64X32, 1),
+
+      (TxSize::TX_4X16, -2),
+      (TxSize::TX_16X4, 2),
+      (TxSize::TX_8X32, -2),
+      (TxSize::TX_32X8, 2),
+      (TxSize::TX_16X64, -2),
+      (TxSize::TX_64X16, 2),
+    ];
+
+    for &(tx_size, expected) in combinations.iter() {
+      println!("Testing combination {:?}, {:?}", tx_size.width(), tx_size.height());
+      assert!(get_rect_tx_log_ratio(tx_size.width(), tx_size.height()) == expected);
+    }
+  }
+
+  #[test]
   fn roundtrips() {
     use partition::TxSize::*;
     use partition::TxType::*;
