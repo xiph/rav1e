@@ -24,25 +24,8 @@ static INV_SQRT2: i32 = 2896;   // 2^12 / sqrt(2)
 /// Utility function that returns the log of the ratio of the col and row sizes.
 #[inline]
 pub fn get_rect_tx_log_ratio(col: usize, row: usize) -> i8 {
-  if col == row {
-    return 0
-  }
-  if col > row {
-    if col == row * 2 {
-      return 1
-    }
-    if col == row * 4 {
-      return 2
-    }
-  }
-  if row == col * 2 {
-    return -1
-  }
-  if row == col * 4 {
-    return -2
-  }
-
-  panic!("Unsupported transform size");
+  debug_assert!(col > 0 && row > 0);
+  col.ilog() as i8 - row.ilog() as i8
 }
 
 // performs half a butterfly
