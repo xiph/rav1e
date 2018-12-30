@@ -25,7 +25,7 @@ static INV_SQRT2: i32 = 2896;   // 2^12 / sqrt(2)
 #[inline]
 pub fn get_rect_tx_log_ratio(col: usize, row: usize) -> i8 {
   debug_assert!(col > 0 && row > 0);
-  col.ilog() as i8 - row.ilog() as i8
+  (msb(col as i32) - msb(row as i32)) as i8
 }
 
 // performs half a butterfly
