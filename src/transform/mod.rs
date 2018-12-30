@@ -24,25 +24,8 @@ static INV_SQRT2: i32 = 2896;   // 2^12 / sqrt(2)
 /// Utility function that returns the log of the ratio of the col and row sizes.
 #[inline]
 pub fn get_rect_tx_log_ratio(col: usize, row: usize) -> i8 {
-  if col == row {
-    return 0
-  }
-  if col > row {
-    if col == row * 2 {
-      return 1
-    }
-    if col == row * 4 {
-      return 2
-    }
-  }
-  if row == col * 2 {
-    return -1
-  }
-  if row == col * 4 {
-    return -2
-  }
-
-  panic!("Unsupported transform size");
+  debug_assert!(col > 0 && row > 0);
+  col.ilog() as i8 - row.ilog() as i8
 }
 
 // performs half a butterfly
@@ -253,6 +236,38 @@ mod test {
 
     for (s, d) in src.iter().zip(dst) {
       assert!(i16::abs((*s as i16) - (*d as i16)) <= tolerance);
+    }
+  }
+
+  #[test]
+  fn log_tx_ratios() {
+    let combinations = [
+      (TxSize::TX_4X4, 0),
+      (TxSize::TX_8X8, 0),
+      (TxSize::TX_16X16, 0),
+      (TxSize::TX_32X32, 0),
+      (TxSize::TX_64X64, 0),
+
+      (TxSize::TX_4X8, -1),
+      (TxSize::TX_8X4, 1),
+      (TxSize::TX_8X16, -1),
+      (TxSize::TX_16X8, 1),
+      (TxSize::TX_16X32, -1),
+      (TxSize::TX_32X16, 1),
+      (TxSize::TX_32X64, -1),
+      (TxSize::TX_64X32, 1),
+
+      (TxSize::TX_4X16, -2),
+      (TxSize::TX_16X4, 2),
+      (TxSize::TX_8X32, -2),
+      (TxSize::TX_32X8, 2),
+      (TxSize::TX_16X64, -2),
+      (TxSize::TX_64X16, 2),
+    ];
+
+    for &(tx_size, expected) in combinations.iter() {
+      println!("Testing combination {:?}, {:?}", tx_size.width(), tx_size.height());
+      assert!(get_rect_tx_log_ratio(tx_size.width(), tx_size.height()) == expected);
     }
   }
 
