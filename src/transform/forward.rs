@@ -62,33 +62,44 @@ type TxfmFunc = Fn(&[i32], &mut [i32]);
 
 use std::ops::*;
 
-fn tx_mul(a: i32, mul: (i32, i32)) -> i32 {
-  ((a * mul.0) + (1 << mul.1 >> 1)) >> mul.1
+trait TxOperations:
+  Copy + Default + Add<Output = Self> + Sub<Output = Self>
+{
+  fn tx_mul(self, (i32, i32)) -> Self;
+  fn add_avg(self, b: Self) -> Self;
+  fn sub_avg(self, b: Self) -> Self;
+  fn rshift1(self) -> Self;
+
+  fn copy_fn(self) -> Self {
+    self
+  }
 }
 
-fn copy_fn(a: i32) -> i32 {
-  a
+impl TxOperations for i32 {
+  fn tx_mul(self, mul: (i32, i32)) -> Self {
+    ((self * mul.0) + (1 << mul.1 >> 1)) >> mul.1
+  }
+
+  fn rshift1(self) -> Self {
+    (self + if self < 0 { 1 } else { 0 }) >> 1
+  }
+
+  fn add_avg(self, b: Self) -> Self {
+    (self + b) >> 1
+  }
+
+  fn sub_avg(self, b: Self) -> Self {
+    (self - b) >> 1
+  }
 }
 
-fn rshift1(a: i32) -> i32 {
-  (a + if a < 0 { 1 } else { 0 }) >> 1
-}
+trait RotateKernelPi4<T: TxOperations> {
+  const ADD: fn(T, T) -> T;
+  const SUB: fn(T, T) -> T;
 
-fn add_avg(a: i32, b: i32) -> i32 {
-  (a + b) >> 1
-}
-
-fn sub_avg(a: i32, b: i32) -> i32 {
-  (a - b) >> 1
-}
-
-trait RotateKernelPi4 {
-  const ADD: fn(i32, i32) -> i32;
-  const SUB: fn(i32, i32) -> i32;
-
-  fn kernel(p0: i32, p1: i32, m: ((i32, i32), (i32, i32))) -> (i32, i32) {
+  fn kernel(p0: T, p1: T, m: ((i32, i32), (i32, i32))) -> (T, T) {
     let t = Self::ADD(p1, p0);
-    let (a, out0) = (tx_mul(p0, m.0), tx_mul(t, m.1));
+    let (a, out0) = (p0.tx_mul(m.0), t.tx_mul(m.1));
     let out1 = Self::SUB(a, out0);
     (out0, out1)
   }
@@ -99,56 +110,53 @@ struct RotatePi4AddAvg;
 struct RotatePi4Sub;
 struct RotatePi4SubAvg;
 
-impl RotateKernelPi4 for RotatePi4Add {
-  const ADD: fn(i32, i32) -> i32 = Add::add;
-  const SUB: fn(i32, i32) -> i32 = Sub::sub;
+impl<T: TxOperations> RotateKernelPi4<T> for RotatePi4Add {
+  const ADD: fn(T, T) -> T = Add::add;
+  const SUB: fn(T, T) -> T = Sub::sub;
 }
 
-impl RotateKernelPi4 for RotatePi4AddAvg {
-  const ADD: fn(i32, i32) -> i32 = add_avg;
-  const SUB: fn(i32, i32) -> i32 = Sub::sub;
+impl<T: TxOperations> RotateKernelPi4<T> for RotatePi4AddAvg {
+  const ADD: fn(T, T) -> T = T::add_avg;
+  const SUB: fn(T, T) -> T = Sub::sub;
 }
 
-impl RotateKernelPi4 for RotatePi4Sub {
-  const ADD: fn(i32, i32) -> i32 = Sub::sub;
-  const SUB: fn(i32, i32) -> i32 = Add::add;
+impl<T: TxOperations> RotateKernelPi4<T> for RotatePi4Sub {
+  const ADD: fn(T, T) -> T = Sub::sub;
+  const SUB: fn(T, T) -> T = Add::add;
 }
 
-impl RotateKernelPi4 for RotatePi4SubAvg {
-  const ADD: fn(i32, i32) -> i32 = sub_avg;
-  const SUB: fn(i32, i32) -> i32 = Add::add;
+impl<T: TxOperations> RotateKernelPi4<T> for RotatePi4SubAvg {
+  const ADD: fn(T, T) -> T = T::sub_avg;
+  const SUB: fn(T, T) -> T = Add::add;
 }
 
-trait RotateKernel {
-  const ADD: fn(i32, i32) -> i32;
-  const SUB: fn(i32, i32) -> i32;
-  const SHIFT: fn(i32) -> i32;
+trait RotateKernel<T: TxOperations> {
+  const ADD: fn(T, T) -> T;
+  const SUB: fn(T, T) -> T;
+  const SHIFT: fn(T) -> T;
 
   fn half_kernel(
-    p0: (i32, i32), p1: i32, m: ((i32, i32), (i32, i32), (i32, i32))
-  ) -> (i32, i32) {
+    p0: (T, T), p1: T, m: ((i32, i32), (i32, i32), (i32, i32))
+  ) -> (T, T) {
     let t = Self::ADD(p1, p0.0);
-    let (a, b, c) = (tx_mul(p0.1, m.0), tx_mul(p1, m.1), tx_mul(t, m.2));
+    let (a, b, c) = (p0.1.tx_mul(m.0), p1.tx_mul(m.1), t.tx_mul(m.2));
     let out0 = b + c;
     let shifted = Self::SHIFT(c);
     let out1 = Self::SUB(a, shifted);
     (out0, out1)
   }
 
-  fn kernel(
-    p0: i32, p1: i32, m: ((i32, i32), (i32, i32), (i32, i32))
-  ) -> (i32, i32) {
+  fn kernel(p0: T, p1: T, m: ((i32, i32), (i32, i32), (i32, i32))) -> (T, T) {
     Self::half_kernel((p0, p0), p1, m)
   }
 }
 
-trait RotateKernelNeg {
-  const ADD: fn(i32, i32) -> i32;
-  fn kernel(
-    p0: i32, p1: i32, m: ((i32, i32), (i32, i32), (i32, i32))
-  ) -> (i32, i32) {
+trait RotateKernelNeg<T: TxOperations> {
+  const ADD: fn(T, T) -> T;
+
+  fn kernel(p0: T, p1: T, m: ((i32, i32), (i32, i32), (i32, i32))) -> (T, T) {
     let t = Self::ADD(p0, p1);
-    let (a, b, c) = (tx_mul(p0, m.0), tx_mul(p1, m.1), tx_mul(t, m.2));
+    let (a, b, c) = (p0.tx_mul(m.0), p1.tx_mul(m.1), t.tx_mul(m.2));
     let out0 = b - c;
     let out1 = c - a;
     (out0, out1)
@@ -164,84 +172,84 @@ struct RotateSubShift;
 struct RotateNeg;
 struct RotateNegAvg;
 
-impl RotateKernel for RotateAdd {
-  const ADD: fn(i32, i32) -> i32 = Add::add;
-  const SUB: fn(i32, i32) -> i32 = Sub::sub;
-  const SHIFT: fn(i32) -> i32 = copy_fn;
+impl<T: TxOperations> RotateKernel<T> for RotateAdd {
+  const ADD: fn(T, T) -> T = Add::add;
+  const SUB: fn(T, T) -> T = Sub::sub;
+  const SHIFT: fn(T) -> T = T::copy_fn;
 }
 
-impl RotateKernel for RotateAddAvg {
-  const ADD: fn(i32, i32) -> i32 = add_avg;
-  const SUB: fn(i32, i32) -> i32 = Sub::sub;
-  const SHIFT: fn(i32) -> i32 = copy_fn;
+impl<T: TxOperations> RotateKernel<T> for RotateAddAvg {
+  const ADD: fn(T, T) -> T = T::add_avg;
+  const SUB: fn(T, T) -> T = Sub::sub;
+  const SHIFT: fn(T) -> T = T::copy_fn;
 }
 
-impl RotateKernel for RotateAddShift {
-  const ADD: fn(i32, i32) -> i32 = Add::add;
-  const SUB: fn(i32, i32) -> i32 = Sub::sub;
-  const SHIFT: fn(i32) -> i32 = rshift1;
+impl<T: TxOperations> RotateKernel<T> for RotateAddShift {
+  const ADD: fn(T, T) -> T = Add::add;
+  const SUB: fn(T, T) -> T = Sub::sub;
+  const SHIFT: fn(T) -> T = T::rshift1;
 }
 
-impl RotateKernel for RotateSub {
-  const ADD: fn(i32, i32) -> i32 = Sub::sub;
-  const SUB: fn(i32, i32) -> i32 = Add::add;
-  const SHIFT: fn(i32) -> i32 = copy_fn;
+impl<T: TxOperations> RotateKernel<T> for RotateSub {
+  const ADD: fn(T, T) -> T = Sub::sub;
+  const SUB: fn(T, T) -> T = Add::add;
+  const SHIFT: fn(T) -> T = T::copy_fn;
 }
 
-impl RotateKernel for RotateSubAvg {
-  const ADD: fn(i32, i32) -> i32 = sub_avg;
-  const SUB: fn(i32, i32) -> i32 = Add::add;
-  const SHIFT: fn(i32) -> i32 = copy_fn;
+impl<T: TxOperations> RotateKernel<T> for RotateSubAvg {
+  const ADD: fn(T, T) -> T = T::sub_avg;
+  const SUB: fn(T, T) -> T = Add::add;
+  const SHIFT: fn(T) -> T = T::copy_fn;
 }
 
-impl RotateKernel for RotateSubShift {
-  const ADD: fn(i32, i32) -> i32 = Sub::sub;
-  const SUB: fn(i32, i32) -> i32 = Add::add;
-  const SHIFT: fn(i32) -> i32 = rshift1;
+impl<T: TxOperations> RotateKernel<T> for RotateSubShift {
+  const ADD: fn(T, T) -> T = T::sub;
+  const SUB: fn(T, T) -> T = Add::add;
+  const SHIFT: fn(T) -> T = T::rshift1;
 }
 
-impl RotateKernelNeg for RotateNeg {
-  const ADD: fn(i32, i32) -> i32 = Sub::sub;
+impl<T: TxOperations> RotateKernelNeg<T> for RotateNeg {
+  const ADD: fn(T, T) -> T = Sub::sub;
 }
 
-impl RotateKernelNeg for RotateNegAvg {
-  const ADD: fn(i32, i32) -> i32 = sub_avg;
+impl<T: TxOperations> RotateKernelNeg<T> for RotateNegAvg {
+  const ADD: fn(T, T) -> T = T::sub_avg;
 }
 
-fn butterfly_add(p0: i32, p1: i32) -> ((i32, i32), i32) {
+fn butterfly_add<T: TxOperations>(p0: T, p1: T) -> ((T, T), T) {
   let p0 = p0 + p1;
-  let p0h = rshift1(p0);
+  let p0h = p0.rshift1();
   let p1h = p1 - p0h;
   ((p0h, p0), p1h)
 }
 
-fn butterfly_sub(p0: i32, p1: i32) -> ((i32, i32), i32) {
+fn butterfly_sub<T: TxOperations>(p0: T, p1: T) -> ((T, T), T) {
   let p0 = p0 - p1;
-  let p0h = rshift1(p0);
+  let p0h = p0.rshift1();
   let p1h = p1 + p0h;
   ((p0h, p0), p1h)
 }
 
-fn butterfly_neg(p0: i32, p1: i32) -> (i32, (i32, i32)) {
+fn butterfly_neg<T: TxOperations>(p0: T, p1: T) -> (T, (T, T)) {
   let p1 = p0 - p1;
-  let p1h = rshift1(p1);
+  let p1h = p1.rshift1();
   let p0h = p0 - p1h;
   (p0h, (p1h, p1))
 }
 
-fn butterfly_add_asym(p0: (i32, i32), p1h: i32) -> (i32, i32) {
+fn butterfly_add_asym<T: TxOperations>(p0: (T, T), p1h: T) -> (T, T) {
   let p1 = p1h + p0.0;
   let p0 = p0.1 - p1;
   (p0, p1)
 }
 
-fn butterfly_sub_asym(p0: (i32, i32), p1h: i32) -> (i32, i32) {
+fn butterfly_sub_asym<T: TxOperations>(p0: (T, T), p1h: T) -> (T, T) {
   let p1 = p1h - p0.0;
   let p0 = p0.1 + p1;
   (p0, p1)
 }
 
-fn butterfly_neg_asym(p0h: i32, p1: (i32, i32)) -> (i32, i32) {
+fn butterfly_neg_asym<T: TxOperations>(p0h: T, p1: (T, T)) -> (T, T) {
   let p0 = p0h + p1.0;
   let p1 = p0 - p1.1;
   (p0, p1)
@@ -259,18 +267,20 @@ macro_rules! store_coeffs {
   };
 }
 
-fn daala_fdct_ii_2_asym(p0h: i32, p1: (i32, i32)) -> (i32, i32) {
+fn daala_fdct_ii_2_asym<T: TxOperations>(p0h: T, p1: (T, T)) -> (T, T) {
   butterfly_neg_asym(p0h, p1)
 }
 
-fn daala_fdst_iv_2_asym(p0: (i32, i32), p1h: (i32)) -> (i32, i32) {
+fn daala_fdst_iv_2_asym<T: TxOperations>(p0: (T, T), p1h: (T)) -> (T, T) {
   //   473/512 = (Sin[3*Pi/8] + Cos[3*Pi/8])/Sqrt[2] = 0.9238795325112867
   // 3135/4096 = (Sin[3*Pi/8] - Cos[3*Pi/8])*Sqrt[2] = 0.7653668647301795
   // 4433/8192 = Cos[3*Pi/8]*Sqrt[2]                 = 0.5411961001461971
   RotateAdd::half_kernel(p0, p1h, ((473, 9), (3135, 12), (4433, 13)))
 }
 
-fn daala_fdct_ii_4(q0: i32, q1: i32, q2: i32, q3: i32, output: &mut [i32]) {
+fn daala_fdct_ii_4<T: TxOperations>(
+  q0: T, q1: T, q2: T, q3: T, output: &mut [T]
+) {
   // +/- Butterflies with asymmetric output.
   let (q0h, q3) = butterfly_neg(q0, q3);
   let (q1, q2h) = butterfly_add(q1, q2);
@@ -282,8 +292,8 @@ fn daala_fdct_ii_4(q0: i32, q1: i32, q2: i32, q3: i32, output: &mut [i32]) {
   store_coeffs!(output, q0, q1, q2, q3);
 }
 
-fn daala_fdct4(input: &[i32], output: &mut [i32]) {
-  let mut temp_out: [i32; 4] = [0; 4];
+fn daala_fdct4<T: TxOperations>(input: &[T], output: &mut [T]) {
+  let mut temp_out: [T; 4] = [T::default(); 4];
   daala_fdct_ii_4(input[0], input[1], input[2], input[3], &mut temp_out);
 
   output[0] = temp_out[0];
@@ -292,28 +302,28 @@ fn daala_fdct4(input: &[i32], output: &mut [i32]) {
   output[3] = temp_out[3];
 }
 
-fn daala_fdst_vii_4(input: &[i32], output: &mut [i32]) {
+fn daala_fdst_vii_4<T: TxOperations>(input: &[T], output: &mut [T]) {
   let q0 = input[0];
   let q1 = input[1];
   let q2 = input[2];
   let q3 = input[3];
   let t0 = q1 + q3;
   // t1 = (q0 + q1 - q3)/2
-  let t1 = q1 + sub_avg(q0, t0);
+  let t1 = q1 + q0.sub_avg(t0);
   let t2 = q0 - q1;
   let t3 = q2;
   let t4 = q0 + q3;
   // 7021/16384 ~= 2*Sin[2*Pi/9]/3 ~= 0.428525073124360
-  let t0 = tx_mul(t0, (7021, 14));
+  let t0 = t0.tx_mul((7021, 14));
   // 37837/32768 ~= 4*Sin[3*Pi/9]/3 ~= 1.154700538379252
-  let t1 = tx_mul(t1, (37837, 15));
+  let t1 = t1.tx_mul((37837, 15));
   // 21513/32768 ~= 2*Sin[4*Pi/9]/3 ~= 0.656538502008139
-  let t2 = tx_mul(t2, (21513, 15));
+  let t2 = t2.tx_mul((21513, 15));
   // 37837/32768 ~= 4*Sin[3*Pi/9]/3 ~= 1.154700538379252
-  let t3 = tx_mul(t3, (37837, 15));
+  let t3 = t3.tx_mul((37837, 15));
   // 467/2048 ~= 2*Sin[1*Pi/9]/3 ~= 0.228013428883779
-  let t4 = tx_mul(t4, (467, 11));
-  let t3h = rshift1(t3);
+  let t4 = t4.tx_mul((467, 11));
+  let t3h = t3.rshift1();
   let u4 = t4 + t3h;
   output[0] = t0 + u4;
   output[1] = t1;
@@ -321,22 +331,22 @@ fn daala_fdst_vii_4(input: &[i32], output: &mut [i32]) {
   output[3] = t2 + (t3 - u4);
 }
 
-fn daala_fdct_ii_2(p0: i32, p1: i32) -> (i32, i32) {
+fn daala_fdct_ii_2<T: TxOperations>(p0: T, p1: T) -> (T, T) {
   // 11585/8192 = Sin[Pi/4] + Cos[Pi/4]  = 1.4142135623730951
   // 11585/8192 = 2*Cos[Pi/4]            = 1.4142135623730951
   let (p1, p0) = RotatePi4SubAvg::kernel(p1, p0, ((11585, 13), (11585, 13)));
   (p0, p1)
 }
 
-fn daala_fdst_iv_2(p0: i32, p1: i32) -> (i32, i32) {
+fn daala_fdst_iv_2<T: TxOperations>(p0: T, p1: T) -> (T, T) {
   // 10703/8192 = Sin[3*Pi/8] + Cos[3*Pi/8]  = 1.3065629648763766
   // 8867/16384 = Sin[3*Pi/8] - Cos[3*Pi/8]  = 0.5411961001461971
   //  3135/4096 = 2*Cos[3*Pi/8]              = 0.7653668647301796
   RotateAddAvg::kernel(p0, p1, ((10703, 13), (8867, 14), (3135, 12)))
 }
 
-fn daala_fdct_ii_4_asym(
-  q0h: i32, q1: (i32, i32), q2h: i32, q3: (i32, i32), output: &mut [i32]
+fn daala_fdct_ii_4_asym<T: TxOperations>(
+  q0h: T, q1: (T, T), q2h: T, q3: (T, T), output: &mut [T]
 ) {
   // +/- Butterflies with asymmetric input.
   let (q0, q3) = butterfly_neg_asym(q0h, q3);
@@ -349,8 +359,8 @@ fn daala_fdct_ii_4_asym(
   store_coeffs!(output, q0, q1, q2, q3);
 }
 
-fn daala_fdst_iv_4_asym(
-  q0: (i32, i32), q1h: i32, q2: (i32, i32), q3h: i32, output: &mut [i32]
+fn daala_fdst_iv_4_asym<T: TxOperations>(
+  q0: (T, T), q1h: T, q2: (T, T), q3h: T, output: &mut [T]
 ) {
   // Stage 0
   //  9633/16384 = (Sin[7*Pi/16] + Cos[7*Pi/16])/2 = 0.5879378012096793
@@ -371,8 +381,8 @@ fn daala_fdst_iv_4_asym(
   );
 
   // Stage 1
-  let (q2, q3) = butterfly_sub_asym((rshift1(q2), q2), q3);
-  let (q0, q1) = butterfly_sub_asym((rshift1(q0), q0), q1);
+  let (q2, q3) = butterfly_sub_asym((q2.rshift1(), q2), q3);
+  let (q0, q1) = butterfly_sub_asym((q0.rshift1(), q0), q1);
 
   // Stage 2
   // 11585/8192 = Sin[Pi/4] + Cos[Pi/4] = 1.4142135623730951
@@ -382,9 +392,8 @@ fn daala_fdst_iv_4_asym(
   store_coeffs!(output, q0, q1, q2, q3);
 }
 
-fn daala_fdct_ii_8(
-  r0: i32, r1: i32, r2: i32, r3: i32, r4: i32, r5: i32, r6: i32, r7: i32,
-  output: &mut [i32]
+fn daala_fdct_ii_8<T: TxOperations>(
+  r0: T, r1: T, r2: T, r3: T, r4: T, r5: T, r6: T, r7: T, output: &mut [T]
 ) {
   // +/- Butterflies with asymmetric output.
   let (r0h, r7) = butterfly_neg(r0, r7);
@@ -398,8 +407,8 @@ fn daala_fdct_ii_8(
   output[4..8].reverse();
 }
 
-fn daala_fdct8(input: &[i32], output: &mut [i32]) {
-  let mut temp_out: [i32; 8] = [0; 8];
+fn daala_fdct8<T: TxOperations>(input: &[T], output: &mut [T]) {
+  let mut temp_out: [T; 8] = [T::default(); 8];
   daala_fdct_ii_8(
     input[0],
     input[1],
@@ -422,9 +431,8 @@ fn daala_fdct8(input: &[i32], output: &mut [i32]) {
   output[7] = temp_out[7];
 }
 
-fn daala_fdst_iv_8(
-  r0: i32, r1: i32, r2: i32, r3: i32, r4: i32, r5: i32, r6: i32, r7: i32,
-  output: &mut [i32]
+fn daala_fdst_iv_8<T: TxOperations>(
+  r0: T, r1: T, r2: T, r3: T, r4: T, r5: T, r6: T, r7: T, output: &mut [T]
 ) {
   // Stage 0
   // 17911/16384 = Sin[15*Pi/32] + Cos[15*Pi/32] = 1.0932018670017576
@@ -478,8 +486,8 @@ fn daala_fdst_iv_8(
   store_coeffs!(output, r0, r1, r2, r3, r4, r5, r6, r7);
 }
 
-fn daala_fdst8(input: &[i32], output: &mut [i32]) {
-  let mut temp_out: [i32; 8] = [0; 8];
+fn daala_fdst8<T: TxOperations>(input: &[T], output: &mut [T]) {
+  let mut temp_out: [T; 8] = [T::default(); 8];
   daala_fdst_iv_8(
     input[0],
     input[1],
@@ -502,7 +510,9 @@ fn daala_fdst8(input: &[i32], output: &mut [i32]) {
   output[7] = temp_out[7];
 }
 
-fn daala_fdst_iv_4(q0: i32, q1: i32, q2: i32, q3: i32, output: &mut [i32]) {
+fn daala_fdst_iv_4<T: TxOperations>(
+  q0: T, q1: T, q2: T, q3: T, output: &mut [T]
+) {
   // Stage 0
   // 13623/16384 = (Sin[7*Pi/16] + Cos[7*Pi/16])/Sqrt[2] = 0.831469612302545
   //   4551/4096 = (Sin[7*Pi/16] - Cos[7*Pi/16])*Sqrt[2] = 1.111140466039204
@@ -516,8 +526,8 @@ fn daala_fdst_iv_4(q0: i32, q1: i32, q2: i32, q3: i32, output: &mut [i32]) {
     RotateSubShift::kernel(q2, q1, ((16069, 14), (12785, 15), (1609, 11)));
 
   // Stage 1
-  let (q2, q3) = butterfly_sub_asym((rshift1(q2), q2), q3);
-  let (q0, q1) = butterfly_sub_asym((rshift1(q0), q0), q1);
+  let (q2, q3) = butterfly_sub_asym((q2.rshift1(), q2), q3);
+  let (q0, q1) = butterfly_sub_asym((q0.rshift1(), q0), q1);
 
   // Stage 2
   // 11585/8192 = Sin[Pi/4] + Cos[Pi/4] = 1.4142135623730951
@@ -527,9 +537,9 @@ fn daala_fdst_iv_4(q0: i32, q1: i32, q2: i32, q3: i32, output: &mut [i32]) {
   store_coeffs!(output, q0, q1, q2, q3);
 }
 
-fn daala_fdct_ii_8_asym(
-  r0h: i32, r1: (i32, i32), r2h: i32, r3: (i32, i32), r4h: i32,
-  r5: (i32, i32), r6h: i32, r7: (i32, i32), output: &mut [i32]
+fn daala_fdct_ii_8_asym<T: TxOperations>(
+  r0h: T, r1: (T, T), r2h: T, r3: (T, T), r4h: T, r5: (T, T), r6h: T,
+  r7: (T, T), output: &mut [T]
 ) {
   // +/- Butterflies with asymmetric input.
   let (r0, r7) = butterfly_neg_asym(r0h, r7);
@@ -543,9 +553,9 @@ fn daala_fdct_ii_8_asym(
   output[4..8].reverse();
 }
 
-fn daala_fdst_iv_8_asym(
-  r0: (i32, i32), r1h: i32, r2: (i32, i32), r3h: i32, r4: (i32, i32),
-  r5h: i32, r6: (i32, i32), r7h: i32, output: &mut [i32]
+fn daala_fdst_iv_8_asym<T: TxOperations>(
+  r0: (T, T), r1h: T, r2: (T, T), r3h: T, r4: (T, T), r5h: T, r6: (T, T),
+  r7h: T, output: &mut [T]
 ) {
   // Stage 0
   // 12665/16384 = (Sin[15*Pi/32] + Cos[15*Pi/32])/Sqrt[2] = 0.77301045336274
@@ -599,10 +609,9 @@ fn daala_fdst_iv_8_asym(
   store_coeffs!(output, r0, r1, r2, r3, r4, r5, r6, r7);
 }
 
-fn daala_fdct_ii_16(
-  s0: i32, s1: i32, s2: i32, s3: i32, s4: i32, s5: i32, s6: i32, s7: i32,
-  s8: i32, s9: i32, sa: i32, sb: i32, sc: i32, sd: i32, se: i32, sf: i32,
-  output: &mut [i32]
+fn daala_fdct_ii_16<T: TxOperations>(
+  s0: T, s1: T, s2: T, s3: T, s4: T, s5: T, s6: T, s7: T, s8: T, s9: T, sa: T,
+  sb: T, sc: T, sd: T, se: T, sf: T, output: &mut [T]
 ) {
   // +/- Butterflies with asymmetric output.
   let (s0h, sf) = butterfly_neg(s0, sf);
@@ -620,8 +629,8 @@ fn daala_fdct_ii_16(
   output[8..16].reverse();
 }
 
-fn daala_fdct16(input: &[i32], output: &mut [i32]) {
-  let mut temp_out: [i32; 16] = [0; 16];
+fn daala_fdct16<T: TxOperations>(input: &[T], output: &mut [T]) {
+  let mut temp_out: [T; 16] = [T::default(); 16];
   daala_fdct_ii_16(
     input[0],
     input[1],
@@ -660,10 +669,9 @@ fn daala_fdct16(input: &[i32], output: &mut [i32]) {
   output[15] = temp_out[15];
 }
 
-fn daala_fdst_iv_16(
-  s0: i32, s1: i32, s2: i32, s3: i32, s4: i32, s5: i32, s6: i32, s7: i32,
-  s8: i32, s9: i32, sa: i32, sb: i32, sc: i32, sd: i32, se: i32, sf: i32,
-  output: &mut [i32]
+fn daala_fdst_iv_16<T: TxOperations>(
+  s0: T, s1: T, s2: T, s3: T, s4: T, s5: T, s6: T, s7: T, s8: T, s9: T, sa: T,
+  sb: T, sc: T, sd: T, se: T, sf: T, output: &mut [T]
 ) {
   // Stage 0
   // 24279/32768 = (Sin[31*Pi/64] + Cos[31*Pi/64])/Sqrt[2] = 0.74095112535496
@@ -708,14 +716,14 @@ fn daala_fdst_iv_16(
     RotateSubShift::kernel(s8, s7, ((32729, 15), (201, 11), (1945, 11)));
 
   // Stage 1
-  let (s0, s7) = butterfly_sub_asym((rshift1(s0), s0), s7);
-  let (s8, sf) = butterfly_sub_asym((rshift1(s8), s8), sf);
-  let (s4, s3) = butterfly_add_asym((rshift1(s4), s4), s3);
-  let (sc, sb) = butterfly_add_asym((rshift1(sc), sc), sb);
-  let (s2, s5) = butterfly_sub_asym((rshift1(s2), s2), s5);
-  let (sa, sd) = butterfly_sub_asym((rshift1(sa), sa), sd);
-  let (s6, s1) = butterfly_add_asym((rshift1(s6), s6), s1);
-  let (se, s9) = butterfly_add_asym((rshift1(se), se), s9);
+  let (s0, s7) = butterfly_sub_asym((s0.rshift1(), s0), s7);
+  let (s8, sf) = butterfly_sub_asym((s8.rshift1(), s8), sf);
+  let (s4, s3) = butterfly_add_asym((s4.rshift1(), s4), s3);
+  let (sc, sb) = butterfly_add_asym((sc.rshift1(), sc), sb);
+  let (s2, s5) = butterfly_sub_asym((s2.rshift1(), s2), s5);
+  let (sa, sd) = butterfly_sub_asym((sa.rshift1(), sa), sd);
+  let (s6, s1) = butterfly_add_asym((s6.rshift1(), s6), s1);
+  let (se, s9) = butterfly_add_asym((se.rshift1(), se), s9);
 
   // Stage 2
   let ((_s8h, s8), s4h) = butterfly_add(s8, s4);
@@ -754,10 +762,10 @@ fn daala_fdst_iv_16(
   let (s0, s1) = butterfly_sub_asym(s0, s1h);
   let (sf, se) = butterfly_add_asym(sf, seh);
   let (sd, s3) = butterfly_add_asym(sd, s3h);
-  let (s7, s6) = butterfly_add_asym((rshift1(s7), s7), s6);
-  let (s8, s9) = butterfly_sub_asym((rshift1(s8), s8), s9);
-  let (sa, sb) = butterfly_sub_asym((rshift1(sa), sa), sb);
-  let (s5, s4) = butterfly_add_asym((rshift1(s5), s5), s4);
+  let (s7, s6) = butterfly_add_asym((s7.rshift1(), s7), s6);
+  let (s8, s9) = butterfly_sub_asym((s8.rshift1(), s8), s9);
+  let (sa, sb) = butterfly_sub_asym((sa.rshift1(), sa), sb);
+  let (s5, s4) = butterfly_add_asym((s5.rshift1(), s5), s4);
 
   // Stage 5
   //    669/512 = Sin[3*Pi/8] + Cos[3*Pi/8] = 1.3065629648763766
@@ -785,8 +793,8 @@ fn daala_fdst_iv_16(
   );
 }
 
-fn daala_fdst16(input: &[i32], output: &mut [i32]) {
-  let mut temp_out: [i32; 16] = [0; 16];
+fn daala_fdst16<T: TxOperations>(input: &[T], output: &mut [T]) {
+  let mut temp_out: [T; 16] = [T::default(); 16];
   daala_fdst_iv_16(
     input[0],
     input[1],
@@ -825,11 +833,10 @@ fn daala_fdst16(input: &[i32], output: &mut [i32]) {
   output[15] = temp_out[15];
 }
 
-fn daala_fdct_ii_16_asym(
-  s0h: i32, s1: (i32, i32), s2h: i32, s3: (i32, i32), s4h: i32,
-  s5: (i32, i32), s6h: i32, s7: (i32, i32), s8h: i32, s9: (i32, i32),
-  sah: i32, sb: (i32, i32), sch: i32, sd: (i32, i32), seh: i32,
-  sf: (i32, i32), output: &mut [i32]
+fn daala_fdct_ii_16_asym<T: TxOperations>(
+  s0h: T, s1: (T, T), s2h: T, s3: (T, T), s4h: T, s5: (T, T), s6h: T,
+  s7: (T, T), s8h: T, s9: (T, T), sah: T, sb: (T, T), sch: T, sd: (T, T),
+  seh: T, sf: (T, T), output: &mut [T]
 ) {
   // +/- Butterflies with asymmetric input.
   let (s0, sf) = butterfly_neg_asym(s0h, sf);
@@ -847,11 +854,10 @@ fn daala_fdct_ii_16_asym(
   output[8..16].reverse();
 }
 
-fn daala_fdst_iv_16_asym(
-  s0: (i32, i32), s1h: i32, s2: (i32, i32), s3h: i32, s4: (i32, i32),
-  s5h: i32, s6: (i32, i32), s7h: i32, s8: (i32, i32), s9h: i32,
-  sa: (i32, i32), sbh: i32, sc: (i32, i32), sdh: i32, se: (i32, i32),
-  sfh: i32, output: &mut [i32]
+fn daala_fdst_iv_16_asym<T: TxOperations>(
+  s0: (T, T), s1h: T, s2: (T, T), s3h: T, s4: (T, T), s5h: T, s6: (T, T),
+  s7h: T, s8: (T, T), s9h: T, sa: (T, T), sbh: T, sc: (T, T), sdh: T,
+  se: (T, T), sfh: T, output: &mut [T]
 ) {
   // Stage 0
   //   1073/2048 = (Sin[31*Pi/64] + Cos[31*Pi/64])/2 = 0.5239315652662953
@@ -905,14 +911,14 @@ fn daala_fdst_iv_16_asym(
   );
 
   // Stage 1
-  let (s0, s7) = butterfly_sub_asym((rshift1(s0), s0), s7);
-  let (s8, sf) = butterfly_sub_asym((rshift1(s8), s8), sf);
-  let (s4, s3) = butterfly_add_asym((rshift1(s4), s4), s3);
-  let (sc, sb) = butterfly_add_asym((rshift1(sc), sc), sb);
-  let (s2, s5) = butterfly_sub_asym((rshift1(s2), s2), s5);
-  let (sa, sd) = butterfly_sub_asym((rshift1(sa), sa), sd);
-  let (s6, s1) = butterfly_add_asym((rshift1(s6), s6), s1);
-  let (se, s9) = butterfly_add_asym((rshift1(se), se), s9);
+  let (s0, s7) = butterfly_sub_asym((s0.rshift1(), s0), s7);
+  let (s8, sf) = butterfly_sub_asym((s8.rshift1(), s8), sf);
+  let (s4, s3) = butterfly_add_asym((s4.rshift1(), s4), s3);
+  let (sc, sb) = butterfly_add_asym((sc.rshift1(), sc), sb);
+  let (s2, s5) = butterfly_sub_asym((s2.rshift1(), s2), s5);
+  let (sa, sd) = butterfly_sub_asym((sa.rshift1(), sa), sd);
+  let (s6, s1) = butterfly_add_asym((s6.rshift1(), s6), s1);
+  let (se, s9) = butterfly_add_asym((se.rshift1(), se), s9);
 
   // Stage 2
   let ((_s8h, s8), s4h) = butterfly_add(s8, s4);
@@ -951,10 +957,10 @@ fn daala_fdst_iv_16_asym(
   let (s0, s1) = butterfly_sub_asym(s0, s1h);
   let (sf, se) = butterfly_add_asym(sf, seh);
   let (sd, s3) = butterfly_add_asym(sd, s3h);
-  let (s7, s6) = butterfly_add_asym((rshift1(s7), s7), s6);
-  let (s8, s9) = butterfly_sub_asym((rshift1(s8), s8), s9);
-  let (sa, sb) = butterfly_sub_asym((rshift1(sa), sa), sb);
-  let (s5, s4) = butterfly_add_asym((rshift1(s5), s5), s4);
+  let (s7, s6) = butterfly_add_asym((s7.rshift1(), s7), s6);
+  let (s8, s9) = butterfly_sub_asym((s8.rshift1(), s8), s9);
+  let (sa, sb) = butterfly_sub_asym((sa.rshift1(), sa), sb);
+  let (s5, s4) = butterfly_add_asym((s5.rshift1(), s5), s4);
 
   // Stage 5
   // 10703/8192 = Sin[3*Pi/8] + Cos[3*Pi/8] = 1.3065629648763766
@@ -982,12 +988,11 @@ fn daala_fdst_iv_16_asym(
   );
 }
 
-fn daala_fdct_ii_32(
-  t0: i32, t1: i32, t2: i32, t3: i32, t4: i32, t5: i32, t6: i32, t7: i32,
-  t8: i32, t9: i32, ta: i32, tb: i32, tc: i32, td: i32, te: i32, tf: i32,
-  tg: i32, th: i32, ti: i32, tj: i32, tk: i32, tl: i32, tm: i32, tn: i32,
-  to: i32, tp: i32, tq: i32, tr: i32, ts: i32, tt: i32, tu: i32, tv: i32,
-  output: &mut [i32]
+fn daala_fdct_ii_32<T: TxOperations>(
+  t0: T, t1: T, t2: T, t3: T, t4: T, t5: T, t6: T, t7: T, t8: T, t9: T, ta: T,
+  tb: T, tc: T, td: T, te: T, tf: T, tg: T, th: T, ti: T, tj: T, tk: T, tl: T,
+  tm: T, tn: T, to: T, tp: T, tq: T, tr: T, ts: T, tt: T, tu: T, tv: T,
+  output: &mut [T]
 ) {
   // +/- Butterflies with asymmetric output.
   let (t0h, tv) = butterfly_neg(t0, tv);
@@ -1049,8 +1054,8 @@ fn daala_fdct_ii_32(
   output[16..32].reverse();
 }
 
-fn daala_fdct32(input: &[i32], output: &mut [i32]) {
-  let mut temp_out: [i32; 32] = [0; 32];
+fn daala_fdct32<T: TxOperations>(input: &[T], output: &mut [T]) {
+  let mut temp_out: [T; 32] = [T::default(); 32];
   daala_fdct_ii_32(
     input[0],
     input[1],
@@ -1121,14 +1126,12 @@ fn daala_fdct32(input: &[i32], output: &mut [i32]) {
   output[31] = temp_out[31];
 }
 
-fn daala_fdct_ii_32_asym(
-  t0h: i32, t1: (i32, i32), t2h: i32, t3: (i32, i32), t4h: i32,
-  t5: (i32, i32), t6h: i32, t7: (i32, i32), t8h: i32, t9: (i32, i32),
-  tah: i32, tb: (i32, i32), tch: i32, td: (i32, i32), teh: i32,
-  tf: (i32, i32), tgh: i32, th: (i32, i32), tih: i32, tj: (i32, i32),
-  tkh: i32, tl: (i32, i32), tmh: i32, tn: (i32, i32), toh: i32,
-  tp: (i32, i32), tqh: i32, tr: (i32, i32), tsh: i32, tt: (i32, i32),
-  tuh: i32, tv: (i32, i32), output: &mut [i32]
+fn daala_fdct_ii_32_asym<T: TxOperations>(
+  t0h: T, t1: (T, T), t2h: T, t3: (T, T), t4h: T, t5: (T, T), t6h: T,
+  t7: (T, T), t8h: T, t9: (T, T), tah: T, tb: (T, T), tch: T, td: (T, T),
+  teh: T, tf: (T, T), tgh: T, th: (T, T), tih: T, tj: (T, T), tkh: T,
+  tl: (T, T), tmh: T, tn: (T, T), toh: T, tp: (T, T), tqh: T, tr: (T, T),
+  tsh: T, tt: (T, T), tuh: T, tv: (T, T), output: &mut [T]
 ) {
   // +/- Butterflies with asymmetric input.
   let (t0, tv) = butterfly_neg_asym(t0h, tv);
@@ -1190,14 +1193,12 @@ fn daala_fdct_ii_32_asym(
   output[16..32].reverse();
 }
 
-fn daala_fdst_iv_32_asym(
-  t0: (i32, i32), t1h: i32, t2: (i32, i32), t3h: i32, t4: (i32, i32),
-  t5h: i32, t6: (i32, i32), t7h: i32, t8: (i32, i32), t9h: i32,
-  ta: (i32, i32), tbh: i32, tc: (i32, i32), tdh: i32, te: (i32, i32),
-  tfh: i32, tg: (i32, i32), thh: i32, ti: (i32, i32), tjh: i32,
-  tk: (i32, i32), tlh: i32, tm: (i32, i32), tnh: i32, to: (i32, i32),
-  tph: i32, tq: (i32, i32), trh: i32, ts: (i32, i32), tth: i32,
-  tu: (i32, i32), tvh: i32, output: &mut [i32]
+fn daala_fdst_iv_32_asym<T: TxOperations>(
+  t0: (T, T), t1h: T, t2: (T, T), t3h: T, t4: (T, T), t5h: T, t6: (T, T),
+  t7h: T, t8: (T, T), t9h: T, ta: (T, T), tbh: T, tc: (T, T), tdh: T,
+  te: (T, T), tfh: T, tg: (T, T), thh: T, ti: (T, T), tjh: T, tk: (T, T),
+  tlh: T, tm: (T, T), tnh: T, to: (T, T), tph: T, tq: (T, T), trh: T,
+  ts: (T, T), tth: T, tu: (T, T), tvh: T, output: &mut [T]
 ) {
   // Stage 0
   // Sin[63*Pi/128] + Cos[63*Pi/128] = 1.0242400472191164
@@ -1403,10 +1404,10 @@ fn daala_fdst_iv_32_asym(
   let (tu, tv) = butterfly_sub_asym(tu, tvh);
   let (ts, t2) = butterfly_sub_asym(ts, t2h);
   let (t3, tt) = butterfly_sub_asym(t3, tth);
-  let (t5, t4) = butterfly_add_asym((rshift1(t5), t5), t4h);
-  let (tq, tr) = butterfly_sub_asym((rshift1(tq), tq), trh);
-  let (t7, t6) = butterfly_add_asym((rshift1(t7), t7), t6h);
-  let (to, tp) = butterfly_sub_asym((rshift1(to), to), tph);
+  let (t5, t4) = butterfly_add_asym((t5.rshift1(), t5), t4h);
+  let (tq, tr) = butterfly_sub_asym((tq.rshift1(), tq), trh);
+  let (t7, t6) = butterfly_add_asym((t7.rshift1(), t7), t6h);
+  let (to, tp) = butterfly_sub_asym((to.rshift1(), to), tph);
   let (t9, t8) = butterfly_add_asym(t9, t8h);
   let (tm, tn) = butterfly_sub_asym(tm, tnh);
   let (tk, ta) = butterfly_sub_asym(tk, tah);
@@ -1463,10 +1464,10 @@ fn daala_fdst_iv_32_asym(
   );
 }
 
-fn daala_fdct64(input: &[i32], output: &mut [i32]) {
+fn daala_fdct64<T: TxOperations>(input: &[T], output: &mut [T]) {
   // Use arrays to avoid ridiculous variable names
-  let mut asym: [(i32, i32); 32] = [(0, 0); 32];
-  let mut half: [i32; 32] = [0; 32];
+  let mut asym: [(T, T); 32] = [<(T, T)>::default(); 32];
+  let mut half: [T; 32] = [T::default(); 32];
   // +/- Butterflies with asymmetric output.
   {
     let mut butterfly_pair = |i: usize| {
@@ -1496,7 +1497,7 @@ fn daala_fdct64(input: &[i32], output: &mut [i32]) {
     butterfly_pair(15);
   }
 
-  let mut temp_out: [i32; 64] = [0; 64];
+  let mut temp_out: [T; 64] = [T::default(); 64];
   // Embedded 2-point transforms with asymmetric input.
   daala_fdct_ii_32_asym(
     half[0],
@@ -1596,25 +1597,25 @@ fn daala_fdct64(input: &[i32], output: &mut [i32]) {
   reorder_4(15, 15);
 }
 
-fn fidentity4(input: &[i32], output: &mut [i32]) {
+fn fidentity4<T: TxOperations>(input: &[T], output: &mut [T]) {
   for i in 0..4 {
     output[i] = input[i];
   }
 }
 
-fn fidentity8(input: &[i32], output: &mut [i32]) {
+fn fidentity8<T: TxOperations>(input: &[T], output: &mut [T]) {
   for i in 0..8 {
     output[i] = input[i];
   }
 }
 
-fn fidentity16(input: &[i32], output: &mut [i32]) {
+fn fidentity16<T: TxOperations>(input: &[T], output: &mut [T]) {
   for i in 0..16 {
     output[i] = input[i];
   }
 }
 
-fn fidentity32(input: &[i32], output: &mut [i32]) {
+fn fidentity32<T: TxOperations>(input: &[T], output: &mut [T]) {
   for i in 0..32 {
     output[i] = input[i];
   }
