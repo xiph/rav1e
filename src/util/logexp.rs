@@ -209,6 +209,18 @@ fn blog64(w: i64) -> i64 {
   q57(ipart) + z
 }
 
+// Converts a Q57 fixed-point fraction to Q24 by rounding.
+#[allow(unused)]
+const fn q57_to_q24(v: i64) -> i32 {
+  (((v >> 32) + 1) >> 1) as i32
+}
+
+// Converts a Q24 fixed-point fraction to Q57.
+#[allow(unused)]
+const fn q24_to_q57(v: i32) -> i64 {
+  (v as i64) << 33
+}
+
 #[cfg(test)]
 mod test {
   use super::{bexp64, blog64};
