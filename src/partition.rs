@@ -246,7 +246,7 @@ impl BlockSize {
 
     (offset_x, offset_y)
   }
-  
+
   pub fn greater_than(self, other: BlockSize) -> bool {
     (self.width() > other.width() && self.height() >= other.height()) ||
     (self.width() >= other.width() && self.height() > other.height())
@@ -899,69 +899,216 @@ pub enum MvJointType {
   MV_JOINT_HNZVNZ = 3  /* Both components nonzero */
 }
 
+pub fn get_intra_edges<'a>(
+  dst: &'a PlaneSlice<'a>,
+  tx_size: TxSize,
+  bit_depth: usize,
+  p: usize,
+  frame_w_in_b: usize,
+  frame_h_in_b: usize,
+  opt_mode: Option<PredictionMode>
+) -> AlignedArray<[u16; 4 * MAX_TX_SIZE + 1]> {
+
+  let mut edge_buf: AlignedArray<[u16; 4 * MAX_TX_SIZE + 1]> =
+    UninitializedAlignedArray();
+  let base = 128u16 << (bit_depth - 8);
+
+  {
+    // left pixels are order from bottom to top and right-aligned
+    let (left, not_left) = edge_buf.array.split_at_mut(2*MAX_TX_SIZE);
+    let (top_left, above) = not_left.split_at_mut(1);
+
+    let x = dst.x;
+    let y = dst.y;
+
+    let mut needs_left = true;
+    let mut needs_topleft = true;
+    let mut needs_top = true;
+    let mut needs_topright = true;
+    let mut needs_bottomleft = true;
+
+    if let Some(mut mode) = opt_mode {
+      mode = match mode {
+        PredictionMode::PAETH_PRED => match (x, y) {
+          (0, 0) => PredictionMode::DC_PRED,
+          (_, 0) => PredictionMode::H_PRED,
+          (0, _) => PredictionMode::V_PRED,
+          _ => PredictionMode::PAETH_PRED
+        },
+        _ => mode
+      };
+
+      let dc_or_cfl =
+        mode == PredictionMode::DC_PRED || mode == PredictionMode::UV_CFL_PRED;
+
+      needs_left = mode != PredictionMode::V_PRED && (!dc_or_cfl || x != 0);
+      needs_topleft = mode == PredictionMode::PAETH_PRED || mode == PredictionMode::D117_PRED
+      || mode == PredictionMode::D135_PRED || mode == PredictionMode::D153_PRED;
+      needs_top = mode != PredictionMode::H_PRED && (!dc_or_cfl || y != 0);
+      needs_topright = mode == PredictionMode::D45_PRED || mode == PredictionMode::D63_PRED;
+      needs_bottomleft = mode == PredictionMode::D207_PRED;
+    }
+
+    // Needs left
+    if needs_left {
+      if x != 0 {
+        let left_slice = dst.go_left(1);
+        for i in 0..tx_size.height() {
+          left[2*MAX_TX_SIZE - tx_size.height() + i] = left_slice.p(0, tx_size.height() - 1 - i);
+        }
+      } else {
+        let val = if y != 0 { dst.go_up(1).p(0, 0) } else { base + 1 };
+        for v in left[2*MAX_TX_SIZE - tx_size.height()..].iter_mut() {
+          *v = val
+        }
+      }
+    }
+
+    // Needs top-left
+    if needs_topleft {
+      top_left[0] = match (x, y) {
+        (0, 0) => base,
+        (_, 0) => dst.go_left(1).p(0, 0),
+        (0, _) => dst.go_up(1).p(0, 0),
+        _ => dst.go_up(1).go_left(1).p(0, 0)
+      };
+    }
+
+    // Needs top
+    if needs_top {
+      if y != 0 {
+        above[..tx_size.width()].copy_from_slice(&dst.go_up(1).as_slice()[..tx_size.width()]);
+      } else {
+        let val = if x != 0 { dst.go_left(1).p(0, 0) } else { base - 1 };
+        for v in above[..tx_size.width()].iter_mut() {
+          *v = val;
+        }
+      }
+    }
+
+    // Needs top right
+    if needs_topright {
+      let bo = if p == 0 {
+        BlockOffset { x: x as usize / 4, y: y as usize / 4 }
+      } else {
+        BlockOffset { x: x as usize / 2, y: y as usize / 2 }
+      };
+      let bsize = if p == 0 {
+        BlockSize::from_width_and_height(tx_size.width(), tx_size.height())
+      } else {
+        BlockSize::from_width_and_height(2*tx_size.width(), 2*tx_size.height())
+      };
+      let num_avail = if y != 0 && has_tr(&bo, bsize) {
+        tx_size.height().min((if p == 0 { MI_SIZE } else { MI_SIZE / 2 }) * frame_w_in_b - x as usize - tx_size.width())
+      } else {
+        0
+      };
+      if num_avail > 0 {
+        above[tx_size.width()..tx_size.width() + num_avail]
+        .copy_from_slice(&dst.go_up(1).as_slice()[tx_size.width()..tx_size.width() + num_avail]);
+      }
+      if num_avail < tx_size.height() {
+        let val = above[tx_size.width() + num_avail - 1];
+        for v in above[tx_size.width() + num_avail..tx_size.width() + tx_size.height()].iter_mut() {
+          *v = val;
+        }
+      }
+    }
+
+    // Needs bottom left
+    if needs_bottomleft {
+      let bo = if p == 0 {
+        BlockOffset { x: x as usize / 4, y: y as usize / 4 }
+      } else {
+        BlockOffset { x: x as usize / 2, y: y as usize / 2 }
+      };
+      let bsize = if p == 0 {
+        BlockSize::from_width_and_height(tx_size.width(), tx_size.height())
+      } else {
+        BlockSize::from_width_and_height(2*tx_size.width(), 2*tx_size.height())
+      };
+      let num_avail = if x != 0 && has_bl(&bo, bsize) {
+        tx_size.width().min((if p == 0 { MI_SIZE } else { MI_SIZE / 2 }) * frame_h_in_b - y as usize - tx_size.height())
+      } else {
+        0
+      };
+      if num_avail > 0 {
+        let left_slice = dst.go_left(1);
+        for i in 0..num_avail {
+          left[2*MAX_TX_SIZE - tx_size.height() - 1 - i] = left_slice.p(0, tx_size.height() + i);
+        }
+      }
+      if num_avail < tx_size.width() {
+        let val = left[2 * MAX_TX_SIZE - tx_size.height() - num_avail];
+        for v in left[(2 * MAX_TX_SIZE - tx_size.height() - tx_size.width())..(2 * MAX_TX_SIZE - tx_size.height() - num_avail)].iter_mut() {
+          *v = val;
+        }
+      }
+    }
+
+  }
+  edge_buf
+}
+
 impl PredictionMode {
   pub fn predict_intra<'a>(
     self, dst: &'a mut PlaneMutSlice<'a>, tx_size: TxSize, bit_depth: usize,
-    ac: &[i16], alpha: i16, p: usize, frame_w_in_b: usize, frame_h_in_b: usize
+    ac: &[i16], alpha: i16, edge_buf: &AlignedArray<[u16; 4 * MAX_TX_SIZE + 1]>
   ) {
     assert!(self.is_intra());
 
     match tx_size {
       TxSize::TX_4X4 =>
-        self.predict_intra_inner::<Block4x4>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
+        self.predict_intra_inner::<Block4x4>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_8X8 =>
-        self.predict_intra_inner::<Block8x8>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
+        self.predict_intra_inner::<Block8x8>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_16X16 =>
-        self.predict_intra_inner::<Block16x16>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
+        self.predict_intra_inner::<Block16x16>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_32X32 =>
-        self.predict_intra_inner::<Block32x32>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
+        self.predict_intra_inner::<Block32x32>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_64X64 =>
-        self.predict_intra_inner::<Block64x64>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
+        self.predict_intra_inner::<Block64x64>(dst, bit_depth, ac, alpha, edge_buf),
 
       TxSize::TX_4X8 =>
-        self.predict_intra_inner::<Block4x8>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
+        self.predict_intra_inner::<Block4x8>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_8X4 =>
-        self.predict_intra_inner::<Block8x4>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
+        self.predict_intra_inner::<Block8x4>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_8X16 =>
-        self.predict_intra_inner::<Block8x16>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
+        self.predict_intra_inner::<Block8x16>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_16X8 =>
-        self.predict_intra_inner::<Block16x8>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
+        self.predict_intra_inner::<Block16x8>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_16X32 =>
-        self.predict_intra_inner::<Block16x32>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
+        self.predict_intra_inner::<Block16x32>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_32X16 =>
-        self.predict_intra_inner::<Block32x16>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
+        self.predict_intra_inner::<Block32x16>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_32X64 =>
-        self.predict_intra_inner::<Block32x64>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
+        self.predict_intra_inner::<Block32x64>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_64X32 =>
-        self.predict_intra_inner::<Block64x32>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
+        self.predict_intra_inner::<Block64x32>(dst, bit_depth, ac, alpha, edge_buf),
 
       TxSize::TX_4X16 =>
-        self.predict_intra_inner::<Block4x16>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
+        self.predict_intra_inner::<Block4x16>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_16X4 =>
-        self.predict_intra_inner::<Block16x4>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
+        self.predict_intra_inner::<Block16x4>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_8X32 =>
-        self.predict_intra_inner::<Block8x32>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
+        self.predict_intra_inner::<Block8x32>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_32X8 =>
-        self.predict_intra_inner::<Block32x8>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
+        self.predict_intra_inner::<Block32x8>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_16X64 =>
-        self.predict_intra_inner::<Block16x64>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
+        self.predict_intra_inner::<Block16x64>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_64X16 =>
-        self.predict_intra_inner::<Block64x16>(dst, bit_depth, ac, alpha, p, frame_w_in_b, frame_h_in_b),
+        self.predict_intra_inner::<Block64x16>(dst, bit_depth, ac, alpha, edge_buf),
     }
   }
 
   #[inline(always)]
   fn predict_intra_inner<'a, B: Intra<u16>>(
     self, dst: &'a mut PlaneMutSlice<'a>, bit_depth: usize, ac: &[i16],
-    alpha: i16, p: usize, frame_w_in_b: usize, frame_h_in_b: usize
+    alpha: i16, edge_buf: &AlignedArray<[u16; 4 * MAX_TX_SIZE + 1]>
   ) {
-    let base = 128u16 << (bit_depth - 8);
-
-    let mut edge_buf: AlignedArray<[u16; 4 * MAX_TX_SIZE + 1]> =
-      UninitializedAlignedArray();
     // left pixels are order from bottom to top and right-aligned
-    let (left, not_left) = edge_buf.array.split_at_mut(2*MAX_TX_SIZE);
-    let (top_left, above) = not_left.split_at_mut(1);
+    let (left, not_left) = edge_buf.array.split_at(2*MAX_TX_SIZE);
+    let (top_left, above) = not_left.split_at(1);
 
     let stride = dst.plane.cfg.stride;
     let x = dst.x;
@@ -982,106 +1129,6 @@ impl PredictionMode {
         },
       _ => self
     };
-
-    let dc_or_cfl =
-      mode == PredictionMode::DC_PRED || mode == PredictionMode::UV_CFL_PRED;
-
-    // Needs left
-    if mode != PredictionMode::V_PRED && (!dc_or_cfl || x != 0) {
-      if x != 0 {
-        let left_slice = dst.go_left(1);
-        for i in 0..B::H {
-          left[2*MAX_TX_SIZE - B::H + i] = left_slice.p(0, B::H - 1 - i);
-        }
-      } else {
-        let val = if y != 0 { dst.go_up(1).p(0, 0) } else { base + 1 };
-        for v in left[2*MAX_TX_SIZE - B::H..].iter_mut() {
-          *v = val
-        }
-      }
-    }
-
-    // Needs top-left
-    if mode == PredictionMode::PAETH_PRED || mode == PredictionMode::D117_PRED
-     || mode == PredictionMode::D135_PRED || mode == PredictionMode::D153_PRED {
-      top_left[0] = match (x, y) {
-        (0, 0) => base,
-        (_, 0) => dst.go_left(1).p(0, 0),
-        (0, _) => dst.go_up(1).p(0, 0),
-        _ => dst.go_up(1).go_left(1).p(0, 0)
-      };
-    }
-
-    // Needs top
-    if mode != PredictionMode::H_PRED && (!dc_or_cfl || y != 0) {
-      if y != 0 {
-        above[..B::W].copy_from_slice(&dst.go_up(1).as_slice()[..B::W]);
-      } else {
-        let val = if x != 0 { dst.go_left(1).p(0, 0) } else { base - 1 };
-        for v in above[..B::W].iter_mut() {
-          *v = val;
-        }
-      }
-    }
-
-    // Needs top right
-    if mode == PredictionMode::D45_PRED || mode == PredictionMode::D63_PRED {
-      let bo = if p == 0 {
-        BlockOffset { x: x as usize / 4, y: y as usize / 4 }
-      } else {
-        BlockOffset { x: x as usize / 2, y: y as usize / 2 }
-      };
-      let bsize = if p == 0 {
-        BlockSize::from_width_and_height(B::W, B::H)
-      } else {
-        BlockSize::from_width_and_height(2*B::W, 2*B::H)
-      };
-      let num_avail = if y != 0 && has_tr(&bo, bsize) {
-        B::H.min((if p == 0 { MI_SIZE } else { MI_SIZE / 2 }) * frame_w_in_b - x as usize - B::W)
-      } else {
-        0
-      };
-      if num_avail > 0 {
-        above[B::W..B::W + num_avail].copy_from_slice(&dst.go_up(1).as_slice()[B::W..B::W + num_avail]);
-      }
-      if num_avail < B::H {
-        let val = above[B::W + num_avail - 1];
-        for v in above[B::W + num_avail..B::W + B::H].iter_mut() {
-          *v = val;
-        }
-      }
-    }
-
-    // Needs bottom left
-    if mode == PredictionMode::D207_PRED {
-      let bo = if p == 0 {
-        BlockOffset { x: x as usize / 4, y: y as usize / 4 }
-      } else {
-        BlockOffset { x: x as usize / 2, y: y as usize / 2 }
-      };
-      let bsize = if p == 0 {
-        BlockSize::from_width_and_height(B::W, B::H)
-      } else {
-        BlockSize::from_width_and_height(2*B::W, 2*B::H)
-      };
-      let num_avail = if x != 0 && has_bl(&bo, bsize) {
-        B::W.min((if p == 0 { MI_SIZE } else { MI_SIZE / 2 }) * frame_h_in_b - y as usize - B::H)
-      } else {
-        0
-      };
-      if num_avail > 0 {
-        let left_slice = dst.go_left(1);
-        for i in 0..num_avail {
-          left[2*MAX_TX_SIZE - B::H - 1 - i] = left_slice.p(0, B::H + i);
-        }
-      }
-      if num_avail < B::W {
-        let val = left[2 * MAX_TX_SIZE - B::H - num_avail];
-        for v in left[(2 * MAX_TX_SIZE - B::H - B::W)..(2 * MAX_TX_SIZE - B::H - num_avail)].iter_mut() {
-          *v = val;
-        }
-      }
-    }
 
     let slice = dst.as_mut_slice();
     let above_slice = &above[..B::W + B::H];
