@@ -12,6 +12,9 @@ use crate::encoder::*;
 use crate::metrics::calculate_frame_psnr;
 use crate::partition::*;
 use crate::rate::RCState;
+use crate::rate::FRAME_NSUBTYPES;
+use crate::rate::FRAME_SUBTYPE_I;
+use crate::rate::FRAME_SUBTYPE_P;
 use crate::scenechange::SceneChangeDetector;
 use self::EncoderStatus::*;
 
@@ -67,6 +70,7 @@ pub struct EncoderConfig {
   pub max_key_frame_interval: u64,
   pub low_latency: bool,
   pub quantizer: usize,
+  pub bitrate: i32,
   pub tune: Tune,
   pub speed_settings: SpeedSettings,
   /// `None` for one-pass encode. `Some(1)` or `Some(2)` for two-pass encoding.
@@ -101,6 +105,7 @@ impl EncoderConfig {
       max_key_frame_interval: 240,
       low_latency: false,
       quantizer: 100,
+      bitrate: 0,
       tune: Tune::Psnr,
       speed_settings: SpeedSettings::from_preset(speed),
       pass: None,
@@ -435,6 +440,12 @@ impl Config {
     // initialize with temporal delimiter
     let packet_data = TEMPORAL_DELIMITER.to_vec();
 
+    let maybe_ac_qi_max = if self.enc.quantizer < 255 {
+      Some(self.enc.quantizer as u8)
+    } else {
+      None
+    };
+
     Context {
       frame_count: 0,
       limit: 0,
@@ -448,7 +459,16 @@ impl Config {
       segment_start_frame: 0,
       keyframe_detector: SceneChangeDetector::new(self.enc.bit_depth),
       config: self.clone(),
-      rc_state: RCState::new(),
+      rc_state: RCState::new(
+        self.enc.width as i32,
+        self.enc.height as i32,
+        self.enc.time_base.num as i64,
+        self.enc.time_base.den as i64,
+        self.enc.bitrate,
+        maybe_ac_qi_max,
+        self.enc.max_key_frame_interval as i32
+      ),
+      maybe_prev_log_base_q: None,
       first_pass_data: FirstPassData {
         frames: Vec::new(),
       },
@@ -460,7 +480,7 @@ pub struct Context {
   //    timebase: Rational,
   frame_count: u64,
   limit: u64,
-  idx: u64,
+  pub(crate) idx: u64,
   frames_processed: u64,
   /// Maps frame *number* to frames
   frame_q: BTreeMap<u64, Option<Arc<Frame>>>, //    packet_q: VecDeque<Packet>
@@ -476,6 +496,7 @@ pub struct Context {
   keyframe_detector: SceneChangeDetector,
   pub config: Config,
   rc_state: RCState,
+  maybe_prev_log_base_q: Option<i64>,
   pub first_pass_data: FirstPassData,
 }
 
@@ -700,6 +721,8 @@ impl Context {
 
         let mut fs = FrameState::new(fi);
 
+        // TODO: Record the bits spent here against the original frame for rate
+        //  control purposes, or add a new frame subtype?
         let sef_data = encode_frame(fi, &mut fs);
         self.packet_data.extend(sef_data);
 
@@ -712,11 +735,22 @@ impl Context {
 
           if let Some(frame) = f.clone() {
             let fti = fi.get_frame_subtype();
-            let qps = self.rc_state.select_qi(fi, fti);
+            let qps =
+              self.rc_state.select_qi(self, fti, self.maybe_prev_log_base_q);
+            let fi = self.frame_data.get_mut(&idx).unwrap();
             fi.set_quantizers(&qps);
             let mut fs = FrameState::new_with_frame(fi, frame.clone());
 
+            // TODO: Trial encoding for first frame of each type.
             let data = encode_frame(fi, &mut fs);
+            self.maybe_prev_log_base_q = Some(qps.log_base_q);
+            // TODO: Add support for dropping frames.
+            self.rc_state.update_state(
+              (data.len() * 8) as i64,
+              fti,
+              qps.log_target_q,
+              false
+            );
             self.packet_data.extend(data);
 
             fs.rec.pad(fi.width, fi.height);
@@ -838,6 +872,79 @@ impl Context {
       }
     }
     FrameType::INTER
+  }
+
+  // Count the number of frames of each subtype in the next
+  //  reservoir_frame_delay frames.
+  // Returns the number of frames until the last keyframe in the next
+  //  reservoir_frame_delay frames, or the end of the interval, whichever
+  //  comes first.
+  pub(crate) fn guess_frame_subtypes(
+    &self, nframes: &mut [i32; FRAME_NSUBTYPES], reservoir_frame_delay: i32
+  ) -> i32 {
+    // TODO: Ideally this logic should be centralized, but the actual code used
+    //  to determine a frame's subtype is spread over many places and
+    //  intertwined with mutable state changes that occur when the frame is
+    //  actually encoded.
+    // So for now we just duplicate it here in stateless fashion.
+    for fti in 0..FRAME_NSUBTYPES {
+      nframes[fti] = 0;
+    }
+    let mut prev_keyframe = self.segment_start_idx;
+    let mut acc: [i32; FRAME_NSUBTYPES] = [0; FRAME_NSUBTYPES];
+    // Updates the frame counts with the accumulated values when we hit a
+    //  keyframe.
+    fn collect_counts(
+      nframes: &mut [i32; FRAME_NSUBTYPES], acc: &mut [i32; FRAME_NSUBTYPES]
+    ) {
+      for fti in 0..FRAME_NSUBTYPES {
+        nframes[fti] += acc[fti];
+        acc[fti] = 0;
+      }
+      acc[FRAME_SUBTYPE_I] += 1;
+    }
+    for idx in self.idx..(self.idx + reservoir_frame_delay as u64) {
+      if let Some(fd) = self.frame_data.get(&idx) {
+        if fd.frame_type == FrameType::KEY {
+          collect_counts(nframes, &mut acc);
+          prev_keyframe = idx;
+          continue;
+        }
+      } else if idx == 0
+        || idx - prev_keyframe >= self.config.enc.max_key_frame_interval
+      {
+        collect_counts(nframes, &mut acc);
+        prev_keyframe = idx;
+        continue;
+      }
+      // TODO: Implement golden P-frames.
+      let mut fti = FRAME_SUBTYPE_P;
+      if !self.config.enc.low_latency {
+        let pyramid_depth = 2;
+        let group_src_len = 1 << pyramid_depth;
+        let group_len = group_src_len + pyramid_depth;
+        let idx_in_group = (idx - prev_keyframe - 1) % group_len;
+        let lvl = if idx_in_group < pyramid_depth {
+          idx_in_group
+        } else {
+          pos_to_lvl(idx_in_group - pyramid_depth + 1, pyramid_depth)
+        };
+        fti += lvl as usize;
+      }
+      acc[fti] += 1;
+    }
+    if prev_keyframe <= self.idx {
+      // If there were no keyframes at all, or only the first frame was a
+      //  keyframe, the accumulators never flushed and still contain counts for
+      //  the entire buffer.
+      // In both cases, we return these counts.
+      collect_counts(nframes, &mut acc);
+      reservoir_frame_delay
+    } else {
+      // Otherwise, we discard what remains in the accumulators as they contain
+      //  the counts from and past the last keyframe.
+      (prev_keyframe - self.idx) as i32
+    }
   }
 }
 

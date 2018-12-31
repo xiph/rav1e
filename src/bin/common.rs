@@ -85,10 +85,16 @@ pub fn parse_cli() -> CliOptions {
     )
     .arg(
       Arg::with_name("QP")
-        .help("Quantizer (0-255)")
+        .help("Quantizer (0-255), smaller values are higher quality [default: 100]")
         .long("quantizer")
         .takes_value(true)
-        .default_value("100")
+    )
+    .arg(
+      Arg::with_name("BITRATE")
+        .help("Bitrate (kbps)")
+        .short("b")
+        .long("bitrate")
+        .takes_value(true)
     )
     .arg(
       Arg::with_name("SPEED")
@@ -247,7 +253,20 @@ pub fn parse_cli() -> CliOptions {
 }
 
 fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
-  let quantizer = matches.value_of("QP").unwrap().parse().unwrap();
+  let maybe_quantizer = matches.value_of("QP").map(|qp| qp.parse().unwrap());
+  let maybe_bitrate =
+    matches.value_of("BITRATE").map(|bitrate| bitrate.parse().unwrap());
+  let quantizer = maybe_quantizer.unwrap_or_else(|| {
+    if maybe_bitrate.is_some() {
+      // If a bitrate is specified, the quantizer is the maximum allowed (e.g.,
+      //  the minimum quality allowed), which by default should be
+      //  unconstrained.
+      255
+    } else {
+      100
+    }
+  });
+  let bitrate = maybe_bitrate.unwrap_or(0);
   if quantizer == 0 {
     unimplemented!("Lossless encoding not yet implemented");
   } else if quantizer > 255 {
@@ -347,6 +366,7 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
   };
 
   cfg.quantizer = quantizer;
+  cfg.bitrate = bitrate;
   cfg.show_psnr = matches.is_present("PSNR");
   cfg.pass = matches.value_of("PASS").map(|pass| pass.parse().unwrap());
   cfg.stats_file = if cfg.pass.is_some() {
