@@ -607,16 +607,23 @@ pub fn rdo_mode_decision(
     };
 
     let intra_mode_set = RAV1E_INTRA_MODES;
-    let mut sads = intra_mode_set.iter().map(|&luma_mode| {
-      let rec = &mut fs.rec.planes[0];
-      let po = bo.plane_offset(&rec.cfg);
-      luma_mode.predict_intra(&mut rec.mut_slice(&po), tx_size, seq.bit_depth, &[0i16; 2], 0, 0, fi.w_in_b, fi.h_in_b);
+    let mut sads = {
+      let edge_buf = {
+        let rec = &mut fs.rec.planes[0];
+        let po = bo.plane_offset(&rec.cfg);
+        get_intra_edges(&rec.slice(&po), tx_size, seq.bit_depth, 0, fi.w_in_b, fi.h_in_b, None)
+      };
+      intra_mode_set.iter().map(|&luma_mode| {
+        let rec = &mut fs.rec.planes[0];
+        let po = bo.plane_offset(&rec.cfg);
+        luma_mode.predict_intra(&mut rec.mut_slice(&po), tx_size, seq.bit_depth, &[0i16; 2], 0, &edge_buf);
 
-      let plane_org = fs.input.planes[0].slice(&po);
-      let plane_ref = rec.slice(&po);
+        let plane_org = fs.input.planes[0].slice(&po);
+        let plane_ref = rec.slice(&po);
 
-      (luma_mode, get_sad(&plane_org, &plane_ref, tx_size.height(), tx_size.width(), seq.bit_depth))
-    }).collect::<Vec<_>>();
+        (luma_mode, get_sad(&plane_org, &plane_ref, tx_size.height(), tx_size.width(), seq.bit_depth))
+      }).collect::<Vec<_>>()
+    };
 
     sads.sort_by_key(|a| a.1);
 
@@ -763,15 +770,14 @@ pub fn rdo_cfl_alpha(
       let po = bo.plane_offset(&fs.input.planes[p].cfg);
       (-16i16..17i16)
         .min_by_key(|&alpha| {
+          let edge_buf = get_intra_edges(&rec.slice(&po), uv_tx_size, bit_depth, p, 0, 0, Some(PredictionMode::UV_CFL_PRED));
           PredictionMode::UV_CFL_PRED.predict_intra(
             &mut rec.mut_slice(&po),
             uv_tx_size,
             bit_depth,
             &ac,
             alpha,
-            p,
-            0, // don't care about frame width for CFL prediction
-            0  // don't care about frame height for CFL prediction
+            &edge_buf
           );
           sse_wxh(
             &input.slice(&po),
