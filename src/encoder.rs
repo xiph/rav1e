@@ -1736,7 +1736,9 @@ pub fn encode_tx_block(
     assert!(tx_size.sqr() <= TxSize::TX_32X32 || tx_type == TxType::DCT_DCT);
 
     if mode.is_intra() {
-      mode.predict_intra(&mut rec.mut_slice(po), tx_size, fi.sequence.bit_depth, &ac, alpha, p, fi.w_in_b, fi.h_in_b);
+      let bit_depth = fi.sequence.bit_depth;
+      let edge_buf = get_intra_edges(&rec.slice(po), tx_size, bit_depth, p, fi.w_in_b, fi.h_in_b, Some(mode));
+      mode.predict_intra(&mut rec.mut_slice(po), tx_size, bit_depth, &ac, alpha, &edge_buf);
     }
 
     if skip { return (false, -1); }
