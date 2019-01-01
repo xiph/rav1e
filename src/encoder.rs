@@ -13,6 +13,7 @@ use context::*;
 use deblock::*;
 use ec::*;
 use lrf::*;
+use mc::*;
 use me::*;
 use partition::*;
 use plane::*;

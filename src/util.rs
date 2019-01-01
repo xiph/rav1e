@@ -131,7 +131,9 @@ macro_rules! cdf_size {
 }
 
 #[repr(align(16))]
-struct Align16;
+pub struct Align16;
+#[repr(align(32))]
+pub struct Align32;
 
 /// A 16 byte aligned array.
 /// # Examples
@@ -145,21 +147,21 @@ struct Align16;
 /// let mut x: AlignedArray<[i16; 64 * 64]> = UninitializedAlignedArray();
 /// assert!(x.array.as_ptr() as usize % 16 == 0);
 /// ```
-pub struct AlignedArray<ARRAY>
+pub struct AlignedArray<ARRAY, AlignType = Align16>
 where
   ARRAY: ?Sized
 {
-  _alignment: [Align16; 0],
+  _alignment: [AlignType; 0],
   pub array: ARRAY
 }
 
 #[allow(non_snake_case)]
-pub fn AlignedArray<ARRAY>(array: ARRAY) -> AlignedArray<ARRAY> {
+pub fn AlignedArray<ARRAY, AlignType>(array: ARRAY) -> AlignedArray<ARRAY, AlignType> {
   AlignedArray { _alignment: [], array }
 }
 
 #[allow(non_snake_case)]
-pub fn UninitializedAlignedArray<ARRAY>() -> AlignedArray<ARRAY> {
+pub fn UninitializedAlignedArray<ARRAY, AlignType>() -> AlignedArray<ARRAY, AlignType> {
   AlignedArray(unsafe { mem::uninitialized() })
 }
 

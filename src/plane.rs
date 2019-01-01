@@ -311,6 +311,20 @@ impl<'a> PlaneSlice<'a> {
     &self.plane.data[y * stride + x..]
   }
 
+  pub fn clamp(&self) -> PlaneSlice<'a> {
+    PlaneSlice {
+      plane: self.plane,
+      x: self
+        .x
+        .min(self.plane.cfg.width as isize)
+        .max(-(self.plane.cfg.xorigin as isize)),
+      y: self
+        .y
+        .min(self.plane.cfg.height as isize)
+        .max(-(self.plane.cfg.yorigin as isize))
+    }
+  }
+
   pub fn as_slice_w_width(&self, width: usize) -> &'a [u16] {
     let stride = self.plane.cfg.stride;
     let base = (self.y + self.plane.cfg.yorigin as isize) as usize * stride

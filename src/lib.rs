@@ -42,6 +42,7 @@ pub mod segmentation;
 pub mod cdef;
 pub mod lrf;
 pub mod encoder;
+pub mod mc;
 pub mod me;
 pub mod metrics;
 pub mod scan_order;
