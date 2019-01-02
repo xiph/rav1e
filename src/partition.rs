@@ -246,7 +246,7 @@ impl BlockSize {
 
     (offset_x, offset_y)
   }
-  
+
   pub fn greater_than(self, other: BlockSize) -> bool {
     (self.width() > other.width() && self.height() >= other.height()) ||
     (self.width() >= other.width() && self.height() > other.height())
@@ -775,9 +775,13 @@ pub enum MvSubpelPrecision {
   MV_SUBPEL_HIGH_PRECISION
 }
 
+mod subpel_filters {
 pub const SUBPEL_FILTER_SIZE: usize = 8;
 
-const SUBPEL_FILTERS: [[[i32; SUBPEL_FILTER_SIZE]; 16]; 6] = [
+#[repr(C, align(256))]
+struct Aligned([[[i32; SUBPEL_FILTER_SIZE]; 16]; 6]);
+
+pub static SUBPEL_FILTERS: &[[[i32; SUBPEL_FILTER_SIZE]; 16]; 6] = &Aligned([
   [
     [0, 0, 0, 128, 0, 0, 0, 0],
     [0, 2, -6, 126, 8, -2, 0, 0],
@@ -886,7 +890,10 @@ const SUBPEL_FILTERS: [[[i32; SUBPEL_FILTER_SIZE]; 16]; 6] = [
     [0, 0, 4, 36, 62, 26, 0, 0],
     [0, 0, 2, 34, 62, 30, 0, 0]
   ]
-];
+]).0;
+}
+
+pub use self::subpel_filters::*;
 
 /* Symbols for coding which components are zero jointly */
 pub const MV_JOINTS: usize = 4;
