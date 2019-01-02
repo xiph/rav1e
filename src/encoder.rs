@@ -2770,7 +2770,7 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
       }
       /* TODO: Don't apply if lossless */
       if sequence.enable_restoration {
-        rs.lrf_filter_frame(fs, &pre_cdef_frame, &cw.bc, bit_depth);
+        rs.lrf_filter_frame(fs, &pre_cdef_frame, bit_depth);
       }
     }
 
@@ -2796,7 +2796,7 @@ fn write_tile_group_header(tile_start_and_end_present_flag: bool) ->
 
 pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
     let mut packet = Vec::new();
-    let mut rs = RestorationState::new(sequence, &fs.input);
+    let mut rs = RestorationState::new(sequence, fi, &fs.input);
     if fi.show_existing_frame {
         //write_uncompressed_header(&mut packet, sequence, fi).unwrap();
         write_obus(&mut packet, sequence, fi, fs, &rs).unwrap();
