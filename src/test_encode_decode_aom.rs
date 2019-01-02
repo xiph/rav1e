@@ -306,7 +306,7 @@ fn encode_decode(
     let mut input = ctx.new_frame();
     fill_frame(&mut ra, Arc::get_mut(&mut input).unwrap());
 
-    let _ = ctx.send_frame(input);
+    let _ = ctx.send_frame(Some(input));
 
     let mut done = false;
     let mut corrupted_count = 0;
