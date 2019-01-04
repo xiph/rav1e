@@ -80,16 +80,6 @@ impl Frame {
         }
     }
 
-    pub fn window(&self, sbo: &SuperBlockOffset) -> Frame {
-        Frame {
-            planes: [
-                self.planes[0].window(&sbo.plane_offset(&self.planes[0].cfg)),
-                self.planes[1].window(&sbo.plane_offset(&self.planes[1].cfg)),
-                self.planes[2].window(&sbo.plane_offset(&self.planes[2].cfg))
-            ]
-        }
-    }
-
     /// Returns a `PixelIter` containing the data of this frame's planes in YUV format.
     /// Each point in the `PixelIter` is a triple consisting of a Y, U, and V component.
     /// The `PixelIter` is laid out as contiguous rows, e.g. to get a given 0-indexed row
@@ -458,19 +448,6 @@ impl FrameState {
             cdfs: CDFContext::new(0),
             deblock: Default::default(),
             segmentation: Default::default(),
-        }
-    }
-
-    pub fn window(&self, sbo: &SuperBlockOffset) -> FrameState {
-        FrameState {
-            input: Arc::new(self.input.window(sbo)),
-            input_hres: self.input_hres.window(&sbo.plane_offset(&self.input_hres.cfg)),
-            input_qres: self.input_qres.window(&sbo.plane_offset(&self.input_qres.cfg)),
-            rec: self.rec.window(sbo),
-            qc: self.qc,
-            cdfs: self.cdfs,
-            deblock: self.deblock,
-            segmentation: self.segmentation,
         }
     }
 }
@@ -2877,36 +2854,6 @@ pub fn update_rec_buffer(fi: &mut FrameInvariants, fs: FrameState) {
 #[cfg(test)]
 mod test {
   use super::*;
-
-  #[test]
-  fn frame_state_window() {
-    let config = EncoderConfig { ..Default::default() };
-    let seq = Sequence::new(&Default::default());
-    let fi = FrameInvariants::new(1024, 1024, config, seq);
-    let mut fs = FrameState::new(&fi);
-    for p in fs.rec.planes.iter_mut() {
-      for (i, v) in p
-        .mut_slice(&PlaneOffset { x: 0, y: 0 })
-        .as_mut_slice()
-        .iter_mut()
-        .enumerate()
-      {
-        *v = i as u16;
-      }
-    }
-    let offset = BlockOffset { x: 56, y: 56 };
-    let sbo = offset.sb_offset();
-    let fs_ = fs.window(&sbo);
-    for p in 0..3 {
-      assert!(fs_.rec.planes[p].cfg.xorigin < 0);
-      assert!(fs_.rec.planes[p].cfg.yorigin < 0);
-      let po = offset.plane_offset(&fs.rec.planes[p].cfg);
-      assert_eq!(
-        &fs.rec.planes[p].slice(&po).as_slice()[..32],
-        &fs_.rec.planes[p].slice(&po).as_slice()[..32]
-      );
-    }
-  }
 
   #[test]
   fn check_partition_types_order() {
