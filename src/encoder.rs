@@ -422,6 +422,7 @@ pub struct FrameState {
     pub cdfs: CDFContext,
     pub deblock: DeblockState,
     pub segmentation: SegmentationState,
+    pub restoration: RestorationState,
 }
 
 impl FrameState {
@@ -431,6 +432,7 @@ impl FrameState {
     }
 
     pub fn new_with_frame(fi: &FrameInvariants, frame: Arc<Frame>) -> FrameState {
+        let rs = RestorationState::new(fi, &frame);
         FrameState {
             input: frame,
             input_hres: Plane::new(
@@ -448,6 +450,7 @@ impl FrameState {
             cdfs: CDFContext::new(0),
             deblock: Default::default(),
             segmentation: Default::default(),
+            restoration: rs,
         }
     }
 }
@@ -880,9 +883,8 @@ trait UncompressedHeader {
             -> io::Result<()>;
     fn write_sequence_header_obu(&mut self, fi: &mut FrameInvariants)
             -> io::Result<()>;
-    fn write_frame_header_obu(&mut self, fi: &FrameInvariants, fs: &FrameState,
-                              rs: &RestorationState)
-            -> io::Result<()>;
+    fn write_frame_header_obu(&mut self, fi: &FrameInvariants, fs: &FrameState)
+          -> io::Result<()>;
     fn write_sequence_header(&mut self, fi: &mut FrameInvariants)
                                     -> io::Result<()>;
     fn write_color_config(&mut self, seq: &mut Sequence) -> io::Result<()>;
@@ -1070,8 +1072,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     }
 
 #[allow(unused)]
-    fn write_frame_header_obu(&mut self, fi: &FrameInvariants, fs: &FrameState,
-                              rs: &RestorationState)
+    fn write_frame_header_obu(&mut self, fi: &FrameInvariants, fs: &FrameState)
         -> io::Result<()> {
       if fi.sequence.reduced_still_picture_hdr {
         assert!(fi.show_existing_frame);
@@ -1320,7 +1321,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       self.write_frame_cdef(fi)?;
 
       // loop restoration
-      self.write_frame_lrf(fi, rs)?;
+      self.write_frame_lrf(fi, &fs.restoration)?;
 
       self.write_bit(false)?; // tx mode == TX_MODE_SELECT ?
 
@@ -1595,7 +1596,7 @@ fn aom_uleb_encode(mut value: u64, coded_value: &mut [u8]) -> usize {
 }
 
 fn write_obus(packet: &mut dyn io::Write,
-         fi: &mut FrameInvariants, fs: &FrameState, rs: &RestorationState)
+              fi: &mut FrameInvariants, fs: &FrameState)
          -> io::Result<()> {
     let obu_extension = 0 as u32;
 
@@ -1644,7 +1645,7 @@ fn write_obus(packet: &mut dyn io::Write,
     let mut buf2 = Vec::new();
     {
         let mut bw2 = BitWriter::endian(&mut buf2, BigEndian);
-        bw2.write_frame_header_obu(fi, fs, rs)?;
+        bw2.write_frame_header_obu(fi, fs)?;
     }
 
     {
@@ -2600,8 +2601,7 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState,
     }
 }
 
-fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState,
-               rs: &mut RestorationState) -> Vec<u8> {
+fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
     let mut w = WriterEncoder::new();
 
     let fc = if fi.primary_ref_frame == PRIMARY_REF_NONE {
@@ -2714,8 +2714,8 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState,
 
             // loop restoration must be decided last but coded before anything else
             if fi.sequence.enable_restoration {
-                rs.lrf_optimize_superblock(&sbo, fi, &mut cw);
-                cw.write_lrf(&mut w, fi, rs, &sbo);
+                fs.restoration.lrf_optimize_superblock(&sbo, fi, &mut cw);
+                cw.write_lrf(&mut w, fi, &mut fs.restoration, &sbo);
             }
 
             // Once loop restoration is coded, we can replay the initial block bits
@@ -2745,7 +2745,7 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState,
       }
       /* TODO: Don't apply if lossless */
       if fi.sequence.enable_restoration {
-        rs.lrf_filter_frame(&mut fs.rec, &pre_cdef_frame, fi.sequence.bit_depth);
+        fs.restoration.lrf_filter_frame(&mut fs.rec, &pre_cdef_frame, fi.sequence.bit_depth);
       }
     }
 
@@ -2771,9 +2771,8 @@ fn write_tile_group_header(tile_start_and_end_present_flag: bool) ->
 
 pub fn encode_frame(fi: &mut FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
     let mut packet = Vec::new();
-    let mut rs = RestorationState::new(fi, &fs.input);
     if fi.show_existing_frame {
-        write_obus(&mut packet, fi, fs, &rs).unwrap();
+        write_obus(&mut packet, fi, fs).unwrap();
         match fi.rec_buffer.frames[fi.frame_to_show_map_idx as usize] {
             Some(ref rec) => for p in 0..3 {
                 fs.rec.planes[p].data.copy_from_slice(rec.frame.planes[p].data.as_slice());
@@ -2802,9 +2801,9 @@ pub fn encode_frame(fi: &mut FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
 
         segmentation_optimize(fi, fs);
 
-        let tile = encode_tile(fi, fs, &mut rs); // actually tile group
+        let tile = encode_tile(fi, fs); // actually tile group
 
-        write_obus(&mut packet, fi, fs, &rs).unwrap();
+        write_obus(&mut packet, fi, fs).unwrap();
         let mut buf1 = Vec::new();
         {
             let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
