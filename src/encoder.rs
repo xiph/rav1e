@@ -895,7 +895,7 @@ trait UncompressedHeader {
     fn write_deblock_filter_b(&mut self, fi: &FrameInvariants, fs: &FrameState) -> io::Result<()>;
     fn write_frame_cdef(&mut self, fi: &FrameInvariants) -> io::Result<()>;
     fn write_frame_lrf(&mut self, fi: &FrameInvariants, rs: &RestorationState) -> io::Result<()>;
-    fn write_segment_data(&mut self, fi: &FrameInvariants, fs: &FrameState) -> io::Result<()>;
+    fn write_segment_data(&mut self, fi: &FrameInvariants, segmentation: &SegmentationState) -> io::Result<()>;
     fn write_delta_q(&mut self, delta_q: i8) -> io::Result<()>;
 }
 #[allow(unused)]
@@ -1304,7 +1304,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       self.write_bit(false)?; // no qm
 
       // segmentation
-      self.write_segment_data(fi, fs)?;
+      self.write_segment_data(fi, &fs.segmentation)?;
 
       // delta_q
       self.write_bit(false)?; // delta_q_present_flag: no delta q
@@ -1513,26 +1513,26 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       Ok(())
     }
 
-    fn write_segment_data(&mut self, fi: &FrameInvariants, fs: &FrameState) -> io::Result<()> {
-        self.write_bit(fs.segmentation.enabled)?;
-        if fs.segmentation.enabled {
+    fn write_segment_data(&mut self, fi: &FrameInvariants, segmentation: &SegmentationState) -> io::Result<()> {
+        self.write_bit(segmentation.enabled)?;
+        if segmentation.enabled {
             if fi.primary_ref_frame == PRIMARY_REF_NONE {
-                assert_eq!(fs.segmentation.update_map, true);
-                assert_eq!(fs.segmentation.update_data, true);
+                assert_eq!(segmentation.update_map, true);
+                assert_eq!(segmentation.update_data, true);
             } else {
-                self.write_bit(fs.segmentation.update_map)?;
-                if fs.segmentation.update_map {
+                self.write_bit(segmentation.update_map)?;
+                if segmentation.update_map {
                     self.write_bit(false)?; /* Without using temporal prediction */
                 }
-                self.write_bit(fs.segmentation.update_data)?;
+                self.write_bit(segmentation.update_data)?;
             }
-            if fs.segmentation.update_data {
+            if segmentation.update_data {
                 for i in 0..8 {
                     for j in 0..SegLvl::SEG_LVL_MAX as usize {
-                        self.write_bit(fs.segmentation.features[i][j])?;
-                        if fs.segmentation.features[i][j] {
+                        self.write_bit(segmentation.features[i][j])?;
+                        if segmentation.features[i][j] {
                             let bits = seg_feature_bits[j];
-                            let data = fs.segmentation.data[i][j];
+                            let data = segmentation.data[i][j];
                             if seg_feature_is_signed[j] {
                                 self.write_signed(bits + 1, data)?;
                             } else {
