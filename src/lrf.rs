@@ -57,7 +57,7 @@ pub const SGRPROJ_PARAMS_EPS: [[u8; 2]; 1 << SGRPROJ_PARAMS_BITS] = [
   [ 0, 11], [ 0, 14], [30,  0], [75,  0],
 ];
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum RestorationFilter {
   None,
   Wiener  { coeffs: [[i8; 3]; 2] },
@@ -315,7 +315,7 @@ fn wiener_stripe_rdu(coeffs: [[i8; 3]; 2], y: isize, h: isize, x: usize, w: usiz
   }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct RestorationUnit {
   pub filter: RestorationFilter,
   pub coded: bool,
@@ -330,7 +330,7 @@ impl RestorationUnit {
   }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RestorationPlane {
   // all size units are subsampled if the plane is subsampled
   pub clipped_cfg: PlaneConfig,
@@ -393,7 +393,7 @@ impl RestorationPlane {
   }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RestorationState {
   pub plane: [RestorationPlane; PLANES]
 }
