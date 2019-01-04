@@ -891,8 +891,8 @@ trait UncompressedHeader {
     // End of OBU Headers
 
     fn write_frame_size(&mut self, fi: &FrameInvariants) -> io::Result<()>;
-    fn write_deblock_filter_a(&mut self, fi: &FrameInvariants, fs: &FrameState) -> io::Result<()>;
-    fn write_deblock_filter_b(&mut self, fi: &FrameInvariants, fs: &FrameState) -> io::Result<()>;
+    fn write_deblock_filter_a(&mut self, fi: &FrameInvariants, deblock: &DeblockState) -> io::Result<()>;
+    fn write_deblock_filter_b(&mut self, fi: &FrameInvariants, deblock: &DeblockState) -> io::Result<()>;
     fn write_frame_cdef(&mut self, fi: &FrameInvariants) -> io::Result<()>;
     fn write_frame_lrf(&mut self, fi: &FrameInvariants, rs: &RestorationState) -> io::Result<()>;
     fn write_segment_data(&mut self, fi: &FrameInvariants, segmentation: &SegmentationState) -> io::Result<()>;
@@ -1310,12 +1310,12 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       self.write_bit(false)?; // delta_q_present_flag: no delta q
 
       // delta_lf_params in the spec
-      self.write_deblock_filter_a(fi, fs)?;
+      self.write_deblock_filter_a(fi, &fs.deblock)?;
 
       // code for features not yet implemented....
 
       // loop_filter_params in the spec
-      self.write_deblock_filter_b(fi, fs)?;
+      self.write_deblock_filter_b(fi, &fs.deblock)?;
 
       // cdef
       self.write_frame_cdef(fi)?;
@@ -1404,35 +1404,35 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         Ok(())
     }
 
-    fn write_deblock_filter_a(&mut self, fi: &FrameInvariants, fs: &FrameState) -> io::Result<()> {
+    fn write_deblock_filter_a(&mut self, fi: &FrameInvariants, deblock: &DeblockState) -> io::Result<()> {
         if fi.delta_q_present {
             if !fi.allow_intrabc {
-                self.write_bit(fs.deblock.block_deltas_enabled)?;
+                self.write_bit(deblock.block_deltas_enabled)?;
             }
-            if fs.deblock.block_deltas_enabled {
-                self.write(2,fs.deblock.block_delta_shift)?;
-                self.write_bit(fs.deblock.block_delta_multi)?;
+            if deblock.block_deltas_enabled {
+                self.write(2, deblock.block_delta_shift)?;
+                self.write_bit(deblock.block_delta_multi)?;
             }
         }
         Ok(())
     }
 
-    fn write_deblock_filter_b(&mut self, fi: &FrameInvariants, fs: &FrameState) -> io::Result<()> {
-        assert!(fs.deblock.levels[0] < 64);
-        self.write(6, fs.deblock.levels[0])?; // loop deblocking filter level 0
-        assert!(fs.deblock.levels[1] < 64);
-        self.write(6, fs.deblock.levels[1])?; // loop deblocking filter level 1
-        if PLANES > 1 && (fs.deblock.levels[0] > 0 || fs.deblock.levels[1] > 0) {
-            assert!(fs.deblock.levels[2] < 64);
-            self.write(6, fs.deblock.levels[2])?; // loop deblocking filter level 2
-            assert!(fs.deblock.levels[3] < 64);
-            self.write(6, fs.deblock.levels[3])?; // loop deblocking filter level 3
+    fn write_deblock_filter_b(&mut self, fi: &FrameInvariants, deblock: &DeblockState) -> io::Result<()> {
+        assert!(deblock.levels[0] < 64);
+        self.write(6, deblock.levels[0])?; // loop deblocking filter level 0
+        assert!(deblock.levels[1] < 64);
+        self.write(6, deblock.levels[1])?; // loop deblocking filter level 1
+        if PLANES > 1 && (deblock.levels[0] > 0 || deblock.levels[1] > 0) {
+            assert!(deblock.levels[2] < 64);
+            self.write(6, deblock.levels[2])?; // loop deblocking filter level 2
+            assert!(deblock.levels[3] < 64);
+            self.write(6, deblock.levels[3])?; // loop deblocking filter level 3
         }
-        self.write(3,fs.deblock.sharpness)?; // deblocking filter sharpness
-        self.write_bit(fs.deblock.deltas_enabled)?; // loop deblocking filter deltas enabled
-        if fs.deblock.deltas_enabled {
-            self.write_bit(fs.deblock.delta_updates_enabled)?; // deltas updates enabled
-            if fs.deblock.delta_updates_enabled {
+        self.write(3, deblock.sharpness)?; // deblocking filter sharpness
+        self.write_bit(deblock.deltas_enabled)?; // loop deblocking filter deltas enabled
+        if deblock.deltas_enabled {
+            self.write_bit(deblock.delta_updates_enabled)?; // deltas updates enabled
+            if deblock.delta_updates_enabled {
                 // conditionally write ref delta updates
                 let prev_ref_deltas = if fi.primary_ref_frame == PRIMARY_REF_NONE {
                     [1, 0, 0, 0, 0, -1, -1, -1]
@@ -1440,10 +1440,10 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
                     fi.rec_buffer.deblock[fi.ref_frames[fi.primary_ref_frame as usize] as usize].ref_deltas
                 };
                 for i in 0..REF_FRAMES {
-                    let update = fs.deblock.ref_deltas[i] != prev_ref_deltas[i];
+                    let update = deblock.ref_deltas[i] != prev_ref_deltas[i];
                     self.write_bit(update)?;
                     if update {
-                        self.write_signed(7,fs.deblock.ref_deltas[i])?;
+                        self.write_signed(7, deblock.ref_deltas[i])?;
                     }
                 }
                 // conditionally write mode delta updates
@@ -1453,10 +1453,10 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
                     fi.rec_buffer.deblock[fi.ref_frames[fi.primary_ref_frame as usize] as usize].mode_deltas
                 };
                 for i in 0..2 {
-                    let update = fs.deblock.mode_deltas[i] != prev_mode_deltas[i];
+                    let update = deblock.mode_deltas[i] != prev_mode_deltas[i];
                     self.write_bit(update)?;
                     if update {
-                        self.write_signed(7,fs.deblock.mode_deltas[i])?;
+                        self.write_signed(7, deblock.mode_deltas[i])?;
                     }
                 }
             }
