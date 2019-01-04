@@ -10,7 +10,6 @@
 #![allow(safe_extern_statics)]
 
 use encoder::Frame;
-use encoder::FrameState;
 use encoder::FrameInvariants;
 use context::ContextWriter;
 use context::SuperBlockOffset;
@@ -443,13 +442,12 @@ impl RestorationState {
   }  
 
   pub fn lrf_optimize_superblock(&mut self, _sbo: &SuperBlockOffset, _fi: &FrameInvariants,
-                                 _fs: &FrameState, _cw: &mut ContextWriter) {
+                                 _cw: &mut ContextWriter) {
   }
 
-  pub fn lrf_filter_frame(&mut self, fs: &mut FrameState, pre_cdef: &Frame,
+  pub fn lrf_filter_frame(&mut self, out: &mut Frame, pre_cdef: &Frame,
                           bit_depth: usize) {
-    let cdeffed = &fs.rec.clone();
-    let out = &mut fs.rec;
+    let cdeffed = out.clone();
     
     // number of stripes (counted according to colocated Y luma position)
     let stripe_n = (self.plane[0].clipped_cfg.height + 7) / 64 + 1;
