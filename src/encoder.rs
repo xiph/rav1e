@@ -2716,7 +2716,7 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState,
 
             // loop restoration must be decided last but coded before anything else
             if fi.sequence.enable_restoration {
-                rs.lrf_optimize_superblock(&sbo, fi, fs, &mut cw);
+                rs.lrf_optimize_superblock(&sbo, fi, &mut cw);
                 cw.write_lrf(&mut w, fi, rs, &sbo);
             }
 
@@ -2747,7 +2747,7 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState,
       }
       /* TODO: Don't apply if lossless */
       if fi.sequence.enable_restoration {
-        rs.lrf_filter_frame(fs, &pre_cdef_frame, fi.sequence.bit_depth);
+        rs.lrf_filter_frame(&mut fs.rec, &pre_cdef_frame, fi.sequence.bit_depth);
       }
     }
 
