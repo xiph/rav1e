@@ -742,7 +742,7 @@ function \type\()_8tap
 
 L(\type\()_8tap_h):
         cmp             \w,  #4
-        ubfm            w9,  \mx, #7, #13
+        ubfx            w9,  \mx, #7, #7
         and             \mx, \mx, #0x7f
         b.le            4f
         mov             \mx,  w9
@@ -965,7 +965,7 @@ L(\type\()_8tap_h_tbl):
 
 L(\type\()_8tap_v):
         cmp             \h,  #4
-        ubfm            w9,  \my, #7, #13
+        ubfx            w9,  \my, #7, #7
         and             \my, \my, #0x7f
         b.le            4f
         mov             \my, w9
@@ -1269,7 +1269,7 @@ L(\type\()_8tap_v_tbl):
 
 L(\type\()_8tap_hv):
         cmp             \h,  #4
-        ubfm            w9,  \my, #7, #13
+        ubfx            w9,  \my, #7, #7
         and             \my, \my, #0x7f
         b.le            4f
         mov             \my,  w9
