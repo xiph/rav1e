@@ -246,13 +246,25 @@ pub struct ColorDescription {
 }
 
 /// Frame-specific information
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub struct FrameInfo {
   pub width: usize,
   pub height: usize,
   pub bit_depth: usize,
   pub chroma_sampling: ChromaSampling,
   pub chroma_sample_position: ChromaSamplePosition
+}
+
+impl Default for FrameInfo {
+    fn default() -> FrameInfo {
+        FrameInfo {
+            width: 640,
+            height: 480,
+            bit_depth: 8,
+            chroma_sampling: Default::default(),
+            chroma_sample_position: Default::default()
+        }
+    }
 }
 
 /// Contain all the encoder configuration
