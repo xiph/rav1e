@@ -18,6 +18,13 @@ extern crate rand;
 extern crate num_traits;
 extern crate paste;
 
+#[cfg(all(test, feature="decode_test_dav1d"))]
+extern crate dav1d_sys;
+
+#[cfg(test)]
+#[macro_use]
+extern crate pretty_assertions;
+
 pub mod ec;
 pub mod partition;
 pub mod plane;
@@ -46,4 +53,8 @@ pub use api::*;
 pub use encoder::*;
 
 #[cfg(all(test, feature="decode_test"))]
-mod test_encode_decode;
+mod test_encode_decode_aom;
+
+#[cfg(all(test, feature="decode_test_dav1d"))]
+mod test_encode_decode_dav1d;
+
