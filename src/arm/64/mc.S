@@ -628,7 +628,7 @@ endfunc
         st1             {\reg\().h}[3], [x8], \strd
 .endif
 .endm
-.macro st_s strd, r0, r1, r2, r3
+.macro st_s strd, r0, r1
         st1             {\r0\().s}[0], [x0], \strd
         st1             {\r0\().s}[1], [x8], \strd
 .ifnb \r1
@@ -636,7 +636,7 @@ endfunc
         st1             {\r1\().s}[1], [x8], \strd
 .endif
 .endm
-.macro st_d strd, r0, r1, r2, r3
+.macro st_d strd, r0, r1
         st1             {\r0\().d}[0], [x0], \strd
         st1             {\r0\().d}[1], [x8], \strd
 .ifnb \r1
@@ -644,13 +644,13 @@ endfunc
         st1             {\r1\().d}[1], [x8], \strd
 .endif
 .endm
-.macro shift_store_4 type, strd, r0, r1, r2, r3
+.macro shift_store_4 type, strd, r0, r1
 .ifc \type, put
-        sqrshrun_b      6,     \r0, \r1, \r2, \r3
-        st_s            \strd, \r0, \r1, \r2, \r3
+        sqrshrun_b      6,     \r0, \r1
+        st_s            \strd, \r0, \r1
 .else
-        srshr_h         2,     \r0, \r1, \r2, \r3
-        st_d            \strd, \r0, \r1, \r2, \r3
+        srshr_h         2,     \r0, \r1
+        st_d            \strd, \r0, \r1
 .endif
 .endm
 .macro st_reg strd, wd, r0, r1, r2, r3, r4, r5, r6, r7
