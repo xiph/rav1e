@@ -1166,7 +1166,7 @@ impl PredictionMode {
   pub fn predict_inter<'a>(
     self, fi: &FrameInvariants, p: usize, po: &PlaneOffset,
     dst: &'a mut PlaneMutSlice<'a>, width: usize, height: usize,
-    ref_frames: [usize; 2], mvs: [MotionVector; 2], bit_depth: usize
+    ref_frames: [usize; 2], mvs: [MotionVector; 2]
   ) {
     assert!(!self.is_intra());
 
@@ -1189,11 +1189,11 @@ impl PredictionMode {
             (mvs[i].col as i32 - (col_offset << shift_col)) << (4 - shift_col);
           let ref_stride = rec_cfg.stride;
 
-          let max_sample_val = ((1 << bit_depth) - 1) as i32;
+          let max_sample_val = ((1 << fi.sequence.bit_depth) - 1) as i32;
           let y_filter_idx = if height <= 4 { 4 } else { 0 };
           let x_filter_idx = if width <= 4 { 4 } else { 0 };
           let shifts = {
-            let shift_offset = if bit_depth == 12 { 2 } else { 0 };
+            let shift_offset = if fi.sequence.bit_depth == 12 { 2 } else { 0 };
             let inter_round0 = 3 + shift_offset;
             let inter_round1 = if is_compound { 7 } else { 11 } - shift_offset;
             (inter_round0, inter_round1, 14 - inter_round0 - inter_round1)

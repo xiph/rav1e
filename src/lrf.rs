@@ -16,7 +16,6 @@ use context::ContextWriter;
 use context::SuperBlockOffset;
 use context::PLANES;
 use context::MAX_SB_SIZE;
-use encoder::Sequence;
 use plane::Plane;
 use plane::PlaneConfig;
 use plane::PlaneOffset;
@@ -403,7 +402,7 @@ pub struct RestorationState {
 }
 
 impl RestorationState {
-  pub fn new(seq: &Sequence, fi: &FrameInvariants, input: &Frame) -> Self {
+  pub fn new(fi: &FrameInvariants, input: &Frame) -> Self {
     // unlike the other loop filters that operate over the padded
     // frame dimensions, restoration filtering and source pixel
     // accesses are clipped to the original frame dimensions
@@ -421,7 +420,7 @@ impl RestorationState {
     clipped_cfg[2].height = fi.height + (1 << ydec >> 1) >> ydec;
 
     // Currrently opt for smallest possible restoration unit size
-    let lrf_y_shift = if seq.use_128x128_superblock {1} else {2};
+    let lrf_y_shift = if fi.sequence.use_128x128_superblock {1} else {2};
     let lrf_uv_shift = lrf_y_shift + if xdec>0 && ydec>0 {1} else {0};
     let lrf_type: [u8; PLANES] = [RESTORE_SWITCHABLE, RESTORE_SWITCHABLE, RESTORE_SWITCHABLE];
     let unit_size: [usize; PLANES] = [RESTORATION_TILESIZE_MAX >> lrf_y_shift,
@@ -448,9 +447,7 @@ impl RestorationState {
   }  
 
   pub fn lrf_optimize_superblock(&mut self, _sbo: &SuperBlockOffset, _fi: &FrameInvariants,
-                                 _fs: &FrameState, _cw: &mut ContextWriter,
-                                 _bit_depth: usize) {
-    
+                                 _fs: &FrameState, _cw: &mut ContextWriter) {
   }
 
   pub fn lrf_filter_frame(&mut self, fs: &mut FrameState, pre_cdef: &Frame,

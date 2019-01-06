@@ -235,7 +235,7 @@ impl Default for ChromaSamplePosition {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Sequence {
     // OBU Sequence header of AV1
     pub profile: u8,
@@ -435,13 +435,12 @@ pub struct FrameState {
 }
 
 impl FrameState {
-    pub fn new(fi: &FrameInvariants, chroma_sampling: ChromaSampling) -> FrameState {
+    pub fn new(fi: &FrameInvariants) -> FrameState {
         FrameState::new_with_frame(fi, Arc::new(Frame::new(
-            fi.padded_w, fi.padded_h, chroma_sampling)), chroma_sampling)
+            fi.padded_w, fi.padded_h, fi.sequence.chroma_sampling)))
     }
 
-    pub fn new_with_frame(fi: &FrameInvariants, frame: Arc<Frame>,
-        chroma_sampling: ChromaSampling) -> FrameState {
+    pub fn new_with_frame(fi: &FrameInvariants, frame: Arc<Frame>) -> FrameState {
         FrameState {
             input: frame,
             input_hres: Plane::new(
@@ -454,7 +453,7 @@ impl FrameState {
                 2, 2,
                 (MAX_SB_SIZE + FRAME_MARGIN) / 4, (MAX_SB_SIZE + FRAME_MARGIN) / 4
             ),
-            rec: Frame::new(fi.padded_w, fi.padded_h, chroma_sampling),
+            rec: Frame::new(fi.padded_w, fi.padded_h, fi.sequence.chroma_sampling),
             qc: Default::default(),
             cdfs: CDFContext::new(0),
             deblock: Default::default(),
@@ -534,6 +533,7 @@ impl Default for SegmentationState {
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct FrameInvariants {
+    pub sequence: Sequence,
     pub width: usize,
     pub height: usize,
     pub padded_w: usize,
@@ -590,7 +590,8 @@ pub struct FrameInvariants {
 }
 
 impl FrameInvariants {
-    pub fn new(width: usize, height: usize, config: EncoderConfig) -> FrameInvariants {
+    pub fn new(width: usize, height: usize,
+        config: EncoderConfig, sequence: Sequence) -> FrameInvariants {
         // Speed level decides the minimum partition size, i.e. higher speed --> larger min partition size,
         // with exception that SBs on right or bottom frame borders split down to BLOCK_4X4.
         // At speed = 0, RDO search is exhaustive.
@@ -607,6 +608,7 @@ impl FrameInvariants {
         let use_tx_domain_distortion = config.tune == Tune::Psnr && config.speed_settings.tx_domain_distortion;
 
         FrameInvariants {
+            sequence,
             width,
             height,
             padded_w: width.align_power_of_two(3),
@@ -824,7 +826,7 @@ impl FrameInvariants {
   }
 }
 
-impl fmt::Display for FrameInvariants{
+impl fmt::Display for FrameInvariants {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Frame {} - {}", self.number, self.frame_type)
     }
@@ -899,12 +901,12 @@ trait UncompressedHeader {
     // Start of OBU Headers
     fn write_obu_header(&mut self, obu_type: OBU_Type, obu_extension: u32)
             -> io::Result<()>;
-    fn write_sequence_header_obu(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
+    fn write_sequence_header_obu(&mut self, fi: &mut FrameInvariants)
             -> io::Result<()>;
-    fn write_frame_header_obu(&mut self, seq: &Sequence, fi: &FrameInvariants, fs: &FrameState,
+    fn write_frame_header_obu(&mut self, fi: &FrameInvariants, fs: &FrameState,
                               rs: &RestorationState)
             -> io::Result<()>;
-    fn write_sequence_header(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
+    fn write_sequence_header(&mut self, fi: &mut FrameInvariants)
                                     -> io::Result<()>;
     fn write_color_config(&mut self, seq: &mut Sequence) -> io::Result<()>;
     // End of OBU Headers
@@ -912,8 +914,8 @@ trait UncompressedHeader {
     fn write_frame_size(&mut self, fi: &FrameInvariants) -> io::Result<()>;
     fn write_deblock_filter_a(&mut self, fi: &FrameInvariants, fs: &FrameState) -> io::Result<()>;
     fn write_deblock_filter_b(&mut self, fi: &FrameInvariants, fs: &FrameState) -> io::Result<()>;
-    fn write_frame_cdef(&mut self, seq: &Sequence, fi: &FrameInvariants) -> io::Result<()>;
-    fn write_frame_lrf(&mut self, seq: &Sequence, fi: &FrameInvariants, rs: &RestorationState) -> io::Result<()>;
+    fn write_frame_cdef(&mut self, fi: &FrameInvariants) -> io::Result<()>;
+    fn write_frame_lrf(&mut self, fi: &FrameInvariants, rs: &RestorationState) -> io::Result<()>;
     fn write_segment_data(&mut self, fi: &FrameInvariants, fs: &FrameState) -> io::Result<()>;
     fn write_delta_q(&mut self, delta_q: i8) -> io::Result<()>;
 }
@@ -949,9 +951,9 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         Ok(())
     }
 
-    fn write_sequence_header_obu(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
+    fn write_sequence_header_obu(&mut self, fi: &mut FrameInvariants)
         -> io::Result<()> {
-        self.write(3, seq.profile)?; // profile, 3 bits
+        self.write(3, fi.sequence.profile)?; // profile, 3 bits
         self.write(1, 0)?; // still_picture
         self.write(1, 0)?; // reduced_still_picture
         self.write_bit(false)?; // display model present
@@ -960,24 +962,26 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         self.write(12,0)?; // idc
         self.write(5, 31)?; // level
         self.write(1, 0)?; // tier
-        if seq.reduced_still_picture_hdr {
+        if fi.sequence.reduced_still_picture_hdr {
             unimplemented!();
         }
 
-        self.write_sequence_header(seq, fi)?;
+        self.write_sequence_header(fi)?;
 
-        self.write_color_config(seq)?;
+        self.write_color_config(&mut fi.sequence)?;
 
-        self.write_bit(seq.film_grain_params_present)?;
+        self.write_bit(fi.sequence.film_grain_params_present)?;
 
         self.write_bit(true)?; // trailing bit
 
         Ok(())
     }
 
-    fn write_sequence_header(&mut self, seq: &mut Sequence, fi: &FrameInvariants)
+    fn write_sequence_header(&mut self, fi: &mut FrameInvariants)
         -> io::Result<()> {
         self.write_frame_size(fi)?;
+
+        let seq = &mut fi.sequence;
 
         if !seq.reduced_still_picture_hdr {
             seq.frame_id_numbers_present_flag = false;
@@ -1089,10 +1093,10 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     }
 
 #[allow(unused)]
-    fn write_frame_header_obu(&mut self, seq: &Sequence, fi: &FrameInvariants, fs: &FrameState,
+    fn write_frame_header_obu(&mut self, fi: &FrameInvariants, fs: &FrameState,
                               rs: &RestorationState)
         -> io::Result<()> {
-      if seq.reduced_still_picture_hdr {
+      if fi.sequence.reduced_still_picture_hdr {
         assert!(fi.show_existing_frame);
         assert!(fi.frame_type == FrameType::KEY);
         assert!(fi.show_frame);
@@ -1104,11 +1108,11 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
           //TODO:
           /* temporal_point_info();
-            if seq.decoder_model_info_present_flag &&
+            if fi.sequence.decoder_model_info_present_flag &&
               timing_info.equal_picture_interval == 0 {
             // write frame_presentation_delay;
           }
-          if seq.frame_id_numbers_present_flag {
+          if fi.sequence.frame_id_numbers_present_flag {
             // write display_frame_id;
           }*/
 
@@ -1123,7 +1127,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         if fi.show_frame {
           //TODO:
           /* temporal_point_info();
-              if seq.decoder_model_info_present_flag &&
+              if fi.sequence.decoder_model_info_present_flag &&
               timing_info.equal_picture_interval == 0 {
             // write frame_presentation_delay;*/
         } else {
@@ -1141,43 +1145,43 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
       self.write_bit(fi.disable_cdf_update)?;
 
-      if seq.force_screen_content_tools == 2 {
+      if fi.sequence.force_screen_content_tools == 2 {
         self.write_bit(fi.allow_screen_content_tools != 0)?;
       } else {
         assert!(fi.allow_screen_content_tools ==
-                seq.force_screen_content_tools);
+                fi.sequence.force_screen_content_tools);
       }
 
       if fi.allow_screen_content_tools == 2 {
-        if seq.force_integer_mv == 2 {
+        if fi.sequence.force_integer_mv == 2 {
           self.write_bit(fi.force_integer_mv != 0)?;
         } else {
-          assert!(fi.force_integer_mv == seq.force_integer_mv);
+          assert!(fi.force_integer_mv == fi.sequence.force_integer_mv);
         }
       } else {
         assert!(fi.allow_screen_content_tools ==
-                seq.force_screen_content_tools);
+                fi.sequence.force_screen_content_tools);
       }
 
-      if seq.frame_id_numbers_present_flag {
+      if fi.sequence.frame_id_numbers_present_flag {
         unimplemented!();
 
         //TODO:
-        //let frame_id_len = seq.frame_id_length;
+        //let frame_id_len = fi.sequence.frame_id_length;
         //self.write(frame_id_len, fi.current_frame_id);
       }
 
       let mut frame_size_override_flag = false;
       if fi.frame_type == FrameType::SWITCH {
         frame_size_override_flag = true;
-      } else if seq.reduced_still_picture_hdr {
+      } else if fi.sequence.reduced_still_picture_hdr {
         frame_size_override_flag = false;
       } else {
         self.write_bit(frame_size_override_flag)?; // frame size overhead flag
       }
 
-      if seq.enable_order_hint {
-        let n = seq.order_hint_bits_minus_1 + 1;
+      if fi.sequence.enable_order_hint {
+        let n = fi.sequence.order_hint_bits_minus_1 + 1;
         let mask = (1 << n) - 1;
         self.write(n, fi.order_hint & mask)?;
       }
@@ -1187,7 +1191,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         self.write(PRIMARY_REF_BITS, fi.primary_ref_frame)?;
       }
 
-      if seq.decoder_model_info_present_flag {
+      if fi.sequence.decoder_model_info_present_flag {
         unimplemented!();
       }
 
@@ -1211,7 +1215,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
       if (!fi.intra_only || fi.refresh_frame_flags != ALL_REF_FRAMES_MASK) {
         // Write all ref frame order hints if error_resilient_mode == 1
-        if (fi.error_resilient && seq.enable_order_hint) {
+        if (fi.error_resilient && fi.sequence.enable_order_hint) {
           unimplemented!();
           //for _ in 0..REF_FRAMES {
           //  self.write(order_hint_bits_minus_1,ref_order_hint[i])?; // order_hint
@@ -1225,7 +1229,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         if frame_size_override_flag {
           unimplemented!();
         }
-        if seq.enable_superres {
+        if fi.sequence.enable_superres {
           unimplemented!();
         }
         self.write_bit(false)?; // render_and_frame_size_different
@@ -1242,7 +1246,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         if fi.intra_only {
           // Done by above
         } else {
-          if seq.enable_order_hint {
+          if fi.sequence.enable_order_hint {
             self.write_bit(frame_refs_short_signaling)?;
             if frame_refs_short_signaling {
               unimplemented!();
@@ -1253,7 +1257,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
             if !frame_refs_short_signaling {
               self.write(REF_FRAMES_LOG2 as u32, fi.ref_frames[i] as u8)?;
             }
-            if seq.frame_id_numbers_present_flag {
+            if fi.sequence.frame_id_numbers_present_flag {
               unimplemented!();
             }
           }
@@ -1263,7 +1267,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
             if frame_size_override_flag {
                unimplemented!();
             }
-            if seq.enable_superres {
+            if fi.sequence.enable_superres {
               unimplemented!();
             }
             self.write_bit(false)?; // render_and_frame_size_different
@@ -1275,14 +1279,14 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
           self.write_bit(fi.is_filter_switchable)?;
           self.write_bit(fi.is_motion_mode_switchable)?;
           self.write(2,0)?; // EIGHTTAP_REGULAR
-          if fi.error_resilient || !seq.enable_ref_frame_mvs {
+          if fi.error_resilient || !fi.sequence.enable_ref_frame_mvs {
           } else {
             self.write_bit(fi.use_ref_frame_mvs)?;
           }
         }
       }
 
-      if !seq.reduced_still_picture_hdr && !fi.disable_cdf_update {
+      if !fi.sequence.reduced_still_picture_hdr && !fi.disable_cdf_update {
         self.write_bit(fi.disable_frame_end_update_cdf)?;
       }
 
@@ -1304,10 +1308,10 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       self.write(8, fi.base_q_idx)?; // base_q_idx
       self.write_delta_q(fi.dc_delta_q[0])?;
       assert!(fi.ac_delta_q[0] == 0);
-      let diff_uv_delta = seq.separate_uv_delta_q
+      let diff_uv_delta = fi.sequence.separate_uv_delta_q
         && (fi.dc_delta_q[1] != fi.dc_delta_q[2]
           || fi.ac_delta_q[1] != fi.ac_delta_q[2]);
-      if seq.separate_uv_delta_q {
+      if fi.sequence.separate_uv_delta_q {
         self.write_bit(diff_uv_delta)?;
       } else {
         assert!(fi.dc_delta_q[1] == fi.dc_delta_q[2]);
@@ -1336,10 +1340,10 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       self.write_deblock_filter_b(fi, fs)?;
 
       // cdef
-      self.write_frame_cdef(seq, fi)?;
+      self.write_frame_cdef(fi)?;
 
       // loop restoration
-      self.write_frame_lrf(seq, fi, rs)?;
+      self.write_frame_lrf(fi, rs)?;
 
       self.write_bit(false)?; // tx mode == TX_MODE_SELECT ?
 
@@ -1349,12 +1353,12 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         self.write_bit(reference_select)?;
       }
 
-      let skip_mode_allowed = seq.get_skip_mode_allowed(fi, reference_select);
+      let skip_mode_allowed = fi.sequence.get_skip_mode_allowed(fi, reference_select);
       if skip_mode_allowed {
         self.write_bit(false)?; // skip_mode_present
       }
 
-      if fi.intra_only || fi.error_resilient || !seq.enable_warped_motion {
+      if fi.intra_only || fi.error_resilient || !fi.sequence.enable_warped_motion {
       } else {
         self.write_bit(fi.allow_warped_motion)?; // allow_warped_motion
       }
@@ -1394,7 +1398,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
           }
       }
 
-      if seq.film_grain_params_present && fi.show_frame {
+      if fi.sequence.film_grain_params_present && fi.show_frame {
           unimplemented!();
       }
 
@@ -1482,8 +1486,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         Ok(())
     }
 
-    fn write_frame_cdef(&mut self, seq: &Sequence, fi: &FrameInvariants) -> io::Result<()> {
-        if seq.enable_cdef {
+    fn write_frame_cdef(&mut self, fi: &FrameInvariants) -> io::Result<()> {
+        if fi.sequence.enable_cdef {
             assert!(fi.cdef_damping >= 3);
             assert!(fi.cdef_damping <= 6);
             self.write(2, fi.cdef_damping - 3)?;
@@ -1500,9 +1504,9 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         Ok(())
     }
 
-    fn write_frame_lrf(&mut self, seq: &Sequence, fi: &FrameInvariants,
+    fn write_frame_lrf(&mut self, fi: &FrameInvariants,
                        rs: &RestorationState) -> io::Result<()> {
-      if seq.enable_restoration && !fi.allow_intrabc { // && !self.lossless
+      if fi.sequence.enable_restoration && !fi.allow_intrabc { // && !self.lossless
         let mut use_lrf = false;
         let mut use_chroma_lrf = false;
         for i in 0..PLANES {
@@ -1514,7 +1518,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         }
         if use_lrf {
           // The Y shift value written here indicates shift up from superblock size
-          if !seq.use_128x128_superblock {
+          if !fi.sequence.use_128x128_superblock {
             self.write(1, if rs.unit_size[0] > 64 {1} else {0})?;
           }
           if rs.unit_size[0] > 64 {
@@ -1522,7 +1526,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
           }
 
           if use_chroma_lrf {
-            if seq.chroma_sampling == ChromaSampling::Cs420 {
+            if fi.sequence.chroma_sampling == ChromaSampling::Cs420 {
               self.write(1, if rs.unit_size[0] > rs.unit_size[1] {1} else {0})?;
             }
           }
@@ -1613,10 +1617,9 @@ fn aom_uleb_encode(mut value: u64, coded_value: &mut [u8]) -> usize {
   leb_size
 }
 
-fn write_obus(packet: &mut dyn io::Write, sequence: &mut Sequence,
-              fi: &mut FrameInvariants, fs: &FrameState, rs: &RestorationState)
+fn write_obus(packet: &mut dyn io::Write,
+         fi: &mut FrameInvariants, fs: &FrameState, rs: &RestorationState)
          -> io::Result<()> {
-    //let mut uch = BitWriter::endian(packet, BigEndian);
     let obu_extension = 0 as u32;
 
     let mut buf1 = Vec::new();
@@ -1633,7 +1636,7 @@ fn write_obus(packet: &mut dyn io::Write, sequence: &mut Sequence,
         let mut buf2 = Vec::new();
         {
             let mut bw2 = BitWriter::endian(&mut buf2, BigEndian);
-            bw2.write_sequence_header_obu(sequence, fi)?;
+            bw2.write_sequence_header_obu(fi)?;
             bw2.byte_align()?;
         }
 
@@ -1664,7 +1667,7 @@ fn write_obus(packet: &mut dyn io::Write, sequence: &mut Sequence,
     let mut buf2 = Vec::new();
     {
         let mut bw2 = BitWriter::endian(&mut buf2, BigEndian);
-        bw2.write_frame_header_obu(sequence, fi, fs, rs)?;
+        bw2.write_frame_header_obu(fi, fs, rs)?;
     }
 
     {
@@ -1724,7 +1727,7 @@ pub fn encode_tx_block(
   fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
   w: &mut dyn Writer, p: usize, bo: &BlockOffset, mode: PredictionMode,
   tx_size: TxSize, tx_type: TxType, plane_bsize: BlockSize, po: &PlaneOffset,
-  skip: bool, bit_depth: usize, ac: &[i16], alpha: i16, for_rdo_use: bool
+  skip: bool, ac: &[i16], alpha: i16, for_rdo_use: bool
 ) -> (bool, i64) {
     let qidx = get_qidx(fi, fs, cw, bo);
     let rec = &mut fs.rec.planes[p];
@@ -1733,7 +1736,7 @@ pub fn encode_tx_block(
     assert!(tx_size.sqr() <= TxSize::TX_32X32 || tx_type == TxType::DCT_DCT);
 
     if mode.is_intra() {
-      mode.predict_intra(&mut rec.mut_slice(po), tx_size, bit_depth, &ac, alpha, p, fi.w_in_b, fi.h_in_b);
+      mode.predict_intra(&mut rec.mut_slice(po), tx_size, fi.sequence.bit_depth, &ac, alpha, p, fi.w_in_b, fi.h_in_b);
     }
 
     if skip { return (false, -1); }
@@ -1753,7 +1756,7 @@ pub fn encode_tx_block(
          tx_size.width(),
          tx_size.height());
 
-    forward_transform(residual, coeffs, tx_size.width(), tx_size, tx_type, bit_depth);
+    forward_transform(residual, coeffs, tx_size.width(), tx_size, tx_type, fi.sequence.bit_depth);
 
     let coded_tx_size = av1_get_coded_tx_size(tx_size).area();
     fs.qc.quantize(coeffs, qcoeffs, coded_tx_size);
@@ -1762,12 +1765,12 @@ pub fn encode_tx_block(
                             fi.use_reduced_tx_set);
 
     // Reconstruct
-    dequantize(qidx, qcoeffs, rcoeffs, tx_size, bit_depth, fi.dc_delta_q[p], fi.ac_delta_q[p]);
+    dequantize(qidx, qcoeffs, rcoeffs, tx_size, fi.sequence.bit_depth, fi.dc_delta_q[p], fi.ac_delta_q[p]);
 
     let mut tx_dist: i64 = -1;
 
     if !fi.use_tx_domain_distortion || !for_rdo_use {
-        inverse_transform_add(rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, bit_depth);
+        inverse_transform_add(rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, fi.sequence.bit_depth);
     } else {
         // Store tx-domain distortion of this block
         tx_dist = coeffs
@@ -1787,8 +1790,7 @@ pub fn encode_tx_block(
 
 pub fn motion_compensate(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
                          luma_mode: PredictionMode, ref_frames: [usize; 2], mvs: [MotionVector; 2],
-                         bsize: BlockSize, bo: &BlockOffset, bit_depth: usize,
-                         luma_only: bool) {
+                         bsize: BlockSize, bo: &BlockOffset, luma_only: bool) {
   debug_assert!(!luma_mode.is_intra());
 
   let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
@@ -1815,7 +1817,7 @@ pub fn motion_compensate(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
 
       if some_use_intra {
         luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), plane_bsize.width(),
-          plane_bsize.height(), ref_frames, mvs, bit_depth);
+          plane_bsize.height(), ref_frames, mvs);
       } else {
         assert!(xdec == 1 && ydec == 1);
         // TODO: these are absolutely only valid for 4:2:0
@@ -1829,29 +1831,29 @@ pub fn motion_compensate(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Con
             let rf2 = cw.bc.at(&bo.with_offset(-1,0)).ref_frames;
             let po2 = PlaneOffset { x: po.x, y: po.y+2 };
             let po3 = PlaneOffset { x: po.x+2, y: po.y+2 };
-            luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), 2, 2, rf0, mv0, bit_depth);
-            luma_mode.predict_inter(fi, p, &po1, &mut rec.mut_slice(&po1), 2, 2, rf1, mv1, bit_depth);
-            luma_mode.predict_inter(fi, p, &po2, &mut rec.mut_slice(&po2), 2, 2, rf2, mv2, bit_depth);
-            luma_mode.predict_inter(fi, p, &po3, &mut rec.mut_slice(&po3), 2, 2, ref_frames, mvs, bit_depth);
+            luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), 2, 2, rf0, mv0);
+            luma_mode.predict_inter(fi, p, &po1, &mut rec.mut_slice(&po1), 2, 2, rf1, mv1);
+            luma_mode.predict_inter(fi, p, &po2, &mut rec.mut_slice(&po2), 2, 2, rf2, mv2);
+            luma_mode.predict_inter(fi, p, &po3, &mut rec.mut_slice(&po3), 2, 2, ref_frames, mvs);
         }
         if bsize == BlockSize::BLOCK_8X4 {
             let mv1 = cw.bc.at(&bo.with_offset(0,-1)).mv;
             let rf1 = cw.bc.at(&bo.with_offset(0,-1)).ref_frames;
-            luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), 4, 2, rf1, mv1, bit_depth);
+            luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), 4, 2, rf1, mv1);
             let po3 = PlaneOffset { x: po.x, y: po.y+2 };
-            luma_mode.predict_inter(fi, p, &po3, &mut rec.mut_slice(&po3), 4, 2, ref_frames, mvs, bit_depth);
+            luma_mode.predict_inter(fi, p, &po3, &mut rec.mut_slice(&po3), 4, 2, ref_frames, mvs);
         }
         if bsize == BlockSize::BLOCK_4X8 {
             let mv2 = cw.bc.at(&bo.with_offset(-1,0)).mv;
             let rf2 = cw.bc.at(&bo.with_offset(-1,0)).ref_frames;
-            luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), 2, 4, rf2, mv2, bit_depth);
+            luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), 2, 4, rf2, mv2);
             let po3 = PlaneOffset { x: po.x+2, y: po.y };
-            luma_mode.predict_inter(fi, p, &po3, &mut rec.mut_slice(&po3), 2, 4, ref_frames, mvs, bit_depth);
+            luma_mode.predict_inter(fi, p, &po3, &mut rec.mut_slice(&po3), 2, 4, ref_frames, mvs);
         }
       }
     } else {
       luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), plane_bsize.width(),
-        plane_bsize.height(), ref_frames, mvs, bit_depth);
+        plane_bsize.height(), ref_frames, mvs);
     }
   }
 }
@@ -1873,17 +1875,17 @@ pub fn encode_block_a(seq: &Sequence, fs: &FrameState,
     cw.bc.cdef_coded
 }
 
-pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
+pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
                  cw: &mut ContextWriter, w: &mut dyn Writer,
                  luma_mode: PredictionMode, chroma_mode: PredictionMode,
                  ref_frames: [usize; 2], mvs: [MotionVector; 2],
-                 bsize: BlockSize, bo: &BlockOffset, skip: bool, bit_depth: usize,
+                 bsize: BlockSize, bo: &BlockOffset, skip: bool,
                  cfl: CFLParams, tx_size: TxSize, tx_type: TxType,
                  mode_context: usize, mv_stack: &[CandidateMV], for_rdo_use: bool)
                  -> i64 {
     let is_inter = !luma_mode.is_intra();
     if is_inter { assert!(luma_mode == chroma_mode); };
-    let sb_size = if seq.use_128x128_superblock {
+    let sb_size = if fi.sequence.use_128x128_superblock {
         BlockSize::BLOCK_128X128
     } else {
         BlockSize::BLOCK_64X64
@@ -2014,10 +2016,10 @@ pub fn encode_block_b(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
     }
 
     if is_inter {
-      motion_compensate(fi, fs, cw, luma_mode, ref_frames, mvs, bsize, bo, bit_depth, false);
-      write_tx_tree(fi, fs, cw, w, luma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth, seq.chroma_sampling, false, for_rdo_use)
+      motion_compensate(fi, fs, cw, luma_mode, ref_frames, mvs, bsize, bo, false);
+      write_tx_tree(fi, fs, cw, w, luma_mode, bo, bsize, tx_size, tx_type, skip, false, for_rdo_use)
     } else {
-      write_tx_blocks(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, bit_depth, seq.chroma_sampling, cfl, false, for_rdo_use)
+      write_tx_blocks(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, cfl, false, for_rdo_use)
     }
 }
 
@@ -2061,9 +2063,8 @@ pub fn luma_ac(
 pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
                        cw: &mut ContextWriter, w: &mut dyn Writer,
                        luma_mode: PredictionMode, chroma_mode: PredictionMode, bo: &BlockOffset,
-                       bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool, bit_depth: usize,
-                       chroma_sampling: ChromaSampling, cfl: CFLParams, luma_only: bool,
-                       for_rdo_use: bool) -> i64 {
+                       bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool,
+                       cfl: CFLParams, luma_only: bool, for_rdo_use: bool) -> i64 {
     let bw = bsize.width_mi() / tx_size.width_mi();
     let bh = bsize.height_mi() / tx_size.height_mi();
     let qidx = get_qidx(fi, fs, cw, bo);
@@ -2073,7 +2074,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
     let mut tx_dist: i64 = 0;
     let do_chroma = has_chroma(bo, bsize, xdec, ydec);
 
-    fs.qc.update(qidx, tx_size, luma_mode.is_intra(), bit_depth, fi.dc_delta_q[0], 0);
+    fs.qc.update(qidx, tx_size, luma_mode.is_intra(), fi.sequence.bit_depth, fi.dc_delta_q[0], 0);
 
     for by in 0..bh {
         for bx in 0..bw {
@@ -2086,7 +2087,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
             let (_, dist) =
             encode_tx_block(
               fi, fs, cw, w, 0, &tx_bo, luma_mode, tx_size, tx_type, bsize, &po,
-              skip, bit_depth, ac, 0, for_rdo_use
+              skip, ac, 0, for_rdo_use
             );
             assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
             tx_dist += dist;
@@ -2095,7 +2096,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
 
     if luma_only { return tx_dist };
 
-    let uv_tx_size = bsize.largest_uv_tx_size(chroma_sampling);
+    let uv_tx_size = bsize.largest_uv_tx_size(fi.sequence.chroma_sampling);
 
     let mut bw_uv = (bw * tx_size.width_mi()) >> xdec;
     let mut bh_uv = (bh * tx_size.height_mi()) >> ydec;
@@ -2122,7 +2123,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
         };
 
         for p in 1..3 {
-            fs.qc.update(fi.base_q_idx, uv_tx_size, true, bit_depth, fi.dc_delta_q[p], fi.ac_delta_q[p]);
+            fs.qc.update(fi.base_q_idx, uv_tx_size, true, fi.sequence.bit_depth, fi.dc_delta_q[p], fi.ac_delta_q[p]);
             let alpha = cfl.alpha(p - 1);
             for by in 0..bh_uv {
                 for bx in 0..bw_uv {
@@ -2139,7 +2140,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
                     po.y += (by * uv_tx_size.height()) as isize;
                     let (_, dist) =
                     encode_tx_block(fi, fs, cw, w, p, &tx_bo, chroma_mode, uv_tx_size, uv_tx_type,
-                                    plane_bsize, &po, skip, bit_depth, ac, alpha, for_rdo_use);
+                                    plane_bsize, &po, skip, ac, alpha, for_rdo_use);
                     assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
                     tx_dist += dist;
                 }
@@ -2154,8 +2155,8 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
 // but only one tx block exist for a inter mode partition.
 pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter, w: &mut dyn Writer,
                        luma_mode: PredictionMode, bo: &BlockOffset,
-                       bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool, bit_depth: usize,
-                       chroma_sampling: ChromaSampling, luma_only: bool, for_rdo_use: bool) -> i64 {
+                       bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool,
+                       luma_only: bool, for_rdo_use: bool) -> i64 {
     let bw = bsize.width_mi() / tx_size.width_mi();
     let bh = bsize.height_mi() / tx_size.height_mi();
     let qidx = get_qidx(fi, fs, cw, bo);
@@ -2164,19 +2165,18 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
     let ac = &[0i16; 32 * 32];
     let mut tx_dist: i64 = 0;
 
-    fs.qc.update(qidx, tx_size, luma_mode.is_intra(), bit_depth, fi.dc_delta_q[0], 0);
+    fs.qc.update(qidx, tx_size, luma_mode.is_intra(), fi.sequence.bit_depth, fi.dc_delta_q[0], 0);
 
     let po = bo.plane_offset(&fs.input.planes[0].cfg);
     let (has_coeff, dist) = encode_tx_block(
-      fi, fs, cw, w, 0, &bo, luma_mode, tx_size, tx_type, bsize, &po, skip,
-      bit_depth, ac, 0, for_rdo_use
+      fi, fs, cw, w, 0, &bo, luma_mode, tx_size, tx_type, bsize, &po, skip, ac, 0, for_rdo_use
     );
     assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
     tx_dist += dist;
 
     if luma_only { return tx_dist };
 
-    let uv_tx_size = bsize.largest_uv_tx_size(chroma_sampling);
+    let uv_tx_size = bsize.largest_uv_tx_size(fi.sequence.chroma_sampling);
 
     let mut bw_uv = (bw * tx_size.width_mi()) >> xdec;
     let mut bh_uv = (bh * tx_size.height_mi()) >> ydec;
@@ -2195,7 +2195,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
         let uv_tx_type = if has_coeff {tx_type} else {TxType::DCT_DCT}; // if inter mode, uv_tx_type == tx_type
 
         for p in 1..3 {
-            fs.qc.update(qidx, uv_tx_size, false, bit_depth, fi.dc_delta_q[p], fi.ac_delta_q[p]);
+            fs.qc.update(qidx, uv_tx_size, false, fi.sequence.bit_depth, fi.dc_delta_q[p], fi.ac_delta_q[p]);
             let tx_bo = BlockOffset {
                 x: bo.x  - ((bw * tx_size.width_mi() == 1) as usize),
                 y: bo.y  - ((bh * tx_size.height_mi() == 1) as usize)
@@ -2204,7 +2204,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
             let po = bo.plane_offset(&fs.input.planes[p].cfg);
             let (_, dist) =
             encode_tx_block(fi, fs, cw, w, p, &tx_bo, luma_mode, uv_tx_size, uv_tx_type,
-                            plane_bsize, &po, skip, bit_depth, ac, 0, for_rdo_use);
+                            plane_bsize, &po, skip, ac, 0, for_rdo_use);
             assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
             tx_dist += dist;
         }
@@ -2213,7 +2213,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
     tx_dist
 }
 
-pub fn encode_block_with_modes(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
+pub fn encode_block_with_modes(fi: &FrameInvariants, fs: &mut FrameState,
     cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
     bsize: BlockSize, bo: &BlockOffset, mode_decision: &RDOPartitionOutput) {
     let (mode_luma, mode_chroma) =
@@ -2226,21 +2226,21 @@ pub fn encode_block_with_modes(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fr
     let (tx_size, tx_type) = (mode_decision.tx_size, mode_decision.tx_type);
 
     debug_assert!((tx_size, tx_type) ==
-        rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, ref_frames, mvs, skip));
+        rdo_tx_size_type(fi, fs, cw, bsize, bo, mode_luma, ref_frames, mvs, skip));
     cw.bc.set_tx_size(bo, tx_size);
 
     let mut mv_stack = Vec::new();
     let is_compound = ref_frames[1] != NONE_FRAME;
     let mode_context = cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, fi, is_compound);
 
-    cdef_coded = encode_block_a(seq, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
+    cdef_coded = encode_block_a(&fi.sequence, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                                 bsize, bo, skip);
-    encode_block_b(seq, fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
-                    mode_luma, mode_chroma, ref_frames, mvs, bsize, bo, skip, seq.bit_depth, cfl,
+    encode_block_b(fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
+                    mode_luma, mode_chroma, ref_frames, mvs, bsize, bo, skip, cfl,
                     tx_size, tx_type, mode_context, &mv_stack, false);
 }
 
-fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
+fn encode_partition_bottomup(fi: &FrameInvariants, fs: &mut FrameState,
                              cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
                              bsize: BlockSize, bo: &BlockOffset, pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5]
 ) -> (f64, Option<RDOPartitionOutput>) {
@@ -2294,7 +2294,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
             let tell = w.tell_frac();
             cw.write_partition(w, bo, best_partition, bsize);
-            cost = (w.tell_frac() - tell) as f64 * get_lambda(fi, seq.bit_depth)/ ((1 << OD_BITRES) as f64);
+            cost = (w.tell_frac() - tell) as f64 * get_lambda(fi)/ ((1 << OD_BITRES) as f64);
         }
 
         let pmv_idx = if bsize.greater_than(BlockSize::BLOCK_32X32) {
@@ -2304,12 +2304,12 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
         };
         let spmvs = &pmvs[pmv_idx];
 
-        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, bsize, bo, spmvs, false).part_modes[0].clone();
+        let mode_decision = rdo_mode_decision(fi, fs, cw, bsize, bo, spmvs, false).part_modes[0].clone();
 
         rd_cost = mode_decision.rd_cost + cost;
         best_rd = rd_cost;
 
-        encode_block_with_modes(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, bsize, bo,
+        encode_block_with_modes(fi, fs, cw, w_pre_cdef, w_post_cdef, bsize, bo,
                             &mode_decision);
 
         best_decision = mode_decision;
@@ -2347,7 +2347,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
                 let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
                 let tell = w.tell_frac();
                 cw.write_partition(w, bo, partition, bsize);
-                rd_cost = (w.tell_frac() - tell) as f64 * get_lambda(fi, seq.bit_depth)/ ((1 << OD_BITRES) as f64);
+                rd_cost = (w.tell_frac() - tell) as f64 * get_lambda(fi)/ ((1 << OD_BITRES) as f64);
             }
 
             let four_partitions = [
@@ -2363,7 +2363,6 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
             // is passed to encode_partition_bottomup()
             partitions.iter().for_each(|&offset| {
                 if let (cost, Some(mode_decision)) = encode_partition_bottomup(
-                    seq,
                     fi,
                     fs,
                     cw,
@@ -2402,7 +2401,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
                 assert!(subsize == mode.bsize);
                 let offset = mode.bo.clone();
                 // FIXME: redundant block re-encode
-                encode_block_with_modes(seq, fi, fs, cw, w_pre_cdef, w_post_cdef,
+                encode_block_with_modes(fi, fs, cw, w_pre_cdef, w_post_cdef,
                                         mode.bsize, &offset, &mode);
             }
         }
@@ -2418,7 +2417,7 @@ fn encode_partition_bottomup(seq: &Sequence, fi: &FrameInvariants, fs: &mut Fram
     (best_rd, Some(best_decision))
 }
 
-fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
+fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState,
             cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
             bsize: BlockSize, bo: &BlockOffset, block_output: &Option<RDOOutput>,
             pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5]
@@ -2468,7 +2467,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
             partition_types.push(PartitionType::PARTITION_NONE);
             partition_types.push(PartitionType::PARTITION_SPLIT);
         }
-        rdo_output = rdo_partition_decision(seq, fi, fs, cw,
+        rdo_output = rdo_partition_decision(fi, fs, cw,
             w_pre_cdef, w_post_cdef, bsize, bo, &rdo_output, pmvs, &partition_types);
         partition = rdo_output.part_type;
     } else {
@@ -2500,7 +2499,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
                     let spmvs = &pmvs[pmv_idx];
 
                     // Make a prediction mode decision for blocks encoded with no rdo_partition_decision call (e.g. edges)
-                    rdo_mode_decision(seq, fi, fs, cw, bsize, bo, spmvs, false).part_modes[0].clone()
+                    rdo_mode_decision(fi, fs, cw, bsize, bo, spmvs, false).part_modes[0].clone()
                 };
 
             let mut mode_luma = part_decision.pred_mode_luma;
@@ -2516,7 +2515,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
             // because, with top-down partition RDO, the neighnoring contexts
             // of current partition can change, i.e. neighboring partitions can split down more.
             let (tx_size, tx_type) =
-                rdo_tx_size_type(seq, fi, fs, cw, bsize, bo, mode_luma, ref_frames, mvs, skip);
+                rdo_tx_size_type(fi, fs, cw, bsize, bo, mode_luma, ref_frames, mvs, skip);
 
             let mut mv_stack = Vec::new();
             let is_compound = ref_frames[1] != NONE_FRAME;
@@ -2562,10 +2561,10 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
             }
 
             // FIXME: every final block that has gone through the RDO decision process is encoded twice
-            cdef_coded = encode_block_a(seq, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
+            cdef_coded = encode_block_a(&fi.sequence, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                          bsize, bo, skip);
-            encode_block_b(seq, fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
-                          mode_luma, mode_chroma, ref_frames, mvs, bsize, bo, skip, seq.bit_depth, cfl,
+            encode_block_b(fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
+                          mode_luma, mode_chroma, ref_frames, mvs, bsize, bo, skip, cfl,
                           tx_size, tx_type, mode_context, &mv_stack, false);
         },
         PARTITION_SPLIT |
@@ -2582,7 +2581,7 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
                     let offset = mode.bo.clone();
 
                     // Each block is subjected to a new splitting decision
-                    encode_partition_topdown(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, subsize, &offset,
+                    encode_partition_topdown(fi, fs, cw, w_pre_cdef, w_post_cdef, subsize, &offset,
                         &Some(RDOOutput {
                             rd_cost: mode.rd_cost,
                             part_type: PartitionType::PARTITION_NONE,
@@ -2602,7 +2601,6 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
 
                 partitions.iter().for_each(|&offset| {
                         encode_partition_topdown(
-                            seq,
                             fi,
                             fs,
                             cw,
@@ -2625,8 +2623,8 @@ fn encode_partition_topdown(seq: &Sequence, fi: &FrameInvariants, fs: &mut Frame
     }
 }
 
-fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameState,
-               rs: &mut RestorationState, bit_depth: usize) -> Vec<u8> {
+fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState,
+               rs: &mut RestorationState) -> Vec<u8> {
     let mut w = WriterEncoder::new();
 
     let fc = if fi.primary_ref_frame == PRIMARY_REF_NONE {
@@ -2653,8 +2651,8 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
             for i in 0..INTER_REFS_PER_FRAME {
                 let r = fi.ref_frames[i] as usize;
                 if pmvs[r].is_none() {
-                    assert!(!sequence.use_128x128_superblock);
-                    pmvs[r] = estimate_motion_ss4(fi, fs, BlockSize::BLOCK_64X64, r, &bo, sequence.bit_depth);
+                    assert!(!fi.sequence.use_128x128_superblock);
+                    pmvs[r] = estimate_motion_ss4(fi, fs, BlockSize::BLOCK_64X64, r, &bo);
                 }
             }
             frame_pmvs.push(pmvs);
@@ -2702,18 +2700,18 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
                             None
                         };
 
-                        assert!(!sequence.use_128x128_superblock);
+                        assert!(!fi.sequence.use_128x128_superblock);
                         pmvs[1][r] = estimate_motion_ss2(
-                            fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(0, 0), &[Some(pmv), pmv_w, pmv_n], sequence.bit_depth
+                            fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(0, 0), &[Some(pmv), pmv_w, pmv_n]
                         );
                         pmvs[2][r] = estimate_motion_ss2(
-                            fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(8, 0), &[Some(pmv), pmv_e, pmv_n], sequence.bit_depth
+                            fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(8, 0), &[Some(pmv), pmv_e, pmv_n]
                         );
                         pmvs[3][r] = estimate_motion_ss2(
-                            fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(0, 8), &[Some(pmv), pmv_w, pmv_s], sequence.bit_depth
+                            fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(0, 8), &[Some(pmv), pmv_w, pmv_s]
                         );
                         pmvs[4][r] = estimate_motion_ss2(
-                            fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(8, 8), &[Some(pmv), pmv_e, pmv_s], sequence.bit_depth
+                            fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(8, 8), &[Some(pmv), pmv_e, pmv_s]
                         );
                     }
                 }
@@ -2721,25 +2719,25 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
 
             // Encode SuperBlock
             if fi.config.speed_settings.encode_bottomup {
-                encode_partition_bottomup(sequence, fi, fs, &mut cw,
+                encode_partition_bottomup(fi, fs, &mut cw,
                                           &mut w_pre_cdef, &mut w_post_cdef,
                                           BlockSize::BLOCK_64X64, &bo, &pmvs);
             }
             else {
-                encode_partition_topdown(sequence, fi, fs, &mut cw,
+                encode_partition_topdown(fi, fs, &mut cw,
                                          &mut w_pre_cdef, &mut w_post_cdef,
                                          BlockSize::BLOCK_64X64, &bo, &None, &pmvs);
             }
 
             // CDEF has to be decisded before loop restoration, but coded after
             if cw.bc.cdef_coded {
-                cdef_index = rdo_cdef_decision(&sbo, fi, fs, &mut cw, bit_depth);
+                cdef_index = rdo_cdef_decision(&sbo, fi, fs, &mut cw);
                 cw.bc.set_cdef(&sbo, cdef_index);
             }
 
             // loop restoration must be decided last but coded before anything else
-            if sequence.enable_restoration {
-                rs.lrf_optimize_superblock(&sbo, fi, fs, &mut cw, bit_depth);
+            if fi.sequence.enable_restoration {
+                rs.lrf_optimize_superblock(&sbo, fi, fs, &mut cw);
                 cw.write_lrf(&mut w, fi, rs, &sbo);
             }
 
@@ -2755,9 +2753,9 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
         }
     }
     /* TODO: Don't apply if lossless */
-    deblock_filter_optimize(fi, fs, &mut cw.bc, bit_depth);
+    deblock_filter_optimize(fi, fs, &mut cw.bc);
     if fs.deblock.levels[0] != 0 || fs.deblock.levels[1] != 0 {
-        deblock_filter_frame(fs, &mut cw.bc, bit_depth);
+        deblock_filter_frame(fs, &mut cw.bc, fi.sequence.bit_depth);
     }
     {
       // Until the loop filters are pipelined, we'll need to keep
@@ -2765,12 +2763,12 @@ fn encode_tile(sequence: &mut Sequence, fi: &FrameInvariants, fs: &mut FrameStat
       let pre_cdef_frame = fs.rec.clone();
 
       /* TODO: Don't apply if lossless */
-      if sequence.enable_cdef {
-        cdef_filter_frame(fi, &mut fs.rec, &mut cw.bc, bit_depth);
+      if fi.sequence.enable_cdef {
+        cdef_filter_frame(fi, &mut fs.rec, &mut cw.bc);
       }
       /* TODO: Don't apply if lossless */
-      if sequence.enable_restoration {
-        rs.lrf_filter_frame(fs, &pre_cdef_frame, bit_depth);
+      if fi.sequence.enable_restoration {
+        rs.lrf_filter_frame(fs, &pre_cdef_frame, fi.sequence.bit_depth);
       }
     }
 
@@ -2794,12 +2792,11 @@ fn write_tile_group_header(tile_start_and_end_present_flag: bool) ->
     buf.clone()
 }
 
-pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
+pub fn encode_frame(fi: &mut FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
     let mut packet = Vec::new();
-    let mut rs = RestorationState::new(sequence, fi, &fs.input);
+    let mut rs = RestorationState::new(fi, &fs.input);
     if fi.show_existing_frame {
-        //write_uncompressed_header(&mut packet, sequence, fi).unwrap();
-        write_obus(&mut packet, sequence, fi, fs, &rs).unwrap();
+        write_obus(&mut packet, fi, fs, &rs).unwrap();
         match fi.rec_buffer.frames[fi.frame_to_show_map_idx as usize] {
             Some(ref rec) => for p in 0..3 {
                 fs.rec.planes[p].data.copy_from_slice(rec.frame.planes[p].data.as_slice());
@@ -2810,11 +2807,11 @@ pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut 
         if !fi.intra_only {
             for i in 0..INTER_REFS_PER_FRAME {
                 fi.ref_frame_sign_bias[i] =
-                if !sequence.enable_order_hint {
+                if !fi.sequence.enable_order_hint {
                     false
                 } else if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[i] as usize] {
                     let hint = rec.order_hint;
-                    sequence.get_relative_dist(hint, fi.order_hint) > 0
+                    fi.sequence.get_relative_dist(hint, fi.order_hint) > 0
                 } else {
                     false
                 };
@@ -2826,14 +2823,11 @@ pub fn encode_frame(sequence: &mut Sequence, fi: &mut FrameInvariants, fs: &mut 
         fs.input_qres.downsample_from(&fs.input_hres);
         fs.input_qres.pad(fi.width, fi.height);
 
-        let bit_depth = sequence.bit_depth;
-
         segmentation_optimize(fi, fs);
 
-        let tile = encode_tile(sequence, fi, fs, &mut rs, bit_depth); // actually tile group
+        let tile = encode_tile(fi, fs, &mut rs); // actually tile group
 
-        //write_uncompressed_header(&mut packet, sequence, fi).unwrap();
-        write_obus(&mut packet, sequence, fi, fs, &rs).unwrap();
+        write_obus(&mut packet, fi, fs, &rs).unwrap();
         let mut buf1 = Vec::new();
         {
             let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
@@ -2885,8 +2879,9 @@ mod test {
   #[test]
   fn frame_state_window() {
     let config = EncoderConfig { ..Default::default() };
-    let fi = FrameInvariants::new(1024, 1024, config);
-    let mut fs = FrameState::new(&fi, Default::default());
+    let seq = Sequence::new(&Default::default());
+    let fi = FrameInvariants::new(1024, 1024, config, seq);
+    let mut fs = FrameState::new(&fi);
     for p in fs.rec.planes.iter_mut() {
       for (i, v) in p
         .mut_slice(&PlaneOffset { x: 0, y: 0 })

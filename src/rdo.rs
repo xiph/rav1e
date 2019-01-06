@@ -30,7 +30,6 @@ use partition::*;
 use plane::*;
 use predict::{RAV1E_INTRA_MODES, RAV1E_INTER_MODES_MINIMAL, RAV1E_INTER_COMPOUND_MODES};
 use quantize::dc_q;
-use Sequence;
 use Tune;
 use write_tx_blocks;
 use write_tx_tree;
@@ -139,8 +138,8 @@ pub fn sse_wxh(
   sse
 }
 
-pub fn get_lambda(fi: &FrameInvariants, bit_depth: usize) -> f64 {
-  let q = dc_q(fi.base_q_idx, fi.dc_delta_q[0], bit_depth) as f64;
+pub fn get_lambda(fi: &FrameInvariants) -> f64 {
+  let q = dc_q(fi.base_q_idx, fi.dc_delta_q[0], fi.sequence.bit_depth) as f64;
 
   // Convert q into Q0 precision, given that libaom quantizers are Q3
   let q0 = q / 8.0_f64;
@@ -150,8 +149,8 @@ pub fn get_lambda(fi: &FrameInvariants, bit_depth: usize) -> f64 {
   q0 * q0 * std::f64::consts::LN_2 / 6.0
 }
 
-pub fn get_lambda_sqrt(fi: &FrameInvariants, bit_depth: usize) -> f64 {
-  let q = dc_q(fi.base_q_idx, fi.dc_delta_q[0], bit_depth) as f64;
+pub fn get_lambda_sqrt(fi: &FrameInvariants) -> f64 {
+  let q = dc_q(fi.base_q_idx, fi.dc_delta_q[0], fi.sequence.bit_depth) as f64;
 
   // Convert q into Q0 precision, given that libaom quantizers are Q3
   let q0 = q / 8.0_f64;
@@ -164,10 +163,10 @@ pub fn get_lambda_sqrt(fi: &FrameInvariants, bit_depth: usize) -> f64 {
 // Compute the rate-distortion cost for an encode
 fn compute_rd_cost(
   fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize,
-  is_chroma_block: bool, bo: &BlockOffset, bit_cost: u32, bit_depth: usize,
+  is_chroma_block: bool, bo: &BlockOffset, bit_cost: u32,
   luma_only: bool
 ) -> f64 {
-  let lambda = get_lambda(fi, bit_depth);
+  let lambda = get_lambda(fi);
 
   // Compute distortion
   let po = bo.plane_offset(&fs.input.planes[0].cfg);
@@ -184,7 +183,7 @@ fn compute_rd_cost(
       &fs.rec.planes[0].slice(&po),
       w_y,
       h_y,
-      bit_depth
+      fi.sequence.bit_depth
     )
   } else {
     unimplemented!();
@@ -226,12 +225,11 @@ fn compute_rd_cost(
 fn compute_tx_rd_cost(
   fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize,
   is_chroma_block: bool, bo: &BlockOffset, bit_cost: u32, tx_dist: i64,
-  bit_depth: usize,
   skip: bool, luma_only: bool
 ) -> f64 {
   assert!(fi.config.tune == Tune::Psnr);
 
-  let lambda = get_lambda(fi, bit_depth);
+  let lambda = get_lambda(fi);
 
   // Compute distortion
   let mut distortion = if skip {
@@ -281,7 +279,7 @@ fn compute_tx_rd_cost(
 }
 
 pub fn rdo_tx_size_type(
-  seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
+  fi: &FrameInvariants, fs: &mut FrameState,
   cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset,
   luma_mode: PredictionMode, ref_frames: [usize; 2], mvs: [MotionVector; 2], skip: bool
 ) -> (TxSize, TxType) {
@@ -322,8 +320,6 @@ pub fn rdo_tx_size_type(
         bo,
         tx_size,
         tx_set,
-        seq.bit_depth,
-        seq.chroma_sampling
       )
     } else {
       TxType::DCT_DCT
@@ -362,8 +358,7 @@ impl Default for EncodingSettings {
   }
 }
 // RDO-based mode decision
-pub fn rdo_mode_decision(
-  seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
+pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
   cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset,
   pmvs: &[Option<MotionVector>], needs_rec: bool
 ) -> RDOOutput {
@@ -417,7 +412,7 @@ pub fn rdo_mode_decision(
       if mv_stack.len() > 1 { pmv[1] = mv_stack[1].this_mv; }
       let cmv = pmvs[ref_slot_set[i] as usize].unwrap();
       mvs_from_me.push([
-        motion_estimation(fi, fs, bsize, bo, ref_frames[0], cmv, seq.bit_depth, &pmv),
+        motion_estimation(fi, fs, bsize, bo, ref_frames[0], cmv, &pmv),
         MotionVector { row: 0, col: 0 }
       ]);
 
@@ -473,7 +468,7 @@ pub fn rdo_mode_decision(
     mvs: [MotionVector; 2], ref_frames: [usize; 2], mode_set_chroma: &[PredictionMode], luma_mode_is_intra: bool,
     mode_context: usize, mv_stack: &Vec<CandidateMV>| {
     let (tx_size, mut tx_type) = rdo_tx_size_type(
-      seq, fi, fs, cw, bsize, bo, luma_mode, ref_frames, mvs, false,
+        fi, fs, cw, bsize, bo, luma_mode, ref_frames, mvs, false,
     );
 
     // Find the best chroma prediction mode for the current luma prediction mode
@@ -488,10 +483,9 @@ pub fn rdo_mode_decision(
           cw.write_partition(wr, bo, PartitionType::PARTITION_NONE, bsize);
         }
 
-        encode_block_a(seq, fs, cw, wr, bsize, bo, skip);
+        encode_block_a(&fi.sequence, fs, cw, wr, bsize, bo, skip);
         let tx_dist =
         encode_block_b(
-          seq,
           fi,
           fs,
           cw,
@@ -503,7 +497,6 @@ pub fn rdo_mode_decision(
           bsize,
           bo,
           skip,
-          seq.bit_depth,
           CFLParams::new(),
           tx_size,
           tx_type,
@@ -523,7 +516,6 @@ pub fn rdo_mode_decision(
             bo,
             cost,
             tx_dist,
-            seq.bit_depth,
             skip,
             false
           )
@@ -536,7 +528,6 @@ pub fn rdo_mode_decision(
             is_chroma_block,
             bo,
             cost,
-            seq.bit_depth,
             false
           )
         };
@@ -610,12 +601,12 @@ pub fn rdo_mode_decision(
     let mut sads = intra_mode_set.iter().map(|&luma_mode| {
       let rec = &mut fs.rec.planes[0];
       let po = bo.plane_offset(&rec.cfg);
-      luma_mode.predict_intra(&mut rec.mut_slice(&po), tx_size, seq.bit_depth, &[0i16; 2], 0, 0, fi.w_in_b, fi.h_in_b);
+      luma_mode.predict_intra(&mut rec.mut_slice(&po), tx_size, fi.sequence.bit_depth, &[0i16; 2], 0, 0, fi.w_in_b, fi.h_in_b);
 
       let plane_org = fs.input.planes[0].slice(&po);
       let plane_ref = rec.slice(&po);
 
-      (luma_mode, get_sad(&plane_org, &plane_ref, tx_size.height(), tx_size.width(), seq.bit_depth))
+      (luma_mode, get_sad(&plane_org, &plane_ref, tx_size.height(), tx_size.width(), fi.sequence.bit_depth))
     }).collect::<Vec<_>>();
 
     sads.sort_by_key(|a| a.1);
@@ -664,20 +655,17 @@ pub fn rdo_mode_decision(
       best.tx_size,
       best.tx_type,
       false,
-      seq.bit_depth,
-      seq.chroma_sampling,
       CFLParams::new(),
       true,
       false
     );
     cw.rollback(&cw_checkpoint);
-    if let Some(cfl) = rdo_cfl_alpha(fs, bo, bsize, seq.bit_depth, seq.chroma_sampling) {
+    if let Some(cfl) = rdo_cfl_alpha(fs, bo, bsize, fi.sequence.bit_depth, fi.sequence.chroma_sampling) {
       let mut wr: &mut dyn Writer = &mut WriterCounter::new();
       let tell = wr.tell_frac();
 
-      encode_block_a(seq, fs, cw, wr, bsize, bo, best.skip);
+      encode_block_a(&fi.sequence, fs, cw, wr, bsize, bo, best.skip);
       encode_block_b(
-        seq,
         fi,
         fs,
         cw,
@@ -689,7 +677,6 @@ pub fn rdo_mode_decision(
         bsize,
         bo,
         best.skip,
-        seq.bit_depth,
         cfl,
         best.tx_size,
         best.tx_type,
@@ -710,7 +697,6 @@ pub fn rdo_mode_decision(
           is_chroma_block,
           bo,
           cost,
-          seq.bit_depth,
           false
         );
 
@@ -793,8 +779,7 @@ pub fn rdo_cfl_alpha(
 pub fn rdo_tx_type_decision(
   fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
   mode: PredictionMode, ref_frames: [usize; 2], mvs: [MotionVector; 2], bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize,
-  tx_set: TxSet, bit_depth: usize, chroma_sampling: ChromaSampling
-) -> TxType {
+  tx_set: TxSet) -> TxType {
   let mut best_type = TxType::DCT_DCT;
   let mut best_rd = std::f64::MAX;
 
@@ -816,19 +801,19 @@ pub fn rdo_tx_type_decision(
     }
 
     if is_inter {
-      motion_compensate(fi, fs, cw, mode, ref_frames, mvs, bsize, bo, bit_depth, true);
+      motion_compensate(fi, fs, cw, mode, ref_frames, mvs, bsize, bo, true);
     }
 
     let mut wr: &mut dyn Writer = &mut WriterCounter::new();
     let tell = wr.tell_frac();
     let tx_dist = if is_inter {
       write_tx_tree(
-        fi, fs, cw, wr, mode, bo, bsize, tx_size, tx_type, false, bit_depth, chroma_sampling, true, true
+        fi, fs, cw, wr, mode, bo, bsize, tx_size, tx_type, false, true, true
       )
     }  else {
       let cfl = CFLParams::new(); // Unused
       write_tx_blocks(
-        fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false, bit_depth, chroma_sampling, cfl, true, true
+        fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false, cfl, true, true
       )
     };
 
@@ -843,7 +828,6 @@ pub fn rdo_tx_type_decision(
           bo,
           cost,
           tx_dist,
-          bit_depth,
           false,
           true
         )
@@ -856,7 +840,6 @@ pub fn rdo_tx_type_decision(
           is_chroma_block,
           bo,
           cost,
-          bit_depth,
           true
         )
     };
@@ -924,7 +907,7 @@ pub fn get_sub_partitions_with_border_check<'a>(four_partitions: &[&'a BlockOffs
 
 // RDO-based single level partitioning decision
 pub fn rdo_partition_decision(
-  seq: &Sequence, fi: &FrameInvariants, fs: &mut FrameState,
+  fi: &FrameInvariants, fs: &mut FrameState,
   cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
   bsize: BlockSize, bo: &BlockOffset,
   cached_block: &RDOOutput, pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5],
@@ -957,7 +940,7 @@ pub fn rdo_partition_decision(
 
         let spmvs = &pmvs[pmv_idx];
 
-        let mode_decision = rdo_mode_decision(seq, fi, fs, cw, bsize, bo, spmvs, false).part_modes[0].clone();
+        let mode_decision = rdo_mode_decision(fi, fs, cw, bsize, bo, spmvs, false).part_modes[0].clone();
         child_modes.push(mode_decision);
       }
       PARTITION_SPLIT |
@@ -999,7 +982,7 @@ pub fn rdo_partition_decision(
           let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
           let tell = w.tell_frac();
           cw.write_partition(w, bo, partition, bsize);
-          cost = (w.tell_frac() - tell) as f64 * get_lambda(fi, seq.bit_depth)/ ((1 << OD_BITRES) as f64);
+          cost = (w.tell_frac() - tell) as f64 * get_lambda(fi)/ ((1 << OD_BITRES) as f64);
         }
 
         child_modes.extend(
@@ -1007,7 +990,7 @@ pub fn rdo_partition_decision(
             .iter().zip(pmv_idxs)
             .map(|(&offset, pmv_idx)| {
               let mode_decision =
-              rdo_mode_decision(seq, fi, fs, cw, subsize, &offset,
+              rdo_mode_decision(fi, fs, cw, subsize, &offset,
                 &pmvs[pmv_idx], true)
                 .part_modes[0]
                 .clone();
@@ -1017,7 +1000,7 @@ pub fn rdo_partition_decision(
                   cw.write_partition(w, offset, PartitionType::PARTITION_NONE, subsize);
                 }
 
-                encode_block_with_modes(seq, fi, fs, cw, w_pre_cdef, w_post_cdef, subsize,
+                encode_block_with_modes(fi, fs, cw, w_pre_cdef, w_post_cdef, subsize,
                                     offset, &mode_decision);
                 mode_decision
             }).collect::<Vec<_>>()
@@ -1050,7 +1033,7 @@ pub fn rdo_partition_decision(
 }
 
 pub fn rdo_cdef_decision(sbo: &SuperBlockOffset, fi: &FrameInvariants,
-                         fs: &FrameState, cw: &mut ContextWriter, bit_depth: usize) -> u8 {
+                         fs: &FrameState, cw: &mut ContextWriter) -> u8 {
     // FIXME: 128x128 SB support will break this, we need FilterBlockOffset etc.
     // Construct a single-superblock-sized frame to test-filter into
     let sbo_0 = SuperBlockOffset { x: 0, y: 0 };
@@ -1113,14 +1096,14 @@ pub fn rdo_cdef_decision(sbo: &SuperBlockOffset, fi: &FrameInvariants,
     // RDO comparisons
     let mut best_index: u8 = 0;
     let mut best_err: u64 = 0;
-    let cdef_dirs = cdef_analyze_superblock(&mut rec_input, bc, &sbo_0, &sbo, bit_depth);
+    let cdef_dirs = cdef_analyze_superblock(&mut rec_input, bc, &sbo_0, &sbo, fi.sequence.bit_depth);
     for cdef_index in 0..(1<<fi.cdef_bits) {
         //for p in 0..3 {
         //    for i in 0..cdef_output.planes[p].data.len() { cdef_output.planes[p].data[i] = CDEF_VERY_LARGE; }
         //}
         // TODO: Don't repeat find_direction over and over; split filter_superblock to run it separately
         cdef_filter_superblock(fi, &mut rec_input, &mut cdef_output,
-                               bc, &sbo_0, &sbo, bit_depth, cdef_index, &cdef_dirs);
+                               bc, &sbo_0, &sbo, cdef_index, &cdef_dirs);
 
         // Rate is constant, compute just distortion
         // Computation is block by block, paying attention to skip flag
@@ -1147,7 +1130,7 @@ pub fn rdo_cdef_decision(sbo: &SuperBlockOffset, fi: &FrameInvariants,
                             let ydec = in_plane.cfg.ydec;
 
                             if p==0 {
-                                err += cdef_dist_wxh_8x8(&in_slice, &out_slice, bit_depth);
+                                err += cdef_dist_wxh_8x8(&in_slice, &out_slice, fi.sequence.bit_depth);
                             } else {
                                 err += sse_wxh(&in_slice, &out_slice, 8>>xdec, 8>>ydec);
                             }
