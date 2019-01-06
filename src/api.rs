@@ -291,12 +291,13 @@ impl Config {
   }
 
   pub fn new_context(&self) -> Context {
+    let seq = Sequence::new(&self.frame_info);
     let fi = FrameInvariants::new(
       self.frame_info.width,
       self.frame_info.height,
-      self.enc
+      self.enc,
+      seq,
     );
-    let seq = Sequence::new(&self.frame_info);
 
     #[cfg(feature = "aom")]
     unsafe {
@@ -306,7 +307,6 @@ impl Config {
 
     Context {
       fi,
-      seq,
       frame_count: 0,
       frames_to_be_coded: 0,
       idx: 0,
@@ -322,7 +322,6 @@ impl Config {
 
 pub struct Context {
   fi: FrameInvariants,
-  seq: Sequence,
   //    timebase: Rational,
   frame_count: u64,
   frames_to_be_coded: u64,
@@ -370,7 +369,7 @@ impl fmt::Display for Packet {
 
 impl Context {
   pub fn new_frame(&self) -> Arc<Frame> {
-    Arc::new(Frame::new(self.fi.padded_w, self.fi.padded_h, self.seq.chroma_sampling))
+    Arc::new(Frame::new(self.fi.padded_w, self.fi.padded_h, self.fi.sequence.chroma_sampling))
   }
 
   pub fn send_frame<F>(&mut self, frame: F) -> Result<(), EncoderStatus>
@@ -423,7 +422,7 @@ impl Context {
       Ok(buf)
     }
 
-    sequence_header_inner(&self.seq).unwrap()
+    sequence_header_inner(&self.fi.sequence).unwrap()
   }
 
   fn next_keyframe(&self) -> u64 {
@@ -503,15 +502,15 @@ impl Context {
     if self.fi.show_existing_frame {
       self.idx += 1;
 
-      let mut fs = FrameState::new(&self.fi, self.seq.chroma_sampling);
+      let mut fs = FrameState::new(&self.fi);
 
-      let data = encode_frame(&mut self.seq, &mut self.fi, &mut fs);
+      let data = encode_frame(&mut self.fi, &mut fs);
 
       let rec = if self.fi.show_frame { Some(fs.rec) } else { None };
       let mut psnr = None;
       if self.fi.config.show_psnr {
         if let Some(ref rec) = rec {
-          psnr = Some(calculate_frame_psnr(&*fs.input, rec, self.seq.bit_depth));
+          psnr = Some(calculate_frame_psnr(&*fs.input, rec, self.fi.sequence.bit_depth));
         }
       }
 
@@ -521,10 +520,9 @@ impl Context {
         self.idx += 1;
 
         if let Some(frame) = f {
-          let mut fs = FrameState::new_with_frame(&self.fi, frame.clone(),
-            self.seq.chroma_sampling);
+          let mut fs = FrameState::new_with_frame(&self.fi, frame.clone());
 
-          let data = encode_frame(&mut self.seq, &mut self.fi, &mut fs);
+          let data = encode_frame(&mut self.fi, &mut fs);
           self.packet_data.extend(data);
 
           fs.rec.pad(self.fi.width, self.fi.height);
@@ -541,7 +539,7 @@ impl Context {
             let mut psnr = None;
             if self.fi.config.show_psnr {
               if let Some(ref rec) = rec {
-                psnr = Some(calculate_frame_psnr(&*frame, rec, self.seq.bit_depth));
+                psnr = Some(calculate_frame_psnr(&*frame, rec, self.fi.sequence.bit_depth));
               }
             }
 
