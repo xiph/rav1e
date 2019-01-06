@@ -2905,8 +2905,8 @@ mod test {
       assert!(fs_.rec.planes[p].cfg.yorigin < 0);
       let po = offset.plane_offset(&fs.rec.planes[p].cfg);
       assert_eq!(
-        fs.rec.planes[p].slice(&po).as_slice()[..32],
-        fs_.rec.planes[p].slice(&po).as_slice()[..32]
+        &fs.rec.planes[p].slice(&po).as_slice()[..32],
+        &fs_.rec.planes[p].slice(&po).as_slice()[..32]
       );
     }
   }
