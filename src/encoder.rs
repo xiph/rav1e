@@ -576,6 +576,8 @@ pub struct FrameInvariants {
   pub base_q_idx: u8,
   pub dc_delta_q: [i8; 3],
   pub ac_delta_q: [i8; 3],
+  pub lambda: f64,
+  pub me_lambda: f64,
   pub me_range_scale: u8,
   pub use_tx_domain_distortion: bool,
   pub inter_cfg: Option<InterPropsConfig>,
@@ -639,6 +641,8 @@ impl FrameInvariants {
       base_q_idx: config.quantizer as u8,
       dc_delta_q: [0; 3],
       ac_delta_q: [0; 3],
+      lambda: 0.0,
+      me_lambda: 0.0,
       me_range_scale: 1,
       use_tx_domain_distortion,
       inter_cfg: None,
@@ -657,8 +661,9 @@ impl FrameInvariants {
     fi.show_existing_frame = false;
     fi.frame_to_show_map_idx = 0;
     let q_boost = 15;
-    fi.base_q_idx = (fi.config.quantizer.max(1 + q_boost).min(255 + q_boost) - q_boost) as u8;
-    fi.cdef_bits = 3;
+    let qi = (fi.config.quantizer.max(1 + q_boost).min(255 + q_boost)
+      - q_boost) as u8;
+    fi.set_quantizer(qi);
     fi.primary_ref_frame = PRIMARY_REF_NONE;
     fi.number = segment_start_frame;
     for i in 0..INTER_REFS_PER_FRAME {
@@ -754,8 +759,8 @@ impl FrameInvariants {
     };
 
     let q_drop = 15 * lvl as usize;
-    fi.base_q_idx = (fi.config.quantizer.min(255 - q_drop) + q_drop) as u8;
-    fi.cdef_bits = 3 - ((fi.base_q_idx.max(128) - 128) >> 5);
+    let qi = (fi.config.quantizer.min(255 - q_drop) + q_drop) as u8;
+    fi.set_quantizer(qi);
     let second_ref_frame = if !inter_cfg.multiref {
       NONE_FRAME
     } else if !inter_cfg.reorder || inter_cfg.idx_in_group == 0 {
@@ -814,6 +819,24 @@ impl FrameInvariants {
     fi.number = number;
     fi.me_range_scale = (inter_cfg.group_src_len >> lvl) as u8;
     (fi, true)
+  }
+
+  pub fn set_quantizer(&mut self, qi: u8) {
+    self.base_q_idx = qi;
+    // TODO: Separate qi values for each color plane.
+    if self.frame_type != FrameType::KEY {
+      self.cdef_bits = 3 - ((self.base_q_idx.max(128) - 128) >> 5);
+    } else {
+      self.cdef_bits = 3;
+    }
+    let q = dc_q(self.base_q_idx, self.dc_delta_q[0], self.sequence.bit_depth)
+      as f64;
+    // Convert q into Q0 precision, given that libaom quantizers are Q3
+    let q0 = q / 8.0;
+    // Lambda formula from doc/theoretical_results.lyx in the daala repo.
+    // Use Q0 quantizer since lambda will be applied to Q0 pixel domain.
+    self.lambda = q0 * q0 * std::f64::consts::LN_2 / 6.0;
+    self.me_lambda = self.lambda.sqrt();
   }
 }
 
@@ -2434,7 +2457,8 @@ fn encode_partition_bottomup(
       let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
       let tell = w.tell_frac();
       cw.write_partition(w, bo, PartitionType::PARTITION_NONE, bsize);
-      cost = (w.tell_frac() - tell) as f64 * get_lambda(fi)/ ((1 << OD_BITRES) as f64);
+      cost =
+        (w.tell_frac() - tell) as f64 * fi.lambda / ((1 << OD_BITRES) as f64);
     }
 
     let pmv_idx = if bsize.greater_than(BlockSize::BLOCK_32X32) {
@@ -2490,7 +2514,8 @@ fn encode_partition_bottomup(
         let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
         let tell = w.tell_frac();
         cw.write_partition(w, bo, partition, bsize);
-        rd_cost = (w.tell_frac() - tell) as f64 * get_lambda(fi)/ ((1 << OD_BITRES) as f64);
+        rd_cost = (w.tell_frac() - tell) as f64 * fi.lambda
+          / ((1 << OD_BITRES) as f64);
       }
 
       let four_partitions = [
