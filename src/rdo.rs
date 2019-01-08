@@ -27,7 +27,6 @@ use crate::motion_compensate;
 use crate::partition::*;
 use crate::plane::*;
 use crate::predict::{RAV1E_INTRA_MODES, RAV1E_INTER_MODES_MINIMAL, RAV1E_INTER_COMPOUND_MODES};
-use crate::quantize::dc_q;
 use crate::Tune;
 use crate::write_tx_blocks;
 use crate::write_tx_tree;
@@ -136,35 +135,13 @@ pub fn sse_wxh(
   sse
 }
 
-pub fn get_lambda(fi: &FrameInvariants) -> f64 {
-  let q = dc_q(fi.base_q_idx, fi.dc_delta_q[0], fi.sequence.bit_depth) as f64;
-
-  // Convert q into Q0 precision, given that libaom quantizers are Q3
-  let q0 = q / 8.0_f64;
-
-  // Lambda formula from doc/theoretical_results.lyx in the daala repo
-  // Use Q0 quantizer since lambda will be applied to Q0 pixel domain
-  q0 * q0 * std::f64::consts::LN_2 / 6.0
-}
-
-pub fn get_lambda_sqrt(fi: &FrameInvariants) -> f64 {
-  let q = dc_q(fi.base_q_idx, fi.dc_delta_q[0], fi.sequence.bit_depth) as f64;
-
-  // Convert q into Q0 precision, given that libaom quantizers are Q3
-  let q0 = q / 8.0_f64;
-
-  // Lambda formula from doc/theoretical_results.lyx in the daala repo
-  // Use Q0 quantizer since lambda will be applied to Q0 pixel domain
-  q0 * (std::f64::consts::LN_2 / 6.0).sqrt()
-}
-
 // Compute the rate-distortion cost for an encode
 fn compute_rd_cost(
   fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize,
   is_chroma_block: bool, bo: &BlockOffset, bit_cost: u32,
   luma_only: bool
 ) -> f64 {
-  let lambda = get_lambda(fi);
+  let lambda = fi.lambda;
 
   // Compute distortion
   let po = bo.plane_offset(&fs.input.planes[0].cfg);
@@ -236,7 +213,7 @@ fn compute_tx_rd_cost(
 ) -> f64 {
   assert!(fi.config.tune == Tune::Psnr);
 
-  let lambda = get_lambda(fi);
+  let lambda = fi.lambda;
 
   // Compute distortion
   let mut distortion = if skip {
@@ -1043,7 +1020,8 @@ pub fn rdo_partition_decision(
           let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
           let tell = w.tell_frac();
           cw.write_partition(w, bo, partition, bsize);
-          cost = (w.tell_frac() - tell) as f64 * get_lambda(fi)/ ((1 << OD_BITRES) as f64);
+          cost = (w.tell_frac() - tell) as f64 * fi.lambda
+            / ((1 << OD_BITRES) as f64);
         }
         let mut rd_cost_sum = 0.0;
 

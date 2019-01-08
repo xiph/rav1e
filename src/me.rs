@@ -16,7 +16,6 @@ use crate::FrameInvariants;
 use crate::FrameState;
 use crate::partition::*;
 use crate::plane::*;
-use crate::rdo::get_lambda_sqrt;
 
 #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
 mod nasm {
@@ -168,7 +167,7 @@ pub fn motion_estimation(
       let mut best_mv = MotionVector { row: 0, col: 0 };
 
       // 0.5 is a fudge factor
-      let lambda = (get_lambda_sqrt(fi) * 256.0 * 0.5) as u32;
+      let lambda = (fi.me_lambda * 256.0 * 0.5) as u32;
 
       full_search(
         x_lo,
@@ -335,7 +334,7 @@ pub fn estimate_motion_ss4(
     let mut best_mv = MotionVector { row: 0, col: 0 };
 
     // Divide by 16 to account for subsampling, 0.125 is a fudge factor
-    let lambda = (get_lambda_sqrt(fi) * 256.0 / 16.0 * 0.125) as u32;
+    let lambda = (fi.me_lambda * 256.0 / 16.0 * 0.125) as u32;
 
     full_search(
       x_lo,
@@ -381,7 +380,7 @@ pub fn estimate_motion_ss2(
     let mut best_mv = MotionVector { row: 0, col: 0 };
 
     // Divide by 4 to account for subsampling, 0.125 is a fudge factor
-    let lambda = (get_lambda_sqrt(fi) * 256.0 / 4.0 * 0.125) as u32;
+    let lambda = (fi.me_lambda * 256.0 / 4.0 * 0.125) as u32;
 
     for omv in pmvs.iter() {
       if let Some(pmv) = omv {
