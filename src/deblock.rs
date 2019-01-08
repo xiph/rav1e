@@ -1339,13 +1339,11 @@ fn sse_optimize(fs: &mut FrameState, bc: &mut BlockContext, bit_depth: usize) {
 }
 
 pub fn deblock_filter_optimize(
-  fi: &FrameInvariants, fs: &mut FrameState, bc: &mut BlockContext,
-  bit_depth: usize
-) {
+  fi: &FrameInvariants, fs: &mut FrameState, bc: &mut BlockContext) {
   if fi.config.speed_settings.fast_deblock {
-    let q = ac_q(fi.base_q_idx, 0, bit_depth) as i32;
+    let q = ac_q(fi.base_q_idx, 0, fi.sequence.bit_depth) as i32;
     let level = clamp(
-      match bit_depth {
+      match fi.sequence.bit_depth {
         8 =>
           if fi.frame_type == FrameType::KEY {
             q * 17563 - 421574 + (1 << 18 >> 1) >> 18
@@ -1378,6 +1376,6 @@ pub fn deblock_filter_optimize(
     fs.deblock.levels[2] = level;
     fs.deblock.levels[3] = level;
   } else {
-    sse_optimize(fs, bc, bit_depth);
+    sse_optimize(fs, bc, fi.sequence.bit_depth);
   }
 }

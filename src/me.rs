@@ -145,7 +145,7 @@ fn get_mv_range(fi: &FrameInvariants, bo: &BlockOffset, blk_w: usize, blk_h: usi
 
 pub fn motion_estimation(
   fi: &FrameInvariants, fs: &FrameState, bsize: BlockSize, bo: &BlockOffset,
-  ref_frame: usize, cmv: MotionVector, bit_depth: usize, pmv: &[MotionVector; 2]
+  ref_frame: usize, cmv: MotionVector, pmv: &[MotionVector; 2]
 ) -> MotionVector {
   match fi.rec_buffer.frames[fi.ref_frames[ref_frame - LAST_FRAME] as usize] {
     Some(ref rec) => {
@@ -166,7 +166,7 @@ pub fn motion_estimation(
       let mut best_mv = MotionVector { row: 0, col: 0 };
 
       // 0.5 is a fudge factor
-      let lambda = (get_lambda_sqrt(fi, bit_depth) * 256.0 * 0.5) as u32;
+      let lambda = (get_lambda_sqrt(fi) * 256.0 * 0.5) as u32;
 
       full_search(
         x_lo,
@@ -181,7 +181,7 @@ pub fn motion_estimation(
         &mut lowest_cost,
         &po,
         2,
-        bit_depth,
+        fi.sequence.bit_depth,
         lambda,
         pmv,
         fi.allow_high_precision_mv
@@ -228,15 +228,14 @@ pub fn motion_estimation(
                 blk_w,
                 blk_h,
                 [ref_frame, NONE_FRAME],
-                [cand_mv, MotionVector { row: 0, col: 0 }],
-                bit_depth
+                [cand_mv, MotionVector { row: 0, col: 0 }]                
               );
             }
 
             let plane_org = fs.input.planes[0].slice(&po);
             let plane_ref = tmp_plane.slice(&PlaneOffset { x: 0, y: 0 });
 
-            let sad = get_sad(&plane_org, &plane_ref, blk_h, blk_w, bit_depth);
+            let sad = get_sad(&plane_org, &plane_ref, blk_h, blk_w, fi.sequence.bit_depth);
 
             let rate1 = get_mv_rate(cand_mv, pmv[0], fi.allow_high_precision_mv);
             let rate2 = get_mv_rate(cand_mv, pmv[1], fi.allow_high_precision_mv);
@@ -312,7 +311,7 @@ fn get_mv_rate(a: MotionVector, b: MotionVector, allow_high_precision_mv: bool) 
 
 pub fn estimate_motion_ss4(
   fi: &FrameInvariants, fs: &FrameState, bsize: BlockSize, ref_idx: usize,
-  bo: &BlockOffset, bit_depth: usize
+  bo: &BlockOffset
 ) -> Option<MotionVector> {
   if let Some(ref rec) = fi.rec_buffer.frames[ref_idx] {
     let blk_w = bsize.width();
@@ -334,7 +333,7 @@ pub fn estimate_motion_ss4(
     let mut best_mv = MotionVector { row: 0, col: 0 };
 
     // Divide by 16 to account for subsampling, 0.125 is a fudge factor
-    let lambda = (get_lambda_sqrt(fi, bit_depth) * 256.0 / 16.0 * 0.125) as u32;
+    let lambda = (get_lambda_sqrt(fi) * 256.0 / 16.0 * 0.125) as u32;
 
     full_search(
       x_lo,
@@ -349,7 +348,7 @@ pub fn estimate_motion_ss4(
       &mut lowest_cost,
       &po,
       1,
-      bit_depth,
+      fi.sequence.bit_depth,
       lambda,
       &[MotionVector { row: 0, col: 0 }; 2],
       fi.allow_high_precision_mv
@@ -363,7 +362,7 @@ pub fn estimate_motion_ss4(
 
 pub fn estimate_motion_ss2(
   fi: &FrameInvariants, fs: &FrameState, bsize: BlockSize, ref_idx: usize,
-  bo: &BlockOffset, pmvs: &[Option<MotionVector>; 3], bit_depth: usize
+  bo: &BlockOffset, pmvs: &[Option<MotionVector>; 3]
 ) -> Option<MotionVector> {
   if let Some(ref rec) = fi.rec_buffer.frames[ref_idx] {
     let blk_w = bsize.width();
@@ -380,7 +379,7 @@ pub fn estimate_motion_ss2(
     let mut best_mv = MotionVector { row: 0, col: 0 };
 
     // Divide by 4 to account for subsampling, 0.125 is a fudge factor
-    let lambda = (get_lambda_sqrt(fi, bit_depth) * 256.0 / 4.0 * 0.125) as u32;
+    let lambda = (get_lambda_sqrt(fi) * 256.0 / 4.0 * 0.125) as u32;
 
     for omv in pmvs.iter() {
       if let Some(pmv) = omv {
@@ -402,7 +401,7 @@ pub fn estimate_motion_ss2(
           &mut lowest_cost,
           &po,
           1,
-          bit_depth,
+          fi.sequence.bit_depth,
           lambda,
           &[MotionVector { row: 0, col: 0 }; 2],
           fi.allow_high_precision_mv

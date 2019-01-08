@@ -243,10 +243,9 @@ pub fn cdef_filter_superblock(fi: &FrameInvariants,
                               bc_global: &mut BlockContext,
                               sbo: &SuperBlockOffset,
                               sbo_global: &SuperBlockOffset,
-                              bit_depth: usize,
                               cdef_index: u8,
                               cdef_dirs: &CdefDirections) {
-    let coeff_shift = bit_depth as i32 - 8;
+    let coeff_shift = fi.sequence.bit_depth as i32 - 8;
     let cdef_damping = fi.cdef_damping as i32;
     let cdef_y_strength = fi.cdef_y_strengths[cdef_index as usize];
     let cdef_uv_strength = fi.cdef_uv_strengths[cdef_index as usize];
@@ -324,7 +323,7 @@ pub fn cdef_filter_superblock(fi: &FrameInvariants,
 // CDEF parameters are stored for each 64 by 64 block of pixels.
 // The CDEF filter is applied on each 8 by 8 block of pixels.
 // Reference: http://av1-spec.argondesign.com/av1-spec/av1-spec.html#cdef-process
-pub fn cdef_filter_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockContext, bit_depth: usize) {
+pub fn cdef_filter_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockContext) {
 
     // Each filter block is 64x64, except right and/or bottom for non-multiple-of-64 sizes.
     // FIXME: 128x128 SB support will break this, we need FilterBlockOffset etc.
@@ -384,8 +383,8 @@ pub fn cdef_filter_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockCo
         for fbx in 0..fb_width {
             let sbo = SuperBlockOffset { x: fbx, y: fby };
             let cdef_index = bc.at(&sbo.block_offset(0, 0)).cdef_index;
-            let cdef_dirs = cdef_analyze_superblock(&mut cdef_frame, bc, &sbo, &sbo, bit_depth);
-            cdef_filter_superblock(fi, &mut cdef_frame, rec, bc, &sbo, &sbo, bit_depth, cdef_index, &cdef_dirs);
+            let cdef_dirs = cdef_analyze_superblock(&mut cdef_frame, bc, &sbo, &sbo, fi.sequence.bit_depth);
+            cdef_filter_superblock(fi, &mut cdef_frame, rec, bc, &sbo, &sbo, cdef_index, &cdef_dirs);
         }
     }
 }

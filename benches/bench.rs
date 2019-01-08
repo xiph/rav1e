@@ -46,11 +46,12 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
   }
   let config =
     EncoderConfig { quantizer: qindex, speed_settings: SpeedSettings::from_preset(10), ..Default::default() };
-  let mut fi = FrameInvariants::new(1024, 1024, config);
+  let sequence = Sequence::new(&Default::default());
+  let mut fi = FrameInvariants::new(1024, 1024, config, sequence);
   let mut w = ec::WriterEncoder::new();
   let fc = CDFContext::new(fi.base_q_idx);
   let bc = BlockContext::new(fi.sb_width * 16, fi.sb_height * 16);
-  let mut fs = FrameState::new(&fi, Default::default());
+  let mut fs = FrameState::new(&fi);
   // For now, restoration unit size is locked to superblock size.
   let mut cw = ContextWriter::new(fc, bc);
 
@@ -89,7 +90,6 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
               tx_size.block_size(),
               &po,
               false,
-              8,
               ac,
               0,
               false
@@ -111,11 +111,12 @@ fn cdef_frame(c: &mut Criterion) {
 fn cdef_frame_bench(b: &mut Bencher, w: usize, h: usize) {
   let config =
     EncoderConfig { quantizer: 100, speed_settings: SpeedSettings::from_preset(10), ..Default::default() };
-  let fi = FrameInvariants::new(w, h, config);
+  let sequence = Sequence::new(&Default::default());
+  let fi = FrameInvariants::new(w, h, config, sequence);
   let mut bc = BlockContext::new(fi.sb_width * 16, fi.sb_height * 16);
-  let mut fs = FrameState::new(&fi, Default::default());
+  let mut fs = FrameState::new(&fi);
 
-  b.iter(|| cdef_filter_frame(&fi, &mut fs.rec, &mut bc, 8));
+  b.iter(|| cdef_filter_frame(&fi, &mut fs.rec, &mut bc));
 }
 
 fn cfl_rdo(c: &mut Criterion) {
@@ -133,10 +134,11 @@ fn cfl_rdo(c: &mut Criterion) {
 fn cfl_rdo_bench(b: &mut Bencher, bsize: BlockSize) {
   let config =
     EncoderConfig { quantizer: 100, speed_settings: SpeedSettings::from_preset(10), ..Default::default() };
-  let fi = FrameInvariants::new(1024, 1024, config);
-  let mut fs = FrameState::new(&fi, Default::default());
+  let sequence = Sequence::new(&Default::default());
+  let fi = FrameInvariants::new(1024, 1024, config, sequence );
+  let mut fs = FrameState::new(&fi);
   let offset = BlockOffset { x: 1, y: 1 };
-  b.iter(|| rdo_cfl_alpha(&mut fs, &offset, bsize, 8, Default::default()))
+  b.iter(|| rdo_cfl_alpha(&mut fs, &offset, bsize, fi.sequence.bit_depth, fi.sequence.chroma_sampling))
 }
 
 criterion_group!(intra_prediction, predict::pred_bench,);
