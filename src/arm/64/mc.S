@@ -1216,7 +1216,7 @@ L(\type\()_8tap_v):
 160:
         b.gt            1680b
 
-        // 16x4 v
+        // 16x2, 16x4 v
         add             \xmy, \xmy, #2
         ld1             {v0.s}[0], [\xmy]
         sub             \src, \src, \s_strd
