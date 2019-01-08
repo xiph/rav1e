@@ -3036,7 +3036,7 @@ impl ContextWriter {
               }
             }
             RestorationFilter::Sgrproj{set, xqd} => {
-              match rs.lrf_type[pli] {
+              match rs.plane[pli].lrf_type {
                 RESTORE_SGRPROJ => {
                   symbol_with_update!(self, w, 1, &mut self.fc.lrf_sgrproj_cdf);
                 }
@@ -3067,7 +3067,7 @@ impl ContextWriter {
               }
             }
             RestorationFilter::Wiener{coeffs} => {
-              match rs.lrf_type[pli] {
+              match rs.plane[pli].lrf_type {
                 RESTORE_WIENER => {
                   symbol_with_update!(self, w, 1, &mut self.fc.lrf_wiener_cdf);
                 }

@@ -1510,8 +1510,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         let mut use_lrf = false;
         let mut use_chroma_lrf = false;
         for i in 0..PLANES {
-          self.write(2,rs.lrf_type[i])?; // filter type by plane
-          if rs.lrf_type[i] != RESTORE_NONE {
+          self.write(2, rs.plane[i].lrf_type)?; // filter type by plane
+          if rs.plane[i].lrf_type != RESTORE_NONE {
             use_lrf = true;
             if i > 0 { use_chroma_lrf = true; }
           }
@@ -1519,15 +1519,15 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         if use_lrf {
           // The Y shift value written here indicates shift up from superblock size
           if !fi.sequence.use_128x128_superblock {
-            self.write(1, if rs.unit_size[0] > 64 {1} else {0})?;
+            self.write(1, if rs.plane[0].unit_size > 64 {1} else {0})?;
           }
-          if rs.unit_size[0] > 64 {
-            self.write(1, if rs.unit_size[0] > 128 {1} else {0})?;
+          if rs.plane[0].unit_size > 64 {
+            self.write(1, if rs.plane[0].unit_size > 128 {1} else {0})?;
           }
 
           if use_chroma_lrf {
             if fi.sequence.chroma_sampling == ChromaSampling::Cs420 {
-              self.write(1, if rs.unit_size[0] > rs.unit_size[1] {1} else {0})?;
+              self.write(1, if rs.plane[0].unit_size > rs.plane[1].unit_size {1} else {0})?;
             }
           }
         }

@@ -396,8 +396,6 @@ impl RestorationPlane {
 
 #[derive(Clone)]
 pub struct RestorationState {
-  pub lrf_type: [u8; PLANES],
-  pub unit_size: [usize; PLANES],
   pub plane: [RestorationPlane; PLANES]
 }
 
@@ -428,8 +426,6 @@ impl RestorationState {
                                       RESTORATION_TILESIZE_MAX >> lrf_uv_shift];
 
     RestorationState {
-      lrf_type,
-      unit_size,
       plane: [RestorationPlane::new(&clipped_cfg[0], lrf_type[0], unit_size[0]),
               RestorationPlane::new(&clipped_cfg[1], lrf_type[1], unit_size[1]),
               RestorationPlane::new(&clipped_cfg[2], lrf_type[2], unit_size[2])]
