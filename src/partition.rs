@@ -10,6 +10,7 @@
 #![allow(non_camel_case_types)]
 #![allow(dead_code)]
 
+use std::ops;
 use self::BlockSize::*;
 use self::TxSize::*;
 use crate::api::ChromaSampling;
@@ -731,11 +732,34 @@ pub enum FilterIntraMode {
   FILTER_INTRA_MODES
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Debug, Clone)]
 pub struct MotionVector {
   pub row: i16,
   pub col: i16
 }
+
+impl ops::Add<MotionVector> for MotionVector {
+    type Output = MotionVector;
+
+    fn add(self, _rhs: MotionVector) -> MotionVector {
+        MotionVector{row: self.row + _rhs.row, col: self.col + _rhs.col}
+    }
+}
+
+impl ops::Div<i16> for MotionVector {
+    type Output = MotionVector;
+
+    fn div(self, _rhs: i16) -> MotionVector {
+        MotionVector{row: self.row  / _rhs, col: self.col / _rhs}
+    }
+}
+
+impl MotionVector {
+  pub fn quantize_to_fullpel(&self) -> MotionVector {
+    MotionVector{row: (self.row / 8) * 8, col: (self.col / 8) * 8}
+  }
+}
+
 
 pub const NEWMV_MODE_CONTEXTS: usize = 7;
 pub const GLOBALMV_MODE_CONTEXTS: usize = 2;
