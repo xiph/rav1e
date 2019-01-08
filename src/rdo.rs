@@ -404,9 +404,22 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
       let mut pmv = [MotionVector{ row: 0, col: 0 }; 2];
       if mv_stack.len() > 0 { pmv[0] = mv_stack[0].this_mv; }
       if mv_stack.len() > 1 { pmv[1] = mv_stack[1].this_mv; }
-      let cmv = pmvs[ref_slot_set[i] as usize].unwrap();
+      let ref_slot = ref_slot_set[i] as usize;
+      let cmv = pmvs[ref_slot].unwrap();
+
+      let b_me = motion_estimation(fi, fs, bsize, bo, ref_frames[0], cmv, &pmv, ref_slot);
+
+      // Fill the saved motion structure.
+      let frame_mvs = &mut fs.frame_mvs[ref_slot as usize];
+      for mi_y in (bo.y)..(bo.y + bsize.height_mi()) {
+        for mi_x in (bo.x)..(bo.x + bsize.width_mi()) {
+          let offset = mi_y * fi.w_in_b + mi_x;
+          frame_mvs[offset] = b_me;
+        }
+      }
+
       mvs_from_me.push([
-        motion_estimation(fi, fs, bsize, bo, ref_frames[0], cmv, &pmv),
+        b_me,
         MotionVector { row: 0, col: 0 }
       ]);
 

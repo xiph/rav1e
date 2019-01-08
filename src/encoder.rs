@@ -156,7 +156,8 @@ pub struct ReferenceFrame {
   pub frame: Frame,
   pub input_hres: Plane,
   pub input_qres: Plane,
-  pub cdfs: CDFContext
+  pub cdfs: CDFContext,
+  pub frame_mvs: Vec<Vec<MotionVector>>,
 }
 
 #[derive(Debug, Clone)]
@@ -394,6 +395,7 @@ pub struct FrameState {
   pub deblock: DeblockState,
   pub segmentation: SegmentationState,
   pub restoration: RestorationState,
+  pub frame_mvs: Vec<Vec<MotionVector>>,
 }
 
 impl FrameState {
@@ -420,6 +422,7 @@ impl FrameState {
       deblock: Default::default(),
       segmentation: Default::default(),
       restoration: rs,
+      frame_mvs: vec![vec![MotionVector{row: 0, col: 0}; fi.w_in_b * fi.h_in_b]; REF_FRAMES]
     }
   }
 }
@@ -559,14 +562,17 @@ impl FrameInvariants {
     let use_reduced_tx_set = config.speed_settings.reduced_tx_set;
     let use_tx_domain_distortion = config.tune == Tune::Psnr && config.speed_settings.tx_domain_distortion;
 
+    let w_in_b = 2 * config.width.align_power_of_two_and_shift(3); // MiCols, ((width+7)/8)<<3 >> MI_SIZE_LOG2
+    let h_in_b = 2 * config.height.align_power_of_two_and_shift(3); // MiRows, ((height+7)/8)<<3 >> MI_SIZE_LOG2
+
     FrameInvariants {
       sequence,
       width: config.width,
       height: config.height,
       sb_width: config.width.align_power_of_two_and_shift(6),
       sb_height: config.height.align_power_of_two_and_shift(6),
-      w_in_b: 2 * config.width.align_power_of_two_and_shift(3), // MiCols, ((width+7)/8)<<3 >> MI_SIZE_LOG2
-      h_in_b: 2 * config.height.align_power_of_two_and_shift(3), // MiRows, ((height+7)/8)<<3 >> MI_SIZE_LOG2
+      w_in_b,
+      h_in_b,
       number: 0,
       order_hint: 0,
       show_frame: true,
@@ -2140,7 +2146,8 @@ pub fn update_rec_buffer(fi: &mut FrameInvariants, fs: FrameState) {
       frame: fs.rec,
       input_hres: fs.input_hres,
       input_qres: fs.input_qres,
-      cdfs: fs.cdfs
+      cdfs: fs.cdfs,
+      frame_mvs: fs.frame_mvs.clone()
     }
   );
   for i in 0..(REF_FRAMES as usize) {
