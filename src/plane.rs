@@ -126,11 +126,11 @@ impl Plane {
     }
   }
 
-  pub fn slice<'a>(&'a self, po: &PlaneOffset) -> PlaneSlice<'a> {
+  pub fn slice(&self, po: &PlaneOffset) -> PlaneSlice {
     PlaneSlice { plane: self, x: po.x, y: po.y }
   }
 
-  pub fn mut_slice<'a>(&'a mut self, po: &PlaneOffset) -> PlaneMutSlice<'a> {
+  pub fn mut_slice(&mut self, po: &PlaneOffset) -> PlaneMutSlice {
     PlaneMutSlice { plane: self, x: po.x, y: po.y }
   }
 
@@ -293,14 +293,14 @@ impl<'a> ExactSizeIterator for IterWidth<'a> { }
 impl<'a> FusedIterator for IterWidth<'a> { }
 
 impl<'a> PlaneSlice<'a> {
-  pub fn as_slice(&'a self) -> &'a [u16] {
+  pub fn as_slice(&self) -> &[u16] {
     let stride = self.plane.cfg.stride;
     let base = (self.y + self.plane.cfg.yorigin as isize) as usize * stride
       + (self.x + self.plane.cfg.xorigin as isize) as usize;
     &self.plane.data[base..]
   }
 
-  pub fn as_slice_clamped(&'a self) -> &'a [u16] {
+  pub fn as_slice_clamped(&self) -> &[u16] {
     let stride = self.plane.cfg.stride;
     let y = (self.y.min(self.plane.cfg.height as isize)
       + self.plane.cfg.yorigin as isize)
@@ -311,18 +311,18 @@ impl<'a> PlaneSlice<'a> {
     &self.plane.data[y * stride + x..]
   }
 
-  pub fn as_slice_w_width(&'a self, width: usize) -> &'a [u16] {
+  pub fn as_slice_w_width(&self, width: usize) -> &[u16] {
     let stride = self.plane.cfg.stride;
     let base = (self.y + self.plane.cfg.yorigin as isize) as usize * stride
       + (self.x + self.plane.cfg.xorigin as isize) as usize;
     &self.plane.data[base..base + width]
   }
 
-  pub fn iter_width(&self, width: usize) -> IterWidth<'a> {
+  pub fn iter_width(&self, width: usize) -> IterWidth {
     IterWidth { ps: *self, width }
   }
 
-  pub fn subslice(&'a self, xo: usize, yo: usize) -> PlaneSlice<'a> {
+  pub fn subslice(&self, xo: usize, yo: usize) -> PlaneSlice {
     PlaneSlice {
       plane: self.plane,
       x: self.x + xo as isize,
@@ -331,12 +331,12 @@ impl<'a> PlaneSlice<'a> {
   }
 
   /// A slice starting i pixels above the current one.
-  pub fn go_up(&'a self, i: usize) -> PlaneSlice<'a> {
+  pub fn go_up(&self, i: usize) -> PlaneSlice {
     PlaneSlice { plane: self.plane, x: self.x, y: self.y - i as isize }
   }
 
   /// A slice starting i pixels to the left of the current one.
-  pub fn go_left(&'a self, i: usize) -> PlaneSlice<'a> {
+  pub fn go_left(&self, i: usize) -> PlaneSlice {
     PlaneSlice { plane: self.plane, x: self.x - i as isize, y: self.y }
   }
 
@@ -356,14 +356,14 @@ pub struct PlaneMutSlice<'a> {
 }
 
 impl<'a> PlaneMutSlice<'a> {
-  pub fn as_mut_slice(&'a mut self) -> &'a mut [u16] {
+  pub fn as_mut_slice(&mut self) -> &mut [u16] {
     let stride = self.plane.cfg.stride;
     let base = (self.y + self.plane.cfg.yorigin as isize) as usize * stride
       + (self.x + self.plane.cfg.xorigin as isize) as usize;
     &mut self.plane.data[base..]
   }
 
-  pub fn as_mut_slice_w_width(&'a mut self, width: usize) -> &'a mut [u16] {
+  pub fn as_mut_slice_w_width(&mut self, width: usize) -> &mut [u16] {
     let stride = self.plane.cfg.stride;
     let y = self.y + self.plane.cfg.yorigin as isize;
     let x = self.x + self.plane.cfg.xorigin as isize;
@@ -382,8 +382,8 @@ impl<'a> PlaneMutSlice<'a> {
   }
 
   pub fn offset_as_mutable(
-    &'a mut self, add_x: usize, add_y: usize
-  ) -> &'a mut [u16] {
+    &mut self, add_x: usize, add_y: usize
+  ) -> &mut [u16] {
     let new_y =
       (self.y + add_y as isize + self.plane.cfg.yorigin as isize) as usize;
     let new_x =
@@ -394,12 +394,12 @@ impl<'a> PlaneMutSlice<'a> {
   // FIXME: code duplication with PlaneSlice
 
   /// A slice starting i pixels above the current one.
-  pub fn go_up(&'a self, i: usize) -> PlaneSlice<'a> {
+  pub fn go_up(&self, i: usize) -> PlaneSlice {
     PlaneSlice { plane: self.plane, x: self.x, y: self.y - i as isize }
   }
 
   /// A slice starting i pixels to the left of the current one.
-  pub fn go_left(&'a self, i: usize) -> PlaneSlice<'a> {
+  pub fn go_left(&self, i: usize) -> PlaneSlice {
     PlaneSlice { plane: self.plane, x: self.x - i as isize, y: self.y }
   }
 
