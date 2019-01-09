@@ -68,7 +68,7 @@ pub enum RestorationFilter {
 
 impl RestorationFilter {
   pub fn default() -> RestorationFilter {
-    RestorationFilter::Sgrproj{set: 5, xqd: SGRPROJ_XQD_MID}
+    RestorationFilter::None
   }
 }
 
@@ -86,10 +86,10 @@ fn sgrproj_box_ab(af: &mut[i32; 64+2],
   let one_over_n = ((1 << SGRPROJ_RECIP_BITS) + n/2 ) / n;
   let n2e = n*n*eps as i32;
   let s = ((1 << SGRPROJ_MTABLE_BITS) + n2e/2) / n2e;
+  let xn = cmp::min(r+1, clipped_cfg.width as isize - x);
   for row in -1..1+h {
     let mut a:i32 = 0;
     let mut b:i32 = 0;
-    let xn = cmp::min(r+1, clipped_cfg.width as isize - x);
 
     for yi in y+row-r..=y+row+r {
       let mut src_plane: &Plane;
@@ -200,63 +200,79 @@ fn sgrproj_stripe_rdu(set: u8, xqd: [i8; 2], clipped_cfg: &PlaneConfig,
   let eps0: u8 = SGRPROJ_PARAMS_EPS[set as usize][0];
   let eps1: u8 = SGRPROJ_PARAMS_EPS[set as usize][1];
 
-  let w0 = xqd[0] as i32;
-  let w1 = xqd[1] as i32;
-  let w2 = (1 << SGRPROJ_PRJ_BITS) - w0 - w1;
-
   /* prime the intermediate arrays */
-  sgrproj_box_ab(&mut a0[0], &mut b0[0], r0 as isize, eps0 as isize, clipped_cfg,
-                 x as isize - 1, stripe_y, stripe_h, clipped_y as isize, clipped_h as isize,
-                 cdeffed, deblocked, bit_depth);
-  sgrproj_box_ab(&mut a0[1], &mut b0[1], r0 as isize, eps0 as isize, clipped_cfg,
-                 x as isize, stripe_y, stripe_h, clipped_y as isize, clipped_h as isize,
-                 cdeffed, deblocked, bit_depth);
-  sgrproj_box_ab(&mut a1[0], &mut b1[0], r1 as isize, eps1 as isize, clipped_cfg,
-                 x as isize - 1, stripe_y, stripe_h, clipped_y as isize, clipped_h as isize,
-                 cdeffed, deblocked, bit_depth);
-  sgrproj_box_ab(&mut a1[1], &mut b1[1], r1 as isize, eps1 as isize, clipped_cfg,
-                 x as isize, stripe_y, stripe_h, clipped_y as isize, clipped_h as isize,
-                 cdeffed, deblocked, bit_depth);
-
+  if r0 > 0 {
+    sgrproj_box_ab(&mut a0[0], &mut b0[0], r0 as isize, eps0 as isize, clipped_cfg,
+                   x as isize - 1, stripe_y, stripe_h, clipped_y as isize, clipped_h as isize,
+                   cdeffed, deblocked, bit_depth);
+    sgrproj_box_ab(&mut a0[1], &mut b0[1], r0 as isize, eps0 as isize, clipped_cfg,
+                   x as isize, stripe_y, stripe_h, clipped_y as isize, clipped_h as isize,
+                   cdeffed, deblocked, bit_depth);
+  }
+  if r1 > 0 {
+    sgrproj_box_ab(&mut a1[0], &mut b1[0], r1 as isize, eps1 as isize, clipped_cfg,
+                   x as isize - 1, stripe_y, stripe_h, clipped_y as isize, clipped_h as isize,
+                   cdeffed, deblocked, bit_depth);
+    sgrproj_box_ab(&mut a1[1], &mut b1[1], r1 as isize, eps1 as isize, clipped_cfg,
+                   x as isize, stripe_y, stripe_h, clipped_y as isize, clipped_h as isize,
+                   cdeffed, deblocked, bit_depth);
+  }
+  
   /* iterate by column */
   let cdeffed_slice = cdeffed.slice(&PlaneOffset{x: x as isize, y: clipped_y as isize});
   let outstride = out.cfg.stride;
   let mut out_slice = out.mut_slice(&PlaneOffset{x: x as isize, y: clipped_y as isize});
   let out_data = out_slice.as_mut_slice();
   for xi in 0..w {
-    sgrproj_box_ab(&mut a0[(xi+2)%3], &mut b0[(xi+2)%3], r0 as isize, eps0 as isize, clipped_cfg,
-                   (x + xi + 1) as isize, stripe_y, stripe_h, clipped_y as isize, clipped_h as isize,
-                   cdeffed, deblocked, bit_depth);
-
-    sgrproj_box_ab(&mut a1[(xi+2)%3], &mut b1[(xi+2)%3], r1 as isize, eps1 as isize, clipped_cfg,
-                   (x + xi + 1) as isize, stripe_y, stripe_h, clipped_y as isize, clipped_h as isize,
-                   cdeffed, deblocked, bit_depth);
-    {
-      /* build intermediate array column F */
+    /* build intermediate array columns */
+    if r0 > 0 {
+      sgrproj_box_ab(&mut a0[(xi+2)%3], &mut b0[(xi+2)%3], r0 as isize, eps0 as isize, clipped_cfg,
+                     (x + xi + 1) as isize, stripe_y, stripe_h, clipped_y as isize, clipped_h as isize,
+                     cdeffed, deblocked, bit_depth);
       let ap0: [&[i32; 64+2]; 3] = [&a0[xi%3], &a0[(xi+1)%3], &a0[(xi+2)%3]];
-      let ap1: [&[i32; 64+2]; 3] = [&a1[xi%3], &a1[(xi+1)%3], &a1[(xi+2)%3]];
       let bp0: [&[i32; 64+2]; 3] = [&b0[xi%3], &b0[(xi+1)%3], &b0[(xi+2)%3]];
+      sgrproj_box_f(&ap0, &bp0, &mut f0, x + xi, clipped_y, clipped_h, cdeffed, 0);
+    }
+    if r1 > 0 {
+      sgrproj_box_ab(&mut a1[(xi+2)%3], &mut b1[(xi+2)%3], r1 as isize, eps1 as isize, clipped_cfg,
+                     (x + xi + 1) as isize, stripe_y, stripe_h, clipped_y as isize, clipped_h as isize,
+                     cdeffed, deblocked, bit_depth);
+      let ap1: [&[i32; 64+2]; 3] = [&a1[xi%3], &a1[(xi+1)%3], &a1[(xi+2)%3]];
       let bp1: [&[i32; 64+2]; 3] = [&b1[xi%3], &b1[(xi+1)%3], &b1[(xi+2)%3]];
 
-      sgrproj_box_f(&ap0, &bp0, &mut f0, x + xi, clipped_y, clipped_h, cdeffed, 0);
       sgrproj_box_f(&ap1, &bp1, &mut f1, x + xi, clipped_y, clipped_h, cdeffed, 1);
     }
-
-    for yi in 0..clipped_h {
-      let u = (cdeffed_slice.p(xi,yi) as i32) << SGRPROJ_RST_BITS;
-      let mut v = w1 * u;
-      if r0 != 0 {
-        v += w0 * f0[yi];
+    if r0 > 0 {
+      if r1 > 0 {
+        let w0 = xqd[0] as i32;
+        let w1 = xqd[1] as i32;
+        let w2 = (1 << SGRPROJ_PRJ_BITS) - w0 - w1;
+        for yi in 0..clipped_h {
+          let u = (cdeffed_slice.p(xi,yi) as i32) << SGRPROJ_RST_BITS;
+          let v = w0*f0[yi] + w1*u + w2*f1[yi];
+          let s = v + (1 << SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS >> 1) >> SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS;
+          out_data[xi + yi*outstride] = clamp(s as u16, 0, (1 << bit_depth) - 1);
+        }
       } else {
-        v += w0 * u;
+        let w0 = xqd[0] as i32;
+        let w = (1 << SGRPROJ_PRJ_BITS) - w0;
+        for yi in 0..clipped_h {
+          let u = (cdeffed_slice.p(xi,yi) as i32) << SGRPROJ_RST_BITS;
+          let v = w0*f0[yi] + w*u;
+          let s = v + (1 << SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS >> 1) >> SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS;
+          out_data[xi + yi*outstride] = clamp(s as u16, 0, (1 << bit_depth) - 1);
+        }
       }
-      if r1 != 0 {
-        v += w2 * f1[yi];
-      } else {
-        v += w2 * u;
-      }
-      let s = v + (1 << SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS >> 1) >> SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS;
-      out_data[xi + yi*outstride] = clamp(s as u16, 0, (1 << bit_depth) - 1);
+    } else {
+      /* if r0 is 0, the r1 must be nonzero */
+      let w = xqd[0] as i32 + xqd[1] as i32;
+      let w2 = (1 << SGRPROJ_PRJ_BITS) - w;
+      for yi in 0..clipped_h {
+        let u = (cdeffed_slice.p(xi,yi) as i32) << SGRPROJ_RST_BITS;
+        let v = w*u + w2*f1[yi];
+        let s = v + (1 << SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS >> 1) >> SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS;
+        out_data[xi + yi*outstride] = clamp(s as u16, 0, (1 << bit_depth) - 1);
+      }      
     }
   }
 }
