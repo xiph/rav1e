@@ -22,8 +22,8 @@ pub struct PlaneConfig {
   pub height: usize,
   pub xdec: usize,
   pub ydec: usize,
-  pub xorigin: isize,
-  pub yorigin: isize
+  pub xorigin: usize,
+  pub yorigin: usize
 }
 
 /// Absolute offset in pixels inside a plane
@@ -50,12 +50,11 @@ impl Plane {
     width: usize, height: usize, xdec: usize, ydec: usize, xpad: usize,
     ypad: usize
   ) -> Plane {
-    let xorigin =
-      xpad.align_power_of_two(Plane::STRIDE_ALIGNMENT_LOG2 - 1) as isize;
-    let yorigin = ypad as isize;
-    let stride = (xorigin as usize + width + xpad)
+    let xorigin = xpad.align_power_of_two(Plane::STRIDE_ALIGNMENT_LOG2 - 1);
+    let yorigin = ypad;
+    let stride = (xorigin + width + xpad)
       .align_power_of_two(Plane::STRIDE_ALIGNMENT_LOG2 - 1);
-    let alloc_height = yorigin as usize + height + ypad;
+    let alloc_height = yorigin + height + ypad;
     let data = vec![128u16; stride * alloc_height];
     assert!(is_aligned(data.as_ptr(), Plane::DATA_ALIGNMENT_LOG2));
     Plane {
@@ -74,9 +73,8 @@ impl Plane {
   }
 
   pub fn pad(&mut self, w: usize, h: usize) {
-    assert!(self.cfg.xorigin >= 0 && self.cfg.yorigin >= 0);
-    let xorigin = self.cfg.xorigin as usize;
-    let yorigin = self.cfg.yorigin as usize;
+    let xorigin = self.cfg.xorigin;
+    let yorigin = self.cfg.yorigin;
     let stride = self.cfg.stride;
     let width = w >> self.cfg.xdec;
     let height = h >> self.cfg.ydec;
@@ -138,10 +136,7 @@ impl Plane {
 
   #[inline]
   fn index(&self, x: usize, y: usize) -> usize {
-    let i = (y as isize + self.cfg.yorigin) * self.cfg.stride as isize
-      + (x as isize + self.cfg.xorigin);
-    assert!(i >= 0);
-    i as usize
+    (y + self.cfg.yorigin) * self.cfg.stride + (x + self.cfg.xorigin)
   }
 
   pub fn p(&self, x: usize, y: usize) -> u16 {
@@ -272,8 +267,8 @@ impl<'a> Iterator for IterWidth<'a> {
 
     #[inline]
     fn next(&mut self) -> Option<&'a [u16]> {
-        let x = self.ps.plane.cfg.xorigin + self.ps.x;
-        let y = self.ps.plane.cfg.yorigin + self.ps.y;
+        let x = self.ps.plane.cfg.xorigin as isize + self.ps.x;
+        let y = self.ps.plane.cfg.yorigin as isize + self.ps.y;
         let stride = self.ps.plane.cfg.stride;
         let base = y as usize * stride + x as usize;
 
@@ -300,26 +295,26 @@ impl<'a> FusedIterator for IterWidth<'a> { }
 impl<'a> PlaneSlice<'a> {
   pub fn as_slice(&'a self) -> &'a [u16] {
     let stride = self.plane.cfg.stride;
-    let base = (self.y + self.plane.cfg.yorigin) as usize * stride
-      + (self.x + self.plane.cfg.xorigin) as usize;
+    let base = (self.y + self.plane.cfg.yorigin as isize) as usize * stride
+      + (self.x + self.plane.cfg.xorigin as isize) as usize;
     &self.plane.data[base..]
   }
 
   pub fn as_slice_clamped(&'a self) -> &'a [u16] {
     let stride = self.plane.cfg.stride;
     let y = (self.y.min(self.plane.cfg.height as isize)
-      + self.plane.cfg.yorigin)
+      + self.plane.cfg.yorigin as isize)
       .max(0) as usize;
     let x = (self.x.min(self.plane.cfg.width as isize)
-      + self.plane.cfg.xorigin)
+      + self.plane.cfg.xorigin as isize)
       .max(0) as usize;
     &self.plane.data[y * stride + x..]
   }
 
   pub fn as_slice_w_width(&'a self, width: usize) -> &'a [u16] {
     let stride = self.plane.cfg.stride;
-    let base = (self.y + self.plane.cfg.yorigin) as usize * stride
-      + (self.x + self.plane.cfg.xorigin) as usize;
+    let base = (self.y + self.plane.cfg.yorigin as isize) as usize * stride
+      + (self.x + self.plane.cfg.xorigin as isize) as usize;
     &self.plane.data[base..base + width]
   }
 
@@ -346,8 +341,10 @@ impl<'a> PlaneSlice<'a> {
   }
 
   pub fn p(&self, add_x: usize, add_y: usize) -> u16 {
-    let new_y = (self.y + add_y as isize + self.plane.cfg.yorigin) as usize;
-    let new_x = (self.x + add_x as isize + self.plane.cfg.xorigin) as usize;
+    let new_y =
+      (self.y + add_y as isize + self.plane.cfg.yorigin as isize) as usize;
+    let new_x =
+      (self.x + add_x as isize + self.plane.cfg.xorigin as isize) as usize;
     self.plane.data[new_y * self.plane.cfg.stride + new_x]
   }
 }
@@ -361,15 +358,15 @@ pub struct PlaneMutSlice<'a> {
 impl<'a> PlaneMutSlice<'a> {
   pub fn as_mut_slice(&'a mut self) -> &'a mut [u16] {
     let stride = self.plane.cfg.stride;
-    let base = (self.y + self.plane.cfg.yorigin) as usize * stride
-      + (self.x + self.plane.cfg.xorigin) as usize;
+    let base = (self.y + self.plane.cfg.yorigin as isize) as usize * stride
+      + (self.x + self.plane.cfg.xorigin as isize) as usize;
     &mut self.plane.data[base..]
   }
 
   pub fn as_mut_slice_w_width(&'a mut self, width: usize) -> &'a mut [u16] {
     let stride = self.plane.cfg.stride;
-    let y = self.y + self.plane.cfg.yorigin;
-    let x = self.x + self.plane.cfg.xorigin;
+    let y = self.y + self.plane.cfg.yorigin as isize;
+    let x = self.x + self.plane.cfg.xorigin as isize;
     assert!(y >= 0);
     assert!(x >= 0);
     let base = y as usize * stride + x as usize;
@@ -377,16 +374,20 @@ impl<'a> PlaneMutSlice<'a> {
   }
 
   pub fn offset(&self, add_x: usize, add_y: usize) -> &[u16] {
-    let new_y = (self.y + add_y as isize + self.plane.cfg.yorigin) as usize;
-    let new_x = (self.x + add_x as isize + self.plane.cfg.xorigin) as usize;
+    let new_y =
+      (self.y + add_y as isize + self.plane.cfg.yorigin as isize) as usize;
+    let new_x =
+      (self.x + add_x as isize + self.plane.cfg.xorigin as isize) as usize;
     &self.plane.data[new_y * self.plane.cfg.stride + new_x..]
   }
 
   pub fn offset_as_mutable(
     &'a mut self, add_x: usize, add_y: usize
   ) -> &'a mut [u16] {
-    let new_y = (self.y + add_y as isize + self.plane.cfg.yorigin) as usize;
-    let new_x = (self.x + add_x as isize + self.plane.cfg.xorigin) as usize;
+    let new_y =
+      (self.y + add_y as isize + self.plane.cfg.yorigin as isize) as usize;
+    let new_x =
+      (self.x + add_x as isize + self.plane.cfg.xorigin as isize) as usize;
     &mut self.plane.data[new_y * self.plane.cfg.stride + new_x..]
   }
 
@@ -403,8 +404,10 @@ impl<'a> PlaneMutSlice<'a> {
   }
 
   pub fn p(&self, add_x: usize, add_y: usize) -> u16 {
-    let new_y = (self.y + add_y as isize + self.plane.cfg.yorigin) as usize;
-    let new_x = (self.x + add_x as isize + self.plane.cfg.xorigin) as usize;
+    let new_y =
+      (self.y + add_y as isize + self.plane.cfg.yorigin as isize) as usize;
+    let new_x =
+      (self.x + add_x as isize + self.plane.cfg.xorigin as isize) as usize;
     self.plane.data[new_y * self.plane.cfg.stride + new_x]
   }
 }
