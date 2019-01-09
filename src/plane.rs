@@ -293,14 +293,14 @@ impl<'a> ExactSizeIterator for IterWidth<'a> { }
 impl<'a> FusedIterator for IterWidth<'a> { }
 
 impl<'a> PlaneSlice<'a> {
-  pub fn as_slice(&self) -> &[u16] {
+  pub fn as_slice(&self) -> &'a [u16] {
     let stride = self.plane.cfg.stride;
     let base = (self.y + self.plane.cfg.yorigin as isize) as usize * stride
       + (self.x + self.plane.cfg.xorigin as isize) as usize;
     &self.plane.data[base..]
   }
 
-  pub fn as_slice_clamped(&self) -> &[u16] {
+  pub fn as_slice_clamped(&self) -> &'a [u16] {
     let stride = self.plane.cfg.stride;
     let y = (self.y.min(self.plane.cfg.height as isize)
       + self.plane.cfg.yorigin as isize)
@@ -311,18 +311,18 @@ impl<'a> PlaneSlice<'a> {
     &self.plane.data[y * stride + x..]
   }
 
-  pub fn as_slice_w_width(&self, width: usize) -> &[u16] {
+  pub fn as_slice_w_width(&self, width: usize) -> &'a [u16] {
     let stride = self.plane.cfg.stride;
     let base = (self.y + self.plane.cfg.yorigin as isize) as usize * stride
       + (self.x + self.plane.cfg.xorigin as isize) as usize;
     &self.plane.data[base..base + width]
   }
 
-  pub fn iter_width(&self, width: usize) -> IterWidth {
+  pub fn iter_width(&self, width: usize) -> IterWidth<'a> {
     IterWidth { ps: *self, width }
   }
 
-  pub fn subslice(&self, xo: usize, yo: usize) -> PlaneSlice {
+  pub fn subslice(&self, xo: usize, yo: usize) -> PlaneSlice<'a> {
     PlaneSlice {
       plane: self.plane,
       x: self.x + xo as isize,
@@ -331,12 +331,12 @@ impl<'a> PlaneSlice<'a> {
   }
 
   /// A slice starting i pixels above the current one.
-  pub fn go_up(&self, i: usize) -> PlaneSlice {
+  pub fn go_up(&self, i: usize) -> PlaneSlice<'a> {
     PlaneSlice { plane: self.plane, x: self.x, y: self.y - i as isize }
   }
 
   /// A slice starting i pixels to the left of the current one.
-  pub fn go_left(&self, i: usize) -> PlaneSlice {
+  pub fn go_left(&self, i: usize) -> PlaneSlice<'a> {
     PlaneSlice { plane: self.plane, x: self.x - i as isize, y: self.y }
   }
 
