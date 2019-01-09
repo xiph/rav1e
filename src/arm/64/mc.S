@@ -1307,21 +1307,19 @@ L(\type\()_8tap_hv):
         ext             v29.16b, v28.16b, v28.16b, #2
         mul             v28.4h,  v28.4h,  v0.4h
         mul             v29.4h,  v29.4h,  v0.4h
-        addv            h28, v28.4h
-        addv            h29, v29.4h
-        trn1            v16.4h, v28.4h, v29.4h
-        srshr           v16.4h, v16.4h, #2
+        addp            v28.4h,  v28.4h,  v29.4h
+        addp            v16.4h,  v28.4h,  v28.4h
+        srshr           v16.4h,  v16.4h,  #2
         bl              L(\type\()_8tap_filter_2)
 
         trn1            v16.2s, v16.2s, v28.2s
-        trn1            v17.2s, v28.2s, v30.2s
-        mov             v18.8b, v30.8b
+        mov             v17.8b, v28.8b
 
 2:
         bl              L(\type\()_8tap_filter_2)
 
-        trn1            v18.2s, v18.2s, v28.2s
-        trn1            v19.2s, v28.2s, v30.2s
+        ext             v18.8b, v17.8b, v28.8b, #4
+        mov             v19.8b, v28.8b
         smull           v2.4s,  v16.4h, v1.h[0]
         smlal           v2.4s,  v17.4h, v1.h[1]
         smlal           v2.4s,  v18.4h, v1.h[2]
@@ -1335,7 +1333,6 @@ L(\type\()_8tap_hv):
         b.le            0f
         mov             v16.8b, v18.8b
         mov             v17.8b, v19.8b
-        mov             v18.8b, v30.8b
         b               2b
 
 280:    // 2x8, 2x16, 2x32 hv
@@ -1355,28 +1352,24 @@ L(\type\()_8tap_hv):
         ext             v29.16b, v28.16b, v28.16b, #2
         mul             v28.4h,  v28.4h,  v0.4h
         mul             v29.4h,  v29.4h,  v0.4h
-        addv            h28, v28.4h
-        addv            h29, v29.4h
-        trn1            v16.4h, v28.4h, v29.4h
-        srshr           v16.4h, v16.4h, #2
+        addp            v28.4h,  v28.4h,  v29.4h
+        addp            v16.4h,  v28.4h,  v28.4h
+        srshr           v16.4h,  v16.4h,  #2
 
         bl              L(\type\()_8tap_filter_2)
         trn1            v16.2s, v16.2s, v28.2s
-        trn1            v17.2s, v28.2s, v30.2s
-        mov             v18.8b, v30.8b
+        mov             v17.8b, v28.8b
         bl              L(\type\()_8tap_filter_2)
-        trn1            v18.2s, v18.2s, v28.2s
-        trn1            v19.2s, v28.2s, v30.2s
-        mov             v20.8b, v30.8b
+        ext             v18.8b, v17.8b, v28.8b, #4
+        mov             v19.8b, v28.8b
         bl              L(\type\()_8tap_filter_2)
-        trn1            v20.2s, v20.2s, v28.2s
-        trn1            v21.2s, v28.2s, v30.2s
-        mov             v22.8b, v30.8b
+        ext             v20.8b, v19.8b, v28.8b, #4
+        mov             v21.8b, v28.8b
 
 28:
         bl              L(\type\()_8tap_filter_2)
-        trn1            v22.2s, v22.2s, v28.2s
-        trn1            v23.2s, v28.2s, v30.2s
+        ext             v22.8b, v21.8b, v28.8b, #4
+        mov             v23.8b, v28.8b
         smull           v2.4s,  v16.4h, v1.h[0]
         smlal           v2.4s,  v17.4h, v1.h[1]
         smlal           v2.4s,  v18.4h, v1.h[2]
@@ -1398,7 +1391,6 @@ L(\type\()_8tap_hv):
         mov             v19.8b, v21.8b
         mov             v20.8b, v22.8b
         mov             v21.8b, v23.8b
-        mov             v22.8b, v30.8b
         b               28b
 
 0:
@@ -1420,7 +1412,6 @@ L(\type\()_8tap_filter_2):
         mla             v27.4h,  v30.4h,  v0.h[2]
         mla             v27.4h,  v31.4h,  v0.h[3]
         srshr           v28.4h,  v27.4h,  #2
-        trn2            v30.2s,  v28.2s,  v28.2s
         ret
 .endif
 
