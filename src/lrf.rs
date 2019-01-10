@@ -16,7 +16,6 @@ use context::SuperBlockOffset;
 use context::PLANES;
 use context::MAX_SB_SIZE;
 use plane::Plane;
-use plane::PlaneConfig;
 use plane::PlaneOffset;
 use std::cmp;
 use util::clamp;
@@ -376,10 +375,11 @@ impl RestorationUnit {
 
 #[derive(Clone, Debug)]
 pub struct RestorationPlane {
-  // all size units are subsampled if the plane is subsampled
-  pub clipped_cfg: PlaneConfig,
   pub lrf_type: u8,
   pub unit_size: usize,
+  // (1 << sb_log2) gives the number of superblocks (having size (1 << SUPERBLOCK_TO_PLANE_SHIFT))
+  // both horizontally and vertically in a restoration unit
+  pub sb_log2: usize,
   pub cols: usize,
   pub rows: usize,
   pub wiener_ref: [[i8; 3]; 2],
@@ -394,15 +394,11 @@ pub struct RestorationPlaneOffset {
 }
 
 impl RestorationPlane {
-  pub fn new(clipped_cfg: &PlaneConfig, lrf_type: u8, unit_size: usize) -> RestorationPlane {
-    let PlaneConfig { width, height, .. } = clipped_cfg;
-    // bolted to superblock size for now
-    let cols = cmp::max((width + (unit_size>>1)) / unit_size, 1);
-    let rows = cmp::max((height + (unit_size>>1)) / unit_size, 1);
+  pub fn new(lrf_type: u8, unit_size: usize, sb_log2: usize, cols: usize, rows: usize) -> RestorationPlane {
     RestorationPlane {
-      clipped_cfg: clipped_cfg.clone(),
       lrf_type,
       unit_size,
+      sb_log2,
       cols,
       rows,
       wiener_ref: [WIENER_TAPS_MID; 2],
@@ -411,29 +407,21 @@ impl RestorationPlane {
     }
   }
 
-  /// find the restoration unit offset corresponding to the this superblock offset
-  /// This encapsulates some minor weirdness due to RU stretching at the frame boundary.
-  pub fn restoration_plane_offset(&self, sbo: &SuperBlockOffset) -> RestorationPlaneOffset {
-    let po = sbo.plane_offset(&self.clipped_cfg);
-    RestorationPlaneOffset {
-      row: cmp::min(po.y / self.unit_size as isize, self.rows as isize - 1) as usize,
-      col: cmp::min(po.x / self.unit_size as isize, self.cols as isize - 1) as usize
-    }
+  fn restoration_unit_index(&self, sbo: &SuperBlockOffset) -> (usize, usize) {
+    (
+      (sbo.x >> self.sb_log2).min(self.cols - 1),
+      (sbo.y >> self.sb_log2).min(self.rows - 1),
+    )
   }
 
   pub fn restoration_unit(&self, sbo: &SuperBlockOffset) -> &RestorationUnit {
-    let rpo = self.restoration_plane_offset(sbo);
-    &self.units[rpo.row][rpo.col]
+    let (x, y) = self.restoration_unit_index(sbo);
+    &self.units[y][x]
   }
 
   pub fn restoration_unit_as_mut(&mut self, sbo: &SuperBlockOffset) -> &mut RestorationUnit {
-    let rpo = self.restoration_plane_offset(sbo);
-    &mut self.units[rpo.row][rpo.col]
-  }
-
-  pub fn restoration_unit_by_stripe(&self, stripenum: usize, rux: usize) -> &RestorationUnit {
-    &self.units[cmp::min((stripenum * 64 >> self.clipped_cfg.ydec) / self.unit_size, self.rows - 1)]
-      [cmp::min(rux, self.cols - 1)]
+    let (x, y) = self.restoration_unit_index(sbo);
+    &mut self.units[y][x]
   }
 }
 
@@ -444,46 +432,31 @@ pub struct RestorationState {
 
 impl RestorationState {
   pub fn new(fi: &FrameInvariants, input: &Frame) -> Self {
-    // unlike the other loop filters that operate over the padded
-    // frame dimensions, restoration filtering and source pixel
-    // accesses are clipped to the original frame dimensions
-    let mut clipped_cfg:[PlaneConfig; 3] = [input.planes[0].cfg.clone(),
-                                    input.planes[1].cfg.clone(),
-                                    input.planes[2].cfg.clone()];
-    clipped_cfg[0].width = fi.width;
-    clipped_cfg[0].height = fi.height;
-    
-    let PlaneConfig { xdec, ydec, .. } = clipped_cfg[1];
+    // Currrently opt for smallest possible restoration unit size (1 superblock)
 
-    clipped_cfg[1].width = fi.width + (1 << xdec >> 1) >> xdec;
-    clipped_cfg[1].height = fi.height + (1 << ydec >> 1) >> ydec;
-    clipped_cfg[2].width = fi.width + (1 << xdec >> 1) >> xdec;
-    clipped_cfg[2].height = fi.height + (1 << ydec >> 1) >> ydec;
+    // if 128x128 superblock is enabled, we need a shift because currently
+    // SuperBlockOffset is always defined in terms of 64x64 superblocks
+    let sb_log2 = if fi.sequence.use_128x128_superblock {1} else {0};
 
-    // Currrently opt for smallest possible restoration unit size
-    let lrf_y_shift = if fi.sequence.use_128x128_superblock {1} else {2};
-    let lrf_uv_shift = lrf_y_shift + if xdec>0 && ydec>0 {1} else {0};
-    let lrf_type: [u8; PLANES] = [RESTORE_SWITCHABLE, RESTORE_SWITCHABLE, RESTORE_SWITCHABLE];
-    let unit_size: [usize; PLANES] = [RESTORATION_TILESIZE_MAX >> lrf_y_shift,
-                                      RESTORATION_TILESIZE_MAX >> lrf_uv_shift,
-                                      RESTORATION_TILESIZE_MAX >> lrf_uv_shift];
-
+    let lr_uv_shift = if input.planes[1].cfg.xdec > 0 && input.planes[1].cfg.ydec > 0 {1} else {0};
+    let y_unit_size = RESTORATION_TILESIZE_MAX >> (2 - sb_log2);
+    let uv_unit_size = y_unit_size >> lr_uv_shift;
+    let cols = ((fi.width + (y_unit_size >> 1)) / y_unit_size).max(1);
+    let rows = ((fi.height + (y_unit_size >> 1)) / y_unit_size).max(1);
     RestorationState {
-      plane: [RestorationPlane::new(&clipped_cfg[0], lrf_type[0], unit_size[0]),
-              RestorationPlane::new(&clipped_cfg[1], lrf_type[1], unit_size[1]),
-              RestorationPlane::new(&clipped_cfg[2], lrf_type[2], unit_size[2])]
+      plane: [RestorationPlane::new(RESTORE_SWITCHABLE, y_unit_size, sb_log2, cols, rows),
+              RestorationPlane::new(RESTORE_SWITCHABLE, uv_unit_size, sb_log2, cols, rows),
+              RestorationPlane::new(RESTORE_SWITCHABLE, uv_unit_size, sb_log2, cols, rows)],
     }
   }
-  
+
   pub fn restoration_unit(&self, sbo: &SuperBlockOffset, pli: usize) -> &RestorationUnit {
-    let rpo = self.plane[pli].restoration_plane_offset(sbo);
-    &self.plane[pli].units[rpo.row][rpo.col]
+    self.plane[pli].restoration_unit(sbo)
   }
 
   pub fn restoration_unit_as_mut(&mut self, sbo: &SuperBlockOffset, pli: usize) -> &mut RestorationUnit {
-    let rpo = self.plane[pli].restoration_plane_offset(sbo);
-    &mut self.plane[pli].units[rpo.row][rpo.col]
-  }  
+    self.plane[pli].restoration_unit_as_mut(sbo)
+  }
 
   pub fn lrf_optimize_superblock(&mut self, _sbo: &SuperBlockOffset, _fi: &FrameInvariants,
                                  _cw: &mut ContextWriter) {
@@ -493,6 +466,11 @@ impl RestorationState {
                           fi: &FrameInvariants) {
     let cdeffed = out.clone();
     
+    // unlike the other loop filters that operate over the padded
+    // frame dimensions, restoration filtering and source pixel
+    // accesses are clipped to the original frame dimensions
+    // that's why we use fi.width and fi.height instead of PlaneConfig fields
+
     // number of stripes (counted according to colocated Y luma position)
     let stripe_n = (fi.height + 7) / 64 + 1;
     
@@ -514,7 +492,9 @@ impl RestorationState {
           } else {
             rp.unit_size
           };
-          let ru = rp.restoration_unit_by_stripe(si, rux);
+          // there may be more stripes than rows, due to how stripe_n is initialized
+          let ruy = (si >> rp.sb_log2).min(rp.rows - 1);
+          let ru = &rp.units[ruy][rux];
           match ru.filter {
             RestorationFilter::Wiener{coeffs} => {          
               wiener_stripe_rdu(coeffs, fi,
