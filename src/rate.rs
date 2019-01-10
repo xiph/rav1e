@@ -9,8 +9,8 @@
 
 use crate::encoder::FrameInvariants;
 use crate::quantize::ac_q;
-use crate::quantize::dc_q;
 use crate::quantize::select_ac_qi;
+use crate::quantize::select_dc_qi;
 
 // The number of frame sub-types for which we track distinct parameters.
 pub const FRAME_NSUBTYPES: usize = 4;
@@ -241,17 +241,14 @@ const Q57_SQUARE_EXP_SCALE: f64 =
   (2.0 * ::std::f64::consts::LN_2) / ((1i64 << 57) as f64);
 
 impl QuantizerParameters {
-  fn new_from_log_q(
-    log_target_dc_q: i64, log_target_ac_q: i64, bit_depth: i32
-  ) -> QuantizerParameters {
-    let quantizer = bexp64(log_target_ac_q + q57(QSCALE + bit_depth - 8));
-    let qi = select_ac_qi(quantizer, bit_depth as usize);
+  fn new_from_log_q(log_target_q: i64, bit_depth: i32) -> QuantizerParameters {
+    let quantizer = bexp64(log_target_q + q57(QSCALE + bit_depth - 8));
     QuantizerParameters {
-      log_target_q: log_target_dc_q,
-      dc_qi: qi,
-      ac_qi: qi,
+      log_target_q,
+      dc_qi: select_dc_qi(quantizer, bit_depth as usize),
+      ac_qi: select_ac_qi(quantizer, bit_depth as usize),
       lambda: (::std::f64::consts::LN_2 / 6.0)
-        * ((log_target_dc_q as f64) * Q57_SQUARE_EXP_SCALE).exp()
+        * ((log_target_q as f64) * Q57_SQUARE_EXP_SCALE).exp()
     }
   }
 }
@@ -282,15 +279,11 @@ impl RCState {
       let q_drop = 15 * (fti - FRAME_SUBTYPE_P);
       base_qi.min(255 - q_drop) + q_drop
     };
-    // We want to use the DC quantizer to calculate lambda, but we cannot use
-    //  it to map log_q back to qi, because the DC quantizer table entries
-    //  are not unique.
-    // The corresponding AC quantizer table entries are unique.
-    let dc_quantizer = dc_q(qi as u8, 0, bit_depth as usize) as i64;
-    let ac_quantizer = ac_q(qi as u8, 0, bit_depth as usize) as i64;
-    // Get the log quantizers as Q57.
-    let log_dc_q = blog64(dc_quantizer) - q57(QSCALE + bit_depth - 8);
-    let log_ac_q = blog64(ac_quantizer) - q57(QSCALE + bit_depth - 8);
-    QuantizerParameters::new_from_log_q(log_dc_q, log_ac_q, bit_depth)
+    // We use the AC quantizer as the source quantizer since its quantizer
+    //  tables have unique entries, while the DC tables do not.
+    let quantizer = ac_q(qi as u8, 0, bit_depth as usize) as i64;
+    // Get the log quantizer as Q57.
+    let log_q = blog64(quantizer) - q57(QSCALE + bit_depth - 8);
+    QuantizerParameters::new_from_log_q(log_q, bit_depth)
   }
 }

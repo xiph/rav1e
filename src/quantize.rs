@@ -74,6 +74,16 @@ fn select_qi(quantizer: i64, qlookup: &[i16; QINDEX_RANGE]) -> u8 {
   }
 }
 
+pub fn select_dc_qi(quantizer: i64, bit_depth: usize) -> u8 {
+  let qlookup = match bit_depth {
+    8 => &dc_qlookup_Q3,
+    10 => &dc_qlookup_10_Q3,
+    12 => &dc_qlookup_12_Q3,
+    _ => unimplemented!()
+  };
+  select_qi(quantizer, qlookup)
+}
+
 pub fn select_ac_qi(quantizer: i64, bit_depth: usize) -> u8 {
   let qlookup = match bit_depth {
     8 => &ac_qlookup_Q3,
