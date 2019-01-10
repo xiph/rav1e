@@ -33,7 +33,20 @@
 #include "src/arm/asm.S"
 
 .macro movrel rd, val
-#if defined(PIC)
+#if defined(PIC) && defined(__APPLE__)
+    ldr         \rd,  1f
+    b           2f
+1:
+@ FIXME: thumb
+    .word       3f - (2f + 8)
+2:
+    ldr         \rd,  [pc, \rd]
+    .non_lazy_symbol_pointer
+3:
+    .indirect_symbol \val
+    .word       0
+    .text
+#elif defined(PIC)
     ldr         \rd,  1f
     b           2f
 1:
