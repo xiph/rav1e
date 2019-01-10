@@ -74,18 +74,16 @@ impl RestorationFilter {
 fn sgrproj_box_ab(af: &mut[i32; 64+2],
                   bf: &mut[i32; 64+2],
                   r: isize, eps: isize,
-                  clipped_cfg: &PlaneConfig,
+                  fi: &FrameInvariants,
                   x: isize,
                   stripe_y: isize, stripe_h: isize, y: isize, h: isize,
-                  cdeffed: &Plane, deblocked: &Plane,
-                  bit_depth: usize) {
-
-
+                  cdeffed: &Plane, deblocked: &Plane) {
+  let bit_depth = fi.sequence.bit_depth;
   let n = ((2*r + 1) * (2*r + 1)) as i32;
   let one_over_n = ((1 << SGRPROJ_RECIP_BITS) + n/2 ) / n;
   let n2e = n*n*eps as i32;
   let s = ((1 << SGRPROJ_MTABLE_BITS) + n2e/2) / n2e;
-  let xn = cmp::min(r+1, clipped_cfg.width as isize - x);
+  let xn = cmp::min(r+1, fi.width as isize - x);
   for row in -1..1+h {
     let mut a:i32 = 0;
     let mut b:i32 = 0;
@@ -94,13 +92,13 @@ fn sgrproj_box_ab(af: &mut[i32; 64+2],
       let mut src_plane: &Plane;
       let ly;
       if yi < stripe_y {
-        ly = cmp::max(clamp(yi, 0, clipped_cfg.height as isize - 1), y - 2) as usize;
+        ly = cmp::max(clamp(yi, 0, fi.height as isize - 1), y - 2) as usize;
         src_plane = deblocked;
       } else if yi < stripe_y + stripe_h {
-        ly = clamp(yi, 0, clipped_cfg.height as isize - 1) as usize;
+        ly = clamp(yi, 0, fi.height as isize - 1) as usize;
         src_plane = cdeffed;
       } else {
-        ly = cmp::min(clamp(yi, 0, clipped_cfg.height as isize - 1), y+h+1) as usize;
+        ly = cmp::min(clamp(yi, 0, fi.height as isize - 1), y+h+1) as usize;
         src_plane = deblocked;
       }
 
@@ -115,7 +113,7 @@ fn sgrproj_box_ab(af: &mut[i32; 64+2],
         b += c;
       }
       for _xi in xn..r+1 {
-        let c = src_plane.p(clipped_cfg.width - 1, ly) as i32;
+        let c = src_plane.p(fi.width - 1, ly) as i32;
         a += c*c;
         b += c;
       }
@@ -172,15 +170,15 @@ fn sgrproj_box_f(af: &[&[i32; 64+2]; 3], bf: &[&[i32; 64+2]; 3], f: &mut[i32; 64
   }
 }
 
-fn sgrproj_stripe_rdu(set: u8, xqd: [i8; 2], clipped_cfg: &PlaneConfig,
+fn sgrproj_stripe_rdu(set: u8, xqd: [i8; 2], fi: &FrameInvariants,
                       x: usize, w: usize, stripe_y: isize, stripe_h: isize,
-                      cdeffed: &Plane, deblocked: &Plane, out: &mut Plane, bit_depth: usize){
+                      cdeffed: &Plane, deblocked: &Plane, out: &mut Plane) {
 
   // unlike x, our y can be negative to start as the first stripe
   // starts off the top of the frame by 8 pixels, and can also run off the end of the frame
   let clipped_y = if stripe_y < 0 {0} else {stripe_y} as usize;
-  let clipped_h = cmp::max(0, if stripe_y + stripe_h > clipped_cfg.height as isize {
-    clipped_cfg.height - clipped_y
+  let clipped_h = cmp::max(0, if stripe_y + stripe_h > fi.height as isize {
+    fi.height - clipped_y
   } else {
     (stripe_y + stripe_h - clipped_y as isize) as usize
   });
@@ -201,20 +199,20 @@ fn sgrproj_stripe_rdu(set: u8, xqd: [i8; 2], clipped_cfg: &PlaneConfig,
 
   /* prime the intermediate arrays */
   if r0 > 0 {
-    sgrproj_box_ab(&mut a0[0], &mut b0[0], r0 as isize, eps0 as isize, clipped_cfg,
+    sgrproj_box_ab(&mut a0[0], &mut b0[0], r0 as isize, eps0 as isize, fi,
                    x as isize - 1, stripe_y, stripe_h, clipped_y as isize, clipped_h as isize,
-                   cdeffed, deblocked, bit_depth);
-    sgrproj_box_ab(&mut a0[1], &mut b0[1], r0 as isize, eps0 as isize, clipped_cfg,
+                   cdeffed, deblocked);
+    sgrproj_box_ab(&mut a0[1], &mut b0[1], r0 as isize, eps0 as isize, fi,
                    x as isize, stripe_y, stripe_h, clipped_y as isize, clipped_h as isize,
-                   cdeffed, deblocked, bit_depth);
+                   cdeffed, deblocked);
   }
   if r1 > 0 {
-    sgrproj_box_ab(&mut a1[0], &mut b1[0], r1 as isize, eps1 as isize, clipped_cfg,
+    sgrproj_box_ab(&mut a1[0], &mut b1[0], r1 as isize, eps1 as isize, fi,
                    x as isize - 1, stripe_y, stripe_h, clipped_y as isize, clipped_h as isize,
-                   cdeffed, deblocked, bit_depth);
-    sgrproj_box_ab(&mut a1[1], &mut b1[1], r1 as isize, eps1 as isize, clipped_cfg,
+                   cdeffed, deblocked);
+    sgrproj_box_ab(&mut a1[1], &mut b1[1], r1 as isize, eps1 as isize, fi,
                    x as isize, stripe_y, stripe_h, clipped_y as isize, clipped_h as isize,
-                   cdeffed, deblocked, bit_depth);
+                   cdeffed, deblocked);
   }
   
   /* iterate by column */
@@ -225,22 +223,23 @@ fn sgrproj_stripe_rdu(set: u8, xqd: [i8; 2], clipped_cfg: &PlaneConfig,
   for xi in 0..w {
     /* build intermediate array columns */
     if r0 > 0 {
-      sgrproj_box_ab(&mut a0[(xi+2)%3], &mut b0[(xi+2)%3], r0 as isize, eps0 as isize, clipped_cfg,
+      sgrproj_box_ab(&mut a0[(xi+2)%3], &mut b0[(xi+2)%3], r0 as isize, eps0 as isize, fi,
                      (x + xi + 1) as isize, stripe_y, stripe_h, clipped_y as isize, clipped_h as isize,
-                     cdeffed, deblocked, bit_depth);
+                     cdeffed, deblocked);
       let ap0: [&[i32; 64+2]; 3] = [&a0[xi%3], &a0[(xi+1)%3], &a0[(xi+2)%3]];
       let bp0: [&[i32; 64+2]; 3] = [&b0[xi%3], &b0[(xi+1)%3], &b0[(xi+2)%3]];
       sgrproj_box_f(&ap0, &bp0, &mut f0, x + xi, clipped_y, clipped_h, cdeffed, 0);
     }
     if r1 > 0 {
-      sgrproj_box_ab(&mut a1[(xi+2)%3], &mut b1[(xi+2)%3], r1 as isize, eps1 as isize, clipped_cfg,
+      sgrproj_box_ab(&mut a1[(xi+2)%3], &mut b1[(xi+2)%3], r1 as isize, eps1 as isize, fi,
                      (x + xi + 1) as isize, stripe_y, stripe_h, clipped_y as isize, clipped_h as isize,
-                     cdeffed, deblocked, bit_depth);
+                     cdeffed, deblocked);
       let ap1: [&[i32; 64+2]; 3] = [&a1[xi%3], &a1[(xi+1)%3], &a1[(xi+2)%3]];
       let bp1: [&[i32; 64+2]; 3] = [&b1[xi%3], &b1[(xi+1)%3], &b1[(xi+2)%3]];
 
       sgrproj_box_f(&ap1, &bp1, &mut f1, x + xi, clipped_y, clipped_h, cdeffed, 1);
     }
+    let bit_depth = fi.sequence.bit_depth;
     if r0 > 0 {
       if r1 > 0 {
         let w0 = xqd[0] as i32;
@@ -276,9 +275,10 @@ fn sgrproj_stripe_rdu(set: u8, xqd: [i8; 2], clipped_cfg: &PlaneConfig,
   }
 }
 
-fn wiener_stripe_rdu(coeffs: [[i8; 3]; 2], clipped_cfg: &PlaneConfig,
+fn wiener_stripe_rdu(coeffs: [[i8; 3]; 2], fi: &FrameInvariants,
                      x: usize, w: usize, y: isize, h: isize,
-                     cdeffed: &Plane, deblocked: &Plane, out: &mut Plane, bit_depth: usize){
+                     cdeffed: &Plane, deblocked: &Plane, out: &mut Plane) {
+  let bit_depth = fi.sequence.bit_depth;
   let round_h = if bit_depth == 12 {5} else {3};
   let round_v = if bit_depth == 12 {9} else {11};
   let offset = 1 << bit_depth + WIENER_BITS - round_h - 1;
@@ -308,8 +308,8 @@ fn wiener_stripe_rdu(coeffs: [[i8; 3]; 2], clipped_cfg: &PlaneConfig,
   // starts off the top of the frame by 8 pixels, and can also run off the end of the frame
   let start_wi = if y < 0 {-y} else {0} as usize; 
   let start_yi = if y < 0 {0} else {y} as usize; 
-  let end_i = cmp::max(0, if y+h > clipped_cfg.height as isize {
-    clipped_cfg.height as isize - y - start_wi as isize
+  let end_i = cmp::max(0, if y+h > fi.height as isize {
+    fi.height as isize - y - start_wi as isize
   } else {
     h - start_wi as isize
   }) as usize;
@@ -319,19 +319,19 @@ fn wiener_stripe_rdu(coeffs: [[i8; 3]; 2], clipped_cfg: &PlaneConfig,
   let out_data = out_slice.as_mut_slice();
 
   for xi in x..x+w {
-    let n = cmp::min(7, clipped_cfg.width as isize + 3 - xi as isize);
+    let n = cmp::min(7, fi.width as isize + 3 - xi as isize);
     for yi in y-3..y+h+4 {
       let mut src_plane: &Plane;
       let mut acc = 0;
       let ly;
       if yi < y {
-        ly = cmp::max(clamp(yi, 0, clipped_cfg.height as isize - 1), y - 2) as usize;
+        ly = cmp::max(clamp(yi, 0, fi.height as isize - 1), y - 2) as usize;
         src_plane = deblocked;
       } else if yi < y+h {
-        ly = clamp(yi, 0, clipped_cfg.height as isize - 1) as usize;
+        ly = clamp(yi, 0, fi.height as isize - 1) as usize;
         src_plane = cdeffed;
       } else {
-        ly = cmp::min(clamp(yi, 0, clipped_cfg.height as isize - 1), y+h+1) as usize;
+        ly = cmp::min(clamp(yi, 0, fi.height as isize - 1), y+h+1) as usize;
         src_plane = deblocked;
       }
       
@@ -342,7 +342,7 @@ fn wiener_stripe_rdu(coeffs: [[i8; 3]; 2], clipped_cfg: &PlaneConfig,
         acc += hfilter[i as usize] * src_plane.p((xi as isize + i - 3) as usize, ly) as i32;
       }
       for i in n..7 {
-        acc += hfilter[i as usize] * src_plane.p(clipped_cfg.width - 1, ly) as i32;
+        acc += hfilter[i as usize] * src_plane.p(fi.width - 1, ly) as i32;
       }
         
       acc = acc + (1 << round_h >> 1) >> round_h;
@@ -490,15 +490,15 @@ impl RestorationState {
   }
 
   pub fn lrf_filter_frame(&mut self, out: &mut Frame, pre_cdef: &Frame,
-                          bit_depth: usize) {
+                          fi: &FrameInvariants) {
     let cdeffed = out.clone();
     
     // number of stripes (counted according to colocated Y luma position)
-    let stripe_n = (self.plane[0].clipped_cfg.height + 7) / 64 + 1;
+    let stripe_n = (fi.height + 7) / 64 + 1;
     
     for pli in 0..PLANES {
       let rp = &self.plane[pli];
-      let ydec = self.plane[pli].clipped_cfg.ydec;
+      let ydec = out.planes[pli].cfg.ydec;
 
       for si in 0..stripe_n {
         // stripe y pixel locations must be able to overspan the frame
@@ -510,23 +510,23 @@ impl RestorationState {
           // stripe x pixel locations must be clipped to frame, last may need to stretch
           let ru_start_x = rux * rp.unit_size;
           let ru_size = if rux == rp.cols - 1 {
-            self.plane[pli].clipped_cfg.width - ru_start_x
+            fi.width - ru_start_x
           } else {
             rp.unit_size
           };
           let ru = rp.restoration_unit_by_stripe(si, rux);
           match ru.filter {
             RestorationFilter::Wiener{coeffs} => {          
-              wiener_stripe_rdu(coeffs, &self.plane[pli].clipped_cfg,
+              wiener_stripe_rdu(coeffs, fi,
                                 ru_start_x, ru_size, stripe_start_y, stripe_size,
                                 &cdeffed.planes[pli], &pre_cdef.planes[pli],
-                                &mut out.planes[pli], bit_depth);
+                                &mut out.planes[pli]);
             },
             RestorationFilter::Sgrproj{set, xqd} => {
-              sgrproj_stripe_rdu(set, xqd, &self.plane[pli].clipped_cfg,
+              sgrproj_stripe_rdu(set, xqd, fi,
                                  ru_start_x, ru_size, stripe_start_y, stripe_size,
                                  &cdeffed.planes[pli], &pre_cdef.planes[pli],
-                                 &mut out.planes[pli], bit_depth);
+                                 &mut out.planes[pli]);
             },
             RestorationFilter::None => {
               // do nothing

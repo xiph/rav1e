@@ -2748,7 +2748,7 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
       }
       /* TODO: Don't apply if lossless */
       if fi.sequence.enable_restoration {
-        fs.restoration.lrf_filter_frame(&mut fs.rec, &pre_cdef_frame, fi.sequence.bit_depth);
+        fs.restoration.lrf_filter_frame(&mut fs.rec, &pre_cdef_frame, &fi);
       }
     }
 
