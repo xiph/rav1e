@@ -38,6 +38,7 @@ pub mod me;
 pub mod metrics;
 pub mod scan_order;
 pub mod scenechange;
+pub mod rate;
 
 mod api;
 

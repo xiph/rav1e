@@ -49,6 +49,41 @@ pub fn ac_q(qindex: u8, delta_q: i8, bit_depth: usize) -> i16 {
   table[(qindex as isize + delta_q as isize).max(0).min(255) as usize]
 }
 
+// TODO: Handle lossless properly.
+fn select_qi(quantizer: i64, qlookup: &[i16; QINDEX_RANGE]) -> u8 {
+  if quantizer < qlookup[MINQ] as i64 {
+    MINQ as u8
+  } else if quantizer >= qlookup[MAXQ] as i64 {
+    MAXQ as u8
+  } else {
+    match qlookup.binary_search(&(quantizer as i16)) {
+      Ok(qi) => qi as u8,
+      Err(qi) => {
+        debug_assert!(qi > MINQ);
+        debug_assert!(qi <= MAXQ);
+        // Pick the closest quantizer in the log domain.
+        let qthresh = (qlookup[qi - 1] as i32) * (qlookup[qi] as i32);
+        let q2_i32 = (quantizer as i32) * (quantizer as i32);
+        if q2_i32 < qthresh {
+          (qi - 1) as u8
+        } else {
+          qi as u8
+        }
+      }
+    }
+  }
+}
+
+pub fn select_ac_qi(quantizer: i64, bit_depth: usize) -> u8 {
+  let qlookup = match bit_depth {
+    8 => &ac_qlookup_Q3,
+    10 => &ac_qlookup_10_Q3,
+    12 => &ac_qlookup_12_Q3,
+    _ => unimplemented!()
+  };
+  select_qi(quantizer, qlookup)
+}
+
 #[derive(Debug, Default, Clone, Copy)]
 pub struct QuantizationContext {
   log_tx_scale: usize,
