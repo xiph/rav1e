@@ -11,6 +11,7 @@ mod align;
 #[macro_use]
 mod cdf;
 mod kmeans;
+mod logexp;
 mod uninit;
 
 pub use v_frame::math::*;
