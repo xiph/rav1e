@@ -114,7 +114,9 @@ EXTERN\name:
 #endif
         .purgem endconst
     .endm
-#if !defined(__MACH__)
+#if defined(_WIN32)
+        .section        .rdata
+#elif !defined(__MACH__)
         .section        .rodata
 #else
         .const_data
