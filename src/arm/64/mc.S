@@ -1447,14 +1447,17 @@ L(\type\()_8tap_filter_2):
         mov             v18.8b, v29.8b
 
 4:
-        smull           v2.4s,  v16.4h, v1.h[0]
         bl              L(\type\()_8tap_filter_4)
-        smull           v3.4s,  v17.4h, v1.h[0]
+        // Interleaving the mul/mla chains actually hurts performance
+        // significantly on Cortex A53, thus keeping mul/mla tightly
+        // chained like this.
+        smull           v2.4s,  v16.4h, v1.h[0]
         smlal           v2.4s,  v17.4h, v1.h[1]
-        smlal           v3.4s,  v18.4h, v1.h[1]
         smlal           v2.4s,  v18.4h, v1.h[2]
-        smlal           v3.4s,  v28.4h, v1.h[2]
         smlal           v2.4s,  v28.4h, v1.h[3]
+        smull           v3.4s,  v17.4h, v1.h[0]
+        smlal           v3.4s,  v18.4h, v1.h[1]
+        smlal           v3.4s,  v28.4h, v1.h[2]
         smlal           v3.4s,  v29.4h, v1.h[3]
         sqrshrn         v2.4h,  v2.4s,  #\shift_hv
         sqrshrn         v3.4h,  v3.4s,  #\shift_hv
@@ -1508,22 +1511,22 @@ L(\type\()_8tap_filter_2):
         mov             v22.8b, v29.8b
 
 48:
-        smull           v2.4s,  v16.4h, v1.h[0]
         bl              L(\type\()_8tap_filter_4)
-        smull           v3.4s,  v17.4h, v1.h[0]
+        smull           v2.4s,  v16.4h, v1.h[0]
         smlal           v2.4s,  v17.4h, v1.h[1]
-        smlal           v3.4s,  v18.4h, v1.h[1]
         smlal           v2.4s,  v18.4h, v1.h[2]
-        smlal           v3.4s,  v19.4h, v1.h[2]
         smlal           v2.4s,  v19.4h, v1.h[3]
-        smlal           v3.4s,  v20.4h, v1.h[3]
         smlal           v2.4s,  v20.4h, v1.h[4]
-        smlal           v3.4s,  v21.4h, v1.h[4]
         smlal           v2.4s,  v21.4h, v1.h[5]
-        smlal           v3.4s,  v22.4h, v1.h[5]
         smlal           v2.4s,  v22.4h, v1.h[6]
-        smlal           v3.4s,  v28.4h, v1.h[6]
         smlal           v2.4s,  v28.4h, v1.h[7]
+        smull           v3.4s,  v17.4h, v1.h[0]
+        smlal           v3.4s,  v18.4h, v1.h[1]
+        smlal           v3.4s,  v19.4h, v1.h[2]
+        smlal           v3.4s,  v20.4h, v1.h[3]
+        smlal           v3.4s,  v21.4h, v1.h[4]
+        smlal           v3.4s,  v22.4h, v1.h[5]
+        smlal           v3.4s,  v28.4h, v1.h[6]
         smlal           v3.4s,  v29.4h, v1.h[7]
         sqrshrn         v2.4h,  v2.4s,  #\shift_hv
         sqrshrn         v3.4h,  v3.4s,  #\shift_hv
