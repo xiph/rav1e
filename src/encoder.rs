@@ -18,6 +18,9 @@ use crate::me::*;
 use crate::partition::*;
 use crate::plane::*;
 use crate::quantize::*;
+use crate::rate::QuantizerParameters;
+use crate::rate::FRAME_SUBTYPE_I;
+use crate::rate::FRAME_SUBTYPE_P;
 use crate::rdo::*;
 use crate::segmentation::*;
 use crate::transform::*;
@@ -584,6 +587,17 @@ pub struct FrameInvariants {
   pub enable_early_exit: bool,
 }
 
+fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
+  // Derive level within pyramid for a frame with a given coding order position
+  // For example, with a pyramid of depth 2, the 2 least significant bits of the
+  // position determine the level:
+  // 00 -> 0
+  // 01 -> 2
+  // 10 -> 1
+  // 11 -> 2
+  pyramid_depth - (pos | (1 << pyramid_depth)).trailing_zeros() as u64
+}
+
 impl FrameInvariants {
   pub fn new(config: EncoderConfig, sequence: Sequence) -> FrameInvariants {
     // Speed level decides the minimum partition size, i.e. higher speed --> larger min partition size,
@@ -660,10 +674,6 @@ impl FrameInvariants {
     fi.show_frame = true;
     fi.show_existing_frame = false;
     fi.frame_to_show_map_idx = 0;
-    let q_boost = 15;
-    let qi = (fi.config.quantizer.max(1 + q_boost).min(255 + q_boost)
-      - q_boost) as u8;
-    fi.set_quantizer(qi);
     fi.primary_ref_frame = PRIMARY_REF_NONE;
     fi.number = segment_start_frame;
     for i in 0..INTER_REFS_PER_FRAME {
@@ -721,17 +731,6 @@ impl FrameInvariants {
       return (fi, false);
     }
 
-    fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
-      // Derive level within pyramid for a frame with a given coding order position
-      // For example, with a pyramid of depth 2, the 2 least significant bits of the
-      // position determine the level:
-      // 00 -> 0
-      // 01 -> 2
-      // 10 -> 1
-      // 11 -> 2
-      pyramid_depth - (pos | (1 << pyramid_depth)).trailing_zeros() as u64
-    }
-
     let lvl = if !inter_cfg.reorder {
       0
     } else if inter_cfg.idx_in_group < inter_cfg.pyramid_depth {
@@ -758,9 +757,6 @@ impl FrameInvariants {
       1 << slot_idx
     };
 
-    let q_drop = 15 * lvl as usize;
-    let qi = (fi.config.quantizer.min(255 - q_drop) + q_drop) as u8;
-    fi.set_quantizer(qi);
     let second_ref_frame = if !inter_cfg.multiref {
       NONE_FRAME
     } else if !inter_cfg.reorder || inter_cfg.idx_in_group == 0 {
@@ -821,21 +817,43 @@ impl FrameInvariants {
     (fi, true)
   }
 
-  pub fn set_quantizer(&mut self, qi: u8) {
-    self.base_q_idx = qi;
+  pub fn get_frame_subtype(&self) -> usize {
+    if self.frame_type == FrameType::KEY {
+      FRAME_SUBTYPE_I
+    } else {
+      let inter_cfg = self.inter_cfg.unwrap();
+      let lvl = if !inter_cfg.reorder {
+        0
+      } else if inter_cfg.idx_in_group < inter_cfg.pyramid_depth {
+        inter_cfg.idx_in_group
+      } else {
+        pos_to_lvl(
+          inter_cfg.idx_in_group - inter_cfg.pyramid_depth + 1,
+          inter_cfg.pyramid_depth
+        )
+      };
+      FRAME_SUBTYPE_P + (lvl as usize)
+    }
+  }
+
+  pub fn set_quantizers(&mut self, qps: &QuantizerParameters) {
+    self.base_q_idx = qps.ac_qi;
     // TODO: Separate qi values for each color plane.
     if self.frame_type != FrameType::KEY {
       self.cdef_bits = 3 - ((self.base_q_idx.max(128) - 128) >> 5);
     } else {
       self.cdef_bits = 3;
     }
-    let q = dc_q(self.base_q_idx, self.dc_delta_q[0], self.sequence.bit_depth)
-      as f64;
-    // Convert q into Q0 precision, given that libaom quantizers are Q3
-    let q0 = q / 8.0;
-    // Lambda formula from doc/theoretical_results.lyx in the daala repo.
-    // Use Q0 quantizer since lambda will be applied to Q0 pixel domain.
-    self.lambda = q0 * q0 * std::f64::consts::LN_2 / 6.0;
+    self.base_q_idx = qps.ac_qi;
+    // TODO: Separate qi values for each color plane.
+    debug_assert!(qps.dc_qi as i32 - qps.ac_qi as i32 >= -128);
+    debug_assert!((qps.dc_qi as i32 - qps.ac_qi as i32) < 128);
+    for pi in 0..3 {
+      self.dc_delta_q[pi] = (qps.dc_qi as i32 - qps.ac_qi as i32) as i8;
+      self.ac_delta_q[pi] = 0;
+    }
+    self.lambda =
+      qps.lambda * ((1 << 2 * (self.sequence.bit_depth - 8)) as f64);
     self.me_lambda = self.lambda.sqrt();
   }
 }
