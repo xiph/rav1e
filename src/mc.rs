@@ -9,6 +9,7 @@
 
 use num_traits::*;
 use plane::*;
+use util::*;
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 pub enum FilterMode {
@@ -130,10 +131,6 @@ const SUBPEL_FILTERS: [[[i32; SUBPEL_FILTER_SIZE]; 16]; 6] = [
     [0, 0, 2, 34, 62, 30, 0, 0]
   ]
 ];
-
-fn round_shift(val: i32, shift: i32) -> i32 {
-  (val + (1 << (shift - 1))) >> shift
-}
 
 fn run_filter<T: AsPrimitive<i32>>(
   src: &[T], stride: usize, filter: [i32; 8]

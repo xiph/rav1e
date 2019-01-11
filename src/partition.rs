@@ -1149,7 +1149,7 @@ impl PredictionMode {
         None => ()
       }
     } else {
-      let mut tmp: [AlignedArray<[i16; 128 * 128], Align32>; 2] =
+      let mut tmp: [AlignedArray<[i16; 128 * 128]>; 2] =
         [UninitializedAlignedArray(), UninitializedAlignedArray()];
       for i in 0..2 {
         match fi.rec_buffer.frames

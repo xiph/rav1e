@@ -130,8 +130,6 @@ macro_rules! cdf_size {
     ($x:expr) => ($x+1);
 }
 
-#[repr(align(16))]
-pub struct Align16;
 #[repr(align(32))]
 pub struct Align32;
 
@@ -147,21 +145,21 @@ pub struct Align32;
 /// let mut x: AlignedArray<[i16; 64 * 64]> = UninitializedAlignedArray();
 /// assert!(x.array.as_ptr() as usize % 16 == 0);
 /// ```
-pub struct AlignedArray<ARRAY, AlignType = Align16>
+pub struct AlignedArray<ARRAY>
 where
   ARRAY: ?Sized
 {
-  _alignment: [AlignType; 0],
+  _alignment: [Align32; 0],
   pub array: ARRAY
 }
 
 #[allow(non_snake_case)]
-pub fn AlignedArray<ARRAY, AlignType>(array: ARRAY) -> AlignedArray<ARRAY, AlignType> {
+pub fn AlignedArray<ARRAY>(array: ARRAY) -> AlignedArray<ARRAY> {
   AlignedArray { _alignment: [], array }
 }
 
 #[allow(non_snake_case)]
-pub fn UninitializedAlignedArray<ARRAY, AlignType>() -> AlignedArray<ARRAY, AlignType> {
+pub fn UninitializedAlignedArray<ARRAY>() -> AlignedArray<ARRAY> {
   AlignedArray(unsafe { mem::uninitialized() })
 }
 
@@ -227,4 +225,8 @@ impl<T> ILog for T where T: PrimInt {}
 pub fn msb(x: i32) -> i32 {
   debug_assert!(x > 0);
   31 ^ (x.leading_zeros() as i32)
+}
+
+pub fn round_shift(value: i32, bit: usize) -> i32 {
+  (value + (1 << bit >> 1)) >> bit
 }
