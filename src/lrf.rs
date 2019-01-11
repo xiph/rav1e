@@ -384,7 +384,7 @@ pub struct RestorationPlane {
   pub rows: usize,
   pub wiener_ref: [[i8; 3]; 2],
   pub sgrproj_ref: [i8; 2],
-  pub units: Vec<Vec<RestorationUnit>>
+  pub units: Box<[RestorationUnit]>,
 }
 
 #[derive(Clone, Default)]
@@ -403,7 +403,7 @@ impl RestorationPlane {
       rows,
       wiener_ref: [WIENER_TAPS_MID; 2],
       sgrproj_ref: SGRPROJ_XQD_MID,
-      units: vec![vec![RestorationUnit::default(); cols]; rows]
+      units: vec![RestorationUnit::default(); cols * rows].into_boxed_slice(),
     }
   }
 
@@ -416,12 +416,12 @@ impl RestorationPlane {
 
   pub fn restoration_unit(&self, sbo: &SuperBlockOffset) -> &RestorationUnit {
     let (x, y) = self.restoration_unit_index(sbo);
-    &self.units[y][x]
+    &self.units[y * self.cols + x]
   }
 
   pub fn restoration_unit_as_mut(&mut self, sbo: &SuperBlockOffset) -> &mut RestorationUnit {
     let (x, y) = self.restoration_unit_index(sbo);
-    &mut self.units[y][x]
+    &mut self.units[y * self.cols + x]
   }
 }
 
@@ -494,7 +494,7 @@ impl RestorationState {
           };
           // there may be more stripes than rows, due to how stripe_n is initialized
           let ruy = (si >> rp.sb_log2).min(rp.rows - 1);
-          let ru = &rp.units[ruy][rux];
+          let ru = &rp.units[ruy * rp.cols + rux];
           match ru.filter {
             RestorationFilter::Wiener{coeffs} => {          
               wiener_stripe_rdu(coeffs, fi,
