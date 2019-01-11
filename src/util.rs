@@ -130,8 +130,8 @@ macro_rules! cdf_size {
     ($x:expr) => ($x+1);
 }
 
-#[repr(align(16))]
-struct Align16;
+#[repr(align(32))]
+pub struct Align32;
 
 /// A 16 byte aligned array.
 /// # Examples
@@ -149,7 +149,7 @@ pub struct AlignedArray<ARRAY>
 where
   ARRAY: ?Sized
 {
-  _alignment: [Align16; 0],
+  _alignment: [Align32; 0],
   pub array: ARRAY
 }
 
@@ -225,4 +225,8 @@ impl<T> ILog for T where T: PrimInt {}
 pub fn msb(x: i32) -> i32 {
   debug_assert!(x > 0);
   31 ^ (x.leading_zeros() as i32)
+}
+
+pub fn round_shift(value: i32, bit: usize) -> i32 {
+  (value + (1 << bit >> 1)) >> bit
 }

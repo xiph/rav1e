@@ -42,15 +42,6 @@ fn half_btf(w0: i32, in0: i32, w1: i32, in1: i32, bit: usize) -> i32 {
   }
 }
 
-#[inline]
-fn round_shift(value: i32, bit: usize) -> i32 {
-  if bit <= 0 {
-    value
-  } else {
-    (value + (1 << (bit - 1))) >> bit
-  }
-}
-
 // clamps value to a signed integer type of bit bits
 #[inline]
 fn clamp_value(value: i32, bit: usize) -> i32 {
