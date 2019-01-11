@@ -230,3 +230,17 @@ pub fn msb(x: i32) -> i32 {
 pub fn round_shift(value: i32, bit: usize) -> i32 {
   (value + (1 << bit >> 1)) >> bit
 }
+
+pub fn convert_slice_2d<NEW: 'static + Copy, OLD: AsPrimitive<NEW>>(
+  dst: &mut [NEW], dst_stride: usize, src: &[OLD], src_stride: usize,
+  width: usize, height: usize
+) {
+  for r in 0..height {
+    for (a, b) in dst[r * dst_stride..r * dst_stride + width]
+      .iter_mut()
+      .zip(src[r * src_stride..r * src_stride + width].iter())
+    {
+      *a = (*b).as_();
+    }
+  }
+}

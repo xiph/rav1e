@@ -1142,8 +1142,9 @@ impl PredictionMode {
             height,
             col_frac,
             row_frac,
-            fi.sequence.bit_depth,
-            mode
+            mode,
+            mode,
+            fi.sequence.bit_depth
           );
         }
         None => ()
@@ -1165,8 +1166,9 @@ impl PredictionMode {
               height,
               col_frac,
               row_frac,
-              fi.sequence.bit_depth,
-              mode
+              mode,
+              mode,
+              fi.sequence.bit_depth
             );
           }
           None => ()
