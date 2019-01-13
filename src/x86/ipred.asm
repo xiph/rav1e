@@ -1308,9 +1308,10 @@ cglobal ipred_z1, 3, 8, 0, dst, stride, tl, w, h, angle, dx, maxbase
     inc                 tlq
     movsxd               wq, [r6+wq*4]
     add                  wq, r6
-    movzx               dxd, angleb
+    mov                 dxd, angled
+    and                 dxd, 0x7e
     add              angled, 165 ; ~90
-    movzx               dxd, word [r7+dxq*2]
+    movzx               dxd, word [r7+dxq]
     xor              angled, 0x4ff ; d = 90 - angle
     vpbroadcastd         m3, [pw_512]
     vpbroadcastd         m4, [pw_62]
@@ -2130,15 +2131,16 @@ cglobal ipred_z3, 4, 9, 0, dst, stride, tl, w, h, angle, dy, org_w, maxbase
     lea                  r6, [ipred_z3_avx2_table]
     tzcnt                hd, hm
     movifnidn        angled, anglem
-    lea                  r7, [dr_intra_derivative+90*2]
+    lea                  r7, [dr_intra_derivative+45*2-1]
     dec                 tlq
     movsxd               hq, [r6+hq*4]
     sub              angled, 180
     add                  hq, r6
-    movzx               dyd, angleb
+    mov                 dyd, angled
+    neg                 dyd
     xor              angled, 0x400
-    neg                 dyq
-    movzx               dyd, word [r7+dyq*2]
+    or                  dyq, ~0x7e
+    movzx               dyd, word [r7+dyq]
     vpbroadcastd         m3, [pw_512]
     vpbroadcastd         m4, [pw_62]
     vpbroadcastd         m5, [pw_64]
