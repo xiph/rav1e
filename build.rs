@@ -48,7 +48,16 @@ fn main() {
         let mut config_include_arg = String::from("-I");
         config_include_arg.push_str(&out_dir);
         config_include_arg.push('/');
-        nasm_rs::compile_library_args("rav1easm", &["src/x86/ipred.asm", "src/x86/me.asm"], &[&config_include_arg, "-Isrc/"]);
+        nasm_rs::compile_library_args(
+            "rav1easm",
+            &[
+                "src/x86/data.asm",
+                "src/x86/ipred.asm",
+                "src/x86/mc.asm",
+                "src/x86/me.asm"
+            ],
+            &[&config_include_arg, "-Isrc/"]
+        );
         println!("cargo:rustc-link-lib=static=rav1easm");
         rerun_dir("src/x86");
         rerun_dir("src/ext/x86");
