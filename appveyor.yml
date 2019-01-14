@@ -20,7 +20,7 @@ install:
 
 build_script:
     - git submodule update --init
-    - cargo build --release --target=%cargo_target%
+    - cargo build --target=%cargo_target% --release
 
 test_script:
     - git submodule update --init
