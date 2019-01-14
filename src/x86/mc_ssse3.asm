@@ -266,7 +266,6 @@ cglobal put_bilin, 4, 8, 0, dst, ds, src, ss, w, h, mxy
     imul               mxyd, 0xff01
     mova                 m4, [base+bilin_h_shuf8]
     mova                 m0, [base+bilin_h_shuf4]
-    WIN64_SPILL_XMM       7
     add                mxyd, 16 << 8
     movd                 m5, mxyd
     mov                mxyd, r7m ; my
@@ -275,7 +274,7 @@ cglobal put_bilin, 4, 8, 0, dst, ds, src, ss, w, h, mxy
     test               mxyd, mxyd
     jnz .hv
     movzx                wd, word [t0+wq*2+table_offset(put, _bilin_h)]
-    mova                 m6, [base+pw_2048]
+    mova                 m3, [base+pw_2048]
     add                  wq, t0
     RESTORE_DSQ_32       t0
     jmp                  wq
@@ -288,7 +287,7 @@ cglobal put_bilin, 4, 8, 0, dst, ds, src, ss, w, h, mxy
     punpckldq            m0, m1
     pshufb               m0, m4
     pmaddubsw            m0, m5
-    pmulhrsw             m0, m6
+    pmulhrsw             m0, m3
     packuswb             m0, m0
     movd                r6d, m0
     mov        [dstq+dsq*0], r6w
@@ -304,10 +303,10 @@ cglobal put_bilin, 4, 8, 0, dst, ds, src, ss, w, h, mxy
     lea                srcq, [srcq+ssq*2]
     pshufb               m4, m0
     pmaddubsw            m4, m5
-    pmulhrsw             m4, m6
+    pmulhrsw             m4, m3
     packuswb             m4, m4
     movd       [dstq+dsq*0], m4
-    pshufd               m4, m4, q0101
+    psrlq                m4, 32
     movd       [dstq+dsq*1], m4
     lea                dstq, [dstq+dsq*2]
     sub                  hd, 2
@@ -321,8 +320,8 @@ cglobal put_bilin, 4, 8, 0, dst, ds, src, ss, w, h, mxy
     pshufb               m1, m4
     pmaddubsw            m0, m5
     pmaddubsw            m1, m5
-    pmulhrsw             m0, m6
-    pmulhrsw             m1, m6
+    pmulhrsw             m0, m3
+    pmulhrsw             m1, m3
     packuswb             m0, m1
     movq       [dstq+dsq*0], m0
     movhps     [dstq+dsq*1], m0
@@ -338,8 +337,8 @@ cglobal put_bilin, 4, 8, 0, dst, ds, src, ss, w, h, mxy
     pshufb               m1, m4
     pmaddubsw            m0, m5
     pmaddubsw            m1, m5
-    pmulhrsw             m0, m6
-    pmulhrsw             m1, m6
+    pmulhrsw             m0, m3
+    pmulhrsw             m1, m3
     packuswb             m0, m1
     mova             [dstq], m0
     add                dstq, dsq
@@ -349,25 +348,25 @@ cglobal put_bilin, 4, 8, 0, dst, ds, src, ss, w, h, mxy
 .h_w32:
     movu                 m0, [srcq+mmsize*0+8*0]
     movu                 m1, [srcq+mmsize*0+8*1]
-    movu                 m2, [srcq+mmsize*1+8*0]
-    movu                 m3, [srcq+mmsize*1+8*1]
-    add                srcq, ssq
     pshufb               m0, m4
     pshufb               m1, m4
-    pshufb               m2, m4
-    pshufb               m3, m4
     pmaddubsw            m0, m5
     pmaddubsw            m1, m5
-    pmaddubsw            m2, m5
-    pmaddubsw            m3, m5
-    pmulhrsw             m0, m6
-    pmulhrsw             m1, m6
-    pmulhrsw             m2, m6
-    pmulhrsw             m3, m6
+    pmulhrsw             m0, m3
+    pmulhrsw             m1, m3
     packuswb             m0, m1
-    packuswb             m2, m3
+    movu                 m1, [srcq+mmsize*1+8*0]
+    movu                 m2, [srcq+mmsize*1+8*1]
+    add                srcq, ssq
+    pshufb               m1, m4
+    pshufb               m2, m4
+    pmaddubsw            m1, m5
+    pmaddubsw            m2, m5
+    pmulhrsw             m1, m3
+    pmulhrsw             m2, m3
+    packuswb             m1, m2
     mova        [dstq+16*0], m0
-    mova        [dstq+16*1], m2
+    mova        [dstq+16*1], m1
     add                dstq, dsq
     dec                  hd
     jg .h_w32
@@ -381,8 +380,8 @@ cglobal put_bilin, 4, 8, 0, dst, ds, src, ss, w, h, mxy
     pshufb               m1, m4
     pmaddubsw            m0, m5
     pmaddubsw            m1, m5
-    pmulhrsw             m0, m6
-    pmulhrsw             m1, m6
+    pmulhrsw             m0, m3
+    pmulhrsw             m1, m3
     packuswb             m0, m1
     mova     [dstq+r6+16*3], m0
     add                  r6, 16
@@ -401,8 +400,8 @@ cglobal put_bilin, 4, 8, 0, dst, ds, src, ss, w, h, mxy
     pshufb               m1, m4
     pmaddubsw            m0, m5
     pmaddubsw            m1, m5
-    pmulhrsw             m0, m6
-    pmulhrsw             m1, m6
+    pmulhrsw             m0, m3
+    pmulhrsw             m1, m3
     packuswb             m0, m1
     mova     [dstq+r6+16*7], m0
     add                  r6, 16
@@ -414,15 +413,13 @@ cglobal put_bilin, 4, 8, 0, dst, ds, src, ss, w, h, mxy
     RET
 .v:
     movzx                wd, word [t0+wq*2+table_offset(put, _bilin_v)]
-    %assign stack_offset stack_offset - stack_size_padded
-    WIN64_SPILL_XMM       8
     imul               mxyd, 0xff01
-    mova                 m7, [base+pw_2048]
+    mova                 m5, [base+pw_2048]
     add                mxyd, 16 << 8
     add                  wq, t0
-    movd                 m6, mxyd
-    pshuflw              m6, m6, q0000
-    punpcklqdq           m6, m6
+    movd                 m4, mxyd
+    pshuflw              m4, m4, q0000
+    punpcklqdq           m4, m4
     RESTORE_DSQ_32       t0
     jmp                  wq
 .v_w2:
@@ -433,8 +430,8 @@ cglobal put_bilin, 4, 8, 0, dst, ds, src, ss, w, h, mxy
     pshuflw              m2, m0, q2301
     pinsrw               m0, [srcq+ssq*0], 0 ; 2 1
     punpcklbw            m1, m0, m2
-    pmaddubsw            m1, m6
-    pmulhrsw             m1, m7
+    pmaddubsw            m1, m4
+    pmulhrsw             m1, m5
     packuswb             m1, m1
     movd                r6d, m1
     mov        [dstq+dsq*1], r6w
@@ -453,8 +450,8 @@ cglobal put_bilin, 4, 8, 0, dst, ds, src, ss, w, h, mxy
     movd                 m0, [srcq+ssq*0]
     punpckldq            m1, m0  ; 1 2
     punpcklbw            m1, m2
-    pmaddubsw            m1, m6
-    pmulhrsw             m1, m7
+    pmaddubsw            m1, m4
+    pmulhrsw             m1, m5
     packuswb             m1, m1
     movd       [dstq+dsq*0], m1
     psrlq                m1, 32
@@ -467,20 +464,18 @@ cglobal put_bilin, 4, 8, 0, dst, ds, src, ss, w, h, mxy
 .v_w8:
     movq                 m0, [srcq+ssq*0]
 .v_w8_loop:
-    movddup              m2, [srcq+ssq*1]
+    movq                 m3, [srcq+ssq*1]
     lea                srcq, [srcq+ssq*2]
-    punpcklqdq           m3, m0, m2 ; 0 1 m2qh:m0ql
-    movddup              m0, [srcq+ssq*0]
-    punpcklqdq           m4, m2, m0 ; 1 2 m0qh:m2ql
-    punpcklbw            m1, m4, m3
-    punpckhbw            m4, m3
-    pmaddubsw            m1, m6
-    pmaddubsw            m4, m6
-    pmulhrsw             m1, m7
-    pmulhrsw             m4, m7
-    packuswb             m1, m4
-    movq         [dstq+dsq*0], m1
-    movhps       [dstq+dsq*1], m1
+    punpcklbw            m1, m3, m0
+    movq                 m0, [srcq+ssq*0]
+    punpcklbw            m2, m0, m3
+    pmaddubsw            m1, m4
+    pmaddubsw            m2, m4
+    pmulhrsw             m1, m5
+    pmulhrsw             m2, m5
+    packuswb             m1, m2
+    movq       [dstq+dsq*0], m1
+    movhps     [dstq+dsq*1], m1
     lea                dstq, [dstq+dsq*2]
     sub                  hd, 2
     jg .v_w8_loop
@@ -489,25 +484,25 @@ cglobal put_bilin, 4, 8, 0, dst, ds, src, ss, w, h, mxy
 %macro PUT_BILIN_V_W16 0
     movu                 m0, [srcq+ssq*0]
 %%loop:
-    movu                 m4, [srcq+ssq*1]
+    movu                 m3, [srcq+ssq*1]
     lea                srcq, [srcq+ssq*2]
-    punpcklbw            m1, m4, m0
-    punpckhbw            m3, m4, m0
+    punpcklbw            m1, m3, m0
+    punpckhbw            m2, m3, m0
     movu                 m0, [srcq+ssq*0]
-    punpcklbw            m2, m0, m4
-    pmaddubsw            m1, m6
-    pmaddubsw            m3, m6
-    pmulhrsw             m1, m7
-    pmulhrsw             m3, m7
-    packuswb             m1, m3
+    pmaddubsw            m1, m4
+    pmaddubsw            m2, m4
+    pmulhrsw             m1, m5
+    pmulhrsw             m2, m5
+    packuswb             m1, m2
     mova       [dstq+dsq*0], m1
-    punpckhbw            m3, m0, m4
-    pmaddubsw            m2, m6
-    pmaddubsw            m3, m6
-    pmulhrsw             m2, m7
-    pmulhrsw             m3, m7
-    packuswb             m2, m3
-    mova       [dstq+dsq*1], m2
+    punpcklbw            m1, m0, m3
+    punpckhbw            m2, m0, m3
+    pmaddubsw            m1, m4
+    pmaddubsw            m2, m4
+    pmulhrsw             m1, m5
+    pmulhrsw             m2, m5
+    packuswb             m1, m2
+    mova       [dstq+dsq*1], m1
     lea                dstq, [dstq+dsq*2]
     sub                  hd, 2
     jg %%loop
@@ -549,7 +544,6 @@ cglobal put_bilin, 4, 8, 0, dst, ds, src, ss, w, h, mxy
     ; (16 * src[x] + (my * (src[x + src_stride] - src[x])) + 128) >> 8
     ; = (src[x] + ((my * (src[x + src_stride] - src[x])) >> 4) + 8) >> 4
     movzx                wd, word [t0+wq*2+table_offset(put, _bilin_hv)]
-    %assign stack_offset stack_offset - stack_size_padded
     WIN64_SPILL_XMM       8
     shl                mxyd, 11 ; can't shift by 12 due to signed overflow
     mova                 m7, [base+pw_2048]
@@ -579,10 +573,14 @@ cglobal put_bilin, 4, 8, 0, dst, ds, src, ss, w, h, mxy
     paddw                m1, m2   ; src[x] + (my * (src[x + src_stride] - src[x])
     pmulhrsw             m1, m7
     packuswb             m1, m1
+%if ARCH_X86_64
+    movq                 r6, m1
+%else
     pshuflw              m1, m1, q2020
     movd                r6d, m1
+%endif
     mov        [dstq+dsq*0], r6w
-    shr                 r6d, 16
+    shr                  r6, gprsize*4
     mov        [dstq+dsq*1], r6w
     lea                dstq, [dstq+dsq*2]
     sub                  hd, 2
@@ -595,9 +593,9 @@ cglobal put_bilin, 4, 8, 0, dst, ds, src, ss, w, h, mxy
     pshufb               m0, m4
     pmaddubsw            m0, m5
 .hv_w4_loop:
-    movq                 m1,     [srcq+ssq*1]
-    lea                srcq,     [srcq+ssq*2]
-    movhps               m1,     [srcq+ssq*0]
+    movq                 m1, [srcq+ssq*1]
+    lea                srcq, [srcq+ssq*2]
+    movhps               m1, [srcq+ssq*0]
     pshufb               m1, m4
     pmaddubsw            m1, m5           ; 1 2
     shufps               m2, m0, m1, q1032 ; 0 1
@@ -617,21 +615,21 @@ cglobal put_bilin, 4, 8, 0, dst, ds, src, ss, w, h, mxy
     RET
 .hv_w8:
     RESTORE_DSQ_32       t0
-    movu                 m0,     [srcq+ssq*0+8*0]
+    movu                 m0, [srcq+ssq*0+8*0]
     pshufb               m0, m4
     pmaddubsw            m0, m5
 .hv_w8_loop:
-    movu                 m2,     [srcq+ssq*1+8*0]
-    lea                srcq,     [srcq+ssq*2]
-    movu                 m3,     [srcq+ssq*0+8*0]
+    movu                 m2, [srcq+ssq*1+8*0]
+    lea                srcq, [srcq+ssq*2]
     pshufb               m2, m4
-    pshufb               m3, m4
     pmaddubsw            m2, m5
     psubw                m1, m2, m0
     paddw                m1, m1
     pmulhw               m1, m6
     paddw                m1, m0
-    pmaddubsw            m0, m3, m5
+    movu                 m0, [srcq+ssq*0+8*0]
+    pshufb               m0, m4
+    pmaddubsw            m0, m5
     psubw                m3, m0, m2
     paddw                m3, m3
     pmulhw               m3, m6
@@ -639,79 +637,69 @@ cglobal put_bilin, 4, 8, 0, dst, ds, src, ss, w, h, mxy
     pmulhrsw             m1, m7
     pmulhrsw             m3, m7
     packuswb             m1, m3
-    movq         [dstq+dsq*0], m1
-    movhps       [dstq+dsq*1], m1
+    movq       [dstq+dsq*0], m1
+    movhps     [dstq+dsq*1], m1
     lea                dstq, [dstq+dsq*2]
     sub                  hd, 2
     jg .hv_w8_loop
     RET
-    ;
-    ; 32bit has ssq, dsq free
-%macro PUT_BILIN_HV_W16 0
+.hv_w16:
+    xor                 t0d, t0d
+.hv_w16gt:
+    mov                  r4, dstq
+    mov                  r6, srcq
+ %if WIN64
+    movaps              r4m, xmm8
+ %endif
+.hv_w16_loop0:
     movu                 m0,     [srcq+8*0]
     movu                 m1,     [srcq+8*1]
     pshufb               m0, m4
     pshufb               m1, m4
     pmaddubsw            m0, m5
     pmaddubsw            m1, m5
- %if WIN64
-    movaps              r4m, xmm8
- %endif
-%%loop:
+.hv_w16_loop:
 %if ARCH_X86_32
- %define m3back [dstq]
- %define dsqval dsm
+ %define m0tmp [dstq]
 %else
- %define m3back m8
- %define dsqval dsq
+ %define m0tmp m8
 %endif
     add                srcq, ssq
-    movu                 m2,     [srcq+8*1]
+    movu                 m2, [srcq+8*0]
+    movu                 m3, [srcq+8*1]
     pshufb               m2, m4
+    pshufb               m3, m4
     pmaddubsw            m2, m5
-    psubw                m3, m2, m1
+    pmaddubsw            m3, m5
+    mova              m0tmp, m2
+    psubw                m2, m0
+    paddw                m2, m2
+    pmulhw               m2, m6
+    paddw                m2, m0
+    mova                 m0, m3
+    psubw                m3, m1
     paddw                m3, m3
     pmulhw               m3, m6
     paddw                m3, m1
-    mova                 m1, m2
+    mova                 m1, m0
+    mova                 m0, m0tmp
+    pmulhrsw             m2, m7
     pmulhrsw             m3, m7
-    mova             m3back, m3
-    movu                 m2,     [srcq+8*0]
-    pshufb               m2, m4
-    pmaddubsw            m2, m5
-    psubw                m3, m2, m0
-    paddw                m3, m3
-    pmulhw               m3, m6
-    paddw                m3, m0
-    mova                 m0, m2
-    pmulhrsw             m3, m7
-    packuswb             m3, m3back
-    mova             [dstq], m3
-    add                dstq, dsqval
+    packuswb             m2, m3
+    mova             [dstq], m2
+    add                dstq, dsmp
     dec                  hd
-    jg %%loop
- %if WIN64
-    movaps             xmm8, r4m
- %endif
- %undef m3back
- %undef dsqval
-%endmacro
-    ;
-.hv_w16:
-    PUT_BILIN_HV_W16
-    RET
-.hv_w16gt:
-    mov                  r4, dstq
-    mov                  r6, srcq
-.hv_w16gt_loop:
-    PUT_BILIN_HV_W16
-    mov                  hw, t0w
+    jg .hv_w16_loop
+    movzx                hd, t0w
     add                  r4, mmsize
     add                  r6, mmsize
     mov                dstq, r4
     mov                srcq, r6
     sub                 t0d, 1<<16
-    jg .hv_w16gt_loop
+    jg .hv_w16_loop0
+ %if WIN64
+    movaps             xmm8, r4m
+ %endif
     RET
 .hv_w32:
     lea                 t0d, [hq+(1<<16)]
