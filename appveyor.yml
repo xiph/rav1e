@@ -20,7 +20,7 @@ install:
 
 build_script:
     - git submodule update --init
-    - cargo build --release --target=$(cargo_target)
+    - cargo build --release --target=$cargo_target
 
 test_script:
     - git submodule update --init
@@ -28,4 +28,4 @@ test_script:
 
 artifacts:
     - path: target\release\rav1e.exe
-      name: rav1e-$(target)
+      name: rav1e-$(platform)
