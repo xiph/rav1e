@@ -15,7 +15,7 @@ install:
 
 build_script:
     - git submodule update --init
-    - rustc --target=aarch64-pc-windows-msvc -C opt-level=2
+    - rustc build.rs --target=aarch64-pc-windows-msvc -C opt-level=2
     - cargo build --release
 
 test_script:
