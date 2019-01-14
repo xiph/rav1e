@@ -3,7 +3,7 @@ os: Visual Studio 2017
 environment:
     matrix:   
     - channel: stable
-      target: x86_64-pc-windows-msvc
+      target: x86_64-pc-windows-msvc,aarch64-pc-windows-msvc
 
 install:
     - call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars64.bat"
