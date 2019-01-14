@@ -17,6 +17,7 @@ use context::PLANES;
 use context::MAX_SB_SIZE;
 use plane::Plane;
 use plane::PlaneOffset;
+use plane::PlaneConfig;
 use std::cmp;
 use util::clamp;
 
@@ -377,8 +378,8 @@ impl RestorationUnit {
 pub struct RestorationPlane {
   pub lrf_type: u8,
   pub unit_size: usize,
-  // (1 << sb_log2) gives the number of superblocks (having size (1 << SUPERBLOCK_TO_PLANE_SHIFT))
-  // both horizontally and vertically in a restoration unit
+  // (1 << sb_log2) gives the number of superblocks having size 1 << SUPERBLOCK_TO_PLANE_SHIFT
+  // both horizontally and vertically in a restoration unit, not accounting for RU stretching
   pub sb_log2: usize,
   pub cols: usize,
   pub rows: usize,
@@ -414,6 +415,17 @@ impl RestorationPlane {
     )
   }
 
+  // Stripes are always 64 pixels high in a non-subsampled
+  // frame, and decimated from 64 pixels in chroma.  When
+  // filtering, they are not co-located on Y with superblocks.
+  fn restoration_unit_index_by_stripe(&self, stripenum: usize, rux: usize,
+                                      cfg: &PlaneConfig) -> (usize, usize) {
+    (
+      cmp::min(rux, self.cols - 1),
+      cmp::min((stripenum * 64 >> cfg.ydec) / self.unit_size, self.rows - 1),
+    )
+  }
+
   pub fn restoration_unit(&self, sbo: &SuperBlockOffset) -> &RestorationUnit {
     let (x, y) = self.restoration_unit_index(sbo);
     &self.units[y * self.cols + x]
@@ -422,6 +434,12 @@ impl RestorationPlane {
   pub fn restoration_unit_as_mut(&mut self, sbo: &SuperBlockOffset) -> &mut RestorationUnit {
     let (x, y) = self.restoration_unit_index(sbo);
     &mut self.units[y * self.cols + x]
+  }
+
+  pub fn restoration_unit_by_stripe(&self, stripenum: usize, rux: usize,
+                                    cfg: &PlaneConfig) -> &RestorationUnit {
+    let (x, y) = self.restoration_unit_index_by_stripe(stripenum, rux, cfg);
+    &self.units[y * self.cols + x]
   }
 }
 
@@ -492,9 +510,7 @@ impl RestorationState {
           } else {
             rp.unit_size
           };
-          // there may be more stripes than rows, due to how stripe_n is initialized
-          let ruy = (si >> rp.sb_log2).min(rp.rows - 1);
-          let ru = &rp.units[ruy * rp.cols + rux];
+          let ru = rp.restoration_unit_by_stripe(si, rux, &out.planes[pli].cfg);
           match ru.filter {
             RestorationFilter::Wiener{coeffs} => {          
               wiener_stripe_rdu(coeffs, fi,
