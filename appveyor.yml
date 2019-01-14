@@ -4,8 +4,10 @@ environment:
   channel: stable
   build: x86_64-pc-windows-msvc
   matrix:   
-    - target: x86_64-pc-windows-msvc
-    - target: aarch64-pc-windows-msvc
+    - platform: x86_64
+      cargo_target: x86_64-pc-windows-msvc
+    - platform: arm64
+      cargo_target: aarch64-pc-windows-msvc
 
 install:
     - appveyor DownloadFile https://win.rustup.rs/ -FileName rustup-init.exe
@@ -18,7 +20,7 @@ install:
 
 build_script:
     - git submodule update --init
-    - cargo build --release
+    - cargo build --release --target=$(cargo_target)
 
 test_script:
     - git submodule update --init
