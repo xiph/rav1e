@@ -7,7 +7,6 @@ environment:
       target: x86_64-pc-windows-msvc,aarch64-pc-windows-msvc
 
 install:
-    - call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars64.bat"
     - appveyor DownloadFile https://win.rustup.rs/ -FileName rustup-init.exe
     - appveyor DownloadFile https://www.nasm.us/pub/nasm/releasebuilds/2.13.03/win64/nasm-2.13.03-win64.zip -FileName nasm.zip
     - 7z e -y nasm.zip
