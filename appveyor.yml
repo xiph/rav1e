@@ -23,5 +23,5 @@ test_script:
     - cargo test --verbose
 
 artifacts:
-    - path: **\*.exe
+    - path: '**\*.exe'
       name: rav1e-$(platform)
