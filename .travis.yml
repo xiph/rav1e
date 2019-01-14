@@ -24,10 +24,10 @@ before_install:
     - cmake .. && make && sudo make install
     - kcov --version
     - cargo install cargo-kcov
-script:
-    - |
-        cargo build --verbose &&
-        cargo test --verbose --release --features=decode_test -- --ignored &&
-        cargo bench --verbose &&
-        cargo doc --verbose &&
-        cargo kcov --coveralls --features=decode_test -- --verify --exclude-pattern=$HOME/.cargo,aom_build,.h,test
+jobs:
+  include:
+      - script: cargo build --verbose
+      - script: cargo test --verbose --release --features=decode_test -- --ignored
+      - script: cargo bench --verbose
+      - script: cargo doc --verbose
+      - script: cargo kcov --coveralls --features=decode_test -- --verify --exclude-pattern=$HOME/.cargo,aom_build,.h,test
