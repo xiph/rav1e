@@ -21,7 +21,7 @@ use plane::PlaneConfig;
 use std::cmp;
 use util::clamp;
 
-pub const RESTORATION_TILESIZE_MAX: usize = 256;
+pub const RESTORATION_TILESIZE_MAX_LOG2: usize = 8;
 
 pub const RESTORE_NONE: u8 = 0;
 pub const RESTORE_SWITCHABLE: u8 = 1;
@@ -378,9 +378,9 @@ impl RestorationUnit {
 pub struct RestorationPlane {
   pub lrf_type: u8,
   pub unit_size: usize,
-  // (1 << sb_log2) gives the number of superblocks having size 1 << SUPERBLOCK_TO_PLANE_SHIFT
+  // (1 << sb_shift) gives the number of superblocks having size 1 << SUPERBLOCK_TO_PLANE_SHIFT
   // both horizontally and vertically in a restoration unit, not accounting for RU stretching
-  pub sb_log2: usize,
+  pub sb_shift: usize,
   pub cols: usize,
   pub rows: usize,
   pub wiener_ref: [[i8; 3]; 2],
@@ -395,11 +395,12 @@ pub struct RestorationPlaneOffset {
 }
 
 impl RestorationPlane {
-  pub fn new(lrf_type: u8, unit_size: usize, sb_log2: usize, cols: usize, rows: usize) -> RestorationPlane {
+  pub fn new(lrf_type: u8, unit_size: usize, sb_shift: usize,
+             cols: usize, rows: usize) -> RestorationPlane {
     RestorationPlane {
       lrf_type,
       unit_size,
-      sb_log2,
+      sb_shift,
       cols,
       rows,
       wiener_ref: [WIENER_TAPS_MID; 2],
@@ -410,8 +411,8 @@ impl RestorationPlane {
 
   fn restoration_unit_index(&self, sbo: &SuperBlockOffset) -> (usize, usize) {
     (
-      (sbo.x >> self.sb_log2).min(self.cols - 1),
-      (sbo.y >> self.sb_log2).min(self.rows - 1),
+      (sbo.x >> self.sb_shift).min(self.cols - 1),
+      (sbo.y >> self.sb_shift).min(self.rows - 1),
     )
   }
 
@@ -450,21 +451,33 @@ pub struct RestorationState {
 
 impl RestorationState {
   pub fn new(fi: &FrameInvariants, input: &Frame) -> Self {
-    // Currrently opt for smallest possible restoration unit size (1 superblock)
+    let PlaneConfig { xdec, ydec, .. } = input.planes[1].cfg;
 
-    // if 128x128 superblock is enabled, we need a shift because currently
-    // SuperBlockOffset is always defined in terms of 64x64 superblocks
-    let sb_log2 = if fi.sequence.use_128x128_superblock {1} else {0};
+    // Currrently opt for smallest possible restoration unit size (1
+    // superblock) This is *temporary*.  Counting on it will break
+    // very shortly; the 1-superblock hardwiring is only until the
+    // upper level encoder is capable of dealing with the delayed
+    // writes that RU size > SB size will require.
+    let lrf_y_shift = if fi.sequence.use_128x128_superblock {1} else {2};
+    let lrf_uv_shift = lrf_y_shift + if xdec>0 && ydec>0 {1} else {0};
 
-    let lr_uv_shift = if input.planes[1].cfg.xdec > 0 && input.planes[1].cfg.ydec > 0 {1} else {0};
-    let y_unit_size = RESTORATION_TILESIZE_MAX >> (2 - sb_log2);
-    let uv_unit_size = y_unit_size >> lr_uv_shift;
+    // derive the rest
+    let y_unit_log2 = RESTORATION_TILESIZE_MAX_LOG2 - lrf_y_shift;
+    let uv_unit_log2 = RESTORATION_TILESIZE_MAX_LOG2 - lrf_uv_shift;
+    let y_unit_size = 1 << y_unit_log2;
+    let uv_unit_size = 1 << uv_unit_log2;
+    let y_sb_log2 = if fi.sequence.use_128x128_superblock {7} else {6};
+    let uv_sb_log2 = y_sb_log2 - if xdec>0 && ydec>0 {1} else {0};
     let cols = ((fi.width + (y_unit_size >> 1)) / y_unit_size).max(1);
     let rows = ((fi.height + (y_unit_size >> 1)) / y_unit_size).max(1);
+
     RestorationState {
-      plane: [RestorationPlane::new(RESTORE_SWITCHABLE, y_unit_size, sb_log2, cols, rows),
-              RestorationPlane::new(RESTORE_SWITCHABLE, uv_unit_size, sb_log2, cols, rows),
-              RestorationPlane::new(RESTORE_SWITCHABLE, uv_unit_size, sb_log2, cols, rows)],
+      plane: [RestorationPlane::new(RESTORE_SWITCHABLE,
+                                    y_unit_size, y_unit_log2 - y_sb_log2, cols, rows),
+              RestorationPlane::new(RESTORE_SWITCHABLE,
+                                    uv_unit_size, uv_unit_log2 - uv_sb_log2, cols, rows),
+              RestorationPlane::new(RESTORE_SWITCHABLE,
+                                    uv_unit_size, uv_unit_log2 - uv_sb_log2, cols, rows)],
     }
   }
 
