@@ -26,11 +26,12 @@ before_install:
     - cargo install cargo-kcov
 jobs:
   include:
-      - name: "Build, Doc & Coveralls"
+      - name: "Build & Coveralls"
         script: cargo build --verbose &&
-                cargo doc --verbose &&
                 cargo kcov --coveralls --features=decode_test -- --verify --exclude-pattern=$HOME/.cargo,aom_build,.h,test
       - name: "Tests"
         script: cargo test --verbose --release --features=decode_test -- --ignored
       - name: "Bench"
         script: cargo bench --verbose
+      - name: "Doc"
+        script: cargo doc --verbose
