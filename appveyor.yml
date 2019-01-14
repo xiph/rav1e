@@ -22,7 +22,7 @@ install:
 
 build_script:
     - git submodule update --init
-    - $bvar
+    - $(bvar)
 
 test_script:
     - git submodule update --init
