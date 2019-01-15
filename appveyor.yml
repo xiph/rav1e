@@ -15,16 +15,23 @@ install:
     - cargo -vV
     - rustup target add %cargo_target%
 
-build_script:
+build:
+  parallel: true
+  script_x86_64:
     - git submodule update --init
-      parallel: true
     - cargo build --release --target=x86_64-pc-windows-msvc
+  script_aarch64:
+    - git submodule update --init
     - cargo build --release --target=aarch64-pc-windows-msvc & exit 0
 
-test_script:
+
+test:
+  parallel: true
+  script_x86_64:
     - git submodule update --init
-    - 
     - cargo test --target=x86_64-pc-windows-msvc --verbose
+  script_aarch64:
+    - git submodule update --init
     - cargo test --target=aarch64-pc-windows-msvc --verbose & exit 0
 
 artifacts:
