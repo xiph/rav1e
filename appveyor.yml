@@ -8,8 +8,8 @@ environment:
       target: x86_64-pc-windows-msvc
     - platform: arm64
       target: aarch64-pc-windows-msvc
-  matrix:
-    allow_failures:
+matrix:
+  allow_failures:
     - platform: arm64
 
 install:
