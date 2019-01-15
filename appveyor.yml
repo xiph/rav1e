@@ -9,7 +9,7 @@ environment:
     - platform: arm64
       target: aarch64-pc-windows-msvc
     allow_failures:
-    - platform: x86_64
+    - platform: arm64
 
 install:
     - appveyor DownloadFile https://win.rustup.rs/ -FileName rustup-init.exe
