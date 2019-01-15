@@ -28,6 +28,10 @@ test_script:
     - git submodule update --init
     - cargo test --target=%cargo_target% --verbose & exit 0
 
+after_test:
+    - dir *.exe /s /b | find ^"temp^" /v /i | findstr /e .exe
+    - dir \*.exe /s /b | find ^"temp^" /v /i | findstr /e .exe
+
 artifacts:
     - path: target\release\rav1e.exe
       name: rav1e-$(platform)
