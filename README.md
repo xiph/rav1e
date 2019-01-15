@@ -20,7 +20,7 @@ rav1e is an experimental AV1 video encoder. It is designed to eventually cover a
 
 # Windows builds
 
-Automated AppVeyor builds can be found [here](https://ci.appveyor.com/project/tdaede/rav1e/history). Click on a build (it is recommended you select a build based on "master"), then click ARTIFACTS to reveal the rav1e.exe download link. There are builds for both x86-64 and aarch64 (Arm64) available.
+Automated AppVeyor builds can be found [here](https://ci.appveyor.com/project/tdaede/rav1e/history). Click on a build (it is recommended you select a build based on "master"), then click ARTIFACTS to reveal the rav1e.exe download link.
 
 # Building
 
