@@ -260,6 +260,12 @@ pub fn cdef_filter_superblock(fi: &FrameInvariants,
         cdef_sec_uv_strength += 1;
     }
 
+    if cdef_y_strength == 0 && cdef_uv_strength == 0 {
+        // bypass filtering for speed
+        // this assumes that out_frame is already filled with in_frame's contents
+        return
+    }
+
     // Each direction block is 8x8 in y, potentially smaller if subsampled in chroma
     for by in 0..8 {
         for bx in 0..8 {
@@ -363,6 +369,7 @@ pub fn cdef_filter_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockCo
                 }
             }
             // copy current row from rec if we're in data, or pad if we're in first two rows/last N rows
+            // all pixel data must be copied, as cdef_filter_superblock may skip writing pixels for strength=0
             {
                 let mut cdef_slice = cdef_frame.planes[p].mut_slice(&PlaneOffset { x: 2, y: row as isize });
                 let mut cdef_row = &mut cdef_slice.as_mut_slice()[..rec_w];
