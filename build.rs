@@ -9,9 +9,6 @@ extern crate pkg_config;
 extern crate bindgen;
 #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 extern crate nasm_rs;
-#[cfg(target_arch = "aarch64")]
-extern crate std;
-extern crate core;
 
 #[allow(unused_imports)]
 use std::env;
