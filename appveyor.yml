@@ -3,6 +3,11 @@ image: Visual Studio 2017 Preview
 environment:
   channel: nightly
   host: x86_64-pc-windows-msvc
+  matrix:   
+    - platform: x86_64
+      cargo_target: x86_64-pc-windows-msvc
+    - platform: arm64
+      cargo_target: aarch64-pc-windows-msvc
 
 install:
     - appveyor DownloadFile https://win.rustup.rs/ -FileName rustup-init.exe
@@ -12,16 +17,17 @@ install:
     - set PATH=%PATH%;%USERPROFILE%\.cargo\bin;%APPVEYOR_BUILD_FOLDER%
     - rustc -vV
     - cargo -vV
+    - rustup target add %cargo_target%
 
 build_script:
     - git submodule update --init
-    - rustc build.rs --target=aarch64-pc-windows-msvc -C opt-level=2
-    - cargo build --release
+    - cargo build --release --target=%cargo_target%
 
 test_script:
     - git submodule update --init
     - cargo test --verbose
 
 artifacts:
-    - path: '**\*.exe'
+    - path: target\release\rav1e.exe
       name: rav1e-$(platform)
+      
