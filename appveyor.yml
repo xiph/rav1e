@@ -6,8 +6,10 @@ environment:
   matrix:   
     - platform: x86_64
       cargo_target: x86_64-pc-windows-msvc
+      exit: 1
     - platform: arm64
       cargo_target: aarch64-pc-windows-msvc
+      exit: 0
 
 install:
     - appveyor DownloadFile https://win.rustup.rs/ -FileName rustup-init.exe
@@ -22,17 +24,13 @@ install:
 
 build_script:
     - git submodule update --init
-    - cargo build --release --target=%cargo_target% & exit 0
+    - cargo build --release --target=%target% & exit %exit%
 
 test_script:
     - git submodule update --init
-    - cargo test --target=%cargo_target% --verbose & exit 0
-
-after_test:
-    - dir *.exe /s /b | find ^"temp^" /v /i | findstr /e .exe
-    - dir \*.exe /s /b | find ^"temp^" /v /i | findstr /e .exe
+    - cargo test --target=%target% --verbose & exit %exit%
 
 artifacts:
-    - path: target\release\rav1e.exe
+    - path: target\$(target)\release\rav1e.exe
       name: rav1e-$(platform)
       
