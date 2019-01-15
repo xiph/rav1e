@@ -281,7 +281,7 @@ mod nasm {
   ) {
     #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
-      if is_x86_feature_detected!("avx2") {
+    if is_x86_feature_detected!("avx2") && bit_depth == 8 {
         let mut dst8: AlignedArray<[u8; 128 * 128]> =
           UninitializedAlignedArray();
         let mut src8: [u8; (128 + 7) * (128 + 7)] =
@@ -329,7 +329,7 @@ mod nasm {
     col_frac: i32, row_frac: i32, mode_x: FilterMode, mode_y: FilterMode,
     bit_depth: usize
   ) {
-    if is_x86_feature_detected!("avx2") {
+    if is_x86_feature_detected!("avx2") && bit_depth == 8 {
       let mut src8: [u8; (128 + 7) * (128 + 7)] =
         unsafe { mem::uninitialized() };
       convert_slice_2d(
@@ -363,7 +363,7 @@ mod nasm {
     dst: &'a mut PlaneMutSlice<'a>, tmp1: &[i16], tmp2: &[i16], width: usize,
     height: usize, bit_depth: usize
   ) {
-    if is_x86_feature_detected!("avx2") {
+    if is_x86_feature_detected!("avx2") && bit_depth == 8 {
       let mut dst8: AlignedArray<[u8; 128 * 128]> =
         UninitializedAlignedArray();
       unsafe {
