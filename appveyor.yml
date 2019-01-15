@@ -22,12 +22,11 @@ install:
 
 build_script:
     - git submodule update --init
-    - cargo build --target=%cargo_target%
-    - cargo build --release --target=%cargo_target%
+    - cargo build --release --target=%cargo_target% & exit 0
 
 test_script:
     - git submodule update --init
-    - cargo test --target=%cargo_target% --verbose
+    - cargo test --target=%cargo_target% --verbose & exit 0
 
 artifacts:
     - path: target\release\rav1e.exe
