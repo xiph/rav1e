@@ -381,6 +381,9 @@ pub struct RestorationPlane {
   // (1 << sb_shift) gives the number of superblocks having size 1 << SUPERBLOCK_TO_PLANE_SHIFT
   // both horizontally and vertically in a restoration unit, not accounting for RU stretching
   pub sb_shift: usize,
+  // stripe height is 64 in all cases except 4:2:0 chroma planes where
+  // it is 32.  This is independent of all other setup parameters
+  pub stripe_height: usize,
   pub cols: usize,
   pub rows: usize,
   pub wiener_ref: [[i8; 3]; 2],
@@ -395,12 +398,14 @@ pub struct RestorationPlaneOffset {
 }
 
 impl RestorationPlane {
-  pub fn new(lrf_type: u8, unit_size: usize, sb_shift: usize,
+  pub fn new(lrf_type: u8, unit_size: usize, sb_shift: usize, stripe_decimate: usize,
              cols: usize, rows: usize) -> RestorationPlane {
+    let stripe_height = if stripe_decimate != 0 {32} else {64};
     RestorationPlane {
       lrf_type,
       unit_size,
       sb_shift,
+      stripe_height,
       cols,
       rows,
       wiener_ref: [WIENER_TAPS_MID; 2],
@@ -419,11 +424,10 @@ impl RestorationPlane {
   // Stripes are always 64 pixels high in a non-subsampled
   // frame, and decimated from 64 pixels in chroma.  When
   // filtering, they are not co-located on Y with superblocks.
-  fn restoration_unit_index_by_stripe(&self, stripenum: usize, rux: usize,
-                                      cfg: &PlaneConfig) -> (usize, usize) {
+  fn restoration_unit_index_by_stripe(&self, stripenum: usize, rux: usize) -> (usize, usize) {
     (
       cmp::min(rux, self.cols - 1),
-      cmp::min((stripenum * 64 >> cfg.ydec) / self.unit_size, self.rows - 1),
+      cmp::min(stripenum * self.stripe_height / self.unit_size, self.rows - 1),
     )
   }
 
@@ -437,9 +441,8 @@ impl RestorationPlane {
     &mut self.units[y * self.cols + x]
   }
 
-  pub fn restoration_unit_by_stripe(&self, stripenum: usize, rux: usize,
-                                    cfg: &PlaneConfig) -> &RestorationUnit {
-    let (x, y) = self.restoration_unit_index_by_stripe(stripenum, rux, cfg);
+  pub fn restoration_unit_by_stripe(&self, stripenum: usize, rux: usize) -> &RestorationUnit {
+    let (x, y) = self.restoration_unit_index_by_stripe(stripenum, rux);
     &self.units[y * self.cols + x]
   }
 }
@@ -452,14 +455,14 @@ pub struct RestorationState {
 impl RestorationState {
   pub fn new(fi: &FrameInvariants, input: &Frame) -> Self {
     let PlaneConfig { xdec, ydec, .. } = input.planes[1].cfg;
-
+    let stripe_uv_decimate = if xdec>0 && ydec>0 {1} else {0};
     // Currrently opt for smallest possible restoration unit size (1
     // superblock) This is *temporary*.  Counting on it will break
     // very shortly; the 1-superblock hardwiring is only until the
     // upper level encoder is capable of dealing with the delayed
     // writes that RU size > SB size will require.
     let lrf_y_shift = if fi.sequence.use_128x128_superblock {1} else {2};
-    let lrf_uv_shift = lrf_y_shift + if xdec>0 && ydec>0 {1} else {0};
+    let lrf_uv_shift = lrf_y_shift + stripe_uv_decimate;
 
     // derive the rest
     let y_unit_log2 = RESTORATION_TILESIZE_MAX_LOG2 - lrf_y_shift;
@@ -467,17 +470,17 @@ impl RestorationState {
     let y_unit_size = 1 << y_unit_log2;
     let uv_unit_size = 1 << uv_unit_log2;
     let y_sb_log2 = if fi.sequence.use_128x128_superblock {7} else {6};
-    let uv_sb_log2 = y_sb_log2 - if xdec>0 && ydec>0 {1} else {0};
+    let uv_sb_log2 = y_sb_log2 - stripe_uv_decimate;
     let cols = ((fi.width + (y_unit_size >> 1)) / y_unit_size).max(1);
     let rows = ((fi.height + (y_unit_size >> 1)) / y_unit_size).max(1);
 
     RestorationState {
-      plane: [RestorationPlane::new(RESTORE_SWITCHABLE,
-                                    y_unit_size, y_unit_log2 - y_sb_log2, cols, rows),
-              RestorationPlane::new(RESTORE_SWITCHABLE,
-                                    uv_unit_size, uv_unit_log2 - uv_sb_log2, cols, rows),
-              RestorationPlane::new(RESTORE_SWITCHABLE,
-                                    uv_unit_size, uv_unit_log2 - uv_sb_log2, cols, rows)],
+      plane: [RestorationPlane::new(RESTORE_SWITCHABLE, y_unit_size, y_unit_log2 - y_sb_log2,
+                                    0, cols, rows),
+              RestorationPlane::new(RESTORE_SWITCHABLE, uv_unit_size, uv_unit_log2 - uv_sb_log2,
+                                    stripe_uv_decimate, cols, rows),
+              RestorationPlane::new(RESTORE_SWITCHABLE, uv_unit_size, uv_unit_log2 - uv_sb_log2,
+                                    stripe_uv_decimate, cols, rows)],
     }
   }
 
@@ -523,7 +526,7 @@ impl RestorationState {
           } else {
             rp.unit_size
           };
-          let ru = rp.restoration_unit_by_stripe(si, rux, &out.planes[pli].cfg);
+          let ru = rp.restoration_unit_by_stripe(si, rux);
           match ru.filter {
             RestorationFilter::Wiener{coeffs} => {          
               wiener_stripe_rdu(coeffs, fi,
