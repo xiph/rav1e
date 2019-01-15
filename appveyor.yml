@@ -1,8 +1,15 @@
-image: Visual Studio 2017 Preview
+image: Visual Studio 2017
 
 environment:
   channel: nightly
   host: x86_64-pc-windows-msvc
+  matrix:   
+    - platform: x86_64
+      target: x86_64-pc-windows-msvc
+      exit: 1
+    - platform: arm64
+      target: aarch64-pc-windows-msvc
+      exit: 0
 
 install:
     - appveyor DownloadFile https://win.rustup.rs/ -FileName rustup-init.exe
@@ -13,30 +20,17 @@ install:
     - ps: $Env:PKG_CONFIG_ALLOW_CROSS=1
     - rustc -vV
     - cargo -vV
-    - rustup target add %cargo_target%
+    - rustup target add %target%
 
-build:
-  parallel: true
-  script_x86_64:
+build_script:
     - git submodule update --init
-    - cargo build --release --target=x86_64-pc-windows-msvc
-  script_aarch64:
-    - git submodule update --init
-    - cargo build --release --target=aarch64-pc-windows-msvc & exit 0
+    - cargo build --release --target=%target% & exit %exit%
 
-
-test:
-  parallel: true
-  script_x86_64:
+test_script:
     - git submodule update --init
-    - cargo test --target=x86_64-pc-windows-msvc --verbose
-  script_aarch64:
-    - git submodule update --init
-    - cargo test --target=aarch64-pc-windows-msvc --verbose & exit 0
+    - cargo test --target=%target% --verbose & exit %exit%
 
 artifacts:
-    - path: target\x86_64-pc-windows-msvc\release\rav1e.exe
-      name: rav1e-x86_64
-    - path: target\aarch64-pc-windows-msvc\release\rav1e.exe
-      name: rav1e-arm64
-      
+    - path: target\$(target)\release\rav1e.exe
+      name: rav1e-$(platform)
+ 
