@@ -515,8 +515,8 @@ impl fmt::Display for ProgressInfo {
         total_frames,
         self.encoding_fps(),
         self.bitrate() as f64 / 1024f64,
-        self.estimated_size() as f64 / (1024 * 1024) as f64
-        self.estimated_time(),
+        self.estimated_size() as f64 / (1024 * 1024) as f64,
+        self.estimated_time()
       )
     } else {
       write!(
