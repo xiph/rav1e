@@ -16,7 +16,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::sync::Arc;
 use std::time::Instant;
-use std::ops::Sub
+use std::ops::Sub;
 use y4m;
 
 pub struct EncoderIO {
