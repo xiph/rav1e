@@ -2357,7 +2357,7 @@ fn encode_partition_bottomup(fi: &FrameInvariants, fs: &mut FrameState,
                     best_rd
                 ) {
                     rd_cost += cost;
-                    if rd_cost > best_rd || rd_cost > ref_rd_cost { continue; }
+                    if rd_cost > best_rd || rd_cost > ref_rd_cost { break; }
                     else { child_modes.push(mode_decision); }
                 }
             };
