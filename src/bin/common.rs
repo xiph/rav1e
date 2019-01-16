@@ -457,6 +457,11 @@ impl ProgressInfo {
       .map(|frames| self.encoded_size * frames / self.frames_encoded())
       .unwrap_or_default()
   }
+  
+  // Estimates the remaining encoding time in seconds, if the number of frames is known
+  pub fn estimated_time(&self) -> f64 {
+    self.total_frames() - self.frames_encoded() / self.encoding_fps()
+  }
 
   // Number of frames of given type which appear in the video
   pub fn get_frame_type_count(&self, frame_type: FrameType) -> usize {
@@ -505,12 +510,13 @@ impl fmt::Display for ProgressInfo {
     if let Some(total_frames) = self.total_frames {
       write!(
         f,
-        "encoded {}/{} frames, {:.3} fps, {:.2} Kb/s, est. size: {:.2} MB",
+        "encoded {}/{} frames, {:.3} fps, {:.2} Kb/s, est. size: {:.2} MB, est. time: {} s",
         self.frames_encoded(),
         total_frames,
         self.encoding_fps(),
         self.bitrate() as f64 / 1024f64,
         self.estimated_size() as f64 / (1024 * 1024) as f64
+        self.estimated_time(),
       )
     } else {
       write!(
