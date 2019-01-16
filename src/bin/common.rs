@@ -16,7 +16,6 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::sync::Arc;
 use std::time::Instant;
-use std::ops::Sub;
 use y4m;
 
 pub struct EncoderIO {
@@ -461,7 +460,7 @@ impl ProgressInfo {
   
   // Estimates the remaining encoding time in seconds
   pub fn estimated_time(&self) -> f64 {
-    (self.total_frames - self.frames_encoded()) as f64 / self.encoding_fps()
+    (self.total_frames as f64 - self.frames_encoded() as f64) / self.encoding_fps()
   }
 
   // Number of frames of given type which appear in the video
