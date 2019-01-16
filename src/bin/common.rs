@@ -505,7 +505,7 @@ impl fmt::Display for ProgressInfo {
     if let Some(total_frames) = self.total_frames {
       write!(
         f,
-        "encoded {}/{} frames, {:.2} fps, {:.2} Kb/s, est. size: {:.2} MB",
+        "encoded {}/{} frames, {:.3} fps, {:.2} Kb/s, est. size: {:.2} MB",
         self.frames_encoded(),
         total_frames,
         self.encoding_fps(),
@@ -515,7 +515,7 @@ impl fmt::Display for ProgressInfo {
     } else {
       write!(
         f,
-        "encoded {} frames, {:.2} fps, {:.2} Kb/s",
+        "encoded {} frames, {:.3} fps, {:.2} Kb/s",
         self.frames_encoded(),
         self.encoding_fps(),
         self.bitrate() as f64 / 1024f64
