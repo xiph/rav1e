@@ -931,6 +931,9 @@ pub fn rdo_partition_decision(
 
     let mut cost: f64 = 0.0;
     let mut child_modes = std::vec::Vec::new();
+    let cw_checkpoint = cw.checkpoint();
+    let w_pre_checkpoint = w_pre_cdef.checkpoint();
+    let w_post_checkpoint = w_post_cdef.checkpoint();
 
     match partition {
       PartitionType::PARTITION_NONE => {
@@ -980,10 +983,6 @@ pub fn rdo_partition_decision(
           }
         }).collect::<Vec<_>>();
 
-        let cw_checkpoint = cw.checkpoint();
-        let w_pre_checkpoint = w_pre_cdef.checkpoint();
-        let w_post_checkpoint = w_post_cdef.checkpoint();
-
         if bsize >= BlockSize::BLOCK_8X8 {
           let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
           let tell = w.tell_frac();
@@ -1011,9 +1010,6 @@ pub fn rdo_partition_decision(
                 mode_decision
             }).collect::<Vec<_>>()
         );
-        cw.rollback(&cw_checkpoint);
-        w_pre_cdef.rollback(&w_pre_checkpoint);
-        w_post_cdef.rollback(&w_post_checkpoint);
       }
       _ => {
         assert!(false);
@@ -1027,6 +1023,9 @@ pub fn rdo_partition_decision(
       best_partition = partition;
       best_pred_modes = child_modes.clone();
     }
+    cw.rollback(&cw_checkpoint);
+    w_pre_cdef.rollback(&w_pre_checkpoint);
+    w_post_cdef.rollback(&w_post_checkpoint);
   }
 
   assert!(best_rd >= 0_f64);
