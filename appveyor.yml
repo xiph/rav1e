@@ -35,3 +35,10 @@ test_script:
 artifacts:
     - path: target\$(target)\release\rav1e.exe
       name: rav1e-$(platform)
+      
+ deploy:
+  - provider: GitHub
+    artifact: target\$(target)\release\rav1e.exe
+    prerelease: true
+    on:
+      appveyor_repo_tag: true
