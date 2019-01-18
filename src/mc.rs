@@ -152,13 +152,6 @@ mod nasm {
     i32
   );
 
-  unsafe extern fn put_invalid(
-    _dst: *mut u8, _dst_stride: libc::ptrdiff_t, _src: *const u8,
-    _src_stride: libc::ptrdiff_t, _w: i32, _h: i32, _mx: i32, _my: i32
-  ) {
-    unimplemented!();
-  }
-
   macro_rules! decl_mc_fns {
     ($($func_name:ident),+) => {
       extern {
@@ -204,19 +197,12 @@ mod nasm {
         rav1e_put_8tap_sharp_smooth_avx2,
       (FilterMode::SHARP, FilterMode::SHARP) => rav1e_put_8tap_sharp_avx2,
       (FilterMode::BILINEAR, FilterMode::BILINEAR) => rav1e_put_bilin_avx2,
-      (_, _) => put_invalid
+      (_, _) => unreachable!()
     }
   }
 
   type PrepFn =
     unsafe extern fn(*mut i16, *const u8, libc::ptrdiff_t, i32, i32, i32, i32);
-
-  unsafe extern fn prep_invalid(
-    _tmp: *mut i16, _src: *const u8, _src_stride: libc::ptrdiff_t, _w: i32,
-    _h: i32, _mx: i32, _my: i32
-  ) {
-    unimplemented!();
-  }
 
   macro_rules! decl_mct_fns {
     ($($func_name:ident),+) => {
@@ -263,7 +249,7 @@ mod nasm {
         rav1e_prep_8tap_sharp_smooth_avx2,
       (FilterMode::SHARP, FilterMode::SHARP) => rav1e_prep_8tap_sharp_avx2,
       (FilterMode::BILINEAR, FilterMode::BILINEAR) => rav1e_prep_bilin_avx2,
-      (_, _) => prep_invalid
+      (_, _) => unreachable!()
     }
   }
 
