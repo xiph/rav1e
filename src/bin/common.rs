@@ -167,9 +167,18 @@ fn parse_config(matches: &ArgMatches) -> EncoderConfig {
     panic!("Maximum keyframe interval must be greater than or equal to minimum keyframe interval");
   }
 
-  let color_primaries = matches.value_of("COLOR_PRIMARIES").unwrap().parse().unwrap_or_default();
-  let transfer_characteristics = matches.value_of("TRANSFER_CHARACTERISTICS").unwrap().parse().unwrap_or_default();
-  let matrix_coefficients = matches.value_of("MATRIX_COEFFICIENTS").unwrap().parse().unwrap_or_default();
+  let color_primaries =
+    matches.value_of("COLOR_PRIMARIES").unwrap().parse().unwrap_or_default();
+  let transfer_characteristics = matches
+    .value_of("TRANSFER_CHARACTERISTICS")
+    .unwrap()
+    .parse()
+    .unwrap_or_default();
+  let matrix_coefficients = matches
+    .value_of("MATRIX_COEFFICIENTS")
+    .unwrap()
+    .parse()
+    .unwrap_or_default();
 
   let mut cfg = EncoderConfig::with_speed_preset(speed);
   cfg.max_key_frame_interval = min_interval;
@@ -474,10 +483,22 @@ impl ProgressInfo {
   }
 
   pub fn print_stats(&self) -> String {
-    let (key, key_size) = (self.get_frame_type_count(FrameType::KEY), self.get_frame_type_size(FrameType::KEY));
-    let (inter, inter_size) = (self.get_frame_type_count(FrameType::INTER), self.get_frame_type_size(FrameType::INTER));
-    let (ionly, ionly_size) = (self.get_frame_type_count(FrameType::INTRA_ONLY), self.get_frame_type_size(FrameType::INTRA_ONLY));
-    let (switch, switch_size) = (self.get_frame_type_count(FrameType::SWITCH), self.get_frame_type_size(FrameType::SWITCH));
+    let (key, key_size) = (
+      self.get_frame_type_count(FrameType::KEY),
+      self.get_frame_type_size(FrameType::KEY)
+    );
+    let (inter, inter_size) = (
+      self.get_frame_type_count(FrameType::INTER),
+      self.get_frame_type_size(FrameType::INTER)
+    );
+    let (ionly, ionly_size) = (
+      self.get_frame_type_count(FrameType::INTRA_ONLY),
+      self.get_frame_type_size(FrameType::INTRA_ONLY)
+    );
+    let (switch, switch_size) = (
+      self.get_frame_type_count(FrameType::SWITCH),
+      self.get_frame_type_size(FrameType::SWITCH)
+    );
     format!("\
     Key Frames: {:>6}    avg size: {:>7} B\n\
     Inter:      {:>6}    avg size: {:>7} B\n\
@@ -489,9 +510,15 @@ impl ProgressInfo {
       ionly, ionly_size / key,
       switch, switch_size / key,
       if self.show_psnr {
-        let psnr_y = self.frame_info.iter().map(|fi| fi.psnr.unwrap().0).sum::<f64>() / self.frame_info.len() as f64;
-        let psnr_u = self.frame_info.iter().map(|fi| fi.psnr.unwrap().1).sum::<f64>() / self.frame_info.len() as f64;
-        let psnr_v = self.frame_info.iter().map(|fi| fi.psnr.unwrap().2).sum::<f64>() / self.frame_info.len() as f64;
+        let psnr_y =
+          self.frame_info.iter().map(|fi| fi.psnr.unwrap().0).sum::<f64>()
+            / self.frame_info.len() as f64;
+        let psnr_u =
+          self.frame_info.iter().map(|fi| fi.psnr.unwrap().1).sum::<f64>()
+            / self.frame_info.len() as f64;
+        let psnr_v =
+          self.frame_info.iter().map(|fi| fi.psnr.unwrap().2).sum::<f64>()
+            / self.frame_info.len() as f64;
         format!("\nMean PSNR: Y: {:.4}  Cb: {:.4}  Cr: {:.4}  Avg: {:.4}",
                 psnr_y, psnr_u, psnr_v,
                 (psnr_y + psnr_u + psnr_v) / 3.0)

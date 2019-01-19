@@ -690,7 +690,10 @@ impl FrameInvariants {
   /// Returns the created FrameInvariants along with a bool indicating success.
   /// This interface provides simpler usage, because we always need the produced
   /// FrameInvariants regardless of success or failure.
-  pub fn new_inter_frame(previous_fi: &Self, segment_start_frame: u64, idx_in_segment: u64, next_keyframe: u64) -> (Self, bool) {
+  pub fn new_inter_frame(
+    previous_fi: &Self, segment_start_frame: u64, idx_in_segment: u64,
+    next_keyframe: u64
+  ) -> (Self, bool) {
     let mut fi = previous_fi.clone();
     fi.frame_type = FrameType::INTER;
     fi.intra_only = false;
@@ -760,7 +763,11 @@ impl FrameInvariants {
     let ref_in_previous_group = LAST3_FRAME;
 
     // reuse probability estimates from previous frames only in top level frames
-    fi.primary_ref_frame = if lvl > 0 { PRIMARY_REF_NONE } else { (ref_in_previous_group - LAST_FRAME) as u32 };
+    fi.primary_ref_frame = if lvl > 0 {
+      PRIMARY_REF_NONE
+    } else {
+      (ref_in_previous_group - LAST_FRAME) as u32
+    };
 
     for i in 0..INTER_REFS_PER_FRAME {
       fi.ref_frames[i] = if lvl == 0 {
@@ -2282,10 +2289,11 @@ pub fn encode_block_with_modes(fi: &FrameInvariants, fs: &mut FrameState,
                     tx_size, tx_type, mode_context, &mv_stack, false);
 }
 
-fn encode_partition_bottomup(fi: &FrameInvariants, fs: &mut FrameState,
-                             cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
-                             bsize: BlockSize, bo: &BlockOffset, pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5],
-                             ref_rd_cost: f64
+fn encode_partition_bottomup(
+  fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
+  w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer, bsize: BlockSize,
+  bo: &BlockOffset, pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5],
+  ref_rd_cost: f64
 ) -> (f64, Option<RDOPartitionOutput>) {
     let mut rd_cost = std::f64::MAX;
     let mut best_rd = std::f64::MAX;
