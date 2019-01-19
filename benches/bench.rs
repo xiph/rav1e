@@ -44,8 +44,11 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
     av1_rtcd();
     aom_dsp_rtcd();
   }
-  let config =
-    EncoderConfig { quantizer: qindex, speed_settings: SpeedSettings::from_preset(10), ..Default::default() };
+  let config = EncoderConfig {
+    quantizer: qindex,
+    speed_settings: SpeedSettings::from_preset(10),
+    ..Default::default()
+  };
   let sequence = Sequence::new(&Default::default());
   let mut fi = FrameInvariants::new(1024, 1024, config, sequence);
   let mut w = ec::WriterEncoder::new();

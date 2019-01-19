@@ -738,7 +738,8 @@ pub struct MotionVector {
 pub const NEWMV_MODE_CONTEXTS: usize = 7;
 pub const GLOBALMV_MODE_CONTEXTS: usize = 2;
 pub const REFMV_MODE_CONTEXTS: usize = 6;
-pub const INTER_COMPOUND_MODES: usize = (1 + PredictionMode::NEW_NEWMV as usize - PredictionMode::NEAREST_NEARESTMV as usize);
+pub const INTER_COMPOUND_MODES: usize = 1 + PredictionMode::NEW_NEWMV as usize
+  - PredictionMode::NEAREST_NEARESTMV as usize;
 
 pub const REFMV_OFFSET: usize = 4;
 pub const GLOBALMV_OFFSET: usize = 3;
@@ -887,7 +888,11 @@ pub fn get_intra_edges<'a>(
         BlockSize::from_width_and_height(2*tx_size.width(), 2*tx_size.height())
       };
       let num_avail = if y != 0 && has_tr(&bo, bsize) {
-        tx_size.height().min((if p == 0 { MI_SIZE } else { MI_SIZE / 2 }) * frame_w_in_b - x as usize - tx_size.width())
+        tx_size.height().min(
+          (if p == 0 { MI_SIZE } else { MI_SIZE / 2 }) * frame_w_in_b
+            - x as usize
+            - tx_size.width()
+        )
       } else {
         0
       };
@@ -916,7 +921,11 @@ pub fn get_intra_edges<'a>(
         BlockSize::from_width_and_height(2*tx_size.width(), 2*tx_size.height())
       };
       let num_avail = if x != 0 && has_bl(&bo, bsize) {
-        tx_size.width().min((if p == 0 { MI_SIZE } else { MI_SIZE / 2 }) * frame_h_in_b - y as usize - tx_size.height())
+        tx_size.width().min(
+          (if p == 0 { MI_SIZE } else { MI_SIZE / 2 }) * frame_h_in_b
+            - y as usize
+            - tx_size.height()
+        )
       } else {
         0
       };
@@ -928,7 +937,10 @@ pub fn get_intra_edges<'a>(
       }
       if num_avail < tx_size.width() {
         let val = left[2 * MAX_TX_SIZE - tx_size.height() - num_avail];
-        for v in left[(2 * MAX_TX_SIZE - tx_size.height() - tx_size.width())..(2 * MAX_TX_SIZE - tx_size.height() - num_avail)].iter_mut() {
+        for v in left[(2 * MAX_TX_SIZE - tx_size.height() - tx_size.width())
+          ..(2 * MAX_TX_SIZE - tx_size.height() - num_avail)]
+          .iter_mut()
+        {
           *v = val;
         }
       }

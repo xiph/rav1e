@@ -464,9 +464,16 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
     }
   }
 
-  let luma_rdo = |luma_mode: PredictionMode, fs: &mut FrameState, cw: &mut ContextWriter, best: &mut EncodingSettings,
-    mvs: [MotionVector; 2], ref_frames: [usize; 2], mode_set_chroma: &[PredictionMode], luma_mode_is_intra: bool,
-    mode_context: usize, mv_stack: &Vec<CandidateMV>| {
+  let luma_rdo = |luma_mode: PredictionMode,
+                  fs: &mut FrameState,
+                  cw: &mut ContextWriter,
+                  best: &mut EncodingSettings,
+                  mvs: [MotionVector; 2],
+                  ref_frames: [usize; 2],
+                  mode_set_chroma: &[PredictionMode],
+                  luma_mode_is_intra: bool,
+                  mode_context: usize,
+                  mv_stack: &Vec<CandidateMV>| {
     let (tx_size, mut tx_type) = rdo_tx_size_type(
         fi, fs, cw, bsize, bo, luma_mode, ref_frames, mvs, false,
     );
@@ -589,8 +596,11 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
 
     // Reduce number of prediction modes at higher speed levels
     let num_modes_rdo = if (fi.frame_type == FrameType::KEY
-      && fi.config.speed_settings.prediction_modes >= PredictionModesSetting::ComplexKeyframes)
-      || (fi.frame_type == FrameType::INTER && fi.config.speed_settings.prediction_modes >= PredictionModesSetting::ComplexAll)
+      && fi.config.speed_settings.prediction_modes
+        >= PredictionModesSetting::ComplexKeyframes)
+      || (fi.frame_type == FrameType::INTER
+        && fi.config.speed_settings.prediction_modes
+          >= PredictionModesSetting::ComplexAll)
     {
       7
     } else {
@@ -604,16 +614,35 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
         let po = bo.plane_offset(&rec.cfg);
         get_intra_edges(&rec.slice(&po), tx_size, fi.sequence.bit_depth, 0, fi.w_in_b, fi.h_in_b, None)
       };
-      intra_mode_set.iter().map(|&luma_mode| {
-        let rec = &mut fs.rec.planes[0];
-        let po = bo.plane_offset(&rec.cfg);
-        luma_mode.predict_intra(&mut rec.mut_slice(&po), tx_size, fi.sequence.bit_depth, &[0i16; 2], 0, &edge_buf);
+      intra_mode_set
+        .iter()
+        .map(|&luma_mode| {
+          let rec = &mut fs.rec.planes[0];
+          let po = bo.plane_offset(&rec.cfg);
+          luma_mode.predict_intra(
+            &mut rec.mut_slice(&po),
+            tx_size,
+            fi.sequence.bit_depth,
+            &[0i16; 2],
+            0,
+            &edge_buf
+          );
 
-        let plane_org = fs.input.planes[0].slice(&po);
-        let plane_ref = rec.slice(&po);
+          let plane_org = fs.input.planes[0].slice(&po);
+          let plane_ref = rec.slice(&po);
 
-        (luma_mode, get_sad(&plane_org, &plane_ref, tx_size.height(), tx_size.width(), fi.sequence.bit_depth))
-      }).collect::<Vec<_>>()
+          (
+            luma_mode,
+            get_sad(
+              &plane_org,
+              &plane_ref,
+              tx_size.height(),
+              tx_size.width(),
+              fi.sequence.bit_depth
+            )
+          )
+        })
+        .collect::<Vec<_>>()
     };
 
     sads.sort_by_key(|a| a.1);
@@ -631,8 +660,15 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
     probs.sort_by_key(|a| !a.1);
 
     let mut modes = Vec::new();
-    probs.iter().take(num_modes_rdo / 2).for_each(|&(luma_mode, _prob)| modes.push(luma_mode));
-    sads.iter().take(num_modes_rdo).for_each(|&(luma_mode, _sad)| if !modes.contains(&luma_mode) { modes.push(luma_mode) } );
+    probs
+      .iter()
+      .take(num_modes_rdo / 2)
+      .for_each(|&(luma_mode, _prob)| modes.push(luma_mode));
+    sads.iter().take(num_modes_rdo).for_each(|&(luma_mode, _sad)| {
+      if !modes.contains(&luma_mode) {
+        modes.push(luma_mode)
+      }
+    });
 
     modes.iter().take(num_modes_rdo).for_each(|&luma_mode| {
       let mvs = [MotionVector { row: 0, col: 0 }; 2];
@@ -756,7 +792,15 @@ pub fn rdo_cfl_alpha(
       let po = bo.plane_offset(&fs.input.planes[p].cfg);
       (-16i16..17i16)
         .min_by_key(|&alpha| {
-          let edge_buf = get_intra_edges(&rec.slice(&po), uv_tx_size, bit_depth, p, 0, 0, Some(PredictionMode::UV_CFL_PRED));
+          let edge_buf = get_intra_edges(
+            &rec.slice(&po),
+            uv_tx_size,
+            bit_depth,
+            p,
+            0,
+            0,
+            Some(PredictionMode::UV_CFL_PRED)
+          );
           PredictionMode::UV_CFL_PRED.predict_intra(
             &mut rec.mut_slice(&po),
             uv_tx_size,
@@ -784,8 +828,9 @@ pub fn rdo_cfl_alpha(
 // RDO-based transform type decision
 pub fn rdo_tx_type_decision(
   fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
-  mode: PredictionMode, ref_frames: [usize; 2], mvs: [MotionVector; 2], bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize,
-  tx_set: TxSet) -> TxType {
+  mode: PredictionMode, ref_frames: [usize; 2], mvs: [MotionVector; 2],
+  bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize, tx_set: TxSet
+) -> TxType {
   let mut best_type = TxType::DCT_DCT;
   let mut best_rd = std::f64::MAX;
 

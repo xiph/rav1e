@@ -41,7 +41,14 @@ fn main() {
   let bit_depth = color_space.get_bit_depth();
 
   let cfg = Config {
-    frame_info: FrameInfo { width, height, bit_depth, chroma_sampling, chroma_sample_position, ..Default::default() },
+    frame_info: FrameInfo {
+      width,
+      height,
+      bit_depth,
+      chroma_sampling,
+      chroma_sample_position,
+      ..Default::default()
+    },
     timebase: Rational::new(framerate.den as u64, framerate.num as u64),
     enc: cli.enc
   };
