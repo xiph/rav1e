@@ -464,9 +464,16 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
     }
   }
 
-  let luma_rdo = |luma_mode: PredictionMode, fs: &mut FrameState, cw: &mut ContextWriter, best: &mut EncodingSettings,
-    mvs: [MotionVector; 2], ref_frames: [usize; 2], mode_set_chroma: &[PredictionMode], luma_mode_is_intra: bool,
-    mode_context: usize, mv_stack: &Vec<CandidateMV>| {
+  let luma_rdo = |luma_mode: PredictionMode,
+                  fs: &mut FrameState,
+                  cw: &mut ContextWriter,
+                  best: &mut EncodingSettings,
+                  mvs: [MotionVector; 2],
+                  ref_frames: [usize; 2],
+                  mode_set_chroma: &[PredictionMode],
+                  luma_mode_is_intra: bool,
+                  mode_context: usize,
+                  mv_stack: &Vec<CandidateMV>| {
     let (tx_size, mut tx_type) = rdo_tx_size_type(
         fi, fs, cw, bsize, bo, luma_mode, ref_frames, mvs, false,
     );
@@ -607,16 +614,35 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
         let po = bo.plane_offset(&rec.cfg);
         get_intra_edges(&rec.slice(&po), tx_size, fi.sequence.bit_depth, 0, fi.w_in_b, fi.h_in_b, None)
       };
-      intra_mode_set.iter().map(|&luma_mode| {
-        let rec = &mut fs.rec.planes[0];
-        let po = bo.plane_offset(&rec.cfg);
-        luma_mode.predict_intra(&mut rec.mut_slice(&po), tx_size, fi.sequence.bit_depth, &[0i16; 2], 0, &edge_buf);
+      intra_mode_set
+        .iter()
+        .map(|&luma_mode| {
+          let rec = &mut fs.rec.planes[0];
+          let po = bo.plane_offset(&rec.cfg);
+          luma_mode.predict_intra(
+            &mut rec.mut_slice(&po),
+            tx_size,
+            fi.sequence.bit_depth,
+            &[0i16; 2],
+            0,
+            &edge_buf
+          );
 
-        let plane_org = fs.input.planes[0].slice(&po);
-        let plane_ref = rec.slice(&po);
+          let plane_org = fs.input.planes[0].slice(&po);
+          let plane_ref = rec.slice(&po);
 
-        (luma_mode, get_sad(&plane_org, &plane_ref, tx_size.height(), tx_size.width(), fi.sequence.bit_depth))
-      }).collect::<Vec<_>>()
+          (
+            luma_mode,
+            get_sad(
+              &plane_org,
+              &plane_ref,
+              tx_size.height(),
+              tx_size.width(),
+              fi.sequence.bit_depth
+            )
+          )
+        })
+        .collect::<Vec<_>>()
     };
 
     sads.sort_by_key(|a| a.1);
