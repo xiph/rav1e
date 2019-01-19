@@ -450,10 +450,18 @@ impl Context {
     let idx_in_segment = idx - self.segment_start_idx;
     if idx_in_segment > 0 {
       let next_keyframe = self.next_keyframe();
-      let (fi, success) = FrameInvariants::new_inter_frame(&self.fi, self.segment_start_frame, idx_in_segment, next_keyframe);
+      let (fi, success) = FrameInvariants::new_inter_frame(
+        &self.fi,
+        self.segment_start_frame,
+        idx_in_segment,
+        next_keyframe
+      );
       self.fi = fi;
       if !success {
-        if !self.fi.inter_cfg.unwrap().reorder || ((idx_in_segment - 1) % self.fi.inter_cfg.unwrap().group_len == 0 && self.fi.number == (next_keyframe - 1)) {
+        if !self.fi.inter_cfg.unwrap().reorder
+          || ((idx_in_segment - 1) % self.fi.inter_cfg.unwrap().group_len == 0
+            && self.fi.number == (next_keyframe - 1))
+        {
           self.segment_start_idx = idx;
           self.segment_start_frame = next_keyframe;
           self.fi.number = next_keyframe;
@@ -477,7 +485,12 @@ impl Context {
         self.fi = FrameInvariants::new_key_frame(&self.fi, self.segment_start_frame);
       } else {
         let next_keyframe = self.next_keyframe();
-        let (fi, success) = FrameInvariants::new_inter_frame(&self.fi, self.segment_start_frame, idx_in_segment, next_keyframe);
+        let (fi, success) = FrameInvariants::new_inter_frame(
+          &self.fi,
+          self.segment_start_frame,
+          idx_in_segment,
+          next_keyframe
+        );
         self.fi = fi;
         if !success {
           return Err(());

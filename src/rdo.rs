@@ -589,8 +589,11 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
 
     // Reduce number of prediction modes at higher speed levels
     let num_modes_rdo = if (fi.frame_type == FrameType::KEY
-      && fi.config.speed_settings.prediction_modes >= PredictionModesSetting::ComplexKeyframes)
-      || (fi.frame_type == FrameType::INTER && fi.config.speed_settings.prediction_modes >= PredictionModesSetting::ComplexAll)
+      && fi.config.speed_settings.prediction_modes
+        >= PredictionModesSetting::ComplexKeyframes)
+      || (fi.frame_type == FrameType::INTER
+        && fi.config.speed_settings.prediction_modes
+          >= PredictionModesSetting::ComplexAll)
     {
       7
     } else {
@@ -631,8 +634,15 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
     probs.sort_by_key(|a| !a.1);
 
     let mut modes = Vec::new();
-    probs.iter().take(num_modes_rdo / 2).for_each(|&(luma_mode, _prob)| modes.push(luma_mode));
-    sads.iter().take(num_modes_rdo).for_each(|&(luma_mode, _sad)| if !modes.contains(&luma_mode) { modes.push(luma_mode) } );
+    probs
+      .iter()
+      .take(num_modes_rdo / 2)
+      .for_each(|&(luma_mode, _prob)| modes.push(luma_mode));
+    sads.iter().take(num_modes_rdo).for_each(|&(luma_mode, _sad)| {
+      if !modes.contains(&luma_mode) {
+        modes.push(luma_mode)
+      }
+    });
 
     modes.iter().take(num_modes_rdo).for_each(|&luma_mode| {
       let mvs = [MotionVector { row: 0, col: 0 }; 2];
@@ -756,7 +766,15 @@ pub fn rdo_cfl_alpha(
       let po = bo.plane_offset(&fs.input.planes[p].cfg);
       (-16i16..17i16)
         .min_by_key(|&alpha| {
-          let edge_buf = get_intra_edges(&rec.slice(&po), uv_tx_size, bit_depth, p, 0, 0, Some(PredictionMode::UV_CFL_PRED));
+          let edge_buf = get_intra_edges(
+            &rec.slice(&po),
+            uv_tx_size,
+            bit_depth,
+            p,
+            0,
+            0,
+            Some(PredictionMode::UV_CFL_PRED)
+          );
           PredictionMode::UV_CFL_PRED.predict_intra(
             &mut rec.mut_slice(&po),
             uv_tx_size,
@@ -784,8 +802,9 @@ pub fn rdo_cfl_alpha(
 // RDO-based transform type decision
 pub fn rdo_tx_type_decision(
   fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
-  mode: PredictionMode, ref_frames: [usize; 2], mvs: [MotionVector; 2], bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize,
-  tx_set: TxSet) -> TxType {
+  mode: PredictionMode, ref_frames: [usize; 2], mvs: [MotionVector; 2],
+  bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize, tx_set: TxSet
+) -> TxType {
   let mut best_type = TxType::DCT_DCT;
   let mut best_rd = std::f64::MAX;
 
