@@ -35,7 +35,7 @@ dav1d-sys = { version = "0.1.1", optional = true }
 cmake = { version = "0.1", optional = true }
 
 [target.'cfg(target_arch = "x86_64")'.build-dependencies]
-nasm-rs = { git = "https://github.com/medek/nasm-rs.git", optional = true }
+nasm-rs = { version = "0.1.4", optional = true }
 
 [target.'cfg(unix)'.build-dependencies]
 pkg-config = "0.3.12"
