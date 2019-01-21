@@ -53,6 +53,7 @@ fn main() {
             &[
                 "src/x86/data.asm",
                 "src/x86/ipred.asm",
+                "src/x86/itx.asm",
                 "src/x86/mc.asm",
                 "src/x86/me.asm"
             ],
