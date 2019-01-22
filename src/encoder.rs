@@ -2044,7 +2044,7 @@ fn encode_tile<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec
 
       // loop restoration must be decided last but coded before anything else
       if fi.sequence.enable_restoration {
-        fs.restoration.lrf_optimize_superblock(&sbo, fi, &mut cw);
+        // optimization would occur here
         cw.write_lrf(&mut w, fi, &mut fs.restoration, &sbo);
       }
 

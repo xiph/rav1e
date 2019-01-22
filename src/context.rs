@@ -3057,20 +3057,21 @@ impl ContextWriter {
               }
               w.literal(SGRPROJ_PARAMS_BITS, set as u32);
               for i in 0..2 {
-                let r = SGRPROJ_PARAMS_RADIUS[set as usize][i];
+                let s = SGRPROJ_PARAMS_S[set as usize][i];
                 let min = SGRPROJ_XQD_MIN[i] as i32;
                 let max = SGRPROJ_XQD_MAX[i] as i32;
-                if r>0 {
+                if s > 0 {
                   w.write_signed_subexp_with_ref(xqd[i] as i32, min, max+1, SGRPROJ_PRJ_SUBEXP_K,
                                                  rp.sgrproj_ref[i] as i32);
                   rp.sgrproj_ref[i] = xqd[i];
                 } else {
                   // Nothing written, just update the reference
                   if i==0 {
+                    assert!(xqd[i] == 0);
                     rp.sgrproj_ref[0] = 0;
                   } else {
-                    rp.sgrproj_ref[1] =
-                      clamp((1 << SGRPROJ_PRJ_BITS) - rp.sgrproj_ref[0], min as i8, max as i8);
+                    assert!(xqd[i] == 95);
+                    rp.sgrproj_ref[1] = 95; // LOL at spec.  The result is always 95.
                   }
                 }
               }
@@ -3087,7 +3088,13 @@ impl ContextWriter {
                 _ => unreachable!()
               }
               for pass in 0..2 {
-                let first_coeff = if pli==0 {0} else {1};
+                let first_coeff =
+                  if pli==0 {
+                    0
+                  } else {
+                    assert!(coeffs[pass][0] == 0);
+                    1
+                  };
                 for i in first_coeff..3 {
                   let min = WIENER_TAPS_MIN[i] as i32;
                   let max = WIENER_TAPS_MAX[i] as i32;
