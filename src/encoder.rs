@@ -2357,12 +2357,11 @@ fn encode_partition_bottomup(
 
         rd_cost = mode_decision.rd_cost + cost;
 
-        if rd_cost < ref_rd_cost {
-            best_partition = PartitionType::PARTITION_NONE;
-            best_rd = rd_cost;
-            best_decision = mode_decision.clone();
-            best_pred_modes.push(best_decision.clone());
-
+        best_partition = PartitionType::PARTITION_NONE;
+        best_rd = rd_cost;
+        best_decision = mode_decision.clone();
+        best_pred_modes.push(best_decision.clone());
+        if !can_split {
             encode_block_with_modes(fi, fs, cw, w_pre_cdef, w_post_cdef, bsize, bo,
                                 &mode_decision);
         }
@@ -2409,6 +2408,7 @@ fn encode_partition_bottomup(
                 &BlockOffset{ x: bo.x + hbsw as usize, y: bo.y + hbsh as usize }
             ];
             let partitions = get_sub_partitions(&four_partitions, partition);
+            let mut early_exit = false;
 
             // If either of horz or vert partition types is being tested,
             // two partitioned rectangles, defined in 'partitions', of the current block
@@ -2426,12 +2426,16 @@ fn encode_partition_bottomup(
                     best_rd
                 ) {
                     rd_cost += cost;
-                    if rd_cost > best_rd || rd_cost > ref_rd_cost { break; }
+                    if rd_cost >= best_rd || rd_cost >= ref_rd_cost {
+                        assert!(cost != std::f64::MAX);
+                        early_exit = true;
+                        if partition == PartitionType::PARTITION_SPLIT { break; }
+                    }
                     else { child_modes.push(mode_decision); }
                 }
             };
 
-            if rd_cost < best_rd && rd_cost < ref_rd_cost {
+            if !early_exit && rd_cost < best_rd {
                 best_rd = rd_cost;
                 best_partition = partition;
                 best_pred_modes = child_modes.clone();
