@@ -967,17 +967,17 @@ pub fn rdo_partition_decision(
   let mut best_rd = cached_block.rd_cost;
   let mut best_pred_modes = cached_block.part_modes.clone();
 
+  let cw_checkpoint = cw.checkpoint();
+  let w_pre_checkpoint = w_pre_cdef.checkpoint();
+  let w_post_checkpoint = w_post_cdef.checkpoint();
+
   for &partition in partition_types {
     // Do not re-encode results we already have
     if partition == cached_block.part_type {
       continue;
     }
-
     let mut cost: f64 = 0.0;
     let mut child_modes = std::vec::Vec::new();
-    let cw_checkpoint = cw.checkpoint();
-    let w_pre_checkpoint = w_pre_cdef.checkpoint();
-    let w_post_checkpoint = w_post_cdef.checkpoint();
 
     match partition {
       PartitionType::PARTITION_NONE => {
