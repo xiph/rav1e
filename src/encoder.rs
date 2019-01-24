@@ -2294,13 +2294,19 @@ fn encode_partition_bottomup(
   w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer, bsize: BlockSize,
   bo: &BlockOffset, pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5],
   ref_rd_cost: f64
-) -> (f64, Option<RDOPartitionOutput>) {
+) -> (RDOOutput) {
     let mut rd_cost = std::f64::MAX;
     let mut best_rd = std::f64::MAX;
     let mut best_pred_modes: Vec<RDOPartitionOutput> = Vec::new();
+    let mut rdo_output = RDOOutput {
+        rd_cost,
+        part_type: PartitionType::PARTITION_INVALID,
+        part_modes: Vec::new()
+    };
 
     if bo.x >= cw.bc.cols || bo.y >= cw.bc.rows {
-        return (rd_cost, None);
+        //return RDOOutput {rd_cost, part_type: PartitionType::PARTITION_INVALID, part_modes: Vec::new()};
+        return rdo_output
     }
 
     let bsw = bsize.width_mi();
@@ -2316,7 +2322,8 @@ fn encode_partition_bottomup(
     let can_split = (bsize > fi.min_partition_size && is_square) || must_split;
 
     let mut best_partition = PartitionType::PARTITION_INVALID;
-    let mut best_decision = RDOPartitionOutput {
+    //let mut best_decision : RDOPartitionOutput;
+    /*let mut best_decision = RDOPartitionOutput {
         rd_cost,
         bo: bo.clone(),
         bsize: bsize,
@@ -2328,7 +2335,7 @@ fn encode_partition_bottomup(
         skip: false,
         tx_size: TxSize::TX_4X4,
         tx_type: TxType::DCT_DCT,
-    }; // Best decision that is not PARTITION_SPLIT
+    }; // Best decision that is not PARTITION_SPLIT*/
 
     let cw_checkpoint = cw.checkpoint();
     let w_pre_checkpoint = w_pre_cdef.checkpoint();
@@ -2359,8 +2366,9 @@ fn encode_partition_bottomup(
 
         best_partition = PartitionType::PARTITION_NONE;
         best_rd = rd_cost;
-        best_decision = mode_decision.clone();
-        best_pred_modes.push(best_decision.clone());
+        //best_decision = mode_decision.clone();
+        rdo_output.part_modes.push(mode_decision.clone());
+        best_pred_modes.push(mode_decision.clone());
         if !can_split {
             encode_block_with_modes(fi, fs, cw, w_pre_cdef, w_post_cdef, bsize, bo,
                                 &mode_decision);
@@ -2372,8 +2380,7 @@ fn encode_partition_bottomup(
         for &partition in RAV1E_PARTITION_TYPES {
             if partition == PartitionType::PARTITION_NONE { continue; }
 
-            assert!(bsw == bsh);
-
+            assert!(is_square);
             if must_split {
                 let cbw = (fi.w_in_b - bo.x).min(bsw); // clipped block width, i.e. having effective pixels
                 let cbh = (fi.h_in_b - bo.y).min(bsh);
@@ -2414,7 +2421,7 @@ fn encode_partition_bottomup(
             // two partitioned rectangles, defined in 'partitions', of the current block
             // is passed to encode_partition_bottomup()
             for offset in partitions {
-                if let (cost, Some(mode_decision)) = encode_partition_bottomup(
+                let rdo_output = encode_partition_bottomup(
                     fi,
                     fs,
                     cw,
@@ -2424,27 +2431,40 @@ fn encode_partition_bottomup(
                     offset,
                     pmvs,//&best_decision.mvs[0]
                     best_rd
-                ) {
-                    rd_cost += cost;
-                    if rd_cost >= best_rd || rd_cost >= ref_rd_cost {
-                        assert!(cost != std::f64::MAX);
-                        early_exit = true;
-                        if partition == PartitionType::PARTITION_SPLIT { break; }
+                );
+                let cost = rdo_output.rd_cost;
+                assert!(cost >= 0.0);
+                if cost == std::f64::MAX { continue; }
+
+                rd_cost += cost;
+                if rd_cost >= best_rd || rd_cost >= ref_rd_cost {
+                    assert!(cost != std::f64::MAX);
+                    early_exit = true;
+                    if partition == PartitionType::PARTITION_SPLIT { break; }
+                }
+                else {
+                    if partition != PartitionType::PARTITION_SPLIT {
+                        child_modes.push(rdo_output.part_modes[0].clone());
                     }
-                    else { child_modes.push(mode_decision); }
                 }
             };
 
             if !early_exit && rd_cost < best_rd {
                 best_rd = rd_cost;
                 best_partition = partition;
-                best_pred_modes = child_modes.clone();
+                if partition != PartitionType::PARTITION_SPLIT {
+                    assert!(child_modes.len() > 0);
+                    best_pred_modes = child_modes.clone();
+                }
             }
         }
 
         // If the best partition is not PARTITION_SPLIT or PARTITION_INVALID, recode it
         if best_partition != PartitionType::PARTITION_SPLIT &&
             best_partition != PartitionType::PARTITION_INVALID {
+
+            assert!(best_pred_modes.len() > 0);
+
             cw.rollback(&cw_checkpoint);
             w_pre_cdef.rollback(&w_pre_checkpoint);
             w_post_cdef.rollback(&w_post_checkpoint);
@@ -2474,7 +2494,24 @@ fn encode_partition_bottomup(
             cw.bc.update_partition_context(bo, subsize, bsize);
         }
     }
-    (best_rd, Some(best_decision))
+
+    /*RDOOutput {
+        rd_cost: best_rd,
+        part_type: best_partition,
+        part_modes: if best_partition == PartitionType::PARTITION_NONE { vec![best_decision.clone()] }
+                    else { Vec::new() }
+    }*/
+
+    rdo_output.rd_cost = best_rd;
+    rdo_output.part_type = best_partition;
+
+    if best_partition == PartitionType::PARTITION_NONE {
+        //rdo_output.part_modes.push(best_decision);
+    }
+    if best_partition != PartitionType::PARTITION_NONE {
+        rdo_output.part_modes = Vec::new();
+    }
+    rdo_output
 }
 
 fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState,
