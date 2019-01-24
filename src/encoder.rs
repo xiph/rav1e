@@ -2297,7 +2297,7 @@ fn encode_partition_bottomup(
 ) -> (RDOOutput) {
     let mut rd_cost = std::f64::MAX;
     let mut best_rd = std::f64::MAX;
-    let mut best_pred_modes: Vec<RDOPartitionOutput> = Vec::new();
+    //let mut rdo_output.part_modes: Vec<RDOPartitionOutput> = Vec::new();
     let mut rdo_output = RDOOutput {
         rd_cost,
         part_type: PartitionType::PARTITION_INVALID,
@@ -2367,8 +2367,8 @@ fn encode_partition_bottomup(
         best_partition = PartitionType::PARTITION_NONE;
         best_rd = rd_cost;
         //best_decision = mode_decision.clone();
+        //rdo_output.part_modes.push(mode_decision.clone());
         rdo_output.part_modes.push(mode_decision.clone());
-        best_pred_modes.push(mode_decision.clone());
         if !can_split {
             encode_block_with_modes(fi, fs, cw, w_pre_cdef, w_post_cdef, bsize, bo,
                                 &mode_decision);
@@ -2454,7 +2454,7 @@ fn encode_partition_bottomup(
                 best_partition = partition;
                 if partition != PartitionType::PARTITION_SPLIT {
                     assert!(child_modes.len() > 0);
-                    best_pred_modes = child_modes.clone();
+                    rdo_output.part_modes = child_modes.clone();
                 }
             }
         }
@@ -2463,7 +2463,7 @@ fn encode_partition_bottomup(
         if best_partition != PartitionType::PARTITION_SPLIT &&
             best_partition != PartitionType::PARTITION_INVALID {
 
-            assert!(best_pred_modes.len() > 0);
+            assert!(rdo_output.part_modes.len() > 0);
 
             cw.rollback(&cw_checkpoint);
             w_pre_cdef.rollback(&w_pre_checkpoint);
@@ -2476,7 +2476,7 @@ fn encode_partition_bottomup(
                 let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
                 cw.write_partition(w, bo, best_partition, bsize);
             }
-            for mode in best_pred_modes {
+            for mode in rdo_output.part_modes.clone() {
                 assert!(subsize == mode.bsize);
                 let offset = mode.bo.clone();
                 // FIXME: redundant block re-encode
