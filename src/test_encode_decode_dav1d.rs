@@ -238,6 +238,7 @@ fn compare_pic(pic: &Dav1dPicture, frame: &Frame, bit_depth: usize, width: usize
     let rec_stride = frame_plane.cfg.stride;
 
     if bit_depth > 8 {
+      let stride = stride / 2;
       let dec = unsafe {
         let data = data as *const u16;
         let size = stride * h;
