@@ -2297,7 +2297,6 @@ fn encode_partition_bottomup(
 ) -> (RDOOutput) {
     let mut rd_cost = std::f64::MAX;
     let mut best_rd = std::f64::MAX;
-    //let mut rdo_output.part_modes: Vec<RDOPartitionOutput> = Vec::new();
     let mut rdo_output = RDOOutput {
         rd_cost,
         part_type: PartitionType::PARTITION_INVALID,
@@ -2305,7 +2304,6 @@ fn encode_partition_bottomup(
     };
 
     if bo.x >= cw.bc.cols || bo.y >= cw.bc.rows {
-        //return RDOOutput {rd_cost, part_type: PartitionType::PARTITION_INVALID, part_modes: Vec::new()};
         return rdo_output
     }
 
@@ -2322,20 +2320,6 @@ fn encode_partition_bottomup(
     let can_split = (bsize > fi.min_partition_size && is_square) || must_split;
 
     let mut best_partition = PartitionType::PARTITION_INVALID;
-    //let mut best_decision : RDOPartitionOutput;
-    /*let mut best_decision = RDOPartitionOutput {
-        rd_cost,
-        bo: bo.clone(),
-        bsize: bsize,
-        pred_mode_luma: PredictionMode::DC_PRED,
-        pred_mode_chroma: PredictionMode::DC_PRED,
-        pred_cfl_params: CFLParams::new(),
-        ref_frames: [INTRA_FRAME, NONE_FRAME],
-        mvs: [MotionVector { row: 0, col: 0}; 2],
-        skip: false,
-        tx_size: TxSize::TX_4X4,
-        tx_type: TxType::DCT_DCT,
-    }; // Best decision that is not PARTITION_SPLIT*/
 
     let cw_checkpoint = cw.checkpoint();
     let w_pre_checkpoint = w_pre_cdef.checkpoint();
@@ -2366,9 +2350,8 @@ fn encode_partition_bottomup(
 
         best_partition = PartitionType::PARTITION_NONE;
         best_rd = rd_cost;
-        //best_decision = mode_decision.clone();
-        //rdo_output.part_modes.push(mode_decision.clone());
         rdo_output.part_modes.push(mode_decision.clone());
+
         if !can_split {
             encode_block_with_modes(fi, fs, cw, w_pre_cdef, w_post_cdef, bsize, bo,
                                 &mode_decision);
@@ -2495,19 +2478,9 @@ fn encode_partition_bottomup(
         }
     }
 
-    /*RDOOutput {
-        rd_cost: best_rd,
-        part_type: best_partition,
-        part_modes: if best_partition == PartitionType::PARTITION_NONE { vec![best_decision.clone()] }
-                    else { Vec::new() }
-    }*/
-
     rdo_output.rd_cost = best_rd;
     rdo_output.part_type = best_partition;
 
-    if best_partition == PartitionType::PARTITION_NONE {
-        //rdo_output.part_modes.push(best_decision);
-    }
     if best_partition != PartitionType::PARTITION_NONE {
         rdo_output.part_modes = Vec::new();
     }
