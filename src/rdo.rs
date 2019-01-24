@@ -966,18 +966,20 @@ pub fn rdo_partition_decision(
   let mut best_partition = cached_block.part_type;
   let mut best_rd = cached_block.rd_cost;
   let mut best_pred_modes = cached_block.part_modes.clone();
+  let mut early_exit;
+
+  let cw_checkpoint = cw.checkpoint();
+  let w_pre_checkpoint = w_pre_cdef.checkpoint();
+  let w_post_checkpoint = w_post_cdef.checkpoint();
 
   for &partition in partition_types {
     // Do not re-encode results we already have
     if partition == cached_block.part_type {
       continue;
     }
-
+    early_exit = false;
     let mut cost: f64 = 0.0;
     let mut child_modes = std::vec::Vec::new();
-    let cw_checkpoint = cw.checkpoint();
-    let w_pre_checkpoint = w_pre_cdef.checkpoint();
-    let w_post_checkpoint = w_post_cdef.checkpoint();
 
     match partition {
       PartitionType::PARTITION_NONE => {
@@ -1033,39 +1035,44 @@ pub fn rdo_partition_decision(
           cw.write_partition(w, bo, partition, bsize);
           cost = (w.tell_frac() - tell) as f64 * get_lambda(fi)/ ((1 << OD_BITRES) as f64);
         }
+        let mut rd_cost_sum = 0.0;
 
-        child_modes.extend(
-          partitions
-            .iter().zip(pmv_idxs)
-            .map(|(&offset, pmv_idx)| {
-              let mode_decision =
-              rdo_mode_decision(fi, fs, cw, subsize, &offset,
-                &pmvs[pmv_idx], true)
-                .part_modes[0]
-                .clone();
+        for (offset, pmv_idx) in partitions.iter().zip(pmv_idxs) {
+          let mode_decision =
+          rdo_mode_decision(fi, fs, cw, subsize, &offset,
+            &pmvs[pmv_idx], true)
+            .part_modes[0]
+            .clone();
 
-                if subsize >= BlockSize::BLOCK_8X8 && subsize.is_sqr() {
-                  let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
-                  cw.write_partition(w, offset, PartitionType::PARTITION_NONE, subsize);
-                }
+          rd_cost_sum += mode_decision.rd_cost;
 
-                encode_block_with_modes(fi, fs, cw, w_pre_cdef, w_post_cdef, subsize,
-                                    offset, &mode_decision);
-                mode_decision
-            }).collect::<Vec<_>>()
-        );
+          if rd_cost_sum > best_rd {
+            early_exit = true;
+            break;
+          }
+
+          if subsize >= BlockSize::BLOCK_8X8 && subsize.is_sqr() {
+            let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
+            cw.write_partition(w, offset, PartitionType::PARTITION_NONE, subsize);
+          }
+          encode_block_with_modes(fi, fs, cw, w_pre_cdef, w_post_cdef, subsize,
+                              offset, &mode_decision);
+          child_modes.push(mode_decision);
+        }
       }
       _ => {
         assert!(false);
       }
     }
 
-    let rd = cost + child_modes.iter().map(|m| m.rd_cost).sum::<f64>();
+    if !early_exit {
+      let rd = cost + child_modes.iter().map(|m| m.rd_cost).sum::<f64>();
 
-    if rd < best_rd {
-      best_rd = rd;
-      best_partition = partition;
-      best_pred_modes = child_modes.clone();
+      if rd < best_rd {
+        best_rd = rd;
+        best_partition = partition;
+        best_pred_modes = child_modes.clone();
+      }
     }
     cw.rollback(&cw_checkpoint);
     w_pre_cdef.rollback(&w_pre_checkpoint);
