@@ -204,21 +204,20 @@ fn parse_config(matches: &ArgMatches) -> EncoderConfig {
   cfg
 }
 
-pub fn map_y4m_color_space(color_space: y4m::Colorspace) -> (ChromaSampling, ChromaSamplePosition) {
+pub fn map_y4m_color_space(
+  color_space: y4m::Colorspace
+) -> (ChromaSampling, ChromaSamplePosition) {
+  use y4m::Colorspace::*;
+  use ChromaSampling::*;
+  use ChromaSamplePosition::*;
   match color_space {
-    y4m::Colorspace::C420jpeg
-    | y4m::Colorspace::C420paldv => (ChromaSampling::Cs420, ChromaSamplePosition::Unknown),
-    y4m::Colorspace::C420mpeg2 => (ChromaSampling::Cs420, ChromaSamplePosition::Vertical),
-    y4m::Colorspace::C420
-    | y4m::Colorspace::C420p10
-    | y4m::Colorspace::C420p12 => (ChromaSampling::Cs420, ChromaSamplePosition::Colocated),
-    y4m::Colorspace::C422
-    | y4m::Colorspace::C422p10
-    | y4m::Colorspace::C422p12 => (ChromaSampling::Cs422, ChromaSamplePosition::Colocated),
-    y4m::Colorspace::C444
-    | y4m::Colorspace::C444p10
-    | y4m::Colorspace::C444p12 => (ChromaSampling::Cs444, ChromaSamplePosition::Colocated),
-    _ => panic!("Chroma characteristics unknown for the specified color space.")
+    C420jpeg | C420paldv => (Cs420, Unknown),
+    C420mpeg2 => (Cs420, Vertical),
+    C420 | C420p10 | C420p12 => (Cs420, Colocated),
+    C422 | C422p10 | C422p12 => (Cs422, Colocated),
+    C444 | C444p10 | C444p12 => (Cs444, Colocated),
+    _ =>
+      panic!("Chroma characteristics unknown for the specified color space.")
   }
 }
 

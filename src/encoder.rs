@@ -202,14 +202,15 @@ impl Default for ChromaSampling {
 }
 
 impl ChromaSampling {
-    // Provides the sampling period in the horizontal and vertical axes.
-    pub fn sampling_period(self) -> (usize, usize) {
-        match self {
-            ChromaSampling::Cs420 => (2, 2),
-            ChromaSampling::Cs422 => (2, 1),
-            ChromaSampling::Cs444 => (1, 1)
-        }
+  // Provides the sampling period in the horizontal and vertical axes.
+  pub fn sampling_period(self) -> (usize, usize) {
+    use self::ChromaSampling::*;
+    match self {
+      Cs420 => (2, 2),
+      Cs422 => (2, 1),
+      Cs444 => (1, 1)
     }
+  }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -853,15 +854,16 @@ pub enum ReferenceMode {
 
 pub const ALL_REF_FRAMES_MASK: u32 = (1 << REF_FRAMES) - 1;
 
-impl fmt::Display for FrameType{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            FrameType::KEY => write!(f, "Key frame"),
-            FrameType::INTER => write!(f, "Inter frame"),
-            FrameType::INTRA_ONLY => write!(f, "Intra only frame"),
-            FrameType::SWITCH => write!(f, "Switching frame"),
-        }
+impl fmt::Display for FrameType {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    use self::FrameType::*;
+    match self {
+      KEY => write!(f, "Key frame"),
+      INTER => write!(f, "Inter frame"),
+      INTRA_ONLY => write!(f, "Intra only frame"),
+      SWITCH => write!(f, "Switching frame"),
     }
+  }
 }
 
 pub fn write_ivf_header(

@@ -283,21 +283,25 @@ pub fn rdo_tx_size_type(
   luma_mode: PredictionMode, ref_frames: [usize; 2], mvs: [MotionVector; 2], skip: bool
 ) -> (TxSize, TxType) {
   // these rules follow TX_MODE_LARGEST
-  let tx_size = match bsize {
-    BlockSize::BLOCK_4X4 => TxSize::TX_4X4,
-    BlockSize::BLOCK_8X8 => TxSize::TX_8X8,
-    BlockSize::BLOCK_16X16 => TxSize::TX_16X16,
-    BlockSize::BLOCK_4X8 => TxSize::TX_4X8,
-    BlockSize::BLOCK_8X4 => TxSize::TX_8X4,
-    BlockSize::BLOCK_8X16 => TxSize::TX_8X16,
-    BlockSize::BLOCK_16X8 => TxSize::TX_16X8,
-    BlockSize::BLOCK_16X32 => TxSize::TX_16X32,
-    BlockSize::BLOCK_32X16 => TxSize::TX_32X16,
-    BlockSize::BLOCK_32X32 => TxSize::TX_32X32,
-    BlockSize::BLOCK_32X64 => TxSize::TX_32X64,
-    BlockSize::BLOCK_64X32 => TxSize::TX_64X32,
-    BlockSize::BLOCK_64X64 => TxSize::TX_64X64,
-    _ => unimplemented!()
+  let tx_size = {
+    use self::BlockSize::*;
+    use self::TxSize::*;
+    match bsize {
+      BLOCK_4X4 => TX_4X4,
+      BLOCK_8X8 => TX_8X8,
+      BLOCK_16X16 => TX_16X16,
+      BLOCK_4X8 => TX_4X8,
+      BLOCK_8X4 => TX_8X4,
+      BLOCK_8X16 => TX_8X16,
+      BLOCK_16X8 => TX_16X8,
+      BLOCK_16X32 => TX_16X32,
+      BLOCK_32X16 => TX_32X16,
+      BLOCK_32X32 => TX_32X32,
+      BLOCK_32X64 => TX_32X64,
+      BLOCK_64X32 => TX_64X32,
+      BLOCK_64X64 => TX_64X64,
+      _ => unimplemented!()
+    }
   };
   cw.bc.set_tx_size(bo, tx_size);
   // Were we not hardcoded to TX_MODE_LARGEST, block tx size would be written here

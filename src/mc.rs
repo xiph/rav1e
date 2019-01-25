@@ -179,24 +179,18 @@ mod nasm {
   );
 
   fn select_put_fn_avx2(mode_x: FilterMode, mode_y: FilterMode) -> PutFn {
+    use self::FilterMode::*;
     match (mode_x, mode_y) {
-      (FilterMode::REGULAR, FilterMode::REGULAR) =>
-        rav1e_put_8tap_regular_avx2,
-      (FilterMode::REGULAR, FilterMode::SMOOTH) =>
-        rav1e_put_8tap_regular_smooth_avx2,
-      (FilterMode::REGULAR, FilterMode::SHARP) =>
-        rav1e_put_8tap_regular_sharp_avx2,
-      (FilterMode::SMOOTH, FilterMode::REGULAR) =>
-        rav1e_put_8tap_smooth_regular_avx2,
-      (FilterMode::SMOOTH, FilterMode::SMOOTH) => rav1e_put_8tap_smooth_avx2,
-      (FilterMode::SMOOTH, FilterMode::SHARP) =>
-        rav1e_put_8tap_smooth_sharp_avx2,
-      (FilterMode::SHARP, FilterMode::REGULAR) =>
-        rav1e_put_8tap_sharp_regular_avx2,
-      (FilterMode::SHARP, FilterMode::SMOOTH) =>
-        rav1e_put_8tap_sharp_smooth_avx2,
-      (FilterMode::SHARP, FilterMode::SHARP) => rav1e_put_8tap_sharp_avx2,
-      (FilterMode::BILINEAR, FilterMode::BILINEAR) => rav1e_put_bilin_avx2,
+      (REGULAR, REGULAR) => rav1e_put_8tap_regular_avx2,
+      (REGULAR, SMOOTH) => rav1e_put_8tap_regular_smooth_avx2,
+      (REGULAR, SHARP) => rav1e_put_8tap_regular_sharp_avx2,
+      (SMOOTH, REGULAR) => rav1e_put_8tap_smooth_regular_avx2,
+      (SMOOTH, SMOOTH) => rav1e_put_8tap_smooth_avx2,
+      (SMOOTH, SHARP) => rav1e_put_8tap_smooth_sharp_avx2,
+      (SHARP, REGULAR) => rav1e_put_8tap_sharp_regular_avx2,
+      (SHARP, SMOOTH) => rav1e_put_8tap_sharp_smooth_avx2,
+      (SHARP, SHARP) => rav1e_put_8tap_sharp_avx2,
+      (BILINEAR, BILINEAR) => rav1e_put_bilin_avx2,
       (_, _) => unreachable!()
     }
   }
@@ -231,24 +225,18 @@ mod nasm {
   );
 
   fn select_prep_fn_avx2(mode_x: FilterMode, mode_y: FilterMode) -> PrepFn {
+    use self::FilterMode::*;
     match (mode_x, mode_y) {
-      (FilterMode::REGULAR, FilterMode::REGULAR) =>
-        rav1e_prep_8tap_regular_avx2,
-      (FilterMode::REGULAR, FilterMode::SMOOTH) =>
-        rav1e_prep_8tap_regular_smooth_avx2,
-      (FilterMode::REGULAR, FilterMode::SHARP) =>
-        rav1e_prep_8tap_regular_sharp_avx2,
-      (FilterMode::SMOOTH, FilterMode::REGULAR) =>
-        rav1e_prep_8tap_smooth_regular_avx2,
-      (FilterMode::SMOOTH, FilterMode::SMOOTH) => rav1e_prep_8tap_smooth_avx2,
-      (FilterMode::SMOOTH, FilterMode::SHARP) =>
-        rav1e_prep_8tap_smooth_sharp_avx2,
-      (FilterMode::SHARP, FilterMode::REGULAR) =>
-        rav1e_prep_8tap_sharp_regular_avx2,
-      (FilterMode::SHARP, FilterMode::SMOOTH) =>
-        rav1e_prep_8tap_sharp_smooth_avx2,
-      (FilterMode::SHARP, FilterMode::SHARP) => rav1e_prep_8tap_sharp_avx2,
-      (FilterMode::BILINEAR, FilterMode::BILINEAR) => rav1e_prep_bilin_avx2,
+      (REGULAR, REGULAR) => rav1e_prep_8tap_regular_avx2,
+      (REGULAR, SMOOTH) => rav1e_prep_8tap_regular_smooth_avx2,
+      (REGULAR, SHARP) => rav1e_prep_8tap_regular_sharp_avx2,
+      (SMOOTH, REGULAR) => rav1e_prep_8tap_smooth_regular_avx2,
+      (SMOOTH, SMOOTH) => rav1e_prep_8tap_smooth_avx2,
+      (SMOOTH, SHARP) => rav1e_prep_8tap_smooth_sharp_avx2,
+      (SHARP, REGULAR) => rav1e_prep_8tap_sharp_regular_avx2,
+      (SHARP, SMOOTH) => rav1e_prep_8tap_sharp_smooth_avx2,
+      (SHARP, SHARP) => rav1e_prep_8tap_sharp_avx2,
+      (BILINEAR, BILINEAR) => rav1e_prep_bilin_avx2,
       (_, _) => unreachable!()
     }
   }
