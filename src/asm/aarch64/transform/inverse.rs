@@ -219,7 +219,9 @@ mod test {
               *d = random::<u8>();
               *r = i16::from(*s) - i16::from(*d);
             }
-            forward_transform(res, freq, tx_size.width(), tx_size, $ENUM, 8);
+            forward_transform(
+              res, freq, tx_size.width(), tx_size, $ENUM, 8, CpuFeatureLevel::NATIVE
+            );
             let mut native_dst = dst.clone();
 
             unsafe { crate::predict::[<Block $W x $H>]::[<inv_txfm2d_add_ $OPT>](
