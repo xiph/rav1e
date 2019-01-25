@@ -2417,17 +2417,18 @@ fn encode_partition_bottomup(
                 );
                 let cost = rdo_output.rd_cost;
                 assert!(cost >= 0.0);
-                if cost == std::f64::MAX { continue; }
 
-                rd_cost += cost;
-                if rd_cost >= best_rd || rd_cost >= ref_rd_cost {
-                    assert!(cost != std::f64::MAX);
-                    early_exit = true;
-                    if partition == PartitionType::PARTITION_SPLIT { break; }
-                }
-                else {
-                    if partition != PartitionType::PARTITION_SPLIT {
-                        child_modes.push(rdo_output.part_modes[0].clone());
+                if cost != std::f64::MAX {
+                    rd_cost += cost;
+                    if rd_cost >= best_rd || rd_cost >= ref_rd_cost {
+                        assert!(cost != std::f64::MAX);
+                        early_exit = true;
+                        if partition == PartitionType::PARTITION_SPLIT { break; }
+                    }
+                    else {
+                        if partition != PartitionType::PARTITION_SPLIT {
+                            child_modes.push(rdo_output.part_modes[0].clone());
+                        }
                     }
                 }
             };
@@ -2437,7 +2438,7 @@ fn encode_partition_bottomup(
                 best_partition = partition;
                 if partition != PartitionType::PARTITION_SPLIT {
                     assert!(child_modes.len() > 0);
-                    rdo_output.part_modes = child_modes.clone();
+                    rdo_output.part_modes = child_modes;
                 }
             }
         }
@@ -2469,20 +2470,18 @@ fn encode_partition_bottomup(
         }
     }
 
-    if best_partition != PartitionType::PARTITION_INVALID {
-        let subsize = bsize.subsize(best_partition);
+    assert!(best_partition != PartitionType::PARTITION_INVALID);
 
-        if bsize.gte(BlockSize::BLOCK_8X8) &&
-            (bsize == BlockSize::BLOCK_8X8 || best_partition != PartitionType::PARTITION_SPLIT) {
-            cw.bc.update_partition_context(bo, subsize, bsize);
-        }
+    if bsize.gte(BlockSize::BLOCK_8X8) &&
+        (bsize == BlockSize::BLOCK_8X8 || best_partition != PartitionType::PARTITION_SPLIT) {
+        cw.bc.update_partition_context(bo, bsize.subsize(best_partition), bsize);
     }
 
     rdo_output.rd_cost = best_rd;
     rdo_output.part_type = best_partition;
 
     if best_partition != PartitionType::PARTITION_NONE {
-        rdo_output.part_modes = Vec::new();
+        rdo_output.part_modes.clear();
     }
     rdo_output
 }
