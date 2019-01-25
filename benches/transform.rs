@@ -76,7 +76,9 @@ pub fn daala_fdct4(c: &mut Criterion) {
   let (input, mut output) = init_buffers(4);
 
   c.bench_function("daala_fdct4", move |b| {
-    b.iter(|| transform::forward::daala_fdct4(&input[..], &mut output[..]))
+    b.iter(|| {
+      transform::forward::native::daala_fdct4(&input[..], &mut output[..])
+    })
   });
 }
 
@@ -84,7 +86,9 @@ pub fn daala_fdct8(c: &mut Criterion) {
   let (input, mut output) = init_buffers(8);
 
   c.bench_function("daala_fdct8", move |b| {
-    b.iter(|| transform::forward::daala_fdct8(&input[..], &mut output[..]))
+    b.iter(|| {
+      transform::forward::native::daala_fdct8(&input[..], &mut output[..])
+    })
   });
 }
 
@@ -92,7 +96,9 @@ pub fn fidentity4(c: &mut Criterion) {
   let (input, mut output) = init_buffers(4);
 
   c.bench_function("fidentity4", move |b| {
-    b.iter(|| transform::forward::fidentity4(&input[..], &mut output[..]))
+    b.iter(|| {
+      transform::forward::native::fidentity4(&input[..], &mut output[..])
+    })
   });
 }
 
@@ -100,7 +106,9 @@ pub fn fidentity8(c: &mut Criterion) {
   let (input, mut output) = init_buffers(8);
 
   c.bench_function("fidentity8", move |b| {
-    b.iter(|| transform::forward::fidentity8(&input[..], &mut output[..]))
+    b.iter(|| {
+      transform::forward::native::fidentity8(&input[..], &mut output[..])
+    })
   });
 }
 
@@ -109,7 +117,7 @@ pub fn daala_fdst_vii_4(c: &mut Criterion) {
 
   c.bench_function("daala_fdst_vii_4", move |b| {
     b.iter(|| {
-      transform::forward::daala_fdst_vii_4(&input[..], &mut output[..])
+      transform::forward::native::daala_fdst_vii_4(&input[..], &mut output[..])
     })
   });
 }
@@ -118,7 +126,9 @@ pub fn daala_fdst8(c: &mut Criterion) {
   let (input, mut output) = init_buffers(8);
 
   c.bench_function("daala_fdst8", move |b| {
-    b.iter(|| transform::forward::daala_fdst8(&input[..], &mut output[..]))
+    b.iter(|| {
+      transform::forward::native::daala_fdst8(&input[..], &mut output[..])
+    })
   });
 }
 

@@ -1196,6 +1196,7 @@ pub fn encode_tx_block<T: Pixel>(
     tx_size,
     tx_type,
     fi.sequence.bit_depth,
+    fi.cpu_feature_level,
   );
 
   ts.qc.quantize(coeffs, qcoeffs, tx_size, tx_type);

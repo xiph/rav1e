@@ -10,6 +10,9 @@
 #![allow(non_camel_case_types)]
 #![allow(dead_code)]
 
+#[macro_use]
+pub mod forward_shared;
+
 use self::forward::*;
 use self::inverse::*;
 
@@ -382,31 +385,31 @@ const HTX_TAB: [TxType1D; TX_TYPES] = [
 
 pub fn forward_transform(
   input: &[i16], output: &mut [i32], stride: usize, tx_size: TxSize,
-  tx_type: TxType, bit_depth: usize,
+  tx_type: TxType, bit_depth: usize, cpu: CpuFeatureLevel,
 ) {
   use self::TxSize::*;
   match tx_size {
-    TX_4X4 => fht4x4(input, output, stride, tx_type, bit_depth),
-    TX_8X8 => fht8x8(input, output, stride, tx_type, bit_depth),
-    TX_16X16 => fht16x16(input, output, stride, tx_type, bit_depth),
-    TX_32X32 => fht32x32(input, output, stride, tx_type, bit_depth),
-    TX_64X64 => fht64x64(input, output, stride, tx_type, bit_depth),
+    TX_4X4 => fht4x4(input, output, stride, tx_type, bit_depth, cpu),
+    TX_8X8 => fht8x8(input, output, stride, tx_type, bit_depth, cpu),
+    TX_16X16 => fht16x16(input, output, stride, tx_type, bit_depth, cpu),
+    TX_32X32 => fht32x32(input, output, stride, tx_type, bit_depth, cpu),
+    TX_64X64 => fht64x64(input, output, stride, tx_type, bit_depth, cpu),
 
-    TX_4X8 => fht4x8(input, output, stride, tx_type, bit_depth),
-    TX_8X4 => fht8x4(input, output, stride, tx_type, bit_depth),
-    TX_8X16 => fht8x16(input, output, stride, tx_type, bit_depth),
-    TX_16X8 => fht16x8(input, output, stride, tx_type, bit_depth),
-    TX_16X32 => fht16x32(input, output, stride, tx_type, bit_depth),
-    TX_32X16 => fht32x16(input, output, stride, tx_type, bit_depth),
-    TX_32X64 => fht32x64(input, output, stride, tx_type, bit_depth),
-    TX_64X32 => fht64x32(input, output, stride, tx_type, bit_depth),
+    TX_4X8 => fht4x8(input, output, stride, tx_type, bit_depth, cpu),
+    TX_8X4 => fht8x4(input, output, stride, tx_type, bit_depth, cpu),
+    TX_8X16 => fht8x16(input, output, stride, tx_type, bit_depth, cpu),
+    TX_16X8 => fht16x8(input, output, stride, tx_type, bit_depth, cpu),
+    TX_16X32 => fht16x32(input, output, stride, tx_type, bit_depth, cpu),
+    TX_32X16 => fht32x16(input, output, stride, tx_type, bit_depth, cpu),
+    TX_32X64 => fht32x64(input, output, stride, tx_type, bit_depth, cpu),
+    TX_64X32 => fht64x32(input, output, stride, tx_type, bit_depth, cpu),
 
-    TX_4X16 => fht4x16(input, output, stride, tx_type, bit_depth),
-    TX_16X4 => fht16x4(input, output, stride, tx_type, bit_depth),
-    TX_8X32 => fht8x32(input, output, stride, tx_type, bit_depth),
-    TX_32X8 => fht32x8(input, output, stride, tx_type, bit_depth),
-    TX_16X64 => fht16x64(input, output, stride, tx_type, bit_depth),
-    TX_64X16 => fht64x16(input, output, stride, tx_type, bit_depth),
+    TX_4X16 => fht4x16(input, output, stride, tx_type, bit_depth, cpu),
+    TX_16X4 => fht16x4(input, output, stride, tx_type, bit_depth, cpu),
+    TX_8X32 => fht8x32(input, output, stride, tx_type, bit_depth, cpu),
+    TX_32X8 => fht32x8(input, output, stride, tx_type, bit_depth, cpu),
+    TX_16X64 => fht16x64(input, output, stride, tx_type, bit_depth, cpu),
+    TX_64X16 => fht64x16(input, output, stride, tx_type, bit_depth, cpu),
   }
 }
 
@@ -450,6 +453,8 @@ mod test {
   fn test_roundtrip<T: Pixel>(
     tx_size: TxSize, tx_type: TxType, tolerance: i16,
   ) {
+    let cpu = CpuFeatureLevel::default();
+
     let mut src_storage = [T::cast_from(0); 64 * 64];
     let src = &mut src_storage[..tx_size.area()];
     // dynamic allocation: test
@@ -466,14 +471,14 @@ mod test {
       *d = T::cast_from(random::<u8>());
       *r = i16::cast_from(*s) - i16::cast_from(*d);
     }
-    forward_transform(res, freq, tx_size.width(), tx_size, tx_type, 8);
+    forward_transform(res, freq, tx_size.width(), tx_size, tx_type, 8, cpu);
     inverse_transform_add(
       freq,
       &mut dst.as_region_mut(),
       tx_size,
       tx_type,
       8,
-      CpuFeatureLevel::default(),
+      cpu,
     );
 
     for (s, d) in src.iter().zip(dst.data.iter()) {
