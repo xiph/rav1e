@@ -2404,7 +2404,7 @@ fn encode_partition_bottomup(
             // two partitioned rectangles, defined in 'partitions', of the current block
             // is passed to encode_partition_bottomup()
             for offset in partitions {
-                let rdo_output = encode_partition_bottomup(
+                let child_rdo_output = encode_partition_bottomup(
                     fi,
                     fs,
                     cw,
@@ -2415,7 +2415,7 @@ fn encode_partition_bottomup(
                     pmvs,//&best_decision.mvs[0]
                     best_rd
                 );
-                let cost = rdo_output.rd_cost;
+                let cost = child_rdo_output.rd_cost;
                 assert!(cost >= 0.0);
 
                 if cost != std::f64::MAX {
@@ -2427,7 +2427,7 @@ fn encode_partition_bottomup(
                     }
                     else {
                         if partition != PartitionType::PARTITION_SPLIT {
-                            child_modes.push(rdo_output.part_modes[0].clone());
+                            child_modes.push(child_rdo_output.part_modes[0].clone());
                         }
                     }
                 }
