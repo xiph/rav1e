@@ -569,6 +569,7 @@ pub struct FrameInvariants {
     pub me_range_scale: u8,
     pub use_tx_domain_distortion: bool,
     pub inter_cfg: Option<InterPropsConfig>,
+    pub enable_early_exit: bool,
 }
 
 impl FrameInvariants {
@@ -642,6 +643,7 @@ impl FrameInvariants {
             me_range_scale: 1,
             use_tx_domain_distortion: use_tx_domain_distortion,
             inter_cfg: None,
+            enable_early_exit: true,
         }
     }
 
@@ -2422,7 +2424,7 @@ fn encode_partition_bottomup(
 
                 if cost != std::f64::MAX {
                     rd_cost += cost;
-                    if rd_cost >= best_rd || rd_cost >= ref_rd_cost {
+                    if fi.enable_early_exit && (rd_cost >= best_rd || rd_cost >= ref_rd_cost) {
                         assert!(cost != std::f64::MAX);
                         early_exit = true;
                         if partition == PartitionType::PARTITION_SPLIT { break; }
