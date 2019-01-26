@@ -970,7 +970,6 @@ pub fn rdo_partition_decision(
   let mut best_partition = cached_block.part_type;
   let mut best_rd = cached_block.rd_cost;
   let mut best_pred_modes = cached_block.part_modes.clone();
-  let mut early_exit;
 
   let cw_checkpoint = cw.checkpoint();
   let w_pre_checkpoint = w_pre_cdef.checkpoint();
@@ -981,9 +980,9 @@ pub fn rdo_partition_decision(
     if partition == cached_block.part_type {
       continue;
     }
-    early_exit = false;
     let mut cost: f64 = 0.0;
     let mut child_modes = std::vec::Vec::new();
+    let mut early_exit = false;
 
     match partition {
       PartitionType::PARTITION_NONE => {
@@ -1050,7 +1049,7 @@ pub fn rdo_partition_decision(
 
           rd_cost_sum += mode_decision.rd_cost;
 
-          if rd_cost_sum > best_rd {
+          if fi.enable_early_exit && rd_cost_sum > best_rd {
             early_exit = true;
             break;
           }
