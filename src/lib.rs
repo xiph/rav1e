@@ -8,7 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 #![allow(safe_extern_statics)]
-#![cfg_attr(feature = "cargo-clippy", allow(collapsible_if))]
+#![allow(clippy::collapsible_if)]
 
 extern crate bitstream_io;
 extern crate backtrace;
