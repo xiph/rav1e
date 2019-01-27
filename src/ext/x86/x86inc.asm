@@ -65,12 +65,19 @@
 %endif
 
 %define FORMAT_ELF 0
+%define FORMAT_MACHO 0
 %ifidn __OUTPUT_FORMAT__,elf
     %define FORMAT_ELF 1
 %elifidn __OUTPUT_FORMAT__,elf32
     %define FORMAT_ELF 1
 %elifidn __OUTPUT_FORMAT__,elf64
     %define FORMAT_ELF 1
+%elifidn __OUTPUT_FORMAT__,macho
+    %define FORMAT_MACHO 1
+%elifidn __OUTPUT_FORMAT__,macho32
+    %define FORMAT_MACHO 1
+%elifidn __OUTPUT_FORMAT__,macho64
+    %define FORMAT_MACHO 1
 %endif
 
 %ifdef PREFIX
@@ -98,8 +105,12 @@
     %define PIC 0
 %endif
 
+%define HAVE_PRIVATE_EXTERN 1
 %ifdef __NASM_VER__
     %use smartalign
+    %if __NASM_VERSION_ID__ < 0x020e0000 ; 2.14
+        %define HAVE_PRIVATE_EXTERN 0
+    %endif
 %endif
 
 ; Macros to eliminate most code duplication between x86_32 and x86_64:
@@ -712,22 +723,25 @@ BRANCH_INSTR jz, je, jnz, jne, jl, jle, jnl, jnle, jg, jge, jng, jnge, ja, jae, 
 %endmacro
 %macro cglobal_internal 2-3+
     annotate_function_size
-    %if %1
-        %xdefine %%FUNCTION_PREFIX private_prefix
-        %xdefine %%VISIBILITY hidden
-    %else
-        %xdefine %%FUNCTION_PREFIX public_prefix
-        %xdefine %%VISIBILITY
-    %endif
     %ifndef cglobaled_%2
-        %xdefine %2 mangle(%%FUNCTION_PREFIX %+ _ %+ %2)
+        %if %1
+            %xdefine %2 mangle(private_prefix %+ _ %+ %2)
+        %else
+            %xdefine %2 mangle(public_prefix %+ _ %+ %2)
+        %endif
         %xdefine %2.skip_prologue %2 %+ .skip_prologue
         CAT_XDEFINE cglobaled_, %2, 1
     %endif
     %xdefine current_function %2
     %xdefine current_function_section __SECT__
     %if FORMAT_ELF
-        global %2:function %%VISIBILITY
+        %if %1
+            global %2:function hidden
+        %else
+            global %2:function
+        %endif
+    %elif FORMAT_MACHO && HAVE_PRIVATE_EXTERN && %1
+        global %2:private_extern
     %else
         global %2
     %endif
@@ -748,6 +762,8 @@ BRANCH_INSTR jz, je, jnz, jne, jl, jle, jnl, jnle, jg, jge, jng, jnge, ja, jae, 
 %macro cglobal_label 1
     %if FORMAT_ELF
         global current_function %+ %1:function hidden
+    %elif FORMAT_MACHO && HAVE_PRIVATE_EXTERN
+        global current_function %+ %1:private_extern
     %else
         global current_function %+ %1
     %endif
@@ -773,6 +789,8 @@ BRANCH_INSTR jz, je, jnz, jne, jl, jle, jnl, jnle, jg, jge, jng, jnge, ja, jae, 
     %xdefine %1 mangle(private_prefix %+ _ %+ %1)
     %if FORMAT_ELF
         global %1:data hidden
+    %elif FORMAT_MACHO && HAVE_PRIVATE_EXTERN
+        global %1:private_extern
     %else
         global %1
     %endif
