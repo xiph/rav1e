@@ -9,9 +9,9 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 #![allow(non_camel_case_types)]
-#![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
-#![cfg_attr(feature = "cargo-clippy", allow(identity_op))]
-#![cfg_attr(feature = "cargo-clippy", allow(needless_range_loop))]
+#![allow(clippy::cast_lossless)]
+#![allow(clippy::identity_op)]
+#![allow(clippy::needless_range_loop)]
 
 use bitstream_io::{BitWriter, BigEndian};
 use std;

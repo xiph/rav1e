@@ -9,7 +9,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 #![allow(non_camel_case_types)]
-#![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
+#![allow(clippy::cast_lossless)]
 
 use api::PredictionModesSetting;
 use cdef::*;
