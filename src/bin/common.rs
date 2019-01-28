@@ -458,9 +458,11 @@ impl ProgressInfo {
       .unwrap_or_default()
   }
   
-  // Estimates the remaining encoding time in seconds
+  // Estimates the remaining encoding time in seconds, if the number of frames is known
   pub fn estimated_time(&self) -> f64 {
-    (total_frames as f64 - self.frames_encoded() as f64) / self.encoding_fps()
+    self.total_frames
+      .map(|frames| frames - self.frames_encoded() / self.encoding_fps())
+      .unwrap_or_default()
   }
 
   // Number of frames of given type which appear in the video
