@@ -364,7 +364,7 @@ impl Default for EncodingSettings {
 pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
   cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset,
   pmvs: &[Option<MotionVector>], needs_rec: bool
-) -> RDOOutput {
+) -> RDOPartitionOutput {
   let mut best = EncodingSettings::default();
 
   // Get block luma and chroma dimensions
@@ -762,22 +762,18 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
 
   assert!(best.rd >= 0_f64);
 
-  RDOOutput {
+  RDOPartitionOutput {
+    bo: bo.clone(),
+    bsize: bsize,
+    pred_mode_luma: best.mode_luma,
+    pred_mode_chroma: best.mode_chroma,
+    pred_cfl_params: best.cfl_params,
+    ref_frames: best.ref_frames,
+    mvs: best.mvs,
     rd_cost: best.rd,
-    part_type: PartitionType::PARTITION_NONE,
-    part_modes: vec![RDOPartitionOutput {
-      bo: bo.clone(),
-      bsize: bsize,
-      pred_mode_luma: best.mode_luma,
-      pred_mode_chroma: best.mode_chroma,
-      pred_cfl_params: best.cfl_params,
-      ref_frames: best.ref_frames,
-      mvs: best.mvs,
-      rd_cost: best.rd,
-      skip: best.skip,
-      tx_size: best.tx_size,
-      tx_type: best.tx_type,
-    }]
+    skip: best.skip,
+    tx_size: best.tx_size,
+    tx_type: best.tx_type,
   }
 }
 
@@ -998,7 +994,7 @@ pub fn rdo_partition_decision(
 
         let spmvs = &pmvs[pmv_idx];
 
-        let mode_decision = rdo_mode_decision(fi, fs, cw, bsize, bo, spmvs, false).part_modes[0].clone();
+        let mode_decision = rdo_mode_decision(fi, fs, cw, bsize, bo, spmvs, false);
         child_modes.push(mode_decision);
       }
       PARTITION_SPLIT |
@@ -1043,9 +1039,7 @@ pub fn rdo_partition_decision(
         for (offset, pmv_idx) in partitions.iter().zip(pmv_idxs) {
           let mode_decision =
           rdo_mode_decision(fi, fs, cw, subsize, &offset,
-            &pmvs[pmv_idx], true)
-            .part_modes[0]
-            .clone();
+            &pmvs[pmv_idx], true);
 
           rd_cost_sum += mode_decision.rd_cost;
 
