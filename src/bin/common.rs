@@ -512,7 +512,7 @@ impl fmt::Display for ProgressInfo {
     if let Some(total_frames) = self.total_frames {
       write!(
         f,
-        "encoded {}/{} frames, {:.3} fps, {:.2} Kb/s, est. size: {:.2} MB, est. time: {} s",
+        "encoded {}/{} frames, {:.3} fps, {:.2} Kb/s, est. size: {:.2} MB, est. time: {:.0} s",
         self.frames_encoded(),
         total_frames,
         self.encoding_fps(),
