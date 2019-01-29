@@ -7,7 +7,7 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-#![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
+#![allow(clippy::cast_lossless)]
 #![allow(non_upper_case_globals)]
 
 use partition::TxSize;
@@ -232,6 +232,7 @@ const MINQ: usize = 0;
 const MAXQ: usize = 255;
 const QINDEX_RANGE: usize = MAXQ - MINQ + 1;
 
+#[rustfmt::skip]
 static dc_qlookup_Q3: [i16;QINDEX_RANGE] = [
   4,    8,    8,    9,    10,  11,  12,  12,  13,  14,  15,   16,   17,   18,
   19,   19,   20,   21,   22,  23,  24,  25,  26,  26,  27,   28,   29,   30,
@@ -254,6 +255,7 @@ static dc_qlookup_Q3: [i16;QINDEX_RANGE] = [
   1184, 1232, 1282, 1336,
 ];
 
+#[rustfmt::skip]
 static dc_qlookup_10_Q3: [i16;QINDEX_RANGE] = [
   4,    9,    10,   13,   15,   17,   20,   22,   25,   28,   31,   34,   37,
   40,   43,   47,   50,   53,   57,   60,   64,   68,   71,   75,   78,   82,
@@ -277,6 +279,7 @@ static dc_qlookup_10_Q3: [i16;QINDEX_RANGE] = [
   3953, 4089, 4236, 4394, 4559, 4737, 4929, 5130, 5347,
 ];
 
+#[rustfmt::skip]
 static dc_qlookup_12_Q3: [i16;QINDEX_RANGE] = [
   4,     12,    18,    25,    33,    41,    50,    60,    70,    80,    91,
   103,   115,   127,   140,   153,   166,   180,   194,   208,   222,   237,
@@ -304,6 +307,7 @@ static dc_qlookup_12_Q3: [i16;QINDEX_RANGE] = [
   19718, 20521, 21387,
 ];
 
+#[rustfmt::skip]
 static ac_qlookup_Q3: [i16;QINDEX_RANGE] = [
   4,    8,    9,    10,   11,   12,   13,   14,   15,   16,   17,   18,   19,
   20,   21,   22,   23,   24,   25,   26,   27,   28,   29,   30,   31,   32,
@@ -327,6 +331,7 @@ static ac_qlookup_Q3: [i16;QINDEX_RANGE] = [
   1567, 1597, 1628, 1660, 1692, 1725, 1759, 1793, 1828,
 ];
 
+#[rustfmt::skip]
 static ac_qlookup_10_Q3: [i16;QINDEX_RANGE] = [
   4,    9,    11,   13,   16,   18,   21,   24,   27,   30,   33,   37,   40,
   44,   48,   51,   55,   59,   63,   67,   71,   75,   79,   83,   88,   92,
@@ -350,6 +355,7 @@ static ac_qlookup_10_Q3: [i16;QINDEX_RANGE] = [
   6268, 6388, 6512, 6640, 6768, 6900, 7036, 7172, 7312,
 ];
 
+#[rustfmt::skip]
 static ac_qlookup_12_Q3: [i16;QINDEX_RANGE] = [
   4,     13,    19,    27,    35,    44,    54,    64,    75,    87,    99,
   112,   126,   139,   154,   168,   183,   199,   214,   230,   247,   263,

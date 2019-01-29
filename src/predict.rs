@@ -8,12 +8,12 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 #![allow(non_upper_case_globals)]
-#![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
-#![cfg_attr(feature = "cargo-clippy", allow(needless_range_loop))]
+#![allow(clippy::cast_lossless)]
+#![allow(clippy::needless_range_loop)]
 
 use context::{INTRA_MODES, MAX_TX_SIZE};
 use partition::*;
-use util::Pixel;
+use util::*;
 
 #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
 use libc;
@@ -449,7 +449,8 @@ where
     assert!((sm_weights_h[0] as u16) < scale);
     assert!((scale - sm_weights_w[Self::W - 1] as u16) < scale);
     assert!((scale - sm_weights_h[Self::H - 1] as u16) < scale);
-    assert!(log2_scale as usize + size_of_val(&output[0]) < 31); // ensures no overflow when calculating predictor
+    // ensures no overflow when calculating predictor
+    assert!(log2_scale as usize + size_of_val(&output[0]) < 31);
 
     for r in 0..Self::H {
       for c in 0..Self::W {
@@ -510,7 +511,8 @@ where
     // Weights sanity checks
     assert!((sm_weights[0] as u16) < scale);
     assert!((scale - sm_weights[Self::W - 1] as u16) < scale);
-    assert!(log2_scale as usize + size_of_val(&output[0]) < 31); // ensures no overflow when calculating predictor
+    // ensures no overflow when calculating predictor
+    assert!(log2_scale as usize + size_of_val(&output[0]) < 31);
 
     for r in 0..Self::H {
       for c in 0..Self::W {
@@ -561,7 +563,8 @@ where
     // Weights sanity checks
     assert!((sm_weights[0] as u16) < scale);
     assert!((scale - sm_weights[Self::H - 1] as u16) < scale);
-    assert!(log2_scale as usize + size_of_val(&output[0]) < 31); // ensures no overflow when calculating predictor
+    // ensures no overflow when calculating predictor
+    assert!(log2_scale as usize + size_of_val(&output[0]) < 31);
 
     for r in 0..Self::H {
       for c in 0..Self::W {
@@ -841,7 +844,7 @@ where
           output[i * stride + j] = if base < max_base_x {
             let a: i32 = above[base].into();
             let b: i32 = above[base + 1].into();
-            (a * (32 - shift) + b * shift + 16) >> 5
+            round_shift(a * (32 - shift) + b * shift, 5)
           } else {
             let c: i32 = above[max_base_x].into();
             c
@@ -855,16 +858,30 @@ where
           let base = idx >> (6 - upsample_above);
           if base >= -(1 << upsample_above) {
             let shift = (((idx << upsample_above) >> 1) & 31) as i32;
-            let a: i32 = if base < 0 { top_left[0] } else { above[base as usize] }.into();
+            let a: i32 =
+              if base < 0 { top_left[0] } else { above[base as usize] }.into();
             let b: i32 = above[(base + 1) as usize].into();
-            output[i * stride + j] = ((a * (32 - shift) + b * shift + 16) >> 5).max(0).min(sample_max).as_();
+            output[i * stride + j] =
+              round_shift(a * (32 - shift) + b * shift, 5)
+                .max(0)
+                .min(sample_max)
+                .as_();
           } else {
             let idx = (i << 6) as isize - ((j + 1) * dy) as isize;
             let base = idx >> (6 - upsample_left);
             let shift = (((idx << upsample_left) >> 1) & 31) as i32;
-            let a: i32 = if base < 0 { top_left[0] } else { left[Self::W + Self::H - 1 - base as usize] }.into();
+            let a: i32 = if base < 0 {
+              top_left[0]
+            } else {
+              left[Self::W + Self::H - 1 - base as usize]
+            }
+            .into();
             let b: i32 = left[Self::W + Self::H - (2 + base) as usize].into();
-            output[i * stride + j] = ((a * (32 - shift) + b * shift + 16) >> 5).max(0).min(sample_max).as_();
+            output[i * stride + j] =
+              round_shift(a * (32 - shift) + b * shift, 5)
+                .max(0)
+                .min(sample_max)
+                .as_();
           }
         }
       }
@@ -876,7 +893,11 @@ where
           let shift = (((idx << upsample_left) >> 1) & 31) as i32;
           let a: i32 = left[Self::W + Self::H - 1 - base].into();
           let b: i32 = left[Self::W + Self::H - 2 - base].into();
-          output[i * stride + j] = ((a * (32 - shift) + b * shift + 16) >> 5).max(0).min(sample_max).as_();
+          output[i * stride + j] =
+            round_shift(a * (32 - shift) + b * shift, 5)
+              .max(0)
+              .min(sample_max)
+              .as_();
         }
       }
     }

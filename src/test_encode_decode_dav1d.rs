@@ -200,19 +200,24 @@ fn odd_size_frame_with_full_rdo() {
   encode_decode(w, h, speed, qindex, limit, 8, 15, 15, true);
 }
 
-#[test]
-fn high_bd() {
+fn high_bd(bits: usize) {
   let quantizer = 100;
   let limit = 3; // Include inter frames
   let speed = 0; // Test as many tools as possible
   let w = 64;
   let h = 80;
 
-  // 10-bit
-  encode_decode(w, h, speed, quantizer, limit, 10, 15, 15, true);
+  encode_decode(w, h, speed, quantizer, limit, bits, 15, 15, true);
+}
 
-  // 12-bit
-  encode_decode(w, h, speed, quantizer, limit, 12, 15, 15, true);
+#[test]
+fn high_bd_10() {
+  high_bd(10);
+}
+
+#[test]
+fn high_bd_12() {
+  high_bd(12);
 }
 
 fn compare_plane<T: Ord + std::fmt::Debug>(
@@ -233,6 +238,7 @@ fn compare_pic(pic: &Dav1dPicture, frame: &Frame, bit_depth: usize, width: usize
     let rec_stride = frame_plane.cfg.stride;
 
     if bit_depth > 8 {
+      let stride = stride / 2;
       let dec = unsafe {
         let data = data as *const u16;
         let size = stride * h;

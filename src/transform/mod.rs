@@ -146,28 +146,29 @@ pub fn forward_transform(
   input: &[i16], output: &mut [i32], stride: usize, tx_size: TxSize,
   tx_type: TxType, bit_depth: usize
 ) {
+  use self::TxSize::*;
   match tx_size {
-    TxSize::TX_4X4 => fht4x4(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_8X8 => fht8x8(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_16X16 => fht16x16(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_32X32 => fht32x32(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_64X64 => fht64x64(input, output, stride, tx_type, bit_depth),
+    TX_4X4 => fht4x4(input, output, stride, tx_type, bit_depth),
+    TX_8X8 => fht8x8(input, output, stride, tx_type, bit_depth),
+    TX_16X16 => fht16x16(input, output, stride, tx_type, bit_depth),
+    TX_32X32 => fht32x32(input, output, stride, tx_type, bit_depth),
+    TX_64X64 => fht64x64(input, output, stride, tx_type, bit_depth),
 
-    TxSize::TX_4X8 => fht4x8(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_8X4 => fht8x4(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_8X16 => fht8x16(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_16X8 => fht16x8(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_16X32 => fht16x32(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_32X16 => fht32x16(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_32X64 => fht32x64(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_64X32 => fht64x32(input, output, stride, tx_type, bit_depth),
+    TX_4X8 => fht4x8(input, output, stride, tx_type, bit_depth),
+    TX_8X4 => fht8x4(input, output, stride, tx_type, bit_depth),
+    TX_8X16 => fht8x16(input, output, stride, tx_type, bit_depth),
+    TX_16X8 => fht16x8(input, output, stride, tx_type, bit_depth),
+    TX_16X32 => fht16x32(input, output, stride, tx_type, bit_depth),
+    TX_32X16 => fht32x16(input, output, stride, tx_type, bit_depth),
+    TX_32X64 => fht32x64(input, output, stride, tx_type, bit_depth),
+    TX_64X32 => fht64x32(input, output, stride, tx_type, bit_depth),
 
-    TxSize::TX_4X16 => fht4x16(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_16X4 => fht16x4(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_8X32 => fht8x32(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_32X8 => fht32x8(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_16X64 => fht16x64(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_64X16 => fht64x16(input, output, stride, tx_type, bit_depth),
+    TX_4X16 => fht4x16(input, output, stride, tx_type, bit_depth),
+    TX_16X4 => fht16x4(input, output, stride, tx_type, bit_depth),
+    TX_8X32 => fht8x32(input, output, stride, tx_type, bit_depth),
+    TX_32X8 => fht32x8(input, output, stride, tx_type, bit_depth),
+    TX_16X64 => fht16x64(input, output, stride, tx_type, bit_depth),
+    TX_64X16 => fht64x16(input, output, stride, tx_type, bit_depth),
   }
 }
 
@@ -175,31 +176,29 @@ pub fn inverse_transform_add(
   input: &[i32], output: &mut [u16], stride: usize, tx_size: TxSize,
   tx_type: TxType, bit_depth: usize
 ) {
+  use self::TxSize::*;
   match tx_size {
-    TxSize::TX_4X4 => iht4x4_add(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_8X8 => iht8x8_add(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_16X16 =>
-      iht16x16_add(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_32X32 =>
-      iht32x32_add(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_64X64 =>
-      iht64x64_add(input, output, stride, tx_type, bit_depth),
+    TX_4X4 => iht4x4_add(input, output, stride, tx_type, bit_depth),
+    TX_8X8 => iht8x8_add(input, output, stride, tx_type, bit_depth),
+    TX_16X16 => iht16x16_add(input, output, stride, tx_type, bit_depth),
+    TX_32X32 => iht32x32_add(input, output, stride, tx_type, bit_depth),
+    TX_64X64 => iht64x64_add(input, output, stride, tx_type, bit_depth),
 
-    TxSize::TX_4X8 => iht4x8_add(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_8X4 => iht8x4_add(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_8X16 => iht8x16_add(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_16X8 => iht16x8_add(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_16X32 => iht16x32_add(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_32X16 => iht32x16_add(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_32X64 => iht32x64_add(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_64X32 => iht64x32_add(input, output, stride, tx_type, bit_depth),
+    TX_4X8 => iht4x8_add(input, output, stride, tx_type, bit_depth),
+    TX_8X4 => iht8x4_add(input, output, stride, tx_type, bit_depth),
+    TX_8X16 => iht8x16_add(input, output, stride, tx_type, bit_depth),
+    TX_16X8 => iht16x8_add(input, output, stride, tx_type, bit_depth),
+    TX_16X32 => iht16x32_add(input, output, stride, tx_type, bit_depth),
+    TX_32X16 => iht32x16_add(input, output, stride, tx_type, bit_depth),
+    TX_32X64 => iht32x64_add(input, output, stride, tx_type, bit_depth),
+    TX_64X32 => iht64x32_add(input, output, stride, tx_type, bit_depth),
 
-    TxSize::TX_4X16 => iht4x16_add(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_16X4 => iht16x4_add(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_8X32 => iht8x32_add(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_32X8 => iht32x8_add(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_16X64 => iht16x64_add(input, output, stride, tx_type, bit_depth),
-    TxSize::TX_64X16 => iht64x16_add(input, output, stride, tx_type, bit_depth),
+    TX_4X16 => iht4x16_add(input, output, stride, tx_type, bit_depth),
+    TX_16X4 => iht16x4_add(input, output, stride, tx_type, bit_depth),
+    TX_8X32 => iht8x32_add(input, output, stride, tx_type, bit_depth),
+    TX_32X8 => iht32x8_add(input, output, stride, tx_type, bit_depth),
+    TX_16X64 => iht16x64_add(input, output, stride, tx_type, bit_depth),
+    TX_64X16 => iht64x16_add(input, output, stride, tx_type, bit_depth),
   }
 }
 
@@ -292,26 +291,11 @@ mod test {
       (TX_16X16, IDTX, 0),
       (TX_16X16, V_DCT, 1),
       (TX_16X16, H_DCT, 1),
-      (TX_16X16, V_ADST, 1),
-      (TX_16X16, H_ADST, 1),
+      // 32x tranforms only use DCT_DCT and IDTX
       (TX_32X32, DCT_DCT, 2),
-      //(TX_32X32, ADST_DCT, 0),
-      //(TX_32X32, DCT_ADST, 0),
-      //(TX_32X32, ADST_ADST, 0),
       (TX_32X32, IDTX, 0),
-      (TX_32X32, V_DCT, 1),
-      (TX_32X32, H_DCT, 1),
-      //(TX_32X32, V_ADST, 0),
-      //(TX_32X32, H_ADST, 0),
+      // 64x tranforms only use DCT_DCT and IDTX
       //(TX_64X64, DCT_DCT, 0),
-      //(TX_64X64, ADST_DCT, 0),
-      //(TX_64X64, DCT_ADST, 0),
-      //(TX_64X64, ADST_ADST, 0),
-      //(TX_64X64, IDTX, 0),
-      //(TX_64X64, V_DCT, 0),
-      //(TX_64X64, H_DCT, 0),
-      //(TX_64X64, V_ADST, 0),
-      //(TX_64X64, H_ADST, 0),
       (TX_4X8, DCT_DCT, 1),
       (TX_8X4, DCT_DCT, 1),
       (TX_4X16, DCT_DCT, 1),

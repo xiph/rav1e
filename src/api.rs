@@ -17,6 +17,10 @@ use self::EncoderStatus::*;
 use std::{cmp, fmt, io};
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use util::Fixed;
+use std::collections::BTreeSet;
+
+const LOOKAHEAD_FRAMES: u64 = 10;
 
 // TODO: use the num crate?
 #[derive(Clone, Copy, Debug)]
@@ -291,14 +295,6 @@ impl Config {
   }
 
   pub fn new_context(&self) -> Context {
-    let seq = Sequence::new(&self.frame_info);
-    let fi = FrameInvariants::new(
-      self.frame_info.width,
-      self.frame_info.height,
-      self.enc,
-      seq,
-    );
-
     #[cfg(feature = "aom")]
     unsafe {
       av1_rtcd();
@@ -306,32 +302,40 @@ impl Config {
     }
 
     Context {
-      fi,
       frame_count: 0,
       frames_to_be_coded: 0,
       idx: 0,
+      frames_processed: 0,
       frame_q: BTreeMap::new(),
+      frame_data: BTreeMap::new(),
+      keyframes: BTreeSet::new(),
       packet_data: Vec::new(),
       segment_start_idx: 0,
       segment_start_frame: 0,
-      frame_types: BTreeMap::new(),
       keyframe_detector: SceneChangeDetector::new(&self.frame_info),
+      config: *self,
     }
   }
 }
 
 pub struct Context {
-  fi: FrameInvariants,
   //    timebase: Rational,
   frame_count: u64,
   frames_to_be_coded: u64,
   idx: u64,
+  frames_processed: u64,
+  /// Maps frame *number* to frames
   frame_q: BTreeMap<u64, Option<Arc<Frame>>>, //    packet_q: VecDeque<Packet>
+  /// Maps frame *idx* to frame data
+  frame_data: BTreeMap<u64, FrameInvariants>,
+  /// A list of keyframe *numbers* in this encode. Needed so that we don't
+  /// need to keep all of the frame_data in memory for the whole life of the encode.
+  keyframes: BTreeSet<u64>,
   packet_data: Vec<u8>,
   segment_start_idx: u64,
   segment_start_frame: u64,
-  frame_types: BTreeMap<u64, FrameType>,
   keyframe_detector: SceneChangeDetector,
+  config: Config,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -369,7 +373,11 @@ impl fmt::Display for Packet {
 
 impl Context {
   pub fn new_frame(&self) -> Arc<Frame> {
-    Arc::new(Frame::new(self.fi.padded_w, self.fi.padded_h, self.fi.sequence.chroma_sampling))
+    Arc::new(Frame::new(
+      self.config.frame_info.width.align_power_of_two(3),
+      self.config.frame_info.height.align_power_of_two(3),
+      self.config.frame_info.chroma_sampling
+    ))
   }
 
   pub fn send_frame<F>(&mut self, frame: F) -> Result<(), EncoderStatus>
@@ -378,7 +386,6 @@ impl Context {
   {
     let idx = self.frame_count;
     self.frame_q.insert(idx, frame.into());
-    self.save_frame_type(idx);
     self.frame_count = self.frame_count + 1;
     Ok(())
   }
@@ -389,6 +396,10 @@ impl Context {
 
   pub fn set_frames_to_be_coded(&mut self, frames_to_be_coded: u64) {
     self.frames_to_be_coded = frames_to_be_coded;
+  }
+
+  pub fn needs_more_lookahead(&self) -> bool {
+    self.needs_more_frames(self.frame_count) && self.frames_processed + LOOKAHEAD_FRAMES > self.frame_q.keys().last().cloned().unwrap_or(0)
   }
 
   pub fn needs_more_frames(&self, frame_count: u64) -> bool {
@@ -422,14 +433,14 @@ impl Context {
       Ok(buf)
     }
 
-    sequence_header_inner(&self.fi.sequence).unwrap()
+    sequence_header_inner(&self.frame_data[&0].sequence).unwrap()
   }
 
   fn next_keyframe(&self) -> u64 {
-    let next_detected = self.frame_types.iter()
-      .find(|(&i, &ty)| ty == FrameType::KEY && i > self.segment_start_frame)
-      .map(|(&i, _)| i);
-    let next_limit = self.segment_start_frame + self.fi.config.max_key_frame_interval;
+    let next_detected = self.frame_data.values()
+      .find(|fi| fi.frame_type == FrameType::KEY && fi.number > self.segment_start_frame)
+      .map(|fi| fi.number);
+    let next_limit = self.segment_start_frame + self.config.enc.max_key_frame_interval;
     if next_detected.is_none() {
       return next_limit;
     }
@@ -437,11 +448,32 @@ impl Context {
   }
 
   fn set_frame_properties(&mut self, idx: u64) -> Result<(), ()> {
+    let props = self.get_frame_properties(idx);
+    let result = props.as_ref().map(|_| ()).map_err(|_| ());
+    match props {
+      Ok(props) | Err(props) => {
+        self.frame_data.insert(idx, props);
+      }
+    }
+    result
+  }
+
+  fn get_frame_properties(&mut self, idx: u64) -> Result<FrameInvariants, FrameInvariants> {
     if idx == 0 {
       // The first frame will always be a key frame
-      self.fi = FrameInvariants::new_key_frame(&self.fi,0);
-      return Ok(());
+      let fi = FrameInvariants::new_key_frame(
+        &FrameInvariants::new(
+          self.config.frame_info.width,
+          self.config.frame_info.height,
+          self.config.enc,
+          Sequence::new(&self.config.frame_info)
+        ),
+        0
+      );
+      return Ok(fi);
     }
+
+    let mut fi = self.frame_data[&(idx - 1)].clone();
 
     // Initially set up the frame as an inter frame.
     // We need to determine what the frame number is before we can
@@ -450,41 +482,53 @@ impl Context {
     let idx_in_segment = idx - self.segment_start_idx;
     if idx_in_segment > 0 {
       let next_keyframe = self.next_keyframe();
-      let (fi, success) = FrameInvariants::new_inter_frame(&self.fi, self.segment_start_frame, idx_in_segment, next_keyframe);
-      self.fi = fi;
+      let (fi_temp, success) = FrameInvariants::new_inter_frame(
+        &fi,
+        self.segment_start_frame,
+        idx_in_segment,
+        next_keyframe
+      );
+      fi = fi_temp;
       if !success {
-        if !self.fi.inter_cfg.unwrap().reorder || ((idx_in_segment - 1) % self.fi.inter_cfg.unwrap().group_len == 0 && self.fi.number == (next_keyframe - 1)) {
+        if !fi.inter_cfg.unwrap().reorder
+          || ((idx_in_segment - 1) % fi.inter_cfg.unwrap().group_len == 0
+          && fi.number == (next_keyframe - 1))
+        {
           self.segment_start_idx = idx;
           self.segment_start_frame = next_keyframe;
-          self.fi.number = next_keyframe;
+          fi.number = next_keyframe;
         } else {
-          return Err(());
+          return Err(fi);
         }
       }
     }
 
     // Now that we know the frame number, look up the correct frame type
-    let frame_type = self.frame_types.get(&self.fi.number).cloned();
-    if let Some(frame_type) = frame_type {
-      if frame_type == FrameType::KEY {
-        self.segment_start_idx = idx;
-        self.segment_start_frame = self.fi.number;
-      }
-      self.fi.frame_type = frame_type;
+    let frame_type = self.determine_frame_type(fi.number);
+    if frame_type == FrameType::KEY {
+      self.segment_start_idx = idx;
+      self.segment_start_frame = fi.number;
+      self.keyframes.insert(fi.number);
+    }
+    fi.frame_type = frame_type;
 
-      let idx_in_segment = idx - self.segment_start_idx;
-      if idx_in_segment == 0 {
-        self.fi = FrameInvariants::new_key_frame(&self.fi, self.segment_start_frame);
-      } else {
-        let next_keyframe = self.next_keyframe();
-        let (fi, success) = FrameInvariants::new_inter_frame(&self.fi, self.segment_start_frame, idx_in_segment, next_keyframe);
-        self.fi = fi;
-        if !success {
-          return Err(());
-        }
+    let idx_in_segment = idx - self.segment_start_idx;
+    if idx_in_segment == 0 {
+      fi = FrameInvariants::new_key_frame(&fi, self.segment_start_frame);
+    } else {
+      let next_keyframe = self.next_keyframe();
+      let (fi_temp, success) = FrameInvariants::new_inter_frame(
+        &fi,
+        self.segment_start_frame,
+        idx_in_segment,
+        next_keyframe
+      );
+      fi = fi_temp;
+      if !success {
+        return Err(fi);
       }
     }
-    Ok(())
+    Ok(fi)
   }
 
   pub fn receive_packet(&mut self) -> Result<Packet, EncoderStatus> {
@@ -494,56 +538,59 @@ impl Context {
       idx = self.idx;
     }
 
-    if !self.needs_more_frames(self.fi.number) {
+    if !self.needs_more_frames(self.frame_data.get(&idx).unwrap().number) {
       self.idx += 1;
       return Err(EncoderStatus::EnoughData)
     }
 
-    if self.fi.show_existing_frame {
+    let fi = self.frame_data.get_mut(&idx).unwrap();
+    if fi.show_existing_frame {
       self.idx += 1;
 
-      let mut fs = FrameState::new(&self.fi);
+      let mut fs = FrameState::new(fi);
 
-      let data = encode_frame(&mut self.fi, &mut fs);
+      let data = encode_frame(fi, &mut fs);
 
-      let rec = if self.fi.show_frame { Some(fs.rec) } else { None };
+      let rec = if fi.show_frame { Some(fs.rec) } else { None };
       let mut psnr = None;
-      if self.fi.config.show_psnr {
+      if self.config.enc.show_psnr {
         if let Some(ref rec) = rec {
-          psnr = Some(calculate_frame_psnr(&*fs.input, rec, self.fi.sequence.bit_depth));
+          psnr = Some(calculate_frame_psnr(&*fs.input, rec, fi.sequence.bit_depth));
         }
       }
 
-      Ok(Packet { data, rec, number: self.fi.number, frame_type: self.fi.frame_type, psnr })
+      self.frames_processed += 1;
+      Ok(Packet { data, rec, number: fi.number, frame_type: fi.frame_type, psnr })
     } else {
-      if let Some(f) = self.frame_q.remove(&self.fi.number) {
+      if let Some(f) = self.frame_q.get(&fi.number) {
         self.idx += 1;
 
         if let Some(frame) = f {
-          let mut fs = FrameState::new_with_frame(&self.fi, frame.clone());
+          let mut fs = FrameState::new_with_frame(fi, frame.clone());
 
-          let data = encode_frame(&mut self.fi, &mut fs);
+          let data = encode_frame(fi, &mut fs);
           self.packet_data.extend(data);
 
-          fs.rec.pad(self.fi.width, self.fi.height);
+          fs.rec.pad(fi.width, fi.height);
 
           // TODO avoid the clone by having rec Arc.
-          let rec = if self.fi.show_frame { Some(fs.rec.clone()) } else { None };
+          let rec = if fi.show_frame { Some(fs.rec.clone()) } else { None };
 
-          update_rec_buffer(&mut self.fi, fs);
+          update_rec_buffer(fi, fs);
 
-          if self.fi.show_frame {
+          if fi.show_frame {
             let data = self.packet_data.clone();
             self.packet_data = Vec::new();
 
             let mut psnr = None;
-            if self.fi.config.show_psnr {
+            if self.config.enc.show_psnr {
               if let Some(ref rec) = rec {
-                psnr = Some(calculate_frame_psnr(&*frame, rec, self.fi.sequence.bit_depth));
+                psnr = Some(calculate_frame_psnr(&*frame, rec, fi.sequence.bit_depth));
               }
             }
 
-            Ok(Packet { data, rec, number: self.fi.number, frame_type: self.fi.frame_type, psnr })
+            self.frames_processed += 1;
+            Ok(Packet { data, rec, number: fi.number, frame_type: fi.frame_type, psnr })
           } else {
             Err(EncoderStatus::NeedMoreData)
           }
@@ -556,46 +603,56 @@ impl Context {
     }
   }
 
+  pub fn garbage_collect(&mut self, cur_frame: u64) {
+    if cur_frame == 0 {
+      return;
+    }
+    for i in 0..cur_frame {
+      self.frame_q.remove(&i);
+    }
+    if self.idx < 2 {
+      return;
+    }
+    for i in 0..(self.idx - 1) {
+      self.frame_data.remove(&i);
+    }
+  }
+
   pub fn flush(&mut self) {
     self.frame_q.insert(self.frame_count, None);
     self.frame_count = self.frame_count + 1;
   }
 
-  fn save_frame_type(&mut self, idx: u64) {
-    let frame_type = self.determine_frame_type(idx);
-    self.frame_types.insert(idx, frame_type);
-  }
-
-  fn determine_frame_type(&mut self, idx: u64) -> FrameType {
-    if idx == 0 {
+  fn determine_frame_type(&mut self, frame_number: u64) -> FrameType {
+    if frame_number == 0 {
       return FrameType::KEY;
     }
 
-    let prev_keyframe = *self.frame_types.iter().rfind(|(_, &ty)| ty == FrameType::KEY).unwrap().0;
-    let frame = self.frame_q.get(&idx).cloned().unwrap();
+    let prev_keyframe = self.keyframes.iter()
+      .rfind(|&&keyframe| keyframe < frame_number)
+      .cloned()
+      .unwrap_or(0);
+    let frame = match self.frame_q.get(&frame_number).cloned() {
+      Some(frame) => frame,
+      None => { return FrameType::KEY; }
+    };
     if let Some(frame) = frame {
-      let distance = idx - prev_keyframe;
-      if distance < self.fi.config.min_key_frame_interval {
-        if distance + 1 == self.fi.config.min_key_frame_interval {
+      let distance = frame_number - prev_keyframe;
+      if distance < self.config.enc.min_key_frame_interval {
+        if distance + 1 == self.config.enc.min_key_frame_interval {
           // Run the detector for the current frame, so that it will contain this frame's information
           // to compare against the next frame. We can ignore the results for this frame.
-          self.keyframe_detector.detect_scene_change(frame, idx as usize);
+          self.keyframe_detector.detect_scene_change(frame, frame_number as usize);
         }
         return FrameType::INTER;
       }
-      if distance >= self.fi.config.max_key_frame_interval {
+      if distance >= self.config.enc.max_key_frame_interval {
         return FrameType::KEY;
       }
-      if self.keyframe_detector.detect_scene_change(frame, idx as usize) {
+      if self.keyframe_detector.detect_scene_change(frame, frame_number as usize) {
         return FrameType::KEY;
       }
     }
     FrameType::INTER
-  }
-}
-
-impl fmt::Display for Context {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "Frame {} - {}", self.fi.number, self.fi.frame_type)
   }
 }

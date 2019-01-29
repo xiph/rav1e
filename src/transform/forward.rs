@@ -1659,19 +1659,20 @@ impl TxfmType {
   ];
 
   fn get_func(self) -> &'static TxfmFunc {
+    use self::TxfmType::*;
     match self {
-      TxfmType::DCT4 => &daala_fdct4,
-      TxfmType::DCT8 => &daala_fdct8,
-      TxfmType::DCT16 => &daala_fdct16,
-      TxfmType::DCT32 => &daala_fdct32,
-      TxfmType::DCT64 => &daala_fdct64,
-      TxfmType::ADST4 => &daala_fdst_vii_4,
-      TxfmType::ADST8 => &daala_fdst8,
-      TxfmType::ADST16 => &daala_fdst16,
-      TxfmType::Identity4 => &fidentity4,
-      TxfmType::Identity8 => &fidentity8,
-      TxfmType::Identity16 => &fidentity16,
-      TxfmType::Identity32 => &fidentity32,
+      DCT4 => &daala_fdct4,
+      DCT8 => &daala_fdct8,
+      DCT16 => &daala_fdct16,
+      DCT32 => &daala_fdct32,
+      DCT64 => &daala_fdct64,
+      ADST4 => &daala_fdst_vii_4,
+      ADST8 => &daala_fdst8,
+      ADST16 => &daala_fdst16,
+      Identity4 => &fidentity4,
+      Identity8 => &fidentity8,
+      Identity16 => &fidentity16,
+      Identity32 => &fidentity32,
       _ => unreachable!()
     }
   }
@@ -1715,21 +1716,20 @@ impl Txfm2DFlipCfg {
 
   /// Determine the flip config, returning (ud_flip, lr_flip)
   fn get_flip_cfg(tx_type: TxType) -> (bool, bool) {
+    use self::TxType::*;
     match tx_type {
-      TxType::DCT_DCT
-      | TxType::ADST_DCT
-      | TxType::DCT_ADST
-      | TxType::ADST_ADST
-      | TxType::IDTX
-      | TxType::V_DCT
-      | TxType::H_DCT
-      | TxType::V_ADST
-      | TxType::H_ADST => (false, false),
-      TxType::FLIPADST_DCT | TxType::FLIPADST_ADST | TxType::V_FLIPADST =>
-        (true, false),
-      TxType::DCT_FLIPADST | TxType::ADST_FLIPADST | TxType::H_FLIPADST =>
-        (false, true),
-      TxType::FLIPADST_FLIPADST => (true, true)
+      DCT_DCT
+      | ADST_DCT
+      | DCT_ADST
+      | ADST_ADST
+      | IDTX
+      | V_DCT
+      | H_DCT
+      | V_ADST
+      | H_ADST => (false, false),
+      FLIPADST_DCT | FLIPADST_ADST | V_FLIPADST => (true, false),
+      DCT_FLIPADST | ADST_FLIPADST | H_FLIPADST => (false, true),
+      FLIPADST_FLIPADST => (true, true)
     }
   }
 }

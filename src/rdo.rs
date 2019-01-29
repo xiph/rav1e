@@ -9,7 +9,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 #![allow(non_camel_case_types)]
-#![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
+#![allow(clippy::cast_lossless)]
 
 use api::PredictionModesSetting;
 use cdef::*;
@@ -19,7 +19,6 @@ use encoder::{ChromaSampling, ReferenceMode};
 use encode_block_a;
 use encode_block_b;
 use encode_block_with_modes;
-use Frame;
 use FrameInvariants;
 use FrameState;
 use FrameType;
@@ -284,21 +283,25 @@ pub fn rdo_tx_size_type(
   luma_mode: PredictionMode, ref_frames: [usize; 2], mvs: [MotionVector; 2], skip: bool
 ) -> (TxSize, TxType) {
   // these rules follow TX_MODE_LARGEST
-  let tx_size = match bsize {
-    BlockSize::BLOCK_4X4 => TxSize::TX_4X4,
-    BlockSize::BLOCK_8X8 => TxSize::TX_8X8,
-    BlockSize::BLOCK_16X16 => TxSize::TX_16X16,
-    BlockSize::BLOCK_4X8 => TxSize::TX_4X8,
-    BlockSize::BLOCK_8X4 => TxSize::TX_8X4,
-    BlockSize::BLOCK_8X16 => TxSize::TX_8X16,
-    BlockSize::BLOCK_16X8 => TxSize::TX_16X8,
-    BlockSize::BLOCK_16X32 => TxSize::TX_16X32,
-    BlockSize::BLOCK_32X16 => TxSize::TX_32X16,
-    BlockSize::BLOCK_32X32 => TxSize::TX_32X32,
-    BlockSize::BLOCK_32X64 => TxSize::TX_32X64,
-    BlockSize::BLOCK_64X32 => TxSize::TX_64X32,
-    BlockSize::BLOCK_64X64 => TxSize::TX_64X64,
-    _ => unimplemented!()
+  let tx_size = {
+    use self::BlockSize::*;
+    use self::TxSize::*;
+    match bsize {
+      BLOCK_4X4 => TX_4X4,
+      BLOCK_8X8 => TX_8X8,
+      BLOCK_16X16 => TX_16X16,
+      BLOCK_4X8 => TX_4X8,
+      BLOCK_8X4 => TX_8X4,
+      BLOCK_8X16 => TX_8X16,
+      BLOCK_16X8 => TX_16X8,
+      BLOCK_16X32 => TX_16X32,
+      BLOCK_32X16 => TX_32X16,
+      BLOCK_32X32 => TX_32X32,
+      BLOCK_32X64 => TX_32X64,
+      BLOCK_64X32 => TX_64X32,
+      BLOCK_64X64 => TX_64X64,
+      _ => unimplemented!()
+    }
   };
   cw.bc.set_tx_size(bo, tx_size);
   // Were we not hardcoded to TX_MODE_LARGEST, block tx size would be written here
@@ -361,7 +364,7 @@ impl Default for EncodingSettings {
 pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
   cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset,
   pmvs: &[Option<MotionVector>], needs_rec: bool
-) -> RDOOutput {
+) -> RDOPartitionOutput {
   let mut best = EncodingSettings::default();
 
   // Get block luma and chroma dimensions
@@ -464,9 +467,16 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
     }
   }
 
-  let luma_rdo = |luma_mode: PredictionMode, fs: &mut FrameState, cw: &mut ContextWriter, best: &mut EncodingSettings,
-    mvs: [MotionVector; 2], ref_frames: [usize; 2], mode_set_chroma: &[PredictionMode], luma_mode_is_intra: bool,
-    mode_context: usize, mv_stack: &Vec<CandidateMV>| {
+  let luma_rdo = |luma_mode: PredictionMode,
+                  fs: &mut FrameState,
+                  cw: &mut ContextWriter,
+                  best: &mut EncodingSettings,
+                  mvs: [MotionVector; 2],
+                  ref_frames: [usize; 2],
+                  mode_set_chroma: &[PredictionMode],
+                  luma_mode_is_intra: bool,
+                  mode_context: usize,
+                  mv_stack: &Vec<CandidateMV>| {
     let (tx_size, mut tx_type) = rdo_tx_size_type(
         fi, fs, cw, bsize, bo, luma_mode, ref_frames, mvs, false,
     );
@@ -589,8 +599,11 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
 
     // Reduce number of prediction modes at higher speed levels
     let num_modes_rdo = if (fi.frame_type == FrameType::KEY
-      && fi.config.speed_settings.prediction_modes >= PredictionModesSetting::ComplexKeyframes)
-      || (fi.frame_type == FrameType::INTER && fi.config.speed_settings.prediction_modes >= PredictionModesSetting::ComplexAll)
+      && fi.config.speed_settings.prediction_modes
+        >= PredictionModesSetting::ComplexKeyframes)
+      || (fi.frame_type == FrameType::INTER
+        && fi.config.speed_settings.prediction_modes
+          >= PredictionModesSetting::ComplexAll)
     {
       7
     } else {
@@ -604,16 +617,35 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
         let po = bo.plane_offset(&rec.cfg);
         get_intra_edges(&rec.slice(&po), tx_size, fi.sequence.bit_depth, 0, fi.w_in_b, fi.h_in_b, None)
       };
-      intra_mode_set.iter().map(|&luma_mode| {
-        let rec = &mut fs.rec.planes[0];
-        let po = bo.plane_offset(&rec.cfg);
-        luma_mode.predict_intra(&mut rec.mut_slice(&po), tx_size, fi.sequence.bit_depth, &[0i16; 2], 0, &edge_buf);
+      intra_mode_set
+        .iter()
+        .map(|&luma_mode| {
+          let rec = &mut fs.rec.planes[0];
+          let po = bo.plane_offset(&rec.cfg);
+          luma_mode.predict_intra(
+            &mut rec.mut_slice(&po),
+            tx_size,
+            fi.sequence.bit_depth,
+            &[0i16; 2],
+            0,
+            &edge_buf
+          );
 
-        let plane_org = fs.input.planes[0].slice(&po);
-        let plane_ref = rec.slice(&po);
+          let plane_org = fs.input.planes[0].slice(&po);
+          let plane_ref = rec.slice(&po);
 
-        (luma_mode, get_sad(&plane_org, &plane_ref, tx_size.height(), tx_size.width(), fi.sequence.bit_depth))
-      }).collect::<Vec<_>>()
+          (
+            luma_mode,
+            get_sad(
+              &plane_org,
+              &plane_ref,
+              tx_size.height(),
+              tx_size.width(),
+              fi.sequence.bit_depth
+            )
+          )
+        })
+        .collect::<Vec<_>>()
     };
 
     sads.sort_by_key(|a| a.1);
@@ -631,8 +663,15 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
     probs.sort_by_key(|a| !a.1);
 
     let mut modes = Vec::new();
-    probs.iter().take(num_modes_rdo / 2).for_each(|&(luma_mode, _prob)| modes.push(luma_mode));
-    sads.iter().take(num_modes_rdo).for_each(|&(luma_mode, _sad)| if !modes.contains(&luma_mode) { modes.push(luma_mode) } );
+    probs
+      .iter()
+      .take(num_modes_rdo / 2)
+      .for_each(|&(luma_mode, _prob)| modes.push(luma_mode));
+    sads.iter().take(num_modes_rdo).for_each(|&(luma_mode, _sad)| {
+      if !modes.contains(&luma_mode) {
+        modes.push(luma_mode)
+      }
+    });
 
     modes.iter().take(num_modes_rdo).for_each(|&luma_mode| {
       let mvs = [MotionVector { row: 0, col: 0 }; 2];
@@ -723,22 +762,18 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
 
   assert!(best.rd >= 0_f64);
 
-  RDOOutput {
+  RDOPartitionOutput {
+    bo: bo.clone(),
+    bsize: bsize,
+    pred_mode_luma: best.mode_luma,
+    pred_mode_chroma: best.mode_chroma,
+    pred_cfl_params: best.cfl_params,
+    ref_frames: best.ref_frames,
+    mvs: best.mvs,
     rd_cost: best.rd,
-    part_type: PartitionType::PARTITION_NONE,
-    part_modes: vec![RDOPartitionOutput {
-      bo: bo.clone(),
-      bsize: bsize,
-      pred_mode_luma: best.mode_luma,
-      pred_mode_chroma: best.mode_chroma,
-      pred_cfl_params: best.cfl_params,
-      ref_frames: best.ref_frames,
-      mvs: best.mvs,
-      rd_cost: best.rd,
-      skip: best.skip,
-      tx_size: best.tx_size,
-      tx_type: best.tx_type,
-    }]
+    skip: best.skip,
+    tx_size: best.tx_size,
+    tx_type: best.tx_type,
   }
 }
 
@@ -756,7 +791,15 @@ pub fn rdo_cfl_alpha(
       let po = bo.plane_offset(&fs.input.planes[p].cfg);
       (-16i16..17i16)
         .min_by_key(|&alpha| {
-          let edge_buf = get_intra_edges(&rec.slice(&po), uv_tx_size, bit_depth, p, 0, 0, Some(PredictionMode::UV_CFL_PRED));
+          let edge_buf = get_intra_edges(
+            &rec.slice(&po),
+            uv_tx_size,
+            bit_depth,
+            p,
+            0,
+            0,
+            Some(PredictionMode::UV_CFL_PRED)
+          );
           PredictionMode::UV_CFL_PRED.predict_intra(
             &mut rec.mut_slice(&po),
             uv_tx_size,
@@ -784,8 +827,9 @@ pub fn rdo_cfl_alpha(
 // RDO-based transform type decision
 pub fn rdo_tx_type_decision(
   fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
-  mode: PredictionMode, ref_frames: [usize; 2], mvs: [MotionVector; 2], bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize,
-  tx_set: TxSet) -> TxType {
+  mode: PredictionMode, ref_frames: [usize; 2], mvs: [MotionVector; 2],
+  bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize, tx_set: TxSet
+) -> TxType {
   let mut best_type = TxType::DCT_DCT;
   let mut best_rd = std::f64::MAX;
 
@@ -923,14 +967,18 @@ pub fn rdo_partition_decision(
   let mut best_rd = cached_block.rd_cost;
   let mut best_pred_modes = cached_block.part_modes.clone();
 
+  let cw_checkpoint = cw.checkpoint();
+  let w_pre_checkpoint = w_pre_cdef.checkpoint();
+  let w_post_checkpoint = w_post_cdef.checkpoint();
+
   for &partition in partition_types {
     // Do not re-encode results we already have
     if partition == cached_block.part_type {
       continue;
     }
-
     let mut cost: f64 = 0.0;
     let mut child_modes = std::vec::Vec::new();
+    let mut early_exit = false;
 
     match partition {
       PartitionType::PARTITION_NONE => {
@@ -946,7 +994,7 @@ pub fn rdo_partition_decision(
 
         let spmvs = &pmvs[pmv_idx];
 
-        let mode_decision = rdo_mode_decision(fi, fs, cw, bsize, bo, spmvs, false).part_modes[0].clone();
+        let mode_decision = rdo_mode_decision(fi, fs, cw, bsize, bo, spmvs, false);
         child_modes.push(mode_decision);
       }
       PARTITION_SPLIT |
@@ -980,53 +1028,52 @@ pub fn rdo_partition_decision(
           }
         }).collect::<Vec<_>>();
 
-        let cw_checkpoint = cw.checkpoint();
-        let w_pre_checkpoint = w_pre_cdef.checkpoint();
-        let w_post_checkpoint = w_post_cdef.checkpoint();
-
         if bsize >= BlockSize::BLOCK_8X8 {
           let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
           let tell = w.tell_frac();
           cw.write_partition(w, bo, partition, bsize);
           cost = (w.tell_frac() - tell) as f64 * get_lambda(fi)/ ((1 << OD_BITRES) as f64);
         }
+        let mut rd_cost_sum = 0.0;
 
-        child_modes.extend(
-          partitions
-            .iter().zip(pmv_idxs)
-            .map(|(&offset, pmv_idx)| {
-              let mode_decision =
-              rdo_mode_decision(fi, fs, cw, subsize, &offset,
-                &pmvs[pmv_idx], true)
-                .part_modes[0]
-                .clone();
+        for (offset, pmv_idx) in partitions.iter().zip(pmv_idxs) {
+          let mode_decision =
+          rdo_mode_decision(fi, fs, cw, subsize, &offset,
+            &pmvs[pmv_idx], true);
 
-                if subsize >= BlockSize::BLOCK_8X8 && subsize.is_sqr() {
-                  let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
-                  cw.write_partition(w, offset, PartitionType::PARTITION_NONE, subsize);
-                }
+          rd_cost_sum += mode_decision.rd_cost;
 
-                encode_block_with_modes(fi, fs, cw, w_pre_cdef, w_post_cdef, subsize,
-                                    offset, &mode_decision);
-                mode_decision
-            }).collect::<Vec<_>>()
-        );
-        cw.rollback(&cw_checkpoint);
-        w_pre_cdef.rollback(&w_pre_checkpoint);
-        w_post_cdef.rollback(&w_post_checkpoint);
+          if fi.enable_early_exit && rd_cost_sum > best_rd {
+            early_exit = true;
+            break;
+          }
+
+          if subsize >= BlockSize::BLOCK_8X8 && subsize.is_sqr() {
+            let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
+            cw.write_partition(w, offset, PartitionType::PARTITION_NONE, subsize);
+          }
+          encode_block_with_modes(fi, fs, cw, w_pre_cdef, w_post_cdef, subsize,
+                              offset, &mode_decision);
+          child_modes.push(mode_decision);
+        }
       }
       _ => {
         assert!(false);
       }
     }
 
-    let rd = cost + child_modes.iter().map(|m| m.rd_cost).sum::<f64>();
+    if !early_exit {
+      let rd = cost + child_modes.iter().map(|m| m.rd_cost).sum::<f64>();
 
-    if rd < best_rd {
-      best_rd = rd;
-      best_partition = partition;
-      best_pred_modes = child_modes.clone();
+      if rd < best_rd {
+        best_rd = rd;
+        best_partition = partition;
+        best_pred_modes = child_modes.clone();
+      }
     }
+    cw.rollback(&cw_checkpoint);
+    w_pre_cdef.rollback(&w_pre_checkpoint);
+    w_post_cdef.rollback(&w_post_checkpoint);
   }
 
   assert!(best_rd >= 0_f64);
@@ -1040,66 +1087,14 @@ pub fn rdo_partition_decision(
 
 pub fn rdo_cdef_decision(sbo: &SuperBlockOffset, fi: &FrameInvariants,
                          fs: &FrameState, cw: &mut ContextWriter) -> u8 {
-    // FIXME: 128x128 SB support will break this, we need FilterBlockOffset etc.
     // Construct a single-superblock-sized frame to test-filter into
     let sbo_0 = SuperBlockOffset { x: 0, y: 0 };
     let bc = &mut cw.bc;
-    let mut cdef_output = Frame {
-        planes: [
-            Plane::new(64 >> fs.rec.planes[0].cfg.xdec, 64 >> fs.rec.planes[0].cfg.ydec,
-                       fs.rec.planes[0].cfg.xdec, fs.rec.planes[0].cfg.ydec, 0, 0),
-            Plane::new(64 >> fs.rec.planes[1].cfg.xdec, 64 >> fs.rec.planes[1].cfg.ydec,
-                       fs.rec.planes[1].cfg.xdec, fs.rec.planes[1].cfg.ydec, 0, 0),
-            Plane::new(64 >> fs.rec.planes[2].cfg.xdec, 64 >> fs.rec.planes[2].cfg.ydec,
-                       fs.rec.planes[2].cfg.xdec, fs.rec.planes[2].cfg.ydec, 0, 0),
-        ]
-    };
-    // Construct a padded input
-    let mut rec_input = Frame {
-        planes: [
-            Plane::new((64 >> fs.rec.planes[0].cfg.xdec)+4, (64 >> fs.rec.planes[0].cfg.ydec)+4,
-                       fs.rec.planes[0].cfg.xdec, fs.rec.planes[0].cfg.ydec, 0, 0),
-            Plane::new((64 >> fs.rec.planes[1].cfg.xdec)+4, (64 >> fs.rec.planes[1].cfg.ydec)+4,
-                       fs.rec.planes[1].cfg.xdec, fs.rec.planes[1].cfg.ydec, 0, 0),
-            Plane::new((64 >> fs.rec.planes[2].cfg.xdec)+4, (64 >> fs.rec.planes[2].cfg.ydec)+4,
-                       fs.rec.planes[2].cfg.xdec, fs.rec.planes[2].cfg.ydec, 0, 0),
-        ]
-    };
-    // Copy reconstructed data into padded input
-    for p in 0..3 {
-        let xdec = fs.rec.planes[p].cfg.xdec;
-        let ydec = fs.rec.planes[p].cfg.ydec;
-        let h = fi.padded_h as isize >> ydec;
-        let w = fi.padded_w as isize >> xdec;
-        let offset = sbo.plane_offset(&fs.rec.planes[p].cfg);
-        for y in 0..(64>>ydec)+4 {
-            let mut rec_slice = rec_input.planes[p].mut_slice(&PlaneOffset {x:0, y:y});
-            let mut rec_row = rec_slice.as_mut_slice();
-            if offset.y+y < 2 || offset.y+y >= h+2 {
-                // above or below the frame, fill with flag
-                for x in 0..(64>>xdec)+4 { rec_row[x] = CDEF_VERY_LARGE; }
-            } else {
-                let mut in_slice = fs.rec.planes[p].slice(&PlaneOffset {x:0, y:offset.y+y-2});
-                let mut in_row = in_slice.as_slice();
-                // are we guaranteed to be all in frame this row?
-                if offset.x < 2 || offset.x+(64>>xdec)+2 >= w {
-                    // No; do it the hard way.  off left or right edge, fill with flag.
-                    for x in 0..(64>>xdec)+4 {
-                        if offset.x+x >= 2 && offset.x+x < w+2 {
-                            rec_row[x as usize] = in_row[(offset.x+x-2) as usize]
-                        } else {
-                            rec_row[x as usize] = CDEF_VERY_LARGE;
-                        }
-                    }
-                }  else  {
-                    // Yes, do it the easy way: just copy
-                    rec_row[0..(64>>xdec)+4].copy_from_slice(&in_row[(offset.x-2) as usize..(offset.x+(64>>xdec)+2) as usize]);
-                }
-            }
-        }
-    }
+    let mut cdef_output = cdef_sb_frame(fi, &fs.rec);
+    let mut rec_input = cdef_sb_padded_frame_copy(fi, sbo, &fs.rec, 2);
 
     // RDO comparisons
+    let sb_blocks = if fi.sequence.use_128x128_superblock {16} else {8};
     let mut best_index: u8 = 0;
     let mut best_err: u64 = 0;
     let cdef_dirs = cdef_analyze_superblock(&mut rec_input, bc, &sbo_0, &sbo, fi.sequence.bit_depth);
@@ -1117,8 +1112,8 @@ pub fn rdo_cdef_decision(sbo: &SuperBlockOffset, fi: &FrameInvariants,
         // Each direction block is 8x8 in y, potentially smaller if subsampled in chroma
         // We're dealing only with in-frmae and unpadded planes now
         let mut err:u64 = 0;
-        for by in 0..8 {
-            for bx in 0..8 {
+        for by in 0..sb_blocks {
+            for bx in 0..sb_blocks {
                 let bo = sbo.block_offset(bx<<1, by<<1);
                 if bo.x < bc.cols && bo.y < bc.rows {
                     let skip = bc.at(&bo).skip;

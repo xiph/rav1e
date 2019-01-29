@@ -1,28 +1,46 @@
-os: Visual Studio 2017
+image: Visual Studio 2017
 
 environment:
-    matrix:   
-    - channel: stable
+  host: x86_64-pc-windows-msvc
+  matrix:
+    - platform: x86_64
       target: x86_64-pc-windows-msvc
+      channel: stable
+    - platform: arm64
+      target: aarch64-pc-windows-msvc
+      channel: nightly
+matrix:
+  allow_failures:
+    - platform: arm64
 
 install:
-    - call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars64.bat"
     - appveyor DownloadFile https://win.rustup.rs/ -FileName rustup-init.exe
-    - appveyor DownloadFile https://www.nasm.us/pub/nasm/releasebuilds/2.13.03/win64/nasm-2.13.03-win64.zip -FileName nasm.zip
+    - appveyor DownloadFile https://www.nasm.us/pub/nasm/releasebuilds/2.14.02/win64/nasm-2.14.02-win64.zip -FileName nasm.zip
     - 7z e -y nasm.zip
-    - rustup-init -yv --default-toolchain %channel% --default-host %target%
+    - rustup-init -yv --default-toolchain %channel% --default-host %host%
     - set PATH=%PATH%;%USERPROFILE%\.cargo\bin;%APPVEYOR_BUILD_FOLDER%
+    - ps: $Env:PKG_CONFIG_ALLOW_CROSS=1
     - rustc -vV
     - cargo -vV
+    - rustup target add %target%
 
 build_script:
     - git submodule update --init
-    - cargo build --release
+    - cargo build --release --target=%target%
 
 test_script:
     - git submodule update --init
-    - cargo test --verbose
+    - cargo test --target=%target% --verbose
 
 artifacts:
-    - path: target\release\rav1e.exe
-      name: rav1e
+    - path: target\$(target)\release\rav1e.exe
+      name: rav1e-$(platform)
+      
+deploy:
+  - provider: GitHub
+    artifact: target\$(target)\release\rav1e.exe
+    auth_token:
+      secure: hY5Mk6KOwgQ97TzEBsM7Woqr1ZIm5QTvHg8EvxMV1x8j3wk/3mNBMqWFFbEIBK0i
+    prerelease: true
+    on:
+      appveyor_repo_tag: true
