@@ -322,8 +322,7 @@ endfunc
 function wiener_filter_v_neon, export=1
         mov             w8,  w4
         ld1             {v0.8h},  [x5]
-        mov             w9,  #128
-        dup             v1.8h, w9
+        movi            v1.8h, #128
         add             v1.8h,  v1.8h,  v0.8h
 
         // Calculate the number of rows to move back when looping vertically
