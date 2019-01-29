@@ -5,15 +5,15 @@ addons:
   apt:
     packages: binutils-dev libcurl4-openssl-dev zlib1g-dev libdw-dev libiberty-dev
 before_install:
-    - wget -O cmake.sh https://cmake.org/files/v3.10/cmake-3.10.2-Linux-x86_64.sh
+    - wget -O cmake.sh https://cmake.org/files/v3.13/cmake-3.13.3-Linux-x86_64.sh
     - sudo sh cmake.sh --skip-license --exclude-subdir --prefix=/usr
     - sudo rm -fR /usr/local/cmake*
     - hash -r
     - which cmake
     - cmake --version
-    - wget https://www.nasm.us/pub/nasm/releasebuilds/2.13.03/nasm-2.13.03.tar.xz
-    - tar -xvf nasm-2.13.03.tar.xz
-    - cd nasm-2.13.03
+    - wget https://www.nasm.us/pub/nasm/releasebuilds/2.14.02/nasm-2.14.02.tar.xz
+    - tar -xvf nasm-2.14.02.tar.xz
+    - cd nasm-2.14.02
     - ./configure
     - make
     - sudo make install
@@ -24,21 +24,21 @@ before_install:
     - cd kcov-36
     - mkdir .build && cd .build
     - cmake .. && make && sudo make install
-    - kcov --version
-    - cargo install cargo-kcov
+
 jobs:
   include:
       - name: "Build & Coveralls"
-        script: cargo build --verbose &&
+        script: cargo install cargo-kcov
+                kcov --version
+                cargo build --verbose
                 cargo kcov --coveralls --features=decode_test -- --verify --exclude-pattern=$HOME/.cargo,aom_build,.h,test
       - name: "Tests"
         script: cargo test --verbose --release --features=decode_test -- --ignored
       - name: "Bench"
         script: cargo bench --verbose
-      - name: "Clippy (linter): verifying code quality"
+      - name: "Doc & Clippy (linter): verifying code quality"
         script:
-          rustup component add clippy &&
-          cargo clippy --version &&
+          cargo doc --verbose
+          rustup component add clippy
+          cargo clippy --version
           cargo clippy -- -D warnings -A clippy::all --verbose
-      - name: "Doc"
-        script: cargo doc --verbose
