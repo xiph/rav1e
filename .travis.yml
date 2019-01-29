@@ -28,17 +28,18 @@ before_install:
 jobs:
   include:
       - name: "Build & Coveralls"
-        script: cargo install cargo-kcov
-                kcov --version
-                cargo build --verbose
-                cargo kcov --coveralls --features=decode_test -- --verify --exclude-pattern=$HOME/.cargo,aom_build,.h,test
+        script: 
+         - cargo install cargo-kcov
+         - kcov --version
+         - cargo build --release --verbose
+         - cargo kcov --coveralls --features=decode_test -- --verify --exclude-pattern=$HOME/.cargo,aom_build,.h,test
       - name: "Tests"
         script: cargo test --verbose --release --features=decode_test -- --ignored
       - name: "Bench"
         script: cargo bench --verbose
       - name: "Doc & Clippy (linter): verifying code quality"
         script:
-          cargo doc --verbose
-          rustup component add clippy
-          cargo clippy --version
-          cargo clippy -- -D warnings -A clippy::all --verbose
+         - cargo doc --verbose
+         - rustup component add clippy
+         - cargo clippy --version
+         - cargo clippy -- -D warnings -A clippy::all --verbose
