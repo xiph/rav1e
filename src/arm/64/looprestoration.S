@@ -52,7 +52,7 @@ function wiener_filter_h_neon, export=1
         add             x13, x2,  x3
         lsl             x3,  x3,  #1
 
-        // Subtract the width from mid_strid3
+        // Subtract the width from mid_stride
         sub             x10, x10, w5, uxtw #1
 
         // For w >= 8, we read (w+5)&~7+8 pixels, for w < 8 we read 16 pixels.
@@ -437,7 +437,7 @@ function wiener_filter_v_neon, export=1
         mov             v21.16b,  v19.16b
         mov             v22.16b,  v19.16b
         b               8f
-62:     // 2 rows in total, v19 already loaded, load v20 and pad that into v20-v23.
+62:     // 2 rows in total, v19 already loaded, load v20 and pad that into v21-v23.
         ld1             {v20.8h}, [x2], x7
         mov             v21.16b,  v20.16b
         mov             v22.16b,  v20.16b
