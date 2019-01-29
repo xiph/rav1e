@@ -27,6 +27,18 @@ fn fill_frame(ra: &mut ChaChaRng, frame: &mut Frame) {
   }
 }
 
+fn read_frame_batch(ctx: &mut Context, ra: &mut ChaChaRng) {
+  while ctx.needs_more_lookahead() {
+    let mut input = ctx.new_frame();
+    fill_frame(ra, Arc::get_mut(&mut input).unwrap());
+
+    let _ = ctx.send_frame(Some(input));
+  }
+  if !ctx.needs_more_frames(ctx.get_frame_count()) {
+    ctx.flush();
+  }
+}
+
 struct Decoder {
   dec: *mut Dav1dContext
 }
@@ -282,16 +294,14 @@ fn encode_decode(
   let mut ctx =
     setup_encoder(w, h, speed, quantizer, bit_depth, ChromaSampling::Cs420,
                   min_keyint, max_keyint, low_latency);
+  ctx.set_frames_to_be_coded(limit as u64);
 
   println!("Encoding {}x{} speed {} quantizer {}", w, h, speed, quantizer);
 
   let mut rec_fifo = VecDeque::new();
 
   for _ in 0..limit {
-    let mut input = ctx.new_frame();
-    fill_frame(&mut ra, Arc::get_mut(&mut input).unwrap());
-
-    let _ = ctx.send_frame(input);
+    read_frame_batch(&mut ctx, &mut ra);
 
     let mut done = false;
     let mut corrupted_count = 0;
@@ -339,6 +349,7 @@ fn encode_decode(
               let ret = dav1d_get_picture(dec.dec, &mut pic);
               println!("Retrieved.");
               if ret == -(EAGAIN as i32) {
+                done = true;
                 break;
               }
               if ret != 0 {
