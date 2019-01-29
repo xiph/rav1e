@@ -509,6 +509,11 @@ impl Context {
       }
     }
 
+    match self.frame_q.get(&fi.number) {
+      Some(Some(_)) => {},
+      _ => { return Err(fi); }
+    }
+
     // Now that we know the frame number, look up the correct frame type
     let frame_type = self.determine_frame_type(fi.number);
     if frame_type == FrameType::KEY {

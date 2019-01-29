@@ -33,6 +33,18 @@ fn fill_frame(ra: &mut ChaChaRng, frame: &mut Frame) {
   }
 }
 
+fn read_frame_batch(ctx: &mut Context, ra: &mut ChaChaRng) {
+  while ctx.needs_more_lookahead() {
+    let mut input = ctx.new_frame();
+    fill_frame(ra, Arc::get_mut(&mut input).unwrap());
+
+    let _ = ctx.send_frame(Some(input));
+  }
+  if !ctx.needs_more_frames(ctx.get_frame_count()) {
+    ctx.flush();
+  }
+}
+
 struct AomDecoder {
   dec: aom_codec_ctx
 }
@@ -208,6 +220,19 @@ fn reordering() {
 }
 
 #[test]
+fn reordering_short_video() {
+  // Regression test for https://github.com/xiph/rav1e/issues/890
+  let limit = 2;
+  let w = 64;
+  let h = 80;
+  let speed = 10;
+  let q = 100;
+  let keyint = 12;
+
+  encode_decode(w, h, speed, q, limit, 8, keyint, keyint, false);
+}
+
+#[test]
 #[ignore]
 fn odd_size_frame_with_full_rdo() {
   let limit = 3;
@@ -294,18 +319,15 @@ fn encode_decode(
   let mut ctx =
     setup_encoder(w, h, speed, quantizer, bit_depth, ChromaSampling::Cs420,
                   min_keyint, max_keyint, low_latency);
+  ctx.set_frames_to_be_coded(limit as u64);
 
   println!("Encoding {}x{} speed {} quantizer {}", w, h, speed, quantizer);
 
   let mut iter: aom_codec_iter_t = ptr::null_mut();
 
   let mut rec_fifo = VecDeque::new();
-
   for _ in 0..limit {
-    let mut input = ctx.new_frame();
-    fill_frame(&mut ra, Arc::get_mut(&mut input).unwrap());
-
-    let _ = ctx.send_frame(Some(input));
+    read_frame_batch(&mut ctx, &mut ra);
 
     let mut done = false;
     let mut corrupted_count = 0;
@@ -352,6 +374,7 @@ fn encode_decode(
               let img = aom_codec_get_frame(&mut dec.dec, &mut iter);
               println!("Retrieved.");
               if img.is_null() {
+                done = true;
                 break;
               }
               let mut corrupted = 0;
