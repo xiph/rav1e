@@ -234,74 +234,6 @@ pub fn cdef_analyze_superblock(in_frame: &mut Frame,
     dir
 }
 
-
-pub fn cdef_sb_frame(fi: &FrameInvariants, f: &Frame) -> Frame {
-  let sb_size = if fi.sequence.use_128x128_superblock {128} else {64};
-  let out = Frame {
-    planes: [
-      Plane::new(sb_size >> f.planes[0].cfg.xdec, sb_size >> f.planes[0].cfg.ydec,
-                 f.planes[0].cfg.xdec, f.planes[0].cfg.ydec, 0, 0),
-      Plane::new(sb_size >> f.planes[1].cfg.xdec, sb_size >> f.planes[1].cfg.ydec,
-                 f.planes[1].cfg.xdec, f.planes[1].cfg.ydec, 0, 0),
-      Plane::new(sb_size >> f.planes[2].cfg.xdec, sb_size >> f.planes[2].cfg.ydec,
-                 f.planes[2].cfg.xdec, f.planes[2].cfg.ydec, 0, 0),
-    ]
-  };
-  out
-}
-
-pub fn cdef_sb_padded_frame_copy(fi: &FrameInvariants, sbo: &SuperBlockOffset,
-                                 f: &Frame, pad: usize) -> Frame {
-  let ipad = pad as isize;
-  let sb_size = if fi.sequence.use_128x128_superblock {128} else {64};
-  let mut out = Frame {
-    planes: [
-      Plane::new((sb_size >> f.planes[0].cfg.xdec) + pad*2, (sb_size >> f.planes[0].cfg.ydec) + pad*2,
-                 f.planes[0].cfg.xdec, f.planes[0].cfg.ydec, 0, 0),
-      Plane::new((sb_size >> f.planes[1].cfg.xdec) + pad*2, (sb_size >> f.planes[1].cfg.ydec) + pad*2,
-                 f.planes[1].cfg.xdec, f.planes[1].cfg.ydec, 0, 0),
-      Plane::new((sb_size >> f.planes[2].cfg.xdec) + pad*2, (sb_size >> f.planes[2].cfg.ydec) + pad*2,
-                 f.planes[2].cfg.xdec, f.planes[2].cfg.ydec, 0, 0),
-    ]
-  };
-  // Copy data into padded frame
-  for p in 0..3 {
-    let xdec = f.planes[p].cfg.xdec;
-    let ydec = f.planes[p].cfg.ydec;
-    let h = fi.padded_h as isize >> ydec;
-    let w = fi.padded_w as isize >> xdec;
-    let offset = sbo.plane_offset(&f.planes[p].cfg);
-    for y in 0..((sb_size>>ydec) + pad*2) as isize {
-      let mut out_slice = out.planes[p].mut_slice(&PlaneOffset {x:0, y:y});
-      let mut out_row = out_slice.as_mut_slice();
-      if offset.y + y < ipad || offset.y+y >= h + ipad {
-        // above or below the frame, fill with flag
-        for x in 0..(sb_size>>xdec) + pad*2 { out_row[x] = CDEF_VERY_LARGE; }
-      } else {
-        let mut in_slice = f.planes[p].slice(&PlaneOffset {x:0, y:offset.y + y - ipad});
-        let mut in_row = in_slice.as_slice();
-        // are we guaranteed to be all in frame this row?
-        if offset.x < ipad || offset.x + (sb_size as isize >>xdec) + ipad >= w {
-          // No; do it the hard way.  off left or right edge, fill with flag.
-          for x in 0..(sb_size>>xdec) as isize + ipad*2 {
-            if offset.x + x >= ipad && offset.x + x < w + ipad {
-              out_row[x as usize] = in_row[(offset.x + x - ipad) as usize]
-            } else {
-              out_row[x as usize] = CDEF_VERY_LARGE;
-            }
-          }
-        } else {
-          // Yes, do it the easy way: just copy
-          out_row[0..(sb_size>>xdec) + pad*2].
-            copy_from_slice(&in_row[(offset.x - ipad) as usize..
-                                    (offset.x + (sb_size>>xdec) as isize + ipad) as usize]);
-        }
-      }
-    }
-  }
-  out
-}
-
 // We assume in is padded, and the area we'll write out is at least as
 // large as the unpadded area of in
 // cdef_index is taken from the block context
@@ -326,6 +258,12 @@ pub fn cdef_filter_superblock(fi: &FrameInvariants,
     }
     if cdef_sec_uv_strength == 3 {
         cdef_sec_uv_strength += 1;
+    }
+
+    if cdef_y_strength == 0 && cdef_uv_strength == 0 {
+        // bypass filtering for speed
+        // this assumes that out_frame is already filled with in_frame's contents
+        return
     }
 
     // Each direction block is 8x8 in y, potentially smaller if subsampled in chroma
@@ -431,6 +369,7 @@ pub fn cdef_filter_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockCo
                 }
             }
             // copy current row from rec if we're in data, or pad if we're in first two rows/last N rows
+            // all pixel data must be copied, as cdef_filter_superblock may skip writing pixels for strength=0
             {
                 let mut cdef_slice = cdef_frame.planes[p].mut_slice(&PlaneOffset { x: 2, y: row as isize });
                 let mut cdef_row = &mut cdef_slice.as_mut_slice()[..rec_w];

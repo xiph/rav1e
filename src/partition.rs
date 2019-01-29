@@ -590,25 +590,25 @@ impl TxSize {
 
   pub fn by_dims(w: usize, h: usize) -> TxSize {
     match (w, h) {
-      (4, 4) => TX_4X4,
-      (8, 8) => TX_8X8,
-      (16, 16) => TX_16X16,
-      (32, 32) => TX_32X32,
-      (64, 64) => TX_64X64,
-      (4, 8) => TX_4X8,
-      (8, 4) => TX_8X4,
-      (8, 16) => TX_8X16,
-      (16, 8) => TX_16X8,
-      (16, 32) => TX_16X32,
-      (32, 16) => TX_32X16,
-      (32, 64) => TX_32X64,
-      (64, 32) => TX_64X32,
-      (4, 16) => TX_4X16,
-      (16, 4) => TX_16X4,
-      (8, 32) => TX_8X32,
-      (32, 8) => TX_32X8,
-      (16, 64) => TX_16X64,
-      (64, 16) => TX_64X16,
+      (4, 4) => TxSize::TX_4X4,
+      (8, 8) => TxSize::TX_8X8,
+      (16, 16) => TxSize::TX_16X16,
+      (32, 32) => TxSize::TX_32X32,
+      (64, 64) => TxSize::TX_64X64,
+      (4, 8) => TxSize::TX_4X8,
+      (8, 4) => TxSize::TX_8X4,
+      (8, 16) => TxSize::TX_8X16,
+      (16, 8) => TxSize::TX_16X8,
+      (16, 32) => TxSize::TX_16X32,
+      (32, 16) => TxSize::TX_32X16,
+      (32, 64) => TxSize::TX_32X64,
+      (64, 32) => TxSize::TX_64X32,
+      (4, 16) => TxSize::TX_4X16,
+      (16, 4) => TxSize::TX_16X4,
+      (8, 32) => TxSize::TX_8X32,
+      (32, 8) => TxSize::TX_32X8,
+      (16, 64) => TxSize::TX_16X64,
+      (64, 16) => TxSize::TX_64X16,
       _ => unreachable!()
     }
   }
@@ -738,8 +738,7 @@ pub struct MotionVector {
 pub const NEWMV_MODE_CONTEXTS: usize = 7;
 pub const GLOBALMV_MODE_CONTEXTS: usize = 2;
 pub const REFMV_MODE_CONTEXTS: usize = 6;
-pub const INTER_COMPOUND_MODES: usize = 1 + PredictionMode::NEW_NEWMV as usize
-  - PredictionMode::NEAREST_NEARESTMV as usize;
+pub const INTER_COMPOUND_MODES: usize = (1 + PredictionMode::NEW_NEWMV as usize - PredictionMode::NEAREST_NEARESTMV as usize);
 
 pub const REFMV_OFFSET: usize = 4;
 pub const GLOBALMV_OFFSET: usize = 3;
@@ -888,11 +887,7 @@ pub fn get_intra_edges<'a>(
         BlockSize::from_width_and_height(2*tx_size.width(), 2*tx_size.height())
       };
       let num_avail = if y != 0 && has_tr(&bo, bsize) {
-        tx_size.height().min(
-          (if p == 0 { MI_SIZE } else { MI_SIZE / 2 }) * frame_w_in_b
-            - x as usize
-            - tx_size.width()
-        )
+        tx_size.height().min((if p == 0 { MI_SIZE } else { MI_SIZE / 2 }) * frame_w_in_b - x as usize - tx_size.width())
       } else {
         0
       };
@@ -921,11 +916,7 @@ pub fn get_intra_edges<'a>(
         BlockSize::from_width_and_height(2*tx_size.width(), 2*tx_size.height())
       };
       let num_avail = if x != 0 && has_bl(&bo, bsize) {
-        tx_size.width().min(
-          (if p == 0 { MI_SIZE } else { MI_SIZE / 2 }) * frame_h_in_b
-            - y as usize
-            - tx_size.height()
-        )
+        tx_size.width().min((if p == 0 { MI_SIZE } else { MI_SIZE / 2 }) * frame_h_in_b - y as usize - tx_size.height())
       } else {
         0
       };
@@ -937,10 +928,7 @@ pub fn get_intra_edges<'a>(
       }
       if num_avail < tx_size.width() {
         let val = left[2 * MAX_TX_SIZE - tx_size.height() - num_avail];
-        for v in left[(2 * MAX_TX_SIZE - tx_size.height() - tx_size.width())
-          ..(2 * MAX_TX_SIZE - tx_size.height() - num_avail)]
-          .iter_mut()
-        {
+        for v in left[(2 * MAX_TX_SIZE - tx_size.height() - tx_size.width())..(2 * MAX_TX_SIZE - tx_size.height() - num_avail)].iter_mut() {
           *v = val;
         }
       }

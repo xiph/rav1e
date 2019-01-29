@@ -53,7 +53,6 @@ fn main() {
             &[
                 "src/x86/data.asm",
                 "src/x86/ipred.asm",
-                "src/x86/itx.asm",
                 "src/x86/mc.asm",
                 "src/x86/me.asm"
             ],
@@ -85,8 +84,6 @@ fn main() {
         .define("ENABLE_DOCS", "0")
         .define("ENABLE_NASM", "1")
         .define("ENABLE_TESTS", "0")
-        .define("ENABLE_TOOLS", "0")
-        .define("ENABLE_EXAMPLES", "0")
         .no_build_target(cfg!(windows))
         .build();
 

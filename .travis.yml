@@ -1,6 +1,4 @@
 language: rust
-rust:
-  - stable
 addons:
   apt:
     packages: binutils-dev libcurl4-openssl-dev zlib1g-dev libdw-dev libiberty-dev
@@ -35,10 +33,5 @@ jobs:
         script: cargo test --verbose --release --features=decode_test -- --ignored
       - name: "Bench"
         script: cargo bench --verbose
-      - name: "Clippy (linter): verifying code quality"
-        script:
-          rustup component add clippy &&
-          cargo clippy --version &&
-          cargo clippy -- -D warnings -A clippy::all --verbose
       - name: "Doc"
         script: cargo doc --verbose

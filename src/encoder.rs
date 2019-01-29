@@ -202,15 +202,14 @@ impl Default for ChromaSampling {
 }
 
 impl ChromaSampling {
-  // Provides the sampling period in the horizontal and vertical axes.
-  pub fn sampling_period(self) -> (usize, usize) {
-    use self::ChromaSampling::*;
-    match self {
-      Cs420 => (2, 2),
-      Cs422 => (2, 1),
-      Cs444 => (1, 1)
+    // Provides the sampling period in the horizontal and vertical axes.
+    pub fn sampling_period(self) -> (usize, usize) {
+        match self {
+            ChromaSampling::Cs420 => (2, 2),
+            ChromaSampling::Cs422 => (2, 1),
+            ChromaSampling::Cs444 => (1, 1)
+        }
     }
-  }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -569,7 +568,6 @@ pub struct FrameInvariants {
     pub me_range_scale: u8,
     pub use_tx_domain_distortion: bool,
     pub inter_cfg: Option<InterPropsConfig>,
-    pub enable_early_exit: bool,
 }
 
 impl FrameInvariants {
@@ -643,7 +641,6 @@ impl FrameInvariants {
             me_range_scale: 1,
             use_tx_domain_distortion: use_tx_domain_distortion,
             inter_cfg: None,
-            enable_early_exit: true,
         }
     }
 
@@ -693,10 +690,7 @@ impl FrameInvariants {
   /// Returns the created FrameInvariants along with a bool indicating success.
   /// This interface provides simpler usage, because we always need the produced
   /// FrameInvariants regardless of success or failure.
-  pub fn new_inter_frame(
-    previous_fi: &Self, segment_start_frame: u64, idx_in_segment: u64,
-    next_keyframe: u64
-  ) -> (Self, bool) {
+  pub fn new_inter_frame(previous_fi: &Self, segment_start_frame: u64, idx_in_segment: u64, next_keyframe: u64) -> (Self, bool) {
     let mut fi = previous_fi.clone();
     fi.frame_type = FrameType::INTER;
     fi.intra_only = false;
@@ -766,11 +760,7 @@ impl FrameInvariants {
     let ref_in_previous_group = LAST3_FRAME;
 
     // reuse probability estimates from previous frames only in top level frames
-    fi.primary_ref_frame = if lvl > 0 {
-      PRIMARY_REF_NONE
-    } else {
-      (ref_in_previous_group - LAST_FRAME) as u32
-    };
+    fi.primary_ref_frame = if lvl > 0 { PRIMARY_REF_NONE } else { (ref_in_previous_group - LAST_FRAME) as u32 };
 
     for i in 0..INTER_REFS_PER_FRAME {
       fi.ref_frames[i] = if lvl == 0 {
@@ -838,10 +828,10 @@ pub struct InterPropsConfig {
 #[derive(Debug,PartialEq,Clone,Copy)]
 #[repr(C)]
 pub enum FrameType {
-  KEY,
-  INTER,
-  INTRA_ONLY,
-  SWITCH
+    KEY,
+    INTER,
+    INTRA_ONLY,
+    SWITCH,
 }
 
 //const REFERENCE_MODES: usize = 3;
@@ -856,774 +846,714 @@ pub enum ReferenceMode {
 
 pub const ALL_REF_FRAMES_MASK: u32 = (1 << REF_FRAMES) - 1;
 
-impl fmt::Display for FrameType {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    use self::FrameType::*;
-    match self {
-      KEY => write!(f, "Key frame"),
-      INTER => write!(f, "Inter frame"),
-      INTRA_ONLY => write!(f, "Intra only frame"),
-      SWITCH => write!(f, "Switching frame"),
+impl fmt::Display for FrameType{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FrameType::KEY => write!(f, "Key frame"),
+            FrameType::INTER => write!(f, "Inter frame"),
+            FrameType::INTRA_ONLY => write!(f, "Intra only frame"),
+            FrameType::SWITCH => write!(f, "Switching frame"),
+        }
     }
-  }
 }
 
-pub fn write_ivf_header(
-  output_file: &mut dyn io::Write, width: usize, height: usize, num: usize,
-  den: usize
-) {
-  let mut bw = BitWriter::endian(output_file, LittleEndian);
-  bw.write_bytes(b"DKIF").unwrap();
-  bw.write(16, 0).unwrap(); // version
-  bw.write(16, 32).unwrap(); // version
-  bw.write_bytes(b"AV01").unwrap();
-  bw.write(16, width as u16).unwrap();
-  bw.write(16, height as u16).unwrap();
-  bw.write(32, num as u32).unwrap();
-  bw.write(32, den as u32).unwrap();
-  bw.write(32, 0).unwrap();
-  bw.write(32, 0).unwrap();
+pub fn write_ivf_header(output_file: &mut dyn io::Write, width: usize, height: usize, num: usize, den: usize) {
+    let mut bw = BitWriter::endian(output_file, LittleEndian);
+    bw.write_bytes(b"DKIF").unwrap();
+    bw.write(16, 0).unwrap(); // version
+    bw.write(16, 32).unwrap(); // version
+    bw.write_bytes(b"AV01").unwrap();
+    bw.write(16, width as u16).unwrap();
+    bw.write(16, height as u16).unwrap();
+    bw.write(32, num as u32).unwrap();
+    bw.write(32, den as u32).unwrap();
+    bw.write(32, 0).unwrap();
+    bw.write(32, 0).unwrap();
 }
 
-pub fn write_ivf_frame(
-  output_file: &mut dyn io::Write, pts: u64, data: &[u8]
-) {
-  let mut bw = BitWriter::endian(output_file, LittleEndian);
-  bw.write(32, data.len() as u32).unwrap();
-  bw.write(64, pts).unwrap();
-  bw.write_bytes(data).unwrap();
+pub fn write_ivf_frame(output_file: &mut dyn io::Write, pts: u64, data: &[u8]) {
+    let mut bw = BitWriter::endian(output_file, LittleEndian);
+    bw.write(32, data.len() as u32).unwrap();
+    bw.write(64, pts).unwrap();
+    bw.write_bytes(data).unwrap();
 }
 
 trait UncompressedHeader {
-  // Start of OBU Headers
-  fn write_obu_header(
-    &mut self, obu_type: OBU_Type, obu_extension: u32
-  ) -> io::Result<()>;
-  fn write_sequence_header_obu(
-    &mut self, fi: &mut FrameInvariants
-  ) -> io::Result<()>;
-  fn write_frame_header_obu(
-    &mut self, fi: &FrameInvariants, fs: &FrameState
-  ) -> io::Result<()>;
-  fn write_sequence_header(
-    &mut self, fi: &mut FrameInvariants
-  ) -> io::Result<()>;
-  fn write_color_config(&mut self, seq: &mut Sequence) -> io::Result<()>;
-  // End of OBU Headers
+    // Start of OBU Headers
+    fn write_obu_header(&mut self, obu_type: OBU_Type, obu_extension: u32)
+            -> io::Result<()>;
+    fn write_sequence_header_obu(&mut self, fi: &mut FrameInvariants)
+            -> io::Result<()>;
+    fn write_frame_header_obu(&mut self, fi: &FrameInvariants, fs: &FrameState)
+          -> io::Result<()>;
+    fn write_sequence_header(&mut self, fi: &mut FrameInvariants)
+                                    -> io::Result<()>;
+    fn write_color_config(&mut self, seq: &mut Sequence) -> io::Result<()>;
+    // End of OBU Headers
 
-  fn write_frame_size(&mut self, fi: &FrameInvariants) -> io::Result<()>;
-  fn write_deblock_filter_a(
-    &mut self, fi: &FrameInvariants, deblock: &DeblockState
-  ) -> io::Result<()>;
-  fn write_deblock_filter_b(
-    &mut self, fi: &FrameInvariants, deblock: &DeblockState
-  ) -> io::Result<()>;
-  fn write_frame_cdef(&mut self, fi: &FrameInvariants) -> io::Result<()>;
-  fn write_frame_lrf(
-    &mut self, fi: &FrameInvariants, rs: &RestorationState
-  ) -> io::Result<()>;
-  fn write_segment_data(
-    &mut self, fi: &FrameInvariants, segmentation: &SegmentationState
-  ) -> io::Result<()>;
-  fn write_delta_q(&mut self, delta_q: i8) -> io::Result<()>;
+    fn write_frame_size(&mut self, fi: &FrameInvariants) -> io::Result<()>;
+    fn write_deblock_filter_a(&mut self, fi: &FrameInvariants, deblock: &DeblockState) -> io::Result<()>;
+    fn write_deblock_filter_b(&mut self, fi: &FrameInvariants, deblock: &DeblockState) -> io::Result<()>;
+    fn write_frame_cdef(&mut self, fi: &FrameInvariants) -> io::Result<()>;
+    fn write_frame_lrf(&mut self, fi: &FrameInvariants, rs: &RestorationState) -> io::Result<()>;
+    fn write_segment_data(&mut self, fi: &FrameInvariants, segmentation: &SegmentationState) -> io::Result<()>;
+    fn write_delta_q(&mut self, delta_q: i8) -> io::Result<()>;
 }
 #[allow(unused)]
-const OP_POINTS_IDC_BITS: usize = 12;
+const OP_POINTS_IDC_BITS:usize = 12;
 #[allow(unused)]
-const LEVEL_MAJOR_MIN: usize = 2;
+const LEVEL_MAJOR_MIN:usize = 2;
 #[allow(unused)]
-const LEVEL_MAJOR_BITS: usize = 3;
+const LEVEL_MAJOR_BITS:usize = 3;
 #[allow(unused)]
-const LEVEL_MINOR_BITS: usize = 2;
+const LEVEL_MINOR_BITS:usize = 2;
 #[allow(unused)]
-const LEVEL_BITS: usize = LEVEL_MAJOR_BITS + LEVEL_MINOR_BITS;
+const LEVEL_BITS:usize = LEVEL_MAJOR_BITS + LEVEL_MINOR_BITS;
 const FRAME_ID_LENGTH: usize = 15;
 const DELTA_FRAME_ID_LENGTH: usize = 14;
 
 impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
-  // Start of OBU Headers
-  // Write OBU Header syntax
-  fn write_obu_header(
-    &mut self, obu_type: OBU_Type, obu_extension: u32
-  ) -> io::Result<()> {
-    self.write_bit(false)?; // forbidden bit.
-    self.write(4, obu_type as u32)?;
-    self.write_bit(obu_extension != 0)?;
-    self.write_bit(true)?; // obu_has_payload_length_field
-    self.write_bit(false)?; // reserved
+    // Start of OBU Headers
+    // Write OBU Header syntax
+    fn write_obu_header(&mut self, obu_type: OBU_Type, obu_extension: u32)
+            -> io::Result<()>{
+        self.write_bit(false)?; // forbidden bit.
+        self.write(4, obu_type as u32)?;
+        self.write_bit(obu_extension != 0)?;
+        self.write_bit(true)?; // obu_has_payload_length_field
+        self.write_bit(false)?; // reserved
 
-    if obu_extension != 0 {
-      unimplemented!();
-      //self.write(8, obu_extension & 0xFF)?; size += 8;
-    }
-
-    Ok(())
-  }
-
-  fn write_sequence_header_obu(
-    &mut self, fi: &mut FrameInvariants
-  ) -> io::Result<()> {
-    self.write(3, fi.sequence.profile)?; // profile, 3 bits
-    self.write(1, 0)?; // still_picture
-    self.write(1, 0)?; // reduced_still_picture
-    self.write_bit(false)?; // display model present
-    self.write_bit(false)?; // no timing info present
-    self.write(5, 0)?; // one operating point
-    self.write(12, 0)?; // idc
-    self.write(5, 31)?; // level
-    self.write(1, 0)?; // tier
-    if fi.sequence.reduced_still_picture_hdr {
-      unimplemented!();
-    }
-
-    self.write_sequence_header(fi)?;
-
-    self.write_color_config(&mut fi.sequence)?;
-
-    self.write_bit(fi.sequence.film_grain_params_present)?;
-
-    self.write_bit(true)?; // trailing bit
-
-    Ok(())
-  }
-
-  fn write_sequence_header(
-    &mut self, fi: &mut FrameInvariants
-  ) -> io::Result<()> {
-    self.write_frame_size(fi)?;
-
-    let seq = &mut fi.sequence;
-
-    if !seq.reduced_still_picture_hdr {
-      seq.frame_id_numbers_present_flag = false;
-      seq.frame_id_length = FRAME_ID_LENGTH as u32;
-      seq.delta_frame_id_length = DELTA_FRAME_ID_LENGTH as u32;
-
-      self.write_bit(seq.frame_id_numbers_present_flag)?;
-
-      if seq.frame_id_numbers_present_flag {
-        // We must always have delta_frame_id_length < frame_id_length,
-        // in order for a frame to be referenced with a unique delta.
-        // Avoid wasting bits by using a coding that enforces this restriction.
-        self.write(4, seq.delta_frame_id_length - 2)?;
-        self.write(3, seq.frame_id_length - seq.delta_frame_id_length - 1)?;
-      }
-    }
-
-    self.write_bit(seq.use_128x128_superblock)?;
-    self.write_bit(true)?; // enable filter intra
-    self.write_bit(seq.enable_intra_edge_filter)?;
-
-    if !seq.reduced_still_picture_hdr {
-      self.write_bit(seq.enable_interintra_compound)?;
-      self.write_bit(seq.enable_masked_compound)?;
-      self.write_bit(seq.enable_warped_motion)?;
-      self.write_bit(seq.enable_dual_filter)?;
-      self.write_bit(seq.enable_order_hint)?;
-
-      if seq.enable_order_hint {
-        self.write_bit(seq.enable_jnt_comp)?;
-        self.write_bit(seq.enable_ref_frame_mvs)?;
-      }
-      if seq.force_screen_content_tools == 2 {
-        self.write_bit(true)?;
-      } else {
-        self.write_bit(false)?;
-        self.write_bit(seq.force_screen_content_tools != 0)?;
-      }
-      if seq.force_screen_content_tools > 0 {
-        if seq.force_integer_mv == 2 {
-          self.write_bit(true)?;
-        } else {
-          self.write_bit(false)?;
-          self.write_bit(seq.force_integer_mv != 0)?;
+        if obu_extension != 0 {
+            unimplemented!();
+            //self.write(8, obu_extension & 0xFF)?; size += 8;
         }
-      } else {
-        assert!(seq.force_integer_mv == 2);
-      }
-      if seq.enable_order_hint {
-        self.write(3, seq.order_hint_bits_minus_1)?;
-      }
+
+        Ok(())
     }
 
-    self.write_bit(seq.enable_superres)?;
-    self.write_bit(seq.enable_cdef)?;
-    self.write_bit(seq.enable_restoration)?;
-
-    Ok(())
-  }
-
-  fn write_color_config(&mut self, seq: &mut Sequence) -> io::Result<()> {
-    let high_bd = seq.bit_depth > 8;
-
-    self.write_bit(high_bd)?;
-
-    if seq.bit_depth == 12 {
-      self.write_bit(true)?;
-    }
-
-    if seq.profile != 1 {
-      self.write_bit(seq.monochrome)?;
-    }
-
-    if seq.monochrome {
-      unimplemented!();
-    }
-
-    if let Some(color_description) = seq.color_description {
-      self.write_bit(true)?; // color description present
-      self.write(8, color_description.color_primaries as u8)?;
-      self.write(8, color_description.transfer_characteristics as u8)?;
-      self.write(8, color_description.matrix_coefficients as u8)?;
-    } else {
-      self.write_bit(false)?; // no color description present
-    }
-
-    self.write_bit(false)?; // full color range
-
-    let subsampling_x = seq.chroma_sampling != ChromaSampling::Cs444;
-    let subsampling_y = seq.chroma_sampling == ChromaSampling::Cs420;
-
-    if seq.bit_depth == 12 {
-      self.write_bit(subsampling_x)?;
-
-      if subsampling_x {
-        self.write_bit(subsampling_y)?;
-      }
-    }
-
-    if !subsampling_y {
-      unimplemented!(); // 4:2:2 or 4:4:4 sampling
-    }
-
-    self.write(2, seq.chroma_sample_position as u32)?;
-
-    self.write_bit(seq.separate_uv_delta_q)?;
-
-    Ok(())
-  }
-
-  #[allow(unused)]
-  fn write_frame_header_obu(
-    &mut self, fi: &FrameInvariants, fs: &FrameState
-  ) -> io::Result<()> {
-    if fi.sequence.reduced_still_picture_hdr {
-      assert!(fi.show_existing_frame);
-      assert!(fi.frame_type == FrameType::KEY);
-      assert!(fi.show_frame);
-    } else {
-      self.write_bit(fi.show_existing_frame)?;
-
-      if fi.show_existing_frame {
-        self.write(3, fi.frame_to_show_map_idx)?;
-
-        //TODO:
-        /* temporal_point_info();
-          if fi.sequence.decoder_model_info_present_flag &&
-            timing_info.equal_picture_interval == 0 {
-          // write frame_presentation_delay;
+    fn write_sequence_header_obu(&mut self, fi: &mut FrameInvariants)
+        -> io::Result<()> {
+        self.write(3, fi.sequence.profile)?; // profile, 3 bits
+        self.write(1, 0)?; // still_picture
+        self.write(1, 0)?; // reduced_still_picture
+        self.write_bit(false)?; // display model present
+        self.write_bit(false)?; // no timing info present
+        self.write(5, 0)?; // one operating point
+        self.write(12,0)?; // idc
+        self.write(5, 31)?; // level
+        self.write(1, 0)?; // tier
+        if fi.sequence.reduced_still_picture_hdr {
+            unimplemented!();
         }
-        if fi.sequence.frame_id_numbers_present_flag {
-          // write display_frame_id;
-        }*/
+
+        self.write_sequence_header(fi)?;
+
+        self.write_color_config(&mut fi.sequence)?;
+
+        self.write_bit(fi.sequence.film_grain_params_present)?;
 
         self.write_bit(true)?; // trailing bit
-        self.byte_align()?;
-        return Ok(());
-      }
 
-      self.write(2, fi.frame_type as u32)?;
-      self.write_bit(fi.show_frame)?; // show frame
+        Ok(())
+    }
 
-      if fi.show_frame {
-        //TODO:
-        /* temporal_point_info();
-          if fi.sequence.decoder_model_info_present_flag &&
-          timing_info.equal_picture_interval == 0 {
-        // write frame_presentation_delay;*/
-      } else {
-        self.write_bit(fi.showable_frame)?;
-      }
+    fn write_sequence_header(&mut self, fi: &mut FrameInvariants)
+        -> io::Result<()> {
+        self.write_frame_size(fi)?;
 
-      if fi.frame_type == FrameType::SWITCH {
-        assert!(fi.error_resilient);
-      } else {
-        if !(fi.frame_type == FrameType::KEY && fi.show_frame) {
-          self.write_bit(fi.error_resilient)?; // error resilient
+        let seq = &mut fi.sequence;
+
+        if !seq.reduced_still_picture_hdr {
+            seq.frame_id_numbers_present_flag = false;
+            seq.frame_id_length = FRAME_ID_LENGTH as u32;
+            seq.delta_frame_id_length = DELTA_FRAME_ID_LENGTH as u32;
+
+            self.write_bit(seq.frame_id_numbers_present_flag)?;
+
+            if seq.frame_id_numbers_present_flag {
+              // We must always have delta_frame_id_length < frame_id_length,
+              // in order for a frame to be referenced with a unique delta.
+              // Avoid wasting bits by using a coding that enforces this restriction.
+              self.write(4, seq.delta_frame_id_length - 2)?;
+              self.write(3, seq.frame_id_length - seq.delta_frame_id_length - 1)?;
+            }
         }
-      }
+
+        self.write_bit(seq.use_128x128_superblock)?;
+        self.write_bit(true)?; // enable filter intra
+        self.write_bit(seq.enable_intra_edge_filter)?;
+
+        if !seq.reduced_still_picture_hdr {
+            self.write_bit(seq.enable_interintra_compound)?;
+            self.write_bit(seq.enable_masked_compound)?;
+            self.write_bit(seq.enable_warped_motion)?;
+            self.write_bit(seq.enable_dual_filter)?;
+            self.write_bit(seq.enable_order_hint)?;
+
+            if seq.enable_order_hint {
+              self.write_bit(seq.enable_jnt_comp)?;
+              self.write_bit(seq.enable_ref_frame_mvs)?;
+            }
+            if seq.force_screen_content_tools == 2 {
+              self.write_bit(true)?;
+            } else {
+              self.write_bit(false)?;
+              self.write_bit(seq.force_screen_content_tools != 0)?;
+            }
+            if seq.force_screen_content_tools > 0 {
+              if seq.force_integer_mv == 2 {
+                self.write_bit(true)?;
+              } else {
+                self.write_bit(false)?;
+                self.write_bit(seq.force_integer_mv != 0)?;
+              }
+            } else {
+              assert!(seq.force_integer_mv == 2);
+            }
+            if seq.enable_order_hint {
+              self.write(3, seq.order_hint_bits_minus_1)?;
+            }
+        }
+
+        self.write_bit(seq.enable_superres)?;
+        self.write_bit(seq.enable_cdef)?;
+        self.write_bit(seq.enable_restoration)?;
+
+        Ok(())
     }
 
-    self.write_bit(fi.disable_cdf_update)?;
+    fn write_color_config(&mut self, seq: &mut Sequence) -> io::Result<()> {
+        let high_bd = seq.bit_depth > 8;
 
-    if fi.sequence.force_screen_content_tools == 2 {
-      self.write_bit(fi.allow_screen_content_tools != 0)?;
-    } else {
-      assert!(
-        fi.allow_screen_content_tools
-          == fi.sequence.force_screen_content_tools
-      );
-    }
+        self.write_bit(high_bd)?;
 
-    if fi.allow_screen_content_tools == 2 {
-      if fi.sequence.force_integer_mv == 2 {
-        self.write_bit(fi.force_integer_mv != 0)?;
-      } else {
-        assert!(fi.force_integer_mv == fi.sequence.force_integer_mv);
-      }
-    } else {
-      assert!(
-        fi.allow_screen_content_tools
-          == fi.sequence.force_screen_content_tools
-      );
-    }
+        if seq.bit_depth == 12 {
+            self.write_bit(true)?;
+        }
 
-    if fi.sequence.frame_id_numbers_present_flag {
-      unimplemented!();
+        if seq.profile != 1 {
+            self.write_bit(seq.monochrome)?;
+        }
 
-      //TODO:
-      //let frame_id_len = fi.sequence.frame_id_length;
-      //self.write(frame_id_len, fi.current_frame_id);
-    }
-
-    let mut frame_size_override_flag = false;
-    if fi.frame_type == FrameType::SWITCH {
-      frame_size_override_flag = true;
-    } else if fi.sequence.reduced_still_picture_hdr {
-      frame_size_override_flag = false;
-    } else {
-      self.write_bit(frame_size_override_flag)?; // frame size overhead flag
-    }
-
-    if fi.sequence.enable_order_hint {
-      let n = fi.sequence.order_hint_bits_minus_1 + 1;
-      let mask = (1 << n) - 1;
-      self.write(n, fi.order_hint & mask)?;
-    }
-
-    if fi.error_resilient || fi.intra_only {
-    } else {
-      self.write(PRIMARY_REF_BITS, fi.primary_ref_frame)?;
-    }
-
-    if fi.sequence.decoder_model_info_present_flag {
-      unimplemented!();
-    }
-
-    if fi.frame_type == FrameType::KEY {
-      if !fi.show_frame {
-        // unshown keyframe (forward keyframe)
-        unimplemented!();
-        self.write(REF_FRAMES as u32, fi.refresh_frame_flags)?;
-      } else {
-        assert!(fi.refresh_frame_flags == ALL_REF_FRAMES_MASK);
-      }
-    } else {
-      // Inter frame info goes here
-      if fi.intra_only {
-        assert!(fi.refresh_frame_flags != ALL_REF_FRAMES_MASK);
-        self.write(REF_FRAMES as u32, fi.refresh_frame_flags)?;
-      } else {
-        // TODO: This should be set once inter mode is used
-        self.write(REF_FRAMES as u32, fi.refresh_frame_flags)?;
-      }
-    };
-
-    if (!fi.intra_only || fi.refresh_frame_flags != ALL_REF_FRAMES_MASK) {
-      // Write all ref frame order hints if error_resilient_mode == 1
-      if (fi.error_resilient && fi.sequence.enable_order_hint) {
-        unimplemented!();
-        //for _ in 0..REF_FRAMES {
-        //  self.write(order_hint_bits_minus_1,ref_order_hint[i])?; // order_hint
-        //}
-      }
-    }
-
-    // if KEY or INTRA_ONLY frame
-    // FIXME: Not sure whether putting frame/render size here is good idea
-    if fi.intra_only {
-      if frame_size_override_flag {
-        unimplemented!();
-      }
-      if fi.sequence.enable_superres {
-        unimplemented!();
-      }
-      self.write_bit(false)?; // render_and_frame_size_different
-                              //if render_and_frame_size_different { }
-      if fi.allow_screen_content_tools != 0 && true
-      /* UpscaledWidth == FrameWidth */
-      {
-        self.write_bit(fi.allow_intrabc)?;
-      }
-    }
-
-    let frame_refs_short_signaling = false;
-    if fi.frame_type == FrameType::KEY {
-      // Done by above
-    } else {
-      if fi.intra_only {
-        // Done by above
-      } else {
-        if fi.sequence.enable_order_hint {
-          self.write_bit(frame_refs_short_signaling)?;
-          if frame_refs_short_signaling {
+        if seq.monochrome {
             unimplemented!();
-          }
         }
 
-        for i in 0..INTER_REFS_PER_FRAME {
-          if !frame_refs_short_signaling {
-            self.write(REF_FRAMES_LOG2 as u32, fi.ref_frames[i] as u8)?;
+        if let Some(color_description) = seq.color_description {
+            self.write_bit(true)?; // color description present
+            self.write(8, color_description.color_primaries as u8)?;
+            self.write(8, color_description.transfer_characteristics as u8)?;
+            self.write(8, color_description.matrix_coefficients as u8)?;
+        } else {
+            self.write_bit(false)?; // no color description present
+        }
+
+        self.write_bit(false)?; // full color range
+
+        let subsampling_x = seq.chroma_sampling != ChromaSampling::Cs444;
+        let subsampling_y = seq.chroma_sampling == ChromaSampling::Cs420;
+
+        if seq.bit_depth == 12 {
+            self.write_bit(subsampling_x)?;
+
+            if subsampling_x {
+                self.write_bit(subsampling_y)?;
+            }
+        }
+
+        if !subsampling_y {
+            unimplemented!(); // 4:2:2 or 4:4:4 sampling
+        }
+
+        self.write(2, seq.chroma_sample_position as u32)?;
+
+        self.write_bit(seq.separate_uv_delta_q)?;
+
+        Ok(())
+    }
+
+#[allow(unused)]
+    fn write_frame_header_obu(&mut self, fi: &FrameInvariants, fs: &FrameState)
+        -> io::Result<()> {
+      if fi.sequence.reduced_still_picture_hdr {
+        assert!(fi.show_existing_frame);
+        assert!(fi.frame_type == FrameType::KEY);
+        assert!(fi.show_frame);
+      } else {
+        self.write_bit(fi.show_existing_frame)?;
+
+        if fi.show_existing_frame {
+          self.write(3, fi.frame_to_show_map_idx)?;
+
+          //TODO:
+          /* temporal_point_info();
+            if fi.sequence.decoder_model_info_present_flag &&
+              timing_info.equal_picture_interval == 0 {
+            // write frame_presentation_delay;
           }
           if fi.sequence.frame_id_numbers_present_flag {
-            unimplemented!();
-          }
+            // write display_frame_id;
+          }*/
+
+          self.write_bit(true)?; // trailing bit
+          self.byte_align()?;
+          return Ok(());
         }
-        if fi.error_resilient && frame_size_override_flag {
-          unimplemented!();
+
+        self.write(2, fi.frame_type as u32)?;
+        self.write_bit(fi.show_frame)?; // show frame
+
+        if fi.show_frame {
+          //TODO:
+          /* temporal_point_info();
+              if fi.sequence.decoder_model_info_present_flag &&
+              timing_info.equal_picture_interval == 0 {
+            // write frame_presentation_delay;*/
         } else {
-          if frame_size_override_flag {
-            unimplemented!();
-          }
-          if fi.sequence.enable_superres {
-            unimplemented!();
-          }
-          self.write_bit(false)?; // render_and_frame_size_different
+          self.write_bit(fi.showable_frame)?;
         }
-        if fi.force_integer_mv != 0 {
+
+        if fi.frame_type == FrameType::SWITCH {
+          assert!(fi.error_resilient);
         } else {
-          self.write_bit(fi.allow_high_precision_mv);
-        }
-        self.write_bit(fi.is_filter_switchable)?;
-        self.write_bit(fi.is_motion_mode_switchable)?;
-        self.write(2, 0)?; // EIGHTTAP_REGULAR
-        if fi.error_resilient || !fi.sequence.enable_ref_frame_mvs {
-        } else {
-          self.write_bit(fi.use_ref_frame_mvs)?;
-        }
-      }
-    }
-
-    if !fi.sequence.reduced_still_picture_hdr && !fi.disable_cdf_update {
-      self.write_bit(fi.disable_frame_end_update_cdf)?;
-    }
-
-    // tile
-    self.write_bit(true)?; // uniform_tile_spacing_flag
-    if fi.width > 64 {
-      // TODO: if tile_cols > 1, write more increment_tile_cols_log2 bits
-      self.write_bit(false)?; // tile cols
-    }
-    if fi.height > 64 {
-      // TODO: if tile_rows > 1, write increment_tile_rows_log2 bits
-      self.write_bit(false)?; // tile rows
-    }
-    // TODO: if tile_cols * tile_rows > 1 {
-    // write context_update_tile_id and tile_size_bytes_minus_1 }
-
-    // quantization
-    assert!(fi.base_q_idx > 0);
-    self.write(8, fi.base_q_idx)?; // base_q_idx
-    self.write_delta_q(fi.dc_delta_q[0])?;
-    assert!(fi.ac_delta_q[0] == 0);
-    let diff_uv_delta = fi.sequence.separate_uv_delta_q
-      && (fi.dc_delta_q[1] != fi.dc_delta_q[2]
-        || fi.ac_delta_q[1] != fi.ac_delta_q[2]);
-    if fi.sequence.separate_uv_delta_q {
-      self.write_bit(diff_uv_delta)?;
-    } else {
-      assert!(fi.dc_delta_q[1] == fi.dc_delta_q[2]);
-      assert!(fi.ac_delta_q[1] == fi.ac_delta_q[2]);
-    }
-    self.write_delta_q(fi.dc_delta_q[1])?;
-    self.write_delta_q(fi.ac_delta_q[1])?;
-    if diff_uv_delta {
-      self.write_delta_q(fi.dc_delta_q[2])?;
-      self.write_delta_q(fi.ac_delta_q[2])?;
-    }
-    self.write_bit(false)?; // no qm
-
-    // segmentation
-    self.write_segment_data(fi, &fs.segmentation)?;
-
-    // delta_q
-    self.write_bit(false)?; // delta_q_present_flag: no delta q
-
-    // delta_lf_params in the spec
-    self.write_deblock_filter_a(fi, &fs.deblock)?;
-
-    // code for features not yet implemented....
-
-    // loop_filter_params in the spec
-    self.write_deblock_filter_b(fi, &fs.deblock)?;
-
-    // cdef
-    self.write_frame_cdef(fi)?;
-
-    // loop restoration
-    self.write_frame_lrf(fi, &fs.restoration)?;
-
-    self.write_bit(false)?; // tx mode == TX_MODE_SELECT ?
-
-    let mut reference_select = false;
-    if !fi.intra_only {
-      reference_select = fi.reference_mode != ReferenceMode::SINGLE;
-      self.write_bit(reference_select)?;
-    }
-
-    let skip_mode_allowed =
-      fi.sequence.get_skip_mode_allowed(fi, reference_select);
-    if skip_mode_allowed {
-      self.write_bit(false)?; // skip_mode_present
-    }
-
-    if fi.intra_only || fi.error_resilient || !fi.sequence.enable_warped_motion
-    {
-    } else {
-      self.write_bit(fi.allow_warped_motion)?; // allow_warped_motion
-    }
-
-    self.write_bit(fi.use_reduced_tx_set)?; // reduced tx
-
-    // global motion
-    if !fi.intra_only {
-      for i in LAST_FRAME..ALTREF_FRAME + 1 {
-        let mode = fi.globalmv_transformation_type[i];
-        self.write_bit(mode != GlobalMVMode::IDENTITY)?;
-        if mode != GlobalMVMode::IDENTITY {
-          self.write_bit(mode == GlobalMVMode::ROTZOOM)?;
-          if mode != GlobalMVMode::ROTZOOM {
-            self.write_bit(mode == GlobalMVMode::TRANSLATION)?;
-          }
-        }
-        match mode {
-          GlobalMVMode::IDENTITY => { /* Nothing to do */ }
-          GlobalMVMode::TRANSLATION => {
-            let mv_x = 0;
-            let mv_x_ref = 0;
-            let mv_y = 0;
-            let mv_y_ref = 0;
-            let bits = 12 - 6 + 3 - !fi.allow_high_precision_mv as u8;
-            let bits_diff = 12 - 3 + fi.allow_high_precision_mv as u8;
-            BCodeWriter::write_s_refsubexpfin(
-              self,
-              (1 << bits) + 1,
-              3,
-              mv_x_ref >> bits_diff,
-              mv_x >> bits_diff
-            )?;
-            BCodeWriter::write_s_refsubexpfin(
-              self,
-              (1 << bits) + 1,
-              3,
-              mv_y_ref >> bits_diff,
-              mv_y >> bits_diff
-            )?;
-          }
-          GlobalMVMode::ROTZOOM => unimplemented!(),
-          GlobalMVMode::AFFINE => unimplemented!()
-        };
-      }
-    }
-
-    if fi.sequence.film_grain_params_present && fi.show_frame {
-      unimplemented!();
-    }
-
-    if fi.large_scale_tile {
-      unimplemented!();
-    }
-    self.write_bit(true)?; // trailing bit
-    self.byte_align()?;
-
-    Ok(())
-  }
-  // End of OBU Headers
-
-  fn write_frame_size(&mut self, fi: &FrameInvariants) -> io::Result<()> {
-    // width_bits and height_bits will have to be moved to the sequence header OBU
-    // when we add support for it.
-    let width_bits = 32 - (fi.width as u32).leading_zeros();
-    let height_bits = 32 - (fi.height as u32).leading_zeros();
-    assert!(width_bits <= 16);
-    assert!(height_bits <= 16);
-    self.write(4, width_bits - 1)?;
-    self.write(4, height_bits - 1)?;
-    self.write(width_bits, (fi.width - 1) as u16)?;
-    self.write(height_bits, (fi.height - 1) as u16)?;
-    Ok(())
-  }
-
-  fn write_deblock_filter_a(
-    &mut self, fi: &FrameInvariants, deblock: &DeblockState
-  ) -> io::Result<()> {
-    if fi.delta_q_present {
-      if !fi.allow_intrabc {
-        self.write_bit(deblock.block_deltas_enabled)?;
-      }
-      if deblock.block_deltas_enabled {
-        self.write(2, deblock.block_delta_shift)?;
-        self.write_bit(deblock.block_delta_multi)?;
-      }
-    }
-    Ok(())
-  }
-
-  fn write_deblock_filter_b(
-    &mut self, fi: &FrameInvariants, deblock: &DeblockState
-  ) -> io::Result<()> {
-    assert!(deblock.levels[0] < 64);
-    self.write(6, deblock.levels[0])?; // loop deblocking filter level 0
-    assert!(deblock.levels[1] < 64);
-    self.write(6, deblock.levels[1])?; // loop deblocking filter level 1
-    if PLANES > 1 && (deblock.levels[0] > 0 || deblock.levels[1] > 0) {
-      assert!(deblock.levels[2] < 64);
-      self.write(6, deblock.levels[2])?; // loop deblocking filter level 2
-      assert!(deblock.levels[3] < 64);
-      self.write(6, deblock.levels[3])?; // loop deblocking filter level 3
-    }
-    self.write(3, deblock.sharpness)?; // deblocking filter sharpness
-    self.write_bit(deblock.deltas_enabled)?; // loop deblocking filter deltas enabled
-    if deblock.deltas_enabled {
-      self.write_bit(deblock.delta_updates_enabled)?; // deltas updates enabled
-      if deblock.delta_updates_enabled {
-        // conditionally write ref delta updates
-        let prev_ref_deltas = if fi.primary_ref_frame == PRIMARY_REF_NONE {
-          [1, 0, 0, 0, 0, -1, -1, -1]
-        } else {
-          fi.rec_buffer.deblock
-            [fi.ref_frames[fi.primary_ref_frame as usize] as usize]
-            .ref_deltas
-        };
-        for i in 0..REF_FRAMES {
-          let update = deblock.ref_deltas[i] != prev_ref_deltas[i];
-          self.write_bit(update)?;
-          if update {
-            self.write_signed(7, deblock.ref_deltas[i])?;
-          }
-        }
-        // conditionally write mode delta updates
-        let prev_mode_deltas = if fi.primary_ref_frame == PRIMARY_REF_NONE {
-          [0, 0]
-        } else {
-          fi.rec_buffer.deblock
-            [fi.ref_frames[fi.primary_ref_frame as usize] as usize]
-            .mode_deltas
-        };
-        for i in 0..2 {
-          let update = deblock.mode_deltas[i] != prev_mode_deltas[i];
-          self.write_bit(update)?;
-          if update {
-            self.write_signed(7, deblock.mode_deltas[i])?;
+          if !(fi.frame_type == FrameType::KEY && fi.show_frame) {
+            self.write_bit(fi.error_resilient)?; // error resilient
           }
         }
       }
-    }
-    Ok(())
-  }
 
-  fn write_frame_cdef(&mut self, fi: &FrameInvariants) -> io::Result<()> {
-    if fi.sequence.enable_cdef {
-      assert!(fi.cdef_damping >= 3);
-      assert!(fi.cdef_damping <= 6);
-      self.write(2, fi.cdef_damping - 3)?;
-      assert!(fi.cdef_bits < 4);
-      self.write(2, fi.cdef_bits)?; // cdef bits
-      for i in 0..(1 << fi.cdef_bits) {
-        let j = i << (3 - fi.cdef_bits);
-        assert!(fi.cdef_y_strengths[j] < 64);
-        assert!(fi.cdef_uv_strengths[j] < 64);
-        self.write(6, fi.cdef_y_strengths[j])?; // cdef y strength
-        self.write(6, fi.cdef_uv_strengths[j])?; // cdef uv strength
-      }
-    }
-    Ok(())
-  }
+      self.write_bit(fi.disable_cdf_update)?;
 
-  fn write_frame_lrf(
-    &mut self, fi: &FrameInvariants, rs: &RestorationState
-  ) -> io::Result<()> {
-    if fi.sequence.enable_restoration && !fi.allow_intrabc {
-      // && !self.lossless
-      let mut use_lrf = false;
-      let mut use_chroma_lrf = false;
-      for i in 0..PLANES {
-        self.write(2, rs.plane[i].lrf_type)?; // filter type by plane
-        if rs.plane[i].lrf_type != RESTORE_NONE {
-          use_lrf = true;
-          if i > 0 {
-            use_chroma_lrf = true;
-          }
-        }
-      }
-      if use_lrf {
-        // The Y shift value written here indicates shift up from superblock size
-        if !fi.sequence.use_128x128_superblock {
-          self.write(1, if rs.plane[0].unit_size > 64 { 1 } else { 0 })?;
-        }
-        if rs.plane[0].unit_size > 64 {
-          self.write(1, if rs.plane[0].unit_size > 128 { 1 } else { 0 })?;
-        }
-
-        if use_chroma_lrf {
-          if fi.sequence.chroma_sampling == ChromaSampling::Cs420 {
-            self.write(
-              1,
-              if rs.plane[0].unit_size > rs.plane[1].unit_size {
-                1
-              } else {
-                0
-              }
-            )?;
-          }
-        }
-      }
-    }
-    Ok(())
-  }
-
-  fn write_segment_data(
-    &mut self, fi: &FrameInvariants, segmentation: &SegmentationState
-  ) -> io::Result<()> {
-    self.write_bit(segmentation.enabled)?;
-    if segmentation.enabled {
-      if fi.primary_ref_frame == PRIMARY_REF_NONE {
-        assert_eq!(segmentation.update_map, true);
-        assert_eq!(segmentation.update_data, true);
+      if fi.sequence.force_screen_content_tools == 2 {
+        self.write_bit(fi.allow_screen_content_tools != 0)?;
       } else {
-        self.write_bit(segmentation.update_map)?;
-        if segmentation.update_map {
-          self.write_bit(false)?; /* Without using temporal prediction */
-        }
-        self.write_bit(segmentation.update_data)?;
+        assert!(fi.allow_screen_content_tools ==
+                fi.sequence.force_screen_content_tools);
       }
-      if segmentation.update_data {
-        for i in 0..8 {
-          for j in 0..SegLvl::SEG_LVL_MAX as usize {
-            self.write_bit(segmentation.features[i][j])?;
-            if segmentation.features[i][j] {
-              let bits = seg_feature_bits[j];
-              let data = segmentation.data[i][j];
-              if seg_feature_is_signed[j] {
-                self.write_signed(bits + 1, data)?;
-              } else {
-                self.write(bits, data)?;
+
+      if fi.allow_screen_content_tools == 2 {
+        if fi.sequence.force_integer_mv == 2 {
+          self.write_bit(fi.force_integer_mv != 0)?;
+        } else {
+          assert!(fi.force_integer_mv == fi.sequence.force_integer_mv);
+        }
+      } else {
+        assert!(fi.allow_screen_content_tools ==
+                fi.sequence.force_screen_content_tools);
+      }
+
+      if fi.sequence.frame_id_numbers_present_flag {
+        unimplemented!();
+
+        //TODO:
+        //let frame_id_len = fi.sequence.frame_id_length;
+        //self.write(frame_id_len, fi.current_frame_id);
+      }
+
+      let mut frame_size_override_flag = false;
+      if fi.frame_type == FrameType::SWITCH {
+        frame_size_override_flag = true;
+      } else if fi.sequence.reduced_still_picture_hdr {
+        frame_size_override_flag = false;
+      } else {
+        self.write_bit(frame_size_override_flag)?; // frame size overhead flag
+      }
+
+      if fi.sequence.enable_order_hint {
+        let n = fi.sequence.order_hint_bits_minus_1 + 1;
+        let mask = (1 << n) - 1;
+        self.write(n, fi.order_hint & mask)?;
+      }
+
+      if fi.error_resilient || fi.intra_only {
+      } else {
+        self.write(PRIMARY_REF_BITS, fi.primary_ref_frame)?;
+      }
+
+      if fi.sequence.decoder_model_info_present_flag {
+        unimplemented!();
+      }
+
+      if fi.frame_type == FrameType::KEY {
+        if !fi.show_frame {  // unshown keyframe (forward keyframe)
+          unimplemented!();
+          self.write(REF_FRAMES as u32, fi.refresh_frame_flags)?;
+        } else {
+          assert!(fi.refresh_frame_flags == ALL_REF_FRAMES_MASK);
+        }
+      } else { // Inter frame info goes here
+        if fi.intra_only {
+          assert!(fi.refresh_frame_flags != ALL_REF_FRAMES_MASK);
+          self.write(REF_FRAMES as u32, fi.refresh_frame_flags)?;
+        } else {
+          // TODO: This should be set once inter mode is used
+          self.write(REF_FRAMES as u32, fi.refresh_frame_flags)?;
+        }
+
+      };
+
+      if (!fi.intra_only || fi.refresh_frame_flags != ALL_REF_FRAMES_MASK) {
+        // Write all ref frame order hints if error_resilient_mode == 1
+        if (fi.error_resilient && fi.sequence.enable_order_hint) {
+          unimplemented!();
+          //for _ in 0..REF_FRAMES {
+          //  self.write(order_hint_bits_minus_1,ref_order_hint[i])?; // order_hint
+          //}
+        }
+      }
+
+      // if KEY or INTRA_ONLY frame
+      // FIXME: Not sure whether putting frame/render size here is good idea
+      if fi.intra_only {
+        if frame_size_override_flag {
+          unimplemented!();
+        }
+        if fi.sequence.enable_superres {
+          unimplemented!();
+        }
+        self.write_bit(false)?; // render_and_frame_size_different
+        //if render_and_frame_size_different { }
+        if fi.allow_screen_content_tools != 0 && true /* UpscaledWidth == FrameWidth */ {
+          self.write_bit(fi.allow_intrabc)?;
+        }
+      }
+
+      let frame_refs_short_signaling = false;
+      if fi.frame_type == FrameType::KEY {
+        // Done by above
+      } else {
+        if fi.intra_only {
+          // Done by above
+        } else {
+          if fi.sequence.enable_order_hint {
+            self.write_bit(frame_refs_short_signaling)?;
+            if frame_refs_short_signaling {
+              unimplemented!();
+            }
+          }
+
+          for i in 0..INTER_REFS_PER_FRAME {
+            if !frame_refs_short_signaling {
+              self.write(REF_FRAMES_LOG2 as u32, fi.ref_frames[i] as u8)?;
+            }
+            if fi.sequence.frame_id_numbers_present_flag {
+              unimplemented!();
+            }
+          }
+          if fi.error_resilient && frame_size_override_flag {
+            unimplemented!();
+          } else {
+            if frame_size_override_flag {
+               unimplemented!();
+            }
+            if fi.sequence.enable_superres {
+              unimplemented!();
+            }
+            self.write_bit(false)?; // render_and_frame_size_different
+          }
+          if fi.force_integer_mv != 0 {
+          } else {
+            self.write_bit(fi.allow_high_precision_mv);
+          }
+          self.write_bit(fi.is_filter_switchable)?;
+          self.write_bit(fi.is_motion_mode_switchable)?;
+          self.write(2,0)?; // EIGHTTAP_REGULAR
+          if fi.error_resilient || !fi.sequence.enable_ref_frame_mvs {
+          } else {
+            self.write_bit(fi.use_ref_frame_mvs)?;
+          }
+        }
+      }
+
+      if !fi.sequence.reduced_still_picture_hdr && !fi.disable_cdf_update {
+        self.write_bit(fi.disable_frame_end_update_cdf)?;
+      }
+
+      // tile
+      self.write_bit(true)?; // uniform_tile_spacing_flag
+      if fi.width > 64 {
+        // TODO: if tile_cols > 1, write more increment_tile_cols_log2 bits
+        self.write_bit(false)?; // tile cols
+      }
+      if fi.height > 64 {
+        // TODO: if tile_rows > 1, write increment_tile_rows_log2 bits
+        self.write_bit(false)?; // tile rows
+      }
+      // TODO: if tile_cols * tile_rows > 1 {
+      // write context_update_tile_id and tile_size_bytes_minus_1 }
+
+      // quantization
+      assert!(fi.base_q_idx > 0);
+      self.write(8, fi.base_q_idx)?; // base_q_idx
+      self.write_delta_q(fi.dc_delta_q[0])?;
+      assert!(fi.ac_delta_q[0] == 0);
+      let diff_uv_delta = fi.sequence.separate_uv_delta_q
+        && (fi.dc_delta_q[1] != fi.dc_delta_q[2]
+          || fi.ac_delta_q[1] != fi.ac_delta_q[2]);
+      if fi.sequence.separate_uv_delta_q {
+        self.write_bit(diff_uv_delta)?;
+      } else {
+        assert!(fi.dc_delta_q[1] == fi.dc_delta_q[2]);
+        assert!(fi.ac_delta_q[1] == fi.ac_delta_q[2]);
+      }
+      self.write_delta_q(fi.dc_delta_q[1])?;
+      self.write_delta_q(fi.ac_delta_q[1])?;
+      if diff_uv_delta {
+        self.write_delta_q(fi.dc_delta_q[2])?;
+        self.write_delta_q(fi.ac_delta_q[2])?;
+      }
+      self.write_bit(false)?; // no qm
+
+      // segmentation
+      self.write_segment_data(fi, &fs.segmentation)?;
+
+      // delta_q
+      self.write_bit(false)?; // delta_q_present_flag: no delta q
+
+      // delta_lf_params in the spec
+      self.write_deblock_filter_a(fi, &fs.deblock)?;
+
+      // code for features not yet implemented....
+
+      // loop_filter_params in the spec
+      self.write_deblock_filter_b(fi, &fs.deblock)?;
+
+      // cdef
+      self.write_frame_cdef(fi)?;
+
+      // loop restoration
+      self.write_frame_lrf(fi, &fs.restoration)?;
+
+      self.write_bit(false)?; // tx mode == TX_MODE_SELECT ?
+
+      let mut reference_select = false;
+      if !fi.intra_only {
+        reference_select = fi.reference_mode != ReferenceMode::SINGLE;
+        self.write_bit(reference_select)?;
+      }
+
+      let skip_mode_allowed = fi.sequence.get_skip_mode_allowed(fi, reference_select);
+      if skip_mode_allowed {
+        self.write_bit(false)?; // skip_mode_present
+      }
+
+      if fi.intra_only || fi.error_resilient || !fi.sequence.enable_warped_motion {
+      } else {
+        self.write_bit(fi.allow_warped_motion)?; // allow_warped_motion
+      }
+
+      self.write_bit(fi.use_reduced_tx_set)?; // reduced tx
+
+      // global motion
+      if !fi.intra_only {
+          for i in LAST_FRAME..ALTREF_FRAME+1 {
+              let mode = fi.globalmv_transformation_type[i];
+              self.write_bit(mode != GlobalMVMode::IDENTITY)?;
+              if mode != GlobalMVMode::IDENTITY {
+                  self.write_bit(mode == GlobalMVMode::ROTZOOM)?;
+                  if mode != GlobalMVMode::ROTZOOM {
+                      self.write_bit(mode == GlobalMVMode::TRANSLATION)?;
+                  }
               }
+              match mode {
+                  GlobalMVMode::IDENTITY => { /* Nothing to do */ }
+                  GlobalMVMode::TRANSLATION => {
+                      let mv_x = 0;
+                      let mv_x_ref = 0;
+                      let mv_y = 0;
+                      let mv_y_ref = 0;
+                      let bits = 12 - 6 + 3 - !fi.allow_high_precision_mv as u8;
+                      let bits_diff = 12 - 3 + fi.allow_high_precision_mv as u8;
+                      BCodeWriter::write_s_refsubexpfin(self, (1 << bits) + 1,
+                                                        3, mv_x_ref >> bits_diff,
+                                                        mv_x >> bits_diff)?;
+                      BCodeWriter::write_s_refsubexpfin(self, (1 << bits) + 1,
+                                                        3, mv_y_ref >> bits_diff,
+                                                        mv_y >> bits_diff)?;
+                  }
+                  GlobalMVMode::ROTZOOM => unimplemented!(),
+                  GlobalMVMode::AFFINE => unimplemented!(),
+              };
+          }
+      }
+
+      if fi.sequence.film_grain_params_present && fi.show_frame {
+          unimplemented!();
+      }
+
+      if fi.large_scale_tile {
+          unimplemented!();
+      }
+      self.write_bit(true)?; // trailing bit
+      self.byte_align()?;
+
+      Ok(())
+    }
+    // End of OBU Headers
+
+    fn write_frame_size(&mut self, fi: &FrameInvariants) -> io::Result<()> {
+        // width_bits and height_bits will have to be moved to the sequence header OBU
+        // when we add support for it.
+        let width_bits = 32 - (fi.width as u32).leading_zeros();
+        let height_bits = 32 - (fi.height as u32).leading_zeros();
+        assert!(width_bits <= 16);
+        assert!(height_bits <= 16);
+        self.write(4, width_bits - 1)?;
+        self.write(4, height_bits - 1)?;
+        self.write(width_bits, (fi.width - 1) as u16)?;
+        self.write(height_bits, (fi.height - 1) as u16)?;
+        Ok(())
+    }
+
+    fn write_deblock_filter_a(&mut self, fi: &FrameInvariants, deblock: &DeblockState) -> io::Result<()> {
+        if fi.delta_q_present {
+            if !fi.allow_intrabc {
+                self.write_bit(deblock.block_deltas_enabled)?;
+            }
+            if deblock.block_deltas_enabled {
+                self.write(2, deblock.block_delta_shift)?;
+                self.write_bit(deblock.block_delta_multi)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn write_deblock_filter_b(&mut self, fi: &FrameInvariants, deblock: &DeblockState) -> io::Result<()> {
+        assert!(deblock.levels[0] < 64);
+        self.write(6, deblock.levels[0])?; // loop deblocking filter level 0
+        assert!(deblock.levels[1] < 64);
+        self.write(6, deblock.levels[1])?; // loop deblocking filter level 1
+        if PLANES > 1 && (deblock.levels[0] > 0 || deblock.levels[1] > 0) {
+            assert!(deblock.levels[2] < 64);
+            self.write(6, deblock.levels[2])?; // loop deblocking filter level 2
+            assert!(deblock.levels[3] < 64);
+            self.write(6, deblock.levels[3])?; // loop deblocking filter level 3
+        }
+        self.write(3, deblock.sharpness)?; // deblocking filter sharpness
+        self.write_bit(deblock.deltas_enabled)?; // loop deblocking filter deltas enabled
+        if deblock.deltas_enabled {
+            self.write_bit(deblock.delta_updates_enabled)?; // deltas updates enabled
+            if deblock.delta_updates_enabled {
+                // conditionally write ref delta updates
+                let prev_ref_deltas = if fi.primary_ref_frame == PRIMARY_REF_NONE {
+                    [1, 0, 0, 0, 0, -1, -1, -1]
+                } else {
+                    fi.rec_buffer.deblock[fi.ref_frames[fi.primary_ref_frame as usize] as usize].ref_deltas
+                };
+                for i in 0..REF_FRAMES {
+                    let update = deblock.ref_deltas[i] != prev_ref_deltas[i];
+                    self.write_bit(update)?;
+                    if update {
+                        self.write_signed(7, deblock.ref_deltas[i])?;
+                    }
+                }
+                // conditionally write mode delta updates
+                let prev_mode_deltas = if fi.primary_ref_frame == PRIMARY_REF_NONE {
+                    [0, 0]
+                } else {
+                    fi.rec_buffer.deblock[fi.ref_frames[fi.primary_ref_frame as usize] as usize].mode_deltas
+                };
+                for i in 0..2 {
+                    let update = deblock.mode_deltas[i] != prev_mode_deltas[i];
+                    self.write_bit(update)?;
+                    if update {
+                        self.write_signed(7, deblock.mode_deltas[i])?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn write_frame_cdef(&mut self, fi: &FrameInvariants) -> io::Result<()> {
+        if fi.sequence.enable_cdef {
+            assert!(fi.cdef_damping >= 3);
+            assert!(fi.cdef_damping <= 6);
+            self.write(2, fi.cdef_damping - 3)?;
+            assert!(fi.cdef_bits < 4);
+            self.write(2,fi.cdef_bits)?; // cdef bits
+            for i in 0..(1<<fi.cdef_bits) {
+                let j = i << (3 - fi.cdef_bits);
+                assert!(fi.cdef_y_strengths[j]<64);
+                assert!(fi.cdef_uv_strengths[j]<64);
+                self.write(6,fi.cdef_y_strengths[j])?; // cdef y strength
+                self.write(6,fi.cdef_uv_strengths[j])?; // cdef uv strength
+            }
+        }
+        Ok(())
+    }
+
+    fn write_frame_lrf(&mut self, fi: &FrameInvariants,
+                       rs: &RestorationState) -> io::Result<()> {
+      if fi.sequence.enable_restoration && !fi.allow_intrabc { // && !self.lossless
+        let mut use_lrf = false;
+        let mut use_chroma_lrf = false;
+        for i in 0..PLANES {
+          self.write(2, rs.plane[i].lrf_type)?; // filter type by plane
+          if rs.plane[i].lrf_type != RESTORE_NONE {
+            use_lrf = true;
+            if i > 0 { use_chroma_lrf = true; }
+          }
+        }
+        if use_lrf {
+          // The Y shift value written here indicates shift up from superblock size
+          if !fi.sequence.use_128x128_superblock {
+            self.write(1, if rs.plane[0].unit_size > 64 {1} else {0})?;
+          }
+          if rs.plane[0].unit_size > 64 {
+            self.write(1, if rs.plane[0].unit_size > 128 {1} else {0})?;
+          }
+
+          if use_chroma_lrf {
+            if fi.sequence.chroma_sampling == ChromaSampling::Cs420 {
+              self.write(1, if rs.plane[0].unit_size > rs.plane[1].unit_size {1} else {0})?;
             }
           }
         }
       }
+      Ok(())
     }
-    Ok(())
-  }
 
-  fn write_delta_q(&mut self, delta_q: i8) -> io::Result<()> {
-    self.write_bit(delta_q != 0)?;
-    if delta_q != 0 {
-      self.write_signed(6 + 1, delta_q)?;
+    fn write_segment_data(&mut self, fi: &FrameInvariants, segmentation: &SegmentationState) -> io::Result<()> {
+        self.write_bit(segmentation.enabled)?;
+        if segmentation.enabled {
+            if fi.primary_ref_frame == PRIMARY_REF_NONE {
+                assert_eq!(segmentation.update_map, true);
+                assert_eq!(segmentation.update_data, true);
+            } else {
+                self.write_bit(segmentation.update_map)?;
+                if segmentation.update_map {
+                    self.write_bit(false)?; /* Without using temporal prediction */
+                }
+                self.write_bit(segmentation.update_data)?;
+            }
+            if segmentation.update_data {
+                for i in 0..8 {
+                    for j in 0..SegLvl::SEG_LVL_MAX as usize {
+                        self.write_bit(segmentation.features[i][j])?;
+                        if segmentation.features[i][j] {
+                            let bits = seg_feature_bits[j];
+                            let data = segmentation.data[i][j];
+                            if seg_feature_is_signed[j] {
+                                self.write_signed(bits + 1, data)?;
+                            } else {
+                                self.write(bits, data)?;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
     }
-    Ok(())
-  }
+
+    fn write_delta_q(&mut self, delta_q: i8) -> io::Result<()> {
+        self.write_bit(delta_q != 0)?;
+        if delta_q != 0 {
+            self.write_signed(6 + 1, delta_q)?;
+        }
+        Ok(())
+    }
 }
 
 #[allow(non_camel_case_types)]
@@ -1666,85 +1596,83 @@ fn aom_uleb_encode(mut value: u64, coded_value: &mut [u8]) -> usize {
   leb_size
 }
 
-fn write_obus(
-  packet: &mut dyn io::Write, fi: &mut FrameInvariants, fs: &FrameState
-) -> io::Result<()> {
-  let obu_extension = 0 as u32;
+fn write_obus(packet: &mut dyn io::Write,
+              fi: &mut FrameInvariants, fs: &FrameState)
+         -> io::Result<()> {
+    let obu_extension = 0 as u32;
 
-  let mut buf1 = Vec::new();
-  {
-    let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
-    bw1.write_obu_header(OBU_Type::OBU_TEMPORAL_DELIMITER, obu_extension)?;
-    bw1.write(8, 0)?; // size of payload == 0, one byte
-  }
-  packet.write_all(&buf1).unwrap();
-  buf1.clear();
+    let mut buf1 = Vec::new();
+    {
+      let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
+      bw1.write_obu_header(OBU_Type::OBU_TEMPORAL_DELIMITER, obu_extension)?;
+      bw1.write(8,0)?;	// size of payload == 0, one byte
+    }
+    packet.write_all(&buf1).unwrap();
+    buf1.clear();
 
-  // write sequence header obu if KEY_FRAME, preceded by 4-byte size
-  if fi.frame_type == FrameType::KEY {
+    // write sequence header obu if KEY_FRAME, preceded by 4-byte size
+    if fi.frame_type == FrameType::KEY {
+        let mut buf2 = Vec::new();
+        {
+            let mut bw2 = BitWriter::endian(&mut buf2, BigEndian);
+            bw2.write_sequence_header_obu(fi)?;
+            bw2.byte_align()?;
+        }
+
+        {
+            let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
+            bw1.write_obu_header(OBU_Type::OBU_SEQUENCE_HEADER, obu_extension)?;
+        }
+        packet.write_all(&buf1).unwrap();
+        buf1.clear();
+
+        let obu_payload_size = buf2.len() as u64;
+        {
+            let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
+            // uleb128()
+            let mut coded_payload_length = [0 as u8; 8];
+            let leb_size = aom_uleb_encode(obu_payload_size, &mut coded_payload_length);
+            for i in 0..leb_size {
+                bw1.write(8, coded_payload_length[i])?;
+            }
+        }
+        packet.write_all(&buf1).unwrap();
+        buf1.clear();
+
+        packet.write_all(&buf2).unwrap();
+        buf2.clear();
+    }
+
     let mut buf2 = Vec::new();
     {
-      let mut bw2 = BitWriter::endian(&mut buf2, BigEndian);
-      bw2.write_sequence_header_obu(fi)?;
-      bw2.byte_align()?;
+        let mut bw2 = BitWriter::endian(&mut buf2, BigEndian);
+        bw2.write_frame_header_obu(fi, fs)?;
     }
 
     {
-      let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
-      bw1.write_obu_header(OBU_Type::OBU_SEQUENCE_HEADER, obu_extension)?;
+        let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
+        bw1.write_obu_header(OBU_Type::OBU_FRAME_HEADER, obu_extension)?;
     }
     packet.write_all(&buf1).unwrap();
     buf1.clear();
 
     let obu_payload_size = buf2.len() as u64;
     {
-      let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
-      // uleb128()
-      let mut coded_payload_length = [0 as u8; 8];
-      let leb_size =
-        aom_uleb_encode(obu_payload_size, &mut coded_payload_length);
-      for i in 0..leb_size {
-        bw1.write(8, coded_payload_length[i])?;
-      }
+        let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
+        // uleb128()
+        let mut coded_payload_length = [0 as u8; 8];
+        let leb_size = aom_uleb_encode(obu_payload_size, &mut coded_payload_length);
+        for i in 0..leb_size {
+            bw1.write(8, coded_payload_length[i])?;
+        }
     }
     packet.write_all(&buf1).unwrap();
     buf1.clear();
 
     packet.write_all(&buf2).unwrap();
     buf2.clear();
-  }
 
-  let mut buf2 = Vec::new();
-  {
-    let mut bw2 = BitWriter::endian(&mut buf2, BigEndian);
-    bw2.write_frame_header_obu(fi, fs)?;
-  }
-
-  {
-    let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
-    bw1.write_obu_header(OBU_Type::OBU_FRAME_HEADER, obu_extension)?;
-  }
-  packet.write_all(&buf1).unwrap();
-  buf1.clear();
-
-  let obu_payload_size = buf2.len() as u64;
-  {
-    let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
-    // uleb128()
-    let mut coded_payload_length = [0 as u8; 8];
-    let leb_size =
-      aom_uleb_encode(obu_payload_size, &mut coded_payload_length);
-    for i in 0..leb_size {
-      bw1.write(8, coded_payload_length[i])?;
-    }
-  }
-  packet.write_all(&buf1).unwrap();
-  buf1.clear();
-
-  packet.write_all(&buf2).unwrap();
-  buf2.clear();
-
-  Ok(())
+    Ok(())
 }
 
 /// Write into `dst` the difference between the blocks at `src1` and `src2`
@@ -2293,22 +2221,17 @@ pub fn encode_block_with_modes(fi: &FrameInvariants, fs: &mut FrameState,
                     tx_size, tx_type, mode_context, &mv_stack, false);
 }
 
-fn encode_partition_bottomup(
-  fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
-  w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer, bsize: BlockSize,
-  bo: &BlockOffset, pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5],
-  ref_rd_cost: f64
-) -> (RDOOutput) {
+fn encode_partition_bottomup(fi: &FrameInvariants, fs: &mut FrameState,
+                             cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
+                             bsize: BlockSize, bo: &BlockOffset, pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5],
+                             ref_rd_cost: f64
+) -> (f64, Option<RDOPartitionOutput>) {
     let mut rd_cost = std::f64::MAX;
     let mut best_rd = std::f64::MAX;
-    let mut rdo_output = RDOOutput {
-        rd_cost,
-        part_type: PartitionType::PARTITION_INVALID,
-        part_modes: Vec::new()
-    };
+    let mut best_pred_modes: Vec<RDOPartitionOutput> = Vec::new();
 
     if bo.x >= cw.bc.cols || bo.y >= cw.bc.rows {
-        return rdo_output
+        return (rd_cost, None);
     }
 
     let bsw = bsize.width_mi();
@@ -2324,6 +2247,19 @@ fn encode_partition_bottomup(
     let can_split = (bsize > fi.min_partition_size && is_square) || must_split;
 
     let mut best_partition = PartitionType::PARTITION_INVALID;
+    let mut best_decision = RDOPartitionOutput {
+        rd_cost,
+        bo: bo.clone(),
+        bsize: bsize,
+        pred_mode_luma: PredictionMode::DC_PRED,
+        pred_mode_chroma: PredictionMode::DC_PRED,
+        pred_cfl_params: CFLParams::new(),
+        ref_frames: [INTRA_FRAME, NONE_FRAME],
+        mvs: [MotionVector { row: 0, col: 0}; 2],
+        skip: false,
+        tx_size: TxSize::TX_4X4,
+        tx_type: TxType::DCT_DCT,
+    }; // Best decision that is not PARTITION_SPLIT
 
     let cw_checkpoint = cw.checkpoint();
     let w_pre_checkpoint = w_pre_cdef.checkpoint();
@@ -2348,15 +2284,16 @@ fn encode_partition_bottomup(
         };
         let spmvs = &pmvs[pmv_idx];
 
-        let mode_decision = rdo_mode_decision(fi, fs, cw, bsize, bo, spmvs, false);
+        let mode_decision = rdo_mode_decision(fi, fs, cw, bsize, bo, spmvs, false).part_modes[0].clone();
 
         rd_cost = mode_decision.rd_cost + cost;
 
-        best_partition = PartitionType::PARTITION_NONE;
-        best_rd = rd_cost;
-        rdo_output.part_modes.push(mode_decision.clone());
+        if rd_cost < ref_rd_cost {
+            best_partition = PartitionType::PARTITION_NONE;
+            best_rd = rd_cost;
+            best_decision = mode_decision.clone();
+            best_pred_modes.push(best_decision.clone());
 
-        if !can_split {
             encode_block_with_modes(fi, fs, cw, w_pre_cdef, w_post_cdef, bsize, bo,
                                 &mode_decision);
         }
@@ -2367,7 +2304,8 @@ fn encode_partition_bottomup(
         for &partition in RAV1E_PARTITION_TYPES {
             if partition == PartitionType::PARTITION_NONE { continue; }
 
-            assert!(is_square);
+            assert!(bsw == bsh);
+
             if must_split {
                 let cbw = (fi.w_in_b - bo.x).min(bsw); // clipped block width, i.e. having effective pixels
                 let cbh = (fi.h_in_b - bo.y).min(bsh);
@@ -2402,13 +2340,12 @@ fn encode_partition_bottomup(
                 &BlockOffset{ x: bo.x + hbsw as usize, y: bo.y + hbsh as usize }
             ];
             let partitions = get_sub_partitions(&four_partitions, partition);
-            let mut early_exit = false;
 
             // If either of horz or vert partition types is being tested,
             // two partitioned rectangles, defined in 'partitions', of the current block
             // is passed to encode_partition_bottomup()
             for offset in partitions {
-                let child_rdo_output = encode_partition_bottomup(
+                if let (cost, Some(mode_decision)) = encode_partition_bottomup(
                     fi,
                     fs,
                     cw,
@@ -2418,41 +2355,23 @@ fn encode_partition_bottomup(
                     offset,
                     pmvs,//&best_decision.mvs[0]
                     best_rd
-                );
-                let cost = child_rdo_output.rd_cost;
-                assert!(cost >= 0.0);
-
-                if cost != std::f64::MAX {
+                ) {
                     rd_cost += cost;
-                    if fi.enable_early_exit && (rd_cost >= best_rd || rd_cost >= ref_rd_cost) {
-                        assert!(cost != std::f64::MAX);
-                        early_exit = true;
-                        if partition == PartitionType::PARTITION_SPLIT { break; }
-                    }
-                    else {
-                        if partition != PartitionType::PARTITION_SPLIT {
-                            child_modes.push(child_rdo_output.part_modes[0].clone());
-                        }
-                    }
+                    if rd_cost > best_rd || rd_cost > ref_rd_cost { break; }
+                    else { child_modes.push(mode_decision); }
                 }
             };
 
-            if !early_exit && rd_cost < best_rd {
+            if rd_cost < best_rd && rd_cost < ref_rd_cost {
                 best_rd = rd_cost;
                 best_partition = partition;
-                if partition != PartitionType::PARTITION_SPLIT {
-                    assert!(child_modes.len() > 0);
-                    rdo_output.part_modes = child_modes;
-                }
+                best_pred_modes = child_modes.clone();
             }
         }
 
         // If the best partition is not PARTITION_SPLIT or PARTITION_INVALID, recode it
         if best_partition != PartitionType::PARTITION_SPLIT &&
             best_partition != PartitionType::PARTITION_INVALID {
-
-            assert!(rdo_output.part_modes.len() > 0);
-
             cw.rollback(&cw_checkpoint);
             w_pre_cdef.rollback(&w_pre_checkpoint);
             w_post_cdef.rollback(&w_post_checkpoint);
@@ -2464,7 +2383,7 @@ fn encode_partition_bottomup(
                 let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
                 cw.write_partition(w, bo, best_partition, bsize);
             }
-            for mode in rdo_output.part_modes.clone() {
+            for mode in best_pred_modes {
                 assert!(subsize == mode.bsize);
                 let offset = mode.bo.clone();
                 // FIXME: redundant block re-encode
@@ -2474,20 +2393,15 @@ fn encode_partition_bottomup(
         }
     }
 
-    assert!(best_partition != PartitionType::PARTITION_INVALID);
+    if best_partition != PartitionType::PARTITION_INVALID {
+        let subsize = bsize.subsize(best_partition);
 
-    if bsize.gte(BlockSize::BLOCK_8X8) &&
-        (bsize == BlockSize::BLOCK_8X8 || best_partition != PartitionType::PARTITION_SPLIT) {
-        cw.bc.update_partition_context(bo, bsize.subsize(best_partition), bsize);
+        if bsize.gte(BlockSize::BLOCK_8X8) &&
+            (bsize == BlockSize::BLOCK_8X8 || best_partition != PartitionType::PARTITION_SPLIT) {
+            cw.bc.update_partition_context(bo, subsize, bsize);
+        }
     }
-
-    rdo_output.rd_cost = best_rd;
-    rdo_output.part_type = best_partition;
-
-    if best_partition != PartitionType::PARTITION_NONE {
-        rdo_output.part_modes.clear();
-    }
-    rdo_output
+    (best_rd, Some(best_decision))
 }
 
 fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState,
@@ -2572,7 +2486,7 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState,
                     let spmvs = &pmvs[pmv_idx];
 
                     // Make a prediction mode decision for blocks encoded with no rdo_partition_decision call (e.g. edges)
-                    rdo_mode_decision(fi, fs, cw, bsize, bo, spmvs, false)
+                    rdo_mode_decision(fi, fs, cw, bsize, bo, spmvs, false).part_modes[0].clone()
                 };
 
             let mut mode_luma = part_decision.pred_mode_luma;

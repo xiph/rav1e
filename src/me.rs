@@ -132,9 +132,7 @@ mod native {
   }
 }
 
-fn get_mv_range(
-  fi: &FrameInvariants, bo: &BlockOffset, blk_w: usize, blk_h: usize
-) -> (isize, isize, isize, isize) {
+fn get_mv_range(fi: &FrameInvariants, bo: &BlockOffset, blk_w: usize, blk_h: usize) -> (isize, isize, isize, isize) {
   let border_w = 128 + blk_w as isize * 8;
   let border_h = 128 + blk_h as isize * 8;
   let mvx_min = -(bo.x as isize) * (8 * MI_SIZE) as isize - border_w;

@@ -17,7 +17,6 @@ use std::io::prelude::*;
 use std::sync::Arc;
 use std::time::Instant;
 use y4m;
-use y4m::Colorspace;
 
 pub struct EncoderIO {
   pub input: Box<dyn Read>,
@@ -168,18 +167,9 @@ fn parse_config(matches: &ArgMatches) -> EncoderConfig {
     panic!("Maximum keyframe interval must be greater than or equal to minimum keyframe interval");
   }
 
-  let color_primaries =
-    matches.value_of("COLOR_PRIMARIES").unwrap().parse().unwrap_or_default();
-  let transfer_characteristics = matches
-    .value_of("TRANSFER_CHARACTERISTICS")
-    .unwrap()
-    .parse()
-    .unwrap_or_default();
-  let matrix_coefficients = matches
-    .value_of("MATRIX_COEFFICIENTS")
-    .unwrap()
-    .parse()
-    .unwrap_or_default();
+  let color_primaries = matches.value_of("COLOR_PRIMARIES").unwrap().parse().unwrap_or_default();
+  let transfer_characteristics = matches.value_of("TRANSFER_CHARACTERISTICS").unwrap().parse().unwrap_or_default();
+  let matrix_coefficients = matches.value_of("MATRIX_COEFFICIENTS").unwrap().parse().unwrap_or_default();
 
   let mut cfg = EncoderConfig::with_speed_preset(speed);
   cfg.max_key_frame_interval = min_interval;
@@ -204,20 +194,21 @@ fn parse_config(matches: &ArgMatches) -> EncoderConfig {
   cfg
 }
 
-pub fn map_y4m_color_space(
-  color_space: y4m::Colorspace
-) -> (ChromaSampling, ChromaSamplePosition) {
-  use y4m::Colorspace::*;
-  use ChromaSampling::*;
-  use ChromaSamplePosition::*;
+pub fn map_y4m_color_space(color_space: y4m::Colorspace) -> (ChromaSampling, ChromaSamplePosition) {
   match color_space {
-    C420jpeg | C420paldv => (Cs420, Unknown),
-    C420mpeg2 => (Cs420, Vertical),
-    C420 | C420p10 | C420p12 => (Cs420, Colocated),
-    C422 | C422p10 | C422p12 => (Cs422, Colocated),
-    C444 | C444p10 | C444p12 => (Cs444, Colocated),
-    _ =>
-      panic!("Chroma characteristics unknown for the specified color space.")
+    y4m::Colorspace::C420jpeg
+    | y4m::Colorspace::C420paldv => (ChromaSampling::Cs420, ChromaSamplePosition::Unknown),
+    y4m::Colorspace::C420mpeg2 => (ChromaSampling::Cs420, ChromaSamplePosition::Vertical),
+    y4m::Colorspace::C420
+    | y4m::Colorspace::C420p10
+    | y4m::Colorspace::C420p12 => (ChromaSampling::Cs420, ChromaSamplePosition::Colocated),
+    y4m::Colorspace::C422
+    | y4m::Colorspace::C422p10
+    | y4m::Colorspace::C422p12 => (ChromaSampling::Cs422, ChromaSamplePosition::Colocated),
+    y4m::Colorspace::C444
+    | y4m::Colorspace::C444p10
+    | y4m::Colorspace::C444p12 => (ChromaSampling::Cs444, ChromaSamplePosition::Colocated),
+    _ => panic!("Chroma characteristics unknown for the specified color space.")
   }
 }
 
@@ -257,80 +248,6 @@ impl fmt::Display for FrameSummary {
   }
 }
 
-fn read_frame_batch(ctx: &mut Context, y4m_dec: &mut y4m::Decoder<'_, Box<dyn Read>>, y4m_details: Y4MDetails) {
-  loop {
-    if ctx.needs_more_lookahead() {
-      match y4m_dec.read_frame() {
-        Ok(y4m_frame) => {
-          let y4m_y = y4m_frame.get_y_plane();
-          let y4m_u = y4m_frame.get_u_plane();
-          let y4m_v = y4m_frame.get_v_plane();
-          let mut input = ctx.new_frame();
-          {
-            let input = Arc::get_mut(&mut input).unwrap();
-            input.planes[0].copy_from_raw_u8(&y4m_y, y4m_details.width * y4m_details.bytes, y4m_details.bytes);
-            input.planes[1].copy_from_raw_u8(
-              &y4m_u,
-              y4m_details.width * y4m_details.bytes / 2,
-              y4m_details.bytes
-            );
-            input.planes[2].copy_from_raw_u8(
-              &y4m_v,
-              y4m_details.width * y4m_details.bytes / 2,
-              y4m_details.bytes
-            );
-          }
-
-          match y4m_details.bits {
-            8 | 10 | 12 => {}
-            _ => panic!("unknown input bit depth!")
-          }
-
-          let _ = ctx.send_frame(Some(input));
-          continue;
-        }
-        _ => {
-          let frames_to_be_coded = ctx.get_frame_count();
-          ctx.set_frames_to_be_coded(frames_to_be_coded);
-          ctx.flush();
-        }
-      }
-    } else if !ctx.needs_more_frames(ctx.get_frame_count()) {
-      ctx.flush();
-    }
-    break;
-  }
-}
-
-#[derive(Debug, Clone, Copy)]
-struct Y4MDetails {
-  width: usize,
-  height: usize,
-  bits: usize,
-  bytes: usize,
-  color_space: Colorspace,
-  bit_depth: usize,
-}
-
-impl Y4MDetails {
-  fn new(y4m_dec: &mut y4m::Decoder<'_, Box<dyn Read>>) -> Self {
-    let width = y4m_dec.get_width();
-    let height = y4m_dec.get_height();
-    let bits = y4m_dec.get_bit_depth();
-    let bytes = y4m_dec.get_bytes_per_sample();
-    let color_space = y4m_dec.get_colorspace();
-    let bit_depth = color_space.get_bit_depth();
-    Y4MDetails {
-      width,
-      height,
-      bits,
-      bytes,
-      color_space,
-      bit_depth,
-    }
-  }
-}
-
 // Encode and write a frame.
 // Returns frame information in a `Result`.
 pub fn process_frame(
@@ -338,94 +255,142 @@ pub fn process_frame(
   y4m_dec: &mut y4m::Decoder<'_, Box<dyn Read>>,
   mut y4m_enc: Option<&mut y4m::Encoder<'_, Box<dyn Write>>>
 ) -> Result<Vec<FrameSummary>, ()> {
-  let y4m_details = Y4MDetails::new(y4m_dec);
-  let mut frame_summaries = Vec::new();
-  read_frame_batch(ctx, y4m_dec, y4m_details);
-  let pkt_wrapped = ctx.receive_packet();
-  if let Ok(pkt) = pkt_wrapped {
-    write_ivf_frame(output_file, pkt.number as u64, pkt.data.as_ref());
-    if let Some(y4m_enc_uw) = y4m_enc.as_mut() {
-      if let Some(ref rec) = pkt.rec {
-        let pitch_y = if y4m_details.bit_depth > 8 { y4m_details.width * 2 } else { y4m_details.width };
-        let chroma_sampling_period = map_y4m_color_space(y4m_details.color_space).0.sampling_period();
-        let (pitch_uv, height_uv) = (
-          pitch_y / chroma_sampling_period.0,
-          y4m_details.height / chroma_sampling_period.1
-        );
+  let width = y4m_dec.get_width();
+  let height = y4m_dec.get_height();
+  let y4m_bits = y4m_dec.get_bit_depth();
+  let y4m_bytes = y4m_dec.get_bytes_per_sample();
+  let y4m_color_space = y4m_dec.get_colorspace();
+  let bit_depth = y4m_color_space.get_bit_depth();
 
-        let (mut rec_y, mut rec_u, mut rec_v) = (
-          vec![128u8; pitch_y * y4m_details.height],
-          vec![128u8; pitch_uv * height_uv],
-          vec![128u8; pitch_uv * height_uv]
-        );
-
-        let (stride_y, stride_u, stride_v) = (
-          rec.planes[0].cfg.stride,
-          rec.planes[1].cfg.stride,
-          rec.planes[2].cfg.stride
-        );
-
-        for (line, line_out) in rec.planes[0]
-          .data_origin()
-          .chunks(stride_y)
-          .zip(rec_y.chunks_mut(pitch_y))
+  if ctx.needs_more_frames(ctx.get_frame_count()) {
+    match y4m_dec.read_frame() {
+      Ok(y4m_frame) => {
+        let y4m_y = y4m_frame.get_y_plane();
+        let y4m_u = y4m_frame.get_u_plane();
+        let y4m_v = y4m_frame.get_v_plane();
+        let mut input = ctx.new_frame();
         {
-          if y4m_details.bit_depth > 8 {
-            unsafe {
-              line_out.copy_from_slice(slice::from_raw_parts::<u8>(
-                line.as_ptr() as (*const u8),
-                pitch_y
-              ));
-            }
-          } else {
-            line_out.copy_from_slice(
-              &line.iter().map(|&v| v as u8).collect::<Vec<u8>>()[..pitch_y]
-            );
-          }
-        }
-        for (line, line_out) in rec.planes[1]
-          .data_origin()
-          .chunks(stride_u)
-          .zip(rec_u.chunks_mut(pitch_uv))
-        {
-          if y4m_details.bit_depth > 8 {
-            unsafe {
-              line_out.copy_from_slice(slice::from_raw_parts::<u8>(
-                line.as_ptr() as (*const u8),
-                pitch_uv
-              ));
-            }
-          } else {
-            line_out.copy_from_slice(
-              &line.iter().map(|&v| v as u8).collect::<Vec<u8>>()[..pitch_uv]
-            );
-          }
-        }
-        for (line, line_out) in rec.planes[2]
-          .data_origin()
-          .chunks(stride_v)
-          .zip(rec_v.chunks_mut(pitch_uv))
-        {
-          if y4m_details.bit_depth > 8 {
-            unsafe {
-              line_out.copy_from_slice(slice::from_raw_parts::<u8>(
-                line.as_ptr() as (*const u8),
-                pitch_uv
-              ));
-            }
-          } else {
-            line_out.copy_from_slice(
-              &line.iter().map(|&v| v as u8).collect::<Vec<u8>>()[..pitch_uv]
-            );
-          }
+          let input = Arc::get_mut(&mut input).unwrap();
+          input.planes[0].copy_from_raw_u8(&y4m_y, width * y4m_bytes, y4m_bytes);
+          input.planes[1].copy_from_raw_u8(
+            &y4m_u,
+            width * y4m_bytes / 2,
+            y4m_bytes
+          );
+          input.planes[2].copy_from_raw_u8(
+            &y4m_v,
+            width * y4m_bytes / 2,
+            y4m_bytes
+          );
         }
 
-        let rec_frame = y4m::Frame::new([&rec_y, &rec_u, &rec_v], None);
-        y4m_enc_uw.write_frame(&rec_frame).unwrap();
+        match y4m_bits {
+          8 | 10 | 12 => {}
+          _ => panic!("unknown input bit depth!")
+        }
+
+        let _ = ctx.send_frame(input);
+      }
+      _ => {
+        let frames_to_be_coded = ctx.get_frame_count();
+        ctx.set_frames_to_be_coded(frames_to_be_coded);
+        ctx.flush();
       }
     }
-    ctx.garbage_collect(pkt.number);
-    frame_summaries.push(pkt.into());
+  } else {
+    ctx.flush();
+  };
+
+  let mut frame_summaries = Vec::new();
+  loop {
+    let pkt_wrapped = ctx.receive_packet();
+    match pkt_wrapped {
+      Ok(pkt) => {
+        write_ivf_frame(output_file, pkt.number as u64, pkt.data.as_ref());
+        if let Some(y4m_enc_uw) = y4m_enc.as_mut() {
+          if let Some(ref rec) = pkt.rec {
+            let pitch_y = if bit_depth > 8 { width * 2 } else { width };
+            let chroma_sampling_period = map_y4m_color_space(y4m_color_space).0.sampling_period();
+            let (pitch_uv, height_uv) = (
+              pitch_y / chroma_sampling_period.0,
+              height / chroma_sampling_period.1
+            );
+
+            let (mut rec_y, mut rec_u, mut rec_v) = (
+              vec![128u8; pitch_y * height],
+              vec![128u8; pitch_uv * height_uv],
+              vec![128u8; pitch_uv * height_uv]
+            );
+
+            let (stride_y, stride_u, stride_v) = (
+              rec.planes[0].cfg.stride,
+              rec.planes[1].cfg.stride,
+              rec.planes[2].cfg.stride
+            );
+
+            for (line, line_out) in rec.planes[0]
+              .data_origin()
+              .chunks(stride_y)
+              .zip(rec_y.chunks_mut(pitch_y))
+            {
+              if bit_depth > 8 {
+                unsafe {
+                  line_out.copy_from_slice(slice::from_raw_parts::<u8>(
+                    line.as_ptr() as (*const u8),
+                    pitch_y
+                  ));
+                }
+              } else {
+                line_out.copy_from_slice(
+                  &line.iter().map(|&v| v as u8).collect::<Vec<u8>>()[..pitch_y]
+                );
+              }
+            }
+            for (line, line_out) in rec.planes[1]
+              .data_origin()
+              .chunks(stride_u)
+              .zip(rec_u.chunks_mut(pitch_uv))
+            {
+              if bit_depth > 8 {
+                unsafe {
+                  line_out.copy_from_slice(slice::from_raw_parts::<u8>(
+                    line.as_ptr() as (*const u8),
+                    pitch_uv
+                  ));
+                }
+              } else {
+                line_out.copy_from_slice(
+                  &line.iter().map(|&v| v as u8).collect::<Vec<u8>>()[..pitch_uv]
+                );
+              }
+            }
+            for (line, line_out) in rec.planes[2]
+              .data_origin()
+              .chunks(stride_v)
+              .zip(rec_v.chunks_mut(pitch_uv))
+            {
+              if bit_depth > 8 {
+                unsafe {
+                  line_out.copy_from_slice(slice::from_raw_parts::<u8>(
+                    line.as_ptr() as (*const u8),
+                    pitch_uv
+                  ));
+                }
+              } else {
+                line_out.copy_from_slice(
+                  &line.iter().map(|&v| v as u8).collect::<Vec<u8>>()[..pitch_uv]
+                );
+              }
+            }
+
+            let rec_frame = y4m::Frame::new([&rec_y, &rec_u, &rec_v], None);
+            y4m_enc_uw.write_frame(&rec_frame).unwrap();
+          }
+        }
+        frame_summaries.push(pkt.into());
+      },
+      _ => { break; }
+    }
   }
   Ok(frame_summaries)
 }
@@ -516,22 +481,10 @@ impl ProgressInfo {
   }
 
   pub fn print_stats(&self) -> String {
-    let (key, key_size) = (
-      self.get_frame_type_count(FrameType::KEY),
-      self.get_frame_type_size(FrameType::KEY)
-    );
-    let (inter, inter_size) = (
-      self.get_frame_type_count(FrameType::INTER),
-      self.get_frame_type_size(FrameType::INTER)
-    );
-    let (ionly, ionly_size) = (
-      self.get_frame_type_count(FrameType::INTRA_ONLY),
-      self.get_frame_type_size(FrameType::INTRA_ONLY)
-    );
-    let (switch, switch_size) = (
-      self.get_frame_type_count(FrameType::SWITCH),
-      self.get_frame_type_size(FrameType::SWITCH)
-    );
+    let (key, key_size) = (self.get_frame_type_count(FrameType::KEY), self.get_frame_type_size(FrameType::KEY));
+    let (inter, inter_size) = (self.get_frame_type_count(FrameType::INTER), self.get_frame_type_size(FrameType::INTER));
+    let (ionly, ionly_size) = (self.get_frame_type_count(FrameType::INTRA_ONLY), self.get_frame_type_size(FrameType::INTRA_ONLY));
+    let (switch, switch_size) = (self.get_frame_type_count(FrameType::SWITCH), self.get_frame_type_size(FrameType::SWITCH));
     format!("\
     Key Frames: {:>6}    avg size: {:>7} B\n\
     Inter:      {:>6}    avg size: {:>7} B\n\
@@ -543,15 +496,9 @@ impl ProgressInfo {
       ionly, ionly_size / key,
       switch, switch_size / key,
       if self.show_psnr {
-        let psnr_y =
-          self.frame_info.iter().map(|fi| fi.psnr.unwrap().0).sum::<f64>()
-            / self.frame_info.len() as f64;
-        let psnr_u =
-          self.frame_info.iter().map(|fi| fi.psnr.unwrap().1).sum::<f64>()
-            / self.frame_info.len() as f64;
-        let psnr_v =
-          self.frame_info.iter().map(|fi| fi.psnr.unwrap().2).sum::<f64>()
-            / self.frame_info.len() as f64;
+        let psnr_y = self.frame_info.iter().map(|fi| fi.psnr.unwrap().0).sum::<f64>() / self.frame_info.len() as f64;
+        let psnr_u = self.frame_info.iter().map(|fi| fi.psnr.unwrap().1).sum::<f64>() / self.frame_info.len() as f64;
+        let psnr_v = self.frame_info.iter().map(|fi| fi.psnr.unwrap().2).sum::<f64>() / self.frame_info.len() as f64;
         format!("\nMean PSNR: Y: {:.4}  Cb: {:.4}  Cr: {:.4}  Avg: {:.4}",
                 psnr_y, psnr_u, psnr_v,
                 (psnr_y + psnr_u + psnr_v) / 3.0)

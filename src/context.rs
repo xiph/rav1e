@@ -11,10 +11,10 @@
 #![allow(non_upper_case_globals)]
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
-#![allow(clippy::cast_lossless)]
-#![allow(clippy::unnecessary_mut_passed)]
-#![allow(clippy::needless_range_loop)]
-#![allow(clippy::collapsible_if)]
+#![cfg_attr(feature = "cargo-clippy", allow(cast_lossless))]
+#![cfg_attr(feature = "cargo-clippy", allow(unnecessary_mut_passed))]
+#![cfg_attr(feature = "cargo-clippy", allow(needless_range_loop))]
+#![cfg_attr(feature = "cargo-clippy", allow(collapsible_if))]
 
 use ec::Writer;
 use encoder::{FrameInvariants, ReferenceMode};
