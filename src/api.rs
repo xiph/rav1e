@@ -19,6 +19,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use util::Fixed;
 use std::collections::BTreeSet;
+use decoder::VideoDetails;
 
 const LOOKAHEAD_FRAMES: u64 = 10;
 
@@ -249,33 +250,10 @@ pub struct ColorDescription {
     pub matrix_coefficients: MatrixCoefficients
 }
 
-/// Frame-specific information
-#[derive(Clone, Copy, Debug)]
-pub struct FrameInfo {
-  pub width: usize,
-  pub height: usize,
-  pub bit_depth: usize,
-  pub chroma_sampling: ChromaSampling,
-  pub chroma_sample_position: ChromaSamplePosition
-}
-
-impl Default for FrameInfo {
-    fn default() -> FrameInfo {
-        FrameInfo {
-            width: 640,
-            height: 480,
-            bit_depth: 8,
-            chroma_sampling: Default::default(),
-            chroma_sample_position: Default::default()
-        }
-    }
-}
-
 /// Contain all the encoder configuration
 #[derive(Clone, Copy, Debug)]
 pub struct Config {
-  pub frame_info: FrameInfo,
-  pub timebase: Rational,
+  pub video_info: VideoDetails,
   pub enc: EncoderConfig
 }
 
@@ -312,7 +290,7 @@ impl Config {
       packet_data: Vec::new(),
       segment_start_idx: 0,
       segment_start_frame: 0,
-      keyframe_detector: SceneChangeDetector::new(&self.frame_info),
+      keyframe_detector: SceneChangeDetector::new(&self.video_info),
       config: *self,
     }
   }
@@ -335,7 +313,7 @@ pub struct Context {
   segment_start_idx: u64,
   segment_start_frame: u64,
   keyframe_detector: SceneChangeDetector,
-  config: Config,
+  pub config: Config,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -374,9 +352,9 @@ impl fmt::Display for Packet {
 impl Context {
   pub fn new_frame(&self) -> Arc<Frame> {
     Arc::new(Frame::new(
-      self.config.frame_info.width.align_power_of_two(3),
-      self.config.frame_info.height.align_power_of_two(3),
-      self.config.frame_info.chroma_sampling
+      self.config.video_info.width.align_power_of_two(3),
+      self.config.video_info.height.align_power_of_two(3),
+      self.config.video_info.chroma_sampling
     ))
   }
 
@@ -463,10 +441,10 @@ impl Context {
       // The first frame will always be a key frame
       let fi = FrameInvariants::new_key_frame(
         &FrameInvariants::new(
-          self.config.frame_info.width,
-          self.config.frame_info.height,
+          self.config.video_info.width,
+          self.config.video_info.height,
           self.config.enc,
-          Sequence::new(&self.config.frame_info)
+          Sequence::new(&self.config.video_info)
         ),
         0
       );

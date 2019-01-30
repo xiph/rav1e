@@ -24,6 +24,7 @@ extern crate dav1d_sys;
 #[cfg(test)]
 #[macro_use]
 extern crate pretty_assertions;
+extern crate y4m;
 
 pub mod ec;
 pub mod partition;
@@ -41,6 +42,7 @@ pub mod deblock;
 pub mod segmentation;
 pub mod cdef;
 pub mod lrf;
+pub mod decoder;
 pub mod encoder;
 pub mod mc;
 pub mod me;

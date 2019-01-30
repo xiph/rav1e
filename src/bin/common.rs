@@ -17,7 +17,8 @@ use std::io::prelude::*;
 use std::sync::Arc;
 use std::time::Instant;
 use y4m;
-use y4m::Colorspace;
+use rav1e::decoder::VideoDetails;
+use rav1e::decoder::Decoder;
 
 pub struct EncoderIO {
   pub input: Box<dyn Read>,
@@ -204,23 +205,6 @@ fn parse_config(matches: &ArgMatches) -> EncoderConfig {
   cfg
 }
 
-pub fn map_y4m_color_space(
-  color_space: y4m::Colorspace
-) -> (ChromaSampling, ChromaSamplePosition) {
-  use y4m::Colorspace::*;
-  use ChromaSampling::*;
-  use ChromaSamplePosition::*;
-  match color_space {
-    C420jpeg | C420paldv => (Cs420, Unknown),
-    C420mpeg2 => (Cs420, Vertical),
-    C420 | C420p10 | C420p12 => (Cs420, Colocated),
-    C422 | C422p10 | C422p12 => (Cs422, Colocated),
-    C444 | C444p10 | C444p12 => (Cs444, Colocated),
-    _ =>
-      panic!("Chroma characteristics unknown for the specified color space.")
-  }
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct FrameSummary {
   // Frame size in bytes
@@ -257,36 +241,17 @@ impl fmt::Display for FrameSummary {
   }
 }
 
-fn read_frame_batch(ctx: &mut Context, y4m_dec: &mut y4m::Decoder<'_, Box<dyn Read>>, y4m_details: Y4MDetails) {
+fn read_frame_batch<D: Decoder>(ctx: &mut Context, decoder: &mut D, video_info: VideoDetails) {
   loop {
     if ctx.needs_more_lookahead() {
-      match y4m_dec.read_frame() {
-        Ok(y4m_frame) => {
-          let y4m_y = y4m_frame.get_y_plane();
-          let y4m_u = y4m_frame.get_u_plane();
-          let y4m_v = y4m_frame.get_v_plane();
-          let mut input = ctx.new_frame();
-          {
-            let input = Arc::get_mut(&mut input).unwrap();
-            input.planes[0].copy_from_raw_u8(&y4m_y, y4m_details.width * y4m_details.bytes, y4m_details.bytes);
-            input.planes[1].copy_from_raw_u8(
-              &y4m_u,
-              y4m_details.width * y4m_details.bytes / 2,
-              y4m_details.bytes
-            );
-            input.planes[2].copy_from_raw_u8(
-              &y4m_v,
-              y4m_details.width * y4m_details.bytes / 2,
-              y4m_details.bytes
-            );
-          }
-
-          match y4m_details.bits {
+      match decoder.read_frame(&video_info) {
+        Ok(frame) => {
+          match video_info.bits {
             8 | 10 | 12 => {}
             _ => panic!("unknown input bit depth!")
           }
 
-          let _ = ctx.send_frame(Some(input));
+          let _ = ctx.send_frame(Some(Arc::new(frame)));
           continue;
         }
         _ => {
@@ -302,35 +267,6 @@ fn read_frame_batch(ctx: &mut Context, y4m_dec: &mut y4m::Decoder<'_, Box<dyn Re
   }
 }
 
-#[derive(Debug, Clone, Copy)]
-struct Y4MDetails {
-  width: usize,
-  height: usize,
-  bits: usize,
-  bytes: usize,
-  color_space: Colorspace,
-  bit_depth: usize,
-}
-
-impl Y4MDetails {
-  fn new(y4m_dec: &mut y4m::Decoder<'_, Box<dyn Read>>) -> Self {
-    let width = y4m_dec.get_width();
-    let height = y4m_dec.get_height();
-    let bits = y4m_dec.get_bit_depth();
-    let bytes = y4m_dec.get_bytes_per_sample();
-    let color_space = y4m_dec.get_colorspace();
-    let bit_depth = color_space.get_bit_depth();
-    Y4MDetails {
-      width,
-      height,
-      bits,
-      bytes,
-      color_space,
-      bit_depth,
-    }
-  }
-}
-
 // Encode and write a frame.
 // Returns frame information in a `Result`.
 pub fn process_frame(
@@ -338,7 +274,7 @@ pub fn process_frame(
   y4m_dec: &mut y4m::Decoder<'_, Box<dyn Read>>,
   mut y4m_enc: Option<&mut y4m::Encoder<'_, Box<dyn Write>>>
 ) -> Result<Vec<FrameSummary>, ()> {
-  let y4m_details = Y4MDetails::new(y4m_dec);
+  let y4m_details = y4m_dec.get_video_details();
   let mut frame_summaries = Vec::new();
   read_frame_batch(ctx, y4m_dec, y4m_details);
   let pkt_wrapped = ctx.receive_packet();
@@ -347,7 +283,7 @@ pub fn process_frame(
     if let Some(y4m_enc_uw) = y4m_enc.as_mut() {
       if let Some(ref rec) = pkt.rec {
         let pitch_y = if y4m_details.bit_depth > 8 { y4m_details.width * 2 } else { y4m_details.width };
-        let chroma_sampling_period = map_y4m_color_space(y4m_details.color_space).0.sampling_period();
+        let chroma_sampling_period = y4m_details.chroma_sampling.sampling_period();
         let (pitch_uv, height_uv) = (
           pitch_y / chroma_sampling_period.0,
           y4m_details.height / chroma_sampling_period.1
@@ -433,7 +369,7 @@ pub fn process_frame(
 #[derive(Debug, Clone)]
 pub struct ProgressInfo {
   // Frame rate of the video
-  frame_rate: y4m::Ratio,
+  frame_rate: Rational,
   // The length of the whole video, in frames, if known
   total_frames: Option<usize>,
   // The time the encode was started
@@ -450,7 +386,7 @@ pub struct ProgressInfo {
 }
 
 impl ProgressInfo {
-  pub fn new(frame_rate: y4m::Ratio, total_frames: Option<usize>, show_psnr: bool) -> Self {
+  pub fn new(frame_rate: Rational, total_frames: Option<usize>, show_psnr: bool) -> Self {
     Self {
       frame_rate,
       total_frames,
