@@ -37,10 +37,16 @@ git submodule update --init
 
 This is also required every time you switch branches or pull a submodule change.
 
-In order to build, test and link to the codec on UNIX, you need Perl, NASM, CMake, Clang and pkg-config. To install this on Ubuntu or Linux Mint, run:
+In order to build, test and link to the codec on UNIX, you need Cargo, Perl, NASM, CMake, Clang, pkg-config and mpv. To install this on Ubuntu or Linux Mint, run:
 
 ```
-sudo apt install perl nasm cmake clang pkg-config
+sudo apt install cargo perl nasm cmake clang pkg-config mpv
+```
+
+To install this on Fedora, run:
+
+```
+sudo dnf install cargo perl nasm cmake clang pkg-config mpv
 ```
 
 On Windows, pkg-config is not required. A Perl distribution such as Strawberry Perl, CMake, and a NASM binary in your system PATH are required.
