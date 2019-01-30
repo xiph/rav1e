@@ -30,6 +30,7 @@ use std::{fmt, io};
 use std::io::Write;
 use std::rc::Rc;
 use std::sync::Arc;
+use decoder::VideoDetails;
 
 extern {
     pub fn av1_rtcd();
@@ -287,7 +288,7 @@ pub struct Sequence {
 }
 
 impl Sequence {
-    pub fn new(info: &FrameInfo) -> Sequence {
+    pub fn new(info: &VideoDetails) -> Sequence {
         let width_bits = 32 - (info.width as u32).leading_zeros();
         let height_bits = 32 - (info.height as u32).leading_zeros();
         assert!(width_bits <= 16);

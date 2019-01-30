@@ -7,10 +7,10 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use api::FrameInfo;
 use encoder::Frame;
 
 use std::sync::Arc;
+use decoder::VideoDetails;
 
 /// Detects fast cuts using changes in colour and intensity between frames.
 /// Since the difference between frames is used, only fast cuts are detected
@@ -41,9 +41,9 @@ impl Default for SceneChangeDetector {
 }
 
 impl SceneChangeDetector {
-  pub fn new(frame_info: &FrameInfo) -> Self {
+  pub fn new(video_info: &VideoDetails) -> Self {
     let mut detector = Self::default();
-    detector.threshold = detector.threshold * frame_info.bit_depth as u8 / 8;
+    detector.threshold = detector.threshold * video_info.bit_depth as u8 / 8;
     detector
   }
 

@@ -17,39 +17,27 @@ use rav1e::*;
 
 use std::io;
 use std::io::Write;
+use rav1e::decoder::Decoder;
 
 fn main() {
   let mut cli = parse_cli();
   let mut y4m_dec = y4m::decode(&mut cli.io.input).unwrap();
-  let width = y4m_dec.get_width();
-  let height = y4m_dec.get_height();
-  let framerate = y4m_dec.get_framerate();
-  let color_space = y4m_dec.get_colorspace();
-
+  let video_info = y4m_dec.get_video_details();
   let mut y4m_enc = match cli.io.rec.as_mut() {
     Some(rec) => Some(
-      y4m::encode(width, height, framerate)
-        .with_colorspace(color_space)
+      y4m::encode(
+        video_info.width,
+        video_info.height,
+        y4m::Ratio::new(video_info.framerate.num as usize, video_info.framerate.den as usize)
+      ).with_colorspace(video_info.color_space)
         .write_header(rec)
         .unwrap()
     ),
     None => None
   };
 
-  let (chroma_sampling, chroma_sample_position) = map_y4m_color_space(color_space);
-
-  let bit_depth = color_space.get_bit_depth();
-
   let cfg = Config {
-    frame_info: FrameInfo {
-      width,
-      height,
-      bit_depth,
-      chroma_sampling,
-      chroma_sample_position,
-      ..Default::default()
-    },
-    timebase: Rational::new(framerate.den as u64, framerate.num as u64),
+    video_info,
     enc: cli.enc
   };
 
@@ -58,18 +46,25 @@ fn main() {
   let stderr = io::stderr();
   let mut err = stderr.lock();
 
-  let _ = writeln!(err, "{}x{} @ {}/{} fps", width, height, framerate.num, framerate.den);
+  let _ = writeln!(
+    err,
+    "{}x{} @ {}/{} fps",
+    video_info.width,
+    video_info.height,
+    video_info.framerate.num,
+    video_info.framerate.den
+  );
 
   write_ivf_header(
     &mut cli.io.output,
-    width,
-    height,
-    framerate.num,
-    framerate.den
+    video_info.width,
+    video_info.height,
+    video_info.framerate.num as usize,
+    video_info.framerate.den as usize
   );
 
   let mut progress = ProgressInfo::new(
-    framerate,
+    video_info.framerate,
     if cli.limit == 0 { None } else { Some(cli.limit) },
       cfg.enc.show_psnr
   );
