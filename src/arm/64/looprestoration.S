@@ -523,7 +523,7 @@ function copy_narrow_neon, export=1
         subs            w4,  w4,  #1
         ld1             {v0.b}[0], [x2], #1
         st1             {v0.b}[0], [x0], x1
-        b.ge            11b
+        b.gt            11b
 0:
         ret
 
@@ -547,7 +547,7 @@ function copy_narrow_neon, export=1
         subs            w4,  w4,  #1
         ld1             {v0.h}[0], [x2], #2
         st1             {v0.h}[0], [x0], x1
-        b.ge            22b
+        b.gt            22b
 0:
         ret
 
