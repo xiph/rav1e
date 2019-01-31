@@ -1486,6 +1486,8 @@ impl BlockContext {
     &mut self, bo: &BlockOffset, subsize: BlockSize, bsize: BlockSize
   ) {
     #[allow(dead_code)]
+    assert!(bsize.is_sqr());
+
     let bw = bsize.width_mi();
     let bh = bsize.height_mi();
 
@@ -1904,6 +1906,7 @@ impl ContextWriter {
   pub fn write_partition(
     &mut self, w: &mut dyn Writer, bo: &BlockOffset, p: PartitionType, bsize: BlockSize
   ) {
+    debug_assert!(bsize.is_sqr());
     assert!(bsize >= BlockSize::BLOCK_8X8 );
     let hbs = bsize.width_mi() / 2;
     let has_cols = (bo.x + hbs) < self.bc.cols;

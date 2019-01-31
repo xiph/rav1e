@@ -2476,7 +2476,7 @@ fn encode_partition_bottomup(
 
     assert!(best_partition != PartitionType::PARTITION_INVALID);
 
-    if bsize.gte(BlockSize::BLOCK_8X8) &&
+    if is_square && bsize.gte(BlockSize::BLOCK_8X8) &&
         (bsize == BlockSize::BLOCK_8X8 || best_partition != PartitionType::PARTITION_SPLIT) {
         cw.bc.update_partition_context(bo, bsize.subsize(best_partition), bsize);
     }
@@ -2690,7 +2690,7 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState,
         _ => { assert!(false); },
     }
 
-    if bsize.gte(BlockSize::BLOCK_8X8) &&
+    if is_square && bsize.gte(BlockSize::BLOCK_8X8) &&
         (bsize == BlockSize::BLOCK_8X8 || partition != PartitionType::PARTITION_SPLIT) {
             cw.bc.update_partition_context(bo, subsize, bsize);
     }
