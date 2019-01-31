@@ -282,19 +282,15 @@ L(variable_shift_tbl):
         addv            h6,      v6.8h
         addv            h7,      v7.8h
         dup             v16.4h,  v2.h[3]
-        dup             v17.4h,  v4.h[3]
+        ins             v16.h[1], v4.h[3]
+        ins             v6.h[1], v7.h[0]
         shl             v16.4h,  v16.4h,  #7
-        shl             v17.4h,  v17.4h,  #7
         sub             v16.4h,  v16.4h,  v30.4h
-        sub             v17.4h,  v17.4h,  v30.4h
         sqadd           v6.4h,   v6.4h,   v16.4h
-        sqadd           v7.4h,   v7.4h,   v17.4h
         sshr            v6.4h,   v6.4h,   #3
-        sshr            v7.4h,   v7.4h,   #3
         add             v6.4h,   v6.4h,   v31.4h
-        add             v7.4h,   v7.4h,   v31.4h
         st1             {v6.h}[0], [x0],  #2
-        st1             {v7.h}[0], [x12], #2
+        st1             {v6.h}[1], [x12], #2
         subs            w5,  w5,  #1
         ext             v2.16b,  v2.16b,  v3.16b,  #2
         ext             v4.16b,  v4.16b,  v5.16b,  #2
