@@ -764,7 +764,7 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
 
   RDOPartitionOutput {
     bo: bo.clone(),
-    bsize: bsize,
+    bsize,
     pred_mode_luma: best.mode_luma,
     pred_mode_chroma: best.mode_chroma,
     pred_cfl_params: best.cfl_params,

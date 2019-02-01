@@ -272,7 +272,7 @@ pub fn cdef_sb_padded_frame_copy(fi: &FrameInvariants, sbo: &SuperBlockOffset,
     let w = fi.padded_w as isize >> xdec;
     let offset = sbo.plane_offset(&f.planes[p].cfg);
     for y in 0..((sb_size>>ydec) + pad*2) as isize {
-      let mut out_slice = out.planes[p].mut_slice(&PlaneOffset {x:0, y:y});
+      let mut out_slice = out.planes[p].mut_slice(&PlaneOffset {x:0, y});
       let mut out_row = out_slice.as_mut_slice();
       if offset.y + y < ipad || offset.y+y >= h + ipad {
         // above or below the frame, fill with flag
