@@ -85,8 +85,8 @@ fn cdef_dist_wxh_8x8(
   let dvar = (sum_d2 - ((sum_d as i64 * sum_d as i64 + 32) >> 6)) as f64;
   let sse = (sum_d2 + sum_s2 - 2 * sum_sd) as f64;
   //The two constants were tuned for CDEF, but can probably be better tuned for use in general RDO
-  let ssim_boost = 0.5_f64 * (svar + dvar + (400 << 2 * coeff_shift) as f64)
-    / f64::sqrt((20000 << 4 * coeff_shift) as f64 + svar * dvar);
+  let ssim_boost = (4033_f64 / 16_384_f64) * (svar + dvar + (16_384 << 2 * coeff_shift) as f64)
+    / f64::sqrt((16_265_089 << 4 * coeff_shift) as f64 + svar * dvar);
   (sse * ssim_boost + 0.5_f64) as u64
 }
 
@@ -177,13 +177,22 @@ fn compute_rd_cost(
       h_y
     )
   } else if fi.config.tune == Tune::Psychovisual {
-    cdef_dist_wxh(
-      &fs.input.planes[0].slice(&po),
-      &fs.rec.planes[0].slice(&po),
-      w_y,
-      h_y,
-      fi.sequence.bit_depth
-    )
+    if w_y < 8 || h_y < 8 {
+      sse_wxh(
+        &fs.input.planes[0].slice(&po),
+        &fs.rec.planes[0].slice(&po),
+        w_y,
+        h_y
+      )
+    } else {
+      cdef_dist_wxh(
+        &fs.input.planes[0].slice(&po),
+        &fs.rec.planes[0].slice(&po),
+        w_y,
+        h_y,
+        fi.sequence.bit_depth
+      )
+    }
   } else {
     unimplemented!();
   };
