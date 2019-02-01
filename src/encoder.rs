@@ -313,7 +313,7 @@ impl Sequence {
         }
 
         Sequence {
-            profile: profile,
+            profile,
             num_bits_width: width_bits,
             num_bits_height: height_bits,
             bit_depth: info.bit_depth,
@@ -344,11 +344,11 @@ impl Sequence {
             enable_cdef: true,
             enable_restoration: true,
             operating_points_cnt_minus_1: 0,
-            operating_point_idc: operating_point_idc,
+            operating_point_idc,
             display_model_info_present_flag: false,
             decoder_model_info_present_flag: false,
-            level: level,
-            tier: tier,
+            level,
+            tier,
             film_grain_params_present: false,
             separate_uv_delta_q: false,
         }
@@ -641,7 +641,7 @@ impl FrameInvariants {
             dc_delta_q: [0; 3],
             ac_delta_q: [0; 3],
             me_range_scale: 1,
-            use_tx_domain_distortion: use_tx_domain_distortion,
+            use_tx_domain_distortion,
             inter_cfg: None,
             enable_early_exit: true,
         }

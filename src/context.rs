@@ -2089,7 +2089,7 @@ impl ContextWriter {
           let mv_cand = CandidateMV {
             this_mv: blk.mv[0],
             comp_mv: blk.mv[1],
-            weight: weight
+            weight
           };
 
           mv_stack.push(mv_cand);
@@ -2117,7 +2117,7 @@ impl ContextWriter {
             let mv_cand = CandidateMV {
               this_mv: blk.mv[i],
               comp_mv: MotionVector { row: 0, col: 0 },
-              weight: weight
+              weight
             };
 
             mv_stack.push(mv_cand);
