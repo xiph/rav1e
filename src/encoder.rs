@@ -578,15 +578,8 @@ impl FrameInvariants {
         // Speed level decides the minimum partition size, i.e. higher speed --> larger min partition size,
         // with exception that SBs on right or bottom frame borders split down to BLOCK_4X4.
         // At speed = 0, RDO search is exhaustive.
-        let mut min_partition_size = config.speed_settings.min_block_size;
+        let min_partition_size = config.speed_settings.min_block_size;
 
-        if config.tune == Tune::Psychovisual {
-            if min_partition_size < BlockSize::BLOCK_8X8 {
-                // TODO: Display message that min partition size is enforced to 8x8
-                min_partition_size = BlockSize::BLOCK_8X8;
-                println!("If tune=Psychovisual is used, min partition size is enforced to 8x8");
-            }
-        }
         let use_reduced_tx_set = config.speed_settings.reduced_tx_set;
         let use_tx_domain_distortion = config.tune == Tune::Psnr && config.speed_settings.tx_domain_distortion;
 
