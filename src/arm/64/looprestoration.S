@@ -498,9 +498,8 @@ function copy_narrow_neon, export=1
         add             x7,  x0,  x1
         lsl             x1,  x1,  #1
 18:
-        cmp             w4,  #8
-        b.lt            110f
         subs            w4,  w4,  #8
+        b.lt            110f
         ld1             {v0.8b}, [x2], #8
         st1             {v0.b}[0], [x0], x1
         st1             {v0.b}[1], [x7], x1
@@ -513,6 +512,7 @@ function copy_narrow_neon, export=1
         b.le            0f
         b               18b
 110:
+        add             w4,  w4,  #8
         asr             x1,  x1,  #1
 11:
         subs            w4,  w4,  #1
@@ -526,9 +526,8 @@ function copy_narrow_neon, export=1
         add             x7,  x0,  x1
         lsl             x1,  x1,  #1
 24:
-        cmp             w4,  #4
-        b.lt            210f
         subs            w4,  w4,  #4
+        b.lt            210f
         ld1             {v0.4h}, [x2], #8
         st1             {v0.h}[0], [x0], x1
         st1             {v0.h}[1], [x7], x1
@@ -537,6 +536,7 @@ function copy_narrow_neon, export=1
         b.le            0f
         b               24b
 210:
+        add             w4,  w4,  #4
         asr             x1,  x1,  #1
 22:
         subs            w4,  w4,  #1
@@ -561,9 +561,8 @@ function copy_narrow_neon, export=1
         add             x7,  x0,  x1
         lsl             x1,  x1,  #1
 42:
-        cmp             w4,  #2
-        b.lt            41f
         subs            w4,  w4,  #2
+        b.lt            41f
         ld1             {v0.2s}, [x2], #8
         st1             {v0.s}[0], [x0], x1
         st1             {v0.s}[1], [x7], x1
