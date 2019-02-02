@@ -40,8 +40,6 @@ const CDEF_DIV_TABLE: [i32; 9] = [ 0, 840, 420, 280, 210, 168, 140, 120, 105 ];
 fn cdef_find_dir(img: &[u16], stride: usize, var: &mut i32, coeff_shift: i32) -> i32 {
     let mut cost: [i32; 8] = [0; 8];
     let mut partial: [[i32; 15]; 8] = [[0; 15]; 8];
-    let mut best_cost: i32 = 0;
-    let mut best_dir = 0;
     for i in 0..8 {
         for j in 0..8 {
             // We subtract 128 here to reduce the maximum range of the squared
@@ -84,12 +82,8 @@ fn cdef_find_dir(img: &[u16], stride: usize, var: &mut i32, coeff_shift: i32) ->
         }
         i+=2;
     }
-    for i in 0..8 {
-        if cost[i] > best_cost {
-            best_cost = cost[i];
-            best_dir = i;
-        }
-    }
+
+    let (best_dir, best_cost) = cost.iter().enumerate().max_by_key(|(_i, &v)| v).unwrap();
     // Difference between the optimal variance and the variance along the
     // orthogonal direction. Again, the sum(x^2) terms cancel out.
     // We'd normally divide by 840, but dividing by 1024 is close enough
