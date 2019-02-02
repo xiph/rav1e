@@ -364,7 +364,7 @@ impl Context {
   {
     let idx = self.frame_count;
     self.frame_q.insert(idx, frame.into());
-    self.frame_count = self.frame_count + 1;
+    self.frame_count += 1;
     Ok(())
   }
 
@@ -598,7 +598,7 @@ impl Context {
 
   pub fn flush(&mut self) {
     self.frame_q.insert(self.frame_count, None);
-    self.frame_count = self.frame_count + 1;
+    self.frame_count += 1;
   }
 
   fn determine_frame_type(&mut self, frame_number: u64) -> FrameType {

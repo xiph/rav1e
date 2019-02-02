@@ -1648,7 +1648,7 @@ fn aom_uleb_size_in_bytes(mut value: u64) -> usize {
   let mut size = 0;
   loop {
     size += 1;
-    value = value >> 7;
+    value >>= 7;
     if value == 0 { break; }
   }
   size
