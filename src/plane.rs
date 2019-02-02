@@ -191,10 +191,10 @@ impl Plane {
 
       for col in 0..width {
         let mut sum = 0;
-        sum = sum + src.p(2*col, 2*row);
-        sum = sum + src.p(2*col+1, 2*row);
-        sum = sum + src.p(2*col, 2*row+1);
-        sum = sum + src.p(2*col+1, 2*row+1);
+        sum += src.p(2 * col, 2 * row);
+        sum += src.p(2 * col + 1, 2 * row);
+        sum += src.p(2 * col, 2 * row + 1);
+        sum += src.p(2 * col + 1, 2 * row + 1);
         let avg = (sum + 2) >> 2;
         dst[col] = avg;
       }

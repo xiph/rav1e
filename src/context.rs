@@ -2159,7 +2159,7 @@ impl ContextWriter {
             let mut cand_mv = blk.mv[cand_list];
             if cand_ref == ref_frames[list] && ref_id_count[list] < 2 {
               ref_id_mvs[list][ref_id_count[list]] = cand_mv;
-              ref_id_count[list] = ref_id_count[list] + 1;
+              ref_id_count[list] += 1;
             } else if ref_diff_count[list] < 2 {
               if fi.ref_frame_sign_bias[cand_ref - LAST_FRAME] !=
                 fi.ref_frame_sign_bias[ref_frames[list] - LAST_FRAME] {
@@ -2167,7 +2167,7 @@ impl ContextWriter {
                 cand_mv.col = -cand_mv.col;
               }
               ref_diff_mvs[list][ref_diff_count[list]] = cand_mv;
-              ref_diff_count[list] = ref_diff_count[list] + 1;
+              ref_diff_count[list] += 1;
             }
           }
         }
@@ -2474,12 +2474,12 @@ impl ContextWriter {
           let mut comp_count = 0;
           for idx in 0..ref_id_count[list] {
             combined_mvs[comp_count][list] = ref_id_mvs[list][idx];
-            comp_count = comp_count + 1;
+            comp_count += 1;
           }
           for idx in 0..ref_diff_count[list] {
             if comp_count < 2 {
               combined_mvs[comp_count][list] = ref_diff_mvs[list][idx];
-              comp_count = comp_count + 1;
+              comp_count += 1;
             }
           }
         }
