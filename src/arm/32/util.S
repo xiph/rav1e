@@ -37,8 +37,7 @@
     ldr         \rd,  1f
     b           2f
 1:
-@ FIXME: thumb
-    .word       3f - (2f + 8)
+    .word       3f - (2f + 8 - 4 * CONFIG_THUMB)
 2:
     ldr         \rd,  [pc, \rd]
 .if \offset < 0
@@ -55,8 +54,7 @@
     ldr         \rd,  1f
     b           2f
 1:
-@ FIXME: thumb
-    .word       \val + \offset - (2f + 8)
+    .word       \val + \offset - (2f + 8 - 4 * CONFIG_THUMB)
 2:
     add         \rd,  \rd,  pc
 #else
