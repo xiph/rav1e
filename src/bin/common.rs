@@ -17,8 +17,7 @@ use std::io::prelude::*;
 use std::sync::Arc;
 use std::time::Instant;
 use y4m;
-use rav1e::decoder::VideoDetails;
-use rav1e::decoder::Decoder;
+use decoder::Decoder;
 
 pub struct EncoderIO {
   pub input: Box<dyn Read>,
@@ -428,7 +427,7 @@ impl ProgressInfo {
       .map(|frames| self.encoded_size * frames / self.frames_encoded())
       .unwrap_or_default()
   }
-  
+
   // Estimates the remaining encoding time in seconds, if the number of frames is known
   pub fn estimated_time(&self) -> f64 {
     self.total_frames
