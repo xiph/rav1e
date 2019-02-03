@@ -245,7 +245,7 @@ fn read_frame_batch<D: Decoder>(ctx: &mut Context, decoder: &mut D, video_info: 
     if ctx.needs_more_lookahead() {
       match decoder.read_frame(&video_info) {
         Ok(frame) => {
-          match video_info.bits {
+          match video_info.bit_depth {
             8 | 10 | 12 => {}
             _ => panic!("unknown input bit depth!")
           }

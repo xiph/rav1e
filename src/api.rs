@@ -26,7 +26,6 @@ const LOOKAHEAD_FRAMES: u64 = 10;
 pub struct VideoDetails {
   pub width: usize,
   pub height: usize,
-  pub bits: usize,
   pub bytes: usize,
   pub mono: bool,
   pub bit_depth: usize,
@@ -40,7 +39,6 @@ impl Default for VideoDetails {
     VideoDetails {
       width: 640,
       height: 480,
-      bits: 8,
       bytes: 1,
       mono: false,
       bit_depth: 8,

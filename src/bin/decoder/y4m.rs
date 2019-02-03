@@ -13,7 +13,6 @@ impl Decoder for y4m::Decoder<'_, Box<dyn Read>> {
   fn get_video_details(&self) -> VideoDetails {
     let width = self.get_width();
     let height = self.get_height();
-    let bits = self.get_bit_depth();
     let bytes = self.get_bytes_per_sample();
     let color_space = self.get_colorspace();
     let bit_depth = color_space.get_bit_depth();
@@ -27,7 +26,6 @@ impl Decoder for y4m::Decoder<'_, Box<dyn Read>> {
     VideoDetails {
       width,
       height,
-      bits,
       bytes,
       bit_depth,
       mono,
