@@ -84,14 +84,15 @@ pub unsafe extern "C" fn rav1e_config_default(
     timebase: Rational,
 ) -> *mut Config {
     let cfg = rav1e::Config {
-        frame_info: rav1e::FrameInfo {
+        video_info: rav1e::VideoDetails {
             width: width as usize,
             height: height as usize,
             bit_depth: bit_depth as usize,
             chroma_sampling,
             chroma_sample_position,
+            mono: false,
+            time_base: timebase,
         },
-        timebase,
         enc: Default::default(),
     };
 
