@@ -13,7 +13,6 @@ impl Decoder for y4m::Decoder<'_, Box<dyn Read>> {
   fn get_video_details(&self) -> VideoDetails {
     let width = self.get_width();
     let height = self.get_height();
-    let bytes = self.get_bytes_per_sample();
     let color_space = self.get_colorspace();
     let bit_depth = color_space.get_bit_depth();
     let mono = match color_space {
@@ -26,7 +25,6 @@ impl Decoder for y4m::Decoder<'_, Box<dyn Read>> {
     VideoDetails {
       width,
       height,
-      bytes,
       bit_depth,
       mono,
       chroma_sampling,
@@ -36,6 +34,7 @@ impl Decoder for y4m::Decoder<'_, Box<dyn Read>> {
   }
 
   fn read_frame(&mut self, cfg: &VideoDetails) -> Result<Frame, DecodeError> {
+    let bytes = self.get_bytes_per_sample();
     self.read_frame()
       .map(|frame| {
         let mut f = Frame::new(
@@ -43,16 +42,16 @@ impl Decoder for y4m::Decoder<'_, Box<dyn Read>> {
           cfg.height.align_power_of_two(3),
           cfg.chroma_sampling
         );
-        f.planes[0].copy_from_raw_u8(frame.get_y_plane(), cfg.width * cfg.bytes, cfg.bytes);
+        f.planes[0].copy_from_raw_u8(frame.get_y_plane(), cfg.width * bytes, bytes);
         f.planes[1].copy_from_raw_u8(
           frame.get_u_plane(),
-          cfg.width * cfg.bytes / 2,
-          cfg.bytes
+          cfg.width * bytes / 2,
+          bytes
         );
         f.planes[2].copy_from_raw_u8(
           frame.get_v_plane(),
-          cfg.width * cfg.bytes / 2,
-          cfg.bytes
+          cfg.width * bytes / 2,
+          bytes
         );
         f
       })
