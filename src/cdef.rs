@@ -231,7 +231,8 @@ pub fn cdef_analyze_superblock(in_frame: &mut Frame,
 
 pub fn cdef_sb_frame(fi: &FrameInvariants, f: &Frame) -> Frame {
   let sb_size = if fi.sequence.use_128x128_superblock {128} else {64};
-  let out = Frame {
+
+  Frame {
     planes: [
       Plane::new(sb_size >> f.planes[0].cfg.xdec, sb_size >> f.planes[0].cfg.ydec,
                  f.planes[0].cfg.xdec, f.planes[0].cfg.ydec, 0, 0),
@@ -240,8 +241,7 @@ pub fn cdef_sb_frame(fi: &FrameInvariants, f: &Frame) -> Frame {
       Plane::new(sb_size >> f.planes[2].cfg.xdec, sb_size >> f.planes[2].cfg.ydec,
                  f.planes[2].cfg.xdec, f.planes[2].cfg.ydec, 0, 0),
     ]
-  };
-  out
+  }
 }
 
 pub fn cdef_sb_padded_frame_copy(fi: &FrameInvariants, sbo: &SuperBlockOffset,

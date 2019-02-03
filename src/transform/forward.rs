@@ -1703,15 +1703,15 @@ impl Txfm2DFlipCfg {
     assert_ne!(txfm_type_col, TxfmType::Invalid);
     assert_ne!(txfm_type_row, TxfmType::Invalid);
     let (ud_flip, lr_flip) = Self::get_flip_cfg(tx_type);
-    let cfg = Txfm2DFlipCfg {
+
+    Txfm2DFlipCfg {
       tx_size,
       ud_flip,
       lr_flip,
       shift: FWD_TXFM_SHIFT_LS[tx_size as usize][(bd - 8) / 2],
       txfm_type_col,
       txfm_type_row
-    };
-    cfg
+    }
   }
 
   /// Determine the flip config, returning (ud_flip, lr_flip)
