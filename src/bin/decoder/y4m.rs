@@ -1,6 +1,6 @@
 use std::io::Read;
 
-use api::Rational;
+use rav1e::Rational;
 use decoder::DecodeError;
 use decoder::Decoder;
 use decoder::VideoDetails;
@@ -17,6 +17,10 @@ impl Decoder for y4m::Decoder<'_, Box<dyn Read>> {
     let bytes = self.get_bytes_per_sample();
     let color_space = self.get_colorspace();
     let bit_depth = color_space.get_bit_depth();
+    let mono = match color_space {
+        y4m::Colorspace::Cmono => true,
+        _ => false
+    };
     let (chroma_sampling, chroma_sample_position) = map_y4m_color_space(color_space);
     let framerate = self.get_framerate();
     let framerate =  Rational::new(framerate.num as u64, framerate.den as u64);
@@ -25,8 +29,8 @@ impl Decoder for y4m::Decoder<'_, Box<dyn Read>> {
       height,
       bits,
       bytes,
-      color_space,
       bit_depth,
+      mono,
       chroma_sampling,
       chroma_sample_position,
       framerate,

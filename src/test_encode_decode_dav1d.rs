@@ -14,11 +14,6 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use dav1d_sys::*;
-use decoder::VideoDetails;
-use util::Fixed;
-use decoder::DecodeError;
-use decoder::Decoder;
-use y4m::Colorspace;
 
 fn fill_frame(ra: &mut ChaChaRng, frame: &mut Frame) {
   for plane in frame.planes.iter_mut() {
@@ -32,31 +27,14 @@ fn fill_frame(ra: &mut ChaChaRng, frame: &mut Frame) {
   }
 }
 
-struct Dav1dDecoder {
+struct Decoder {
   dec: *mut Dav1dContext
 }
 
-impl Decoder for Dav1dDecoder {
-  fn get_video_details(&self) -> VideoDetails {
-    unimplemented!()
-  }
-
-  fn read_frame(&mut self, cfg: &VideoDetails) -> Result<Frame, DecodeError> {
-    let mut f = Frame::new(
-      cfg.width.align_power_of_two(3),
-      cfg.height.align_power_of_two(3),
-      cfg.chroma_sampling
-    );
-    let mut ra = ChaChaRng::from_seed([0; 32]);
-    fill_frame(&mut ra, &mut f);
-    Ok(f)
-  }
-}
-
-fn setup_decoder() -> Dav1dDecoder {
+fn setup_decoder() -> Decoder {
   unsafe {
     let mut settings = mem::uninitialized();
-    let mut dec: Dav1dDecoder = mem::uninitialized();
+    let mut dec: Decoder = mem::uninitialized();
 
     dav1d_default_settings(&mut settings);
 
@@ -70,7 +48,7 @@ fn setup_decoder() -> Dav1dDecoder {
   }
 }
 
-impl Drop for Dav1dDecoder {
+impl Drop for Decoder {
   fn drop(&mut self) {
     unsafe { dav1d_close(&mut self.dec) };
   }
@@ -92,13 +70,9 @@ fn setup_encoder(
     video_info: VideoDetails {
       width: w,
       height: h,
-      bits: bit_depth,
-      bytes: 1,
-      color_space: Colorspace::C420,
       bit_depth,
       chroma_sampling,
-      chroma_sample_position: ChromaSamplePosition::Unknown,
-      framerate: Rational::new(1000, 1),
+      ..Default::default()
     },
     enc
   };
@@ -302,6 +276,8 @@ fn encode_decode(
   w: usize, h: usize, speed: usize, quantizer: usize, limit: usize,
   bit_depth: usize, min_keyint: u64, max_keyint: u64, low_latency: bool
 ) {
+  let mut ra = ChaChaRng::from_seed([0; 32]);
+
   let dec = setup_decoder();
   let mut ctx =
     setup_encoder(w, h, speed, quantizer, bit_depth, ChromaSampling::Cs420,
@@ -312,8 +288,10 @@ fn encode_decode(
   let mut rec_fifo = VecDeque::new();
 
   for _ in 0..limit {
-    let mut input = dec.read_frame(&ctx.config.video_info).unwrap();
-    let _ = ctx.send_frame(Some(Arc::new(input)));
+    let mut input = ctx.new_frame();
+    fill_frame(&mut ra, Arc::get_mut(&mut input).unwrap());
+
+    let _ = ctx.send_frame(input);
 
     let mut done = false;
     let mut corrupted_count = 0;

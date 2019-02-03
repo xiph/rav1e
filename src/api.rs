@@ -19,9 +19,37 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use util::Fixed;
 use std::collections::BTreeSet;
-use decoder::VideoDetails;
 
 const LOOKAHEAD_FRAMES: u64 = 10;
+
+#[derive(Debug, Clone, Copy)]
+pub struct VideoDetails {
+  pub width: usize,
+  pub height: usize,
+  pub bits: usize,
+  pub bytes: usize,
+  pub mono: bool,
+  pub bit_depth: usize,
+  pub chroma_sampling: ChromaSampling,
+  pub chroma_sample_position: ChromaSamplePosition,
+  pub framerate: Rational,
+}
+
+impl Default for VideoDetails {
+  fn default() -> Self {
+    VideoDetails {
+      width: 640,
+      height: 480,
+      bits: 8,
+      bytes: 1,
+      mono: false,
+      bit_depth: 8,
+      chroma_sampling: ChromaSampling::Cs420,
+      chroma_sample_position: ChromaSamplePosition::Unknown,
+      framerate: Rational { num: 1, den: 1 }
+    }
+  }
+}
 
 // TODO: use the num crate?
 #[derive(Clone, Copy, Debug)]

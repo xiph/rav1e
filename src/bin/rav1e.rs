@@ -12,12 +12,13 @@ extern crate rav1e;
 extern crate y4m;
 
 mod common;
+mod decoder;
 use common::*;
 use rav1e::*;
 
 use std::io;
 use std::io::Write;
-use rav1e::decoder::Decoder;
+use decoder::Decoder;
 
 fn main() {
   let mut cli = parse_cli();
@@ -29,7 +30,7 @@ fn main() {
         video_info.width,
         video_info.height,
         y4m::Ratio::new(video_info.framerate.num as usize, video_info.framerate.den as usize)
-      ).with_colorspace(video_info.color_space)
+      ).with_colorspace(y4m_dec.get_colorspace())
         .write_header(rec)
         .unwrap()
     ),

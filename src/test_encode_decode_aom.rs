@@ -20,11 +20,6 @@ use std::{mem, ptr, slice};
 use std::collections::VecDeque;
 use std::ffi::CStr;
 use std::sync::Arc;
-use decoder::Decoder;
-use decoder::VideoDetails;
-use decoder::DecodeError;
-use util::Fixed;
-use y4m::Colorspace;
 
 fn fill_frame(ra: &mut ChaChaRng, frame: &mut Frame) {
   for plane in frame.planes.iter_mut() {
@@ -39,7 +34,7 @@ fn fill_frame(ra: &mut ChaChaRng, frame: &mut Frame) {
 }
 
 struct AomDecoder {
-  dec: aom_codec_ctx,
+  dec: aom_codec_ctx
 }
 
 fn setup_decoder(w: usize, h: usize) -> AomDecoder {
@@ -75,23 +70,6 @@ impl Drop for AomDecoder {
   }
 }
 
-impl Decoder for AomDecoder {
-  fn get_video_details(&self) -> VideoDetails {
-    unimplemented!()
-  }
-
-  fn read_frame(&mut self, cfg: &VideoDetails) -> Result<Frame, DecodeError> {
-    let mut f = Frame::new(
-      cfg.width.align_power_of_two(3),
-      cfg.height.align_power_of_two(3),
-      cfg.chroma_sampling
-    );
-    let mut ra = ChaChaRng::from_seed([0; 32]);
-    fill_frame(&mut ra, &mut f);
-    Ok(f)
-  }
-}
-
 fn setup_encoder(
   w: usize, h: usize, speed: usize, quantizer: usize, bit_depth: usize,
   chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
@@ -112,13 +90,9 @@ fn setup_encoder(
     video_info: VideoDetails {
       width: w,
       height: h,
-      bits: bit_depth,
-      bytes: 1,
-      color_space: Colorspace::C420,
       bit_depth,
       chroma_sampling,
-      chroma_sample_position: ChromaSamplePosition::Unknown,
-      framerate: Rational::new(1000, 1),
+      ..Default::default()
     },
     enc
   };
@@ -314,6 +288,8 @@ fn encode_decode(
   w: usize, h: usize, speed: usize, quantizer: usize, limit: usize,
   bit_depth: usize, min_keyint: u64, max_keyint: u64, low_latency: bool
 ) {
+  let mut ra = ChaChaRng::from_seed([0; 32]);
+
   let mut dec = setup_decoder(w, h);
   let mut ctx =
     setup_encoder(w, h, speed, quantizer, bit_depth, ChromaSampling::Cs420,
@@ -326,8 +302,10 @@ fn encode_decode(
   let mut rec_fifo = VecDeque::new();
 
   for _ in 0..limit {
-    let mut input = dec.read_frame(&ctx.config.video_info).unwrap();
-    let _ = ctx.send_frame(Some(Arc::new(input)));
+    let mut input = ctx.new_frame();
+    fill_frame(&mut ra, Arc::get_mut(&mut input).unwrap());
+
+    let _ = ctx.send_frame(Some(input));
 
     let mut done = false;
     let mut corrupted_count = 0;

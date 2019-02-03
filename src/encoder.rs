@@ -30,7 +30,6 @@ use std::{fmt, io};
 use std::io::Write;
 use std::rc::Rc;
 use std::sync::Arc;
-use decoder::VideoDetails;
 
 extern {
     pub fn av1_rtcd();

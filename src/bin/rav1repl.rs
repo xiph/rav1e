@@ -13,6 +13,7 @@ extern crate y4m;
 extern crate rav1e;
 
 mod common;
+mod decoder;
 
 use common::*;
 use rav1e::*;

@@ -10,7 +10,7 @@
 use encoder::Frame;
 
 use std::sync::Arc;
-use decoder::VideoDetails;
+use api::VideoDetails;
 
 /// Detects fast cuts using changes in colour and intensity between frames.
 /// Since the difference between frames is used, only fast cuts are detected
