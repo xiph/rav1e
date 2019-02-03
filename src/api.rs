@@ -32,7 +32,7 @@ pub struct VideoDetails {
   pub bit_depth: usize,
   pub chroma_sampling: ChromaSampling,
   pub chroma_sample_position: ChromaSamplePosition,
-  pub framerate: Rational,
+  pub time_base: Rational,
 }
 
 impl Default for VideoDetails {
@@ -46,7 +46,7 @@ impl Default for VideoDetails {
       bit_depth: 8,
       chroma_sampling: ChromaSampling::Cs420,
       chroma_sample_position: ChromaSamplePosition::Unknown,
-      framerate: Rational { num: 1, den: 1 }
+      time_base: Rational { num: 30, den: 1 }
     }
   }
 }

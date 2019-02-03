@@ -23,7 +23,7 @@ impl Decoder for y4m::Decoder<'_, Box<dyn Read>> {
     };
     let (chroma_sampling, chroma_sample_position) = map_y4m_color_space(color_space);
     let framerate = self.get_framerate();
-    let framerate =  Rational::new(framerate.num as u64, framerate.den as u64);
+    let time_base =  Rational::new(framerate.den as u64, framerate.num as u64);
     VideoDetails {
       width,
       height,
@@ -33,7 +33,7 @@ impl Decoder for y4m::Decoder<'_, Box<dyn Read>> {
       mono,
       chroma_sampling,
       chroma_sample_position,
-      framerate,
+      time_base,
     }
   }
 
