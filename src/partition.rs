@@ -792,7 +792,7 @@ pub fn get_intra_edges<'a>(
   dst: &'a PlaneSlice<'a>,
   tx_size: TxSize,
   bit_depth: usize,
-  p: usize,
+  plane_cfg: &'a PlaneConfig,
   frame_w_in_b: usize,
   frame_h_in_b: usize,
   opt_mode: Option<PredictionMode>
@@ -877,19 +877,21 @@ pub fn get_intra_edges<'a>(
 
     // Needs top right
     if needs_topright {
-      let bo = if p == 0 {
-        BlockOffset { x: x as usize / 4, y: y as usize / 4 }
-      } else {
-        BlockOffset { x: x as usize / 2, y: y as usize / 2 }
-      };
-      let bsize = if p == 0 {
-        BlockSize::from_width_and_height(tx_size.width(), tx_size.height())
-      } else {
-        BlockSize::from_width_and_height(2*tx_size.width(), 2*tx_size.height())
-      };
+      debug_assert!(plane_cfg.xdec <= 1 && plane_cfg.ydec <= 1);
+
+      let bo = BlockOffset {
+        x: x as usize >> (2 - plane_cfg.xdec),
+        y: y as usize >> (2 - plane_cfg.ydec)
+        };
+
+      let bsize = BlockSize::from_width_and_height(
+          tx_size.width() << plane_cfg.xdec,
+          tx_size.height() << plane_cfg.ydec
+        );
+
       let num_avail = if y != 0 && has_tr(&bo, bsize) {
         tx_size.height().min(
-          (if p == 0 { MI_SIZE } else { MI_SIZE / 2 }) * frame_w_in_b
+          (MI_SIZE >> plane_cfg.xdec) * frame_w_in_b // TODO: validate for 4:2:2
             - x as usize
             - tx_size.width()
         )
@@ -910,19 +912,21 @@ pub fn get_intra_edges<'a>(
 
     // Needs bottom left
     if needs_bottomleft {
-      let bo = if p == 0 {
-        BlockOffset { x: x as usize / 4, y: y as usize / 4 }
-      } else {
-        BlockOffset { x: x as usize / 2, y: y as usize / 2 }
-      };
-      let bsize = if p == 0 {
-        BlockSize::from_width_and_height(tx_size.width(), tx_size.height())
-      } else {
-        BlockSize::from_width_and_height(2*tx_size.width(), 2*tx_size.height())
-      };
+      debug_assert!(plane_cfg.xdec <= 1 && plane_cfg.ydec <= 1);
+
+      let bo = BlockOffset {
+        x: x as usize >> (2 - plane_cfg.xdec),
+        y: y as usize >> (2 - plane_cfg.ydec)
+        };
+
+      let bsize = BlockSize::from_width_and_height(
+        tx_size.width() << plane_cfg.xdec,
+        tx_size.height() << plane_cfg.ydec
+        );
+
       let num_avail = if x != 0 && has_bl(&bo, bsize) {
         tx_size.width().min(
-          (if p == 0 { MI_SIZE } else { MI_SIZE / 2 }) * frame_h_in_b
+          (MI_SIZE >> plane_cfg.xdec) * frame_h_in_b // TODO: validate for 4:2:2
             - y as usize
             - tx_size.height()
         )

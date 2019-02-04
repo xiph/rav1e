@@ -615,7 +615,7 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
       let edge_buf = {
         let rec = &mut fs.rec.planes[0];
         let po = bo.plane_offset(&rec.cfg);
-        get_intra_edges(&rec.slice(&po), tx_size, fi.sequence.bit_depth, 0, fi.w_in_b, fi.h_in_b, None)
+        get_intra_edges(&rec.slice(&po), tx_size, fi.sequence.bit_depth, &fs.input.planes[0].cfg, fi.w_in_b, fi.h_in_b, None)
       };
       intra_mode_set
         .iter()
@@ -795,7 +795,7 @@ pub fn rdo_cfl_alpha(
             &rec.slice(&po),
             uv_tx_size,
             bit_depth,
-            p,
+            &input.cfg,
             0,
             0,
             Some(PredictionMode::UV_CFL_PRED)
