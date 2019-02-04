@@ -956,11 +956,11 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
   fn write_sequence_header_obu(
     &mut self, fi: &mut FrameInvariants
   ) -> io::Result<()> {
-    self.write(3, fi.sequence.profile)?; // profile, 3 bits
-    self.write(1, 0)?; // still_picture
-    self.write(1, 0)?; // reduced_still_picture
-    self.write_bit(false)?; // display model present
-    self.write_bit(false)?; // no timing info present
+    self.write(3, fi.sequence.profile)?; // profile
+    self.write_bit(false)?; // still_picture
+    self.write_bit(false)?; // reduced_still_picture_header
+    self.write_bit(false)?; // timing info present
+    self.write_bit(false)?; // initial display delay present flag
     self.write(5, 0)?; // one operating point
     self.write(12, 0)?; // idc
     self.write(5, 31)?; // level
@@ -975,8 +975,6 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
     self.write_bit(fi.sequence.film_grain_params_present)?;
 
-    self.write_bit(true)?; // trailing bit
-
     Ok(())
   }
 
@@ -987,20 +985,21 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
     let seq = &mut fi.sequence;
 
+    seq.frame_id_numbers_present_flag = false;
+
     if !seq.reduced_still_picture_hdr {
-      seq.frame_id_numbers_present_flag = false;
-      seq.frame_id_length = FRAME_ID_LENGTH as u32;
-      seq.delta_frame_id_length = DELTA_FRAME_ID_LENGTH as u32;
-
       self.write_bit(seq.frame_id_numbers_present_flag)?;
+    }
 
-      if seq.frame_id_numbers_present_flag {
-        // We must always have delta_frame_id_length < frame_id_length,
-        // in order for a frame to be referenced with a unique delta.
-        // Avoid wasting bits by using a coding that enforces this restriction.
-        self.write(4, seq.delta_frame_id_length - 2)?;
-        self.write(3, seq.frame_id_length - seq.delta_frame_id_length - 1)?;
-      }
+    seq.frame_id_length = FRAME_ID_LENGTH as u32;
+    seq.delta_frame_id_length = DELTA_FRAME_ID_LENGTH as u32;
+
+    if seq.frame_id_numbers_present_flag {
+      // We must always have delta_frame_id_length < frame_id_length,
+      // in order for a frame to be referenced with a unique delta.
+      // Avoid wasting bits by using a coding that enforces this restriction.
+      self.write(4, seq.delta_frame_id_length - 2)?;
+      self.write(3, seq.frame_id_length - seq.delta_frame_id_length - 1)?;
     }
 
     self.write_bit(seq.use_128x128_superblock)?;
@@ -1018,6 +1017,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         self.write_bit(seq.enable_jnt_comp)?;
         self.write_bit(seq.enable_ref_frame_mvs)?;
       }
+
       if seq.force_screen_content_tools == 2 {
         self.write_bit(true)?;
       } else {
@@ -1051,8 +1051,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
     self.write_bit(high_bd)?;
 
-    if seq.bit_depth == 12 {
-      self.write_bit(true)?;
+    if seq.profile == 2 && high_bd {
+      self.write_bit(seq.bit_depth == 12)?;
     }
 
     if seq.profile != 1 {
@@ -1063,33 +1063,46 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       unimplemented!();
     }
 
+    let mut write_color_range = true;
+
     if let Some(color_description) = seq.color_description {
       self.write_bit(true)?; // color description present
       self.write(8, color_description.color_primaries as u8)?;
       self.write(8, color_description.transfer_characteristics as u8)?;
       self.write(8, color_description.matrix_coefficients as u8)?;
+
+      if color_description.color_primaries == ColorPrimaries::BT709 &&
+        color_description.transfer_characteristics == TransferCharacteristics::SRGB &&
+        color_description.matrix_coefficients == MatrixCoefficients::Identity {
+        write_color_range = false;
+        assert!(seq.chroma_sampling == ChromaSampling::Cs444);
+      }
     } else {
       self.write_bit(false)?; // no color description present
     }
 
-    self.write_bit(false)?; // full color range
+    if write_color_range {
+      self.write_bit(false)?; // full color range
 
-    let subsampling_x = seq.chroma_sampling != ChromaSampling::Cs444;
-    let subsampling_y = seq.chroma_sampling == ChromaSampling::Cs420;
+      let subsampling_x = seq.chroma_sampling != ChromaSampling::Cs444;
+      let subsampling_y = seq.chroma_sampling == ChromaSampling::Cs420;
 
-    if seq.bit_depth == 12 {
-      self.write_bit(subsampling_x)?;
+      if seq.bit_depth == 12 {
+        self.write_bit(subsampling_x)?;
 
-      if subsampling_x {
-        self.write_bit(subsampling_y)?;
+        if subsampling_x {
+          self.write_bit(subsampling_y)?;
+        }
+      }
+
+      if subsampling_x && !subsampling_y {
+        unimplemented!(); // 4:2:2 sampling
+      }
+
+      if seq.chroma_sampling == ChromaSampling::Cs420 {
+        self.write(2, seq.chroma_sample_position as u32)?;
       }
     }
-
-    if !subsampling_y {
-      unimplemented!(); // 4:2:2 or 4:4:4 sampling
-    }
-
-    self.write(2, seq.chroma_sample_position as u32)?;
 
     self.write_bit(seq.separate_uv_delta_q)?;
 
@@ -1679,6 +1692,7 @@ fn write_obus(
     {
       let mut bw2 = BitWriter::endian(&mut buf2, BigEndian);
       bw2.write_sequence_header_obu(fi)?;
+      bw2.write_bit(true)?; // trailing bit
       bw2.byte_align()?;
     }
 
@@ -1731,6 +1745,7 @@ fn write_obus(
       bw1.write(8, coded_payload_length[i])?;
     }
   }
+
   packet.write_all(&buf1).unwrap();
   buf1.clear();
 
