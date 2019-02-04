@@ -42,15 +42,18 @@ impl Decoder for y4m::Decoder<'_, Box<dyn Read>> {
           cfg.height.align_power_of_two(3),
           cfg.chroma_sampling
         );
+
+        let (chroma_period, _) = cfg.chroma_sampling.sampling_period();
+
         f.planes[0].copy_from_raw_u8(frame.get_y_plane(), cfg.width * bytes, bytes);
         f.planes[1].copy_from_raw_u8(
           frame.get_u_plane(),
-          cfg.width * bytes / 2,
+          cfg.width * bytes / chroma_period,
           bytes
         );
         f.planes[2].copy_from_raw_u8(
           frame.get_v_plane(),
-          cfg.width * bytes / 2,
+          cfg.width * bytes / chroma_period,
           bytes
         );
         f
