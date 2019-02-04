@@ -49,7 +49,7 @@ impl Frame {
         let (chroma_width, chroma_height, chroma_padding, chroma_xdec, chroma_ydec) = (
             width / chroma_sampling_period.0,
             height / chroma_sampling_period.1,
-            MAX_SB_SIZE / chroma_sampling_period.0 + FRAME_MARGIN,
+            (MAX_SB_SIZE + FRAME_MARGIN) / chroma_sampling_period.0,
             chroma_sampling_period.0 - 1,
             chroma_sampling_period.1 - 1
         );
