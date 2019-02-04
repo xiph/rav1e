@@ -255,7 +255,8 @@ fn read_frame_batch<D: Decoder>(ctx: &mut Context, decoder: &mut D, video_info: 
         }
         _ => {
           let frames_to_be_coded = ctx.get_frame_count();
-          ctx.set_frames_to_be_coded(frames_to_be_coded);
+          // This is a hack, instead when EOF is reached simply "close" the encoder to input (flag)
+          ctx.set_limit(frames_to_be_coded);
           ctx.flush();
         }
       }
