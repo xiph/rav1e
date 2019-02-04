@@ -333,6 +333,7 @@ pub struct Context {
   /// A list of keyframe *numbers* in this encode. Needed so that we don't
   /// need to keep all of the frame_data in memory for the whole life of the encode.
   keyframes: BTreeSet<u64>,
+  /// A storage space for reordered frames.
   packet_data: Vec<u8>,
   segment_start_idx: u64,
   segment_start_frame: u64,
@@ -582,7 +583,7 @@ impl Context {
 
           if fi.show_frame {
             let data = self.packet_data.clone();
-            self.packet_data = Vec::new();
+            self.packet_data.clear();
 
             let mut psnr = None;
             if self.config.enc.show_psnr {
