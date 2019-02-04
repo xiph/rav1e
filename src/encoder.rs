@@ -128,8 +128,8 @@ impl<'a> Iterator for PixelIter<'a> {
     }
     let pixel = (
       self.planes[0].p(self.x, self.y),
-      self.planes[1].p(self.x / 2, self.y / 2),
-      self.planes[2].p(self.x / 2, self.y / 2),
+      self.planes[1].p(self.x >> self.planes[1].cfg.xdec, self.y >> self.planes[1].cfg.ydec),
+      self.planes[2].p(self.x >> self.planes[2].cfg.xdec, self.y >> self.planes[2].cfg.ydec),
     );
     if self.x == self.width() - 1 {
       self.x = 0;
