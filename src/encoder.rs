@@ -238,6 +238,8 @@ pub struct Sequence {
     pub chroma_sample_position: ChromaSamplePosition,
     pub pixel_range: PixelRange,
     pub color_description: Option<ColorDescription>,
+    pub mastering_display: Option<MasteringDisplay>,
+    pub content_light: Option<ContentLight>,
     pub max_frame_width: u32,
     pub max_frame_height: u32,
     pub frame_id_numbers_present_flag: bool,
@@ -322,6 +324,8 @@ impl Sequence {
             chroma_sample_position: info.chroma_sample_position,
             pixel_range: PixelRange::Unspecified,
             color_description: None,
+            mastering_display: None,
+            content_light: None,
             max_frame_width: info.width as u32,
             max_frame_height: info.height as u32,
             frame_id_numbers_present_flag: false,
@@ -894,6 +898,9 @@ trait UncompressedHeader {
   fn write_obu_header(
     &mut self, obu_type: OBU_Type, obu_extension: u32
   ) -> io::Result<()>;
+  fn write_metadata_obu(
+    &mut self, obu_meta_type: ObuMetaType, seq: Sequence
+  ) -> io::Result<()>;
   fn write_sequence_header_obu(
     &mut self, fi: &mut FrameInvariants
   ) -> io::Result<()>;
@@ -950,6 +957,57 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     if obu_extension != 0 {
       unimplemented!();
       //self.write(8, obu_extension & 0xFF)?; size += 8;
+    }
+
+    Ok(())
+  }
+
+  fn write_metadata_obu(
+    &mut self, obu_meta_type: ObuMetaType, seq: Sequence
+  ) -> io::Result<()> {
+    // header
+    self.write_obu_header(OBU_Type::OBU_METADATA, 0)?;
+
+    // uleb128() - length
+    // we use a constant value to avoid computing the OBU size every time
+    // since it is fixed (depending on the metadata)
+    {
+      let mut coded_payload_length = [0 as u8; 8];
+      let leb_size = aom_uleb_encode(obu_meta_type.size(), &mut coded_payload_length);
+      for i in 0..leb_size {
+        self.write(8, coded_payload_length[i]).unwrap();
+      }
+    }
+
+    // uleb128() - metadata_type (1 byte)
+    {
+      let mut coded_payload_length = [0 as u8; 8];
+      let leb_size = aom_uleb_encode(obu_meta_type as u64, &mut coded_payload_length);
+      for i in 0..leb_size {
+        self.write(8, coded_payload_length[i]).unwrap();
+      }
+    }
+
+    match obu_meta_type {
+      ObuMetaType::OBU_META_HDR_CLL => {
+        let cll = seq.content_light.unwrap();
+        self.write(16, cll.max_content_light_level)?;
+        self.write(16, cll.max_frame_average_light_level)?;
+      },
+      ObuMetaType::OBU_META_HDR_MDCV => {
+        let mdcv = seq.mastering_display.unwrap();
+        for i in 0..3 {
+          self.write(16, mdcv.primaries[i].x)?;
+          self.write(16, mdcv.primaries[i].y)?;
+        }
+
+        self.write(16, mdcv.white_point.x)?;
+        self.write(16, mdcv.white_point.y)?;
+
+        self.write(32, mdcv.max_luminance)?;
+        self.write(32, mdcv.min_luminance)?;
+      },
+      _ => {}
     }
 
     Ok(())
@@ -1647,6 +1705,27 @@ pub enum OBU_Type {
   OBU_PADDING = 15,
 }
 
+#[derive(Clone,Copy)]
+#[allow(non_camel_case_types)]
+pub enum ObuMetaType {
+  OBU_META_HDR_CLL = 1,
+  OBU_META_HDR_MDCV = 2,
+  OBU_META_SCALABILITY = 3,
+  OBU_META_ITUT_T35 = 4,
+  OBU_META_TIMECODE = 5,
+}
+
+impl ObuMetaType {
+  fn size(&self) -> u64 {
+    use self::ObuMetaType::*;
+    match self {
+      OBU_META_HDR_CLL => 5,
+      OBU_META_HDR_MDCV => 25,
+      _ => 0,
+    }
+  }
+}
+
 // NOTE from libaom:
 // Disallow values larger than 32-bits to ensure consistent behavior on 32 and
 // 64 bit targets: value is typically used to determine buffer allocation size
@@ -1721,6 +1800,26 @@ fn write_obus(
 
     packet.write_all(&buf2).unwrap();
     buf2.clear();
+
+    if fi.sequence.content_light.is_some() {
+      {
+        let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
+        bw1.write_metadata_obu(ObuMetaType::OBU_META_HDR_CLL, fi.sequence)?;
+        bw1.byte_align()?;
+      }
+      packet.write_all(&buf1).unwrap();
+      buf1.clear();
+    }
+
+    if fi.sequence.mastering_display.is_some() {
+      {
+        let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
+        bw1.write_metadata_obu(ObuMetaType::OBU_META_HDR_MDCV, fi.sequence)?;
+        bw1.byte_align()?;
+      }
+      packet.write_all(&buf1).unwrap();
+      buf1.clear();
+    }
   }
 
   let mut buf2 = Vec::new();
