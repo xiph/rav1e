@@ -10,6 +10,8 @@
 extern crate clap;
 extern crate rav1e;
 extern crate y4m;
+#[macro_use]
+extern crate scan_fmt;
 
 mod common;
 mod decoder;

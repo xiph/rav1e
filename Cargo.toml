@@ -12,7 +12,7 @@ repl = ["rustyline", "binaries"]
 comparative_bench = ["aom"]
 decode_test = ["bindgen", "aom"]
 decode_test_dav1d = ["dav1d-sys"]
-binaries = ["y4m", "clap"]
+binaries = ["y4m", "clap", "scan_fmt"]
 default = ["binaries", "nasm"]
 aom = ["cmake"]
 nasm = ["nasm-rs"]
@@ -30,6 +30,7 @@ quote = "^0.6.10" # hack for proc-macro-hack
 num-traits = "0.2"
 paste = "0.1"
 dav1d-sys = { version = "0.1.2", optional = true }
+scan_fmt = { version = "0.1.3", optional = true }
 
 [build-dependencies]
 cmake = { version = "0.1", optional = true }

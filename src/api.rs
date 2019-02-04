@@ -61,6 +61,13 @@ impl Rational {
   }
 }
 
+#[derive(Clone, Copy, Debug)]
+#[repr(C)]
+pub struct Point {
+  pub x: u16,
+  pub y: u16
+}
+
 #[derive(Copy, Clone, Debug)]
 pub struct EncoderConfig {
   /// The *minimum* interval between two keyframes
@@ -72,6 +79,8 @@ pub struct EncoderConfig {
   pub tune: Tune,
   pub pixel_range: PixelRange,
   pub color_description: Option<ColorDescription>,
+  pub mastering_display: Option<MasteringDisplay>,
+  pub content_light: Option<ContentLight>,
   pub speed_settings: SpeedSettings,
   pub show_psnr: bool,
 }
@@ -93,6 +102,8 @@ impl EncoderConfig {
       tune: Tune::Psnr,
       pixel_range: PixelRange::Unspecified,
       color_description: None,
+      mastering_display: None,
+      content_light: None,
       speed_settings: SpeedSettings::from_preset(speed),
       show_psnr: false,
     }
@@ -292,6 +303,20 @@ pub struct ColorDescription {
     pub matrix_coefficients: MatrixCoefficients
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct MasteringDisplay {
+    pub primaries: [Point; 3],
+    pub white_point: Point,
+    pub max_luminance: u32,
+    pub min_luminance: u32,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct ContentLight {
+    pub max_content_light_level: u16,
+    pub max_frame_average_light_level: u16,
+}
+
 /// Contain all the encoder configuration
 #[derive(Clone, Copy, Debug)]
 pub struct Config {
@@ -480,6 +505,8 @@ impl Context {
       let mut seq = Sequence::new(&self.config.video_info);
       seq.pixel_range = self.config.enc.pixel_range;
       seq.color_description = self.config.enc.color_description;
+      seq.mastering_display = self.config.enc.mastering_display;
+      seq.content_light = self.config.enc.content_light;
 
       // The first frame will always be a key frame
       let fi = FrameInvariants::new_key_frame(
