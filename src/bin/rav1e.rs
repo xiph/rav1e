@@ -70,7 +70,7 @@ fn main() {
       cfg.enc.show_psnr
   );
 
-  ctx.set_frames_to_be_coded(cli.limit as u64);
+  ctx.set_limit(cli.limit as u64);
 
   loop {
     match process_frame(&mut ctx, &mut cli.io.output, &mut y4m_dec, y4m_enc.as_mut()) {

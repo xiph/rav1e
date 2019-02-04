@@ -305,7 +305,7 @@ impl Config {
 
     Context {
       frame_count: 0,
-      frames_to_be_coded: 0,
+      limit: 0,
       idx: 0,
       frames_processed: 0,
       frame_q: BTreeMap::new(),
@@ -323,7 +323,7 @@ impl Config {
 pub struct Context {
   //    timebase: Rational,
   frame_count: u64,
-  frames_to_be_coded: u64,
+  limit: u64,
   idx: u64,
   frames_processed: u64,
   /// Maps frame *number* to frames
@@ -397,8 +397,8 @@ impl Context {
     self.frame_count
   }
 
-  pub fn set_frames_to_be_coded(&mut self, frames_to_be_coded: u64) {
-    self.frames_to_be_coded = frames_to_be_coded;
+  pub fn set_limit(&mut self, limit: u64) {
+    self.limit = limit;
   }
 
   pub fn needs_more_lookahead(&self) -> bool {
@@ -406,7 +406,7 @@ impl Context {
   }
 
   pub fn needs_more_frames(&self, frame_count: u64) -> bool {
-    self.frames_to_be_coded == 0 || frame_count < self.frames_to_be_coded
+    self.limit == 0 || frame_count < self.limit
   }
 
   pub fn container_sequence_header(&mut self) -> Vec<u8> {
