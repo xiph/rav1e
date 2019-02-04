@@ -22,7 +22,7 @@ use decoder::Decoder;
 
 fn main() {
   let mut cli = parse_cli();
-  let mut y4m_dec = y4m::decode(&mut cli.io.input).unwrap();
+  let mut y4m_dec = y4m::decode(&mut cli.io.input).expect("input is not a y4m file");
   let video_info = y4m_dec.get_video_details();
   let mut y4m_enc = match cli.io.rec.as_mut() {
     Some(rec) => Some(
