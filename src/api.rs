@@ -70,6 +70,7 @@ pub struct EncoderConfig {
   pub low_latency: bool,
   pub quantizer: usize,
   pub tune: Tune,
+  pub pixel_range: PixelRange,
   pub color_description: Option<ColorDescription>,
   pub speed_settings: SpeedSettings,
   pub show_psnr: bool,
@@ -90,6 +91,7 @@ impl EncoderConfig {
       low_latency: true,
       quantizer: 100,
       tune: Tune::Psnr,
+      pixel_range: PixelRange::Unspecified,
       color_description: None,
       speed_settings: SpeedSettings::from_preset(speed),
       show_psnr: false,
@@ -183,6 +185,22 @@ pub enum PredictionModesSetting {
   Simple,
   ComplexKeyframes,
   ComplexAll,
+}
+
+arg_enum!{
+  #[derive(Debug, Clone, Copy, PartialEq)]
+  #[repr(C)]
+  pub enum PixelRange {
+      Unspecified = 0,
+      Limited,
+      Full,
+  }
+}
+
+impl Default for PixelRange {
+    fn default() -> Self {
+        PixelRange::Unspecified
+    }
 }
 
 arg_enum!{
@@ -460,6 +478,7 @@ impl Context {
   fn get_frame_properties(&mut self, idx: u64) -> (FrameInvariants, bool) {
     if idx == 0 {
       let mut seq = Sequence::new(&self.config.video_info);
+      seq.pixel_range = self.config.enc.pixel_range;
       seq.color_description = self.config.enc.color_description;
 
       // The first frame will always be a key frame

@@ -100,6 +100,13 @@ pub fn parse_cli() -> CliOptions {
         .default_value("psnr")
         .case_insensitive(true)
     ).arg(
+      Arg::with_name("PIXEL_RANGE")
+      .help("Pixel range")
+      .long("range")
+      .possible_values(&PixelRange::variants())
+      .default_value("unspecified")
+      .case_insensitive(true)
+    ).arg(
       Arg::with_name("COLOR_PRIMARIES")
       .help("Color primaries used to describe color parameters.")
       .long("primaries")
@@ -186,6 +193,8 @@ fn parse_config(matches: &ArgMatches) -> EncoderConfig {
   cfg.max_key_frame_interval = max_interval;
   cfg.low_latency = matches.value_of("LOW_LATENCY").unwrap().parse().unwrap();
   cfg.tune = matches.value_of("TUNE").unwrap().parse().unwrap();
+
+  cfg.pixel_range = matches.value_of("PIXEL_RANGE").unwrap().parse().unwrap_or_default();
   cfg.color_description = if color_primaries == ColorPrimaries::Unspecified &&
     transfer_characteristics == TransferCharacteristics::Unspecified &&
     matrix_coefficients == MatrixCoefficients::Unspecified {

@@ -236,6 +236,7 @@ pub struct Sequence {
     pub bit_depth: usize,
     pub chroma_sampling: ChromaSampling,
     pub chroma_sample_position: ChromaSamplePosition,
+    pub pixel_range: PixelRange,
     pub color_description: Option<ColorDescription>,
     pub max_frame_width: u32,
     pub max_frame_height: u32,
@@ -319,6 +320,7 @@ impl Sequence {
             bit_depth: info.bit_depth,
             chroma_sampling: info.chroma_sampling,
             chroma_sample_position: info.chroma_sample_position,
+            pixel_range: PixelRange::Unspecified,
             color_description: None,
             max_frame_width: info.width as u32,
             max_frame_height: info.height as u32,
@@ -1082,7 +1084,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     }
 
     if write_color_range {
-      self.write_bit(false)?; // full color range
+      self.write_bit(seq.pixel_range == PixelRange::Full)?; // full color range
 
       let subsampling_x = seq.chroma_sampling != ChromaSampling::Cs444;
       let subsampling_y = seq.chroma_sampling == ChromaSampling::Cs420;
