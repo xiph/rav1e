@@ -1139,7 +1139,7 @@ pub fn rdo_cdef_decision(sbo: &SuperBlockOffset, fi: &FrameInvariants,
               let xdec = in_plane.cfg.xdec;
               let ydec = in_plane.cfg.ydec;
 
-              if p==0 {
+              if p==0 && fi.config.tune == Tune::Psychovisual {
                 err += cdef_dist_wxh_8x8(&in_slice, &out_slice, fi.sequence.bit_depth);
               } else {
                 err += sse_wxh(&in_slice, &out_slice, 8>>xdec, 8>>ydec);
