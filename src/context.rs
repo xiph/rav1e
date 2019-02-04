@@ -1812,6 +1812,7 @@ pub struct ContextWriter {
 }
 
 impl ContextWriter {
+  #[allow(clippy::let_and_return)]
   pub fn new(fc: CDFContext, bc: BlockContext) -> Self {
     #[allow(unused_mut)]
     let mut cw = ContextWriter {
