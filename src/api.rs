@@ -450,18 +450,14 @@ impl Context {
     cmp::min(next_detected.unwrap(), next_limit)
   }
 
-  fn set_frame_properties(&mut self, idx: u64) -> Result<(), ()> {
-    let props = self.get_frame_properties(idx);
-    let result = props.as_ref().map(|_| ()).map_err(|_| ());
-    match props {
-      Ok(props) | Err(props) => {
-        self.frame_data.insert(idx, props);
-      }
-    }
-    result
+  fn set_frame_properties(&mut self, idx: u64) -> bool {
+    let (fi, end_of_subgop) = self.get_frame_properties(idx);
+    self.frame_data.insert(idx, fi);
+
+    end_of_subgop
   }
 
-  fn get_frame_properties(&mut self, idx: u64) -> Result<FrameInvariants, FrameInvariants> {
+  fn get_frame_properties(&mut self, idx: u64) -> (FrameInvariants, bool) {
     if idx == 0 {
       let mut seq = Sequence::new(&self.config.video_info);
       seq.color_description = self.config.enc.color_description;
@@ -476,7 +472,7 @@ impl Context {
         ),
         0
       );
-      return Ok(fi);
+      return (fi, true);
     }
 
     let mut fi = self.frame_data[&(idx - 1)].clone();
@@ -488,14 +484,14 @@ impl Context {
     let idx_in_segment = idx - self.segment_start_idx;
     if idx_in_segment > 0 {
       let next_keyframe = self.next_keyframe();
-      let (fi_temp, success) = FrameInvariants::new_inter_frame(
+      let (fi_temp, end_of_subgop) = FrameInvariants::new_inter_frame(
         &fi,
         self.segment_start_frame,
         idx_in_segment,
         next_keyframe
       );
       fi = fi_temp;
-      if !success {
+      if !end_of_subgop {
         if !fi.inter_cfg.unwrap().reorder
           || ((idx_in_segment - 1) % fi.inter_cfg.unwrap().group_len == 0
           && fi.number == (next_keyframe - 1))
@@ -504,7 +500,7 @@ impl Context {
           self.segment_start_frame = next_keyframe;
           fi.number = next_keyframe;
         } else {
-          return Err(fi);
+          return (fi, false);
         }
       }
     }
@@ -528,23 +524,23 @@ impl Context {
       fi = FrameInvariants::new_key_frame(&fi, self.segment_start_frame);
     } else {
       let next_keyframe = self.next_keyframe();
-      let (fi_temp, success) = FrameInvariants::new_inter_frame(
+      let (fi_temp, end_of_subgop) = FrameInvariants::new_inter_frame(
         &fi,
         self.segment_start_frame,
         idx_in_segment,
         next_keyframe
       );
       fi = fi_temp;
-      if !success {
-        return Err(fi);
+      if !end_of_subgop {
+        return (fi, false);
       }
     }
-    Ok(fi)
+    (fi, true)
   }
 
   pub fn receive_packet(&mut self) -> Result<Packet, EncoderStatus> {
     let mut idx = self.idx;
-    while self.set_frame_properties(idx).is_err() {
+    while !self.set_frame_properties(idx) {
       self.idx += 1;
       idx = self.idx;
     }
