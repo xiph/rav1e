@@ -463,13 +463,16 @@ impl Context {
 
   fn get_frame_properties(&mut self, idx: u64) -> Result<FrameInvariants, FrameInvariants> {
     if idx == 0 {
+      let mut seq = Sequence::new(&self.config.video_info);
+      seq.color_description = self.config.enc.color_description;
+
       // The first frame will always be a key frame
       let fi = FrameInvariants::new_key_frame(
         &FrameInvariants::new(
           self.config.video_info.width,
           self.config.video_info.height,
           self.config.enc,
-          Sequence::new(&self.config.video_info)
+          seq
         ),
         0
       );
