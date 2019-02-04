@@ -83,7 +83,8 @@ fn cdef_find_dir(img: &[u16], stride: usize, var: &mut i32, coeff_shift: i32) ->
         i+=2;
     }
 
-    let (best_dir, best_cost) = cost.iter().enumerate().max_by_key(|(_i, &v)| v).unwrap();
+    // In case of a tie, the first direction must be selected.
+    let (best_dir, best_cost) = cost.iter().enumerate().max_by_key(|&(i, v)| (v, -(i as isize))).unwrap();
     // Difference between the optimal variance and the variance along the
     // orthogonal direction. Again, the sum(x^2) terms cancel out.
     // We'd normally divide by 840, but dividing by 1024 is close enough
