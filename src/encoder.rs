@@ -1781,7 +1781,7 @@ pub fn encode_tx_block(
 
     if mode.is_intra() {
       let bit_depth = fi.sequence.bit_depth;
-      let edge_buf = get_intra_edges(&rec.slice(po), tx_size, bit_depth, p, fi.w_in_b, fi.h_in_b, Some(mode));
+      let edge_buf = get_intra_edges(&rec.slice(po), tx_size, bit_depth, &fs.input.planes[p].cfg, fi.w_in_b, fi.h_in_b, Some(mode));
       mode.predict_intra(&mut rec.mut_slice(po), tx_size, bit_depth, &ac, alpha, &edge_buf);
     }
 
