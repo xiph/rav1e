@@ -70,8 +70,7 @@ fn cdef_find_dir(img: &[u16], stride: usize, var: &mut i32, coeff_shift: i32) ->
     }
     cost[0] += partial[0][7] * partial[0][7] * CDEF_DIV_TABLE[8];
     cost[4] += partial[4][7] * partial[4][7] * CDEF_DIV_TABLE[8];
-    let mut i = 1;
-    while i<8 {
+    for i in (1..8).step_by(2) {
         for j in 0..5 {
             cost[i] += partial[i][3 + j] * partial[i][3 + j];
         }
@@ -80,7 +79,6 @@ fn cdef_find_dir(img: &[u16], stride: usize, var: &mut i32, coeff_shift: i32) ->
             cost[i] += (partial[i][j]*partial[i][j] +
                         partial[i][10-j]*partial[i][10-j]) * CDEF_DIV_TABLE[2 * j + 2];
         }
-        i+=2;
     }
 
     // In case of a tie, the first direction must be selected.
