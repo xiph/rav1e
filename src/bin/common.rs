@@ -115,7 +115,7 @@ pub fn parse_cli() -> CliOptions {
       .case_insensitive(true)
     ).arg(
       Arg::with_name("MATRIX_COEFFICIENTS")
-      .help("Color primaries used to describe color parameters.")
+      .help("Matrix coefficients used to describe color parameters.")
       .long("matrix")
       .possible_values(&MatrixCoefficients::variants())
       .default_value("unspecified")
