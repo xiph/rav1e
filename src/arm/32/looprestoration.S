@@ -47,7 +47,7 @@ function wiener_filter_h_neon, export=1
         lsl             r10, r10, #1
 
         // Clear the last unused element of q0, to allow filtering a single
-        // pixel with one plain mul+addv.
+        // pixel with one plain vmul+vpadd.
         mov             r12, #0
         vmov.16         d1[3], r12
 
