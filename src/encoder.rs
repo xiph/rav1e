@@ -1063,10 +1063,12 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       unimplemented!();
     }
 
+    // color description present
+    self.write_bit(seq.color_description.is_some())?;
+
     let mut write_color_range = true;
 
     if let Some(color_description) = seq.color_description {
-      self.write_bit(true)?; // color description present
       self.write(8, color_description.color_primaries as u8)?;
       self.write(8, color_description.transfer_characteristics as u8)?;
       self.write(8, color_description.matrix_coefficients as u8)?;
@@ -1077,8 +1079,6 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         write_color_range = false;
         assert!(seq.chroma_sampling == ChromaSampling::Cs444);
       }
-    } else {
-      self.write_bit(false)?; // no color description present
     }
 
     if write_color_range {
