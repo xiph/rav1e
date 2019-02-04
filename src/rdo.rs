@@ -198,30 +198,30 @@ fn compute_rd_cost(
   };
 
   if !luma_only {
-  let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
+    let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
 
-  let mask = !(MI_SIZE - 1);
-  let mut w_uv = (w_y >> xdec) & mask;
-  let mut h_uv = (h_y >> ydec) & mask;
+    let mask = !(MI_SIZE - 1);
+    let mut w_uv = (w_y >> xdec) & mask;
+    let mut h_uv = (h_y >> ydec) & mask;
 
-  if (w_uv == 0 || h_uv == 0) && is_chroma_block {
-    w_uv = MI_SIZE;
-    h_uv = MI_SIZE;
-  }
-
-  // Add chroma distortion only when it is available
-  if w_uv > 0 && h_uv > 0 {
-    for p in 1..3 {
-      let po = bo.plane_offset(&fs.input.planes[p].cfg);
-
-      distortion += sse_wxh(
-        &fs.input.planes[p].slice(&po),
-        &fs.rec.planes[p].slice(&po),
-        w_uv,
-        h_uv
-      );
+    if (w_uv == 0 || h_uv == 0) && is_chroma_block {
+      w_uv = MI_SIZE;
+      h_uv = MI_SIZE;
     }
-  };
+
+    // Add chroma distortion only when it is available
+    if w_uv > 0 && h_uv > 0 {
+      for p in 1..3 {
+        let po = bo.plane_offset(&fs.input.planes[p].cfg);
+
+        distortion += sse_wxh(
+          &fs.input.planes[p].slice(&po),
+          &fs.rec.planes[p].slice(&po),
+          w_uv,
+          h_uv
+        );
+      }
+    };
   }
   // Compute rate
   let rate = (bit_cost as f64) / ((1 << OD_BITRES) as f64);
@@ -371,8 +371,8 @@ impl Default for EncodingSettings {
 }
 // RDO-based mode decision
 pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
-  cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset,
-  pmvs: &[Option<MotionVector>], needs_rec: bool
+                         cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset,
+                         pmvs: &[Option<MotionVector>], needs_rec: bool
 ) -> RDOPartitionOutput {
   let mut best = EncodingSettings::default();
 
@@ -449,8 +449,8 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
       if !mv_stack.iter().take(if include_near_mvs {4} else {2})
         .any(|ref x| x.this_mv.row == mvs_from_me[i][0].row && x.this_mv.col == mvs_from_me[i][0].col)
         && (mvs_from_me[i][0].row != 0 || mvs_from_me[i][0].col != 0) {
-        mode_set.push((PredictionMode::NEWMV, i));
-      }
+          mode_set.push((PredictionMode::NEWMV, i));
+        }
     }
     mv_stacks.push(mv_stack);
   }
@@ -477,17 +477,17 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
   }
 
   let luma_rdo = |luma_mode: PredictionMode,
-                  fs: &mut FrameState,
-                  cw: &mut ContextWriter,
-                  best: &mut EncodingSettings,
-                  mvs: [MotionVector; 2],
-                  ref_frames: [usize; 2],
-                  mode_set_chroma: &[PredictionMode],
-                  luma_mode_is_intra: bool,
-                  mode_context: usize,
-                  mv_stack: &Vec<CandidateMV>| {
+  fs: &mut FrameState,
+  cw: &mut ContextWriter,
+  best: &mut EncodingSettings,
+  mvs: [MotionVector; 2],
+  ref_frames: [usize; 2],
+  mode_set_chroma: &[PredictionMode],
+  luma_mode_is_intra: bool,
+  mode_context: usize,
+  mv_stack: &Vec<CandidateMV>| {
     let (tx_size, mut tx_type) = rdo_tx_size_type(
-        fi, fs, cw, bsize, bo, luma_mode, ref_frames, mvs, false,
+      fi, fs, cw, bsize, bo, luma_mode, ref_frames, mvs, false,
     );
 
     // Find the best chroma prediction mode for the current luma prediction mode
@@ -504,25 +504,25 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
 
         encode_block_a(&fi.sequence, fs, cw, wr, bsize, bo, skip);
         let tx_dist =
-        encode_block_b(
-          fi,
-          fs,
-          cw,
-          wr,
-          luma_mode,
-          chroma_mode,
-          ref_frames,
-          mvs,
-          bsize,
-          bo,
-          skip,
-          CFLParams::new(),
-          tx_size,
-          tx_type,
-          mode_context,
-          mv_stack,
-          !needs_rec
-        );
+          encode_block_b(
+            fi,
+            fs,
+            cw,
+            wr,
+            luma_mode,
+            chroma_mode,
+            ref_frames,
+            mvs,
+            bsize,
+            bo,
+            skip,
+            CFLParams::new(),
+            tx_size,
+            tx_type,
+            mode_context,
+            mv_stack,
+            !needs_rec
+          );
 
         let cost = wr.tell_frac() - tell;
         let rd = if fi.use_tx_domain_distortion && !needs_rec {
@@ -551,7 +551,7 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
           )
         };
         if rd < best.rd {
-        //if rd < best.rd || luma_mode == PredictionMode::NEW_NEWMV {
+          //if rd < best.rd || luma_mode == PredictionMode::NEW_NEWMV {
           best.rd = rd;
           best.mode_luma = luma_mode;
           best.mode_chroma = chroma_mode;
@@ -569,7 +569,7 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
     chroma_rdo(false);
     // Don't skip when using intra modes
     if !luma_mode_is_intra {
-        chroma_rdo(true);
+      chroma_rdo(true);
     };
   };
 
@@ -591,8 +591,8 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
         [MotionVector { row: 0, col: 0 }; 2]
       },
       PredictionMode::NEAR1MV | PredictionMode::NEAR2MV =>
-          [mv_stacks[i][luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].this_mv,
-          mv_stacks[i][luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].comp_mv],
+        [mv_stacks[i][luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].this_mv,
+         mv_stacks[i][luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].comp_mv],
       PredictionMode::NEAREST_NEWMV => [mv_stacks[i][0].this_mv, mvs_from_me[i][1]],
       PredictionMode::NEW_NEARESTMV => [mvs_from_me[i][0], mv_stacks[i][0].comp_mv],
       _ => [MotionVector { row: 0, col: 0 }; 2]
@@ -608,10 +608,10 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
 
     // Reduce number of prediction modes at higher speed levels
     let num_modes_rdo = if (fi.frame_type == FrameType::KEY
-      && fi.config.speed_settings.prediction_modes
-        >= PredictionModesSetting::ComplexKeyframes)
+                            && fi.config.speed_settings.prediction_modes
+                            >= PredictionModesSetting::ComplexKeyframes)
       || (fi.frame_type == FrameType::INTER
-        && fi.config.speed_settings.prediction_modes
+          && fi.config.speed_settings.prediction_modes
           >= PredictionModesSetting::ComplexAll)
     {
       7
@@ -877,30 +877,30 @@ pub fn rdo_tx_type_decision(
     };
 
     let cost = wr.tell_frac() - tell;
-      let rd = if fi.use_tx_domain_distortion {
-        compute_tx_rd_cost(
-          fi,
-          fs,
-          w,
-          h,
-          is_chroma_block,
-          bo,
-          cost,
-          tx_dist,
-          false,
-          true
-        )
-      } else {
-        compute_rd_cost(
-          fi,
-          fs,
-          w,
-          h,
-          is_chroma_block,
-          bo,
-          cost,
-          true
-        )
+    let rd = if fi.use_tx_domain_distortion {
+      compute_tx_rd_cost(
+        fi,
+        fs,
+        w,
+        h,
+        is_chroma_block,
+        bo,
+        cost,
+        tx_dist,
+        false,
+        true
+      )
+    } else {
+      compute_rd_cost(
+        fi,
+        fs,
+        w,
+        h,
+        is_chroma_block,
+        bo,
+        cost,
+        true
+      )
     };
     if rd < best_rd {
       best_rd = rd;
@@ -916,31 +916,31 @@ pub fn rdo_tx_type_decision(
 }
 
 pub fn get_sub_partitions<'a>(four_partitions: &[&'a BlockOffset; 4],
-   partition: PartitionType) -> Vec<&'a BlockOffset> {
+                              partition: PartitionType) -> Vec<&'a BlockOffset> {
   let mut partitions = vec![ four_partitions[0] ];
 
   if partition == PARTITION_NONE {
-      return partitions;
+    return partitions;
   }
   if partition == PARTITION_VERT || partition == PARTITION_SPLIT {
-     partitions.push(four_partitions[1]);
+    partitions.push(four_partitions[1]);
   };
   if partition == PARTITION_HORZ || partition == PARTITION_SPLIT {
-     partitions.push(four_partitions[2]);
+    partitions.push(four_partitions[2]);
   };
   if partition == PARTITION_SPLIT {
-     partitions.push(four_partitions[3]);
+    partitions.push(four_partitions[3]);
   };
 
   partitions
 }
 
 pub fn get_sub_partitions_with_border_check<'a>(four_partitions: &[&'a BlockOffset; 4],
-   partition: PartitionType, fi: &FrameInvariants, subsize: BlockSize) -> Vec<&'a BlockOffset> {
+                                                partition: PartitionType, fi: &FrameInvariants, subsize: BlockSize) -> Vec<&'a BlockOffset> {
   let mut partitions = vec![ four_partitions[0] ];
 
   if partition == PARTITION_NONE {
-      return partitions;
+    return partitions;
   }
   let hbsw = subsize.width_mi(); // Half the block size width in blocks
   let hbsh = subsize.height_mi(); // Half the block size height in blocks
@@ -1031,9 +1031,9 @@ pub fn rdo_partition_decision(
 
         let pmv_idxs = partitions.iter().map(|&offset| {
           if subsize.greater_than(BlockSize::BLOCK_32X32) {
-              0
+            0
           } else {
-              ((offset.x & 32) >> 5) + ((offset.y & 32) >> 4) + 1
+            ((offset.x & 32) >> 5) + ((offset.y & 32) >> 4) + 1
           }
         }).collect::<Vec<_>>();
 
@@ -1047,8 +1047,8 @@ pub fn rdo_partition_decision(
 
         for (offset, pmv_idx) in partitions.iter().zip(pmv_idxs) {
           let mode_decision =
-          rdo_mode_decision(fi, fs, cw, subsize, &offset,
-            &pmvs[pmv_idx], true);
+            rdo_mode_decision(fi, fs, cw, subsize, &offset,
+                              &pmvs[pmv_idx], true);
 
           rd_cost_sum += mode_decision.rd_cost;
 
@@ -1062,7 +1062,7 @@ pub fn rdo_partition_decision(
             cw.write_partition(w, offset, PartitionType::PARTITION_NONE, subsize);
           }
           encode_block_with_modes(fi, fs, cw, w_pre_cdef, w_post_cdef, subsize,
-                              offset, &mode_decision);
+                                  offset, &mode_decision);
           child_modes.push(mode_decision);
         }
       }
@@ -1096,65 +1096,65 @@ pub fn rdo_partition_decision(
 
 pub fn rdo_cdef_decision(sbo: &SuperBlockOffset, fi: &FrameInvariants,
                          fs: &FrameState, cw: &mut ContextWriter) -> u8 {
-    // Construct a single-superblock-sized frame to test-filter into
-    let sbo_0 = SuperBlockOffset { x: 0, y: 0 };
-    let bc = &mut cw.bc;
-    let mut cdef_output = cdef_sb_frame(fi, &fs.rec);
-    let mut rec_input = cdef_sb_padded_frame_copy(fi, sbo, &fs.rec, 2);
+  // Construct a single-superblock-sized frame to test-filter into
+  let sbo_0 = SuperBlockOffset { x: 0, y: 0 };
+  let bc = &mut cw.bc;
+  let mut cdef_output = cdef_sb_frame(fi, &fs.rec);
+  let mut rec_input = cdef_sb_padded_frame_copy(fi, sbo, &fs.rec, 2);
 
-    // RDO comparisons
-    let sb_blocks = if fi.sequence.use_128x128_superblock {16} else {8};
-    let mut best_index: u8 = 0;
-    let mut best_err: u64 = 0;
-    let cdef_dirs = cdef_analyze_superblock(&mut rec_input, bc, &sbo_0, &sbo, fi.sequence.bit_depth);
-    for cdef_index in 0..(1<<fi.cdef_bits) {
-        //for p in 0..3 {
-        //    for i in 0..cdef_output.planes[p].data.len() { cdef_output.planes[p].data[i] = CDEF_VERY_LARGE; }
-        //}
-        // TODO: Don't repeat find_direction over and over; split filter_superblock to run it separately
-        cdef_filter_superblock(fi, &mut rec_input, &mut cdef_output,
-                               bc, &sbo_0, &sbo, cdef_index, &cdef_dirs);
+  // RDO comparisons
+  let sb_blocks = if fi.sequence.use_128x128_superblock {16} else {8};
+  let mut best_index: u8 = 0;
+  let mut best_err: u64 = 0;
+  let cdef_dirs = cdef_analyze_superblock(&mut rec_input, bc, &sbo_0, &sbo, fi.sequence.bit_depth);
+  for cdef_index in 0..(1<<fi.cdef_bits) {
+    //for p in 0..3 {
+    //    for i in 0..cdef_output.planes[p].data.len() { cdef_output.planes[p].data[i] = CDEF_VERY_LARGE; }
+    //}
+    // TODO: Don't repeat find_direction over and over; split filter_superblock to run it separately
+    cdef_filter_superblock(fi, &mut rec_input, &mut cdef_output,
+                           bc, &sbo_0, &sbo, cdef_index, &cdef_dirs);
 
-        // Rate is constant, compute just distortion
-        // Computation is block by block, paying attention to skip flag
+    // Rate is constant, compute just distortion
+    // Computation is block by block, paying attention to skip flag
 
-        // Each direction block is 8x8 in y, potentially smaller if subsampled in chroma
-        // We're dealing only with in-frmae and unpadded planes now
-        let mut err:u64 = 0;
-        for by in 0..sb_blocks {
-            for bx in 0..sb_blocks {
-                let bo = sbo.block_offset(bx<<1, by<<1);
-                if bo.x < bc.cols && bo.y < bc.rows {
-                    let skip = bc.at(&bo).skip;
-                    if !skip {
-                        for p in 0..3 {
-                            let mut in_plane = &fs.input.planes[p];
-                            let in_po = sbo.block_offset(bx<<1, by<<1).plane_offset(&in_plane.cfg);
-                            let in_slice = in_plane.slice(&in_po);
+    // Each direction block is 8x8 in y, potentially smaller if subsampled in chroma
+    // We're dealing only with in-frmae and unpadded planes now
+    let mut err:u64 = 0;
+    for by in 0..sb_blocks {
+      for bx in 0..sb_blocks {
+        let bo = sbo.block_offset(bx<<1, by<<1);
+        if bo.x < bc.cols && bo.y < bc.rows {
+          let skip = bc.at(&bo).skip;
+          if !skip {
+            for p in 0..3 {
+              let mut in_plane = &fs.input.planes[p];
+              let in_po = sbo.block_offset(bx<<1, by<<1).plane_offset(&in_plane.cfg);
+              let in_slice = in_plane.slice(&in_po);
 
-                            let mut out_plane = &mut cdef_output.planes[p];
-                            let out_po = sbo_0.block_offset(bx<<1, by<<1).plane_offset(&out_plane.cfg);
-                            let out_slice = &out_plane.slice(&out_po);
+              let mut out_plane = &mut cdef_output.planes[p];
+              let out_po = sbo_0.block_offset(bx<<1, by<<1).plane_offset(&out_plane.cfg);
+              let out_slice = &out_plane.slice(&out_po);
 
-                            let xdec = in_plane.cfg.xdec;
-                            let ydec = in_plane.cfg.ydec;
+              let xdec = in_plane.cfg.xdec;
+              let ydec = in_plane.cfg.ydec;
 
-                            if p==0 {
-                                err += cdef_dist_wxh_8x8(&in_slice, &out_slice, fi.sequence.bit_depth);
-                            } else {
-                                err += sse_wxh(&in_slice, &out_slice, 8>>xdec, 8>>ydec);
-                            }
-                        }
-                    }
-                }
+              if p==0 {
+                err += cdef_dist_wxh_8x8(&in_slice, &out_slice, fi.sequence.bit_depth);
+              } else {
+                err += sse_wxh(&in_slice, &out_slice, 8>>xdec, 8>>ydec);
+              }
             }
+          }
         }
-
-        if cdef_index == 0 || err < best_err {
-            best_err = err;
-            best_index = cdef_index;
-        }
-
+      }
     }
-    best_index
+
+    if cdef_index == 0 || err < best_err {
+      best_err = err;
+      best_index = cdef_index;
+    }
+
+  }
+  best_index
 }
