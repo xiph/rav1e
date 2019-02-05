@@ -94,10 +94,10 @@ pub fn parse_cli() -> CliOptions {
         .default_value("false")
     ).arg(
       Arg::with_name("TUNE")
-        .help("Quality tuning (Will enforce partition sizes >= 8x8)")
+        .help("Quality tuning")
         .long("tune")
         .possible_values(&Tune::variants())
-        .default_value("psnr")
+        .default_value("Psychovisual")
         .case_insensitive(true)
     ).arg(
       Arg::with_name("PIXEL_RANGE")

@@ -183,7 +183,7 @@ arg_enum!{
 
 impl Default for Tune {
   fn default() -> Self {
-    Tune::Psnr
+    Tune::Psychovisual
   }
 }
 
