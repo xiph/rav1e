@@ -585,17 +585,21 @@ impl Context {
   }
 
   pub fn receive_packet(&mut self) -> Result<Packet, EncoderStatus> {
-    let mut idx = self.idx;
-    while !self.set_frame_properties(idx) {
-      self.idx += 1;
-      idx = self.idx;
-    }
+    let idx = {
+      let mut idx = self.idx;
+      while !self.set_frame_properties(idx) {
+        self.idx += 1;
+        idx = self.idx;
+      }
 
-    if !self.needs_more_frames(self.frame_data.get(&idx).unwrap().number) {
-      self.idx += 1;
-      return Err(EncoderStatus::EnoughData)
-    }
+      if !self.needs_more_frames(self.frame_data.get(&idx).unwrap().number) {
+        self.idx += 1;
+        return Err(EncoderStatus::EnoughData);
+      }
+      idx
+    };
 
+    let ret = {
     let fi = self.frame_data.get_mut(&idx).unwrap();
     if fi.show_existing_frame {
       self.idx += 1;
@@ -654,9 +658,16 @@ impl Context {
         Err(EncoderStatus::NeedMoreData)
       }
     }
+    };
+
+    if let Ok(ref pkt) = ret {
+        self.garbage_collect(pkt.number);
+    }
+
+    ret
   }
 
-  pub fn garbage_collect(&mut self, cur_frame: u64) {
+  fn garbage_collect(&mut self, cur_frame: u64) {
     if cur_frame == 0 {
       return;
     }
