@@ -417,7 +417,6 @@ pub fn process_frame(
         y4m_enc_uw.write_frame(&rec_frame).unwrap();
       }
     }
-    ctx.garbage_collect(pkt.number);
     frame_summaries.push(pkt.into());
   }
   Ok(frame_summaries)
