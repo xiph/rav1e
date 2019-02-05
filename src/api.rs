@@ -600,68 +600,88 @@ impl Context {
     };
 
     let ret = {
-    let fi = self.frame_data.get_mut(&idx).unwrap();
-    if fi.show_existing_frame {
-      self.idx += 1;
-
-      let mut fs = FrameState::new(fi);
-
-      let data = encode_frame(fi, &mut fs);
-
-      let rec = if fi.show_frame { Some(fs.rec) } else { None };
-      let mut psnr = None;
-      if self.config.enc.show_psnr {
-        if let Some(ref rec) = rec {
-          psnr = Some(calculate_frame_psnr(&*fs.input, rec, fi.sequence.bit_depth));
-        }
-      }
-
-      self.frames_processed += 1;
-      Ok(Packet { data, rec, number: fi.number, frame_type: fi.frame_type, psnr })
-    } else {
-      if let Some(f) = self.frame_q.get(&fi.number) {
+      let fi = self.frame_data.get_mut(&idx).unwrap();
+      if fi.show_existing_frame {
         self.idx += 1;
 
-        if let Some(frame) = f {
-          let mut fs = FrameState::new_with_frame(fi, frame.clone());
+        let mut fs = FrameState::new(fi);
 
-          let data = encode_frame(fi, &mut fs);
-          self.packet_data.extend(data);
+        let data = encode_frame(fi, &mut fs);
 
-          fs.rec.pad(fi.width, fi.height);
+        let rec = if fi.show_frame { Some(fs.rec) } else { None };
+        let mut psnr = None;
+        if self.config.enc.show_psnr {
+          if let Some(ref rec) = rec {
+            psnr = Some(calculate_frame_psnr(
+              &*fs.input,
+              rec,
+              fi.sequence.bit_depth
+            ));
+          }
+        }
 
-          // TODO avoid the clone by having rec Arc.
-          let rec = if fi.show_frame { Some(fs.rec.clone()) } else { None };
+        self.frames_processed += 1;
+        Ok(Packet {
+          data,
+          rec,
+          number: fi.number,
+          frame_type: fi.frame_type,
+          psnr
+        })
+      } else {
+        if let Some(f) = self.frame_q.get(&fi.number) {
+          self.idx += 1;
 
-          update_rec_buffer(fi, fs);
+          if let Some(frame) = f {
+            let mut fs = FrameState::new_with_frame(fi, frame.clone());
 
-          if fi.show_frame {
-            let data = self.packet_data.clone();
-            self.packet_data.clear();
+            let data = encode_frame(fi, &mut fs);
+            self.packet_data.extend(data);
 
-            let mut psnr = None;
-            if self.config.enc.show_psnr {
-              if let Some(ref rec) = rec {
-                psnr = Some(calculate_frame_psnr(&*frame, rec, fi.sequence.bit_depth));
+            fs.rec.pad(fi.width, fi.height);
+
+            // TODO avoid the clone by having rec Arc.
+            let rec = if fi.show_frame { Some(fs.rec.clone()) } else { None };
+
+            update_rec_buffer(fi, fs);
+
+            if fi.show_frame {
+              let data = self.packet_data.clone();
+              self.packet_data.clear();
+
+              let mut psnr = None;
+              if self.config.enc.show_psnr {
+                if let Some(ref rec) = rec {
+                  psnr = Some(calculate_frame_psnr(
+                    &*frame,
+                    rec,
+                    fi.sequence.bit_depth
+                  ));
+                }
               }
-            }
 
-            self.frames_processed += 1;
-            Ok(Packet { data, rec, number: fi.number, frame_type: fi.frame_type, psnr })
+              self.frames_processed += 1;
+              Ok(Packet {
+                data,
+                rec,
+                number: fi.number,
+                frame_type: fi.frame_type,
+                psnr
+              })
+            } else {
+              Err(EncoderStatus::NeedMoreData)
+            }
           } else {
             Err(EncoderStatus::NeedMoreData)
           }
         } else {
           Err(EncoderStatus::NeedMoreData)
         }
-      } else {
-        Err(EncoderStatus::NeedMoreData)
       }
-    }
     };
 
     if let Ok(ref pkt) = ret {
-        self.garbage_collect(pkt.number);
+      self.garbage_collect(pkt.number);
     }
 
     ret
