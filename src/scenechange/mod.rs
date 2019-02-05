@@ -10,7 +10,6 @@
 use encoder::Frame;
 
 use std::sync::Arc;
-use api::VideoDetails;
 
 /// Detects fast cuts using changes in colour and intensity between frames.
 /// Since the difference between frames is used, only fast cuts are detected
@@ -41,9 +40,9 @@ impl Default for SceneChangeDetector {
 }
 
 impl SceneChangeDetector {
-  pub fn new(video_info: &VideoDetails) -> Self {
+  pub fn new(bit_depth: usize) -> Self {
     let mut detector = Self::default();
-    detector.threshold = detector.threshold * video_info.bit_depth as u8 / 8;
+    detector.threshold = detector.threshold * bit_depth as u8 / 8;
     detector
   }
 

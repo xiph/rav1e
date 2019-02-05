@@ -355,7 +355,7 @@ impl Config {
       packet_data: Vec::new(),
       segment_start_idx: 0,
       segment_start_frame: 0,
-      keyframe_detector: SceneChangeDetector::new(&self.video_info),
+      keyframe_detector: SceneChangeDetector::new(self.video_info.bit_depth),
       config: *self,
     }
   }
