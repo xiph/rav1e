@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use y4m;
 use decoder::Decoder;
+use decoder::VideoDetails;
 
 pub struct EncoderIO {
   pub input: Box<dyn Read>,
