@@ -192,7 +192,8 @@ impl Default for Tune {
 pub enum ChromaSampling {
   Cs420,
   Cs422,
-  Cs444
+  Cs444,
+  Cs400,
 }
 
 impl Default for ChromaSampling {
@@ -208,7 +209,8 @@ impl ChromaSampling {
     match self {
       Cs420 => (2, 2),
       Cs422 => (2, 1),
-      Cs444 => (1, 1)
+      Cs444 => (1, 1),
+      Cs400 => (1, 1),
     }
   }
 }
@@ -255,7 +257,6 @@ pub struct Sequence {
   // 2 - adaptive
   pub still_picture: bool,               // Video is a single frame still picture
   pub reduced_still_picture_hdr: bool,   // Use reduced header for still picture
-  pub monochrome: bool,                  // Monochrome video
   pub enable_intra_edge_filter: bool,    // enables/disables corner/edge/upsampling
   pub enable_interintra_compound: bool,  // enables/disables interintra_compound
   pub enable_masked_compound: bool,      // enables/disables masked compound
@@ -337,7 +338,6 @@ impl Sequence {
       force_integer_mv: 2,
       still_picture: false,
       reduced_still_picture_hdr: false,
-      monochrome: false,
       enable_intra_edge_filter: false,
       enable_interintra_compound: false,
       enable_masked_compound: false,
@@ -1116,11 +1116,12 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       self.write_bit(seq.bit_depth == 12)?;
     }
 
+    let monochrome = seq.chroma_sampling == ChromaSampling::Cs400;
     if seq.profile != 1 {
-      self.write_bit(seq.monochrome)?;
+      self.write_bit(monochrome)?;
     }
 
-    if seq.monochrome {
+    if monochrome {
       unimplemented!();
     }
 

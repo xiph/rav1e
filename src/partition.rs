@@ -230,6 +230,7 @@ impl BlockSize {
         BLOCK_64X16 => TX_32X8,
         _ => TX_32X32
       }
+      ChromaSampling::Cs400 => unimplemented!()
     }
   }
 
