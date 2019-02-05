@@ -319,7 +319,7 @@ fn encode_decode(
   let mut ctx =
     setup_encoder(w, h, speed, quantizer, bit_depth, ChromaSampling::Cs420,
                   min_keyint, max_keyint, low_latency);
-  ctx.set_frames_to_be_coded(limit as u64);
+  ctx.set_limit(limit as u64);
 
   println!("Encoding {}x{} speed {} quantizer {}", w, h, speed, quantizer);
 
