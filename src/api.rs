@@ -68,6 +68,12 @@ pub struct Point {
 
 #[derive(Copy, Clone, Debug)]
 pub struct EncoderConfig {
+  pub width: usize,
+  pub height: usize,
+  pub bit_depth: usize,
+  pub chroma_sampling: ChromaSampling,
+  pub chroma_sample_position: ChromaSamplePosition,
+  pub time_base: Rational,
   /// The *minimum* interval between two keyframes
   pub min_key_frame_interval: u64,
   /// The *maximum* interval between two keyframes
@@ -93,6 +99,12 @@ impl Default for EncoderConfig {
 impl EncoderConfig {
   pub fn with_speed_preset(speed: usize) -> Self {
     EncoderConfig {
+      width: 640,
+      height: 480,
+      bit_depth: 8,
+      chroma_sampling: ChromaSampling::Cs420,
+      chroma_sample_position: ChromaSamplePosition::Unknown,
+      time_base: Rational { num: 30, den: 1 },
       min_key_frame_interval: 12,
       max_key_frame_interval: 240,
       low_latency: false,
@@ -318,7 +330,6 @@ pub struct ContentLight {
 /// Contain all the encoder configuration
 #[derive(Clone, Copy, Debug)]
 pub struct Config {
-  pub video_info: VideoDetails,
   pub enc: EncoderConfig
 }
 
@@ -355,7 +366,7 @@ impl Config {
       packet_data: Vec::new(),
       segment_start_idx: 0,
       segment_start_frame: 0,
-      keyframe_detector: SceneChangeDetector::new(self.video_info.bit_depth),
+      keyframe_detector: SceneChangeDetector::new(self.enc.bit_depth),
       config: *self,
     }
   }
@@ -418,9 +429,9 @@ impl fmt::Display for Packet {
 impl Context {
   pub fn new_frame(&self) -> Arc<Frame> {
     Arc::new(Frame::new(
-      self.config.video_info.width.align_power_of_two(3),
-      self.config.video_info.height.align_power_of_two(3),
-      self.config.video_info.chroma_sampling
+      self.config.enc.width.align_power_of_two(3),
+      self.config.enc.height.align_power_of_two(3),
+      self.config.enc.chroma_sampling
     ))
   }
 
@@ -500,17 +511,11 @@ impl Context {
 
   fn build_frame_properties(&mut self, idx: u64) -> (FrameInvariants, bool) {
     if idx == 0 {
-      let mut seq = Sequence::new(&self.config.video_info);
-      seq.pixel_range = self.config.enc.pixel_range;
-      seq.color_description = self.config.enc.color_description;
-      seq.mastering_display = self.config.enc.mastering_display;
-      seq.content_light = self.config.enc.content_light;
+      let seq = Sequence::new(&self.config.enc);
 
       // The first frame will always be a key frame
       let fi = FrameInvariants::new_key_frame(
         &FrameInvariants::new(
-          self.config.video_info.width,
-          self.config.video_info.height,
           self.config.enc,
           seq
         ),

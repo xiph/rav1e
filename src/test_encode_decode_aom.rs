@@ -97,15 +97,12 @@ fn setup_encoder(
   enc.min_key_frame_interval = min_keyint;
   enc.max_key_frame_interval = max_keyint;
   enc.low_latency = low_latency;
+  enc.width = w;
+  enc.height = h;
+  enc.bit_depth = bit_depth;
+  enc.chroma_sampling = chroma_sampling;
 
   let cfg = Config {
-    video_info: VideoDetails {
-      width: w,
-      height: h,
-      bit_depth,
-      chroma_sampling,
-      ..Default::default()
-    },
     enc
   };
 

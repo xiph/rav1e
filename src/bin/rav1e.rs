@@ -39,8 +39,13 @@ fn main() {
     None => None
   };
 
+  cli.enc.width = video_info.width;
+  cli.enc.height = video_info.height;
+  cli.enc.bit_depth = video_info.bit_depth;
+  cli.enc.chroma_sampling = video_info.chroma_sampling;
+  cli.enc.chroma_sample_position = video_info.chroma_sample_position;
+  cli.enc.time_base = video_info.time_base;
   let cfg = Config {
-    video_info,
     enc: cli.enc
   };
 

@@ -291,15 +291,15 @@ pub struct Sequence {
 }
 
 impl Sequence {
-  pub fn new(info: &VideoDetails) -> Sequence {
-    let width_bits = 32 - (info.width as u32).leading_zeros();
-    let height_bits = 32 - (info.height as u32).leading_zeros();
+  pub fn new(config: &EncoderConfig) -> Sequence {
+    let width_bits = 32 - (config.width as u32).leading_zeros();
+    let height_bits = 32 - (config.height as u32).leading_zeros();
     assert!(width_bits <= 16);
     assert!(height_bits <= 16);
 
-    let profile = if info.bit_depth == 12 {
+    let profile = if config.bit_depth == 12 {
       2
-    } else if info.chroma_sampling == ChromaSampling::Cs444 {
+    } else if config.chroma_sampling == ChromaSampling::Cs444 {
       1
     } else {
       0
@@ -320,15 +320,15 @@ impl Sequence {
       profile,
       num_bits_width: width_bits,
       num_bits_height: height_bits,
-      bit_depth: info.bit_depth,
-      chroma_sampling: info.chroma_sampling,
-      chroma_sample_position: info.chroma_sample_position,
-      pixel_range: PixelRange::Unspecified,
-      color_description: None,
-      mastering_display: None,
-      content_light: None,
-      max_frame_width: info.width as u32,
-      max_frame_height: info.height as u32,
+      bit_depth: config.bit_depth,
+      chroma_sampling: config.chroma_sampling,
+      chroma_sample_position: config.chroma_sample_position,
+      pixel_range: config.pixel_range,
+      color_description: config.color_description,
+      mastering_display: config.mastering_display,
+      content_light: config.content_light,
+      max_frame_width: config.width as u32,
+      max_frame_height: config.height as u32,
       frame_id_numbers_present_flag: false,
       frame_id_length: 0,
       delta_frame_id_length: 0,
@@ -579,8 +579,7 @@ pub struct FrameInvariants {
 }
 
 impl FrameInvariants {
-  pub fn new(width: usize, height: usize,
-             config: EncoderConfig, sequence: Sequence) -> FrameInvariants {
+  pub fn new(config: EncoderConfig, sequence: Sequence) -> FrameInvariants {
     // Speed level decides the minimum partition size, i.e. higher speed --> larger min partition size,
     // with exception that SBs on right or bottom frame borders split down to BLOCK_4X4.
     // At speed = 0, RDO search is exhaustive.
@@ -591,14 +590,14 @@ impl FrameInvariants {
 
     FrameInvariants {
       sequence,
-      width,
-      height,
-      padded_w: width.align_power_of_two(3),
-      padded_h: height.align_power_of_two(3),
-      sb_width: width.align_power_of_two_and_shift(6),
-      sb_height: height.align_power_of_two_and_shift(6),
-      w_in_b: 2 * width.align_power_of_two_and_shift(3), // MiCols, ((width+7)/8)<<3 >> MI_SIZE_LOG2
-      h_in_b: 2 * height.align_power_of_two_and_shift(3), // MiRows, ((height+7)/8)<<3 >> MI_SIZE_LOG2
+      width: config.width,
+      height: config.height,
+      padded_w: config.width.align_power_of_two(3),
+      padded_h: config.height.align_power_of_two(3),
+      sb_width: config.width.align_power_of_two_and_shift(6),
+      sb_height: config.height.align_power_of_two_and_shift(6),
+      w_in_b: 2 * config.width.align_power_of_two_and_shift(3), // MiCols, ((width+7)/8)<<3 >> MI_SIZE_LOG2
+      h_in_b: 2 * config.height.align_power_of_two_and_shift(3), // MiRows, ((height+7)/8)<<3 >> MI_SIZE_LOG2
       number: 0,
       order_hint: 0,
       show_frame: true,
