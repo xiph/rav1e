@@ -911,7 +911,6 @@ pub trait Inter: Dim {}
 pub mod test {
   use super::*;
   use rand::{ChaChaRng, Rng, SeedableRng};
-  use util::*;
 
   const MAX_ITER: usize = 50000;
 
