@@ -494,13 +494,13 @@ impl Context {
   }
 
   fn set_frame_properties(&mut self, idx: u64) -> bool {
-    let (fi, end_of_subgop) = self.get_frame_properties(idx);
+    let (fi, end_of_subgop) = self.build_frame_properties(idx);
     self.frame_data.insert(idx, fi);
 
     end_of_subgop
   }
 
-  fn get_frame_properties(&mut self, idx: u64) -> (FrameInvariants, bool) {
+  fn build_frame_properties(&mut self, idx: u64) -> (FrameInvariants, bool) {
     if idx == 0 {
       let mut seq = Sequence::new(&self.config.video_info);
       seq.pixel_range = self.config.enc.pixel_range;
