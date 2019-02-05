@@ -26,7 +26,6 @@ const LOOKAHEAD_FRAMES: u64 = 10;
 pub struct VideoDetails {
   pub width: usize,
   pub height: usize,
-  pub mono: bool,
   pub bit_depth: usize,
   pub chroma_sampling: ChromaSampling,
   pub chroma_sample_position: ChromaSamplePosition,
@@ -38,7 +37,6 @@ impl Default for VideoDetails {
     VideoDetails {
       width: 640,
       height: 480,
-      mono: false,
       bit_depth: 8,
       chroma_sampling: ChromaSampling::Cs420,
       chroma_sample_position: ChromaSamplePosition::Unknown,

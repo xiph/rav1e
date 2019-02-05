@@ -15,18 +15,14 @@ impl Decoder for y4m::Decoder<'_, Box<dyn Read>> {
     let height = self.get_height();
     let color_space = self.get_colorspace();
     let bit_depth = color_space.get_bit_depth();
-    let mono = match color_space {
-        y4m::Colorspace::Cmono => true,
-        _ => false
-    };
     let (chroma_sampling, chroma_sample_position) = map_y4m_color_space(color_space);
     let framerate = self.get_framerate();
     let time_base =  Rational::new(framerate.den as u64, framerate.num as u64);
+
     VideoDetails {
       width,
       height,
       bit_depth,
-      mono,
       chroma_sampling,
       chroma_sample_position,
       time_base,
@@ -81,12 +77,11 @@ pub fn map_y4m_color_space(
   use ChromaSampling::*;
   use ChromaSamplePosition::*;
   match color_space {
+    Cmono => (Cs400, Unknown),
     C420jpeg | C420paldv => (Cs420, Unknown),
     C420mpeg2 => (Cs420, Vertical),
     C420 | C420p10 | C420p12 => (Cs420, Colocated),
     C422 | C422p10 | C422p12 => (Cs422, Colocated),
     C444 | C444p10 | C444p12 => (Cs444, Colocated),
-    _ =>
-      panic!("Chroma characteristics unknown for the specified color space.")
   }
 }
