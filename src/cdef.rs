@@ -30,6 +30,23 @@ const CDEF_SEC_STRENGTHS: u8 = 4;
 // the max. */
 const CDEF_DIV_TABLE: [i32; 9] = [ 0, 840, 420, 280, 210, 168, 140, 120, 105 ];
 
+#[inline]
+/// Returns the position and value of the first instance of the max element in
+/// a slice as a tuple.
+///
+/// # Arguments
+///
+/// * `elems` - A non-empty slice of integers
+///
+/// # Panics
+///
+/// Panics if `elems` is empty
+fn first_max_element(elems: &[i32]) -> (usize, i32) {
+  // In case of a tie, the first element must be selected.
+  let (max_idx, max_value) = elems.iter().enumerate().max_by_key(|&(i, v)| (v, -(i as isize))).unwrap();
+  (max_idx, *max_value)
+}
+
 // Detect direction. 0 means 45-degree up-right, 2 is horizontal, and so on.
 // The search minimizes the weighted variance along all the lines in a
 // particular direction, i.e. the squared error between the input and a
@@ -81,8 +98,7 @@ fn cdef_find_dir(img: &[u16], stride: usize, var: &mut i32, coeff_shift: i32) ->
         }
     }
 
-    // In case of a tie, the first direction must be selected.
-    let (best_dir, best_cost) = cost.iter().enumerate().max_by_key(|&(i, v)| (v, -(i as isize))).unwrap();
+    let (best_dir, best_cost) = first_max_element(&cost);
     // Difference between the optimal variance and the variance along the
     // orthogonal direction. Again, the sum(x^2) terms cancel out.
     // We'd normally divide by 840, but dividing by 1024 is close enough
@@ -448,4 +464,16 @@ pub fn cdef_filter_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockCo
             cdef_filter_superblock(fi, &mut cdef_frame, rec, bc, &sbo, &sbo, cdef_index, &cdef_dirs);
         }
     }
+}
+
+#[cfg(test)]
+mod test {
+  use super::*;
+
+  #[test]
+  fn check_max_element() {
+    assert_eq!(first_max_element(&[-1, -1, 1, 2, 3, 4, 6, 6]), (6, 6));
+    assert_eq!(first_max_element(&[-1, -1, 1, 2, 3, 4, 7, 6]), (6, 7));
+    assert_eq!(first_max_element(&[0, 0]), (0, 0));
+  }
 }
