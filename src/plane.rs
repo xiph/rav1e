@@ -10,6 +10,7 @@
 #![allow(clippy::cast_lossless)]
 
 use std::iter::FusedIterator;
+use std::fmt::{Debug, Formatter};
 
 use util::*;
 
@@ -33,10 +34,16 @@ pub struct PlaneOffset {
   pub y: isize
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Plane {
   pub data: Vec<u16>,
   pub cfg: PlaneConfig
+}
+
+impl Debug for Plane {
+  fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+    write!(f, "Plane {{ data: [{}, ...], cfg: {:?} }}", self.data[0], self.cfg)
+  }
 }
 
 impl Plane {
@@ -250,7 +257,7 @@ impl<'a> Iterator for PlaneIter<'a> {
   }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct PlaneSlice<'a> {
   pub plane: &'a Plane,
   pub x: isize,
