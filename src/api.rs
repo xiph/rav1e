@@ -87,7 +87,7 @@ impl EncoderConfig {
     EncoderConfig {
       min_key_frame_interval: 12,
       max_key_frame_interval: 240,
-      low_latency: true,
+      low_latency: false,
       quantizer: 100,
       tune: Tune::Psnr,
       color_description: None,

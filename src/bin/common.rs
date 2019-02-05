@@ -88,10 +88,10 @@ pub fn parse_cli() -> CliOptions {
         .default_value("240")
     ).arg(
       Arg::with_name("LOW_LATENCY")
-        .help("low latency mode. true or false")
+        .help("low latency mode. true or [false]")
         .long("low_latency")
         .takes_value(true)
-        .default_value("true")
+        .default_value("false")
     ).arg(
       Arg::with_name("TUNE")
         .help("Quality tuning (Will enforce partition sizes >= 8x8)")
