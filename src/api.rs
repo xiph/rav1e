@@ -45,11 +45,20 @@ pub struct Point {
 
 #[derive(Copy, Clone, Debug)]
 pub struct EncoderConfig {
+  // output size
   pub width: usize,
   pub height: usize,
+
+  // data format and ancillary color information
   pub bit_depth: usize,
   pub chroma_sampling: ChromaSampling,
   pub chroma_sample_position: ChromaSamplePosition,
+  pub pixel_range: PixelRange,
+  pub color_description: Option<ColorDescription>,
+  pub mastering_display: Option<MasteringDisplay>,
+  pub content_light: Option<ContentLight>,
+
+  // encoder configuration
   pub time_base: Rational,
   /// The *minimum* interval between two keyframes
   pub min_key_frame_interval: u64,
@@ -58,10 +67,6 @@ pub struct EncoderConfig {
   pub low_latency: bool,
   pub quantizer: usize,
   pub tune: Tune,
-  pub pixel_range: PixelRange,
-  pub color_description: Option<ColorDescription>,
-  pub mastering_display: Option<MasteringDisplay>,
-  pub content_light: Option<ContentLight>,
   pub speed_settings: SpeedSettings,
   pub show_psnr: bool,
 }
@@ -78,19 +83,21 @@ impl EncoderConfig {
     EncoderConfig {
       width: 640,
       height: 480,
+
       bit_depth: 8,
       chroma_sampling: ChromaSampling::Cs420,
       chroma_sample_position: ChromaSamplePosition::Unknown,
+      pixel_range: PixelRange::Unspecified,
+      color_description: None,
+      mastering_display: None,
+      content_light: None,
+
       time_base: Rational { num: 30, den: 1 },
       min_key_frame_interval: 12,
       max_key_frame_interval: 240,
       low_latency: false,
       quantizer: 100,
       tune: Tune::Psnr,
-      pixel_range: PixelRange::Unspecified,
-      color_description: None,
-      mastering_display: None,
-      content_light: None,
       speed_settings: SpeedSettings::from_preset(speed),
       show_psnr: false,
     }
