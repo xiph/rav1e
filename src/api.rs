@@ -507,7 +507,7 @@ impl Context {
 
     match self.frame_q.get(&fi.number) {
       Some(Some(_)) => {},
-      _ => { return Err(fi); }
+      _ => { return (fi, false); }
     }
 
     // Now that we know the frame number, look up the correct frame type
