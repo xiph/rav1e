@@ -81,19 +81,19 @@ pub unsafe extern "C" fn rav1e_config_default(
     bit_depth: u8,
     chroma_sampling: ChromaSampling,
     chroma_sample_position: ChromaSamplePosition,
-    timebase: Rational,
+    time_base: Rational,
 ) -> *mut Config {
+    let enc = rav1e::EncoderConfig{
+      width : width as usize,
+      height: height as usize,
+      bit_depth: bit_depth as usize,
+      chroma_sampling,
+      chroma_sample_position,
+      time_base,
+      ..Default::default()
+    };
     let cfg = rav1e::Config {
-        video_info: rav1e::VideoDetails {
-            width: width as usize,
-            height: height as usize,
-            bit_depth: bit_depth as usize,
-            chroma_sampling,
-            chroma_sample_position,
-            mono: false,
-            time_base: timebase,
-        },
-        enc: Default::default(),
+        enc
     };
 
     let c = Box::new(Config {
