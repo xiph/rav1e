@@ -66,85 +66,83 @@ fn process_frame(
   let pkt_wrapped = ctx.receive_packet();
   if let Ok(pkt) = pkt_wrapped {
     write_ivf_frame(output_file, pkt.number as u64, pkt.data.as_ref());
-    if let Some(y4m_enc_uw) = y4m_enc.as_mut() {
-      if let Some(ref rec) = pkt.rec {
-        let pitch_y = if y4m_details.bit_depth > 8 { y4m_details.width * 2 } else { y4m_details.width };
-        let chroma_sampling_period = y4m_details.chroma_sampling.sampling_period();
-        let (pitch_uv, height_uv) = (
-          pitch_y / chroma_sampling_period.0,
-          y4m_details.height / chroma_sampling_period.1
-        );
+    if let (Some(ref mut y4m_enc_uw), Some(ref rec)) = (y4m_enc.as_mut(), &pkt.rec) {
+      let pitch_y = if y4m_details.bit_depth > 8 { y4m_details.width * 2 } else { y4m_details.width };
+      let chroma_sampling_period = y4m_details.chroma_sampling.sampling_period();
+      let (pitch_uv, height_uv) = (
+        pitch_y / chroma_sampling_period.0,
+        y4m_details.height / chroma_sampling_period.1
+      );
 
-        let (mut rec_y, mut rec_u, mut rec_v) = (
-          vec![128u8; pitch_y * y4m_details.height],
-          vec![128u8; pitch_uv * height_uv],
-          vec![128u8; pitch_uv * height_uv]
-        );
+      let (mut rec_y, mut rec_u, mut rec_v) = (
+        vec![128u8; pitch_y * y4m_details.height],
+        vec![128u8; pitch_uv * height_uv],
+        vec![128u8; pitch_uv * height_uv]
+      );
 
-        let (stride_y, stride_u, stride_v) = (
-          rec.planes[0].cfg.stride,
-          rec.planes[1].cfg.stride,
-          rec.planes[2].cfg.stride
-        );
+      let (stride_y, stride_u, stride_v) = (
+        rec.planes[0].cfg.stride,
+        rec.planes[1].cfg.stride,
+        rec.planes[2].cfg.stride
+      );
 
-        for (line, line_out) in rec.planes[0]
-          .data_origin()
-          .chunks(stride_y)
-          .zip(rec_y.chunks_mut(pitch_y))
-        {
-          if y4m_details.bit_depth > 8 {
-            unsafe {
-              line_out.copy_from_slice(slice::from_raw_parts::<u8>(
-                line.as_ptr() as (*const u8),
-                pitch_y
-              ));
-            }
-          } else {
-            line_out.copy_from_slice(
-              &line.iter().map(|&v| v as u8).collect::<Vec<u8>>()[..pitch_y]
-            );
+      for (line, line_out) in rec.planes[0]
+        .data_origin()
+        .chunks(stride_y)
+        .zip(rec_y.chunks_mut(pitch_y))
+      {
+        if y4m_details.bit_depth > 8 {
+          unsafe {
+            line_out.copy_from_slice(slice::from_raw_parts::<u8>(
+              line.as_ptr() as (*const u8),
+              pitch_y
+            ));
           }
+        } else {
+          line_out.copy_from_slice(
+            &line.iter().map(|&v| v as u8).collect::<Vec<u8>>()[..pitch_y]
+          );
         }
-        for (line, line_out) in rec.planes[1]
-          .data_origin()
-          .chunks(stride_u)
-          .zip(rec_u.chunks_mut(pitch_uv))
-        {
-          if y4m_details.bit_depth > 8 {
-            unsafe {
-              line_out.copy_from_slice(slice::from_raw_parts::<u8>(
-                line.as_ptr() as (*const u8),
-                pitch_uv
-              ));
-            }
-          } else {
-            line_out.copy_from_slice(
-              &line.iter().map(|&v| v as u8).collect::<Vec<u8>>()[..pitch_uv]
-            );
-          }
-        }
-        for (line, line_out) in rec.planes[2]
-          .data_origin()
-          .chunks(stride_v)
-          .zip(rec_v.chunks_mut(pitch_uv))
-        {
-          if y4m_details.bit_depth > 8 {
-            unsafe {
-              line_out.copy_from_slice(slice::from_raw_parts::<u8>(
-                line.as_ptr() as (*const u8),
-                pitch_uv
-              ));
-            }
-          } else {
-            line_out.copy_from_slice(
-              &line.iter().map(|&v| v as u8).collect::<Vec<u8>>()[..pitch_uv]
-            );
-          }
-        }
-
-        let rec_frame = y4m::Frame::new([&rec_y, &rec_u, &rec_v], None);
-        y4m_enc_uw.write_frame(&rec_frame).unwrap();
       }
+      for (line, line_out) in rec.planes[1]
+        .data_origin()
+        .chunks(stride_u)
+        .zip(rec_u.chunks_mut(pitch_uv))
+      {
+        if y4m_details.bit_depth > 8 {
+          unsafe {
+            line_out.copy_from_slice(slice::from_raw_parts::<u8>(
+              line.as_ptr() as (*const u8),
+              pitch_uv
+            ));
+          }
+        } else {
+          line_out.copy_from_slice(
+            &line.iter().map(|&v| v as u8).collect::<Vec<u8>>()[..pitch_uv]
+          );
+        }
+      }
+      for (line, line_out) in rec.planes[2]
+        .data_origin()
+        .chunks(stride_v)
+        .zip(rec_v.chunks_mut(pitch_uv))
+      {
+        if y4m_details.bit_depth > 8 {
+          unsafe {
+            line_out.copy_from_slice(slice::from_raw_parts::<u8>(
+              line.as_ptr() as (*const u8),
+              pitch_uv
+            ));
+          }
+        } else {
+          line_out.copy_from_slice(
+            &line.iter().map(|&v| v as u8).collect::<Vec<u8>>()[..pitch_uv]
+          );
+        }
+      }
+
+      let rec_frame = y4m::Frame::new([&rec_y, &rec_u, &rec_v], None);
+      y4m_enc_uw.write_frame(&rec_frame).unwrap();
     }
     frame_summaries.push(pkt.into());
   }
