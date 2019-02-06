@@ -12,10 +12,13 @@ extern crate rav1e;
 extern crate y4m;
 #[macro_use]
 extern crate scan_fmt;
+extern crate bitstream_io;
 
 mod common;
 mod decoder;
+mod muxer;
 use common::*;
+use muxer::*;
 use rav1e::*;
 
 use std::slice;
