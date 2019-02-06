@@ -75,25 +75,9 @@ type TransferCharacteristics=rav1e::TransferCharacteristics;
 type Rational=rav1e::Rational;
 
 #[no_mangle]
-pub unsafe extern "C" fn rav1e_config_default(
-    width: u32,
-    height: u32,
-    bit_depth: u8,
-    chroma_sampling: ChromaSampling,
-    chroma_sample_position: ChromaSamplePosition,
-    time_base: Rational,
-) -> *mut Config {
-    let enc = rav1e::EncoderConfig{
-      width : width as usize,
-      height: height as usize,
-      bit_depth: bit_depth as usize,
-      chroma_sampling,
-      chroma_sample_position,
-      time_base,
-      ..Default::default()
-    };
+pub unsafe extern "C" fn rav1e_config_default() -> *mut Config {
     let cfg = rav1e::Config {
-        enc
+        enc: rav1e::EncoderConfig::default(),
     };
 
     let c = Box::new(Config {
