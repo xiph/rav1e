@@ -118,6 +118,32 @@ pub unsafe extern "C" fn rav1e_config_set_color_description(cfg: *mut Config,
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn rav1e_config_set_content_light(cfg: *mut Config,
+                                                        max_content_light_level: u16,
+                                                        max_frame_average_light_level: u16)
+{
+    (*cfg).cfg.enc.content_light = Some(rav1e::ContentLight {
+        max_content_light_level,
+        max_frame_average_light_level,
+    });
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rav1e_config_set_mastering_display(cfg: *mut Config,
+                                                            primaries: [rav1e::Point; 3],
+                                                            white_point: rav1e::Point,
+                                                            max_luminance: u32,
+                                                            min_luminance: u32)
+{
+    (*cfg).cfg.enc.mastering_display = Some(rav1e::MasteringDisplay {
+        primaries,
+        white_point,
+        max_luminance,
+        min_luminance,
+    });
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn rav1e_config_unref(cfg: *mut Config) {
     let _ = Box::from_raw(cfg);
 }
