@@ -22,9 +22,12 @@ use rav1e::*;
 use std::io;
 use std::io::Write;
 use std::io::Read;
+use std::path::Path;
 use std::sync::Arc;
 use crate::decoder::Decoder;
 use crate::decoder::VideoDetails;
+use std::fs::File;
+use std::io::BufWriter;
 
 fn read_frame_batch<D: Decoder>(ctx: &mut Context, decoder: &mut D, video_info: VideoDetails) {
   loop {
@@ -56,9 +59,10 @@ fn read_frame_batch<D: Decoder>(ctx: &mut Context, decoder: &mut D, video_info: 
 // Encode and write a frame.
 // Returns frame information in a `Result`.
 fn process_frame(
-  ctx: &mut Context, output_file: &mut dyn Write,
+  ctx: &mut Context,
+  output_file: &mut dyn Write,
   y4m_dec: &mut y4m::Decoder<'_, Box<dyn Read>>,
-  mut y4m_enc: Option<&mut y4m::Encoder<'_, Box<dyn Write>>>
+  mut y4m_enc: Option<&mut y4m::Encoder<'_, Box<dyn Write>>>,
 ) -> Result<Vec<FrameSummary>, ()> {
   let y4m_details = y4m_dec.get_video_details();
   let mut frame_summaries = Vec::new();
@@ -72,6 +76,13 @@ fn process_frame(
     frame_summaries.push(pkt.into());
   }
   Ok(frame_summaries)
+}
+
+fn write_stats_file(ctx: &Context, filename: &Path) -> Result<(), io::Error> {
+  let file = File::create(filename)?;
+  let writer = BufWriter::new(file);
+  serde_json::to_writer(writer, &ctx.first_pass_data).expect("Serialization should not fail");
+  Ok(())
 }
 
 fn main() {
@@ -153,5 +164,10 @@ fn main() {
     cli.io.output.flush().unwrap();
   }
 
-  let _ = write!(err, "\n{}\n", progress.print_stats());
+  if cfg.enc.pass == Some(1) {
+    if let Err(e) = write_stats_file(&ctx, cfg.enc.stats_file.as_ref().unwrap()) {
+      let _ = writeln!(err, "\nError: Failed to write stats file! {}\n", e);
+    }
+  }
+  let _ = write!(err, "\n{}\n", progress.print_summary());
 }
