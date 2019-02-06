@@ -8,7 +8,6 @@ autobenches = false
 autobins = false
 
 [features]
-repl = ["rustyline", "binaries"]
 comparative_bench = ["aom"]
 decode_test = ["bindgen", "aom"]
 decode_test_dav1d = ["dav1d-sys"]
@@ -22,7 +21,6 @@ bitstream-io = "0.8"
 clap = { version = "2", optional = true, default-features = false }
 libc = "0.2"
 rand = "0.5"
-rustyline = { version = "1", optional = true }
 y4m = { version = "0.3", optional = true }
 backtrace = "0.3"
 syn = "^0.15.20"
@@ -49,11 +47,6 @@ pretty_assertions = "0.5.1"
 [[bin]]
 name = "rav1e"
 required-features = ["binaries"]
-bench = false
-
-[[bin]]
-name = "rav1repl"
-required-features = ["repl"]
 bench = false
 
 [lib]
