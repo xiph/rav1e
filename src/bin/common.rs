@@ -14,6 +14,7 @@ use rav1e::*;
 use std::{fmt, io};
 use std::fs::File;
 use std::io::prelude::*;
+use std::path::PathBuf;
 use std::time::Instant;
 
 pub struct EncoderIO {
@@ -45,6 +46,20 @@ pub fn parse_cli() -> CliOptions {
         .long("output")
         .required(true)
         .takes_value(true)
+    ).arg(
+      Arg::with_name("PASS")
+        .help("Specify first-pass or second-pass to run as a two-pass encode")
+        .short("p")
+        .long("pass")
+        .takes_value(true)
+        .possible_values(&["1", "2"])
+    )
+    .arg(
+      Arg::with_name("STATS_FILE")
+        .help("Custom location for first-pass stats file")
+        .long("stats")
+        .takes_value(true)
+        .default_value("rav1e_stats.json")
     ).arg(
       Arg::with_name("RECONSTRUCTION")
         .short("r")
@@ -222,6 +237,12 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
     };
   cfg.quantizer = quantizer;
   cfg.show_psnr = matches.is_present("PSNR");
+  cfg.pass = matches.value_of("PASS").map(|pass| pass.parse().unwrap());
+  cfg.stats_file = if cfg.pass.is_some() {
+    Some(PathBuf::from(matches.value_of("STATS_FILE").unwrap()))
+  } else {
+    None
+  };
 
   let mastering_display_opt = matches.value_of("MASTERING_DISPLAY").unwrap();
   cfg.mastering_display = if mastering_display_opt == "unspecified" { None } else {
@@ -383,7 +404,7 @@ impl ProgressInfo {
       .sum()
   }
 
-  pub fn print_stats(&self) -> String {
+  pub fn print_summary(&self) -> String {
     let (key, key_size) = (
       self.get_frame_type_count(FrameType::KEY),
       self.get_frame_type_size(FrameType::KEY)

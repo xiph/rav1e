@@ -648,7 +648,6 @@ impl FrameInvariants {
       cdef_y_strengths: [0*4+0, 1*4+0, 2*4+1, 3*4+1, 5*4+2, 7*4+3, 10*4+3, 13*4+3],
       cdef_uv_strengths: [0*4+0, 1*4+0, 2*4+1, 3*4+1, 5*4+2, 7*4+3, 10*4+3, 13*4+3],
       delta_q_present: false,
-      config,
       ref_frames: [0; INTER_REFS_PER_FRAME],
       ref_frame_sign_bias: [false; INTER_REFS_PER_FRAME],
       rec_buffer: ReferenceFramesSet::new(),
@@ -661,6 +660,7 @@ impl FrameInvariants {
       use_tx_domain_distortion,
       inter_cfg: None,
       enable_early_exit: true,
+      config,
     }
   }
 
@@ -875,8 +875,8 @@ pub struct InterPropsConfig {
   pub group_idx: u64,
 }
 
-#[allow(dead_code,non_camel_case_types)]
-#[derive(Debug,PartialEq,Clone,Copy)]
+#[allow(dead_code, non_camel_case_types)]
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 #[repr(C)]
 pub enum FrameType {
   KEY,

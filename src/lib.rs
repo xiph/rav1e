@@ -9,6 +9,9 @@
 
 #![allow(safe_extern_statics)]
 
+#[macro_use]
+extern crate serde_derive;
+
 #[cfg(all(test, feature="decode_test_dav1d"))]
 extern crate dav1d_sys;
 

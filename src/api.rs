@@ -19,6 +19,7 @@ use std::{cmp, fmt, io};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::collections::BTreeSet;
+use std::path::PathBuf;
 
 const LOOKAHEAD_FRAMES: u64 = 10;
 
@@ -43,7 +44,7 @@ pub struct Point {
   pub y: u16
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct EncoderConfig {
   // output size
   pub width: usize,
@@ -68,7 +69,10 @@ pub struct EncoderConfig {
   pub quantizer: usize,
   pub tune: Tune,
   pub speed_settings: SpeedSettings,
+  /// `None` for one-pass encode. `Some(1)` or `Some(2)` for two-pass encoding.
+  pub pass: Option<u8>,
   pub show_psnr: bool,
+  pub stats_file: Option<PathBuf>,
 }
 
 impl Default for EncoderConfig {
@@ -99,7 +103,9 @@ impl EncoderConfig {
       quantizer: 100,
       tune: Tune::Psnr,
       speed_settings: SpeedSettings::from_preset(speed),
+      pass: None,
       show_psnr: false,
+      stats_file: None,
     }
   }
 }
@@ -236,7 +242,7 @@ impl Default for MatrixCoefficients {
 }
 
 arg_enum!{
-  #[derive(Debug,Clone,Copy,PartialEq)]
+  #[derive(Debug, Clone, Copy, PartialEq)]
   #[repr(C)]
   pub enum ColorPrimaries {
       BT709 = 1,
@@ -261,7 +267,7 @@ impl Default for ColorPrimaries {
 }
 
 arg_enum!{
-  #[derive(Debug,Clone,Copy,PartialEq)]
+  #[derive(Debug, Clone, Copy, PartialEq)]
   #[repr(C)]
   pub enum TransferCharacteristics {
       BT1886 = 1,
@@ -312,7 +318,7 @@ pub struct ContentLight {
 }
 
 /// Contain all the encoder configuration
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Config {
   pub enc: EncoderConfig
 }
@@ -354,8 +360,11 @@ impl Config {
       segment_start_idx: 0,
       segment_start_frame: 0,
       keyframe_detector: SceneChangeDetector::new(self.enc.bit_depth),
-      config: *self,
-      rc_state: RCState::new()
+      config: self.clone(),
+      rc_state: RCState::new(),
+      first_pass_data: FirstPassData {
+        frames: Vec::new(),
+      },
     }
   }
 }
@@ -379,7 +388,8 @@ pub struct Context {
   segment_start_frame: u64,
   keyframe_detector: SceneChangeDetector,
   pub config: Config,
-  rc_state: RCState
+  rc_state: RCState,
+  pub first_pass_data: FirstPassData,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -505,7 +515,7 @@ impl Context {
       // The first frame will always be a key frame
       let fi = FrameInvariants::new_key_frame(
         &FrameInvariants::new(
-          self.config.enc,
+          self.config.enc.clone(),
           seq
         ),
         0
@@ -669,6 +679,10 @@ impl Context {
       }
     }
 
+    if self.config.enc.pass == Some(1) {
+      self.first_pass_data.frames.push(FirstPassFrame::from(fi));
+    }
+
     self.frames_processed += 1;
     Ok(Packet {
       data,
@@ -730,5 +744,25 @@ impl Context {
       }
     }
     FrameType::INTER
+  }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FirstPassData {
+  frames: Vec<FirstPassFrame>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct FirstPassFrame {
+  number: u64,
+  frame_type: FrameType,
+}
+
+impl From<&FrameInvariants> for FirstPassFrame {
+  fn from(fi: &FrameInvariants) -> FirstPassFrame {
+    FirstPassFrame {
+      number: fi.number,
+      frame_type: fi.frame_type,
+    }
   }
 }
