@@ -297,7 +297,8 @@ impl Sequence {
     assert!(width_bits <= 16);
     assert!(height_bits <= 16);
 
-    let profile = if config.bit_depth == 12 {
+    let profile = if config.bit_depth == 12 ||
+      config.chroma_sampling == ChromaSampling::Cs422 {
       2
     } else if config.chroma_sampling == ChromaSampling::Cs444 {
       1
