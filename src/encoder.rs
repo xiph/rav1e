@@ -2451,6 +2451,8 @@ fn encode_partition_bottomup(
   if can_split {
     for &partition in RAV1E_PARTITION_TYPES {
       if partition == PartitionType::PARTITION_NONE { continue; }
+      if fi.sequence.chroma_sampling == ChromaSampling::Cs422 &&
+        partition == PartitionType::PARTITION_VERT { continue; }
 
       assert!(is_square);
       if must_split {
@@ -2605,7 +2607,8 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState,
     let cbw = (fi.w_in_b - bo.x).min(bsw); // clipped block width, i.e. having effective pixels
     let cbh = (fi.h_in_b - bo.y).min(bsh);
 
-    if cbw == bsw/2 && cbh == bsh { split_vert = true; }
+    if cbw == bsw/2 && cbh == bsh &&
+      fi.sequence.chroma_sampling != ChromaSampling::Cs422 { split_vert = true; }
     if cbh == bsh/2 && cbw == bsw { split_horz = true; }
   }
 
