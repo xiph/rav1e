@@ -585,7 +585,12 @@ impl FrameInvariants {
     // Speed level decides the minimum partition size, i.e. higher speed --> larger min partition size,
     // with exception that SBs on right or bottom frame borders split down to BLOCK_4X4.
     // At speed = 0, RDO search is exhaustive.
-    let min_partition_size = config.speed_settings.min_block_size;
+    let min_partition_size = if config.chroma_sampling == ChromaSampling::Cs444 ||
+      config.chroma_sampling == ChromaSampling::Cs422 {
+        config.speed_settings.min_block_size.max(BlockSize::BLOCK_8X8)
+      } else {
+        config.speed_settings.min_block_size
+      };
 
     let use_reduced_tx_set = config.speed_settings.reduced_tx_set;
     let use_tx_domain_distortion = config.tune == Tune::Psnr && config.speed_settings.tx_domain_distortion;
