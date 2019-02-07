@@ -1091,7 +1091,9 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     }
 
     let monochrome = seq.chroma_sampling == ChromaSampling::Cs400;
-    if seq.profile != 1 {
+    if seq.profile == 1 {
+      assert!(monochrome == false);
+    } else {
       self.write_bit(monochrome)?;
     }
 
@@ -1120,19 +1122,27 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     if write_color_range {
       self.write_bit(seq.pixel_range == PixelRange::Full)?; // full color range
 
+      if monochrome {
+        return Ok(());
+      }
+
       let subsampling_x = seq.chroma_sampling != ChromaSampling::Cs444;
       let subsampling_y = seq.chroma_sampling == ChromaSampling::Cs420;
 
-      if seq.bit_depth == 12 {
-        self.write_bit(subsampling_x)?;
+      if seq.profile == 0 {
+        assert!(seq.chroma_sampling == ChromaSampling::Cs420);
+      } else if seq.profile == 1 {
+        assert!(seq.chroma_sampling == ChromaSampling::Cs444);
+      } else {
+        if seq.bit_depth == 12 {
+          self.write_bit(subsampling_x)?;
 
-        if subsampling_x {
-          self.write_bit(subsampling_y)?;
+          if subsampling_x {
+            self.write_bit(subsampling_y)?;
+          }
+        } else {
+          assert!(seq.chroma_sampling == ChromaSampling::Cs422);
         }
-      }
-
-      if subsampling_x && !subsampling_y {
-        unimplemented!(); // 4:2:2 sampling
       }
 
       if seq.chroma_sampling == ChromaSampling::Cs420 {
