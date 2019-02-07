@@ -529,8 +529,8 @@ function wiener_filter_v_neon, export=1
 8:      // At this point, all registers up to q14-15,q1 are loaded with
         // edge/padding (depending on how many rows are left).
         filter          0 // This branches to 9f when done
-        vmov            q13, q14
-        vmov            q14, q1
+        vmov            q14, q15
+        vmov            q15, q1
         b               8b
 
 9:      // End of one vertical slice.
