@@ -29,8 +29,6 @@ use decoder::Decoder;
 use decoder::VideoDetails;
 
 fn read_frame_batch<D: Decoder>(ctx: &mut Context, decoder: &mut D, video_info: VideoDetails) {
-  loop {
-    if ctx.needs_more_lookahead() {
       match decoder.read_frame(&video_info) {
         Ok(frame) => {
           match video_info.bit_depth {
@@ -39,7 +37,6 @@ fn read_frame_batch<D: Decoder>(ctx: &mut Context, decoder: &mut D, video_info: 
           }
 
           let _ = ctx.send_frame(Some(Arc::new(frame)));
-          continue;
         }
         _ => {
           let frames_to_be_coded = ctx.get_frame_count();
@@ -48,11 +45,6 @@ fn read_frame_batch<D: Decoder>(ctx: &mut Context, decoder: &mut D, video_info: 
           ctx.flush();
         }
       }
-    } else if !ctx.needs_more_frames(ctx.get_frame_count()) {
-      ctx.flush();
-    }
-    break;
-  }
 }
 
 // Encode and write a frame.

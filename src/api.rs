@@ -379,6 +379,8 @@ pub struct Context {
 
 #[derive(Clone, Copy, Debug)]
 pub enum EncoderStatus {
+  /// End of Sequence
+  EoS,
   /// The encoder needs more Frames to produce an output Packet
   NeedMoreData,
   /// There are enough Frames queue
@@ -486,14 +488,14 @@ impl Context {
     cmp::min(next_detected.unwrap(), next_limit)
   }
 
-  fn set_frame_properties(&mut self, idx: u64) -> bool {
-    let (fi, end_of_subgop) = self.build_frame_properties(idx);
+  fn set_frame_properties(&mut self, idx: u64) -> Result<bool, EncoderStatus> {
+    let (fi, end_of_subgop) = self.build_frame_properties(idx)?;
     self.frame_data.insert(idx, fi);
 
-    end_of_subgop
+    Ok(end_of_subgop)
   }
 
-  fn build_frame_properties(&mut self, idx: u64) -> (FrameInvariants, bool) {
+  fn build_frame_properties(&mut self, idx: u64) -> Result<(FrameInvariants, bool), EncoderStatus> {
     if idx == 0 {
       let seq = Sequence::new(&self.config.enc);
 
@@ -505,7 +507,7 @@ impl Context {
         ),
         0
       );
-      return (fi, true);
+      return Ok((fi, true));
     }
 
     let mut fi = self.frame_data[&(idx - 1)].clone();
@@ -533,14 +535,15 @@ impl Context {
           self.segment_start_frame = next_keyframe;
           fi.number = next_keyframe;
         } else {
-          return (fi, false);
+          return Ok((fi, false));
         }
       }
     }
 
     match self.frame_q.get(&fi.number) {
       Some(Some(_)) => {},
-      _ => { return (fi, false); }
+      Some(None) => { return Err(EncoderStatus::EoS); },
+      _ => { return Ok((fi, false)); }
     }
 
     // Now that we know the frame number, look up the correct frame type
@@ -565,16 +568,16 @@ impl Context {
       );
       fi = fi_temp;
       if !end_of_subgop {
-        return (fi, false);
+        return Ok((fi, false));
       }
     }
-    (fi, true)
+    Ok((fi, true))
   }
 
   pub fn receive_packet(&mut self) -> Result<Packet, EncoderStatus> {
     let idx = {
       let mut idx = self.idx;
-      while !self.set_frame_properties(idx) {
+      while !self.set_frame_properties(idx)? {
         self.idx += 1;
         idx = self.idx;
       }
