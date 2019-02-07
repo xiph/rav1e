@@ -349,7 +349,8 @@ impl Sequence {
       enable_warped_motion: false,
       enable_superres: false,
       enable_cdef: true,
-      enable_restoration: true,
+      enable_restoration: config.chroma_sampling != ChromaSampling::Cs422 &&
+        config.chroma_sampling != ChromaSampling::Cs444, // FIXME: not working yet
       operating_points_cnt_minus_1: 0,
       operating_point_idc,
       display_model_info_present_flag: false,
