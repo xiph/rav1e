@@ -28,7 +28,7 @@ use motion_compensate;
 use partition::*;
 use plane::*;
 use predict::{RAV1E_INTRA_MODES, RAV1E_INTER_MODES_MINIMAL, RAV1E_INTER_COMPOUND_MODES};
-use quantize::dc_q;
+use quantize::ac_q;
 use Tune;
 use write_tx_blocks;
 use write_tx_tree;
@@ -138,7 +138,7 @@ pub fn sse_wxh(
 }
 
 pub fn get_lambda(fi: &FrameInvariants) -> f64 {
-  let q = dc_q(fi.base_q_idx, fi.dc_delta_q[0], fi.sequence.bit_depth) as f64;
+  let q = ac_q(fi.base_q_idx, fi.dc_delta_q[0], fi.sequence.bit_depth) as f64;
 
   // Convert q into Q0 precision, given that libaom quantizers are Q3
   let q0 = q / 8.0_f64;
@@ -149,7 +149,7 @@ pub fn get_lambda(fi: &FrameInvariants) -> f64 {
 }
 
 pub fn get_lambda_sqrt(fi: &FrameInvariants) -> f64 {
-  let q = dc_q(fi.base_q_idx, fi.dc_delta_q[0], fi.sequence.bit_depth) as f64;
+  let q = ac_q(fi.base_q_idx, fi.dc_delta_q[0], fi.sequence.bit_depth) as f64;
 
   // Convert q into Q0 precision, given that libaom quantizers are Q3
   let q0 = q / 8.0_f64;
