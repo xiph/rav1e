@@ -857,13 +857,14 @@ pub fn rdo_tx_type_decision(
   if is_inter {
     motion_compensate(fi, fs, cw, mode, ref_frames, mvs, bsize, bo, true);
   }
+  let pixel_backup = PixelBackup::from_frame(&fs.rec, bo);
 
   for &tx_type in RAV1E_TX_TYPES {
     // Skip unsupported transform types
     if av1_tx_used[tx_set as usize][tx_type as usize] == 0 {
       continue;
     }
-
+    pixel_backup.restore(&mut fs.rec, bo);
     let wr: &mut dyn Writer = &mut WriterCounter::new();
     let tell = wr.tell_frac();
     let tx_dist = if is_inter {

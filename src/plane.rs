@@ -13,6 +13,8 @@ use std::iter::FusedIterator;
 use std::fmt::{Debug, Formatter};
 
 use crate::util::*;
+use crate::encoder::Frame;
+use crate::context::BlockOffset;
 
 /// Plane-specific configuration.
 #[derive(Debug, Clone)]
@@ -430,5 +432,38 @@ impl<'a> PlaneMutSlice<'a> {
     let new_x =
       (self.x + add_x as isize + self.plane.cfg.xorigin as isize) as usize;
     self.plane.data[new_y * self.plane.cfg.stride + new_x]
+  }
+}
+
+pub struct PixelBackup {
+  pixels: [[u16; 64*64]; 3]
+}
+
+impl PixelBackup {
+  pub fn from_frame(f: &Frame, bo: &BlockOffset) -> PixelBackup {
+    let mut pixels = [[0; 64*64]; 3];
+    for p in 0..3 {
+      let slice = f.planes[p].slice(&bo.plane_offset(&f.planes[p].cfg));
+      for y in 0..64 {
+        for x in 0..64 {
+          pixels[p][y*64+x] = slice.p(x,y);
+        }
+      }
+    }
+    PixelBackup {
+      pixels
+    }
+  }
+  pub fn restore(&self, f: &mut Frame, bo: &BlockOffset) {
+    for p in 0..3 {
+      let stride = f.planes[p].cfg.stride;
+      let mut ps = f.planes[p].mut_slice(&bo.plane_offset(&f.planes[p].cfg));
+      let slice = ps.as_mut_slice();
+      for y in 0..64 {
+        for x in 0..64 {
+          slice[y*stride+x] = self.pixels[p][y*64+x];
+        }
+      }
+    }
   }
 }
