@@ -3,8 +3,6 @@
 #[cfg(feature = "aom")]
 extern crate cmake;
 #[cfg(unix)]
-extern crate pkg_config;
-#[cfg(unix)]
 #[cfg(feature = "decode_test")]
 extern crate bindgen;
 #[cfg(all(target_arch = "x86_64", feature = "nasm"))]

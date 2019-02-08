@@ -43,7 +43,7 @@ pub struct Plane {
 }
 
 impl Debug for Plane {
-  fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     write!(f, "Plane {{ data: [{}, ...], cfg: {:?} }}", self.data[0], self.cfg)
   }
 }
@@ -137,11 +137,11 @@ impl Plane {
     }
   }
 
-  pub fn slice(&self, po: &PlaneOffset) -> PlaneSlice {
+  pub fn slice(&self, po: &PlaneOffset) -> PlaneSlice<'_> {
     PlaneSlice { plane: self, x: po.x, y: po.y }
   }
 
-  pub fn mut_slice(&mut self, po: &PlaneOffset) -> PlaneMutSlice {
+  pub fn mut_slice(&mut self, po: &PlaneOffset) -> PlaneMutSlice<'_> {
     PlaneMutSlice { plane: self, x: po.x, y: po.y }
   }
 
@@ -213,7 +213,7 @@ impl Plane {
   }
 
   /// Iterates over the pixels in the `Plane`, skipping stride data.
-  pub fn iter(&self) -> PlaneIter {
+  pub fn iter(&self) -> PlaneIter<'_> {
     PlaneIter::new(self)
   }
 }
@@ -419,12 +419,12 @@ impl<'a> PlaneMutSlice<'a> {
   // FIXME: code duplication with PlaneSlice
 
   /// A slice starting i pixels above the current one.
-  pub fn go_up(&self, i: usize) -> PlaneSlice {
+  pub fn go_up(&self, i: usize) -> PlaneSlice<'_> {
     PlaneSlice { plane: self.plane, x: self.x, y: self.y - i as isize }
   }
 
   /// A slice starting i pixels to the left of the current one.
-  pub fn go_left(&self, i: usize) -> PlaneSlice {
+  pub fn go_left(&self, i: usize) -> PlaneSlice<'_> {
     PlaneSlice { plane: self.plane, x: self.x - i as isize, y: self.y }
   }
 

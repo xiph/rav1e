@@ -59,7 +59,7 @@ mod nasm {
 
   #[target_feature(enable = "ssse3")]
   unsafe fn sad_ssse3(
-    plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize,
+    plane_org: &PlaneSlice<'_>, plane_ref: &PlaneSlice<'_>, blk_h: usize,
     blk_w: usize, bit_depth: usize
   ) -> u32 {
     let mut sum = 0 as u32;
@@ -92,7 +92,7 @@ mod nasm {
 
   #[inline(always)]
   pub fn get_sad(
-    plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize,
+    plane_org: &PlaneSlice<'_>, plane_ref: &PlaneSlice<'_>, blk_h: usize,
     blk_w: usize, bit_depth: usize
   ) -> u32 {
     #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
@@ -112,7 +112,7 @@ mod native {
 
   #[inline(always)]
   pub fn get_sad(
-    plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize,
+    plane_org: &PlaneSlice<'_>, plane_ref: &PlaneSlice<'_>, blk_h: usize,
     blk_w: usize, _bit_depth: usize
   ) -> u32 {
     let mut sum = 0 as u32;
@@ -429,7 +429,7 @@ pub mod test {
     let mut rec_plane = input_plane.clone();
 
     for (i, row) in input_plane.data.chunks_mut(input_plane.cfg.stride).enumerate() {
-      for (j, mut pixel) in row.into_iter().enumerate() {
+      for (j, pixel) in row.into_iter().enumerate() {
         let val = ((j + i) as i32 & 255i32) as u16;
         assert!(val >= u8::min_value().into() &&
             val <= u8::max_value().into());
@@ -438,7 +438,7 @@ pub mod test {
     }
 
     for (i, row) in rec_plane.data.chunks_mut(rec_plane.cfg.stride).enumerate() {
-      for (j, mut pixel) in row.into_iter().enumerate() {
+      for (j, pixel) in row.into_iter().enumerate() {
         let val = (j as i32 - i as i32 & 255i32) as u16;
         assert!(val >= u8::min_value().into() &&
             val <= u8::max_value().into());

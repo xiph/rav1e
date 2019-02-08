@@ -10,14 +10,6 @@
 #![allow(safe_extern_statics)]
 #![allow(clippy::collapsible_if)]
 
-extern crate bitstream_io;
-extern crate backtrace;
-extern crate libc;
-extern crate rand;
-
-extern crate num_traits;
-extern crate paste;
-
 #[cfg(all(test, feature="decode_test_dav1d"))]
 extern crate dav1d_sys;
 

@@ -7,12 +7,10 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-extern crate clap;
-extern crate rav1e;
-extern crate y4m;
+use y4m;
+
 #[macro_use]
 extern crate scan_fmt;
-extern crate bitstream_io;
 
 mod common;
 mod decoder;

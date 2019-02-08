@@ -96,7 +96,7 @@ impl Frame {
   /// This data retains any padding, e.g. it uses the width and height specifed in
   /// the Y-plane's `cfg` struct, and not the display width and height specied in
   /// `FrameInvariants`.
-  pub fn iter(&self) -> PixelIter {
+  pub fn iter(&self) -> PixelIter<'_> {
     PixelIter::new(&self.planes)
   }
 }

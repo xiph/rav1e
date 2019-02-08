@@ -146,8 +146,6 @@ pub struct Align32;
 /// assert!(x.array.as_ptr() as usize % 16 == 0);
 /// ```
 pub struct AlignedArray<ARRAY>
-where
-  ARRAY: ?Sized
 {
   _alignment: [Align32; 0],
   pub array: ARRAY
