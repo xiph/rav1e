@@ -47,12 +47,15 @@ const FRAME_MARGIN: usize = 16 + SUBPEL_FILTER_SIZE;
 
 impl Frame {
   pub fn new(width: usize, height: usize, chroma_sampling: ChromaSampling) -> Frame {
+    let (luma_width, luma_height, luma_padding) = (
+      width.align_power_of_two(3),
+      height.align_power_of_two(3),
+      MAX_SB_SIZE + FRAME_MARGIN);
     let (chroma_sampling_period_h, chroma_sampling_period_v) =
      chroma_sampling.sampling_period();
-    let luma_padding = MAX_SB_SIZE + FRAME_MARGIN;
     let (chroma_width, chroma_height, chroma_padding, chroma_xdec, chroma_ydec) = (
-      width / chroma_sampling_period_h,
-      height / chroma_sampling_period_v,
+      luma_width / chroma_sampling_period_h,
+      luma_height / chroma_sampling_period_v,
       luma_padding / chroma_sampling_period_h,
       chroma_sampling_period_h - 1,
       chroma_sampling_period_v - 1
@@ -61,7 +64,7 @@ impl Frame {
     Frame {
       planes: [
         Plane::new(
-          width, height,
+          luma_width, luma_height,
           0, 0,
           luma_padding, luma_padding
         ),
@@ -441,8 +444,9 @@ pub struct FrameState {
 
 impl FrameState {
   pub fn new(fi: &FrameInvariants) -> FrameState {
+    // TODO(negge): Use fi.cfg.chroma_sampling when we store VideoDetails in FrameInvariants
     FrameState::new_with_frame(fi, Arc::new(Frame::new(
-      fi.padded_w, fi.padded_h, fi.sequence.chroma_sampling)))
+      fi.width, fi.height, fi.sequence.chroma_sampling)))
   }
 
   pub fn new_with_frame(fi: &FrameInvariants, frame: Arc<Frame>) -> FrameState {
