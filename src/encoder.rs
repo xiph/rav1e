@@ -47,19 +47,18 @@ const FRAME_MARGIN: usize = 16 + SUBPEL_FILTER_SIZE;
 
 impl Frame {
   pub fn new(width: usize, height: usize, chroma_sampling: ChromaSampling) -> Frame {
-    let (luma_width, luma_height, luma_padding) = (
-      width.align_power_of_two(3),
-      height.align_power_of_two(3),
-      MAX_SB_SIZE + FRAME_MARGIN);
-    let (chroma_sampling_period_h, chroma_sampling_period_v) =
-     chroma_sampling.sampling_period();
-    let (chroma_width, chroma_height, chroma_padding, chroma_xdec, chroma_ydec) = (
-      luma_width / chroma_sampling_period_h,
-      luma_height / chroma_sampling_period_v,
-      luma_padding / chroma_sampling_period_h,
-      chroma_sampling_period_h - 1,
-      chroma_sampling_period_v - 1
-    );
+    let luma_width = width.align_power_of_two(3);
+    let luma_height = height.align_power_of_two(3);
+    let luma_padding = MAX_SB_SIZE + FRAME_MARGIN;
+
+    let (chroma_sampling_period_x, chroma_sampling_period_y) =
+      chroma_sampling.sampling_period();
+    let chroma_width = luma_width / chroma_sampling_period_x;
+    let chroma_height = luma_height / chroma_sampling_period_y;
+    let chroma_padding_x = luma_padding / chroma_sampling_period_x;
+    let chroma_padding_y = luma_padding / chroma_sampling_period_y;
+    let chroma_decimation_x = chroma_sampling_period_x - 1;
+    let chroma_decimation_y = chroma_sampling_period_y - 1;
 
     Frame {
       planes: [
@@ -70,13 +69,13 @@ impl Frame {
         ),
         Plane::new(
           chroma_width, chroma_height,
-          chroma_xdec, chroma_ydec,
-          chroma_padding, chroma_padding
+          chroma_decimation_x, chroma_decimation_y,
+          chroma_padding_x, chroma_padding_y
         ),
         Plane::new(
           chroma_width, chroma_height,
-          chroma_xdec, chroma_ydec,
-          chroma_padding, chroma_padding
+          chroma_decimation_x, chroma_decimation_y,
+          chroma_padding_x, chroma_padding_y
         )
       ]
     }
