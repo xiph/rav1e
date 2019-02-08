@@ -87,7 +87,7 @@ fn sgrproj_box_ab(af: &mut[i32; 64+2],
     let mut b:i32 = 0;
 
     for yi in stripe_y+row-r..=stripe_y+row+r {
-      let mut src_plane: &Plane;
+      let src_plane: &Plane;
       let ly;
       if yi < stripe_y {
         ly = cmp::max(cmp::max(yi, 0), stripe_y - 2) as usize;
@@ -208,11 +208,11 @@ fn sgrproj_stripe_rdu(set: u8, xqd: [i8; 2], fi: &FrameInvariants,
                    stripe_x as isize, stripe_y,
                    cdeffed, deblocked, fi.sequence.bit_depth);
   }
-  
+
   /* iterate by column */
   let start = cmp::max(0, -stripe_y) as usize;
   let cdeffed_slice = cdeffed.slice(&PlaneOffset{x: stripe_x as isize, y: stripe_y});
-  let outstride = out.cfg.stride; 
+  let outstride = out.cfg.stride;
   let mut out_slice = out.mut_slice(&PlaneOffset{x: stripe_x as isize, y: stripe_y});
   let out_data = out_slice.as_mut_slice();
   for xi in 0..stripe_w {
@@ -267,7 +267,7 @@ fn sgrproj_stripe_rdu(set: u8, xqd: [i8; 2], fi: &FrameInvariants,
         let v = w*u + w2*f1[yi];
         let s = v + (1 << SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS >> 1) >> SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS;
         out_data[xi + yi*outstride] = clamp(s as u16, 0, (1 << bit_depth) - 1);
-      }      
+      }
     }
   }
 }
@@ -282,7 +282,7 @@ fn wiener_stripe_rdu(coeffs: [[i8; 3]; 2], fi: &FrameInvariants,
   let round_v = if bit_depth == 12 {9} else {11};
   let offset = 1 << bit_depth + WIENER_BITS - round_h - 1;
   let limit = (1 << bit_depth + 1 + WIENER_BITS - round_h) - 1;
-  
+
   let mut work: [i32; MAX_SB_SIZE+7] = [0; MAX_SB_SIZE+7];
   let vfilter: [i32; 7] = [ coeffs[0][0] as i32,
                             coeffs[0][1] as i32,
@@ -312,7 +312,7 @@ fn wiener_stripe_rdu(coeffs: [[i8; 3]; 2], fi: &FrameInvariants,
   } else {
     stripe_h - start_wi as isize
   }) as usize;
-  
+
   let stride = out.cfg.stride;
   let mut out_slice = out.mut_slice(&PlaneOffset{x: 0, y: start_yi as isize});
   let out_data = out_slice.as_mut_slice();
@@ -320,7 +320,7 @@ fn wiener_stripe_rdu(coeffs: [[i8; 3]; 2], fi: &FrameInvariants,
   for xi in stripe_x..stripe_x+stripe_w {
     let n = cmp::min(7, crop_w as isize + 3 - xi as isize);
     for yi in stripe_y-3..stripe_y+stripe_h+4 {
-      let mut src_plane: &Plane;
+      let src_plane: &Plane;
       let mut acc = 0;
       let ly;
       if yi < stripe_y {
@@ -333,7 +333,7 @@ fn wiener_stripe_rdu(coeffs: [[i8; 3]; 2], fi: &FrameInvariants,
         ly = cmp::min(clamp(yi, 0, crop_h as isize - 1), stripe_y + stripe_h + 1) as usize;
         src_plane = deblocked;
       }
-      
+
       for i in 0..3 - xi as isize {
         acc += hfilter[i as usize] * src_plane.p(0, ly) as i32;
       }
@@ -343,7 +343,7 @@ fn wiener_stripe_rdu(coeffs: [[i8; 3]; 2], fi: &FrameInvariants,
       for i in n..7 {
         acc += hfilter[i as usize] * src_plane.p(crop_w - 1, ly) as i32;
       }
-        
+
       acc = acc + (1 << round_h >> 1) >> round_h;
       work[(yi-stripe_y+3) as usize] = clamp(acc, -offset, limit-offset);
     }
@@ -498,7 +498,7 @@ impl RestorationState {
   pub fn lrf_filter_frame(&mut self, out: &mut Frame, pre_cdef: &Frame,
                           fi: &FrameInvariants) {
     let cdeffed = out.clone();
-    
+
     // unlike the other loop filters that operate over the padded
     // frame dimensions, restoration filtering and source pixel
     // accesses are clipped to the original frame dimensions
@@ -506,19 +506,19 @@ impl RestorationState {
 
     // number of stripes (counted according to colocated Y luma position)
     let stripe_n = (fi.height + 7) / 64 + 1;
-    
+
     for pli in 0..PLANES {
       let rp = &self.plane[pli];
       let xdec = out.planes[pli].cfg.xdec;
       let ydec = out.planes[pli].cfg.ydec;
       let crop_w = fi.width + (1 << xdec >> 1) >> xdec;
       let crop_h = fi.height + (1 << ydec >> 1) >> ydec;
-      
+
       for si in 0..stripe_n {
         // stripe y pixel locations must be able to overspan the frame
         let stripe_start_y = si as isize * 64 - 8 >> ydec;
         let stripe_size = 64 >> ydec; // one past, unlike spec
-      
+
         // horizontally, go rdu-by-rdu
         for rux in 0..rp.cols {
           // stripe x pixel locations must be clipped to frame, last may need to stretch
@@ -530,7 +530,7 @@ impl RestorationState {
           };
           let ru = rp.restoration_unit_by_stripe(si, rux);
           match ru.filter {
-            RestorationFilter::Wiener{coeffs} => {          
+            RestorationFilter::Wiener{coeffs} => {
               wiener_stripe_rdu(coeffs, fi,
                                 crop_w, crop_h,
                                 ru_size, stripe_size,
@@ -552,6 +552,6 @@ impl RestorationState {
           }
         }
       }
-    }    
+    }
   }
 }

@@ -194,7 +194,7 @@ impl Plane {
 
     for row in 0..height {
       let mut dst_slice = self.mut_slice(&PlaneOffset{ x: 0, y: row as isize });
-      let mut dst = dst_slice.as_mut_slice();
+      let dst = dst_slice.as_mut_slice();
 
       for col in 0..width {
         let mut sum = 0;
