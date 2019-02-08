@@ -339,6 +339,9 @@ impl Config {
       aom_dsp_rtcd();
     }
 
+    // initialize with temporal delimiter
+    let packet_data = TEMPORAL_DELIMITER.to_vec();
+
     Context {
       frame_count: 0,
       limit: 0,
@@ -347,7 +350,7 @@ impl Config {
       frame_q: BTreeMap::new(),
       frame_data: BTreeMap::new(),
       keyframes: BTreeSet::new(),
-      packet_data: Vec::new(),
+      packet_data,
       segment_start_idx: 0,
       segment_start_frame: 0,
       keyframe_detector: SceneChangeDetector::new(self.enc.bit_depth),
@@ -593,7 +596,13 @@ impl Context {
 
         let mut fs = FrameState::new(fi);
 
-        let data = encode_frame(fi, &mut fs);
+        let sef_data = encode_frame(fi, &mut fs);
+        self.packet_data.extend(sef_data);
+        let data = self.packet_data.clone();
+        self.packet_data.clear();
+        if write_temporal_delimiter(&mut self.packet_data).is_err() {
+          return Err(EncoderStatus::Failure);
+        };
 
         let rec = if fi.show_frame { Some(fs.rec) } else { None };
         let mut psnr = None;
@@ -635,6 +644,9 @@ impl Context {
             if fi.show_frame {
               let data = self.packet_data.clone();
               self.packet_data.clear();
+              if write_temporal_delimiter(&mut self.packet_data).is_err() {
+                return Err(EncoderStatus::Failure);
+              }
 
               let mut psnr = None;
               if self.config.enc.show_psnr {

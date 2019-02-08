@@ -41,6 +41,8 @@ pub struct Frame {
   pub planes: [Plane; 3]
 }
 
+pub static TEMPORAL_DELIMITER: [u8; 2] = [0x12, 0x00];
+
 const FRAME_MARGIN: usize = 16 + SUBPEL_FILTER_SIZE;
 
 impl Frame {
@@ -1729,19 +1731,19 @@ fn aom_uleb_encode(mut value: u64, coded_value: &mut [u8]) -> usize {
   leb_size
 }
 
+pub fn write_temporal_delimiter(
+  packet: &mut dyn io::Write
+) -> io::Result<()> {
+  packet.write(&TEMPORAL_DELIMITER)?;
+  Ok(())
+}
+
 fn write_obus(
   packet: &mut dyn io::Write, fi: &mut FrameInvariants, fs: &FrameState
 ) -> io::Result<()> {
   let obu_extension = 0 as u32;
 
   let mut buf1 = Vec::new();
-  {
-    let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
-    bw1.write_obu_header(OBU_Type::OBU_TEMPORAL_DELIMITER, obu_extension)?;
-    bw1.write(8, 0)?; // size of payload == 0, one byte
-  }
-  packet.write_all(&buf1).unwrap();
-  buf1.clear();
 
   // write sequence header obu if KEY_FRAME, preceded by 4-byte size
   if fi.frame_type == FrameType::KEY {
