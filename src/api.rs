@@ -159,7 +159,7 @@ impl SpeedSettings {
   }
 
   fn tx_domain_distortion_preset(speed: usize) -> bool {
-    speed >= 1
+    speed >= 4
   }
 
   fn encode_bottomup_preset(speed: usize) -> bool {
