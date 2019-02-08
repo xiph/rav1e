@@ -30,7 +30,8 @@ Automated AppVeyor builds can be found [here](https://ci.appveyor.com/project/td
 
 # Building
 
-**rav1e** can optionally use a local copy of `libaom` to run some extended tests and some `x86_64`-specific optimizations require a recent version of NASM.
+**rav1e** can optionally use either a local copy of `libaom` (default) or a `dav1d` installation to run some extended tests.
+Some `x86_64`-specific optimizations require a recent version of NASM.
 
 ## Internal libaom setup
 
@@ -148,6 +149,11 @@ cargo test
 Run encode-decode integration tests with:
 ```
 cargo test --release --features=decode_test
+```
+
+Run the encode-decode tests against `dav1d` with:
+```
+cargo test --release --features=decode_test_dav1d
 ```
 
 Run regular benchmarks with:
