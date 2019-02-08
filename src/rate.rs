@@ -9,6 +9,7 @@
 
 use crate::encoder::FrameInvariants;
 use crate::quantize::ac_q;
+use crate::quantize::dc_q;
 use crate::quantize::select_ac_qi;
 use crate::quantize::select_dc_qi;
 
@@ -282,8 +283,13 @@ impl RCState {
     // We use the AC quantizer as the source quantizer since its quantizer
     //  tables have unique entries, while the DC tables do not.
     let quantizer = ac_q(qi as u8, 0, bit_depth as usize) as i64;
+    // Pick the nearest DC entry since an exact match may be unavailable.
+    let dc_qi = select_dc_qi(quantizer, bit_depth as usize);
+    let dc_quantizer = dc_q(dc_qi as u8, 0, bit_depth as usize) as i64;
     // Get the log quantizer as Q57.
     let log_q = blog64(quantizer) - q57(QSCALE + bit_depth - 8);
-    QuantizerParameters::new_from_log_q(log_q, bit_depth)
+    let log_dc_q = blog64(dc_quantizer) - q57(QSCALE + bit_depth - 8);
+    // Target the midpoint of the chosen entries.
+    QuantizerParameters::new_from_log_q((log_q + log_dc_q + 1) / 2, bit_depth)
   }
 }
