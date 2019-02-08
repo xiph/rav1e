@@ -372,7 +372,7 @@ impl Default for EncodingSettings {
 // RDO-based mode decision
 pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
                          cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset,
-                         pmvs: &[Option<MotionVector>], needs_rec: bool
+                         pmvs: &[Option<MotionVector>]
 ) -> RDOPartitionOutput {
   let mut best = EncodingSettings::default();
 
@@ -501,6 +501,8 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
         if bsize >= BlockSize::BLOCK_8X8 && bsize.is_sqr() {
           cw.write_partition(wr, bo, PartitionType::PARTITION_NONE, bsize);
         }
+
+        let needs_rec = luma_mode_is_intra && tx_size < bsize.tx_size();
 
         encode_block_a(&fi.sequence, fs, cw, wr, bsize, bo, skip);
         let tx_dist =
@@ -1003,7 +1005,7 @@ pub fn rdo_partition_decision(
 
         let spmvs = &pmvs[pmv_idx];
 
-        let mode_decision = rdo_mode_decision(fi, fs, cw, bsize, bo, spmvs, false);
+        let mode_decision = rdo_mode_decision(fi, fs, cw, bsize, bo, spmvs);
         child_modes.push(mode_decision);
       }
       PARTITION_SPLIT |
@@ -1048,7 +1050,7 @@ pub fn rdo_partition_decision(
         for (offset, pmv_idx) in partitions.iter().zip(pmv_idxs) {
           let mode_decision =
             rdo_mode_decision(fi, fs, cw, subsize, &offset,
-                              &pmvs[pmv_idx], true);
+                              &pmvs[pmv_idx]);
 
           rd_cost_sum += mode_decision.rd_cost;
 

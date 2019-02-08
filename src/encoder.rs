@@ -2433,7 +2433,7 @@ fn encode_partition_bottomup(
     };
     let spmvs = &pmvs[pmv_idx];
 
-    let mode_decision = rdo_mode_decision(fi, fs, cw, bsize, bo, spmvs, false);
+    let mode_decision = rdo_mode_decision(fi, fs, cw, bsize, bo, spmvs);
 
     rd_cost = mode_decision.rd_cost + cost;
 
@@ -2657,7 +2657,7 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState,
         let spmvs = &pmvs[pmv_idx];
 
         // Make a prediction mode decision for blocks encoded with no rdo_partition_decision call (e.g. edges)
-        rdo_mode_decision(fi, fs, cw, bsize, bo, spmvs, false)
+        rdo_mode_decision(fi, fs, cw, bsize, bo, spmvs)
       };
 
       let mut mode_luma = part_decision.pred_mode_luma;
