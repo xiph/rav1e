@@ -135,42 +135,40 @@ pub fn sse_wxh(
   sse
 }
 
-// Compute the rate-distortion cost for an encode
-fn compute_rd_cost(
+// Compute the pixel-domain distortion for an encode
+fn compute_distortion(
   fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize,
-  is_chroma_block: bool, bo: &BlockOffset, bit_cost: u32,
+  is_chroma_block: bool, bo: &BlockOffset,
   luma_only: bool
-) -> f64 {
-  let lambda = fi.lambda;
-
-  // Compute distortion
+) -> u64 {
   let po = bo.plane_offset(&fs.input.planes[0].cfg);
-  let mut distortion = if fi.config.tune == Tune::Psnr {
-    sse_wxh(
-      &fs.input.planes[0].slice(&po),
-      &fs.rec.planes[0].slice(&po),
-      w_y,
-      h_y
-    )
-  } else if fi.config.tune == Tune::Psychovisual {
-    if w_y < 8 || h_y < 8 {
+  let mut distortion = match fi.config.tune {
+    Tune::Psnr => {
       sse_wxh(
         &fs.input.planes[0].slice(&po),
         &fs.rec.planes[0].slice(&po),
         w_y,
         h_y
       )
-    } else {
-      cdef_dist_wxh(
-        &fs.input.planes[0].slice(&po),
-        &fs.rec.planes[0].slice(&po),
-        w_y,
-        h_y,
-        fi.sequence.bit_depth
-      )
+    },
+    Tune::Psychovisual => {
+      if w_y < 8 || h_y < 8 {
+        sse_wxh(
+          &fs.input.planes[0].slice(&po),
+          &fs.rec.planes[0].slice(&po),
+          w_y,
+          h_y
+        )
+      } else {
+        cdef_dist_wxh(
+          &fs.input.planes[0].slice(&po),
+          &fs.rec.planes[0].slice(&po),
+          w_y,
+          h_y,
+          fi.sequence.bit_depth
+        )
+      }
     }
-  } else {
-    unimplemented!();
   };
 
   if !luma_only {
@@ -199,23 +197,16 @@ fn compute_rd_cost(
       }
     };
   }
-  // Compute rate
-  let rate = (bit_cost as f64) / ((1 << OD_BITRES) as f64);
-
-  (distortion as f64) + lambda * rate
+  distortion
 }
 
-// Compute the rate-distortion cost for an encode
-fn compute_tx_rd_cost(
+// Compute the transform-domain distortion for an encode
+fn compute_tx_distortion(
   fi: &FrameInvariants, fs: &FrameState, w_y: usize, h_y: usize,
-  is_chroma_block: bool, bo: &BlockOffset, bit_cost: u32, tx_dist: i64,
+  is_chroma_block: bool, bo: &BlockOffset, tx_dist: i64,
   skip: bool, luma_only: bool
-) -> f64 {
+) -> u64 {
   assert!(fi.config.tune == Tune::Psnr);
-
-  let lambda = fi.lambda;
-
-  // Compute distortion
   let mut distortion = if skip {
     let po = bo.plane_offset(&fs.input.planes[0].cfg);
 
@@ -256,10 +247,12 @@ fn compute_tx_rd_cost(
       }
     }
   }
-  // Compute rate
-  let rate = (bit_cost as f64) / ((1 << OD_BITRES) as f64);
+  distortion
+}
 
-  (distortion as f64) + lambda * rate
+fn compute_rd_cost(fi: &FrameInvariants, rate: u32, distortion: u64) -> f64 {
+  let rate_in_bits = (rate as f64) / ((1 << OD_BITRES) as f64);
+  (distortion as f64) + fi.lambda * rate_in_bits
 }
 
 pub fn rdo_tx_size_type(
@@ -502,32 +495,31 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
             !needs_rec
           );
 
-        let cost = wr.tell_frac() - tell;
-        let rd = if fi.use_tx_domain_distortion && !needs_rec {
-          compute_tx_rd_cost(
+        let rate = wr.tell_frac() - tell;
+        let distortion = if fi.use_tx_domain_distortion && !needs_rec {
+          compute_tx_distortion(
             fi,
             fs,
             w,
             h,
             is_chroma_block,
             bo,
-            cost,
             tx_dist,
             skip,
             false
           )
         } else {
-          compute_rd_cost(
+          compute_distortion(
             fi,
             fs,
             w,
             h,
             is_chroma_block,
             bo,
-            cost,
             false
           )
         };
+        let rd = compute_rd_cost(fi, rate, distortion);
         if rd < best.rd {
           //if rd < best.rd || luma_mode == PredictionMode::NEW_NEWMV {
           best.rd = rd;
@@ -719,21 +711,20 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
         false // For CFL, luma should be always reconstructed.
       );
 
-      let cost = wr.tell_frac() - tell;
+      let rate = wr.tell_frac() - tell;
 
       // For CFL, tx-domain distortion is not an option.
-      let rd =
-        compute_rd_cost(
+      let distortion =
+        compute_distortion(
           fi,
           fs,
           w,
           h,
           is_chroma_block,
           bo,
-          cost,
           false
         );
-
+      let rd = compute_rd_cost(fi, rate, distortion);
       if rd < best.rd {
         best.rd = rd;
         best.mode_chroma = chroma_mode;
@@ -855,32 +846,31 @@ pub fn rdo_tx_type_decision(
       )
     };
 
-    let cost = wr.tell_frac() - tell;
-    let rd = if fi.use_tx_domain_distortion {
-      compute_tx_rd_cost(
+    let rate = wr.tell_frac() - tell;
+    let distortion = if fi.use_tx_domain_distortion {
+      compute_tx_distortion(
         fi,
         fs,
         w,
         h,
         is_chroma_block,
         bo,
-        cost,
         tx_dist,
         false,
         true
       )
     } else {
-      compute_rd_cost(
+      compute_distortion(
         fi,
         fs,
         w,
         h,
         is_chroma_block,
         bo,
-        cost,
         true
       )
     };
+    let rd = compute_rd_cost(fi, rate, distortion);
     if rd < best_rd {
       best_rd = rd;
       best_type = tx_type;
