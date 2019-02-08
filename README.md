@@ -16,6 +16,7 @@ rav1e is an experimental AV1 video encoder. It is designed to eventually cover a
 * DC, H, V, Paeth, and smooth prediction modes
 * DCT, ADST and identity transforms (up to 64x64, 16x16 and 32x32 respectively)
 * 8-, 10- and 12-bit depth color
+* 4:2:0 (full support), 4:2:2 and 4:4:4 (limited) chroma sampling
 * Variable speed settings
 * Near real-time encoding at high speed levels
 
