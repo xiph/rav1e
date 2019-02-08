@@ -19,6 +19,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use util::Fixed;
 use std::collections::BTreeSet;
+use std::collections::VecDeque;
 
 const LOOKAHEAD_FRAMES: u64 = 10;
 
@@ -342,11 +343,13 @@ impl Config {
     Context {
       frame_count: 0,
       limit: 0,
+      last_frame: None,
       idx: 0,
       frames_processed: 0,
       frame_q: BTreeMap::new(),
       frame_data: BTreeMap::new(),
       keyframes: BTreeSet::new(),
+      packet_q: VecDeque::new(),
       packet_data: Vec::new(),
       segment_start_idx: 0,
       segment_start_frame: 0,
@@ -360,6 +363,7 @@ pub struct Context {
   //    timebase: Rational,
   frame_count: u64,
   limit: u64,
+  last_frame: Option<u64>,
   idx: u64,
   frames_processed: u64,
   /// Maps frame *number* to frames
@@ -369,6 +373,8 @@ pub struct Context {
   /// A list of keyframe *numbers* in this encode. Needed so that we don't
   /// need to keep all of the frame_data in memory for the whole life of the encode.
   keyframes: BTreeSet<u64>,
+
+  packet_q: std::collections::VecDeque<Packet>,
   /// A storage space for reordered frames.
   packet_data: Vec<u8>,
   segment_start_idx: u64,
@@ -426,7 +432,23 @@ impl Context {
     let idx = self.frame_count;
     self.frame_q.insert(idx, frame.into());
     self.frame_count += 1;
+    println!("Adding Frame {}", idx);
+
+    if self.frame_q.len() > LOOKAHEAD_FRAMES as usize {
+        while let Ok(pkt) = self.get_packet() {
+            println!("Enqueuing {}", pkt.number);
+            self.packet_q.push_back(pkt);
+        }
+    }
+
     Ok(())
+  }
+
+  pub fn receive_packet(&mut self) -> Result<Packet, EncoderStatus> {
+    match self.packet_q.pop_front() {
+      Some(pkt) => Ok(pkt),
+      None => Err(EncoderStatus::NeedMoreData),
+    }
   }
 
   pub fn get_frame_count(&self) -> u64 {
@@ -490,10 +512,13 @@ impl Context {
     let (fi, end_of_subgop) = self.build_frame_properties(idx);
     self.frame_data.insert(idx, fi);
 
+    println!("set frame properties for {} -> {}", idx, end_of_subgop);
+
     end_of_subgop
   }
 
   fn build_frame_properties(&mut self, idx: u64) -> (FrameInvariants, bool) {
+    println!("building properties for {}", idx);
     if idx == 0 {
       let seq = Sequence::new(&self.config.enc);
 
@@ -540,7 +565,7 @@ impl Context {
 
     match self.frame_q.get(&fi.number) {
       Some(Some(_)) => {},
-      _ => { return (fi, false); }
+      _ => { println!("No frames in queue"); return (fi, false); }
     }
 
     // Now that we know the frame number, look up the correct frame type
@@ -571,12 +596,15 @@ impl Context {
     (fi, true)
   }
 
-  pub fn receive_packet(&mut self) -> Result<Packet, EncoderStatus> {
+  fn get_packet(&mut self) -> Result<Packet, EncoderStatus> {
     let idx = {
       let mut idx = self.idx;
       while !self.set_frame_properties(idx) {
         self.idx += 1;
         idx = self.idx;
+        if self.idx >= self.last_frame.unwrap_or(std::u64::MAX) {
+          return Err(EncoderStatus::EnoughData);
+        }
       }
 
       if !self.needs_more_frames(self.frame_data.get(&idx).unwrap().number) {
@@ -690,8 +718,14 @@ impl Context {
   }
 
   pub fn flush(&mut self) {
+    println!("Flushing");
+    self.last_frame = Some(self.frame_count);
     self.frame_q.insert(self.frame_count, None);
     self.frame_count += 1;
+    while let Ok(pkt) = self.get_packet() {
+        println!("Enqueuing {}", pkt.number);
+        self.packet_q.push_back(pkt);
+    }
   }
 
   fn determine_frame_type(&mut self, frame_number: u64) -> FrameType {

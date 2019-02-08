@@ -28,9 +28,7 @@ use std::sync::Arc;
 use decoder::Decoder;
 use decoder::VideoDetails;
 
-fn read_frame_batch<D: Decoder>(ctx: &mut Context, decoder: &mut D, video_info: VideoDetails) {
-  loop {
-    if ctx.needs_more_lookahead() {
+fn read_frame_batch<D: Decoder>(ctx: &mut Context, decoder: &mut D, video_info: VideoDetails) -> bool {
       match decoder.read_frame(&video_info) {
         Ok(frame) => {
           match video_info.bit_depth {
@@ -39,20 +37,16 @@ fn read_frame_batch<D: Decoder>(ctx: &mut Context, decoder: &mut D, video_info: 
           }
 
           let _ = ctx.send_frame(Some(Arc::new(frame)));
-          continue;
+          false
         }
         _ => {
           let frames_to_be_coded = ctx.get_frame_count();
           // This is a hack, instead when EOF is reached simply "close" the encoder to input (flag)
           ctx.set_limit(frames_to_be_coded);
           ctx.flush();
+          true
         }
       }
-    } else if !ctx.needs_more_frames(ctx.get_frame_count()) {
-      ctx.flush();
-    }
-    break;
-  }
 }
 
 // Encode and write a frame.
@@ -61,19 +55,21 @@ fn process_frame(
   ctx: &mut Context, output_file: &mut dyn Write,
   y4m_dec: &mut y4m::Decoder<'_, Box<dyn Read>>,
   mut y4m_enc: Option<&mut y4m::Encoder<'_, Box<dyn Write>>>
-) -> Result<Vec<FrameSummary>, ()> {
+) -> (Vec<FrameSummary>, bool) {
   let y4m_details = y4m_dec.get_video_details();
   let mut frame_summaries = Vec::new();
-  read_frame_batch(ctx, y4m_dec, y4m_details);
-  let pkt_wrapped = ctx.receive_packet();
-  if let Ok(pkt) = pkt_wrapped {
+  let done = read_frame_batch(ctx, y4m_dec, y4m_details);
+  println!("done {}", done);
+  while let Ok(pkt) = ctx.receive_packet() {
+    println!("writing {}", pkt.number);
     write_ivf_frame(output_file, pkt.number as u64, pkt.data.as_ref());
     if let (Some(ref mut y4m_enc_uw), Some(ref rec)) = (y4m_enc.as_mut(), &pkt.rec) {
       write_y4m_frame(y4m_enc_uw, rec, y4m_details);
     }
     frame_summaries.push(pkt.into());
   }
-  Ok(frame_summaries)
+
+  (frame_summaries, done)
 }
 
 fn main() {
@@ -134,8 +130,9 @@ fn main() {
   ctx.set_limit(cli.limit as u64);
 
   loop {
-    match process_frame(&mut ctx, &mut cli.io.output, &mut y4m_dec, y4m_enc.as_mut()) {
-      Ok(frame_info) => {
+    let (frame_info, done) = process_frame(&mut ctx, &mut cli.io.output, &mut y4m_dec, y4m_enc.as_mut());
+
+        println!("we have a frame");
         for frame in frame_info {
           progress.add_frame(frame);
           let _ = if cli.verbose {
@@ -144,11 +141,9 @@ fn main() {
             write!(err, "\r{}                    ", progress)
           };
         }
-      },
-      Err(_) => break,
-    };
 
-    if !ctx.needs_more_frames(progress.frames_encoded() as u64) {
+    println!("frame encoded {}", progress.frames_encoded());
+    if done {
       break;
     }
 
