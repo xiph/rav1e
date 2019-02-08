@@ -20,6 +20,9 @@ use std::{mem, ptr, slice};
 use std::collections::VecDeque;
 use std::ffi::CStr;
 use std::sync::Arc;
+use util::Fixed;
+
+// TODO: merge this file with test_encode_decode_dav1d.rs
 
 fn fill_frame(ra: &mut ChaChaRng, frame: &mut Frame) {
   for plane in frame.planes.iter_mut() {
@@ -33,9 +36,11 @@ fn fill_frame(ra: &mut ChaChaRng, frame: &mut Frame) {
   }
 }
 
-fn read_frame_batch(ctx: &mut Context, ra: &mut ChaChaRng) {
+fn read_frame_batch(ctx: &mut Context, ra: &mut ChaChaRng, w: usize, h: usize,
+ chroma_sampling: ChromaSampling) {
   while ctx.needs_more_lookahead() {
-    let mut input = ctx.new_frame();
+    let mut input = Arc::new(Frame::new(
+      w.align_power_of_two(3), h.align_power_of_two(3), chroma_sampling));
     fill_frame(ra, Arc::get_mut(&mut input).unwrap());
 
     let _ = ctx.send_frame(Some(input));
@@ -342,7 +347,7 @@ fn encode_decode(
 
   let mut rec_fifo = VecDeque::new();
   for _ in 0..limit {
-    read_frame_batch(&mut ctx, &mut ra);
+    read_frame_batch(&mut ctx, &mut ra, w, h, chroma_sampling);
 
     let mut done = false;
     let mut corrupted_count = 0;
