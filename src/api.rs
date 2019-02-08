@@ -616,6 +616,7 @@ impl Context {
 
     let ret = {
       let fi = self.frame_data.get_mut(&idx).unwrap();
+      println!("Frame index {} number {}", idx, fi.number);
       if fi.show_existing_frame {
         self.idx += 1;
 
@@ -723,7 +724,7 @@ impl Context {
     self.frame_q.insert(self.frame_count, None);
     self.frame_count += 1;
     while let Ok(pkt) = self.get_packet() {
-        println!("Enqueuing {}", pkt.number);
+        println!("End Enqueuing {}", pkt.number);
         self.packet_q.push_back(pkt);
     }
   }
