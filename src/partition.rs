@@ -892,7 +892,7 @@ pub fn get_intra_edges<'a>(
 
       let num_avail = if y != 0 && has_tr(&bo, bsize) {
         tx_size.height().min(
-          (MI_SIZE >> plane_cfg.xdec) * frame_w_in_b
+          (MI_SIZE >> plane_cfg.ydec) * frame_w_in_b
             - x as usize
             - tx_size.width()
         )
@@ -927,7 +927,7 @@ pub fn get_intra_edges<'a>(
 
       let num_avail = if x != 0 && has_bl(&bo, bsize) {
         tx_size.width().min(
-          (MI_SIZE >> plane_cfg.xdec) * frame_h_in_b
+          (MI_SIZE >> plane_cfg.ydec) * frame_h_in_b
             - y as usize
             - tx_size.height()
         )
