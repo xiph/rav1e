@@ -34,7 +34,6 @@ jobs:
          - cargo install cargo-kcov
          - kcov --version
          - cargo build --release --verbose
-         - cargo kcov --coveralls --features=decode_test -- --verify --exclude-pattern=$HOME/.cargo,aom_build,.h,test
       - name: "Tests"
         script: cargo test --verbose --release --features=decode_test -- --ignored
       - name: "Bench"
