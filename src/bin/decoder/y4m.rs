@@ -1,13 +1,13 @@
 use std::io::Read;
 
 use rav1e::Rational;
-use decoder::DecodeError;
-use decoder::Decoder;
-use decoder::VideoDetails;
-use encoder::ChromaSamplePosition;
-use encoder::ChromaSampling;
-use encoder::Frame;
-use util::Fixed;
+use crate::decoder::DecodeError;
+use crate::decoder::Decoder;
+use crate::decoder::VideoDetails;
+use crate::encoder::ChromaSamplePosition;
+use crate::encoder::ChromaSampling;
+use crate::encoder::Frame;
+use crate::util::Fixed;
 
 impl Decoder for y4m::Decoder<'_, Box<dyn Read>> {
   fn get_video_details(&self) -> VideoDetails {
@@ -74,8 +74,8 @@ pub fn map_y4m_color_space(
   color_space: y4m::Colorspace
 ) -> (ChromaSampling, ChromaSamplePosition) {
   use y4m::Colorspace::*;
-  use ChromaSampling::*;
-  use ChromaSamplePosition::*;
+  use crate::ChromaSampling::*;
+  use crate::ChromaSamplePosition::*;
   match color_space {
     Cmono => (Cs400, Unknown),
     C420jpeg | C420paldv => (Cs420, Unknown),

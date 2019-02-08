@@ -11,31 +11,31 @@
 #![allow(non_camel_case_types)]
 #![allow(clippy::cast_lossless)]
 
-use api::PredictionModesSetting;
-use cdef::*;
-use context::*;
-use ec::{OD_BITRES, Writer, WriterCounter};
-use encoder::{ChromaSampling, ReferenceMode};
-use encode_block_a;
-use encode_block_b;
-use encode_block_with_modes;
-use FrameInvariants;
-use FrameState;
-use FrameType;
-use luma_ac;
-use me::*;
-use motion_compensate;
-use partition::*;
-use plane::*;
-use predict::{RAV1E_INTRA_MODES, RAV1E_INTER_MODES_MINIMAL, RAV1E_INTER_COMPOUND_MODES};
-use quantize::dc_q;
-use Tune;
-use write_tx_blocks;
-use write_tx_tree;
+use crate::api::PredictionModesSetting;
+use crate::cdef::*;
+use crate::context::*;
+use crate::ec::{OD_BITRES, Writer, WriterCounter};
+use crate::encoder::{ChromaSampling, ReferenceMode};
+use crate::encode_block_a;
+use crate::encode_block_b;
+use crate::encode_block_with_modes;
+use crate::FrameInvariants;
+use crate::FrameState;
+use crate::FrameType;
+use crate::luma_ac;
+use crate::me::*;
+use crate::motion_compensate;
+use crate::partition::*;
+use crate::plane::*;
+use crate::predict::{RAV1E_INTRA_MODES, RAV1E_INTER_MODES_MINIMAL, RAV1E_INTER_COMPOUND_MODES};
+use crate::quantize::dc_q;
+use crate::Tune;
+use crate::write_tx_blocks;
+use crate::write_tx_tree;
 
 use std;
 use std::vec::Vec;
-use partition::PartitionType::*;
+use crate::partition::PartitionType::*;
 
 #[derive(Clone)]
 pub struct RDOOutput {

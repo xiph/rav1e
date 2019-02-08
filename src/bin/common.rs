@@ -8,7 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use clap::{App, Arg, ArgMatches};
-use {ColorPrimaries, TransferCharacteristics, MatrixCoefficients};
+use crate::{ColorPrimaries, TransferCharacteristics, MatrixCoefficients};
 use rav1e::*;
 
 use std::{fmt, io};

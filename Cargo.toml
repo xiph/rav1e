@@ -2,6 +2,7 @@
 name = "rav1e"
 version = "0.1.0"
 authors = ["Thomas Daede <tdaede@xiph.org>"]
+edition = "2018"
 build = "build.rs"
 include = ["/src/**", "/aom_build/**", "/Cargo.toml", "/build.rs"]
 autobenches = false

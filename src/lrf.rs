@@ -9,17 +9,17 @@
 
 #![allow(safe_extern_statics)]
 
-use encoder::Frame;
-use encoder::FrameInvariants;
-use context::ContextWriter;
-use context::SuperBlockOffset;
-use context::PLANES;
-use context::MAX_SB_SIZE;
-use plane::Plane;
-use plane::PlaneOffset;
-use plane::PlaneConfig;
+use crate::encoder::Frame;
+use crate::encoder::FrameInvariants;
+use crate::context::ContextWriter;
+use crate::context::SuperBlockOffset;
+use crate::context::PLANES;
+use crate::context::MAX_SB_SIZE;
+use crate::plane::Plane;
+use crate::plane::PlaneOffset;
+use crate::plane::PlaneConfig;
 use std::cmp;
-use util::clamp;
+use crate::util::clamp;
 
 pub const RESTORATION_TILESIZE_MAX_LOG2: usize = 8;
 

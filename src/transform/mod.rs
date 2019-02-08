@@ -10,9 +10,9 @@
 pub use self::forward::*;
 pub use self::inverse::*;
 
-use partition::{TxSize, TxType, TX_TYPES};
-use predict::*;
-use util::*;
+use crate::partition::{TxSize, TxType, TX_TYPES};
+use crate::predict::*;
+use crate::util::*;
 
 mod forward;
 mod inverse;
@@ -263,8 +263,8 @@ mod test {
 
   #[test]
   fn roundtrips() {
-    use partition::TxSize::*;
-    use partition::TxType::*;
+    use crate::partition::TxSize::*;
+    use crate::partition::TxType::*;
     let combinations = [
       (TX_4X4, DCT_DCT, 0),
       (TX_4X4, ADST_DCT, 0),

@@ -9,9 +9,9 @@
 
 #![allow(safe_extern_statics)]
 
-use context::*;
-use FrameInvariants;
-use FrameState;
+use crate::context::*;
+use crate::FrameInvariants;
+use crate::FrameState;
 
 pub fn segmentation_optimize(_fi: &FrameInvariants, fs: &mut FrameState) {
     fs.segmentation.enabled = false;

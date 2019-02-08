@@ -12,12 +12,12 @@
 
 use self::BlockSize::*;
 use self::TxSize::*;
-use context::*;
-use encoder::{ChromaSampling, FrameInvariants};
-use mc::*;
-use plane::*;
-use predict::*;
-use util::*;
+use crate::context::*;
+use crate::encoder::{ChromaSampling, FrameInvariants};
+use crate::mc::*;
+use crate::plane::*;
+use crate::predict::*;
+use crate::util::*;
 
 pub const NONE_FRAME: usize = 8;
 pub const INTRA_FRAME: usize = 0;

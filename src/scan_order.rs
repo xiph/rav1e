@@ -14,7 +14,7 @@
 
 const MAX_NEIGHBORS: usize = 2;
 
-use partition::*;
+use crate::partition::*;
 
 #[repr(C)]
 pub struct SCAN_ORDER {

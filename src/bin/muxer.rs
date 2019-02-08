@@ -8,7 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use bitstream_io::{BitWriter, LittleEndian};
-use decoder::VideoDetails;
+use crate::decoder::VideoDetails;
 use std::io;
 use std::io::Write;
 use std::slice;

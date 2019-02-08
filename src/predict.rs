@@ -11,9 +11,9 @@
 #![allow(clippy::cast_lossless)]
 #![allow(clippy::needless_range_loop)]
 
-use context::{INTRA_MODES, MAX_TX_SIZE};
-use partition::*;
-use util::*;
+use crate::context::{INTRA_MODES, MAX_TX_SIZE};
+use crate::partition::*;
+use crate::util::*;
 
 #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
 use libc;

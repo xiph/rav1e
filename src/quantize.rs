@@ -10,7 +10,7 @@
 #![allow(clippy::cast_lossless)]
 #![allow(non_upper_case_globals)]
 
-use partition::TxSize;
+use crate::partition::TxSize;
 
 use num_traits::*;
 use std::convert::Into;
@@ -98,7 +98,7 @@ fn divu_pair(x: i32, d: (u32, u32, u32)) -> i32 {
 #[cfg(test)]
 mod test {
   use super::*;
-  use partition::TxSize::*;
+  use crate::partition::TxSize::*;
 
   #[test]
   fn test_divu_pair() {

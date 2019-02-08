@@ -9,11 +9,11 @@
 
 #![allow(safe_extern_statics)]
 
-use context::*;
-use Frame;
-use FrameInvariants;
-use plane::*;
-use util::{clamp, msb};
+use crate::context::*;
+use crate::Frame;
+use crate::FrameInvariants;
+use crate::plane::*;
+use crate::util::{clamp, msb};
 
 use std::cmp;
 

@@ -11,7 +11,7 @@ use criterion::*;
 use rand::{ChaChaRng, Rng, RngCore, SeedableRng};
 use rav1e::partition::BlockSize;
 use rav1e::predict::{Block4x4, Intra};
-use util::*;
+use crate::util::*;
 
 pub const BLOCK_SIZE: BlockSize = BlockSize::BLOCK_32X32;
 
