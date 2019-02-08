@@ -28,7 +28,7 @@ use motion_compensate;
 use partition::*;
 use plane::*;
 use predict::{RAV1E_INTRA_MODES, RAV1E_INTER_MODES_MINIMAL, RAV1E_INTER_COMPOUND_MODES};
-use quantize::ac_q;
+use quantize::{ac_q, dc_q};
 use Tune;
 use write_tx_blocks;
 use write_tx_tree;
@@ -138,25 +138,19 @@ pub fn sse_wxh(
 }
 
 pub fn get_lambda(fi: &FrameInvariants) -> f64 {
-  let q = ac_q(fi.base_q_idx, fi.dc_delta_q[0], fi.sequence.bit_depth) as f64;
+  let sqr_q = ac_q(fi.base_q_idx, fi.dc_delta_q[0], fi.sequence.bit_depth) as f64 *
+              dc_q(fi.base_q_idx, fi.dc_delta_q[0], fi.sequence.bit_depth) as f64;
 
   // Convert q into Q0 precision, given that libaom quantizers are Q3
-  let q0 = q / 8.0_f64;
+  let sqr_q0 = sqr_q / 64.0_f64;
 
   // Lambda formula from doc/theoretical_results.lyx in the daala repo
   // Use Q0 quantizer since lambda will be applied to Q0 pixel domain
-  q0 * q0 * std::f64::consts::LN_2 / 6.0
+  sqr_q0 * std::f64::consts::LN_2 / 6.0
 }
 
 pub fn get_lambda_sqrt(fi: &FrameInvariants) -> f64 {
-  let q = ac_q(fi.base_q_idx, fi.dc_delta_q[0], fi.sequence.bit_depth) as f64;
-
-  // Convert q into Q0 precision, given that libaom quantizers are Q3
-  let q0 = q / 8.0_f64;
-
-  // Lambda formula from doc/theoretical_results.lyx in the daala repo
-  // Use Q0 quantizer since lambda will be applied to Q0 pixel domain
-  q0 * (std::f64::consts::LN_2 / 6.0).sqrt()
+  get_lambda(&fi).sqrt()
 }
 
 // Compute the rate-distortion cost for an encode
