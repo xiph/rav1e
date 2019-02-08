@@ -450,16 +450,15 @@ impl FrameState {
 
   pub fn new_with_frame(fi: &FrameInvariants, frame: Arc<Frame>) -> FrameState {
     let rs = RestorationState::new(fi, &frame);
-    let (luma_width, luma_height, luma_xpad, luma_ypad) = (
-      frame.planes[0].cfg.width,
-      frame.planes[0].cfg.height,
-      frame.planes[0].cfg.xpad,
-      frame.planes[0].cfg.ypad
-    );
+    let luma_width = frame.planes[0].cfg.width;
+    let luma_height = frame.planes[0].cfg.height;
+    let luma_padding_x = frame.planes[0].cfg.xpad;
+    let luma_padding_y = frame.planes[0].cfg.ypad;
+
     FrameState {
       input: frame,
-      input_hres: Plane::new(luma_width/2, luma_height/2, 1, 1, luma_xpad/2, luma_ypad/2),
-      input_qres: Plane::new(luma_width/4, luma_height/4, 2, 2, luma_xpad/4, luma_ypad/4),
+      input_hres: Plane::new(luma_width / 2, luma_height / 2, 1, 1, luma_padding_x / 2, luma_padding_y / 2),
+      input_qres: Plane::new(luma_width / 4, luma_height / 4, 2, 2, luma_padding_x / 4, luma_padding_y / 4),
       rec: Frame::new(luma_width, luma_height, fi.sequence.chroma_sampling),
       qc: Default::default(),
       cdfs: CDFContext::new(0),
