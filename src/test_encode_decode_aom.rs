@@ -25,7 +25,7 @@ fn fill_frame(ra: &mut ChaChaRng, frame: &mut Frame) {
   for plane in frame.planes.iter_mut() {
     let stride = plane.cfg.stride;
     for row in plane.data.chunks_mut(stride) {
-      for mut pixel in row {
+      for pixel in row {
         let v: u8 = ra.gen();
         *pixel = v as u16;
       }
