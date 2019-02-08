@@ -854,14 +854,14 @@ pub fn rdo_tx_type_decision(
 
   let cw_checkpoint = cw.checkpoint();
 
+  if is_inter {
+    motion_compensate(fi, fs, cw, mode, ref_frames, mvs, bsize, bo, true);
+  }
+
   for &tx_type in RAV1E_TX_TYPES {
     // Skip unsupported transform types
     if av1_tx_used[tx_set as usize][tx_type as usize] == 0 {
       continue;
-    }
-
-    if is_inter {
-      motion_compensate(fi, fs, cw, mode, ref_frames, mvs, bsize, bo, true);
     }
 
     let wr: &mut dyn Writer = &mut WriterCounter::new();
