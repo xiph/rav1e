@@ -277,8 +277,8 @@ pub fn cdef_sb_padded_frame_copy(fi: &FrameInvariants, sbo: &SuperBlockOffset,
   for p in 0..3 {
     let xdec = f.planes[p].cfg.xdec;
     let ydec = f.planes[p].cfg.ydec;
-    let h = fi.padded_h as isize >> ydec;
-    let w = fi.padded_w as isize >> xdec;
+    let h = f.planes[p].cfg.height as isize;
+    let w = f.planes[p].cfg.width as isize;
     let offset = sbo.plane_offset(&f.planes[p].cfg);
     for y in 0..((sb_size>>ydec) + pad*2) as isize {
       let mut out_slice = out.planes[p].mut_slice(&PlaneOffset {x:0, y});
@@ -404,8 +404,8 @@ pub fn cdef_filter_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockCo
 
   // Each filter block is 64x64, except right and/or bottom for non-multiple-of-64 sizes.
   // FIXME: 128x128 SB support will break this, we need FilterBlockOffset etc.
-  let fb_height = (fi.padded_h + 63) / 64;
-  let fb_width = (fi.padded_w + 63) / 64;
+  let fb_width = (rec.planes[0].cfg.width + 63) / 64;
+  let fb_height = (rec.planes[0].cfg.height + 63) / 64;
 
   // Construct a padded copy of the reconstructed frame.
   let mut padded_px: [[usize; 2]; 3] = [[0; 2]; 3];
@@ -421,8 +421,8 @@ pub fn cdef_filter_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockCo
     ]
   };
   for p in 0..3 {
-    let rec_w = fi.padded_w >> rec.planes[p].cfg.xdec;
-    let rec_h = fi.padded_h >> rec.planes[p].cfg.ydec;
+    let rec_w = rec.planes[p].cfg.width;
+    let rec_h = rec.planes[p].cfg.height;
     for row in 0..padded_px[p][1] {
       // pad first two elements of current row
       {
