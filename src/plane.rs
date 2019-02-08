@@ -23,6 +23,8 @@ pub struct PlaneConfig {
   pub height: usize,
   pub xdec: usize,
   pub ydec: usize,
+  pub xpad: usize,
+  pub ypad: usize,
   pub xorigin: usize,
   pub yorigin: usize
 }
@@ -73,6 +75,8 @@ impl Plane {
         height,
         xdec,
         ydec,
+        xpad,
+        ypad,
         xorigin,
         yorigin
       }
