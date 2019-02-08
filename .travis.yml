@@ -1,6 +1,8 @@
 language: rust
 rust:
   - stable
+env:
+  - RUST_BACKTRACE=1
 addons:
   apt:
     packages: binutils-dev libcurl4-openssl-dev zlib1g-dev libdw-dev libiberty-dev
@@ -28,7 +30,7 @@ before_install:
 jobs:
   include:
       - name: "Build & Coveralls"
-        script: 
+        script:
          - cargo install cargo-kcov
          - kcov --version
          - cargo build --release --verbose
