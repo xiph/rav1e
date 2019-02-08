@@ -17,7 +17,7 @@ use rav1e::me;
 fn fill_plane(ra: &mut ChaChaRng, plane: &mut Plane) {
   let stride = plane.cfg.stride;
   for row in plane.data.chunks_mut(stride) {
-    for mut pixel in row {
+    for pixel in row {
       let v: u8 = ra.gen();
       *pixel = v as u16;
     }

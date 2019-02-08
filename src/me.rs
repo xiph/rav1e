@@ -230,7 +230,7 @@ pub fn motion_estimation(
                 blk_w,
                 blk_h,
                 [ref_frame, NONE_FRAME],
-                [cand_mv, MotionVector { row: 0, col: 0 }]                
+                [cand_mv, MotionVector { row: 0, col: 0 }]
               );
             }
 
@@ -429,7 +429,7 @@ pub mod test {
     let mut rec_plane = input_plane.clone();
 
     for (i, row) in input_plane.data.chunks_mut(input_plane.cfg.stride).enumerate() {
-      for (j, mut pixel) in row.into_iter().enumerate() {
+      for (j, pixel) in row.into_iter().enumerate() {
         let val = ((j + i) as i32 & 255i32) as u16;
         assert!(val >= u8::min_value().into() &&
             val <= u8::max_value().into());
@@ -438,7 +438,7 @@ pub mod test {
     }
 
     for (i, row) in rec_plane.data.chunks_mut(rec_plane.cfg.stride).enumerate() {
-      for (j, mut pixel) in row.into_iter().enumerate() {
+      for (j, pixel) in row.into_iter().enumerate() {
         let val = (j as i32 - i as i32 & 255i32) as u16;
         assert!(val >= u8::min_value().into() &&
             val <= u8::max_value().into());
