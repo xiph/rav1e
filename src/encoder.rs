@@ -532,8 +532,6 @@ pub struct FrameInvariants {
   pub sequence: Sequence,
   pub width: usize,
   pub height: usize,
-  pub padded_w: usize,
-  pub padded_h: usize,
   pub sb_width: usize,
   pub sb_height: usize,
   pub w_in_b: usize,
@@ -599,8 +597,6 @@ impl FrameInvariants {
       sequence,
       width: config.width,
       height: config.height,
-      padded_w: config.width.align_power_of_two(3),
-      padded_h: config.height.align_power_of_two(3),
       sb_width: config.width.align_power_of_two_and_shift(6),
       sb_height: config.height.align_power_of_two_and_shift(6),
       w_in_b: 2 * config.width.align_power_of_two_and_shift(3), // MiCols, ((width+7)/8)<<3 >> MI_SIZE_LOG2
