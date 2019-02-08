@@ -17,7 +17,6 @@ use self::EncoderStatus::*;
 use std::{cmp, fmt, io};
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use crate::util::Fixed;
 use std::collections::BTreeSet;
 
 const LOOKAHEAD_FRAMES: u64 = 10;
@@ -413,8 +412,8 @@ impl fmt::Display for Packet {
 impl Context {
   pub fn new_frame(&self) -> Arc<Frame> {
     Arc::new(Frame::new(
-      self.config.enc.width.align_power_of_two(3),
-      self.config.enc.height.align_power_of_two(3),
+      self.config.enc.width,
+      self.config.enc.height,
       self.config.enc.chroma_sampling
     ))
   }
