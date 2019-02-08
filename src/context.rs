@@ -806,13 +806,13 @@ impl CDFContext {
       ($field:expr) => (let r = $field.last_mut().unwrap(); *r = 0;)
     }
     macro_rules! reset_2d {
-      ($field:expr) => (for mut x in $field.iter_mut() { reset_1d!(x); })
+      ($field:expr) => (for x in $field.iter_mut() { reset_1d!(x); })
     }
     macro_rules! reset_3d {
-      ($field:expr) => (for mut x in $field.iter_mut() { reset_2d!(x); })
+      ($field:expr) => (for x in $field.iter_mut() { reset_2d!(x); })
     }
     macro_rules! reset_4d {
-      ($field:expr) => (for mut x in $field.iter_mut() { reset_3d!(x); })
+      ($field:expr) => (for x in $field.iter_mut() { reset_3d!(x); })
     }
 
     for i in 0..4 { self.partition_cdf[i][4] = 0; }

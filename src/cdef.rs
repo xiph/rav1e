@@ -229,7 +229,7 @@ pub fn cdef_analyze_superblock(in_frame: &mut Frame,
 
         if !skip {
           let mut var: i32 = 0;
-          let mut in_plane = &mut in_frame.planes[0];
+          let in_plane = &mut in_frame.planes[0];
           let in_po = sbo.plane_offset(&in_plane.cfg);
           let in_stride = in_plane.cfg.stride;
           let in_slice = &in_plane.mut_slice(&in_po);
@@ -282,13 +282,13 @@ pub fn cdef_sb_padded_frame_copy(fi: &FrameInvariants, sbo: &SuperBlockOffset,
     let offset = sbo.plane_offset(&f.planes[p].cfg);
     for y in 0..((sb_size>>ydec) + pad*2) as isize {
       let mut out_slice = out.planes[p].mut_slice(&PlaneOffset {x:0, y});
-      let mut out_row = out_slice.as_mut_slice();
+      let out_row = out_slice.as_mut_slice();
       if offset.y + y < ipad || offset.y+y >= h + ipad {
         // above or below the frame, fill with flag
         for x in 0..(sb_size>>xdec) + pad*2 { out_row[x] = CDEF_VERY_LARGE; }
       } else {
-        let mut in_slice = f.planes[p].slice(&PlaneOffset {x:0, y:offset.y + y - ipad});
-        let mut in_row = in_slice.as_slice();
+        let in_slice = f.planes[p].slice(&PlaneOffset {x:0, y:offset.y + y - ipad});
+        let in_row = in_slice.as_slice();
         // are we guaranteed to be all in frame this row?
         if offset.x < ipad || offset.x + (sb_size as isize >>xdec) + ipad >= w {
           // No; do it the hard way.  off left or right edge, fill with flag.
@@ -350,9 +350,9 @@ pub fn cdef_filter_superblock(fi: &FrameInvariants,
           let dir = cdef_dirs.dir[bx][by];
           let var = cdef_dirs.var[bx][by];
           for p in 0..3 {
-            let mut out_plane = &mut out_frame.planes[p];
+            let out_plane = &mut out_frame.planes[p];
             let out_po = sbo.plane_offset(&out_plane.cfg);
-            let mut in_plane = &mut in_frame.planes[p];
+            let in_plane = &mut in_frame.planes[p];
             let in_po = sbo.plane_offset(&in_plane.cfg);
             let xdec = in_plane.cfg.xdec;
             let ydec = in_plane.cfg.ydec;
@@ -360,12 +360,12 @@ pub fn cdef_filter_superblock(fi: &FrameInvariants,
             let in_stride = in_plane.cfg.stride;
             let in_slice = &in_plane.mut_slice(&in_po);
             let out_stride = out_plane.cfg.stride;
-            let mut out_slice = &mut out_plane.mut_slice(&out_po);
+            let out_slice = &mut out_plane.mut_slice(&out_po);
 
-            let mut local_pri_strength;
-            let mut local_sec_strength;
+            let local_pri_strength;
+            let local_sec_strength;
             let mut local_damping: i32 = cdef_damping + coeff_shift;
-            let mut local_dir: usize;
+            let local_dir: usize;
 
             if p==0 {
               local_pri_strength = adjust_strength(cdef_pri_y_strength << coeff_shift, var);
@@ -427,14 +427,14 @@ pub fn cdef_filter_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockCo
       // pad first two elements of current row
       {
         let mut cdef_slice = cdef_frame.planes[p].mut_slice(&PlaneOffset { x: 0, y: row as isize });
-        let mut cdef_row = &mut cdef_slice.as_mut_slice()[..2];
+        let cdef_row = &mut cdef_slice.as_mut_slice()[..2];
         cdef_row[0] = CDEF_VERY_LARGE;
         cdef_row[1] = CDEF_VERY_LARGE;
       }
       // pad out end of current row
       {
         let mut cdef_slice = cdef_frame.planes[p].mut_slice(&PlaneOffset { x: rec_w as isize + 2, y: row as isize });
-        let mut cdef_row = &mut cdef_slice.as_mut_slice()[..padded_px[p][0]-rec_w-2];
+        let cdef_row = &mut cdef_slice.as_mut_slice()[..padded_px[p][0]-rec_w-2];
         for x in cdef_row {
           *x = CDEF_VERY_LARGE;
         }
@@ -442,7 +442,7 @@ pub fn cdef_filter_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockCo
       // copy current row from rec if we're in data, or pad if we're in first two rows/last N rows
       {
         let mut cdef_slice = cdef_frame.planes[p].mut_slice(&PlaneOffset { x: 2, y: row as isize });
-        let mut cdef_row = &mut cdef_slice.as_mut_slice()[..rec_w];
+        let cdef_row = &mut cdef_slice.as_mut_slice()[..rec_w];
         if row < 2 || row >= rec_h+2 {
           for x in cdef_row {
             *x = CDEF_VERY_LARGE;

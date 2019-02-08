@@ -717,7 +717,7 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
     );
     cw.rollback(&cw_checkpoint);
     if let Some(cfl) = rdo_cfl_alpha(fs, bo, bsize, fi.sequence.bit_depth, fi.sequence.chroma_sampling) {
-      let mut wr: &mut dyn Writer = &mut WriterCounter::new();
+      let wr: &mut dyn Writer = &mut WriterCounter::new();
       let tell = wr.tell_frac();
 
       encode_block_a(&fi.sequence, fs, cw, wr, bsize, bo, best.skip);
@@ -864,7 +864,7 @@ pub fn rdo_tx_type_decision(
       motion_compensate(fi, fs, cw, mode, ref_frames, mvs, bsize, bo, true);
     }
 
-    let mut wr: &mut dyn Writer = &mut WriterCounter::new();
+    let wr: &mut dyn Writer = &mut WriterCounter::new();
     let tell = wr.tell_frac();
     let tx_dist = if is_inter {
       write_tx_tree(
@@ -1129,11 +1129,11 @@ pub fn rdo_cdef_decision(sbo: &SuperBlockOffset, fi: &FrameInvariants,
           let skip = bc.at(&bo).skip;
           if !skip {
             for p in 0..3 {
-              let mut in_plane = &fs.input.planes[p];
+              let in_plane = &fs.input.planes[p];
               let in_po = sbo.block_offset(bx<<1, by<<1).plane_offset(&in_plane.cfg);
               let in_slice = in_plane.slice(&in_po);
 
-              let mut out_plane = &mut cdef_output.planes[p];
+              let out_plane = &mut cdef_output.planes[p];
               let out_po = sbo_0.block_offset(bx<<1, by<<1).plane_offset(&out_plane.cfg);
               let out_slice = &out_plane.slice(&out_po);
 
