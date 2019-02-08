@@ -12,7 +12,7 @@
 use std::iter::FusedIterator;
 use std::fmt::{Debug, Formatter};
 
-use util::*;
+use crate::util::*;
 
 /// Plane-specific configuration.
 #[derive(Debug, Clone)]

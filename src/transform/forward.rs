@@ -8,7 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use super::*;
-use partition::{TxSize, TxType};
+use crate::partition::{TxSize, TxType};
 
 type TxfmShift = [i8; 3];
 type TxfmShifts = [TxfmShift; 3];
@@ -65,7 +65,7 @@ use std::ops::*;
 trait TxOperations:
   Copy + Default + Add<Output = Self> + Sub<Output = Self>
 {
-  fn tx_mul(self, (i32, i32)) -> Self;
+  fn tx_mul(self, _: (i32, i32)) -> Self;
   fn add_avg(self, b: Self) -> Self;
   fn sub_avg(self, b: Self) -> Self;
   fn rshift1(self) -> Self;

@@ -11,17 +11,17 @@
 pub use self::nasm::get_sad;
 #[cfg(any(not(target_arch = "x86_64"), windows, not(feature = "nasm")))]
 pub use self::native::get_sad;
-use context::{BlockOffset, BLOCK_TO_PLANE_SHIFT, MI_SIZE};
-use FrameInvariants;
-use FrameState;
-use partition::*;
-use plane::*;
-use rdo::get_lambda_sqrt;
+use crate::context::{BlockOffset, BLOCK_TO_PLANE_SHIFT, MI_SIZE};
+use crate::FrameInvariants;
+use crate::FrameState;
+use crate::partition::*;
+use crate::plane::*;
+use crate::rdo::get_lambda_sqrt;
 
 #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
 mod nasm {
-  use plane::*;
-  use util::*;
+  use crate::plane::*;
+  use crate::util::*;
 
   use libc;
 
@@ -108,7 +108,7 @@ mod nasm {
 }
 
 mod native {
-  use plane::*;
+  use crate::plane::*;
 
   #[inline(always)]
   pub fn get_sad(
@@ -420,8 +420,8 @@ pub fn estimate_motion_ss2(
 #[cfg(test)]
 pub mod test {
   use super::*;
-  use partition::BlockSize;
-  use partition::BlockSize::*;
+  use crate::partition::BlockSize;
+  use crate::partition::BlockSize::*;
 
   // Generate plane data for get_sad_same()
   fn setup_sad() -> (Plane, Plane) {

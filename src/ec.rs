@@ -16,8 +16,8 @@
 use bitstream_io::{BitWriter, BigEndian};
 use std;
 use std::io;
-use util::ILog;
-use util::msb;
+use crate::util::ILog;
+use crate::util::msb;
 
 pub const OD_BITRES: u8 = 3;
 const EC_PROB_SHIFT: u32 = 6;
@@ -62,7 +62,7 @@ pub trait Writer {
   /// Save current point in coding/recording to a checkpoint
   fn checkpoint(&mut self) -> WriterCheckpoint;
   /// Restore saved position in coding/recording from a checkpoint
-  fn rollback(&mut self, &WriterCheckpoint);
+  fn rollback(&mut self, _: &WriterCheckpoint);
 }
 
 /// StorageBackend is an internal trait used to tie a specific Writer
@@ -77,7 +77,7 @@ pub trait StorageBackend {
   /// Backend implementation of checkpoint to pass through Writer interface
   fn checkpoint(&mut self) -> WriterCheckpoint;
   /// Backend implementation of rollback to pass through Writer interface
-  fn rollback(&mut self, &WriterCheckpoint);
+  fn rollback(&mut self, _: &WriterCheckpoint);
 }
 
 #[derive(Debug, Clone)]

@@ -7,8 +7,8 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use encoder::Frame;
-use plane::Plane;
+use crate::encoder::Frame;
+use crate::plane::Plane;
 
 /// Calculates the PSNR for a `Frame` by comparing the original (uncompressed) to the compressed
 /// version of the frame. Higher PSNR is better--PSNR is capped at 100 in order to avoid skewed

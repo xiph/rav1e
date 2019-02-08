@@ -7,22 +7,22 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use api::*;
-use cdef::*;
-use context::*;
-use deblock::*;
-use ec::*;
-use lrf::*;
-use mc::*;
-use me::*;
-use partition::*;
-use plane::*;
-use quantize::*;
-use rdo::*;
-use segmentation::*;
-use transform::*;
-use util::*;
-use partition::PartitionType::*;
+use crate::api::*;
+use crate::cdef::*;
+use crate::context::*;
+use crate::deblock::*;
+use crate::ec::*;
+use crate::lrf::*;
+use crate::mc::*;
+use crate::me::*;
+use crate::partition::*;
+use crate::plane::*;
+use crate::quantize::*;
+use crate::rdo::*;
+use crate::segmentation::*;
+use crate::transform::*;
+use crate::util::*;
+use crate::partition::PartitionType::*;
 
 use bitstream_io::{BitWriter, BigEndian};
 use std;

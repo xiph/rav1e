@@ -8,16 +8,16 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use bitstream_io::*;
-use encoder::*;
-use metrics::calculate_frame_psnr;
-use partition::*;
-use scenechange::SceneChangeDetector;
+use crate::encoder::*;
+use crate::metrics::calculate_frame_psnr;
+use crate::partition::*;
+use crate::scenechange::SceneChangeDetector;
 use self::EncoderStatus::*;
 
 use std::{cmp, fmt, io};
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use util::Fixed;
+use crate::util::Fixed;
 use std::collections::BTreeSet;
 
 const LOOKAHEAD_FRAMES: u64 = 10;

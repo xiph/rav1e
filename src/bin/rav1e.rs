@@ -17,16 +17,16 @@ extern crate bitstream_io;
 mod common;
 mod decoder;
 mod muxer;
-use common::*;
-use muxer::*;
+use crate::common::*;
+use crate::muxer::*;
 use rav1e::*;
 
 use std::io;
 use std::io::Write;
 use std::io::Read;
 use std::sync::Arc;
-use decoder::Decoder;
-use decoder::VideoDetails;
+use crate::decoder::Decoder;
+use crate::decoder::VideoDetails;
 
 fn read_frame_batch<D: Decoder>(ctx: &mut Context, decoder: &mut D, video_info: VideoDetails) {
   loop {

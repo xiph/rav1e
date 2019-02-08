@@ -8,9 +8,9 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use criterion::*;
-use partition::*;
-use partition::BlockSize::*;
-use plane::*;
+use crate::partition::*;
+use crate::partition::BlockSize::*;
+use crate::plane::*;
 use rand::{ChaChaRng, Rng, SeedableRng};
 use rav1e::me;
 

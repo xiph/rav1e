@@ -16,19 +16,19 @@
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::collapsible_if)]
 
-use ec::Writer;
-use encoder::{FrameInvariants, ReferenceMode};
-use entropymode::*;
-use partition::BlockSize::*;
-use partition::PredictionMode::*;
-use partition::TxSize::*;
-use partition::TxType::*;
-use partition::*;
-use lrf::*;
-use plane::*;
-use scan_order::*;
-use token_cdfs::*;
-use util::{clamp, msb};
+use crate::ec::Writer;
+use crate::encoder::{FrameInvariants, ReferenceMode};
+use crate::entropymode::*;
+use crate::partition::BlockSize::*;
+use crate::partition::PredictionMode::*;
+use crate::partition::TxSize::*;
+use crate::partition::TxType::*;
+use crate::partition::*;
+use crate::lrf::*;
+use crate::plane::*;
+use crate::scan_order::*;
+use crate::token_cdfs::*;
+use crate::util::{clamp, msb};
 
 use std::*;
 
@@ -276,7 +276,7 @@ pub const seg_feature_bits: [u32; SegLvl::SEG_LVL_MAX as usize] =
 pub const seg_feature_is_signed: [bool; SegLvl::SEG_LVL_MAX as usize] =
     [ true, true, true, true, true, false, false, false, ];
 
-use context::TxClass::*;
+use crate::context::TxClass::*;
 
 static tx_type_to_class: [TxClass; TX_TYPES] = [
   TX_CLASS_2D,    // DCT_DCT
@@ -1711,7 +1711,7 @@ impl CFLSign {
   }
 }
 
-use context::CFLSign::*;
+use crate::context::CFLSign::*;
 const CFL_SIGNS: usize = 3;
 static cfl_sign_value: [i16; CFL_SIGNS] = [ 0, -1, 1 ];
 

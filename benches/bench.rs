@@ -21,7 +21,7 @@ use rav1e::context::*;
 use rav1e::partition::*;
 use rav1e::predict::*;
 use rav1e::rdo::rdo_cfl_alpha;
-use transform::transform;
+use crate::transform::transform;
 
 use criterion::*;
 use std::time::Duration;

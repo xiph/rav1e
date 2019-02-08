@@ -50,8 +50,8 @@ pub mod scenechange;
 
 mod api;
 
-pub use api::*;
-pub use encoder::*;
+pub use crate::api::*;
+pub use crate::encoder::*;
 
 #[cfg(all(test, feature="decode_test"))]
 mod test_encode_decode_aom;
