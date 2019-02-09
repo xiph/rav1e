@@ -103,7 +103,10 @@ SECTION .text
 
 INIT_XMM ssse3
 %if ARCH_X86_64
-cglobal wiener_filter_h, 8, 15, 16, dst, left, src, stride, fh, w, h, edge
+cglobal wiener_filter_h, 5, 15, 16, dst, left, src, stride, fh, w, h, edge
+    mov        edged, edgem
+    movifnidn     wd, wm
+    mov           hd, hm
     movq         m15, [fhq]
     pshufb       m12, m15, [pb_6_7]
     pshufb       m13, m15, [pb_4]
@@ -115,7 +118,11 @@ cglobal wiener_filter_h, 8, 15, 16, dst, left, src, stride, fh, w, h, edge
 
     DEFINE_ARGS dst, left, src, stride, x, w, h, edge, srcptr, dstptr, xlim
 %else
-cglobal wiener_filter_h, 8, 8, 8, 92, dst, left, src, stride, fh, w, h, edge
+cglobal wiener_filter_h, 5, 7, 8, -100, dst, left, src, stride, fh, w, h, edge
+    mov           wd, edgem
+    mov     [esp+12], wd
+    mov           wd, wm
+    mov           hd, hm
     SETUP_PIC hd
     movq          m0, [fhq]
     pshufb        m3, m0, [PIC_sym(pb_6_7)]
@@ -124,20 +131,19 @@ cglobal wiener_filter_h, 8, 8, 8, 92, dst, left, src, stride, fh, w, h, edge
     pshufb        m0, m0, [PIC_sym(pb_0)]
 
     DEFINE_ARGS dst, left, src, stride, x, w, h, edge
- %define xlimm   r0m
- %define xlimmp  r0mp
 
  %define srcptrq    srcq
  %define dstptrq    dstq
  %define hd         dword [esp]
- %define edged      edgemp
+ %define edged      dword [esp+12]
+ %define xlimd      dword [esp+16]
 
  %define m10    [PIC_sym(pw_16380)]
  %define m11    [PIC_sym(pw_2048)]
- %define m12    [esp+0Ch]
- %define m13    [esp+1Ch]
- %define m14    [esp+2Ch]
- %define m15    [esp+3Ch]
+ %define m12    [esp+0x14]
+ %define m13    [esp+0x24]
+ %define m14    [esp+0x34]
+ %define m15    [esp+0x44]
 
     mova         m15, m0
     mova         m14, m1
@@ -149,11 +155,7 @@ cglobal wiener_filter_h, 8, 8, 8, 92, dst, left, src, stride, fh, w, h, edge
     ; else w -= 3, and use that as limit in x loop
     test       edged, 2 ; has_right
     jnz .align
-%if ARCH_X86_64
-    mov        xlimq, -3
-%else
-    mov       xlimmp, -3
-%endif
+    mov        xlimd, -3
     jmp .loop
 .align:
     add           wd, 15
@@ -161,7 +163,7 @@ cglobal wiener_filter_h, 8, 8, 8, 92, dst, left, src, stride, fh, w, h, edge
 %if ARCH_X86_64
     xor        xlimd, xlimd
 %else
-    mov       xlimmp, 0
+    mov        xlimd, 0
 %endif
 
     ; main y loop for vertical filter
@@ -169,12 +171,12 @@ cglobal wiener_filter_h, 8, 8, 8, 92, dst, left, src, stride, fh, w, h, edge
 %if ARCH_X86_64
     mov      srcptrq, srcq
     mov      dstptrq, dstq
-    lea           xd, [wd+xlimd]
+    lea           xd, [wq+xlimq]
 %else
     mov      [esp+8], srcq
     mov      [esp+4], dstq
-    mov           xd, wd
-    add           xd, xlimm
+    mov           xd, xlimd
+    add           xd, wd
 %endif
 
     ; load left edge pixels
@@ -252,7 +254,7 @@ cglobal wiener_filter_h, 8, 8, 8, 92, dst, left, src, stride, fh, w, h, edge
     palignr       m7, m1, m0, 15
 
 %if ARCH_X86_32
-    mova   [esp+4Ch], m1
+    mova  [esp+0x54], m1
  %define m8  m1
 %endif
     punpcklbw     m0, m2, m1
@@ -294,7 +296,7 @@ cglobal wiener_filter_h, 8, 8, 8, 92, dst, left, src, stride, fh, w, h, edge
 %if ARCH_X86_64
     mova          m0, m1
 %else
-    mova          m0, [esp+4Ch]
+    mova          m0, [esp+0x54]
 %endif
     add      srcptrq, 16
     add      dstptrq, 32
@@ -303,11 +305,7 @@ cglobal wiener_filter_h, 8, 8, 8, 92, dst, left, src, stride, fh, w, h, edge
     jg .main_load
     test          xd, xd
     jg .load_and_splat
-%if ARCH_X86_64
     cmp           xd, xlimd
-%else
-    cmp           xd, xlimm
-%endif
     jg .splat_right
 
 %if ARCH_X86_32
@@ -321,7 +319,10 @@ cglobal wiener_filter_h, 8, 8, 8, 92, dst, left, src, stride, fh, w, h, edge
     RET
 
 %if ARCH_X86_64
-cglobal wiener_filter_v, 7, 10, 16, dst, stride, mid, w, h, fv, edge
+cglobal wiener_filter_v, 4, 10, 16, dst, stride, mid, w, h, fv, edge
+    mov        edged, edgem
+    movifnidn    fvq, fvmp
+    movifnidn     hd, hm
     movq         m15, [fvq]
     pshufb       m14, m15, [pb_4_5_6_7]
     pshufb       m15, m15, [pb_0_1_2_3]
@@ -336,14 +337,16 @@ cglobal wiener_filter_v, 7, 10, 16, dst, stride, mid, w, h, fv, edge
     shr        ylimd, 2
     sub        ylimd, 3
 %else
-cglobal wiener_filter_v, 7, 7, 8, 92, dst, stride, mid, w, h, fv, edge
- %define ylimm  r0m
- %define ylimmp r0mp
+cglobal wiener_filter_v, 5, 7, 8, -96, dst, stride, mid, w, h, fv, edge
+ %define ylimd [esp+12]
 
-    mov        ylimm, edged
-    and       ylimmp, 8 ; have_bottom
-    shr       ylimmp, 2
-    sub       ylimmp, 3
+    mov          r5d, edgem
+    and          r5d, 8
+    shr          r5d, 2
+    sub          r5d, 3
+    mov        ylimd, r5d
+    mov          fvq, fvmp
+    mov        edged, edgem
 
     SETUP_PIC edged
 
@@ -351,8 +354,8 @@ cglobal wiener_filter_v, 7, 7, 8, 92, dst, stride, mid, w, h, fv, edge
     pshufb        m1, m0, [PIC_sym(pb_4_5_6_7)]
     pshufb        m0, m0, [PIC_sym(pb_0_1_2_3)]
     paddw         m1, [PIC_sym(pw_0_128)]
-    mova   [esp+4Ch], m0
-    mova   [esp+3Ch], m1
+    mova  [esp+0x50], m0
+    mova  [esp+0x40], m1
 
     DEFINE_ARGS dst, stride, mid, w, h, y, edge
  %define mptrq      midq
@@ -386,7 +389,7 @@ cglobal wiener_filter_v, 7, 7, 8, 92, dst, stride, mid, w, h, fv, edge
 %else
     mov      [esp+8], midq
     mov      [esp+4], dstq
-    add           yd, ylimm
+    add           yd, ylimd
 %endif
     jg .load_threelines
 
@@ -438,19 +441,19 @@ cglobal wiener_filter_v, 7, 7, 8, 92, dst, stride, mid, w, h, fv, edge
     pmaddwd       m7, m15
     pmaddwd      m11, m14
     pmaddwd       m9, m14
-    paddd        m10, m11
-    paddd         m7, m9
     paddd        m10, m12
     paddd         m7, m12
+    paddd        m10, m11
+    paddd         m7, m9
     psrad        m10, 11
     psrad         m7, 11
     packssdw     m10, m7
     packuswb     m10, m10
     movq   [dstptrq], m10
 %else
-    mova   [esp+2Ch], m1
-    mova   [esp+1Ch], m2
-    mova   [esp+0Ch], m3
+    mova  [esp+0x30], m1
+    mova  [esp+0x20], m2
+    mova  [esp+0x10], m3
     paddw         m0, m6
     paddw         m1, m5
     paddw         m2, m4
@@ -458,22 +461,24 @@ cglobal wiener_filter_v, 7, 7, 8, 92, dst, stride, mid, w, h, fv, edge
     punpckhwd     m2, m3
     punpcklwd     m3, m0, m1
     punpckhwd     m0, m1
-    pmaddwd       m3, [esp+4Ch]
-    pmaddwd       m0, [esp+4Ch]
-    pmaddwd       m7, [esp+3Ch]
-    pmaddwd       m2, [esp+3Ch]
-    paddd         m3, m7
-    paddd         m0, m2
+    mova          m1, [esp+0x50]
+    pmaddwd       m3, m1
+    pmaddwd       m0, m1
+    mova          m1, [esp+0x40]
+    pmaddwd       m7, m1
+    pmaddwd       m2, m1
     paddd         m3, [PIC_sym(pd_1024)]
     paddd         m0, [PIC_sym(pd_1024)]
+    paddd         m3, m7
+    paddd         m0, m2
     psrad         m3, 11
     psrad         m0, 11
     packssdw      m3, m0
     packuswb      m3, m3
     movq      [dstq], m3
-    mova          m1, [esp+2Ch]
-    mova          m2, [esp+1Ch]
-    mova          m3, [esp+0Ch]
+    mova          m1, [esp+0x30]
+    mova          m2, [esp+0x20]
+    mova          m3, [esp+0x10]
 %endif
     ; shift pixels one position
     mova          m0, m1
@@ -487,11 +492,7 @@ cglobal wiener_filter_v, 7, 7, 8, 92, dst, stride, mid, w, h, fv, edge
     dec           yd
     jg .loop_load
     ; for the bottom pixels, continue using m6 (as extended edge)
-%if ARCH_X86_64
     cmp           yd, ylimd
-%else
-    cmp           yd, ylimm
-%endif
     jg .loop
 
 %if ARCH_X86_32
@@ -545,28 +546,27 @@ cglobal wiener_filter_v, 7, 7, 8, 92, dst, stride, mid, w, h, fv, edge
 %endmacro
 
 %if ARCH_X86_64
-cglobal sgr_box3_h, 8, 11, 8, sumsq, sum, left, src, stride, x, h, edge, w, xlim
-    mov        xlimd, edged
+cglobal sgr_box3_h, 5, 11, 8, sumsq, sum, left, src, stride, x, h, edge, w, xlim
+    mov        xlimd, edgem
+    movifnidn     xd, xm
+    mov           hd, hm
+    mov        edged, xlimd
     and        xlimd, 2                             ; have_right
     add           xd, xlimd
     xor        xlimd, 2                             ; 2*!have_right
 %else
-cglobal sgr_box3_h, 8, 8, 8, 4, sumsq, sum, left, src, stride, x, h, edge, w, xlim
- %define wm     r0m
- %define xlimm  r1m
-
-    SETUP_PIC hd
-    PUSH          r0
-    mov           r0, edgem
-    and           r0, 2                             ; have_right
-    add           xd, r0
-    xor           r0, 2                             ; 2*!have_right
-    mov        xlimm, r0
-    POP           r0
-
- %define hd     dword [esp]
+cglobal sgr_box3_h, 6, 7, 8, sumsq, sum, left, src, stride, x, h, edge, w, xlim
+ %define wq     r0m
+ %define xlimd  r1m
+ %define hd     hmp
  %define edged  edgemp
- %define xlimq  xlimm
+
+    mov           r6, edgem
+    and           r6, 2                             ; have_right
+    add           xd, r6
+    xor           r6, 2                             ; 2*!have_right
+    mov        xlimd, r6
+    SETUP_PIC     r6, 0
 %endif
 
     jnz .no_right
@@ -578,16 +578,12 @@ cglobal sgr_box3_h, 8, 8, 8, 4, sumsq, sum, left, src, stride, x, h, edge, w, xl
     lea         sumq, [sumq+xq*2-2]
     lea       sumsqq, [sumsqq+xq*4-4]
     neg           xq
-%if ARCH_X86_64
     mov           wq, xq
+%if ARCH_X86_64
     lea          r10, [pb_right_ext_mask+16]
+%endif
 .loop_y:
     mov           xq, wq
-%else
-    mov           wm, xd
-.loop_y:
-    mov           xd, wm
-%endif
 
     ; load left
     test       edged, 1                             ; have_left
@@ -661,11 +657,11 @@ cglobal sgr_box3_h, 8, 8, 8, 4, sumsq, sum, left, src, stride, x, h, edge, w, xl
     ; else if x < xlimd we extend from previous load (this implies have_right=0)
     ; else we are done
 
-    cmp           xq, -8
+    cmp           xd, -8
     jle .loop_x
-    test          xq, xq
+    test          xd, xd
     jl .partial_load_and_extend
-    cmp           xq, xlimq
+    cmp           xd, xlimd
     jl .right_extend
 
     add       sumsqq, (384+16)*4
@@ -676,15 +672,14 @@ cglobal sgr_box3_h, 8, 8, 8, 4, sumsq, sum, left, src, stride, x, h, edge, w, xl
     RET
 
 %if ARCH_X86_64
-cglobal sgr_box3_v, 5, 10, 9, sumsq, sum, w, h, edge, x, y, sumsq_base, sum_base, ylim
+cglobal sgr_box3_v, 4, 10, 9, sumsq, sum, w, h, edge, x, y, sumsq_base, sum_base, ylim
+    movifnidn  edged, edgem
 %else
-cglobal sgr_box3_v, 5, 7, 8, 16, sumsq, sum, w, h, edge, x, y
- %define sumsq_basem    r0m
- %define sum_basem      r1m
- %define ylimm          r4m
- %define ylimmp         r4mp
-
- %define m8 [esp]
+cglobal sgr_box3_v, 5, 7, 8, -28, sumsq, sum, w, h, edge, x, y
+ %define sumsq_baseq dword [esp+0]
+ %define sum_baseq   dword [esp+4]
+ %define ylimd       dword [esp+8]
+ %define m8          [esp+12]
 %endif
     mov           xq, -2
 %if ARCH_X86_64
@@ -699,14 +694,18 @@ cglobal sgr_box3_v, 5, 7, 8, 16, sumsq, sum, w, h, edge, x, y
     mov         sumq, sum_baseq
     lea           yd, [hd+ylimd+2]
 %else
-    and       ylimmp, 8                             ; have_bottom
-    shr       ylimmp, 2
-    sub       ylimmp, 2                             ; -2 if have_bottom=0, else 0
+    mov           yd, edged
+    and           yd, 8                             ; have_bottom
+    shr           yd, 2
+    sub           yd, 2                             ; -2 if have_bottom=0, else 0
+    mov  sumsq_baseq, sumsqq
+    mov    sum_baseq, sumq
+    mov        ylimd, yd
 .loop_x:
-    mov       sumsqd, sumsq_basem
-    mov         sumd, sum_basem
+    mov       sumsqd, sumsq_baseq
+    mov         sumd, sum_baseq
     lea           yd, [hd+2]
-    add           yd, ylimm
+    add           yd, ylimd
 %endif
     lea       sumsqq, [sumsqq+xq*4+4-(384+16)*4]
     lea         sumq, [sumq+xq*2+2-(384+16)*2]
@@ -734,7 +733,7 @@ cglobal sgr_box3_v, 5, 7, 8, 16, sumsq, sum, w, h, edge, x, y
     movu          m8, [sumq+(384+16)*2*1]        ; l0
 %else
     movu          m4, [sumq+(384+16)*2*1]        ; l0
-    mova       [esp], m4
+    mova          m8, m4
 %endif
     movu          m4, [sumsqq+(384+16)*4*1]      ; l0sq [left]
     movu          m5, [sumsqq+(384+16)*4*1+16]   ; l0sq [right]
@@ -760,18 +759,15 @@ cglobal sgr_box3_v, 5, 7, 8, 16, sumsq, sum, w, h, edge, x, y
     add         sumq, (384+16)*2
     dec           yd
     jg .loop_y
-%if ARCH_X86_64
     cmp           yd, ylimd
-%else
-    cmp           yd, ylimm
-%endif
     jg .loop_y_noload
     add           xd, 8
     cmp           xd, wd
     jl .loop_x
     RET
 
-cglobal sgr_calc_ab1, 5, 7, 14, a, b, w, h, s
+cglobal sgr_calc_ab1, 4, 7, 14, a, b, w, h, s
+    movifnidn     sd, sm
     sub           aq, (384+16-1)*4
     sub           bq, (384+16-1)*2
     add           hd, 2
@@ -845,34 +841,42 @@ cglobal sgr_calc_ab1, 5, 7, 14, a, b, w, h, s
     RET
 
 %if ARCH_X86_64
-cglobal sgr_finish_filter1, 7, 13, 16, t, src, stride, a, b, w, h, \
+cglobal sgr_finish_filter1, 5, 13, 16, t, src, stride, a, b, w, h, \
                                        tmp_base, src_base, a_base, b_base, x, y
-    mova          m15, [pw_16]
-
+    movifnidn     wd, wm
+    mov           hd, hm
+    mova         m15, [pw_16]
     mov    tmp_baseq, tq
     mov    src_baseq, srcq
     mov      a_baseq, aq
     mov      b_baseq, bq
+    xor           xd, xd
 %else
-cglobal sgr_finish_filter1, 7, 7, 8, 120, t, src, stride, a, b, x, y
- %define tmp_baseq  r0m
- %define src_baseq  r1m
- %define a_baseq    r3m
- %define b_baseq    r4m
- %define wd         r5m
- %define hd         r6m
-
+cglobal sgr_finish_filter1, 7, 7, 8, -144, t, src, stride, a, b, x, y
+ %define tmp_baseq  [esp+8]
+ %define src_baseq  [esp+12]
+ %define a_baseq    [esp+16]
+ %define b_baseq    [esp+20]
+ %define wd         [esp+24]
+ %define hd         [esp+28]
+    mov    tmp_baseq, tq
+    mov    src_baseq, srcq
+    mov      a_baseq, aq
+    mov      b_baseq, bq
+    mov           wd, xd
+    mov           hd, yd
+    xor           xd, xd
     SETUP_PIC yd, 1, 1
+    jmp .loop_start
 %endif
 
-    xor           xd, xd
 .loop_x:
     mov           tq, tmp_baseq
     mov         srcq, src_baseq
     mov           aq, a_baseq
     mov           bq, b_baseq
-
 %if ARCH_X86_32
+.loop_start:
     movu          m0, [bq+xq*2-(384+16)*2-2]
     movu          m2, [bq+xq*2-(384+16)*2+2]
     mova          m1, [bq+xq*2-(384+16)*2]          ; b:top
@@ -881,9 +885,9 @@ cglobal sgr_finish_filter1, 7, 7, 8, 120, t, src, stride, a, b, x, y
     movu          m3, [bq+xq*2+2]
     paddw         m1, [bq+xq*2]                     ; b:top+ctr
     paddw         m2, m3                            ; b:l+r
-    mova   [esp+68h], m0
-    mova   [esp+58h], m1
-    mova   [esp+48h], m2
+    mova  [esp+0x80], m0
+    mova  [esp+0x70], m1
+    mova  [esp+0x60], m2
 %endif
     movu          m0, [aq+xq*4-(384+16)*4-4]
     movu          m2, [aq+xq*4-(384+16)*4+4]
@@ -941,9 +945,9 @@ cglobal sgr_finish_filter1, 7, 7, 8, 120, t, src, stride, a, b, x, y
 %else
     paddd         m1, [aq]                          ; a:top+ctr+bottom [first half]
     paddd         m3, [aq+16]                       ; a:top+ctr+bottom [second half]
-    mova   [esp+38h], m1
-    mova   [esp+28h], m3
-    mova   [esp+18h], m4
+    mova  [esp+0x50], m1
+    mova  [esp+0x40], m3
+    mova  [esp+0x30], m4
     movu          m6, [aq-4]
     movu          m7, [aq+4]
     paddd         m1, m4                            ; a:top+ctr+bottom+l+r [first half]
@@ -984,13 +988,13 @@ cglobal sgr_finish_filter1, 7, 7, 8, 120, t, src, stride, a, b, x, y
     psubd         m1, [aq-(384+16)*4*2]             ; a:ctr+bottom [first half]
     psubd         m3, [aq-(384+16)*4*2+16]          ; a:ctr+bottom [second half]
 %else
-    mova          m4, [esp+68h]
-    mova   [esp+68h], m5
-    mova          m5, [esp+58h]
-    mova   [esp+58h], m6
-    mova          m6, [esp+48h]
-    mova   [esp+48h], m7
-    mova   [esp+08h], m1
+    mova          m4, [esp+0x80]
+    mova  [esp+0x80], m5
+    mova          m5, [esp+0x70]
+    mova  [esp+0x70], m6
+    mova          m6, [esp+0x60]
+    mova  [esp+0x60], m7
+    mova  [esp+0x20], m1
     movu          m7, [bq-2]
     movu          m1, [bq+2]
     paddw         m5, [bq]                          ; b:top+ctr+bottom
@@ -1021,7 +1025,7 @@ cglobal sgr_finish_filter1, 7, 7, 8, 120, t, src, stride, a, b, x, y
     packssdw      m6, m10
     mova        [tq], m6
 %else
-    paddd         m4, [esp+08h]
+    paddd         m4, [esp+0x20]
     paddd         m1, m3
     psrad         m4, 9
     psrad         m1, 9
@@ -1038,15 +1042,15 @@ cglobal sgr_finish_filter1, 7, 7, 8, 120, t, src, stride, a, b, x, y
     mova          m6, m8
     mova          m8, m9
 %else
-    mova          m1, [esp+38h]
-    mova          m3, [esp+28h]
-    mova          m0, [esp+18h]
-    mova          m2, [esp+68h]
-    mova          m4, [esp+58h]
-    mova   [esp+58h], m5
-    mova          m5, [esp+48h]
-    mova   [esp+68h], m6
-    mova   [esp+48h], m7
+    mova          m1, [esp+0x50]
+    mova          m3, [esp+0x40]
+    mova          m0, [esp+0x30]
+    mova          m2, [esp+0x80]
+    mova          m4, [esp+0x70]
+    mova  [esp+0x70], m5
+    mova          m5, [esp+0x60]
+    mova  [esp+0x80], m6
+    mova  [esp+0x60], m7
     psubd         m1, [aq-(384+16)*4*2]             ; a:ctr+bottom [first half]
     psubd         m3, [aq-(384+16)*4*2+16]          ; a:ctr+bottom [second half]
 %endif
@@ -1062,13 +1066,12 @@ cglobal sgr_finish_filter1, 7, 7, 8, 120, t, src, stride, a, b, x, y
     jl .loop_x
     RET
 
-%if ARCH_X86_64
-cglobal sgr_weighted1, 6, 6, 8, dst, stride, t, w, h, wt
-%else
-cglobal sgr_weighted1, 6, 7, 8, dst, stride, t, w, h, wt
+cglobal sgr_weighted1, 4, 7, 8, dst, stride, t, w, h, wt
+    movifnidn     hd, hm
+%if ARCH_X86_32
     SETUP_PIC r6, 0
 %endif
-    movd          m0, wtd
+    movd          m0, wtm
     pshufb        m0, [PIC_sym(pb_0_1)]
     psllw         m0, 4
     pxor          m7, m7
@@ -1101,17 +1104,20 @@ cglobal sgr_weighted1, 6, 7, 8, dst, stride, t, w, h, wt
     RET
 
 %if ARCH_X86_64
-cglobal sgr_box5_h, 8, 11, 12, sumsq, sum, left, src, stride, w, h, edge, x, xlim
+cglobal sgr_box5_h, 5, 11, 12, sumsq, sum, left, src, stride, w, h, edge, x, xlim
+    mov        edged, edgem
+    movifnidn     wd, wm
+    mov           hd, hm
     mova         m10, [pb_0]
     mova         m11, [pb_0_1]
 %else
-cglobal sgr_box5_h, 8, 8, 8, 8, sumsq, sum, left, src, xlim, x, h, edge
+cglobal sgr_box5_h, 7, 7, 8, sumsq, sum, left, src, xlim, x, h, edge
  %define edged      edgemp
  %define wd         xd
  %define wq         wd
  %define wm         r5m
  %define strideq    r4m
-
+    SUB          esp, 8
     SETUP_PIC sumsqd, 1, 1
 
  %define m10    [PIC_sym(pb_0)]
@@ -1275,17 +1281,23 @@ cglobal sgr_box5_h, 8, 8, 8, 8, sumsq, sum, left, src, xlim, x, h, edge
     add         srcq, strideq
     dec           hd
     jg .loop_y
+%if ARCH_X86_32
+    ADD          esp, 8
+%endif
     RET
 
 %if ARCH_X86_64
-cglobal sgr_box5_v, 5, 10, 15, sumsq, sum, w, h, edge, x, y, sumsq_ptr, sum_ptr, ylim
+cglobal sgr_box5_v, 4, 10, 15, sumsq, sum, w, h, edge, x, y, sumsq_ptr, sum_ptr, ylim
+    movifnidn  edged, edgem
     mov        ylimd, edged
 %else
-cglobal sgr_box5_v, 5, 7, 8, 32, sumsq, sum, x, y, ylim, sumsq_ptr, sum_ptr
- %define wm     r2m
- %define hm     r3m
- %define edgem  r4m
- %define edgemp r4mp
+cglobal sgr_box5_v, 5, 7, 8, -44, sumsq, sum, x, y, ylim, sumsq_ptr, sum_ptr
+ %define wm     [esp+0]
+ %define hm     [esp+4]
+ %define edgem  [esp+8]
+    mov           wm, xd
+    mov           hm, yd
+    mov        edgem, ylimd
 %endif
 
     and        ylimd, 8                             ; have_bottom
@@ -1383,7 +1395,7 @@ cglobal sgr_box5_v, 5, 7, 8, 32, sumsq, sum, x, y, ylim, sumsq_ptr, sum_ptr
     lea           yd, [ylimd+2]
     add           yd, hm
     lea   sumsq_ptrq, [sumsqq+xq*4+4-(384+16)*4]
-    test      edgemp, 4                             ; have_top
+    test dword edgem, 4                             ; have_top
     jnz .sumsq_load_top
     movu          m0, [sumsq_ptrq+(384+16)*4*1]
     movu          m1, [sumsq_ptrq+(384+16)*4*1+16]
@@ -1391,16 +1403,16 @@ cglobal sgr_box5_v, 5, 7, 8, 32, sumsq, sum, x, y, ylim, sumsq_ptr, sum_ptr
     mova          m5, m1
     mova          m6, m0
     mova          m7, m1
-    mova   [esp+10h], m0
-    mova   [esp+ 0h], m1
+    mova  [esp+0x1c], m0
+    mova  [esp+0x0c], m1
     jmp .sumsq_loop_y_second_load
 .sumsq_load_top:
     movu          m0, [sumsq_ptrq-(384+16)*4*1]      ; l3/4sq [left]
     movu          m1, [sumsq_ptrq-(384+16)*4*1+16]   ; l3/4sq [right]
     movu          m4, [sumsq_ptrq-(384+16)*4*0]      ; l2sq [left]
     movu          m5, [sumsq_ptrq-(384+16)*4*0+16]   ; l2sq [right]
-    mova   [esp+10h], m0
-    mova   [esp+ 0h], m1
+    mova  [esp+0x1c], m0
+    mova  [esp+0x0c], m1
 .sumsq_loop_y:
     movu          m6, [sumsq_ptrq+(384+16)*4*1]      ; l1sq [left]
     movu          m7, [sumsq_ptrq+(384+16)*4*1+16]   ; l1sq [right]
@@ -1410,8 +1422,8 @@ cglobal sgr_box5_v, 5, 7, 8, 32, sumsq, sum, x, y, ylim, sumsq_ptr, sum_ptr
     movu          m2, [sumsq_ptrq+(384+16)*4*2]      ; l0sq [left]
     movu          m3, [sumsq_ptrq+(384+16)*4*2+16]   ; l0sq [right]
 .sumsq_loop_y_noload:
-    paddd         m0, [esp+10h]
-    paddd         m1, [esp+ 0h]
+    paddd         m0, [esp+0x1c]
+    paddd         m1, [esp+0x0c]
     paddd         m0, m4
     paddd         m1, m5
     paddd         m0, m6
@@ -1426,8 +1438,8 @@ cglobal sgr_box5_v, 5, 7, 8, 32, sumsq, sum, x, y, ylim, sumsq_ptr, sum_ptr
     mova          m1, m5
     mova          m4, m2
     mova          m5, m3
-    mova   [esp+10h], m6
-    mova   [esp+ 0h], m7
+    mova  [esp+0x1c], m6
+    mova  [esp+0x0c], m7
     add   sumsq_ptrq, (384+16)*4*2
     sub           yd, 2
     jge .sumsq_loop_y
@@ -1445,7 +1457,7 @@ cglobal sgr_box5_v, 5, 7, 8, 32, sumsq, sum, x, y, ylim, sumsq_ptr, sum_ptr
     lea           yd, [ylimd+2]
     add           yd, hm
     lea     sum_ptrq, [sumq+xq*2+2-(384+16)*2]
-    test      edgemp, 4                             ; have_top
+    test dword edgem, 4                             ; have_top
     jnz .sum_load_top
     movu          m0, [sum_ptrq+(384+16)*2*1]
     mova          m1, m0
@@ -1493,7 +1505,8 @@ cglobal sgr_box5_v, 5, 7, 8, 32, sumsq, sum, x, y, ylim, sumsq_ptr, sum_ptr
     jmp .sum_loop_y_noload
 %endif
 
-cglobal sgr_calc_ab2, 5, 7, 14, a, b, w, h, s
+cglobal sgr_calc_ab2, 4, 7, 11, a, b, w, h, s
+    movifnidn     sd, sm
     sub           aq, (384+16-1)*4
     sub           bq, (384+16-1)*2
     add           hd, 2
@@ -1569,8 +1582,10 @@ cglobal sgr_calc_ab2, 5, 7, 14, a, b, w, h, s
     RET
 
 %if ARCH_X86_64
-cglobal sgr_finish_filter2, 7, 13, 14, t, src, stride, a, b, w, h, \
+cglobal sgr_finish_filter2, 5, 13, 14, t, src, stride, a, b, w, h, \
                                        tmp_base, src_base, a_base, b_base, x, y
+    movifnidn     wd, wm
+    mov           hd, hm
     mov    tmp_baseq, tq
     mov    src_baseq, srcq
     mov      a_baseq, aq
@@ -1581,7 +1596,7 @@ cglobal sgr_finish_filter2, 7, 13, 14, t, src, stride, a, b, w, h, \
     psrlw        m11, m12, 1                    ; pw_128
     pxor         m13, m13
 %else
-cglobal sgr_finish_filter2, 7, 7, 8, 8, t, src, stride, a, b, x, y
+cglobal sgr_finish_filter2, 6, 7, 8, t, src, stride, a, b, x, y
  %define tmp_baseq  r0m
  %define src_baseq  r1m
  %define a_baseq    r3m
@@ -1589,6 +1604,7 @@ cglobal sgr_finish_filter2, 7, 7, 8, 8, t, src, stride, a, b, x, y
  %define wd         r5m
  %define hd         r6m
 
+    SUB          esp, 8
     SETUP_PIC yd
 
  %define m8     m5
@@ -1733,15 +1749,20 @@ cglobal sgr_finish_filter2, 7, 7, 8, 8, t, src, stride, a, b, x, y
     add           xd, 8
     cmp           xd, wd
     jl .loop_x
+%if ARCH_X86_32
+    ADD          esp, 8
+%endif
     RET
 
+cglobal sgr_weighted2, 4, 7, 12, dst, stride, t1, t2, w, h, wt
+    movifnidn     wd, wm
+    mov          wtq, wtmp
 %if ARCH_X86_64
-cglobal sgr_weighted2, 7, 7, 12, dst, stride, t1, t2, w, h, wt
+    movifnidn     hd, hm
     mova         m10, [pd_1024]
     pxor         m11, m11
 %else
-cglobal sgr_weighted2, 7, 7, 8, 4, dst, stride, t1, t2, w, h, wt
-    SETUP_PIC hd
+    SETUP_PIC     hd, 0
  %define m10    [PIC_sym(pd_1024)]
  %define m11    m7
 %endif
@@ -1749,7 +1770,7 @@ cglobal sgr_weighted2, 7, 7, 8, 4, dst, stride, t1, t2, w, h, wt
     pshufd        m0, m0, 0
     DEFINE_ARGS dst, stride, t1, t2, w, h, idx
 %if ARCH_X86_32
- %define hd     dword [esp]
+ %define hd     hmp
 %endif
 
 .loop_y:
