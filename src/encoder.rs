@@ -32,7 +32,6 @@ use bitstream_io::{BitWriter, BigEndian};
 use std;
 use std::{fmt, io};
 use std::io::Write;
-use std::rc::Rc;
 use std::sync::Arc;
 
 extern {
@@ -162,7 +161,7 @@ pub struct ReferenceFrame {
 
 #[derive(Debug, Clone)]
 pub struct ReferenceFramesSet {
-  pub frames: [Option<Rc<ReferenceFrame>>; (REF_FRAMES as usize)],
+  pub frames: [Option<Arc<ReferenceFrame>>; (REF_FRAMES as usize)],
   pub deblock: [DeblockState; (REF_FRAMES as usize)]
 }
 
@@ -1946,18 +1945,37 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
             };
 
             assert!(!fi.sequence.use_128x128_superblock);
-            pmvs[1][r] = estimate_motion_ss2(
+            let mut pmvs1 = None;
+            let mut pmvs2 = None;
+            let mut pmvs3 = None;
+            let mut pmvs4 = None;
+            rayon::scope(|s| {
+                s.spawn(|_|
+            pmvs1 = estimate_motion_ss2(
               fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(0, 0), &[Some(pmv), pmv_w, pmv_n]
+            )
             );
-            pmvs[2][r] = estimate_motion_ss2(
+                s.spawn(|_|
+            pmvs2 = estimate_motion_ss2(
               fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(8, 0), &[Some(pmv), pmv_e, pmv_n]
+            )
             );
-            pmvs[3][r] = estimate_motion_ss2(
+                s.spawn(|_|
+            pmvs3 = estimate_motion_ss2(
               fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(0, 8), &[Some(pmv), pmv_w, pmv_s]
+            )
             );
-            pmvs[4][r] = estimate_motion_ss2(
+                s.spawn(|_|
+            pmvs4 = estimate_motion_ss2(
               fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(8, 8), &[Some(pmv), pmv_e, pmv_s]
+            )
             );
+            });
+
+            pmvs[1][r] = pmvs1;
+            pmvs[2][r] = pmvs2;
+            pmvs[3][r] = pmvs3;
+            pmvs[4][r] = pmvs4;
           }
         }
       }
@@ -2093,7 +2111,7 @@ pub fn encode_frame(fi: &mut FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
 }
 
 pub fn update_rec_buffer(fi: &mut FrameInvariants, fs: FrameState) {
-  let rfs = Rc::new(
+  let rfs = Arc::new(
     ReferenceFrame {
       order_hint: fi.order_hint,
       frame: fs.rec,
@@ -2104,7 +2122,7 @@ pub fn update_rec_buffer(fi: &mut FrameInvariants, fs: FrameState) {
   );
   for i in 0..(REF_FRAMES as usize) {
     if (fi.refresh_frame_flags & (1 << i)) != 0 {
-      fi.rec_buffer.frames[i] = Some(Rc::clone(&rfs));
+      fi.rec_buffer.frames[i] = Some(Arc::clone(&rfs));
       fi.rec_buffer.deblock[i] = fs.deblock;
     }
   }
