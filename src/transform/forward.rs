@@ -58,7 +58,7 @@ const FWD_TXFM_SHIFT_LS: [TxfmShifts; TxSize::TX_SIZES_ALL] = [
   FWD_SHIFT_64X16
 ];
 
-type TxfmFunc = Fn(&[i32], &mut [i32]);
+type TxfmFunc = dyn Fn(&[i32], &mut [i32]);
 
 use std::ops::*;
 

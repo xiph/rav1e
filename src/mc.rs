@@ -249,7 +249,7 @@ mod nasm {
   }
 
   pub fn put_8tap<'a>(
-    dst: &'a mut PlaneMutSlice<'a>, src: PlaneSlice, width: usize,
+    dst: &'a mut PlaneMutSlice<'a>, src: PlaneSlice<'_>, width: usize,
     height: usize, col_frac: i32, row_frac: i32, mode_x: FilterMode,
     mode_y: FilterMode, bit_depth: usize
   ) {
@@ -299,7 +299,7 @@ mod nasm {
   }
 
   pub fn prep_8tap<'a>(
-    tmp: &mut [i16], src: PlaneSlice, width: usize, height: usize,
+    tmp: &mut [i16], src: PlaneSlice<'_>, width: usize, height: usize,
     col_frac: i32, row_frac: i32, mode_x: FilterMode, mode_y: FilterMode,
     bit_depth: usize
   ) {
@@ -395,7 +395,7 @@ mod native {
   }
 
   pub fn put_8tap<'a>(
-    dst: &'a mut PlaneMutSlice<'a>, src: PlaneSlice, width: usize,
+    dst: &'a mut PlaneMutSlice<'a>, src: PlaneSlice<'_>, width: usize,
     height: usize, col_frac: i32, row_frac: i32, mode_x: FilterMode,
     mode_y: FilterMode, bit_depth: usize
   ) {
@@ -481,7 +481,7 @@ mod native {
   }
 
   pub fn prep_8tap<'a>(
-    tmp: &mut [i16], src: PlaneSlice, width: usize, height: usize,
+    tmp: &mut [i16], src: PlaneSlice<'_>, width: usize, height: usize,
     col_frac: i32, row_frac: i32, mode_x: FilterMode, mode_y: FilterMode,
     bit_depth: usize
   ) {

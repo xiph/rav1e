@@ -1066,7 +1066,7 @@ impl CDFContext {
 }
 
 impl fmt::Debug for CDFContext {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(f, "CDFContext contains too many numbers to print :-(")
   }
 }
@@ -3683,7 +3683,7 @@ pub fn get_mv_class(z: u32, offset: &mut u32) -> usize {
   c
 }
 
-pub fn encode_mv_component(w: &mut Writer, comp: i32,
+pub fn encode_mv_component(w: &mut dyn Writer, comp: i32,
   mvcomp: &mut NMVComponent, precision: MvSubpelPrecision) {
   assert!(comp != 0);
   let mut offset: u32 = 0;

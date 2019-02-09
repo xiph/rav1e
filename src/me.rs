@@ -59,7 +59,7 @@ mod nasm {
 
   #[target_feature(enable = "ssse3")]
   unsafe fn sad_ssse3(
-    plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize,
+    plane_org: &PlaneSlice<'_>, plane_ref: &PlaneSlice<'_>, blk_h: usize,
     blk_w: usize, bit_depth: usize
   ) -> u32 {
     let mut sum = 0 as u32;
@@ -92,7 +92,7 @@ mod nasm {
 
   #[inline(always)]
   pub fn get_sad(
-    plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize,
+    plane_org: &PlaneSlice<'_>, plane_ref: &PlaneSlice<'_>, blk_h: usize,
     blk_w: usize, bit_depth: usize
   ) -> u32 {
     #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
@@ -112,7 +112,7 @@ mod native {
 
   #[inline(always)]
   pub fn get_sad(
-    plane_org: &PlaneSlice, plane_ref: &PlaneSlice, blk_h: usize,
+    plane_org: &PlaneSlice<'_>, plane_ref: &PlaneSlice<'_>, blk_h: usize,
     blk_w: usize, _bit_depth: usize
   ) -> u32 {
     let mut sum = 0 as u32;
