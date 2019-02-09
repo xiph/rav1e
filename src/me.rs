@@ -264,8 +264,11 @@ fn full_search(
   lowest_cost: &mut u32, po: &PlaneOffset, step: usize, bit_depth: usize,
   lambda: u32, pmv: &[MotionVector; 2], allow_high_precision_mv: bool
 ) {
-  for y in (y_lo..=y_hi).step_by(step) {
-    for x in (x_lo..=x_hi).step_by(step) {
+    let search_range_y = (y_lo..=y_hi).step_by(step);
+    let search_range_x = (x_lo..=x_hi).step_by(step);
+    let search_area = search_range_y.flat_map(|y| { search_range_x.clone().map(move |x| (y, x)) });
+
+    let (cost, mv) = search_area.map(|(y, x)| {
       let plane_org = p_org.slice(po);
       let plane_ref = p_ref.slice(&PlaneOffset { x, y });
 
@@ -281,12 +284,11 @@ fn full_search(
       let rate = rate1.min(rate2 + 1);
       let cost = 256 * sad + rate * lambda;
 
-      if cost < *lowest_cost {
-        *lowest_cost = cost;
-        *best_mv = mv;
-      }
-    }
-  }
+      (cost, mv)
+  }).min_by_key(|(c, _)| *c).unwrap();
+
+    *lowest_cost = cost;
+    *best_mv = mv;
 }
 
 // Adjust block offset such that entire block lies within frame boundaries
