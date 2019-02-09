@@ -8,8 +8,6 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 #![allow(non_upper_case_globals)]
-#![allow(clippy::cast_lossless)]
-#![allow(clippy::needless_range_loop)]
 
 use crate::context::{INTRA_MODES, MAX_TX_SIZE};
 use crate::partition::*;
