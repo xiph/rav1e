@@ -8,7 +8,6 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 #![allow(safe_extern_statics)]
-#![allow(clippy::collapsible_if)]
 
 #[cfg(all(test, feature="decode_test_dav1d"))]
 extern crate dav1d_sys;

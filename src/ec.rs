@@ -9,9 +9,6 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 #![allow(non_camel_case_types)]
-#![allow(clippy::cast_lossless)]
-#![allow(clippy::identity_op)]
-#![allow(clippy::needless_range_loop)]
 
 use bitstream_io::{BitWriter, BigEndian};
 use std;

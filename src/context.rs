@@ -11,10 +11,6 @@
 #![allow(non_upper_case_globals)]
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
-#![allow(clippy::cast_lossless)]
-#![allow(clippy::unnecessary_mut_passed)]
-#![allow(clippy::needless_range_loop)]
-#![allow(clippy::collapsible_if)]
 
 use crate::ec::Writer;
 use crate::encoder::{FrameInvariants, ReferenceMode};
