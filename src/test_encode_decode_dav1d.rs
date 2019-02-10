@@ -312,6 +312,12 @@ fn encode_decode(
   ctx.set_limit(limit as u64);
 
   println!("Encoding {}x{} speed {} quantizer {}", w, h, speed, quantizer);
+  #[cfg(feature="dump_ivf")]
+  let mut out = std::fs::File::create(&format!("out-{}x{}-s{}-q{}-{:?}.ivf",
+                                           w, h, speed, quantizer, chroma_sampling)).unwrap();
+
+  #[cfg(feature="dump_ivf")]
+  ivf::write_ivf_header(&mut out, w, h, 30, 1);
 
   let mut rec_fifo = VecDeque::new();
 
@@ -324,6 +330,8 @@ fn encode_decode(
       let res = ctx.receive_packet();
       if let Ok(pkt) = res {
         println!("Encoded packet {}", pkt.number);
+        #[cfg(feature="dump_ivf")]
+        ivf::write_ivf_frame(&mut out, pkt.number, &pkt.data);
 
         if let Some(pkt_rec) = pkt.rec {
           rec_fifo.push_back(pkt_rec.clone());

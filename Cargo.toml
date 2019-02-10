@@ -16,6 +16,7 @@ binaries = ["ivf", "y4m", "clap", "scan_fmt"]
 default = ["binaries", "nasm"]
 aom = ["cmake"]
 nasm = ["nasm-rs"]
+dump_ivf = ["ivf"]
 
 [dependencies]
 bitstream-io = "0.8"
