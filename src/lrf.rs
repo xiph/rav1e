@@ -82,7 +82,7 @@ fn sgrproj_box_ab(af: &mut[i32; 64+2],
   let n2e = n*n*eps as i32;
   let s = ((1 << SGRPROJ_MTABLE_BITS) + n2e/2) / n2e;
   let xn = cmp::min(r+1, crop_w as isize - stripe_x);
-  for row in -1..1+stripe_h {
+  for row in -1..=stripe_h {
     let mut a:i32 = 0;
     let mut b:i32 = 0;
 
@@ -110,7 +110,7 @@ fn sgrproj_box_ab(af: &mut[i32; 64+2],
         a += c*c;
         b += c;
       }
-      for _xi in xn..r+1 {
+      for _xi in xn..=r {
         let c = src_plane.p(crop_w - 1, ly) as i32;
         a += c*c;
         b += c;
