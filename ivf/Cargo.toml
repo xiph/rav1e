@@ -1,0 +1,9 @@
+[package]
+name = "ivf"
+version = "0.1.0"
+authors = ["Thomas Daede <tdaede@xiph.org>"]
+edition = "2018"
+
+[dependencies]
+bitstream-io = "0.8"
+
