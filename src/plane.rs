@@ -358,6 +358,14 @@ impl<'a, T: Pixel> PlaneSlice<'a, T> {
     }
   }
 
+  pub fn reslice(&self, xo: isize, yo: isize) -> PlaneSlice<'a, T> {
+    PlaneSlice {
+      plane: self.plane,
+      x: self.x + xo,
+      y: self.y + yo
+    }
+  }
+
   /// A slice starting i pixels above the current one.
   pub fn go_up(&self, i: usize) -> PlaneSlice<'a, T> {
     PlaneSlice { plane: self.plane, x: self.x, y: self.y - i as isize }

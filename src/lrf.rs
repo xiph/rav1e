@@ -16,6 +16,7 @@ use crate::context::SuperBlockOffset;
 use crate::context::PLANES;
 use crate::context::MAX_SB_SIZE;
 use crate::plane::Plane;
+use crate::plane::PlaneSlice;
 use crate::plane::PlaneOffset;
 use crate::plane::PlaneConfig;
 use std::cmp;
@@ -67,11 +68,9 @@ impl RestorationFilter {
   }
 }
 
-fn sgrproj_sum_finish<T: Pixel>(ssq: i32, sum: i32,
-                      n: i32, one_over_n: i32, s: i32,
-                      bit_depth: usize) -> (i32, i32) {
-  let scaled_ssq = ssq + (1 << 2*(bit_depth-8) >> 1) >> 2*(bit_depth-8);
-  let scaled_sum = sum + (1 << bit_depth - 8 >> 1) >> bit_depth - 8;
+fn sgrproj_sum_finish(ssq: i32, sum: i32, n: i32, one_over_n: i32, s: i32, bdm8: usize) -> (i32, i32) {
+  let scaled_ssq = ssq + (1 << 2*bdm8 >> 1) >> 2*bdm8;
+  let scaled_sum = sum + (1 << bdm8 >> 1) >> bdm8;
   let p = cmp::max(0, scaled_ssq*(n as i32) - scaled_sum*scaled_sum);
   let z = p*s + (1 << SGRPROJ_MTABLE_BITS >> 1) >> SGRPROJ_MTABLE_BITS;
   let a = if z >= 255 {
@@ -84,64 +83,129 @@ fn sgrproj_sum_finish<T: Pixel>(ssq: i32, sum: i32,
   let b = ((1 << SGRPROJ_SGR_BITS) - a ) * sum * one_over_n;
   (a, b + (1 << SGRPROJ_RECIP_BITS >> 1) >> SGRPROJ_RECIP_BITS)
 }
-fn sgrproj_box_sum_slow<T: Pixel>(a: &mut i32, b: &mut i32, row: isize, r: usize,
-                        crop_w: usize, crop_h: usize, stripe_h: usize,
-                        stripe_x: isize, stripe_y: isize,
-                        n: i32, one_over_n: i32, s: i32,
-                        cdeffed: &Plane<T>, deblocked: &Plane<T>, bit_depth: usize) {  
-  let xn = cmp::min(r as isize + 1, crop_w as isize - stripe_x);
+
+// The addressing below is a bit confusing, made worse by LRF's odd
+// clipping requirements, and our reusing code for partial frames.  So
+// I'm documenting the LRF conventions here in detail.
+
+// 'Relative to plane storage' means that a coordinate or bound is
+// being applied as if to the full Plane backing the PlaneSlice.  For
+// example, a PlaneSlice may represent a subset of a middle of a
+// plane, but when we say the top/left bounds are clipped 'relative to
+// plane storage', that means relative to 0,0 of the plane, not 0,0 of
+// the plane slice.
+
+// 'Relative to the slice view' means that a coordinate or bound is
+// counted from the 0,0 of the PlaneSlice, not the Plane from which it
+// was sliced.
+
+// Passed in plane slices may be the same size or different sizes;
+// filter access will be clipped to 0,0..w,h of the underlying plane
+// storage for both planes, depending which is accessed.  Note that
+// the passed in w/h that specifies the storage clipping is actually
+// relative to the the slice view, not the plane storage (it
+// simplifies the math internally).  Eg, if a PlaceSlice has a y
+// offset of -2 (meaning its origin is two rows above the top row of
+// the backing plane), and we pass in a height of 4, the rows
+// 0,1,2,3,4 of the slice address -2, -1, 0, 1, 2 of the backing plane
+// with access clipped to 0, 0, 0, 1, 1.
+
+// Active area cropping is done by specifying a w,h smaller
+// than the actual underlying plane storage.
+
+// stripe_y is the beginning of the current stripe (used for source
+// buffer choice/clipping) relative to the passed in plane view.  It
+// may (and regularly will) be negative.
+
+// stripe_h is the hright of the current stripe, again used for source
+// buffer choice/clipping).  It may specify a stripe boundary less
+// than, eqqal to, or larger than the buffers we're accessing.
+
+// x and y specify the center pixel of the current filter kernel
+// application.  They are relative to the passed in slice views.
+
+fn sgrproj_box_sum_slow<T: Pixel>(a: &mut i32, b: &mut i32,
+                        stripe_y: isize, stripe_h: usize,
+                        x: isize, y: isize,
+                        r: usize, n: i32, one_over_n: i32, s: i32, bdm8: usize,
+                        backing: &PlaneSlice<T>, backing_w: usize, backing_h: usize,
+                        cdeffed: &PlaneSlice<T>, cdeffed_w: usize, cdeffed_h: usize) {  
   let mut ssq:i32 = 0;
   let mut sum:i32 = 0;
 
-  for yi in row-r as isize..=row+r as isize {
-    let src_plane = if yi >= 0 && yi < stripe_h as isize {cdeffed} else {deblocked};
-    let ly = clamp(clamp(yi+stripe_y, 0, crop_h as isize - 1),
-                   stripe_y - 2, stripe_y + stripe_h as isize + 1) as usize;
+  for yi in y-r as isize..=y+r as isize {
+    let src_plane;
+    let src_w;
+    let src_h;
+    
+    // decide if we're vertically inside or outside the stripe
+    if yi >= stripe_y && yi < stripe_y + stripe_h as isize {
+      src_plane = cdeffed;
+      src_w = (cdeffed_w as isize - x + r as isize) as usize;
+      src_h = cdeffed_h as isize;
+    } else {
+      src_plane = backing;
+      src_w = (backing_w as isize - x + r as isize) as usize;
+      src_h = backing_h as isize;
+    }
+    // clamp vertically to storage at top and passed-in height at bottom 
+    let cropped_y = clamp(yi, -src_plane.y, src_h - 1);
+    // clamp vertically to stripe limits
+    let ly = clamp(cropped_y, stripe_y - 2, stripe_y + stripe_h as isize + 1);
+    // Reslice to avoid a negative X index.
+    let p = src_plane.reslice(x - r as isize,ly).as_slice();
+    // left-hand addressing limit
+    let left = cmp::max(0, r as isize - x - src_plane.x) as usize;
+    // right-hand addressing limit
+    let right = cmp::min(2*r+1, src_w);
 
-    for _xi in -(r as isize)..-stripe_x {
-      let c = i32::cast_from(src_plane.p(0, ly));
+    // run accumulation to left of frame storage (if any)
+    for _xi in 0..left {
+      let c = i32::cast_from(p[(r as isize - x) as usize]);
       ssq += c*c;
       sum += c;
     }
-    for xi in cmp::max(-(r as isize), -stripe_x)..xn {
-      let c = i32::cast_from(src_plane.p((xi + stripe_x) as usize, ly));
+    // run accumulation in-frame
+    for xi in left..right {
+      let c = i32::cast_from(p[xi]);
       ssq += c*c;
       sum += c;
     }
-    for _xi in xn..r as isize + 1 {
-      let c = i32::cast_from(src_plane.p(crop_w - 1, ly));
+    // run accumulation to right of frame (if any)
+    for _xi in right..2*r+1 {
+      let c = i32::cast_from(p[src_w - 1]);
       ssq += c*c;
       sum += c;
     }
   }
-  let (reta, retb) = sgrproj_sum_finish::<T>(ssq, sum, n, one_over_n, s, bit_depth);
+  let (reta, retb) = sgrproj_sum_finish(ssq, sum, n, one_over_n, s, bdm8);
   *a = reta;
   *b = retb;
 }
 
-// unrolled computation to be used when all bounds-checking has been pre-satisfied.
-fn sgrproj_box_sum_fastxy_r1<T: Pixel>(a: &mut i32, b: &mut i32, stripe_x: isize, stripe_y: isize,
-                         s: i32, p: &Plane<T>, bit_depth: usize) {
+// unrolled computation to be used when all bounds-checking has been satisfied.
+fn sgrproj_box_sum_fastxy_r1<T: Pixel>(a: &mut i32, b: &mut i32, x: isize, y: isize,
+                             s: i32, bdm8: usize, p: &PlaneSlice<T>) {
   let mut ssq:i32 = 0;
   let mut sum:i32 = 0;
   for yi in -1..=1 {
-    let x = p.slice(&PlaneOffset{x: stripe_x - 1, y: stripe_y + yi}).as_slice();
+    let x = p.reslice(x - 1, y + yi).as_slice();
     ssq += i32::cast_from(x[0]) * i32::cast_from(x[0]) +
       i32::cast_from(x[1]) * i32::cast_from(x[1]) +
       i32::cast_from(x[2]) * i32::cast_from(x[2]);
     sum += i32::cast_from(x[0]) + i32::cast_from(x[1]) + i32::cast_from(x[2]);
   }
-  let (reta, retb) = sgrproj_sum_finish::<T>(ssq, sum, 9, 455, s, bit_depth);
+  let (reta, retb) = sgrproj_sum_finish(ssq, sum, 9, 455, s, bdm8);
   *a = reta;
   *b = retb;
 }
 
-fn sgrproj_box_sum_fastxy_r2<T: Pixel>(a: &mut i32, b: &mut i32, stripe_x: isize, stripe_y: isize,
-                         s: i32, p: &Plane<T>, bit_depth: usize) {
+fn sgrproj_box_sum_fastxy_r2<T: Pixel>(a: &mut i32, b: &mut i32, x: isize, y: isize,
+                             s: i32, bdm8: usize, p: &PlaneSlice<T>) {
   let mut ssq:i32 = 0;
   let mut sum:i32 = 0;
   for yi in -2..=2 {
-    let x = p.slice(&PlaneOffset{x: stripe_x - 2, y: stripe_y + yi}).as_slice();
+    let x = p.reslice(x - 2, y + yi).as_slice();
     ssq += i32::cast_from(x[0]) * i32::cast_from(x[0]) +
       i32::cast_from(x[1]) * i32::cast_from(x[1]) +
       i32::cast_from(x[2]) * i32::cast_from(x[2]) +
@@ -149,44 +213,72 @@ fn sgrproj_box_sum_fastxy_r2<T: Pixel>(a: &mut i32, b: &mut i32, stripe_x: isize
       i32::cast_from(x[4]) * i32::cast_from(x[4]);
     sum += i32::cast_from(x[0]) + i32::cast_from(x[1]) + i32::cast_from(x[2]) + i32::cast_from(x[3]) + i32::cast_from(x[4]);
   }
-  let (reta, retb) = sgrproj_sum_finish::<T>(ssq, sum, 25, 164, s, bit_depth);
+  let (reta, retb) = sgrproj_sum_finish(ssq, sum, 25, 164, s, bdm8);
   *a = reta;
   *b = retb;
 }
 
-// unrolled computation to be used when X bounds-checking has been pre-satisfied.
-fn sgrproj_box_sum_fastx_r1<T: Pixel>(a: &mut i32, b: &mut i32, row: isize,
-                            crop_h: usize, stripe_h: usize,
-                            stripe_x: isize, stripe_y: isize,
-                            s: i32, cdeffed: &Plane<T>, deblocked: &Plane<T>, bit_depth: usize) {  
+// unrolled computation to be used when only X bounds-checking has been satisfied.
+fn sgrproj_box_sum_fastx_r1<T: Pixel>(a: &mut i32, b: &mut i32,
+                            stripe_y: isize, stripe_h: usize,
+                            x: isize, y: isize,
+                            s: i32, bdm8: usize,
+                            backing: &PlaneSlice<T>, backing_h: usize,
+                            cdeffed: &PlaneSlice<T>, cdeffed_h: usize) {  
   let mut ssq:i32 = 0;
   let mut sum:i32 = 0;
-  for yi in row-1 as isize..=row+1 as isize {
-    let p = if yi >= 0 && yi < stripe_h as isize {cdeffed} else {deblocked};
-    let ly = clamp(clamp(yi+stripe_y, 0, crop_h as isize - 1),
-                   stripe_y - 2, stripe_y + stripe_h as isize + 1);
-    let x = p.slice(&PlaneOffset{x: stripe_x - 1, y: ly}).as_slice();
+  for yi in y-1..=y+1 {
+    let src_plane;
+    let src_h;
+    
+    // decide if we're vertically inside or outside the stripe
+    if yi >= stripe_y && yi < stripe_y + stripe_h as isize {
+      src_plane = cdeffed;
+      src_h = cdeffed_h as isize;
+    } else {
+      src_plane = backing;
+      src_h = backing_h as isize;
+    }
+    // clamp vertically to storage addressing limit
+    let cropped_y = clamp(yi, -src_plane.y, src_h - 1);
+    // clamp vertically to stripe limits
+    let ly = clamp(cropped_y, stripe_y - 2, stripe_y + stripe_h as isize + 1);
+    let x = src_plane.reslice(x - 1, ly).as_slice();
     ssq += i32::cast_from(x[0]) * i32::cast_from(x[0]) +
       i32::cast_from(x[1]) * i32::cast_from(x[1]) +
       i32::cast_from(x[2]) * i32::cast_from(x[2]);
     sum += i32::cast_from(x[0]) + i32::cast_from(x[1]) + i32::cast_from(x[2]);
   }
-  let (reta, retb) = sgrproj_sum_finish::<T>(ssq, sum, 9, 455, s, bit_depth);
+  let (reta, retb) = sgrproj_sum_finish(ssq, sum, 9, 455, s, bdm8);
   *a = reta;
   *b = retb;
 }
 
-fn sgrproj_box_sum_fastx_r2<T: Pixel>(a: &mut i32, b: &mut i32, row: isize,
-                          crop_h: usize, stripe_h: usize,
-                          stripe_x: isize, stripe_y: isize,
-                          s: i32, cdeffed: &Plane<T>, deblocked: &Plane<T>, bit_depth: usize) {  
+fn sgrproj_box_sum_fastx_r2<T: Pixel>(a: &mut i32, b: &mut i32,
+                            stripe_y: isize, stripe_h: usize,
+                            x: isize, y: isize,
+                            s: i32, bdm8: usize,
+                            backing: &PlaneSlice<T>, backing_h: usize,
+                            cdeffed: &PlaneSlice<T>, cdeffed_h: usize) {  
   let mut ssq:i32 = 0;
   let mut sum:i32 = 0;
-  for yi in row-2 as isize..=row+2 as isize {
-    let p = if yi >= 0 && yi < stripe_h as isize {cdeffed} else {deblocked};
-    let ly = clamp(clamp(yi+stripe_y, 0, crop_h as isize - 1),
-                   stripe_y - 2, stripe_y + stripe_h as isize + 1);
-    let x = p.slice(&PlaneOffset{x: stripe_x - 2, y: ly}).as_slice();
+  for yi in y - 2..=y + 2 {
+    let src_plane;
+    let src_h;
+    
+    // decide if we're vertically inside or outside the stripe
+    if yi >= stripe_y && yi < stripe_y + stripe_h as isize {
+      src_plane = cdeffed;
+      src_h = cdeffed_h as isize;
+    } else {
+      src_plane = backing;
+      src_h = backing_h as isize;
+    }
+    // clamp vertically to storage addressing limit
+    let cropped_y = clamp(yi, -src_plane.y, src_h as isize - 1);
+    // clamp vertically to stripe limits
+    let ly = clamp(cropped_y, stripe_y - 2, stripe_y + stripe_h as isize + 1);
+    let x = src_plane.reslice(x - 2, ly).as_slice();
     ssq += i32::cast_from(x[0]) * i32::cast_from(x[0]) +
       i32::cast_from(x[1]) * i32::cast_from(x[1]) +
       i32::cast_from(x[2]) * i32::cast_from(x[2]) +
@@ -194,46 +286,69 @@ fn sgrproj_box_sum_fastx_r2<T: Pixel>(a: &mut i32, b: &mut i32, row: isize,
       i32::cast_from(x[4]) * i32::cast_from(x[4]);
     sum += i32::cast_from(x[0]) + i32::cast_from(x[1]) + i32::cast_from(x[2]) + i32::cast_from(x[3]) + i32::cast_from(x[4]);
   }
-  let (reta, retb) = sgrproj_sum_finish::<T>(ssq, sum, 25, 164, s, bit_depth);
+  let (reta, retb) = sgrproj_sum_finish(ssq, sum, 25, 164, s, bdm8);
   *a = reta;
   *b = retb;
 }
 
+// computes an intermediate (ab) column for rows stripe_y through
+// stripe_y+stripe_h (no inclusize) at column stripe_x.
 // r=1 case computes every row as every row is used (see r2 version below)
 fn sgrproj_box_ab_r1<T: Pixel>(af: &mut[i32; 64+2],
                      bf: &mut[i32; 64+2],
-                     s: i32,
-                     crop_w: usize, crop_h: usize, stripe_h: usize,
-                     stripe_x: isize, stripe_y: isize,
-                     cdeffed: &Plane<T>, deblocked: &Plane<T>, bit_depth: usize) {
-  let boundary0 = cmp::max(0, -stripe_y) as usize;
+                     stripe_x: isize, stripe_y: isize, stripe_h: usize,
+                     s: i32, bdm8: usize,
+                     backing: &PlaneSlice<T>, backing_w: usize, backing_h: usize,
+                     cdeffed: &PlaneSlice<T>, cdeffed_w: usize, cdeffed_h: usize) {
+  // we will fill the af and bf arrays from 0..stripe_h+1 (ni),
+  // representing stripe_y-1 to stripe_y+stripe_h+1 inclusive
+  let boundary0 = 0;
   let boundary3 = stripe_h + 2;
-  if stripe_x > 1 && stripe_x < crop_w as isize - 2 {
-    // Away from left and right edges; no X clipping to worry about,
-    // but top/bottom few rows still need to worry about Y
-    let boundary1 = cmp::max(3, 3-stripe_y) as usize;
-    let boundary2 = cmp::min(crop_h as isize - stripe_y - 1, stripe_h as isize - 1) as usize;
+  if backing.x + stripe_x > 0 && stripe_x < backing_w as isize - 1 &&
+    cdeffed.x + stripe_x > 0 && stripe_x < cdeffed_w as isize - 1 {
+    // Addressing is away from left and right edges of cdeffed storage;
+    // no X clipping to worry about, but the top/bottom few rows still
+    // need to worry about storage and stripe limits
+      
+    // boundary1 is the point where we're guaranteed all our y
+    // addressing will be both in the stripe and in cdeffed storage  
+    let boundary1 = cmp::max(2, 2 - cdeffed.y - stripe_y) as usize;
+    // boundary 2 is when we have to bounds check along the bottom of
+    // the stripe or bottom of storage
+    let boundary2 = cmp::min(cdeffed_h as isize - stripe_y - 1, stripe_h as isize - 1) as usize;
 
-    // top rows, away from left and right columns
+    // top rows (if any), away from left and right columns
     for i in boundary0..boundary1 {
-      sgrproj_box_sum_fastx_r1(&mut af[i], &mut bf[i], i as isize - 1, crop_h, stripe_h,
-                           stripe_x, stripe_y, s, cdeffed, deblocked, bit_depth);
+      sgrproj_box_sum_fastx_r1(&mut af[i], &mut bf[i],
+                               stripe_y, stripe_h, 
+                               stripe_x, stripe_y + i as isize - 1,
+                               s, bdm8,
+                               backing, backing_h,
+                               cdeffed, cdeffed_h);
     }
     // middle rows, away from left and right columns
     for i in boundary1..boundary2 {
       sgrproj_box_sum_fastxy_r1(&mut af[i], &mut bf[i],
-                            stripe_x, stripe_y + i as isize - 1, s, cdeffed, bit_depth);
+                                stripe_x, stripe_y + i as isize - 1, s, bdm8, cdeffed);
     }
-    // bottom rows, away from left and right columns
+    // bottom rows (if any), away from left and right columns
     for i in boundary2..boundary3 {
-      sgrproj_box_sum_fastx_r1(&mut af[i], &mut bf[i], i as isize - 1, crop_h, stripe_h,
-                           stripe_x, stripe_y, s, cdeffed, deblocked, bit_depth);
+      sgrproj_box_sum_fastx_r1(&mut af[i], &mut bf[i],
+                               stripe_y, stripe_h, 
+                               stripe_x, stripe_y + i as isize - 1,
+                               s, bdm8,
+                               backing, backing_h,
+                               cdeffed, cdeffed_h);
     }
   } else {
     // top/bottom rows and left/right columns, where we need to worry about frame and stripe clipping
     for i in boundary0..boundary3 {
-      sgrproj_box_sum_slow(&mut af[i], &mut bf[i], i as isize - 1, 1, crop_w, crop_h, stripe_h,
-                           stripe_x, stripe_y, 9, 455, s, cdeffed, deblocked, bit_depth);
+      sgrproj_box_sum_slow(&mut af[i], &mut bf[i],                           
+                           stripe_y, stripe_h,
+                           stripe_x, stripe_y + i as isize - 1,
+                           1, 9, 455, s, bdm8,
+                           backing, backing_w, backing_h,
+                           cdeffed, cdeffed_w, cdeffed_h);
     }
   }
 }
@@ -247,50 +362,74 @@ fn sgrproj_box_ab_r1<T: Pixel>(af: &mut[i32; 64+2],
 // (ie not as much as it may appear).
 fn sgrproj_box_ab_r2<T: Pixel>(af: &mut[i32; 64+2],
                      bf: &mut[i32; 64+2],
-                     s: i32,
-                     crop_w: usize, crop_h: usize, stripe_h: usize,
-                     stripe_x: isize, stripe_y: isize,
-                     cdeffed: &Plane<T>, deblocked: &Plane<T>, bit_depth: usize) {
-  let boundary0 = cmp::max(0, -stripe_y) as usize; // always even
+                     stripe_x: isize, stripe_y: isize, stripe_h: usize,
+                     s: i32, bdm8: usize,
+                     backing: &PlaneSlice<T>, backing_w: usize, backing_h: usize,
+                     cdeffed: &PlaneSlice<T>, cdeffed_w: usize, cdeffed_h: usize) {  
+  // we will fill the af and bf arrays from 0..stripe_h+1 (ni),
+  // representing stripe_y-1 to stripe_y+stripe_h+1 inclusive
+  let boundary0 = 0; // even
   let boundary3 = stripe_h + 2; // don't care if odd
-  if stripe_x > 1 && stripe_x < crop_w as isize - 2 {
-    // make even, round up
-    let boundary1 = cmp::max(3, 3-stripe_y) as usize + 1 >> 1 << 1;
+  if backing.x + stripe_x > 1 && stripe_x < backing_w as isize - 2 &&
+    cdeffed.x + stripe_x > 1 && stripe_x < cdeffed_w as isize - 2 {
+    // Addressing is away from left and right edges of cdeffed storage;
+    // no X clipping to worry about, but the top/bottom few rows still
+    // need to worry about storage and stripe limits
+      
+    // boundary1 is the point where we're guaranteed all our y
+    // addressing will be both in the stripe and in cdeffed storage
+    // make even and round up  
+    let boundary1 = (cmp::max(3, 3 - cdeffed.y - stripe_y) + 1 >> 1 << 1) as usize;
+    // boundary 2 is when we have to bounds check along the bottom of
+    // the stripe or bottom of storage
     // must be even, rounding of +1 cancels fencepost of -1
-    let boundary2 = cmp::min(crop_h as isize - stripe_y, stripe_h as isize) as usize >> 1 << 1;
+    let boundary2 = (cmp::min(cdeffed_h as isize - stripe_y, stripe_h as isize) >> 1 << 1) as usize;
 
     // top rows, away from left and right columns
     for i in (boundary0..boundary1).step_by(2) {
-      sgrproj_box_sum_fastx_r2(&mut af[i], &mut bf[i], i as isize - 1, crop_h, stripe_h,
-                           stripe_x, stripe_y, s, cdeffed, deblocked, bit_depth);
+      sgrproj_box_sum_fastx_r2(&mut af[i], &mut bf[i],
+                               stripe_y, stripe_h, 
+                               stripe_x, stripe_y + i as isize - 1,
+                               s, bdm8,
+                               backing, backing_h,
+                               cdeffed, cdeffed_h);
     }
     // middle rows, away from left and right columns
     for i in (boundary1..boundary2).step_by(2) {
       sgrproj_box_sum_fastxy_r2(&mut af[i], &mut bf[i],
-                            stripe_x, stripe_y + i as isize - 1, s, cdeffed, bit_depth);
+                                stripe_x, stripe_y + i as isize - 1,
+                                s, bdm8, cdeffed);
     }
     // bottom rows, away from left and right columns
     for i in (boundary2..boundary3).step_by(2) {
-      sgrproj_box_sum_fastx_r2(&mut af[i], &mut bf[i], i as isize - 1, crop_h, stripe_h,
-                           stripe_x, stripe_y, s, cdeffed, deblocked, bit_depth);
+      sgrproj_box_sum_fastx_r2(&mut af[i], &mut bf[i],
+                               stripe_y, stripe_h, 
+                               stripe_x, stripe_y + i as isize - 1,
+                               s, bdm8,
+                               backing, backing_h,
+                               cdeffed, cdeffed_h);
     }
   } else {
     // top/bottom rows and left/right columns, where we need to worry about frame and stripe clipping
     for i in (boundary0..boundary3).step_by(2) {
-      sgrproj_box_sum_slow(&mut af[i], &mut bf[i], i as isize - 1, 2, crop_w, crop_h, stripe_h,
-                           stripe_x, stripe_y, 25, 164, s, cdeffed, deblocked, bit_depth);
+      sgrproj_box_sum_slow(&mut af[i], &mut bf[i],
+                           stripe_y, stripe_h,
+                           stripe_x, stripe_y + i as isize - 1,
+                           2, 25, 164, s, bdm8,
+                           backing, backing_w, backing_h,
+                           cdeffed, cdeffed_w, cdeffed_h);
     }
   }
 }
 
-fn sgrproj_box_f_r0<T: Pixel>(f: &mut[i32; 64], x: usize, y: isize, h: usize, cdeffed: &Plane<T>) {
+fn sgrproj_box_f_r0<T: Pixel>(f: &mut[i32; 64], x: usize, y: isize, h: usize, cdeffed: &PlaneSlice<T>) {
   for i in cmp::max(0, -y) as usize..h {
     f[i as usize] = i32::cast_from(cdeffed.p(x, (y + i as isize) as usize)) << SGRPROJ_RST_BITS;
   }
 }
 
 fn sgrproj_box_f_r1<T: Pixel>(af: &[&[i32; 64+2]; 3], bf: &[&[i32; 64+2]; 3], f: &mut[i32; 64],
-                 x: usize, y: isize, h: usize, cdeffed: &Plane<T>) {
+                 x: usize, y: isize, h: usize, cdeffed: &PlaneSlice<T>) {
   let shift = 5 + SGRPROJ_SGR_BITS - SGRPROJ_RST_BITS;
   for i in cmp::max(0, -y) as usize..h {
     let a =
@@ -305,7 +444,7 @@ fn sgrproj_box_f_r1<T: Pixel>(af: &[&[i32; 64+2]; 3], bf: &[&[i32; 64+2]; 3], f:
 }
 
 fn sgrproj_box_f_r2<T: Pixel>(af: &[&[i32; 64+2]; 3], bf: &[&[i32; 64+2]; 3], f: &mut[i32; 64],
-                    x: usize, y: isize, h: usize, cdeffed: &Plane<T>) {
+                    x: usize, y: isize, h: usize, cdeffed: &PlaneSlice<T>) {
   let shift = 5 + SGRPROJ_SGR_BITS - SGRPROJ_RST_BITS;
   let shifto = 4 + SGRPROJ_SGR_BITS - SGRPROJ_RST_BITS;
   for i in (cmp::max(0, -y) as usize..h).step_by(2) {
@@ -331,10 +470,11 @@ fn sgrproj_box_f_r2<T: Pixel>(af: &[&[i32; 64+2]; 3], bf: &[&[i32; 64+2]; 3], f:
 fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvariants<T>,
                          crop_w: usize, crop_h: usize,
                          stripe_w: usize, stripe_h: usize,
-                         stripe_x: usize, stripe_y: isize,
+                         stripe_x: isize, stripe_y: isize,
                          cdeffed: &Plane<T>, deblocked: &Plane<T>, out: &mut Plane<T>) {
 
   assert!(stripe_h <= 64);
+  let bdm8 = fi.sequence.bit_depth - 8;
   let mut a_r2: [[i32; 64+2]; 3] = [[0; 64+2]; 3];
   let mut b_r2: [[i32; 64+2]; 3] = [[0; 64+2]; 3];
   let mut f_r2: [i32; 64] = [0; 64];
@@ -345,58 +485,90 @@ fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvariants<T
   let s_r2: i32 = SGRPROJ_PARAMS_S[set as usize][0];
   let s_r1: i32 = SGRPROJ_PARAMS_S[set as usize][1];
 
+  let deblocked_slice = deblocked.slice(&PlaneOffset{x: stripe_x, y: stripe_y});
+  let cdeffed_slice = cdeffed.slice(&PlaneOffset{x: stripe_x, y: stripe_y});
+  
   /* prime the intermediate arrays */
   if s_r2 > 0 {
-    sgrproj_box_ab_r2(&mut a_r2[0], &mut b_r2[0], s_r2,
-                   crop_w, crop_h, stripe_h,
-                   stripe_x as isize - 1, stripe_y,
-                   cdeffed, deblocked, fi.sequence.bit_depth);
-    sgrproj_box_ab_r2(&mut a_r2[1], &mut b_r2[1], s_r2,
-                   crop_w, crop_h, stripe_h,
-                   stripe_x as isize, stripe_y,
-                   cdeffed, deblocked, fi.sequence.bit_depth);
+    sgrproj_box_ab_r2(&mut a_r2[0], &mut b_r2[0],
+                      -1, 0, stripe_h,
+                      s_r2, bdm8,
+                      &deblocked_slice,
+                      (crop_w as isize - stripe_x) as usize,
+                      (crop_h as isize - stripe_y) as usize,
+                      &cdeffed_slice,
+                      (crop_w as isize - stripe_x) as usize,
+                      (crop_h as isize - stripe_y) as usize);
+    sgrproj_box_ab_r2(&mut a_r2[1], &mut b_r2[1],
+                      0, 0, stripe_h,
+                      s_r2, bdm8,
+                      &deblocked_slice,
+                      (crop_w as isize - stripe_x) as usize,
+                      (crop_h as isize - stripe_y) as usize,
+                      &cdeffed_slice,
+                      (crop_w as isize - stripe_x) as usize,
+                      (crop_h as isize - stripe_y) as usize);
   }
   if s_r1 > 0 {
-    sgrproj_box_ab_r1(&mut a_r1[0], &mut b_r1[0], s_r1,
-                      crop_w, crop_h, stripe_h,
-                      stripe_x as isize - 1, stripe_y,
-                      cdeffed, deblocked, fi.sequence.bit_depth);
-    sgrproj_box_ab_r1(&mut a_r1[1], &mut b_r1[1], s_r1,
-                      crop_w, crop_h, stripe_h,
-                      stripe_x as isize, stripe_y,
-                      cdeffed, deblocked, fi.sequence.bit_depth);
+    sgrproj_box_ab_r1(&mut a_r1[0], &mut b_r1[0],
+                      -1, 0, stripe_h,
+                      s_r1, bdm8,
+                      &deblocked_slice,
+                      (crop_w as isize - stripe_x) as usize,
+                      (crop_h as isize - stripe_y) as usize,
+                      &cdeffed_slice,
+                      (crop_w as isize - stripe_x) as usize,
+                      (crop_h as isize - stripe_y) as usize);
+    sgrproj_box_ab_r1(&mut a_r1[1], &mut b_r1[1],
+                      0, 0, stripe_h,
+                      s_r1, bdm8,
+                      &deblocked_slice,
+                      (crop_w as isize - stripe_x) as usize,
+                      (crop_h as isize - stripe_y) as usize,
+                      &cdeffed_slice,
+                      (crop_w as isize - stripe_x) as usize,
+                      (crop_h as isize - stripe_y) as usize);
   }
 
   /* iterate by column */
   let start = cmp::max(0, -stripe_y) as usize;
-  let cdeffed_slice = cdeffed.slice(&PlaneOffset{x: stripe_x as isize, y: stripe_y});
-  let outstride = out.cfg.stride;
-  let mut out_slice = out.mut_slice(&PlaneOffset{x: stripe_x as isize, y: stripe_y});
+  let outstride = out.cfg.stride; 
+  let mut out_slice = out.mut_slice(&PlaneOffset{x: stripe_x, y: stripe_y});
   let out_data = out_slice.as_mut_slice();
   for xi in 0..stripe_w {
     /* build intermediate array columns */
     if s_r2 > 0 {
-      sgrproj_box_ab_r2(&mut a_r2[(xi+2)%3], &mut b_r2[(xi+2)%3], s_r2,
-                     crop_w, crop_h, stripe_h,
-                     (stripe_x + xi + 1) as isize, stripe_y,
-                     cdeffed, deblocked, fi.sequence.bit_depth);
+      sgrproj_box_ab_r2(&mut a_r2[(xi+2)%3], &mut b_r2[(xi+2)%3],
+                        xi as isize + 1, 0, stripe_h,
+                        s_r2, bdm8,
+                        &deblocked_slice,
+                        (crop_w as isize - stripe_x) as usize,                        
+                        (crop_h as isize - stripe_y) as usize,
+                        &cdeffed_slice,
+                        (crop_w as isize - stripe_x) as usize,
+                        (crop_h as isize - stripe_y) as usize);
       let ap0: [&[i32; 64+2]; 3] = [&a_r2[xi%3], &a_r2[(xi+1)%3], &a_r2[(xi+2)%3]];
       let bp0: [&[i32; 64+2]; 3] = [&b_r2[xi%3], &b_r2[(xi+1)%3], &b_r2[(xi+2)%3]];
-      sgrproj_box_f_r2(&ap0, &bp0, &mut f_r2, stripe_x + xi, stripe_y, stripe_h as usize, cdeffed);
+      sgrproj_box_f_r2(&ap0, &bp0, &mut f_r2, xi, 0, stripe_h as usize, &cdeffed_slice);
     } else {
-      sgrproj_box_f_r0(&mut f_r2, stripe_x + xi, stripe_y, stripe_h as usize, cdeffed);
+      sgrproj_box_f_r0(&mut f_r2, xi, 0, stripe_h as usize, &cdeffed_slice);
     }
     if s_r1 > 0 {
-      sgrproj_box_ab_r1(&mut a_r1[(xi+2)%3], &mut b_r1[(xi+2)%3], s_r1,
-                        crop_w, crop_h, stripe_h,
-                        (stripe_x + xi + 1) as isize, stripe_y,
-                        cdeffed, deblocked, fi.sequence.bit_depth);
+      sgrproj_box_ab_r1(&mut a_r1[(xi+2)%3], &mut b_r1[(xi+2)%3],
+                        xi as isize + 1, 0, stripe_h,
+                        s_r1, bdm8,
+                        &deblocked_slice,
+                        (crop_w as isize - stripe_x) as usize,
+                        (crop_h as isize - stripe_y) as usize,
+                        &cdeffed_slice,
+                        (crop_w as isize - stripe_x) as usize,
+                        (crop_h as isize - stripe_y) as usize);
       let ap1: [&[i32; 64+2]; 3] = [&a_r1[xi%3], &a_r1[(xi+1)%3], &a_r1[(xi+2)%3]];
       let bp1: [&[i32; 64+2]; 3] = [&b_r1[xi%3], &b_r1[(xi+1)%3], &b_r1[(xi+2)%3]];
 
-      sgrproj_box_f_r1(&ap1, &bp1, &mut f_r1, stripe_x + xi, stripe_y, stripe_h as usize, cdeffed);
+      sgrproj_box_f_r1(&ap1, &bp1, &mut f_r1, xi, 0, stripe_h as usize, &cdeffed_slice);
     } else {
-      sgrproj_box_f_r0(&mut f_r1, stripe_x + xi, stripe_y, stripe_h as usize, cdeffed);
+      sgrproj_box_f_r0(&mut f_r1, xi, 0, stripe_h as usize, &cdeffed_slice);
     }
 
     /* apply filter */
@@ -688,7 +860,7 @@ impl RestorationState {
               sgrproj_stripe_filter(set, xqd, fi,
                                     crop_w, crop_h,
                                     ru_size, stripe_size,
-                                    ru_start_x, stripe_start_y,
+                                    ru_start_x as isize, stripe_start_y,
                                     &cdeffed.planes[pli], &pre_cdef.planes[pli],
                                     &mut out.planes[pli]);
             },
