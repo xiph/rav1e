@@ -1911,7 +1911,7 @@ impl ContextWriter {
     let ctx = self.bc.partition_plane_context(&bo, bsize);
     assert!(ctx < PARTITION_CONTEXTS);
     let partition_cdf = if bsize <= BlockSize::BLOCK_8X8 {
-      &mut self.fc.partition_cdf[ctx][..PARTITION_TYPES+1]
+      &mut self.fc.partition_cdf[ctx][..=PARTITION_TYPES]
     } else {
       &mut self.fc.partition_cdf[ctx]
     };
@@ -2393,7 +2393,7 @@ impl ContextWriter {
     );
     row_match |= found_match;
 
-    for idx in 2..MVREF_ROW_COLS+1 {
+    for idx in 2..=MVREF_ROW_COLS {
       let row_offset = -2 * idx as isize + 1 + row_adj as isize;
       let col_offset = -2 * idx as isize + 1 + col_adj as isize;
 
@@ -2904,7 +2904,7 @@ impl ContextWriter {
           av1_tx_ind[tx_set as usize][tx_type as usize] as u32,
           &mut self.fc.inter_tx_cdf[tx_set_index as usize]
             [square_tx_size as usize]
-            [..num_tx_set[tx_set as usize] + 1]
+            [..=num_tx_set[tx_set as usize]]
         );
       } else {
         let intra_dir = y_mode;
@@ -2918,7 +2918,7 @@ impl ContextWriter {
           av1_tx_ind[tx_set as usize][tx_type as usize] as u32,
           &mut self.fc.intra_tx_cdf[tx_set_index as usize]
             [square_tx_size as usize][intra_dir as usize]
-            [..num_tx_set[tx_set as usize] + 1]
+            [..=num_tx_set[tx_set as usize]]
         );
       }
     }

@@ -1440,7 +1440,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
     // global motion
     if !fi.intra_only {
-      for i in LAST_FRAME..ALTREF_FRAME + 1 {
+      for i in LAST_FRAME..=ALTREF_FRAME {
         let mode = fi.globalmv_transformation_type[i];
         self.write_bit(mode != GlobalMVMode::IDENTITY)?;
         if mode != GlobalMVMode::IDENTITY {
