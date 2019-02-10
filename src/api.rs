@@ -602,37 +602,15 @@ impl Context {
 
         let sef_data = encode_frame(fi, &mut fs);
         self.packet_data.extend(sef_data);
-        let data = self.packet_data.clone();
-        self.packet_data.clear();
-        if write_temporal_delimiter(&mut self.packet_data).is_err() {
-          return Err(EncoderStatus::Failure);
-        };
 
         let rec = if fi.show_frame { Some(fs.rec) } else { None };
-        let mut psnr = None;
-        if self.config.enc.show_psnr {
-          if let Some(ref rec) = rec {
-            psnr = Some(calculate_frame_psnr(
-              &*fs.input,
-              rec,
-              fi.sequence.bit_depth
-            ));
-          }
-        }
-
-        self.frames_processed += 1;
-        Ok(Packet {
-          data,
-          rec,
-          number: fi.number,
-          frame_type: fi.frame_type,
-          psnr
-        })
+        let fi = fi.clone();
+        self.finalize_packet(&*fs.input, rec, &fi)
       } else {
         if let Some(f) = self.frame_q.get(&fi.number) {
           self.idx += 1;
 
-          if let Some(frame) = f {
+          if let Some(frame) = f.clone() {
             let mut fs = FrameState::new_with_frame(fi, frame.clone());
 
             let data = encode_frame(fi, &mut fs);
@@ -646,31 +624,8 @@ impl Context {
             update_rec_buffer(fi, fs);
 
             if fi.show_frame {
-              let data = self.packet_data.clone();
-              self.packet_data.clear();
-              if write_temporal_delimiter(&mut self.packet_data).is_err() {
-                return Err(EncoderStatus::Failure);
-              }
-
-              let mut psnr = None;
-              if self.config.enc.show_psnr {
-                if let Some(ref rec) = rec {
-                  psnr = Some(calculate_frame_psnr(
-                    &*frame,
-                    rec,
-                    fi.sequence.bit_depth
-                  ));
-                }
-              }
-
-              self.frames_processed += 1;
-              Ok(Packet {
-                data,
-                rec,
-                number: fi.number,
-                frame_type: fi.frame_type,
-                psnr
-              })
+              let fi = fi.clone();
+              self.finalize_packet(&*frame, rec, &fi)
             } else {
               Err(EncoderStatus::NeedMoreData)
             }
@@ -688,6 +643,34 @@ impl Context {
     }
 
     ret
+  }
+
+  fn finalize_packet(&mut self, original_frame: &Frame, rec: Option<Frame>, fi: &FrameInvariants) -> Result<Packet, EncoderStatus> {
+    let data = self.packet_data.clone();
+    self.packet_data.clear();
+    if write_temporal_delimiter(&mut self.packet_data).is_err() {
+      return Err(EncoderStatus::Failure);
+    }
+
+    let mut psnr = None;
+    if self.config.enc.show_psnr {
+      if let Some(ref rec) = rec {
+        psnr = Some(calculate_frame_psnr(
+          &*original_frame,
+          rec,
+          fi.sequence.bit_depth
+        ));
+      }
+    }
+
+    self.frames_processed += 1;
+    Ok(Packet {
+      data,
+      rec,
+      number: fi.number,
+      frame_type: fi.frame_type,
+      psnr
+    })
   }
 
   fn garbage_collect(&mut self, cur_frame: u64) {
