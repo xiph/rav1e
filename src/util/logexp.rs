@@ -208,3 +208,32 @@ fn blog64(w: i64) -> i64 {
   }
   q57(ipart) + z
 }
+
+#[cfg(test)]
+mod test {
+  use super::{bexp64, blog64};
+
+  #[test]
+  fn blog64_vectors() {
+    assert!(blog64(1793) == 0x159dc71e24d32daf);
+    assert!(blog64(0x678dde6e5fd29f05) == 0x7d6373ad151ca685);
+  }
+
+  #[test]
+  fn bexp64_vectors() {
+    assert!(bexp64(0x159dc71e24d32daf) == 1793);
+    assert!((bexp64(0x7d6373ad151ca685) - 0x678dde6e5fd29f05).abs() < 29);
+  }
+
+  #[test]
+  fn blog64_bexp64_round_trip() {
+    for a in 1..=std::u16::MAX as i64 {
+      let b = std::i64::MAX / a;
+      let (log_a, log_b, log_ab) = (blog64(a), blog64(b), blog64(a * b));
+      assert!((log_a + log_b - log_ab).abs() < 4);
+      assert!(bexp64(log_a) == a);
+      assert!((bexp64(log_b) - b).abs() < 128);
+      assert!((bexp64(log_ab) - a * b).abs() < 128);
+    }
+  }
+}
