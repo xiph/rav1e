@@ -51,12 +51,12 @@ bilin_h_shuf8:  db 1,  0,  2,  1,  3,  2,  4,  3,  5,  4,  6,  5,  7,  6,  8,  7
 blend_shuf:     db 0,  1,  0,  1,  0,  1,  0,  1,  2,  3,  2,  3,  2,  3,  2,  3
 
 pb_64:   times 16 db 64
-pw_8:    times 8 dw 8
-pw_26:   times 8 dw 26
-pw_258:  times 8 dw 258
 pw_512:  times 8 dw 512
 pw_1024: times 8 dw 1024
 pw_2048: times 8 dw 2048
+pw_6903: times 8 dw 6903
+
+pw_258:  times 2 dw 258
 
 %macro BIDIR_JMP_TABLE 1-*
     ;evaluated at definition time (in loop below)
@@ -918,41 +918,34 @@ cglobal mask, 4, 7, 7, dst, stride, tmp1, tmp2, w, mask, stride3
     BIDIR_FN           MASK
 %undef hd
 
-%if ARCH_X86_64
- %define reg_pw_8         m8
- %define reg_pw_27        m9
- %define reg_pw_2048      m10
-%else
- %define reg_pw_8         [base+pw_8]
- %define reg_pw_27        [base+pw_26] ; 64 - 38
- %define reg_pw_2048      [base+pw_2048]
-%endif
-
 %macro W_MASK_420_B 2 ; src_offset in bytes, mask_out
     ;**** do m0 = u16.dst[7..0], m%2 = u16.m[7..0] ****
     mova                 m0, [tmp1q+(%1)]
     mova                 m1, [tmp2q+(%1)]
-    psubw                m1, m0 ; tmp1 - tmp2
-    pabsw                m3, m1 ; abs(tmp1 - tmp2)
-    paddw                m3, reg_pw_8 ; abs(tmp1 - tmp2) + 8
-    psrlw                m3, 8  ; (abs(tmp1 - tmp2) + 8) >> 8
-    psubusw             m%2, reg_pw_27, m3 ; 64 - min(m, 64)
-    psllw                m2, m%2, 10
+    mova                 m2, reg_pw_6903
+    psubw                m1, m0
+    pabsw               m%2, m1 ; abs(tmp1 - tmp2)
+    mova                 m3, m2
+    psubusw              m2, m%2
+    psrlw                m2, 8  ; 64 - m
+    mova                m%2, m2
+    psllw                m2, 10
     pmulhw               m1, m2 ; tmp2 * ()
     paddw                m0, m1 ; tmp1 + ()
     ;**** do m1 = u16.dst[7..0], m%2 = u16.m[7..0] ****
     mova                 m1, [tmp1q+(%1)+mmsize]
     mova                 m2, [tmp2q+(%1)+mmsize]
-    psubw                m2, m1 ; tmp1 - tmp2
+    psubw                m2, m1
     pabsw                m7, m2 ; abs(tmp1 - tmp2)
-    paddw                m7, reg_pw_8 ; abs(tmp1 - tmp2) + 8
-    psrlw                m7, 8  ; (abs(tmp1 - tmp2) + 8) >> 8
-    psubusw              m3, reg_pw_27, m7 ; 64 - min(m, 64)
+    psubusw              m3, m7
+    psrlw                m3, 8  ; 64 - m
     phaddw              m%2, m3 ; pack both u16.m[8..0]runs as u8.m [15..0]
     psllw                m3, 10
     pmulhw               m2, m3
+%if ARCH_X86_32
+    mova        reg_pw_2048, [base+pw_2048]
+%endif
     paddw                m1, m2
-    ;********
     pmulhrsw             m0, reg_pw_2048 ; round/scale 2048
     pmulhrsw             m1, reg_pw_2048 ; round/scale 2048
     packuswb             m0, m1 ; concat m0 = u8.dst[15..0]
@@ -964,38 +957,41 @@ cglobal mask, 4, 7, 7, dst, stride, tmp1, tmp2, w, mask, stride3
 
 %define base r6-w_mask_420_ssse3_table
 %if ARCH_X86_64
+%define reg_pw_6903 m8
+%define reg_pw_2048 m9
 ; args: dst, stride, tmp1, tmp2, w, h, mask, sign
-cglobal w_mask_420, 4, 8, 11, dst, stride, tmp1, tmp2, w, h, mask
+cglobal w_mask_420, 4, 8, 10, dst, stride, tmp1, tmp2, w, h, mask
     lea                  r6, [w_mask_420_ssse3_table]
     mov                  wd, wm
     tzcnt               r7d, wd
+    movd                 m0, r7m ; sign
     movifnidn            hd, hm
-    movd                 m0, r7m
-    pshuflw              m0, m0, q0000 ; sign
-    punpcklqdq           m0, m0
     movsxd               r7, [r6+r7*4]
-    mova           reg_pw_8, [base+pw_8]
-    mova          reg_pw_27, [base+pw_26] ; 64 - 38
+    mova        reg_pw_6903, [base+pw_6903] ; ((64 - 38) << 8) + 255 - 8
     mova        reg_pw_2048, [base+pw_2048]
-    mova                 m6, [base+pw_258] ; 64 * 4 + 2
+    movd                 m6, [base+pw_258]  ; 64 * 4 + 2
     add                  r7, r6
     mov               maskq, maskmp
     psubw                m6, m0
+    pshuflw              m6, m6, q0000
+    punpcklqdq           m6, m6
     W_MASK_420            0, 4
     jmp                  r7
     %define loop_w      r7d
 %else
+%define reg_pw_6903 [base+pw_6903]
+%define reg_pw_2048 m3
 cglobal w_mask_420, 4, 7, 8, dst, stride, tmp1, tmp2, w, mask
     tzcnt                wd, wm
     LEA                  r6, w_mask_420_ssse3_table
-    mov                  wd, [r6+wq*4]
+    movd                 m0, r7m ; sign
     mov               maskq, r6mp
-    movd                 m0, r7m
-    pshuflw              m0, m0, q0000 ; sign
-    punpcklqdq           m0, m0
-    mova                 m6, [base+pw_258] ; 64 * 4 + 2
+    mov                  wd, [r6+wq*4]
+    movd                 m6, [base+pw_258]
     add                  wq, r6
     psubw                m6, m0
+    pshuflw              m6, m6, q0000
+    punpcklqdq           m6, m6
     W_MASK_420            0, 4
     jmp                  wd
     %define loop_w dword r0m
@@ -1016,12 +1012,12 @@ cglobal w_mask_420, 4, 7, 8, dst, stride, tmp1, tmp2, w, mask
     movd   [dstq+strideq*0], m0 ; copy m0[2]
     psrlq                m0, 32
     movd   [dstq+strideq*1], m0 ; copy m0[3]
-    pshufd               m5, m4, q3131; DBDB even lines repeated
-    pshufd               m4, m4, q2020; CACA odd lines repeated
-    psubw                m1, m6, m4   ; m9 == 64 * 4 + 2
-    psubw                m1, m5       ; C-D A-B C-D A-B
-    psrlw                m1, 2        ; >> 2
+    psubw                m1, m6, m4 ; a _ c _
+    psrlq                m4, 32     ; b _ d _
+    psubw                m1, m4
+    psrlw                m1, 2
     packuswb             m1, m1
+    pshuflw              m1, m1, q2020
     movd            [maskq], m1
     sub                  hd, 4
     jg .w4_loop
@@ -1035,9 +1031,9 @@ cglobal w_mask_420, 4, 7, 8, dst, stride, tmp1, tmp2, w, mask
 .w8:
     movq   [dstq          ], m0
     movhps [dstq+strideq*1], m0
-    pshufd               m1, m4, q3232
     psubw                m0, m6, m4
-    psubw                m0, m1
+    punpckhqdq           m4, m4
+    psubw                m0, m4
     psrlw                m0, 2
     packuswb             m0, m0
     movd            [maskq], m0
@@ -1077,8 +1073,7 @@ cglobal w_mask_420, 4, 7, 8, dst, stride, tmp1, tmp2, w, mask
     jg .w16ge_loop
     RET
 
-%undef reg_pw_8
-%undef reg_pw_27
+%undef reg_pw_6903
 %undef reg_pw_2048
 %undef dst_bak
 %undef loop_w
