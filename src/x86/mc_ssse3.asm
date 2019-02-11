@@ -828,16 +828,17 @@ cglobal avg, 4, 7, 3, dst, stride, tmp1, tmp2, w, h, stride3
 %macro W_AVG 1 ; src_offset
     ; (a * weight + b * (16 - weight) + 128) >> 8
     ; = ((a - b) * weight + (b << 4) + 128) >> 8
-    ; = ((((b - a) * (-weight << 12)) >> 16) + b + 8) >> 4
-    mova                 m0,     [tmp2q+(%1+0)*mmsize]
-    psubw                m2, m0, [tmp1q+(%1+0)*mmsize]
-    mova                 m1,     [tmp2q+(%1+1)*mmsize]
-    psubw                m3, m1, [tmp1q+(%1+1)*mmsize]
-    paddw                m2, m2 ; compensate for the weight only being half
-    paddw                m3, m3 ; of what it should be
-    pmulhw               m2, m4 ; (b-a) * (-weight << 12)
-    pmulhw               m3, m4 ; (b-a) * (-weight << 12)
-    paddw                m0, m2 ; ((b-a) * -weight) + b
+    ; = ((((a - b) * ((weight-16) << 12)) >> 16) + a + 8) >> 4
+    ; = ((((b - a) * (-weight     << 12)) >> 16) + b + 8) >> 4
+    mova                 m2, [tmp1q+(%1+0)*mmsize]
+    mova                 m0, m2
+    psubw                m2, [tmp2q+(%1+0)*mmsize]
+    mova                 m3, [tmp1q+(%1+1)*mmsize]
+    mova                 m1, m3
+    psubw                m3, [tmp2q+(%1+1)*mmsize]
+    pmulhw               m2, m4
+    pmulhw               m3, m4
+    paddw                m0, m2
     paddw                m1, m3
     pmulhrsw             m0, m5
     pmulhrsw             m1, m5
@@ -849,16 +850,22 @@ cglobal avg, 4, 7, 3, dst, stride, tmp1, tmp2, w, h, stride3
 cglobal w_avg, 4, 7, 6, dst, stride, tmp1, tmp2, w, h, stride3
     LEA                  r6, w_avg_ssse3_table
     tzcnt                wd, wm
+    movd                 m4, r6m
     movifnidn            hd, hm
-    movd                 m0, r6m
-    pshuflw              m0, m0, q0000
-    punpcklqdq           m0, m0
+    pxor                 m0, m0
     movsxd               wq, dword [r6+wq*4]
-    pxor                 m4, m4
-    psllw                m0, 11 ; can't shift by 12, sign bit must be preserved
-    psubw                m4, m0
     mova                 m5, [pw_2048+r6-w_avg_ssse3_table]
+    pshufb               m4, m0
+    psllw                m4, 12 ; (weight-16) << 12 when interpreted as signed
     add                  wq, r6
+    cmp           dword r6m, 7
+    jg .weight_gt7
+    mov                  r6, tmp1q
+    psubw                m0, m4
+    mov               tmp1q, tmp2q
+    mova                 m4, m0 ; -weight
+    mov               tmp2q, r6
+.weight_gt7:
     BIDIR_FN          W_AVG
 
 %macro MASK 1 ; src_offset
