@@ -176,10 +176,6 @@ cglobal cdef_filter_%1x%2, 4, 9, 16, 2 * 16 + (%2+4)*%3, \
     movd [px+3*%3+%1*2], xm14
 %if %2 == 8
     ; FIXME w == 4
-    movd [px+0*%3+%1*2], xm14
-    movd [px+1*%3+%1*2], xm14
-    movd [px+2*%3+%1*2], xm14
-    movd [px+3*%3+%1*2], xm14
     pmovzxbw       xm1, [dst4q+strideq*0]
     pmovzxbw       xm2, [dst4q+strideq*1]
     pmovzxbw       xm3, [dst4q+strideq*2]
