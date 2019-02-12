@@ -33,6 +33,7 @@
 #if ARCH_ARM
     .syntax unified
 #ifdef __ELF__
+    .arch armv7-a
     .fpu neon
     .eabi_attribute 10, 0           // suppress Tag_FP_arch
     .eabi_attribute 12, 0           // suppress Tag_Advanced_SIMD_arch
