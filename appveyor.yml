@@ -15,7 +15,7 @@ matrix:
 
 install:
     - appveyor DownloadFile https://win.rustup.rs/ -FileName rustup-init.exe
-    - appveyor DownloadFile https://www.nasm.us/pub/nasm/releasebuilds/2.14.02/win64/nasm-2.14.02-win64.zip -FileName nasm.zip
+    - appveyor DownloadFile https://people.xiph.org/~tdaede/nasm-2.14.02-win64.zip -FileName nasm.zip
     - 7z e -y nasm.zip
     - rustup-init -yv --default-toolchain %channel% --default-host %host%
     - set PATH=%PATH%;%USERPROFILE%\.cargo\bin;%APPVEYOR_BUILD_FOLDER%
