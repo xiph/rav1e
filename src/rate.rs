@@ -24,6 +24,31 @@ pub const FRAME_SUBTYPE_B1: usize = 3;
 // The scale of AV1 quantizer tables (relative to the pixel domain), i.e., Q3.
 const QSCALE: i32 = 3;
 
+// The base quantizer for a frame is adjusted based on the frame type using the
+//  formula (log_qp*mqp + dqp), where log_qp is the base-2 logarithm of the
+//  "linear" quantizer (the actual factor by which coefficients are divided).
+// Because log_qp has an implicit offset built in based on the scale of the
+//  coefficients (which depends on the pixel bit depth and the transform
+//  scale), we normalize the quantizer to the equivalent for 8-bit pixels with
+//  orthonormal transforms for the purposes of rate modeling.
+const MQP_Q12: &[i32; FRAME_NSUBTYPES] = &[
+  // TODO: Use a const function once f64 operations in const functions are
+  //  stable.
+  (1.0 * (1 << 12) as f64) as i32,
+  (1.0 * (1 << 12) as f64) as i32,
+  (1.0 * (1 << 12) as f64) as i32,
+  (1.0 * (1 << 12) as f64) as i32
+];
+
+// The ratio 33810170.0/86043287.0 was derived by approximating the median of a
+//  change of 15 quantizer steps in the quantizer tables.
+const DQP_Q57: &[i64; FRAME_NSUBTYPES] = &[
+  (-(33810170.0 / 86043287.0) * (1i64 << 57) as f64) as i64,
+  (0.0 * (1i64 << 57) as f64) as i64,
+  ((33810170.0 / 86043287.0) * (1i64 << 57) as f64) as i64,
+  (2.0 * (33810170.0 / 86043287.0) * (1i64 << 57) as f64) as i64
+];
+
 // Integer binary logarithm of a 64-bit value.
 // v: A 64-bit value.
 // Returns floor(log2(v)) + 1, or 0 if v == 0.
@@ -270,27 +295,21 @@ impl RCState {
     //  parameterize a "quality" configuration parameter).
     let base_qi = fi.config.quantizer;
     let bit_depth = fi.sequence.bit_depth as i32;
-    // Adjust base_qi for the frame type.
-    // TODO: Adjust the quantizer (not the index) instead to avoid issues with
-    //  the non-linearity of the AV1 quantizer tables.
-    let qi = if fti == FRAME_SUBTYPE_I {
-      let q_boost = 15;
-      base_qi.max(1 + q_boost).min(255 + q_boost) - q_boost
-    } else {
-      let q_drop = 15 * (fti - FRAME_SUBTYPE_P);
-      base_qi.min(255 - q_drop) + q_drop
-    };
     // We use the AC quantizer as the source quantizer since its quantizer
     //  tables have unique entries, while the DC tables do not.
-    let quantizer = ac_q(qi as u8, 0, bit_depth as usize) as i64;
+    let ac_quantizer = ac_q(base_qi as u8, 0, bit_depth as usize) as i64;
     // Pick the nearest DC entry since an exact match may be unavailable.
-    let dc_qi = select_dc_qi(quantizer, bit_depth as usize);
+    let dc_qi = select_dc_qi(ac_quantizer, bit_depth as usize);
     let dc_quantizer = dc_q(dc_qi as u8, 0, bit_depth as usize) as i64;
-    // Get the log quantizer as Q57.
-    let log_q = blog64(quantizer) - q57(QSCALE + bit_depth - 8);
+    // Get the log quantizers as Q57.
+    let log_ac_q = blog64(ac_quantizer) - q57(QSCALE + bit_depth - 8);
     let log_dc_q = blog64(dc_quantizer) - q57(QSCALE + bit_depth - 8);
     // Target the midpoint of the chosen entries.
-    QuantizerParameters::new_from_log_q((log_q + log_dc_q + 1) / 2, bit_depth)
+    let log_base_q = (log_ac_q + log_dc_q + 1) >> 1;
+    // Adjust the quantizer for the frame type, result is Q57:
+    let log_q = ((log_base_q + (1i64 << 11)) >> 12) * (MQP_Q12[fti] as i64)
+      + DQP_Q57[fti];
+    QuantizerParameters::new_from_log_q(log_q, bit_depth)
   }
 }
 
