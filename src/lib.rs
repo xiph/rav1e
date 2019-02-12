@@ -49,6 +49,7 @@ mod header;
 pub use crate::api::*;
 pub use crate::encoder::*;
 pub use crate::header::*;
+pub use crate::util::{CastFromPrimitive, Pixel};
 
 #[cfg(all(test, feature="decode_test"))]
 mod test_encode_decode_aom;

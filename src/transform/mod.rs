@@ -14,6 +14,8 @@ use crate::partition::{TxSize, TxType, TX_TYPES};
 use crate::predict::*;
 use crate::util::*;
 
+use std::mem;
+
 mod forward;
 mod inverse;
 
@@ -172,10 +174,11 @@ pub fn forward_transform(
   }
 }
 
-pub fn inverse_transform_add(
-  input: &[i32], output: &mut [u16], stride: usize, tx_size: TxSize,
+pub fn inverse_transform_add<T: Pixel>(
+  input: &[i32], output: &mut [T], stride: usize, tx_size: TxSize,
   tx_type: TxType, bit_depth: usize
 ) {
+  assert!(mem::size_of::<T>() == 2, "only implemented for u16 for now");
   use self::TxSize::*;
   match tx_size {
     TX_4X4 => iht4x4_add(input, output, stride, tx_type, bit_depth),

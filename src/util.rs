@@ -10,6 +10,7 @@
 use num_traits::*;
 use std::mem;
 use std::mem::size_of;
+use std::fmt::{Debug, Display};
 #[allow(deprecated, unused_imports)]
 use ::std::ascii::AsciiExt;
 
@@ -250,6 +251,10 @@ pub trait Pixel:
   + CastFromPrimitive<i32>
   + CastFromPrimitive<u32>
   + CastFromPrimitive<usize>
+  + Debug
+  + Display
+  + Send
+  + Sync
   + 'static
 {}
 

@@ -463,8 +463,8 @@ pub struct FrameSummary {
   pub psnr: Option<(f64, f64, f64)>,
 }
 
-impl From<Packet> for FrameSummary {
-  fn from(packet: Packet) -> Self {
+impl<T: Pixel> From<Packet<T>> for FrameSummary {
+  fn from(packet: Packet<T>) -> Self {
     Self {
       size: packet.data.len(),
       number: packet.number,

@@ -814,17 +814,16 @@ pub enum MvJointType {
   MV_JOINT_HNZVNZ = 3  /* Both components nonzero */
 }
 
-pub fn get_intra_edges<'a>(
-  dst: &'a PlaneSlice<'a>,
+pub fn get_intra_edges<'a, T: Pixel>(
+  dst: &'a PlaneSlice<'a, T>,
   tx_size: TxSize,
   bit_depth: usize,
   plane_cfg: &'a PlaneConfig,
   frame_w_in_b: usize,
   frame_h_in_b: usize,
   opt_mode: Option<PredictionMode>
-) -> AlignedArray<[u16; 4 * MAX_TX_SIZE + 1]> {
-
-  let mut edge_buf: AlignedArray<[u16; 4 * MAX_TX_SIZE + 1]> =
+) -> AlignedArray<[T; 4 * MAX_TX_SIZE + 1]> {
+  let mut edge_buf: AlignedArray<[T; 4 * MAX_TX_SIZE + 1]> =
     UninitializedAlignedArray();
   let base = 128u16 << (bit_depth - 8);
 
@@ -872,7 +871,7 @@ pub fn get_intra_edges<'a>(
           left[2*MAX_TX_SIZE - tx_size.height() + i] = left_slice.p(0, tx_size.height() - 1 - i);
         }
       } else {
-        let val = if y != 0 { dst.go_up(1).p(0, 0) } else { base + 1 };
+        let val = if y != 0 { dst.go_up(1).p(0, 0) } else { T::cast_from(base + 1) };
         for v in left[2*MAX_TX_SIZE - tx_size.height()..].iter_mut() {
           *v = val
         }
@@ -882,7 +881,7 @@ pub fn get_intra_edges<'a>(
     // Needs top-left
     if needs_topleft {
       top_left[0] = match (x, y) {
-        (0, 0) => base,
+        (0, 0) => T::cast_from(base),
         (_, 0) => dst.go_left(1).p(0, 0),
         (0, _) => dst.go_up(1).p(0, 0),
         _ => dst.go_up(1).go_left(1).p(0, 0)
@@ -894,7 +893,7 @@ pub fn get_intra_edges<'a>(
       if y != 0 {
         above[..tx_size.width()].copy_from_slice(&dst.go_up(1).as_slice()[..tx_size.width()]);
       } else {
-        let val = if x != 0 { dst.go_left(1).p(0, 0) } else { base - 1 };
+        let val = if x != 0 { dst.go_left(1).p(0, 0) } else { T::cast_from(base - 1) };
         for v in above[..tx_size.width()].iter_mut() {
           *v = val;
         }
@@ -981,60 +980,60 @@ pub fn get_intra_edges<'a>(
 }
 
 impl PredictionMode {
-  pub fn predict_intra<'a>(
-    self, dst: &'a mut PlaneMutSlice<'a>, tx_size: TxSize, bit_depth: usize,
-    ac: &[i16], alpha: i16, edge_buf: &AlignedArray<[u16; 4 * MAX_TX_SIZE + 1]>
+  pub fn predict_intra<'a, T: Pixel>(
+    self, dst: &'a mut PlaneMutSlice<'a, T>, tx_size: TxSize, bit_depth: usize,
+    ac: &[i16], alpha: i16, edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>
   ) {
     assert!(self.is_intra());
 
     match tx_size {
       TxSize::TX_4X4 =>
-        self.predict_intra_inner::<Block4x4>(dst, bit_depth, ac, alpha, edge_buf),
+        self.predict_intra_inner::<Block4x4, _>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_8X8 =>
-        self.predict_intra_inner::<Block8x8>(dst, bit_depth, ac, alpha, edge_buf),
+        self.predict_intra_inner::<Block8x8, _>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_16X16 =>
-        self.predict_intra_inner::<Block16x16>(dst, bit_depth, ac, alpha, edge_buf),
+        self.predict_intra_inner::<Block16x16, _>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_32X32 =>
-        self.predict_intra_inner::<Block32x32>(dst, bit_depth, ac, alpha, edge_buf),
+        self.predict_intra_inner::<Block32x32, _>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_64X64 =>
-        self.predict_intra_inner::<Block64x64>(dst, bit_depth, ac, alpha, edge_buf),
+        self.predict_intra_inner::<Block64x64, _>(dst, bit_depth, ac, alpha, edge_buf),
 
       TxSize::TX_4X8 =>
-        self.predict_intra_inner::<Block4x8>(dst, bit_depth, ac, alpha, edge_buf),
+        self.predict_intra_inner::<Block4x8, _>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_8X4 =>
-        self.predict_intra_inner::<Block8x4>(dst, bit_depth, ac, alpha, edge_buf),
+        self.predict_intra_inner::<Block8x4, _>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_8X16 =>
-        self.predict_intra_inner::<Block8x16>(dst, bit_depth, ac, alpha, edge_buf),
+        self.predict_intra_inner::<Block8x16, _>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_16X8 =>
-        self.predict_intra_inner::<Block16x8>(dst, bit_depth, ac, alpha, edge_buf),
+        self.predict_intra_inner::<Block16x8, _>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_16X32 =>
-        self.predict_intra_inner::<Block16x32>(dst, bit_depth, ac, alpha, edge_buf),
+        self.predict_intra_inner::<Block16x32, _>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_32X16 =>
-        self.predict_intra_inner::<Block32x16>(dst, bit_depth, ac, alpha, edge_buf),
+        self.predict_intra_inner::<Block32x16, _>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_32X64 =>
-        self.predict_intra_inner::<Block32x64>(dst, bit_depth, ac, alpha, edge_buf),
+        self.predict_intra_inner::<Block32x64, _>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_64X32 =>
-        self.predict_intra_inner::<Block64x32>(dst, bit_depth, ac, alpha, edge_buf),
+        self.predict_intra_inner::<Block64x32, _>(dst, bit_depth, ac, alpha, edge_buf),
 
       TxSize::TX_4X16 =>
-        self.predict_intra_inner::<Block4x16>(dst, bit_depth, ac, alpha, edge_buf),
+        self.predict_intra_inner::<Block4x16, _>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_16X4 =>
-        self.predict_intra_inner::<Block16x4>(dst, bit_depth, ac, alpha, edge_buf),
+        self.predict_intra_inner::<Block16x4, _>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_8X32 =>
-        self.predict_intra_inner::<Block8x32>(dst, bit_depth, ac, alpha, edge_buf),
+        self.predict_intra_inner::<Block8x32, _>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_32X8 =>
-        self.predict_intra_inner::<Block32x8>(dst, bit_depth, ac, alpha, edge_buf),
+        self.predict_intra_inner::<Block32x8, _>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_16X64 =>
-        self.predict_intra_inner::<Block16x64>(dst, bit_depth, ac, alpha, edge_buf),
+        self.predict_intra_inner::<Block16x64, _>(dst, bit_depth, ac, alpha, edge_buf),
       TxSize::TX_64X16 =>
-        self.predict_intra_inner::<Block64x16>(dst, bit_depth, ac, alpha, edge_buf),
+        self.predict_intra_inner::<Block64x16, _>(dst, bit_depth, ac, alpha, edge_buf),
     }
   }
 
   #[inline(always)]
-  fn predict_intra_inner<'a, B: Intra<u16>>(
-    self, dst: &'a mut PlaneMutSlice<'a>, bit_depth: usize, ac: &[i16],
-    alpha: i16, edge_buf: &AlignedArray<[u16; 4 * MAX_TX_SIZE + 1]>
+  fn predict_intra_inner<'a, B: Intra<T>, T: Pixel>(
+    self, dst: &'a mut PlaneMutSlice<'a, T>, bit_depth: usize, ac: &[i16],
+    alpha: i16, edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>
   ) {
     // left pixels are order from bottom to top and right-aligned
     let (left, not_left) = edge_buf.array.split_at(2*MAX_TX_SIZE);
@@ -1140,9 +1139,9 @@ impl PredictionMode {
     self >= PredictionMode::V_PRED && self <= PredictionMode::D63_PRED
   }
 
-  pub fn predict_inter<'a>(
-    self, fi: &FrameInvariants, p: usize, po: &PlaneOffset,
-    dst: &'a mut PlaneMutSlice<'a>, width: usize, height: usize,
+  pub fn predict_inter<'a, T: Pixel>(
+    self, fi: &FrameInvariants<T>, p: usize, po: &PlaneOffset,
+    dst: &'a mut PlaneMutSlice<'a, T>, width: usize, height: usize,
     ref_frames: [usize; 2], mvs: [MotionVector; 2]
   ) {
     assert!(!self.is_intra());
@@ -1151,9 +1150,9 @@ impl PredictionMode {
     let is_compound =
       ref_frames[1] > INTRA_FRAME && ref_frames[1] != NONE_FRAME;
 
-    fn get_params<'a>(
-      rec_plane: &'a Plane, po: &PlaneOffset, mv: MotionVector
-    ) -> (i32, i32, PlaneSlice<'a>) {
+    fn get_params<'a, T: Pixel>(
+      rec_plane: &'a Plane<T>, po: &PlaneOffset, mv: MotionVector
+    ) -> (i32, i32, PlaneSlice<'a, T>) {
       let rec_cfg = &rec_plane.cfg;
       let shift_row = 3 + rec_cfg.ydec;
       let shift_col = 3 + rec_cfg.xdec;

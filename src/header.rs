@@ -12,6 +12,7 @@ use crate::context::*;
 use crate::ec::*;
 use crate::lrf::*;
 use crate::partition::*;
+use crate::util::Pixel;
 
 use crate::SegmentationState;
 use crate::DeblockState;
@@ -135,37 +136,37 @@ pub trait UncompressedHeader {
   fn write_metadata_obu(
     &mut self, obu_meta_type: ObuMetaType, seq: Sequence
   ) -> io::Result<()>;
-  fn write_sequence_header_obu(
-    &mut self, fi: &mut FrameInvariants
+  fn write_sequence_header_obu<T: Pixel>(
+    &mut self, fi: &mut FrameInvariants<T>
   ) -> io::Result<()>;
-  fn write_frame_header_obu(
-    &mut self, fi: &FrameInvariants, fs: &FrameState
+  fn write_frame_header_obu<T: Pixel>(
+    &mut self, fi: &FrameInvariants<T>, fs: &FrameState<T>
   ) -> io::Result<()>;
-  fn write_sequence_header(
-    &mut self, fi: &mut FrameInvariants
+  fn write_sequence_header<T: Pixel>(
+    &mut self, fi: &mut FrameInvariants<T>
   ) -> io::Result<()>;
   fn write_color_config(
     &mut self, seq: &mut Sequence
   ) -> io::Result<()>;
   // End of OBU Headers
 
-  fn write_frame_size(
-    &mut self, fi: &FrameInvariants
+  fn write_frame_size<T: Pixel>(
+    &mut self, fi: &FrameInvariants<T>
   ) -> io::Result<()>;
-  fn write_deblock_filter_a(
-    &mut self, fi: &FrameInvariants, deblock: &DeblockState
+  fn write_deblock_filter_a<T: Pixel>(
+    &mut self, fi: &FrameInvariants<T>, deblock: &DeblockState
   ) -> io::Result<()>;
-  fn write_deblock_filter_b(
-    &mut self, fi: &FrameInvariants, deblock: &DeblockState
+  fn write_deblock_filter_b<T: Pixel>(
+    &mut self, fi: &FrameInvariants<T>, deblock: &DeblockState
   ) -> io::Result<()>;
-  fn write_frame_cdef(
-    &mut self, fi: &FrameInvariants
+  fn write_frame_cdef<T: Pixel>(
+    &mut self, fi: &FrameInvariants<T>
   ) -> io::Result<()>;
-  fn write_frame_lrf(
-    &mut self, fi: &FrameInvariants, rs: &RestorationState
+  fn write_frame_lrf<T: Pixel>(
+    &mut self, fi: &FrameInvariants<T>, rs: &RestorationState
   ) -> io::Result<()>;
-  fn write_segment_data(
-    &mut self, fi: &FrameInvariants, segmentation: &SegmentationState
+  fn write_segment_data<T: Pixel>(
+    &mut self, fi: &FrameInvariants<T>, segmentation: &SegmentationState
   ) -> io::Result<()>;
   fn write_delta_q(
     &mut self, delta_q: i8
@@ -237,8 +238,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     Ok(())
   }
 
-  fn write_sequence_header_obu(
-    &mut self, fi: &mut FrameInvariants
+  fn write_sequence_header_obu<T: Pixel>(
+    &mut self, fi: &mut FrameInvariants<T>
   ) -> io::Result<()> {
     self.write(3, fi.sequence.profile)?; // profile
     self.write_bit(false)?; // still_picture
@@ -262,8 +263,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     Ok(())
   }
 
-  fn write_sequence_header(
-    &mut self, fi: &mut FrameInvariants
+  fn write_sequence_header<T: Pixel>(
+    &mut self, fi: &mut FrameInvariants<T>
   ) -> io::Result<()> {
     self.write_frame_size(fi)?;
 
@@ -405,8 +406,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
   }
 
   #[allow(unused)]
-  fn write_frame_header_obu(
-    &mut self, fi: &FrameInvariants, fs: &FrameState
+  fn write_frame_header_obu<T: Pixel>(
+    &mut self, fi: &FrameInvariants<T>, fs: &FrameState<T>
   ) -> io::Result<()> {
     if fi.sequence.reduced_still_picture_hdr {
       assert!(fi.show_existing_frame);
@@ -740,7 +741,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
   }
   // End of OBU Headers
 
-  fn write_frame_size(&mut self, fi: &FrameInvariants) -> io::Result<()> {
+  fn write_frame_size<T: Pixel>(&mut self, fi: &FrameInvariants<T>) -> io::Result<()> {
     // width_bits and height_bits will have to be moved to the sequence header OBU
     // when we add support for it.
     let width_bits = 32 - (fi.width as u32).leading_zeros();
@@ -754,8 +755,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     Ok(())
   }
 
-  fn write_deblock_filter_a(
-    &mut self, fi: &FrameInvariants, deblock: &DeblockState
+  fn write_deblock_filter_a<T: Pixel>(
+    &mut self, fi: &FrameInvariants<T>, deblock: &DeblockState
   ) -> io::Result<()> {
     if fi.delta_q_present {
       if !fi.allow_intrabc {
@@ -769,8 +770,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     Ok(())
   }
 
-  fn write_deblock_filter_b(
-    &mut self, fi: &FrameInvariants, deblock: &DeblockState
+  fn write_deblock_filter_b<T: Pixel>(
+    &mut self, fi: &FrameInvariants<T>, deblock: &DeblockState
   ) -> io::Result<()> {
     assert!(deblock.levels[0] < 64);
     self.write(6, deblock.levels[0])?; // loop deblocking filter level 0
@@ -822,7 +823,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     Ok(())
   }
 
-  fn write_frame_cdef(&mut self, fi: &FrameInvariants) -> io::Result<()> {
+  fn write_frame_cdef<T: Pixel>(&mut self, fi: &FrameInvariants<T>) -> io::Result<()> {
     if fi.sequence.enable_cdef {
       assert!(fi.cdef_damping >= 3);
       assert!(fi.cdef_damping <= 6);
@@ -840,8 +841,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     Ok(())
   }
 
-  fn write_frame_lrf(
-    &mut self, fi: &FrameInvariants, rs: &RestorationState
+  fn write_frame_lrf<T: Pixel>(
+    &mut self, fi: &FrameInvariants<T>, rs: &RestorationState
   ) -> io::Result<()> {
     if fi.sequence.enable_restoration && !fi.allow_intrabc {
       // && !self.lossless
@@ -882,8 +883,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     Ok(())
   }
 
-  fn write_segment_data(
-    &mut self, fi: &FrameInvariants, segmentation: &SegmentationState
+  fn write_segment_data<T: Pixel>(
+    &mut self, fi: &FrameInvariants<T>, segmentation: &SegmentationState
   ) -> io::Result<()> {
     self.write_bit(segmentation.enabled)?;
     if segmentation.enabled {

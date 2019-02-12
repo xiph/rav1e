@@ -20,20 +20,21 @@ use std::{mem, ptr, slice};
 use std::collections::VecDeque;
 use std::ffi::CStr;
 use std::sync::Arc;
+use crate::util::Pixel;
 
-fn fill_frame(ra: &mut ChaChaRng, frame: &mut Frame) {
+fn fill_frame<T: Pixel>(ra: &mut ChaChaRng, frame: &mut Frame<T>) {
   for plane in frame.planes.iter_mut() {
     let stride = plane.cfg.stride;
     for row in plane.data.chunks_mut(stride) {
       for pixel in row {
         let v: u8 = ra.gen();
-        *pixel = v as u16;
+        *pixel = T::cast_from(v);
       }
     }
   }
 }
 
-fn read_frame_batch(ctx: &mut Context, ra: &mut ChaChaRng) {
+fn read_frame_batch<T: Pixel>(ctx: &mut Context<T>, ra: &mut ChaChaRng) {
   while ctx.needs_more_lookahead() {
     let mut input = ctx.new_frame();
     fill_frame(ra, Arc::get_mut(&mut input).unwrap());
@@ -82,11 +83,11 @@ impl Drop for AomDecoder {
   }
 }
 
-fn setup_encoder(
+fn setup_encoder<T: Pixel>(
   w: usize, h: usize, speed: usize, quantizer: usize, bit_depth: usize,
   chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
   low_latency: bool, bitrate: i32
-) -> Context {
+) -> Context<T> {
   unsafe {
     av1_rtcd();
     aom_dsp_rtcd();
@@ -297,7 +298,7 @@ fn compare_plane<T: Ord + std::fmt::Debug>(
   }
 }
 
-fn compare_img(img: *const aom_image_t, frame: &Frame, bit_depth: usize, width: usize, height: usize) {
+fn compare_img<T: Pixel>(img: *const aom_image_t, frame: &Frame<T>, bit_depth: usize, width: usize, height: usize) {
   let img = unsafe { *img };
   let img_iter = img.planes.iter().zip(img.stride.iter());
 
@@ -317,7 +318,7 @@ fn compare_img(img: *const aom_image_t, frame: &Frame, bit_depth: usize, width: 
       };
 
       let rec: Vec<u16> =
-        frame_plane.data_origin().iter().map(|&v| v).collect();
+        frame_plane.data_origin().iter().map(|&v| u16::cast_from(v)).collect();
 
       compare_plane::<u16>(&rec[..], rec_stride, dec, dec_stride, w, h);
     } else {
@@ -331,7 +332,7 @@ fn compare_img(img: *const aom_image_t, frame: &Frame, bit_depth: usize, width: 
       };
 
       let rec: Vec<u8> =
-        frame_plane.data_origin().iter().map(|&v| v as u8).collect();
+        frame_plane.data_origin().iter().map(|&v| u8::cast_from(v)).collect();
 
       compare_plane::<u8>(&rec[..], rec_stride, dec, dec_stride, w, h);
     }
@@ -346,7 +347,7 @@ fn encode_decode(
   let mut ra = ChaChaRng::from_seed([0; 32]);
 
   let mut dec = setup_decoder(w, h);
-  let mut ctx =
+  let mut ctx: Context<u16> =
     setup_encoder(w, h, speed, quantizer, bit_depth, chroma_sampling,
                   min_keyint, max_keyint, low_latency, bitrate);
   ctx.set_limit(limit as u64);

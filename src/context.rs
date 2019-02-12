@@ -25,7 +25,7 @@ use crate::lrf::*;
 use crate::plane::*;
 use crate::scan_order::*;
 use crate::token_cdfs::*;
-use crate::util::{clamp, msb};
+use crate::util::{clamp, msb, Pixel};
 
 use std::*;
 
@@ -2137,12 +2137,12 @@ impl ContextWriter {
     }
   }
 
-  fn add_extra_mv_candidate(
+  fn add_extra_mv_candidate<T: Pixel>(
     &self,
     blk: &Block,
     ref_frames: [usize; 2],
     mv_stack: &mut Vec<CandidateMV>,
-    fi: &FrameInvariants,
+    fi: &FrameInvariants<T>,
     is_compound: bool,
     ref_id_count: &mut [usize; 2],
     ref_id_mvs: &mut [[MotionVector; 2]; 2],
@@ -2320,8 +2320,10 @@ impl ContextWriter {
     }
   }
 
-  fn setup_mvref_list(&mut self, bo: &BlockOffset, ref_frames: [usize; 2], mv_stack: &mut Vec<CandidateMV>,
-                      bsize: BlockSize, fi: &FrameInvariants, is_compound: bool) -> usize {
+  fn setup_mvref_list<T: Pixel>(
+    &mut self, bo: &BlockOffset, ref_frames: [usize; 2], mv_stack: &mut Vec<CandidateMV>,
+    bsize: BlockSize, fi: &FrameInvariants<T>, is_compound: bool
+  ) -> usize {
     let (_rf, _rf_num) = self.get_mvref_ref_frames(INTRA_FRAME);
 
     let target_n4_h = bsize.height_mi();
@@ -2536,9 +2538,11 @@ impl ContextWriter {
     mode_context
   }
 
-  pub fn find_mvrefs(&mut self, bo: &BlockOffset, ref_frames: [usize; 2],
-                     mv_stack: &mut Vec<CandidateMV>, bsize: BlockSize,
-                     fi: &FrameInvariants, is_compound: bool) -> usize {
+  pub fn find_mvrefs<T: Pixel>(
+    &mut self, bo: &BlockOffset, ref_frames: [usize; 2],
+    mv_stack: &mut Vec<CandidateMV>, bsize: BlockSize,
+    fi: &FrameInvariants<T>, is_compound: bool
+  ) -> usize {
     assert!(ref_frames[0] != NONE_FRAME);
     if ref_frames[0] < REF_FRAMES {
       if ref_frames[0] != INTRA_FRAME {
@@ -2753,7 +2757,7 @@ impl ContextWriter {
     }
   }
 
-  pub fn write_ref_frames(&mut self, w: &mut dyn Writer, fi: &FrameInvariants, bo: &BlockOffset) {
+  pub fn write_ref_frames<T: Pixel>(&mut self, w: &mut dyn Writer, fi: &FrameInvariants<T>, bo: &BlockOffset) {
     let rf = self.bc.at(bo).ref_frames;
     let sz = self.bc.at(bo).n4_w.min(self.bc.at(bo).n4_h);
 
@@ -3008,8 +3012,9 @@ impl ContextWriter {
     symbol_with_update!(self, w, coded_id as u32, &mut self.fc.spatial_segmentation_cdfs[cdf_index as usize]);
   }
 
-  pub fn write_lrf(&mut self, w: &mut dyn Writer, fi: &FrameInvariants, rs: &mut RestorationState,
-                   sbo: &SuperBlockOffset) {
+  pub fn write_lrf<T: Pixel>(
+    &mut self, w: &mut dyn Writer, fi: &FrameInvariants<T>, rs: &mut RestorationState, sbo: &SuperBlockOffset
+  ) {
     if !fi.allow_intrabc { // TODO: also disallow if lossless
       for pli in 0..PLANES {
         let code;

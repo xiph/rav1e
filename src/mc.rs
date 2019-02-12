@@ -12,6 +12,8 @@ pub use self::nasm::*;
 #[cfg(any(not(target_arch = "x86_64"), windows, not(feature = "nasm")))]
 pub use self::native::*;
 
+use crate::util::Pixel;
+
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 pub enum FilterMode {
   REGULAR = 0,
@@ -248,8 +250,8 @@ mod nasm {
     );
   }
 
-  pub fn put_8tap<'a>(
-    dst: &'a mut PlaneMutSlice<'a>, src: PlaneSlice<'_>, width: usize,
+  pub fn put_8tap<'a, T: Pixel>(
+    dst: &'a mut PlaneMutSlice<'a, T>, src: PlaneSlice<'_, T>, width: usize,
     height: usize, col_frac: i32, row_frac: i32, mode_x: FilterMode,
     mode_y: FilterMode, bit_depth: usize
   ) {
@@ -298,8 +300,8 @@ mod nasm {
     );
   }
 
-  pub fn prep_8tap(
-    tmp: &mut [i16], src: PlaneSlice<'_>, width: usize, height: usize,
+  pub fn prep_8tap<T: Pixel>(
+    tmp: &mut [i16], src: PlaneSlice<'_, T>, width: usize, height: usize,
     col_frac: i32, row_frac: i32, mode_x: FilterMode, mode_y: FilterMode,
     bit_depth: usize
   ) {
@@ -333,8 +335,8 @@ mod nasm {
     }
   }
 
-  pub fn mc_avg<'a>(
-    dst: &'a mut PlaneMutSlice<'a>, tmp1: &[i16], tmp2: &[i16], width: usize,
+  pub fn mc_avg<'a, T: Pixel>(
+    dst: &'a mut PlaneMutSlice<'a, T>, tmp1: &[i16], tmp2: &[i16], width: usize,
     height: usize, bit_depth: usize
   ) {
     if is_x86_feature_detected!("avx2") && bit_depth == 8 {
@@ -394,8 +396,8 @@ mod native {
     SUBPEL_FILTERS[filter_idx][frac as usize]
   }
 
-  pub fn put_8tap<'a>(
-    dst: &'a mut PlaneMutSlice<'a>, src: PlaneSlice<'_>, width: usize,
+  pub fn put_8tap<'a, T: Pixel>(
+    dst: &'a mut PlaneMutSlice<'a, T>, src: PlaneSlice<'_, T>, width: usize,
     height: usize, col_frac: i32, row_frac: i32, mode_x: FilterMode,
     mode_y: FilterMode, bit_depth: usize
   ) {
@@ -419,7 +421,7 @@ mod native {
         let src_slice = src.go_up(3).as_slice();
         for r in 0..height {
           for c in 0..width {
-            dst_slice[r * dst_stride + c] = round_shift(
+            dst_slice[r * dst_stride + c] = T::cast_from(round_shift(
               run_filter(
                 &src_slice[r * ref_stride + c..],
                 ref_stride,
@@ -428,8 +430,7 @@ mod native {
               7
             )
             .max(0)
-            .min(max_sample_val)
-              as u16;
+            .min(max_sample_val));
           }
         }
       }
@@ -437,7 +438,7 @@ mod native {
         let src_slice = src.go_left(3).as_slice();
         for r in 0..height {
           for c in 0..width {
-            dst_slice[r * dst_stride + c] = round_shift(
+            dst_slice[r * dst_stride + c] = T::cast_from(round_shift(
               round_shift(
                 run_filter(&src_slice[r * ref_stride + c..], 1, x_filter),
                 7 - intermediate_bits
@@ -445,8 +446,7 @@ mod native {
               intermediate_bits
             )
             .max(0)
-            .min(max_sample_val)
-              as u16;
+            .min(max_sample_val));
           }
         }
       }
@@ -466,13 +466,12 @@ mod native {
 
           for r in 0..height {
             for c in cg..(cg + 8).min(width) {
-              dst_slice[r * dst_stride + c] = round_shift(
+              dst_slice[r * dst_stride + c] = T::cast_from(round_shift(
                 run_filter(&intermediate[8 * r + c - cg..], 8, y_filter),
                 7 + intermediate_bits
               )
               .max(0)
-              .min(max_sample_val)
-                as u16;
+              .min(max_sample_val));
             }
           }
         }
@@ -480,8 +479,8 @@ mod native {
     }
   }
 
-  pub fn prep_8tap(
-    tmp: &mut [i16], src: PlaneSlice<'_>, width: usize, height: usize,
+  pub fn prep_8tap<T: Pixel>(
+    tmp: &mut [i16], src: PlaneSlice<'_, T>, width: usize, height: usize,
     col_frac: i32, row_frac: i32, mode_x: FilterMode, mode_y: FilterMode,
     bit_depth: usize
   ) {
@@ -495,7 +494,7 @@ mod native {
         for r in 0..height {
           for c in 0..width {
             tmp[r * width + c] =
-              (src_slice[r * ref_stride + c] << intermediate_bits) as i16;
+              i16::cast_from(src_slice[r * ref_stride + c] << intermediate_bits);
           }
         }
       }
@@ -552,8 +551,8 @@ mod native {
     }
   }
 
-  pub fn mc_avg<'a>(
-    dst: &'a mut PlaneMutSlice<'a>, tmp1: &[i16], tmp2: &[i16], width: usize,
+  pub fn mc_avg<'a, T: Pixel>(
+    dst: &'a mut PlaneMutSlice<'a, T>, tmp1: &[i16], tmp2: &[i16], width: usize,
     height: usize, bit_depth: usize
   ) {
     let dst_stride = dst.plane.cfg.stride;
@@ -562,12 +561,12 @@ mod native {
     let intermediate_bits = 4 - if bit_depth == 12 { 2 } else { 0 };
     for r in 0..height {
       for c in 0..width {
-        dst_slice[r * dst_stride + c] = round_shift(
+        dst_slice[r * dst_stride + c] = T::cast_from(round_shift(
           (tmp1[r * width + c] + tmp2[r * width + c]) as i32,
           intermediate_bits + 1
         )
         .max(0)
-        .min(max_sample_val) as u16;
+        .min(max_sample_val));
       }
     }
   }

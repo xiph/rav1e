@@ -16,6 +16,7 @@ use crate::rate::FRAME_NSUBTYPES;
 use crate::rate::FRAME_SUBTYPE_I;
 use crate::rate::FRAME_SUBTYPE_P;
 use crate::scenechange::SceneChangeDetector;
+use crate::util::Pixel;
 use self::EncoderStatus::*;
 
 use std::{cmp, fmt, io};
@@ -437,7 +438,7 @@ impl Config {
     Ok(())
   }
 
-  pub fn new_context(&self) -> Context {
+  pub fn new_context<T: Pixel>(&self) -> Context<T> {
     #[cfg(feature = "aom")]
     unsafe {
       av1_rtcd();
@@ -483,16 +484,16 @@ impl Config {
   }
 }
 
-pub struct Context {
+pub struct Context<T: Pixel> {
   //    timebase: Rational,
   frame_count: u64,
   limit: u64,
   pub(crate) idx: u64,
   frames_processed: u64,
   /// Maps frame *number* to frames
-  frame_q: BTreeMap<u64, Option<Arc<Frame>>>, //    packet_q: VecDeque<Packet>
+  frame_q: BTreeMap<u64, Option<Arc<Frame<T>>>>, //    packet_q: VecDeque<Packet>
   /// Maps frame *idx* to frame data
-  frame_data: BTreeMap<u64, FrameInvariants>,
+  frame_data: BTreeMap<u64, FrameInvariants<T>>,
   /// A list of keyframe *numbers* in this encode. Needed so that we don't
   /// need to keep all of the frame_data in memory for the whole life of the encode.
   keyframes: BTreeSet<u64>,
@@ -500,7 +501,7 @@ pub struct Context {
   packet_data: Vec<u8>,
   segment_start_idx: u64,
   segment_start_frame: u64,
-  keyframe_detector: SceneChangeDetector,
+  keyframe_detector: SceneChangeDetector<T>,
   pub config: Config,
   rc_state: RCState,
   maybe_prev_log_base_q: Option<i64>,
@@ -519,16 +520,16 @@ pub enum EncoderStatus {
   ParseError
 }
 
-pub struct Packet {
+pub struct Packet<T: Pixel> {
   pub data: Vec<u8>,
-  pub rec: Option<Frame>,
+  pub rec: Option<Frame<T>>,
   pub number: u64,
   pub frame_type: FrameType,
   /// PSNR for Y, U, and V planes
   pub psnr: Option<(f64, f64, f64)>,
 }
 
-impl fmt::Display for Packet {
+impl<T: Pixel> fmt::Display for Packet<T> {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(
       f,
@@ -540,8 +541,8 @@ impl fmt::Display for Packet {
   }
 }
 
-impl Context {
-  pub fn new_frame(&self) -> Arc<Frame> {
+impl<T: Pixel> Context<T> {
+  pub fn new_frame(&self) -> Arc<Frame<T>> {
     Arc::new(Frame::new(
       self.config.enc.width,
       self.config.enc.height,
@@ -551,7 +552,8 @@ impl Context {
 
   pub fn send_frame<F>(&mut self, frame: F) -> Result<(), EncoderStatus>
   where
-    F: Into<Option<Arc<Frame>>>
+    F: Into<Option<Arc<Frame<T>>>>,
+    T: Pixel,
   {
     let idx = self.frame_count;
     self.frame_q.insert(idx, frame.into());
@@ -559,7 +561,7 @@ impl Context {
     Ok(())
   }
 
-  pub fn get_frame(&self, frame_number: u64) -> Arc<Frame> {
+  pub fn get_frame(&self, frame_number: u64) -> Arc<Frame<T>> {
     // Clones only the arc, so low cost overhead
     self.frame_q.get(&frame_number).as_ref().unwrap().as_ref().unwrap().clone()
   }
@@ -628,7 +630,7 @@ impl Context {
     end_of_subgop
   }
 
-  fn build_frame_properties(&mut self, idx: u64) -> (FrameInvariants, bool) {
+  fn build_frame_properties(&mut self, idx: u64) -> (FrameInvariants<T>, bool) {
     if idx == 0 {
       let seq = Sequence::new(&self.config.enc);
 
@@ -711,7 +713,7 @@ impl Context {
     (fi, true)
   }
 
-  pub fn receive_packet(&mut self) -> Result<Packet, EncoderStatus> {
+  pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
     let idx = {
       let mut idx = self.idx;
       while !self.set_frame_properties(idx) {
@@ -794,7 +796,7 @@ impl Context {
     ret
   }
 
-  fn finalize_packet(&mut self, rec: Option<Frame>, fi: &FrameInvariants) -> Result<Packet, EncoderStatus> {
+  fn finalize_packet(&mut self, rec: Option<Frame<T>>, fi: &FrameInvariants<T>) -> Result<Packet<T>, EncoderStatus> {
     let data = self.packet_data.clone();
     self.packet_data.clear();
     if write_temporal_delimiter(&mut self.packet_data).is_err() {
@@ -972,8 +974,8 @@ pub struct FirstPassFrame {
   frame_type: FrameType,
 }
 
-impl From<&FrameInvariants> for FirstPassFrame {
-  fn from(fi: &FrameInvariants) -> FirstPassFrame {
+impl<T: Pixel> From<&FrameInvariants<T>> for FirstPassFrame {
+  fn from(fi: &FrameInvariants<T>) -> FirstPassFrame {
     FirstPassFrame {
       number: fi.number,
       frame_type: fi.frame_type,

@@ -7,6 +7,7 @@ use crate::decoder::VideoDetails;
 use crate::ChromaSamplePosition;
 use crate::ChromaSampling;
 use crate::encoder::Frame;
+use rav1e::*;
 
 impl Decoder for y4m::Decoder<'_, Box<dyn Read>> {
   fn get_video_details(&self) -> VideoDetails {
@@ -28,11 +29,11 @@ impl Decoder for y4m::Decoder<'_, Box<dyn Read>> {
     }
   }
 
-  fn read_frame(&mut self, cfg: &VideoDetails) -> Result<Frame, DecodeError> {
+  fn read_frame<T: Pixel>(&mut self, cfg: &VideoDetails) -> Result<Frame<T>, DecodeError> {
     let bytes = self.get_bytes_per_sample();
     self.read_frame()
       .map(|frame| {
-        let mut f = Frame::new(cfg.width, cfg.height, cfg.chroma_sampling);
+        let mut f: Frame<T> = Frame::new(cfg.width, cfg.height, cfg.chroma_sampling);
 
         let (chroma_period, _) = cfg.chroma_sampling.sampling_period();
 

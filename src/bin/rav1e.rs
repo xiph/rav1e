@@ -29,7 +29,7 @@ use crate::decoder::VideoDetails;
 use std::fs::File;
 use std::io::BufWriter;
 
-fn read_frame_batch<D: Decoder>(ctx: &mut Context, decoder: &mut D, video_info: VideoDetails) {
+fn read_frame_batch<T: Pixel, D: Decoder>(ctx: &mut Context<T>, decoder: &mut D, video_info: VideoDetails) {
   loop {
     if ctx.needs_more_lookahead() {
       match decoder.read_frame(&video_info) {
@@ -58,8 +58,8 @@ fn read_frame_batch<D: Decoder>(ctx: &mut Context, decoder: &mut D, video_info: 
 
 // Encode and write a frame.
 // Returns frame information in a `Result`.
-fn process_frame(
-  ctx: &mut Context,
+fn process_frame<T: Pixel>(
+  ctx: &mut Context<T>,
   output_file: &mut dyn Write,
   y4m_dec: &mut y4m::Decoder<'_, Box<dyn Read>>,
   mut y4m_enc: Option<&mut y4m::Encoder<'_, Box<dyn Write>>>,
@@ -78,7 +78,7 @@ fn process_frame(
   Ok(frame_summaries)
 }
 
-fn write_stats_file(ctx: &Context, filename: &Path) -> Result<(), io::Error> {
+fn write_stats_file<T: Pixel>(ctx: &Context<T>, filename: &Path) -> Result<(), io::Error> {
   let file = File::create(filename)?;
   let writer = BufWriter::new(file);
   serde_json::to_writer(writer, &ctx.first_pass_data).expect("Serialization should not fail");
@@ -112,7 +112,8 @@ fn main() {
     enc: cli.enc
   };
 
-  let mut ctx = cfg.new_context();
+  // FIXME for now, unconditionally create Context<u16>
+  let mut ctx: Context<u16> = cfg.new_context();
 
   let stderr = io::stderr();
   let mut err = stderr.lock();
