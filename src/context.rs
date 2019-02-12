@@ -326,7 +326,7 @@ fn clip_max3(x: u8) -> u8 {
 // The ctx offset table when TX is TX_CLASS_2D.
 // TX col and row indices are clamped to 4
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 static av1_nz_map_ctx_offset: [[[i8; 5]; 5]; TxSize::TX_SIZES_ALL] = [
   // TX_4X4
   [
