@@ -13,9 +13,9 @@ before_install:
     - hash -r
     - which cmake
     - cmake --version
-    - wget https://www.nasm.us/pub/nasm/releasebuilds/2.14.02/nasm-2.14.02.tar.xz
-    - tar -xvf nasm-2.14.02.tar.xz
-    - cd nasm-2.14.02
+    - wget https://download.videolan.org/contrib/nasm/nasm-2.14.tar.gz
+    - tar -xvf nasm-2.14.tar.gz
+    - cd nasm-2.14
     - ./configure
     - make
     - sudo make install
