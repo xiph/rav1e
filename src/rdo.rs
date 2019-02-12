@@ -143,31 +143,22 @@ fn compute_distortion(
 ) -> u64 {
   let po = bo.plane_offset(&fs.input.planes[0].cfg);
   let mut distortion = match fi.config.tune {
-    Tune::Psnr => {
+    Tune::Psychovisual if w_y >= 8 && h_y >= 8 => {
+      cdef_dist_wxh(
+        &fs.input.planes[0].slice(&po),
+        &fs.rec.planes[0].slice(&po),
+        w_y,
+        h_y,
+        fi.sequence.bit_depth
+      )
+    }
+    Tune::Psnr | Tune::Psychovisual => {
       sse_wxh(
         &fs.input.planes[0].slice(&po),
         &fs.rec.planes[0].slice(&po),
         w_y,
         h_y
       )
-    },
-    Tune::Psychovisual => {
-      if w_y < 8 || h_y < 8 {
-        sse_wxh(
-          &fs.input.planes[0].slice(&po),
-          &fs.rec.planes[0].slice(&po),
-          w_y,
-          h_y
-        )
-      } else {
-        cdef_dist_wxh(
-          &fs.input.planes[0].slice(&po),
-          &fs.rec.planes[0].slice(&po),
-          w_y,
-          h_y,
-          fi.sequence.bit_depth
-        )
-      }
     }
   };
 
