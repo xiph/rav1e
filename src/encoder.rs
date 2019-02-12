@@ -1868,6 +1868,8 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState,
     }
 }
 
+use rayon::prelude::*;
+
 fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
   let mut w = WriterEncoder::new();
 
@@ -1892,7 +1894,7 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
       sbx_range.clone().map(move |x| SuperBlockOffset { x, y })
   }).collect::<Vec<SuperBlockOffset>>();
 
-  let frame_pmvs: Vec<[Option<MotionVector>; REF_FRAMES]> = sbos.iter().map(|sbo| {
+  let frame_pmvs: Vec<[Option<MotionVector>; REF_FRAMES]> = sbos.par_iter().map(|sbo| {
       let bo = sbo.block_offset(0, 0);
       let mut pmvs: [Option<MotionVector>; REF_FRAMES] = [None; REF_FRAMES];
       for i in 0..INTER_REFS_PER_FRAME {
