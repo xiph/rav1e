@@ -1885,11 +1885,14 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
   let mut cw = ContextWriter::new(fc, bc);
 
   // initial coarse ME loop
-  let mut frame_pmvs = Vec::new();
+  let sby_range = 0..fi.sb_height;
+  let sbx_range = 0..fi.sb_width;
 
-  for sby in 0..fi.sb_height {
-    for sbx in 0..fi.sb_width {
-      let sbo = SuperBlockOffset { x: sbx, y: sby };
+  let sbos = (sby_range).flat_map(|y| {
+      sbx_range.clone().map(move |x| SuperBlockOffset { x, y })
+  }).collect::<Vec<SuperBlockOffset>>();
+
+  let frame_pmvs: Vec<[Option<MotionVector>; REF_FRAMES]> = sbos.iter().map(|sbo| {
       let bo = sbo.block_offset(0, 0);
       let mut pmvs: [Option<MotionVector>; REF_FRAMES] = [None; REF_FRAMES];
       for i in 0..INTER_REFS_PER_FRAME {
@@ -1899,9 +1902,8 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
           pmvs[r] = estimate_motion_ss4(fi, fs, BlockSize::BLOCK_64X64, r, &bo);
         }
       }
-      frame_pmvs.push(pmvs);
-    }
-  }
+      pmvs
+  }).collect();
 
   // main loop
   for sby in 0..fi.sb_height {
