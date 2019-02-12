@@ -246,7 +246,7 @@ fn filter_narrow4_12(
 }
 
 // six taps, 4 outputs
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 fn filter_wide6_4(
   p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32
 ) -> [i32; 4] {
@@ -259,7 +259,7 @@ fn filter_wide6_4(
 }
 
 // eight taps, 6 outputs
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 fn filter_wide8_6(
   p3: i32, p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32, q3: i32
 ) -> [i32; 6] {
@@ -283,7 +283,7 @@ fn filter_wide8_12(
 }
 
 // fourteen taps, 12 outputs
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 fn filter_wide14_12(
   p6: i32, p5: i32, p4: i32, p3: i32, p2: i32, p1: i32, p0: i32, q0: i32,
   q1: i32, q2: i32, q3: i32, q4: i32, q5: i32, q6: i32

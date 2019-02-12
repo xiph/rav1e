@@ -259,7 +259,7 @@ impl BlockSize {
     (self.width() == other.width() && self.height() == other.height())
   }
 
-  #[cfg_attr(rustfmt, rustfmt_skip)]
+  #[rustfmt::skip]
   const SUBSIZE_LOOKUP: [[BlockSize; BlockSize::BLOCK_SIZES_ALL];
     EXT_PARTITION_TYPES] = [
     // PARTITION_NONE

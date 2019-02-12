@@ -41,7 +41,7 @@ pub static RAV1E_INTRA_MODES: &'static [PredictionMode] = &[
 ];
 
 // Intra prediction modes tested at high speed levels
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 pub static RAV1E_INTRA_MODES_MINIMAL: &'static [PredictionMode] = &[
     PredictionMode::DC_PRED,
     PredictionMode::H_PRED,
@@ -64,7 +64,7 @@ pub static RAV1E_INTER_COMPOUND_MODES: &'static [PredictionMode] = &[
 const sm_weight_log2_scale: u8 = 8;
 
 // Smooth predictor weights
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 static sm_weight_arrays: [u8; 2 * MAX_TX_SIZE] = [
     // Unused, because we always offset by bs, which is at least 2.
     0, 0,

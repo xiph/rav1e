@@ -41,7 +41,7 @@ const fn q57(v: i32) -> i64 {
   (v as i64) << 57
 }
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 const ATANH_LOG2: &[i64; 32] = &[
   0x32B803473F7AD0F4, 0x2F2A71BD4E25E916, 0x2E68B244BB93BA06,
   0x2E39FB9198CE62E4, 0x2E2E683F68565C8F, 0x2E2B850BE2077FC1,
