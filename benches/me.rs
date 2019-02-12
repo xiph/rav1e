@@ -13,18 +13,19 @@ use crate::partition::BlockSize::*;
 use crate::plane::*;
 use rand::{ChaChaRng, Rng, SeedableRng};
 use rav1e::me;
+use rav1e::Pixel;
 
-fn fill_plane(ra: &mut ChaChaRng, plane: &mut Plane) {
+fn fill_plane<T: Pixel>(ra: &mut ChaChaRng, plane: &mut Plane<T>) {
   let stride = plane.cfg.stride;
   for row in plane.data.chunks_mut(stride) {
     for pixel in row {
       let v: u8 = ra.gen();
-      *pixel = v as u16;
+      *pixel = T::cast_from(v);
     }
   }
 }
 
-fn new_plane(ra: &mut ChaChaRng, width: usize, height: usize) -> Plane {
+fn new_plane<T: Pixel>(ra: &mut ChaChaRng, width: usize, height: usize) -> Plane<T> {
   let mut p = Plane::new(width, height, 0, 0, 128 + 8, 128 + 8);
 
   fill_plane(ra, &mut p);
@@ -39,8 +40,8 @@ fn bench_get_sad(b: &mut Bencher, bs: &BlockSize) {
   let w = 640;
   let h = 480;
   let bit_depth = 10;
-  let input_plane = new_plane(&mut ra, w, h);
-  let rec_plane = new_plane(&mut ra, w, h);
+  let input_plane = new_plane::<u16>(&mut ra, w, h);
+  let rec_plane = new_plane::<u16>(&mut ra, w, h);
   let po = PlaneOffset { x: 0, y: 0 };
 
   let plane_org = input_plane.slice(&po);

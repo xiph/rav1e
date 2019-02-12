@@ -13,9 +13,10 @@ use crate::context::*;
 use crate::Frame;
 use crate::FrameInvariants;
 use crate::plane::*;
-use crate::util::{clamp, msb};
+use crate::util::{clamp, msb, Pixel, CastFromPrimitive};
 
 use std::cmp;
+use std::mem;
 
 pub struct CdefDirections {
   dir: [[u8; 8]; 8],
@@ -54,15 +55,16 @@ fn first_max_element(elems: &[i32]) -> (usize, i32) {
 // in a particular direction. Since each direction have the same sum(x^2) term,
 // that term is never computed. See Section 2, step 2, of:
 // http://jmvalin.ca/notes/intra_paint.pdf
-fn cdef_find_dir(img: &[u16], stride: usize, var: &mut i32, coeff_shift: i32) -> i32 {
+fn cdef_find_dir<T: Pixel>(img: &[T], stride: usize, var: &mut i32, coeff_shift: usize) -> i32 {
   let mut cost: [i32; 8] = [0; 8];
   let mut partial: [[i32; 15]; 8] = [[0; 15]; 8];
   for i in 0..8 {
     for j in 0..8 {
+      let p: i32 = img[i * stride + j].as_();
       // We subtract 128 here to reduce the maximum range of the squared
       // partial sums.
-      debug_assert!((img[i * stride + j] >> coeff_shift) <= 255);
-      let x = (img[i * stride + j] as i32 >> coeff_shift) - 128;
+      debug_assert!(p >> coeff_shift <= 255);
+      let x = (p >> coeff_shift) - 128;
       partial[0][i + j] += x;
       partial[1][i + j / 2] += x;
       partial[2][i] += x;
@@ -125,11 +127,13 @@ fn constrain(diff: i32, threshold: i32, damping: i32) -> i32 {
 // Unlike the AOM code, our block addressing points to the UL corner
 // of the 2-pixel padding around the block, not the block itself.
 // The destination is unpadded.
-unsafe fn cdef_filter_block(dst: &mut [u16], dstride: isize, input: &[u16],
-                            istride: isize, pri_strength: i32, sec_strength: i32,
-                            dir: usize, pri_damping: i32, sec_damping: i32,
-                            xsize: isize, ysize: isize, coeff_shift: i32) {
-
+unsafe fn cdef_filter_block<T: Pixel>(
+  dst: &mut [T], dstride: isize, input: &[T],
+  istride: isize, pri_strength: i32, sec_strength: i32,
+  dir: usize, pri_damping: i32, sec_damping: i32,
+  xsize: isize, ysize: isize, coeff_shift: i32
+) {
+  assert!(mem::size_of::<T>() == 2, "only implemented for u16 for now");
   let cdef_pri_taps = [[4, 2], [3, 3]];
   let cdef_sec_taps = [[2, 1], [2, 1]];
   let pri_taps = cdef_pri_taps[((pri_strength >> coeff_shift) & 1) as usize];
@@ -155,12 +159,13 @@ unsafe fn cdef_filter_block(dst: &mut [u16], dstride: isize, input: &[u16],
       for k in 0..2usize {
         let p0 = *ptr_in.offset(cdef_directions[dir][k]);
         let p1 = *ptr_in.offset(-cdef_directions[dir][k]);
-        sum += pri_taps[k] * constrain(p0 as i32 - x as i32, pri_strength, pri_damping);
-        sum += pri_taps[k] * constrain(p1 as i32 - x as i32, pri_strength, pri_damping);
-        if p0 != CDEF_VERY_LARGE {
+        sum += pri_taps[k] * constrain(i32::cast_from(p0) - i32::cast_from(x), pri_strength, pri_damping);
+        sum += pri_taps[k] * constrain(i32::cast_from(p1) - i32::cast_from(x), pri_strength, pri_damping);
+        // FIXME this is just to make it compile, but it's incorrect if T == u8
+        if p0 != T::cast_from(CDEF_VERY_LARGE) {
           max = cmp::max(p0, max);
         }
-        if p1 != CDEF_VERY_LARGE {
+        if p1 != T::cast_from(CDEF_VERY_LARGE) {
           max = cmp::max(p1, max);
         }
         min = cmp::min(p0, min);
@@ -169,29 +174,29 @@ unsafe fn cdef_filter_block(dst: &mut [u16], dstride: isize, input: &[u16],
         let s1 = *ptr_in.offset(-cdef_directions[(dir + 2) & 7][k]);
         let s2 = *ptr_in.offset(cdef_directions[(dir + 6) & 7][k]);
         let s3 = *ptr_in.offset(-cdef_directions[(dir + 6) & 7][k]);
-        if s0 != CDEF_VERY_LARGE {
+        if s0 != T::cast_from(CDEF_VERY_LARGE) {
           max = cmp::max(s0, max);
         }
-        if s1 != CDEF_VERY_LARGE {
+        if s1 != T::cast_from(CDEF_VERY_LARGE) {
           max = cmp::max(s1, max);
         }
-        if s2 != CDEF_VERY_LARGE {
+        if s2 != T::cast_from(CDEF_VERY_LARGE) {
           max = cmp::max(s2, max);
         }
-        if s3 != CDEF_VERY_LARGE {
+        if s3 != T::cast_from(CDEF_VERY_LARGE) {
           max = cmp::max(s3, max);
         }
         min = cmp::min(s0, min);
         min = cmp::min(s1, min);
         min = cmp::min(s2, min);
         min = cmp::min(s3, min);
-        sum += sec_taps[k] * constrain(s0 as i32 - x as i32, sec_strength, sec_damping);
-        sum += sec_taps[k] * constrain(s1 as i32 - x as i32, sec_strength, sec_damping);
-        sum += sec_taps[k] * constrain(s2 as i32 - x as i32, sec_strength, sec_damping);
-        sum += sec_taps[k] * constrain(s3 as i32 - x as i32, sec_strength, sec_damping);
+        sum += sec_taps[k] * constrain(i32::cast_from(s0) - i32::cast_from(x), sec_strength, sec_damping);
+        sum += sec_taps[k] * constrain(i32::cast_from(s1) - i32::cast_from(x), sec_strength, sec_damping);
+        sum += sec_taps[k] * constrain(i32::cast_from(s2) - i32::cast_from(x), sec_strength, sec_damping);
+        sum += sec_taps[k] * constrain(i32::cast_from(s3) - i32::cast_from(x), sec_strength, sec_damping);
       }
-      *ptr_out = clamp(x as i32 + ((8 + sum - (sum < 0) as i32) >> 4), min as i32,
-                                   max as i32) as u16;
+      let v = T::cast_from(i32::cast_from(x) + ((8 + sum - (sum < 0) as i32) >> 4));
+      *ptr_out = clamp(v, min, max);
     }
   }
 }
@@ -206,12 +211,14 @@ fn adjust_strength(strength: i32, var: i32) -> i32 {
 // in_frame is padded.  Blocks are not scanned outside the block
 // boundaries (padding is untouched here).
 
-pub fn cdef_analyze_superblock(in_frame: &mut Frame,
-                               bc_global: &mut BlockContext,
-                               sbo: &SuperBlockOffset,
-                               sbo_global: &SuperBlockOffset,
-                               bit_depth: usize) -> CdefDirections {
-  let coeff_shift = bit_depth as i32 - 8;
+pub fn cdef_analyze_superblock<T: Pixel>(
+  in_frame: &mut Frame<T>,
+  bc_global: &mut BlockContext,
+  sbo: &SuperBlockOffset,
+  sbo_global: &SuperBlockOffset,
+  bit_depth: usize,
+) -> CdefDirections {
+  let coeff_shift = bit_depth as usize - 8;
   let mut dir: CdefDirections = CdefDirections {dir: [[0; 8]; 8], var: [[0; 8]; 8]};
   // Each direction block is 8x8 in y, and direction computation only looks at y
   for by in 0..8 {
@@ -244,7 +251,7 @@ pub fn cdef_analyze_superblock(in_frame: &mut Frame,
 }
 
 
-pub fn cdef_sb_frame(fi: &FrameInvariants, f: &Frame) -> Frame {
+pub fn cdef_sb_frame<T: Pixel>(fi: &FrameInvariants<T>, f: &Frame<T>) -> Frame<T> {
   let sb_size = if fi.sequence.use_128x128_superblock {128} else {64};
 
   Frame {
@@ -259,8 +266,11 @@ pub fn cdef_sb_frame(fi: &FrameInvariants, f: &Frame) -> Frame {
   }
 }
 
-pub fn cdef_sb_padded_frame_copy(fi: &FrameInvariants, sbo: &SuperBlockOffset,
-                                 f: &Frame, pad: usize) -> Frame {
+pub fn cdef_sb_padded_frame_copy<T: Pixel>(
+  fi: &FrameInvariants<T>, sbo: &SuperBlockOffset,
+  f: &Frame<T>, pad: usize
+) -> Frame<T> {
+  assert!(mem::size_of::<T>() == 2, "only implemented for u16 for now");
   let ipad = pad as isize;
   let sb_size = if fi.sequence.use_128x128_superblock {128} else {64};
   let mut out = Frame {
@@ -285,7 +295,10 @@ pub fn cdef_sb_padded_frame_copy(fi: &FrameInvariants, sbo: &SuperBlockOffset,
       let out_row = out_slice.as_mut_slice();
       if offset.y + y < ipad || offset.y+y >= h + ipad {
         // above or below the frame, fill with flag
-        for x in 0..(sb_size>>xdec) + pad*2 { out_row[x] = CDEF_VERY_LARGE; }
+        for x in 0..(sb_size>>xdec) + pad*2 {
+          // FIXME for now, T == u16
+          out_row[x] = T::cast_from(CDEF_VERY_LARGE);
+        }
       } else {
         let in_slice = f.planes[p].slice(&PlaneOffset {x:0, y:offset.y + y - ipad});
         let in_row = in_slice.as_slice();
@@ -296,7 +309,8 @@ pub fn cdef_sb_padded_frame_copy(fi: &FrameInvariants, sbo: &SuperBlockOffset,
             if offset.x + x >= ipad && offset.x + x < w + ipad {
               out_row[x as usize] = in_row[(offset.x + x - ipad) as usize]
             } else {
-              out_row[x as usize] = CDEF_VERY_LARGE;
+              // FIXME for now, T == u16
+              out_row[x as usize] = T::cast_from(CDEF_VERY_LARGE);
             }
           }
         } else {
@@ -314,14 +328,16 @@ pub fn cdef_sb_padded_frame_copy(fi: &FrameInvariants, sbo: &SuperBlockOffset,
 // We assume in is padded, and the area we'll write out is at least as
 // large as the unpadded area of in
 // cdef_index is taken from the block context
-pub fn cdef_filter_superblock(fi: &FrameInvariants,
-                              in_frame: &mut Frame,
-                              out_frame: &mut Frame,
-                              bc_global: &mut BlockContext,
-                              sbo: &SuperBlockOffset,
-                              sbo_global: &SuperBlockOffset,
-                              cdef_index: u8,
-                              cdef_dirs: &CdefDirections) {
+pub fn cdef_filter_superblock<T: Pixel>(
+  fi: &FrameInvariants<T>,
+  in_frame: &mut Frame<T>,
+  out_frame: &mut Frame<T>,
+  bc_global: &mut BlockContext,
+  sbo: &SuperBlockOffset,
+  sbo_global: &SuperBlockOffset,
+  cdef_index: u8,
+  cdef_dirs: &CdefDirections,
+) {
   let coeff_shift = fi.sequence.bit_depth as i32 - 8;
   let cdef_damping = fi.cdef_damping as i32;
   let cdef_y_strength = fi.cdef_y_strengths[cdef_index as usize];
@@ -398,8 +414,8 @@ pub fn cdef_filter_superblock(fi: &FrameInvariants,
 // CDEF parameters are stored for each 64 by 64 block of pixels.
 // The CDEF filter is applied on each 8 by 8 block of pixels.
 // Reference: http://av1-spec.argondesign.com/av1-spec/av1-spec.html#cdef-process
-pub fn cdef_filter_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockContext) {
-
+pub fn cdef_filter_frame<T: Pixel>(fi: &FrameInvariants<T>, rec: &mut Frame<T>, bc: &mut BlockContext) {
+  assert!(mem::size_of::<T>() == 2, "only implemented for u16 for now");
   // Each filter block is 64x64, except right and/or bottom for non-multiple-of-64 sizes.
   // FIXME: 128x128 SB support will break this, we need FilterBlockOffset etc.
   let fb_width = (rec.planes[0].cfg.width + 63) / 64;
@@ -426,15 +442,16 @@ pub fn cdef_filter_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockCo
       {
         let mut cdef_slice = cdef_frame.planes[p].mut_slice(&PlaneOffset { x: 0, y: row as isize });
         let cdef_row = &mut cdef_slice.as_mut_slice()[..2];
-        cdef_row[0] = CDEF_VERY_LARGE;
-        cdef_row[1] = CDEF_VERY_LARGE;
+        // FIXME this is just to make it compile, but it's incorrect if T == u8
+        cdef_row[0] = T::cast_from(CDEF_VERY_LARGE);
+        cdef_row[1] = T::cast_from(CDEF_VERY_LARGE);
       }
       // pad out end of current row
       {
         let mut cdef_slice = cdef_frame.planes[p].mut_slice(&PlaneOffset { x: rec_w as isize + 2, y: row as isize });
         let cdef_row = &mut cdef_slice.as_mut_slice()[..padded_px[p][0]-rec_w-2];
         for x in cdef_row {
-          *x = CDEF_VERY_LARGE;
+          *x = T::cast_from(CDEF_VERY_LARGE);
         }
       }
       // copy current row from rec if we're in data, or pad if we're in first two rows/last N rows
@@ -443,7 +460,7 @@ pub fn cdef_filter_frame(fi: &FrameInvariants, rec: &mut Frame, bc: &mut BlockCo
         let cdef_row = &mut cdef_slice.as_mut_slice()[..rec_w];
         if row < 2 || row >= rec_h+2 {
           for x in cdef_row {
-            *x = CDEF_VERY_LARGE;
+            *x = T::cast_from(CDEF_VERY_LARGE);
           }
         } else {
           let rec_stride = rec.planes[p].cfg.stride;

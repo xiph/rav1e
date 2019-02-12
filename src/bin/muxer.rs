@@ -10,10 +10,11 @@
 use crate::decoder::VideoDetails;
 use std::io::Write;
 use std::slice;
+use rav1e::*;
 
 pub use ivf::*;
 
-pub fn write_y4m_frame(y4m_enc: &mut y4m::Encoder<'_, Box<dyn Write>>, rec: &rav1e::Frame, y4m_details: VideoDetails) {
+pub fn write_y4m_frame<T: Pixel>(y4m_enc: &mut y4m::Encoder<'_, Box<dyn Write>>, rec: &rav1e::Frame<T>, y4m_details: VideoDetails) {
   let pitch_y = if y4m_details.bit_depth > 8 { y4m_details.width * 2 } else { y4m_details.width };
   let chroma_sampling_period = y4m_details.chroma_sampling.sampling_period();
   let (pitch_uv, height_uv) = (
@@ -47,7 +48,7 @@ pub fn write_y4m_frame(y4m_enc: &mut y4m::Encoder<'_, Box<dyn Write>>, rec: &rav
       }
     } else {
       line_out.copy_from_slice(
-        &line.iter().map(|&v| v as u8).collect::<Vec<u8>>()[..pitch_y]
+        &line.iter().map(|&v| u8::cast_from(v)).collect::<Vec<u8>>()[..pitch_y]
       );
     }
   }
@@ -65,7 +66,7 @@ pub fn write_y4m_frame(y4m_enc: &mut y4m::Encoder<'_, Box<dyn Write>>, rec: &rav
       }
     } else {
       line_out.copy_from_slice(
-        &line.iter().map(|&v| v as u8).collect::<Vec<u8>>()[..pitch_uv]
+        &line.iter().map(|&v| u8::cast_from(v)).collect::<Vec<u8>>()[..pitch_uv]
       );
     }
   }
@@ -83,7 +84,7 @@ pub fn write_y4m_frame(y4m_enc: &mut y4m::Encoder<'_, Box<dyn Write>>, rec: &rav
       }
     } else {
       line_out.copy_from_slice(
-        &line.iter().map(|&v| v as u8).collect::<Vec<u8>>()[..pitch_uv]
+        &line.iter().map(|&v| u8::cast_from(v)).collect::<Vec<u8>>()[..pitch_uv]
       );
     }
   }

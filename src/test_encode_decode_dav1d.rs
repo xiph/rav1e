@@ -12,10 +12,11 @@ use rand::{ChaChaRng, Rng, SeedableRng};
 use std::{mem, ptr, slice};
 use std::collections::VecDeque;
 use std::sync::Arc;
+use crate::util::Pixel;
 
 use dav1d_sys::*;
 
-fn fill_frame(ra: &mut ChaChaRng, frame: &mut Frame) {
+fn fill_frame<T: Pixel>(ra: &mut ChaChaRng, frame: &mut Frame<T>) {
   for plane in frame.planes.iter_mut() {
     let stride = plane.cfg.stride;
     for row in plane.data.chunks_mut(stride) {
@@ -27,7 +28,7 @@ fn fill_frame(ra: &mut ChaChaRng, frame: &mut Frame) {
   }
 }
 
-fn read_frame_batch(ctx: &mut Context, ra: &mut ChaChaRng) {
+fn read_frame_batch<T: Pixel>(ctx: &mut Context<T>, ra: &mut ChaChaRng) {
   while ctx.needs_more_lookahead() {
     let mut input = ctx.new_frame();
     fill_frame(ra, Arc::get_mut(&mut input).unwrap());

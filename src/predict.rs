@@ -127,8 +127,7 @@ macro_rules! block_dimension {
         const H: usize = $H;
       }
 
-      impl Intra<u8> for [<Block $W x $H>] {}
-      impl Intra<u16> for [<Block $W x $H>] {}
+      impl<T: Pixel> Intra<T> for [<Block $W x $H>] {}
     }
   };
 }

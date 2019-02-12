@@ -8,7 +8,8 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use std::iter::FusedIterator;
-use std::fmt::{Debug, Formatter};
+use std::fmt::{Debug, Display, Formatter};
+use std::mem;
 
 use crate::util::*;
 
@@ -35,18 +36,19 @@ pub struct PlaneOffset {
 }
 
 #[derive(Clone)]
-pub struct Plane {
-  pub data: Vec<u16>,
+pub struct Plane<T: Pixel> {
+  pub data: Vec<T>,
   pub cfg: PlaneConfig
 }
 
-impl Debug for Plane {
+impl<T: Pixel> Debug for Plane<T>
+    where T: Display {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     write!(f, "Plane {{ data: [{}, ...], cfg: {:?} }}", self.data[0], self.cfg)
   }
 }
 
-impl Plane {
+impl<T: Pixel> Plane<T> {
   /// Stride alignment in bytes.
   const STRIDE_ALIGNMENT_LOG2: usize = 4;
 
@@ -56,14 +58,14 @@ impl Plane {
   pub fn new(
     width: usize, height: usize, xdec: usize, ydec: usize, xpad: usize,
     ypad: usize
-  ) -> Plane {
-    let xorigin = xpad.align_power_of_two(Plane::STRIDE_ALIGNMENT_LOG2 - 1);
+  ) -> Self {
+    let xorigin = xpad.align_power_of_two(Self::STRIDE_ALIGNMENT_LOG2 - 1);
     let yorigin = ypad;
     let stride = (xorigin + width + xpad)
-      .align_power_of_two(Plane::STRIDE_ALIGNMENT_LOG2 - 1);
+      .align_power_of_two(Self::STRIDE_ALIGNMENT_LOG2 - 1);
     let alloc_height = yorigin + height + ypad;
-    let data = vec![128u16; stride * alloc_height];
-    assert!(is_aligned(data.as_ptr(), Plane::DATA_ALIGNMENT_LOG2));
+    let data = vec![T::cast_from(128); stride * alloc_height];
+    assert!(is_aligned(data.as_ptr(), Self::DATA_ALIGNMENT_LOG2));
     Plane {
       data,
       cfg: PlaneConfig {
@@ -135,11 +137,11 @@ impl Plane {
     }
   }
 
-  pub fn slice(&self, po: &PlaneOffset) -> PlaneSlice<'_> {
+  pub fn slice(&self, po: &PlaneOffset) -> PlaneSlice<'_, T> {
     PlaneSlice { plane: self, x: po.x, y: po.y }
   }
 
-  pub fn mut_slice(&mut self, po: &PlaneOffset) -> PlaneMutSlice<'_> {
+  pub fn mut_slice(&mut self, po: &PlaneOffset) -> PlaneMutSlice<'_, T> {
     PlaneMutSlice { plane: self, x: po.x, y: po.y }
   }
 
@@ -148,15 +150,15 @@ impl Plane {
     (y + self.cfg.yorigin) * self.cfg.stride + (x + self.cfg.xorigin)
   }
 
-  pub fn p(&self, x: usize, y: usize) -> u16 {
+  pub fn p(&self, x: usize, y: usize) -> T {
     self.data[self.index(x, y)]
   }
 
-  pub fn data_origin(&self) -> &[u16] {
+  pub fn data_origin(&self) -> &[T] {
     &self.data[self.index(0, 0)..]
   }
 
-  pub fn data_origin_mut(&mut self) -> &mut [u16] {
+  pub fn data_origin_mut(&mut self) -> &mut [T] {
     let i = self.index(0, 0);
     &mut self.data[i..]
   }
@@ -174,12 +176,15 @@ impl Plane {
         1 => for (self_pixel, source_pixel) in
           self_row.iter_mut().zip(source_row.iter())
         {
-          *self_pixel = *source_pixel as u16;
+          *self_pixel = T::cast_from(*source_pixel);
         },
-        2 => for (self_pixel, bytes) in
-          self_row.iter_mut().zip(source_row.chunks(2))
-        {
-          *self_pixel = (bytes[1] as u16) << 8 | (bytes[0] as u16);
+        2 => {
+          assert!(mem::size_of::<T>() >= 2, "source bytewidth ({}) cannot fit in Plane<u8>", source_bytewidth);
+          for (self_pixel, bytes) in
+            self_row.iter_mut().zip(source_row.chunks(2))
+          {
+            *self_pixel = T::cast_from(u16::cast_from(bytes[1]) << 8 | u16::cast_from(bytes[0]));
+          }
         },
 
         _ => {}
@@ -187,7 +192,7 @@ impl Plane {
     }
   }
 
-  pub fn downsample_from(&mut self, src: &Plane) {
+  pub fn downsample_from(&mut self, src: &Plane<T>) {
     let width = self.cfg.width;
     let height = self.cfg.height;
 
@@ -200,32 +205,32 @@ impl Plane {
 
       for col in 0..width {
         let mut sum = 0;
-        sum += src.p(2 * col, 2 * row);
-        sum += src.p(2 * col + 1, 2 * row);
-        sum += src.p(2 * col, 2 * row + 1);
-        sum += src.p(2 * col + 1, 2 * row + 1);
+        sum += u32::cast_from(src.p(2 * col, 2 * row));
+        sum += u32::cast_from(src.p(2 * col + 1, 2 * row));
+        sum += u32::cast_from(src.p(2 * col, 2 * row + 1));
+        sum += u32::cast_from(src.p(2 * col + 1, 2 * row + 1));
         let avg = (sum + 2) >> 2;
-        dst[col] = avg;
+        dst[col] = T::cast_from(avg);
       }
     }
   }
 
   /// Iterates over the pixels in the `Plane`, skipping stride data.
-  pub fn iter(&self) -> PlaneIter<'_> {
+  pub fn iter(&self) -> PlaneIter<'_, T> {
     PlaneIter::new(self)
   }
 }
 
 #[derive(Debug)]
-pub struct PlaneIter<'a> {
-  plane: &'a Plane,
+pub struct PlaneIter<'a, T: Pixel> {
+  plane: &'a Plane<T>,
   y: usize,
   x: usize,
 }
 
-impl<'a> PlaneIter<'a> {
-  pub fn new(plane: &'a Plane) -> Self {
-    PlaneIter {
+impl<'a, T: Pixel> PlaneIter<'a, T> {
+  pub fn new(plane: &'a Plane<T>) -> Self {
+    Self {
       plane,
       y: 0,
       x: 0,
@@ -241,8 +246,8 @@ impl<'a> PlaneIter<'a> {
   }
 }
 
-impl<'a> Iterator for PlaneIter<'a> {
-  type Item = u16;
+impl<'a, T: Pixel> Iterator for PlaneIter<'a, T> {
+  type Item = T;
 
   fn next(&mut self) -> Option<<Self as Iterator>::Item> {
     if self.y == self.height() {
@@ -260,22 +265,22 @@ impl<'a> Iterator for PlaneIter<'a> {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct PlaneSlice<'a> {
-  pub plane: &'a Plane,
+pub struct PlaneSlice<'a, T: Pixel> {
+  pub plane: &'a Plane<T>,
   pub x: isize,
   pub y: isize
 }
 
-pub struct IterWidth<'a> {
-    ps: PlaneSlice<'a>,
+pub struct IterWidth<'a, T: Pixel> {
+    ps: PlaneSlice<'a, T>,
     width: usize,
 }
 
-impl<'a> Iterator for IterWidth<'a> {
-    type Item = &'a [u16];
+impl<'a, T: Pixel> Iterator for IterWidth<'a, T> {
+    type Item = &'a [T];
 
     #[inline]
-    fn next(&mut self) -> Option<&'a [u16]> {
+    fn next(&mut self) -> Option<Self::Item> {
         let x = self.ps.plane.cfg.xorigin as isize + self.ps.x;
         let y = self.ps.plane.cfg.yorigin as isize + self.ps.y;
         let stride = self.ps.plane.cfg.stride;
@@ -297,19 +302,19 @@ impl<'a> Iterator for IterWidth<'a> {
     }
 }
 
-impl<'a> ExactSizeIterator for IterWidth<'a> { }
+impl<'a, T: Pixel> ExactSizeIterator for IterWidth<'a, T> { }
 
-impl<'a> FusedIterator for IterWidth<'a> { }
+impl<'a, T: Pixel> FusedIterator for IterWidth<'a, T> { }
 
-impl<'a> PlaneSlice<'a> {
-  pub fn as_slice(&self) -> &'a [u16] {
+impl<'a, T: Pixel> PlaneSlice<'a, T> {
+  pub fn as_slice(&self) -> &'a [T] {
     let stride = self.plane.cfg.stride;
     let base = (self.y + self.plane.cfg.yorigin as isize) as usize * stride
       + (self.x + self.plane.cfg.xorigin as isize) as usize;
     &self.plane.data[base..]
   }
 
-  pub fn as_slice_clamped(&self) -> &'a [u16] {
+  pub fn as_slice_clamped(&self) -> &'a [T] {
     let stride = self.plane.cfg.stride;
     let y = (self.y.min(self.plane.cfg.height as isize)
       + self.plane.cfg.yorigin as isize)
@@ -320,7 +325,7 @@ impl<'a> PlaneSlice<'a> {
     &self.plane.data[y * stride + x..]
   }
 
-  pub fn clamp(&self) -> PlaneSlice<'a> {
+  pub fn clamp(&self) -> PlaneSlice<'a, T> {
     PlaneSlice {
       plane: self.plane,
       x: self
@@ -334,18 +339,18 @@ impl<'a> PlaneSlice<'a> {
     }
   }
 
-  pub fn as_slice_w_width(&self, width: usize) -> &'a [u16] {
+  pub fn as_slice_w_width(&self, width: usize) -> &'a [T] {
     let stride = self.plane.cfg.stride;
     let base = (self.y + self.plane.cfg.yorigin as isize) as usize * stride
       + (self.x + self.plane.cfg.xorigin as isize) as usize;
     &self.plane.data[base..base + width]
   }
 
-  pub fn iter_width(&self, width: usize) -> IterWidth<'a> {
+  pub fn iter_width(&self, width: usize) -> IterWidth<'a, T> {
     IterWidth { ps: *self, width }
   }
 
-  pub fn subslice(&self, xo: usize, yo: usize) -> PlaneSlice<'a> {
+  pub fn subslice(&self, xo: usize, yo: usize) -> PlaneSlice<'a, T> {
     PlaneSlice {
       plane: self.plane,
       x: self.x + xo as isize,
@@ -354,16 +359,16 @@ impl<'a> PlaneSlice<'a> {
   }
 
   /// A slice starting i pixels above the current one.
-  pub fn go_up(&self, i: usize) -> PlaneSlice<'a> {
+  pub fn go_up(&self, i: usize) -> PlaneSlice<'a, T> {
     PlaneSlice { plane: self.plane, x: self.x, y: self.y - i as isize }
   }
 
   /// A slice starting i pixels to the left of the current one.
-  pub fn go_left(&self, i: usize) -> PlaneSlice<'a> {
+  pub fn go_left(&self, i: usize) -> PlaneSlice<'a, T> {
     PlaneSlice { plane: self.plane, x: self.x - i as isize, y: self.y }
   }
 
-  pub fn p(&self, add_x: usize, add_y: usize) -> u16 {
+  pub fn p(&self, add_x: usize, add_y: usize) -> T {
     let new_y =
       (self.y + add_y as isize + self.plane.cfg.yorigin as isize) as usize;
     let new_x =
@@ -372,21 +377,21 @@ impl<'a> PlaneSlice<'a> {
   }
 }
 
-pub struct PlaneMutSlice<'a> {
-  pub plane: &'a mut Plane,
+pub struct PlaneMutSlice<'a, T: Pixel> {
+  pub plane: &'a mut Plane<T>,
   pub x: isize,
   pub y: isize
 }
 
-impl<'a> PlaneMutSlice<'a> {
-  pub fn as_mut_slice(&mut self) -> &mut [u16] {
+impl<'a, T: Pixel> PlaneMutSlice<'a, T> {
+  pub fn as_mut_slice(&mut self) -> &mut [T] {
     let stride = self.plane.cfg.stride;
     let base = (self.y + self.plane.cfg.yorigin as isize) as usize * stride
       + (self.x + self.plane.cfg.xorigin as isize) as usize;
     &mut self.plane.data[base..]
   }
 
-  pub fn as_mut_slice_w_width(&mut self, width: usize) -> &mut [u16] {
+  pub fn as_mut_slice_w_width(&mut self, width: usize) -> &mut [T] {
     let stride = self.plane.cfg.stride;
     let y = self.y + self.plane.cfg.yorigin as isize;
     let x = self.x + self.plane.cfg.xorigin as isize;
@@ -396,7 +401,7 @@ impl<'a> PlaneMutSlice<'a> {
     &mut self.plane.data[base..base + width]
   }
 
-  pub fn offset(&self, add_x: usize, add_y: usize) -> &[u16] {
+  pub fn offset(&self, add_x: usize, add_y: usize) -> &[T] {
     let new_y =
       (self.y + add_y as isize + self.plane.cfg.yorigin as isize) as usize;
     let new_x =
@@ -406,7 +411,7 @@ impl<'a> PlaneMutSlice<'a> {
 
   pub fn offset_as_mutable(
     &mut self, add_x: usize, add_y: usize
-  ) -> &mut [u16] {
+  ) -> &mut [T] {
     let new_y =
       (self.y + add_y as isize + self.plane.cfg.yorigin as isize) as usize;
     let new_x =
@@ -417,16 +422,16 @@ impl<'a> PlaneMutSlice<'a> {
   // FIXME: code duplication with PlaneSlice
 
   /// A slice starting i pixels above the current one.
-  pub fn go_up(&self, i: usize) -> PlaneSlice<'_> {
+  pub fn go_up(&self, i: usize) -> PlaneSlice<'_, T> {
     PlaneSlice { plane: self.plane, x: self.x, y: self.y - i as isize }
   }
 
   /// A slice starting i pixels to the left of the current one.
-  pub fn go_left(&self, i: usize) -> PlaneSlice<'_> {
+  pub fn go_left(&self, i: usize) -> PlaneSlice<'_, T> {
     PlaneSlice { plane: self.plane, x: self.x - i as isize, y: self.y }
   }
 
-  pub fn p(&self, add_x: usize, add_y: usize) -> u16 {
+  pub fn p(&self, add_x: usize, add_y: usize) -> T {
     let new_y =
       (self.y + add_y as isize + self.plane.cfg.yorigin as isize) as usize;
     let new_x =

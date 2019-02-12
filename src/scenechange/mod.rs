@@ -8,20 +8,21 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::encoder::Frame;
+use crate::util::{CastFromPrimitive, Pixel};
 
 use std::sync::Arc;
 
 /// Detects fast cuts using changes in colour and intensity between frames.
 /// Since the difference between frames is used, only fast cuts are detected
 /// with this method. This is probably fine for the purpose of choosing keyframes.
-pub struct SceneChangeDetector {
+pub struct SceneChangeDetector<T: Pixel> {
   /// Minimum average difference between YUV deltas that will trigger a scene change.
   threshold: u8,
   /// Frame number and frame reference of the last frame analyzed
-  last_frame: Option<(usize, Arc<Frame>)>,
+  last_frame: Option<(usize, Arc<Frame<T>>)>,
 }
 
-impl Default for SceneChangeDetector {
+impl<T: Pixel> Default for SceneChangeDetector<T> {
   fn default() -> Self {
     Self {
       // This implementation is based on a Python implementation at
@@ -39,14 +40,14 @@ impl Default for SceneChangeDetector {
   }
 }
 
-impl SceneChangeDetector {
+impl<T: Pixel> SceneChangeDetector<T> {
   pub fn new(bit_depth: usize) -> Self {
     let mut detector = Self::default();
     detector.threshold = detector.threshold * bit_depth as u8 / 8;
     detector
   }
 
-  pub fn detect_scene_change(&mut self, curr_frame: Arc<Frame>, frame_num: usize) -> bool {
+  pub fn detect_scene_change(&mut self, curr_frame: Arc<Frame<T>>, frame_num: usize) -> bool {
     let mut is_change = false;
 
     match self.last_frame {
@@ -54,9 +55,9 @@ impl SceneChangeDetector {
         let len = curr_frame.planes[0].cfg.width * curr_frame.planes[0].cfg.height;
         let delta_yuv = last_frame.iter().zip(curr_frame.iter())
           .map(|(last, cur)| (
-            (cur.0 as i16 - last.0 as i16).abs() as u64,
-            (cur.1 as i16 - last.1 as i16).abs() as u64,
-            (cur.2 as i16 - last.2 as i16).abs() as u64
+            (i16::cast_from(cur.0) - i16::cast_from(last.0)).abs() as u64,
+            (i16::cast_from(cur.1) - i16::cast_from(last.1)).abs() as u64,
+            (i16::cast_from(cur.2) - i16::cast_from(last.2)).abs() as u64
           )).fold((0, 0, 0), |(ht, st, vt), (h, s, v)| (ht + h, st + s, vt + v));
         let delta_yuv = (
           (delta_yuv.0 / len as u64) as u16,
