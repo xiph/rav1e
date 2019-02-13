@@ -987,9 +987,10 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     // uleb128() - length
     // we use a constant value to avoid computing the OBU size every time
     // since it is fixed (depending on the metadata)
+    // +2 is for the metadata_type field and the trailing bits byte
     {
       let mut coded_payload_length = [0 as u8; 8];
-      let leb_size = aom_uleb_encode(obu_meta_type.size(), &mut coded_payload_length);
+      let leb_size = aom_uleb_encode(obu_meta_type.size() + 2, &mut coded_payload_length);
       for i in 0..leb_size {
         self.write(8, coded_payload_length[i]).unwrap();
       }
@@ -1025,6 +1026,10 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       },
       _ => {}
     }
+
+    // trailing bits (1 byte)
+    self.write_bit(true)?;
+    self.byte_align()?;
 
     Ok(())
   }
@@ -1747,8 +1752,8 @@ impl ObuMetaType {
   fn size(&self) -> u64 {
     use self::ObuMetaType::*;
     match self {
-      OBU_META_HDR_CLL => 5,
-      OBU_META_HDR_MDCV => 25,
+      OBU_META_HDR_CLL => 4,
+      OBU_META_HDR_MDCV => 24,
       _ => 0,
     }
   }
