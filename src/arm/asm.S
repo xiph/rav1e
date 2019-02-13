@@ -25,8 +25,8 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __DAV1D_SRC_ARM_ASM_S__
-#define __DAV1D_SRC_ARM_ASM_S__
+#ifndef DAV1D_SRC_ARM_ASM_S
+#define DAV1D_SRC_ARM_ASM_S
 
 #include "config.h"
 
@@ -134,4 +134,4 @@ EXTERN\name:
 
 #define X(x) CONCAT(EXTERN, x)
 
-#endif /* __DAV1D_SRC_ARM_ASM_S__ */
+#endif /* DAV1D_SRC_ARM_ASM_S */

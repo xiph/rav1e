@@ -26,8 +26,8 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-#ifndef __DAVID_SRC_ARM_32_UTIL_S__
-#define __DAVID_SRC_ARM_32_UTIL_S__
+#ifndef DAVID_SRC_ARM_32_UTIL_S
+#define DAVID_SRC_ARM_32_UTIL_S
 
 #include "config.h"
 #include "src/arm/asm.S"
@@ -63,4 +63,4 @@
 #endif
 .endm
 
-#endif /* __DAVID_SRC_ARM_32_UTIL_S__ */
+#endif /* DAVID_SRC_ARM_32_UTIL_S */
