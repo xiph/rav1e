@@ -912,7 +912,7 @@ impl fmt::Display for FrameType {
 trait UncompressedHeader {
   // Start of OBU Headers
   fn write_obu_header(
-    &mut self, obu_type: OBU_Type, obu_extension: u32
+    &mut self, obu_type: ObuType, obu_extension: u32
   ) -> io::Result<()>;
   fn write_metadata_obu(
     &mut self, obu_meta_type: ObuMetaType, seq: Sequence
@@ -962,7 +962,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
   // Start of OBU Headers
   // Write OBU Header syntax
   fn write_obu_header(
-    &mut self, obu_type: OBU_Type, obu_extension: u32
+    &mut self, obu_type: ObuType, obu_extension: u32
   ) -> io::Result<()> {
     self.write_bit(false)?; // forbidden bit.
     self.write(4, obu_type as u32)?;
@@ -982,7 +982,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     &mut self, obu_meta_type: ObuMetaType, seq: Sequence
   ) -> io::Result<()> {
     // header
-    self.write_obu_header(OBU_Type::OBU_METADATA, 0)?;
+    self.write_obu_header(ObuType::OBU_METADATA, 0)?;
 
     // uleb128() - length
     // we use a constant value to avoid computing the OBU size every time
@@ -1726,7 +1726,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 }
 
 #[allow(non_camel_case_types)]
-pub enum OBU_Type {
+pub enum ObuType {
   OBU_SEQUENCE_HEADER = 1,
   OBU_TEMPORAL_DELIMITER = 2,
   OBU_FRAME_HEADER = 3,
@@ -1812,7 +1812,7 @@ fn write_obus(
 
     {
       let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
-      bw1.write_obu_header(OBU_Type::OBU_SEQUENCE_HEADER, obu_extension)?;
+      bw1.write_obu_header(ObuType::OBU_SEQUENCE_HEADER, obu_extension)?;
     }
     packet.write_all(&buf1).unwrap();
     buf1.clear();
@@ -1863,7 +1863,7 @@ fn write_obus(
 
   {
     let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
-    bw1.write_obu_header(OBU_Type::OBU_FRAME_HEADER, obu_extension)?;
+    bw1.write_obu_header(ObuType::OBU_FRAME_HEADER, obu_extension)?;
   }
   packet.write_all(&buf1).unwrap();
   buf1.clear();
@@ -3049,7 +3049,7 @@ pub fn encode_frame(fi: &mut FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
     let mut buf1 = Vec::new();
     {
       let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
-      bw1.write_obu_header(OBU_Type::OBU_TILE_GROUP, 0).unwrap();
+      bw1.write_obu_header(ObuType::OBU_TILE_GROUP, 0).unwrap();
     }
     packet.write_all(&buf1).unwrap();
     buf1.clear();
