@@ -958,6 +958,48 @@ const LEVEL_BITS: usize = LEVEL_MAJOR_BITS + LEVEL_MINOR_BITS;
 const FRAME_ID_LENGTH: usize = 15;
 const DELTA_FRAME_ID_LENGTH: usize = 14;
 
+trait ULEB128Writer {
+  fn write_uleb128(&mut self, payload: u64) -> io::Result<()>;
+}
+
+impl<W: io::Write> ULEB128Writer for BitWriter<W, BigEndian> {
+  fn write_uleb128(&mut self, payload: u64) -> io::Result<()> {
+    // NOTE from libaom:
+    // Disallow values larger than 32-bits to ensure consistent behavior on 32 and
+    // 64 bit targets: value is typically used to determine buffer allocation size
+    // when decoded.
+    fn uleb_size_in_bytes(mut value: u64) -> usize {
+      let mut size = 0;
+      loop {
+        size += 1;
+        value >>= 7;
+        if value == 0 { break; }
+      }
+      size
+    }
+
+    fn uleb_encode(mut value: u64, coded_value: &mut [u8]) -> usize {
+      let leb_size = uleb_size_in_bytes(value);
+
+      for i in 0..leb_size {
+        let mut byte = (value & 0x7f) as u8;
+        value >>= 7;
+        if value != 0 { byte |= 0x80 };  // Signal that more bytes follow.
+        coded_value[i] = byte;
+      }
+
+      leb_size
+    }
+
+    let mut coded_payload_length = [0 as u8; 8];
+    let leb_size = uleb_encode(payload, &mut coded_payload_length);
+    for i in 0..leb_size {
+      self.write(8, coded_payload_length[i])?;
+    }
+    Ok(())
+  }
+}
+
 impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
   // Start of OBU Headers
   // Write OBU Header syntax
@@ -988,22 +1030,10 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     // we use a constant value to avoid computing the OBU size every time
     // since it is fixed (depending on the metadata)
     // +2 is for the metadata_type field and the trailing bits byte
-    {
-      let mut coded_payload_length = [0 as u8; 8];
-      let leb_size = aom_uleb_encode(obu_meta_type.size() + 2, &mut coded_payload_length);
-      for i in 0..leb_size {
-        self.write(8, coded_payload_length[i]).unwrap();
-      }
-    }
+    self.write_uleb128(obu_meta_type.size() + 2)?;
 
     // uleb128() - metadata_type (1 byte)
-    {
-      let mut coded_payload_length = [0 as u8; 8];
-      let leb_size = aom_uleb_encode(obu_meta_type as u64, &mut coded_payload_length);
-      for i in 0..leb_size {
-        self.write(8, coded_payload_length[i]).unwrap();
-      }
-    }
+    self.write_uleb128(obu_meta_type as u64)?;
 
     match obu_meta_type {
       ObuMetaType::OBU_META_HDR_CLL => {
@@ -1759,33 +1789,6 @@ impl ObuMetaType {
   }
 }
 
-// NOTE from libaom:
-// Disallow values larger than 32-bits to ensure consistent behavior on 32 and
-// 64 bit targets: value is typically used to determine buffer allocation size
-// when decoded.
-fn aom_uleb_size_in_bytes(mut value: u64) -> usize {
-  let mut size = 0;
-  loop {
-    size += 1;
-    value >>= 7;
-    if value == 0 { break; }
-  }
-  size
-}
-
-fn aom_uleb_encode(mut value: u64, coded_value: &mut [u8]) -> usize {
-  let leb_size = aom_uleb_size_in_bytes(value);
-
-  for i in 0..leb_size {
-    let mut byte = (value & 0x7f) as u8;
-    value >>= 7;
-    if value != 0 { byte |= 0x80 };  // Signal that more bytes follow.
-    coded_value[i] = byte;
-  }
-
-  leb_size
-}
-
 pub fn write_temporal_delimiter(
   packet: &mut dyn io::Write
 ) -> io::Result<()> {
@@ -1817,16 +1820,9 @@ fn write_obus(
     packet.write_all(&buf1).unwrap();
     buf1.clear();
 
-    let obu_payload_size = buf2.len() as u64;
     {
       let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
-      // uleb128()
-      let mut coded_payload_length = [0 as u8; 8];
-      let leb_size =
-        aom_uleb_encode(obu_payload_size, &mut coded_payload_length);
-      for i in 0..leb_size {
-        bw1.write(8, coded_payload_length[i])?;
-      }
+      bw1.write_uleb128(buf2.len() as u64)?;
     }
     packet.write_all(&buf1).unwrap();
     buf1.clear();
@@ -1868,16 +1864,9 @@ fn write_obus(
   packet.write_all(&buf1).unwrap();
   buf1.clear();
 
-  let obu_payload_size = buf2.len() as u64;
   {
     let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
-    // uleb128()
-    let mut coded_payload_length = [0 as u8; 8];
-    let leb_size =
-      aom_uleb_encode(obu_payload_size, &mut coded_payload_length);
-    for i in 0..leb_size {
-      bw1.write(8, coded_payload_length[i])?;
-    }
+    bw1.write_uleb128(buf2.len() as u64)?;
   }
 
   packet.write_all(&buf1).unwrap();
@@ -3054,15 +3043,9 @@ pub fn encode_frame(fi: &mut FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
     packet.write_all(&buf1).unwrap();
     buf1.clear();
 
-    let obu_payload_size = tile.len() as u64;
     {
       let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
-      // uleb128()
-      let mut coded_payload_length = [0 as u8; 8];
-      let leb_size = aom_uleb_encode(obu_payload_size, &mut coded_payload_length);
-      for i in 0..leb_size {
-        bw1.write(8, coded_payload_length[i]).unwrap();
-      }
+      bw1.write_uleb128(tile.len() as u64).unwrap();
     }
     packet.write_all(&buf1).unwrap();
     buf1.clear();
