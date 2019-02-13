@@ -104,8 +104,8 @@ SECTION .text
     pminsw         m12, m10
     psignw         m11, m5                      ; constrain(diff_p0)
     psignw         m12, m6                      ; constrain(diff_p1)
-    pmullw         m11, %4                      ; constrain(diff_p0) * pri_taps
-    pmullw         m12, %4                      ; constrain(diff_p1) * pri_taps
+    pmullw         m11, %4                      ; constrain(diff_p0) * taps
+    pmullw         m12, %4                      ; constrain(diff_p1) * taps
     paddw          m15, m11
     paddw          m15, m12
 %endmacro
@@ -258,15 +258,15 @@ cglobal cdef_filter_%1x%2, 4, 9, 16, 2 * 16 + (%2+4)*%3, \
 %if %2 == 8
     pmovzxbw       xm2, [leftq+ 8]
 %endif
-    movd   [px+0*32-4], xm1
-    pextrd [px+1*32-4], xm1, 1
-    pextrd [px+2*32-4], xm1, 2
-    pextrd [px+3*32-4], xm1, 3
+    movd   [px+0*%3-4], xm1
+    pextrd [px+1*%3-4], xm1, 1
+    pextrd [px+2*%3-4], xm1, 2
+    pextrd [px+3*%3-4], xm1, 3
 %if %2 == 8
-    movd   [px+4*32-4], xm2
-    pextrd [px+5*32-4], xm2, 1
-    pextrd [px+6*32-4], xm2, 2
-    pextrd [px+7*32-4], xm2, 3
+    movd   [px+4*%3-4], xm2
+    pextrd [px+5*%3-4], xm2, 1
+    pextrd [px+6*%3-4], xm2, 2
+    pextrd [px+7*%3-4], xm2, 3
 %endif
     jmp .left_done
 .no_left:
