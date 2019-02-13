@@ -1688,7 +1688,6 @@ mod native {
       bd: usize
     ) where
       T: Pixel,
-      i32: AsPrimitive<T>
     {
       // For 64 point transforms, rely on the last 32 columns being initialized
       //   to zero for filling out missing input coeffs.
@@ -1736,8 +1735,9 @@ mod native {
           .iter()
           .zip(output[c..].iter_mut().step_by(stride).take(Self::H))
         {
-          *out = clamp((*out).as_() + round_shift(*temp, 4), 0, (1 << bd) - 1)
-            .as_();
+          let v: i32 = (*out).as_();
+          let v = clamp(v + round_shift(*temp, 4), 0, (1 << bd) - 1);
+          *out = T::cast_from(v);
         }
       }
     }

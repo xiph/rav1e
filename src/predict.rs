@@ -15,7 +15,6 @@ use crate::util::*;
 
 #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
 use libc;
-use num_traits::*;
 #[cfg(target_arch = "x86")]
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
@@ -217,9 +216,6 @@ decl_cfl_pred_fn!(rav1e_ipred_cfl_top_avx2);
 pub trait Intra<T>: Dim
 where
   T: Pixel,
-  i32: AsPrimitive<T>,
-  u32: AsPrimitive<T>,
-  usize: AsPrimitive<T>
 {
   #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_dc(output: &mut [T], stride: usize, above: &[T], left: &[T]) {
@@ -240,8 +236,8 @@ where
     }
     let edges = left[..Self::H].iter().chain(above[..Self::W].iter());
     let len = (Self::W + Self::H) as u32;
-    let avg =
-      ((edges.fold(0u32, |acc, &v| { let v: u32 = v.into(); v + acc }) + (len >> 1)) / len).as_();
+    let avg = (edges.fold(0u32, |acc, &v| { let v: u32 = v.into(); v + acc }) + (len >> 1)) / len;
+    let avg = T::cast_from(avg);
 
     for line in output.chunks_mut(stride).take(Self::H) {
       for v in &mut line[..Self::W] {
@@ -267,9 +263,10 @@ where
         };
       }
     }
+    let v = T::cast_from(128u32 << (bit_depth - 8));
     for y in 0..Self::H {
       for x in 0..Self::W {
-        output[y * stride + x] = (128u32 << (bit_depth - 8)).as_();
+        output[y * stride + x] = v;
       }
     }
   }
@@ -292,7 +289,7 @@ where
       }
     }
     let sum = left[..Self::H].iter().fold(0u32, |acc, &v| { let v: u32 = v.into(); v + acc });
-    let avg = ((sum + (Self::H >> 1) as u32) / Self::H as u32).as_();
+    let avg = T::cast_from((sum + (Self::H >> 1) as u32) / Self::H as u32);
     for line in output.chunks_mut(stride).take(Self::H) {
       line[..Self::W].iter_mut().for_each(|v| *v = avg);
     }
@@ -316,7 +313,7 @@ where
       }
     }
     let sum = above[..Self::W].iter().fold(0u32, |acc, &v| { let v: u32 = v.into(); v + acc });
-    let avg = ((sum + (Self::W >> 1) as u32) / Self::W as u32).as_();
+    let avg = T::cast_from((sum + (Self::W >> 1) as u32) / Self::W as u32);
     for line in output.chunks_mut(stride).take(Self::H) {
       line[..Self::W].iter_mut().for_each(|v| *v = avg);
     }
@@ -406,11 +403,11 @@ where
 
         // Return nearest to base of left, top and top_left
         if p_left <= p_top && p_left <= p_top_left {
-          output[output_index] = raw_left.as_();
+          output[output_index] = T::cast_from(raw_left);
         } else if p_top <= p_top_left {
-          output[output_index] = raw_top.as_();
+          output[output_index] = T::cast_from(raw_top);
         } else {
-          output[output_index] = raw_top_left.as_();
+          output[output_index] = T::cast_from(raw_top_left);
         }
       }
     }
@@ -477,7 +474,7 @@ where
 
         let output_index = r * stride + c;
 
-        output[output_index] = this_pred.as_();
+        output[output_index] = T::cast_from(this_pred);
       }
     }
   }
@@ -529,7 +526,7 @@ where
 
         let output_index = r * stride + c;
 
-        output[output_index] = this_pred.as_();
+        output[output_index] = T::cast_from(this_pred);
       }
     }
   }
@@ -581,7 +578,7 @@ where
 
         let output_index = r * stride + c;
 
-        output[output_index] = this_pred.as_();
+        output[output_index] = T::cast_from(this_pred);
       }
     }
   }
@@ -664,8 +661,8 @@ where
       output.chunks_mut(stride).zip(ac.chunks(Self::W)).take(Self::H)
     {
       for (v, &l) in line[..Self::W].iter_mut().zip(luma[..Self::W].iter()) {
-        *v =
-          (avg + get_scaled_luma_q0(alpha, l)).max(0).min(sample_max).as_();
+        *v = T::cast_from(
+          (avg + get_scaled_luma_q0(alpha, l)).max(0).min(sample_max));
       }
     }
   }
@@ -840,14 +837,15 @@ where
           let base = (idx >> (6 - upsample_above)) + (j << upsample_above);
           let shift = (((idx << upsample_above) >> 1) & 31) as i32;
           let max_base_x = (Self::H + Self::W - 1) << upsample_above;
-          output[i * stride + j] = if base < max_base_x {
+          let v = if base < max_base_x {
             let a: i32 = above[base].into();
             let b: i32 = above[base + 1].into();
             round_shift(a * (32 - shift) + b * shift, 5)
           } else {
             let c: i32 = above[max_base_x].into();
             c
-          }.max(0).min(sample_max).as_();
+          }.max(0).min(sample_max);
+          output[i * stride + j] = T::cast_from(v);
         }
       }
     } else if p_angle > 90 && p_angle < 180 {
@@ -860,11 +858,10 @@ where
             let a: i32 =
               if base < 0 { top_left[0] } else { above[base as usize] }.into();
             let b: i32 = above[(base + 1) as usize].into();
-            output[i * stride + j] =
-              round_shift(a * (32 - shift) + b * shift, 5)
+            let v = round_shift(a * (32 - shift) + b * shift, 5)
                 .max(0)
-                .min(sample_max)
-                .as_();
+                .min(sample_max);
+            output[i * stride + j] = T::cast_from(v);
           } else {
             let idx = (i << 6) as isize - ((j + 1) * dy) as isize;
             let base = idx >> (6 - upsample_left);
@@ -876,11 +873,10 @@ where
             }
             .into();
             let b: i32 = left[Self::W + Self::H - (2 + base) as usize].into();
-            output[i * stride + j] =
-              round_shift(a * (32 - shift) + b * shift, 5)
+            let v = round_shift(a * (32 - shift) + b * shift, 5)
                 .max(0)
-                .min(sample_max)
-                .as_();
+                .min(sample_max);
+            output[i * stride + j] = T::cast_from(v);
           }
         }
       }
@@ -892,11 +888,10 @@ where
           let shift = (((idx << upsample_left) >> 1) & 31) as i32;
           let a: i32 = left[Self::W + Self::H - 1 - base].into();
           let b: i32 = left[Self::W + Self::H - 2 - base].into();
-          output[i * stride + j] =
-            round_shift(a * (32 - shift) + b * shift, 5)
+          let v = round_shift(a * (32 - shift) + b * shift, 5)
               .max(0)
-              .min(sample_max)
-              .as_();
+              .min(sample_max);
+          output[i * stride + j] = T::cast_from(v);
         }
       }
     }
@@ -909,6 +904,7 @@ pub trait Inter: Dim {}
 #[cfg(all(test, feature = "aom"))]
 pub mod test {
   use super::*;
+  use num_traits::*;
   use rand::{ChaChaRng, Rng, SeedableRng};
 
   const MAX_ITER: usize = 50000;
