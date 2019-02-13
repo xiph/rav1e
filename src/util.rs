@@ -208,7 +208,49 @@ pub fn clamp<T: PartialOrd>(input: T, min: T, max: T) -> T {
   }
 }
 
-pub trait Pixel: PrimInt + Into<u32> + Into<i32> + AsPrimitive<i32> + 'static {}
+pub trait CastFromPrimitive<T> : Copy + 'static {
+  fn cast_from(v: T) -> Self;
+}
+
+macro_rules! impl_cast_from_primitive {
+  ( $T:ty => $U:ty ) => {
+    impl CastFromPrimitive<$U> for $T {
+      fn cast_from(v: $U) -> Self { v as Self }
+    }
+  };
+  ( $T:ty => { $( $U:ty ),* } ) => {
+    $( impl_cast_from_primitive!($T => $U); )*
+  };
+}
+
+impl_cast_from_primitive!(u8 => { u8, u16, u32, u64, usize });
+impl_cast_from_primitive!(u8 => { i8, i16, i32, i64, isize });
+impl_cast_from_primitive!(u16 => { u8, u16, u32, u64, usize });
+impl_cast_from_primitive!(u16 => { i8, i16, i32, i64, isize });
+impl_cast_from_primitive!(i16 => { u8, u16, u32, u64, usize });
+impl_cast_from_primitive!(i16 => { i8, i16, i32, i64, isize });
+impl_cast_from_primitive!(i32 => { u8, u16, u32, u64, usize });
+impl_cast_from_primitive!(i32 => { i8, i16, i32, i64, isize });
+
+pub trait Pixel:
+  PrimInt
+  + Into<u32>
+  + Into<i32>
+  + AsPrimitive<u8>
+  + AsPrimitive<i16>
+  + AsPrimitive<u16>
+  + AsPrimitive<i32>
+  + AsPrimitive<u32>
+  + AsPrimitive<usize>
+  + CastFromPrimitive<u8>
+  + CastFromPrimitive<i16>
+  + CastFromPrimitive<u16>
+  + CastFromPrimitive<i32>
+  + CastFromPrimitive<u32>
+  + CastFromPrimitive<usize>
+  + 'static
+{}
+
 impl Pixel for u8 {}
 impl Pixel for u16 {}
 

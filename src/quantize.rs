@@ -10,6 +10,7 @@
 #![allow(non_upper_case_globals)]
 
 use crate::partition::TxSize;
+use crate::util::*;
 
 use num_traits::*;
 use std::convert::Into;
@@ -17,7 +18,7 @@ use std::mem;
 use std::ops::AddAssign;
 
 pub trait Coefficient:
-  PrimInt + Into<i32> + AsPrimitive<i32> + AddAssign + Signed + 'static {}
+  PrimInt + Into<i32> + AsPrimitive<i32> + CastFromPrimitive<i32> + AddAssign + Signed + 'static {}
 impl Coefficient for i16 {}
 impl Coefficient for i32 {}
 
@@ -210,21 +211,21 @@ impl QuantizationContext {
 
   #[inline]
   pub fn quantize<T>(&self, coeffs: &[T], qcoeffs: &mut [T], coded_tx_size: usize)
-    where T: Coefficient, i32: AsPrimitive<T>
+    where T: Coefficient
   {
     qcoeffs[0] = coeffs[0] << (self.log_tx_scale as usize);
-    qcoeffs[0] += qcoeffs[0].signum() * self.dc_offset.as_();
-    qcoeffs[0] = divu_pair(qcoeffs[0].as_(), self.dc_mul_add).as_();
+    qcoeffs[0] += qcoeffs[0].signum() * T::cast_from(self.dc_offset);
+    qcoeffs[0] = T::cast_from(divu_pair(qcoeffs[0].as_(), self.dc_mul_add));
 
     for (qc, c) in qcoeffs[1..].iter_mut().zip(coeffs[1..].iter()).take(coded_tx_size - 1) {
       *qc = *c << self.log_tx_scale;
-      *qc += qc.signum() * self.ac_offset.as_();
-      *qc = divu_pair((*qc).as_(), self.ac_mul_add).as_();
+      *qc += qc.signum() * T::cast_from(self.ac_offset);
+      *qc = T::cast_from(divu_pair((*qc).as_(), self.ac_mul_add));
     }
 
     if qcoeffs.len() > coded_tx_size {
       for qc in qcoeffs[coded_tx_size..].iter_mut() {
-        *qc = 0.as_();
+        *qc = T::cast_from(0);
       }
     }
   }
