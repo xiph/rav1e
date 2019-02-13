@@ -1831,21 +1831,15 @@ fn write_obus(
     buf2.clear();
 
     if fi.sequence.content_light.is_some() {
-      {
-        let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
-        bw1.write_metadata_obu(ObuMetaType::OBU_META_HDR_CLL, fi.sequence)?;
-        bw1.byte_align()?;
-      }
+      let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
+      bw1.write_metadata_obu(ObuMetaType::OBU_META_HDR_CLL, fi.sequence)?;
       packet.write_all(&buf1).unwrap();
       buf1.clear();
     }
 
     if fi.sequence.mastering_display.is_some() {
-      {
-        let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
-        bw1.write_metadata_obu(ObuMetaType::OBU_META_HDR_MDCV, fi.sequence)?;
-        bw1.byte_align()?;
-      }
+      let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
+      bw1.write_metadata_obu(ObuMetaType::OBU_META_HDR_MDCV, fi.sequence)?;
       packet.write_all(&buf1).unwrap();
       buf1.clear();
     }
