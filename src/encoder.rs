@@ -2568,7 +2568,7 @@ fn encode_partition_bottomup(
           if fi.enable_early_exit && (rd_cost >= best_rd || rd_cost >= ref_rd_cost) {
             assert!(cost != std::f64::MAX);
             early_exit = true;
-            if partition == PartitionType::PARTITION_SPLIT { break; }
+            break;
           }
           else {
             if partition != PartitionType::PARTITION_SPLIT {
