@@ -15,7 +15,6 @@ pub use self::native::*;
 // TODO: move 1d txfm code to native module.
 
 use super::*;
-use num_traits::*;
 use crate::partition::TxType;
 
 static COSPI_INV: [i32; 64] = [
@@ -1522,9 +1521,6 @@ mod nasm {
       bd: usize
     ) where
       T: Pixel,
-      i32: AsPrimitive<T>,
-      u8: AsPrimitive<T>,
-      T: AsPrimitive<u8>
     {
       if is_x86_feature_detected!("avx2") && bd == 8 {
         // 64x only uses 32 coeffs
@@ -1782,9 +1778,6 @@ macro_rules! impl_iht_fns {
           bit_depth: usize
         ) where
           T: Pixel,
-          i32: AsPrimitive<T>,
-          u8: AsPrimitive<T>,
-          T: AsPrimitive<u8>
         {
           [<Block $W x $H>]::inv_txfm2d_add(
             input, output, stride, tx_type, bit_depth
