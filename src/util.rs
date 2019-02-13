@@ -223,13 +223,15 @@ macro_rules! impl_cast_from_primitive {
   };
 }
 
-impl_cast_from_primitive!(u8 => { u8, u16, u32, u64, usize });
+// casts to { u8, u16 } are implemented separately using Pixel, so that the
+// compiler understands that CastFromPrimitive<T: Pixel> is always implemented
+impl_cast_from_primitive!(u8 => { u32, u64, usize });
 impl_cast_from_primitive!(u8 => { i8, i16, i32, i64, isize });
-impl_cast_from_primitive!(u16 => { u8, u16, u32, u64, usize });
+impl_cast_from_primitive!(u16 => { u32, u64, usize });
 impl_cast_from_primitive!(u16 => { i8, i16, i32, i64, isize });
-impl_cast_from_primitive!(i16 => { u8, u16, u32, u64, usize });
+impl_cast_from_primitive!(i16 => { u32, u64, usize });
 impl_cast_from_primitive!(i16 => { i8, i16, i32, i64, isize });
-impl_cast_from_primitive!(i32 => { u8, u16, u32, u64, usize });
+impl_cast_from_primitive!(i32 => { u32, u64, usize });
 impl_cast_from_primitive!(i32 => { i8, i16, i32, i64, isize });
 
 pub trait Pixel:
@@ -254,6 +256,20 @@ pub trait Pixel:
 impl Pixel for u8 {}
 impl Pixel for u16 {}
 
+macro_rules! impl_cast_from_pixel_to_primitive {
+  ( $T:ty ) => {
+    impl<T: Pixel> CastFromPrimitive<T> for $T {
+      fn cast_from(v: T) -> Self { v.as_() }
+    }
+  };
+}
+
+impl_cast_from_pixel_to_primitive!(u8);
+impl_cast_from_pixel_to_primitive!(i16);
+impl_cast_from_pixel_to_primitive!(u16);
+impl_cast_from_pixel_to_primitive!(i32);
+impl_cast_from_pixel_to_primitive!(u32);
+
 pub trait ILog: PrimInt {
   fn ilog(self) -> Self {
     Self::from(size_of::<Self>() * 8 - self.leading_zeros() as usize).unwrap()
@@ -271,16 +287,20 @@ pub fn round_shift(value: i32, bit: usize) -> i32 {
   (value + (1 << bit >> 1)) >> bit
 }
 
-pub fn convert_slice_2d<NEW: 'static + Copy, OLD: AsPrimitive<NEW>>(
+pub fn convert_slice_2d<NEW, OLD>(
   dst: &mut [NEW], dst_stride: usize, src: &[OLD], src_stride: usize,
   width: usize, height: usize
-) {
+)
+where
+  NEW: CastFromPrimitive<OLD> + Copy + 'static,
+  OLD: Copy + 'static,
+{
   for r in 0..height {
     for (a, b) in dst[r * dst_stride..r * dst_stride + width]
       .iter_mut()
       .zip(src[r * src_stride..r * src_stride + width].iter())
     {
-      *a = (*b).as_();
+      *a = NEW::cast_from(*b);
     }
   }
 }
