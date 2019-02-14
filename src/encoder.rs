@@ -1870,6 +1870,30 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState,
 
 use rayon::prelude::*;
 
+
+#[inline(always)]
+fn build_coarse_pmvs(fi: &FrameInvariants, fs: &FrameState) -> Vec<[Option<MotionVector>; REF_FRAMES]> {
+  assert!(!fi.sequence.use_128x128_superblock);
+  let sby_range = 0..fi.sb_height;
+  let sbx_range = 0..fi.sb_width;
+
+  let sbos = (sby_range).flat_map(|y| {
+      sbx_range.clone().map(move |x| SuperBlockOffset { x, y })
+  }).collect::<Vec<SuperBlockOffset>>();
+
+  sbos.par_iter().map(|sbo| {
+      let bo = sbo.block_offset(0, 0);
+      let mut pmvs: [Option<MotionVector>; REF_FRAMES] = [None; REF_FRAMES];
+      for i in 0..INTER_REFS_PER_FRAME {
+        let r = fi.ref_frames[i] as usize;
+        if pmvs[r].is_none() {
+          pmvs[r] = estimate_motion_ss4(fi, fs, BlockSize::BLOCK_64X64, r, &bo);
+        }
+      }
+      pmvs
+  }).collect()
+}
+
 fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
   let mut w = WriterEncoder::new();
 
@@ -1886,27 +1910,7 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
   // For now, restoration unit size is locked to superblock size.
   let mut cw = ContextWriter::new(fc, bc);
 
-  // initial coarse ME loop
-  let sby_range = 0..fi.sb_height;
-  let sbx_range = 0..fi.sb_width;
-
-  let sbos = (sby_range).flat_map(|y| {
-      sbx_range.clone().map(move |x| SuperBlockOffset { x, y })
-  }).collect::<Vec<SuperBlockOffset>>();
-
-  let frame_pmvs: Vec<[Option<MotionVector>; REF_FRAMES]> = sbos.par_iter().map(|sbo| {
-      let bo = sbo.block_offset(0, 0);
-      let mut pmvs: [Option<MotionVector>; REF_FRAMES] = [None; REF_FRAMES];
-      for i in 0..INTER_REFS_PER_FRAME {
-        let r = fi.ref_frames[i] as usize;
-        if pmvs[r].is_none() {
-          assert!(!fi.sequence.use_128x128_superblock);
-          pmvs[r] = estimate_motion_ss4(fi, fs, BlockSize::BLOCK_64X64, r, &bo);
-        }
-      }
-      pmvs
-  }).collect();
-
+  let frame_pmvs = build_coarse_pmvs(fi, fs);
   // main loop
   for sby in 0..fi.sb_height {
     cw.bc.reset_left_contexts();
