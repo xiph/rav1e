@@ -298,7 +298,7 @@ mod nasm {
     );
   }
 
-  pub fn prep_8tap<'a>(
+  pub fn prep_8tap(
     tmp: &mut [i16], src: PlaneSlice<'_>, width: usize, height: usize,
     col_frac: i32, row_frac: i32, mode_x: FilterMode, mode_y: FilterMode,
     bit_depth: usize
@@ -480,7 +480,7 @@ mod native {
     }
   }
 
-  pub fn prep_8tap<'a>(
+  pub fn prep_8tap(
     tmp: &mut [i16], src: PlaneSlice<'_>, width: usize, height: usize,
     col_frac: i32, row_frac: i32, mode_x: FilterMode, mode_y: FilterMode,
     bit_depth: usize
