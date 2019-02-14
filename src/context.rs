@@ -13,8 +13,9 @@
 #![allow(non_camel_case_types)]
 
 use crate::ec::Writer;
-use crate::encoder::{FrameInvariants, ReferenceMode};
+use crate::encoder::FrameInvariants;
 use crate::entropymode::*;
+use crate::header::ReferenceMode;
 use crate::partition::BlockSize::*;
 use crate::partition::PredictionMode::*;
 use crate::partition::TxSize::*;

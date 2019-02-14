@@ -14,7 +14,7 @@ use crate::api::*;
 use crate::cdef::*;
 use crate::context::*;
 use crate::ec::{OD_BITRES, Writer, WriterCounter};
-use crate::encoder::ReferenceMode;
+use crate::header::ReferenceMode;
 use crate::encode_block_a;
 use crate::encode_block_b;
 use crate::encode_block_with_modes;
