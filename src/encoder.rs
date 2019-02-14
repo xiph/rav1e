@@ -945,7 +945,7 @@ pub fn encode_tx_block(
   fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter,
   w: &mut dyn Writer, p: usize, bo: &BlockOffset, mode: PredictionMode,
   tx_size: TxSize, tx_type: TxType, plane_bsize: BlockSize, po: &PlaneOffset,
-  skip: bool, ac: &[i16], alpha: i16, for_rdo_use: bool
+  skip: bool, ac: &[i16], alpha: i16, rdo_type: RDOType, for_rdo_use: bool
 ) -> (bool, i64) {
   let qidx = get_qidx(fi, fs, cw, bo);
   let rec = &mut fs.rec.planes[p];
@@ -991,7 +991,8 @@ pub fn encode_tx_block(
 
   if !fi.use_tx_domain_distortion || !for_rdo_use {
     inverse_transform_add(rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, fi.sequence.bit_depth);
-  } else {
+  }
+  if rdo_type.needs_tx_dist() {
     // Store tx-domain distortion of this block
     tx_dist = coeffs
       .iter()
@@ -1101,7 +1102,7 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
                       ref_frames: [usize; 2], mvs: [MotionVector; 2],
                       bsize: BlockSize, bo: &BlockOffset, skip: bool,
                       cfl: CFLParams, tx_size: TxSize, tx_type: TxType,
-                      mode_context: usize, mv_stack: &[CandidateMV], for_rdo_use: bool)
+                      mode_context: usize, mv_stack: &[CandidateMV], rdo_type: RDOType, for_rdo_use: bool)
                       -> i64 {
   let is_inter = !luma_mode.is_intra();
   if is_inter { assert!(luma_mode == chroma_mode); };
@@ -1237,9 +1238,9 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
 
   if is_inter {
     motion_compensate(fi, fs, cw, luma_mode, ref_frames, mvs, bsize, bo, false);
-    write_tx_tree(fi, fs, cw, w, luma_mode, bo, bsize, tx_size, tx_type, skip, false, for_rdo_use)
+    write_tx_tree(fi, fs, cw, w, luma_mode, bo, bsize, tx_size, tx_type, skip, false, rdo_type, for_rdo_use)
   } else {
-    write_tx_blocks(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, cfl, false, for_rdo_use)
+    write_tx_blocks(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, cfl, false, rdo_type, for_rdo_use)
   }
 }
 
@@ -1284,7 +1285,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
                        cw: &mut ContextWriter, w: &mut dyn Writer,
                        luma_mode: PredictionMode, chroma_mode: PredictionMode, bo: &BlockOffset,
                        bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool,
-                       cfl: CFLParams, luma_only: bool, for_rdo_use: bool) -> i64 {
+                       cfl: CFLParams, luma_only: bool, rdo_type: RDOType, for_rdo_use: bool) -> i64 {
   let bw = bsize.width_mi() / tx_size.width_mi();
   let bh = bsize.height_mi() / tx_size.height_mi();
   let qidx = get_qidx(fi, fs, cw, bo);
@@ -1307,7 +1308,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
       let (_, dist) =
         encode_tx_block(
           fi, fs, cw, w, 0, &tx_bo, luma_mode, tx_size, tx_type, bsize, &po,
-          skip, ac, 0, for_rdo_use
+          skip, ac, 0, rdo_type, for_rdo_use
         );
       assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
       tx_dist += dist;
@@ -1360,7 +1361,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
           po.y += (by * uv_tx_size.height()) as isize;
           let (_, dist) =
             encode_tx_block(fi, fs, cw, w, p, &tx_bo, chroma_mode, uv_tx_size, uv_tx_type,
-                            plane_bsize, &po, skip, ac, alpha, for_rdo_use);
+                            plane_bsize, &po, skip, ac, alpha, rdo_type, for_rdo_use);
           assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
           tx_dist += dist;
         }
@@ -1376,7 +1377,7 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
 pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter, w: &mut dyn Writer,
                      luma_mode: PredictionMode, bo: &BlockOffset,
                      bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool,
-                     luma_only: bool, for_rdo_use: bool) -> i64 {
+                     luma_only: bool, rdo_type: RDOType, for_rdo_use: bool) -> i64 {
   let bw = bsize.width_mi() / tx_size.width_mi();
   let bh = bsize.height_mi() / tx_size.height_mi();
   let qidx = get_qidx(fi, fs, cw, bo);
@@ -1389,7 +1390,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
 
   let po = bo.plane_offset(&fs.input.planes[0].cfg);
   let (has_coeff, dist) = encode_tx_block(
-    fi, fs, cw, w, 0, &bo, luma_mode, tx_size, tx_type, bsize, &po, skip, ac, 0, for_rdo_use
+    fi, fs, cw, w, 0, &bo, luma_mode, tx_size, tx_type, bsize, &po, skip, ac, 0, rdo_type, for_rdo_use
   );
   assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
   tx_dist += dist;
@@ -1424,7 +1425,7 @@ pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut Context
       let po = bo.plane_offset(&fs.input.planes[p].cfg);
       let (_, dist) =
         encode_tx_block(fi, fs, cw, w, p, &tx_bo, luma_mode, uv_tx_size, uv_tx_type,
-                        plane_bsize, &po, skip, ac, 0, for_rdo_use);
+                        plane_bsize, &po, skip, ac, 0, rdo_type, for_rdo_use);
       assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
       tx_dist += dist;
     }
@@ -1457,7 +1458,7 @@ pub fn encode_block_with_modes(fi: &FrameInvariants, fs: &mut FrameState,
                               bsize, bo, skip);
   encode_block_b(fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                  mode_luma, mode_chroma, ref_frames, mvs, bsize, bo, skip, cfl,
-                 tx_size, tx_type, mode_context, &mv_stack, false);
+                 tx_size, tx_type, mode_context, &mv_stack, RDOType::PixelDistRealRate, false);
 }
 
 fn encode_partition_bottomup(
@@ -1810,7 +1811,7 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState,
                                   bsize, bo, skip);
       encode_block_b(fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                      mode_luma, mode_chroma, ref_frames, mvs, bsize, bo, skip, cfl,
-                     tx_size, tx_type, mode_context, &mv_stack, false);
+                     tx_size, tx_type, mode_context, &mv_stack, RDOType::PixelDistRealRate, false);
     },
     PARTITION_SPLIT |
     PARTITION_HORZ |
