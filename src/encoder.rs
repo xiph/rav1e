@@ -196,48 +196,6 @@ impl Default for Tune {
   }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
-#[repr(C)]
-pub enum ChromaSampling {
-  Cs420,
-  Cs422,
-  Cs444,
-  Cs400,
-}
-
-impl Default for ChromaSampling {
-  fn default() -> Self {
-    ChromaSampling::Cs420
-  }
-}
-
-impl ChromaSampling {
-  // Provides the sampling period in the horizontal and vertical axes.
-  pub fn sampling_period(self) -> (usize, usize) {
-    use self::ChromaSampling::*;
-    match self {
-      Cs420 => (2, 2),
-      Cs422 => (2, 1),
-      Cs444 => (1, 1),
-      Cs400 => (2, 2),
-    }
-  }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-#[repr(C)]
-pub enum ChromaSamplePosition {
-  Unknown,
-  Vertical,
-  Colocated
-}
-
-impl Default for ChromaSamplePosition {
-  fn default() -> Self {
-    ChromaSamplePosition::Unknown
-  }
-}
-
 #[derive(Copy, Clone, Debug)]
 pub struct Sequence {
   // OBU Sequence header of AV1
@@ -875,18 +833,6 @@ pub struct InterPropsConfig {
   pub group_idx: u64,
 }
 
-#[allow(dead_code, non_camel_case_types)]
-#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
-#[repr(C)]
-pub enum FrameType {
-  KEY,
-  INTER,
-  INTRA_ONLY,
-  SWITCH
-}
-
-//const REFERENCE_MODES: usize = 3;
-
 #[allow(dead_code,non_camel_case_types)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ReferenceMode {
@@ -896,18 +842,6 @@ pub enum ReferenceMode {
 }
 
 pub const ALL_REF_FRAMES_MASK: u32 = (1 << REF_FRAMES) - 1;
-
-impl fmt::Display for FrameType {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    use self::FrameType::*;
-    match self {
-      KEY => write!(f, "Key frame"),
-      INTER => write!(f, "Inter frame"),
-      INTRA_ONLY => write!(f, "Intra only frame"),
-      SWITCH => write!(f, "Switching frame"),
-    }
-  }
-}
 
 trait UncompressedHeader {
   // Start of OBU Headers

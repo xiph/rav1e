@@ -4,8 +4,8 @@ use rav1e::Rational;
 use crate::decoder::DecodeError;
 use crate::decoder::Decoder;
 use crate::decoder::VideoDetails;
-use crate::encoder::ChromaSamplePosition;
-use crate::encoder::ChromaSampling;
+use crate::ChromaSamplePosition;
+use crate::ChromaSampling;
 use crate::encoder::Frame;
 
 impl Decoder for y4m::Decoder<'_, Box<dyn Read>> {

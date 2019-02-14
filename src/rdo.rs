@@ -10,17 +10,16 @@
 
 #![allow(non_camel_case_types)]
 
-use crate::api::PredictionModesSetting;
+use crate::api::*;
 use crate::cdef::*;
 use crate::context::*;
 use crate::ec::{OD_BITRES, Writer, WriterCounter};
-use crate::encoder::{ChromaSampling, ReferenceMode};
+use crate::encoder::ReferenceMode;
 use crate::encode_block_a;
 use crate::encode_block_b;
 use crate::encode_block_with_modes;
 use crate::FrameInvariants;
 use crate::FrameState;
-use crate::FrameType;
 use crate::luma_ac;
 use crate::me::*;
 use crate::motion_compensate;
