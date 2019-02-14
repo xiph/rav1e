@@ -191,11 +191,75 @@ impl SpeedSettings {
   }
 }
 
+#[allow(dead_code, non_camel_case_types)]
+#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[repr(C)]
+pub enum FrameType {
+  KEY,
+  INTER,
+  INTRA_ONLY,
+  SWITCH
+}
+
+impl fmt::Display for FrameType {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    use self::FrameType::*;
+    match self {
+      KEY => write!(f, "Key frame"),
+      INTER => write!(f, "Inter frame"),
+      INTRA_ONLY => write!(f, "Intra only frame"),
+      SWITCH => write!(f, "Switching frame"),
+    }
+  }
+}
+
 #[derive(Clone, Copy, Debug, PartialOrd, PartialEq)]
 pub enum PredictionModesSetting {
   Simple,
   ComplexKeyframes,
   ComplexAll,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+#[repr(C)]
+pub enum ChromaSampling {
+  Cs420,
+  Cs422,
+  Cs444,
+  Cs400,
+}
+
+impl Default for ChromaSampling {
+  fn default() -> Self {
+    ChromaSampling::Cs420
+  }
+}
+
+impl ChromaSampling {
+  // Provides the sampling period in the horizontal and vertical axes.
+  pub fn sampling_period(self) -> (usize, usize) {
+    use self::ChromaSampling::*;
+    match self {
+      Cs420 => (2, 2),
+      Cs422 => (2, 1),
+      Cs444 => (1, 1),
+      Cs400 => (2, 2),
+    }
+  }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+#[repr(C)]
+pub enum ChromaSamplePosition {
+  Unknown,
+  Vertical,
+  Colocated
+}
+
+impl Default for ChromaSamplePosition {
+  fn default() -> Self {
+    ChromaSamplePosition::Unknown
+  }
 }
 
 arg_enum!{

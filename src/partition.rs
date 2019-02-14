@@ -12,8 +12,9 @@
 
 use self::BlockSize::*;
 use self::TxSize::*;
+use crate::api::ChromaSampling;
 use crate::context::*;
-use crate::encoder::{ChromaSampling, FrameInvariants};
+use crate::encoder::FrameInvariants;
 use crate::mc::*;
 use crate::plane::*;
 use crate::predict::*;

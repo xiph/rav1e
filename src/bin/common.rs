@@ -9,6 +9,7 @@
 
 use clap::{App, Arg, ArgMatches};
 use crate::{ColorPrimaries, TransferCharacteristics, MatrixCoefficients};
+use rav1e::FrameType;
 use rav1e::*;
 
 use std::{fmt, io};
