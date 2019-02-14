@@ -34,6 +34,23 @@ use std;
 use std::vec::Vec;
 use crate::partition::PartitionType::*;
 
+#[derive(Copy,Clone)]
+pub enum RDOType {
+  PixelDistRealRate,
+  TxDistRealRate
+}
+
+impl RDOType {
+  pub fn needs_tx_dist(&self) -> bool {
+    match self {
+      // Pixel-domain distortion and exact ec rate
+      RDOType::PixelDistRealRate => false,
+      // Tx-domain distortion and exact ec rate
+      RDOType::TxDistRealRate => true
+    }
+  }
+}
+
 #[derive(Clone)]
 pub struct RDOOutput {
   pub rd_cost: f64,
@@ -350,6 +367,12 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
   let mut fwdref = None;
   let mut bwdref = None;
 
+  let rdo_type = if fi.use_tx_domain_distortion {
+    RDOType::TxDistRealRate
+  } else {
+    RDOType::PixelDistRealRate
+  };
+
   if fi.frame_type == FrameType::INTER {
     for i in LAST_FRAME..NONE_FRAME {
       // Don't search LAST3 since it's used only for probs
@@ -482,6 +505,7 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
             tx_type,
             mode_context,
             mv_stack,
+            rdo_type,
             !needs_rec
           );
 
@@ -673,6 +697,7 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
       false,
       CFLParams::new(),
       true,
+      rdo_type,
       false
     );
     cw.rollback(&cw_checkpoint);
@@ -698,6 +723,7 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
         best.tx_type,
         0,
         &Vec::new(),
+        rdo_type,
         false // For CFL, luma should be always reconstructed.
       );
 
@@ -813,6 +839,12 @@ pub fn rdo_tx_type_decision(
 
   let cw_checkpoint = cw.checkpoint();
 
+  let rdo_type = if fi.use_tx_domain_distortion {
+    RDOType::TxDistRealRate
+  } else {
+    RDOType::PixelDistRealRate
+  };
+
   for &tx_type in RAV1E_TX_TYPES {
     // Skip unsupported transform types
     if av1_tx_used[tx_set as usize][tx_type as usize] == 0 {
@@ -827,12 +859,12 @@ pub fn rdo_tx_type_decision(
     let tell = wr.tell_frac();
     let tx_dist = if is_inter {
       write_tx_tree(
-        fi, fs, cw, wr, mode, bo, bsize, tx_size, tx_type, false, true, true
+        fi, fs, cw, wr, mode, bo, bsize, tx_size, tx_type, false, true, rdo_type, true
       )
     }  else {
       let cfl = CFLParams::new(); // Unused
       write_tx_blocks(
-        fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false, cfl, true, true
+        fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false, cfl, true, rdo_type, true
       )
     };
 

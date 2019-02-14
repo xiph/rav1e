@@ -17,6 +17,7 @@ use rav1e::context::*;
 use rav1e::partition::*;
 use rav1e::predict::*;
 use rav1e::rdo::rdo_cfl_alpha;
+use rav1e::rdo::RDOType;
 use crate::transform::transform;
 
 use criterion::*;
@@ -93,6 +94,7 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
               false,
               ac,
               0,
+              RDOType::PixelDistRealRate,
               false
             );
           }
