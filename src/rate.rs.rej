@@ -1,0 +1,88 @@
+diff a/src/rate.rs b/src/rate.rs	(rejected hunks)
+@@ -318,2 +318,5 @@ fn iir_bessel2_get_parameters(delay: i32) -> (i32, i32, i32) {
+-  (((b1 + (1i64 << 31)) >> 32) as i32, ((b2 + (1i64 << 31)) >> 32) as i32,
+-   ((a + 128) >> 8) as i32)
++  (
++    ((b1 + (1i64 << 31)) >> 32) as i32,
++    ((b2 + (1i64 << 31)) >> 32) as i32,
++    ((a + 128) >> 8) as i32
++  )
+@@ -325,6 +328 @@ impl IIRBessel2 {
+-    IIRBessel2 {
+-      c: [c0, c1],
+-      g,
+-      x: [value, value],
+-      y: [value, value]
+-    }
++    IIRBessel2 { c: [c0, c1], g, x: [value, value], y: [value, value] }
+@@ -578,2 +584,2 @@ impl RCState {
+-          let reservoir_frames = ctx.guess_frame_subtypes(&mut nframes,
+-           self.reservoir_frame_delay);
++          let reservoir_frames =
++            ctx.guess_frame_subtypes(&mut nframes, self.reservoir_frame_delay);
+@@ -603 +610 @@ impl RCState {
+-           - q57(QSCALE + bit_depth - 8);
++            - q57(QSCALE + bit_depth - 8);
+@@ -627,2 +640 @@ impl RCState {
+-            }
+-            else if diff < 0 {
++            } else if diff < 0 {
+@@ -630,2 +642 @@ impl RCState {
+-            }
+-            else {
++            } else {
+@@ -640,2 +651,4 @@ impl RCState {
+-            log_base_q = ::std::cmp::max(prev_log_base_q - 0xA4D3C25E68DC58,
+-             ::std::cmp::min(log_base_q, prev_log_base_q + 0xA4D3C25E68DC58));
++            log_base_q = ::std::cmp::max(
++              prev_log_base_q - 0xA4D3C25E68DC58,
++              ::std::cmp::min(log_base_q, prev_log_base_q + 0xA4D3C25E68DC58)
++            );
+@@ -659 +672 @@ impl RCState {
+-             - (self.reservoir_max - margin);
++              - (self.reservoir_max - margin);
+@@ -682 +696 @@ impl RCState {
+-             blog64(self.reservoir_fullness + (self.bits_per_frame >> 1));
++              blog64(self.reservoir_fullness + (self.bits_per_frame >> 1));
+@@ -700,2 +714,3 @@ impl RCState {
+-  pub fn update_state(&mut self, bits: i64, fti: usize, log_target_q: i64,
+-   droppable: bool) -> bool {
++  pub fn update_state(
++    &mut self, bits: i64, fti: usize, log_target_q: i64, droppable: bool
++  ) -> bool {
+@@ -712,3 +727,2 @@ impl RCState {
+-        // TODO: Adjust VFR rate based on drop count.
+-      }
+-      else {
++      // TODO: Adjust VFR rate based on drop count.
++      } else {
+@@ -718 +732 @@ impl RCState {
+-         ::std::cmp::min(log_bits - self.log_npixels + log_q_exp, q57(16));
++          ::std::cmp::min(log_bits - self.log_npixels + log_q_exp, q57(16));
+@@ -730,3 +744,2 @@ impl RCState {
+-          // TODO: Duplicate regular P frame state for first golden P frame.
+-        }
+-        else {
++        // TODO: Duplicate regular P frame state for first golden P frame.
++        } else {
+@@ -735,2 +748,4 @@ impl RCState {
+-          if fti > 0 && self.inter_delay[fti - 1] < self.inter_delay_target
+-           && self.nframes[fti] >= self.inter_delay[fti - 1] {
++          if fti > 0
++            && self.inter_delay[fti - 1] < self.inter_delay_target
++            && self.nframes[fti] >= self.inter_delay[fti - 1]
++          {
+@@ -743 +758 @@ impl RCState {
+-           q24_to_q57(self.scalefilter[fti].update(log_scale_q24));
++            q24_to_q57(self.scalefilter[fti].update(log_scale_q24));
+@@ -746,2 +761,4 @@ impl RCState {
+-        if droppable && self.drop_frames
+-         && self.reservoir_fullness + self.bits_per_frame < bits {
++        if droppable
++          && self.drop_frames
++          && self.reservoir_fullness + self.bits_per_frame < bits
++        {
+@@ -751,2 +768 @@ impl RCState {
+-        }
+-        else {
++        } else {

@@ -12,6 +12,7 @@
 
 use crate::api::*;
 use crate::cdef::*;
+use crate::lrf::*;
 use crate::context::*;
 use crate::ec::{OD_BITRES, Writer, WriterCounter};
 use crate::header::ReferenceMode;
@@ -20,6 +21,7 @@ use crate::encode_block_b;
 use crate::encode_block_with_modes;
 use crate::FrameInvariants;
 use crate::FrameState;
+use crate::Frame;
 use crate::luma_ac;
 use crate::me::*;
 use crate::motion_compensate;
@@ -32,6 +34,7 @@ use crate::write_tx_tree;
 use crate::util::{CastFromPrimitive, Pixel};
 
 use std;
+use std::cmp;
 use std::vec::Vec;
 use crate::partition::PartitionType::*;
 
@@ -1107,69 +1110,199 @@ pub fn rdo_partition_decision<T: Pixel>(
   }
 }
 
-pub fn rdo_cdef_decision<T: Pixel>(
-  sbo: &SuperBlockOffset, fi: &FrameInvariants<T>,
-  fs: &FrameState<T>, cw: &mut ContextWriter
-) -> u8 {
-  // Construct a single-superblock-sized frame to test-filter into
+fn rdo_loop_plane_error<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<T>,
+                        fs: &FrameState<T>, bc: &BlockContext, test: &Frame<T>, pli: usize) -> u64 {
   let sbo_0 = SuperBlockOffset { x: 0, y: 0 };
-  let bc = &mut cw.bc;
-  let mut cdef_output = cdef_sb_frame(fi, &fs.rec);
-  let mut rec_input = cdef_sb_padded_frame_copy(fi, sbo, &fs.rec, 2);
+  let sb_blocks = if fi.sequence.use_128x128_superblock {16} else {8};  
+  // Each direction block is 8x8 in y, potentially smaller if subsampled in chroma
+  // accumulating in-frame and unpadded
+  let mut err:u64 = 0;
+  for by in 0..sb_blocks {
+    for bx in 0..sb_blocks {
+      let bo = sbo.block_offset(bx<<1, by<<1);
+      if bo.x < bc.cols && bo.y < bc.rows {
+        let skip = bc.at(&bo).skip;
+        if !skip {
+          let in_plane = &fs.input.planes[pli];
+          let in_po = sbo.block_offset(bx<<1, by<<1).plane_offset(&in_plane.cfg);
+          let in_slice = in_plane.slice(&in_po);
 
-  // RDO comparisons
-  let sb_blocks = if fi.sequence.use_128x128_superblock {16} else {8};
-  let mut best_index: u8 = 0;
-  let mut best_err: u64 = 0;
-  let cdef_dirs = cdef_analyze_superblock(&mut rec_input, bc, &sbo_0, &sbo, fi.sequence.bit_depth);
-  for cdef_index in 0..(1<<fi.cdef_bits) {
-    //for p in 0..3 {
-    //    for i in 0..cdef_output.planes[p].data.len() { cdef_output.planes[p].data[i] = CDEF_VERY_LARGE; }
-    //}
-    // TODO: Don't repeat find_direction over and over; split filter_superblock to run it separately
-    cdef_filter_superblock(fi, &mut rec_input, &mut cdef_output,
-                           bc, &sbo_0, &sbo, cdef_index, &cdef_dirs);
+          let test_plane = &test.planes[pli];
+          let test_po = sbo_0.block_offset(bx<<1, by<<1).plane_offset(&test_plane.cfg);
+          let test_slice = &test_plane.slice(&test_po);
 
-    // Rate is constant, compute just distortion
-    // Computation is block by block, paying attention to skip flag
+          let xdec = in_plane.cfg.xdec;
+          let ydec = in_plane.cfg.ydec;
 
-    // Each direction block is 8x8 in y, potentially smaller if subsampled in chroma
-    // We're dealing only with in-frmae and unpadded planes now
-    let mut err:u64 = 0;
-    for by in 0..sb_blocks {
-      for bx in 0..sb_blocks {
-        let bo = sbo.block_offset(bx<<1, by<<1);
-        if bo.x < bc.cols && bo.y < bc.rows {
-          let skip = bc.at(&bo).skip;
-          if !skip {
-            for p in 0..3 {
-              let in_plane = &fs.input.planes[p];
-              let in_po = sbo.block_offset(bx<<1, by<<1).plane_offset(&in_plane.cfg);
-              let in_slice = in_plane.slice(&in_po);
+          if pli==0 {
+            err += cdef_dist_wxh_8x8(&in_slice, &test_slice, fi.sequence.bit_depth);
+          } else {
+            err += sse_wxh(&in_slice, &test_slice, 8>>xdec, 8>>ydec);
+          }
+        }
+      }
+    }
+  }
+  err
+}
 
-              let out_plane = &mut cdef_output.planes[p];
-              let out_po = sbo_0.block_offset(bx<<1, by<<1).plane_offset(&out_plane.cfg);
-              let out_slice = &out_plane.slice(&out_po);
+pub fn rdo_loop_decision<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<T>,
+                         fs: &mut FrameState<T>,
+                         cw: &mut ContextWriter, w: &mut dyn Writer) {
+  assert!(fi.sequence.enable_cdef || fi.sequence.enable_restoration);
+  // Construct a single-superblock-sized padded frame to filter from,
+  // and a single-superblock-sized padded frame to test-filter into
+  let mut best_index = -1;
+  let mut best_lrf = [RestorationFilter::None{}; PLANES];
+  let mut best_cost_acc = -1.;
+  let mut best_cost = [-1.; PLANES];
+  let sbo_0 = SuperBlockOffset { x: 0, y: 0 };
+  let mut lrf_input;
+  let mut lrf_output;
+  let mut cdef_input;
 
-              let xdec = in_plane.cfg.xdec;
-              let ydec = in_plane.cfg.ydec;
+  if fi.sequence.enable_cdef {
+    // all stages; reconstruction goes to cdef so it must be additionally padded
+    // TODO: use the new plane padding mechanism rather than this old kludge.  Will require
+    // altering CDEF code a little.
+    cdef_input = cdef_sb_padded_frame_copy(fi, sbo, &fs.rec, 2);
+    lrf_input = cdef_sb_frame(fi, &fs.rec);
+    lrf_output = cdef_sb_frame(fi, &fs.rec);
+  } else {
+    // no cdef; unpadded reconstruction offered directly to LRF optimization
+    cdef_input = cdef_empty_frame(&fs.rec);
+    lrf_input = cdef_sb_padded_frame_copy(fi, sbo, &fs.rec, 0);
+    lrf_output = cdef_sb_frame(fi, &fs.rec);
+  }
 
-              if p==0 && fi.config.tune == Tune::Psychovisual {
-                err += cdef_dist_wxh_8x8(&in_slice, &out_slice, fi.sequence.bit_depth);
-              } else {
-                err += sse_wxh(&in_slice, &out_slice, 8>>xdec, 8>>ydec);
+  // CDEF/LRF decision iteration
+  // Start with a default of CDEF 0 and RestorationFilter::None
+  // Try all CDEF options with current LRF; if new CDEF+LRF choice is better, select it.
+  // Try all LRF options with current CDEF; if new CDEF+LRF choice is better, select it.
+  // If LRF choice changed for any plane, repeat last two steps.
+  let cdef_dirs = cdef_analyze_superblock(&mut cdef_input, &mut cw.bc,
+                                          &sbo_0, &sbo, fi.sequence.bit_depth);
+  let mut first_loop = true;
+  loop {
+    // check for [new] cdef index if cdef is enabled.
+    let mut cdef_change = false;
+    let prev_best_index = best_index;
+    if fi.sequence.enable_cdef {
+      for cdef_index in 0..(1<<fi.cdef_bits) {
+        if cdef_index != prev_best_index {
+          let mut cost = [0.; PLANES];
+          let mut cost_acc = 0.;
+          cdef_filter_superblock(fi, &mut cdef_input, &mut lrf_input,
+                                 &mut cw.bc, &sbo_0, &sbo, cdef_index as u8, &cdef_dirs);
+          for pli in 0..3 {
+            match best_lrf[pli] {
+              RestorationFilter::None{} => {
+                let err = rdo_loop_plane_error(sbo, fi, fs, &cw.bc, &lrf_input, pli);
+                let rate = if fi.sequence.enable_restoration {
+                  cw.count_lrf_switchable(w, &fs.restoration, &best_lrf[pli], pli)
+                } else {
+                  0 // no relative cost differeneces to different CDEF params.  If cdef is on, it's a wash.
+                };
+                cost[pli] = err as f64 + fi.lambda * rate as f64 / ((1<<OD_BITRES) as f64);
+                cost_acc += cost[pli];
               }
+              RestorationFilter::Sgrproj{set, xqd} => {
+                sgrproj_stripe_filter(set, xqd, fi,
+                                      lrf_input.planes[pli].cfg.width,
+                                      lrf_input.planes[pli].cfg.height,
+                                      lrf_input.planes[pli].cfg.width,
+                                      lrf_input.planes[pli].cfg.height,
+                                      &lrf_input.planes[pli].slice(&PlaneOffset{x:0, y:0}),
+                                      &lrf_input.planes[pli].slice(&PlaneOffset{x:0, y:0}),
+                                      &mut lrf_output.planes[pli].mut_slice(&PlaneOffset{x:0, y:0}));
+                let err = rdo_loop_plane_error(sbo, fi, fs, &cw.bc, &lrf_output, pli);
+                let rate = cw.count_lrf_switchable(w, &fs.restoration, &best_lrf[pli], pli);
+                cost[pli] = err as f64 + fi.lambda * rate as f64 / ((1<<OD_BITRES) as f64);
+                cost_acc += cost[pli];
+              }
+              RestorationFilter::Wiener{..} => unreachable!() // coming soon
+            }
+          }
+          if best_cost_acc < 0. || cost_acc < best_cost_acc {
+            cdef_change = true;
+            best_cost_acc = cost_acc;
+            best_index = cdef_index;
+            for pli in 0..3 {
+              best_cost[pli] = cost[pli];
             }
           }
         }
       }
     }
 
-    if cdef_index == 0 || err < best_err {
-      best_err = err;
-      best_index = cdef_index;
-    }
+    if !cdef_change && !first_loop { break; }
+    first_loop = false;
+    
+    // check for new best restoration filter if enabled
+    let mut lrf_change = false;
+    if fi.sequence.enable_restoration {
+      // need cdef output from best index, not just last iteration
+      if fi.sequence.enable_cdef {
+        cdef_filter_superblock(fi, &mut cdef_input, &mut lrf_input,
+                               &mut cw.bc, &sbo_0, &sbo, best_index as u8, &cdef_dirs);
+      }
 
+      // Wiener LRF decision coming soon
+
+      // SgrProj LRF decision
+      for pli in 0..3 {
+        for set in 0..16 {
+          let in_plane = &fs.input.planes[pli];  // reference
+          let ipo = &sbo.plane_offset(&in_plane.cfg);
+          let cdef_plane = &lrf_input.planes[pli];
+          let (xqd0, xqd1) = sgrproj_solve(set, fi,
+                                           &in_plane.slice(ipo),
+                                           &cdef_plane.slice(&PlaneOffset{x: 0, y: 0}),
+                                           cmp::min(cdef_plane.cfg.width, fi.width - ipo.x as usize),
+                                           cmp::min(cdef_plane.cfg.height, fi.height - ipo.y as usize));
+          let current_lrf = RestorationFilter::Sgrproj{set: set, xqd: [xqd0, xqd1]};
+          if let RestorationFilter::Sgrproj{set, xqd} = current_lrf {
+            // At present, this is a gross simplification
+            sgrproj_stripe_filter(set, xqd, fi,
+                                  lrf_input.planes[pli].cfg.width, lrf_input.planes[pli].cfg.height,
+                                  lrf_input.planes[pli].cfg.width, lrf_input.planes[pli].cfg.height,
+                                  &lrf_input.planes[pli].slice(&PlaneOffset{x:0, y:0}),
+                                  &lrf_input.planes[pli].slice(&PlaneOffset{x:0, y:0}),
+                                  &mut lrf_output.planes[pli].mut_slice(&PlaneOffset{x:0, y:0}));
+          }
+          let err = rdo_loop_plane_error(sbo, fi, fs, &cw.bc, &lrf_output, pli);
+          let rate = cw.count_lrf_switchable(w, &fs.restoration, &current_lrf, pli);
+          let cost = err as f64 + fi.lambda * rate as f64 / ((1<<OD_BITRES) as f64);
+          if best_cost[pli] < 0. || cost < best_cost[pli] {
+            best_cost[pli] = cost;
+            best_lrf[pli] = current_lrf;
+            lrf_change = true;
+          }
+        }
+      }
+
+      // we tried all LRF possibilities for this cdef index; is the local result for this
+      // cdef index better than the best previous result?
+      if lrf_change {
+        let mut cost_acc = 0.;
+        for pli in 0..3 {
+          cost_acc += best_cost[pli];
+        }
+        best_cost_acc = cost_acc;
+      }
+    }
+    if !lrf_change || !cdef_change{
+      break;
+    }
   }
-  best_index
+
+  if cw.bc.cdef_coded {
+    cw.bc.set_cdef(&sbo, best_index as u8);
+  }
+
+  if fi.sequence.enable_restoration {
+    for pli in 0..PLANES {
+      fs.restoration.plane[pli].restoration_unit_as_mut(sbo).filter = best_lrf[pli];
+    }
+  }
 }

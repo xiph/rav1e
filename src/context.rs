@@ -13,6 +13,7 @@
 #![allow(non_camel_case_types)]
 
 use crate::ec::Writer;
+use crate::ec::OD_BITRES;
 use crate::encoder::FrameInvariants;
 use crate::entropymode::*;
 use crate::header::ReferenceMode;
@@ -1561,6 +1562,11 @@ impl BlockContext {
     }
   }
 
+  pub fn get_cdef(&mut self, sbo: &SuperBlockOffset) -> u8 {
+    let bo = sbo.block_offset(0, 0);
+    self.blocks[bo.y][bo.x].cdef_index
+  }
+
   // The mode info data structure has a one element border above and to the
   // left of the entries corresponding to real macroblocks.
   // The prediction flags in these dummy entries are initialized to 0.
@@ -3012,6 +3018,36 @@ impl ContextWriter {
     symbol_with_update!(self, w, coded_id as u32, &mut self.fc.spatial_segmentation_cdfs[cdf_index as usize]);
   }
 
+  // rather than test writing and rolling back the cdf, we just count Q8 bits using the current cdf
+  pub fn count_lrf_switchable(&mut self, w: &dyn Writer, rs: &RestorationState,
+                              filter: &RestorationFilter, pli: usize) -> u32 {
+    let nsym = &self.fc.lrf_switchable_cdf.len()-1;
+    match *filter {
+      RestorationFilter::None => {
+        w.symbol_bits(0, &self.fc.lrf_switchable_cdf[..nsym])
+      }
+      RestorationFilter::Wiener{coeffs: _} => {
+        unreachable!() // for now, not permanently
+      }
+      RestorationFilter::Sgrproj{set, xqd} => {
+        // Does *not* use 'RESTORE_SGRPROJ' but rather just '2'
+        let rp = &rs.plane[pli];
+        let mut bits = w.symbol_bits(2, &self.fc.lrf_switchable_cdf[..nsym]) +
+          ((SGRPROJ_PARAMS_BITS as u32) << OD_BITRES);
+        for i in 0..2 {
+          let s = SGRPROJ_PARAMS_S[set as usize][i];
+          let min = SGRPROJ_XQD_MIN[i] as i32;
+          let max = SGRPROJ_XQD_MAX[i] as i32;
+          if s > 0 {
+            bits += w.count_signed_subexp_with_ref(xqd[i] as i32, min, max+1, SGRPROJ_PRJ_SUBEXP_K,
+                                                   rp.sgrproj_ref[i] as i32);
+          }
+        }
+        bits
+      }
+    }
+  }
+
   pub fn write_lrf<T: Pixel>(
     &mut self, w: &mut dyn Writer, fi: &FrameInvariants<T>, rs: &mut RestorationState, sbo: &SuperBlockOffset
   ) {
@@ -3048,7 +3084,7 @@ impl ContextWriter {
                 }
                 RESTORE_SWITCHABLE => {
                   // Does *not* write 'RESTORE_SGRPROJ'
-                  symbol_with_update!(self, w, 2 as u32, &mut self.fc.lrf_switchable_cdf);
+                  symbol_with_update!(self, w, 2, &mut self.fc.lrf_switchable_cdf);
                 }
                 _ => unreachable!()
               }
@@ -3067,7 +3103,6 @@ impl ContextWriter {
                     assert!(xqd[i] == 0);
                     rp.sgrproj_ref[0] = 0;
                   } else {
-                    assert!(xqd[i] == 95);
                     rp.sgrproj_ref[1] = 95; // LOL at spec.  The result is always 95.
                   }
                 }
