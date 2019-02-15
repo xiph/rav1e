@@ -64,7 +64,7 @@ pub enum RestorationFilter {
 
 impl RestorationFilter {
   pub fn default() -> RestorationFilter {
-    RestorationFilter::Sgrproj {set:4, xqd: SGRPROJ_XQD_MID}
+    RestorationFilter::None{}
   }
 }
 
@@ -469,13 +469,12 @@ fn sgrproj_box_f_r2<T: Pixel>(af: &[&[i32; 64+2]; 3], bf: &[&[i32; 64+2]; 3], f:
   }
 }
 
-fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvariants<T>,
-                                   crop_w: usize, crop_h: usize,
-                                   stripe_w: usize, stripe_h: usize,
-                                   cdeffed: &PlaneSlice<T>,
-                                   deblocked: &PlaneSlice<T>,
-                                   out: &mut PlaneMutSlice<T>) {
-
+pub fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvariants<T>,
+                                       crop_w: usize, crop_h: usize,
+                                       stripe_w: usize, stripe_h: usize,
+                                       cdeffed: &PlaneSlice<T>,
+                                       deblocked: &PlaneSlice<T>,
+                                       out: &mut PlaneMutSlice<T>) {
   assert!(stripe_h <= 64);
   let bdm8 = fi.sequence.bit_depth - 8;
   let mut a_r2: [[i32; 64+2]; 3] = [[0; 64+2]; 3];
@@ -561,11 +560,153 @@ fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvariants<T
   }
 }
 
+// Frame inputs below aren't all equal, and will change as work
+// continues.  There's no deblocked reconstruction available at this
+// point of RDO, so we use the non-deblocked reconstruction, cdef and
+// input.  The input can be a full-sized frame. Cdef input is a partial
+// frame constructed specifically for RDO.
+
+// For simplicity, this ignores stripe segmentation (it's possible the
+// extra complexity isn't worth it and we'll ignore stripes
+// permanently during RDO, but that's not been tested yet). Data
+// access inside the cdef frame is monolithic and clipped to the cdef
+// borders.
+
+// Input params follow the same rules as sgrproj_stripe_filter.
+// Inputs are relative to the colocated slice views.
+pub fn sgrproj_solve<T: Pixel>(set: u8, fi: &FrameInvariants<T>,
+                               input: &PlaneSlice<T>,
+                               cdeffed: &PlaneSlice<T>,
+                               cdef_w: usize, cdef_h: usize) -> (i8, i8) {
+
+  assert!(cdef_h <= 64);
+  let bdm8 = fi.sequence.bit_depth - 8;
+  let mut a_r2: [[i32; 64+2]; 3] = [[0; 64+2]; 3];
+  let mut b_r2: [[i32; 64+2]; 3] = [[0; 64+2]; 3];
+  let mut f_r2: [i32; 64] = [0; 64];
+  let mut a_r1: [[i32; 64+2]; 3] = [[0; 64+2]; 3];
+  let mut b_r1: [[i32; 64+2]; 3] = [[0; 64+2]; 3];
+  let mut f_r1: [i32; 64] = [0; 64];
+
+  let s_r2: i32 = SGRPROJ_PARAMS_S[set as usize][0];
+  let s_r1: i32 = SGRPROJ_PARAMS_S[set as usize][1];
+
+  let mut h:[[f64; 2]; 2] = [[0.,0.],[0.,0.]];
+  let mut c:[f64; 2] = [0., 0.];
+
+  /* prime the intermediate arrays */
+  if s_r2 > 0 {
+    sgrproj_box_ab_r2(&mut a_r2[0], &mut b_r2[0],
+                      -1, 0, cdef_h,
+                      s_r2, bdm8,
+                      &cdeffed, cdef_w, cdef_h,
+                      &cdeffed, cdef_w, cdef_h);
+    sgrproj_box_ab_r2(&mut a_r2[1], &mut b_r2[1],
+                      0, 0, cdef_h,
+                      s_r2, bdm8,
+                      &cdeffed, cdef_w, cdef_h,
+                      &cdeffed, cdef_w, cdef_h);
+  }
+  if s_r1 > 0 {
+    sgrproj_box_ab_r1(&mut a_r1[0], &mut b_r1[0],
+                      -1, 0, cdef_h,
+                      s_r1, bdm8,
+                      &cdeffed, cdef_w, cdef_h,
+                      &cdeffed, cdef_w, cdef_h);
+    sgrproj_box_ab_r1(&mut a_r1[1], &mut b_r1[1],
+                      0, 0, cdef_h,
+                      s_r1, bdm8,
+                      &cdeffed, cdef_w, cdef_h,
+                      &cdeffed, cdef_w, cdef_h);
+  }
+  
+  /* iterate by column */
+  for xi in 0..cdef_w {
+    /* build intermediate array columns */
+    if s_r2 > 0 {
+      sgrproj_box_ab_r2(&mut a_r2[(xi+2)%3], &mut b_r2[(xi+2)%3],
+                        xi as isize + 1, 0, cdef_h,
+                        s_r2, bdm8,
+                        &cdeffed, cdef_w, cdef_h,
+                        &cdeffed, cdef_w, cdef_h);
+      let ap0: [&[i32; 64+2]; 3] = [&a_r2[xi%3], &a_r2[(xi+1)%3], &a_r2[(xi+2)%3]];
+      let bp0: [&[i32; 64+2]; 3] = [&b_r2[xi%3], &b_r2[(xi+1)%3], &b_r2[(xi+2)%3]];
+      sgrproj_box_f_r2(&ap0, &bp0, &mut f_r2, xi, 0, cdef_h as usize, &cdeffed);
+    } else {
+      sgrproj_box_f_r0(&mut f_r2, xi, 0, cdef_h as usize, &cdeffed);
+    }
+    if s_r1 > 0 {
+      sgrproj_box_ab_r1(&mut a_r1[(xi+2)%3], &mut b_r1[(xi+2)%3],
+                        xi as isize + 1, 0, cdef_h,
+                        s_r1, bdm8,
+                        &cdeffed, cdef_w, cdef_h,
+                        &cdeffed, cdef_w, cdef_h);
+      let ap1: [&[i32; 64+2]; 3] = [&a_r1[xi%3], &a_r1[(xi+1)%3], &a_r1[(xi+2)%3]];
+      let bp1: [&[i32; 64+2]; 3] = [&b_r1[xi%3], &b_r1[(xi+1)%3], &b_r1[(xi+2)%3]];
+
+      sgrproj_box_f_r1(&ap1, &bp1, &mut f_r1, xi, 0, cdef_h as usize, &cdeffed);
+    } else {
+      sgrproj_box_f_r0(&mut f_r1, xi, 0, cdef_h as usize, &cdeffed);
+    }
+
+    for yi in 0..cdef_h {
+      let u = i32::cast_from(cdeffed.p(yi,xi)) << SGRPROJ_RST_BITS;
+      let s = i32::cast_from(input.p(yi,xi)) << SGRPROJ_RST_BITS;
+      let f2 = f_r2[yi] - u;
+      let f1 = f_r1[yi] - u;
+      h[0][0] += f2 as f64 * f2 as f64;
+      h[1][1] += f1 as f64 * f1 as f64;
+      h[0][1] += f1 as f64 * f2 as f64;
+      c[0] += f2 as f64 * s as f64;
+      c[1] += f1 as f64 * s as f64;
+    }
+  }
+
+  // this is lifted almost in-tact from libaom
+  let n = cdef_w as f64 * cdef_h as f64;
+  h[0][0] /= n;
+  h[0][1] /= n;
+  h[1][1] /= n;
+  h[1][0] = h[0][1];
+  c[0] /= n;
+  c[1] /= n;
+  let (xq0, xq1) = if s_r2 == 0 {
+    // H matrix is now only the scalar h[1][1]
+    // C vector is now only the scalar c[1]
+    if h[1][1] == 0. {
+      (0, 0)
+    } else {
+      (0, (c[1] / h[1][1]).round() as i32)
+    }
+  } else if s_r1 == 0 {
+    // H matrix is now only the scalar h[0][0]
+    // C vector is now only the scalar c[0]
+    if h[0][0] == 0. {
+      (0, 0)
+    } else {
+      ((c[0] / h[0][0]).round() as i32, 0)
+    }
+  } else {
+    let det = h[0][0] * h[1][1] - h[0][1] * h[1][0];
+    if det == 0. {
+      (0, 0)
+    } else {
+      // If scaling up dividend would overflow, instead scale down the divisor
+      let div1 = (h[1][1] * c[0] - h[0][1] * c[1]) * (1 << SGRPROJ_PRJ_BITS) as f64;
+      let div2 = (h[0][0] * c[1] - h[1][0] * c[0]) * (1 << SGRPROJ_PRJ_BITS) as f64;
+
+      ((div1 / det).round() as i32, (div2 / det).round() as i32)
+    }
+  };
+  (clamp(xq0, SGRPROJ_XQD_MIN[0] as i32, SGRPROJ_XQD_MAX[0] as i32) as i8,
+   clamp(xq1, SGRPROJ_XQD_MIN[1] as i32, SGRPROJ_XQD_MAX[1] as i32) as i8)
+}
+
 fn wiener_stripe_filter<T: Pixel>(coeffs: [[i8; 3]; 2], fi: &FrameInvariants<T>,
-                      crop_w: usize, crop_h: usize,
-                      stripe_w: usize, stripe_h: usize,
-                      stripe_x: usize, stripe_y: isize,
-                      cdeffed: &Plane<T>, deblocked: &Plane<T>, out: &mut Plane<T>) {
+                                  crop_w: usize, crop_h: usize,
+                                  stripe_w: usize, stripe_h: usize,
+                                  stripe_x: usize, stripe_y: isize,
+                                  cdeffed: &Plane<T>, deblocked: &Plane<T>, out: &mut Plane<T>) {
   let bit_depth = fi.sequence.bit_depth;
   let round_h = if bit_depth == 12 {5} else {3};
   let round_v = if bit_depth == 12 {9} else {11};
