@@ -31,6 +31,10 @@ type ec_window = u32;
 pub trait Writer {
   /// Write a symbol s, using the passed in cdf reference; leaves cdf unchanged
   fn symbol(&mut self, s: u32, cdf: &[u16]);
+  /// return approximate number of fractional bits in OD_BITRES
+  /// precision to write a symbol s using the passed in cdf reference;
+  /// leaves cdf unchanged
+  fn symbol_bits(&self, s: u32, cdf: &[u16]) -> u32;
   /// Write a symbol s, using the passed in cdf reference; updates the referenced cdf.
   fn symbol_with_update(&mut self, s: u32, cdf: &mut [u16]);
   /// Write a bool using passed in probability
@@ -43,14 +47,28 @@ pub trait Writer {
   fn write_golomb(&mut self, level: u16);
   /// Write a value v in [0, n-1] quasi-uniformly
   fn write_quniform(&mut self, n: u32, v: u32);
+  /// Return fractional bits needed to write Write a value v in [0,
+  /// n-1] quasi-uniformly
+  fn count_quniform(&self, n: u32, v: u32) -> u32;
   /// Write symbol v in [0, n-1] with parameter k as finite subexponential
   fn write_subexp(&mut self, n: u32, k: u8, v: u32);
+  /// Return fractional bits needed to write symbol v in [0, n-1] with
+  /// parameter k as finite subexponential
+  fn count_subexp(&self, n: u32, k: u8, v: u32) -> u32;
   /// Write symbol v in [0, n-1] with parameter k as finite
   /// subexponential based on a reference ref also in [0, n-1].
   fn write_unsigned_subexp_with_ref(&mut self, v: u32, mx: u32, k: u8, r: u32);
+  /// Return fractional bits beed to write symbol v in [0, n-1] with
+  /// parameter k as finite subexponential based on a reference ref
+  /// also in [0, n-1].
+  fn count_unsigned_subexp_with_ref(&self, v: u32, mx: u32, k: u8, r: u32) -> u32;
   /// Write symbol v in [-(n-1), n-1] with parameter k as finite
   /// subexponential based on a reference ref also in [-(n-1), n-1].
   fn write_signed_subexp_with_ref(&mut self, v: i32, low: i32, high: i32, k: u8, r: i32);
+  /// Return fractional bits needed to write symbol v in [-(n-1), n-1]
+  /// with parameter k as finite subexponential based on a reference
+  /// ref also in [-(n-1), n-1].
+  fn count_signed_subexp_with_ref(&self, v: i32, low: i32, high: i32, k: u8, r: i32) -> u32;
   /// Return current length of range-coded bitstream in integer bits
   fn tell(&mut self) -> u32;
   /// Return currrent length of range-coded bitstream in fractional
@@ -503,6 +521,45 @@ where
     self.symbol(s, &cdf[..nsymbs]);
     Self::update_cdf(cdf, s);
   }
+  /// Returns approximate cost for a symbol given a cumulative
+  /// distribution function (CDF) table and current write state.
+  /// `s`: The index of the symbol to encode.
+  /// `cdf`: The CDF, such that symbol s falls in the range
+  ///        `[s > 0 ? cdf[s - 1] : 0, cdf[s])`.
+  ///       The values must be monotonically non-decreasing, and the last value
+  ///       must be exactly 32768. There should be at most 16 values.
+  fn symbol_bits(&self, s: u32, cdf: &[u16]) -> u32 {
+    let mut bits = 0;
+    debug_assert!(cdf[cdf.len() - 1] == 0);
+    debug_assert!(32768 <= self.rng);
+    let rng = (self.rng >> 8) as u32;
+    let fh = cdf[s as usize] as u32 >> EC_PROB_SHIFT;
+    let r =
+      if s > 0 {
+        let fl = cdf[s as usize - 1] as u32 >> EC_PROB_SHIFT;
+        (rng * fl >> 7 - EC_PROB_SHIFT) - (rng * fh >> 7 - EC_PROB_SHIFT) + EC_MIN_PROB
+      } else {
+        let nms1 = cdf.len() as u32 - s - 1;
+        self.rng as u32 - (rng * fh >> 7 - EC_PROB_SHIFT) - nms1 * EC_MIN_PROB
+      };
+
+    // The 9 here counteracts the offset of -9 baked into cnt.  Don't include a termination bit.
+    let pre = Self::frac_compute((self.cnt + 9) as u32, self.rng as u32);      
+    let d = 16 - r.ilog();
+    let mut c = self.cnt;
+    let mut sh = c + (d as i16);
+    if sh >= 0 {
+      c += 16;
+      if sh >= 8 {
+        bits += 8;
+        c -= 8;
+      }
+      bits += 8;
+      sh = c + (d as i16) - 24;
+    }
+    // The 9 here counteracts the offset of -9 baked into cnt.  Don't include a termination bit.
+    Self::frac_compute((bits + sh + 9) as u32, r << d) - pre
+  }
   /// Encode a golomb to the bitstream.
   /// 'level': passed in value to encode
   fn write_golomb(&mut self, level: u16) {
@@ -539,6 +596,23 @@ where
       }
     }
   }
+  /// Returns QOD_BITRES bits for a value v in [0, n-1] quasi-uniformly
+  /// n: size of interval
+  /// v: value to encode
+  fn count_quniform(&self, n: u32, v: u32) -> u32 {
+    let mut bits = 0;
+    if n > 1 {
+      let l = (msb(n as i32) + 1) as u32;
+      let m = (1 << l) - n;
+      if v < m {
+        bits += l-1 << OD_BITRES;
+      } else {
+        bits += l-1 << OD_BITRES;
+        bits += 1 << OD_BITRES;
+      }
+    }
+    bits
+  }
   /// Write symbol v in [0, n-1] with parameter k as finite subexponential
   /// n: size of interval
   /// k: 'parameter'
@@ -565,6 +639,34 @@ where
       }
     }
   }
+  /// Resturns QOD_BITRES bits for symbol v in [0, n-1] with parameter k as finite subexponential
+  /// n: size of interval
+  /// k: 'parameter'
+  /// v: value to encode
+  fn count_subexp(&self, n: u32, k: u8, v: u32) -> u32 {
+    let mut i = 0;
+    let mut mk = 0;
+    let mut bits = 0;
+    loop {
+      let b = if i != 0 {k + i - 1} else {k};
+      let a = 1 << b;
+      if n <= mk + 3 * a {
+        bits += self.count_quniform(n - mk, v - mk);
+        break;
+      } else {
+        let t = v >= mk + a;
+        bits += 1 << OD_BITRES;
+        if t {
+          i += 1;
+          mk += a;
+        } else {
+          bits += (b as u32) << OD_BITRES;
+          break;
+        }
+      }
+    }
+    bits
+  }
   /// Write symbol v in [0, n-1] with parameter k as finite
   /// subexponential based on a reference ref also in [0, n-1].
   /// v: value to encode
@@ -578,6 +680,19 @@ where
       self.write_subexp(n, k, Self::recenter(n-1-r, n-1-v));
     }
   }
+  /// Returns QOD_BITRES bits for symbol v in [0, n-1] with parameter k as finite
+  /// subexponential based on a reference ref also in [0, n-1].
+  /// v: value to encode
+  /// n: size of interval
+  /// k: 'parameter'
+  /// r: reference
+  fn count_unsigned_subexp_with_ref(&self, v: u32, n: u32, k: u8, r: u32) -> u32 {
+    if (r << 1) <= n {
+      self.count_subexp(n, k, Self::recenter(r, v))
+    } else {
+      self.count_subexp(n, k, Self::recenter(n-1-r, n-1-v))
+    }
+  }
   /// Write symbol v in [-(n-1), n-1] with parameter k as finite
   /// subexponential based on a reference ref also in [-(n-1), n-1].
   /// v: value to encode
@@ -587,7 +702,15 @@ where
   fn write_signed_subexp_with_ref(&mut self, v: i32, low: i32, high: i32, k: u8, r: i32) {
     self.write_unsigned_subexp_with_ref((v - low) as u32, (high - low) as u32, k, (r - low) as u32);
   }
-
+  /// Returns QOD_BITRES bits for symbol v in [-(n-1), n-1] with parameter k as finite
+  /// subexponential based on a reference ref also in [-(n-1), n-1].
+  /// v: value to encode
+  /// n: size of interval
+  /// k: 'parameter'
+  /// r: reference
+  fn count_signed_subexp_with_ref(&self, v: i32, low: i32, high: i32, k: u8, r: i32) -> u32 {
+    self.count_unsigned_subexp_with_ref((v - low) as u32, (high - low) as u32, k, (r - low) as u32)
+  }
   /// Returns the number of bits "used" by the encoded symbols so far.
   /// This same number can be computed in either the encoder or the
   /// decoder, and is suitable for making coding decisions.  The value
