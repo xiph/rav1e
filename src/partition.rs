@@ -1147,14 +1147,28 @@ impl PredictionMode {
     };
 
     if !is_compound {
-      match fi.rec_buffer.frames
-        [fi.ref_frames[ref_frames[0] - LAST_FRAME] as usize]
-      {
-        Some(ref rec) => {
-          let (row_frac, col_frac, src) =
-            get_params(&rec.frame.planes[p], po, mvs[0]);
-          put_8tap(
-            dst,
+      if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[ref_frames[0] - LAST_FRAME] as usize] {
+        let (row_frac, col_frac, src) = get_params(&rec.frame.planes[p], po, mvs[0]);
+        put_8tap(
+          dst,
+          src,
+          width,
+          height,
+          col_frac,
+          row_frac,
+          mode,
+          mode,
+          fi.sequence.bit_depth
+        );
+      }
+    } else {
+      let mut tmp: [AlignedArray<[i16; 128 * 128]>; 2] =
+        [UninitializedAlignedArray(), UninitializedAlignedArray()];
+      for i in 0..2 {
+        if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[ref_frames[i] - LAST_FRAME] as usize] {
+          let (row_frac, col_frac, src) = get_params(&rec.frame.planes[p], po, mvs[i]);
+          prep_8tap(
+            &mut tmp[i].array,
             src,
             width,
             height,
@@ -1164,32 +1178,6 @@ impl PredictionMode {
             mode,
             fi.sequence.bit_depth
           );
-        }
-        None => ()
-      }
-    } else {
-      let mut tmp: [AlignedArray<[i16; 128 * 128]>; 2] =
-        [UninitializedAlignedArray(), UninitializedAlignedArray()];
-      for i in 0..2 {
-        match fi.rec_buffer.frames
-          [fi.ref_frames[ref_frames[i] - LAST_FRAME] as usize]
-        {
-          Some(ref rec) => {
-            let (row_frac, col_frac, src) =
-              get_params(&rec.frame.planes[p], po, mvs[i]);
-            prep_8tap(
-              &mut tmp[i].array,
-              src,
-              width,
-              height,
-              col_frac,
-              row_frac,
-              mode,
-              mode,
-              fi.sequence.bit_depth
-            );
-          }
-          None => ()
         }
       }
       mc_avg(

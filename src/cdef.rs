@@ -365,18 +365,16 @@ pub fn cdef_filter_superblock(fi: &FrameInvariants,
             let local_pri_strength;
             let local_sec_strength;
             let mut local_damping: i32 = cdef_damping + coeff_shift;
-            let local_dir: usize;
-
-            if p==0 {
+            let local_dir = if p == 0 {
               local_pri_strength = adjust_strength(cdef_pri_y_strength << coeff_shift, var);
               local_sec_strength = cdef_sec_y_strength << coeff_shift;
-              local_dir = if cdef_pri_y_strength != 0 {dir as usize} else {0};
+              if cdef_pri_y_strength != 0 { dir as usize } else { 0 }
             } else {
               local_pri_strength = cdef_pri_uv_strength << coeff_shift;
               local_sec_strength = cdef_sec_uv_strength << coeff_shift;
               local_damping -= 1;
-              local_dir = if cdef_pri_uv_strength != 0 {dir as usize} else {0};
-            }
+              if cdef_pri_uv_strength != 0 { dir as usize } else { 0 }
+            };
 
             unsafe {
               cdef_filter_block(out_slice.offset_as_mutable(8*bx>>xdec,8*by>>ydec),

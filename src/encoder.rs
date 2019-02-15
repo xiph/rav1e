@@ -1496,15 +1496,14 @@ fn encode_partition_bottomup(
   // Code the whole block
   // TODO(yushin): Try move PARTITION_NONE to below partition loop
   if !must_split {
-    let mut cost: f64 = 0.0;
-
-    if bsize.gte(BlockSize::BLOCK_8X8) && is_square {
+    let cost = if bsize.gte(BlockSize::BLOCK_8X8) && is_square {
       let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
       let tell = w.tell_frac();
       cw.write_partition(w, bo, PartitionType::PARTITION_NONE, bsize);
-      cost =
-        (w.tell_frac() - tell) as f64 * fi.lambda / ((1 << OD_BITRES) as f64);
-    }
+      (w.tell_frac() - tell) as f64 * fi.lambda / ((1 << OD_BITRES) as f64)
+    } else {
+      0.0
+    };
 
     let pmv_idx = if bsize.greater_than(BlockSize::BLOCK_32X32) {
       0
@@ -2084,11 +2083,10 @@ pub fn encode_frame(fi: &mut FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
   let mut packet = Vec::new();
   if fi.show_existing_frame {
     write_obus(&mut packet, fi, fs).unwrap();
-    match fi.rec_buffer.frames[fi.frame_to_show_map_idx as usize] {
-      Some(ref rec) => for p in 0..3 {
+    if let Some(ref rec) = fi.rec_buffer.frames[fi.frame_to_show_map_idx as usize] {
+      for p in 0..3 {
         fs.rec.planes[p].data.copy_from_slice(rec.frame.planes[p].data.as_slice());
-      },
-      None => (),
+      }
     }
   } else {
     if !fi.intra_only {
