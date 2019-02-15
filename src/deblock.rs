@@ -365,12 +365,11 @@ fn deblock_size4(
     let q0 = p[pitch * 2] as i32;
     let q1 = p[pitch * 3] as i32;
     if mask4(p1, p0, q0, q1, bd - 8) <= level {
-      let x;
-      if nhev4(p1, p0, q0, q1, bd - 8) <= level {
-        x = filter_narrow4_4(p1, p0, q0, q1, bd - 8);
+      let x = if nhev4(p1, p0, q0, q1, bd - 8) <= level {
+        filter_narrow4_4(p1, p0, q0, q1, bd - 8)
       } else {
-        x = filter_narrow2_4(p1, p0, q0, q1, bd - 8);
-      }
+        filter_narrow2_4(p1, p0, q0, q1, bd - 8)
+      };
       stride_copy(p, &x, pitch);
     }
     s += stride;

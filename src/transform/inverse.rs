@@ -1705,10 +1705,11 @@ mod native {
         //   initialized to zero for filling out the missing coeffs.
         let mut temp_in: [i32; 64] = [0; 64];
         for (raw, clamped) in input_slice.iter().zip(temp_in.iter_mut()) {
-          let mut val = *raw;
-          if rect_type.abs() == 1 {
-            val = round_shift(*raw * INV_SQRT2, SQRT2_BITS);
-          }
+          let val = if rect_type.abs() == 1 {
+            round_shift(*raw * INV_SQRT2, SQRT2_BITS)
+          } else {
+            *raw
+          };
           *clamped = clamp_value(val, range);
         }
         txfm_fn(&temp_in, buffer_slice, range);
