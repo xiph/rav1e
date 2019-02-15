@@ -375,12 +375,9 @@ impl Sequence {
             }
           }
         }
-        if second_forward_idx < 0 {
-          false
-        } else {
-          // set skip_mode_frame
-          true
-        }
+
+        // TODO: Set skip_mode_frame, when second_forward_idx is not less than 0.
+        second_forward_idx >= 0
       }
     }
   }
