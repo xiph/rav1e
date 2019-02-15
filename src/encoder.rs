@@ -1950,26 +1950,46 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
             let mut pmvs3 = None;
             let mut pmvs4 = None;
             rayon::scope(|s| {
-                s.spawn(|_|
-            pmvs1 = estimate_motion_ss2(
-              fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(0, 0), &[Some(pmv), pmv_w, pmv_n]
-            )
-            );
-                s.spawn(|_|
-            pmvs2 = estimate_motion_ss2(
-              fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(8, 0), &[Some(pmv), pmv_e, pmv_n]
-            )
-            );
-                s.spawn(|_|
-            pmvs3 = estimate_motion_ss2(
-              fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(0, 8), &[Some(pmv), pmv_w, pmv_s]
-            )
-            );
-                s.spawn(|_|
-            pmvs4 = estimate_motion_ss2(
-              fi, fs, BlockSize::BLOCK_32X32, r, &sbo.block_offset(8, 8), &[Some(pmv), pmv_e, pmv_s]
-            )
-            );
+              s.spawn(|_| {
+                pmvs1 = estimate_motion_ss2(
+                  fi,
+                  fs,
+                  BlockSize::BLOCK_32X32,
+                  r,
+                  &sbo.block_offset(0, 0),
+                  &[Some(pmv), pmv_w, pmv_n]
+                )
+              });
+              s.spawn(|_| {
+                pmvs2 = estimate_motion_ss2(
+                  fi,
+                  fs,
+                  BlockSize::BLOCK_32X32,
+                  r,
+                  &sbo.block_offset(8, 0),
+                  &[Some(pmv), pmv_e, pmv_n]
+                )
+              });
+              s.spawn(|_| {
+                pmvs3 = estimate_motion_ss2(
+                  fi,
+                  fs,
+                  BlockSize::BLOCK_32X32,
+                  r,
+                  &sbo.block_offset(0, 8),
+                  &[Some(pmv), pmv_w, pmv_s]
+                )
+              });
+              s.spawn(|_| {
+                pmvs4 = estimate_motion_ss2(
+                  fi,
+                  fs,
+                  BlockSize::BLOCK_32X32,
+                  r,
+                  &sbo.block_offset(8, 8),
+                  &[Some(pmv), pmv_e, pmv_s]
+                )
+              });
             });
 
             pmvs[1][r] = pmvs1;
