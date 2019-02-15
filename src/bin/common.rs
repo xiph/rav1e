@@ -7,16 +7,16 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use clap::{App, Arg, ArgMatches};
-use crate::{ColorPrimaries, TransferCharacteristics, MatrixCoefficients};
+use crate::{ColorPrimaries, MatrixCoefficients, TransferCharacteristics};
+use clap::{App, AppSettings, Arg, ArgMatches};
 use rav1e::FrameType;
 use rav1e::*;
 
-use std::{fmt, io};
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::PathBuf;
 use std::time::Instant;
+use std::{fmt, io};
 
 pub struct EncoderIO {
   pub input: Box<dyn Read>,
@@ -33,27 +33,23 @@ pub struct CliOptions {
 
 pub fn parse_cli() -> CliOptions {
   let matches = App::new("rav1e")
-    .version("0.1.0")
+    .version(env!("CARGO_PKG_VERSION"))
     .about("AV1 video encoder")
+    .setting(AppSettings::DeriveDisplayOrder)
+    // INPUT/OUTPUT
     .arg(
       Arg::with_name("INPUT")
         .help("Uncompressed YUV4MPEG2 video input")
         .required(true)
         .index(1)
-    ).arg(
+    )
+    .arg(
       Arg::with_name("OUTPUT")
         .help("Compressed AV1 in IVF video output")
         .short("o")
         .long("output")
         .required(true)
         .takes_value(true)
-    ).arg(
-      Arg::with_name("PASS")
-        .help("Specify first-pass or second-pass to run as a two-pass encode")
-        .short("p")
-        .long("pass")
-        .takes_value(true)
-        .possible_values(&["1", "2"])
     )
     .arg(
       Arg::with_name("STATS_FILE")
@@ -61,107 +57,136 @@ pub fn parse_cli() -> CliOptions {
         .long("stats")
         .takes_value(true)
         .default_value("rav1e_stats.json")
-    ).arg(
-      Arg::with_name("RECONSTRUCTION")
-        .short("r")
+    )
+    // ENCODING SETTINGS
+    .arg(
+      Arg::with_name("PASS")
+        .help("Specify first-pass or second-pass to run as a two-pass encode; If not provided, will run a one-pass encode")
+        .short("p")
+        .long("pass")
         .takes_value(true)
-    ).arg(
+        .possible_values(&["1", "2"])
+    )
+    .arg(
       Arg::with_name("LIMIT")
         .help("Maximum number of frames to encode")
         .short("l")
         .long("limit")
         .takes_value(true)
         .default_value("0")
-    ).arg(
+    )
+    .arg(
       Arg::with_name("QP")
         .help("Quantizer (0-255)")
         .long("quantizer")
         .takes_value(true)
         .default_value("100")
-    ).arg(
+    )
+    .arg(
       Arg::with_name("SPEED")
-        .help("Speed level (0(slow)-10(fast))")
+        .help("Speed level (0 is best quality, 10 is fastest)")
         .short("s")
         .long("speed")
         .takes_value(true)
         .default_value("3")
-    ).arg(
+    )
+    .arg(
       Arg::with_name("MIN_KEYFRAME_INTERVAL")
         .help("Minimum interval between keyframes")
         .short("i")
         .long("min-keyint")
         .takes_value(true)
         .default_value("12")
-    ).arg(
+    )
+    .arg(
       Arg::with_name("KEYFRAME_INTERVAL")
         .help("Maximum interval between keyframes")
         .short("I")
         .long("keyint")
         .takes_value(true)
         .default_value("240")
-    ).arg(
+    )
+    .arg(
       Arg::with_name("LOW_LATENCY")
-        .help("low latency mode. true or [false]")
+        .help("Low latency mode; disables frame reordering")
         .long("low_latency")
         .takes_value(true)
         .default_value("false")
-    ).arg(
+    )
+    .arg(
       Arg::with_name("TUNE")
         .help("Quality tuning")
         .long("tune")
         .possible_values(&Tune::variants())
         .default_value("Psychovisual")
         .case_insensitive(true)
-    ).arg(
+    )
+    // MASTERING
+    .arg(
       Arg::with_name("PIXEL_RANGE")
-      .help("Pixel range")
-      .long("range")
-      .possible_values(&PixelRange::variants())
-      .default_value("unspecified")
-      .case_insensitive(true)
-    ).arg(
+        .help("Pixel range")
+        .long("range")
+        .possible_values(&PixelRange::variants())
+        .default_value("unspecified")
+        .case_insensitive(true)
+    )
+    .arg(
       Arg::with_name("COLOR_PRIMARIES")
-      .help("Color primaries used to describe color parameters.")
-      .long("primaries")
-      .possible_values(&ColorPrimaries::variants())
-      .default_value("unspecified")
-      .case_insensitive(true)
-    ).arg(
+        .help("Color primaries used to describe color parameters")
+        .long("primaries")
+        .possible_values(&ColorPrimaries::variants())
+        .default_value("unspecified")
+        .case_insensitive(true)
+    )
+    .arg(
       Arg::with_name("TRANSFER_CHARACTERISTICS")
-      .help("Transfer characteristics used to describe color parameters.")
-      .long("transfer")
-      .possible_values(&TransferCharacteristics::variants())
-      .default_value("unspecified")
-      .case_insensitive(true)
-    ).arg(
+        .help("Transfer characteristics used to describe color parameters")
+        .long("transfer")
+        .possible_values(&TransferCharacteristics::variants())
+        .default_value("unspecified")
+        .case_insensitive(true)
+    )
+    .arg(
       Arg::with_name("MATRIX_COEFFICIENTS")
-      .help("Matrix coefficients used to describe color parameters.")
-      .long("matrix")
-      .possible_values(&MatrixCoefficients::variants())
-      .default_value("unspecified")
-      .case_insensitive(true)
-    ).arg(
+        .help("Matrix coefficients used to describe color parameters")
+        .long("matrix")
+        .possible_values(&MatrixCoefficients::variants())
+        .default_value("unspecified")
+        .case_insensitive(true)
+    )
+    .arg(
       Arg::with_name("MASTERING_DISPLAY")
-      .help("Mastering display primaries in the form of G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min).")
-      .long("mastering_display")
-      .default_value("unspecified")
-      .case_insensitive(true)
-    ).arg(
+        .help("Mastering display primaries in the form of G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min)")
+        .long("mastering_display")
+        .default_value("unspecified")
+        .case_insensitive(true)
+    )
+    .arg(
       Arg::with_name("CONTENT_LIGHT")
-      .help("Content light level used to describe content luminosity (cll,fall).")
-      .long("content_light")
-      .default_value("0,0")
-      .case_insensitive(true)
-    ).arg(
+        .help("Content light level used to describe content luminosity (cll,fall)")
+        .long("content_light")
+        .default_value("0,0")
+        .case_insensitive(true)
+    )
+    // DEBUGGING
+    .arg(
       Arg::with_name("VERBOSE")
-        .help("verbose logging, output info for every frame")
+        .help("Verbose logging; outputs info for every frame")
         .long("verbose")
         .short("v")
-    ).arg(
+    )
+    .arg(
       Arg::with_name("PSNR")
-        .help("calculate and display PSNR metrics")
+        .help("Calculate and display PSNR metrics")
         .long("psnr")
-    ).get_matches();
+    )
+    .arg(
+      Arg::with_name("RECONSTRUCTION")
+        .help("Outputs a Y4M file containing the output from the decoder")
+        .short("r")
+        .takes_value(true)
+    )
+    .get_matches();
 
   let io = EncoderIO {
     input: match matches.value_of("INPUT").unwrap() {
