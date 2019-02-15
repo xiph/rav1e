@@ -341,7 +341,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
     let monochrome = seq.chroma_sampling == ChromaSampling::Cs400;
     if seq.profile == 1 {
-      assert!(monochrome == false);
+      assert!(!monochrome);
     } else {
       self.write_bit(monochrome)?;
     }
@@ -552,9 +552,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       }
       self.write_bit(false)?; // render_and_frame_size_different
                               // if render_and_frame_size_different { }
-      if fi.allow_screen_content_tools != 0 && true
-      /* UpscaledWidth == FrameWidth */
-      {
+      if fi.allow_screen_content_tools != 0 { // TODO: && UpscaledWidth == FrameWidth.
         self.write_bit(fi.allow_intrabc)?;
       }
     }
