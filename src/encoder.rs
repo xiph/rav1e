@@ -1128,7 +1128,6 @@ pub fn encode_block_b(fi: &FrameInvariants, fs: &mut FrameState,
       cw.fill_neighbours_ref_counts(bo);
       cw.write_ref_frames(w, fi, bo);
 
-      // NOTE: Until rav1e supports other inter modes than GLOBALMV
       if luma_mode >= PredictionMode::NEAREST_NEARESTMV {
         cw.write_compound_mode(w, luma_mode, mode_context);
       } else {
@@ -1368,8 +1367,8 @@ pub fn write_tx_blocks(fi: &FrameInvariants, fs: &mut FrameState,
   tx_dist
 }
 
-// FIXME: For now, assume tx_mode is LARGEST_TX, so var-tx is not implemented yet
-// but only one tx block exist for a inter mode partition.
+// FIXME: For now, assume tx_mode is LARGEST_TX, so var-tx is not implemented yet,
+// which means only one tx block exist for a inter mode partition.
 pub fn write_tx_tree(fi: &FrameInvariants, fs: &mut FrameState, cw: &mut ContextWriter, w: &mut dyn Writer,
                      luma_mode: PredictionMode, bo: &BlockOffset,
                      bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool,
@@ -1494,7 +1493,6 @@ fn encode_partition_bottomup(
   let w_post_checkpoint = w_post_cdef.checkpoint();
 
   // Code the whole block
-  // TODO(yushin): Try move PARTITION_NONE to below partition loop
   if !must_split {
     let mut cost: f64 = 0.0;
 
@@ -1529,12 +1527,13 @@ fn encode_partition_bottomup(
 
   // Test all partition types other than PARTITION_NONE by comparing their RD costs
   if can_split {
+    debug_assert!(is_square);
+
     for &partition in RAV1E_PARTITION_TYPES {
       if partition == PartitionType::PARTITION_NONE { continue; }
       if fi.sequence.chroma_sampling == ChromaSampling::Cs422 &&
         partition == PartitionType::PARTITION_VERT { continue; }
 
-      assert!(is_square);
       if must_split {
         let cbw = (fi.w_in_b - bo.x).min(bsw); // clipped block width, i.e. having effective pixels
         let cbh = (fi.h_in_b - bo.y).min(bsh);
@@ -1615,9 +1614,10 @@ fn encode_partition_bottomup(
       }
     }
 
-    // If the best partition is not PARTITION_SPLIT or PARTITION_INVALID, recode it
-    if best_partition != PartitionType::PARTITION_SPLIT &&
-      best_partition != PartitionType::PARTITION_INVALID {
+    debug_assert!(best_partition != PartitionType::PARTITION_INVALID);
+
+    // If the best partition is not PARTITION_SPLIT, recode it
+    if best_partition != PartitionType::PARTITION_SPLIT {
 
         assert!(rdo_output.part_modes.len() > 0);
 
@@ -1763,7 +1763,7 @@ fn encode_partition_topdown(fi: &FrameInvariants, fs: &mut FrameState,
       let is_compound = ref_frames[1] != NONE_FRAME;
       let mode_context = cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, fi, is_compound);
 
-      // TODO proper remap when is_compound is true
+      // TODO: proper remap when is_compound is true
       if !mode_luma.is_intra() {
         if is_compound && mode_luma != PredictionMode::GLOBAL_GLOBALMV {
           let match0 = mv_stack[0].this_mv.row == mvs[0].row && mv_stack[0].this_mv.col == mvs[0].col;
@@ -2017,7 +2017,7 @@ fn encode_tile(fi: &FrameInvariants, fs: &mut FrameState) -> Vec<u8> {
                                  BlockSize::BLOCK_64X64, &bo, &None, &pmvs);
       }
 
-      // CDEF has to be decisded before loop restoration, but coded after
+      // CDEF has to be decided before loop restoration, but coded after
       if cw.bc.cdef_coded {
         cdef_index = rdo_cdef_decision(&sbo, fi, fs, &mut cw);
         cw.bc.set_cdef(&sbo, cdef_index);

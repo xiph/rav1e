@@ -484,6 +484,7 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
           cw.write_partition(wr, bo, PartitionType::PARTITION_NONE, bsize);
         }
 
+        // TODO(yushin): luma and chroma would have different decision based on chroma format
         let needs_rec = luma_mode_is_intra && tx_size < bsize.tx_size();
 
         encode_block_a(&fi.sequence, fs, cw, wr, bsize, bo, skip);
