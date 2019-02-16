@@ -44,6 +44,7 @@ parser.add_argument('-branch',default=None)
 parser.add_argument('-prefix',default=None)
 parser.add_argument('-master',action='store_true',default=False)
 parser.add_argument('-set',default='objective-1-fast')
+parser.add_argument('-extra_options',default='')
 args = parser.parse_args()
 
 if args.branch is None:
@@ -65,5 +66,13 @@ is_master = args.master
 run_id = user+'-'+date_short+'-'+short
 
 print(GetTime(), 'Creating run '+run_id)
-r = requests.post("https://beta.arewecompressedyet.com/submit/job", {'run_id': run_id, 'commit': commit, 'master': is_master, 'key': key, 'task': args.set, 'codec': 'rav1e'})
+r = requests.post("https://beta.arewecompressedyet.com/submit/job", {
+    'run_id': run_id,
+    'commit': commit,
+    'master': is_master,
+    'key': key,
+    'task': args.set,
+    'codec': 'rav1e',
+    'extra_options': args.extra_options,
+})
 print(GetTime(), r)
