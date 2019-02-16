@@ -36,6 +36,14 @@ pub fn parse_cli() -> CliOptions {
     .version(env!("CARGO_PKG_VERSION"))
     .about("AV1 video encoder")
     .setting(AppSettings::DeriveDisplayOrder)
+    // THREADS
+    .arg(
+      Arg::with_name("THREADS")
+        .help("Set the threadpool size")
+        .long("threads")
+        .takes_value(true)
+        .default_value("0")
+    )
     // INPUT/OUTPUT
     .arg(
       Arg::with_name("INPUT")
@@ -211,6 +219,10 @@ pub fn parse_cli() -> CliOptions {
         ])
     )
     .get_matches();
+
+  if let Some(threads) = matches.value_of("THREADS").map(|v| v.parse().expect("Threads must be an integer")) {
+    rayon::ThreadPoolBuilder::new().num_threads(threads).build_global().unwrap();
+  }
 
   let io = EncoderIO {
     input: match matches.value_of("INPUT").unwrap() {
