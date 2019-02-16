@@ -1,7 +1,7 @@
 ;*****************************************************************************
 ;* x86inc.asm: x264asm abstraction layer
 ;*****************************************************************************
-;* Copyright (C) 2005-2018 x264 project
+;* Copyright (C) 2005-2019 x264 project
 ;*
 ;* Authors: Loren Merritt <lorenm@u.washington.edu>
 ;*          Henrik Gramner <henrik@gramner.com>
@@ -1239,8 +1239,16 @@ INIT_XMM
         %ifdef cpuname
             %if notcpuflag(%2)
                 %error use of ``%1'' %2 instruction in cpuname function: current_function
-            %elif cpuflags_%2 < cpuflags_sse && notcpuflag(sse2) && __sizeofreg > 8
+            %elif %3 == 0 && __sizeofreg == 16 && notcpuflag(sse2)
                 %error use of ``%1'' sse2 instruction in cpuname function: current_function
+            %elif %3 == 0 && __sizeofreg == 32 && notcpuflag(avx2)
+                %error use of ``%1'' avx2 instruction in cpuname function: current_function
+            %elifidn %1, pextrw ; special case because the base instruction is mmx2,
+                %ifnid %6       ; but sse4 is required for memory operands
+                    %if notcpuflag(sse4)
+                        %error use of ``%1'' sse4 instruction in cpuname function: current_function
+                    %endif
+                %endif
             %endif
         %endif
     %endif
@@ -1402,38 +1410,38 @@ AVX_INSTR cmpunordpd, sse2, 1, 0, 1
 AVX_INSTR cmpunordps, sse, 1, 0, 1
 AVX_INSTR cmpunordsd, sse2, 1, 0, 0
 AVX_INSTR cmpunordss, sse, 1, 0, 0
-AVX_INSTR comisd, sse2
-AVX_INSTR comiss, sse
-AVX_INSTR cvtdq2pd, sse2
-AVX_INSTR cvtdq2ps, sse2
-AVX_INSTR cvtpd2dq, sse2
-AVX_INSTR cvtpd2ps, sse2
-AVX_INSTR cvtps2dq, sse2
-AVX_INSTR cvtps2pd, sse2
-AVX_INSTR cvtsd2si, sse2
+AVX_INSTR comisd, sse2, 1
+AVX_INSTR comiss, sse, 1
+AVX_INSTR cvtdq2pd, sse2, 1
+AVX_INSTR cvtdq2ps, sse2, 1
+AVX_INSTR cvtpd2dq, sse2, 1
+AVX_INSTR cvtpd2ps, sse2, 1
+AVX_INSTR cvtps2dq, sse2, 1
+AVX_INSTR cvtps2pd, sse2, 1
+AVX_INSTR cvtsd2si, sse2, 1
 AVX_INSTR cvtsd2ss, sse2, 1, 0, 0
 AVX_INSTR cvtsi2sd, sse2, 1, 0, 0
 AVX_INSTR cvtsi2ss, sse, 1, 0, 0
 AVX_INSTR cvtss2sd, sse2, 1, 0, 0
-AVX_INSTR cvtss2si, sse
-AVX_INSTR cvttpd2dq, sse2
-AVX_INSTR cvttps2dq, sse2
-AVX_INSTR cvttsd2si, sse2
-AVX_INSTR cvttss2si, sse
+AVX_INSTR cvtss2si, sse, 1
+AVX_INSTR cvttpd2dq, sse2, 1
+AVX_INSTR cvttps2dq, sse2, 1
+AVX_INSTR cvttsd2si, sse2, 1
+AVX_INSTR cvttss2si, sse, 1
 AVX_INSTR divpd, sse2, 1, 0, 0
 AVX_INSTR divps, sse, 1, 0, 0
 AVX_INSTR divsd, sse2, 1, 0, 0
 AVX_INSTR divss, sse, 1, 0, 0
 AVX_INSTR dppd, sse4, 1, 1, 0
 AVX_INSTR dpps, sse4, 1, 1, 0
-AVX_INSTR extractps, sse4
+AVX_INSTR extractps, sse4, 1
 AVX_INSTR haddpd, sse3, 1, 0, 0
 AVX_INSTR haddps, sse3, 1, 0, 0
 AVX_INSTR hsubpd, sse3, 1, 0, 0
 AVX_INSTR hsubps, sse3, 1, 0, 0
 AVX_INSTR insertps, sse4, 1, 1, 0
 AVX_INSTR lddqu, sse3
-AVX_INSTR ldmxcsr, sse
+AVX_INSTR ldmxcsr, sse, 1
 AVX_INSTR maskmovdqu, sse2
 AVX_INSTR maxpd, sse2, 1, 0, 1
 AVX_INSTR maxps, sse, 1, 0, 1
@@ -1443,10 +1451,10 @@ AVX_INSTR minpd, sse2, 1, 0, 1
 AVX_INSTR minps, sse, 1, 0, 1
 AVX_INSTR minsd, sse2, 1, 0, 0
 AVX_INSTR minss, sse, 1, 0, 0
-AVX_INSTR movapd, sse2
-AVX_INSTR movaps, sse
+AVX_INSTR movapd, sse2, 1
+AVX_INSTR movaps, sse, 1
 AVX_INSTR movd, mmx
-AVX_INSTR movddup, sse3
+AVX_INSTR movddup, sse3, 1
 AVX_INSTR movdqa, sse2
 AVX_INSTR movdqu, sse2
 AVX_INSTR movhlps, sse, 1, 0, 0
@@ -1455,19 +1463,19 @@ AVX_INSTR movhps, sse, 1, 0, 0
 AVX_INSTR movlhps, sse, 1, 0, 0
 AVX_INSTR movlpd, sse2, 1, 0, 0
 AVX_INSTR movlps, sse, 1, 0, 0
-AVX_INSTR movmskpd, sse2
-AVX_INSTR movmskps, sse
+AVX_INSTR movmskpd, sse2, 1
+AVX_INSTR movmskps, sse, 1
 AVX_INSTR movntdq, sse2
 AVX_INSTR movntdqa, sse4
-AVX_INSTR movntpd, sse2
-AVX_INSTR movntps, sse
+AVX_INSTR movntpd, sse2, 1
+AVX_INSTR movntps, sse, 1
 AVX_INSTR movq, mmx
 AVX_INSTR movsd, sse2, 1, 0, 0
-AVX_INSTR movshdup, sse3
-AVX_INSTR movsldup, sse3
+AVX_INSTR movshdup, sse3, 1
+AVX_INSTR movsldup, sse3, 1
 AVX_INSTR movss, sse, 1, 0, 0
-AVX_INSTR movupd, sse2
-AVX_INSTR movups, sse
+AVX_INSTR movupd, sse2, 1
+AVX_INSTR movups, sse, 1
 AVX_INSTR mpsadbw, sse4, 0, 1, 0
 AVX_INSTR mulpd, sse2, 1, 0, 1
 AVX_INSTR mulps, sse, 1, 0, 1
@@ -1600,27 +1608,27 @@ AVX_INSTR punpcklwd, mmx, 0, 0, 0
 AVX_INSTR punpckldq, mmx, 0, 0, 0
 AVX_INSTR punpcklqdq, sse2, 0, 0, 0
 AVX_INSTR pxor, mmx, 0, 0, 1
-AVX_INSTR rcpps, sse
+AVX_INSTR rcpps, sse, 1
 AVX_INSTR rcpss, sse, 1, 0, 0
-AVX_INSTR roundpd, sse4
-AVX_INSTR roundps, sse4
+AVX_INSTR roundpd, sse4, 1
+AVX_INSTR roundps, sse4, 1
 AVX_INSTR roundsd, sse4, 1, 1, 0
 AVX_INSTR roundss, sse4, 1, 1, 0
-AVX_INSTR rsqrtps, sse
+AVX_INSTR rsqrtps, sse, 1
 AVX_INSTR rsqrtss, sse, 1, 0, 0
 AVX_INSTR shufpd, sse2, 1, 1, 0
 AVX_INSTR shufps, sse, 1, 1, 0
-AVX_INSTR sqrtpd, sse2
-AVX_INSTR sqrtps, sse
+AVX_INSTR sqrtpd, sse2, 1
+AVX_INSTR sqrtps, sse, 1
 AVX_INSTR sqrtsd, sse2, 1, 0, 0
 AVX_INSTR sqrtss, sse, 1, 0, 0
-AVX_INSTR stmxcsr, sse
+AVX_INSTR stmxcsr, sse, 1
 AVX_INSTR subpd, sse2, 1, 0, 0
 AVX_INSTR subps, sse, 1, 0, 0
 AVX_INSTR subsd, sse2, 1, 0, 0
 AVX_INSTR subss, sse, 1, 0, 0
-AVX_INSTR ucomisd, sse2
-AVX_INSTR ucomiss, sse
+AVX_INSTR ucomisd, sse2, 1
+AVX_INSTR ucomiss, sse, 1
 AVX_INSTR unpckhpd, sse2, 1, 0, 0
 AVX_INSTR unpckhps, sse, 1, 0, 0
 AVX_INSTR unpcklpd, sse2, 1, 0, 0
@@ -1632,6 +1640,37 @@ AVX_INSTR xorps, sse, 1, 0, 1
 AVX_INSTR pfadd, 3dnow, 1, 0, 1
 AVX_INSTR pfsub, 3dnow, 1, 0, 0
 AVX_INSTR pfmul, 3dnow, 1, 0, 1
+
+;%1 == instruction
+;%2 == minimal instruction set
+%macro GPR_INSTR 2
+    %macro %1 2-5 fnord, %1, %2
+        %ifdef cpuname
+            %if notcpuflag(%5)
+                %error use of ``%4'' %5 instruction in cpuname function: current_function
+            %endif
+        %endif
+        %ifidn %3, fnord
+            %4 %1, %2
+        %else
+            %4 %1, %2, %3
+        %endif
+    %endmacro
+%endmacro
+
+GPR_INSTR andn, bmi1
+GPR_INSTR bextr, bmi1
+GPR_INSTR blsi, bmi1
+GPR_INSTR blsmsk, bmi1
+GPR_INSTR bzhi, bmi2
+GPR_INSTR mulx, bmi2
+GPR_INSTR pdep, bmi2
+GPR_INSTR pext, bmi2
+GPR_INSTR popcnt, sse42
+GPR_INSTR rorx, bmi2
+GPR_INSTR sarx, bmi2
+GPR_INSTR shlx, bmi2
+GPR_INSTR shrx, bmi2
 
 ; base-4 constants for shuffles
 %assign i 0
