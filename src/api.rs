@@ -121,6 +121,24 @@ pub struct SpeedSettings {
   pub rdo_tx_decision: bool,
   pub prediction_modes: PredictionModesSetting,
   pub include_near_mvs: bool,
+  pub no_scene_detection: bool,
+}
+
+impl Default for SpeedSettings {
+  fn default() -> Self {
+    SpeedSettings {
+      min_block_size: BlockSize::BLOCK_32X32,
+      multiref: false,
+      fast_deblock: false,
+      reduced_tx_set: false,
+      tx_domain_distortion: false,
+      encode_bottomup: false,
+      rdo_tx_decision: false,
+      prediction_modes: PredictionModesSetting::Simple,
+      include_near_mvs: false,
+      no_scene_detection: false,
+    }
+  }
 }
 
 impl SpeedSettings {
@@ -135,6 +153,7 @@ impl SpeedSettings {
       rdo_tx_decision: Self::rdo_tx_decision_preset(speed),
       prediction_modes: Self::prediction_modes_preset(speed),
       include_near_mvs: Self::include_near_mvs_preset(speed),
+      no_scene_detection: Self::no_scene_detection_preset(speed),
     }
   }
 
@@ -188,6 +207,10 @@ impl SpeedSettings {
 
   fn include_near_mvs_preset(speed: usize) -> bool {
     speed <= 2
+  }
+
+  fn no_scene_detection_preset(speed: usize) -> bool {
+    speed == 10
   }
 }
 
@@ -780,6 +803,13 @@ impl Context {
   fn determine_frame_type(&mut self, frame_number: u64) -> FrameType {
     if frame_number == 0 {
       return FrameType::KEY;
+    }
+    if self.config.enc.speed_settings.no_scene_detection {
+      if frame_number % self.config.enc.max_key_frame_interval == 0 {
+        return FrameType::KEY;
+      } else {
+        return FrameType::INTER;
+      }
     }
 
     let prev_keyframe = self.keyframes.iter()
