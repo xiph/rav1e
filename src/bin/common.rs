@@ -9,7 +9,7 @@
 
 use crate::{ColorPrimaries, MatrixCoefficients, TransferCharacteristics};
 use clap::{App, AppSettings, Arg, ArgMatches};
-use rav1e::FrameType;
+use rav1e::partition::BlockSize;
 use rav1e::*;
 
 use std::fs::File;
@@ -186,6 +186,30 @@ pub fn parse_cli() -> CliOptions {
         .short("r")
         .takes_value(true)
     )
+    .arg(
+      Arg::with_name("SPEED_TEST")
+        .help("Run an encode using default encoding settings, adjusting only one; allows benchmarking settings in isolation")
+        .hidden(true)
+        .long("speed-test")
+        .takes_value(true)
+        .possible_values(&[
+          "baseline",
+          "min_block_size_4x4",
+          "min_block_size_8x8",
+          "min_block_size_16x16",
+          "min_block_size_32x32",
+          "multiref",
+          "fast_deblock",
+          "reduced_tx_set",
+          "tx_domain_distortion",
+          "encode_bottomup",
+          "rdo_tx_decision",
+          "prediction_modes_keyframes",
+          "prediction_modes_all",
+          "include_near_mvs",
+          "no_scene_detection",
+        ])
+    )
     .get_matches();
 
   let io = EncoderIO {
@@ -211,47 +235,54 @@ pub fn parse_cli() -> CliOptions {
 }
 
 fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
-  let speed = matches.value_of("SPEED").unwrap().parse().unwrap();
   let quantizer = matches.value_of("QP").unwrap().parse().unwrap();
-  let max_interval: u64 = matches.value_of("KEYFRAME_INTERVAL").unwrap().parse().unwrap();
-  let mut min_interval: u64 = matches.value_of("MIN_KEYFRAME_INTERVAL").unwrap().parse().unwrap();
-
-  if matches.occurrences_of("MIN_KEYFRAME_INTERVAL") == 0 {
-    min_interval = min_interval.min(max_interval);
-  }
-
-  // Validate arguments
   if quantizer == 0 {
     unimplemented!("Lossless encoding not yet implemented");
-  } else if quantizer > 255 || speed > 10 {
-    panic!("argument out of range");
-  } else if min_interval > max_interval {
-    panic!("Maximum keyframe interval must be greater than or equal to minimum keyframe interval");
+  } else if quantizer > 255 {
+    panic!("Quantizer must be between 0-255");
   }
 
-  let color_primaries =
-    matches.value_of("COLOR_PRIMARIES").unwrap().parse().unwrap_or_default();
-  let transfer_characteristics = matches
-    .value_of("TRANSFER_CHARACTERISTICS")
-    .unwrap()
-    .parse()
-    .unwrap_or_default();
-  let matrix_coefficients = matches
-    .value_of("MATRIX_COEFFICIENTS")
-    .unwrap()
-    .parse()
-    .unwrap_or_default();
+  let mut cfg = if let Some(setting) = matches.value_of("SPEED_TEST") {
+    eprintln!("Running in speed test mode--ignoring other settings");
+    load_speed_test_cfg(setting)
+  } else {
+    let speed = matches.value_of("SPEED").unwrap().parse().unwrap();
+    let max_interval: u64 = matches.value_of("KEYFRAME_INTERVAL").unwrap().parse().unwrap();
+    let mut min_interval: u64 = matches.value_of("MIN_KEYFRAME_INTERVAL").unwrap().parse().unwrap();
 
-  let mut cfg = EncoderConfig::with_speed_preset(speed);
-  cfg.max_key_frame_interval = min_interval;
-  cfg.max_key_frame_interval = max_interval;
-  cfg.low_latency = matches.value_of("LOW_LATENCY").unwrap().parse().unwrap();
-  cfg.tune = matches.value_of("TUNE").unwrap().parse().unwrap();
+    if matches.occurrences_of("MIN_KEYFRAME_INTERVAL") == 0 {
+      min_interval = min_interval.min(max_interval);
+    }
 
-  cfg.pixel_range = matches.value_of("PIXEL_RANGE").unwrap().parse().unwrap_or_default();
-  cfg.color_description = if color_primaries == ColorPrimaries::Unspecified &&
-    transfer_characteristics == TransferCharacteristics::Unspecified &&
-    matrix_coefficients == MatrixCoefficients::Unspecified {
+    // Validate arguments
+    if speed > 10 {
+      panic!("Speed must be between 0-10");
+    } else if min_interval > max_interval {
+      panic!("Maximum keyframe interval must be greater than or equal to minimum keyframe interval");
+    }
+
+    let color_primaries =
+      matches.value_of("COLOR_PRIMARIES").unwrap().parse().unwrap_or_default();
+    let transfer_characteristics = matches
+      .value_of("TRANSFER_CHARACTERISTICS")
+      .unwrap()
+      .parse()
+      .unwrap_or_default();
+    let matrix_coefficients = matches
+      .value_of("MATRIX_COEFFICIENTS")
+      .unwrap()
+      .parse()
+      .unwrap_or_default();
+
+    let mut cfg = EncoderConfig::with_speed_preset(speed);
+    cfg.max_key_frame_interval = min_interval;
+    cfg.max_key_frame_interval = max_interval;
+    cfg.low_latency = matches.value_of("LOW_LATENCY").unwrap().parse().unwrap();
+
+    cfg.pixel_range = matches.value_of("PIXEL_RANGE").unwrap().parse().unwrap_or_default();
+    cfg.color_description = if color_primaries == ColorPrimaries::Unspecified &&
+      transfer_characteristics == TransferCharacteristics::Unspecified &&
+      matrix_coefficients == MatrixCoefficients::Unspecified {
       // No need to set a color description with all parameters unspecified.
       None
     } else {
@@ -261,6 +292,45 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
         matrix_coefficients
       })
     };
+
+    let mastering_display_opt = matches.value_of("MASTERING_DISPLAY").unwrap();
+    cfg.mastering_display = if mastering_display_opt == "unspecified" { None } else {
+      let (g_x, g_y, b_x, b_y, r_x, r_y, wp_x, wp_y, max_lum, min_lum) = scan_fmt!(mastering_display_opt, "G({},{})B({},{})R({},{})WP({},{})L({},{})", f64, f64, f64, f64, f64, f64, f64, f64, f64, f64);
+      Some(MasteringDisplay {
+        primaries: [
+          Point {
+            x: (r_x.unwrap() * ((1 << 16) as f64)).round() as u16,
+            y: (r_y.unwrap() * ((1 << 16) as f64)).round() as u16,
+          },
+          Point {
+            x: (g_x.unwrap() * ((1 << 16) as f64)).round() as u16,
+            y: (g_y.unwrap() * ((1 << 16) as f64)).round() as u16,
+          },
+          Point {
+            x: (b_x.unwrap() * ((1 << 16) as f64)).round() as u16,
+            y: (b_y.unwrap() * ((1 << 16) as f64)).round() as u16,
+          }
+        ],
+        white_point: Point {
+          x: (wp_x.unwrap() * ((1 << 16) as f64)).round() as u16,
+          y: (wp_y.unwrap() * ((1 << 16) as f64)).round() as u16,
+        },
+        max_luminance: (max_lum.unwrap() * ((1 << 8) as f64)).round() as u32,
+        min_luminance: (min_lum.unwrap() * ((1 << 14) as f64)).round() as u32,
+      })
+    };
+
+    let content_light_opt = matches.value_of("CONTENT_LIGHT").unwrap();
+    let (cll, fall) = scan_fmt!(content_light_opt, "{},{}", u16, u16);
+    cfg.content_light = if cll.unwrap() == 0 && fall.unwrap() == 0 { None } else {
+      Some(ContentLight {
+        max_content_light_level: cll.unwrap(),
+        max_frame_average_light_level: fall.unwrap()
+      })
+    };
+    cfg
+  };
+
   cfg.quantizer = quantizer;
   cfg.show_psnr = matches.is_present("PSNR");
   cfg.pass = matches.value_of("PASS").map(|pass| pass.parse().unwrap());
@@ -269,43 +339,63 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
   } else {
     None
   };
+  cfg.tune = matches.value_of("TUNE").unwrap().parse().unwrap();
 
-  let mastering_display_opt = matches.value_of("MASTERING_DISPLAY").unwrap();
-  cfg.mastering_display = if mastering_display_opt == "unspecified" { None } else {
-    let (g_x, g_y, b_x, b_y, r_x, r_y, wp_x, wp_y, max_lum, min_lum) = scan_fmt!(mastering_display_opt, "G({},{})B({},{})R({},{})WP({},{})L({},{})", f64, f64, f64, f64, f64, f64, f64, f64, f64, f64);
-    Some(MasteringDisplay {
-      primaries: [
-        Point{
-          x: (r_x.unwrap() * ((1 << 16) as f64)).round() as u16,
-          y: (r_y.unwrap() * ((1 << 16) as f64)).round() as u16,
-        },
-        Point{
-          x: (g_x.unwrap() * ((1 << 16) as f64)).round() as u16,
-          y: (g_y.unwrap() * ((1 << 16) as f64)).round() as u16,
-        },
-        Point{
-          x: (b_x.unwrap() * ((1 << 16) as f64)).round() as u16,
-          y: (b_y.unwrap() * ((1 << 16) as f64)).round() as u16,
-        }
-      ],
-      white_point: Point{
-        x: (wp_x.unwrap() * ((1 << 16) as f64)).round() as u16,
-        y: (wp_y.unwrap() * ((1 << 16) as f64)).round() as u16,
-      },
-      max_luminance: (max_lum.unwrap() * ((1 << 8) as f64)).round() as u32,
-      min_luminance: (min_lum.unwrap() * ((1 << 14) as f64)).round() as u32,
-    })
+  cfg
+}
+
+fn load_speed_test_cfg(setting: &str) -> EncoderConfig {
+  let mut cfg = EncoderConfig::default();
+  match setting {
+    "baseline" => {
+      // Use default settings
+    },
+    "min_block_size_4x4" => {
+      cfg.speed_settings.min_block_size = BlockSize::BLOCK_4X4;
+    },
+    "min_block_size_8x8" => {
+      cfg.speed_settings.min_block_size = BlockSize::BLOCK_8X8;
+    },
+    "min_block_size_16x16" => {
+      cfg.speed_settings.min_block_size = BlockSize::BLOCK_16X16;
+    },
+    "min_block_size_32x32" => {
+      cfg.speed_settings.min_block_size = BlockSize::BLOCK_32X32;
+    },
+    "multiref" => {
+      cfg.speed_settings.multiref = true;
+    },
+    "fast_deblock" => {
+      cfg.speed_settings.fast_deblock = true;
+    },
+    "reduced_tx_set" => {
+      cfg.speed_settings.reduced_tx_set = true;
+    },
+    "tx_domain_distortion" => {
+      cfg.speed_settings.tx_domain_distortion = true;
+    },
+    "encode_bottomup" => {
+      cfg.speed_settings.encode_bottomup = true;
+    },
+    "rdo_tx_decision" => {
+      cfg.speed_settings.rdo_tx_decision = true;
+    },
+    "prediction_modes_keyframes" => {
+      cfg.speed_settings.prediction_modes = PredictionModesSetting::ComplexKeyframes;
+    },
+    "prediction_modes_all" => {
+      cfg.speed_settings.prediction_modes = PredictionModesSetting::ComplexAll;
+    },
+    "include_near_mvs" => {
+      cfg.speed_settings.include_near_mvs = true;
+    },
+    "no_scene_detection" => {
+      cfg.speed_settings.no_scene_detection = true;
+    },
+    _ => {
+      panic!("Unrecognized speed test setting");
+    }
   };
-
-  let content_light_opt = matches.value_of("CONTENT_LIGHT").unwrap();
-  let (cll, fall) = scan_fmt!(content_light_opt, "{},{}", u16, u16);
-  cfg.content_light = if cll.unwrap() == 0 && fall.unwrap() == 0 { None } else {
-    Some(ContentLight {
-      max_content_light_level : cll.unwrap(),
-      max_frame_average_light_level : fall.unwrap()
-    })
-  };
-
   cfg
 }
 
