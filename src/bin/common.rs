@@ -196,7 +196,7 @@ pub fn parse_cli() -> CliOptions {
     )
     .arg(
       Arg::with_name("SPEED_TEST")
-        .help("Run an encode using default encoding settings, adjusting only one; allows benchmarking settings in isolation")
+        .help("Run an encode using default encoding settings, manually adjusting only the settings specified; allows benchmarking settings in isolation")
         .hidden(true)
         .long("speed-test")
         .takes_value(true)
@@ -204,8 +204,8 @@ pub fn parse_cli() -> CliOptions {
           "baseline",
           "min_block_size_4x4",
           "min_block_size_8x8",
-          "min_block_size_16x16",
           "min_block_size_32x32",
+          "min_block_size_64x64",
           "multiref",
           "fast_deblock",
           "reduced_tx_set",
@@ -254,9 +254,13 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
     panic!("Quantizer must be between 0-255");
   }
 
-  let mut cfg = if let Some(setting) = matches.value_of("SPEED_TEST") {
+  let mut cfg = if let Some(settings) = matches.value_of("SPEED_TEST") {
     eprintln!("Running in speed test mode--ignoring other settings");
-    load_speed_test_cfg(setting)
+    let mut cfg = EncoderConfig::default();
+    settings
+      .split_whitespace()
+      .for_each(|setting| apply_speed_test_cfg(&mut cfg, setting));
+    cfg
   } else {
     let speed = matches.value_of("SPEED").unwrap().parse().unwrap();
     let max_interval: u64 = matches.value_of("KEYFRAME_INTERVAL").unwrap().parse().unwrap();
@@ -289,7 +293,6 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
     let mut cfg = EncoderConfig::with_speed_preset(speed);
     cfg.max_key_frame_interval = min_interval;
     cfg.max_key_frame_interval = max_interval;
-    cfg.low_latency = matches.value_of("LOW_LATENCY").unwrap().parse().unwrap();
 
     cfg.pixel_range = matches.value_of("PIXEL_RANGE").unwrap().parse().unwrap_or_default();
     cfg.color_description = if color_primaries == ColorPrimaries::Unspecified &&
@@ -352,12 +355,12 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
     None
   };
   cfg.tune = matches.value_of("TUNE").unwrap().parse().unwrap();
+  cfg.low_latency = matches.value_of("LOW_LATENCY").unwrap().parse().unwrap();
 
   cfg
 }
 
-fn load_speed_test_cfg(setting: &str) -> EncoderConfig {
-  let mut cfg = EncoderConfig::default();
+fn apply_speed_test_cfg(cfg: &mut EncoderConfig, setting: &str) {
   match setting {
     "baseline" => {
       // Use default settings
@@ -368,11 +371,11 @@ fn load_speed_test_cfg(setting: &str) -> EncoderConfig {
     "min_block_size_8x8" => {
       cfg.speed_settings.min_block_size = BlockSize::BLOCK_8X8;
     },
-    "min_block_size_16x16" => {
-      cfg.speed_settings.min_block_size = BlockSize::BLOCK_16X16;
-    },
     "min_block_size_32x32" => {
       cfg.speed_settings.min_block_size = BlockSize::BLOCK_32X32;
+    },
+    "min_block_size_64x64" => {
+      cfg.speed_settings.min_block_size = BlockSize::BLOCK_64X64;
     },
     "multiref" => {
       cfg.speed_settings.multiref = true;
@@ -404,11 +407,10 @@ fn load_speed_test_cfg(setting: &str) -> EncoderConfig {
     "no_scene_detection" => {
       cfg.speed_settings.no_scene_detection = true;
     },
-    _ => {
-      panic!("Unrecognized speed test setting");
+    setting => {
+      panic!("Unrecognized speed test setting {}", setting);
     }
   };
-  cfg
 }
 
 #[derive(Debug, Clone, Copy)]
