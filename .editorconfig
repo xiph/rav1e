@@ -1,0 +1,20 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_size = 2
+indent_style = space
+# Some tools that work with text may not work correctly without the newline
+# control character at the end of the last line. This character helps them to
+# understand that the line is complete and can be considered as a line.
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.md]
+# Trailing whitespace may have a special meaning. For example, two spaces at the
+# end of a line means a line break.
+trim_trailing_whitespace = false
+
+[*.py]
+indent_size = 4
