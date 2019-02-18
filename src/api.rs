@@ -127,7 +127,7 @@ pub struct SpeedSettings {
 impl Default for SpeedSettings {
   fn default() -> Self {
     SpeedSettings {
-      min_block_size: BlockSize::BLOCK_32X32,
+      min_block_size: BlockSize::BLOCK_16X16,
       multiref: false,
       fast_deblock: false,
       reduced_tx_set: false,
