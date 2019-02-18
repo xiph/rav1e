@@ -81,6 +81,7 @@ pd_32768    : times 1  dd 32768
 %endmacro
 
 %define ipred_dc_splat_ssse3_table (ipred_dc_ssse3_table + 10*4)
+%define ipred_cfl_splat_ssse3_table (ipred_cfl_ssse3_table + 8*4)
 
 JMP_TABLE ipred_h,          ssse3, w4, w8, w16, w32, w64
 JMP_TABLE ipred_dc,         ssse3, h4, h8, h16, h32, h64, w4, w8, w16, w32, w64, \
@@ -90,6 +91,9 @@ JMP_TABLE ipred_smooth,     ssse3, w4, w8, w16, w32, w64
 JMP_TABLE ipred_smooth_v,   ssse3, w4, w8, w16, w32, w64
 JMP_TABLE ipred_smooth_h,   ssse3, w4, w8, w16, w32, w64
 JMP_TABLE pal_pred,         ssse3, w4, w8, w16, w32, w64
+JMP_TABLE ipred_cfl,        ssse3, h4, h8, h16, h32, w4, w8, w16, w32, \
+                                s4-8*4, s8-8*4, s16-8*4, s32-8*4
+JMP_TABLE ipred_cfl_left,   ssse3, h4, h8, h16, h32
 
 
 
@@ -1268,3 +1272,335 @@ ALIGN function_align
     jg .w64
     RET
 
+;---------------------------------------------------------------------------------------
+;void dav1d_ipred_cfl_ssse3(pixel *dst, const ptrdiff_t stride, const pixel *const topleft,
+;                           const int width, const int height, const int16_t *ac, const int alpha);
+;---------------------------------------------------------------------------------------
+%macro IPRED_CFL 1                   ; ac in, unpacked pixels out
+    psignw               m3, m%1, m1
+    pabsw               m%1, m%1
+    pmulhrsw            m%1, m2
+    psignw              m%1, m3
+    paddw               m%1, m0
+%endmacro
+
+%if UNIX64
+DECLARE_REG_TMP 7
+%else
+DECLARE_REG_TMP 5
+%endif
+
+cglobal ipred_cfl, 3, 7, 6, dst, stride, tl, w, h, ac, alpha
+    movifnidn            wd, wm
+    movifnidn            hd, hm
+    tzcnt               r6d, hd
+    lea                 t0d, [wq+hq]
+    movd                 m4, t0d
+    tzcnt               t0d, t0d
+    movd                 m5, t0d
+    LEA                  t0, ipred_cfl_ssse3_table
+    tzcnt                wd, wd
+    movsxd               r6, [t0+r6*4]
+    movsxd               wq, [t0+wq*4+16]
+    pcmpeqd              m3, m3
+    psrlw                m4, 1
+    add                  r6, t0
+    add                  wq, t0
+    movifnidn           acq, acmp
+    jmp                  r6
+.h4:
+    movd                 m0, [tlq-4]
+    pmaddubsw            m0, m3
+    jmp                  wq
+.w4:
+    movd                 m1, [tlq+1]
+    pmaddubsw            m1, m3
+    psubw                m0, m4
+    paddw                m0, m1
+    pmaddwd              m0, m3
+    cmp                  hd, 4
+    jg .w4_mul
+    psrlw                m0, 3                             ; dc >>= ctz(width + height);
+    jmp .w4_end
+.w4_mul:
+    punpckhqdq           m1, m0, m0
+    paddw                m0, m1
+    pshuflw              m1, m0, q1032                     ; psrlq                m1, m0, 32
+    paddw                m0, m1
+    psrlw                m0, 2
+    mov                 r6d, 0x5556
+    mov                 r2d, 0x3334
+    test                 hd, 8
+    cmovz               r6d, r2d
+    movd                 m5, r6d
+    pmulhuw              m0, m5
+.w4_end:
+    pshuflw              m0, m0, q0000
+    punpcklqdq           m0, m0
+.s4:
+    movd                 m1, alpham
+    pshuflw              m1, m1, q0000
+    punpcklqdq           m1, m1
+    lea                  r6, [strideq*3]
+    pabsw                m2, m1
+    psllw                m2, 9
+.s4_loop:
+    mova                 m4, [acq]
+    mova                 m5, [acq+16]
+    IPRED_CFL             4
+    IPRED_CFL             5
+    packuswb             m4, m5
+    movd   [dstq+strideq*0], m4
+    pshuflw              m4, m4, q1032
+    movd   [dstq+strideq*1], m4
+    punpckhqdq           m4, m4
+    movd   [dstq+strideq*2], m4
+    psrlq                m4, 32
+    movd   [dstq+r6       ], m4
+    lea                dstq, [dstq+strideq*4]
+    add                 acq, 32
+    sub                  hd, 4
+    jg .s4_loop
+    RET
+ALIGN function_align
+.h8:
+    movq                 m0, [tlq-8]
+    pmaddubsw            m0, m3
+    jmp                  wq
+.w8:
+    movq                 m1, [tlq+1]
+    pmaddubsw            m1, m3
+    psubw                m4, m0
+    punpckhqdq           m0, m0
+    psubw                m0, m4
+    paddw                m0, m1
+    pshuflw              m1, m0, q1032                  ; psrlq  m1, m0, 32
+    paddw                m0, m1
+    pmaddwd              m0, m3
+    psrlw                m0, m5
+    cmp                  hd, 8
+    je .w8_end
+    mov                 r6d, 0x5556
+    mov                 r2d, 0x3334
+    cmp                  hd, 32
+    cmovz               r6d, r2d
+    movd                 m1, r6d
+    pmulhuw              m0, m1
+.w8_end:
+    pshuflw              m0, m0, q0000
+    punpcklqdq           m0, m0
+.s8:
+    movd                 m1, alpham
+    pshuflw              m1, m1, q0000
+    punpcklqdq           m1, m1
+    lea                  r6, [strideq*3]
+    pabsw                m2, m1
+    psllw                m2, 9
+.s8_loop:
+    mova                 m4, [acq]
+    mova                 m5, [acq+16]
+    IPRED_CFL             4
+    IPRED_CFL             5
+    packuswb             m4, m5
+    movq   [dstq          ], m4
+    movhps [dstq+strideq  ], m4
+    mova                 m4, [acq+32]
+    mova                 m5, [acq+48]
+    IPRED_CFL             4
+    IPRED_CFL             5
+    packuswb             m4, m5
+    movq   [dstq+strideq*2], m4
+    movhps [dstq+r6       ], m4
+    lea                dstq, [dstq+strideq*4]
+    add                 acq, 64
+    sub                  hd, 4
+    jg .s8_loop
+    RET
+ALIGN function_align
+.h16:
+    mova                 m0, [tlq-16]
+    pmaddubsw            m0, m3
+    jmp                  wq
+.w16:
+    movu                 m1, [tlq+1]
+    pmaddubsw            m1, m3
+    paddw                m0, m1
+    psubw                m4, m0
+    punpckhqdq           m0, m0
+    psubw                m0, m4
+    pshuflw              m1, m0, q1032                  ; psrlq  m1, m0, 32
+    paddw                m0, m1
+    pmaddwd              m0, m3
+    psrlw                m0, m5
+    cmp                  hd, 16
+    je .w16_end
+    mov                 r6d, 0x5556
+    mov                 r2d, 0x3334
+    test                 hd, 8|32
+    cmovz               r6d, r2d
+    movd                 m1, r6d
+    pmulhuw              m0, m1
+.w16_end:
+    pshuflw              m0, m0, q0000
+    punpcklqdq           m0, m0
+.s16:
+    movd                 m1, alpham
+    pshuflw              m1, m1, q0000
+    punpcklqdq           m1, m1
+    pabsw                m2, m1
+    psllw                m2, 9
+.s16_loop:
+    mova                 m4, [acq]
+    mova                 m5, [acq+16]
+    IPRED_CFL             4
+    IPRED_CFL             5
+    packuswb             m4, m5
+    mova             [dstq], m4
+    mova                 m4, [acq+32]
+    mova                 m5, [acq+48]
+    IPRED_CFL             4
+    IPRED_CFL             5
+    packuswb             m4, m5
+    mova     [dstq+strideq], m4
+    lea                dstq, [dstq+strideq*2]
+    add                 acq, 64
+    sub                  hd, 2
+    jg .s16_loop
+    RET
+ALIGN function_align
+.h32:
+    mova                 m0, [tlq-32]
+    pmaddubsw            m0, m3
+    mova                 m2, [tlq-16]
+    pmaddubsw            m2, m3
+    paddw                m0, m2
+    jmp                  wq
+.w32:
+    movu                 m1, [tlq+1]
+    pmaddubsw            m1, m3
+    movu                 m2, [tlq+17]
+    pmaddubsw            m2, m3
+    paddw                m1, m2
+    paddw                m0, m1
+    psubw                m4, m0
+    punpckhqdq           m0, m0
+    psubw                m0, m4
+    pshuflw              m1, m0, q1032                   ; psrlq  m1, m0, 32
+    paddw                m0, m1
+    pmaddwd              m0, m3
+    psrlw                m0, m5
+    cmp                  hd, 32
+    je .w32_end
+    lea                 r2d, [hq*2]
+    mov                 r6d, 0x5556
+    mov                 r2d, 0x3334
+    test                 hd, 64|16
+    cmovz               r6d, r2d
+    movd                 m1, r6d
+    pmulhuw              m0, m1
+.w32_end:
+    pshuflw              m0, m0, q0000
+    punpcklqdq           m0, m0
+.s32:
+    movd                 m1, alpham
+    pshuflw              m1, m1, q0000
+    punpcklqdq           m1, m1
+    pabsw                m2, m1
+    psllw                m2, 9
+.s32_loop:
+    mova                 m4, [acq]
+    mova                 m5, [acq+16]
+    IPRED_CFL             4
+    IPRED_CFL             5
+    packuswb             m4, m5
+    mova             [dstq], m4
+    mova                 m4, [acq+32]
+    mova                 m5, [acq+48]
+    IPRED_CFL             4
+    IPRED_CFL             5
+    packuswb             m4, m5
+    mova          [dstq+16], m4
+    add                dstq, strideq
+    add                 acq, 64
+    dec                  hd
+    jg .s32_loop
+    RET
+
+;---------------------------------------------------------------------------------------
+;void dav1d_ipred_cfl_left_ssse3(pixel *dst, const ptrdiff_t stride, const pixel *const topleft,
+;                           const int width, const int height, const int16_t *ac, const int alpha);
+;---------------------------------------------------------------------------------------
+cglobal ipred_cfl_left, 3, 7, 6, dst, stride, tl, w, h, ac, alpha
+    mov                  hd, hm                                 ; zero upper half
+    tzcnt               r6d, hd
+    sub                 tlq, hq
+    tzcnt                wd, wm
+    movu                 m0, [tlq]
+    mov                 t0d, 0x8000
+    movd                 m3, t0d
+    movd                 m2, r6d
+    psrld                m3, m2
+    LEA                  t0, ipred_cfl_left_ssse3_table
+    movsxd               r6, [t0+r6*4]
+    pcmpeqd              m2, m2
+    pmaddubsw            m0, m2
+    add                  r6, t0
+    add                  t0, ipred_cfl_splat_ssse3_table-ipred_cfl_left_ssse3_table
+    movsxd               wq, [t0+wq*4]
+    add                  wq, t0
+    movifnidn           acq, acmp
+    jmp                  r6
+.h32:
+    movu                 m1, [tlq+16]                           ; unaligned when jumping here from dc_top
+    pmaddubsw            m1, m2
+    paddw                m0, m1
+.h16:
+    pshufd               m1, m0, q3232                          ; psrlq               m1, m0, 16
+    paddw                m0, m1
+.h8:
+    pshuflw              m1, m0, q1032                          ; psrlq               m1, m0, 32
+    paddw                m0, m1
+.h4:
+    pmaddwd              m0, m2
+    pmulhrsw             m0, m3
+    pshuflw              m0, m0, q0000
+    punpcklqdq           m0, m0
+    jmp                  wq
+
+;---------------------------------------------------------------------------------------
+;void dav1d_ipred_cfl_top_ssse3(pixel *dst, const ptrdiff_t stride, const pixel *const topleft,
+;                           const int width, const int height, const int16_t *ac, const int alpha);
+;---------------------------------------------------------------------------------------
+cglobal ipred_cfl_top, 3, 7, 6, dst, stride, tl, w, h, ac, alpha
+    LEA                  t0, ipred_cfl_left_ssse3_table
+    tzcnt                wd, wm
+    inc                 tlq
+    movu                 m0, [tlq]
+    movifnidn            hd, hm
+    mov                 r6d, 0x8000
+    movd                 m3, r6d
+    movd                 m2, wd
+    psrld                m3, m2
+    movsxd               r6, [t0+wq*4]
+    pcmpeqd              m2, m2
+    pmaddubsw            m0, m2
+    add                  r6, t0
+    add                  t0, ipred_cfl_splat_ssse3_table-ipred_cfl_left_ssse3_table
+    movsxd               wq, [t0+wq*4]
+    add                  wq, t0
+    movifnidn           acq, acmp
+    jmp                  r6
+
+;---------------------------------------------------------------------------------------
+;void dav1d_ipred_cfl_128_ssse3(pixel *dst, const ptrdiff_t stride, const pixel *const topleft,
+;                           const int width, const int height, const int16_t *ac, const int alpha);
+;---------------------------------------------------------------------------------------
+cglobal ipred_cfl_128, 3, 7, 6, dst, stride, tl, w, h, ac, alpha
+    tzcnt                wd, wm
+    movifnidn            hd, hm
+    LEA                  r6, ipred_cfl_splat_ssse3_table
+    movsxd               wq, [r6+wq*4]
+    movddup              m0, [r6-ipred_cfl_splat_ssse3_table+pw_128]
+    add                  wq, r6
+    movifnidn           acq, acmp
+    jmp                  wq
