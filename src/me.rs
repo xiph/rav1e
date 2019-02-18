@@ -163,7 +163,7 @@ pub fn motion_estimation(
       let y_lo = po.y + ((-range + (cmv.row / 8) as isize).max(mvy_min / 8).min(mvy_max / 8));
       let y_hi = po.y + ((range + (cmv.row / 8) as isize).max(mvy_min / 8).min(mvy_max / 8));
 
-      let mut lowest_cost = std::u32::MAX;
+      let mut lowest_cost = std::u64::MAX;
       let mut best_mv = MotionVector { row: 0, col: 0 };
 
       // 0.5 is a fudge factor
@@ -241,7 +241,7 @@ pub fn motion_estimation(
             let rate1 = get_mv_rate(cand_mv, pmv[0], fi.allow_high_precision_mv);
             let rate2 = get_mv_rate(cand_mv, pmv[1], fi.allow_high_precision_mv);
             let rate = rate1.min(rate2 + 1);
-            let cost = 256 * sad + rate * lambda;
+            let cost = 256 * sad as u64 + rate as u64 * lambda as u64;
 
             if cost < lowest_cost {
               lowest_cost = cost;
@@ -261,7 +261,7 @@ pub fn motion_estimation(
 fn full_search(
   x_lo: isize, x_hi: isize, y_lo: isize, y_hi: isize, blk_h: usize,
   blk_w: usize, p_org: &Plane, p_ref: &Plane, best_mv: &mut MotionVector,
-  lowest_cost: &mut u32, po: &PlaneOffset, step: usize, bit_depth: usize,
+  lowest_cost: &mut u64, po: &PlaneOffset, step: usize, bit_depth: usize,
   lambda: u32, pmv: &[MotionVector; 2], allow_high_precision_mv: bool
 ) {
     let search_range_y = (y_lo..=y_hi).step_by(step);
@@ -282,7 +282,7 @@ fn full_search(
       let rate1 = get_mv_rate(mv, pmv[0], allow_high_precision_mv);
       let rate2 = get_mv_rate(mv, pmv[1], allow_high_precision_mv);
       let rate = rate1.min(rate2 + 1);
-      let cost = 256 * sad + rate * lambda;
+      let cost = 256 * sad as u64 + rate as u64 * lambda as u64;
 
       (cost, mv)
   }).min_by_key(|(c, _)| *c).unwrap();
@@ -332,7 +332,7 @@ pub fn estimate_motion_ss4(
     let y_lo = po.y + (((-range_y).max(mvy_min / 8)) >> 2);
     let y_hi = po.y + (((range_y).min(mvy_max / 8)) >> 2);
 
-    let mut lowest_cost = std::u32::MAX;
+    let mut lowest_cost = std::u64::MAX;
     let mut best_mv = MotionVector { row: 0, col: 0 };
 
     // Divide by 16 to account for subsampling, 0.125 is a fudge factor
@@ -378,7 +378,7 @@ pub fn estimate_motion_ss2(
     let range = 16;
     let (mvx_min, mvx_max, mvy_min, mvy_max) = get_mv_range(fi, &bo_adj, blk_w, blk_h);
 
-    let mut lowest_cost = std::u32::MAX;
+    let mut lowest_cost = std::u64::MAX;
     let mut best_mv = MotionVector { row: 0, col: 0 };
 
     // Divide by 4 to account for subsampling, 0.125 is a fudge factor

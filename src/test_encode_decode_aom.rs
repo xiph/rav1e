@@ -85,7 +85,7 @@ impl Drop for AomDecoder {
 fn setup_encoder(
   w: usize, h: usize, speed: usize, quantizer: usize, bit_depth: usize,
   chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
-  low_latency: bool
+  low_latency: bool, bitrate: i32
 ) -> Context {
   unsafe {
     av1_rtcd();
@@ -101,6 +101,7 @@ fn setup_encoder(
   enc.height = h;
   enc.bit_depth = bit_depth;
   enc.chroma_sampling = chroma_sampling;
+  enc.bitrate = bitrate;
 
   let cfg = Config {
     enc
@@ -120,7 +121,7 @@ fn speed(s: usize) {
   let h = 80;
 
   for b in DIMENSION_OFFSETS.iter() {
-      encode_decode(w + b.0, h + b.1, s, quantizer, limit, 8, Default::default(), 15, 15, true);
+      encode_decode(w + b.0, h + b.1, s, quantizer, limit, 8, Default::default(), 15, 15, true, 0);
   }
 }
 
@@ -175,7 +176,7 @@ fn dimension(w: usize, h: usize) {
   let limit = 1;
   let speed = 4;
 
-  encode_decode(w, h, speed, quantizer, limit, 8, Default::default(), 15, 15, true);
+  encode_decode(w, h, speed, quantizer, limit, 8, Default::default(), 15, 15, true, 0);
 }
 
 #[test]
@@ -187,7 +188,21 @@ fn quantizer() {
 
   for b in DIMENSION_OFFSETS.iter() {
     for &q in [80, 100, 120].iter() {
-      encode_decode(w + b.0, h + b.1, speed, q, limit, 8, Default::default(), 15, 15, true);
+      encode_decode(w + b.0, h + b.1, speed, q, limit, 8, Default::default(), 15, 15, true, 0);
+    }
+  }
+}
+
+#[test]
+fn bitrate() {
+  let limit = 5;
+  let w = 64;
+  let h = 80;
+  let speed = 4;
+
+  for &q in [172, 220, 252, 255].iter() {
+    for &r in [100, 1000, 10_000].iter() {
+      encode_decode(w, h, speed, q, limit, 8, Default::default(), 15, 15, true, r);
     }
   }
 }
@@ -200,7 +215,7 @@ fn keyframes() {
   let speed = 10;
   let q = 100;
 
-  encode_decode(w, h, speed, q, limit, 8, Default::default(), 6, 6, true);
+  encode_decode(w, h, speed, q, limit, 8, Default::default(), 6, 6, true, 0);
 }
 
 #[test]
@@ -212,7 +227,7 @@ fn reordering() {
   let q = 100;
 
   for keyint in &[4, 5, 6] {
-    encode_decode(w, h, speed, q, limit, 8, Default::default(), *keyint, *keyint, false);
+    encode_decode(w, h, speed, q, limit, 8, Default::default(), *keyint, *keyint, false, 0);
   }
 }
 
@@ -226,7 +241,7 @@ fn reordering_short_video() {
   let q = 100;
   let keyint = 12;
 
-  encode_decode(w, h, speed, q, limit, 8, Default::default(), keyint, keyint, false);
+  encode_decode(w, h, speed, q, limit, 8, Default::default(), keyint, keyint, false, 0);
 }
 
 #[test]
@@ -238,7 +253,7 @@ fn odd_size_frame_with_full_rdo() {
   let speed = 0;
   let qindex = 100;
 
-  encode_decode(w, h, speed, qindex, limit, 8, Default::default(), 15, 15, true);
+  encode_decode(w, h, speed, qindex, limit, 8, Default::default(), 15, 15, true, 0);
 }
 
 #[test]
@@ -250,10 +265,10 @@ fn high_bd() {
   let h = 80;
 
   // 10-bit
-  encode_decode(w, h, speed, quantizer, limit, 10, Default::default(), 15, 15, true);
+  encode_decode(w, h, speed, quantizer, limit, 10, Default::default(), 15, 15, true, 0);
 
   // 12-bit
-  encode_decode(w, h, speed, quantizer, limit, 12, Default::default(), 15, 15, true);
+  encode_decode(w, h, speed, quantizer, limit, 12, Default::default(), 15, 15, true, 0);
 }
 
 #[test]
@@ -267,10 +282,10 @@ fn chroma_sampling() {
   // TODO: bump keyint when inter is supported
 
   // 4:2:2
-  encode_decode(w, h, speed, quantizer, limit, 8, ChromaSampling::Cs422, 1, 1, true);
+  encode_decode(w, h, speed, quantizer, limit, 8, ChromaSampling::Cs422, 1, 1, true, 0);
 
   // 4:4:4
-  encode_decode(w, h, speed, quantizer, limit, 8, ChromaSampling::Cs444, 1, 1, true);
+  encode_decode(w, h, speed, quantizer, limit, 8, ChromaSampling::Cs444, 1, 1, true, 0);
 }
 
 fn compare_plane<T: Ord + std::fmt::Debug>(
@@ -326,14 +341,14 @@ fn compare_img(img: *const aom_image_t, frame: &Frame, bit_depth: usize, width: 
 fn encode_decode(
   w: usize, h: usize, speed: usize, quantizer: usize, limit: usize,
   bit_depth: usize, chroma_sampling: ChromaSampling, min_keyint: u64,
-  max_keyint: u64, low_latency: bool
+  max_keyint: u64, low_latency: bool, bitrate: i32
 ) {
   let mut ra = ChaChaRng::from_seed([0; 32]);
 
   let mut dec = setup_decoder(w, h);
   let mut ctx =
     setup_encoder(w, h, speed, quantizer, bit_depth, chroma_sampling,
-                  min_keyint, max_keyint, low_latency);
+                  min_keyint, max_keyint, low_latency, bitrate);
   ctx.set_limit(limit as u64);
 
   println!("Encoding {}x{} speed {} quantizer {}", w, h, speed, quantizer);
