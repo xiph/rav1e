@@ -47,13 +47,13 @@ const MQP_Q12: &[i32; FRAME_NSUBTYPES] = &[
   (1.0 * (1 << 12) as f64) as i32
 ];
 
-// The ratio 33810170.0/86043287.0 was derived by approximating the median of a
-//  change of 15 quantizer steps in the quantizer tables.
+// The ratio 33_810_170.0 / 86_043_287.0 was derived by approximating the median
+// of a change of 15 quantizer steps in the quantizer tables.
 const DQP_Q57: &[i64; FRAME_NSUBTYPES] = &[
-  (-(33810170.0 / 86043287.0) * (1i64 << 57) as f64) as i64,
+  (-(33_810_170.0 / 86_043_287.0) * (1i64 << 57) as f64) as i64,
   (0.0 * (1i64 << 57) as f64) as i64,
-  ((33810170.0 / 86043287.0) * (1i64 << 57) as f64) as i64,
-  (2.0 * (33810170.0 / 86043287.0) * (1i64 << 57) as f64) as i64
+  ((33_810_170.0 / 86_043_287.0) * (1i64 << 57) as f64) as i64,
+  (2.0 * (33_810_170.0 / 86_043_287.0) * (1i64 << 57) as f64) as i64
 ];
 
 // Integer binary logarithm of a 64-bit value.
@@ -75,17 +75,17 @@ const fn q57(v: i32) -> i64 {
 
 #[rustfmt::skip]
 const ATANH_LOG2: &[i64; 32] = &[
-  0x32B803473F7AD0F4, 0x2F2A71BD4E25E916, 0x2E68B244BB93BA06,
-  0x2E39FB9198CE62E4, 0x2E2E683F68565C8F, 0x2E2B850BE2077FC1,
-  0x2E2ACC58FE7B78DB, 0x2E2A9E2DE52FD5F2, 0x2E2A92A338D53EEC,
-  0x2E2A8FC08F5E19B6, 0x2E2A8F07E51A485E, 0x2E2A8ED9BA8AF388,
-  0x2E2A8ECE2FE7384A, 0x2E2A8ECB4D3E4B1A, 0x2E2A8ECA94940FE8,
-  0x2E2A8ECA6669811D, 0x2E2A8ECA5ADEDD6A, 0x2E2A8ECA57FC347E,
-  0x2E2A8ECA57438A43, 0x2E2A8ECA57155FB4, 0x2E2A8ECA5709D510,
-  0x2E2A8ECA5706F267, 0x2E2A8ECA570639BD, 0x2E2A8ECA57060B92,
-  0x2E2A8ECA57060008, 0x2E2A8ECA5705FD25, 0x2E2A8ECA5705FC6C,
-  0x2E2A8ECA5705FC3E, 0x2E2A8ECA5705FC33, 0x2E2A8ECA5705FC30,
-  0x2E2A8ECA5705FC2F, 0x2E2A8ECA5705FC2F
+  0x32B8_0347_3F7A_D0F4, 0x2F2A_71BD_4E25_E916, 0x2E68_B244_BB93_BA06,
+  0x2E39_FB91_98CE_62E4, 0x2E2E_683F_6856_5C8F, 0x2E2B_850B_E207_7FC1,
+  0x2E2A_CC58_FE7B_78DB, 0x2E2A_9E2D_E52F_D5F2, 0x2E2A_92A3_38D5_3EEC,
+  0x2E2A_8FC0_8F5E_19B6, 0x2E2A_8F07_E51A_485E, 0x2E2A_8ED9_BA8A_F388,
+  0x2E2A_8ECE_2FE7_384A, 0x2E2A_8ECB_4D3E_4B1A, 0x2E2A_8ECA_9494_0FE8,
+  0x2E2A_8ECA_6669_811D, 0x2E2A_8ECA_5ADE_DD6A, 0x2E2A_8ECA_57FC_347E,
+  0x2E2A_8ECA_5743_8A43, 0x2E2A_8ECA_5715_5FB4, 0x2E2A_8ECA_5709_D510,
+  0x2E2A_8ECA_5706_F267, 0x2E2A_8ECA_5706_39BD, 0x2E2A_8ECA_5706_0B92,
+  0x2E2A_8ECA_5706_0008, 0x2E2A_8ECA_5705_FD25, 0x2E2A_8ECA_5705_FC6C,
+  0x2E2A_8ECA_5705_FC3E, 0x2E2A_8ECA_5705_FC33, 0x2E2A_8ECA_5705_FC30,
+  0x2E2A_8ECA_5705_FC2F, 0x2E2A_8ECA_5705_FC2F
 ];
 
 // Computes the binary exponential of logq57.
@@ -98,7 +98,7 @@ fn bexp64(logq57: i64) -> i64 {
     return 0;
   }
   if ipart >= 63 {
-    return 0x7FFFFFFFFFFFFFFF;
+    return 0x7FFF_FFFF_FFFF_FFFF;
   }
   // z is the fractional part of the log in Q62 format.
   // We need 1 bit of headroom since the magnitude can get larger than 1
@@ -116,7 +116,7 @@ fn bexp64(logq57: i64) -> i64 {
     //   \lim_{n->\infty} 2^{61}/\product_{i=1}^n \sqrt{1-2^{-2i}}
     //  but in order to guarantee convergence we have to repeat iterations 4,
     //  13 (=3*4+1), and 40 (=3*13+1, etc.), so it winds up somewhat larger.
-    w = 0x26A3D0E401DD846D;
+    w = 0x26A3_D0E4_01DD_846D;
     let mut i: i64 = 0;
     loop {
       let mask = -((z < 0) as i64);
@@ -470,7 +470,7 @@ impl RCState {
     // Let's not get carried away.
     // TODO: Support constraints imposed by levels.
     let bits_per_frame = clamp(
-      (target_bitrate as i64)*framerate_den/framerate_num, 32, 0x400000000000
+      (target_bitrate as i64)*framerate_den/framerate_num, 32, 0x4000_0000_0000
     );
     let reservoir_max = bits_per_frame*(reservoir_frame_delay as i64);
     // Start with a buffer fullness and fullness target of 50%.
@@ -636,8 +636,8 @@ impl RCState {
           if let Some(prev_log_base_q) = maybe_prev_log_base_q {
             log_base_q = clamp(
               log_base_q,
-              prev_log_base_q - 0xA4D3C25E68DC58,
-              prev_log_base_q + 0xA4D3C25E68DC58
+              prev_log_base_q - 0xA4_D3C2_5E68_DC58,
+              prev_log_base_q + 0xA4_D3C2_5E68_DC58
             );
           }
           // Modulate base quantizer by frame type.
