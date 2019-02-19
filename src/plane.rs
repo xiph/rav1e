@@ -245,7 +245,7 @@ impl<'a> Iterator for PlaneIter<'a> {
   type Item = u16;
 
   fn next(&mut self) -> Option<<Self as Iterator>::Item> {
-    if self.y == self.height() - 1 && self.x == self.width() - 1 {
+    if self.y == self.height() {
       return None;
     }
     let pixel = self.plane.p(self.x, self.y);
