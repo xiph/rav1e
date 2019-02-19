@@ -552,6 +552,11 @@ impl Context {
     Ok(())
   }
 
+  pub fn get_frame(&self, frame_number: u64) -> Arc<Frame> {
+    // Clones only the arc, so low cost overhead
+    self.frame_q.get(&frame_number).as_ref().unwrap().as_ref().unwrap().clone()
+  }
+
   pub fn get_frame_count(&self) -> u64 {
     self.frame_count
   }
@@ -728,7 +733,7 @@ impl Context {
 
         let rec = if fi.show_frame { Some(fs.rec) } else { None };
         let fi = fi.clone();
-        self.finalize_packet(&*fs.input, rec, &fi)
+        self.finalize_packet(rec, &fi)
       } else {
         if let Some(f) = self.frame_q.get(&fi.number) {
           self.idx += 1;
@@ -762,7 +767,7 @@ impl Context {
 
             if fi.show_frame {
               let fi = fi.clone();
-              self.finalize_packet(&*frame, rec, &fi)
+              self.finalize_packet(rec, &fi)
             } else {
               Err(EncoderStatus::NeedMoreData)
             }
@@ -782,7 +787,7 @@ impl Context {
     ret
   }
 
-  fn finalize_packet(&mut self, original_frame: &Frame, rec: Option<Frame>, fi: &FrameInvariants) -> Result<Packet, EncoderStatus> {
+  fn finalize_packet(&mut self, rec: Option<Frame>, fi: &FrameInvariants) -> Result<Packet, EncoderStatus> {
     let data = self.packet_data.clone();
     self.packet_data.clear();
     if write_temporal_delimiter(&mut self.packet_data).is_err() {
@@ -792,6 +797,7 @@ impl Context {
     let mut psnr = None;
     if self.config.enc.show_psnr {
       if let Some(ref rec) = rec {
+        let original_frame = self.get_frame(fi.number);
         psnr = Some(calculate_frame_psnr(
           &*original_frame,
           rec,
