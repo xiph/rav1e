@@ -29,31 +29,23 @@ use crate::decoder::VideoDetails;
 use std::fs::File;
 use std::io::BufWriter;
 
-fn read_frame_batch<T: Pixel, D: Decoder>(ctx: &mut Context<T>, decoder: &mut D, video_info: VideoDetails) {
-  loop {
-    if ctx.needs_more_lookahead() {
-      match decoder.read_frame(&video_info) {
-        Ok(frame) => {
-          match video_info.bit_depth {
-            8 | 10 | 12 => {}
-            _ => panic!("unknown input bit depth!")
-          }
-
-          let _ = ctx.send_frame(Some(Arc::new(frame)));
-          continue;
-        }
-        _ => {
-          let frames_to_be_coded = ctx.get_frame_count();
-          // This is a hack, instead when EOF is reached simply "close" the encoder to input (flag)
-          ctx.set_limit(frames_to_be_coded);
-          ctx.flush();
-        }
+fn read_frame<T: Pixel, D: Decoder>(ctx: &mut Context<T>, decoder: &mut D, video_info: VideoDetails) {
+  match decoder.read_frame(&video_info) {
+    Ok(frame) => {
+      match video_info.bit_depth {
+        8 | 10 | 12 => {}
+        _ => panic!("unknown input bit depth!")
       }
-    } else if !ctx.needs_more_frames(ctx.get_frame_count()) {
+
+      let _ = ctx.send_frame(Some(Arc::new(frame)));
+    }
+    _ => {
+      let frames_to_be_coded = ctx.get_frame_count();
+      // This is a hack, instead when EOF is reached simply "close" the encoder to input (flag)
+      ctx.set_limit(frames_to_be_coded);
       ctx.flush();
     }
-    break;
-  }
+  };
 }
 
 // Encode and write a frame.
@@ -66,7 +58,7 @@ fn process_frame<T: Pixel>(
 ) -> Result<Vec<FrameSummary>, ()> {
   let y4m_details = y4m_dec.get_video_details();
   let mut frame_summaries = Vec::new();
-  read_frame_batch(ctx, y4m_dec, y4m_details);
+  read_frame(ctx, y4m_dec, y4m_details);
   let pkt_wrapped = ctx.receive_packet();
   if let Ok(pkt) = pkt_wrapped {
     write_ivf_frame(output_file, pkt.number as u64, pkt.data.as_ref());
