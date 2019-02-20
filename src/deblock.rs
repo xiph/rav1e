@@ -357,24 +357,23 @@ fn mask4(p1: i32, p0: i32, q0: i32, q1: i32, shift: usize) -> usize {
 
 // Assumes rec[0] is set 2 taps back from the edge
 fn deblock_size4<T: Pixel>(
-  rec: &mut [T], pitch: usize, stride: usize, level: usize, bd: usize
+  rec: &mut [T], stride: usize, vertical: bool, level: usize, bd: usize
 ) {
-  let mut s = 0;
-  for _i in 0..4 {
-    let p = &mut rec[s..];
+  let (main_pitch, sec_pitch) = if vertical { (stride, 1) } else { (1, stride) };
+  for y in 0..4 {
+    let p = &mut rec[y * main_pitch..];
     let p1: i32 = p[0].as_();
-    let p0: i32 = p[pitch].as_();
-    let q0: i32 = p[pitch * 2].as_();
-    let q1: i32 = p[pitch * 3].as_();
+    let p0: i32 = p[sec_pitch].as_();
+    let q0: i32 = p[sec_pitch * 2].as_();
+    let q1: i32 = p[sec_pitch * 3].as_();
     if mask4(p1, p0, q0, q1, bd - 8) <= level {
       let x = if nhev4(p1, p0, q0, q1, bd - 8) <= level {
         filter_narrow4_4(p1, p0, q0, q1, bd - 8)
       } else {
         filter_narrow2_4(p1, p0, q0, q1, bd - 8)
       };
-      stride_copy(p, &x, pitch);
+      stride_copy(p, &x, sec_pitch);
     }
-    s += stride;
   }
 }
 
@@ -455,18 +454,18 @@ fn flat6(p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32) -> usize {
 
 // Assumes slice[0] is set 3 taps back from the edge
 fn deblock_size6<T: Pixel>(
-  rec: &mut [T], pitch: usize, stride: usize, level: usize, bd: usize
+  rec: &mut [T], stride: usize, vertical: bool, level: usize, bd: usize
 ) {
-  let mut s = 0;
+  let (main_pitch, sec_pitch) = if vertical { (stride, 1) } else { (1, stride) };
   let flat = 1 << bd - 8;
-  for _i in 0..4 {
-    let p = &mut rec[s..];
+  for y in 0..4 {
+    let p = &mut rec[y * main_pitch..];
     let p2: i32 = p[0].as_();
-    let p1: i32 = p[pitch].as_();
-    let p0: i32 = p[pitch * 2].as_();
-    let q0: i32 = p[pitch * 3].as_();
-    let q1: i32 = p[pitch * 4].as_();
-    let q2: i32 = p[pitch * 5].as_();
+    let p1: i32 = p[sec_pitch].as_();
+    let p0: i32 = p[sec_pitch * 2].as_();
+    let q0: i32 = p[sec_pitch * 3].as_();
+    let q1: i32 = p[sec_pitch * 4].as_();
+    let q2: i32 = p[sec_pitch * 5].as_();
     if mask6(p2, p1, p0, q0, q1, q2, bd - 8) <= level {
       let x;
       if flat6(p2, p1, p0, q0, q1, q2) <= flat {
@@ -476,9 +475,8 @@ fn deblock_size6<T: Pixel>(
       } else {
         x = filter_narrow2_4(p1, p0, q0, q1, bd - 8);
       }
-      stride_copy(&mut p[pitch..], &x, pitch);
+      stride_copy(&mut p[sec_pitch..], &x, sec_pitch);
     }
-    s += stride;
   }
 }
 
@@ -595,20 +593,20 @@ fn flat8(
 
 // Assumes rec[0] is set 4 taps back from the edge
 fn deblock_size8<T: Pixel>(
-  rec: &mut [T], pitch: usize, stride: usize, level: usize, bd: usize
+  rec: &mut [T], stride: usize, vertical: bool, level: usize, bd: usize
 ) {
-  let mut s = 0;
+  let (main_pitch, sec_pitch) = if vertical { (stride, 1) } else { (1, stride) };
   let flat = 1 << bd - 8;
-  for _i in 0..4 {
-    let p = &mut rec[s..];
+  for y in 0..4 {
+    let p = &mut rec[y * main_pitch..];
     let p3: i32 = p[0].as_();
-    let p2: i32 = p[pitch].as_();
-    let p1: i32 = p[pitch * 2].as_();
-    let p0: i32 = p[pitch * 3].as_();
-    let q0: i32 = p[pitch * 4].as_();
-    let q1: i32 = p[pitch * 5].as_();
-    let q2: i32 = p[pitch * 6].as_();
-    let q3: i32 = p[pitch * 7].as_();
+    let p2: i32 = p[sec_pitch].as_();
+    let p1: i32 = p[sec_pitch * 2].as_();
+    let p0: i32 = p[sec_pitch * 3].as_();
+    let q0: i32 = p[sec_pitch * 4].as_();
+    let q1: i32 = p[sec_pitch * 5].as_();
+    let q2: i32 = p[sec_pitch * 6].as_();
+    let q3: i32 = p[sec_pitch * 7].as_();
     if mask8(p3, p2, p1, p0, q0, q1, q2, q3, bd - 8) <= level {
       let x: [i32; 6];
       if flat8(p3, p2, p1, p0, q0, q1, q2, q3) <= flat {
@@ -620,9 +618,8 @@ fn deblock_size8<T: Pixel>(
           x = filter_narrow2_6(p2, p1, p0, q0, q1, q2, bd - 8);
         }
       }
-      stride_copy(&mut p[pitch..], &x, pitch);
+      stride_copy(&mut p[sec_pitch..], &x, sec_pitch);
     }
-    s += stride;
   }
 }
 
@@ -717,26 +714,26 @@ fn flat14_outer(
 
 // Assumes rec[0] is set 7 taps back from the edge
 fn deblock_size14<T: Pixel>(
-  rec: &mut [T], pitch: usize, stride: usize, level: usize, bd: usize
+  rec: &mut [T], stride: usize, vertical: bool, level: usize, bd: usize
 ) {
-  let mut s = 0;
+  let (main_pitch, sec_pitch) = if vertical { (stride, 1) } else { (1, stride) };
   let flat = 1 << bd - 8;
-  for _i in 0..4 {
-    let p = &mut rec[s..];
+  for y in 0..4 {
+    let p = &mut rec[y * main_pitch..];
     let p6: i32 = p[0].as_();
-    let p5: i32 = p[pitch].as_();
-    let p4: i32 = p[pitch * 2].as_();
-    let p3: i32 = p[pitch * 3].as_();
-    let p2: i32 = p[pitch * 4].as_();
-    let p1: i32 = p[pitch * 5].as_();
-    let p0: i32 = p[pitch * 6].as_();
-    let q0: i32 = p[pitch * 7].as_();
-    let q1: i32 = p[pitch * 8].as_();
-    let q2: i32 = p[pitch * 9].as_();
-    let q3: i32 = p[pitch * 10].as_();
-    let q4: i32 = p[pitch * 11].as_();
-    let q5: i32 = p[pitch * 12].as_();
-    let q6: i32 = p[pitch * 13].as_();
+    let p5: i32 = p[sec_pitch].as_();
+    let p4: i32 = p[sec_pitch * 2].as_();
+    let p3: i32 = p[sec_pitch * 3].as_();
+    let p2: i32 = p[sec_pitch * 4].as_();
+    let p1: i32 = p[sec_pitch * 5].as_();
+    let p0: i32 = p[sec_pitch * 6].as_();
+    let q0: i32 = p[sec_pitch * 7].as_();
+    let q1: i32 = p[sec_pitch * 8].as_();
+    let q2: i32 = p[sec_pitch * 9].as_();
+    let q3: i32 = p[sec_pitch * 10].as_();
+    let q4: i32 = p[sec_pitch * 11].as_();
+    let q5: i32 = p[sec_pitch * 12].as_();
+    let q6: i32 = p[sec_pitch * 13].as_();
     // 'mask' test
     if mask8(p3, p2, p1, p0, q0, q1, q2, q3, bd - 8) <= level {
       let x: [i32; 12];
@@ -788,9 +785,8 @@ fn deblock_size14<T: Pixel>(
           );
         }
       }
-      stride_copy(&mut p[pitch..], &x, pitch);
+      stride_copy(&mut p[sec_pitch..], &x, sec_pitch);
     }
-    s += stride;
   }
 }
 
@@ -937,16 +933,16 @@ fn filter_v_edge<T: Pixel>(
         let slice = plane_slice.as_mut_slice();
         match filter_size {
           4 => {
-            deblock_size4(slice, 1, stride, level, bd);
+            deblock_size4(slice, stride, true, level, bd);
           }
           6 => {
-            deblock_size6(slice, 1, stride, level, bd);
+            deblock_size6(slice, stride, true, level, bd);
           }
           8 => {
-            deblock_size8(slice, 1, stride, level, bd);
+            deblock_size8(slice, stride, true, level, bd);
           }
           14 => {
-            deblock_size14(slice, 1, stride, level, bd);
+            deblock_size14(slice, stride, true, level, bd);
           }
           _ => unreachable!()
         }
@@ -1050,16 +1046,16 @@ fn filter_h_edge<T: Pixel>(
         let slice = plane_slice.as_mut_slice();
         match filter_size {
           4 => {
-            deblock_size4(slice, stride, 1, level, bd);
+            deblock_size4(slice, stride, false, level, bd);
           }
           6 => {
-            deblock_size6(slice, stride, 1, level, bd);
+            deblock_size6(slice, stride, false, level, bd);
           }
           8 => {
-            deblock_size8(slice, stride, 1, level, bd);
+            deblock_size8(slice, stride, false, level, bd);
           }
           14 => {
-            deblock_size14(slice, stride, 1, level, bd);
+            deblock_size14(slice, stride, false, level, bd);
           }
           _ => unreachable!()
         }
