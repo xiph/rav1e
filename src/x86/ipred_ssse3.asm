@@ -547,7 +547,7 @@ cglobal ipred_smooth_v, 3, 7, 7, dst, stride, tl, w, h, weights
     neg                  hq
     movd                 m5, [tlq+hq]
     pxor                 m2, m2
-    pshufb               m5, m2 
+    pshufb               m5, m2
     add                  wq, r6
     jmp                  wq
 .w4:
@@ -960,7 +960,7 @@ cglobal ipred_smooth, 3, 7, 8, -13*16, dst, stride, tl, w, h, v_weights
     LEA                  r6, ipred_smooth_ssse3_table
     movd                 m4, [tlq+wq]                     ; right
     pxor                 m2, m2
-    pshufb               m4, m2 
+    pshufb               m4, m2
     tzcnt                wd, wd
     mov                  r5, tlq
     sub                  r5, hq
