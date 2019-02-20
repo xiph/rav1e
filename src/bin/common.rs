@@ -8,7 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::{ColorPrimaries, MatrixCoefficients, TransferCharacteristics};
-use clap::{App, AppSettings, Arg, ArgMatches};
+use clap::{App, AppSettings, Arg, ArgMatches, SubCommand, Shell};
 use rav1e::partition::BlockSize;
 use rav1e::*;
 
@@ -32,10 +32,11 @@ pub struct CliOptions {
 }
 
 pub fn parse_cli() -> CliOptions {
-  let matches = App::new("rav1e")
+  let mut app = App::new("rav1e")
     .version(env!("CARGO_PKG_VERSION"))
     .about("AV1 video encoder")
     .setting(AppSettings::DeriveDisplayOrder)
+    .setting(AppSettings::SubcommandsNegateReqs)
     // THREADS
     .arg(
       Arg::with_name("THREADS")
@@ -224,10 +225,28 @@ pub fn parse_cli() -> CliOptions {
           "no_scene_detection",
         ])
     )
-    .get_matches();
+    .subcommand(SubCommand::with_name("advanced")
+                .about("Advanced features")
+                .arg(Arg::with_name("SHELL")
+                     .help("Output to stdout the completion definition for the shell")
+                     .short("c")
+                     .long("completion")
+                     .takes_value(true)
+                     .possible_values(&Shell::variants())
+                )
+    );
+
+  let matches = app.clone().get_matches();
 
   if let Some(threads) = matches.value_of("THREADS").map(|v| v.parse().expect("Threads must be an integer")) {
     rayon::ThreadPoolBuilder::new().num_threads(threads).build_global().unwrap();
+  }
+
+  if let Some(matches) = matches.subcommand_matches("advanced") {
+    if let Some(shell) = matches.value_of("SHELL").map(|v| v.parse().unwrap()) {
+      app.gen_completions_to("rav1e", shell, &mut std::io::stdout());
+      std::process::exit(0);
+    }
   }
 
   let io = EncoderIO {
