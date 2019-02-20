@@ -14,12 +14,14 @@ use crate::FrameInvariants;
 use crate::FrameState;
 
 pub fn segmentation_optimize(_fi: &FrameInvariants, fs: &mut FrameState) {
-    fs.segmentation.enabled = false;
-    fs.segmentation.update_data = false;
-    fs.segmentation.update_map = false;
+    fs.segmentation.enabled = true;
+    fs.segmentation.update_data = true;
+    fs.segmentation.update_map = true;
 
-    fs.segmentation.features[0][SegLvl::SEG_LVL_ALT_Q as usize] = false;
-    fs.segmentation.data[0][SegLvl::SEG_LVL_ALT_Q as usize] = 0;
+    for i in 0..4 {
+        fs.segmentation.features[i][SegLvl::SEG_LVL_ALT_Q as usize] = true;
+        fs.segmentation.data[i][SegLvl::SEG_LVL_ALT_Q as usize] = -10*(i as i16);
+    }
 
     /* Figure out parameters */
     fs.segmentation.preskip = false;

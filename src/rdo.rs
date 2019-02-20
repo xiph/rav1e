@@ -257,9 +257,9 @@ fn compute_tx_distortion(
   distortion
 }
 
-fn compute_rd_cost(fi: &FrameInvariants, rate: u32, distortion: u64) -> f64 {
+fn compute_rd_cost(fi: &FrameInvariants, rate: u32, distortion: u64) -> ( f64, f64) {
   let rate_in_bits = (rate as f64) / ((1 << OD_BITRES) as f64);
-  (distortion as f64) + fi.lambda * rate_in_bits
+  ( (distortion as f64) + fi.lambda * rate_in_bits, distortion as f64 )
 }
 
 pub fn rdo_tx_size_type(
@@ -324,6 +324,8 @@ struct EncodingSettings {
   cfl_params: CFLParams,
   skip: bool,
   rd: f64,
+  dist: f64,
+  seg_idx : u8,
   ref_frames: [usize; 2],
   mvs: [MotionVector; 2],
   tx_size: TxSize,
@@ -338,6 +340,8 @@ impl Default for EncodingSettings {
       cfl_params: CFLParams::new(),
       skip: false,
       rd: std::f64::MAX,
+      dist: std::f64::MAX,
+      seg_idx: 0,
       ref_frames: [INTRA_FRAME, NONE_FRAME],
       mvs: [MotionVector { row: 0, col: 0 }; 2],
       tx_size: TxSize::TX_4X4,
@@ -547,10 +551,11 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
             false
           )
         };
-        let rd = compute_rd_cost(fi, rate, distortion);
+        let ( rd, dist ) = compute_rd_cost(fi, rate, distortion);
         if rd < best.rd {
           //if rd < best.rd || luma_mode == PredictionMode::NEW_NEWMV {
           best.rd = rd;
+          best.dist = dist;
           best.mode_luma = luma_mode;
           best.mode_chroma = chroma_mode;
           best.ref_frames = ref_frames;
@@ -754,9 +759,10 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
           bo,
           false
         );
-      let rd = compute_rd_cost(fi, rate, distortion);
+      let ( rd, dist ) = compute_rd_cost(fi, rate, distortion);
       if rd < best.rd {
         best.rd = rd;
+        best.dist = dist;
         best.mode_chroma = chroma_mode;
         best.cfl_params = cfl;
       }
@@ -765,6 +771,14 @@ pub fn rdo_mode_decision(fi: &FrameInvariants, fs: &mut FrameState,
     }
   }
 
+  if best.dist > 0.0 {
+    let wei = best.dist.log(10.0) as u8;
+    best.seg_idx = wei.min(0).max(3);
+  } else {
+    best.seg_idx = 0;
+  }
+
+  cw.bc.set_segmentation_idx(bo, bsize, best.seg_idx);
   cw.bc.set_mode(bo, bsize, best.mode_luma);
   cw.bc.set_ref_frames(bo, bsize, best.ref_frames);
   cw.bc.set_motion_vectors(bo, bsize, best.mvs);
@@ -906,7 +920,7 @@ pub fn rdo_tx_type_decision(
         true
       )
     };
-    let rd = compute_rd_cost(fi, rate, distortion);
+    let rd = compute_rd_cost(fi, rate, distortion).0;
     if rd < best_rd {
       best_rd = rd;
       best_type = tx_type;
