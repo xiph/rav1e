@@ -160,7 +160,7 @@ pub struct ReferenceFrame<T: Pixel> {
   pub frame_mvs: Vec<Vec<MotionVector>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ReferenceFramesSet<T: Pixel> {
   pub frames: [Option<Arc<ReferenceFrame<T>>>; (REF_FRAMES as usize)],
   pub deblock: [DeblockState; (REF_FRAMES as usize)]
