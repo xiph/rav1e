@@ -377,9 +377,8 @@ fn deblock_size4_inner(
 fn deblock_size4<T: Pixel>(
   rec: &mut [T], pitch: usize, stride: usize, level: usize, bd: usize
 ) {
-  let mut s = 0;
-  for _i in 0..4 {
-    let p = &mut rec[s..];
+  for y in 0..4 {
+    let p = &mut rec[y * stride..];
     let p1: i32 = p[0].as_();
     let p0: i32 = p[pitch].as_();
     let q0: i32 = p[pitch * 2].as_();
@@ -387,7 +386,6 @@ fn deblock_size4<T: Pixel>(
     if let Some(x) = deblock_size4_inner([p1, p0, q0, q1], level, bd) {
       stride_copy(p, &x, pitch);
     }
-    s += stride;
   }
 }
 
@@ -491,9 +489,8 @@ fn deblock_size6_inner(
 fn deblock_size6<T: Pixel>(
   rec: &mut [T], pitch: usize, stride: usize, level: usize, bd: usize
 ) {
-  let mut s = 0;
-  for _i in 0..4 {
-    let p = &mut rec[s..];
+  for y in 0..4 {
+    let p = &mut rec[y * stride..];
     let p2: i32 = p[0].as_();
     let p1: i32 = p[pitch].as_();
     let p0: i32 = p[pitch * 2].as_();
@@ -503,7 +500,6 @@ fn deblock_size6<T: Pixel>(
     if let Some(x) = deblock_size6_inner([p2, p1, p0, q0, q1, q2], level, bd) {
       stride_copy(&mut p[pitch..], &x, pitch);
     }
-    s += stride;
   }
 }
 
@@ -643,9 +639,8 @@ fn deblock_size8_inner (
 fn deblock_size8<T: Pixel>(
   rec: &mut [T], pitch: usize, stride: usize, level: usize, bd: usize
 ) {
-  let mut s = 0;
-  for _i in 0..4 {
-    let p = &mut rec[s..];
+  for y in 0..4 {
+    let p = &mut rec[y * stride..];
     let p3: i32 = p[0].as_();
     let p2: i32 = p[pitch].as_();
     let p1: i32 = p[pitch * 2].as_();
@@ -657,7 +652,6 @@ fn deblock_size8<T: Pixel>(
     if let Some(x) = deblock_size8_inner([p3, p2, p1, p0, q0, q1, q2, q3], level, bd) {
       stride_copy(&mut p[pitch..], &x, pitch);
     }
-    s += stride;
   }
 }
 
@@ -785,9 +779,8 @@ fn deblock_size14_inner(
 fn deblock_size14<T: Pixel>(
   rec: &mut [T], pitch: usize, stride: usize, level: usize, bd: usize
 ) {
-  let mut s = 0;
-  for _i in 0..4 {
-    let p = &mut rec[s..];
+  for y in 0..4 {
+    let p = &mut rec[y * stride..];
     let p6: i32 = p[0].as_();
     let p5: i32 = p[pitch].as_();
     let p4: i32 = p[pitch * 2].as_();
@@ -807,7 +800,6 @@ fn deblock_size14<T: Pixel>(
     ) {
       stride_copy(&mut p[pitch..], &x, pitch);
     }
-    s += stride;
   }
 }
 
