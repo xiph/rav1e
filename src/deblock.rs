@@ -355,6 +355,24 @@ fn mask4(p1: i32, p0: i32, q0: i32, q1: i32, shift: usize) -> usize {
   ) as usize
 }
 
+#[inline]
+fn deblock_size4_inner(
+  [p1, p0, q0, q1]: [i32; 4],
+  level: usize,
+  bd: usize,
+) -> Option<[i32; 4]> {
+  if mask4(p1, p0, q0, q1, bd - 8) <= level {
+    let x = if nhev4(p1, p0, q0, q1, bd - 8) <= level {
+      filter_narrow4_4(p1, p0, q0, q1, bd - 8)
+    } else {
+      filter_narrow2_4(p1, p0, q0, q1, bd - 8)
+    };
+    Some(x)
+  } else {
+    None
+  }
+}
+
 // Assumes rec[0] is set 2 taps back from the edge
 fn deblock_size4<T: Pixel>(
   rec: &mut [T], pitch: usize, stride: usize, level: usize, bd: usize
@@ -366,12 +384,7 @@ fn deblock_size4<T: Pixel>(
     let p0: i32 = p[pitch].as_();
     let q0: i32 = p[pitch * 2].as_();
     let q1: i32 = p[pitch * 3].as_();
-    if mask4(p1, p0, q0, q1, bd - 8) <= level {
-      let x = if nhev4(p1, p0, q0, q1, bd - 8) <= level {
-        filter_narrow4_4(p1, p0, q0, q1, bd - 8)
-      } else {
-        filter_narrow2_4(p1, p0, q0, q1, bd - 8)
-      };
+    if let Some(x) = deblock_size4_inner([p1, p0, q0, q1], level, bd) {
       stride_copy(p, &x, pitch);
     }
     s += stride;
@@ -453,12 +466,32 @@ fn flat6(p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32) -> usize {
   ) as usize
 }
 
+#[inline]
+fn deblock_size6_inner(
+  [p2, p1, p0, q0, q1, q2]: [i32; 6],
+  level: usize,
+  bd: usize,
+) -> Option<[i32; 4]> {
+  if mask6(p2, p1, p0, q0, q1, q2, bd - 8) <= level {
+    let flat = 1 << bd - 8;
+    let x = if flat6(p2, p1, p0, q0, q1, q2) <= flat {
+      filter_wide6_4(p2, p1, p0, q0, q1, q2)
+    } else if nhev4(p1, p0, q0, q1, bd - 8) <= level {
+      filter_narrow4_4(p1, p0, q0, q1, bd - 8)
+    } else {
+      filter_narrow2_4(p1, p0, q0, q1, bd - 8)
+    };
+    Some(x)
+  } else {
+    None
+  }
+}
+
 // Assumes slice[0] is set 3 taps back from the edge
 fn deblock_size6<T: Pixel>(
   rec: &mut [T], pitch: usize, stride: usize, level: usize, bd: usize
 ) {
   let mut s = 0;
-  let flat = 1 << bd - 8;
   for _i in 0..4 {
     let p = &mut rec[s..];
     let p2: i32 = p[0].as_();
@@ -467,15 +500,7 @@ fn deblock_size6<T: Pixel>(
     let q0: i32 = p[pitch * 3].as_();
     let q1: i32 = p[pitch * 4].as_();
     let q2: i32 = p[pitch * 5].as_();
-    if mask6(p2, p1, p0, q0, q1, q2, bd - 8) <= level {
-      let x;
-      if flat6(p2, p1, p0, q0, q1, q2) <= flat {
-        x = filter_wide6_4(p2, p1, p0, q0, q1, q2);
-      } else if nhev4(p1, p0, q0, q1, bd - 8) <= level {
-        x = filter_narrow4_4(p1, p0, q0, q1, bd - 8);
-      } else {
-        x = filter_narrow2_4(p1, p0, q0, q1, bd - 8);
-      }
+    if let Some(x) = deblock_size6_inner([p2, p1, p0, q0, q1, q2], level, bd) {
       stride_copy(&mut p[pitch..], &x, pitch);
     }
     s += stride;
@@ -593,12 +618,32 @@ fn flat8(
   ) as usize
 }
 
+#[inline]
+fn deblock_size8_inner (
+  [p3, p2, p1, p0, q0, q1, q2, q3]: [i32; 8],
+  level: usize,
+  bd: usize,
+) -> Option<[i32; 6]> {
+  if mask8(p3, p2, p1, p0, q0, q1, q2, q3, bd - 8) <= level {
+    let flat = 1 << bd - 8;
+    let x = if flat8(p3, p2, p1, p0, q0, q1, q2, q3) <= flat {
+      filter_wide8_6(p3, p2, p1, p0, q0, q1, q2, q3)
+    } else if nhev4(p1, p0, q0, q1, bd - 8) <= level {
+      filter_narrow4_6(p2, p1, p0, q0, q1, q2, bd - 8)
+    } else {
+      filter_narrow2_6(p2, p1, p0, q0, q1, q2, bd - 8)
+    };
+    Some(x)
+  } else {
+    None
+  }
+}
+
 // Assumes rec[0] is set 4 taps back from the edge
 fn deblock_size8<T: Pixel>(
   rec: &mut [T], pitch: usize, stride: usize, level: usize, bd: usize
 ) {
   let mut s = 0;
-  let flat = 1 << bd - 8;
   for _i in 0..4 {
     let p = &mut rec[s..];
     let p3: i32 = p[0].as_();
@@ -609,17 +654,7 @@ fn deblock_size8<T: Pixel>(
     let q1: i32 = p[pitch * 5].as_();
     let q2: i32 = p[pitch * 6].as_();
     let q3: i32 = p[pitch * 7].as_();
-    if mask8(p3, p2, p1, p0, q0, q1, q2, q3, bd - 8) <= level {
-      let x: [i32; 6];
-      if flat8(p3, p2, p1, p0, q0, q1, q2, q3) <= flat {
-        x = filter_wide8_6(p3, p2, p1, p0, q0, q1, q2, q3);
-      } else {
-        if nhev4(p1, p0, q0, q1, bd - 8) <= level {
-          x = filter_narrow4_6(p2, p1, p0, q0, q1, q2, bd - 8);
-        } else {
-          x = filter_narrow2_6(p2, p1, p0, q0, q1, q2, bd - 8);
-        }
-      }
+    if let Some(x) = deblock_size8_inner([p3, p2, p1, p0, q0, q1, q2, q3], level, bd) {
       stride_copy(&mut p[pitch..], &x, pitch);
     }
     s += stride;
@@ -715,12 +750,42 @@ fn flat14_outer(
   ) as usize
 }
 
+#[inline]
+fn deblock_size14_inner(
+  [p6, p5, p4, p3, p2, p1, p0, q0, q1, q2, q3, q4, q5, q6]: [i32; 14],
+  level: usize,
+  bd: usize,
+) -> Option<[i32; 12]> {
+  // 'mask' test
+  if mask8(p3, p2, p1, p0, q0, q1, q2, q3, bd - 8) <= level {
+    let flat = 1 << bd - 8;
+    // inner flatness test
+    let x = if flat8(p3, p2, p1, p0, q0, q1, q2, q3) <= flat {
+      // outer flatness test
+      if flat14_outer(p6, p5, p4, p0, q0, q4, q5, q6) <= flat {
+        // sufficient flatness across 14 pixel width; run full-width filter
+        filter_wide14_12(p6, p5, p4, p3, p2, p1, p0, q0, q1, q2, q3, q4, q5, q6)
+      } else {
+        // only flat in inner area, run 8-tap
+        filter_wide8_12(p5, p4, p3, p2, p1, p0, q0, q1, q2, q3, q4, q5)
+      }
+    } else if nhev4(p1, p0, q0, q1, bd - 8) <= level {
+      // not flat, run narrow filter
+      filter_narrow4_12(p5, p4, p3, p2, p1, p0, q0, q1, q2, q3, q4, q5, bd - 8)
+    } else {
+      filter_narrow2_12(p5, p4, p3, p2, p1, p0, q0, q1, q2, q3, q4, q5, bd - 8)
+    };
+    Some(x)
+  } else {
+    None
+  }
+}
+
 // Assumes rec[0] is set 7 taps back from the edge
 fn deblock_size14<T: Pixel>(
   rec: &mut [T], pitch: usize, stride: usize, level: usize, bd: usize
 ) {
   let mut s = 0;
-  let flat = 1 << bd - 8;
   for _i in 0..4 {
     let p = &mut rec[s..];
     let p6: i32 = p[0].as_();
@@ -737,57 +802,9 @@ fn deblock_size14<T: Pixel>(
     let q4: i32 = p[pitch * 11].as_();
     let q5: i32 = p[pitch * 12].as_();
     let q6: i32 = p[pitch * 13].as_();
-    // 'mask' test
-    if mask8(p3, p2, p1, p0, q0, q1, q2, q3, bd - 8) <= level {
-      let x: [i32; 12];
-      // inner flatness test
-      if flat8(p3, p2, p1, p0, q0, q1, q2, q3) <= flat {
-        // outer flatness test
-        if flat14_outer(p6, p5, p4, p0, q0, q4, q5, q6) <= flat {
-          // sufficient flatness across 14 pixel width; run full-width filter
-          x = filter_wide14_12(
-            p6, p5, p4, p3, p2, p1, p0, q0, q1, q2, q3, q4, q5, q6,
-          );
-        } else {
-          // only flat in inner area, run 8-tap
-          x = filter_wide8_12(p5, p4, p3, p2, p1, p0, q0, q1, q2, q3, q4, q5);
-        }
-      } else {
-        // not flat, run narrow filter
-        if nhev4(p1, p0, q0, q1, bd - 8) <= level {
-          x = filter_narrow4_12(
-            p5,
-            p4,
-            p3,
-            p2,
-            p1,
-            p0,
-            q0,
-            q1,
-            q2,
-            q3,
-            q4,
-            q5,
-            bd - 8
-          );
-        } else {
-          x = filter_narrow2_12(
-            p5,
-            p4,
-            p3,
-            p2,
-            p1,
-            p0,
-            q0,
-            q1,
-            q2,
-            q3,
-            q4,
-            q5,
-            bd - 8
-          );
-        }
-      }
+    if let Some(x) = deblock_size14_inner(
+      [p6, p5, p4, p3, p2, p1, p0, q0, q1, q2, q3, q4, q5, q6], level, bd
+    ) {
       stride_copy(&mut p[pitch..], &x, pitch);
     }
     s += stride;
