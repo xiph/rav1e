@@ -1105,7 +1105,7 @@ mod test {
   fn cfl_joint_sign() {
     use super::*;
 
-    let mut cfl = CFLParams::new();
+    let mut cfl = CFLParams::default();
     for (joint_sign, &signs) in cfl_alpha_signs.iter().enumerate() {
       cfl.sign = signs;
       assert!(cfl.joint_sign() as usize == joint_sign);
@@ -1718,13 +1718,16 @@ pub struct CFLParams {
   scale: [u8; 2]
 }
 
-impl CFLParams {
-  pub fn new() -> CFLParams {
-    CFLParams {
+impl Default for CFLParams {
+  fn default() -> Self {
+    Self {
       sign: [CFL_SIGN_NEG, CFL_SIGN_ZERO],
       scale: [1, 0]
     }
   }
+}
+
+impl CFLParams {
   pub fn joint_sign(self) -> u32 {
     assert!(self.sign[0] != CFL_SIGN_ZERO || self.sign[1] != CFL_SIGN_ZERO);
     (self.sign[0] as u32) * (CFL_SIGNS as u32) + (self.sign[1] as u32) - 1

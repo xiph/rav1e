@@ -333,10 +333,10 @@ struct EncodingSettings {
 
 impl Default for EncodingSettings {
   fn default() -> Self {
-    EncodingSettings {
+    Self {
       mode_luma: PredictionMode::DC_PRED,
       mode_chroma: PredictionMode::DC_PRED,
-      cfl_params: CFLParams::new(),
+      cfl_params: CFLParams::default(),
       skip: false,
       rd: std::f64::MAX,
       ref_frames: [INTRA_FRAME, NONE_FRAME],
@@ -516,7 +516,7 @@ pub fn rdo_mode_decision<T: Pixel>(
             bsize,
             bo,
             skip,
-            CFLParams::new(),
+            CFLParams::default(),
             tx_size,
             tx_type,
             mode_context,
@@ -711,7 +711,7 @@ pub fn rdo_mode_decision<T: Pixel>(
       best.tx_size,
       best.tx_type,
       false,
-      CFLParams::new(),
+      CFLParams::default(),
       true,
       rdo_type,
       false
@@ -879,9 +879,22 @@ pub fn rdo_tx_type_decision<T: Pixel>(
         fi, fs, cw, wr, mode, bo, bsize, tx_size, tx_type, false, true, rdo_type, true
       )
     }  else {
-      let cfl = CFLParams::new(); // Unused
       write_tx_blocks(
-        fi, fs, cw, wr, mode, mode, bo, bsize, tx_size, tx_type, false, cfl, true, rdo_type, true
+        fi,
+        fs,
+        cw,
+        wr,
+        mode,
+        mode,
+        bo,
+        bsize,
+        tx_size,
+        tx_type,
+        false,
+        CFLParams::default(), // Unused.
+        true,
+        rdo_type,
+        true
       )
     };
 
