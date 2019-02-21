@@ -226,6 +226,7 @@ pub fn parse_cli() -> CliOptions {
         ])
     )
     .subcommand(SubCommand::with_name("advanced")
+                .setting(AppSettings::Hidden)
                 .about("Advanced features")
                 .arg(Arg::with_name("SHELL")
                      .help("Output to stdout the completion definition for the shell")
