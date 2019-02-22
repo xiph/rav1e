@@ -71,14 +71,14 @@ impl RestorationFilter {
 fn sgrproj_sum_finish(ssq: i32, sum: i32, n: i32, one_over_n: i32, s: i32, bdm8: usize) -> (i32, i32) {
   let scaled_ssq = ssq + (1 << 2*bdm8 >> 1) >> 2*bdm8;
   let scaled_sum = sum + (1 << bdm8 >> 1) >> bdm8;
-  let p = cmp::max(0, scaled_ssq*(n as i32) - scaled_sum*scaled_sum);
-  let z = p*s + (1 << SGRPROJ_MTABLE_BITS >> 1) >> SGRPROJ_MTABLE_BITS;
-  let a = if z >= 255 {
+  let p = cmp::max(0, scaled_ssq*(n as i32) - scaled_sum*scaled_sum) as u32;
+  let z = p*s as u32 + (1 << SGRPROJ_MTABLE_BITS >> 1) >> SGRPROJ_MTABLE_BITS;
+  let a:i32 = if z >= 255 {
     256
   } else if z == 0 {
     1
   } else {
-    ((z << SGRPROJ_SGR_BITS) + z/2) / (z+1)
+    (((z << SGRPROJ_SGR_BITS) + z/2) / (z+1)) as i32
   };
   let b = ((1 << SGRPROJ_SGR_BITS) - a ) * sum * one_over_n;
   (a, b + (1 << SGRPROJ_RECIP_BITS >> 1) >> SGRPROJ_RECIP_BITS)
