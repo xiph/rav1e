@@ -262,15 +262,15 @@ mod nasm {
           UninitializedAlignedArray();
         let mut src8: [u8; (128 + 7) * (128 + 7)] =
           unsafe { mem::uninitialized() };
-        convert_slice_2d(
-          &mut src8,
-          width + 7,
-          src.go_left(3).go_up(3).as_slice(),
-          src.plane.cfg.stride,
-          width + 7,
-          height + 7
-        );
         unsafe {
+          convert_slice_2d(
+            src8.as_mut_ptr(),
+            width + 7,
+            src.go_left(3).go_up(3).as_ptr(),
+            src.plane.cfg.stride,
+            width + 7,
+            height + 7
+          );
           select_put_fn_avx2(mode_x, mode_y)(
             dst8.array.as_mut_ptr(),
             width as isize,
@@ -281,17 +281,17 @@ mod nasm {
             col_frac,
             row_frac
           );
+          let dst_stride = dst.plane.cfg.stride;
+          let dst_slice = dst.as_mut_slice();
+          convert_slice_2d(
+            dst_slice.as_mut_ptr(),
+            dst_stride,
+            dst8.array.as_ptr(),
+            width,
+            width,
+            height
+          );
         }
-        let dst_stride = dst.plane.cfg.stride;
-        let dst_slice = dst.as_mut_slice();
-        convert_slice_2d(
-          dst_slice,
-          dst_stride,
-          &dst8.array,
-          width,
-          width,
-          height
-        );
         return;
       }
     }
@@ -308,15 +308,15 @@ mod nasm {
     if is_x86_feature_detected!("avx2") && bit_depth == 8 {
       let mut src8: [u8; (128 + 7) * (128 + 7)] =
         unsafe { mem::uninitialized() };
-      convert_slice_2d(
-        &mut src8,
-        width + 7,
-        src.go_left(3).go_up(3).as_slice(),
-        src.plane.cfg.stride,
-        width + 7,
-        height + 7
-      );
       unsafe {
+        convert_slice_2d(
+          src8.as_mut_ptr(),
+          width + 7,
+          src.go_left(3).go_up(3).as_ptr(),
+          src.plane.cfg.stride,
+          width + 7,
+          height + 7
+        );
         select_prep_fn_avx2(mode_x, mode_y)(
           tmp.as_mut_ptr(),
           src8[(width + 7) * 3 + 3..].as_ptr(),
@@ -351,17 +351,17 @@ mod nasm {
           width as i32,
           height as i32
         );
+        let dst_stride = dst.plane.cfg.stride;
+        let dst_slice = dst.as_mut_slice();
+        convert_slice_2d(
+          dst_slice.as_mut_ptr(),
+          dst_stride,
+          dst8.array.as_ptr(),
+          width,
+          width,
+          height
+        );
       }
-      let dst_stride = dst.plane.cfg.stride;
-      let dst_slice = dst.as_mut_slice();
-      convert_slice_2d(
-        dst_slice,
-        dst_stride,
-        &dst8.array,
-        width,
-        width,
-        height
-      );
       return;
     } else {
       super::native::mc_avg(dst, tmp1, tmp2, width, height, bit_depth);
