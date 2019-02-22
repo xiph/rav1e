@@ -134,20 +134,16 @@ fn sgrproj_box_sum_slow<T: Pixel>(a: &mut i32, b: &mut i32,
   let mut sum:i32 = 0;
 
   for yi in y-r as isize..=y+r as isize {
-    let src_plane;
-    let src_w;
-    let src_h;
-    
     // decide if we're vertically inside or outside the stripe
-    if yi >= stripe_y && yi < stripe_y + stripe_h as isize {
-      src_plane = cdeffed;
-      src_w = (cdeffed_w as isize - x + r as isize) as usize;
-      src_h = cdeffed_h as isize;
+    let (src_plane, src_w, src_h) = if yi >= stripe_y && yi < stripe_y + stripe_h as isize {
+      (cdeffed, 
+       (cdeffed_w as isize - x + r as isize) as usize,
+       cdeffed_h as isize)
     } else {
-      src_plane = backing;
-      src_w = (backing_w as isize - x + r as isize) as usize;
-      src_h = backing_h as isize;
-    }
+      (backing,
+       (backing_w as isize - x + r as isize) as usize,
+       backing_h as isize)
+    };
     // clamp vertically to storage at top and passed-in height at bottom 
     let cropped_y = clamp(yi, -src_plane.y, src_h - 1);
     // clamp vertically to stripe limits
@@ -172,7 +168,7 @@ fn sgrproj_box_sum_slow<T: Pixel>(a: &mut i32, b: &mut i32,
       sum += c;
     }
     // run accumulation to right of frame (if any)
-    for _xi in right..2*r+1 {
+    for _xi in right..=2*r {
       let c = i32::cast_from(p[src_w - 1]);
       ssq += c*c;
       sum += c;
@@ -229,17 +225,14 @@ fn sgrproj_box_sum_fastx_r1<T: Pixel>(a: &mut i32, b: &mut i32,
   let mut ssq:i32 = 0;
   let mut sum:i32 = 0;
   for yi in y-1..=y+1 {
-    let src_plane;
-    let src_h;
-    
     // decide if we're vertically inside or outside the stripe
-    if yi >= stripe_y && yi < stripe_y + stripe_h as isize {
-      src_plane = cdeffed;
-      src_h = cdeffed_h as isize;
+    let (src_plane, src_h) = if yi >= stripe_y && yi < stripe_y + stripe_h as isize {
+      (cdeffed,
+       cdeffed_h as isize)
     } else {
-      src_plane = backing;
-      src_h = backing_h as isize;
-    }
+      (backing,
+       backing_h as isize)
+    };
     // clamp vertically to storage addressing limit
     let cropped_y = clamp(yi, -src_plane.y, src_h - 1);
     // clamp vertically to stripe limits
@@ -264,17 +257,14 @@ fn sgrproj_box_sum_fastx_r2<T: Pixel>(a: &mut i32, b: &mut i32,
   let mut ssq:i32 = 0;
   let mut sum:i32 = 0;
   for yi in y - 2..=y + 2 {
-    let src_plane;
-    let src_h;
-    
     // decide if we're vertically inside or outside the stripe
-    if yi >= stripe_y && yi < stripe_y + stripe_h as isize {
-      src_plane = cdeffed;
-      src_h = cdeffed_h as isize;
+    let (src_plane, src_h) = if yi >= stripe_y && yi < stripe_y + stripe_h as isize {
+      (cdeffed,
+       cdeffed_h as isize)
     } else {
-      src_plane = backing;
-      src_h = backing_h as isize;
-    }
+      (backing,
+       backing_h as isize)
+    };
     // clamp vertically to storage addressing limit
     let cropped_y = clamp(yi, -src_plane.y, src_h as isize - 1);
     // clamp vertically to stripe limits

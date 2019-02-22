@@ -3029,7 +3029,7 @@ impl ContextWriter {
       RestorationFilter::None => {
         w.symbol_bits(0, &self.fc.lrf_switchable_cdf[..nsym])
       }
-      RestorationFilter::Wiener{coeffs: _} => {
+      RestorationFilter::Wiener{ .. } => {
         unreachable!() // for now, not permanently
       }
       RestorationFilter::Sgrproj{set, xqd} => {

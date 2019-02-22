@@ -1287,7 +1287,7 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<
                                              &cdef_plane.slice(&PlaneOffset{x: 0, y: 0}),
                                              cmp::min(cdef_plane.cfg.width, fi.width - ipo.x as usize),
                                              cmp::min(cdef_plane.cfg.height, fi.height - ipo.y as usize));
-            let current_lrf = RestorationFilter::Sgrproj{set: set, xqd: [xqd0, xqd1]};
+            let current_lrf = RestorationFilter::Sgrproj{set, xqd: [xqd0, xqd1]};
             if let RestorationFilter::Sgrproj{set, xqd} = current_lrf {
               // At present, this is a gross simplification
               sgrproj_stripe_filter(set, xqd, fi,
