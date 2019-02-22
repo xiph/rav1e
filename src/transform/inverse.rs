@@ -1539,36 +1539,36 @@ mod nasm {
           }
         }
 
-        // copy output to dst8 so that the results of the inverse transform
-        //   can be added to it
-        convert_slice_2d(
-          &mut dst8.array,
-          Self::W,
-          output,
-          stride,
-          Self::W,
-          Self::H
-        );
-
-        // perform the inverse transform
         unsafe {
+          // copy output to dst8 so that the results of the inverse transform
+          //   can be added to it
+          convert_slice_2d(
+            dst8.array.as_mut_ptr(),
+            Self::W,
+            output.as_ptr(),
+            stride,
+            Self::W,
+            Self::H
+          );
+
+          // perform the inverse transform
           Self::match_tx_type(tx_type)(
             dst8.array.as_mut_ptr(),
             Self::W as isize,
             coeff16.array.as_ptr(),
             (coeff_w * coeff_h) as i32
           );
-        }
 
-        // copy back to output
-        convert_slice_2d(
-          output,
-          stride,
-          &dst8.array,
-          Self::W,
-          Self::W,
-          Self::H
-        );
+          // copy back to output
+          convert_slice_2d(
+            output.as_mut_ptr(),
+            stride,
+            dst8.array.as_ptr(),
+            Self::W,
+            Self::W,
+            Self::H
+          );
+        }
       } else {
         <Self as super::native::InvTxfm2D>::inv_txfm2d_add(
           input, output, stride, tx_type, bd,
