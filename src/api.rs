@@ -107,7 +107,7 @@ impl EncoderConfig {
       low_latency: false,
       quantizer: 100,
       bitrate: 0,
-      tune: Tune::Psnr,
+      tune: Tune::default(),
       speed_settings: SpeedSettings::from_preset(speed),
       pass: None,
       show_psnr: false,
