@@ -315,6 +315,39 @@ impl<'a, T: Pixel> ExactSizeIterator for IterWidth<'a, T> { }
 
 impl<'a, T: Pixel> FusedIterator for IterWidth<'a, T> { }
 
+pub struct RowsIter<'a, T: Pixel> {
+  ps: &'a PlaneSlice<'a, T>,
+  next_row: usize,
+}
+
+impl<'a, T: Pixel> Iterator for RowsIter<'a, T> {
+  type Item = &'a [T];
+
+  fn next(&mut self) -> Option<Self::Item> {
+    let remaining = self.ps.plane.cfg.height as isize - self.ps.y + self.next_row as isize;
+    if remaining > 0 {
+      let row = self.next_row;
+      self.next_row += 1;
+      // cannot directly return self.ps.row(row) due to lifetime issue
+      let range = self.ps.slice_range(row);
+      Some(&self.ps.plane.data[range])
+    } else {
+      None
+    }
+  }
+
+  fn size_hint(&self) -> (usize, Option<usize>) {
+    let remaining = self.ps.plane.cfg.height as isize - self.ps.y + self.next_row as isize;
+    assert!(remaining >= 0);
+    let remaining = remaining as usize;
+
+    (remaining, Some(remaining))
+  }
+}
+
+impl<'a, T: Pixel> ExactSizeIterator for RowsIter<'a, T> {}
+impl<'a, T: Pixel> FusedIterator for RowsIter<'a, T> {}
+
 impl<'a, T: Pixel> PlaneSlice<'a, T> {
   #[inline]
   fn slice_range(&self, y_offset: usize) -> Range<usize> {
@@ -333,6 +366,13 @@ impl<'a, T: Pixel> PlaneSlice<'a, T> {
 
   pub fn as_ptr(&self) -> *const T {
     self.row(0).as_ptr()
+  }
+
+  pub fn rows_iter(&self) -> RowsIter<'_, T> {
+    RowsIter {
+      ps: self,
+      next_row: 0,
+    }
   }
 
   pub fn as_slice(&self) -> &'a [T] {
