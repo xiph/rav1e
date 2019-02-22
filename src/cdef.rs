@@ -327,14 +327,13 @@ pub fn cdef_sb_padded_frame_copy<T: Pixel>(
 
 
 pub fn cdef_empty_frame<T: Pixel>(f: &Frame<T>) -> Frame<T> {
-  let out = Frame {
+  Frame {
     planes: [
       Plane::new(0, 0, f.planes[0].cfg.xdec, f.planes[0].cfg.ydec, 0, 0),
       Plane::new(0, 0, f.planes[0].cfg.xdec, f.planes[0].cfg.ydec, 0, 0),
       Plane::new(0, 0, f.planes[0].cfg.xdec, f.planes[0].cfg.ydec, 0, 0),
     ]
-  };
-  out
+  }
 }
 
 // We assume in is padded, and the area we'll write out is at least as
