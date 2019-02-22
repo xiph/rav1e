@@ -375,13 +375,16 @@ mod native {
   use crate::plane::*;
   use crate::util::*;
 
-  fn run_filter<T: AsPrimitive<i32>>(
-    src: &[T], stride: usize, filter: [i32; 8]
+  unsafe fn run_filter<T: AsPrimitive<i32>>(
+    src: *const T, stride: usize, filter: [i32; 8]
   ) -> i32 {
     filter
       .iter()
-      .zip(src.iter().step_by(stride))
-      .map(|(f, s)| f * s.as_())
+      .enumerate()
+      .map(|(i, f)| {
+        let p = src.add(i * stride);
+        f * (*p).as_()
+      })
       .sum::<i32>()
   }
 
@@ -418,15 +421,18 @@ mod native {
         }
       }
       (0, _) => {
-        let src_slice = src.go_up(3).as_slice();
+        let offset_slice = src.go_up(3);
         for r in 0..height {
+          let src_slice = &offset_slice[r];
           for c in 0..width {
             dst_slice[r * dst_stride + c] = T::cast_from(round_shift(
-              run_filter(
-                &src_slice[r * ref_stride + c..],
-                ref_stride,
-                y_filter
-              ),
+              unsafe {
+                run_filter(
+                  src_slice[c..].as_ptr(),
+                  ref_stride,
+                  y_filter
+                )
+              },
               7
             )
             .max(0)
@@ -435,12 +441,13 @@ mod native {
         }
       }
       (_, 0) => {
-        let src_slice = src.go_left(3).as_slice();
+        let offset_slice = src.go_left(3);
         for r in 0..height {
+          let src_slice = &offset_slice[r];
           for c in 0..width {
             dst_slice[r * dst_stride + c] = T::cast_from(round_shift(
               round_shift(
-                run_filter(&src_slice[r * ref_stride + c..], 1, x_filter),
+                unsafe { run_filter(src_slice[c..].as_ptr(), 1, x_filter) },
                 7 - intermediate_bits
               ),
               intermediate_bits
@@ -453,12 +460,13 @@ mod native {
       (_, _) => {
         let mut intermediate = [0 as i16; 8 * (128 + 7)];
 
-        let src_slice = src.go_left(3).go_up(3).as_slice();
+        let offset_slice = src.go_left(3).go_up(3);
         for cg in (0..width).step_by(8) {
           for r in 0..height + 7 {
+            let src_slice = &offset_slice[r];
             for c in cg..(cg + 8).min(width) {
               intermediate[8 * r + (c - cg)] = round_shift(
-                run_filter(&src_slice[r * ref_stride + c..], 1, x_filter),
+                unsafe { run_filter(src_slice[c..].as_ptr(), 1, x_filter) },
                 7 - intermediate_bits
               ) as i16;
             }
@@ -467,7 +475,7 @@ mod native {
           for r in 0..height {
             for c in cg..(cg + 8).min(width) {
               dst_slice[r * dst_stride + c] = T::cast_from(round_shift(
-                run_filter(&intermediate[8 * r + c - cg..], 8, y_filter),
+                unsafe { run_filter(intermediate[8 * r + c - cg..].as_ptr(), 8, y_filter) },
                 7 + intermediate_bits
               )
               .max(0)
@@ -490,35 +498,39 @@ mod native {
     let intermediate_bits = 4 - if bit_depth == 12 { 2 } else { 0 };
     match (col_frac, row_frac) {
       (0, 0) => {
-        let src_slice = src.as_slice();
         for r in 0..height {
+          let src_slice = &src[r];
           for c in 0..width {
             tmp[r * width + c] =
-              i16::cast_from(src_slice[r * ref_stride + c] << intermediate_bits);
+              i16::cast_from(src_slice[c] << intermediate_bits);
           }
         }
       }
       (0, _) => {
-        let src_slice = src.go_up(3).as_slice();
+        let offset_slice = src.go_up(3);
         for r in 0..height {
+          let src_slice = &offset_slice[r];
           for c in 0..width {
             tmp[r * width + c] = round_shift(
-              run_filter(
-                &src_slice[r * ref_stride + c..],
-                ref_stride,
-                y_filter
-              ),
+              unsafe {
+                run_filter(
+                  src_slice[c..].as_ptr(),
+                  ref_stride,
+                  y_filter
+                )
+              },
               7 - intermediate_bits
             ) as i16;
           }
         }
       }
       (_, 0) => {
-        let src_slice = src.go_left(3).as_slice();
+        let offset_slice = src.go_left(3);
         for r in 0..height {
+          let src_slice = &offset_slice[r];
           for c in 0..width {
             tmp[r * width + c] = round_shift(
-              run_filter(&src_slice[r * ref_stride + c..], 1, x_filter),
+              unsafe { run_filter(src_slice[c..].as_ptr(), 1, x_filter) },
               7 - intermediate_bits
             ) as i16;
           }
@@ -527,12 +539,13 @@ mod native {
       (_, _) => {
         let mut intermediate = [0 as i16; 8 * (128 + 7)];
 
-        let src_slice = src.go_left(3).go_up(3).as_slice();
+        let offset_slice = src.go_left(3).go_up(3);
         for cg in (0..width).step_by(8) {
           for r in 0..height + 7 {
+            let src_slice = &offset_slice[r];
             for c in cg..(cg + 8).min(width) {
               intermediate[8 * r + (c - cg)] = round_shift(
-                run_filter(&src_slice[r * ref_stride + c..], 1, x_filter),
+                unsafe { run_filter(src_slice[c..].as_ptr(), 1, x_filter) },
                 7 - intermediate_bits
               ) as i16;
             }
@@ -541,7 +554,7 @@ mod native {
           for r in 0..height {
             for c in cg..(cg + 8).min(width) {
               tmp[r * width + c] = round_shift(
-                run_filter(&intermediate[8 * r + c - cg..], 8, y_filter),
+                unsafe { run_filter(intermediate[8 * r + c - cg..].as_ptr(), 8, y_filter) },
                 7
               ) as i16;
             }
