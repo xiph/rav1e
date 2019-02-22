@@ -99,11 +99,34 @@ pub fn parse_cli() -> CliOptions {
     )
     .arg(
       Arg::with_name("SPEED")
-        .help("Speed level (0 is best quality, 10 is fastest)")
+        .help("Speed level (0 is best quality, 10 is fastest)\n\
+        Speeds 10 and 0 are extremes and are generally not recommended\n\
+        - 10 (fastest):\n\
+        Min block size 64x64, TX domain distortion, RDO TX decision, fast deblock, no scenechange detection\n\
+        - 9:\n\
+        Min block size 64x64, TX domain distortion, RDO TX decision, fast deblock\n\
+        - 8:\n\
+        Min block size 8x8, reduced TX set, TX domain distortion, RDO TX decision, fast deblock\n\
+        - 7:\n\
+        Min block size 8x8, reduced TX set, TX domain distortion, RDO TX decision\n\
+        - 6:\n\
+        Min block size 8x8, reduced TX set, TX domain distortion, RDO TX decision\n\
+        - 5 (default):\n\
+        Min block size 8x8, reduced TX set, TX domain distortion\n\
+        - 4:\n\
+        Min block size 8x8, reduced TX set, TX domain distortion, complex pred modes for keyframes\n\
+        - 3:\n\
+        Min block size 8x8, TX domain distortion, complex pred modes for keyframes\n\
+        - 2:\n\
+        Min block size 8x8, TX domain distortion, complex pred modes for keyframes, include near MVs\n\
+        - 1:\n\
+        Min block size 8x8, TX domain distortion, complex pred modes, include near MVs\n\
+        - 0 (slowest):\n\
+        Min block size 4x4, TX domain distortion, complex pred modes, include near MVs, bottom-up encoding\n")
         .short("s")
         .long("speed")
         .takes_value(true)
-        .default_value("3")
+        .default_value("5")
     )
     .arg(
       Arg::with_name("MIN_KEYFRAME_INTERVAL")
@@ -123,7 +146,8 @@ pub fn parse_cli() -> CliOptions {
     )
     .arg(
       Arg::with_name("LOW_LATENCY")
-        .help("Low latency mode; disables frame reordering")
+        .help("Low latency mode; disables frame reordering\n\
+            Has a significant speed-to-quality trade-off")
         .long("low_latency")
         .takes_value(true)
         .default_value("false")
@@ -207,23 +231,6 @@ pub fn parse_cli() -> CliOptions {
         .hidden(true)
         .long("speed-test")
         .takes_value(true)
-        .possible_values(&[
-          "baseline",
-          "min_block_size_4x4",
-          "min_block_size_8x8",
-          "min_block_size_32x32",
-          "min_block_size_64x64",
-          "multiref",
-          "fast_deblock",
-          "reduced_tx_set",
-          "tx_domain_distortion",
-          "encode_bottomup",
-          "rdo_tx_decision",
-          "prediction_modes_keyframes",
-          "prediction_modes_all",
-          "include_near_mvs",
-          "no_scene_detection",
-        ])
     )
     .subcommand(SubCommand::with_name("advanced")
                 .setting(AppSettings::Hidden)
@@ -447,6 +454,9 @@ fn apply_speed_test_cfg(cfg: &mut EncoderConfig, setting: &str) {
     "no_scene_detection" => {
       cfg.speed_settings.no_scene_detection = true;
     },
+    "diamond_me" => {
+      cfg.speed_settings.diamond_me = true;
+    }
     setting => {
       panic!("Unrecognized speed test setting {}", setting);
     }

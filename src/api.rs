@@ -82,7 +82,7 @@ pub struct EncoderConfig {
 
 impl Default for EncoderConfig {
   fn default() -> Self {
-    const DEFAULT_SPEED: usize = 3;
+    const DEFAULT_SPEED: usize = 5;
     Self::with_speed_preset(DEFAULT_SPEED)
   }
 }
@@ -166,48 +166,52 @@ impl SpeedSettings {
     }
   }
 
+  /// This preset is set this way because 8x8 with reduced TX set is faster but with equivalent
+  /// or better quality compared to 16x16 or 32x32 (to which reduced TX set does not apply).
   fn min_block_size_preset(speed: usize) -> BlockSize {
-    if speed <= 1 {
+    if speed == 0 {
       BlockSize::BLOCK_4X4
-    } else if speed <= 2 {
+    } else if speed <= 8 {
       BlockSize::BLOCK_8X8
-    } else if speed <= 3 {
-      BlockSize::BLOCK_16X16
-    } else if speed <= 4 {
-      BlockSize::BLOCK_32X32
     } else {
       BlockSize::BLOCK_64X64
     }
   }
 
+  /// Multiref is enabled automatically if low_latency is false,
+  /// but if someone is setting low_latency to true manually,
+  /// multiref has a large speed penalty with low quality gain.
+  /// Because low_latency can be set manually, this setting is conservative.
   fn multiref_preset(speed: usize) -> bool {
-    speed <= 2
+    speed <= 1
   }
 
   fn fast_deblock_preset(speed: usize) -> bool {
-    speed >= 4
+    speed >= 8
   }
 
   fn reduced_tx_set_preset(speed: usize) -> bool {
-    speed >= 2
+    speed >= 4
   }
 
-  fn tx_domain_distortion_preset(speed: usize) -> bool {
-    speed >= 4
+  /// TX domain distortion is always faster, with no significant quality change
+  fn tx_domain_distortion_preset(_speed: usize) -> bool {
+    true
   }
 
   fn encode_bottomup_preset(speed: usize) -> bool {
     speed == 0
   }
 
+  /// RDO TX decision, counter-intuitively, provides a speed up, with a very small quality cost
   fn rdo_tx_decision_preset(speed: usize) -> bool {
-    speed <= 3
+    speed >= 6
   }
 
   fn prediction_modes_preset(speed: usize) -> PredictionModesSetting {
     if speed <= 1 {
       PredictionModesSetting::ComplexAll
-    } else if speed <= 3 {
+    } else if speed <= 4 {
       PredictionModesSetting::ComplexKeyframes
     } else {
       PredictionModesSetting::Simple
@@ -222,8 +226,13 @@ impl SpeedSettings {
     speed == 10
   }
 
-  fn diamond_me_preset(speed: usize) -> bool {
-    speed >= 3
+  /// Currently Diamond ME gives better quality than full search on most videos,
+  /// in addition to being faster.
+  /// There are a few outliers, such as the Wikipedia test clip.
+  ///
+  /// TODO: Revisit this setting if full search quality improves in the future.
+  fn diamond_me_preset(_speed: usize) -> bool {
+    true
   }
 }
 
