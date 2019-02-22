@@ -2565,9 +2565,6 @@ impl ContextWriter {
       /* TODO: Set zeromv ref to the converted global motion vector */
     } else {
       /* TODO: Set the zeromv ref to 0 */
-    }
-
-    if ref_frames[0] <= INTRA_FRAME {
       return 0;
     }
 
