@@ -145,6 +145,14 @@ impl<T: Pixel> Plane<T> {
     PlaneMutSlice { plane: self, x: po.x, y: po.y }
   }
 
+  pub fn as_slice(&self) -> PlaneSlice<'_, T> {
+    self.slice(&PlaneOffset { x: 0, y: 0 })
+  }
+
+  pub fn as_mut_slice(&mut self) -> PlaneMutSlice<'_, T> {
+    self.mut_slice(&PlaneOffset { x: 0, y: 0 })
+  }
+
   #[inline]
   fn index(&self, x: usize, y: usize) -> usize {
     (y + self.cfg.yorigin) * self.cfg.stride + (x + self.cfg.xorigin)
