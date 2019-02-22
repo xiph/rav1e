@@ -1189,6 +1189,17 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<
     lrf_output = cdef_sb_frame(fi, &fs.rec);
   }
 
+  let mut lrf_any_uncoded = false;
+  if fi.sequence.enable_restoration {
+    for pli in 0..PLANES {
+      let ru = fs.restoration.plane[pli].restoration_unit(sbo);
+      if !ru.coded {
+        lrf_any_uncoded = true;
+        break;
+      }
+    }
+  }
+
   // CDEF/LRF decision iteration
   // Start with a default of CDEF 0 and RestorationFilter::None
   // Try all CDEF options with current LRF; if new CDEF+LRF choice is better, select it.
@@ -1254,7 +1265,7 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<
     
     // check for new best restoration filter if enabled
     let mut lrf_change = false;
-    if fi.sequence.enable_restoration {
+    if fi.sequence.enable_restoration && lrf_any_uncoded {
       // need cdef output from best index, not just last iteration
       if fi.sequence.enable_cdef {
         cdef_filter_superblock(fi, &mut cdef_input, &mut lrf_input,
@@ -1265,32 +1276,35 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<
 
       // SgrProj LRF decision
       for pli in 0..3 {
-        for set in 0..16 {
-          let in_plane = &fs.input.planes[pli];  // reference
-          let ipo = &sbo.plane_offset(&in_plane.cfg);
-          let cdef_plane = &lrf_input.planes[pli];
-          let (xqd0, xqd1) = sgrproj_solve(set, fi,
-                                           &in_plane.slice(ipo),
-                                           &cdef_plane.slice(&PlaneOffset{x: 0, y: 0}),
-                                           cmp::min(cdef_plane.cfg.width, fi.width - ipo.x as usize),
-                                           cmp::min(cdef_plane.cfg.height, fi.height - ipo.y as usize));
-          let current_lrf = RestorationFilter::Sgrproj{set: set, xqd: [xqd0, xqd1]};
-          if let RestorationFilter::Sgrproj{set, xqd} = current_lrf {
-            // At present, this is a gross simplification
-            sgrproj_stripe_filter(set, xqd, fi,
-                                  lrf_input.planes[pli].cfg.width, lrf_input.planes[pli].cfg.height,
-                                  lrf_input.planes[pli].cfg.width, lrf_input.planes[pli].cfg.height,
-                                  &lrf_input.planes[pli].slice(&PlaneOffset{x:0, y:0}),
-                                  &lrf_input.planes[pli].slice(&PlaneOffset{x:0, y:0}),
-                                  &mut lrf_output.planes[pli].mut_slice(&PlaneOffset{x:0, y:0}));
-          }
-          let err = rdo_loop_plane_error(sbo, fi, fs, &cw.bc, &lrf_output, pli);
-          let rate = cw.count_lrf_switchable(w, &fs.restoration, &current_lrf, pli);
-          let cost = err as f64 + fi.lambda * rate as f64 / ((1<<OD_BITRES) as f64);
-          if best_cost[pli] < 0. || cost < best_cost[pli] {
-            best_cost[pli] = cost;
-            best_lrf[pli] = current_lrf;
-            lrf_change = true;
+        let ru = fs.restoration.plane[pli].restoration_unit(sbo);
+        if !ru.coded {
+          for set in 0..16 {
+            let in_plane = &fs.input.planes[pli];  // reference
+            let ipo = &sbo.plane_offset(&in_plane.cfg);
+            let cdef_plane = &lrf_input.planes[pli];
+            let (xqd0, xqd1) = sgrproj_solve(set, fi,
+                                             &in_plane.slice(ipo),
+                                             &cdef_plane.slice(&PlaneOffset{x: 0, y: 0}),
+                                             cmp::min(cdef_plane.cfg.width, fi.width - ipo.x as usize),
+                                             cmp::min(cdef_plane.cfg.height, fi.height - ipo.y as usize));
+            let current_lrf = RestorationFilter::Sgrproj{set: set, xqd: [xqd0, xqd1]};
+            if let RestorationFilter::Sgrproj{set, xqd} = current_lrf {
+              // At present, this is a gross simplification
+              sgrproj_stripe_filter(set, xqd, fi,
+                                    lrf_input.planes[pli].cfg.width, lrf_input.planes[pli].cfg.height,
+                                    lrf_input.planes[pli].cfg.width, lrf_input.planes[pli].cfg.height,
+                                    &lrf_input.planes[pli].slice(&PlaneOffset{x:0, y:0}),
+                                    &lrf_input.planes[pli].slice(&PlaneOffset{x:0, y:0}),
+                                    &mut lrf_output.planes[pli].mut_slice(&PlaneOffset{x:0, y:0}));
+            }
+            let err = rdo_loop_plane_error(sbo, fi, fs, &cw.bc, &lrf_output, pli);
+            let rate = cw.count_lrf_switchable(w, &fs.restoration, &current_lrf, pli);
+            let cost = err as f64 + fi.lambda * rate as f64 / ((1<<OD_BITRES) as f64);
+            if best_cost[pli] < 0. || cost < best_cost[pli] {
+              best_cost[pli] = cost;
+              best_lrf[pli] = current_lrf;
+              lrf_change = true;
+            }
           }
         }
       }
@@ -1316,7 +1330,10 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<
 
   if fi.sequence.enable_restoration {
     for pli in 0..PLANES {
-      fs.restoration.plane[pli].restoration_unit_as_mut(sbo).filter = best_lrf[pli];
+      let ru = fs.restoration.plane[pli].restoration_unit_as_mut(sbo);
+      if !ru.coded {
+        ru.filter = best_lrf[pli];
+      }
     }
   }
 }
