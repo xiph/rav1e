@@ -90,7 +90,7 @@ https://arewecompressedyet.com/analyzer/?d=https://people.xiph.org/~mbebenita/an
 
 * src/context.rs - High-level functions that write symbols to the bitstream, and maintain context.
 * src/ec.rs - Low-level implementation of the entropy coder, which directly writes the bitstream.
-* src/lib.rs - The top level library, contains code to write headers, manage buffers, and iterate throught each superblock.
+* src/lib.rs - The top level library, contains code to write headers, manage buffers, and iterate through each superblock.
 * src/partition.rs - Functions and enums to manage partitions (subdivisions of a superblock).
 * src/predict.rs - Intra prediction implementations.
 * src/quantize.rs - Quantization and dequantization functions for coefficients.
