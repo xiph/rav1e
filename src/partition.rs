@@ -893,7 +893,7 @@ pub fn get_intra_edges<'a, T: Pixel>(
     // Needs top
     if needs_top {
       if y != 0 {
-        above[..tx_size.width()].copy_from_slice(&dst.go_up(1).as_slice()[..tx_size.width()]);
+        above[..tx_size.width()].copy_from_slice(&dst.go_up(1)[0][..tx_size.width()]);
       } else {
         let val = if x != 0 { dst.go_left(1).p(0, 0) } else { T::cast_from(base - 1) };
         for v in above[..tx_size.width()].iter_mut() {
@@ -927,7 +927,7 @@ pub fn get_intra_edges<'a, T: Pixel>(
       };
       if num_avail > 0 {
         above[tx_size.width()..tx_size.width() + num_avail]
-        .copy_from_slice(&dst.go_up(1).as_slice()[tx_size.width()..tx_size.width() + num_avail]);
+        .copy_from_slice(&dst.go_up(1)[0][tx_size.width()..tx_size.width() + num_avail]);
       }
       if num_avail < tx_size.height() {
         let val = above[tx_size.width() + num_avail - 1];
