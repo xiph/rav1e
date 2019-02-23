@@ -86,8 +86,8 @@ mod nasm {
       for c in (0..blk_w).step_by(step_size) {
         let org_slice = plane_org.subslice(c, r);
         let ref_slice = plane_ref.subslice(c, r);
-        let org_ptr = org_slice.as_slice().as_ptr();
-        let ref_ptr = ref_slice.as_slice().as_ptr();
+        let org_ptr = org_slice.as_ptr();
+        let ref_ptr = ref_slice.as_ptr();
         // FIXME for now, T == u16
         let org_ptr = org_ptr as *const u16;
         let ref_ptr = ref_ptr as *const u16;
