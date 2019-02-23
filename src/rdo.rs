@@ -138,10 +138,8 @@ pub fn sse_wxh<T: Pixel>(
 
   let mut sse: u64 = 0;
   for j in 0..h {
-    let src1j = src1.subslice(0, j);
-    let src2j = src2.subslice(0, j);
-    let s1 = src1j.as_slice_w_width(w);
-    let s2 = src2j.as_slice_w_width(w);
+    let s1 = &src1[j][..w];
+    let s2 = &src2[j][..w];
 
     let row_sse = s1
       .iter()
