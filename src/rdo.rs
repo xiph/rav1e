@@ -476,7 +476,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     }
   }
 
-  let luma_rdo = |luma_mode: PredictionMode,
+  let luma_chroma_mode_rdo = |luma_mode: PredictionMode,
   fs: &mut FrameState<T>,
   cw: &mut ContextWriter,
   best: &mut EncodingSettings,
@@ -602,7 +602,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     };
     let mode_set_chroma = vec![luma_mode];
 
-    luma_rdo(luma_mode, fs, cw, &mut best, mvs, ref_frames_set[i], &mode_set_chroma, false,
+    luma_chroma_mode_rdo(luma_mode, fs, cw, &mut best, mvs, ref_frames_set[i], &mode_set_chroma, false,
              mode_contexts[i], &mv_stacks[i]);
   });
 
@@ -692,7 +692,7 @@ pub fn rdo_mode_decision<T: Pixel>(
       if is_chroma_block && luma_mode != PredictionMode::DC_PRED {
         mode_set_chroma.push(PredictionMode::DC_PRED);
       }
-      luma_rdo(luma_mode, fs, cw, &mut best, mvs, ref_frames, &mode_set_chroma, true,
+      luma_chroma_mode_rdo(luma_mode, fs, cw, &mut best, mvs, ref_frames, &mode_set_chroma, true,
                0, &Vec::new());
     });
   }
