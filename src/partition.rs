@@ -732,7 +732,7 @@ pub enum FilterIntraMode {
   FILTER_INTRA_MODES
 }
 
-#[derive(Copy, Debug, Clone)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct MotionVector {
   pub row: i16,
   pub col: i16

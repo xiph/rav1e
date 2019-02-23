@@ -422,7 +422,7 @@ impl<T: Pixel> FrameState<T> {
       deblock: Default::default(),
       segmentation: Default::default(),
       restoration: rs,
-      frame_mvs: vec![vec![MotionVector{row: 0, col: 0}; fi.w_in_b * fi.h_in_b]; REF_FRAMES]
+      frame_mvs: vec![vec![MotionVector::default(); fi.w_in_b * fi.h_in_b]; REF_FRAMES]
     }
   }
 }
@@ -1166,7 +1166,7 @@ pub fn encode_block_b<T: Pixel>(
       let ref_mvs = if num_mv_found > 0 {
         [mv_stack[ref_mv_idx].this_mv, mv_stack[ref_mv_idx].comp_mv]
       } else {
-        [MotionVector{ row: 0, col: 0 }; 2]
+        [MotionVector::default(); 2]
       };
 
       let mv_precision = if fi.force_integer_mv != 0 {

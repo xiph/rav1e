@@ -343,7 +343,7 @@ impl Default for EncodingSettings {
       skip: false,
       rd: std::f64::MAX,
       ref_frames: [INTRA_FRAME, NONE_FRAME],
-      mvs: [MotionVector { row: 0, col: 0 }; 2],
+      mvs: [MotionVector::default(); 2],
       tx_size: TxSize::TX_4X4,
       tx_type: TxType::DCT_DCT
     }
@@ -406,7 +406,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     mode_contexts.push(cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, fi, false));
 
     if fi.frame_type == FrameType::INTER {
-      let mut pmv = [MotionVector{ row: 0, col: 0 }; 2];
+      let mut pmv = [MotionVector::default(); 2];
       if mv_stack.len() > 0 { pmv[0] = mv_stack[0].this_mv; }
       if mv_stack.len() > 1 { pmv[1] = mv_stack[1].this_mv; }
       let ref_slot = ref_slot_set[i] as usize;
@@ -425,7 +425,7 @@ pub fn rdo_mode_decision<T: Pixel>(
 
       mvs_from_me.push([
         b_me,
-        MotionVector { row: 0, col: 0 }
+        MotionVector::default()
       ]);
 
       for &x in RAV1E_INTER_MODES_MINIMAL {
@@ -586,19 +586,19 @@ pub fn rdo_mode_decision<T: Pixel>(
       PredictionMode::NEARESTMV | PredictionMode::NEAREST_NEARESTMV => if mv_stacks[i].len() > 0 {
         [mv_stacks[i][0].this_mv, mv_stacks[i][0].comp_mv]
       } else {
-        [MotionVector { row: 0, col: 0 }; 2]
+        [MotionVector::default(); 2]
       },
       PredictionMode::NEAR0MV => if mv_stacks[i].len() > 1 {
         [mv_stacks[i][1].this_mv, mv_stacks[i][1].comp_mv]
       } else {
-        [MotionVector { row: 0, col: 0 }; 2]
+        [MotionVector::default(); 2]
       },
       PredictionMode::NEAR1MV | PredictionMode::NEAR2MV =>
         [mv_stacks[i][luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].this_mv,
          mv_stacks[i][luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].comp_mv],
       PredictionMode::NEAREST_NEWMV => [mv_stacks[i][0].this_mv, mvs_from_me[i][1]],
       PredictionMode::NEW_NEARESTMV => [mvs_from_me[i][0], mv_stacks[i][0].comp_mv],
-      _ => [MotionVector { row: 0, col: 0 }; 2]
+      _ => [MotionVector::default(); 2]
     };
     let mode_set_chroma = vec![luma_mode];
 
@@ -686,7 +686,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     });
 
     modes.iter().take(num_modes_rdo).for_each(|&luma_mode| {
-      let mvs = [MotionVector { row: 0, col: 0 }; 2];
+      let mvs = [MotionVector::default(); 2];
       let ref_frames = [INTRA_FRAME, NONE_FRAME];
       let mut mode_set_chroma = vec![luma_mode];
       if is_chroma_block && luma_mode != PredictionMode::DC_PRED {
