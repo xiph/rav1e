@@ -413,10 +413,10 @@ mod native {
     let intermediate_bits = 4 - if bit_depth == 12 { 2 } else { 0 };
     match (col_frac, row_frac) {
       (0, 0) => {
-        let src_slice = src.as_slice();
         for r in 0..height {
+          let src_slice = &src[r];
           for c in 0..width {
-            dst_slice[r * dst_stride + c] = src_slice[r * ref_stride + c];
+            dst_slice[r * dst_stride + c] = src_slice[c];
           }
         }
       }
