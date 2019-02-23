@@ -76,7 +76,7 @@ pub enum ObuMetaType {
 }
 
 impl ObuMetaType {
-  fn size(&self) -> u64 {
+  fn size(self) -> u64 {
     use self::ObuMetaType::*;
     match self {
       OBU_META_HDR_CLL => 4,

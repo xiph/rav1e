@@ -45,7 +45,7 @@ pub enum RDOType {
 }
 
 impl RDOType {
-  pub fn needs_tx_dist(&self) -> bool {
+  pub fn needs_tx_dist(self) -> bool {
     match self {
       // Pixel-domain distortion and exact ec rate
       RDOType::PixelDistRealRate => false,
@@ -412,7 +412,7 @@ pub fn rdo_mode_decision<T: Pixel>(
       let ref_slot = ref_slot_set[i] as usize;
       let cmv = pmvs[ref_slot].unwrap();
 
-      let b_me = motion_estimation(fi, fs, bsize, bo, ref_frames[0], cmv, &pmv, ref_slot);
+      let b_me = motion_estimation(fi, fs, bsize, bo, ref_frames[0], cmv, pmv, ref_slot);
 
       // Fill the saved motion structure.
       let frame_mvs = &mut fs.frame_mvs[ref_slot as usize];
@@ -1127,7 +1127,7 @@ fn rdo_loop_plane_error<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<T
                                   fs: &FrameState<T>, bc: &BlockContext,
                                   test: &Frame<T>, pli: usize) -> u64 {
   let sbo_0 = SuperBlockOffset { x: 0, y: 0 };
-  let sb_blocks = if fi.sequence.use_128x128_superblock {16} else {8};  
+  let sb_blocks = if fi.sequence.use_128x128_superblock {16} else {8};
   // Each direction block is 8x8 in y, potentially smaller if subsampled in chroma
   // accumulating in-frame and unpadded
   let mut err:u64 = 0;
@@ -1224,7 +1224,7 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<
               RestorationFilter::None{} => {
                 let err = rdo_loop_plane_error(sbo, fi, fs, &cw.bc, &lrf_input, pli);
                 let rate = if fi.sequence.enable_restoration {
-                  cw.count_lrf_switchable(w, &fs.restoration, &best_lrf[pli], pli)
+                  cw.count_lrf_switchable(w, &fs.restoration, best_lrf[pli], pli)
                 } else {
                   0 // no relative cost differeneces to different CDEF params.  If cdef is on, it's a wash.
                 };
@@ -1241,7 +1241,7 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<
                                       &lrf_input.planes[pli].slice(&PlaneOffset{x:0, y:0}),
                                       &mut lrf_output.planes[pli].mut_slice(&PlaneOffset{x:0, y:0}));
                 let err = rdo_loop_plane_error(sbo, fi, fs, &cw.bc, &lrf_output, pli);
-                let rate = cw.count_lrf_switchable(w, &fs.restoration, &best_lrf[pli], pli);
+                let rate = cw.count_lrf_switchable(w, &fs.restoration, best_lrf[pli], pli);
                 cost[pli] = err as f64 + fi.lambda * rate as f64 / ((1<<OD_BITRES) as f64);
                 cost_acc += cost[pli];
               }
@@ -1262,7 +1262,7 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<
 
     if !cdef_change && !first_loop { break; }
     first_loop = false;
-    
+
     // check for new best restoration filter if enabled
     let mut lrf_change = false;
     if fi.sequence.enable_restoration && lrf_any_uncoded {
@@ -1298,7 +1298,7 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<
                                     &mut lrf_output.planes[pli].mut_slice(&PlaneOffset{x:0, y:0}));
             }
             let err = rdo_loop_plane_error(sbo, fi, fs, &cw.bc, &lrf_output, pli);
-            let rate = cw.count_lrf_switchable(w, &fs.restoration, &current_lrf, pli);
+            let rate = cw.count_lrf_switchable(w, &fs.restoration, current_lrf, pli);
             let cost = err as f64 + fi.lambda * rate as f64 / ((1<<OD_BITRES) as f64);
             if best_cost[pli] < 0. || cost < best_cost[pli] {
               best_cost[pli] = cost;
