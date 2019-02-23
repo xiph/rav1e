@@ -919,12 +919,9 @@ fn write_obus<T: Pixel>(
 
 /// Write into `dst` the difference between the blocks at `src1` and `src2`
 fn diff<T: Pixel>(dst: &mut [i16], src1: &PlaneSlice<'_, T>, src2: &PlaneSlice<'_, T>, width: usize, height: usize) {
-  let src1_stride = src1.plane.cfg.stride;
-  let src2_stride = src2.plane.cfg.stride;
-
   for ((l, s1), s2) in dst.chunks_mut(width).take(height)
-    .zip(src1.as_slice().chunks(src1_stride))
-    .zip(src2.as_slice().chunks(src2_stride)) {
+    .zip(src1.rows_iter())
+    .zip(src2.rows_iter()) {
       for ((r, v1), v2) in l.iter_mut().zip(s1).zip(s2) {
         *r = i16::cast_from(*v1) - i16::cast_from(*v2);
       }
