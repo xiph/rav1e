@@ -37,6 +37,9 @@ pub fn parse_cli() -> CliOptions {
     .about("AV1 video encoder")
     .setting(AppSettings::DeriveDisplayOrder)
     .setting(AppSettings::SubcommandsNegateReqs)
+    .arg(Arg::with_name("FULLHELP")
+      .help("Prints more detailed help information")
+      .long("fullhelp"))
     // THREADS
     .arg(
       Arg::with_name("THREADS")
@@ -49,7 +52,7 @@ pub fn parse_cli() -> CliOptions {
     .arg(
       Arg::with_name("INPUT")
         .help("Uncompressed YUV4MPEG2 video input")
-        .required(true)
+        .required_unless("FULLHELP")
         .index(1)
     )
     .arg(
@@ -57,7 +60,7 @@ pub fn parse_cli() -> CliOptions {
         .help("Compressed AV1 in IVF video output")
         .short("o")
         .long("output")
-        .required(true)
+        .required_unless("FULLHELP")
         .takes_value(true)
     )
     .arg(
@@ -100,6 +103,8 @@ pub fn parse_cli() -> CliOptions {
     .arg(
       Arg::with_name("SPEED")
         .help("Speed level (0 is best quality, 10 is fastest)\n\
+        Speeds 10 and 0 are extremes and are generally not recommended")
+        .long_help("Speed level (0 is best quality, 10 is fastest)\n\
         Speeds 10 and 0 are extremes and are generally not recommended\n\
         - 10 (fastest):\n\
         Min block size 64x64, TX domain distortion, RDO TX decision, fast deblock, no scenechange detection\n\
@@ -245,6 +250,11 @@ pub fn parse_cli() -> CliOptions {
     );
 
   let matches = app.clone().get_matches();
+
+  if matches.is_present("FULLHELP") {
+    app.print_long_help().unwrap();
+    std::process::exit(0);
+  }
 
   if let Some(threads) = matches.value_of("THREADS").map(|v| v.parse().expect("Threads must be an integer")) {
     rayon::ThreadPoolBuilder::new().num_threads(threads).build_global().unwrap();
