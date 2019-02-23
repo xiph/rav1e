@@ -222,7 +222,7 @@ pub fn get_subset_predictors<T: Pixel>(
 
 pub fn motion_estimation<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &FrameState<T>, bsize: BlockSize, bo: &BlockOffset,
-  ref_frame: usize, cmv: MotionVector, pmv: &[MotionVector; 2],
+  ref_frame: usize, cmv: MotionVector, pmv: [MotionVector; 2],
   ref_slot: usize
 ) -> MotionVector {
   match fi.rec_buffer.frames[fi.ref_frames[ref_frame - LAST_FRAME] as usize] {
@@ -362,7 +362,7 @@ fn get_best_predictor<T: Pixel>(
   fi: &FrameInvariants<T>,
   po: &PlaneOffset, p_org: &Plane<T>, p_ref: &Plane<T>,
   predictors: &[MotionVector],
-  bit_depth: usize, pmv: &[MotionVector; 2], lambda: u32,
+  bit_depth: usize, pmv: [MotionVector; 2], lambda: u32,
   mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
   blk_w: usize, blk_h: usize,
   center_mv: &mut MotionVector, center_mv_cost: &mut u64) {
@@ -386,7 +386,7 @@ fn diamond_me_search<T: Pixel>(
   fi: &FrameInvariants<T>,
   po: &PlaneOffset, p_org: &Plane<T>, p_ref: &Plane<T>,
   predictors: &[MotionVector],
-  bit_depth: usize, pmv: &[MotionVector; 2], lambda: u32,
+  bit_depth: usize, pmv: [MotionVector; 2], lambda: u32,
   mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
   blk_w: usize, blk_h: usize,
   center_mv: &mut MotionVector, center_mv_cost: &mut u64)
@@ -440,7 +440,7 @@ fn diamond_me_search<T: Pixel>(
 fn get_mv_rd_cost<T: Pixel>(
   fi: &FrameInvariants<T>,
   po: &PlaneOffset, p_org: &Plane<T>, p_ref: &Plane<T>, bit_depth: usize,
-  pmv: &[MotionVector; 2], lambda: u32,
+  pmv: [MotionVector; 2], lambda: u32,
   mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
   blk_w: usize, blk_h: usize,
   cand_mv: MotionVector) -> u64
@@ -471,7 +471,7 @@ fn full_search<T: Pixel>(
   x_lo: isize, x_hi: isize, y_lo: isize, y_hi: isize, blk_h: usize,
   blk_w: usize, p_org: &Plane<T>, p_ref: &Plane<T>, best_mv: &mut MotionVector,
   lowest_cost: &mut u64, po: &PlaneOffset, step: usize, bit_depth: usize,
-  lambda: u32, pmv: &[MotionVector; 2], allow_high_precision_mv: bool
+  lambda: u32, pmv: [MotionVector; 2], allow_high_precision_mv: bool
 ) {
     let search_range_y = (y_lo..=y_hi).step_by(step);
     let search_range_x = (x_lo..=x_hi).step_by(step);
@@ -563,7 +563,7 @@ pub fn estimate_motion_ss4<T: Pixel>(
       1,
       fi.sequence.bit_depth,
       lambda,
-      &[MotionVector { row: 0, col: 0 }; 2],
+      [MotionVector { row: 0, col: 0 }; 2],
       fi.allow_high_precision_mv
     );
 
@@ -616,7 +616,7 @@ pub fn estimate_motion_ss2<T: Pixel>(
           1,
           fi.sequence.bit_depth,
           lambda,
-          &[MotionVector { row: 0, col: 0 }; 2],
+          [MotionVector { row: 0, col: 0 }; 2],
           fi.allow_high_precision_mv
         );
       }

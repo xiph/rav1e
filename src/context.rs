@@ -3023,9 +3023,9 @@ impl ContextWriter {
 
   // rather than test writing and rolling back the cdf, we just count Q8 bits using the current cdf
   pub fn count_lrf_switchable(&mut self, w: &dyn Writer, rs: &RestorationState,
-                              filter: &RestorationFilter, pli: usize) -> u32 {
+                              filter: RestorationFilter, pli: usize) -> u32 {
     let nsym = &self.fc.lrf_switchable_cdf.len()-1;
-    match *filter {
+    match filter {
       RestorationFilter::None => {
         w.symbol_bits(0, &self.fc.lrf_switchable_cdf[..nsym])
       }
