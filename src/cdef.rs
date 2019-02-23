@@ -300,8 +300,8 @@ pub fn cdef_sb_padded_frame_copy<T: Pixel>(
           out_row[x] = T::cast_from(CDEF_VERY_LARGE);
         }
       } else {
-        let in_slice = f.planes[p].slice(&PlaneOffset {x:0, y:offset.y + y - ipad});
-        let in_row = in_slice.as_slice();
+        let in_slice = f.planes[p].slice(&PlaneOffset {x:0, y:offset.y - ipad});
+        let in_row = &in_slice[y as usize];
         // are we guaranteed to be all in frame this row?
         if offset.x < ipad || offset.x + (sb_size as isize >>xdec) + ipad >= w {
           // No; do it the hard way.  off left or right edge, fill with flag.
