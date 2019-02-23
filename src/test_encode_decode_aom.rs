@@ -175,7 +175,7 @@ test_dimensions!{
 fn dimension(w: usize, h: usize) {
   let quantizer = 100;
   let limit = 1;
-  let speed = 4;
+  let speed = 8;
 
   encode_decode(w, h, speed, quantizer, limit, 8, Default::default(), 15, 15, true, 0);
 }
@@ -185,7 +185,7 @@ fn quantizer() {
   let limit = 5;
   let w = 64;
   let h = 80;
-  let speed = 4;
+  let speed = 8;
 
   for b in DIMENSION_OFFSETS.iter() {
     for &q in [80, 100, 120].iter() {
@@ -199,7 +199,7 @@ fn bitrate() {
   let limit = 5;
   let w = 64;
   let h = 80;
-  let speed = 4;
+  let speed = 8;
 
   for &q in [172, 220, 252, 255].iter() {
     for &r in [100, 1000, 10_000].iter() {
@@ -213,7 +213,7 @@ fn keyframes() {
   let limit = 12;
   let w = 64;
   let h = 80;
-  let speed = 10;
+  let speed = 9;
   let q = 100;
 
   encode_decode(w, h, speed, q, limit, 8, Default::default(), 6, 6, true, 0);
