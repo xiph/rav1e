@@ -149,7 +149,7 @@ fn sgrproj_box_sum_slow<T: Pixel>(a: &mut i32, b: &mut i32,
     // clamp vertically to stripe limits
     let ly = clamp(cropped_y, stripe_y - 2, stripe_y + stripe_h as isize + 1);
     // Reslice to avoid a negative X index.
-    let p = src_plane.reslice(x - r as isize,ly).as_slice();
+    let p = &src_plane.reslice(x - r as isize,ly)[0];
     // left-hand addressing limit
     let left = cmp::max(0, r as isize - x - src_plane.x) as usize;
     // right-hand addressing limit
@@ -185,7 +185,7 @@ fn sgrproj_box_sum_fastxy_r1<T: Pixel>(a: &mut i32, b: &mut i32, x: isize, y: is
   let mut ssq:i32 = 0;
   let mut sum:i32 = 0;
   for yi in -1..=1 {
-    let x = p.reslice(x - 1, y + yi).as_slice();
+    let x = &p.reslice(x - 1, y + yi)[0];
     ssq += i32::cast_from(x[0]) * i32::cast_from(x[0]) +
       i32::cast_from(x[1]) * i32::cast_from(x[1]) +
       i32::cast_from(x[2]) * i32::cast_from(x[2]);
@@ -201,7 +201,7 @@ fn sgrproj_box_sum_fastxy_r2<T: Pixel>(a: &mut i32, b: &mut i32, x: isize, y: is
   let mut ssq:i32 = 0;
   let mut sum:i32 = 0;
   for yi in -2..=2 {
-    let x = p.reslice(x - 2, y + yi).as_slice();
+    let x = &p.reslice(x - 2, y + yi)[0];
     ssq += i32::cast_from(x[0]) * i32::cast_from(x[0]) +
       i32::cast_from(x[1]) * i32::cast_from(x[1]) +
       i32::cast_from(x[2]) * i32::cast_from(x[2]) +
@@ -237,7 +237,7 @@ fn sgrproj_box_sum_fastx_r1<T: Pixel>(a: &mut i32, b: &mut i32,
     let cropped_y = clamp(yi, -src_plane.y, src_h - 1);
     // clamp vertically to stripe limits
     let ly = clamp(cropped_y, stripe_y - 2, stripe_y + stripe_h as isize + 1);
-    let x = src_plane.reslice(x - 1, ly).as_slice();
+    let x = &src_plane.reslice(x - 1, ly)[0];
     ssq += i32::cast_from(x[0]) * i32::cast_from(x[0]) +
       i32::cast_from(x[1]) * i32::cast_from(x[1]) +
       i32::cast_from(x[2]) * i32::cast_from(x[2]);
@@ -269,7 +269,7 @@ fn sgrproj_box_sum_fastx_r2<T: Pixel>(a: &mut i32, b: &mut i32,
     let cropped_y = clamp(yi, -src_plane.y, src_h as isize - 1);
     // clamp vertically to stripe limits
     let ly = clamp(cropped_y, stripe_y - 2, stripe_y + stripe_h as isize + 1);
-    let x = src_plane.reslice(x - 2, ly).as_slice();
+    let x = &src_plane.reslice(x - 2, ly)[0];
     ssq += i32::cast_from(x[0]) * i32::cast_from(x[0]) +
       i32::cast_from(x[1]) * i32::cast_from(x[1]) +
       i32::cast_from(x[2]) * i32::cast_from(x[2]) +
