@@ -714,6 +714,10 @@ impl<T: Pixel> Context<T> {
   }
 
   pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
+    if self.needs_more_lookahead() {
+      return Err(EncoderStatus::NeedMoreData);
+    }
+
     let idx = {
       let mut idx = self.idx;
       while !self.set_frame_properties(idx) {
