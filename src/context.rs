@@ -1222,7 +1222,7 @@ impl Block {
       partition: PartitionType::PARTITION_NONE,
       skip: false,
       ref_frames: [INTRA_FRAME; 2],
-      mv: [ MotionVector { row:0, col: 0 }; 2],
+      mv: [ MotionVector::default(); 2],
       neighbors_ref_counts: [0; TOTAL_REFS_PER_FRAME],
       cdef_index: 0,
       n4_w: BLOCK_64X64.width_mi(),
@@ -2123,7 +2123,7 @@ impl ContextWriter {
           if !found_match && mv_stack.len() < MAX_REF_MV_STACK_SIZE {
             let mv_cand = CandidateMV {
               this_mv: blk.mv[i],
-              comp_mv: MotionVector { row: 0, col: 0 },
+              comp_mv: MotionVector::default(),
               weight
             };
 
@@ -2193,7 +2193,7 @@ impl ContextWriter {
           if !self.find_matching_mv(mv, mv_stack) {
             let mv_cand = CandidateMV {
               this_mv: mv,
-              comp_mv: MotionVector { row: 0, col: 0 },
+              comp_mv: MotionVector::default(),
               weight: 2
             };
             mv_stack.push(mv_cand);
@@ -2450,8 +2450,8 @@ impl ContextWriter {
 
       let mut ref_id_count = [0 as usize; 2];
       let mut ref_diff_count = [0 as usize; 2];
-      let mut ref_id_mvs = [[MotionVector { row: 0, col: 0 }; 2]; 2];
-      let mut ref_diff_mvs = [[MotionVector { row: 0, col: 0 }; 2]; 2];
+      let mut ref_id_mvs = [[MotionVector::default(); 2]; 2];
+      let mut ref_diff_mvs = [[MotionVector::default(); 2]; 2];
 
       for pass in passes {
         let mut idx = 0;
@@ -2477,7 +2477,7 @@ impl ContextWriter {
       }
 
       if is_compound {
-        let mut combined_mvs = [[MotionVector { row: 0, col: 0}; 2]; 2];
+        let mut combined_mvs = [[MotionVector::default(); 2]; 2];
 
         for list in 0..2 {
           let mut comp_count = 0;

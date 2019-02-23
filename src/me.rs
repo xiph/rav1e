@@ -177,7 +177,7 @@ pub fn get_subset_predictors<T: Pixel>(
   }
 
   if predictors.len() > 0 {
-    let mut median_mv = MotionVector{row: 0, col: 0};
+    let mut median_mv = MotionVector::default();
     for mv in predictors.iter() {
       median_mv = median_mv + *mv;
     }
@@ -186,7 +186,7 @@ pub fn get_subset_predictors<T: Pixel>(
     predictors.push(median_mv.quantize_to_fullpel());
   }
 
-  predictors.push(MotionVector{row: 0, col: 0});
+  predictors.push(MotionVector::default());
 
   // Coarse motion estimation.
 
@@ -242,7 +242,7 @@ pub fn motion_estimation<T: Pixel>(
       // Full-pixel motion estimation
 
       let mut lowest_cost = std::u64::MAX;
-      let mut best_mv = MotionVector { row: 0, col: 0 };
+      let mut best_mv = MotionVector::default();
 
       let frame_mvs = &fs.frame_mvs[ref_slot];
       let frame_ref = &fi.rec_buffer.frames[fi.ref_frames[0] as usize];
@@ -329,7 +329,7 @@ pub fn motion_estimation<T: Pixel>(
                 blk_w,
                 blk_h,
                 [ref_frame, NONE_FRAME],
-                [cand_mv, MotionVector { row: 0, col: 0 }]
+                [cand_mv, MotionVector::default()]
               );
             }
 
@@ -354,7 +354,7 @@ pub fn motion_estimation<T: Pixel>(
       best_mv
     }
 
-    None => MotionVector { row: 0, col: 0 }
+    None => MotionVector::default()
   }
 }
 
@@ -366,7 +366,7 @@ fn get_best_predictor<T: Pixel>(
   mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
   blk_w: usize, blk_h: usize,
   center_mv: &mut MotionVector, center_mv_cost: &mut u64) {
-  *center_mv = MotionVector{row: 0, col: 0};
+  *center_mv = MotionVector::default();
   *center_mv_cost = std::u64::MAX;
 
   for &init_mv in predictors.iter() {
@@ -401,7 +401,7 @@ fn diamond_me_search<T: Pixel>(
 
   loop {
     let mut best_diamond_rd_cost = std::u64::MAX;
-    let mut best_diamond_mv = MotionVector { row: 0, col: 0 };
+    let mut best_diamond_mv = MotionVector::default();
 
     for p in diamond_pattern.iter() {
 
@@ -543,7 +543,7 @@ pub fn estimate_motion_ss4<T: Pixel>(
     let y_hi = po.y + (((range_y).min(mvy_max / 8)) >> 2);
 
     let mut lowest_cost = std::u64::MAX;
-    let mut best_mv = MotionVector { row: 0, col: 0 };
+    let mut best_mv = MotionVector::default();
 
     // Divide by 16 to account for subsampling, 0.125 is a fudge factor
     let lambda = (fi.me_lambda * 256.0 / 16.0 * 0.125) as u32;
@@ -563,7 +563,7 @@ pub fn estimate_motion_ss4<T: Pixel>(
       1,
       fi.sequence.bit_depth,
       lambda,
-      [MotionVector { row: 0, col: 0 }; 2],
+      [MotionVector::default(); 2],
       fi.allow_high_precision_mv
     );
 
@@ -589,7 +589,7 @@ pub fn estimate_motion_ss2<T: Pixel>(
     let (mvx_min, mvx_max, mvy_min, mvy_max) = get_mv_range(fi.w_in_b, fi.h_in_b, &bo_adj, blk_w, blk_h);
 
     let mut lowest_cost = std::u64::MAX;
-    let mut best_mv = MotionVector { row: 0, col: 0 };
+    let mut best_mv = MotionVector::default();
 
     // Divide by 4 to account for subsampling, 0.125 is a fudge factor
     let lambda = (fi.me_lambda * 256.0 / 4.0 * 0.125) as u32;
@@ -616,7 +616,7 @@ pub fn estimate_motion_ss2<T: Pixel>(
           1,
           fi.sequence.bit_depth,
           lambda,
-          [MotionVector { row: 0, col: 0 }; 2],
+          [MotionVector::default(); 2],
           fi.allow_high_precision_mv
         );
       }
