@@ -112,8 +112,13 @@ SECTION .text
 
 %macro cdef_filter_fn 3 ; w, h, stride
 INIT_YMM avx2
+%if %1 != 4 || %2 != 8
 cglobal cdef_filter_%1x%2, 4, 9, 16, 2 * 16 + (%2+4)*%3, \
                            dst, stride, left, top, pri, sec, stride3, dst4, edge
+%else
+cglobal cdef_filter_%1x%2, 4, 10, 16, 2 * 16 + (%2+4)*%3, \
+                           dst, stride, left, top, pri, sec, stride3, dst4, edge
+%endif
 %define px rsp+2*16+2*%3
     pcmpeqw        m14, m14
     psrlw          m14, 1                   ; 0x7fff
@@ -175,7 +180,20 @@ cglobal cdef_filter_%1x%2, 4, 9, 16, 2 * 16 + (%2+4)*%3, \
     movd [px+2*%3+%1*2], xm14
     movd [px+3*%3+%1*2], xm14
 %if %2 == 8
-    ; FIXME w == 4
+ %if %1 == 4
+    movd           xm1, [dst4q+strideq*0]
+    movd           xm2, [dst4q+strideq*1]
+    movd           xm3, [dst4q+strideq*2]
+    movd           xm4, [dst4q+stride3q]
+    pmovzxbw       xm1, xm1
+    pmovzxbw       xm2, xm2
+    pmovzxbw       xm3, xm3
+    pmovzxbw       xm4, xm4
+    movq     [px+4*%3], xm1
+    movq     [px+5*%3], xm2
+    movq     [px+6*%3], xm3
+    movq     [px+7*%3], xm4
+ %else
     pmovzxbw       xm1, [dst4q+strideq*0]
     pmovzxbw       xm2, [dst4q+strideq*1]
     pmovzxbw       xm3, [dst4q+strideq*2]
@@ -184,6 +202,7 @@ cglobal cdef_filter_%1x%2, 4, 9, 16, 2 * 16 + (%2+4)*%3, \
     mova     [px+5*%3], xm2
     mova     [px+6*%3], xm3
     mova     [px+7*%3], xm4
+ %endif
     movd [px+4*%3+%1*2], xm14
     movd [px+5*%3+%1*2], xm14
     movd [px+6*%3+%1*2], xm14
@@ -376,7 +395,11 @@ cglobal cdef_filter_%1x%2, 4, 9, 16, 2 * 16 + (%2+4)*%3, \
     mov           dird, r6m
     lea           tapq, [tapq+dirq*2+12]
 %if %1*%2*2/mmsize > 1
+ %if %1 == 4
+    DEFINE_ARGS dst, stride, dir, stk, pri, sec, stride3, h, off, k
+ %else
     DEFINE_ARGS dst, stride, dir, stk, pri, sec, h, off, k
+ %endif
     mov             hd, %1*%2*2/mmsize
 %else
     DEFINE_ARGS dst, stride, dir, stk, pri, sec, stride3, off, k
@@ -431,8 +454,9 @@ cglobal cdef_filter_%1x%2, 4, 9, 16, 2 * 16 + (%2+4)*%3, \
 %endif
 
 %if %1*%2*2/mmsize > 1
-    lea           dstq, [dstq+strideq*2]
-    add           stkq, %3*2
+ %define vloop_lines (mmsize/(%1*2))
+    lea           dstq, [dstq+strideq*vloop_lines]
+    add           stkq, %3*vloop_lines
     dec             hd
     jg .v_loop
 %endif
@@ -441,6 +465,7 @@ cglobal cdef_filter_%1x%2, 4, 9, 16, 2 * 16 + (%2+4)*%3, \
 %endmacro
 
 cdef_filter_fn 8, 8, 32
+cdef_filter_fn 4, 8, 32
 cdef_filter_fn 4, 4, 32
 
 INIT_YMM avx2
