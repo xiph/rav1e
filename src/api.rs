@@ -510,8 +510,10 @@ pub struct Context<T: Pixel> {
 
 #[derive(Clone, Copy, Debug)]
 pub enum EncoderStatus {
-  /// The encoder needs more Frames to produce an output Packet
+  /// The encoder needs more data to produce an output Packet--used with frame reordering
   NeedMoreData,
+  /// The encoder needs more Frames to analyze lookahead
+  NeedMoreFrames,
   /// There are enough Frames queue
   EnoughData,
   ///
@@ -715,7 +717,7 @@ impl<T: Pixel> Context<T> {
 
   pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
     if self.needs_more_lookahead() {
-      return Err(EncoderStatus::NeedMoreData);
+      return Err(EncoderStatus::NeedMoreFrames);
     }
 
     let idx = {

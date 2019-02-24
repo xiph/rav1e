@@ -58,14 +58,24 @@ fn process_frame<T: Pixel>(
 ) -> Result<Vec<FrameSummary>, ()> {
   let y4m_details = y4m_dec.get_video_details();
   let mut frame_summaries = Vec::new();
-  read_frame(ctx, y4m_dec, y4m_details);
   let pkt_wrapped = ctx.receive_packet();
-  if let Ok(pkt) = pkt_wrapped {
-    write_ivf_frame(output_file, pkt.number as u64, pkt.data.as_ref());
-    if let (Some(ref mut y4m_enc_uw), Some(ref rec)) = (y4m_enc.as_mut(), &pkt.rec) {
-      write_y4m_frame(y4m_enc_uw, rec, y4m_details);
+  match pkt_wrapped {
+    Ok(pkt) => {
+      write_ivf_frame(output_file, pkt.number as u64, pkt.data.as_ref());
+      if let (Some(ref mut y4m_enc_uw), Some(ref rec)) = (y4m_enc.as_mut(), &pkt.rec) {
+        write_y4m_frame(y4m_enc_uw, rec, y4m_details);
+      }
+      frame_summaries.push(pkt.into());
     }
-    frame_summaries.push(pkt.into());
+    Err(EncoderStatus::NeedMoreFrames) => {
+      read_frame(ctx, y4m_dec, y4m_details);
+    }
+    Err(EncoderStatus::NeedMoreData) | Err(EncoderStatus::EnoughData) => {
+      // Expected statuses, continue without error
+    }
+    Err(EncoderStatus::Failure) | Err(EncoderStatus::InvalidKey) | Err(EncoderStatus::ParseError) => {
+      panic!("Failed to encode video");
+    }
   }
   Ok(frame_summaries)
 }
