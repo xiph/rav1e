@@ -156,15 +156,17 @@ cglobal cdef_filter_%1x%2, 4, 10, 16, 2 * 16 + (%2+4)*%3, \
 .no_right:
 %if %1 == 4
     movd           xm1, [dstq+strideq*0]
-    movd           xm2, [dstq+strideq*2]
-    pinsrd         xm1, [dstq+strideq*1], 1
-    pinsrd         xm2, [dstq+stride3q], 1
+    movd           xm2, [dstq+strideq*1]
+    movd           xm3, [dstq+strideq*2]
+    movd           xm4, [dstq+stride3q]
     pmovzxbw       xm1, xm1
     pmovzxbw       xm2, xm2
+    pmovzxbw       xm3, xm3
+    pmovzxbw       xm4, xm4
     movq     [px+0*%3], xm1
-    movhps   [px+1*%3], xm1
-    movq     [px+2*%3], xm2
-    movhps   [px+3*%3], xm2
+    movq     [px+1*%3], xm2
+    movq     [px+2*%3], xm3
+    movq     [px+3*%3], xm4
 %else
     pmovzxbw       xm1, [dstq+strideq*0]
     pmovzxbw       xm2, [dstq+strideq*1]
