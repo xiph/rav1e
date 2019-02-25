@@ -94,20 +94,18 @@ SECTION .text
     psubw           m6, m4                      ; diff_p1(p1 - px)
     pabsw           m9, m5
     pabsw          m10, m6
-    psraw          m11, m9,  %2
-    psraw          m12, m10, %2
-    psubw          m11, %3, m11
-    psubw          m12, %3, m12
-    pmaxsw         m11, m13
-    pmaxsw         m12, m13
-    pminsw         m11, m9
-    pminsw         m12, m10
-    psignw         m11, m5                      ; constrain(diff_p0)
-    psignw         m12, m6                      ; constrain(diff_p1)
-    pmullw         m11, %4                      ; constrain(diff_p0) * taps
-    pmullw         m12, %4                      ; constrain(diff_p1) * taps
-    paddw          m15, m11
-    paddw          m15, m12
+    psignw         m11, %4, m5
+    psignw         m12, %4, m6
+    psrlw           m5, m9, %2
+    psrlw           m6, m10, %2
+    psubusw         m5, %3, m5
+    psubusw         m6, %3, m6
+    pminsw          m5, m9                      ; constrain(diff_p0)
+    pminsw          m6, m10                     ; constrain(diff_p1)
+    pmullw          m5, m11                     ; constrain(diff_p0) * taps
+    pmullw          m6, m12                     ; constrain(diff_p1) * taps
+    paddw          m15, m5
+    paddw          m15, m6
 %endmacro
 
 %macro cdef_filter_fn 3 ; w, h, stride
