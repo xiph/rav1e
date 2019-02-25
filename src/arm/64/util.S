@@ -26,8 +26,8 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
-#ifndef DAVID_SRC_ARM_64_UTIL_S
-#define DAVID_SRC_ARM_64_UTIL_S
+#ifndef DAV1D_SRC_ARM_64_UTIL_S
+#define DAV1D_SRC_ARM_64_UTIL_S
 
 #include "config.h"
 #include "src/arm/asm.S"
@@ -88,4 +88,4 @@
     trn2        \r7\().2s,  \r9\().2s,  \r7\().2s
 .endm
 
-#endif /* DAVID_SRC_ARM_64_UTIL_S */
+#endif /* DAV1D_SRC_ARM_64_UTIL_S */
