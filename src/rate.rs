@@ -440,8 +440,9 @@ impl QuantizerParameters {
     QuantizerParameters {
       log_base_q,
       log_target_q,
-      dc_qi: select_dc_qi(quantizer, bit_depth as usize),
-      ac_qi: select_ac_qi(quantizer, bit_depth as usize),
+      // TODO: Allow lossless mode; i.e. qi == 0.
+      dc_qi: select_dc_qi(quantizer, bit_depth as usize).max(1),
+      ac_qi: select_ac_qi(quantizer, bit_depth as usize).max(1),
       lambda: (::std::f64::consts::LN_2 / 6.0)
         * ((log_target_q as f64) * Q57_SQUARE_EXP_SCALE).exp()
     }
