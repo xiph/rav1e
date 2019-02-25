@@ -121,8 +121,8 @@ fn deblock_size<T: Pixel>(
   if !(block_edge
     || !block.skip
     || !prev_block.skip
-    || block.ref_frames[0] <= INTRA_FRAME
-    || prev_block.ref_frames[0] <= INTRA_FRAME)
+    || block.ref_frames[0] == INTRA_FRAME
+    || prev_block.ref_frames[0] == INTRA_FRAME)
   {
     0
   } else {

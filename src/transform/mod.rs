@@ -37,7 +37,7 @@ fn half_btf(w0: i32, in0: i32, w1: i32, in1: i32, bit: usize) -> i32 {
   //   overflows, but w0*in0 + w1*in1 + rounding isn't.
   let result = (w0 * in0).wrapping_add(w1 * in1);
   // Implement a version of round_shift with wrapping
-  if bit <= 0 {
+  if bit == 0 {
     result
   } else {
     result.wrapping_add(1 << (bit - 1)) >> bit
