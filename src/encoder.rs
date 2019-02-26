@@ -1104,6 +1104,21 @@ pub fn motion_compensate<T: Pixel>(
   }
 }
 
+pub fn save_block_motion<T: Pixel>(
+   fs: &mut FrameState<T>,
+   w_in_b: usize, _h_in_b: usize,
+   bsize: BlockSize, bo: &BlockOffset,
+   ref_frame: usize, mv: MotionVector,
+) {
+  let frame_mvs = &mut fs.frame_mvs;
+  for mi_y in (bo.y)..(bo.y + bsize.height_mi()) {
+    for mi_x in (bo.x)..(bo.x + bsize.width_mi()) {
+      let offset = mi_y * w_in_b + mi_x;
+      frame_mvs[ref_frame][offset] = mv;
+    }
+  }
+}
+
 pub fn encode_block_a<T: Pixel>(
   seq: &Sequence, fs: &FrameState<T>,
   cw: &mut ContextWriter, w: &mut dyn Writer,
@@ -1553,6 +1568,14 @@ fn encode_partition_bottomup<T: Pixel>(
 
     let mode_decision = rdo_mode_decision(fi, fs, cw, bsize, bo, spmvs);
 
+    if !mode_decision.pred_mode_luma.is_intra() {
+      // Fill the saved motion structure
+      save_block_motion(
+        fs, fi.w_in_b, fi.h_in_b, mode_decision.bsize, &mode_decision.bo,
+        mode_decision.ref_frames[0] - LAST_FRAME, mode_decision.mvs[0]
+      );
+    }
+
     rd_cost = mode_decision.rd_cost + cost;
 
     best_partition = PartitionType::PARTITION_NONE;
@@ -1675,6 +1698,14 @@ fn encode_partition_bottomup<T: Pixel>(
         for mode in rdo_output.part_modes.clone() {
           assert!(subsize == mode.bsize);
           let offset = mode.bo.clone();
+
+          if !mode.pred_mode_luma.is_intra() {
+            save_block_motion(
+              fs, fi.w_in_b, fi.h_in_b, mode.bsize, &mode.bo,
+              mode.ref_frames[0] - LAST_FRAME, mode.mvs[0]
+            );
+          }
+
           // FIXME: redundant block re-encode
           encode_block_with_modes(fi, fs, cw, w_pre_cdef, w_post_cdef,
                                   mode.bsize, &offset, &mode, rdo_type);
@@ -1842,6 +1873,12 @@ fn encode_partition_topdown<T: Pixel>(
           }
           mode_chroma = mode_luma;
         }
+
+        save_block_motion(
+          fs, fi.w_in_b, fi.h_in_b,
+          part_decision.bsize, &part_decision.bo,
+          part_decision.ref_frames[0] - LAST_FRAME, part_decision.mvs[0]
+        );
       }
 
       // FIXME: every final block that has gone through the RDO decision process is encoded twice

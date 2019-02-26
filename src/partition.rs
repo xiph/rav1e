@@ -761,6 +761,10 @@ impl MotionVector {
       col: (self.col / 8) * 8
     }
   }
+
+  pub fn is_zero(self) -> bool {
+    self.row == 0 && self.col == 0
+  }
 }
 
 pub const NEWMV_MODE_CONTEXTS: usize = 7;

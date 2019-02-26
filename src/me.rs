@@ -232,65 +232,70 @@ fn get_mv_range(
 pub fn get_subset_predictors<T: Pixel>(
   fi: &FrameInvariants<T>, bo: &BlockOffset, cmv: MotionVector,
   frame_mvs: &[MotionVector], frame_ref_opt: &Option<Arc<ReferenceFrame<T>>>,
-  ref_slot: usize
+  ref_frame_id: usize
 ) -> (Vec<MotionVector>) {
   let mut predictors = Vec::new();
 
-  // EPZS subset A and B predictors.
-
-  if bo.x > 0 {
-    let left = frame_mvs[bo.y * fi.w_in_b + bo.x - 1];
-    predictors.push(left);
-  }
-  if bo.y > 0 {
-    let top = frame_mvs[(bo.y - 1) * fi.w_in_b + bo.x];
-    predictors.push(top);
-
-    if bo.x < fi.w_in_b - 1 {
-      let top_right = frame_mvs[(bo.y - 1) * fi.w_in_b + bo.x + 1];
-      predictors.push(top_right);
-    }
-  }
-
-  if predictors.len() > 0 {
-    let mut median_mv = MotionVector::default();
-    for mv in predictors.iter() {
-      median_mv = median_mv + *mv;
-    }
-    median_mv = median_mv / (predictors.len() as i16);
-
-    predictors.push(median_mv.quantize_to_fullpel());
-  }
-
+  // Zero motion vector
   predictors.push(MotionVector::default());
 
   // Coarse motion estimation.
-
   predictors.push(cmv.quantize_to_fullpel());
+
+  // EPZS subset A and B predictors.
+
+  let mut median_preds = Vec::new();
+  if bo.x > 0 {
+    let left = frame_mvs[bo.y * fi.w_in_b + bo.x - 1];
+    median_preds.push(left);
+    if !left.is_zero() { predictors.push(left); }
+  }
+  if bo.y > 0 {
+    let top = frame_mvs[(bo.y - 1) * fi.w_in_b + bo.x];
+    median_preds.push(top);
+    if !top.is_zero() { predictors.push(top); }
+
+    if bo.x < fi.w_in_b - 1 {
+      let top_right = frame_mvs[(bo.y - 1) * fi.w_in_b + bo.x + 1];
+      median_preds.push(top_right);
+      if !top_right.is_zero() { predictors.push(top_right); }
+    }
+  }
+
+  if median_preds.len() > 0 {
+    let mut median_mv = MotionVector::default();
+    for mv in median_preds.iter() {
+      median_mv = median_mv + *mv;
+    }
+    median_mv = median_mv / (median_preds.len() as i16);
+    let median_mv_quant = median_mv.quantize_to_fullpel();
+    if !median_mv_quant.is_zero() { predictors.push(median_mv_quant); }
+  }
 
   // EPZS subset C predictors.
 
   if let Some(ref frame_ref) = frame_ref_opt {
-    let prev_frame_mvs = &frame_ref.frame_mvs[ref_slot];
+    let prev_frame_mvs = &frame_ref.frame_mvs[ref_frame_id];
 
     if bo.x > 0 {
       let left = prev_frame_mvs[bo.y * fi.w_in_b + bo.x - 1];
-      predictors.push(left);
+      if !left.is_zero() { predictors.push(left); }
     }
     if bo.y > 0 {
       let top = prev_frame_mvs[(bo.y - 1) * fi.w_in_b + bo.x];
-      predictors.push(top);
+      if !top.is_zero() { predictors.push(top); }
     }
     if bo.x < fi.w_in_b - 1 {
       let right = prev_frame_mvs[bo.y * fi.w_in_b + bo.x + 1];
-      predictors.push(right);
+      if !right.is_zero() { predictors.push(right); }
     }
     if bo.y < fi.h_in_b - 1 {
       let bottom = prev_frame_mvs[(bo.y + 1) * fi.w_in_b + bo.x];
-      predictors.push(bottom);
+      if !bottom.is_zero() { predictors.push(bottom); }
     }
 
-    predictors.push(prev_frame_mvs[bo.y * fi.w_in_b + bo.x]);
+    let previous = prev_frame_mvs[bo.y * fi.w_in_b + bo.x];
+    if !previous.is_zero() { predictors.push(previous); }
   }
 
   predictors
@@ -300,7 +305,7 @@ pub trait MotionEstimation {
   fn full_pixel_me<T: Pixel>(
     fi: &FrameInvariants<T>, fs: &FrameState<T>, rec: &Arc<ReferenceFrame<T>>, po: &PlaneOffset,
     bo: &BlockOffset, lambda: u32,
-    ref_slot: usize, cmv: MotionVector, pmv: [MotionVector; 2],
+    cmv: MotionVector, pmv: [MotionVector; 2],
     mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
     blk_w: usize, blk_h: usize, best_mv: &mut MotionVector,
     lowest_cost: &mut u64, ref_frame: usize
@@ -318,7 +323,7 @@ pub trait MotionEstimation {
   fn motion_estimation<T: Pixel> (
     fi: &FrameInvariants<T>, fs: &FrameState<T>, bsize: BlockSize,
     bo: &BlockOffset, ref_frame: usize, cmv: MotionVector,
-    pmv: [MotionVector; 2], ref_slot: usize
+    pmv: [MotionVector; 2]
   ) -> MotionVector {
     match fi.rec_buffer.frames[fi.ref_frames[ref_frame - LAST_FRAME] as usize]
     {
@@ -340,7 +345,7 @@ pub trait MotionEstimation {
         let mut lowest_cost = std::u64::MAX;
         let mut best_mv = MotionVector::default();
 
-        Self::full_pixel_me(fi, fs, rec, &po, bo, lambda, ref_slot, cmv, pmv,
+        Self::full_pixel_me(fi, fs, rec, &po, bo, lambda, cmv, pmv,
                            mvx_min, mvx_max, mvy_min, mvy_max, blk_w, blk_h,
                            &mut best_mv, &mut lowest_cost, ref_frame);
 
@@ -364,15 +369,15 @@ pub struct FullSearch {}
 impl MotionEstimation for DiamondSearch {
   fn full_pixel_me<T: Pixel>(
     fi: &FrameInvariants<T>, fs: &FrameState<T>, rec: &Arc<ReferenceFrame<T>>,
-    po: &PlaneOffset, bo: &BlockOffset, lambda: u32, ref_slot: usize,
+    po: &PlaneOffset, bo: &BlockOffset, lambda: u32,
     cmv: MotionVector, pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize,
     mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize,
     best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: usize
   ) {
-    let frame_mvs = &fs.frame_mvs[ref_slot];
+    let frame_mvs = &fs.frame_mvs[ref_frame - LAST_FRAME];
     let frame_ref = &fi.rec_buffer.frames[fi.ref_frames[0] as usize];
     let predictors =
-      get_subset_predictors(fi, bo, cmv, frame_mvs, frame_ref, ref_slot);
+      get_subset_predictors(fi, bo, cmv, frame_mvs, frame_ref, ref_frame - LAST_FRAME);
 
     diamond_me_search(
       fi,
@@ -432,7 +437,7 @@ impl MotionEstimation for DiamondSearch {
 impl MotionEstimation for FullSearch {
   fn full_pixel_me<T: Pixel>(
     fi: &FrameInvariants<T>, fs: &FrameState<T>, rec: &Arc<ReferenceFrame<T>>,
-    po: &PlaneOffset, _bo: &BlockOffset, lambda: u32, _ref_slot: usize,
+    po: &PlaneOffset, _bo: &BlockOffset, lambda: u32,
     cmv: MotionVector, pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize,
     mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize,
     best_mv: &mut MotionVector, lowest_cost: &mut u64, _ref_frame: usize
