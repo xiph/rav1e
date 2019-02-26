@@ -727,7 +727,7 @@ impl<T: Pixel> Context<T> {
         idx = self.idx;
       }
 
-      if !self.needs_more_frames(self.frame_data.get(&idx).unwrap().number) {
+      if !self.needs_more_frames(self.frame_data[&idx].number) {
         self.idx += 1;
         return Err(EncoderStatus::EnoughData);
       }
