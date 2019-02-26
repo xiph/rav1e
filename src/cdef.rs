@@ -127,7 +127,7 @@ fn constrain(diff: i32, threshold: i32, damping: i32) -> i32 {
 // Unlike the AOM code, our block addressing points to the UL corner
 // of the 2-pixel padding around the block, not the block itself.
 // The destination is unpadded.
-unsafe fn cdef_filter_block<T: Pixel>(
+fn cdef_filter_block<T: Pixel>(
   dst: &mut [T], dstride: isize, input: &[T],
   istride: isize, pri_strength: i32, sec_strength: i32,
   dir: usize, pri_damping: i32, sec_damping: i32,
@@ -150,15 +150,14 @@ unsafe fn cdef_filter_block<T: Pixel>(
   assert!(dst.len() >= ((ysize - 1) * dstride + xsize) as usize);
   for i in 0..ysize {
     for j in 0..xsize {
-      let ptr_in = input.as_ptr().offset((i + 2) * istride + j + 2);
-      let ptr_out = dst.as_mut_ptr().offset(i * dstride + j);
-      let x = *ptr_in;
+      let in_index = (i + 2) * istride + j + 2;
+      let x = input[in_index as usize];
       let mut sum = 0 as i32;
       let mut max = x;
       let mut min = x;
       for k in 0..2usize {
-        let p0 = *ptr_in.offset(cdef_directions[dir][k]);
-        let p1 = *ptr_in.offset(-cdef_directions[dir][k]);
+        let p0 = input[(in_index + cdef_directions[dir][k]) as usize];
+        let p1 = input[(in_index - cdef_directions[dir][k]) as usize];
         sum += pri_taps[k] * constrain(i32::cast_from(p0) - i32::cast_from(x), pri_strength, pri_damping);
         sum += pri_taps[k] * constrain(i32::cast_from(p1) - i32::cast_from(x), pri_strength, pri_damping);
         // FIXME this is just to make it compile, but it's incorrect if T == u8
@@ -170,10 +169,10 @@ unsafe fn cdef_filter_block<T: Pixel>(
         }
         min = cmp::min(p0, min);
         min = cmp::min(p1, min);
-        let s0 = *ptr_in.offset(cdef_directions[(dir + 2) & 7][k]);
-        let s1 = *ptr_in.offset(-cdef_directions[(dir + 2) & 7][k]);
-        let s2 = *ptr_in.offset(cdef_directions[(dir + 6) & 7][k]);
-        let s3 = *ptr_in.offset(-cdef_directions[(dir + 6) & 7][k]);
+        let s0 = input[(in_index + cdef_directions[(dir + 2) & 7][k]) as usize];
+        let s1 = input[(in_index - cdef_directions[(dir + 2) & 7][k]) as usize];
+        let s2 = input[(in_index + cdef_directions[(dir + 6) & 7][k]) as usize];
+        let s3 = input[(in_index - cdef_directions[(dir + 6) & 7][k]) as usize];
         if s0 != T::cast_from(CDEF_VERY_LARGE) {
           max = cmp::max(s0, max);
         }
@@ -196,7 +195,7 @@ unsafe fn cdef_filter_block<T: Pixel>(
         sum += sec_taps[k] * constrain(i32::cast_from(s3) - i32::cast_from(x), sec_strength, sec_damping);
       }
       let v = T::cast_from(i32::cast_from(x) + ((8 + sum - (sum < 0) as i32) >> 4));
-      *ptr_out = clamp(v, min, max);
+      dst[(i * dstride + j) as usize] = clamp(v, min, max);
     }
   }
 }
@@ -403,15 +402,13 @@ pub fn cdef_filter_superblock<T: Pixel>(
               if cdef_pri_uv_strength != 0 { dir as usize } else { 0 }
             };
 
-            unsafe {
-              cdef_filter_block(out_slice.offset_as_mutable(8*bx>>xdec,8*by>>ydec),
-                                out_stride as isize,
-                                in_slice.offset(8*bx>>xdec,8*by>>ydec),
-                                in_stride as isize,
-                                local_pri_strength, local_sec_strength, local_dir,
-                                local_damping, local_damping,
-                                8 >> xdec, 8 >> ydec, coeff_shift as i32);
-            }
+            cdef_filter_block(out_slice.offset_as_mutable(8*bx>>xdec,8*by>>ydec),
+                              out_stride as isize,
+                              in_slice.offset(8*bx>>xdec,8*by>>ydec),
+                              in_stride as isize,
+                              local_pri_strength, local_sec_strength, local_dir,
+                              local_damping, local_damping,
+                              8 >> xdec, 8 >> ydec, coeff_shift as i32);
           }
         }
       }
