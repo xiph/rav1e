@@ -117,11 +117,11 @@ pub fn parse_cli() -> CliOptions {
         - 6:\n\
         Min block size 8x8, reduced TX set, TX domain distortion\n\
         - 5 (default):\n\
-        Min block size 8x8, reduced TX set, TX domain distortion\n\
-        - 4:\n\
         Min block size 8x8, reduced TX set, TX domain distortion, complex pred modes for keyframes\n\
-        - 3:\n\
+        - 4:\n\
         Min block size 8x8, TX domain distortion, complex pred modes for keyframes\n\
+        - 3:\n\
+        Min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision\n\
         - 2:\n\
         Min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision, include near MVs\n\
         - 1:\n\

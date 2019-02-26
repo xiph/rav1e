@@ -191,7 +191,7 @@ impl SpeedSettings {
   }
 
   fn reduced_tx_set_preset(speed: usize) -> bool {
-    speed >= 4
+    speed >= 5
   }
 
   /// TX domain distortion is always faster, with no significant quality change
@@ -204,13 +204,13 @@ impl SpeedSettings {
   }
 
   fn rdo_tx_decision_preset(speed: usize) -> bool {
-    speed <= 2
+    speed <= 3
   }
 
   fn prediction_modes_preset(speed: usize) -> PredictionModesSetting {
     if speed <= 1 {
       PredictionModesSetting::ComplexAll
-    } else if speed <= 4 {
+    } else if speed <= 5 {
       PredictionModesSetting::ComplexKeyframes
     } else {
       PredictionModesSetting::Simple
