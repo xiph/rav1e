@@ -107,15 +107,15 @@ pub fn parse_cli() -> CliOptions {
         .long_help("Speed level (0 is best quality, 10 is fastest)\n\
         Speeds 10 and 0 are extremes and are generally not recommended\n\
         - 10 (fastest):\n\
-        Min block size 64x64, TX domain distortion, RDO TX decision, fast deblock, no scenechange detection\n\
+        Min block size 64x64, TX domain distortion, fast deblock, no scenechange detection\n\
         - 9:\n\
-        Min block size 64x64, TX domain distortion, RDO TX decision, fast deblock\n\
+        Min block size 64x64, TX domain distortion, fast deblock\n\
         - 8:\n\
-        Min block size 8x8, reduced TX set, TX domain distortion, RDO TX decision, fast deblock\n\
+        Min block size 8x8, reduced TX set, TX domain distortion, fast deblock\n\
         - 7:\n\
-        Min block size 8x8, reduced TX set, TX domain distortion, RDO TX decision\n\
+        Min block size 8x8, reduced TX set, TX domain distortion\n\
         - 6:\n\
-        Min block size 8x8, reduced TX set, TX domain distortion, RDO TX decision\n\
+        Min block size 8x8, reduced TX set, TX domain distortion\n\
         - 5 (default):\n\
         Min block size 8x8, reduced TX set, TX domain distortion\n\
         - 4:\n\
@@ -123,11 +123,11 @@ pub fn parse_cli() -> CliOptions {
         - 3:\n\
         Min block size 8x8, TX domain distortion, complex pred modes for keyframes\n\
         - 2:\n\
-        Min block size 8x8, TX domain distortion, complex pred modes for keyframes, include near MVs\n\
+        Min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision, include near MVs\n\
         - 1:\n\
-        Min block size 8x8, TX domain distortion, complex pred modes, include near MVs\n\
+        Min block size 8x8, TX domain distortion, complex pred modes, RDO TX decision, include near MVs\n\
         - 0 (slowest):\n\
-        Min block size 4x4, TX domain distortion, complex pred modes, include near MVs, bottom-up encoding\n")
+        Min block size 4x4, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, bottom-up encoding\n")
         .short("s")
         .long("speed")
         .takes_value(true)

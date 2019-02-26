@@ -203,9 +203,8 @@ impl SpeedSettings {
     speed == 0
   }
 
-  /// RDO TX decision, counter-intuitively, provides a speed up, with a very small quality cost
   fn rdo_tx_decision_preset(speed: usize) -> bool {
-    speed >= 6
+    speed <= 2
   }
 
   fn prediction_modes_preset(speed: usize) -> PredictionModesSetting {
