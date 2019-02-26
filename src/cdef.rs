@@ -128,7 +128,7 @@ fn constrain(diff: i32, threshold: i32, damping: i32) -> i32 {
 // of the 2-pixel padding around the block, not the block itself.
 // The destination is unpadded.
 unsafe fn cdef_filter_block<T: Pixel>(
-  dst: &mut [T], dstride: isize, input: &[T],
+  dst: *mut T, dstride: isize, input: *const T,
   istride: isize, pri_strength: i32, sec_strength: i32,
   dir: usize, pri_damping: i32, sec_damping: i32,
   xsize: isize, ysize: isize, coeff_shift: i32
@@ -146,12 +146,10 @@ unsafe fn cdef_filter_block<T: Pixel>(
                          [ 1 * istride + 0,  2 * istride + 1 ],
                          [ 1 * istride + 0,  2 * istride + 0 ],
                          [ 1 * istride + 0,  2 * istride - 1 ]];
-  assert!(input.len() >= ((ysize + 3) * istride + xsize + 4) as usize);
-  assert!(dst.len() >= ((ysize - 1) * dstride + xsize) as usize);
   for i in 0..ysize {
     for j in 0..xsize {
-      let ptr_in = input.as_ptr().offset((i + 2) * istride + j + 2);
-      let ptr_out = dst.as_mut_ptr().offset(i * dstride + j);
+      let ptr_in = input.offset((i + 2) * istride + j + 2);
+      let ptr_out = dst.offset(i * dstride + j);
       let x = *ptr_in;
       let mut sum = 0 as i32;
       let mut max = x;
@@ -404,13 +402,19 @@ pub fn cdef_filter_superblock<T: Pixel>(
             };
 
             unsafe {
-              cdef_filter_block(out_slice.offset_as_mutable(8*bx>>xdec,8*by>>ydec),
+              let xsize = 8 >> xdec;
+              let ysize = 8 >> ydec;
+              let dst = out_slice.offset_as_mutable(8 * bx >> xdec, 8 * by >> ydec);
+              let input = in_slice.offset(8 * bx >> xdec, 8 * by >> ydec);
+              assert!(dst.len() >= (ysize - 1) * out_stride + xsize);
+              assert!(input.len() >= ((ysize + 3) * in_stride + xsize + 4) as usize);
+              cdef_filter_block(dst.as_mut_ptr(),
                                 out_stride as isize,
-                                in_slice.offset(8*bx>>xdec,8*by>>ydec),
+                                input.as_ptr(),
                                 in_stride as isize,
                                 local_pri_strength, local_sec_strength, local_dir,
                                 local_damping, local_damping,
-                                8 >> xdec, 8 >> ydec, coeff_shift as i32);
+                                xsize as isize, ysize as isize, coeff_shift as i32);
             }
           }
         }
