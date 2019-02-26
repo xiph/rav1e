@@ -837,7 +837,7 @@ pub struct InterPropsConfig {
 pub fn write_temporal_delimiter(
   packet: &mut dyn io::Write
 ) -> io::Result<()> {
-  packet.write(&TEMPORAL_DELIMITER)?;
+  packet.write_all(&TEMPORAL_DELIMITER)?;
   Ok(())
 }
 
