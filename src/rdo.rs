@@ -514,15 +514,8 @@ pub fn rdo_mode_decision<T: Pixel>(
       let ref_slot = ref_slot_set[i] as usize;
       let cmv = pmvs[ref_slot].unwrap();
 
-      let b_me = motion_estimation(fi, fs, bsize, bo, ref_frames[0], cmv, pmv, ref_slot);
 
-      // Fill the saved motion structure.
-      let frame_mvs = &mut fs.frame_mvs[ref_slot as usize];
-      for mi_y in (bo.y)..(bo.y + bsize.height_mi()) {
-        for mi_x in (bo.x)..(bo.x + bsize.width_mi()) {
-          frame_mvs[mi_y][mi_x] = b_me;
-        }
-      }
+      let b_me = motion_estimation(fi, fs, bsize, bo, ref_frames[0], cmv, pmv);
 
       mvs_from_me.push([
         b_me,
