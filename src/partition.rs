@@ -1041,7 +1041,6 @@ impl PredictionMode {
     let (left, not_left) = edge_buf.array.split_at(2*MAX_TX_SIZE);
     let (top_left, above) = not_left.split_at(1);
 
-    let stride = dst.plane.cfg.stride;
     let x = dst.x;
     let y = dst.y;
 
@@ -1061,23 +1060,21 @@ impl PredictionMode {
       _ => self
     };
 
-    let slice = dst.as_mut_slice();
     let above_slice = &above[..B::W + B::H];
     let left_slice = &left[2 * MAX_TX_SIZE - B::H..];
     let left_and_left_below_slice = &left[2 * MAX_TX_SIZE - B::H - B::W..];
 
     match mode {
       PredictionMode::DC_PRED => match (x, y) {
-        (0, 0) => B::pred_dc_128(slice, stride, bit_depth),
-        (_, 0) => B::pred_dc_left(slice, stride, above_slice, left_slice),
-        (0, _) => B::pred_dc_top(slice, stride, above_slice, left_slice),
-        _ => B::pred_dc(slice, stride, above_slice, left_slice)
+        (0, 0) => B::pred_dc_128(dst, bit_depth),
+        (_, 0) => B::pred_dc_left(dst, above_slice, left_slice),
+        (0, _) => B::pred_dc_top(dst, above_slice, left_slice),
+        _ => B::pred_dc(dst, above_slice, left_slice)
       },
       PredictionMode::UV_CFL_PRED => match (x, y) {
-        (0, 0) => B::pred_cfl_128(slice, stride, &ac, alpha, bit_depth),
+        (0, 0) => B::pred_cfl_128(dst, &ac, alpha, bit_depth),
         (_, 0) => B::pred_cfl_left(
-          slice,
-          stride,
+          dst,
           &ac,
           alpha,
           bit_depth,
@@ -1085,8 +1082,7 @@ impl PredictionMode {
           left_slice
         ),
         (0, _) => B::pred_cfl_top(
-          slice,
-          stride,
+          dst,
           &ac,
           alpha,
           bit_depth,
@@ -1094,8 +1090,7 @@ impl PredictionMode {
           left_slice
         ),
         _ => B::pred_cfl(
-          slice,
-          stride,
+          dst,
           &ac,
           alpha,
           bit_depth,
@@ -1103,28 +1098,28 @@ impl PredictionMode {
           left_slice
         )
       },
-      PredictionMode::H_PRED => B::pred_h(slice, stride, left_slice),
-      PredictionMode::V_PRED => B::pred_v(slice, stride, above_slice),
+      PredictionMode::H_PRED => B::pred_h(dst, left_slice),
+      PredictionMode::V_PRED => B::pred_v(dst, above_slice),
       PredictionMode::PAETH_PRED =>
-        B::pred_paeth(slice, stride, above_slice, left_slice, top_left[0]),
+        B::pred_paeth(dst, above_slice, left_slice, top_left[0]),
       PredictionMode::SMOOTH_PRED =>
-        B::pred_smooth(slice, stride, above_slice, left_slice),
+        B::pred_smooth(dst, above_slice, left_slice),
       PredictionMode::SMOOTH_H_PRED =>
-        B::pred_smooth_h(slice, stride, above_slice, left_slice),
+        B::pred_smooth_h(dst, above_slice, left_slice),
       PredictionMode::SMOOTH_V_PRED =>
-        B::pred_smooth_v(slice, stride, above_slice, left_slice),
+        B::pred_smooth_v(dst, above_slice, left_slice),
       PredictionMode::D45_PRED =>
-        B::pred_directional(slice, stride, above_slice, left_and_left_below_slice, top_left, 45, bit_depth),
+        B::pred_directional(dst, above_slice, left_and_left_below_slice, top_left, 45, bit_depth),
       PredictionMode::D135_PRED =>
-        B::pred_directional(slice, stride, above_slice, left_and_left_below_slice, top_left, 135, bit_depth),
+        B::pred_directional(dst, above_slice, left_and_left_below_slice, top_left, 135, bit_depth),
       PredictionMode::D117_PRED =>
-        B::pred_directional(slice, stride, above_slice, left_and_left_below_slice, top_left, 113, bit_depth),
+        B::pred_directional(dst, above_slice, left_and_left_below_slice, top_left, 113, bit_depth),
       PredictionMode::D153_PRED =>
-        B::pred_directional(slice, stride, above_slice, left_and_left_below_slice, top_left, 157, bit_depth),
+        B::pred_directional(dst, above_slice, left_and_left_below_slice, top_left, 157, bit_depth),
       PredictionMode::D207_PRED =>
-        B::pred_directional(slice, stride, above_slice, left_and_left_below_slice, top_left, 203, bit_depth),
+        B::pred_directional(dst, above_slice, left_and_left_below_slice, top_left, 203, bit_depth),
       PredictionMode::D63_PRED =>
-        B::pred_directional(slice, stride, above_slice, left_and_left_below_slice, top_left, 67, bit_depth),
+        B::pred_directional(dst, above_slice, left_and_left_below_slice, top_left, 67, bit_depth),
       _ => unimplemented!()
     }
   }
