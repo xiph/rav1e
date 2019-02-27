@@ -533,41 +533,6 @@ impl<'a, T: Pixel> PlaneMutSlice<'a, T> {
     }
   }
 
-  pub fn as_mut_slice(&mut self) -> &mut [T] {
-    let stride = self.plane.cfg.stride;
-    let base = (self.y + self.plane.cfg.yorigin as isize) as usize * stride
-      + (self.x + self.plane.cfg.xorigin as isize) as usize;
-    &mut self.plane.data[base..]
-  }
-
-  pub fn as_mut_slice_w_width(&mut self, width: usize) -> &mut [T] {
-    let stride = self.plane.cfg.stride;
-    let y = self.y + self.plane.cfg.yorigin as isize;
-    let x = self.x + self.plane.cfg.xorigin as isize;
-    assert!(y >= 0);
-    assert!(x >= 0);
-    let base = y as usize * stride + x as usize;
-    &mut self.plane.data[base..base + width]
-  }
-
-  pub fn offset(&self, add_x: usize, add_y: usize) -> &[T] {
-    let new_y =
-      (self.y + add_y as isize + self.plane.cfg.yorigin as isize) as usize;
-    let new_x =
-      (self.x + add_x as isize + self.plane.cfg.xorigin as isize) as usize;
-    &self.plane.data[new_y * self.plane.cfg.stride + new_x..]
-  }
-
-  pub fn offset_as_mutable(
-    &mut self, add_x: usize, add_y: usize
-  ) -> &mut [T] {
-    let new_y =
-      (self.y + add_y as isize + self.plane.cfg.yorigin as isize) as usize;
-    let new_x =
-      (self.x + add_x as isize + self.plane.cfg.xorigin as isize) as usize;
-    &mut self.plane.data[new_y * self.plane.cfg.stride + new_x..]
-  }
-
   // FIXME: code duplication with PlaneSlice
 
   /// A slice starting i pixels above the current one.
