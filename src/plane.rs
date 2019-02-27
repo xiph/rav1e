@@ -9,6 +9,7 @@
 
 use std::iter::FusedIterator;
 use std::fmt::{Debug, Display, Formatter};
+use std::marker::PhantomData;
 use std::mem;
 use std::ops::{Index, IndexMut, Range};
 
@@ -443,6 +444,43 @@ pub struct PlaneMutSlice<'a, T: Pixel> {
   pub y: isize
 }
 
+pub struct RowsIterMut<'a, T: Pixel> {
+  plane: *mut Plane<T>,
+  x: isize,
+  y: isize,
+  phantom: PhantomData<&'a mut Plane<T>>,
+}
+
+impl<'a, T: Pixel> Iterator for RowsIterMut<'a, T> {
+  type Item = &'a mut [T];
+
+  fn next(&mut self) -> Option<Self::Item> {
+    // there could not be a concurrent call using a mutable reference to the plane
+    let plane = unsafe { &mut *self.plane };
+    if plane.cfg.height as isize > self.y {
+      // cannot directly return self.ps.row(row) due to lifetime issue
+      let range = plane.row_range(self.x, self.y);
+      self.y += 1;
+      Some(&mut plane.data[range])
+    } else {
+      None
+    }
+  }
+
+  fn size_hint(&self) -> (usize, Option<usize>) {
+    // there could not be a concurrent call using a mutable reference to the plane
+    let plane = unsafe { &mut *self.plane };
+    let remaining = plane.cfg.height as isize - self.y;
+    debug_assert!(remaining >= 0);
+    let remaining = remaining as usize;
+
+    (remaining, Some(remaining))
+  }
+}
+
+impl<'a, T: Pixel> ExactSizeIterator for RowsIterMut<'a, T> {}
+impl<'a, T: Pixel> FusedIterator for RowsIterMut<'a, T> {}
+
 impl<'a, T: Pixel> PlaneMutSlice<'a, T> {
   pub fn row(&self, y: usize) -> &[T] {
     let range = self.plane.row_range(self.x, self.y + y as isize);
@@ -460,6 +498,23 @@ impl<'a, T: Pixel> PlaneMutSlice<'a, T> {
 
   pub fn as_mut_ptr(&mut self) -> *mut T {
     self.row_mut(0).as_mut_ptr()
+  }
+
+  pub fn rows_iter(&self) -> RowsIter<'_, T> {
+    RowsIter {
+      plane: self.plane,
+      x: self.x,
+      y: self.y,
+    }
+  }
+
+  pub fn rows_iter_mut(&mut self) -> RowsIterMut<'_, T> {
+    RowsIterMut {
+      plane: self.plane as *mut Plane<T>,
+      x: self.x,
+      y: self.y,
+      phantom: PhantomData,
+    }
   }
 
   pub fn as_mut_slice(&mut self) -> &mut [T] {
