@@ -85,6 +85,26 @@ impl<T: Pixel> Plane<T> {
     }
   }
 
+  pub fn wrap(data: Vec<T>, stride: usize) -> Self {
+    let len = data.len();
+    assert!(len % stride == 0);
+    Self {
+      data,
+      cfg: PlaneConfig {
+        stride,
+        alloc_height: len / stride,
+        width: stride,
+        height: len / stride,
+        xdec: 0,
+        ydec: 0,
+        xpad: 0,
+        ypad: 0,
+        xorigin: 0,
+        yorigin: 0,
+      }
+    }
+  }
+
   pub fn pad(&mut self, w: usize, h: usize) {
     let xorigin = self.cfg.xorigin;
     let yorigin = self.cfg.yorigin;
