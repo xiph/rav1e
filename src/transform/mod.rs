@@ -11,6 +11,7 @@ pub use self::forward::*;
 pub use self::inverse::*;
 
 use crate::partition::{TxSize, TxType, TX_TYPES};
+use crate::plane::PlaneMutSlice;
 use crate::predict::*;
 use crate::util::*;
 
@@ -174,34 +175,34 @@ pub fn forward_transform(
   }
 }
 
-pub fn inverse_transform_add<T: Pixel>(
-  input: &[i32], output: &mut [T], stride: usize, tx_size: TxSize,
+pub fn inverse_transform_add<'a, T: Pixel>(
+  input: &[i32], output: &mut PlaneMutSlice<'a, T>, tx_size: TxSize,
   tx_type: TxType, bit_depth: usize
 ) {
   assert!(mem::size_of::<T>() == 2, "only implemented for u16 for now");
   use self::TxSize::*;
   match tx_size {
-    TX_4X4 => iht4x4_add(input, output, stride, tx_type, bit_depth),
-    TX_8X8 => iht8x8_add(input, output, stride, tx_type, bit_depth),
-    TX_16X16 => iht16x16_add(input, output, stride, tx_type, bit_depth),
-    TX_32X32 => iht32x32_add(input, output, stride, tx_type, bit_depth),
-    TX_64X64 => iht64x64_add(input, output, stride, tx_type, bit_depth),
+    TX_4X4 => iht4x4_add(input, output, tx_type, bit_depth),
+    TX_8X8 => iht8x8_add(input, output, tx_type, bit_depth),
+    TX_16X16 => iht16x16_add(input, output, tx_type, bit_depth),
+    TX_32X32 => iht32x32_add(input, output, tx_type, bit_depth),
+    TX_64X64 => iht64x64_add(input, output, tx_type, bit_depth),
 
-    TX_4X8 => iht4x8_add(input, output, stride, tx_type, bit_depth),
-    TX_8X4 => iht8x4_add(input, output, stride, tx_type, bit_depth),
-    TX_8X16 => iht8x16_add(input, output, stride, tx_type, bit_depth),
-    TX_16X8 => iht16x8_add(input, output, stride, tx_type, bit_depth),
-    TX_16X32 => iht16x32_add(input, output, stride, tx_type, bit_depth),
-    TX_32X16 => iht32x16_add(input, output, stride, tx_type, bit_depth),
-    TX_32X64 => iht32x64_add(input, output, stride, tx_type, bit_depth),
-    TX_64X32 => iht64x32_add(input, output, stride, tx_type, bit_depth),
+    TX_4X8 => iht4x8_add(input, output, tx_type, bit_depth),
+    TX_8X4 => iht8x4_add(input, output, tx_type, bit_depth),
+    TX_8X16 => iht8x16_add(input, output, tx_type, bit_depth),
+    TX_16X8 => iht16x8_add(input, output, tx_type, bit_depth),
+    TX_16X32 => iht16x32_add(input, output, tx_type, bit_depth),
+    TX_32X16 => iht32x16_add(input, output, tx_type, bit_depth),
+    TX_32X64 => iht32x64_add(input, output, tx_type, bit_depth),
+    TX_64X32 => iht64x32_add(input, output, tx_type, bit_depth),
 
-    TX_4X16 => iht4x16_add(input, output, stride, tx_type, bit_depth),
-    TX_16X4 => iht16x4_add(input, output, stride, tx_type, bit_depth),
-    TX_8X32 => iht8x32_add(input, output, stride, tx_type, bit_depth),
-    TX_32X8 => iht32x8_add(input, output, stride, tx_type, bit_depth),
-    TX_16X64 => iht16x64_add(input, output, stride, tx_type, bit_depth),
-    TX_64X16 => iht64x16_add(input, output, stride, tx_type, bit_depth),
+    TX_4X16 => iht4x16_add(input, output, tx_type, bit_depth),
+    TX_16X4 => iht16x4_add(input, output, tx_type, bit_depth),
+    TX_8X32 => iht8x32_add(input, output, tx_type, bit_depth),
+    TX_32X8 => iht32x8_add(input, output, tx_type, bit_depth),
+    TX_16X64 => iht16x64_add(input, output, tx_type, bit_depth),
+    TX_64X16 => iht64x16_add(input, output, tx_type, bit_depth),
   }
 }
 
@@ -209,26 +210,26 @@ pub fn inverse_transform_add<T: Pixel>(
 mod test {
   use super::*;
   use rand::random;
+  use crate::plane::*;
 
   fn test_roundtrip(tx_size: TxSize, tx_type: TxType, tolerance: i16) {
     let mut src_storage = [0u16; 64 * 64];
     let src = &mut src_storage[..tx_size.area()];
-    let mut dst_storage = [0u16; 64 * 64];
-    let dst = &mut dst_storage[..tx_size.area()];
+    let mut dst = Plane::wrap(vec![0u16; tx_size.area()], tx_size.width());
     let mut res_storage = [0i16; 64 * 64];
     let res = &mut res_storage[..tx_size.area()];
     let mut freq_storage = [0i32; 64 * 64];
     let freq = &mut freq_storage[..tx_size.area()];
-    for ((r, s), d) in res.iter_mut().zip(src.iter_mut()).zip(dst.iter_mut()) {
+    for ((r, s), d) in res.iter_mut().zip(src.iter_mut()).zip(dst.data.iter_mut()) {
       *s = random::<u8>() as u16;
       *d = random::<u8>() as u16;
       *r = (*s as i16) - (*d as i16);
     }
     forward_transform(res, freq, tx_size.width(), tx_size, tx_type, 8);
-    inverse_transform_add(freq, dst, tx_size.width(), tx_size, tx_type, 8);
+    inverse_transform_add(freq, &mut dst.as_mut_slice(), tx_size, tx_type, 8);
 
-    for (s, d) in src.iter().zip(dst) {
-      assert!(i16::abs((*s as i16) - (*d as i16)) <= tolerance);
+    for (s, d) in src.iter().zip(dst.data) {
+      assert!(i16::abs((*s as i16) - (d as i16)) <= tolerance);
     }
   }
 
