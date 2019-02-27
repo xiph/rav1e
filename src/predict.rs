@@ -585,18 +585,18 @@ where
   #[target_feature(enable = "ssse3")]
   #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
   unsafe fn pred_cfl_ssse3(
-    output: &mut [T], stride: usize, ac: &[i16], alpha: i16,
+    output: *mut T, stride: usize, ac: *const i16, alpha: i16,
     bit_depth: usize
   ) {
     let alpha_sign = _mm_set1_epi16(alpha);
     let alpha_q12 = _mm_slli_epi16(_mm_abs_epi16(alpha_sign), 9);
-    let dc_scalar: u32 = (*output.as_ptr()).into();
+    let dc_scalar: u32 = (*output).into();
     let dc_q0 = _mm_set1_epi16(dc_scalar as i16);
     let max = _mm_set1_epi16((1 << bit_depth) - 1);
 
     for j in 0..Self::H {
-      let luma = ac.as_ptr().add(Self::W * j);
-      let line = output.as_mut_ptr().add(stride * j);
+      let luma = ac.add(Self::W * j);
+      let line = output.add(stride * j);
 
       let mut i = 0isize;
       let mut last = _mm_setzero_si128();
@@ -648,7 +648,7 @@ where
     {
       if is_x86_feature_detected!("ssse3") {
         return unsafe {
-          Self::pred_cfl_ssse3(output, stride, ac, alpha, bit_depth)
+          Self::pred_cfl_ssse3(output.as_mut_ptr(), stride, ac.as_ptr(), alpha, bit_depth)
         };
       }
     }
