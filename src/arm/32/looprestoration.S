@@ -283,14 +283,12 @@ L(variable_shift_tbl):
         .word 66f - L(variable_shift_tbl) + CONFIG_THUMB
         .word 77f - L(variable_shift_tbl) + CONFIG_THUMB
 
+44:     // 4 pixels valid in d2/d16, fill d3/d17 with padding.
+        vmov            d3,  d4
+        vmov            d17, d18
+        b               88f
         // Shift q1 right, shifting out invalid pixels,
         // shift q1 left to the original offset, shifting in padding pixels.
-44:     // 4 pixels valid
-        vext.8          q1,  q1,  q1,  #8
-        vext.8          q1,  q1,  q2,  #8
-        vext.8          q8,  q8,  q8,  #8
-        vext.8          q8,  q8,  q9,  #8
-        b               88f
 55:     // 5 pixels valid
         vext.8          q1,  q1,  q1,  #10
         vext.8          q1,  q1,  q2,  #6

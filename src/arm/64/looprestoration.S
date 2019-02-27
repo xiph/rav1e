@@ -224,31 +224,25 @@ function wiener_filter_h_neon, export=1
         mov             v3.16b,  v28.16b
         mov             v5.16b,  v29.16b
         br              x11
+44:     // 4 pixels valid in v2/v4, fill the high half with padding.
+        ins             v2.d[1], v3.d[0]
+        ins             v4.d[1], v5.d[0]
+        b               88f
         // Shift v2 right, shifting out invalid pixels,
         // shift v2 left to the original offset, shifting in padding pixels.
-44:     // 4 pixels valid
-        ext             v2.16b,  v2.16b,  v2.16b,  #8
-        ext             v2.16b,  v2.16b,  v3.16b,  #8
-        ext             v4.16b,  v4.16b,  v4.16b,  #8
-        ext             v4.16b,  v4.16b,  v5.16b,  #8
-        b               88f
 55:     // 5 pixels valid
         ext             v2.16b,  v2.16b,  v2.16b,  #10
         ext             v2.16b,  v2.16b,  v3.16b,  #6
         ext             v4.16b,  v4.16b,  v4.16b,  #10
         ext             v4.16b,  v4.16b,  v5.16b,  #6
         b               88f
-66:     // 6 pixels valid
-        ext             v2.16b,  v2.16b,  v2.16b,  #12
-        ext             v2.16b,  v2.16b,  v3.16b,  #4
-        ext             v4.16b,  v4.16b,  v4.16b,  #12
-        ext             v4.16b,  v4.16b,  v5.16b,  #4
+66:     // 6 pixels valid, fill the upper 2 pixels with padding.
+        ins             v2.s[3], v3.s[0]
+        ins             v4.s[3], v5.s[0]
         b               88f
-77:     // 7 pixels valid
-        ext             v2.16b,  v2.16b,  v2.16b,  #14
-        ext             v2.16b,  v2.16b,  v3.16b,  #2
-        ext             v4.16b,  v4.16b,  v4.16b,  #14
-        ext             v4.16b,  v4.16b,  v5.16b,  #2
+77:     // 7 pixels valid, fill the last pixel with padding.
+        ins             v2.h[7], v3.h[0]
+        ins             v4.h[7], v5.h[0]
         b               88f
 
 L(variable_shift_tbl):
