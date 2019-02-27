@@ -478,9 +478,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvarian
   let s_r1: i32 = SGRPROJ_PARAMS_S[set as usize][1];
 
   let outstart = cmp::max(0, cmp::max(-cdeffed.y, -out.y)) as usize;
-  let outstride = out.plane.cfg.stride; 
-  let out_data = out.as_mut_slice();
-  
+
   /* prime the intermediate arrays */
   if s_r2 > 0 {
     sgrproj_box_ab_r2(&mut a_r2[0], &mut b_r2[0],
@@ -545,7 +543,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvarian
       let u = i32::cast_from(cdeffed.p(xi, yi)) << SGRPROJ_RST_BITS;
       let v = w0*f_r2[yi] + w1*u + w2*f_r1[yi];
       let s = v + (1 << SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS >> 1) >> SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS;
-      out_data[xi + yi*outstride] = T::cast_from(clamp(s, 0, (1 << bit_depth) - 1));
+      out[yi][xi] = T::cast_from(clamp(s, 0, (1 << bit_depth) - 1));
     }
   }
 }
@@ -733,9 +731,7 @@ fn wiener_stripe_filter<T: Pixel>(coeffs: [[i8; 3]; 2], fi: &FrameInvariants<T>,
     stripe_h as isize - start_wi as isize
   }) as usize;
 
-  let stride = out.cfg.stride;
   let mut out_slice = out.mut_slice(&PlaneOffset{x: 0, y: start_yi as isize});
-  let out_data = out_slice.as_mut_slice();
 
   for xi in stripe_x..stripe_x+stripe_w {
     let n = cmp::min(7, crop_w as isize + 3 - xi as isize);
@@ -768,7 +764,7 @@ fn wiener_stripe_filter<T: Pixel>(coeffs: [[i8; 3]; 2], fi: &FrameInvariants<T>,
       work[(yi-stripe_y+3) as usize] = clamp(acc, -offset, limit-offset);
     }
 
-    for (wi, dst) in (start_wi..start_wi+end_i).zip(out_data[xi..].iter_mut().step_by(stride).take(end_i)) {
+    for (wi, dst) in (start_wi..start_wi+end_i).zip(out_slice.rows_iter_mut().map(|row| &mut row[xi]).take(end_i)) {
       let mut acc = 0;
       for (i,src) in (0..7).zip(work[wi..wi+7].iter_mut()) {
         acc += vfilter[i] * *src;
