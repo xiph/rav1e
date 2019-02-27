@@ -444,6 +444,24 @@ pub struct PlaneMutSlice<'a, T: Pixel> {
 }
 
 impl<'a, T: Pixel> PlaneMutSlice<'a, T> {
+  pub fn row(&self, y: usize) -> &[T] {
+    let range = self.plane.row_range(self.x, self.y + y as isize);
+    &self.plane.data[range]
+  }
+
+  pub fn row_mut(&mut self, y: usize) -> &mut [T] {
+    let range = self.plane.row_range(self.x, self.y + y as isize);
+    &mut self.plane.data[range]
+  }
+
+  pub fn as_ptr(&self) -> *const T {
+    self.row(0).as_ptr()
+  }
+
+  pub fn as_mut_ptr(&mut self) -> *mut T {
+    self.row_mut(0).as_mut_ptr()
+  }
+
   pub fn as_mut_slice(&mut self) -> &mut [T] {
     let stride = self.plane.cfg.stride;
     let base = (self.y + self.plane.cfg.yorigin as isize) as usize * stride
