@@ -10,7 +10,7 @@
 use std::iter::FusedIterator;
 use std::fmt::{Debug, Display, Formatter};
 use std::mem;
-use std::ops::{Index, Range};
+use std::ops::{Index, IndexMut, Range};
 
 use crate::util::*;
 
@@ -515,5 +515,18 @@ impl<'a, T: Pixel> PlaneMutSlice<'a, T> {
     let new_x =
       (self.x + add_x as isize + self.plane.cfg.xorigin as isize) as usize;
     self.plane.data[new_y * self.plane.cfg.stride + new_x]
+  }
+}
+
+impl<'a, T: Pixel> Index<usize> for PlaneMutSlice<'a, T> {
+  type Output = [T];
+  fn index(&self, index: usize) -> &Self::Output {
+    self.row(index)
+  }
+}
+
+impl<'a, T: Pixel> IndexMut<usize> for PlaneMutSlice<'a, T> {
+  fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+    self.row_mut(index)
   }
 }
