@@ -16,7 +16,7 @@ use std::ops::{Index, IndexMut, Range};
 use crate::util::*;
 
 /// Plane-specific configuration.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaneConfig {
   pub stride: usize,
   pub alloc_height: usize,
@@ -37,7 +37,7 @@ pub struct PlaneOffset {
   pub y: isize
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Plane<T: Pixel> {
   pub data: Vec<T>,
   pub cfg: PlaneConfig
