@@ -55,12 +55,12 @@ fn first_max_element(elems: &[i32]) -> (usize, i32) {
 // in a particular direction. Since each direction have the same sum(x^2) term,
 // that term is never computed. See Section 2, step 2, of:
 // http://jmvalin.ca/notes/intra_paint.pdf
-fn cdef_find_dir<T: Pixel>(img: &[T], stride: usize, var: &mut i32, coeff_shift: usize) -> i32 {
+fn cdef_find_dir<'a, T: Pixel>(img: &PlaneSlice<'a, T>, var: &mut i32, coeff_shift: usize) -> i32 {
   let mut cost: [i32; 8] = [0; 8];
   let mut partial: [[i32; 15]; 8] = [[0; 15]; 8];
   for i in 0..8 {
     for j in 0..8 {
-      let p: i32 = img[i * stride + j].as_();
+      let p: i32 = img[i][j].as_();
       // We subtract 128 here to reduce the maximum range of the squared
       // partial sums.
       debug_assert!(p >> coeff_shift <= 255);
@@ -236,10 +236,10 @@ pub fn cdef_analyze_superblock<T: Pixel>(
           let mut var: i32 = 0;
           let in_plane = &mut in_frame.planes[0];
           let in_po = sbo.plane_offset(&in_plane.cfg);
-          let in_stride = in_plane.cfg.stride;
-          let in_slice = &in_plane.mut_slice(&in_po);
-          dir.dir[bx][by] = cdef_find_dir(in_slice.offset(8*bx+2,8*by+2),
-                                          in_stride, &mut var, coeff_shift) as u8;
+          let in_slice = in_plane.slice(&in_po);
+          dir.dir[bx][by] = cdef_find_dir(&in_slice.reslice(8 * bx as isize + 2,
+                                                            8 * by as isize + 2),
+                                          &mut var, coeff_shift) as u8;
           dir.var[bx][by] = var;
         }
       }
@@ -289,8 +289,8 @@ pub fn cdef_sb_padded_frame_copy<T: Pixel>(
     let w = f.planes[p].cfg.width as isize;
     let offset = sbo.plane_offset(&f.planes[p].cfg);
     for y in 0..((sb_size>>ydec) + pad*2) as isize {
-      let mut out_slice = out.planes[p].mut_slice(&PlaneOffset {x:0, y});
-      let out_row = out_slice.as_mut_slice();
+      let mut out_slice = out.planes[p].as_mut_slice();
+      let out_row = &mut out_slice[y as usize];
       if offset.y + y < ipad || offset.y+y >= h + ipad {
         // above or below the frame, fill with flag
         for x in 0..(sb_size>>xdec) + pad*2 {
@@ -404,13 +404,13 @@ pub fn cdef_filter_superblock<T: Pixel>(
             unsafe {
               let xsize = 8 >> xdec;
               let ysize = 8 >> ydec;
-              let dst = out_slice.offset_as_mutable(8 * bx >> xdec, 8 * by >> ydec);
-              let input = in_slice.offset(8 * bx >> xdec, 8 * by >> ydec);
-              assert!(dst.len() >= (ysize - 1) * out_stride + xsize);
-              assert!(input.len() >= ((ysize + 3) * in_stride + xsize + 4) as usize);
-              cdef_filter_block(dst.as_mut_ptr(),
+              assert!(out_slice.rows_iter().len() >= (8 * by >> ydec) + ysize);
+              assert!(in_slice.rows_iter().len() >= (8 * by >> ydec) + ysize + 4);
+              let dst = out_slice[8 * by >> ydec][8 * bx >> xdec..].as_mut_ptr();
+              let input = in_slice[8 * by >> ydec][8 * bx >> xdec..].as_ptr();
+              cdef_filter_block(dst,
                                 out_stride as isize,
-                                input.as_ptr(),
+                                input,
                                 in_stride as isize,
                                 local_pri_strength, local_sec_strength, local_dir,
                                 local_damping, local_damping,
@@ -452,27 +452,25 @@ pub fn cdef_filter_frame<T: Pixel>(fi: &FrameInvariants<T>, rec: &mut Frame<T>, 
   for p in 0..3 {
     let rec_w = rec.planes[p].cfg.width;
     let rec_h = rec.planes[p].cfg.height;
+    let mut cdef_slice = cdef_frame.planes[p].as_mut_slice();
     for row in 0..padded_px[p][1] {
       // pad first two elements of current row
       {
-        let mut cdef_slice = cdef_frame.planes[p].mut_slice(&PlaneOffset { x: 0, y: row as isize });
-        let cdef_row = &mut cdef_slice.as_mut_slice()[..2];
+        let cdef_row = &mut cdef_slice[row][..2];
         // FIXME this is just to make it compile, but it's incorrect if T == u8
         cdef_row[0] = T::cast_from(CDEF_VERY_LARGE);
         cdef_row[1] = T::cast_from(CDEF_VERY_LARGE);
       }
       // pad out end of current row
       {
-        let mut cdef_slice = cdef_frame.planes[p].mut_slice(&PlaneOffset { x: rec_w as isize + 2, y: row as isize });
-        let cdef_row = &mut cdef_slice.as_mut_slice()[..padded_px[p][0]-rec_w-2];
+        let cdef_row = &mut cdef_slice[row][rec_w + 2..padded_px[p][0]];
         for x in cdef_row {
           *x = T::cast_from(CDEF_VERY_LARGE);
         }
       }
       // copy current row from rec if we're in data, or pad if we're in first two rows/last N rows
       {
-        let mut cdef_slice = cdef_frame.planes[p].mut_slice(&PlaneOffset { x: 2, y: row as isize });
-        let cdef_row = &mut cdef_slice.as_mut_slice()[..rec_w];
+        let cdef_row = &mut cdef_slice[row][2..rec_w + 2];
         if row < 2 || row >= rec_h+2 {
           for x in cdef_row {
             *x = T::cast_from(CDEF_VERY_LARGE);
