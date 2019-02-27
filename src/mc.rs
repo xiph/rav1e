@@ -282,9 +282,8 @@ mod nasm {
             row_frac
           );
           let dst_stride = dst.plane.cfg.stride;
-          let dst_slice = dst.as_mut_slice();
           convert_slice_2d(
-            dst_slice.as_mut_ptr(),
+            dst.as_mut_ptr(),
             dst_stride,
             dst8.array.as_ptr(),
             width,
@@ -352,9 +351,8 @@ mod nasm {
           height as i32
         );
         let dst_stride = dst.plane.cfg.stride;
-        let dst_slice = dst.as_mut_slice();
         convert_slice_2d(
-          dst_slice.as_mut_ptr(),
+          dst.as_mut_ptr(),
           dst_stride,
           dst8.array.as_ptr(),
           width,
@@ -404,8 +402,6 @@ mod native {
     height: usize, col_frac: i32, row_frac: i32, mode_x: FilterMode,
     mode_y: FilterMode, bit_depth: usize
   ) {
-    let dst_stride = dst.plane.cfg.stride;
-    let dst_slice = dst.as_mut_slice();
     let ref_stride = src.plane.cfg.stride;
     let y_filter = get_filter(mode_y, row_frac, height);
     let x_filter = get_filter(mode_x, col_frac, width);
@@ -415,17 +411,17 @@ mod native {
       (0, 0) => {
         for r in 0..height {
           let src_slice = &src[r];
-          for c in 0..width {
-            dst_slice[r * dst_stride + c] = src_slice[c];
-          }
+          let dst_slice = &mut dst[r];
+          dst_slice[..width].copy_from_slice(&src_slice[..width]);
         }
       }
       (0, _) => {
         let offset_slice = src.go_up(3);
         for r in 0..height {
           let src_slice = &offset_slice[r];
+          let dst_slice = &mut dst[r];
           for c in 0..width {
-            dst_slice[r * dst_stride + c] = T::cast_from(round_shift(
+            dst_slice[c] = T::cast_from(round_shift(
               unsafe {
                 run_filter(
                   src_slice[c..].as_ptr(),
@@ -444,8 +440,9 @@ mod native {
         let offset_slice = src.go_left(3);
         for r in 0..height {
           let src_slice = &offset_slice[r];
+          let dst_slice = &mut dst[r];
           for c in 0..width {
-            dst_slice[r * dst_stride + c] = T::cast_from(round_shift(
+            dst_slice[c] = T::cast_from(round_shift(
               round_shift(
                 unsafe { run_filter(src_slice[c..].as_ptr(), 1, x_filter) },
                 7 - intermediate_bits
@@ -473,8 +470,9 @@ mod native {
           }
 
           for r in 0..height {
+            let dst_slice = &mut dst[r];
             for c in cg..(cg + 8).min(width) {
-              dst_slice[r * dst_stride + c] = T::cast_from(round_shift(
+              dst_slice[c] = T::cast_from(round_shift(
                 unsafe { run_filter(intermediate[8 * r + c - cg..].as_ptr(), 8, y_filter) },
                 7 + intermediate_bits
               )
@@ -568,13 +566,12 @@ mod native {
     dst: &'a mut PlaneMutSlice<'a, T>, tmp1: &[i16], tmp2: &[i16], width: usize,
     height: usize, bit_depth: usize
   ) {
-    let dst_stride = dst.plane.cfg.stride;
-    let dst_slice = dst.as_mut_slice();
     let max_sample_val = ((1 << bit_depth) - 1) as i32;
     let intermediate_bits = 4 - if bit_depth == 12 { 2 } else { 0 };
     for r in 0..height {
+      let dst_slice = &mut dst[r];
       for c in 0..width {
-        dst_slice[r * dst_stride + c] = T::cast_from(round_shift(
+        dst_slice[c] = T::cast_from(round_shift(
           (tmp1[r * width + c] + tmp2[r * width + c]) as i32,
           intermediate_bits + 1
         )
