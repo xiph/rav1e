@@ -159,6 +159,18 @@ impl<T: Pixel> Plane<T> {
     (y + self.cfg.yorigin) * self.cfg.stride + (x + self.cfg.xorigin)
   }
 
+  #[inline]
+  fn row_range(&self, x: isize, y: isize) -> Range<usize> {
+    debug_assert!(self.cfg.yorigin as isize + y >= 0);
+    debug_assert!(self.cfg.xorigin as isize + x >= 0);
+    let base_y = (self.cfg.yorigin as isize + y) as usize;
+    let base_x = (self.cfg.xorigin as isize + x) as usize;
+    let base = base_y * self.cfg.stride + base_x;
+    let width = self.cfg.stride - base_x;
+    base..base + width
+  }
+
+
   pub fn p(&self, x: usize, y: usize) -> T {
     self.data[self.index(x, y)]
   }
@@ -316,29 +328,28 @@ impl<'a, T: Pixel> ExactSizeIterator for IterWidth<'a, T> { }
 impl<'a, T: Pixel> FusedIterator for IterWidth<'a, T> { }
 
 pub struct RowsIter<'a, T: Pixel> {
-  ps: &'a PlaneSlice<'a, T>,
-  next_row: usize,
+  plane: &'a Plane<T>,
+  x: isize,
+  y: isize,
 }
 
 impl<'a, T: Pixel> Iterator for RowsIter<'a, T> {
   type Item = &'a [T];
 
   fn next(&mut self) -> Option<Self::Item> {
-    let remaining = self.ps.plane.cfg.height as isize - self.ps.y + self.next_row as isize;
-    if remaining > 0 {
-      let row = self.next_row;
-      self.next_row += 1;
+    if self.plane.cfg.height as isize > self.y {
       // cannot directly return self.ps.row(row) due to lifetime issue
-      let range = self.ps.slice_range(row);
-      Some(&self.ps.plane.data[range])
+      let range = self.plane.row_range(self.x, self.y);
+      self.y += 1;
+      Some(&self.plane.data[range])
     } else {
       None
     }
   }
 
   fn size_hint(&self) -> (usize, Option<usize>) {
-    let remaining = self.ps.plane.cfg.height as isize - self.ps.y + self.next_row as isize;
-    assert!(remaining >= 0);
+    let remaining = self.plane.cfg.height as isize - self.y;
+    debug_assert!(remaining >= 0);
     let remaining = remaining as usize;
 
     (remaining, Some(remaining))
@@ -349,18 +360,8 @@ impl<'a, T: Pixel> ExactSizeIterator for RowsIter<'a, T> {}
 impl<'a, T: Pixel> FusedIterator for RowsIter<'a, T> {}
 
 impl<'a, T: Pixel> PlaneSlice<'a, T> {
-  #[inline]
-  fn slice_range(&self, y_offset: usize) -> Range<usize> {
-    assert!(self.plane.cfg.yorigin as isize + self.y + y_offset as isize >= 0);
-    let base_y = (self.plane.cfg.yorigin as isize + self.y + y_offset as isize) as usize;
-    let base_x = (self.plane.cfg.xorigin as isize + self.x) as usize;
-    let base = base_y * self.plane.cfg.stride + base_x;
-    let width = self.plane.cfg.stride - base_x;
-    base..base + width
-  }
-
   pub fn row(&self, y: usize) -> &[T] {
-    let range = self.slice_range(y);
+    let range = self.plane.row_range(self.x, self.y + y as isize);
     &self.plane.data[range]
   }
 
@@ -370,8 +371,9 @@ impl<'a, T: Pixel> PlaneSlice<'a, T> {
 
   pub fn rows_iter(&self) -> RowsIter<'_, T> {
     RowsIter {
-      ps: self,
-      next_row: 0,
+      plane: self.plane,
+      x: self.x,
+      y: self.y,
     }
   }
 
