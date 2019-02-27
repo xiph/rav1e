@@ -109,6 +109,7 @@ impl<T: Pixel> Plane<T> {
     let xorigin = self.cfg.xorigin;
     let yorigin = self.cfg.yorigin;
     let stride = self.cfg.stride;
+    let alloc_height = self.cfg.alloc_height;
     let width = w >> self.cfg.xdec;
     let height = h >> self.cfg.ydec;
 
@@ -147,13 +148,13 @@ impl<T: Pixel> Plane<T> {
       }
     }
 
-    if yorigin + height < self.cfg.alloc_height {
+    if yorigin + height < alloc_height {
       let mut ps = self.mut_slice(&PlaneOffset {
         x: -(xorigin as isize),
         y: height as isize - 1
       });
       let (s2, s1) = ps.as_mut_slice().split_at_mut(stride);
-      for y in 0..yorigin {
+      for y in 0..alloc_height - (yorigin + height) {
         s1[y * stride..y * stride + stride].copy_from_slice(&s2[..stride]);
       }
     }
