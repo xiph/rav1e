@@ -16,6 +16,7 @@ pub use self::native::*;
 
 use super::*;
 use crate::partition::TxType;
+use crate::plane::PlaneMutSlice;
 
 static COSPI_INV: [i32; 64] = [
   4096, 4095, 4091, 4085, 4076, 4065, 4052, 4036, 4017, 3996, 3973, 3948,
@@ -1516,12 +1517,14 @@ mod nasm {
   pub trait InvTxfm2D: super::native::InvTxfm2D {
     fn match_tx_type(tx_type: TxType) -> InvTxfmFunc;
 
-    fn inv_txfm2d_add<T>(
-      input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
+    fn inv_txfm2d_add<'a, T>(
+      input: &[i32], output: &mut PlaneMutSlice<'a, T>, tx_type: TxType,
       bd: usize
     ) where
       T: Pixel,
     {
+      let stride = output.plane.cfg.stride;
+
       if is_x86_feature_detected!("avx2") && bd == 8 {
         // 64x only uses 32 coeffs
         let coeff_w = Self::W.min(32);
@@ -1571,7 +1574,7 @@ mod nasm {
         }
       } else {
         <Self as super::native::InvTxfm2D>::inv_txfm2d_add(
-          input, output, stride, tx_type, bd,
+          input, output, tx_type, bd,
         );
       }
     }
@@ -1679,8 +1682,8 @@ mod native {
   pub trait InvTxfm2D: Dim {
     const INTERMEDIATE_SHIFT: usize;
 
-    fn inv_txfm2d_add<T>(
-      input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
+    fn inv_txfm2d_add<'a, T: Pixel>(
+      input: &[i32], output: &mut PlaneMutSlice<'a, T>, tx_type: TxType,
       bd: usize
     ) where
       T: Pixel,
@@ -1730,7 +1733,7 @@ mod native {
         txfm_fn(&temp_in, &mut temp_out, range);
         for (temp, out) in temp_out
           .iter()
-          .zip(output[c..].iter_mut().step_by(stride).take(Self::H))
+          .zip(output.rows_iter_mut().map(|row| &mut row[c]).take(Self::H))
         {
           let v: i32 = (*out).as_();
           let v = clamp(v + round_shift(*temp, 4), 0, (1 << bd) - 1);
@@ -1774,14 +1777,14 @@ macro_rules! impl_iht_fns {
   ($(($W:expr, $H:expr)),+) => {
     $(
       paste::item! {
-        pub fn [<iht $W x $H _add>]<T>(
-          input: &[i32], output: &mut [T], stride: usize, tx_type: TxType,
+        pub fn [<iht $W x $H _add>]<'a, T: Pixel>(
+          input: &[i32], output: &mut PlaneMutSlice<'a, T>, tx_type: TxType,
           bit_depth: usize
         ) where
           T: Pixel,
         {
           [<Block $W x $H>]::inv_txfm2d_add(
-            input, output, stride, tx_type, bit_depth
+            input, output, tx_type, bit_depth
           );
         }
       }

@@ -949,7 +949,7 @@ pub fn encode_tx_block<T: Pixel>(
 ) -> (bool, i64) {
   let qidx = get_qidx(fi, fs, cw, bo);
   let rec = &mut fs.rec.planes[p];
-  let PlaneConfig { stride, xdec, ydec, .. } = fs.input.planes[p].cfg;
+  let PlaneConfig { xdec, ydec, .. } = fs.input.planes[p].cfg;
 
   assert!(tx_size.sqr() <= TxSize::TX_32X32 || tx_type == TxType::DCT_DCT);
 
@@ -990,7 +990,7 @@ pub fn encode_tx_block<T: Pixel>(
   let mut tx_dist: i64 = -1;
 
   if !fi.use_tx_domain_distortion || !for_rdo_use {
-    inverse_transform_add(rcoeffs, &mut rec.mut_slice(po).as_mut_slice(), stride, tx_size, tx_type, fi.sequence.bit_depth);
+    inverse_transform_add(rcoeffs, &mut rec.mut_slice(po), tx_size, tx_type, fi.sequence.bit_depth);
   }
   if rdo_type.needs_tx_dist() {
     // Store tx-domain distortion of this block
