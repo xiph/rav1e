@@ -22,7 +22,7 @@ use libc::ptrdiff_t;
 ///
 /// It can be allocated throught rav1e_frame_new(), populated using rav1e_frame_fill_plane()
 /// and freed using rav1e_frame_unref().
-pub struct Frame(Arc<rav1e::Frame>);
+pub struct Frame(Arc<rav1e::Frame<u16>>);
 
 type EncoderStatus=rav1e::EncoderStatus;
 
@@ -44,7 +44,7 @@ pub struct Config {
 ///
 /// Use rav1e_context_unref() to free its memory.
 pub struct Context {
-    ctx: rav1e::Context,
+    ctx: rav1e::Context<u16>,
     last_err: Option<EncoderStatus>,
 }
 
