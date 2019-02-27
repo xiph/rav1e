@@ -606,3 +606,52 @@ impl<'a, T: Pixel> IndexMut<usize> for PlaneMutSlice<'a, T> {
     self.row_mut(index)
   }
 }
+
+#[cfg(test)]
+pub mod test {
+  use super::*;
+
+  #[test]
+  fn test_plane_pad() {
+    let mut plane = Plane::<u8> {
+      data: vec![
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 1, 2, 3, 4, 0, 0,
+        0, 0, 8, 7, 6, 5, 0, 0,
+        0, 0, 9, 8, 7, 6, 0, 0,
+        0, 0, 2, 3, 4, 5, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+      ],
+      cfg: PlaneConfig {
+        stride: 8,
+        alloc_height: 9,
+        width: 4,
+        height: 4,
+        xdec: 0,
+        ydec: 0,
+        xpad: 0,
+        ypad: 0,
+        xorigin: 2,
+        yorigin: 3,
+      },
+    };
+    plane.pad(4, 4);
+    assert_eq!(
+      vec![
+        1, 1, 1, 2, 3, 4, 4, 4,
+        1, 1, 1, 2, 3, 4, 4, 4,
+        1, 1, 1, 2, 3, 4, 4, 4,
+        1, 1, 1, 2, 3, 4, 4, 4,
+        8, 8, 8, 7, 6, 5, 5, 5,
+        9, 9, 9, 8, 7, 6, 6, 6,
+        2, 2, 2, 3, 4, 5, 5, 5,
+        2, 2, 2, 3, 4, 5, 5, 5,
+        2, 2, 2, 3, 4, 5, 5, 5,
+      ],
+      plane.data
+    );
+  }
+}
