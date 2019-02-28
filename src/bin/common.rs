@@ -37,6 +37,9 @@ pub fn parse_cli() -> CliOptions {
     .about("AV1 video encoder")
     .setting(AppSettings::DeriveDisplayOrder)
     .setting(AppSettings::SubcommandsNegateReqs)
+    .arg(Arg::with_name("FULLHELP")
+      .help("Prints more detailed help information")
+      .long("fullhelp"))
     // THREADS
     .arg(
       Arg::with_name("THREADS")
@@ -49,7 +52,7 @@ pub fn parse_cli() -> CliOptions {
     .arg(
       Arg::with_name("INPUT")
         .help("Uncompressed YUV4MPEG2 video input")
-        .required(true)
+        .required_unless("FULLHELP")
         .index(1)
     )
     .arg(
@@ -57,7 +60,7 @@ pub fn parse_cli() -> CliOptions {
         .help("Compressed AV1 in IVF video output")
         .short("o")
         .long("output")
-        .required(true)
+        .required_unless("FULLHELP")
         .takes_value(true)
     )
     .arg(
@@ -99,11 +102,36 @@ pub fn parse_cli() -> CliOptions {
     )
     .arg(
       Arg::with_name("SPEED")
-        .help("Speed level (0 is best quality, 10 is fastest)")
+        .help("Speed level (0 is best quality, 10 is fastest)\n\
+        Speeds 10 and 0 are extremes and are generally not recommended")
+        .long_help("Speed level (0 is best quality, 10 is fastest)\n\
+        Speeds 10 and 0 are extremes and are generally not recommended\n\
+        - 10 (fastest):\n\
+        Min block size 64x64, TX domain distortion, fast deblock, no scenechange detection\n\
+        - 9:\n\
+        Min block size 64x64, TX domain distortion, fast deblock\n\
+        - 8:\n\
+        Min block size 8x8, reduced TX set, TX domain distortion, fast deblock\n\
+        - 7:\n\
+        Min block size 8x8, reduced TX set, TX domain distortion\n\
+        - 6:\n\
+        Min block size 8x8, reduced TX set, TX domain distortion\n\
+        - 5 (default):\n\
+        Min block size 8x8, reduced TX set, TX domain distortion, complex pred modes for keyframes\n\
+        - 4:\n\
+        Min block size 8x8, TX domain distortion, complex pred modes for keyframes\n\
+        - 3:\n\
+        Min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision\n\
+        - 2:\n\
+        Min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision, include near MVs\n\
+        - 1:\n\
+        Min block size 8x8, TX domain distortion, complex pred modes, RDO TX decision, include near MVs\n\
+        - 0 (slowest):\n\
+        Min block size 4x4, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, bottom-up encoding\n")
         .short("s")
         .long("speed")
         .takes_value(true)
-        .default_value("3")
+        .default_value("5")
     )
     .arg(
       Arg::with_name("MIN_KEYFRAME_INTERVAL")
@@ -123,7 +151,8 @@ pub fn parse_cli() -> CliOptions {
     )
     .arg(
       Arg::with_name("LOW_LATENCY")
-        .help("Low latency mode; disables frame reordering")
+        .help("Low latency mode; disables frame reordering\n\
+            Has a significant speed-to-quality trade-off")
         .long("low_latency")
         .takes_value(true)
         .default_value("false")
@@ -207,23 +236,6 @@ pub fn parse_cli() -> CliOptions {
         .hidden(true)
         .long("speed-test")
         .takes_value(true)
-        .possible_values(&[
-          "baseline",
-          "min_block_size_4x4",
-          "min_block_size_8x8",
-          "min_block_size_32x32",
-          "min_block_size_64x64",
-          "multiref",
-          "fast_deblock",
-          "reduced_tx_set",
-          "tx_domain_distortion",
-          "encode_bottomup",
-          "rdo_tx_decision",
-          "prediction_modes_keyframes",
-          "prediction_modes_all",
-          "include_near_mvs",
-          "no_scene_detection",
-        ])
     )
     .subcommand(SubCommand::with_name("advanced")
                 .setting(AppSettings::Hidden)
@@ -238,6 +250,11 @@ pub fn parse_cli() -> CliOptions {
     );
 
   let matches = app.clone().get_matches();
+
+  if matches.is_present("FULLHELP") {
+    app.print_long_help().unwrap();
+    std::process::exit(0);
+  }
 
   if let Some(threads) = matches.value_of("THREADS").map(|v| v.parse().expect("Threads must be an integer")) {
     rayon::ThreadPoolBuilder::new().num_threads(threads).build_global().unwrap();
@@ -447,6 +464,9 @@ fn apply_speed_test_cfg(cfg: &mut EncoderConfig, setting: &str) {
     "no_scene_detection" => {
       cfg.speed_settings.no_scene_detection = true;
     },
+    "diamond_me" => {
+      cfg.speed_settings.diamond_me = true;
+    }
     setting => {
       panic!("Unrecognized speed test setting {}", setting);
     }
