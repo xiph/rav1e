@@ -155,7 +155,7 @@ fn get_mv_range(
 
 pub fn get_subset_predictors<T: Pixel>(
   fi: &FrameInvariants<T>, bo: &BlockOffset, cmv: MotionVector,
-  frame_mvs: &Vec<MotionVector>, frame_ref_opt: &Option<Arc<ReferenceFrame<T>>>,
+  frame_mvs: &[MotionVector], frame_ref_opt: &Option<Arc<ReferenceFrame<T>>>,
   ref_slot: usize
 ) -> (Vec<MotionVector>) {
   let mut predictors = Vec::new();

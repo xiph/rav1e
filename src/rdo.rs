@@ -996,7 +996,7 @@ pub fn rdo_partition_decision<T: Pixel>(
   cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
   bsize: BlockSize, bo: &BlockOffset,
   cached_block: &RDOOutput, pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5],
-  partition_types: &Vec<PartitionType>,
+  partition_types: &[PartitionType],
 ) -> RDOOutput {
   let mut best_partition = cached_block.part_type;
   let mut best_rd = cached_block.rd_cost;
