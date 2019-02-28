@@ -74,6 +74,8 @@ pw_m16384:      times 8 dw  -16384
 pw_2896x8:      times 8 dw  2896*8
 pw_3344x8:      times 8 dw  3344*8
 pw_5793x4:      times 8 dw  5793*4
+pw_8192:        times 8 dw  8192
+pw_m8192:       times 8 dw -8192
 
 iadst4_dconly1a: times 2 dw 10568, 19856, 26752, 30424
 iadst4_dconly1b: times 2 dw 30424, 26752, 19856, 10568
@@ -1181,14 +1183,12 @@ cglobal iidentity_8x4_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     pmulhrsw             m0, m1
     pmulhrsw             m0, m2
 .end:
-    mov                 r2d, 2
+    mov                 r3d, 2
     lea                tx2q, [o(m(inv_txfm_add_dct_dct_8x8).end3)]
-.end2:
-    lea                  r3, [strideq*3]
 .loop:
     WRITE_8X4             0, 0, 0, 0, 1, 2, 3
     lea                dstq, [dstq+strideq*2]
-    dec                 r2d
+    dec                 r3d
     jg .loop
     jmp                tx2q
 .end3:
@@ -1214,15 +1214,27 @@ cglobal iidentity_8x4_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
 %endif
 %endmacro
 
-%macro ITX_8X8_LOAD_COEFS 0
-    mova                 m0, [coeffq+16*0]
-    mova                 m1, [coeffq+16*1]
-    mova                 m2, [coeffq+16*2]
-    mova                 m3, [coeffq+16*3]
-    mova                 m4, [coeffq+16*4]
-    mova                 m5, [coeffq+16*5]
-    mova                 m6, [coeffq+16*6]
-    mova                 m7, [coeffq+16*7]
+%macro LOAD_8ROWS 2-3 0 ; src, stride, is_rect2
+%if %3
+    mova                 m7, [o(pw_2896x8)]
+    pmulhrsw             m0, m7, [%1+%2*0]
+    pmulhrsw             m1, m7, [%1+%2*1]
+    pmulhrsw             m2, m7, [%1+%2*2]
+    pmulhrsw             m3, m7, [%1+%2*3]
+    pmulhrsw             m4, m7, [%1+%2*4]
+    pmulhrsw             m5, m7, [%1+%2*5]
+    pmulhrsw             m6, m7, [%1+%2*6]
+    pmulhrsw             m7, [%1+%2*7]
+%else
+    mova                 m0, [%1+%2*0]
+    mova                 m1, [%1+%2*1]
+    mova                 m2, [%1+%2*2]
+    mova                 m3, [%1+%2*3]
+    mova                 m4, [%1+%2*4]
+    mova                 m5, [%1+%2*5]
+    mova                 m6, [%1+%2*6]
+    mova                 m7, [%1+%2*7]
+%endif
 %endmacro
 
 %macro IDCT8_1D_ODDHALF 7 ; src[1-4], tmp[1-2], pd_2048
@@ -1245,13 +1257,15 @@ INV_TXFM_8X8_FN dct, adst
 INV_TXFM_8X8_FN dct, flipadst
 
 cglobal idct_8x8_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
-    ITX_8X8_LOAD_COEFS
+    LOAD_8ROWS          coeffq, 16
 
 .pass1:
     call .main
 
 .pass1_end:
     mova                    m7, [o(pw_16384)]
+
+.pass1_end1:
     REPX      {pmulhrsw x, m7}, m0, m2, m4, m6
     mova    [rsp+gprsize+16*1], m6
 
@@ -1355,13 +1369,15 @@ INV_TXFM_8X8_FN adst, flipadst
 INV_TXFM_8X8_FN adst, identity
 
 cglobal iadst_8x8_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
-    ITX_8X8_LOAD_COEFS
+    LOAD_8ROWS          coeffq, 16
 
 .pass1:
     call .main
 
 .pass1_end:
     mova                    m7, [o(pw_16384)]
+
+.pass1_end1:
     REPX      {pmulhrsw x, m7}, m0, m2, m4, m6
     mova    [rsp+gprsize+16*1], m6
     pxor                    m6, m6
@@ -1443,13 +1459,15 @@ INV_TXFM_8X8_FN flipadst, flipadst
 INV_TXFM_8X8_FN flipadst, identity
 
 cglobal iflipadst_8x8_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
-    ITX_8X8_LOAD_COEFS
+    LOAD_8ROWS          coeffq, 16
 
 .pass1:
     call m(iadst_8x8_internal).main
 
 .pass1_end:
     mova                    m7, [o(pw_m16384)]
+
+.pass1_end1:
     pmulhrsw                m1, m7
     mova    [rsp+gprsize+16*1], m1
     mova                    m1, m6
@@ -1500,7 +1518,7 @@ INV_TXFM_8X8_FN identity, flipadst
 INV_TXFM_8X8_FN identity, identity
 
 cglobal iidentity_8x8_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
-    ITX_8X8_LOAD_COEFS
+    LOAD_8ROWS          coeffq, 16
     mova    [rsp+gprsize+16*1], m6
     jmp   m(idct_8x8_internal).pass1_end3
 
@@ -1921,14 +1939,14 @@ cglobal iidentity_4x16_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
 %endif
 %endmacro
 
-%macro ITX_16X4_LOAD_COEFS 0
-    mova                 m0, [coeffq+16*0]
-    mova                 m1, [coeffq+16*1]
-    mova                 m2, [coeffq+16*2]
-    mova                 m3, [coeffq+16*3]
-    mova                 m4, [coeffq+16*4]
-    mova                 m5, [coeffq+16*5]
-    mova                 m6, [coeffq+16*6]
+%macro LOAD_7ROWS 2 ;src, stride
+    mova                 m0, [%1+%2*0]
+    mova                 m1, [%1+%2*1]
+    mova                 m2, [%1+%2*2]
+    mova                 m3, [%1+%2*3]
+    mova                 m4, [%1+%2*4]
+    mova                 m5, [%1+%2*5]
+    mova                 m6, [%1+%2*6]
 %endmacro
 
 %macro IDCT16_1D_PACKED_ODDHALF 7  ;src[1-4], tmp[1-3]
@@ -1975,7 +1993,7 @@ INV_TXFM_16X4_FN dct, flipadst, 0
 INV_TXFM_16X4_FN dct, identity, 3
 
 cglobal idct_16x4_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
-    ITX_16X4_LOAD_COEFS
+    LOAD_7ROWS coeffq, 16
     call .main
 
 .pass1_end:
@@ -2080,7 +2098,7 @@ INV_TXFM_16X4_FN adst, flipadst
 INV_TXFM_16X4_FN adst, identity
 
 cglobal iadst_16x4_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
-    ITX_16X4_LOAD_COEFS
+    LOAD_7ROWS coeffq, 16
     call .main
 
     punpckhwd             m6, m7, m0                 ;packed -out11, -out15
@@ -2218,7 +2236,7 @@ INV_TXFM_16X4_FN flipadst, flipadst
 INV_TXFM_16X4_FN flipadst, identity
 
 cglobal iflipadst_16x4_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
-    ITX_16X4_LOAD_COEFS
+    LOAD_7ROWS coeffq, 16
     call m(iadst_16x4_internal).main
 
     punpcklwd             m6, m7, m0                 ;packed  out11,  out15
@@ -2248,7 +2266,7 @@ INV_TXFM_16X4_FN identity, flipadst
 INV_TXFM_16X4_FN identity, identity
 
 cglobal iidentity_16x4_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
-    ITX_16X4_LOAD_COEFS
+    LOAD_7ROWS coeffq, 16
     mova                  m7, [o(pw_5793x4)]
     REPX    {psllw    x, 2 }, m0, m1, m2, m3, m4, m5, m6
     REPX    {pmulhrsw x, m7}, m0, m1, m2, m3, m4, m5, m6
@@ -2270,72 +2288,15 @@ cglobal iidentity_16x4_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     jmp   m(idct_16x4_internal).pass2_end
 
 
-%macro ITX_8X16_LOAD_EVEN_COEFS 0
-    mova                   m0, [coeffq+32*0]
-    mova                   m1, [coeffq+32*1]
-    mova                   m2, [coeffq+32*2]
-    mova                   m3, [coeffq+32*3]
-    mova                   m4, [coeffq+32*4]
-    mova                   m5, [coeffq+32*5]
-    mova                   m6, [coeffq+32*6]
-    mova                   m7, [coeffq+32*7]
-%endmacro
-
-%macro ITX_8X16_RECT2_LOAD_EVEN_COEFS 0
-    mova                   m7, [o(pw_2896x8)]
-    pmulhrsw               m0, m7, [coeffq+32*0]
-    pmulhrsw               m1, m7, [coeffq+32*1]
-    pmulhrsw               m2, m7, [coeffq+32*2]
-    pmulhrsw               m3, m7, [coeffq+32*3]
-    pmulhrsw               m4, m7, [coeffq+32*4]
-    pmulhrsw               m5, m7, [coeffq+32*5]
-    pmulhrsw               m6, m7, [coeffq+32*6]
-    pmulhrsw               m7,     [coeffq+32*7]
-%endmacro
-
-%macro ITX_8X16_LOAD_ODD_COEFS 0
-    mova                   m0, [coeffq+16*1 ]
-    mova                   m1, [coeffq+16*3 ]
-    mova                   m2, [coeffq+16*5 ]
-    mova                   m3, [coeffq+16*7 ]
-    mova                   m4, [coeffq+16*9 ]
-    mova                   m5, [coeffq+16*11]
-    mova                   m6, [coeffq+16*13]
-    mova                   m7, [coeffq+16*15]
-%endmacro
-
-%macro ITX_8X16_RECT2_LOAD_ODD_COEFS 0
-    mova                   m7, [o(pw_2896x8)]
-    pmulhrsw               m0, m7, [coeffq+16*1 ]
-    pmulhrsw               m1, m7, [coeffq+16*3 ]
-    pmulhrsw               m2, m7, [coeffq+16*5 ]
-    pmulhrsw               m3, m7, [coeffq+16*7 ]
-    pmulhrsw               m4, m7, [coeffq+16*9 ]
-    pmulhrsw               m5, m7, [coeffq+16*11]
-    pmulhrsw               m6, m7, [coeffq+16*13]
-    pmulhrsw               m7,     [coeffq+16*15]
-%endmacro
-
-%macro ITX_8X16_SAVE_EVEN_COEFS 0
-    mova        [coeffq+32*0], m0
-    mova        [coeffq+32*1], m1
-    mova        [coeffq+32*2], m2
-    mova        [coeffq+32*3], m3
-    mova        [coeffq+32*4], m4
-    mova        [coeffq+32*5], m5
-    mova        [coeffq+32*6], m6
-    mova        [coeffq+32*7], m7
-%endmacro
-
-%macro ITX_8X16_SAVE_ODD_COEFS 0
-    mova       [coeffq+16*1 ], m0
-    mova       [coeffq+16*3 ], m1
-    mova       [coeffq+16*5 ], m2
-    mova       [coeffq+16*7 ], m3
-    mova       [coeffq+16*9 ], m4
-    mova       [coeffq+16*11], m5
-    mova       [coeffq+16*13], m6
-    mova       [coeffq+16*15], m7
+%macro SAVE_8ROWS 2  ;src, stride
+    mova                 [%1+%2*0], m0
+    mova                 [%1+%2*1], m1
+    mova                 [%1+%2*2], m2
+    mova                 [%1+%2*3], m3
+    mova                 [%1+%2*4], m4
+    mova                 [%1+%2*5], m5
+    mova                 [%1+%2*6], m6
+    mova                 [%1+%2*7], m7
 %endmacro
 
 %macro ITX_8X16_LOAD_STACK_COEFS 0
@@ -2363,9 +2324,9 @@ cglobal iidentity_16x4_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     psrlw                m2, 3              ; pw_2048
     pmulhrsw             m0, m1
     pmulhrsw             m0, m2
-    mov                 r2d, 4
+    mov                 r3d, 4
     lea                tx2q, [o(m(inv_txfm_add_dct_dct_8x16).end)]
-    jmp m(inv_txfm_add_dct_dct_8x8).end2
+    jmp m(inv_txfm_add_dct_dct_8x8).loop
 .end:
     RET
 %elifidn %1_%2, dct_identity
@@ -2427,9 +2388,9 @@ cglobal iidentity_16x4_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     mov       [coeffq+32*1], eobd
     mov       [coeffq+32*2], eobd
     mov       [coeffq+32*3], eobd
-    mov                 r2d, 4
+    mov                 r3d, 4
     lea                tx2q, [o(m(inv_txfm_add_identity_dct_8x16).end)]
-    jmp m(inv_txfm_add_dct_dct_8x8).end2
+    jmp m(inv_txfm_add_dct_dct_8x8).loop
 .end:
     RET
 %endif
@@ -2444,22 +2405,25 @@ cglobal idct_8x16_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     lea                    r3, [o(m(idct_8x8_internal).pass1)]
 
 .pass1:
-    ITX_8X16_RECT2_LOAD_ODD_COEFS
+    LOAD_8ROWS    coeffq+16*1, 32, 1
     mov   [rsp+gprsize+16*11], tx2q
     lea                  tx2q, [o(m(idct_8x16_internal).pass1_end)]
     jmp                    r3
 
 .pass1_end:
-    ITX_8X16_SAVE_ODD_COEFS
-    ITX_8X16_RECT2_LOAD_EVEN_COEFS
+    SAVE_8ROWS    coeffq+16*1, 32
+    LOAD_8ROWS    coeffq+16*0, 32, 1
     mov                  tx2q, [rsp+gprsize+16*11]
     jmp                    r3
 
 .pass2:
-    mova        [coeffq+16*0], m1
-    mova        [coeffq+16*2], m3
-    mova        [coeffq+16*4], m5
-    mova        [coeffq+16*6], m7
+    lea                  tx2q, [o(m(idct_8x16_internal).end)]
+
+.pass2_pre:
+    mova       [coeffq+16*2 ], m1
+    mova       [coeffq+16*6 ], m3
+    mova       [coeffq+16*10], m5
+    mova       [coeffq+16*14], m7
     mova                   m1, m2
     mova                   m2, m4
     mova                   m3, m6
@@ -2467,6 +2431,8 @@ cglobal idct_8x16_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     mova                   m5, [coeffq+16*5 ]
     mova                   m6, [coeffq+16*9 ]
     mova                   m7, [coeffq+16*13]
+
+.pass2_main:
     call m(idct_8x8_internal).main
 
     mova   [rsp+gprsize+16*3], m0
@@ -2477,17 +2443,16 @@ cglobal idct_8x16_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     mova   [rsp+gprsize+16*8], m5
     mova   [rsp+gprsize+16*9], m6
 
-    mova                   m0, [coeffq+16*0 ]
-    mova                   m1, [coeffq+16*2 ]
-    mova                   m2, [coeffq+16*4 ]
-    mova                   m3, [coeffq+16*6 ]
+    mova                   m0, [coeffq+16*2 ]
+    mova                   m1, [coeffq+16*6 ]
+    mova                   m2, [coeffq+16*10]
+    mova                   m3, [coeffq+16*14]
     mova                   m4, [coeffq+16*3 ]
     mova                   m5, [coeffq+16*7 ]
     mova                   m6, [coeffq+16*11]
     mova                   m7, [coeffq+16*15]
     call m(idct_16x8_internal).main
 
-    lea                  tx2q, [o(m(idct_8x16_internal).end)]
     mov                    r3, dstq
     lea                  dstq, [dstq+strideq*8]
     jmp  m(idct_8x8_internal).end
@@ -2514,6 +2479,9 @@ cglobal iadst_8x16_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     jmp  m(idct_8x16_internal).pass1
 
 .pass2:
+    lea                  tx2q, [o(m(iadst_8x16_internal).end)]
+
+.pass2_pre:
     mova    [rsp+gprsize+16*7], m0
     mova    [rsp+gprsize+16*8], m1
     mova    [rsp+gprsize+16*5], m6
@@ -2522,6 +2490,8 @@ cglobal iadst_8x16_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     mova                    m1, m3
     mova                    m2, m4
     mova                    m3, m5
+
+.pass2_main:
     mova                    m4, [coeffq+16*1 ]
     mova                    m5, [coeffq+16*3 ]
     mova                    m6, [coeffq+16*13]
@@ -2537,7 +2507,6 @@ cglobal iadst_8x16_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
 
     call m(iadst_16x8_internal).main
 
-    lea                  tx2q, [o(m(iadst_8x16_internal).end)]
     mov                    r3, dstq
     lea                  dstq, [dstq+strideq*8]
     jmp m(iadst_8x8_internal).end
@@ -2560,6 +2529,10 @@ cglobal iflipadst_8x16_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     jmp  m(idct_8x16_internal).pass1
 
 .pass2:
+    lea                   tx2q, [o(m(iflipadst_8x16_internal).end)]
+    lea                     r3, [dstq+strideq*8]
+
+.pass2_pre:
     mova    [rsp+gprsize+16*7], m0
     mova    [rsp+gprsize+16*8], m1
     mova    [rsp+gprsize+16*5], m6
@@ -2568,6 +2541,8 @@ cglobal iflipadst_8x16_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     mova                    m1, m3
     mova                    m2, m4
     mova                    m3, m5
+
+.pass2_main:
     mova                    m4, [coeffq+16*1 ]
     mova                    m5, [coeffq+16*3 ]
     mova                    m6, [coeffq+16*13]
@@ -2582,10 +2557,7 @@ cglobal iflipadst_8x16_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     mova                    m7, [coeffq+16*11]
 
     call m(iadst_16x8_internal).main
-
-    lea                   tx2q, [o(m(iflipadst_8x16_internal).end)]
-    lea                     r3, [dstq+strideq*8]
-    jmp m(iflipadst_8x8_internal).end
+    jmp  m(iflipadst_8x8_internal).end
 
 .end:
     ITX_8X16_LOAD_STACK_COEFS
@@ -2601,15 +2573,15 @@ INV_TXFM_8X16_FN identity, flipadst
 INV_TXFM_8X16_FN identity, identity
 
 cglobal iidentity_8x16_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
-    ITX_8X16_RECT2_LOAD_ODD_COEFS
+    LOAD_8ROWS    coeffq+16*1, 32, 1
     mov                    r3, tx2q
     lea                  tx2q, [o(m(iidentity_8x16_internal).pass1_end)]
     mova   [rsp+gprsize+16*1], m6
     jmp  m(idct_8x8_internal).pass1_end3
 
 .pass1_end:
-    ITX_8X16_SAVE_ODD_COEFS
-    ITX_8X16_RECT2_LOAD_EVEN_COEFS
+    SAVE_8ROWS    coeffq+16*1, 32
+    LOAD_8ROWS    coeffq+16*0, 32, 1
     mov                  tx2q, r3
     mova   [rsp+gprsize+16*1], m6
     jmp  m(idct_8x8_internal).pass1_end3
@@ -2631,7 +2603,7 @@ cglobal iidentity_8x16_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     jmp  m(idct_8x8_internal).end3
 
 .end1:
-    ITX_8X16_LOAD_ODD_COEFS
+    LOAD_8ROWS    coeffq+16*1, 32
     lea                  tx2q, [o(m(idct_8x16_internal).end1)]
     lea                  dstq, [dstq+strideq*2]
     jmp .end
@@ -2729,7 +2701,7 @@ INV_TXFM_16X8_FN dct, adst
 INV_TXFM_16X8_FN dct, flipadst
 
 cglobal idct_16x8_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
-    ITX_8X16_RECT2_LOAD_EVEN_COEFS
+    LOAD_8ROWS    coeffq+16*0, 32, 1
     call m(idct_8x8_internal).main
     mova   [rsp+gprsize+16*3], m0
     mova   [rsp+gprsize+16*4], m1
@@ -2739,14 +2711,14 @@ cglobal idct_16x8_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     mova   [rsp+gprsize+16*8], m5
     mova   [rsp+gprsize+16*9], m6
 
-    ITX_8X16_RECT2_LOAD_ODD_COEFS
+    LOAD_8ROWS    coeffq+16*1, 32, 1
     call  .main
     mov                    r3, tx2q
     lea                  tx2q, [o(m(idct_16x8_internal).pass1_end)]
     jmp  m(idct_8x8_internal).pass1_end
 
 .pass1_end:
-    ITX_8X16_SAVE_ODD_COEFS
+    SAVE_8ROWS    coeffq+16*1, 32
     ITX_8X16_LOAD_STACK_COEFS
     mova   [rsp+gprsize+16*0], m7
     mov                  tx2q, r3
@@ -2758,7 +2730,7 @@ cglobal idct_16x8_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     jmp  m(idct_8x8_internal).pass2_main
 
 .end:
-    ITX_8X16_LOAD_ODD_COEFS
+    LOAD_8ROWS    coeffq+16*1, 32
     lea                  tx2q, [o(m(idct_8x16_internal).end1)]
     mov                  dstq, r3
     jmp  m(idct_8x8_internal).pass2_main
@@ -2890,7 +2862,7 @@ cglobal iadst_16x8_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     jmp m(iadst_8x8_internal).pass1_end
 
 .pass1_end:
-    ITX_8X16_SAVE_ODD_COEFS
+    SAVE_8ROWS    coeffq+16*1, 32
     ITX_8X16_LOAD_STACK_COEFS
     mova   [rsp+gprsize+16*0], m7
     mov                  tx2q, r3
@@ -2902,7 +2874,7 @@ cglobal iadst_16x8_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     jmp m(iadst_8x8_internal).pass2_main
 
 .end:
-    ITX_8X16_LOAD_ODD_COEFS
+    LOAD_8ROWS    coeffq+16*1, 32
     lea                  tx2q, [o(m(idct_8x16_internal).end1)]
     mov                  dstq, r3
     jmp m(iadst_8x8_internal).pass2_main
@@ -3094,29 +3066,29 @@ cglobal iflipadst_16x8_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     call m(iadst_16x8_internal).main
 
     mova                    m7, [rsp+gprsize+16*0]
-    ITX_8X16_SAVE_EVEN_COEFS
+    SAVE_8ROWS     coeffq+16*0, 32
     ITX_8X16_LOAD_STACK_COEFS
-    mova   [rsp+gprsize+16*0], m7
-    mov                    r3, tx2q
-    lea                  tx2q, [o(m(iflipadst_16x8_internal).pass1_end)]
+    mova    [rsp+gprsize+16*0], m7
+    mov                     r3, tx2q
+    lea                   tx2q, [o(m(iflipadst_16x8_internal).pass1_end)]
     jmp m(iflipadst_8x8_internal).pass1_end
 
 .pass1_end:
-    ITX_8X16_SAVE_ODD_COEFS
-    ITX_8X16_LOAD_EVEN_COEFS
-    mova   [rsp+gprsize+16*0], m7
-    mov                  tx2q, r3
+    SAVE_8ROWS     coeffq+16*1, 32
+    LOAD_8ROWS     coeffq+16*0, 32
+    mova    [rsp+gprsize+16*0], m7
+    mov                   tx2q, r3
     jmp m(iflipadst_8x8_internal).pass1_end
 
 .pass2:
-    lea                  tx2q, [o(m(iflipadst_16x8_internal).end)]
-    lea                    r3, [dstq+8]
+    lea                   tx2q, [o(m(iflipadst_16x8_internal).end)]
+    lea                     r3, [dstq+8]
     jmp m(iflipadst_8x8_internal).pass2_main
 
 .end:
-    ITX_8X16_LOAD_ODD_COEFS
-    lea                  tx2q, [o(m(idct_8x16_internal).end1)]
-    mov                  dstq, r3
+    LOAD_8ROWS     coeffq+16*1, 32
+    lea                   tx2q, [o(m(idct_8x16_internal).end1)]
+    mov                   dstq, r3
     jmp m(iflipadst_8x8_internal).pass2_main
 
 
@@ -3177,7 +3149,515 @@ cglobal iidentity_16x8_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     jmp  m(iidentity_8x8_internal).end
 
 .end:
-    ITX_8X16_LOAD_ODD_COEFS
+    LOAD_8ROWS    coeffq+16*1, 32
     lea                  tx2q, [o(m(idct_8x16_internal).end1)]
     mov                  dstq, r3
     jmp  m(iidentity_8x8_internal).end
+
+
+%macro INV_TXFM_16X16_FN 2-3 -1 ; type1, type2, fast_thresh
+    INV_TXFM_FN          %1, %2, %3, 16x16, 8, 16*12
+%ifidn %1_%2, dct_dct
+    movd                   m1, [o(pw_2896x8)]
+    pmulhrsw               m0, m1, [coeffq]
+    movd                   m2, [o(pw_8192)]
+    mov              [coeffq], eobd
+    mov                   r2d, 8
+    lea                  tx2q, [o(m(inv_txfm_add_dct_dct_16x16).end)]
+    jmp m(inv_txfm_add_dct_dct_16x4).dconly
+.end:
+    RET
+%elifidn %1_%2, dct_identity
+    mova                   m3, [o(pw_2896x8)]
+    pmulhrsw               m2, m3, [coeffq+16*0]
+    pmulhrsw               m3, [coeffq+16*1]
+    mova                   m0, [o(pw_8192)]
+    mova                   m1, [o(pw_5793x4)]
+    pshuflw                m4, [o(deint_shuf)], q0000 ;pb_0_1
+    punpcklwd              m4, m4
+    pcmpeqb                m5, m5
+    pxor                   m6, m6
+    mova        [coeffq+16*0], m6
+    mova        [coeffq+16*1], m6
+    paddb                  m5, m5                     ;pb_m2
+    pmulhrsw               m2, m0
+    pmulhrsw               m3, m0
+    psrlw                  m0, 2                      ;pw_2048
+    psllw                  m2, 2
+    psllw                  m3, 2
+    pmulhrsw               m2, m1
+    pmulhrsw               m3, m1
+    pmulhrsw               m2, m0
+    pmulhrsw               m3, m0
+    mov                   r3d, 8
+.loop:
+    mova                   m1, [dstq]
+    pshufb                 m0, m2, m4
+    punpckhbw              m7, m1, m6
+    punpcklbw              m1, m6
+    paddw                  m7, m0
+    paddw                  m1, m0
+    packuswb               m1, m7
+    mova               [dstq], m1
+    mova                   m1, [dstq+strideq*8]
+    pshufb                 m0, m3, m4
+    psubb                  m4, m5 ; += 2
+    punpckhbw              m7, m1, m6
+    punpcklbw              m1, m6
+    paddw                  m7, m0
+    paddw                  m1, m0
+    packuswb               m1, m7
+    mova     [dstq+strideq*8], m1
+    add                  dstq, strideq
+    dec                   r3d
+    jg .loop
+    RET
+%elifidn %1_%2, identity_dct
+    mova                   m4, [o(pw_5793x4)]
+    mova                   m5, [o(pw_8192)]
+    mova                   m6, [o(pw_2896x8)]
+    psrlw                  m7, m5, 2                 ;pw_2048
+    xor                  eobd, eobd
+    lea                  tx2q, [o(m(inv_txfm_add_identity_dct_16x16).end)]
+    lea                    r3, [dstq+8]
+    mov            [rsp+16*0], r3
+.main:
+    movd                   m0, [coeffq+32*0]
+    punpcklwd              m0, [coeffq+32*1]
+    movd                   m2, [coeffq+32*2]
+    punpcklwd              m2, [coeffq+32*3]
+    add                coeffq, 32*4
+    movd                   m1, [coeffq+32*0]
+    punpcklwd              m1, [coeffq+32*1]
+    movd                   m3, [coeffq+32*2]
+    punpcklwd              m3, [coeffq+32*3]
+    xor                  eobd, eobd
+    mov         [coeffq-32*4], eobd
+    mov         [coeffq-32*3], eobd
+    mov         [coeffq-32*2], eobd
+    mov         [coeffq-32*1], eobd
+    punpckldq              m0, m2
+    punpckldq              m1, m3
+    punpcklqdq             m0, m1
+    psllw                  m0, 2
+    pmulhrsw               m0, m4
+    pmulhrsw               m0, m5
+    pmulhrsw               m0, m6
+    pmulhrsw               m0, m7
+    mov         [coeffq+32*0], eobd
+    mov         [coeffq+32*1], eobd
+    mov         [coeffq+32*2], eobd
+    mov         [coeffq+32*3], eobd
+    mov                   r3d, 4
+    jmp m(inv_txfm_add_dct_dct_8x8).loop
+.end:
+    lea                  tx2q, [o(m(inv_txfm_add_identity_dct_16x16).end1)]
+    add                coeffq, 32*4
+    mov                  dstq, [rsp+16*0]
+    jmp .main
+.end1:
+    RET
+%endif
+%endmacro
+
+INV_TXFM_16X16_FN dct, dct,      0
+INV_TXFM_16X16_FN dct, identity, 15
+INV_TXFM_16X16_FN dct, adst
+INV_TXFM_16X16_FN dct, flipadst
+
+cglobal idct_16x16_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
+    mova                    m0, [coeffq+16*1 ]
+    mova                    m1, [coeffq+16*5 ]
+    mova                    m2, [coeffq+16*9 ]
+    mova                    m3, [coeffq+16*13]
+    mova                    m4, [coeffq+16*17]
+    mova                    m5, [coeffq+16*21]
+    mova                    m6, [coeffq+16*25]
+    mova                    m7, [coeffq+16*29]
+    call  m(idct_8x8_internal).main
+    mova    [rsp+gprsize+16*3], m0
+    mova    [rsp+gprsize+16*4], m1
+    mova    [rsp+gprsize+16*5], m2
+    mova    [rsp+gprsize+16*6], m3
+    mova    [rsp+gprsize+16*7], m4
+    mova    [rsp+gprsize+16*8], m5
+    mova    [rsp+gprsize+16*9], m6
+    mova                    m0, [coeffq+16*3 ]
+    mova                    m1, [coeffq+16*7 ]
+    mova                    m2, [coeffq+16*11]
+    mova                    m3, [coeffq+16*15]
+    mova                    m4, [coeffq+16*19]
+    mova                    m5, [coeffq+16*23]
+    mova                    m6, [coeffq+16*27]
+    mova                    m7, [coeffq+16*31]
+    call m(idct_16x8_internal).main
+    mov                     r3, tx2q
+    lea                   tx2q, [o(m(idct_16x16_internal).pass1_end)]
+    mova                    m7, [o(pw_8192)]
+    jmp   m(idct_8x8_internal).pass1_end1
+
+.pass1_end:
+    SAVE_8ROWS    coeffq+16*17, 32
+    ITX_8X16_LOAD_STACK_COEFS
+    mova    [rsp+gprsize+16*0], m7
+    lea                   tx2q, [o(m(idct_16x16_internal).pass1_end1)]
+    mova                    m7, [o(pw_8192)]
+    jmp   m(idct_8x8_internal).pass1_end1
+
+.pass1_end1:
+    SAVE_8ROWS     coeffq+16*1, 32
+    mova                    m0, [coeffq+16*0 ]
+    mova                    m1, [coeffq+16*4 ]
+    mova                    m2, [coeffq+16*8 ]
+    mova                    m3, [coeffq+16*12]
+    mova                    m4, [coeffq+16*16]
+    mova                    m5, [coeffq+16*20]
+    mova                    m6, [coeffq+16*24]
+    mova                    m7, [coeffq+16*28]
+    call  m(idct_8x8_internal).main
+    mova    [rsp+gprsize+16*3], m0
+    mova    [rsp+gprsize+16*4], m1
+    mova    [rsp+gprsize+16*5], m2
+    mova    [rsp+gprsize+16*6], m3
+    mova    [rsp+gprsize+16*7], m4
+    mova    [rsp+gprsize+16*8], m5
+    mova    [rsp+gprsize+16*9], m6
+    mova                    m0, [coeffq+16*2 ]
+    mova                    m1, [coeffq+16*6 ]
+    mova                    m2, [coeffq+16*10]
+    mova                    m3, [coeffq+16*14]
+    mova                    m4, [coeffq+16*18]
+    mova                    m5, [coeffq+16*22]
+    mova                    m6, [coeffq+16*26]
+    mova                    m7, [coeffq+16*30]
+    call m(idct_16x8_internal).main
+    lea                   tx2q, [o(m(idct_16x16_internal).pass1_end2)]
+    mova                    m7, [o(pw_8192)]
+    jmp   m(idct_8x8_internal).pass1_end1
+
+.pass1_end2:
+    SAVE_8ROWS    coeffq+16*16, 32
+    ITX_8X16_LOAD_STACK_COEFS
+    mova    [rsp+gprsize+16*0], m7
+    mov                   tx2q, r3
+    mova                    m7, [o(pw_8192)]
+    jmp   m(idct_8x8_internal).pass1_end1
+
+.pass2:
+    lea                   tx2q, [o(m(idct_16x16_internal).end)]
+    jmp  m(idct_8x16_internal).pass2_pre
+
+.end:
+    ITX_8X16_LOAD_STACK_COEFS
+    mova    [rsp+gprsize+16*0], m7
+    lea                   tx2q, [o(m(idct_16x16_internal).end1)]
+    mov                   dstq, r3
+    lea                     r3, [dstq+8]
+    jmp   m(idct_8x8_internal).end
+
+.end1:
+    pxor                    m7, m7
+    REPX   {mova [coeffq+16*x], m7}, 0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15
+
+    add                 coeffq, 32*8
+    mov                   dstq, r3
+
+    mova                    m0, [coeffq+16*0 ]
+    mova                    m1, [coeffq+16*4 ]
+    mova                    m2, [coeffq+16*8 ]
+    mova                    m3, [coeffq+16*12]
+    mova                    m4, [coeffq+16*1 ]
+    mova                    m5, [coeffq+16*5 ]
+    mova                    m6, [coeffq+16*9 ]
+    mova                    m7, [coeffq+16*13]
+    lea                   tx2q, [o(m(idct_8x16_internal).end)]
+    jmp  m(idct_8x16_internal).pass2_main
+
+
+%macro ITX_16X16_ADST_LOAD_ODD_COEFS 0
+    mova                    m0, [coeffq+16*1 ]
+    mova                    m1, [coeffq+16*3 ]
+    mova                    m2, [coeffq+16*29]
+    mova                    m3, [coeffq+16*31]
+    mova    [rsp+gprsize+16*7], m0
+    mova    [rsp+gprsize+16*8], m1
+    mova    [rsp+gprsize+16*9], m2
+    mova    [rsp+gprsize+32*5], m3
+    mova                    m0, [coeffq+16*13]
+    mova                    m1, [coeffq+16*15]
+    mova                    m2, [coeffq+16*17]
+    mova                    m3, [coeffq+16*19]
+    mova    [rsp+gprsize+16*3], m2
+    mova    [rsp+gprsize+16*4], m3
+    mova    [rsp+gprsize+16*5], m0
+    mova    [rsp+gprsize+16*6], m1
+    mova                    m0, [coeffq+16*5 ]
+    mova                    m1, [coeffq+16*7 ]
+    mova                    m2, [coeffq+16*9 ]
+    mova                    m3, [coeffq+16*11]
+    mova                    m4, [coeffq+16*21]
+    mova                    m5, [coeffq+16*23]
+    mova                    m6, [coeffq+16*25]
+    mova                    m7, [coeffq+16*27]
+%endmacro
+
+%macro ITX_16X16_ADST_LOAD_EVEN_COEFS 0
+    mova                    m0, [coeffq+16*0 ]
+    mova                    m1, [coeffq+16*2 ]
+    mova                    m2, [coeffq+16*28]
+    mova                    m3, [coeffq+16*30]
+    mova    [rsp+gprsize+16*7], m0
+    mova    [rsp+gprsize+16*8], m1
+    mova    [rsp+gprsize+16*9], m2
+    mova    [rsp+gprsize+32*5], m3
+    mova                    m0, [coeffq+16*12]
+    mova                    m1, [coeffq+16*14]
+    mova                    m2, [coeffq+16*16]
+    mova                    m3, [coeffq+16*18]
+    mova    [rsp+gprsize+16*3], m2
+    mova    [rsp+gprsize+16*4], m3
+    mova    [rsp+gprsize+16*5], m0
+    mova    [rsp+gprsize+16*6], m1
+    mova                    m0, [coeffq+16*4 ]
+    mova                    m1, [coeffq+16*6 ]
+    mova                    m2, [coeffq+16*8 ]
+    mova                    m3, [coeffq+16*10]
+    mova                    m4, [coeffq+16*20]
+    mova                    m5, [coeffq+16*22]
+    mova                    m6, [coeffq+16*24]
+    mova                    m7, [coeffq+16*26]
+%endmacro
+
+INV_TXFM_16X16_FN adst, dct
+INV_TXFM_16X16_FN adst, adst
+INV_TXFM_16X16_FN adst, flipadst
+
+cglobal iadst_16x16_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
+    ITX_16X16_ADST_LOAD_ODD_COEFS
+    call m(iadst_16x8_internal).main
+
+    mov                     r3, tx2q
+    lea                   tx2q, [o(m(iadst_16x16_internal).pass1_end)]
+    mova                    m7, [o(pw_8192)]
+    jmp  m(iadst_8x8_internal).pass1_end1
+
+.pass1_end:
+    SAVE_8ROWS    coeffq+16*17, 32
+    ITX_8X16_LOAD_STACK_COEFS
+    mova    [rsp+gprsize+16*0], m7
+    lea                   tx2q, [o(m(iadst_16x16_internal).pass1_end1)]
+    mova                    m7, [o(pw_8192)]
+    jmp  m(iadst_8x8_internal).pass1_end1
+
+.pass1_end1:
+    SAVE_8ROWS     coeffq+16*1, 32
+    ITX_16X16_ADST_LOAD_EVEN_COEFS
+    call m(iadst_16x8_internal).main
+
+    lea                   tx2q, [o(m(iadst_16x16_internal).pass1_end2)]
+    mova                    m7, [o(pw_8192)]
+    jmp  m(iadst_8x8_internal).pass1_end1
+
+.pass1_end2:
+    SAVE_8ROWS    coeffq+16*16, 32
+    ITX_8X16_LOAD_STACK_COEFS
+    mova    [rsp+gprsize+16*0], m7
+    mov                   tx2q, r3
+    mova                    m7, [o(pw_8192)]
+    jmp  m(iadst_8x8_internal).pass1_end1
+
+.pass2:
+    lea                   tx2q, [o(m(iadst_16x16_internal).end)]
+    jmp m(iadst_8x16_internal).pass2_pre
+
+.end:
+    ITX_8X16_LOAD_STACK_COEFS
+    mova    [rsp+gprsize+16*0], m7
+    lea                   tx2q, [o(m(iadst_16x16_internal).end1)]
+    mov                   dstq, r3
+    lea                     r3, [dstq+8]
+    jmp  m(iadst_8x8_internal).end
+
+.end1:
+    pxor                    m7, m7
+    REPX   {mova [coeffq+16*x], m7}, 0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15
+
+    add                 coeffq, 32*8
+    mov                   dstq, r3
+
+    mova                    m4, [coeffq+16*0 ]
+    mova                    m5, [coeffq+16*2 ]
+    mova                    m0, [coeffq+16*4 ]
+    mova                    m1, [coeffq+16*6 ]
+    mova                    m2, [coeffq+16*8 ]
+    mova                    m3, [coeffq+16*10]
+    mova                    m6, [coeffq+16*12]
+    mova                    m7, [coeffq+16*14]
+    mova    [rsp+gprsize+16*7], m4
+    mova    [rsp+gprsize+16*8], m5
+    mova    [rsp+gprsize+16*5], m6
+    mova    [rsp+gprsize+16*6], m7
+    lea                   tx2q, [o(m(iadst_8x16_internal).end)]
+    jmp m(iadst_8x16_internal).pass2_main
+
+
+INV_TXFM_16X16_FN flipadst, dct
+INV_TXFM_16X16_FN flipadst, adst
+INV_TXFM_16X16_FN flipadst, flipadst
+
+cglobal iflipadst_16x16_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
+    ITX_16X16_ADST_LOAD_ODD_COEFS
+    call m(iadst_16x8_internal).main
+
+    mov                     r3, tx2q
+    lea                   tx2q, [o(m(iflipadst_16x16_internal).pass1_end)]
+    mova                    m7, [o(pw_m8192)]
+    jmp  m(iflipadst_8x8_internal).pass1_end1
+
+.pass1_end:
+    SAVE_8ROWS     coeffq+16*1, 32
+    ITX_8X16_LOAD_STACK_COEFS
+    mova    [rsp+gprsize+16*0], m7
+    lea                   tx2q, [o(m(iflipadst_16x16_internal).pass1_end1)]
+    mova                    m7, [o(pw_m8192)]
+    jmp  m(iflipadst_8x8_internal).pass1_end1
+
+.pass1_end1:
+    SAVE_8ROWS    coeffq+16*17, 32
+    ITX_16X16_ADST_LOAD_EVEN_COEFS
+    call m(iadst_16x8_internal).main
+
+    mova                    m7, [rsp+gprsize+16*0]
+    SAVE_8ROWS     coeffq+16*0, 32
+    ITX_8X16_LOAD_STACK_COEFS
+    mova    [rsp+gprsize+16*0], m7
+    lea                   tx2q, [o(m(iflipadst_16x16_internal).pass1_end2)]
+    mova                    m7, [o(pw_m8192)]
+    jmp  m(iflipadst_8x8_internal).pass1_end1
+
+.pass1_end2:
+    SAVE_8ROWS    coeffq+16*16, 32
+    LOAD_8ROWS    coeffq+16* 0, 32
+    mova    [rsp+gprsize+16*0], m7
+    mov                   tx2q, r3
+    mova                    m7, [o(pw_m8192)]
+    jmp m(iflipadst_8x8_internal).pass1_end1
+
+.pass2:
+    lea                   tx2q, [o(m(iflipadst_16x16_internal).end)]
+    lea                     r3, [dstq+8]
+    jmp m(iflipadst_8x16_internal).pass2_pre
+
+.end:
+    ITX_8X16_LOAD_STACK_COEFS
+    mova    [rsp+gprsize+16*0], m7
+    lea                   tx2q, [o(m(iflipadst_16x16_internal).end1)]
+    lea                   dstq, [dstq+strideq*2]
+    jmp  m(iflipadst_8x8_internal).end
+
+.end1:
+    pxor                    m7, m7
+    REPX   {mova [coeffq+16*x], m7}, 0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15
+
+    add                 coeffq, 32*8
+
+    mova                    m4, [coeffq+16*0 ]
+    mova                    m5, [coeffq+16*2 ]
+    mova                    m0, [coeffq+16*4 ]
+    mova                    m1, [coeffq+16*6 ]
+    mova                    m2, [coeffq+16*8 ]
+    mova                    m3, [coeffq+16*10]
+    mova                    m6, [coeffq+16*12]
+    mova                    m7, [coeffq+16*14]
+    mova    [rsp+gprsize+16*7], m4
+    mova    [rsp+gprsize+16*8], m5
+    mova    [rsp+gprsize+16*5], m6
+    mova    [rsp+gprsize+16*6], m7
+
+    lea                   tx2q, [o(m(iflipadst_16x16_internal).end2)]
+    mov                   dstq, r3
+    jmp m(iflipadst_8x16_internal).pass2_main
+
+.end2:
+    ITX_8X16_LOAD_STACK_COEFS
+    mova    [rsp+gprsize+16*0], m7
+    lea                   tx2q, [o(m(idct_8x16_internal).end1)]
+    lea                   dstq, [dstq+strideq*2]
+    jmp  m(iflipadst_8x8_internal).end
+
+
+INV_TXFM_16X16_FN identity, dct,      15
+INV_TXFM_16X16_FN identity, identity
+
+cglobal iidentity_16x16_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
+    LOAD_8ROWS    coeffq+16*17, 32
+    mov                     r3, tx2q
+    lea                   tx2q, [o(m(iidentity_16x16_internal).pass1_end)]
+
+.pass1:
+    REPX      {psllw    x, 2 }, m0, m1, m2, m3, m4, m5, m6, m7
+    pmulhrsw                m7, [o(pw_5793x4)]
+    mova    [rsp+gprsize+16*0], m7
+
+    mova                    m7, [o(pw_5793x4)]
+    REPX      {pmulhrsw x, m7}, m0, m1, m2, m3, m4, m5, m6
+
+    mova                    m7, [o(pw_8192)]
+    jmp   m(idct_8x8_internal).pass1_end1
+
+.pass1_end:
+    SAVE_8ROWS    coeffq+16*17, 32
+    LOAD_8ROWS    coeffq+16* 1, 32
+    lea                   tx2q, [o(m(iidentity_16x16_internal).pass1_end1)]
+    jmp .pass1
+
+.pass1_end1:
+    SAVE_8ROWS    coeffq+16* 1, 32
+    LOAD_8ROWS    coeffq+16*16, 32
+    lea                   tx2q, [o(m(iidentity_16x16_internal).pass1_end2)]
+    jmp .pass1
+
+.pass1_end2:
+    SAVE_8ROWS    coeffq+16*16, 32
+    LOAD_8ROWS    coeffq+16* 0, 32
+    mov                   tx2q, r3
+    jmp .pass1
+
+.pass2:
+    lea                     r3, [dstq+8]
+    lea                   tx2q, [o(m(iidentity_16x16_internal).end1)]
+
+.end:
+    REPX      {psllw    x, 2 }, m0, m1, m2, m3, m4, m5, m6, m7
+    pmulhrsw                m7, [o(pw_5793x4)]
+    pmulhrsw                m7, [o(pw_2048)]
+    mova    [rsp+gprsize+16*0], m7
+    mova                    m7, [o(pw_5793x4)]
+    REPX      {pmulhrsw x, m7}, m0, m1, m2, m3, m4, m5, m6
+    mova                    m7, [o(pw_2048)]
+    REPX      {pmulhrsw x, m7}, m0, m1, m2, m3, m4, m5, m6
+    mova    [rsp+gprsize+16*1], m6
+    mova    [rsp+gprsize+16*2], m5
+    jmp   m(idct_8x8_internal).end3
+
+.end1:
+    LOAD_8ROWS     coeffq+16*1, 32
+    lea                   tx2q, [o(m(iidentity_16x16_internal).end2)]
+    lea                   dstq, [dstq+strideq*2]
+    jmp .end
+
+.end2:
+    pxor                    m7, m7
+    REPX   {mova [coeffq+16*x], m7}, 0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15
+
+    add                 coeffq, 32*8
+    LOAD_8ROWS          coeffq, 32
+    lea                   tx2q, [o(m(iidentity_16x16_internal).end3)]
+    mov                   dstq, r3
+    jmp .end
+
+.end3:
+    LOAD_8ROWS     coeffq+16*1, 32
+    lea                   tx2q, [o(m(idct_8x16_internal).end1)]
+    lea                   dstq, [dstq+strideq*2]
+    jmp .end
