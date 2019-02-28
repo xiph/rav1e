@@ -63,6 +63,9 @@ bench = false
 name = "bench"
 harness = false
 
+[profile.dev]
+opt-level = 3  # unoptimized builds are unusable for video encoding
+
 [profile.release]
 codegen-units = 1  # if > 1 enables parallel code generation which improves
                    # compile times, but prevents some optimizations.
