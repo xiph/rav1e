@@ -26,6 +26,15 @@ before_install:
     - cd kcov-36
     - mkdir .build && cd .build
     - cmake .. && make && sudo make install
+    - cd ../..
+    - git clone https://aomedia.googlesource.com/aom
+    - cd aom
+    - rm -rf CMakeCache.txt CMakeFiles
+    - mkdir -p .build
+    - cd .build
+    - cmake .. -DCMAKE_BUILD_TYPE=Release -DENABLE_TESTS=0 -DENABLE_DOCS=0 -DCONFIG_LOWBITDEPTH=1 -DCMAKE_INSTALL_PREFIX=/usr -DCONFIG_PIC=1
+    - make && sudo make install
+    - cd ../..
 
 jobs:
   include:
