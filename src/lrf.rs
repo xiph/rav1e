@@ -129,14 +129,14 @@ fn sgrproj_box_sum_slow<T: Pixel>(a: &mut i32, b: &mut i32,
                                   x: isize, y: isize,
                                   r: usize, n: i32, one_over_n: i32, s: i32, bdm8: usize,
                                   backing: &PlaneSlice<T>, backing_w: usize, backing_h: usize,
-                                  cdeffed: &PlaneSlice<T>, cdeffed_w: usize, cdeffed_h: usize) {  
+                                  cdeffed: &PlaneSlice<T>, cdeffed_w: usize, cdeffed_h: usize) {
   let mut ssq:i32 = 0;
   let mut sum:i32 = 0;
 
   for yi in y-r as isize..=y+r as isize {
     // decide if we're vertically inside or outside the stripe
     let (src_plane, src_w, src_h) = if yi >= stripe_y && yi < stripe_y + stripe_h as isize {
-      (cdeffed, 
+      (cdeffed,
        (cdeffed_w as isize - x + r as isize) as usize,
        cdeffed_h as isize)
     } else {
@@ -144,7 +144,7 @@ fn sgrproj_box_sum_slow<T: Pixel>(a: &mut i32, b: &mut i32,
        (backing_w as isize - x + r as isize) as usize,
        backing_h as isize)
     };
-    // clamp vertically to storage at top and passed-in height at bottom 
+    // clamp vertically to storage at top and passed-in height at bottom
     let cropped_y = clamp(yi, -src_plane.y, src_h - 1);
     // clamp vertically to stripe limits
     let ly = clamp(cropped_y, stripe_y - 2, stripe_y + stripe_h as isize + 1);
@@ -221,7 +221,7 @@ fn sgrproj_box_sum_fastx_r1<T: Pixel>(a: &mut i32, b: &mut i32,
                                       x: isize, y: isize,
                                       s: i32, bdm8: usize,
                                       backing: &PlaneSlice<T>, backing_h: usize,
-                                      cdeffed: &PlaneSlice<T>, cdeffed_h: usize) {  
+                                      cdeffed: &PlaneSlice<T>, cdeffed_h: usize) {
   let mut ssq:i32 = 0;
   let mut sum:i32 = 0;
   for yi in y-1..=y+1 {
@@ -253,7 +253,7 @@ fn sgrproj_box_sum_fastx_r2<T: Pixel>(a: &mut i32, b: &mut i32,
                                       x: isize, y: isize,
                                       s: i32, bdm8: usize,
                                       backing: &PlaneSlice<T>, backing_h: usize,
-                                      cdeffed: &PlaneSlice<T>, cdeffed_h: usize) {  
+                                      cdeffed: &PlaneSlice<T>, cdeffed_h: usize) {
   let mut ssq:i32 = 0;
   let mut sum:i32 = 0;
   for yi in y - 2..=y + 2 {
@@ -301,9 +301,9 @@ fn sgrproj_box_ab_r1<T: Pixel>(af: &mut[i32; 64+2],
     // Addressing is away from left and right edges of cdeffed storage;
     // no X clipping to worry about, but the top/bottom few rows still
     // need to worry about storage and stripe limits
-      
+
     // boundary1 is the point where we're guaranteed all our y
-    // addressing will be both in the stripe and in cdeffed storage  
+    // addressing will be both in the stripe and in cdeffed storage
     let boundary1 = cmp::max(2, 2 - cdeffed.y - stripe_y) as usize;
     // boundary 2 is when we have to bounds check along the bottom of
     // the stripe or bottom of storage
@@ -312,7 +312,7 @@ fn sgrproj_box_ab_r1<T: Pixel>(af: &mut[i32; 64+2],
     // top rows (if any), away from left and right columns
     for i in boundary0..boundary1 {
       sgrproj_box_sum_fastx_r1(&mut af[i], &mut bf[i],
-                               stripe_y, stripe_h, 
+                               stripe_y, stripe_h,
                                stripe_x, stripe_y + i as isize - 1,
                                s, bdm8,
                                backing, backing_h,
@@ -326,7 +326,7 @@ fn sgrproj_box_ab_r1<T: Pixel>(af: &mut[i32; 64+2],
     // bottom rows (if any), away from left and right columns
     for i in boundary2..boundary3 {
       sgrproj_box_sum_fastx_r1(&mut af[i], &mut bf[i],
-                               stripe_y, stripe_h, 
+                               stripe_y, stripe_h,
                                stripe_x, stripe_y + i as isize - 1,
                                s, bdm8,
                                backing, backing_h,
@@ -335,7 +335,7 @@ fn sgrproj_box_ab_r1<T: Pixel>(af: &mut[i32; 64+2],
   } else {
     // top/bottom rows and left/right columns, where we need to worry about frame and stripe clipping
     for i in boundary0..boundary3 {
-      sgrproj_box_sum_slow(&mut af[i], &mut bf[i],                           
+      sgrproj_box_sum_slow(&mut af[i], &mut bf[i],
                            stripe_y, stripe_h,
                            stripe_x, stripe_y + i as isize - 1,
                            1, 9, 455, s, bdm8,
@@ -357,7 +357,7 @@ fn sgrproj_box_ab_r2<T: Pixel>(af: &mut[i32; 64+2],
                                stripe_x: isize, stripe_y: isize, stripe_h: usize,
                                s: i32, bdm8: usize,
                                backing: &PlaneSlice<T>, backing_w: usize, backing_h: usize,
-                               cdeffed: &PlaneSlice<T>, cdeffed_w: usize, cdeffed_h: usize) {  
+                               cdeffed: &PlaneSlice<T>, cdeffed_w: usize, cdeffed_h: usize) {
   // we will fill the af and bf arrays from 0..stripe_h+1 (ni),
   // representing stripe_y-1 to stripe_y+stripe_h+1 inclusive
   let boundary0 = 0; // even
@@ -367,10 +367,10 @@ fn sgrproj_box_ab_r2<T: Pixel>(af: &mut[i32; 64+2],
     // Addressing is away from left and right edges of cdeffed storage;
     // no X clipping to worry about, but the top/bottom few rows still
     // need to worry about storage and stripe limits
-      
+
     // boundary1 is the point where we're guaranteed all our y
     // addressing will be both in the stripe and in cdeffed storage
-    // make even and round up  
+    // make even and round up
     let boundary1 = (cmp::max(3, 3 - cdeffed.y - stripe_y) + 1 >> 1 << 1) as usize;
     // boundary 2 is when we have to bounds check along the bottom of
     // the stripe or bottom of storage
@@ -380,7 +380,7 @@ fn sgrproj_box_ab_r2<T: Pixel>(af: &mut[i32; 64+2],
     // top rows, away from left and right columns
     for i in (boundary0..boundary1).step_by(2) {
       sgrproj_box_sum_fastx_r2(&mut af[i], &mut bf[i],
-                               stripe_y, stripe_h, 
+                               stripe_y, stripe_h,
                                stripe_x, stripe_y + i as isize - 1,
                                s, bdm8,
                                backing, backing_h,
@@ -395,7 +395,7 @@ fn sgrproj_box_ab_r2<T: Pixel>(af: &mut[i32; 64+2],
     // bottom rows, away from left and right columns
     for i in (boundary2..boundary3).step_by(2) {
       sgrproj_box_sum_fastx_r2(&mut af[i], &mut bf[i],
-                               stripe_y, stripe_h, 
+                               stripe_y, stripe_h,
                                stripe_x, stripe_y + i as isize - 1,
                                s, bdm8,
                                backing, backing_h,
@@ -425,11 +425,11 @@ fn sgrproj_box_f_r1<T: Pixel>(af: &[&[i32; 64+2]; 3], bf: &[&[i32; 64+2]; 3], f:
   let shift = 5 + SGRPROJ_SGR_BITS - SGRPROJ_RST_BITS;
   for i in cmp::max(0, -y) as usize..h {
     let a =
-      3 * (af[0][i+0] + af[2][i+0] + af[0][i+2] + af[2][i+2]) +
-      4 * (af[1][i+0] + af[0][i+1] + af[1][i+1] + af[2][i+1] + af[1][i+2]);
+      3 * (af[0][i] + af[2][i]   + af[0][i+2] + af[2][i+2]) +
+      4 * (af[1][i] + af[0][i+1] + af[1][i+1] + af[2][i+1] + af[1][i+2]);
     let b =
-      3 * (bf[0][i+0] + bf[2][i+0] + bf[0][i+2] + bf[2][i+2]) +
-      4 * (bf[1][i+0] + bf[0][i+1] + bf[1][i+1] + bf[2][i+1] + bf[1][i+2]);
+      3 * (bf[0][i] + bf[2][i]   + bf[0][i+2] + bf[2][i+2]) +
+      4 * (bf[1][i] + bf[0][i+1] + bf[1][i+1] + bf[2][i+1] + bf[1][i+2]);
     let v = a * i32::cast_from(cdeffed.p(x, (y + i as isize) as usize)) + b;
     f[i as usize] = v + (1 << shift >> 1) >> shift;
   }
@@ -441,16 +441,16 @@ fn sgrproj_box_f_r2<T: Pixel>(af: &[&[i32; 64+2]; 3], bf: &[&[i32; 64+2]; 3], f:
   let shifto = 4 + SGRPROJ_SGR_BITS - SGRPROJ_RST_BITS;
   for i in (cmp::max(0, -y) as usize..h).step_by(2) {
     let a =
-      5 * (af[0][i+0] + af[2][i+0]) + 
-      6 * (af[1][i+0]);
+      5 * (af[0][i] + af[2][i]) +
+      6 * (af[1][i]);
     let b =
-      5 * (bf[0][i+0] + bf[2][i+0]) + 
-      6 * (bf[1][i+0]);
+      5 * (bf[0][i] + bf[2][i]) +
+      6 * (bf[1][i]);
     let ao =
-      5 * (af[0][i+2] + af[2][i+2]) + 
+      5 * (af[0][i+2] + af[2][i+2]) +
       6 * (af[1][i+2]);
     let bo =
-      5 * (bf[0][i+2] + bf[2][i+2]) + 
+      5 * (bf[0][i+2] + bf[2][i+2]) +
       6 * (bf[1][i+2]);
     let v = (a + ao) * i32::cast_from(cdeffed.p(x, (y+i as isize) as usize)) + b + bo;
     f[i as usize] = v + (1 << shift >> 1) >> shift;
@@ -607,7 +607,7 @@ pub fn sgrproj_solve<T: Pixel>(set: u8, fi: &FrameInvariants<T>,
                       &cdeffed, cdef_w, cdef_h,
                       &cdeffed, cdef_w, cdef_h);
   }
-  
+
   /* iterate by column */
   for xi in 0..cdef_w {
     /* build intermediate array columns */
