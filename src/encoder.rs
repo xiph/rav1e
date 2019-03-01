@@ -1112,14 +1112,16 @@ pub fn motion_compensate<T: Pixel>(
 
 pub fn save_block_motion<T: Pixel>(
    fs: &mut FrameState<T>,
-   w_in_b: usize, _h_in_b: usize,
+   w_in_b: usize, h_in_b: usize,
    bsize: BlockSize, bo: &BlockOffset,
    ref_frame: usize, mv: MotionVector,
 ) {
-  let frame_mvs = &mut fs.frame_mvs;
-  for mi_y in (bo.y)..(bo.y + bsize.height_mi()) {
-    for mi_x in (bo.x)..(bo.x + bsize.width_mi()) {
-      frame_mvs[ref_frame][mi_y][mi_x] = mv;
+  let frame_mvs = &mut fs.frame_mvs[ref_frame];
+  let bo_x_end = (bo.x + bsize.width_mi()).min(w_in_b);
+  let bo_y_end = (bo.y + bsize.height_mi()).min(h_in_b);
+  for mi_y in bo.y..bo_y_end {
+    for mi_x in bo.x..bo_x_end {
+      frame_mvs[mi_y][mi_x] = mv;
     }
   }
 }
@@ -2044,7 +2046,8 @@ fn encode_tile<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec
                   BlockSize::BLOCK_32X32,
                   r,
                   &sbo.block_offset(0, 0),
-                  &[Some(pmv), pmv_w, pmv_n]
+                  &[Some(pmv), pmv_w, pmv_n],
+                  i
                 )
               });
               s.spawn(|_| {
@@ -2054,7 +2057,8 @@ fn encode_tile<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec
                   BlockSize::BLOCK_32X32,
                   r,
                   &sbo.block_offset(8, 0),
-                  &[Some(pmv), pmv_e, pmv_n]
+                  &[Some(pmv), pmv_e, pmv_n],
+                  i
                 )
               });
               s.spawn(|_| {
@@ -2064,7 +2068,8 @@ fn encode_tile<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec
                   BlockSize::BLOCK_32X32,
                   r,
                   &sbo.block_offset(0, 8),
-                  &[Some(pmv), pmv_w, pmv_s]
+                  &[Some(pmv), pmv_w, pmv_s],
+                  i
                 )
               });
               s.spawn(|_| {
@@ -2074,7 +2079,8 @@ fn encode_tile<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec
                   BlockSize::BLOCK_32X32,
                   r,
                   &sbo.block_offset(8, 8),
-                  &[Some(pmv), pmv_e, pmv_s]
+                  &[Some(pmv), pmv_e, pmv_s],
+                  i
                 )
               });
             });
@@ -2083,6 +2089,19 @@ fn encode_tile<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec
             pmvs[2][r] = pmvs2;
             pmvs[3][r] = pmvs3;
             pmvs[4][r] = pmvs4;
+
+            if let Some(mv1) = pmvs1 {
+              save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, &sbo.block_offset(0, 0), i, mv1);
+            }
+            if let Some(mv2) = pmvs2 {
+              save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, &sbo.block_offset(8, 0), i, mv2);
+            }
+            if let Some(mv3) = pmvs3 {
+              save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, &sbo.block_offset(0, 8), i, mv3);
+            }
+            if let Some(mv4) = pmvs4 {
+              save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, &sbo.block_offset(8, 8), i, mv4);
+            }
           }
         }
       }
