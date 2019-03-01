@@ -816,11 +816,11 @@ pub enum MvJointType {
   MV_JOINT_HNZVNZ = 3  /* Both components nonzero */
 }
 
-pub fn get_intra_edges<'a, T: Pixel>(
-  dst: &'a PlaneSlice<'a, T>,
+pub fn get_intra_edges<T: Pixel>(
+  dst: &PlaneSlice<'_, T>,
   tx_size: TxSize,
   bit_depth: usize,
-  plane_cfg: &'a PlaneConfig,
+  plane_cfg: &PlaneConfig,
   frame_w_in_b: usize,
   frame_h_in_b: usize,
   opt_mode: Option<PredictionMode>
@@ -982,8 +982,8 @@ pub fn get_intra_edges<'a, T: Pixel>(
 }
 
 impl PredictionMode {
-  pub fn predict_intra<'a, T: Pixel>(
-    self, dst: &'a mut PlaneMutSlice<'a, T>, tx_size: TxSize, bit_depth: usize,
+  pub fn predict_intra<T: Pixel>(
+    self, dst: &mut PlaneMutSlice<'_, T>, tx_size: TxSize, bit_depth: usize,
     ac: &[i16], alpha: i16, edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>
   ) {
     assert!(self.is_intra());
@@ -1033,8 +1033,8 @@ impl PredictionMode {
   }
 
   #[inline(always)]
-  fn predict_intra_inner<'a, B: Intra<T>, T: Pixel>(
-    self, dst: &'a mut PlaneMutSlice<'a, T>, bit_depth: usize, ac: &[i16],
+  fn predict_intra_inner<B: Intra<T>, T: Pixel>(
+    self, dst: &mut PlaneMutSlice<'_, T>, bit_depth: usize, ac: &[i16],
     alpha: i16, edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>
   ) {
     // left pixels are order from bottom to top and right-aligned
@@ -1136,9 +1136,9 @@ impl PredictionMode {
     self >= PredictionMode::V_PRED && self <= PredictionMode::D63_PRED
   }
 
-  pub fn predict_inter<'a, T: Pixel>(
+  pub fn predict_inter<T: Pixel>(
     self, fi: &FrameInvariants<T>, p: usize, po: &PlaneOffset,
-    dst: &'a mut PlaneMutSlice<'a, T>, width: usize, height: usize,
+    dst: &mut PlaneMutSlice<'_, T>, width: usize, height: usize,
     ref_frames: [usize; 2], mvs: [MotionVector; 2]
   ) {
     assert!(!self.is_intra());

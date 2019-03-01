@@ -55,7 +55,7 @@ fn first_max_element(elems: &[i32]) -> (usize, i32) {
 // in a particular direction. Since each direction have the same sum(x^2) term,
 // that term is never computed. See Section 2, step 2, of:
 // http://jmvalin.ca/notes/intra_paint.pdf
-fn cdef_find_dir<'a, T: Pixel>(img: &PlaneSlice<'a, T>, var: &mut i32, coeff_shift: usize) -> i32 {
+fn cdef_find_dir<T: Pixel>(img: &PlaneSlice<'_, T>, var: &mut i32, coeff_shift: usize) -> i32 {
   let mut cost: [i32; 8] = [0; 8];
   let mut partial: [[i32; 15]; 8] = [[0; 15]; 8];
   for i in 0..8 {

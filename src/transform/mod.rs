@@ -175,8 +175,8 @@ pub fn forward_transform(
   }
 }
 
-pub fn inverse_transform_add<'a, T: Pixel>(
-  input: &[i32], output: &mut PlaneMutSlice<'a, T>, tx_size: TxSize,
+pub fn inverse_transform_add<T: Pixel>(
+  input: &[i32], output: &mut PlaneMutSlice<'_, T>, tx_size: TxSize,
   tx_type: TxType, bit_depth: usize
 ) {
   assert!(mem::size_of::<T>() == 2, "only implemented for u16 for now");

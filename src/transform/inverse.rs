@@ -1517,8 +1517,8 @@ mod nasm {
   pub trait InvTxfm2D: super::native::InvTxfm2D {
     fn match_tx_type(tx_type: TxType) -> InvTxfmFunc;
 
-    fn inv_txfm2d_add<'a, T>(
-      input: &[i32], output: &mut PlaneMutSlice<'a, T>, tx_type: TxType,
+    fn inv_txfm2d_add<T>(
+      input: &[i32], output: &mut PlaneMutSlice<'_, T>, tx_type: TxType,
       bd: usize
     ) where
       T: Pixel,
@@ -1682,8 +1682,8 @@ mod native {
   pub trait InvTxfm2D: Dim {
     const INTERMEDIATE_SHIFT: usize;
 
-    fn inv_txfm2d_add<'a, T: Pixel>(
-      input: &[i32], output: &mut PlaneMutSlice<'a, T>, tx_type: TxType,
+    fn inv_txfm2d_add<T: Pixel>(
+      input: &[i32], output: &mut PlaneMutSlice<'_, T>, tx_type: TxType,
       bd: usize
     ) where
       T: Pixel,
@@ -1777,8 +1777,8 @@ macro_rules! impl_iht_fns {
   ($(($W:expr, $H:expr)),+) => {
     $(
       paste::item! {
-        pub fn [<iht $W x $H _add>]<'a, T: Pixel>(
-          input: &[i32], output: &mut PlaneMutSlice<'a, T>, tx_type: TxType,
+        pub fn [<iht $W x $H _add>]<T: Pixel>(
+          input: &[i32], output: &mut PlaneMutSlice<'_, T>, tx_type: TxType,
           bit_depth: usize
         ) where
           T: Pixel,
