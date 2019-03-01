@@ -250,8 +250,8 @@ mod nasm {
     );
   }
 
-  pub fn put_8tap<'a, T: Pixel>(
-    dst: &'a mut PlaneMutSlice<'a, T>, src: PlaneSlice<'_, T>, width: usize,
+  pub fn put_8tap<T: Pixel>(
+    dst: &mut PlaneMutSlice<'_, T>, src: PlaneSlice<'_, T>, width: usize,
     height: usize, col_frac: i32, row_frac: i32, mode_x: FilterMode,
     mode_y: FilterMode, bit_depth: usize
   ) {
@@ -334,8 +334,8 @@ mod nasm {
     }
   }
 
-  pub fn mc_avg<'a, T: Pixel>(
-    dst: &'a mut PlaneMutSlice<'a, T>, tmp1: &[i16], tmp2: &[i16], width: usize,
+  pub fn mc_avg<T: Pixel>(
+    dst: &mut PlaneMutSlice<'_, T>, tmp1: &[i16], tmp2: &[i16], width: usize,
     height: usize, bit_depth: usize
   ) {
     if is_x86_feature_detected!("avx2") && bit_depth == 8 {
@@ -397,8 +397,8 @@ mod native {
     SUBPEL_FILTERS[filter_idx][frac as usize]
   }
 
-  pub fn put_8tap<'a, T: Pixel>(
-    dst: &'a mut PlaneMutSlice<'a, T>, src: PlaneSlice<'_, T>, width: usize,
+  pub fn put_8tap<T: Pixel>(
+    dst: &mut PlaneMutSlice<'_, T>, src: PlaneSlice<'_, T>, width: usize,
     height: usize, col_frac: i32, row_frac: i32, mode_x: FilterMode,
     mode_y: FilterMode, bit_depth: usize
   ) {
@@ -562,8 +562,8 @@ mod native {
     }
   }
 
-  pub fn mc_avg<'a, T: Pixel>(
-    dst: &'a mut PlaneMutSlice<'a, T>, tmp1: &[i16], tmp2: &[i16], width: usize,
+  pub fn mc_avg<T: Pixel>(
+    dst: &mut PlaneMutSlice<'_, T>, tmp1: &[i16], tmp2: &[i16], width: usize,
     height: usize, bit_depth: usize
   ) {
     let max_sample_val = ((1 << bit_depth) - 1) as i32;

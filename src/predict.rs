@@ -218,7 +218,7 @@ where
   T: Pixel,
 {
   #[cfg_attr(feature = "comparative_bench", inline(never))]
-  fn pred_dc<'a>(output: &mut PlaneMutSlice<'a, T>, above: &[T], left: &[T]) {
+  fn pred_dc(output: &mut PlaneMutSlice<'_, T>, above: &[T], left: &[T]) {
     #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
@@ -247,7 +247,7 @@ where
   }
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
-  fn pred_dc_128<'a>(output: &mut PlaneMutSlice<'a, T>, bit_depth: usize) {
+  fn pred_dc_128(output: &mut PlaneMutSlice<'_, T>, bit_depth: usize) {
     #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
@@ -272,7 +272,7 @@ where
   }
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
-  fn pred_dc_left<'a>(output: &mut PlaneMutSlice<'a, T>, _above: &[T], left: &[T]) {
+  fn pred_dc_left(output: &mut PlaneMutSlice<'_, T>, _above: &[T], left: &[T]) {
     #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
@@ -296,7 +296,7 @@ where
   }
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
-  fn pred_dc_top<'a>(output: &mut PlaneMutSlice<'a, T>, above: &[T], _left: &[T]) {
+  fn pred_dc_top(output: &mut PlaneMutSlice<'_, T>, above: &[T], _left: &[T]) {
     #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
@@ -320,7 +320,7 @@ where
   }
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
-  fn pred_h<'a>(output: &mut PlaneMutSlice<'a, T>, left: &[T]) {
+  fn pred_h(output: &mut PlaneMutSlice<'_, T>, left: &[T]) {
     #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
@@ -346,7 +346,7 @@ where
   }
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
-  fn pred_v<'a>(output: &mut PlaneMutSlice<'a, T>, above: &[T]) {
+  fn pred_v(output: &mut PlaneMutSlice<'_, T>, above: &[T]) {
     #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
@@ -368,8 +368,8 @@ where
   }
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
-  fn pred_paeth<'a>(
-    output: &mut PlaneMutSlice<'a, T>, above: &[T], left: &[T],
+  fn pred_paeth(
+    output: &mut PlaneMutSlice<'_, T>, above: &[T], left: &[T],
     above_left: T
   ) {
     #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
@@ -413,8 +413,8 @@ where
   }
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
-  fn pred_smooth<'a>(
-    output: &mut PlaneMutSlice<'a, T>, above: &[T], left: &[T]
+  fn pred_smooth(
+    output: &mut PlaneMutSlice<'_, T>, above: &[T], left: &[T]
   ) {
     #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
@@ -478,8 +478,8 @@ where
   }
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
-  fn pred_smooth_h<'a>(
-    output: &mut PlaneMutSlice<'a, T>, above: &[T], left: &[T]
+  fn pred_smooth_h(
+    output: &mut PlaneMutSlice<'_, T>, above: &[T], left: &[T]
   ) {
     #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
@@ -529,8 +529,8 @@ where
   }
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
-  fn pred_smooth_v<'a>(
-    output: &mut PlaneMutSlice<'a, T>, above: &[T], left: &[T]
+  fn pred_smooth_v(
+    output: &mut PlaneMutSlice<'_, T>, above: &[T], left: &[T]
   ) {
     #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
@@ -631,8 +631,8 @@ where
     }
   }
 
-  fn pred_cfl_inner<'a>(
-    output: &mut PlaneMutSlice<'a, T>, ac: &[i16], alpha: i16, bit_depth: usize
+  fn pred_cfl_inner(
+    output: &mut PlaneMutSlice<'_, T>, ac: &[i16], alpha: i16, bit_depth: usize
   ) {
     if alpha == 0 {
       return;
@@ -665,8 +665,8 @@ where
   }
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
-  fn pred_cfl<'a>(
-    output: &mut PlaneMutSlice<'a, T>, ac: &[i16], alpha: i16, bit_depth: usize,
+  fn pred_cfl(
+    output: &mut PlaneMutSlice<'_, T>, ac: &[i16], alpha: i16, bit_depth: usize,
     above: &[T], left: &[T]
   ) {
     #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
@@ -689,8 +689,8 @@ where
     Self::pred_cfl_inner(output, &ac, alpha, bit_depth);
   }
 
-  fn pred_cfl_128<'a>(
-    output: &mut PlaneMutSlice<'a, T>, ac: &[i16], alpha: i16, bit_depth: usize
+  fn pred_cfl_128(
+    output: &mut PlaneMutSlice<'_, T>, ac: &[i16], alpha: i16, bit_depth: usize
   ) {
     #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
@@ -712,8 +712,8 @@ where
     Self::pred_cfl_inner(output, &ac, alpha, bit_depth);
   }
 
-  fn pred_cfl_left<'a>(
-    output: &mut PlaneMutSlice<'a, T>, ac: &[i16], alpha: i16, bit_depth: usize,
+  fn pred_cfl_left(
+    output: &mut PlaneMutSlice<'_, T>, ac: &[i16], alpha: i16, bit_depth: usize,
     above: &[T], left: &[T]
   ) {
     #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
@@ -736,8 +736,8 @@ where
     Self::pred_cfl_inner(output, &ac, alpha, bit_depth);
   }
 
-  fn pred_cfl_top<'a>(
-    output: &mut PlaneMutSlice<'a, T>, ac: &[i16], alpha: i16, bit_depth: usize,
+  fn pred_cfl_top(
+    output: &mut PlaneMutSlice<'_, T>, ac: &[i16], alpha: i16, bit_depth: usize,
     above: &[T], left: &[T]
   ) {
     #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
@@ -761,8 +761,8 @@ where
   }
 
   #[cfg_attr(feature = "comparative_bench", inline(never))]
-  fn pred_directional<'a>(
-    output: &mut PlaneMutSlice<'a, T>, above: &[T], left: &[T], top_left: &[T], angle: usize, bit_depth: usize
+  fn pred_directional(
+    output: &mut PlaneMutSlice<'_, T>, above: &[T], left: &[T], top_left: &[T], angle: usize, bit_depth: usize
   ) {
     let sample_max = ((1 << bit_depth) - 1) as i32;
     let _angle_delta = 0;
@@ -931,8 +931,8 @@ pub mod test {
         );
       }
 
-      fn $fn_4x4<'a>(
-        output: &mut PlaneMutSlice<'a, u16>, above: &[u16], left: &[u16]
+      fn $fn_4x4(
+        output: &mut PlaneMutSlice<'_, u16>, above: &[u16], left: &[u16]
       ) {
         let mut left = left.to_vec();
         left.reverse();
@@ -969,8 +969,8 @@ pub mod test {
     );
   }
 
-  pub fn pred_cfl_4x4<'a>(
-    output: &mut PlaneMutSlice<'a, u16>, ac: &[i16], alpha: i16, bd: i32
+  pub fn pred_cfl_4x4(
+    output: &mut PlaneMutSlice<'_, u16>, ac: &[i16], alpha: i16, bd: i32
   ) {
     let mut ac32 = [0; 4*32];
     for (l32, l) in ac32.chunks_mut(32).zip(ac.chunks(4).take(4)) {

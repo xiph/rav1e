@@ -306,8 +306,8 @@ fn filter_wide14_12(
 }
 
 #[inline]
-fn copy_horizontal<'a, T: Pixel>(
-  dst: &mut PlaneMutSlice<'a, T>, x: usize, y: usize, src: &[i32]
+fn copy_horizontal<T: Pixel>(
+  dst: &mut PlaneMutSlice<'_, T>, x: usize, y: usize, src: &[i32]
 ) {
   let row = &mut dst[y][x..];
   for (dst, src) in row.iter_mut().take(src.len()).zip(src) {
@@ -316,8 +316,8 @@ fn copy_horizontal<'a, T: Pixel>(
 }
 
 #[inline]
-fn copy_vertical<'a, T: Pixel>(
-  dst: &mut PlaneMutSlice<'a, T>, x: usize, y: usize, src: &[i32]
+fn copy_vertical<T: Pixel>(
+  dst: &mut PlaneMutSlice<'_, T>, x: usize, y: usize, src: &[i32]
 ) {
   for (i, v) in src.iter().enumerate() {
     let p = &mut dst[y + i][x];
@@ -388,8 +388,8 @@ fn deblock_size4_inner(
 }
 
 // Assumes rec[0] is set 2 taps back from the edge
-fn deblock_v_size4<'a, T: Pixel>(
-  rec: &mut PlaneMutSlice<'a, T>, level: usize, bd: usize
+fn deblock_v_size4<T: Pixel>(
+  rec: &mut PlaneMutSlice<'_, T>, level: usize, bd: usize
 ) {
   for y in 0..4 {
     let p = &rec[y];
@@ -406,8 +406,8 @@ fn deblock_v_size4<'a, T: Pixel>(
 }
 
 // Assumes rec[0] is set 2 taps back from the edge
-fn deblock_h_size4<'a, T: Pixel>(
-  rec: &mut PlaneMutSlice<'a, T>, level: usize, bd: usize
+fn deblock_h_size4<T: Pixel>(
+  rec: &mut PlaneMutSlice<'_, T>, level: usize, bd: usize
 ) {
   for x in 0..4 {
     let vals = [
@@ -424,9 +424,9 @@ fn deblock_h_size4<'a, T: Pixel>(
 
 // Assumes rec[0] and src[0] are set 2 taps back from the edge.
 // Accesses four taps, accumulates four pixels into the tally
-fn sse_size4<'a, T: Pixel>(
-  rec: &PlaneSlice<'a, T>,
-  src: &PlaneSlice<'a, T>,
+fn sse_size4<T: Pixel>(
+  rec: &PlaneSlice<'_, T>,
+  src: &PlaneSlice<'_, T>,
   tally: &mut [i64; MAX_LOOP_FILTER + 2],
   rec_pitch: usize,
   src_pitch: usize,
@@ -517,8 +517,8 @@ fn deblock_size6_inner(
 }
 
 // Assumes slice[0] is set 3 taps back from the edge
-fn deblock_v_size6<'a, T: Pixel>(
-  rec: &mut PlaneMutSlice<'a, T>, level: usize, bd: usize
+fn deblock_v_size6<T: Pixel>(
+  rec: &mut PlaneMutSlice<'_, T>, level: usize, bd: usize
 ) {
   for y in 0..4 {
     let p = &rec[y];
@@ -537,8 +537,8 @@ fn deblock_v_size6<'a, T: Pixel>(
 }
 
 // Assumes slice[0] is set 3 taps back from the edge
-fn deblock_h_size6<'a, T: Pixel>(
-  rec: &mut PlaneMutSlice<'a, T>, level: usize, bd: usize
+fn deblock_h_size6<T: Pixel>(
+  rec: &mut PlaneMutSlice<'_, T>, level: usize, bd: usize
 ) {
   for x in 0..4 {
     let vals = [
@@ -557,9 +557,9 @@ fn deblock_h_size6<'a, T: Pixel>(
 
 // Assumes rec[0] and src[0] are set 3 taps back from the edge.
 // Accesses six taps, accumulates four pixels into the tally
-fn sse_size6<'a, T: Pixel>(
-  rec: &PlaneSlice<'a, T>,
-  src: &PlaneSlice<'a, T>,
+fn sse_size6<T: Pixel>(
+  rec: &PlaneSlice<'_, T>,
+  src: &PlaneSlice<'_, T>,
   tally: &mut [i64; MAX_LOOP_FILTER + 2],
   rec_pitch: usize,
   src_pitch: usize,
@@ -686,8 +686,8 @@ fn deblock_size8_inner (
 }
 
 // Assumes rec[0] is set 4 taps back from the edge
-fn deblock_v_size8<'a, T: Pixel>(
-  rec: &mut PlaneMutSlice<'a, T>, level: usize, bd: usize
+fn deblock_v_size8<T: Pixel>(
+  rec: &mut PlaneMutSlice<'_, T>, level: usize, bd: usize
 ) {
   for y in 0..4 {
     let p = &rec[y];
@@ -708,8 +708,8 @@ fn deblock_v_size8<'a, T: Pixel>(
 }
 
 // Assumes rec[0] is set 4 taps back from the edge
-fn deblock_h_size8<'a, T: Pixel>(
-  rec: &mut PlaneMutSlice<'a, T>, level: usize, bd: usize
+fn deblock_h_size8<T: Pixel>(
+  rec: &mut PlaneMutSlice<'_, T>, level: usize, bd: usize
 ) {
   for x in 0..4 {
     let vals = [
@@ -730,9 +730,9 @@ fn deblock_h_size8<'a, T: Pixel>(
 
 // Assumes rec[0] and src[0] are set 4 taps back from the edge.
 // Accesses eight taps, accumulates six pixels into the tally
-fn sse_size8<'a, T: Pixel>(
-  rec: &PlaneSlice<'a, T>,
-  src: &PlaneSlice<'a, T>,
+fn sse_size8<T: Pixel>(
+  rec: &PlaneSlice<'_, T>,
+  src: &PlaneSlice<'_, T>,
   tally: &mut [i64; MAX_LOOP_FILTER + 2],
   rec_pitch: usize,
   src_pitch: usize,
@@ -847,8 +847,8 @@ fn deblock_size14_inner(
 }
 
 // Assumes rec[0] is set 7 taps back from the edge
-fn deblock_v_size14<'a, T: Pixel>(
-  rec: &mut PlaneMutSlice<'a, T>, level: usize, bd: usize
+fn deblock_v_size14<T: Pixel>(
+  rec: &mut PlaneMutSlice<'_, T>, level: usize, bd: usize
 ) {
   for y in 0..4 {
     let p = &rec[y];
@@ -875,8 +875,8 @@ fn deblock_v_size14<'a, T: Pixel>(
 }
 
 // Assumes rec[0] is set 7 taps back from the edge
-fn deblock_h_size14<'a, T: Pixel>(
-  rec: &mut PlaneMutSlice<'a, T>, level: usize, bd: usize
+fn deblock_h_size14<T: Pixel>(
+  rec: &mut PlaneMutSlice<'_, T>, level: usize, bd: usize
 ) {
   for x in 0..4 {
     let vals = [
@@ -903,9 +903,9 @@ fn deblock_h_size14<'a, T: Pixel>(
 
 // Assumes rec[0] and src[0] are set 7 taps back from the edge.
 // Accesses fourteen taps, accumulates twelve pixels into the tally
-fn sse_size14<'a, T: Pixel>(
-  rec: &PlaneSlice<'a, T>,
-  src: &PlaneSlice<'a, T>,
+fn sse_size14<T: Pixel>(
+  rec: &PlaneSlice<'_, T>,
+  src: &PlaneSlice<'_, T>,
   tally: &mut [i64; MAX_LOOP_FILTER + 2],
   rec_pitch: usize,
   src_pitch: usize,
