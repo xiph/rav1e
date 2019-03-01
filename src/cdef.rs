@@ -113,12 +113,9 @@ fn constrain(diff: i32, threshold: i32, damping: i32) -> i32 {
   if threshold != 0 {
     let shift = cmp::max(0, damping - msb(threshold));
     let magnitude = cmp::min(diff.abs(), cmp::max(0, threshold - (diff.abs() >> shift)));
-    if diff < 0 {
-      -1 * magnitude
+
+    if diff < 0 { -magnitude } else { magnitude }
     } else {
-      magnitude
-    }
-  } else {
     0
   }
 }
@@ -126,6 +123,7 @@ fn constrain(diff: i32, threshold: i32, damping: i32) -> i32 {
 // Unlike the AOM code, our block addressing points to the UL corner
 // of the 2-pixel padding around the block, not the block itself.
 // The destination is unpadded.
+#[allow(clippy::erasing_op, clippy::identity_op, clippy::neg_multiply)]
 unsafe fn cdef_filter_block<T: Pixel>(
   dst: *mut T, dstride: isize, input: *const u16, istride: isize, pri_strength: i32,
   sec_strength: i32, dir: usize, damping: i32, xsize: isize, ysize: isize, coeff_shift: i32

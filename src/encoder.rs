@@ -555,6 +555,7 @@ pub(crate) fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
 }
 
 impl<T: Pixel> FrameInvariants<T> {
+  #[allow(clippy::erasing_op, clippy::identity_op)]
   pub fn new(config: EncoderConfig, sequence: Sequence) -> Self {
     assert!(sequence.bit_depth <= mem::size_of::<T>() * 8, "bit depth cannot fit into u8");
     // Speed level decides the minimum partition size, i.e. higher speed --> larger min partition size,

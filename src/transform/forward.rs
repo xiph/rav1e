@@ -1464,6 +1464,7 @@ fn daala_fdst_iv_32_asym<T: TxOperations>(
   );
 }
 
+#[allow(clippy::identity_op)]
 fn daala_fdct64<T: TxOperations>(input: &[T], output: &mut [T]) {
   // Use arrays to avoid ridiculous variable names
   let mut asym: [(T, T); 32] = [<(T, T)>::default(); 32];
