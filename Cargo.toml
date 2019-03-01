@@ -45,6 +45,7 @@ pkg-config = "0.3.12"
 [dev-dependencies]
 criterion = "0.2"
 pretty_assertions = "0.5.1"
+interpolate_name = "0.2.1"
 
 [[bin]]
 name = "rav1e"
