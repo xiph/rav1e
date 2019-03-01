@@ -1950,7 +1950,13 @@ use rayon::prelude::*;
 
 
 #[inline(always)]
-fn build_coarse_pmvs<T: Pixel>(fi: &FrameInvariants<T>, fs: &FrameState<T>) -> Vec<[Option<MotionVector>; REF_FRAMES]> {
+fn build_coarse_pmvs<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec<[Option<MotionVector>; REF_FRAMES]> {
+  let estimate_motion_ss4 = if fi.config.speed_settings.diamond_me {
+    crate::me::DiamondSearch::estimate_motion_ss4
+  } else {
+    crate::me::FullSearch::estimate_motion_ss4
+  };
+
   assert!(!fi.sequence.use_128x128_superblock);
   let sby_range = 0..fi.sb_height;
   let sbx_range = 0..fi.sb_width;
@@ -1959,13 +1965,16 @@ fn build_coarse_pmvs<T: Pixel>(fi: &FrameInvariants<T>, fs: &FrameState<T>) -> V
       sbx_range.clone().map(move |x| SuperBlockOffset { x, y })
   }).collect::<Vec<SuperBlockOffset>>();
 
-  sbos.par_iter().map(|sbo| {
+  sbos.iter().map(|sbo| {
       let bo = sbo.block_offset(0, 0);
       let mut pmvs: [Option<MotionVector>; REF_FRAMES] = [None; REF_FRAMES];
       for i in 0..INTER_REFS_PER_FRAME {
         let r = fi.ref_frames[i] as usize;
         if pmvs[r].is_none() {
-          pmvs[r] = estimate_motion_ss4(fi, fs, BlockSize::BLOCK_64X64, r, &bo);
+          pmvs[r] = estimate_motion_ss4(fi, fs, BlockSize::BLOCK_64X64, r, &bo, i);
+        }
+        if let Some(mv) = pmvs[r] {
+          save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_64X64, &bo, i, mv);
         }
       }
       pmvs
