@@ -3031,7 +3031,7 @@ impl ContextWriter {
       }
       RestorationFilter::Sgrproj{set, xqd} => {
         // Does *not* use 'RESTORE_SGRPROJ' but rather just '2'
-        let rp = &rs.plane[pli];
+        let rp = &rs.planes[pli];
         let mut bits = w.symbol_bits(2, &self.fc.lrf_switchable_cdf[..nsym]) +
           ((SGRPROJ_PARAMS_BITS as u32) << OD_BITRES);
         for i in 0..2 {
@@ -3054,7 +3054,7 @@ impl ContextWriter {
     if !fi.allow_intrabc { // TODO: also disallow if lossless
       for pli in 0..PLANES {
         let code;
-        let rp = &mut rs.plane[pli];
+        let rp = &mut rs.planes[pli];
         {
           let ru = &mut rp.restoration_unit_as_mut(sbo);
           code = !ru.coded;

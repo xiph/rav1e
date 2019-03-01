@@ -864,7 +864,7 @@ impl RestorationPlane {
 
 #[derive(Clone, Debug)]
 pub struct RestorationState {
-  pub plane: [RestorationPlane; PLANES]
+  pub planes: [RestorationPlane; PLANES]
 }
 
 impl RestorationState {
@@ -890,21 +890,23 @@ impl RestorationState {
     let rows = ((fi.height + (y_unit_size >> 1)) / y_unit_size).max(1);
 
     RestorationState {
-      plane: [RestorationPlane::new(RESTORE_SWITCHABLE, y_unit_size, y_unit_log2 - y_sb_log2,
-                                    0, cols, rows),
-              RestorationPlane::new(RESTORE_SWITCHABLE, uv_unit_size, uv_unit_log2 - uv_sb_log2,
-                                    stripe_uv_decimate, cols, rows),
-              RestorationPlane::new(RESTORE_SWITCHABLE, uv_unit_size, uv_unit_log2 - uv_sb_log2,
-                                    stripe_uv_decimate, cols, rows)],
+      planes: [
+        RestorationPlane::new(RESTORE_SWITCHABLE, y_unit_size, y_unit_log2 - y_sb_log2,
+                              0, cols, rows),
+        RestorationPlane::new(RESTORE_SWITCHABLE, uv_unit_size, uv_unit_log2 - uv_sb_log2,
+                              stripe_uv_decimate, cols, rows),
+        RestorationPlane::new(RESTORE_SWITCHABLE, uv_unit_size, uv_unit_log2 - uv_sb_log2,
+                              stripe_uv_decimate, cols, rows)
+      ],
     }
   }
 
   pub fn restoration_unit(&self, sbo: &SuperBlockOffset, pli: usize) -> &RestorationUnit {
-    self.plane[pli].restoration_unit(sbo)
+    self.planes[pli].restoration_unit(sbo)
   }
 
   pub fn restoration_unit_as_mut(&mut self, sbo: &SuperBlockOffset, pli: usize) -> &mut RestorationUnit {
-    self.plane[pli].restoration_unit_as_mut(sbo)
+    self.planes[pli].restoration_unit_as_mut(sbo)
   }
 
   pub fn lrf_filter_frame<T: Pixel>(&mut self, out: &mut Frame<T>, pre_cdef: &Frame<T>,
@@ -920,7 +922,7 @@ impl RestorationState {
     let stripe_n = (fi.height + 7) / 64 + 1;
 
     for pli in 0..PLANES {
-      let rp = &self.plane[pli];
+      let rp = &self.planes[pli];
       let xdec = out.planes[pli].cfg.xdec;
       let ydec = out.planes[pli].cfg.ydec;
       let crop_w = fi.width + (1 << xdec >> 1) >> xdec;
