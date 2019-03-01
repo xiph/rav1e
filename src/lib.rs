@@ -17,6 +17,10 @@ extern crate dav1d_sys;
 
 #[cfg(test)]
 #[macro_use]
+extern crate interpolate_name;
+
+#[cfg(test)]
+#[macro_use]
 extern crate pretty_assertions;
 
 pub mod ec;
@@ -50,6 +54,9 @@ pub use crate::api::*;
 pub use crate::encoder::*;
 pub use crate::header::*;
 pub use crate::util::{CastFromPrimitive, Pixel};
+
+#[cfg(all(test, any(feature="decode_test", feature="decode_test_dav1d")))]
+mod test_encode_decode;
 
 #[cfg(all(test, feature="decode_test"))]
 mod test_encode_decode_aom;
