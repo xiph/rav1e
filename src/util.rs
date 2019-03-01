@@ -216,6 +216,7 @@ pub trait CastFromPrimitive<T> : Copy + 'static {
 macro_rules! impl_cast_from_primitive {
   ( $T:ty => $U:ty ) => {
     impl CastFromPrimitive<$U> for $T {
+      #[inline(always)]
       fn cast_from(v: $U) -> Self { v as Self }
     }
   };
@@ -264,6 +265,7 @@ impl Pixel for u16 {}
 macro_rules! impl_cast_from_pixel_to_primitive {
   ( $T:ty ) => {
     impl<T: Pixel> CastFromPrimitive<T> for $T {
+      #[inline(always)]
       fn cast_from(v: T) -> Self { v.as_() }
     }
   };
