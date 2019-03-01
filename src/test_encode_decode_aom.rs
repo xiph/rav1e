@@ -7,12 +7,6 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-#![allow(dead_code)]
-#![allow(non_camel_case_types)]
-#![allow(non_snake_case)]
-#![allow(non_upper_case_globals)]
-
-include!(concat!(env!("OUT_DIR"), "/aom.rs"));
 
 use super::*;
 use rand::{ChaChaRng, Rng, SeedableRng};
@@ -21,6 +15,8 @@ use std::collections::VecDeque;
 use std::ffi::CStr;
 use std::sync::Arc;
 use crate::util::Pixel;
+
+use aom_sys::*;
 
 fn fill_frame<T: Pixel>(ra: &mut ChaChaRng, frame: &mut Frame<T>) {
   for plane in frame.planes.iter_mut() {
@@ -417,7 +413,7 @@ fn encode_decode(
               let mut corrupted = 0;
               let ret = aom_codec_control_(
                 &mut dec.dec,
-                aom_dec_control_id_AOMD_GET_FRAME_CORRUPTED as i32,
+                aom_dec_control_id::AOMD_GET_FRAME_CORRUPTED as i32,
                 &mut corrupted
               );
               if ret != 0 {

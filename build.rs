@@ -3,7 +3,7 @@
 #[cfg(feature = "aom")]
 extern crate cmake;
 #[cfg(unix)]
-#[cfg(feature = "decode_test")]
+#[cfg(feature = "bindgen")]
 extern crate bindgen;
 #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 extern crate nasm_rs;
@@ -102,7 +102,7 @@ fn main() {
         env::set_var("PKG_CONFIG_PATH", dst.join("lib/pkgconfig"));
         let _libs = pkg_config::Config::new().statik(true).probe("aom").unwrap();
 
-        #[cfg(feature = "decode_test")] {
+        #[cfg(feature = "bindgen")] {
             use std::io::Write;
 
             let out_dir = env::var("OUT_DIR").unwrap();
