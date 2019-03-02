@@ -4,17 +4,15 @@ version = "0.1.0"
 authors = ["Thomas Daede <tdaede@xiph.org>"]
 edition = "2018"
 build = "build.rs"
-include = ["/src/**", "/aom_build/**", "/Cargo.toml", "/build.rs"]
+include = ["/src/**", "/Cargo.toml", "/build.rs"]
 autobenches = false
 autobins = false
 
 [features]
-comparative_bench = ["aom"]
 decode_test = ["aom-sys"]
 decode_test_dav1d = ["dav1d-sys"]
 binaries = ["ivf", "y4m", "clap", "scan_fmt", "serde_json"]
 default = ["binaries", "nasm"]
-aom = ["cmake"]
 nasm = ["nasm-rs"]
 dump_ivf = ["ivf"]
 
@@ -38,15 +36,11 @@ scan_fmt = { version = "0.1.3", optional = true }
 ivf = { path = "ivf/", optional = true }
 rayon = "1.0"
 
-[build-dependencies]
-cmake = { version = "0.1", optional = true }
-
 [target.'cfg(target_arch = "x86_64")'.build-dependencies]
 nasm-rs = { version = "0.1.4", optional = true }
 
 [target.'cfg(unix)'.build-dependencies]
 pkg-config = "0.3.12"
-bindgen = { version = "0.47.1", optional = true }
 
 [dev-dependencies]
 criterion = "0.2"

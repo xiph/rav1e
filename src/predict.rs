@@ -217,7 +217,6 @@ pub trait Intra<T>: Dim
 where
   T: Pixel,
 {
-  #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_dc(output: &mut PlaneMutSlice<'_, T>, above: &[T], left: &[T]) {
     #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
@@ -246,7 +245,6 @@ where
     }
   }
 
-  #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_dc_128(output: &mut PlaneMutSlice<'_, T>, bit_depth: usize) {
     #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
@@ -271,7 +269,6 @@ where
     }
   }
 
-  #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_dc_left(output: &mut PlaneMutSlice<'_, T>, _above: &[T], left: &[T]) {
     #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
@@ -295,7 +292,6 @@ where
     }
   }
 
-  #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_dc_top(output: &mut PlaneMutSlice<'_, T>, above: &[T], _left: &[T]) {
     #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
@@ -319,7 +315,6 @@ where
     }
   }
 
-  #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_h(output: &mut PlaneMutSlice<'_, T>, left: &[T]) {
     #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
@@ -345,7 +340,6 @@ where
     }
   }
 
-  #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_v(output: &mut PlaneMutSlice<'_, T>, above: &[T]) {
     #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
@@ -367,7 +361,6 @@ where
     }
   }
 
-  #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_paeth(
     output: &mut PlaneMutSlice<'_, T>, above: &[T], left: &[T],
     above_left: T
@@ -412,7 +405,6 @@ where
     }
   }
 
-  #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_smooth(
     output: &mut PlaneMutSlice<'_, T>, above: &[T], left: &[T]
   ) {
@@ -477,7 +469,6 @@ where
     }
   }
 
-  #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_smooth_h(
     output: &mut PlaneMutSlice<'_, T>, above: &[T], left: &[T]
   ) {
@@ -528,7 +519,6 @@ where
     }
   }
 
-  #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_smooth_v(
     output: &mut PlaneMutSlice<'_, T>, above: &[T], left: &[T]
   ) {
@@ -664,7 +654,6 @@ where
     }
   }
 
-  #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_cfl(
     output: &mut PlaneMutSlice<'_, T>, ac: &[i16], alpha: i16, bit_depth: usize,
     above: &[T], left: &[T]
@@ -760,7 +749,6 @@ where
     Self::pred_cfl_inner(output, &ac, alpha, bit_depth);
   }
 
-  #[cfg_attr(feature = "comparative_bench", inline(never))]
   fn pred_directional(
     output: &mut PlaneMutSlice<'_, T>, above: &[T], left: &[T], top_left: &[T], angle: usize, bit_depth: usize
   ) {
@@ -900,389 +888,3 @@ where
 
 
 pub trait Inter: Dim {}
-
-#[cfg(all(test, feature = "aom"))]
-pub mod test {
-  use super::*;
-  use num_traits::*;
-  use rand::{ChaChaRng, Rng, SeedableRng};
-
-  const MAX_ITER: usize = 50000;
-
-  fn setup_pred(
-    ra: &mut ChaChaRng
-  ) -> (Vec<u16>, Vec<u16>, Plane<u16>, Plane<u16>) {
-    let above: Vec<u16> = (0..32).map(|_| ra.gen()).collect();
-    let left: Vec<u16> = (0..32).map(|_| ra.gen()).collect();
-
-    let o1 = Plane::wrap(vec![0u16; 32 * 32], 32);
-    let o2 = Plane::wrap(vec![0u16; 32 * 32], 32);
-
-    (above, left, o1, o2)
-  }
-
-  macro_rules! wrap_aom_pred_fn {
-    ($fn_4x4:ident, $aom_fn:ident) => {
-      extern {
-        fn $aom_fn(
-          dst: *mut u16, stride: libc::ptrdiff_t, bw: libc::c_int,
-          bh: libc::c_int, above: *const u16, left: *const u16,
-          bd: libc::c_int
-        );
-      }
-
-      fn $fn_4x4(
-        output: &mut PlaneMutSlice<'_, u16>, above: &[u16], left: &[u16]
-      ) {
-        let mut left = left.to_vec();
-        left.reverse();
-        unsafe {
-          $aom_fn(
-            output.as_mut_ptr(),
-            output.plane.cfg.stride as libc::ptrdiff_t,
-            4,
-            4,
-            above.as_ptr(),
-            left.as_ptr(),
-            8
-          );
-        }
-      }
-    };
-  }
-
-  wrap_aom_pred_fn!(pred_dc_4x4, highbd_dc_predictor);
-  wrap_aom_pred_fn!(pred_dc_left_4x4, highbd_dc_left_predictor);
-  wrap_aom_pred_fn!(pred_dc_top_4x4, highbd_dc_top_predictor);
-  wrap_aom_pred_fn!(pred_h_4x4, highbd_h_predictor);
-  wrap_aom_pred_fn!(pred_v_4x4, highbd_v_predictor);
-  wrap_aom_pred_fn!(pred_paeth_4x4, highbd_paeth_predictor);
-  wrap_aom_pred_fn!(pred_smooth_4x4, highbd_smooth_predictor);
-  wrap_aom_pred_fn!(pred_smooth_h_4x4, highbd_smooth_h_predictor);
-  wrap_aom_pred_fn!(pred_smooth_v_4x4, highbd_smooth_v_predictor);
-
-  extern {
-    fn cfl_predict_hbd_c(
-      ac_buf_q3: *const i16, dst: *mut u16, stride: libc::ptrdiff_t,
-      alpha_q3: libc::c_int, bd: libc::c_int, bw: libc::c_int,
-      bh: libc::c_int
-    );
-  }
-
-  pub fn pred_cfl_4x4(
-    output: &mut PlaneMutSlice<'_, u16>, ac: &[i16], alpha: i16, bd: i32
-  ) {
-    let mut ac32 = [0; 4*32];
-    for (l32, l) in ac32.chunks_mut(32).zip(ac.chunks(4).take(4)) {
-        l32[..4].copy_from_slice(&l);
-    }
-    unsafe {
-      cfl_predict_hbd_c(
-        ac32.as_ptr(),
-        output.as_mut_ptr(),
-        output.plane.cfg.stride as libc::ptrdiff_t,
-        alpha as libc::c_int,
-        bd,
-        4,
-        4
-      );
-    }
-  }
-
-  fn do_dc_pred(ra: &mut ChaChaRng) -> (Plane<u16>, Plane<u16>) {
-    let (above, left, mut o1, mut o2) = setup_pred(ra);
-
-    pred_dc_4x4(&mut o1.as_mut_slice(), &above[..4], &left[..4]);
-    Block4x4::pred_dc(&mut o2.as_mut_slice(), &above[..4], &left[..4]);
-
-    (o1, o2)
-  }
-
-  fn do_dc_left_pred(ra: &mut ChaChaRng) -> (Plane<u16>, Plane<u16>) {
-    let (above, left, mut o1, mut o2) = setup_pred(ra);
-
-    pred_dc_left_4x4(&mut o1.as_mut_slice(), &above[..4], &left[..4]);
-    Block4x4::pred_dc_left(&mut o2.as_mut_slice(), &above[..4], &left[..4]);
-
-    (o1, o2)
-  }
-
-  fn do_dc_top_pred(ra: &mut ChaChaRng) -> (Plane<u16>, Plane<u16>) {
-    let (above, left, mut o1, mut o2) = setup_pred(ra);
-
-    pred_dc_top_4x4(&mut o1.as_mut_slice(), &above[..4], &left[..4]);
-    Block4x4::pred_dc_top(&mut o2.as_mut_slice(), &above[..4], &left[..4]);
-
-    (o1, o2)
-  }
-
-  fn do_h_pred(ra: &mut ChaChaRng) -> (Plane<u16>, Plane<u16>) {
-    let (above, left, mut o1, mut o2) = setup_pred(ra);
-
-    pred_h_4x4(&mut o1.as_mut_slice(), &above[..4], &left[..4]);
-    Block4x4::pred_h(&mut o2.as_mut_slice(), &left[..4]);
-
-    (o1, o2)
-  }
-
-  fn do_v_pred(ra: &mut ChaChaRng) -> (Plane<u16>, Plane<u16>) {
-    let (above, left, mut o1, mut o2) = setup_pred(ra);
-
-    pred_v_4x4(&mut o1.as_mut_slice(), &above[..4], &left[..4]);
-    Block4x4::pred_v(&mut o2.as_mut_slice(), &above[..4]);
-
-    (o1, o2)
-  }
-
-  fn do_paeth_pred(ra: &mut ChaChaRng) -> (Plane<u16>, Plane<u16>) {
-    let (above, left, mut o1, mut o2) = setup_pred(ra);
-    let above_left = unsafe { *above.as_ptr().offset(-1) };
-
-    pred_paeth_4x4(&mut o1.as_mut_slice(), &above[..4], &left[..4]);
-    Block4x4::pred_paeth(&mut o2.as_mut_slice(), &above[..4], &left[..4], above_left);
-
-    (o1, o2)
-  }
-
-  fn do_smooth_pred(ra: &mut ChaChaRng) -> (Plane<u16>, Plane<u16>) {
-    let (above, left, mut o1, mut o2) = setup_pred(ra);
-
-    pred_smooth_4x4(&mut o1.as_mut_slice(), &above[..4], &left[..4]);
-    Block4x4::pred_smooth(&mut o2.as_mut_slice(), &above[..4], &left[..4]);
-
-    (o1, o2)
-  }
-
-  fn do_smooth_h_pred(ra: &mut ChaChaRng) -> (Plane<u16>, Plane<u16>) {
-    let (above, left, mut o1, mut o2) = setup_pred(ra);
-
-    pred_smooth_h_4x4(&mut o1.as_mut_slice(), &above[..4], &left[..4]);
-    Block4x4::pred_smooth_h(&mut o2.as_mut_slice(), &above[..4], &left[..4]);
-
-    (o1, o2)
-  }
-
-  fn do_smooth_v_pred(ra: &mut ChaChaRng) -> (Plane<u16>, Plane<u16>) {
-    let (above, left, mut o1, mut o2) = setup_pred(ra);
-
-    pred_smooth_v_4x4(&mut o1.as_mut_slice(), &above[..4], &left[..4]);
-    Block4x4::pred_smooth_v(&mut o2.as_mut_slice(), &above[..4], &left[..4]);
-
-    (o1, o2)
-  }
-
-  fn setup_cfl_pred(
-    ra: &mut ChaChaRng, bit_depth: usize
-  ) -> (Vec<u16>, Vec<u16>, Vec<i16>, i16, Plane<u16>, Plane<u16>) {
-    let max: u16 = (1 << bit_depth) - 1;
-    let above: Vec<u16> =
-      (0..32).map(|_| ra.gen()).map(|v: u16| v & max).collect();
-    let left: Vec<u16> =
-      (0..32).map(|_| ra.gen()).map(|v: u16| v & max).collect();
-    let luma_max: i16 = (1 << (bit_depth + 3)) - 1;
-    let ac: Vec<i16> = (0..(32 * 32))
-      .map(|_| ra.gen())
-      .map(|v: i16| (v & luma_max) - (luma_max >> 1))
-      .collect();
-    let alpha = -1 as i16;
-
-    let o1 = Plane::wrap(vec![0u16; 32 * 32], 32);
-    let o2 = Plane::wrap(vec![0u16; 32 * 32], 32);
-
-    (above, left, ac, alpha, o1, o2)
-  }
-
-  fn do_cfl_pred(ra: &mut ChaChaRng) -> (Plane<u16>, Plane<u16>) {
-    let (above, left, ac, alpha, mut o1, mut o2) = setup_cfl_pred(ra, 8);
-
-    pred_dc_4x4(&mut o1.as_mut_slice(), &above[..4], &left[..4]);
-    pred_cfl_4x4(&mut o1.as_mut_slice(), &ac, alpha, 8);
-
-    Block4x4::pred_cfl(&mut o2.as_mut_slice(), &ac, alpha, 8, &above[..4], &left[..4]);
-
-    (o1, o2)
-  }
-
-  fn assert_same(o2: Vec<u16>) {
-    for l in o2.chunks(32).take(4) {
-      for v in l[..4].windows(2) {
-        assert_eq!(v[0], v[1]);
-      }
-    }
-  }
-
-  #[test]
-  fn pred_matches() {
-    let mut ra = ChaChaRng::from_seed([0; 32]);
-    for _ in 0..MAX_ITER {
-      let (o1, o2) = do_dc_pred(&mut ra);
-      assert_eq!(o1, o2);
-
-      let (o1, o2) = do_dc_left_pred(&mut ra);
-      assert_eq!(o1, o2);
-
-      let (o1, o2) = do_dc_top_pred(&mut ra);
-      assert_eq!(o1, o2);
-
-      let (o1, o2) = do_h_pred(&mut ra);
-      assert_eq!(o1, o2);
-
-      let (o1, o2) = do_v_pred(&mut ra);
-      assert_eq!(o1, o2);
-
-      let (o1, o2) = do_paeth_pred(&mut ra);
-      assert_eq!(o1, o2);
-
-      let (o1, o2) = do_smooth_pred(&mut ra);
-      assert_eq!(o1, o2);
-
-      let (o1, o2) = do_smooth_h_pred(&mut ra);
-      assert_eq!(o1, o2);
-
-      let (o1, o2) = do_smooth_v_pred(&mut ra);
-      assert_eq!(o1, o2);
-
-      let (o1, o2) = do_cfl_pred(&mut ra);
-      assert_eq!(o1, o2);
-    }
-  }
-
-  #[test]
-  fn pred_matches_u8() {
-    let mut edge_buf: AlignedArray<[u8; 2 * MAX_TX_SIZE + 1]> =
-      UninitializedAlignedArray();
-    for i in 0..edge_buf.array.len() {
-      edge_buf.array[i] = (i + 32).saturating_sub(MAX_TX_SIZE).as_();
-    }
-    let left = &edge_buf.array[MAX_TX_SIZE - 4..MAX_TX_SIZE];
-    let above = &edge_buf.array[MAX_TX_SIZE + 1..MAX_TX_SIZE + 5];
-    let top_left = edge_buf.array[MAX_TX_SIZE];
-
-    let mut output = Plane::wrap(vec![0u8; 4 * 4], 4);
-
-    Block4x4::pred_dc(&mut output.as_mut_slice(), above, left);
-    assert_eq!(output.data, [32u8; 16]);
-
-    Block4x4::pred_dc_top(&mut output.as_mut_slice(), above, left);
-    assert_eq!(output.data, [35u8; 16]);
-
-    Block4x4::pred_dc_left(&mut output.as_mut_slice(), above, left);
-    assert_eq!(output.data, [30u8; 16]);
-
-    Block4x4::pred_dc_128(&mut output.as_mut_slice(), 8);
-    assert_eq!(output.data, [128u8; 16]);
-
-    Block4x4::pred_v(&mut output.as_mut_slice(), above);
-    assert_eq!(
-      output.data,
-      [33, 34, 35, 36, 33, 34, 35, 36, 33, 34, 35, 36, 33, 34, 35, 36]
-    );
-
-    Block4x4::pred_h(&mut output.as_mut_slice(), left);
-    assert_eq!(
-      output.data,
-      [31, 31, 31, 31, 30, 30, 30, 30, 29, 29, 29, 29, 28, 28, 28, 28]
-    );
-
-    Block4x4::pred_paeth(&mut output.as_mut_slice(), above, left, top_left);
-    assert_eq!(
-      output.data,
-      [32, 34, 35, 36, 30, 32, 32, 36, 29, 32, 32, 32, 28, 28, 32, 32]
-    );
-
-    Block4x4::pred_smooth(&mut output.as_mut_slice(), above, left);
-    assert_eq!(
-      output.data,
-      [32, 34, 35, 35, 30, 32, 33, 34, 29, 31, 32, 32, 29, 30, 32, 32]
-    );
-
-    Block4x4::pred_smooth_h(&mut output.as_mut_slice(), above, left);
-    assert_eq!(
-      output.data,
-      [31, 33, 34, 35, 30, 33, 34, 35, 29, 32, 34, 34, 28, 31, 33, 34]
-    );
-
-    Block4x4::pred_smooth_v(&mut output.as_mut_slice(), above, left);
-    assert_eq!(
-      output.data,
-      [33, 34, 35, 36, 31, 31, 32, 33, 30, 30, 30, 31, 29, 30, 30, 30]
-    );
-  }
-
-  #[test]
-  fn pred_same() {
-    let mut ra = ChaChaRng::from_seed([0; 32]);
-    for _ in 0..MAX_ITER {
-      let (_, o2) = do_dc_pred(&mut ra);
-
-      assert_same(o2.data)
-    }
-  }
-
-  #[test]
-  fn pred_max() {
-    let max12bit = 4096 - 1;
-    let above = [max12bit; 32];
-    let left = [max12bit; 32];
-
-    let mut o = Plane::wrap(vec![0u16; 32 * 32], 32);
-
-    Block4x4::pred_dc(&mut o.as_mut_slice(), &above[..4], &left[..4]);
-
-    for l in o.data.chunks(32).take(4) {
-      for v in l[..4].iter() {
-        assert_eq!(*v, max12bit);
-      }
-    }
-
-    Block4x4::pred_h(&mut o.as_mut_slice(), &left[..4]);
-
-    for l in o.data.chunks(32).take(4) {
-      for v in l[..4].iter() {
-        assert_eq!(*v, max12bit);
-      }
-    }
-
-    Block4x4::pred_v(&mut o.as_mut_slice(), &above[..4]);
-
-    for l in o.data.chunks(32).take(4) {
-      for v in l[..4].iter() {
-        assert_eq!(*v, max12bit);
-      }
-    }
-
-    let above_left = unsafe { *above.as_ptr().offset(-1) };
-
-    Block4x4::pred_paeth(&mut o.as_mut_slice(), &above[..4], &left[..4], above_left);
-
-    for l in o.data.chunks(32).take(4) {
-      for v in l[..4].iter() {
-        assert_eq!(*v, max12bit);
-      }
-    }
-
-    Block4x4::pred_smooth(&mut o.as_mut_slice(), &above[..4], &left[..4]);
-
-    for l in o.data.chunks(32).take(4) {
-      for v in l[..4].iter() {
-        assert_eq!(*v, max12bit);
-      }
-    }
-
-    Block4x4::pred_smooth_h(&mut o.as_mut_slice(), &above[..4], &left[..4]);
-
-    for l in o.data.chunks(32).take(4) {
-      for v in l[..4].iter() {
-        assert_eq!(*v, max12bit);
-      }
-    }
-
-    Block4x4::pred_smooth_v(&mut o.as_mut_slice(), &above[..4], &left[..4]);
-
-    for l in o.data.chunks(32).take(4) {
-      for v in l[..4].iter() {
-        assert_eq!(*v, max12bit);
-      }
-    }
-  }
-}
