@@ -23,9 +23,6 @@ use crate::transform::transform;
 use criterion::*;
 use std::time::Duration;
 
-#[cfg(feature = "comparative_bench")]
-mod comparative;
-
 fn write_b(c: &mut Criterion) {
   for &tx_size in &[TxSize::TX_4X4, TxSize::TX_8X8] {
     for &qi in &[20, 55] {
@@ -164,8 +161,4 @@ criterion_group!{ name = me;
                   targets = me::get_sad
 }
 
-#[cfg(feature = "comparative_bench")]
-criterion_main!(comparative::intra_prediction);
-
-#[cfg(not(feature = "comparative_bench"))]
 criterion_main!(write_block, intra_prediction, cdef, cfl, me, transform);
