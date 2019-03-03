@@ -29,10 +29,10 @@
 %if ARCH_X86_64
 
 SECTION_RODATA 32
-pd_04512763: dd 0, 4, 5, 1, 2, 7, 6, 3
+pd_02564713: dd 0, 2, 5, 6, 4, 7, 1, 3
+pd_47130256: dd 4, 7, 1, 3, 0, 2, 5, 6
 div_table: dd 840, 420, 280, 210, 168, 140, 120, 105
            dd 420, 210, 140, 105
-pd_04261537: dd 0, 4, 2, 6, 1, 5, 3, 7
 shufw_6543210x: db 12, 13, 10, 11, 8, 9, 6, 7, 4, 5, 2, 3, 0, 1, 14, 15
 shufw_210xxxxx: db 4, 5, 2, 3, 0, 1, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
 pw_128: times 2 dw 128
@@ -640,54 +640,38 @@ cglobal cdef_dir, 3, 4, 15, src, stride, var, stride3
     pmulld          m5, m13
     paddd           m5, m6                  ; cost1[a-d] | cost3[a-d]
 
-    mova           xm0, [pd_04512763+ 0]
-    mova           xm1, [pd_04512763+ 16]
+    mova           xm0, [pd_47130256+ 16]
+    mova            m1, [pd_47130256]
     phaddd          m9, m8
     phaddd          m5, m4
     phaddd          m9, m5
-    vpermd          m0, m9                  ; cost[0/4/2/6]
-    vpermd          m1, m9                  ; cost[1/5/3/7]
+    vpermd          m0, m9                  ; cost[0-3]
+    vpermd          m1, m9                  ; cost[4-7] | cost[0-3]
 
-    ; now find the best cost, its idx^4 complement, and its idx
-    pcmpgtd        xm2, xm1, xm0            ; [1/5/3/7] > [0/4/2/6]
-    pand           xm3, xm2, xm1
-    pandn          xm4, xm2, xm0
-    por            xm3, xm4                 ; higher 4 values
-    pshufd         xm1, xm1, q2301
-    pshufd         xm0, xm0, q2301
-    pand           xm1, xm2, xm1
-    pandn          xm0, xm2, xm0
-    por            xm0, xm1                 ; complementary 4 values at idx^4 offset
-    pand          xm13, xm2, [pd_04261537+16]
-    pandn         xm14, xm2, [pd_04261537+ 0]
-    por           xm14, xm13                ; indices
+    ; now find the best cost
+    pmaxsd         xm2, xm0, xm1
+    pshufd         xm3, xm2, q3232
+    pmaxsd         xm2, xm3
+    pshufd         xm3, xm2, q1111
+    pmaxsd         xm2, xm3
+    pshufd         xm2, xm2, q0000 ; best cost
 
-    punpckhqdq     xm4, xm3, xm0
-    punpcklqdq     xm3, xm0
-    pcmpgtd        xm5, xm4, xm3            ; [2or3-6or7] > [0or1/4or5]
-    punpcklqdq     xm5, xm5
-    pand           xm6, xm5, xm4
-    pandn          xm7, xm5, xm3
-    por            xm6, xm7                 ; { highest 2 values, complements at idx^4 }
-    movhlps       xm13, xm14
-    pand          xm13, xm5, xm13
-    pandn         xm14, xm5, xm14
-    por           xm14, xm13
+    ; find the idx using minpos
+    ; make everything other than the best cost negative via subtraction
+    ; find the min of unsigned 16-bit ints to sort out the negative values
+    psubd          xm4, xm1, xm2
+    psubd          xm3, xm0, xm2
+    packssdw       xm3, xm4
+    phminposuw     xm3, xm3
 
-    pshufd         xm7, xm6, q3311
-    pcmpgtd        xm8, xm7, xm6            ; [4or5or6or7] > [0or1or2or3]
-    punpcklqdq     xm8, xm8
-    pand           xm9, xm8, xm7
-    pandn         xm10, xm8, xm6
-    por            xm9, xm10                ; max
-    movhlps       xm10, xm9                 ; complement at idx^4
-    psubd          xm9, xm10
-    psrld          xm9, 10
-    movd        [varq], xm9
-    pshufd        xm13, xm14, q1111
-    pand          xm13, xm8, xm13
-    pandn         xm14, xm8, xm14
-    por           xm14, xm13
-    movd           eax, xm14
+    ; convert idx to 32-bits
+    psrldq         xm3, 2
+    movd           eax, xm3
+
+    ; get idx^4 complement
+    vpermd          m3, m1
+    psubd          xm2, xm3
+    psrld          xm2, 10
+    movd        [varq], xm2
     RET
 %endif ; ARCH_X86_64
