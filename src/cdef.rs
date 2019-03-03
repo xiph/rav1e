@@ -128,10 +128,8 @@ fn constrain(diff: i32, threshold: i32, damping: i32) -> i32 {
 // of the 2-pixel padding around the block, not the block itself.
 // The destination is unpadded.
 unsafe fn cdef_filter_block<T: Pixel>(
-  dst: *mut T, dstride: isize, input: *const T,
-  istride: isize, pri_strength: i32, sec_strength: i32,
-  dir: usize, pri_damping: i32, sec_damping: i32,
-  xsize: isize, ysize: isize, coeff_shift: i32
+  dst: *mut T, dstride: isize, input: *const T, istride: isize, pri_strength: i32,
+  sec_strength: i32, dir: usize, damping: i32, xsize: isize, ysize: isize, coeff_shift: i32
 ) {
   assert!(mem::size_of::<T>() == 2, "only implemented for u16 for now");
   let cdef_pri_taps = [[4, 2], [3, 3]];
@@ -157,8 +155,8 @@ unsafe fn cdef_filter_block<T: Pixel>(
       for k in 0..2usize {
         let p0 = *ptr_in.offset(cdef_directions[dir][k]);
         let p1 = *ptr_in.offset(-cdef_directions[dir][k]);
-        sum += pri_taps[k] * constrain(i32::cast_from(p0) - i32::cast_from(x), pri_strength, pri_damping);
-        sum += pri_taps[k] * constrain(i32::cast_from(p1) - i32::cast_from(x), pri_strength, pri_damping);
+        sum += pri_taps[k] * constrain(i32::cast_from(p0) - i32::cast_from(x), pri_strength, damping);
+        sum += pri_taps[k] * constrain(i32::cast_from(p1) - i32::cast_from(x), pri_strength, damping);
         // FIXME this is just to make it compile, but it's incorrect if T == u8
         if p0 != T::cast_from(CDEF_VERY_LARGE) {
           max = cmp::max(p0, max);
@@ -188,10 +186,10 @@ unsafe fn cdef_filter_block<T: Pixel>(
         min = cmp::min(s1, min);
         min = cmp::min(s2, min);
         min = cmp::min(s3, min);
-        sum += sec_taps[k] * constrain(i32::cast_from(s0) - i32::cast_from(x), sec_strength, sec_damping);
-        sum += sec_taps[k] * constrain(i32::cast_from(s1) - i32::cast_from(x), sec_strength, sec_damping);
-        sum += sec_taps[k] * constrain(i32::cast_from(s2) - i32::cast_from(x), sec_strength, sec_damping);
-        sum += sec_taps[k] * constrain(i32::cast_from(s3) - i32::cast_from(x), sec_strength, sec_damping);
+        sum += sec_taps[k] * constrain(i32::cast_from(s0) - i32::cast_from(x), sec_strength, damping);
+        sum += sec_taps[k] * constrain(i32::cast_from(s1) - i32::cast_from(x), sec_strength, damping);
+        sum += sec_taps[k] * constrain(i32::cast_from(s2) - i32::cast_from(x), sec_strength, damping);
+        sum += sec_taps[k] * constrain(i32::cast_from(s3) - i32::cast_from(x), sec_strength, damping);
       }
       let v = T::cast_from(i32::cast_from(x) + ((8 + sum - (sum < 0) as i32) >> 4));
       *ptr_out = clamp(v, min, max);
@@ -413,8 +411,8 @@ pub fn cdef_filter_superblock<T: Pixel>(
                                 input.as_ptr(),
                                 in_stride as isize,
                                 local_pri_strength, local_sec_strength, local_dir,
-                                local_damping, local_damping,
-                                xsize as isize, ysize as isize, coeff_shift as i32);
+                                local_damping, xsize as isize, ysize as isize,
+                                coeff_shift as i32);
             }
           }
         }
