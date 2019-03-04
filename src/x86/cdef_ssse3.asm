@@ -29,10 +29,17 @@
 
 SECTION_RODATA 16
 
+%if ARCH_X86_32
 pb_0: times 16 db 0
+%endif
+pw_128: times 8 dw 128
 pw_256: times 8 dw 256
 pw_2048: times 8 dw 2048
 pw_0x7FFF: times 8 dw 0x7FFF
+pd_0to7: dd 0, 4, 2, 6, 1, 5, 3, 7
+div_table: dw 840, 840, 420, 420, 280, 280, 210, 210, 168, 168, 140, 140, 120, 120, 105, 105
+           dw 420, 420, 210, 210, 140, 140, 105, 105, 105, 105, 105, 105, 105, 105, 105, 105
+shufw_6543210x: db 12, 13, 10, 11, 8, 9, 6, 7, 4, 5, 2, 3, 0, 1, 14, 15
 tap_table: dw 4, 2, 3, 3, 2, 1
            db -1 * 16 + 1, -2 * 16 + 2
            db  0 * 16 + 1, -1 * 16 + 2
@@ -711,3 +718,589 @@ cglobal cdef_filter_%1x%2, 2, 7, 8, - 5 * 16 - (%2+4)*%3, \
 cdef_filter_fn 8, 8, 32
 cdef_filter_fn 4, 8, 32
 cdef_filter_fn 4, 4, 32
+
+%macro MULLD 2-3 0 ; %3 = is_constant
+ %if ARCH_X86_32
+  %define m15 m1
+ %endif
+    pmulhuw        m15, %1, %2
+    pmullw          %1, %2
+    pslld          m15, 16
+    paddd           %1, m15
+%endmacro
+
+%if ARCH_X86_64
+cglobal cdef_dir, 3, 4, 16, src, stride, var, stride3
+    lea       stride3q, [strideq*3]
+    movq            m1, [srcq+strideq*0]
+    movhps          m1, [srcq+strideq*1]
+    movq            m3, [srcq+strideq*2]
+    movhps          m3, [srcq+stride3q]
+    lea           srcq, [srcq+strideq*4]
+    movq            m5, [srcq+strideq*0]
+    movhps          m5, [srcq+strideq*1]
+    movq            m7, [srcq+strideq*2]
+    movhps          m7, [srcq+stride3q]
+
+    pxor            m8, m8
+    psadbw          m0, m1, m8
+    psadbw          m2, m3, m8
+    psadbw          m4, m5, m8
+    psadbw          m6, m7, m8
+    packssdw        m0, m2
+    packssdw        m4, m6
+    packssdw        m0, m4
+    SWAP            m0, m9
+
+    punpcklbw       m0, m1, m8
+    punpckhbw       m1, m8
+    punpcklbw       m2, m3, m8
+    punpckhbw       m3, m8
+    punpcklbw       m4, m5, m8
+    punpckhbw       m5, m8
+    punpcklbw       m6, m7, m8
+    punpckhbw       m7, m8
+
+    mova            m8, [pw_128]
+    psubw           m0, m8
+    psubw           m1, m8
+    psubw           m2, m8
+    psubw           m3, m8
+    psubw           m4, m8
+    psubw           m5, m8
+    psubw           m6, m8
+    psubw           m7, m8
+    psllw           m8, 3
+    psubw           m9, m8                  ; partial_sum_hv[0]
+
+    paddw           m8, m0, m1
+    paddw          m10, m2, m3
+    paddw           m8, m4
+    paddw          m10, m5
+    paddw           m8, m6
+    paddw          m10, m7
+    paddw           m8, m10                 ; partial_sum_hv[1]
+
+    pmaddwd         m8, m8
+    pmaddwd         m9, m9
+    phaddd          m9, m8
+    SWAP            m8, m9
+    MULLD           m8, [div_table+48], 1
+
+    pslldq          m9, m1, 2
+    psrldq         m10, m1, 14
+    pslldq         m11, m2, 4
+    psrldq         m12, m2, 12
+    pslldq         m13, m3, 6
+    psrldq         m14, m3, 10
+    paddw           m9, m0
+    paddw          m10, m12
+    paddw          m11, m13
+    paddw          m10, m14                 ; partial_sum_diag[0] top/right half
+    paddw           m9, m11                 ; partial_sum_diag[0] top/left half
+    pslldq         m11, m4, 8
+    psrldq         m12, m4, 8
+    pslldq         m13, m5, 10
+    psrldq         m14, m5, 6
+    paddw           m9, m11
+    paddw          m10, m12
+    paddw           m9, m13
+    paddw          m10, m14
+    pslldq         m11, m6, 12
+    psrldq         m12, m6, 4
+    pslldq         m13, m7, 14
+    psrldq         m14, m7, 2
+    paddw           m9, m11
+    paddw          m10, m12
+    paddw           m9, m13                 ; partial_sum_diag[0][0-7]
+    paddw          m10, m14                 ; partial_sum_diag[0][8-14,zero]
+    pshufb         m10, [shufw_6543210x]
+    punpckhwd      m11, m9, m10
+    punpcklwd       m9, m10
+    pmaddwd        m11, m11
+    pmaddwd         m9, m9
+    MULLD          m11, [div_table+16]
+    MULLD           m9, [div_table+0]
+    paddd           m9, m11                 ; cost[0a-d]
+
+    pslldq         m10, m0, 14
+    psrldq         m11, m0, 2
+    pslldq         m12, m1, 12
+    psrldq         m13, m1, 4
+    pslldq         m14, m2, 10
+    psrldq         m15, m2, 6
+    paddw          m10, m12
+    paddw          m11, m13
+    paddw          m10, m14
+    paddw          m11, m15
+    pslldq         m12, m3, 8
+    psrldq         m13, m3, 8
+    pslldq         m14, m4, 6
+    psrldq         m15, m4, 10
+    paddw          m10, m12
+    paddw          m11, m13
+    paddw          m10, m14
+    paddw          m11, m15
+    pslldq         m12, m5, 4
+    psrldq         m13, m5, 12
+    pslldq         m14, m6, 2
+    psrldq         m15, m6, 14
+    paddw          m10, m12
+    paddw          m11, m13
+    paddw          m10, m14
+    paddw          m11, m15                 ; partial_sum_diag[1][8-14,zero]
+    paddw          m10, m7                  ; partial_sum_diag[1][0-7]
+    pshufb         m11, [shufw_6543210x]
+    punpckhwd      m12, m10, m11
+    punpcklwd      m10, m11
+    pmaddwd        m12, m12
+    pmaddwd        m10, m10
+    MULLD          m12, [div_table+16]
+    MULLD          m10, [div_table+0]
+    paddd          m10, m12                 ; cost[4a-d]
+    phaddd          m9, m10                 ; cost[0a/b,4a/b]
+
+    paddw          m10, m0, m1
+    paddw          m11, m2, m3
+    paddw          m12, m4, m5
+    paddw          m13, m6, m7
+    phaddw          m0, m4
+    phaddw          m1, m5
+    phaddw          m2, m6
+    phaddw          m3, m7
+
+    ; m0-3 are horizontal sums (x >> 1), m10-13 are vertical sums (y >> 1)
+    pslldq          m4, m11, 2
+    psrldq          m5, m11, 14
+    pslldq          m6, m12, 4
+    psrldq          m7, m12, 12
+    pslldq         m14, m13, 6
+    psrldq         m15, m13, 10
+    paddw           m4, m10
+    paddw           m5, m7
+    paddw           m4, m6
+    paddw           m5, m15                 ; partial_sum_alt[3] right
+    paddw           m4, m14                 ; partial_sum_alt[3] left
+    pshuflw         m5, m5, q3012
+    punpckhwd       m6, m4, m5
+    punpcklwd       m4, m5
+    pmaddwd         m6, m6
+    pmaddwd         m4, m4
+    MULLD           m6, [div_table+48], 1
+    MULLD           m4, [div_table+32]
+    paddd           m4, m6                  ; cost[7a-d]
+
+    pslldq          m5, m10, 6
+    psrldq          m6, m10, 10
+    pslldq          m7, m11, 4
+    psrldq         m10, m11, 12
+    pslldq         m11, m12, 2
+    psrldq         m12, 14
+    paddw           m5, m7
+    paddw           m6, m10
+    paddw           m5, m11
+    paddw           m6, m12
+    paddw           m5, m13
+    pshuflw         m6, m6, q3012
+    punpckhwd       m7, m5, m6
+    punpcklwd       m5, m6
+    pmaddwd         m7, m7
+    pmaddwd         m5, m5
+    MULLD           m7, [div_table+48], 1
+    MULLD           m5, [div_table+32]
+    paddd           m5, m7                  ; cost[5a-d]
+
+    pslldq          m6, m1, 2
+    psrldq          m7, m1, 14
+    pslldq         m10, m2, 4
+    psrldq         m11, m2, 12
+    pslldq         m12, m3, 6
+    psrldq         m13, m3, 10
+    paddw           m6, m0
+    paddw           m7, m11
+    paddw           m6, m10
+    paddw           m7, m13                 ; partial_sum_alt[3] right
+    paddw           m6, m12                 ; partial_sum_alt[3] left
+    pshuflw         m7, m7, q3012
+    punpckhwd      m10, m6, m7
+    punpcklwd       m6, m7
+    pmaddwd        m10, m10
+    pmaddwd         m6, m6
+    MULLD          m10, [div_table+48], 1
+    MULLD           m6, [div_table+32]
+    paddd           m6, m10                 ; cost[1a-d]
+
+    pshufd          m0, m0, q1032
+    pshufd          m1, m1, q1032
+    pshufd          m2, m2, q1032
+    pshufd          m3, m3, q1032
+
+    pslldq         m10, m0, 6
+    psrldq         m11, m0, 10
+    pslldq         m12, m1, 4
+    psrldq         m13, m1, 12
+    pslldq         m14, m2, 2
+    psrldq          m2, 14
+    paddw          m10, m12
+    paddw          m11, m13
+    paddw          m10, m14
+    paddw          m11, m2
+    paddw          m10, m3
+    pshuflw        m11, m11, q3012
+    punpckhwd      m12, m10, m11
+    punpcklwd      m10, m11
+    pmaddwd        m12, m12
+    pmaddwd        m10, m10
+    MULLD          m12, [div_table+48], 1
+    MULLD          m10, [div_table+32]
+    paddd          m10, m12                 ; cost[3a-d]
+
+    phaddd          m0, m9, m8              ; cost[0,4,2,6]
+    phaddd          m6, m5
+    phaddd         m10, m4
+    phaddd          m1, m6, m10             ; cost[1,5,3,7]
+
+    pcmpgtd         m2, m1, m0              ; [1/5/3/7] > [0/4/2/6]
+    pand            m3, m2, m1
+    pandn           m4, m2, m0
+    por             m3, m4                  ; higher 4 values
+    pshufd          m1, m1, q2301
+    pshufd          m0, m0, q2301
+    pand            m1, m2, m1
+    pandn           m4, m2, m0
+    por             m0, m4, m1              ; 4 values at idx^4 offset
+    pand           m14, m2, [pd_0to7+16]
+    pandn          m15, m2, [pd_0to7]
+    por            m15, m14
+
+    punpckhqdq      m4, m3, m0
+    punpcklqdq      m3, m0
+    pcmpgtd         m5, m4, m3              ; [2or3-6or7] > [0or1/4or5]
+    punpcklqdq      m5, m5
+    pand            m6, m5, m4
+    pandn           m7, m5, m3
+    por             m6, m7                  ; { highest 2 values, complements at idx^4 }
+    movhlps        m14, m15
+    pand           m14, m5, m14
+    pandn          m13, m5, m15
+    por            m15, m13, m14
+
+    pshufd          m7, m6, q3311
+    pcmpgtd         m8, m7, m6              ; [4or5or6or7] > [0or1or2or3]
+    punpcklqdq      m8, m8
+    pand            m9, m8, m7
+    pandn          m10, m8, m6
+    por             m9, m10                 ; max
+    movhlps        m10, m9                  ; complement at idx^4
+    psubd           m9, m10
+    psrld           m9, 10
+    movd        [varq], m9
+    pshufd         m14, m15, q1111
+    pand           m14, m8, m14
+    pandn          m13, m8, m15
+    por            m15, m13, m14
+    movd           eax, m15
+%else
+cglobal cdef_dir, 3, 5, 16, 96, src, stride, var, stride3
+ %define PIC_reg r4
+    LEA        PIC_reg, PIC_base_offset
+
+    pxor            m0, m0
+    mova            m1, [PIC_sym(pw_128)]
+
+    lea       stride3q, [strideq*3]
+    movq            m5, [srcq+strideq*0]
+    movhps          m5, [srcq+strideq*1]
+    movq            m7, [srcq+strideq*2]
+    movhps          m7, [srcq+stride3q]
+    psadbw          m2, m5, m0
+    psadbw          m3, m7, m0
+    packssdw        m2, m3
+    punpcklbw       m4, m5, m0
+    punpckhbw       m5, m0
+    punpcklbw       m6, m7, m0
+    punpckhbw       m7, m0
+    psubw           m4, m1
+    psubw           m5, m1
+    psubw           m6, m1
+    psubw           m7, m1
+
+    mova    [esp+0x00], m4
+    mova    [esp+0x10], m5
+    mova    [esp+0x20], m6
+    mova    [esp+0x50], m7
+
+    lea           srcq, [srcq+strideq*4]
+    movq            m5, [srcq+strideq*0]
+    movhps          m5, [srcq+strideq*1]
+    movq            m7, [srcq+strideq*2]
+    movhps          m7, [srcq+stride3q]
+    psadbw          m3, m5, m0
+    psadbw          m0, m7, m0
+    packssdw        m3, m0
+    pxor            m0, m0
+    packssdw        m2, m3
+    punpcklbw       m4, m5, m0
+    punpckhbw       m5, m0
+    punpcklbw       m6, m7, m0
+    punpckhbw       m7, m0
+    psubw           m4, m1
+    psubw           m5, m1
+    psubw           m6, m1
+    psubw           m7, m1
+
+    psllw           m1, 3
+    psubw           m2, m1                  ; partial_sum_hv[0]
+    pmaddwd         m2, m2
+
+    mova            m3, [esp+0x50]
+    mova            m0, [esp+0x00]
+    paddw           m0, [esp+0x10]
+    paddw           m1, m3, [esp+0x20]
+    paddw           m0, m4
+    paddw           m1, m5
+    paddw           m0, m6
+    paddw           m1, m7
+    paddw           m0, m1                  ; partial_sum_hv[1]
+    pmaddwd         m0, m0
+
+    phaddd          m2, m0
+    MULLD           m2, [PIC_sym(div_table)+48], 1
+    mova    [esp+0x30], m2
+
+    mova            m1, [esp+0x10]
+    pslldq          m0, m1, 2
+    psrldq          m1, 14
+    paddw           m0, [esp+0x00]
+    pslldq          m2, m3, 6
+    psrldq          m3, 10
+    paddw           m0, m2
+    paddw           m1, m3
+    mova            m3, [esp+0x20]
+    pslldq          m2, m3, 4
+    psrldq          m3, 12
+    paddw           m0, m2                  ; partial_sum_diag[0] top/left half
+    paddw           m1, m3                  ; partial_sum_diag[0] top/right half
+    pslldq          m2, m4, 8
+    psrldq          m3, m4, 8
+    paddw           m0, m2
+    paddw           m1, m3
+    pslldq          m2, m5, 10
+    psrldq          m3, m5, 6
+    paddw           m0, m2
+    paddw           m1, m3
+    pslldq          m2, m6, 12
+    psrldq          m3, m6, 4
+    paddw           m0, m2
+    paddw           m1, m3
+    pslldq          m2, m7, 14
+    psrldq          m3, m7, 2
+    paddw           m0, m2                  ; partial_sum_diag[0][0-7]
+    paddw           m1, m3                  ; partial_sum_diag[0][8-14,zero]
+    mova            m3, [esp+0x50]
+    pshufb          m1, [PIC_sym(shufw_6543210x)]
+    punpckhwd       m2, m0, m1
+    punpcklwd       m0, m1
+    pmaddwd         m2, m2
+    pmaddwd         m0, m0
+    MULLD           m2, [PIC_sym(div_table)+16]
+    MULLD           m0, [PIC_sym(div_table)+0]
+    paddd           m0, m2                  ; cost[0a-d]
+    mova    [esp+0x40], m0
+
+    mova            m1, [esp+0x00]
+    pslldq          m0, m1, 14
+    psrldq          m1, 2
+    paddw           m0, m7
+    pslldq          m2, m3, 8
+    psrldq          m3, 8
+    paddw           m0, m2
+    paddw           m1, m3
+    mova            m3, [esp+0x20]
+    pslldq          m2, m3, 10
+    psrldq          m3, 6
+    paddw           m0, m2
+    paddw           m1, m3
+    mova            m3, [esp+0x10]
+    pslldq          m2, m3, 12
+    psrldq          m3, 4
+    paddw           m0, m2
+    paddw           m1, m3
+    pslldq          m2, m4, 6
+    psrldq          m3, m4, 10
+    paddw           m0, m2
+    paddw           m1, m3
+    pslldq          m2, m5, 4
+    psrldq          m3, m5, 12
+    paddw           m0, m2
+    paddw           m1, m3
+    pslldq          m2, m6, 2
+    psrldq          m3, m6, 14
+    paddw           m0, m2                  ; partial_sum_diag[1][0-7]
+    paddw           m1, m3                  ; partial_sum_diag[1][8-14,zero]
+    mova            m3, [esp+0x50]
+    pshufb          m1, [PIC_sym(shufw_6543210x)]
+    punpckhwd       m2, m0, m1
+    punpcklwd       m0, m1
+    pmaddwd         m2, m2
+    pmaddwd         m0, m0
+    MULLD           m2, [PIC_sym(div_table)+16]
+    MULLD           m0, [PIC_sym(div_table)+0]
+    paddd           m0, m2                  ; cost[4a-d]
+    phaddd          m1, [esp+0x40], m0      ; cost[0a/b,4a/b]
+    phaddd          m1, [esp+0x30]          ; cost[0,4,2,6]
+    mova    [esp+0x30], m1
+
+    phaddw          m0, [esp+0x00], m4
+    phaddw          m1, [esp+0x10], m5
+    paddw           m4, m5
+    mova            m2, [esp+0x20]
+    paddw           m5, m2, m3
+    phaddw          m2, m6
+    paddw           m6, m7
+    phaddw          m3, m7
+    mova            m7, [esp+0x00]
+    paddw           m7, [esp+0x10]
+    mova    [esp+0x00], m0
+    mova    [esp+0x10], m1
+    mova    [esp+0x20], m2
+
+    pslldq          m1, m4, 4
+    pslldq          m2, m6, 6
+    pslldq          m0, m5, 2
+    paddw           m1, m2
+    paddw           m0, m7
+    psrldq          m2, m5, 14
+    paddw           m0, m1                  ; partial_sum_alt[3] left
+    psrldq          m1, m4, 12
+    paddw           m1, m2
+    psrldq          m2, m6, 10
+    paddw           m1, m2                  ; partial_sum_alt[3] right
+    pshuflw         m1, m1, q3012
+    punpckhwd       m2, m0, m1
+    punpcklwd       m0, m1
+    pmaddwd         m2, m2
+    pmaddwd         m0, m0
+    MULLD           m2, [PIC_sym(div_table)+48], 1
+    MULLD           m0, [PIC_sym(div_table)+32]
+    paddd           m0, m2                  ; cost[7a-d]
+    mova    [esp+0x40], m0
+
+    pslldq          m0, m7, 6
+    psrldq          m7, 10
+    pslldq          m1, m5, 4
+    psrldq          m5, 12
+    pslldq          m2, m4, 2
+    psrldq          m4, 14
+    paddw           m0, m6
+    paddw           m7, m5
+    paddw           m0, m1
+    paddw           m7, m4
+    paddw           m0, m2
+    pshuflw         m7, m7, q3012
+    punpckhwd       m2, m0, m7
+    punpcklwd       m0, m7
+    pmaddwd         m2, m2
+    pmaddwd         m0, m0
+    MULLD           m2, [PIC_sym(div_table)+48], 1
+    MULLD           m0, [PIC_sym(div_table)+32]
+    paddd           m0, m2                  ; cost[5a-d]
+    mova    [esp+0x50], m0
+
+    mova            m1, [esp+0x10]
+    mova            m2, [esp+0x20]
+    pslldq          m0, m1, 2
+    psrldq          m1, 14
+    pslldq          m4, m2, 4
+    psrldq          m2, 12
+    pslldq          m5, m3, 6
+    psrldq          m6, m3, 10
+    paddw           m0, [esp+0x00]
+    paddw           m1, m2
+    paddw           m4, m5
+    paddw           m1, m6                  ; partial_sum_alt[3] right
+    paddw           m0, m4                  ; partial_sum_alt[3] left
+    pshuflw         m1, m1, q3012
+    punpckhwd       m2, m0, m1
+    punpcklwd       m0, m1
+    pmaddwd         m2, m2
+    pmaddwd         m0, m0
+    MULLD           m2, [PIC_sym(div_table)+48], 1
+    MULLD           m0, [PIC_sym(div_table)+32]
+    paddd           m0, m2                  ; cost[1a-d]
+    phaddd          m0, [esp+0x50]
+    mova    [esp+0x50], m0
+
+    pshufd          m0, [esp+0x00], q1032
+    pshufd          m1, [esp+0x10], q1032
+    pshufd          m2, [esp+0x20], q1032
+    pshufd          m3, m3, q1032
+
+    pslldq          m4, m0, 6
+    psrldq          m0, 10
+    pslldq          m5, m1, 4
+    psrldq          m1, 12
+    pslldq          m6, m2, 2
+    psrldq          m2, 14
+    paddw           m4, m3
+    paddw           m0, m1
+    paddw           m5, m6
+    paddw           m0, m2
+    paddw           m4, m5
+    pshuflw         m0, m0, q3012
+    punpckhwd      m2, m4, m0
+    punpcklwd      m4, m0
+    pmaddwd        m2, m2
+    pmaddwd        m4, m4
+    MULLD          m2, [PIC_sym(div_table)+48], 1
+    MULLD          m4, [PIC_sym(div_table)+32]
+    paddd          m4, m2                   ; cost[3a-d]
+    phaddd         m4, [esp+0x40]
+
+    mova            m1, [esp+0x50]
+    mova            m0, [esp+0x30]          ; cost[0,4,2,6]
+    phaddd          m1, m4                  ; cost[1,5,3,7]
+
+    pcmpgtd         m2, m1, m0              ; [1/5/3/7] > [0/4/2/6]
+    pand            m3, m2, m1
+    pandn           m4, m2, m0
+    por             m3, m4                  ; higher 4 values
+    pshufd          m1, m1, q2301
+    pshufd          m0, m0, q2301
+    pand            m1, m2, m1
+    pandn           m4, m2, m0
+    por             m0, m4, m1              ; 4 values at idx^4 offset
+    pand            m5, m2, [PIC_sym(pd_0to7)+16]
+    pandn           m6, m2, [PIC_sym(pd_0to7)]
+    por             m6, m5
+
+    punpckhqdq      m4, m3, m0
+    punpcklqdq      m3, m0
+    pcmpgtd         m0, m4, m3              ; [2or3-6or7] > [0or1/4or5]
+    punpcklqdq      m0, m0
+    pand            m1, m0, m4
+    pandn           m7, m0, m3
+    por             m1, m7                  ; { highest 2 values, complements at idx^4 }
+    movhlps         m5, m6
+    pand            m5, m0, m5
+    pandn           m3, m0, m6
+    por             m6, m3, m5
+
+    pshufd          m7, m1, q3311
+    pcmpgtd         m2, m7, m1              ; [4or5or6or7] > [0or1or2or3]
+    punpcklqdq      m2, m2
+    pand            m0, m2, m7
+    pandn           m7, m2, m1
+    por             m0, m7                  ; max
+    movhlps         m7, m0                  ; complement at idx^4
+    psubd           m0, m7
+    psrld           m0, 10
+    movd        [varq], m0
+    pshufd          m5, m6, q1111
+    pand            m5, m2, m5
+    pandn           m3, m2, m6
+    por             m6, m3, m5
+    movd           eax, m6
+%endif
+
+    RET
