@@ -31,7 +31,7 @@ use crate::predict::{RAV1E_INTRA_MODES, RAV1E_INTER_MODES_MINIMAL, RAV1E_INTER_C
 use crate::Tune;
 use crate::write_tx_blocks;
 use crate::write_tx_tree;
-use crate::util::{CastFromPrimitive, Pixel};
+use crate::util::{AlignedArray, CastFromPrimitive, Pixel, UninitializedAlignedArray};
 use crate::rdo_tables::*;
 
 use std;
@@ -893,8 +893,8 @@ pub fn rdo_cfl_alpha<T: Pixel>(
 ) -> Option<CFLParams> {
   let uv_tx_size = bsize.largest_uv_tx_size(chroma_sampling);
 
-  let mut ac = [0i16; 32 * 32];
-  luma_ac(&mut ac, fs, bo, bsize);
+  let mut ac: AlignedArray<[i16; 32 * 32]> = UninitializedAlignedArray();
+  luma_ac(&mut ac.array, fs, bo, bsize);
   let best_alpha: Vec<i16> = (1..3)
     .map(|p| {
       let rec = &mut fs.rec.planes[p];
@@ -915,7 +915,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
             &mut rec.mut_slice(&po),
             uv_tx_size,
             bit_depth,
-            &ac,
+            &ac.array,
             alpha,
             &edge_buf
           );
