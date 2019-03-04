@@ -21,7 +21,7 @@ bitstream-io = "0.8"
 clap = { version = "2", optional = true, default-features = false }
 libc = "0.2"
 rand = "0.5"
-y4m = { version = "0.3", optional = true }
+y4m = { version = "0.3.2", optional = true }
 backtrace = "0.3"
 syn = "^0.15.20"
 quote = "^0.6.10" # hack for proc-macro-hack
