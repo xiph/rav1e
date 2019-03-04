@@ -146,9 +146,9 @@ fn main() {
   ctx.set_limit(cli.limit as u64);
   let mut frame_current_count = 0;
 
-  while frame_current_count <= cli.skip {
+  while frame_current_count < cli.skip {
        y4m_dec.read_frame().expect("Skipped more frames than in the input");
-       frame_current_count+=1;
+       frame_current_count += 1;
   }
 
   while let Ok(frame_info) = process_frame(&mut ctx, &mut cli.io.output, &mut y4m_dec, y4m_enc.as_mut()) {
