@@ -132,6 +132,7 @@ macro_rules! cdf_size {
 }
 
 #[repr(align(32))]
+#[derive(Clone)]
 pub struct Align32;
 
 /// A 16 byte aligned array.
@@ -146,6 +147,7 @@ pub struct Align32;
 /// let mut x: AlignedArray<[i16; 64 * 64]> = UninitializedAlignedArray();
 /// assert!(x.array.as_ptr() as usize % 16 == 0);
 /// ```
+#[derive(Clone)]
 pub struct AlignedArray<ARRAY>
 {
   _alignment: [Align32; 0],

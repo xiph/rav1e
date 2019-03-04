@@ -31,7 +31,7 @@ use crate::predict::{RAV1E_INTRA_MODES, RAV1E_INTER_MODES_MINIMAL, RAV1E_INTER_C
 use crate::Tune;
 use crate::write_tx_blocks;
 use crate::write_tx_tree;
-use crate::util::{CastFromPrimitive, Pixel};
+use crate::util::{AlignedArray, CastFromPrimitive, Pixel, UninitializedAlignedArray};
 
 use std;
 use std::cmp;
@@ -795,8 +795,8 @@ pub fn rdo_cfl_alpha<T: Pixel>(
 ) -> Option<CFLParams> {
   let uv_tx_size = bsize.largest_uv_tx_size(chroma_sampling);
 
-  let mut ac = [0i16; 32 * 32];
-  luma_ac(&mut ac, fs, bo, bsize);
+  let mut ac: AlignedArray<[i16; 32 * 32]> = UninitializedAlignedArray();
+  luma_ac(&mut ac.array, fs, bo, bsize);
   let best_alpha: Vec<i16> = (1..3)
     .map(|p| {
       let rec = &mut fs.rec.planes[p];
@@ -817,7 +817,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
             &mut rec.mut_slice(&po),
             uv_tx_size,
             bit_depth,
-            &ac,
+            &ac.array,
             alpha,
             &edge_buf
           );
@@ -1173,19 +1173,18 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<
   let mut lrf_output;
   let mut cdef_input;
 
-  if fi.sequence.enable_cdef {
-    // all stages; reconstruction goes to cdef so it must be additionally padded
-    // TODO: use the new plane padding mechanism rather than this old kludge.  Will require
-    // altering CDEF code a little.
-    cdef_input = cdef_sb_padded_frame_copy(fi, sbo, &fs.rec, 2);
-    lrf_input = cdef_sb_frame(fi, &fs.rec);
-    lrf_output = cdef_sb_frame(fi, &fs.rec);
-  } else {
-    // no cdef; unpadded reconstruction offered directly to LRF optimization
-    cdef_input = cdef_empty_frame(&fs.rec);
-    lrf_input = cdef_sb_padded_frame_copy(fi, sbo, &fs.rec, 0);
-    lrf_output = cdef_sb_frame(fi, &fs.rec);
-  }
+  assert!(fi.sequence.enable_cdef);
+  // all stages; reconstruction goes to cdef so it must be additionally padded
+  // TODO: use the new plane padding mechanism rather than this old kludge.  Will require
+  // altering CDEF code a little.
+  cdef_input = cdef_sb_padded_frame_copy(fi, sbo, &fs.rec, 2);
+  lrf_input = cdef_sb_frame(fi, &fs.rec);
+  lrf_output = cdef_sb_frame(fi, &fs.rec);
+  // TODO: T:T padded frame copy
+  // no cdef; unpadded reconstruction offered directly to LRF optimization
+  // cdef_input = cdef_empty_frame(&fs.rec);
+  // lrf_input = cdef_sb_padded_frame_copy(fi, sbo, &fs.rec, 0);
+  // lrf_output = cdef_sb_frame(fi, &fs.rec);
 
   let mut lrf_any_uncoded = false;
   if fi.sequence.enable_restoration {
@@ -1203,14 +1202,18 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<
   // Try all CDEF options with current LRF; if new CDEF+LRF choice is better, select it.
   // Try all LRF options with current CDEF; if new CDEF+LRF choice is better, select it.
   // If LRF choice changed for any plane, repeat last two steps.
-  let cdef_dirs = cdef_analyze_superblock(&mut cdef_input, &mut cw.bc,
-                                          &sbo_0, &sbo, fi.sequence.bit_depth);
+  let cdef_dirs = if fi.sequence.enable_cdef {
+      Some(cdef_analyze_superblock(&mut cdef_input, &mut cw.bc,
+                                   &sbo_0, &sbo, fi.sequence.bit_depth))
+  } else {
+      None
+  };
   let mut first_loop = true;
   loop {
     // check for [new] cdef index if cdef is enabled.
     let mut cdef_change = false;
     let prev_best_index = best_index;
-    if fi.sequence.enable_cdef {
+    if let Some(cdef_dirs) = &cdef_dirs {
       for cdef_index in 0..(1<<fi.cdef_bits) {
         if cdef_index != prev_best_index {
           let mut cost = [0.; PLANES];
@@ -1265,7 +1268,7 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<
     let mut lrf_change = false;
     if fi.sequence.enable_restoration && lrf_any_uncoded {
       // need cdef output from best index, not just last iteration
-      if fi.sequence.enable_cdef {
+      if let Some(cdef_dirs) = &cdef_dirs {
         cdef_filter_superblock(fi, &mut cdef_input, &mut lrf_input,
                                &mut cw.bc, &sbo_0, &sbo, best_index as u8, &cdef_dirs);
       }

@@ -54,11 +54,17 @@ impl TestDecoder for AomDecoder {
     limit: usize, bit_depth: usize, chroma_sampling: ChromaSampling,
     min_keyint: u64, max_keyint: u64, low_latency: bool, bitrate: i32
   ) {
+
+  fn encode_decode_inner<T: Pixel>(
+    dec: &mut aom_codec_ctx, w: usize, h: usize, speed: usize, quantizer: usize,
+    limit: usize, bit_depth: usize, chroma_sampling: ChromaSampling,
+    min_keyint: u64, max_keyint: u64, low_latency: bool, bitrate: i32
+  ) {
     let mut ra = ChaChaRng::from_seed([0; 32]);
 
-    let mut ctx: Context<u16> =
-      setup_encoder(w, h, speed, quantizer, bit_depth, chroma_sampling,
-                    min_keyint, max_keyint, low_latency, bitrate);
+    let mut ctx = setup_encoder::<T>(
+        w, h, speed, quantizer, bit_depth, chroma_sampling,
+        min_keyint, max_keyint, low_latency, bitrate);
     ctx.set_limit(limit as u64);
 
     println!("Encoding {}x{} speed {} quantizer {} bit-depth {}", w, h, speed, quantizer, bit_depth);
@@ -85,19 +91,19 @@ impl TestDecoder for AomDecoder {
           unsafe {
             println!("Decoding frame {}", pkt.number);
             let ret = aom_codec_decode(
-              &mut self.dec,
+              dec,
               packet.as_ptr(),
               packet.len(),
               ptr::null_mut()
             );
             println!("Decoded. -> {}", ret);
             if ret != 0 {
-              let error_msg = aom_codec_error(&mut self.dec);
+              let error_msg = aom_codec_error(dec);
               println!(
                 "  Decode codec_decode failed: {}",
                 CStr::from_ptr(error_msg).to_string_lossy()
               );
-              let detail = aom_codec_error_detail(&mut self.dec);
+              let detail = aom_codec_error_detail(dec);
               if !detail.is_null() {
                 println!(
                   "  Decode codec_decode failed {}",
@@ -111,7 +117,7 @@ impl TestDecoder for AomDecoder {
             if ret == 0 {
               loop {
                 println!("Retrieving frame");
-                let img = aom_codec_get_frame(&mut self.dec, &mut iter);
+                let img = aom_codec_get_frame(dec, &mut iter);
                 println!("Retrieved.");
                 if img.is_null() {
                   done = true;
@@ -119,12 +125,12 @@ impl TestDecoder for AomDecoder {
                 }
                 let mut corrupted = 0;
                 let ret = aom_codec_control_(
-                  &mut self.dec,
+                  dec,
                   aom_dec_control_id::AOMD_GET_FRAME_CORRUPTED as i32,
                   &mut corrupted
                 );
                 if ret != 0 {
-                  let detail = aom_codec_error_detail(&mut self.dec);
+                  let detail = aom_codec_error_detail(dec);
                   panic!(
                     "Decode codec_control failed {}",
                     CStr::from_ptr(detail).to_string_lossy()
@@ -143,6 +149,14 @@ impl TestDecoder for AomDecoder {
       }
       assert_eq!(corrupted_count, 0);
     }
+  };
+    if bit_depth == 8 {
+      encode_decode_inner::<u8>(&mut self.dec, w, h, speed, quantizer, limit, bit_depth, chroma_sampling,
+                          min_keyint, max_keyint, low_latency, bitrate)
+    } else {
+      encode_decode_inner::<u16>(&mut self.dec, w, h, speed, quantizer, limit, bit_depth, chroma_sampling,
+                           min_keyint, max_keyint, low_latency, bitrate)
+    };
   }
 }
 

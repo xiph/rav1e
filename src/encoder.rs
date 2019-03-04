@@ -1268,11 +1268,11 @@ pub fn luma_ac<T: Pixel>(
     for sub_x in 0..plane_bsize.width() {
       let y = sub_y << ydec;
       let x = sub_x << xdec;
-      let sample: i16 = ((luma.p(x, y)
-                          + luma.p(x + 1, y)
-                          + luma.p(x, y + 1)
-                          + luma.p(x + 1, y + 1))
-                         << 1).as_();
+      let sample: i16 = (i16::cast_from(luma.p(x, y))
+                          + i16::cast_from(luma.p(x + 1, y))
+                          + i16::cast_from(luma.p(x, y + 1))
+                          + i16::cast_from(luma.p(x + 1, y + 1)))
+                         << 1;
       ac[sub_y * plane_bsize.width() + sub_x] = sample;
       sum += sample as i32;
     }
@@ -1298,7 +1298,7 @@ pub fn write_tx_blocks<T: Pixel>(
   let qidx = get_qidx(fi, fs, cw, bo);
 
   let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
-  let ac = &mut [0i16; 32 * 32];
+  let mut ac: AlignedArray<[i16; 32 * 32]> = UninitializedAlignedArray();
   let mut tx_dist: i64 = 0;
   let do_chroma = has_chroma(bo, bsize, xdec, ydec);
 
@@ -1315,7 +1315,7 @@ pub fn write_tx_blocks<T: Pixel>(
       let (_, dist) =
         encode_tx_block(
           fi, fs, cw, w, 0, &tx_bo, luma_mode, tx_size, tx_type, bsize, &po,
-          skip, ac, 0, rdo_type, for_rdo_use
+          skip, &ac.array, 0, rdo_type, for_rdo_use
         );
       assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
       tx_dist += dist;
@@ -1340,7 +1340,7 @@ pub fn write_tx_blocks<T: Pixel>(
   let plane_bsize = get_plane_block_size(bsize, xdec, ydec);
 
   if chroma_mode.is_cfl() {
-    luma_ac(ac, fs, bo, bsize);
+    luma_ac(&mut ac.array, fs, bo, bsize);
   }
 
   if bw_uv > 0 && bh_uv > 0 {
@@ -1368,7 +1368,7 @@ pub fn write_tx_blocks<T: Pixel>(
           po.y += (by * uv_tx_size.height()) as isize;
           let (_, dist) =
             encode_tx_block(fi, fs, cw, w, p, &tx_bo, chroma_mode, uv_tx_size, uv_tx_type,
-                            plane_bsize, &po, skip, ac, alpha, rdo_type, for_rdo_use);
+                            plane_bsize, &po, skip, &ac.array, alpha, rdo_type, for_rdo_use);
           assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
           tx_dist += dist;
         }
@@ -1392,7 +1392,7 @@ pub fn write_tx_tree<T: Pixel>(
   let qidx = get_qidx(fi, fs, cw, bo);
 
   let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
-  let ac = &[0i16; 32 * 32];
+  let ac = &[0i16; 0];
   let mut tx_dist: i64 = 0;
 
   fs.qc.update(qidx, tx_size, luma_mode.is_intra(), fi.sequence.bit_depth, fi.dc_delta_q[0], 0);

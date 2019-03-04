@@ -927,8 +927,8 @@ ALIGN function_align
     paddw                m2, m5
     paddw                m1, m2
     vpermq               m2, [tlq-32*2], q3120
-    mova [rsp+gprsize+32*3], m0
-    mova [rsp+gprsize+32*2], m1
+    movu [rsp+gprsize+32*3], m0
+    movu [rsp+gprsize+32*2], m1
     punpckhbw            m1, m2, m3
     punpcklbw            m2, m3
     pmaddubsw            m0, m1, m4
@@ -937,8 +937,8 @@ ALIGN function_align
     pmaddubsw            m1, m2, m4
     paddw                m2, m5
     paddw                m1, m2
-    mova [rsp+gprsize+32*1], m0
-    mova [rsp+gprsize+32*0], m1
+    movu [rsp+gprsize+32*1], m0
+    movu [rsp+gprsize+32*0], m1
     sub                  r3, hq
     sub                 tlq, hq
     sub                  r3, hq
@@ -1183,10 +1183,10 @@ ALIGN function_align
     paddw                m1, m13
     paddw                m2, m14
     paddw                m3, m15
-    mova          [r6+32*0], m0
-    mova          [r6+32*1], m1
-    mova          [r6+32*2], m2
-    mova          [r6+32*3], m3
+    movu          [r6+32*0], m0
+    movu          [r6+32*1], m1
+    movu          [r6+32*2], m2
+    movu          [r6+32*3], m3
 .w64_loop:
     vpbroadcastb         m5, [tlq+hq]
     punpcklbw            m5, m4
@@ -1219,16 +1219,16 @@ ALIGN function_align
     pmaddubsw            m1, m2, m5
     paddw                m1, m2
     vpermq               m2, [tlq-32*2], q3120
-    mova [rsp+gprsize+32*3], m0
-    mova [rsp+gprsize+32*2], m1
+    movu [rsp+gprsize+32*3], m0
+    movu [rsp+gprsize+32*2], m1
     punpckhbw            m1, m2, m4
     punpcklbw            m2, m4
     pmaddubsw            m0, m1, m5
     paddw                m0, m1
     pmaddubsw            m1, m2, m5
     paddw                m1, m2
-    mova [rsp+gprsize+32*1], m0
-    mova [rsp+gprsize+32*0], m1
+    movu [rsp+gprsize+32*1], m0
+    movu [rsp+gprsize+32*0], m1
     sub                  r3, hq
     sub                 tlq, hq
     sub                  r3, hq

@@ -15,8 +15,6 @@ use crate::plane::PlaneMutSlice;
 use crate::predict::*;
 use crate::util::*;
 
-use std::mem;
-
 mod forward;
 mod inverse;
 
@@ -179,7 +177,6 @@ pub fn inverse_transform_add<T: Pixel>(
   input: &[i32], output: &mut PlaneMutSlice<'_, T>, tx_size: TxSize,
   tx_type: TxType, bit_depth: usize
 ) {
-  assert!(mem::size_of::<T>() == 2, "only implemented for u16 for now");
   use self::TxSize::*;
   match tx_size {
     TX_4X4 => iht4x4_add(input, output, tx_type, bit_depth),

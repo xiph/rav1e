@@ -114,9 +114,6 @@ fn main() {
     enc: cli.enc
   };
 
-  // FIXME for now, unconditionally create Context<u16>
-  let mut ctx: Context<u16> = cfg.new_context();
-
   let stderr = io::stderr();
   let mut err = stderr.lock();
 
@@ -142,6 +139,36 @@ fn main() {
     if cli.limit == 0 { None } else { Some(cli.limit) },
       cfg.enc.show_psnr
   );
+
+  if video_info.bit_depth == 8 {
+  let mut ctx: Context<u8> = cfg.new_context();
+
+  ctx.set_limit(cli.limit as u64);
+
+  while let Ok(frame_info) = process_frame(&mut ctx, &mut cli.io.output, &mut y4m_dec, y4m_enc.as_mut()) {
+    for frame in frame_info {
+      progress.add_frame(frame);
+      let _ = if cli.verbose {
+        writeln!(err, "{} - {}", frame, progress)
+      } else {
+        write!(err, "\r{}                    ", progress)
+      };
+    }
+
+    if !ctx.needs_more_frames(progress.frames_encoded() as u64) {
+      break;
+    }
+
+    cli.io.output.flush().unwrap();
+  }
+
+  if cfg.enc.pass == Some(1) {
+    if let Err(e) = write_stats_file(&ctx, cfg.enc.stats_file.as_ref().unwrap()) {
+      let _ = writeln!(err, "\nError: Failed to write stats file! {}\n", e);
+    }
+  }
+  } else {
+  let mut ctx: Context<u16> = cfg.new_context();
 
   ctx.set_limit(cli.limit as u64);
 
@@ -170,6 +197,7 @@ fn main() {
     if let Err(e) = write_stats_file(&ctx, cfg.enc.stats_file.as_ref().unwrap()) {
       let _ = writeln!(err, "\nError: Failed to write stats file! {}\n", e);
     }
+  }
   }
   let _ = write!(err, "\n{}\n", progress.print_summary());
 }

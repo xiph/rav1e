@@ -52,21 +52,29 @@ impl<T: Pixel> Debug for Plane<T>
 
 impl<T: Pixel> Plane<T> {
   /// Stride alignment in bytes.
-  const STRIDE_ALIGNMENT_LOG2: usize = 4;
+  const STRIDE_ALIGNMENT_LOG2: usize = 5;
 
   /// Data alignment in bytes.
-  const DATA_ALIGNMENT_LOG2: usize = 4;
+  const DATA_ALIGNMENT_LOG2: usize = 5;
 
   pub fn new(
     width: usize, height: usize, xdec: usize, ydec: usize, xpad: usize,
     ypad: usize
   ) -> Self {
-    let xorigin = xpad.align_power_of_two(Self::STRIDE_ALIGNMENT_LOG2 - 1);
+    let xorigin = xpad.align_power_of_two(Self::DATA_ALIGNMENT_LOG2 + 1 - mem::size_of::<T>());
     let yorigin = ypad;
     let stride = (xorigin + width + xpad)
-      .align_power_of_two(Self::STRIDE_ALIGNMENT_LOG2 - 1);
+      .align_power_of_two(Self::STRIDE_ALIGNMENT_LOG2 + 1 - mem::size_of::<T>());
     let alloc_height = yorigin + height + ypad;
-    let data = vec![T::cast_from(128); stride * alloc_height];
+    let data = unsafe {
+      let mut aligned_data = vec![AlignedArray([T::cast_from(128); 32]);
+          (stride * alloc_height + 31) >> Self::DATA_ALIGNMENT_LOG2];
+      let new_parts = Vec::from_raw_parts(aligned_data.as_mut_ptr() as *mut T,
+          aligned_data.len() << Self::DATA_ALIGNMENT_LOG2,
+          aligned_data.capacity() << Self::DATA_ALIGNMENT_LOG2);
+      std::mem::forget(aligned_data);
+      new_parts
+    };
     assert!(is_aligned(data.as_ptr(), Self::DATA_ALIGNMENT_LOG2));
     Plane {
       data,
