@@ -1271,19 +1271,18 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<
   let mut lrf_output;
   let mut cdef_input;
 
-  if fi.sequence.enable_cdef {
-    // all stages; reconstruction goes to cdef so it must be additionally padded
-    // TODO: use the new plane padding mechanism rather than this old kludge.  Will require
-    // altering CDEF code a little.
-    cdef_input = cdef_sb_padded_frame_copy(fi, sbo, &fs.rec, 2);
-    lrf_input = cdef_sb_frame(fi, &fs.rec);
-    lrf_output = cdef_sb_frame(fi, &fs.rec);
-  } else {
-    // no cdef; unpadded reconstruction offered directly to LRF optimization
-    cdef_input = cdef_empty_frame(&fs.rec);
-    lrf_input = cdef_sb_padded_frame_copy(fi, sbo, &fs.rec, 0);
-    lrf_output = cdef_sb_frame(fi, &fs.rec);
-  }
+  assert!(fi.sequence.enable_cdef);
+  // all stages; reconstruction goes to cdef so it must be additionally padded
+  // TODO: use the new plane padding mechanism rather than this old kludge.  Will require
+  // altering CDEF code a little.
+  cdef_input = cdef_sb_padded_frame_copy(fi, sbo, &fs.rec, 2);
+  lrf_input = cdef_sb_frame(fi, &fs.rec);
+  lrf_output = cdef_sb_frame(fi, &fs.rec);
+  // FIXME: T:T padded frame copy required for CDEF disabled path.
+  // no cdef; unpadded reconstruction offered directly to LRF optimization
+  // cdef_input = cdef_empty_frame(&fs.rec);
+  // lrf_input = cdef_sb_padded_frame_copy(fi, sbo, &fs.rec, 0);
+  // lrf_output = cdef_sb_frame(fi, &fs.rec);
 
   let mut lrf_any_uncoded = false;
   if fi.sequence.enable_restoration {
