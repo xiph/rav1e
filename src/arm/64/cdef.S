@@ -304,10 +304,8 @@ endconst
         uabd            v20.8h, v0.8h,  \s2\().8h   // abs(diff)
         ushl            v17.8h, v16.8h, \shift      // abs(diff) >> shift
         ushl            v21.8h, v20.8h, \shift      // abs(diff) >> shift
-        sub             v17.8h, \thresh_vec, v17.8h // threshold - (abs(diff) >> shift)
-        sub             v21.8h, \thresh_vec, v21.8h // threshold - (abs(diff) >> shift)
-        smax            v17.8h, v29.8h, v17.8h      // imax(0, threshold - ())
-        smax            v21.8h, v29.8h, v21.8h      // imax(0, threshold - ())
+        uqsub           v17.8h, \thresh_vec, v17.8h // imax(0, threshold - (abs(diff) >> shift))
+        uqsub           v21.8h, \thresh_vec, v21.8h // imax(0, threshold - (abs(diff) >> shift))
         cmhi            v18.8h, v0.8h,  \s1\().8h   // px > p0
         cmhi            v22.8h, v0.8h,  \s2\().8h   // px > p1
         smin            v17.8h, v17.8h, v16.8h      // imin(abs(diff), imax())
@@ -334,7 +332,6 @@ function cdef_filter\w\()_neon, export=1
         add             x5,  x9,  w5, uxtw #1
         movi            v31.16b,  #255
         movi            v30.8h,   #15
-        movi            v29.8h,   #0
         dup             v28.8h,   w6                // damping
         ushr            v31.8h,   v31.8h, #1        // INT16_MAX
 
@@ -344,10 +341,8 @@ function cdef_filter\w\()_neon, export=1
         clz             v26.8h, v27.8h              // clz(threshold)
         sub             v24.8h, v30.8h, v24.8h      // ulog2(threshold)
         sub             v26.8h, v30.8h, v26.8h      // ulog2(threshold)
-        sub             v24.8h, v28.8h, v24.8h      // damping - ulog2(threshold)
-        sub             v26.8h, v28.8h, v26.8h      // damping - ulog2(threshold)
-        smax            v24.8h, v29.8h, v24.8h      // shift = imax(0, damping - ulog2(threshold))
-        smax            v26.8h, v29.8h, v26.8h      // shift = imax(0, damping - ulog2(threshold))
+        uqsub           v24.8h, v28.8h, v24.8h      // shift = imax(0, damping - ulog2(threshold))
+        uqsub           v26.8h, v28.8h, v26.8h      // shift = imax(0, damping - ulog2(threshold))
         neg             v24.8h, v24.8h              // -shift
         neg             v26.8h, v26.8h              // -shift
 
