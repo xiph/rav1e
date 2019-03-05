@@ -305,7 +305,7 @@ endconst
         cmhi            v22.8h, v0.8h,  \s2\().8h   // px > p1
         umin            v17.8h, v17.8h, v16.8h      // imin(abs(diff), imax())
         umin            v21.8h, v21.8h, v20.8h      // imin(abs(diff), imax())
-        dup             v19.8h, \tap                // taps[k]/taps[k]
+        dup             v19.8h, \tap                // taps[k]
         neg             v16.8h, v17.8h              // -imin()
         neg             v20.8h, v21.8h              // -imin()
         bsl             v18.16b, v16.16b, v17.16b   // constrain() = apply_sign()
