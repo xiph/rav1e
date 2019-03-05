@@ -1169,14 +1169,9 @@ impl BlockOffset {
 
   /// Offset of the top-left pixel of this block.
   pub fn plane_offset(&self, plane: &PlaneConfig) -> PlaneOffset {
-    let po = self.sb_offset().plane_offset(plane);
-
-    let x_offset = self.x & LOCAL_BLOCK_MASK;
-    let y_offset = self.y & LOCAL_BLOCK_MASK;
-
     PlaneOffset {
-        x: po.x + (x_offset as isize >> plane.xdec << BLOCK_TO_PLANE_SHIFT),
-        y: po.y + (y_offset as isize >> plane.ydec << BLOCK_TO_PLANE_SHIFT)
+        x: (self.x >> plane.xdec << BLOCK_TO_PLANE_SHIFT) as isize,
+        y: (self.y >> plane.ydec << BLOCK_TO_PLANE_SHIFT) as isize,
     }
   }
 
