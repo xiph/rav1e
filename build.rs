@@ -33,7 +33,7 @@ fn main() {
             config_file.write(b"	%define ARCH_X86_32 0\n").unwrap();
             config_file.write(b" %define ARCH_X86_64 1\n").unwrap();
             config_file.write(b"	%define PIC 1\n").unwrap();
-            config_file.write(b" %define STACK_ALIGNMENT 32\n").unwrap();
+            config_file.write(b" %define STACK_ALIGNMENT 16\n").unwrap();
             if cfg!(target_os="macos") {
               config_file.write(b" %define PREFIX 1\n").unwrap();
             }
