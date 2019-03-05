@@ -79,14 +79,13 @@ SECTION .text
     movu           xm6, [stkq+offq*2+%6*0]      ; p1
     vinserti128     m6, [stkq+offq*2+%6*1], 1
 %endif
-    pcmpeqw         m9, m14, m5
-    pcmpeqw        m10, m14, m6
-    pandn           m9, m5
-    pandn          m10, m6
-    pmaxsw          m7, m9                      ; max after p0
-    pminsw          m8, m5                      ; min after p0
-    pmaxsw          m7, m10                     ; max after p1
-    pminsw          m8, m6                      ; min after p1
+    ; out of bounds values are set to a value that is a both a large unsigned
+    ; value and a negative signed value.
+    ; use signed max and unsigned min to remove them
+    pmaxsw          m7, m5                      ; max after p0
+    pminuw          m8, m5                      ; min after p0
+    pmaxsw          m7, m6                      ; max after p1
+    pminuw          m8, m6                      ; min after p1
 
     ; accumulate sum[m15] over p0/p1
     psubw           m5, m4                      ; diff_p0(p0 - px)
@@ -99,8 +98,10 @@ SECTION .text
     psrlw           m6, m10, %2
     psubusw         m5, %3, m5
     psubusw         m6, %3, m6
-    pminsw          m5, m9                      ; constrain(diff_p0)
-    pminsw          m6, m10                     ; constrain(diff_p1)
+
+    ; use unsigned min since abs diff can equal 0x8000
+    pminuw          m5, m9                      ; constrain(diff_p0)
+    pminuw          m6, m10                     ; constrain(diff_p1)
     pmullw          m5, m11                     ; constrain(diff_p0) * taps
     pmullw          m6, m12                     ; constrain(diff_p1) * taps
     paddw          m15, m5
@@ -118,7 +119,7 @@ cglobal cdef_filter_%1x%2, 4, 10, 16, 2 * 16 + (%2+4)*%3, \
 %endif
 %define px rsp+2*16+2*%3
     pcmpeqw        m14, m14
-    psrlw          m14, 1                   ; 0x7fff
+    psllw          m14, 15                  ; 0x8000
     mov          edged, r8m
 
     ; prepare pixel buffers - body/right
