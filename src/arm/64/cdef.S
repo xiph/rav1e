@@ -136,8 +136,7 @@
 
 .macro padding_func w, stride, rn, rw
 function cdef_padding\w\()_neon, export=1
-        movi            v30.16b, #255
-        ushr            v30.8h, v30.8h, #1 // INT16_MAX
+        movi            v30.8h,  #0x80, lsl #8
         mov             v31.16b, v30.16b
         sub             x0,  x0,  #2*(2*\stride+2)
         tst             w6,  #4 // CDEF_HAVE_TOP
@@ -290,14 +289,10 @@ endconst
 .endif
 .endm
 .macro handle_pixel s1, s2, threshold, thresh_vec, shift, tap
-        cmeq            v16.8h,  \s1\().8h,  v31.8h
-        cmeq            v17.8h,  \s2\().8h,  v31.8h
-        bic             v16.16b, \s1\().16b, v16.16b
-        bic             v17.16b, \s2\().16b, v17.16b
         umin            v2.8h,   v2.8h,  \s1\().8h
-        umax            v3.8h,   v3.8h,  v16.8h
+        smax            v3.8h,   v3.8h,  \s1\().8h
         umin            v2.8h,   v2.8h,  \s2\().8h
-        umax            v3.8h,   v3.8h,  v17.8h
+        smax            v3.8h,   v3.8h,  \s2\().8h
 
         cbz             \threshold, 3f
         uabd            v16.8h, v0.8h,  \s1\().8h   // abs(diff)
@@ -308,8 +303,8 @@ endconst
         uqsub           v21.8h, \thresh_vec, v21.8h // imax(0, threshold - (abs(diff) >> shift))
         cmhi            v18.8h, v0.8h,  \s1\().8h   // px > p0
         cmhi            v22.8h, v0.8h,  \s2\().8h   // px > p1
-        smin            v17.8h, v17.8h, v16.8h      // imin(abs(diff), imax())
-        smin            v21.8h, v21.8h, v20.8h      // imin(abs(diff), imax())
+        umin            v17.8h, v17.8h, v16.8h      // imin(abs(diff), imax())
+        umin            v21.8h, v21.8h, v20.8h      // imin(abs(diff), imax())
         dup             v19.8h, \tap                // taps[k]/taps[k]
         neg             v16.8h, v17.8h              // -imin()
         neg             v20.8h, v21.8h              // -imin()
@@ -330,10 +325,8 @@ function cdef_filter\w\()_neon, export=1
         add             x8,  x8,  w9, uxtw #1
         movrel          x9,  directions\w
         add             x5,  x9,  w5, uxtw #1
-        movi            v31.16b,  #255
         movi            v30.8h,   #15
         dup             v28.8h,   w6                // damping
-        ushr            v31.8h,   v31.8h, #1        // INT16_MAX
 
         dup             v25.8h, w3                  // threshold
         dup             v27.8h, w4                  // threshold
