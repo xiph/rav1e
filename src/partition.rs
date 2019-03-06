@@ -857,7 +857,8 @@ pub fn get_intra_edges<T: Pixel>(
       let dc_or_cfl =
         mode == PredictionMode::DC_PRED || mode == PredictionMode::UV_CFL_PRED;
 
-      needs_left = mode != PredictionMode::V_PRED && (!dc_or_cfl || x != 0);
+      needs_left = mode != PredictionMode::V_PRED && (!dc_or_cfl || x != 0)
+        && !(mode == PredictionMode::D45_PRED || mode == PredictionMode::D63_PRED);
       needs_topleft = mode == PredictionMode::PAETH_PRED || mode == PredictionMode::D117_PRED
       || mode == PredictionMode::D135_PRED || mode == PredictionMode::D153_PRED;
       needs_top = mode != PredictionMode::H_PRED && (!dc_or_cfl || y != 0);
@@ -917,8 +918,8 @@ pub fn get_intra_edges<T: Pixel>(
         );
 
       let num_avail = if y != 0 && has_tr(&bo, bsize) {
-        tx_size.height().min(
-          (MI_SIZE >> plane_cfg.ydec) * frame_w_in_b
+        tx_size.width().min(
+          (MI_SIZE >> plane_cfg.xdec) * frame_w_in_b
             - x as usize
             - tx_size.width()
         )
@@ -952,7 +953,7 @@ pub fn get_intra_edges<T: Pixel>(
         );
 
       let num_avail = if x != 0 && has_bl(&bo, bsize) {
-        tx_size.width().min(
+        tx_size.height().min(
           (MI_SIZE >> plane_cfg.ydec) * frame_h_in_b
             - y as usize
             - tx_size.height()
