@@ -8,13 +8,14 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use super::*;
-use rand::{ChaChaRng, Rng};
+use rand::{ChaChaRng, Rng, SeedableRng};
 use std::sync::Arc;
 use crate::util::Pixel;
 #[cfg(feature="decode_test")]
 use crate::test_encode_decode_aom::AomDecoder;
 #[cfg(feature="decode_test_dav1d")]
 use crate::test_encode_decode_dav1d::Dav1dDecoder;
+use std::collections::VecDeque;
 
 fn fill_frame<T: Pixel>(ra: &mut ChaChaRng, frame: &mut Frame<T>) {
   for plane in frame.planes.iter_mut() {
@@ -40,13 +41,64 @@ pub(crate) fn read_frame_batch<T: Pixel>(ctx: &mut Context<T>, ra: &mut ChaChaRn
   }
 }
 
+pub(crate) enum DecodeResult {
+  Done,
+  NotDone,
+  Corrupted(usize),
+}
+
 pub(crate) trait TestDecoder {
   fn setup_decoder(w: usize, h: usize) -> Self where Self: Sized;
   fn encode_decode(
     &mut self, w: usize, h: usize, speed: usize, quantizer: usize,
     limit: usize, bit_depth: usize, chroma_sampling: ChromaSampling,
     min_keyint: u64, max_keyint: u64, low_latency: bool, bitrate: i32
-  );
+  ) {
+    let mut ra = ChaChaRng::from_seed([0; 32]);
+
+    let mut ctx: Context<u16> =
+      setup_encoder(w, h, speed, quantizer, bit_depth, chroma_sampling,
+                    min_keyint, max_keyint, low_latency, bitrate);
+    ctx.set_limit(limit as u64);
+
+    println!("Encoding {}x{} speed {} quantizer {} bit-depth {}", w, h, speed, quantizer, bit_depth);
+    #[cfg(feature="dump_ivf")]
+    let mut out = std::fs::File::create(&format!("out-{}x{}-s{}-q{}-{:?}.ivf",
+                                                   w, h, speed, quantizer, chroma_sampling)).unwrap();
+    #[cfg(feature="dump_ivf")]
+    ivf::write_ivf_header(&mut out, w, h, 30, 1);
+
+    let mut rec_fifo = VecDeque::new();
+    for _ in 0..limit {
+      read_frame_batch(&mut ctx, &mut ra);
+
+      let mut corrupted_count = 0;
+      loop {
+        let res = ctx.receive_packet();
+        if let Ok(pkt) = res {
+          println!("Encoded packet {}", pkt.number);
+
+          #[cfg(feature="dump_ivf")]
+          ivf::write_ivf_frame(&mut out, pkt.number, &pkt.data);
+
+          if let Some(pkt_rec) = pkt.rec {
+            rec_fifo.push_back(pkt_rec.clone());
+          }
+          let packet = pkt.data;
+          println!("Decoding frame {}", pkt.number);
+          match self.decode_packet(&packet, &mut rec_fifo, w, h, bit_depth) {
+            DecodeResult::Done => { break; }
+            DecodeResult::NotDone => {}
+            DecodeResult::Corrupted(corrupted) => { corrupted_count += corrupted; }
+          }
+        } else {
+          break;
+        }
+      }
+      assert_eq!(corrupted_count, 0);
+    }
+  }
+  fn decode_packet(&mut self, packet: &[u8], rec_fifo: &mut VecDeque<Frame<u16>>, w: usize, h: usize, bit_depth: usize) -> DecodeResult;
 }
 
 pub(crate) fn compare_plane<T: Ord + std::fmt::Debug>(
