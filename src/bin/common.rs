@@ -47,7 +47,7 @@ pub fn parse_cli() -> CliOptions {
         .help("Set the threadpool size")
         .long("threads")
         .takes_value(true)
-        .default_value("0")
+        .default_value("2")
     )
     // INPUT/OUTPUT
     .arg(
