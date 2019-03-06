@@ -9,23 +9,23 @@
 
 
 use super::*;
-use rand::{ChaChaRng, SeedableRng};
 use std::{mem, ptr, slice};
 use std::collections::VecDeque;
 use std::ffi::CStr;
 use crate::util::Pixel;
-use crate::test_encode_decode::{compare_plane, read_frame_batch, setup_encoder, TestDecoder};
+use crate::test_encode_decode::{compare_plane, TestDecoder, DecodeResult};
 use aom_sys::*;
 
 pub(crate) struct AomDecoder {
-  dec: aom_codec_ctx
+  dec: aom_codec_ctx,
+  iter: aom_codec_iter_t
 }
 
 impl TestDecoder for AomDecoder {
   fn setup_decoder(w: usize, h: usize) -> Self {
     unsafe {
       let interface = aom_codec_av1_dx();
-      let mut dec: AomDecoder = mem::uninitialized();
+      let mut dec: aom_codec_ctx = mem::uninitialized();
       let cfg = aom_codec_dec_cfg_t {
         threads: 1,
         w: w as u32,
@@ -35,7 +35,7 @@ impl TestDecoder for AomDecoder {
       };
 
       let ret = aom_codec_dec_init_ver(
-        &mut dec.dec,
+        &mut dec,
         interface,
         &cfg,
         0,
@@ -45,103 +45,72 @@ impl TestDecoder for AomDecoder {
         panic!("Cannot instantiate the decoder {}", ret);
       }
 
-      dec
+      AomDecoder {
+        dec,
+        iter: ptr::null_mut()
+      }
     }
   }
 
-  fn encode_decode(
-    &mut self, w: usize, h: usize, speed: usize, quantizer: usize,
-    limit: usize, bit_depth: usize, chroma_sampling: ChromaSampling,
-    min_keyint: u64, max_keyint: u64, low_latency: bool, bitrate: i32
-  ) {
-    let mut ra = ChaChaRng::from_seed([0; 32]);
+  fn decode_packet(&mut self, packet: &[u8], rec_fifo: &mut VecDeque<Frame<u16>>, w: usize, h: usize, bit_depth: usize) -> DecodeResult {
+    let mut corrupted_count = 0;
+    unsafe {
+      let ret = aom_codec_decode(
+        &mut self.dec,
+        packet.as_ptr(),
+        packet.len(),
+        ptr::null_mut()
+      );
+      println!("Decoded. -> {}", ret);
+      if ret != 0 {
+        let error_msg = aom_codec_error(&mut self.dec);
+        println!(
+          "  Decode codec_decode failed: {}",
+          CStr::from_ptr(error_msg).to_string_lossy()
+        );
+        let detail = aom_codec_error_detail(&mut self.dec);
+        if !detail.is_null() {
+          println!(
+            "  Decode codec_decode failed {}",
+            CStr::from_ptr(detail).to_string_lossy()
+          );
+        }
 
-    let mut ctx: Context<u16> =
-      setup_encoder(w, h, speed, quantizer, bit_depth, chroma_sampling,
-                    min_keyint, max_keyint, low_latency, bitrate);
-    ctx.set_limit(limit as u64);
+        corrupted_count += 1;
+      }
 
-    println!("Encoding {}x{} speed {} quantizer {} bit-depth {}", w, h, speed, quantizer, bit_depth);
-
-    let mut iter: aom_codec_iter_t = ptr::null_mut();
-
-    let mut rec_fifo = VecDeque::new();
-    for _ in 0..limit {
-      read_frame_batch(&mut ctx, &mut ra);
-
-      let mut done = false;
-      let mut corrupted_count = 0;
-      while !done {
-        let res = ctx.receive_packet();
-        if let Ok(pkt) = res {
-          println!("Encoded packet {}", pkt.number);
-
-          if let Some(pkt_rec) = pkt.rec {
-            rec_fifo.push_back(pkt_rec.clone());
+      if ret == 0 {
+        loop {
+          println!("Retrieving frame");
+          let img = aom_codec_get_frame(&mut self.dec, &mut self.iter);
+          println!("Retrieved.");
+          if img.is_null() {
+            return DecodeResult::Done;
           }
-
-          let packet = pkt.data;
-
-          unsafe {
-            println!("Decoding frame {}", pkt.number);
-            let ret = aom_codec_decode(
-              &mut self.dec,
-              packet.as_ptr(),
-              packet.len(),
-              ptr::null_mut()
+          let mut corrupted = 0;
+          let ret = aom_codec_control_(
+            &mut self.dec,
+            aom_dec_control_id::AOMD_GET_FRAME_CORRUPTED as i32,
+            &mut corrupted
+          );
+          if ret != 0 {
+            let detail = aom_codec_error_detail(&mut self.dec);
+            panic!(
+              "Decode codec_control failed {}",
+              CStr::from_ptr(detail).to_string_lossy()
             );
-            println!("Decoded. -> {}", ret);
-            if ret != 0 {
-              let error_msg = aom_codec_error(&mut self.dec);
-              println!(
-                "  Decode codec_decode failed: {}",
-                CStr::from_ptr(error_msg).to_string_lossy()
-              );
-              let detail = aom_codec_error_detail(&mut self.dec);
-              if !detail.is_null() {
-                println!(
-                  "  Decode codec_decode failed {}",
-                  CStr::from_ptr(detail).to_string_lossy()
-                );
-              }
-
-              corrupted_count += 1;
-            }
-
-            if ret == 0 {
-              loop {
-                println!("Retrieving frame");
-                let img = aom_codec_get_frame(&mut self.dec, &mut iter);
-                println!("Retrieved.");
-                if img.is_null() {
-                  done = true;
-                  break;
-                }
-                let mut corrupted = 0;
-                let ret = aom_codec_control_(
-                  &mut self.dec,
-                  aom_dec_control_id::AOMD_GET_FRAME_CORRUPTED as i32,
-                  &mut corrupted
-                );
-                if ret != 0 {
-                  let detail = aom_codec_error_detail(&mut self.dec);
-                  panic!(
-                    "Decode codec_control failed {}",
-                    CStr::from_ptr(detail).to_string_lossy()
-                  );
-                }
-                corrupted_count += corrupted;
-
-                let rec = rec_fifo.pop_front().unwrap();
-                compare_img(img, &rec, bit_depth, w, h);
-              }
-            }
           }
-        } else {
-          done = true;
+          corrupted_count += corrupted;
+
+          let rec = rec_fifo.pop_front().unwrap();
+          compare_img(img, &rec, bit_depth, w, h);
         }
       }
-      assert_eq!(corrupted_count, 0);
+    }
+    if corrupted_count > 0 {
+      DecodeResult::Corrupted(corrupted_count)
+    } else {
+      DecodeResult::NotDone
     }
   }
 }

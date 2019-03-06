@@ -8,11 +8,10 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use super::*;
-use rand::{ChaChaRng, SeedableRng};
 use std::{mem, ptr, slice};
 use std::collections::VecDeque;
 use crate::util::{Pixel, CastFromPrimitive};
-use crate::test_encode_decode::{compare_plane, read_frame_batch, setup_encoder, TestDecoder};
+use crate::test_encode_decode::{compare_plane, TestDecoder, DecodeResult};
 
 use dav1d_sys::*;
 
@@ -38,83 +37,42 @@ impl TestDecoder for Dav1dDecoder {
     }
   }
 
-  fn encode_decode(
-    &mut self, w: usize, h: usize, speed: usize, quantizer: usize,
-    limit: usize, bit_depth: usize, chroma_sampling: ChromaSampling,
-    min_keyint: u64, max_keyint: u64, low_latency: bool, bitrate: i32
-  ) {
-    let mut ra = ChaChaRng::from_seed([0; 32]);
+  fn decode_packet(&mut self, packet: &[u8], rec_fifo: &mut VecDeque<Frame<u16>>, w: usize, h: usize, bit_depth: usize) -> DecodeResult {
+    let mut corrupted_count = 0;
+    unsafe {
+      let mut data: Dav1dData = mem::zeroed();
+      let ptr = dav1d_data_create(&mut data, packet.len());
+      ptr::copy_nonoverlapping(packet.as_ptr(), ptr, packet.len());
+      let ret = dav1d_send_data(
+        self.dec, &mut data
+      );
+      println!("Decoded. -> {}", ret);
+      if ret != 0 {
+        corrupted_count += 1;
+      }
 
-    let mut ctx: Context<u16> =
-      setup_encoder(w, h, speed, quantizer, bit_depth, chroma_sampling,
-                    min_keyint, max_keyint, low_latency, bitrate);
-    ctx.set_limit(limit as u64);
-
-    println!("Encoding {}x{} speed {} quantizer {}", w, h, speed, quantizer);
-    #[cfg(feature="dump_ivf")]
-      let mut out = std::fs::File::create(&format!("out-{}x{}-s{}-q{}-{:?}.ivf",
-                                                   w, h, speed, quantizer, chroma_sampling)).unwrap();
-
-    #[cfg(feature="dump_ivf")]
-      ivf::write_ivf_header(&mut out, w, h, 30, 1);
-
-    let mut rec_fifo = VecDeque::new();
-
-    for _ in 0..limit {
-      read_frame_batch(&mut ctx, &mut ra);
-
-      let mut done = false;
-      let mut corrupted_count = 0;
-      while !done {
-        let res = ctx.receive_packet();
-        if let Ok(pkt) = res {
-          println!("Encoded packet {}", pkt.number);
-          #[cfg(feature="dump_ivf")]
-            ivf::write_ivf_frame(&mut out, pkt.number, &pkt.data);
-
-          if let Some(pkt_rec) = pkt.rec {
-            rec_fifo.push_back(pkt_rec.clone());
+      if ret == 0 {
+        loop {
+          let mut pic: Dav1dPicture = mem::zeroed();
+          println!("Retrieving frame");
+          let ret = dav1d_get_picture(self.dec, &mut pic);
+          println!("Retrieved.");
+          if ret == -(EAGAIN as i32) {
+            return DecodeResult::Done;
+          }
+          if ret != 0 {
+            panic!("Decode fail");
           }
 
-          let packet = pkt.data;
-
-          unsafe {
-            let mut data: Dav1dData = mem::zeroed();
-            println!("Decoding frame {}", pkt.number);
-            let ptr = dav1d_data_create(&mut data, packet.len());
-            ptr::copy_nonoverlapping(packet.as_ptr(), ptr, packet.len());
-            let ret = dav1d_send_data(
-              self.dec, &mut data
-            );
-            println!("Decoded. -> {}", ret);
-            if ret != 0 {
-              corrupted_count += 1;
-            }
-
-            if ret == 0 {
-              loop {
-                let mut pic: Dav1dPicture = mem::zeroed();
-                println!("Retrieving frame");
-                let ret = dav1d_get_picture(self.dec, &mut pic);
-                println!("Retrieved.");
-                if ret == -(EAGAIN as i32) {
-                  done = true;
-                  break;
-                }
-                if ret != 0 {
-                  panic!("Decode fail");
-                }
-
-                let rec = rec_fifo.pop_front().unwrap();
-                compare_pic(&pic, &rec, bit_depth, w, h);
-              }
-            }
-          }
-        } else {
-          done = true;
+          let rec = rec_fifo.pop_front().unwrap();
+          compare_pic(&pic, &rec, bit_depth, w, h);
         }
       }
-      assert_eq!(corrupted_count, 0);
+    }
+    if corrupted_count > 0 {
+      DecodeResult::Corrupted(corrupted_count)
+    } else {
+      DecodeResult::NotDone
     }
   }
 }
