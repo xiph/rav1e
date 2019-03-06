@@ -15,8 +15,6 @@ use crate::plane::PlaneMutSlice;
 use crate::predict::*;
 use crate::util::*;
 
-use std::mem;
-
 mod forward;
 mod inverse;
 
@@ -179,7 +177,6 @@ pub fn inverse_transform_add<T: Pixel>(
   input: &[i32], output: &mut PlaneMutSlice<'_, T>, tx_size: TxSize,
   tx_type: TxType, bit_depth: usize
 ) {
-  assert!(mem::size_of::<T>() == 2, "only implemented for u16 for now");
   use self::TxSize::*;
   match tx_size {
     TX_4X4 => iht4x4_add(input, output, tx_type, bit_depth),
@@ -212,24 +209,24 @@ mod test {
   use rand::random;
   use crate::plane::*;
 
-  fn test_roundtrip(tx_size: TxSize, tx_type: TxType, tolerance: i16) {
-    let mut src_storage = [0u16; 64 * 64];
+  fn test_roundtrip<T: Pixel>(tx_size: TxSize, tx_type: TxType, tolerance: i16) {
+    let mut src_storage = [T::cast_from(0); 64 * 64];
     let src = &mut src_storage[..tx_size.area()];
-    let mut dst = Plane::wrap(vec![0u16; tx_size.area()], tx_size.width());
+    let mut dst = Plane::wrap(vec![T::cast_from(0); tx_size.area()], tx_size.width());
     let mut res_storage = [0i16; 64 * 64];
     let res = &mut res_storage[..tx_size.area()];
     let mut freq_storage = [0i32; 64 * 64];
     let freq = &mut freq_storage[..tx_size.area()];
     for ((r, s), d) in res.iter_mut().zip(src.iter_mut()).zip(dst.data.iter_mut()) {
-      *s = random::<u8>() as u16;
-      *d = random::<u8>() as u16;
-      *r = (*s as i16) - (*d as i16);
+      *s = T::cast_from(random::<u8>());
+      *d = T::cast_from(random::<u8>());
+      *r = i16::cast_from(*s) - i16::cast_from(*d);
     }
     forward_transform(res, freq, tx_size.width(), tx_size, tx_type, 8);
     inverse_transform_add(freq, &mut dst.as_mut_slice(), tx_size, tx_type, 8);
 
     for (s, d) in src.iter().zip(dst.data) {
-      assert!(i16::abs((*s as i16) - (d as i16)) <= tolerance);
+      assert!(i16::abs(i16::cast_from(*s) - i16::cast_from(d)) <= tolerance);
     }
   }
 
@@ -265,8 +262,7 @@ mod test {
     }
   }
 
-  #[test]
-  fn roundtrips() {
+  fn roundtrips<T: Pixel>() {
     use crate::partition::TxSize::*;
     use crate::partition::TxType::*;
     let combinations = [
@@ -313,7 +309,17 @@ mod test {
     ];
     for &(tx_size, tx_type, tolerance) in combinations.iter() {
       println!("Testing combination {:?}, {:?}", tx_size, tx_type);
-      test_roundtrip(tx_size, tx_type, tolerance);
+      test_roundtrip::<T>(tx_size, tx_type, tolerance);
     }
+  }
+
+  #[test]
+  fn roundtrips_u8() {
+    roundtrips::<u8>();
+  }
+
+  #[test]
+  fn roundtrips_u16() {
+    roundtrips::<u16>();
   }
 }
