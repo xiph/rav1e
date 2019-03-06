@@ -7,6 +7,7 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use std::alloc::{alloc, Layout};
 use std::iter::FusedIterator;
 use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomData;
@@ -52,21 +53,41 @@ impl<T: Pixel> Debug for Plane<T>
 
 impl<T: Pixel> Plane<T> {
   /// Stride alignment in bytes.
+  #[cfg(windows)]
   const STRIDE_ALIGNMENT_LOG2: usize = 4;
+  #[cfg(not(windows))]
+  const STRIDE_ALIGNMENT_LOG2: usize = 5;
 
   /// Data alignment in bytes.
+  #[cfg(windows)]
   const DATA_ALIGNMENT_LOG2: usize = 4;
+  #[cfg(not(windows))]
+  const DATA_ALIGNMENT_LOG2: usize = 5;
 
   pub fn new(
     width: usize, height: usize, xdec: usize, ydec: usize, xpad: usize,
     ypad: usize
   ) -> Self {
-    let xorigin = xpad.align_power_of_two(Self::STRIDE_ALIGNMENT_LOG2 - 1);
+    let xorigin = xpad.align_power_of_two(
+      Self::STRIDE_ALIGNMENT_LOG2 + 1 - mem::size_of::<T>()
+    );
     let yorigin = ypad;
-    let stride = (xorigin + width + xpad)
-      .align_power_of_two(Self::STRIDE_ALIGNMENT_LOG2 - 1);
+    let stride = (xorigin + width + xpad).align_power_of_two(
+      Self::STRIDE_ALIGNMENT_LOG2 + 1 - mem::size_of::<T>()
+    );
     let alloc_height = yorigin + height + ypad;
-    let data = vec![T::cast_from(128); stride * alloc_height];
+    let mut data = unsafe {
+      let capacity = stride * alloc_height;
+      let layout = Layout::from_size_align_unchecked(
+        capacity * mem::size_of::<T>(),
+        1 << Self::DATA_ALIGNMENT_LOG2
+      );
+      let ptr = alloc(layout) as *mut T;
+      Vec::from_raw_parts(ptr, capacity, capacity)
+    };
+    for v in &mut data {
+      *v = T::cast_from(128);
+    }
     assert!(is_aligned(data.as_ptr(), Self::DATA_ALIGNMENT_LOG2));
     Plane {
       data,
