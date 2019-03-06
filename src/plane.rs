@@ -568,17 +568,6 @@ impl<'a, T: Pixel> PlaneMutSlice<'a, T> {
   }
 
   // FIXME: code duplication with PlaneSlice
-
-  /// A slice starting i pixels above the current one.
-  pub fn go_up(&self, i: usize) -> PlaneSlice<'_, T> {
-    PlaneSlice { plane: self.plane, x: self.x, y: self.y - i as isize }
-  }
-
-  /// A slice starting i pixels to the left of the current one.
-  pub fn go_left(&self, i: usize) -> PlaneSlice<'_, T> {
-    PlaneSlice { plane: self.plane, x: self.x - i as isize, y: self.y }
-  }
-
   pub fn p(&self, add_x: usize, add_y: usize) -> T {
     let new_y =
       (self.y + add_y as isize + self.plane.cfg.yorigin as isize) as usize;
