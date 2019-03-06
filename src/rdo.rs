@@ -625,7 +625,23 @@ pub fn rdo_mode_decision<T: Pixel>(
       let edge_buf = {
         let rec = &mut fs.rec.planes[0];
         let po = bo.plane_offset(&rec.cfg);
-        get_intra_edges(&rec.slice(&po), tx_size, fi.sequence.bit_depth, &fs.input.planes[0].cfg, fi.w_in_b, fi.h_in_b, None)
+        let x_offset = if po.x == 0 { 0 } else { 1 };
+        let y_offset = if po.y == 0 { 0 } else { 1 };
+        let po_with_edges = PlaneOffset {
+          x: po.x - x_offset as isize,
+          y: po.y - y_offset as isize,
+        };
+        get_intra_edges(
+          &rec.slice(&po_with_edges),
+          x_offset,
+          y_offset,
+          tx_size,
+          fi.sequence.bit_depth,
+          &fs.input.planes[0].cfg,
+          fi.w_in_b,
+          fi.h_in_b,
+          None
+        )
       };
       intra_mode_set
         .iter()
@@ -804,8 +820,16 @@ pub fn rdo_cfl_alpha<T: Pixel>(
       let po = bo.plane_offset(&fs.input.planes[p].cfg);
       (-16i16..17i16)
         .min_by_key(|&alpha| {
+          let x_offset = if po.x == 0 { 0 } else { 1 };
+          let y_offset = if po.y == 0 { 0 } else { 1 };
+          let po_with_edges = PlaneOffset {
+            x: po.x - x_offset as isize,
+            y: po.y - y_offset as isize,
+          };
           let edge_buf = get_intra_edges(
-            &rec.slice(&po),
+            &rec.slice(&po_with_edges),
+            x_offset,
+            y_offset,
             uv_tx_size,
             bit_depth,
             &input.cfg,

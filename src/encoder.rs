@@ -955,7 +955,23 @@ pub fn encode_tx_block<T: Pixel>(
 
   if mode.is_intra() {
     let bit_depth = fi.sequence.bit_depth;
-    let edge_buf = get_intra_edges(&rec.slice(po), tx_size, bit_depth, &fs.input.planes[p].cfg, fi.w_in_b, fi.h_in_b, Some(mode));
+    let x_offset = if po.x == 0 { 0 } else { 1 };
+    let y_offset = if po.y == 0 { 0 } else { 1 };
+    let po_with_edges = PlaneOffset {
+      x: po.x - x_offset as isize,
+      y: po.y - y_offset as isize,
+    };
+    let edge_buf = get_intra_edges(
+      &rec.slice(&po_with_edges),
+      x_offset,
+      y_offset,
+      tx_size,
+      bit_depth,
+      &fs.input.planes[p].cfg,
+      fi.w_in_b,
+      fi.h_in_b,
+      Some(mode),
+    );
     mode.predict_intra(&mut rec.mut_slice(po), tx_size, bit_depth, &ac, alpha, &edge_buf);
   }
 

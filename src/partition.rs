@@ -818,6 +818,8 @@ pub enum MvJointType {
 
 pub fn get_intra_edges<T: Pixel>(
   dst: &PlaneSlice<'_, T>,
+  x_offset: usize,
+  y_offset: usize,
   tx_size: TxSize,
   bit_depth: usize,
   plane_cfg: &PlaneConfig,
@@ -825,6 +827,9 @@ pub fn get_intra_edges<T: Pixel>(
   frame_h_in_b: usize,
   opt_mode: Option<PredictionMode>
 ) -> AlignedArray<[T; 4 * MAX_TX_SIZE + 1]> {
+  debug_assert!(x_offset <= 1);
+  debug_assert!(y_offset <= 1);
+
   let mut edge_buf: AlignedArray<[T; 4 * MAX_TX_SIZE + 1]> =
     UninitializedAlignedArray();
   let base = 128u16 << (bit_depth - 8);
@@ -834,8 +839,10 @@ pub fn get_intra_edges<T: Pixel>(
     let (left, not_left) = edge_buf.array.split_at_mut(2*MAX_TX_SIZE);
     let (top_left, above) = not_left.split_at_mut(1);
 
-    let x = dst.x;
-    let y = dst.y;
+    debug_assert!(dst.x >= 0);
+    debug_assert!(dst.y >= 0);
+    let x = dst.x as usize + x_offset;
+    let y = dst.y as usize + y_offset;
 
     let mut needs_left = true;
     let mut needs_topleft = true;
@@ -845,7 +852,7 @@ pub fn get_intra_edges<T: Pixel>(
 
     if let Some(mut mode) = opt_mode {
       mode = match mode {
-        PredictionMode::PAETH_PRED => match (x, y) {
+        PredictionMode::PAETH_PRED => match (x_offset, y_offset) {
           (0, 0) => PredictionMode::DC_PRED,
           (_, 0) => PredictionMode::H_PRED,
           (0, _) => PredictionMode::V_PRED,
@@ -857,24 +864,23 @@ pub fn get_intra_edges<T: Pixel>(
       let dc_or_cfl =
         mode == PredictionMode::DC_PRED || mode == PredictionMode::UV_CFL_PRED;
 
-      needs_left = mode != PredictionMode::V_PRED && (!dc_or_cfl || x != 0)
+      needs_left = mode != PredictionMode::V_PRED && (!dc_or_cfl || x_offset != 0)
         && !(mode == PredictionMode::D45_PRED || mode == PredictionMode::D63_PRED);
       needs_topleft = mode == PredictionMode::PAETH_PRED || mode == PredictionMode::D117_PRED
       || mode == PredictionMode::D135_PRED || mode == PredictionMode::D153_PRED;
-      needs_top = mode != PredictionMode::H_PRED && (!dc_or_cfl || y != 0);
+      needs_top = mode != PredictionMode::H_PRED && (!dc_or_cfl || y_offset != 0);
       needs_topright = mode == PredictionMode::D45_PRED || mode == PredictionMode::D63_PRED;
       needs_bottomleft = mode == PredictionMode::D207_PRED;
     }
 
     // Needs left
     if needs_left {
-      if x != 0 {
-        let left_slice = dst.go_left(1);
+      if x_offset != 0 {
         for i in 0..tx_size.height() {
-          left[2*MAX_TX_SIZE - tx_size.height() + i] = left_slice.p(0, tx_size.height() - 1 - i);
+          left[2*MAX_TX_SIZE - tx_size.height() + i] = dst[y_offset + tx_size.height() - 1 - i][0];
         }
       } else {
-        let val = if y != 0 { dst.go_up(1).p(0, 0) } else { T::cast_from(base + 1) };
+        let val = if y_offset != 0 { dst[0][0] } else { T::cast_from(base + 1) };
         for v in left[2*MAX_TX_SIZE - tx_size.height()..].iter_mut() {
           *v = val
         }
@@ -883,20 +889,18 @@ pub fn get_intra_edges<T: Pixel>(
 
     // Needs top-left
     if needs_topleft {
-      top_left[0] = match (x, y) {
+      top_left[0] = match (x_offset, y_offset) {
         (0, 0) => T::cast_from(base),
-        (_, 0) => dst.go_left(1).p(0, 0),
-        (0, _) => dst.go_up(1).p(0, 0),
-        _ => dst.go_up(1).go_left(1).p(0, 0)
+        _ => dst[0][0],
       };
     }
 
     // Needs top
     if needs_top {
-      if y != 0 {
-        above[..tx_size.width()].copy_from_slice(&dst.go_up(1)[0][..tx_size.width()]);
+      if y_offset != 0 {
+        above[..tx_size.width()].copy_from_slice(&dst[0][x_offset..x_offset + tx_size.width()]);
       } else {
-        let val = if x != 0 { dst.go_left(1).p(0, 0) } else { T::cast_from(base - 1) };
+        let val = if x_offset != 0 { dst[0][0] } else { T::cast_from(base - 1) };
         for v in above[..tx_size.width()].iter_mut() {
           *v = val;
         }
@@ -908,27 +912,25 @@ pub fn get_intra_edges<T: Pixel>(
       debug_assert!(plane_cfg.xdec <= 1 && plane_cfg.ydec <= 1);
 
       let bo = BlockOffset {
-        x: x as usize >> (2 - plane_cfg.xdec),
-        y: y as usize >> (2 - plane_cfg.ydec)
-        };
+        x: x >> (2 - plane_cfg.xdec),
+        y: y >> (2 - plane_cfg.ydec)
+      };
 
       let bsize = BlockSize::from_width_and_height(
           tx_size.width() << plane_cfg.xdec,
           tx_size.height() << plane_cfg.ydec
         );
 
-      let num_avail = if y != 0 && has_tr(&bo, bsize) {
+      let num_avail = if y_offset != 0 && has_tr(&bo, bsize) {
         tx_size.width().min(
-          (MI_SIZE >> plane_cfg.xdec) * frame_w_in_b
-            - x as usize
-            - tx_size.width()
+          (MI_SIZE >> plane_cfg.xdec) * frame_w_in_b - x - tx_size.width()
         )
       } else {
         0
       };
       if num_avail > 0 {
         above[tx_size.width()..tx_size.width() + num_avail]
-        .copy_from_slice(&dst.go_up(1)[0][tx_size.width()..tx_size.width() + num_avail]);
+        .copy_from_slice(&dst[0][x_offset + tx_size.width()..x_offset + tx_size.width() + num_avail]);
       }
       if num_avail < tx_size.height() {
         let val = above[tx_size.width() + num_avail - 1];
@@ -943,8 +945,8 @@ pub fn get_intra_edges<T: Pixel>(
       debug_assert!(plane_cfg.xdec <= 1 && plane_cfg.ydec <= 1);
 
       let bo = BlockOffset {
-        x: x as usize >> (2 - plane_cfg.xdec),
-        y: y as usize >> (2 - plane_cfg.ydec)
+        x: x >> (2 - plane_cfg.xdec),
+        y: y >> (2 - plane_cfg.ydec)
         };
 
       let bsize = BlockSize::from_width_and_height(
@@ -952,19 +954,16 @@ pub fn get_intra_edges<T: Pixel>(
         tx_size.height() << plane_cfg.ydec
         );
 
-      let num_avail = if x != 0 && has_bl(&bo, bsize) {
+      let num_avail = if x_offset != 0 && has_bl(&bo, bsize) {
         tx_size.height().min(
-          (MI_SIZE >> plane_cfg.ydec) * frame_h_in_b
-            - y as usize
-            - tx_size.height()
+          (MI_SIZE >> plane_cfg.ydec) * frame_h_in_b - y - tx_size.height()
         )
       } else {
         0
       };
       if num_avail > 0 {
-        let left_slice = dst.go_left(1);
         for i in 0..num_avail {
-          left[2*MAX_TX_SIZE - tx_size.height() - 1 - i] = left_slice.p(0, tx_size.height() + i);
+          left[2*MAX_TX_SIZE - tx_size.height() - 1 - i] = dst[y_offset + tx_size.height() + i][0];
         }
       }
       if num_avail < tx_size.width() {
