@@ -723,7 +723,15 @@ pub fn rdo_mode_decision<T: Pixel>(
       let edge_buf = {
         let rec = &mut fs.rec.planes[0];
         let po = bo.plane_offset(&rec.cfg);
-        get_intra_edges(&rec.slice(&po), tx_size, fi.sequence.bit_depth, &fs.input.planes[0].cfg, fi.w_in_b, fi.h_in_b, None)
+        get_intra_edges(
+          &rec.edged_slice(&po, 1, 1),
+          tx_size,
+          fi.sequence.bit_depth,
+          &fs.input.planes[0].cfg,
+          fi.w_in_b,
+          fi.h_in_b,
+          None
+        )
       };
       intra_mode_set
         .iter()
@@ -903,7 +911,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
       (-16i16..17i16)
         .min_by_key(|&alpha| {
           let edge_buf = get_intra_edges(
-            &rec.slice(&po),
+            &rec.edged_slice(&po, 1, 1),
             uv_tx_size,
             bit_depth,
             &input.cfg,
