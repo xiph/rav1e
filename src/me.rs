@@ -59,6 +59,36 @@ mod nasm {
       src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
       dst_stride: libc::ptrdiff_t
     ) -> u32;
+
+    fn rav1e_sad4x4_sse2(
+      src: *const u8, src_stride: libc::ptrdiff_t, dst: *const u8,
+      dst_stride: libc::ptrdiff_t
+    ) -> u32;
+
+    fn rav1e_sad8x8_sse2(
+      src: *const u8, src_stride: libc::ptrdiff_t, dst: *const u8,
+      dst_stride: libc::ptrdiff_t
+    ) -> u32;
+
+    fn rav1e_sad16x16_sse2(
+      src: *const u8, src_stride: libc::ptrdiff_t, dst: *const u8,
+      dst_stride: libc::ptrdiff_t
+    ) -> u32;
+
+    fn rav1e_sad32x32_sse2(
+      src: *const u8, src_stride: libc::ptrdiff_t, dst: *const u8,
+      dst_stride: libc::ptrdiff_t
+    ) -> u32;
+
+    fn rav1e_sad64x64_sse2(
+      src: *const u8, src_stride: libc::ptrdiff_t, dst: *const u8,
+      dst_stride: libc::ptrdiff_t
+    ) -> u32;
+
+    fn rav1e_sad128x128_sse2(
+      src: *const u8, src_stride: libc::ptrdiff_t, dst: *const u8,
+      dst_stride: libc::ptrdiff_t
+    ) -> u32;
   }
 
   #[target_feature(enable = "ssse3")]
@@ -97,6 +127,46 @@ mod nasm {
     sum
   }
 
+  #[target_feature(enable = "sse2")]
+  unsafe fn sad_sse2<T: Pixel>(
+    plane_org: &PlaneSlice<'_, T>, plane_ref: &PlaneSlice<'_, T>, blk_h: usize,
+    blk_w: usize
+  ) -> u32 {
+    assert!(mem::size_of::<T>() == 1, "only implemented for u8 for now");
+    // FIXME unaligned blocks coming from hres/qres ME search
+    let ptr_align_log2 = (plane_org.as_ptr() as usize).trailing_zeros() as usize;
+    if ptr_align_log2 < 2 {
+      return super::native::get_sad(plane_org, plane_ref, blk_h, blk_w, 8);
+    }
+    let mut sum = 0 as u32;
+    let org_stride = (plane_org.plane.cfg.stride * mem::size_of::<T>()) as libc::ptrdiff_t;
+    let ref_stride = (plane_ref.plane.cfg.stride * mem::size_of::<T>()) as libc::ptrdiff_t;
+    assert!(blk_h >= 4 && blk_w >= 4);
+    let step_size = blk_h.min(blk_w).min(1 << ptr_align_log2);
+    let func = match step_size.ilog() {
+      3 => rav1e_sad4x4_sse2,
+      4 => rav1e_sad8x8_sse2,
+      5 => rav1e_sad16x16_sse2,
+      6 => rav1e_sad32x32_sse2,
+      7 => rav1e_sad64x64_sse2,
+      8 => rav1e_sad128x128_sse2,
+      _ => rav1e_sad128x128_sse2
+    };
+    for r in (0..blk_h).step_by(step_size) {
+      for c in (0..blk_w).step_by(step_size) {
+        let org_slice = plane_org.subslice(c, r);
+        let ref_slice = plane_ref.subslice(c, r);
+        let org_ptr = org_slice.as_ptr();
+        let ref_ptr = ref_slice.as_ptr();
+        // FIXME for now, T == u8
+        let org_ptr = org_ptr as *const u8;
+        let ref_ptr = ref_ptr as *const u8;
+        sum += func(org_ptr, org_stride, ref_ptr, ref_stride);
+      }
+    }
+    sum
+  }
+
   #[inline(always)]
   pub fn get_sad<T: Pixel>(
     plane_org: &PlaneSlice<'_, T>, plane_ref: &PlaneSlice<'_, T>, blk_h: usize,
@@ -104,9 +174,14 @@ mod nasm {
   ) -> u32 {
     #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
     {
-      if is_x86_feature_detected!("ssse3") && blk_h >= 4 && blk_w >= 4 {
+      if mem::size_of::<T>() == 2 && is_x86_feature_detected!("ssse3") && blk_h >= 4 && blk_w >= 4 {
         return unsafe {
           sad_ssse3(plane_org, plane_ref, blk_h, blk_w, bit_depth)
+        };
+      }
+      if mem::size_of::<T>() == 1 && is_x86_feature_detected!("sse2") && blk_h >= 4 && blk_w >= 4 {
+        return unsafe {
+          sad_sse2(plane_org, plane_ref, blk_h, blk_w)
         };
       }
     }
@@ -711,25 +786,27 @@ pub mod test {
   use crate::partition::BlockSize::*;
 
   // Generate plane data for get_sad_same()
-  fn setup_sad() -> (Plane<u16>, Plane<u16>) {
+  fn setup_sad<T: Pixel>() -> (Plane<T>, Plane<T>) {
     let mut input_plane = Plane::new(640, 480, 0, 0, 128 + 8, 128 + 8);
     let mut rec_plane = input_plane.clone();
+    // Make the test pattern robust to data alignment
+    let xpad_off = (input_plane.cfg.xorigin - input_plane.cfg.xpad) as i32 - 8i32;
 
     for (i, row) in input_plane.data.chunks_mut(input_plane.cfg.stride).enumerate() {
       for (j, pixel) in row.into_iter().enumerate() {
-        let val = ((j + i) as i32 & 255i32) as u16;
+        let val = (j + i) as i32 - xpad_off & 255i32;
         assert!(val >= u8::min_value().into() &&
             val <= u8::max_value().into());
-        *pixel = val;
+        *pixel = T::cast_from(val);
       }
     }
 
     for (i, row) in rec_plane.data.chunks_mut(rec_plane.cfg.stride).enumerate() {
       for (j, pixel) in row.into_iter().enumerate() {
-        let val = (j as i32 - i as i32 & 255i32) as u16;
+        let val = j as i32 - i as i32 - xpad_off & 255i32;
         assert!(val >= u8::min_value().into() &&
             val <= u8::max_value().into());
-        *pixel = val;
+        *pixel = T::cast_from(val);
       }
     }
 
@@ -737,8 +814,7 @@ pub mod test {
   }
 
   // Regression and validation test for SAD computation
-  #[test]
-  fn get_sad_same() {
+  fn get_sad_same_inner<T: Pixel>() {
     let blocks: Vec<(BlockSize, u32)> = vec![
       (BLOCK_4X4, 1912),
       (BLOCK_4X8, 3496),
@@ -765,12 +841,12 @@ pub mod test {
     ];
 
     let bit_depth: usize = 8;
-    let (input_plane, rec_plane) = setup_sad();
+    let (input_plane, rec_plane) = setup_sad::<T>();
 
     for block in blocks {
       let bsw = block.0.width();
       let bsh = block.0.height();
-      let po = PlaneOffset { x: 40, y: 40 };
+      let po = PlaneOffset { x: 32, y: 40 };
 
       let mut input_slice = input_plane.slice(&po);
       let mut rec_slice = rec_plane.slice(&po);
@@ -780,5 +856,15 @@ pub mod test {
         get_sad(&mut input_slice, &mut rec_slice, bsw, bsh, bit_depth)
       );
     }
+  }
+
+  #[test]
+  fn get_sad_same_u8() {
+    get_sad_same_inner::<u8>();
+  }
+
+  #[test]
+  fn get_sad_same_u16() {
+    get_sad_same_inner::<u16>();
   }
 }

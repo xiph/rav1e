@@ -11,7 +11,8 @@
 
 ;
 
-%include "third_party/x86inc/x86inc.asm"
+%include "config.asm"
+%include "ext/x86/x86inc.asm"
 
 SECTION .text
 
