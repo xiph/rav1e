@@ -377,13 +377,8 @@ impl<'a, T: Pixel> ExactSizeIterator for RowsIter<'a, T> {}
 impl<'a, T: Pixel> FusedIterator for RowsIter<'a, T> {}
 
 impl<'a, T: Pixel> PlaneSlice<'a, T> {
-  pub fn row(&self, y: usize) -> &[T] {
-    let range = self.plane.row_range(self.x, self.y + y as isize);
-    &self.plane.data[range]
-  }
-
   pub fn as_ptr(&self) -> *const T {
-    self.row(0).as_ptr()
+    self[0].as_ptr()
   }
 
   pub fn rows_iter(&self) -> RowsIter<'_, T> {
@@ -450,7 +445,8 @@ impl<'a, T: Pixel> PlaneSlice<'a, T> {
 impl<'a, T: Pixel> Index<usize> for PlaneSlice<'a, T> {
   type Output = [T];
   fn index(&self, index: usize) -> &Self::Output {
-    self.row(index)
+    let range = self.plane.row_range(self.x, self.y + index as isize);
+    &self.plane.data[range]
   }
 }
 
@@ -498,22 +494,12 @@ impl<'a, T: Pixel> ExactSizeIterator for RowsIterMut<'a, T> {}
 impl<'a, T: Pixel> FusedIterator for RowsIterMut<'a, T> {}
 
 impl<'a, T: Pixel> PlaneMutSlice<'a, T> {
-  pub fn row(&self, y: usize) -> &[T] {
-    let range = self.plane.row_range(self.x, self.y + y as isize);
-    &self.plane.data[range]
-  }
-
-  pub fn row_mut(&mut self, y: usize) -> &mut [T] {
-    let range = self.plane.row_range(self.x, self.y + y as isize);
-    &mut self.plane.data[range]
-  }
-
   pub fn as_ptr(&self) -> *const T {
-    self.row(0).as_ptr()
+    self[0].as_ptr()
   }
 
   pub fn as_mut_ptr(&mut self) -> *mut T {
-    self.row_mut(0).as_mut_ptr()
+    self[0].as_mut_ptr()
   }
 
   pub fn rows_iter(&self) -> RowsIter<'_, T> {
@@ -557,13 +543,15 @@ impl<'a, T: Pixel> PlaneMutSlice<'a, T> {
 impl<'a, T: Pixel> Index<usize> for PlaneMutSlice<'a, T> {
   type Output = [T];
   fn index(&self, index: usize) -> &Self::Output {
-    self.row(index)
+    let range = self.plane.row_range(self.x, self.y + index as isize);
+    &self.plane.data[range]
   }
 }
 
 impl<'a, T: Pixel> IndexMut<usize> for PlaneMutSlice<'a, T> {
   fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-    self.row_mut(index)
+    let range = self.plane.row_range(self.x, self.y + index as isize);
+    &mut self.plane.data[range]
   }
 }
 
