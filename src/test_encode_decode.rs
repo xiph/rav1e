@@ -127,7 +127,8 @@ pub(crate) fn setup_encoder<T: Pixel>(
   enc.bitrate = bitrate;
 
   let cfg = Config {
-    enc
+    enc,
+    threads: 0,
   };
 
   cfg.new_context()

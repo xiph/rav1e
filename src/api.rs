@@ -437,7 +437,9 @@ pub struct ContentLight {
 /// Contain all the encoder configuration
 #[derive(Clone, Debug)]
 pub struct Config {
-  pub enc: EncoderConfig
+  pub enc: EncoderConfig,
+  /// The number of threads in the threadpool.
+  pub threads: usize
 }
 
 impl Config {
@@ -449,6 +451,7 @@ impl Config {
       "quantizer" => self.enc.quantizer = value.parse().map_err(|_e| ParseError)?,
       "speed" => self.enc.speed_settings = SpeedSettings::from_preset(value.parse().map_err(|_e| ParseError)?),
       "tune" => self.enc.tune = value.parse().map_err(|_e| ParseError)?,
+      "threads" => self.threads = value.parse().map_err(|_e| ParseError)?,
       _ => return Err(InvalidKey)
     }
 
@@ -465,6 +468,8 @@ impl Config {
       None
     };
 
+    let pool = rayon::ThreadPoolBuilder::new().num_threads(self.threads).build().unwrap();
+
     Context {
       frame_count: 0,
       limit: 0,
@@ -474,6 +479,7 @@ impl Config {
       frame_data: BTreeMap::new(),
       keyframes: BTreeSet::new(),
       packet_data,
+      pool,
       segment_start_idx: 0,
       segment_start_frame: 0,
       keyframe_detector: SceneChangeDetector::new(self.enc.bit_depth),
@@ -517,6 +523,7 @@ pub struct Context<T: Pixel> {
   rc_state: RCState,
   maybe_prev_log_base_q: Option<i64>,
   pub first_pass_data: FirstPassData,
+  pool: rayon::ThreadPool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -754,7 +761,7 @@ impl<T: Pixel> Context<T> {
 
         // TODO: Record the bits spent here against the original frame for rate
         //  control purposes, or add a new frame subtype?
-        let sef_data = encode_frame(fi, &mut fs);
+        let sef_data = self.pool.install(|| encode_frame(fi, &mut fs));
         self.packet_data.extend(sef_data);
 
         let rec = if fi.show_frame { Some(fs.rec) } else { None };
@@ -773,7 +780,7 @@ impl<T: Pixel> Context<T> {
             let mut fs = FrameState::new_with_frame(fi, frame.clone());
 
             // TODO: Trial encoding for first frame of each type.
-            let data = encode_frame(fi, &mut fs);
+            let data = self.pool.install(||encode_frame(fi, &mut fs));
             self.maybe_prev_log_base_q = Some(qps.log_base_q);
             // TODO: Add support for dropping frames.
             self.rc_state.update_state(

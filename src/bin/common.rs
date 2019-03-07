@@ -30,6 +30,7 @@ pub struct CliOptions {
   pub limit: usize,
   pub skip: usize,
   pub verbose: bool,
+  pub threads: usize,
 }
 
 pub fn parse_cli() -> CliOptions {
@@ -268,9 +269,7 @@ pub fn parse_cli() -> CliOptions {
     std::process::exit(0);
   }
 
-  if let Some(threads) = matches.value_of("THREADS").map(|v| v.parse().expect("Threads must be an integer")) {
-    rayon::ThreadPoolBuilder::new().num_threads(threads).build_global().unwrap();
-  }
+  let threads = matches.value_of("THREADS").map(|v| v.parse().expect("Threads must be an integer")).unwrap();
 
   if let Some(matches) = matches.subcommand_matches("advanced") {
     if let Some(shell) = matches.value_of("SHELL").map(|v| v.parse().unwrap()) {
@@ -299,6 +298,7 @@ pub fn parse_cli() -> CliOptions {
     limit: matches.value_of("LIMIT").unwrap().parse().unwrap(),
     skip: matches.value_of("SKIP").unwrap().parse().unwrap(),
     verbose: matches.is_present("VERBOSE"),
+    threads,
   }
 }
 
