@@ -445,6 +445,7 @@ pub struct Config {
 const MAX_USABLE_THREADS: usize = 4;
 
 impl Config {
+  /// Contain the values of the encoder configuration which are to be parsed
   pub fn parse(&mut self, key: &str, value: &str) -> Result<(), EncoderStatus> {
     match key {
       "low_latency" => self.enc.low_latency = value.parse().map_err(|_e| ParseError)?,
@@ -459,11 +460,13 @@ impl Config {
 
     Ok(())
   }
-
+  /// Create a new context for the encoder. Context contatins
+  /// details of the process like frames count, limit frames
+  /// which are processed, details of segment and also Rate Control state
   pub fn new_context<T: Pixel>(&self) -> Context<T> {
-    // initialize with temporal delimiter
+    // Initialize with temporal delimiter
     let packet_data = TEMPORAL_DELIMITER.to_vec();
-
+    // Initialize with the value of encoder quantizer if less than 255 to "maybe_ac_qi_max"
     let maybe_ac_qi_max = if self.enc.quantizer < 255 {
       Some(self.enc.quantizer as u8)
     } else {
@@ -477,7 +480,7 @@ impl Config {
     };
 
     let pool = rayon::ThreadPoolBuilder::new().num_threads(threads).build().unwrap();
-
+    // Initialize default values to context objects
     Context {
       frame_count: 0,
       limit: 0,
