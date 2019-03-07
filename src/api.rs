@@ -456,12 +456,6 @@ impl Config {
   }
 
   pub fn new_context<T: Pixel>(&self) -> Context<T> {
-    #[cfg(feature = "aom")]
-    unsafe {
-      av1_rtcd();
-      aom_dsp_rtcd();
-    }
-
     // initialize with temporal delimiter
     let packet_data = TEMPORAL_DELIMITER.to_vec();
 
