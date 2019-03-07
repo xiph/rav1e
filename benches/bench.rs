@@ -33,11 +33,6 @@ fn write_b(c: &mut Criterion) {
 }
 
 fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
-  #[cfg(feature = "aom")]
-  unsafe {
-    av1_rtcd();
-    aom_dsp_rtcd();
-  }
   let config = EncoderConfig {
     width: 1024,
     height: 1024,

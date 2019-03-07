@@ -37,11 +37,6 @@ use std::io::Read;
 use std::sync::Arc;
 use std::fs::File;
 
-extern {
-  pub fn av1_rtcd();
-  pub fn aom_dsp_rtcd();
-}
-
 #[derive(Debug, Clone)]
 pub struct Frame<T: Pixel> {
   pub planes: [Plane<T>; 3]
