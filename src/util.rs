@@ -257,10 +257,19 @@ pub trait Pixel:
   + Send
   + Sync
   + 'static
-{}
+{
+  fn size() -> usize;
+}
 
-impl Pixel for u8 {}
-impl Pixel for u16 {}
+impl Pixel for u8 {
+  #[inline(always)]
+  fn size() -> usize { 1 }
+}
+
+impl Pixel for u16 {
+  #[inline(always)]
+  fn size() -> usize { 2 }
+}
 
 macro_rules! impl_cast_from_pixel_to_primitive {
   ( $T:ty ) => {
