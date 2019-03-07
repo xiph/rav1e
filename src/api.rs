@@ -48,6 +48,7 @@ pub struct Point {
   pub y: u16
 }
 
+/// Contain all the encoder configuration
 #[derive(Clone, Debug)]
 pub struct EncoderConfig {
   // output size
@@ -81,6 +82,9 @@ pub struct EncoderConfig {
   pub train_rdo: bool,
 }
 
+/// Default preset for EncoderConfig, In this DEFAULT_SPEED is set to 5 
+/// and called the with_speed_preset with this value(5). We are using 5 
+/// as it is in the middle so it will have good balance of quality and speed.
 impl Default for EncoderConfig {
   fn default() -> Self {
     const DEFAULT_SPEED: usize = 5;
@@ -89,6 +93,10 @@ impl Default for EncoderConfig {
 }
 
 impl EncoderConfig {
+  /// This is the preset set with width and height to 640 and 480 respectively,
+  /// bit depth to 8 and many others, this preset is only activiated when we 
+  /// do the encoder configuration with speed explicity 
+  /// for instance *let mut cfg = EncoderConfig::with_speed_preset(speed);*
   pub fn with_speed_preset(speed: usize) -> Self {
     EncoderConfig {
       width: 640,
