@@ -47,7 +47,7 @@ pub(crate) enum DecodeResult {
   Corrupted(usize),
 }
 
-pub(crate) trait TestDecoder {
+pub(crate) trait TestDecoder<T: Pixel> {
   fn setup_decoder(w: usize, h: usize) -> Self where Self: Sized;
   fn encode_decode(
     &mut self, w: usize, h: usize, speed: usize, quantizer: usize,
@@ -56,7 +56,7 @@ pub(crate) trait TestDecoder {
   ) {
     let mut ra = ChaChaRng::from_seed([0; 32]);
 
-    let mut ctx: Context<u16> =
+    let mut ctx: Context<T> =
       setup_encoder(w, h, speed, quantizer, bit_depth, chroma_sampling,
                     min_keyint, max_keyint, low_latency, bitrate);
     ctx.set_limit(limit as u64);
@@ -98,7 +98,7 @@ pub(crate) trait TestDecoder {
       assert_eq!(corrupted_count, 0);
     }
   }
-  fn decode_packet(&mut self, packet: &[u8], rec_fifo: &mut VecDeque<Frame<u16>>, w: usize, h: usize, bit_depth: usize) -> DecodeResult;
+  fn decode_packet(&mut self, packet: &[u8], rec_fifo: &mut VecDeque<Frame<T>>, w: usize, h: usize, bit_depth: usize) -> DecodeResult;
 }
 
 pub(crate) fn compare_plane<T: Ord + std::fmt::Debug>(
@@ -115,6 +115,7 @@ pub(crate) fn setup_encoder<T: Pixel>(
   chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
   low_latency: bool, bitrate: i32
 ) -> Context<T> {
+  assert!(bit_depth == 8 || std::mem::size_of::<T>() > 1);
   let mut enc = EncoderConfig::with_speed_preset(speed);
   enc.quantizer = quantizer;
   enc.min_key_frame_interval = min_keyint;
@@ -146,7 +147,7 @@ fn speed(s: usize, decoder: &str) {
   for b in DIMENSION_OFFSETS.iter() {
       let w = w + b.0;
       let h = h + b.1;
-      let mut dec = get_decoder(decoder, w as usize, h as usize);
+      let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
       dec.encode_decode(w, h, s, quantizer, limit, 8, Default::default(), 15, 15, true, 0);
   }
 }
@@ -204,7 +205,7 @@ fn dimension(w: usize, h: usize, decoder: &str) {
   let limit = 1;
   let speed = 10;
 
-  let mut dec = get_decoder(decoder, w as usize, h as usize);
+  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(w, h, speed, quantizer, limit, 8, Default::default(), 15, 15, true, 0);
 }
 
@@ -218,7 +219,7 @@ fn quantizer(decoder: &str) {
 
   for b in DIMENSION_OFFSETS.iter() {
     for &q in [80, 100, 120].iter() {
-      let mut dec = get_decoder(decoder, b.0, b.1);
+      let mut dec = get_decoder::<u8>(decoder, b.0, b.1);
       dec.encode_decode(w + b.0, h + b.1, speed, q, limit, 8, Default::default(), 15, 15, true, 0);
     }
   }
@@ -234,7 +235,7 @@ fn bitrate(decoder: &str) {
 
   for &q in [172, 220, 252, 255].iter() {
     for &r in [100, 1000, 10_000].iter() {
-      let mut dec = get_decoder(decoder, w as usize, h as usize);
+      let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
       dec.encode_decode(w, h, speed, q, limit, 8, Default::default(), 15, 15, true, r);
     }
   }
@@ -249,7 +250,7 @@ fn keyframes(decoder: &str) {
   let speed = 9;
   let q = 100;
 
-  let mut dec = get_decoder(decoder, w as usize, h as usize);
+  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(w, h, speed, q, limit, 8, Default::default(), 6, 6, true, 0);
 }
 
@@ -263,7 +264,7 @@ fn reordering(decoder: &str) {
   let q = 100;
 
   for keyint in &[4, 5, 6] {
-    let mut dec = get_decoder(decoder, w as usize, h as usize);
+    let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
     dec.encode_decode(w, h, speed, q, limit, 8, Default::default(), *keyint, *keyint, false, 0);
   }
 }
@@ -279,7 +280,7 @@ fn reordering_short_video(decoder: &str) {
   let q = 100;
   let keyint = 12;
 
-  let mut dec = get_decoder(decoder, w as usize, h as usize);
+  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(w, h, speed, q, limit, 8, Default::default(), keyint, keyint, false, 0);
 }
 
@@ -293,7 +294,7 @@ fn odd_size_frame_with_full_rdo(decoder: &str) {
   let speed = 0;
   let qindex = 100;
 
-  let mut dec = get_decoder(decoder, w as usize, h as usize);
+  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(w, h, speed, qindex, limit, 8, Default::default(), 15, 15, true, 0);
 }
 
@@ -307,15 +308,15 @@ fn all_bit_depths(decoder: &str) {
   let h = 80;
 
   // 8-bit
-  let mut dec = get_decoder(decoder, w as usize, h as usize);
+  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(w, h, speed, quantizer, limit, 8, Default::default(), 15, 15, true, 0);
 
   // 10-bit
-  let mut dec = get_decoder(decoder, w as usize, h as usize);
+  let mut dec = get_decoder::<u16>(decoder, w as usize, h as usize);
   dec.encode_decode(w, h, speed, quantizer, limit, 10, Default::default(), 15, 15, true, 0);
 
   // 12-bit
-  let mut dec = get_decoder(decoder, w as usize, h as usize);
+  let mut dec = get_decoder::<u16>(decoder, w as usize, h as usize);
   dec.encode_decode(w, h, speed, quantizer, limit, 12, Default::default(), 15, 15, true, 0);
 }
 
@@ -331,24 +332,24 @@ fn chroma_sampling(decoder: &str) {
   // TODO: bump keyint when inter is supported
 
   // 4:2:0
-  let mut dec = get_decoder(decoder, w as usize, h as usize);
+  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(w, h, speed, quantizer, limit, 8, ChromaSampling::Cs420, 1, 1, true, 0);
 
   // 4:2:2
-  let mut dec = get_decoder(decoder, w as usize, h as usize);
+  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(w, h, speed, quantizer, limit, 8, ChromaSampling::Cs422, 1, 1, true, 0);
 
   // 4:4:4
-  let mut dec = get_decoder(decoder, w as usize, h as usize);
+  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(w, h, speed, quantizer, limit, 8, ChromaSampling::Cs444, 1, 1, true, 0);
 }
 
-fn get_decoder(decoder: &str, w: usize, h: usize) -> Box<dyn TestDecoder> {
+fn get_decoder<T: Pixel>(decoder: &str, w: usize, h: usize) -> Box<dyn TestDecoder<T>> {
   match decoder {
     #[cfg(feature="decode_test")]
-    "aom" => Box::new(AomDecoder::setup_decoder(w, h)),
+    "aom" => Box::new(AomDecoder::<T>::setup_decoder(w, h)),
     #[cfg(feature="decode_test_dav1d")]
-    "dav1d" => Box::new(Dav1dDecoder::setup_decoder(w, h)),
+    "dav1d" => Box::new(Dav1dDecoder::<T>::setup_decoder(w, h)),
     _ => unimplemented!()
   }
 }

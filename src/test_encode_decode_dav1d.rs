@@ -8,6 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use super::*;
+use std::marker::PhantomData;
 use std::{mem, ptr, slice};
 use std::collections::VecDeque;
 use crate::util::{Pixel, CastFromPrimitive};
@@ -15,15 +16,16 @@ use crate::test_encode_decode::{compare_plane, TestDecoder, DecodeResult};
 
 use dav1d_sys::*;
 
-pub(crate) struct Dav1dDecoder {
-  dec: *mut Dav1dContext
+pub(crate) struct Dav1dDecoder<T: Pixel> {
+  dec: *mut Dav1dContext,
+  pixel: PhantomData<T>
 }
 
-impl TestDecoder for Dav1dDecoder {
+impl<T: Pixel> TestDecoder<T> for Dav1dDecoder<T> {
   fn setup_decoder(_w: usize, _h: usize) -> Self {
     unsafe {
       let mut settings = mem::uninitialized();
-      let mut dec: Dav1dDecoder = mem::uninitialized();
+      let mut dec: Dav1dDecoder<T> = mem::uninitialized();
 
       dav1d_default_settings(&mut settings);
 
@@ -37,7 +39,7 @@ impl TestDecoder for Dav1dDecoder {
     }
   }
 
-  fn decode_packet(&mut self, packet: &[u8], rec_fifo: &mut VecDeque<Frame<u16>>, w: usize, h: usize, bit_depth: usize) -> DecodeResult {
+  fn decode_packet(&mut self, packet: &[u8], rec_fifo: &mut VecDeque<Frame<T>>, w: usize, h: usize, bit_depth: usize) -> DecodeResult {
     let mut corrupted_count = 0;
     unsafe {
       let mut data: Dav1dData = mem::zeroed();
@@ -77,7 +79,7 @@ impl TestDecoder for Dav1dDecoder {
   }
 }
 
-impl Drop for Dav1dDecoder {
+impl<T: Pixel> Drop for Dav1dDecoder<T> {
   fn drop(&mut self) {
     unsafe { dav1d_close(&mut self.dec) };
   }
