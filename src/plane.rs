@@ -10,7 +10,6 @@
 use std::iter::FusedIterator;
 use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomData;
-use std::mem;
 use std::ops::{Index, IndexMut, Range};
 
 use crate::util::*;
@@ -214,7 +213,7 @@ impl<T: Pixel> Plane<T> {
           *self_pixel = T::cast_from(*source_pixel);
         },
         2 => {
-          assert!(mem::size_of::<T>() >= 2, "source bytewidth ({}) cannot fit in Plane<u8>", source_bytewidth);
+          assert!(T::size() >= 2, "source bytewidth ({}) cannot fit in Plane<u8>", source_bytewidth);
           for (self_pixel, bytes) in
             self_row.iter_mut().zip(source_row.chunks(2))
           {

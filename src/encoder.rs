@@ -31,7 +31,7 @@ use crate::header::*;
 use bitstream_io::{BitWriter, BigEndian};
 use bincode::{serialize, deserialize};
 use std;
-use std::{fmt, io, mem};
+use std::{fmt, io};
 use std::io::Write;
 use std::io::Read;
 use std::sync::Arc;
@@ -556,7 +556,7 @@ pub(crate) fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
 
 impl<T: Pixel> FrameInvariants<T> {
   pub fn new(config: EncoderConfig, sequence: Sequence) -> Self {
-    assert!(sequence.bit_depth <= mem::size_of::<T>() * 8, "bit depth cannot fit into u8");
+    assert!(sequence.bit_depth <= T::size() * 8, "bit depth cannot fit into u8");
     // Speed level decides the minimum partition size, i.e. higher speed --> larger min partition size,
     // with exception that SBs on right or bottom frame borders split down to BLOCK_4X4.
     // At speed = 0, RDO search is exhaustive.

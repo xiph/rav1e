@@ -25,7 +25,6 @@ use std::sync::Arc;
 mod nasm {
   use crate::plane::*;
   use crate::util::*;
-  use std::mem;
 
   use libc;
 
@@ -66,10 +65,10 @@ mod nasm {
     plane_org: &PlaneSlice<'_, T>, plane_ref: &PlaneSlice<'_, T>, blk_h: usize,
     blk_w: usize, bit_depth: usize
   ) -> u32 {
-    assert!(mem::size_of::<T>() == 2, "only implemented for u16 for now");
+    assert!(T::size() == 2, "only implemented for u16 for now");
     let mut sum = 0 as u32;
-    let org_stride = (plane_org.plane.cfg.stride * mem::size_of::<T>()) as libc::ptrdiff_t;
-    let ref_stride = (plane_ref.plane.cfg.stride * mem::size_of::<T>()) as libc::ptrdiff_t;
+    let org_stride = (plane_org.plane.cfg.stride * T::size()) as libc::ptrdiff_t;
+    let ref_stride = (plane_ref.plane.cfg.stride * T::size()) as libc::ptrdiff_t;
     assert!(blk_h >= 4 && blk_w >= 4);
     let step_size =
       blk_h.min(blk_w).min(if bit_depth <= 10 { 128 } else { 4 });

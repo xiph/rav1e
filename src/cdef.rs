@@ -16,7 +16,6 @@ use crate::plane::*;
 use crate::util::{clamp, msb, Pixel, CastFromPrimitive};
 
 use std::cmp;
-use std::mem;
 
 pub struct CdefDirections {
   dir: [[u8; 8]; 8],
@@ -131,7 +130,7 @@ unsafe fn cdef_filter_block<T: Pixel>(
   dst: *mut T, dstride: isize, input: *const T, istride: isize, pri_strength: i32,
   sec_strength: i32, dir: usize, damping: i32, xsize: isize, ysize: isize, coeff_shift: i32
 ) {
-  assert!(mem::size_of::<T>() == 2, "only implemented for u16 for now");
+  assert!(T::size() == 2, "only implemented for u16 for now");
   let cdef_pri_taps = [[4, 2], [3, 3]];
   let cdef_sec_taps = [[2, 1], [2, 1]];
   let pri_taps = cdef_pri_taps[((pri_strength >> coeff_shift) & 1) as usize];
@@ -266,7 +265,7 @@ pub fn cdef_sb_padded_frame_copy<T: Pixel>(
   fi: &FrameInvariants<T>, sbo: &SuperBlockOffset,
   f: &Frame<T>, pad: usize
 ) -> Frame<T> {
-  assert!(mem::size_of::<T>() == 2, "only implemented for u16 for now");
+  assert!(T::size() == 2, "only implemented for u16 for now");
   let ipad = pad as isize;
   let sb_size = if fi.sequence.use_128x128_superblock {128} else {64};
   let mut out = Frame {
@@ -428,7 +427,7 @@ pub fn cdef_filter_superblock<T: Pixel>(
 // The CDEF filter is applied on each 8 by 8 block of pixels.
 // Reference: http://av1-spec.argondesign.com/av1-spec/av1-spec.html#cdef-process
 pub fn cdef_filter_frame<T: Pixel>(fi: &FrameInvariants<T>, rec: &mut Frame<T>, bc: &mut BlockContext) {
-  assert!(mem::size_of::<T>() == 2, "only implemented for u16 for now");
+  assert!(T::size() == 2, "only implemented for u16 for now");
   // Each filter block is 64x64, except right and/or bottom for non-multiple-of-64 sizes.
   // FIXME: 128x128 SB support will break this, we need FilterBlockOffset etc.
   let fb_width = (rec.planes[0].cfg.width + 63) / 64;
