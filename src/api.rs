@@ -126,6 +126,7 @@ impl EncoderConfig {
   }
 }
 
+/// Contains all the speed settings
 #[derive(Clone, Copy, Debug)]
 pub struct SpeedSettings {
   pub min_block_size: BlockSize,
@@ -142,6 +143,7 @@ pub struct SpeedSettings {
   pub diamond_me: bool
 }
 
+/// Default values for the speed settings.
 impl Default for SpeedSettings {
   fn default() -> Self {
     SpeedSettings {
@@ -162,6 +164,9 @@ impl Default for SpeedSettings {
 }
 
 impl SpeedSettings {
+  /// This preset is set to assign the speed, where the speed is passed as arguement,
+  /// the parametes like min_block_size, multi reference preditions, distortion are assigned,
+  /// for instance  *speed_settings: SpeedSettings::from_preset(10);*
   pub fn from_preset(speed: usize) -> Self {
     SpeedSettings {
       min_block_size: Self::min_block_size_preset(speed),
