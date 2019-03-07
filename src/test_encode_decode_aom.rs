@@ -9,6 +9,7 @@
 
 
 use super::*;
+use std::marker::PhantomData;
 use std::{mem, ptr, slice};
 use std::collections::VecDeque;
 use std::ffi::CStr;
@@ -16,12 +17,13 @@ use crate::util::Pixel;
 use crate::test_encode_decode::{compare_plane, TestDecoder, DecodeResult};
 use aom_sys::*;
 
-pub(crate) struct AomDecoder {
+pub(crate) struct AomDecoder<T: Pixel> {
   dec: aom_codec_ctx,
-  iter: aom_codec_iter_t
+  iter: aom_codec_iter_t,
+  pixel: PhantomData<T>
 }
 
-impl TestDecoder for AomDecoder {
+impl<T: Pixel> TestDecoder<T> for AomDecoder<T> {
   fn setup_decoder(w: usize, h: usize) -> Self {
     unsafe {
       let interface = aom_codec_av1_dx();
@@ -47,12 +49,13 @@ impl TestDecoder for AomDecoder {
 
       AomDecoder {
         dec,
-        iter: ptr::null_mut()
+        iter: ptr::null_mut(),
+        pixel: PhantomData
       }
     }
   }
 
-  fn decode_packet(&mut self, packet: &[u8], rec_fifo: &mut VecDeque<Frame<u16>>, w: usize, h: usize, bit_depth: usize) -> DecodeResult {
+  fn decode_packet(&mut self, packet: &[u8], rec_fifo: &mut VecDeque<Frame<T>>, w: usize, h: usize, bit_depth: usize) -> DecodeResult {
     let mut corrupted_count = 0;
     unsafe {
       let ret = aom_codec_decode(
@@ -115,7 +118,7 @@ impl TestDecoder for AomDecoder {
   }
 }
 
-impl Drop for AomDecoder {
+impl<T: Pixel> Drop for AomDecoder<T> {
   fn drop(&mut self) {
     unsafe { aom_codec_destroy(&mut self.dec) };
   }
