@@ -442,6 +442,8 @@ pub struct Config {
   pub threads: usize
 }
 
+const MAX_USABLE_THREADS: usize = 4;
+
 impl Config {
   pub fn parse(&mut self, key: &str, value: &str) -> Result<(), EncoderStatus> {
     match key {
@@ -468,7 +470,13 @@ impl Config {
       None
     };
 
-    let pool = rayon::ThreadPoolBuilder::new().num_threads(self.threads).build().unwrap();
+    let threads = if self.threads == 0 {
+      rayon::current_num_threads().min(MAX_USABLE_THREADS)
+    } else {
+      self.threads
+    };
+
+    let pool = rayon::ThreadPoolBuilder::new().num_threads(threads).build().unwrap();
 
     Context {
       frame_count: 0,
