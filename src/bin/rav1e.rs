@@ -150,7 +150,8 @@ fn main() {
   cli.enc.chroma_sample_position = video_info.chroma_sample_position;
   cli.enc.time_base = video_info.time_base;
   let cfg = Config {
-    enc: cli.enc
+    enc: cli.enc,
+    threads: cli.threads,
   };
 
   let stderr = io::stderr();
