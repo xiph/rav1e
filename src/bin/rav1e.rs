@@ -87,11 +87,50 @@ fn write_stats_file<T: Pixel>(ctx: &Context<T>, filename: &Path) -> Result<(), i
   Ok(())
 }
 
+fn do_encode<T: Pixel>(
+  cfg: Config, limit: usize, verbose: bool, mut progress: ProgressInfo,
+  mut err: std::io::StderrLock, mut output: &mut dyn Write,
+  mut y4m_dec: &mut y4m::Decoder<'_, Box<dyn Read>>,
+  mut y4m_enc: Option<y4m::Encoder<'_, Box<dyn Write>>>
+) {
+  let mut ctx: Context<T> = cfg.new_context();
+
+  ctx.set_limit(limit as u64);
+
+  while let Ok(frame_info) =
+    process_frame(&mut ctx, &mut output, &mut y4m_dec, y4m_enc.as_mut())
+  {
+    for frame in frame_info {
+      progress.add_frame(frame);
+      let _ = if verbose {
+        writeln!(err, "{} - {}", frame, progress)
+      } else {
+        write!(err, "\r{}                    ", progress)
+      };
+    }
+
+    if !ctx.needs_more_frames(progress.frames_encoded() as u64) {
+      break;
+    }
+
+    output.flush().unwrap();
+  }
+
+  if cfg.enc.pass == Some(1) {
+    if let Err(e) =
+      write_stats_file(&ctx, cfg.enc.stats_file.as_ref().unwrap())
+    {
+      let _ = writeln!(err, "\nError: Failed to write stats file! {}\n", e);
+    }
+  }
+  let _ = write!(err, "\n{}\n", progress.print_summary());
+}
+
 fn main() {
   let mut cli = parse_cli();
   let mut y4m_dec = y4m::decode(&mut cli.io.input).expect("input is not a y4m file");
   let video_info = y4m_dec.get_video_details();
-  let mut y4m_enc = match cli.io.rec.as_mut() {
+  let y4m_enc = match cli.io.rec.as_mut() {
     Some(rec) => Some(
       y4m::encode(
         video_info.width,
@@ -114,9 +153,6 @@ fn main() {
     enc: cli.enc
   };
 
-  // FIXME for now, unconditionally create Context<u16>
-  let mut ctx: Context<u16> = cfg.new_context();
-
   let stderr = io::stderr();
   let mut err = stderr.lock();
 
@@ -137,39 +173,23 @@ fn main() {
     video_info.time_base.num as usize
   );
 
-  let mut progress = ProgressInfo::new(
+  let progress = ProgressInfo::new(
     Rational { num: video_info.time_base.den, den: video_info.time_base.num },
     if cli.limit == 0 { None } else { Some(cli.limit) },
       cfg.enc.show_psnr
   );
 
-  ctx.set_limit(cli.limit as u64);
-
   for _ in 0..cli.skip {
     y4m_dec.read_frame().expect("Skipped more frames than in the input");
   }
 
-  while let Ok(frame_info) = process_frame(&mut ctx, &mut cli.io.output, &mut y4m_dec, y4m_enc.as_mut()) {
-    for frame in frame_info {
-      progress.add_frame(frame);
-      let _ = if cli.verbose {
-        writeln!(err, "{} - {}", frame, progress)
-      } else {
-        write!(err, "\r{}                    ", progress)
-      };
-    }
-
-    if !ctx.needs_more_frames(progress.frames_encoded() as u64) {
-      break;
-    }
-
-    cli.io.output.flush().unwrap();
+  if video_info.bit_depth == 8 {
+    do_encode::<u8>(
+      cfg, cli.limit, cli.verbose, progress, err, &mut cli.io.output, &mut y4m_dec, y4m_enc
+    )
+  } else {
+    do_encode::<u16>(
+      cfg, cli.limit, cli.verbose, progress, err, &mut cli.io.output, &mut y4m_dec, y4m_enc
+    )
   }
-
-  if cfg.enc.pass == Some(1) {
-    if let Err(e) = write_stats_file(&ctx, cfg.enc.stats_file.as_ref().unwrap()) {
-      let _ = writeln!(err, "\nError: Failed to write stats file! {}\n", e);
-    }
-  }
-  let _ = write!(err, "\n{}\n", progress.print_summary());
 }
