@@ -286,6 +286,7 @@ pub enum PredictionModesSetting {
   ComplexAll,
 }
 
+/// Contains all details of chroma sampling for different types like 4:2:0, 4:2:2, 4:4:4, 4:0:0
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(C)]
 pub enum ChromaSampling {
@@ -295,6 +296,8 @@ pub enum ChromaSampling {
   Cs400,
 }
 
+/// Make 4:2:0 as default chroma sampling type as it is almost loseless since it
+/// is removing half of the horizondtal and half of vertical color information
 impl Default for ChromaSampling {
   fn default() -> Self {
     ChromaSampling::Cs420
@@ -302,7 +305,7 @@ impl Default for ChromaSampling {
 }
 
 impl ChromaSampling {
-  // Provides the sampling period in the horizontal and vertical axes.
+  /// Provides the sampling period in the horizontal and vertical axes.
   pub fn sampling_period(self) -> (usize, usize) {
     use self::ChromaSampling::*;
     match self {
@@ -314,6 +317,7 @@ impl ChromaSampling {
   }
 }
 
+/// Contains details of chroma sampling position
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(C)]
 pub enum ChromaSamplePosition {
@@ -322,6 +326,7 @@ pub enum ChromaSamplePosition {
   Colocated
 }
 
+/// Assign default ChromaSamplePosition as Unknown
 impl Default for ChromaSamplePosition {
   fn default() -> Self {
     ChromaSamplePosition::Unknown
@@ -329,6 +334,7 @@ impl Default for ChromaSamplePosition {
 }
 
 arg_enum!{
+  /// Contains details of Pixel color range
   #[derive(Debug, Clone, Copy, PartialEq)]
   #[repr(C)]
   pub enum PixelRange {
@@ -338,6 +344,7 @@ arg_enum!{
   }
 }
 
+/// Assign default of PixelRange as Unspecified
 impl Default for PixelRange {
     fn default() -> Self {
         PixelRange::Unspecified
@@ -345,6 +352,7 @@ impl Default for PixelRange {
 }
 
 arg_enum!{
+  /// Contains different types of Matrix Coefficients which is used in deriving the luma and chroma (YCbCr) from the R'G'B' primaries
   #[derive(Debug, Clone, Copy, PartialEq)]
   #[repr(C)]
   pub enum MatrixCoefficients {
@@ -365,6 +373,7 @@ arg_enum!{
   }
 }
 
+/// Assign default of MatrixCoefficients as Unspecified
 impl Default for MatrixCoefficients {
     fn default() -> Self {
         MatrixCoefficients::Unspecified
@@ -372,6 +381,7 @@ impl Default for MatrixCoefficients {
 }
 
 arg_enum!{
+  /// Contains different types of the color primaries, they defines how the chromaticy coordinates of the source picture
   #[derive(Debug, Clone, Copy, PartialEq)]
   #[repr(C)]
   pub enum ColorPrimaries {
@@ -390,6 +400,7 @@ arg_enum!{
   }
 }
 
+/// Assign default of ColorPrimaries as Unspecified
 impl Default for ColorPrimaries {
     fn default() -> Self {
         ColorPrimaries::Unspecified
@@ -397,6 +408,7 @@ impl Default for ColorPrimaries {
 }
 
 arg_enum!{
+/// Contains differnt types of Transfer Characteristics, they define the optoelectronic tranfer charecteristic of the source picture aka Gamma.
   #[derive(Debug, Clone, Copy, PartialEq)]
   #[repr(C)]
   pub enum TransferCharacteristics {
@@ -420,12 +432,14 @@ arg_enum!{
   }
 }
 
+/// Assign default of TransferCharacteristics as Unspecified
 impl Default for TransferCharacteristics {
     fn default() -> Self {
         TransferCharacteristics::Unspecified
     }
 }
 
+/// Contain description of color which inclues Color Primaries, Transfer Characteristics and also Matrix Coefficients.
 #[derive(Copy, Clone, Debug)]
 pub struct ColorDescription {
     pub color_primaries: ColorPrimaries,
@@ -433,6 +447,8 @@ pub struct ColorDescription {
     pub matrix_coefficients: MatrixCoefficients
 }
 
+/// Contain all the detail of picture like chromacity coordinate of primaries(RGB), the chromaticity coordinates of the 
+/// white point in the color space. The maximum and minimum number of nits of the display used to master the content.
 #[derive(Copy, Clone, Debug)]
 pub struct MasteringDisplay {
     pub primaries: [Point; 3],
@@ -441,6 +457,8 @@ pub struct MasteringDisplay {
     pub min_luminance: u32,
 }
 
+/// Contain details like the maximum content light level which is the nit value corresponding to the brightest pixel used anywhere in the frame.
+/// Frame's maximum average light level which is the nit value corresponding to the average luminance of the frame which has the brightest average luminance anywhere in the content.
 #[derive(Copy, Clone, Debug)]
 pub struct ContentLight {
     pub max_content_light_level: u16,
