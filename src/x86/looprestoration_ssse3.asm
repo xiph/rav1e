@@ -35,6 +35,7 @@ pb_14x0_1_2: times 14 db 0
              db 1, 2
 pb_0_to_15_min_n: db 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 13, 13
                   db 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 14
+pb_unpcklwdw: db 0, 1, 0, 1, 4, 5, 4, 5, 8, 9, 8, 9, 12, 13, 12, 13
 pb_0: times 16 db 0
 pb_2: times 16 db 2
 pb_3: times 16 db 3
@@ -509,17 +510,11 @@ cglobal wiener_filter_v, 5, 7, 8, -96, dst, stride, mid, w, h, fv, edge
 ;;      self-guided     ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-%macro MULLD 2-3 1 ; %3 = is_constant
-    pmuludq       m5, %1, %2
-    psrlq         %1, 32
- %if %3 == 0
-    pshufd        m3, %2, q2301
-    pmuludq       %1, m3
- %else
-    pmuludq       %1, %2
- %endif
-    shufps        %1, m5, q2020
-    pshufd        %1, %1, q1302
+%macro MULLD 2
+    pmulhuw       m5, %1, %2
+    pmullw        %1, %2
+    pslld         m5, 16
+    paddd         %1, m5
 %endmacro
 
 %macro GATHERDD 2
@@ -777,17 +772,20 @@ cglobal sgr_calc_ab1, 4, 7, 14, a, b, w, h, s
     SETUP_PIC r5, 0
 %endif
     movd          m6, sd
-    pshufd        m6, m6, 0
+    pshuflw       m6, m6, q0000
+    punpcklqdq    m6, m6
     pxor          m7, m7
     DEFINE_ARGS a, b, w, h, x
 %if ARCH_X86_64
     mova          m8, [pd_0xF00801C7]
     mova          m9, [pw_256]
     psrld        m10, m9, 13                        ; pd_2048
+    mova         m11, [pb_unpcklwdw]
 %else
  %define m8     [PIC_sym(pd_0xF00801C7)]
  %define m9     [PIC_sym(pw_256)]
  %define m10    [PIC_sym(pd_2048)]
+ %define m11    [PIC_sym(pb_unpcklwdw)]
 %endif
 .loop_y:
     mov           xq, -2
@@ -818,10 +816,12 @@ cglobal sgr_calc_ab1, 4, 7, 14, a, b, w, h, s
     GATHERDD      m2, m3
     psrld         m4, 24
     psrld         m2, 24
-    MULLD         m0, m4, 0
-    MULLD         m1, m2, 0
-    packssdw      m4, m2
-    psubw         m5, m9, m4
+    packssdw      m3, m4, m2
+    pshufb        m4, m11
+    MULLD         m0, m4
+    pshufb        m2, m11
+    MULLD         m1, m2
+    psubw         m5, m9, m3
     paddd         m0, m10
     paddd         m1, m10
     psrld         m0, 12
@@ -1516,7 +1516,8 @@ cglobal sgr_calc_ab2, 4, 7, 11, a, b, w, h, s
     SETUP_PIC r5, 0
 %endif
     movd          m6, sd
-    pshufd        m6, m6, 0
+    pshuflw       m6, m6, q0000
+    punpcklqdq    m6, m6
     pxor          m7, m7
     DEFINE_ARGS a, b, w, h, x
 %if ARCH_X86_64
