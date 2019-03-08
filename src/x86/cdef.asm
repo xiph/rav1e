@@ -33,7 +33,6 @@ pd_47130256: dd 4, 7, 1, 3, 0, 2, 5, 6
 div_table: dd 840, 420, 280, 210, 168, 140, 120, 105
            dd 420, 210, 140, 105
 shufw_6543210x: db 12, 13, 10, 11, 8, 9, 6, 7, 4, 5, 2, 3, 0, 1, 14, 15
-shufw_210xxxxx: db 4, 5, 2, 3, 0, 1, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
 shufb_lohi: db 0, 8, 1, 9, 2, 10, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15
 pw_128: times 2 dw 128
 pw_2048: times 2 dw 2048
@@ -600,9 +599,8 @@ cglobal cdef_dir, 3, 4, 15, src, stride, var, stride3
     ; and [upper half]:
     ; m4 = m10:xxx01234+m11:xx012345+m12:x0123456+m13:01234567
     ; m11= m10:567xxxxx+m11:67xxxxxx+m12:7xxxxxxx
-    ; and then shuffle m11 [shufw_210xxxxx], unpcklwd, pmaddwd, pmulld, paddd
+    ; and then pshuflw m11 3012, unpcklwd, pmaddwd, pmulld, paddd
 
-    vbroadcasti128 m14, [shufw_210xxxxx]
     pslldq          m4, m11, 2
     psrldq         m11, 14
     pslldq          m5, m12, 4
@@ -616,7 +614,7 @@ cglobal cdef_dir, 3, 4, 15, src, stride, var, stride3
     paddw          m11, m13                 ; partial_sum_alt[3/2] right
     vbroadcasti128 m13, [div_table+32]
     paddw           m4, m5                  ; partial_sum_alt[3/2] left
-    pshufb         m11, m14
+    pshuflw        m11, m11, q3012
     punpckhwd       m6, m4, m11
     punpcklwd       m4, m11
     pmaddwd         m6, m6
@@ -631,7 +629,7 @@ cglobal cdef_dir, 3, 4, 15, src, stride, var, stride3
     ; and [upper half]:
     ; m5 = m0:xxx01234+m1:xx012345+m2:x0123456+m3:01234567
     ; m1 = m0:567xxxxx+m1:67xxxxxx+m2:7xxxxxxx
-    ; and then shuffle m11 [shufw_210xxxxx], unpcklwd, pmaddwd, pmulld, paddd
+    ; and then pshuflw m1 3012, unpcklwd, pmaddwd, pmulld, paddd
 
     pslldq          m5, m1, 2
     psrldq          m1, 14
@@ -644,7 +642,7 @@ cglobal cdef_dir, 3, 4, 15, src, stride, var, stride3
     paddw           m6, m7
     paddw           m1, m3                  ; partial_sum_alt[0/1] right
     paddw           m5, m6                  ; partial_sum_alt[0/1] left
-    pshufb          m1, m14
+    pshuflw         m1, m1, q3012
     punpckhwd       m6, m5, m1
     punpcklwd       m5, m1
     pmaddwd         m6, m6
