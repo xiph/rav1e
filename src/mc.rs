@@ -139,7 +139,6 @@ const SUBPEL_FILTERS: [[[i32; SUBPEL_FILTER_SIZE]; 16]; 6] = [
 mod nasm {
   use super::*;
   use crate::plane::*;
-  use crate::util::*;
 
   use std::mem;
 
@@ -255,44 +254,23 @@ mod nasm {
     height: usize, col_frac: i32, row_frac: i32, mode_x: FilterMode,
     mode_y: FilterMode, bit_depth: usize
   ) {
-    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
-    {
-    if is_x86_feature_detected!("avx2") && bit_depth == 8 {
-        let mut dst8: AlignedArray<[u8; 128 * 128]> =
-          UninitializedAlignedArray();
-        let mut src8: [u8; (128 + 7) * (128 + 7)] =
-          unsafe { mem::uninitialized() };
-        unsafe {
-          convert_slice_2d(
-            src8.as_mut_ptr(),
-            width + 7,
-            src.go_left(3).go_up(3).as_ptr(),
-            src.plane.cfg.stride,
-            width + 7,
-            height + 7
-          );
-          select_put_fn_avx2(mode_x, mode_y)(
-            dst8.array.as_mut_ptr(),
-            width as isize,
-            src8[(width + 7) * 3 + 3..].as_ptr(),
-            (width + 7) as isize,
-            width as i32,
-            height as i32,
-            col_frac,
-            row_frac
-          );
-          let dst_stride = dst.plane.cfg.stride;
-          convert_slice_2d(
-            dst.as_mut_ptr(),
-            dst_stride,
-            dst8.array.as_ptr(),
-            width,
-            width,
-            height
-          );
-        }
-        return;
+    if mem::size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
+      debug_assert!(bit_depth == 8);
+      let dst_stride = dst.plane.cfg.stride as isize;
+      let src_stride = src.plane.cfg.stride as isize;
+      unsafe {
+        select_put_fn_avx2(mode_x, mode_y)(
+          dst.as_mut_ptr() as *mut _,
+          dst_stride,
+          src.as_ptr() as *const _,
+          src_stride,
+          width as i32,
+          height as i32,
+          col_frac,
+          row_frac
+        );
       }
+      return;
     }
     super::native::put_8tap(
       dst, src, width, height, col_frac, row_frac, mode_x, mode_y, bit_depth,
@@ -304,66 +282,47 @@ mod nasm {
     col_frac: i32, row_frac: i32, mode_x: FilterMode, mode_y: FilterMode,
     bit_depth: usize
   ) {
-    if is_x86_feature_detected!("avx2") && bit_depth == 8 {
-      let mut src8: [u8; (128 + 7) * (128 + 7)] =
-        unsafe { mem::uninitialized() };
+    if mem::size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
+      debug_assert!(bit_depth == 8);
+      let src_stride = src.plane.cfg.stride as isize;
       unsafe {
-        convert_slice_2d(
-          src8.as_mut_ptr(),
-          width + 7,
-          src.go_left(3).go_up(3).as_ptr(),
-          src.plane.cfg.stride,
-          width + 7,
-          height + 7
-        );
         select_prep_fn_avx2(mode_x, mode_y)(
           tmp.as_mut_ptr(),
-          src8[(width + 7) * 3 + 3..].as_ptr(),
-          (width + 7) as isize,
+          src.as_ptr() as *const _,
+          src_stride,
           width as i32,
           height as i32,
           col_frac,
           row_frac
         );
       }
-    } else {
-      super::native::prep_8tap(
-        tmp, src, width, height, col_frac, row_frac, mode_x, mode_y,
-        bit_depth,
-      );
+      return;
     }
+    super::native::prep_8tap(
+      tmp, src, width, height, col_frac, row_frac, mode_x, mode_y, bit_depth
+    );
   }
 
   pub fn mc_avg<T: Pixel>(
     dst: &mut PlaneMutSlice<'_, T>, tmp1: &[i16], tmp2: &[i16], width: usize,
     height: usize, bit_depth: usize
   ) {
-    if is_x86_feature_detected!("avx2") && bit_depth == 8 {
-      let mut dst8: AlignedArray<[u8; 128 * 128]> =
-        UninitializedAlignedArray();
+    if mem::size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
+      debug_assert!(bit_depth == 8);
+      let dst_stride = dst.plane.cfg.stride as isize;
       unsafe {
         rav1e_avg_avx2(
-          dst8.array.as_mut_ptr(),
-          width as isize,
+          dst.as_mut_ptr() as *mut _,
+          dst_stride,
           tmp1.as_ptr(),
           tmp2.as_ptr(),
           width as i32,
           height as i32
         );
-        let dst_stride = dst.plane.cfg.stride;
-        convert_slice_2d(
-          dst.as_mut_ptr(),
-          dst_stride,
-          dst8.array.as_ptr(),
-          width,
-          width,
-          height
-        );
       }
       return;
-    } else {
-      super::native::mc_avg(dst, tmp1, tmp2, width, height, bit_depth);
     }
+    super::native::mc_avg(dst, tmp1, tmp2, width, height, bit_depth);
   }
 }
 

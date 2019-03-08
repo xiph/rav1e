@@ -1523,14 +1523,12 @@ mod nasm {
     ) where
       T: Pixel,
     {
-      let stride = output.plane.cfg.stride;
+      if std::mem::size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
+        debug_assert!(bd == 8);
 
-      if is_x86_feature_detected!("avx2") && bd == 8 {
         // 64x only uses 32 coeffs
         let coeff_w = Self::W.min(32);
         let coeff_h = Self::H.min(32);
-        let mut dst8: AlignedArray<[u8; 64 * 64]> =
-          UninitializedAlignedArray();
         let mut coeff16: AlignedArray<[i16; 32 * 32]> =
           UninitializedAlignedArray();
 
@@ -1542,41 +1540,21 @@ mod nasm {
           }
         }
 
+        let stride = output.plane.cfg.stride as isize;
         unsafe {
-          // copy output to dst8 so that the results of the inverse transform
-          //   can be added to it
-          convert_slice_2d(
-            dst8.array.as_mut_ptr(),
-            Self::W,
-            output.as_ptr(),
-            stride,
-            Self::W,
-            Self::H
-          );
-
           // perform the inverse transform
           Self::match_tx_type(tx_type)(
-            dst8.array.as_mut_ptr(),
-            Self::W as isize,
+            output.as_mut_ptr() as *mut _,
+            stride,
             coeff16.array.as_ptr(),
             (coeff_w * coeff_h) as i32
           );
-
-          // copy back to output
-          convert_slice_2d(
-            output.as_mut_ptr(),
-            stride,
-            dst8.array.as_ptr(),
-            Self::W,
-            Self::W,
-            Self::H
-          );
         }
-      } else {
-        <Self as super::native::InvTxfm2D>::inv_txfm2d_add(
-          input, output, tx_type, bd,
-        );
+        return;
       }
+      <Self as super::native::InvTxfm2D>::inv_txfm2d_add(
+        input, output, tx_type, bd,
+      );
     }
   }
 
