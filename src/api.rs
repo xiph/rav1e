@@ -408,7 +408,7 @@ impl Default for ColorPrimaries {
 }
 
 arg_enum!{
-/// Contains differnt types of Transfer Characteristics, they define the optoelectronic tranfer charecteristic of the source picture aka Gamma.
+  /// Contains differnt types of Transfer Characteristics, they define the optoelectronic tranfer charecteristic of the source picture aka Gamma.
   #[derive(Debug, Clone, Copy, PartialEq)]
   #[repr(C)]
   pub enum TransferCharacteristics {
@@ -543,6 +543,7 @@ impl Config {
   }
 }
 
+/// Contain all the context configurations
 pub struct Context<T: Pixel> {
   //    timebase: Rational,
   frame_count: u64,
@@ -604,6 +605,8 @@ impl<T: Pixel> fmt::Display for Packet<T> {
 }
 
 impl<T: Pixel> Context<T> {
+
+  /// Create new frame  with details like width, height and also chroma sampling from the encoder
   pub fn new_frame(&self) -> Arc<Frame<T>> {
     Arc::new(Frame::new(
       self.config.enc.width,
@@ -612,6 +615,7 @@ impl<T: Pixel> Context<T> {
     ))
   }
 
+  /// Send the details of the frame by passing the frame details as input
   pub fn send_frame<F>(&mut self, frame: F) -> Result<(), EncoderStatus>
   where
     F: Into<Option<Arc<Frame<T>>>>,
@@ -623,32 +627,39 @@ impl<T: Pixel> Context<T> {
     Ok(())
   }
 
+  /// Returns the details of a specific frame
   pub fn get_frame(&self, frame_number: u64) -> Arc<Frame<T>> {
     // Clones only the arc, so low cost overhead
     self.frame_q.get(&frame_number).as_ref().unwrap().as_ref().unwrap().clone()
   }
 
+  /// Returns the frame count
   pub fn get_frame_count(&self) -> u64 {
     self.frame_count
   }
 
+  /// Set the limit which is passed as argument
   pub fn set_limit(&mut self, limit: u64) {
     self.limit = limit;
   }
 
+  /// Allow to read frames ahead of current ones
   pub fn needs_more_lookahead(&self) -> bool {
     self.needs_more_frames(self.frame_count) && self.frames_processed + LOOKAHEAD_FRAMES > self.frame_q.keys().last().cloned().unwrap_or(0)
   }
 
+  /// Request for more frames
   pub fn needs_more_frames(&self, frame_count: u64) -> bool {
     self.limit == 0 || frame_count < self.limit
   }
 
+  /// Video sequences are headed by a sequence header which was starting value, various other things like chroma sampling x and y, sequence bit depth
   pub fn container_sequence_header(&mut self) -> Vec<u8> {
     fn sequence_header_inner(seq: &Sequence) -> io::Result<Vec<u8>> {
       let mut buf = Vec::new();
 
       {
+        // Create a bitwriter instance with BigEndian type ie. an order in which the "big end" (most significant value in the sequence) is stored first.
         let mut bw = BitWriter::endian(&mut buf, BigEndian);
         bw.write_bit(true)?; // marker
         bw.write(7, 1)?; // version
@@ -775,6 +786,10 @@ impl<T: Pixel> Context<T> {
     (fi, true)
   }
 
+  /// Receive packet functions provide an Encode API with decoupled packets/frames, On sucess it returns packet with compressed frame.
+  /// If it has needs_more_lookahead and if everything is encoded then it will be returning the encode status as "NeedMoreFrames"
+  /// Frames to analyze lookahead, when the frame queue is nearly full it returns with status as "Enough Data". At the begining the encoder
+  /// accepts multiple frames as input untill the buffer is full. When it is end of stream it requires flushing aka. draining.
   pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
     if self.needs_more_lookahead() {
       return Err(EncoderStatus::NeedMoreFrames);
@@ -910,6 +925,9 @@ impl<T: Pixel> Context<T> {
     }
   }
 
+  /// Flush the output, the flush makes the current frame to the frame_q and then increments the frame count for the next process.
+  /// This also means that some packets might not produce output immediately and might requrie to flushed at the end of decoding to
+  /// get all the decoded data.
   pub fn flush(&mut self) {
     self.frame_q.insert(self.frame_count, None);
     self.frame_count += 1;
