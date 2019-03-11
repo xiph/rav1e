@@ -761,7 +761,7 @@ cglobal sgr_box3_v, 5, 7, 8, -28, sumsq, sum, w, h, edge, x, y
     jl .loop_x
     RET
 
-cglobal sgr_calc_ab1, 4, 7, 14, a, b, w, h, s
+cglobal sgr_calc_ab1, 4, 7, 12, a, b, w, h, s
     movifnidn     sd, sm
     sub           aq, (384+16-1)*4
     sub           bq, (384+16-1)*2
