@@ -434,7 +434,7 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
 fn apply_speed_test_cfg(cfg: &mut EncoderConfig, setting: &str) {
   match setting {
     "baseline" => {
-      // Use default settings
+      cfg.speed_settings = SpeedSettings::default();
     },
     "min_block_size_4x4" => {
       cfg.speed_settings.min_block_size = BlockSize::BLOCK_4X4;
