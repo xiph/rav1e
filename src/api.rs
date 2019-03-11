@@ -7,6 +7,7 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use arg_enum_proc_macro::ArgEnum;
 use bitstream_io::*;
 use crate::encoder::*;
 use crate::metrics::calculate_frame_psnr;
@@ -315,14 +316,12 @@ impl Default for ChromaSamplePosition {
   }
 }
 
-arg_enum!{
-  #[derive(Debug, Clone, Copy, PartialEq)]
-  #[repr(C)]
-  pub enum PixelRange {
-      Unspecified = 0,
-      Limited,
-      Full,
-  }
+#[derive(ArgEnum, Debug, Clone, Copy, PartialEq)]
+#[repr(C)]
+pub enum PixelRange {
+    Unspecified = 0,
+    Limited,
+    Full,
 }
 
 impl Default for PixelRange {
@@ -331,25 +330,23 @@ impl Default for PixelRange {
     }
 }
 
-arg_enum!{
-  #[derive(Debug, Clone, Copy, PartialEq)]
-  #[repr(C)]
-  pub enum MatrixCoefficients {
-      Identity = 0,
-      BT709,
-      Unspecified,
-      BT470M = 4,
-      BT470BG,
-      ST170M,
-      ST240M,
-      YCgCo,
-      BT2020NonConstantLuminance,
-      BT2020ConstantLuminance,
-      ST2085,
-      ChromaticityDerivedNonConstantLuminance,
-      ChromaticityDerivedConstantLuminance,
-      ICtCp,
-  }
+#[derive(ArgEnum, Debug, Clone, Copy, PartialEq)]
+#[repr(C)]
+pub enum MatrixCoefficients {
+    Identity = 0,
+    BT709,
+    Unspecified,
+    BT470M = 4,
+    BT470BG,
+    ST170M,
+    ST240M,
+    YCgCo,
+    BT2020NonConstantLuminance,
+    BT2020ConstantLuminance,
+    ST2085,
+    ChromaticityDerivedNonConstantLuminance,
+    ChromaticityDerivedConstantLuminance,
+    ICtCp,
 }
 
 impl Default for MatrixCoefficients {
@@ -358,23 +355,21 @@ impl Default for MatrixCoefficients {
     }
 }
 
-arg_enum!{
-  #[derive(Debug, Clone, Copy, PartialEq)]
-  #[repr(C)]
-  pub enum ColorPrimaries {
-      BT709 = 1,
-      Unspecified,
-      BT470M = 4,
-      BT470BG,
-      ST170M,
-      ST240M,
-      Film,
-      BT2020,
-      ST428,
-      P3DCI,
-      P3Display,
-      Tech3213 = 22,
-  }
+#[derive(ArgEnum, Debug, Clone, Copy, PartialEq)]
+#[repr(C)]
+pub enum ColorPrimaries {
+    BT709 = 1,
+    Unspecified,
+    BT470M = 4,
+    BT470BG,
+    ST170M,
+    ST240M,
+    Film,
+    BT2020,
+    ST428,
+    P3DCI,
+    P3Display,
+    Tech3213 = 22,
 }
 
 impl Default for ColorPrimaries {
@@ -383,28 +378,26 @@ impl Default for ColorPrimaries {
     }
 }
 
-arg_enum!{
-  #[derive(Debug, Clone, Copy, PartialEq)]
-  #[repr(C)]
-  pub enum TransferCharacteristics {
-      BT1886 = 1,
-      Unspecified,
-      BT470M = 4,
-      BT470BG,
-      ST170M,
-      ST240M,
-      Linear,
-      Logarithmic100,
-      Logarithmic316,
-      XVYCC,
-      BT1361E,
-      SRGB,
-      BT2020Ten,
-      BT2020Twelve,
-      PerceptualQuantizer,
-      ST428,
-      HybridLogGamma,
-  }
+#[derive(ArgEnum, Debug, Clone, Copy, PartialEq)]
+#[repr(C)]
+pub enum TransferCharacteristics {
+    BT1886 = 1,
+    Unspecified,
+    BT470M = 4,
+    BT470BG,
+    ST170M,
+    ST240M,
+    Linear,
+    Logarithmic100,
+    Logarithmic316,
+    XVYCC,
+    BT1361E,
+    SRGB,
+    BT2020Ten,
+    BT2020Twelve,
+    PerceptualQuantizer,
+    ST428,
+    HybridLogGamma,
 }
 
 impl Default for TransferCharacteristics {

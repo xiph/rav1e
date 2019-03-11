@@ -28,6 +28,7 @@ use crate::util::*;
 use crate::partition::PartitionType::*;
 use crate::header::*;
 
+use arg_enum_proc_macro::ArgEnum;
 use bitstream_io::{BitWriter, BigEndian};
 use bincode::{serialize, deserialize};
 use std;
@@ -177,13 +178,11 @@ const MAX_NUM_TEMPORAL_LAYERS: usize = 8;
 const MAX_NUM_SPATIAL_LAYERS: usize = 4;
 const MAX_NUM_OPERATING_POINTS: usize = MAX_NUM_TEMPORAL_LAYERS * MAX_NUM_SPATIAL_LAYERS;
 
-arg_enum!{
-  #[derive(Copy, Clone, Debug, PartialEq)]
-  #[repr(C)]
-  pub enum Tune {
-    Psnr,
-    Psychovisual
-  }
+#[derive(ArgEnum, Copy, Clone, Debug, PartialEq)]
+#[repr(C)]
+pub enum Tune {
+  Psnr,
+  Psychovisual
 }
 
 impl Default for Tune {
