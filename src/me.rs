@@ -92,7 +92,7 @@ mod nasm {
   }
 
   #[target_feature(enable = "ssse3")]
-  unsafe fn sad_ssse3(
+  unsafe fn sad_hbd_ssse3(
     plane_org: &PlaneSlice<'_, u16>, plane_ref: &PlaneSlice<'_, u16>, blk_h: usize,
     blk_w: usize, bit_depth: usize
   ) -> u32 {
@@ -175,7 +175,7 @@ mod nasm {
         return unsafe {
           let plane_org = &*(plane_org as *const _ as *const PlaneSlice<'_, u16>);
           let plane_ref = &*(plane_ref as *const _ as *const PlaneSlice<'_, u16>);
-          sad_ssse3(plane_org, plane_ref, blk_h, blk_w, bit_depth)
+          sad_hbd_ssse3(plane_org, plane_ref, blk_h, blk_w, bit_depth)
         };
       }
       if mem::size_of::<T>() == 1 && is_x86_feature_detected!("sse2") && blk_h >= 4 && blk_w >= 4 {
