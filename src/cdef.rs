@@ -203,7 +203,7 @@ fn adjust_strength(strength: i32, var: i32) -> i32 {
 // boundaries (padding is untouched here).
 
 pub fn cdef_analyze_superblock<T: Pixel>(
-  in_frame: &mut Frame<T>,
+  in_frame: &Frame<T>,
   bc_global: &mut BlockContext,
   sbo: &SuperBlockOffset,
   sbo_global: &SuperBlockOffset,
@@ -227,7 +227,7 @@ pub fn cdef_analyze_superblock<T: Pixel>(
 
         if !skip {
           let mut var: i32 = 0;
-          let in_plane = &mut in_frame.planes[0];
+          let in_plane = &in_frame.planes[0];
           let in_po = sbo.plane_offset(&in_plane.cfg);
           let in_slice = in_plane.slice(&in_po);
           dir.dir[bx][by] = cdef_find_dir(&in_slice.reslice(8 * bx as isize + 2,
@@ -329,7 +329,7 @@ pub fn cdef_empty_frame<T: Pixel, U: Pixel>(f: &Frame<T>) -> Frame<U> {
 // cdef_index is taken from the block context
 pub fn cdef_filter_superblock<T: Pixel>(
   fi: &FrameInvariants<T>,
-  in_frame: &mut Frame<u16>,
+  in_frame: &Frame<u16>,
   out_frame: &mut Frame<T>,
   bc_global: &mut BlockContext,
   sbo: &SuperBlockOffset,
@@ -367,13 +367,13 @@ pub fn cdef_filter_superblock<T: Pixel>(
           for p in 0..3 {
             let out_plane = &mut out_frame.planes[p];
             let out_po = sbo.plane_offset(&out_plane.cfg);
-            let in_plane = &mut in_frame.planes[p];
+            let in_plane = &in_frame.planes[p];
             let in_po = sbo.plane_offset(&in_plane.cfg);
             let xdec = in_plane.cfg.xdec;
             let ydec = in_plane.cfg.ydec;
 
             let in_stride = in_plane.cfg.stride;
-            let in_slice = &in_plane.mut_slice(&in_po);
+            let in_slice = &in_plane.slice(&in_po);
             let out_stride = out_plane.cfg.stride;
             let out_slice = &mut out_plane.mut_slice(&out_po);
 
@@ -480,8 +480,8 @@ pub fn cdef_filter_frame<T: Pixel>(fi: &FrameInvariants<T>, rec: &mut Frame<T>, 
     for fbx in 0..fb_width {
       let sbo = SuperBlockOffset { x: fbx, y: fby };
       let cdef_index = bc.at(&sbo.block_offset(0, 0)).cdef_index;
-      let cdef_dirs = cdef_analyze_superblock(&mut cdef_frame, bc, &sbo, &sbo, fi.sequence.bit_depth);
-      cdef_filter_superblock(fi, &mut cdef_frame, rec, bc, &sbo, &sbo, cdef_index, &cdef_dirs);
+      let cdef_dirs = cdef_analyze_superblock(&cdef_frame, bc, &sbo, &sbo, fi.sequence.bit_depth);
+      cdef_filter_superblock(fi, &cdef_frame, rec, bc, &sbo, &sbo, cdef_index, &cdef_dirs);
     }
   }
 }

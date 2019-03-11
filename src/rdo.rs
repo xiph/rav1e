@@ -1308,7 +1308,7 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<
   // Try all CDEF options with current LRF; if new CDEF+LRF choice is better, select it.
   // Try all LRF options with current CDEF; if new CDEF+LRF choice is better, select it.
   // If LRF choice changed for any plane, repeat last two steps.
-  let cdef_dirs = cdef_analyze_superblock(&mut cdef_input, &mut cw.bc,
+  let cdef_dirs = cdef_analyze_superblock(&cdef_input, &mut cw.bc,
                                           &sbo_0, &sbo, fi.sequence.bit_depth);
   let mut first_loop = true;
   loop {
@@ -1320,7 +1320,7 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<
         if cdef_index != prev_best_index {
           let mut cost = [0.; PLANES];
           let mut cost_acc = 0.;
-          cdef_filter_superblock(fi, &mut cdef_input, &mut lrf_input,
+          cdef_filter_superblock(fi, &cdef_input, &mut lrf_input,
                                  &mut cw.bc, &sbo_0, &sbo, cdef_index as u8, &cdef_dirs);
           for pli in 0..3 {
             match best_lrf[pli] {
@@ -1371,7 +1371,7 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<
     if fi.sequence.enable_restoration && lrf_any_uncoded {
       // need cdef output from best index, not just last iteration
       if fi.sequence.enable_cdef {
-        cdef_filter_superblock(fi, &mut cdef_input, &mut lrf_input,
+        cdef_filter_superblock(fi, &cdef_input, &mut lrf_input,
                                &mut cw.bc, &sbo_0, &sbo, best_index as u8, &cdef_dirs);
       }
 
