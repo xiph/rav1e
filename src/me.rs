@@ -92,14 +92,13 @@ mod nasm {
   }
 
   #[target_feature(enable = "ssse3")]
-  unsafe fn sad_ssse3<T: Pixel>(
-    plane_org: &PlaneSlice<'_, T>, plane_ref: &PlaneSlice<'_, T>, blk_h: usize,
+  unsafe fn sad_ssse3(
+    plane_org: &PlaneSlice<'_, u16>, plane_ref: &PlaneSlice<'_, u16>, blk_h: usize,
     blk_w: usize, bit_depth: usize
   ) -> u32 {
-    assert!(mem::size_of::<T>() == 2, "only implemented for u16 for now");
     let mut sum = 0 as u32;
-    let org_stride = (plane_org.plane.cfg.stride * mem::size_of::<T>()) as libc::ptrdiff_t;
-    let ref_stride = (plane_ref.plane.cfg.stride * mem::size_of::<T>()) as libc::ptrdiff_t;
+    let org_stride = (plane_org.plane.cfg.stride * 2) as libc::ptrdiff_t;
+    let ref_stride = (plane_ref.plane.cfg.stride * 2) as libc::ptrdiff_t;
     assert!(blk_h >= 4 && blk_w >= 4);
     let step_size =
       blk_h.min(blk_w).min(if bit_depth <= 10 { 128 } else { 4 });
@@ -128,18 +127,17 @@ mod nasm {
   }
 
   #[target_feature(enable = "sse2")]
-  unsafe fn sad_sse2<T: Pixel>(
-    plane_org: &PlaneSlice<'_, T>, plane_ref: &PlaneSlice<'_, T>, blk_h: usize,
+  unsafe fn sad_sse2(
+    plane_org: &PlaneSlice<'_, u8>, plane_ref: &PlaneSlice<'_, u8>, blk_h: usize,
     blk_w: usize
   ) -> u32 {
-    assert!(mem::size_of::<T>() == 1, "only implemented for u8 for now");
     // FIXME unaligned blocks coming from hres/qres ME search
     let ptr_align_log2 = (plane_org.as_ptr() as usize).trailing_zeros() as usize;
     // The largest unaligned-safe function is for 8x8
     let ptr_align = 1 << ptr_align_log2.max(3);
     let mut sum = 0 as u32;
-    let org_stride = (plane_org.plane.cfg.stride * mem::size_of::<T>()) as libc::ptrdiff_t;
-    let ref_stride = (plane_ref.plane.cfg.stride * mem::size_of::<T>()) as libc::ptrdiff_t;
+    let org_stride = plane_org.plane.cfg.stride as libc::ptrdiff_t;
+    let ref_stride = plane_ref.plane.cfg.stride as libc::ptrdiff_t;
     assert!(blk_h >= 4 && blk_w >= 4);
     let step_size = blk_h.min(blk_w).min(ptr_align);
     let func = match step_size.ilog() {
@@ -175,11 +173,15 @@ mod nasm {
     {
       if mem::size_of::<T>() == 2 && is_x86_feature_detected!("ssse3") && blk_h >= 4 && blk_w >= 4 {
         return unsafe {
+          let plane_org = &*(plane_org as *const _ as *const PlaneSlice<'_, u16>);
+          let plane_ref = &*(plane_ref as *const _ as *const PlaneSlice<'_, u16>);
           sad_ssse3(plane_org, plane_ref, blk_h, blk_w, bit_depth)
         };
       }
       if mem::size_of::<T>() == 1 && is_x86_feature_detected!("sse2") && blk_h >= 4 && blk_w >= 4 {
         return unsafe {
+          let plane_org = &*(plane_org as *const _ as *const PlaneSlice<'_, u8>);
+          let plane_ref = &*(plane_ref as *const _ as *const PlaneSlice<'_, u8>);
           sad_sse2(plane_org, plane_ref, blk_h, blk_w)
         };
       }
