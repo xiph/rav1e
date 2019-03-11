@@ -78,6 +78,7 @@ type Rational=rav1e::Rational;
 pub unsafe extern "C" fn rav1e_config_default() -> *mut Config {
     let cfg = rav1e::Config {
         enc: rav1e::EncoderConfig::default(),
+        threads: 0,
     };
 
     let c = Box::new(Config {
