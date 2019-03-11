@@ -132,7 +132,8 @@ pub struct SpeedSettings {
   pub prediction_modes: PredictionModesSetting,
   pub include_near_mvs: bool,
   pub no_scene_detection: bool,
-  pub diamond_me: bool
+  pub diamond_me: bool,
+  pub cdef: bool
 }
 
 impl Default for SpeedSettings {
@@ -150,6 +151,7 @@ impl Default for SpeedSettings {
       include_near_mvs: false,
       no_scene_detection: false,
       diamond_me: false,
+      cdef: false,
     }
   }
 }
@@ -169,6 +171,7 @@ impl SpeedSettings {
       include_near_mvs: Self::include_near_mvs_preset(speed),
       no_scene_detection: Self::no_scene_detection_preset(speed),
       diamond_me: Self::diamond_me_preset(speed),
+      cdef: Self::cdef_preset(speed),
     }
   }
 
@@ -241,6 +244,10 @@ impl SpeedSettings {
   ///
   /// TODO: Revisit this setting if full search quality improves in the future.
   fn diamond_me_preset(_speed: usize) -> bool {
+    true
+  }
+
+  fn cdef_preset(_speed: usize) -> bool {
     true
   }
 }

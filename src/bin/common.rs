@@ -484,6 +484,9 @@ fn apply_speed_test_cfg(cfg: &mut EncoderConfig, setting: &str) {
     "diamond_me" => {
       cfg.speed_settings.diamond_me = true;
     }
+    "cdef" => {
+      cfg.speed_settings.cdef = true;
+    }
     setting => {
       panic!("Unrecognized speed test setting {}", setting);
     }
