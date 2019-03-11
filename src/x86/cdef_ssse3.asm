@@ -719,7 +719,7 @@ cdef_filter_fn 8, 8, 32
 cdef_filter_fn 4, 8, 32
 cdef_filter_fn 4, 4, 32
 
-%macro MULLD 2-3 0 ; %3 = is_constant
+%macro MULLD 2
  %if ARCH_X86_32
   %define m15 m1
  %endif
@@ -785,7 +785,7 @@ cglobal cdef_dir, 3, 4, 16, src, stride, var, stride3
     pmaddwd         m9, m9
     phaddd          m9, m8
     SWAP            m8, m9
-    MULLD           m8, [div_table+48], 1
+    MULLD           m8, [div_table+48]
 
     pslldq          m9, m1, 2
     psrldq         m10, m1, 14
@@ -886,7 +886,7 @@ cglobal cdef_dir, 3, 4, 16, src, stride, var, stride3
     punpcklwd       m4, m5
     pmaddwd         m6, m6
     pmaddwd         m4, m4
-    MULLD           m6, [div_table+48], 1
+    MULLD           m6, [div_table+48]
     MULLD           m4, [div_table+32]
     paddd           m4, m6                  ; cost[7a-d]
 
@@ -906,7 +906,7 @@ cglobal cdef_dir, 3, 4, 16, src, stride, var, stride3
     punpcklwd       m5, m6
     pmaddwd         m7, m7
     pmaddwd         m5, m5
-    MULLD           m7, [div_table+48], 1
+    MULLD           m7, [div_table+48]
     MULLD           m5, [div_table+32]
     paddd           m5, m7                  ; cost[5a-d]
 
@@ -926,7 +926,7 @@ cglobal cdef_dir, 3, 4, 16, src, stride, var, stride3
     punpcklwd       m6, m7
     pmaddwd        m10, m10
     pmaddwd         m6, m6
-    MULLD          m10, [div_table+48], 1
+    MULLD          m10, [div_table+48]
     MULLD           m6, [div_table+32]
     paddd           m6, m10                 ; cost[1a-d]
 
@@ -951,7 +951,7 @@ cglobal cdef_dir, 3, 4, 16, src, stride, var, stride3
     punpcklwd      m10, m11
     pmaddwd        m12, m12
     pmaddwd        m10, m10
-    MULLD          m12, [div_table+48], 1
+    MULLD          m12, [div_table+48]
     MULLD          m10, [div_table+32]
     paddd          m10, m12                 ; cost[3a-d]
 
@@ -1065,7 +1065,7 @@ cglobal cdef_dir, 3, 5, 16, 96, src, stride, var, stride3
     pmaddwd         m0, m0
 
     phaddd          m2, m0
-    MULLD           m2, [PIC_sym(div_table)+48], 1
+    MULLD           m2, [PIC_sym(div_table)+48]
     mova    [esp+0x30], m2
 
     mova            m1, [esp+0x10]
@@ -1181,7 +1181,7 @@ cglobal cdef_dir, 3, 5, 16, 96, src, stride, var, stride3
     punpcklwd       m0, m1
     pmaddwd         m2, m2
     pmaddwd         m0, m0
-    MULLD           m2, [PIC_sym(div_table)+48], 1
+    MULLD           m2, [PIC_sym(div_table)+48]
     MULLD           m0, [PIC_sym(div_table)+32]
     paddd           m0, m2                  ; cost[7a-d]
     mova    [esp+0x40], m0
@@ -1202,7 +1202,7 @@ cglobal cdef_dir, 3, 5, 16, 96, src, stride, var, stride3
     punpcklwd       m0, m7
     pmaddwd         m2, m2
     pmaddwd         m0, m0
-    MULLD           m2, [PIC_sym(div_table)+48], 1
+    MULLD           m2, [PIC_sym(div_table)+48]
     MULLD           m0, [PIC_sym(div_table)+32]
     paddd           m0, m2                  ; cost[5a-d]
     mova    [esp+0x50], m0
@@ -1225,7 +1225,7 @@ cglobal cdef_dir, 3, 5, 16, 96, src, stride, var, stride3
     punpcklwd       m0, m1
     pmaddwd         m2, m2
     pmaddwd         m0, m0
-    MULLD           m2, [PIC_sym(div_table)+48], 1
+    MULLD           m2, [PIC_sym(div_table)+48]
     MULLD           m0, [PIC_sym(div_table)+32]
     paddd           m0, m2                  ; cost[1a-d]
     phaddd          m0, [esp+0x50]
@@ -1252,7 +1252,7 @@ cglobal cdef_dir, 3, 5, 16, 96, src, stride, var, stride3
     punpcklwd      m4, m0
     pmaddwd        m2, m2
     pmaddwd        m4, m4
-    MULLD          m2, [PIC_sym(div_table)+48], 1
+    MULLD          m2, [PIC_sym(div_table)+48]
     MULLD          m4, [PIC_sym(div_table)+32]
     paddd          m4, m2                   ; cost[3a-d]
     phaddd         m4, [esp+0x40]
