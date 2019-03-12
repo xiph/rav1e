@@ -15,6 +15,7 @@ binaries = ["ivf", "y4m", "clap", "scan_fmt", "serde_json"]
 default = ["binaries", "nasm"]
 nasm = ["nasm-rs"]
 dump_ivf = ["ivf"]
+quick_test = []
 
 [dependencies]
 bitstream-io = "0.8"
