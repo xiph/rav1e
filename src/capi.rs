@@ -194,7 +194,7 @@ pub unsafe extern "C" fn rav1e_frame_new(ctx: *const Context) -> *mut Frame {
 
 #[no_mangle]
 pub unsafe extern "C" fn rav1e_frame_unref(frame: *mut Frame) {
-    let _ = Arc::from_raw(frame);
+    let _ = Box::from_raw(frame);
 }
 
 /// Send the frame for encoding
