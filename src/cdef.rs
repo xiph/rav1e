@@ -131,7 +131,7 @@ unsafe fn cdef_filter_block<T: Pixel>(
   let cdef_pri_taps = [[4, 2], [3, 3]];
   let cdef_sec_taps = [[2, 1], [2, 1]];
   let pri_taps = cdef_pri_taps[((pri_strength >> coeff_shift) & 1) as usize];
-  let sec_taps = cdef_sec_taps[((pri_strength >> coeff_shift) & 1) as usize];
+  let sec_taps = cdef_sec_taps[((sec_strength >> coeff_shift) & 1) as usize];
   let cdef_directions = [[-1 * istride + 1, -2 * istride + 2 ],
                          [ 0 * istride + 1, -1 * istride + 2 ],
                          [ 0 * istride + 1,  0 * istride + 2 ],
