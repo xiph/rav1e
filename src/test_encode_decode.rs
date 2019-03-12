@@ -338,10 +338,6 @@ fn low_bit_depth(decoder: &str) {
   dec.encode_decode(w, h, speed, quantizer, limit, 8, Default::default(), 15, 15, true, 0);
 }
 
-#[cfg_attr(feature = "decode_test", interpolate_test(10_aom, "aom", 10))]
-#[cfg_attr(feature = "decode_test_dav1d", interpolate_test(10_dav1d, "dav1d", 10))]
-#[cfg_attr(feature = "decode_test", interpolate_test(12_aom, "aom", 12))]
-#[cfg_attr(feature = "decode_test_dav1d", interpolate_test(12_dav1d, "dav1d", 12))]
 fn high_bit_depth(decoder: &str, depth: usize) {
   let quantizer = 100;
   let limit = 3; // Include inter frames
@@ -353,12 +349,22 @@ fn high_bit_depth(decoder: &str, depth: usize) {
   dec.encode_decode(w, h, speed, quantizer, limit, depth, Default::default(), 15, 15, true, 0);
 }
 
-#[cfg_attr(feature = "decode_test", interpolate_test(420_aom, "aom", ChromaSampling::Cs420))]
-#[cfg_attr(feature = "decode_test_dav1d", interpolate_test(420_dav1d, "dav1d", ChromaSampling::Cs420))]
-#[cfg_attr(feature = "decode_test", interpolate_test(422_aom, "aom", ChromaSampling::Cs422))]
-#[cfg_attr(feature = "decode_test_dav1d", interpolate_test(422_dav1d, "dav1d", ChromaSampling::Cs422))]
-#[cfg_attr(feature = "decode_test", interpolate_test(444_aom, "aom", ChromaSampling::Cs444))]
-#[cfg_attr(feature = "decode_test_dav1d", interpolate_test(444_dav1d, "dav1d", ChromaSampling::Cs444))]
+macro_rules! test_high_bit_depth {
+  ($($B:expr),+) => {
+    $(
+      paste::item_with_macros!{
+        #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
+        #[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
+        fn [<high_bit_depth_ $B>](decoder: &str) {
+          high_bit_depth(decoder, $B);
+        }
+      }
+    )*
+  }
+}
+
+test_high_bit_depth!{10, 12}
+
 fn chroma_sampling(decoder: &str, cs: ChromaSampling) {
   let quantizer = 100;
   let limit = 3; // Include inter frames
@@ -371,6 +377,22 @@ fn chroma_sampling(decoder: &str, cs: ChromaSampling) {
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(w, h, speed, quantizer, limit, 8, cs, 1, 1, true, 0);
 }
+
+macro_rules! test_chroma_sampling {
+  ($(($S:expr, $I:expr)),+) => {
+    $(
+      paste::item_with_macros!{
+        #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
+        #[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
+        fn [<chroma_sampling_ $S>](decoder: &str) {
+          chroma_sampling(decoder, $I);
+        }
+      }
+    )*
+  }
+}
+
+test_chroma_sampling!{(420, ChromaSampling::Cs420), (422, ChromaSampling::Cs422), (444, ChromaSampling::Cs444)}
 
 fn get_decoder<T: Pixel>(decoder: &str, w: usize, h: usize) -> Box<dyn TestDecoder<T>> {
   match decoder {
