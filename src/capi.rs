@@ -130,7 +130,9 @@ pub unsafe extern "C" fn rav1e_config_set_mastering_display(cfg: *mut Config,
 
 #[no_mangle]
 pub unsafe extern "C" fn rav1e_config_unref(cfg: *mut Config) {
-    let _ = Box::from_raw(cfg);
+    if !cfg.is_null() {
+        let _ = Box::from_raw(cfg);
+    }
 }
 
 /// Set a configuration parameter using its key and value
@@ -175,7 +177,9 @@ pub unsafe extern "C" fn rav1e_context_new(cfg: *const Config) -> *mut Context {
 
 #[no_mangle]
 pub unsafe extern "C" fn rav1e_context_unref(ctx: *mut Context) {
-    let _ = Box::from_raw(ctx);
+    if !ctx.is_null() {
+        let _ = Box::from_raw(ctx);
+    }
 }
 
 /// Produce a new frame from the encoding context
@@ -194,7 +198,9 @@ pub unsafe extern "C" fn rav1e_frame_new(ctx: *const Context) -> *mut Frame {
 
 #[no_mangle]
 pub unsafe extern "C" fn rav1e_frame_unref(frame: *mut Frame) {
-    let _ = Box::from_raw(frame);
+    if !frame.is_null() {
+        let _ = Box::from_raw(frame);
+    }
 }
 
 /// Send the frame for encoding
@@ -269,7 +275,9 @@ pub unsafe extern "C" fn rav1e_receive_packet(
 
 #[no_mangle]
 pub unsafe extern fn rav1e_packet_unref(pkt: *mut Packet) {
-    let _ = Box::from_raw(pkt);
+    if !pkt.is_null() {
+        let _ = Box::from_raw(pkt);
+    }
 }
 
 /// Produce a sequence header matching the current encoding context
@@ -287,7 +295,9 @@ pub unsafe extern fn rav1e_container_sequence_header(ctx: *mut Context, buf_size
 
 #[no_mangle]
 pub unsafe extern fn rav1e_container_sequence_header_unref(sequence: *mut u8) {
-    let _ = Box::from_raw(sequence);
+    if !sequence.is_null() {
+        let _ = Box::from_raw(sequence);
+    }
 }
 
 /// Fill a frame plane
