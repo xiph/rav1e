@@ -22,7 +22,7 @@ fn rerun_dir<P: AsRef<Path>>(dir: P) {
 }
 
 fn main() {
-    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))] {
+    #[cfg(all(target_arch = "x86_64", feature = "nasm"))] {
         use std::fs::File;
         use std::io::Write;
         let out_dir = env::var("OUT_DIR").unwrap();

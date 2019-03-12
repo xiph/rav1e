@@ -38,7 +38,7 @@ rayon = "1.0"
 bincode = "=1.0.1"
 
 [target.'cfg(target_arch = "x86_64")'.build-dependencies]
-nasm-rs = { version = "0.1.4", optional = true }
+nasm-rs = { git = "https://github.com/tdaede/nasm-rs", branch="msvc-OUT", optional = true }
 
 [target.'cfg(unix)'.build-dependencies]
 pkg-config = "0.3.12"
