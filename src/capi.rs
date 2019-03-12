@@ -201,6 +201,11 @@ pub unsafe extern "C" fn rav1e_frame_unref(frame: *mut Frame) {
 ///
 /// The function increases the frame internal reference count and it can be passed multiple
 /// times to different rav1e_send_frame().
+///
+/// Returns:
+/// - `0` on success,
+/// - `> 0` if the input queue is full
+/// - `< 0` on unrecoverable failure
 #[no_mangle]
 pub unsafe extern "C" fn rav1e_send_frame(ctx: *mut Context, frame: *const Frame) -> c_int {
     let frame = if frame.is_null() {
@@ -215,11 +220,23 @@ pub unsafe extern "C" fn rav1e_send_frame(ctx: *mut Context, frame: *const Frame
         .map(|_v| {
             (*ctx).last_err = None;
             0
-        }).map_err(|e| (*ctx).last_err = Some(e))
-        .unwrap_or(-1)
+        }).unwrap_or_else(|e| {
+            use rav1e::EncoderStatus::*;
+            (*ctx).last_err = Some(e);
+            match e {
+                EnoughData => 1,
+                NeedMoreData | NeedMoreFrames => unreachable!(),
+                _ => -1,
+            }
+        })
 }
 
 /// Receive encoded data
+///
+/// Returns:
+/// - `0` on success
+/// - `> 0` if additional frame data is required
+/// - `< 0` on unrecoverable failure
 #[no_mangle]
 pub unsafe extern "C" fn rav1e_receive_packet(
     ctx: *mut Context,
@@ -238,8 +255,16 @@ pub unsafe extern "C" fn rav1e_receive_packet(
             };
             *pkt = Box::into_raw(Box::new(packet));
             0
-        }).map_err(|e| (*ctx).last_err = Some(e))
-        .unwrap_or(-1)
+        }).unwrap_or_else(|e| {
+            use rav1e::EncoderStatus::*;
+            (*ctx).last_err = Some(e);
+            match e {
+                NeedMoreData |
+                    NeedMoreFrames => 1,
+                EnoughData => unreachable!(),
+                _ => -1,
+            }
+        })
 }
 
 #[no_mangle]
