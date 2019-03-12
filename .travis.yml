@@ -40,8 +40,8 @@ jobs:
         script:
          - cargo install cargo-kcov
          - kcov --version
-         - cargo fetch
-         - cargo kcov -v --coveralls --features=decode_test,quick_test -- --verify --exclude-pattern=$HOME/.cargo,aom_build,.h,test
+         - RUSTFLAGS="-C link-dead-code" cargo build --features=decode_test,quick_test --tests --verbose
+         - cargo kcov -v --coveralls --no-clean-rebuild -- --verify --exclude-pattern=$HOME/.cargo,aom_build,.h,test
       - name: "Tests"
         script: cargo test --verbose --release --features=decode_test -- --ignored
       - name: "Bench"
