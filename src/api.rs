@@ -454,6 +454,8 @@ impl Config {
       "speed" => self.enc.speed_settings = SpeedSettings::from_preset(value.parse().map_err(|_e| ParseError)?),
       "tune" => self.enc.tune = value.parse().map_err(|_e| ParseError)?,
       "threads" => self.threads = value.parse().map_err(|_e| ParseError)?,
+      "width" => self.enc.width = value.parse().map_err(|_e| ParseError)?,
+      "height" => self.enc.height = value.parse().map_err(|_e| ParseError)?,
       _ => return Err(InvalidKey)
     }
 
