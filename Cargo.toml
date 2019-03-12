@@ -15,6 +15,7 @@ binaries = ["ivf", "y4m", "clap", "scan_fmt", "serde_json"]
 default = ["binaries", "nasm"]
 nasm = ["nasm-rs"]
 dump_ivf = ["ivf"]
+quick_test = []
 
 [dependencies]
 arg_enum_proc_macro = "0.1.1"

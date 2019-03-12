@@ -177,28 +177,41 @@ macro_rules! test_dimensions {
             #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
             #[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
             fn [<dimension_ $W x $H>](decoder: &str) {
-                dimension($W, $H, decoder)
+                super::dimension($W, $H, decoder)
             }
         }
     )*
   }
 }
 
-test_dimensions!{
-  (8, 8),
-  (16, 16),
-  (32, 32),
-  (64, 64),
-  (128, 128),
-  (256, 256),
-  (512, 512),
-  (1024, 1024),
-  (2048, 2048),
-  (258, 258),
-  (260, 260),
-  (262, 262),
-  (264, 264),
-  (265, 265)
+#[cfg(not(feature="quick_test"))]
+mod large_dimension {
+  test_dimensions!{
+    (512, 512),
+    (1024, 1024),
+    (2048, 2048)
+  }
+}
+
+mod small_dimension {
+  test_dimensions!{
+    (256, 256),
+    (258, 258),
+    (260, 260),
+    (262, 262),
+    (264, 264),
+    (265, 265)
+  }
+}
+
+mod tiny_dimension {
+  test_dimensions!{
+    (8, 8),
+    (16, 16),
+    (32, 32),
+    (64, 64),
+    (128, 128)
+  }
 }
 
 fn dimension(w: usize, h: usize, decoder: &str) {
@@ -210,21 +223,33 @@ fn dimension(w: usize, h: usize, decoder: &str) {
   dec.encode_decode(w, h, speed, quantizer, limit, 8, Default::default(), 15, 15, true, 0);
 }
 
-#[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
-#[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
-fn quantizer(decoder: &str) {
+fn quantizer(decoder: &str, q: usize) {
   let limit = 5;
   let w = 64;
   let h = 80;
   let speed = 10;
 
   for b in DIMENSION_OFFSETS.iter() {
-    for &q in [80, 100, 120].iter() {
-      let mut dec = get_decoder::<u8>(decoder, b.0, b.1);
-      dec.encode_decode(w + b.0, h + b.1, speed, q, limit, 8, Default::default(), 15, 15, true, 0);
-    }
+    let mut dec = get_decoder::<u8>(decoder, b.0, b.1);
+    dec.encode_decode(w + b.0, h + b.1, speed, q, limit, 8, Default::default(), 15, 15, true, 0);
   }
 }
+
+macro_rules! test_quantizer {
+  ($($Q:expr),+) => {
+    $(
+      paste::item!{
+        #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
+        #[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
+        fn [<quantizer_ $Q>](decoder: &str) {
+          quantizer(decoder, $Q);
+        }
+      }
+    )*
+  }
+}
+
+test_quantizer!{60, 80, 100, 120}
 
 #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
 #[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
@@ -301,7 +326,7 @@ fn odd_size_frame_with_full_rdo(decoder: &str) {
 
 #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
 #[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
-fn all_bit_depths(decoder: &str) {
+fn low_bit_depth(decoder: &str) {
   let quantizer = 100;
   let limit = 3; // Include inter frames
   let speed = 0; // Test as many tools as possible
@@ -311,19 +336,30 @@ fn all_bit_depths(decoder: &str) {
   // 8-bit
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(w, h, speed, quantizer, limit, 8, Default::default(), 15, 15, true, 0);
-
-  // 10-bit
-  let mut dec = get_decoder::<u16>(decoder, w as usize, h as usize);
-  dec.encode_decode(w, h, speed, quantizer, limit, 10, Default::default(), 15, 15, true, 0);
-
-  // 12-bit
-  let mut dec = get_decoder::<u16>(decoder, w as usize, h as usize);
-  dec.encode_decode(w, h, speed, quantizer, limit, 12, Default::default(), 15, 15, true, 0);
 }
 
-#[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
-#[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
-fn chroma_sampling(decoder: &str) {
+#[cfg_attr(feature = "decode_test", interpolate_test(10_aom, "aom", 10))]
+#[cfg_attr(feature = "decode_test_dav1d", interpolate_test(10_dav1d, "dav1d", 10))]
+#[cfg_attr(feature = "decode_test", interpolate_test(12_aom, "aom", 12))]
+#[cfg_attr(feature = "decode_test_dav1d", interpolate_test(12_dav1d, "dav1d", 12))]
+fn high_bit_depth(decoder: &str, depth: usize) {
+  let quantizer = 100;
+  let limit = 3; // Include inter frames
+  let speed = 0; // Test as many tools as possible
+  let w = 64;
+  let h = 80;
+
+  let mut dec = get_decoder::<u16>(decoder, w as usize, h as usize);
+  dec.encode_decode(w, h, speed, quantizer, limit, depth, Default::default(), 15, 15, true, 0);
+}
+
+#[cfg_attr(feature = "decode_test", interpolate_test(420_aom, "aom", ChromaSampling::Cs420))]
+#[cfg_attr(feature = "decode_test_dav1d", interpolate_test(420_dav1d, "dav1d", ChromaSampling::Cs420))]
+#[cfg_attr(feature = "decode_test", interpolate_test(422_aom, "aom", ChromaSampling::Cs422))]
+#[cfg_attr(feature = "decode_test_dav1d", interpolate_test(422_dav1d, "dav1d", ChromaSampling::Cs422))]
+#[cfg_attr(feature = "decode_test", interpolate_test(444_aom, "aom", ChromaSampling::Cs444))]
+#[cfg_attr(feature = "decode_test_dav1d", interpolate_test(444_dav1d, "dav1d", ChromaSampling::Cs444))]
+fn chroma_sampling(decoder: &str, cs: ChromaSampling) {
   let quantizer = 100;
   let limit = 3; // Include inter frames
   let speed = 0; // Test as many tools as possible
@@ -332,17 +368,8 @@ fn chroma_sampling(decoder: &str) {
 
   // TODO: bump keyint when inter is supported
 
-  // 4:2:0
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
-  dec.encode_decode(w, h, speed, quantizer, limit, 8, ChromaSampling::Cs420, 1, 1, true, 0);
-
-  // 4:2:2
-  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
-  dec.encode_decode(w, h, speed, quantizer, limit, 8, ChromaSampling::Cs422, 1, 1, true, 0);
-
-  // 4:4:4
-  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
-  dec.encode_decode(w, h, speed, quantizer, limit, 8, ChromaSampling::Cs444, 1, 1, true, 0);
+  dec.encode_decode(w, h, speed, quantizer, limit, 8, cs, 1, 1, true, 0);
 }
 
 fn get_decoder<T: Pixel>(decoder: &str, w: usize, h: usize) -> Box<dyn TestDecoder<T>> {
