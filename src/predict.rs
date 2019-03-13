@@ -14,14 +14,14 @@ use crate::partition::*;
 use crate::plane::*;
 use crate::util::*;
 
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 use libc;
 #[cfg(target_arch = "x86")]
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 use std::mem::*;
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 use std::ptr;
 
 pub static RAV1E_INTRA_MODES: &'static [PredictionMode] = &[
@@ -157,7 +157,7 @@ fn get_scaled_luma_q0(alpha_q3: i16, ac_pred_q3: i16) -> i32 {
   }
 }
 
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 macro_rules! decl_angular_ipred_fn {
   ($f:ident) => {
     extern {
@@ -169,28 +169,28 @@ macro_rules! decl_angular_ipred_fn {
   };
 }
 
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 decl_angular_ipred_fn!(rav1e_ipred_dc_avx2);
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 decl_angular_ipred_fn!(rav1e_ipred_dc_128_avx2);
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 decl_angular_ipred_fn!(rav1e_ipred_dc_left_avx2);
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 decl_angular_ipred_fn!(rav1e_ipred_dc_top_avx2);
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 decl_angular_ipred_fn!(rav1e_ipred_h_avx2);
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 decl_angular_ipred_fn!(rav1e_ipred_v_avx2);
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 decl_angular_ipred_fn!(rav1e_ipred_paeth_avx2);
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 decl_angular_ipred_fn!(rav1e_ipred_smooth_avx2);
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 decl_angular_ipred_fn!(rav1e_ipred_smooth_h_avx2);
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 decl_angular_ipred_fn!(rav1e_ipred_smooth_v_avx2);
 
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 macro_rules! decl_cfl_pred_fn {
   ($f:ident) => {
     extern {
@@ -203,13 +203,13 @@ macro_rules! decl_cfl_pred_fn {
   };
 }
 
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 decl_cfl_pred_fn!(rav1e_ipred_cfl_avx2);
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 decl_cfl_pred_fn!(rav1e_ipred_cfl_128_avx2);
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 decl_cfl_pred_fn!(rav1e_ipred_cfl_left_avx2);
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 decl_cfl_pred_fn!(rav1e_ipred_cfl_top_avx2);
 
 pub trait Intra<T>: Dim
@@ -217,7 +217,7 @@ where
   T: Pixel,
 {
   fn pred_dc(output: &mut PlaneMutSlice<'_, T>, above: &[T], left: &[T]) {
-    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
         return unsafe {
@@ -245,7 +245,7 @@ where
   }
 
   fn pred_dc_128(output: &mut PlaneMutSlice<'_, T>, bit_depth: usize) {
-    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
         return unsafe {
@@ -269,7 +269,7 @@ where
   }
 
   fn pred_dc_left(output: &mut PlaneMutSlice<'_, T>, _above: &[T], left: &[T]) {
-    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
         return unsafe {
@@ -292,7 +292,7 @@ where
   }
 
   fn pred_dc_top(output: &mut PlaneMutSlice<'_, T>, above: &[T], _left: &[T]) {
-    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
         return unsafe {
@@ -315,7 +315,7 @@ where
   }
 
   fn pred_h(output: &mut PlaneMutSlice<'_, T>, left: &[T]) {
-    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
         return unsafe {
@@ -340,7 +340,7 @@ where
   }
 
   fn pred_v(output: &mut PlaneMutSlice<'_, T>, above: &[T]) {
-    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
         return unsafe {
@@ -364,7 +364,7 @@ where
     output: &mut PlaneMutSlice<'_, T>, above: &[T], left: &[T],
     above_left: T
   ) {
-    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
         return unsafe {
@@ -407,7 +407,7 @@ where
   fn pred_smooth(
     output: &mut PlaneMutSlice<'_, T>, above: &[T], left: &[T]
   ) {
-    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
         return unsafe {
@@ -471,7 +471,7 @@ where
   fn pred_smooth_h(
     output: &mut PlaneMutSlice<'_, T>, above: &[T], left: &[T]
   ) {
-    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
         return unsafe {
@@ -521,7 +521,7 @@ where
   fn pred_smooth_v(
     output: &mut PlaneMutSlice<'_, T>, above: &[T], left: &[T]
   ) {
-    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
         return unsafe {
@@ -657,7 +657,7 @@ where
     output: &mut PlaneMutSlice<'_, T>, ac: &[i16], alpha: i16, bit_depth: usize,
     above: &[T], left: &[T]
   ) {
-    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
         return unsafe {
@@ -680,7 +680,7 @@ where
   fn pred_cfl_128(
     output: &mut PlaneMutSlice<'_, T>, ac: &[i16], alpha: i16, bit_depth: usize
   ) {
-    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
         return unsafe {
@@ -704,7 +704,7 @@ where
     output: &mut PlaneMutSlice<'_, T>, ac: &[i16], alpha: i16, bit_depth: usize,
     above: &[T], left: &[T]
   ) {
-    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
         return unsafe {
@@ -728,7 +728,7 @@ where
     output: &mut PlaneMutSlice<'_, T>, ac: &[i16], alpha: i16, bit_depth: usize,
     above: &[T], left: &[T]
   ) {
-    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
         return unsafe {

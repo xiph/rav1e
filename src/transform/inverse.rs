@@ -7,9 +7,9 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 pub use self::nasm::*;
-#[cfg(any(not(target_arch = "x86_64"), windows, not(feature = "nasm")))]
+#[cfg(any(not(target_arch = "x86_64"), not(feature = "nasm")))]
 pub use self::native::*;
 
 // TODO: move 1d txfm code to native module.
@@ -1506,7 +1506,7 @@ static INV_TXFM_FNS: [[fn(&[i32], &mut [i32], usize); 5]; 4] = [
   [av1_iidentity4, av1_iidentity8, av1_iidentity16, av1_iidentity32, |_, _, _| unimplemented!()]
 ];
 
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 mod nasm {
   use super::*;
   use crate::partition::TxType;

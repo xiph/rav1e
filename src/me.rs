@@ -7,9 +7,9 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 pub use self::nasm::get_sad;
-#[cfg(any(not(target_arch = "x86_64"), windows, not(feature = "nasm")))]
+#[cfg(any(not(target_arch = "x86_64"), not(feature = "nasm")))]
 pub use self::native::get_sad;
 use crate::context::{BlockOffset, BLOCK_TO_PLANE_SHIFT, MI_SIZE};
 use crate::encoder::ReferenceFrame;
@@ -21,7 +21,7 @@ use crate::util::Pixel;
 
 use std::sync::Arc;
 
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 mod nasm {
   use crate::plane::*;
   use crate::util::*;
@@ -169,7 +169,7 @@ mod nasm {
     plane_org: &PlaneSlice<'_, T>, plane_ref: &PlaneSlice<'_, T>, blk_h: usize,
     blk_w: usize, bit_depth: usize
   ) -> u32 {
-    #[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
       if mem::size_of::<T>() == 2 && is_x86_feature_detected!("ssse3") && blk_h >= 4 && blk_w >= 4 {
         return unsafe {

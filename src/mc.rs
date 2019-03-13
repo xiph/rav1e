@@ -7,9 +7,9 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 pub use self::nasm::*;
-#[cfg(any(not(target_arch = "x86_64"), windows, not(feature = "nasm")))]
+#[cfg(any(not(target_arch = "x86_64"), not(feature = "nasm")))]
 pub use self::native::*;
 
 use crate::util::Pixel;
@@ -135,7 +135,7 @@ const SUBPEL_FILTERS: [[[i32; SUBPEL_FILTER_SIZE]; 16]; 6] = [
   ]
 ];
 
-#[cfg(all(target_arch = "x86_64", not(windows), feature = "nasm"))]
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 mod nasm {
   use super::*;
   use crate::plane::*;
