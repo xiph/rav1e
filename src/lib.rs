@@ -17,7 +17,6 @@ extern crate bincode;
 extern crate dav1d_sys;
 
 #[cfg(test)]
-#[macro_use]
 extern crate interpolate_name;
 
 #[cfg(test)]
