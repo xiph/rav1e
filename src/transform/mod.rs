@@ -225,8 +225,8 @@ mod test {
     forward_transform(res, freq, tx_size.width(), tx_size, tx_type, 8);
     inverse_transform_add(freq, &mut dst.as_mut_slice(), tx_size, tx_type, 8);
 
-    for (s, d) in src.iter().zip(dst.data) {
-      assert!(i16::abs(i16::cast_from(*s) - i16::cast_from(d)) <= tolerance);
+    for (s, d) in src.iter().zip(dst.data.iter()) {
+      assert!(i16::abs(i16::cast_from(*s) - i16::cast_from(*d)) <= tolerance);
     }
   }
 
