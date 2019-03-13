@@ -12,6 +12,7 @@ use std::slice;
 use std::sync::Arc;
 
 use std::ffi::CStr;
+use std::ffi::CString;
 use std::os::raw::c_char;
 use std::os::raw::c_int;
 
@@ -164,7 +165,7 @@ unsafe fn option_match(
     Ok(())
 }
 
-/// Set a configuration parameter using its key and value
+/// Set a configuration parameter using its key and value as string.
 ///
 /// Available keys and values
 /// - "quantizer": 0-255, default 100
@@ -179,6 +180,21 @@ pub unsafe extern "C" fn rav1e_config_parse(
     value: *const c_char,
 ) -> c_int {
     if option_match(cfg, key, value) == Ok(()) { 0 } else { -1 }
+}
+
+/// Set a configuration parameter using its key and value as integer.
+///
+/// Available keys and values are the same as rav1e_config_parse()
+///
+/// Return a negative value on error or 0.
+#[no_mangle]
+pub unsafe extern "C" fn rav1e_config_parse_int(
+    cfg: *mut Config,
+    key: *const c_char,
+    value: c_int,
+) -> c_int {
+    let val = CString::new(value.to_string()).unwrap();
+    if option_match(cfg, key, val.as_ptr()) == Ok(()) { 0 } else { -1 }
 }
 
 /// Generate a new encoding context from a populated encoder configuration
