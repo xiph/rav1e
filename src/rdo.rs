@@ -728,8 +728,6 @@ pub fn rdo_mode_decision<T: Pixel>(
           tx_size,
           fi.sequence.bit_depth,
           &fs.input.planes[0].cfg,
-          fi.w_in_b,
-          fi.h_in_b,
           None
         )
       };
@@ -915,8 +913,6 @@ pub fn rdo_cfl_alpha<T: Pixel>(
             uv_tx_size,
             bit_depth,
             &input.cfg,
-            0,
-            0,
             Some(PredictionMode::UV_CFL_PRED)
           );
           PredictionMode::UV_CFL_PRED.predict_intra(
