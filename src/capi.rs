@@ -253,11 +253,14 @@ pub unsafe extern "C" fn rav1e_receive_packet(
         .receive_packet()
         .map(|p| {
             (*ctx).last_err = None;
+            let rav1e::Packet { data, number, frame_type, .. } = p;
+            let len  = data.len();
+            let data = Box::into_raw(data.into_boxed_slice()) as *const u8;
             let packet = Packet {
-                data: p.data.as_ptr(),
-                len: p.data.len(),
-                number: p.number,
-                frame_type: p.frame_type,
+                data,
+                len,
+                number,
+                frame_type,
             };
             *pkt = Box::into_raw(Box::new(packet));
             0
@@ -276,7 +279,8 @@ pub unsafe extern "C" fn rav1e_receive_packet(
 #[no_mangle]
 pub unsafe extern fn rav1e_packet_unref(pkt: *mut Packet) {
     if !pkt.is_null() {
-        let _ = Box::from_raw(pkt);
+        let pkt = Box::from_raw(pkt);
+        let _ = Box::from_raw(pkt.data as *mut u8);
     }
 }
 
