@@ -2138,7 +2138,7 @@ pub fn encode_frame<T: Pixel>(fi: &mut FrameInvariants<T>, fs: &mut FrameState<T
     write_obus(&mut packet, fi, fs).unwrap();
     if let Some(ref rec) = fi.rec_buffer.frames[fi.frame_to_show_map_idx as usize] {
       for p in 0..3 {
-        fs.rec.planes[p].data.copy_from_slice(rec.frame.planes[p].data.as_slice());
+        fs.rec.planes[p].data.copy_from_slice(&rec.frame.planes[p].data);
       }
     }
   } else {

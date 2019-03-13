@@ -907,50 +907,50 @@ mod test {
     let mut output = Plane::wrap(vec![0u8; 4 * 4], 4);
 
     Block4x4::pred_dc(&mut output.as_mut_slice(), above, left);
-    assert_eq!(output.data, [32u8; 16]);
+    assert_eq!(&output.data[..], [32u8; 16]);
 
     Block4x4::pred_dc_top(&mut output.as_mut_slice(), above, left);
-    assert_eq!(output.data, [35u8; 16]);
+    assert_eq!(&output.data[..], [35u8; 16]);
 
     Block4x4::pred_dc_left(&mut output.as_mut_slice(), above, left);
-    assert_eq!(output.data, [30u8; 16]);
+    assert_eq!(&output.data[..], [30u8; 16]);
 
     Block4x4::pred_dc_128(&mut output.as_mut_slice(), 8);
-    assert_eq!(output.data, [128u8; 16]);
+    assert_eq!(&output.data[..], [128u8; 16]);
 
     Block4x4::pred_v(&mut output.as_mut_slice(), above);
     assert_eq!(
-      output.data,
+      &output.data[..],
       [33, 34, 35, 36, 33, 34, 35, 36, 33, 34, 35, 36, 33, 34, 35, 36]
     );
 
     Block4x4::pred_h(&mut output.as_mut_slice(), left);
     assert_eq!(
-      output.data,
+      &output.data[..],
       [31, 31, 31, 31, 30, 30, 30, 30, 29, 29, 29, 29, 28, 28, 28, 28]
     );
 
     Block4x4::pred_paeth(&mut output.as_mut_slice(), above, left, top_left);
     assert_eq!(
-      output.data,
+      &output.data[..],
       [32, 34, 35, 36, 30, 32, 32, 36, 29, 32, 32, 32, 28, 28, 32, 32]
     );
 
     Block4x4::pred_smooth(&mut output.as_mut_slice(), above, left);
     assert_eq!(
-      output.data,
+      &output.data[..],
       [32, 34, 35, 35, 30, 32, 33, 34, 29, 31, 32, 32, 29, 30, 32, 32]
     );
 
     Block4x4::pred_smooth_h(&mut output.as_mut_slice(), above, left);
     assert_eq!(
-      output.data,
+      &output.data[..],
       [31, 33, 34, 35, 30, 33, 34, 35, 29, 32, 34, 34, 28, 31, 33, 34]
     );
 
     Block4x4::pred_smooth_v(&mut output.as_mut_slice(), above, left);
     assert_eq!(
-      output.data,
+      &output.data[..],
       [33, 34, 35, 36, 31, 31, 32, 33, 30, 30, 30, 31, 29, 30, 30, 30]
     );
   }

@@ -40,7 +40,7 @@ pub struct PlaneOffset {
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Plane<T: Pixel> {
-  pub data: Vec<T>,
+  pub data: Box<[T]>,
   pub cfg: PlaneConfig
 }
 
@@ -90,7 +90,7 @@ impl<T: Pixel> Plane<T> {
     }
     assert!(is_aligned(data.as_ptr(), Self::DATA_ALIGNMENT_LOG2));
     Plane {
-      data,
+      data: data.into_boxed_slice(),
       cfg: PlaneConfig {
         stride,
         alloc_height,
@@ -108,9 +108,10 @@ impl<T: Pixel> Plane<T> {
 
   pub fn wrap(data: Vec<T>, stride: usize) -> Self {
     let len = data.len();
+
     assert!(len % stride == 0);
     Self {
-      data,
+      data: data.into_boxed_slice(),
       cfg: PlaneConfig {
         stride,
         alloc_height: len / stride,
@@ -607,7 +608,7 @@ pub mod test {
         0, 0, 2, 3, 4, 5, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0,
-      ],
+      ].into_boxed_slice(),
       cfg: PlaneConfig {
         stride: 8,
         alloc_height: 9,
@@ -623,8 +624,8 @@ pub mod test {
     };
     plane.pad(4, 4);
     assert_eq!(
-      vec![
-        1, 1, 1, 2, 3, 4, 4, 4,
+      &[
+        1u8, 1, 1, 2, 3, 4, 4, 4,
         1, 1, 1, 2, 3, 4, 4, 4,
         1, 1, 1, 2, 3, 4, 4, 4,
         1, 1, 1, 2, 3, 4, 4, 4,
@@ -633,8 +634,8 @@ pub mod test {
         2, 2, 2, 3, 4, 5, 5, 5,
         2, 2, 2, 3, 4, 5, 5, 5,
         2, 2, 2, 3, 4, 5, 5, 5,
-      ],
-      plane.data
+      ][..],
+      &plane.data[..]
     );
   }
 }
