@@ -90,9 +90,6 @@ impl<T: Pixel> std::ops::Drop for PlaneData<T> {
 
 impl<T: Pixel> PlaneData<T> {
   /// Data alignment in bytes.
-  #[cfg(windows)]
-  const DATA_ALIGNMENT_LOG2: usize = 4;
-  #[cfg(not(windows))]
   const DATA_ALIGNMENT_LOG2: usize = 5;
 
   unsafe fn layout(len: usize) -> Layout {
@@ -149,16 +146,7 @@ impl<T: Pixel> Debug for Plane<T>
 
 impl<T: Pixel> Plane<T> {
   /// Stride alignment in bytes.
-  #[cfg(windows)]
-  const STRIDE_ALIGNMENT_LOG2: usize = 4;
-  #[cfg(not(windows))]
   const STRIDE_ALIGNMENT_LOG2: usize = 5;
-
-  /// Data alignment in bytes.
-  #[cfg(windows)]
-  const DATA_ALIGNMENT_LOG2: usize = 4;
-  #[cfg(not(windows))]
-  const DATA_ALIGNMENT_LOG2: usize = 5;
 
   pub fn new(
     width: usize, height: usize, xdec: usize, ydec: usize, xpad: usize,
@@ -174,7 +162,6 @@ impl<T: Pixel> Plane<T> {
     let alloc_height = yorigin + height + ypad;
     let data = PlaneData::new(stride * alloc_height);
 
-    assert!(is_aligned(data.as_ptr(), Self::DATA_ALIGNMENT_LOG2));
     Plane {
       data,
       cfg: PlaneConfig {
