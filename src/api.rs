@@ -621,7 +621,7 @@ impl<T: Pixel> Context<T> {
         bw.write_bit(true)?; // marker
         bw.write(7, 1)?; // version
         bw.write(3, seq.profile)?;
-        bw.write(5, 32)?; // level
+        bw.write(5, 31)?; // level
         bw.write_bit(false)?; // tier
         bw.write_bit(seq.bit_depth > 8)?; // high_bitdepth
         bw.write_bit(seq.bit_depth == 12)?; // twelve_bit
@@ -639,7 +639,9 @@ impl<T: Pixel> Context<T> {
       Ok(buf)
     }
 
-    sequence_header_inner(&self.frame_data[&0].sequence).unwrap()
+    let seq = Sequence::new(&self.config.enc);
+
+    sequence_header_inner(&seq).unwrap()
   }
 
   fn next_keyframe(&self) -> u64 {
