@@ -16,6 +16,7 @@ use crate::test_encode_decode_aom::AomDecoder;
 #[cfg(feature="decode_test_dav1d")]
 use crate::test_encode_decode_dav1d::Dav1dDecoder;
 use std::collections::VecDeque;
+use interpolate_name::interpolate_test;
 
 fn fill_frame<T: Pixel>(ra: &mut ChaChaRng, frame: &mut Frame<T>) {
   for plane in frame.planes.iter_mut() {
@@ -174,8 +175,8 @@ macro_rules! test_dimensions {
   ($(($W:expr, $H:expr)),+) => {
     $(
         paste::item!{
-            #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
-            #[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
+            #[cfg_attr(feature = "decode_test", interpolate_name::interpolate_test(aom, "aom"))]
+            #[cfg_attr(feature = "decode_test_dav1d", interpolate_name::interpolate_test(dav1d, "dav1d"))]
             fn [<dimension_ $W x $H>](decoder: &str) {
                 super::dimension($W, $H, decoder)
             }
