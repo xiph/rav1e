@@ -963,8 +963,6 @@ pub fn encode_tx_block<T: Pixel>(
       tx_size,
       bit_depth,
       &fs.input.planes[p].cfg,
-      fi.w_in_b,
-      fi.h_in_b,
       Some(mode),
     );
     mode.predict_intra(&mut rec.mut_slice(po), tx_size, bit_depth, &ac, alpha, &edge_buf);

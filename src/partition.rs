@@ -821,8 +821,6 @@ pub fn get_intra_edges<T: Pixel>(
   tx_size: TxSize,
   bit_depth: usize,
   plane_cfg: &PlaneConfig,
-  frame_w_in_b: usize,
-  frame_h_in_b: usize,
   opt_mode: Option<PredictionMode>
 ) -> AlignedArray<[T; 4 * MAX_TX_SIZE + 1]> {
   let (left_edge, top_edge) = (dst.left_edge, dst.top_edge);
@@ -920,9 +918,7 @@ pub fn get_intra_edges<T: Pixel>(
         );
 
       let num_avail = if top_edge != 0 && has_tr(&bo, bsize) {
-        tx_size.width().min(
-          (MI_SIZE >> plane_cfg.xdec) * frame_w_in_b - x - tx_size.width()
-        )
+        tx_size.width().min(plane_cfg.width - x - tx_size.width())
       } else {
         0
       };
@@ -953,9 +949,7 @@ pub fn get_intra_edges<T: Pixel>(
         );
 
       let num_avail = if left_edge != 0 && has_bl(&bo, bsize) {
-        tx_size.height().min(
-          (MI_SIZE >> plane_cfg.ydec) * frame_h_in_b - y - tx_size.height()
-        )
+        tx_size.height().min(plane_cfg.height - y - tx_size.height())
       } else {
         0
       };
