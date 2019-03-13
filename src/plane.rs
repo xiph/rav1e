@@ -670,6 +670,30 @@ pub mod test {
   use super::*;
 
   #[test]
+  fn copy_from_raw_u8() {
+    let mut plane = Plane::wrap(
+    vec![
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 1, 2, 3, 4, 0, 0,
+        0, 0, 8, 7, 6, 5, 0, 0,
+        0, 0, 9, 8, 7, 6, 0, 0,
+        0, 0, 2, 3, 4, 5, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+    ], 8);
+
+    let input = vec![42u8; 64];
+
+    plane.copy_from_raw_u8(&input, 8, 1);
+
+    println!("{:?}", &plane.data[..10]);
+
+    assert_eq!(&input[..64], &plane.data[..64]);
+  }
+
+  #[test]
   fn test_plane_pad() {
     let mut plane = Plane::<u8> {
       data: PlaneData::from_slice(&vec![
