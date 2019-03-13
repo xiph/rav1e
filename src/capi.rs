@@ -384,7 +384,8 @@ pub unsafe extern "C" fn rav1e_frame_fill_plane(
     stride: ptrdiff_t,
     bytewidth: c_int,
 ) {
-    let input = Arc::get_mut(&mut (*frame).0).unwrap();
+    let f = &mut (*frame).0;
+    let input = Arc::make_mut(f);
     let data_slice = slice::from_raw_parts(data, data_len as usize);
 
     input.planes[plane as usize].copy_from_raw_u8(data_slice, stride as usize, bytewidth as usize);
