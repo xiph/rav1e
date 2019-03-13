@@ -42,7 +42,6 @@ pub struct PlaneOffset {
 pub struct PlaneData<T: Pixel> {
   ptr: std::ptr::NonNull<T>,
   _marker: PhantomData<T>,
-  layout: Layout,
   len: usize,
 }
 
@@ -84,7 +83,7 @@ impl<T: Pixel> std::ops::DerefMut for PlaneData<T> {
 impl<T: Pixel> std::ops::Drop for PlaneData<T> {
   fn drop(&mut self) {
     unsafe {
-      dealloc(self.ptr.as_ptr() as *mut u8, self.layout);
+      dealloc(self.ptr.as_ptr() as *mut u8, Self::layout(self.len));
     }
   }
 }
@@ -96,20 +95,21 @@ impl<T: Pixel> PlaneData<T> {
   #[cfg(not(windows))]
   const DATA_ALIGNMENT_LOG2: usize = 5;
 
-  unsafe fn new_uninitialized(len: usize) -> Self {
-    let layout = Layout::from_size_align_unchecked(
+  unsafe fn layout(len: usize) -> Layout {
+    Layout::from_size_align_unchecked(
       len * mem::size_of::<T>(),
       1 << Self::DATA_ALIGNMENT_LOG2
-    );
+    )
+  }
 
+  unsafe fn new_uninitialized(len: usize) -> Self {
     let ptr = {
-      let ptr = alloc(layout) as *mut T;
+      let ptr = alloc(Self::layout(len)) as *mut T;
       std::ptr::NonNull::new_unchecked(ptr)
     };
 
     PlaneData {
       ptr,
-      layout,
       len,
       _marker: PhantomData
     }
