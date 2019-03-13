@@ -7,7 +7,7 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use std::alloc::{alloc, Layout};
+use std::alloc::{alloc, dealloc, Layout};
 use std::iter::FusedIterator;
 use std::fmt::{Debug, Display, Formatter};
 use std::marker::PhantomData;
@@ -38,9 +38,105 @@ pub struct PlaneOffset {
   pub y: isize
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct PlaneData<T: Pixel> {
+  ptr: std::ptr::NonNull<T>,
+  _marker: PhantomData<T>,
+  layout: Layout,
+  len: usize,
+}
+
+unsafe impl<T: Pixel + Send> Send for PlaneData<T> { }
+unsafe impl<T: Pixel + Sync> Sync for PlaneData<T> { }
+
+impl<T: Pixel> Clone for PlaneData<T> {
+  fn clone(&self) -> Self {
+    let mut pd = unsafe { Self::new_uninitialized(self.len) };
+
+    pd.copy_from_slice(self);
+
+    pd
+  }
+}
+
+impl<T: Pixel> std::ops::Deref for PlaneData<T> {
+  type Target = [T];
+
+  fn deref(&self) -> &[T] {
+    unsafe {
+      let p = self.ptr.as_ptr();
+
+      std::slice::from_raw_parts(p, self.len)
+    }
+  }
+}
+
+impl<T: Pixel> std::ops::DerefMut for PlaneData<T> {
+  fn deref_mut(&mut self) -> &mut [T] {
+    unsafe {
+      let p = self.ptr.as_ptr();
+
+      std::slice::from_raw_parts_mut(p, self.len)
+    }
+  }
+}
+
+impl<T: Pixel> std::ops::Drop for PlaneData<T> {
+  fn drop(&mut self) {
+    unsafe {
+      dealloc(self.ptr.as_ptr() as *mut u8, self.layout);
+    }
+  }
+}
+
+impl<T: Pixel> PlaneData<T> {
+  /// Data alignment in bytes.
+  #[cfg(windows)]
+  const DATA_ALIGNMENT_LOG2: usize = 4;
+  #[cfg(not(windows))]
+  const DATA_ALIGNMENT_LOG2: usize = 5;
+
+  unsafe fn new_uninitialized(len: usize) -> Self {
+    let layout = Layout::from_size_align_unchecked(
+      len * mem::size_of::<T>(),
+      1 << Self::DATA_ALIGNMENT_LOG2
+    );
+
+    let ptr = {
+      let ptr = alloc(layout) as *mut T;
+      std::ptr::NonNull::new_unchecked(ptr)
+    };
+
+    PlaneData {
+      ptr,
+      layout,
+      len,
+      _marker: PhantomData
+    }
+  }
+
+  pub fn new(len: usize) -> Self {
+    let mut pd = unsafe { Self::new_uninitialized(len) };
+
+    for v in pd.iter_mut() {
+      *v = T::cast_from(128);
+    }
+
+    pd
+  }
+
+  pub fn from_slice(data: &[T]) -> Self {
+    let mut pd = unsafe { Self::new_uninitialized(data.len()) };
+
+    pd.copy_from_slice(data);
+
+    pd
+  }
+}
+
 #[derive(Clone, PartialEq, Eq)]
 pub struct Plane<T: Pixel> {
-  pub data: Box<[T]>,
+  pub data: PlaneData<T>,
   pub cfg: PlaneConfig
 }
 
@@ -76,21 +172,11 @@ impl<T: Pixel> Plane<T> {
       Self::STRIDE_ALIGNMENT_LOG2 + 1 - mem::size_of::<T>()
     );
     let alloc_height = yorigin + height + ypad;
-    let mut data = unsafe {
-      let capacity = stride * alloc_height;
-      let layout = Layout::from_size_align_unchecked(
-        capacity * mem::size_of::<T>(),
-        1 << Self::DATA_ALIGNMENT_LOG2
-      );
-      let ptr = alloc(layout) as *mut T;
-      Vec::from_raw_parts(ptr, capacity, capacity)
-    };
-    for v in &mut data {
-      *v = T::cast_from(128);
-    }
+    let data = PlaneData::new(stride * alloc_height);
+
     assert!(is_aligned(data.as_ptr(), Self::DATA_ALIGNMENT_LOG2));
     Plane {
-      data: data.into_boxed_slice(),
+      data,
       cfg: PlaneConfig {
         stride,
         alloc_height,
@@ -110,8 +196,9 @@ impl<T: Pixel> Plane<T> {
     let len = data.len();
 
     assert!(len % stride == 0);
+
     Self {
-      data: data.into_boxed_slice(),
+      data: PlaneData::from_slice(&data),
       cfg: PlaneConfig {
         stride,
         alloc_height: len / stride,
@@ -598,7 +685,7 @@ pub mod test {
   #[test]
   fn test_plane_pad() {
     let mut plane = Plane::<u8> {
-      data: vec![
+      data: PlaneData::from_slice(&vec![
         0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0,
@@ -608,7 +695,7 @@ pub mod test {
         0, 0, 2, 3, 4, 5, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0,
-      ].into_boxed_slice(),
+      ]),
       cfg: PlaneConfig {
         stride: 8,
         alloc_height: 9,
