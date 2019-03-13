@@ -135,6 +135,35 @@ pub unsafe extern "C" fn rav1e_config_unref(cfg: *mut Config) {
     }
 }
 
+unsafe fn option_match(
+    cfg: *mut Config,
+    key: *const c_char,
+    value: *const c_char
+) -> Result<(), ()> {
+    let key = CStr::from_ptr(key).to_str().map_err(|_| ())?;
+    let value = CStr::from_ptr(value).to_str().map_err(|_| ())?;
+    let enc = &mut(*cfg).cfg.enc;
+
+    match key {
+        "width" => enc.width = value.parse().map_err(|_| ())?,
+        "height" => enc.height = value.parse().map_err(|_| ())?,
+        "speed" => enc.speed_settings = rav1e::SpeedSettings::from_preset(value.parse().map_err(|_| ())?),
+
+        "threads" => (*cfg).cfg.threads = value.parse().map_err(|_| ())?,
+
+        "tune" => enc.tune = value.parse().map_err(|_| ())?,
+        "quantizer" => enc.quantizer = value.parse().map_err(|_| ())?,
+
+        "key_frame_interval" => enc.max_key_frame_interval = value.parse().map_err(|_| ())?,
+        "min_key_frame_interval" => enc.min_key_frame_interval = value.parse().map_err(|_| ())?,
+        "low_latency" => enc.low_latency = value.parse().map_err(|_| ())?,
+
+        _ => return Err(())
+    }
+
+    Ok(())
+}
+
 /// Set a configuration parameter using its key and value
 ///
 /// Available keys and values
@@ -142,24 +171,14 @@ pub unsafe extern "C" fn rav1e_config_unref(cfg: *mut Config) {
 /// - "speed": 0-10, default 3
 /// - "tune": "psnr"-"psychovisual", default "psnr"
 ///
-/// Returns a negative value on non-zero.
+/// Return a negative value on error or 0.
 #[no_mangle]
 pub unsafe extern "C" fn rav1e_config_parse(
     cfg: *mut Config,
     key: *const c_char,
     value: *const c_char,
 ) -> c_int {
-    let key = CStr::from_ptr(key).to_string_lossy();
-    let value = CStr::from_ptr(value).to_string_lossy();
-
-    (*cfg)
-        .cfg
-        .parse(&key, &value)
-        .map(|_v| {
-            (*cfg).last_err = None;
-            0
-        }).map_err(|e| (*cfg).last_err = Some(e))
-        .unwrap_or(-1)
+    if option_match(cfg, key, value) == Ok(()) { 0 } else { -1 }
 }
 
 /// Generate a new encoding context from a populated encoder configuration
