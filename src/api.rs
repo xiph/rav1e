@@ -18,7 +18,6 @@ use crate::rate::FRAME_SUBTYPE_I;
 use crate::rate::FRAME_SUBTYPE_P;
 use crate::scenechange::SceneChangeDetector;
 use crate::util::Pixel;
-use self::EncoderStatus::*;
 
 use std::{cmp, fmt, io};
 use std::collections::BTreeMap;
@@ -445,23 +444,6 @@ pub struct Config {
 const MAX_USABLE_THREADS: usize = 4;
 
 impl Config {
-  pub fn parse(&mut self, key: &str, value: &str) -> Result<(), EncoderStatus> {
-    match key {
-      "low_latency" => self.enc.low_latency = value.parse().map_err(|_e| ParseError)?,
-      "min_key_frame_interval" => self.enc.min_key_frame_interval = value.parse().map_err(|_e| ParseError)?,
-      "key_frame_interval" => self.enc.max_key_frame_interval = value.parse().map_err(|_e| ParseError)?,
-      "quantizer" => self.enc.quantizer = value.parse().map_err(|_e| ParseError)?,
-      "speed" => self.enc.speed_settings = SpeedSettings::from_preset(value.parse().map_err(|_e| ParseError)?),
-      "tune" => self.enc.tune = value.parse().map_err(|_e| ParseError)?,
-      "threads" => self.threads = value.parse().map_err(|_e| ParseError)?,
-      "width" => self.enc.width = value.parse().map_err(|_e| ParseError)?,
-      "height" => self.enc.height = value.parse().map_err(|_e| ParseError)?,
-      _ => return Err(InvalidKey)
-    }
-
-    Ok(())
-  }
-
   pub fn new_context<T: Pixel>(&self) -> Context<T> {
     // initialize with temporal delimiter
     let packet_data = TEMPORAL_DELIMITER.to_vec();
