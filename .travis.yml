@@ -13,6 +13,9 @@ before_install:
     - hash -r
     - which cmake
     - cmake --version
+    - curl -L https://github.com/mozilla/sccache/releases/download/0.2.8/sccache-0.2.8-x86_64-unknown-linux-musl.tar.gz | tar xz
+    - export PATH=$PATH:`pwd`/sccache-0.2.8-x86_64-unknown-linux-musl
+    - export RUSTC_WRAPPER=sccache
     - wget https://download.videolan.org/contrib/nasm/nasm-2.14.tar.gz
     - tar -xvf nasm-2.14.tar.gz
     - cd nasm-2.14
@@ -33,6 +36,9 @@ before_install:
     - cmake -GNinja .. -DCMAKE_BUILD_TYPE=Release -DENABLE_TESTS=0 -DENABLE_DOCS=0 -DCONFIG_LOWBITDEPTH=1 -DCMAKE_INSTALL_PREFIX=/usr -DCONFIG_PIC=1
     - ninja && sudo ninja install
     - cd ../..
+
+after_script:
+- sccache -s
 
 jobs:
   include:
