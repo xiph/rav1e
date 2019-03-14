@@ -818,27 +818,27 @@ pub mod test {
   fn get_sad_same_inner<T: Pixel>() {
     let blocks: Vec<(BlockSize, u32)> = vec![
       (BLOCK_4X4, 1912),
-      (BLOCK_4X8, 3496),
-      (BLOCK_8X4, 4296),
+      (BLOCK_4X8, 4296),
+      (BLOCK_8X4, 3496),
       (BLOCK_8X8, 7824),
-      (BLOCK_8X16, 14416),
-      (BLOCK_16X8, 16592),
+      (BLOCK_8X16, 16592),
+      (BLOCK_16X8, 14416),
       (BLOCK_16X16, 31136),
-      (BLOCK_16X32, 59552),
-      (BLOCK_32X16, 60064),
+      (BLOCK_16X32, 60064),
+      (BLOCK_32X16, 59552),
       (BLOCK_32X32, 120128),
-      (BLOCK_32X64, 250176),
-      (BLOCK_64X32, 186688),
+      (BLOCK_32X64, 186688),
+      (BLOCK_64X32, 250176),
       (BLOCK_64X64, 438912),
-      (BLOCK_64X128, 1016768),
-      (BLOCK_128X64, 654272),
+      (BLOCK_64X128, 654272),
+      (BLOCK_128X64, 1016768),
       (BLOCK_128X128, 1689792),
-      (BLOCK_4X16, 6664),
-      (BLOCK_16X4, 8680),
-      (BLOCK_8X32, 27600),
-      (BLOCK_32X8, 31056),
-      (BLOCK_16X64, 116384),
-      (BLOCK_64X16, 93344),
+      (BLOCK_4X16, 8680),
+      (BLOCK_16X4, 6664),
+      (BLOCK_8X32, 31056),
+      (BLOCK_32X8, 27600),
+      (BLOCK_16X64, 93344),
+      (BLOCK_64X16, 116384),
     ];
 
     let bit_depth: usize = 8;
@@ -854,7 +854,7 @@ pub mod test {
 
       assert_eq!(
         block.1,
-        get_sad(&mut input_slice, &mut rec_slice, bsw, bsh, bit_depth)
+        get_sad(&mut input_slice, &mut rec_slice, bsh, bsw, bit_depth)
       );
     }
   }

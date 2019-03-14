@@ -49,7 +49,7 @@ fn bench_get_sad(b: &mut Bencher, bs: &BlockSize) {
 
   b.iter(|| {
     let _ =
-      black_box(me::get_sad(&plane_org, &plane_ref, bsw, bsh, bit_depth));
+      black_box(me::get_sad(&plane_org, &plane_ref, bsh, bsw, bit_depth));
   })
 }
 
