@@ -23,6 +23,8 @@ install:
     - rustup-init -yv --default-toolchain %channel% --default-host %host%
     - set PATH=%PATH%;%USERPROFILE%\.cargo\bin;%APPVEYOR_BUILD_FOLDER%;nasm-2.14.02;sccache-0.2.8-x86_64-pc-windows-msvc
     - set RUSTC_WRAPPER=sccache
+    - set SCCACHE_CACHE_SIZE=500M
+    - set SCCACHE_DIR=%LOCALAPPDATA%\Mozilla\sccache
     - ps: $Env:PKG_CONFIG_ALLOW_CROSS=1
     - rustc -vV
     - cargo -vV

@@ -16,6 +16,8 @@ before_install:
     - curl -L https://github.com/mozilla/sccache/releases/download/0.2.8/sccache-0.2.8-x86_64-unknown-linux-musl.tar.gz | tar xvz
     - export PATH=$PATH:`pwd`/sccache-0.2.8-x86_64-unknown-linux-musl
     - export RUSTC_WRAPPER=sccache
+    - export SCCACHE_CACHE_SIZE=500M
+    - export SCCACHE_DIR=~/.cache/sccache
     - curl -L https://download.videolan.org/contrib/nasm/nasm-2.14.tar.gz | tar xvz
     - cd nasm-2.14
     - ./configure CC='sccache gcc' && make -j2 && sudo make install
