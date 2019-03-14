@@ -90,43 +90,66 @@ pub unsafe extern "C" fn rav1e_config_default() -> *mut Config {
     Box::into_raw(c)
 }
 
+/// Set color properties of the stream.
+///
+/// Supported values are defined by the enum types
+/// RaMatrixCoefficients, RaColorPrimaries, and RaTransferCharacteristics
+/// respectively.
+///
+/// Return a negative value on error or 0.
 #[no_mangle]
 pub unsafe extern "C" fn rav1e_config_set_color_description(cfg: *mut Config,
                                                             matrix: MatrixCoefficients,
                                                             primaries: ColorPrimaries,
-                                                            transfer: TransferCharacteristics)
-{
+                                                            transfer: TransferCharacteristics
+) -> c_int {
     (*cfg).cfg.enc.color_description = Some(rav1e::ColorDescription {
         matrix_coefficients: matrix,
         color_primaries: primaries,
         transfer_characteristics: transfer,
     });
+
+    if (*cfg).cfg.enc.color_description.is_some() { 0 } else { -1 }
 }
 
+/// Set the content light level information for HDR10 streams.
+///
+/// Return a negative value on error or 0.
 #[no_mangle]
 pub unsafe extern "C" fn rav1e_config_set_content_light(cfg: *mut Config,
                                                         max_content_light_level: u16,
-                                                        max_frame_average_light_level: u16)
-{
+                                                        max_frame_average_light_level: u16
+) -> c_int {
     (*cfg).cfg.enc.content_light = Some(rav1e::ContentLight {
         max_content_light_level,
         max_frame_average_light_level,
     });
+
+    if (*cfg).cfg.enc.content_light.is_some() { 0 } else { -1 }
 }
 
+/// Set the mastering display information for HDR10 streams.
+///
+/// primaries and white_point arguments are RaPoint, containing 0.16 fixed point values.
+/// max_luminance is a 24.8 fixed point value.
+/// min_luminance is a 18.14 fixed point value.
+///
+/// Returns a negative value on error or 0.
 #[no_mangle]
 pub unsafe extern "C" fn rav1e_config_set_mastering_display(cfg: *mut Config,
                                                             primaries: [rav1e::Point; 3],
                                                             white_point: rav1e::Point,
                                                             max_luminance: u32,
-                                                            min_luminance: u32)
-{
+                                                            min_luminance: u32
+) -> c_int {
     (*cfg).cfg.enc.mastering_display = Some(rav1e::MasteringDisplay {
         primaries,
         white_point,
         max_luminance,
         min_luminance,
     });
+
+    if (*cfg).cfg.enc.mastering_display.is_some() { 0 } else { -1 }
 }
 
 #[no_mangle]
