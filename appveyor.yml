@@ -28,6 +28,12 @@ install:
     - cargo -vV
     - rustup target add %target%
 
+on_success:
+    - sccache -s
+
+cache:
+    - '%LOCALAPPDATA%\Mozilla\sccache'
+
 build_script:
     - cargo build --release --target=%target%
 

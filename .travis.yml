@@ -35,6 +35,10 @@ before_install:
     - ninja && sudo ninja install
     - cd ../..
 
+cache:
+  directories:
+  - "$HOME/.cache/sccache"
+
 after_script:
 - sccache -s
 
