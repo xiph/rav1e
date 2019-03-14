@@ -39,7 +39,11 @@ before_install:
 
 cache:
   directories:
-  - "$HOME/.cache/sccache"
+  - $HOME/.cargo
+  - $HOME/.cache/sccache
+
+before_cache:
+  - rm -rf $HOME/.cargo/registry
 
 after_script:
 - sccache -s

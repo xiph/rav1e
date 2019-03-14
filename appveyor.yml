@@ -34,6 +34,8 @@ on_success:
     - sccache -s
 
 cache:
+    - '%USERPROFILE%\.cargo\bin'
+    - '%USERPROFILE%\.cargo\.crates.toml'
     - '%LOCALAPPDATA%\Mozilla\sccache'
 
 build_script:
