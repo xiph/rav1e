@@ -13,26 +13,36 @@ before_install:
     - hash -r
     - which cmake
     - cmake --version
-    - wget https://download.videolan.org/contrib/nasm/nasm-2.14.tar.gz
-    - tar -xvf nasm-2.14.tar.gz
+    - curl -L https://github.com/mozilla/sccache/releases/download/0.2.8/sccache-0.2.8-x86_64-unknown-linux-musl.tar.gz | tar xvz
+    - export PATH=$PATH:`pwd`/sccache-0.2.8-x86_64-unknown-linux-musl
+    - export RUSTC_WRAPPER=sccache
+    - export SCCACHE_CACHE_SIZE=500M
+    - export SCCACHE_DIR=~/.cache/sccache
+    - curl -L https://download.videolan.org/contrib/nasm/nasm-2.14.tar.gz | tar xvz
     - cd nasm-2.14
-    - ./configure && make -j2 && sudo make install
+    - ./configure CC='sccache gcc' && make -j2 && sudo make install
     - nasm --version
     - cd ..
-    - wget -O kcov.tar.gz https://github.com/SimonKagstrom/kcov/archive/v36.tar.gz
-    - tar -xvf kcov.tar.gz
+    - curl -L https://github.com/SimonKagstrom/kcov/archive/v36.tar.gz | tar xvz
     - cd kcov-36
     - mkdir .build && cd .build
-    - cmake -GNinja .. && ninja && sudo ninja install
+    - cmake -GNinja -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache .. && ninja && sudo ninja install
     - cd ../..
     - git clone --depth 1 -b v1.0.0-errata1 https://aomedia.googlesource.com/aom
     - cd aom
     - rm -rf CMakeCache.txt CMakeFiles
     - mkdir -p .build
     - cd .build
-    - cmake -GNinja .. -DCMAKE_BUILD_TYPE=Release -DENABLE_TESTS=0 -DENABLE_DOCS=0 -DCONFIG_LOWBITDEPTH=1 -DCMAKE_INSTALL_PREFIX=/usr -DCONFIG_PIC=1
+    - cmake -GNinja .. -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DCMAKE_BUILD_TYPE=Release -DENABLE_TESTS=0 -DENABLE_DOCS=0 -DCONFIG_LOWBITDEPTH=1 -DCMAKE_INSTALL_PREFIX=/usr -DCONFIG_PIC=1
     - ninja && sudo ninja install
     - cd ../..
+
+cache:
+  directories:
+  - "$HOME/.cache/sccache"
+
+after_script:
+- sccache -s
 
 jobs:
   include:
