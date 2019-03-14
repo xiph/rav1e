@@ -315,18 +315,19 @@ pub fn motion_estimation<T: Pixel>(
       // 0.5 is a fudge factor
       let lambda = (fi.me_lambda * 256.0 * 0.5) as u32;
 
-      // Full-pixel motion estimation
-
       let mut lowest_cost = std::u64::MAX;
       let mut best_mv = MotionVector::default();
 
       let frame_mvs = &fs.frame_mvs[ref_slot];
       let frame_ref = &fi.rec_buffer.frames[fi.ref_frames[0] as usize];
 
+      let mut tmp_plane = Plane::new(blk_w, blk_h, 0, 0, 0, 0);
+
       if fi.config.speed_settings.diamond_me {
         let predictors = get_subset_predictors(fi, bo, cmv,
           frame_mvs, frame_ref, ref_slot);
 
+        // Full-pixel motion estimation
         diamond_me_search(
           fi, &po,
           &fs.input.planes[0], &rec.frame.planes[0],
@@ -336,6 +337,18 @@ pub fn motion_estimation<T: Pixel>(
           blk_w, blk_h,
           &mut best_mv, &mut lowest_cost, &mut None, ref_frame
         );
+
+        // Sub-pixel motion estimation
+        let predictors = vec![best_mv];
+        diamond_me_search(
+          fi, &po,
+          &fs.input.planes[0], &rec.frame.planes[0],
+          &predictors, fi.sequence.bit_depth,
+          pmv, lambda,
+          mvx_min, mvx_max, mvy_min, mvy_max,
+          blk_w, blk_h,
+          &mut best_mv, &mut lowest_cost, &mut Some(tmp_plane), ref_frame
+        );
       } else {
         let range = 16;
         let x_lo = po.x + ((-range + (cmv.col / 8) as isize).max(mvx_min / 8).min(mvx_max / 8));
@@ -343,6 +356,7 @@ pub fn motion_estimation<T: Pixel>(
         let y_lo = po.y + ((-range + (cmv.row / 8) as isize).max(mvy_min / 8).min(mvy_max / 8));
         let y_hi = po.y + ((range + (cmv.row / 8) as isize).max(mvy_min / 8).min(mvy_max / 8));
 
+        // Full-pixel motion estimation
         full_search(
           x_lo,
           x_hi,
@@ -361,23 +375,8 @@ pub fn motion_estimation<T: Pixel>(
           pmv,
           fi.allow_high_precision_mv
         );
-      }
 
-      // Sub-pixel motion estimation
-      let mut tmp_plane = Plane::new(blk_w, blk_h, 0, 0, 0, 0);
-
-      if fi.config.speed_settings.diamond_me {
-        let predictors = vec![best_mv];
-        diamond_me_search(
-          fi, &po,
-          &fs.input.planes[0], &rec.frame.planes[0],
-          &predictors, fi.sequence.bit_depth,
-          pmv, lambda,
-          mvx_min, mvx_max, mvy_min, mvy_max,
-          blk_w, blk_h,
-          &mut best_mv, &mut lowest_cost, &mut Some(tmp_plane), ref_frame
-        );
-      } else {
+        // Sub-pixel motion estimation
         telescopic_subpel_search(
           fi, fs, bsize, &po,
           lambda, ref_frame, pmv,
