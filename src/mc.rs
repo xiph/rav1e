@@ -282,7 +282,8 @@ mod nasm {
     col_frac: i32, row_frac: i32, mode_x: FilterMode, mode_y: FilterMode,
     bit_depth: usize
   ) {
-    if mem::size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
+    // disabled temporarily due to native/asm mismatches
+    if mem::size_of::<T>() == 0 /* FIXME */ && is_x86_feature_detected!("avx2") {
       debug_assert!(bit_depth == 8);
       let src_stride = src.plane.cfg.stride as isize;
       unsafe {
