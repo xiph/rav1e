@@ -573,7 +573,7 @@ impl<T: Pixel> Context<T> {
     Ok(())
   }
 
-  pub fn get_frame(&self, frame_number: u64) -> Arc<Frame<T>> {
+  fn get_frame(&self, frame_number: u64) -> Arc<Frame<T>> {
     // Clones only the arc, so low cost overhead
     self.frame_q.get(&frame_number).as_ref().unwrap().as_ref().unwrap().clone()
   }
@@ -586,7 +586,7 @@ impl<T: Pixel> Context<T> {
     self.limit = limit;
   }
 
-  pub fn needs_more_lookahead(&self) -> bool {
+  pub(crate) fn needs_more_lookahead(&self) -> bool {
     self.needs_more_frames(self.frame_count) && self.frames_processed + LOOKAHEAD_FRAMES > self.frame_q.keys().last().cloned().unwrap_or(0)
   }
 
