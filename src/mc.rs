@@ -460,7 +460,7 @@ mod native {
           let src_slice = &src[r];
           for c in 0..width {
             tmp[r * width + c] =
-              i16::cast_from(src_slice[c] << intermediate_bits);
+              i16::cast_from(src_slice[c]) << intermediate_bits;
           }
         }
       }
