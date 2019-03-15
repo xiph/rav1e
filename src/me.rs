@@ -306,6 +306,15 @@ pub trait MotionEstimation {
     lowest_cost: &mut u64, ref_frame: usize
   );
 
+  fn sub_pixel_me<T: Pixel>(
+    fi: &FrameInvariants<T>, fs: &FrameState<T>, rec: &Arc<ReferenceFrame<T>>, po: &PlaneOffset,
+    bo: &BlockOffset, lambda: u32, pmv: [MotionVector; 2],
+    mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
+    blk_w: usize, blk_h: usize, best_mv: &mut MotionVector,
+    lowest_cost: &mut u64, ref_frame: usize,
+    tmp_plane: Plane<T>, bsize: BlockSize
+  );
+
   fn motion_estimation<T: Pixel> (
     fi: &FrameInvariants<T>, fs: &FrameState<T>, bsize: BlockSize,
     bo: &BlockOffset, ref_frame: usize, cmv: MotionVector,
@@ -335,49 +344,11 @@ pub trait MotionEstimation {
                            mvx_min, mvx_max, mvy_min, mvy_max, blk_w, blk_h,
                            &mut best_mv, &mut lowest_cost, ref_frame);
 
-        // Sub-pixel motion estimation
-        let mut tmp_plane = Plane::new(blk_w, blk_h, 0, 0, 0, 0);
-
-        if fi.config.speed_settings.diamond_me {
-          let predictors = vec![best_mv];
-          diamond_me_search(
-            fi,
-            &po,
-            &fs.input.planes[0],
-            &rec.frame.planes[0],
-            &predictors,
-            fi.sequence.bit_depth,
-            pmv,
-            lambda,
-            mvx_min,
-            mvx_max,
-            mvy_min,
-            mvy_max,
-            blk_w,
-            blk_h,
-            &mut best_mv,
-            &mut lowest_cost,
-            &mut Some(tmp_plane),
-            ref_frame
-          );
-        } else {
-          telescopic_subpel_search(
-            fi,
-            fs,
-            bsize,
-            &po,
-            lambda,
-            ref_frame,
-            pmv,
-            mvx_min,
-            mvx_max,
-            mvy_min,
-            mvy_max,
-            &mut tmp_plane,
-            &mut best_mv,
-            &mut lowest_cost
-          );
-        }
+        let tmp_plane = Plane::new(blk_w, blk_h, 0, 0, 0, 0);
+        Self::sub_pixel_me(fi, fs, rec, &po, bo, lambda, pmv,
+                           mvx_min, mvx_max, mvy_min, mvy_max, blk_w, blk_h,
+                           &mut best_mv, &mut lowest_cost, ref_frame,
+                           tmp_plane, bsize);
 
         best_mv
       }
@@ -424,6 +395,38 @@ impl MotionEstimation for DiamondSearch {
       ref_frame
     );
   }
+
+  fn sub_pixel_me<T: Pixel>(
+    fi: &FrameInvariants<T>, fs: &FrameState<T>, rec: &Arc<ReferenceFrame<T>>,
+    po: &PlaneOffset, _bo: &BlockOffset, lambda: u32,
+    pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize,
+    mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize,
+    best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: usize,
+    tmp_plane: Plane<T>, _bsize: BlockSize
+  )
+  {
+    let predictors = vec![*best_mv];
+    diamond_me_search(
+      fi,
+      &po,
+      &fs.input.planes[0],
+      &rec.frame.planes[0],
+      &predictors,
+      fi.sequence.bit_depth,
+      pmv,
+      lambda,
+      mvx_min,
+      mvx_max,
+      mvy_min,
+      mvy_max,
+      blk_w,
+      blk_h,
+      best_mv,
+      lowest_cost,
+      &mut Some(tmp_plane),
+      ref_frame
+    );
+  }
 }
 
 impl MotionEstimation for FullSearch {
@@ -461,6 +464,33 @@ impl MotionEstimation for FullSearch {
       lambda,
       pmv,
       fi.allow_high_precision_mv
+    );
+  }
+
+  fn sub_pixel_me<T: Pixel>(
+    fi: &FrameInvariants<T>, fs: &FrameState<T>, _rec: &Arc<ReferenceFrame<T>>,
+    po: &PlaneOffset, _bo: &BlockOffset, lambda: u32,
+    pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize,
+    mvy_min: isize, mvy_max: isize, _blk_w: usize, _blk_h: usize,
+    best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: usize,
+    mut tmp_plane: Plane<T>, bsize: BlockSize
+  )
+  {
+    telescopic_subpel_search(
+      fi,
+      fs,
+      bsize,
+      &po,
+      lambda,
+      ref_frame,
+      pmv,
+      mvx_min,
+      mvx_max,
+      mvy_min,
+      mvy_max,
+      &mut tmp_plane,
+      best_mv,
+      lowest_cost
     );
   }
 }
