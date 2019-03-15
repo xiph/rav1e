@@ -395,6 +395,55 @@ pub trait MotionEstimation {
       None => MotionVector::default()
     }
   }
+
+  fn estimate_motion_ss2<T: Pixel>(
+    fi: &FrameInvariants<T>, fs: &FrameState<T>, bsize: BlockSize, ref_idx: usize,
+    bo: &BlockOffset, pmvs: &[Option<MotionVector>; 3], ref_frame: usize
+  ) -> Option<MotionVector> {
+    if let Some(ref rec) = fi.rec_buffer.frames[ref_idx] {
+      let blk_w = bsize.width();
+      let blk_h = bsize.height();
+      let bo_adj = adjust_bo(bo, fi, blk_w, blk_h);
+      let bo_adj_h = BlockOffset{x: bo_adj.x >> 1, y: bo_adj.y >> 1};
+      let po = PlaneOffset {
+        x: (bo_adj.x as isize) << BLOCK_TO_PLANE_SHIFT >> 1,
+        y: (bo_adj.y as isize) << BLOCK_TO_PLANE_SHIFT >> 1
+      };
+      let (mvx_min, mvx_max, mvy_min, mvy_max) = get_mv_range(fi.w_in_b, fi.h_in_b, &bo_adj, blk_w, blk_h);
+
+      let global_mv = [MotionVector{row: 0, col: 0}; 2];
+      let frame_mvs = &fs.frame_mvs[ref_frame];
+      let frame_ref_opt = &fi.rec_buffer.frames[fi.ref_frames[0] as usize];
+
+      let mut lowest_cost = std::u64::MAX;
+      let mut best_mv = MotionVector::default();
+
+      // Divide by 4 to account for subsampling, 0.125 is a fudge factor
+      let lambda = (fi.me_lambda * 256.0 / 4.0 * 0.125) as u32;
+
+      Self::me_ss2(
+        fi, fs, pmvs, bo_adj_h,
+        frame_mvs, frame_ref_opt, po, rec, global_mv, lambda,
+        mvx_min, mvx_max, mvy_min, mvy_max, blk_w, blk_h,
+        &mut best_mv, &mut lowest_cost
+      );
+
+      Some(MotionVector { row: best_mv.row * 2, col: best_mv.col * 2 })
+    } else {
+      None
+    }
+  }
+
+  fn me_ss2<T: Pixel>(
+    fi: &FrameInvariants<T>, fs: &FrameState<T>,
+    pmvs: &[Option<MotionVector>; 3], bo_adj_h: BlockOffset,
+    frame_mvs: &FrameMotionVectors, frame_ref_opt: &Option<Arc<ReferenceFrame<T>>>,
+    po: PlaneOffset, rec: &Arc<ReferenceFrame<T>>,
+    global_mv: [MotionVector; 2], lambda: u32,
+    mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
+    blk_w: usize, blk_h: usize,
+    best_mv: &mut MotionVector, lowest_cost: &mut u64
+  );
 }
 
 pub struct DiamondSearch {}
@@ -411,7 +460,7 @@ impl MotionEstimation for DiamondSearch {
     let frame_mvs = &fs.frame_mvs[ref_frame - LAST_FRAME];
     let frame_ref = &fi.rec_buffer.frames[fi.ref_frames[0] as usize];
     let predictors =
-      get_subset_predictors(fi, bo, cmv, frame_mvs, frame_ref, ref_frame - LAST_FRAME);
+      get_subset_predictors(bo, cmv, fi.w_in_b, fi.h_in_b, frame_mvs, frame_ref, ref_frame - LAST_FRAME);
 
     diamond_me_search(
       fi,
@@ -465,6 +514,44 @@ impl MotionEstimation for DiamondSearch {
       &mut Some(tmp_plane),
       ref_frame
     );
+  }
+
+  fn me_ss2<T: Pixel>(
+    fi: &FrameInvariants<T>, fs: &FrameState<T>,
+    pmvs: &[Option<MotionVector>; 3], bo_adj_h: BlockOffset,
+    frame_mvs: &FrameMotionVectors, frame_ref_opt: &Option<Arc<ReferenceFrame<T>>>,
+    po: PlaneOffset, rec: &Arc<ReferenceFrame<T>>,
+    global_mv: [MotionVector; 2], lambda: u32,
+    mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
+    blk_w: usize, blk_h: usize,
+    best_mv: &mut MotionVector, lowest_cost: &mut u64
+  ) {
+    for omv in pmvs.iter() {
+      if let Some(pmv) = omv {
+        let mut predictors = get_subset_predictors::<T>(
+          &bo_adj_h,
+          MotionVector{row: pmv.row, col: pmv.col},
+          fi.w_in_b, fi.h_in_b,
+          &frame_mvs, frame_ref_opt, 0
+        );
+
+        for predictor in &mut predictors {
+          predictor.row >>= 1;
+          predictor.col >>= 1;
+        }
+
+        diamond_me_search(
+          fi, &po,
+          &fs.input_hres, &rec.input_hres,
+          &predictors, fi.sequence.bit_depth,
+          global_mv, lambda,
+          mvx_min >> 1, mvx_max >> 1, mvy_min >> 1, mvy_max >> 1,
+          blk_w >> 1, blk_h >> 1,
+          best_mv, lowest_cost,
+          &mut None, 0
+        );
+      }
+    }
   }
 }
 
@@ -531,6 +618,45 @@ impl MotionEstimation for FullSearch {
       best_mv,
       lowest_cost
     );
+  }
+
+  fn me_ss2<T: Pixel>(
+    fi: &FrameInvariants<T>, fs: &FrameState<T>,
+    pmvs: &[Option<MotionVector>; 3], _bo_adj_h: BlockOffset,
+    _frame_mvs: &FrameMotionVectors, _frame_ref_opt: &Option<Arc<ReferenceFrame<T>>>,
+    po: PlaneOffset, rec: &Arc<ReferenceFrame<T>>,
+    _global_mv: [MotionVector; 2], lambda: u32,
+    mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
+    blk_w: usize, blk_h: usize,
+    best_mv: &mut MotionVector, lowest_cost: &mut u64
+  ) {
+    let range = 16;
+    for omv in pmvs.iter() {
+      if let Some(pmv) = omv {
+        let x_lo = po.x + (((pmv.col as isize / 8 - range).max(mvx_min / 8).min(mvx_max / 8)) >> 1);
+        let x_hi = po.x + (((pmv.col as isize / 8 + range).max(mvx_min / 8).min(mvx_max / 8)) >> 1);
+        let y_lo = po.y + (((pmv.row as isize / 8 - range).max(mvy_min / 8).min(mvy_max / 8)) >> 1);
+        let y_hi = po.y + (((pmv.row as isize / 8 + range).max(mvy_min / 8).min(mvy_max / 8)) >> 1);
+        full_search(
+          x_lo,
+          x_hi,
+          y_lo,
+          y_hi,
+          blk_h >> 1,
+          blk_w >> 1,
+          &fs.input_hres,
+          &rec.input_hres,
+          best_mv,
+          lowest_cost,
+          &po,
+          1,
+          fi.sequence.bit_depth,
+          lambda,
+          [MotionVector::default(); 2],
+          fi.allow_high_precision_mv
+        );
+      }
+    }
   }
 }
 
@@ -863,94 +989,6 @@ pub fn estimate_motion_ss4<T: Pixel>(
     );
 
     Some(MotionVector { row: best_mv.row * 4, col: best_mv.col * 4 })
-  } else {
-    None
-  }
-}
-
-pub fn estimate_motion_ss2<T: Pixel>(
-  fi: &FrameInvariants<T>, fs: &FrameState<T>, bsize: BlockSize, ref_idx: usize,
-  bo: &BlockOffset, pmvs: &[Option<MotionVector>; 3], ref_frame: usize
-) -> Option<MotionVector> {
-  if let Some(ref rec) = fi.rec_buffer.frames[ref_idx] {
-    let blk_w = bsize.width();
-    let blk_h = bsize.height();
-    let bo_adj = adjust_bo(bo, fi, blk_w, blk_h);
-    let bo_adj_h = BlockOffset{x: bo_adj.x >> 1, y: bo_adj.y >> 1};
-    let po = PlaneOffset {
-      x: (bo_adj.x as isize) << BLOCK_TO_PLANE_SHIFT >> 1,
-      y: (bo_adj.y as isize) << BLOCK_TO_PLANE_SHIFT >> 1
-    };
-    let range = 16;
-    let (mvx_min, mvx_max, mvy_min, mvy_max) = get_mv_range(fi.w_in_b, fi.h_in_b, &bo_adj, blk_w, blk_h);
-
-    let global_mv = [MotionVector{row: 0, col: 0}; 2];
-    let frame_mvs = &fs.frame_mvs[ref_frame];
-    let frame_ref = &fi.rec_buffer.frames[fi.ref_frames[0] as usize];
-
-    let mut lowest_cost = std::u64::MAX;
-    let mut best_mv = MotionVector::default();
-
-    // Divide by 4 to account for subsampling, 0.125 is a fudge factor
-    let lambda = (fi.me_lambda * 256.0 / 4.0 * 0.125) as u32;
-
-    if fi.config.speed_settings.diamond_me {
-      for omv in pmvs.iter() {
-        if let Some(pmv) = omv {
-          let mut predictors = get_subset_predictors::<T>(
-            &bo_adj_h,
-            MotionVector{row: pmv.row, col: pmv.col},
-            fi.w_in_b, fi.h_in_b,
-            &frame_mvs, frame_ref, 0
-          );
-
-          for predictor in &mut predictors {
-            predictor.row >>= 1;
-            predictor.col >>= 1;
-          }
-
-          diamond_me_search(
-            fi, &po,
-            &fs.input_hres, &rec.input_hres,
-            &predictors, fi.sequence.bit_depth,
-            global_mv, lambda,
-            mvx_min >> 1, mvx_max >> 1, mvy_min >> 1, mvy_max >> 1,
-            blk_w >> 1, blk_h >> 1,
-            &mut best_mv, &mut lowest_cost,
-            &mut None, 0
-          );
-        }
-      }
-    } else {
-      for omv in pmvs.iter() {
-        if let Some(pmv) = omv {
-          let x_lo = po.x + (((pmv.col as isize / 8 - range).max(mvx_min / 8).min(mvx_max / 8)) >> 1);
-          let x_hi = po.x + (((pmv.col as isize / 8 + range).max(mvx_min / 8).min(mvx_max / 8)) >> 1);
-          let y_lo = po.y + (((pmv.row as isize / 8 - range).max(mvy_min / 8).min(mvy_max / 8)) >> 1);
-          let y_hi = po.y + (((pmv.row as isize / 8 + range).max(mvy_min / 8).min(mvy_max / 8)) >> 1);
-          full_search(
-            x_lo,
-            x_hi,
-            y_lo,
-            y_hi,
-            blk_h >> 1,
-            blk_w >> 1,
-            &fs.input_hres,
-            &rec.input_hres,
-            &mut best_mv,
-            &mut lowest_cost,
-            &po,
-            1,
-            fi.sequence.bit_depth,
-            lambda,
-            [MotionVector::default(); 2],
-            fi.allow_high_precision_mv
-          );
-        }
-      }
-    }
-
-    Some(MotionVector { row: best_mv.row * 2, col: best_mv.col * 2 })
   } else {
     None
   }
