@@ -26,7 +26,7 @@ use crate::lrf::*;
 use crate::plane::*;
 use crate::scan_order::*;
 use crate::token_cdfs::*;
-use crate::util::{clamp, msb, Pixel};
+use crate::util::{AlignedArray, clamp, msb, Pixel, UninitializedAlignedArray};
 
 use std::*;
 
@@ -3412,8 +3412,9 @@ impl ContextWriter {
     let scan = scan_order.scan;
     let width = av1_get_coded_tx_size(tx_size).width();
     let height = av1_get_coded_tx_size(tx_size).height();
-    let mut coeffs_storage = [0 as i32; 32*32];
-    let coeffs = &mut coeffs_storage[..width*height];
+    let mut coeffs_storage: AlignedArray<[i32; 32 * 32]> =
+      UninitializedAlignedArray();
+    let coeffs = &mut coeffs_storage.array[..width*height];
     let mut cul_level = 0 as u32;
 
     for i in 0..width*height {
@@ -3439,7 +3440,7 @@ impl ContextWriter {
       return false;
     }
 
-    let mut levels_buf = [0 as u8; TX_PAD_2D];
+    let mut levels_buf = [0u8; TX_PAD_2D];
 
     self.txb_init_levels(
       coeffs_in,
@@ -3518,7 +3519,8 @@ impl ContextWriter {
       }
     }
 
-    let mut coeff_contexts = [0 as i8; MAX_TX_SQUARE];
+    let mut coeff_contexts: AlignedArray<[i8; MAX_TX_SQUARE]> =
+      UninitializedAlignedArray();
     let levels =
       &mut levels_buf[TX_PAD_TOP * (width + TX_PAD_HOR)..];
 
@@ -3528,14 +3530,14 @@ impl ContextWriter {
       eob as u16,
       tx_size,
       tx_class,
-      &mut coeff_contexts
+      &mut coeff_contexts.array
     );
 
     let bwl = self.get_txb_bwl(tx_size);
 
     for c in (0..eob).rev() {
       let pos = scan[c];
-      let coeff_ctx = coeff_contexts[pos as usize];
+      let coeff_ctx = coeff_contexts.array[pos as usize];
       let v = coeffs_in[pos as usize];
       let level: u32 = v.abs() as u32;
 
