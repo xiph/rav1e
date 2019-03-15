@@ -1979,6 +1979,12 @@ fn build_coarse_pmvs<T: Pixel>(fi: &FrameInvariants<T>, fs: &FrameState<T>) -> V
 fn encode_tile<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec<u8> {
   let mut w = WriterEncoder::new();
 
+  let estimate_motion_ss2 = if fi.config.speed_settings.diamond_me {
+    crate::me::DiamondSearch::estimate_motion_ss2
+  } else {
+    crate::me::FullSearch::estimate_motion_ss2
+  };
+
   let fc = if fi.primary_ref_frame == PRIMARY_REF_NONE {
     CDFContext::new(fi.base_q_idx)
   } else {
