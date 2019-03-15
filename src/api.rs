@@ -568,7 +568,11 @@ impl<T: Pixel> Context<T> {
     T: Pixel,
   {
     let idx = self.frame_count;
-    self.frame_q.insert(idx, frame.into());
+    let frame = frame.into();
+    if frame.is_none() {
+        self.limit = idx;
+    }
+    self.frame_q.insert(idx, frame);
     self.frame_count += 1;
     Ok(())
   }
@@ -862,9 +866,9 @@ impl<T: Pixel> Context<T> {
     }
   }
 
+  // TODO: this is a workaround not meant to stay
   pub fn flush(&mut self) {
-    self.frame_q.insert(self.frame_count, None);
-    self.frame_count += 1;
+    let _ = self.send_frame(None);
   }
 
   fn determine_frame_type(&mut self, frame_number: u64) -> FrameType {
