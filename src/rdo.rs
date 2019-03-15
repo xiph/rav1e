@@ -497,6 +497,12 @@ pub fn rdo_mode_decision<T: Pixel>(
   let mut mv_stacks = Vec::new();
   let mut mode_contexts = Vec::new();
 
+  let motion_estimation = if fi.config.speed_settings.diamond_me {
+    crate::me::DiamondSearch::motion_estimation
+  } else {
+    crate::me::FullSearch::motion_estimation
+  };
+
   for (i, &ref_frames) in ref_frames_set.iter().enumerate() {
     let mut mv_stack: Vec<CandidateMV> = Vec::new();
     mode_contexts.push(cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, fi, false));
