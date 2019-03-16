@@ -1599,27 +1599,19 @@ fn daala_fdct64<T: TxOperations>(input: &[T], output: &mut [T]) {
 }
 
 fn fidentity4<T: TxOperations>(input: &[T], output: &mut [T]) {
-  for i in 0..4 {
-    output[i] = input[i];
-  }
+  output[..4].copy_from_slice(&input[..4]);
 }
 
 fn fidentity8<T: TxOperations>(input: &[T], output: &mut [T]) {
-  for i in 0..8 {
-    output[i] = input[i];
-  }
+  output[..8].copy_from_slice(&input[..8]);
 }
 
 fn fidentity16<T: TxOperations>(input: &[T], output: &mut [T]) {
-  for i in 0..16 {
-    output[i] = input[i];
-  }
+  output[..16].copy_from_slice(&input[..16]);
 }
 
 fn fidentity32<T: TxOperations>(input: &[T], output: &mut [T]) {
-  for i in 0..32 {
-    output[i] = input[i];
-  }
+  output[..32].copy_from_slice(&input[..32]);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
