@@ -1363,9 +1363,7 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<
             cdef_change = true;
             best_cost_acc = cost_acc;
             best_index = cdef_index;
-            for pli in 0..3 {
-              best_cost[pli] = cost[pli];
-            }
+            best_cost[..3].copy_from_slice(&cost[..3]);
           }
         }
       }
