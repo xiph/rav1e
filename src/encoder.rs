@@ -1854,10 +1854,7 @@ fn encode_partition_topdown<T: Pixel>(
     PARTITION_SPLIT |
     PARTITION_HORZ |
     PARTITION_VERT => {
-      let num_modes = if partition == PARTITION_SPLIT { 1 }
-      else { 1 };
-
-      if rdo_output.part_modes.len() >= num_modes {
+      if !rdo_output.part_modes.is_empty() {
         // The optimal prediction modes for each split block is known from an rdo_partition_decision() call
         assert!(subsize != BlockSize::BLOCK_INVALID);
 
