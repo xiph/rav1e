@@ -2549,11 +2549,8 @@ impl ContextWriter {
   ) -> usize {
     assert!(ref_frames[0] != NONE_FRAME);
     if ref_frames[0] < REF_FRAMES {
-      if ref_frames[0] != INTRA_FRAME {
-        /* TODO: convert global mv to an mv here */
-      } else {
-        /* TODO: set the global mv ref to invalid here */
-      }
+      // TODO: If ref_frames[0] != INTRA_FRAME, convert global mv to an mv;
+      // otherwise, set the global mv ref to invalid.
     }
 
     if ref_frames[0] != INTRA_FRAME {
