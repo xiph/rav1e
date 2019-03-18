@@ -762,7 +762,9 @@ fn adjust_bo<T: Pixel>(bo: &BlockOffset, fi: &FrameInvariants<T>, blk_w: usize, 
   }
 }
 
+#[inline(always)]
 fn get_mv_rate(a: MotionVector, b: MotionVector, allow_high_precision_mv: bool) -> u32 {
+  #[inline(always)]
   fn diff_to_rate(diff: i16, allow_high_precision_mv: bool) -> u32 {
     let d = if allow_high_precision_mv { diff } else { diff >> 1 };
     if d == 0 {

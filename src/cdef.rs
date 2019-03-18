@@ -109,6 +109,7 @@ fn cdef_find_dir<T: Pixel>(img: &PlaneSlice<'_, T>, var: &mut i32, coeff_shift: 
   best_dir as i32
 }
 
+#[inline(always)]
 fn constrain(diff: i32, threshold: i32, damping: i32) -> i32 {
   if threshold != 0 {
     let shift = cmp::max(0, damping - msb(threshold));

@@ -176,11 +176,13 @@ pub trait ILog: PrimInt {
 
 impl<T> ILog for T where T: PrimInt {}
 
+#[inline(always)]
 pub fn msb(x: i32) -> i32 {
   debug_assert!(x > 0);
   31 ^ (x.leading_zeros() as i32)
 }
 
+#[inline(always)]
 pub fn round_shift(value: i32, bit: usize) -> i32 {
   (value + (1 << bit >> 1)) >> bit
 }

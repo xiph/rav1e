@@ -68,6 +68,7 @@ impl RestorationFilter {
   }
 }
 
+#[inline(always)]
 fn sgrproj_sum_finish(ssq: i32, sum: i32, n: i32, one_over_n: i32, s: i32, bdm8: usize) -> (i32, i32) {
   let scaled_ssq = ssq + (1 << 2*bdm8 >> 1) >> 2*bdm8;
   let scaled_sum = sum + (1 << bdm8 >> 1) >> bdm8;
