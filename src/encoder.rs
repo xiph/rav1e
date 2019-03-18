@@ -2013,7 +2013,7 @@ fn build_coarse_pmvs<T: Pixel>(fi: &FrameInvariants<T>, fs: &FrameState<T>) -> V
   }).collect()
 }
 
-fn encode_tile<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec<u8> {
+fn encode_tile_group<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec<u8> {
   let mut w = WriterEncoder::new();
 
   let estimate_motion_ss2 = if fi.config.speed_settings.diamond_me {
@@ -2279,7 +2279,7 @@ pub fn encode_frame<T: Pixel>(
 
   segmentation_optimize(fi, fs);
 
-  let tile = encode_tile(fi, fs); // actually tile group
+  let tile_group = encode_tile_group(fi, fs);
 
   write_obus(&mut packet, fi, fs).unwrap();
   let mut buf1 = Vec::new();
@@ -2292,12 +2292,12 @@ pub fn encode_frame<T: Pixel>(
 
   {
     let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
-    bw1.write_uleb128(tile.len() as u64).unwrap();
+    bw1.write_uleb128(tile_group.len() as u64).unwrap();
   }
   packet.write_all(&buf1).unwrap();
   buf1.clear();
 
-  packet.write_all(&tile).unwrap();
+  packet.write_all(&tile_group).unwrap();
   packet
 }
 
