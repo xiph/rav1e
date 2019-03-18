@@ -182,6 +182,7 @@ pub fn msb(x: i32) -> i32 {
   31 ^ (x.leading_zeros() as i32)
 }
 
+#[inline(always)]
 pub fn round_shift(value: i32, bit: usize) -> i32 {
   (value + (1 << bit >> 1)) >> bit
 }
