@@ -285,7 +285,7 @@ pub fn get_subset_predictors<T: Pixel>(
     }
   }
 
-  if predictors.len() > 0 {
+  if !predictors.is_empty() {
     let mut median_mv = MotionVector::default();
     for mv in predictors.iter() {
       median_mv = median_mv + *mv;

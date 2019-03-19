@@ -490,7 +490,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         ref_slot_set.push(slot_idx);
       }
     }
-    assert!(ref_frames_set.len() != 0);
+    assert!(!ref_frames_set.is_empty());
   }
 
   let mut mode_set: Vec<(PredictionMode, usize)> = Vec::new();
@@ -509,7 +509,7 @@ pub fn rdo_mode_decision<T: Pixel>(
 
     if fi.frame_type == FrameType::INTER {
       let mut pmv = [MotionVector::default(); 2];
-      if mv_stack.len() > 0 { pmv[0] = mv_stack[0].this_mv; }
+      if !mv_stack.is_empty() { pmv[0] = mv_stack[0].this_mv; }
       if mv_stack.len() > 1 { pmv[1] = mv_stack[1].this_mv; }
       let ref_slot = ref_slot_set[i] as usize;
       let cmv = pmvs[ref_slot].unwrap();
@@ -532,7 +532,7 @@ pub fn rdo_mode_decision<T: Pixel>(
       for &x in RAV1E_INTER_MODES_MINIMAL {
         mode_set.push((x, i));
       }
-      if mv_stack.len() >= 1 {
+      if !mv_stack.is_empty() {
         mode_set.push((PredictionMode::NEAR0MV, i));
       }
       if mv_stack.len() >= 2 {
@@ -678,13 +678,13 @@ pub fn rdo_mode_decision<T: Pixel>(
   };
 
   if fi.frame_type != FrameType::INTER {
-    assert!(mode_set.len() == 0);
+    assert!(mode_set.is_empty());
   }
 
   mode_set.iter().for_each(|&(luma_mode, i)| {
     let mvs = match luma_mode {
       PredictionMode::NEWMV | PredictionMode::NEW_NEWMV => mvs_from_me[i],
-      PredictionMode::NEARESTMV | PredictionMode::NEAREST_NEARESTMV => if mv_stacks[i].len() > 0 {
+      PredictionMode::NEARESTMV | PredictionMode::NEAREST_NEARESTMV => if !mv_stacks[i].is_empty() {
         [mv_stacks[i][0].this_mv, mv_stacks[i][0].comp_mv]
       } else {
         [MotionVector::default(); 2]

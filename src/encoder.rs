@@ -1235,12 +1235,12 @@ pub fn encode_block_b<T: Pixel>(
           assert!(0 == mvs[0].col);
         }
       } else if luma_mode == PredictionMode::NEARESTMV {
-        if mv_stack.len() > 0 {
-          assert!(mv_stack[0].this_mv.row == mvs[0].row);
-          assert!(mv_stack[0].this_mv.col == mvs[0].col);
+        if mv_stack.is_empty() {
+          assert_eq!(mvs[0].row, 0);
+          assert_eq!(mvs[0].col, 0);
         } else {
-          assert!(0 == mvs[0].row);
-          assert!(0 == mvs[0].col);
+          assert_eq!(mvs[0].row, mv_stack[0].this_mv.row);
+          assert_eq!(mvs[0].col, mv_stack[0].this_mv.col);
         }
       }
     } else {
@@ -1654,7 +1654,7 @@ fn encode_partition_bottomup<T: Pixel>(
         best_rd = rd_cost;
         best_partition = partition;
         if partition != PartitionType::PARTITION_SPLIT {
-          assert!(child_modes.len() > 0);
+          assert!(!child_modes.is_empty());
           rdo_output.part_modes = child_modes;
         }
       }
@@ -1664,8 +1664,7 @@ fn encode_partition_bottomup<T: Pixel>(
 
     // If the best partition is not PARTITION_SPLIT, recode it
     if best_partition != PartitionType::PARTITION_SPLIT {
-
-        assert!(rdo_output.part_modes.len() > 0);
+        assert!(!rdo_output.part_modes.is_empty());
 
         cw.rollback(&cw_checkpoint);
         w_pre_cdef.rollback(&w_pre_checkpoint);
@@ -1841,10 +1840,13 @@ fn encode_partition_topdown<T: Pixel>(
               }
             }
           if mode_luma == PredictionMode::NEWMV && mvs[0].row == 0 && mvs[0].col == 0 {
-            mode_luma =
-              if mv_stack.len() == 0 { PredictionMode::NEARESTMV }
-            else if mv_stack.len() == 1 { PredictionMode::NEAR0MV }
-            else { PredictionMode::GLOBALMV };
+            mode_luma = if mv_stack.is_empty() {
+              PredictionMode::NEARESTMV
+            } else if mv_stack.len() == 1 {
+              PredictionMode::NEAR0MV
+            } else {
+              PredictionMode::GLOBALMV
+            };
           }
           mode_chroma = mode_luma;
         }
