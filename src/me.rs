@@ -91,6 +91,26 @@ mod nasm {
       src: *const u8, src_stride: libc::ptrdiff_t, dst: *const u8,
       dst_stride: libc::ptrdiff_t
     ) -> u32;
+
+    fn rav1e_sad16x16_avx2(
+      src: *const u8, src_stride: libc::ptrdiff_t, dst: *const u8,
+      dst_stride: libc::ptrdiff_t
+    ) -> u32;
+
+    fn rav1e_sad32x32_avx2(
+      src: *const u8, src_stride: libc::ptrdiff_t, dst: *const u8,
+      dst_stride: libc::ptrdiff_t
+    ) -> u32;
+
+    fn rav1e_sad64x64_avx2(
+      src: *const u8, src_stride: libc::ptrdiff_t, dst: *const u8,
+      dst_stride: libc::ptrdiff_t
+    ) -> u32;
+
+    fn rav1e_sad128x128_avx2(
+      src: *const u8, src_stride: libc::ptrdiff_t, dst: *const u8,
+      dst_stride: libc::ptrdiff_t
+    ) -> u32;
   }
 
   #[target_feature(enable = "ssse3")]
@@ -165,6 +185,40 @@ mod nasm {
     sum
   }
 
+  #[target_feature(enable = "avx2")]
+  unsafe fn sad_avx2(
+    plane_org: &PlaneSlice<'_, u8>, plane_ref: &PlaneSlice<'_, u8>, blk_h: usize,
+    blk_w: usize
+  ) -> u32 {
+    let mut sum = 0 as u32;
+    let org_stride = plane_org.plane.cfg.stride as libc::ptrdiff_t;
+    let ref_stride = plane_ref.plane.cfg.stride as libc::ptrdiff_t;
+    assert!(blk_h >= 4 && blk_w >= 4);
+    let step_size = blk_h.min(blk_w);
+    let func = match step_size.ilog() {
+      3 => rav1e_sad4x4_sse2,
+      4 => rav1e_sad8x8_sse2,
+      5 => rav1e_sad16x16_avx2,
+      6 => rav1e_sad32x32_avx2,
+      7 => rav1e_sad64x64_avx2,
+      8 => rav1e_sad128x128_avx2,
+      _ => rav1e_sad128x128_avx2
+    };
+    for r in (0..blk_h).step_by(step_size) {
+      for c in (0..blk_w).step_by(step_size) {
+        let org_slice = plane_org.subslice(c, r);
+        let ref_slice = plane_ref.subslice(c, r);
+        let org_ptr = org_slice.as_ptr();
+        let ref_ptr = ref_slice.as_ptr();
+        // FIXME for now, T == u8
+        let org_ptr = org_ptr as *const u8;
+        let ref_ptr = ref_ptr as *const u8;
+        sum += func(org_ptr, org_stride, ref_ptr, ref_stride);
+      }
+    }
+    sum
+  }
+
   #[inline(always)]
   pub fn get_sad<T: Pixel>(
     plane_org: &PlaneSlice<'_, T>, plane_ref: &PlaneSlice<'_, T>, blk_h: usize,
@@ -177,6 +231,13 @@ mod nasm {
           let plane_org = &*(plane_org as *const _ as *const PlaneSlice<'_, u16>);
           let plane_ref = &*(plane_ref as *const _ as *const PlaneSlice<'_, u16>);
           sad_hbd_ssse3(plane_org, plane_ref, blk_h, blk_w, bit_depth)
+        };
+      }
+      if mem::size_of::<T>() == 1 && is_x86_feature_detected!("avx") && blk_h >= 4 && blk_w >= 4 {
+        return unsafe {
+          let plane_org = &*(plane_org as *const _ as *const PlaneSlice<'_, u8>);
+          let plane_ref = &*(plane_ref as *const _ as *const PlaneSlice<'_, u8>);
+          sad_avx2(plane_org, plane_ref, blk_h, blk_w)
         };
       }
       if mem::size_of::<T>() == 1 && is_x86_feature_detected!("sse2") && blk_h >= 4 && blk_w >= 4 {

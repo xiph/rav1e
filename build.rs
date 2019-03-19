@@ -49,7 +49,8 @@ fn main() {
                 "src/x86/itx.asm",
                 "src/x86/mc.asm",
                 "src/x86/me.asm",
-                "src/x86/sad_sse2.asm"
+                "src/x86/sad_sse2.asm",
+                "src/x86/sad_avx.asm"
             ],
             &[&config_include_arg, "-Isrc/"]
         );
