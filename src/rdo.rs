@@ -520,8 +520,7 @@ pub fn rdo_mode_decision<T: Pixel>(
       let frame_mvs = &mut fs.frame_mvs[ref_slot as usize];
       for mi_y in (bo.y)..(bo.y + bsize.height_mi()) {
         for mi_x in (bo.x)..(bo.x + bsize.width_mi()) {
-          let offset = mi_y * fi.w_in_b + mi_x;
-          frame_mvs[offset] = b_me;
+          frame_mvs[mi_y][mi_x] = b_me;
         }
       }
 

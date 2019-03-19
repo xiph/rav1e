@@ -19,6 +19,7 @@ use crate::partition::*;
 use crate::plane::*;
 use crate::util::Pixel;
 
+use std::ops::{Index, IndexMut};
 use std::sync::Arc;
 
 #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
@@ -216,6 +217,38 @@ mod native {
   }
 }
 
+#[derive(Debug, Clone)]
+pub struct FrameMotionVectors {
+  mvs: Box<[MotionVector]>,
+  pub cols: usize,
+  pub rows: usize,
+}
+
+impl FrameMotionVectors {
+  pub fn new(cols: usize, rows: usize) -> Self {
+    Self {
+      mvs: vec![MotionVector::default(); cols * rows].into_boxed_slice(),
+      cols,
+      rows,
+    }
+  }
+}
+
+impl Index<usize> for FrameMotionVectors {
+  type Output = [MotionVector];
+  #[inline]
+  fn index(&self, index: usize) -> &Self::Output {
+    &self.mvs[index * self.cols..(index + 1) * self.cols]
+  }
+}
+
+impl IndexMut<usize> for FrameMotionVectors {
+  #[inline]
+  fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+    &mut self.mvs[index * self.cols..(index + 1) * self.cols]
+  }
+}
+
 fn get_mv_range(
   w_in_b: usize, h_in_b: usize, bo: &BlockOffset, blk_w: usize, blk_h: usize
 ) -> (isize, isize, isize, isize) {
@@ -231,7 +264,7 @@ fn get_mv_range(
 
 pub fn get_subset_predictors<T: Pixel>(
   fi: &FrameInvariants<T>, bo: &BlockOffset, cmv: MotionVector,
-  frame_mvs: &[MotionVector], frame_ref_opt: &Option<Arc<ReferenceFrame<T>>>,
+  frame_mvs: &FrameMotionVectors, frame_ref_opt: &Option<Arc<ReferenceFrame<T>>>,
   ref_slot: usize
 ) -> (Vec<MotionVector>) {
   let mut predictors = Vec::new();
@@ -239,15 +272,15 @@ pub fn get_subset_predictors<T: Pixel>(
   // EPZS subset A and B predictors.
 
   if bo.x > 0 {
-    let left = frame_mvs[bo.y * fi.w_in_b + bo.x - 1];
+    let left = frame_mvs[bo.y][bo.x - 1];
     predictors.push(left);
   }
   if bo.y > 0 {
-    let top = frame_mvs[(bo.y - 1) * fi.w_in_b + bo.x];
+    let top = frame_mvs[bo.y - 1][bo.x];
     predictors.push(top);
 
     if bo.x < fi.w_in_b - 1 {
-      let top_right = frame_mvs[(bo.y - 1) * fi.w_in_b + bo.x + 1];
+      let top_right = frame_mvs[bo.y - 1][bo.x + 1];
       predictors.push(top_right);
     }
   }
@@ -274,23 +307,23 @@ pub fn get_subset_predictors<T: Pixel>(
     let prev_frame_mvs = &frame_ref.frame_mvs[ref_slot];
 
     if bo.x > 0 {
-      let left = prev_frame_mvs[bo.y * fi.w_in_b + bo.x - 1];
+      let left = prev_frame_mvs[bo.y][bo.x - 1];
       predictors.push(left);
     }
     if bo.y > 0 {
-      let top = prev_frame_mvs[(bo.y - 1) * fi.w_in_b + bo.x];
+      let top = prev_frame_mvs[bo.y - 1][bo.x];
       predictors.push(top);
     }
     if bo.x < fi.w_in_b - 1 {
-      let right = prev_frame_mvs[bo.y * fi.w_in_b + bo.x + 1];
+      let right = prev_frame_mvs[bo.y][bo.x + 1];
       predictors.push(right);
     }
     if bo.y < fi.h_in_b - 1 {
-      let bottom = prev_frame_mvs[(bo.y + 1) * fi.w_in_b + bo.x];
+      let bottom = prev_frame_mvs[bo.y + 1][bo.x];
       predictors.push(bottom);
     }
 
-    predictors.push(prev_frame_mvs[bo.y * fi.w_in_b + bo.x]);
+    predictors.push(prev_frame_mvs[bo.y][bo.x]);
   }
 
   predictors
