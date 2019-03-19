@@ -19,6 +19,7 @@ use crate::entropymode::*;
 use crate::header::ReferenceMode;
 use crate::partition::BlockSize::*;
 use crate::partition::PredictionMode::*;
+use crate::partition::RefType::*;
 use crate::partition::TxSize::*;
 use crate::partition::TxType::*;
 use crate::partition::*;
@@ -1257,9 +1258,10 @@ pub struct Block {
   pub mode: PredictionMode,
   pub partition: PartitionType,
   pub skip: bool,
-  pub ref_frames: [usize; 2],
+  pub ref_frames: [RefType; 2],
   pub mv: [MotionVector; 2],
-  pub neighbors_ref_counts: [usize; TOTAL_REFS_PER_FRAME],
+  // note: indexes are reflist index, NOT the same as libaom
+  pub neighbors_ref_counts: [usize; INTER_REFS_PER_FRAME],
   pub cdef_index: u8,
   pub bsize: BlockSize,
   pub n4_w: usize, /* block width in the unit of mode_info */
@@ -1280,7 +1282,7 @@ impl Block {
       skip: false,
       ref_frames: [INTRA_FRAME; 2],
       mv: [ MotionVector::default(); 2],
-      neighbors_ref_counts: [0; TOTAL_REFS_PER_FRAME],
+      neighbors_ref_counts: [0; INTER_REFS_PER_FRAME],
       cdef_index: 0,
       bsize: BLOCK_64X64,
       n4_w: BLOCK_64X64.width_mi(),
@@ -1294,7 +1296,7 @@ impl Block {
     self.mode >= PredictionMode::NEARESTMV
   }
   pub fn has_second_ref(&self) -> bool {
-    self.ref_frames[1] > INTRA_FRAME && self.ref_frames[1] != NONE_FRAME
+    self.ref_frames[1] != INTRA_FRAME && self.ref_frames[1] != NONE_FRAME
   }
 }
 
@@ -1657,7 +1659,7 @@ impl BlockContext {
     self.for_each(bo, bsize, |block| block.segmentation_idx = idx);
   }
 
-  pub fn set_ref_frames(&mut self, bo: BlockOffset, bsize: BlockSize, r: [usize; 2]) {
+  pub fn set_ref_frames(&mut self, bo: BlockOffset, bsize: BlockSize, r: [RefType; 2]) {
     let bw = bsize.width_mi();
     let bh = bsize.height_mi();
 
@@ -2219,8 +2221,19 @@ impl ContextWriter {
     symbol_with_update!(self, w, enable as u32, &mut self.fc.filter_intra_cdfs[block_size as usize]);
   }
 
-  fn get_mvref_ref_frames(&mut self, ref_frame: usize) -> ([usize; 2], usize) {
-    let ref_frame_map: [[usize; 2]; TOTAL_COMP_REFS] = [
+  fn get_mvref_ref_frames(&mut self, ref_frame: usize) -> ([RefType; 2], usize) {
+    let all_refs: [RefType; 9] = [
+      INTRA_FRAME,
+      LAST_FRAME,
+      LAST2_FRAME,
+      LAST3_FRAME,
+      GOLDEN_FRAME,
+      BWDREF_FRAME,
+      ALTREF2_FRAME,
+      ALTREF_FRAME,
+      NONE_FRAME,
+    ];
+    let ref_frame_map: [[RefType; 2]; TOTAL_COMP_REFS] = [
       [ LAST_FRAME,  BWDREF_FRAME  ], [ LAST2_FRAME,  BWDREF_FRAME  ],
       [ LAST3_FRAME, BWDREF_FRAME  ], [ GOLDEN_FRAME, BWDREF_FRAME  ],
       [ LAST_FRAME,  ALTREF2_FRAME ], [ LAST2_FRAME,  ALTREF2_FRAME ],
@@ -2241,7 +2254,7 @@ impl ContextWriter {
     if ref_frame >= REF_FRAMES {
       ([ ref_frame_map[ref_frame - REF_FRAMES][0], ref_frame_map[ref_frame - REF_FRAMES][1] ], 2)
     } else {
-      ([ ref_frame, 0 ], 1)
+      ([ all_refs[ref_frame], NONE_FRAME ], 1)
     }
   }
 
@@ -2288,7 +2301,7 @@ impl ContextWriter {
     false
   }
 
-  fn add_ref_mv_candidate(&self, ref_frames: [usize; 2], blk: &Block, mv_stack: &mut Vec<CandidateMV>,
+  fn add_ref_mv_candidate(&self, ref_frames: [RefType; 2], blk: &Block, mv_stack: &mut Vec<CandidateMV>,
                           weight: u32, newmv_count: &mut usize, is_compound: bool) -> bool {
     if !blk.is_inter() { /* For intrabc */
       false
@@ -2353,7 +2366,7 @@ impl ContextWriter {
   fn add_extra_mv_candidate<T: Pixel>(
     &self,
     blk: &Block,
-    ref_frames: [usize; 2],
+    ref_frames: [RefType; 2],
     mv_stack: &mut Vec<CandidateMV>,
     fi: &FrameInvariants<T>,
     is_compound: bool,
@@ -2365,15 +2378,15 @@ impl ContextWriter {
     if is_compound {
       for cand_list in 0..2 {
         let cand_ref = blk.ref_frames[cand_list];
-        if cand_ref > INTRA_FRAME && cand_ref != NONE_FRAME {
+        if cand_ref != INTRA_FRAME && cand_ref != NONE_FRAME {
           for list in 0..2 {
             let mut cand_mv = blk.mv[cand_list];
             if cand_ref == ref_frames[list] && ref_id_count[list] < 2 {
               ref_id_mvs[list][ref_id_count[list]] = cand_mv;
               ref_id_count[list] += 1;
             } else if ref_diff_count[list] < 2 {
-              if fi.ref_frame_sign_bias[cand_ref - LAST_FRAME] !=
-                fi.ref_frame_sign_bias[ref_frames[list] - LAST_FRAME] {
+              if fi.ref_frame_sign_bias[cand_ref.to_index()] !=
+                fi.ref_frame_sign_bias[ref_frames[list].to_index()] {
                 cand_mv.row = -cand_mv.row;
                 cand_mv.col = -cand_mv.col;
               }
@@ -2386,10 +2399,10 @@ impl ContextWriter {
     } else {
       for cand_list in 0..2 {
         let cand_ref = blk.ref_frames[cand_list];
-        if cand_ref > INTRA_FRAME && cand_ref != NONE_FRAME {
+        if cand_ref != INTRA_FRAME && cand_ref != NONE_FRAME {
           let mut mv = blk.mv[cand_list];
-          if fi.ref_frame_sign_bias[cand_ref - LAST_FRAME] !=
-            fi.ref_frame_sign_bias[ref_frames[0] - LAST_FRAME] {
+          if fi.ref_frame_sign_bias[cand_ref.to_index()] !=
+            fi.ref_frame_sign_bias[ref_frames[0].to_index()] {
             mv.row = -mv.row;
             mv.col = -mv.col;
           }
@@ -2408,7 +2421,7 @@ impl ContextWriter {
   }
 
   fn scan_row_mbmi(&mut self, bo: BlockOffset, row_offset: isize, max_row_offs: isize,
-                   processed_rows: &mut isize, ref_frames: [usize; 2],
+                   processed_rows: &mut isize, ref_frames: [RefType; 2],
                    mv_stack: &mut Vec<CandidateMV>, newmv_count: &mut usize, bsize: BlockSize,
                    is_compound: bool) -> bool {
     let bc = &self.bc;
@@ -2462,7 +2475,7 @@ impl ContextWriter {
   }
 
   fn scan_col_mbmi(&mut self, bo: BlockOffset, col_offset: isize, max_col_offs: isize,
-                   processed_cols: &mut isize, ref_frames: [usize; 2],
+                   processed_cols: &mut isize, ref_frames: [RefType; 2],
                    mv_stack: &mut Vec<CandidateMV>, newmv_count: &mut usize, bsize: BlockSize,
                    is_compound: bool) -> bool {
     let bc = &self.bc;
@@ -2515,7 +2528,7 @@ impl ContextWriter {
     found_match
   }
 
-  fn scan_blk_mbmi(&mut self, bo: BlockOffset, ref_frames: [usize; 2],
+  fn scan_blk_mbmi(&mut self, bo: BlockOffset, ref_frames: [RefType; 2],
                    mv_stack: &mut Vec<CandidateMV>, newmv_count: &mut usize,
                    is_compound: bool) -> bool {
     if bo.x >= self.bc.cols || bo.y >= self.bc.rows {
@@ -2534,10 +2547,10 @@ impl ContextWriter {
   }
 
   fn setup_mvref_list<T: Pixel>(
-    &mut self, bo: BlockOffset, ref_frames: [usize; 2], mv_stack: &mut Vec<CandidateMV>,
+    &mut self, bo: BlockOffset, ref_frames: [RefType; 2], mv_stack: &mut Vec<CandidateMV>,
     bsize: BlockSize, fi: &FrameInvariants<T>, is_compound: bool
   ) -> usize {
-    let (_rf, _rf_num) = self.get_mvref_ref_frames(INTRA_FRAME);
+    let (_rf, _rf_num) = (INTRA_FRAME, 1);
 
     let target_n4_h = bsize.height_mi();
     let target_n4_w = bsize.width_mi();
@@ -2752,12 +2765,12 @@ impl ContextWriter {
   }
 
   pub fn find_mvrefs<T: Pixel>(
-    &mut self, bo: BlockOffset, ref_frames: [usize; 2],
+    &mut self, bo: BlockOffset, ref_frames: [RefType; 2],
     mv_stack: &mut Vec<CandidateMV>, bsize: BlockSize,
     fi: &FrameInvariants<T>, is_compound: bool
   ) -> usize {
     assert!(ref_frames[0] != NONE_FRAME);
-    if ref_frames[0] < REF_FRAMES {
+    if ref_frames[0] != NONE_FRAME {
       // TODO: If ref_frames[0] != INTRA_FRAME, convert global mv to an mv;
       // otherwise, set the global mv ref to invalid.
     }
@@ -2773,22 +2786,22 @@ impl ContextWriter {
   }
 
   pub fn fill_neighbours_ref_counts(&mut self, bo: BlockOffset) {
-      let mut ref_counts = [0; TOTAL_REFS_PER_FRAME];
+      let mut ref_counts = [0; INTER_REFS_PER_FRAME];
 
       let above_b = self.bc.above_of(bo);
       let left_b = self.bc.left_of(bo);
 
       if bo.y > 0 && above_b.is_inter() {
-        ref_counts[above_b.ref_frames[0] as usize] += 1;
+        ref_counts[above_b.ref_frames[0].to_index()] += 1;
         if above_b.has_second_ref() {
-          ref_counts[above_b.ref_frames[1] as usize] += 1;
+          ref_counts[above_b.ref_frames[1].to_index()] += 1;
         }
       }
 
       if bo.x > 0 && left_b.is_inter() {
-        ref_counts[left_b.ref_frames[0] as usize] += 1;
+        ref_counts[left_b.ref_frames[0].to_index()] += 1;
         if left_b.has_second_ref() {
-          ref_counts[left_b.ref_frames[1] as usize] += 1;
+          ref_counts[left_b.ref_frames[1].to_index()] += 1;
         }
       }
       self.bc.at_mut(bo).neighbors_ref_counts = ref_counts;
@@ -2807,11 +2820,11 @@ impl ContextWriter {
   fn get_ref_frame_ctx_b0(&mut self, bo: BlockOffset) -> usize {
     let ref_counts = self.bc.at(bo).neighbors_ref_counts;
 
-    let fwd_cnt = ref_counts[LAST_FRAME] + ref_counts[LAST2_FRAME] +
-                  ref_counts[LAST3_FRAME] + ref_counts[GOLDEN_FRAME];
+    let fwd_cnt = ref_counts[LAST_FRAME.to_index()] + ref_counts[LAST2_FRAME.to_index()] +
+                  ref_counts[LAST3_FRAME.to_index()] + ref_counts[GOLDEN_FRAME.to_index()];
 
-    let bwd_cnt = ref_counts[BWDREF_FRAME] + ref_counts[ALTREF2_FRAME] +
-                  ref_counts[ALTREF_FRAME];
+    let bwd_cnt = ref_counts[BWDREF_FRAME.to_index()] + ref_counts[ALTREF2_FRAME.to_index()] +
+                  ref_counts[ALTREF_FRAME.to_index()];
 
     ContextWriter::ref_count_ctx(fwd_cnt, bwd_cnt)
   }
@@ -2819,8 +2832,8 @@ impl ContextWriter {
   fn get_pred_ctx_brfarf2_or_arf(&mut self, bo: BlockOffset) -> usize {
     let ref_counts = self.bc.at(bo).neighbors_ref_counts;
 
-    let brfarf2_count = ref_counts[BWDREF_FRAME] + ref_counts[ALTREF2_FRAME];
-    let arf_count = ref_counts[ALTREF_FRAME];
+    let brfarf2_count = ref_counts[BWDREF_FRAME.to_index()] + ref_counts[ALTREF2_FRAME.to_index()];
+    let arf_count = ref_counts[ALTREF_FRAME.to_index()];
 
     ContextWriter::ref_count_ctx(brfarf2_count, arf_count)
   }
@@ -2828,8 +2841,8 @@ impl ContextWriter {
   fn get_pred_ctx_ll2_or_l3gld(&mut self, bo: BlockOffset) -> usize {
     let ref_counts = self.bc.at(bo).neighbors_ref_counts;
 
-    let l_l2_count = ref_counts[LAST_FRAME] + ref_counts[LAST2_FRAME];
-    let l3_gold_count = ref_counts[LAST3_FRAME] + ref_counts[GOLDEN_FRAME];
+    let l_l2_count = ref_counts[LAST_FRAME.to_index()] + ref_counts[LAST2_FRAME.to_index()];
+    let l3_gold_count = ref_counts[LAST3_FRAME.to_index()] + ref_counts[GOLDEN_FRAME.to_index()];
 
     ContextWriter::ref_count_ctx(l_l2_count, l3_gold_count)
   }
@@ -2837,8 +2850,8 @@ impl ContextWriter {
   fn get_pred_ctx_last_or_last2(&mut self, bo: BlockOffset) -> usize {
     let ref_counts = self.bc.at(bo).neighbors_ref_counts;
 
-    let l_count = ref_counts[LAST_FRAME];
-    let l2_count = ref_counts[LAST2_FRAME];
+    let l_count = ref_counts[LAST_FRAME.to_index()];
+    let l2_count = ref_counts[LAST2_FRAME.to_index()];
 
     ContextWriter::ref_count_ctx(l_count, l2_count)
   }
@@ -2846,8 +2859,8 @@ impl ContextWriter {
   fn get_pred_ctx_last3_or_gold(&mut self, bo: BlockOffset) -> usize {
     let ref_counts = self.bc.at(bo).neighbors_ref_counts;
 
-    let l3_count = ref_counts[LAST3_FRAME];
-    let gold_count = ref_counts[GOLDEN_FRAME];
+    let l3_count = ref_counts[LAST3_FRAME.to_index()];
+    let gold_count = ref_counts[GOLDEN_FRAME.to_index()];
 
     ContextWriter::ref_count_ctx(l3_count, gold_count)
   }
@@ -2855,16 +2868,14 @@ impl ContextWriter {
   fn get_pred_ctx_brf_or_arf2(&mut self, bo: BlockOffset) -> usize {
     let ref_counts = self.bc.at(bo).neighbors_ref_counts;
 
-    let brf_count = ref_counts[BWDREF_FRAME];
-    let arf2_count = ref_counts[ALTREF2_FRAME];
+    let brf_count = ref_counts[BWDREF_FRAME.to_index()];
+    let arf2_count = ref_counts[ALTREF2_FRAME.to_index()];
 
     ContextWriter::ref_count_ctx(brf_count, arf2_count)
   }
 
+
   fn get_comp_mode_ctx(&self, bo: BlockOffset) -> usize {
-    fn check_backward(ref_frame: usize) -> bool {
-      ref_frame >= BWDREF_FRAME && ref_frame <= ALTREF_FRAME
-    }
     let avail_left = bo.x > 0;
     let avail_up = bo.y > 0;
     let bo_left = bo.with_offset(-1, 0);
@@ -2877,8 +2888,8 @@ impl ContextWriter {
     let above_single = above1 == NONE_FRAME;
     let left_intra = left0 == INTRA_FRAME;
     let above_intra = above0 == INTRA_FRAME;
-    let left_backward = check_backward(left0);
-    let above_backward = check_backward(above0);
+    let left_backward = left0.is_bwd_ref();
+    let above_backward = above0.is_bwd_ref();
 
     if avail_left && avail_up {
       if above_single && left_single {
@@ -2908,8 +2919,8 @@ impl ContextWriter {
   }
 
   fn get_comp_ref_type_ctx(&self, bo: BlockOffset) -> usize {
-    fn is_samedir_ref_pair(ref0: usize, ref1: usize) -> bool {
-      (ref0 >= BWDREF_FRAME && ref0 != NONE_FRAME) == (ref1 >= BWDREF_FRAME && ref1 != NONE_FRAME)
+    fn is_samedir_ref_pair(ref0: RefType, ref1: RefType) -> bool {
+      (ref0.is_bwd_ref() && ref0 != NONE_FRAME) == (ref1.is_bwd_ref() && ref1 != NONE_FRAME)
     }
 
     let avail_left = bo.x > 0;
@@ -3009,7 +3020,7 @@ impl ContextWriter {
       }
     } else {
       let b0_ctx = self.get_ref_frame_ctx_b0(bo);
-      let b0 = rf[0] <= ALTREF_FRAME && rf[0] >= BWDREF_FRAME;
+      let b0 = rf[0] != NONE_FRAME && rf[0].is_bwd_ref();
 
       symbol_with_update!(self, w, b0 as u32, &mut self.fc.single_ref_cdfs[b0_ctx][0]);
       if b0 {

@@ -26,6 +26,7 @@ use crate::luma_ac;
 use crate::me::*;
 use crate::motion_compensate;
 use crate::partition::*;
+use crate::partition::RefType::*;
 use crate::plane::*;
 use crate::predict::{RAV1E_INTRA_MODES, RAV1E_INTER_MODES_MINIMAL, RAV1E_INTER_COMPOUND_MODES};
 use crate::Tune;
@@ -84,7 +85,7 @@ pub struct RDOPartitionOutput {
   pub pred_mode_luma: PredictionMode,
   pub pred_mode_chroma: PredictionMode,
   pub pred_cfl_params: CFLParams,
-  pub ref_frames: [usize; 2],
+  pub ref_frames: [RefType; 2],
   pub mvs: [MotionVector; 2],
   pub skip: bool,
   pub tx_size: TxSize,
@@ -361,7 +362,7 @@ fn compute_rd_cost<T: Pixel>(fi: &FrameInvariants<T>, rate: u32, distortion: u64
 pub fn rdo_tx_size_type<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>,
   cw: &mut ContextWriter, bsize: BlockSize, bo: BlockOffset,
-  luma_mode: PredictionMode, ref_frames: [usize; 2], mvs: [MotionVector; 2], skip: bool
+  luma_mode: PredictionMode, ref_frames: [RefType; 2], mvs: [MotionVector; 2], skip: bool
 ) -> (TxSize, TxType) {
   use crate::context::max_txsize_rect_lookup;
 
@@ -428,7 +429,7 @@ struct EncodingSettings {
   cfl_params: CFLParams,
   skip: bool,
   rd: f64,
-  ref_frames: [usize; 2],
+  ref_frames: [RefType; 2],
   mvs: [MotionVector; 2],
   tx_size: TxSize,
   tx_type: TxType
@@ -483,18 +484,18 @@ pub fn rdo_mode_decision<T: Pixel>(
   };
 
   if fi.frame_type == FrameType::INTER {
-    for i in LAST_FRAME..NONE_FRAME {
+    for i in ALL_INTER_REFS.iter() {
       // Don't search LAST3 since it's used only for probs
-      if i == LAST3_FRAME { continue; }
-      if !ref_slot_set.contains(&fi.ref_frames[i - LAST_FRAME]) {
-        if fwdref == None && i < BWDREF_FRAME {
+      if *i == LAST3_FRAME { continue; }
+      if !ref_slot_set.contains(&fi.ref_frames[i.to_index()]) {
+        if fwdref == None && i.is_fwd_ref() {
           fwdref = Some(ref_frames_set.len());
         }
-        if bwdref == None && i >= BWDREF_FRAME {
+        if bwdref == None && i.is_bwd_ref() {
           bwdref = Some(ref_frames_set.len());
         }
-        ref_frames_set.push([i, NONE_FRAME]);
-        let slot_idx = fi.ref_frames[i - LAST_FRAME];
+        ref_frames_set.push([*i, NONE_FRAME]);
+        let slot_idx = fi.ref_frames[i.to_index()];
         ref_slot_set.push(slot_idx);
       }
     }
@@ -583,7 +584,7 @@ pub fn rdo_mode_decision<T: Pixel>(
   cw: &mut ContextWriter,
   best: &mut EncodingSettings,
   mvs: [MotionVector; 2],
-  ref_frames: [usize; 2],
+  ref_frames: [RefType; 2],
   mode_set_chroma: &[PredictionMode],
   luma_mode_is_intra: bool,
   mode_context: usize,
@@ -948,7 +949,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
 // RDO-based transform type decision
 pub fn rdo_tx_type_decision<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, cw: &mut ContextWriter,
-  mode: PredictionMode, ref_frames: [usize; 2], mvs: [MotionVector; 2],
+  mode: PredictionMode, ref_frames: [RefType; 2], mvs: [MotionVector; 2],
   bsize: BlockSize, bo: BlockOffset, tx_size: TxSize, tx_set: TxSet,
   tx_types: &[TxType]
 ) -> (TxType, f64) {

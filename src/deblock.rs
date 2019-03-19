@@ -14,8 +14,8 @@ use crate::DeblockState;
 use crate::FrameInvariants;
 use crate::FrameState;
 use crate::FrameType;
-use crate::partition::*;
 use crate::partition::PredictionMode::*;
+use crate::partition::RefType::*;
 use crate::plane::*;
 use crate::quantize::*;
 use crate::util::Pixel;
@@ -67,7 +67,7 @@ fn deblock_adjusted_level(
     let l5 = level >> 5;
     clamp(
       level as i32
-        + ((deblock.ref_deltas[reference] as i32) << l5)
+        + ((deblock.ref_deltas[reference.to_index()] as i32) << l5)
         + if reference == INTRA_FRAME {
           0
         } else {

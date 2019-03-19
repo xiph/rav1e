@@ -20,15 +20,48 @@ use crate::plane::*;
 use crate::predict::*;
 use crate::util::*;
 
-pub const NONE_FRAME: usize = 8;
-pub const INTRA_FRAME: usize = 0;
-pub const LAST_FRAME: usize = 1;
-pub const LAST2_FRAME: usize = 2;
-pub const LAST3_FRAME: usize = 3;
-pub const GOLDEN_FRAME: usize = 4;
-pub const BWDREF_FRAME: usize = 5;
-pub const ALTREF2_FRAME: usize = 6;
-pub const ALTREF_FRAME: usize = 7;
+// LAST_FRAME through ALTREF_FRAME correspond to slots 0-6.
+#[derive(PartialEq, Eq, Copy, Clone)]
+pub enum RefType {
+  INTRA_FRAME = 0,
+  LAST_FRAME = 1,
+  LAST2_FRAME = 2,
+  LAST3_FRAME = 3,
+  GOLDEN_FRAME = 4,
+  BWDREF_FRAME = 5,
+  ALTREF2_FRAME = 6,
+  ALTREF_FRAME = 7,
+  NONE_FRAME = 8,
+}
+
+impl RefType {
+  // convert to a ref list index, 0-6 (INTER_REFS_PER_FRAME)
+  pub fn to_index(self) -> usize {
+    match self {
+      NONE_FRAME => { panic!("Tried to get slot of NONE_FRAME"); },
+      INTRA_FRAME => { panic!("Tried to get slot of INTRA_FRAME"); },
+      _ => { (self as usize) - 1 }
+    }
+  }
+  pub fn is_fwd_ref(self) -> bool {
+    (self as usize) < 5
+  }
+  pub fn is_bwd_ref(self) -> bool {
+    (self as usize) >= 5
+  }
+}
+
+use RefType::*;
+
+pub const ALL_INTER_REFS: [RefType; 7] = [
+  LAST_FRAME,
+  LAST2_FRAME,
+  LAST3_FRAME,
+  GOLDEN_FRAME,
+  BWDREF_FRAME,
+  ALTREF2_FRAME,
+  ALTREF_FRAME
+];
 
 pub const LAST_LAST2_FRAMES: usize = 0; // { LAST_FRAME, LAST2_FRAME }
 pub const LAST_LAST3_FRAMES: usize = 1; // { LAST_FRAME, LAST3_FRAME }
@@ -45,11 +78,11 @@ pub const TOTAL_UNIDIR_COMP_REFS: usize = 9;
 //       that are explicitly signaled.
 pub const UNIDIR_COMP_REFS: usize = BWDREF_ALTREF_FRAMES + 1;
 
-pub const FWD_REFS: usize = GOLDEN_FRAME - LAST_FRAME + 1;
-pub const BWD_REFS: usize = ALTREF_FRAME - BWDREF_FRAME + 1;
-pub const SINGLE_REFS: usize = FWD_REFS + BWD_REFS;
-pub const TOTAL_REFS_PER_FRAME: usize = ALTREF_FRAME - INTRA_FRAME + 1;
-pub const INTER_REFS_PER_FRAME: usize = ALTREF_FRAME - LAST_FRAME + 1;
+pub const FWD_REFS: usize = 4;
+pub const BWD_REFS: usize = 3;
+pub const SINGLE_REFS: usize = 7;
+pub const TOTAL_REFS_PER_FRAME: usize = 8;
+pub const INTER_REFS_PER_FRAME: usize = 7;
 pub const TOTAL_COMP_REFS: usize =
   FWD_REFS * BWD_REFS + TOTAL_UNIDIR_COMP_REFS;
 
@@ -1132,13 +1165,13 @@ impl PredictionMode {
   pub fn predict_inter<T: Pixel>(
     self, fi: &FrameInvariants<T>, p: usize, po: PlaneOffset,
     dst: &mut PlaneMutSlice<'_, T>, width: usize, height: usize,
-    ref_frames: [usize; 2], mvs: [MotionVector; 2]
+    ref_frames: [RefType; 2], mvs: [MotionVector; 2]
   ) {
     assert!(!self.is_intra());
 
     let mode = FilterMode::REGULAR;
     let is_compound =
-      ref_frames[1] > INTRA_FRAME && ref_frames[1] != NONE_FRAME;
+      ref_frames[1] != INTRA_FRAME && ref_frames[1] != NONE_FRAME;
 
     fn get_params<'a, T: Pixel>(
       rec_plane: &'a Plane<T>, po: PlaneOffset, mv: MotionVector
@@ -1160,7 +1193,7 @@ impl PredictionMode {
     };
 
     if !is_compound {
-      if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[ref_frames[0] - LAST_FRAME] as usize] {
+      if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[ref_frames[0].to_index()] as usize] {
         let (row_frac, col_frac, src) = get_params(&rec.frame.planes[p], po, mvs[0]);
         put_8tap(
           dst,
@@ -1178,7 +1211,7 @@ impl PredictionMode {
       let mut tmp: [AlignedArray<[i16; 128 * 128]>; 2] =
         [UninitializedAlignedArray(), UninitializedAlignedArray()];
       for i in 0..2 {
-        if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[ref_frames[i] - LAST_FRAME] as usize] {
+        if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[ref_frames[i].to_index()] as usize] {
           let (row_frac, col_frac, src) = get_params(&rec.frame.planes[p], po, mvs[i]);
           prep_8tap(
             &mut tmp[i].array,
