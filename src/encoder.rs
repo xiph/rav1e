@@ -156,7 +156,7 @@ pub struct ReferenceFrame<T: Pixel> {
   pub input_hres: Plane<T>,
   pub input_qres: Plane<T>,
   pub cdfs: CDFContext,
-  pub frame_mvs: Vec<Vec<MotionVector>>,
+  pub frame_mvs: Vec<FrameMotionVectors>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -392,7 +392,7 @@ pub struct FrameState<T: Pixel> {
   pub deblock: DeblockState,
   pub segmentation: SegmentationState,
   pub restoration: RestorationState,
-  pub frame_mvs: Vec<Vec<MotionVector>>,
+  pub frame_mvs: Vec<FrameMotionVectors>,
   pub t: RDOTracker,
 }
 
@@ -420,7 +420,13 @@ impl<T: Pixel> FrameState<T> {
       deblock: Default::default(),
       segmentation: Default::default(),
       restoration: rs,
-      frame_mvs: vec![vec![MotionVector::default(); fi.w_in_b * fi.h_in_b]; REF_FRAMES],
+      frame_mvs: {
+        let mut vec = Vec::with_capacity(REF_FRAMES);
+        for _ in 0..REF_FRAMES {
+          vec.push(FrameMotionVectors::new(fi.w_in_b, fi.h_in_b));
+        }
+        vec
+      },
       t: RDOTracker::new()
     }
   }
