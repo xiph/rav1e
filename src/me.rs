@@ -16,6 +16,7 @@ use crate::encoder::ReferenceFrame;
 use crate::FrameInvariants;
 use crate::FrameState;
 use crate::partition::*;
+use crate::partition::RefType::*;
 use crate::plane::*;
 use crate::util::Pixel;
 
@@ -341,7 +342,7 @@ pub trait MotionEstimation {
     cmv: MotionVector, pmv: [MotionVector; 2],
     mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
     blk_w: usize, blk_h: usize, best_mv: &mut MotionVector,
-    lowest_cost: &mut u64, ref_frame: usize
+    lowest_cost: &mut u64, ref_frame: RefType
   );
 
   fn sub_pixel_me<T: Pixel>(
@@ -349,15 +350,15 @@ pub trait MotionEstimation {
     bo: BlockOffset, lambda: u32, pmv: [MotionVector; 2],
     mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
     blk_w: usize, blk_h: usize, best_mv: &mut MotionVector,
-    lowest_cost: &mut u64, ref_frame: usize
+    lowest_cost: &mut u64, ref_frame: RefType
   );
 
   fn motion_estimation<T: Pixel> (
     fi: &FrameInvariants<T>, fs: &FrameState<T>, bsize: BlockSize,
-    bo: BlockOffset, ref_frame: usize, cmv: MotionVector,
+    bo: BlockOffset, ref_frame: RefType, cmv: MotionVector,
     pmv: [MotionVector; 2]
   ) -> MotionVector {
-    match fi.rec_buffer.frames[fi.ref_frames[ref_frame - LAST_FRAME] as usize]
+    match fi.rec_buffer.frames[fi.ref_frames[ref_frame.to_index()] as usize]
     {
       Some(ref rec) => {
         let blk_w = bsize.width();
@@ -447,12 +448,12 @@ impl MotionEstimation for DiamondSearch {
     bo: BlockOffset, lambda: u32,
     cmv: MotionVector, pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize,
     mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize,
-    best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: usize
+    best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: RefType
   ) {
-    let frame_mvs = &fs.frame_mvs[ref_frame - LAST_FRAME];
+    let frame_mvs = &fs.frame_mvs[ref_frame.to_index()];
     let frame_ref = fi.rec_buffer.frames[fi.ref_frames[0] as usize].as_ref().map(Arc::as_ref);
     let predictors =
-      get_subset_predictors(bo, cmv, fi.w_in_b, fi.h_in_b, frame_mvs, frame_ref, ref_frame - LAST_FRAME);
+      get_subset_predictors(bo, cmv, fi.w_in_b, fi.h_in_b, frame_mvs, frame_ref, ref_frame.to_index());
 
     diamond_me_search(
       fi,
@@ -481,7 +482,7 @@ impl MotionEstimation for DiamondSearch {
     bo: BlockOffset, lambda: u32,
     pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize,
     mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize,
-    best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: usize,
+    best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: RefType,
   )
   {
     let predictors = vec![*best_mv];
@@ -539,7 +540,7 @@ impl MotionEstimation for DiamondSearch {
           mvx_min >> 1, mvx_max >> 1, mvy_min >> 1, mvy_max >> 1,
           blk_w >> 1, blk_h >> 1,
           best_mv, lowest_cost,
-          false, 0
+          false, LAST_FRAME
         );
       }
     }
@@ -552,7 +553,7 @@ impl MotionEstimation for FullSearch {
     bo: BlockOffset, lambda: u32,
     cmv: MotionVector, pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize,
     mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize,
-    best_mv: &mut MotionVector, lowest_cost: &mut u64, _ref_frame: usize
+    best_mv: &mut MotionVector, lowest_cost: &mut u64, _ref_frame: RefType
   ) {
     let po = bo.to_luma_plane_offset();
     let range = 16;
@@ -590,7 +591,7 @@ impl MotionEstimation for FullSearch {
     bo: BlockOffset, lambda: u32,
     pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize,
     mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize,
-    best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: usize,
+    best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: RefType,
   )
   {
     telescopic_subpel_search(
@@ -659,7 +660,7 @@ fn get_best_predictor<T: Pixel>(
   mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
   blk_w: usize, blk_h: usize,
   center_mv: &mut MotionVector, center_mv_cost: &mut u64,
-  tmp_plane_opt: &mut Option<Plane<T>>, ref_frame: usize) {
+  tmp_plane_opt: &mut Option<Plane<T>>, ref_frame: RefType) {
   *center_mv = MotionVector::default();
   *center_mv_cost = std::u64::MAX;
 
@@ -684,7 +685,7 @@ fn diamond_me_search<T: Pixel>(
   mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
   blk_w: usize, blk_h: usize,
   center_mv: &mut MotionVector, center_mv_cost: &mut u64,
-  subpixel: bool, ref_frame: usize)
+  subpixel: bool, ref_frame: RefType)
 {
   let diamond_pattern = [(1i16, 0i16), (0, 1), (-1, 0), (0, -1)];
   let (mut diamond_radius, diamond_radius_end, mut tmp_plane_opt) = {
@@ -752,7 +753,7 @@ fn get_mv_rd_cost<T: Pixel>(
   mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
   blk_w: usize, blk_h: usize,
   cand_mv: MotionVector, tmp_plane_opt: &mut Option<Plane<T>>,
-  ref_frame: usize) -> u64
+  ref_frame: RefType) -> u64
 {
   if (cand_mv.col as isize) < mvx_min || (cand_mv.col as isize) > mvx_max {
     return std::u64::MAX;
@@ -811,7 +812,7 @@ fn compute_mv_rd_cost<T: Pixel>(
 
 fn telescopic_subpel_search<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &FrameState<T>, po: PlaneOffset,
-  lambda: u32, ref_frame: usize, pmv: [MotionVector; 2],
+  lambda: u32, ref_frame: RefType, pmv: [MotionVector; 2],
   mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
   blk_w: usize, blk_h: usize,
   best_mv: &mut MotionVector, lowest_cost: &mut u64

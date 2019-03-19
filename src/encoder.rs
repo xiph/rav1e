@@ -26,6 +26,7 @@ use crate::segmentation::*;
 use crate::transform::*;
 use crate::util::*;
 use crate::partition::PartitionType::*;
+use crate::partition::RefType::*;
 use crate::header::*;
 
 use arg_enum_proc_macro::ArgEnum;
@@ -511,7 +512,7 @@ pub struct FrameInvariants<T: Pixel> {
   pub reference_mode: ReferenceMode,
   pub use_prev_frame_mvs: bool,
   pub min_partition_size: BlockSize,
-  pub globalmv_transformation_type: [GlobalMVMode; ALTREF_FRAME + 1],
+  pub globalmv_transformation_type: [GlobalMVMode; INTER_REFS_PER_FRAME],
   pub num_tg: usize,
   pub large_scale_tile: bool,
   pub disable_cdf_update: bool,
@@ -597,7 +598,7 @@ impl<T: Pixel> FrameInvariants<T> {
       reference_mode: ReferenceMode::SINGLE,
       use_prev_frame_mvs: false,
       min_partition_size,
-      globalmv_transformation_type: [GlobalMVMode::IDENTITY; ALTREF_FRAME + 1],
+      globalmv_transformation_type: [GlobalMVMode::IDENTITY; INTER_REFS_PER_FRAME],
       num_tg: 1,
       large_scale_tile: false,
       disable_cdf_update: false,
@@ -736,7 +737,7 @@ impl<T: Pixel> FrameInvariants<T> {
     };
 
     let second_ref_frame = if !inter_cfg.multiref {
-      NONE_FRAME
+      LAST_FRAME // make second_ref_frame match first
     } else if !inter_cfg.reorder || inter_cfg.idx_in_group == 0 {
       LAST2_FRAME
     } else {
@@ -748,18 +749,18 @@ impl<T: Pixel> FrameInvariants<T> {
     fi.primary_ref_frame = if lvl > 0 {
       PRIMARY_REF_NONE
     } else {
-      (ref_in_previous_group - LAST_FRAME) as u32
+      (ref_in_previous_group.to_index()) as u32
     };
 
     for i in 0..INTER_REFS_PER_FRAME {
       fi.ref_frames[i] = if lvl == 0 {
-        if i == second_ref_frame - LAST_FRAME {
+        if i == second_ref_frame.to_index() {
           (slot_idx + 4 - 2) as u8 % 4
         } else {
           (slot_idx + 4 - 1) as u8 % 4
         }
       } else {
-        if i == second_ref_frame - LAST_FRAME {
+        if i == second_ref_frame.to_index() {
           let oh = fi.order_hint + (inter_cfg.group_src_len as u32 >> lvl);
           let lvl2 = pos_to_lvl(oh as u64, inter_cfg.pyramid_depth);
           if lvl2 == 0 {
@@ -767,7 +768,7 @@ impl<T: Pixel> FrameInvariants<T> {
           } else {
             3 + lvl2 as u8
           }
-        } else if i == ref_in_previous_group - LAST_FRAME {
+        } else if i == ref_in_previous_group.to_index() {
           if lvl == 0 {
             (slot_idx + 4 - 1) as u8 % 4
           } else {
@@ -1050,7 +1051,7 @@ pub fn encode_tx_block<T: Pixel>(
 
 pub fn motion_compensate<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, cw: &mut ContextWriter,
-  luma_mode: PredictionMode, ref_frames: [usize; 2], mvs: [MotionVector; 2],
+  luma_mode: PredictionMode, ref_frames: [RefType; 2], mvs: [MotionVector; 2],
   bsize: BlockSize, bo: BlockOffset, luma_only: bool
 ) {
   debug_assert!(!luma_mode.is_intra());
@@ -1159,7 +1160,7 @@ pub fn encode_block_b<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>,
   cw: &mut ContextWriter, w: &mut dyn Writer,
   luma_mode: PredictionMode, chroma_mode: PredictionMode,
-  ref_frames: [usize; 2], mvs: [MotionVector; 2],
+  ref_frames: [RefType; 2], mvs: [MotionVector; 2],
   bsize: BlockSize, bo: BlockOffset, skip: bool,
   cfl: CFLParams, tx_size: TxSize, tx_type: TxType,
   mode_context: usize, mv_stack: &[CandidateMV],
@@ -1618,7 +1619,7 @@ fn encode_partition_bottomup<T: Pixel>(
       // Fill the saved motion structure
       save_block_motion(
         fs, fi.w_in_b, fi.h_in_b, mode_decision.bsize, mode_decision.bo,
-        mode_decision.ref_frames[0] - LAST_FRAME, mode_decision.mvs[0]
+        mode_decision.ref_frames[0].to_index(), mode_decision.mvs[0]
       );
     }
 
@@ -1746,7 +1747,7 @@ fn encode_partition_bottomup<T: Pixel>(
           if !mode.pred_mode_luma.is_intra() {
             save_block_motion(
               fs, fi.w_in_b, fi.h_in_b, mode.bsize, mode.bo,
-              mode.ref_frames[0] - LAST_FRAME, mode.mvs[0]
+              mode.ref_frames[0].to_index(), mode.mvs[0]
             );
           }
 
@@ -1924,7 +1925,7 @@ fn encode_partition_topdown<T: Pixel>(
         save_block_motion(
           fs, fi.w_in_b, fi.h_in_b,
           part_decision.bsize, part_decision.bo,
-          part_decision.ref_frames[0] - LAST_FRAME, part_decision.mvs[0]
+          part_decision.ref_frames[0].to_index(), part_decision.mvs[0]
         );
       }
 
