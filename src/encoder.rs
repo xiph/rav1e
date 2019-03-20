@@ -937,7 +937,7 @@ fn diff<T: Pixel>(dst: &mut [i16], src1: &PlaneSlice<'_, T>, src2: &PlaneSlice<'
     }
 }
 
-fn get_qidx<T: Pixel>(fi: &FrameInvariants<T>, fs: &FrameState<T>, cw: &ContextWriter, bo: &BlockOffset) -> u8 {
+fn get_qidx<T: Pixel>(fi: &FrameInvariants<T>, fs: &FrameState<T>, cw: &ContextWriter, bo: BlockOffset) -> u8 {
   let mut qidx = fi.base_q_idx;
   let sidx = cw.bc.at(bo).segmentation_idx as usize;
   if fs.segmentation.features[sidx][SegLvl::SEG_LVL_ALT_Q as usize] {
@@ -952,7 +952,7 @@ fn get_qidx<T: Pixel>(fi: &FrameInvariants<T>, fs: &FrameState<T>, cw: &ContextW
 // dequantize, inverse-transform.
 pub fn encode_tx_block<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, cw: &mut ContextWriter,
-  w: &mut dyn Writer, p: usize, bo: &BlockOffset, mode: PredictionMode,
+  w: &mut dyn Writer, p: usize, bo: BlockOffset, mode: PredictionMode,
   tx_size: TxSize, tx_type: TxType, plane_bsize: BlockSize, po: &PlaneOffset,
   skip: bool, ac: &[i16], alpha: i16, rdo_type: RDOType, for_rdo_use: bool
 ) -> (bool, i64) {
@@ -1041,7 +1041,7 @@ pub fn encode_tx_block<T: Pixel>(
 pub fn motion_compensate<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, cw: &mut ContextWriter,
   luma_mode: PredictionMode, ref_frames: [usize; 2], mvs: [MotionVector; 2],
-  bsize: BlockSize, bo: &BlockOffset, luma_only: bool
+  bsize: BlockSize, bo: BlockOffset, luma_only: bool
 ) {
   debug_assert!(!luma_mode.is_intra());
 
@@ -1061,11 +1061,11 @@ pub fn motion_compensate<T: Pixel>(
     if p > 0 && bsize < BlockSize::BLOCK_8X8 {
       let mut some_use_intra = false;
       if bsize == BlockSize::BLOCK_4X4 || bsize == BlockSize::BLOCK_4X8 {
-        some_use_intra |= cw.bc.at(&bo.with_offset(-1,0)).mode.is_intra(); };
+        some_use_intra |= cw.bc.at(bo.with_offset(-1,0)).mode.is_intra(); };
       if !some_use_intra && bsize == BlockSize::BLOCK_4X4 || bsize == BlockSize::BLOCK_8X4 {
-        some_use_intra |= cw.bc.at(&bo.with_offset(0,-1)).mode.is_intra(); };
+        some_use_intra |= cw.bc.at(bo.with_offset(0,-1)).mode.is_intra(); };
       if !some_use_intra && bsize == BlockSize::BLOCK_4X4 {
-        some_use_intra |= cw.bc.at(&bo.with_offset(-1,-1)).mode.is_intra(); };
+        some_use_intra |= cw.bc.at(bo.with_offset(-1,-1)).mode.is_intra(); };
 
       if some_use_intra {
         luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), plane_bsize.width(),
@@ -1074,13 +1074,13 @@ pub fn motion_compensate<T: Pixel>(
         assert!(xdec == 1 && ydec == 1);
         // TODO: these are absolutely only valid for 4:2:0
         if bsize == BlockSize::BLOCK_4X4 {
-          let mv0 = cw.bc.at(&bo.with_offset(-1,-1)).mv;
-          let rf0 = cw.bc.at(&bo.with_offset(-1,-1)).ref_frames;
-          let mv1 = cw.bc.at(&bo.with_offset(0,-1)).mv;
-          let rf1 = cw.bc.at(&bo.with_offset(0,-1)).ref_frames;
+          let mv0 = cw.bc.at(bo.with_offset(-1,-1)).mv;
+          let rf0 = cw.bc.at(bo.with_offset(-1,-1)).ref_frames;
+          let mv1 = cw.bc.at(bo.with_offset(0,-1)).mv;
+          let rf1 = cw.bc.at(bo.with_offset(0,-1)).ref_frames;
           let po1 = PlaneOffset { x: po.x+2, y: po.y };
-          let mv2 = cw.bc.at(&bo.with_offset(-1,0)).mv;
-          let rf2 = cw.bc.at(&bo.with_offset(-1,0)).ref_frames;
+          let mv2 = cw.bc.at(bo.with_offset(-1,0)).mv;
+          let rf2 = cw.bc.at(bo.with_offset(-1,0)).ref_frames;
           let po2 = PlaneOffset { x: po.x, y: po.y+2 };
           let po3 = PlaneOffset { x: po.x+2, y: po.y+2 };
           luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), 2, 2, rf0, mv0);
@@ -1089,15 +1089,15 @@ pub fn motion_compensate<T: Pixel>(
           luma_mode.predict_inter(fi, p, &po3, &mut rec.mut_slice(&po3), 2, 2, ref_frames, mvs);
         }
         if bsize == BlockSize::BLOCK_8X4 {
-          let mv1 = cw.bc.at(&bo.with_offset(0,-1)).mv;
-          let rf1 = cw.bc.at(&bo.with_offset(0,-1)).ref_frames;
+          let mv1 = cw.bc.at(bo.with_offset(0,-1)).mv;
+          let rf1 = cw.bc.at(bo.with_offset(0,-1)).ref_frames;
           luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), 4, 2, rf1, mv1);
           let po3 = PlaneOffset { x: po.x, y: po.y+2 };
           luma_mode.predict_inter(fi, p, &po3, &mut rec.mut_slice(&po3), 4, 2, ref_frames, mvs);
         }
         if bsize == BlockSize::BLOCK_4X8 {
-          let mv2 = cw.bc.at(&bo.with_offset(-1,0)).mv;
-          let rf2 = cw.bc.at(&bo.with_offset(-1,0)).ref_frames;
+          let mv2 = cw.bc.at(bo.with_offset(-1,0)).mv;
+          let rf2 = cw.bc.at(bo.with_offset(-1,0)).ref_frames;
           luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), 2, 4, rf2, mv2);
           let po3 = PlaneOffset { x: po.x+2, y: po.y };
           luma_mode.predict_inter(fi, p, &po3, &mut rec.mut_slice(&po3), 2, 4, ref_frames, mvs);
@@ -1113,7 +1113,7 @@ pub fn motion_compensate<T: Pixel>(
 pub fn save_block_motion<T: Pixel>(
    fs: &mut FrameState<T>,
    w_in_b: usize, h_in_b: usize,
-   bsize: BlockSize, bo: &BlockOffset,
+   bsize: BlockSize, bo: BlockOffset,
    ref_frame: usize, mv: MotionVector,
 ) {
   let frame_mvs = &mut fs.frame_mvs[ref_frame];
@@ -1129,7 +1129,7 @@ pub fn save_block_motion<T: Pixel>(
 pub fn encode_block_a<T: Pixel>(
   seq: &Sequence, fs: &FrameState<T>,
   cw: &mut ContextWriter, w: &mut dyn Writer,
-  bsize: BlockSize, bo: &BlockOffset, skip: bool
+  bsize: BlockSize, bo: BlockOffset, skip: bool
 ) -> bool {
   cw.bc.set_skip(bo, bsize, skip);
   if fs.segmentation.enabled && fs.segmentation.update_map && fs.segmentation.preskip {
@@ -1150,7 +1150,7 @@ pub fn encode_block_b<T: Pixel>(
   cw: &mut ContextWriter, w: &mut dyn Writer,
   luma_mode: PredictionMode, chroma_mode: PredictionMode,
   ref_frames: [usize; 2], mvs: [MotionVector; 2],
-  bsize: BlockSize, bo: &BlockOffset, skip: bool,
+  bsize: BlockSize, bo: BlockOffset, skip: bool,
   cfl: CFLParams, tx_size: TxSize, tx_type: TxType,
   mode_context: usize, mv_stack: &[CandidateMV],
   rdo_type: RDOType, for_rdo_use: bool
@@ -1295,7 +1295,7 @@ pub fn encode_block_b<T: Pixel>(
 }
 
 pub fn luma_ac<T: Pixel>(
-  ac: &mut [i16], fs: &mut FrameState<T>, bo: &BlockOffset, bsize: BlockSize
+  ac: &mut [i16], fs: &mut FrameState<T>, bo: BlockOffset, bsize: BlockSize
 ) {
   let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
   let plane_bsize = get_plane_block_size(bsize, xdec, ydec);
@@ -1334,7 +1334,7 @@ pub fn luma_ac<T: Pixel>(
 pub fn write_tx_blocks<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>,
   cw: &mut ContextWriter, w: &mut dyn Writer,
-  luma_mode: PredictionMode, chroma_mode: PredictionMode, bo: &BlockOffset,
+  luma_mode: PredictionMode, chroma_mode: PredictionMode, bo: BlockOffset,
   bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool,
   cfl: CFLParams, luma_only: bool, rdo_type: RDOType, for_rdo_use: bool
 ) -> i64 {
@@ -1359,7 +1359,7 @@ pub fn write_tx_blocks<T: Pixel>(
       let po = tx_bo.plane_offset(&fs.input.planes[0].cfg);
       let (_, dist) =
         encode_tx_block(
-          fi, fs, cw, w, 0, &tx_bo, luma_mode, tx_size, tx_type, bsize, &po,
+          fi, fs, cw, w, 0, tx_bo, luma_mode, tx_size, tx_type, bsize, &po,
           skip, &ac.array, 0, rdo_type, for_rdo_use
         );
       assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
@@ -1412,7 +1412,7 @@ pub fn write_tx_blocks<T: Pixel>(
           po.x += (bx * uv_tx_size.width()) as isize;
           po.y += (by * uv_tx_size.height()) as isize;
           let (_, dist) =
-            encode_tx_block(fi, fs, cw, w, p, &tx_bo, chroma_mode, uv_tx_size, uv_tx_type,
+            encode_tx_block(fi, fs, cw, w, p, tx_bo, chroma_mode, uv_tx_size, uv_tx_type,
                             plane_bsize, &po, skip, &ac.array, alpha, rdo_type, for_rdo_use);
           assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
           tx_dist += dist;
@@ -1428,7 +1428,7 @@ pub fn write_tx_blocks<T: Pixel>(
 // which means only one tx block exist for a inter mode partition.
 pub fn write_tx_tree<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, cw: &mut ContextWriter, w: &mut dyn Writer,
-  luma_mode: PredictionMode, bo: &BlockOffset,
+  luma_mode: PredictionMode, bo: BlockOffset,
   bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool,
   luma_only: bool, rdo_type: RDOType, for_rdo_use: bool
 ) -> i64 {
@@ -1444,7 +1444,7 @@ pub fn write_tx_tree<T: Pixel>(
 
   let po = bo.plane_offset(&fs.input.planes[0].cfg);
   let (has_coeff, dist) = encode_tx_block(
-    fi, fs, cw, w, 0, &bo, luma_mode, tx_size, tx_type, bsize, &po, skip, ac, 0, rdo_type, for_rdo_use
+    fi, fs, cw, w, 0, bo, luma_mode, tx_size, tx_type, bsize, &po, skip, ac, 0, rdo_type, for_rdo_use
   );
   assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
   tx_dist += dist;
@@ -1478,7 +1478,7 @@ pub fn write_tx_tree<T: Pixel>(
 
       let po = bo.plane_offset(&fs.input.planes[p].cfg);
       let (_, dist) =
-        encode_tx_block(fi, fs, cw, w, p, &tx_bo, luma_mode, uv_tx_size, uv_tx_type,
+        encode_tx_block(fi, fs, cw, w, p, tx_bo, luma_mode, uv_tx_size, uv_tx_type,
                         plane_bsize, &po, skip, ac, 0, rdo_type, for_rdo_use);
       assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
       tx_dist += dist;
@@ -1491,7 +1491,7 @@ pub fn write_tx_tree<T: Pixel>(
 pub fn encode_block_with_modes<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
-  bsize: BlockSize, bo: &BlockOffset, mode_decision: &RDOPartitionOutput,
+  bsize: BlockSize, bo: BlockOffset, mode_decision: &RDOPartitionOutput,
   rdo_type: RDOType
 ) {
   let (mode_luma, mode_chroma) =
@@ -1521,7 +1521,7 @@ pub fn encode_block_with_modes<T: Pixel>(
 fn encode_partition_bottomup<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, cw: &mut ContextWriter,
   w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer, bsize: BlockSize,
-  bo: &BlockOffset, pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5],
+  bo: BlockOffset, pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5],
   ref_rd_cost: f64
 ) -> (RDOOutput) {
   let rdo_type = RDOType::PixelDistRealRate;
@@ -1578,7 +1578,7 @@ fn encode_partition_bottomup<T: Pixel>(
     if !mode_decision.pred_mode_luma.is_intra() {
       // Fill the saved motion structure
       save_block_motion(
-        fs, fi.w_in_b, fi.h_in_b, mode_decision.bsize, &mode_decision.bo,
+        fs, fi.w_in_b, fi.h_in_b, mode_decision.bsize, mode_decision.bo,
         mode_decision.ref_frames[0] - LAST_FRAME, mode_decision.mvs[0]
       );
     }
@@ -1634,9 +1634,9 @@ fn encode_partition_bottomup<T: Pixel>(
 
       let four_partitions = [
         bo,
-        &BlockOffset{ x: bo.x + hbsw as usize, y: bo.y },
-        &BlockOffset{ x: bo.x, y: bo.y + hbsh as usize },
-        &BlockOffset{ x: bo.x + hbsw as usize, y: bo.y + hbsh as usize }
+        BlockOffset{ x: bo.x + hbsw as usize, y: bo.y },
+        BlockOffset{ x: bo.x, y: bo.y + hbsh as usize },
+        BlockOffset{ x: bo.x + hbsw as usize, y: bo.y + hbsh as usize }
       ];
       let partitions = get_sub_partitions(&four_partitions, partition);
       let mut early_exit = false;
@@ -1703,18 +1703,17 @@ fn encode_partition_bottomup<T: Pixel>(
         }
         for mode in rdo_output.part_modes.clone() {
           assert!(subsize == mode.bsize);
-          let offset = mode.bo.clone();
 
           if !mode.pred_mode_luma.is_intra() {
             save_block_motion(
-              fs, fi.w_in_b, fi.h_in_b, mode.bsize, &mode.bo,
+              fs, fi.w_in_b, fi.h_in_b, mode.bsize, mode.bo,
               mode.ref_frames[0] - LAST_FRAME, mode.mvs[0]
             );
           }
 
           // FIXME: redundant block re-encode
           encode_block_with_modes(fi, fs, cw, w_pre_cdef, w_post_cdef,
-                                  mode.bsize, &offset, &mode, rdo_type);
+                                  mode.bsize, mode.bo, &mode, rdo_type);
         }
       }
   }
@@ -1738,7 +1737,7 @@ fn encode_partition_bottomup<T: Pixel>(
 fn encode_partition_topdown<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
-  bsize: BlockSize, bo: &BlockOffset, block_output: &Option<RDOOutput>,
+  bsize: BlockSize, bo: BlockOffset, block_output: &Option<RDOOutput>,
   pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5]
 ) {
 
@@ -1885,7 +1884,7 @@ fn encode_partition_topdown<T: Pixel>(
 
         save_block_motion(
           fs, fi.w_in_b, fi.h_in_b,
-          part_decision.bsize, &part_decision.bo,
+          part_decision.bsize, part_decision.bo,
           part_decision.ref_frames[0] - LAST_FRAME, part_decision.mvs[0]
         );
       }
@@ -1905,10 +1904,8 @@ fn encode_partition_topdown<T: Pixel>(
         assert!(subsize != BlockSize::BLOCK_INVALID);
 
         for mode in rdo_output.part_modes {
-          let offset = mode.bo.clone();
-
           // Each block is subjected to a new splitting decision
-          encode_partition_topdown(fi, fs, cw, w_pre_cdef, w_post_cdef, subsize, &offset,
+          encode_partition_topdown(fi, fs, cw, w_pre_cdef, w_post_cdef, subsize, mode.bo,
                                    &Some(RDOOutput {
                                      rd_cost: mode.rd_cost,
                                      part_type: PartitionType::PARTITION_NONE,
@@ -1920,9 +1917,9 @@ fn encode_partition_topdown<T: Pixel>(
         let hbsh = subsize.height_mi(); // Half the block size height in blocks
         let four_partitions = [
           bo,
-          &BlockOffset{ x: bo.x + hbsw as usize, y: bo.y },
-          &BlockOffset{ x: bo.x, y: bo.y + hbsh as usize },
-          &BlockOffset{ x: bo.x + hbsw as usize, y: bo.y + hbsh as usize }
+          BlockOffset{ x: bo.x + hbsw as usize, y: bo.y },
+          BlockOffset{ x: bo.x, y: bo.y + hbsh as usize },
+          BlockOffset{ x: bo.x + hbsw as usize, y: bo.y + hbsh as usize }
         ];
         let partitions = get_sub_partitions(&four_partitions, partition);
 
@@ -1969,7 +1966,7 @@ fn build_coarse_pmvs<T: Pixel>(fi: &FrameInvariants<T>, fs: &FrameState<T>) -> V
       for i in 0..INTER_REFS_PER_FRAME {
         let r = fi.ref_frames[i] as usize;
         if pmvs[r].is_none() {
-          pmvs[r] = estimate_motion_ss4(fi, fs, BlockSize::BLOCK_64X64, r, &bo);
+          pmvs[r] = estimate_motion_ss4(fi, fs, BlockSize::BLOCK_64X64, r, bo);
         }
       }
       pmvs
@@ -2051,7 +2048,7 @@ fn encode_tile<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec
                   fs,
                   BlockSize::BLOCK_32X32,
                   r,
-                  &sbo.block_offset(0, 0),
+                  sbo.block_offset(0, 0),
                   &[Some(pmv), pmv_w, pmv_n],
                   i
                 )
@@ -2062,7 +2059,7 @@ fn encode_tile<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec
                   fs,
                   BlockSize::BLOCK_32X32,
                   r,
-                  &sbo.block_offset(8, 0),
+                  sbo.block_offset(8, 0),
                   &[Some(pmv), pmv_e, pmv_n],
                   i
                 )
@@ -2073,7 +2070,7 @@ fn encode_tile<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec
                   fs,
                   BlockSize::BLOCK_32X32,
                   r,
-                  &sbo.block_offset(0, 8),
+                  sbo.block_offset(0, 8),
                   &[Some(pmv), pmv_w, pmv_s],
                   i
                 )
@@ -2084,7 +2081,7 @@ fn encode_tile<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec
                   fs,
                   BlockSize::BLOCK_32X32,
                   r,
-                  &sbo.block_offset(8, 8),
+                  sbo.block_offset(8, 8),
                   &[Some(pmv), pmv_e, pmv_s],
                   i
                 )
@@ -2097,16 +2094,16 @@ fn encode_tile<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec
             pmvs[4][r] = pmvs4;
 
             if let Some(mv1) = pmvs1 {
-              save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, &sbo.block_offset(0, 0), i, mv1);
+              save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(0, 0), i, mv1);
             }
             if let Some(mv2) = pmvs2 {
-              save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, &sbo.block_offset(8, 0), i, mv2);
+              save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(8, 0), i, mv2);
             }
             if let Some(mv3) = pmvs3 {
-              save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, &sbo.block_offset(0, 8), i, mv3);
+              save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(0, 8), i, mv3);
             }
             if let Some(mv4) = pmvs4 {
-              save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, &sbo.block_offset(8, 8), i, mv4);
+              save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(8, 8), i, mv4);
             }
           }
         }
@@ -2116,12 +2113,12 @@ fn encode_tile<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec
       if fi.config.speed_settings.encode_bottomup {
         encode_partition_bottomup(fi, fs, &mut cw,
                                   &mut w_pre_cdef, &mut w_post_cdef,
-                                  BlockSize::BLOCK_64X64, &bo, &pmvs, std::f64::MAX);
+                                  BlockSize::BLOCK_64X64, bo, &pmvs, std::f64::MAX);
       }
       else {
         encode_partition_topdown(fi, fs, &mut cw,
                                  &mut w_pre_cdef, &mut w_post_cdef,
-                                 BlockSize::BLOCK_64X64, &bo, &None, &pmvs);
+                                 BlockSize::BLOCK_64X64, bo, &None, &pmvs);
       }
 
       // CDEF has to be decided before loop restoration, but coded after.

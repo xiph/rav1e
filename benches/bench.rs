@@ -77,7 +77,7 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
               &mut cw,
               &mut w,
               p,
-              &bo,
+              bo,
               mode,
               tx_size,
               tx_type,
@@ -143,7 +143,7 @@ fn cfl_rdo_bench(b: &mut Bencher, bsize: BlockSize) {
   let fi = FrameInvariants::<u16>::new(config, sequence);
   let mut fs = FrameState::new(&fi);
   let offset = BlockOffset { x: 1, y: 1 };
-  b.iter(|| rdo_cfl_alpha(&mut fs, &offset, bsize, fi.sequence.bit_depth, fi.sequence.chroma_sampling))
+  b.iter(|| rdo_cfl_alpha(&mut fs, offset, bsize, fi.sequence.bit_depth, fi.sequence.chroma_sampling))
 }
 
 criterion_group!(intra_prediction, predict::pred_bench,);

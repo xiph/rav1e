@@ -507,7 +507,7 @@ static mag_ref_offset_with_txclass: [[[usize; 2]; CONTEXT_MAG_POSITION_NUM]; 3] 
 // End of Level Map
 
 pub fn has_chroma(
-  bo: &BlockOffset, bsize: BlockSize, subsampling_x: usize,
+  bo: BlockOffset, bsize: BlockSize, subsampling_x: usize,
   subsampling_y: usize
 ) -> bool {
   let bw = bsize.width_mi();
@@ -1152,7 +1152,7 @@ impl SuperBlockOffset {
 
 /// Absolute offset in blocks inside a plane, where a block is defined
 /// to be an N*N square where N = (1 << BLOCK_TO_PLANE_SHIFT).
-#[derive(Clone)]
+#[derive(Clone, Copy, Debug)]
 pub struct BlockOffset {
   pub x: usize,
   pub y: usize
@@ -1160,7 +1160,7 @@ pub struct BlockOffset {
 
 impl BlockOffset {
   /// Offset of the superblock in which this block is located.
-  pub fn sb_offset(&self) -> SuperBlockOffset {
+  pub fn sb_offset(self) -> SuperBlockOffset {
     SuperBlockOffset {
       x: self.x >> SUPERBLOCK_TO_BLOCK_SHIFT,
       y: self.y >> SUPERBLOCK_TO_BLOCK_SHIFT
@@ -1168,18 +1168,18 @@ impl BlockOffset {
   }
 
   /// Offset of the top-left pixel of this block.
-  pub fn plane_offset(&self, plane: &PlaneConfig) -> PlaneOffset {
+  pub fn plane_offset(self, plane: &PlaneConfig) -> PlaneOffset {
     PlaneOffset {
         x: (self.x >> plane.xdec << BLOCK_TO_PLANE_SHIFT) as isize,
         y: (self.y >> plane.ydec << BLOCK_TO_PLANE_SHIFT) as isize,
     }
   }
 
-  pub fn y_in_sb(&self) -> usize {
+  pub fn y_in_sb(self) -> usize {
     self.y % MAX_MIB_SIZE
   }
 
-  pub fn with_offset(&self, col_offset: isize, row_offset: isize) -> BlockOffset {
+  pub fn with_offset(self, col_offset: isize, row_offset: isize) -> BlockOffset {
     let x = self.x as isize + col_offset;
     let y = self.y as isize + row_offset;
 
@@ -1309,15 +1309,15 @@ impl BlockContext {
     self.left_coeff_context = checkpoint.left_coeff_context;
   }
 
-  pub fn at_mut(&mut self, bo: &BlockOffset) -> &mut Block {
+  pub fn at_mut(&mut self, bo: BlockOffset) -> &mut Block {
     &mut self.blocks[bo.y][bo.x]
   }
 
-  pub fn at(&self, bo: &BlockOffset) -> &Block {
+  pub fn at(&self, bo: BlockOffset) -> &Block {
     &self.blocks[bo.y][bo.x]
   }
 
-  pub fn above_of(&self, bo: &BlockOffset) -> Block {
+  pub fn above_of(&self, bo: BlockOffset) -> Block {
     if bo.y > 0 {
       self.blocks[bo.y - 1][bo.x]
     } else {
@@ -1325,7 +1325,7 @@ impl BlockContext {
     }
   }
 
-  pub fn left_of(&self, bo: &BlockOffset) -> Block {
+  pub fn left_of(&self, bo: BlockOffset) -> Block {
     if bo.x > 0 {
       self.blocks[bo.y][bo.x - 1]
     } else {
@@ -1333,7 +1333,7 @@ impl BlockContext {
     }
   }
 
-  pub fn above_left_of(&mut self, bo: &BlockOffset) -> Block {
+  pub fn above_left_of(&mut self, bo: BlockOffset) -> Block {
     if bo.x > 0 && bo.y > 0 {
       self.blocks[bo.y - 1][bo.x - 1]
     } else {
@@ -1341,7 +1341,7 @@ impl BlockContext {
     }
   }
 
-  pub fn for_each<F>(&mut self, bo: &BlockOffset, bsize: BlockSize, f: F)
+  pub fn for_each<F>(&mut self, bo: BlockOffset, bsize: BlockSize, f: F)
   where
     F: Fn(&mut Block) -> ()
   {
@@ -1363,7 +1363,7 @@ impl BlockContext {
   }
 
   fn set_coeff_context(
-    &mut self, plane: usize, bo: &BlockOffset, tx_size: TxSize, xdec: usize,
+    &mut self, plane: usize, bo: BlockOffset, tx_size: TxSize, xdec: usize,
     ydec: usize, value: u8
   ) {
     for bx in 0..tx_size.width_mi() {
@@ -1389,7 +1389,7 @@ impl BlockContext {
   //TODO(anyone): Add reset_left_tx_context() here then call it in reset_left_contexts()
 
   pub fn reset_skip_context(
-    &mut self, bo: &BlockOffset, bsize: BlockSize, xdec: usize, ydec: usize
+    &mut self, bo: BlockOffset, bsize: BlockSize, xdec: usize, ydec: usize
   ) {
     const num_planes: usize = 3;
     let nplanes = if bsize >= BLOCK_8X8 {
@@ -1439,29 +1439,29 @@ impl BlockContext {
   }
 
   pub fn set_mode(
-    &mut self, bo: &BlockOffset, bsize: BlockSize, mode: PredictionMode
+    &mut self, bo: BlockOffset, bsize: BlockSize, mode: PredictionMode
   ) {
     self.for_each(bo, bsize, |block| block.mode = mode);
   }
 
-  pub fn set_block_size(&mut self, bo: &BlockOffset, bsize: BlockSize) {
+  pub fn set_block_size(&mut self, bo: BlockOffset, bsize: BlockSize) {
     let n4_w = bsize.width_mi();
     let n4_h = bsize.height_mi();
     self.for_each(bo, bsize, |block| { block.n4_w = n4_w; block.n4_h = n4_h } );
   }
 
-  pub fn set_tx_size(&mut self, bo: &BlockOffset, txsize: TxSize) {
+  pub fn set_tx_size(&mut self, bo: BlockOffset, txsize: TxSize) {
     let tx_w = txsize.width_mi();
     let tx_h = txsize.height_mi();
     self.for_each(bo, txsize.block_size(), |block| { block.tx_w = tx_w; block.tx_h = tx_h } );
   }
 
-  pub fn get_mode(&mut self, bo: &BlockOffset) -> PredictionMode {
+  pub fn get_mode(&mut self, bo: BlockOffset) -> PredictionMode {
     self.blocks[bo.y][bo.x].mode
   }
 
   fn partition_plane_context(
-    &self, bo: &BlockOffset, bsize: BlockSize
+    &self, bo: BlockOffset, bsize: BlockSize
   ) -> usize {
     // TODO: this should be way simpler without sub8x8
     let above_ctx = self.above_partition_context[bo.x];
@@ -1476,7 +1476,7 @@ impl BlockContext {
   }
 
   pub fn update_partition_context(
-    &mut self, bo: &BlockOffset, subsize: BlockSize, bsize: BlockSize
+    &mut self, bo: BlockOffset, subsize: BlockSize, bsize: BlockSize
   ) {
     #[allow(dead_code)]
     assert!(bsize.is_sqr());
@@ -1501,7 +1501,7 @@ impl BlockContext {
     }
   }
 
-  fn skip_context(&mut self, bo: &BlockOffset) -> usize {
+  fn skip_context(&mut self, bo: BlockOffset) -> usize {
     let above_skip = if bo.y > 0 {
       self.above_of(bo).skip as usize
     } else {
@@ -1515,15 +1515,15 @@ impl BlockContext {
     above_skip + left_skip
   }
 
-  pub fn set_skip(&mut self, bo: &BlockOffset, bsize: BlockSize, skip: bool) {
+  pub fn set_skip(&mut self, bo: BlockOffset, bsize: BlockSize, skip: bool) {
     self.for_each(bo, bsize, |block| block.skip = skip);
   }
 
-  pub fn set_segmentation_idx(&mut self, bo: &BlockOffset, bsize: BlockSize, idx: u8) {
+  pub fn set_segmentation_idx(&mut self, bo: BlockOffset, bsize: BlockSize, idx: u8) {
     self.for_each(bo, bsize, |block| block.segmentation_idx = idx);
   }
 
-  pub fn set_ref_frames(&mut self, bo: &BlockOffset, bsize: BlockSize, r: [usize; 2]) {
+  pub fn set_ref_frames(&mut self, bo: BlockOffset, bsize: BlockSize, r: [usize; 2]) {
     let bw = bsize.width_mi();
     let bh = bsize.height_mi();
 
@@ -1534,7 +1534,7 @@ impl BlockContext {
     }
   }
 
-  pub fn set_motion_vectors(&mut self, bo: &BlockOffset, bsize: BlockSize, mvs: [MotionVector; 2]) {
+  pub fn set_motion_vectors(&mut self, bo: BlockOffset, bsize: BlockSize, mvs: [MotionVector; 2]) {
     let bw = bsize.width_mi();
     let bh = bsize.height_mi();
 
@@ -1569,7 +1569,7 @@ impl BlockContext {
   // 1 - intra/inter, inter/intra
   // 2 - intra/--, --/intra
   // 3 - intra/intra
-  pub fn intra_inter_context(&mut self, bo: &BlockOffset) -> usize {
+  pub fn intra_inter_context(&mut self, bo: BlockOffset) -> usize {
     let has_above = bo.y > 0;
     let has_left = bo.x > 0;
 
@@ -1595,7 +1595,7 @@ impl BlockContext {
 
   pub fn get_txb_ctx(
     &mut self, plane_bsize: BlockSize, tx_size: TxSize, plane: usize,
-    bo: &BlockOffset, xdec: usize, ydec: usize
+    bo: BlockOffset, xdec: usize, ydec: usize
   ) -> TXB_CTX {
     let mut txb_ctx = TXB_CTX {
       txb_skip_ctx: 0,
@@ -1906,14 +1906,14 @@ impl ContextWriter {
   }
 
   pub fn write_partition(
-    &mut self, w: &mut dyn Writer, bo: &BlockOffset, p: PartitionType, bsize: BlockSize
+    &mut self, w: &mut dyn Writer, bo: BlockOffset, p: PartitionType, bsize: BlockSize
   ) {
     debug_assert!(bsize.is_sqr());
     assert!(bsize >= BlockSize::BLOCK_8X8 );
     let hbs = bsize.width_mi() / 2;
     let has_cols = (bo.x + hbs) < self.bc.cols;
     let has_rows = (bo.y + hbs) < self.bc.rows;
-    let ctx = self.bc.partition_plane_context(&bo, bsize);
+    let ctx = self.bc.partition_plane_context(bo, bsize);
     assert!(ctx < PARTITION_CONTEXTS);
     let partition_cdf = if bsize <= BlockSize::BLOCK_8X8 {
       &mut self.fc.partition_cdf[ctx][..=PARTITION_TYPES]
@@ -1949,7 +1949,7 @@ impl ContextWriter {
       w.symbol((p == PartitionType::PARTITION_SPLIT) as u32, &cdf);
     }
   }
-  pub fn get_cdf_intra_mode_kf(&self, bo: &BlockOffset) -> &[u16; INTRA_MODES + 1] {
+  pub fn get_cdf_intra_mode_kf(&self, bo: BlockOffset) -> &[u16; INTRA_MODES + 1] {
     static intra_mode_context: [usize; INTRA_MODES] =
       [0, 1, 2, 3, 4, 4, 4, 4, 3, 0, 1, 2, 0];
     let above_mode = self.bc.above_of(bo).mode as usize;
@@ -1959,7 +1959,7 @@ impl ContextWriter {
     &self.fc.kf_y_cdf[above_ctx][left_ctx]
   }
   pub fn write_intra_mode_kf(
-    &mut self, w: &mut dyn Writer, bo: &BlockOffset, mode: PredictionMode
+    &mut self, w: &mut dyn Writer, bo: BlockOffset, mode: PredictionMode
   ) {
     static intra_mode_context: [usize; INTRA_MODES] =
       [0, 1, 2, 3, 4, 4, 4, 4, 3, 0, 1, 2, 0];
@@ -2198,7 +2198,7 @@ impl ContextWriter {
     }
   }
 
-  fn scan_row_mbmi(&mut self, bo: &BlockOffset, row_offset: isize, max_row_offs: isize,
+  fn scan_row_mbmi(&mut self, bo: BlockOffset, row_offset: isize, max_row_offs: isize,
                    processed_rows: &mut isize, ref_frames: [usize; 2],
                    mv_stack: &mut Vec<CandidateMV>, newmv_count: &mut usize, bsize: BlockSize,
                    is_compound: bool) -> bool {
@@ -2224,7 +2224,7 @@ impl ContextWriter {
 
     let mut i = 0;
     while i < end_mi {
-      let cand = bc.at(&bo.with_offset(col_offset + i as isize, row_offset));
+      let cand = bc.at(bo.with_offset(col_offset + i as isize, row_offset));
 
       let n4_w = cand.n4_w;
       let mut len = cmp::min(target_n4_w, n4_w);
@@ -2252,7 +2252,7 @@ impl ContextWriter {
     found_match
   }
 
-  fn scan_col_mbmi(&mut self, bo: &BlockOffset, col_offset: isize, max_col_offs: isize,
+  fn scan_col_mbmi(&mut self, bo: BlockOffset, col_offset: isize, max_col_offs: isize,
                    processed_cols: &mut isize, ref_frames: [usize; 2],
                    mv_stack: &mut Vec<CandidateMV>, newmv_count: &mut usize, bsize: BlockSize,
                    is_compound: bool) -> bool {
@@ -2279,7 +2279,7 @@ impl ContextWriter {
 
     let mut i = 0;
     while i < end_mi {
-      let cand = bc.at(&bo.with_offset(col_offset, row_offset + i as isize));
+      let cand = bc.at(bo.with_offset(col_offset, row_offset + i as isize));
       let n4_h = cand.n4_h;
       let mut len = cmp::min(target_n4_h, n4_h);
       if use_step_16 {
@@ -2306,7 +2306,7 @@ impl ContextWriter {
     found_match
   }
 
-  fn scan_blk_mbmi(&mut self, bo: &BlockOffset, ref_frames: [usize; 2],
+  fn scan_blk_mbmi(&mut self, bo: BlockOffset, ref_frames: [usize; 2],
                    mv_stack: &mut Vec<CandidateMV>, newmv_count: &mut usize,
                    is_compound: bool) -> bool {
     if bo.x >= self.bc.cols || bo.y >= self.bc.rows {
@@ -2325,7 +2325,7 @@ impl ContextWriter {
   }
 
   fn setup_mvref_list<T: Pixel>(
-    &mut self, bo: &BlockOffset, ref_frames: [usize; 2], mv_stack: &mut Vec<CandidateMV>,
+    &mut self, bo: BlockOffset, ref_frames: [usize; 2], mv_stack: &mut Vec<CandidateMV>,
     bsize: BlockSize, fi: &FrameInvariants<T>, is_compound: bool
   ) -> usize {
     let (_rf, _rf_num) = self.get_mvref_ref_frames(INTRA_FRAME);
@@ -2383,7 +2383,7 @@ impl ContextWriter {
       col_match |= found_match;
     }
     if has_tr(bo, bsize) {
-      let found_match = self.scan_blk_mbmi(&bo.with_offset(target_n4_w as isize, -1), ref_frames, mv_stack,
+      let found_match = self.scan_blk_mbmi(bo.with_offset(target_n4_w as isize, -1), ref_frames, mv_stack,
                                            &mut newmv_count, is_compound);
       row_match |= found_match;
     }
@@ -2396,7 +2396,7 @@ impl ContextWriter {
     let mut far_newmv_count: usize = 0; // won't be used
 
     let found_match = self.scan_blk_mbmi(
-      &bo.with_offset(-1, -1), ref_frames, mv_stack, &mut far_newmv_count, is_compound
+      bo.with_offset(-1, -1), ref_frames, mv_stack, &mut far_newmv_count, is_compound
     );
     row_match |= found_match;
 
@@ -2457,7 +2457,7 @@ impl ContextWriter {
             bo.with_offset(-1, idx as isize)
           };
 
-          let blk = &self.bc.at(&rbo);
+          let blk = &self.bc.at(rbo);
           self.add_extra_mv_candidate(
             blk, ref_frames, mv_stack, fi, is_compound,
             &mut ref_id_count, &mut ref_id_mvs, &mut ref_diff_count, &mut ref_diff_mvs
@@ -2543,7 +2543,7 @@ impl ContextWriter {
   }
 
   pub fn find_mvrefs<T: Pixel>(
-    &mut self, bo: &BlockOffset, ref_frames: [usize; 2],
+    &mut self, bo: BlockOffset, ref_frames: [usize; 2],
     mv_stack: &mut Vec<CandidateMV>, bsize: BlockSize,
     fi: &FrameInvariants<T>, is_compound: bool
   ) -> usize {
@@ -2563,7 +2563,7 @@ impl ContextWriter {
     self.setup_mvref_list(bo, ref_frames, mv_stack, bsize, fi, is_compound)
   }
 
-  pub fn fill_neighbours_ref_counts(&mut self, bo: &BlockOffset) {
+  pub fn fill_neighbours_ref_counts(&mut self, bo: BlockOffset) {
       let mut ref_counts = [0; TOTAL_REFS_PER_FRAME];
 
       let above_b = self.bc.above_of(bo);
@@ -2595,7 +2595,7 @@ impl ContextWriter {
     }
   }
 
-  fn get_ref_frame_ctx_b0(&mut self, bo: &BlockOffset) -> usize {
+  fn get_ref_frame_ctx_b0(&mut self, bo: BlockOffset) -> usize {
     let ref_counts = self.bc.at(bo).neighbors_ref_counts;
 
     let fwd_cnt = ref_counts[LAST_FRAME] + ref_counts[LAST2_FRAME] +
@@ -2607,7 +2607,7 @@ impl ContextWriter {
     ContextWriter::ref_count_ctx(fwd_cnt, bwd_cnt)
   }
 
-  fn get_pred_ctx_brfarf2_or_arf(&mut self, bo: &BlockOffset) -> usize {
+  fn get_pred_ctx_brfarf2_or_arf(&mut self, bo: BlockOffset) -> usize {
     let ref_counts = self.bc.at(bo).neighbors_ref_counts;
 
     let brfarf2_count = ref_counts[BWDREF_FRAME] + ref_counts[ALTREF2_FRAME];
@@ -2616,7 +2616,7 @@ impl ContextWriter {
     ContextWriter::ref_count_ctx(brfarf2_count, arf_count)
   }
 
-  fn get_pred_ctx_ll2_or_l3gld(&mut self, bo: &BlockOffset) -> usize {
+  fn get_pred_ctx_ll2_or_l3gld(&mut self, bo: BlockOffset) -> usize {
     let ref_counts = self.bc.at(bo).neighbors_ref_counts;
 
     let l_l2_count = ref_counts[LAST_FRAME] + ref_counts[LAST2_FRAME];
@@ -2625,7 +2625,7 @@ impl ContextWriter {
     ContextWriter::ref_count_ctx(l_l2_count, l3_gold_count)
   }
 
-  fn get_pred_ctx_last_or_last2(&mut self, bo: &BlockOffset) -> usize {
+  fn get_pred_ctx_last_or_last2(&mut self, bo: BlockOffset) -> usize {
     let ref_counts = self.bc.at(bo).neighbors_ref_counts;
 
     let l_count = ref_counts[LAST_FRAME];
@@ -2634,7 +2634,7 @@ impl ContextWriter {
     ContextWriter::ref_count_ctx(l_count, l2_count)
   }
 
-  fn get_pred_ctx_last3_or_gold(&mut self, bo: &BlockOffset) -> usize {
+  fn get_pred_ctx_last3_or_gold(&mut self, bo: BlockOffset) -> usize {
     let ref_counts = self.bc.at(bo).neighbors_ref_counts;
 
     let l3_count = ref_counts[LAST3_FRAME];
@@ -2643,7 +2643,7 @@ impl ContextWriter {
     ContextWriter::ref_count_ctx(l3_count, gold_count)
   }
 
-  fn get_pred_ctx_brf_or_arf2(&mut self, bo: &BlockOffset) -> usize {
+  fn get_pred_ctx_brf_or_arf2(&mut self, bo: BlockOffset) -> usize {
     let ref_counts = self.bc.at(bo).neighbors_ref_counts;
 
     let brf_count = ref_counts[BWDREF_FRAME];
@@ -2652,7 +2652,7 @@ impl ContextWriter {
     ContextWriter::ref_count_ctx(brf_count, arf2_count)
   }
 
-  fn get_comp_mode_ctx(&self, bo: &BlockOffset) -> usize {
+  fn get_comp_mode_ctx(&self, bo: BlockOffset) -> usize {
     fn check_backward(ref_frame: usize) -> bool {
       ref_frame >= BWDREF_FRAME && ref_frame <= ALTREF_FRAME
     }
@@ -2660,10 +2660,10 @@ impl ContextWriter {
     let avail_up = bo.y > 0;
     let bo_left = bo.with_offset(-1, 0);
     let bo_up = bo.with_offset(0, -1);
-    let above0 = if avail_up { self.bc.at(&bo_up).ref_frames[0] } else { INTRA_FRAME };
-    let above1 = if avail_up { self.bc.at(&bo_up).ref_frames[1] } else { NONE_FRAME };
-    let left0 = if avail_left { self.bc.at(&bo_left).ref_frames[0] } else { INTRA_FRAME };
-    let left1 = if avail_left { self.bc.at(&bo_left).ref_frames[1] } else { NONE_FRAME };
+    let above0 = if avail_up { self.bc.at(bo_up).ref_frames[0] } else { INTRA_FRAME };
+    let above1 = if avail_up { self.bc.at(bo_up).ref_frames[1] } else { NONE_FRAME };
+    let left0 = if avail_left { self.bc.at(bo_left).ref_frames[0] } else { INTRA_FRAME };
+    let left1 = if avail_left { self.bc.at(bo_left).ref_frames[1] } else { NONE_FRAME };
     let left_single = left1 == NONE_FRAME;
     let above_single = above1 == NONE_FRAME;
     let left_intra = left0 == INTRA_FRAME;
@@ -2698,7 +2698,7 @@ impl ContextWriter {
     }
   }
 
-  fn get_comp_ref_type_ctx(&self, bo: &BlockOffset) -> usize {
+  fn get_comp_ref_type_ctx(&self, bo: BlockOffset) -> usize {
     fn is_samedir_ref_pair(ref0: usize, ref1: usize) -> bool {
       (ref0 >= BWDREF_FRAME && ref0 != NONE_FRAME) == (ref1 >= BWDREF_FRAME && ref1 != NONE_FRAME)
     }
@@ -2707,10 +2707,10 @@ impl ContextWriter {
     let avail_up = bo.y > 0;
     let bo_left = bo.with_offset(-1, 0);
     let bo_up = bo.with_offset(0, -1);
-    let above0 = if avail_up { self.bc.at(&bo_up).ref_frames[0] } else { INTRA_FRAME };
-    let above1 = if avail_up { self.bc.at(&bo_up).ref_frames[1] } else { NONE_FRAME };
-    let left0 = if avail_left { self.bc.at(&bo_left).ref_frames[0] } else { INTRA_FRAME };
-    let left1 = if avail_left { self.bc.at(&bo_left).ref_frames[1] } else { NONE_FRAME };
+    let above0 = if avail_up { self.bc.at(bo_up).ref_frames[0] } else { INTRA_FRAME };
+    let above1 = if avail_up { self.bc.at(bo_up).ref_frames[1] } else { NONE_FRAME };
+    let left0 = if avail_left { self.bc.at(bo_left).ref_frames[0] } else { INTRA_FRAME };
+    let left1 = if avail_left { self.bc.at(bo_left).ref_frames[1] } else { NONE_FRAME };
     let left_single = left1 == NONE_FRAME;
     let above_single = above1 == NONE_FRAME;
     let left_intra = left0 == INTRA_FRAME;
@@ -2755,7 +2755,7 @@ impl ContextWriter {
     }
   }
 
-  pub fn write_ref_frames<T: Pixel>(&mut self, w: &mut dyn Writer, fi: &FrameInvariants<T>, bo: &BlockOffset) {
+  pub fn write_ref_frames<T: Pixel>(&mut self, w: &mut dyn Writer, fi: &FrameInvariants<T>, bo: BlockOffset) {
     let rf = self.bc.at(bo).ref_frames;
     let sz = self.bc.at(bo).n4_w.min(self.bc.at(bo).n4_h);
 
@@ -2926,12 +2926,12 @@ impl ContextWriter {
       }
     }
   }
-  pub fn write_skip(&mut self, w: &mut dyn Writer, bo: &BlockOffset, skip: bool) {
+  pub fn write_skip(&mut self, w: &mut dyn Writer, bo: BlockOffset, skip: bool) {
     let ctx = self.bc.skip_context(bo);
     symbol_with_update!(self, w, skip as u32, &mut self.fc.skip_cdfs[ctx]);
   }
 
-  fn get_segment_pred(&mut self, bo: &BlockOffset) -> ( u8, u8 ) {
+  fn get_segment_pred(&mut self, bo: BlockOffset) -> ( u8, u8 ) {
     let mut prev_ul = -1;
     let mut prev_u  = -1;
     let mut prev_l  = -1;
@@ -2998,7 +2998,7 @@ impl ContextWriter {
     }
   }
 
-  pub fn write_segmentation(&mut self, w: &mut dyn Writer, bo: &BlockOffset,
+  pub fn write_segmentation(&mut self, w: &mut dyn Writer, bo: BlockOffset,
                             bsize: BlockSize, skip: bool, last_active_segid: u8) {
     let ( pred, cdf_index ) = self.get_segment_pred(bo);
     if skip {
@@ -3139,7 +3139,7 @@ impl ContextWriter {
   }
 
   pub fn write_block_deblock_deltas(&mut self, w: &mut dyn Writer,
-                                    bo: &BlockOffset, multi: bool) {
+                                    bo: BlockOffset, multi: bool) {
       let block = self.bc.at(bo);
       let deltas = if multi { FRAME_LF_COUNT + PLANES - 3 } else { 1 };
       for i in 0..deltas {
@@ -3164,7 +3164,7 @@ impl ContextWriter {
       }
   }
 
-  pub fn write_is_inter(&mut self, w: &mut dyn Writer, bo: &BlockOffset, is_inter: bool) {
+  pub fn write_is_inter(&mut self, w: &mut dyn Writer, bo: BlockOffset, is_inter: bool) {
     let ctx = self.bc.intra_inter_context(bo);
     symbol_with_update!(self, w, is_inter as u32, &mut self.fc.intra_inter_cdfs[ctx]);
   }
@@ -3396,7 +3396,7 @@ impl ContextWriter {
   }
 
   pub fn write_coeffs_lv_map(
-    &mut self, w: &mut dyn Writer, plane: usize, bo: &BlockOffset, coeffs_in: &[i32],
+    &mut self, w: &mut dyn Writer, plane: usize, bo: BlockOffset, coeffs_in: &[i32],
     pred_mode: PredictionMode,
     tx_size: TxSize, tx_type: TxType, plane_bsize: BlockSize, xdec: usize,
     ydec: usize, use_reduced_tx_set: bool

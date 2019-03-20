@@ -250,7 +250,7 @@ pub fn sse_wxh<T: Pixel>(
 // Compute the pixel-domain distortion for an encode
 fn compute_distortion<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &FrameState<T>, w_y: usize, h_y: usize,
-  is_chroma_block: bool, bo: &BlockOffset,
+  is_chroma_block: bool, bo: BlockOffset,
   luma_only: bool
 ) -> u64 {
   let po = bo.plane_offset(&fs.input.planes[0].cfg);
@@ -306,7 +306,7 @@ fn compute_distortion<T: Pixel>(
 // Compute the transform-domain distortion for an encode
 fn compute_tx_distortion<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &FrameState<T>, w_y: usize, h_y: usize,
-  is_chroma_block: bool, bo: &BlockOffset, tx_dist: i64,
+  is_chroma_block: bool, bo: BlockOffset, tx_dist: i64,
   skip: bool, luma_only: bool
 ) -> u64 {
   assert!(fi.config.tune == Tune::Psnr);
@@ -360,7 +360,7 @@ fn compute_rd_cost<T: Pixel>(fi: &FrameInvariants<T>, rate: u32, distortion: u64
 
 pub fn rdo_tx_size_type<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>,
-  cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset,
+  cw: &mut ContextWriter, bsize: BlockSize, bo: BlockOffset,
   luma_mode: PredictionMode, ref_frames: [usize; 2], mvs: [MotionVector; 2], skip: bool
 ) -> (TxSize, TxType) {
   // these rules follow TX_MODE_LARGEST
@@ -444,7 +444,7 @@ impl Default for EncodingSettings {
 // RDO-based mode decision
 pub fn rdo_mode_decision<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>,
-  cw: &mut ContextWriter, bsize: BlockSize, bo: &BlockOffset,
+  cw: &mut ContextWriter, bsize: BlockSize, bo: BlockOffset,
   pmvs: &[Option<MotionVector>]
 ) -> RDOPartitionOutput {
   let mut best = EncodingSettings::default();
@@ -877,7 +877,7 @@ pub fn rdo_mode_decision<T: Pixel>(
   assert!(best.rd >= 0_f64);
 
   RDOPartitionOutput {
-    bo: bo.clone(),
+    bo,
     bsize,
     pred_mode_luma: best.mode_luma,
     pred_mode_chroma: best.mode_chroma,
@@ -892,7 +892,7 @@ pub fn rdo_mode_decision<T: Pixel>(
 }
 
 pub fn rdo_cfl_alpha<T: Pixel>(
-  fs: &mut FrameState<T>, bo: &BlockOffset, bsize: BlockSize, bit_depth: usize,
+  fs: &mut FrameState<T>, bo: BlockOffset, bsize: BlockSize, bit_depth: usize,
   chroma_sampling: ChromaSampling
 ) -> Option<CFLParams> {
   let uv_tx_size = bsize.largest_uv_tx_size(chroma_sampling);
@@ -941,7 +941,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
 pub fn rdo_tx_type_decision<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, cw: &mut ContextWriter,
   mode: PredictionMode, ref_frames: [usize; 2], mvs: [MotionVector; 2],
-  bsize: BlockSize, bo: &BlockOffset, tx_size: TxSize, tx_set: TxSet
+  bsize: BlockSize, bo: BlockOffset, tx_size: TxSize, tx_set: TxSet
 ) -> TxType {
   let mut best_type = TxType::DCT_DCT;
   let mut best_rd = std::f64::MAX;
@@ -1037,8 +1037,8 @@ pub fn rdo_tx_type_decision<T: Pixel>(
   best_type
 }
 
-pub fn get_sub_partitions<'a>(four_partitions: &[&'a BlockOffset; 4],
-                              partition: PartitionType) -> Vec<&'a BlockOffset> {
+pub fn get_sub_partitions(four_partitions: &[BlockOffset; 4],
+                          partition: PartitionType) -> Vec<BlockOffset> {
   let mut partitions = vec![ four_partitions[0] ];
 
   if partition == PARTITION_NONE {
@@ -1057,12 +1057,12 @@ pub fn get_sub_partitions<'a>(four_partitions: &[&'a BlockOffset; 4],
   partitions
 }
 
-pub fn get_sub_partitions_with_border_check<'a, T: Pixel>(
-  four_partitions: &[&'a BlockOffset; 4],
+pub fn get_sub_partitions_with_border_check<T: Pixel>(
+  four_partitions: &[BlockOffset; 4],
   partition: PartitionType,
   fi: &FrameInvariants<T>,
   subsize: BlockSize
-) -> Vec<&'a BlockOffset> {
+) -> Vec<BlockOffset> {
   let mut partitions = vec![ four_partitions[0] ];
 
   if partition == PARTITION_NONE {
@@ -1094,7 +1094,7 @@ pub fn get_sub_partitions_with_border_check<'a, T: Pixel>(
 pub fn rdo_partition_decision<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
-  bsize: BlockSize, bo: &BlockOffset,
+  bsize: BlockSize, bo: BlockOffset,
   cached_block: &RDOOutput, pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5],
   partition_types: &[PartitionType], rdo_type: RDOType
 ) -> RDOOutput {
@@ -1149,9 +1149,9 @@ pub fn rdo_partition_decision<T: Pixel>(
         let hbsh = subsize.height_mi(); // Half the block size height in blocks
         let four_partitions = [
           bo,
-          &BlockOffset{ x: bo.x + hbsw as usize, y: bo.y },
-          &BlockOffset{ x: bo.x, y: bo.y + hbsh as usize },
-          &BlockOffset{ x: bo.x + hbsw as usize, y: bo.y + hbsh as usize }
+          BlockOffset{ x: bo.x + hbsw as usize, y: bo.y },
+          BlockOffset{ x: bo.x, y: bo.y + hbsh as usize },
+          BlockOffset{ x: bo.x + hbsw as usize, y: bo.y + hbsh as usize }
         ];
         let partitions = get_sub_partitions_with_border_check(&four_partitions, partition, fi, subsize);
 
@@ -1172,9 +1172,9 @@ pub fn rdo_partition_decision<T: Pixel>(
         }
         let mut rd_cost_sum = 0.0;
 
-        for (offset, pmv_idx) in partitions.iter().zip(pmv_idxs) {
+        for (&offset, pmv_idx) in partitions.iter().zip(pmv_idxs) {
           let mode_decision =
-            rdo_mode_decision(fi, fs, cw, subsize, &offset,
+            rdo_mode_decision(fi, fs, cw, subsize, offset,
                               &pmvs[pmv_idx]);
 
           rd_cost_sum += mode_decision.rd_cost;
@@ -1233,7 +1233,7 @@ fn rdo_loop_plane_error<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<T
     for bx in 0..sb_blocks {
       let bo = sbo.block_offset(bx<<1, by<<1);
       if bo.x < bc.cols && bo.y < bc.rows {
-        let skip = bc.at(&bo).skip;
+        let skip = bc.at(bo).skip;
         if !skip {
           let in_plane = &fs.input.planes[pli];
           let in_po = sbo.block_offset(bx<<1, by<<1).plane_offset(&in_plane.cfg);
