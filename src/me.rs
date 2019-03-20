@@ -337,7 +337,7 @@ pub fn get_subset_predictors<T: Pixel>(
 
 pub trait MotionEstimation {
   fn full_pixel_me<T: Pixel>(
-    fi: &FrameInvariants<T>, fs: &FrameState<T>, rec: &Arc<ReferenceFrame<T>>, po: &PlaneOffset,
+    fi: &FrameInvariants<T>, fs: &FrameState<T>, rec: &Arc<ReferenceFrame<T>>, po: PlaneOffset,
     bo: BlockOffset, lambda: u32,
     cmv: MotionVector, pmv: [MotionVector; 2],
     mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
@@ -346,7 +346,7 @@ pub trait MotionEstimation {
   );
 
   fn sub_pixel_me<T: Pixel>(
-    fi: &FrameInvariants<T>, fs: &FrameState<T>, rec: &Arc<ReferenceFrame<T>>, po: &PlaneOffset,
+    fi: &FrameInvariants<T>, fs: &FrameState<T>, rec: &Arc<ReferenceFrame<T>>, po: PlaneOffset,
     bo: BlockOffset, lambda: u32, pmv: [MotionVector; 2],
     mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
     blk_w: usize, blk_h: usize, best_mv: &mut MotionVector,
@@ -379,12 +379,12 @@ pub trait MotionEstimation {
         let mut lowest_cost = std::u64::MAX;
         let mut best_mv = MotionVector::default();
 
-        Self::full_pixel_me(fi, fs, rec, &po, bo, lambda, cmv, pmv,
+        Self::full_pixel_me(fi, fs, rec, po, bo, lambda, cmv, pmv,
                            mvx_min, mvx_max, mvy_min, mvy_max, blk_w, blk_h,
                            &mut best_mv, &mut lowest_cost, ref_frame);
 
         let tmp_plane = Plane::new(blk_w, blk_h, 0, 0, 0, 0);
-        Self::sub_pixel_me(fi, fs, rec, &po, bo, lambda, pmv,
+        Self::sub_pixel_me(fi, fs, rec, po, bo, lambda, pmv,
                            mvx_min, mvx_max, mvy_min, mvy_max, blk_w, blk_h,
                            &mut best_mv, &mut lowest_cost, ref_frame,
                            tmp_plane, bsize);
@@ -452,7 +452,7 @@ pub struct FullSearch {}
 impl MotionEstimation for DiamondSearch {
   fn full_pixel_me<T: Pixel>(
     fi: &FrameInvariants<T>, fs: &FrameState<T>, rec: &Arc<ReferenceFrame<T>>,
-    po: &PlaneOffset, bo: BlockOffset, lambda: u32,
+    po: PlaneOffset, bo: BlockOffset, lambda: u32,
     cmv: MotionVector, pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize,
     mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize,
     best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: usize
@@ -464,7 +464,7 @@ impl MotionEstimation for DiamondSearch {
 
     diamond_me_search(
       fi,
-      &po,
+      po,
       &fs.input.planes[0],
       &rec.frame.planes[0],
       &predictors,
@@ -486,7 +486,7 @@ impl MotionEstimation for DiamondSearch {
 
   fn sub_pixel_me<T: Pixel>(
     fi: &FrameInvariants<T>, fs: &FrameState<T>, rec: &Arc<ReferenceFrame<T>>,
-    po: &PlaneOffset, _bo: BlockOffset, lambda: u32,
+    po: PlaneOffset, _bo: BlockOffset, lambda: u32,
     pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize,
     mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize,
     best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: usize,
@@ -496,7 +496,7 @@ impl MotionEstimation for DiamondSearch {
     let predictors = vec![*best_mv];
     diamond_me_search(
       fi,
-      &po,
+      po,
       &fs.input.planes[0],
       &rec.frame.planes[0],
       &predictors,
@@ -541,7 +541,7 @@ impl MotionEstimation for DiamondSearch {
         }
 
         diamond_me_search(
-          fi, &po,
+          fi, po,
           &fs.input_hres, &rec.input_hres,
           &predictors, fi.sequence.bit_depth,
           global_mv, lambda,
@@ -558,7 +558,7 @@ impl MotionEstimation for DiamondSearch {
 impl MotionEstimation for FullSearch {
   fn full_pixel_me<T: Pixel>(
     fi: &FrameInvariants<T>, fs: &FrameState<T>, rec: &Arc<ReferenceFrame<T>>,
-    po: &PlaneOffset, _bo: BlockOffset, lambda: u32,
+    po: PlaneOffset, _bo: BlockOffset, lambda: u32,
     cmv: MotionVector, pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize,
     mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize,
     best_mv: &mut MotionVector, lowest_cost: &mut u64, _ref_frame: usize
@@ -584,7 +584,7 @@ impl MotionEstimation for FullSearch {
       &rec.frame.planes[0],
       best_mv,
       lowest_cost,
-      &po,
+      po,
       2,
       fi.sequence.bit_depth,
       lambda,
@@ -595,7 +595,7 @@ impl MotionEstimation for FullSearch {
 
   fn sub_pixel_me<T: Pixel>(
     fi: &FrameInvariants<T>, fs: &FrameState<T>, _rec: &Arc<ReferenceFrame<T>>,
-    po: &PlaneOffset, _bo: BlockOffset, lambda: u32,
+    po: PlaneOffset, _bo: BlockOffset, lambda: u32,
     pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize,
     mvy_min: isize, mvy_max: isize, _blk_w: usize, _blk_h: usize,
     best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: usize,
@@ -606,7 +606,7 @@ impl MotionEstimation for FullSearch {
       fi,
       fs,
       bsize,
-      &po,
+      po,
       lambda,
       ref_frame,
       pmv,
@@ -648,7 +648,7 @@ impl MotionEstimation for FullSearch {
           &rec.input_hres,
           best_mv,
           lowest_cost,
-          &po,
+          po,
           1,
           fi.sequence.bit_depth,
           lambda,
@@ -662,7 +662,7 @@ impl MotionEstimation for FullSearch {
 
 fn get_best_predictor<T: Pixel>(
   fi: &FrameInvariants<T>,
-  po: &PlaneOffset, p_org: &Plane<T>, p_ref: &Plane<T>,
+  po: PlaneOffset, p_org: &Plane<T>, p_ref: &Plane<T>,
   predictors: &[MotionVector],
   bit_depth: usize, pmv: [MotionVector; 2], lambda: u32,
   mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
@@ -687,7 +687,7 @@ fn get_best_predictor<T: Pixel>(
 
 fn diamond_me_search<T: Pixel>(
   fi: &FrameInvariants<T>,
-  po: &PlaneOffset, p_org: &Plane<T>, p_ref: &Plane<T>,
+  po: PlaneOffset, p_org: &Plane<T>, p_ref: &Plane<T>,
   predictors: &[MotionVector],
   bit_depth: usize, pmv: [MotionVector; 2], lambda: u32,
   mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
@@ -724,7 +724,7 @@ fn diamond_me_search<T: Pixel>(
         };
 
         let rd_cost = get_mv_rd_cost(
-          fi, &po, p_org, p_ref, bit_depth,
+          fi, po, p_org, p_ref, bit_depth,
           pmv, lambda, mvx_min, mvx_max, mvy_min, mvy_max,
           blk_w, blk_h, cand_mv, tmp_plane_opt, ref_frame);
 
@@ -752,7 +752,7 @@ fn diamond_me_search<T: Pixel>(
 
 fn get_mv_rd_cost<T: Pixel>(
   fi: &FrameInvariants<T>,
-  po: &PlaneOffset, p_org: &Plane<T>, p_ref: &Plane<T>, bit_depth: usize,
+  po: PlaneOffset, p_org: &Plane<T>, p_ref: &Plane<T>, bit_depth: usize,
   pmv: [MotionVector; 2], lambda: u32,
   mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
   blk_w: usize, blk_h: usize,
@@ -769,25 +769,25 @@ fn get_mv_rd_cost<T: Pixel>(
   let plane_org = p_org.slice(po);
 
   if let Some(ref mut tmp_plane) = tmp_plane_opt {
-    let mut tmp_slice = &mut tmp_plane.mut_slice(&PlaneOffset { x: 0, y: 0 });
+    let mut tmp_slice = &mut tmp_plane.mut_slice(PlaneOffset { x: 0, y: 0 });
     PredictionMode::NEWMV.predict_inter(
       fi,
       0,
-      &po,
+      po,
       &mut tmp_slice,
       blk_w,
       blk_h,
       [ref_frame, NONE_FRAME],
       [cand_mv, MotionVector { row: 0, col: 0 }]
     );
-    let plane_ref = tmp_plane.slice(&PlaneOffset { x: 0, y: 0 });
+    let plane_ref = tmp_plane.slice(PlaneOffset { x: 0, y: 0 });
     compute_mv_rd_cost(
       fi, pmv, lambda, bit_depth, blk_w, blk_h, cand_mv,
       &plane_org, &plane_ref
     )
   } else {
     // Full pixel motion vector
-    let plane_ref = p_ref.slice(&PlaneOffset {
+    let plane_ref = p_ref.slice(PlaneOffset {
       x: po.x + (cand_mv.col / 8) as isize,
       y: po.y + (cand_mv.row / 8) as isize
     });
@@ -815,7 +815,7 @@ fn compute_mv_rd_cost<T: Pixel>(
 }
 
 fn telescopic_subpel_search<T: Pixel>(
-  fi: &FrameInvariants<T>, fs: &FrameState<T>, bsize: BlockSize, po: &PlaneOffset,
+  fi: &FrameInvariants<T>, fs: &FrameState<T>, bsize: BlockSize, po: PlaneOffset,
   lambda: u32, ref_frame: usize, pmv: [MotionVector; 2],
   mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
   tmp_plane: &mut Plane<T>, best_mv: &mut MotionVector, lowest_cost: &mut u64
@@ -853,12 +853,12 @@ fn telescopic_subpel_search<T: Pixel>(
 
         {
           let tmp_slice =
-            &mut tmp_plane.mut_slice(&PlaneOffset { x: 0, y: 0 });
+            &mut tmp_plane.mut_slice(PlaneOffset { x: 0, y: 0 });
 
           mode.predict_inter(
             fi,
             0,
-            &po,
+            po,
             tmp_slice,
             blk_w,
             blk_h,
@@ -867,8 +867,8 @@ fn telescopic_subpel_search<T: Pixel>(
           );
         }
 
-        let plane_org = fs.input.planes[0].slice(&po);
-        let plane_ref = tmp_plane.slice(&PlaneOffset { x: 0, y: 0 });
+        let plane_org = fs.input.planes[0].slice(po);
+        let plane_ref = tmp_plane.slice(PlaneOffset { x: 0, y: 0 });
 
         let sad = get_sad(&plane_org, &plane_ref, blk_h, blk_w, fi.sequence.bit_depth);
 
@@ -889,7 +889,7 @@ fn telescopic_subpel_search<T: Pixel>(
 fn full_search<T: Pixel>(
   x_lo: isize, x_hi: isize, y_lo: isize, y_hi: isize, blk_h: usize,
   blk_w: usize, p_org: &Plane<T>, p_ref: &Plane<T>, best_mv: &mut MotionVector,
-  lowest_cost: &mut u64, po: &PlaneOffset, step: usize, bit_depth: usize,
+  lowest_cost: &mut u64, po: PlaneOffset, step: usize, bit_depth: usize,
   lambda: u32, pmv: [MotionVector; 2], allow_high_precision_mv: bool
 ) {
     let search_range_y = (y_lo..=y_hi).step_by(step);
@@ -898,7 +898,7 @@ fn full_search<T: Pixel>(
 
     let (cost, mv) = search_area.map(|(y, x)| {
       let plane_org = p_org.slice(po);
-      let plane_ref = p_ref.slice(&PlaneOffset { x, y });
+      let plane_ref = p_ref.slice(PlaneOffset { x, y });
 
       let sad = get_sad(&plane_org, &plane_ref, blk_h, blk_w, bit_depth);
 
@@ -980,7 +980,7 @@ pub fn estimate_motion_ss4<T: Pixel>(
       &rec.input_qres,
       &mut best_mv,
       &mut lowest_cost,
-      &po,
+      po,
       1,
       fi.sequence.bit_depth,
       lambda,
@@ -1063,8 +1063,8 @@ pub mod test {
       let bsh = block.0.height();
       let po = PlaneOffset { x: 32, y: 40 };
 
-      let mut input_slice = input_plane.slice(&po);
-      let mut rec_slice = rec_plane.slice(&po);
+      let mut input_slice = input_plane.slice(po);
+      let mut rec_slice = rec_plane.slice(po);
 
       assert_eq!(
         block.1,

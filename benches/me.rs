@@ -44,8 +44,8 @@ fn bench_get_sad(b: &mut Bencher, bs: &BlockSize) {
   let rec_plane = new_plane::<u16>(&mut ra, w, h);
   let po = PlaneOffset { x: 0, y: 0 };
 
-  let plane_org = input_plane.slice(&po);
-  let plane_ref = rec_plane.slice(&po);
+  let plane_org = input_plane.slice(po);
+  let plane_ref = rec_plane.slice(po);
 
   b.iter(|| {
     let _ =

@@ -230,7 +230,7 @@ pub fn cdef_analyze_superblock<T: Pixel>(
           let mut var: i32 = 0;
           let in_plane = &in_frame.planes[0];
           let in_po = sbo.plane_offset(&in_plane.cfg);
-          let in_slice = in_plane.slice(&in_po);
+          let in_slice = in_plane.slice(in_po);
           dir.dir[bx][by] = cdef_find_dir(&in_slice.reslice(8 * bx as isize + 2,
                                                             8 * by as isize + 2),
                                           &mut var, coeff_shift) as u8;
@@ -290,7 +290,7 @@ pub fn cdef_sb_padded_frame_copy<T: Pixel>(
           out_row[x] = CDEF_VERY_LARGE;
         }
       } else {
-        let in_slice = f.planes[p].slice(&PlaneOffset {x:0, y:offset.y - ipad});
+        let in_slice = f.planes[p].slice(PlaneOffset {x:0, y:offset.y - ipad});
         let in_row = &in_slice[y as usize];
         // are we guaranteed to be all in frame this row?
         if offset.x < ipad || offset.x + (sb_size as isize >>xdec) + ipad >= w {
@@ -374,9 +374,9 @@ pub fn cdef_filter_superblock<T: Pixel>(
             let ydec = in_plane.cfg.ydec;
 
             let in_stride = in_plane.cfg.stride;
-            let in_slice = &in_plane.slice(&in_po);
+            let in_slice = &in_plane.slice(in_po);
             let out_stride = out_plane.cfg.stride;
-            let out_slice = &mut out_plane.mut_slice(&out_po);
+            let out_slice = &mut out_plane.mut_slice(out_po);
 
             let local_pri_strength;
             let local_sec_strength;

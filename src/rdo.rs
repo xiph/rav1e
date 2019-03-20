@@ -257,8 +257,8 @@ fn compute_distortion<T: Pixel>(
   let mut distortion = match fi.config.tune {
     Tune::Psychovisual if w_y >= 8 && h_y >= 8 => {
       cdef_dist_wxh(
-        &fs.input.planes[0].slice(&po),
-        &fs.rec.planes[0].slice(&po),
+        &fs.input.planes[0].slice(po),
+        &fs.rec.planes[0].slice(po),
         w_y,
         h_y,
         fi.sequence.bit_depth
@@ -266,8 +266,8 @@ fn compute_distortion<T: Pixel>(
     }
     Tune::Psnr | Tune::Psychovisual => {
       sse_wxh(
-        &fs.input.planes[0].slice(&po),
-        &fs.rec.planes[0].slice(&po),
+        &fs.input.planes[0].slice(po),
+        &fs.rec.planes[0].slice(po),
         w_y,
         h_y
       )
@@ -292,8 +292,8 @@ fn compute_distortion<T: Pixel>(
         let po = bo.plane_offset(&fs.input.planes[p].cfg);
 
         distortion += sse_wxh(
-          &fs.input.planes[p].slice(&po),
-          &fs.rec.planes[p].slice(&po),
+          &fs.input.planes[p].slice(po),
+          &fs.rec.planes[p].slice(po),
           w_uv,
           h_uv
         );
@@ -314,8 +314,8 @@ fn compute_tx_distortion<T: Pixel>(
     let po = bo.plane_offset(&fs.input.planes[0].cfg);
 
     sse_wxh(
-      &fs.input.planes[0].slice(&po),
-      &fs.rec.planes[0].slice(&po),
+      &fs.input.planes[0].slice(po),
+      &fs.rec.planes[0].slice(po),
       w_y,
       h_y
     )
@@ -342,8 +342,8 @@ fn compute_tx_distortion<T: Pixel>(
         let po = bo.plane_offset(&fs.input.planes[p].cfg);
 
         distortion += sse_wxh(
-          &fs.input.planes[p].slice(&po),
-          &fs.rec.planes[p].slice(&po),
+          &fs.input.planes[p].slice(po),
+          &fs.rec.planes[p].slice(po),
           w_uv,
           h_uv
         );
@@ -722,7 +722,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         let rec = &mut fs.rec.planes[0];
         let po = bo.plane_offset(&rec.cfg);
         get_intra_edges(
-          &rec.edged_slice(&po, 1, 1),
+          &rec.edged_slice(po, 1, 1),
           tx_size,
           fi.sequence.bit_depth,
           &fs.input.planes[0].cfg,
@@ -735,7 +735,7 @@ pub fn rdo_mode_decision<T: Pixel>(
           let rec = &mut fs.rec.planes[0];
           let po = bo.plane_offset(&rec.cfg);
           luma_mode.predict_intra(
-            &mut rec.mut_slice(&po),
+            &mut rec.mut_slice(po),
             tx_size,
             fi.sequence.bit_depth,
             &[0i16; 2],
@@ -743,8 +743,8 @@ pub fn rdo_mode_decision<T: Pixel>(
             &edge_buf
           );
 
-          let plane_org = fs.input.planes[0].slice(&po);
-          let plane_ref = rec.slice(&po);
+          let plane_org = fs.input.planes[0].slice(po);
+          let plane_ref = rec.slice(po);
 
           (
             luma_mode,
@@ -907,14 +907,14 @@ pub fn rdo_cfl_alpha<T: Pixel>(
       (-16i16..17i16)
         .min_by_key(|&alpha| {
           let edge_buf = get_intra_edges(
-            &rec.edged_slice(&po, 1, 1),
+            &rec.edged_slice(po, 1, 1),
             uv_tx_size,
             bit_depth,
             &input.cfg,
             Some(PredictionMode::UV_CFL_PRED)
           );
           PredictionMode::UV_CFL_PRED.predict_intra(
-            &mut rec.mut_slice(&po),
+            &mut rec.mut_slice(po),
             uv_tx_size,
             bit_depth,
             &ac.array,
@@ -922,8 +922,8 @@ pub fn rdo_cfl_alpha<T: Pixel>(
             &edge_buf
           );
           sse_wxh(
-            &input.slice(&po),
-            &rec.slice(&po),
+            &input.slice(po),
+            &rec.slice(po),
             uv_tx_size.width(),
             uv_tx_size.height()
           )
@@ -1237,11 +1237,11 @@ fn rdo_loop_plane_error<T: Pixel>(sbo: SuperBlockOffset, fi: &FrameInvariants<T>
         if !skip {
           let in_plane = &fs.input.planes[pli];
           let in_po = sbo.block_offset(bx<<1, by<<1).plane_offset(&in_plane.cfg);
-          let in_slice = in_plane.slice(&in_po);
+          let in_slice = in_plane.slice(in_po);
 
           let test_plane = &test.planes[pli];
           let test_po = sbo_0.block_offset(bx<<1, by<<1).plane_offset(&test_plane.cfg);
-          let test_slice = &test_plane.slice(&test_po);
+          let test_slice = &test_plane.slice(test_po);
 
           let xdec = in_plane.cfg.xdec;
           let ydec = in_plane.cfg.ydec;
@@ -1282,7 +1282,7 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: SuperBlockOffset, fi: &FrameInvariants<T
     for p in 0..3 {
       let po = sbo.plane_offset(&fs.rec.planes[p].cfg);
       let PlaneConfig { width, height, .. } = lrf_input.planes[p].cfg;
-      for (rec, inp) in fs.rec.planes[p].slice(&po).rows_iter().zip(
+      for (rec, inp) in fs.rec.planes[p].slice(po).rows_iter().zip(
         lrf_input.planes[p].as_mut_slice().rows_iter_mut()
       ).take(height) {
         inp[..width].copy_from_slice(&rec[..width]);
@@ -1340,9 +1340,9 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: SuperBlockOffset, fi: &FrameInvariants<T
                                       lrf_input.planes[pli].cfg.height,
                                       lrf_input.planes[pli].cfg.width,
                                       lrf_input.planes[pli].cfg.height,
-                                      &lrf_input.planes[pli].slice(&PlaneOffset{x:0, y:0}),
-                                      &lrf_input.planes[pli].slice(&PlaneOffset{x:0, y:0}),
-                                      &mut lrf_output.planes[pli].mut_slice(&PlaneOffset{x:0, y:0}));
+                                      &lrf_input.planes[pli].slice(PlaneOffset{x:0, y:0}),
+                                      &lrf_input.planes[pli].slice(PlaneOffset{x:0, y:0}),
+                                      &mut lrf_output.planes[pli].mut_slice(PlaneOffset{x:0, y:0}));
                 let err = rdo_loop_plane_error(sbo, fi, fs, &cw.bc, &lrf_output, pli);
                 let rate = cw.count_lrf_switchable(w, &fs.restoration, best_lrf[pli], pli);
                 cost[pli] = err as f64 + fi.lambda * rate as f64 / ((1<<OD_BITRES) as f64);
@@ -1381,11 +1381,11 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: SuperBlockOffset, fi: &FrameInvariants<T
         if !ru.coded {
           for set in 0..16 {
             let in_plane = &fs.input.planes[pli];  // reference
-            let ipo = &sbo.plane_offset(&in_plane.cfg);
+            let ipo = sbo.plane_offset(&in_plane.cfg);
             let cdef_plane = &lrf_input.planes[pli];
             let (xqd0, xqd1) = sgrproj_solve(set, fi,
                                              &in_plane.slice(ipo),
-                                             &cdef_plane.slice(&PlaneOffset{x: 0, y: 0}),
+                                             &cdef_plane.slice(PlaneOffset{x: 0, y: 0}),
                                              cmp::min(cdef_plane.cfg.width, fi.width - ipo.x as usize),
                                              cmp::min(cdef_plane.cfg.height, fi.height - ipo.y as usize));
             let current_lrf = RestorationFilter::Sgrproj{set, xqd: [xqd0, xqd1]};
@@ -1394,9 +1394,9 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: SuperBlockOffset, fi: &FrameInvariants<T
               sgrproj_stripe_filter(set, xqd, fi,
                                     lrf_input.planes[pli].cfg.width, lrf_input.planes[pli].cfg.height,
                                     lrf_input.planes[pli].cfg.width, lrf_input.planes[pli].cfg.height,
-                                    &lrf_input.planes[pli].slice(&PlaneOffset{x:0, y:0}),
-                                    &lrf_input.planes[pli].slice(&PlaneOffset{x:0, y:0}),
-                                    &mut lrf_output.planes[pli].mut_slice(&PlaneOffset{x:0, y:0}));
+                                    &lrf_input.planes[pli].slice(PlaneOffset{x:0, y:0}),
+                                    &lrf_input.planes[pli].slice(PlaneOffset{x:0, y:0}),
+                                    &mut lrf_output.planes[pli].mut_slice(PlaneOffset{x:0, y:0}));
             }
             let err = rdo_loop_plane_error(sbo, fi, fs, &cw.bc, &lrf_output, pli);
             let rate = cw.count_lrf_switchable(w, &fs.restoration, current_lrf, pli);

@@ -732,7 +732,7 @@ fn wiener_stripe_filter<T: Pixel>(coeffs: [[i8; 3]; 2], fi: &FrameInvariants<T>,
     stripe_h as isize - start_wi as isize
   }) as usize;
 
-  let mut out_slice = out.mut_slice(&PlaneOffset{x: 0, y: start_yi as isize});
+  let mut out_slice = out.mut_slice(PlaneOffset{x: 0, y: start_yi as isize});
 
   for xi in stripe_x..stripe_x+stripe_w {
     let n = cmp::min(7, crop_w as isize + 3 - xi as isize);
@@ -958,11 +958,11 @@ impl RestorationState {
                                     crop_w - x,
                                     (crop_h as isize - stripe_start_y) as usize,
                                     size, stripe_size,
-                                    &cdeffed.planes[pli].slice(&PlaneOffset{x: x as isize,
+                                    &cdeffed.planes[pli].slice(PlaneOffset{x: x as isize,
                                                                            y: stripe_start_y}),
-                                    &pre_cdef.planes[pli].slice(&PlaneOffset{x: x as isize,
+                                    &pre_cdef.planes[pli].slice(PlaneOffset{x: x as isize,
                                                                             y: stripe_start_y}),
-                                    &mut out.planes[pli].mut_slice(&PlaneOffset{x: x as isize,
+                                    &mut out.planes[pli].mut_slice(PlaneOffset{x: x as isize,
                                                                                y: stripe_start_y}));
             },
             RestorationFilter::None => {

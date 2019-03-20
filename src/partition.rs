@@ -1133,7 +1133,7 @@ impl PredictionMode {
   }
 
   pub fn predict_inter<T: Pixel>(
-    self, fi: &FrameInvariants<T>, p: usize, po: &PlaneOffset,
+    self, fi: &FrameInvariants<T>, p: usize, po: PlaneOffset,
     dst: &mut PlaneMutSlice<'_, T>, width: usize, height: usize,
     ref_frames: [usize; 2], mvs: [MotionVector; 2]
   ) {
@@ -1144,7 +1144,7 @@ impl PredictionMode {
       ref_frames[1] > INTRA_FRAME && ref_frames[1] != NONE_FRAME;
 
     fn get_params<'a, T: Pixel>(
-      rec_plane: &'a Plane<T>, po: &PlaneOffset, mv: MotionVector
+      rec_plane: &'a Plane<T>, po: PlaneOffset, mv: MotionVector
     ) -> (i32, i32, PlaneSlice<'a, T>) {
       let rec_cfg = &rec_plane.cfg;
       let shift_row = 3 + rec_cfg.ydec;
@@ -1159,7 +1159,7 @@ impl PredictionMode {
         x: po.x + col_offset as isize - 3,
         y: po.y + row_offset as isize - 3
       };
-      (row_frac, col_frac, rec_plane.slice(&qo).clamp().subslice(3, 3))
+      (row_frac, col_frac, rec_plane.slice(qo).clamp().subslice(3, 3))
     };
 
     if !is_compound {

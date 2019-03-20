@@ -1036,7 +1036,7 @@ fn filter_v_edge<T: Pixel>(
       let level = deblock_level(deblock, block, prev_block, pli, true);
       if level > 0 {
         let po = bo.plane_offset(&p.cfg);
-        let mut plane_slice = p.mut_slice(&po);
+        let mut plane_slice = p.mut_slice(po);
         plane_slice.x -= (filter_size >> 1) as isize;
         match filter_size {
           4 => {
@@ -1075,8 +1075,8 @@ fn sse_v_edge<T: Pixel>(
         po.x -= (filter_size >> 1) as isize;
         po
       };
-      let rec_slice = rec_plane.slice(&po);
-      let src_slice = src_plane.slice(&po);
+      let rec_slice = rec_plane.slice(po);
+      let src_slice = src_plane.slice(po);
       match filter_size {
         4 => {
           sse_size4(
@@ -1139,7 +1139,7 @@ fn filter_h_edge<T: Pixel>(
       let level = deblock_level(deblock, block, prev_block, pli, false);
       if level > 0 {
         let po = bo.plane_offset(&p.cfg);
-        let mut plane_slice = p.mut_slice(&po);
+        let mut plane_slice = p.mut_slice(po);
         plane_slice.y -= (filter_size >> 1) as isize;
         match filter_size {
           4 => {
@@ -1178,8 +1178,8 @@ fn sse_h_edge<T: Pixel>(
         po.x -= (filter_size >> 1) as isize;
         po
       };
-      let rec_slice = rec_plane.slice(&po);
-      let src_slice = src_plane.slice(&po);
+      let rec_slice = rec_plane.slice(po);
+      let src_slice = src_plane.slice(po);
       match filter_size {
         4 => {
           sse_size4(
