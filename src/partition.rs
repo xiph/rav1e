@@ -921,7 +921,7 @@ pub fn get_intra_edges<T: Pixel>(
           tx_size.height() << plane_cfg.ydec
         );
 
-      let num_avail = if top_edge != 0 && has_tr(&bo, bsize) {
+      let num_avail = if top_edge != 0 && has_tr(bo, bsize) {
         tx_size.width().min(plane_cfg.width - x - tx_size.width())
       } else {
         0
@@ -952,7 +952,7 @@ pub fn get_intra_edges<T: Pixel>(
         tx_size.height() << plane_cfg.ydec
         );
 
-      let num_avail = if left_edge != 0 && has_bl(&bo, bsize) {
+      let num_avail = if left_edge != 0 && has_bl(bo, bsize) {
         tx_size.height().min(plane_cfg.height - y - tx_size.height())
       } else {
         0
@@ -1232,7 +1232,7 @@ pub enum TxSet {
   TX_SET_ALL16
 }
 
-pub fn has_tr(bo: &BlockOffset, bsize: BlockSize) -> bool {
+pub fn has_tr(bo: BlockOffset, bsize: BlockSize) -> bool {
   let sb_mi_size = BLOCK_64X64.width_mi(); /* Assume 64x64 for now */
   let mask_row = bo.y & LOCAL_BLOCK_MASK;
   let mask_col = bo.x & LOCAL_BLOCK_MASK;
@@ -1289,7 +1289,7 @@ pub fn has_tr(bo: &BlockOffset, bsize: BlockSize) -> bool {
   has_tr
 }
 
-pub fn has_bl(bo: &BlockOffset, bsize: BlockSize) -> bool {
+pub fn has_bl(bo: BlockOffset, bsize: BlockSize) -> bool {
   let sb_mi_size = BLOCK_64X64.width_mi(); /* Assume 64x64 for now */
   let mask_row = bo.y & LOCAL_BLOCK_MASK;
   let mask_col = bo.x & LOCAL_BLOCK_MASK;

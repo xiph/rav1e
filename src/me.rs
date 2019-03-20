@@ -250,7 +250,7 @@ impl IndexMut<usize> for FrameMotionVectors {
 }
 
 fn get_mv_range(
-  w_in_b: usize, h_in_b: usize, bo: &BlockOffset, blk_w: usize, blk_h: usize
+  w_in_b: usize, h_in_b: usize, bo: BlockOffset, blk_w: usize, blk_h: usize
 ) -> (isize, isize, isize, isize) {
   let border_w = 128 + blk_w as isize * 8;
   let border_h = 128 + blk_h as isize * 8;
@@ -263,7 +263,7 @@ fn get_mv_range(
 }
 
 pub fn get_subset_predictors<T: Pixel>(
-  bo: &BlockOffset, cmv: MotionVector,
+  bo: BlockOffset, cmv: MotionVector,
   w_in_b: usize, h_in_b: usize,
   frame_mvs: &FrameMotionVectors, frame_ref_opt: &Option<Arc<ReferenceFrame<T>>>,
   ref_frame_id: usize
@@ -338,7 +338,7 @@ pub fn get_subset_predictors<T: Pixel>(
 pub trait MotionEstimation {
   fn full_pixel_me<T: Pixel>(
     fi: &FrameInvariants<T>, fs: &FrameState<T>, rec: &Arc<ReferenceFrame<T>>, po: &PlaneOffset,
-    bo: &BlockOffset, lambda: u32,
+    bo: BlockOffset, lambda: u32,
     cmv: MotionVector, pmv: [MotionVector; 2],
     mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
     blk_w: usize, blk_h: usize, best_mv: &mut MotionVector,
@@ -347,7 +347,7 @@ pub trait MotionEstimation {
 
   fn sub_pixel_me<T: Pixel>(
     fi: &FrameInvariants<T>, fs: &FrameState<T>, rec: &Arc<ReferenceFrame<T>>, po: &PlaneOffset,
-    bo: &BlockOffset, lambda: u32, pmv: [MotionVector; 2],
+    bo: BlockOffset, lambda: u32, pmv: [MotionVector; 2],
     mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
     blk_w: usize, blk_h: usize, best_mv: &mut MotionVector,
     lowest_cost: &mut u64, ref_frame: usize,
@@ -356,7 +356,7 @@ pub trait MotionEstimation {
 
   fn motion_estimation<T: Pixel> (
     fi: &FrameInvariants<T>, fs: &FrameState<T>, bsize: BlockSize,
-    bo: &BlockOffset, ref_frame: usize, cmv: MotionVector,
+    bo: BlockOffset, ref_frame: usize, cmv: MotionVector,
     pmv: [MotionVector; 2]
   ) -> MotionVector {
     match fi.rec_buffer.frames[fi.ref_frames[ref_frame - LAST_FRAME] as usize]
@@ -398,7 +398,7 @@ pub trait MotionEstimation {
 
   fn estimate_motion_ss2<T: Pixel>(
     fi: &FrameInvariants<T>, fs: &FrameState<T>, bsize: BlockSize, ref_idx: usize,
-    bo: &BlockOffset, pmvs: &[Option<MotionVector>; 3], ref_frame: usize
+    bo: BlockOffset, pmvs: &[Option<MotionVector>; 3], ref_frame: usize
   ) -> Option<MotionVector> {
     if let Some(ref rec) = fi.rec_buffer.frames[ref_idx] {
       let blk_w = bsize.width();
@@ -409,7 +409,7 @@ pub trait MotionEstimation {
         x: (bo_adj.x as isize) << BLOCK_TO_PLANE_SHIFT >> 1,
         y: (bo_adj.y as isize) << BLOCK_TO_PLANE_SHIFT >> 1
       };
-      let (mvx_min, mvx_max, mvy_min, mvy_max) = get_mv_range(fi.w_in_b, fi.h_in_b, &bo_adj, blk_w, blk_h);
+      let (mvx_min, mvx_max, mvy_min, mvy_max) = get_mv_range(fi.w_in_b, fi.h_in_b, bo_adj, blk_w, blk_h);
 
       let global_mv = [MotionVector{row: 0, col: 0}; 2];
       let frame_mvs = &fs.frame_mvs[ref_frame];
@@ -452,7 +452,7 @@ pub struct FullSearch {}
 impl MotionEstimation for DiamondSearch {
   fn full_pixel_me<T: Pixel>(
     fi: &FrameInvariants<T>, fs: &FrameState<T>, rec: &Arc<ReferenceFrame<T>>,
-    po: &PlaneOffset, bo: &BlockOffset, lambda: u32,
+    po: &PlaneOffset, bo: BlockOffset, lambda: u32,
     cmv: MotionVector, pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize,
     mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize,
     best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: usize
@@ -486,7 +486,7 @@ impl MotionEstimation for DiamondSearch {
 
   fn sub_pixel_me<T: Pixel>(
     fi: &FrameInvariants<T>, fs: &FrameState<T>, rec: &Arc<ReferenceFrame<T>>,
-    po: &PlaneOffset, _bo: &BlockOffset, lambda: u32,
+    po: &PlaneOffset, _bo: BlockOffset, lambda: u32,
     pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize,
     mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize,
     best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: usize,
@@ -529,7 +529,7 @@ impl MotionEstimation for DiamondSearch {
     for omv in pmvs.iter() {
       if let Some(pmv) = omv {
         let mut predictors = get_subset_predictors::<T>(
-          &bo_adj_h,
+          bo_adj_h,
           MotionVector{row: pmv.row, col: pmv.col},
           fi.w_in_b, fi.h_in_b,
           &frame_mvs, frame_ref_opt, 0
@@ -558,7 +558,7 @@ impl MotionEstimation for DiamondSearch {
 impl MotionEstimation for FullSearch {
   fn full_pixel_me<T: Pixel>(
     fi: &FrameInvariants<T>, fs: &FrameState<T>, rec: &Arc<ReferenceFrame<T>>,
-    po: &PlaneOffset, _bo: &BlockOffset, lambda: u32,
+    po: &PlaneOffset, _bo: BlockOffset, lambda: u32,
     cmv: MotionVector, pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize,
     mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize,
     best_mv: &mut MotionVector, lowest_cost: &mut u64, _ref_frame: usize
@@ -595,7 +595,7 @@ impl MotionEstimation for FullSearch {
 
   fn sub_pixel_me<T: Pixel>(
     fi: &FrameInvariants<T>, fs: &FrameState<T>, _rec: &Arc<ReferenceFrame<T>>,
-    po: &PlaneOffset, _bo: &BlockOffset, lambda: u32,
+    po: &PlaneOffset, _bo: BlockOffset, lambda: u32,
     pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize,
     mvy_min: isize, mvy_max: isize, _blk_w: usize, _blk_h: usize,
     best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: usize,
@@ -920,7 +920,7 @@ fn full_search<T: Pixel>(
 }
 
 // Adjust block offset such that entire block lies within frame boundaries
-fn adjust_bo<T: Pixel>(bo: &BlockOffset, fi: &FrameInvariants<T>, blk_w: usize, blk_h: usize) -> BlockOffset {
+fn adjust_bo<T: Pixel>(bo: BlockOffset, fi: &FrameInvariants<T>, blk_w: usize, blk_h: usize) -> BlockOffset {
   BlockOffset {
     x: (bo.x as isize).min(fi.w_in_b as isize - blk_w as isize / 4).max(0) as usize,
     y: (bo.y as isize).min(fi.h_in_b as isize - blk_h as isize / 4).max(0) as usize
@@ -944,7 +944,7 @@ fn get_mv_rate(a: MotionVector, b: MotionVector, allow_high_precision_mv: bool) 
 
 pub fn estimate_motion_ss4<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &FrameState<T>, bsize: BlockSize, ref_idx: usize,
-  bo: &BlockOffset
+  bo: BlockOffset
 ) -> Option<MotionVector> {
   if let Some(ref rec) = fi.rec_buffer.frames[ref_idx] {
     let blk_w = bsize.width();
@@ -957,7 +957,7 @@ pub fn estimate_motion_ss4<T: Pixel>(
 
     let range_x = 192 * fi.me_range_scale as isize;
     let range_y = 64 * fi.me_range_scale as isize;
-    let (mvx_min, mvx_max, mvy_min, mvy_max) = get_mv_range(fi.w_in_b, fi.h_in_b, &bo_adj, blk_w, blk_h);
+    let (mvx_min, mvx_max, mvy_min, mvy_max) = get_mv_range(fi.w_in_b, fi.h_in_b, bo_adj, blk_w, blk_h);
     let x_lo = po.x + (((-range_x).max(mvx_min / 8)) >> 2);
     let x_hi = po.x + (((range_x).min(mvx_max / 8)) >> 2);
     let y_lo = po.y + (((-range_y).max(mvy_min / 8)) >> 2);
