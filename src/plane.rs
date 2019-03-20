@@ -32,7 +32,7 @@ pub struct PlaneConfig {
 }
 
 /// Absolute offset in pixels inside a plane
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct PlaneOffset {
   pub x: isize,
   pub y: isize
@@ -248,24 +248,24 @@ impl<T: Pixel> Plane<T> {
     }
   }
 
-  pub fn slice(&self, po: &PlaneOffset) -> PlaneSlice<'_, T> {
+  pub fn slice(&self, po: PlaneOffset) -> PlaneSlice<'_, T> {
     PlaneSlice { plane: self, x: po.x, y: po.y }
   }
 
-  pub fn mut_slice(&mut self, po: &PlaneOffset) -> PlaneMutSlice<'_, T> {
+  pub fn mut_slice(&mut self, po: PlaneOffset) -> PlaneMutSlice<'_, T> {
     PlaneMutSlice { plane: self, x: po.x, y: po.y }
   }
 
   pub fn as_slice(&self) -> PlaneSlice<'_, T> {
-    self.slice(&PlaneOffset { x: 0, y: 0 })
+    self.slice(PlaneOffset { x: 0, y: 0 })
   }
 
   pub fn as_mut_slice(&mut self) -> PlaneMutSlice<'_, T> {
-    self.mut_slice(&PlaneOffset { x: 0, y: 0 })
+    self.mut_slice(PlaneOffset { x: 0, y: 0 })
   }
 
   #[inline]
-  pub fn edged_slice(&self, po: &PlaneOffset, left_edge: usize, top_edge: usize) -> EdgedPlaneSlice<'_, T> {
+  pub fn edged_slice(&self, po: PlaneOffset, left_edge: usize, top_edge: usize) -> EdgedPlaneSlice<'_, T> {
     debug_assert!(po.x >= 0);
     debug_assert!(po.y >= 0);
     let left_edge = left_edge.min(po.x as usize);
@@ -274,7 +274,7 @@ impl<T: Pixel> Plane<T> {
       x: po.x - left_edge as isize,
       y: po.y - top_edge as isize,
     };
-    EdgedPlaneSlice { ps: self.slice(&edged_po), left_edge, top_edge }
+    EdgedPlaneSlice { ps: self.slice(edged_po), left_edge, top_edge }
   }
 
   #[inline]

@@ -953,7 +953,7 @@ fn get_qidx<T: Pixel>(fi: &FrameInvariants<T>, fs: &FrameState<T>, cw: &ContextW
 pub fn encode_tx_block<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, cw: &mut ContextWriter,
   w: &mut dyn Writer, p: usize, bo: BlockOffset, mode: PredictionMode,
-  tx_size: TxSize, tx_type: TxType, plane_bsize: BlockSize, po: &PlaneOffset,
+  tx_size: TxSize, tx_type: TxType, plane_bsize: BlockSize, po: PlaneOffset,
   skip: bool, ac: &[i16], alpha: i16, rdo_type: RDOType, for_rdo_use: bool
 ) -> (bool, i64) {
   let qidx = get_qidx(fi, fs, cw, bo);
@@ -1068,7 +1068,7 @@ pub fn motion_compensate<T: Pixel>(
         some_use_intra |= cw.bc.at(bo.with_offset(-1,-1)).mode.is_intra(); };
 
       if some_use_intra {
-        luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), plane_bsize.width(),
+        luma_mode.predict_inter(fi, p, po, &mut rec.mut_slice(po), plane_bsize.width(),
                                 plane_bsize.height(), ref_frames, mvs);
       } else {
         assert!(xdec == 1 && ydec == 1);
@@ -1083,28 +1083,28 @@ pub fn motion_compensate<T: Pixel>(
           let rf2 = cw.bc.at(bo.with_offset(-1,0)).ref_frames;
           let po2 = PlaneOffset { x: po.x, y: po.y+2 };
           let po3 = PlaneOffset { x: po.x+2, y: po.y+2 };
-          luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), 2, 2, rf0, mv0);
-          luma_mode.predict_inter(fi, p, &po1, &mut rec.mut_slice(&po1), 2, 2, rf1, mv1);
-          luma_mode.predict_inter(fi, p, &po2, &mut rec.mut_slice(&po2), 2, 2, rf2, mv2);
-          luma_mode.predict_inter(fi, p, &po3, &mut rec.mut_slice(&po3), 2, 2, ref_frames, mvs);
+          luma_mode.predict_inter(fi, p, po, &mut rec.mut_slice(po), 2, 2, rf0, mv0);
+          luma_mode.predict_inter(fi, p, po1, &mut rec.mut_slice(po1), 2, 2, rf1, mv1);
+          luma_mode.predict_inter(fi, p, po2, &mut rec.mut_slice(po2), 2, 2, rf2, mv2);
+          luma_mode.predict_inter(fi, p, po3, &mut rec.mut_slice(po3), 2, 2, ref_frames, mvs);
         }
         if bsize == BlockSize::BLOCK_8X4 {
           let mv1 = cw.bc.at(bo.with_offset(0,-1)).mv;
           let rf1 = cw.bc.at(bo.with_offset(0,-1)).ref_frames;
-          luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), 4, 2, rf1, mv1);
+          luma_mode.predict_inter(fi, p, po, &mut rec.mut_slice(po), 4, 2, rf1, mv1);
           let po3 = PlaneOffset { x: po.x, y: po.y+2 };
-          luma_mode.predict_inter(fi, p, &po3, &mut rec.mut_slice(&po3), 4, 2, ref_frames, mvs);
+          luma_mode.predict_inter(fi, p, po3, &mut rec.mut_slice(po3), 4, 2, ref_frames, mvs);
         }
         if bsize == BlockSize::BLOCK_4X8 {
           let mv2 = cw.bc.at(bo.with_offset(-1,0)).mv;
           let rf2 = cw.bc.at(bo.with_offset(-1,0)).ref_frames;
-          luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), 2, 4, rf2, mv2);
+          luma_mode.predict_inter(fi, p, po, &mut rec.mut_slice(po), 2, 4, rf2, mv2);
           let po3 = PlaneOffset { x: po.x+2, y: po.y };
-          luma_mode.predict_inter(fi, p, &po3, &mut rec.mut_slice(&po3), 2, 4, ref_frames, mvs);
+          luma_mode.predict_inter(fi, p, po3, &mut rec.mut_slice(po3), 2, 4, ref_frames, mvs);
         }
       }
     } else {
-      luma_mode.predict_inter(fi, p, &po, &mut rec.mut_slice(&po), plane_bsize.width(),
+      luma_mode.predict_inter(fi, p, po, &mut rec.mut_slice(po), plane_bsize.width(),
                               plane_bsize.height(), ref_frames, mvs);
     }
   }
@@ -1306,7 +1306,7 @@ pub fn luma_ac<T: Pixel>(
     bo.plane_offset(&fs.input.planes[0].cfg)
   };
   let rec = &fs.rec.planes[0];
-  let luma = &rec.slice(&po);
+  let luma = &rec.slice(po);
 
   let mut sum: i32 = 0;
   for sub_y in 0..plane_bsize.height() {
@@ -1359,7 +1359,7 @@ pub fn write_tx_blocks<T: Pixel>(
       let po = tx_bo.plane_offset(&fs.input.planes[0].cfg);
       let (_, dist) =
         encode_tx_block(
-          fi, fs, cw, w, 0, tx_bo, luma_mode, tx_size, tx_type, bsize, &po,
+          fi, fs, cw, w, 0, tx_bo, luma_mode, tx_size, tx_type, bsize, po,
           skip, &ac.array, 0, rdo_type, for_rdo_use
         );
       assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
@@ -1413,7 +1413,7 @@ pub fn write_tx_blocks<T: Pixel>(
           po.y += (by * uv_tx_size.height()) as isize;
           let (_, dist) =
             encode_tx_block(fi, fs, cw, w, p, tx_bo, chroma_mode, uv_tx_size, uv_tx_type,
-                            plane_bsize, &po, skip, &ac.array, alpha, rdo_type, for_rdo_use);
+                            plane_bsize, po, skip, &ac.array, alpha, rdo_type, for_rdo_use);
           assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
           tx_dist += dist;
         }
@@ -1444,7 +1444,7 @@ pub fn write_tx_tree<T: Pixel>(
 
   let po = bo.plane_offset(&fs.input.planes[0].cfg);
   let (has_coeff, dist) = encode_tx_block(
-    fi, fs, cw, w, 0, bo, luma_mode, tx_size, tx_type, bsize, &po, skip, ac, 0, rdo_type, for_rdo_use
+    fi, fs, cw, w, 0, bo, luma_mode, tx_size, tx_type, bsize, po, skip, ac, 0, rdo_type, for_rdo_use
   );
   assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
   tx_dist += dist;
@@ -1479,7 +1479,7 @@ pub fn write_tx_tree<T: Pixel>(
       let po = bo.plane_offset(&fs.input.planes[p].cfg);
       let (_, dist) =
         encode_tx_block(fi, fs, cw, w, p, tx_bo, luma_mode, uv_tx_size, uv_tx_type,
-                        plane_bsize, &po, skip, ac, 0, rdo_type, for_rdo_use);
+                        plane_bsize, po, skip, ac, 0, rdo_type, for_rdo_use);
       assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
       tx_dist += dist;
     }
