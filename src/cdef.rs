@@ -206,8 +206,8 @@ fn adjust_strength(strength: i32, var: i32) -> i32 {
 pub fn cdef_analyze_superblock<T: Pixel>(
   in_frame: &Frame<T>,
   bc_global: &mut BlockContext,
-  sbo: &SuperBlockOffset,
-  sbo_global: &SuperBlockOffset,
+  sbo: SuperBlockOffset,
+  sbo_global: SuperBlockOffset,
   bit_depth: usize,
 ) -> CdefDirections {
   let coeff_shift = bit_depth as usize - 8;
@@ -259,7 +259,7 @@ pub fn cdef_sb_frame<T: Pixel>(fi: &FrameInvariants<T>, f: &Frame<T>) -> Frame<T
 }
 
 pub fn cdef_sb_padded_frame_copy<T: Pixel>(
-  fi: &FrameInvariants<T>, sbo: &SuperBlockOffset,
+  fi: &FrameInvariants<T>, sbo: SuperBlockOffset,
   f: &Frame<T>, pad: usize
 ) -> Frame<u16> {
   let ipad = pad as isize;
@@ -333,8 +333,8 @@ pub fn cdef_filter_superblock<T: Pixel>(
   in_frame: &Frame<u16>,
   out_frame: &mut Frame<T>,
   bc_global: &mut BlockContext,
-  sbo: &SuperBlockOffset,
-  sbo_global: &SuperBlockOffset,
+  sbo: SuperBlockOffset,
+  sbo_global: SuperBlockOffset,
   cdef_index: u8,
   cdef_dirs: &CdefDirections,
 ) {
@@ -481,8 +481,8 @@ pub fn cdef_filter_frame<T: Pixel>(fi: &FrameInvariants<T>, rec: &mut Frame<T>, 
     for fbx in 0..fb_width {
       let sbo = SuperBlockOffset { x: fbx, y: fby };
       let cdef_index = bc.at(sbo.block_offset(0, 0)).cdef_index;
-      let cdef_dirs = cdef_analyze_superblock(&cdef_frame, bc, &sbo, &sbo, fi.sequence.bit_depth);
-      cdef_filter_superblock(fi, &cdef_frame, rec, bc, &sbo, &sbo, cdef_index, &cdef_dirs);
+      let cdef_dirs = cdef_analyze_superblock(&cdef_frame, bc, sbo, sbo, fi.sequence.bit_depth);
+      cdef_filter_superblock(fi, &cdef_frame, rec, bc, sbo, sbo, cdef_index, &cdef_dirs);
     }
   }
 }

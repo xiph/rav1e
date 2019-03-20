@@ -2124,11 +2124,11 @@ fn encode_tile<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec
       // CDEF has to be decided before loop restoration, but coded after.
       // loop restoration must be decided last but coded before anything else.
       if cw.bc.cdef_coded || fi.sequence.enable_restoration {
-        rdo_loop_decision(&sbo, fi, fs, &mut cw, &mut w);
+        rdo_loop_decision(sbo, fi, fs, &mut cw, &mut w);
       }
 
       if fi.sequence.enable_restoration {
-        cw.write_lrf(&mut w, fi, &mut fs.restoration, &sbo);
+        cw.write_lrf(&mut w, fi, &mut fs.restoration, sbo);
       }
 
       // Once loop restoration is coded, we can replay the initial block bits
@@ -2136,7 +2136,7 @@ fn encode_tile<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec
 
       if cw.bc.cdef_coded {
         // CDEF index must be written in the middle, we can code it now
-        let cdef_index = cw.bc.get_cdef(&sbo);
+        let cdef_index = cw.bc.get_cdef(sbo);
         cw.write_cdef(&mut w, cdef_index, fi.cdef_bits);
         // ...and then finally code what comes after the CDEF index
         w_post_cdef.replay(&mut w);
