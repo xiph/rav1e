@@ -1126,7 +1126,7 @@ pub const LOCAL_BLOCK_MASK: usize = (1 << SUPERBLOCK_TO_BLOCK_SHIFT) - 1;
 
 /// Absolute offset in superblocks inside a plane, where a superblock is defined
 /// to be an N*N square where N = (1 << SUPERBLOCK_TO_PLANE_SHIFT).
-#[derive(Clone)]
+#[derive(Clone, Copy, Debug)]
 pub struct SuperBlockOffset {
   pub x: usize,
   pub y: usize
@@ -1134,7 +1134,7 @@ pub struct SuperBlockOffset {
 
 impl SuperBlockOffset {
   /// Offset of a block inside the current superblock.
-  pub fn block_offset(&self, block_x: usize, block_y: usize) -> BlockOffset {
+  pub fn block_offset(self, block_x: usize, block_y: usize) -> BlockOffset {
     BlockOffset {
       x: (self.x << SUPERBLOCK_TO_BLOCK_SHIFT) + block_x,
       y: (self.y << SUPERBLOCK_TO_BLOCK_SHIFT) + block_y
@@ -1142,7 +1142,7 @@ impl SuperBlockOffset {
   }
 
   /// Offset of the top-left pixel of this block.
-  pub fn plane_offset(&self, plane: &PlaneConfig) -> PlaneOffset {
+  pub fn plane_offset(self, plane: &PlaneConfig) -> PlaneOffset {
     PlaneOffset {
       x: (self.x as isize) << (SUPERBLOCK_TO_PLANE_SHIFT - plane.xdec),
       y: (self.y as isize) << (SUPERBLOCK_TO_PLANE_SHIFT - plane.ydec)
@@ -1545,7 +1545,7 @@ impl BlockContext {
     }
   }
 
-  pub fn set_cdef(&mut self, sbo: &SuperBlockOffset, cdef_index: u8) {
+  pub fn set_cdef(&mut self, sbo: SuperBlockOffset, cdef_index: u8) {
     let bo = sbo.block_offset(0, 0);
     // Checkme: Is 16 still the right block unit for 128x128 superblocks?
     let bw = cmp::min (bo.x + MAX_MIB_SIZE, self.blocks[bo.y as usize].len());
@@ -1557,7 +1557,7 @@ impl BlockContext {
     }
   }
 
-  pub fn get_cdef(&mut self, sbo: &SuperBlockOffset) -> u8 {
+  pub fn get_cdef(&mut self, sbo: SuperBlockOffset) -> u8 {
     let bo = sbo.block_offset(0, 0);
     self.blocks[bo.y][bo.x].cdef_index
   }
@@ -3041,7 +3041,7 @@ impl ContextWriter {
   }
 
   pub fn write_lrf<T: Pixel>(
-    &mut self, w: &mut dyn Writer, fi: &FrameInvariants<T>, rs: &mut RestorationState, sbo: &SuperBlockOffset
+    &mut self, w: &mut dyn Writer, fi: &FrameInvariants<T>, rs: &mut RestorationState, sbo: SuperBlockOffset
   ) {
     if !fi.allow_intrabc { // TODO: also disallow if lossless
       for pli in 0..PLANES {

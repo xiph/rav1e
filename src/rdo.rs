@@ -1221,7 +1221,7 @@ pub fn rdo_partition_decision<T: Pixel>(
   }
 }
 
-fn rdo_loop_plane_error<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<T>,
+fn rdo_loop_plane_error<T: Pixel>(sbo: SuperBlockOffset, fi: &FrameInvariants<T>,
                                   fs: &FrameState<T>, bc: &BlockContext,
                                   test: &Frame<T>, pli: usize) -> u64 {
   let sbo_0 = SuperBlockOffset { x: 0, y: 0 };
@@ -1258,7 +1258,7 @@ fn rdo_loop_plane_error<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<T
   err
 }
 
-pub fn rdo_loop_decision<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<T>,
+pub fn rdo_loop_decision<T: Pixel>(sbo: SuperBlockOffset, fi: &FrameInvariants<T>,
                                    fs: &mut FrameState<T>,
                                    cw: &mut ContextWriter, w: &mut dyn Writer) {
   assert!(fi.sequence.enable_cdef || fi.sequence.enable_restoration);
@@ -1308,7 +1308,7 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<
   // If LRF choice changed for any plane, repeat last two steps.
   let bd = fi.sequence.bit_depth;
   let cdef_data = cdef_input.as_ref().map(|input| {
-    (input, cdef_analyze_superblock(input, &mut cw.bc, &sbo_0, &sbo, bd))
+    (input, cdef_analyze_superblock(input, &mut cw.bc, sbo_0, sbo, bd))
   });
   let mut first_loop = true;
   loop {
@@ -1321,7 +1321,7 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<
           let mut cost = [0.; PLANES];
           let mut cost_acc = 0.;
           cdef_filter_superblock(fi, &cdef_input, &mut lrf_input,
-                                 &mut cw.bc, &sbo_0, &sbo, cdef_index as u8, &cdef_dirs);
+                                 &mut cw.bc, sbo_0, sbo, cdef_index as u8, &cdef_dirs);
           for pli in 0..3 {
             match best_lrf[pli] {
               RestorationFilter::None{} => {
@@ -1370,7 +1370,7 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<
       // need cdef output from best index, not just last iteration
       if let Some((cdef_input, cdef_dirs)) = cdef_data.as_ref() {
         cdef_filter_superblock(fi, &cdef_input, &mut lrf_input,
-                               &mut cw.bc, &sbo_0, &sbo, best_index as u8, &cdef_dirs);
+                               &mut cw.bc, sbo_0, sbo, best_index as u8, &cdef_dirs);
       }
 
       // Wiener LRF decision coming soon
@@ -1426,7 +1426,7 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: &SuperBlockOffset, fi: &FrameInvariants<
   }
 
   if cw.bc.cdef_coded {
-    cw.bc.set_cdef(&sbo, best_index as u8);
+    cw.bc.set_cdef(sbo, best_index as u8);
   }
 
   if fi.sequence.enable_restoration {

@@ -830,7 +830,7 @@ impl RestorationPlane {
     }
   }
 
-  fn restoration_unit_index(&self, sbo: &SuperBlockOffset) -> (usize, usize) {
+  fn restoration_unit_index(&self, sbo: SuperBlockOffset) -> (usize, usize) {
     (
       (sbo.x >> self.sb_shift).min(self.cols - 1),
       (sbo.y >> self.sb_shift).min(self.rows - 1),
@@ -847,12 +847,12 @@ impl RestorationPlane {
     )
   }
 
-  pub fn restoration_unit(&self, sbo: &SuperBlockOffset) -> &RestorationUnit {
+  pub fn restoration_unit(&self, sbo: SuperBlockOffset) -> &RestorationUnit {
     let (x, y) = self.restoration_unit_index(sbo);
     &self.units[y * self.cols + x]
   }
 
-  pub fn restoration_unit_as_mut(&mut self, sbo: &SuperBlockOffset) -> &mut RestorationUnit {
+  pub fn restoration_unit_as_mut(&mut self, sbo: SuperBlockOffset) -> &mut RestorationUnit {
     let (x, y) = self.restoration_unit_index(sbo);
     &mut self.units[y * self.cols + x]
   }
@@ -902,11 +902,11 @@ impl RestorationState {
     }
   }
 
-  pub fn restoration_unit(&self, sbo: &SuperBlockOffset, pli: usize) -> &RestorationUnit {
+  pub fn restoration_unit(&self, sbo: SuperBlockOffset, pli: usize) -> &RestorationUnit {
     self.planes[pli].restoration_unit(sbo)
   }
 
-  pub fn restoration_unit_as_mut(&mut self, sbo: &SuperBlockOffset, pli: usize) -> &mut RestorationUnit {
+  pub fn restoration_unit_as_mut(&mut self, sbo: SuperBlockOffset, pli: usize) -> &mut RestorationUnit {
     self.planes[pli].restoration_unit_as_mut(sbo)
   }
 
