@@ -197,8 +197,10 @@ fn cdef_dist_wxh_8x8<T: Pixel>(
   let dvar = (sum_d2 - ((sum_d as i64 * sum_d as i64 + 32) >> 6)) as f64;
   let sse = (sum_d2 + sum_s2 - 2 * sum_sd) as f64;
   //The two constants were tuned for CDEF, but can probably be better tuned for use in general RDO
-  let ssim_boost = (4033_f64 / 16_384_f64) * (svar + dvar + (16_384 << 2 * coeff_shift) as f64)
-    / f64::sqrt((16_265_089u64 << 4 * coeff_shift) as f64 + svar * dvar);
+  let ssim_boost =
+    (4033_f64 / 16_384_f64) *
+    (svar + dvar + (16_384 << (2 * coeff_shift)) as f64) /
+    f64::sqrt((16_265_089u64 << (4 * coeff_shift)) as f64 + svar * dvar);
   (sse * ssim_boost + 0.5_f64) as u64
 }
 

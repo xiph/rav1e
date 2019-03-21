@@ -70,10 +70,10 @@ impl RestorationFilter {
 
 #[inline(always)]
 fn sgrproj_sum_finish(ssq: i32, sum: i32, n: i32, one_over_n: i32, s: i32, bdm8: usize) -> (i32, i32) {
-  let scaled_ssq = ssq + (1 << 2*bdm8 >> 1) >> 2*bdm8;
-  let scaled_sum = sum + (1 << bdm8 >> 1) >> bdm8;
+  let scaled_ssq = (ssq + (1 << (2 * bdm8) >> 1)) >> (2 * bdm8);
+  let scaled_sum = (sum + (1 << bdm8 >> 1)) >> bdm8;
   let p = cmp::max(0, scaled_ssq*(n as i32) - scaled_sum*scaled_sum) as u32;
-  let z = p*s as u32 + (1 << SGRPROJ_MTABLE_BITS >> 1) >> SGRPROJ_MTABLE_BITS;
+  let z = (p * s as u32 + (1 << SGRPROJ_MTABLE_BITS >> 1)) >> SGRPROJ_MTABLE_BITS;
   let a:i32 = if z >= 255 {
     256
   } else if z == 0 {
@@ -81,8 +81,8 @@ fn sgrproj_sum_finish(ssq: i32, sum: i32, n: i32, one_over_n: i32, s: i32, bdm8:
   } else {
     (((z << SGRPROJ_SGR_BITS) + z/2) / (z+1)) as i32
   };
-  let b = ((1 << SGRPROJ_SGR_BITS) - a ) * sum * one_over_n;
-  (a, b + (1 << SGRPROJ_RECIP_BITS >> 1) >> SGRPROJ_RECIP_BITS)
+  let b = ((1 << SGRPROJ_SGR_BITS) - a) * sum * one_over_n;
+  (a, (b + (1 << SGRPROJ_RECIP_BITS >> 1)) >> SGRPROJ_RECIP_BITS)
 }
 
 // The addressing below is a bit confusing, made worse by LRF's odd
@@ -372,7 +372,7 @@ fn sgrproj_box_ab_r2<T: Pixel>(af: &mut[i32; 64+2],
     // boundary1 is the point where we're guaranteed all our y
     // addressing will be both in the stripe and in cdeffed storage
     // make even and round up
-    let boundary1 = (cmp::max(3, 3 - cdeffed.y - stripe_y) + 1 >> 1 << 1) as usize;
+    let boundary1 = ((cmp::max(3, 3 - cdeffed.y - stripe_y) + 1) >> 1 << 1) as usize;
     // boundary 2 is when we have to bounds check along the bottom of
     // the stripe or bottom of storage
     // must be even, rounding of +1 cancels fencepost of -1
@@ -432,7 +432,7 @@ fn sgrproj_box_f_r1<T: Pixel>(af: &[&[i32; 64+2]; 3], bf: &[&[i32; 64+2]; 3], f:
       3 * (bf[0][i] + bf[2][i]   + bf[0][i+2] + bf[2][i+2]) +
       4 * (bf[1][i] + bf[0][i+1] + bf[1][i+1] + bf[2][i+1] + bf[1][i+2]);
     let v = a * i32::cast_from(cdeffed.p(x, (y + i as isize) as usize)) + b;
-    f[i as usize] = v + (1 << shift >> 1) >> shift;
+    f[i as usize] = (v + (1 << shift >> 1)) >> shift;
   }
 }
 
@@ -454,9 +454,9 @@ fn sgrproj_box_f_r2<T: Pixel>(af: &[&[i32; 64+2]; 3], bf: &[&[i32; 64+2]; 3], f:
       5 * (bf[0][i+2] + bf[2][i+2]) +
       6 * (bf[1][i+2]);
     let v = (a + ao) * i32::cast_from(cdeffed.p(x, (y+i as isize) as usize)) + b + bo;
-    f[i as usize] = v + (1 << shift >> 1) >> shift;
+    f[i as usize] = (v + (1 << shift >> 1)) >> shift;
     let vo = ao * i32::cast_from(cdeffed.p(x, (y + i as isize) as usize + 1)) + bo;
-    f[i as usize + 1] = vo + (1 << shifto >> 1) >> shifto;
+    f[i as usize + 1] = (vo + (1 << shifto >> 1)) >> shifto;
   }
 }
 
@@ -543,7 +543,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvarian
     for yi in outstart..stripe_h as usize {
       let u = i32::cast_from(cdeffed.p(xi, yi)) << SGRPROJ_RST_BITS;
       let v = w0*f_r2[yi] + w1*u + w2*f_r1[yi];
-      let s = v + (1 << SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS >> 1) >> SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS;
+      let s = (v + (1 << (SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS) >> 1)) >> (SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS);
       out[yi][xi] = T::cast_from(clamp(s, 0, (1 << bit_depth) - 1));
     }
   }
@@ -699,8 +699,8 @@ fn wiener_stripe_filter<T: Pixel>(coeffs: [[i8; 3]; 2], fi: &FrameInvariants<T>,
   let bit_depth = fi.sequence.bit_depth;
   let round_h = if bit_depth == 12 {5} else {3};
   let round_v = if bit_depth == 12 {9} else {11};
-  let offset = 1 << bit_depth + WIENER_BITS - round_h - 1;
-  let limit = (1 << bit_depth + 1 + WIENER_BITS - round_h) - 1;
+  let offset = 1 << (bit_depth + WIENER_BITS - round_h - 1);
+  let limit = (1 << (bit_depth + 1 + WIENER_BITS - round_h)) - 1;
 
   let mut work: [i32; MAX_SB_SIZE+7] = [0; MAX_SB_SIZE+7];
   let vfilter: [i32; 7] = [ coeffs[0][0] as i32,
@@ -761,7 +761,7 @@ fn wiener_stripe_filter<T: Pixel>(coeffs: [[i8; 3]; 2], fi: &FrameInvariants<T>,
         acc += hfilter[i as usize] * i32::cast_from(src_plane.p(crop_w - 1, ly));
       }
 
-      acc = acc + (1 << round_h >> 1) >> round_h;
+      acc = (acc + (1 << round_h >> 1)) >> round_h;
       work[(yi-stripe_y+3) as usize] = clamp(acc, -offset, limit-offset);
     }
 
@@ -770,7 +770,7 @@ fn wiener_stripe_filter<T: Pixel>(coeffs: [[i8; 3]; 2], fi: &FrameInvariants<T>,
       for (i,src) in (0..7).zip(work[wi..wi+7].iter_mut()) {
         acc += vfilter[i] * *src;
       }
-      *dst = T::cast_from(clamp(acc + (1 << round_v >> 1) >> round_v, 0, (1 << bit_depth) - 1));
+      *dst = T::cast_from(clamp((acc + (1 << round_v >> 1)) >> round_v, 0, (1 << bit_depth) - 1));
     }
   }
 }
@@ -926,12 +926,12 @@ impl RestorationState {
       let rp = &self.planes[pli];
       let xdec = out.planes[pli].cfg.xdec;
       let ydec = out.planes[pli].cfg.ydec;
-      let crop_w = fi.width + (1 << xdec >> 1) >> xdec;
-      let crop_h = fi.height + (1 << ydec >> 1) >> ydec;
+      let crop_w = (fi.width + (1 << xdec >> 1)) >> xdec;
+      let crop_h = (fi.height + (1 << ydec >> 1)) >> ydec;
 
       for si in 0..stripe_n {
         // stripe y pixel locations must be able to overspan the frame
-        let stripe_start_y = si as isize * 64 - 8 >> ydec;
+        let stripe_start_y = (si as isize * 64 - 8) >> ydec;
         let stripe_size = 64 >> ydec; // one past, unlike spec
 
         // horizontally, go rdu-by-rdu

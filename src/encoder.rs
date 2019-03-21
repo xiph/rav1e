@@ -821,7 +821,7 @@ impl<T: Pixel> FrameInvariants<T> {
       self.ac_delta_q[pi] = 0;
     }
     self.lambda =
-      qps.lambda * ((1 << 2 * (self.sequence.bit_depth - 8)) as f64);
+      qps.lambda * ((1 << (2 * (self.sequence.bit_depth - 8))) as f64);
     self.me_lambda = self.lambda.sqrt();
   }
 }
