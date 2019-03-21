@@ -2533,7 +2533,7 @@ impl ContextWriter {
                                            &mut newmv_count, bsize, is_compound);
       col_match |= found_match;
     }
-    if has_tr(bo, bsize) {
+    if has_tr(bo, bsize) && bo.y > 0 {
       let found_match = self.scan_blk_mbmi(bo.with_offset(target_n4_w as isize, -1), ref_frames, mv_stack,
                                            &mut newmv_count, is_compound);
       row_match |= found_match;
@@ -2546,7 +2546,7 @@ impl ContextWriter {
     /* Scan the second outer area. */
     let mut far_newmv_count: usize = 0; // won't be used
 
-    let found_match = self.scan_blk_mbmi(
+    let found_match = bo.x > 0 && bo.y > 0 && self.scan_blk_mbmi(
       bo.with_offset(-1, -1), ref_frames, mv_stack, &mut far_newmv_count, is_compound
     );
     row_match |= found_match;
