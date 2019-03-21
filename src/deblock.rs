@@ -224,7 +224,7 @@ fn filter_narrow4_4(
     let test = clamp(base + 3, -128 << shift, (128 << shift) - 1) >> 3;
     filter2 == test
   });
-  let filter3 = filter1 + 1 >> 1;
+  let filter3 = (filter1 + 1) >> 1;
   [
     clamp(p1 + filter3, 0, (256 << shift) - 1),
     clamp(p0 + filter2, 0, (256 << shift) - 1),
@@ -256,10 +256,10 @@ fn filter_wide6_4(
   p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32
 ) -> [i32; 4] {
   [
-    p2*3 + p1*2 + p0*2 + q0   + (1<<2) >> 3,
-    p2   + p1*2 + p0*2 + q0*2 + q1   + (1<<2) >> 3,
-           p1   + p0*2 + q0*2 + q1*2 + q2   + (1<<2) >> 3,
-                  p0   + q0*2 + q1*2 + q2*3 + (1<<2) >> 3
+    (p2*3 + p1*2 + p0*2 + q0   + (1<<2)) >> 3,
+    (p2   + p1*2 + p0*2 + q0*2 + q1   + (1<<2)) >> 3,
+           (p1   + p0*2 + q0*2 + q1*2 + q2   + (1<<2)) >> 3,
+                  (p0   + q0*2 + q1*2 + q2*3 + (1<<2)) >> 3
   ]
 }
 
@@ -269,12 +269,12 @@ fn filter_wide8_6(
   p3: i32, p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32, q3: i32
 ) -> [i32; 6] {
   [
-    p3*3 + p2*2 + p1   + p0   + q0   + (1<<2) >> 3,
-    p3*2 + p2   + p1*2 + p0   + q0   + q1   + (1<<2) >> 3,
-    p3   + p2   + p1   + p0*2 + q0   + q1   + q2   +(1<<2) >> 3,
-           p2   + p1   + p0   + q0*2 + q1   + q2   + q3   + (1<<2) >> 3,
-                  p1   + p0   + q0   + q1*2 + q2   + q3*2 + (1<<2) >> 3,
-                         p0   + q0   + q1   + q2*2 + q3*3 + (1<<2) >> 3
+    (p3*3 + p2*2 + p1   + p0   + q0   + (1<<2)) >> 3,
+    (p3*2 + p2   + p1*2 + p0   + q0   + q1   + (1<<2)) >> 3,
+    (p3   + p2   + p1   + p0*2 + q0   + q1   + q2   +(1<<2)) >> 3,
+           (p2   + p1   + p0   + q0*2 + q1   + q2   + q3   + (1<<2)) >> 3,
+                  (p1   + p0   + q0   + q1*2 + q2   + q3*2 + (1<<2)) >> 3,
+                         (p0   + q0   + q1   + q2*2 + q3*3 + (1<<2)) >> 3
   ]
 }
 
@@ -294,18 +294,18 @@ fn filter_wide14_12(
   q1: i32, q2: i32, q3: i32, q4: i32, q5: i32, q6: i32
 ) -> [i32; 12] {
   [
-    p6*7 + p5*2 + p4*2 + p3   + p2   + p1   + p0   + q0   + (1<<3) >> 4,
-    p6*5 + p5*2 + p4*2 + p3*2 + p2   + p1   + p0   + q0   + q1   + (1<<3) >> 4,
-    p6*4 + p5   + p4*2 + p3*2 + p2*2 + p1   + p0   + q0   + q1   + q2   + (1<<3) >> 4,
-    p6*3 + p5   + p4   + p3*2 + p2*2 + p1*2 + p0   + q0   + q1   + q2   + q3   + (1<<3) >> 4,
-    p6*2 + p5   + p4   + p3   + p2*2 + p1*2 + p0*2 + q0   + q1   + q2   + q3   + q4   + (1<<3) >> 4,
-    p6   + p5   + p4   + p3   + p2   + p1*2 + p0*2 + q0*2 + q1   + q2   + q3   + q4   + q5   + (1<<3) >> 4,
-           p5   + p4   + p3   + p2   + p1   + p0*2 + q0*2 + q1*2 + q2   + q3   + q4   + q5   + q6 + (1<<3) >> 4,
-                  p4   + p3   + p2   + p1   + p0   + q0*2 + q1*2 + q2*2 + q3   + q4   + q5   + q6*2 + (1<<3) >> 4,
-                         p3   + p2   + p1   + p0   + q0   + q1*2 + q2*2 + q3*2 + q4   + q5   + q6*3 + (1<<3) >> 4,
-                                p2   + p1   + p0   + q0   + q1   + q2*2 + q3*2 + q4*2 + q5   + q6*4 + (1<<3) >> 4,
-                                       p1   + p0   + q0   + q1   + q2   + q3*2 + q4*2 + q5*2 + q6*5 + (1<<3) >> 4,
-                                              p0   + q0   + q1   + q2   + q3   + q4*2 + q5*2 + q6*7 + (1<<3) >> 4
+    (p6*7 + p5*2 + p4*2 + p3   + p2   + p1   + p0   + q0   + (1<<3)) >> 4,
+    (p6*5 + p5*2 + p4*2 + p3*2 + p2   + p1   + p0   + q0   + q1   + (1<<3)) >> 4,
+    (p6*4 + p5   + p4*2 + p3*2 + p2*2 + p1   + p0   + q0   + q1   + q2   + (1<<3)) >> 4,
+    (p6*3 + p5   + p4   + p3*2 + p2*2 + p1*2 + p0   + q0   + q1   + q2   + q3   + (1<<3)) >> 4,
+    (p6*2 + p5   + p4   + p3   + p2*2 + p1*2 + p0*2 + q0   + q1   + q2   + q3   + q4   + (1<<3)) >> 4,
+    (p6   + p5   + p4   + p3   + p2   + p1*2 + p0*2 + q0*2 + q1   + q2   + q3   + q4   + q5   + (1<<3)) >> 4,
+           (p5   + p4   + p3   + p2   + p1   + p0*2 + q0*2 + q1*2 + q2   + q3   + q4   + q5   + q6 + (1<<3)) >> 4,
+                  (p4   + p3   + p2   + p1   + p0   + q0*2 + q1*2 + q2*2 + q3   + q4   + q5   + q6*2 + (1<<3)) >> 4,
+                         (p3   + p2   + p1   + p0   + q0   + q1*2 + q2*2 + q3*2 + q4   + q5   + q6*3 + (1<<3)) >> 4,
+                                (p2   + p1   + p0   + q0   + q1   + q2*2 + q3*2 + q4*2 + q5   + q6*4 + (1<<3)) >> 4,
+                                       (p1   + p0   + q0   + q1   + q2   + q3*2 + q4*2 + q5*2 + q6*5 + (1<<3)) >> 4,
+                                              (p0   + q0   + q1   + q2   + q3   + q4*2 + q5*2 + q6*7 + (1<<3)) >> 4
   ]
 }
 
@@ -343,15 +343,15 @@ fn _level_to_limit(level: i32, shift: usize) -> i32 {
 }
 
 fn limit_to_level(limit: i32, shift: usize) -> i32 {
-  limit + (1 << shift) - 1 >> shift
+  (limit + (1 << shift) - 1) >> shift
 }
 
 fn _level_to_blimit(level: i32, shift: usize) -> i32 {
-  3 * level + 4 << shift
+  (3 * level + 4) << shift
 }
 
 fn blimit_to_level(blimit: i32, shift: usize) -> i32 {
-  ((blimit + (1 << shift) - 1 >> shift) - 2) / 3
+  (((blimit + (1 << shift) - 1) >> shift) - 2) / 3
 }
 
 fn _level_to_thresh(level: i32, shift: usize) -> i32 {
@@ -359,7 +359,7 @@ fn _level_to_thresh(level: i32, shift: usize) -> i32 {
 }
 
 fn thresh_to_level(thresh: i32, shift: usize) -> i32 {
-  thresh + (1 << shift) - 1 >> shift << 4
+  (thresh + (1 << shift) - 1) >> shift << 4
 }
 
 fn nhev4(p1: i32, p0: i32, q0: i32, q1: i32, shift: usize) -> usize {
@@ -506,7 +506,7 @@ fn deblock_size6_inner(
   bd: usize,
 ) -> Option<[i32; 4]> {
   if mask6(p2, p1, p0, q0, q1, q2, bd - 8) <= level {
-    let flat = 1 << bd - 8;
+    let flat = 1 << (bd - 8);
     let x = if flat6(p2, p1, p0, q0, q1, q2) <= flat {
       filter_wide6_4(p2, p1, p0, q0, q1, q2)
     } else if nhev4(p1, p0, q0, q1, bd - 8) <= level {
@@ -569,7 +569,7 @@ fn sse_size6<T: Pixel>(
   src_pitch: usize,
   bd: usize
 ) {
-  let flat = 1 << bd - 8;
+  let flat = 1 << (bd - 8);
   for y in 0..4 {
     let p = &rec[y]; // six taps
     let a = &src[y][src_pitch..]; // four pixels to compare so offset one forward
@@ -675,7 +675,7 @@ fn deblock_size8_inner (
   bd: usize,
 ) -> Option<[i32; 6]> {
   if mask8(p3, p2, p1, p0, q0, q1, q2, q3, bd - 8) <= level {
-    let flat = 1 << bd - 8;
+    let flat = 1 << (bd - 8);
     let x = if flat8(p3, p2, p1, p0, q0, q1, q2, q3) <= flat {
       filter_wide8_6(p3, p2, p1, p0, q0, q1, q2, q3)
     } else if nhev4(p1, p0, q0, q1, bd - 8) <= level {
@@ -742,7 +742,7 @@ fn sse_size8<T: Pixel>(
   src_pitch: usize,
   bd: usize
 ) {
-  let flat = 1 << bd - 8;
+  let flat = 1 << (bd - 8);
   for y in 0..4 {
     let p = &rec[y]; // eight taps
     let a = &src[y][src_pitch..]; // six pixels to compare so offset one forward
@@ -827,7 +827,7 @@ fn deblock_size14_inner(
 ) -> Option<[i32; 12]> {
   // 'mask' test
   if mask8(p3, p2, p1, p0, q0, q1, q2, q3, bd - 8) <= level {
-    let flat = 1 << bd - 8;
+    let flat = 1 << (bd - 8);
     // inner flatness test
     let x = if flat8(p3, p2, p1, p0, q0, q1, q2, q3) <= flat {
       // outer flatness test
@@ -915,7 +915,7 @@ fn sse_size14<T: Pixel>(
   src_pitch: usize,
   bd: usize
 ) {
-  let flat = 1 << bd - 8;
+  let flat = 1 << (bd - 8);
   for y in 0..4 {
     let p = &rec[y]; // 14 taps
     let a = &src[y][src_pitch..]; // 12 pixels to compare so offset one forward
@@ -1450,21 +1450,21 @@ pub fn deblock_filter_optimize<T: Pixel>(
       match fi.sequence.bit_depth {
         8 =>
           if fi.frame_type == FrameType::KEY {
-            q * 17563 - 421_574 + (1 << 18 >> 1) >> 18
+            (q * 17563 - 421_574 + (1 << 18 >> 1)) >> 18
           } else {
-            q * 6017 + 650_707 + (1 << 18 >> 1) >> 18
+            (q * 6017 + 650_707 + (1 << 18 >> 1)) >> 18
           },
         10 =>
           if fi.frame_type == FrameType::KEY {
-            (q * 20723 + 4_060_632 + (1 << 20 >> 1) >> 20) - 4
+            ((q * 20723 + 4_060_632 + (1 << 20 >> 1)) >> 20) - 4
           } else {
-            q * 20723 + 4_060_632 + (1 << 20 >> 1) >> 20
+            (q * 20723 + 4_060_632 + (1 << 20 >> 1)) >> 20
           },
         12 =>
           if fi.frame_type == FrameType::KEY {
-            (q * 20723 + 16_242_526 + (1 << 22 >> 1) >> 22) - 4
+            ((q * 20723 + 16_242_526 + (1 << 22 >> 1)) >> 22) - 4
           } else {
-            q * 20723 + 16_242_526 + (1 << 22 >> 1) >> 22
+            (q * 20723 + 16_242_526 + (1 << 22 >> 1)) >> 22
           },
         _ => {
           assert!(false);

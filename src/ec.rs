@@ -375,8 +375,15 @@ impl<S> WriterBase<S> {
       }
     }
   }
+
   fn recenter(r: u32, v: u32) -> u32 {
-    if v > (r << 1) {v} else if v >= r {v - r << 1} else {(r - v << 1) - 1}
+    if v > (r << 1) {
+      v
+    } else if v >= r {
+      (v - r) << 1
+    } else {
+      ((r - v) << 1) - 1
+    }
   }
 
   #[cfg(debug)]
@@ -543,17 +550,16 @@ where
     debug_assert!(32768 <= self.rng);
     let rng = (self.rng >> 8) as u32;
     let fh = cdf[s as usize] as u32 >> EC_PROB_SHIFT;
-    let r =
-      if s > 0 {
-        let fl = cdf[s as usize - 1] as u32 >> EC_PROB_SHIFT;
-        (rng * fl >> 7 - EC_PROB_SHIFT) - (rng * fh >> 7 - EC_PROB_SHIFT) + EC_MIN_PROB
-      } else {
-        let nms1 = cdf.len() as u32 - s - 1;
-        self.rng as u32 - (rng * fh >> 7 - EC_PROB_SHIFT) - nms1 * EC_MIN_PROB
-      };
+    let r = if s > 0 {
+      let fl = cdf[s as usize - 1] as u32 >> EC_PROB_SHIFT;
+      ((rng * fl) >> (7 - EC_PROB_SHIFT)) - ((rng * fh) >> (7 - EC_PROB_SHIFT)) + EC_MIN_PROB
+    } else {
+      let nms1 = cdf.len() as u32 - s - 1;
+      self.rng as u32 - ((rng * fh) >> (7 - EC_PROB_SHIFT)) - nms1 * EC_MIN_PROB
+    };
 
     // The 9 here counteracts the offset of -9 baked into cnt.  Don't include a termination bit.
-    let pre = Self::frac_compute((self.cnt + 9) as u32, self.rng as u32);      
+    let pre = Self::frac_compute((self.cnt + 9) as u32, self.rng as u32);
     let d = 16 - r.ilog();
     let mut c = self.cnt;
     let mut sh = c + (d as i16);
@@ -598,10 +604,10 @@ where
       let l = msb(n as i32) as u8 + 1;
       let m = (1 << l) - n;
       if v < m {
-        self.literal(l-1, v);
+        self.literal(l - 1, v);
       } else {
-        self.literal(l-1, m + (v-m >> 1));
-        self.literal(1, (v-m) & 1);
+        self.literal(l - 1, m + ((v - m) >> 1));
+        self.literal(1, (v - m) & 1);
       }
     }
   }
@@ -613,10 +619,8 @@ where
     if n > 1 {
       let l = (msb(n as i32) + 1) as u32;
       let m = (1 << l) - n;
-      if v < m {
-        bits += l-1 << OD_BITRES;
-      } else {
-        bits += l-1 << OD_BITRES;
+      bits += (l - 1) << OD_BITRES;
+      if v >= m {
         bits += 1 << OD_BITRES;
       }
     }

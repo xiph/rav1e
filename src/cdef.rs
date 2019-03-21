@@ -195,8 +195,8 @@ unsafe fn cdef_filter_block<T: Pixel>(
 
 // We use the variance of an 8x8 block to adjust the effective filter strength.
 fn adjust_strength(strength: i32, var: i32) -> i32 {
-  let i = if (var >> 6) != 0 {cmp::min(msb(var >> 6), 12)} else {0};
-  if var!=0 {strength * (4 + i) + 8 >> 4} else {0}
+  let i = if (var >> 6) != 0 { cmp::min(msb(var >> 6), 12) } else { 0 };
+  if var != 0 { (strength * (4 + i) + 8) >> 4 } else { 0 }
 }
 
 // For convenience of use alongside cdef_filter_superblock, we assume
@@ -395,10 +395,10 @@ pub fn cdef_filter_superblock<T: Pixel>(
             unsafe {
               let xsize = 8 >> xdec;
               let ysize = 8 >> ydec;
-              assert!(out_slice.rows_iter().len() >= (8 * by >> ydec) + ysize);
-              assert!(in_slice.rows_iter().len() >= (8 * by >> ydec) + ysize + 4);
-              let dst = out_slice[8 * by >> ydec][8 * bx >> xdec..].as_mut_ptr();
-              let input = in_slice[8 * by >> ydec][8 * bx >> xdec..].as_ptr();
+              assert!(out_slice.rows_iter().len() >= ((8 * by) >> ydec) + ysize);
+              assert!(in_slice.rows_iter().len() >= ((8 * by) >> ydec) + ysize + 4);
+              let dst = out_slice[(8 * by) >> ydec][(8 * bx) >> xdec..].as_mut_ptr();
+              let input = in_slice[(8 * by) >> ydec][(8 * bx) >> xdec..].as_ptr();
               cdef_filter_block(dst,
                                 out_stride as isize,
                                 input,
@@ -429,8 +429,8 @@ pub fn cdef_filter_frame<T: Pixel>(fi: &FrameInvariants<T>, rec: &mut Frame<T>, 
   // Construct a padded copy of the reconstructed frame.
   let mut padded_px: [[usize; 2]; 3] = [[0; 2]; 3];
   for p in 0..3 {
-    padded_px[p][0] =  (fb_width*64 >> rec.planes[p].cfg.xdec) + 4;
-    padded_px[p][1] =  (fb_height*64 >> rec.planes[p].cfg.ydec) + 4;
+    padded_px[p][0] = ((fb_width * 64) >> rec.planes[p].cfg.xdec) + 4;
+    padded_px[p][1] = ((fb_height * 64) >> rec.planes[p].cfg.ydec) + 4;
   }
   let mut cdef_frame: Frame<u16> = Frame {
     planes: [

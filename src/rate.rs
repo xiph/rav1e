@@ -285,7 +285,7 @@ pub struct IIRBessel2 {
 // The return value is 5.12.
 // TODO: Mark const once we can use local variables in a const function.
 fn warp_alpha(alpha: i32) -> i32 {
-  let i = (alpha*36 >> 24).min(16);
+  let i = ((alpha*36) >> 24).min(16);
   let t0 = ROUGH_TAN_LOOKUP[i as usize];
   let t1 = ROUGH_TAN_LOOKUP[i as usize + 1];
   let d = alpha*36 - (i << 24);
@@ -465,7 +465,7 @@ impl RCState {
     //  errors in the worst case.
     // The 256 frame maximum means we'll require 8-10 seconds of pre-buffering
     // at 24-30 fps, which is not unreasonable.
-    let reservoir_frame_delay = clamp(max_key_frame_interval*3 >> 1, 12, 256);
+    let reservoir_frame_delay = clamp((max_key_frame_interval*3) >> 1, 12, 256);
     // TODO: What are the limits on these?
     let npixels = (frame_width as i64)*(frame_height as i64);
     // Insane framerates or frame sizes mean insane bitrates.
