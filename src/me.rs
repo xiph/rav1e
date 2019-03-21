@@ -132,15 +132,11 @@ mod nasm {
     plane_org: &PlaneSlice<'_, u8>, plane_ref: &PlaneSlice<'_, u8>, blk_h: usize,
     blk_w: usize
   ) -> u32 {
-    // FIXME unaligned blocks coming from hres/qres ME search
-    let ptr_align_log2 = (plane_org.as_ptr() as usize).trailing_zeros() as usize;
-    // The largest unaligned-safe function is for 8x8
-    let ptr_align = 1 << ptr_align_log2.max(3);
     let mut sum = 0 as u32;
     let org_stride = plane_org.plane.cfg.stride as libc::ptrdiff_t;
     let ref_stride = plane_ref.plane.cfg.stride as libc::ptrdiff_t;
     assert!(blk_h >= 4 && blk_w >= 4);
-    let step_size = blk_h.min(blk_w).min(ptr_align);
+    let step_size = blk_h.min(blk_w);
     let func = match step_size.ilog() {
       3 => rav1e_sad4x4_sse2,
       4 => rav1e_sad8x8_sse2,
