@@ -2810,12 +2810,20 @@ impl ContextWriter {
   fn get_comp_mode_ctx(&self, bo: BlockOffset) -> usize {
     let avail_left = bo.x > 0;
     let avail_up = bo.y > 0;
-    let bo_left = bo.with_offset(-1, 0);
-    let bo_up = bo.with_offset(0, -1);
-    let above0 = if avail_up { self.bc.blocks[bo_up].ref_frames[0] } else { INTRA_FRAME };
-    let above1 = if avail_up { self.bc.blocks[bo_up].ref_frames[1] } else { NONE_FRAME };
-    let left0 = if avail_left { self.bc.blocks[bo_left].ref_frames[0] } else { INTRA_FRAME };
-    let left1 = if avail_left { self.bc.blocks[bo_left].ref_frames[1] } else { NONE_FRAME };
+    let (left0, left1) = if avail_left {
+      let bo_left = bo.with_offset(-1, 0);
+      let ref_frames = &self.bc.blocks[bo_left].ref_frames;
+      (ref_frames[0], ref_frames[1])
+    } else {
+      (INTRA_FRAME, NONE_FRAME)
+    };
+    let (above0, above1) = if avail_up {
+      let bo_up = bo.with_offset(0, -1);
+      let ref_frames = &self.bc.blocks[bo_up].ref_frames;
+      (ref_frames[0], ref_frames[1])
+    } else {
+      (INTRA_FRAME, NONE_FRAME)
+    };
     let left_single = left1 == NONE_FRAME;
     let above_single = above1 == NONE_FRAME;
     let left_intra = left0 == INTRA_FRAME;
@@ -2857,12 +2865,20 @@ impl ContextWriter {
 
     let avail_left = bo.x > 0;
     let avail_up = bo.y > 0;
-    let bo_left = bo.with_offset(-1, 0);
-    let bo_up = bo.with_offset(0, -1);
-    let above0 = if avail_up { self.bc.blocks[bo_up].ref_frames[0] } else { INTRA_FRAME };
-    let above1 = if avail_up { self.bc.blocks[bo_up].ref_frames[1] } else { NONE_FRAME };
-    let left0 = if avail_left { self.bc.blocks[bo_left].ref_frames[0] } else { INTRA_FRAME };
-    let left1 = if avail_left { self.bc.blocks[bo_left].ref_frames[1] } else { NONE_FRAME };
+    let (left0, left1) = if avail_left {
+      let bo_left = bo.with_offset(-1, 0);
+      let ref_frames = &self.bc.blocks[bo_left].ref_frames;
+      (ref_frames[0], ref_frames[1])
+    } else {
+      (INTRA_FRAME, NONE_FRAME)
+    };
+    let (above0, above1) = if avail_up {
+      let bo_up = bo.with_offset(0, -1);
+      let ref_frames = &self.bc.blocks[bo_up].ref_frames;
+      (ref_frames[0], ref_frames[1])
+    } else {
+      (INTRA_FRAME, NONE_FRAME)
+    };
     let left_single = left1 == NONE_FRAME;
     let above_single = above1 == NONE_FRAME;
     let left_intra = left0 == INTRA_FRAME;
