@@ -350,8 +350,7 @@ pub trait MotionEstimation {
     bo: BlockOffset, lambda: u32, pmv: [MotionVector; 2],
     mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
     blk_w: usize, blk_h: usize, best_mv: &mut MotionVector,
-    lowest_cost: &mut u64, ref_frame: usize,
-    tmp_plane: Plane<T>, bsize: BlockSize
+    lowest_cost: &mut u64, ref_frame: usize, bsize: BlockSize
   );
 
   fn motion_estimation<T: Pixel> (
@@ -379,11 +378,9 @@ pub trait MotionEstimation {
                            mvx_min, mvx_max, mvy_min, mvy_max, blk_w, blk_h,
                            &mut best_mv, &mut lowest_cost, ref_frame);
 
-        let tmp_plane = Plane::new(blk_w, blk_h, 0, 0, 0, 0);
         Self::sub_pixel_me(fi, fs, rec, bo, lambda, pmv,
                            mvx_min, mvx_max, mvy_min, mvy_max, blk_w, blk_h,
-                           &mut best_mv, &mut lowest_cost, ref_frame,
-                           tmp_plane, bsize);
+                           &mut best_mv, &mut lowest_cost, ref_frame, bsize);
 
         best_mv
       }
@@ -486,10 +483,11 @@ impl MotionEstimation for DiamondSearch {
     pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize,
     mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize,
     best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: usize,
-    tmp_plane: Plane<T>, _bsize: BlockSize
+    _bsize: BlockSize
   )
   {
     let predictors = vec![*best_mv];
+    let tmp_plane = Plane::new(blk_w, blk_h, 0, 0, 0, 0);
     diamond_me_search(
       fi,
       bo.to_luma_plane_offset(),
@@ -596,7 +594,7 @@ impl MotionEstimation for FullSearch {
     pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize,
     mvy_min: isize, mvy_max: isize, _blk_w: usize, _blk_h: usize,
     best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: usize,
-    mut tmp_plane: Plane<T>, bsize: BlockSize
+    bsize: BlockSize
   )
   {
     telescopic_subpel_search(
@@ -611,7 +609,6 @@ impl MotionEstimation for FullSearch {
       mvx_max,
       mvy_min,
       mvy_max,
-      &mut tmp_plane,
       best_mv,
       lowest_cost
     );
@@ -815,7 +812,7 @@ fn telescopic_subpel_search<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &FrameState<T>, bsize: BlockSize, po: PlaneOffset,
   lambda: u32, ref_frame: usize, pmv: [MotionVector; 2],
   mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
-  tmp_plane: &mut Plane<T>, best_mv: &mut MotionVector, lowest_cost: &mut u64
+  best_mv: &mut MotionVector, lowest_cost: &mut u64
 ) {
   let blk_w = bsize.width();
   let blk_h = bsize.height();
@@ -826,6 +823,8 @@ fn telescopic_subpel_search<T: Pixel>(
   if fi.allow_high_precision_mv {
     steps.push(1);
   }
+
+  let mut tmp_plane = Plane::new(blk_w, blk_h, 0, 0, 0, 0);
 
   for step in steps {
     let center_mv_h = *best_mv;
