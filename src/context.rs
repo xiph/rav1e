@@ -1245,6 +1245,8 @@ impl BlockOffset {
   pub fn with_offset(self, col_offset: isize, row_offset: isize) -> BlockOffset {
     let x = self.x as isize + col_offset;
     let y = self.y as isize + row_offset;
+    debug_assert!(x >= 0);
+    debug_assert!(y >= 0);
 
     BlockOffset {
       x: x as usize,
