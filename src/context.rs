@@ -1175,6 +1175,15 @@ impl BlockOffset {
     }
   }
 
+  /// Convert to plane offset without decimation
+  #[inline]
+  pub fn to_luma_plane_offset(self) -> PlaneOffset {
+    PlaneOffset {
+      x: (self.x as isize) << BLOCK_TO_PLANE_SHIFT,
+      y: (self.y as isize) << BLOCK_TO_PLANE_SHIFT,
+    }
+  }
+
   pub fn y_in_sb(self) -> usize {
     self.y % MAX_MIB_SIZE
   }
