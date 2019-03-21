@@ -472,7 +472,7 @@ impl MotionEstimation for DiamondSearch {
       blk_h,
       best_mv,
       lowest_cost,
-      &mut None,
+      false,
       ref_frame
     );
   }
@@ -487,7 +487,6 @@ impl MotionEstimation for DiamondSearch {
   )
   {
     let predictors = vec![*best_mv];
-    let tmp_plane = Plane::new(blk_w, blk_h, 0, 0, 0, 0);
     diamond_me_search(
       fi,
       bo.to_luma_plane_offset(),
@@ -505,7 +504,7 @@ impl MotionEstimation for DiamondSearch {
       blk_h,
       best_mv,
       lowest_cost,
-      &mut Some(tmp_plane),
+      true,
       ref_frame
     );
   }
@@ -542,7 +541,7 @@ impl MotionEstimation for DiamondSearch {
           mvx_min >> 1, mvx_max >> 1, mvy_min >> 1, mvy_max >> 1,
           blk_w >> 1, blk_h >> 1,
           best_mv, lowest_cost,
-          &mut None, 0
+          false, 0
         );
       }
     }
@@ -687,16 +686,20 @@ fn diamond_me_search<T: Pixel>(
   mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
   blk_w: usize, blk_h: usize,
   center_mv: &mut MotionVector, center_mv_cost: &mut u64,
-  tmp_plane_opt: &mut Option<Plane<T>>, ref_frame: usize)
+  subpixel: bool, ref_frame: usize)
 {
   let diamond_pattern = [(1i16, 0i16), (0, 1), (-1, 0), (0, -1)];
-  let (mut diamond_radius, diamond_radius_end) = {
-    if tmp_plane_opt.is_some() {
+  let (mut diamond_radius, diamond_radius_end, mut tmp_plane_opt) = {
+    if subpixel {
       // Sub-pixel motion estimation
-      (4i16, if fi.allow_high_precision_mv {1i16} else {2i16})
+      (
+        4i16,
+        if fi.allow_high_precision_mv {1i16} else {2i16},
+        Some(Plane::new(blk_w, blk_h, 0, 0, 0, 0)),
+      )
     } else {
       // Full pixel motion estimation
-      (16i16, 8i16)
+      (16i16, 8i16, None)
     }
   };
 
@@ -704,7 +707,7 @@ fn diamond_me_search<T: Pixel>(
     fi, po, p_org, p_ref, &predictors,
     bit_depth, pmv, lambda, mvx_min, mvx_max, mvy_min, mvy_max,
     blk_w, blk_h, center_mv, center_mv_cost,
-    tmp_plane_opt, ref_frame);
+    &mut tmp_plane_opt, ref_frame);
 
   loop {
     let mut best_diamond_rd_cost = std::u64::MAX;
@@ -720,7 +723,7 @@ fn diamond_me_search<T: Pixel>(
         let rd_cost = get_mv_rd_cost(
           fi, po, p_org, p_ref, bit_depth,
           pmv, lambda, mvx_min, mvx_max, mvy_min, mvy_max,
-          blk_w, blk_h, cand_mv, tmp_plane_opt, ref_frame);
+          blk_w, blk_h, cand_mv, &mut tmp_plane_opt, ref_frame);
 
         if rd_cost < best_diamond_rd_cost {
           best_diamond_rd_cost = rd_cost;
