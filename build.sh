@@ -56,7 +56,7 @@ aomdec $ENC_FILE -o $DEC_FILE
 # Input/Output compare
 tail -n+2 $DEC_FILE > /tmp/dec_file
 tail -n+2 $REC_FILE > /tmp/rec_file
-cmp /tmp/dec_file /tmp/rec_file || printf '\e[1;31m%-6s\e[m\n\n' 'Desync detected!!!' && exit 1
+cmp /tmp/dec_file /tmp/rec_file || (printf '\e[1;31m%-6s\e[m\n\n' 'Desync detected!!!' && exit 1)
 
 # Daala tools support coming soon
 #DAALA_TOOLS="../daala/tools/"
