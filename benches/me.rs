@@ -48,7 +48,7 @@ fn run_sad_bench<T: Pixel>(b: &mut Bencher, &(bs, bit_depth): &(BlockSize, usize
 
   b.iter(|| {
     let _ =
-      black_box(me::get_sad(&plane_org, &plane_ref, bsh, bsw, bit_depth));
+      black_box(me::get_sad(&plane_org, &plane_ref, bsw, bsh, bit_depth));
   })
 }
 
