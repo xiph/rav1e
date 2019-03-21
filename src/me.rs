@@ -92,8 +92,8 @@ mod nasm {
 
   #[target_feature(enable = "ssse3")]
   unsafe fn sad_hbd_ssse3(
-    plane_org: &PlaneSlice<'_, u16>, plane_ref: &PlaneSlice<'_, u16>, blk_h: usize,
-    blk_w: usize, bit_depth: usize
+    plane_org: &PlaneSlice<'_, u16>, plane_ref: &PlaneSlice<'_, u16>, blk_w: usize,
+    blk_h: usize, bit_depth: usize
   ) -> u32 {
     let mut sum = 0 as u32;
     let org_stride = (plane_org.plane.cfg.stride * 2) as libc::ptrdiff_t;
@@ -127,8 +127,8 @@ mod nasm {
 
   #[target_feature(enable = "sse2")]
   unsafe fn sad_sse2(
-    plane_org: &PlaneSlice<'_, u8>, plane_ref: &PlaneSlice<'_, u8>, blk_h: usize,
-    blk_w: usize
+    plane_org: &PlaneSlice<'_, u8>, plane_ref: &PlaneSlice<'_, u8>, blk_w: usize,
+    blk_h: usize
   ) -> u32 {
     let org_ptr = plane_org.as_ptr();
     let ref_ptr = plane_ref.as_ptr();
@@ -164,8 +164,8 @@ mod nasm {
 
   #[target_feature(enable = "avx2")]
   unsafe fn sad_avx2(
-    plane_org: &PlaneSlice<'_, u8>, plane_ref: &PlaneSlice<'_, u8>, blk_h: usize,
-    blk_w: usize
+    plane_org: &PlaneSlice<'_, u8>, plane_ref: &PlaneSlice<'_, u8>, blk_w: usize,
+    blk_h: usize
   ) -> u32 {
     let org_ptr = plane_org.as_ptr();
     let ref_ptr = plane_ref.as_ptr();
@@ -209,8 +209,7 @@ mod nasm {
 
   #[inline(always)]
   pub fn get_sad<T: Pixel>(
-    plane_org: &PlaneSlice<'_, T>, plane_ref: &PlaneSlice<'_, T>, blk_h: usize,
-    blk_w: usize, bit_depth: usize
+    plane_org: &PlaneSlice<'_, T>, plane_ref: &PlaneSlice<'_, T>, blk_w: usize, blk_h: usize, bit_depth: usize
   ) -> u32 {
     #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
@@ -218,25 +217,25 @@ mod nasm {
         return unsafe {
           let plane_org = &*(plane_org as *const _ as *const PlaneSlice<'_, u16>);
           let plane_ref = &*(plane_ref as *const _ as *const PlaneSlice<'_, u16>);
-          sad_hbd_ssse3(plane_org, plane_ref, blk_h, blk_w, bit_depth)
+          sad_hbd_ssse3(plane_org, plane_ref, blk_w, blk_h, bit_depth)
         };
       }
       if mem::size_of::<T>() == 1 && is_x86_feature_detected!("avx2") && blk_h >= 4 && blk_w >= 4 {
         return unsafe {
           let plane_org = &*(plane_org as *const _ as *const PlaneSlice<'_, u8>);
           let plane_ref = &*(plane_ref as *const _ as *const PlaneSlice<'_, u8>);
-          sad_avx2(plane_org, plane_ref, blk_h, blk_w)
+          sad_avx2(plane_org, plane_ref, blk_w, blk_h)
         };
       }
       if mem::size_of::<T>() == 1 && is_x86_feature_detected!("sse2") && blk_h >= 4 && blk_w >= 4 {
         return unsafe {
           let plane_org = &*(plane_org as *const _ as *const PlaneSlice<'_, u8>);
           let plane_ref = &*(plane_ref as *const _ as *const PlaneSlice<'_, u8>);
-          sad_sse2(plane_org, plane_ref, blk_h, blk_w)
+          sad_sse2(plane_org, plane_ref, blk_w, blk_h)
         };
       }
     }
-    super::native::get_sad(plane_org, plane_ref, blk_h, blk_w, bit_depth)
+    super::native::get_sad(plane_org, plane_ref, blk_w, blk_h, bit_depth)
   }
 }
 
@@ -246,8 +245,8 @@ mod native {
 
   #[inline(always)]
   pub fn get_sad<T: Pixel>(
-    plane_org: &PlaneSlice<'_, T>, plane_ref: &PlaneSlice<'_, T>, blk_h: usize,
-    blk_w: usize, _bit_depth: usize
+    plane_org: &PlaneSlice<'_, T>, plane_ref: &PlaneSlice<'_, T>, blk_w: usize,
+    blk_h: usize, _bit_depth: usize
   ) -> u32 {
     let mut sum = 0 as u32;
 
@@ -850,7 +849,7 @@ fn compute_mv_rd_cost<T: Pixel>(
   plane_org: &PlaneSlice<T>, plane_ref: &PlaneSlice<T>
 ) -> u64
 {
-  let sad = get_sad(&plane_org, &plane_ref, blk_h, blk_w, bit_depth);
+  let sad = get_sad(&plane_org, &plane_ref, blk_w, blk_h, bit_depth);
 
   let rate1 = get_mv_rate(cand_mv, pmv[0], fi.allow_high_precision_mv);
   let rate2 = get_mv_rate(cand_mv, pmv[1], fi.allow_high_precision_mv);
@@ -915,7 +914,7 @@ fn telescopic_subpel_search<T: Pixel>(
         let plane_org = fs.input.planes[0].slice(po);
         let plane_ref = tmp_plane.slice(PlaneOffset { x: 0, y: 0 });
 
-        let sad = get_sad(&plane_org, &plane_ref, blk_h, blk_w, fi.sequence.bit_depth);
+        let sad = get_sad(&plane_org, &plane_ref, blk_w, blk_h, fi.sequence.bit_depth);
 
         let rate1 = get_mv_rate(cand_mv, pmv[0], fi.allow_high_precision_mv);
         let rate2 = get_mv_rate(cand_mv, pmv[1], fi.allow_high_precision_mv);
@@ -945,7 +944,7 @@ fn full_search<T: Pixel>(
       let plane_org = p_org.slice(po);
       let plane_ref = p_ref.slice(PlaneOffset { x, y });
 
-      let sad = get_sad(&plane_org, &plane_ref, blk_h, blk_w, bit_depth);
+      let sad = get_sad(&plane_org, &plane_ref, blk_w, blk_h, bit_depth);
 
       let mv = MotionVector {
         row: 8 * (y as i16 - po.y as i16),
@@ -1113,7 +1112,7 @@ pub mod test {
 
       assert_eq!(
         block.1,
-        get_sad(&mut input_slice, &mut rec_slice, bsh, bsw, bit_depth)
+        get_sad(&mut input_slice, &mut rec_slice, bsw, bsh, bit_depth)
       );
     }
   }
