@@ -143,7 +143,7 @@ pub static max_txsize_rect_lookup: [TxSize; BlockSize::BLOCK_SIZES_ALL] = [
       TX_16X64,  TX_64X16
 ];
 
-static sub_tx_size_map: [TxSize; TxSize::TX_SIZES_ALL] = [
+pub static sub_tx_size_map: [TxSize; TxSize::TX_SIZES_ALL] = [
   TX_4X4,    // TX_4X4
   TX_4X4,    // TX_8X8
   TX_8X8,    // TX_16X16

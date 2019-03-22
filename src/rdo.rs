@@ -363,27 +363,14 @@ pub fn rdo_tx_size_type<T: Pixel>(
   cw: &mut ContextWriter, bsize: BlockSize, bo: BlockOffset,
   luma_mode: PredictionMode, ref_frames: [usize; 2], mvs: [MotionVector; 2], skip: bool
 ) -> (TxSize, TxType) {
-  // these rules follow TX_MODE_LARGEST
-  let tx_size = {
-    use self::BlockSize::*;
-    use self::TxSize::*;
-    match bsize {
-      BLOCK_4X4 => TX_4X4,
-      BLOCK_8X8 => TX_8X8,
-      BLOCK_16X16 => TX_16X16,
-      BLOCK_4X8 => TX_4X8,
-      BLOCK_8X4 => TX_8X4,
-      BLOCK_8X16 => TX_8X16,
-      BLOCK_16X8 => TX_16X8,
-      BLOCK_16X32 => TX_16X32,
-      BLOCK_32X16 => TX_32X16,
-      BLOCK_32X32 => TX_32X32,
-      BLOCK_32X64 => TX_32X64,
-      BLOCK_64X32 => TX_64X32,
-      BLOCK_64X64 => TX_64X64,
-      _ => unimplemented!()
-    }
+  use crate::context::max_txsize_rect_lookup;
+  let tx_size = if !fi.tx_mode_select || !luma_mode.is_intra() {
+    max_txsize_rect_lookup[bsize as usize]
+  } else {
+    sub_tx_size_map[max_txsize_rect_lookup[bsize as usize] as usize]  // 1 level partition
   };
+  debug_assert!(tx_size.width_log2() <= bsize.width_log2());
+  debug_assert!(tx_size.height_log2() <= bsize.height_log2());
 
   // Luma plane transform type decision
   let is_inter = !luma_mode.is_intra();
