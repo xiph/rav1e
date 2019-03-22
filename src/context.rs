@@ -143,6 +143,28 @@ pub static max_txsize_rect_lookup: [TxSize; BlockSize::BLOCK_SIZES_ALL] = [
       TX_16X64,  TX_64X16
 ];
 
+static sub_tx_size_map: [TxSize; TxSize::TX_SIZES_ALL] = [
+  TX_4X4,    // TX_4X4
+  TX_4X4,    // TX_8X8
+  TX_8X8,    // TX_16X16
+  TX_16X16,  // TX_32X32
+  TX_32X32,  // TX_64X64
+  TX_4X4,    // TX_4X8
+  TX_4X4,    // TX_8X4
+  TX_8X8,    // TX_8X16
+  TX_8X8,    // TX_16X8
+  TX_16X16,  // TX_16X32
+  TX_16X16,  // TX_32X16
+  TX_32X32,  // TX_32X64
+  TX_32X32,  // TX_64X32
+  TX_4X8,    // TX_4X16
+  TX_8X4,    // TX_16X4
+  TX_8X16,   // TX_8X32
+  TX_16X8,   // TX_32X8
+  TX_16X32,  // TX_16X64
+  TX_32X16,  // TX_64X16
+];
+
 static ss_size_lookup: [[[BlockSize; 2]; 2]; BlockSize::BLOCK_SIZES_ALL] = [
   //  ss_x == 0    ss_x == 0        ss_x == 1      ss_x == 1
   //  ss_y == 0    ss_y == 1        ss_y == 0      ss_y == 1
@@ -1470,6 +1492,32 @@ impl BlockContext {
     }
   }
 
+  pub fn update_tx_size_context(
+    &mut self, bo: BlockOffset, bsize: BlockSize, tx_size: TxSize, skip: bool
+  ) {
+    let n4_w = bsize.width_mi();
+    let n4_h = bsize.height_mi();
+
+    let (tx_w, tx_h) = if skip {
+      (n4_w as u8, n4_h as u8)
+    } else {
+      (tx_size.width() as u8, tx_size.height() as u8)
+    };
+
+    let above_ctx =
+      &mut self.above_tx_context[bo.x..bo.x + n4_w as usize];
+    let left_ctx = &mut self.left_tx_context
+      [bo.y_in_sb()..bo.y_in_sb() + n4_h as usize];
+
+    for v in above_ctx[0..n4_w].iter_mut() {
+      *v = tx_w;
+    }
+
+    for v in left_ctx[0..n4_h].iter_mut()  {
+      *v = tx_h;
+    }
+  }
+
   fn reset_left_tx_context(&mut self) {
     for c in &mut self.left_tx_context {
       *c = 0;
@@ -2037,6 +2085,81 @@ impl ContextWriter {
       w.symbol((p == PartitionType::PARTITION_SPLIT) as u32, &cdf);
     }
   }
+
+  pub fn get_tx_size_context(&self, bo: BlockOffset, bsize: BlockSize) -> usize {
+    let max_tx_size = max_txsize_rect_lookup[bsize as usize];
+    let max_tx_wide = max_tx_size.width();
+    let max_tx_high = max_tx_size.height();
+    let has_above = bo.y > 0;
+    let has_left = bo.x > 0;
+    let mut above = self.bc.above_tx_context[bo.x] >= max_tx_wide as u8;
+    let mut left = self.bc.left_tx_context[bo.y_in_sb()] >= max_tx_high as u8;
+
+    if has_above {
+      let above_blk = self.bc.above_of(bo);
+      if above_blk.is_inter() { above = (above_blk.n4_w << MI_SIZE_LOG2) >= max_tx_wide; };
+    }
+    if has_left {
+      let left_blk = self.bc.left_of(bo);
+      if left_blk.is_inter() { left = (left_blk.n4_h << MI_SIZE_LOG2) >= max_tx_high; };
+    }
+    if has_above && has_left { return above as usize + left as usize };
+    if has_above { return above as usize};
+    if has_left { return left as usize};
+    0
+  }
+
+  pub fn write_tx_size_intra(&mut self, w: &mut dyn Writer, bo: BlockOffset,
+                          bsize: BlockSize, tx_size: TxSize) {
+    fn tx_size_to_depth(tx_size: TxSize, bsize: BlockSize ) -> usize {
+      let mut ctx_size = max_txsize_rect_lookup[bsize as usize];
+      let mut depth: usize = 0;
+      while tx_size != ctx_size {
+        depth += 1;
+        ctx_size = sub_tx_size_map[ctx_size as usize];
+        debug_assert!(depth <= MAX_TX_DEPTH);
+      }
+      depth
+    }
+    fn bsize_to_max_depth(bsize: BlockSize) -> usize {
+      let mut tx_size: TxSize = max_txsize_rect_lookup[bsize as usize];
+      let mut depth = 0;
+      while depth < MAX_TX_DEPTH && tx_size != TX_4X4 {
+        depth += 1;
+        tx_size = sub_tx_size_map[tx_size as usize];
+        debug_assert!(depth <= MAX_TX_DEPTH);
+      }
+      depth
+    }
+    fn bsize_to_tx_size_cat(bsize: BlockSize) -> usize {
+      let mut tx_size: TxSize = max_txsize_rect_lookup[bsize as usize];
+      debug_assert!(tx_size != TX_4X4);
+      let mut depth = 0;
+      while tx_size != TX_4X4 {
+        depth += 1;
+        tx_size = sub_tx_size_map[tx_size as usize];
+      }
+      debug_assert!(depth <= MAX_TX_CATS);
+
+      depth - 1
+    }
+
+    debug_assert!(!self.bc.at(bo).is_inter());
+    debug_assert!(bsize.greater_than(BlockSize::BLOCK_4X4));
+
+    let tx_size_ctx = self.get_tx_size_context(bo, bsize);
+    let depth = tx_size_to_depth(tx_size, bsize);
+
+    let max_depths = bsize_to_max_depth(bsize);
+    let tx_size_cat = bsize_to_tx_size_cat(bsize);
+
+    debug_assert!(depth <= max_depths);
+    debug_assert!(!tx_size.is_rect() || bsize.is_rect_tx_allowed());
+
+    symbol_with_update!(self, w, depth as u32,
+        &mut self.fc.tx_size_cdf[tx_size_cat][tx_size_ctx][..=max_depths+1]);
+  }
+
   pub fn get_cdf_intra_mode_kf(&self, bo: BlockOffset) -> &[u16; INTRA_MODES + 1] {
     static intra_mode_context: [usize; INTRA_MODES] =
       [0, 1, 2, 3, 4, 4, 4, 4, 3, 0, 1, 2, 0];
