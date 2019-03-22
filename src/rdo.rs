@@ -818,7 +818,7 @@ pub fn rdo_mode_decision<T: Pixel>(
       false
     );
     cw.rollback(&cw_checkpoint);
-    if let Some(cfl) = rdo_cfl_alpha(fs, bo, bsize, fi.sequence.bit_depth, fi.sequence.chroma_sampling) {
+    if let Some(cfl) = rdo_cfl_alpha(fs, bo, bsize, fi.sequence.bit_depth) {
       let wr: &mut dyn Writer = &mut WriterCounter::new();
       let tell = wr.tell_frac();
 
@@ -890,10 +890,10 @@ pub fn rdo_mode_decision<T: Pixel>(
 }
 
 pub fn rdo_cfl_alpha<T: Pixel>(
-  fs: &mut FrameState<T>, bo: BlockOffset, bsize: BlockSize, bit_depth: usize,
-  chroma_sampling: ChromaSampling
+  fs: &mut FrameState<T>, bo: BlockOffset, bsize: BlockSize, bit_depth: usize
 ) -> Option<CFLParams> {
-  let uv_tx_size = bsize.largest_uv_tx_size(chroma_sampling);
+  let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
+  let uv_tx_size = bsize.largest_uv_tx_size(xdec, ydec);
 
   let mut ac: AlignedArray<[i16; 32 * 32]> = UninitializedAlignedArray();
   luma_ac(&mut ac.array, fs, bo, bsize);

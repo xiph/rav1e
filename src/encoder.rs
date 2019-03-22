@@ -1370,7 +1370,7 @@ pub fn write_tx_blocks<T: Pixel>(
 
   if luma_only { return tx_dist };
 
-  let uv_tx_size = bsize.largest_uv_tx_size(fi.sequence.chroma_sampling);
+  let uv_tx_size = bsize.largest_uv_tx_size(xdec, ydec);
 
   let mut bw_uv = (bw * tx_size.width_mi()) >> xdec;
   let mut bh_uv = (bh * tx_size.height_mi()) >> ydec;
@@ -1452,7 +1452,7 @@ pub fn write_tx_tree<T: Pixel>(
 
   if luma_only { return tx_dist };
 
-  let uv_tx_size = bsize.largest_uv_tx_size(fi.sequence.chroma_sampling);
+  let uv_tx_size = bsize.largest_uv_tx_size(xdec, ydec);
 
   let mut bw_uv = (bw * tx_size.width_mi()) >> xdec;
   let mut bh_uv = (bh * tx_size.height_mi()) >> ydec;
