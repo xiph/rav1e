@@ -120,6 +120,29 @@ static av1_tx_ind: [[usize; TX_TYPES]; TX_SETS] = [
   [7, 8, 9, 12, 10, 11, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6]
 ];
 
+pub static max_txsize_rect_lookup: [TxSize; BlockSize::BLOCK_SIZES_ALL] = [
+      // 4X4
+      TX_4X4,
+      // 4X8,    8X4,      8X8
+      TX_4X8,    TX_8X4,   TX_8X8,
+      // 8X16,   16X8,     16X16
+      TX_8X16,   TX_16X8,  TX_16X16,
+      // 16X32,  32X16,    32X32
+      TX_16X32,  TX_32X16, TX_32X32,
+      // 32X64,  64X32,
+      TX_32X64,  TX_64X32,
+      // 64X64
+      TX_64X64,
+      // 64x128, 128x64,   128x128
+      TX_64X64,  TX_64X64, TX_64X64,
+      // 4x16,   16x4,
+      TX_4X16,   TX_16X4,
+      // 8x32,   32x8
+      TX_8X32,   TX_32X8,
+      // 16x64,  64x16
+      TX_16X64,  TX_64X16
+];
+
 static ss_size_lookup: [[[BlockSize; 2]; 2]; BlockSize::BLOCK_SIZES_ALL] = [
   //  ss_x == 0    ss_x == 0        ss_x == 1      ss_x == 1
   //  ss_y == 0    ss_y == 1        ss_y == 0      ss_y == 1
