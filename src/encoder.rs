@@ -1409,6 +1409,13 @@ pub fn write_tx_blocks<T: Pixel>(
   }
 
   if bw_uv > 0 && bh_uv > 0 {
+    // TODO: Disable these asserts temporarilly, since chroma_sampling_422_aom and chroma_sampling_444_aom
+    // tests seems trigerring them as well, which should not
+    // TODO: Not valid if partition > 64x64 && chroma != 420
+    /*if xdec == 1 && ydec == 1 {
+      assert!(bw_uv == 1, "bw_uv = {}, bh_uv = {}", bw_uv, bh_uv);
+      assert!(bh_uv == 1, "bw_uv = {}, bh_uv = {}", bw_uv, bh_uv);
+    }*/
     let uv_tx_type = if uv_tx_size.width() >= 32 || uv_tx_size.height() >= 32 {
       TxType::DCT_DCT
     } else {
@@ -1487,6 +1494,13 @@ pub fn write_tx_tree<T: Pixel>(
   let plane_bsize = get_plane_block_size(bsize, xdec, ydec);
 
   if bw_uv > 0 && bh_uv > 0 {
+    // TODO: Disable these asserts temporarilly, since chroma_sampling_422_aom and chroma_sampling_444_aom
+    // tests seems trigerring them as well, which should not
+    // TODO: Not valid if partition > 64x64 && chroma != 420
+    /*if xdec == 1 && ydec == 1 {
+      debug_assert!(bw_uv == 1, "bw_uv = {}, bh_uv = {}", bw_uv, bh_uv);
+      debug_assert!(bh_uv == 1, "bw_uv = {}, bh_uv = {}", bw_uv, bh_uv);
+    }*/
     let uv_tx_type = if has_coeff {tx_type} else {TxType::DCT_DCT}; // if inter mode, uv_tx_type == tx_type
 
     for p in 1..3 {
