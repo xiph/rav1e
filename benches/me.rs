@@ -33,13 +33,12 @@ fn new_plane<T: Pixel>(ra: &mut ChaChaRng, width: usize, height: usize) -> Plane
   p
 }
 
-fn bench_get_sad(b: &mut Bencher, bs: &BlockSize) {
+fn bench_get_sad(b: &mut Bencher, &(bs, bit_depth): &(BlockSize, usize)) {
   let mut ra = ChaChaRng::from_seed([0; 32]);
   let bsw = bs.width();
   let bsh = bs.height();
   let w = 640;
   let h = 480;
-  let bit_depth = 10;
   let input_plane = new_plane::<u16>(&mut ra, w, h);
   let rec_plane = new_plane::<u16>(&mut ra, w, h);
   let po = PlaneOffset { x: 0, y: 0 };
@@ -55,28 +54,51 @@ fn bench_get_sad(b: &mut Bencher, bs: &BlockSize) {
 
 pub fn get_sad(c: &mut Criterion) {
   let blocks = vec![
-    BLOCK_4X4,
-    BLOCK_4X8,
-    BLOCK_8X4,
-    BLOCK_8X8,
-    BLOCK_8X16,
-    BLOCK_16X8,
-    BLOCK_16X16,
-    BLOCK_16X32,
-    BLOCK_32X16,
-    BLOCK_32X32,
-    BLOCK_32X64,
-    BLOCK_64X32,
-    BLOCK_64X64,
-    BLOCK_64X128,
-    BLOCK_128X64,
-    BLOCK_128X128,
-    BLOCK_4X16,
-    BLOCK_16X4,
-    BLOCK_8X32,
-    BLOCK_32X8,
-    BLOCK_16X64,
-    BLOCK_64X16,
+    (BLOCK_4X4, 8),
+    (BLOCK_4X8, 8),
+    (BLOCK_8X4, 8),
+    (BLOCK_8X8, 8),
+    (BLOCK_8X16, 8),
+    (BLOCK_16X8, 8),
+    (BLOCK_16X16, 8),
+    (BLOCK_16X32, 8),
+    (BLOCK_32X16, 8),
+    (BLOCK_32X32, 8),
+    (BLOCK_32X64, 8),
+    (BLOCK_64X32, 8),
+    (BLOCK_64X64, 8),
+    (BLOCK_64X128, 8),
+    (BLOCK_128X64, 8),
+    (BLOCK_128X128, 8),
+    (BLOCK_4X16, 8),
+    (BLOCK_16X4, 8),
+    (BLOCK_8X32, 8),
+    (BLOCK_32X8, 8),
+    (BLOCK_16X64, 8),
+    (BLOCK_64X16, 8),
+
+    (BLOCK_4X4, 10),
+    (BLOCK_4X8, 10),
+    (BLOCK_8X4, 10),
+    (BLOCK_8X8, 10),
+    (BLOCK_8X16, 10),
+    (BLOCK_16X8, 10),
+    (BLOCK_16X16, 10),
+    (BLOCK_16X32, 10),
+    (BLOCK_32X16, 10),
+    (BLOCK_32X32, 10),
+    (BLOCK_32X64, 10),
+    (BLOCK_64X32, 10),
+    (BLOCK_64X64, 10),
+    (BLOCK_64X128, 10),
+    (BLOCK_128X64, 10),
+    (BLOCK_128X128, 10),
+    (BLOCK_4X16, 10),
+    (BLOCK_16X4, 10),
+    (BLOCK_8X32, 10),
+    (BLOCK_32X8, 10),
+    (BLOCK_16X64, 10),
+    (BLOCK_64X16, 10)
   ];
 
   c.bench_function_over_inputs("get_sad", bench_get_sad, blocks);
