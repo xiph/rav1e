@@ -1291,6 +1291,21 @@ pub fn encode_block_b<T: Pixel>(
     }
   }
 
+  // write tx_size here (for now, intra frame only)
+  // TODO: Add new field tx_mode to fi, then Use the condition, fi.tx_mode == TX_MODE_SELECT
+  if fi.tx_mode_select {
+    if bsize.greater_than(BlockSize::BLOCK_4X4) && !(is_inter && skip) {
+      if !is_inter {
+        cw.write_tx_size_intra(w, bo, bsize, tx_size);
+        cw.bc.update_tx_size_context(bo, bsize, tx_size, false);
+      } /*else {  // TODO (yushin): write_tx_size_inter(), i.e. var-tx
+
+      }*/
+    } else {
+      cw.bc.update_tx_size_context(bo, bsize, tx_size, is_inter && skip);
+    }
+  }
+
   if is_inter {
     motion_compensate(fi, fs, cw, luma_mode, ref_frames, mvs, bsize, bo, false);
     write_tx_tree(fi, fs, cw, w, luma_mode, bo, bsize, tx_size, tx_type, skip, false, rdo_type, for_rdo_use)
