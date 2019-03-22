@@ -1318,6 +1318,8 @@ pub struct BlockContextCheckpoint {
   cdef_coded: bool,
   above_partition_context: Vec<u8>,
   left_partition_context: [u8; MAX_MIB_SIZE],
+  above_tx_context: Vec<u8>,
+  left_tx_context: [u8; MAX_MIB_SIZE],
   above_coeff_context: [Vec<u8>; PLANES],
   left_coeff_context: [[u8; MAX_MIB_SIZE]; PLANES],
 }
@@ -1332,6 +1334,8 @@ pub struct BlockContext {
   pub preskip_segid: bool,
   above_partition_context: Vec<u8>,
   left_partition_context: [u8; MAX_MIB_SIZE],
+  above_tx_context: Vec<u8>,
+  left_tx_context: [u8; MAX_MIB_SIZE],
   above_coeff_context: [Vec<u8>; PLANES],
   left_coeff_context: [[u8; MAX_MIB_SIZE]; PLANES],
   blocks: FrameBlocks,
@@ -1354,6 +1358,8 @@ impl BlockContext {
       preskip_segid: true,
       above_partition_context: vec![0; aligned_cols],
       left_partition_context: [0; MAX_MIB_SIZE],
+      above_tx_context: vec![0; aligned_cols],
+      left_tx_context: [0; MAX_MIB_SIZE],
       above_coeff_context: [
         vec![0; above_coeff_context_size],
         vec![0; above_coeff_context_size],
@@ -1369,6 +1375,8 @@ impl BlockContext {
       cdef_coded: self.cdef_coded,
       above_partition_context: self.above_partition_context.clone(),
       left_partition_context: self.left_partition_context,
+      above_tx_context: self.above_tx_context.clone(),
+      left_tx_context: self.left_tx_context,
       above_coeff_context: self.above_coeff_context.clone(),
       left_coeff_context: self.left_coeff_context,
     }
@@ -1378,6 +1386,8 @@ impl BlockContext {
     self.cdef_coded = checkpoint.cdef_coded;
     self.above_partition_context = checkpoint.above_partition_context.clone();
     self.left_partition_context = checkpoint.left_partition_context;
+    self.above_tx_context = checkpoint.above_tx_context.clone();
+    self.left_tx_context = checkpoint.left_tx_context;
     self.above_coeff_context = checkpoint.above_coeff_context.clone();
     self.left_coeff_context = checkpoint.left_coeff_context;
   }
@@ -1459,7 +1469,12 @@ impl BlockContext {
       *c = 0;
     }
   }
-  //TODO(anyone): Add reset_left_tx_context() here then call it in reset_left_contexts()
+
+  fn reset_left_tx_context(&mut self) {
+    for c in &mut self.left_tx_context {
+      *c = 0;
+    }
+  }
 
   pub fn reset_skip_context(
     &mut self, bo: BlockOffset, bsize: BlockSize, xdec: usize, ydec: usize
@@ -1508,7 +1523,7 @@ impl BlockContext {
     }
     BlockContext::reset_left_partition_context(self);
 
-    //TODO(anyone): Call reset_left_tx_context() here.
+    BlockContext::reset_left_tx_context(self);
   }
 
   pub fn set_mode(
