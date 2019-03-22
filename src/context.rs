@@ -1493,10 +1493,10 @@ impl BlockContext {
     self.for_each(bo, bsize, |block| { block.n4_w = n4_w; block.n4_h = n4_h } );
   }
 
-  pub fn set_tx_size(&mut self, bo: BlockOffset, txsize: TxSize) {
+  pub fn set_tx_size(&mut self, bo: BlockOffset, bsize: BlockSize, txsize: TxSize) {
     let tx_w = txsize.width_mi();
     let tx_h = txsize.height_mi();
-    self.for_each(bo, txsize.block_size(), |block| { block.tx_w = tx_w; block.tx_h = tx_h } );
+    self.for_each(bo, bsize, |block| { block.tx_w = tx_w; block.tx_h = tx_h } );
   }
 
   pub fn get_mode(&mut self, bo: BlockOffset) -> PredictionMode {
