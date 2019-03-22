@@ -724,6 +724,7 @@ pub struct CDFContext {
   intra_tx_cdf:
     [[[[u16; TX_TYPES + 1]; INTRA_MODES]; TX_SIZE_SQR_CONTEXTS]; TX_SETS_INTRA],
   inter_tx_cdf: [[[u16; TX_TYPES + 1]; TX_SIZE_SQR_CONTEXTS]; TX_SETS_INTER],
+  tx_size_cdf: [[[u16; MAX_TX_DEPTH + 1 + 1]; TX_SIZE_CONTEXTS]; MAX_TX_CATS],
   skip_cdfs: [[u16; 3]; SKIP_CONTEXTS],
   intra_inter_cdfs: [[u16; 3]; INTRA_INTER_CONTEXTS],
   angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES],
@@ -785,6 +786,7 @@ impl CDFContext {
       refmv_cdf: default_refmv_cdf,
       intra_tx_cdf: default_intra_ext_tx_cdf,
       inter_tx_cdf: default_inter_ext_tx_cdf,
+      tx_size_cdf: default_tx_size_cdf,
       skip_cdfs: default_skip_cdfs,
       intra_inter_cdfs: default_intra_inter_cdf,
       angle_delta_cdf: default_angle_delta_cdf,
@@ -863,6 +865,11 @@ impl CDFContext {
       self.inter_tx_cdf[2][i][12] = 0;
       self.inter_tx_cdf[3][i][2] = 0;
     }
+
+    for i in 0..TX_SIZE_CONTEXTS { self.tx_size_cdf[0][i][MAX_TX_DEPTH] = 0; }
+    reset_2d!(self.tx_size_cdf[1]);
+    reset_2d!(self.tx_size_cdf[2]);
+    reset_2d!(self.tx_size_cdf[3]);
 
     reset_2d!(self.skip_cdfs);
     reset_2d!(self.intra_inter_cdfs);
