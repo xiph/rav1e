@@ -265,7 +265,7 @@ fn get_mv_range(
 pub fn get_subset_predictors<T: Pixel>(
   bo: BlockOffset, cmv: MotionVector,
   w_in_b: usize, h_in_b: usize,
-  frame_mvs: &FrameMotionVectors, frame_ref_opt: &Option<Arc<ReferenceFrame<T>>>,
+  frame_mvs: &FrameMotionVectors, frame_ref_opt: Option<&ReferenceFrame<T>>,
   ref_frame_id: usize
 ) -> (Vec<MotionVector>) {
   let mut predictors = Vec::new();
@@ -406,7 +406,7 @@ pub trait MotionEstimation {
 
       let global_mv = [MotionVector{row: 0, col: 0}; 2];
       let frame_mvs = &fs.frame_mvs[ref_frame];
-      let frame_ref_opt = &fi.rec_buffer.frames[fi.ref_frames[0] as usize];
+      let frame_ref_opt = fi.rec_buffer.frames[fi.ref_frames[0] as usize].as_ref().map(Arc::as_ref);
 
       let mut lowest_cost = std::u64::MAX;
       let mut best_mv = MotionVector::default();
@@ -430,7 +430,7 @@ pub trait MotionEstimation {
   fn me_ss2<T: Pixel>(
     fi: &FrameInvariants<T>, fs: &FrameState<T>,
     pmvs: &[Option<MotionVector>; 3], bo_adj_h: BlockOffset,
-    frame_mvs: &FrameMotionVectors, frame_ref_opt: &Option<Arc<ReferenceFrame<T>>>,
+    frame_mvs: &FrameMotionVectors, frame_ref_opt: Option<&ReferenceFrame<T>>,
     po: PlaneOffset, rec: &ReferenceFrame<T>,
     global_mv: [MotionVector; 2], lambda: u32,
     mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
@@ -451,7 +451,7 @@ impl MotionEstimation for DiamondSearch {
     best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: usize
   ) {
     let frame_mvs = &fs.frame_mvs[ref_frame - LAST_FRAME];
-    let frame_ref = &fi.rec_buffer.frames[fi.ref_frames[0] as usize];
+    let frame_ref = fi.rec_buffer.frames[fi.ref_frames[0] as usize].as_ref().map(Arc::as_ref);
     let predictors =
       get_subset_predictors(bo, cmv, fi.w_in_b, fi.h_in_b, frame_mvs, frame_ref, ref_frame - LAST_FRAME);
 
@@ -511,7 +511,7 @@ impl MotionEstimation for DiamondSearch {
   fn me_ss2<T: Pixel>(
     fi: &FrameInvariants<T>, fs: &FrameState<T>,
     pmvs: &[Option<MotionVector>; 3], bo_adj_h: BlockOffset,
-    frame_mvs: &FrameMotionVectors, frame_ref_opt: &Option<Arc<ReferenceFrame<T>>>,
+    frame_mvs: &FrameMotionVectors, frame_ref_opt: Option<&ReferenceFrame<T>>,
     po: PlaneOffset, rec: &ReferenceFrame<T>,
     global_mv: [MotionVector; 2], lambda: u32,
     mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
@@ -615,7 +615,7 @@ impl MotionEstimation for FullSearch {
   fn me_ss2<T: Pixel>(
     fi: &FrameInvariants<T>, fs: &FrameState<T>,
     pmvs: &[Option<MotionVector>; 3], _bo_adj_h: BlockOffset,
-    _frame_mvs: &FrameMotionVectors, _frame_ref_opt: &Option<Arc<ReferenceFrame<T>>>,
+    _frame_mvs: &FrameMotionVectors, _frame_ref_opt: Option<&ReferenceFrame<T>>,
     po: PlaneOffset, rec: &ReferenceFrame<T>,
     _global_mv: [MotionVector; 2], lambda: u32,
     mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
