@@ -337,7 +337,7 @@ pub fn get_subset_predictors<T: Pixel>(
 
 pub trait MotionEstimation {
   fn full_pixel_me<T: Pixel>(
-    fi: &FrameInvariants<T>, fs: &FrameState<T>, rec: &Arc<ReferenceFrame<T>>,
+    fi: &FrameInvariants<T>, fs: &FrameState<T>, rec: &ReferenceFrame<T>,
     bo: BlockOffset, lambda: u32,
     cmv: MotionVector, pmv: [MotionVector; 2],
     mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
@@ -346,7 +346,7 @@ pub trait MotionEstimation {
   );
 
   fn sub_pixel_me<T: Pixel>(
-    fi: &FrameInvariants<T>, fs: &FrameState<T>, rec: &Arc<ReferenceFrame<T>>,
+    fi: &FrameInvariants<T>, fs: &FrameState<T>, rec: &ReferenceFrame<T>,
     bo: BlockOffset, lambda: u32, pmv: [MotionVector; 2],
     mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
     blk_w: usize, blk_h: usize, best_mv: &mut MotionVector,
@@ -431,7 +431,7 @@ pub trait MotionEstimation {
     fi: &FrameInvariants<T>, fs: &FrameState<T>,
     pmvs: &[Option<MotionVector>; 3], bo_adj_h: BlockOffset,
     frame_mvs: &FrameMotionVectors, frame_ref_opt: &Option<Arc<ReferenceFrame<T>>>,
-    po: PlaneOffset, rec: &Arc<ReferenceFrame<T>>,
+    po: PlaneOffset, rec: &ReferenceFrame<T>,
     global_mv: [MotionVector; 2], lambda: u32,
     mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
     blk_w: usize, blk_h: usize,
@@ -444,7 +444,7 @@ pub struct FullSearch {}
 
 impl MotionEstimation for DiamondSearch {
   fn full_pixel_me<T: Pixel>(
-    fi: &FrameInvariants<T>, fs: &FrameState<T>, rec: &Arc<ReferenceFrame<T>>,
+    fi: &FrameInvariants<T>, fs: &FrameState<T>, rec: &ReferenceFrame<T>,
     bo: BlockOffset, lambda: u32,
     cmv: MotionVector, pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize,
     mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize,
@@ -478,7 +478,7 @@ impl MotionEstimation for DiamondSearch {
   }
 
   fn sub_pixel_me<T: Pixel>(
-    fi: &FrameInvariants<T>, fs: &FrameState<T>, rec: &Arc<ReferenceFrame<T>>,
+    fi: &FrameInvariants<T>, fs: &FrameState<T>, rec: &ReferenceFrame<T>,
     bo: BlockOffset, lambda: u32,
     pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize,
     mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize,
@@ -512,7 +512,7 @@ impl MotionEstimation for DiamondSearch {
     fi: &FrameInvariants<T>, fs: &FrameState<T>,
     pmvs: &[Option<MotionVector>; 3], bo_adj_h: BlockOffset,
     frame_mvs: &FrameMotionVectors, frame_ref_opt: &Option<Arc<ReferenceFrame<T>>>,
-    po: PlaneOffset, rec: &Arc<ReferenceFrame<T>>,
+    po: PlaneOffset, rec: &ReferenceFrame<T>,
     global_mv: [MotionVector; 2], lambda: u32,
     mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
     blk_w: usize, blk_h: usize,
@@ -549,7 +549,7 @@ impl MotionEstimation for DiamondSearch {
 
 impl MotionEstimation for FullSearch {
   fn full_pixel_me<T: Pixel>(
-    fi: &FrameInvariants<T>, fs: &FrameState<T>, rec: &Arc<ReferenceFrame<T>>,
+    fi: &FrameInvariants<T>, fs: &FrameState<T>, rec: &ReferenceFrame<T>,
     bo: BlockOffset, lambda: u32,
     cmv: MotionVector, pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize,
     mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize,
@@ -587,7 +587,7 @@ impl MotionEstimation for FullSearch {
   }
 
   fn sub_pixel_me<T: Pixel>(
-    fi: &FrameInvariants<T>, fs: &FrameState<T>, _rec: &Arc<ReferenceFrame<T>>,
+    fi: &FrameInvariants<T>, fs: &FrameState<T>, _rec: &ReferenceFrame<T>,
     bo: BlockOffset, lambda: u32,
     pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize,
     mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize,
@@ -616,7 +616,7 @@ impl MotionEstimation for FullSearch {
     fi: &FrameInvariants<T>, fs: &FrameState<T>,
     pmvs: &[Option<MotionVector>; 3], _bo_adj_h: BlockOffset,
     _frame_mvs: &FrameMotionVectors, _frame_ref_opt: &Option<Arc<ReferenceFrame<T>>>,
-    po: PlaneOffset, rec: &Arc<ReferenceFrame<T>>,
+    po: PlaneOffset, rec: &ReferenceFrame<T>,
     _global_mv: [MotionVector; 2], lambda: u32,
     mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
     blk_w: usize, blk_h: usize,
