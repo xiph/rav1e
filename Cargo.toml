@@ -63,7 +63,7 @@ name = "bench"
 harness = false
 
 [profile.dev]
-opt-level = 2
+opt-level = 3
 
 [profile.release]
 codegen-units = 1  # if > 1 enables parallel code generation which improves
