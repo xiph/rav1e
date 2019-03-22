@@ -546,6 +546,7 @@ pub struct FrameInvariants<T: Pixel> {
   pub use_tx_domain_rate: bool,
   pub inter_cfg: Option<InterPropsConfig>,
   pub enable_early_exit: bool,
+  pub tx_mode_select: bool,
 }
 
 pub(crate) fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
@@ -629,6 +630,7 @@ impl<T: Pixel> FrameInvariants<T> {
       inter_cfg: None,
       enable_early_exit: true,
       config,
+      tx_mode_select : false,
     }
   }
 
@@ -647,6 +649,7 @@ impl<T: Pixel> FrameInvariants<T> {
     for i in 0..INTER_REFS_PER_FRAME {
       fi.ref_frames[i] = 0;
     }
+    fi.tx_mode_select = false;
     fi
   }
 
@@ -683,6 +686,7 @@ impl<T: Pixel> FrameInvariants<T> {
     fi.frame_type = FrameType::INTER;
     fi.intra_only = false;
     fi.apply_inter_props_cfg(idx_in_segment);
+    fi.tx_mode_select = false;
     let inter_cfg = fi.inter_cfg.unwrap();
 
     fi.order_hint =
