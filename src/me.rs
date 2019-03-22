@@ -132,14 +132,17 @@ mod nasm {
     plane_org: &PlaneSlice<'_, u8>, plane_ref: &PlaneSlice<'_, u8>, blk_h: usize,
     blk_w: usize
   ) -> u32 {
-    // FIXME unaligned blocks coming from hres/qres ME search
-    let ptr_align_log2 = (plane_org.as_ptr() as usize).trailing_zeros() as usize;
-    // The largest unaligned-safe function is for 8x8
-    let ptr_align = 1 << ptr_align_log2.max(3);
-    let mut sum = 0 as u32;
+    let org_ptr = plane_org.as_ptr();
+    let ref_ptr = plane_ref.as_ptr();
     let org_stride = plane_org.plane.cfg.stride as libc::ptrdiff_t;
     let ref_stride = plane_ref.plane.cfg.stride as libc::ptrdiff_t;
-    assert!(blk_h >= 4 && blk_w >= 4);
+    if blk_w == 16 && blk_h == 16 && (org_ptr as usize & 15) == 0 {
+      return rav1e_sad16x16_sse2(org_ptr, org_stride, ref_ptr, ref_stride);
+    }
+    // Note: unaligned blocks come from hres/qres ME search
+    let ptr_align_log2 = (org_ptr as usize).trailing_zeros() as usize;
+    // The largest unaligned-safe function is for 8x8
+    let ptr_align = 1 << ptr_align_log2.max(3);
     let step_size = blk_h.min(blk_w).min(ptr_align);
     let func = match step_size.ilog() {
       3 => rav1e_sad4x4_sse2,
@@ -150,15 +153,11 @@ mod nasm {
       8 => rav1e_sad128x128_sse2,
       _ => rav1e_sad128x128_sse2
     };
-    for r in (0..blk_h).step_by(step_size) {
-      for c in (0..blk_w).step_by(step_size) {
-        let org_slice = plane_org.subslice(c, r);
-        let ref_slice = plane_ref.subslice(c, r);
-        let org_ptr = org_slice.as_ptr();
-        let ref_ptr = ref_slice.as_ptr();
-        // FIXME for now, T == u8
-        let org_ptr = org_ptr as *const u8;
-        let ref_ptr = ref_ptr as *const u8;
+    let mut sum = 0 as u32;
+    for r in (0..blk_h as isize).step_by(step_size) {
+      for c in (0..blk_w as isize).step_by(step_size) {
+        let org_ptr = org_ptr.offset(r * org_stride + c);
+        let ref_ptr = ref_ptr.offset(r * ref_stride + c);
         sum += func(org_ptr, org_stride, ref_ptr, ref_stride);
       }
     }
