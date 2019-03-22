@@ -19,7 +19,7 @@ const PALETTE_COLOR_INDEX_CONTEXTS: usize = 5;
 const CDFMAX: u16 = 32768;
 const BLOCK_SIZE_GROUPS: usize = 4;
 const RESTORE_SWITCHABLE_TYPES: usize = 3;
-const TX_SIZE_CONTEXTS: usize = 3;
+pub const TX_SIZE_CONTEXTS: usize = 3;
 
 // from seg_common.h
 const MAX_SEGMENTS: usize = 8;
@@ -29,8 +29,8 @@ const SEG_TEMPORAL_PRED_CTXS: usize = 3;
 // enums.h
 const TX_SIZE_LUMA_MIN: usize = TxSize::TX_4X4 as usize;
 const TX_SIZE_CTX_MIN: usize = (TX_SIZE_LUMA_MIN + 1);
-const MAX_TX_CATS: usize = (TxSize::TX_SIZES - TX_SIZE_CTX_MIN);
-const MAX_TX_DEPTH: usize = 2;
+pub const MAX_TX_CATS: usize = (TxSize::TX_SIZES - TX_SIZE_CTX_MIN);
+pub const MAX_TX_DEPTH: usize = 2;
 
 // LUTS ---------------------
 
