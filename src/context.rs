@@ -29,6 +29,7 @@ use crate::token_cdfs::*;
 use crate::util::{AlignedArray, clamp, msb, Pixel, UninitializedAlignedArray};
 
 use std::*;
+use std::ops::{Index, IndexMut};
 
 pub const PLANES: usize = 3;
 
@@ -1250,7 +1251,39 @@ pub struct TXB_CTX {
   pub dc_sign_ctx: usize
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
+pub struct FrameBlocks {
+  blocks: Box<[Block]>,
+  pub cols: usize,
+  pub rows: usize,
+}
+
+impl FrameBlocks {
+  pub fn new(cols: usize, rows: usize) -> Self {
+    Self {
+      blocks: vec![Block::default(); cols * rows].into_boxed_slice(),
+      cols,
+      rows,
+    }
+  }
+}
+
+impl Index<usize> for FrameBlocks {
+  type Output = [Block];
+  #[inline]
+  fn index(&self, index: usize) -> &Self::Output {
+    &self.blocks[index * self.cols..(index + 1) * self.cols]
+  }
+}
+
+impl IndexMut<usize> for FrameBlocks {
+  #[inline]
+  fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+    &mut self.blocks[index * self.cols..(index + 1) * self.cols]
+  }
+}
+
+#[derive(Clone)]
 pub struct BlockContext {
   pub cols: usize,
   pub rows: usize,
@@ -1262,7 +1295,7 @@ pub struct BlockContext {
   left_partition_context: [u8; MAX_MIB_SIZE],
   above_coeff_context: [Vec<u8>; PLANES],
   left_coeff_context: [[u8; MAX_MIB_SIZE]; PLANES],
-  blocks: Vec<Vec<Block>>
+  blocks: FrameBlocks,
 }
 
 impl BlockContext {
@@ -1288,7 +1321,7 @@ impl BlockContext {
         vec![0; above_coeff_context_size]
       ],
       left_coeff_context: [[0; MAX_MIB_SIZE]; PLANES],
-      blocks: vec![vec![Block::default(); cols]; rows]
+      blocks: FrameBlocks::new(cols, rows),
     }
   }
 
@@ -1304,7 +1337,7 @@ impl BlockContext {
       left_partition_context: self.left_partition_context,
       above_coeff_context: self.above_coeff_context.clone(),
       left_coeff_context: self.left_coeff_context,
-      blocks: vec![vec![Block::default(); 0]; 0]
+      blocks: FrameBlocks::new(0, 0),
     }
   }
 
@@ -1557,8 +1590,8 @@ impl BlockContext {
   pub fn set_cdef(&mut self, sbo: SuperBlockOffset, cdef_index: u8) {
     let bo = sbo.block_offset(0, 0);
     // Checkme: Is 16 still the right block unit for 128x128 superblocks?
-    let bw = cmp::min (bo.x + MAX_MIB_SIZE, self.blocks[bo.y as usize].len());
-    let bh = cmp::min (bo.y + MAX_MIB_SIZE, self.blocks.len());
+    let bw = cmp::min(bo.x + MAX_MIB_SIZE, self.blocks.cols);
+    let bh = cmp::min(bo.y + MAX_MIB_SIZE, self.blocks.rows);
     for y in bo.y..bh {
       for x in bo.x..bw {
         self.blocks[y as usize][x as usize].cdef_index = cdef_index;
