@@ -205,7 +205,7 @@ fn adjust_strength(strength: i32, var: i32) -> i32 {
 
 pub fn cdef_analyze_superblock<T: Pixel>(
   in_frame: &Frame<T>,
-  bc_global: &mut BlockContext,
+  bc_global: &BlockContext,
   sbo: SuperBlockOffset,
   sbo_global: SuperBlockOffset,
   bit_depth: usize,
@@ -332,7 +332,7 @@ pub fn cdef_filter_superblock<T: Pixel>(
   fi: &FrameInvariants<T>,
   in_frame: &Frame<u16>,
   out_frame: &mut Frame<T>,
-  bc_global: &mut BlockContext,
+  bc_global: &BlockContext,
   sbo: SuperBlockOffset,
   sbo_global: SuperBlockOffset,
   cdef_index: u8,
@@ -420,7 +420,7 @@ pub fn cdef_filter_superblock<T: Pixel>(
 // CDEF parameters are stored for each 64 by 64 block of pixels.
 // The CDEF filter is applied on each 8 by 8 block of pixels.
 // Reference: http://av1-spec.argondesign.com/av1-spec/av1-spec.html#cdef-process
-pub fn cdef_filter_frame<T: Pixel>(fi: &FrameInvariants<T>, rec: &mut Frame<T>, bc: &mut BlockContext) {
+pub fn cdef_filter_frame<T: Pixel>(fi: &FrameInvariants<T>, rec: &mut Frame<T>, bc: &BlockContext) {
   // Each filter block is 64x64, except right and/or bottom for non-multiple-of-64 sizes.
   // FIXME: 128x128 SB support will break this, we need FilterBlockOffset etc.
   let fb_width = (rec.planes[0].cfg.width + 63) / 64;
