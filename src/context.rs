@@ -1261,10 +1261,10 @@ pub struct Block {
   pub mv: [MotionVector; 2],
   pub neighbors_ref_counts: [usize; TOTAL_REFS_PER_FRAME],
   pub cdef_index: u8,
+  pub bsize: BlockSize,
   pub n4_w: usize, /* block width in the unit of mode_info */
   pub n4_h: usize, /* block height in the unit of mode_info */
-  pub tx_w: usize, /* transform width in the unit of mode_info */
-  pub tx_h: usize, /* transform height in the unit of mode_info */
+  pub txsize: TxSize,
   // The block-level deblock_deltas are left-shifted by
   // fi.deblock.block_delta_shift and added to the frame-configured
   // deltas
@@ -1282,10 +1282,10 @@ impl Block {
       mv: [ MotionVector::default(); 2],
       neighbors_ref_counts: [0; TOTAL_REFS_PER_FRAME],
       cdef_index: 0,
+      bsize: BLOCK_64X64,
       n4_w: BLOCK_64X64.width_mi(),
       n4_h: BLOCK_64X64.height_mi(),
-      tx_w: TX_64X64.width_mi(),
-      tx_h: TX_64X64.height_mi(),
+      txsize: TX_64X64,
       deblock_deltas: [0, 0, 0, 0],
       segmentation_idx: 0,
     }
@@ -1583,13 +1583,11 @@ impl BlockContext {
   pub fn set_block_size(&mut self, bo: BlockOffset, bsize: BlockSize) {
     let n4_w = bsize.width_mi();
     let n4_h = bsize.height_mi();
-    self.for_each(bo, bsize, |block| { block.n4_w = n4_w; block.n4_h = n4_h } );
+    self.for_each(bo, bsize, |block| { block.bsize = bsize; block.n4_w = n4_w; block.n4_h = n4_h } );
   }
 
-  pub fn set_tx_size(&mut self, bo: BlockOffset, bsize: BlockSize, txsize: TxSize) {
-    let tx_w = txsize.width_mi();
-    let tx_h = txsize.height_mi();
-    self.for_each(bo, bsize, |block| { block.tx_w = tx_w; block.tx_h = tx_h } );
+  pub fn set_tx_size(&mut self, bo: BlockOffset, bsize: BlockSize, tx_size: TxSize) {
+    self.for_each(bo, bsize, |block| { block.txsize = tx_size } );
   }
 
   pub fn get_mode(&mut self, bo: BlockOffset) -> PredictionMode {
