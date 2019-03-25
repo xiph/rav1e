@@ -2144,9 +2144,9 @@ fn encode_tile<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec
     }
   }
   /* TODO: Don't apply if lossless */
-  deblock_filter_optimize(fi, fs, &mut cw.bc);
+  deblock_filter_optimize(fi, fs, &cw.bc);
   if fs.deblock.levels[0] != 0 || fs.deblock.levels[1] != 0 {
-    deblock_filter_frame(fs, &mut cw.bc, fi.sequence.bit_depth);
+    deblock_filter_frame(fs, &cw.bc, fi.sequence.bit_depth);
   }
     // Until the loop filters are pipelined, we'll need to keep
     // around a copy of both the pre- and post-cdef frame.
@@ -2154,7 +2154,7 @@ fn encode_tile<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec
 
     /* TODO: Don't apply if lossless */
     if fi.sequence.enable_cdef {
-      cdef_filter_frame(fi, &mut fs.rec, &mut cw.bc);
+      cdef_filter_frame(fi, &mut fs.rec, &cw.bc);
     }
     /* TODO: Don't apply if lossless */
     if fi.sequence.enable_restoration {

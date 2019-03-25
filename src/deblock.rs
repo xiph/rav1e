@@ -1229,7 +1229,7 @@ fn sse_h_edge<T: Pixel>(
 
 // Deblocks all edges, vertical and horizontal, in a single plane
 pub fn deblock_plane<T: Pixel>(
-  deblock: &DeblockState, p: &mut Plane<T>, pli: usize, bc: &mut BlockContext,
+  deblock: &DeblockState, p: &mut Plane<T>, pli: usize, bc: &BlockContext,
   bd: usize
 ) {
   let xdec = p.cfg.xdec;
@@ -1333,7 +1333,7 @@ pub fn deblock_plane<T: Pixel>(
 // sse count of all edges in a single plane, accumulates into vertical and horizontal counts
 fn sse_plane<T: Pixel>(
   rec: &Plane<T>, src: &Plane<T>, v_sse: &mut [i64; MAX_LOOP_FILTER + 2],
-  h_sse: &mut [i64; MAX_LOOP_FILTER + 2], pli: usize, bc: &mut BlockContext,
+  h_sse: &mut [i64; MAX_LOOP_FILTER + 2], pli: usize, bc: &BlockContext,
   bd: usize
 ) {
   let xdec = rec.cfg.xdec;
@@ -1359,14 +1359,14 @@ fn sse_plane<T: Pixel>(
 
 // Deblocks all edges in all planes of a frame
 pub fn deblock_filter_frame<T: Pixel>(
-  fs: &mut FrameState<T>, bc: &mut BlockContext, bit_depth: usize
+  fs: &mut FrameState<T>, bc: &BlockContext, bit_depth: usize
 ) {
   for pli in 0..PLANES {
     deblock_plane(&fs.deblock, &mut fs.rec.planes[pli], pli, bc, bit_depth);
   }
 }
 
-fn sse_optimize<T: Pixel>(fs: &mut FrameState<T>, bc: &mut BlockContext, bit_depth: usize) {
+fn sse_optimize<T: Pixel>(fs: &mut FrameState<T>, bc: &BlockContext, bit_depth: usize) {
   assert!(MAX_LOOP_FILTER < 999);
   // i64 allows us to accumulate a total of ~ 35 bits worth of pixels
   assert!(
@@ -1425,7 +1425,7 @@ fn sse_optimize<T: Pixel>(fs: &mut FrameState<T>, bc: &mut BlockContext, bit_dep
 }
 
 pub fn deblock_filter_optimize<T: Pixel>(
-  fi: &FrameInvariants<T>, fs: &mut FrameState<T>, bc: &mut BlockContext) {
+  fi: &FrameInvariants<T>, fs: &mut FrameState<T>, bc: &BlockContext) {
   if fi.config.speed_settings.fast_deblock {
     let q = ac_q(fi.base_q_idx, 0, fi.sequence.bit_depth) as i32;
     let level = clamp(
