@@ -126,15 +126,19 @@ fn deblock_size<T: Pixel>(
   {
     0
   } else {
-    let (tx_size, prev_tx_size) = if vertical {
-      (cmp::max(block.tx_w >> xdec, 1), cmp::max(prev_block.tx_w >> xdec, 1))
+    let (txsize, prev_txsize) = if pli==0 {
+      (block.txsize, prev_block.txsize)
     } else {
-      (cmp::max(block.tx_h >> ydec, 1), cmp::max(prev_block.tx_h >> ydec, 1))
+      (block.bsize.largest_uv_tx_size(xdec, ydec), prev_block.bsize.largest_uv_tx_size(xdec, ydec))
     };
-
+    let (tx_n, prev_tx_n) = if vertical {
+      (cmp::max(txsize.width_mi(), 1), cmp::max(prev_txsize.width_mi(), 1))
+    } else {
+      (cmp::max(txsize.height_mi(), 1), cmp::max(prev_txsize.height_mi(), 1))
+    };
     cmp::min(
       if pli == 0 { 14 } else { 6 },
-      cmp::min(tx_size, prev_tx_size) << MI_SIZE_LOG2
+      cmp::min(tx_n, prev_tx_n) << MI_SIZE_LOG2
     )
   }
 }
@@ -1023,10 +1027,11 @@ fn sse_size14<T: Pixel>(
 
 fn filter_v_edge<T: Pixel>(
   deblock: &DeblockState, bc: &BlockContext, bo: BlockOffset, p: &mut Plane<T>,
-  pli: usize, bd: usize
+  pli: usize, bd: usize, xdec: usize, ydec: usize
 ) {
   let block = bc.at(bo);
-  let tx_edge = bo.x & (block.tx_w - 1) == 0;
+  let txsize = if pli==0 { block.txsize } else { block.bsize.largest_uv_tx_size(xdec, ydec) };
+  let tx_edge = bo.x >> xdec & (txsize.width_mi() - 1) == 0;
   if tx_edge {
     let prev_block = deblock_left(bc, bo, p);
     let block_edge = bo.x & (block.n4_w - 1) == 0;
@@ -1060,10 +1065,11 @@ fn filter_v_edge<T: Pixel>(
 
 fn sse_v_edge<T: Pixel>(
   bc: &BlockContext, bo: BlockOffset, rec_plane: &Plane<T>, src_plane: &Plane<T>,
-  tally: &mut [i64; MAX_LOOP_FILTER + 2], pli: usize, bd: usize
+  tally: &mut [i64; MAX_LOOP_FILTER + 2], pli: usize, bd: usize, xdec: usize, ydec: usize
 ) {
   let block = bc.at(bo);
-  let tx_edge = bo.x & (block.tx_w - 1) == 0;
+  let txsize = if pli==0 { block.txsize } else { block.bsize.largest_uv_tx_size(xdec, ydec) };
+  let tx_edge = bo.x >> xdec & (txsize.width_mi() - 1) == 0;
   if tx_edge {
     let prev_block = deblock_left(bc, bo, rec_plane);
     let block_edge = bo.x & (block.n4_w - 1) == 0;
@@ -1126,10 +1132,11 @@ fn sse_v_edge<T: Pixel>(
 
 fn filter_h_edge<T: Pixel>(
   deblock: &DeblockState, bc: &BlockContext, bo: BlockOffset, p: &mut Plane<T>,
-  pli: usize, bd: usize
+  pli: usize, bd: usize, xdec: usize, ydec: usize
 ) {
   let block = bc.at(bo);
-  let tx_edge = bo.y & (block.tx_h - 1) == 0;
+  let txsize = if pli==0 { block.txsize } else { block.bsize.largest_uv_tx_size(xdec, ydec) };
+  let tx_edge = bo.y >> ydec & (txsize.height_mi() - 1) == 0;
   if tx_edge {
     let prev_block = deblock_up(bc, bo, p);
     let block_edge = bo.y & (block.n4_h - 1) == 0;
@@ -1163,10 +1170,11 @@ fn filter_h_edge<T: Pixel>(
 
 fn sse_h_edge<T: Pixel>(
   bc: &BlockContext, bo: BlockOffset, rec_plane: &Plane<T>, src_plane: &Plane<T>,
-  tally: &mut [i64; MAX_LOOP_FILTER + 2], pli: usize, bd: usize
+  tally: &mut [i64; MAX_LOOP_FILTER + 2], pli: usize, bd: usize, xdec: usize, ydec: usize
 ) {
   let block = bc.at(bo);
-  let tx_edge = bo.y & (block.tx_h - 1) == 0;
+  let txsize = if pli==0 { block.txsize } else { block.bsize.largest_uv_tx_size(xdec, ydec) };
+  let tx_edge = bo.y >> ydec & (txsize.height_mi() - 1) == 0;
   if tx_edge {
     let prev_block = deblock_up(bc, bo, rec_plane);
     let block_edge = bo.y & (block.n4_h - 1) == 0;
@@ -1256,7 +1264,7 @@ pub fn deblock_plane<T: Pixel>(
   // edge).  Unroll to avoid corner-cases.
   if bc.rows > 0 {
     for x in (1 << xdec..bc.cols).step_by(1 << xdec) {
-      filter_v_edge(deblock, bc, BlockOffset { x, y: 0 }, p, pli, bd);
+      filter_v_edge(deblock, bc, BlockOffset { x, y: 0 }, p, pli, bd, xdec, ydec);
     }
     if bc.rows > 1 << ydec {
       for x in (1 << xdec..bc.cols).step_by(1 << xdec) {
@@ -1266,7 +1274,9 @@ pub fn deblock_plane<T: Pixel>(
           BlockOffset { x, y: 1 << ydec },
           p,
           pli,
-          bd
+          bd,
+          xdec,
+          ydec
         );
       }
     }
@@ -1277,19 +1287,21 @@ pub fn deblock_plane<T: Pixel>(
   for y in ((2 << ydec)..bc.rows).step_by(1 << ydec) {
     // Check for vertical edge at first MI block boundary on this row
     if 1 << xdec < bc.cols {
-      filter_v_edge(deblock, bc, BlockOffset { x: 1 << xdec, y }, p, pli, bd);
+      filter_v_edge(deblock, bc, BlockOffset { x: 1 << xdec, y }, p, pli, bd, xdec, ydec);
     }
     // run the rest of the row with both vertical and horizontal edge filtering.
     // Horizontal lags vertical edge by one row and two columns.
     for x in (2 << xdec..bc.cols).step_by(1 << xdec) {
-      filter_v_edge(deblock, bc, BlockOffset { x, y }, p, pli, bd);
+      filter_v_edge(deblock, bc, BlockOffset { x, y }, p, pli, bd, xdec, ydec);
       filter_h_edge(
         deblock,
         bc,
         BlockOffset { x: x - (2 << xdec), y: y - (1 << ydec) },
         p,
         pli,
-        bd
+        bd,
+        xdec,
+        ydec
       );
     }
     // ..and the last two horizontal edges for the row
@@ -1300,7 +1312,9 @@ pub fn deblock_plane<T: Pixel>(
         BlockOffset { x: bc.cols - (2 << xdec), y: y - (1 << ydec) },
         p,
         pli,
-        bd
+        bd,
+        xdec,
+        ydec
       );
       if bc.cols - (1 << xdec) > 0 {
         filter_h_edge(
@@ -1309,7 +1323,9 @@ pub fn deblock_plane<T: Pixel>(
           BlockOffset { x: bc.cols - (1 << xdec), y: y - (1 << ydec) },
           p,
           pli,
-          bd
+          bd,
+          xdec,
+          ydec
         );
       }
     }
@@ -1324,7 +1340,9 @@ pub fn deblock_plane<T: Pixel>(
         BlockOffset { x, y: bc.rows - (1 << ydec) },
         p,
         pli,
-        bd
+        bd,
+        xdec,
+        ydec
       );
     }
   }
@@ -1341,7 +1359,7 @@ fn sse_plane<T: Pixel>(
 
   // No horizontal edge filtering along top of frame
   for x in (1 << xdec..bc.cols).step_by(1 << xdec) {
-    sse_v_edge(bc, BlockOffset { x, y: 0 }, rec, src, v_sse, pli, bd);
+    sse_v_edge(bc, BlockOffset { x, y: 0 }, rec, src, v_sse, pli, bd, xdec, ydec);
   }
 
   // Unlike actual filtering, we're counting horizontal and vertical
@@ -1349,10 +1367,10 @@ fn sse_plane<T: Pixel>(
   // behind vertical.
   for y in (1 << ydec..bc.rows).step_by(1 << ydec) {
     // No vertical filtering along left edge of frame
-    sse_h_edge(bc, BlockOffset { x: 0, y }, rec, src, h_sse, pli, bd);
+    sse_h_edge(bc, BlockOffset { x: 0, y }, rec, src, h_sse, pli, bd, xdec, ydec);
     for x in (1 << xdec..bc.cols).step_by(1 << xdec) {
-      sse_v_edge(bc, BlockOffset { x, y }, rec, src, v_sse, pli, bd);
-      sse_h_edge(bc, BlockOffset { x, y }, rec, src, h_sse, pli, bd);
+      sse_v_edge(bc, BlockOffset { x, y }, rec, src, v_sse, pli, bd, xdec, ydec);
+      sse_h_edge(bc, BlockOffset { x, y }, rec, src, h_sse, pli, bd, xdec, ydec);
     }
   }
 }
