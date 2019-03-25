@@ -649,7 +649,13 @@ impl<T: Pixel> FrameInvariants<T> {
     for i in 0..INTER_REFS_PER_FRAME {
       fi.ref_frames[i] = 0;
     }
+
     fi.tx_mode_select = false;
+    // FIXME: tx partition for intra not supported for chroma 422
+    if fi.tx_mode_select {
+      if fi.sequence.chroma_sampling == ChromaSampling::Cs422 { fi.tx_mode_select = false; }
+    }
+
     fi
   }
 
