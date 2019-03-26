@@ -939,7 +939,7 @@ fn diff<T: Pixel>(dst: &mut [i16], src1: &PlaneSlice<'_, T>, src2: &PlaneSlice<'
 
 fn get_qidx<T: Pixel>(fi: &FrameInvariants<T>, fs: &FrameState<T>, cw: &ContextWriter, bo: BlockOffset) -> u8 {
   let mut qidx = fi.base_q_idx;
-  let sidx = cw.bc.blocks.at(bo).segmentation_idx as usize;
+  let sidx = cw.bc.blocks[bo].segmentation_idx as usize;
   if fs.segmentation.features[sidx][SegLvl::SEG_LVL_ALT_Q as usize] {
     let delta = fs.segmentation.data[sidx][SegLvl::SEG_LVL_ALT_Q as usize];
     qidx = clamp((qidx as i16) + delta, 0, 255) as u8;
@@ -1061,11 +1061,11 @@ pub fn motion_compensate<T: Pixel>(
     if p > 0 && bsize < BlockSize::BLOCK_8X8 {
       let mut some_use_intra = false;
       if bsize == BlockSize::BLOCK_4X4 || bsize == BlockSize::BLOCK_4X8 {
-        some_use_intra |= cw.bc.blocks.at(bo.with_offset(-1,0)).mode.is_intra(); };
+        some_use_intra |= cw.bc.blocks[bo.with_offset(-1,0)].mode.is_intra(); };
       if !some_use_intra && bsize == BlockSize::BLOCK_4X4 || bsize == BlockSize::BLOCK_8X4 {
-        some_use_intra |= cw.bc.blocks.at(bo.with_offset(0,-1)).mode.is_intra(); };
+        some_use_intra |= cw.bc.blocks[bo.with_offset(0,-1)].mode.is_intra(); };
       if !some_use_intra && bsize == BlockSize::BLOCK_4X4 {
-        some_use_intra |= cw.bc.blocks.at(bo.with_offset(-1,-1)).mode.is_intra(); };
+        some_use_intra |= cw.bc.blocks[bo.with_offset(-1,-1)].mode.is_intra(); };
 
       if some_use_intra {
         luma_mode.predict_inter(fi, p, po, &mut rec.mut_slice(po), plane_bsize.width(),
@@ -1074,13 +1074,13 @@ pub fn motion_compensate<T: Pixel>(
         assert!(xdec == 1 && ydec == 1);
         // TODO: these are absolutely only valid for 4:2:0
         if bsize == BlockSize::BLOCK_4X4 {
-          let mv0 = cw.bc.blocks.at(bo.with_offset(-1,-1)).mv;
-          let rf0 = cw.bc.blocks.at(bo.with_offset(-1,-1)).ref_frames;
-          let mv1 = cw.bc.blocks.at(bo.with_offset(0,-1)).mv;
-          let rf1 = cw.bc.blocks.at(bo.with_offset(0,-1)).ref_frames;
+          let mv0 = cw.bc.blocks[bo.with_offset(-1,-1)].mv;
+          let rf0 = cw.bc.blocks[bo.with_offset(-1,-1)].ref_frames;
+          let mv1 = cw.bc.blocks[bo.with_offset(0,-1)].mv;
+          let rf1 = cw.bc.blocks[bo.with_offset(0,-1)].ref_frames;
           let po1 = PlaneOffset { x: po.x+2, y: po.y };
-          let mv2 = cw.bc.blocks.at(bo.with_offset(-1,0)).mv;
-          let rf2 = cw.bc.blocks.at(bo.with_offset(-1,0)).ref_frames;
+          let mv2 = cw.bc.blocks[bo.with_offset(-1,0)].mv;
+          let rf2 = cw.bc.blocks[bo.with_offset(-1,0)].ref_frames;
           let po2 = PlaneOffset { x: po.x, y: po.y+2 };
           let po3 = PlaneOffset { x: po.x+2, y: po.y+2 };
           luma_mode.predict_inter(fi, p, po, &mut rec.mut_slice(po), 2, 2, rf0, mv0);
@@ -1089,15 +1089,15 @@ pub fn motion_compensate<T: Pixel>(
           luma_mode.predict_inter(fi, p, po3, &mut rec.mut_slice(po3), 2, 2, ref_frames, mvs);
         }
         if bsize == BlockSize::BLOCK_8X4 {
-          let mv1 = cw.bc.blocks.at(bo.with_offset(0,-1)).mv;
-          let rf1 = cw.bc.blocks.at(bo.with_offset(0,-1)).ref_frames;
+          let mv1 = cw.bc.blocks[bo.with_offset(0,-1)].mv;
+          let rf1 = cw.bc.blocks[bo.with_offset(0,-1)].ref_frames;
           luma_mode.predict_inter(fi, p, po, &mut rec.mut_slice(po), 4, 2, rf1, mv1);
           let po3 = PlaneOffset { x: po.x, y: po.y+2 };
           luma_mode.predict_inter(fi, p, po3, &mut rec.mut_slice(po3), 4, 2, ref_frames, mvs);
         }
         if bsize == BlockSize::BLOCK_4X8 {
-          let mv2 = cw.bc.blocks.at(bo.with_offset(-1,0)).mv;
-          let rf2 = cw.bc.blocks.at(bo.with_offset(-1,0)).ref_frames;
+          let mv2 = cw.bc.blocks[bo.with_offset(-1,0)].mv;
+          let rf2 = cw.bc.blocks[bo.with_offset(-1,0)].ref_frames;
           luma_mode.predict_inter(fi, p, po, &mut rec.mut_slice(po), 2, 4, rf2, mv2);
           let po3 = PlaneOffset { x: po.x+2, y: po.y };
           luma_mode.predict_inter(fi, p, po3, &mut rec.mut_slice(po3), 2, 4, ref_frames, mvs);
