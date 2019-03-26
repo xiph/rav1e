@@ -250,7 +250,7 @@ INIT_XMM ssse3
  %endif
 %endmacro
 
-%macro cdef_filter_fn 3 ; w, h, stride
+%macro CDEF_FILTER 3 ; w, h, stride
  %if ARCH_X86_64
 cglobal cdef_filter_%1x%2, 4, 9, 16, 3 * 16 + (%2+4)*%3, \
                            dst, stride, left, top, pri, sec, stride3, dst4, edge
@@ -715,9 +715,9 @@ cglobal cdef_filter_%1x%2, 2, 7, 8, - 5 * 16 - (%2+4)*%3, \
     RET
 %endmacro
 
-cdef_filter_fn 8, 8, 32
-cdef_filter_fn 4, 8, 32
-cdef_filter_fn 4, 4, 32
+CDEF_FILTER 8, 8, 32
+CDEF_FILTER 4, 8, 32
+CDEF_FILTER 4, 4, 32
 
 %macro MULLD 2
  %if ARCH_X86_32
