@@ -879,9 +879,9 @@ pub fn rdo_mode_decision<T: Pixel>(
     }
   }
 
-  cw.bc.set_mode(bo, bsize, best.mode_luma);
-  cw.bc.set_ref_frames(bo, bsize, best.ref_frames);
-  cw.bc.set_motion_vectors(bo, bsize, best.mvs);
+  cw.bc.blocks.set_mode(bo, bsize, best.mode_luma);
+  cw.bc.blocks.set_ref_frames(bo, bsize, best.ref_frames);
+  cw.bc.blocks.set_motion_vectors(bo, bsize, best.mvs);
 
   assert!(best.rd >= 0_f64);
 
@@ -1243,7 +1243,7 @@ fn rdo_loop_plane_error<T: Pixel>(sbo: SuperBlockOffset, fi: &FrameInvariants<T>
     for bx in 0..sb_blocks {
       let bo = sbo.block_offset(bx<<1, by<<1);
       if bo.x < bc.cols && bo.y < bc.rows {
-        let skip = bc.at(bo).skip;
+        let skip = bc.blocks.at(bo).skip;
         if !skip {
           let in_plane = &fs.input.planes[pli];
           let in_po = sbo.block_offset(bx<<1, by<<1).plane_offset(&in_plane.cfg);
@@ -1436,7 +1436,7 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: SuperBlockOffset, fi: &FrameInvariants<T
   }
 
   if cw.bc.cdef_coded {
-    cw.bc.set_cdef(sbo, best_index as u8);
+    cw.bc.blocks.set_cdef(sbo, best_index as u8);
   }
 
   if fi.sequence.enable_restoration {

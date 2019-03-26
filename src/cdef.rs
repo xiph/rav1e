@@ -221,10 +221,10 @@ pub fn cdef_analyze_superblock<T: Pixel>(
       // in the main frame.
       let global_block_offset = sbo_global.block_offset(bx<<1, by<<1);
       if global_block_offset.x < bc_global.cols && global_block_offset.y < bc_global.rows {
-        let skip = bc_global.at(global_block_offset).skip
-          & bc_global.at(sbo_global.block_offset(2*bx+1, 2*by)).skip
-          & bc_global.at(sbo_global.block_offset(2*bx, 2*by+1)).skip
-          & bc_global.at(sbo_global.block_offset(2*bx+1, 2*by+1)).skip;
+        let skip = bc_global.blocks.at(global_block_offset).skip
+          & bc_global.blocks.at(sbo_global.block_offset(2*bx+1, 2*by)).skip
+          & bc_global.blocks.at(sbo_global.block_offset(2*bx, 2*by+1)).skip
+          & bc_global.blocks.at(sbo_global.block_offset(2*bx+1, 2*by+1)).skip;
 
         if !skip {
           let mut var: i32 = 0;
@@ -358,10 +358,10 @@ pub fn cdef_filter_superblock<T: Pixel>(
     for bx in 0..8 {
       let global_block_offset = sbo_global.block_offset(bx<<1, by<<1);
       if global_block_offset.x < bc_global.cols && global_block_offset.y < bc_global.rows {
-        let skip = bc_global.at(global_block_offset).skip
-          & bc_global.at(sbo_global.block_offset(2*bx+1, 2*by)).skip
-          & bc_global.at(sbo_global.block_offset(2*bx, 2*by+1)).skip
-          & bc_global.at(sbo_global.block_offset(2*bx+1, 2*by+1)).skip;
+        let skip = bc_global.blocks.at(global_block_offset).skip
+          & bc_global.blocks.at(sbo_global.block_offset(2*bx+1, 2*by)).skip
+          & bc_global.blocks.at(sbo_global.block_offset(2*bx, 2*by+1)).skip
+          & bc_global.blocks.at(sbo_global.block_offset(2*bx+1, 2*by+1)).skip;
         if !skip {
           let dir = cdef_dirs.dir[bx][by];
           let var = cdef_dirs.var[bx][by];
@@ -480,7 +480,7 @@ pub fn cdef_filter_frame<T: Pixel>(fi: &FrameInvariants<T>, rec: &mut Frame<T>, 
   for fby in 0..fb_height {
     for fbx in 0..fb_width {
       let sbo = SuperBlockOffset { x: fbx, y: fby };
-      let cdef_index = bc.at(sbo.block_offset(0, 0)).cdef_index;
+      let cdef_index = bc.blocks.at(sbo.block_offset(0, 0)).cdef_index;
       let cdef_dirs = cdef_analyze_superblock(&cdef_frame, bc, sbo, sbo, fi.sequence.bit_depth);
       cdef_filter_superblock(fi, &cdef_frame, rec, bc, sbo, sbo, cdef_index, &cdef_dirs);
     }
