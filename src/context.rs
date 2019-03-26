@@ -1422,6 +1422,23 @@ impl IndexMut<usize> for FrameBlocks {
   }
 }
 
+// for convenience, also index by BlockOffset
+
+impl Index<BlockOffset> for FrameBlocks {
+  type Output = Block;
+  #[inline]
+  fn index(&self, bo: BlockOffset) -> &Self::Output {
+    &self[bo.y][bo.x]
+  }
+}
+
+impl IndexMut<BlockOffset> for FrameBlocks {
+  #[inline]
+  fn index_mut(&mut self, bo: BlockOffset) -> &mut Self::Output {
+    &mut self[bo.y][bo.x]
+  }
+}
+
 #[derive(Clone)]
 pub struct BlockContextCheckpoint {
   cdef_coded: bool,
