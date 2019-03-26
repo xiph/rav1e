@@ -1284,6 +1284,15 @@ impl IndexMut<usize> for FrameBlocks {
 }
 
 #[derive(Clone)]
+pub struct BlockContextCheckpoint {
+  cdef_coded: bool,
+  above_partition_context: Vec<u8>,
+  left_partition_context: [u8; MAX_MIB_SIZE],
+  above_coeff_context: [Vec<u8>; PLANES],
+  left_coeff_context: [[u8; MAX_MIB_SIZE]; PLANES],
+}
+
+#[derive(Clone)]
 pub struct BlockContext {
   pub cols: usize,
   pub rows: usize,
@@ -1325,25 +1334,17 @@ impl BlockContext {
     }
   }
 
-  pub fn checkpoint(&mut self) -> BlockContext {
-    BlockContext {
-      cols: self.cols,
-      rows: self.rows,
+  pub fn checkpoint(&mut self) -> BlockContextCheckpoint {
+    BlockContextCheckpoint {
       cdef_coded: self.cdef_coded,
-      code_deltas: self.code_deltas,
-      update_seg: self.update_seg,
-      preskip_segid: self.preskip_segid,
       above_partition_context: self.above_partition_context.clone(),
       left_partition_context: self.left_partition_context,
       above_coeff_context: self.above_coeff_context.clone(),
       left_coeff_context: self.left_coeff_context,
-      blocks: FrameBlocks::new(0, 0),
     }
   }
 
-  pub fn rollback(&mut self, checkpoint: &BlockContext) {
-    self.cols = checkpoint.cols;
-    self.rows = checkpoint.rows;
+  pub fn rollback(&mut self, checkpoint: &BlockContextCheckpoint) {
     self.cdef_coded = checkpoint.cdef_coded;
     self.above_partition_context = checkpoint.above_partition_context.clone();
     self.left_partition_context = checkpoint.left_partition_context;
@@ -1843,7 +1844,7 @@ pub fn av1_get_coded_tx_size(tx_size: TxSize) -> TxSize {
 #[derive(Clone)]
 pub struct ContextWriterCheckpoint {
   pub fc: CDFContext,
-  pub bc: BlockContext
+  pub bc: BlockContextCheckpoint,
 }
 
 #[derive(Clone)]
