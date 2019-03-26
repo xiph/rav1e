@@ -364,39 +364,62 @@ pub fn rdo_tx_size_type<T: Pixel>(
   luma_mode: PredictionMode, ref_frames: [usize; 2], mvs: [MotionVector; 2], skip: bool
 ) -> (TxSize, TxType) {
   use crate::context::max_txsize_rect_lookup;
-  let tx_size = if !fi.tx_mode_select || !luma_mode.is_intra() {
-    max_txsize_rect_lookup[bsize as usize]
-  } else {
-    sub_tx_size_map[max_txsize_rect_lookup[bsize as usize] as usize]  // 1 level partition
-  };
-  debug_assert!(tx_size.width_log2() <= bsize.width_log2());
-  debug_assert!(tx_size.height_log2() <= bsize.height_log2());
 
-  // Luma plane transform type decision
+  let mut tx_size = max_txsize_rect_lookup[bsize as usize];
+  let mut best_tx_type = TxType::DCT_DCT;
+  let mut best_tx_size = tx_size;
+  let mut best_rd = std::f64::MAX;
   let is_inter = !luma_mode.is_intra();
-  let tx_set = get_tx_set(tx_size, is_inter, fi.use_reduced_tx_set);
 
-  let tx_type =
-    if tx_set > TxSet::TX_SET_DCTONLY && fi.config.speed_settings.rdo_tx_decision && !skip {
-      rdo_tx_type_decision(
-        fi,
-        fs,
-        cw,
-        luma_mode,
-        ref_frames,
-        mvs,
-        bsize,
-        bo,
-        tx_size,
-        tx_set,
-      )
-    } else {
-      TxType::DCT_DCT
-    };
+  let do_rdo_tx_size = fi.tx_mode_select && fi.config.speed_settings.rdo_tx_decision &&
+                luma_mode.is_intra();
+  // TODO: Will consider increase rdo_tx_depth to max 2
+  let rdo_tx_depth = if do_rdo_tx_size { 1 } else { 0 };
+  let cw_checkpoint = cw.checkpoint();
 
-  assert!(tx_size.sqr() <= TxSize::TX_32X32 || tx_type == TxType::DCT_DCT);
+  for _ in 0..=rdo_tx_depth {
+    let tx_set = get_tx_set(tx_size, is_inter, fi.use_reduced_tx_set);
 
-  (tx_size, tx_type)
+    let do_rdo_tx_type = tx_set > TxSet::TX_SET_DCTONLY &&
+        fi.config.speed_settings.rdo_tx_decision && !skip;
+
+    if !do_rdo_tx_size && !do_rdo_tx_type { return (best_tx_size, best_tx_type) };
+
+    let tx_types = if do_rdo_tx_type { RAV1E_TX_TYPES } else { &[TxType::DCT_DCT] };
+
+    // Luma plane transform type decision
+    let (tx_type, rd_cost) =
+        rdo_tx_type_decision(
+          fi,
+          fs,
+          cw,
+          luma_mode,
+          ref_frames,
+          mvs,
+          bsize,
+          bo,
+          tx_size,
+          tx_set,
+          tx_types
+        );
+
+    if rd_cost < best_rd {
+      best_tx_size = tx_size;
+      best_tx_type = tx_type;
+      best_rd = rd_cost;
+    }
+
+    debug_assert!(tx_size.width_log2() <= bsize.width_log2());
+    debug_assert!(tx_size.height_log2() <= bsize.height_log2());
+    debug_assert!(tx_size.sqr() <= TxSize::TX_32X32 || tx_type == TxType::DCT_DCT);
+
+    tx_size = sub_tx_size_map[best_tx_size as usize];
+    if tx_size == best_tx_size { break; };
+
+    cw.rollback(&cw_checkpoint);
+  }
+
+  (best_tx_size, best_tx_type)
 }
 
 struct EncodingSettings {
@@ -926,8 +949,9 @@ pub fn rdo_cfl_alpha<T: Pixel>(
 pub fn rdo_tx_type_decision<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, cw: &mut ContextWriter,
   mode: PredictionMode, ref_frames: [usize; 2], mvs: [MotionVector; 2],
-  bsize: BlockSize, bo: BlockOffset, tx_size: TxSize, tx_set: TxSet
-) -> TxType {
+  bsize: BlockSize, bo: BlockOffset, tx_size: TxSize, tx_set: TxSet,
+  tx_types: &[TxType]
+) -> (TxType, f64) {
   let mut best_type = TxType::DCT_DCT;
   let mut best_rd = std::f64::MAX;
 
@@ -948,7 +972,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
     RDOType::PixelDistRealRate
   };
 
-  for &tx_type in RAV1E_TX_TYPES {
+  for &tx_type in tx_types {
     // Skip unsupported transform types
     if av1_tx_used[tx_set as usize][tx_type as usize] == 0 {
       continue;
@@ -1019,7 +1043,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
 
   assert!(best_rd >= 0_f64);
 
-  best_type
+  (best_type, best_rd)
 }
 
 pub fn get_sub_partitions(four_partitions: &[BlockOffset; 4],
