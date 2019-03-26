@@ -1232,7 +1232,7 @@ pub fn rdo_partition_decision<T: Pixel>(
 }
 
 fn rdo_loop_plane_error<T: Pixel>(sbo: SuperBlockOffset, fi: &FrameInvariants<T>,
-                                  fs: &FrameState<T>, bc: &BlockContext,
+                                  fs: &FrameState<T>, blocks: &FrameBlocks,
                                   test: &Frame<T>, pli: usize) -> u64 {
   let sbo_0 = SuperBlockOffset { x: 0, y: 0 };
   let sb_blocks = if fi.sequence.use_128x128_superblock {16} else {8};
@@ -1242,8 +1242,8 @@ fn rdo_loop_plane_error<T: Pixel>(sbo: SuperBlockOffset, fi: &FrameInvariants<T>
   for by in 0..sb_blocks {
     for bx in 0..sb_blocks {
       let bo = sbo.block_offset(bx<<1, by<<1);
-      if bo.x < bc.cols && bo.y < bc.rows {
-        let skip = bc.blocks[bo].skip;
+      if bo.x < blocks.cols && bo.y < blocks.rows {
+        let skip = blocks[bo].skip;
         if !skip {
           let in_plane = &fs.input.planes[pli];
           let in_po = sbo.block_offset(bx<<1, by<<1).plane_offset(&in_plane.cfg);
@@ -1318,7 +1318,7 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: SuperBlockOffset, fi: &FrameInvariants<T
   // If LRF choice changed for any plane, repeat last two steps.
   let bd = fi.sequence.bit_depth;
   let cdef_data = cdef_input.as_ref().map(|input| {
-    (input, cdef_analyze_superblock(input, &cw.bc, sbo_0, sbo, bd))
+    (input, cdef_analyze_superblock(input, &cw.bc.blocks, sbo_0, sbo, bd))
   });
   let mut first_loop = true;
   loop {
@@ -1331,11 +1331,11 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: SuperBlockOffset, fi: &FrameInvariants<T
           let mut cost = [0.; PLANES];
           let mut cost_acc = 0.;
           cdef_filter_superblock(fi, &cdef_input, &mut lrf_input,
-                                 &cw.bc, sbo_0, sbo, cdef_index as u8, &cdef_dirs);
+                                 &cw.bc.blocks, sbo_0, sbo, cdef_index as u8, &cdef_dirs);
           for pli in 0..3 {
             match best_lrf[pli] {
               RestorationFilter::None{} => {
-                let err = rdo_loop_plane_error(sbo, fi, fs, &cw.bc, &lrf_input, pli);
+                let err = rdo_loop_plane_error(sbo, fi, fs, &cw.bc.blocks, &lrf_input, pli);
                 let rate = if fi.sequence.enable_restoration {
                   cw.count_lrf_switchable(w, &fs.restoration, best_lrf[pli], pli)
                 } else {
@@ -1353,7 +1353,7 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: SuperBlockOffset, fi: &FrameInvariants<T
                                       &lrf_input.planes[pli].slice(PlaneOffset{x:0, y:0}),
                                       &lrf_input.planes[pli].slice(PlaneOffset{x:0, y:0}),
                                       &mut lrf_output.planes[pli].mut_slice(PlaneOffset{x:0, y:0}));
-                let err = rdo_loop_plane_error(sbo, fi, fs, &cw.bc, &lrf_output, pli);
+                let err = rdo_loop_plane_error(sbo, fi, fs, &cw.bc.blocks, &lrf_output, pli);
                 let rate = cw.count_lrf_switchable(w, &fs.restoration, best_lrf[pli], pli);
                 cost[pli] = err as f64 + fi.lambda * rate as f64 / ((1<<OD_BITRES) as f64);
                 cost_acc += cost[pli];
@@ -1380,7 +1380,7 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: SuperBlockOffset, fi: &FrameInvariants<T
       // need cdef output from best index, not just last iteration
       if let Some((cdef_input, cdef_dirs)) = cdef_data.as_ref() {
         cdef_filter_superblock(fi, &cdef_input, &mut lrf_input,
-                               &cw.bc, sbo_0, sbo, best_index as u8, &cdef_dirs);
+                               &cw.bc.blocks, sbo_0, sbo, best_index as u8, &cdef_dirs);
       }
 
       // Wiener LRF decision coming soon
@@ -1408,7 +1408,7 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: SuperBlockOffset, fi: &FrameInvariants<T
                                     &lrf_input.planes[pli].slice(PlaneOffset{x:0, y:0}),
                                     &mut lrf_output.planes[pli].mut_slice(PlaneOffset{x:0, y:0}));
             }
-            let err = rdo_loop_plane_error(sbo, fi, fs, &cw.bc, &lrf_output, pli);
+            let err = rdo_loop_plane_error(sbo, fi, fs, &cw.bc.blocks, &lrf_output, pli);
             let rate = cw.count_lrf_switchable(w, &fs.restoration, current_lrf, pli);
             let cost = err as f64 + fi.lambda * rate as f64 / ((1<<OD_BITRES) as f64);
             if best_cost[pli] < 0. || cost < best_cost[pli] {

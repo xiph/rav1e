@@ -113,10 +113,10 @@ fn cdef_frame_bench(b: &mut Bencher, width: usize, height: usize) {
   };
   let sequence = Sequence::new(&Default::default());
   let fi = FrameInvariants::<u16>::new(config, sequence);
-  let mut bc = BlockContext::new(fi.sb_width * 16, fi.sb_height * 16);
+  let bc = BlockContext::new(fi.sb_width * 16, fi.sb_height * 16);
   let mut fs = FrameState::new(&fi);
 
-  b.iter(|| cdef_filter_frame(&fi, &mut fs.rec, &mut bc));
+  b.iter(|| cdef_filter_frame(&fi, &mut fs.rec, &bc.blocks));
 }
 
 fn cfl_rdo(c: &mut Criterion) {
