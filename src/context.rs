@@ -1200,7 +1200,7 @@ impl BlockOffset {
   }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct Block {
   pub mode: PredictionMode,
   pub partition: PartitionType,
@@ -1358,30 +1358,6 @@ impl BlockContext {
 
   pub fn at(&self, bo: BlockOffset) -> &Block {
     &self.blocks[bo.y][bo.x]
-  }
-
-  pub fn above_of(&self, bo: BlockOffset) -> Block {
-    if bo.y > 0 {
-      self.blocks[bo.y - 1][bo.x]
-    } else {
-      Block::default()
-    }
-  }
-
-  pub fn left_of(&self, bo: BlockOffset) -> Block {
-    if bo.x > 0 {
-      self.blocks[bo.y][bo.x - 1]
-    } else {
-      Block::default()
-    }
-  }
-
-  pub fn above_left_of(&mut self, bo: BlockOffset) -> Block {
-    if bo.x > 0 && bo.y > 0 {
-      self.blocks[bo.y - 1][bo.x - 1]
-    } else {
-      Block::default()
-    }
   }
 
   pub fn for_each<F>(&mut self, bo: BlockOffset, bsize: BlockSize, f: F)
@@ -1545,8 +1521,8 @@ impl BlockContext {
   }
 
   fn skip_context(&mut self, bo: BlockOffset) -> usize {
-    let above_skip = bo.y > 0 && self.above_of(bo).skip;
-    let left_skip = bo.x > 0 && self.left_of(bo).skip;
+    let above_skip = bo.y > 0 && self.blocks[bo.y - 1][bo.x].skip;
+    let left_skip = bo.x > 0 && self.blocks[bo.y][bo.x - 1].skip;
     above_skip as usize + left_skip as usize
   }
 
@@ -1610,16 +1586,16 @@ impl BlockContext {
 
     match (has_above, has_left) {
       (true, true) => {
-        let above_intra = !self.above_of(bo).is_inter();
-        let left_intra = !self.left_of(bo).is_inter();
+        let above_intra = !self.blocks[bo.y - 1][bo.x].is_inter();
+        let left_intra = !self.blocks[bo.y][bo.x - 1].is_inter();
         if above_intra && left_intra {
           3
         } else {
           (above_intra || left_intra) as usize
         }
       }
-      (true, false) => if self.above_of(bo).is_inter() { 0 } else { 2 },
-      (false, true) => if self.left_of(bo).is_inter() { 0 } else { 2 },
+      (true, false) => if self.blocks[bo.y - 1][bo.x].is_inter() { 0 } else { 2 },
+      (false, true) => if self.blocks[bo.y][bo.x - 1].is_inter() { 0 } else { 2 },
       _ => 0
     }
   }
@@ -1983,10 +1959,10 @@ impl ContextWriter {
   pub fn get_cdf_intra_mode_kf(&self, bo: BlockOffset) -> &[u16; INTRA_MODES + 1] {
     static intra_mode_context: [usize; INTRA_MODES] =
       [0, 1, 2, 3, 4, 4, 4, 4, 3, 0, 1, 2, 0];
-    let above_mode = self.bc.above_of(bo).mode as usize;
-    let left_mode = self.bc.left_of(bo).mode as usize;
-    let above_ctx = intra_mode_context[above_mode];
-    let left_ctx = intra_mode_context[left_mode];
+    let above_mode = if bo.y > 0 { self.bc.blocks[bo.y - 1][bo.x].mode } else { PredictionMode::DC_PRED };
+    let left_mode = if bo.x > 0 { self.bc.blocks[bo.y][bo.x - 1].mode } else { PredictionMode::DC_PRED };
+    let above_ctx = intra_mode_context[above_mode as usize];
+    let left_ctx = intra_mode_context[left_mode as usize];
     &self.fc.kf_y_cdf[above_ctx][left_ctx]
   }
   pub fn write_intra_mode_kf(
@@ -1994,10 +1970,10 @@ impl ContextWriter {
   ) {
     static intra_mode_context: [usize; INTRA_MODES] =
       [0, 1, 2, 3, 4, 4, 4, 4, 3, 0, 1, 2, 0];
-    let above_mode = self.bc.above_of(bo).mode as usize;
-    let left_mode = self.bc.left_of(bo).mode as usize;
-    let above_ctx = intra_mode_context[above_mode];
-    let left_ctx = intra_mode_context[left_mode];
+    let above_mode = if bo.y > 0 { self.bc.blocks[bo.y - 1][bo.x].mode } else { PredictionMode::DC_PRED };
+    let left_mode = if bo.x > 0 { self.bc.blocks[bo.y][bo.x - 1].mode } else { PredictionMode::DC_PRED };
+    let above_ctx = intra_mode_context[above_mode as usize];
+    let left_ctx = intra_mode_context[left_mode as usize];
     let cdf = &mut self.fc.kf_y_cdf[above_ctx][left_ctx];
     symbol_with_update!(self, w, mode as u32, cdf);
   }
@@ -2597,20 +2573,23 @@ impl ContextWriter {
   pub fn fill_neighbours_ref_counts(&mut self, bo: BlockOffset) {
       let mut ref_counts = [0; TOTAL_REFS_PER_FRAME];
 
-      let above_b = self.bc.above_of(bo);
-      let left_b = self.bc.left_of(bo);
-
-      if bo.y > 0 && above_b.is_inter() {
-        ref_counts[above_b.ref_frames[0] as usize] += 1;
-        if above_b.has_second_ref() {
-          ref_counts[above_b.ref_frames[1] as usize] += 1;
+      if bo.y > 0 {
+        let above_b = &self.bc.blocks[bo.y - 1][bo.x];
+        if above_b.is_inter() {
+          ref_counts[above_b.ref_frames[0] as usize] += 1;
+          if above_b.has_second_ref() {
+            ref_counts[above_b.ref_frames[1] as usize] += 1;
+          }
         }
       }
 
-      if bo.x > 0 && left_b.is_inter() {
-        ref_counts[left_b.ref_frames[0] as usize] += 1;
-        if left_b.has_second_ref() {
-          ref_counts[left_b.ref_frames[1] as usize] += 1;
+      if bo.x > 0 {
+        let left_b = &self.bc.blocks[bo.y][bo.x - 1];
+        if left_b.is_inter() {
+          ref_counts[left_b.ref_frames[0] as usize] += 1;
+          if left_b.has_second_ref() {
+            ref_counts[left_b.ref_frames[1] as usize] += 1;
+          }
         }
       }
       self.bc.at_mut(bo).neighbors_ref_counts = ref_counts;
@@ -2967,13 +2946,13 @@ impl ContextWriter {
     let mut prev_u  = -1;
     let mut prev_l  = -1;
     if bo.x > 0 && bo.y > 0 {
-      prev_ul = self.bc.above_left_of(bo).segmentation_idx as i8;
+      prev_ul = self.bc.blocks[bo.y - 1][bo.x - 1].segmentation_idx as i8;
     }
     if bo.y > 0 {
-      prev_u  = self.bc.above_of(bo).segmentation_idx as i8;
+      prev_u  = self.bc.blocks[bo.y - 1][bo.x].segmentation_idx as i8;
     }
     if bo.x > 0 {
-      prev_l  = self.bc.left_of(bo).segmentation_idx as i8;
+      prev_l  = self.bc.blocks[bo.y][bo.x - 1].segmentation_idx as i8;
     }
 
     /* Pick CDF index based on number of matching/out-of-bounds segment IDs. */
