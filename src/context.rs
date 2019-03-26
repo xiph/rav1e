@@ -1253,7 +1253,7 @@ impl BlockOffset {
   }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct Block {
   pub mode: PredictionMode,
   pub partition: PartitionType,
@@ -1424,28 +1424,19 @@ impl BlockContext {
     &self.blocks[bo.y][bo.x]
   }
 
-  pub fn above_of(&self, bo: BlockOffset) -> Block {
-    if bo.y > 0 {
-      self.blocks[bo.y - 1][bo.x]
-    } else {
-      Block::default()
-    }
+  #[inline]
+  pub fn above_of(&self, bo: BlockOffset) -> &Block {
+    &self.blocks[bo.y - 1][bo.x]
   }
 
-  pub fn left_of(&self, bo: BlockOffset) -> Block {
-    if bo.x > 0 {
-      self.blocks[bo.y][bo.x - 1]
-    } else {
-      Block::default()
-    }
+  #[inline]
+  pub fn left_of(&self, bo: BlockOffset) -> &Block {
+    &self.blocks[bo.y][bo.x - 1]
   }
 
-  pub fn above_left_of(&mut self, bo: BlockOffset) -> Block {
-    if bo.x > 0 && bo.y > 0 {
-      self.blocks[bo.y - 1][bo.x - 1]
-    } else {
-      Block::default()
-    }
+  #[inline]
+  pub fn above_left_of(&self, bo: BlockOffset) -> &Block {
+    &self.blocks[bo.y - 1][bo.x - 1]
   }
 
   pub fn for_each<F>(&mut self, bo: BlockOffset, bsize: BlockSize, f: F)
@@ -2151,10 +2142,10 @@ impl ContextWriter {
   pub fn get_cdf_intra_mode_kf(&self, bo: BlockOffset) -> &[u16; INTRA_MODES + 1] {
     static intra_mode_context: [usize; INTRA_MODES] =
       [0, 1, 2, 3, 4, 4, 4, 4, 3, 0, 1, 2, 0];
-    let above_mode = self.bc.above_of(bo).mode as usize;
-    let left_mode = self.bc.left_of(bo).mode as usize;
-    let above_ctx = intra_mode_context[above_mode];
-    let left_ctx = intra_mode_context[left_mode];
+    let above_mode = if bo.y > 0 { self.bc.above_of(bo).mode } else { PredictionMode::DC_PRED };
+    let left_mode = if bo.x > 0 { self.bc.left_of(bo).mode } else { PredictionMode::DC_PRED };
+    let above_ctx = intra_mode_context[above_mode as usize];
+    let left_ctx = intra_mode_context[left_mode as usize];
     &self.fc.kf_y_cdf[above_ctx][left_ctx]
   }
   pub fn write_intra_mode_kf(
@@ -2162,10 +2153,10 @@ impl ContextWriter {
   ) {
     static intra_mode_context: [usize; INTRA_MODES] =
       [0, 1, 2, 3, 4, 4, 4, 4, 3, 0, 1, 2, 0];
-    let above_mode = self.bc.above_of(bo).mode as usize;
-    let left_mode = self.bc.left_of(bo).mode as usize;
-    let above_ctx = intra_mode_context[above_mode];
-    let left_ctx = intra_mode_context[left_mode];
+    let above_mode = if bo.y > 0 { self.bc.above_of(bo).mode } else { PredictionMode::DC_PRED };
+    let left_mode = if bo.x > 0 { self.bc.left_of(bo).mode } else { PredictionMode::DC_PRED };
+    let above_ctx = intra_mode_context[above_mode as usize];
+    let left_ctx = intra_mode_context[left_mode as usize];
     let cdf = &mut self.fc.kf_y_cdf[above_ctx][left_ctx];
     symbol_with_update!(self, w, mode as u32, cdf);
   }
@@ -2776,20 +2767,23 @@ impl ContextWriter {
   pub fn fill_neighbours_ref_counts(&mut self, bo: BlockOffset) {
       let mut ref_counts = [0; INTER_REFS_PER_FRAME];
 
-      let above_b = self.bc.above_of(bo);
-      let left_b = self.bc.left_of(bo);
-
-      if bo.y > 0 && above_b.is_inter() {
-        ref_counts[above_b.ref_frames[0].to_index()] += 1;
-        if above_b.has_second_ref() {
-          ref_counts[above_b.ref_frames[1].to_index()] += 1;
+      if bo.y > 0 {
+        let above_b = self.bc.above_of(bo);
+        if above_b.is_inter() {
+          ref_counts[above_b.ref_frames[0].to_index()] += 1;
+          if above_b.has_second_ref() {
+            ref_counts[above_b.ref_frames[1].to_index()] += 1;
+          }
         }
       }
 
-      if bo.x > 0 && left_b.is_inter() {
-        ref_counts[left_b.ref_frames[0].to_index()] += 1;
-        if left_b.has_second_ref() {
-          ref_counts[left_b.ref_frames[1].to_index()] += 1;
+      if bo.x > 0 {
+        let left_b = self.bc.left_of(bo);
+        if left_b.is_inter() {
+          ref_counts[left_b.ref_frames[0].to_index()] += 1;
+          if left_b.has_second_ref() {
+            ref_counts[left_b.ref_frames[1].to_index()] += 1;
+          }
         }
       }
       self.bc.at_mut(bo).neighbors_ref_counts = ref_counts;
