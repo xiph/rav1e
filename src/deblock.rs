@@ -92,7 +92,7 @@ fn deblock_left<'a, T: Pixel>(
   let bo = BlockOffset { x: in_bo.x | xdec, y: in_bo.y | ydec };
 
   // We already know we're not at the upper/left corner, so prev_block is in frame
-  bc.at(bo.with_offset(-1 << xdec, 0))
+  bc.blocks.at(bo.with_offset(-1 << xdec, 0))
 }
 
 fn deblock_up<'a, T: Pixel>(
@@ -106,7 +106,7 @@ fn deblock_up<'a, T: Pixel>(
   let bo = BlockOffset { x: in_bo.x | xdec, y: in_bo.y | ydec };
 
   // We already know we're not at the upper/left corner, so prev_block is in frame
-  bc.at(bo.with_offset(0, -1 << ydec))
+  bc.blocks.at(bo.with_offset(0, -1 << ydec))
 }
 
 // Must be called on a tx edge, and not on a frame edge.  This is enforced above the call.
@@ -1025,7 +1025,7 @@ fn filter_v_edge<T: Pixel>(
   deblock: &DeblockState, bc: &BlockContext, bo: BlockOffset, p: &mut Plane<T>,
   pli: usize, bd: usize
 ) {
-  let block = bc.at(bo);
+  let block = bc.blocks.at(bo);
   let tx_edge = bo.x & (block.tx_w - 1) == 0;
   if tx_edge {
     let prev_block = deblock_left(bc, bo, p);
@@ -1062,7 +1062,7 @@ fn sse_v_edge<T: Pixel>(
   bc: &BlockContext, bo: BlockOffset, rec_plane: &Plane<T>, src_plane: &Plane<T>,
   tally: &mut [i64; MAX_LOOP_FILTER + 2], pli: usize, bd: usize
 ) {
-  let block = bc.at(bo);
+  let block = bc.blocks.at(bo);
   let tx_edge = bo.x & (block.tx_w - 1) == 0;
   if tx_edge {
     let prev_block = deblock_left(bc, bo, rec_plane);
@@ -1128,7 +1128,7 @@ fn filter_h_edge<T: Pixel>(
   deblock: &DeblockState, bc: &BlockContext, bo: BlockOffset, p: &mut Plane<T>,
   pli: usize, bd: usize
 ) {
-  let block = bc.at(bo);
+  let block = bc.blocks.at(bo);
   let tx_edge = bo.y & (block.tx_h - 1) == 0;
   if tx_edge {
     let prev_block = deblock_up(bc, bo, p);
@@ -1165,7 +1165,7 @@ fn sse_h_edge<T: Pixel>(
   bc: &BlockContext, bo: BlockOffset, rec_plane: &Plane<T>, src_plane: &Plane<T>,
   tally: &mut [i64; MAX_LOOP_FILTER + 2], pli: usize, bd: usize
 ) {
-  let block = bc.at(bo);
+  let block = bc.blocks.at(bo);
   let tx_edge = bo.y & (block.tx_h - 1) == 0;
   if tx_edge {
     let prev_block = deblock_up(bc, bo, rec_plane);

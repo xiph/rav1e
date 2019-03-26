@@ -939,7 +939,7 @@ fn diff<T: Pixel>(dst: &mut [i16], src1: &PlaneSlice<'_, T>, src2: &PlaneSlice<'
 
 fn get_qidx<T: Pixel>(fi: &FrameInvariants<T>, fs: &FrameState<T>, cw: &ContextWriter, bo: BlockOffset) -> u8 {
   let mut qidx = fi.base_q_idx;
-  let sidx = cw.bc.at(bo).segmentation_idx as usize;
+  let sidx = cw.bc.blocks.at(bo).segmentation_idx as usize;
   if fs.segmentation.features[sidx][SegLvl::SEG_LVL_ALT_Q as usize] {
     let delta = fs.segmentation.data[sidx][SegLvl::SEG_LVL_ALT_Q as usize];
     qidx = clamp((qidx as i16) + delta, 0, 255) as u8;
@@ -1061,11 +1061,11 @@ pub fn motion_compensate<T: Pixel>(
     if p > 0 && bsize < BlockSize::BLOCK_8X8 {
       let mut some_use_intra = false;
       if bsize == BlockSize::BLOCK_4X4 || bsize == BlockSize::BLOCK_4X8 {
-        some_use_intra |= cw.bc.at(bo.with_offset(-1,0)).mode.is_intra(); };
+        some_use_intra |= cw.bc.blocks.at(bo.with_offset(-1,0)).mode.is_intra(); };
       if !some_use_intra && bsize == BlockSize::BLOCK_4X4 || bsize == BlockSize::BLOCK_8X4 {
-        some_use_intra |= cw.bc.at(bo.with_offset(0,-1)).mode.is_intra(); };
+        some_use_intra |= cw.bc.blocks.at(bo.with_offset(0,-1)).mode.is_intra(); };
       if !some_use_intra && bsize == BlockSize::BLOCK_4X4 {
-        some_use_intra |= cw.bc.at(bo.with_offset(-1,-1)).mode.is_intra(); };
+        some_use_intra |= cw.bc.blocks.at(bo.with_offset(-1,-1)).mode.is_intra(); };
 
       if some_use_intra {
         luma_mode.predict_inter(fi, p, po, &mut rec.mut_slice(po), plane_bsize.width(),
@@ -1074,13 +1074,13 @@ pub fn motion_compensate<T: Pixel>(
         assert!(xdec == 1 && ydec == 1);
         // TODO: these are absolutely only valid for 4:2:0
         if bsize == BlockSize::BLOCK_4X4 {
-          let mv0 = cw.bc.at(bo.with_offset(-1,-1)).mv;
-          let rf0 = cw.bc.at(bo.with_offset(-1,-1)).ref_frames;
-          let mv1 = cw.bc.at(bo.with_offset(0,-1)).mv;
-          let rf1 = cw.bc.at(bo.with_offset(0,-1)).ref_frames;
+          let mv0 = cw.bc.blocks.at(bo.with_offset(-1,-1)).mv;
+          let rf0 = cw.bc.blocks.at(bo.with_offset(-1,-1)).ref_frames;
+          let mv1 = cw.bc.blocks.at(bo.with_offset(0,-1)).mv;
+          let rf1 = cw.bc.blocks.at(bo.with_offset(0,-1)).ref_frames;
           let po1 = PlaneOffset { x: po.x+2, y: po.y };
-          let mv2 = cw.bc.at(bo.with_offset(-1,0)).mv;
-          let rf2 = cw.bc.at(bo.with_offset(-1,0)).ref_frames;
+          let mv2 = cw.bc.blocks.at(bo.with_offset(-1,0)).mv;
+          let rf2 = cw.bc.blocks.at(bo.with_offset(-1,0)).ref_frames;
           let po2 = PlaneOffset { x: po.x, y: po.y+2 };
           let po3 = PlaneOffset { x: po.x+2, y: po.y+2 };
           luma_mode.predict_inter(fi, p, po, &mut rec.mut_slice(po), 2, 2, rf0, mv0);
@@ -1089,15 +1089,15 @@ pub fn motion_compensate<T: Pixel>(
           luma_mode.predict_inter(fi, p, po3, &mut rec.mut_slice(po3), 2, 2, ref_frames, mvs);
         }
         if bsize == BlockSize::BLOCK_8X4 {
-          let mv1 = cw.bc.at(bo.with_offset(0,-1)).mv;
-          let rf1 = cw.bc.at(bo.with_offset(0,-1)).ref_frames;
+          let mv1 = cw.bc.blocks.at(bo.with_offset(0,-1)).mv;
+          let rf1 = cw.bc.blocks.at(bo.with_offset(0,-1)).ref_frames;
           luma_mode.predict_inter(fi, p, po, &mut rec.mut_slice(po), 4, 2, rf1, mv1);
           let po3 = PlaneOffset { x: po.x, y: po.y+2 };
           luma_mode.predict_inter(fi, p, po3, &mut rec.mut_slice(po3), 4, 2, ref_frames, mvs);
         }
         if bsize == BlockSize::BLOCK_4X8 {
-          let mv2 = cw.bc.at(bo.with_offset(-1,0)).mv;
-          let rf2 = cw.bc.at(bo.with_offset(-1,0)).ref_frames;
+          let mv2 = cw.bc.blocks.at(bo.with_offset(-1,0)).mv;
+          let rf2 = cw.bc.blocks.at(bo.with_offset(-1,0)).ref_frames;
           luma_mode.predict_inter(fi, p, po, &mut rec.mut_slice(po), 2, 4, rf2, mv2);
           let po3 = PlaneOffset { x: po.x+2, y: po.y };
           luma_mode.predict_inter(fi, p, po3, &mut rec.mut_slice(po3), 2, 4, ref_frames, mvs);
@@ -1131,7 +1131,7 @@ pub fn encode_block_a<T: Pixel>(
   cw: &mut ContextWriter, w: &mut dyn Writer,
   bsize: BlockSize, bo: BlockOffset, skip: bool
 ) -> bool {
-  cw.bc.set_skip(bo, bsize, skip);
+  cw.bc.blocks.set_skip(bo, bsize, skip);
   if fs.segmentation.enabled && fs.segmentation.update_map && fs.segmentation.preskip {
     cw.write_segmentation(w, bo, bsize, false, fs.segmentation.last_active_segid);
   }
@@ -1166,10 +1166,10 @@ pub fn encode_block_b<T: Pixel>(
   if skip {
     cw.bc.reset_skip_context(bo, bsize, xdec, ydec);
   }
-  cw.bc.set_block_size(bo, bsize);
-  cw.bc.set_mode(bo, bsize, luma_mode);
-  cw.bc.set_ref_frames(bo, bsize, ref_frames);
-  cw.bc.set_motion_vectors(bo, bsize, mvs);
+  cw.bc.blocks.set_block_size(bo, bsize);
+  cw.bc.blocks.set_mode(bo, bsize, luma_mode);
+  cw.bc.blocks.set_ref_frames(bo, bsize, ref_frames);
+  cw.bc.blocks.set_motion_vectors(bo, bsize, mvs);
 
   //write_q_deltas();
   if cw.bc.code_deltas && fs.deblock.block_deltas_enabled && (bsize < sb_size || !skip) {
@@ -1505,7 +1505,7 @@ pub fn encode_block_with_modes<T: Pixel>(
 
   debug_assert!((tx_size, tx_type) ==
                 rdo_tx_size_type(fi, fs, cw, bsize, bo, mode_luma, ref_frames, mvs, skip));
-  cw.bc.set_tx_size(bo, tx_size);
+  cw.bc.blocks.set_tx_size(bo, tx_size);
 
   let mut mv_stack = Vec::new();
   let is_compound = ref_frames[1] != NONE_FRAME;
@@ -2136,7 +2136,7 @@ fn encode_tile<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec
 
       if cw.bc.cdef_coded {
         // CDEF index must be written in the middle, we can code it now
-        let cdef_index = cw.bc.get_cdef(sbo);
+        let cdef_index = cw.bc.blocks.get_cdef(sbo);
         cw.write_cdef(&mut w, cdef_index, fi.cdef_bits);
         // ...and then finally code what comes after the CDEF index
         w_post_cdef.replay(&mut w);
