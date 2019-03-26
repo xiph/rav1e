@@ -650,7 +650,7 @@ impl<T: Pixel> FrameInvariants<T> {
       fi.ref_frames[i] = 0;
     }
 
-    fi.tx_mode_select = false;
+    fi.tx_mode_select = fi.config.speed_settings.rdo_tx_decision;
     // FIXME: tx partition for intra not supported for chroma 422
     if fi.tx_mode_select {
       if fi.sequence.chroma_sampling == ChromaSampling::Cs422 { fi.tx_mode_select = false; }
