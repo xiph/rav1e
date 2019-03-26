@@ -1315,25 +1315,11 @@ impl FrameBlocks {
   }
 
   pub fn set_ref_frames(&mut self, bo: BlockOffset, bsize: BlockSize, r: [usize; 2]) {
-    let bw = bsize.width_mi();
-    let bh = bsize.height_mi();
-
-    for y in 0..bh {
-      for x in 0..bw {
-        self[bo.y + y as usize][bo.x + x as usize].ref_frames = r;
-      }
-    }
+    self.for_each(bo, bsize, |block| block.ref_frames = r);
   }
 
   pub fn set_motion_vectors(&mut self, bo: BlockOffset, bsize: BlockSize, mvs: [MotionVector; 2]) {
-    let bw = bsize.width_mi();
-    let bh = bsize.height_mi();
-
-    for y in 0..bh {
-      for x in 0..bw {
-        self[bo.y + y as usize][bo.x + x as usize].mv = mvs;
-      }
-    }
+    self.for_each(bo, bsize, |block| block.mv = mvs);
   }
 
   pub fn set_cdef(&mut self, sbo: SuperBlockOffset, cdef_index: u8) {
