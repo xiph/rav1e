@@ -1573,7 +1573,7 @@ fn encode_partition_bottomup<T: Pixel>(
     part_modes: Vec::new()
   };
 
-  if bo.x >= cw.bc.cols || bo.y >= cw.bc.rows {
+  if bo.x >= cw.bc.blocks.cols || bo.y >= cw.bc.blocks.rows {
     return rdo_output
   }
 
@@ -1781,7 +1781,7 @@ fn encode_partition_topdown<T: Pixel>(
   pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5]
 ) {
 
-  if bo.x >= cw.bc.cols || bo.y >= cw.bc.rows {
+  if bo.x >= cw.bc.blocks.cols || bo.y >= cw.bc.blocks.rows {
     return;
   }
   let bsw = bsize.width_mi();
