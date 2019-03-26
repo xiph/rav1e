@@ -92,7 +92,7 @@ fn deblock_left<'a, T: Pixel>(
   let bo = BlockOffset { x: in_bo.x | xdec, y: in_bo.y | ydec };
 
   // We already know we're not at the upper/left corner, so prev_block is in frame
-  bc.blocks.at(bo.with_offset(-1 << xdec, 0))
+  &bc.blocks[bo.with_offset(-1 << xdec, 0)]
 }
 
 fn deblock_up<'a, T: Pixel>(
@@ -106,7 +106,7 @@ fn deblock_up<'a, T: Pixel>(
   let bo = BlockOffset { x: in_bo.x | xdec, y: in_bo.y | ydec };
 
   // We already know we're not at the upper/left corner, so prev_block is in frame
-  bc.blocks.at(bo.with_offset(0, -1 << ydec))
+  &bc.blocks[bo.with_offset(0, -1 << ydec)]
 }
 
 // Must be called on a tx edge, and not on a frame edge.  This is enforced above the call.
@@ -1029,7 +1029,7 @@ fn filter_v_edge<T: Pixel>(
   deblock: &DeblockState, bc: &BlockContext, bo: BlockOffset, p: &mut Plane<T>,
   pli: usize, bd: usize, xdec: usize, ydec: usize
 ) {
-  let block = bc.blocks.at(bo);
+  let block = &bc.blocks[bo];
   let txsize = if pli==0 { block.txsize } else { block.bsize.largest_uv_tx_size(xdec, ydec) };
   let tx_edge = bo.x >> xdec & (txsize.width_mi() - 1) == 0;
   if tx_edge {
@@ -1067,7 +1067,7 @@ fn sse_v_edge<T: Pixel>(
   bc: &BlockContext, bo: BlockOffset, rec_plane: &Plane<T>, src_plane: &Plane<T>,
   tally: &mut [i64; MAX_LOOP_FILTER + 2], pli: usize, bd: usize, xdec: usize, ydec: usize
 ) {
-  let block = bc.blocks.at(bo);
+  let block = &bc.blocks[bo];
   let txsize = if pli==0 { block.txsize } else { block.bsize.largest_uv_tx_size(xdec, ydec) };
   let tx_edge = bo.x >> xdec & (txsize.width_mi() - 1) == 0;
   if tx_edge {
@@ -1134,7 +1134,7 @@ fn filter_h_edge<T: Pixel>(
   deblock: &DeblockState, bc: &BlockContext, bo: BlockOffset, p: &mut Plane<T>,
   pli: usize, bd: usize, xdec: usize, ydec: usize
 ) {
-  let block = bc.blocks.at(bo);
+  let block = &bc.blocks[bo];
   let txsize = if pli==0 { block.txsize } else { block.bsize.largest_uv_tx_size(xdec, ydec) };
   let tx_edge = bo.y >> ydec & (txsize.height_mi() - 1) == 0;
   if tx_edge {
@@ -1172,7 +1172,7 @@ fn sse_h_edge<T: Pixel>(
   bc: &BlockContext, bo: BlockOffset, rec_plane: &Plane<T>, src_plane: &Plane<T>,
   tally: &mut [i64; MAX_LOOP_FILTER + 2], pli: usize, bd: usize, xdec: usize, ydec: usize
 ) {
-  let block = bc.blocks.at(bo);
+  let block = &bc.blocks[bo];
   let txsize = if pli==0 { block.txsize } else { block.bsize.largest_uv_tx_size(xdec, ydec) };
   let tx_edge = bo.y >> ydec & (txsize.height_mi() - 1) == 0;
   if tx_edge {

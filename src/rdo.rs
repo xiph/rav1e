@@ -1243,7 +1243,7 @@ fn rdo_loop_plane_error<T: Pixel>(sbo: SuperBlockOffset, fi: &FrameInvariants<T>
     for bx in 0..sb_blocks {
       let bo = sbo.block_offset(bx<<1, by<<1);
       if bo.x < bc.cols && bo.y < bc.rows {
-        let skip = bc.blocks.at(bo).skip;
+        let skip = bc.blocks[bo].skip;
         if !skip {
           let in_plane = &fs.input.planes[pli];
           let in_po = sbo.block_offset(bx<<1, by<<1).plane_offset(&in_plane.cfg);
