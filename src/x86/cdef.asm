@@ -113,7 +113,7 @@ SECTION .text
     paddw          m15, m5
 %endmacro
 
-%macro cdef_filter_fn 3 ; w, h, stride
+%macro CDEF_FILTER 3 ; w, h, stride
 INIT_YMM avx2
 %if %1 != 4 || %2 != 8
 cglobal cdef_filter_%1x%2, 4, 9, 16, 2 * 16 + (%2+4)*%3, \
@@ -475,9 +475,9 @@ cglobal cdef_filter_%1x%2, 4, 10, 16, 2 * 16 + (%2+4)*%3, \
     RET
 %endmacro
 
-cdef_filter_fn 8, 8, 32
-cdef_filter_fn 4, 8, 32
-cdef_filter_fn 4, 4, 32
+CDEF_FILTER 8, 8, 32
+CDEF_FILTER 4, 8, 32
+CDEF_FILTER 4, 4, 32
 
 INIT_YMM avx2
 cglobal cdef_dir, 3, 4, 15, src, stride, var, stride3
