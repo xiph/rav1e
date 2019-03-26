@@ -1545,17 +1545,9 @@ impl BlockContext {
   }
 
   fn skip_context(&mut self, bo: BlockOffset) -> usize {
-    let above_skip = if bo.y > 0 {
-      self.above_of(bo).skip as usize
-    } else {
-      0
-    };
-    let left_skip = if bo.x > 0 {
-      self.left_of(bo).skip as usize
-    } else {
-      0
-    };
-    above_skip + left_skip
+    let above_skip = bo.y > 0 && self.above_of(bo).skip;
+    let left_skip = bo.x > 0 && self.left_of(bo).skip;
+    above_skip as usize + left_skip as usize
   }
 
   pub fn set_skip(&mut self, bo: BlockOffset, bsize: BlockSize, skip: bool) {
@@ -1626,13 +1618,9 @@ impl BlockContext {
           (above_intra || left_intra) as usize
         }
       }
-      (true, _) | (_, true) =>
-        2 * if has_above {
-          !self.above_of(bo).is_inter() as usize
-        } else {
-          !self.left_of(bo).is_inter() as usize
-        },
-      (_, _) => 0
+      (true, false) => if self.above_of(bo).is_inter() { 0 } else { 2 },
+      (false, true) => if self.left_of(bo).is_inter() { 0 } else { 2 },
+      _ => 0
     }
   }
 
