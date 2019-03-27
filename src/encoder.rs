@@ -2014,14 +2014,6 @@ fn build_coarse_pmvs<T: Pixel>(fi: &FrameInvariants<T>, fs: &FrameState<T>) -> V
 }
 
 fn encode_tile_group<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec<u8> {
-  let mut w = WriterEncoder::new();
-
-  let estimate_motion_ss2 = if fi.config.speed_settings.diamond_me {
-    crate::me::DiamondSearch::estimate_motion_ss2
-  } else {
-    crate::me::FullSearch::estimate_motion_ss2
-  };
-
   let mut fc = if fi.primary_ref_frame == PRIMARY_REF_NONE {
     CDFContext::new(fi.base_q_idx)
   } else {
@@ -2032,9 +2024,62 @@ fn encode_tile_group<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) 
   };
 
   let mut blocks = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
-  let bc = BlockContext::new(&mut blocks);
+
+  let data = encode_tile(fi, fs, &mut fc, &mut blocks);
+
+  /* TODO: Don't apply if lossless */
+  deblock_filter_optimize(fi, fs, &blocks);
+  if fs.deblock.levels[0] != 0 || fs.deblock.levels[1] != 0 {
+    deblock_filter_frame(fs, &blocks, fi.sequence.bit_depth);
+  }
+    // Until the loop filters are pipelined, we'll need to keep
+    // around a copy of both the pre- and post-cdef frame.
+    let pre_cdef_frame = fs.rec.clone();
+
+    /* TODO: Don't apply if lossless */
+    if fi.sequence.enable_cdef {
+      cdef_filter_frame(fi, &mut fs.rec, &blocks);
+    }
+    /* TODO: Don't apply if lossless */
+    if fi.sequence.enable_restoration {
+      fs.restoration.lrf_filter_frame(&mut fs.rec, &pre_cdef_frame, &fi);
+    }
+
+  if fi.config.train_rdo {
+    eprintln!("train rdo");
+    if let Ok(mut file) = File::open("rdo.dat") {
+      let mut data = vec![];
+      file.read_to_end(&mut data).unwrap();
+      fs.t.merge_in(&deserialize(data.as_slice()).unwrap());
+    }
+    let mut rdo_file = File::create("rdo.dat").unwrap();
+    rdo_file.write_all(&serialize(&fs.t).unwrap()).unwrap();
+    fs.t.print_code();
+  }
+
+  fs.cdfs = fc;
+  fs.cdfs.reset_counts();
+
+  data
+}
+
+fn encode_tile<T: Pixel>(
+  fi: &FrameInvariants<T>,
+  fs: &mut FrameState<T>,
+  fc: &mut CDFContext,
+  blocks: &mut FrameBlocks,
+) -> Vec<u8> {
+  let mut w = WriterEncoder::new();
+
+  let estimate_motion_ss2 = if fi.config.speed_settings.diamond_me {
+    crate::me::DiamondSearch::estimate_motion_ss2
+  } else {
+    crate::me::FullSearch::estimate_motion_ss2
+  };
+
+  let bc = BlockContext::new(blocks);
   // For now, restoration unit size is locked to superblock size.
-  let mut cw = ContextWriter::new(&mut fc, bc);
+  let mut cw = ContextWriter::new(fc, bc);
 
   let frame_pmvs = build_coarse_pmvs(fi, fs);
   // main loop
@@ -2184,38 +2229,6 @@ fn encode_tile_group<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) 
       }
     }
   }
-  /* TODO: Don't apply if lossless */
-  deblock_filter_optimize(fi, fs, &cw.bc.blocks);
-  if fs.deblock.levels[0] != 0 || fs.deblock.levels[1] != 0 {
-    deblock_filter_frame(fs, &cw.bc.blocks, fi.sequence.bit_depth);
-  }
-    // Until the loop filters are pipelined, we'll need to keep
-    // around a copy of both the pre- and post-cdef frame.
-    let pre_cdef_frame = fs.rec.clone();
-
-    /* TODO: Don't apply if lossless */
-    if fi.sequence.enable_cdef {
-      cdef_filter_frame(fi, &mut fs.rec, &cw.bc.blocks);
-    }
-    /* TODO: Don't apply if lossless */
-    if fi.sequence.enable_restoration {
-      fs.restoration.lrf_filter_frame(&mut fs.rec, &pre_cdef_frame, &fi);
-    }
-
-  if fi.config.train_rdo {
-    eprintln!("train rdo");
-    if let Ok(mut file) = File::open("rdo.dat") {
-      let mut data = vec![];
-      file.read_to_end(&mut data).unwrap();
-      fs.t.merge_in(&deserialize(data.as_slice()).unwrap());
-    }
-    let mut rdo_file = File::create("rdo.dat").unwrap();
-    rdo_file.write_all(&serialize(&fs.t).unwrap()).unwrap();
-    fs.t.print_code();
-  }
-
-  fs.cdfs = fc;
-  fs.cdfs.reset_counts();
 
   w.done()
 }
