@@ -1444,8 +1444,7 @@ pub struct BlockContextCheckpoint {
   left_coeff_context: [[u8; MAX_MIB_SIZE]; PLANES],
 }
 
-#[derive(Clone)]
-pub struct BlockContext {
+pub struct BlockContext<'a> {
   pub cdef_coded: bool,
   pub code_deltas: bool,
   pub update_seg: bool,
@@ -1456,16 +1455,16 @@ pub struct BlockContext {
   left_tx_context: [u8; MAX_MIB_SIZE],
   above_coeff_context: [Vec<u8>; PLANES],
   left_coeff_context: [[u8; MAX_MIB_SIZE]; PLANES],
-  pub blocks: FrameBlocks,
+  pub blocks: &'a mut FrameBlocks,
 }
 
-impl BlockContext {
-  pub fn new(cols: usize, rows: usize) -> BlockContext {
+impl<'a> BlockContext<'a> {
+  pub fn new(blocks: &'a mut FrameBlocks) -> Self {
     // Align power of two
-    let aligned_cols = (cols + ((1 << MAX_MIB_SIZE_LOG2) - 1))
+    let aligned_cols = (blocks.cols + ((1 << MAX_MIB_SIZE_LOG2) - 1))
       & !((1 << MAX_MIB_SIZE_LOG2) - 1);
     let above_coeff_context_size =
-      cols << (MI_SIZE_LOG2 - TxSize::width_log2(TxSize::TX_4X4));
+      blocks.cols << (MI_SIZE_LOG2 - TxSize::width_log2(TxSize::TX_4X4));
 
     BlockContext {
       cdef_coded: false,
@@ -1482,7 +1481,7 @@ impl BlockContext {
         vec![0; above_coeff_context_size]
       ],
       left_coeff_context: [[0; MAX_MIB_SIZE]; PLANES],
-      blocks: FrameBlocks::new(cols, rows),
+      blocks,
     }
   }
 
@@ -1908,17 +1907,16 @@ pub struct ContextWriterCheckpoint {
   pub bc: BlockContextCheckpoint,
 }
 
-#[derive(Clone)]
-pub struct ContextWriter {
-  pub bc: BlockContext,
+pub struct ContextWriter<'a> {
+  pub bc: BlockContext<'a>,
   pub fc: CDFContext,
   #[cfg(debug)]
   fc_map: Option<FieldMap> // For debugging purposes
 }
 
-impl ContextWriter {
+impl<'a> ContextWriter<'a> {
   #[allow(clippy::let_and_return)]
-  pub fn new(fc: CDFContext, bc: BlockContext) -> Self {
+  pub fn new(fc: CDFContext, bc: BlockContext<'a>) -> Self {
     #[allow(unused_mut)]
     let mut cw = ContextWriter {
       fc,

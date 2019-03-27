@@ -2031,7 +2031,8 @@ fn encode_tile<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec
     }
   };
 
-  let bc = BlockContext::new(fi.w_in_b, fi.h_in_b);
+  let mut blocks = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
+  let bc = BlockContext::new(&mut blocks);
   // For now, restoration unit size is locked to superblock size.
   let mut cw = ContextWriter::new(fc, bc);
 
