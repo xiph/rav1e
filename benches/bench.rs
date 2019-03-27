@@ -43,12 +43,12 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
   let sequence = Sequence::new(&Default::default());
   let mut fi = FrameInvariants::<u16>::new(config, sequence);
   let mut w = ec::WriterEncoder::new();
-  let fc = CDFContext::new(fi.base_q_idx);
+  let mut fc = CDFContext::new(fi.base_q_idx);
   let mut fb = FrameBlocks::new(fi.sb_width * 16, fi.sb_height * 16);
   let bc = BlockContext::new(&mut fb);
   let mut fs = FrameState::new(&fi);
   // For now, restoration unit size is locked to superblock size.
-  let mut cw = ContextWriter::new(fc, bc);
+  let mut cw = ContextWriter::new(&mut fc, bc);
 
   let tx_type = TxType::DCT_DCT;
 

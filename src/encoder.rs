@@ -2022,7 +2022,7 @@ fn encode_tile<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec
     crate::me::FullSearch::estimate_motion_ss2
   };
 
-  let fc = if fi.primary_ref_frame == PRIMARY_REF_NONE {
+  let mut fc = if fi.primary_ref_frame == PRIMARY_REF_NONE {
     CDFContext::new(fi.base_q_idx)
   } else {
     match fi.rec_buffer.frames[fi.ref_frames[fi.primary_ref_frame as usize] as usize] {
@@ -2034,7 +2034,7 @@ fn encode_tile<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec
   let mut blocks = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
   let bc = BlockContext::new(&mut blocks);
   // For now, restoration unit size is locked to superblock size.
-  let mut cw = ContextWriter::new(fc, bc);
+  let mut cw = ContextWriter::new(&mut fc, bc);
 
   let frame_pmvs = build_coarse_pmvs(fi, fs);
   // main loop
@@ -2214,7 +2214,7 @@ fn encode_tile<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec
     fs.t.print_code();
   }
 
-  fs.cdfs = cw.fc;
+  fs.cdfs = fc;
   fs.cdfs.reset_counts();
 
   w.done()
