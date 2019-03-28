@@ -1583,10 +1583,6 @@ impl BlockContext {
     self.for_each(bo, bsize, |block| { block.txsize = tx_size } );
   }
 
-  pub fn get_mode(&mut self, bo: BlockOffset) -> PredictionMode {
-    self.blocks[bo.y][bo.x].mode
-  }
-
   fn partition_plane_context(
     &self, bo: BlockOffset, bsize: BlockSize
   ) -> usize {
