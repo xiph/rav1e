@@ -190,10 +190,10 @@ mod nasm {
     plane_org: &PlaneSlice<'_, u8>, plane_ref: &PlaneSlice<'_, u8>, blk_h: usize,
     blk_w: usize
   ) -> u32 {
-    let mut sum = 0 as u32;
+    let org_ptr = plane_org.as_ptr();
+    let ref_ptr = plane_ref.as_ptr();
     let org_stride = plane_org.plane.cfg.stride as libc::ptrdiff_t;
     let ref_stride = plane_ref.plane.cfg.stride as libc::ptrdiff_t;
-    assert!(blk_h >= 4 && blk_w >= 4);
     let step_size = blk_h.min(blk_w);
     let func = match step_size.ilog() {
       3 => rav1e_sad4x4_sse2,
@@ -204,15 +204,14 @@ mod nasm {
       8 => rav1e_sad128x128_avx2,
       _ => rav1e_sad128x128_avx2
     };
-    for r in (0..blk_h).step_by(step_size) {
-      for c in (0..blk_w).step_by(step_size) {
-        let org_slice = plane_org.subslice(c, r);
-        let ref_slice = plane_ref.subslice(c, r);
-        let org_ptr = org_slice.as_ptr();
-        let ref_ptr = ref_slice.as_ptr();
-        // FIXME for now, T == u8
-        let org_ptr = org_ptr as *const u8;
-        let ref_ptr = ref_ptr as *const u8;
+    if blk_w == blk_h {
+      return func(org_ptr, org_stride, ref_ptr, ref_stride);
+    }
+    let mut sum = 0 as u32;
+    for r in (0..blk_h as isize).step_by(step_size) {
+      for c in (0..blk_w as isize).step_by(step_size) {
+        let org_ptr = org_ptr.offset(r * org_stride + c);
+        let ref_ptr = ref_ptr.offset(r * ref_stride + c);
         sum += func(org_ptr, org_stride, ref_ptr, ref_stride);
       }
     }
