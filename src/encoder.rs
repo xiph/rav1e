@@ -2216,9 +2216,7 @@ fn encode_tile<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec
   fs.cdfs = cw.fc;
   fs.cdfs.reset_counts();
 
-  let mut h = w.done();
-  h.push(0); // superframe anti emulation
-  h
+  w.done()
 }
 
 #[allow(unused)]
