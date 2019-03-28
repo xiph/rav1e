@@ -2008,14 +2008,16 @@ fn build_coarse_pmvs<T: Pixel>(fi: &FrameInvariants<T>, fs: &FrameState<T>) -> V
 }
 
 fn get_initial_cdfcontext<T: Pixel>(fi: &FrameInvariants<T>) -> CDFContext {
-  if fi.primary_ref_frame == PRIMARY_REF_NONE {
-    CDFContext::new(fi.base_q_idx)
+  let cdf = if fi.primary_ref_frame == PRIMARY_REF_NONE {
+    None
   } else {
-    match fi.rec_buffer.frames[fi.ref_frames[fi.primary_ref_frame as usize] as usize] {
-      Some(ref rec) => rec.cdfs,
-      None => CDFContext::new(fi.base_q_idx)
-    }
-  }
+    let ref_frame_idx = fi.ref_frames[fi.primary_ref_frame as usize] as usize;
+    let ref_frame = fi.rec_buffer.frames[ref_frame_idx].as_ref();
+    ref_frame.map(|rec| rec.cdfs)
+  };
+
+  // return the retrieved instance if any, a new one otherwise
+  cdf.unwrap_or_else(|| CDFContext::new(fi.base_q_idx))
 }
 
 fn encode_tile_group<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec<u8> {
