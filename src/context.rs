@@ -2221,43 +2221,6 @@ impl ContextWriter {
     symbol_with_update!(self, w, enable as u32, &mut self.fc.filter_intra_cdfs[block_size as usize]);
   }
 
-  fn get_mvref_ref_frames(&mut self, ref_frame: usize) -> ([RefType; 2], usize) {
-    let all_refs: [RefType; 9] = [
-      INTRA_FRAME,
-      LAST_FRAME,
-      LAST2_FRAME,
-      LAST3_FRAME,
-      GOLDEN_FRAME,
-      BWDREF_FRAME,
-      ALTREF2_FRAME,
-      ALTREF_FRAME,
-      NONE_FRAME,
-    ];
-    let ref_frame_map: [[RefType; 2]; TOTAL_COMP_REFS] = [
-      [ LAST_FRAME,  BWDREF_FRAME  ], [ LAST2_FRAME,  BWDREF_FRAME  ],
-      [ LAST3_FRAME, BWDREF_FRAME  ], [ GOLDEN_FRAME, BWDREF_FRAME  ],
-      [ LAST_FRAME,  ALTREF2_FRAME ], [ LAST2_FRAME,  ALTREF2_FRAME ],
-      [ LAST3_FRAME, ALTREF2_FRAME ], [ GOLDEN_FRAME, ALTREF2_FRAME ],
-      [ LAST_FRAME,  ALTREF_FRAME  ], [ LAST2_FRAME,  ALTREF_FRAME  ],
-      [ LAST3_FRAME, ALTREF_FRAME  ], [ GOLDEN_FRAME, ALTREF_FRAME  ],
-      [ LAST_FRAME,  LAST2_FRAME   ], [ LAST_FRAME,   LAST3_FRAME   ],
-      [ LAST_FRAME,  GOLDEN_FRAME  ], [ BWDREF_FRAME, ALTREF_FRAME  ],
-
-      // NOTE: Following reference frame pairs are not supported to be explicitly
-      //       signalled, but they are possibly chosen by the use of skip_mode,
-      //       which may use the most recent one-sided reference frame pair.
-      [ LAST2_FRAME, LAST3_FRAME   ], [  LAST2_FRAME, GOLDEN_FRAME  ],
-      [ LAST3_FRAME, GOLDEN_FRAME  ], [ BWDREF_FRAME, ALTREF2_FRAME ],
-      [ ALTREF2_FRAME, ALTREF_FRAME ]
-    ];
-
-    if ref_frame >= REF_FRAMES {
-      ([ ref_frame_map[ref_frame - REF_FRAMES][0], ref_frame_map[ref_frame - REF_FRAMES][1] ], 2)
-    } else {
-      ([ all_refs[ref_frame], NONE_FRAME ], 1)
-    }
-  }
-
   fn find_valid_row_offs(&mut self, row_offset: isize, mi_row: usize, mi_rows: usize) -> isize {
     if /* !tile->tg_horz_boundary */ true {
       cmp::min(cmp::max(row_offset, -(mi_row as isize)), (mi_rows - mi_row - 1) as isize)
