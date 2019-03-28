@@ -1137,187 +1137,201 @@ pub fn save_block_motion<T: Pixel>(
   }
 }
 
-pub fn encode_block_a<T: Pixel>(
-  seq: &Sequence, fs: &FrameState<T>,
-  cw: &mut ContextWriter, w: &mut dyn Writer,
-  bsize: BlockSize, bo: BlockOffset, skip: bool
-) -> bool {
-  cw.bc.blocks.set_skip(bo, bsize, skip);
-  if fs.segmentation.enabled && fs.segmentation.update_map && fs.segmentation.preskip {
-    cw.write_segmentation(w, bo, bsize, false, fs.segmentation.last_active_segid);
-  }
-  cw.write_skip(w, bo, skip);
-  if fs.segmentation.enabled && fs.segmentation.update_map && !fs.segmentation.preskip {
-    cw.write_segmentation(w, bo, bsize, skip, fs.segmentation.last_active_segid);
-  }
-  if !skip && seq.enable_cdef {
-    cw.bc.cdef_coded = true;
-  }
-  cw.bc.cdef_coded
+pub struct BlockEncoder<'a, T: Pixel> {
+  pub seq: &'a Sequence,
+  pub fs: &'a mut FrameState<T>,
+  pub cw: &'a mut ContextWriter,
+  pub bsize: BlockSize,
+  pub bo: BlockOffset,
+  pub fi: &'a FrameInvariants<T>,
+  pub luma_mode: PredictionMode,
+  pub chroma_mode: PredictionMode,
+  pub ref_frames: [RefType; 2],
+  pub mvs: [MotionVector; 2],
+  pub cfl: CFLParams,
+  pub tx_size: TxSize,
+  pub tx_type: TxType,
+  pub mode_context: usize,
+  pub mv_stack: &'a [CandidateMV],
+  pub rdo_type: RDOType,
+  pub skip: bool,
+  pub for_rdo_use: bool,
 }
 
-pub fn encode_block_b<T: Pixel>(
-  fi: &FrameInvariants<T>, fs: &mut FrameState<T>,
-  cw: &mut ContextWriter, w: &mut dyn Writer,
-  luma_mode: PredictionMode, chroma_mode: PredictionMode,
-  ref_frames: [RefType; 2], mvs: [MotionVector; 2],
-  bsize: BlockSize, bo: BlockOffset, skip: bool,
-  cfl: CFLParams, tx_size: TxSize, tx_type: TxType,
-  mode_context: usize, mv_stack: &[CandidateMV],
-  rdo_type: RDOType, for_rdo_use: bool
-) -> i64 {
-  let is_inter = !luma_mode.is_intra();
-  if is_inter { assert!(luma_mode == chroma_mode); };
-  let sb_size = if fi.sequence.use_128x128_superblock {
-    BlockSize::BLOCK_128X128
-  } else {
-    BlockSize::BLOCK_64X64
-  };
-  let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
-  if skip {
-    cw.bc.reset_skip_context(bo, bsize, xdec, ydec);
+impl<'a, T> BlockEncoder<'a, T> where T: Pixel {
+  pub fn encode_block_a(&mut self, w: &mut dyn Writer) -> bool {
+    self.cw.bc.blocks.set_skip(self.bo, self.bsize, self.skip);
+    if self.fs.segmentation.enabled && self.fs.segmentation.update_map && self.fs.segmentation.preskip {
+      self.cw.write_segmentation(w, self.bo, self.bsize, false, self.fs.segmentation.last_active_segid);
+    }
+    self.cw.write_skip(w, self.bo, self.skip);
+    if self.fs.segmentation.enabled && self.fs.segmentation.update_map && !self.fs.segmentation.preskip {
+      self.cw.write_segmentation(w, self.bo, self.bsize, self.skip, self.fs.segmentation.last_active_segid);
+    }
+    if !self.skip && self.seq.enable_cdef {
+      self.cw.bc.cdef_coded = true;
+    }
+    self.cw.bc.cdef_coded
   }
-  cw.bc.blocks.set_block_size(bo, bsize);
-  cw.bc.blocks.set_mode(bo, bsize, luma_mode);
-  cw.bc.blocks.set_tx_size(bo, bsize, tx_size);
-  cw.bc.blocks.set_ref_frames(bo, bsize, ref_frames);
-  cw.bc.blocks.set_motion_vectors(bo, bsize, mvs);
 
-  //write_q_deltas();
-  if cw.bc.code_deltas && fs.deblock.block_deltas_enabled && (bsize < sb_size || !skip) {
-    cw.write_block_deblock_deltas(w, bo, fs.deblock.block_delta_multi);
-  }
-  cw.bc.code_deltas = false;
+  pub fn encode_block_b(&mut self, w: &mut dyn Writer) -> i64 {
+    let is_inter = !self.luma_mode.is_intra();
+    if is_inter { assert!(self.luma_mode == self.chroma_mode); };
+    let sb_size = if self.fi.sequence.use_128x128_superblock {
+      BlockSize::BLOCK_128X128
+    } else {
+      BlockSize::BLOCK_64X64
+    };
+    let PlaneConfig { xdec, ydec, .. } = self.fs.input.planes[1].cfg;
+    if self.skip {
+      self.cw.bc.reset_skip_context(self.bo, self.bsize, xdec, ydec);
+    }
+    self.cw.bc.blocks.set_block_size(self.bo, self.bsize);
+    self.cw.bc.blocks.set_mode(self.bo, self.bsize, self.luma_mode);
+    self.cw.bc.blocks.set_tx_size(self.bo, self.bsize, self.tx_size);
+    self.cw.bc.blocks.set_ref_frames(self.bo, self.bsize, self.ref_frames);
+    self.cw.bc.blocks.set_motion_vectors(self.bo, self.bsize, self.mvs);
 
-  if fi.frame_type == FrameType::INTER {
-    cw.write_is_inter(w, bo, is_inter);
-    if is_inter {
-      cw.fill_neighbours_ref_counts(bo);
-      cw.write_ref_frames(w, fi, bo);
+    //write_q_deltas();
+    if self.cw.bc.code_deltas && self.fs.deblock.block_deltas_enabled && (self.bsize < sb_size || !self.skip) {
+      self.cw.write_block_deblock_deltas(w, self.bo, self.fs.deblock.block_delta_multi);
+    }
+    self.cw.bc.code_deltas = false;
 
-      if luma_mode >= PredictionMode::NEAREST_NEARESTMV {
-        cw.write_compound_mode(w, luma_mode, mode_context);
-      } else {
-        cw.write_inter_mode(w, luma_mode, mode_context);
-      }
+    if self.fi.frame_type == FrameType::INTER {
+      self.cw.write_is_inter(w, self.bo, is_inter);
+      if is_inter {
+        self.cw.fill_neighbours_ref_counts(self.bo);
+        self.cw.write_ref_frames(w, self.fi, self.bo);
 
-      let ref_mv_idx = 0;
-      let num_mv_found = mv_stack.len();
+        if self.luma_mode >= PredictionMode::NEAREST_NEARESTMV {
+          self.cw.write_compound_mode(w, self.luma_mode, self.mode_context);
+        } else {
+          self.cw.write_inter_mode(w, self.luma_mode, self.mode_context);
+        }
 
-      if luma_mode == PredictionMode::NEWMV || luma_mode == PredictionMode::NEW_NEWMV {
-        if luma_mode == PredictionMode::NEW_NEWMV { assert!(num_mv_found >= 2); }
-        for idx in 0..2 {
-          if num_mv_found > idx + 1 {
-            let drl_mode = ref_mv_idx > idx;
-            let ctx: usize = (mv_stack[idx].weight < REF_CAT_LEVEL) as usize
-              + (mv_stack[idx + 1].weight < REF_CAT_LEVEL) as usize;
-            cw.write_drl_mode(w, drl_mode, ctx);
-            if !drl_mode { break; }
+        let ref_mv_idx = 0;
+        let num_mv_found = self.mv_stack.len();
+
+        if self.luma_mode == PredictionMode::NEWMV || self.luma_mode == PredictionMode::NEW_NEWMV {
+          if self.luma_mode == PredictionMode::NEW_NEWMV { assert!(num_mv_found >= 2); }
+          for idx in 0..2 {
+            if num_mv_found > idx + 1 {
+              let drl_mode = ref_mv_idx > idx;
+              let ctx: usize = (self.mv_stack[idx].weight < REF_CAT_LEVEL) as usize
+                  + (self.mv_stack[idx + 1].weight < REF_CAT_LEVEL) as usize;
+              self.cw.write_drl_mode(w, drl_mode, ctx);
+              if !drl_mode { break; }
+            }
           }
         }
-      }
 
-      let ref_mvs = if num_mv_found > 0 {
-        [mv_stack[ref_mv_idx].this_mv, mv_stack[ref_mv_idx].comp_mv]
-      } else {
-        [MotionVector::default(); 2]
-      };
+        let ref_mvs = if num_mv_found > 0 {
+          [self.mv_stack[ref_mv_idx].this_mv, self.mv_stack[ref_mv_idx].comp_mv]
+        } else {
+          [MotionVector::default(); 2]
+        };
 
-      let mv_precision = if fi.force_integer_mv != 0 {
-        MvSubpelPrecision::MV_SUBPEL_NONE
-      } else if fi.allow_high_precision_mv {
-        MvSubpelPrecision::MV_SUBPEL_HIGH_PRECISION
-      } else {
-        MvSubpelPrecision::MV_SUBPEL_LOW_PRECISION
-      };
+        let mv_precision = if self.fi.force_integer_mv != 0 {
+          MvSubpelPrecision::MV_SUBPEL_NONE
+        } else if self.fi.allow_high_precision_mv {
+          MvSubpelPrecision::MV_SUBPEL_HIGH_PRECISION
+        } else {
+          MvSubpelPrecision::MV_SUBPEL_LOW_PRECISION
+        };
 
-      if luma_mode == PredictionMode::NEWMV ||
-        luma_mode == PredictionMode::NEW_NEWMV ||
-        luma_mode == PredictionMode::NEW_NEARESTMV {
-          cw.write_mv(w, mvs[0], ref_mvs[0], mv_precision);
+        if self.luma_mode == PredictionMode::NEWMV ||
+            self.luma_mode == PredictionMode::NEW_NEWMV ||
+            self.luma_mode == PredictionMode::NEW_NEARESTMV {
+          self.cw.write_mv(w, self.mvs[0], ref_mvs[0], mv_precision);
         }
-      if luma_mode == PredictionMode::NEW_NEWMV ||
-        luma_mode == PredictionMode::NEAREST_NEWMV {
-          cw.write_mv(w, mvs[1], ref_mvs[1], mv_precision);
+        if self.luma_mode == PredictionMode::NEW_NEWMV ||
+            self.luma_mode == PredictionMode::NEAREST_NEWMV {
+          self.cw.write_mv(w, self.mvs[1], ref_mvs[1], mv_precision);
         }
 
-      if luma_mode >= PredictionMode::NEAR0MV && luma_mode <= PredictionMode::NEAR2MV {
-        let ref_mv_idx = luma_mode as usize - PredictionMode::NEAR0MV as usize + 1;
-        if luma_mode != PredictionMode::NEAR0MV { assert!(num_mv_found > ref_mv_idx); }
+        if self.luma_mode >= PredictionMode::NEAR0MV && self.luma_mode <= PredictionMode::NEAR2MV {
+          let ref_mv_idx = self.luma_mode as usize - PredictionMode::NEAR0MV as usize + 1;
+          if self.luma_mode != PredictionMode::NEAR0MV { assert!(num_mv_found > ref_mv_idx); }
 
-        for idx in 1..3 {
-          if num_mv_found > idx + 1 {
-            let drl_mode = ref_mv_idx > idx;
-            let ctx: usize = (mv_stack[idx].weight < REF_CAT_LEVEL) as usize
-              + (mv_stack[idx + 1].weight < REF_CAT_LEVEL) as usize;
+          for idx in 1..3 {
+            if num_mv_found > idx + 1 {
+              let drl_mode = ref_mv_idx > idx;
+              let ctx: usize = (self.mv_stack[idx].weight < REF_CAT_LEVEL) as usize
+                  + (self.mv_stack[idx + 1].weight < REF_CAT_LEVEL) as usize;
 
-            cw.write_drl_mode(w, drl_mode, ctx);
-            if !drl_mode { break; }
+              self.cw.write_drl_mode(w, drl_mode, ctx);
+              if !drl_mode { break; }
+            }
+          }
+          if self.mv_stack.len() > 1 {
+            assert!(self.mv_stack[ref_mv_idx].this_mv.row == self.mvs[0].row);
+            assert!(self.mv_stack[ref_mv_idx].this_mv.col == self.mvs[0].col);
+          } else {
+            assert!(0 == self.mvs[0].row);
+            assert!(0 == self.mvs[0].col);
+          }
+        } else if self.luma_mode == PredictionMode::NEARESTMV {
+          if self.mv_stack.is_empty() {
+            assert_eq!(self.mvs[0].row, 0);
+            assert_eq!(self.mvs[0].col, 0);
+          } else {
+            assert_eq!(self.mvs[0].row, self.mv_stack[0].this_mv.row);
+            assert_eq!(self.mvs[0].col, self.mv_stack[0].this_mv.col);
           }
         }
-        if mv_stack.len() > 1 {
-          assert!(mv_stack[ref_mv_idx].this_mv.row == mvs[0].row);
-          assert!(mv_stack[ref_mv_idx].this_mv.col == mvs[0].col);
-        } else {
-          assert!(0 == mvs[0].row);
-          assert!(0 == mvs[0].col);
-        }
-      } else if luma_mode == PredictionMode::NEARESTMV {
-        if mv_stack.is_empty() {
-          assert_eq!(mvs[0].row, 0);
-          assert_eq!(mvs[0].col, 0);
-        } else {
-          assert_eq!(mvs[0].row, mv_stack[0].this_mv.row);
-          assert_eq!(mvs[0].col, mv_stack[0].this_mv.col);
-        }
+      } else {
+        self.cw.write_intra_mode(w, self.bsize, self.luma_mode);
       }
     } else {
-      cw.write_intra_mode(w, bsize, luma_mode);
+      self.cw.write_intra_mode_kf(w, self.bo, self.luma_mode);
     }
-  } else {
-    cw.write_intra_mode_kf(w, bo, luma_mode);
-  }
 
-  if !is_inter {
-    if luma_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
-      cw.write_angle_delta(w, 0, luma_mode);
-    }
-    if has_chroma(bo, bsize, xdec, ydec) {
-      cw.write_intra_uv_mode(w, chroma_mode, luma_mode, bsize);
-      if chroma_mode.is_cfl() {
-        assert!(bsize.cfl_allowed());
-        cw.write_cfl_alphas(w, cfl);
+    if !is_inter {
+      if self.luma_mode.is_directional() && self.bsize >= BlockSize::BLOCK_8X8 {
+        self.cw.write_angle_delta(w, 0, self.luma_mode);
       }
-      if chroma_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
-        cw.write_angle_delta(w, 0, chroma_mode);
+      if has_chroma(self.bo, self.bsize, xdec, ydec) {
+        self.cw.write_intra_uv_mode(w, self.chroma_mode, self.luma_mode, self.bsize);
+        if self.chroma_mode.is_cfl() {
+          assert!(self.bsize.cfl_allowed());
+          self.cw.write_cfl_alphas(w, self.cfl);
+        }
+        if self.chroma_mode.is_directional() && self.bsize >= BlockSize::BLOCK_8X8 {
+          self.cw.write_angle_delta(w, 0, self.chroma_mode);
+        }
+      }
+      if self.bsize >= BlockSize::BLOCK_8X8 &&
+          self.bsize.width() <= 64 && self.bsize.height() <= 64 &&
+          self.fi.allow_screen_content_tools != 0 {
+        // TODO: Write palette mode info
+      }
+      if self.luma_mode == PredictionMode::DC_PRED && self.bsize.width() <= 32 && self.bsize.height() <= 32 {
+        self.cw.write_use_filter_intra(w, false, self.bsize); // Always turn off FILTER_INTRA
       }
     }
-    // TODO: Extra condition related to palette mode, see `read_filter_intra_mode_info` in decodemv.c
-    if luma_mode == PredictionMode::DC_PRED && bsize.width() <= 32 && bsize.height() <= 32 {
-      cw.write_use_filter_intra(w,false, bsize); // Always turn off FILTER_INTRA
-    }
-  }
 
-  // write tx_size here (for now, intra frame only)
-  // TODO: Add new field tx_mode to fi, then Use the condition, fi.tx_mode == TX_MODE_SELECT
-  if fi.tx_mode_select {
-    if bsize.greater_than(BlockSize::BLOCK_4X4) && !(is_inter && skip) {
-      if !is_inter {
-        cw.write_tx_size_intra(w, bo, bsize, tx_size);
-        cw.bc.update_tx_size_context(bo, bsize, tx_size, false);
-      } /*else {  // TODO (yushin): write_tx_size_inter(), i.e. var-tx
+    // write tx_size here (for now, intra frame only)
+    // TODO: Add new field tx_mode to fi, then Use the condition, fi.tx_mode == TX_MODE_SELECT
+    if self.fi.tx_mode_select {
+      if self.bsize.greater_than(BlockSize::BLOCK_4X4) && !(is_inter && self.skip) {
+        if !is_inter {
+          self.cw.write_tx_size_intra(w, self.bo, self.bsize, self.tx_size);
+          self.cw.bc.update_tx_size_context(self.bo, self.bsize, self.tx_size, false);
+        } /*else {  // TODO (yushin): write_tx_size_inter(), i.e. var-tx
 
       }*/
-    } else {
-      cw.bc.update_tx_size_context(bo, bsize, tx_size, is_inter && skip);
+      } else {
+        self.cw.bc.update_tx_size_context(self.bo, self.bsize, self.tx_size, is_inter && self.skip);
+      }
     }
-  }
 
-  if is_inter {
-    motion_compensate(fi, fs, cw, luma_mode, ref_frames, mvs, bsize, bo, false);
-    write_tx_tree(fi, fs, cw, w, luma_mode, bo, bsize, tx_size, tx_type, skip, false, rdo_type, for_rdo_use)
-  } else {
-    write_tx_blocks(fi, fs, cw, w, luma_mode, chroma_mode, bo, bsize, tx_size, tx_type, skip, cfl, false, rdo_type, for_rdo_use)
+    if is_inter {
+      motion_compensate(self.fi, self.fs, self.cw, self.luma_mode, self.ref_frames, self.mvs, self.bsize, self.bo, false);
+      write_tx_tree(self.fi, self.fs, self.cw, w, self.luma_mode, self.bo, self.bsize, self.tx_size, self.tx_type, self.skip, false, self.rdo_type, self.for_rdo_use)
+    } else {
+      write_tx_blocks(self.fi, self.fs, self.cw, w, self.luma_mode, self.chroma_mode, self.bo, self.bsize, self.tx_size, self.tx_type, self.skip, self.cfl, false, self.rdo_type, self.for_rdo_use)
+    }
   }
 }
 
@@ -1551,11 +1565,28 @@ pub fn encode_block_with_modes<T: Pixel>(
   let is_compound = ref_frames[1] != NONE_FRAME;
   let mode_context = cw.find_mvrefs(bo, ref_frames, &mut mv_stack, bsize, fi, is_compound);
 
-  cdef_coded = encode_block_a(&fi.sequence, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
-                              bsize, bo, skip);
-  encode_block_b(fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
-                 mode_luma, mode_chroma, ref_frames, mvs, bsize, bo, skip, cfl,
-                 tx_size, tx_type, mode_context, &mv_stack, rdo_type, false);
+  let mut encoder = BlockEncoder {
+    seq: &fi.sequence,
+    fs,
+    cw,
+    bsize,
+    bo,
+    fi,
+    luma_mode: mode_luma,
+    chroma_mode: mode_chroma,
+    ref_frames,
+    mvs,
+    cfl,
+    tx_size,
+    tx_type,
+    mode_context,
+    mv_stack: &mv_stack,
+    rdo_type,
+    skip,
+    for_rdo_use: false
+  };
+  cdef_coded = encoder.encode_block_a(if cdef_coded { w_post_cdef } else { w_pre_cdef });
+  encoder.encode_block_b(if cdef_coded { w_post_cdef } else { w_pre_cdef });
 }
 
 fn encode_partition_bottomup<T: Pixel>(
@@ -1930,11 +1961,28 @@ fn encode_partition_topdown<T: Pixel>(
       }
 
       // FIXME: every final block that has gone through the RDO decision process is encoded twice
-      cdef_coded = encode_block_a(&fi.sequence, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
-                                  bsize, bo, skip);
-      encode_block_b(fi, fs, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
-                     mode_luma, mode_chroma, ref_frames, mvs, bsize, bo, skip, cfl,
-                     tx_size, tx_type, mode_context, &mv_stack, RDOType::PixelDistRealRate, false);
+      let mut encoder = BlockEncoder {
+        seq: &fi.sequence,
+        fs,
+        cw,
+        bsize,
+        bo,
+        fi,
+        luma_mode: mode_luma,
+        chroma_mode: mode_chroma,
+        ref_frames,
+        mvs,
+        cfl,
+        tx_size,
+        tx_type,
+        mode_context,
+        mv_stack: &mv_stack,
+        rdo_type: RDOType::PixelDistRealRate,
+        skip,
+        for_rdo_use: false
+      };
+      cdef_coded = encoder.encode_block_a(if cdef_coded { w_post_cdef } else { w_pre_cdef });
+      encoder.encode_block_b(if cdef_coded { w_post_cdef } else { w_pre_cdef });
     },
     PARTITION_SPLIT |
     PARTITION_HORZ |

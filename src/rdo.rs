@@ -16,8 +16,7 @@ use crate::lrf::*;
 use crate::context::*;
 use crate::ec::{OD_BITRES, Writer, WriterCounter};
 use crate::header::ReferenceMode;
-use crate::encode_block_a;
-use crate::encode_block_b;
+use crate::BlockEncoder;
 use crate::encode_block_with_modes;
 use crate::FrameInvariants;
 use crate::FrameState;
@@ -608,29 +607,28 @@ pub fn rdo_mode_decision<T: Pixel>(
         // TODO(yushin): luma and chroma would have different decision based on chroma format
         let needs_rec = luma_mode_is_intra && tx_size < bsize.tx_size();
 
-        encode_block_a(&fi.sequence, fs, cw, wr, bsize, bo, skip);
-        let tx_dist =
-          encode_block_b(
-            fi,
-            fs,
-            cw,
-            wr,
-            luma_mode,
-            chroma_mode,
-            ref_frames,
-            mvs,
-            bsize,
-            bo,
-            skip,
-            CFLParams::default(),
-            tx_size,
-            tx_type,
-            mode_context,
-            mv_stack,
-            rdo_type,
-            !needs_rec
-          );
-
+        let mut encoder = BlockEncoder {
+          seq: &fi.sequence,
+          fs,
+          cw,
+          bsize,
+          bo,
+          fi,
+          luma_mode,
+          chroma_mode,
+          ref_frames,
+          mvs,
+          cfl: CFLParams::default(),
+          tx_size,
+          tx_type,
+          mode_context,
+          mv_stack,
+          rdo_type,
+          skip,
+          for_rdo_use: !needs_rec
+        };
+        encoder.encode_block_a(wr);
+        let tx_dist = encoder.encode_block_b(wr);
         let rate = wr.tell_frac() - tell;
         let distortion = if fi.use_tx_domain_distortion && !needs_rec {
           compute_tx_distortion(
@@ -833,27 +831,29 @@ pub fn rdo_mode_decision<T: Pixel>(
       let wr: &mut dyn Writer = &mut WriterCounter::new();
       let tell = wr.tell_frac();
 
-        encode_block_a(&fi.sequence, fs, cw, wr, bsize, bo, best.skip);
-        let _ = encode_block_b(
-        fi,
+      let mut encoder = BlockEncoder {
+        seq: &fi.sequence,
         fs,
         cw,
-        wr,
-        best.mode_luma,
-        chroma_mode,
-        best.ref_frames,
-        best.mvs,
         bsize,
         bo,
-        best.skip,
+        fi,
+        luma_mode: best.mode_luma,
+        chroma_mode,
+        ref_frames: best.ref_frames,
+        mvs: best.mvs,
         cfl,
-        best.tx_size,
-        best.tx_type,
-        0,
-        &Vec::new(),
+        tx_size: best.tx_size,
+        tx_type: best.tx_type,
+        mode_context: 0,
+        mv_stack: &[],
         rdo_type,
-        false // For CFL, luma should be always reconstructed.
-      );
+        skip: best.skip,
+        // For CFL, luma should be always reconstructed.
+        for_rdo_use: false
+      };
+      encoder.encode_block_a(wr);
+      encoder.encode_block_b(wr);
 
       let rate = wr.tell_frac() - tell;
 
