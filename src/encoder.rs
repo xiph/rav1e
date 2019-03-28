@@ -2012,15 +2012,19 @@ fn build_coarse_pmvs<T: Pixel>(fi: &FrameInvariants<T>, fs: &FrameState<T>) -> V
   }
 }
 
-fn encode_tile_group<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec<u8> {
-  let mut fc = if fi.primary_ref_frame == PRIMARY_REF_NONE {
+fn get_initial_cdfcontext<T: Pixel>(fi: &FrameInvariants<T>) -> CDFContext {
+  if fi.primary_ref_frame == PRIMARY_REF_NONE {
     CDFContext::new(fi.base_q_idx)
   } else {
     match fi.rec_buffer.frames[fi.ref_frames[fi.primary_ref_frame as usize] as usize] {
       Some(ref rec) => rec.cdfs,
       None => CDFContext::new(fi.base_q_idx)
     }
-  };
+  }
+}
+
+fn encode_tile_group<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec<u8> {
+  let mut fc = get_initial_cdfcontext(fi);
 
   let mut blocks = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
 
