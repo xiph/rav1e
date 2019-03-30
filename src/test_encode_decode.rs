@@ -370,7 +370,7 @@ fn chroma_sampling(decoder: &str, cs: ChromaSampling) {
   let quantizer = 100;
   let limit = 3; // Include inter frames
   let speed = 0; // Test as many tools as possible
-  let w = 64;
+  let w = 198;
   let h = 80;
 
   // TODO: bump keyint when inter is supported
