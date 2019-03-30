@@ -47,6 +47,10 @@ impl<T: Pixel> SceneChangeDetector<T> {
     detector
   }
 
+  pub fn set_last_frame(&mut self, ref_frame: Arc<Frame<T>>, frame_num: usize) {
+    self.last_frame = Some((frame_num, ref_frame));
+  }
+
   pub fn detect_scene_change(&mut self, curr_frame: Arc<Frame<T>>, frame_num: usize) -> bool {
     let mut is_change = false;
 
