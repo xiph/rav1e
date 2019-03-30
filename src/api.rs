@@ -891,9 +891,7 @@ impl<T: Pixel> Context<T> {
       let distance = frame_number - prev_keyframe;
       if distance < self.config.enc.min_key_frame_interval {
         if distance + 1 == self.config.enc.min_key_frame_interval {
-          // Run the detector for the current frame, so that it will contain this frame's information
-          // to compare against the next frame. We can ignore the results for this frame.
-          self.keyframe_detector.detect_scene_change(frame, frame_number as usize);
+          self.keyframe_detector.set_last_frame(frame, frame_number as usize);
         }
         return FrameType::INTER;
       }
