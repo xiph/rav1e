@@ -755,7 +755,7 @@ impl<T: Pixel> Context<T> {
 
         // TODO: Record the bits spent here against the original frame for rate
         //  control purposes, or add a new frame subtype?
-        let sef_data = self.pool.install(|| encode_frame(fi, &mut fs));
+        let sef_data = encode_show_existing_frame(fi, &mut fs);
         self.packet_data.extend(sef_data);
 
         let rec = if fi.show_frame { Some(fs.rec) } else { None };
