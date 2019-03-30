@@ -2251,51 +2251,52 @@ pub fn encode_show_existing_frame<T: Pixel>(
   packet
 }
 
-pub fn encode_frame<T: Pixel>(fi: &mut FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec<u8> {
+pub fn encode_frame<T: Pixel>(
+  fi: &mut FrameInvariants<T>, fs: &mut FrameState<T>
+) -> Vec<u8> {
   debug_assert!(!fi.show_existing_frame);
   let mut packet = Vec::new();
-  {
-    if !fi.intra_only {
-      for i in 0..INTER_REFS_PER_FRAME {
-        fi.ref_frame_sign_bias[i] =
-          if !fi.sequence.enable_order_hint {
-            false
-          } else if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[i] as usize] {
-            let hint = rec.order_hint;
-            fi.sequence.get_relative_dist(hint, fi.order_hint) > 0
-          } else {
-            false
-          };
-      }
+  if !fi.intra_only {
+    for i in 0..INTER_REFS_PER_FRAME {
+      fi.ref_frame_sign_bias[i] = if !fi.sequence.enable_order_hint {
+        false
+      } else if let Some(ref rec) =
+        fi.rec_buffer.frames[fi.ref_frames[i] as usize]
+      {
+        let hint = rec.order_hint;
+        fi.sequence.get_relative_dist(hint, fi.order_hint) > 0
+      } else {
+        false
+      };
     }
-
-    fs.input_hres.downsample_from(&fs.input.planes[0]);
-    fs.input_hres.pad(fi.width, fi.height);
-    fs.input_qres.downsample_from(&fs.input_hres);
-    fs.input_qres.pad(fi.width, fi.height);
-
-    segmentation_optimize(fi, fs);
-
-    let tile = encode_tile(fi, fs); // actually tile group
-
-    write_obus(&mut packet, fi, fs).unwrap();
-    let mut buf1 = Vec::new();
-    {
-      let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
-      bw1.write_obu_header(ObuType::OBU_TILE_GROUP, 0).unwrap();
-    }
-    packet.write_all(&buf1).unwrap();
-    buf1.clear();
-
-    {
-      let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
-      bw1.write_uleb128(tile.len() as u64).unwrap();
-    }
-    packet.write_all(&buf1).unwrap();
-    buf1.clear();
-
-    packet.write_all(&tile).unwrap();
   }
+
+  fs.input_hres.downsample_from(&fs.input.planes[0]);
+  fs.input_hres.pad(fi.width, fi.height);
+  fs.input_qres.downsample_from(&fs.input_hres);
+  fs.input_qres.pad(fi.width, fi.height);
+
+  segmentation_optimize(fi, fs);
+
+  let tile = encode_tile(fi, fs); // actually tile group
+
+  write_obus(&mut packet, fi, fs).unwrap();
+  let mut buf1 = Vec::new();
+  {
+    let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
+    bw1.write_obu_header(ObuType::OBU_TILE_GROUP, 0).unwrap();
+  }
+  packet.write_all(&buf1).unwrap();
+  buf1.clear();
+
+  {
+    let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
+    bw1.write_uleb128(tile.len() as u64).unwrap();
+  }
+  packet.write_all(&buf1).unwrap();
+  buf1.clear();
+
+  packet.write_all(&tile).unwrap();
   packet
 }
 
