@@ -2231,16 +2231,30 @@ fn write_tile_group_header(tile_start_and_end_present_flag: bool) ->
     buf.clone()
   }
 
-pub fn encode_frame<T: Pixel>(fi: &mut FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec<u8> {
+// Write a packet containing only the placeholder that tells the decoder
+// to present the already decoded frame present at `frame_to_show_map_idx`
+//
+// See `av1-spec` Section 6.8.2 and 7.18.
+pub fn encode_show_existing_frame<T: Pixel>(
+  fi: &mut FrameInvariants<T>, fs: &mut FrameState<T>
+) -> Vec<u8> {
+  debug_assert!(fi.show_existing_frame);
   let mut packet = Vec::new();
-  if fi.show_existing_frame {
-    write_obus(&mut packet, fi, fs).unwrap();
-    if let Some(ref rec) = fi.rec_buffer.frames[fi.frame_to_show_map_idx as usize] {
-      for p in 0..3 {
-        fs.rec.planes[p].data.copy_from_slice(&rec.frame.planes[p].data);
-      }
+
+  write_obus(&mut packet, fi, fs).unwrap();
+  let map_idx = fi.frame_to_show_map_idx as usize;
+  if let Some(ref rec) = fi.rec_buffer.frames[map_idx] {
+    for p in 0..3 {
+      fs.rec.planes[p].data.copy_from_slice(&rec.frame.planes[p].data);
     }
-  } else {
+  }
+  packet
+}
+
+pub fn encode_frame<T: Pixel>(fi: &mut FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec<u8> {
+  debug_assert!(!fi.show_existing_frame);
+  let mut packet = Vec::new();
+  {
     if !fi.intra_only {
       for i in 0..INTER_REFS_PER_FRAME {
         fi.ref_frame_sign_bias[i] =
