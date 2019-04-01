@@ -465,6 +465,7 @@ impl Config {
     let pool = rayon::ThreadPoolBuilder::new().num_threads(threads).build().unwrap();
 
     Context {
+      inner: ContextInner {
       frame_count: 0,
       limit: 0,
       idx: 0,
@@ -473,7 +474,6 @@ impl Config {
       frame_data: BTreeMap::new(),
       keyframes: BTreeSet::new(),
       packet_data,
-      pool,
       segment_start_idx: 0,
       segment_start_frame: 0,
       keyframe_detector: SceneChangeDetector::new(self.enc.bit_depth),
@@ -491,12 +491,14 @@ impl Config {
       first_pass_data: FirstPassData {
         frames: Vec::new(),
       },
+      pool,
+      },
+      config: self.enc.clone(),
     }
   }
 }
 
-pub struct Context<T: Pixel> {
-  //    timebase: Rational,
+pub struct ContextInner<T: Pixel> {
   frame_count: u64,
   limit: u64,
   pub(crate) idx: u64,
@@ -518,6 +520,11 @@ pub struct Context<T: Pixel> {
   maybe_prev_log_base_q: Option<i64>,
   pub first_pass_data: FirstPassData,
   pool: rayon::ThreadPool,
+}
+
+pub struct Context<T: Pixel> {
+  inner: ContextInner<T>,
+  config: EncoderConfig,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -569,31 +576,15 @@ impl<T: Pixel> Context<T> {
     F: Into<Option<Arc<Frame<T>>>>,
     T: Pixel,
   {
-    let idx = self.frame_count;
-    self.frame_q.insert(idx, frame.into());
-    self.frame_count += 1;
-    Ok(())
+    self.inner.send_frame(frame)
   }
 
-  fn get_frame(&self, frame_number: u64) -> Arc<Frame<T>> {
-    // Clones only the arc, so low cost overhead
-    self.frame_q.get(&frame_number).as_ref().unwrap().as_ref().unwrap().clone()
+  pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
+    self.inner.receive_packet()
   }
 
-  pub fn get_frame_count(&self) -> u64 {
-    self.frame_count
-  }
-
-  pub fn set_limit(&mut self, limit: u64) {
-    self.limit = limit;
-  }
-
-  pub(crate) fn needs_more_lookahead(&self) -> bool {
-    self.needs_more_frames(self.frame_count) && self.frames_processed + LOOKAHEAD_FRAMES > self.frame_q.keys().last().cloned().unwrap_or(0)
-  }
-
-  pub fn needs_more_frames(&self, frame_count: u64) -> bool {
-    self.limit == 0 || frame_count < self.limit
+  pub fn flush(&mut self) {
+    self.send_frame(None).unwrap();
   }
 
   pub fn container_sequence_header(&mut self) -> Vec<u8> {
@@ -626,6 +617,61 @@ impl<T: Pixel> Context<T> {
     let seq = Sequence::new(&self.config);
 
     sequence_header_inner(&seq).unwrap()
+  }
+
+  pub fn get_first_pass_data(&self) -> &FirstPassData {
+    &self.inner.first_pass_data
+  }
+
+
+  // TODO: the methods below should go away
+
+  pub fn get_frame_count(&self) -> u64 {
+    self.inner.get_frame_count()
+  }
+
+  pub fn set_limit(&mut self, limit: u64) {
+    self.inner.set_limit(limit);
+  }
+
+  pub fn needs_more_frames(&self, frame_count: u64) -> bool {
+    self.inner.needs_more_frames(frame_count)
+  }
+
+}
+
+
+impl<T: Pixel> ContextInner<T> {
+  pub fn send_frame<F>(&mut self, frame: F) -> Result<(), EncoderStatus>
+  where
+    F: Into<Option<Arc<Frame<T>>>>,
+    T: Pixel,
+  {
+    let idx = self.frame_count;
+    self.frame_q.insert(idx, frame.into());
+    self.frame_count += 1;
+    Ok(())
+  }
+
+  fn get_frame(&self, frame_number: u64) -> Arc<Frame<T>> {
+    // Clones only the arc, so low cost overhead
+    self.frame_q.get(&frame_number).as_ref().unwrap().as_ref().unwrap().clone()
+  }
+
+  pub fn get_frame_count(&self) -> u64 {
+    self.frame_count
+  }
+
+  pub fn set_limit(&mut self, limit: u64) {
+    self.limit = limit;
+  }
+
+  pub(crate) fn needs_more_lookahead(&self) -> bool {
+    self.needs_more_frames(self.frame_count) && self.frames_processed + LOOKAHEAD_FRAMES > self.frame_q.keys().last().cloned().unwrap_or(0)
+  }
+
+  pub fn needs_more_frames(&self, frame_count: u64) -> bool {
+    self.limit == 0 || frame_count < self.limit
   }
 
   fn next_keyframe(&self) -> u64 {

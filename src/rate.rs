@@ -7,7 +7,7 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use crate::api::Context;
+use crate::api::ContextInner;
 use crate::quantize::ac_q;
 use crate::quantize::dc_q;
 use crate::quantize::select_ac_qi;
@@ -540,7 +540,7 @@ impl RCState {
 
   // TODO: Separate quantizers for Cb and Cr.
   pub fn select_qi<T: Pixel>(
-    &self, ctx: &Context<T>, fti: usize, maybe_prev_log_base_q: Option<i64>
+    &self, ctx: &ContextInner<T>, fti: usize, maybe_prev_log_base_q: Option<i64>
   ) -> QuantizerParameters {
     // Is rate control active?
     if self.target_bitrate <= 0 {
