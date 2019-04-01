@@ -18,6 +18,7 @@ use rav1e::partition::*;
 use rav1e::predict::*;
 use rav1e::rdo::rdo_cfl_alpha;
 use rav1e::rdo::RDOType;
+use rav1e::ec::*;
 use crate::transform::transform;
 
 use criterion::*;
@@ -146,6 +147,31 @@ fn cfl_rdo_bench(b: &mut Bencher, bsize: BlockSize) {
   b.iter(|| rdo_cfl_alpha(&mut fs, offset, bsize, fi.sequence.bit_depth))
 }
 
+fn ec_bench(c: &mut Criterion) {
+    c.bench_function("update_cdf_4_native", update_cdf_4_native);
+    c.bench_function("update_cdf_4_sse2", update_cdf_4_sse2);
+}
+
+fn update_cdf_4_native(b: &mut Bencher) {
+    let mut cdf = [7296, 3819, 1616, 0, 0];
+    b.iter(|| {
+        for i in 0..1000 {
+            WriterBase::<WriterRecorder>::update_cdf(&mut cdf, i & 3);
+            black_box(cdf);
+        }
+    });
+}
+
+fn update_cdf_4_sse2(b: &mut Bencher) {
+    let mut cdf = [7296, 3819, 1616, 0, 0];
+    b.iter(|| {
+        for i in 0..1000 {
+            WriterBase::<WriterRecorder>::update_cdf_4_sse2(&mut cdf, i & 3);
+            black_box(cdf);
+        }
+    });
+}
+
 criterion_group!(intra_prediction, predict::pred_bench,);
 
 criterion_group!(cfl, cfl_rdo);
@@ -156,4 +182,7 @@ criterion_group!{ name = me;
                   targets = me::get_sad
 }
 
-criterion_main!(write_block, intra_prediction, cdef, cfl, me, transform);
+criterion_group!(ec, ec_bench);
+
+criterion_main!(write_block, intra_prediction, cdef, cfl, me, transform, ec);
+
