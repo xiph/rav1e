@@ -83,7 +83,7 @@ fn process_frame<T: Pixel>(
 fn write_stats_file<T: Pixel>(ctx: &Context<T>, filename: &Path) -> Result<(), io::Error> {
   let file = File::create(filename)?;
   let writer = BufWriter::new(file);
-  serde_json::to_writer(writer, &ctx.first_pass_data).expect("Serialization should not fail");
+  serde_json::to_writer(writer, ctx.get_first_pass_data()).expect("Serialization should not fail");
   Ok(())
 }
 
