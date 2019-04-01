@@ -578,10 +578,18 @@ impl<T: Pixel> Context<T> {
     F: Into<Option<Arc<Frame<T>>>>,
     T: Pixel,
   {
+    // TODO:
+    // - move the scenechange detection here
+    // - once a segment is ready, set the inner limit to its boundary
+    // - call the inner receive until all the frames had been encoded and put the results in a
+    //   separate queue/channel
+    // - move all of this in a separate thread
     self.inner.send_frame(frame)
   }
 
   pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
+    // TODO:
+    // - receive packets from the queue/channel
     self.inner.receive_packet()
   }
 
