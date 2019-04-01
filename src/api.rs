@@ -48,7 +48,8 @@ pub struct Point {
   pub y: u16
 }
 
-/// Contain all the encoder configuration
+/// Contain all the encoder configuration which are taken for encoded output.
+/// Encoder configurations which doesn't affect the encoded output are in 'config'.
 #[derive(Clone, Debug)]
 pub struct EncoderConfig {
   // output size
@@ -82,9 +83,8 @@ pub struct EncoderConfig {
   pub train_rdo: bool,
 }
 
-/// Default preset for EncoderConfig, In this DEFAULT_SPEED is set to 5 
-/// and called the with_speed_preset with this value(5). We are using 5 
-/// as it is in the middle so it will have good balance of quality and speed.
+/// Default preset for EncoderConfig,it is a balance between quality and speed.
+/// User can use with_speed_preset to have a default structure with a specific speed level.
 impl Default for EncoderConfig {
   fn default() -> Self {
     const DEFAULT_SPEED: usize = 5;
@@ -93,10 +93,9 @@ impl Default for EncoderConfig {
 }
 
 impl EncoderConfig {
-  /// This is the preset set with width and height to 640 and 480 respectively,
-  /// bit depth to 8 and many others, this preset is only activiated when we 
-  /// do the encoder configuration with speed explicity 
-  /// for instance *let mut cfg = EncoderConfig::with_speed_preset(speed);*
+
+  /// This is a preset which provides default settings according to a speed value in the specific
+  /// range 0-10, If the input value is greater than 10 will result in the same setting like 10.
   pub fn with_speed_preset(speed: usize) -> Self {
     EncoderConfig {
       width: 640,
@@ -164,9 +163,19 @@ impl Default for SpeedSettings {
 }
 
 impl SpeedSettings {
-  /// This preset is set to assign the speed, where the speed is passed as arguement,
-  /// the parametes like min_block_size, multi reference preditions, distortion are assigned,
-  /// for instance  *speed_settings: SpeedSettings::from_preset(10);*
+  /// Set the speed setting according to a numeric speed preset
+  /// The speed settings vary depending on speed value from 0 to 10
+  ///   speed - 10, fastest, Min block size 64x64, TX domain distortion, fast deblock, no scenechange detection
+  ///   speed - 9, Min block size 64x64, TX domain distortion, fast deblock
+  ///   speed - 8, Min block size 8x8, reduced TX set, TX domain distortion, fast deblock
+  ///   speed - 7, Min block size 8x8, reduced TX set, TX domain distortion
+  ///   speed - 6, Min block size 8x8, reduced TX set, TX domain distortion
+  ///   speed - 5, default, Min block size 8x8, reduced TX set, TX domain distortion, complex pred modes for keyframes
+  ///   speed - 4, Min block size 8x8, TX domain distortion, complex pred modes for keyframes\n\
+  ///   speed - 3, Min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision
+  ///   speed - 2, Min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision, include near MVs
+  ///   speed - 1, Min block size 8x8, TX domain distortion, complex pred modes, RDO TX decision, include near MVs
+  ///   speed - 0, slowest,  Min block size 4x4, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, bottom-up encoding
   pub fn from_preset(speed: usize) -> Self {
     SpeedSettings {
       min_block_size: Self::min_block_size_preset(speed),
@@ -296,8 +305,6 @@ pub enum ChromaSampling {
   Cs400,
 }
 
-/// Make 4:2:0 as default chroma sampling type as it is almost loseless since it
-/// is removing half of the horizondtal and half of vertical color information
 impl Default for ChromaSampling {
   fn default() -> Self {
     ChromaSampling::Cs420
@@ -326,15 +333,19 @@ pub enum ChromaSamplePosition {
   Colocated
 }
 
-/// Assign default ChromaSamplePosition as Unknown
 impl Default for ChromaSamplePosition {
   fn default() -> Self {
     ChromaSamplePosition::Unknown
   }
 }
 
+/// Pixel data can be encoded over 8 or 10 (or 12 but unsupported) bits. When data is expressed in limited range 
+/// you need to take into account different lower and higher bounds that can be used to express color information:
+///  - 8 bit limited ranges are within 16-235, anything below 16 will be treated as pure black, anything above 235 
+///    will be treated as pure white, whereas for 10 bit the same limits apply between 64 - 940. 
+///  - Of course when using full range you may use the whole width of the available levels (0-255 for 8 bit, 
+///    and 0-1023 for 10 bit) to represent data.
 arg_enum!{
-  /// Contains details of Pixel color range
   #[derive(Debug, Clone, Copy, PartialEq)]
   #[repr(C)]
   pub enum PixelRange {
@@ -344,15 +355,16 @@ arg_enum!{
   }
 }
 
-/// Assign default of PixelRange as Unspecified
 impl Default for PixelRange {
     fn default() -> Self {
         PixelRange::Unspecified
     }
 }
 
+/// Contains different types of Matrix Coefficients which is used in deriving the luma and chroma (YCbCr) from the R'G'B' primaries or X, Y, Z primaries
+/// This is used to describe the color parameters for the video to be encoded, the default value is Unspecfied
+/// This is defined as per ITU H.273 Standrad, for more information refer "Table 4 - Interpretation of matrix coefficients (MatrixCoefficients) value"
 arg_enum!{
-  /// Contains different types of Matrix Coefficients which is used in deriving the luma and chroma (YCbCr) from the R'G'B' primaries
   #[derive(Debug, Clone, Copy, PartialEq)]
   #[repr(C)]
   pub enum MatrixCoefficients {
@@ -373,15 +385,14 @@ arg_enum!{
   }
 }
 
-/// Assign default of MatrixCoefficients as Unspecified
 impl Default for MatrixCoefficients {
     fn default() -> Self {
         MatrixCoefficients::Unspecified
     }
 }
 
+/// Contains different types of the color primaries, they defines how the chromaticy coordinates of the source picture
 arg_enum!{
-  /// Contains different types of the color primaries, they defines how the chromaticy coordinates of the source picture
   #[derive(Debug, Clone, Copy, PartialEq)]
   #[repr(C)]
   pub enum ColorPrimaries {
@@ -400,15 +411,16 @@ arg_enum!{
   }
 }
 
-/// Assign default of ColorPrimaries as Unspecified
 impl Default for ColorPrimaries {
     fn default() -> Self {
         ColorPrimaries::Unspecified
     }
 }
 
+/// Contains different types of Transfer Characteristics, they define the optoelectronic tranfer charecteristic of the source picture aka Gamma.
+/// 8 Bit field is sufficient for representation of the TransferCharacteristics.
+/// This is defined as per ITU H.273 Standrad, for more information refer "Table 3 – Interpretation of transfer characteristics (TransferCharacteristics) value"
 arg_enum!{
-  /// Contains differnt types of Transfer Characteristics, they define the optoelectronic tranfer charecteristic of the source picture aka Gamma.
   #[derive(Debug, Clone, Copy, PartialEq)]
   #[repr(C)]
   pub enum TransferCharacteristics {
@@ -432,7 +444,6 @@ arg_enum!{
   }
 }
 
-/// Assign default of TransferCharacteristics as Unspecified
 impl Default for TransferCharacteristics {
     fn default() -> Self {
         TransferCharacteristics::Unspecified
@@ -475,8 +486,8 @@ pub struct Config {
 
 const MAX_USABLE_THREADS: usize = 4;
 
+ /// Sets a specific configuration key parameter by parsing the value string
 impl Config {
-  /// Contain the values of the encoder configuration which are to be parsed
   pub fn parse(&mut self, key: &str, value: &str) -> Result<(), EncoderStatus> {
     match key {
       "low_latency" => self.enc.low_latency = value.parse().map_err(|_e| ParseError)?,
@@ -491,9 +502,8 @@ impl Config {
 
     Ok(())
   }
-  /// Create a new context for the encoder. Context contatins
-  /// details of the process like frames count, limit frames
-  /// which are processed, details of segment and also Rate Control state
+
+  /// Context is the full encoder state. It is used for caching of OBUs before encoding a single instance.
   pub fn new_context<T: Pixel>(&self) -> Context<T> {
     // Initialize with temporal delimiter
     let packet_data = TEMPORAL_DELIMITER.to_vec();
@@ -511,7 +521,6 @@ impl Config {
     };
 
     let pool = rayon::ThreadPoolBuilder::new().num_threads(threads).build().unwrap();
-    // Initialize default values to context objects
     Context {
       frame_count: 0,
       limit: 0,
@@ -543,7 +552,6 @@ impl Config {
   }
 }
 
-/// Contain all the context configurations
 pub struct Context<T: Pixel> {
   //    timebase: Rational,
   frame_count: u64,
@@ -606,7 +614,7 @@ impl<T: Pixel> fmt::Display for Packet<T> {
 
 impl<T: Pixel> Context<T> {
 
-  /// Create new frame  with details like width, height and also chroma sampling from the encoder
+  /// Create a new empty frame according to the current encoder settings
   pub fn new_frame(&self) -> Arc<Frame<T>> {
     Arc::new(Frame::new(
       self.config.enc.width,
@@ -615,7 +623,7 @@ impl<T: Pixel> Context<T> {
     ))
   }
 
-  /// Send the details of the frame by passing the frame details as input
+  /// Send a frame to be encoded, and it will return error if the input queue is full
   pub fn send_frame<F>(&mut self, frame: F) -> Result<(), EncoderStatus>
   where
     F: Into<Option<Arc<Frame<T>>>>,
@@ -627,34 +635,34 @@ impl<T: Pixel> Context<T> {
     Ok(())
   }
 
-  /// Returns the details of a specific frame
   pub fn get_frame(&self, frame_number: u64) -> Arc<Frame<T>> {
     // Clones only the arc, so low cost overhead
     self.frame_q.get(&frame_number).as_ref().unwrap().as_ref().unwrap().clone()
   }
 
-  /// Returns the frame count
+  /// frame_count is the total number of frames of the video and this function returns this value
   pub fn get_frame_count(&self) -> u64 {
     self.frame_count
   }
 
-  /// Set the limit which is passed as argument
+  /// Limit is the maxiumum number of frames whcih are to be encoded and this function set the value to local variable which is passed as argument 
   pub fn set_limit(&mut self, limit: u64) {
     self.limit = limit;
   }
 
-  /// Allow to read frames ahead of current ones
   pub fn needs_more_lookahead(&self) -> bool {
     self.needs_more_frames(self.frame_count) && self.frames_processed + LOOKAHEAD_FRAMES > self.frame_q.keys().last().cloned().unwrap_or(0)
   }
 
-  /// Request for more frames
+  /// This function returns true if more frames are needed by the encoder, send_frame() is responsible for sending frames if needed.
   pub fn needs_more_frames(&self, frame_count: u64) -> bool {
     self.limit == 0 || frame_count < self.limit
   }
 
-  /// Video sequences are headed by a sequence header which was starting value, various other things like chroma sampling x and y, sequence bit depth
-  pub fn container_sequence_header(&mut self) -> Vec<u8> {
+  /// Video sequences are headed by a sequence header, this function returns the buffer which has the details of the sequence header which are compatible by the container 
+  /// Refer to `Section 5.5 Sequence header OBU syntax` of AV1 Spec for more information.
+  /// 
+  pub fn  (&mut self) -> Vec<u8> {
     fn sequence_header_inner(seq: &Sequence) -> io::Result<Vec<u8>> {
       let mut buf = Vec::new();
 
@@ -786,10 +794,9 @@ impl<T: Pixel> Context<T> {
     (fi, true)
   }
 
-  /// Receive packet functions provide an Encode API with decoupled packets/frames, On sucess it returns packet with compressed frame.
-  /// If it has needs_more_lookahead and if everything is encoded then it will be returning the encode status as "NeedMoreFrames"
-  /// Frames to analyze lookahead, when the frame queue is nearly full it returns with status as "Enough Data". At the begining the encoder
-  /// accepts multiple frames as input untill the buffer is full. When it is end of stream it requires flushing aka. draining.
+  /// This function provide an Encoder API with decoupled packets/frames, send_frame() function
+  /// send frames and returns an encoded packet or signals that additional frame data must be 
+  /// provided. When it is reaches end of frame, flush() fucntion is called for draining data.
   pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
     if self.needs_more_lookahead() {
       return Err(EncoderStatus::NeedMoreFrames);
@@ -925,9 +932,8 @@ impl<T: Pixel> Context<T> {
     }
   }
 
-  /// Flush the output, the flush makes the current frame to the frame_q and then increments the frame count for the next process.
-  /// This also means that some packets might not produce output immediately and might requrie to flushed at the end of decoding to
-  /// get all the decoded data.
+  /// flush all delayed frames in the encoder, the frames are sent by send_frame() and encoded using receive_packet().
+  /// This delay occurs when the receive_packet() doesn't produce output immediately. 
   pub fn flush(&mut self) {
     self.frame_q.insert(self.frame_count, None);
     self.frame_count += 1;
