@@ -499,8 +499,10 @@ impl Config {
 }
 
 pub struct ContextInner<T: Pixel> {
+  /// Number of frames fed to the encoder
   frame_count: u64,
   limit: u64,
+  /// Last frame number being marked
   pub(crate) idx: u64,
   frames_processed: u64,
   /// Maps frame *number* to frames
