@@ -471,7 +471,7 @@ impl Config {
       idx: 0,
       frames_processed: 0,
       frame_q: BTreeMap::new(),
-      frame_data: BTreeMap::new(),
+      frame_invariants: BTreeMap::new(),
       keyframes: BTreeSet::new(),
       packet_data,
       segment_start_idx: 0,
@@ -506,9 +506,9 @@ pub struct ContextInner<T: Pixel> {
   /// Maps frame *number* to frames
   frame_q: BTreeMap<u64, Option<Arc<Frame<T>>>>, //    packet_q: VecDeque<Packet>
   /// Maps frame *idx* to frame data
-  frame_data: BTreeMap<u64, FrameInvariants<T>>,
+  frame_invariants: BTreeMap<u64, FrameInvariants<T>>,
   /// A list of keyframe *numbers* in this encode. Needed so that we don't
-  /// need to keep all of the frame_data in memory for the whole life of the encode.
+  /// need to keep all of the frame_invariants in memory for the whole life of the encode.
   keyframes: BTreeSet<u64>,
   /// A storage space for reordered frames.
   packet_data: Vec<u8>,
@@ -675,7 +675,7 @@ impl<T: Pixel> ContextInner<T> {
   }
 
   fn next_keyframe(&self) -> u64 {
-    let next_detected = self.frame_data.values()
+    let next_detected = self.frame_invariants.values()
       .find(|fi| fi.frame_type == FrameType::KEY && fi.number > self.segment_start_frame)
       .map(|fi| fi.number);
     let next_limit = self.segment_start_frame + self.config.max_key_frame_interval;
@@ -687,7 +687,7 @@ impl<T: Pixel> ContextInner<T> {
 
   fn set_frame_properties(&mut self, idx: u64) -> bool {
     let (fi, end_of_subgop) = self.build_frame_properties(idx);
-    self.frame_data.insert(idx, fi);
+    self.frame_invariants.insert(idx, fi);
 
     end_of_subgop
   }
@@ -707,7 +707,7 @@ impl<T: Pixel> ContextInner<T> {
       return (fi, true);
     }
 
-    let mut fi = self.frame_data[&(idx - 1)].clone();
+    let mut fi = self.frame_invariants[&(idx - 1)].clone();
 
     // FIXME: inter unsupported with 4:2:2 and 4:4:4 chroma sampling
     let chroma_sampling = self.config.chroma_sampling;
@@ -787,7 +787,7 @@ impl<T: Pixel> ContextInner<T> {
         idx = self.idx;
       }
 
-      if !self.needs_more_frames(self.frame_data[&idx].number) {
+      if !self.needs_more_frames(self.frame_invariants[&idx].number) {
         self.idx += 1;
         return Err(EncoderStatus::EnoughData);
       }
@@ -795,7 +795,7 @@ impl<T: Pixel> ContextInner<T> {
     };
 
     let ret = {
-      let fi = self.frame_data.get_mut(&idx).unwrap();
+      let fi = self.frame_invariants.get_mut(&idx).unwrap();
       if fi.show_existing_frame {
         self.idx += 1;
 
@@ -817,7 +817,7 @@ impl<T: Pixel> ContextInner<T> {
             let fti = fi.get_frame_subtype();
             let qps =
               self.rc_state.select_qi(self, fti, self.maybe_prev_log_base_q);
-            let fi = self.frame_data.get_mut(&idx).unwrap();
+            let fi = self.frame_invariants.get_mut(&idx).unwrap();
             fi.set_quantizers(&qps);
             let mut fs = FrameState::new_with_frame(fi, frame.clone());
 
@@ -906,7 +906,7 @@ impl<T: Pixel> ContextInner<T> {
       return;
     }
     for i in 0..(self.idx - 1) {
-      self.frame_data.remove(&i);
+      self.frame_invariants.remove(&i);
     }
   }
 
@@ -983,7 +983,7 @@ impl<T: Pixel> ContextInner<T> {
       acc[FRAME_SUBTYPE_I] += 1;
     }
     for idx in self.idx..(self.idx + reservoir_frame_delay as u64) {
-      if let Some(fd) = self.frame_data.get(&idx) {
+      if let Some(fd) = self.frame_invariants.get(&idx) {
         if fd.frame_type == FrameType::KEY {
           collect_counts(nframes, &mut acc);
           prev_keyframe = idx;
