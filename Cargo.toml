@@ -21,6 +21,7 @@ quick_test = []
 arg_enum_proc_macro = "0.1.1"
 bitstream-io = "0.8"
 clap = { version = "2", optional = true, default-features = false }
+crossbeam = "0.7"
 libc = "0.2"
 rand = "0.5"
 y4m = { version = "0.3.2", optional = true }

@@ -9,6 +9,8 @@
 
 use arg_enum_proc_macro::ArgEnum;
 use bitstream_io::*;
+use crossbeam::channel::*;
+
 use crate::encoder::*;
 use crate::metrics::calculate_frame_psnr;
 use crate::partition::*;
@@ -464,6 +466,8 @@ impl Config {
 
     let pool = rayon::ThreadPoolBuilder::new().num_threads(threads).build().unwrap();
 
+    let (send_packet, recv_packet) = unbounded();
+
     Context {
       inner: ContextInner {
       frame_count: 0,
@@ -476,7 +480,6 @@ impl Config {
       packet_data,
       segment_start_idx: 0,
       segment_start_frame: 0,
-      keyframe_detector: SceneChangeDetector::new(self.enc.bit_depth),
       config: self.enc.clone(),
       rc_state: RCState::new(
         self.enc.width as i32,
@@ -494,6 +497,10 @@ impl Config {
       pool,
       },
       config: self.enc.clone(),
+      prev_keyframe: 0,
+      keyframe_detector: SceneChangeDetector::new(self.enc.bit_depth),
+      send_packet,
+      recv_packet,
     }
   }
 }
@@ -516,7 +523,6 @@ pub struct ContextInner<T: Pixel> {
   packet_data: Vec<u8>,
   segment_start_idx: u64,
   segment_start_frame: u64,
-  keyframe_detector: SceneChangeDetector<T>,
   pub(crate) config: EncoderConfig,
   rc_state: RCState,
   maybe_prev_log_base_q: Option<i64>,
@@ -527,6 +533,12 @@ pub struct ContextInner<T: Pixel> {
 pub struct Context<T: Pixel> {
   inner: ContextInner<T>,
   config: EncoderConfig,
+
+  /// Previous keyframe number
+  prev_keyframe: u64,
+  keyframe_detector: SceneChangeDetector<T>,
+  send_packet: Sender<Packet<T>>,
+  recv_packet: Receiver<Packet<T>>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -584,13 +596,47 @@ impl<T: Pixel> Context<T> {
     // - call the inner receive until all the frames had been encoded and put the results in a
     //   separate queue/channel
     // - move all of this in a separate thread
-    self.inner.send_frame(frame)
+
+    let frame = frame.into();
+
+    let must_flush = if let Some(f) = frame {
+      let idx = self.inner.frame_count;
+      self.inner.send_frame(f.clone())?;
+
+      let distance = idx - self.prev_keyframe;
+      if distance == self.config.min_key_frame_interval {
+        self.keyframe_detector.set_last_frame(f.clone(), idx as usize);
+        false
+      } else {
+        let over_min_interval = distance > self.config.min_key_frame_interval;
+        let over_max_interval = distance > self.config.max_key_frame_interval;
+
+        over_max_interval || over_min_interval && self.keyframe_detector.detect_scene_change(f.clone(), idx as usize)
+      }
+    } else {
+      true
+    };
+
+    if must_flush {
+      self.inner.limit = self.inner.frame_count;
+
+      while let Ok(pkt) = self.inner.receive_packet() {
+        self.send_packet.send(pkt).unwrap();
+      }
+    }
+
+    Ok(())
   }
 
   pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
     // TODO:
     // - receive packets from the queue/channel
-    self.inner.receive_packet()
+    // self.inner.receive_packet()
+
+    self.recv_packet.try_recv().map_err(|e| match e {
+      TryRecvError::Empty => EncoderStatus::NeedMoreData,
+      TryRecvError::Disconnected => unreachable!("Packet channel disconnected?")
+    })
   }
 
   pub fn flush(&mut self) {
@@ -945,20 +991,17 @@ impl<T: Pixel> ContextInner<T> {
       Some(frame) => frame,
       None => { return FrameType::KEY; }
     };
-    if let Some(frame) = frame {
+    // TODO: Doublecheck
+    if frame.is_some() {
       let distance = frame_number - prev_keyframe;
       if distance < self.config.min_key_frame_interval {
-        if distance + 1 == self.config.min_key_frame_interval {
-          self.keyframe_detector.set_last_frame(frame, frame_number as usize);
-        }
         return FrameType::INTER;
       }
       if distance >= self.config.max_key_frame_interval {
         return FrameType::KEY;
       }
-      if self.keyframe_detector.detect_scene_change(frame, frame_number as usize) {
-        return FrameType::KEY;
-      }
+
+      return FrameType::KEY;
     }
     FrameType::INTER
   }
