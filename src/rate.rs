@@ -549,8 +549,8 @@ impl RCState {
       // TODO: Rename "quantizer" something that indicates it is a quantizer
       //  index, and move it somewhere more sensible (or choose a better way to
       //  parameterize a "quality" configuration parameter).
-      let base_qi = ctx.config.enc.quantizer;
-      let bit_depth = ctx.config.enc.bit_depth as i32;
+      let base_qi = ctx.config.quantizer;
+      let bit_depth = ctx.config.bit_depth as i32;
       // We use the AC quantizer as the source quantizer since its quantizer
       //  tables have unique entries, while the DC tables do not.
       let ac_quantizer = ac_q(base_qi as u8, 0, bit_depth as usize) as i64;
@@ -598,7 +598,7 @@ impl RCState {
           //  in the binary log domain (binary exp and log aren't too bad):
           //  rate = exp2(log2(scale) - log2(quantizer)*exp)
           // There's no easy closed form solution, so we bisection searh for it.
-          let bit_depth = ctx.config.enc.bit_depth as i32;
+          let bit_depth = ctx.config.bit_depth as i32;
           // TODO: Proper handling of lossless.
           let mut log_qlo = blog64(dc_q(0, 0, bit_depth as usize) as i64)
             - q57(QSCALE + bit_depth - 8);

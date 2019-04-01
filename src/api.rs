@@ -48,6 +48,8 @@ pub struct Point {
   pub y: u16
 }
 
+
+/// Encoder Settings impacting the bitstream produced
 #[derive(Clone, Debug)]
 pub struct EncoderConfig {
   // output size
@@ -433,7 +435,7 @@ pub struct ContentLight {
     pub max_frame_average_light_level: u16,
 }
 
-/// Contain all the encoder configuration
+/// Contains all the encoder configuration
 #[derive(Clone, Debug)]
 pub struct Config {
   pub enc: EncoderConfig,
@@ -475,7 +477,7 @@ impl Config {
       segment_start_idx: 0,
       segment_start_frame: 0,
       keyframe_detector: SceneChangeDetector::new(self.enc.bit_depth),
-      config: self.clone(),
+      config: self.enc.clone(),
       rc_state: RCState::new(
         self.enc.width as i32,
         self.enc.height as i32,
@@ -511,7 +513,7 @@ pub struct Context<T: Pixel> {
   segment_start_idx: u64,
   segment_start_frame: u64,
   keyframe_detector: SceneChangeDetector<T>,
-  pub config: Config,
+  pub(crate) config: EncoderConfig,
   rc_state: RCState,
   maybe_prev_log_base_q: Option<i64>,
   pub first_pass_data: FirstPassData,
@@ -556,9 +558,9 @@ impl<T: Pixel> fmt::Display for Packet<T> {
 impl<T: Pixel> Context<T> {
   pub fn new_frame(&self) -> Arc<Frame<T>> {
     Arc::new(Frame::new(
-      self.config.enc.width,
-      self.config.enc.height,
-      self.config.enc.chroma_sampling
+      self.config.width,
+      self.config.height,
+      self.config.chroma_sampling
     ))
   }
 
@@ -621,7 +623,7 @@ impl<T: Pixel> Context<T> {
       Ok(buf)
     }
 
-    let seq = Sequence::new(&self.config.enc);
+    let seq = Sequence::new(&self.config);
 
     sequence_header_inner(&seq).unwrap()
   }
@@ -630,7 +632,7 @@ impl<T: Pixel> Context<T> {
     let next_detected = self.frame_data.values()
       .find(|fi| fi.frame_type == FrameType::KEY && fi.number > self.segment_start_frame)
       .map(|fi| fi.number);
-    let next_limit = self.segment_start_frame + self.config.enc.max_key_frame_interval;
+    let next_limit = self.segment_start_frame + self.config.max_key_frame_interval;
     if next_detected.is_none() {
       return next_limit;
     }
@@ -646,12 +648,12 @@ impl<T: Pixel> Context<T> {
 
   fn build_frame_properties(&mut self, idx: u64) -> (FrameInvariants<T>, bool) {
     if idx == 0 {
-      let seq = Sequence::new(&self.config.enc);
+      let seq = Sequence::new(&self.config);
 
       // The first frame will always be a key frame
       let fi = FrameInvariants::new_key_frame(
         &FrameInvariants::new(
-          self.config.enc.clone(),
+          self.config.clone(),
           seq
         ),
         0
@@ -662,7 +664,7 @@ impl<T: Pixel> Context<T> {
     let mut fi = self.frame_data[&(idx - 1)].clone();
 
     // FIXME: inter unsupported with 4:2:2 and 4:4:4 chroma sampling
-    let chroma_sampling = self.config.enc.chroma_sampling;
+    let chroma_sampling = self.config.chroma_sampling;
     let keyframe_only = chroma_sampling == ChromaSampling::Cs444 ||
       chroma_sampling == ChromaSampling::Cs422;
 
@@ -822,7 +824,7 @@ impl<T: Pixel> Context<T> {
     }
 
     let mut psnr = None;
-    if self.config.enc.show_psnr {
+    if self.config.show_psnr {
       if let Some(ref rec) = rec {
         let original_frame = self.get_frame(fi.number);
         psnr = Some(calculate_frame_psnr(
@@ -833,7 +835,7 @@ impl<T: Pixel> Context<T> {
       }
     }
 
-    if self.config.enc.pass == Some(1) {
+    if self.config.pass == Some(1) {
       self.first_pass_data.frames.push(FirstPassFrame::from(fi));
     }
 
@@ -871,8 +873,8 @@ impl<T: Pixel> Context<T> {
     if frame_number == 0 {
       return FrameType::KEY;
     }
-    if self.config.enc.speed_settings.no_scene_detection {
-      if frame_number % self.config.enc.max_key_frame_interval == 0 {
+    if self.config.speed_settings.no_scene_detection {
+      if frame_number % self.config.max_key_frame_interval == 0 {
         return FrameType::KEY;
       } else {
         return FrameType::INTER;
@@ -889,13 +891,13 @@ impl<T: Pixel> Context<T> {
     };
     if let Some(frame) = frame {
       let distance = frame_number - prev_keyframe;
-      if distance < self.config.enc.min_key_frame_interval {
-        if distance + 1 == self.config.enc.min_key_frame_interval {
+      if distance < self.config.min_key_frame_interval {
+        if distance + 1 == self.config.min_key_frame_interval {
           self.keyframe_detector.set_last_frame(frame, frame_number as usize);
         }
         return FrameType::INTER;
       }
-      if distance >= self.config.enc.max_key_frame_interval {
+      if distance >= self.config.max_key_frame_interval {
         return FrameType::KEY;
       }
       if self.keyframe_detector.detect_scene_change(frame, frame_number as usize) {
@@ -942,7 +944,7 @@ impl<T: Pixel> Context<T> {
           continue;
         }
       } else if idx == 0
-        || idx - prev_keyframe >= self.config.enc.max_key_frame_interval
+        || idx - prev_keyframe >= self.config.max_key_frame_interval
       {
         collect_counts(nframes, &mut acc);
         prev_keyframe = idx;
@@ -950,7 +952,7 @@ impl<T: Pixel> Context<T> {
       }
       // TODO: Implement golden P-frames.
       let mut fti = FRAME_SUBTYPE_P;
-      if !self.config.enc.low_latency {
+      if !self.config.low_latency {
         let pyramid_depth = 2;
         let group_src_len = 1 << pyramid_depth;
         let group_len = group_src_len + pyramid_depth;
