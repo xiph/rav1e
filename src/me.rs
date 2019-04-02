@@ -511,7 +511,6 @@ impl MotionEstimation for DiamondSearch {
     blk_w: usize, blk_h: usize,
     best_mv: &mut MotionVector, lowest_cost: &mut u64
   ) {
-    let bo_adj_h = BlockOffset { x: bo_adj.x >> 1, y: bo_adj.y >> 1 };
     let po = PlaneOffset {
       x: (bo_adj.x as isize) << BLOCK_TO_PLANE_SHIFT >> 1,
       y: (bo_adj.y as isize) << BLOCK_TO_PLANE_SHIFT >> 1,
@@ -519,7 +518,7 @@ impl MotionEstimation for DiamondSearch {
     for omv in pmvs.iter() {
       if let Some(pmv) = omv {
         let mut predictors = get_subset_predictors::<T>(
-          bo_adj_h,
+          bo_adj,
           MotionVector{row: pmv.row, col: pmv.col},
           fi.w_in_b, fi.h_in_b,
           &frame_mvs, frame_ref_opt, 0
