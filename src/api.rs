@@ -576,6 +576,12 @@ impl<T: Pixel> Context<T> {
     F: Into<Option<Arc<Frame<T>>>>,
     T: Pixel,
   {
+    let frame = frame.into();
+
+    if frame.is_none() {
+        self.inner.limit = self.inner.frame_count;
+    }
+
     self.inner.send_frame(frame)
   }
 
@@ -776,7 +782,7 @@ impl<T: Pixel> ContextInner<T> {
   }
 
   pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
-    if self.frames_processed == self.limit {
+    if self.limit != 0 && self.frames_processed == self.limit {
       return Err(EncoderStatus::EnoughData);
     }
 
@@ -1107,6 +1113,48 @@ mod test {
     let limit = 40;
 
     ctx.set_limit(limit);
+
+    for _ in  0..limit {
+      let input = ctx.new_frame();
+      let _ = ctx.send_frame(input);
+    }
+
+    ctx.flush();
+
+    let mut count = 0;
+
+    'out: for _ in 0..limit {
+      loop {
+        match ctx.receive_packet() {
+          Ok(_) => {
+            eprintln!("Packet Received {}/{}", count, limit);
+            count += 1;
+          },
+          Err(EncoderStatus::EnoughData) => {
+            eprintln!("{:?}", EncoderStatus::EnoughData);
+
+            break 'out;
+          }
+          Err(e) => {
+            eprintln!("{:?}", e);
+            break;
+          }
+        }
+      }
+    }
+
+    assert_eq!(limit, count);
+  }
+
+
+  #[interpolate_test(low_latency_no_scene_change, true, true)]
+  #[interpolate_test(reorder_no_scene_change, false, true)]
+  #[interpolate_test(low_latency_scene_change_detection, true, false)]
+  #[interpolate_test(reorder_scene_change_detection, false, false)]
+  #[test]
+  fn flush_unlimited(low_lantency: bool, no_scene_detection: bool) {
+    let mut ctx = setup_encoder::<u8>(64, 80, 5, 100, 8, ChromaSampling::Cs420, 15, 20, 0, low_lantency, no_scene_detection);
+    let limit = 40;
 
     for _ in  0..limit {
       let input = ctx.new_frame();
