@@ -43,6 +43,7 @@ mod nasm {
   }
 
   declare_asm_sad![
+    // SSSE3
     (rav1e_sad_4x4_hbd_ssse3, u16),
     (rav1e_sad_8x8_hbd10_ssse3, u16),
     (rav1e_sad_16x16_hbd_ssse3, u16),
@@ -50,16 +51,42 @@ mod nasm {
     (rav1e_sad_64x64_hbd10_ssse3, u16),
     (rav1e_sad_128x128_hbd10_ssse3, u16),
 
+    // SSE2
     (rav1e_sad4x4_sse2, u8),
+    (rav1e_sad4x8_sse2, u8),
+    (rav1e_sad4x16_sse2, u8),
+
+    (rav1e_sad8x4_sse2, u8),
     (rav1e_sad8x8_sse2, u8),
+    (rav1e_sad8x16_sse2, u8),
+    (rav1e_sad8x32_sse2, u8),
+
     (rav1e_sad16x16_sse2, u8),
+
     (rav1e_sad32x32_sse2, u8),
+
     (rav1e_sad64x64_sse2, u8),
+
     (rav1e_sad128x128_sse2, u8),
 
+    // AVX
+    (rav1e_sad16x4_avx2, u8),
+    (rav1e_sad16x8_avx2, u8),
     (rav1e_sad16x16_avx2, u8),
+    (rav1e_sad16x32_avx2, u8),
+    (rav1e_sad16x64_avx2, u8),
+
+    (rav1e_sad32x8_avx2, u8),
+    (rav1e_sad32x16_avx2, u8),
     (rav1e_sad32x32_avx2, u8),
+    (rav1e_sad32x64_avx2, u8),
+
+    (rav1e_sad64x16_avx2, u8),
+    (rav1e_sad64x32_avx2, u8),
     (rav1e_sad64x64_avx2, u8),
+    (rav1e_sad64x128_avx2, u8),
+
+    (rav1e_sad128x64_avx2, u8),
     (rav1e_sad128x128_avx2, u8)
   ];
 
@@ -144,28 +171,40 @@ mod nasm {
     let ref_ptr = plane_ref.as_ptr();
     let org_stride = plane_org.plane.cfg.stride as libc::ptrdiff_t;
     let ref_stride = plane_ref.plane.cfg.stride as libc::ptrdiff_t;
-    let step_size = blk_h.min(blk_w);
-    let func = match step_size.ilog() {
-      3 => rav1e_sad4x4_sse2,
-      4 => rav1e_sad8x8_sse2,
-      5 => rav1e_sad16x16_avx2,
-      6 => rav1e_sad32x32_avx2,
-      7 => rav1e_sad64x64_avx2,
-      8 => rav1e_sad128x128_avx2,
-      _ => rav1e_sad128x128_avx2
+
+    let func = match (blk_w, blk_h) {
+      (4, 4) => rav1e_sad4x4_sse2,
+      (4, 8) => rav1e_sad4x8_sse2,
+      (4, 16) => rav1e_sad4x16_sse2,
+
+      (8, 4) => rav1e_sad8x4_sse2,
+      (8, 8) => rav1e_sad8x8_sse2,
+      (8, 16) => rav1e_sad8x16_sse2,
+      (8, 32) => rav1e_sad8x32_sse2,
+
+      (16, 4) => rav1e_sad16x4_avx2,
+      (16, 8) => rav1e_sad16x8_avx2,
+      (16, 16) => rav1e_sad16x16_avx2,
+      (16, 32) => rav1e_sad16x32_avx2,
+      (16, 64) => rav1e_sad16x64_avx2,
+
+      (32, 8) => rav1e_sad32x8_avx2,
+      (32, 16) => rav1e_sad32x16_avx2,
+      (32, 32) => rav1e_sad32x32_avx2,
+      (32, 64) => rav1e_sad32x64_avx2,
+
+      (64, 16) => rav1e_sad64x16_avx2,
+      (64, 32) => rav1e_sad64x32_avx2,
+      (64, 64) => rav1e_sad64x64_avx2,
+      (64, 128) => rav1e_sad64x128_avx2,
+
+      (128, 64) => rav1e_sad128x64_avx2,
+      (128, 128) => rav1e_sad128x128_avx2,
+
+      _ => unreachable!()
     };
-    if blk_w == blk_h {
-      return func(org_ptr, org_stride, ref_ptr, ref_stride);
-    }
-    let mut sum = 0 as u32;
-    for r in (0..blk_h as isize).step_by(step_size) {
-      for c in (0..blk_w as isize).step_by(step_size) {
-        let org_ptr = org_ptr.offset(r * org_stride + c);
-        let ref_ptr = ref_ptr.offset(r * ref_stride + c);
-        sum += func(org_ptr, org_stride, ref_ptr, ref_stride);
-      }
-    }
-    sum
+    func(org_ptr, org_stride, ref_ptr, ref_stride)
+
   }
 
   #[inline(always)]
