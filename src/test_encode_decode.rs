@@ -30,16 +30,15 @@ fn fill_frame<T: Pixel>(ra: &mut ChaChaRng, frame: &mut Frame<T>) {
   }
 }
 
-pub(crate) fn read_frame_batch<T: Pixel>(ctx: &mut Context<T>, ra: &mut ChaChaRng) {
-  while ctx.needs_more_lookahead() {
+pub(crate) fn read_frame_batch<T: Pixel>(ctx: &mut Context<T>, ra: &mut ChaChaRng, limit: usize) {
+  for _ in  0..limit {
     let mut input = ctx.new_frame();
     fill_frame(ra, Arc::get_mut(&mut input).unwrap());
 
     let _ = ctx.send_frame(Some(input));
   }
-  if !ctx.needs_more_frames(ctx.get_frame_count()) {
-    ctx.flush();
-  }
+
+  ctx.flush();
 }
 
 pub(crate) enum DecodeResult {
@@ -70,8 +69,9 @@ pub(crate) trait TestDecoder<T: Pixel> {
     ivf::write_ivf_header(&mut out, w, h, 30, 1);
 
     let mut rec_fifo = VecDeque::new();
+    read_frame_batch(&mut ctx, &mut ra, limit);
+
     for _ in 0..limit {
-      read_frame_batch(&mut ctx, &mut ra);
 
       let mut corrupted_count = 0;
       loop {
