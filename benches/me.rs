@@ -33,14 +33,14 @@ fn new_plane<T: Pixel>(ra: &mut ChaChaRng, width: usize, height: usize) -> Plane
   p
 }
 
-fn bench_get_sad(b: &mut Bencher, &(bs, bit_depth): &(BlockSize, usize)) {
+fn run_sad_bench<T: Pixel>(b: &mut Bencher, &(bs, bit_depth): &(BlockSize, usize)) {
   let mut ra = ChaChaRng::from_seed([0; 32]);
   let bsw = bs.width();
   let bsh = bs.height();
   let w = 640;
   let h = 480;
-  let input_plane = new_plane::<u16>(&mut ra, w, h);
-  let rec_plane = new_plane::<u16>(&mut ra, w, h);
+  let input_plane = new_plane::<T>(&mut ra, w, h);
+  let rec_plane = new_plane::<T>(&mut ra, w, h);
   let po = PlaneOffset { x: 0, y: 0 };
 
   let plane_org = input_plane.slice(po);
@@ -50,6 +50,15 @@ fn bench_get_sad(b: &mut Bencher, &(bs, bit_depth): &(BlockSize, usize)) {
     let _ =
       black_box(me::get_sad(&plane_org, &plane_ref, bsh, bsw, bit_depth));
   })
+}
+
+fn bench_get_sad(b: &mut Bencher, &(bs, bit_depth): &(BlockSize, usize)) {
+  if bit_depth <= 8 {
+    run_sad_bench::<u8>(b, &(bs, bit_depth))
+  }
+  else {
+    run_sad_bench::<u16>(b, &(bs, bit_depth))
+  }
 }
 
 pub fn get_sad(c: &mut Criterion) {
