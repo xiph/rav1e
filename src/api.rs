@@ -776,6 +776,10 @@ impl<T: Pixel> ContextInner<T> {
   }
 
   pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
+    if self.frames_processed == self.limit {
+      return Err(EncoderStatus::EnoughData);
+    }
+
     if self.needs_more_lookahead() {
       return Err(EncoderStatus::NeedMoreFrames);
     }
@@ -1044,5 +1048,86 @@ impl<T: Pixel> From<&FrameInvariants<T>> for FirstPassFrame {
       number: fi.number,
       frame_type: fi.frame_type,
     }
+  }
+}
+
+#[cfg(test)]
+mod test {
+  use super::*;
+
+  fn setup_encoder<T: Pixel>(
+    w: usize, h: usize, speed: usize, quantizer: usize, bit_depth: usize,
+    chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
+    low_latency: bool, bitrate: i32
+  ) -> Context<T> {
+    assert!(bit_depth == 8 || std::mem::size_of::<T>() > 1);
+    let mut enc = EncoderConfig::with_speed_preset(speed);
+    enc.quantizer = quantizer;
+    enc.min_key_frame_interval = min_keyint;
+    enc.max_key_frame_interval = max_keyint;
+    enc.low_latency = low_latency;
+    enc.width = w;
+    enc.height = h;
+    enc.bit_depth = bit_depth;
+    enc.chroma_sampling = chroma_sampling;
+    enc.bitrate = bitrate;
+    enc.speed_settings.no_scene_detection = true;
+
+    let cfg = Config { enc, threads: 0 };
+
+    cfg.new_context()
+  }
+
+  /*
+  fn fill_frame<T: Pixel>(ra: &mut ChaChaRng, frame: &mut Frame<T>) {
+    for plane in frame.planes.iter_mut() {
+      let stride = plane.cfg.stride;
+      for row in plane.data.chunks_mut(stride) {
+        for pixel in row {
+          let v: u8 = ra.gen();
+          *pixel = T::cast_from(v);
+        }
+      }
+    }
+  }
+  */
+
+  #[test]
+  fn flush() {
+    let mut ctx = setup_encoder::<u8>(64, 80, 5, 100, 8, ChromaSampling::Cs420, 15, 20, true, 0);
+    let limit = 40;
+
+    ctx.set_limit(limit);
+
+    for _ in  0..limit {
+      let input = ctx.new_frame();
+      let _ = ctx.send_frame(input);
+    }
+
+    ctx.flush();
+
+    let mut count = 0;
+
+    'out: for _ in 0..limit {
+      loop {
+        match ctx.receive_packet() {
+          Ok(_) => {
+            eprintln!("Packet Received {}/{}", count, limit);
+            count += 1;
+          },
+          Err(EncoderStatus::EnoughData) => {
+            eprintln!("{:?}", EncoderStatus::EnoughData);
+
+            break 'out;
+          }
+          Err(e) => {
+            eprintln!("{:?}", e);
+            break;
+          }
+        }
+      }
+    }
+
+    assert_eq!(limit, count);
   }
 }
