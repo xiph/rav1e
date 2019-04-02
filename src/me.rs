@@ -31,87 +31,37 @@ mod nasm {
 
   use libc;
 
-  extern {
-    fn rav1e_sad_4x4_hbd_ssse3(
-      src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
-      dst_stride: libc::ptrdiff_t
-    ) -> u32;
-
-    fn rav1e_sad_8x8_hbd10_ssse3(
-      src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
-      dst_stride: libc::ptrdiff_t
-    ) -> u32;
-
-    fn rav1e_sad_16x16_hbd_ssse3(
-      src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
-      dst_stride: libc::ptrdiff_t
-    ) -> u32;
-
-    fn rav1e_sad_32x32_hbd10_ssse3(
-      src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
-      dst_stride: libc::ptrdiff_t
-    ) -> u32;
-
-    fn rav1e_sad_64x64_hbd10_ssse3(
-      src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
-      dst_stride: libc::ptrdiff_t
-    ) -> u32;
-
-    fn rav1e_sad_128x128_hbd10_ssse3(
-      src: *const u16, src_stride: libc::ptrdiff_t, dst: *const u16,
-      dst_stride: libc::ptrdiff_t
-    ) -> u32;
-
-    fn rav1e_sad4x4_sse2(
-      src: *const u8, src_stride: libc::ptrdiff_t, dst: *const u8,
-      dst_stride: libc::ptrdiff_t
-    ) -> u32;
-
-    fn rav1e_sad8x8_sse2(
-      src: *const u8, src_stride: libc::ptrdiff_t, dst: *const u8,
-      dst_stride: libc::ptrdiff_t
-    ) -> u32;
-
-    fn rav1e_sad16x16_sse2(
-      src: *const u8, src_stride: libc::ptrdiff_t, dst: *const u8,
-      dst_stride: libc::ptrdiff_t
-    ) -> u32;
-
-    fn rav1e_sad32x32_sse2(
-      src: *const u8, src_stride: libc::ptrdiff_t, dst: *const u8,
-      dst_stride: libc::ptrdiff_t
-    ) -> u32;
-
-    fn rav1e_sad64x64_sse2(
-      src: *const u8, src_stride: libc::ptrdiff_t, dst: *const u8,
-      dst_stride: libc::ptrdiff_t
-    ) -> u32;
-
-    fn rav1e_sad128x128_sse2(
-      src: *const u8, src_stride: libc::ptrdiff_t, dst: *const u8,
-      dst_stride: libc::ptrdiff_t
-    ) -> u32;
-
-    fn rav1e_sad16x16_avx2(
-      src: *const u8, src_stride: libc::ptrdiff_t, dst: *const u8,
-      dst_stride: libc::ptrdiff_t
-    ) -> u32;
-
-    fn rav1e_sad32x32_avx2(
-      src: *const u8, src_stride: libc::ptrdiff_t, dst: *const u8,
-      dst_stride: libc::ptrdiff_t
-    ) -> u32;
-
-    fn rav1e_sad64x64_avx2(
-      src: *const u8, src_stride: libc::ptrdiff_t, dst: *const u8,
-      dst_stride: libc::ptrdiff_t
-    ) -> u32;
-
-    fn rav1e_sad128x128_avx2(
-      src: *const u8, src_stride: libc::ptrdiff_t, dst: *const u8,
-      dst_stride: libc::ptrdiff_t
-    ) -> u32;
+  macro_rules! declare_asm_sad {
+    ($(($name: ident, $T: ident)),+) => (
+      $(
+        extern { fn $name (
+          src: *const $T, src_stride: libc::ptrdiff_t, dst: *const $T,
+          dst_stride: libc::ptrdiff_t
+        ) -> u32; }
+      )+
+    )
   }
+
+  declare_asm_sad![
+    (rav1e_sad_4x4_hbd_ssse3, u16),
+    (rav1e_sad_8x8_hbd10_ssse3, u16),
+    (rav1e_sad_16x16_hbd_ssse3, u16),
+    (rav1e_sad_32x32_hbd10_ssse3, u16),
+    (rav1e_sad_64x64_hbd10_ssse3, u16),
+    (rav1e_sad_128x128_hbd10_ssse3, u16),
+
+    (rav1e_sad4x4_sse2, u8),
+    (rav1e_sad8x8_sse2, u8),
+    (rav1e_sad16x16_sse2, u8),
+    (rav1e_sad32x32_sse2, u8),
+    (rav1e_sad64x64_sse2, u8),
+    (rav1e_sad128x128_sse2, u8),
+
+    (rav1e_sad16x16_avx2, u8),
+    (rav1e_sad32x32_avx2, u8),
+    (rav1e_sad64x64_avx2, u8),
+    (rav1e_sad128x128_avx2, u8)
+  ];
 
   #[target_feature(enable = "ssse3")]
   unsafe fn sad_hbd_ssse3(
