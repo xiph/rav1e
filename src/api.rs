@@ -466,34 +466,32 @@ impl Config {
 
     Context {
       inner: ContextInner {
-      frame_count: 0,
-      limit: 0,
-      idx: 0,
-      frames_processed: 0,
-      frame_q: BTreeMap::new(),
-      frame_invariants: BTreeMap::new(),
-      keyframes: BTreeSet::new(),
-      packet_data,
-      segment_start_idx: 0,
-      segment_start_frame: 0,
-      keyframe_detector: SceneChangeDetector::new(self.enc.bit_depth),
-      config: self.enc.clone(),
-      rc_state: RCState::new(
-        self.enc.width as i32,
-        self.enc.height as i32,
-        self.enc.time_base.num as i64,
-        self.enc.time_base.den as i64,
-        self.enc.bitrate,
-        maybe_ac_qi_max,
-        self.enc.max_key_frame_interval as i32
-      ),
-      maybe_prev_log_base_q: None,
-      first_pass_data: FirstPassData {
-        frames: Vec::new(),
+        frame_count: 0,
+        limit: 0,
+        idx: 0,
+        frames_processed: 0,
+        frame_q: BTreeMap::new(),
+        frame_invariants: BTreeMap::new(),
+        keyframes: BTreeSet::new(),
+        packet_data,
+        segment_start_idx: 0,
+        segment_start_frame: 0,
+        keyframe_detector: SceneChangeDetector::new(self.enc.bit_depth),
+        config: self.enc.clone(),
+        rc_state: RCState::new(
+          self.enc.width as i32,
+          self.enc.height as i32,
+          self.enc.time_base.num as i64,
+          self.enc.time_base.den as i64,
+          self.enc.bitrate,
+          maybe_ac_qi_max,
+          self.enc.max_key_frame_interval as i32
+        ),
+        maybe_prev_log_base_q: None,
+        first_pass_data: FirstPassData { frames: Vec::new() },
+        pool
       },
-      pool,
-      },
-      config: self.enc.clone(),
+      config: self.enc.clone()
     }
   }
 }
