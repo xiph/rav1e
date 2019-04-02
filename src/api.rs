@@ -1055,10 +1055,14 @@ impl<T: Pixel> From<&FrameInvariants<T>> for FirstPassFrame {
 mod test {
   use super::*;
 
+  use interpolate_name::interpolate_test;
+
   fn setup_encoder<T: Pixel>(
     w: usize, h: usize, speed: usize, quantizer: usize, bit_depth: usize,
     chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
-    low_latency: bool, bitrate: i32
+    bitrate: i32,
+    low_latency: bool,
+    no_scene_detection: bool,
   ) -> Context<T> {
     assert!(bit_depth == 8 || std::mem::size_of::<T>() > 1);
     let mut enc = EncoderConfig::with_speed_preset(speed);
@@ -1071,7 +1075,7 @@ mod test {
     enc.bit_depth = bit_depth;
     enc.chroma_sampling = chroma_sampling;
     enc.bitrate = bitrate;
-    enc.speed_settings.no_scene_detection = true;
+    enc.speed_settings.no_scene_detection = no_scene_detection;
 
     let cfg = Config { enc, threads: 0 };
 
@@ -1092,9 +1096,14 @@ mod test {
   }
   */
 
+
+  #[interpolate_test(low_latency_no_scene_change, true, true)]
+  #[interpolate_test(reorder_no_scene_change, false, true)]
+  #[interpolate_test(low_latency_scene_change_detection, true, false)]
+  #[interpolate_test(reorder_scene_change_detection, false, false)]
   #[test]
-  fn flush() {
-    let mut ctx = setup_encoder::<u8>(64, 80, 5, 100, 8, ChromaSampling::Cs420, 15, 20, true, 0);
+  fn flush(low_lantency: bool, no_scene_detection: bool) {
+    let mut ctx = setup_encoder::<u8>(64, 80, 5, 100, 8, ChromaSampling::Cs420, 15, 20, 0, low_lantency, no_scene_detection);
     let limit = 40;
 
     ctx.set_limit(limit);
