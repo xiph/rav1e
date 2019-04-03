@@ -688,6 +688,7 @@ impl<T: Pixel> ContextInner<T> {
       .find(|fi| fi.frame_type == FrameType::KEY && fi.number > self.segment_start_frame)
       .map(|fi| fi.number);
     let next_limit = self.segment_start_frame + self.config.max_key_frame_interval;
+    let next_limit = if self.limit != 0 { next_limit.min(self.limit) } else { next_limit };
     if next_detected.is_none() {
       return next_limit;
     }
