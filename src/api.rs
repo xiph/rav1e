@@ -527,16 +527,18 @@ pub struct Context<T: Pixel> {
 
 #[derive(Clone, Copy, Debug)]
 pub enum EncoderStatus {
-  /// The encoder needs more data to produce an output Packet--used with frame reordering
+  /// The encoder needs more data to produce an output Packet
+  /// May be emitted by `Context::receive_packet`  when frame reordering is enabled.
   NeedMoreData,
-  /// The encoder needs more Frames to analyze lookahead
-  NeedMoreFrames,
   /// There are enough Frames queue
+  /// May be emitted by `Context::send_frame` when the input queue is constrained
   EnoughData,
-  ///
+  /// The encoder already produced the number of frames requested
+  /// May be emitted by `Context::receive_packet` after a flush request had been processed
+  /// or the frame limit had been reached.
+  LimitReached,
+  /// Generic fatal error
   Failure,
-  InvalidKey,
-  ParseError
 }
 
 pub struct Packet<T: Pixel> {
@@ -784,11 +786,11 @@ impl<T: Pixel> ContextInner<T> {
 
   pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
     if self.limit != 0 && self.frames_processed == self.limit {
-      return Err(EncoderStatus::EnoughData);
+      return Err(EncoderStatus::LimitReached);
     }
 
     if self.needs_more_lookahead() {
-      return Err(EncoderStatus::NeedMoreFrames);
+      return Err(EncoderStatus::NeedMoreData);
     }
 
     let idx = {
@@ -800,7 +802,7 @@ impl<T: Pixel> ContextInner<T> {
 
       if !self.needs_more_frames(self.frame_invariants[&idx].number) {
         self.idx += 1;
-        return Err(EncoderStatus::EnoughData);
+        return Err(EncoderStatus::LimitReached);
       }
       idx
     };

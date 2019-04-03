@@ -55,7 +55,7 @@ fn process_frame<T: Pixel>(
   output_file: &mut dyn Write,
   y4m_dec: &mut y4m::Decoder<'_, Box<dyn Read>>,
   mut y4m_enc: Option<&mut y4m::Encoder<'_, Box<dyn Write>>>,
-) -> Result<Vec<FrameSummary>, ()> {
+) -> Option<Vec<FrameSummary>> {
   let y4m_details = y4m_dec.get_video_details();
   let mut frame_summaries = Vec::new();
   let pkt_wrapped = ctx.receive_packet();
@@ -67,17 +67,20 @@ fn process_frame<T: Pixel>(
       }
       frame_summaries.push(pkt.into());
     }
-    Err(EncoderStatus::NeedMoreFrames) => {
+    Err(EncoderStatus::NeedMoreData) => {
       read_frame(ctx, y4m_dec, y4m_details);
     }
-    Err(EncoderStatus::NeedMoreData) | Err(EncoderStatus::EnoughData) => {
-      // Expected statuses, continue without error
+    Err(EncoderStatus::EnoughData) => {
+      unreachable!();
     }
-    Err(EncoderStatus::Failure) | Err(EncoderStatus::InvalidKey) | Err(EncoderStatus::ParseError) => {
+    Err(EncoderStatus::LimitReached) => {
+      return None;
+    }
+    Err(EncoderStatus::Failure) => {
       panic!("Failed to encode video");
     }
   }
-  Ok(frame_summaries)
+  Some(frame_summaries)
 }
 
 fn write_stats_file<T: Pixel>(ctx: &Context<T>, filename: &Path) -> Result<(), io::Error> {
@@ -97,7 +100,7 @@ fn do_encode<T: Pixel>(
 
   ctx.set_limit(limit as u64);
 
-  while let Ok(frame_info) =
+  while let Some(frame_info) =
     process_frame(&mut ctx, &mut output, &mut y4m_dec, y4m_enc.as_mut())
   {
     for frame in frame_info {
@@ -107,10 +110,6 @@ fn do_encode<T: Pixel>(
       } else {
         write!(err, "\r{}                    ", progress)
       };
-    }
-
-    if !ctx.needs_more_frames(progress.frames_encoded() as u64) {
-      break;
     }
 
     output.flush().unwrap();
