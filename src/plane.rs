@@ -265,19 +265,6 @@ impl<T: Pixel> Plane<T> {
   }
 
   #[inline]
-  pub fn edged_slice(&self, po: PlaneOffset, left_edge: usize, top_edge: usize) -> EdgedPlaneSlice<'_, T> {
-    debug_assert!(po.x >= 0);
-    debug_assert!(po.y >= 0);
-    let left_edge = left_edge.min(po.x as usize);
-    let top_edge = top_edge.min(po.y as usize);
-    let edged_po = PlaneOffset {
-      x: po.x - left_edge as isize,
-      y: po.y - top_edge as isize,
-    };
-    EdgedPlaneSlice { ps: self.slice(edged_po), left_edge, top_edge }
-  }
-
-  #[inline]
   fn index(&self, x: usize, y: usize) -> usize {
     (y + self.cfg.yorigin) * self.cfg.stride + (x + self.cfg.xorigin)
   }
@@ -650,18 +637,6 @@ impl<'a, T: Pixel> IndexMut<usize> for PlaneMutSlice<'a, T> {
   fn index_mut(&mut self, index: usize) -> &mut Self::Output {
     let range = self.plane.row_range(self.x, self.y + index as isize);
     &mut self.plane.data[range]
-  }
-}
-
-pub struct EdgedPlaneSlice<'a, T: Pixel> {
-  pub ps: PlaneSlice<'a, T>,
-  pub left_edge: usize,
-  pub top_edge: usize,
-}
-
-impl<T: Pixel> EdgedPlaneSlice<'_, T> {
-  pub fn without_edges(&self) -> PlaneSlice<'_, T> {
-    self.ps.subslice(self.left_edge, self.top_edge)
   }
 }
 
