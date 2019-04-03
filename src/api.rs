@@ -692,14 +692,14 @@ impl<T: Pixel> ContextInner<T> {
     cmp::min(next_detected.unwrap(), next_limit)
   }
 
-  fn set_frame_properties(&mut self, idx: u64) -> bool {
-    let (fi, end_of_subgop) = self.build_frame_properties(idx);
+  fn set_frame_properties(&mut self, idx: u64) -> Result<bool, EncoderStatus> {
+    let (fi, end_of_subgop) = self.build_frame_properties(idx)?;
     self.frame_invariants.insert(idx, fi);
 
-    end_of_subgop
+    Ok(end_of_subgop)
   }
 
-  fn build_frame_properties(&mut self, idx: u64) -> (FrameInvariants<T>, bool) {
+  fn build_frame_properties(&mut self, idx: u64) -> Result<(FrameInvariants<T>, bool), EncoderStatus> {
     if idx == 0 {
       let seq = Sequence::new(&self.config);
 
@@ -711,7 +711,7 @@ impl<T: Pixel> ContextInner<T> {
         ),
         0
       );
-      return (fi, true);
+      return Ok((fi, true));
     }
 
     let mut fi = self.frame_invariants[&(idx - 1)].clone();
@@ -744,14 +744,14 @@ impl<T: Pixel> ContextInner<T> {
           self.segment_start_frame = next_keyframe;
           fi.number = next_keyframe;
         } else {
-          return (fi, false);
+          return Ok((fi, false));
         }
       }
     }
 
     match self.frame_q.get(&fi.number) {
       Some(Some(_)) => {},
-      _ => { return (fi, false); }
+      _ => { return Err(EncoderStatus::NeedMoreData); }
     }
 
     // Now that we know the frame number, look up the correct frame type
@@ -776,10 +776,10 @@ impl<T: Pixel> ContextInner<T> {
       );
       fi = fi_temp;
       if !end_of_subgop {
-        return (fi, false);
+        return Ok((fi, false));
       }
     }
-    (fi, true)
+    Ok((fi, true))
   }
 
   pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
@@ -793,7 +793,7 @@ impl<T: Pixel> ContextInner<T> {
 
     let idx = {
       let mut idx = self.idx;
-      while !self.set_frame_properties(idx) {
+      while !self.set_frame_properties(idx)? {
         self.idx += 1;
         idx = self.idx;
       }
