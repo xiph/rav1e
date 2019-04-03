@@ -975,13 +975,7 @@ pub fn encode_tx_block<T: Pixel>(
 
   if mode.is_intra() {
     let bit_depth = fi.sequence.bit_depth;
-    let edge_buf = get_intra_edges(
-      &rec.edged_slice(po, 1, 1),
-      tx_size,
-      bit_depth,
-      &fs.input.planes[p].cfg,
-      Some(mode),
-    );
+    let edge_buf = get_intra_edges(rec, po, tx_size, bit_depth, Some(mode));
     mode.predict_intra(&mut rec.mut_slice(po), tx_size, bit_depth, &ac, alpha, &edge_buf);
   }
 
