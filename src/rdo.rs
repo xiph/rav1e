@@ -456,7 +456,7 @@ impl Default for EncodingSettings {
 pub fn rdo_mode_decision<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>,
   cw: &mut ContextWriter, bsize: BlockSize, bo: BlockOffset,
-  pmvs: &[Option<MotionVector>]
+  pmvs: &mut [Option<MotionVector>]
 ) -> RDOPartitionOutput {
   let mut best = EncodingSettings::default();
 
@@ -525,8 +525,12 @@ pub fn rdo_mode_decision<T: Pixel>(
       let ref_slot = ref_slot_set[i] as usize;
       let cmv = pmvs[ref_slot].unwrap();
 
-
       let b_me = motion_estimation(fi, fs, bsize, bo, ref_frames[0], cmv, pmv);
+
+      if !fi.config.speed_settings.encode_bottomup &&
+        (bsize == BlockSize::BLOCK_32X32 || bsize == BlockSize::BLOCK_64X64) {
+          pmvs[ref_slot] = Some(b_me);
+      };
 
       mvs_from_me.push([
         b_me,
@@ -1101,7 +1105,7 @@ pub fn rdo_partition_decision<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
   bsize: BlockSize, bo: BlockOffset,
-  cached_block: &RDOOutput, pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5],
+  cached_block: &RDOOutput, pmvs: &mut [[Option<MotionVector>; REF_FRAMES]; 5],
   partition_types: &[PartitionType], rdo_type: RDOType
 ) -> RDOOutput {
   let mut best_partition = cached_block.part_type;
@@ -1133,7 +1137,7 @@ pub fn rdo_partition_decision<T: Pixel>(
           ((bo.x & 32) >> 5) + ((bo.y & 32) >> 4) + 1
         };
 
-        let spmvs = &pmvs[pmv_idx];
+        let spmvs = &mut pmvs[pmv_idx];
 
         let mode_decision = rdo_mode_decision(fi, fs, cw, bsize, bo, spmvs);
         child_modes.push(mode_decision);
@@ -1181,7 +1185,7 @@ pub fn rdo_partition_decision<T: Pixel>(
         for (&offset, pmv_idx) in partitions.iter().zip(pmv_idxs) {
           let mode_decision =
             rdo_mode_decision(fi, fs, cw, subsize, offset,
-                              &pmvs[pmv_idx]);
+                              &mut pmvs[pmv_idx]);
 
           rd_cost_sum += mode_decision.rd_cost;
 

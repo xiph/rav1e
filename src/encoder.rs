@@ -1555,7 +1555,7 @@ pub fn encode_block_with_modes<T: Pixel>(
 fn encode_partition_bottomup<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, cw: &mut ContextWriter,
   w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer, bsize: BlockSize,
-  bo: BlockOffset, pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5],
+  bo: BlockOffset, pmvs: &mut [[Option<MotionVector>; REF_FRAMES]; 5],
   ref_rd_cost: f64
 ) -> (RDOOutput) {
   let rdo_type = RDOType::PixelDistRealRate;
@@ -1605,7 +1605,7 @@ fn encode_partition_bottomup<T: Pixel>(
     } else {
       ((bo.x & 32) >> 5) + ((bo.y & 32) >> 4) + 1
     };
-    let spmvs = &pmvs[pmv_idx];
+    let spmvs = &mut pmvs[pmv_idx];
 
     let mode_decision = rdo_mode_decision(fi, fs, cw, bsize, bo, spmvs);
 
@@ -1772,7 +1772,7 @@ fn encode_partition_topdown<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
   bsize: BlockSize, bo: BlockOffset, block_output: &Option<RDOOutput>,
-  pmvs: &[[Option<MotionVector>; REF_FRAMES]; 5]
+  pmvs: &mut [[Option<MotionVector>; REF_FRAMES]; 5]
 ) {
 
   if bo.x >= cw.bc.blocks.cols || bo.y >= cw.bc.blocks.rows {
@@ -1850,7 +1850,7 @@ fn encode_partition_topdown<T: Pixel>(
         } else {
           ((bo.x & 32) >> 5) + ((bo.y & 32) >> 4) + 1
         };
-        let spmvs = &pmvs[pmv_idx];
+        let spmvs = &mut pmvs[pmv_idx];
 
         // Make a prediction mode decision for blocks encoded with no rdo_partition_decision call (e.g. edges)
         rdo_mode_decision(fi, fs, cw, bsize, bo, spmvs)
@@ -2194,12 +2194,12 @@ fn encode_tile<T: Pixel>(
       if fi.config.speed_settings.encode_bottomup {
         encode_partition_bottomup(fi, fs, &mut cw,
                                   &mut w_pre_cdef, &mut w_post_cdef,
-                                  BlockSize::BLOCK_64X64, bo, &pmvs, std::f64::MAX);
+                                  BlockSize::BLOCK_64X64, bo, &mut pmvs, std::f64::MAX);
       }
       else {
         encode_partition_topdown(fi, fs, &mut cw,
                                  &mut w_pre_cdef, &mut w_post_cdef,
-                                 BlockSize::BLOCK_64X64, bo, &None, &pmvs);
+                                 BlockSize::BLOCK_64X64, bo, &None, &mut pmvs);
       }
 
       // CDEF has to be decided before loop restoration, but coded after.
