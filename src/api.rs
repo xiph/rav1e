@@ -652,8 +652,11 @@ impl<T: Pixel> ContextInner<T> {
     T: Pixel,
   {
     let idx = self.frame_count;
-    self.frame_q.insert(idx, frame.into());
-    self.frame_count += 1;
+    let frame = frame.into();
+    if frame.is_some() {
+      self.frame_count += 1;
+    }
+    self.frame_q.insert(idx, frame);
     Ok(())
   }
 
@@ -916,11 +919,6 @@ impl<T: Pixel> ContextInner<T> {
     for i in 0..(self.idx - 1) {
       self.frame_invariants.remove(&i);
     }
-  }
-
-  pub fn flush(&mut self) {
-    self.frame_q.insert(self.frame_count, None);
-    self.frame_count += 1;
   }
 
   fn determine_frame_type(&mut self, frame_number: u64) -> FrameType {
