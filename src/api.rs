@@ -1105,9 +1105,8 @@ mod test {
   #[interpolate_test(reorder_no_scene_change, false, true)]
   #[interpolate_test(low_latency_scene_change_detection, true, false)]
   #[interpolate_test(reorder_scene_change_detection, false, false)]
-  #[test]
   fn flush(low_lantency: bool, no_scene_detection: bool) {
-    let mut ctx = setup_encoder::<u8>(64, 80, 5, 100, 8, ChromaSampling::Cs420, 15, 20, 0, low_lantency, no_scene_detection);
+    let mut ctx = setup_encoder::<u8>(64, 80, 10, 100, 8, ChromaSampling::Cs420, 15, 20, 0, low_lantency, no_scene_detection);
     let limit = 40;
 
     ctx.set_limit(limit);
@@ -1149,9 +1148,8 @@ mod test {
   #[interpolate_test(reorder_no_scene_change, false, true)]
   #[interpolate_test(low_latency_scene_change_detection, true, false)]
   #[interpolate_test(reorder_scene_change_detection, false, false)]
-  #[test]
   fn flush_unlimited(low_lantency: bool, no_scene_detection: bool) {
-    let mut ctx = setup_encoder::<u8>(64, 80, 5, 100, 8, ChromaSampling::Cs420, 15, 20, 0, low_lantency, no_scene_detection);
+    let mut ctx = setup_encoder::<u8>(64, 80, 10, 100, 8, ChromaSampling::Cs420, 15, 20, 0, low_lantency, no_scene_detection);
     let limit = 40;
 
     for _ in  0..limit {
