@@ -84,7 +84,7 @@ cglobal sad%1x%2_avg, 5, ARCH_X86_64 + %3, 6, src, src_stride, \
   jg .loop
 
   vextracti128         xm1, m0, 1
-  paddw                xm0, xm1
+  paddd                xm0, xm1
 
   movhlps              xm1, xm0
   paddd                xm0, xm1
