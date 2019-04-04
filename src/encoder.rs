@@ -2026,18 +2026,19 @@ fn encode_tile_group<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) 
   if fs.deblock.levels[0] != 0 || fs.deblock.levels[1] != 0 {
     deblock_filter_frame(fs, &blocks, fi.sequence.bit_depth);
   }
-    // Until the loop filters are pipelined, we'll need to keep
-    // around a copy of both the pre- and post-cdef frame.
-    let pre_cdef_frame = fs.rec.clone();
 
-    /* TODO: Don't apply if lossless */
-    if fi.sequence.enable_cdef {
-      cdef_filter_frame(fi, &mut fs.rec, &blocks);
-    }
-    /* TODO: Don't apply if lossless */
-    if fi.sequence.enable_restoration {
-      fs.restoration.lrf_filter_frame(&mut fs.rec, &pre_cdef_frame, &fi);
-    }
+  // Until the loop filters are pipelined, we'll need to keep
+  // around a copy of both the pre- and post-cdef frame.
+  let pre_cdef_frame = fs.rec.clone();
+
+  /* TODO: Don't apply if lossless */
+  if fi.sequence.enable_cdef {
+    cdef_filter_frame(fi, &mut fs.rec, &blocks);
+  }
+  /* TODO: Don't apply if lossless */
+  if fi.sequence.enable_restoration {
+    fs.restoration.lrf_filter_frame(&mut fs.rec, &pre_cdef_frame, &fi);
+  }
 
   if fi.config.train_rdo {
     eprintln!("train rdo");
