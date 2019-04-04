@@ -25,7 +25,38 @@ use libc::ptrdiff_t;
 /// and freed using rav1e_frame_unref().
 pub struct Frame(Arc<rav1e::Frame<u16>>);
 
-type EncoderStatus=rav1e::EncoderStatus;
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub enum EncoderStatus {
+    /// Normal operation
+    Success = 0,
+    /// The encoder needs more data to produce an output Packet
+    /// May be emitted by `Context::receive_packet`  when frame reordering is enabled.
+    NeedMoreData,
+    /// There are enough Frames queue
+    /// May be emitted by `Context::send_frame` when the input queue is constrained
+    EnoughData,
+    /// The encoder already produced the number of frames requested
+    /// May be emitted by `Context::receive_packet` after a flush request had been processed
+    /// or the frame limit had been reached.
+    LimitReached,
+    /// Generic fatal error
+    Failure = -1,
+}
+
+impl From<Option<rav1e::EncoderStatus>> for EncoderStatus {
+    fn from(status: Option<rav1e::EncoderStatus>) -> Self {
+        match status {
+            None => EncoderStatus::Success,
+            Some(s) => match s {
+                rav1e::EncoderStatus::NeedMoreData => EncoderStatus::NeedMoreData,
+                rav1e::EncoderStatus::EnoughData => EncoderStatus::EnoughData,
+                rav1e::EncoderStatus::LimitReached => EncoderStatus::LimitReached,
+                rav1e::EncoderStatus::Failure => EncoderStatus::Failure,
+            }
+        }
+    }
+}
 
 /// Encoder configuration
 ///
@@ -35,7 +66,6 @@ type EncoderStatus=rav1e::EncoderStatus;
 /// Use rav1e_config_unref() to free its memory.
 pub struct Config {
     cfg: rav1e::Config,
-    last_err: Option<EncoderStatus>,
 }
 
 /// Encoder context
@@ -46,7 +76,7 @@ pub struct Config {
 /// Use rav1e_context_unref() to free its memory.
 pub struct Context {
     ctx: rav1e::Context<u16>,
-    last_err: Option<EncoderStatus>,
+    last_err: Option<rav1e::EncoderStatus>,
 }
 
 type FrameType = rav1e::FrameType;
@@ -84,7 +114,6 @@ pub unsafe extern "C" fn rav1e_config_default() -> *mut Config {
 
     let c = Box::new(Config {
         cfg,
-        last_err: None,
     });
 
     Box::into_raw(c)
@@ -271,28 +300,40 @@ pub unsafe extern "C" fn rav1e_frame_unref(frame: *mut Frame) {
 /// - `> 0` if the input queue is full
 /// - `< 0` on unrecoverable failure
 #[no_mangle]
-pub unsafe extern "C" fn rav1e_send_frame(ctx: *mut Context, frame: *const Frame) -> c_int {
+pub unsafe extern "C" fn rav1e_send_frame(ctx: *mut Context, frame: *const Frame) -> EncoderStatus {
     let frame = if frame.is_null() {
         None
     } else {
         Some((*frame).0.clone())
     };
 
-    (*ctx)
+    let ret = (*ctx)
         .ctx
         .send_frame(frame)
         .map(|_v| {
-            (*ctx).last_err = None;
-            0
+            None
         }).unwrap_or_else(|e| {
-            use rav1e::EncoderStatus::*;
-            (*ctx).last_err = Some(e);
-            match e {
-                EnoughData => 1,
-                NeedMoreData | NeedMoreFrames => unreachable!(),
-                _ => -1,
-            }
-        })
+            Some(e)
+        });
+
+    (*ctx).last_err = ret;
+
+    ret.into()
+}
+
+/// Return the last encoder status
+#[no_mangle]
+pub unsafe extern "C" fn rav1e_last_status(ctx: *const Context) -> EncoderStatus {
+    (*ctx).last_err.into()
+}
+
+/// Return a string matching the EncooderStatus variant.
+#[no_mangle]
+pub unsafe extern "C" fn rav1e_status_to_str(status: EncoderStatus) -> *mut c_char {
+    let status = format!("{:?}", status);
+    let cptr = CString::new(status).unwrap().as_ptr();
+
+    libc::strdup(cptr)
 }
 
 /// Receive encoded data
@@ -305,12 +346,11 @@ pub unsafe extern "C" fn rav1e_send_frame(ctx: *mut Context, frame: *const Frame
 pub unsafe extern "C" fn rav1e_receive_packet(
     ctx: *mut Context,
     pkt: *mut *mut Packet,
-) -> c_int {
-    (*ctx)
+) -> EncoderStatus {
+    let ret = (*ctx)
         .ctx
         .receive_packet()
         .map(|p| {
-            (*ctx).last_err = None;
             let rav1e::Packet { data, number, frame_type, .. } = p;
             let len  = data.len();
             let data = Box::into_raw(data.into_boxed_slice()) as *const u8;
@@ -321,17 +361,14 @@ pub unsafe extern "C" fn rav1e_receive_packet(
                 frame_type,
             };
             *pkt = Box::into_raw(Box::new(packet));
-            0
+            None
         }).unwrap_or_else(|e| {
-            use rav1e::EncoderStatus::*;
-            (*ctx).last_err = Some(e);
-            match e {
-                NeedMoreData |
-                    NeedMoreFrames => 1,
-                EnoughData => unreachable!(),
-                _ => -1,
-            }
-        })
+            Some(e)
+        });
+
+    (*ctx).last_err = ret;
+
+    ret.into()
 }
 
 #[no_mangle]
