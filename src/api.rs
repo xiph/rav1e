@@ -25,8 +25,6 @@ use std::sync::Arc;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-const LOOKAHEAD_FRAMES: u64 = 10;
-
 // TODO: use the num crate?
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]
@@ -675,10 +673,6 @@ impl<T: Pixel> ContextInner<T> {
     self.limit = limit;
   }
 
-  pub(crate) fn needs_more_lookahead(&self) -> bool {
-    self.needs_more_frames(self.frame_count) && self.frames_processed + LOOKAHEAD_FRAMES > self.frame_q.keys().last().cloned().unwrap_or(0)
-  }
-
   pub fn needs_more_frames(&self, frame_count: u64) -> bool {
     self.limit == 0 || frame_count < self.limit
   }
@@ -788,10 +782,6 @@ impl<T: Pixel> ContextInner<T> {
   pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
     if self.limit != 0 && self.frames_processed == self.limit {
       return Err(EncoderStatus::LimitReached);
-    }
-
-    if self.needs_more_lookahead() {
-      return Err(EncoderStatus::NeedMoreData);
     }
 
     let idx = {
