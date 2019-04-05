@@ -349,9 +349,7 @@ impl<S> WriterBase<S> {
     //  encoder or decoder claims to have used 1 bit.
     let nbits = nbits_total << OD_BITRES;
     let mut l = 0;
-    let mut i = OD_BITRES;
-    while i > 0 {
-      i -= 1;
+    for _ in 0..OD_BITRES {
       rng = (rng * rng) >> 15;
       let b = rng >> 16;
       l = (l << 1) | b;
