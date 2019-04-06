@@ -40,9 +40,6 @@ fn read_frame<T: Pixel, D: Decoder>(ctx: &mut Context<T>, decoder: &mut D, video
       let _ = ctx.send_frame(Some(Arc::new(frame)));
     }
     _ => {
-      let frames_to_be_coded = ctx.get_frame_count();
-      // This is a hack, instead when EOF is reached simply "close" the encoder to input (flag)
-      ctx.set_limit(frames_to_be_coded);
       ctx.flush();
     }
   };
