@@ -629,21 +629,9 @@ impl<T: Pixel> Context<T> {
     &self.inner.first_pass_data
   }
 
-
-  // TODO: the methods below should go away
-
-  pub fn get_frame_count(&self) -> u64 {
-    self.inner.get_frame_count()
-  }
-
   pub fn set_limit(&mut self, limit: u64) {
     self.inner.set_limit(limit);
   }
-
-  pub fn needs_more_frames(&self, frame_count: u64) -> bool {
-    self.inner.needs_more_frames(frame_count)
-  }
-
 }
 
 
