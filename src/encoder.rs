@@ -2324,7 +2324,7 @@ pub fn update_rec_buffer<T: Pixel>(fi: &mut FrameInvariants<T>, fs: FrameState<T
       input_hres: fs.input_hres,
       input_qres: fs.input_qres,
       cdfs: fs.cdfs,
-      frame_mvs: fs.frame_mvs.clone()
+      frame_mvs: fs.frame_mvs,
     }
   );
   for i in 0..(REF_FRAMES as usize) {
