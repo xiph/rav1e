@@ -366,8 +366,6 @@ pub fn rdo_tx_size_type<T: Pixel>(
   cw: &mut ContextWriter, bsize: BlockSize, bo: BlockOffset,
   luma_mode: PredictionMode, ref_frames: [RefType; 2], mvs: [MotionVector; 2], skip: bool
 ) -> (TxSize, TxType) {
-  use crate::context::max_txsize_rect_lookup;
-
   let mut tx_size = max_txsize_rect_lookup[bsize as usize];
   let mut best_tx_type = TxType::DCT_DCT;
   let mut best_tx_size = tx_size;
