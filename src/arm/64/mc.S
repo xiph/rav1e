@@ -235,7 +235,7 @@ bidir_fn mask
 
 
 // This has got the same signature as the put_8tap functions,
-// and assumes that x8 is set to (24-clz(w)).
+// and assumes that x8 is set to (clz(w)-24).
 function put
         adr             x9,  L(put_tbl)
         ldrh            w8,  [x9, x8, lsl #1]
@@ -330,7 +330,7 @@ endfunc
 
 
 // This has got the same signature as the prep_8tap functions,
-// and assumes that x8 is set to (24-clz(w)), and x7 to w*2.
+// and assumes that x8 is set to (clz(w)-24), and x7 to w*2.
 function prep
         adr             x9,  L(prep_tbl)
         ldrh            w8,  [x9, x8, lsl #1]
