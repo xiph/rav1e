@@ -221,7 +221,7 @@ mod nasm {
           sad_hbd_ssse3(plane_org, plane_ref, blk_h, blk_w, bit_depth)
         };
       }
-      if mem::size_of::<T>() == 1 && is_x86_feature_detected!("avx") && blk_h >= 4 && blk_w >= 4 {
+      if mem::size_of::<T>() == 1 && is_x86_feature_detected!("avx2") && blk_h >= 4 && blk_w >= 4 {
         return unsafe {
           let plane_org = &*(plane_org as *const _ as *const PlaneSlice<'_, u8>);
           let plane_ref = &*(plane_ref as *const _ as *const PlaneSlice<'_, u8>);
