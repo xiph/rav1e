@@ -1987,24 +1987,29 @@ use rayon::prelude::*;
 #[inline(always)]
 fn build_coarse_pmvs<T: Pixel>(fi: &FrameInvariants<T>, fs: &FrameState<T>) -> Vec<[Option<MotionVector>; REF_FRAMES]> {
   assert!(!fi.sequence.use_128x128_superblock);
-  let sby_range = 0..fi.sb_height;
-  let sbx_range = 0..fi.sb_width;
+  if fi.w_in_b >= 16 && fi.h_in_b >= 16 {
+    let sby_range = 0..fi.sb_height;
+    let sbx_range = 0..fi.sb_width;
 
-  let sbos = (sby_range).flat_map(|y| {
-      sbx_range.clone().map(move |x| SuperBlockOffset { x, y })
-  }).collect::<Vec<SuperBlockOffset>>();
+    let sbos = (sby_range).flat_map(|y| {
+        sbx_range.clone().map(move |x| SuperBlockOffset { x, y })
+    }).collect::<Vec<SuperBlockOffset>>();
 
-  sbos.par_iter().map(|sbo| {
-      let bo = sbo.block_offset(0, 0);
-      let mut pmvs: [Option<MotionVector>; REF_FRAMES] = [None; REF_FRAMES];
-      for i in 0..INTER_REFS_PER_FRAME {
-        let r = fi.ref_frames[i] as usize;
-        if pmvs[r].is_none() {
-          pmvs[r] = estimate_motion_ss4(fi, fs, BlockSize::BLOCK_64X64, r, bo);
+    sbos.par_iter().map(|sbo| {
+        let bo = sbo.block_offset(0, 0);
+        let mut pmvs: [Option<MotionVector>; REF_FRAMES] = [None; REF_FRAMES];
+        for i in 0..INTER_REFS_PER_FRAME {
+          let r = fi.ref_frames[i] as usize;
+          if pmvs[r].is_none() {
+            pmvs[r] = estimate_motion_ss4(fi, fs, BlockSize::BLOCK_64X64, r, bo);
+          }
         }
-      }
-      pmvs
-  }).collect()
+        pmvs
+    }).collect()
+  } else {
+    // the block use for motion estimation would be smaller than the whole image
+    vec![[Some(Default::default()); REF_FRAMES]; fi.sb_width * fi.sb_height]
+  }
 }
 
 fn encode_tile_group<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) -> Vec<u8> {
@@ -2091,100 +2096,102 @@ fn encode_tile<T: Pixel>(
 
       // Do subsampled ME
       let mut pmvs: [[Option<MotionVector>; REF_FRAMES]; 5] = [[None; REF_FRAMES]; 5];
-      for i in 0..INTER_REFS_PER_FRAME {
-        let r = fi.ref_frames[i] as usize;
-        if pmvs[0][r].is_none() {
-          pmvs[0][r] = frame_pmvs[sby * fi.sb_width + sbx][r];
-          if let Some(pmv) = pmvs[0][r] {
-            let pmv_w = if sbx > 0 {
-              frame_pmvs[sby * fi.sb_width + sbx - 1][r]
-            } else {
-              None
-            };
-            let pmv_e = if sbx < fi.sb_width - 1 {
-              frame_pmvs[sby * fi.sb_width + sbx + 1][r]
-            } else {
-              None
-            };
-            let pmv_n = if sby > 0 {
-              frame_pmvs[sby * fi.sb_width + sbx - fi.sb_width][r]
-            } else {
-              None
-            };
-            let pmv_s = if sby < fi.sb_height - 1 {
-              frame_pmvs[sby * fi.sb_width + sbx + fi.sb_width][r]
-            } else {
-              None
-            };
+      if fi.w_in_b >= 8 && fi.h_in_b >= 8 {
+        for i in 0..INTER_REFS_PER_FRAME {
+          let r = fi.ref_frames[i] as usize;
+          if pmvs[0][r].is_none() {
+            pmvs[0][r] = frame_pmvs[sby * fi.sb_width + sbx][r];
+            if let Some(pmv) = pmvs[0][r] {
+              let pmv_w = if sbx > 0 {
+                frame_pmvs[sby * fi.sb_width + sbx - 1][r]
+              } else {
+                None
+              };
+              let pmv_e = if sbx < fi.sb_width - 1 {
+                frame_pmvs[sby * fi.sb_width + sbx + 1][r]
+              } else {
+                None
+              };
+              let pmv_n = if sby > 0 {
+                frame_pmvs[sby * fi.sb_width + sbx - fi.sb_width][r]
+              } else {
+                None
+              };
+              let pmv_s = if sby < fi.sb_height - 1 {
+                frame_pmvs[sby * fi.sb_width + sbx + fi.sb_width][r]
+              } else {
+                None
+              };
 
-            assert!(!fi.sequence.use_128x128_superblock);
-            let mut pmvs1 = None;
-            let mut pmvs2 = None;
-            let mut pmvs3 = None;
-            let mut pmvs4 = None;
-            rayon::scope(|s| {
-              s.spawn(|_| {
-                pmvs1 = estimate_motion_ss2(
-                  fi,
-                  fs,
-                  BlockSize::BLOCK_32X32,
-                  r,
-                  sbo.block_offset(0, 0),
-                  &[Some(pmv), pmv_w, pmv_n],
-                  i
-                )
+              assert!(!fi.sequence.use_128x128_superblock);
+              let mut pmvs1 = None;
+              let mut pmvs2 = None;
+              let mut pmvs3 = None;
+              let mut pmvs4 = None;
+              rayon::scope(|s| {
+                s.spawn(|_| {
+                  pmvs1 = estimate_motion_ss2(
+                    fi,
+                    fs,
+                    BlockSize::BLOCK_32X32,
+                    r,
+                    sbo.block_offset(0, 0),
+                    &[Some(pmv), pmv_w, pmv_n],
+                    i
+                  )
+                });
+                s.spawn(|_| {
+                  pmvs2 = estimate_motion_ss2(
+                    fi,
+                    fs,
+                    BlockSize::BLOCK_32X32,
+                    r,
+                    sbo.block_offset(8, 0),
+                    &[Some(pmv), pmv_e, pmv_n],
+                    i
+                  )
+                });
+                s.spawn(|_| {
+                  pmvs3 = estimate_motion_ss2(
+                    fi,
+                    fs,
+                    BlockSize::BLOCK_32X32,
+                    r,
+                    sbo.block_offset(0, 8),
+                    &[Some(pmv), pmv_w, pmv_s],
+                    i
+                  )
+                });
+                s.spawn(|_| {
+                  pmvs4 = estimate_motion_ss2(
+                    fi,
+                    fs,
+                    BlockSize::BLOCK_32X32,
+                    r,
+                    sbo.block_offset(8, 8),
+                    &[Some(pmv), pmv_e, pmv_s],
+                    i
+                  )
+                });
               });
-              s.spawn(|_| {
-                pmvs2 = estimate_motion_ss2(
-                  fi,
-                  fs,
-                  BlockSize::BLOCK_32X32,
-                  r,
-                  sbo.block_offset(8, 0),
-                  &[Some(pmv), pmv_e, pmv_n],
-                  i
-                )
-              });
-              s.spawn(|_| {
-                pmvs3 = estimate_motion_ss2(
-                  fi,
-                  fs,
-                  BlockSize::BLOCK_32X32,
-                  r,
-                  sbo.block_offset(0, 8),
-                  &[Some(pmv), pmv_w, pmv_s],
-                  i
-                )
-              });
-              s.spawn(|_| {
-                pmvs4 = estimate_motion_ss2(
-                  fi,
-                  fs,
-                  BlockSize::BLOCK_32X32,
-                  r,
-                  sbo.block_offset(8, 8),
-                  &[Some(pmv), pmv_e, pmv_s],
-                  i
-                )
-              });
-            });
 
-            pmvs[1][r] = pmvs1;
-            pmvs[2][r] = pmvs2;
-            pmvs[3][r] = pmvs3;
-            pmvs[4][r] = pmvs4;
+              pmvs[1][r] = pmvs1;
+              pmvs[2][r] = pmvs2;
+              pmvs[3][r] = pmvs3;
+              pmvs[4][r] = pmvs4;
 
-            if let Some(mv1) = pmvs1 {
-              save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(0, 0), i, mv1);
-            }
-            if let Some(mv2) = pmvs2 {
-              save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(8, 0), i, mv2);
-            }
-            if let Some(mv3) = pmvs3 {
-              save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(0, 8), i, mv3);
-            }
-            if let Some(mv4) = pmvs4 {
-              save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(8, 8), i, mv4);
+              if let Some(mv1) = pmvs1 {
+                save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(0, 0), i, mv1);
+              }
+              if let Some(mv2) = pmvs2 {
+                save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(8, 0), i, mv2);
+              }
+              if let Some(mv3) = pmvs3 {
+                save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(0, 8), i, mv3);
+              }
+              if let Some(mv4) = pmvs4 {
+                save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(8, 8), i, mv4);
+              }
             }
           }
         }
