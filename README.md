@@ -30,18 +30,8 @@ Automated AppVeyor builds can be found [here](https://ci.appveyor.com/project/td
 
 # Building
 
-**rav1e** can optionally use either a local copy of `libaom` (default) or a `dav1d` installation to run some extended tests.
+**rav1e** can optionally use either `libaom` (default) or a `dav1d` installation to run some extended tests.
 Some `x86_64`-specific optimizations require a recent version of NASM.
-
-## Internal libaom setup
-
-This repository uses a git submodule. To initialize it, run:
-
-```
-git submodule update --init
-```
-
-This is also required every time you switch branches or pull a submodule change.
 
 In order to build, test and link to the codec on UNIX, you need Perl, NASM, CMake, Clang and pkg-config. To install this on Ubuntu or Linux Mint, run:
 
@@ -50,6 +40,12 @@ sudo apt install perl nasm cmake clang pkg-config
 ```
 
 On Windows, pkg-config is not required. A Perl distribution such as Strawberry Perl, CMake, and a NASM binary in your system PATH are required.
+
+To build release binary in `target/release/rav1e` run:
+
+```
+cargo build --release
+```
 
 # Compressing video
 
@@ -60,12 +56,12 @@ cargo run --release --bin rav1e -- input.y4m -o output.ivf
 ```
 # Decompressing video
 
-Encoder output should be compatible with any AV1 decoder compliant with the v1.0.0 specification. You can also build the included compatible aomdec using the following:
+Encoder output should be compatible with any AV1 decoder compliant with the v1.0.0 specification. You can build compatible aomdec using the following:
 
 ```
 mkdir aom_test
 cd aom_test
-cmake ../aom_build/aom -DAOM_TARGET_CPU=generic -DCONFIG_AV1_ENCODER=0 -DENABLE_TESTS=0 -DENABLE_DOCS=0 -DCONFIG_LOWBITDEPTH=1
+cmake /path/to/aom -DAOM_TARGET_CPU=generic -DCONFIG_AV1_ENCODER=0 -DENABLE_TESTS=0 -DENABLE_DOCS=0 -DCONFIG_LOWBITDEPTH=1
 make -j8
 ./aomdec ../output.ivf -o output.y4m
 ```
@@ -99,7 +95,6 @@ https://arewecompressedyet.com/analyzer/?d=https://people.xiph.org/~mbebenita/an
 * src/util.rs - Misc utility code.
 * src/bin/rav1e.rs - rav1e command line tool.
 * src/bin/rav1erepl.rs - Command line tool for debugging.
-* aom_build/ - Local submodule of libaom. Some C functions and constants are used directly. Also used for benchmarking and testing.
 
 # Contributing
 
