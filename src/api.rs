@@ -447,6 +447,8 @@ const MAX_USABLE_THREADS: usize = 4;
 
 impl Config {
   pub fn new_context<T: Pixel>(&self) -> Context<T> {
+    assert!(8 * std::mem::size_of::<T>() >= self.enc.bit_depth, "The Pixel u{} does not match the Config bit_depth {}",
+            8 * std::mem::size_of::<T>(), self.enc.bit_depth);
     // initialize with temporal delimiter
     let packet_data = TEMPORAL_DELIMITER.to_vec();
 
