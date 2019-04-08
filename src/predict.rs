@@ -32,12 +32,14 @@ pub static RAV1E_INTRA_MODES: &'static [PredictionMode] = &[
   PredictionMode::SMOOTH_H_PRED,
   PredictionMode::SMOOTH_V_PRED,
   PredictionMode::PAETH_PRED,
-  PredictionMode::D45_PRED,
+  // Disable directional intra prediction AGAIN, since it cause failure
+  // with intra tx partitioning depth = 2
+  /* PredictionMode::D45_PRED,
   PredictionMode::D135_PRED,
   PredictionMode::D117_PRED,
   PredictionMode::D153_PRED,
   PredictionMode::D207_PRED,
-  PredictionMode::D63_PRED,
+  PredictionMode::D63_PRED, */
 ];
 
 // Intra prediction modes tested at high speed levels
