@@ -374,8 +374,7 @@ pub fn rdo_tx_size_type<T: Pixel>(
 
   let do_rdo_tx_size = fi.tx_mode_select && fi.config.speed_settings.rdo_tx_decision &&
                 luma_mode.is_intra();
-  // TODO: Will consider increase rdo_tx_depth to max 2
-  let rdo_tx_depth = if do_rdo_tx_size { 1 } else { 0 };
+  let rdo_tx_depth = if do_rdo_tx_size { 2 } else { 0 };
   let cw_checkpoint = cw.checkpoint();
 
   for _ in 0..=rdo_tx_depth {
