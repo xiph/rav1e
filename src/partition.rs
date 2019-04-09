@@ -237,13 +237,13 @@ impl BlockSize {
     self.width_log2() == self.height_log2()
   }
 
-  pub fn is_sub8x8(self) -> bool {
-    self.width_log2().min(self.height_log2()) < 3
+  pub fn is_sub8x8(self, xdec: usize, ydec: usize) -> bool {
+    xdec != 0 && self.width_log2() == 2 || ydec != 0 && self.height_log2() == 2
   }
 
-  pub fn sub8x8_offset(self) -> (isize, isize) {
-    let offset_x: isize = if self.width_log2() == 2 { -1 } else { 0 };
-    let offset_y: isize = if self.height_log2() == 2 { -1 } else { 0 };
+  pub fn sub8x8_offset(self, xdec: usize, ydec: usize) -> (isize, isize) {
+    let offset_x = if xdec != 0 && self.width_log2() == 2 { -1 } else { 0 };
+    let offset_y = if ydec != 0 && self.height_log2() == 2 { -1 } else { 0 };
 
     (offset_x, offset_y)
   }

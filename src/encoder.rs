@@ -1320,8 +1320,8 @@ pub fn luma_ac<T: Pixel>(
 ) {
   let PlaneConfig { xdec, ydec, .. } = fs.input.planes[1].cfg;
   let plane_bsize = get_plane_block_size(bsize, xdec, ydec);
-  let po = if bsize.is_sub8x8() {
-    let offset = bsize.sub8x8_offset();
+  let po = if bsize.is_sub8x8(xdec, ydec) {
+    let offset = bsize.sub8x8_offset(xdec, ydec);
     bo.with_offset(offset.0, offset.1).plane_offset(&fs.input.planes[0].cfg)
   } else {
     bo.plane_offset(&fs.input.planes[0].cfg)
@@ -1334,11 +1334,16 @@ pub fn luma_ac<T: Pixel>(
     for sub_x in 0..plane_bsize.width() {
       let y = sub_y << ydec;
       let x = sub_x << xdec;
-      let sample: i16 = (i16::cast_from(luma.p(x, y))
-                          + i16::cast_from(luma.p(x + 1, y))
-                          + i16::cast_from(luma.p(x, y + 1))
-                          + i16::cast_from(luma.p(x + 1, y + 1)))
-                         << 1;
+      let mut sample: i16 = i16::cast_from(luma.p(x, y));
+      if xdec != 0 {
+        sample += i16::cast_from(luma.p(x + 1, y));
+      }
+      if ydec != 0 {
+        debug_assert!(xdec != 0);
+        sample += i16::cast_from(luma.p(x, y + 1))
+          + i16::cast_from(luma.p(x + 1, y + 1));
+      }
+      sample <<= 3 - xdec - ydec;
       ac[sub_y * plane_bsize.width() + sub_x] = sample;
       sum += sample as i32;
     }
