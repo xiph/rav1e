@@ -374,7 +374,7 @@ impl<S> WriterBase<S> {
     }
   }
 
-  #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+  #[cfg(target_arch = "x86_64")]
   pub fn update_cdf_4_sse2(cdf: &mut [u16], val: u32) {
     #[cfg(target_arch = "x86_64")]
     use std::arch::x86_64::*;
