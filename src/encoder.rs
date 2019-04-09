@@ -2013,7 +2013,7 @@ fn build_coarse_pmvs<T: Pixel>(fi: &FrameInvariants<T>, fs: &FrameState<T>) -> V
     }).collect()
   } else {
     // the block use for motion estimation would be smaller than the whole image
-    vec![[Some(Default::default()); REF_FRAMES]; fi.sb_width * fi.sb_height]
+    vec![[None; REF_FRAMES]; fi.sb_width * fi.sb_height]
   }
 }
 

@@ -520,7 +520,7 @@ pub fn rdo_mode_decision<T: Pixel>(
       if !mv_stack.is_empty() { pmv[0] = mv_stack[0].this_mv; }
       if mv_stack.len() > 1 { pmv[1] = mv_stack[1].this_mv; }
       let ref_slot = ref_slot_set[i] as usize;
-      let cmv = pmvs[ref_slot].unwrap();
+      let cmv = pmvs[ref_slot].unwrap_or_else(Default::default);
 
       let b_me = motion_estimation(fi, fs, bsize, bo, ref_frames[0], cmv, pmv);
 
