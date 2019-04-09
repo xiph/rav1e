@@ -804,8 +804,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     });
   }
 
-  if best.mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() &&
-    fi.config.chroma_sampling == ChromaSampling::Cs420 { // FIXME: 4:2:2/4:4:4 unimplemented
+  if best.mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
     let chroma_mode = PredictionMode::UV_CFL_PRED;
     let cw_checkpoint = cw.checkpoint();
     let wr: &mut dyn Writer = &mut WriterCounter::new();
