@@ -56,9 +56,9 @@ smooth_weights: SMOOTH_WEIGHT_TABLE         \
      18,  16,  15,  13,  12,  10,   9,   8, \
       7,   6,   6,   5,   5,   4,   4,   4
 
-
-ipred_v_shuf  : db  0,  1,  0,  1,  2,  3,  2,  3,  4,  5,  4,  5,  6,  7,  6,  7
-ipred_h_shuf  : db  3,  3,  3,  3,  2,  2,  2,  2,  1,  1,  1,  1,  0,  0,  0,  0
+ipred_v_shuf      : db  0,  1,  0,  1,  2,  3,  2,  3,  4,  5,  4,  5,  6,  7,  6,  7
+ipred_h_shuf      : db  3,  3,  3,  3,  2,  2,  2,  2,  1,  1,  1,  1,  0,  0,  0,  0
+ipred_paeth_shuf  : db  1,  1,  1,  1,  1,  1,  1,  1,  0,  0,  0,  0,  0,  0,  0,  0
 
 pb_3        : times 16 db 3
 pb_128      : times 8  db 128
@@ -90,6 +90,7 @@ JMP_TABLE ipred_dc_left,    ssse3, h4, h8, h16, h32, h64
 JMP_TABLE ipred_smooth,     ssse3, w4, w8, w16, w32, w64
 JMP_TABLE ipred_smooth_v,   ssse3, w4, w8, w16, w32, w64
 JMP_TABLE ipred_smooth_h,   ssse3, w4, w8, w16, w32, w64
+JMP_TABLE ipred_paeth,      ssse3, w4, w8, w16, w32, w64
 JMP_TABLE pal_pred,         ssse3, w4, w8, w16, w32, w64
 JMP_TABLE ipred_cfl,        ssse3, h4, h8, h16, h32, w4, w8, w16, w32, \
                                 s4-8*4, s8-8*4, s16-8*4, s32-8*4
@@ -2725,3 +2726,186 @@ cglobal ipred_cfl_ac_444, 4, 7, 7, -5*16, ac, y, stride, wpad, hpad, w, h
     sub                 szd, 8
     jg .sub_loop
     RET
+
+; %1 simd register that hold the mask and will hold the result
+; %2 simd register that holds the "true" values
+; %3 location of the "false" values (simd register/memory)
+%macro BLEND 3 ; mask, true, false
+    pand  %2, %1
+    pandn %1, %3
+    por   %1, %2
+%endmacro
+
+%macro PAETH 2                                 ; top, ldiff
+    pavgb                m1, m%1, m3
+    pxor                 m0, m%1, m3
+    pand                 m0, m4
+    psubusb              m2, m5, m1
+    psubb                m1, m0
+    psubusb              m1, m5
+    por                  m1, m2
+    paddusb              m1, m1
+    por                  m1, m0               ; min(tldiff, 255)
+    psubusb              m2, m5, m3
+    psubusb              m0, m3, m5
+    por                  m2, m0               ; tdiff
+%ifnum %2
+    pminub               m2, m%2
+    pcmpeqb              m0, m%2, m2          ; ldiff <= tdiff
+%else
+    mova                 m0, %2
+    pminub               m2, m0
+    pcmpeqb              m0, m2
+%endif
+    pminub               m1, m2
+    pcmpeqb              m1, m2               ; ldiff <= tldiff && tdiff <= tldiff
+    mova                 m2, m3
+    BLEND                m0, m2, m%1
+    BLEND                m1, m0, m5
+%endmacro
+
+cglobal ipred_paeth, 3, 6, 8, -7*16, dst, stride, tl, w, h
+%define base r5-ipred_paeth_ssse3_table
+    tzcnt                wd, wm
+    movifnidn            hd, hm
+    pxor                 m0, m0
+    movd                 m5, [tlq]
+    pshufb               m5, m0
+    LEA                  r5, ipred_paeth_ssse3_table
+    movsxd               wq, [r5+wq*4]
+    movddup              m4, [base+ipred_paeth_shuf]
+    add                  wq, r5
+    jmp                  wq
+.w4:
+    movd                 m6, [tlq+1]            ; top
+    pshufd               m6, m6, q0000
+    lea                  r3, [strideq*3]
+    psubusb              m7, m5, m6
+    psubusb              m0, m6, m5
+    por                  m7, m0                 ; ldiff
+.w4_loop:
+    sub                 tlq, 4
+    movd                 m3, [tlq]
+    mova                 m1, [base+ipred_h_shuf]
+    pshufb               m3, m1                 ; left
+    PAETH                 6, 7
+    movd   [dstq          ], m1
+    pshuflw              m0, m1, q1032
+    movd   [dstq+strideq  ], m0
+    punpckhqdq           m1, m1
+    movd   [dstq+strideq*2], m1
+    psrlq                m1, 32
+    movd   [dstq+r3       ], m1
+    lea                dstq, [dstq+strideq*4]
+    sub                  hd, 4
+    jg .w4_loop
+    RET
+ALIGN function_align
+.w8:
+    movddup              m6, [tlq+1]
+    psubusb              m7, m5, m6
+    psubusb              m0, m6, m5
+    por                  m7, m0
+.w8_loop:
+    sub                 tlq, 2
+    movd                 m3, [tlq]
+    pshufb               m3, [base+ipred_paeth_shuf]
+    PAETH                 6, 7
+    movq     [dstq        ], m1
+    movhps   [dstq+strideq], m1
+    lea                dstq, [dstq+strideq*2]
+    sub                  hd, 2
+    jg .w8_loop
+    RET
+ALIGN function_align
+.w16:
+    movu                 m6, [tlq+1]
+    psubusb              m7, m5, m6
+    psubusb              m0, m6, m5
+    por                  m7, m0
+.w16_loop:
+    sub                 tlq, 1
+    movd                 m3, [tlq]
+    pxor                 m1, m1
+    pshufb               m3, m1
+    PAETH                 6, 7
+    mova             [dstq], m1
+    add                dstq, strideq
+    sub                  hd, 1
+    jg .w16_loop
+    RET
+ALIGN function_align
+.w32:
+    movu                 m6, [tlq+1]
+    psubusb              m7, m5, m6
+    psubusb              m0, m6, m5
+    por                  m7, m0
+    mova           [rsp   ], m6
+    mova           [rsp+16], m7
+    movu                 m6, [tlq+17]
+    psubusb              m7, m5, m6
+    psubusb              m0, m6, m5
+    por                  m7, m0
+    mova           [rsp+32], m6
+.w32_loop:
+    dec                 tlq
+    movd                 m3, [tlq]
+    pxor                 m1, m1
+    pshufb               m3, m1
+    mova                 m6, [rsp]
+    PAETH                 6, [rsp+16]
+    mova          [dstq   ], m1
+    mova                 m6, [rsp+32]
+    PAETH                 6, 7
+    mova          [dstq+16], m1
+    add                dstq, strideq
+    dec                  hd
+    jg .w32_loop
+    RET
+ALIGN function_align
+.w64:
+    movu                 m6, [tlq+1]
+    psubusb              m7, m5, m6
+    psubusb              m0, m6, m5
+    por                  m7, m0
+    mova           [rsp   ], m6
+    mova           [rsp+16], m7
+    movu                 m6, [tlq+17]
+    psubusb              m7, m5, m6
+    psubusb              m0, m6, m5
+    por                  m7, m0
+    mova           [rsp+32], m6
+    mova           [rsp+48], m7
+    movu                 m6, [tlq+33]
+    psubusb              m7, m5, m6
+    psubusb              m0, m6, m5
+    por                  m7, m0
+    mova           [rsp+64], m6
+    mova           [rsp+80], m7
+    movu                 m6, [tlq+49]
+    psubusb              m7, m5, m6
+    psubusb              m0, m6, m5
+    por                  m7, m0
+    mova           [rsp+96], m6
+.w64_loop:
+    dec                 tlq
+    movd                 m3, [tlq]
+    pxor                 m1, m1
+    pshufb               m3, m1
+    mova                 m6, [rsp]
+    PAETH                 6, [rsp+16]
+    mova          [dstq   ], m1
+    mova                 m6, [rsp+32]
+    PAETH                 6, [rsp+48]
+    mova          [dstq+16], m1
+    mova                 m6, [rsp+64]
+    PAETH                 6, [rsp+80]
+    mova          [dstq+32], m1
+    mova                 m6, [rsp+96]
+    PAETH                 6, 7
+    mova          [dstq+48], m1
+    add                dstq, strideq
+    dec                  hd
+    jg .w64_loop
+    RET
+
