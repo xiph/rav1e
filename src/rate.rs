@@ -425,8 +425,8 @@ pub struct QuantizerParameters {
   // This is used when estimating the scale parameter once we know the actual
   //  bit usage of a frame.
   pub log_target_q: i64,
-  pub dc_qi: u8,
-  pub ac_qi: u8,
+  pub dc_qi: [u8; 3],
+  pub ac_qi: [u8; 3],
   pub lambda: f64
 }
 
@@ -435,15 +435,24 @@ const Q57_SQUARE_EXP_SCALE: f64 =
 
 impl QuantizerParameters {
   fn new_from_log_q(
-    log_base_q: i64, log_target_q: i64, bit_depth: i32
+    log_base_q: i64, log_target_q: i64, bit_depth: usize
   ) -> QuantizerParameters {
-    let quantizer = bexp64(log_target_q + q57(QSCALE + bit_depth - 8));
+    let scale = q57(QSCALE + bit_depth as i32 - 8);
+    let quantizer = bexp64(log_target_q + scale);
     QuantizerParameters {
       log_base_q,
       log_target_q,
       // TODO: Allow lossless mode; i.e. qi == 0.
-      dc_qi: select_dc_qi(quantizer, bit_depth as usize).max(1),
-      ac_qi: select_ac_qi(quantizer, bit_depth as usize).max(1),
+      dc_qi: [
+        select_dc_qi(quantizer, bit_depth).max(1),
+        select_dc_qi(quantizer, bit_depth).max(1),
+        select_dc_qi(quantizer, bit_depth).max(1)
+      ],
+      ac_qi: [
+        select_ac_qi(quantizer, bit_depth).max(1),
+        select_ac_qi(quantizer, bit_depth).max(1),
+        select_ac_qi(quantizer, bit_depth).max(1)
+      ],
       lambda: (::std::f64::consts::LN_2 / 6.0)
         * ((log_target_q as f64) * Q57_SQUARE_EXP_SCALE).exp()
     }
@@ -550,16 +559,16 @@ impl RCState {
       //  index, and move it somewhere more sensible (or choose a better way to
       //  parameterize a "quality" configuration parameter).
       let base_qi = ctx.config.quantizer;
-      let bit_depth = ctx.config.bit_depth as i32;
+      let bit_depth = ctx.config.bit_depth;
       // We use the AC quantizer as the source quantizer since its quantizer
       //  tables have unique entries, while the DC tables do not.
-      let ac_quantizer = ac_q(base_qi as u8, 0, bit_depth as usize) as i64;
+      let ac_quantizer = ac_q(base_qi as u8, 0, bit_depth) as i64;
       // Pick the nearest DC entry since an exact match may be unavailable.
-      let dc_qi = select_dc_qi(ac_quantizer, bit_depth as usize);
-      let dc_quantizer = dc_q(dc_qi as u8, 0, bit_depth as usize) as i64;
+      let dc_qi = select_dc_qi(ac_quantizer, bit_depth);
+      let dc_quantizer = dc_q(dc_qi as u8, 0, bit_depth) as i64;
       // Get the log quantizers as Q57.
-      let log_ac_q = blog64(ac_quantizer) - q57(QSCALE + bit_depth - 8);
-      let log_dc_q = blog64(dc_quantizer) - q57(QSCALE + bit_depth - 8);
+      let log_ac_q = blog64(ac_quantizer) - q57(QSCALE + bit_depth as i32 - 8);
+      let log_dc_q = blog64(dc_quantizer) - q57(QSCALE + bit_depth as i32 - 8);
       // Target the midpoint of the chosen entries.
       let log_base_q = (log_ac_q + log_dc_q + 1) >> 1;
       // Adjust the quantizer for the frame type, result is Q57:
@@ -598,15 +607,15 @@ impl RCState {
           //  in the binary log domain (binary exp and log aren't too bad):
           //  rate = exp2(log2(scale) - log2(quantizer)*exp)
           // There's no easy closed form solution, so we bisection searh for it.
-          let bit_depth = ctx.config.bit_depth as i32;
+          let bit_depth = ctx.config.bit_depth;
           // TODO: Proper handling of lossless.
-          let mut log_qlo = blog64(dc_q(0, 0, bit_depth as usize) as i64)
-            - q57(QSCALE + bit_depth - 8);
+          let mut log_qlo = blog64(dc_q(0, 0, bit_depth) as i64)
+            - q57(QSCALE + bit_depth as i32 - 8);
           // The AC quantizer tables map to values larger than the DC quantizer
           //  tables, so we use that as the upper bound to make sure we can use
           //  the full table if needed.
           let mut log_qhi = blog64(ac_q(self.maybe_ac_qi_max.unwrap_or(255), 0,
-            bit_depth as usize) as i64) - q57(QSCALE + bit_depth - 8);
+            bit_depth) as i64) - q57(QSCALE + bit_depth as i32 - 8);
           let mut log_base_q = (log_qlo + log_qhi) >> 1;
           while log_qlo < log_qhi {
             // Count bits contributed by each frame type using the model.
