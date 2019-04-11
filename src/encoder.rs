@@ -816,20 +816,20 @@ impl<T: Pixel> FrameInvariants<T> {
   }
 
   pub fn set_quantizers(&mut self, qps: &QuantizerParameters) {
-    self.base_q_idx = qps.ac_qi;
-    // TODO: Separate qi values for each color plane.
+    self.base_q_idx = qps.ac_qi[0];
     if self.frame_type != FrameType::KEY {
       self.cdef_bits = 3 - ((self.base_q_idx.max(128) - 128) >> 5);
     } else {
       self.cdef_bits = 3;
     }
-    self.base_q_idx = qps.ac_qi;
-    // TODO: Separate qi values for each color plane.
-    debug_assert!(qps.dc_qi as i32 - qps.ac_qi as i32 >= -128);
-    debug_assert!((qps.dc_qi as i32 - qps.ac_qi as i32) < 128);
+    let base_q_idx = self.base_q_idx as i32;
     for pi in 0..3 {
-      self.dc_delta_q[pi] = (qps.dc_qi as i32 - qps.ac_qi as i32) as i8;
-      self.ac_delta_q[pi] = 0;
+      debug_assert!(qps.dc_qi[pi] as i32 - base_q_idx >= -128);
+      debug_assert!((qps.dc_qi[pi] as i32 - base_q_idx) < 128);
+      debug_assert!(qps.ac_qi[pi] as i32 - base_q_idx >= -128);
+      debug_assert!((qps.ac_qi[pi] as i32 - base_q_idx) < 128);
+      self.dc_delta_q[pi] = (qps.dc_qi[pi] as i32 - base_q_idx) as i8;
+      self.ac_delta_q[pi] = (qps.ac_qi[pi] as i32 - base_q_idx) as i8;
     }
     self.lambda =
       qps.lambda * ((1 << (2 * (self.sequence.bit_depth - 8))) as f64);
