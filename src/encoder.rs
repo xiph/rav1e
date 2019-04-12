@@ -321,7 +321,7 @@ impl Sequence {
       level,
       tier,
       film_grain_params_present: false,
-      separate_uv_delta_q: false,
+      separate_uv_delta_q: true,
     }
   }
 

@@ -433,25 +433,38 @@ pub struct QuantizerParameters {
 const Q57_SQUARE_EXP_SCALE: f64 =
   (2.0 * ::std::f64::consts::LN_2) / ((1i64 << 57) as f64);
 
+// Daala style log-offset for chroma quantizers
+fn chroma_offset(log_target_q: i64) -> (i64, i64) {
+    let blog64_40 = 0xAA4_D3C2_5E68_DC58i64;
+    let x = log_target_q.max(0).min(blog64_40);
+    // m = (blog64(16) - blog64(5)) / blog64(40)
+    let y = 1291i64 * (x >> 12);
+    // blog64(7) - blog64(4); blog64(5) - blog64(4)
+    (0x19D_5D9F_D501_0B37 - y, 0xA4_D3C2_5E68_DC58 - y)
+}
+
 impl QuantizerParameters {
   fn new_from_log_q(
     log_base_q: i64, log_target_q: i64, bit_depth: usize
   ) -> QuantizerParameters {
     let scale = q57(QSCALE + bit_depth as i32 - 8);
     let quantizer = bexp64(log_target_q + scale);
+    let (offset_u, offset_v) = chroma_offset(log_target_q);
+    let quantizer_u = bexp64(log_target_q + offset_u + scale);
+    let quantizer_v = bexp64(log_target_q + offset_v + scale);
     QuantizerParameters {
       log_base_q,
       log_target_q,
       // TODO: Allow lossless mode; i.e. qi == 0.
       dc_qi: [
         select_dc_qi(quantizer, bit_depth).max(1),
-        select_dc_qi(quantizer, bit_depth).max(1),
-        select_dc_qi(quantizer, bit_depth).max(1)
+        select_dc_qi(quantizer_u, bit_depth).max(1),
+        select_dc_qi(quantizer_v, bit_depth).max(1)
       ],
       ac_qi: [
         select_ac_qi(quantizer, bit_depth).max(1),
-        select_ac_qi(quantizer, bit_depth).max(1),
-        select_ac_qi(quantizer, bit_depth).max(1)
+        select_ac_qi(quantizer_u, bit_depth).max(1),
+        select_ac_qi(quantizer_v, bit_depth).max(1)
       ],
       lambda: (::std::f64::consts::LN_2 / 6.0)
         * ((log_target_q as f64) * Q57_SQUARE_EXP_SCALE).exp()
