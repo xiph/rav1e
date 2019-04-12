@@ -558,11 +558,15 @@ where
       }
     }
     self.symbol(s, &cdf[..nsymbs]);
-    if cdf.len() == 5 && cfg!(target_feature = "sse2") {
-      Self::update_cdf_4_sse2(cdf, s);
-    } else {
-      Self::update_cdf(cdf, s);
+
+    #[cfg(target_arch = "x86_64")]
+    {
+      if cdf.len() == 5 && cfg!(target_feature = "sse2") {
+        return Self::update_cdf_4_sse2(cdf, s);
+      }
     }
+
+    Self::update_cdf(cdf, s);
   }
   /// Returns approximate cost for a symbol given a cumulative
   /// distribution function (CDF) table and current write state.
