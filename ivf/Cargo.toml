@@ -5,7 +5,6 @@ authors = ["Thomas Daede <tdaede@xiph.org>"]
 edition = "2018"
 description = "Simple ivf muxer"
 license = "BSD-2"
-license-file = "LICENSE"
 homepage = "https://github.com/xiph/rav1e"
 
 [dependencies]
