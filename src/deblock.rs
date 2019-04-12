@@ -1467,8 +1467,7 @@ pub fn deblock_filter_optimize<T: Pixel>(
             (q * 20723 + 16_242_526 + (1 << 22 >> 1)) >> 22
           },
         _ => {
-          assert!(false);
-          0
+          unreachable!()
         }
       },
       0,
