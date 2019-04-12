@@ -1977,7 +1977,7 @@ fn encode_partition_topdown<T: Pixel>(
         });
       }
     },
-    _ => { assert!(false); },
+    _ => unreachable!(),
   }
 
   if is_square && bsize.gte(BlockSize::BLOCK_8X8) &&

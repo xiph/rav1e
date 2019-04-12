@@ -50,7 +50,7 @@ impl Decoder for y4m::Decoder<'_, Box<dyn Read>> {
         );
         f
       })
-      .map_err(|e| e.into())
+      .map_err(Into::into)
   }
 }
 
