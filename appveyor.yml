@@ -3,12 +3,13 @@ image: Visual Studio 2019
 environment:
   host: x86_64-pc-windows-msvc
   matrix:
-    - platform: x86_64
-      target: x86_64-pc-windows-msvc
-      channel: stable
+    - #platform: x86_64
+      #target: x86_64-pc-windows-msvc
+      #channel: stable
     - platform: arm64
       target: aarch64-pc-windows-msvc
       channel: nightly
+      build_para: "--no-default-features --features=binaries"
 matrix:
   allow_failures:
     - platform: arm64
@@ -37,7 +38,7 @@ cache:
     - '%LOCALAPPDATA%\Mozilla\sccache'
 
 build_script:
-    - cargo build --release --target=%target%
+    - cargo build --release --target=%target% %build_para%
 
 test_script:
     - cargo test --target=%target% --verbose
