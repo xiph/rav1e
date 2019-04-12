@@ -1200,7 +1200,7 @@ pub fn rdo_partition_decision<T: Pixel>(
         }
       }
       _ => {
-        assert!(false);
+        unreachable!();
       }
     }
 

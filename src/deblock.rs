@@ -1385,7 +1385,6 @@ pub fn deblock_filter_frame<T: Pixel>(
 }
 
 fn sse_optimize<T: Pixel>(fs: &mut FrameState<T>, blocks: &FrameBlocks, bit_depth: usize) {
-  assert!(MAX_LOOP_FILTER < 999);
   // i64 allows us to accumulate a total of ~ 35 bits worth of pixels
   assert!(
     fs.input.planes[0].cfg.width.ilog() + fs.input.planes[0].cfg.height.ilog()
@@ -1467,8 +1466,7 @@ pub fn deblock_filter_optimize<T: Pixel>(
             (q * 20723 + 16_242_526 + (1 << 22 >> 1)) >> 22
           },
         _ => {
-          assert!(false);
-          0
+          unreachable!()
         }
       },
       0,
