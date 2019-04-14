@@ -1074,23 +1074,26 @@ pub fn get_sub_partitions_with_border_check<T: Pixel>(
   if partition == PARTITION_NONE {
     return partitions;
   }
+
   let hbsw = subsize.width_mi(); // Half the block size width in blocks
   let hbsh = subsize.height_mi(); // Half the block size height in blocks
 
-  if partition == PARTITION_VERT || partition == PARTITION_SPLIT {
-    if four_partitions[1].x + hbsw as usize <= fi.w_in_b &&
-      four_partitions[1].y + hbsh as usize <= fi.h_in_b {
-        partitions.push(four_partitions[1]); }
+  if (partition == PARTITION_VERT || partition == PARTITION_SPLIT) &&
+    four_partitions[1].x + hbsw <= fi.w_in_b &&
+    four_partitions[1].y + hbsh <= fi.h_in_b {
+    partitions.push(four_partitions[1]);
   };
-  if partition == PARTITION_HORZ || partition == PARTITION_SPLIT {
-    if four_partitions[2].x + hbsw as usize <= fi.w_in_b &&
-      four_partitions[2].y + hbsh as usize <= fi.h_in_b {
-        partitions.push(four_partitions[2]); }
+
+  if (partition == PARTITION_HORZ || partition == PARTITION_SPLIT) &&
+    four_partitions[2].x + hbsw <= fi.w_in_b &&
+    four_partitions[2].y + hbsh <= fi.h_in_b {
+    partitions.push(four_partitions[2]);
   };
-  if partition == PARTITION_SPLIT {
-    if four_partitions[3].x + hbsw as usize <= fi.w_in_b &&
-      four_partitions[3].y + hbsh as usize <= fi.h_in_b {
-        partitions.push(four_partitions[3]); }
+
+  if partition == PARTITION_SPLIT &&
+    four_partitions[3].x + hbsw <= fi.w_in_b &&
+    four_partitions[3].y + hbsh <= fi.h_in_b {
+    partitions.push(four_partitions[3]);
   };
 
   partitions

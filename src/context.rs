@@ -571,31 +571,37 @@ pub fn get_tx_set(
   let tx_size_sqr = tx_size.sqr();
 
   if tx_size.width() >= 64 || tx_size.height() >= 64 {
-    TxSet::TX_SET_DCTONLY
-  } else if tx_size_sqr_up == TxSize::TX_32X32 {
-    if is_inter {
+    return TxSet::TX_SET_DCTONLY;
+  }
+
+  if tx_size_sqr_up == TxSize::TX_32X32 {
+    return if is_inter {
       TxSet::TX_SET_DCT_IDTX
     } else {
       TxSet::TX_SET_DCTONLY
-    }
-  } else if use_reduced_set {
-    if is_inter {
+    };
+  }
+
+  if use_reduced_set {
+    return if is_inter {
       TxSet::TX_SET_DCT_IDTX
     } else {
       TxSet::TX_SET_DTT4_IDTX
-    }
-  } else if is_inter {
-    if tx_size_sqr == TxSize::TX_16X16 {
+    };
+  }
+
+  if is_inter {
+    return if tx_size_sqr == TxSize::TX_16X16 {
       TxSet::TX_SET_DTT9_IDTX_1DDCT
     } else {
       TxSet::TX_SET_ALL16
-    }
+    };
+  }
+
+  if tx_size_sqr == TxSize::TX_16X16 {
+    TxSet::TX_SET_DTT4_IDTX
   } else {
-    if tx_size_sqr == TxSize::TX_16X16 {
-      TxSet::TX_SET_DTT4_IDTX
-    } else {
-      TxSet::TX_SET_DTT4_IDTX_1DDCT
-    }
+    TxSet::TX_SET_DTT4_IDTX_1DDCT
   }
 }
 
@@ -2889,22 +2895,20 @@ impl<'a> ContextWriter<'a> {
     let left_uni_comp = left_comp_inter && is_samedir_ref_pair(left0, left1);
 
     if avail_up && !above_intra && avail_left && !left_intra {
-      let samedir = is_samedir_ref_pair(above0, left0);
+      let samedir = is_samedir_ref_pair(above0, left0) as usize;
 
       if !above_comp_inter && !left_comp_inter {
-        1 + 2 * samedir as usize
+        1 + 2 * samedir
       } else if !above_comp_inter {
-        if !left_uni_comp { 1 } else { 3 + samedir as usize }
+        if !left_uni_comp { 1 } else { 3 + samedir }
       } else if !left_comp_inter {
-        if !above_uni_comp { 1 } else { 3 + samedir as usize }
+        if !above_uni_comp { 1 } else { 3 + samedir }
+      } else if !above_uni_comp && !left_uni_comp {
+        0
+      } else if !above_uni_comp || !left_uni_comp {
+        2
       } else {
-        if !above_uni_comp && !left_uni_comp {
-          0
-        } else if !above_uni_comp || !left_uni_comp {
-          2
-        } else {
-          3 + ((above0 == BWDREF_FRAME) == (left0 == BWDREF_FRAME)) as usize
-        }
+        3 + ((above0 == BWDREF_FRAME) == (left0 == BWDREF_FRAME)) as usize
       }
     } else if avail_up && avail_left {
       if above_comp_inter {
@@ -3855,10 +3859,10 @@ const MV_LOW: i32 = (-(1 << MV_IN_USE_BITS));
 #[inline(always)]
 pub fn av1_get_mv_joint(mv: MotionVector) -> MvJointType {
   if mv.row == 0 {
-    if mv.col == 0 { MvJointType::MV_JOINT_ZERO } else { MvJointType::MV_JOINT_HNZVZ }
-  } else {
-    if mv.col == 0 { MvJointType::MV_JOINT_HZVNZ } else { MvJointType::MV_JOINT_HNZVNZ }
+    return if mv.col == 0 { MvJointType::MV_JOINT_ZERO } else { MvJointType::MV_JOINT_HNZVZ };
   }
+
+  if mv.col == 0 { MvJointType::MV_JOINT_HZVNZ } else { MvJointType::MV_JOINT_HNZVNZ }
 }
 #[inline(always)]
 pub fn mv_joint_vertical(joint_type: MvJointType) -> bool {
