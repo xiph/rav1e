@@ -383,16 +383,14 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         assert!(seq.chroma_sampling == ChromaSampling::Cs420);
       } else if seq.profile == 1 {
         assert!(seq.chroma_sampling == ChromaSampling::Cs444);
-      } else {
-        if seq.bit_depth == 12 {
-          self.write_bit(subsampling_x)?;
+      } else if seq.bit_depth == 12 {
+        self.write_bit(subsampling_x)?;
 
-          if subsampling_x {
-            self.write_bit(subsampling_y)?;
-          }
-        } else {
-          assert!(seq.chroma_sampling == ChromaSampling::Cs422);
+        if subsampling_x {
+          self.write_bit(subsampling_y)?;
         }
+      } else {
+        assert!(seq.chroma_sampling == ChromaSampling::Cs422);
       }
 
       if seq.chroma_sampling == ChromaSampling::Cs420 {
@@ -450,10 +448,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
       if fi.frame_type == FrameType::SWITCH {
         assert!(fi.error_resilient);
-      } else {
-        if !(fi.frame_type == FrameType::KEY && fi.show_frame) {
-          self.write_bit(fi.error_resilient)?; // error resilient
-        }
+      } else if !(fi.frame_type == FrameType::KEY && fi.show_frame) {
+        self.write_bit(fi.error_resilient)?; // error resilient
       }
     }
 
@@ -559,49 +555,47 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     }
 
     let frame_refs_short_signaling = false;
-    if fi.frame_type == FrameType::KEY {
+    if fi.frame_type == FrameType::KEY || fi.intra_only {
       // Done by above
     } else {
-      if fi.intra_only {
-        // Done by above
-      } else {
-        if fi.sequence.enable_order_hint {
-          self.write_bit(frame_refs_short_signaling)?;
-          if frame_refs_short_signaling {
-            unimplemented!();
-          }
-        }
-
-        for i in 0..INTER_REFS_PER_FRAME {
-          if !frame_refs_short_signaling {
-            self.write(REF_FRAMES_LOG2 as u32, fi.ref_frames[i] as u8)?;
-          }
-          if fi.sequence.frame_id_numbers_present_flag {
-            unimplemented!();
-          }
-        }
-        if fi.error_resilient && frame_size_override_flag {
+      if fi.sequence.enable_order_hint {
+        self.write_bit(frame_refs_short_signaling)?;
+        if frame_refs_short_signaling {
           unimplemented!();
-        } else {
-          if frame_size_override_flag {
-            unimplemented!();
-          }
-          if fi.sequence.enable_superres {
-            unimplemented!();
-          }
-          self.write_bit(false)?; // render_and_frame_size_different
         }
-        if fi.force_integer_mv != 0 {
-        } else {
-          self.write_bit(fi.allow_high_precision_mv);
+      }
+
+      for i in 0..INTER_REFS_PER_FRAME {
+        if !frame_refs_short_signaling {
+          self.write(REF_FRAMES_LOG2 as u32, fi.ref_frames[i] as u8)?;
         }
-        self.write_bit(fi.is_filter_switchable)?;
-        self.write_bit(fi.is_motion_mode_switchable)?;
-        self.write(2, 0)?; // EIGHTTAP_REGULAR
-        if fi.error_resilient || !fi.sequence.enable_ref_frame_mvs {
-        } else {
-          self.write_bit(fi.use_ref_frame_mvs)?;
+        if fi.sequence.frame_id_numbers_present_flag {
+          unimplemented!();
         }
+      }
+
+      if fi.error_resilient && frame_size_override_flag {
+        unimplemented!();
+      } else {
+        if frame_size_override_flag {
+          unimplemented!();
+        }
+        if fi.sequence.enable_superres {
+          unimplemented!();
+        }
+        self.write_bit(false)?; // render_and_frame_size_different
+      }
+
+      if fi.force_integer_mv == 0 {
+        self.write_bit(fi.allow_high_precision_mv);
+      }
+
+      self.write_bit(fi.is_filter_switchable)?;
+      self.write_bit(fi.is_motion_mode_switchable)?;
+      self.write(2, 0)?; // EIGHTTAP_REGULAR
+
+      if (!fi.error_resilient && fi.sequence.enable_ref_frame_mvs) {
+        self.write_bit(fi.use_ref_frame_mvs)?;
       }
     }
 
@@ -862,21 +856,16 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         if !fi.sequence.use_128x128_superblock {
           self.write(1, if rs.planes[0].unit_size > 64 { 1 } else { 0 })?;
         }
+
         if rs.planes[0].unit_size > 64 {
           self.write(1, if rs.planes[0].unit_size > 128 { 1 } else { 0 })?;
         }
 
-        if use_chroma_lrf {
-          if fi.sequence.chroma_sampling == ChromaSampling::Cs420 {
-            self.write(
-              1,
-              if rs.planes[0].unit_size > rs.planes[1].unit_size {
-                1
-              } else {
-                0
-              }
-            )?;
-          }
+        if use_chroma_lrf && fi.sequence.chroma_sampling == ChromaSampling::Cs420 {
+          self.write(
+            1,
+            if rs.planes[0].unit_size > rs.planes[1].unit_size { 1 } else { 0 }
+          )?;
         }
       }
     }

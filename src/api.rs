@@ -813,49 +813,47 @@ impl<T: Pixel> ContextInner<T> {
         let rec = if fi.show_frame { Some(fs.rec) } else { None };
         let fi = fi.clone();
         self.finalize_packet(rec, &fi)
-      } else {
-        if let Some(f) = self.frame_q.get(&fi.number) {
-          self.idx += 1;
+      } else if let Some(f) = self.frame_q.get(&fi.number) {
+        self.idx += 1;
 
-          if let Some(frame) = f.clone() {
-            let fti = fi.get_frame_subtype();
-            let qps =
-              self.rc_state.select_qi(self, fti, self.maybe_prev_log_base_q);
-            let fi = self.frame_invariants.get_mut(&idx).unwrap();
-            fi.set_quantizers(&qps);
-            let mut fs = FrameState::new_with_frame(fi, frame.clone());
+        if let Some(frame) = f.clone() {
+          let fti = fi.get_frame_subtype();
+          let qps =
+            self.rc_state.select_qi(self, fti, self.maybe_prev_log_base_q);
+          let fi = self.frame_invariants.get_mut(&idx).unwrap();
+          fi.set_quantizers(&qps);
+          let mut fs = FrameState::new_with_frame(fi, frame.clone());
 
-            // TODO: Trial encoding for first frame of each type.
-            let data = self.pool.install(||encode_frame(fi, &mut fs));
-            self.maybe_prev_log_base_q = Some(qps.log_base_q);
-            // TODO: Add support for dropping frames.
-            self.rc_state.update_state(
-              (data.len() * 8) as i64,
-              fti,
-              qps.log_target_q,
-              false
-            );
-            self.packet_data.extend(data);
+          // TODO: Trial encoding for first frame of each type.
+          let data = self.pool.install(||encode_frame(fi, &mut fs));
+          self.maybe_prev_log_base_q = Some(qps.log_base_q);
+          // TODO: Add support for dropping frames.
+          self.rc_state.update_state(
+            (data.len() * 8) as i64,
+            fti,
+            qps.log_target_q,
+            false
+          );
+          self.packet_data.extend(data);
 
-            fs.rec.pad(fi.width, fi.height);
+          fs.rec.pad(fi.width, fi.height);
 
-            // TODO avoid the clone by having rec Arc.
-            let rec = if fi.show_frame { Some(fs.rec.clone()) } else { None };
+          // TODO avoid the clone by having rec Arc.
+          let rec = if fi.show_frame { Some(fs.rec.clone()) } else { None };
 
-            update_rec_buffer(fi, fs);
+          update_rec_buffer(fi, fs);
 
-            if fi.show_frame {
-              let fi = fi.clone();
-              self.finalize_packet(rec, &fi)
-            } else {
-              Err(EncoderStatus::NeedMoreData)
-            }
+          if fi.show_frame {
+            let fi = fi.clone();
+            self.finalize_packet(rec, &fi)
           } else {
             Err(EncoderStatus::NeedMoreData)
           }
         } else {
           Err(EncoderStatus::NeedMoreData)
         }
+      } else {
+        Err(EncoderStatus::NeedMoreData)
       }
     };
 

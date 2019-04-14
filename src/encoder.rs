@@ -333,51 +333,54 @@ impl Sequence {
 
   pub fn get_skip_mode_allowed<T: Pixel>(&self, fi: &FrameInvariants<T>, reference_select: bool) -> bool {
     if fi.intra_only || !reference_select || !self.enable_order_hint {
+      return false;
+    }
+
+    let mut forward_idx: isize = -1;
+    let mut backward_idx: isize = -1;
+    let mut forward_hint = 0;
+    let mut backward_hint = 0;
+
+    for i in 0..INTER_REFS_PER_FRAME {
+      if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[i] as usize] {
+        let ref_hint = rec.order_hint;
+
+        if self.get_relative_dist(ref_hint, fi.order_hint) < 0 {
+          if forward_idx < 0 || self.get_relative_dist(ref_hint, forward_hint) > 0 {
+            forward_idx = i as isize;
+            forward_hint = ref_hint;
+          }
+        } else if self.get_relative_dist(ref_hint, fi.order_hint) > 0 &&
+          (backward_idx < 0 || self.get_relative_dist(ref_hint, backward_hint) > 0) {
+          backward_idx = i as isize;
+          backward_hint = ref_hint;
+        }
+      }
+    }
+
+    if forward_idx < 0 {
       false
+    } else if backward_idx >= 0 {
+      // set skip_mode_frame
+      true
     } else {
-      let mut forward_idx: isize = -1;
-      let mut backward_idx: isize = -1;
-      let mut forward_hint = 0;
-      let mut backward_hint = 0;
+      let mut second_forward_idx: isize = -1;
+      let mut second_forward_hint = 0;
+
       for i in 0..INTER_REFS_PER_FRAME {
         if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[i] as usize] {
           let ref_hint = rec.order_hint;
-          if self.get_relative_dist(ref_hint, fi.order_hint) < 0 {
-            if forward_idx < 0 || self.get_relative_dist(ref_hint, forward_hint) > 0 {
-              forward_idx = i as isize;
-              forward_hint = ref_hint;
-            }
-          } else if self.get_relative_dist(ref_hint, fi.order_hint) > 0 {
-            if backward_idx < 0 || self.get_relative_dist(ref_hint, backward_hint) > 0 {
-              backward_idx = i as isize;
-              backward_hint = ref_hint;
-            }
-          }
-        }
-      }
-      if forward_idx < 0 {
-        false
-      } else if backward_idx >= 0 {
-        // set skip_mode_frame
-        true
-      } else {
-        let mut second_forward_idx: isize = -1;
-        let mut second_forward_hint = 0;
-        for i in 0..INTER_REFS_PER_FRAME {
-          if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[i] as usize] {
-            let ref_hint = rec.order_hint;
-            if self.get_relative_dist(ref_hint, forward_hint) < 0 {
-              if second_forward_idx < 0 || self.get_relative_dist(ref_hint, second_forward_hint) > 0 {
-                second_forward_idx = i as isize;
-                second_forward_hint = ref_hint;
-              }
-            }
-          }
-        }
 
-        // TODO: Set skip_mode_frame, when second_forward_idx is not less than 0.
-        second_forward_idx >= 0
+          if self.get_relative_dist(ref_hint, forward_hint) < 0 &&
+            (second_forward_idx < 0 || self.get_relative_dist(ref_hint, second_forward_hint) > 0) {
+              second_forward_idx = i as isize;
+              second_forward_hint = ref_hint;
+          }
+        }
       }
+
+      // TODO: Set skip_mode_frame, when second_forward_idx is not less than 0.
+      second_forward_idx >= 0
     }
   }
 }
@@ -653,8 +656,8 @@ impl<T: Pixel> FrameInvariants<T> {
 
     fi.tx_mode_select = fi.config.speed_settings.rdo_tx_decision;
     // FIXME: tx partition for intra not supported for chroma 422
-    if fi.tx_mode_select {
-      if fi.sequence.chroma_sampling == ChromaSampling::Cs422 { fi.tx_mode_select = false; }
+    if fi.tx_mode_select && fi.sequence.chroma_sampling == ChromaSampling::Cs422 {
+      fi.tx_mode_select = false;
     }
 
     fi
@@ -759,29 +762,27 @@ impl<T: Pixel> FrameInvariants<T> {
         } else {
           (slot_idx + 4 - 1) as u8 % 4
         }
-      } else {
-        if i == second_ref_frame.to_index() {
-          let oh = fi.order_hint + (inter_cfg.group_src_len as u32 >> lvl);
-          let lvl2 = pos_to_lvl(oh as u64, inter_cfg.pyramid_depth);
-          if lvl2 == 0 {
-            ((oh >> inter_cfg.pyramid_depth) % 4) as u8
-          } else {
-            3 + lvl2 as u8
-          }
-        } else if i == ref_in_previous_group.to_index() {
-          if lvl == 0 {
-            (slot_idx + 4 - 1) as u8 % 4
-          } else {
-            slot_idx as u8
-          }
+      } else if i == second_ref_frame.to_index() {
+        let oh = fi.order_hint + (inter_cfg.group_src_len as u32 >> lvl);
+        let lvl2 = pos_to_lvl(oh as u64, inter_cfg.pyramid_depth);
+        if lvl2 == 0 {
+          ((oh >> inter_cfg.pyramid_depth) % 4) as u8
         } else {
-          let oh = fi.order_hint - (inter_cfg.group_src_len as u32 >> lvl);
-          let lvl1 = pos_to_lvl(oh as u64, inter_cfg.pyramid_depth);
-          if lvl1 == 0 {
-            ((oh >> inter_cfg.pyramid_depth) % 4) as u8
-          } else {
-            3 + lvl1 as u8
-          }
+          3 + lvl2 as u8
+        }
+      } else if i == ref_in_previous_group.to_index() {
+        if lvl == 0 {
+          (slot_idx + 4 - 1) as u8 % 4
+        } else {
+          slot_idx as u8
+        }
+      } else {
+        let oh = fi.order_hint - (inter_cfg.group_src_len as u32 >> lvl);
+        let lvl1 = pos_to_lvl(oh as u64, inter_cfg.pyramid_depth);
+        if lvl1 == 0 {
+          ((oh >> inter_cfg.pyramid_depth) % 4) as u8
+        } else {
+          3 + lvl1 as u8
         }
       }
     }
@@ -1704,11 +1705,8 @@ fn encode_partition_bottomup<T: Pixel>(
             assert!(cost != std::f64::MAX);
             early_exit = true;
             break;
-          }
-          else {
-            if partition != PartitionType::PARTITION_SPLIT {
-              child_modes.push(child_rdo_output.part_modes[0].clone());
-            }
+          } else if partition != PartitionType::PARTITION_SPLIT {
+            child_modes.push(child_rdo_output.part_modes[0].clone());
           }
         }
       };
