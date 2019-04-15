@@ -446,12 +446,14 @@ pub struct Config {
 const MAX_USABLE_THREADS: usize = 4;
 
 impl Config {
+
+  /// Context is the full encoder state. It is used for caching of OBUs before encoding a single instance.
   pub fn new_context<T: Pixel>(&self) -> Context<T> {
     assert!(8 * std::mem::size_of::<T>() >= self.enc.bit_depth, "The Pixel u{} does not match the Config bit_depth {}",
             8 * std::mem::size_of::<T>(), self.enc.bit_depth);
-    // initialize with temporal delimiter
+    // Initialize with temporal delimiter
     let packet_data = TEMPORAL_DELIMITER.to_vec();
-
+    // Initialize with the value of encoder quantizer if less than 255 to "maybe_ac_qi_max"
     let maybe_ac_qi_max = if self.enc.quantizer < 255 {
       Some(self.enc.quantizer as u8)
     } else {
