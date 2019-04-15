@@ -757,8 +757,8 @@ pub fn rdo_mode_decision<T: Pixel>(
             get_sad(
               &plane_org,
               &plane_ref,
-              tx_size.height(),
               tx_size.width(),
+              tx_size.height(),
               fi.sequence.bit_depth
             )
           )
