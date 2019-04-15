@@ -120,6 +120,7 @@ impl EncoderConfig {
   }
 }
 
+/// Contains all the speed settings
 #[derive(Clone, Copy, Debug)]
 pub struct SpeedSettings {
   pub min_block_size: BlockSize,
@@ -137,6 +138,7 @@ pub struct SpeedSettings {
   pub cdef: bool
 }
 
+/// Default values for the speed settings.
 impl Default for SpeedSettings {
   fn default() -> Self {
     SpeedSettings {
@@ -158,6 +160,19 @@ impl Default for SpeedSettings {
 }
 
 impl SpeedSettings {
+  /// Set the speed setting according to a numeric speed preset.
+  /// The speed settings vary depending on speed value from 0 to 10:
+  ///  - speed - 10, fastest, Min block size 64x64, TX domain distortion, fast deblock, no scenechange detection,
+  ///  - speed - 9, Min block size 64x64, TX domain distortion, fast deblock,
+  ///  - speed - 8, Min block size 8x8, reduced TX set, TX domain distortion, fast deblock,
+  ///  - speed - 7, Min block size 8x8, reduced TX set, TX domain distortion,
+  ///  - speed - 6, Min block size 8x8, reduced TX set, TX domain distortion,
+  ///  - speed - 5, default, Min block size 8x8, reduced TX set, TX domain distortion, complex pred modes for keyframes,
+  ///  - speed - 4, Min block size 8x8, TX domain distortion, complex pred modes for keyframes,
+  ///  - speed - 3, Min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision,
+  ///  - speed - 2, Min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision, include near MVs,
+  ///  - speed - 1, Min block size 8x8, TX domain distortion, complex pred modes, RDO TX decision, include near MVs,
+  ///  - speed - 0, slowest,  Min block size 4x4, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, bottom-up encoding.
   pub fn from_preset(speed: usize) -> Self {
     SpeedSettings {
       min_block_size: Self::min_block_size_preset(speed),
