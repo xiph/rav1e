@@ -1,7 +1,7 @@
 /// Simple ivf muxer
 ///
 
-use bitstream_io::{BitWriter, LittleEndian};
+use bitstream_io::{BitReader, BitWriter, LittleEndian};
 use std::io;
 
 pub fn write_ivf_header(
@@ -29,4 +29,58 @@ pub fn write_ivf_frame(
   bw.write(32, data.len() as u32).unwrap();
   bw.write(64, pts).unwrap();
   bw.write_bytes(data).unwrap();
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Header {
+  pub tag: [u8; 4],
+  pub w: u16,
+  pub h: u16,
+  pub timebase_num: u32,
+  pub timebase_den: u32
+}
+
+pub fn read_header(r: &mut dyn io::Read) -> io::Result<Header> {
+  let mut br = BitReader::endian(r, LittleEndian);
+
+  let mut signature = [0u8; 4];
+  let mut tag = [0u8; 4];
+
+  br.read_bytes(&mut signature)?;
+
+  if &signature != b"DKIF" {
+    return Err(io::ErrorKind::InvalidData.into())
+  }
+
+  let _v0: u16 = br.read(16)?;
+  let _v1: u16 = br.read(16)?;
+  br.read_bytes(&mut tag)?;
+
+  let w: u16 = br.read(16)?;
+  let h: u16 = br.read(16)?;
+
+  let timebase_den: u32 = br.read(32)?;
+  let timebase_num: u32 = br.read(32)?;
+
+  let _: u32 = br.read(32)?;
+  let _: u32 = br.read(32)?;
+
+  Ok(Header { tag, w, h, timebase_num, timebase_den })
+}
+
+pub struct Packet {
+  pub data: Box<[u8]>,
+  pub pts: u64
+}
+
+pub fn read_packet(r: &mut dyn io::Read) -> io::Result<Packet> {
+  let mut br = BitReader::endian(r, LittleEndian);
+
+  let len: u32 = br.read(32)?;
+  let pts: u64 = br.read(64)?;
+  let mut buf = vec![0u8; len as usize];
+
+  br.read_bytes(&mut buf)?;
+
+  Ok(Packet { data: buf.into_boxed_slice(), pts })
 }
