@@ -1866,20 +1866,20 @@ impl FieldMap {
     for (name, start, end) in &self.map {
       // eprintln!("{} {} {} val {}", name, start, end, addr);
       if addr >= *start && addr < *end {
-        eprintln!(" CDF {}", name);
-        eprintln!("");
+        println!(" CDF {}", name);
+        println!();
         return;
       }
     }
 
-    eprintln!("  CDF address not found {}", addr);
+    println!("  CDF address not found {}", addr);
   }
 }
 
 macro_rules! symbol_with_update {
   ($self:ident, $w:ident, $s:expr, $cdf:expr) => {
     $w.symbol_with_update($s, $cdf);
-    #[cfg(debug)] {
+    #[cfg(feature = "desync_finder")] {
       if let Some(map) = $self.fc_map.as_ref() {
         map.lookup($cdf.as_ptr() as usize);
       }
@@ -1910,7 +1910,7 @@ pub struct ContextWriterCheckpoint {
 pub struct ContextWriter<'a> {
   pub bc: BlockContext<'a>,
   pub fc: &'a mut CDFContext,
-  #[cfg(debug)]
+  #[cfg(feature = "desync_finder")]
   fc_map: Option<FieldMap> // For debugging purposes
 }
 
@@ -1921,10 +1921,10 @@ impl<'a> ContextWriter<'a> {
     let mut cw = ContextWriter {
       fc,
       bc,
-      #[cfg(debug)]
+      #[cfg(feature = "desync_finder")]
       fc_map: Default::default()
     };
-    #[cfg(debug)] {
+    #[cfg(feature = "desync_finder")] {
       if std::env::var_os("RAV1E_DEBUG").is_some() {
         cw.fc_map = Some(FieldMap {
           map: cw.fc.build_map()
@@ -3643,20 +3643,15 @@ impl<'a> ContextWriter<'a> {
       1
     };
 
-    symbol_with_update!(
-      self,
-      w,
-      eob_pt - 1,
-      match eob_multi_size {
-        0 => &mut self.fc.eob_flag_cdf16[plane_type][eob_multi_ctx],
-        1 => &mut self.fc.eob_flag_cdf32[plane_type][eob_multi_ctx],
-        2 => &mut self.fc.eob_flag_cdf64[plane_type][eob_multi_ctx],
-        3 => &mut self.fc.eob_flag_cdf128[plane_type][eob_multi_ctx],
-        4 => &mut self.fc.eob_flag_cdf256[plane_type][eob_multi_ctx],
-        5 => &mut self.fc.eob_flag_cdf512[plane_type][eob_multi_ctx],
-        _ => &mut self.fc.eob_flag_cdf1024[plane_type][eob_multi_ctx],
-      }
-    );
+    match eob_multi_size {
+      0 => { symbol_with_update!(self, w, eob_pt - 1, &mut self.fc.eob_flag_cdf16[plane_type][eob_multi_ctx]); },
+      1 => { symbol_with_update!(self, w, eob_pt - 1, &mut self.fc.eob_flag_cdf32[plane_type][eob_multi_ctx]); },
+      2 => { symbol_with_update!(self, w, eob_pt - 1, &mut self.fc.eob_flag_cdf64[plane_type][eob_multi_ctx]); },
+      3 => { symbol_with_update!(self, w, eob_pt - 1, &mut self.fc.eob_flag_cdf128[plane_type][eob_multi_ctx]); },
+      4 => { symbol_with_update!(self, w, eob_pt - 1, &mut self.fc.eob_flag_cdf256[plane_type][eob_multi_ctx]); },
+      5 => { symbol_with_update!(self, w, eob_pt - 1, &mut self.fc.eob_flag_cdf512[plane_type][eob_multi_ctx]); },
+      _ => { symbol_with_update!(self, w, eob_pt - 1, &mut self.fc.eob_flag_cdf1024[plane_type][eob_multi_ctx]); },
+    }
 
     let eob_offset_bits = k_eob_offset_bits[eob_pt as usize];
 
@@ -3811,7 +3806,7 @@ impl<'a> ContextWriter<'a> {
   pub fn rollback(&mut self, checkpoint: &ContextWriterCheckpoint) {
     *self.fc = checkpoint.fc;
     self.bc.rollback(&checkpoint.bc);
-    #[cfg(debug)] {
+    #[cfg(feature = "desync_finder")] {
       if self.fc_map.is_some() {
         self.fc_map = Some(FieldMap {
           map: self.fc.build_map()

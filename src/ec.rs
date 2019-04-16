@@ -303,7 +303,7 @@ impl<S> WriterBase<S> {
   /// Internal constructor called by the subtypes that implement the
   /// actual encoder and Recorder.
   fn new(storage: S) -> Self {
-    WriterBase { rng: 0x8000, cnt: -9, debug: false, fake_bits_frac: 0, s: storage }
+    WriterBase { rng: 0x8000, cnt: -9, debug: std::env::var_os("RAV1E_DEBUG").is_some(), fake_bits_frac: 0, s: storage }
   }
 
   /// Compute low and range values from token cdf values and local state
@@ -409,7 +409,7 @@ impl<S> WriterBase<S> {
     }
   }
 
-  #[cfg(debug)]
+  #[cfg(feature = "desync_finder")]
   fn print_backtrace(&self, s: u32) {
     let mut depth = 3;
     backtrace::trace(|frame| {
@@ -420,7 +420,7 @@ impl<S> WriterBase<S> {
       if depth == 0 {
         backtrace::resolve(ip, |symbol| {
           if let Some(name) = symbol.name() {
-            eprintln!("Writing symbol {} from {}", s, name);
+            println!("Writing symbol {} from {}", s, name);
           }
         });
         false
@@ -551,7 +551,7 @@ where
   ///       must be exactly 32768. There should be at most 16 values.
   fn symbol_with_update(&mut self, s: u32, cdf: &mut [u16]) {
     let nsymbs = cdf.len() - 1;
-    #[cfg(debug)]
+    #[cfg(feature = "desync_finder")]
     {
       if self.debug {
         self.print_backtrace(s);
