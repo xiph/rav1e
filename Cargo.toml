@@ -16,6 +16,7 @@ default = ["binaries", "nasm"]
 nasm = ["nasm-rs"]
 dump_ivf = ["ivf"]
 quick_test = []
+desync_finder = []
 
 [dependencies]
 arg_enum_proc_macro = "0.1.1"
