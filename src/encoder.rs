@@ -1991,14 +1991,10 @@ use rayon::prelude::*;
 fn build_coarse_pmvs<T: Pixel>(fi: &FrameInvariants<T>, fs: &FrameState<T>) -> Vec<[Option<MotionVector>; REF_FRAMES]> {
   assert!(!fi.sequence.use_128x128_superblock);
   if fi.w_in_b >= 16 && fi.h_in_b >= 16 {
-    let sby_range = 0..fi.sb_height;
-    let sbx_range = 0..fi.sb_width;
-
-    let sbos = (sby_range).flat_map(|y| {
-        sbx_range.clone().map(move |x| SuperBlockOffset { x, y })
-    }).collect::<Vec<SuperBlockOffset>>();
-
-    sbos.par_iter().map(|sbo| {
+    let mut frame_pmvs = Vec::with_capacity(fi.sb_width * fi.sb_height);
+    for sby in 0..fi.sb_height {
+      for sbx in 0..fi.sb_width {
+        let sbo = SuperBlockOffset { x: sbx, y: sby };
         let bo = sbo.block_offset(0, 0);
         let mut pmvs: [Option<MotionVector>; REF_FRAMES] = [None; REF_FRAMES];
         for i in 0..INTER_REFS_PER_FRAME {
@@ -2007,8 +2003,10 @@ fn build_coarse_pmvs<T: Pixel>(fi: &FrameInvariants<T>, fs: &FrameState<T>) -> V
             pmvs[r] = estimate_motion_ss4(fi, fs, BlockSize::BLOCK_64X64, r, bo);
           }
         }
-        pmvs
-    }).collect()
+        frame_pmvs.push(pmvs);
+      }
+    }
+    frame_pmvs
   } else {
     // the block use for motion estimation would be smaller than the whole image
     vec![[None; REF_FRAMES]; fi.sb_width * fi.sb_height]
