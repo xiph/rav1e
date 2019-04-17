@@ -458,8 +458,6 @@ pub struct Config {
   pub threads: usize
 }
 
-const MAX_USABLE_THREADS: usize = 4;
-
 impl Config {
   pub fn new_context<T: Pixel>(&self) -> Context<T> {
     assert!(8 * std::mem::size_of::<T>() >= self.enc.bit_depth, "The Pixel u{} does not match the Config bit_depth {}",
@@ -473,13 +471,7 @@ impl Config {
       None
     };
 
-    let threads = if self.threads == 0 {
-      rayon::current_num_threads().min(MAX_USABLE_THREADS)
-    } else {
-      self.threads
-    };
-
-    let pool = rayon::ThreadPoolBuilder::new().num_threads(threads).build().unwrap();
+    let pool = rayon::ThreadPoolBuilder::new().num_threads(self.threads).build().unwrap();
 
     Context {
       inner: ContextInner {
