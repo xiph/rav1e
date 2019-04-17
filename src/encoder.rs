@@ -1984,9 +1984,6 @@ fn encode_partition_topdown<T: Pixel>(
     }
 }
 
-use rayon::prelude::*;
-
-
 #[inline(always)]
 fn build_coarse_pmvs<T: Pixel>(fi: &FrameInvariants<T>, fs: &FrameState<T>) -> Vec<[Option<MotionVector>; REF_FRAMES]> {
   assert!(!fi.sequence.use_128x128_superblock);
@@ -2131,73 +2128,23 @@ fn encode_tile<T: Pixel>(
               };
 
               assert!(!fi.sequence.use_128x128_superblock);
-              let mut pmvs1 = None;
-              let mut pmvs2 = None;
-              let mut pmvs3 = None;
-              let mut pmvs4 = None;
-              rayon::scope(|s| {
-                s.spawn(|_| {
-                  pmvs1 = estimate_motion_ss2(
-                    fi,
-                    fs,
-                    BlockSize::BLOCK_32X32,
-                    r,
-                    sbo.block_offset(0, 0),
-                    &[Some(pmv), pmv_w, pmv_n],
-                    i
-                  )
-                });
-                s.spawn(|_| {
-                  pmvs2 = estimate_motion_ss2(
-                    fi,
-                    fs,
-                    BlockSize::BLOCK_32X32,
-                    r,
-                    sbo.block_offset(8, 0),
-                    &[Some(pmv), pmv_e, pmv_n],
-                    i
-                  )
-                });
-                s.spawn(|_| {
-                  pmvs3 = estimate_motion_ss2(
-                    fi,
-                    fs,
-                    BlockSize::BLOCK_32X32,
-                    r,
-                    sbo.block_offset(0, 8),
-                    &[Some(pmv), pmv_w, pmv_s],
-                    i
-                  )
-                });
-                s.spawn(|_| {
-                  pmvs4 = estimate_motion_ss2(
-                    fi,
-                    fs,
-                    BlockSize::BLOCK_32X32,
-                    r,
-                    sbo.block_offset(8, 8),
-                    &[Some(pmv), pmv_e, pmv_s],
-                    i
-                  )
-                });
-              });
+              pmvs[1][r] = estimate_motion_ss2(
+                fi, fs, BlockSize::BLOCK_32X32, r, sbo.block_offset(0, 0), &[Some(pmv), pmv_w, pmv_n], i
+              );
+              pmvs[2][r] = estimate_motion_ss2(
+                fi, fs, BlockSize::BLOCK_32X32, r, sbo.block_offset(8, 0), &[Some(pmv), pmv_e, pmv_n], i
+              );
+              pmvs[3][r] = estimate_motion_ss2(
+                fi, fs, BlockSize::BLOCK_32X32, r, sbo.block_offset(0, 8), &[Some(pmv), pmv_w, pmv_s], i
+              );
+              pmvs[4][r] = estimate_motion_ss2(
+                fi, fs, BlockSize::BLOCK_32X32, r, sbo.block_offset(8, 8), &[Some(pmv), pmv_e, pmv_s], i
+              );
 
-              pmvs[1][r] = pmvs1;
-              pmvs[2][r] = pmvs2;
-              pmvs[3][r] = pmvs3;
-              pmvs[4][r] = pmvs4;
-
-              if let Some(mv1) = pmvs1 {
-                save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(0, 0), i, mv1);
-              }
-              if let Some(mv2) = pmvs2 {
-                save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(8, 0), i, mv2);
-              }
-              if let Some(mv3) = pmvs3 {
-                save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(0, 8), i, mv3);
-              }
-              if let Some(mv4) = pmvs4 {
-                save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(8, 8), i, mv4);
+              for k in 1..5 {
+                if let Some(mv) = pmvs[k][r] {
+                  save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(0, 0), i, mv);
+                }
               }
             }
           }
