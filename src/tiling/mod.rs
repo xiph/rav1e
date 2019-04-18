@@ -9,6 +9,8 @@
 
 mod plane_region;
 mod tile;
+mod tile_state;
 
 pub use self::plane_region::*;
 pub use self::tile::*;
+pub use self::tile_state::*;
