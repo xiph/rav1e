@@ -322,7 +322,7 @@ fn get_mv_range(
 }
 
 pub fn get_subset_predictors<T: Pixel>(
-  bo: BlockOffset, cmv: MotionVector,
+  tile_bo: BlockOffset, cmv: MotionVector,
   tile_mvs: &TileMotionVectors<'_>, frame_ref_opt: Option<&ReferenceFrame<T>>,
   ref_frame_id: usize
 ) -> (Vec<MotionVector>) {
@@ -337,18 +337,18 @@ pub fn get_subset_predictors<T: Pixel>(
   // EPZS subset A and B predictors.
 
   let mut median_preds = Vec::new();
-  if bo.x > 0 {
-    let left = tile_mvs[bo.y][bo.x - 1];
+  if tile_bo.x > 0 {
+    let left = tile_mvs[tile_bo.y][tile_bo.x - 1];
     median_preds.push(left);
     if !left.is_zero() { predictors.push(left); }
   }
-  if bo.y > 0 {
-    let top = tile_mvs[bo.y - 1][bo.x];
+  if tile_bo.y > 0 {
+    let top = tile_mvs[tile_bo.y - 1][tile_bo.x];
     median_preds.push(top);
     if !top.is_zero() { predictors.push(top); }
 
-    if bo.x < tile_mvs.cols() - 1 {
-      let top_right = tile_mvs[bo.y - 1][bo.x + 1];
+    if tile_bo.x < tile_mvs.cols() - 1 {
+      let top_right = tile_mvs[tile_bo.y - 1][tile_bo.x + 1];
       median_preds.push(top_right);
       if !top_right.is_zero() { predictors.push(top_right); }
     }
@@ -370,8 +370,8 @@ pub fn get_subset_predictors<T: Pixel>(
     let prev_frame_mvs = &frame_ref.frame_mvs[ref_frame_id];
 
     let frame_bo = BlockOffset {
-      x: tile_mvs.x() + bo.x,
-      y: tile_mvs.y() + bo.y,
+      x: tile_mvs.x() + tile_bo.x,
+      y: tile_mvs.y() + tile_bo.y,
     };
     if frame_bo.x > 0 {
       let left = prev_frame_mvs[frame_bo.y][frame_bo.x - 1];
