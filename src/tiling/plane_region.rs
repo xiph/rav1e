@@ -87,11 +87,16 @@ impl Area {
         width,
         height,
       },
-      Area::BlockStartingAt { bo } => Area::StartingAt {
-        x: (bo.x >> xdec << BLOCK_TO_PLANE_SHIFT) as isize,
-        y: (bo.y >> ydec << BLOCK_TO_PLANE_SHIFT) as isize,
-      }
-      .to_rect(xdec, ydec, parent_width, parent_height),
+      Area::BlockStartingAt { bo } => {
+        let x = (bo.x >> xdec << BLOCK_TO_PLANE_SHIFT) as isize;
+        let y = (bo.y >> ydec << BLOCK_TO_PLANE_SHIFT) as isize;
+        Rect {
+          x,
+          y,
+          width: (parent_width as isize - x) as usize,
+          height: (parent_height as isize - y) as usize,
+        }
+      },
     }
   }
 }

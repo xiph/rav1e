@@ -176,6 +176,7 @@ impl TileBlocksMut<'_> {
     self.for_each(bo, bsize, |block| block.mode = mode);
   }
 
+  #[inline(always)]
   pub fn set_block_size(&mut self, bo: BlockOffset, bsize: BlockSize) {
     let n4_w = bsize.width_mi();
     let n4_h = bsize.height_mi();
