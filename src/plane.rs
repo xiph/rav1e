@@ -287,6 +287,16 @@ impl<T: Pixel> Plane<T> {
     PlaneRegionMut::new(self, rect)
   }
 
+  #[inline(always)]
+  pub fn as_region(&self) -> PlaneRegion<'_, T> {
+    self.region(Area::StartingAt { x: 0, y: 0 })
+  }
+
+  #[inline(always)]
+  pub fn as_region_mut(&mut self) -> PlaneRegionMut<'_, T> {
+    self.region_mut(Area::StartingAt { x: 0, y: 0 })
+  }
+
   #[inline]
   fn index(&self, x: usize, y: usize) -> usize {
     (y + self.cfg.yorigin) * self.cfg.stride + (x + self.cfg.xorigin)
