@@ -2131,8 +2131,8 @@ impl<'a> ContextWriter<'a> {
     cmp::min(cmp::max(row_offset, -(mi_row as isize)), (mi_rows - mi_row - 1) as isize)
   }
 
-  fn find_valid_col_offs(&mut self, col_offset: isize, mi_col: usize) -> isize {
-    cmp::max(col_offset, -(mi_col as isize))
+  fn find_valid_col_offs(&mut self, col_offset: isize, mi_col: usize, mi_cols: usize) -> isize {
+    cmp::min(cmp::max(col_offset, -(mi_col as isize)), (mi_cols - mi_col - 1) as isize)
   }
 
   fn find_matching_mv(&self, mv: MotionVector, mv_stack: &mut Vec<CandidateMV>) -> bool {
@@ -2451,7 +2451,8 @@ impl<'a> ContextWriter<'a> {
         max_col_offs = -2 * 2 + col_adj as isize;
       }
 
-      max_col_offs = self.find_valid_col_offs(max_col_offs, bo.x);
+      let cols = self.bc.blocks.cols();
+      max_col_offs = self.find_valid_col_offs(max_col_offs, bo.x, cols);
     }
 
     let mut row_match = false;
