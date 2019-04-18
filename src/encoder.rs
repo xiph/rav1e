@@ -415,7 +415,6 @@ pub struct FrameState<T: Pixel> {
   pub input_hres: Plane<T>, // half-resolution version of input luma
   pub input_qres: Plane<T>, // quarter-resolution version of input luma
   pub rec: Frame<T>,
-  pub qc: QuantizationContext,
   pub cdfs: CDFContext,
   pub deblock: DeblockState,
   pub segmentation: SegmentationState,
@@ -444,7 +443,6 @@ impl<T: Pixel> FrameState<T> {
       input_hres: Plane::new(luma_width / 2, luma_height / 2, 1, 1, luma_padding_x / 2, luma_padding_y / 2),
       input_qres: Plane::new(luma_width / 4, luma_height / 4, 2, 2, luma_padding_x / 4, luma_padding_y / 4),
       rec: Frame::new(luma_width, luma_height, fi.sequence.chroma_sampling),
-      qc: Default::default(),
       cdfs: CDFContext::new(0),
       deblock: Default::default(),
       segmentation: Default::default(),
