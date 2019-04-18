@@ -56,7 +56,7 @@ pub const SGRPROJ_PARAMS_S: [[i32; 2]; 1 << SGRPROJ_PARAMS_BITS] = [
   [  0, 1177], [  0,  925], [ 56,    0], [ 22,    0]
 ];
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum RestorationFilter {
   None,
   Wiener  { coeffs: [[i8; 3]; 2] },
