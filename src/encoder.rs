@@ -1017,8 +1017,9 @@ pub fn encode_tx_block<T: Pixel>(
   skip: bool, ac: &[i16], alpha: i16, rdo_type: RDOType, for_rdo_use: bool
 ) -> (bool, i64) {
   let qidx = get_qidx(fi, ts, cw, tile_bo);
-  let rec = &mut ts.rec.planes[p];
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[p].cfg;
+  let tile_rect = ts.tile_rect().decimated(xdec, ydec);
+  let rec = &mut ts.rec.planes[p];
   let area = Area::BlockStartingAt { bo: tile_bo };
 
   assert!(tx_size.sqr() <= TxSize::TX_32X32 || tx_type == TxType::DCT_DCT);
@@ -1026,7 +1027,7 @@ pub fn encode_tx_block<T: Pixel>(
   if mode.is_intra() {
     let bit_depth = fi.sequence.bit_depth;
     let edge_buf = get_intra_edges(&rec.as_const(), po, tx_size, bit_depth, Some(mode));
-    mode.predict_intra(rec, tile_bo, tx_size, bit_depth, &ac, alpha, &edge_buf);
+    mode.predict_intra(tile_rect, &mut rec.subregion_mut(area), tx_size, bit_depth, &ac, alpha, &edge_buf);
   }
 
   if skip { return (false, -1); }
