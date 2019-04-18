@@ -2137,8 +2137,27 @@ fn encode_tile_group<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) 
   fs.cdfs = cdfs[0];
   fs.cdfs.reset_counts();
 
-  // single tile for now
-  raw_tiles[0].clone()
+  build_raw_tile_group(ti, &raw_tiles)
+}
+
+fn build_raw_tile_group(ti: &TilingInfo, raw_tiles: &[Vec<u8>]) -> Vec<u8> {
+  // <https://aomediacodec.github.io/av1-spec/#general-tile-group-obu-syntax>
+  let mut raw = Vec::new();
+  let mut bw = BitWriter::endian(&mut raw, BigEndian);
+  if ti.cols * ti.rows > 1 {
+    // tile_start_and_end_present_flag
+    bw.write_bit(false).unwrap();
+  }
+  bw.byte_align().unwrap();
+  for (i, raw_tile) in raw_tiles.iter().enumerate() {
+    let last = raw_tiles.len() - 1;
+    if i != last {
+      let tile_size_minus_1 = raw_tile.len() - 1;
+      bw.write_le(4, tile_size_minus_1 as u64).unwrap();
+    }
+    bw.write_bytes(&raw_tile).unwrap();
+  }
+  raw
 }
 
 fn encode_tile<'a, T: Pixel>(
