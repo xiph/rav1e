@@ -23,6 +23,7 @@ use crate::rate::FRAME_SUBTYPE_I;
 use crate::rate::FRAME_SUBTYPE_P;
 use crate::rdo::*;
 use crate::segmentation::*;
+use crate::tiling::*;
 use crate::transform::*;
 use crate::util::*;
 use crate::partition::PartitionType::*;
@@ -88,6 +89,18 @@ impl<T: Pixel> Frame<T> {
     for p in self.planes.iter_mut() {
       p.pad(w, h);
     }
+  }
+
+  #[inline(always)]
+  pub fn as_tile(&self) -> Tile<'_, T> {
+    let PlaneConfig { width, height, .. } = self.planes[0].cfg;
+    Tile::new(self, TileRect { x: 0, y: 0, width, height })
+  }
+
+  #[inline(always)]
+  pub fn as_tile_mut(&mut self) -> TileMut<'_, T> {
+    let PlaneConfig { width, height, .. } = self.planes[0].cfg;
+    TileMut::new(self, TileRect { x: 0, y: 0, width, height })
   }
 
   /// Returns a `PixelIter` containing the data of this frame's planes in YUV format.
