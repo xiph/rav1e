@@ -52,13 +52,15 @@ pub(crate) trait TestDecoder<T: Pixel> {
   fn encode_decode(
     &mut self, w: usize, h: usize, speed: usize, quantizer: usize,
     limit: usize, bit_depth: usize, chroma_sampling: ChromaSampling,
-    min_keyint: u64, max_keyint: u64, low_latency: bool, bitrate: i32
+    min_keyint: u64, max_keyint: u64, low_latency: bool, bitrate: i32,
+    tile_cols_log2: usize, tile_rows_log2: usize,
   ) {
     let mut ra = ChaChaRng::from_seed([0; 32]);
 
     let mut ctx: Context<T> =
       setup_encoder(w, h, speed, quantizer, bit_depth, chroma_sampling,
-                    min_keyint, max_keyint, low_latency, bitrate);
+                    min_keyint, max_keyint, low_latency, bitrate,
+                    tile_cols_log2, tile_rows_log2);
     ctx.set_limit(limit as u64);
 
     println!("Encoding {}x{} speed {} quantizer {} bit-depth {}", w, h, speed, quantizer, bit_depth);
@@ -114,7 +116,7 @@ pub(crate) fn compare_plane<T: Ord + std::fmt::Debug>(
 pub(crate) fn setup_encoder<T: Pixel>(
   w: usize, h: usize, speed: usize, quantizer: usize, bit_depth: usize,
   chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
-  low_latency: bool, bitrate: i32
+  low_latency: bool, bitrate: i32, tile_cols_log2: usize, tile_rows_log2: usize,
 ) -> Context<T> {
   assert!(bit_depth == 8 || std::mem::size_of::<T>() > 1);
   let mut enc = EncoderConfig::with_speed_preset(speed);
@@ -127,6 +129,8 @@ pub(crate) fn setup_encoder<T: Pixel>(
   enc.bit_depth = bit_depth;
   enc.chroma_sampling = chroma_sampling;
   enc.bitrate = bitrate;
+  enc.tile_cols_log2 = tile_cols_log2;
+  enc.tile_rows_log2 = tile_rows_log2;
 
   let cfg = Config {
     enc,
@@ -150,7 +154,7 @@ fn speed(s: usize, decoder: &str) {
       let w = w + b.0;
       let h = h + b.1;
       let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
-      dec.encode_decode(w, h, s, quantizer, limit, 8, Default::default(), 15, 15, true, 0);
+      dec.encode_decode(w, h, s, quantizer, limit, 8, Default::default(), 15, 15, true, 0, 0, 0);
   }
 }
 
@@ -221,7 +225,7 @@ fn dimension(w: usize, h: usize, decoder: &str) {
   let speed = 10;
 
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
-  dec.encode_decode(w, h, speed, quantizer, limit, 8, Default::default(), 15, 15, true, 0);
+  dec.encode_decode(w, h, speed, quantizer, limit, 8, Default::default(), 15, 15, true, 0, 0, 0);
 }
 
 fn quantizer(decoder: &str, q: usize) {
@@ -232,7 +236,7 @@ fn quantizer(decoder: &str, q: usize) {
 
   for b in DIMENSION_OFFSETS.iter() {
     let mut dec = get_decoder::<u8>(decoder, b.0, b.1);
-    dec.encode_decode(w + b.0, h + b.1, speed, q, limit, 8, Default::default(), 15, 15, true, 0);
+    dec.encode_decode(w + b.0, h + b.1, speed, q, limit, 8, Default::default(), 15, 15, true, 0, 0, 0);
   }
 }
 
@@ -263,7 +267,7 @@ fn bitrate(decoder: &str) {
   for &q in [172, 220, 252, 255].iter() {
     for &r in [100, 1000, 10_000].iter() {
       let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
-      dec.encode_decode(w, h, speed, q, limit, 8, Default::default(), 15, 15, true, r);
+      dec.encode_decode(w, h, speed, q, limit, 8, Default::default(), 15, 15, true, r, 0, 0);
     }
   }
 }
@@ -278,7 +282,7 @@ fn keyframes(decoder: &str) {
   let q = 100;
 
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
-  dec.encode_decode(w, h, speed, q, limit, 8, Default::default(), 6, 6, true, 0);
+  dec.encode_decode(w, h, speed, q, limit, 8, Default::default(), 6, 6, true, 0, 0, 0);
 }
 
 #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
@@ -292,7 +296,7 @@ fn reordering(decoder: &str) {
 
   for keyint in &[4, 5, 6] {
     let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
-    dec.encode_decode(w, h, speed, q, limit, 8, Default::default(), *keyint, *keyint, false, 0);
+    dec.encode_decode(w, h, speed, q, limit, 8, Default::default(), *keyint, *keyint, false, 0, 0, 0);
   }
 }
 
@@ -308,7 +312,7 @@ fn reordering_short_video(decoder: &str) {
   let keyint = 12;
 
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
-  dec.encode_decode(w, h, speed, q, limit, 8, Default::default(), keyint, keyint, false, 0);
+  dec.encode_decode(w, h, speed, q, limit, 8, Default::default(), keyint, keyint, false, 0, 0, 0);
 }
 
 #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
@@ -322,7 +326,7 @@ fn odd_size_frame_with_full_rdo(decoder: &str) {
   let qindex = 100;
 
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
-  dec.encode_decode(w, h, speed, qindex, limit, 8, Default::default(), 15, 15, true, 0);
+  dec.encode_decode(w, h, speed, qindex, limit, 8, Default::default(), 15, 15, true, 0, 0, 0);
 }
 
 #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
@@ -336,7 +340,7 @@ fn low_bit_depth(decoder: &str) {
 
   // 8-bit
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
-  dec.encode_decode(w, h, speed, quantizer, limit, 8, Default::default(), 15, 15, true, 0);
+  dec.encode_decode(w, h, speed, quantizer, limit, 8, Default::default(), 15, 15, true, 0, 0, 0);
 }
 
 fn high_bit_depth(decoder: &str, depth: usize) {
@@ -347,7 +351,7 @@ fn high_bit_depth(decoder: &str, depth: usize) {
   let h = 80;
 
   let mut dec = get_decoder::<u16>(decoder, w as usize, h as usize);
-  dec.encode_decode(w, h, speed, quantizer, limit, depth, Default::default(), 15, 15, true, 0);
+  dec.encode_decode(w, h, speed, quantizer, limit, depth, Default::default(), 15, 15, true, 0, 0, 0);
 }
 
 macro_rules! test_high_bit_depth {
@@ -376,7 +380,7 @@ fn chroma_sampling(decoder: &str, cs: ChromaSampling) {
   // TODO: bump keyint when inter is supported
 
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
-  dec.encode_decode(w, h, speed, quantizer, limit, 8, cs, 1, 1, true, 0);
+  dec.encode_decode(w, h, speed, quantizer, limit, 8, cs, 1, 1, true, 0, 0, 0);
 }
 
 macro_rules! test_chroma_sampling {
