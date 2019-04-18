@@ -490,11 +490,116 @@ pub fn cdef_filter_frame<T: Pixel>(fi: &FrameInvariants<T>, rec: &mut Frame<T>, 
 #[cfg(test)]
 mod test {
   use super::*;
+  use crate::api::*;
+  use crate::encoder::*;
 
   #[test]
   fn check_max_element() {
     assert_eq!(first_max_element(&[-1, -1, 1, 2, 3, 4, 6, 6]), (6, 6));
     assert_eq!(first_max_element(&[-1, -1, 1, 2, 3, 4, 7, 6]), (6, 7));
     assert_eq!(first_max_element(&[0, 0]), (0, 0));
+  }
+
+  fn create_frame() -> (Frame<u16>, FrameInvariants<u16>) {
+    let mut frame = Frame::<u16>::new(512, 512, ChromaSampling::Cs420);
+
+    // in this test, each pixel contains the sum of its row and column indices:
+    //
+    //  0 1 2 3 4 . .
+    //  1 2 3 4 5 . .
+    //  2 3 4 5 6 . .
+    //  3 4 5 6 7 . .
+    //  4 5 6 7 8 . .
+    //  . . . . . . .
+    //  . . . . . . .
+    for plane in &mut frame.planes {
+      let PlaneConfig { width, height, .. } = plane.cfg;
+      let mut slice = plane.as_mut_slice();
+      for col in 0..width {
+        for row in 0..height {
+          slice[row][col] = (row + col) as u16;
+        }
+      }
+    }
+
+    let config = EncoderConfig {
+      width: 512,
+      height: 512,
+      quantizer: 100,
+      speed_settings: SpeedSettings::from_preset(10),
+      ..Default::default()
+    };
+    let sequence = Sequence::new(&Default::default());
+    let fi = FrameInvariants::new(config, sequence);
+    (frame, fi)
+  }
+
+  #[test]
+  fn test_padded_frame_copy() {
+    let (frame, fi) = create_frame();
+    // a super-block in the middle (not near frame borders)
+    let sbo = SuperBlockOffset { x: 1, y: 2 };
+    let pad = 8;
+    let padded_frame = cdef_sb_padded_frame_copy(&fi, sbo, &frame, pad);
+
+    // the padded_frame should contain the subregion starting at (64-8, 128-8)
+    // having size (64+2*8, 64+2*8)
+    assert_eq!(padded_frame.planes[0].cfg.width, 80);
+    assert_eq!(padded_frame.planes[0].cfg.height, 80);
+
+    let po = PlaneOffset { x: 56, y: 120 };
+    let in_luma_slice = frame.planes[0].slice(po);
+    let out_luma_slice = padded_frame.planes[0].as_slice();
+
+    // this region does not overlap the frame padding, so it contains only
+    // values from the input frame
+    for row in 0..80 {
+      for col in 0..80 {
+        let in_pixel = in_luma_slice[row][col];
+        let out_pixel = out_luma_slice[row][col];
+        assert_eq!(in_pixel, out_pixel);
+      }
+    }
+  }
+
+  #[test]
+  fn test_padded_frame_copy_outside_input() {
+    let (frame, fi) = create_frame();
+    // the top-right super-block (near top and right frame borders)
+    let sbo = SuperBlockOffset { x: 7, y: 0 };
+    let pad = 8;
+    let padded_frame = cdef_sb_padded_frame_copy(&fi, sbo, &frame, pad);
+
+    // the padded_frame should contain the subregion starting at (448-8, -8)
+    // having size (64+2*8, 64+2*8)
+    assert_eq!(padded_frame.planes[0].cfg.width, 80);
+    assert_eq!(padded_frame.planes[0].cfg.height, 80);
+
+    let po = PlaneOffset { x: 440, y: 0 };
+    let in_luma_slice = frame.planes[0].slice(po);
+    let out_luma_slice = padded_frame.planes[0].as_slice();
+
+    // this region does not overlap the frame padding, so it contains only
+    // values from the input frame
+    for row in 0..72 {
+      for col in 0..72 {
+        let in_pixel = in_luma_slice[row][col];
+        let out_pixel = out_luma_slice[row + 8][col];
+        assert_eq!(out_pixel, in_pixel);
+      }
+      // right frame padding
+      for col in 72..80 {
+        let out_pixel = out_luma_slice[row + 8][col];
+        assert_eq!(out_pixel, CDEF_VERY_LARGE);
+      }
+    }
+
+    // top frame padding
+    for row in 0..8 {
+      for col in 0..80 {
+        let out_pixel = out_luma_slice[row][col];
+        assert_eq!(out_pixel, CDEF_VERY_LARGE);
+      }
+    }
   }
 }
