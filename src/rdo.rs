@@ -734,9 +734,9 @@ pub fn rdo_mode_decision<T: Pixel>(
         .iter()
         .map(|&luma_mode| {
           let rec = &mut ts.rec.planes[0];
-          let mut rec_region = rec.subregion_mut(Area::BlockStartingAt { bo: tile_bo });
           luma_mode.predict_intra(
-            &mut rec_region,
+            rec,
+            tile_bo,
             tx_size,
             fi.sequence.bit_depth,
             &[0i16; 2],
@@ -745,7 +745,7 @@ pub fn rdo_mode_decision<T: Pixel>(
           );
 
           let plane_org = ts.input_tile.planes[0].subregion(Area::BlockStartingAt { bo: tile_bo });
-          let plane_ref = rec_region.as_const();
+          let plane_ref = rec.subregion(Area::BlockStartingAt { bo: tile_bo });
 
           (
             luma_mode,
@@ -914,9 +914,9 @@ pub fn rdo_cfl_alpha<T: Pixel>(
             Some(PredictionMode::UV_CFL_PRED)
           );
 
-          let mut rec_region = rec.subregion_mut(Area::BlockStartingAt { bo: tile_bo });
           PredictionMode::UV_CFL_PRED.predict_intra(
-            &mut rec_region,
+            rec,
+            tile_bo,
             uv_tx_size,
             bit_depth,
             &ac.array,
@@ -925,7 +925,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
           );
           sse_wxh(
             &input.subregion(Area::BlockStartingAt { bo: tile_bo }),
-            &rec_region.as_const(),
+            &rec.subregion(Area::BlockStartingAt { bo: tile_bo }),
             uv_tx_size.width(),
             uv_tx_size.height()
           )
