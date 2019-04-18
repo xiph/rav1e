@@ -75,6 +75,8 @@ pub struct EncoderConfig {
   pub quantizer: usize,
   pub bitrate: i32,
   pub tune: Tune,
+  pub tile_cols_log2: usize,
+  pub tile_rows_log2: usize,
   pub speed_settings: SpeedSettings,
   /// `None` for one-pass encode. `Some(1)` or `Some(2)` for two-pass encoding.
   pub pass: Option<u8>,
@@ -111,6 +113,8 @@ impl EncoderConfig {
       quantizer: 100,
       bitrate: 0,
       tune: Tune::default(),
+      tile_cols_log2: 0,
+      tile_rows_log2: 0,
       speed_settings: SpeedSettings::from_preset(speed),
       pass: None,
       show_psnr: false,
