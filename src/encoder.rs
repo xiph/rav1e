@@ -1161,14 +1161,14 @@ pub fn motion_compensate<T: Pixel>(
 pub fn save_block_motion<T: Pixel>(
    ts: &mut TileStateMut<'_, T>,
    w_in_b: usize, h_in_b: usize,
-   bsize: BlockSize, bo: BlockOffset,
+   bsize: BlockSize, tile_bo: BlockOffset,
    ref_frame: usize, mv: MotionVector,
 ) {
   let tile_mvs = &mut ts.mvs[ref_frame];
-  let bo_x_end = (bo.x + bsize.width_mi()).min(w_in_b);
-  let bo_y_end = (bo.y + bsize.height_mi()).min(h_in_b);
-  for mi_y in bo.y..bo_y_end {
-    for mi_x in bo.x..bo_x_end {
+  let tile_bo_x_end = (tile_bo.x + bsize.width_mi()).min(w_in_b);
+  let tile_bo_y_end = (tile_bo.y + bsize.height_mi()).min(h_in_b);
+  for mi_y in tile_bo.y..tile_bo_y_end {
+    for mi_x in tile_bo.x..tile_bo_x_end {
       tile_mvs[mi_y][mi_x] = mv;
     }
   }
