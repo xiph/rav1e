@@ -174,6 +174,20 @@ pub fn parse_cli() -> CliOptions {
         .default_value("Psychovisual")
         .case_insensitive(true)
     )
+    .arg(
+      Arg::with_name("TILE_ROWS_LOG2")
+        .help("Log2 of number of tile rows")
+        .long("tile-rows-log2")
+        .takes_value(true)
+        .default_value("0")
+    )
+    .arg(
+      Arg::with_name("TILE_COLS_LOG2")
+        .help("Log2 of number of tile columns")
+        .long("tile-cols-log2")
+        .takes_value(true)
+        .default_value("0")
+    )
     // MASTERING
     .arg(
       Arg::with_name("PIXEL_RANGE")
@@ -426,6 +440,14 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
     None
   };
   cfg.tune = matches.value_of("TUNE").unwrap().parse().unwrap();
+
+  cfg.tile_cols_log2 = matches.value_of("TILE_COLS_LOG2").unwrap().parse().unwrap();
+  cfg.tile_rows_log2 = matches.value_of("TILE_ROWS_LOG2").unwrap().parse().unwrap();
+
+  if cfg.tile_cols_log2 > 6 || cfg.tile_rows_log2 > 6 {
+    panic!("Log2 of tile columns and rows may not be greater than 6");
+  }
+
   cfg.low_latency = matches.value_of("LOW_LATENCY").unwrap().parse().unwrap();
   cfg.train_rdo = train_rdo;
   cfg
