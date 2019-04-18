@@ -54,6 +54,7 @@ pub struct TileStateMut<'a, T: Pixel> {
   pub rec: TileMut<'a, T>,
   pub qc: QuantizationContext,
   pub segmentation: &'a SegmentationState,
+  pub restoration: TileRestorationStateMut<'a>,
   pub rdo: RDOTracker,
 }
 
@@ -90,6 +91,12 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
       rec: TileMut::new(&mut fs.rec, luma_rect),
       qc: Default::default(),
       segmentation: &fs.segmentation,
+      restoration: TileRestorationStateMut::new(
+        &mut fs.restoration,
+        sbo,
+        sb_width,
+        sb_height,
+      ),
       rdo: RDOTracker::new(),
     }
   }

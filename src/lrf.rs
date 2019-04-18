@@ -826,8 +826,8 @@ impl IndexMut<usize> for FrameRestorationUnits {
 pub struct RestorationPlaneConfig {
   pub lrf_type: u8,
   pub unit_size: usize,
-  // (1 << sb_shift) gives the number of superblocks having size 1 << SUPERBLOCK_TO_PLANE_SHIFT
-  // both horizontally and vertically in a restoration unit, not accounting for RU stretching
+  // (1 << sb_shift) gives the number of superblocks both horizontally and
+  // vertically in a restoration unit, not accounting for RU stretching
   pub sb_shift: usize,
   // stripe height is 64 in all cases except 4:2:0 chroma planes where
   // it is 32.  This is independent of all other setup parameters
