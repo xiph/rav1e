@@ -399,6 +399,21 @@ macro_rules! test_chroma_sampling {
 
 test_chroma_sampling!{(420, ChromaSampling::Cs420), (422, ChromaSampling::Cs422), (444, ChromaSampling::Cs444)}
 
+#[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
+#[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
+fn tile_encoding_with_stretched_restoration_units(decoder: &str) {
+  let limit = 5;
+  let w = 256;
+  // the bottom tiles are small (their height is 140-128=12), so they will use stretched
+  // restoration units from their above neighbours
+  let h = 140;
+  let speed = 10;
+  let q = 100;
+
+  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+  dec.encode_decode(w, h, speed, q, limit, 8, Default::default(), 15, 15, true, 0, 2, 2);
+}
+
 fn get_decoder<T: Pixel>(decoder: &str, w: usize, h: usize) -> Box<dyn TestDecoder<T>> {
   match decoder {
     #[cfg(feature="decode_test")]
