@@ -459,6 +459,13 @@ impl<T: Pixel> FrameState<T> {
       t: RDOTracker::new()
     }
   }
+
+  #[inline(always)]
+  pub fn as_tile_state_mut(&mut self) -> TileStateMut<'_, T> {
+    let PlaneConfig { width, height, .. } = self.rec.planes[0].cfg;
+    let sbo_0 = SuperBlockOffset { x: 0, y: 0 };
+    TileStateMut::new(self, sbo_0, self.sb_size_log2, width, height)
+  }
 }
 
 #[derive(Copy, Clone, Debug)]
