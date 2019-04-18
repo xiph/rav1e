@@ -13,6 +13,7 @@ use crate::context::*;
 use crate::Frame;
 use crate::FrameInvariants;
 use crate::plane::*;
+use crate::tiling::*;
 use crate::util::{clamp, msb, Pixel, CastFromPrimitive};
 
 use std::cmp;
@@ -243,55 +244,79 @@ pub fn cdef_analyze_superblock<T: Pixel>(
 }
 
 
-pub fn cdef_sb_frame<T: Pixel>(fi: &FrameInvariants<T>, f: &Frame<T>) -> Frame<T> {
+pub fn cdef_sb_frame<T: Pixel>(fi: &FrameInvariants<T>, tile: &Tile<'_, T>) -> Frame<T> {
   let sb_size = if fi.sequence.use_128x128_superblock {128} else {64};
 
   Frame {
     planes: [
-      Plane::new(sb_size >> f.planes[0].cfg.xdec, sb_size >> f.planes[0].cfg.ydec,
-                 f.planes[0].cfg.xdec, f.planes[0].cfg.ydec, 3, 3),
-      Plane::new(sb_size >> f.planes[1].cfg.xdec, sb_size >> f.planes[1].cfg.ydec,
-                 f.planes[1].cfg.xdec, f.planes[1].cfg.ydec, 3, 3),
-      Plane::new(sb_size >> f.planes[2].cfg.xdec, sb_size >> f.planes[2].cfg.ydec,
-                 f.planes[2].cfg.xdec, f.planes[2].cfg.ydec, 3, 3),
+      {
+        let &PlaneConfig { xdec, ydec, .. } = tile.planes[0].plane_cfg;
+        Plane::new(sb_size >> xdec, sb_size >> ydec, xdec, ydec, 3, 3)
+      },
+      {
+        let &PlaneConfig { xdec, ydec, .. } = tile.planes[1].plane_cfg;
+        Plane::new(sb_size >> xdec, sb_size >> ydec, xdec, ydec, 3, 3)
+      },
+      {
+        let &PlaneConfig { xdec, ydec, .. } = tile.planes[2].plane_cfg;
+        Plane::new(sb_size >> xdec, sb_size >> ydec, xdec, ydec, 3, 3)
+      },
     ]
   }
 }
 
 pub fn cdef_sb_padded_frame_copy<T: Pixel>(
   fi: &FrameInvariants<T>, sbo: SuperBlockOffset,
-  f: &Frame<T>, pad: usize
+  tile: &Tile<'_, T>, pad: usize
 ) -> Frame<u16> {
   let ipad = pad as isize;
   let sb_size = if fi.sequence.use_128x128_superblock {128} else {64};
   let mut out = Frame {
     planes: [
-      Plane::new((sb_size >> f.planes[0].cfg.xdec) + pad*2, (sb_size >> f.planes[0].cfg.ydec) + pad*2,
-                 f.planes[0].cfg.xdec, f.planes[0].cfg.ydec, 3, 3),
-      Plane::new((sb_size >> f.planes[1].cfg.xdec) + pad*2, (sb_size >> f.planes[1].cfg.ydec) + pad*2,
-                 f.planes[1].cfg.xdec, f.planes[1].cfg.ydec, 3, 3),
-      Plane::new((sb_size >> f.planes[2].cfg.xdec) + pad*2, (sb_size >> f.planes[2].cfg.ydec) + pad*2,
-                 f.planes[2].cfg.xdec, f.planes[2].cfg.ydec, 3, 3),
+      {
+        let &PlaneConfig { xdec, ydec, .. } = tile.planes[0].plane_cfg;
+        Plane::new(
+          (sb_size >> xdec) + pad * 2,
+          (sb_size >> ydec) + pad * 2,
+          xdec, ydec, 3, 3
+        )
+      },
+      {
+        let &PlaneConfig { xdec, ydec, .. } = tile.planes[1].plane_cfg;
+        Plane::new(
+          (sb_size >> xdec) + pad * 2,
+          (sb_size >> ydec) + pad * 2,
+          xdec, ydec, 3, 3
+        )
+      },
+      {
+        let &PlaneConfig { xdec, ydec, .. } = tile.planes[2].plane_cfg;
+        Plane::new(
+          (sb_size >> xdec) + pad * 2,
+          (sb_size >> ydec) + pad * 2,
+          xdec, ydec, 3, 3
+        )
+      },
     ]
   };
   // Copy data into padded frame
   for p in 0..3 {
-    let xdec = f.planes[p].cfg.xdec;
-    let ydec = f.planes[p].cfg.ydec;
-    let h = f.planes[p].cfg.height as isize;
-    let w = f.planes[p].cfg.width as isize;
-    let offset = sbo.plane_offset(&f.planes[p].cfg);
+    let &PlaneConfig { xdec, ydec, .. } = tile.planes[p].plane_cfg;
+    let &Rect { width, height, .. } = tile.planes[p].rect();
+    let w = width as isize;
+    let h = height as isize;
+    let offset = sbo.plane_offset(&tile.planes[p].plane_cfg);
     for y in 0..((sb_size>>ydec) + pad*2) as isize {
-      let mut out_slice = out.planes[p].as_mut_slice();
-      let out_row = &mut out_slice[y as usize];
+      let mut out_region = out.planes[p].as_region_mut();
+      let out_row = &mut out_region[y as usize];
       if offset.y + y < ipad || offset.y+y >= h + ipad {
         // above or below the frame, fill with flag
         for x in 0..(sb_size>>xdec) + pad*2 {
           out_row[x] = CDEF_VERY_LARGE;
         }
       } else {
-        let in_slice = f.planes[p].slice(PlaneOffset {x:0, y:offset.y - ipad});
-        let in_row = &in_slice[y as usize];
+        let in_plane_region = &tile.planes[p];
+        let in_row = &in_plane_region[(offset.y - ipad + y) as usize];
         // are we guaranteed to be all in frame this row?
         if offset.x < ipad || offset.x + (sb_size as isize >>xdec) + ipad >= w {
           // No; do it the hard way.  off left or right edge, fill with flag.
@@ -537,10 +562,11 @@ mod test {
   #[test]
   fn test_padded_frame_copy() {
     let (frame, fi) = create_frame();
+    let tile = frame.as_tile();
     // a super-block in the middle (not near frame borders)
     let sbo = SuperBlockOffset { x: 1, y: 2 };
     let pad = 8;
-    let padded_frame = cdef_sb_padded_frame_copy(&fi, sbo, &frame, pad);
+    let padded_frame = cdef_sb_padded_frame_copy(&fi, sbo, &tile, pad);
 
     // the padded_frame should contain the subregion starting at (64-8, 128-8)
     // having size (64+2*8, 64+2*8)
@@ -565,10 +591,11 @@ mod test {
   #[test]
   fn test_padded_frame_copy_outside_input() {
     let (frame, fi) = create_frame();
+    let tile = frame.as_tile();
     // the top-right super-block (near top and right frame borders)
     let sbo = SuperBlockOffset { x: 7, y: 0 };
     let pad = 8;
-    let padded_frame = cdef_sb_padded_frame_copy(&fi, sbo, &frame, pad);
+    let padded_frame = cdef_sb_padded_frame_copy(&fi, sbo, &tile, pad);
 
     // the padded_frame should contain the subregion starting at (448-8, -8)
     // having size (64+2*8, 64+2*8)

@@ -1283,10 +1283,11 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: SuperBlockOffset, fi: &FrameInvariants<T
   // TODO: use the new plane padding mechanism rather than this old kludge.  Will require
   // altering CDEF code a little.
   let mut cdef_input = None;
-  let mut lrf_input = cdef_sb_frame(fi, &fs.rec);
-  let mut lrf_output = cdef_sb_frame(fi, &fs.rec);
+  let rec_tile = fs.rec.as_tile();
+  let mut lrf_input = cdef_sb_frame(fi, &rec_tile);
+  let mut lrf_output = cdef_sb_frame(fi, &rec_tile);
   if fi.sequence.enable_cdef {
-    cdef_input = Some(cdef_sb_padded_frame_copy(fi, sbo, &fs.rec, 2));
+    cdef_input = Some(cdef_sb_padded_frame_copy(fi, sbo, &rec_tile, 2));
   } else {
     for p in 0..3 {
       let po = sbo.plane_offset(&fs.rec.planes[p].cfg);
