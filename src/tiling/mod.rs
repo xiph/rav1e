@@ -8,5 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 mod plane_region;
+mod tile;
 
 pub use self::plane_region::*;
+pub use self::tile::*;
