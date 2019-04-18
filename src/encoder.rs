@@ -1178,13 +1178,12 @@ pub fn motion_compensate<T: Pixel>(
 
 pub fn save_block_motion<T: Pixel>(
    ts: &mut TileStateMut<'_, T>,
-   w_in_b: usize, h_in_b: usize,
    bsize: BlockSize, tile_bo: BlockOffset,
    ref_frame: usize, mv: MotionVector,
 ) {
   let tile_mvs = &mut ts.mvs[ref_frame];
-  let tile_bo_x_end = (tile_bo.x + bsize.width_mi()).min(w_in_b);
-  let tile_bo_y_end = (tile_bo.y + bsize.height_mi()).min(h_in_b);
+  let tile_bo_x_end = (tile_bo.x + bsize.width_mi()).min(ts.mi_width);
+  let tile_bo_y_end = (tile_bo.y + bsize.height_mi()).min(ts.mi_height);
   for mi_y in tile_bo.y..tile_bo_y_end {
     for mi_x in tile_bo.x..tile_bo_x_end {
       tile_mvs[mi_y][mi_x] = mv;
@@ -1678,7 +1677,7 @@ fn encode_partition_bottomup<T: Pixel>(
     if !mode_decision.pred_mode_luma.is_intra() {
       // Fill the saved motion structure
       save_block_motion(
-        ts, fi.w_in_b, fi.h_in_b, mode_decision.bsize, mode_decision.bo,
+        ts, mode_decision.bsize, mode_decision.bo,
         mode_decision.ref_frames[0].to_index(), mode_decision.mvs[0]
       );
     }
@@ -1803,7 +1802,7 @@ fn encode_partition_bottomup<T: Pixel>(
 
           if !mode.pred_mode_luma.is_intra() {
             save_block_motion(
-              ts, fi.w_in_b, fi.h_in_b, mode.bsize, mode.bo,
+              ts, mode.bsize, mode.bo,
               mode.ref_frames[0].to_index(), mode.mvs[0]
             );
           }
@@ -1980,8 +1979,7 @@ fn encode_partition_topdown<T: Pixel>(
         }
 
         save_block_motion(
-          ts, fi.w_in_b, fi.h_in_b,
-          part_decision.bsize, part_decision.bo,
+          ts, part_decision.bsize, part_decision.bo,
           part_decision.ref_frames[0].to_index(), part_decision.mvs[0]
         );
       }
@@ -2204,16 +2202,16 @@ fn encode_tile<T: Pixel>(
               );
 
               if let Some(mv) = pmvs[1][r] {
-                save_block_motion(ts, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, tile_sbo.block_offset(0, 0), i, mv);
+                save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(0, 0), i, mv);
               }
               if let Some(mv) = pmvs[2][r] {
-                save_block_motion(ts, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, tile_sbo.block_offset(8, 0), i, mv);
+                save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(8, 0), i, mv);
               }
               if let Some(mv) = pmvs[3][r] {
-                save_block_motion(ts, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, tile_sbo.block_offset(0, 8), i, mv);
+                save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(0, 8), i, mv);
               }
               if let Some(mv) = pmvs[4][r] {
-                save_block_motion(ts, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, tile_sbo.block_offset(8, 8), i, mv);
+                save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(8, 8), i, mv);
               }
             }
           }
