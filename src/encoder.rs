@@ -2141,10 +2141,17 @@ fn encode_tile<T: Pixel>(
                 fi, fs, BlockSize::BLOCK_32X32, r, sbo.block_offset(8, 8), &[Some(pmv), pmv_e, pmv_s], i
               );
 
-              for k in 1..5 {
-                if let Some(mv) = pmvs[k][r] {
-                  save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(0, 0), i, mv);
-                }
+              if let Some(mv) = pmvs[1][r] {
+                save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(0, 0), i, mv);
+              }
+              if let Some(mv) = pmvs[2][r] {
+                save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(8, 0), i, mv);
+              }
+              if let Some(mv) = pmvs[3][r] {
+                save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(0, 8), i, mv);
+              }
+              if let Some(mv) = pmvs[4][r] {
+                save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(8, 8), i, mv);
               }
             }
           }
