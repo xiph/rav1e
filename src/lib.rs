@@ -47,6 +47,7 @@ pub mod metrics;
 pub mod scan_order;
 pub mod scenechange;
 pub mod rate;
+pub mod tiling;
 
 mod api;
 mod header;
