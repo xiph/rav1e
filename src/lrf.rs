@@ -789,7 +789,7 @@ impl RestorationUnit {
 }
 
 #[derive(Clone, Debug)]
-pub struct RestorationPlane {
+pub struct RestorationPlaneConfig {
   pub lrf_type: u8,
   pub unit_size: usize,
   // (1 << sb_shift) gives the number of superblocks having size 1 << SUPERBLOCK_TO_PLANE_SHIFT
@@ -800,6 +800,11 @@ pub struct RestorationPlane {
   pub stripe_height: usize,
   pub cols: usize,
   pub rows: usize,
+}
+
+#[derive(Clone, Debug)]
+pub struct RestorationPlane {
+  pub cfg: RestorationPlaneConfig,
   pub wiener_ref: [[i8; 3]; 2],
   pub sgrproj_ref: [i8; 2],
   pub units: Box<[RestorationUnit]>,
@@ -816,12 +821,14 @@ impl RestorationPlane {
              cols: usize, rows: usize) -> RestorationPlane {
     let stripe_height = if stripe_decimate != 0 {32} else {64};
     RestorationPlane {
-      lrf_type,
-      unit_size,
-      sb_shift,
-      stripe_height,
-      cols,
-      rows,
+      cfg: RestorationPlaneConfig {
+        lrf_type,
+        unit_size,
+        sb_shift,
+        stripe_height,
+        cols,
+        rows,
+      },
       wiener_ref: [WIENER_TAPS_MID; 2],
       sgrproj_ref: SGRPROJ_XQD_MID,
       units: vec![RestorationUnit::default(); cols * rows].into_boxed_slice(),
@@ -830,12 +837,12 @@ impl RestorationPlane {
 
   fn restoration_unit_index(&self, sbo: SuperBlockOffset) -> Option<(usize, usize)> {
     // there is 1 restoration unit for (1 << sb_shift) super-blocks
-    let mask = (1 << self.sb_shift) - 1;
+    let mask = (1 << self.cfg.sb_shift) - 1;
     let first_sbo = sbo.x & mask == 0 && sbo.y & mask == 0;
     if first_sbo {
-      let x = sbo.x >> self.sb_shift;
-      let y = sbo.y >> self.sb_shift;
-      if x < self.cols && y < self.rows {
+      let x = sbo.x >> self.cfg.sb_shift;
+      let y = sbo.y >> self.cfg.sb_shift;
+      if x < self.cfg.cols && y < self.cfg.rows {
         Some((x, y))
       } else {
         // this super-block will share the "stretched" restoration unit from its neighbours
@@ -852,19 +859,19 @@ impl RestorationPlane {
   // filtering, they are not co-located on Y with superblocks.
   fn restoration_unit_index_by_stripe(&self, stripenum: usize, rux: usize) -> (usize, usize) {
     (
-      cmp::min(rux, self.cols - 1),
-      cmp::min(stripenum * self.stripe_height / self.unit_size, self.rows - 1),
+      cmp::min(rux, self.cfg.cols - 1),
+      cmp::min(stripenum * self.cfg.stripe_height / self.cfg.unit_size, self.cfg.rows - 1),
     )
   }
 
   pub fn restoration_unit(&self, sbo: SuperBlockOffset) -> Option<&RestorationUnit> {
-    self.restoration_unit_index(sbo).map(|(x, y)| &self.units[y * self.cols + x])
+    self.restoration_unit_index(sbo).map(|(x, y)| &self.units[y * self.cfg.cols + x])
   }
 
   pub fn restoration_unit_mut(&mut self, sbo: SuperBlockOffset) -> Option<&mut RestorationUnit> {
     // cannot use map() due to lifetime constraints
     if let Some((x, y)) = self.restoration_unit_index(sbo) {
-      Some(&mut self.units[y * self.cols + x])
+      Some(&mut self.units[y * self.cfg.cols + x])
     } else {
       None
     }
@@ -872,7 +879,7 @@ impl RestorationPlane {
 
   pub fn restoration_unit_by_stripe(&self, stripenum: usize, rux: usize) -> &RestorationUnit {
     let (x, y) = self.restoration_unit_index_by_stripe(stripenum, rux);
-    &self.units[y * self.cols + x]
+    &self.units[y * self.cfg.cols + x]
   }
 }
 
@@ -948,13 +955,13 @@ impl RestorationState {
         let stripe_size = 64 >> ydec; // one past, unlike spec
 
         // horizontally, go rdu-by-rdu
-        for rux in 0..rp.cols {
+        for rux in 0..rp.cfg.cols {
           // stripe x pixel locations must be clipped to frame, last may need to stretch
-          let x = rux * rp.unit_size;
-          let size = if rux == rp.cols - 1 {
+          let x = rux * rp.cfg.unit_size;
+          let size = if rux == rp.cfg.cols - 1 {
             crop_w - x
           } else {
-            rp.unit_size
+            rp.cfg.unit_size
           };
           let ru = rp.restoration_unit_by_stripe(si, rux);
           match ru.filter {
