@@ -531,6 +531,7 @@ pub struct FrameInvariants<T: Pixel> {
   pub sb_height: usize,
   pub w_in_b: usize,
   pub h_in_b: usize,
+  pub tiling: TilingInfo,
   pub number: u64,
   pub order_hint: u32,
   pub show_frame: bool,
@@ -609,6 +610,14 @@ impl<T: Pixel> FrameInvariants<T> {
     let w_in_b = 2 * config.width.align_power_of_two_and_shift(3); // MiCols, ((width+7)/8)<<3 >> MI_SIZE_LOG2
     let h_in_b = 2 * config.height.align_power_of_two_and_shift(3); // MiRows, ((height+7)/8)<<3 >> MI_SIZE_LOG2
 
+    let tiling = TilingInfo::new(
+      sequence.sb_size_log2(),
+      config.width,
+      config.height,
+      config.tile_cols_log2,
+      config.tile_rows_log2
+    );
+
     Self {
       sequence,
       width: config.width,
@@ -617,6 +626,7 @@ impl<T: Pixel> FrameInvariants<T> {
       sb_height: config.height.align_power_of_two_and_shift(6),
       w_in_b,
       h_in_b,
+      tiling,
       number: 0,
       order_hint: 0,
       show_frame: true,
