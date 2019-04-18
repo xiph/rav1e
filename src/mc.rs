@@ -12,6 +12,7 @@ pub use self::nasm::*;
 #[cfg(any(not(target_arch = "x86_64"), not(feature = "nasm")))]
 pub use self::native::*;
 
+use crate::tiling::*;
 use crate::util::Pixel;
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
@@ -250,17 +251,17 @@ mod nasm {
   }
 
   pub fn put_8tap<T: Pixel>(
-    dst: &mut PlaneMutSlice<'_, T>, src: PlaneSlice<'_, T>, width: usize,
+    dst: &mut PlaneRegionMut<'_, T>, src: PlaneSlice<'_, T>, width: usize,
     height: usize, col_frac: i32, row_frac: i32, mode_x: FilterMode,
     mode_y: FilterMode, bit_depth: usize
   ) {
     if mem::size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
       debug_assert!(bit_depth == 8);
-      let dst_stride = dst.plane.cfg.stride as isize;
+      let dst_stride = dst.plane_cfg.stride as isize;
       let src_stride = src.plane.cfg.stride as isize;
       unsafe {
         select_put_fn_avx2(mode_x, mode_y)(
-          dst.as_mut_ptr() as *mut _,
+          dst.data_ptr_mut() as *mut _,
           dst_stride,
           src.as_ptr() as *const _,
           src_stride,
@@ -304,15 +305,15 @@ mod nasm {
   }
 
   pub fn mc_avg<T: Pixel>(
-    dst: &mut PlaneMutSlice<'_, T>, tmp1: &[i16], tmp2: &[i16], width: usize,
+    dst: &mut PlaneRegionMut<'_, T>, tmp1: &[i16], tmp2: &[i16], width: usize,
     height: usize, bit_depth: usize
   ) {
     if mem::size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
       debug_assert!(bit_depth == 8);
-      let dst_stride = dst.plane.cfg.stride as isize;
+      let dst_stride = dst.plane_cfg.stride as isize;
       unsafe {
         rav1e_avg_avx2(
-          dst.as_mut_ptr() as *mut _,
+          dst.data_ptr_mut() as *mut _,
           dst_stride,
           tmp1.as_ptr(),
           tmp2.as_ptr(),
@@ -357,7 +358,7 @@ mod native {
   }
 
   pub fn put_8tap<T: Pixel>(
-    dst: &mut PlaneMutSlice<'_, T>, src: PlaneSlice<'_, T>, width: usize,
+    dst: &mut PlaneRegionMut<'_, T>, src: PlaneSlice<'_, T>, width: usize,
     height: usize, col_frac: i32, row_frac: i32, mode_x: FilterMode,
     mode_y: FilterMode, bit_depth: usize
   ) {
@@ -522,7 +523,7 @@ mod native {
   }
 
   pub fn mc_avg<T: Pixel>(
-    dst: &mut PlaneMutSlice<'_, T>, tmp1: &[i16], tmp2: &[i16], width: usize,
+    dst: &mut PlaneRegionMut<'_, T>, tmp1: &[i16], tmp2: &[i16], width: usize,
     height: usize, bit_depth: usize
   ) {
     let max_sample_val = ((1 << bit_depth) - 1) as i32;

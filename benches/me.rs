@@ -41,10 +41,9 @@ fn run_sad_bench<T: Pixel>(b: &mut Bencher, &(bs, bit_depth): &(BlockSize, usize
   let h = 480;
   let input_plane = new_plane::<T>(&mut ra, w, h);
   let rec_plane = new_plane::<T>(&mut ra, w, h);
-  let po = PlaneOffset { x: 0, y: 0 };
 
-  let plane_org = input_plane.slice(po);
-  let plane_ref = rec_plane.slice(po);
+  let plane_org = input_plane.as_region();
+  let plane_ref = rec_plane.as_region();
 
   b.iter(|| {
     let _ =

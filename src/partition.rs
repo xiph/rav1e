@@ -18,6 +18,7 @@ use crate::encoder::FrameInvariants;
 use crate::mc::*;
 use crate::plane::*;
 use crate::predict::*;
+use crate::tiling::*;
 use crate::util::*;
 
 // LAST_FRAME through ALTREF_FRAME correspond to slots 0-6.
@@ -851,14 +852,13 @@ pub enum MvJointType {
 }
 
 pub fn get_intra_edges<T: Pixel>(
-  dst: &Plane<T>,
+  dst: &PlaneRegion<'_, T>,
   po: PlaneOffset,
   tx_size: TxSize,
   bit_depth: usize,
   opt_mode: Option<PredictionMode>
 ) -> AlignedArray<[T; 4 * MAX_TX_SIZE + 1]> {
-  let plane_cfg = &dst.cfg;
-  let dst = dst.as_slice();
+  let plane_cfg = &dst.plane_cfg;
 
   let mut edge_buf: AlignedArray<[T; 4 * MAX_TX_SIZE + 1]> =
     UninitializedAlignedArray();
@@ -952,7 +952,7 @@ pub fn get_intra_edges<T: Pixel>(
         );
 
       let num_avail = if y != 0 && has_tr(bo, bsize) {
-        tx_size.width().min(plane_cfg.width - x - tx_size.width())
+        tx_size.width().min(dst.rect().width - x - tx_size.width())
       } else {
         0
       };
@@ -983,7 +983,7 @@ pub fn get_intra_edges<T: Pixel>(
         );
 
       let num_avail = if x != 0 && has_bl(bo, bsize) {
-        tx_size.height().min(plane_cfg.height - y - tx_size.height())
+        tx_size.height().min(dst.rect().height - y - tx_size.height())
       } else {
         0
       };
@@ -1009,7 +1009,7 @@ pub fn get_intra_edges<T: Pixel>(
 
 impl PredictionMode {
   pub fn predict_intra<T: Pixel>(
-    self, dst: &mut PlaneMutSlice<'_, T>, tx_size: TxSize, bit_depth: usize,
+    self, dst: &mut PlaneRegionMut<'_, T>, tx_size: TxSize, bit_depth: usize,
     ac: &[i16], alpha: i16, edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>
   ) {
     assert!(self.is_intra());
@@ -1060,15 +1060,14 @@ impl PredictionMode {
 
   #[inline(always)]
   fn predict_intra_inner<B: Intra<T>, T: Pixel>(
-    self, dst: &mut PlaneMutSlice<'_, T>, bit_depth: usize, ac: &[i16],
+    self, dst: &mut PlaneRegionMut<'_, T>, bit_depth: usize, ac: &[i16],
     alpha: i16, edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>
   ) {
     // left pixels are order from bottom to top and right-aligned
     let (left, not_left) = edge_buf.array.split_at(2*MAX_TX_SIZE);
     let (top_left, above) = not_left.split_at(1);
 
-    let x = dst.x;
-    let y = dst.y;
+    let &Rect { x, y, .. } = dst.rect();
 
     let mode: PredictionMode = match self {
       PredictionMode::PAETH_PRED => match (x, y) {
@@ -1164,10 +1163,11 @@ impl PredictionMode {
 
   pub fn predict_inter<T: Pixel>(
     self, fi: &FrameInvariants<T>, p: usize, po: PlaneOffset,
-    dst: &mut PlaneMutSlice<'_, T>, width: usize, height: usize,
+    dst: &mut PlaneRegionMut<'_, T>, width: usize, height: usize,
     ref_frames: [RefType; 2], mvs: [MotionVector; 2]
   ) {
     assert!(!self.is_intra());
+    let frame_po = dst.to_frame_plane_offset(po);
 
     let mode = FilterMode::REGULAR;
     let is_compound =
@@ -1194,7 +1194,7 @@ impl PredictionMode {
 
     if !is_compound {
       if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[ref_frames[0].to_index()] as usize] {
-        let (row_frac, col_frac, src) = get_params(&rec.frame.planes[p], po, mvs[0]);
+        let (row_frac, col_frac, src) = get_params(&rec.frame.planes[p], frame_po, mvs[0]);
         put_8tap(
           dst,
           src,
@@ -1212,7 +1212,7 @@ impl PredictionMode {
         [UninitializedAlignedArray(), UninitializedAlignedArray()];
       for i in 0..2 {
         if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[ref_frames[i].to_index()] as usize] {
-          let (row_frac, col_frac, src) = get_params(&rec.frame.planes[p], po, mvs[i]);
+          let (row_frac, col_frac, src) = get_params(&rec.frame.planes[p], frame_po, mvs[i]);
           prep_8tap(
             &mut tmp[i].array,
             src,

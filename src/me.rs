@@ -25,7 +25,7 @@ use std::sync::Arc;
 
 #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 mod nasm {
-  use crate::plane::*;
+  use crate::tiling::*;
   use crate::util::*;
   use std::mem;
 
@@ -92,12 +92,15 @@ mod nasm {
 
   #[target_feature(enable = "ssse3")]
   unsafe fn sad_hbd_ssse3(
-    plane_org: &PlaneSlice<'_, u16>, plane_ref: &PlaneSlice<'_, u16>, blk_w: usize,
-    blk_h: usize, bit_depth: usize
+    plane_org: &PlaneRegion<'_, u16>,
+    plane_ref: &PlaneRegion<'_, u16>,
+    blk_w: usize,
+    blk_h: usize,
+    bit_depth: usize,
   ) -> u32 {
     let mut sum = 0 as u32;
-    let org_stride = (plane_org.plane.cfg.stride * 2) as libc::ptrdiff_t;
-    let ref_stride = (plane_ref.plane.cfg.stride * 2) as libc::ptrdiff_t;
+    let org_stride = (plane_org.plane_cfg.stride * 2) as libc::ptrdiff_t;
+    let ref_stride = (plane_ref.plane_cfg.stride * 2) as libc::ptrdiff_t;
     assert!(blk_h >= 4 && blk_w >= 4);
     let step_size =
       blk_h.min(blk_w).min(if bit_depth <= 10 { 128 } else { 4 });
@@ -112,13 +115,9 @@ mod nasm {
     };
     for r in (0..blk_h).step_by(step_size) {
       for c in (0..blk_w).step_by(step_size) {
-        let org_slice = plane_org.subslice(c, r);
-        let ref_slice = plane_ref.subslice(c, r);
-        let org_ptr = org_slice.as_ptr();
-        let ref_ptr = ref_slice.as_ptr();
         // FIXME for now, T == u16
-        let org_ptr = org_ptr as *const u16;
-        let ref_ptr = ref_ptr as *const u16;
+        let org_ptr = &plane_org[r][c] as *const u16;
+        let ref_ptr = &plane_ref[r][c] as *const u16;
         sum += func(org_ptr, org_stride, ref_ptr, ref_stride);
       }
     }
@@ -127,13 +126,15 @@ mod nasm {
 
   #[target_feature(enable = "sse2")]
   unsafe fn sad_sse2(
-    plane_org: &PlaneSlice<'_, u8>, plane_ref: &PlaneSlice<'_, u8>, blk_w: usize,
-    blk_h: usize
+    plane_org: &PlaneRegion<'_, u8>,
+    plane_ref: &PlaneRegion<'_, u8>,
+    blk_w: usize,
+    blk_h: usize,
   ) -> u32 {
-    let org_ptr = plane_org.as_ptr();
-    let ref_ptr = plane_ref.as_ptr();
-    let org_stride = plane_org.plane.cfg.stride as libc::ptrdiff_t;
-    let ref_stride = plane_ref.plane.cfg.stride as libc::ptrdiff_t;
+    let org_ptr = plane_org.data_ptr();
+    let ref_ptr = plane_ref.data_ptr();
+    let org_stride = plane_org.plane_cfg.stride as libc::ptrdiff_t;
+    let ref_stride = plane_ref.plane_cfg.stride as libc::ptrdiff_t;
     if blk_w == 16 && blk_h == 16 && (org_ptr as usize & 15) == 0 {
       return rav1e_sad16x16_sse2(org_ptr, org_stride, ref_ptr, ref_stride);
     }
@@ -152,10 +153,10 @@ mod nasm {
       _ => rav1e_sad128x128_sse2
     };
     let mut sum = 0 as u32;
-    for r in (0..blk_h as isize).step_by(step_size) {
-      for c in (0..blk_w as isize).step_by(step_size) {
-        let org_ptr = org_ptr.offset(r * org_stride + c);
-        let ref_ptr = ref_ptr.offset(r * ref_stride + c);
+    for r in (0..blk_h).step_by(step_size) {
+      for c in (0..blk_w).step_by(step_size) {
+        let org_ptr = &plane_org[r][c] as *const u8;
+        let ref_ptr = &plane_ref[r][c] as *const u8;
         sum += func(org_ptr, org_stride, ref_ptr, ref_stride);
       }
     }
@@ -164,13 +165,15 @@ mod nasm {
 
   #[target_feature(enable = "avx2")]
   unsafe fn sad_avx2(
-    plane_org: &PlaneSlice<'_, u8>, plane_ref: &PlaneSlice<'_, u8>, blk_w: usize,
-    blk_h: usize
+    plane_org: &PlaneRegion<'_, u8>,
+    plane_ref: &PlaneRegion<'_, u8>,
+    blk_w: usize,
+    blk_h: usize,
   ) -> u32 {
-    let org_ptr = plane_org.as_ptr();
-    let ref_ptr = plane_ref.as_ptr();
-    let org_stride = plane_org.plane.cfg.stride as libc::ptrdiff_t;
-    let ref_stride = plane_ref.plane.cfg.stride as libc::ptrdiff_t;
+    let org_ptr = plane_org.data_ptr();
+    let ref_ptr = plane_ref.data_ptr();
+    let org_stride = plane_org.plane_cfg.stride as libc::ptrdiff_t;
+    let ref_stride = plane_ref.plane_cfg.stride as libc::ptrdiff_t;
 
     let func = match (blk_w, blk_h) {
       (4, 4) => rav1e_sad4x4_sse2,
@@ -209,28 +212,32 @@ mod nasm {
 
   #[inline(always)]
   pub fn get_sad<T: Pixel>(
-    plane_org: &PlaneSlice<'_, T>, plane_ref: &PlaneSlice<'_, T>, blk_w: usize, blk_h: usize, bit_depth: usize
+    plane_org: &PlaneRegion<'_, T>,
+    plane_ref: &PlaneRegion<'_, T>,
+    blk_w: usize,
+    blk_h: usize,
+    bit_depth: usize,
   ) -> u32 {
     #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
       if mem::size_of::<T>() == 2 && is_x86_feature_detected!("ssse3") && blk_h >= 4 && blk_w >= 4 {
         return unsafe {
-          let plane_org = &*(plane_org as *const _ as *const PlaneSlice<'_, u16>);
-          let plane_ref = &*(plane_ref as *const _ as *const PlaneSlice<'_, u16>);
+          let plane_org = &*(plane_org as *const _ as *const PlaneRegion<'_, u16>);
+          let plane_ref = &*(plane_ref as *const _ as *const PlaneRegion<'_, u16>);
           sad_hbd_ssse3(plane_org, plane_ref, blk_w, blk_h, bit_depth)
         };
       }
       if mem::size_of::<T>() == 1 && is_x86_feature_detected!("avx2") && blk_h >= 4 && blk_w >= 4 {
         return unsafe {
-          let plane_org = &*(plane_org as *const _ as *const PlaneSlice<'_, u8>);
-          let plane_ref = &*(plane_ref as *const _ as *const PlaneSlice<'_, u8>);
+          let plane_org = &*(plane_org as *const _ as *const PlaneRegion<'_, u8>);
+          let plane_ref = &*(plane_ref as *const _ as *const PlaneRegion<'_, u8>);
           sad_avx2(plane_org, plane_ref, blk_w, blk_h)
         };
       }
       if mem::size_of::<T>() == 1 && is_x86_feature_detected!("sse2") && blk_h >= 4 && blk_w >= 4 {
         return unsafe {
-          let plane_org = &*(plane_org as *const _ as *const PlaneSlice<'_, u8>);
-          let plane_ref = &*(plane_ref as *const _ as *const PlaneSlice<'_, u8>);
+          let plane_org = &*(plane_org as *const _ as *const PlaneRegion<'_, u8>);
+          let plane_ref = &*(plane_ref as *const _ as *const PlaneRegion<'_, u8>);
           sad_sse2(plane_org, plane_ref, blk_w, blk_h)
         };
       }
@@ -240,22 +247,23 @@ mod nasm {
 }
 
 mod native {
-  use crate::plane::*;
+  use crate::tiling::*;
   use crate::util::*;
 
   #[inline(always)]
   pub fn get_sad<T: Pixel>(
-    plane_org: &PlaneSlice<'_, T>, plane_ref: &PlaneSlice<'_, T>, blk_w: usize,
-    blk_h: usize, _bit_depth: usize
+    plane_org: &PlaneRegion<'_, T>,
+    plane_ref: &PlaneRegion<'_, T>,
+    blk_w: usize,
+    blk_h: usize,
+    _bit_depth: usize,
   ) -> u32 {
     let mut sum = 0 as u32;
 
-    let org_iter = plane_org.iter_width(blk_w);
-    let ref_iter = plane_ref.iter_width(blk_w);
-
-    for (slice_org, slice_ref) in org_iter.take(blk_h).zip(ref_iter) {
+    for (slice_org, slice_ref) in plane_org.rows_iter().take(blk_h).zip(plane_ref.rows_iter()) {
       sum += slice_org
         .iter()
+        .take(blk_w)
         .zip(slice_ref)
         .map(|(&a, &b)| (i32::cast_from(a) - i32::cast_from(b)).abs() as u32)
         .sum::<u32>();
@@ -474,7 +482,7 @@ pub trait MotionEstimation {
 
       Self::me_ss2(
         fi, ts, pmvs, tile_bo_adj,
-        &tile_mvs, frame_ref_opt, rec, global_mv, lambda,
+        tile_mvs, frame_ref_opt, rec, global_mv, lambda,
         mvx_min, mvx_max, mvy_min, mvy_max, blk_w, blk_h,
         &mut best_mv, &mut lowest_cost
       );
@@ -510,7 +518,7 @@ impl MotionEstimation for DiamondSearch {
     let tile_mvs = &ts.mvs[ref_frame.to_index()].as_const();
     let frame_ref = fi.rec_buffer.frames[fi.ref_frames[0] as usize].as_ref().map(Arc::as_ref);
     let predictors =
-      get_subset_predictors(tile_bo, cmv, &tile_mvs, frame_ref, ref_frame.to_index());
+      get_subset_predictors(tile_bo, cmv, tile_mvs, frame_ref, ref_frame.to_index());
 
     let frame_bo = ts.to_frame_block_offset(tile_bo);
     diamond_me_search(
@@ -830,28 +838,27 @@ fn get_mv_rd_cost<T: Pixel>(
     return std::u64::MAX;
   }
 
-  let plane_org = p_org.slice(po);
+  let plane_org = p_org.region(Area::StartingAt { x: po.x, y: po.y });
 
   if let Some(ref mut tmp_plane) = tmp_plane_opt {
-    let mut tmp_slice = &mut tmp_plane.mut_slice(PlaneOffset { x: 0, y: 0 });
     PredictionMode::NEWMV.predict_inter(
       fi,
       0,
       po,
-      &mut tmp_slice,
+      &mut tmp_plane.as_region_mut(),
       blk_w,
       blk_h,
       [ref_frame, NONE_FRAME],
       [cand_mv, MotionVector { row: 0, col: 0 }]
     );
-    let plane_ref = tmp_plane.slice(PlaneOffset { x: 0, y: 0 });
+    let plane_ref = tmp_plane.as_region();
     compute_mv_rd_cost(
       fi, pmv, lambda, bit_depth, blk_w, blk_h, cand_mv,
       &plane_org, &plane_ref
     )
   } else {
     // Full pixel motion vector
-    let plane_ref = p_ref.slice(PlaneOffset {
+    let plane_ref = p_ref.region(Area::StartingAt {
       x: po.x + (cand_mv.col / 8) as isize,
       y: po.y + (cand_mv.row / 8) as isize
     });
@@ -866,7 +873,7 @@ fn compute_mv_rd_cost<T: Pixel>(
   fi: &FrameInvariants<T>,
   pmv: [MotionVector; 2], lambda: u32,
   bit_depth: usize, blk_w: usize, blk_h: usize, cand_mv: MotionVector,
-  plane_org: &PlaneSlice<T>, plane_ref: &PlaneSlice<T>
+  plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>
 ) -> u64
 {
   let sad = get_sad(&plane_org, &plane_ref, blk_w, blk_h, bit_depth);
@@ -916,14 +923,11 @@ fn telescopic_subpel_search<T: Pixel>(
         }
 
         {
-          let tmp_slice =
-            &mut tmp_plane.mut_slice(PlaneOffset { x: 0, y: 0 });
-
           mode.predict_inter(
             fi,
             0,
             po,
-            tmp_slice,
+            &mut tmp_plane.as_region_mut(),
             blk_w,
             blk_h,
             [ref_frame, NONE_FRAME],
@@ -931,8 +935,8 @@ fn telescopic_subpel_search<T: Pixel>(
           );
         }
 
-        let plane_org = ts.input.planes[0].slice(po);
-        let plane_ref = tmp_plane.slice(PlaneOffset { x: 0, y: 0 });
+        let plane_org = ts.input.planes[0].region(Area::StartingAt { x: po.x, y: po.y });
+        let plane_ref = tmp_plane.as_region();
 
         let sad = get_sad(&plane_org, &plane_ref, blk_w, blk_h, fi.sequence.bit_depth);
 
@@ -961,9 +965,8 @@ fn full_search<T: Pixel>(
     let search_area = search_range_y.flat_map(|y| { search_range_x.clone().map(move |x| (y, x)) });
 
     let (cost, mv) = search_area.map(|(y, x)| {
-      let plane_org = p_org.slice(po);
-      let plane_ref = p_ref.slice(PlaneOffset { x, y });
-
+      let plane_org = p_org.region(Area::StartingAt { x: po.x, y: po.y });
+      let plane_ref = p_ref.region(Area::StartingAt { x, y });
       let sad = get_sad(&plane_org, &plane_ref, blk_w, blk_h, bit_depth);
 
       let mv = MotionVector {
@@ -1126,14 +1129,14 @@ pub mod test {
     for block in blocks {
       let bsw = block.0.width();
       let bsh = block.0.height();
-      let po = PlaneOffset { x: 32, y: 40 };
+      let area = Area::StartingAt { x: 32, y: 40 };
 
-      let mut input_slice = input_plane.slice(po);
-      let mut rec_slice = rec_plane.slice(po);
+      let mut input_region = input_plane.region(area);
+      let mut rec_region = rec_plane.region(area);
 
       assert_eq!(
         block.1,
-        get_sad(&mut input_slice, &mut rec_slice, bsw, bsh, bit_depth)
+        get_sad(&mut input_region, &mut rec_region, bsw, bsh, bit_depth)
       );
     }
   }
