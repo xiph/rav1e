@@ -217,6 +217,49 @@ macro_rules! plane_region_common {
           phantom: PhantomData,
         }
       }
+
+      #[inline(always)]
+      pub fn to_frame_plane_offset(&self, tile_po: PlaneOffset) -> PlaneOffset {
+        PlaneOffset {
+          x: self.rect.x + tile_po.x,
+          y: self.rect.y + tile_po.y,
+        }
+      }
+
+      #[inline(always)]
+      pub fn to_frame_block_offset(&self, tile_bo: BlockOffset) -> BlockOffset {
+        debug_assert!(self.rect.x >= 0);
+        debug_assert!(self.rect.y >= 0);
+        let PlaneConfig { xdec, ydec, .. } = self.plane_cfg;
+        debug_assert!(self.rect.x as usize % (MI_SIZE >> xdec) == 0);
+        debug_assert!(self.rect.y as usize % (MI_SIZE >> ydec) == 0);
+        let bx = self.rect.x as usize >> MI_SIZE_LOG2 - xdec;
+        let by = self.rect.y as usize >> MI_SIZE_LOG2 - ydec;
+        BlockOffset {
+          x: bx + tile_bo.x,
+          y: by + tile_bo.y,
+        }
+      }
+
+      #[inline(always)]
+      pub fn to_frame_super_block_offset(
+        &self,
+        tile_sbo: SuperBlockOffset,
+        sb_size_log2: usize
+      ) -> SuperBlockOffset {
+        debug_assert!(sb_size_log2 == 6 || sb_size_log2 == 7);
+        debug_assert!(self.rect.x >= 0);
+        debug_assert!(self.rect.y >= 0);
+        let PlaneConfig { xdec, ydec, .. } = self.plane_cfg;
+        debug_assert!(self.rect.x as usize % (1 << sb_size_log2 - xdec) == 0);
+        debug_assert!(self.rect.y as usize % (1 << sb_size_log2 - ydec) == 0);
+        let sbx = self.rect.x as usize >> sb_size_log2 - xdec;
+        let sby = self.rect.y as usize >> sb_size_log2 - ydec;
+        SuperBlockOffset {
+          x: sbx + tile_sbo.x,
+          y: sby + tile_sbo.y,
+        }
+      }
     }
 
     unsafe impl<T: Pixel> Send for $name<'_, T> {}
