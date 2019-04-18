@@ -617,18 +617,37 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       self.write_bit(fi.disable_frame_end_update_cdf)?;
     }
 
-    // tile
+    // tile <https://aomediacodec.github.io/av1-spec/#tile-info-syntax>
     self.write_bit(true)?; // uniform_tile_spacing_flag
-    if fi.width > 64 {
-      // TODO: if tile_cols > 1, write more increment_tile_cols_log2 bits
-      self.write_bit(false)?; // tile cols
+
+    let ti = &fi.tiling;
+
+    let cols_ones = ti.tile_cols_log2 - ti.min_tile_cols_log2;
+    for _ in 0..cols_ones {
+      self.write_bit(true);
     }
-    if fi.height > 64 {
-      // TODO: if tile_rows > 1, write increment_tile_rows_log2 bits
-      self.write_bit(false)?; // tile rows
+    if ti.tile_cols_log2 < ti.max_tile_cols_log2 {
+      self.write_bit(false);
     }
-    // TODO: if tile_cols * tile_rows > 1 {
-    // write context_update_tile_id and tile_size_bytes_minus_1 }
+
+    let rows_ones = ti.tile_rows_log2 - ti.min_tile_cols_log2;
+    for _ in 0..rows_ones {
+      self.write_bit(true);
+    }
+    if ti.tile_rows_log2 < ti.max_tile_rows_log2 {
+      self.write_bit(false);
+    }
+
+    let tiles_log2 = ti.tile_cols_log2 + ti.tile_rows_log2;
+    if tiles_log2 > 0 {
+      // context_update_tile_id
+      // for now, always use the first tile CDF
+      self.write(tiles_log2 as u32, 0)?;
+
+      // tile_size_bytes_minus_1
+      // force TileSizeBytes == 4, to be optimized using actual tile sizes
+      self.write(2, 3);
+    }
 
     // quantization
     assert!(fi.base_q_idx > 0);
