@@ -1632,7 +1632,7 @@ fn encode_partition_bottomup<T: Pixel>(
     part_modes: Vec::new()
   };
 
-  if tile_bo.x >= cw.bc.blocks.cols || tile_bo.y >= cw.bc.blocks.rows {
+  if tile_bo.x >= cw.bc.blocks.cols() || tile_bo.y >= cw.bc.blocks.rows() {
     return rdo_output
   }
 
@@ -1837,7 +1837,7 @@ fn encode_partition_topdown<T: Pixel>(
   pmvs: &mut [[Option<MotionVector>; REF_FRAMES]; 5]
 ) {
 
-  if tile_bo.x >= cw.bc.blocks.cols || tile_bo.y >= cw.bc.blocks.rows {
+  if tile_bo.x >= cw.bc.blocks.cols() || tile_bo.y >= cw.bc.blocks.rows() {
     return;
   }
   let bsw = bsize.width_mi();
@@ -2086,8 +2086,9 @@ fn encode_tile_group<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) 
 
   let mut blocks = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
   let mut ts = fs.as_tile_state_mut();
+  let mut tb = blocks.as_tile_blocks_mut();
 
-  let data = encode_tile(fi, &mut ts, &mut fc, &mut blocks);
+  let data = encode_tile(fi, &mut ts, &mut fc, &mut tb);
 
   /* TODO: Don't apply if lossless */
   deblock_filter_optimize(fi, fs, &blocks);
@@ -2126,11 +2127,11 @@ fn encode_tile_group<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) 
   data
 }
 
-fn encode_tile<T: Pixel>(
+fn encode_tile<'a, T: Pixel>(
   fi: &FrameInvariants<T>,
   ts: &mut TileStateMut<'_, T>,
-  fc: &mut CDFContext,
-  blocks: &mut FrameBlocks,
+  fc: &'a mut CDFContext,
+  blocks: &'a mut TileBlocksMut<'a>,
 ) -> Vec<u8> {
   let mut w = WriterEncoder::new();
 
