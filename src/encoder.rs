@@ -2097,13 +2097,16 @@ fn encode_tile_group<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) 
   let initial_cdf = get_initial_cdfcontext(fi);
   let mut cdfs = vec![initial_cdf; ti.tile_count()];
 
-  let raw_tiles = ti
+  let (raw_tiles, rdo_trackers): (Vec<_>, Vec<_>) = ti
     .tile_iter_mut(fs, &mut blocks)
     .zip(cdfs.iter_mut())
     .collect::<Vec<_>>()
     .par_iter_mut()
-    .map(|(ref mut ctx, cdf)| encode_tile(fi, &mut ctx.ts, cdf, &mut ctx.tb))
-    .collect::<Vec<_>>();
+    .map(|(ref mut ctx, cdf)| {
+      let raw = encode_tile(fi, &mut ctx.ts, cdf, &mut ctx.tb);
+      (raw, ctx.ts.rdo.clone())
+    })
+    .unzip();
 
   /* TODO: Don't apply if lossless */
   deblock_filter_optimize(fi, fs, &blocks);
@@ -2126,6 +2129,9 @@ fn encode_tile_group<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) 
 
   if fi.config.train_rdo {
     eprintln!("train rdo");
+    for rdo_tracker in &rdo_trackers {
+      fs.t.merge_in(&rdo_tracker);
+    }
     if let Ok(mut file) = File::open("rdo.dat") {
       let mut data = vec![];
       file.read_to_end(&mut data).unwrap();
