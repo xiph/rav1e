@@ -1166,12 +1166,12 @@ impl PredictionMode {
   }
 
   pub fn predict_inter<T: Pixel>(
-    self, fi: &FrameInvariants<T>, p: usize, po: PlaneOffset,
+    self, fi: &FrameInvariants<T>, tile_rect: TileRect, p: usize, po: PlaneOffset,
     dst: &mut PlaneRegionMut<'_, T>, width: usize, height: usize,
     ref_frames: [RefType; 2], mvs: [MotionVector; 2]
   ) {
     assert!(!self.is_intra());
-    let frame_po = dst.to_frame_plane_offset(po);
+    let frame_po = tile_rect.to_frame_plane_offset(po);
 
     let mode = FilterMode::REGULAR;
     let is_compound =
