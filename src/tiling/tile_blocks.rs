@@ -23,7 +23,8 @@ pub struct TileBlocks<'a> {
   y: usize,
   cols: usize,
   rows: usize,
-  stride: usize, // number of cols in the underlying FrameBlocks
+  frame_cols: usize,
+  frame_rows: usize,
   phantom: PhantomData<&'a Block>,
 }
 
@@ -36,7 +37,8 @@ pub struct TileBlocksMut<'a> {
   y: usize,
   cols: usize,
   rows: usize,
-  stride: usize, // number of cols in the underlying FrameBlocks
+  pub frame_cols: usize,
+  pub frame_rows: usize,
   phantom: PhantomData<&'a mut Block>,
 }
 
@@ -61,7 +63,8 @@ macro_rules! tile_blocks_common {
           y,
           cols,
           rows,
-          stride: frame_blocks.cols,
+          frame_cols: frame_blocks.cols,
+          frame_rows: frame_blocks.rows,
           phantom: PhantomData,
         }
       }
@@ -116,7 +119,7 @@ macro_rules! tile_blocks_common {
       fn index(&self, index: usize) -> &Self::Output {
         assert!(index < self.rows);
         unsafe {
-          let ptr = self.data.add(index * self.stride);
+          let ptr = self.data.add(index * self.frame_cols);
           slice::from_raw_parts(ptr, self.cols)
         }
       }
@@ -145,7 +148,8 @@ impl TileBlocksMut<'_> {
       y: self.y,
       cols: self.cols,
       rows: self.rows,
-      stride: self.stride,
+      frame_cols: self.frame_cols,
+      frame_rows: self.frame_rows,
       phantom: PhantomData,
     }
   }
@@ -240,7 +244,7 @@ impl IndexMut<usize> for TileBlocksMut<'_> {
   fn index_mut(&mut self, index: usize) -> &mut Self::Output {
     assert!(index < self.rows);
     unsafe {
-      let ptr = self.data.add(index * self.stride);
+      let ptr = self.data.add(index * self.frame_cols);
       slice::from_raw_parts_mut(ptr, self.cols)
     }
   }
