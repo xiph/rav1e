@@ -1298,12 +1298,14 @@ pub fn rdo_loop_decision<T: Pixel>(tile_sbo: SuperBlockOffset, fi: &FrameInvaria
         x: po.x,
         y: po.y,
       });
-      let PlaneConfig { width, height, .. } = lrf_input.planes[p].cfg;
+      let width = lrf_input.planes[p].cfg.width.min(rec_region.rect().width);
+      let height = lrf_input.planes[p].cfg.height.min(rec_region.rect().height);
       for (rec, inp) in rec_region.rows_iter().zip(
         lrf_input.planes[p].as_region_mut().rows_iter_mut()
       ).take(height) {
         inp[..width].copy_from_slice(&rec[..width]);
       }
+      lrf_input.planes[p].pad(width, height);
     }
   }
 
