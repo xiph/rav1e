@@ -20,7 +20,7 @@ use crate::FrameState;
 use crate::FrameInvariants;
 use crate::Sequence;
 
-use bitstream_io::{BitWriter, BigEndian};
+use bitstream_io::{BitWriter, BigEndian, LittleEndian};
 
 use std;
 use std::io;
@@ -125,6 +125,20 @@ impl<W: io::Write> ULEB128Writer for BitWriter<W, BigEndian> {
       self.write(8, coded_payload_length[i])?;
     }
     Ok(())
+  }
+}
+
+pub trait LEWriter {
+  fn write_le(&mut self, bytes: u32, payload: u64) -> io::Result<()>;
+}
+
+// to write little endian values in a globally big-endian BitWriter
+impl<W: io::Write> LEWriter for BitWriter<W, BigEndian> {
+  fn write_le(&mut self, bytes: u32, value: u64) -> io::Result<()> {
+      let mut data = Vec::new();
+      let mut bwle = BitWriter::endian(&mut data, LittleEndian);
+      bwle.write(bytes * 8, value)?;
+      self.write_bytes(&data)
   }
 }
 
