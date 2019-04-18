@@ -14,6 +14,7 @@ use std::marker::PhantomData;
 use std::mem;
 use std::ops::{Index, IndexMut, Range};
 
+use crate::tiling::*;
 use crate::util::*;
 
 /// Plane-specific configuration.
@@ -262,6 +263,28 @@ impl<T: Pixel> Plane<T> {
 
   pub fn as_mut_slice(&mut self) -> PlaneMutSlice<'_, T> {
     self.mut_slice(PlaneOffset { x: 0, y: 0 })
+  }
+
+  #[inline(always)]
+  pub fn region(&self, area: Area) -> PlaneRegion<'_, T> {
+    let rect = area.to_rect(
+      self.cfg.xdec,
+      self.cfg.ydec,
+      self.cfg.stride - self.cfg.xorigin as usize,
+      self.cfg.alloc_height - self.cfg.yorigin as usize,
+    );
+    PlaneRegion::new(self, rect)
+  }
+
+  #[inline(always)]
+  pub fn region_mut(&mut self, area: Area) -> PlaneRegionMut<'_, T> {
+    let rect = area.to_rect(
+      self.cfg.xdec,
+      self.cfg.ydec,
+      self.cfg.stride - self.cfg.xorigin as usize,
+      self.cfg.alloc_height - self.cfg.yorigin as usize,
+    );
+    PlaneRegionMut::new(self, rect)
   }
 
   #[inline]
