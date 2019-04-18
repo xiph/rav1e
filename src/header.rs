@@ -645,8 +645,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       self.write(tiles_log2 as u32, fs.context_update_tile_id as u32)?;
 
       // tile_size_bytes_minus_1
-      // force TileSizeBytes == 4, to be optimized using actual tile sizes
-      self.write(2, 3);
+      self.write(2, fs.max_tile_size_bytes - 1);
     }
 
     // quantization
