@@ -3217,15 +3217,9 @@ impl<'a> ContextWriter<'a> {
   ) {
     if !fi.allow_intrabc { // TODO: also disallow if lossless
       for pli in 0..PLANES {
-        let code;
         let rp = &mut rs.planes[pli];
-        {
-          let ru = &mut rp.restoration_unit_as_mut(sbo);
-          code = !ru.coded;
-          ru.coded = true;
-        }
-        if code {
-          match rp.restoration_unit_as_mut(sbo).filter {
+        if let Some(filter) = rp.restoration_unit(sbo).map(|ru| ru.filter) {
+          match filter {
             RestorationFilter::None => {
               match rp.lrf_type {
                 RESTORE_WIENER => {
