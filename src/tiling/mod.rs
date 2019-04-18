@@ -9,10 +9,12 @@
 
 mod plane_region;
 mod tile;
+mod tile_motion_vectors;
 mod tile_restoration_state;
 mod tile_state;
 
 pub use self::plane_region::*;
 pub use self::tile::*;
+pub use self::tile_motion_vectors::*;
 pub use self::tile_restoration_state::*;
 pub use self::tile_state::*;
