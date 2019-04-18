@@ -11,6 +11,7 @@ use super::*;
 
 use crate::context::*;
 use crate::encoder::*;
+use crate::plane::*;
 use crate::util::*;
 
 /// Rectangle of a tile, in pixels
@@ -32,6 +33,50 @@ impl TileRect {
       y: self.y >> ydec,
       width: self.width >> xdec,
       height: self.height >> ydec,
+    }
+  }
+
+  #[inline(always)]
+  pub fn to_frame_plane_offset(&self, tile_po: PlaneOffset) -> PlaneOffset {
+    PlaneOffset {
+      x: self.x as isize + tile_po.x,
+      y: self.y as isize + tile_po.y,
+    }
+  }
+
+  #[inline(always)]
+  pub fn to_frame_block_offset(
+    &self,
+    tile_bo: BlockOffset,
+    xdec: usize,
+    ydec: usize,
+  ) -> BlockOffset {
+    debug_assert!(self.x as usize % (MI_SIZE >> xdec) == 0);
+    debug_assert!(self.y as usize % (MI_SIZE >> ydec) == 0);
+    let bx = self.x >> (MI_SIZE_LOG2 - xdec);
+    let by = self.y >> (MI_SIZE_LOG2 - ydec);
+    BlockOffset {
+      x: bx + tile_bo.x,
+      y: by + tile_bo.y,
+    }
+  }
+
+  #[inline(always)]
+  pub fn to_frame_super_block_offset(
+    &self,
+    tile_sbo: SuperBlockOffset,
+    sb_size_log2: usize,
+    xdec: usize,
+    ydec: usize,
+  ) -> SuperBlockOffset {
+    debug_assert!(sb_size_log2 == 6 || sb_size_log2 == 7);
+    debug_assert!(self.x as usize % (1 << (sb_size_log2 - xdec)) == 0);
+    debug_assert!(self.y as usize % (1 << (sb_size_log2 - ydec)) == 0);
+    let sbx = self.x as usize >> (sb_size_log2 - xdec);
+    let sby = self.y as usize >> (sb_size_log2 - ydec);
+    SuperBlockOffset {
+      x: sbx + tile_sbo.x,
+      y: sby + tile_sbo.y,
     }
   }
 }
