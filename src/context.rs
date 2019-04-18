@@ -1472,16 +1472,16 @@ pub struct BlockContext<'a> {
   left_tx_context: [u8; MAX_MIB_SIZE],
   above_coeff_context: [Vec<u8>; PLANES],
   left_coeff_context: [[u8; MAX_MIB_SIZE]; PLANES],
-  pub blocks: &'a mut FrameBlocks,
+  pub blocks: &'a mut TileBlocksMut<'a>,
 }
 
 impl<'a> BlockContext<'a> {
-  pub fn new(blocks: &'a mut FrameBlocks) -> Self {
+  pub fn new(blocks: &'a mut TileBlocksMut<'a>) -> Self {
     // Align power of two
-    let aligned_cols = (blocks.cols + ((1 << MAX_MIB_SIZE_LOG2) - 1))
+    let aligned_cols = (blocks.cols() + ((1 << MAX_MIB_SIZE_LOG2) - 1))
       & !((1 << MAX_MIB_SIZE_LOG2) - 1);
     let above_coeff_context_size =
-      blocks.cols << (MI_SIZE_LOG2 - TxSize::width_log2(TxSize::TX_4X4));
+      blocks.cols() << (MI_SIZE_LOG2 - TxSize::width_log2(TxSize::TX_4X4));
 
     BlockContext {
       cdef_coded: false,
@@ -2030,8 +2030,8 @@ impl<'a> ContextWriter<'a> {
     debug_assert!(bsize.is_sqr());
     assert!(bsize >= BlockSize::BLOCK_8X8 );
     let hbs = bsize.width_mi() / 2;
-    let has_cols = (bo.x + hbs) < self.bc.blocks.cols;
-    let has_rows = (bo.y + hbs) < self.bc.blocks.rows;
+    let has_cols = (bo.x + hbs) < self.bc.blocks.cols();
+    let has_rows = (bo.y + hbs) < self.bc.blocks.rows();
     let ctx = self.bc.partition_plane_context(bo, bsize);
     assert!(ctx < PARTITION_CONTEXTS);
     let partition_cdf = if bsize <= BlockSize::BLOCK_8X8 {
@@ -2373,7 +2373,7 @@ impl<'a> ContextWriter<'a> {
     let bc = &self.bc;
     let target_n4_w = bsize.width_mi();
 
-    let end_mi = cmp::min(cmp::min(target_n4_w, bc.blocks.cols - bo.x),
+    let end_mi = cmp::min(cmp::min(target_n4_w, bc.blocks.cols() - bo.x),
                           BLOCK_64X64.width_mi());
     let n4_w_8 = BLOCK_8X8.width_mi();
     let n4_w_16 = BLOCK_16X16.width_mi();
@@ -2428,7 +2428,7 @@ impl<'a> ContextWriter<'a> {
 
     let target_n4_h = bsize.height_mi();
 
-    let end_mi = cmp::min(cmp::min(target_n4_h, bc.blocks.rows - bo.y),
+    let end_mi = cmp::min(cmp::min(target_n4_h, bc.blocks.rows() - bo.y),
                           BLOCK_64X64.height_mi());
     let n4_h_8 = BLOCK_8X8.height_mi();
     let n4_h_16 = BLOCK_16X16.height_mi();
@@ -2477,7 +2477,7 @@ impl<'a> ContextWriter<'a> {
   fn scan_blk_mbmi(&mut self, bo: BlockOffset, ref_frames: [RefType; 2],
                    mv_stack: &mut Vec<CandidateMV>, newmv_count: &mut usize,
                    is_compound: bool) -> bool {
-    if bo.x >= self.bc.blocks.cols || bo.y >= self.bc.blocks.rows {
+    if bo.x >= self.bc.blocks.cols() || bo.y >= self.bc.blocks.rows() {
       return false;
     }
 
@@ -2521,7 +2521,7 @@ impl<'a> ContextWriter<'a> {
         max_row_offs = -2 * 2 + row_adj as isize;
       }
 
-      let rows = self.bc.blocks.rows;
+      let rows = self.bc.blocks.rows();
       max_row_offs = self.find_valid_row_offs(max_row_offs, bo.y, rows);
     }
 
@@ -2605,8 +2605,8 @@ impl<'a> ContextWriter<'a> {
     if mv_stack.len() < 2 {
       // 7.10.2.12 Extra search process
 
-      let w4 = bsize.width_mi().min(16).min(self.bc.blocks.cols - bo.x);
-      let h4 = bsize.height_mi().min(16).min(self.bc.blocks.rows - bo.y);
+      let w4 = bsize.width_mi().min(16).min(self.bc.blocks.cols() - bo.x);
+      let h4 = bsize.height_mi().min(16).min(self.bc.blocks.rows() - bo.y);
       let num4x4 = w4.min(h4);
 
       let passes = if up_avail { 0 } else { 1 } .. if left_avail { 2 } else { 1 };
@@ -2698,9 +2698,9 @@ impl<'a> ContextWriter<'a> {
       let border_w = 128 + blk_w as isize * 8;
       let border_h = 128 + blk_h as isize * 8;
       let mvx_min = -(bo.x as isize) * (8 * MI_SIZE) as isize - border_w;
-      let mvx_max = (self.bc.blocks.cols - bo.x - blk_w / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_w;
+      let mvx_max = (self.bc.blocks.cols() - bo.x - blk_w / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_w;
       let mvy_min = -(bo.y as isize) * (8 * MI_SIZE) as isize - border_h;
-      let mvy_max = (self.bc.blocks.rows - bo.y - blk_h / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_h;
+      let mvy_max = (self.bc.blocks.rows() - bo.y - blk_h / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_h;
       mv.this_mv.row = (mv.this_mv.row as isize).max(mvy_min).min(mvy_max) as i16;
       mv.this_mv.col = (mv.this_mv.col as isize).max(mvx_min).min(mvx_max) as i16;
       mv.comp_mv.row = (mv.comp_mv.row as isize).max(mvy_min).min(mvy_max) as i16;
