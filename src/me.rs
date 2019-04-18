@@ -323,7 +323,6 @@ fn get_mv_range(
 
 pub fn get_subset_predictors<T: Pixel>(
   bo: BlockOffset, cmv: MotionVector,
-  w_in_b: usize, h_in_b: usize,
   frame_mvs: &FrameMotionVectors, frame_ref_opt: Option<&ReferenceFrame<T>>,
   ref_frame_id: usize
 ) -> (Vec<MotionVector>) {
@@ -348,7 +347,7 @@ pub fn get_subset_predictors<T: Pixel>(
     median_preds.push(top);
     if !top.is_zero() { predictors.push(top); }
 
-    if bo.x < w_in_b - 1 {
+    if bo.x < frame_mvs.cols - 1 {
       let top_right = frame_mvs[bo.y - 1][bo.x + 1];
       median_preds.push(top_right);
       if !top_right.is_zero() { predictors.push(top_right); }
@@ -378,11 +377,11 @@ pub fn get_subset_predictors<T: Pixel>(
       let top = prev_frame_mvs[bo.y - 1][bo.x];
       if !top.is_zero() { predictors.push(top); }
     }
-    if bo.x < w_in_b - 1 {
+    if bo.x < frame_mvs.cols - 1 {
       let right = prev_frame_mvs[bo.y][bo.x + 1];
       if !right.is_zero() { predictors.push(right); }
     }
-    if bo.y < h_in_b - 1 {
+    if bo.y < frame_mvs.rows - 1 {
       let bottom = prev_frame_mvs[bo.y + 1][bo.x];
       if !bottom.is_zero() { predictors.push(bottom); }
     }
@@ -506,7 +505,7 @@ impl MotionEstimation for DiamondSearch {
     let frame_mvs = &fs.frame_mvs[ref_frame.to_index()];
     let frame_ref = fi.rec_buffer.frames[fi.ref_frames[0] as usize].as_ref().map(Arc::as_ref);
     let predictors =
-      get_subset_predictors(bo, cmv, fi.w_in_b, fi.h_in_b, frame_mvs, frame_ref, ref_frame.to_index());
+      get_subset_predictors(bo, cmv, frame_mvs, frame_ref, ref_frame.to_index());
 
     diamond_me_search(
       fi,
@@ -579,7 +578,6 @@ impl MotionEstimation for DiamondSearch {
         let mut predictors = get_subset_predictors::<T>(
           bo_adj,
           MotionVector{row: pmv.row, col: pmv.col},
-          fi.w_in_b, fi.h_in_b,
           &frame_mvs, frame_ref_opt, 0
         );
 
