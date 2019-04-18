@@ -1159,17 +1159,17 @@ pub fn motion_compensate<T: Pixel>(
 }
 
 pub fn save_block_motion<T: Pixel>(
-   fs: &mut FrameState<T>,
+   ts: &mut TileStateMut<'_, T>,
    w_in_b: usize, h_in_b: usize,
    bsize: BlockSize, bo: BlockOffset,
    ref_frame: usize, mv: MotionVector,
 ) {
-  let frame_mvs = &mut fs.frame_mvs[ref_frame];
+  let tile_mvs = &mut ts.mvs[ref_frame];
   let bo_x_end = (bo.x + bsize.width_mi()).min(w_in_b);
   let bo_y_end = (bo.y + bsize.height_mi()).min(h_in_b);
   for mi_y in bo.y..bo_y_end {
     for mi_x in bo.x..bo_x_end {
-      frame_mvs[mi_y][mi_x] = mv;
+      tile_mvs[mi_y][mi_x] = mv;
     }
   }
 }
@@ -1660,7 +1660,7 @@ fn encode_partition_bottomup<T: Pixel>(
     if !mode_decision.pred_mode_luma.is_intra() {
       // Fill the saved motion structure
       save_block_motion(
-        fs, fi.w_in_b, fi.h_in_b, mode_decision.bsize, mode_decision.bo,
+        &mut fs.as_tile_state_mut(), fi.w_in_b, fi.h_in_b, mode_decision.bsize, mode_decision.bo,
         mode_decision.ref_frames[0].to_index(), mode_decision.mvs[0]
       );
     }
@@ -1785,7 +1785,7 @@ fn encode_partition_bottomup<T: Pixel>(
 
           if !mode.pred_mode_luma.is_intra() {
             save_block_motion(
-              fs, fi.w_in_b, fi.h_in_b, mode.bsize, mode.bo,
+              &mut fs.as_tile_state_mut(), fi.w_in_b, fi.h_in_b, mode.bsize, mode.bo,
               mode.ref_frames[0].to_index(), mode.mvs[0]
             );
           }
@@ -1962,7 +1962,7 @@ fn encode_partition_topdown<T: Pixel>(
         }
 
         save_block_motion(
-          fs, fi.w_in_b, fi.h_in_b,
+          &mut fs.as_tile_state_mut(), fi.w_in_b, fi.h_in_b,
           part_decision.bsize, part_decision.bo,
           part_decision.ref_frames[0].to_index(), part_decision.mvs[0]
         );
@@ -2027,19 +2027,19 @@ fn encode_partition_topdown<T: Pixel>(
 }
 
 #[inline(always)]
-fn build_coarse_pmvs<T: Pixel>(fi: &FrameInvariants<T>, fs: &FrameState<T>) -> Vec<[Option<MotionVector>; REF_FRAMES]> {
+fn build_coarse_pmvs<T: Pixel>(fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>) -> Vec<[Option<MotionVector>; REF_FRAMES]> {
   assert!(!fi.sequence.use_128x128_superblock);
-  if fi.w_in_b >= 16 && fi.h_in_b >= 16 {
-    let mut frame_pmvs = Vec::with_capacity(fi.sb_width * fi.sb_height);
-    for sby in 0..fi.sb_height {
-      for sbx in 0..fi.sb_width {
+  if ts.mi_width >= 16 && ts.mi_height >= 16 {
+    let mut frame_pmvs = Vec::with_capacity(ts.sb_width * ts.sb_height);
+    for sby in 0..ts.sb_height {
+      for sbx in 0..ts.sb_width {
         let sbo = SuperBlockOffset { x: sbx, y: sby };
         let bo = sbo.block_offset(0, 0);
         let mut pmvs: [Option<MotionVector>; REF_FRAMES] = [None; REF_FRAMES];
         for i in 0..INTER_REFS_PER_FRAME {
           let r = fi.ref_frames[i] as usize;
           if pmvs[r].is_none() {
-            pmvs[r] = estimate_motion_ss4(fi, fs, BlockSize::BLOCK_64X64, r, bo);
+            pmvs[r] = estimate_motion_ss4(fi, ts, BlockSize::BLOCK_64X64, r, bo);
           }
         }
         frame_pmvs.push(pmvs);
@@ -2048,7 +2048,7 @@ fn build_coarse_pmvs<T: Pixel>(fi: &FrameInvariants<T>, fs: &FrameState<T>) -> V
     frame_pmvs
   } else {
     // the block use for motion estimation would be smaller than the whole image
-    vec![[None; REF_FRAMES]; fi.sb_width * fi.sb_height]
+    vec![[None; REF_FRAMES]; ts.sb_width * ts.sb_height]
   }
 }
 
@@ -2127,7 +2127,7 @@ fn encode_tile<T: Pixel>(
   // For now, restoration unit size is locked to superblock size.
   let mut cw = ContextWriter::new(fc, bc);
 
-  let frame_pmvs = build_coarse_pmvs(fi, fs);
+  let tile_pmvs = build_coarse_pmvs(fi, &fs.as_tile_state_mut());
   // main loop
   for sby in 0..fi.sb_height {
     cw.bc.reset_left_contexts();
@@ -2142,58 +2142,59 @@ fn encode_tile<T: Pixel>(
 
       // Do subsampled ME
       let mut pmvs: [[Option<MotionVector>; REF_FRAMES]; 5] = [[None; REF_FRAMES]; 5];
-      if fi.w_in_b >= 8 && fi.h_in_b >= 8 {
+      let mut ts = fs.as_tile_state_mut();
+      if ts.mi_width >= 8 && ts.mi_height >= 8 {
         for i in 0..INTER_REFS_PER_FRAME {
           let r = fi.ref_frames[i] as usize;
           if pmvs[0][r].is_none() {
-            pmvs[0][r] = frame_pmvs[sby * fi.sb_width + sbx][r];
+            pmvs[0][r] = tile_pmvs[sby * ts.sb_width + sbx][r];
             if let Some(pmv) = pmvs[0][r] {
               let pmv_w = if sbx > 0 {
-                frame_pmvs[sby * fi.sb_width + sbx - 1][r]
+                tile_pmvs[sby * ts.sb_width + sbx - 1][r]
               } else {
                 None
               };
-              let pmv_e = if sbx < fi.sb_width - 1 {
-                frame_pmvs[sby * fi.sb_width + sbx + 1][r]
+              let pmv_e = if sbx < ts.sb_width - 1 {
+                tile_pmvs[sby * ts.sb_width + sbx + 1][r]
               } else {
                 None
               };
               let pmv_n = if sby > 0 {
-                frame_pmvs[sby * fi.sb_width + sbx - fi.sb_width][r]
+                tile_pmvs[sby * ts.sb_width + sbx - ts.sb_width][r]
               } else {
                 None
               };
-              let pmv_s = if sby < fi.sb_height - 1 {
-                frame_pmvs[sby * fi.sb_width + sbx + fi.sb_width][r]
+              let pmv_s = if sby < ts.sb_height - 1 {
+                tile_pmvs[sby * ts.sb_width + sbx + ts.sb_width][r]
               } else {
                 None
               };
 
               assert!(!fi.sequence.use_128x128_superblock);
               pmvs[1][r] = estimate_motion_ss2(
-                fi, fs, BlockSize::BLOCK_32X32, r, sbo.block_offset(0, 0), &[Some(pmv), pmv_w, pmv_n], i
+                fi, &ts, BlockSize::BLOCK_32X32, r, sbo.block_offset(0, 0), &[Some(pmv), pmv_w, pmv_n], i
               );
               pmvs[2][r] = estimate_motion_ss2(
-                fi, fs, BlockSize::BLOCK_32X32, r, sbo.block_offset(8, 0), &[Some(pmv), pmv_e, pmv_n], i
+                fi, &ts, BlockSize::BLOCK_32X32, r, sbo.block_offset(8, 0), &[Some(pmv), pmv_e, pmv_n], i
               );
               pmvs[3][r] = estimate_motion_ss2(
-                fi, fs, BlockSize::BLOCK_32X32, r, sbo.block_offset(0, 8), &[Some(pmv), pmv_w, pmv_s], i
+                fi, &ts, BlockSize::BLOCK_32X32, r, sbo.block_offset(0, 8), &[Some(pmv), pmv_w, pmv_s], i
               );
               pmvs[4][r] = estimate_motion_ss2(
-                fi, fs, BlockSize::BLOCK_32X32, r, sbo.block_offset(8, 8), &[Some(pmv), pmv_e, pmv_s], i
+                fi, &ts, BlockSize::BLOCK_32X32, r, sbo.block_offset(8, 8), &[Some(pmv), pmv_e, pmv_s], i
               );
 
               if let Some(mv) = pmvs[1][r] {
-                save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(0, 0), i, mv);
+                save_block_motion(&mut ts, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(0, 0), i, mv);
               }
               if let Some(mv) = pmvs[2][r] {
-                save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(8, 0), i, mv);
+                save_block_motion(&mut ts, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(8, 0), i, mv);
               }
               if let Some(mv) = pmvs[3][r] {
-                save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(0, 8), i, mv);
+                save_block_motion(&mut ts, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(0, 8), i, mv);
               }
               if let Some(mv) = pmvs[4][r] {
-                save_block_motion(fs, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(8, 8), i, mv);
+                save_block_motion(&mut ts, fi.w_in_b, fi.h_in_b, BlockSize::BLOCK_32X32, sbo.block_offset(8, 8), i, mv);
               }
             }
           }

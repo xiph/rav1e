@@ -522,7 +522,8 @@ pub fn rdo_mode_decision<T: Pixel>(
       let ref_slot = ref_slot_set[i] as usize;
       let cmv = pmvs[ref_slot].unwrap_or_else(Default::default);
 
-      let b_me = motion_estimation(fi, fs, bsize, bo, ref_frames[0], cmv, pmv);
+      let mut ts = fs.as_tile_state_mut();
+      let b_me = motion_estimation(fi, &mut ts, bsize, bo, ref_frames[0], cmv, pmv);
 
       if !fi.config.speed_settings.encode_bottomup &&
         (bsize == BlockSize::BLOCK_32X32 || bsize == BlockSize::BLOCK_64X64) {
