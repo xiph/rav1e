@@ -2128,12 +2128,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   fn find_valid_row_offs(&mut self, row_offset: isize, mi_row: usize, mi_rows: usize) -> isize {
-    if /* !tile->tg_horz_boundary */ true {
-      cmp::min(cmp::max(row_offset, -(mi_row as isize)), (mi_rows - mi_row - 1) as isize)
-    } else {
-      0
-      /* TODO: for tiling */
-    }
+    cmp::min(cmp::max(row_offset, -(mi_row as isize)), (mi_rows - mi_row - 1) as isize)
   }
 
   fn find_valid_col_offs(&mut self, col_offset: isize, mi_col: usize) -> isize {
