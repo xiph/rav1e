@@ -33,6 +33,7 @@ use crate::header::*;
 use arg_enum_proc_macro::ArgEnum;
 use bitstream_io::{BitWriter, BigEndian};
 use bincode::{serialize, deserialize};
+use rayon::iter::*;
 use std;
 use std::{fmt, io, mem};
 use std::io::Write;
@@ -2100,7 +2101,7 @@ fn encode_tile_group<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) 
     .tile_iter_mut(fs, &mut blocks)
     .zip(cdfs.iter_mut())
     .collect::<Vec<_>>()
-    .iter_mut()
+    .par_iter_mut()
     .map(|(ref mut ctx, cdf)| encode_tile(fi, &mut ctx.ts, cdf, &mut ctx.tb))
     .collect::<Vec<_>>();
 
