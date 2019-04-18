@@ -11,7 +11,6 @@
 
 use crate::encoder::Frame;
 use crate::encoder::FrameInvariants;
-use crate::context::SuperBlockOffset;
 use crate::context::PLANES;
 use crate::context::MAX_SB_SIZE;
 use crate::plane::Plane;
@@ -839,8 +838,6 @@ pub struct RestorationPlaneConfig {
 #[derive(Clone, Debug)]
 pub struct RestorationPlane {
   pub cfg: RestorationPlaneConfig,
-  pub wiener_ref: [[i8; 3]; 2],
-  pub sgrproj_ref: [i8; 2],
   pub units: FrameRestorationUnits,
 }
 
@@ -863,28 +860,7 @@ impl RestorationPlane {
         cols,
         rows,
       },
-      wiener_ref: [WIENER_TAPS_MID; 2],
-      sgrproj_ref: SGRPROJ_XQD_MID,
       units: FrameRestorationUnits::new(cols, rows),
-    }
-  }
-
-  fn restoration_unit_index(&self, sbo: SuperBlockOffset) -> Option<(usize, usize)> {
-    // there is 1 restoration unit for (1 << sb_shift) super-blocks
-    let mask = (1 << self.cfg.sb_shift) - 1;
-    let first_sbo = sbo.x & mask == 0 && sbo.y & mask == 0;
-    if first_sbo {
-      let x = sbo.x >> self.cfg.sb_shift;
-      let y = sbo.y >> self.cfg.sb_shift;
-      if x < self.cfg.cols && y < self.cfg.rows {
-        Some((x, y))
-      } else {
-        // this super-block will share the "stretched" restoration unit from its neighbours
-        None
-      }
-    } else {
-      // the restoration unit is ignored for others super-blocks
-      None
     }
   }
 
@@ -896,19 +872,6 @@ impl RestorationPlane {
       cmp::min(rux, self.cfg.cols - 1),
       cmp::min(stripenum * self.cfg.stripe_height / self.cfg.unit_size, self.cfg.rows - 1),
     )
-  }
-
-  pub fn restoration_unit(&self, sbo: SuperBlockOffset) -> Option<&RestorationUnit> {
-    self.restoration_unit_index(sbo).map(|(x, y)| &self.units[y][x])
-  }
-
-  pub fn restoration_unit_mut(&mut self, sbo: SuperBlockOffset) -> Option<&mut RestorationUnit> {
-    // cannot use map() due to lifetime constraints
-    if let Some((x, y)) = self.restoration_unit_index(sbo) {
-      Some(&mut self.units[y][x])
-    } else {
-      None
-    }
   }
 
   pub fn restoration_unit_by_stripe(&self, stripenum: usize, rux: usize) -> &RestorationUnit {
@@ -954,14 +917,6 @@ impl RestorationState {
                               stripe_uv_decimate, cols, rows)
       ],
     }
-  }
-
-  pub fn has_restoration_unit(&self, sbo: SuperBlockOffset) -> bool {
-    let is_some = self.planes[0].restoration_unit(sbo).is_some();
-    debug_assert_eq!(is_some, self.planes[1].restoration_unit(sbo).is_some());
-    debug_assert_eq!(is_some, self.planes[2].restoration_unit(sbo).is_some());
-
-    is_some
   }
 
   pub fn lrf_filter_frame<T: Pixel>(&mut self, out: &mut Frame<T>, pre_cdef: &Frame<T>,
