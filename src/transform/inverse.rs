@@ -16,7 +16,6 @@ pub use self::native::*;
 
 use super::*;
 use crate::partition::TxType;
-use crate::plane::PlaneMutSlice;
 
 static COSPI_INV: [i32; 64] = [
   4096, 4095, 4091, 4085, 4076, 4065, 4052, 4036, 4017, 3996, 3973, 3948,
@@ -1518,7 +1517,7 @@ mod nasm {
     fn match_tx_type(tx_type: TxType) -> InvTxfmFunc;
 
     fn inv_txfm2d_add<T>(
-      input: &[i32], output: &mut PlaneMutSlice<'_, T>, tx_type: TxType,
+      input: &[i32], output: &mut PlaneRegionMut<'_, T>, tx_type: TxType,
       bd: usize
     ) where
       T: Pixel,
@@ -1540,11 +1539,11 @@ mod nasm {
           }
         }
 
-        let stride = output.plane.cfg.stride as isize;
+        let stride = output.plane_cfg.stride as isize;
         unsafe {
           // perform the inverse transform
           Self::match_tx_type(tx_type)(
-            output.as_mut_ptr() as *mut _,
+            output.data_ptr_mut() as *mut _,
             stride,
             coeff16.array.as_ptr(),
             (coeff_w * coeff_h) as i32
@@ -1661,7 +1660,7 @@ mod native {
     const INTERMEDIATE_SHIFT: usize;
 
     fn inv_txfm2d_add<T: Pixel>(
-      input: &[i32], output: &mut PlaneMutSlice<'_, T>, tx_type: TxType,
+      input: &[i32], output: &mut PlaneRegionMut<'_, T>, tx_type: TxType,
       bd: usize
     ) where
       T: Pixel,
@@ -1756,7 +1755,7 @@ macro_rules! impl_iht_fns {
     $(
       paste::item! {
         pub fn [<iht $W x $H _add>]<T: Pixel>(
-          input: &[i32], output: &mut PlaneMutSlice<'_, T>, tx_type: TxType,
+          input: &[i32], output: &mut PlaneRegionMut<'_, T>, tx_type: TxType,
           bit_depth: usize
         ) where
           T: Pixel,

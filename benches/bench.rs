@@ -48,6 +48,7 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
   let mut fb = FrameBlocks::new(fi.sb_width * 16, fi.sb_height * 16);
   let bc = BlockContext::new(&mut fb);
   let mut fs = FrameState::new(&fi);
+  let mut ts = fs.as_tile_state_mut();
   // For now, restoration unit size is locked to superblock size.
   let mut cw = ContextWriter::new(&mut fc, bc);
 
@@ -61,7 +62,7 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
     for &mode in RAV1E_INTRA_MODES {
       let sbo = SuperBlockOffset { x: sbx, y: sby };
       for p in 1..3 {
-        fs.qc.update(fi.base_q_idx, tx_size, mode.is_intra(), 8, fi.dc_delta_q[p], fi.ac_delta_q[p]);
+        ts.qc.update(fi.base_q_idx, tx_size, mode.is_intra(), 8, fi.dc_delta_q[p], fi.ac_delta_q[p]);
         for by in 0..8 {
           for bx in 0..8 {
             // For ex, 8x8 tx should be applied to even numbered (bx,by)
@@ -72,10 +73,10 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
             };
             let bo = sbo.block_offset(bx, by);
             let tx_bo = BlockOffset { x: bo.x + bx, y: bo.y + by };
-            let po = tx_bo.plane_offset(&fs.input.planes[p].cfg);
+            let po = tx_bo.plane_offset(&ts.input.planes[p].cfg);
             encode_tx_block(
               &mut fi,
-              &mut fs,
+              &mut ts,
               &mut cw,
               &mut w,
               p,
@@ -145,8 +146,9 @@ fn cfl_rdo_bench(b: &mut Bencher, bsize: BlockSize) {
   let sequence = Sequence::new(&Default::default());
   let fi = FrameInvariants::<u16>::new(config, sequence);
   let mut fs = FrameState::new(&fi);
+  let mut ts = fs.as_tile_state_mut();
   let offset = BlockOffset { x: 1, y: 1 };
-  b.iter(|| rdo_cfl_alpha(&mut fs, offset, bsize, fi.sequence.bit_depth))
+  b.iter(|| rdo_cfl_alpha(&mut ts, offset, bsize, fi.sequence.bit_depth))
 }
 
 fn ec_bench(c: &mut Criterion) {

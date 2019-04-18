@@ -11,8 +11,8 @@ pub use self::forward::*;
 pub use self::inverse::*;
 
 use crate::partition::{TxSize, TxType, TX_TYPES};
-use crate::plane::PlaneMutSlice;
 use crate::predict::*;
+use crate::tiling::*;
 use crate::util::*;
 
 mod forward;
@@ -174,7 +174,7 @@ pub fn forward_transform(
 }
 
 pub fn inverse_transform_add<T: Pixel>(
-  input: &[i32], output: &mut PlaneMutSlice<'_, T>, tx_size: TxSize,
+  input: &[i32], output: &mut PlaneRegionMut<'_, T>, tx_size: TxSize,
   tx_type: TxType, bit_depth: usize
 ) {
   use self::TxSize::*;
@@ -223,7 +223,7 @@ mod test {
       *r = i16::cast_from(*s) - i16::cast_from(*d);
     }
     forward_transform(res, freq, tx_size.width(), tx_size, tx_type, 8);
-    inverse_transform_add(freq, &mut dst.as_mut_slice(), tx_size, tx_type, 8);
+    inverse_transform_add(freq, &mut dst.as_region_mut(), tx_size, tx_type, 8);
 
     for (s, d) in src.iter().zip(dst.data.iter()) {
       assert!(i16::abs(i16::cast_from(*s) - i16::cast_from(*d)) <= tolerance);

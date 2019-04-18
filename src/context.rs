@@ -3194,7 +3194,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   // rather than test writing and rolling back the cdf, we just count Q8 bits using the current cdf
-  pub fn count_lrf_switchable(&mut self, w: &dyn Writer, rs: &RestorationState,
+  pub fn count_lrf_switchable(&mut self, w: &dyn Writer, rs: &TileRestorationState,
                               filter: RestorationFilter, pli: usize) -> u32 {
     let nsym = &self.fc.lrf_switchable_cdf.len()-1;
     match filter {
@@ -3224,7 +3224,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   pub fn write_lrf<T: Pixel>(
-    &mut self, w: &mut dyn Writer, fi: &FrameInvariants<T>, rs: &mut RestorationState, sbo: SuperBlockOffset
+    &mut self, w: &mut dyn Writer, fi: &FrameInvariants<T>, rs: &mut TileRestorationStateMut, sbo: SuperBlockOffset
   ) {
     if !fi.allow_intrabc { // TODO: also disallow if lossless
       for pli in 0..PLANES {
@@ -3232,7 +3232,7 @@ impl<'a> ContextWriter<'a> {
         if let Some(filter) = rp.restoration_unit(sbo).map(|ru| ru.filter) {
           match filter {
             RestorationFilter::None => {
-              match rp.cfg.lrf_type {
+              match rp.rp_cfg.lrf_type {
                 RESTORE_WIENER => {
                   symbol_with_update!(self, w, 0, &mut self.fc.lrf_wiener_cdf);
                 }
@@ -3247,7 +3247,7 @@ impl<'a> ContextWriter<'a> {
               }
             }
             RestorationFilter::Sgrproj{set, xqd} => {
-              match rp.cfg.lrf_type {
+              match rp.rp_cfg.lrf_type {
                 RESTORE_SGRPROJ => {
                   symbol_with_update!(self, w, 1, &mut self.fc.lrf_sgrproj_cdf);
                 }
@@ -3278,7 +3278,7 @@ impl<'a> ContextWriter<'a> {
               }
             }
             RestorationFilter::Wiener{coeffs} => {
-              match rp.cfg.lrf_type {
+              match rp.rp_cfg.lrf_type {
                 RESTORE_WIENER => {
                   symbol_with_update!(self, w, 1, &mut self.fc.lrf_wiener_cdf);
                 }
