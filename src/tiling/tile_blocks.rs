@@ -154,6 +154,7 @@ impl TileBlocksMut<'_> {
     }
   }
 
+  #[inline(always)]
   pub fn for_each<F>(&mut self, bo: BlockOffset, bsize: BlockSize, f: F)
   where
     F: Fn(&mut Block) -> (),
@@ -167,6 +168,7 @@ impl TileBlocksMut<'_> {
     }
   }
 
+  #[inline(always)]
   pub fn set_mode(
     &mut self,
     bo: BlockOffset,
@@ -187,6 +189,7 @@ impl TileBlocksMut<'_> {
     });
   }
 
+  #[inline(always)]
   pub fn set_tx_size(
     &mut self,
     bo: BlockOffset,
@@ -196,10 +199,12 @@ impl TileBlocksMut<'_> {
     self.for_each(bo, bsize, |block| block.txsize = tx_size);
   }
 
+  #[inline(always)]
   pub fn set_skip(&mut self, bo: BlockOffset, bsize: BlockSize, skip: bool) {
     self.for_each(bo, bsize, |block| block.skip = skip);
   }
 
+  #[inline(always)]
   pub fn set_segmentation_idx(
     &mut self,
     bo: BlockOffset,
@@ -209,6 +214,7 @@ impl TileBlocksMut<'_> {
     self.for_each(bo, bsize, |block| block.segmentation_idx = idx);
   }
 
+  #[inline(always)]
   pub fn set_ref_frames(
     &mut self,
     bo: BlockOffset,
@@ -218,6 +224,7 @@ impl TileBlocksMut<'_> {
     self.for_each(bo, bsize, |block| block.ref_frames = r);
   }
 
+  #[inline(always)]
   pub fn set_motion_vectors(
     &mut self,
     bo: BlockOffset,
@@ -227,6 +234,7 @@ impl TileBlocksMut<'_> {
     self.for_each(bo, bsize, |block| block.mv = mvs);
   }
 
+  #[inline(always)]
   pub fn set_cdef(&mut self, sbo: SuperBlockOffset, cdef_index: u8) {
     let bo = sbo.block_offset(0, 0);
     // Checkme: Is 16 still the right block unit for 128x128 superblocks?
