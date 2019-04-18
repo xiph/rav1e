@@ -417,6 +417,7 @@ pub struct FrameState<T: Pixel> {
   pub input_qres: Plane<T>, // quarter-resolution version of input luma
   pub rec: Frame<T>,
   pub cdfs: CDFContext,
+  pub context_update_tile_id: usize, // tile id used for the CDFontext
   pub deblock: DeblockState,
   pub segmentation: SegmentationState,
   pub restoration: RestorationState,
@@ -445,6 +446,7 @@ impl<T: Pixel> FrameState<T> {
       input_qres: Plane::new(luma_width / 4, luma_height / 4, 2, 2, luma_padding_x / 4, luma_padding_y / 4),
       rec: Frame::new(luma_width, luma_height, fi.sequence.chroma_sampling),
       cdfs: CDFContext::new(0),
+      context_update_tile_id: 0,
       deblock: Default::default(),
       segmentation: Default::default(),
       restoration: rs,
@@ -2142,8 +2144,16 @@ fn encode_tile_group<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) 
     fs.t.print_code();
   }
 
-  // for now, always keep the CDF from the first tile
-  fs.cdfs = cdfs[0];
+  let (idx_max, _max_len) = raw_tiles
+    .iter()
+    .map(Vec::len)
+    .enumerate()
+    .max_by_key(|&(_, len)| len)
+    .unwrap();
+
+  // use the biggest tile (in bytes) for CDF update
+  fs.context_update_tile_id = idx_max;
+  fs.cdfs = cdfs[idx_max];
   fs.cdfs.reset_counts();
 
   build_raw_tile_group(ti, &raw_tiles)
