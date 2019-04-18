@@ -24,6 +24,8 @@ use crate::util::clamp;
 use crate::util::CastFromPrimitive;
 use crate::util::Pixel;
 
+use std::ops::{Index, IndexMut};
+
 pub const RESTORATION_TILESIZE_MAX_LOG2: usize = 8;
 
 pub const RESTORE_NONE: u8 = 0;
@@ -789,6 +791,38 @@ impl RestorationUnit {
 }
 
 #[derive(Clone, Debug)]
+pub struct FrameRestorationUnits {
+  units: Box<[RestorationUnit]>,
+  pub cols: usize,
+  pub rows: usize,
+}
+
+impl FrameRestorationUnits {
+  pub fn new(cols: usize, rows: usize) -> Self {
+    Self {
+      units: vec![RestorationUnit::default(); cols * rows].into_boxed_slice(),
+      cols,
+      rows,
+    }
+  }
+}
+
+impl Index<usize> for FrameRestorationUnits {
+  type Output = [RestorationUnit];
+  #[inline(always)]
+  fn index(&self, index: usize) -> &Self::Output {
+    &self.units[index * self.cols..(index + 1) * self.cols]
+  }
+}
+
+impl IndexMut<usize> for FrameRestorationUnits {
+  #[inline(always)]
+  fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+    &mut self.units[index * self.cols..(index + 1) * self.cols]
+  }
+}
+
+#[derive(Clone, Debug)]
 pub struct RestorationPlaneConfig {
   pub lrf_type: u8,
   pub unit_size: usize,
@@ -807,7 +841,7 @@ pub struct RestorationPlane {
   pub cfg: RestorationPlaneConfig,
   pub wiener_ref: [[i8; 3]; 2],
   pub sgrproj_ref: [i8; 2],
-  pub units: Box<[RestorationUnit]>,
+  pub units: FrameRestorationUnits,
 }
 
 #[derive(Clone, Default)]
@@ -831,7 +865,7 @@ impl RestorationPlane {
       },
       wiener_ref: [WIENER_TAPS_MID; 2],
       sgrproj_ref: SGRPROJ_XQD_MID,
-      units: vec![RestorationUnit::default(); cols * rows].into_boxed_slice(),
+      units: FrameRestorationUnits::new(cols, rows),
     }
   }
 
@@ -865,13 +899,13 @@ impl RestorationPlane {
   }
 
   pub fn restoration_unit(&self, sbo: SuperBlockOffset) -> Option<&RestorationUnit> {
-    self.restoration_unit_index(sbo).map(|(x, y)| &self.units[y * self.cfg.cols + x])
+    self.restoration_unit_index(sbo).map(|(x, y)| &self.units[y][x])
   }
 
   pub fn restoration_unit_mut(&mut self, sbo: SuperBlockOffset) -> Option<&mut RestorationUnit> {
     // cannot use map() due to lifetime constraints
     if let Some((x, y)) = self.restoration_unit_index(sbo) {
-      Some(&mut self.units[y * self.cfg.cols + x])
+      Some(&mut self.units[y][x])
     } else {
       None
     }
@@ -879,7 +913,7 @@ impl RestorationPlane {
 
   pub fn restoration_unit_by_stripe(&self, stripenum: usize, rux: usize) -> &RestorationUnit {
     let (x, y) = self.restoration_unit_index_by_stripe(stripenum, rux);
-    &self.units[y * self.cfg.cols + x]
+    &self.units[y][x]
   }
 }
 
