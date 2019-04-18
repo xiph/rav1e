@@ -1102,18 +1102,21 @@ pub fn motion_compensate<T: Pixel>(
 ) {
   debug_assert!(!luma_mode.is_intra());
 
-  let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
+  let PlaneConfig { xdec: u_xdec, ydec: u_ydec, .. } = ts.input.planes[1].cfg;
 
   // Inter mode prediction can take place once for a whole partition,
   // instead of each tx-block.
-  let num_planes = 1 + if !luma_only && has_chroma(tile_bo, bsize, xdec, ydec) { 2 } else { 0 };
+  let num_planes = 1 + if !luma_only && has_chroma(tile_bo, bsize, u_xdec, u_ydec) { 2 } else { 0 };
 
+  let luma_tile_rect = ts.tile_rect();
   for p in 0..num_planes {
     let plane_bsize = if p == 0 { bsize }
-    else { get_plane_block_size(bsize, xdec, ydec) };
+    else { get_plane_block_size(bsize, u_xdec, u_ydec) };
 
     let rec = &mut ts.rec.planes[p];
     let po = tile_bo.plane_offset(&rec.plane_cfg);
+    let &PlaneConfig { xdec, ydec, .. } = rec.plane_cfg;
+    let tile_rect = luma_tile_rect.decimated(xdec, ydec);
 
     let area = Area::BlockStartingAt { bo: tile_bo };
     if p > 0 && bsize < BlockSize::BLOCK_8X8 {
@@ -1126,10 +1129,10 @@ pub fn motion_compensate<T: Pixel>(
         some_use_intra |= cw.bc.blocks[tile_bo.with_offset(-1,-1)].mode.is_intra(); };
 
       if some_use_intra {
-        luma_mode.predict_inter(fi, p, po, &mut rec.subregion_mut(area), plane_bsize.width(),
+        luma_mode.predict_inter(fi, tile_rect, p, po, &mut rec.subregion_mut(area), plane_bsize.width(),
                                 plane_bsize.height(), ref_frames, mvs);
       } else {
-        assert!(xdec == 1 && ydec == 1);
+        assert!(u_xdec == 1 && u_ydec == 1);
         // TODO: these are absolutely only valid for 4:2:0
         if bsize == BlockSize::BLOCK_4X4 {
           let mv0 = cw.bc.blocks[tile_bo.with_offset(-1,-1)].mv;
@@ -1144,30 +1147,30 @@ pub fn motion_compensate<T: Pixel>(
           let area2 = Area::StartingAt { x: po2.x, y: po2.y };
           let po3 = PlaneOffset { x: po.x+2, y: po.y+2 };
           let area3 = Area::StartingAt { x: po3.x, y: po3.y };
-          luma_mode.predict_inter(fi, p, po, &mut rec.subregion_mut(area), 2, 2, rf0, mv0);
-          luma_mode.predict_inter(fi, p, po1, &mut rec.subregion_mut(area1), 2, 2, rf1, mv1);
-          luma_mode.predict_inter(fi, p, po2, &mut rec.subregion_mut(area2), 2, 2, rf2, mv2);
-          luma_mode.predict_inter(fi, p, po3, &mut rec.subregion_mut(area3), 2, 2, ref_frames, mvs);
+          luma_mode.predict_inter(fi, tile_rect, p, po, &mut rec.subregion_mut(area), 2, 2, rf0, mv0);
+          luma_mode.predict_inter(fi, tile_rect, p, po1, &mut rec.subregion_mut(area1), 2, 2, rf1, mv1);
+          luma_mode.predict_inter(fi, tile_rect, p, po2, &mut rec.subregion_mut(area2), 2, 2, rf2, mv2);
+          luma_mode.predict_inter(fi, tile_rect, p, po3, &mut rec.subregion_mut(area3), 2, 2, ref_frames, mvs);
         }
         if bsize == BlockSize::BLOCK_8X4 {
           let mv1 = cw.bc.blocks[tile_bo.with_offset(0,-1)].mv;
           let rf1 = cw.bc.blocks[tile_bo.with_offset(0,-1)].ref_frames;
-          luma_mode.predict_inter(fi, p, po, &mut rec.subregion_mut(area), 4, 2, rf1, mv1);
+          luma_mode.predict_inter(fi, tile_rect, p, po, &mut rec.subregion_mut(area), 4, 2, rf1, mv1);
           let po3 = PlaneOffset { x: po.x, y: po.y+2 };
           let area3 = Area::StartingAt { x: po3.x, y: po3.y };
-          luma_mode.predict_inter(fi, p, po3, &mut rec.subregion_mut(area3), 4, 2, ref_frames, mvs);
+          luma_mode.predict_inter(fi, tile_rect, p, po3, &mut rec.subregion_mut(area3), 4, 2, ref_frames, mvs);
         }
         if bsize == BlockSize::BLOCK_4X8 {
           let mv2 = cw.bc.blocks[tile_bo.with_offset(-1,0)].mv;
           let rf2 = cw.bc.blocks[tile_bo.with_offset(-1,0)].ref_frames;
-          luma_mode.predict_inter(fi, p, po, &mut rec.subregion_mut(area), 2, 4, rf2, mv2);
+          luma_mode.predict_inter(fi, tile_rect, p, po, &mut rec.subregion_mut(area), 2, 4, rf2, mv2);
           let po3 = PlaneOffset { x: po.x+2, y: po.y };
           let area3 = Area::StartingAt { x: po3.x, y: po3.y };
-          luma_mode.predict_inter(fi, p, po3, &mut rec.subregion_mut(area3), 2, 4, ref_frames, mvs);
+          luma_mode.predict_inter(fi, tile_rect, p, po3, &mut rec.subregion_mut(area3), 2, 4, ref_frames, mvs);
         }
       }
     } else {
-      luma_mode.predict_inter(fi, p, po, &mut rec.subregion_mut(area), plane_bsize.width(),
+      luma_mode.predict_inter(fi, tile_rect, p, po, &mut rec.subregion_mut(area), plane_bsize.width(),
                               plane_bsize.height(), ref_frames, mvs);
     }
   }

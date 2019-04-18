@@ -841,8 +841,16 @@ fn get_mv_rd_cost<T: Pixel>(
   let plane_org = p_org.region(Area::StartingAt { x: po.x, y: po.y });
 
   if let Some(ref mut tmp_plane) = tmp_plane_opt {
+    let tile_rect = TileRect {
+      x: 0,
+      y: 0,
+      width: tmp_plane.cfg.width,
+      height: tmp_plane.cfg.height
+    };
+
     PredictionMode::NEWMV.predict_inter(
       fi,
+      tile_rect,
       0,
       po,
       &mut tmp_plane.as_region_mut(),
@@ -900,6 +908,12 @@ fn telescopic_subpel_search<T: Pixel>(
   }
 
   let mut tmp_plane = Plane::new(blk_w, blk_h, 0, 0, 0, 0);
+  let tile_rect = TileRect {
+    x: 0,
+    y: 0,
+    width: tmp_plane.cfg.width,
+    height: tmp_plane.cfg.height
+  };
 
   for step in steps {
     let center_mv_h = *best_mv;
@@ -925,6 +939,7 @@ fn telescopic_subpel_search<T: Pixel>(
         {
           mode.predict_inter(
             fi,
+            tile_rect,
             0,
             po,
             &mut tmp_plane.as_region_mut(),
