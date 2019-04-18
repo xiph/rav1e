@@ -3221,7 +3221,7 @@ impl<'a> ContextWriter<'a> {
         if let Some(filter) = rp.restoration_unit(sbo).map(|ru| ru.filter) {
           match filter {
             RestorationFilter::None => {
-              match rp.lrf_type {
+              match rp.cfg.lrf_type {
                 RESTORE_WIENER => {
                   symbol_with_update!(self, w, 0, &mut self.fc.lrf_wiener_cdf);
                 }
@@ -3236,7 +3236,7 @@ impl<'a> ContextWriter<'a> {
               }
             }
             RestorationFilter::Sgrproj{set, xqd} => {
-              match rp.lrf_type {
+              match rp.cfg.lrf_type {
                 RESTORE_SGRPROJ => {
                   symbol_with_update!(self, w, 1, &mut self.fc.lrf_sgrproj_cdf);
                 }
@@ -3267,7 +3267,7 @@ impl<'a> ContextWriter<'a> {
               }
             }
             RestorationFilter::Wiener{coeffs} => {
-              match rp.lrf_type {
+              match rp.cfg.lrf_type {
                 RESTORE_WIENER => {
                   symbol_with_update!(self, w, 1, &mut self.fc.lrf_wiener_cdf);
                 }
