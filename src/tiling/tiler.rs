@@ -35,6 +35,12 @@ pub struct TilingInfo {
   pub tile_height_sb: usize,
   pub cols: usize, // number of columns of tiles within the whole frame
   pub rows: usize, // number of rows of tiles within the whole frame
+  pub tile_cols_log2: usize,
+  pub tile_rows_log2: usize,
+  pub min_tile_cols_log2: usize,
+  pub max_tile_cols_log2: usize,
+  pub min_tile_rows_log2: usize,
+  pub max_tile_rows_log2: usize,
   pub sb_size_log2: usize,
 }
 
@@ -90,6 +96,12 @@ impl TilingInfo {
       tile_height_sb,
       cols,
       rows,
+      tile_cols_log2,
+      tile_rows_log2,
+      min_tile_cols_log2,
+      max_tile_cols_log2,
+      min_tile_rows_log2,
+      max_tile_rows_log2,
       sb_size_log2,
     }
   }
