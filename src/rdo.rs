@@ -1376,10 +1376,10 @@ pub fn rdo_loop_decision<T: Pixel>(sbo: SuperBlockOffset, fi: &FrameInvariants<T
 
       // SgrProj LRF decision
       for pli in 0..3 {
+        let in_plane = &fs.input.planes[pli];  // reference
+        let ipo = sbo.plane_offset(&in_plane.cfg);
+        let cdef_plane = &lrf_input.planes[pli];
         for set in 0..16 {
-          let in_plane = &fs.input.planes[pli];  // reference
-          let ipo = sbo.plane_offset(&in_plane.cfg);
-          let cdef_plane = &lrf_input.planes[pli];
           let (xqd0, xqd1) = sgrproj_solve(set, fi,
                                            &in_plane.slice(ipo),
                                            &cdef_plane.slice(PlaneOffset{x: 0, y: 0}),
