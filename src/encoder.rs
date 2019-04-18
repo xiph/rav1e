@@ -2099,7 +2099,9 @@ fn encode_tile_group<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) 
   let raw_tiles = ti
     .tile_iter_mut(fs, &mut blocks)
     .zip(cdfs.iter_mut())
-    .map(|(mut ctx, cdf)| encode_tile(fi, &mut ctx.ts, cdf, &mut ctx.tb))
+    .collect::<Vec<_>>()
+    .iter_mut()
+    .map(|(ref mut ctx, cdf)| encode_tile(fi, &mut ctx.ts, cdf, &mut ctx.tb))
     .collect::<Vec<_>>();
 
   /* TODO: Don't apply if lossless */
