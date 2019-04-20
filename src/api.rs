@@ -85,8 +85,10 @@ pub struct EncoderConfig {
   pub train_rdo: bool,
 }
 
-/// Default preset for EncoderConfig,it is a balance between quality and speed.
-/// User can use with_speed_preset to have a default structure with a specific speed level.
+/// Default preset for EncoderConfig: it is a balance between quality and speed.
+/// See [`with_speed_preset()`]
+///
+/// [`with_speed_preset()`]: struct.EncoderConfig.html#method.with_speed_preset
 impl Default for EncoderConfig {
   fn default() -> Self {
     const DEFAULT_SPEED: usize = 5;
@@ -96,8 +98,11 @@ impl Default for EncoderConfig {
 
 impl EncoderConfig {
 
-  /// This is a preset which provides default settings according to a speed value in the specific range 0-10,
-  /// If the input value is greater than 10 will result in the same setting like 10.
+  /// This is a preset which provides default settings according to a speed value in the specific range 0-10. 
+  /// For each speed value it is having different preset. See [`from_preset()`]. 
+  /// If the input value is greater than 10, it will result in the same settings of 10.
+  ///
+  /// [`from_preset()`]: struct.SpeedSettings.html#method.from_preset
   pub fn with_speed_preset(speed: usize) -> Self {
     EncoderConfig {
       width: 640,
