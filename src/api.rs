@@ -643,8 +643,8 @@ impl<T: Pixel> Context<T> {
     F: Into<Option<Arc<Frame<T>>>>,
   {
     let frame = frame.into();
-
     let keyframe = if frame.is_none() {
+      println!("flushing {} {}", self.inner.frame_count, frame.is_some());
       self.inner.limit = self.inner.frame_count;
       true
     } else if self.config.speed_settings.no_scene_detection {
@@ -752,11 +752,15 @@ impl<T: Pixel> ContextInner<T> {
     if next_detected.is_none() {
       return next_limit;
     }
+    println!("Keyframes detected {:?} limit {}", next_detected, next_limit);
     cmp::min(next_detected.unwrap(), next_limit)
   }
 
   fn set_frame_properties(&mut self, idx: u64) -> Result<bool, EncoderStatus> {
     let (fi, end_of_subgop) = self.build_frame_properties(idx)?;
+
+    println!("idx {} type {} frame_num {} {}", idx, fi.frame_type, fi.number, end_of_subgop);
+
     self.frame_invariants.insert(idx, fi);
 
     Ok(end_of_subgop)
@@ -796,8 +800,9 @@ impl<T: Pixel> ContextInner<T> {
         // if we are at next_keyframe
         if !fi.inter_cfg.unwrap().reorder
           || ((idx_in_segment - 1) % fi.inter_cfg.unwrap().group_len == 0
-          && fi.number == (next_keyframe - 1))
+          && fi.number == (next_keyframe - 1) && self.limit != 0)
         {
+          println!("Jumping to the next keyframe {} / {}", next_keyframe, self.limit);
           self.segment_start_idx = idx;
           self.segment_start_frame = next_keyframe;
           fi.number = next_keyframe;
@@ -807,7 +812,14 @@ impl<T: Pixel> ContextInner<T> {
 
     match self.frame_q.get(&fi.number) {
       Some(Some(_)) => {},
-      _ => { return Err(EncoderStatus::NeedMoreData); }
+      _ => {
+        if fi.show_existing_frame {
+          println!("Show existing frame idx {} frame {}", idx, fi.number);
+        } else {
+          println!("This frame does not exist idx {} frame {}", idx, fi.number);
+        }
+        return Err(EncoderStatus::NeedMoreData);
+      }
     }
 
     // Now that we know the frame number, look up the correct frame type
@@ -870,6 +882,7 @@ impl<T: Pixel> ContextInner<T> {
         let rec = if fi.show_frame { Some(fs.rec) } else { None };
         let fi = fi.clone();
         self.idx += 1;
+        println!("Out sef type {} frame_num {}", fi.number, fi.frame_type);
         self.finalize_packet(rec, &fi)
       } else if let Some(f) = self.frame_q.get(&fi.number) {
         if let Some(frame) = f.clone() {
@@ -882,6 +895,7 @@ impl<T: Pixel> ContextInner<T> {
 
           // TODO: Trial encoding for first frame of each type.
           let data = self.pool.install(||encode_frame(fi, &mut fs));
+          println!("Enc type {} frame_num {}", fi.number, fi.frame_type);
           self.maybe_prev_log_base_q = Some(qps.log_base_q);
           // TODO: Add support for dropping frames.
           self.rc_state.update_state(
@@ -946,6 +960,7 @@ impl<T: Pixel> ContextInner<T> {
     }
 
     self.frames_processed += 1;
+    println!("Out type {1} frame_num {0}", fi.number, fi.frame_type);
     Ok(Packet {
       data,
       rec,
