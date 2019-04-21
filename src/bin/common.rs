@@ -163,8 +163,6 @@ pub fn parse_cli() -> CliOptions {
         .help("Low latency mode; disables frame reordering\n\
             Has a significant speed-to-quality trade-off")
         .long("low_latency")
-        .takes_value(true)
-        .default_value("false")
     )
     .arg(
       Arg::with_name("TUNE")
@@ -448,7 +446,7 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
     panic!("Log2 of tile columns and rows may not be greater than 6");
   }
 
-  cfg.low_latency = matches.value_of("LOW_LATENCY").unwrap().parse().unwrap();
+  cfg.low_latency = matches.is_present("LOW_LATENCY");
   cfg.train_rdo = train_rdo;
   cfg
 }
