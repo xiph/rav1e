@@ -993,11 +993,13 @@ impl<T: Pixel> ContextInner<T> {
   }
 
   fn determine_frame_type(&mut self, frame_number: u64) -> FrameType {
-    if self.keyframes_tmp.contains(&frame_number) {
+    let ft = if self.keyframes_tmp.contains(&frame_number) {
       FrameType::KEY
     } else {
       FrameType::INTER
-    }
+    };
+    println!("Detecting {} {}", frame_number, ft);
+    ft
     /*
     if frame_number == 0 {
       return FrameType::KEY;
