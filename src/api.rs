@@ -732,14 +732,14 @@ impl<T: Pixel> ContextInner<T> {
     let idx_in_segment = idx - self.segment_start_idx;
     if idx_in_segment > 0 {
       let next_keyframe = if keyframe_only { self.segment_start_frame + 1 } else { self.next_keyframe() };
-      let (fi_temp, end_of_subgop) = FrameInvariants::new_inter_frame(
+      let (fi_temp, end_of_segment) = FrameInvariants::new_inter_frame(
         &fi,
         self.segment_start_frame,
         idx_in_segment,
         next_keyframe
       );
       fi = fi_temp;
-      if !end_of_subgop {
+      if !end_of_segment {
         if !fi.inter_cfg.unwrap().reorder
           || ((idx_in_segment - 1) % fi.inter_cfg.unwrap().group_len == 0
           && fi.number == (next_keyframe - 1))
@@ -772,14 +772,14 @@ impl<T: Pixel> ContextInner<T> {
       fi = FrameInvariants::new_key_frame(&fi, self.segment_start_frame);
     } else {
       let next_keyframe = self.next_keyframe();
-      let (fi_temp, end_of_subgop) = FrameInvariants::new_inter_frame(
+      let (fi_temp, end_of_segment) = FrameInvariants::new_inter_frame(
         &fi,
         self.segment_start_frame,
         idx_in_segment,
         next_keyframe
       );
       fi = fi_temp;
-      if !end_of_subgop {
+      if !end_of_segment {
         return Ok((fi, false));
       }
     }
