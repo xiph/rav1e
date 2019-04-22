@@ -124,7 +124,7 @@ impl EncoderConfig {
   }
 }
 
-/// Contains all the speed settings
+/// Contain all the speed settings
 #[derive(Clone, Copy, Debug)]
 pub struct SpeedSettings {
   pub min_block_size: BlockSize,
@@ -301,6 +301,7 @@ pub enum PredictionModesSetting {
   ComplexAll,
 }
 
+/// Contain all details of chroma sampling for different types like 4:2:0, 4:2:2, 4:4:4, 4:0:0
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(C)]
 pub enum ChromaSampling {
@@ -317,7 +318,8 @@ impl Default for ChromaSampling {
 }
 
 impl ChromaSampling {
-  // Provides the sampling period in the horizontal and vertical axes.
+
+  /// Provides the sampling period in the horizontal and vertical axes.
   pub fn sampling_period(self) -> (usize, usize) {
     use self::ChromaSampling::*;
     match self {
@@ -329,6 +331,7 @@ impl ChromaSampling {
   }
 }
 
+/// Contain the detail of the chroma sampling position ie. the location of chroma samples wrt luma samples.
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(C)]
 pub enum ChromaSamplePosition {
@@ -343,6 +346,11 @@ impl Default for ChromaSamplePosition {
   }
 }
 
+/// Pixel data can be encoded over 8 or 10 (or 12 but unsupported) bits. When data is expressed in:
+///  - Limited range: Take into account different lower and higher bounds that can be used to express color information, for
+///    Luma 8 bit limited range is 16-235, anything below 16 will be treated as pure black, anything above 235 will be treated
+///    as pure white, whereas for 10 bit the same limits apply between 64 - 940. While Chroma has a different range(16-240).
+///  - Full range: Use the whole width of the available levels (0-255 for 8 bit, 0-1023 for 10 bit) to represent data.
 #[derive(ArgEnum, Debug, Clone, Copy, PartialEq)]
 #[repr(C)]
 pub enum PixelRange {
@@ -357,6 +365,12 @@ impl Default for PixelRange {
     }
 }
 
+/// Contain different types of Matrix Coefficients which are used for deriving the luma and chroma (YCbCr) from the R, G, B primaries.
+/// - This is used to describe the color parameters for the video to be encoded, the default value is `Unspecified`.
+/// - Matrix Coefficients can also covert across a multitude of systems.
+/// - For more information please refer to `Table 4` of [`ISO/IEC 23008-9's ITU H.273 Standard`].
+///
+/// [`ISO/IEC 23008-9's ITU H.273 Standard`]:  https://www.itu.int/rec/dologin_pub.asp?lang=e&id=T-REC-H.273-201612-I!!PDF-E&type=items
 #[derive(ArgEnum, Debug, Clone, Copy, PartialEq)]
 #[repr(C)]
 pub enum MatrixCoefficients {
@@ -382,6 +396,7 @@ impl Default for MatrixCoefficients {
     }
 }
 
+/// Contain different types of color primaries according to av1 spec, this also defines the chromaticity co-ordinate of the source picture.
 #[derive(ArgEnum, Debug, Clone, Copy, PartialEq)]
 #[repr(C)]
 pub enum ColorPrimaries {
@@ -405,6 +420,10 @@ impl Default for ColorPrimaries {
     }
 }
 
+/// Contain different types of Transfer Characteristics, they define the optoelectronic transfer charecteristic of the source picture aka Gamma.
+/// - For more information please refer to `Table 3` of [`ISO/IEC 23008-9's ITU H.273 Standard`].
+///
+/// [`ISO/IEC 23008-9's ITU H.273 Standard`]:  https://www.itu.int/rec/dologin_pub.asp?lang=e&id=T-REC-H.273-201612-I!!PDF-E&type=items
 #[derive(ArgEnum, Debug, Clone, Copy, PartialEq)]
 #[repr(C)]
 pub enum TransferCharacteristics {
@@ -433,6 +452,7 @@ impl Default for TransferCharacteristics {
     }
 }
 
+/// Contain the description of color which includes Color Primaries, Transfer Characteristics and also Matrix Coefficients.
 #[derive(Copy, Clone, Debug)]
 pub struct ColorDescription {
     pub color_primaries: ColorPrimaries,
@@ -440,6 +460,8 @@ pub struct ColorDescription {
     pub matrix_coefficients: MatrixCoefficients
 }
 
+/// Contain all the detail of picture like chromaticity coordinate of primaries, the chromaticity coordinates of the white point.
+/// The maximum and the minimum number of nits of the display used to master the content.
 #[derive(Copy, Clone, Debug)]
 pub struct MasteringDisplay {
     pub primaries: [Point; 3],
@@ -448,13 +470,15 @@ pub struct MasteringDisplay {
     pub min_luminance: u32,
 }
 
+/// Contain the details like the maximum content light level which is the nit value corresponding to the brightest pixel used anywhere in the frame.
+/// Frame's maximum average light level is the nit value corresponding to the average luminance of the frame which has the brightest average luminance anywhere in the content.
 #[derive(Copy, Clone, Debug)]
 pub struct ContentLight {
     pub max_content_light_level: u16,
     pub max_frame_average_light_level: u16,
 }
 
-/// Contains all the encoder configuration
+/// Contain all the encoder configuration
 #[derive(Clone, Debug)]
 pub struct Config {
   pub enc: EncoderConfig,
