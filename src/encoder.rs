@@ -758,11 +758,21 @@ impl<T: Pixel> FrameInvariants<T> {
       return (fi, false);
     }
 
+    // A group always starts with zero or more no-show frames, followed by
+    // the group_src_len of shown frames. For example, for a pryamid depth of 2,
+    // the group is as follows:
+    // |TU         |TU |TU |TU
+    // 0   1   2   3   4   5
+    // ^^^^^   ^^^^^^^^^^^^^
+    // no-show show
+
     let lvl = if !inter_cfg.reorder {
       0
     } else if inter_cfg.idx_in_group < inter_cfg.pyramid_depth {
+      // no-show frames are output first (to be shown in future)
       inter_cfg.idx_in_group
     } else {
+      // show frames
       pos_to_lvl(inter_cfg.idx_in_group - inter_cfg.pyramid_depth + 1, inter_cfg.pyramid_depth)
     };
 
@@ -904,9 +914,12 @@ pub struct InterPropsConfig {
   pub reorder: bool,
   pub multiref: bool,
   pub pyramid_depth: u64,
+  /// number of source frames in group
   pub group_src_len: u64,
+  /// number of output frames on group (group_src_len + pyramid_depth)
   pub group_len: u64,
   pub idx_in_group: u64,
+  /// segment-relative group
   pub group_idx: u64,
 }
 
