@@ -799,25 +799,19 @@ impl<T: Pixel> ContextInner<T> {
       return Err(EncoderStatus::NeedMoreData);
     }
 
-    let idx = {
-      let mut idx = self.idx;
-      while !self.set_frame_properties(idx)? {
-        self.idx += 1;
-        idx = self.idx;
-      }
+    while !self.set_frame_properties(self.idx)? {
+      self.idx += 1;
+    }
 
-      if !self.needs_more_frames(self.frame_invariants[&idx].number) {
-        self.idx += 1;
-        return Err(EncoderStatus::LimitReached);
-      }
-      idx
-    };
+    if !self.needs_more_frames(self.frame_invariants[&self.idx].number) {
+      return Err(EncoderStatus::LimitReached);
+    }
+
+    let cur_idx = self.idx;
 
     let ret = {
-      let fi = self.frame_invariants.get_mut(&idx).unwrap();
+      let fi = self.frame_invariants.get_mut(&cur_idx).unwrap();
       if fi.show_existing_frame {
-        self.idx += 1;
-
         let mut fs = FrameState::new(fi);
 
         // TODO: Record the bits spent here against the original frame for rate
@@ -827,15 +821,14 @@ impl<T: Pixel> ContextInner<T> {
 
         let rec = if fi.show_frame { Some(fs.rec) } else { None };
         let fi = fi.clone();
+        self.idx += 1;
         self.finalize_packet(rec, &fi)
       } else if let Some(f) = self.frame_q.get(&fi.number) {
-        self.idx += 1;
-
         if let Some(frame) = f.clone() {
           let fti = fi.get_frame_subtype();
           let qps =
             self.rc_state.select_qi(self, fti, self.maybe_prev_log_base_q);
-          let fi = self.frame_invariants.get_mut(&idx).unwrap();
+          let fi = self.frame_invariants.get_mut(&cur_idx).unwrap();
           fi.set_quantizers(&qps);
           let mut fs = FrameState::new_with_frame(fi, frame.clone());
 
@@ -857,6 +850,8 @@ impl<T: Pixel> ContextInner<T> {
           let rec = if fi.show_frame { Some(fs.rec.clone()) } else { None };
 
           update_rec_buffer(fi, fs);
+
+          self.idx += 1;
 
           if fi.show_frame {
             let fi = fi.clone();
