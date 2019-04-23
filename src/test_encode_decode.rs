@@ -61,7 +61,6 @@ pub(crate) trait TestDecoder<T: Pixel> {
       setup_encoder(w, h, speed, quantizer, bit_depth, chroma_sampling,
                     min_keyint, max_keyint, low_latency, bitrate,
                     tile_cols_log2, tile_rows_log2);
-    ctx.set_limit(limit as u64);
 
     println!("Encoding {}x{} speed {} quantizer {} bit-depth {}", w, h, speed, quantizer, bit_depth);
     #[cfg(feature="dump_ivf")]

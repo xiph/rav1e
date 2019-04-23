@@ -29,31 +29,43 @@ use crate::decoder::VideoDetails;
 use std::fs::File;
 use std::io::BufWriter;
 
-fn read_frame<T: Pixel, D: Decoder>(ctx: &mut Context<T>, decoder: &mut D, video_info: VideoDetails) {
-  match decoder.read_frame(&video_info) {
-    Ok(frame) => {
-      match video_info.bit_depth {
-        8 | 10 | 12 => {}
-        _ => panic!("unknown input bit depth!")
-      }
+struct Source<D: Decoder> {
+ limit: usize,
+ count: usize,
+ input: D,
+}
 
-      let _ = ctx.send_frame(Some(Arc::new(frame)));
-    }
-    _ => {
+impl<D: Decoder> Source<D> {
+  fn read_frame<T: Pixel>(&mut self, ctx: &mut Context<T>, video_info: VideoDetails) {
+    if self.limit != 0 && self.count == self.limit {
       ctx.flush();
+      return;
     }
-  };
+    match self.input.read_frame(&video_info) {
+      Ok(frame) => {
+        match video_info.bit_depth {
+          8 | 10 | 12 => {}
+          _ => panic!("unknown input bit depth!")
+        }
+        self.count += 1;
+        let _ = ctx.send_frame(Some(Arc::new(frame)));
+      }
+      _ => {
+        ctx.flush();
+      }
+    };
+  }
 }
 
 // Encode and write a frame.
 // Returns frame information in a `Result`.
-fn process_frame<T: Pixel>(
+fn process_frame<T: Pixel, D: Decoder>(
   ctx: &mut Context<T>,
   output_file: &mut dyn Write,
-  y4m_dec: &mut y4m::Decoder<'_, Box<dyn Read>>,
+  source: &mut Source<D>,
   mut y4m_enc: Option<&mut y4m::Encoder<'_, Box<dyn Write>>>,
 ) -> Option<Vec<FrameSummary>> {
-  let y4m_details = y4m_dec.get_video_details();
+  let y4m_details = source.input.get_video_details();
   let mut frame_summaries = Vec::new();
   let pkt_wrapped = ctx.receive_packet();
   match pkt_wrapped {
@@ -65,7 +77,7 @@ fn process_frame<T: Pixel>(
       frame_summaries.push(pkt.into());
     }
     Err(EncoderStatus::NeedMoreData) => {
-      read_frame(ctx, y4m_dec, y4m_details);
+      source.read_frame(ctx, y4m_details);
     }
     Err(EncoderStatus::EnoughData) => {
       unreachable!();
@@ -87,18 +99,17 @@ fn write_stats_file<T: Pixel>(ctx: &Context<T>, filename: &Path) -> Result<(), i
   Ok(())
 }
 
-fn do_encode<T: Pixel>(
-  cfg: Config, limit: usize, verbose: bool, mut progress: ProgressInfo,
+fn do_encode<T: Pixel, D: Decoder>(
+  cfg: Config, verbose: bool, mut progress: ProgressInfo,
   mut err: std::io::StderrLock, mut output: &mut dyn Write,
-  mut y4m_dec: &mut y4m::Decoder<'_, Box<dyn Read>>,
+  source: &mut Source<D>,
   mut y4m_enc: Option<y4m::Encoder<'_, Box<dyn Write>>>
 ) {
   let mut ctx: Context<T> = cfg.new_context();
 
-  ctx.set_limit(limit as u64);
 
   while let Some(frame_info) =
-    process_frame(&mut ctx, &mut output, &mut y4m_dec, y4m_enc.as_mut())
+    process_frame(&mut ctx, &mut output, source, y4m_enc.as_mut())
   {
     for frame in frame_info {
       progress.add_frame(frame);
@@ -180,13 +191,15 @@ fn main() {
     y4m_dec.read_frame().expect("Skipped more frames than in the input");
   }
 
+  let mut source = Source { limit: cli.limit, input: y4m_dec, count: 0 };
+
   if video_info.bit_depth == 8 {
-    do_encode::<u8>(
-      cfg, cli.limit, cli.verbose, progress, err, &mut cli.io.output, &mut y4m_dec, y4m_enc
+    do_encode::<u8, y4m::Decoder<'_, Box<dyn Read>>>(
+      cfg, cli.verbose, progress, err, &mut cli.io.output, &mut source, y4m_enc
     )
   } else {
-    do_encode::<u16>(
-      cfg, cli.limit, cli.verbose, progress, err, &mut cli.io.output, &mut y4m_dec, y4m_enc
+    do_encode::<u16, y4m::Decoder<'_, Box<dyn Read>>>(
+      cfg, cli.verbose, progress, err, &mut cli.io.output, &mut source, y4m_enc
     )
   }
 }
