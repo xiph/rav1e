@@ -270,7 +270,7 @@ macro_rules! plane_region_common {
     unsafe impl<T: Pixel> Send for $name<'_, T> {}
     unsafe impl<T: Pixel> Sync for $name<'_, T> {}
 
-    impl<'a, T: Pixel> Index<usize> for $name<'a, T> {
+    impl<T: Pixel> Index<usize> for $name<'_, T> {
       type Output = [T];
 
       #[inline(always)]
@@ -368,7 +368,7 @@ impl<'a, T: Pixel> PlaneRegionMut<'a, T> {
   }
 }
 
-impl<'a, T: Pixel> IndexMut<usize> for PlaneRegionMut<'a, T> {
+impl<T: Pixel> IndexMut<usize> for PlaneRegionMut<'_, T> {
   #[inline(always)]
   fn index_mut(&mut self, index: usize) -> &mut Self::Output {
     assert!(index < self.rect.height);
