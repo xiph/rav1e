@@ -713,21 +713,19 @@ impl<T: Pixel> ContextInner<T> {
   }
 
   fn build_frame_properties(&mut self, idx: u64) -> Result<(FrameInvariants<T>, bool), EncoderStatus> {
-    if idx == 0 {
+    let mut fi = if idx == 0 {
       let seq = Sequence::new(&self.config);
-
       // The first frame will always be a key frame
-      let fi = FrameInvariants::new_key_frame(
+      FrameInvariants::new_key_frame(
         &FrameInvariants::new(
           self.config.clone(),
           seq
         ),
         0
-      );
-      return Ok((fi, true));
-    }
-
-    let mut fi = self.frame_invariants[&(idx - 1)].clone();
+      )
+    } else {
+      self.frame_invariants[&(idx - 1)].clone()
+    };
 
     // Initially set up the frame as an inter frame.
     // We need to determine what the frame number is before we can
