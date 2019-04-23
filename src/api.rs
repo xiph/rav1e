@@ -477,6 +477,17 @@ impl Config {
 
     let pool = rayon::ThreadPoolBuilder::new().num_threads(self.threads).build().unwrap();
 
+    let mut config = self.enc.clone();
+
+    // FIXME: inter unsupported with 4:2:2 and 4:4:4 chroma sampling
+    let chroma_sampling = config.chroma_sampling;
+    let keyframe_only = chroma_sampling == ChromaSampling::Cs444 ||
+      chroma_sampling == ChromaSampling::Cs422;
+    if keyframe_only {
+      config.max_key_frame_interval = 1;
+      config.min_key_frame_interval = 1;
+    }
+
     Context {
       inner: ContextInner {
         frame_count: 0,
@@ -504,7 +515,7 @@ impl Config {
         first_pass_data: FirstPassData { frames: Vec::new() },
         pool
       },
-      config: self.enc.clone()
+      config
     }
   }
 }
@@ -720,18 +731,13 @@ impl<T: Pixel> ContextInner<T> {
 
     let mut fi = self.frame_invariants[&(idx - 1)].clone();
 
-    // FIXME: inter unsupported with 4:2:2 and 4:4:4 chroma sampling
-    let chroma_sampling = self.config.chroma_sampling;
-    let keyframe_only = chroma_sampling == ChromaSampling::Cs444 ||
-      chroma_sampling == ChromaSampling::Cs422;
-
     // Initially set up the frame as an inter frame.
     // We need to determine what the frame number is before we can
     // look up the frame type. If reordering is enabled, the idx
     // may not match the frame number.
     let idx_in_segment = idx - self.segment_start_idx;
     if idx_in_segment > 0 {
-      let next_keyframe = if keyframe_only { self.segment_start_frame + 1 } else { self.next_keyframe() };
+      let next_keyframe = self.next_keyframe();
       let (fi_temp, end_of_subgop) = FrameInvariants::new_inter_frame(
         &fi,
         self.segment_start_frame,
