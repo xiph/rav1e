@@ -487,6 +487,10 @@ impl Config {
       config.max_key_frame_interval = 1;
       config.min_key_frame_interval = 1;
     }
+    // FIXME: tx partition for intra not supported for chroma 422
+    if chroma_sampling == ChromaSampling::Cs422 {
+      config.speed_settings.rdo_tx_decision = false;
+    }
 
     Context {
       inner: ContextInner {
