@@ -151,42 +151,27 @@ unsafe fn cdef_filter_block<T: Pixel>(
       let mut max = x;
       let mut min = x;
       for k in 0..2usize {
-        let p0 = *ptr_in.offset(cdef_directions[dir][k]);
-        let p1 = *ptr_in.offset(-cdef_directions[dir][k]);
-        sum += pri_taps[k] * constrain(i32::cast_from(p0) - i32::cast_from(x), pri_strength, damping);
-        sum += pri_taps[k] * constrain(i32::cast_from(p1) - i32::cast_from(x), pri_strength, damping);
-        if p0 != CDEF_VERY_LARGE {
-          max = cmp::max(p0, max);
+        let p = [*ptr_in.offset(cdef_directions[dir][k]),
+                 *ptr_in.offset(-cdef_directions[dir][k])];
+        for p_elem in p.iter() {
+          sum += pri_taps[k] * constrain(i32::cast_from(*p_elem) - i32::cast_from(x), pri_strength, damping);
+          if *p_elem != CDEF_VERY_LARGE {
+            max = cmp::max(*p_elem, max);
+          }
+          min = cmp::min(*p_elem, min);
         }
-        if p1 != CDEF_VERY_LARGE {
-          max = cmp::max(p1, max);
+
+        let s = [*ptr_in.offset(cdef_directions[(dir + 2) & 7][k]),
+                 *ptr_in.offset(-cdef_directions[(dir + 2) & 7][k]),
+                 *ptr_in.offset(cdef_directions[(dir + 6) & 7][k]),
+                 *ptr_in.offset(-cdef_directions[(dir + 6) & 7][k])];
+        for s_elem in s.iter() {
+          sum += sec_taps[k] * constrain(i32::cast_from(*s_elem) - i32::cast_from(x), sec_strength, damping);
+          if *s_elem != CDEF_VERY_LARGE {
+            max = cmp::max(*s_elem, max);
+          }
+          min = cmp::min(*s_elem, min);
         }
-        min = cmp::min(p0, min);
-        min = cmp::min(p1, min);
-        let s0 = *ptr_in.offset(cdef_directions[(dir + 2) & 7][k]);
-        let s1 = *ptr_in.offset(-cdef_directions[(dir + 2) & 7][k]);
-        let s2 = *ptr_in.offset(cdef_directions[(dir + 6) & 7][k]);
-        let s3 = *ptr_in.offset(-cdef_directions[(dir + 6) & 7][k]);
-        if s0 != CDEF_VERY_LARGE {
-          max = cmp::max(s0, max);
-        }
-        if s1 != CDEF_VERY_LARGE {
-          max = cmp::max(s1, max);
-        }
-        if s2 != CDEF_VERY_LARGE {
-          max = cmp::max(s2, max);
-        }
-        if s3 != CDEF_VERY_LARGE {
-          max = cmp::max(s3, max);
-        }
-        min = cmp::min(s0, min);
-        min = cmp::min(s1, min);
-        min = cmp::min(s2, min);
-        min = cmp::min(s3, min);
-        sum += sec_taps[k] * constrain(i32::cast_from(s0) - i32::cast_from(x), sec_strength, damping);
-        sum += sec_taps[k] * constrain(i32::cast_from(s1) - i32::cast_from(x), sec_strength, damping);
-        sum += sec_taps[k] * constrain(i32::cast_from(s2) - i32::cast_from(x), sec_strength, damping);
-        sum += sec_taps[k] * constrain(i32::cast_from(s3) - i32::cast_from(x), sec_strength, damping);
       }
       let v = T::cast_from(i32::cast_from(x) + ((8 + sum - (sum < 0) as i32) >> 4));
       *ptr_out = clamp(v, T::cast_from(min), T::cast_from(max));
