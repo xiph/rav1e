@@ -652,10 +652,6 @@ impl<T: Pixel> Context<T> {
   pub fn get_first_pass_data(&self) -> &FirstPassData {
     &self.inner.first_pass_data
   }
-
-  pub fn set_limit(&mut self, limit: u64) {
-    self.inner.set_limit(limit);
-  }
 }
 
 
@@ -1114,8 +1110,6 @@ mod test {
   fn flush(low_lantency: bool, no_scene_detection: bool) {
     let mut ctx = setup_encoder::<u8>(64, 80, 10, 100, 8, ChromaSampling::Cs420, 150, 200, 0, low_lantency, no_scene_detection);
     let limit = 41;
-
-    ctx.set_limit(limit);
 
     for _ in  0..limit {
       let input = ctx.new_frame();
