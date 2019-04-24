@@ -2114,10 +2114,10 @@ fn encode_tile_group<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) 
     .tile_iter_mut(fs, &mut blocks)
     .zip(cdfs.iter_mut())
     .collect::<Vec<_>>()
-    .par_iter_mut()
-    .map(|(ref mut ctx, cdf)| {
+    .into_par_iter()
+    .map(|(mut ctx, cdf)| {
       let raw = encode_tile(fi, &mut ctx.ts, cdf, &mut ctx.tb);
-      (raw, ctx.ts.rdo.clone())
+      (raw, ctx.ts.rdo)
     })
     .unzip();
 
