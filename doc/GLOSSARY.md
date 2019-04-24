@@ -23,3 +23,15 @@ With reordering, there will be more frames in the output than the input, but som
 Segment
 --------
 A sequence of groups. The first group will start with a keyframe, and the rest of the groups will start with inter frames.
+
+MI
+--
+One mode info block, the smallest unit of pixels that has a prediction mode coded for it. Corresponds to a 4x4 block of luma pixels and a 4x4, 2x4, or 2x2 unit of chroma pixels (depending on chroma subsampling).
+
+Pixel domain
+--------------
+Operations on raw pixel values of the image. Distortion measurements in pixel domain are the most accurate as they most closely represent the video output.
+
+Transform domain
+------------------
+Otherwise known as frequency domain, it refers to coefficient values after they have gone through the forward transform and before the inverse transform. Computing distortion in transform domain is faster than pixel domain as the inverse transform can be skipped, but it is less accurate as a result.
