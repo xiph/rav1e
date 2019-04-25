@@ -51,7 +51,7 @@ impl RefType {
   }
 }
 
-use RefType::*;
+use self::RefType::*;
 
 pub const ALL_INTER_REFS: [RefType; 7] = [
   LAST_FRAME,
