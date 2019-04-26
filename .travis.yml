@@ -58,7 +58,7 @@ jobs:
         script: cargo bench --verbose
       - name: "Doc & Clippy (linter): verifying code quality"
         script:
-         - cargo doc --verbose
+         - cargo doc --verbose --no-deps
          - rustup component add clippy
          - cargo clippy --version
          - cargo clippy -- -D warnings -A clippy::cast_lossless -A clippy::cast_ptr_alignment -A clippy::cyclomatic_complexity -A clippy::needless_range_loop -A clippy::too_many_arguments -A clippy::type_complexity -A clippy::verbose_bit_mask --verbose
