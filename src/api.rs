@@ -664,6 +664,7 @@ impl<T: Pixel> Context<T> {
       self.last_keyframe = self.inner.frame_count;
       self.keyframes.insert(self.last_keyframe);
       self.inner.keyframes_tmp.insert(self.last_keyframe);
+      println!("Keyframe at {}", self.last_keyframe);
     }
 
     self.inner.send_frame(frame)
