@@ -31,5 +31,4 @@ ignore = [
     "tests/aom.rs",
     # "benches/bench.rs",
     # "benches/predict.rs",
-    # "benches/comparative/predict.rs",
 ]
