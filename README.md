@@ -156,11 +156,6 @@ Run regular benchmarks with:
 cargo bench
 ```
 
-Run comparative benchmarks with:
-```
-cargo bench --features=comparative_bench
-```
-
 # Getting in Touch
 
 Come chat with us on the IRC channel #daala on Freenode! If you don't have IRC set
