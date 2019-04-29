@@ -742,6 +742,8 @@ impl<T: Pixel> ContextInner<T> {
       );
       fi = fi_temp;
       if !end_of_subgop {
+        // This is a hack because our fi.number will otherwise be incorrect
+        // if we are at next_keyframe
         if !fi.inter_cfg.unwrap().reorder
           || ((idx_in_segment - 1) % fi.inter_cfg.unwrap().group_len == 0
           && fi.number == (next_keyframe - 1))
@@ -749,8 +751,6 @@ impl<T: Pixel> ContextInner<T> {
           self.segment_start_idx = idx;
           self.segment_start_frame = next_keyframe;
           fi.number = next_keyframe;
-        } else {
-          return Ok((fi, false));
         }
       }
     }
