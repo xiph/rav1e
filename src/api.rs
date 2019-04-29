@@ -713,6 +713,11 @@ impl<T: Pixel> ContextInner<T> {
   }
 
   fn build_frame_properties(&mut self, idx: u64) -> Result<(FrameInvariants<T>, bool), EncoderStatus> {
+    let idx_in_segment = idx - self.segment_start_idx;
+    // Initially set up the frame as an inter frame.
+    // We need to determine what the frame number is before we can
+    // look up the frame type. If reordering is enabled, the idx
+    // may not match the frame number.
     let mut fi = if idx == 0 {
       let seq = Sequence::new(&self.config);
       // The first frame will always be a key frame
@@ -723,24 +728,16 @@ impl<T: Pixel> ContextInner<T> {
         ),
         0
       )
-    } else {
-      self.frame_invariants[&(idx - 1)].clone()
-    };
-
-    // Initially set up the frame as an inter frame.
-    // We need to determine what the frame number is before we can
-    // look up the frame type. If reordering is enabled, the idx
-    // may not match the frame number.
-    let idx_in_segment = idx - self.segment_start_idx;
-    if idx_in_segment > 0 {
+    } else if idx_in_segment > 0 {
+      let prev_fi = &self.frame_invariants[&(idx - 1)];
       let next_keyframe = self.next_keyframe();
       let (fi_temp, end_of_subgop) = FrameInvariants::new_inter_frame(
-        &fi,
+        &prev_fi,
         self.segment_start_frame,
         idx_in_segment,
         next_keyframe
       );
-      fi = fi_temp;
+      let mut fi = fi_temp;
       if !end_of_subgop {
         // This is a hack because our fi.number will otherwise be incorrect
         // if we are at next_keyframe
@@ -753,7 +750,11 @@ impl<T: Pixel> ContextInner<T> {
           fi.number = next_keyframe;
         }
       }
+      fi
     }
+    else {
+      self.frame_invariants[&(idx - 1)].clone()
+    };
 
     match self.frame_q.get(&fi.number) {
       Some(Some(_)) => {},
