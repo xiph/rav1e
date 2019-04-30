@@ -608,6 +608,7 @@ impl<T: Pixel> FrameInvariants<T> {
     // with exception that SBs on right or bottom frame borders split down to BLOCK_4X4.
     // At speed = 0, RDO search is exhaustive.
     let min_partition_size = config.speed_settings.min_block_size;
+    assert!(min_partition_size.is_sqr());
     let use_reduced_tx_set = config.speed_settings.reduced_tx_set;
     let use_tx_domain_distortion = config.tune == Tune::Psnr && config.speed_settings.tx_domain_distortion;
     let use_tx_domain_rate = config.speed_settings.tx_domain_rate;
@@ -1893,15 +1894,16 @@ fn encode_partition_topdown<T: Pixel>(
     // Oversized blocks are split automatically
     partition = PartitionType::PARTITION_SPLIT;
   } else if must_split || (bsize > fi.min_partition_size && is_square) {
+    debug_assert!(bsize.is_sqr());
     // Blocks of sizes within the supported range are subjected to a partitioning decision
     let mut partition_types: Vec<PartitionType> = Vec::new();
     if must_split {
       partition_types.push(PartitionType::PARTITION_SPLIT);
       if split_horz { partition_types.push(PartitionType::PARTITION_HORZ); };
       if split_vert { partition_types.push(PartitionType::PARTITION_VERT); };
-    }
-    else {
-      //partition_types.append(&mut RAV1E_PARTITION_TYPES.to_vec());
+    } else if bsize.width_log2() == fi.min_partition_size.width_log2() + 1 {
+      partition_types.extend_from_slice(RAV1E_PARTITION_TYPES);
+    } else {
       partition_types.push(PartitionType::PARTITION_NONE);
       partition_types.push(PartitionType::PARTITION_SPLIT);
     }

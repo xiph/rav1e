@@ -208,13 +208,17 @@ impl SpeedSettings {
   /// This preset is set this way because 8x8 with reduced TX set is faster but with equivalent
   /// or better quality compared to 16x16 or 32x32 (to which reduced TX set does not apply).
   fn min_block_size_preset(speed: usize) -> BlockSize {
-    if speed == 0 {
-      BlockSize::BLOCK_4X4
-    } else if speed <= 8 {
-      BlockSize::BLOCK_8X8
-    } else {
-      BlockSize::BLOCK_64X64
-    }
+    let min_block_size =
+      if speed == 0 {
+        BlockSize::BLOCK_4X4
+      } else if speed <= 8 {
+        BlockSize::BLOCK_8X8
+      } else {
+        BlockSize::BLOCK_64X64
+      };
+    // Topdown search checks min_block_size for PARTITION_SPLIT only, so min_block_size must be square.
+    assert!(min_block_size.is_sqr());
+    min_block_size
   }
 
   /// Multiref is enabled automatically if low_latency is false,
