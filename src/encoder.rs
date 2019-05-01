@@ -88,6 +88,9 @@ impl Default for Tune {
   }
 }
 
+const FRAME_ID_LENGTH: u32 = 15;
+const DELTA_FRAME_ID_LENGTH: u32 = 14;
+
 #[derive(Copy, Clone, Debug)]
 pub struct Sequence {
   // OBU Sequence header of AV1
@@ -191,8 +194,8 @@ impl Sequence {
       max_frame_width: config.width as u32,
       max_frame_height: config.height as u32,
       frame_id_numbers_present_flag: false,
-      frame_id_length: 0,
-      delta_frame_id_length: 0,
+      frame_id_length: FRAME_ID_LENGTH,
+      delta_frame_id_length: DELTA_FRAME_ID_LENGTH,
       use_128x128_superblock: false,
       order_hint_bits_minus_1: 5,
       force_screen_content_tools: 0,
@@ -720,7 +723,17 @@ impl<T: Pixel> FrameInvariants<T> {
         } else {
           3 + lvl1 as u8
         }
-      }
+      };
+      fi.ref_frame_sign_bias[i] = if !fi.sequence.enable_order_hint {
+        false
+      } else if let Some(ref rec) =
+        fi.rec_buffer.frames[fi.ref_frames[i] as usize]
+      {
+        let hint = rec.order_hint;
+        fi.sequence.get_relative_dist(hint, fi.order_hint) > 0
+      } else {
+        false
+      };
     }
 
     fi.reference_mode = if inter_cfg.multiref && inter_cfg.reorder && inter_cfg.idx_in_group != 0 {
@@ -812,7 +825,7 @@ pub fn write_temporal_delimiter(
 }
 
 fn write_obus<T: Pixel>(
-  packet: &mut dyn io::Write, fi: &mut FrameInvariants<T>, fs: &FrameState<T>
+  packet: &mut dyn io::Write, fi: &FrameInvariants<T>, fs: &FrameState<T>
 ) -> io::Result<()> {
   let obu_extension = 0 as u32;
 
@@ -2246,24 +2259,10 @@ pub fn encode_show_existing_frame<T: Pixel>(
 }
 
 pub fn encode_frame<T: Pixel>(
-  fi: &mut FrameInvariants<T>, fs: &mut FrameState<T>
+  fi: &FrameInvariants<T>, fs: &mut FrameState<T>
 ) -> Vec<u8> {
   debug_assert!(!fi.show_existing_frame);
   let mut packet = Vec::new();
-  if !fi.intra_only {
-    for i in 0..INTER_REFS_PER_FRAME {
-      fi.ref_frame_sign_bias[i] = if !fi.sequence.enable_order_hint {
-        false
-      } else if let Some(ref rec) =
-        fi.rec_buffer.frames[fi.ref_frames[i] as usize]
-      {
-        let hint = rec.order_hint;
-        fi.sequence.get_relative_dist(hint, fi.order_hint) > 0
-      } else {
-        false
-      };
-    }
-  }
 
   fs.input_hres.downsample_from(&fs.input.planes[0]);
   fs.input_hres.pad(fi.width, fi.height);

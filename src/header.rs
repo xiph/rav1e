@@ -40,9 +40,6 @@ const LEVEL_MAJOR_BITS: usize = 3;
 const LEVEL_MINOR_BITS: usize = 2;
 #[allow(unused)]
 const LEVEL_BITS: usize = LEVEL_MAJOR_BITS + LEVEL_MINOR_BITS;
-const FRAME_ID_LENGTH: usize = 15;
-const DELTA_FRAME_ID_LENGTH: usize = 14;
-
 
 #[allow(dead_code,non_camel_case_types)]
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -151,16 +148,16 @@ pub trait UncompressedHeader {
     &mut self, obu_meta_type: ObuMetaType, seq: Sequence
   ) -> io::Result<()>;
   fn write_sequence_header_obu<T: Pixel>(
-    &mut self, fi: &mut FrameInvariants<T>
+    &mut self, fi: &FrameInvariants<T>
   ) -> io::Result<()>;
   fn write_frame_header_obu<T: Pixel>(
     &mut self, fi: &FrameInvariants<T>, fs: &FrameState<T>
   ) -> io::Result<()>;
   fn write_sequence_header<T: Pixel>(
-    &mut self, fi: &mut FrameInvariants<T>
+    &mut self, fi: &FrameInvariants<T>
   ) -> io::Result<()>;
   fn write_color_config(
-    &mut self, seq: &mut Sequence
+    &mut self, seq: &Sequence
   ) -> io::Result<()>;
   // End of OBU Headers
 
@@ -253,7 +250,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
   }
 
   fn write_sequence_header_obu<T: Pixel>(
-    &mut self, fi: &mut FrameInvariants<T>
+    &mut self, fi: &FrameInvariants<T>
   ) -> io::Result<()> {
     self.write(3, fi.sequence.profile)?; // profile
     self.write_bit(false)?; // still_picture
@@ -270,7 +267,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
     self.write_sequence_header(fi)?;
 
-    self.write_color_config(&mut fi.sequence)?;
+    self.write_color_config(&fi.sequence)?;
 
     self.write_bit(fi.sequence.film_grain_params_present)?;
 
@@ -278,20 +275,15 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
   }
 
   fn write_sequence_header<T: Pixel>(
-    &mut self, fi: &mut FrameInvariants<T>
+    &mut self, fi: &FrameInvariants<T>
   ) -> io::Result<()> {
     self.write_frame_size(fi)?;
 
-    let seq = &mut fi.sequence;
-
-    seq.frame_id_numbers_present_flag = false;
+    let seq = &fi.sequence;
 
     if !seq.reduced_still_picture_hdr {
       self.write_bit(seq.frame_id_numbers_present_flag)?;
     }
-
-    seq.frame_id_length = FRAME_ID_LENGTH as u32;
-    seq.delta_frame_id_length = DELTA_FRAME_ID_LENGTH as u32;
 
     if seq.frame_id_numbers_present_flag {
       // We must always have delta_frame_id_length < frame_id_length,
@@ -345,7 +337,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     Ok(())
   }
 
-  fn write_color_config(&mut self, seq: &mut Sequence) -> io::Result<()> {
+  fn write_color_config(&mut self, seq: &Sequence) -> io::Result<()> {
     let high_bd = seq.bit_depth > 8;
 
     self.write_bit(high_bd)?;
