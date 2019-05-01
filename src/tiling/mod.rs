@@ -15,10 +15,10 @@ mod tile_restoration_state;
 mod tile_state;
 mod tiler;
 
-pub use self::plane_region::*;
-pub use self::tile::*;
-pub use self::tile_blocks::*;
-pub use self::tile_motion_vectors::*;
-pub use self::tile_restoration_state::*;
-pub use self::tile_state::*;
-pub use self::tiler::*;
+pub(crate) use self::plane_region::*;
+pub(crate) use self::tile::*;
+pub(crate) use self::tile_blocks::*;
+pub(crate) use self::tile_motion_vectors::*;
+pub(crate) use self::tile_restoration_state::*;
+pub(crate) use self::tile_state::*;
+pub(crate) use self::tiler::*;

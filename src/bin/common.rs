@@ -9,7 +9,6 @@
 
 use crate::{ColorPrimaries, MatrixCoefficients, TransferCharacteristics};
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand, Shell};
-use rav1e::partition::BlockSize;
 use rav1e::*;
 
 use std::fs::File;

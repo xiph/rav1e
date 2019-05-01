@@ -23,42 +23,44 @@ extern crate interpolate_name;
 #[macro_use]
 extern crate pretty_assertions;
 
-pub mod ec;
-pub mod partition;
-pub mod plane;
-pub mod transform;
-pub mod quantize;
-pub mod predict;
-pub mod rdo;
-pub mod rdo_tables;
+pub(crate) mod ec;
+pub(crate) mod partition;
+pub(crate) mod plane;
+pub(crate) mod transform;
+pub(crate) mod quantize;
+pub(crate) mod predict;
+pub(crate) mod rdo;
+pub(crate) mod rdo_tables;
 #[macro_use]
-pub mod util;
-pub mod context;
-pub mod entropymode;
-pub mod token_cdfs;
-pub mod deblock;
-pub mod segmentation;
-pub mod cdef;
-pub mod lrf;
-pub mod encoder;
-pub mod mc;
-pub mod me;
-pub mod metrics;
-pub mod scan_order;
-pub mod scenechange;
-pub mod rate;
-pub mod tiling;
+pub(crate) mod util;
+pub(crate) mod context;
+pub(crate) mod entropymode;
+pub(crate) mod token_cdfs;
+pub(crate) mod deblock;
+pub(crate) mod segmentation;
+pub(crate) mod cdef;
+pub(crate) mod lrf;
+pub(crate) mod encoder;
+pub(crate) mod mc;
+pub(crate) mod me;
+pub(crate) mod metrics;
+pub(crate) mod scan_order;
+pub(crate) mod scenechange;
+pub(crate) mod rate;
+pub(crate) mod tiling;
 
 mod api;
 mod header;
 mod frame;
 
+pub(crate) use crate::encoder::*;
+
 pub use crate::api::*;
-pub use crate::encoder::*;
-pub use crate::header::*;
 pub use crate::util::{CastFromPrimitive, Pixel};
 
+pub use crate::encoder::Tune;
 pub use crate::frame::Frame;
+pub use crate::partition::BlockSize;
 
 #[cfg(all(test, any(feature="decode_test", feature="decode_test_dav1d")))]
 mod test_encode_decode;
