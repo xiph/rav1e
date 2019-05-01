@@ -98,8 +98,8 @@ impl Default for EncoderConfig {
 
 impl EncoderConfig {
 
-  /// This is a preset which provides default settings according to a speed value in the specific range 0-10. 
-  /// For each speed value it is having different preset. See [`from_preset()`]. 
+  /// This is a preset which provides default settings according to a speed value in the specific range 0-10.
+  /// For each speed value it is having different preset. See [`from_preset()`].
   /// If the input value is greater than 10, it will result in the same settings of 10.
   ///
   /// [`from_preset()`]: struct.SpeedSettings.html#method.from_preset
