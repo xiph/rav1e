@@ -10,7 +10,7 @@
 use super::*;
 
 use crate::context::*;
-use crate::encoder::*;
+use crate::frame::*;
 use crate::plane::*;
 use crate::util::*;
 

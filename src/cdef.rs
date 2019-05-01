@@ -10,8 +10,8 @@
 #![allow(safe_extern_statics)]
 
 use crate::context::*;
-use crate::Frame;
-use crate::FrameInvariants;
+use crate::frame::Frame;
+use crate::encoder::FrameInvariants;
 use crate::plane::*;
 use crate::tiling::*;
 use crate::util::{clamp, msb, Pixel, CastFromPrimitive};

@@ -9,7 +9,7 @@
 
 #![allow(safe_extern_statics)]
 
-use crate::encoder::Frame;
+use crate::frame::Frame;
 use crate::encoder::FrameInvariants;
 use crate::context::PLANES;
 use crate::context::MAX_SB_SIZE;
