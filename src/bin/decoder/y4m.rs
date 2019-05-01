@@ -6,7 +6,7 @@ use crate::decoder::Decoder;
 use crate::decoder::VideoDetails;
 use crate::ChromaSamplePosition;
 use crate::ChromaSampling;
-use crate::encoder::Frame;
+use crate::Frame;
 use rav1e::*;
 
 impl Decoder for y4m::Decoder<'_, Box<dyn Read>> {
