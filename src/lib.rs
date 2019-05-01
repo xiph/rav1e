@@ -51,11 +51,14 @@ pub mod tiling;
 
 mod api;
 mod header;
+mod frame;
 
 pub use crate::api::*;
 pub use crate::encoder::*;
 pub use crate::header::*;
 pub use crate::util::{CastFromPrimitive, Pixel};
+
+pub use crate::frame::Frame;
 
 #[cfg(all(test, any(feature="decode_test", feature="decode_test_dav1d")))]
 mod test_encode_decode;
