@@ -651,16 +651,17 @@ impl ProgressInfo {
       self.get_frame_type_count(FrameType::SWITCH),
       self.get_frame_type_size(FrameType::SWITCH)
     );
+
     format!("\
     Key Frames: {:>6}    avg size: {:>7} B\n\
     Inter:      {:>6}    avg size: {:>7} B\n\
     Intra Only: {:>6}    avg size: {:>7} B\n\
     Switch:     {:>6}    avg size: {:>7} B\
     {}",
-      key, key_size / key,
+      key, key_size.checked_div(key).unwrap_or(0),
       inter, inter_size.checked_div(inter).unwrap_or(0),
-      ionly, ionly_size / key,
-      switch, switch_size / key,
+      ionly, ionly_size.checked_div(ionly).unwrap_or(0),
+      switch, switch_size.checked_div(switch).unwrap_or(0),
       if self.show_psnr {
         let psnr_y =
           self.frame_info.iter().map(|fi| fi.psnr.unwrap().0).sum::<f64>()
