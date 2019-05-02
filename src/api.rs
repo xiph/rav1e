@@ -624,7 +624,6 @@ impl<T: Pixel> Context<T> {
     let s = &mut self.output.0;
     let mut count = 0;
     while inner.frames_processed < inner.frame_count {
-
       match pool.install(|| inner.receive_packet()) {
         Ok(pkt) => {
           println!("Processed {}", pkt.number);
@@ -669,7 +668,11 @@ impl<T: Pixel> Context<T> {
       if self.inner.frame_count > 0 {
         self.inner.limit = self.inner.frame_count;
         self.process_frames();
-      }
+        self.inner = ContextInner::new(&self.config);
+        self.last_keyframe = 0;
+        self.inner.keyframes_tmp.clear();
+        self.inner.keyframes.clear();
+     }
     }
 
     let ret = self.inner.send_frame(frame);
