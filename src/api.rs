@@ -483,14 +483,6 @@ impl Config {
   pub fn new_context<T: Pixel>(&self) -> Context<T> {
     assert!(8 * std::mem::size_of::<T>() >= self.enc.bit_depth, "The Pixel u{} does not match the Config bit_depth {}",
             8 * std::mem::size_of::<T>(), self.enc.bit_depth);
-    // initialize with temporal delimiter
-    let packet_data = TEMPORAL_DELIMITER.to_vec();
-
-    let maybe_ac_qi_max = if self.enc.quantizer < 255 {
-      Some(self.enc.quantizer as u8)
-    } else {
-      None
-    };
 
     let pool = rayon::ThreadPoolBuilder::new().num_threads(self.threads).build().unwrap();
 
@@ -509,35 +501,9 @@ impl Config {
       config.speed_settings.rdo_tx_decision = false;
     }
 
-    let inner = ContextInner {
-        frame_count: 0,
-        limit: 0,
-        idx: 0,
-        frames_processed: 0,
-        frame_q: BTreeMap::new(),
-        frame_invariants: BTreeMap::new(),
-        keyframes: BTreeSet::new(),
-        keyframes_tmp: BTreeSet::new(),
-        packet_data,
-        segment_start_idx: 0,
-        segment_start_frame: 0,
-        config: self.enc.clone(),
-        rc_state: RCState::new(
-          self.enc.width as i32,
-          self.enc.height as i32,
-          self.enc.time_base.num as i64,
-          self.enc.time_base.den as i64,
-          self.enc.bitrate,
-          maybe_ac_qi_max,
-          self.enc.max_key_frame_interval as i32
-        ),
-        maybe_prev_log_base_q: None,
-        first_pass_data: FirstPassData { frames: Vec::new() },
-      };
-
     Context {
-      inner,
-      config: self.enc.clone(),
+      inner: ContextInner::new(&config),
+      config: config.clone(),
       last_keyframe: 0,
       keyframes: BTreeSet::new(),
       keyframe_detector: SceneChangeDetector::new(self.enc.bit_depth),
@@ -769,6 +735,43 @@ impl<T: Pixel> Context<T> {
 
 
 impl<T: Pixel> ContextInner<T> {
+  pub fn new(enc: &EncoderConfig) -> Self {
+    let maybe_ac_qi_max = if enc.quantizer < 255 {
+      Some(enc.quantizer as u8)
+    } else {
+      None
+    };
+
+    // initialize with temporal delimiter
+    let packet_data = TEMPORAL_DELIMITER.to_vec();
+
+    ContextInner {
+      frame_count: 0,
+      limit: 0,
+      idx: 0,
+      frames_processed: 0,
+      frame_q: BTreeMap::new(),
+      frame_invariants: BTreeMap::new(),
+      keyframes: BTreeSet::new(),
+      keyframes_tmp: BTreeSet::new(),
+      packet_data,
+      segment_start_idx: 0,
+      segment_start_frame: 0,
+      config: enc.clone(),
+      rc_state: RCState::new(
+        enc.width as i32,
+        enc.height as i32,
+        enc.time_base.num as i64,
+        enc.time_base.den as i64,
+        enc.bitrate,
+        maybe_ac_qi_max,
+        enc.max_key_frame_interval as i32
+      ),
+      maybe_prev_log_base_q: None,
+      first_pass_data: FirstPassData { frames: Vec::new() },
+    }
+  }
+
   pub fn send_frame<F>(&mut self, frame: F) -> Result<(), EncoderStatus>
   where
     F: Into<Option<Arc<Frame<T>>>>
