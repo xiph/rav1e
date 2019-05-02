@@ -82,6 +82,7 @@ fn process_frame<T: Pixel, D: Decoder>(
     Err(EncoderStatus::EnoughData) => {
       unreachable!();
     }
+    Err(EncoderStatus::Encoded) => {},
     Err(EncoderStatus::LimitReached) => {
       return None;
     }

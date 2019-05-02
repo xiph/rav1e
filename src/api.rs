@@ -9,6 +9,8 @@
 
 use arg_enum_proc_macro::ArgEnum;
 use bitstream_io::*;
+use crossbeam::channel::*;
+
 use crate::encoder::*;
 use crate::frame::Frame;
 use crate::metrics::calculate_frame_psnr;
@@ -541,6 +543,8 @@ impl Config {
       keyframe_detector: SceneChangeDetector::new(self.enc.bit_depth),
       is_flushing: false,
       pool,
+      output: unbounded(),
+      // pending: std::collections::VecDeque::new(),
     }
   }
 }
@@ -576,10 +580,13 @@ pub struct Context<T: Pixel> {
   keyframe_detector: SceneChangeDetector<T>,
   is_flushing: bool,
   pool: rayon::ThreadPool,
+  output: (Sender<Packet<T>>, Receiver<Packet<T>>),
 }
 
 #[derive(Clone, Copy, Debug)]
 pub enum EncoderStatus {
+  /// The frame had been encode but not emitted yet
+  Encoded,
   /// The encoder needs more data to produce an output Packet
   /// May be emitted by `Context::receive_packet`  when frame reordering is enabled.
   NeedMoreData,
@@ -640,6 +647,34 @@ impl<T: Pixel> Context<T> {
     }
   }
 
+  fn process_frames(&mut self) -> usize {
+    println!("Batch processing {} frames {} {}",
+             self.inner.frame_q.len(),
+             self.inner.frames_processed,
+             self.inner.frame_count);
+    let inner = &mut self.inner;
+    let pool = &mut self.pool;
+
+    let s = &mut self.output.0;
+    let mut count = 0;
+    while inner.frames_processed < inner.frame_count {
+
+      match pool.install(|| inner.receive_packet()) {
+        Ok(pkt) => {
+          println!("Processed {}", pkt.number);
+          let _ = s.send(pkt).unwrap();
+          count += 1;
+        },
+        Err(EncoderStatus::Encoded) => {},
+        Err(err) => {
+          panic!("Error {:?}", err);
+        }
+      }
+    }
+
+    count
+  }
+
   pub fn send_frame<F>(&mut self, frame: F) -> Result<(), EncoderStatus>
   where
     F: Into<Option<Arc<Frame<T>>>>,
@@ -665,16 +700,30 @@ impl<T: Pixel> Context<T> {
       self.keyframes.insert(self.last_keyframe);
       self.inner.keyframes_tmp.insert(self.last_keyframe);
       println!("Keyframe at {}", self.last_keyframe);
+      if self.inner.frame_count > 0 {
+        self.inner.limit = self.inner.frame_count;
+        self.process_frames();
+      }
     }
 
-    self.inner.send_frame(frame)
+    let ret = self.inner.send_frame(frame);
+
+
+    ret
   }
 
   pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
-    let pool = &mut self.pool;
-    let inner = &mut self.inner;
+    let r = &mut self.output.1;
 
-    pool.install(|| inner.receive_packet())
+    if let Ok(pkt) = r.try_recv() {
+      return Ok(pkt);
+    } else {
+      if self.is_flushing {
+        return Err(EncoderStatus::LimitReached);
+      } else {
+        return Err(EncoderStatus::NeedMoreData);
+      }
+    }
   }
 
   pub fn flush(&mut self) {
@@ -825,9 +874,9 @@ impl<T: Pixel> ContextInner<T> {
       Some(Some(_)) => {},
       _ => {
         if fi.show_existing_frame {
-          println!("Show existing frame idx {} frame {}", idx, fi.number);
+          println!("  Show existing frame idx {} frame {}", idx, fi.number);
         } else {
-          println!("This frame does not exist idx {} frame {}", idx, fi.number);
+          println!("  This frame does not exist idx {} frame {}", idx, fi.number);
         }
         return Err(EncoderStatus::NeedMoreData);
       }
@@ -866,10 +915,6 @@ impl<T: Pixel> ContextInner<T> {
       return Err(EncoderStatus::LimitReached);
     }
 
-    if self.needs_more_lookahead() {
-      return Err(EncoderStatus::NeedMoreData);
-    }
-
     while !self.set_frame_properties(self.idx)? {
       self.idx += 1;
     }
@@ -906,7 +951,7 @@ impl<T: Pixel> ContextInner<T> {
 
           // TODO: Trial encoding for first frame of each type.
           let data = encode_frame(fi, &mut fs);
-          println!("Enc type {} frame_num {}", fi.number, fi.frame_type);
+          // println!("Enc type {} frame_num {}", fi.number, fi.frame_type);
           self.maybe_prev_log_base_q = Some(qps.log_base_q);
           // TODO: Add support for dropping frames.
           self.rc_state.update_state(
@@ -930,7 +975,7 @@ impl<T: Pixel> ContextInner<T> {
             let fi = fi.clone();
             self.finalize_packet(rec, &fi)
           } else {
-            Err(EncoderStatus::NeedMoreData)
+            Err(EncoderStatus::Encoded)
           }
         } else {
           Err(EncoderStatus::NeedMoreData)
@@ -1002,7 +1047,7 @@ impl<T: Pixel> ContextInner<T> {
     } else {
       FrameType::INTER
     };
-    println!("Detecting {} {}", frame_number, ft);
+    // println!("Detecting {} {}", frame_number, ft);
     ft
     /*
     if frame_number == 0 {
