@@ -501,16 +501,93 @@ impl Config {
       config.speed_settings.rdo_tx_decision = false;
     }
 
+    let (s_frame, r_frame) = unbounded::<Option<Arc<Frame<T>>>>();
+    let (s_pkt, r_pkt) = unbounded();
+
+    let conf = config.clone();
+    let worker = std::thread::spawn(move || {
+      let config = conf;
+      let mut keyframe_detector = SceneChangeDetector::new(config.bit_depth);
+      let mut inner = ContextInner::new(&config);
+      let mut last_keyframe = 0;
+
+      fn detect_keyframe<T: Pixel>(frame_count: u64,
+                         min_interval: u64,
+                         max_interval: u64,
+                         last_keyframe: u64,
+                         keyframe_detector: &mut SceneChangeDetector<T>,
+                         frame: Arc<Frame<T>>) -> bool {
+        println!("Detecting {}", frame_count);
+        if frame_count == 0 {
+          true
+        } else {
+          let interval = frame_count - last_keyframe;
+          let frame_count = frame_count as usize;
+          if interval + 1 == min_interval {
+            keyframe_detector.set_last_frame(frame.clone(), frame_count);
+          }
+
+          interval > max_interval ||
+            interval > min_interval && keyframe_detector.detect_scene_change(frame.clone(), frame_count)
+        }
+      }
+
+      while let Ok(frame) = r_frame.recv() {
+        println!("Frame in {:?}", frame);
+        let keyframe = if frame.is_none() {
+          println!("flushing {} {}", inner.frame_count, frame.is_some());
+          inner.limit = inner.frame_count;
+          true
+        } else if config.speed_settings.no_scene_detection {
+          inner.frame_count % config.max_key_frame_interval == 0
+        } else {
+          detect_keyframe(inner.frame_count,
+                          config.min_key_frame_interval,
+                          config.max_key_frame_interval,
+                          last_keyframe,
+                          &mut keyframe_detector,
+                          frame.clone().unwrap())
+        };
+
+        if keyframe {
+          last_keyframe = inner.frame_count;
+          // self.keyframes.insert(self.last_keyframe);
+          inner.keyframes_tmp.insert(last_keyframe);
+          println!("Keyframe at {}", last_keyframe);
+          if inner.frame_count > 0 {
+            inner.limit = inner.frame_count;
+            while inner.frames_processed < inner.frame_count {
+              match pool.install(|| inner.receive_packet()) {
+                Ok(pkt) => {
+                  println!("Processed {}", pkt.number);
+                  let _ = s_pkt.send(pkt).unwrap();
+                },
+                Err(EncoderStatus::Encoded) => {},
+                Err(err) => {
+                  panic!("Error {:?}", err);
+                }
+              }
+            }
+
+            // inner = ContextInner::new(&config);
+            // last_keyframe = 0;
+          }
+        }
+
+        let _ = inner.send_frame(frame);
+      }
+
+      println!("Encoding thread gone");
+    });
+
     Context {
-      inner: ContextInner::new(&config),
-      config: config.clone(),
-      last_keyframe: 0,
-      keyframes: BTreeSet::new(),
-      keyframe_detector: SceneChangeDetector::new(self.enc.bit_depth),
+      config,
       is_flushing: false,
-      pool,
-      output: unbounded(),
-      // pending: std::collections::VecDeque::new(),
+      worker,
+      output: r_pkt,
+      input: s_frame,
+      frames_sent: 0,
+      frames_processes: 0,
     }
   }
 }
@@ -539,14 +616,13 @@ pub struct ContextInner<T: Pixel> {
 }
 
 pub struct Context<T: Pixel> {
-  inner: ContextInner<T>,
-  config: EncoderConfig,
-  last_keyframe: u64,
-  keyframes: BTreeSet<u64>,
-  keyframe_detector: SceneChangeDetector<T>,
   is_flushing: bool,
-  pool: rayon::ThreadPool,
-  output: (Sender<Packet<T>>, Receiver<Packet<T>>),
+  worker: std::thread::JoinHandle<()>,
+  output: Receiver<Packet<T>>,
+  input: Sender<Option<Arc<Frame<T>>>>,
+  config: EncoderConfig,
+  frames_sent: usize,
+  frames_processes: usize,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -597,49 +673,6 @@ impl<T: Pixel> Context<T> {
     ))
   }
 
-  fn detect_keyframe(&mut self, frame: Arc<Frame<T>>) -> bool {
-    if self.inner.frame_count == 0 {
-      true
-    } else {
-      let interval = self.inner.frame_count - self.last_keyframe;
-      let frame_count = self.inner.frame_count as usize;
-      let min_interval = self.config.min_key_frame_interval;
-      if interval + 1 == min_interval {
-        self.keyframe_detector.set_last_frame(frame.clone(), frame_count);
-      }
-
-      interval > self.config.max_key_frame_interval ||
-        interval > min_interval && self.keyframe_detector.detect_scene_change(frame.clone(), frame_count)
-    }
-  }
-
-  fn process_frames(&mut self) -> usize {
-    println!("Batch processing {} frames {} {}",
-             self.inner.frame_q.len(),
-             self.inner.frames_processed,
-             self.inner.frame_count);
-    let inner = &mut self.inner;
-    let pool = &mut self.pool;
-
-    let s = &mut self.output.0;
-    let mut count = 0;
-    while inner.frames_processed < inner.frame_count {
-      match pool.install(|| inner.receive_packet()) {
-        Ok(pkt) => {
-          println!("Processed {}", pkt.number);
-          let _ = s.send(pkt).unwrap();
-          count += 1;
-        },
-        Err(EncoderStatus::Encoded) => {},
-        Err(err) => {
-          panic!("Error {:?}", err);
-        }
-      }
-    }
-
-    count
-  }
-
   pub fn send_frame<F>(&mut self, frame: F) -> Result<(), EncoderStatus>
   where
     F: Into<Option<Arc<Frame<T>>>>,
@@ -649,46 +682,31 @@ impl<T: Pixel> Context<T> {
     }
 
     let frame = frame.into();
-    let keyframe = if frame.is_none() {
-      println!("flushing {} {}", self.inner.frame_count, frame.is_some());
+    if frame.is_none() {
       self.is_flushing = true;
-      self.inner.limit = self.inner.frame_count;
-      true
-    } else if self.config.speed_settings.no_scene_detection {
-      self.inner.frame_count % self.config.max_key_frame_interval == 0
+      println!("Flush requested");
     } else {
-      self.detect_keyframe(frame.clone().unwrap())
-    };
-
-    if keyframe {
-      self.last_keyframe = self.inner.frame_count;
-      self.keyframes.insert(self.last_keyframe);
-      self.inner.keyframes_tmp.insert(self.last_keyframe);
-      println!("Keyframe at {}", self.last_keyframe);
-      if self.inner.frame_count > 0 {
-        self.inner.limit = self.inner.frame_count;
-        self.process_frames();
-        self.inner = ContextInner::new(&self.config);
-        self.last_keyframe = 0;
-        self.inner.keyframes_tmp.clear();
-        self.inner.keyframes.clear();
-     }
+      self.frames_sent += 1;
     }
 
-    let ret = self.inner.send_frame(frame);
+    self.input.send(frame).unwrap();
 
-
-    ret
+    Ok(())
   }
 
   pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
-    let r = &mut self.output.1;
+    let r = &mut self.output;
 
     if let Ok(pkt) = r.try_recv() {
-      return Ok(pkt);
+        self.frames_processes += 1;
+        return Ok(pkt);
     } else {
       if self.is_flushing {
-        return Err(EncoderStatus::LimitReached);
+        if self.frames_sent == self.frames_processes {
+          return Err(EncoderStatus::LimitReached);
+        } else {
+          return Err(EncoderStatus::Encoded);
+        }
       } else {
         return Err(EncoderStatus::NeedMoreData);
       }
@@ -732,7 +750,8 @@ impl<T: Pixel> Context<T> {
   }
 
   pub fn get_first_pass_data(&self) -> &FirstPassData {
-    &self.inner.first_pass_data
+    // &self.inner.first_pass_data
+    unimplemented!()
   }
 }
 
