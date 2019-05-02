@@ -531,7 +531,6 @@ impl Config {
         ),
         maybe_prev_log_base_q: None,
         first_pass_data: FirstPassData { frames: Vec::new() },
-        pool
       };
 
     Context {
@@ -541,6 +540,7 @@ impl Config {
       keyframes: BTreeSet::new(),
       keyframe_detector: SceneChangeDetector::new(self.enc.bit_depth),
       is_flushing: false,
+      pool,
     }
   }
 }
@@ -565,7 +565,6 @@ pub struct ContextInner<T: Pixel> {
   rc_state: RCState,
   maybe_prev_log_base_q: Option<i64>,
   pub first_pass_data: FirstPassData,
-  pool: rayon::ThreadPool,
   keyframes_tmp: BTreeSet<u64>,
 }
 
@@ -576,6 +575,7 @@ pub struct Context<T: Pixel> {
   keyframes: BTreeSet<u64>,
   keyframe_detector: SceneChangeDetector<T>,
   is_flushing: bool,
+  pool: rayon::ThreadPool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -671,7 +671,10 @@ impl<T: Pixel> Context<T> {
   }
 
   pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
-    self.inner.receive_packet()
+    let pool = &mut self.pool;
+    let inner = &mut self.inner;
+
+    pool.install(|| inner.receive_packet())
   }
 
   pub fn flush(&mut self) {
@@ -902,7 +905,7 @@ impl<T: Pixel> ContextInner<T> {
           let mut fs = FrameState::new_with_frame(fi, frame.clone());
 
           // TODO: Trial encoding for first frame of each type.
-          let data = self.pool.install(||encode_frame(fi, &mut fs));
+          let data = encode_frame(fi, &mut fs);
           println!("Enc type {} frame_num {}", fi.number, fi.frame_type);
           self.maybe_prev_log_base_q = Some(qps.log_base_q);
           // TODO: Add support for dropping frames.
