@@ -396,7 +396,8 @@ pub fn rdo_tx_size_type<T: Pixel>(
           tile_bo,
           tx_size,
           tx_set,
-          tx_types
+          tx_types,
+          skip
         );
 
     if rd_cost < best_rd {
@@ -414,6 +415,8 @@ pub fn rdo_tx_size_type<T: Pixel>(
 
     cw.rollback(&cw_checkpoint);
   }
+
+  debug_assert!(!skip || best_tx_type == TxType::DCT_DCT);
 
   (best_tx_size, best_tx_type)
 }
@@ -591,12 +594,12 @@ pub fn rdo_mode_decision<T: Pixel>(
   luma_mode_is_intra: bool,
   mode_context: usize,
   mv_stack: &ArrayVec<[CandidateMV; 9]>| {
-    let (tx_size, mut tx_type) = rdo_tx_size_type(
-      fi, ts, cw, bsize, tile_bo, luma_mode, ref_frames, mvs, false,
-    );
 
     // Find the best chroma prediction mode for the current luma prediction mode
     let mut chroma_rdo = |skip: bool| {
+      let (tx_size, mut tx_type) = rdo_tx_size_type(
+        fi, ts, cw, bsize, tile_bo, luma_mode, ref_frames, mvs, skip,
+      );
       mode_set_chroma.iter().for_each(|&chroma_mode| {
         let wr = &mut WriterCounter::new();
         let tell = wr.tell_frac();
@@ -675,10 +678,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     };
 
     chroma_rdo(false);
-    // Don't skip when using intra modes
-    if !luma_mode_is_intra {
-      chroma_rdo(true);
-    };
+    chroma_rdo(true);
   };
 
   if fi.frame_type != FrameType::INTER {
@@ -819,7 +819,7 @@ pub fn rdo_mode_decision<T: Pixel>(
       bsize,
       best.tx_size,
       best.tx_type,
-      false,
+      best.skip,
       CFLParams::default(),
       true,
       rdo_type,
@@ -953,7 +953,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>, cw: &mut ContextWriter,
   mode: PredictionMode, ref_frames: [RefType; 2], mvs: [MotionVector; 2],
   bsize: BlockSize, tile_bo: BlockOffset, tx_size: TxSize, tx_set: TxSet,
-  tx_types: &[TxType]
+  tx_types: &[TxType], skip: bool
 ) -> (TxType, f64) {
   let mut best_type = TxType::DCT_DCT;
   let mut best_rd = std::f64::MAX;
@@ -1004,7 +1004,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
         bsize,
         tx_size,
         tx_type,
-        false,
+        skip,
         CFLParams::default(), // Unused.
         true,
         rdo_type,
@@ -1022,7 +1022,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
         is_chroma_block,
         tile_bo,
         tx_dist,
-        false,
+        skip,
         true
       )
     } else {

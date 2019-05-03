@@ -1270,7 +1270,7 @@ pub fn encode_block_b<T: Pixel>(
         cw.write_tx_size_intra(w, tile_bo, bsize, tx_size);
         cw.bc.update_tx_size_context(tile_bo, bsize, tx_size, false);
       } /*else {  // TODO (yushin): write_tx_size_inter(), i.e. var-tx
-
+        // if here, skip == false
       }*/
     } else {
       cw.bc.update_tx_size_context(tile_bo, bsize, tx_size, is_inter && skip);
@@ -1513,9 +1513,13 @@ pub fn encode_block_with_modes<T: Pixel>(
   let mut cdef_coded = cw.bc.cdef_coded;
   let (tx_size, tx_type) = (mode_decision.tx_size, mode_decision.tx_type);
 
-  debug_assert!((tx_size, tx_type) ==
-                rdo_tx_size_type(fi, ts, cw, bsize, tile_bo, mode_luma, ref_frames, mvs, skip));
-
+  if cfg!(debug_assertions) {
+    let (tx_size_test, tx_type_test) =
+      rdo_tx_size_type(fi, ts, cw, bsize, tile_bo, mode_luma, ref_frames, mvs, skip);
+    debug_assert!((tx_size, tx_type) == (tx_size_test, tx_type_test),
+      "tx_size: {:#?} -> {:#?}, tx_type: {:#?} -> {:#?}, bsize: {:#?}, skip: {:#?}, mode_luma: {:#?}",
+      tx_size, tx_size_test, tx_type, tx_type_test, bsize, skip, mode_luma);
+  }
   let mut mv_stack = ArrayVec::<[CandidateMV; 9]>::new();
   let is_compound = ref_frames[1] != NONE_FRAME;
   let mode_context = cw.find_mvrefs(tile_bo, ref_frames, &mut mv_stack, bsize, fi, is_compound);
