@@ -8,11 +8,9 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::decoder::VideoDetails;
+use rav1e::*;
 use std::io::Write;
 use std::slice;
-use rav1e::*;
-
-pub use ivf::*;
 
 pub fn write_y4m_frame<T: Pixel>(y4m_enc: &mut y4m::Encoder<'_, Box<dyn Write>>, rec: &rav1e::Frame<T>, y4m_details: VideoDetails) {
   let pitch_y = if y4m_details.bit_depth > 8 { y4m_details.width * 2 } else { y4m_details.width };

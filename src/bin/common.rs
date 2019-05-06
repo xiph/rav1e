@@ -7,6 +7,7 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use crate::muxer::{create_muxer, Muxer};
 use crate::{ColorPrimaries, MatrixCoefficients, TransferCharacteristics};
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand, Shell};
 use rav1e::partition::BlockSize;
@@ -20,7 +21,7 @@ use std::{fmt, io};
 
 pub struct EncoderIO {
   pub input: Box<dyn Read>,
-  pub output: Box<dyn Write>,
+  pub output: Box<dyn Muxer>,
   pub rec: Option<Box<dyn Write>>
 }
 
@@ -296,10 +297,7 @@ pub fn parse_cli() -> CliOptions {
       "-" => Box::new(io::stdin()) as Box<dyn Read>,
       f => Box::new(File::open(&f).unwrap()) as Box<dyn Read>
     },
-    output: match matches.value_of("OUTPUT").unwrap() {
-      "-" => Box::new(io::stdout()) as Box<dyn Write>,
-      f => Box::new(File::create(&f).unwrap()) as Box<dyn Write>
-    },
+    output: create_muxer(matches.value_of("OUTPUT").unwrap()),
     rec: matches
       .value_of("RECONSTRUCTION")
       .map(|f| Box::new(File::create(&f).unwrap()) as Box<dyn Write>)
