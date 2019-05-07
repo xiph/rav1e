@@ -8,6 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 #![deny(missing_docs)]
 
+use crate::activity::ActivityMask;
 use crate::api::{EncoderConfig, EncoderStatus, FrameType, Packet};
 use crate::context::*;
 use crate::context::{FrameBlocks, SuperBlockOffset, TileSuperBlockOffset};
@@ -1190,6 +1191,9 @@ impl<T: Pixel> ContextInner<T> {
 
           let fi = self.frame_invariants.get_mut(&cur_output_frameno).unwrap();
           let mut fs = FrameState::new_with_frame(fi, frame.clone());
+
+          fi.activity_mask = ActivityMask::from_plane(&fs.input.planes[0]);
+
           let data = encode_frame(fi, &mut fs, &self.inter_cfg);
           let enc_stats = fs.enc_stats.clone();
           self.maybe_prev_log_base_q = Some(qps.log_base_q);

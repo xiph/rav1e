@@ -7,6 +7,7 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use crate::activity::*;
 use crate::api::*;
 use crate::cdef::*;
 use crate::context::*;
@@ -35,7 +36,6 @@ use crate::stats::EncoderStats;
 use crate::tiling::*;
 use crate::transform::*;
 use crate::util::*;
-
 use arg_enum_proc_macro::ArgEnum;
 use arrayvec::*;
 use bincode::{deserialize, serialize};
@@ -543,6 +543,7 @@ pub struct FrameInvariants<T: Pixel> {
 
   /// Target CPU feature level.
   pub cpu_feature_level: crate::cpu_features::CpuFeatureLevel,
+  pub activity_mask: ActivityMask,
 }
 
 pub(crate) const fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
@@ -711,6 +712,7 @@ impl<T: Pixel> FrameInvariants<T> {
         .into_boxed_slice(),
       block_importances: vec![0.; w_in_imp_b * h_in_imp_b].into_boxed_slice(),
       cpu_feature_level: Default::default(),
+      activity_mask: Default::default(),
     }
   }
 
