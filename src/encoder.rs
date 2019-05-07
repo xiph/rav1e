@@ -31,6 +31,7 @@ use crate::util::*;
 use crate::partition::PartitionType::*;
 use crate::partition::RefType::*;
 use crate::header::*;
+use crate::quantize::QSCALE;
 
 use arg_enum_proc_macro::ArgEnum;
 use bitstream_io::{BitWriter, BigEndian};
@@ -301,9 +302,12 @@ impl Sequence {
 #[derive(Debug)]
 pub struct FrameState<T: Pixel> {
   pub sb_size_log2: usize,
+  pub bit_depth: usize,
   pub input: Arc<Frame<T>>,
   pub input_hres: Plane<T>, // half-resolution version of input luma
   pub input_qres: Plane<T>, // quarter-resolution version of input luma
+  pub activity_mask: Plane<u16>,
+  pub mean_activity: u16,
   pub rec: Frame<T>,
   pub cdfs: CDFContext,
   pub context_update_tile_id: usize, // tile id used for the CDFontext
@@ -331,9 +335,12 @@ impl<T: Pixel> FrameState<T> {
 
     Self {
       sb_size_log2: fi.sb_size_log2(),
+      bit_depth: fi.sequence.bit_depth,
       input: frame,
       input_hres: Plane::new(luma_width / 2, luma_height / 2, 1, 1, luma_padding_x / 2, luma_padding_y / 2),
       input_qres: Plane::new(luma_width / 4, luma_height / 4, 2, 2, luma_padding_x / 4, luma_padding_y / 4),
+      activity_mask: Plane::new(luma_width / 8, luma_height / 8, 3, 3, luma_padding_x / 8, luma_padding_y / 8),
+      mean_activity: 0_u16,
       rec: Frame::new(luma_width, luma_height, fi.sequence.chroma_sampling),
       cdfs: CDFContext::new(0),
       context_update_tile_id: 0,
@@ -350,6 +357,72 @@ impl<T: Pixel> FrameState<T> {
       },
       t: RDOTracker::new()
     }
+  }
+
+  /// Computes the variance of 8x8 blocks factoring Contrast Sensitivity
+  /// Function in the tx_domain.
+  ///
+  /// # Panics
+  ///
+  /// Panics if the activity mask is not decimated by 8 on both axes.
+  pub fn compute_activity_mask(&mut self) {
+
+    // Contrast Sensitivity Function with DC coeff = 0 to subtract mean 
+    let csf: [[f32; 8]; 8] = [
+      [0.0/*1.608_443*/, 2.339_554, 2.573_509, 1.608_443, 1.072_295, 0.643_377, 0.504_610, 0.421_887],
+      [2.144_591, 2.144_591, 1.838_221, 1.354_478, 0.989_811, 0.443_708, 0.428_918, 0.467_911],
+      [1.838_221, 1.979_622, 1.608_443, 1.072_295, 0.643_377, 0.451_493, 0.372_972, 0.459_555],
+      [1.838_221, 1.513_829, 1.169_777, 0.887_417, 0.504_610, 0.295_806, 0.321_689, 0.415_082],
+      [1.429_727, 1.169_777, 0.695_543, 0.459_555, 0.378_457, 0.236_102, 0.249_855, 0.334_222],
+      [1.072_295, 0.735_288, 0.467_911, 0.402_111, 0.317_717, 0.247_453, 0.227_744, 0.279_729],
+      [0.525_206, 0.402_111, 0.329_937, 0.295_806, 0.249_855, 0.212_687, 0.214_459, 0.254_803],
+      [0.357_432, 0.279_729, 0.270_896, 0.262_603, 0.229_778, 0.257_351, 0.249_855, 0.259_950]];
+    
+    let luma_plane = &self.input.planes[0];
+    let PlaneConfig { width, height, .. } = luma_plane.cfg;
+    let activity_plane = &mut self.activity_mask;
+    let PlaneConfig { xdec, ydec, .. } = activity_plane.cfg;
+    let activity_mask: &mut [u16] = &mut *activity_plane.data;
+    assert!(xdec == 3 && ydec == 3);
+    let bit_depth = self.bit_depth;
+
+    let aligned_luma = Rect {
+      x: 0_isize,
+      y: 0_isize,
+      width: (width >> xdec) << xdec,
+      height: (height >> ydec) << ydec,
+    };
+    let luma = PlaneRegion::new(luma_plane, aligned_luma);
+
+    for x in 0 .. width >> xdec {
+      for y in 0 .. height >> ydec {
+
+        let block_rect = Area::Rect{
+          x: (x << xdec) as isize,
+          y: (y << ydec) as isize,
+          width: 8,
+          height: 8,
+        };
+        
+        let block = luma.subregion(block_rect);
+        
+        let deviation: Vec<i16> = block.rows_iter().flatten().map(|&pix| {
+          let pix_int: i16 = CastFromPrimitive::cast_from(pix);
+          pix_int
+        }).collect();
+        
+        let tx_type = TxType::DCT_DCT;
+        let tx_size = TxSize::TX_8X8;
+        let mut tx_deviation = [0_i32; 64];
+        forward_transform(&deviation, &mut tx_deviation, tx_size.width(), tx_size, tx_type, bit_depth);
+
+        // Applying CSF to the deviation on tx_domain and accumulating 
+        let act: f32 = tx_deviation.iter().zip(csf.iter().flatten()).map(|(d, &csf)| (*d as f32 * csf / (1 << QSCALE) as f32).powf(2.0).floor() / 64.0f32).sum();
+        activity_mask[y * (width >> xdec) + x] = act as u16;
+      }
+    }
+    let sum: f32 = activity_mask.iter().map(|&a| a as f32).sum();
+    self.mean_activity = (sum / activity_mask.len() as f32) as u16;
   }
 
   #[inline(always)]
@@ -2297,7 +2370,7 @@ pub fn update_rec_buffer<T: Pixel>(fi: &mut FrameInvariants<T>, fs: FrameState<T
 }
 
 #[cfg(test)]
-mod test {
+pub mod test {
   use super::*;
 
   #[test]

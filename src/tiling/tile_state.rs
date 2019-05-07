@@ -51,6 +51,7 @@ pub struct TileStateMut<'a, T: Pixel> {
   pub input_tile: Tile<'a, T>, // the current tile
   pub input_hres: &'a Plane<T>,
   pub input_qres: &'a Plane<T>,
+  pub activity_mask: &'a Plane<u16>,
   pub deblock: &'a DeblockState,
   pub rec: TileMut<'a, T>,
   pub qc: QuantizationContext,
@@ -91,6 +92,7 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
       input_tile: Tile::new(&fs.input, luma_rect),
       input_hres: &fs.input_hres,
       input_qres: &fs.input_qres,
+      activity_mask: &fs.activity_mask,
       deblock: &fs.deblock,
       rec: TileMut::new(&mut fs.rec, luma_rect),
       qc: Default::default(),
@@ -116,6 +118,27 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
         .collect(),
       rdo: RDOTracker::new(),
     }
+  }
+
+  //Retrieves the average activity of the tile
+  //Retrieves the average activity of the tile
+  pub fn get_activity(&self) -> u16 {
+    let TileRect { x, y, width, height} = self.tile_rect();
+    let act_mask: &[u16] = &self.activity_mask.data;
+    let PlaneConfig { xdec, ydec, .. } = self.activity_mask.cfg;
+    let act_tile_x = x >> xdec;
+    let act_tile_y = y >> ydec;
+    let act_tile_width = width >> xdec;
+    let act_tile_height = height >> ydec;
+
+    let mut activity: u32 = 0;
+    for r in 0..act_tile_height {
+      for c in 0..act_tile_width {
+        let act: u32 = act_mask[ (act_tile_x + r) * act_tile_width + act_tile_y + c].into();
+        activity += act;
+      }
+    }
+    (activity as usize / (act_tile_width * act_tile_height)) as u16
   }
 
   #[inline(always)]

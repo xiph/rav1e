@@ -17,6 +17,8 @@ use std::convert::Into;
 use std::mem;
 use std::ops::AddAssign;
 
+pub const QSCALE: usize = 3;
+
 pub trait Coefficient:
   PrimInt + Into<i32> + AsPrimitive<i32> + CastFromPrimitive<i32> + AddAssign + Signed + 'static {}
 impl Coefficient for i16 {}

@@ -1043,6 +1043,9 @@ impl<T: Pixel> ContextInner<T> {
 
           let fi = self.frame_invariants.get_mut(&cur_output_frameno).unwrap();
           let mut fs = FrameState::new_with_frame(fi, frame.clone());
+          
+          fs.compute_activity_mask();
+          
           let data = encode_frame(fi, &mut fs);
           self.maybe_prev_log_base_q = Some(qps.log_base_q);
           // TODO: Add support for dropping frames.

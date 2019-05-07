@@ -298,7 +298,7 @@ impl<T: Pixel> Plane<T> {
   }
 
   #[inline]
-  fn index(&self, x: usize, y: usize) -> usize {
+  pub fn index(&self, x: usize, y: usize) -> usize {
     (y + self.cfg.yorigin) * self.cfg.stride + (x + self.cfg.xorigin)
   }
 
