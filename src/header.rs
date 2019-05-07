@@ -302,7 +302,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     }
 
     self.write_bit(seq.use_128x128_superblock)?;
-    self.write_bit(true)?; // enable filter intra
+    self.write_bit(seq.enable_filter_intra)?; // enable filter intra
     self.write_bit(seq.enable_intra_edge_filter)?;
 
     if !seq.reduced_still_picture_hdr {
