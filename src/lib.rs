@@ -56,6 +56,7 @@ extern crate log;
 #[cfg(any(cargo_c, feature = "capi"))]
 pub mod capi;
 
+mod activity;
 pub(crate) mod asm;
 mod cpu_features;
 mod dist;
