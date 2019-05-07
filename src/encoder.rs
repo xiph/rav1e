@@ -116,6 +116,7 @@ pub struct Sequence {
   // 2 - adaptive
   pub still_picture: bool,               // Video is a single frame still picture
   pub reduced_still_picture_hdr: bool,   // Use reduced header for still picture
+  pub enable_filter_intra: bool,         // enables/disables filter_intra
   pub enable_intra_edge_filter: bool,    // enables/disables corner/edge/upsampling
   pub enable_interintra_compound: bool,  // enables/disables interintra_compound
   pub enable_masked_compound: bool,      // enables/disables masked compound
@@ -198,6 +199,7 @@ impl Sequence {
       force_integer_mv: 2,
       still_picture: false,
       reduced_still_picture_hdr: false,
+      enable_filter_intra: false,
       enable_intra_edge_filter: false,
       enable_interintra_compound: false,
       enable_masked_compound: false,
@@ -1252,13 +1254,13 @@ pub fn encode_block_b<T: Pixel>(
       }
     }
     // TODO: Extra condition related to palette mode, see `read_filter_intra_mode_info` in decodemv.c
-    if luma_mode == PredictionMode::DC_PRED && bsize.width() <= 32 && bsize.height() <= 32 {
-      cw.write_use_filter_intra(w,false, bsize); // Always turn off FILTER_INTRA
+    if fi.sequence.enable_filter_intra &&
+      luma_mode == PredictionMode::DC_PRED && bsize.width() <= 32 && bsize.height() <= 32 {
+      cw.write_use_filter_intra(w,false, bsize); // turn off FILTER_INTRA
     }
   }
 
-  // write tx_size here (for now, intra frame only)
-  // TODO: Add new field tx_mode to fi, then Use the condition, fi.tx_mode == TX_MODE_SELECT
+  // write tx_size here
   if fi.tx_mode_select {
     if bsize.greater_than(BlockSize::BLOCK_4X4) && !(is_inter && skip) {
       if !is_inter {
