@@ -703,7 +703,7 @@ endfunc
 function \op\()_8tap_\type\()_8bpc_neon, export=1
         mov             x8,  \type_h
         mov             x9,  \type_v
-        b               \op\()_8tap\()_neon
+        b               \op\()_8tap_neon
 endfunc
 .endm
 
