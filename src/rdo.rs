@@ -511,7 +511,7 @@ pub fn rdo_mode_decision<T: Pixel>(
   };
 
   for (i, &ref_frames) in ref_frames_set.iter().enumerate() {
-    let mut mv_stack: Vec<CandidateMV> = Vec::new();
+    let mut mv_stack = ArrayVec::<[CandidateMV; 9]>::new();
     mode_contexts.push(cw.find_mvrefs(tile_bo, ref_frames, &mut mv_stack, bsize, fi, false));
 
     if fi.frame_type == FrameType::INTER {
@@ -571,7 +571,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         let mv0 = mvs_from_me[r0][0];
         let mv1 = mvs_from_me[r1][0];
         mvs_from_me.push([mv0, mv1]);
-        let mut mv_stack: Vec<CandidateMV> = Vec::new();
+        let mut mv_stack = ArrayVec::<[CandidateMV; 9]>::new();
         mode_contexts.push(cw.find_mvrefs(tile_bo, ref_frames, &mut mv_stack, bsize, fi, true));
         for &x in RAV1E_INTER_COMPOUND_MODES {
           mode_set.push((x, ref_frames_set.len() - 1));
@@ -590,7 +590,7 @@ pub fn rdo_mode_decision<T: Pixel>(
   mode_set_chroma: &[PredictionMode],
   luma_mode_is_intra: bool,
   mode_context: usize,
-  mv_stack: &Vec<CandidateMV>| {
+  mv_stack: &ArrayVec<[CandidateMV; 9]>| {
     let (tx_size, mut tx_type) = rdo_tx_size_type(
       fi, ts, cw, bsize, tile_bo, luma_mode, ref_frames, mvs, false,
     );
@@ -628,7 +628,7 @@ pub fn rdo_mode_decision<T: Pixel>(
             tx_size,
             tx_type,
             mode_context,
-            mv_stack,
+            &mv_stack,
             rdo_type,
             !needs_rec
           );
@@ -705,7 +705,7 @@ pub fn rdo_mode_decision<T: Pixel>(
       PredictionMode::NEW_NEARESTMV => [mvs_from_me[i][0], mv_stacks[i][0].comp_mv],
       _ => [MotionVector::default(); 2]
     };
-    let mode_set_chroma = vec![luma_mode];
+    let mode_set_chroma = ArrayVec::from([luma_mode]);
 
     luma_chroma_mode_rdo(luma_mode, ts, cw, &mut best, mvs, ref_frames_set[i], &mode_set_chroma, false,
              mode_contexts[i], &mv_stacks[i]);
@@ -800,7 +800,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         mode_set_chroma.push(PredictionMode::DC_PRED);
       }
       luma_chroma_mode_rdo(luma_mode, ts, cw, &mut best, mvs, ref_frames, &mode_set_chroma, true,
-               0, &Vec::new());
+                           0, &ArrayVec::<[CandidateMV; 9]>::new());
     });
   }
 
