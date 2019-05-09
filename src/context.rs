@@ -32,6 +32,7 @@ use crate::util::{AlignedArray, clamp, msb, Pixel, UninitializedAlignedArray};
 
 use std::*;
 use std::ops::{Index, IndexMut};
+use arrayvec::*;
 
 pub const PLANES: usize = 3;
 
@@ -2135,7 +2136,7 @@ impl<'a> ContextWriter<'a> {
     cmp::min(cmp::max(col_offset, -(mi_col as isize)), (mi_cols - mi_col - 1) as isize)
   }
 
-  fn find_matching_mv(&self, mv: MotionVector, mv_stack: &mut Vec<CandidateMV>) -> bool {
+  fn find_matching_mv(&self, mv: MotionVector, mv_stack: &mut ArrayVec<[CandidateMV; 9]>) -> bool {
     for mv_cand in mv_stack {
       if mv.row == mv_cand.this_mv.row && mv.col == mv_cand.this_mv.col {
         return true;
@@ -2144,7 +2145,7 @@ impl<'a> ContextWriter<'a> {
     false
   }
 
-  fn find_matching_mv_and_update_weight(&self, mv: MotionVector, mv_stack: &mut Vec<CandidateMV>, weight: u32) -> bool {
+  fn find_matching_mv_and_update_weight(&self, mv: MotionVector, mv_stack: &mut ArrayVec<[CandidateMV; 9]>, weight: u32) -> bool {
     for mut mv_cand in mv_stack {
       if mv.row == mv_cand.this_mv.row && mv.col == mv_cand.this_mv.col {
         mv_cand.weight += weight;
@@ -2154,8 +2155,8 @@ impl<'a> ContextWriter<'a> {
     false
   }
 
-  fn find_matching_comp_mv_and_update_weight(&self, mvs: [MotionVector; 2], mv_stack: &mut Vec<CandidateMV>, weight: u32) -> bool {
-    for mut mv_cand in mv_stack {
+  fn find_matching_comp_mv_and_update_weight(&self, mvs: [MotionVector; 2], mv_stack: &mut ArrayVec<[CandidateMV; 9]>, weight: u32) -> bool {
+    for mv_cand in mv_stack {
       if mvs[0].row == mv_cand.this_mv.row && mvs[0].col == mv_cand.this_mv.col &&
         mvs[1].row == mv_cand.comp_mv.row && mvs[1].col == mv_cand.comp_mv.col {
         mv_cand.weight += weight;
@@ -2165,7 +2166,7 @@ impl<'a> ContextWriter<'a> {
     false
   }
 
-  fn add_ref_mv_candidate(&self, ref_frames: [RefType; 2], blk: &Block, mv_stack: &mut Vec<CandidateMV>,
+  fn add_ref_mv_candidate(&self, ref_frames: [RefType; 2], blk: &Block, mv_stack: &mut ArrayVec<[CandidateMV; 9]>,
                           weight: u32, newmv_count: &mut usize, is_compound: bool) -> bool {
     if !blk.is_inter() { /* For intrabc */
       false
@@ -2231,7 +2232,7 @@ impl<'a> ContextWriter<'a> {
     &self,
     blk: &Block,
     ref_frames: [RefType; 2],
-    mv_stack: &mut Vec<CandidateMV>,
+    mv_stack: &mut ArrayVec<[CandidateMV; 9]>,
     fi: &FrameInvariants<T>,
     is_compound: bool,
     ref_id_count: &mut [usize; 2],
@@ -2286,7 +2287,7 @@ impl<'a> ContextWriter<'a> {
 
   fn scan_row_mbmi(&mut self, bo: BlockOffset, row_offset: isize, max_row_offs: isize,
                    processed_rows: &mut isize, ref_frames: [RefType; 2],
-                   mv_stack: &mut Vec<CandidateMV>, newmv_count: &mut usize, bsize: BlockSize,
+                   mv_stack: &mut ArrayVec<[CandidateMV; 9]>, newmv_count: &mut usize, bsize: BlockSize,
                    is_compound: bool) -> bool {
     let bc = &self.bc;
     let target_n4_w = bsize.width_mi();
@@ -2340,7 +2341,7 @@ impl<'a> ContextWriter<'a> {
 
   fn scan_col_mbmi(&mut self, bo: BlockOffset, col_offset: isize, max_col_offs: isize,
                    processed_cols: &mut isize, ref_frames: [RefType; 2],
-                   mv_stack: &mut Vec<CandidateMV>, newmv_count: &mut usize, bsize: BlockSize,
+                   mv_stack: &mut ArrayVec<[CandidateMV; 9]>, newmv_count: &mut usize, bsize: BlockSize,
                    is_compound: bool) -> bool {
     let bc = &self.bc;
 
@@ -2393,7 +2394,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   fn scan_blk_mbmi(&mut self, bo: BlockOffset, ref_frames: [RefType; 2],
-                   mv_stack: &mut Vec<CandidateMV>, newmv_count: &mut usize,
+                   mv_stack: &mut ArrayVec<[CandidateMV; 9]>, newmv_count: &mut usize,
                    is_compound: bool) -> bool {
     if bo.x >= self.bc.blocks.cols() || bo.y >= self.bc.blocks.rows() {
       return false;
@@ -2404,14 +2405,14 @@ impl<'a> ContextWriter<'a> {
     self.add_ref_mv_candidate(ref_frames, &self.bc.blocks[bo], mv_stack, weight, newmv_count, is_compound)
   }
 
-  fn add_offset(&mut self, mv_stack: &mut Vec<CandidateMV>) {
+  fn add_offset(&mut self, mv_stack: &mut ArrayVec<[CandidateMV; 9]>) {
     for mut cand_mv in mv_stack {
       cand_mv.weight += REF_CAT_LEVEL;
     }
   }
 
   fn setup_mvref_list<T: Pixel>(
-    &mut self, bo: BlockOffset, ref_frames: [RefType; 2], mv_stack: &mut Vec<CandidateMV>,
+    &mut self, bo: BlockOffset, ref_frames: [RefType; 2], mv_stack: &mut ArrayVec<[CandidateMV; 9]>,
     bsize: BlockSize, fi: &FrameInvariants<T>, is_compound: bool
   ) -> usize {
     let (_rf, _rf_num) = (INTRA_FRAME, 1);
@@ -2635,7 +2636,7 @@ impl<'a> ContextWriter<'a> {
 
   pub fn find_mvrefs<T: Pixel>(
     &mut self, bo: BlockOffset, ref_frames: [RefType; 2],
-    mv_stack: &mut Vec<CandidateMV>, bsize: BlockSize,
+    mv_stack: &mut ArrayVec<[CandidateMV; 9]>, bsize: BlockSize,
     fi: &FrameInvariants<T>, is_compound: bool
   ) -> usize {
     assert!(ref_frames[0] != NONE_FRAME);

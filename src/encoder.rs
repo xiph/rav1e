@@ -40,6 +40,7 @@ use std::io::Write;
 use std::io::Read;
 use std::sync::Arc;
 use std::fs::File;
+use arrayvec::*;
 
 pub static TEMPORAL_DELIMITER: [u8; 2] = [0x12, 0x00];
 
@@ -1510,7 +1511,7 @@ pub fn encode_block_with_modes<T: Pixel>(
   debug_assert!((tx_size, tx_type) ==
                 rdo_tx_size_type(fi, ts, cw, bsize, tile_bo, mode_luma, ref_frames, mvs, skip));
 
-  let mut mv_stack = Vec::new();
+  let mut mv_stack = ArrayVec::<[CandidateMV; 9]>::new();
   let is_compound = ref_frames[1] != NONE_FRAME;
   let mode_context = cw.find_mvrefs(tile_bo, ref_frames, &mut mv_stack, bsize, fi, is_compound);
 
@@ -1838,7 +1839,7 @@ fn encode_partition_topdown<T: Pixel>(
       let (tx_size, tx_type) =
         rdo_tx_size_type(fi, ts, cw, bsize, tile_bo, mode_luma, ref_frames, mvs, skip);
 
-      let mut mv_stack = Vec::new();
+      let mut mv_stack = ArrayVec::<[CandidateMV; 9]>::new();
       let is_compound = ref_frames[1] != NONE_FRAME;
       let mode_context = cw.find_mvrefs(tile_bo, ref_frames, &mut mv_stack, bsize, fi, is_compound);
 
