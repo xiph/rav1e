@@ -39,6 +39,7 @@ use std;
 use std::cmp;
 use std::vec::Vec;
 use crate::partition::PartitionType::*;
+use arrayvec::*;
 
 #[derive(Copy,Clone,PartialEq)]
 pub enum RDOType {
@@ -461,9 +462,12 @@ pub fn rdo_mode_decision<T: Pixel>(
 
   let cw_checkpoint = cw.checkpoint();
 
-  let mut ref_frames_set = Vec::new();
-  let mut ref_slot_set = Vec::new();
-  let mut mvs_from_me = Vec::new();
+  // we can never have more than 7 reference frame sets
+  let mut ref_frames_set = ArrayVec::<[_; 7]>::new();
+  // again, max of 7 ref slots
+  let mut ref_slot_set = ArrayVec::<[_; 7]>::new();
+  // our implementation never returns more than 3 at the moment
+  let mut mvs_from_me = ArrayVec::<[_; 3]>::new();
   let mut fwdref = None;
   let mut bwdref = None;
 
@@ -496,9 +500,9 @@ pub fn rdo_mode_decision<T: Pixel>(
     assert!(!ref_frames_set.is_empty());
   }
 
-  let mut mode_set: Vec<(PredictionMode, usize)> = Vec::new();
-  let mut mv_stacks = Vec::new();
-  let mut mode_contexts = Vec::new();
+  let mut mode_set = ArrayVec::<[(PredictionMode, usize); 20]>::new();
+  let mut mv_stacks = ArrayVec::<[_; 20]>::new();
+  let mut mode_contexts = ArrayVec::<[_; 7]>::new();
 
   let motion_estimation = if fi.config.speed_settings.diamond_me {
     crate::me::DiamondSearch::motion_estimation
@@ -777,7 +781,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     let mut probs = intra_mode_set.iter().map(|&a| (a, probs_all[a as usize])).collect::<Vec<_>>();
     probs.sort_by_key(|a| !a.1);
 
-    let mut modes = Vec::new();
+    let mut modes = ArrayVec::<[_;7]>::new();
     probs
       .iter()
       .take(num_modes_rdo / 2)
