@@ -33,8 +33,8 @@ paste = "0.1"
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = { version = "1.0", optional = true }
-dav1d-sys = { version = "0.1.2", optional = true }
-aom-sys = { version = "0.1.0", optional = true }
+dav1d-sys = { version = "0.2", optional = true }
+aom-sys = { version = "0.1.2", optional = true }
 scan_fmt = { version = "0.1.3", optional = true }
 ivf = { path = "ivf/", optional = true }
 rayon = "1.0"
@@ -50,7 +50,7 @@ pkg-config = "0.3.12"
 [dev-dependencies]
 criterion = "0.2"
 pretty_assertions = "0.5.1"
-interpolate_name = "0.2.1"
+interpolate_name = "0.2.2"
 
 [[bin]]
 name = "rav1e"
