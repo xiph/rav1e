@@ -1949,7 +1949,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   pub fn write_partition(
-    &mut self, w: &mut dyn Writer, bo: BlockOffset, p: PartitionType, bsize: BlockSize
+    &mut self, w: &mut impl Writer, bo: BlockOffset, p: PartitionType, bsize: BlockSize
   ) {
     debug_assert!(bsize.is_sqr());
     assert!(bsize >= BlockSize::BLOCK_8X8 );
