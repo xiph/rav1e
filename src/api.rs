@@ -532,8 +532,8 @@ impl Config {
         ),
         maybe_prev_log_base_q: None,
         first_pass_data: FirstPassData { frames: Vec::new() },
-        pool
       },
+      pool,
       config
     }
   }
@@ -560,12 +560,12 @@ pub struct ContextInner<T: Pixel> {
   rc_state: RCState,
   maybe_prev_log_base_q: Option<i64>,
   pub first_pass_data: FirstPassData,
-  pool: rayon::ThreadPool,
 }
 
 pub struct Context<T: Pixel> {
   inner: ContextInner<T>,
   config: EncoderConfig,
+  pool: rayon::ThreadPool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -628,7 +628,10 @@ impl<T: Pixel> Context<T> {
   }
 
   pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
-    self.inner.receive_packet()
+    let inner = &mut self.inner;
+    let pool = &mut self.pool;
+
+    pool.install(|| inner.receive_packet())
   }
 
   pub fn flush(&mut self) {
@@ -846,7 +849,7 @@ impl<T: Pixel> ContextInner<T> {
           let mut fs = FrameState::new_with_frame(fi, frame.clone());
 
           // TODO: Trial encoding for first frame of each type.
-          let data = self.pool.install(||encode_frame(fi, &mut fs));
+          let data = encode_frame(fi, &mut fs);
           self.maybe_prev_log_base_q = Some(qps.log_base_q);
           // TODO: Add support for dropping frames.
           self.rc_state.update_state(
