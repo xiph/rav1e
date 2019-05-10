@@ -392,37 +392,37 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
 
     let mastering_display_opt = matches.value_of("MASTERING_DISPLAY").unwrap();
     cfg.mastering_display = if mastering_display_opt == "unspecified" { None } else {
-      let (g_x, g_y, b_x, b_y, r_x, r_y, wp_x, wp_y, max_lum, min_lum) = scan_fmt!(mastering_display_opt, "G({},{})B({},{})R({},{})WP({},{})L({},{})", f64, f64, f64, f64, f64, f64, f64, f64, f64, f64);
+      let (g_x, g_y, b_x, b_y, r_x, r_y, wp_x, wp_y, max_lum, min_lum) = scan_fmt!(mastering_display_opt, "G({},{})B({},{})R({},{})WP({},{})L({},{})", f64, f64, f64, f64, f64, f64, f64, f64, f64, f64).expect("Cannot parse the mastering display option");
       Some(MasteringDisplay {
         primaries: [
           Point {
-            x: (r_x.unwrap() * ((1 << 16) as f64)).round() as u16,
-            y: (r_y.unwrap() * ((1 << 16) as f64)).round() as u16,
+            x: (r_x * ((1 << 16) as f64)).round() as u16,
+            y: (r_y * ((1 << 16) as f64)).round() as u16,
           },
           Point {
-            x: (g_x.unwrap() * ((1 << 16) as f64)).round() as u16,
-            y: (g_y.unwrap() * ((1 << 16) as f64)).round() as u16,
+            x: (g_x * ((1 << 16) as f64)).round() as u16,
+            y: (g_y * ((1 << 16) as f64)).round() as u16,
           },
           Point {
-            x: (b_x.unwrap() * ((1 << 16) as f64)).round() as u16,
-            y: (b_y.unwrap() * ((1 << 16) as f64)).round() as u16,
+            x: (b_x * ((1 << 16) as f64)).round() as u16,
+            y: (b_y * ((1 << 16) as f64)).round() as u16,
           }
         ],
         white_point: Point {
-          x: (wp_x.unwrap() * ((1 << 16) as f64)).round() as u16,
-          y: (wp_y.unwrap() * ((1 << 16) as f64)).round() as u16,
+          x: (wp_x * ((1 << 16) as f64)).round() as u16,
+          y: (wp_y * ((1 << 16) as f64)).round() as u16,
         },
-        max_luminance: (max_lum.unwrap() * ((1 << 8) as f64)).round() as u32,
-        min_luminance: (min_lum.unwrap() * ((1 << 14) as f64)).round() as u32,
+        max_luminance: (max_lum * ((1 << 8) as f64)).round() as u32,
+        min_luminance: (min_lum * ((1 << 14) as f64)).round() as u32,
       })
     };
 
     let content_light_opt = matches.value_of("CONTENT_LIGHT").unwrap();
-    let (cll, fall) = scan_fmt!(content_light_opt, "{},{}", u16, u16);
-    cfg.content_light = if cll.unwrap() == 0 && fall.unwrap() == 0 { None } else {
+    let (cll, fall) = scan_fmt!(content_light_opt, "{},{}", u16, u16).expect("Cannot parse the content light option");
+    cfg.content_light = if cll == 0 && fall == 0 { None } else {
       Some(ContentLight {
-        max_content_light_level: cll.unwrap(),
-        max_frame_average_light_level: fall.unwrap()
+        max_content_light_level: cll,
+        max_frame_average_light_level: fall
       })
     };
     cfg
