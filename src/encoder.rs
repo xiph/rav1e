@@ -1524,9 +1524,9 @@ pub fn encode_block_with_modes<T: Pixel>(
                  tx_size, tx_type, mode_context, &mv_stack, rdo_type, false);
 }
 
-fn encode_partition_bottomup<T: Pixel>(
+fn encode_partition_bottomup<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>, cw: &mut ContextWriter,
-  w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer, bsize: BlockSize,
+  w_pre_cdef: &mut W, w_post_cdef: &mut W, bsize: BlockSize,
   tile_bo: BlockOffset, pmvs: &mut [[Option<MotionVector>; REF_FRAMES]; 5],
   ref_rd_cost: f64
 ) -> (RDOOutput) {
@@ -1564,7 +1564,7 @@ fn encode_partition_bottomup<T: Pixel>(
   // Code the whole block
   if !must_split {
     let cost = if bsize.gte(BlockSize::BLOCK_8X8) && is_square {
-      let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
+      let w: &mut W = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
       let tell = w.tell_frac();
       cw.write_partition(w, tile_bo, PartitionType::PARTITION_NONE, bsize);
       (w.tell_frac() - tell) as f64 * fi.lambda / ((1 << OD_BITRES) as f64)
@@ -1631,7 +1631,7 @@ fn encode_partition_bottomup<T: Pixel>(
       rd_cost = 0.0;
 
       if bsize.gte(BlockSize::BLOCK_8X8) {
-        let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
+        let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
         let tell = w.tell_frac();
         cw.write_partition(w, tile_bo, partition, bsize);
         rd_cost = (w.tell_frac() - tell) as f64 * fi.lambda
@@ -1701,7 +1701,7 @@ fn encode_partition_bottomup<T: Pixel>(
         let subsize = bsize.subsize(best_partition);
 
         if bsize.gte(BlockSize::BLOCK_8X8) {
-          let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
+          let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
           cw.write_partition(w, tile_bo, best_partition, bsize);
         }
         for mode in rdo_output.part_modes.clone() {
@@ -1737,9 +1737,9 @@ fn encode_partition_bottomup<T: Pixel>(
   rdo_output
 }
 
-fn encode_partition_topdown<T: Pixel>(
+fn encode_partition_topdown<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
+  cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
   bsize: BlockSize, tile_bo: BlockOffset, block_output: &Option<RDOOutput>,
   pmvs: &mut [[Option<MotionVector>; REF_FRAMES]; 5]
 ) {
@@ -1805,7 +1805,7 @@ fn encode_partition_topdown<T: Pixel>(
   let subsize = bsize.subsize(partition);
 
   if bsize.gte(BlockSize::BLOCK_8X8) && is_square {
-    let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
+    let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
     cw.write_partition(w, tile_bo, partition, bsize);
   }
 

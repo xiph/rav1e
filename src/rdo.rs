@@ -598,7 +598,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     // Find the best chroma prediction mode for the current luma prediction mode
     let mut chroma_rdo = |skip: bool| {
       mode_set_chroma.iter().for_each(|&chroma_mode| {
-        let wr: &mut dyn Writer = &mut WriterCounter::new();
+        let wr = &mut WriterCounter::new();
         let tell = wr.tell_frac();
 
         if skip { tx_type = TxType::DCT_DCT; };
@@ -1107,9 +1107,9 @@ pub fn get_sub_partitions_with_border_check(
 }
 
 // RDO-based single level partitioning decision
-pub fn rdo_partition_decision<T: Pixel>(
+pub fn rdo_partition_decision<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
+  cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
   bsize: BlockSize, tile_bo: BlockOffset,
   cached_block: &RDOOutput, pmvs: &mut [[Option<MotionVector>; REF_FRAMES]; 5],
   partition_types: &[PartitionType], rdo_type: RDOType
@@ -1180,7 +1180,7 @@ pub fn rdo_partition_decision<T: Pixel>(
         }).collect::<Vec<_>>();
 
         if bsize >= BlockSize::BLOCK_8X8 {
-          let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
+          let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
           let tell = w.tell_frac();
           cw.write_partition(w, tile_bo, partition, bsize);
           cost = (w.tell_frac() - tell) as f64 * fi.lambda
@@ -1200,7 +1200,7 @@ pub fn rdo_partition_decision<T: Pixel>(
           }
 
           if subsize >= BlockSize::BLOCK_8X8 && subsize.is_sqr() {
-            let w: &mut dyn Writer = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
+            let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
             cw.write_partition(w, offset, PartitionType::PARTITION_NONE, subsize);
           }
           encode_block_with_modes(fi, ts, cw, w_pre_cdef, w_post_cdef, subsize,
