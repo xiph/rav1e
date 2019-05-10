@@ -1751,19 +1751,21 @@ trait FwdTxfm2D: Dim {
 
     // Columns
     for c in 0..txfm_size_col {
+      let mut col_flip_backing: AlignedArray<[i32; 64 * 64]> = UninitializedAlignedArray();
+      let col_flip = &mut col_flip_backing.array[..txfm_size_row];
       if cfg.ud_flip {
         // flip upside down
         for r in 0..txfm_size_row {
-          output[r] = (input[(txfm_size_row - r - 1) * stride + c]).into();
+          col_flip[r] = (input[(txfm_size_row - r - 1) * stride + c]).into();
         }
       } else {
         for r in 0..txfm_size_row {
-          output[r] = (input[r * stride + c]).into();
+          col_flip[r] = (input[r * stride + c]).into();
         }
       }
-      av1_round_shift_array(output, txfm_size_row, -cfg.shift[0]);
+      av1_round_shift_array(col_flip, txfm_size_row, -cfg.shift[0]);
       txfm_func_col(
-        &output[..txfm_size_row].to_vec(),
+        &col_flip,
         &mut output[txfm_size_row..]
       );
       av1_round_shift_array(
