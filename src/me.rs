@@ -20,6 +20,8 @@ use crate::plane::*;
 use crate::tiling::*;
 use crate::util::Pixel;
 
+use arrayvec::*;
+
 use std::ops::{Index, IndexMut};
 use std::sync::Arc;
 
@@ -332,8 +334,8 @@ pub fn get_subset_predictors<T: Pixel>(
   tile_bo: BlockOffset, cmv: MotionVector,
   tile_mvs: &TileMotionVectors<'_>, frame_ref_opt: Option<&ReferenceFrame<T>>,
   ref_frame_id: usize
-) -> (Vec<MotionVector>) {
-  let mut predictors = Vec::new();
+) -> (ArrayVec<[MotionVector; 11]>) {
+  let mut predictors = ArrayVec::<[_; 11]>::new();
 
   // Zero motion vector
   predictors.push(MotionVector::default());
@@ -343,7 +345,7 @@ pub fn get_subset_predictors<T: Pixel>(
 
   // EPZS subset A and B predictors.
 
-  let mut median_preds = Vec::new();
+  let mut median_preds = ArrayVec::<[_; 3]>::new();
   if tile_bo.x > 0 {
     let left = tile_mvs[tile_bo.y][tile_bo.x - 1];
     median_preds.push(left);
