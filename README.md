@@ -98,42 +98,44 @@ https://arewecompressedyet.com/analyzer/?d=https://people.xiph.org/~mbebenita/an
 
 # Contributing
 
+## Toolchain
+rav1e uses the stable version of Rust (the stable toolchain).
+
+To install the toolchain:
+```
+rustup install stable
+```
+
+
 ## Coding style
 Check code formatting with [rustfmt](https://github.com/rust-lang-nursery/rustfmt) before submitting a PR.
-rav1e currently uses the nightly version of rustfmt.
 
-To install nightly:
-
-```
-rustup install nightly
-```
-
-To install the nightly version of rustfmt:
+To install the rustfmt:
 
 ```
-rustup component add rustfmt-preview --toolchain nightly
+rustup component add rustfmt
 ```
 
 then
 
 ```
-cargo +nightly fmt -- --check
+cargo fmt -- --check
 ```
 
-You should also try [clippy](https://github.com/rust-lang-nursery/rust-clippy).
-Rust also uses nightly for clippy.
+
+## Code Analysis
+The [clippy](https://github.com/rust-lang-nursery/rust-clippy) will help catch common mistakes and improve your Rust code.
+
+We recommend you use it before submitting a PR.
 
 To install clippy:
 
 ```
-rustup component add clippy-preview --toolchain nightly
+rustup component add clippy
 ```
 
-then
+then you can search "cargo clippy" in [.travis.yml](https://github.com/xiph/rav1e/blob/master/.travis.yml) for detailed command and run it.
 
-```
-cargo +nightly clippy
-```
 
 ## Testing
 Run unit tests with:
