@@ -111,6 +111,7 @@ cglobal msac_decode_symbol_adapt4, 3, 7, 6, s, cdf, ns
     sub           r2d, r1d ; rng
     shl            r1, 48
     add            r4, r1  ; ~dif
+.renorm3:
     mov           r1d, [sq+msac.cnt]
     movifnidn      t0, sq
     bsr           ecx, r2d
@@ -283,5 +284,22 @@ cglobal msac_decode_symbol_adapt16, 3, 7, 6, s, cdf, ns
     add           rsp, 48
 %endif
     jmp m(msac_decode_symbol_adapt4).renorm2
+
+cglobal msac_decode_bool_equi, 1, 7, 0, s
+    mov           r1d, [sq+msac.rng]
+    mov            r4, [sq+msac.dif]
+    mov           r2d, r1d
+    mov           r1b, 8
+    mov            r3, r4
+    mov           eax, r1d
+    shr           r1d, 1   ; v
+    shl           rax, 47  ; vw
+    sub           r2d, r1d ; r - v
+    sub            r4, rax ; dif - vw
+    cmovb         r2d, r1d
+    cmovb          r4, r3
+    setb           al ; the upper 32 bits contains garbage but that's OK
+    not            r4
+    jmp m(msac_decode_symbol_adapt4).renorm3
 
 %endif
