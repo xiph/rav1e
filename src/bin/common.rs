@@ -353,6 +353,10 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
     }
 
     // Validate arguments
+    if max_interval < 1 {
+      panic!("Keyframe interval must be greater than 0");
+    }
+
     if speed > 10 {
       panic!("Speed must be between 0-10");
     } else if min_interval > max_interval {
