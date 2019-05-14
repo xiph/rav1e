@@ -1,0 +1,35 @@
+variables:
+    CARGO_HOME: $CI_PROJECT_DIR/cargo
+
+cache:
+    paths:
+        - $CARGO_HOME
+
+before_script:
+    - rustc --version
+    - cargo --version
+
+Build, Test, Bench:
+    image: registry.gitlab.xiph.org/xiph/rav1e-docker/rust-1.34-rav1e:latest
+    stage: build
+    tags:
+        - docker
+        - alpine
+    script:
+        - cargo install --force cargo-kcov
+        - RUSTFLAGS="-C link-dead-code" cargo build --features=decode_test,quick_test --tests --verbose
+        - kcov --version
+        - cargo kcov -v --no-clean-rebuild -- --verify --exclude-pattern=$HOME/.cargo,aom_build,.h,test
+        - cargo test --verbose --release --features=decode_test -- --ignored
+        - cargo bench --features=bench --verbose
+
+Doc and Clippy:
+    image: registry.gitlab.xiph.org/xiph/rav1e-docker/rust-1.34-rav1e:latest
+    stage: test
+    tags:
+        - docker
+        - alpine
+    script:
+        - cargo doc --verbose --no-deps
+        - cargo clippy --version
+        - cargo clippy -- -D warnings -A clippy::cast_lossless -A clippy::cast_ptr_alignment -A clippy::cognitive_complexity -A clippy::needless_range_loop -A clippy::too_many_arguments -A clippy::verbose_bit_mask -A clippy::unreadable_literal --verbose
