@@ -114,6 +114,7 @@ cglobal msac_decode_symbol_adapt4, 3, 7, 6, s, cdf, ns
 .renorm3:
     mov           r1d, [sq+msac.cnt]
     movifnidn      t0, sq
+.renorm4:
     bsr           ecx, r2d
     xor           ecx, 15  ; d
     shl           r2d, cl
@@ -285,6 +286,58 @@ cglobal msac_decode_symbol_adapt16, 3, 7, 6, s, cdf, ns
 %endif
     jmp m(msac_decode_symbol_adapt4).renorm2
 
+cglobal msac_decode_bool_adapt, 2, 7, 0, s, cdf
+    movzx         eax, word [cdfq]
+    movzx         r3d, byte [sq+msac.rng+1]
+    mov            r4, [sq+msac.dif]
+    mov           r2d, [sq+msac.rng]
+    mov           r5d, eax
+    and           eax, ~63
+    imul          eax, r3d
+%if UNIX64
+    mov            r7, r4
+%endif
+    shr           eax, 7
+    add           eax, 4   ; v
+    mov           r3d, eax
+    shl           rax, 48  ; vw
+    sub           r2d, r3d ; r - v
+    sub            r4, rax ; dif - vw
+    cmovb         r2d, r3d
+    mov           r3d, [sq+msac.update_cdf]
+%if UNIX64
+    cmovb          r4, r7
+%else
+    cmovb          r4, [sq+msac.dif]
+%endif
+    setb           al
+    not            r4
+    test          r3d, r3d
+    jz m(msac_decode_symbol_adapt4).renorm3
+%if WIN64
+    push           r7
+%endif
+    movzx         r7d, word [cdfq+2]
+    movifnidn      t0, sq
+    lea           ecx, [r7+64]
+    cmp           r7d, 32
+    adc           r7d, 0
+    mov      [cdfq+2], r7w
+    imul          r7d, eax, -32769
+    shr           ecx, 4   ; rate
+    add           r7d, r5d ; if (bit)
+    sub           r5d, eax ;     cdf[0] -= ((cdf[0] - 32769) >> rate) + 1;
+    sar           r7d, cl  ; else
+    sub           r5d, r7d ;     cdf[0] -= cdf[0] >> rate;
+    mov        [cdfq], r5w
+%if WIN64
+    mov           r1d, [t0+msac.cnt]
+    pop            r7
+    jmp m(msac_decode_symbol_adapt4).renorm4
+%else
+    jmp m(msac_decode_symbol_adapt4).renorm3
+%endif
+
 cglobal msac_decode_bool_equi, 1, 7, 0, s
     mov           r1d, [sq+msac.rng]
     mov            r4, [sq+msac.dif]
@@ -299,6 +352,25 @@ cglobal msac_decode_bool_equi, 1, 7, 0, s
     cmovb         r2d, r1d
     cmovb          r4, r3
     setb           al ; the upper 32 bits contains garbage but that's OK
+    not            r4
+    jmp m(msac_decode_symbol_adapt4).renorm3
+
+cglobal msac_decode_bool, 2, 7, 0, s, f
+    movzx         eax, byte [sq+msac.rng+1] ; r >> 8
+    mov            r4, [sq+msac.dif]
+    mov           r2d, [sq+msac.rng]
+    and           r1d, ~63
+    imul          eax, r1d
+    mov            r3, r4
+    shr           eax, 7
+    add           eax, 4   ; v
+    mov           r1d, eax
+    shl           rax, 48  ; vw
+    sub           r2d, r1d ; r - v
+    sub            r4, rax ; dif - vw
+    cmovb         r2d, r1d
+    cmovb          r4, r3
+    setb           al
     not            r4
     jmp m(msac_decode_symbol_adapt4).renorm3
 
