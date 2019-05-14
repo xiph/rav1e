@@ -930,6 +930,9 @@ pub fn encode_tx_block<T: Pixel>(
   let area = Area::BlockStartingAt { bo: tile_bo };
 
   assert!(tx_size.sqr() <= TxSize::TX_32X32 || tx_type == TxType::DCT_DCT);
+  debug_assert!(p != 0 || !mode.is_intra() || tx_size.block_size() == plane_bsize || need_recon_pixel,
+    "mode.is_intra()={:#?}, plane={:#?}, tx_size.block_size()={:#?}, plane_bsize={:#?}, need_recon_pixel={:#?}",
+    mode.is_intra(), p, tx_size.block_size(), plane_bsize, need_recon_pixel);
 
   if mode.is_intra() {
     let bit_depth = fi.sequence.bit_depth;
