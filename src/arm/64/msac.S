@@ -192,7 +192,7 @@ function msac_decode_symbol_adapt4_neon, export=1
         sub_n           v4,  v5,  v4,  v5,  v0,  v1,  \sz, \n     // (32768 - cdf[i]) or (-1 - cdf[i])
         dup             v6.8h,    w4                              // -rate
 
-        sub             w3,  w3,  w3, lsr #5                      // count + (count >= 32)
+        sub             w3,  w3,  w3, lsr #5                      // count - (count >= 32)
         sub_n           v0,  v1,  v0,  v1,  v2,  v3,  \sz, \n     // cdf + (i >= val ? 1 : 0)
         sshl_n          v4,  v5,  v4,  v5,  v6,  v6,  \sz, \n     // ({32768,-1} - cdf[i]) >> rate
         add             w3,  w3,  #1                              // count + (count < 32)
