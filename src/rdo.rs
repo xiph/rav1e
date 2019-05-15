@@ -500,7 +500,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     assert!(!ref_frames_set.is_empty());
   }
 
-  let mut mode_set = ArrayVec::<[(PredictionMode, usize); 20]>::new();
+  let mut inter_mode_set = ArrayVec::<[(PredictionMode, usize); 20]>::new();
   let mut mv_stacks = ArrayVec::<[_; 20]>::new();
   let mut mode_contexts = ArrayVec::<[_; 7]>::new();
 
@@ -534,27 +534,27 @@ pub fn rdo_mode_decision<T: Pixel>(
       ]);
 
       for &x in RAV1E_INTER_MODES_MINIMAL {
-        mode_set.push((x, i));
+        inter_mode_set.push((x, i));
       }
       if !mv_stack.is_empty() {
-        mode_set.push((PredictionMode::NEAR0MV, i));
+        inter_mode_set.push((PredictionMode::NEAR0MV, i));
       }
       if mv_stack.len() >= 2 {
-        mode_set.push((PredictionMode::GLOBALMV, i));
+        inter_mode_set.push((PredictionMode::GLOBALMV, i));
       }
       let include_near_mvs = fi.config.speed_settings.include_near_mvs;
       if include_near_mvs {
         if mv_stack.len() >= 3 {
-          mode_set.push((PredictionMode::NEAR1MV, i));
+          inter_mode_set.push((PredictionMode::NEAR1MV, i));
         }
         if mv_stack.len() >= 4 {
-          mode_set.push((PredictionMode::NEAR2MV, i));
+          inter_mode_set.push((PredictionMode::NEAR2MV, i));
         }
       }
       if !mv_stack.iter().take(if include_near_mvs {4} else {2})
         .any(|ref x| x.this_mv.row == mvs_from_me[i][0].row && x.this_mv.col == mvs_from_me[i][0].col)
         && (mvs_from_me[i][0].row != 0 || mvs_from_me[i][0].col != 0) {
-          mode_set.push((PredictionMode::NEWMV, i));
+          inter_mode_set.push((PredictionMode::NEWMV, i));
         }
     }
     mv_stacks.push(mv_stack);
@@ -574,7 +574,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         let mut mv_stack = ArrayVec::<[CandidateMV; 9]>::new();
         mode_contexts.push(cw.find_mvrefs(tile_bo, ref_frames, &mut mv_stack, bsize, fi, true));
         for &x in RAV1E_INTER_COMPOUND_MODES {
-          mode_set.push((x, ref_frames_set.len() - 1));
+          inter_mode_set.push((x, ref_frames_set.len() - 1));
         }
         mv_stacks.push(mv_stack);
       }
@@ -682,10 +682,10 @@ pub fn rdo_mode_decision<T: Pixel>(
   };
 
   if fi.frame_type != FrameType::INTER {
-    assert!(mode_set.is_empty());
+    assert!(inter_mode_set.is_empty());
   }
 
-  mode_set.iter().for_each(|&(luma_mode, i)| {
+  inter_mode_set.iter().for_each(|&(luma_mode, i)| {
     let mvs = match luma_mode {
       PredictionMode::NEWMV | PredictionMode::NEW_NEWMV => mvs_from_me[i],
       PredictionMode::NEARESTMV | PredictionMode::NEAREST_NEARESTMV => if !mv_stacks[i].is_empty() {
