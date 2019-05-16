@@ -1374,14 +1374,17 @@ impl IndexMut<BlockOffset> for FrameBlocks {
   }
 }
 
+const PARTITION_CONTEXT_GRANULARITY: usize = 8;
+const PARTITION_CONTEXT_MAX_WIDTH: usize = MAX_TILE_WIDTH / PARTITION_CONTEXT_GRANULARITY;
+
 #[derive(Clone)]
 pub struct BlockContextCheckpoint {
   cdef_coded: bool,
-  above_partition_context: Vec<u8>,
+  above_partition_context: [u8; PARTITION_CONTEXT_MAX_WIDTH],
   left_partition_context: [u8; MAX_MIB_SIZE],
-  above_tx_context: Vec<u8>,
+  above_tx_context: [u8; PARTITION_CONTEXT_MAX_WIDTH],
   left_tx_context: [u8; MAX_MIB_SIZE],
-  above_coeff_context: [Vec<u8>; PLANES],
+  above_coeff_context: [[u8; PARTITION_CONTEXT_MAX_WIDTH]; PLANES],
   left_coeff_context: [[u8; MAX_MIB_SIZE]; PLANES],
 }
 
@@ -1390,36 +1393,30 @@ pub struct BlockContext<'a> {
   pub code_deltas: bool,
   pub update_seg: bool,
   pub preskip_segid: bool,
-  above_partition_context: Vec<u8>,
+  above_partition_context: [u8; PARTITION_CONTEXT_MAX_WIDTH],
   left_partition_context: [u8; MAX_MIB_SIZE],
-  above_tx_context: Vec<u8>,
+  above_tx_context: [u8; PARTITION_CONTEXT_MAX_WIDTH],
   left_tx_context: [u8; MAX_MIB_SIZE],
-  above_coeff_context: [Vec<u8>; PLANES],
+  above_coeff_context: [[u8; PARTITION_CONTEXT_MAX_WIDTH]; PLANES],
   left_coeff_context: [[u8; MAX_MIB_SIZE]; PLANES],
   pub blocks: &'a mut TileBlocksMut<'a>,
 }
 
 impl<'a> BlockContext<'a> {
   pub fn new(blocks: &'a mut TileBlocksMut<'a>) -> Self {
-    // Align power of two
-    let aligned_cols = (blocks.cols() + ((1 << MAX_MIB_SIZE_LOG2) - 1))
-      & !((1 << MAX_MIB_SIZE_LOG2) - 1);
-    let above_coeff_context_size =
-      blocks.cols() << (MI_SIZE_LOG2 - TxSize::width_log2(TxSize::TX_4X4));
-
     BlockContext {
       cdef_coded: false,
       code_deltas: false,
       update_seg: false,
       preskip_segid: true,
-      above_partition_context: vec![0; aligned_cols],
+      above_partition_context: [0; PARTITION_CONTEXT_MAX_WIDTH],
       left_partition_context: [0; MAX_MIB_SIZE],
-      above_tx_context: vec![0; aligned_cols],
+      above_tx_context: [0; PARTITION_CONTEXT_MAX_WIDTH],
       left_tx_context: [0; MAX_MIB_SIZE],
       above_coeff_context: [
-        vec![0; above_coeff_context_size],
-        vec![0; above_coeff_context_size],
-        vec![0; above_coeff_context_size]
+        [0; PARTITION_CONTEXT_MAX_WIDTH],
+        [0; PARTITION_CONTEXT_MAX_WIDTH],
+        [0; PARTITION_CONTEXT_MAX_WIDTH]
       ],
       left_coeff_context: [[0; MAX_MIB_SIZE]; PLANES],
       blocks,
@@ -1429,22 +1426,22 @@ impl<'a> BlockContext<'a> {
   pub fn checkpoint(&mut self) -> BlockContextCheckpoint {
     BlockContextCheckpoint {
       cdef_coded: self.cdef_coded,
-      above_partition_context: self.above_partition_context.clone(),
+      above_partition_context: self.above_partition_context,
       left_partition_context: self.left_partition_context,
-      above_tx_context: self.above_tx_context.clone(),
+      above_tx_context: self.above_tx_context,
       left_tx_context: self.left_tx_context,
-      above_coeff_context: self.above_coeff_context.clone(),
+      above_coeff_context: self.above_coeff_context,
       left_coeff_context: self.left_coeff_context,
     }
   }
 
   pub fn rollback(&mut self, checkpoint: &BlockContextCheckpoint) {
     self.cdef_coded = checkpoint.cdef_coded;
-    self.above_partition_context = checkpoint.above_partition_context.clone();
+    self.above_partition_context = checkpoint.above_partition_context;
     self.left_partition_context = checkpoint.left_partition_context;
-    self.above_tx_context = checkpoint.above_tx_context.clone();
+    self.above_tx_context = checkpoint.above_tx_context;
     self.left_tx_context = checkpoint.left_tx_context;
-    self.above_coeff_context = checkpoint.above_coeff_context.clone();
+    self.above_coeff_context = checkpoint.above_coeff_context;
     self.left_coeff_context = checkpoint.left_coeff_context;
   }
 
