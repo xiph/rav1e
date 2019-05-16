@@ -40,6 +40,7 @@ ivf = { path = "ivf/", optional = true }
 rayon = "1.0"
 bincode = "1.1"
 arrayvec = "0.4.10"
+signal-hook = { version = "0.1.9", optional = true }
 
 [target.'cfg(target_arch = "x86_64")'.build-dependencies]
 nasm-rs = { git = "https://github.com/tdaede/nasm-rs", branch="msvc-OUT", optional = true }
