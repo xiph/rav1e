@@ -103,6 +103,7 @@ pub struct WriterBase<S> {
   rng: u16,
   /// The number of bits of data in the current value.
   cnt: i16,
+  #[cfg(feature = "desync_finder")]
   /// Debug enable flag
   debug: bool,
   /// Extra offset added to tell() and tell_frac() to approximate costs
@@ -303,7 +304,12 @@ impl<S> WriterBase<S> {
   /// Internal constructor called by the subtypes that implement the
   /// actual encoder and Recorder.
   fn new(storage: S) -> Self {
-    WriterBase { rng: 0x8000, cnt: -9, debug: std::env::var_os("RAV1E_DEBUG").is_some(), fake_bits_frac: 0, s: storage }
+    #[cfg(feature = "desync_finder")] {
+      WriterBase { rng: 0x8000, cnt: -9, debug: std::env::var_os("RAV1E_DEBUG").is_some(), fake_bits_frac: 0, s: storage }
+    }
+    #[cfg(not(feature = "desync_finder"))] {
+      WriterBase { rng: 0x8000, cnt: -9, fake_bits_frac: 0, s: storage }
+    }
   }
 
   /// Compute low and range values from token cdf values and local state
