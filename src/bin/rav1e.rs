@@ -33,6 +33,8 @@ struct Source<D: Decoder> {
  limit: usize,
  count: usize,
  input: D,
+ #[cfg(feature = "signal-hook")]
+ exit_requested: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl<D: Decoder> Source<D> {
@@ -41,6 +43,14 @@ impl<D: Decoder> Source<D> {
       ctx.flush();
       return;
     }
+
+    #[cfg(feature = "signal-hook")] {
+      if self.exit_requested.load(std::sync::atomic::Ordering::SeqCst) {
+        ctx.flush();
+        return;
+      }
+    }
+
     match self.input.read_frame(&video_info) {
       Ok(frame) => {
         match video_info.bit_depth {
@@ -191,6 +201,38 @@ fn main() {
     y4m_dec.read_frame().expect("Skipped more frames than in the input");
   }
 
+  #[cfg(feature = "signal-hook")]
+  let exit_requested = {
+    use std::sync::atomic::*;
+    let e  = Arc::new(AtomicBool::from(false));
+
+    fn setup_signal(sig: i32, e: Arc<AtomicBool>) {
+      unsafe {
+        signal_hook::register(sig, move || {
+          if e.load(Ordering::SeqCst) {
+            std::process::exit(128 + sig);
+          }
+          e.store(true, Ordering::SeqCst);
+          eprintln!("\rExit requested, flushing.\n");
+        }).expect("Cannot register the signal hooks");
+      }
+    }
+
+    setup_signal(signal_hook::SIGTERM, e.clone());
+    setup_signal(signal_hook::SIGQUIT, e.clone());
+    setup_signal(signal_hook::SIGINT, e.clone());
+
+    e
+  };
+
+  #[cfg(feature = "signal-hook")]
+  let mut source = Source {
+    limit: cli.limit,
+    input: y4m_dec,
+    count: 0,
+    exit_requested
+  };
+  #[cfg(not(feature = "signal-hook"))]
   let mut source = Source { limit: cli.limit, input: y4m_dec, count: 0 };
 
   if video_info.bit_depth == 8 {
