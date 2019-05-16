@@ -51,6 +51,7 @@ criterion = "0.2"
 pretty_assertions = "0.6"
 interpolate_name = "0.2.2"
 rand = "0.6"
+rand_chacha = "0.1"
 
 [[bin]]
 name = "rav1e"
