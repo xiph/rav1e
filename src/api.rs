@@ -550,6 +550,8 @@ pub enum EncoderStatus {
   /// May be emitted by `Context::receive_packet` after a flush request had been processed
   /// or the frame limit had been reached.
   LimitReached,
+  /// A Frame had been encoded but not emitted yet
+  Encoded,
   /// Generic fatal error
   Failure,
 }
@@ -880,7 +882,7 @@ impl<T: Pixel> ContextInner<T> {
             let fi = fi.clone();
             self.finalize_packet(rec, &fi)
           } else {
-            Err(EncoderStatus::NeedMoreData)
+            Err(EncoderStatus::Encoded)
           }
         } else {
           Err(EncoderStatus::NeedMoreData)

@@ -88,6 +88,7 @@ fn process_frame<T: Pixel, D: Decoder>(
     Err(EncoderStatus::Failure) => {
       panic!("Failed to encode video");
     }
+    Err(EncoderStatus::Encoded) => {}
   }
   Some(frame_summaries)
 }
