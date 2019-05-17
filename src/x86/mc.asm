@@ -3837,7 +3837,10 @@ cglobal blend_h, 4, 7, 6, dst, ds, tmp, w, h, mask
     movsxd               wq, dword [r5+wq*4]
     vpbroadcastd         m5, [base+pw_512]
     add                  wq, r5
-    lea               maskq, [base+obmc_masks+hq*4]
+    lea               maskq, [base+obmc_masks+hq*2]
+    lea                  hd, [hq*3]
+    shr                  hd, 2 ; h * 3/4
+    lea               maskq, [maskq+hq*2]
     neg                  hq
     jmp                  wq
 .w2:
