@@ -39,6 +39,7 @@ dav1d-sys = { version = "0.2", optional = true }
 aom-sys = { version = "0.1.2", optional = true }
 scan_fmt = { version = "0.2", optional = true }
 ivf = { path = "ivf/", optional = true }
+avformat-sys = { path = "avformat-sys/", optional = true }
 rayon = "1.0"
 bincode = "1.1"
 arrayvec = "0.4.10"

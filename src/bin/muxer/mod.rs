@@ -10,10 +10,19 @@
 mod ivf;
 use self::ivf::IvfMuxer;
 
+mod mp4;
+use mp4::Mp4Muxer;
+
 mod y4m;
 pub use self::y4m::write_y4m_frame;
 
+#[cfg(feature = "avformat-sys")]
+mod avformat;
+
 use std::io;
+use std::ffi::OsStr;
+use std::path::Path;
+
 
 pub trait Muxer {
   fn write_header(
@@ -27,5 +36,25 @@ pub trait Muxer {
 }
 
 pub fn create_muxer(path: &str) -> Box<dyn Muxer> {
-  IvfMuxer::open(path)
+  if path == "-" {
+    return IvfMuxer::open(path);
+  }
+
+  let ext = Path::new(path)
+    .extension()
+    .and_then(OsStr::to_str)
+    .map(str::to_lowercase)
+    .expect("no extension");
+
+  match &ext[..] {
+    "mp4" => {
+      Mp4Muxer::open(path)
+    }
+    "ivf" => {
+      IvfMuxer::open(path)
+    }
+    _e => {
+      panic!("{} is not a supported extension, please change to .ivf", ext);
+    }
+  }
 }
