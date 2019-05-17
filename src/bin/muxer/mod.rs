@@ -7,11 +7,11 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-mod muxer;
-pub use muxer::*;
-
 mod ivf;
 use self::ivf::IvfMuxer;
+
+mod y4m;
+pub use self::y4m::write_y4m_frame;
 
 use std::io;
 
