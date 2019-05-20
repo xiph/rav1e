@@ -921,7 +921,7 @@ pub fn encode_tx_block<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>, cw: &mut ContextWriter,
   w: &mut dyn Writer, p: usize, tile_bo: BlockOffset, mode: PredictionMode,
   tx_size: TxSize, tx_type: TxType, plane_bsize: BlockSize, po: PlaneOffset,
-  skip: bool, ac: &[i16], alpha: i16, rdo_type: RDOType, for_rdo_use: bool
+  skip: bool, ac: &[i16], alpha: i16, rdo_type: RDOType, need_recon_pixel: bool
 ) -> (bool, i64) {
   let qidx = get_qidx(fi, ts, cw, tile_bo);
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[p].cfg;
@@ -961,7 +961,7 @@ pub fn encode_tx_block<T: Pixel>(
   ts.qc.quantize(coeffs, qcoeffs, coded_tx_size);
 
   let tell_coeffs = w.tell_frac();
-  let has_coeff = if !for_rdo_use || rdo_type.needs_coeff_rate() {
+  let has_coeff = if need_recon_pixel || rdo_type.needs_coeff_rate() {
     cw.write_coeffs_lv_map(w, p, tile_bo, &qcoeffs, mode, tx_size, tx_type, plane_bsize, xdec, ydec,
                            fi.use_reduced_tx_set)
   } else {
@@ -973,7 +973,7 @@ pub fn encode_tx_block<T: Pixel>(
 
   let mut tx_dist: i64 = -1;
 
-  if !fi.use_tx_domain_distortion || !for_rdo_use {
+  if !fi.use_tx_domain_distortion || need_recon_pixel {
     inverse_transform_add(rcoeffs, &mut rec.subregion_mut(area), tx_size, tx_type, fi.sequence.bit_depth);
   }
   if rdo_type.needs_tx_dist() {
@@ -1125,7 +1125,7 @@ pub fn encode_block_b<T: Pixel>(
   bsize: BlockSize, tile_bo: BlockOffset, skip: bool,
   cfl: CFLParams, tx_size: TxSize, tx_type: TxType,
   mode_context: usize, mv_stack: &[CandidateMV],
-  rdo_type: RDOType, for_rdo_use: bool
+  rdo_type: RDOType, need_recon_pixel: bool
 ) -> i64 {
   let is_inter = !luma_mode.is_intra();
   if is_inter { assert!(luma_mode == chroma_mode); };
@@ -1276,9 +1276,9 @@ pub fn encode_block_b<T: Pixel>(
 
   if is_inter {
     motion_compensate(fi, ts, cw, luma_mode, ref_frames, mvs, bsize, tile_bo, false);
-    write_tx_tree(fi, ts, cw, w, luma_mode, tile_bo, bsize, tx_size, tx_type, skip, false, rdo_type, for_rdo_use)
+    write_tx_tree(fi, ts, cw, w, luma_mode, tile_bo, bsize, tx_size, tx_type, skip, false, rdo_type, need_recon_pixel)
   } else {
-    write_tx_blocks(fi, ts, cw, w, luma_mode, chroma_mode, tile_bo, bsize, tx_size, tx_type, skip, cfl, false, rdo_type, for_rdo_use)
+    write_tx_blocks(fi, ts, cw, w, luma_mode, chroma_mode, tile_bo, bsize, tx_size, tx_type, skip, cfl, false, rdo_type, need_recon_pixel)
   }
 }
 
@@ -1329,7 +1329,7 @@ pub fn write_tx_blocks<T: Pixel>(
   cw: &mut ContextWriter, w: &mut dyn Writer,
   luma_mode: PredictionMode, chroma_mode: PredictionMode, tile_bo: BlockOffset,
   bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool,
-  cfl: CFLParams, luma_only: bool, rdo_type: RDOType, for_rdo_use: bool
+  cfl: CFLParams, luma_only: bool, rdo_type: RDOType, need_recon_pixel: bool
 ) -> i64 {
   let bw = bsize.width_mi() / tx_size.width_mi();
   let bh = bsize.height_mi() / tx_size.height_mi();
@@ -1353,9 +1353,9 @@ pub fn write_tx_blocks<T: Pixel>(
       let (_, dist) =
         encode_tx_block(
           fi, ts, cw, w, 0, tx_bo, luma_mode, tx_size, tx_type, bsize, po,
-          skip, &ac.array, 0, rdo_type, for_rdo_use
+          skip, &ac.array, 0, rdo_type, need_recon_pixel
         );
-      assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
+      assert!(!fi.use_tx_domain_distortion || need_recon_pixel || skip || dist >= 0);
       tx_dist += dist;
     }
   }
@@ -1413,8 +1413,8 @@ pub fn write_tx_blocks<T: Pixel>(
           po.y += (by * uv_tx_size.height()) as isize;
           let (_, dist) =
             encode_tx_block(fi, ts, cw, w, p, tx_bo, chroma_mode, uv_tx_size, uv_tx_type,
-                            plane_bsize, po, skip, &ac.array, alpha, rdo_type, for_rdo_use);
-          assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
+                            plane_bsize, po, skip, &ac.array, alpha, rdo_type, need_recon_pixel);
+          assert!(!fi.use_tx_domain_distortion || need_recon_pixel || skip || dist >= 0);
           tx_dist += dist;
         }
       }
@@ -1430,7 +1430,7 @@ pub fn write_tx_tree<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>, cw: &mut ContextWriter, w: &mut dyn Writer,
   luma_mode: PredictionMode, tile_bo: BlockOffset,
   bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool,
-  luma_only: bool, rdo_type: RDOType, for_rdo_use: bool
+  luma_only: bool, rdo_type: RDOType, need_recon_pixel: bool
 ) -> i64 {
   let bw = bsize.width_mi() / tx_size.width_mi();
   let bh = bsize.height_mi() / tx_size.height_mi();
@@ -1444,9 +1444,9 @@ pub fn write_tx_tree<T: Pixel>(
 
   let po = tile_bo.plane_offset(&ts.input.planes[0].cfg);
   let (has_coeff, dist) = encode_tx_block(
-    fi, ts, cw, w, 0, tile_bo, luma_mode, tx_size, tx_type, bsize, po, skip, ac, 0, rdo_type, for_rdo_use
+    fi, ts, cw, w, 0, tile_bo, luma_mode, tx_size, tx_type, bsize, po, skip, ac, 0, rdo_type, need_recon_pixel
   );
-  assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
+  assert!(!fi.use_tx_domain_distortion || need_recon_pixel || skip || dist >= 0);
   tx_dist += dist;
 
   if luma_only { return tx_dist };
@@ -1486,8 +1486,8 @@ pub fn write_tx_tree<T: Pixel>(
       let po = tile_bo.plane_offset(&ts.input.planes[p].cfg);
       let (_, dist) =
         encode_tx_block(fi, ts, cw, w, p, tx_bo, luma_mode, uv_tx_size, uv_tx_type,
-                        plane_bsize, po, skip, ac, 0, rdo_type, for_rdo_use);
-      assert!(!fi.use_tx_domain_distortion || !for_rdo_use || skip || dist >= 0);
+                        plane_bsize, po, skip, ac, 0, rdo_type, need_recon_pixel);
+      assert!(!fi.use_tx_domain_distortion || need_recon_pixel || skip || dist >= 0);
       tx_dist += dist;
     }
   }
@@ -1521,7 +1521,7 @@ pub fn encode_block_with_modes<T: Pixel>(
                               bsize, tile_bo, skip);
   encode_block_b(fi, ts, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                  mode_luma, mode_chroma, ref_frames, mvs, bsize, tile_bo, skip, cfl,
-                 tx_size, tx_type, mode_context, &mv_stack, rdo_type, false);
+                 tx_size, tx_type, mode_context, &mv_stack, rdo_type, true);
 }
 
 fn encode_partition_bottomup<T: Pixel, W: Writer>(
@@ -1897,7 +1897,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
                                   bsize, tile_bo, skip);
       encode_block_b(fi, ts, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                      mode_luma, mode_chroma, ref_frames, mvs, bsize, tile_bo, skip, cfl,
-                     tx_size, tx_type, mode_context, &mv_stack, RDOType::PixelDistRealRate, false);
+                     tx_size, tx_type, mode_context, &mv_stack, RDOType::PixelDistRealRate, true);
     },
     PARTITION_SPLIT |
     PARTITION_HORZ |
