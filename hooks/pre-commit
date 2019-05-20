@@ -1,0 +1,21 @@
+#!/bin/bash
+
+#disable check when merge or rebase
+cached=$(git diff --cached  --shortstat)
+if [[ -z "$cached" ]]
+then
+    exit 0
+fi
+
+fmt="cargo fmt"
+check="${fmt} -- --check"
+$check
+result=$?
+if [ ${result} -ne 0 ]; then
+    YELLOW='\033[0;33m'
+    NC='\033[0m'
+    printf "[${YELLOW}WARN${NC}]code style check failed. "
+    printf "We will apply above changes with your commit\n\n"
+    $fmt
+    git add -u
+fi

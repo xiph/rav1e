@@ -21,6 +21,11 @@ fn rerun_dir<P: AsRef<Path>>(dir: P) {
   }
 }
 
+fn install_git_hooks() {
+  fs::copy("hooks/pre-commit", ".git/hooks/pre-commit")
+    .expect("copy pre-commit hook failed");
+}
+
 fn main() {
   #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
   {
@@ -63,4 +68,5 @@ fn main() {
   if cfg!(windows) && cfg!(feature = "decode_test") {
     panic!("Unsupported feature on this platform!");
   }
+  install_git_hooks();
 }
