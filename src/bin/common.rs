@@ -328,7 +328,7 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
       100
     }
   });
-  let bitrate = maybe_bitrate.unwrap_or(0);
+  let bitrate: i32 = maybe_bitrate.unwrap_or(0);
   let train_rdo = matches.is_present("train-rdo");
   if quantizer == 0 {
     unimplemented!("Lossless encoding not yet implemented");
@@ -429,7 +429,7 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
   };
 
   cfg.quantizer = quantizer;
-  cfg.bitrate = bitrate;
+  cfg.bitrate = bitrate.checked_mul(1000).expect("Bitrate too high");
   cfg.show_psnr = matches.is_present("PSNR");
   cfg.pass = matches.value_of("PASS").map(|pass| pass.parse().unwrap());
   cfg.stats_file = if cfg.pass.is_some() {
