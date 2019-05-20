@@ -608,7 +608,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         }
 
         // TODO(yushin): luma and chroma would have different decision based on chroma format
-        let needs_rec = luma_mode_is_intra && tx_size < bsize.tx_size();
+        let need_recon_pixel = luma_mode_is_intra && tx_size < bsize.tx_size();
 
         encode_block_a(&fi.sequence, ts, cw, wr, bsize, tile_bo, skip);
         let tx_dist =
@@ -630,11 +630,11 @@ pub fn rdo_mode_decision<T: Pixel>(
             mode_context,
             &mv_stack,
             rdo_type,
-            !needs_rec
+            need_recon_pixel
           );
 
         let rate = wr.tell_frac() - tell;
-        let distortion = if fi.use_tx_domain_distortion && !needs_rec {
+        let distortion = if fi.use_tx_domain_distortion && !need_recon_pixel {
           compute_tx_distortion(
             fi,
             ts,
@@ -823,7 +823,7 @@ pub fn rdo_mode_decision<T: Pixel>(
       CFLParams::default(),
       true,
       rdo_type,
-      false
+      true
     );
     cw.rollback(&cw_checkpoint);
     if let Some(cfl) = rdo_cfl_alpha(ts, tile_bo, bsize, fi.sequence.bit_depth) {
@@ -849,7 +849,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         0,
         &Vec::new(),
         rdo_type,
-        false // For CFL, luma should be always reconstructed.
+        true // For CFL, luma should be always reconstructed.
       );
 
       let rate = wr.tell_frac() - tell;
@@ -989,7 +989,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
     let tell = wr.tell_frac();
     let tx_dist = if is_inter {
       write_tx_tree(
-        fi, ts, cw, wr, mode, tile_bo, bsize, tx_size, tx_type, false, true, rdo_type, true
+        fi, ts, cw, wr, mode, tile_bo, bsize, tx_size, tx_type, false, true, rdo_type, false
       )
     }  else {
       write_tx_blocks(
@@ -1007,7 +1007,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
         CFLParams::default(), // Unused.
         true,
         rdo_type,
-        true
+        false
       )
     };
 
