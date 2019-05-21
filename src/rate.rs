@@ -499,34 +499,20 @@ impl RCState {
     // Start with a buffer fullness and fullness target of 50%.
     let reservoir_target = (reservoir_max + 1) >> 1;
     // Pick exponents and initial scales for quantizer selection.
-    let ibpp = npixels/bits_per_frame;
-    // All of these initial scale/exp values are from Theora, and have not yet
-    //  been adapted to AV1, so they're certainly wrong.
-    // The B-frame values especially are simply copies of the P-frame values.
-    let i_exp: u8;
-    let i_log_scale: i64;
-    if ibpp < 1 {
-      i_exp = 59;
-      i_log_scale = blog64(1997) - q57(QSCALE);
-    } else if ibpp < 2 {
-      i_exp = 55;
-      i_log_scale = blog64(1604) - q57(QSCALE);
-    } else {
-      i_exp = 48;
-      i_log_scale = blog64(834) - q57(QSCALE);
-    }
-    let p_exp: u8;
-    let p_log_scale: i64;
-    if ibpp < 4 {
-      p_exp = 100;
-      p_log_scale = blog64(2249) - q57(QSCALE);
-    } else if ibpp < 8 {
-      p_exp = 95;
-      p_log_scale = blog64(1751) - q57(QSCALE);
-    } else {
-      p_exp = 73;
-      p_log_scale = blog64(1260) - q57(QSCALE);
-    }
+    //
+    // These have been derived by encoding many clips at every quantizer
+    // and running a linear regression in binary log space, as the relationship
+    // appears to be linear in nature; that is, one single bucket for all bits
+    // per pixel values.
+    let i_exp: u8 = 62;
+    let i_log_scale = blog64(52) - q57(QSCALE);
+    let p_exp: u8 = 97;
+    let p_log_scale = blog64(57) - q57(QSCALE);
+    let b0_exp: u8 = 94;
+    let b0_log_scale = blog64(25) - q57(QSCALE);
+    let b1_exp: u8 = 89;
+    let b1_log_scale = blog64(11) - q57(QSCALE);
+
     // TODO: Add support for "golden" P frames.
     RCState {
       target_bitrate,
@@ -543,13 +529,13 @@ impl RCState {
       reservoir_fullness: reservoir_target,
       reservoir_target,
       reservoir_max,
-      log_scale: [i_log_scale, p_log_scale, p_log_scale, p_log_scale],
-      exp: [i_exp, p_exp, p_exp, p_exp],
+      log_scale: [i_log_scale, p_log_scale, b0_log_scale, b1_log_scale],
+      exp: [i_exp, p_exp, b0_exp, b1_exp],
       scalefilter: [
         IIRBessel2::new(4, q57_to_q24(i_log_scale)),
         IIRBessel2::new(INTER_DELAY_TARGET_MIN, q57_to_q24(p_log_scale)),
-        IIRBessel2::new(INTER_DELAY_TARGET_MIN, q57_to_q24(p_log_scale)),
-        IIRBessel2::new(INTER_DELAY_TARGET_MIN, q57_to_q24(p_log_scale))
+        IIRBessel2::new(INTER_DELAY_TARGET_MIN, q57_to_q24(b0_log_scale)),
+        IIRBessel2::new(INTER_DELAY_TARGET_MIN, q57_to_q24(b1_log_scale))
       ],
       // TODO VFR
       nframes: [0; FRAME_NSUBTYPES],
