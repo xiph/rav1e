@@ -853,9 +853,23 @@ impl<T: Pixel> ContextInner<T> {
             self.rc_state.select_qi(self, fti, self.maybe_prev_log_base_q);
           let fi = self.frame_invariants.get_mut(&cur_idx).unwrap();
           fi.set_quantizers(&qps);
-          let mut fs = FrameState::new_with_frame(fi, frame.clone());
 
-          // TODO: Trial encoding for first frame of each type.
+          if self.rc_state.needs_trial_encode(fti) {
+            let mut fs = FrameState::new_with_frame(fi, frame.clone());
+            let data = encode_frame(fi, &mut fs);
+            self.rc_state.record_trial_encode(
+              (data.len() * 8) as i64,
+              fti,
+              qps.log_target_q,
+            );
+            let qps =
+              self.rc_state.select_qi(self, fti, self.maybe_prev_log_base_q);
+            let fi = self.frame_invariants.get_mut(&cur_idx).unwrap();
+            fi.set_quantizers(&qps);
+          }
+
+          let fi = self.frame_invariants.get_mut(&cur_idx).unwrap();
+          let mut fs = FrameState::new_with_frame(fi, frame.clone());
           let data = encode_frame(fi, &mut fs);
           self.maybe_prev_log_base_q = Some(qps.log_base_q);
           // TODO: Add support for dropping frames.

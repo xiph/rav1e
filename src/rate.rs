@@ -802,6 +802,32 @@ impl RCState {
     }
     dropped
   }
+
+  pub fn needs_trial_encode(&self, fti: usize) -> bool {
+      self.target_bitrate > 0 && self.nframes[fti] == 0
+  }
+
+  pub fn record_trial_encode(
+    &mut self, bits: i64, fti: usize, log_target_q: i64
+  ) {
+    assert!(self.needs_trial_encode(fti));
+    assert!(bits > 0);
+    let log_q_exp = ((log_target_q + 32) >> 6)*(self.exp[fti] as i64);
+    // Compute the estimated scale factor for this frame type.
+    let log_bits = blog64(bits);
+    let log_scale = (log_bits - self.log_npixels + log_q_exp).min(q57(16));
+    let log_scale_q24 = q57_to_q24(log_scale);
+    // If this is the first example of the given frame type we've seen, we
+    //  immediately replace the default scale factor guess with the
+    //  estimate we just computed using the first frame.
+    self.log_scale[fti] = log_scale;
+    let f = &mut self.scalefilter[fti];
+    let x = log_scale_q24;
+    f.x[0] = x;
+    f.x[1] = x;
+    f.y[0] = x;
+    f.y[1] = x;
+  }
 }
 
 #[cfg(test)]
