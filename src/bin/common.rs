@@ -248,6 +248,7 @@ pub fn parse_cli() -> CliOptions {
     .arg(
       Arg::with_name("RECONSTRUCTION")
         .help("Outputs a Y4M file containing the output from the decoder")
+        .long("reconstruction")
         .short("r")
         .takes_value(true)
     )
