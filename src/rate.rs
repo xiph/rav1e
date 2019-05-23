@@ -394,6 +394,9 @@ pub struct RCState {
   // The maximum buffer fullness (total size of the buffer).
   reservoir_max: i64,
   // The log of estimated scale factor for the rate model in Q57 format.
+  //
+  // TODO: Convert to Q23 or figure out a better way to avoid overflow
+  // once 2-pass mode is introduced, if required.
   log_scale: [i64; FRAME_NSUBTYPES],
   // The exponent used in the rate model in Q6 format.
   exp: [u8; FRAME_NSUBTYPES],
@@ -477,16 +480,14 @@ impl RCState {
     framerate_den: i64, target_bitrate: i32, maybe_ac_qi_max: Option<u8>,
     max_key_frame_interval: i32
   ) -> RCState {
-    // The buffer size is set equal to 1.5x the keyframe interval, clamped to
-    //  the range [12, 256] frames.
+    // The buffer size is set equal to 1.5x the keyframe interval, with a minimum
+    //  of 12.
     // The interval is short enough to allow reaction, but long enough to allow
     //  looking into the next GOP (avoiding the case where the last frames
     //  before an I-frame get starved).
     // The 12 frame minimum gives us some chance to distribute bit estimation
     //  errors in the worst case.
-    // The 256 frame maximum means we'll require 8-10 seconds of pre-buffering
-    // at 24-30 fps, which is not unreasonable.
-    let reservoir_frame_delay = clamp((max_key_frame_interval*3) >> 1, 12, 256);
+    let reservoir_frame_delay = ((max_key_frame_interval*3) >> 1).max(12);
     // TODO: What are the limits on these?
     let npixels = (frame_width as i64)*(frame_height as i64);
     // Insane framerates or frame sizes mean insane bitrates.
