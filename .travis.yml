@@ -1,6 +1,6 @@
 language: rust
 rust:
-  - stable
+  - 1.35.0
 env:
   - RUST_BACKTRACE=1
 addons:
