@@ -19,24 +19,28 @@ use crate::common::*;
 use crate::muxer::*;
 use rav1e::*;
 
-use std::io;
-use std::io::Write;
-use std::io::Read;
-use std::path::Path;
-use std::sync::Arc;
 use crate::decoder::Decoder;
 use crate::decoder::VideoDetails;
 use std::fs::File;
+use std::io;
 use std::io::BufWriter;
+use std::io::Read;
+use std::io::Write;
+use std::path::Path;
+use std::sync::Arc;
 
 struct Source<D: Decoder> {
- limit: usize,
- count: usize,
- input: D,
+  limit: usize,
+  count: usize,
+  input: D,
 }
 
 impl<D: Decoder> Source<D> {
-  fn read_frame<T: Pixel>(&mut self, ctx: &mut Context<T>, video_info: VideoDetails) {
+  fn read_frame<T: Pixel>(
+    &mut self,
+    ctx: &mut Context<T>,
+    video_info: VideoDetails,
+  ) {
     if self.limit != 0 && self.count == self.limit {
       ctx.flush();
       return;
@@ -45,7 +49,7 @@ impl<D: Decoder> Source<D> {
       Ok(frame) => {
         match video_info.bit_depth {
           8 | 10 | 12 => {}
-          _ => panic!("unknown input bit depth!")
+          _ => panic!("unknown input bit depth!"),
         }
         self.count += 1;
         let _ = ctx.send_frame(Some(Arc::new(frame)));
@@ -71,7 +75,9 @@ fn process_frame<T: Pixel, D: Decoder>(
   match pkt_wrapped {
     Ok(pkt) => {
       write_ivf_frame(output_file, pkt.number as u64, pkt.data.as_ref());
-      if let (Some(ref mut y4m_enc_uw), Some(ref rec)) = (y4m_enc.as_mut(), &pkt.rec) {
+      if let (Some(ref mut y4m_enc_uw), Some(ref rec)) =
+        (y4m_enc.as_mut(), &pkt.rec)
+      {
         write_y4m_frame(y4m_enc_uw, rec, y4m_details);
       }
       frame_summaries.push(pkt.into());
@@ -93,21 +99,27 @@ fn process_frame<T: Pixel, D: Decoder>(
   Some(frame_summaries)
 }
 
-fn write_stats_file<T: Pixel>(ctx: &Context<T>, filename: &Path) -> Result<(), io::Error> {
+fn write_stats_file<T: Pixel>(
+  ctx: &Context<T>,
+  filename: &Path,
+) -> Result<(), io::Error> {
   let file = File::create(filename)?;
   let writer = BufWriter::new(file);
-  serde_json::to_writer(writer, ctx.get_first_pass_data()).expect("Serialization should not fail");
+  serde_json::to_writer(writer, ctx.get_first_pass_data())
+    .expect("Serialization should not fail");
   Ok(())
 }
 
 fn do_encode<T: Pixel, D: Decoder>(
-  cfg: Config, verbose: bool, mut progress: ProgressInfo,
-  mut err: std::io::StderrLock, mut output: &mut dyn Write,
+  cfg: Config,
+  verbose: bool,
+  mut progress: ProgressInfo,
+  mut err: std::io::StderrLock,
+  mut output: &mut dyn Write,
   source: &mut Source<D>,
-  mut y4m_enc: Option<y4m::Encoder<'_, Box<dyn Write>>>
+  mut y4m_enc: Option<y4m::Encoder<'_, Box<dyn Write>>>,
 ) {
   let mut ctx: Context<T> = cfg.new_context();
-
 
   while let Some(frame_info) =
     process_frame(&mut ctx, &mut output, source, y4m_enc.as_mut())
@@ -136,19 +148,24 @@ fn do_encode<T: Pixel, D: Decoder>(
 
 fn main() {
   let mut cli = parse_cli();
-  let mut y4m_dec = y4m::decode(&mut cli.io.input).expect("input is not a y4m file");
+  let mut y4m_dec =
+    y4m::decode(&mut cli.io.input).expect("input is not a y4m file");
   let video_info = y4m_dec.get_video_details();
   let y4m_enc = match cli.io.rec.as_mut() {
     Some(rec) => Some(
       y4m::encode(
         video_info.width,
         video_info.height,
-        y4m::Ratio::new(video_info.time_base.den as usize, video_info.time_base.num as usize)
-      ).with_colorspace(y4m_dec.get_colorspace())
-        .write_header(rec)
-        .unwrap()
+        y4m::Ratio::new(
+          video_info.time_base.den as usize,
+          video_info.time_base.num as usize,
+        ),
+      )
+      .with_colorspace(y4m_dec.get_colorspace())
+      .write_header(rec)
+      .unwrap(),
     ),
-    None => None
+    None => None,
   };
 
   cli.enc.width = video_info.width;
@@ -157,10 +174,7 @@ fn main() {
   cli.enc.chroma_sampling = video_info.chroma_sampling;
   cli.enc.chroma_sample_position = video_info.chroma_sample_position;
   cli.enc.time_base = video_info.time_base;
-  let cfg = Config {
-    enc: cli.enc,
-    threads: cli.threads,
-  };
+  let cfg = Config { enc: cli.enc, threads: cli.threads };
 
   let stderr = io::stderr();
   let mut err = stderr.lock();
@@ -179,13 +193,13 @@ fn main() {
     video_info.width,
     video_info.height,
     video_info.time_base.den as usize,
-    video_info.time_base.num as usize
+    video_info.time_base.num as usize,
   );
 
   let progress = ProgressInfo::new(
     Rational { num: video_info.time_base.den, den: video_info.time_base.num },
     if cli.limit == 0 { None } else { Some(cli.limit) },
-      cfg.enc.show_psnr
+    cfg.enc.show_psnr,
   );
 
   for _ in 0..cli.skip {
@@ -196,11 +210,23 @@ fn main() {
 
   if video_info.bit_depth == 8 {
     do_encode::<u8, y4m::Decoder<'_, Box<dyn Read>>>(
-      cfg, cli.verbose, progress, err, &mut cli.io.output, &mut source, y4m_enc
+      cfg,
+      cli.verbose,
+      progress,
+      err,
+      &mut cli.io.output,
+      &mut source,
+      y4m_enc,
     )
   } else {
     do_encode::<u16, y4m::Decoder<'_, Box<dyn Read>>>(
-      cfg, cli.verbose, progress, err, &mut cli.io.output, &mut source, y4m_enc
+      cfg,
+      cli.verbose,
+      progress,
+      err,
+      &mut cli.io.output,
+      &mut source,
+      y4m_enc,
     )
   }
 }

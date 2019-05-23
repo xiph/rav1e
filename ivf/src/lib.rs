@@ -1,13 +1,14 @@
 /// Simple ivf muxer
 ///
-
 use bitstream_io::{BitReader, BitWriter, LittleEndian};
 use std::io;
 
 pub fn write_ivf_header(
-  output_file: &mut dyn io::Write, width: usize, height: usize,
+  output_file: &mut dyn io::Write,
+  width: usize,
+  height: usize,
   framerate_num: usize,
-  framerate_den: usize
+  framerate_den: usize,
 ) {
   let mut bw = BitWriter::endian(output_file, LittleEndian);
   bw.write_bytes(b"DKIF").unwrap();
@@ -23,7 +24,9 @@ pub fn write_ivf_header(
 }
 
 pub fn write_ivf_frame(
-  output_file: &mut dyn io::Write, pts: u64, data: &[u8]
+  output_file: &mut dyn io::Write,
+  pts: u64,
+  data: &[u8],
 ) {
   let mut bw = BitWriter::endian(output_file, LittleEndian);
   bw.write(32, data.len() as u32).unwrap();
@@ -37,7 +40,7 @@ pub struct Header {
   pub w: u16,
   pub h: u16,
   pub timebase_num: u32,
-  pub timebase_den: u32
+  pub timebase_den: u32,
 }
 
 pub fn read_header(r: &mut dyn io::Read) -> io::Result<Header> {
@@ -49,7 +52,7 @@ pub fn read_header(r: &mut dyn io::Read) -> io::Result<Header> {
   br.read_bytes(&mut signature)?;
 
   if &signature != b"DKIF" {
-    return Err(io::ErrorKind::InvalidData.into())
+    return Err(io::ErrorKind::InvalidData.into());
   }
 
   let _v0: u16 = br.read(16)?;
@@ -70,7 +73,7 @@ pub fn read_header(r: &mut dyn io::Read) -> io::Result<Header> {
 
 pub struct Packet {
   pub data: Box<[u8]>,
-  pub pts: u64
+  pub pts: u64,
 }
 
 pub fn read_packet(r: &mut dyn io::Read) -> io::Result<Packet> {

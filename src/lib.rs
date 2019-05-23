@@ -13,7 +13,7 @@
 extern crate serde_derive;
 extern crate bincode;
 
-#[cfg(all(test, feature="decode_test_dav1d"))]
+#[cfg(all(test, feature = "decode_test_dav1d"))]
 extern crate dav1d_sys;
 
 #[cfg(test)]
@@ -26,32 +26,32 @@ extern crate pretty_assertions;
 pub mod ec;
 pub mod partition;
 pub mod plane;
-pub mod transform;
-pub mod quantize;
 pub mod predict;
+pub mod quantize;
 pub mod rdo;
 pub mod rdo_tables;
+pub mod transform;
 #[macro_use]
 pub mod util;
-pub mod context;
-pub mod entropymode;
-pub mod token_cdfs;
-pub mod deblock;
-pub mod segmentation;
 pub mod cdef;
-pub mod lrf;
+pub mod context;
+pub mod deblock;
 pub mod encoder;
+pub mod entropymode;
+pub mod lrf;
 pub mod mc;
 pub mod me;
 pub mod metrics;
+pub mod rate;
 pub mod scan_order;
 pub mod scenechange;
-pub mod rate;
+pub mod segmentation;
 pub mod tiling;
+pub mod token_cdfs;
 
 mod api;
-mod header;
 mod frame;
+mod header;
 
 pub use crate::api::*;
 pub use crate::encoder::*;
@@ -60,12 +60,11 @@ pub use crate::util::{CastFromPrimitive, Pixel};
 
 pub use crate::frame::Frame;
 
-#[cfg(all(test, any(feature="decode_test", feature="decode_test_dav1d")))]
+#[cfg(all(test, any(feature = "decode_test", feature = "decode_test_dav1d")))]
 mod test_encode_decode;
 
-#[cfg(all(test, feature="decode_test"))]
+#[cfg(all(test, feature = "decode_test"))]
 mod test_encode_decode_aom;
 
-#[cfg(all(test, feature="decode_test_dav1d"))]
+#[cfg(all(test, feature = "decode_test_dav1d"))]
 mod test_encode_decode_dav1d;
-

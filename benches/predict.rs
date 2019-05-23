@@ -7,16 +7,18 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use crate::plane::*;
+use crate::util::*;
 use criterion::*;
 use rand::{ChaChaRng, Rng, RngCore, SeedableRng};
 use rav1e::partition::BlockSize;
 use rav1e::predict::{Block4x4, Intra};
-use crate::plane::*;
-use crate::util::*;
 
 pub const BLOCK_SIZE: BlockSize = BlockSize::BLOCK_32X32;
 
-pub fn generate_block(rng: &mut ChaChaRng) -> (Plane<u16>, Vec<u16>, Vec<u16>) {
+pub fn generate_block(
+  rng: &mut ChaChaRng,
+) -> (Plane<u16>, Vec<u16>, Vec<u16>) {
   let block = Plane::wrap(
     vec![0u16; BLOCK_SIZE.width() * BLOCK_SIZE.height()],
     BLOCK_SIZE.width(),
@@ -30,7 +32,8 @@ pub fn generate_block(rng: &mut ChaChaRng) -> (Plane<u16>, Vec<u16>, Vec<u16>) {
 }
 
 pub fn generate_block_u8<'a>(
-  rng: &mut ChaChaRng, edge_buf: &'a mut AlignedArray<[u8; 65]>
+  rng: &mut ChaChaRng,
+  edge_buf: &'a mut AlignedArray<[u8; 65]>,
 ) -> (Plane<u8>, &'a [u8], &'a [u8]) {
   let block = Plane::wrap(
     vec![0u8; BLOCK_SIZE.width() * BLOCK_SIZE.height()],
@@ -45,7 +48,7 @@ pub fn generate_block_u8<'a>(
 
 pub fn bench_pred_fn<F>(c: &mut Criterion, id: &str, f: F)
 where
-  F: FnMut(&mut Bencher) + 'static
+  F: FnMut(&mut Bencher) + 'static,
 {
   let b = Benchmark::new(id, f);
   c.bench(
@@ -56,7 +59,7 @@ where
       b.throughput(Throughput::Bytes(32))
     } else {
       b
-    }
+    },
   );
 }
 
@@ -100,7 +103,7 @@ pub fn intra_dc_left_4x4(b: &mut Bencher) {
     Block4x4::pred_dc_left(
       &mut block.as_region_mut(),
       &above[..4],
-      &left[..4]
+      &left[..4],
     );
   })
 }
@@ -110,11 +113,7 @@ pub fn intra_dc_top_4x4(b: &mut Bencher) {
   let (mut block, above, left) = generate_block(&mut rng);
 
   b.iter(|| {
-    Block4x4::pred_dc_top(
-      &mut block.as_region_mut(),
-      &above[..4],
-      &left[..4]
-    );
+    Block4x4::pred_dc_top(&mut block.as_region_mut(), &above[..4], &left[..4]);
   })
 }
 
@@ -146,7 +145,7 @@ pub fn intra_paeth_4x4(b: &mut Bencher) {
       &mut block.as_region_mut(),
       &above[..4],
       &left[..4],
-      above_left
+      above_left,
     );
   })
 }
@@ -156,11 +155,7 @@ pub fn intra_smooth_4x4(b: &mut Bencher) {
   let (mut block, above, left) = generate_block(&mut rng);
 
   b.iter(|| {
-    Block4x4::pred_smooth(
-      &mut block.as_region_mut(),
-      &above[..4],
-      &left[..4]
-    );
+    Block4x4::pred_smooth(&mut block.as_region_mut(), &above[..4], &left[..4]);
   })
 }
 
@@ -172,7 +167,7 @@ pub fn intra_smooth_h_4x4(b: &mut Bencher) {
     Block4x4::pred_smooth_h(
       &mut block.as_region_mut(),
       &above[..4],
-      &left[..4]
+      &left[..4],
     );
   })
 }
@@ -185,7 +180,7 @@ pub fn intra_smooth_v_4x4(b: &mut Bencher) {
     Block4x4::pred_smooth_v(
       &mut block.as_region_mut(),
       &above[..4],
-      &left[..4]
+      &left[..4],
     );
   })
 }
@@ -203,7 +198,7 @@ pub fn intra_cfl_4x4(b: &mut Bencher) {
       alpha,
       8,
       &above,
-      &left
+      &left,
     );
   })
 }
@@ -217,7 +212,7 @@ pub fn intra_dc_4x4_u8(b: &mut Bencher) {
     Block4x4::pred_dc(
       &mut block.as_region_mut(),
       &above[..4],
-      &left[32 - 4..]
+      &left[32 - 4..],
     );
   })
 }
@@ -241,7 +236,7 @@ pub fn intra_dc_left_4x4_u8(b: &mut Bencher) {
     Block4x4::pred_dc_left(
       &mut block.as_region_mut(),
       &above[..4],
-      &left[32 - 4..]
+      &left[32 - 4..],
     );
   })
 }
@@ -255,7 +250,7 @@ pub fn intra_dc_top_4x4_u8(b: &mut Bencher) {
     Block4x4::pred_dc_top(
       &mut block.as_region_mut(),
       &above[..4],
-      &left[32 - 4..]
+      &left[32 - 4..],
     );
   })
 }
@@ -291,7 +286,7 @@ pub fn intra_paeth_4x4_u8(b: &mut Bencher) {
       &mut block.as_region_mut(),
       &above[..4],
       &left[32 - 4..],
-      above_left
+      above_left,
     );
   })
 }
@@ -305,7 +300,7 @@ pub fn intra_smooth_4x4_u8(b: &mut Bencher) {
     Block4x4::pred_smooth(
       &mut block.as_region_mut(),
       &above[..4],
-      &left[32 - 4..]
+      &left[32 - 4..],
     );
   })
 }
@@ -319,7 +314,7 @@ pub fn intra_smooth_h_4x4_u8(b: &mut Bencher) {
     Block4x4::pred_smooth_h(
       &mut block.as_region_mut(),
       &above[..4],
-      &left[32 - 4..]
+      &left[32 - 4..],
     );
   })
 }
@@ -333,7 +328,7 @@ pub fn intra_smooth_v_4x4_u8(b: &mut Bencher) {
     Block4x4::pred_smooth_v(
       &mut block.as_region_mut(),
       &above[..4],
-      &left[32 - 4..]
+      &left[32 - 4..],
     );
   })
 }

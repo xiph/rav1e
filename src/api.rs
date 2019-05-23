@@ -7,8 +7,6 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use arg_enum_proc_macro::ArgEnum;
-use bitstream_io::*;
 use crate::encoder::*;
 use crate::frame::Frame;
 use crate::metrics::calculate_frame_psnr;
@@ -19,12 +17,14 @@ use crate::rate::FRAME_SUBTYPE_I;
 use crate::rate::FRAME_SUBTYPE_P;
 use crate::scenechange::SceneChangeDetector;
 use crate::util::Pixel;
+use arg_enum_proc_macro::ArgEnum;
+use bitstream_io::*;
 
-use std::{cmp, fmt, io};
 use std::collections::BTreeMap;
-use std::sync::Arc;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::{cmp, fmt, io};
 
 const LOOKAHEAD_FRAMES: u64 = 10;
 
@@ -33,7 +33,7 @@ const LOOKAHEAD_FRAMES: u64 = 10;
 #[repr(C)]
 pub struct Rational {
   pub num: u64,
-  pub den: u64
+  pub den: u64,
 }
 
 impl Rational {
@@ -46,9 +46,8 @@ impl Rational {
 #[repr(C)]
 pub struct Point {
   pub x: u16,
-  pub y: u16
+  pub y: u16,
 }
-
 
 /// Encoder Settings impacting the bitstream produced
 #[derive(Clone, Debug)]
@@ -98,7 +97,6 @@ impl Default for EncoderConfig {
 }
 
 impl EncoderConfig {
-
   /// This is a preset which provides default settings according to a speed value in the specific range 0-10.
   /// For each speed value it is having different preset. See [`from_preset()`].
   /// If the input value is greater than 10, it will result in the same settings of 10.
@@ -130,7 +128,7 @@ impl EncoderConfig {
       pass: None,
       show_psnr: false,
       stats_file: None,
-      train_rdo: false
+      train_rdo: false,
     }
   }
 }
@@ -150,7 +148,7 @@ pub struct SpeedSettings {
   pub include_near_mvs: bool,
   pub no_scene_detection: bool,
   pub diamond_me: bool,
-  pub cdef: bool
+  pub cdef: bool,
 }
 
 /// Default values for the speed settings.
@@ -209,14 +207,13 @@ impl SpeedSettings {
   /// This preset is set this way because 8x8 with reduced TX set is faster but with equivalent
   /// or better quality compared to 16x16 or 32x32 (to which reduced TX set does not apply).
   fn min_block_size_preset(speed: usize) -> BlockSize {
-    let min_block_size =
-      if speed == 0 {
-        BlockSize::BLOCK_4X4
-      } else if speed <= 8 {
-        BlockSize::BLOCK_8X8
-      } else {
-        BlockSize::BLOCK_64X64
-      };
+    let min_block_size = if speed == 0 {
+      BlockSize::BLOCK_4X4
+    } else if speed <= 8 {
+      BlockSize::BLOCK_8X8
+    } else {
+      BlockSize::BLOCK_64X64
+    };
     // Topdown search checks min_block_size for PARTITION_SPLIT only, so min_block_size must be square.
     assert!(min_block_size.is_sqr());
     min_block_size
@@ -294,7 +291,7 @@ pub enum FrameType {
   KEY,
   INTER,
   INTRA_ONLY,
-  SWITCH
+  SWITCH,
 }
 
 impl fmt::Display for FrameType {
@@ -349,7 +346,7 @@ impl ChromaSampling {
 pub enum ChromaSamplePosition {
   Unknown,
   Vertical,
-  Colocated
+  Colocated,
 }
 
 impl Default for ChromaSamplePosition {
@@ -361,112 +358,112 @@ impl Default for ChromaSamplePosition {
 #[derive(ArgEnum, Debug, Clone, Copy, PartialEq)]
 #[repr(C)]
 pub enum PixelRange {
-    Unspecified = 0,
-    Limited,
-    Full,
+  Unspecified = 0,
+  Limited,
+  Full,
 }
 
 impl Default for PixelRange {
-    fn default() -> Self {
-        PixelRange::Unspecified
-    }
+  fn default() -> Self {
+    PixelRange::Unspecified
+  }
 }
 
 #[derive(ArgEnum, Debug, Clone, Copy, PartialEq)]
 #[repr(C)]
 pub enum MatrixCoefficients {
-    Identity = 0,
-    BT709,
-    Unspecified,
-    BT470M = 4,
-    BT470BG,
-    ST170M,
-    ST240M,
-    YCgCo,
-    BT2020NonConstantLuminance,
-    BT2020ConstantLuminance,
-    ST2085,
-    ChromaticityDerivedNonConstantLuminance,
-    ChromaticityDerivedConstantLuminance,
-    ICtCp,
+  Identity = 0,
+  BT709,
+  Unspecified,
+  BT470M = 4,
+  BT470BG,
+  ST170M,
+  ST240M,
+  YCgCo,
+  BT2020NonConstantLuminance,
+  BT2020ConstantLuminance,
+  ST2085,
+  ChromaticityDerivedNonConstantLuminance,
+  ChromaticityDerivedConstantLuminance,
+  ICtCp,
 }
 
 impl Default for MatrixCoefficients {
-    fn default() -> Self {
-        MatrixCoefficients::Unspecified
-    }
+  fn default() -> Self {
+    MatrixCoefficients::Unspecified
+  }
 }
 
 #[derive(ArgEnum, Debug, Clone, Copy, PartialEq)]
 #[repr(C)]
 pub enum ColorPrimaries {
-    BT709 = 1,
-    Unspecified,
-    BT470M = 4,
-    BT470BG,
-    ST170M,
-    ST240M,
-    Film,
-    BT2020,
-    ST428,
-    P3DCI,
-    P3Display,
-    Tech3213 = 22,
+  BT709 = 1,
+  Unspecified,
+  BT470M = 4,
+  BT470BG,
+  ST170M,
+  ST240M,
+  Film,
+  BT2020,
+  ST428,
+  P3DCI,
+  P3Display,
+  Tech3213 = 22,
 }
 
 impl Default for ColorPrimaries {
-    fn default() -> Self {
-        ColorPrimaries::Unspecified
-    }
+  fn default() -> Self {
+    ColorPrimaries::Unspecified
+  }
 }
 
 #[derive(ArgEnum, Debug, Clone, Copy, PartialEq)]
 #[repr(C)]
 pub enum TransferCharacteristics {
-    BT1886 = 1,
-    Unspecified,
-    BT470M = 4,
-    BT470BG,
-    ST170M,
-    ST240M,
-    Linear,
-    Logarithmic100,
-    Logarithmic316,
-    XVYCC,
-    BT1361E,
-    SRGB,
-    BT2020Ten,
-    BT2020Twelve,
-    PerceptualQuantizer,
-    ST428,
-    HybridLogGamma,
+  BT1886 = 1,
+  Unspecified,
+  BT470M = 4,
+  BT470BG,
+  ST170M,
+  ST240M,
+  Linear,
+  Logarithmic100,
+  Logarithmic316,
+  XVYCC,
+  BT1361E,
+  SRGB,
+  BT2020Ten,
+  BT2020Twelve,
+  PerceptualQuantizer,
+  ST428,
+  HybridLogGamma,
 }
 
 impl Default for TransferCharacteristics {
-    fn default() -> Self {
-        TransferCharacteristics::Unspecified
-    }
+  fn default() -> Self {
+    TransferCharacteristics::Unspecified
+  }
 }
 
 #[derive(Copy, Clone, Debug)]
 pub struct ColorDescription {
-    pub color_primaries: ColorPrimaries,
-    pub transfer_characteristics: TransferCharacteristics,
-    pub matrix_coefficients: MatrixCoefficients
+  pub color_primaries: ColorPrimaries,
+  pub transfer_characteristics: TransferCharacteristics,
+  pub matrix_coefficients: MatrixCoefficients,
 }
 
 #[derive(Copy, Clone, Debug)]
 pub struct MasteringDisplay {
-    pub primaries: [Point; 3],
-    pub white_point: Point,
-    pub max_luminance: u32,
-    pub min_luminance: u32,
+  pub primaries: [Point; 3],
+  pub white_point: Point,
+  pub max_luminance: u32,
+  pub min_luminance: u32,
 }
 
 #[derive(Copy, Clone, Debug)]
 pub struct ContentLight {
-    pub max_content_light_level: u16,
-    pub max_frame_average_light_level: u16,
+  pub max_content_light_level: u16,
+  pub max_frame_average_light_level: u16,
 }
 
 /// Contains all the encoder configuration
@@ -474,22 +471,29 @@ pub struct ContentLight {
 pub struct Config {
   pub enc: EncoderConfig,
   /// The number of threads in the threadpool.
-  pub threads: usize
+  pub threads: usize,
 }
 
 impl Config {
   pub fn new_context<T: Pixel>(&self) -> Context<T> {
-    assert!(8 * std::mem::size_of::<T>() >= self.enc.bit_depth, "The Pixel u{} does not match the Config bit_depth {}",
-            8 * std::mem::size_of::<T>(), self.enc.bit_depth);
+    assert!(
+      8 * std::mem::size_of::<T>() >= self.enc.bit_depth,
+      "The Pixel u{} does not match the Config bit_depth {}",
+      8 * std::mem::size_of::<T>(),
+      self.enc.bit_depth
+    );
 
-    let pool = rayon::ThreadPoolBuilder::new().num_threads(self.threads).build().unwrap();
+    let pool = rayon::ThreadPoolBuilder::new()
+      .num_threads(self.threads)
+      .build()
+      .unwrap();
 
     let mut config = self.enc.clone();
 
     // FIXME: inter unsupported with 4:2:2 and 4:4:4 chroma sampling
     let chroma_sampling = config.chroma_sampling;
-    let keyframe_only = chroma_sampling == ChromaSampling::Cs444 ||
-      chroma_sampling == ChromaSampling::Cs422;
+    let keyframe_only = chroma_sampling == ChromaSampling::Cs444
+      || chroma_sampling == ChromaSampling::Cs422;
     if keyframe_only {
       config.max_key_frame_interval = 1;
       config.min_key_frame_interval = 1;
@@ -501,11 +505,7 @@ impl Config {
 
     let inner = ContextInner::new(&config);
 
-    Context {
-      inner,
-      pool,
-      config
-    }
+    Context { inner, pool, config }
   }
 }
 
@@ -582,7 +582,7 @@ impl<T: Pixel> Context<T> {
     Arc::new(Frame::new(
       self.config.width,
       self.config.height,
-      self.config.chroma_sampling
+      self.config.chroma_sampling,
     ))
   }
 
@@ -593,7 +593,7 @@ impl<T: Pixel> Context<T> {
     let frame = frame.into();
 
     if frame.is_none() {
-        self.inner.limit = self.inner.frame_count;
+      self.inner.limit = self.inner.frame_count;
     }
 
     self.inner.send_frame(frame)
@@ -647,48 +647,44 @@ impl<T: Pixel> Context<T> {
   }
 }
 
-
 impl<T: Pixel> ContextInner<T> {
   pub fn new(enc: &EncoderConfig) -> Self {
     // initialize with temporal delimiter
     let packet_data = TEMPORAL_DELIMITER.to_vec();
 
-    let maybe_ac_qi_max = if enc.quantizer < 255 {
-      Some(enc.quantizer as u8)
-    } else {
-      None
-    };
+    let maybe_ac_qi_max =
+      if enc.quantizer < 255 { Some(enc.quantizer as u8) } else { None };
 
     ContextInner {
-        frame_count: 0,
-        limit: 0,
-        idx: 0,
-        frames_processed: 0,
-        frame_q: BTreeMap::new(),
-        frame_invariants: BTreeMap::new(),
-        keyframes: BTreeSet::new(),
-        packet_data,
-        segment_start_idx: 0,
-        segment_start_frame: 0,
-        keyframe_detector: SceneChangeDetector::new(enc.bit_depth),
-        config: enc.clone(),
-        rc_state: RCState::new(
-          enc.width as i32,
-          enc.height as i32,
-          enc.time_base.den as i64,
-          enc.time_base.num as i64,
-          enc.bitrate,
-          maybe_ac_qi_max,
-          enc.max_key_frame_interval as i32
-        ),
-        maybe_prev_log_base_q: None,
-        first_pass_data: FirstPassData { frames: Vec::new() },
+      frame_count: 0,
+      limit: 0,
+      idx: 0,
+      frames_processed: 0,
+      frame_q: BTreeMap::new(),
+      frame_invariants: BTreeMap::new(),
+      keyframes: BTreeSet::new(),
+      packet_data,
+      segment_start_idx: 0,
+      segment_start_frame: 0,
+      keyframe_detector: SceneChangeDetector::new(enc.bit_depth),
+      config: enc.clone(),
+      rc_state: RCState::new(
+        enc.width as i32,
+        enc.height as i32,
+        enc.time_base.den as i64,
+        enc.time_base.num as i64,
+        enc.bitrate,
+        maybe_ac_qi_max,
+        enc.max_key_frame_interval as i32,
+      ),
+      maybe_prev_log_base_q: None,
+      first_pass_data: FirstPassData { frames: Vec::new() },
     }
   }
 
   pub fn send_frame<F>(&mut self, frame: F) -> Result<(), EncoderStatus>
   where
-    F: Into<Option<Arc<Frame<T>>>>
+    F: Into<Option<Arc<Frame<T>>>>,
   {
     let idx = self.frame_count;
     let frame = frame.into();
@@ -713,7 +709,9 @@ impl<T: Pixel> ContextInner<T> {
   }
 
   pub(crate) fn needs_more_lookahead(&self) -> bool {
-    self.needs_more_frames(self.frame_count) && self.frames_processed + LOOKAHEAD_FRAMES > self.frame_q.keys().last().cloned().unwrap_or(0)
+    self.needs_more_frames(self.frame_count)
+      && self.frames_processed + LOOKAHEAD_FRAMES
+        > self.frame_q.keys().last().cloned().unwrap_or(0)
   }
 
   pub fn needs_more_frames(&self, frame_count: u64) -> bool {
@@ -721,11 +719,17 @@ impl<T: Pixel> ContextInner<T> {
   }
 
   fn next_keyframe(&self) -> u64 {
-    let next_detected = self.frame_invariants.values()
-      .find(|fi| fi.frame_type == FrameType::KEY && fi.number > self.segment_start_frame)
+    let next_detected = self
+      .frame_invariants
+      .values()
+      .find(|fi| {
+        fi.frame_type == FrameType::KEY && fi.number > self.segment_start_frame
+      })
       .map(|fi| fi.number);
-    let next_limit = self.segment_start_frame + self.config.max_key_frame_interval;
-    let next_limit = if self.limit != 0 { next_limit.min(self.limit) } else { next_limit };
+    let next_limit =
+      self.segment_start_frame + self.config.max_key_frame_interval;
+    let next_limit =
+      if self.limit != 0 { next_limit.min(self.limit) } else { next_limit };
     if next_detected.is_none() {
       return next_limit;
     }
@@ -739,16 +743,16 @@ impl<T: Pixel> ContextInner<T> {
     Ok(end_of_subgop)
   }
 
-  fn build_frame_properties(&mut self, idx: u64) -> Result<(FrameInvariants<T>, bool), EncoderStatus> {
+  fn build_frame_properties(
+    &mut self,
+    idx: u64,
+  ) -> Result<(FrameInvariants<T>, bool), EncoderStatus> {
     let mut fi = if idx == 0 {
       let seq = Sequence::new(&self.config);
       // The first frame will always be a key frame
       FrameInvariants::new_key_frame(
-        &FrameInvariants::new(
-          self.config.clone(),
-          seq
-        ),
-        0
+        &FrameInvariants::new(self.config.clone(), seq),
+        0,
       )
     } else {
       self.frame_invariants[&(idx - 1)].clone()
@@ -765,13 +769,13 @@ impl<T: Pixel> ContextInner<T> {
         &fi,
         self.segment_start_frame,
         idx_in_segment,
-        next_keyframe
+        next_keyframe,
       );
       fi = fi_temp;
       if !end_of_subgop {
         if !fi.inter_cfg.unwrap().reorder
           || ((idx_in_segment - 1) % fi.inter_cfg.unwrap().group_len == 0
-          && fi.number == (next_keyframe - 1))
+            && fi.number == (next_keyframe - 1))
         {
           self.segment_start_idx = idx;
           self.segment_start_frame = next_keyframe;
@@ -783,8 +787,10 @@ impl<T: Pixel> ContextInner<T> {
     }
 
     match self.frame_q.get(&fi.number) {
-      Some(Some(_)) => {},
-      _ => { return Err(EncoderStatus::NeedMoreData); }
+      Some(Some(_)) => {}
+      _ => {
+        return Err(EncoderStatus::NeedMoreData);
+      }
     }
 
     // Now that we know the frame number, look up the correct frame type
@@ -805,7 +811,7 @@ impl<T: Pixel> ContextInner<T> {
         &fi,
         self.segment_start_frame,
         idx_in_segment,
-        next_keyframe
+        next_keyframe,
       );
       fi = fi_temp;
       if !end_of_subgop {
@@ -879,7 +885,7 @@ impl<T: Pixel> ContextInner<T> {
             (data.len() * 8) as i64,
             fti,
             qps.log_target_q,
-            false
+            false,
           );
           self.packet_data.extend(data);
 
@@ -913,7 +919,11 @@ impl<T: Pixel> ContextInner<T> {
     ret
   }
 
-  fn finalize_packet(&mut self, rec: Option<Frame<T>>, fi: &FrameInvariants<T>) -> Result<Packet<T>, EncoderStatus> {
+  fn finalize_packet(
+    &mut self,
+    rec: Option<Frame<T>>,
+    fi: &FrameInvariants<T>,
+  ) -> Result<Packet<T>, EncoderStatus> {
     let data = self.packet_data.clone();
     self.packet_data.clear();
     if write_temporal_delimiter(&mut self.packet_data).is_err() {
@@ -927,7 +937,7 @@ impl<T: Pixel> ContextInner<T> {
         psnr = Some(calculate_frame_psnr(
           &*original_frame,
           rec,
-          fi.sequence.bit_depth
+          fi.sequence.bit_depth,
         ));
       }
     }
@@ -942,7 +952,7 @@ impl<T: Pixel> ContextInner<T> {
       rec,
       number: fi.number,
       frame_type: fi.frame_type,
-      psnr
+      psnr,
     })
   }
 
@@ -973,13 +983,17 @@ impl<T: Pixel> ContextInner<T> {
       }
     }
 
-    let prev_keyframe = self.keyframes.iter()
+    let prev_keyframe = self
+      .keyframes
+      .iter()
       .rfind(|&&keyframe| keyframe < frame_number)
       .cloned()
       .unwrap_or(0);
     let frame = match self.frame_q.get(&frame_number).cloned() {
       Some(frame) => frame,
-      None => { return FrameType::KEY; }
+      None => {
+        return FrameType::KEY;
+      }
     };
     if let Some(frame) = frame {
       let distance = frame_number - prev_keyframe;
@@ -992,7 +1006,10 @@ impl<T: Pixel> ContextInner<T> {
       if distance >= self.config.max_key_frame_interval {
         return FrameType::KEY;
       }
-      if self.keyframe_detector.detect_scene_change(frame, frame_number as usize) {
+      if self
+        .keyframe_detector
+        .detect_scene_change(frame, frame_number as usize)
+      {
         return FrameType::KEY;
       }
     }
@@ -1005,7 +1022,9 @@ impl<T: Pixel> ContextInner<T> {
   //  reservoir_frame_delay frames, or the end of the interval, whichever
   //  comes first.
   pub(crate) fn guess_frame_subtypes(
-    &self, nframes: &mut [i32; FRAME_NSUBTYPES], reservoir_frame_delay: i32
+    &self,
+    nframes: &mut [i32; FRAME_NSUBTYPES],
+    reservoir_frame_delay: i32,
   ) -> i32 {
     // TODO: Ideally this logic should be centralized, but the actual code used
     //  to determine a frame's subtype is spread over many places and
@@ -1020,7 +1039,8 @@ impl<T: Pixel> ContextInner<T> {
     // Updates the frame counts with the accumulated values when we hit a
     //  keyframe.
     fn collect_counts(
-      nframes: &mut [i32; FRAME_NSUBTYPES], acc: &mut [i32; FRAME_NSUBTYPES]
+      nframes: &mut [i32; FRAME_NSUBTYPES],
+      acc: &mut [i32; FRAME_NSUBTYPES],
     ) {
       for fti in 0..FRAME_NSUBTYPES {
         nframes[fti] += acc[fti];
@@ -1086,10 +1106,7 @@ pub struct FirstPassFrame {
 
 impl<T: Pixel> From<&FrameInvariants<T>> for FirstPassFrame {
   fn from(fi: &FrameInvariants<T>) -> FirstPassFrame {
-    FirstPassFrame {
-      number: fi.number,
-      frame_type: fi.frame_type,
-    }
+    FirstPassFrame { number: fi.number, frame_type: fi.frame_type }
   }
 }
 
@@ -1100,8 +1117,14 @@ mod test {
   use interpolate_name::interpolate_test;
 
   fn setup_encoder<T: Pixel>(
-    w: usize, h: usize, speed: usize, quantizer: usize, bit_depth: usize,
-    chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
+    w: usize,
+    h: usize,
+    speed: usize,
+    quantizer: usize,
+    bit_depth: usize,
+    chroma_sampling: ChromaSampling,
+    min_keyint: u64,
+    max_keyint: u64,
     bitrate: i32,
     low_latency: bool,
     no_scene_detection: bool,
@@ -1138,16 +1161,27 @@ mod test {
   }
   */
 
-
   #[interpolate_test(low_latency_no_scene_change, true, true)]
   #[interpolate_test(reorder_no_scene_change, false, true)]
   #[interpolate_test(low_latency_scene_change_detection, true, false)]
   #[interpolate_test(reorder_scene_change_detection, false, false)]
   fn flush(low_lantency: bool, no_scene_detection: bool) {
-    let mut ctx = setup_encoder::<u8>(64, 80, 10, 100, 8, ChromaSampling::Cs420, 150, 200, 0, low_lantency, no_scene_detection);
+    let mut ctx = setup_encoder::<u8>(
+      64,
+      80,
+      10,
+      100,
+      8,
+      ChromaSampling::Cs420,
+      150,
+      200,
+      0,
+      low_lantency,
+      no_scene_detection,
+    );
     let limit = 41;
 
-    for _ in  0..limit {
+    for _ in 0..limit {
       let input = ctx.new_frame();
       let _ = ctx.send_frame(input);
     }
@@ -1162,7 +1196,7 @@ mod test {
           Ok(_) => {
             eprintln!("Packet Received {}/{}", count, limit);
             count += 1;
-          },
+          }
           Err(EncoderStatus::EnoughData) => {
             eprintln!("{:?}", EncoderStatus::EnoughData);
 
@@ -1179,16 +1213,27 @@ mod test {
     assert_eq!(limit, count);
   }
 
-
   #[interpolate_test(low_latency_no_scene_change, true, true)]
   #[interpolate_test(reorder_no_scene_change, false, true)]
   #[interpolate_test(low_latency_scene_change_detection, true, false)]
   #[interpolate_test(reorder_scene_change_detection, false, false)]
   fn flush_unlimited(low_lantency: bool, no_scene_detection: bool) {
-    let mut ctx = setup_encoder::<u8>(64, 80, 10, 100, 8, ChromaSampling::Cs420, 150, 200, 0, low_lantency, no_scene_detection);
+    let mut ctx = setup_encoder::<u8>(
+      64,
+      80,
+      10,
+      100,
+      8,
+      ChromaSampling::Cs420,
+      150,
+      200,
+      0,
+      low_lantency,
+      no_scene_detection,
+    );
     let limit = 41;
 
-    for _ in  0..limit {
+    for _ in 0..limit {
       let input = ctx.new_frame();
       let _ = ctx.send_frame(input);
     }
@@ -1203,7 +1248,7 @@ mod test {
           Ok(_) => {
             eprintln!("Packet Received {}/{}", count, limit);
             count += 1;
-          },
+          }
           Err(EncoderStatus::EnoughData) => {
             eprintln!("{:?}", EncoderStatus::EnoughData);
 

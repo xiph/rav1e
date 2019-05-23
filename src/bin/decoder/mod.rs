@@ -1,12 +1,14 @@
-use std::io;
 use rav1e::*;
+use std::io;
 
 pub mod y4m;
 
-
 pub trait Decoder {
   fn get_video_details(&self) -> VideoDetails;
-  fn read_frame<T: Pixel>(&mut self, cfg: &VideoDetails) -> Result<Frame<T>, DecodeError>;
+  fn read_frame<T: Pixel>(
+    &mut self,
+    cfg: &VideoDetails,
+  ) -> Result<Frame<T>, DecodeError>;
 }
 
 #[derive(Debug)]
@@ -36,7 +38,7 @@ impl Default for VideoDetails {
       bit_depth: 8,
       chroma_sampling: ChromaSampling::Cs420,
       chroma_sample_position: ChromaSamplePosition::Unknown,
-      time_base: Rational { num: 30, den: 1 }
+      time_base: Rational { num: 30, den: 1 },
     }
   }
 }

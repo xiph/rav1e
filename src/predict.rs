@@ -50,16 +50,15 @@ pub static RAV1E_INTRA_MODES_MINIMAL: &'static [PredictionMode] = &[
     PredictionMode::V_PRED
 ];
 
-pub static RAV1E_INTER_MODES_MINIMAL: &'static [PredictionMode] = &[
-  PredictionMode::NEARESTMV
-];
+pub static RAV1E_INTER_MODES_MINIMAL: &'static [PredictionMode] =
+  &[PredictionMode::NEARESTMV];
 
 pub static RAV1E_INTER_COMPOUND_MODES: &'static [PredictionMode] = &[
   PredictionMode::GLOBAL_GLOBALMV,
   PredictionMode::NEAREST_NEARESTMV,
   PredictionMode::NEW_NEWMV,
   PredictionMode::NEAREST_NEWMV,
-  PredictionMode::NEW_NEARESTMV
+  PredictionMode::NEW_NEARESTMV,
 ];
 
 // Weights are quadratic from '1' to '1 / block_size', scaled by 2^sm_weight_log2_scale.
@@ -111,7 +110,7 @@ pub static extend_modes: [u8; INTRA_MODES] = [
   NEED_LEFT | NEED_ABOVE,                  // SMOOTH
   NEED_LEFT | NEED_ABOVE,                  // SMOOTH_V
   NEED_LEFT | NEED_ABOVE,                  // SMOOTH_H
-  NEED_LEFT | NEED_ABOVE | NEED_ABOVELEFT  // PAETH
+  NEED_LEFT | NEED_ABOVE | NEED_ABOVELEFT, // PAETH
 ];
 
 pub trait Dim {
@@ -164,8 +163,12 @@ macro_rules! decl_angular_ipred_fn {
   ($f:ident) => {
     extern {
       fn $f(
-        dst: *mut u8, stride: libc::ptrdiff_t, topleft: *const u8,
-        width: libc::c_int, height: libc::c_int, angle: libc::c_int
+        dst: *mut u8,
+        stride: libc::ptrdiff_t,
+        topleft: *const u8,
+        width: libc::c_int,
+        height: libc::c_int,
+        angle: libc::c_int,
       );
     }
   };
@@ -197,9 +200,13 @@ macro_rules! decl_cfl_pred_fn {
   ($f:ident) => {
     extern {
       fn $f(
-        dst: *mut u8, stride: libc::ptrdiff_t, topleft: *const u8,
-        width: libc::c_int, height: libc::c_int, ac: *const u8,
-        alpha: libc::c_int
+        dst: *mut u8,
+        stride: libc::ptrdiff_t,
+        topleft: *const u8,
+        width: libc::c_int,
+        height: libc::c_int,
+        ac: *const u8,
+        alpha: libc::c_int,
       );
     }
   };
@@ -229,14 +236,18 @@ where
             above.as_ptr().offset(-1) as *const _,
             Self::W as libc::c_int,
             Self::H as libc::c_int,
-            0
+            0,
           )
         };
       }
     }
     let edges = left[..Self::H].iter().chain(above[..Self::W].iter());
     let len = (Self::W + Self::H) as u32;
-    let avg = (edges.fold(0u32, |acc, &v| { let v: u32 = v.into(); v + acc }) + (len >> 1)) / len;
+    let avg = (edges.fold(0u32, |acc, &v| {
+      let v: u32 = v.into();
+      v + acc
+    }) + (len >> 1))
+      / len;
     let avg = T::cast_from(avg);
 
     for line in output.rows_iter_mut().take(Self::H) {
@@ -257,7 +268,7 @@ where
             ptr::null(),
             Self::W as libc::c_int,
             Self::H as libc::c_int,
-            0
+            0,
           )
         };
       }
@@ -270,7 +281,11 @@ where
     }
   }
 
-  fn pred_dc_left(output: &mut PlaneRegionMut<'_, T>, _above: &[T], left: &[T]) {
+  fn pred_dc_left(
+    output: &mut PlaneRegionMut<'_, T>,
+    _above: &[T],
+    left: &[T],
+  ) {
     #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
@@ -281,19 +296,26 @@ where
             left.as_ptr().add(Self::H) as *const _,
             Self::W as libc::c_int,
             Self::H as libc::c_int,
-            0
+            0,
           )
         };
       }
     }
-    let sum = left[..Self::H].iter().fold(0u32, |acc, &v| { let v: u32 = v.into(); v + acc });
+    let sum = left[..Self::H].iter().fold(0u32, |acc, &v| {
+      let v: u32 = v.into();
+      v + acc
+    });
     let avg = T::cast_from((sum + (Self::H >> 1) as u32) / Self::H as u32);
     for line in output.rows_iter_mut().take(Self::H) {
       line[..Self::W].iter_mut().for_each(|v| *v = avg);
     }
   }
 
-  fn pred_dc_top(output: &mut PlaneRegionMut<'_, T>, above: &[T], _left: &[T]) {
+  fn pred_dc_top(
+    output: &mut PlaneRegionMut<'_, T>,
+    above: &[T],
+    _left: &[T],
+  ) {
     #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
@@ -304,12 +326,15 @@ where
             above.as_ptr().offset(-1) as *const _,
             Self::W as libc::c_int,
             Self::H as libc::c_int,
-            0
+            0,
           )
         };
       }
     }
-    let sum = above[..Self::W].iter().fold(0u32, |acc, &v| { let v: u32 = v.into(); v + acc });
+    let sum = above[..Self::W].iter().fold(0u32, |acc, &v| {
+      let v: u32 = v.into();
+      v + acc
+    });
     let avg = T::cast_from((sum + (Self::W >> 1) as u32) / Self::W as u32);
     for line in output.rows_iter_mut().take(Self::H) {
       line[..Self::W].iter_mut().for_each(|v| *v = avg);
@@ -327,14 +352,12 @@ where
             left.as_ptr().add(Self::H) as *const _,
             Self::W as libc::c_int,
             Self::H as libc::c_int,
-            0
+            0,
           )
         };
       }
     }
-    for (line, l) in
-      output.rows_iter_mut().zip(left[..Self::H].iter().rev())
-    {
+    for (line, l) in output.rows_iter_mut().zip(left[..Self::H].iter().rev()) {
       for v in &mut line[..Self::W] {
         *v = *l;
       }
@@ -352,7 +375,7 @@ where
             above.as_ptr().offset(-1) as *const _,
             Self::W as libc::c_int,
             Self::H as libc::c_int,
-            0
+            0,
           )
         };
       }
@@ -363,8 +386,10 @@ where
   }
 
   fn pred_paeth(
-    output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
-    above_left: T
+    output: &mut PlaneRegionMut<'_, T>,
+    above: &[T],
+    left: &[T],
+    above_left: T,
   ) {
     #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
@@ -376,7 +401,7 @@ where
             above.as_ptr().offset(-1) as *const _,
             Self::W as libc::c_int,
             Self::H as libc::c_int,
-            0
+            0,
           )
         };
       }
@@ -406,9 +431,7 @@ where
     }
   }
 
-  fn pred_smooth(
-    output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T]
-  ) {
+  fn pred_smooth(output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T]) {
     #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
       if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
@@ -419,7 +442,7 @@ where
             above.as_ptr().offset(-1) as *const _,
             Self::W as libc::c_int,
             Self::H as libc::c_int,
-            0
+            0,
           )
         };
       }
@@ -449,7 +472,7 @@ where
           sm_weights_h[r] as u16,
           scale - sm_weights_h[r] as u16,
           sm_weights_w[c] as u16,
-          scale - sm_weights_w[c] as u16
+          scale - sm_weights_w[c] as u16,
         ];
 
         assert!(
@@ -461,7 +484,10 @@ where
         let mut this_pred: u32 = weights
           .iter()
           .zip(pixels.iter())
-          .map(|(w, p)| { let p: u32 = (*p).into(); (*w as u32) * p })
+          .map(|(w, p)| {
+            let p: u32 = (*p).into();
+            (*w as u32) * p
+          })
           .sum();
         this_pred = (this_pred + (1 << (log2_scale - 1))) >> log2_scale;
 
@@ -471,7 +497,9 @@ where
   }
 
   fn pred_smooth_h(
-    output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T]
+    output: &mut PlaneRegionMut<'_, T>,
+    above: &[T],
+    left: &[T],
   ) {
     #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
@@ -483,7 +511,7 @@ where
             above.as_ptr().offset(-1) as *const _,
             Self::W as libc::c_int,
             Self::H as libc::c_int,
-            0
+            0,
           )
         };
       }
@@ -511,7 +539,10 @@ where
         let mut this_pred: u32 = weights
           .iter()
           .zip(pixels.iter())
-          .map(|(w, p)| { let p: u32 = (*p).into(); (*w as u32) * p })
+          .map(|(w, p)| {
+            let p: u32 = (*p).into();
+            (*w as u32) * p
+          })
           .sum();
         this_pred = (this_pred + (1 << (log2_scale - 1))) >> log2_scale;
 
@@ -521,7 +552,9 @@ where
   }
 
   fn pred_smooth_v(
-    output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T]
+    output: &mut PlaneRegionMut<'_, T>,
+    above: &[T],
+    left: &[T],
   ) {
     #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
@@ -533,7 +566,7 @@ where
             above.as_ptr().offset(-1) as *const _,
             Self::W as libc::c_int,
             Self::H as libc::c_int,
-            0
+            0,
           )
         };
       }
@@ -561,7 +594,10 @@ where
         let mut this_pred: u32 = weights
           .iter()
           .zip(pixels.iter())
-          .map(|(w, p)| { let p: u32 = (*p).into(); (*w as u32) * p })
+          .map(|(w, p)| {
+            let p: u32 = (*p).into();
+            (*w as u32) * p
+          })
           .sum();
         this_pred = (this_pred + (1 << (log2_scale - 1))) >> log2_scale;
 
@@ -573,8 +609,11 @@ where
   #[target_feature(enable = "ssse3")]
   #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
   unsafe fn pred_cfl_ssse3(
-    output: *mut T, stride: usize, ac: *const i16, alpha: i16,
-    bit_depth: usize
+    output: *mut T,
+    stride: usize,
+    ac: *const i16,
+    alpha: i16,
+    bit_depth: usize,
   ) {
     let alpha_sign = _mm_set1_epi16(alpha);
     let alpha_q12 = _mm_slli_epi16(_mm_abs_epi16(alpha_sign), 9);
@@ -599,7 +638,7 @@ where
           if Self::W < 16 {
             let res = _mm_packus_epi16(pred, pred);
             if Self::W == 4 {
-               *(line.offset(i) as *mut i32) = _mm_cvtsi128_si32(res);
+              *(line.offset(i) as *mut i32) = _mm_cvtsi128_si32(res);
             } else {
               _mm_storel_epi64(line.offset(i) as *mut _, res);
             }
@@ -610,7 +649,8 @@ where
             _mm_storeu_si128(line.offset(i - 8) as *mut _, res);
           }
         } else {
-          let res = _mm_min_epi16(max, _mm_max_epi16(pred, _mm_setzero_si128()));
+          let res =
+            _mm_min_epi16(max, _mm_max_epi16(pred, _mm_setzero_si128()));
           if Self::W == 4 {
             _mm_storel_epi64(line.offset(i) as *mut _, res);
           } else {
@@ -623,7 +663,10 @@ where
   }
 
   fn pred_cfl_inner(
-    output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16, bit_depth: usize
+    output: &mut PlaneRegionMut<'_, T>,
+    ac: &[i16],
+    alpha: i16,
+    bit_depth: usize,
   ) {
     if alpha == 0 {
       return;
@@ -636,7 +679,13 @@ where
     {
       if is_x86_feature_detected!("ssse3") {
         return unsafe {
-          Self::pred_cfl_ssse3(output.data_ptr_mut(), output.plane_cfg.stride, ac.as_ptr(), alpha, bit_depth)
+          Self::pred_cfl_ssse3(
+            output.data_ptr_mut(),
+            output.plane_cfg.stride,
+            ac.as_ptr(),
+            alpha,
+            bit_depth,
+          )
         };
       }
     }
@@ -644,20 +693,24 @@ where
     let sample_max = (1 << bit_depth) - 1;
     let avg: i32 = output[0][0].into();
 
-
     for (line, luma) in
       output.rows_iter_mut().zip(ac.chunks(Self::W)).take(Self::H)
     {
       for (v, &l) in line[..Self::W].iter_mut().zip(luma[..Self::W].iter()) {
         *v = T::cast_from(
-          (avg + get_scaled_luma_q0(alpha, l)).max(0).min(sample_max));
+          (avg + get_scaled_luma_q0(alpha, l)).max(0).min(sample_max),
+        );
       }
     }
   }
 
   fn pred_cfl(
-    output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16, bit_depth: usize,
-    above: &[T], left: &[T]
+    output: &mut PlaneRegionMut<'_, T>,
+    ac: &[i16],
+    alpha: i16,
+    bit_depth: usize,
+    above: &[T],
+    left: &[T],
   ) {
     #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
@@ -670,9 +723,9 @@ where
             Self::W as libc::c_int,
             Self::H as libc::c_int,
             ac.as_ptr() as *const _,
-            alpha as libc::c_int
+            alpha as libc::c_int,
           )
-        }
+        };
       }
     }
     Self::pred_dc(output, above, left);
@@ -680,7 +733,10 @@ where
   }
 
   fn pred_cfl_128(
-    output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16, bit_depth: usize
+    output: &mut PlaneRegionMut<'_, T>,
+    ac: &[i16],
+    alpha: i16,
+    bit_depth: usize,
   ) {
     #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
@@ -693,9 +749,9 @@ where
             Self::W as libc::c_int,
             Self::H as libc::c_int,
             ac.as_ptr() as *const _,
-            alpha as libc::c_int
+            alpha as libc::c_int,
           )
-        }
+        };
       }
     }
     Self::pred_dc_128(output, bit_depth);
@@ -703,8 +759,12 @@ where
   }
 
   fn pred_cfl_left(
-    output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16, bit_depth: usize,
-    above: &[T], left: &[T]
+    output: &mut PlaneRegionMut<'_, T>,
+    ac: &[i16],
+    alpha: i16,
+    bit_depth: usize,
+    above: &[T],
+    left: &[T],
   ) {
     #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
@@ -717,9 +777,9 @@ where
             Self::W as libc::c_int,
             Self::H as libc::c_int,
             ac.as_ptr() as *const _,
-            alpha as libc::c_int
+            alpha as libc::c_int,
           )
-        }
+        };
       }
     }
     Self::pred_dc_left(output, above, left);
@@ -727,8 +787,12 @@ where
   }
 
   fn pred_cfl_top(
-    output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16, bit_depth: usize,
-    above: &[T], left: &[T]
+    output: &mut PlaneRegionMut<'_, T>,
+    ac: &[i16],
+    alpha: i16,
+    bit_depth: usize,
+    above: &[T],
+    left: &[T],
   ) {
     #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
@@ -741,9 +805,9 @@ where
             Self::W as libc::c_int,
             Self::H as libc::c_int,
             ac.as_ptr() as *const _,
-            alpha as libc::c_int
+            alpha as libc::c_int,
           )
-        }
+        };
       }
     }
     Self::pred_dc_top(output, above, left);
@@ -751,7 +815,12 @@ where
   }
 
   fn pred_directional(
-    output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T], top_left: &[T], angle: usize, bit_depth: usize
+    output: &mut PlaneRegionMut<'_, T>,
+    above: &[T],
+    left: &[T],
+    top_left: &[T],
+    angle: usize,
+    bit_depth: usize,
   ) {
     let sample_max = ((1 << bit_depth) - 1) as i32;
     let _angle_delta = 0;
@@ -796,7 +865,7 @@ where
         81 => 11,
         84 => 7,
         87 => 3,
-        _ => 0
+        _ => 0,
       }
     }
 
@@ -831,7 +900,9 @@ where
           } else {
             let c: i32 = above[max_base_x].into();
             c
-          }.max(0).min(sample_max);
+          }
+          .max(0)
+          .min(sample_max);
           row[j] = T::cast_from(v);
         }
       }
@@ -847,8 +918,8 @@ where
               if base < 0 { top_left[0] } else { above[base as usize] }.into();
             let b: i32 = above[(base + 1) as usize].into();
             let v = round_shift(a * (32 - shift) + b * shift, 5)
-                .max(0)
-                .min(sample_max);
+              .max(0)
+              .min(sample_max);
             row[j] = T::cast_from(v);
           } else {
             let idx = (i << 6) as isize - ((j + 1) * dy) as isize;
@@ -862,8 +933,8 @@ where
             .into();
             let b: i32 = left[Self::W + Self::H - (2 + base) as usize].into();
             let v = round_shift(a * (32 - shift) + b * shift, 5)
-                .max(0)
-                .min(sample_max);
+              .max(0)
+              .min(sample_max);
             row[j] = T::cast_from(v);
           }
         }
@@ -878,8 +949,8 @@ where
           let a: i32 = left[Self::W + Self::H - 1 - base].into();
           let b: i32 = left[Self::W + Self::H - 2 - base].into();
           let v = round_shift(a * (32 - shift) + b * shift, 5)
-              .max(0)
-              .min(sample_max);
+            .max(0)
+            .min(sample_max);
           row[j] = T::cast_from(v);
         }
       }
@@ -887,14 +958,13 @@ where
   }
 }
 
-
 pub trait Inter: Dim {}
 
 #[cfg(test)]
 mod test {
   use super::*;
-  use num_traits::*;
   use crate::plane::*;
+  use num_traits::*;
 
   #[test]
   fn pred_matches_u8() {
@@ -992,7 +1062,12 @@ mod test {
 
     let above_left = unsafe { *above.as_ptr().offset(-1) };
 
-    Block4x4::pred_paeth(&mut o.as_region_mut(), &above[..4], &left[..4], above_left);
+    Block4x4::pred_paeth(
+      &mut o.as_region_mut(),
+      &above[..4],
+      &left[..4],
+      above_left,
+    );
 
     for l in o.data.chunks(32).take(4) {
       for v in l[..4].iter() {

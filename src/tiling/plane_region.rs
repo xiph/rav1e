@@ -96,7 +96,7 @@ impl Area {
           width: (parent_width as isize - x) as usize,
           height: (parent_height as isize - y) as usize,
         }
-      },
+      }
     }
   }
 }

@@ -8,7 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::{ColorPrimaries, MatrixCoefficients, TransferCharacteristics};
-use clap::{App, AppSettings, Arg, ArgMatches, SubCommand, Shell};
+use clap::{App, AppSettings, Arg, ArgMatches, Shell, SubCommand};
 use rav1e::partition::BlockSize;
 use rav1e::*;
 
@@ -21,7 +21,7 @@ use std::{fmt, io};
 pub struct EncoderIO {
   pub input: Box<dyn Read>,
   pub output: Box<dyn Write>,
-  pub rec: Option<Box<dyn Write>>
+  pub rec: Option<Box<dyn Write>>,
 }
 
 pub struct CliOptions {
@@ -282,10 +282,14 @@ pub fn parse_cli() -> CliOptions {
     std::process::exit(0);
   }
 
-  let threads = matches.value_of("THREADS").map(|v| v.parse().expect("Threads must be an integer")).unwrap();
+  let threads = matches
+    .value_of("THREADS")
+    .map(|v| v.parse().expect("Threads must be an integer"))
+    .unwrap();
 
   if let Some(matches) = matches.subcommand_matches("advanced") {
-    if let Some(shell) = matches.value_of("SHELL").map(|v| v.parse().unwrap()) {
+    if let Some(shell) = matches.value_of("SHELL").map(|v| v.parse().unwrap())
+    {
       app.gen_completions_to("rav1e", shell, &mut std::io::stdout());
       std::process::exit(0);
     }
@@ -294,15 +298,15 @@ pub fn parse_cli() -> CliOptions {
   let io = EncoderIO {
     input: match matches.value_of("INPUT").unwrap() {
       "-" => Box::new(io::stdin()) as Box<dyn Read>,
-      f => Box::new(File::open(&f).unwrap()) as Box<dyn Read>
+      f => Box::new(File::open(&f).unwrap()) as Box<dyn Read>,
     },
     output: match matches.value_of("OUTPUT").unwrap() {
       "-" => Box::new(io::stdout()) as Box<dyn Write>,
-      f => Box::new(File::create(&f).unwrap()) as Box<dyn Write>
+      f => Box::new(File::create(&f).unwrap()) as Box<dyn Write>,
     },
     rec: matches
       .value_of("RECONSTRUCTION")
-      .map(|f| Box::new(File::create(&f).unwrap()) as Box<dyn Write>)
+      .map(|f| Box::new(File::create(&f).unwrap()) as Box<dyn Write>),
   };
 
   CliOptions {
@@ -346,8 +350,10 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
     cfg
   } else {
     let speed = matches.value_of("SPEED").unwrap().parse().unwrap();
-    let max_interval: u64 = matches.value_of("KEYFRAME_INTERVAL").unwrap().parse().unwrap();
-    let mut min_interval: u64 = matches.value_of("MIN_KEYFRAME_INTERVAL").unwrap().parse().unwrap();
+    let max_interval: u64 =
+      matches.value_of("KEYFRAME_INTERVAL").unwrap().parse().unwrap();
+    let mut min_interval: u64 =
+      matches.value_of("MIN_KEYFRAME_INTERVAL").unwrap().parse().unwrap();
 
     if matches.occurrences_of("MIN_KEYFRAME_INTERVAL") == 0 {
       min_interval = min_interval.min(max_interval);
@@ -381,23 +387,42 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
     cfg.max_key_frame_interval = min_interval;
     cfg.max_key_frame_interval = max_interval;
 
-    cfg.pixel_range = matches.value_of("PIXEL_RANGE").unwrap().parse().unwrap_or_default();
-    cfg.color_description = if color_primaries == ColorPrimaries::Unspecified &&
-      transfer_characteristics == TransferCharacteristics::Unspecified &&
-      matrix_coefficients == MatrixCoefficients::Unspecified {
+    cfg.pixel_range =
+      matches.value_of("PIXEL_RANGE").unwrap().parse().unwrap_or_default();
+    cfg.color_description = if color_primaries == ColorPrimaries::Unspecified
+      && transfer_characteristics == TransferCharacteristics::Unspecified
+      && matrix_coefficients == MatrixCoefficients::Unspecified
+    {
       // No need to set a color description with all parameters unspecified.
       None
     } else {
       Some(ColorDescription {
         color_primaries,
         transfer_characteristics,
-        matrix_coefficients
+        matrix_coefficients,
       })
     };
 
     let mastering_display_opt = matches.value_of("MASTERING_DISPLAY").unwrap();
-    cfg.mastering_display = if mastering_display_opt == "unspecified" { None } else {
-      let (g_x, g_y, b_x, b_y, r_x, r_y, wp_x, wp_y, max_lum, min_lum) = scan_fmt!(mastering_display_opt, "G({},{})B({},{})R({},{})WP({},{})L({},{})", f64, f64, f64, f64, f64, f64, f64, f64, f64, f64).expect("Cannot parse the mastering display option");
+    cfg.mastering_display = if mastering_display_opt == "unspecified" {
+      None
+    } else {
+      let (g_x, g_y, b_x, b_y, r_x, r_y, wp_x, wp_y, max_lum, min_lum) =
+        scan_fmt!(
+          mastering_display_opt,
+          "G({},{})B({},{})R({},{})WP({},{})L({},{})",
+          f64,
+          f64,
+          f64,
+          f64,
+          f64,
+          f64,
+          f64,
+          f64,
+          f64,
+          f64
+        )
+        .expect("Cannot parse the mastering display option");
       Some(MasteringDisplay {
         primaries: [
           Point {
@@ -411,7 +436,7 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
           Point {
             x: (b_x * ((1 << 16) as f64)).round() as u16,
             y: (b_y * ((1 << 16) as f64)).round() as u16,
-          }
+          },
         ],
         white_point: Point {
           x: (wp_x * ((1 << 16) as f64)).round() as u16,
@@ -423,11 +448,14 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
     };
 
     let content_light_opt = matches.value_of("CONTENT_LIGHT").unwrap();
-    let (cll, fall) = scan_fmt!(content_light_opt, "{},{}", u16, u16).expect("Cannot parse the content light option");
-    cfg.content_light = if cll == 0 && fall == 0 { None } else {
+    let (cll, fall) = scan_fmt!(content_light_opt, "{},{}", u16, u16)
+      .expect("Cannot parse the content light option");
+    cfg.content_light = if cll == 0 && fall == 0 {
+      None
+    } else {
       Some(ContentLight {
         max_content_light_level: cll,
-        max_frame_average_light_level: fall
+        max_frame_average_light_level: fall,
       })
     };
     cfg
@@ -444,8 +472,10 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
   };
   cfg.tune = matches.value_of("TUNE").unwrap().parse().unwrap();
 
-  cfg.tile_cols_log2 = matches.value_of("TILE_COLS_LOG2").unwrap().parse().unwrap();
-  cfg.tile_rows_log2 = matches.value_of("TILE_ROWS_LOG2").unwrap().parse().unwrap();
+  cfg.tile_cols_log2 =
+    matches.value_of("TILE_COLS_LOG2").unwrap().parse().unwrap();
+  cfg.tile_rows_log2 =
+    matches.value_of("TILE_ROWS_LOG2").unwrap().parse().unwrap();
 
   if cfg.tile_cols_log2 > 6 || cfg.tile_rows_log2 > 6 {
     panic!("Log2 of tile columns and rows may not be greater than 6");
@@ -460,52 +490,53 @@ fn apply_speed_test_cfg(cfg: &mut EncoderConfig, setting: &str) {
   match setting {
     "baseline" => {
       cfg.speed_settings = SpeedSettings::default();
-    },
+    }
     "min_block_size_4x4" => {
       cfg.speed_settings.min_block_size = BlockSize::BLOCK_4X4;
-    },
+    }
     "min_block_size_8x8" => {
       cfg.speed_settings.min_block_size = BlockSize::BLOCK_8X8;
-    },
+    }
     "min_block_size_32x32" => {
       cfg.speed_settings.min_block_size = BlockSize::BLOCK_32X32;
-    },
+    }
     "min_block_size_64x64" => {
       cfg.speed_settings.min_block_size = BlockSize::BLOCK_64X64;
-    },
+    }
     "multiref" => {
       cfg.speed_settings.multiref = true;
-    },
+    }
     "fast_deblock" => {
       cfg.speed_settings.fast_deblock = true;
-    },
+    }
     "reduced_tx_set" => {
       cfg.speed_settings.reduced_tx_set = true;
-    },
+    }
     "tx_domain_distortion" => {
       cfg.speed_settings.tx_domain_distortion = true;
-    },
+    }
     "tx_domain_rate" => {
       cfg.speed_settings.tx_domain_rate = true;
-    },
+    }
     "encode_bottomup" => {
       cfg.speed_settings.encode_bottomup = true;
-    },
+    }
     "rdo_tx_decision" => {
       cfg.speed_settings.rdo_tx_decision = true;
-    },
+    }
     "prediction_modes_keyframes" => {
-      cfg.speed_settings.prediction_modes = PredictionModesSetting::ComplexKeyframes;
-    },
+      cfg.speed_settings.prediction_modes =
+        PredictionModesSetting::ComplexKeyframes;
+    }
     "prediction_modes_all" => {
       cfg.speed_settings.prediction_modes = PredictionModesSetting::ComplexAll;
-    },
+    }
     "include_near_mvs" => {
       cfg.speed_settings.include_near_mvs = true;
-    },
+    }
     "no_scene_detection" => {
       cfg.speed_settings.no_scene_detection = true;
-    },
+    }
     "diamond_me" => {
       cfg.speed_settings.diamond_me = true;
     }
@@ -548,8 +579,13 @@ impl fmt::Display for FrameSummary {
       self.frame_type,
       self.size,
       if let Some(psnr) = self.psnr {
-        format!(" - PSNR: Y: {:.4}  Cb: {:.4}  Cr: {:.4}", psnr.0, psnr.1, psnr.2)
-      } else { String::new() }
+        format!(
+          " - PSNR: Y: {:.4}  Cb: {:.4}  Cr: {:.4}",
+          psnr.0, psnr.1, psnr.2
+        )
+      } else {
+        String::new()
+      }
     )
   }
 }
@@ -574,7 +610,11 @@ pub struct ProgressInfo {
 }
 
 impl ProgressInfo {
-  pub fn new(frame_rate: Rational, total_frames: Option<usize>, show_psnr: bool) -> Self {
+  pub fn new(
+    frame_rate: Rational,
+    total_frames: Option<usize>,
+    show_psnr: bool,
+  ) -> Self {
     Self {
       frame_rate,
       total_frames,
@@ -596,7 +636,8 @@ impl ProgressInfo {
 
   pub fn encoding_fps(&self) -> f64 {
     let duration = Instant::now().duration_since(self.time_started);
-    self.frame_info.len() as f64 / (duration.as_secs() as f64 + duration.subsec_millis() as f64 / 1000f64)
+    self.frame_info.len() as f64
+      / (duration.as_secs() as f64 + duration.subsec_millis() as f64 / 1000f64)
   }
 
   pub fn video_fps(&self) -> f64 {
@@ -612,28 +653,36 @@ impl ProgressInfo {
 
   // Estimates the final filesize in bytes, if the number of frames is known
   pub fn estimated_size(&self) -> usize {
-    self.total_frames
+    self
+      .total_frames
       .map(|frames| self.encoded_size * frames / self.frames_encoded())
       .unwrap_or_default()
   }
 
   // Estimates the remaining encoding time in seconds, if the number of frames is known
   pub fn estimated_time(&self) -> f64 {
-    self.total_frames
-      .map(|frames| (frames - self.frames_encoded()) as f64 / self.encoding_fps())
+    self
+      .total_frames
+      .map(|frames| {
+        (frames - self.frames_encoded()) as f64 / self.encoding_fps()
+      })
       .unwrap_or_default()
   }
 
   // Number of frames of given type which appear in the video
   pub fn get_frame_type_count(&self, frame_type: FrameType) -> usize {
-    self.frame_info.iter()
+    self
+      .frame_info
+      .iter()
       .filter(|frame| frame.frame_type == frame_type)
       .count()
   }
 
   // Size in bytes of all frames of given frame type
   pub fn get_frame_type_size(&self, frame_type: FrameType) -> usize {
-    self.frame_info.iter()
+    self
+      .frame_info
+      .iter()
       .filter(|frame| frame.frame_type == frame_type)
       .map(|frame| frame.size)
       .sum()
@@ -642,30 +691,35 @@ impl ProgressInfo {
   pub fn print_summary(&self) -> String {
     let (key, key_size) = (
       self.get_frame_type_count(FrameType::KEY),
-      self.get_frame_type_size(FrameType::KEY)
+      self.get_frame_type_size(FrameType::KEY),
     );
     let (inter, inter_size) = (
       self.get_frame_type_count(FrameType::INTER),
-      self.get_frame_type_size(FrameType::INTER)
+      self.get_frame_type_size(FrameType::INTER),
     );
     let (ionly, ionly_size) = (
       self.get_frame_type_count(FrameType::INTRA_ONLY),
-      self.get_frame_type_size(FrameType::INTRA_ONLY)
+      self.get_frame_type_size(FrameType::INTRA_ONLY),
     );
     let (switch, switch_size) = (
       self.get_frame_type_count(FrameType::SWITCH),
-      self.get_frame_type_size(FrameType::SWITCH)
+      self.get_frame_type_size(FrameType::SWITCH),
     );
-    format!("\
-    Key Frames: {:>6}    avg size: {:>7} B\n\
-    Inter:      {:>6}    avg size: {:>7} B\n\
-    Intra Only: {:>6}    avg size: {:>7} B\n\
-    Switch:     {:>6}    avg size: {:>7} B\
-    {}",
-      key, key_size / key,
-      inter, inter_size.checked_div(inter).unwrap_or(0),
-      ionly, ionly_size / key,
-      switch, switch_size / key,
+    format!(
+      "\
+       Key Frames: {:>6}    avg size: {:>7} B\n\
+       Inter:      {:>6}    avg size: {:>7} B\n\
+       Intra Only: {:>6}    avg size: {:>7} B\n\
+       Switch:     {:>6}    avg size: {:>7} B\
+       {}",
+      key,
+      key_size / key,
+      inter,
+      inter_size.checked_div(inter).unwrap_or(0),
+      ionly,
+      ionly_size / key,
+      switch,
+      switch_size / key,
       if self.show_psnr {
         let psnr_y =
           self.frame_info.iter().map(|fi| fi.psnr.unwrap().0).sum::<f64>()
@@ -676,10 +730,16 @@ impl ProgressInfo {
         let psnr_v =
           self.frame_info.iter().map(|fi| fi.psnr.unwrap().2).sum::<f64>()
             / self.frame_info.len() as f64;
-        format!("\nMean PSNR: Y: {:.4}  Cb: {:.4}  Cr: {:.4}  Avg: {:.4}",
-                psnr_y, psnr_u, psnr_v,
-                (psnr_y + psnr_u + psnr_v) / 3.0)
-      } else { String::new() }
+        format!(
+          "\nMean PSNR: Y: {:.4}  Cb: {:.4}  Cr: {:.4}  Avg: {:.4}",
+          psnr_y,
+          psnr_u,
+          psnr_v,
+          (psnr_y + psnr_u + psnr_v) / 3.0
+        )
+      } else {
+        String::new()
+      }
     )
   }
 }

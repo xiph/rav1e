@@ -55,10 +55,7 @@ impl TileRect {
     debug_assert!(self.y as usize % (MI_SIZE >> ydec) == 0);
     let bx = self.x >> (MI_SIZE_LOG2 - xdec);
     let by = self.y >> (MI_SIZE_LOG2 - ydec);
-    BlockOffset {
-      x: bx + tile_bo.x,
-      y: by + tile_bo.y,
-    }
+    BlockOffset { x: bx + tile_bo.x, y: by + tile_bo.y }
   }
 
   #[inline(always)]
@@ -74,10 +71,7 @@ impl TileRect {
     debug_assert!(self.y as usize % (1 << (sb_size_log2 - ydec)) == 0);
     let sbx = self.x as usize >> (sb_size_log2 - xdec);
     let sby = self.y as usize >> (sb_size_log2 - ydec);
-    SuperBlockOffset {
-      x: sbx + tile_sbo.x,
-      y: sby + tile_sbo.y,
-    }
+    SuperBlockOffset { x: sbx + tile_sbo.x, y: sby + tile_sbo.y }
   }
 }
 
@@ -147,7 +141,6 @@ tile_common!(Tile, PlaneRegion, iter);
 tile_common!(TileMut, PlaneRegionMut, iter_mut, mut);
 
 impl<'a, T: Pixel> TileMut<'a, T> {
-
   #[inline(always)]
   pub fn as_const(&self) -> Tile<'_, T> {
     Tile {

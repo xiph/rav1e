@@ -10,7 +10,6 @@
 #![allow(non_camel_case_types)]
 #![allow(dead_code)]
 
-use std::ops;
 use self::BlockSize::*;
 use self::TxSize::*;
 use crate::context::*;
@@ -20,6 +19,7 @@ use crate::plane::*;
 use crate::predict::*;
 use crate::tiling::*;
 use crate::util::*;
+use std::ops;
 
 // LAST_FRAME through ALTREF_FRAME correspond to slots 0-6.
 #[derive(PartialEq, Eq, Copy, Clone)]
@@ -39,9 +39,13 @@ impl RefType {
   // convert to a ref list index, 0-6 (INTER_REFS_PER_FRAME)
   pub fn to_index(self) -> usize {
     match self {
-      NONE_FRAME => { panic!("Tried to get slot of NONE_FRAME"); },
-      INTRA_FRAME => { panic!("Tried to get slot of INTRA_FRAME"); },
-      _ => { (self as usize) - 1 }
+      NONE_FRAME => {
+        panic!("Tried to get slot of NONE_FRAME");
+      }
+      INTRA_FRAME => {
+        panic!("Tried to get slot of INTRA_FRAME");
+      }
+      _ => (self as usize) - 1,
     }
   }
   pub fn is_fwd_ref(self) -> bool {
@@ -61,7 +65,7 @@ pub const ALL_INTER_REFS: [RefType; 7] = [
   GOLDEN_FRAME,
   BWDREF_FRAME,
   ALTREF2_FRAME,
-  ALTREF_FRAME
+  ALTREF_FRAME,
 ];
 
 pub const LAST_LAST2_FRAMES: usize = 0; // { LAST_FRAME, LAST2_FRAME }
@@ -105,7 +109,7 @@ pub enum PartitionType {
   PARTITION_VERT_B, // VERT split and the right partition is split again
   PARTITION_HORZ_4, // 4:1 horizontal partition
   PARTITION_VERT_4, // 4:1 vertical partition
-  PARTITION_INVALID
+  PARTITION_INVALID,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Ord, Eq)]
@@ -132,7 +136,7 @@ pub enum BlockSize {
   BLOCK_32X8,
   BLOCK_16X64,
   BLOCK_64X16,
-  BLOCK_INVALID
+  BLOCK_INVALID,
 }
 
 impl BlockSize {
@@ -168,7 +172,7 @@ impl BlockSize {
       (32, 8) => BLOCK_32X8,
       (16, 64) => BLOCK_16X64,
       (64, 16) => BLOCK_64X16,
-      _ => unreachable!()
+      _ => unreachable!(),
     }
   }
 
@@ -222,7 +226,7 @@ impl BlockSize {
       BLOCK_16X64 => TX_16X64,
       BLOCK_64X16 => TX_64X16,
       BLOCK_INVALID => unreachable!(),
-      _ => TX_64X64
+      _ => TX_64X64,
     }
   }
 
@@ -250,13 +254,13 @@ impl BlockSize {
   }
 
   pub fn greater_than(self, other: BlockSize) -> bool {
-    (self.width() > other.width() && self.height() >= other.height()) ||
-    (self.width() >= other.width() && self.height() > other.height())
+    (self.width() > other.width() && self.height() >= other.height())
+      || (self.width() >= other.width() && self.height() > other.height())
   }
 
   pub fn gte(self, other: BlockSize) -> bool {
-    self.greater_than(other) ||
-    (self.width() == other.width() && self.height() == other.height())
+    self.greater_than(other)
+      || (self.width() == other.width() && self.height() == other.height())
   }
 
   #[rustfmt::skip]
@@ -460,28 +464,28 @@ impl BlockSize {
 
   pub fn is_rect_tx_allowed(self) -> bool {
     static LUT: [u8; BlockSize::BLOCK_SIZES_ALL] = [
-      0,  // BLOCK_4X4
-      1,  // BLOCK_4X8
-      1,  // BLOCK_8X4
-      0,  // BLOCK_8X8
-      1,  // BLOCK_8X16
-      1,  // BLOCK_16X8
-      0,  // BLOCK_16X16
-      1,  // BLOCK_16X32
-      1,  // BLOCK_32X16
-      0,  // BLOCK_32X32
-      1,  // BLOCK_32X64
-      1,  // BLOCK_64X32
-      0,  // BLOCK_64X64
-      0,  // BLOCK_64X128
-      0,  // BLOCK_128X64
-      0,  // BLOCK_128X128
-      1,  // BLOCK_4X16
-      1,  // BLOCK_16X4
-      1,  // BLOCK_8X32
-      1,  // BLOCK_32X8
-      1,  // BLOCK_16X64
-      1,  // BLOCK_64X16
+      0, // BLOCK_4X4
+      1, // BLOCK_4X8
+      1, // BLOCK_8X4
+      0, // BLOCK_8X8
+      1, // BLOCK_8X16
+      1, // BLOCK_16X8
+      0, // BLOCK_16X16
+      1, // BLOCK_16X32
+      1, // BLOCK_32X16
+      0, // BLOCK_32X32
+      1, // BLOCK_32X64
+      1, // BLOCK_64X32
+      0, // BLOCK_64X64
+      0, // BLOCK_64X128
+      0, // BLOCK_128X64
+      0, // BLOCK_128X128
+      1, // BLOCK_4X16
+      1, // BLOCK_16X4
+      1, // BLOCK_8X32
+      1, // BLOCK_32X8
+      1, // BLOCK_16X64
+      1, // BLOCK_64X16
     ];
 
     LUT[self as usize] == 1
@@ -512,7 +516,7 @@ pub enum TxSize {
   TX_8X32,
   TX_32X8,
   TX_16X64,
-  TX_64X16
+  TX_64X16,
 }
 
 impl TxSize {
@@ -532,7 +536,7 @@ impl TxSize {
       TX_8X8 | TX_8X4 | TX_8X16 | TX_8X32 => 3,
       TX_16X16 | TX_16X8 | TX_16X32 | TX_16X4 | TX_16X64 => 4,
       TX_32X32 | TX_32X16 | TX_32X64 | TX_32X8 => 5,
-      TX_64X64 | TX_64X32 | TX_64X16 => 6
+      TX_64X64 | TX_64X32 | TX_64X16 => 6,
     }
   }
 
@@ -550,7 +554,7 @@ impl TxSize {
       TX_8X8 | TX_4X8 | TX_16X8 | TX_32X8 => 3,
       TX_16X16 | TX_8X16 | TX_32X16 | TX_4X16 | TX_64X16 => 4,
       TX_32X32 | TX_16X32 | TX_64X32 | TX_8X32 => 5,
-      TX_64X64 | TX_32X64 | TX_16X64 => 6
+      TX_64X64 | TX_32X64 | TX_16X64 => 6,
     }
   }
 
@@ -594,7 +598,7 @@ impl TxSize {
       TX_8X32 => BLOCK_8X32,
       TX_32X8 => BLOCK_32X8,
       TX_16X64 => BLOCK_16X64,
-      TX_64X16 => BLOCK_64X16
+      TX_64X16 => BLOCK_64X16,
     }
   }
 
@@ -604,7 +608,7 @@ impl TxSize {
       TX_8X8 | TX_8X16 | TX_16X8 | TX_8X32 | TX_32X8 => TX_8X8,
       TX_16X16 | TX_16X32 | TX_32X16 | TX_16X64 | TX_64X16 => TX_16X16,
       TX_32X32 | TX_32X64 | TX_64X32 => TX_32X32,
-      TX_64X64 => TX_64X64
+      TX_64X64 => TX_64X64,
     }
   }
 
@@ -614,7 +618,7 @@ impl TxSize {
       TX_8X8 | TX_4X8 | TX_8X4 => TX_8X8,
       TX_16X16 | TX_8X16 | TX_16X8 | TX_4X16 | TX_16X4 => TX_16X16,
       TX_32X32 | TX_16X32 | TX_32X16 | TX_8X32 | TX_32X8 => TX_32X32,
-      TX_64X64 | TX_32X64 | TX_64X32 | TX_16X64 | TX_64X16 => TX_64X64
+      TX_64X64 | TX_32X64 | TX_64X32 | TX_16X64 | TX_64X16 => TX_64X64,
     }
   }
 
@@ -639,7 +643,7 @@ impl TxSize {
       (32, 8) => TX_32X8,
       (16, 64) => TX_16X64,
       (64, 16) => TX_64X16,
-      _ => unreachable!()
+      _ => unreachable!(),
     }
   }
 
@@ -668,7 +672,7 @@ pub enum TxType {
   V_ADST = 12,
   H_ADST = 13,
   V_FLIPADST = 14,
-  H_FLIPADST = 15
+  H_FLIPADST = 15,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
@@ -701,7 +705,7 @@ pub enum PredictionMode {
   NEAR_NEWMV,
   NEW_NEARMV,
   GLOBAL_GLOBALMV,
-  NEW_NEWMV
+  NEW_NEWMV,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
@@ -710,7 +714,7 @@ pub enum InterIntraMode {
   II_V_PRED,
   II_H_PRED,
   II_SMOOTH_PRED,
-  INTERINTRA_MODES
+  INTERINTRA_MODES,
 }
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 pub enum CompoundType {
@@ -723,9 +727,9 @@ pub enum CompoundType {
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 pub enum MotionMode {
   SIMPLE_TRANSLATION,
-  OBMC_CAUSAL,    // 2-sided OBMC
-  WARPED_CAUSAL,  // 2-sided WARPED
-  MOTION_MODES
+  OBMC_CAUSAL,   // 2-sided OBMC
+  WARPED_CAUSAL, // 2-sided WARPED
+  MOTION_MODES,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
@@ -737,7 +741,7 @@ pub enum PaletteSize {
   SIX_COLORS,
   SEVEN_COLORS,
   EIGHT_COLORS,
-  PALETTE_SIZES
+  PALETTE_SIZES,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
@@ -750,7 +754,7 @@ pub enum PaletteColor {
   PALETTE_COLOR_SIX,
   PALETTE_COLOR_SEVEN,
   PALETTE_COLOR_EIGHT,
-  PALETTE_COLORS
+  PALETTE_COLORS,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
@@ -760,37 +764,34 @@ pub enum FilterIntraMode {
   FILTER_H_PRED,
   FILTER_D157_PRED,
   FILTER_PAETH_PRED,
-  FILTER_INTRA_MODES
+  FILTER_INTRA_MODES,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct MotionVector {
   pub row: i16,
-  pub col: i16
+  pub col: i16,
 }
 
 impl ops::Add<MotionVector> for MotionVector {
-    type Output = MotionVector;
+  type Output = MotionVector;
 
-    fn add(self, _rhs: MotionVector) -> MotionVector {
-        MotionVector{row: self.row + _rhs.row, col: self.col + _rhs.col}
-    }
+  fn add(self, _rhs: MotionVector) -> MotionVector {
+    MotionVector { row: self.row + _rhs.row, col: self.col + _rhs.col }
+  }
 }
 
 impl ops::Div<i16> for MotionVector {
-    type Output = MotionVector;
+  type Output = MotionVector;
 
-    fn div(self, _rhs: i16) -> MotionVector {
-        MotionVector{row: self.row  / _rhs, col: self.col / _rhs}
-    }
+  fn div(self, _rhs: i16) -> MotionVector {
+    MotionVector { row: self.row / _rhs, col: self.col / _rhs }
+  }
 }
 
 impl MotionVector {
   pub fn quantize_to_fullpel(self) -> Self {
-    Self {
-      row: (self.row / 8) * 8,
-      col: (self.col / 8) * 8
-    }
+    Self { row: (self.row / 8) * 8, col: (self.col / 8) * 8 }
   }
 
   pub fn is_zero(self) -> bool {
@@ -811,9 +812,12 @@ pub const GLOBALMV_CTX_MASK: usize =
   ((1 << (REFMV_OFFSET - GLOBALMV_OFFSET)) - 1);
 pub const REFMV_CTX_MASK: usize = ((1 << (8 - REFMV_OFFSET)) - 1);
 
-pub static RAV1E_PARTITION_TYPES: &'static [PartitionType] =
-  &[PartitionType::PARTITION_NONE, PartitionType::PARTITION_HORZ,
-    PartitionType::PARTITION_VERT, PartitionType::PARTITION_SPLIT];
+pub static RAV1E_PARTITION_TYPES: &'static [PartitionType] = &[
+  PartitionType::PARTITION_NONE,
+  PartitionType::PARTITION_HORZ,
+  PartitionType::PARTITION_VERT,
+  PartitionType::PARTITION_SPLIT,
+];
 
 pub static RAV1E_TX_TYPES: &'static [TxType] = &[
   TxType::DCT_DCT,
@@ -822,7 +826,7 @@ pub static RAV1E_TX_TYPES: &'static [TxType] = &[
   TxType::ADST_ADST,
   TxType::IDTX,
   TxType::V_DCT,
-  TxType::H_DCT
+  TxType::H_DCT,
 ];
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
@@ -830,14 +834,14 @@ pub enum GlobalMVMode {
   IDENTITY = 0,    // identity transformation, 0-parameter
   TRANSLATION = 1, // translational motion 2-parameter
   ROTZOOM = 2,     // simplified affine with rotation + zoom only, 4-parameter
-  AFFINE = 3       // affine, 6-parameter
+  AFFINE = 3,      // affine, 6-parameter
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 pub enum MvSubpelPrecision {
   MV_SUBPEL_NONE = -1,
   MV_SUBPEL_LOW_PRECISION = 0,
-  MV_SUBPEL_HIGH_PRECISION
+  MV_SUBPEL_HIGH_PRECISION,
 }
 
 /* Symbols for coding which components are zero jointly */
@@ -848,7 +852,7 @@ pub enum MvJointType {
   MV_JOINT_ZERO = 0,   /* Zero vector */
   MV_JOINT_HNZVZ = 1,  /* Vert zero, hor nonzero */
   MV_JOINT_HZVNZ = 2,  /* Hor zero, vert nonzero */
-  MV_JOINT_HNZVNZ = 3  /* Both components nonzero */
+  MV_JOINT_HNZVNZ = 3, /* Both components nonzero */
 }
 
 pub fn get_intra_edges<T: Pixel>(
@@ -856,7 +860,7 @@ pub fn get_intra_edges<T: Pixel>(
   po: PlaneOffset,
   tx_size: TxSize,
   bit_depth: usize,
-  opt_mode: Option<PredictionMode>
+  opt_mode: Option<PredictionMode>,
 ) -> AlignedArray<[T; 4 * MAX_TX_SIZE + 1]> {
   let plane_cfg = &dst.plane_cfg;
 
@@ -866,7 +870,7 @@ pub fn get_intra_edges<T: Pixel>(
 
   {
     // left pixels are order from bottom to top and right-aligned
-    let (left, not_left) = edge_buf.array.split_at_mut(2*MAX_TX_SIZE);
+    let (left, not_left) = edge_buf.array.split_at_mut(2 * MAX_TX_SIZE);
     let (top_left, above) = not_left.split_at_mut(1);
 
     let x = po.x as usize;
@@ -884,20 +888,25 @@ pub fn get_intra_edges<T: Pixel>(
           (0, 0) => PredictionMode::DC_PRED,
           (_, 0) => PredictionMode::H_PRED,
           (0, _) => PredictionMode::V_PRED,
-          _ => PredictionMode::PAETH_PRED
+          _ => PredictionMode::PAETH_PRED,
         },
-        _ => mode
+        _ => mode,
       };
 
       let dc_or_cfl =
         mode == PredictionMode::DC_PRED || mode == PredictionMode::UV_CFL_PRED;
 
-      needs_left = mode != PredictionMode::V_PRED && (!dc_or_cfl || x != 0)
-        && !(mode == PredictionMode::D45_PRED || mode == PredictionMode::D63_PRED);
-      needs_topleft = mode == PredictionMode::PAETH_PRED || mode == PredictionMode::D117_PRED
-      || mode == PredictionMode::D135_PRED || mode == PredictionMode::D153_PRED;
+      needs_left = mode != PredictionMode::V_PRED
+        && (!dc_or_cfl || x != 0)
+        && !(mode == PredictionMode::D45_PRED
+          || mode == PredictionMode::D63_PRED);
+      needs_topleft = mode == PredictionMode::PAETH_PRED
+        || mode == PredictionMode::D117_PRED
+        || mode == PredictionMode::D135_PRED
+        || mode == PredictionMode::D153_PRED;
       needs_top = mode != PredictionMode::H_PRED && (!dc_or_cfl || y != 0);
-      needs_topright = mode == PredictionMode::D45_PRED || mode == PredictionMode::D63_PRED;
+      needs_topright =
+        mode == PredictionMode::D45_PRED || mode == PredictionMode::D63_PRED;
       needs_bottomleft = mode == PredictionMode::D207_PRED;
     }
 
@@ -905,11 +914,12 @@ pub fn get_intra_edges<T: Pixel>(
     if needs_left {
       if x != 0 {
         for i in 0..tx_size.height() {
-          left[2*MAX_TX_SIZE - tx_size.height() + i] = dst[y + tx_size.height() - 1 - i][x - 1];
+          left[2 * MAX_TX_SIZE - tx_size.height() + i] =
+            dst[y + tx_size.height() - 1 - i][x - 1];
         }
       } else {
         let val = if y != 0 { dst[y - 1][0] } else { T::cast_from(base + 1) };
-        for v in left[2*MAX_TX_SIZE - tx_size.height()..].iter_mut() {
+        for v in left[2 * MAX_TX_SIZE - tx_size.height()..].iter_mut() {
           *v = val
         }
       }
@@ -928,7 +938,8 @@ pub fn get_intra_edges<T: Pixel>(
     // Needs top
     if needs_top {
       if y != 0 {
-        above[..tx_size.width()].copy_from_slice(&dst[y - 1][x..x + tx_size.width()]);
+        above[..tx_size.width()]
+          .copy_from_slice(&dst[y - 1][x..x + tx_size.width()]);
       } else {
         let val = if x != 0 { dst[0][x - 1] } else { T::cast_from(base - 1) };
         for v in above[..tx_size.width()].iter_mut() {
@@ -943,13 +954,13 @@ pub fn get_intra_edges<T: Pixel>(
 
       let bo = BlockOffset {
         x: x >> (2 - plane_cfg.xdec),
-        y: y >> (2 - plane_cfg.ydec)
+        y: y >> (2 - plane_cfg.ydec),
       };
 
       let bsize = BlockSize::from_width_and_height(
-          tx_size.width() << plane_cfg.xdec,
-          tx_size.height() << plane_cfg.ydec
-        );
+        tx_size.width() << plane_cfg.xdec,
+        tx_size.height() << plane_cfg.ydec,
+      );
 
       let num_avail = if y != 0 && has_tr(bo, bsize) {
         tx_size.width().min(dst.rect().width - x - tx_size.width())
@@ -957,12 +968,16 @@ pub fn get_intra_edges<T: Pixel>(
         0
       };
       if num_avail > 0 {
-        above[tx_size.width()..tx_size.width() + num_avail]
-        .copy_from_slice(&dst[y - 1][x + tx_size.width()..x + tx_size.width() + num_avail]);
+        above[tx_size.width()..tx_size.width() + num_avail].copy_from_slice(
+          &dst[y - 1][x + tx_size.width()..x + tx_size.width() + num_avail],
+        );
       }
       if num_avail < tx_size.height() {
         let val = above[tx_size.width() + num_avail - 1];
-        for v in above[tx_size.width() + num_avail..tx_size.width() + tx_size.height()].iter_mut() {
+        for v in above
+          [tx_size.width() + num_avail..tx_size.width() + tx_size.height()]
+          .iter_mut()
+        {
           *v = val;
         }
       }
@@ -974,13 +989,13 @@ pub fn get_intra_edges<T: Pixel>(
 
       let bo = BlockOffset {
         x: x >> (2 - plane_cfg.xdec),
-        y: y >> (2 - plane_cfg.ydec)
-        };
+        y: y >> (2 - plane_cfg.ydec),
+      };
 
       let bsize = BlockSize::from_width_and_height(
         tx_size.width() << plane_cfg.xdec,
-        tx_size.height() << plane_cfg.ydec
-        );
+        tx_size.height() << plane_cfg.ydec,
+      );
 
       let num_avail = if x != 0 && has_bl(bo, bsize) {
         tx_size.height().min(dst.rect().height - y - tx_size.height())
@@ -989,7 +1004,8 @@ pub fn get_intra_edges<T: Pixel>(
       };
       if num_avail > 0 {
         for i in 0..num_avail {
-          left[2*MAX_TX_SIZE - tx_size.height() - 1 - i] = dst[y + tx_size.height() + i][x - 1];
+          left[2 * MAX_TX_SIZE - tx_size.height() - 1 - i] =
+            dst[y + tx_size.height() + i][x - 1];
         }
       }
       if num_avail < tx_size.width() {
@@ -1002,69 +1018,98 @@ pub fn get_intra_edges<T: Pixel>(
         }
       }
     }
-
   }
   edge_buf
 }
 
 impl PredictionMode {
   pub fn predict_intra<T: Pixel>(
-    self, tile_rect: TileRect, dst: &mut PlaneRegionMut<'_, T>, tx_size: TxSize, bit_depth: usize,
-    ac: &[i16], alpha: i16, edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>
+    self,
+    tile_rect: TileRect,
+    dst: &mut PlaneRegionMut<'_, T>,
+    tx_size: TxSize,
+    bit_depth: usize,
+    ac: &[i16],
+    alpha: i16,
+    edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>,
   ) {
     assert!(self.is_intra());
 
     match tx_size {
-      TxSize::TX_4X4 =>
-        self.predict_intra_inner::<Block4x4, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
-      TxSize::TX_8X8 =>
-        self.predict_intra_inner::<Block8x8, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
-      TxSize::TX_16X16 =>
-        self.predict_intra_inner::<Block16x16, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
-      TxSize::TX_32X32 =>
-        self.predict_intra_inner::<Block32x32, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
-      TxSize::TX_64X64 =>
-        self.predict_intra_inner::<Block64x64, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
+      TxSize::TX_4X4 => self.predict_intra_inner::<Block4x4, _>(
+        tile_rect, dst, bit_depth, ac, alpha, edge_buf,
+      ),
+      TxSize::TX_8X8 => self.predict_intra_inner::<Block8x8, _>(
+        tile_rect, dst, bit_depth, ac, alpha, edge_buf,
+      ),
+      TxSize::TX_16X16 => self.predict_intra_inner::<Block16x16, _>(
+        tile_rect, dst, bit_depth, ac, alpha, edge_buf,
+      ),
+      TxSize::TX_32X32 => self.predict_intra_inner::<Block32x32, _>(
+        tile_rect, dst, bit_depth, ac, alpha, edge_buf,
+      ),
+      TxSize::TX_64X64 => self.predict_intra_inner::<Block64x64, _>(
+        tile_rect, dst, bit_depth, ac, alpha, edge_buf,
+      ),
 
-      TxSize::TX_4X8 =>
-        self.predict_intra_inner::<Block4x8, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
-      TxSize::TX_8X4 =>
-        self.predict_intra_inner::<Block8x4, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
-      TxSize::TX_8X16 =>
-        self.predict_intra_inner::<Block8x16, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
-      TxSize::TX_16X8 =>
-        self.predict_intra_inner::<Block16x8, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
-      TxSize::TX_16X32 =>
-        self.predict_intra_inner::<Block16x32, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
-      TxSize::TX_32X16 =>
-        self.predict_intra_inner::<Block32x16, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
-      TxSize::TX_32X64 =>
-        self.predict_intra_inner::<Block32x64, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
-      TxSize::TX_64X32 =>
-        self.predict_intra_inner::<Block64x32, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
+      TxSize::TX_4X8 => self.predict_intra_inner::<Block4x8, _>(
+        tile_rect, dst, bit_depth, ac, alpha, edge_buf,
+      ),
+      TxSize::TX_8X4 => self.predict_intra_inner::<Block8x4, _>(
+        tile_rect, dst, bit_depth, ac, alpha, edge_buf,
+      ),
+      TxSize::TX_8X16 => self.predict_intra_inner::<Block8x16, _>(
+        tile_rect, dst, bit_depth, ac, alpha, edge_buf,
+      ),
+      TxSize::TX_16X8 => self.predict_intra_inner::<Block16x8, _>(
+        tile_rect, dst, bit_depth, ac, alpha, edge_buf,
+      ),
+      TxSize::TX_16X32 => self.predict_intra_inner::<Block16x32, _>(
+        tile_rect, dst, bit_depth, ac, alpha, edge_buf,
+      ),
+      TxSize::TX_32X16 => self.predict_intra_inner::<Block32x16, _>(
+        tile_rect, dst, bit_depth, ac, alpha, edge_buf,
+      ),
+      TxSize::TX_32X64 => self.predict_intra_inner::<Block32x64, _>(
+        tile_rect, dst, bit_depth, ac, alpha, edge_buf,
+      ),
+      TxSize::TX_64X32 => self.predict_intra_inner::<Block64x32, _>(
+        tile_rect, dst, bit_depth, ac, alpha, edge_buf,
+      ),
 
-      TxSize::TX_4X16 =>
-        self.predict_intra_inner::<Block4x16, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
-      TxSize::TX_16X4 =>
-        self.predict_intra_inner::<Block16x4, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
-      TxSize::TX_8X32 =>
-        self.predict_intra_inner::<Block8x32, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
-      TxSize::TX_32X8 =>
-        self.predict_intra_inner::<Block32x8, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
-      TxSize::TX_16X64 =>
-        self.predict_intra_inner::<Block16x64, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
-      TxSize::TX_64X16 =>
-        self.predict_intra_inner::<Block64x16, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
+      TxSize::TX_4X16 => self.predict_intra_inner::<Block4x16, _>(
+        tile_rect, dst, bit_depth, ac, alpha, edge_buf,
+      ),
+      TxSize::TX_16X4 => self.predict_intra_inner::<Block16x4, _>(
+        tile_rect, dst, bit_depth, ac, alpha, edge_buf,
+      ),
+      TxSize::TX_8X32 => self.predict_intra_inner::<Block8x32, _>(
+        tile_rect, dst, bit_depth, ac, alpha, edge_buf,
+      ),
+      TxSize::TX_32X8 => self.predict_intra_inner::<Block32x8, _>(
+        tile_rect, dst, bit_depth, ac, alpha, edge_buf,
+      ),
+      TxSize::TX_16X64 => self.predict_intra_inner::<Block16x64, _>(
+        tile_rect, dst, bit_depth, ac, alpha, edge_buf,
+      ),
+      TxSize::TX_64X16 => self.predict_intra_inner::<Block64x16, _>(
+        tile_rect, dst, bit_depth, ac, alpha, edge_buf,
+      ),
     }
   }
 
   #[inline(always)]
   fn predict_intra_inner<B: Intra<T>, T: Pixel>(
-    self, tile_rect: TileRect, dst: &mut PlaneRegionMut<'_, T>, bit_depth: usize, ac: &[i16],
-    alpha: i16, edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>
+    self,
+    tile_rect: TileRect,
+    dst: &mut PlaneRegionMut<'_, T>,
+    bit_depth: usize,
+    ac: &[i16],
+    alpha: i16,
+    edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>,
   ) {
     // left pixels are order from bottom to top and right-aligned
-    let (left, not_left) = edge_buf.array.split_at(2*MAX_TX_SIZE);
+    let (left, not_left) = edge_buf.array.split_at(2 * MAX_TX_SIZE);
     let (top_left, above) = not_left.split_at(1);
 
     let &Rect { x: frame_x, y: frame_y, .. } = dst.rect();
@@ -1078,15 +1123,16 @@ impl PredictionMode {
         (0, 0) => PredictionMode::DC_PRED,
         (_, 0) => PredictionMode::H_PRED,
         (0, _) => PredictionMode::V_PRED,
-        _ => PredictionMode::PAETH_PRED
+        _ => PredictionMode::PAETH_PRED,
       },
-      PredictionMode::UV_CFL_PRED =>
+      PredictionMode::UV_CFL_PRED => {
         if alpha == 0 {
           PredictionMode::DC_PRED
         } else {
           self
-        },
-      _ => self
+        }
+      }
+      _ => self,
     };
 
     let above_slice = &above[..B::W + B::H];
@@ -1098,58 +1144,81 @@ impl PredictionMode {
         (0, 0) => B::pred_dc_128(dst, bit_depth),
         (_, 0) => B::pred_dc_left(dst, above_slice, left_slice),
         (0, _) => B::pred_dc_top(dst, above_slice, left_slice),
-        _ => B::pred_dc(dst, above_slice, left_slice)
+        _ => B::pred_dc(dst, above_slice, left_slice),
       },
       PredictionMode::UV_CFL_PRED => match (x, y) {
         (0, 0) => B::pred_cfl_128(dst, &ac, alpha, bit_depth),
-        (_, 0) => B::pred_cfl_left(
-          dst,
-          &ac,
-          alpha,
-          bit_depth,
-          above_slice,
-          left_slice
-        ),
-        (0, _) => B::pred_cfl_top(
-          dst,
-          &ac,
-          alpha,
-          bit_depth,
-          above_slice,
-          left_slice
-        ),
-        _ => B::pred_cfl(
-          dst,
-          &ac,
-          alpha,
-          bit_depth,
-          above_slice,
-          left_slice
-        )
+        (_, 0) => {
+          B::pred_cfl_left(dst, &ac, alpha, bit_depth, above_slice, left_slice)
+        }
+        (0, _) => {
+          B::pred_cfl_top(dst, &ac, alpha, bit_depth, above_slice, left_slice)
+        }
+        _ => B::pred_cfl(dst, &ac, alpha, bit_depth, above_slice, left_slice),
       },
       PredictionMode::H_PRED => B::pred_h(dst, left_slice),
       PredictionMode::V_PRED => B::pred_v(dst, above_slice),
-      PredictionMode::PAETH_PRED =>
-        B::pred_paeth(dst, above_slice, left_slice, top_left[0]),
-      PredictionMode::SMOOTH_PRED =>
-        B::pred_smooth(dst, above_slice, left_slice),
-      PredictionMode::SMOOTH_H_PRED =>
-        B::pred_smooth_h(dst, above_slice, left_slice),
-      PredictionMode::SMOOTH_V_PRED =>
-        B::pred_smooth_v(dst, above_slice, left_slice),
-      PredictionMode::D45_PRED =>
-        B::pred_directional(dst, above_slice, left_and_left_below_slice, top_left, 45, bit_depth),
-      PredictionMode::D135_PRED =>
-        B::pred_directional(dst, above_slice, left_and_left_below_slice, top_left, 135, bit_depth),
-      PredictionMode::D117_PRED =>
-        B::pred_directional(dst, above_slice, left_and_left_below_slice, top_left, 113, bit_depth),
-      PredictionMode::D153_PRED =>
-        B::pred_directional(dst, above_slice, left_and_left_below_slice, top_left, 157, bit_depth),
-      PredictionMode::D207_PRED =>
-        B::pred_directional(dst, above_slice, left_and_left_below_slice, top_left, 203, bit_depth),
-      PredictionMode::D63_PRED =>
-        B::pred_directional(dst, above_slice, left_and_left_below_slice, top_left, 67, bit_depth),
-      _ => unimplemented!()
+      PredictionMode::PAETH_PRED => {
+        B::pred_paeth(dst, above_slice, left_slice, top_left[0])
+      }
+      PredictionMode::SMOOTH_PRED => {
+        B::pred_smooth(dst, above_slice, left_slice)
+      }
+      PredictionMode::SMOOTH_H_PRED => {
+        B::pred_smooth_h(dst, above_slice, left_slice)
+      }
+      PredictionMode::SMOOTH_V_PRED => {
+        B::pred_smooth_v(dst, above_slice, left_slice)
+      }
+      PredictionMode::D45_PRED => B::pred_directional(
+        dst,
+        above_slice,
+        left_and_left_below_slice,
+        top_left,
+        45,
+        bit_depth,
+      ),
+      PredictionMode::D135_PRED => B::pred_directional(
+        dst,
+        above_slice,
+        left_and_left_below_slice,
+        top_left,
+        135,
+        bit_depth,
+      ),
+      PredictionMode::D117_PRED => B::pred_directional(
+        dst,
+        above_slice,
+        left_and_left_below_slice,
+        top_left,
+        113,
+        bit_depth,
+      ),
+      PredictionMode::D153_PRED => B::pred_directional(
+        dst,
+        above_slice,
+        left_and_left_below_slice,
+        top_left,
+        157,
+        bit_depth,
+      ),
+      PredictionMode::D207_PRED => B::pred_directional(
+        dst,
+        above_slice,
+        left_and_left_below_slice,
+        top_left,
+        203,
+        bit_depth,
+      ),
+      PredictionMode::D63_PRED => B::pred_directional(
+        dst,
+        above_slice,
+        left_and_left_below_slice,
+        top_left,
+        67,
+        bit_depth,
+      ),
+      _ => unimplemented!(),
     }
   }
 
@@ -1166,9 +1235,16 @@ impl PredictionMode {
   }
 
   pub fn predict_inter<T: Pixel>(
-    self, fi: &FrameInvariants<T>, tile_rect: TileRect, p: usize, po: PlaneOffset,
-    dst: &mut PlaneRegionMut<'_, T>, width: usize, height: usize,
-    ref_frames: [RefType; 2], mvs: [MotionVector; 2]
+    self,
+    fi: &FrameInvariants<T>,
+    tile_rect: TileRect,
+    p: usize,
+    po: PlaneOffset,
+    dst: &mut PlaneRegionMut<'_, T>,
+    width: usize,
+    height: usize,
+    ref_frames: [RefType; 2],
+    mvs: [MotionVector; 2],
   ) {
     assert!(!self.is_intra());
     let frame_po = tile_rect.to_frame_plane_offset(po);
@@ -1178,7 +1254,9 @@ impl PredictionMode {
       ref_frames[1] != INTRA_FRAME && ref_frames[1] != NONE_FRAME;
 
     fn get_params<'a, T: Pixel>(
-      rec_plane: &'a Plane<T>, po: PlaneOffset, mv: MotionVector
+      rec_plane: &'a Plane<T>,
+      po: PlaneOffset,
+      mv: MotionVector,
     ) -> (i32, i32, PlaneSlice<'a, T>) {
       let rec_cfg = &rec_plane.cfg;
       let shift_row = 3 + rec_cfg.ydec;
@@ -1191,14 +1269,17 @@ impl PredictionMode {
         (mv.col as i32 - (col_offset << shift_col)) << (4 - shift_col);
       let qo = PlaneOffset {
         x: po.x + col_offset as isize - 3,
-        y: po.y + row_offset as isize - 3
+        y: po.y + row_offset as isize - 3,
       };
       (row_frac, col_frac, rec_plane.slice(qo).clamp().subslice(3, 3))
     };
 
     if !is_compound {
-      if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[ref_frames[0].to_index()] as usize] {
-        let (row_frac, col_frac, src) = get_params(&rec.frame.planes[p], frame_po, mvs[0]);
+      if let Some(ref rec) =
+        fi.rec_buffer.frames[fi.ref_frames[ref_frames[0].to_index()] as usize]
+      {
+        let (row_frac, col_frac, src) =
+          get_params(&rec.frame.planes[p], frame_po, mvs[0]);
         put_8tap(
           dst,
           src,
@@ -1208,15 +1289,18 @@ impl PredictionMode {
           row_frac,
           mode,
           mode,
-          fi.sequence.bit_depth
+          fi.sequence.bit_depth,
         );
       }
     } else {
       let mut tmp: [AlignedArray<[i16; 128 * 128]>; 2] =
         [UninitializedAlignedArray(), UninitializedAlignedArray()];
       for i in 0..2 {
-        if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[ref_frames[i].to_index()] as usize] {
-          let (row_frac, col_frac, src) = get_params(&rec.frame.planes[p], frame_po, mvs[i]);
+        if let Some(ref rec) = fi.rec_buffer.frames
+          [fi.ref_frames[ref_frames[i].to_index()] as usize]
+        {
+          let (row_frac, col_frac, src) =
+            get_params(&rec.frame.planes[p], frame_po, mvs[i]);
           prep_8tap(
             &mut tmp[i].array,
             src,
@@ -1226,7 +1310,7 @@ impl PredictionMode {
             row_frac,
             mode,
             mode,
-            fi.sequence.bit_depth
+            fi.sequence.bit_depth,
           );
         }
       }
@@ -1236,7 +1320,7 @@ impl PredictionMode {
         &tmp[1].array,
         width,
         height,
-        fi.sequence.bit_depth
+        fi.sequence.bit_depth,
       );
     }
   }
@@ -1263,7 +1347,7 @@ pub enum TxSet {
   // for 16x16 only
   TX_SET_ALL16_16X16,
   // Discrete Trig transforms w/ flip (9) + Identity (1) + 1D Hor/Ver (6)
-  TX_SET_ALL16
+  TX_SET_ALL16,
 }
 
 pub fn has_tr(bo: BlockOffset, bsize: BlockSize) -> bool {
@@ -1296,29 +1380,29 @@ pub fn has_tr(bo: BlockOffset, bsize: BlockSize) -> bool {
   }
 
   /* The left hand of two vertical rectangles always has a top right (as the
-    * block above will have been decoded) */
+   * block above will have been decoded) */
   if (target_n4_w < target_n4_h) && (bo.x & target_n4_w) == 0 {
     has_tr = true;
   }
 
   /* The bottom of two horizontal rectangles never has a top right (as the block
-    * to the right won't have been decoded) */
+   * to the right won't have been decoded) */
   if (target_n4_w > target_n4_h) && (bo.y & target_n4_h) != 0 {
     has_tr = false;
   }
 
   /* The bottom left square of a Vertical A (in the old format) does
-    * not have a top right as it is decoded before the right hand
-    * rectangle of the partition */
-/*
-  if blk.partition == PartitionType::PARTITION_VERT_A {
-    if blk.n4_w == blk.n4_h {
-      if (mask_row & bs) != 0 {
-        has_tr = false;
+   * not have a top right as it is decoded before the right hand
+   * rectangle of the partition */
+  /*
+    if blk.partition == PartitionType::PARTITION_VERT_A {
+      if blk.n4_w == blk.n4_h {
+        if (mask_row & bs) != 0 {
+          has_tr = false;
+        }
       }
     }
-  }
-*/
+  */
 
   has_tr
 }
@@ -1336,7 +1420,8 @@ pub fn has_bl(bo: BlockOffset, bsize: BlockSize) -> bool {
     return false;
   }
 
-  let mut has_bl = (mask_row & bs) == 0 && (mask_col & bs) == 0 && bs < sb_mi_size;
+  let mut has_bl =
+    (mask_row & bs) == 0 && (mask_col & bs) == 0 && bs < sb_mi_size;
 
   /* TODO: assert its a power of two */
 
@@ -1353,29 +1438,29 @@ pub fn has_bl(bo: BlockOffset, bsize: BlockSize) -> bool {
   }
 
   /* The right hand of two vertical rectangles never has a bottom left (as the
-    * block below won't have been decoded) */
+   * block below won't have been decoded) */
   if (target_n4_w < target_n4_h) && (bo.x & target_n4_w) != 0 {
     has_bl = false;
   }
 
   /* The top of two horizontal rectangles always has a bottom left (as the block
-    * to the left will have been decoded) */
+   * to the left will have been decoded) */
   if (target_n4_w > target_n4_h) && (bo.y & target_n4_h) == 0 {
     has_bl = true;
   }
 
   /* The bottom left square of a Vertical A (in the old format) does
-    * not have a top right as it is decoded before the right hand
-    * rectangle of the partition */
-/*
-  if blk.partition == PartitionType::PARTITION_VERT_A {
-    if blk.n4_w == blk.n4_h {
-      if (mask_row & bs) != 0 {
-        has_tr = false;
+   * not have a top right as it is decoded before the right hand
+   * rectangle of the partition */
+  /*
+    if blk.partition == PartitionType::PARTITION_VERT_A {
+      if blk.n4_w == blk.n4_h {
+        if (mask_row & bs) != 0 {
+          has_tr = false;
+        }
       }
     }
-  }
-*/
+  */
 
   has_bl
 }

@@ -211,7 +211,11 @@ macro_rules! tile_restoration_plane_common {
 }
 
 tile_restoration_plane_common!(TileRestorationPlane, TileRestorationUnits);
-tile_restoration_plane_common!(TileRestorationPlaneMut, TileRestorationUnitsMut, mut);
+tile_restoration_plane_common!(
+  TileRestorationPlaneMut,
+  TileRestorationUnitsMut,
+  mut
+);
 
 impl<'a> TileRestorationPlaneMut<'a> {
   #[inline(always)]
@@ -334,8 +338,17 @@ macro_rules! tile_restoration_state_common {
   }
 }
 
-tile_restoration_state_common!(TileRestorationState, TileRestorationPlane, iter);
-tile_restoration_state_common!(TileRestorationStateMut, TileRestorationPlaneMut, iter_mut, mut);
+tile_restoration_state_common!(
+  TileRestorationState,
+  TileRestorationPlane,
+  iter
+);
+tile_restoration_state_common!(
+  TileRestorationStateMut,
+  TileRestorationPlaneMut,
+  iter_mut,
+  mut
+);
 
 impl<'a> TileRestorationStateMut<'a> {
   #[inline(always)]

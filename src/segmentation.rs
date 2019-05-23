@@ -10,31 +10,34 @@
 #![allow(safe_extern_statics)]
 
 use crate::context::*;
+use crate::util::Pixel;
 use crate::FrameInvariants;
 use crate::FrameState;
-use crate::util::Pixel;
 
-pub fn segmentation_optimize<T: Pixel>(_fi: &FrameInvariants<T>, fs: &mut FrameState<T>) {
-    fs.segmentation.enabled = false;
-    fs.segmentation.update_data = false;
-    fs.segmentation.update_map = false;
+pub fn segmentation_optimize<T: Pixel>(
+  _fi: &FrameInvariants<T>,
+  fs: &mut FrameState<T>,
+) {
+  fs.segmentation.enabled = false;
+  fs.segmentation.update_data = false;
+  fs.segmentation.update_map = false;
 
-    fs.segmentation.features[0][SegLvl::SEG_LVL_ALT_Q as usize] = false;
-    fs.segmentation.data[0][SegLvl::SEG_LVL_ALT_Q as usize] = 0;
+  fs.segmentation.features[0][SegLvl::SEG_LVL_ALT_Q as usize] = false;
+  fs.segmentation.data[0][SegLvl::SEG_LVL_ALT_Q as usize] = 0;
 
-    /* Figure out parameters */
-    fs.segmentation.preskip = false;
-    fs.segmentation.last_active_segid = 0;
-    if fs.segmentation.enabled {
-        for i in 0..8 {
-            for j in 0..SegLvl::SEG_LVL_MAX as usize {
-                if fs.segmentation.features[i][j] {
-                    fs.segmentation.last_active_segid = i as u8;
-                    if j >= SegLvl::SEG_LVL_REF_FRAME as usize {
-                        fs.segmentation.preskip = true;
-                    }
-                }
-            }
+  /* Figure out parameters */
+  fs.segmentation.preskip = false;
+  fs.segmentation.last_active_segid = 0;
+  if fs.segmentation.enabled {
+    for i in 0..8 {
+      for j in 0..SegLvl::SEG_LVL_MAX as usize {
+        if fs.segmentation.features[i][j] {
+          fs.segmentation.last_active_segid = i as u8;
+          if j >= SegLvl::SEG_LVL_REF_FRAME as usize {
+            fs.segmentation.preskip = true;
+          }
         }
+      }
     }
+  }
 }

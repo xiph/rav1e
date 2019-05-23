@@ -20,7 +20,7 @@ use crate::partition::*;
 pub struct SCAN_ORDER {
   pub scan: &'static [u16],
   pub iscan: &'static [u16],
-  pub neighbors: &'static [u16]
+  pub neighbors: &'static [u16],
 }
 
 #[rustfmt::skip]
