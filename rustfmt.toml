@@ -1,34 +1,8 @@
-# rustfmt configuration, only used for some files
+# rustfmt configuration
 
 max_width = 79
-comment_width = 79
 force_explicit_abi = false
-fn_args_density = "Compressed"
 use_small_heuristics = "Max"
-match_arm_blocks = false
 reorder_imports = true
 tab_spaces = 2
 use_field_init_shorthand = true
-trailing_comma = "Never"
-ignore = [
-    "build.rs",
-    "src/context.rs", # Partial
-    # "src/ec.rs", # Clean
-    "src/lib.rs", # Did not clean yet to avoid conflicts with open PRs.
-    "src/cdef.rs", # Did not try to clean yet.
-    "src/lrf.rs", # Did not try to clean yet.
-    # "src/deblock.rs", # Clean
-    # "src/partition.rs", # Clean
-    # "src/plane.rs", # Clean
-    # "src/predict.rs", # Clean
-    # "src/quantize.rs", # Clean
-    # "src/rdo.rs", # Clean
-    # "src/transform/mod.rs", # Clean
-    # "benches/bench.rs", # Clean
-    # "src/bin/rav1e.rs", # Clean
-    # "src/bin/rav1repl.rs", # Clean
-    # "src/util.rs", # Clean
-    "tests/aom.rs",
-    # "benches/bench.rs",
-    # "benches/predict.rs",
-]
