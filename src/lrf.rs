@@ -1082,22 +1082,24 @@ fn wiener_stripe_filter<T: Pixel>(
   let limit = (1 << (bit_depth + 1 + WIENER_BITS - round_h)) - 1;
 
   let mut work: [i32; MAX_SB_SIZE + 7] = [0; MAX_SB_SIZE + 7];
+  let vfilter3 = 128
+    - 2 * (coeffs[0][0] as i32 + coeffs[0][1] as i32 + coeffs[0][2] as i32);
   let vfilter: [i32; 7] = [
     coeffs[0][0] as i32,
     coeffs[0][1] as i32,
     coeffs[0][2] as i32,
-    128
-      - 2 * (coeffs[0][0] as i32 + coeffs[0][1] as i32 + coeffs[0][2] as i32),
+    vfilter3,
     coeffs[0][2] as i32,
     coeffs[0][1] as i32,
     coeffs[0][0] as i32,
   ];
+  let hfilter3 = 128
+    - 2 * (coeffs[1][0] as i32 + coeffs[1][1] as i32 + coeffs[1][2] as i32);
   let hfilter: [i32; 7] = [
     coeffs[1][0] as i32,
     coeffs[1][1] as i32,
     coeffs[1][2] as i32,
-    128
-      - 2 * (coeffs[1][0] as i32 + coeffs[1][1] as i32 + coeffs[1][2] as i32),
+    hfilter3,
     coeffs[1][2] as i32,
     coeffs[1][1] as i32,
     coeffs[1][0] as i32,
