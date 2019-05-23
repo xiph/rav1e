@@ -46,6 +46,10 @@ after_script:
 
 jobs:
   include:
+      - name: "Check Code Style"
+        script:
+         - rustup component add rustfmt
+         - cargo fmt -- --check
       - name: "Build & Coveralls"
         script:
          - cargo install cargo-kcov
