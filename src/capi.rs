@@ -40,6 +40,8 @@ pub enum EncoderStatus {
     /// May be emitted by `Context::receive_packet` after a flush request had been processed
     /// or the frame limit had been reached.
     LimitReached,
+    /// A Frame had been encoded but not emitted yet
+    Encoded,
     /// Generic fatal error
     Failure = -1,
 }
@@ -52,6 +54,7 @@ impl From<Option<rav1e::EncoderStatus>> for EncoderStatus {
                 rav1e::EncoderStatus::NeedMoreData => EncoderStatus::NeedMoreData,
                 rav1e::EncoderStatus::EnoughData => EncoderStatus::EnoughData,
                 rav1e::EncoderStatus::LimitReached => EncoderStatus::LimitReached,
+                rav1e::EncoderStatus::Encoded => EncoderStatus::Encoded,
                 rav1e::EncoderStatus::Failure => EncoderStatus::Failure,
             }
         }
