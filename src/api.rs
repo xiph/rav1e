@@ -85,8 +85,15 @@ pub struct EncoderConfig {
   pub min_quantizer: u8,
   pub bitrate: i32,
   pub tune: Tune,
+  /// log2(tile columns). If tiles is also specified, this acts
+  /// as a minimum.
   pub tile_cols_log2: usize,
+  /// log2(tile rows). If tiles is also specified, this acts
+  /// as a minimum.
   pub tile_rows_log2: usize,
+  /// Number of tiles desired. The video is split automatically so that
+  /// it contains at least this many tiles.
+  pub tiles: usize,
   pub speed_settings: SpeedSettings,
   /// `None` for one-pass encode. `Some(1)` or `Some(2)` for two-pass encoding.
   pub pass: Option<u8>,
@@ -137,6 +144,7 @@ impl EncoderConfig {
       tune: Tune::default(),
       tile_cols_log2: 0,
       tile_rows_log2: 0,
+      tiles: 0,
       speed_settings: SpeedSettings::from_preset(speed),
       pass: None,
       show_psnr: false,
