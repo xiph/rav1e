@@ -186,6 +186,14 @@ pub fn parse_cli() -> CliOptions {
         .takes_value(true)
         .default_value("0")
     )
+    .arg(
+      Arg::with_name("TILES")
+        .help("Number of tiles. Tile-cols and tile-rows are overridden\n\
+               so that the video has at least this many tiles.")
+        .long("tiles")
+        .takes_value(true)
+        .default_value("0")
+    )
     // MASTERING
     .arg(
       Arg::with_name("PIXEL_RANGE")
@@ -446,6 +454,8 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
 
   cfg.tile_cols_log2 = matches.value_of("TILE_COLS_LOG2").unwrap().parse().unwrap();
   cfg.tile_rows_log2 = matches.value_of("TILE_ROWS_LOG2").unwrap().parse().unwrap();
+
+  cfg.tiles = matches.value_of("TILES").unwrap().parse().unwrap();
 
   if cfg.tile_cols_log2 > 6 || cfg.tile_rows_log2 > 6 {
     panic!("Log2 of tile columns and rows may not be greater than 6");

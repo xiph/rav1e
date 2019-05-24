@@ -500,13 +500,38 @@ impl<T: Pixel> FrameInvariants<T> {
     let w_in_b = 2 * config.width.align_power_of_two_and_shift(3); // MiCols, ((width+7)/8)<<3 >> MI_SIZE_LOG2
     let h_in_b = 2 * config.height.align_power_of_two_and_shift(3); // MiRows, ((height+7)/8)<<3 >> MI_SIZE_LOG2
 
-    let tiling = TilingInfo::new(
+    let mut tiling = TilingInfo::new(
       sequence.sb_size_log2(),
       config.width,
       config.height,
       config.tile_cols_log2,
       config.tile_rows_log2
     );
+
+    if config.tiles > 0 {
+      let mut tile_rows_log2 = 0;
+      let mut tile_cols_log2 = 0;
+      while (tile_rows_log2 < tiling.max_tile_rows_log2) || (tile_cols_log2 < tiling.max_tile_cols_log2) {
+
+        tiling = TilingInfo::new(
+          sequence.sb_size_log2(),
+          config.width,
+          config.height,
+          tile_cols_log2,
+          tile_rows_log2
+        );
+
+        if tiling.rows * tiling.cols >= config.tiles { break };
+
+        if ((tiling.tile_height_sb >= tiling.tile_width_sb) &&
+            (tiling.tile_rows_log2 < tiling.max_tile_rows_log2))
+          || (tile_cols_log2 >= tiling.max_tile_cols_log2) {
+            tile_rows_log2 += 1;
+          } else {
+            tile_cols_log2 += 1;
+          }
+      }
+    }
 
     Self {
       sequence,
