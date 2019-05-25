@@ -630,7 +630,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       self.write_bit(false);
     }
 
-    let rows_ones = ti.tile_rows_log2 - ti.min_tile_cols_log2;
+    let rows_ones = ti.tile_rows_log2 - ti.min_tile_rows_log2;
     for _ in 0..rows_ones {
       self.write_bit(true);
     }
