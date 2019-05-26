@@ -7,6 +7,7 @@
 
 extern crate rav1e;
 extern crate libc;
+extern crate num_traits;
 
 use std::slice;
 use std::sync::Arc;
@@ -18,6 +19,8 @@ use std::os::raw::c_int;
 
 use libc::size_t;
 use libc::ptrdiff_t;
+
+use num_traits::cast::FromPrimitive;
 
 /// Raw video Frame
 ///
@@ -101,6 +104,7 @@ pub struct Packet {
     pub frame_type: FrameType,
 }
 
+type PixelRange=rav1e::PixelRange;
 type ChromaSamplePosition=rav1e::ChromaSamplePosition;
 type ChromaSampling=rav1e::ChromaSampling;
 type MatrixCoefficients=rav1e::MatrixCoefficients;
@@ -120,6 +124,47 @@ pub unsafe extern "C" fn rav1e_config_default() -> *mut Config {
     });
 
     Box::into_raw(c)
+}
+
+
+/// Set pixel format of the stream.
+///
+/// Supported values for subsampling and chromapos are defined by the
+/// enum types RaChromaSampling and RaChromaSamplePosition respectively.
+/// Valid values for fullrange are 0 and 1.
+///
+/// Reuturns a negative value on error or 0.
+#[no_mangle]
+pub unsafe extern "C" fn rav1e_config_set_pixel_format(cfg: *mut Config,
+                                                       bit_depth: u8,
+                                                       subsampling: ChromaSampling,
+                                                       chroma_pos: ChromaSamplePosition,
+                                                       pixel_range: PixelRange
+) -> c_int {
+    if bit_depth != 8 && bit_depth != 10 && bit_depth != 12 {
+        return -1
+    }
+    (*cfg).cfg.enc.bit_depth = bit_depth as usize;
+
+    let subsampling_val = std::mem::transmute::<ChromaSampling, i32>(subsampling);
+    if rav1e::ChromaSampling::from_i32(subsampling_val).is_none() {
+        return -1
+    }
+    (*cfg).cfg.enc.chroma_sampling = subsampling;
+
+    let chroma_pos_val = std::mem::transmute::<ChromaSamplePosition, i32>(chroma_pos);
+    if rav1e::ChromaSamplePosition::from_i32(chroma_pos_val).is_none() {
+        return -1
+    }
+    (*cfg).cfg.enc.chroma_sample_position = chroma_pos;
+
+    let pixel_range_val = std::mem::transmute::<PixelRange, i32>(pixel_range);
+    if rav1e::PixelRange::from_i32(pixel_range_val).is_none() {
+        return -1;
+    }
+    (*cfg).cfg.enc.pixel_range = pixel_range;
+
+    0
 }
 
 /// Set color properties of the stream.
