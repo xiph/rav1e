@@ -9,6 +9,8 @@
 
 use arg_enum_proc_macro::ArgEnum;
 use bitstream_io::*;
+use num_derive::*;
+
 use crate::encoder::*;
 use crate::frame::Frame;
 use crate::metrics::calculate_frame_psnr;
@@ -309,14 +311,14 @@ impl fmt::Display for FrameType {
   }
 }
 
-#[derive(Clone, Copy, Debug, PartialOrd, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialOrd, PartialEq, FromPrimitive)]
 pub enum PredictionModesSetting {
   Simple,
   ComplexKeyframes,
   ComplexAll,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, FromPrimitive)]
 #[repr(C)]
 pub enum ChromaSampling {
   Cs420,
@@ -344,7 +346,7 @@ impl ChromaSampling {
   }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, FromPrimitive)]
 #[repr(C)]
 pub enum ChromaSamplePosition {
   Unknown,
@@ -358,7 +360,7 @@ impl Default for ChromaSamplePosition {
   }
 }
 
-#[derive(ArgEnum, Debug, Clone, Copy, PartialEq)]
+#[derive(ArgEnum, Debug, Clone, Copy, PartialEq, FromPrimitive)]
 #[repr(C)]
 pub enum PixelRange {
     Unspecified = 0,
@@ -372,7 +374,7 @@ impl Default for PixelRange {
     }
 }
 
-#[derive(ArgEnum, Debug, Clone, Copy, PartialEq)]
+#[derive(ArgEnum, Debug, Clone, Copy, PartialEq, FromPrimitive)]
 #[repr(C)]
 pub enum MatrixCoefficients {
     Identity = 0,
@@ -397,7 +399,7 @@ impl Default for MatrixCoefficients {
     }
 }
 
-#[derive(ArgEnum, Debug, Clone, Copy, PartialEq)]
+#[derive(ArgEnum, Debug, Clone, Copy, PartialEq, FromPrimitive)]
 #[repr(C)]
 pub enum ColorPrimaries {
     BT709 = 1,
@@ -420,7 +422,7 @@ impl Default for ColorPrimaries {
     }
 }
 
-#[derive(ArgEnum, Debug, Clone, Copy, PartialEq)]
+#[derive(ArgEnum, Debug, Clone, Copy, PartialEq, FromPrimitive)]
 #[repr(C)]
 pub enum TransferCharacteristics {
     BT1886 = 1,

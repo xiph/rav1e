@@ -28,6 +28,7 @@ backtrace = "0.3"
 syn = "^0.15.20"
 quote = "^0.6.10" # hack for proc-macro-hack
 num-traits = "0.2"
+num-derive = "0.2"
 paste = "0.1"
 serde = "1.0"
 serde_derive = "1.0"
