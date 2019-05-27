@@ -102,7 +102,7 @@ fn write_stats_file<T: Pixel>(ctx: &Context<T>, filename: &Path) -> Result<(), i
 
 fn do_encode<T: Pixel, D: Decoder>(
   cfg: Config, verbose: bool, mut progress: ProgressInfo,
-  mut err: std::io::StderrLock, mut output: &mut dyn Write,
+  mut output: &mut dyn Write,
   source: &mut Source<D>,
   mut y4m_enc: Option<y4m::Encoder<'_, Box<dyn Write>>>
 ) {
@@ -114,10 +114,10 @@ fn do_encode<T: Pixel, D: Decoder>(
   {
     for frame in frame_info {
       progress.add_frame(frame);
-      let _ = if verbose {
-        writeln!(err, "{} - {}", frame, progress)
+      if verbose {
+        eprintln!("{} - {}", frame, progress);
       } else {
-        write!(err, "\r{}                    ", progress)
+        eprint!("\r{}                    ", progress);
       };
     }
 
@@ -128,10 +128,10 @@ fn do_encode<T: Pixel, D: Decoder>(
     if let Err(e) =
       write_stats_file(&ctx, cfg.enc.stats_file.as_ref().unwrap())
     {
-      let _ = writeln!(err, "\nError: Failed to write stats file! {}\n", e);
+      eprintln!("\nError: Failed to write stats file! {}\n", e);
     }
   }
-  let _ = write!(err, "\n{}\n", progress.print_summary());
+  eprint!("\n{}\n", progress.print_summary());
 }
 
 fn main() {
@@ -162,12 +162,7 @@ fn main() {
     threads: cli.threads,
   };
 
-  let stderr = io::stderr();
-  let mut err = stderr.lock();
-
-  let _ = writeln!(
-    err,
-    "{}x{} @ {}/{} fps",
+  eprintln!("{}x{} @ {}/{} fps",
     video_info.width,
     video_info.height,
     video_info.time_base.den,
@@ -196,11 +191,11 @@ fn main() {
 
   if video_info.bit_depth == 8 {
     do_encode::<u8, y4m::Decoder<'_, Box<dyn Read>>>(
-      cfg, cli.verbose, progress, err, &mut cli.io.output, &mut source, y4m_enc
+      cfg, cli.verbose, progress, &mut cli.io.output, &mut source, y4m_enc
     )
   } else {
     do_encode::<u16, y4m::Decoder<'_, Box<dyn Read>>>(
-      cfg, cli.verbose, progress, err, &mut cli.io.output, &mut source, y4m_enc
+      cfg, cli.verbose, progress, &mut cli.io.output, &mut source, y4m_enc
     )
   }
 }
