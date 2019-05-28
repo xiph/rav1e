@@ -383,9 +383,16 @@ pub unsafe extern "C" fn rav1e_last_status(ctx: *const Context) -> EncoderStatus
 #[no_mangle]
 pub unsafe extern "C" fn rav1e_status_to_str(status: EncoderStatus) -> *mut c_char {
     let status = format!("{:?}", status);
-    let cptr = CString::new(status).unwrap().as_ptr();
+    let cbuf = CString::new(status).unwrap();
+    let len = cbuf.as_bytes_with_nul().len();
+    let ret = libc::malloc(len);
 
-    libc::strdup(cptr)
+    if !ret.is_null() {
+        let cptr = cbuf.as_ptr() as *const libc::c_void;
+        libc::memcpy(ret, cptr, len);
+    }
+
+    ret as *mut c_char
 }
 
 /// Receive encoded data
