@@ -8,6 +8,8 @@
 extern crate rav1e;
 extern crate libc;
 extern crate num_traits;
+#[macro_use]
+extern crate num_derive;
 
 use std::slice;
 use std::sync::Arc;
@@ -29,7 +31,7 @@ use num_traits::cast::FromPrimitive;
 pub struct Frame(Arc<rav1e::Frame<u16>>);
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, FromPrimitive)]
 pub enum EncoderStatus {
     /// Normal operation
     Success = 0,
@@ -382,6 +384,10 @@ pub unsafe extern "C" fn rav1e_last_status(ctx: *const Context) -> EncoderStatus
 /// Return a string matching the EncooderStatus variant.
 #[no_mangle]
 pub unsafe extern "C" fn rav1e_status_to_str(status: EncoderStatus) -> *mut c_char {
+    if EncoderStatus::from_i32(std::mem::transmute(status)).is_none() {
+        return std::ptr::null_mut();
+    }
+
     let status = format!("{:?}", status);
     let cbuf = CString::new(status).unwrap();
     let len = cbuf.as_bytes_with_nul().len();
