@@ -129,6 +129,16 @@ pub unsafe extern "C" fn rav1e_config_default() -> *mut Config {
 }
 
 
+/// Set the time base of the stream
+///
+/// Needed for rate control.
+#[no_mangle]
+pub unsafe extern "C" fn rav1e_config_set_time_base(cfg: *mut Config,
+                                                    time_base: Rational)
+{
+    (*cfg).cfg.enc.time_base = time_base
+}
+
 /// Set pixel format of the stream.
 ///
 /// Supported values for subsampling and chromapos are defined by the
