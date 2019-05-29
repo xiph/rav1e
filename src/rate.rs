@@ -500,19 +500,37 @@ impl RCState {
     // Start with a buffer fullness and fullness target of 50%.
     let reservoir_target = (reservoir_max + 1) >> 1;
     // Pick exponents and initial scales for quantizer selection.
-    //
+    let ibpp = npixels/bits_per_frame;
     // These have been derived by encoding many clips at every quantizer
-    // and running a linear regression in binary log space, as the relationship
-    // appears to be linear in nature; that is, one single bucket for all bits
-    // per pixel values.
-    let i_exp: u8 = 62;
-    let i_log_scale = blog64(52) - q57(QSCALE);
-    let p_exp: u8 = 97;
-    let p_log_scale = blog64(57) - q57(QSCALE);
-    let b0_exp: u8 = 94;
-    let b0_log_scale = blog64(25) - q57(QSCALE);
-    let b1_exp: u8 = 89;
-    let b1_log_scale = blog64(11) - q57(QSCALE);
+    // and running a piecewise-linear regression in binary log space.
+    let (i_exp, i_log_scale) = if ibpp < 1 {
+      (48u8, blog64(36) - q57(QSCALE))
+    } else if ibpp < 4 {
+      (61u8, blog64(55) - q57(QSCALE))
+    } else {
+      (77u8, blog64(129) - q57(QSCALE))
+    };
+    let (p_exp, p_log_scale) = if ibpp < 2 {
+      (69u8, blog64(32) - q57(QSCALE))
+    } else if ibpp < 139 {
+      (104u8, blog64(84) - q57(QSCALE))
+    } else {
+      (83u8, blog64(19) - q57(QSCALE))
+    };
+    let (b0_exp, b0_log_scale) = if ibpp < 2 {
+      (84u8, blog64(30) - q57(QSCALE))
+    } else if ibpp < 92 {
+      (120u8, blog64(68) - q57(QSCALE))
+    } else {
+      (68u8, blog64(4) - q57(QSCALE))
+    };
+    let (b1_exp, b1_log_scale) = if ibpp < 2 {
+      (87u8, blog64(27) - q57(QSCALE))
+    } else if ibpp < 126 {
+      (139u8, blog64(84) - q57(QSCALE))
+    } else {
+      (61u8, blog64(1) - q57(QSCALE))
+    };
 
     // TODO: Add support for "golden" P frames.
     RCState {
