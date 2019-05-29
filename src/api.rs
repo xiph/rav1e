@@ -119,7 +119,7 @@ impl EncoderConfig {
       mastering_display: None,
       content_light: None,
 
-      time_base: Rational { num: 30, den: 1 },
+      time_base: Rational { num: 1, den: 30 },
       min_key_frame_interval: 12,
       max_key_frame_interval: 240,
       low_latency: false,
