@@ -42,7 +42,7 @@ bincode = "1.1"
 arrayvec = "0.4.10"
 
 [target.'cfg(target_arch = "x86_64")'.build-dependencies]
-nasm-rs = { git = "https://github.com/tdaede/nasm-rs", branch="msvc-OUT", optional = true }
+nasm-rs = { git = "https://github.com/tdaede/nasm-rs", branch = "msvc-OUT", optional = true }
 
 [target.'cfg(unix)'.build-dependencies]
 pkg-config = "0.3.12"
@@ -74,6 +74,9 @@ codegen-units = 1  # if > 1 enables parallel code generation which improves
                    # compile times, but prevents some optimizations.
                    # Passes `-C codegen-units`. Ignored when `lto = true`.
 lto = true
+overflow-checks = false
+panic = "abort"
+incremental = false
 
 [profile.bench]
 codegen-units = 1
