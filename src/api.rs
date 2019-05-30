@@ -858,7 +858,15 @@ impl<T: Pixel> ContextInner<T> {
           let fi = self.frame_invariants.get_mut(&cur_idx).unwrap();
           fi.set_quantizers(&qps);
 
-          if self.rc_state.needs_trial_encode(fti) {
+          let trials = if !self.rc_state.needs_trial_encode(fti) {
+            0
+          } else if fti > 1 {
+            1
+          } else {
+            2
+          };
+          for _ in 0..trials {
+            let fi = self.frame_invariants.get_mut(&cur_idx).unwrap();
             let mut fs = FrameState::new_with_frame(fi, frame.clone());
             let data = encode_frame(fi, &mut fs);
             self.rc_state.record_trial_encode(
