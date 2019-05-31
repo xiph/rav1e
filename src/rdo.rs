@@ -608,7 +608,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         }
 
         // TODO(yushin): luma and chroma would have different decision based on chroma format
-        let need_recon_pixel = luma_mode_is_intra && tx_size.block_size() < bsize;
+        let need_recon_pixel = luma_mode_is_intra && tx_size.block_size() != bsize;
 
         encode_block_a(&fi.sequence, ts, cw, wr, bsize, tile_bo, skip);
         let tx_dist =
@@ -974,7 +974,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
   } else {
     RDOType::PixelDistRealRate
   };
-  let need_recon_pixel = tx_size.block_size() < bsize;
+  let need_recon_pixel = tx_size.block_size() != bsize;
 
   for &tx_type in tx_types {
     // Skip unsupported transform types
