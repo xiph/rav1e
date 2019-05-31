@@ -754,6 +754,7 @@ impl RCState {
           f.x[1] = x;
           f.y[0] = x;
           f.y[1] = x;
+          self.log_scale[fti] = log_scale;
           // TODO: Duplicate regular P frame state for first golden P frame.
         } else {
           // Lengthen the time constant for the inter filters as we collect
