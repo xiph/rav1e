@@ -865,10 +865,12 @@ impl<T: Pixel> ContextInner<T> {
           if self.rc_state.needs_trial_encode(fti) {
             let mut fs = FrameState::new_with_frame(fi, frame.clone());
             let data = encode_frame(fi, &mut fs);
-            self.rc_state.record_trial_encode(
+            self.rc_state.update_state(
               (data.len() * 8) as i64,
               fti,
               qps.log_target_q,
+              true,
+              false
             );
             let qps =
               self.rc_state.select_qi(self, fti, self.maybe_prev_log_base_q);
@@ -885,6 +887,7 @@ impl<T: Pixel> ContextInner<T> {
             (data.len() * 8) as i64,
             fti,
             qps.log_target_q,
+            false,
             false
           );
           self.packet_data.extend(data);
