@@ -1492,7 +1492,9 @@ fn av1_idct64(input: &[i32], output: &mut [i32], range: usize) {
   output[63] = clamp_value(stg10[0] - stg10[63], range);
 }
 
-static INV_TXFM_FNS: [[fn(&[i32], &mut [i32], usize); 5]; 4] = [
+type InvTxfmFn = fn(input: &[i32], output: &mut [i32], range: usize);
+
+static INV_TXFM_FNS: [[InvTxfmFn; 5]; 4] = [
   [av1_idct4, av1_idct8, av1_idct16, av1_idct32, av1_idct64],
   [av1_iadst4, av1_iadst8, av1_iadst16, |_, _, _| unimplemented!(), |_, _, _| unimplemented!()],
   [
