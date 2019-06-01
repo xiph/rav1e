@@ -726,8 +726,13 @@ impl RCState {
   }
 
   pub fn update_state(
-    &mut self, bits: i64, fti: usize, log_target_q: i64, droppable: bool
+    &mut self, bits: i64, fti: usize, log_target_q: i64, trial: bool,
+    droppable: bool
   ) -> bool {
+    if trial {
+      assert!(self.needs_trial_encode(fti));
+      assert!(bits > 0);
+    }
     let mut dropped = false;
     // Update rate control only if rate control is active.
     if self.target_bitrate > 0 {
@@ -747,7 +752,7 @@ impl RCState {
         // If this is the first example of the given frame type we've seen, we
         //  immediately replace the default scale factor guess with the
         //  estimate we just computed using the first frame.
-        if self.nframes[fti] <= 0 {
+        if trial || self.nframes[fti] <= 0 {
           let f = &mut self.scalefilter[fti];
           let x = log_scale_q24;
           f.x[0] = x;
@@ -786,53 +791,33 @@ impl RCState {
           //  count of dropped frames.
         }
         // Increment the frame count for filter adaptation purposes.
-        if self.nframes[fti] < ::std::i32::MAX {
+        if !trial && self.nframes[fti] < ::std::i32::MAX {
           self.nframes[fti] += 1;
         }
       }
-      self.reservoir_fullness += self.bits_per_frame - bits;
-      // If we're too quick filling the buffer and overflow is capped, that
-      //  rate is lost forever.
-      if self.cap_overflow {
-        self.reservoir_fullness =
-          self.reservoir_fullness.min(self.reservoir_max);
+      if !trial {
+        self.reservoir_fullness += self.bits_per_frame - bits;
+        // If we're too quick filling the buffer and overflow is capped, that
+        //  rate is lost forever.
+        if self.cap_overflow {
+          self.reservoir_fullness =
+            self.reservoir_fullness.min(self.reservoir_max);
+        }
+        // If we're too quick draining the buffer and underflow is capped, don't
+        //  try to make up that rate later.
+        if self.cap_underflow {
+          self.reservoir_fullness = self.reservoir_fullness.max(0);
+        }
+        // Adjust the bias for the real bits we've used.
+        self.rate_bias +=
+          bexp64(prev_log_scale + self.log_npixels - log_q_exp) - bits;
       }
-      // If we're too quick draining the buffer and underflow is capped, don't
-      //  try to make up that rate later.
-      if self.cap_underflow {
-        self.reservoir_fullness = self.reservoir_fullness.max(0);
-      }
-      // Adjust the bias for the real bits we've used.
-      self.rate_bias +=
-        bexp64(prev_log_scale + self.log_npixels - log_q_exp) - bits;
     }
     dropped
   }
 
   pub fn needs_trial_encode(&self, fti: usize) -> bool {
       self.target_bitrate > 0 && self.nframes[fti] == 0
-  }
-
-  pub fn record_trial_encode(
-    &mut self, bits: i64, fti: usize, log_target_q: i64
-  ) {
-    assert!(self.needs_trial_encode(fti));
-    assert!(bits > 0);
-    let log_q_exp = ((log_target_q + 32) >> 6)*(self.exp[fti] as i64);
-    // Compute the estimated scale factor for this frame type.
-    let log_bits = blog64(bits);
-    let log_scale = (log_bits - self.log_npixels + log_q_exp).min(q57(16));
-    let log_scale_q24 = q57_to_q24(log_scale);
-    // If this is the first example of the given frame type we've seen, we
-    //  immediately replace the default scale factor guess with the
-    //  estimate we just computed using the first frame.
-    self.log_scale[fti] = log_scale;
-    let f = &mut self.scalefilter[fti];
-    let x = log_scale_q24;
-    f.x[0] = x;
-    f.x[1] = x;
-    f.y[0] = x;
-    f.y[1] = x;
   }
 }
 
