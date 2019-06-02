@@ -478,16 +478,21 @@ impl RCState {
   pub fn new(
     frame_width: i32, frame_height: i32, framerate_num: i64,
     framerate_den: i64, target_bitrate: i32, maybe_ac_qi_max: Option<u8>,
-    max_key_frame_interval: i32
+    max_key_frame_interval: i32, maybe_reservoir_frame_delay: Option<i32>
   ) -> RCState {
-    // The buffer size is set equal to 1.5x the keyframe interval, with a minimum
-    //  of 12.
+    // The default buffer size is set equal to 1.5x the keyframe interval, or 240
+    //  frames; whichsever is smaller.
+    // For user set values, we enforce a minimum of 12.
     // The interval is short enough to allow reaction, but long enough to allow
     //  looking into the next GOP (avoiding the case where the last frames
-    //  before an I-frame get starved).
+    //  before an I-frame get starved), in most cases.
     // The 12 frame minimum gives us some chance to distribute bit estimation
     //  errors in the worst case.
-    let reservoir_frame_delay = ((max_key_frame_interval*3) >> 1).max(12);
+    let reservoir_frame_delay = if maybe_reservoir_frame_delay.is_some() {
+        maybe_reservoir_frame_delay.unwrap().max(12)
+    } else {
+        ((max_key_frame_interval*3) >> 1).max(240)
+    };
     // TODO: What are the limits on these?
     let npixels = (frame_width as i64)*(frame_height as i64);
     // Insane framerates or frame sizes mean insane bitrates.

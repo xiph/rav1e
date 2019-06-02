@@ -160,6 +160,13 @@ pub fn parse_cli() -> CliOptions {
         .default_value("240")
     )
     .arg(
+      Arg::with_name("RESERVOIR_FRAME_DELAY")
+        .help("Number of frames over which rate control should distribute the reservoir [default: max(240, 1.5x keyint)]\n\
+         A minimum value of 12 is enforced.")
+        .long("reservoir_frame_delay")
+        .takes_value(true)
+    )
+    .arg(
       Arg::with_name("LOW_LATENCY")
         .help("Low latency mode; disables frame reordering\n\
             Has a significant speed-to-quality trade-off")
@@ -433,6 +440,7 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
 
   cfg.quantizer = quantizer;
   cfg.bitrate = bitrate.checked_mul(1000).expect("Bitrate too high");
+  cfg.reservoir_frame_delay = matches.value_of("RESERVOIR_FRAME_DELAY").map(|reservior_frame_delay| reservior_frame_delay.parse().unwrap());
   cfg.show_psnr = matches.is_present("PSNR");
   cfg.pass = matches.value_of("PASS").map(|pass| pass.parse().unwrap());
   cfg.stats_file = if cfg.pass.is_some() {
