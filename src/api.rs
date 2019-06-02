@@ -74,6 +74,8 @@ pub struct EncoderConfig {
   pub min_key_frame_interval: u64,
   /// The *maximum* interval between two keyframes
   pub max_key_frame_interval: u64,
+  /// The number of frames over which to distribute the reservoir usage.
+  pub reservoir_frame_delay: Option<i32>,
   pub low_latency: bool,
   pub quantizer: usize,
   pub bitrate: i32,
@@ -122,6 +124,7 @@ impl EncoderConfig {
       time_base: Rational { num: 1, den: 30 },
       min_key_frame_interval: 12,
       max_key_frame_interval: 240,
+      reservoir_frame_delay: None,
       low_latency: false,
       quantizer: 100,
       bitrate: 0,
@@ -681,7 +684,8 @@ impl<T: Pixel> ContextInner<T> {
           enc.time_base.num as i64,
           enc.bitrate,
           maybe_ac_qi_max,
-          enc.max_key_frame_interval as i32
+          enc.max_key_frame_interval as i32,
+          enc.reservoir_frame_delay
         ),
         maybe_prev_log_base_q: None,
         first_pass_data: FirstPassData { frames: Vec::new() },
