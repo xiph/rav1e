@@ -537,8 +537,7 @@ impl RCState {
       target_bitrate,
       reservoir_frame_delay,
       maybe_ac_qi_max,
-      // By default, enforce hard buffer constraints.
-      drop_frames: true,
+      drop_frames: false,
       cap_overflow: true,
       cap_underflow: false,
       // TODO: Support multiple passes.
