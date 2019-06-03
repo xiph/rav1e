@@ -273,6 +273,7 @@ unsafe fn option_match(
 
         "key_frame_interval" => enc.max_key_frame_interval = value.parse().map_err(|_| ())?,
         "min_key_frame_interval" => enc.min_key_frame_interval = value.parse().map_err(|_| ())?,
+        "reservoir_frame_delay" => enc.reservoir_frame_delay = Some(value.parse().map_err(|_| ())?),
         "low_latency" => enc.low_latency = value.parse().map_err(|_| ())?,
 
         _ => return Err(())
