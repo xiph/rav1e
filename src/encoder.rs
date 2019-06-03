@@ -1485,7 +1485,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
   skip: bool, cfl: CFLParams, tx_size: TxSize, tx_type: TxType,
   mode_context: usize, mv_stack: &[CandidateMV], rdo_type: RDOType,
   need_recon_pixel: bool, record_stats: bool,
-) -> i64 {
+) -> (bool, i64) {
   let is_inter = !luma_mode.is_intra();
   if is_inter {
     assert!(luma_mode == chroma_mode);
@@ -1758,13 +1758,14 @@ pub fn write_tx_blocks<T: Pixel>(
   chroma_mode: PredictionMode, tile_bo: TileBlockOffset, bsize: BlockSize,
   tx_size: TxSize, tx_type: TxType, skip: bool, cfl: CFLParams,
   luma_only: bool, rdo_type: RDOType, need_recon_pixel: bool,
-) -> i64 {
+) -> (bool, i64) {
   let bw = bsize.width_mi() / tx_size.width_mi();
   let bh = bsize.height_mi() / tx_size.height_mi();
   let qidx = get_qidx(fi, ts, cw, tile_bo);
 
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let mut ac: AlignedArray<[i16; 32 * 32]> = AlignedArray::uninitialized();
+  let mut partition_has_coeff: bool = false;
   let mut tx_dist: i64 = 0;
   let do_chroma = has_chroma(tile_bo, bsize, xdec, ydec);
 
@@ -1785,7 +1786,7 @@ pub fn write_tx_blocks<T: Pixel>(
       });
 
       let po = tx_bo.plane_offset(&ts.input.planes[0].cfg);
-      let (_, dist) = encode_tx_block(
+      let (has_coeff, dist) = encode_tx_block(
         fi,
         ts,
         cw,
@@ -1806,6 +1807,7 @@ pub fn write_tx_blocks<T: Pixel>(
         rdo_type,
         need_recon_pixel,
       );
+      partition_has_coeff |= has_coeff;
       assert!(
         !fi.use_tx_domain_distortion || need_recon_pixel || skip || dist >= 0
       );
@@ -1814,7 +1816,7 @@ pub fn write_tx_blocks<T: Pixel>(
   }
 
   if luma_only {
-    return tx_dist;
+    return (partition_has_coeff, tx_dist);
   };
 
   let uv_tx_size = bsize.largest_chroma_tx_size(xdec, ydec);
@@ -1870,7 +1872,7 @@ pub fn write_tx_blocks<T: Pixel>(
           let mut po = tile_bo.plane_offset(&ts.input.planes[p].cfg);
           po.x += (bx * uv_tx_size.width()) as isize;
           po.y += (by * uv_tx_size.height()) as isize;
-          let (_, dist) = encode_tx_block(
+          let (has_coeff, dist) = encode_tx_block(
             fi,
             ts,
             cw,
@@ -1891,6 +1893,7 @@ pub fn write_tx_blocks<T: Pixel>(
             rdo_type,
             need_recon_pixel,
           );
+          partition_has_coeff |= has_coeff;
           assert!(
             !fi.use_tx_domain_distortion
               || need_recon_pixel
@@ -1903,7 +1906,7 @@ pub fn write_tx_blocks<T: Pixel>(
     }
   }
 
-  tx_dist
+  (partition_has_coeff, tx_dist)
 }
 
 // FIXME: For now, assume tx_mode is LARGEST_TX, so var-tx is not implemented yet,
@@ -1914,7 +1917,10 @@ pub fn write_tx_tree<T: Pixel>(
   tile_bo: TileBlockOffset, bsize: BlockSize, tx_size: TxSize,
   tx_type: TxType, skip: bool, luma_only: bool, rdo_type: RDOType,
   need_recon_pixel: bool,
-) -> i64 {
+) -> (bool, i64) {
+  if skip {
+    return (false, -1);
+  }
   let bw = bsize.width_mi() / tx_size.width_mi();
   let bh = bsize.height_mi() / tx_size.height_mi();
   let qidx = get_qidx(fi, ts, cw, tile_bo);
@@ -1922,6 +1928,7 @@ pub fn write_tx_tree<T: Pixel>(
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let ac = &[0i16; 0];
   let mut tx_dist: i64 = 0;
+  let mut partition_has_coeff: bool = false;
 
   ts.qc.update(
     qidx,
@@ -1954,13 +1961,14 @@ pub fn write_tx_tree<T: Pixel>(
     rdo_type,
     need_recon_pixel,
   );
+  partition_has_coeff |= has_coeff;
   assert!(
     !fi.use_tx_domain_distortion || need_recon_pixel || skip || dist >= 0
   );
   tx_dist += dist;
 
   if luma_only {
-    return tx_dist;
+    return (partition_has_coeff, tx_dist);
   };
 
   let uv_tx_size = bsize.largest_chroma_tx_size(xdec, ydec);
@@ -2008,7 +2016,7 @@ pub fn write_tx_tree<T: Pixel>(
           let mut po = tile_bo.plane_offset(&ts.input.planes[p].cfg);
           po.x += (bx * uv_tx_size.width()) as isize;
           po.y += (by * uv_tx_size.height()) as isize;
-          let (_, dist) = encode_tx_block(
+          let (has_coeff, dist) = encode_tx_block(
             fi,
             ts,
             cw,
@@ -2029,6 +2037,7 @@ pub fn write_tx_tree<T: Pixel>(
             rdo_type,
             need_recon_pixel,
           );
+          partition_has_coeff |= has_coeff;
           assert!(
             !fi.use_tx_domain_distortion
               || need_recon_pixel
@@ -2041,7 +2050,7 @@ pub fn write_tx_tree<T: Pixel>(
     }
   }
 
-  tx_dist
+  (partition_has_coeff, tx_dist)
 }
 
 pub fn encode_block_with_modes<T: Pixel>(
@@ -2055,7 +2064,7 @@ pub fn encode_block_with_modes<T: Pixel>(
   let cfl = mode_decision.pred_cfl_params;
   let ref_frames = mode_decision.ref_frames;
   let mvs = mode_decision.mvs;
-  let skip = mode_decision.skip;
+  let mut skip = mode_decision.skip;
   let mut cdef_coded = cw.bc.cdef_coded;
   let (tx_size, tx_type) = (mode_decision.tx_size, mode_decision.tx_type);
 
@@ -2075,6 +2084,9 @@ pub fn encode_block_with_modes<T: Pixel>(
   let mode_context =
     cw.find_mvrefs(tile_bo, ref_frames, &mut mv_stack, bsize, fi, is_compound);
 
+  if !mode_decision.skip && !mode_decision.has_coeff {
+    skip = true;
+  }
   cdef_coded = encode_block_pre_cdef(
     &fi.sequence,
     ts,
