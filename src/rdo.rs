@@ -94,6 +94,7 @@ pub struct RDOPartitionOutput {
   pub ref_frames: [RefType; 2],
   pub mvs: [MotionVector; 2],
   pub skip: bool,
+  pub has_coeff: bool,
   pub tx_size: TxSize,
   pub tx_type: TxType,
   pub sidx: u8,
@@ -564,6 +565,7 @@ struct EncodingSettings {
   mode_chroma: PredictionMode,
   cfl_params: CFLParams,
   skip: bool,
+  has_coeff: bool,
   rd: f64,
   ref_frames: [RefType; 2],
   mvs: [MotionVector; 2],
@@ -579,6 +581,7 @@ impl Default for EncodingSettings {
       mode_chroma: PredictionMode::DC_PRED,
       cfl_params: CFLParams::default(),
       skip: false,
+      has_coeff: false,
       rd: std::f64::MAX,
       ref_frames: [INTRA_FRAME, NONE_FRAME],
       mvs: [MotionVector::default(); 2],
@@ -655,7 +658,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
           luma_mode_is_intra && tx_size.block_size() != bsize;
 
         encode_block_pre_cdef(&fi.sequence, ts, cw, wr, bsize, tile_bo, skip);
-        let tx_dist = encode_block_post_cdef(
+        let (has_coeff, tx_dist) = encode_block_post_cdef(
           fi,
           ts,
           cw,
@@ -701,6 +704,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
           best.ref_frames = ref_frames;
           best.mvs = mvs;
           best.skip = skip;
+          best.has_coeff = has_coeff;
           best.tx_size = tx_size;
           best.tx_type = tx_type;
           best.sidx = sidx;
@@ -1100,6 +1104,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     let chroma_mode = PredictionMode::UV_CFL_PRED;
     let cw_checkpoint = cw.checkpoint();
     let wr: &mut dyn Writer = &mut WriterCounter::new();
+
     write_tx_blocks(
       fi,
       ts,
@@ -1132,7 +1137,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         tile_bo,
         best.skip,
       );
-      let _ = encode_block_post_cdef(
+      let (has_coeff, _) = encode_block_post_cdef(
         fi,
         ts,
         cw,
@@ -1163,6 +1168,7 @@ pub fn rdo_mode_decision<T: Pixel>(
       if rd < best.rd {
         best.rd = rd;
         best.mode_chroma = chroma_mode;
+        best.has_coeff = has_coeff;
         best.cfl_params = cfl;
       }
 
@@ -1186,6 +1192,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     mvs: best.mvs,
     rd_cost: best.rd,
     skip: best.skip,
+    has_coeff: best.has_coeff,
     tx_size: best.tx_size,
     tx_type: best.tx_type,
     sidx: best.sidx,
@@ -1305,7 +1312,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
 
     let wr: &mut dyn Writer = &mut WriterCounter::new();
     let tell = wr.tell_frac();
-    let tx_dist = if is_inter {
+    let (_, tx_dist) = if is_inter {
       write_tx_tree(
         fi,
         ts,
