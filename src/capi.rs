@@ -145,7 +145,7 @@ pub unsafe extern "C" fn rav1e_config_set_time_base(cfg: *mut Config,
 /// enum types RaChromaSampling and RaChromaSamplePosition respectively.
 /// Valid values for fullrange are 0 and 1.
 ///
-/// Reuturns a negative value on error or 0.
+/// Returns a negative value on error or 0.
 #[no_mangle]
 pub unsafe extern "C" fn rav1e_config_set_pixel_format(cfg: *mut Config,
                                                        bit_depth: u8,
