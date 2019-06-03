@@ -804,7 +804,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     });
   }
 
-  if best.mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
+  if best.mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() && best.tx_size.block_size() == bsize {
     let chroma_mode = PredictionMode::UV_CFL_PRED;
     let cw_checkpoint = cw.checkpoint();
     let wr: &mut dyn Writer = &mut WriterCounter::new();
