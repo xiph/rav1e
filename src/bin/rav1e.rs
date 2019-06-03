@@ -33,7 +33,7 @@ struct Source<D: Decoder> {
  limit: usize,
  count: usize,
  input: D,
- #[cfg(feature = "signal-hook")]
+ #[cfg(all(unix, feature = "signal-hook"))]
  exit_requested: Arc<std::sync::atomic::AtomicBool>,
 }
 
@@ -44,7 +44,7 @@ impl<D: Decoder> Source<D> {
       return;
     }
 
-    #[cfg(feature = "signal-hook")] {
+    #[cfg(all(unix, feature = "signal-hook"))] {
       if self.exit_requested.load(std::sync::atomic::Ordering::SeqCst) {
         ctx.flush();
         return;
@@ -195,7 +195,7 @@ fn main() {
     y4m_dec.read_frame().expect("Skipped more frames than in the input");
   }
 
-  #[cfg(feature = "signal-hook")]
+  #[cfg(all(unix, feature = "signal-hook"))]
   let exit_requested = {
     use std::sync::atomic::*;
     let e  = Arc::new(AtomicBool::from(false));
@@ -219,14 +219,14 @@ fn main() {
     e
   };
 
-  #[cfg(feature = "signal-hook")]
+  #[cfg(all(unix, feature = "signal-hook"))]
   let mut source = Source {
     limit: cli.limit,
     input: y4m_dec,
     count: 0,
     exit_requested
   };
-  #[cfg(not(feature = "signal-hook"))]
+  #[cfg(not(all(unix, feature = "signal-hook")))]
   let mut source = Source { limit: cli.limit, input: y4m_dec, count: 0 };
 
   if video_info.bit_depth == 8 {

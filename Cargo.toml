@@ -13,8 +13,9 @@ autobins = false
 decode_test = ["aom-sys"]
 decode_test_dav1d = ["dav1d-sys"]
 binaries = ["ivf", "y4m", "clap", "scan_fmt", "serde_json"]
-default = ["binaries", "nasm"]
+default = ["binaries", "nasm", "signal_support"]
 nasm = ["nasm-rs"]
+signal_support = ["signal-hook"]
 dump_ivf = ["ivf"]
 quick_test = []
 desync_finder = []
@@ -41,13 +42,15 @@ ivf = { path = "ivf/", optional = true }
 rayon = "1.0"
 bincode = "1.1"
 arrayvec = "0.4.10"
-signal-hook = { version = "0.1.9", optional = true }
 
 [build-dependencies]
 nasm-rs = { version = "0.1", path = "nasm_rs/", optional = true }
 
 [target.'cfg(unix)'.build-dependencies]
 pkg-config = "0.3.12"
+
+[target.'cfg(unix)'.dependencies]
+signal-hook = { version = "0.1.9", optional = true }
 
 [dev-dependencies]
 criterion = "0.2"
