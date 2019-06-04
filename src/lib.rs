@@ -8,6 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 #![allow(safe_extern_statics)]
+#![deny(bare_trait_objects)]
 
 #[macro_use]
 extern crate serde_derive;
