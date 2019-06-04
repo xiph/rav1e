@@ -231,31 +231,6 @@ impl QuantizationContext {
   }
 }
 
-// quantization without using Multiplication Factor
-pub fn quantize_wo_mf(
-  qindex: u8, coeffs: &[i32], qcoeffs: &mut [i32], tx_size: TxSize, bit_depth: usize,
-  dc_delta_q: i8, ac_delta_q: i8
-) {
-  let log_tx_scale = get_log_tx_scale(tx_size);
-
-  let dc_quant = dc_q(qindex, dc_delta_q, bit_depth) as i32;
-  let ac_quant = ac_q(qindex, ac_delta_q, bit_depth) as i32;
-
-  // using 21/64=0.328125 as rounding offset. To be tuned
-  let dc_offset = dc_quant * 21 / 64 as i32;
-  let ac_offset = ac_quant * 21 / 64 as i32;
-
-  qcoeffs[0] = coeffs[0] << log_tx_scale;
-  qcoeffs[0] += qcoeffs[0].signum() * dc_offset;
-  qcoeffs[0] /= dc_quant;
-
-  for (qc, c) in qcoeffs[1..].iter_mut().zip(coeffs[1..].iter()) {
-    *qc = *c << log_tx_scale;
-    *qc += qc.signum() * ac_offset;
-    *qc /= ac_quant;
-  }
-}
-
 pub fn dequantize(
   qindex: u8, coeffs: &[i32], rcoeffs: &mut [i32], tx_size: TxSize,
   bit_depth: usize, dc_delta_q: i8, ac_delta_q: i8
