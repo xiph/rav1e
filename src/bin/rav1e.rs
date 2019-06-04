@@ -7,6 +7,8 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+#![deny(bare_trait_objects)]
+
 #[macro_use]
 extern crate scan_fmt;
 
