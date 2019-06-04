@@ -36,7 +36,7 @@ serde_json = { version = "1.0", optional = true }
 dav1d-sys = { version = "0.2", optional = true }
 aom-sys = { version = "0.1.2", optional = true }
 scan_fmt = { version = "0.2", optional = true }
-ivf = { path = "ivf/", optional = true }
+ivf = { version = "0.1.0", optional = true }
 rayon = "1.0"
 bincode = "1.1"
 arrayvec = "0.4.10"
@@ -79,6 +79,3 @@ lto = true
 [profile.bench]
 codegen-units = 1
 lto = true
-
-[workspace]
-members = ["ivf"]
