@@ -5,6 +5,7 @@ authors = ["Thomas Daede <tdaede@xiph.org>"]
 edition = "2018"
 build = "build.rs"
 include = ["/src/**", "/Cargo.toml", "/build.rs"]
+license = "BSD-2-Clause"
 autobenches = false
 autobins = false
 
