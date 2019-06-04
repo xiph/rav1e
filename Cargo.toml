@@ -44,7 +44,7 @@ arrayvec = "0.4.10"
 signal-hook = { version = "0.1.9", optional = true }
 
 [build-dependencies]
-nasm-rs = { git = "https://github.com/tdaede/nasm-rs", branch="msvc-OUT", optional = true }
+nasm-rs = { version = "0.1", path = "nasm_rs/", optional = true }
 
 [target.'cfg(unix)'.build-dependencies]
 pkg-config = "0.3.12"
@@ -82,4 +82,4 @@ codegen-units = 1
 lto = true
 
 [workspace]
-members = ["ivf"]
+members = ["ivf", "nasm_rs"]
