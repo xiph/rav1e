@@ -109,7 +109,7 @@ fn write_stats_file<T: Pixel>(ctx: &Context<T>, filename: &Path) -> Result<(), i
 
 fn do_encode<T: Pixel, D: Decoder>(
   cfg: Config, verbose: bool, mut progress: ProgressInfo,
-  output: &mut Muxer,
+  output: &mut dyn Muxer,
   source: &mut Source<D>,
   mut y4m_enc: Option<y4m::Encoder<'_, Box<dyn Write>>>
 ) {
