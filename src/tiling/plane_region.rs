@@ -408,6 +408,7 @@ impl<'a, T: Pixel> Iterator for RowsIter<'a, T> {
         self.data = self.data.add(self.stride);
         slice::from_raw_parts(ptr, self.width)
       };
+      self.remaining -= 1;
       Some(row)
     } else {
       None
@@ -431,6 +432,7 @@ impl<'a, T: Pixel> Iterator for RowsIterMut<'a, T> {
         self.data = self.data.add(self.stride);
         slice::from_raw_parts_mut(ptr, self.width)
       };
+      self.remaining -= 1;
       Some(row)
     } else {
       None
