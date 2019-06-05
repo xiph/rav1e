@@ -475,7 +475,7 @@ pub struct ContentLight {
 }
 
 /// Contains all the encoder configuration
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Config {
   pub enc: EncoderConfig,
   /// The number of threads in the threadpool.
