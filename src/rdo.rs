@@ -12,6 +12,7 @@
 
 use crate::api::*;
 use crate::cdef::*;
+use crate::dist::*;
 use crate::lrf::*;
 use crate::context::*;
 use crate::ec::{OD_BITRES, Writer, WriterCounter};

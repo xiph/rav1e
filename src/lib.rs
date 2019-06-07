@@ -18,6 +18,7 @@ extern crate pretty_assertions;
 #[cfg(cargo_c)]
 mod capi;
 
+mod dist;
 mod ec;
 mod partition;
 mod transform;
@@ -187,9 +188,9 @@ pub mod bench {
   pub mod api { pub use crate::api::*; }
   pub mod cdef { pub use crate::cdef::*; }
   pub mod context { pub use crate::context::*; }
+  pub mod dist { pub use crate::dist::*; }
   pub mod ec { pub use crate::ec::*; }
   pub mod encoder { pub use crate::encoder::*; }
-  pub mod me { pub use crate::me::*; }
   pub mod partition { pub use crate::partition::*; }
   pub mod frame { pub use crate::frame::*; }
   pub mod predict { pub use crate::predict::*; }

@@ -8,12 +8,12 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use criterion::*;
+use rav1e::bench::dist;
 use rav1e::bench::partition::*;
 use rav1e::bench::partition::BlockSize::*;
 use rav1e::bench::frame::*;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
-use rav1e::bench::me;
 use rav1e::Pixel;
 
 fn fill_plane<T: Pixel>(ra: &mut ChaChaRng, plane: &mut Plane<T>) {
@@ -48,7 +48,7 @@ fn run_sad_bench<T: Pixel>(b: &mut Bencher, &(bs, bit_depth): &(BlockSize, usize
 
   b.iter(|| {
     let _ =
-      black_box(me::get_sad(&plane_org, &plane_ref, bsw, bsh, bit_depth));
+      black_box(dist::get_sad(&plane_org, &plane_ref, bsw, bsh, bit_depth));
   })
 }
 
