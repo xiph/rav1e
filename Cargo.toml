@@ -45,6 +45,7 @@ arrayvec = "0.4.10"
 
 [build-dependencies]
 nasm-rs = { version = "0.1", path = "nasm_rs/", optional = true }
+vergen = "3"
 
 [target.'cfg(unix)'.build-dependencies]
 pkg-config = "0.3.12"
@@ -58,6 +59,7 @@ pretty_assertions = "0.6"
 interpolate_name = "0.2.2"
 rand = "0.6"
 rand_chacha = "0.1"
+semver = "0.9"
 
 [[bin]]
 name = "rav1e"

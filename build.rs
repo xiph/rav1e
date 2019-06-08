@@ -71,4 +71,6 @@ fn main() {
     if os == "windows" && cfg!(feature = "decode_test") {
         panic!("Unsupported feature on this platform!");
     }
+
+    vergen::generate_cargo_keys(vergen::ConstantsFlags::all()).expect("Unable to generate the cargo keys!");
 }
