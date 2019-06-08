@@ -35,8 +35,13 @@ pub struct CliOptions {
 }
 
 pub fn parse_cli() -> CliOptions {
+  let ver_short = version::short();
+  let ver_long = version::full();
+  let ver = version::full();
   let mut app = App::new("rav1e")
-    .version(env!("CARGO_PKG_VERSION"))
+    .version(ver.as_str())
+    .long_version(ver_long.as_str())
+    .version_short(ver_short.as_str())
     .about("AV1 video encoder")
     .setting(AppSettings::DeriveDisplayOrder)
     .setting(AppSettings::SubcommandsNegateReqs)
