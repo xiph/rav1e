@@ -704,7 +704,7 @@ impl fmt::Display for ProgressInfo {
         self.frames_encoded(),
         total_frames,
         self.encoding_fps(),
-        self.bitrate() as f64 / 1024f64,
+        self.bitrate() as f64 / 1000f64,
         self.estimated_size() as f64 / (1024 * 1024) as f64,
         self.estimated_time()
       )
@@ -714,7 +714,7 @@ impl fmt::Display for ProgressInfo {
         "encoded {} frames, {:.3} fps, {:.2} Kb/s",
         self.frames_encoded(),
         self.encoding_fps(),
-        self.bitrate() as f64 / 1024f64
+        self.bitrate() as f64 / 1000f64
       )
     }
   }
