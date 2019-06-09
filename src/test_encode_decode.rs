@@ -79,16 +79,16 @@ pub(crate) trait TestDecoder<T: Pixel> {
       loop {
         let res = ctx.receive_packet();
         if let Ok(pkt) = res {
-          println!("Encoded packet {}", pkt.number);
+          println!("Encoded packet {}", pkt.input_frameno);
 
           #[cfg(feature="dump_ivf")]
-          ivf::write_ivf_frame(&mut out, pkt.number, &pkt.data);
+          ivf::write_ivf_frame(&mut out, pkt.input_frameno, &pkt.data);
 
           if let Some(pkt_rec) = pkt.rec {
             rec_fifo.push_back(pkt_rec.clone());
           }
           let packet = pkt.data;
-          println!("Decoding frame {}", pkt.number);
+          println!("Decoding frame {}", pkt.input_frameno);
           match self.decode_packet(&packet, &mut rec_fifo, w, h, bit_depth) {
             DecodeResult::Done => { break; }
             DecodeResult::NotDone => {}

@@ -79,7 +79,7 @@ fn process_frame<T: Pixel, D: Decoder>(
   let pkt_wrapped = ctx.receive_packet();
   match pkt_wrapped {
     Ok(pkt) => {
-      output_file.write_frame(pkt.number as u64, pkt.data.as_ref());
+      output_file.write_frame(pkt.input_frameno as u64, pkt.data.as_ref());
       if let (Some(ref mut y4m_enc_uw), Some(ref rec)) = (y4m_enc.as_mut(), &pkt.rec) {
         write_y4m_frame(y4m_enc_uw, rec, y4m_details);
       }

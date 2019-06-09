@@ -610,8 +610,8 @@ impl RCState {
             self.reservoir_frame_delay);
           // TODO: Scale for VFR.
           // If we've been missing our target, add a penalty term.
-          let rate_bias =
-            (self.rate_bias/(ctx.idx as i64 + 100))*(reservoir_frames as i64);
+          let rate_bias = (self.rate_bias/
+           (ctx.output_frameno as i64 + 100))*(reservoir_frames as i64);
           // rate_total is the total bits available over the next
           //  reservoir_frames frames.
           let rate_total = self.reservoir_fullness - self.reservoir_target

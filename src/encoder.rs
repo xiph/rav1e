@@ -424,7 +424,7 @@ pub struct FrameInvariants<T: Pixel> {
   pub w_in_b: usize,
   pub h_in_b: usize,
   pub tiling: TilingInfo,
-  pub number: u64,
+  pub input_frameno: u64,
   pub order_hint: u32,
   pub show_frame: bool,
   pub showable_frame: bool,
@@ -520,7 +520,7 @@ impl<T: Pixel> FrameInvariants<T> {
       w_in_b,
       h_in_b,
       tiling,
-      number: 0,
+      input_frameno: 0,
       order_hint: 0,
       show_frame: true,
       showable_frame: true,
@@ -571,7 +571,8 @@ impl<T: Pixel> FrameInvariants<T> {
     }
   }
 
-  pub fn new_key_frame(previous_fi: &Self, segment_start_frame: u64) -> Self {
+  pub fn new_key_frame(previous_fi: &Self,
+   segment_input_frameno_start: u64) -> Self {
     let mut fi = previous_fi.clone();
     fi.frame_type = FrameType::KEY;
     fi.intra_only = true;
@@ -582,7 +583,7 @@ impl<T: Pixel> FrameInvariants<T> {
     fi.show_existing_frame = false;
     fi.frame_to_show_map_idx = 0;
     fi.primary_ref_frame = PRIMARY_REF_NONE;
-    fi.number = segment_start_frame;
+    fi.input_frameno = segment_input_frameno_start;
     for i in 0..INTER_REFS_PER_FRAME {
       fi.ref_frames[i] = 0;
     }
@@ -592,24 +593,26 @@ impl<T: Pixel> FrameInvariants<T> {
     fi
   }
 
-  fn apply_inter_props_cfg(&mut self, idx_in_segment: u64) {
+  fn apply_inter_props_cfg(&mut self, output_frameno_in_segment: u64) {
     let reorder = !self.config.low_latency;
     let multiref = reorder || self.config.speed_settings.multiref;
 
     let pyramid_depth = if reorder { 2 } else { 0 };
-    let group_src_len = 1 << pyramid_depth;
-    let group_len = group_src_len + if reorder { pyramid_depth } else { 0 };
+    let group_input_len = 1 << pyramid_depth;
+    let group_output_len =
+     group_input_len + if reorder { pyramid_depth } else { 0 };
 
-    let idx_in_group = (idx_in_segment - 1) % group_len;
-    let group_idx = (idx_in_segment - 1) / group_len;
+    let idx_in_group_output =
+     (output_frameno_in_segment - 1) % group_output_len;
+    let group_idx = (output_frameno_in_segment - 1) / group_output_len;
 
     self.inter_cfg = Some(InterPropsConfig {
       reorder,
       multiref,
       pyramid_depth,
-      group_src_len,
-      group_len,
-      idx_in_group,
+      group_input_len,
+      group_output_len,
+      idx_in_group_output,
       group_idx,
     })
   }
@@ -618,32 +621,33 @@ impl<T: Pixel> FrameInvariants<T> {
   /// This interface provides simpler usage, because we always need the produced
   /// FrameInvariants regardless of success or failure.
   pub fn new_inter_frame(
-    previous_fi: &Self, segment_start_frame: u64, idx_in_segment: u64,
-    next_keyframe: u64
+    previous_fi: &Self, segment_input_frameno_start: u64,
+    output_frameno_in_segment: u64, next_keyframe_input_frameno: u64
   ) -> (Self, bool) {
     let mut fi = previous_fi.clone();
     fi.frame_type = FrameType::INTER;
     fi.intra_only = false;
-    fi.apply_inter_props_cfg(idx_in_segment);
+    fi.apply_inter_props_cfg(output_frameno_in_segment);
     fi.tx_mode_select = false;
     let inter_cfg = fi.inter_cfg.unwrap();
 
     fi.order_hint =
-      (inter_cfg.group_src_len * inter_cfg.group_idx +
-       if inter_cfg.reorder && inter_cfg.idx_in_group < inter_cfg.pyramid_depth {
-         inter_cfg.group_src_len >> inter_cfg.idx_in_group
+      (inter_cfg.group_input_len * inter_cfg.group_idx +
+       if inter_cfg.reorder
+        && inter_cfg.idx_in_group_output < inter_cfg.pyramid_depth {
+         inter_cfg.group_input_len >> inter_cfg.idx_in_group_output
        } else {
-         inter_cfg.idx_in_group - inter_cfg.pyramid_depth + 1
+         inter_cfg.idx_in_group_output - inter_cfg.pyramid_depth + 1
        }) as u32;
-    let number = segment_start_frame + fi.order_hint as u64;
-    if number >= next_keyframe {
+    let input_frameno = segment_input_frameno_start + fi.order_hint as u64;
+    if input_frameno >= next_keyframe_input_frameno {
       fi.show_existing_frame = false;
       fi.show_frame = false;
       return (fi, false);
     }
 
     // A group always starts with zero or more no-show frames, followed by
-    // the group_src_len of shown frames. For example, for a pryamid depth of 2,
+    // the group_input_len of shown frames. For example, for a pryamid depth of 2,
     // the group is as follows:
     // |TU         |TU |TU |TU
     // 0   1   2   3   4   5
@@ -652,12 +656,13 @@ impl<T: Pixel> FrameInvariants<T> {
 
     let lvl = if !inter_cfg.reorder {
       0
-    } else if inter_cfg.idx_in_group < inter_cfg.pyramid_depth {
+    } else if inter_cfg.idx_in_group_output < inter_cfg.pyramid_depth {
       // no-show frames are output first (to be shown in future)
-      inter_cfg.idx_in_group
+      inter_cfg.idx_in_group_output
     } else {
       // show frames
-      pos_to_lvl(inter_cfg.idx_in_group - inter_cfg.pyramid_depth + 1, inter_cfg.pyramid_depth)
+      pos_to_lvl(inter_cfg.idx_in_group_output - inter_cfg.pyramid_depth + 1,
+       inter_cfg.pyramid_depth)
     };
 
     // Frames with lvl == 0 are stored in slots 0..4 and frames with higher values
@@ -667,10 +672,12 @@ impl<T: Pixel> FrameInvariants<T> {
     } else {
       3 + lvl as u32
     };
-    fi.show_frame = !inter_cfg.reorder || inter_cfg.idx_in_group >= inter_cfg.pyramid_depth;
-    fi.show_existing_frame = fi.show_frame && inter_cfg.reorder &&
-      (inter_cfg.idx_in_group - inter_cfg.pyramid_depth + 1).count_ones() == 1 &&
-      inter_cfg.idx_in_group != inter_cfg.pyramid_depth;
+    fi.show_frame = !inter_cfg.reorder
+     || inter_cfg.idx_in_group_output >= inter_cfg.pyramid_depth;
+    fi.show_existing_frame = fi.show_frame && inter_cfg.reorder
+     && (inter_cfg.idx_in_group_output
+     - inter_cfg.pyramid_depth + 1).count_ones() == 1
+     && inter_cfg.idx_in_group_output != inter_cfg.pyramid_depth;
     fi.frame_to_show_map_idx = slot_idx;
     fi.refresh_frame_flags = if fi.show_existing_frame {
       0
@@ -680,7 +687,7 @@ impl<T: Pixel> FrameInvariants<T> {
 
     let second_ref_frame = if !inter_cfg.multiref {
       LAST_FRAME // make second_ref_frame match first
-    } else if !inter_cfg.reorder || inter_cfg.idx_in_group == 0 {
+    } else if !inter_cfg.reorder || inter_cfg.idx_in_group_output == 0 {
       LAST2_FRAME
     } else {
       ALTREF_FRAME
@@ -702,7 +709,7 @@ impl<T: Pixel> FrameInvariants<T> {
           (slot_idx + 4 - 1) as u8 % 4
         }
       } else if i == second_ref_frame.to_index() {
-        let oh = fi.order_hint + (inter_cfg.group_src_len as u32 >> lvl);
+        let oh = fi.order_hint + (inter_cfg.group_input_len as u32 >> lvl);
         let lvl2 = pos_to_lvl(oh as u64, inter_cfg.pyramid_depth);
         if lvl2 == 0 {
           ((oh >> inter_cfg.pyramid_depth) % 4) as u8
@@ -716,7 +723,7 @@ impl<T: Pixel> FrameInvariants<T> {
           slot_idx as u8
         }
       } else {
-        let oh = fi.order_hint - (inter_cfg.group_src_len as u32 >> lvl);
+        let oh = fi.order_hint - (inter_cfg.group_input_len as u32 >> lvl);
         let lvl1 = pos_to_lvl(oh as u64, inter_cfg.pyramid_depth);
         if lvl1 == 0 {
           ((oh >> inter_cfg.pyramid_depth) % 4) as u8
@@ -736,13 +743,14 @@ impl<T: Pixel> FrameInvariants<T> {
       };
     }
 
-    fi.reference_mode = if inter_cfg.multiref && inter_cfg.reorder && inter_cfg.idx_in_group != 0 {
+    fi.reference_mode = if inter_cfg.multiref
+     && inter_cfg.reorder && inter_cfg.idx_in_group_output != 0 {
       ReferenceMode::SELECT
     } else {
       ReferenceMode::SINGLE
     };
-    fi.number = number;
-    fi.me_range_scale = (inter_cfg.group_src_len >> lvl) as u8;
+    fi.input_frameno = input_frameno;
+    fi.me_range_scale = (inter_cfg.group_input_len >> lvl) as u8;
     (fi, true)
   }
 
@@ -753,11 +761,11 @@ impl<T: Pixel> FrameInvariants<T> {
       let inter_cfg = self.inter_cfg.unwrap();
       let lvl = if !inter_cfg.reorder {
         0
-      } else if inter_cfg.idx_in_group < inter_cfg.pyramid_depth {
-        inter_cfg.idx_in_group
+      } else if inter_cfg.idx_in_group_output < inter_cfg.pyramid_depth {
+        inter_cfg.idx_in_group_output
       } else {
         pos_to_lvl(
-          inter_cfg.idx_in_group - inter_cfg.pyramid_depth + 1,
+          inter_cfg.idx_in_group_output - inter_cfg.pyramid_depth + 1,
           inter_cfg.pyramid_depth
         )
       };
@@ -799,7 +807,7 @@ impl<T: Pixel> FrameInvariants<T> {
 
 impl<T: Pixel> fmt::Display for FrameInvariants<T> {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "Frame {} - {}", self.number, self.frame_type)
+    write!(f, "Input Frame {} - {}", self.input_frameno, self.frame_type)
   }
 }
 
@@ -808,11 +816,11 @@ pub struct InterPropsConfig {
   pub reorder: bool,
   pub multiref: bool,
   pub pyramid_depth: u64,
-  /// number of source frames in group
-  pub group_src_len: u64,
-  /// number of output frames on group (group_src_len + pyramid_depth)
-  pub group_len: u64,
-  pub idx_in_group: u64,
+  /// number of input frames in group
+  pub group_input_len: u64,
+  /// number of output frames on group (group_input_len + pyramid_depth)
+  pub group_output_len: u64,
+  pub idx_in_group_output: u64,
   /// segment-relative group
   pub group_idx: u64,
 }
