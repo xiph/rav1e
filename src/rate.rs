@@ -16,12 +16,17 @@ use crate::util::clamp;
 use crate::util::Pixel;
 
 // The number of frame sub-types for which we track distinct parameters.
+// This does not include FRAME_SUBTYPE_SEF, because we don't need to do any
+//  parameter tracking for Show Existing Frame frames.
 pub const FRAME_NSUBTYPES: usize = 4;
 
 pub const FRAME_SUBTYPE_I: usize = 0;
 pub const FRAME_SUBTYPE_P: usize = 1;
 pub const FRAME_SUBTYPE_B0: usize = 2;
 pub const FRAME_SUBTYPE_B1: usize = 3;
+pub const FRAME_SUBTYPE_SEF: usize = 4;
+
+const SEF_BITS: i64 = 40;
 
 // The scale of AV1 quantizer tables (relative to the pixel domain), i.e., Q3.
 const QSCALE: i32 = 3;
@@ -365,7 +370,9 @@ impl IIRBessel2 {
 pub struct RCState {
   // The target bit-rate in bits per second.
   target_bitrate: i32,
-  // The number of frames over which to distribute the reservoir usage.
+  // The number of TUs over which to distribute the reservoir usage.
+  // We use TUs because in our leaky bucket model, we only add bits to the
+  //  reservoir on TU boundaries.
   reservoir_frame_delay: i32,
   // The maximum quantizer index to allow (for the luma AC coefficients, other
   //  quantizers will still be adjusted to match).
@@ -412,7 +419,9 @@ pub struct RCState {
   inter_delay: [i32; FRAME_NSUBTYPES - 1],
   inter_delay_target: i32,
   // The total accumulated estimation bias.
-  rate_bias: i64
+  rate_bias: i64,
+  // The number of (non-Show Existing Frame) frames that have been encoded.
+  nencoded_frames: i64
 }
 
 // TODO: Separate qi values for each color plane.
@@ -564,7 +573,8 @@ impl RCState {
       nframes: [0; FRAME_NSUBTYPES],
       inter_delay: [INTER_DELAY_TARGET_MIN; FRAME_NSUBTYPES - 1],
       inter_delay_target: reservoir_frame_delay >> 1,
-      rate_bias: 0
+      rate_bias: 0,
+      nencoded_frames: 0
     }
   }
 
@@ -605,17 +615,18 @@ impl RCState {
           //  (after the current frame), or the end of the buffer window,
           //  whichever comes first.
           // Count the various types and classes of frames.
-          let mut nframes: [i32; FRAME_NSUBTYPES] = [0; FRAME_NSUBTYPES];
-          let reservoir_frames = ctx.guess_frame_subtypes(&mut nframes,
-            self.reservoir_frame_delay);
+          let mut nframes: [i32; FRAME_NSUBTYPES + 1] =
+           [0; FRAME_NSUBTYPES + 1];
+          let (reservoir_frames, reservoir_tus) =
+           ctx.guess_frame_subtypes(&mut nframes, self.reservoir_frame_delay);
           // TODO: Scale for VFR.
           // If we've been missing our target, add a penalty term.
           let rate_bias = (self.rate_bias/
-           (ctx.output_frameno as i64 + 100))*(reservoir_frames as i64);
+           (self.nencoded_frames as i64 + 100))*(reservoir_frames as i64);
           // rate_total is the total bits available over the next
-          //  reservoir_frames frames.
+          //  reservoir_tus TUs.
           let rate_total = self.reservoir_fullness - self.reservoir_target
-            + rate_bias + (reservoir_frames as i64)*self.bits_per_frame;
+            + rate_bias + (reservoir_tus as i64)*self.bits_per_frame;
           // Find a target quantizer that meets our rate target for the
           //  specific mix of frame types we'll have over the next
           //  reservoir_frame frames.
@@ -652,6 +663,8 @@ impl RCState {
                 bexp64(self.log_scale[ftj] + self.log_npixels
                 - ((log_q + 32) >> 6)*(self.exp[ftj] as i64));
             }
+            // The number of bits for Show Existing Frame frames is constant.
+            bits += (nframes[FRAME_SUBTYPE_SEF] as i64)*SEF_BITS;
             let diff = bits - rate_total;
             if diff > 0 {
               log_qlo = log_base_q + 1;
@@ -691,6 +704,10 @@ impl RCState {
               - (self.reservoir_max - margin);
             let log_soft_limit = blog64(soft_limit);
             // If we're predicting we won't use that many bits...
+            // TODO: When using frame re-ordering, we should include the rate
+            //  for all of the frames in the current TU.
+            // When there is more than one frame, there will be no direct
+            //  solution for the required adjustment, however.
             let log_scale_pixels = self.log_scale[fti] + self.log_npixels;
             let exp = self.exp[fti] as i64;
             let mut log_q_exp = ((log_q + 32) >> 6)*exp;
@@ -713,6 +730,10 @@ impl RCState {
             let log_hard_limit =
               blog64(self.reservoir_fullness + (self.bits_per_frame >> 1));
             // If we're predicting we'll use more than this...
+            // TODO: When using frame re-ordering, we should include the rate
+            //  for all of the frames in the current TU.
+            // When there is more than one frame, there will be no direct
+            //  solution for the required adjustment, however.
             let log_scale_pixels = self.log_scale[fti] + self.log_npixels;
             let exp = self.exp[fti] as i64;
             let mut log_q_exp = ((log_q + 32) >> 6)*exp;
@@ -730,8 +751,8 @@ impl RCState {
   }
 
   pub fn update_state(
-    &mut self, bits: i64, fti: usize, log_target_q: i64, trial: bool,
-    droppable: bool
+    &mut self, bits: i64, fti: usize, show_frame: bool, log_target_q: i64,
+    trial: bool, droppable: bool
   ) -> bool {
     if trial {
       assert!(self.needs_trial_encode(fti));
@@ -740,81 +761,98 @@ impl RCState {
     let mut dropped = false;
     // Update rate control only if rate control is active.
     if self.target_bitrate > 0 {
-      let log_q_exp = ((log_target_q + 32) >> 6)*(self.exp[fti] as i64);
-      let prev_log_scale = self.log_scale[fti];
+      let estimated_bits;
       let mut bits = bits;
-      if bits <= 0 {
-        // We didn't code any blocks in this frame.
-        bits = 0;
-        dropped = true;
-        // TODO: Adjust VFR rate based on drop count.
-      } else {
-        // Compute the estimated scale factor for this frame type.
-        let log_bits = blog64(bits);
-        let log_scale = (log_bits - self.log_npixels + log_q_exp).min(q57(16));
-        let log_scale_q24 = q57_to_q24(log_scale);
-        // If this is the first example of the given frame type we've seen, we
-        //  immediately replace the default scale factor guess with the
-        //  estimate we just computed using the first frame.
-        if trial || self.nframes[fti] <= 0 {
-          let f = &mut self.scalefilter[fti];
-          let x = log_scale_q24;
-          f.x[0] = x;
-          f.x[1] = x;
-          f.y[0] = x;
-          f.y[1] = x;
-          self.log_scale[fti] = log_scale;
-          // TODO: Duplicate regular P frame state for first golden P frame.
-        } else {
-          // Lengthen the time constant for the inter filters as we collect
-          //  more frame statistics, until we reach our target.
-          if fti > 0
-            && self.inter_delay[fti - 1] < self.inter_delay_target
-            && self.nframes[fti] >= self.inter_delay[fti - 1]
-          {
-            self.inter_delay[fti - 1] += 1;
-            self.scalefilter[fti].reinit(self.inter_delay[fti - 1]);
-          }
-          // Update the low-pass scale filter for this frame type regardless of
-          //  whether or not we will ultimately drop this frame.
-          self.log_scale[fti] =
-            q24_to_q57(self.scalefilter[fti].update(log_scale_q24));
-        }
-        // If this frame busts our budget, it must be dropped.
-        if droppable
-          && self.drop_frames
-          && self.reservoir_fullness + self.bits_per_frame < bits
-        {
-          // TODO: Adjust VFR rate based on drop count.
+      if fti == FRAME_SUBTYPE_SEF {
+        debug_assert!(bits == SEF_BITS);
+        debug_assert!(show_frame);
+        // Please don't make trial encodes of a SEF.
+        debug_assert!(!trial);
+        estimated_bits = SEF_BITS;
+      }
+      else {
+        let log_q_exp = ((log_target_q + 32) >> 6)*(self.exp[fti] as i64);
+        let prev_log_scale = self.log_scale[fti];
+        if bits <= 0 {
+          // We didn't code any blocks in this frame.
           bits = 0;
           dropped = true;
+          // TODO: Adjust VFR rate based on drop count.
         } else {
-          // TODO: Update a low-pass filter to estimate the "real" frame rate
-          //  taking timestamps and drops into account.
-          // This is only done if the frame is coded, as it needs the final
-          //  count of dropped frames.
+          // Compute the estimated scale factor for this frame type.
+          let log_bits = blog64(bits);
+          let log_scale =
+           (log_bits - self.log_npixels + log_q_exp).min(q57(16));
+          let log_scale_q24 = q57_to_q24(log_scale);
+          // If this is the first example of the given frame type we've seen,
+          //  we immediately replace the default scale factor guess with the
+          //  estimate we just computed using the first frame.
+          if trial || self.nframes[fti] <= 0 {
+            let f = &mut self.scalefilter[fti];
+            let x = log_scale_q24;
+            f.x[0] = x;
+            f.x[1] = x;
+            f.y[0] = x;
+            f.y[1] = x;
+            self.log_scale[fti] = log_scale;
+            // TODO: Duplicate regular P frame state for first golden P frame.
+          } else {
+            // Lengthen the time constant for the inter filters as we collect
+            //  more frame statistics, until we reach our target.
+            if fti > 0
+              && self.inter_delay[fti - 1] < self.inter_delay_target
+              && self.nframes[fti] >= self.inter_delay[fti - 1]
+            {
+              self.inter_delay[fti - 1] += 1;
+              self.scalefilter[fti].reinit(self.inter_delay[fti - 1]);
+            }
+            // Update the low-pass scale filter for this frame type regardless
+            //  of whether or not we will ultimately drop this frame.
+            self.log_scale[fti] =
+              q24_to_q57(self.scalefilter[fti].update(log_scale_q24));
+          }
+          // If this frame busts our budget, it must be dropped.
+          if droppable
+            && self.drop_frames
+            && self.reservoir_fullness + self.bits_per_frame < bits
+          {
+            // TODO: Adjust VFR rate based on drop count.
+            bits = 0;
+            dropped = true;
+          } else {
+            // TODO: Update a low-pass filter to estimate the "real" frame rate
+            //  taking timestamps and drops into account.
+            // This is only done if the frame is coded, as it needs the final
+            //  count of dropped frames.
+          }
+          // Increment the frame count for filter adaptation purposes.
+          if !trial && self.nframes[fti] < ::std::i32::MAX {
+            self.nframes[fti] += 1;
+          }
         }
-        // Increment the frame count for filter adaptation purposes.
-        if !trial && self.nframes[fti] < ::std::i32::MAX {
-          self.nframes[fti] += 1;
+        estimated_bits = bexp64(prev_log_scale + self.log_npixels - log_q_exp);
+        if !trial {
+          self.nencoded_frames += 1;
         }
       }
       if !trial {
-        self.reservoir_fullness += self.bits_per_frame - bits;
+        self.reservoir_fullness -= bits;
+        if show_frame {
+          self.reservoir_fullness += self.bits_per_frame;
+        }
         // If we're too quick filling the buffer and overflow is capped, that
         //  rate is lost forever.
         if self.cap_overflow {
           self.reservoir_fullness =
             self.reservoir_fullness.min(self.reservoir_max);
         }
-        // If we're too quick draining the buffer and underflow is capped, don't
-        //  try to make up that rate later.
+        // If we're too quick draining the buffer and underflow is capped,
+        //  don't try to make up that rate later.
         if self.cap_underflow {
           self.reservoir_fullness = self.reservoir_fullness.max(0);
         }
         // Adjust the bias for the real bits we've used.
-        self.rate_bias +=
-          bexp64(prev_log_scale + self.log_npixels - log_q_exp) - bits;
+        self.rate_bias += estimated_bits - bits;
       }
     }
     dropped

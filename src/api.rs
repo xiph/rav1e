@@ -19,6 +19,7 @@ use crate::rate::RCState;
 use crate::rate::FRAME_NSUBTYPES;
 use crate::rate::FRAME_SUBTYPE_I;
 use crate::rate::FRAME_SUBTYPE_P;
+use crate::rate::FRAME_SUBTYPE_SEF;
 use crate::scenechange::SceneChangeDetector;
 use crate::util::Pixel;
 
@@ -74,7 +75,8 @@ pub struct EncoderConfig {
   pub min_key_frame_interval: u64,
   /// The *maximum* interval between two keyframes
   pub max_key_frame_interval: u64,
-  /// The number of frames over which to distribute the reservoir usage.
+  /// The number of temporal units over which to distribute the reservoir
+  ///  usage.
   pub reservoir_frame_delay: Option<i32>,
   pub low_latency: bool,
   pub quantizer: usize,
@@ -638,7 +640,7 @@ pub struct ContextInner<T: Pixel> {
   frame_count: u64,
   limit: u64,
   inter_cfg: InterConfig,
-  pub(crate) output_frameno: u64,
+  output_frameno: u64,
   frames_processed: u64,
   /// Maps *input_frameno* to frames
   frame_q: BTreeMap<u64, Option<Arc<Frame<T>>>>, //    packet_q: VecDeque<Packet>
@@ -856,15 +858,18 @@ impl<T: Pixel> ContextInner<T> {
     self.limit == 0 || frame_count < self.limit
   }
 
-  fn next_keyframe_input_frameno(&self) -> u64 {
+  fn next_keyframe_input_frameno(&self,
+   segment_input_frameno_start: u64, ignore_limit: bool) -> u64 {
     let next_detected = self.frame_invariants.values()
       .find(|fi| {
         fi.frame_type == FrameType::KEY
-         && fi.input_frameno > self.segment_input_frameno_start
+         && fi.input_frameno > segment_input_frameno_start
       }).map(|fi| fi.input_frameno);
-    let next_limit =
-     self.segment_input_frameno_start + self.config.max_key_frame_interval;
-    let next_limit = if self.limit != 0 { next_limit.min(self.limit) } else { next_limit };
+    let mut next_limit =
+     segment_input_frameno_start + self.config.max_key_frame_interval;
+    if !ignore_limit && self.limit != 0 {
+      next_limit = next_limit.min(self.limit);
+    }
     if next_detected.is_none() {
       return next_limit;
     }
@@ -903,7 +908,8 @@ impl<T: Pixel> ContextInner<T> {
     let output_frameno_in_segment =
      output_frameno - self.segment_output_frameno_start;
     if output_frameno_in_segment > 0 {
-      let next_keyframe_input_frameno = self.next_keyframe_input_frameno();
+      let next_keyframe_input_frameno = self.next_keyframe_input_frameno(
+       self.segment_input_frameno_start, false);
       let (fi_temp, end_of_subgop) = FrameInvariants::new_inter_frame(
         &fi,
         &self.inter_cfg,
@@ -947,7 +953,8 @@ impl<T: Pixel> ContextInner<T> {
       fi = FrameInvariants::new_key_frame(&fi,
        self.segment_input_frameno_start);
     } else {
-      let next_keyframe_input_frameno = self.next_keyframe_input_frameno();
+      let next_keyframe_input_frameno = self.next_keyframe_input_frameno(
+       self.segment_input_frameno_start, false);
       let (fi_temp, end_of_subgop) = FrameInvariants::new_inter_frame(
         &fi,
         &self.inter_cfg,
@@ -988,11 +995,17 @@ impl<T: Pixel> ContextInner<T> {
       if fi.show_existing_frame {
         let mut fs = FrameState::new(fi);
 
-        // TODO: Record the bits spent here against the original frame for rate
-        //  control purposes, or add a new frame subtype?
         let sef_data = encode_show_existing_frame(fi, &mut fs);
+        let bits = (sef_data.len()*8) as i64;
         self.packet_data.extend(sef_data);
-
+        self.rc_state.update_state(
+          bits,
+          FRAME_SUBTYPE_SEF,
+          fi.show_frame,
+          0,
+          false,
+          false
+        );
         let rec = if fi.show_frame { Some(fs.rec) } else { None };
         let fi = fi.clone();
         self.output_frameno += 1;
@@ -1011,6 +1024,7 @@ impl<T: Pixel> ContextInner<T> {
             self.rc_state.update_state(
               (data.len() * 8) as i64,
               fti,
+              fi.show_frame,
               qps.log_target_q,
               true,
               false
@@ -1030,6 +1044,7 @@ impl<T: Pixel> ContextInner<T> {
           self.rc_state.update_state(
             (data.len() * 8) as i64,
             fti,
+            fi.show_frame,
             qps.log_target_q,
             false,
             false
@@ -1153,80 +1168,122 @@ impl<T: Pixel> ContextInner<T> {
     FrameType::INTER
   }
 
-  // Count the number of frames of each subtype in the next
-  //  reservoir_frame_delay frames.
-  // Returns the number of frames until the last keyframe in the next
-  //  reservoir_frame_delay frames, or the end of the interval, whichever
-  //  comes first.
-  // TODO: This currently hopelessly conflates input and output frame numbers.
-  // It needs to be completely rewritten.
+  // Count the number of output frames of each subtype in the next
+  //  reservoir_frame_delay temporal units (needed for rate control).
+  // Returns the number of output frames (excluding SEF frames) and output TUs
+  //  until the last keyframe in the next reservoir_frame_delay temporal units,
+  //  or the end of the interval, whichever comes first.
+  // The former is needed because it indicates the number of rate estimates we
+  //  will make.
+  // The latter is needed because it indicates the number of times new bitrate
+  //  is added to the buffer.
   pub(crate) fn guess_frame_subtypes(
-    &self, nframes: &mut [i32; FRAME_NSUBTYPES], reservoir_frame_delay: i32
-  ) -> i32 {
-    // TODO: Ideally this logic should be centralized, but the actual code used
-    //  to determine a frame's subtype is spread over many places and
-    //  intertwined with mutable state changes that occur when the frame is
-    //  actually encoded.
-    // So for now we just duplicate it here in stateless fashion.
-    for fti in 0..FRAME_NSUBTYPES {
+    &self, nframes: &mut [i32; FRAME_NSUBTYPES + 1], reservoir_frame_delay: i32
+  ) -> (i32, i32) {
+    for fti in 0..=FRAME_NSUBTYPES {
       nframes[fti] = 0;
     }
-    let mut prev_keyframe = self.segment_output_frameno_start;
-    let mut acc: [i32; FRAME_NSUBTYPES] = [0; FRAME_NSUBTYPES];
+    let mut prev_keyframe_input_frameno = self.segment_input_frameno_start;
+    let mut prev_keyframe_output_frameno = self.segment_output_frameno_start;
+    let mut prev_keyframe_ntus = 0;
+    // Does not include SEF frames.
+    let mut prev_keyframe_nframes = 0;
+    let mut acc: [i32; FRAME_NSUBTYPES + 1] = [0; FRAME_NSUBTYPES + 1];
     // Updates the frame counts with the accumulated values when we hit a
     //  keyframe.
     fn collect_counts(
-      nframes: &mut [i32; FRAME_NSUBTYPES], acc: &mut [i32; FRAME_NSUBTYPES]
+      nframes: &mut [i32; FRAME_NSUBTYPES + 1],
+      acc: &mut [i32; FRAME_NSUBTYPES + 1]
     ) {
-      for fti in 0..FRAME_NSUBTYPES {
+      for fti in 0..=FRAME_NSUBTYPES {
         nframes[fti] += acc[fti];
         acc[fti] = 0;
       }
       acc[FRAME_SUBTYPE_I] += 1;
     }
-    for output_frameno in self.output_frameno..(self.output_frameno
-     + reservoir_frame_delay as u64) {
-      if let Some(fd) = self.frame_invariants.get(&output_frameno) {
-        if fd.frame_type == FrameType::KEY {
+    let mut output_frameno = self.output_frameno;
+    let mut ntus = 0;
+    // Does not include SEF frames.
+    let mut nframes_total = 0;
+    while ntus < reservoir_frame_delay {
+      if let Some(fi) = self.frame_invariants.get(&output_frameno) {
+        if fi.frame_type == FrameType::KEY {
           collect_counts(nframes, &mut acc);
-          prev_keyframe = output_frameno;
+          prev_keyframe_input_frameno = fi.input_frameno;
+          prev_keyframe_output_frameno = output_frameno;
+          prev_keyframe_ntus = ntus;
+          prev_keyframe_nframes = nframes_total;
+          // We do not currently use forward keyframes, so they should always
+          //  end the current TU.
+          debug_assert!(fi.show_frame);
+          output_frameno += 1;
+          ntus += 1;
+          nframes_total += 1;
           continue;
         }
-      } else if output_frameno == 0
-        || output_frameno - prev_keyframe >= self.config.max_key_frame_interval
-      {
-        collect_counts(nframes, &mut acc);
-        prev_keyframe = output_frameno;
+      }
+      let output_frameno_in_segment =
+       output_frameno - prev_keyframe_output_frameno;
+      let idx_in_group_output =
+       self.inter_cfg.get_idx_in_group_output(output_frameno_in_segment);
+      let input_frameno = prev_keyframe_input_frameno
+       + self.inter_cfg.get_order_hint(output_frameno_in_segment,
+       idx_in_group_output) as u64;
+      // For rate control purposes, ignore any limit on frame count that has
+      //  been set.
+      // We pretend that we will keep encoding frames forever to prevent the
+      //  control loop from driving us into the rails as we come up against a
+      //  hard stop (with no more chance to correct outstanding errors).
+      let next_keyframe_input_frameno =
+       self.next_keyframe_input_frameno(prev_keyframe_input_frameno, true);
+      // If we are re-ordering, we may skip some output frames in the final
+      //  re-order group of the GOP.
+      if input_frameno >= next_keyframe_input_frameno {
+        // If we have encoded enough whole groups to reach the next keyframe,
+        //  then start the next keyframe segment.
+        if 1 + (output_frameno - prev_keyframe_output_frameno)/
+         self.inter_cfg.group_output_len*self.inter_cfg.group_input_len >=
+          next_keyframe_input_frameno - prev_keyframe_input_frameno {
+          collect_counts(nframes, &mut acc);
+          prev_keyframe_input_frameno = input_frameno;
+          prev_keyframe_output_frameno = output_frameno;
+          prev_keyframe_ntus = ntus;
+          prev_keyframe_nframes = nframes_total;
+          // We do not currently use forward keyframes, so they should always
+          //  end the current TU.
+          debug_assert!(self.inter_cfg.get_show_frame(idx_in_group_output));
+          output_frameno += 1;
+          ntus += 1;
+        }
+        output_frameno += 1;
         continue;
       }
-      // TODO: Implement golden P-frames.
-      let mut fti = FRAME_SUBTYPE_P;
-      if !self.config.low_latency {
-        let pyramid_depth = 2;
-        let group_input_len = 1 << pyramid_depth;
-        let group_output_len = group_input_len + pyramid_depth;
-        let idx_in_group_output =
-         (output_frameno - prev_keyframe - 1) % group_output_len;
-        let lvl = if idx_in_group_output < pyramid_depth {
-          idx_in_group_output
-        } else {
-          pos_to_lvl(idx_in_group_output - pyramid_depth + 1, pyramid_depth)
-        };
-        fti += lvl as usize;
+      if self.inter_cfg.get_show_existing_frame(idx_in_group_output) {
+        acc[FRAME_SUBTYPE_SEF] += 1;
       }
-      acc[fti] += 1;
+      else {
+        // TODO: Implement golden P-frames.
+        let fti = FRAME_SUBTYPE_P
+         + (self.inter_cfg.get_level(idx_in_group_output) as usize);
+        acc[fti] += 1;
+        nframes_total += 1;
+      }
+      if self.inter_cfg.get_show_frame(idx_in_group_output) {
+        ntus += 1;
+      }
+      output_frameno += 1;
     }
-    if prev_keyframe <= self.output_frameno {
+    if prev_keyframe_output_frameno <= self.output_frameno {
       // If there were no keyframes at all, or only the first frame was a
       //  keyframe, the accumulators never flushed and still contain counts for
       //  the entire buffer.
       // In both cases, we return these counts.
       collect_counts(nframes, &mut acc);
-      reservoir_frame_delay
+      (nframes_total, ntus)
     } else {
       // Otherwise, we discard what remains in the accumulators as they contain
       //  the counts from and past the last keyframe.
-      (prev_keyframe - self.output_frameno) as i32
+      (prev_keyframe_nframes, prev_keyframe_ntus)
     }
   }
 }
