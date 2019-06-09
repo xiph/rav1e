@@ -514,9 +514,130 @@ impl Config {
   }
 }
 
+// The set of options that controls frame re-ordering and reference picture
+//  selection.
+// The options stored here are invariant over the whole encode.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct InterConfig {
+  // Whether frame re-ordering is enabled.
+  reorder: bool,
+  // Whether P-frames can use multiple references.
+  pub(crate) multiref: bool,
+  // The depth of the re-ordering pyramid.
+  // The current code cannot support values larger than 2.
+  pub(crate) pyramid_depth: u64,
+  // Number of input frames in group.
+  pub(crate) group_input_len: u64,
+  // Number of output frames in group.
+  // This includes both hidden frames and "show existing frame" frames.
+  group_output_len: u64,
+}
+
+impl InterConfig {
+  fn new(enc_config: &EncoderConfig) -> InterConfig {
+    let reorder = !enc_config.low_latency;
+    // A group always starts with (group_output_len - group_input_len) hidden
+    //  frames, followed by group_input_len shown frames.
+    // The shown frames iterate over the input frames in order, with frames
+    //  already encoded as hidden frames now displayed with Show Existing
+    //  Frame.
+    // For example, for a pryamid depth of 2, the group is as follows:
+    //                      |TU         |TU |TU |TU
+    // idx_in_group_output:   0   1   2   3   4   5
+    // input_frameno:         4   2   1  SEF  3  SEF
+    // output_frameno:        1   2   3   4   5   6
+    // level:                 0   1   2   1   2   0
+    //                        ^^^^^   ^^^^^^^^^^^^^
+    //                        hidden      shown
+    // TODO: This only works for pyramid_depth <= 2 --- after that we need
+    //  more hidden frames in the middle of the group.
+    let pyramid_depth = if reorder { 2 } else { 0 };
+    let group_input_len = 1 << pyramid_depth;
+    let group_output_len = group_input_len + pyramid_depth;
+    InterConfig {
+      reorder,
+      multiref: reorder || enc_config.speed_settings.multiref,
+      pyramid_depth,
+      group_input_len,
+      group_output_len
+    }
+  }
+
+  // Get the index of an output frame in its re-ordering group given the output
+  //  frame number of the frame in the current keyframe segment.
+  // When re-ordering is disabled, this always returns 0.
+  pub(crate) fn get_idx_in_group_output(&self,
+   output_frameno_in_segment: u64) -> u64 {
+    (output_frameno_in_segment - 1) % self.group_output_len
+  }
+
+  // Get the order-hint of an output frame given the output frame number of the
+  //  frame in the current keyframe segment and the index of that output frame
+  //  in its re-ordering gorup.
+  pub(crate) fn get_order_hint(&self, output_frameno_in_segment: u64,
+   idx_in_group_output: u64) -> u32 {
+    // Which P-frame group in the current segment is this output frame in?
+    // Subtract 1 because the first frame in the segment is always a keyframe.
+    let group_idx = (output_frameno_in_segment - 1) / self.group_output_len;
+    // Get the offset to the corresponding input frame.
+    // TODO: This only works with pyramid_depth <= 2.
+    let offset = if idx_in_group_output < self.pyramid_depth {
+      self.group_input_len >> idx_in_group_output
+    }
+    else {
+      idx_in_group_output - self.pyramid_depth + 1
+    };
+    // Construct the final order hint relative to the start of the group.
+    (self.group_input_len*group_idx + offset) as u32
+  }
+
+  // Get the level of the current frame in the pyramid.
+  pub(crate) fn get_level(&self, idx_in_group_output: u64) -> u64 {
+    if !self.reorder {
+      0
+    }
+    else if idx_in_group_output < self.pyramid_depth {
+      // Hidden frames are output first (to be shown in the future).
+      idx_in_group_output
+    }
+    else {
+      // Shown frames
+      // TODO: This only works with pyramid_depth <= 2.
+      pos_to_lvl(idx_in_group_output - self.pyramid_depth + 1,
+       self.pyramid_depth)
+    }
+  }
+
+  pub(crate) fn get_slot_idx(&self, level: u64, order_hint: u32) -> u32 {
+    // Frames with level == 0 are stored in slots 0..4, and frames with higher
+    //  values of level in slots 4..8
+    if level == 0 {
+      (order_hint >> self.pyramid_depth) & 3
+    }
+    else {
+      // This only works with pyramid_depth <= 4.
+      3 + level as u32
+    }
+  }
+
+  pub(crate) fn get_show_frame(&self, idx_in_group_output: u64) -> bool {
+    idx_in_group_output >= self.pyramid_depth
+  }
+
+  pub(crate) fn get_show_existing_frame(&self,
+   idx_in_group_output: u64) -> bool {
+    // The self.reorder test here is redundant, but short-circuits the rest,
+    //  avoiding a bunch of work when it's false.
+    self.reorder && self.get_show_frame(idx_in_group_output)
+     && (idx_in_group_output - self.pyramid_depth + 1).count_ones() == 1
+     && idx_in_group_output != self.pyramid_depth
+  }
+}
+
 pub struct ContextInner<T: Pixel> {
   frame_count: u64,
   limit: u64,
+  inter_cfg: InterConfig,
   pub(crate) output_frameno: u64,
   frames_processed: u64,
   /// Maps *input_frameno* to frames
@@ -674,6 +795,7 @@ impl<T: Pixel> ContextInner<T> {
     ContextInner {
         frame_count: 0,
         limit: 0,
+        inter_cfg: InterConfig::new(enc),
         output_frameno: 0,
         frames_processed: 0,
         frame_q: BTreeMap::new(),
@@ -784,15 +906,16 @@ impl<T: Pixel> ContextInner<T> {
       let next_keyframe_input_frameno = self.next_keyframe_input_frameno();
       let (fi_temp, end_of_subgop) = FrameInvariants::new_inter_frame(
         &fi,
+        &self.inter_cfg,
         self.segment_input_frameno_start,
         output_frameno_in_segment,
         next_keyframe_input_frameno
       );
       fi = fi_temp;
       if !end_of_subgop {
-        if !fi.inter_cfg.unwrap().reorder
+        if !self.inter_cfg.reorder
           || ((output_frameno_in_segment - 1) %
-          fi.inter_cfg.unwrap().group_output_len == 0
+          self.inter_cfg.group_output_len == 0
           && fi.input_frameno == (next_keyframe_input_frameno - 1))
         {
           self.segment_output_frameno_start = output_frameno;
@@ -827,6 +950,7 @@ impl<T: Pixel> ContextInner<T> {
       let next_keyframe_input_frameno = self.next_keyframe_input_frameno();
       let (fi_temp, end_of_subgop) = FrameInvariants::new_inter_frame(
         &fi,
+        &self.inter_cfg,
         self.segment_input_frameno_start,
         output_frameno_in_segment,
         next_keyframe_input_frameno
