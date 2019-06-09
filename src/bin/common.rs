@@ -533,7 +533,7 @@ fn apply_speed_test_cfg(cfg: &mut EncoderConfig, setting: &str) {
 pub struct FrameSummary {
   // Frame size in bytes
   pub size: usize,
-  pub number: u64,
+  pub input_frameno: u64,
   pub frame_type: FrameType,
   // PSNR for Y, U, and V planes
   pub psnr: Option<(f64, f64, f64)>,
@@ -543,7 +543,7 @@ impl<T: Pixel> From<Packet<T>> for FrameSummary {
   fn from(packet: Packet<T>) -> Self {
     Self {
       size: packet.data.len(),
-      number: packet.number,
+      input_frameno: packet.input_frameno,
       frame_type: packet.frame_type,
       psnr: packet.psnr,
     }
@@ -554,8 +554,8 @@ impl fmt::Display for FrameSummary {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(
       f,
-      "Frame {} - {} - {} bytes{}",
-      self.number,
+      "Input Frame {} - {} - {} bytes{}",
+      self.input_frameno,
       self.frame_type,
       self.size,
       if let Some(psnr) = self.psnr {

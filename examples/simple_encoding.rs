@@ -37,7 +37,7 @@ fn main() {
   while i < limit + 5 {
     match ctx.receive_packet() {
       Ok(pkt) => {
-        println!("Packet {}", pkt.number);
+        println!("Packet {}", pkt.input_frameno);
         i += 1;
       }
       Err(e) => match e {
