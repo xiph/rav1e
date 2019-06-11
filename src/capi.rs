@@ -101,7 +101,7 @@ pub struct Packet {
     /// Encoded data buffer size
     pub len: size_t,
     /// Frame sequence number
-    pub number: u64,
+    pub input_frameno: u64,
     /// Frame type
     pub frame_type: FrameType,
 }
@@ -427,13 +427,13 @@ pub unsafe extern "C" fn rav1e_receive_packet(
         .ctx
         .receive_packet()
         .map(|p| {
-            let rav1e::Packet { data, number, frame_type, .. } = p;
+            let rav1e::Packet { data, input_frameno, frame_type, .. } = p;
             let len  = data.len();
             let data = Box::into_raw(data.into_boxed_slice()) as *const u8;
             let packet = Packet {
                 data,
                 len,
-                number,
+                input_frameno,
                 frame_type,
             };
             *pkt = Box::into_raw(Box::new(packet));
