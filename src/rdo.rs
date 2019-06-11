@@ -40,6 +40,7 @@ use std::cmp;
 use std::vec::Vec;
 use crate::partition::PartitionType::*;
 use arrayvec::*;
+use serde_derive::{Serialize, Deserialize};
 
 #[derive(Copy,Clone,PartialEq)]
 pub enum RDOType {
