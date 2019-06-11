@@ -60,6 +60,7 @@ pub use crate::header::*;
 pub use crate::util::{CastFromPrimitive, Pixel};
 
 pub use crate::frame::Frame;
+pub use crate::partition::BlockSize;
 
 /// Version information
 ///
