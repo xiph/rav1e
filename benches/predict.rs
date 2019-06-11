@@ -8,7 +8,8 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use criterion::*;
-use rand::{ChaChaRng, Rng, RngCore, SeedableRng};
+use rand::{Rng, RngCore, SeedableRng};
+use rand_chacha::ChaChaRng;
 use rav1e::partition::BlockSize;
 use rav1e::predict::{Block4x4, Intra};
 use crate::plane::*;

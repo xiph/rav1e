@@ -8,7 +8,8 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use criterion::*;
-use rand::{ChaChaRng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng};
+use rand_chacha::ChaChaRng;
 use rav1e::transform;
 
 fn bench_idct4(b: &mut Bencher, bit_depth: &usize) {

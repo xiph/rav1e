@@ -11,7 +11,8 @@ use criterion::*;
 use crate::partition::*;
 use crate::partition::BlockSize::*;
 use crate::plane::*;
-use rand::{ChaChaRng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng};
+use rand_chacha::ChaChaRng;
 use rav1e::me;
 use rav1e::Pixel;
 
