@@ -379,6 +379,8 @@ pub struct RCState {
   // The maximum quantizer index to allow (for the luma AC coefficients, other
   //  quantizers will still be adjusted to match).
   maybe_ac_qi_max: Option<u8>,
+  // The minimum quantizer index to allow (for the luma AC coefficients).
+  ac_qi_min: u8,
   // Will we drop frames to meet bitrate requirements?
   drop_frames: bool,
   // Do we respect the maximum reservoir fullness?
@@ -489,7 +491,8 @@ impl RCState {
   pub fn new(
     frame_width: i32, frame_height: i32, framerate_num: i64,
     framerate_den: i64, target_bitrate: i32, maybe_ac_qi_max: Option<u8>,
-    max_key_frame_interval: i32, maybe_reservoir_frame_delay: Option<i32>
+    ac_qi_min: u8, max_key_frame_interval: i32,
+    maybe_reservoir_frame_delay: Option<i32>
   ) -> RCState {
     // The default buffer size is set equal to 1.5x the keyframe interval, or 240
     //  frames; whichsever is smaller.
@@ -553,6 +556,7 @@ impl RCState {
       target_bitrate,
       reservoir_frame_delay,
       maybe_ac_qi_max,
+      ac_qi_min,
       drop_frames: false,
       cap_overflow: true,
       cap_underflow: false,
@@ -643,7 +647,7 @@ impl RCState {
           // There's no easy closed form solution, so we bisection searh for it.
           let bit_depth = ctx.config.bit_depth;
           // TODO: Proper handling of lossless.
-          let mut log_qlo = blog64(dc_q(0, 0, bit_depth) as i64)
+          let mut log_qlo = blog64(ac_q(self.ac_qi_min, 0, bit_depth) as i64)
             - q57(QSCALE + bit_depth as i32 - 8);
           // The AC quantizer tables map to values larger than the DC quantizer
           //  tables, so we use that as the upper bound to make sure we can use

@@ -110,6 +110,12 @@ pub fn parse_cli() -> CliOptions {
         .takes_value(true)
     )
     .arg(
+      Arg::with_name("MINQP")
+        .help("Minimum quantizer (0-255) to use in bitrate mode [default: 0]")
+        .long("min_quantizer")
+        .takes_value(true)
+    )
+    .arg(
       Arg::with_name("BITRATE")
         .help("Bitrate (kbps)")
         .short("b")
@@ -445,6 +451,7 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
   };
 
   cfg.quantizer = quantizer;
+  cfg.min_quantizer = matches.value_of("MINQP").unwrap().parse().unwrap_or(0);
   cfg.bitrate = bitrate.checked_mul(1000).expect("Bitrate too high");
   cfg.reservoir_frame_delay = matches.value_of("RESERVOIR_FRAME_DELAY").map(|reservior_frame_delay| reservior_frame_delay.parse().unwrap());
   cfg.show_psnr = matches.is_present("PSNR");
