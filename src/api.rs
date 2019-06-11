@@ -543,7 +543,7 @@ impl InterConfig {
     // The shown frames iterate over the input frames in order, with frames
     //  already encoded as hidden frames now displayed with Show Existing
     //  Frame.
-    // For example, for a pryamid depth of 2, the group is as follows:
+    // For example, for a pyramid depth of 2, the group is as follows:
     //                      |TU         |TU |TU |TU
     // idx_in_group_output:   0   1   2   3   4   5
     // input_frameno:         4   2   1  SEF  3  SEF
