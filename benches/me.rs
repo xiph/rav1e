@@ -8,12 +8,12 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use criterion::*;
-use crate::partition::*;
-use crate::partition::BlockSize::*;
-use crate::plane::*;
+use rav1e::bench::partition::*;
+use rav1e::bench::partition::BlockSize::*;
+use rav1e::bench::plane::*;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
-use rav1e::me;
+use rav1e::bench::me;
 use rav1e::Pixel;
 
 fn fill_plane<T: Pixel>(ra: &mut ChaChaRng, plane: &mut Plane<T>) {

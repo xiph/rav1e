@@ -15,43 +15,43 @@
 #[macro_use]
 extern crate pretty_assertions;
 
-pub mod ec;
-pub mod partition;
-pub mod plane;
-pub mod transform;
-pub mod quantize;
-pub mod predict;
-pub mod rdo;
-pub mod rdo_tables;
+mod ec;
+mod partition;
+mod plane;
+mod transform;
+mod quantize;
+mod predict;
+mod rdo;
+mod rdo_tables;
 #[macro_use]
-pub mod util;
-pub mod context;
-pub mod entropymode;
-pub mod token_cdfs;
-pub mod deblock;
-pub mod segmentation;
-pub mod cdef;
-pub mod lrf;
-pub mod encoder;
-pub mod mc;
-pub mod me;
-pub mod metrics;
-pub mod scan_order;
-pub mod scenechange;
-pub mod rate;
-pub mod tiling;
+mod util;
+mod context;
+mod entropymode;
+mod token_cdfs;
+mod deblock;
+mod segmentation;
+mod cdef;
+mod lrf;
+mod encoder;
+mod mc;
+mod me;
+mod metrics;
+mod scan_order;
+mod scenechange;
+mod rate;
+mod tiling;
 
 mod api;
 mod header;
 mod frame;
 
-pub use crate::api::*;
-pub use crate::encoder::*;
-pub use crate::header::*;
-pub use crate::util::{CastFromPrimitive, Pixel};
+use crate::encoder::*;
 
+pub use crate::api::*;
 pub use crate::frame::Frame;
+pub use crate::encoder::Tune;
 pub use crate::partition::BlockSize;
+pub use crate::util::{CastFromPrimitive, Pixel};
 
 /// Version information
 ///
@@ -148,3 +148,18 @@ mod test_encode_decode_aom;
 #[cfg(all(test, feature="decode_test_dav1d"))]
 mod test_encode_decode_dav1d;
 
+#[cfg(rav1e_bench)]
+pub mod bench {
+  pub mod api { pub use crate::api::*; }
+  pub mod cdef { pub use crate::cdef::*; }
+  pub mod context { pub use crate::context::*; }
+  pub mod ec { pub use crate::ec::*; }
+  pub mod encoder { pub use crate::encoder::*; }
+  pub mod me { pub use crate::me::*; }
+  pub mod partition { pub use crate::partition::*; }
+  pub mod plane { pub use crate::plane::*; }
+  pub mod predict { pub use crate::predict::*; }
+  pub mod rdo { pub use crate::rdo::*; }
+  pub mod transform { pub use crate::transform::*; }
+  pub mod util { pub use crate::util::*; }
+}

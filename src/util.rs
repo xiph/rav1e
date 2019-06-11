@@ -27,10 +27,7 @@ pub struct Align32;
 
 /// A 16 byte aligned array.
 /// # Examples
-/// ```
-/// extern crate rav1e;
-/// use rav1e::util::*;
-///
+/// ``` ignore
 /// let mut x: AlignedArray<[i16; 64 * 64]> = AlignedArray([0; 64 * 64]);
 /// assert!(x.array.as_ptr() as usize % 16 == 0);
 ///

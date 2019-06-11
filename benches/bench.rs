@@ -11,14 +11,15 @@ mod predict;
 mod transform;
 mod me;
 
-use rav1e::*;
-use rav1e::cdef::cdef_filter_frame;
-use rav1e::context::*;
-use rav1e::partition::*;
-use rav1e::predict::*;
-use rav1e::rdo::rdo_cfl_alpha;
-use rav1e::rdo::RDOType;
-use rav1e::ec::*;
+use rav1e::bench::api::*;
+use rav1e::bench::encoder::*;
+use rav1e::bench::cdef::*;
+use rav1e::bench::context::*;
+use rav1e::bench::ec::*;
+use rav1e::bench::partition::*;
+use rav1e::bench::predict::*;
+use rav1e::bench::rdo::*;
+
 use crate::transform::transform;
 
 use criterion::*;
@@ -43,7 +44,7 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
   };
   let sequence = Sequence::new(&Default::default());
   let mut fi = FrameInvariants::<u16>::new(config, sequence);
-  let mut w = ec::WriterEncoder::new();
+  let mut w = WriterEncoder::new();
   let mut fc = CDFContext::new(fi.base_q_idx);
   let mut fb = FrameBlocks::new(fi.sb_width * 16, fi.sb_height * 16);
   let mut tb = fb.as_tile_blocks_mut();

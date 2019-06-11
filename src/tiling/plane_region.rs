@@ -179,7 +179,7 @@ macro_rules! plane_region_common {
       ///
       /// # Example
       ///
-      /// ```
+      /// ``` ignore
       /// # use rav1e::tiling::*;
       /// # fn f(region: &PlaneRegion<'_, u16>) {
       /// // a subregion from (10, 8) to the end of the region
@@ -187,7 +187,7 @@ macro_rules! plane_region_common {
       /// # }
       /// ```
       ///
-      /// ```
+      /// ``` ignore
       /// # use rav1e::context::*;
       /// # use rav1e::tiling::*;
       /// # fn f(region: &PlaneRegion<'_, u16>) {
@@ -313,7 +313,7 @@ impl<'a, T: Pixel> PlaneRegionMut<'a, T> {
   ///
   /// # Example
   ///
-  /// ```
+  /// ``` ignore
   /// # use rav1e::tiling::*;
   /// # fn f(region: &mut PlaneRegionMut<'_, u16>) {
   /// // a mutable subregion from (10, 8) having size (32, 32)
@@ -321,7 +321,7 @@ impl<'a, T: Pixel> PlaneRegionMut<'a, T> {
   /// # }
   /// ```
   ///
-  /// ```
+  /// ``` ignore
   /// # use rav1e::context::*;
   /// # use rav1e::tiling::*;
   /// # fn f(region: &mut PlaneRegionMut<'_, u16>) {

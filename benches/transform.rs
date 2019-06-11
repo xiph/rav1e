@@ -10,7 +10,7 @@
 use criterion::*;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
-use rav1e::transform;
+use rav1e::bench::transform;
 
 fn bench_idct4(b: &mut Bencher, bit_depth: &usize) {
   let mut ra = ChaChaRng::from_seed([0; 32]);
