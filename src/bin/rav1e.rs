@@ -9,9 +9,6 @@
 
 #![deny(bare_trait_objects)]
 
-#[macro_use]
-extern crate scan_fmt;
-
 mod common;
 mod decoder;
 mod muxer;

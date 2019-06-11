@@ -10,16 +10,7 @@
 #![allow(safe_extern_statics)]
 #![deny(bare_trait_objects)]
 
-#[macro_use]
-extern crate serde_derive;
-extern crate bincode;
-
-#[cfg(all(test, feature="decode_test_dav1d"))]
-extern crate dav1d_sys;
-
-#[cfg(test)]
-extern crate interpolate_name;
-
+// Override assert! and assert_eq! in tests
 #[cfg(test)]
 #[macro_use]
 extern crate pretty_assertions;

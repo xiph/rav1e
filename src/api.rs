@@ -10,6 +10,7 @@
 use arg_enum_proc_macro::ArgEnum;
 use bitstream_io::*;
 use num_derive::*;
+use serde_derive::{Serialize, Deserialize};
 
 use crate::encoder::*;
 use crate::frame::Frame;
