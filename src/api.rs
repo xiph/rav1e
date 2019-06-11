@@ -81,6 +81,8 @@ pub struct EncoderConfig {
   pub reservoir_frame_delay: Option<i32>,
   pub low_latency: bool,
   pub quantizer: usize,
+  /// The minimum allowed base quantizer to use in bitrate mode.
+  pub min_quantizer: u8,
   pub bitrate: i32,
   pub tune: Tune,
   pub tile_cols_log2: usize,
@@ -127,6 +129,7 @@ impl EncoderConfig {
       time_base: Rational { num: 1, den: 30 },
       min_key_frame_interval: 12,
       max_key_frame_interval: 240,
+      min_quantizer: 0,
       reservoir_frame_delay: None,
       low_latency: false,
       quantizer: 100,
@@ -816,6 +819,7 @@ impl<T: Pixel> ContextInner<T> {
           enc.time_base.num as i64,
           enc.bitrate,
           maybe_ac_qi_max,
+          enc.min_quantizer,
           enc.max_key_frame_interval as i32,
           enc.reservoir_frame_delay
         ),
