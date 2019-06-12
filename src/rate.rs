@@ -28,7 +28,7 @@ pub const FRAME_SUBTYPE_B0: usize = 2;
 pub const FRAME_SUBTYPE_B1: usize = 3;
 pub const FRAME_SUBTYPE_SEF: usize = 4;
 
-const SEF_BITS: i64 = 40;
+const SEF_BITS: i64 = 24;
 
 // The scale of AV1 quantizer tables (relative to the pixel domain), i.e., Q3.
 const QSCALE: i32 = 3;
@@ -845,6 +845,7 @@ impl RCState {
         self.reservoir_fullness -= bits;
         if show_frame {
           self.reservoir_fullness += self.bits_per_frame;
+          // TODO: Properly account for temporal delimeter bits.
         }
         // If we're too quick filling the buffer and overflow is capped, that
         //  rate is lost forever.
