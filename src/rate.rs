@@ -8,6 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::api::ContextInner;
+use crate::encoder::TEMPORAL_DELIMITER;
 use crate::quantize::ac_q;
 use crate::quantize::dc_q;
 use crate::quantize::select_ac_qi;
@@ -454,8 +455,8 @@ pub struct RCState {
   twopass_state: i32,
   // The log of the number of pixels in a frame in Q57 format.
   log_npixels: i64,
-  // The target average bits per frame.
-  bits_per_frame: i64,
+  // The target average bits per Temporal Unit (input frame).
+  bits_per_tu: i64,
   // The current bit reservoir fullness (bits available to be used).
   reservoir_fullness: i64,
   // The target buffer fullness.
@@ -646,15 +647,18 @@ impl RCState {
     let npixels = (frame_width as i64)*(frame_height as i64);
     // Insane framerates or frame sizes mean insane bitrates.
     // Let's not get carried away.
+    // We also subtract 16 bits from each temporal unit to account for the
+    //  temporal delimeter, whose bits are not included in the frame sizes
+    //  reported to update_state().
     // TODO: Support constraints imposed by levels.
-    let bits_per_frame = clamp(
-      (target_bitrate as i64)*framerate_den/framerate_num, 32, 0x4000_0000_0000
-    );
-    let reservoir_max = bits_per_frame*(reservoir_frame_delay as i64);
+    let bits_per_tu = clamp(
+      (target_bitrate as i64)*framerate_den/framerate_num, 40, 0x4000_0000_0000
+    ) - (TEMPORAL_DELIMITER.len()*8) as i64;
+    let reservoir_max = bits_per_tu*(reservoir_frame_delay as i64);
     // Start with a buffer fullness and fullness target of 50%.
     let reservoir_target = (reservoir_max + 1) >> 1;
     // Pick exponents and initial scales for quantizer selection.
-    let ibpp = npixels/bits_per_frame;
+    let ibpp = npixels/bits_per_tu;
     // These have been derived by encoding many clips at every quantizer
     // and running a piecewise-linear regression in binary log space.
     let (i_exp, i_log_scale) = if ibpp < 1 {
@@ -699,7 +703,7 @@ impl RCState {
       pass1_log_base_q: 0,
       twopass_state: PASS_SINGLE,
       log_npixels: blog64(npixels),
-      bits_per_frame,
+      bits_per_tu,
       reservoir_fullness: reservoir_target,
       reservoir_target,
       reservoir_max,
@@ -922,7 +926,7 @@ impl RCState {
       // rate_total is the total bits available over the next
       //  reservoir_tus TUs.
       let rate_total = self.reservoir_fullness - self.reservoir_target
-        + rate_bias + (reservoir_tus as i64)*self.bits_per_frame;
+        + rate_bias + (reservoir_tus as i64)*self.bits_per_tu;
       // Find a target quantizer that meets our rate target for the
       //  specific mix of frame types we'll have over the next
       //  reservoir_frame frames.
@@ -996,7 +1000,7 @@ impl RCState {
         // We only want to keep these bits from being completely wasted.
         let margin = (self.reservoir_max + 31) >> 5;
         // We want to use at least this many bits next frame.
-        let soft_limit = self.reservoir_fullness + self.bits_per_frame
+        let soft_limit = self.reservoir_fullness + self.bits_per_tu
           - (self.reservoir_max - margin);
         let log_soft_limit = blog64(soft_limit);
         // If we're predicting we won't use that many bits...
@@ -1024,7 +1028,7 @@ impl RCState {
         // This may not be enough for keyframes or sudden changes in
         //  complexity.
         let log_hard_limit =
-          blog64(self.reservoir_fullness + (self.bits_per_frame >> 1));
+          blog64(self.reservoir_fullness + (self.bits_per_tu >> 1));
         // If we're predicting we'll use more than this...
         // TODO: When using frame re-ordering, we should include the rate
         //  for all of the frames in the current TU.
@@ -1165,7 +1169,7 @@ impl RCState {
             q24_to_q57(self.scalefilter[fti].update(log_scale_q24));
         }
         // If this frame busts our budget, it must be dropped.
-        if droppable && self.reservoir_fullness + self.bits_per_frame < bits
+        if droppable && self.reservoir_fullness + self.bits_per_tu < bits
         {
           // TODO: Adjust VFR rate based on drop count.
           bits = 0;
@@ -1184,7 +1188,7 @@ impl RCState {
         }
         self.reservoir_fullness -= bits;
         if show_frame {
-          self.reservoir_fullness += self.bits_per_frame;
+          self.reservoir_fullness += self.bits_per_tu;
           // TODO: Properly account for temporal delimeter bits.
         }
         // If we're too quick filling the buffer and overflow is capped, that
@@ -1442,7 +1446,7 @@ impl RCState {
               self.scale_window_nframes = self.nframes_total;
               self.scale_window_sum = scale_sum;
               self.reservoir_max =
-               self.bits_per_frame*(self.reservoir_frame_delay as i64);
+               self.bits_per_tu*(self.reservoir_frame_delay as i64);
               self.reservoir_target = (self.reservoir_max + 1) >> 1;
               self.reservoir_fullness = self.reservoir_target;
             }
