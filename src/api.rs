@@ -637,7 +637,7 @@ impl InterConfig {
   }
 }
 
-pub struct ContextInner<T: Pixel> {
+pub(crate) struct ContextInner<T: Pixel> {
   frame_count: u64,
   limit: u64,
   inter_cfg: InterConfig,
