@@ -221,6 +221,22 @@ const fn q24_to_q57(v: i32) -> i64 {
   (v as i64) << 33
 }
 
+// Binary exponentiation of a log_scale with 24-bit fractional precision and
+//  saturation.
+// log_scale: A binary logarithm in Q24 format.
+// Return: The binary exponential in Q24 format, saturated to 2**47 - 1 if
+//  log_scale was too large.
+#[allow(unused)]
+fn bexp_q24(log_scale: i32) -> i64 {
+  if log_scale < 23 << 24 {
+    let ret = bexp64(((log_scale as i64) << 33) + q57(24));
+    if ret < (1i64 << 47) - 1 {
+      return ret;
+    }
+  }
+  (1i64 << 47) - 1
+}
+
 #[cfg(test)]
 mod test {
   use super::{bexp64, blog64};
