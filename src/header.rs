@@ -50,6 +50,7 @@ pub enum ReferenceMode {
 }
 
 #[allow(non_camel_case_types)]
+#[allow(unused)]
 pub enum ObuType {
   OBU_SEQUENCE_HEADER = 1,
   OBU_TEMPORAL_DELIMITER = 2,
@@ -64,6 +65,7 @@ pub enum ObuType {
 
 #[derive(Clone,Copy)]
 #[allow(non_camel_case_types)]
+#[allow(unused)]
 pub enum ObuMetaType {
   OBU_META_HDR_CLL = 1,
   OBU_META_HDR_MDCV = 2,

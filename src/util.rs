@@ -52,6 +52,10 @@ pub fn UninitializedAlignedArray<ARRAY>() -> AlignedArray<ARRAY> {
 
 #[test]
 fn sanity() {
+  fn is_aligned<T>(ptr: *const T, n: usize) -> bool {
+    ((ptr as usize) & ((1 << n) - 1)) == 0
+  }
+
   let a: AlignedArray<_> = AlignedArray([0u8; 3]);
   assert!(is_aligned(a.array.as_ptr(), 4));
 }
@@ -80,11 +84,6 @@ impl Fixed for usize {
   fn align_power_of_two_and_shift(&self, n: usize) -> usize {
     (self + (1 << n) - 1) >> n
   }
-}
-
-/// Check alignment.
-pub fn is_aligned<T>(ptr: *const T, n: usize) -> bool {
-  ((ptr as usize) & ((1 << n) - 1)) == 0
 }
 
 pub fn clamp<T: PartialOrd>(input: T, min: T, max: T) -> T {

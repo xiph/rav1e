@@ -22,7 +22,9 @@ pub const FRAME_NSUBTYPES: usize = 4;
 
 pub const FRAME_SUBTYPE_I: usize = 0;
 pub const FRAME_SUBTYPE_P: usize = 1;
+#[allow(unused)]
 pub const FRAME_SUBTYPE_B0: usize = 2;
+#[allow(unused)]
 pub const FRAME_SUBTYPE_B1: usize = 3;
 pub const FRAME_SUBTYPE_SEF: usize = 4;
 

@@ -35,6 +35,7 @@ pub const RESTORE_SGRPROJ: u8 = 3;
 pub const WIENER_TAPS_MIN: [i8; 3] = [ -5, -23, -17 ];
 pub const WIENER_TAPS_MID: [i8; 3] = [ 3, -7, 15 ];
 pub const WIENER_TAPS_MAX: [i8; 3] = [ 10, 8, 46 ];
+#[allow(unused)]
 pub const WIENER_TAPS_K:   [i8; 3] = [ 1, 2, 3 ];
 pub const WIENER_BITS: usize = 7;
 
