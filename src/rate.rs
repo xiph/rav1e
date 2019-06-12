@@ -31,6 +31,7 @@ pub const FRAME_SUBTYPE_SEF: usize = 4;
 const PASS_SINGLE: i32 = 0;
 const PASS_1: i32 = 1;
 const PASS_2: i32 = 2;
+const PASS_2_PLUS_1: i32 = 3;
 
 // Magic value at the start of the 2-pass stats file
 const TWOPASS_MAGIC: i32 = 0x50324156;
@@ -448,6 +449,8 @@ pub struct RCState {
   // PASS_SINGLE => 1-pass encoding.
   // PASS_1 => 1st pass of 2-pass encoding.
   // PASS_2 => 2nd pass of 2-pass encoding.
+  // PASS_2_PLUS_1 => 2nd pass of 2-pass encoding, but also emitting pass 1
+  //  data again.
   twopass_state: i32,
   // The log of the number of pixels in a frame in Q57 format.
   log_npixels: i64,
@@ -479,7 +482,7 @@ pub struct RCState {
   // These are only 32 bits to guarantee that we can sum the scales over the
   //  whole file without overflow in a 64-bit int.
   // That limits us to 2.268 years at 60 fps (minus 33% with re-ordering).
-  nframes: [i32; FRAME_NSUBTYPES],
+  nframes: [i32; FRAME_NSUBTYPES + 1],
   inter_delay: [i32; FRAME_NSUBTYPES - 1],
   inter_delay_target: i32,
   // The total accumulated estimation bias.
@@ -488,19 +491,29 @@ pub struct RCState {
   nencoded_frames: i64,
   // The number of Show Existing Frames that have been emitted.
   nsef_frames: i64,
-  // Buffer for current frame metrics.
-  twopass_buffer: [u8; TWOPASS_HEADER_SZ + TWOPASS_PACKET_SZ],
+  // Buffer for current frame metrics in pass 1.
+  pass1_buffer: [u8; TWOPASS_HEADER_SZ],
+  // Whether or not the user has retrieved the pass 1 data for the last frame.
+  // For PASS_1 or PASS_2_PLUS_1 encoding, this is set to false after each
+  //  frame is encoded, and must be set to true by calling twopass_out() before
+  //  the next frame can be encoded.
+  pass1_data_retrieved: bool,
+  // Marks whether or not the user has retrieved the summary data at the end of
+  //  the encode.
+  pass1_summary_retrieved: bool,
+  // Buffer for current frame metrics in pass 2.
+  pass2_buffer: [u8; TWOPASS_HEADER_SZ],
+  // Whether or not the user has provided enough data to encode in the second
+  //  pass.
+  // For PASS_2 or PASS_2_PLUS_1 encoding, this is set to false after each
+  //  frame, and must be set to true by calling twopass_in() before the next
+  //  frame can be encoded.
+  pass2_data_ready: bool,
   // The current byte position in the frame metrics buffer.
-  // When 2-pass encoding is enabled, this is set to 0 after each frame is
-  //  encoded, and be must non-zero before the next frame can be encoded.
-  // In pass 1, it represents the number of bytes that have been stored in the
-  //  output buffer, and is set to a non-zero value by twopass_out().
-  // In pass 2, it represents the number of bytes that have been parsed from
-  //  the input buffer, and is set to a non-zero value by twopass_in().
-  twopass_buffer_bytes: usize,
+  pass2_buffer_pos: usize,
   // In pass 2, this represents the number of bytes that are available in the
   //  input buffer.
-  twopass_buffer_fill: usize,
+  pass2_buffer_fill: usize,
   // TODO: Add a way to force the next frame to be a keyframe in 2-pass mode.
   // Right now we are relying on keyframe detection to detect the same
   //  keyframes.
@@ -514,7 +527,9 @@ pub struct RCState {
   nframe_metrics: usize,
   // The index of the current frame in the circular metric buffer.
   frame_metrics_head: usize,
-  // The TU count.
+  // The TU count encoded so far.
+  ntus: i32,
+  // The TU count for the whole file.
   ntus_total: i32,
   // The remaining TU count.
   ntus_left: i32,
@@ -530,6 +545,8 @@ pub struct RCState {
   scale_window_ntus: i32,
   // The frame count of each frame subtype in the current scale window.
   scale_window_nframes: [i32; FRAME_NSUBTYPES + 1],
+  // The sum of the scale values for each frame subtype in the current window.
+  scale_window_sum: [i64; FRAME_NSUBTYPES],
 }
 
 // TODO: Separate qi values for each color plane.
@@ -695,20 +712,25 @@ impl RCState {
         IIRBessel2::new(INTER_DELAY_TARGET_MIN, q57_to_q24(b1_log_scale))
       ],
       // TODO VFR
-      nframes: [0; FRAME_NSUBTYPES],
+      nframes: [0; FRAME_NSUBTYPES + 1],
       inter_delay: [INTER_DELAY_TARGET_MIN; FRAME_NSUBTYPES - 1],
       inter_delay_target: reservoir_frame_delay >> 1,
       rate_bias: 0,
       nencoded_frames: 0,
       nsef_frames: 0,
-      twopass_buffer: [0; TWOPASS_HEADER_SZ + TWOPASS_PACKET_SZ],
-      twopass_buffer_bytes: 0,
-      twopass_buffer_fill: 0,
+      pass1_buffer: [0; TWOPASS_HEADER_SZ],
+      pass1_data_retrieved: false,
+      pass1_summary_retrieved: false,
+      pass2_buffer: [0; TWOPASS_HEADER_SZ],
+      pass2_data_ready: false,
+      pass2_buffer_pos: 0,
+      pass2_buffer_fill: 0,
       prev_metrics: RCFrameMetrics::new(),
       cur_metrics: RCFrameMetrics::new(),
       frame_metrics: Vec::new(),
       nframe_metrics: 0,
       frame_metrics_head: 0,
+      ntus: 0,
       ntus_total: 0,
       ntus_left: 0,
       nframes_total: [0; FRAME_NSUBTYPES + 1],
@@ -717,6 +739,7 @@ impl RCState {
       scale_sum: [0; FRAME_NSUBTYPES],
       scale_window_ntus: 0,
       scale_window_nframes: [0; FRAME_NSUBTYPES + 1],
+      scale_window_sum: [0; FRAME_NSUBTYPES],
     }
   }
 
@@ -766,8 +789,9 @@ impl RCState {
         // Second pass of 2-pass mode: we know exactly how much of each frame
         //  type there is in the current buffer window, and have estimates for
         //  the scales.
-        PASS_2 => {
-          let mut scale_sum: [i64; FRAME_NSUBTYPES] = self.scale_sum;
+        PASS_2 | PASS_2_PLUS_1 => {
+          let mut scale_window_sum: [i64; FRAME_NSUBTYPES] =
+           self.scale_window_sum;
           let mut scale_window_nframes: [i32; FRAME_NSUBTYPES + 1]
            = self.scale_window_nframes;
           // Intentionally exclude Show Existing Frame frames from this.
@@ -812,7 +836,7 @@ impl RCState {
                   let ftj = m.fti;
                   scale_window_nframes[ftj] -= 1;
                   if ftj < FRAME_NSUBTYPES {
-                    scale_sum[ftj] -= bexp_q24(m.log_scale_q24);
+                    scale_window_sum[ftj] -= bexp_q24(m.log_scale_q24);
                     reservoir_frames -= 1;
                   }
                   if m.show_frame {
@@ -836,7 +860,7 @@ impl RCState {
           if self.cur_metrics.fti != fti {
             scale_window_nframes[self.cur_metrics.fti] -= 1;
             if self.cur_metrics.fti != FRAME_SUBTYPE_SEF {
-              scale_sum[self.cur_metrics.fti]
+              scale_window_sum[self.cur_metrics.fti]
                -= bexp_q24(self.cur_metrics.log_scale_q24);
             }
           }
@@ -867,7 +891,8 @@ impl RCState {
           //  frames of each type we need to add compared to the actual sums in
           //  our window.
           for ftj in 0..FRAME_NSUBTYPES {
-            let scale = scale_sum[ftj] + bexp_q24(self.scalefilter[ftj].y[0])*
+            let scale = scale_window_sum[ftj]
+             + bexp_q24(self.scalefilter[ftj].y[0])*
              (nframes[ftj] - scale_window_nframes[ftj]) as i64;
             log_scale[ftj] = if nframes[ftj] > 0 {
               blog64(scale) - blog64(nframes[ftj] as i64) - q57(24)
@@ -1037,7 +1062,8 @@ impl RCState {
       // Drop frames is also disabled for now in the case of infinite-buffer
       //  two-pass mode.
       if !self.drop_frames || fti == FRAME_SUBTYPE_SEF
-       || self.twopass_state == PASS_2 && !self.frame_metrics.is_empty() {
+       || (self.twopass_state == PASS_2 || self.twopass_state == PASS_2_PLUS_1)
+       && !self.frame_metrics.is_empty() {
         droppable = false;
       }
       if fti == FRAME_SUBTYPE_SEF {
@@ -1069,47 +1095,45 @@ impl RCState {
       }
       let log_scale_q24 = q57_to_q24(log_scale);
       // Special two-pass processing.
-      match self.twopass_state {
-        PASS_1 => {
-          // Pass 1 mode: save the metrics for this frame.
-          self.cur_metrics.log_scale_q24 = log_scale_q24;
-          self.cur_metrics.fti = fti;
-          self.cur_metrics.show_frame = show_frame;
-          self.twopass_buffer_bytes = 0;
-        },
-        PASS_2 => {
-          // Pass 2 mode:
-          if !trial {
-            // Move the current metrics back one frame.
-            self.prev_metrics = self.cur_metrics;
-            // Back out the last frame's statistics from the sliding window.
-            let ftj = self.prev_metrics.fti;
-            self.nframes_left[ftj] -= 1;
-            self.scale_window_nframes[ftj] -= 1;
-            if ftj < FRAME_NSUBTYPES {
-              self.scale_sum[ftj] -= bexp_q24(self.prev_metrics.log_scale_q24);
-            }
-            if self.prev_metrics.show_frame {
-              self.ntus_left -= 1;
-              self.scale_window_ntus -= 1;
-            }
-            // Free the corresponding entry in the circular buffer.
-            if !self.frame_metrics.is_empty() {
-              self.nframe_metrics -= 1;
-              self.frame_metrics_head += 1;
-              if self.frame_metrics_head >= self.frame_metrics.len() {
-                self.frame_metrics_head = 0;
-              }
-            }
-            // Mark us ready for the next 2-pass packet.
-            self.twopass_buffer_bytes = 0;
-            // Update state, so the user doesn't have to keep calling
-            //  twopass_in() after they've fed in all the data when we're using
-            //  a finite buffer.
-            // TODO: self.twopass_in()
+      if self.twopass_state == PASS_2 || self.twopass_state == PASS_2_PLUS_1 {
+        // Pass 2 mode:
+        if !trial {
+          // Move the current metrics back one frame.
+          self.prev_metrics = self.cur_metrics;
+          // Back out the last frame's statistics from the sliding window.
+          let ftj = self.prev_metrics.fti;
+          self.nframes_left[ftj] -= 1;
+          self.scale_window_nframes[ftj] -= 1;
+          if ftj < FRAME_NSUBTYPES {
+            self.scale_window_sum[ftj] -=
+             bexp_q24(self.prev_metrics.log_scale_q24);
           }
-        },
-        _ => { /*Nothing special to do for single-pass.*/ }
+          if self.prev_metrics.show_frame {
+            self.ntus_left -= 1;
+            self.scale_window_ntus -= 1;
+          }
+          // Free the corresponding entry in the circular buffer.
+          if !self.frame_metrics.is_empty() {
+            self.nframe_metrics -= 1;
+            self.frame_metrics_head += 1;
+            if self.frame_metrics_head >= self.frame_metrics.len() {
+              self.frame_metrics_head = 0;
+            }
+          }
+          // Mark us ready for the next 2-pass packet.
+          self.pass2_data_ready = false;
+          // Update state, so the user doesn't have to keep calling
+          //  twopass_in() after they've fed in all the data when we're using
+          //  a finite buffer.
+          self.twopass_in(None).unwrap_or(0);
+        }
+      }
+      if self.twopass_state == PASS_1 || self.twopass_state == PASS_2_PLUS_1 {
+        // Pass 1 mode: save the metrics for this frame.
+        self.prev_metrics.log_scale_q24 = log_scale_q24;
+        self.prev_metrics.fti = fti;
+        self.prev_metrics.show_frame = show_frame;
+        self.pass1_data_retrieved = false;
       }
       // Common to all passes:
       if fti != FRAME_SUBTYPE_SEF && bits > 0 {
@@ -1152,12 +1176,12 @@ impl RCState {
           // This is only done if the frame is coded, as it needs the final
           //  count of dropped frames.
         }
+      }
+      if !trial {
         // Increment the frame count for filter adaptation purposes.
         if !trial && self.nframes[fti] < ::std::i32::MAX {
           self.nframes[fti] += 1;
         }
-      }
-      if !trial {
         self.reservoir_fullness -= bits;
         if show_frame {
           self.reservoir_fullness += self.bits_per_frame;
@@ -1185,22 +1209,33 @@ impl RCState {
       self.target_bitrate > 0 && self.nframes[fti] == 0
   }
 
-  fn buffer_val(&mut self, val: i64, bytes: usize) {
+  pub(crate) fn ready(&self) -> bool {
+    match self.twopass_state {
+      PASS_SINGLE => true,
+      PASS_1 => self.pass1_data_retrieved,
+      PASS_2 => self.pass2_data_ready,
+      _ => self.pass1_data_retrieved && self.pass2_data_ready
+    }
+  }
+
+  fn buffer_val(&mut self, val: i64, bytes: usize, cur_pos: usize) -> usize {
     let mut val = val;
     let mut bytes = bytes;
+    let mut cur_pos = cur_pos;
     while bytes > 0 {
       bytes -= 1;
-      self.twopass_buffer[self.twopass_buffer_bytes] = val as u8;
-      self.twopass_buffer_bytes += 1;
+      self.pass1_buffer[cur_pos] = val as u8;
+      cur_pos += 1;
       val >>= 8;
     }
+    cur_pos
   }
 
   pub(crate) fn get_twopass_out_params<T: Pixel>(&self, ctx: &ContextInner<T>)
    -> TwoPassOutParams {
     let mut pass1_log_base_q = 0;
     let mut done_processing = false;
-    if self.twopass_buffer_bytes == 0 {
+    if !self.pass1_data_retrieved {
       if self.twopass_state == PASS_SINGLE {
         pass1_log_base_q =
          self.select_qi(ctx, FRAME_SUBTYPE_I, None).log_base_q;
@@ -1217,63 +1252,74 @@ impl RCState {
 
   pub(crate) fn twopass_out(&mut self, params: TwoPassOutParams)
    -> Option<&[u8]> {
-    if self.twopass_buffer_bytes == 0 {
-      if self.twopass_state == PASS_SINGLE {
+    let mut cur_pos = 0;
+    if !self.pass1_data_retrieved {
+      if self.twopass_state != PASS_1 && self.twopass_state != PASS_2_PLUS_1 {
         // Initialize the first pass.
-        self.twopass_state = PASS_1;
-        // Pick first-pass qi for scale calculations.
-        self.pass1_log_base_q = params.pass1_log_base_q;
+        if self.twopass_state == PASS_SINGLE {
+          // Pick first-pass qi for scale calculations.
+          self.pass1_log_base_q = params.pass1_log_base_q;
+        }
+        else {
+          debug_assert!(self.twopass_state == PASS_2);
+        }
+        self.twopass_state += PASS_1;
         // Fill in dummy summary values.
-        self.buffer_val(TWOPASS_MAGIC as i64, 4);
-        self.buffer_val(TWOPASS_VERSION as i64, 4);
-        self.buffer_val(0, TWOPASS_HEADER_SZ - 8);
-        debug_assert!(self.twopass_buffer_bytes == TWOPASS_HEADER_SZ);
+        cur_pos = self.buffer_val(TWOPASS_MAGIC as i64, 4, cur_pos);
+        cur_pos = self.buffer_val(TWOPASS_VERSION as i64, 4, cur_pos);
+        cur_pos = self.buffer_val(0, TWOPASS_HEADER_SZ - 8, cur_pos);
+        debug_assert!(cur_pos == TWOPASS_HEADER_SZ);
       }
       else {
-        let fti = self.cur_metrics.fti;
+        let fti = self.prev_metrics.fti;
         if fti < FRAME_NSUBTYPES {
-          self.scale_sum[fti] += bexp_q24(self.cur_metrics.log_scale_q24);
+          self.scale_sum[fti] += bexp_q24(self.prev_metrics.log_scale_q24);
         }
-        if self.cur_metrics.show_frame {
-          self.ntus_total += 1;
+        if self.prev_metrics.show_frame {
+          self.ntus += 1;
         }
-        self.nframes_total[fti] += 1;
-        self.buffer_val((self.cur_metrics.show_frame as i64) << 31
-         | self.cur_metrics.fti as i64, 4);
-        self.buffer_val(self.cur_metrics.log_scale_q24 as i64, 4);
-        debug_assert!(self.twopass_buffer_bytes == TWOPASS_PACKET_SZ);
+        // If we have encoded too many frames, prevent us from reaching the
+        //  ready state required to encode more.
+        if self.nencoded_frames + self.nsef_frames >= std::i32::MAX as i64 {
+          None?
+        }
+        cur_pos = self.buffer_val((self.prev_metrics.show_frame as i64) << 31
+         | self.prev_metrics.fti as i64, 4, cur_pos);
+        cur_pos =
+         self.buffer_val(self.prev_metrics.log_scale_q24 as i64, 4, cur_pos);
+        debug_assert!(cur_pos == TWOPASS_PACKET_SZ);
       }
+      self.pass1_data_retrieved = true;
     }
-    else if params.done_processing
-     && self.twopass_buffer_bytes != TWOPASS_HEADER_SZ {
-      self.twopass_buffer_bytes = 0;
-      self.buffer_val(TWOPASS_MAGIC as i64, 4);
-      self.buffer_val(TWOPASS_VERSION as i64, 4);
-      self.buffer_val(self.ntus_total as i64, 4);
+    else if params.done_processing && !self.pass1_summary_retrieved {
+      cur_pos = self.buffer_val(TWOPASS_MAGIC as i64, 4, cur_pos);
+      cur_pos = self.buffer_val(TWOPASS_VERSION as i64, 4, cur_pos);
+      cur_pos = self.buffer_val(self.ntus as i64, 4, cur_pos);
       for fti in 0..=FRAME_NSUBTYPES {
-        self.buffer_val(self.nframes_total[fti] as i64, 4);
+        cur_pos = self.buffer_val(self.nframes[fti] as i64, 4, cur_pos);
       }
       for fti in 0..FRAME_NSUBTYPES {
-        self.buffer_val(self.exp[fti] as i64, 1);
+        cur_pos = self.buffer_val(self.exp[fti] as i64, 1, cur_pos);
       }
       for fti in 0..FRAME_NSUBTYPES {
-        self.buffer_val(self.scale_sum[fti], 8);
+        cur_pos = self.buffer_val(self.scale_sum[fti], 8, cur_pos);
       }
-      debug_assert!(self.twopass_buffer_bytes == TWOPASS_HEADER_SZ);
+      debug_assert!(cur_pos == TWOPASS_HEADER_SZ);
+      self.pass1_summary_retrieved = true;
     }
     else {
       // The data for this frame has already been retrieved.
       return None;
     }
-    Some(&self.twopass_buffer[..self.twopass_buffer_bytes])
+    Some(&self.pass1_buffer[..cur_pos])
   }
 
   fn buffer_fill(&mut self, buf: &[u8], consumed: usize, goal: usize)
    -> usize {
     let mut consumed = consumed;
-    while self.twopass_buffer_fill < goal && consumed < buf.len() {
-      self.twopass_buffer[self.twopass_buffer_fill] = buf[consumed];
-      self.twopass_buffer_fill += 1;
+    while self.pass2_buffer_fill < goal && consumed < buf.len() {
+      self.pass2_buffer[self.pass2_buffer_fill] = buf[consumed];
+      self.pass2_buffer_fill += 1;
       consumed += 1;
     }
     consumed
@@ -1285,8 +1331,8 @@ impl RCState {
     let mut shift = 0;
     while bytes > 0 {
       bytes -= 1;
-      ret |= (self.twopass_buffer[self.twopass_buffer_bytes] as i64) << shift;
-      self.twopass_buffer_bytes += 1;
+      ret |= (self.pass2_buffer[self.pass2_buffer_pos] as i64) << shift;
+      self.pass2_buffer_pos += 1;
       shift += 8;
     }
     ret
@@ -1294,13 +1340,12 @@ impl RCState {
 
   // Read metrics for the next frame.
   fn parse_metrics(&mut self) -> Result<RCFrameMetrics, ()> {
-    debug_assert!(self.twopass_buffer_fill >= TWOPASS_PACKET_SZ);
+    debug_assert!(self.pass2_buffer_fill >= TWOPASS_PACKET_SZ);
     let ft_val = self.unbuffer_val(4);
     let show_frame = (ft_val >> 31) != 0;
     let fti = (ft_val & 0x7FFFFFFF) as usize;
     // Make sure the frame type is valid.
     if fti > FRAME_NSUBTYPES {
-      self.twopass_buffer_bytes = 0;
       Err(())?;
     }
     let log_scale_q24 = self.unbuffer_val(4) as i32;
@@ -1311,16 +1356,12 @@ impl RCState {
     })
   }
 
-  pub(crate) fn ready(&self) -> bool {
-    self.twopass_state == PASS_SINGLE || self.twopass_buffer_bytes != 0
-  }
-
   pub(crate) fn twopass_in(&mut self, maybe_buf: Option<&[u8]>)
    -> Result<usize, ()> {
     let mut consumed = 0;
-    if self.twopass_state == PASS_SINGLE {
+    if self.twopass_state == PASS_SINGLE || self.twopass_state == PASS_1 {
       // Initialize the second pass.
-      self.twopass_state = PASS_2;
+      self.twopass_state += PASS_2;
       // If the user requested a finite buffer, reserve the space required for
       //  it.
       if self.reservoir_frame_delay_is_set {
@@ -1342,14 +1383,15 @@ impl RCState {
     }
     // If we haven't got a valid summary header yet, try to parse one.
     if self.nframes_total[FRAME_SUBTYPE_I] == 0 {
+      self.pass2_data_ready = false;
       if let Some(buf) = maybe_buf {
         consumed = self.buffer_fill(buf, consumed, TWOPASS_HEADER_SZ);
-        if self.twopass_buffer_fill >= TWOPASS_HEADER_SZ {
+        if self.pass2_buffer_fill >= TWOPASS_HEADER_SZ {
+          self.pass2_buffer_pos = 0;
           // Read the summary header data.
           // check the magic value and version number.
           if self.unbuffer_val(4) != TWOPASS_MAGIC as i64
-           || self.unbuffer_val(4) != TWOPASS_VERSION  as i64{
-            self.twopass_buffer_bytes = 0;
+           || self.unbuffer_val(4) != TWOPASS_VERSION  as i64 {
             Err(())?;
           }
           let ntus_total = self.unbuffer_val(4) as i32;
@@ -1357,7 +1399,6 @@ impl RCState {
           // Otherwise we probably got the placeholder data from an aborted
           //  pass 1.
           if ntus_total < 1 {
-            self.twopass_buffer_bytes = 0;
             Err(())?;
           }
           let mut maybe_nframes_total_total: Option<i32> = Some(0);
@@ -1366,7 +1407,6 @@ impl RCState {
           for fti in 0..=FRAME_NSUBTYPES {
             nframes_total[fti] = self.unbuffer_val(4) as i32;
             if nframes_total[fti] < 0 {
-              self.twopass_buffer_bytes = 0;
               Err(())?;
             }
             maybe_nframes_total_total =
@@ -1377,7 +1417,6 @@ impl RCState {
           if let Some(nframes_total_total) = maybe_nframes_total_total {
             // We can't have more TUs than frames.
             if ntus_total > nframes_total_total {
-              self.twopass_buffer_bytes = 0;
               Err(())?;
             }
             let mut exp: [u8; FRAME_NSUBTYPES] = [0; FRAME_NSUBTYPES];
@@ -1388,7 +1427,6 @@ impl RCState {
             for fti in 0..FRAME_NSUBTYPES {
               scale_sum[fti] = self.unbuffer_val(8);
               if scale_sum[fti] < 0 {
-                self.twopass_buffer_bytes = 0;
                 Err(())?;
               }
             }
@@ -1402,7 +1440,7 @@ impl RCState {
             if self.frame_metrics.is_empty() {
               self.reservoir_frame_delay = ntus_total;
               self.scale_window_nframes = self.nframes_total;
-              self.scale_sum = scale_sum;
+              self.scale_window_sum = scale_sum;
               self.reservoir_max =
                self.bits_per_frame*(self.reservoir_frame_delay as i64);
               self.reservoir_target = (self.reservoir_max + 1) >> 1;
@@ -1415,13 +1453,11 @@ impl RCState {
             self.exp = exp;
             // Clear the header data from the buffer to make room for the
             //  packet data.
-            self.twopass_buffer_fill = 0;
-            self.twopass_buffer_bytes = 0;
+            self.pass2_buffer_fill = 0;
           }
           else {
             // The sum of the frame counts for each type overflowed a 32-bit
             //  integer.
-            self.twopass_buffer_bytes = 0;
             Err(())?;
           }
         }
@@ -1444,22 +1480,24 @@ impl RCState {
        self.nframes_total_total as i64 {
         // We don't want any more data after the last frame, and we don't want
         //  to allow any more frames to be encoded.
-        self.twopass_buffer_bytes = 0;
+        self.pass2_data_ready = false;
       }
-      else if self.twopass_buffer_bytes == 0 {
+      else if !self.pass2_data_ready {
         if self.frame_metrics.is_empty() {
           // We're using a whole-file buffer.
           if let Some(buf) = maybe_buf {
             consumed = self.buffer_fill(buf, consumed, TWOPASS_PACKET_SZ);
-            if self.twopass_buffer_fill >= TWOPASS_PACKET_SZ {
+            if self.pass2_buffer_fill >= TWOPASS_PACKET_SZ {
+              self.pass2_buffer_pos = 0;
               // Read metrics for the next frame.
               self.cur_metrics = self.parse_metrics()?;
               // Clear the buffer for the next frame.
-              self.twopass_buffer_fill = 0;
+              self.pass2_buffer_fill = 0;
+              self.pass2_data_ready = true;
             }
           }
           else {
-            return Ok(TWOPASS_PACKET_SZ - self.twopass_buffer_fill);
+            return Ok(TWOPASS_PACKET_SZ - self.pass2_buffer_fill);
           }
         }
         else {
@@ -1476,7 +1514,8 @@ impl RCState {
           while frames_needed > 0 {
             if let Some(buf) = maybe_buf {
               consumed = self.buffer_fill(buf, consumed, TWOPASS_PACKET_SZ);
-              if self.twopass_buffer_fill >= TWOPASS_PACKET_SZ {
+              if self.pass2_buffer_fill >= TWOPASS_PACKET_SZ {
+                self.pass2_buffer_pos = 0;
                 // Read the metrics for the next frame.
                 let m = self.parse_metrics()?;
                 // Add them to the circular buffer.
@@ -1494,7 +1533,7 @@ impl RCState {
                 self.scale_window_nframes[m.fti] += 1;
                 cur_scale_window_nframes += 1;
                 if m.fti < FRAME_NSUBTYPES {
-                  self.scale_sum[m.fti] += bexp_q24(m.log_scale_q24);
+                  self.scale_window_sum[m.fti] += bexp_q24(m.log_scale_q24);
                 }
                 if m.show_frame {
                   self.scale_window_ntus += 1;
@@ -1503,8 +1542,7 @@ impl RCState {
                  (self.reservoir_frame_delay - self.scale_window_ntus).max(0)
                  .min(cur_nframes_left - cur_scale_window_nframes);
                 // Clear the buffer for the next frame.
-                self.twopass_buffer_fill = 0;
-                self.twopass_buffer_bytes = 0;
+                self.pass2_buffer_fill = 0;
               }
               else {
                 // Go back for more data.
@@ -1513,7 +1551,7 @@ impl RCState {
             }
             else {
               return Ok(TWOPASS_PACKET_SZ*(frames_needed as usize)
-               - self.twopass_buffer_fill);
+               - self.pass2_buffer_fill);
             }
           }
           // If we've got all the frames we need, fill in the current metrics.
@@ -1521,7 +1559,7 @@ impl RCState {
           if frames_needed <= 0 {
             self.cur_metrics = self.frame_metrics[self.frame_metrics_head];
             // Mark us ready for the next frame.
-            self.twopass_buffer_bytes = 1;
+            self.pass2_data_ready = true;
           }
         }
       }
