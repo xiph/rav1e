@@ -47,11 +47,49 @@ mod frame;
 
 use crate::encoder::*;
 
-pub use crate::api::*;
+pub use crate::api::{Context, Config, Packet, EncoderStatus};
 pub use crate::frame::Frame;
-pub use crate::encoder::Tune;
-pub use crate::partition::BlockSize;
 pub use crate::util::{CastFromPrimitive, Pixel};
+
+pub mod prelude {
+  pub use crate::api::*;
+  pub use crate::frame::Frame;
+  pub use crate::encoder::Tune;
+  pub use crate::partition::BlockSize;
+  pub use crate::util::{CastFromPrimitive, Pixel};
+}
+
+/// Basic data structures
+pub mod data {
+  pub use crate::frame::Frame;
+  pub use crate::api::{
+    Packet, Point, Rational, FrameType, EncoderStatus
+  };
+  pub use crate::util::{CastFromPrimitive, Pixel};
+}
+
+/// Color model information
+pub mod color {
+  pub use crate::api::{
+    ChromaSamplePosition,
+    ChromaSampling,
+    ColorPrimaries,
+    TransferCharacteristics,
+    PixelRange,
+    ContentLight,
+    ColorDescription,
+    MasteringDisplay,
+    MatrixCoefficients,
+  };
+}
+
+/// Encoder configuration and settings
+pub mod config {
+  pub use crate::api::{
+    Config, EncoderConfig, SpeedSettings, PredictionModesSetting,
+  };
+}
+
 
 /// Version information
 ///

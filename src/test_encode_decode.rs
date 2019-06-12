@@ -7,7 +7,9 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use super::*;
+use crate::*;
+use crate::color::ChromaSampling;
+use crate::config::*;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use std::sync::Arc;
