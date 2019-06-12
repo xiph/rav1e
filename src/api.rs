@@ -661,7 +661,7 @@ pub(crate) struct ContextInner<T: Pixel> {
   /// A storage space for reordered frames.
   packet_data: Vec<u8>,
   segment_output_frameno_start: u64,
-  segment_input_frameno_start: u64,
+  pub(crate) segment_input_frameno_start: u64,
   keyframe_detector: SceneChangeDetector<T>,
   pub(crate) config: EncoderConfig,
   rc_state: RCState,
@@ -691,6 +691,10 @@ pub enum EncoderStatus {
   Encoded,
   /// Generic fatal error
   Failure,
+  /// A frame was encoded in the first pass of a 2-pass encode, but its stats
+  /// data was not retrieved with twopass_out(), or not enough stats data was
+  /// provided in the second pass of a 2-pass encode to encode the next frame.
+  NotReady
 }
 
 pub struct Packet<T: Pixel> {
@@ -739,6 +743,44 @@ impl<T: Pixel> Context<T> {
     }
 
     self.inner.send_frame(frame)
+  }
+
+  /// Retrieve the first-pass data of a two-pass encode for the frame that was
+  /// just encoded. This should be called BEFORE every call to receive_packet()
+  /// (including the very first one), even if no packet was produced by the
+  /// last call to receive_packet, if any (i.e., *EncoderStatus::Encoded* was
+  /// returned). It needs to be called once more after
+  /// *EncoderStatus::LimitReached* is returned, to retrieve the header that
+  /// should be written to the front of the stats file (overwriting the
+  /// placeholder header that was emitted at the start of encoding).
+  ///
+  /// It is still safe to call this function when receive_packet() returns any
+  /// other error. It will return *None* instead of returning a duplicate copy
+  /// of the previous frame's data.
+  pub fn twopass_out(&mut self) -> Option<&[u8]> {
+    let params = self.inner.rc_state.get_twopass_out_params(&self.inner);
+    self.inner.rc_state.twopass_out(params)
+  }
+
+  /// Ask how many bytes of the stats file are needed before the next frame
+  /// of the second pass in a two-pass encode can be encoded. This is a lower
+  /// bound (more might be required), but if 0 is returned, then encoding can
+  /// proceed. This is just a hint to the application, and does not need to
+  /// be called for encoding the second pass to work, so long as the
+  /// application continues to provide more data to twopass_in() in a loop
+  /// until twopass_in() returns 0.
+  pub fn twopass_bytes_needed(&mut self) -> usize {
+    self.inner.rc_state.twopass_in(None).unwrap_or(0)
+  }
+
+  /// Provide stats data produced in the first pass of a two-pass encode to the
+  /// second pass. On success this returns the number of bytes of that data
+  /// which were consumed. When encoding the second pass of a two-pass encode,
+  /// this should be called repeatedly in a loop before every call to
+  /// receive_packet() (including the very first one) until no bytes are
+  /// consumed, or until twopass_bytes_needed() returns 0.
+  pub fn twopass_in(&mut self, buf: &[u8]) -> Result<usize, EncoderStatus> {
+    self.inner.rc_state.twopass_in(Some(buf)).or(Err(EncoderStatus::Failure))
   }
 
   pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
@@ -970,8 +1012,12 @@ impl<T: Pixel> ContextInner<T> {
     Ok((fi, true))
   }
 
+  pub(crate) fn done_processing(&self) -> bool {
+    self.limit != 0 && self.frames_processed == self.limit
+  }
+
   pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
-    if self.limit != 0 && self.frames_processed == self.limit {
+    if self.done_processing() {
       return Err(EncoderStatus::LimitReached);
     }
 
@@ -993,6 +1039,9 @@ impl<T: Pixel> ContextInner<T> {
     let ret = {
       let fi = self.frame_invariants.get_mut(&cur_output_frameno).unwrap();
       if fi.show_existing_frame {
+        if !self.rc_state.ready() {
+          return Err(EncoderStatus::NotReady);
+        }
         let mut fs = FrameState::new(fi);
 
         let sef_data = encode_show_existing_frame(fi, &mut fs);
@@ -1011,6 +1060,9 @@ impl<T: Pixel> ContextInner<T> {
         self.output_frameno += 1;
         self.finalize_packet(rec, &fi)
       } else if let Some(f) = self.frame_q.get(&fi.input_frameno) {
+        if !self.rc_state.ready() {
+          return Err(EncoderStatus::NotReady);
+        }
         if let Some(frame) = f.clone() {
           let fti = fi.get_frame_subtype();
           let qps =

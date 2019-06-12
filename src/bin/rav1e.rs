@@ -18,6 +18,7 @@ use rav1e::prelude::*;
 use std::io;
 use std::io::Write;
 use std::io::Read;
+use std::io::Seek;
 use std::path::Path;
 use std::sync::Arc;
 use crate::decoder::Decoder;
@@ -69,10 +70,51 @@ impl<D: Decoder> Source<D> {
 fn process_frame<T: Pixel, D: Decoder>(
   ctx: &mut Context<T>, output_file: &mut dyn Muxer,
   source: &mut Source<D>,
+  pass1file: Option<&mut File>,
+  pass2file: Option<&mut File>,
+  buffer: &mut [u8],
+  buf_pos: &mut usize,
   mut y4m_enc: Option<&mut y4m::Encoder<'_, Box<dyn Write>>>
 ) -> Option<Vec<FrameSummary>> {
   let y4m_details = source.input.get_video_details();
   let mut frame_summaries = Vec::new();
+  let mut pass1file = pass1file;
+  let mut pass2file = pass2file;
+  // Submit first pass data to pass 2.
+  if let Some(passfile) = pass2file.as_mut() {
+    loop {
+      let mut bytes = ctx.twopass_bytes_needed();
+      if bytes == 0 {
+        break;
+      }
+      // Read in some more bytes, if necessary.
+      bytes = bytes.min(buffer.len() - *buf_pos);
+      if bytes > 0 {
+        passfile.read_exact(&mut buffer[*buf_pos..*buf_pos + bytes])
+         .expect("Could not read frame data from two-pass data file!");
+      }
+      // And pass them off.
+      let consumed = ctx.twopass_in(&buffer[*buf_pos..*buf_pos + bytes])
+       .expect("Error submitting pass data in second pass.");
+      // If the encoder consumed the whole buffer, reset it.
+      if consumed >= bytes {
+        *buf_pos = 0;
+      }
+      else {
+        *buf_pos += consumed;
+      }
+    }
+  }
+  // Extract first pass data from pass 1.
+  // We call this before encoding any frames to ensure we are in 2-pass mode
+  //  and to get the placeholder header data.
+  if let Some(passfile) = pass1file.as_mut() {
+    if let Some(outbuf) = ctx.twopass_out() {
+      passfile.write_all(outbuf)
+       .expect("Unable to write to two-pass data file.");
+    }
+  }
+
   let pkt_wrapped = ctx.receive_packet();
   match pkt_wrapped {
     Ok(pkt) => {
@@ -89,10 +131,24 @@ fn process_frame<T: Pixel, D: Decoder>(
       unreachable!();
     }
     Err(EncoderStatus::LimitReached) => {
+      if let Some(passfile) = pass1file.as_mut() {
+        if let Some(outbuf) = ctx.twopass_out() {
+          // The last block of data we get is the summary data that needs to go
+          //  at the start of the pass file.
+          // Seek to the start so we can write it there.
+          passfile.seek(std::io::SeekFrom::Start(0))
+           .expect("Unable to seek in two-pass data file.");
+          passfile.write_all(outbuf)
+           .expect("Unable to write to two-pass data file.");
+        }
+      }
       return None;
     }
     Err(EncoderStatus::Failure) => {
       panic!("Failed to encode video");
+    }
+    Err(EncoderStatus::NotReady) => {
+      panic!("Mis-managed handling of two-pass stats data");
     }
     Err(EncoderStatus::Encoded) => {}
   }
@@ -110,13 +166,27 @@ fn do_encode<T: Pixel, D: Decoder>(
   cfg: Config, verbose: bool, mut progress: ProgressInfo,
   output: &mut dyn Muxer,
   source: &mut Source<D>,
+  pass1file_name: Option<&String>,
+  pass2file_name: Option<&String>,
   mut y4m_enc: Option<y4m::Encoder<'_, Box<dyn Write>>>
 ) {
   let mut ctx: Context<T> = cfg.new_context();
 
+  let mut pass2file = pass2file_name.map(|f| {
+    File::open(f)
+     .unwrap_or_else(|_| panic!("Unable to open \"{}\" for reading two-pass data.", f))
+  });
+  let mut pass1file = pass1file_name.map(|f| {
+    File::create(f)
+     .unwrap_or_else(|_| panic!("Unable to open \"{}\" for writing two-pass data.", f))
+  });
+
+  let mut buffer: [u8; 80] = [0; 80];
+  let mut buf_pos = 0;
 
   while let Some(frame_info) =
-    process_frame(&mut ctx, &mut *output, source, y4m_enc.as_mut())
+    process_frame(&mut ctx, &mut *output, source, pass1file.as_mut(),
+     pass2file.as_mut(), &mut buffer, &mut buf_pos, y4m_enc.as_mut())
   {
     for frame in frame_info {
       progress.add_frame(frame);
@@ -235,11 +305,13 @@ fn main() {
 
   if video_info.bit_depth == 8 {
     do_encode::<u8, y4m::Decoder<'_, Box<dyn Read>>>(
-      cfg, cli.verbose, progress, &mut *cli.io.output, &mut source, y4m_enc
+      cfg, cli.verbose, progress, &mut *cli.io.output, &mut source,
+      cli.pass1file_name.as_ref(), cli.pass2file_name.as_ref(), y4m_enc
     )
   } else {
     do_encode::<u16, y4m::Decoder<'_, Box<dyn Read>>>(
-      cfg, cli.verbose, progress, &mut *cli.io.output, &mut source, y4m_enc
+      cfg, cli.verbose, progress, &mut *cli.io.output, &mut source,
+      cli.pass1file_name.as_ref(), cli.pass2file_name.as_ref(), y4m_enc
     )
   }
 }

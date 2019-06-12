@@ -34,6 +34,8 @@ pub struct CliOptions {
   pub skip: usize,
   pub verbose: bool,
   pub threads: usize,
+  pub pass1file_name: Option<String>,
+  pub pass2file_name: Option<String>
 }
 
 pub fn parse_cli() -> CliOptions {
@@ -82,12 +84,16 @@ pub fn parse_cli() -> CliOptions {
     )
     // ENCODING SETTINGS
     .arg(
-      Arg::with_name("PASS")
-        .help("Specify first-pass or second-pass to run as a two-pass encode; If not provided, will run a one-pass encode")
-        .short("p")
-        .long("pass")
+      Arg::with_name("FIRST_PASS")
+        .help("Perform the first pass of a two-pass encode, saving the pass data to the specified file for future passes")
+        .long("first-pass")
         .takes_value(true)
-        .possible_values(&["1", "2"])
+    )
+    .arg(
+      Arg::with_name("SECOND_PASS")
+        .help("Perform the second pass of a two-pass encode, reading the pass data saved from a previous pass from the specified file")
+        .long("second-pass")
+        .takes_value(true)
     )
     .arg(
       Arg::with_name("LIMIT")
@@ -341,6 +347,8 @@ pub fn parse_cli() -> CliOptions {
     skip: matches.value_of("SKIP").unwrap().parse().unwrap(),
     verbose: matches.is_present("VERBOSE"),
     threads,
+    pass1file_name: matches.value_of("FIRST_PASS").map(|s| s.to_owned()),
+    pass2file_name: matches.value_of("SECOND_PASS").map(|s| s.to_owned())
   }
 }
 
@@ -467,7 +475,7 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
   cfg.bitrate = bitrate.checked_mul(1000).expect("Bitrate too high");
   cfg.reservoir_frame_delay = matches.value_of("RESERVOIR_FRAME_DELAY").map(|reservior_frame_delay| reservior_frame_delay.parse().unwrap());
   cfg.show_psnr = matches.is_present("PSNR");
-  cfg.pass = matches.value_of("PASS").map(|pass| pass.parse().unwrap());
+  cfg.pass = None;
   cfg.stats_file = if cfg.pass.is_some() {
     Some(PathBuf::from(matches.value_of("STATS_FILE").unwrap()))
   } else {
