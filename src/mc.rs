@@ -16,6 +16,7 @@ use crate::tiling::*;
 use crate::util::Pixel;
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[allow(unused)]
 pub enum FilterMode {
   REGULAR = 0,
   SMOOTH = 1,

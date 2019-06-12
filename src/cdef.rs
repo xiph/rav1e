@@ -327,17 +327,6 @@ pub fn cdef_sb_padded_frame_copy<T: Pixel>(
   out
 }
 
-
-pub fn cdef_empty_frame<T: Pixel, U: Pixel>(f: &Frame<T>) -> Frame<U> {
-  Frame {
-    planes: [
-      Plane::new(0, 0, f.planes[0].cfg.xdec, f.planes[0].cfg.ydec, 0, 0),
-      Plane::new(0, 0, f.planes[0].cfg.xdec, f.planes[0].cfg.ydec, 0, 0),
-      Plane::new(0, 0, f.planes[0].cfg.xdec, f.planes[0].cfg.ydec, 0, 0),
-    ]
-  }
-}
-
 // We assume in is padded, and the area we'll write out is at least as
 // large as the unpadded area of in
 // cdef_index is taken from the block context

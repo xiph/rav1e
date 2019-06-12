@@ -853,6 +853,7 @@ pub static default_cfl_alpha_cdf: [[u16; cdf_size!(CFL_ALPHABET_SIZE)];
 const SWITCHABLE_FILTERS: usize = 3;
 const SWITCHABLE_FILTER_CONTEXTS: usize = (SWITCHABLE_FILTERS + 1) * 4;
 
+#[allow(unused)]
 pub static default_switchable_interp_cdf: [[u16;
   cdf_size!(SWITCHABLE_FILTERS)];
   SWITCHABLE_FILTER_CONTEXTS] = [
@@ -912,9 +913,11 @@ pub static default_compound_mode_cdf: [[u16;
   cdf!(13046, 23214, 24505, 25942, 27435, 28442, 29330)
 ];
 
+#[allow(unused)]
 pub static default_interintra_cdf: [[u16; cdf_size!(2)]; BLOCK_SIZE_GROUPS] =
   [cdf!(16384), cdf!(26887), cdf!(27597), cdf!(30237)];
 
+#[allow(unused)]
 pub static default_interintra_mode_cdf: [[u16;
   cdf_size!(InterIntraMode::INTERINTRA_MODES as usize)];
   BLOCK_SIZE_GROUPS as usize] = [
@@ -924,6 +927,7 @@ pub static default_interintra_mode_cdf: [[u16;
   cdf!(4238, 11537, 25926)
 ];
 
+#[allow(unused)]
 pub static default_wedge_interintra_cdf: [[u16; cdf_size!(2)];
   BlockSize::BLOCK_SIZES_ALL] = [
   cdf!(16384),
@@ -950,6 +954,7 @@ pub static default_wedge_interintra_cdf: [[u16; cdf_size!(2)];
   cdf!(16384)
 ];
 
+#[allow(unused)]
 pub static default_compound_type_cdf: [[u16;
   cdf_size!(CompoundType::COMPOUND_TYPES as usize - 1)];
   BlockSize::BLOCK_SIZES_ALL as usize] = [
@@ -977,6 +982,7 @@ pub static default_compound_type_cdf: [[u16;
   cdf!(16384)
 ];
 
+#[allow(unused)]
 pub static default_wedge_idx_cdf: [[u16; cdf_size!(16)];
   BlockSize::BLOCK_SIZES_ALL] = [
   cdf!(
@@ -1069,6 +1075,7 @@ pub static default_wedge_idx_cdf: [[u16; cdf_size!(16)];
   )
 ];
 
+#[allow(unused)]
 pub static default_motion_mode_cdf: [[u16;
   cdf_size!(MotionMode::MOTION_MODES as usize)];
   BlockSize::BLOCK_SIZES_ALL as usize] = [
@@ -1096,6 +1103,7 @@ pub static default_motion_mode_cdf: [[u16;
   cdf!(29742, 31203)
 ];
 
+#[allow(unused)]
 pub static default_obmc_cdf: [[u16; cdf_size!(2)];
   BlockSize::BLOCK_SIZES_ALL] = [
   cdf!(16384),
@@ -1132,6 +1140,7 @@ pub static default_comp_ref_type_cdf: [[u16; cdf_size!(2)];
   COMP_REF_TYPE_CONTEXTS] =
   [cdf!(1198), cdf!(2070), cdf!(9166), cdf!(7499), cdf!(22475)];
 
+#[allow(unused)]
 pub static default_uni_comp_ref_cdf: [[[u16; cdf_size!(2)];
   UNIDIR_COMP_REFS - 1];
   UNI_COMP_REF_CONTEXTS] = [
@@ -1175,6 +1184,7 @@ pub static default_comp_bwdref_cdf: [[[u16; cdf_size!(2)]; BWD_REFS - 1];
   [cdf!(30606), cdf!(30489)]
 ];
 
+#[allow(unused)]
 pub static default_palette_y_size_cdf: [[u16;
   cdf_size!(PaletteSize::PALETTE_SIZES as usize)];
   PALATTE_BSIZE_CTXS] = [
@@ -1187,6 +1197,7 @@ pub static default_palette_y_size_cdf: [[u16;
   cdf!(14940, 20797, 21678, 24186, 27033, 28999)
 ];
 
+#[allow(unused)]
 pub static default_palette_uv_size_cdf: [[u16;
   cdf_size!(PaletteSize::PALETTE_SIZES as usize)];
   PALATTE_BSIZE_CTXS] = [
@@ -1199,6 +1210,7 @@ pub static default_palette_uv_size_cdf: [[u16;
   cdf!(1269, 5435, 10433, 18963, 21700, 25865)
 ];
 
+#[allow(unused)]
 pub static default_palette_y_mode_cdf: [[[u16; cdf_size!(2)];
   PALETTE_Y_MODE_CONTEXTS];
   PALATTE_BSIZE_CTXS] = [
@@ -1211,9 +1223,11 @@ pub static default_palette_y_mode_cdf: [[[u16; cdf_size!(2)];
   [cdf!(32450), cdf!(7946), cdf!(129)]
 ];
 
+#[allow(unused)]
 pub static default_palette_uv_mode_cdf: [[u16; cdf_size!(2)];
   PALETTE_UV_MODE_CONTEXTS] = [cdf!(32461), cdf!(21488)];
 
+#[allow(unused)]
 pub static default_palette_y_color_index_cdf: [[[u16;
   cdf_size!(PaletteColor::PALETTE_COLORS as usize)];
   PALETTE_COLOR_INDEX_CONTEXTS];
@@ -1269,6 +1283,7 @@ pub static default_palette_y_color_index_cdf: [[[u16;
   ]
 ];
 
+#[allow(unused)]
 pub static default_palette_uv_color_index_cdf: [[[u16;
   cdf_size!(PaletteColor::PALETTE_COLORS as usize)];
   PALETTE_COLOR_INDEX_CONTEXTS];
@@ -1324,6 +1339,7 @@ pub static default_palette_uv_color_index_cdf: [[[u16;
   ]
 ];
 
+#[allow(unused)]
 pub static default_txfm_partition_cdf: [[u16; cdf_size!(2)];
   TXFM_PARTITION_CONTEXTS] = [
   cdf!(28581),
@@ -1352,13 +1368,16 @@ pub static default_txfm_partition_cdf: [[u16; cdf_size!(2)];
 pub static default_skip_cdfs: [[u16; cdf_size!(2)]; SKIP_CONTEXTS] =
   [cdf!(31671), cdf!(16515), cdf!(4576)];
 
+#[allow(unused)]
 pub static default_skip_mode_cdfs: [[u16; cdf_size!(2)]; SKIP_MODE_CONTEXTS] =
   [cdf!(32621), cdf!(20708), cdf!(8127)];
 
+#[allow(unused)]
 pub static default_compound_idx_cdfs: [[u16; cdf_size!(2)];
   COMP_INDEX_CONTEXTS] =
   [cdf!(18244), cdf!(12865), cdf!(7053), cdf!(13259), cdf!(9334), cdf!(4644)];
 
+#[allow(unused)]
 pub static default_comp_group_idx_cdfs: [[u16; cdf_size!(2)];
   COMP_GROUP_IDX_CONTEXTS] = [
   cdf!(26607),
@@ -1369,8 +1388,10 @@ pub static default_comp_group_idx_cdfs: [[u16; cdf_size!(2)];
   cdf!(22674)
 ];
 
+#[allow(unused)]
 pub static default_intrabc_cdf: [u16; cdf_size!(2)] = cdf!(30531);
 
+#[allow(unused)]
 pub static default_filter_intra_mode_cdf: [u16;
   cdf_size!(FilterIntraMode::FILTER_INTRA_MODES as usize)] =
   cdf!(8949, 12776, 17211, 29558);
@@ -1408,6 +1429,7 @@ pub static default_wiener_restore_cdf: [u16; cdf_size!(2)] = cdf!(11570);
 
 pub static default_sgrproj_restore_cdf: [u16; cdf_size!(2)] = cdf!(16855);
 
+#[allow(unused)]
 pub static default_delta_q_cdf: [u16; cdf_size!(DELTA_Q_PROBS + 1)] =
   cdf!(28160, 32120, 32677);
 
@@ -1423,9 +1445,11 @@ pub static default_delta_lf_cdf: [u16; cdf_size!(DELTA_LF_PROBS + 1)] =
   cdf!(28160, 32120, 32677);
 
 // FIXME(someone) need real defaults here
+#[allow(unused)]
 pub static default_seg_tree_cdf: [u16; cdf_size!(MAX_SEGMENTS)] =
   cdf!(4096, 8192, 12288, 16384, 20480, 24576, 28672);
 
+#[allow(unused)]
 pub static default_segment_pred_cdf: [[u16; cdf_size!(2)];
   SEG_TEMPORAL_PRED_CTXS] =
   [cdf!(128 * 128), cdf!(128 * 128), cdf!(128 * 128)];

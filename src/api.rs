@@ -843,14 +843,6 @@ impl<T: Pixel> ContextInner<T> {
      .as_ref().unwrap().as_ref().unwrap().clone()
   }
 
-  pub fn get_frame_count(&self) -> u64 {
-    self.frame_count
-  }
-
-  pub fn set_limit(&mut self, limit: u64) {
-    self.limit = limit;
-  }
-
   pub(crate) fn needs_more_lookahead(&self) -> bool {
     self.needs_more_frames(self.frame_count) && self.frames_processed + LOOKAHEAD_FRAMES > self.frame_q.keys().last().cloned().unwrap_or(0)
   }

@@ -42,14 +42,6 @@ pub static RAV1E_INTRA_MODES: &'static [PredictionMode] = &[
   PredictionMode::D63_PRED, */
 ];
 
-// Intra prediction modes tested at high speed levels
-#[rustfmt::skip]
-pub static RAV1E_INTRA_MODES_MINIMAL: &'static [PredictionMode] = &[
-    PredictionMode::DC_PRED,
-    PredictionMode::H_PRED,
-    PredictionMode::V_PRED
-];
-
 pub static RAV1E_INTER_MODES_MINIMAL: &'static [PredictionMode] = &[
   PredictionMode::NEARESTMV
 ];
@@ -92,12 +84,14 @@ const NEED_LEFT: u8 = 1 << 1;
 const NEED_ABOVE: u8 = 1 << 2;
 const NEED_ABOVERIGHT: u8 = 1 << 3;
 const NEED_ABOVELEFT: u8 = 1 << 4;
+#[allow(unused)]
 const NEED_BOTTOMLEFT: u8 = 1 << 5;
 
 /*const INTRA_EDGE_FILT: usize = 3;
 const INTRA_EDGE_TAPS: usize = 5;
 const MAX_UPSAMPLE_SZ: usize = 16;*/
 
+#[allow(unused)]
 pub static extend_modes: [u8; INTRA_MODES] = [
   NEED_ABOVE | NEED_LEFT,                  // DC
   NEED_ABOVE,                              // V
