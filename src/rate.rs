@@ -579,7 +579,7 @@ impl RCState {
   }
 
   // TODO: Separate quantizers for Cb and Cr.
-  pub fn select_qi<T: Pixel>(
+  pub(crate) fn select_qi<T: Pixel>(
     &self, ctx: &ContextInner<T>, fti: usize, maybe_prev_log_base_q: Option<i64>
   ) -> QuantizerParameters {
     // Is rate control active?
