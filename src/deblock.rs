@@ -11,9 +11,9 @@
 
 use crate::context::*;
 use crate::DeblockState;
-use crate::FrameInvariants;
-use crate::FrameState;
-use crate::FrameType;
+use crate::encoder::FrameInvariants;
+use crate::encoder::FrameState;
+use crate::api::FrameType;
 use crate::partition::PredictionMode::*;
 use crate::partition::RefType::*;
 use crate::plane::*;
