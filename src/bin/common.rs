@@ -10,7 +10,8 @@
 use crate::muxer::{create_muxer, Muxer};
 use crate::{ColorPrimaries, MatrixCoefficients, TransferCharacteristics};
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand, Shell};
-use rav1e::*;
+use rav1e::prelude::*;
+use rav1e::version;
 use scan_fmt::scan_fmt;
 
 use std::fs::File;

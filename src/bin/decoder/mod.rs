@@ -1,5 +1,5 @@
 use std::io;
-use rav1e::*;
+use rav1e::prelude::*;
 
 pub mod y4m;
 

@@ -13,7 +13,7 @@ mod common;
 mod decoder;
 mod muxer;
 use crate::common::*;
-use rav1e::*;
+use rav1e::prelude::*;
 
 use std::io;
 use std::io::Write;

@@ -1,13 +1,10 @@
 use std::io::Read;
 
-use rav1e::Rational;
 use crate::decoder::DecodeError;
 use crate::decoder::Decoder;
 use crate::decoder::VideoDetails;
-use crate::ChromaSamplePosition;
-use crate::ChromaSampling;
 use crate::Frame;
-use rav1e::*;
+use rav1e::prelude::*;
 
 impl Decoder for y4m::Decoder<'_, Box<dyn Read>> {
   fn get_video_details(&self) -> VideoDetails {

@@ -1,5 +1,6 @@
 // Encode the same tiny blank frame 30 times
 use rav1e::*;
+use rav1e::config::SpeedSettings;
 
 fn main() {
   let mut cfg = Config::default();
