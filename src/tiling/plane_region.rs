@@ -37,19 +37,19 @@ impl Rect {
   }
 }
 
-/// Structure to describe a rectangle area in several ways
-///
-/// To retrieve a subregion from a region, we need to provide the subregion
-/// bounds, relative to its parent region. The subregion must always be included
-/// in its parent region.
-///
-/// For that purpose, we could just use a rectangle (x, y, width, height), but
-/// this would be too cumbersome to use in practice. For example, we often need
-/// to pass a subregion from an offset, using the same bottom-right corner as
-/// its parent, or to pass a subregion expressed in block offset instead of
-/// pixel offset.
-///
-/// Area provides a flexible way to describe a subregion.
+// Structure to describe a rectangle area in several ways
+//
+// To retrieve a subregion from a region, we need to provide the subregion
+// bounds, relative to its parent region. The subregion must always be included
+// in its parent region.
+//
+// For that purpose, we could just use a rectangle (x, y, width, height), but
+// this would be too cumbersome to use in practice. For example, we often need
+// to pass a subregion from an offset, using the same bottom-right corner as
+// its parent, or to pass a subregion expressed in block offset instead of
+// pixel offset.
+//
+// Area provides a flexible way to describe a subregion.
 #[derive(Debug, Clone, Copy)]
 pub enum Area {
   /// A well-defined rectangle
@@ -171,31 +171,31 @@ macro_rules! plane_region_common {
         }
       }
 
-      /// Return a view to a subregion of the plane
-      ///
-      /// The subregion must be included in (i.e. must not exceed) this region.
-      ///
-      /// It is described by an `Area`, relative to this region.
-      ///
-      /// # Example
-      ///
-      /// ``` ignore
-      /// # use rav1e::tiling::*;
-      /// # fn f(region: &PlaneRegion<'_, u16>) {
-      /// // a subregion from (10, 8) to the end of the region
-      /// let subregion = region.subregion(Area::StartingAt { x: 10, y: 8 });
-      /// # }
-      /// ```
-      ///
-      /// ``` ignore
-      /// # use rav1e::context::*;
-      /// # use rav1e::tiling::*;
-      /// # fn f(region: &PlaneRegion<'_, u16>) {
-      /// // a subregion from the top-left of block (2, 3) having size (64, 64)
-      /// let bo = BlockOffset { x: 2, y: 3 };
-      /// let subregion = region.subregion(Area::BlockRect { bo, width: 64, height: 64 });
-      /// # }
-      /// ```
+      // Return a view to a subregion of the plane
+      //
+      // The subregion must be included in (i.e. must not exceed) this region.
+      //
+      // It is described by an `Area`, relative to this region.
+      //
+      // # Example
+      //
+      // ``` ignore
+      // # use rav1e::tiling::*;
+      // # fn f(region: &PlaneRegion<'_, u16>) {
+      // // a subregion from (10, 8) to the end of the region
+      // let subregion = region.subregion(Area::StartingAt { x: 10, y: 8 });
+      // # }
+      // ```
+      //
+      // ``` ignore
+      // # use rav1e::context::*;
+      // # use rav1e::tiling::*;
+      // # fn f(region: &PlaneRegion<'_, u16>) {
+      // // a subregion from the top-left of block (2, 3) having size (64, 64)
+      // let bo = BlockOffset { x: 2, y: 3 };
+      // let subregion = region.subregion(Area::BlockRect { bo, width: 64, height: 64 });
+      // # }
+      // ```
       #[inline(always)]
       pub fn subregion(&self, area: Area) -> PlaneRegion<'_, T> {
         let rect = area.to_rect(
@@ -305,31 +305,31 @@ impl<'a, T: Pixel> PlaneRegionMut<'a, T> {
     }
   }
 
-  /// Return a mutable view to a subregion of the plane
-  ///
-  /// The subregion must be included in (i.e. must not exceed) this region.
-  ///
-  /// It is described by an `Area`, relative to this region.
-  ///
-  /// # Example
-  ///
-  /// ``` ignore
-  /// # use rav1e::tiling::*;
-  /// # fn f(region: &mut PlaneRegionMut<'_, u16>) {
-  /// // a mutable subregion from (10, 8) having size (32, 32)
-  /// let subregion = region.subregion_mut(Area::Rect { x: 10, y: 8, width: 32, height: 32 });
-  /// # }
-  /// ```
-  ///
-  /// ``` ignore
-  /// # use rav1e::context::*;
-  /// # use rav1e::tiling::*;
-  /// # fn f(region: &mut PlaneRegionMut<'_, u16>) {
-  /// // a mutable subregion from the top-left of block (2, 3) to the end of the region
-  /// let bo = BlockOffset { x: 2, y: 3 };
-  /// let subregion = region.subregion_mut(Area::BlockStartingAt { bo });
-  /// # }
-  /// ```
+  // Return a mutable view to a subregion of the plane
+  //
+  // The subregion must be included in (i.e. must not exceed) this region.
+  //
+  // It is described by an `Area`, relative to this region.
+  //
+  // # Example
+  //
+  // ``` ignore
+  // # use rav1e::tiling::*;
+  // # fn f(region: &mut PlaneRegionMut<'_, u16>) {
+  // // a mutable subregion from (10, 8) having size (32, 32)
+  // let subregion = region.subregion_mut(Area::Rect { x: 10, y: 8, width: 32, height: 32 });
+  // # }
+  // ```
+  //
+  // ``` ignore
+  // # use rav1e::context::*;
+  // # use rav1e::tiling::*;
+  // # fn f(region: &mut PlaneRegionMut<'_, u16>) {
+  // // a mutable subregion from the top-left of block (2, 3) to the end of the region
+  // let bo = BlockOffset { x: 2, y: 3 };
+  // let subregion = region.subregion_mut(Area::BlockStartingAt { bo });
+  // # }
+  // ```
   #[inline(always)]
   pub fn subregion_mut(&mut self, area: Area) -> PlaneRegionMut<'_, T> {
     let rect = area.to_rect(
