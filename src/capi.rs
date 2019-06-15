@@ -87,7 +87,7 @@ pub struct Context {
     last_err: Option<rav1e::EncoderStatus>,
 }
 
-type FrameType = rav1e::FrameType;
+type FrameType = rav1e::data::FrameType;
 
 /// Encoded Packet
 ///
@@ -106,18 +106,18 @@ pub struct Packet {
     pub frame_type: FrameType,
 }
 
-type PixelRange=rav1e::PixelRange;
-type ChromaSamplePosition=rav1e::ChromaSamplePosition;
-type ChromaSampling=rav1e::ChromaSampling;
-type MatrixCoefficients=rav1e::MatrixCoefficients;
-type ColorPrimaries=rav1e::ColorPrimaries;
-type TransferCharacteristics=rav1e::TransferCharacteristics;
-type Rational=rav1e::Rational;
+type PixelRange=rav1e::color::PixelRange;
+type ChromaSamplePosition=rav1e::color::ChromaSamplePosition;
+type ChromaSampling=rav1e::color::ChromaSampling;
+type MatrixCoefficients=rav1e::color::MatrixCoefficients;
+type ColorPrimaries=rav1e::color::ColorPrimaries;
+type TransferCharacteristics=rav1e::color::TransferCharacteristics;
+type Rational=rav1e::data::Rational;
 
 #[no_mangle]
 pub unsafe extern "C" fn rav1e_config_default() -> *mut Config {
     let cfg = rav1e::Config {
-        enc: rav1e::EncoderConfig::default(),
+        enc: rav1e::config::EncoderConfig::default(),
         threads: 0,
     };
 
@@ -159,19 +159,19 @@ pub unsafe extern "C" fn rav1e_config_set_pixel_format(cfg: *mut Config,
     (*cfg).cfg.enc.bit_depth = bit_depth as usize;
 
     let subsampling_val = std::mem::transmute::<ChromaSampling, i32>(subsampling);
-    if rav1e::ChromaSampling::from_i32(subsampling_val).is_none() {
+    if ChromaSampling::from_i32(subsampling_val).is_none() {
         return -1
     }
     (*cfg).cfg.enc.chroma_sampling = subsampling;
 
     let chroma_pos_val = std::mem::transmute::<ChromaSamplePosition, i32>(chroma_pos);
-    if rav1e::ChromaSamplePosition::from_i32(chroma_pos_val).is_none() {
+    if ChromaSamplePosition::from_i32(chroma_pos_val).is_none() {
         return -1
     }
     (*cfg).cfg.enc.chroma_sample_position = chroma_pos;
 
     let pixel_range_val = std::mem::transmute::<PixelRange, i32>(pixel_range);
-    if rav1e::PixelRange::from_i32(pixel_range_val).is_none() {
+    if PixelRange::from_i32(pixel_range_val).is_none() {
         return -1;
     }
     (*cfg).cfg.enc.pixel_range = pixel_range;
@@ -192,7 +192,7 @@ pub unsafe extern "C" fn rav1e_config_set_color_description(cfg: *mut Config,
                                                             primaries: ColorPrimaries,
                                                             transfer: TransferCharacteristics
 ) -> c_int {
-    (*cfg).cfg.enc.color_description = Some(rav1e::ColorDescription {
+    (*cfg).cfg.enc.color_description = Some(rav1e::color::ColorDescription {
         matrix_coefficients: matrix,
         color_primaries: primaries,
         transfer_characteristics: transfer,
@@ -209,7 +209,7 @@ pub unsafe extern "C" fn rav1e_config_set_content_light(cfg: *mut Config,
                                                         max_content_light_level: u16,
                                                         max_frame_average_light_level: u16
 ) -> c_int {
-    (*cfg).cfg.enc.content_light = Some(rav1e::ContentLight {
+    (*cfg).cfg.enc.content_light = Some(rav1e::color::ContentLight {
         max_content_light_level,
         max_frame_average_light_level,
     });
@@ -226,12 +226,12 @@ pub unsafe extern "C" fn rav1e_config_set_content_light(cfg: *mut Config,
 /// Returns a negative value on error or 0.
 #[no_mangle]
 pub unsafe extern "C" fn rav1e_config_set_mastering_display(cfg: *mut Config,
-                                                            primaries: [rav1e::Point; 3],
-                                                            white_point: rav1e::Point,
+                                                            primaries: [rav1e::data::Point; 3],
+                                                            white_point: rav1e::data::Point,
                                                             max_luminance: u32,
                                                             min_luminance: u32
 ) -> c_int {
-    (*cfg).cfg.enc.mastering_display = Some(rav1e::MasteringDisplay {
+    (*cfg).cfg.enc.mastering_display = Some(rav1e::color::MasteringDisplay {
         primaries,
         white_point,
         max_luminance,
@@ -260,7 +260,7 @@ unsafe fn option_match(
     match key {
         "width" => enc.width = value.parse().map_err(|_| ())?,
         "height" => enc.height = value.parse().map_err(|_| ())?,
-        "speed" => enc.speed_settings = rav1e::SpeedSettings::from_preset(value.parse().map_err(|_| ())?),
+        "speed" => enc.speed_settings = rav1e::config::SpeedSettings::from_preset(value.parse().map_err(|_| ())?),
 
         "threads" => (*cfg).cfg.threads = value.parse().map_err(|_| ())?,
 
