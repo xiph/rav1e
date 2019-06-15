@@ -271,6 +271,7 @@ unsafe fn option_match(
 
         "tune" => enc.tune = value.parse().map_err(|_| ())?,
         "quantizer" => enc.quantizer = value.parse().map_err(|_| ())?,
+        "min_quantizer" => enc.min_quantizer = value.parse().map_err(|_| ())?,
         "bitrate" => enc.bitrate = value.parse().map_err(|_| ())?,
 
         "key_frame_interval" => enc.max_key_frame_interval = value.parse().map_err(|_| ())?,
