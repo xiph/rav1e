@@ -44,7 +44,7 @@ pub fn create_muxer(path: &str) -> Box<dyn Muxer> {
     .extension()
     .and_then(OsStr::to_str)
     .map(str::to_lowercase)
-    .expect("no extension");
+    .unwrap_or_else(|| "ivf".into());
 
   match &ext[..] {
     "mp4" => {
