@@ -451,7 +451,7 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
   };
 
   cfg.quantizer = quantizer;
-  cfg.min_quantizer = matches.value_of("MINQP").unwrap().parse().unwrap_or(0);
+  cfg.min_quantizer = matches.value_of("MINQP").unwrap_or("0").parse().unwrap();
   cfg.bitrate = bitrate.checked_mul(1000).expect("Bitrate too high");
   cfg.reservoir_frame_delay = matches.value_of("RESERVOIR_FRAME_DELAY").map(|reservior_frame_delay| reservior_frame_delay.parse().unwrap());
   cfg.show_psnr = matches.is_present("PSNR");
