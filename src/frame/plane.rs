@@ -303,7 +303,7 @@ impl<T: Pixel> Plane<T> {
   }
 
   #[inline]
-  fn row_range(&self, x: isize, y: isize) -> Range<usize> {
+  pub fn row_range(&self, x: isize, y: isize) -> Range<usize> {
     debug_assert!(self.cfg.yorigin as isize + y >= 0);
     debug_assert!(self.cfg.xorigin as isize + x >= 0);
     let base_y = (self.cfg.yorigin as isize + y) as usize;
