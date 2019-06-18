@@ -1374,7 +1374,7 @@ impl IndexMut<BlockOffset> for FrameBlocks {
   }
 }
 
-const PARTITION_CONTEXT_GRANULARITY: usize = 8;
+const PARTITION_CONTEXT_GRANULARITY: usize = MI_SIZE;
 const PARTITION_CONTEXT_MAX_WIDTH: usize = MAX_TILE_WIDTH / PARTITION_CONTEXT_GRANULARITY;
 
 #[derive(Clone)]
