@@ -162,6 +162,13 @@ fn main() {
   cli.enc.bit_depth = video_info.bit_depth;
   cli.enc.chroma_sampling = video_info.chroma_sampling;
   cli.enc.chroma_sample_position = video_info.chroma_sample_position;
+
+  // If no pixel range is specified via CLI, assume limited,
+  // as it is the default for the Y4M format.
+  if cli.enc.pixel_range == PixelRange::Unspecified {
+    cli.enc.pixel_range = PixelRange::Limited;
+  }
+
   cli.enc.time_base = video_info.time_base;
   let cfg = Config {
     enc: cli.enc,
