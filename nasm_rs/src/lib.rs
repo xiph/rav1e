@@ -192,7 +192,7 @@ impl Build {
         let lib_name = if lib_name.starts_with("lib") && lib_name.ends_with(".a") {
             &lib_name[3..lib_name.len() - 2]
         } else {
-            lib_name.trim_right_matches(".lib")
+            lib_name.trim_end_matches(".lib")
         };
 
         let target = self.get_target();
