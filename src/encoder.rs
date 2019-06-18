@@ -504,17 +504,33 @@ impl<T: Pixel> FrameInvariants<T> {
     let w_in_b = 2 * config.width.align_power_of_two_and_shift(3); // MiCols, ((width+7)/8)<<3 >> MI_SIZE_LOG2
     let h_in_b = 2 * config.height.align_power_of_two_and_shift(3); // MiRows, ((height+7)/8)<<3 >> MI_SIZE_LOG2
 
+    let frame_rate = (config.time_base.den / config.time_base.num) as usize;
+    let min_tile_cols = (config.width - 1) / 4096;
+    // The minimum number of tiles is determined based on the following requirements:
+    // - A tile cannot be wider than 4096 pixels
+    // - A tile cannot be larger than 4096x2304 pixels
+    // - The tile size * the frame rate * a temporal ratio cannot exceed a given fixed rate
+    //   corresponding to 4K60 resolution with a 1.1 ratio.
+    let min_tiles = 1 + min_tile_cols.max(
+      (config.width * config.height) / (4096 * 2304)).max(
+      (config.width * config.height * frame_rate) / (4096_f64 * 2176_f64 * 60_f64 * 1.1) as usize
+    );
+
     let mut tiling = TilingInfo::new(
       sequence.sb_size_log2(),
       config.width,
       config.height,
-      config.tile_cols_log2,
+      config.tile_cols_log2.min(min_tile_cols),
       config.tile_rows_log2
     );
 
-    if config.tiles > 0 {
-      let mut tile_rows_log2 = 0;
-      let mut tile_cols_log2 = 0;
+    if config.tiles > 0 || tiling.rows * tiling.cols < min_tiles {
+      // If a number of automatically-assigned tiles is specified,
+      // start with the bare minimum number of tile rows and columns.
+      // Otherwise, the tile assignment is triggered because we need
+      // to add more tiles than the number set in the configuration.
+      let mut tile_rows_log2 = if config.tiles == 0 { config.tile_rows_log2 } else { 0 };
+      let mut tile_cols_log2 = if config.tiles == 0 { config.tile_cols_log2 } else { min_tile_cols };
       while (tile_rows_log2 < tiling.max_tile_rows_log2) || (tile_cols_log2 < tiling.max_tile_cols_log2) {
 
         tiling = TilingInfo::new(
@@ -525,7 +541,10 @@ impl<T: Pixel> FrameInvariants<T> {
           tile_rows_log2
         );
 
-        if tiling.rows * tiling.cols >= config.tiles { break };
+        if tiling.rows * tiling.cols >= config.tiles &&
+          tiling.rows * tiling.cols >= min_tiles {
+            break;
+        }
 
         if ((tiling.tile_height_sb >= tiling.tile_width_sb) &&
             (tiling.tile_rows_log2 < tiling.max_tile_rows_log2))
