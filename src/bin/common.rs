@@ -30,6 +30,7 @@ pub struct CliOptions {
   pub io: EncoderIO,
   pub enc: EncoderConfig,
   pub limit: usize,
+  pub color_range_specified: bool,
   pub skip: usize,
   pub verbose: bool,
   pub threads: usize,
@@ -334,6 +335,9 @@ pub fn parse_cli() -> CliOptions {
     io,
     enc: parse_config(&matches),
     limit: matches.value_of("LIMIT").unwrap().parse().unwrap(),
+    // Use `occurrences_of()` because `is_present()` is always true
+    // if a parameter has a default value.
+    color_range_specified: matches.occurrences_of("PIXEL_RANGE") > 0,
     skip: matches.value_of("SKIP").unwrap().parse().unwrap(),
     verbose: matches.is_present("VERBOSE"),
     threads,

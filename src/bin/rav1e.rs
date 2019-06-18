@@ -165,7 +165,7 @@ fn main() {
 
   // If no pixel range is specified via CLI, assume limited,
   // as it is the default for the Y4M format.
-  if cli.enc.pixel_range == PixelRange::Unspecified {
+  if !cli.color_range_specified {
     cli.enc.pixel_range = PixelRange::Limited;
   }
 
