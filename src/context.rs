@@ -1374,6 +1374,8 @@ impl IndexMut<BlockOffset> for FrameBlocks {
   }
 }
 
+// partition contexts are at 8x8 granularity, as it is not possible to
+// split 4x4 blocks any further than that
 const PARTITION_CONTEXT_GRANULARITY: usize = 8;
 const PARTITION_CONTEXT_MAX_WIDTH: usize = MAX_TILE_WIDTH / PARTITION_CONTEXT_GRANULARITY;
 
@@ -1381,7 +1383,8 @@ const PARTITION_CONTEXT_MAX_WIDTH: usize = MAX_TILE_WIDTH / PARTITION_CONTEXT_GR
 pub struct BlockContextCheckpoint {
   cdef_coded: bool,
   above_partition_context: [u8; PARTITION_CONTEXT_MAX_WIDTH],
-  left_partition_context: [u8; MAX_MIB_SIZE],
+  // left context is also at 8x8 granularity
+  left_partition_context: [u8; MAX_MIB_SIZE >> 1],
   above_tx_context: [u8; PARTITION_CONTEXT_MAX_WIDTH],
   left_tx_context: [u8; MAX_MIB_SIZE],
   above_coeff_context: [[u8; PARTITION_CONTEXT_MAX_WIDTH]; PLANES],
@@ -1394,7 +1397,7 @@ pub struct BlockContext<'a> {
   pub update_seg: bool,
   pub preskip_segid: bool,
   above_partition_context: [u8; PARTITION_CONTEXT_MAX_WIDTH],
-  left_partition_context: [u8; MAX_MIB_SIZE],
+  left_partition_context: [u8; MAX_MIB_SIZE >> 1],
   above_tx_context: [u8; PARTITION_CONTEXT_MAX_WIDTH],
   left_tx_context: [u8; MAX_MIB_SIZE],
   above_coeff_context: [[u8; PARTITION_CONTEXT_MAX_WIDTH]; PLANES],
@@ -1410,7 +1413,7 @@ impl<'a> BlockContext<'a> {
       update_seg: false,
       preskip_segid: true,
       above_partition_context: [0; PARTITION_CONTEXT_MAX_WIDTH],
-      left_partition_context: [0; MAX_MIB_SIZE],
+      left_partition_context: [0; MAX_MIB_SIZE >> 1],
       above_tx_context: [0; PARTITION_CONTEXT_MAX_WIDTH],
       left_tx_context: [0; MAX_MIB_SIZE],
       above_coeff_context: [
@@ -1564,8 +1567,8 @@ impl<'a> BlockContext<'a> {
     &self, bo: BlockOffset, bsize: BlockSize
   ) -> usize {
     // TODO: this should be way simpler without sub8x8
-    let above_ctx = self.above_partition_context[bo.x];
-    let left_ctx = self.left_partition_context[bo.y_in_sb()];
+    let above_ctx = self.above_partition_context[bo.x >> 1];
+    let left_ctx = self.left_partition_context[bo.y_in_sb() >> 1];
     let bsl = bsize.width_log2() - BLOCK_8X8.width_log2();
     let above = (above_ctx >> bsl) & 1;
     let left = (left_ctx >> bsl) & 1;
@@ -1585,18 +1588,18 @@ impl<'a> BlockContext<'a> {
     let bh = bsize.height_mi();
 
     let above_ctx =
-      &mut self.above_partition_context[bo.x..bo.x + bw as usize];
+      &mut self.above_partition_context[bo.x >> 1..(bo.x + bw) >> 1 as usize];
     let left_ctx = &mut self.left_partition_context
-      [bo.y_in_sb()..bo.y_in_sb() + bh as usize];
+      [bo.y_in_sb() >> 1..(bo.y_in_sb() + bh) >> 1 as usize];
 
     // update the partition context at the end notes. set partition bits
     // of block sizes larger than the current one to be one, and partition
     // bits of smaller block sizes to be zero.
-    for i in 0..bw {
+    for i in 0..bw >> 1 {
       above_ctx[i as usize] = partition_context_lookup[subsize as usize][0];
     }
 
-    for i in 0..bh {
+    for i in 0..bh >> 1{
       left_ctx[i as usize] = partition_context_lookup[subsize as usize][1];
     }
   }
