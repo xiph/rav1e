@@ -21,6 +21,7 @@ signal_support = ["signal-hook"]
 dump_ivf = ["ivf"]
 quick_test = []
 desync_finder = []
+bench = []
 
 [dependencies]
 arg_enum_proc_macro = "0.1.1"
