@@ -186,7 +186,7 @@ mod test_encode_decode_aom;
 #[cfg(all(test, feature="decode_test_dav1d"))]
 mod test_encode_decode_dav1d;
 
-#[cfg(rav1e_bench)]
+#[cfg(feature="bench")]
 pub mod bench {
   pub mod api { pub use crate::api::*; }
   pub mod cdef { pub use crate::cdef::*; }

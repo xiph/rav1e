@@ -66,6 +66,12 @@ make -j8
 ./aomdec ../output.ivf -o output.y4m
 ```
 
+# Configuring
+
+rav1e has several optional features that can be enabled by passing --features to cargo test. Passing --all-features is discouraged.
+
+* nasm - enabled by default. When enabled, assembly is built for x86_64.
+
 # Using the AOMAnalyzer
 
 ## Local Analyzer
@@ -155,7 +161,7 @@ cargo test --release --features=decode_test_dav1d
 
 Run regular benchmarks with:
 ```
-cargo bench
+cargo bench --features=bench
 ```
 
 # Getting in Touch
