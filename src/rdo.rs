@@ -782,7 +782,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     let mut probs = intra_mode_set.iter().map(|&a| (a, probs_all[a as usize])).collect::<Vec<_>>();
     probs.sort_by_key(|a| !a.1);
 
-    let mut modes = ArrayVec::<[_;7]>::new();
+    let mut modes = ArrayVec::<[_;INTRA_MODES]>::new();
     probs
       .iter()
       .take(num_modes_rdo / 2)
