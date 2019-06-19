@@ -212,7 +212,7 @@ impl Sequence {
       enable_ref_frame_mvs: false,
       enable_warped_motion: false,
       enable_superres: false,
-      enable_cdef: config.speed_settings.cdef,
+      enable_cdef: config.speed_settings.cdef && config.chroma_sampling != ChromaSampling::Cs422,
       enable_restoration: config.chroma_sampling != ChromaSampling::Cs422 &&
         config.chroma_sampling != ChromaSampling::Cs444, // FIXME: not working yet
       operating_points_cnt_minus_1: 0,
