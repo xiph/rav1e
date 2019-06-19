@@ -1237,11 +1237,11 @@ fn sse_h_edge<T: Pixel>(
 
 // Deblocks all edges, vertical and horizontal, in a single plane
 pub fn deblock_plane<T: Pixel>(
-  deblock: &DeblockState, p: &mut Plane<T>, pli: usize, blocks: &FrameBlocks,
-  bd: usize
+  fi: &FrameInvariants<T>, deblock: &DeblockState, p: &mut Plane<T>, pli: usize, blocks: &FrameBlocks
 ) {
   let xdec = p.cfg.xdec;
   let ydec = p.cfg.ydec;
+  let bd = fi.sequence.bit_depth;
 
   match pli {
     0 =>
@@ -1259,15 +1259,24 @@ pub fn deblock_plane<T: Pixel>(
     _ => return
   }
 
+  // Deblocking happens in 4x4 (luma) units; luma x,y are clipped to
+  // the *crop frame* by 4x4 block.  Rounding is to handle chroma
+  // fenceposts here instead of throughout the code.
+
+  let cols = ((cmp::min(blocks.cols, (fi.width + MI_SIZE - 1) >> MI_SIZE_LOG2) + (1<<xdec>>1)) >>
+              xdec) << xdec;  // Clippy can go suck an egg
+  let rows = ((cmp::min(blocks.rows, (fi.height + MI_SIZE - 1) >> MI_SIZE_LOG2) + (1<<ydec>>1)) >>
+              ydec) << ydec;  // Clippy can go suck an egg
+
   // vertical edge filtering leads horizonal by one full MI-sized
   // row (and horizontal filtering doesn't happen along the upper
   // edge).  Unroll to avoid corner-cases.
-  if blocks.rows > 0 {
-    for x in (1 << xdec..blocks.cols).step_by(1 << xdec) {
+  if rows > 0 {
+    for x in (1 << xdec..cols).step_by(1 << xdec) {
       filter_v_edge(deblock, blocks, BlockOffset { x, y: 0 }, p, pli, bd, xdec, ydec);
     }
-    if blocks.rows > 1 << ydec {
-      for x in (1 << xdec..blocks.cols).step_by(1 << xdec) {
+    if rows > 1 << ydec {
+      for x in (1 << xdec..cols).step_by(1 << xdec) {
         filter_v_edge(
           deblock,
           blocks,
@@ -1284,14 +1293,14 @@ pub fn deblock_plane<T: Pixel>(
 
   // filter rows where vertical and horizontal edge filtering both
   // happen (horizontal edge filtering lags vertical by one row).
-  for y in ((2 << ydec)..blocks.rows).step_by(1 << ydec) {
+  for y in ((2 << ydec)..rows).step_by(1 << ydec) {
     // Check for vertical edge at first MI block boundary on this row
-    if 1 << xdec < blocks.cols {
+    if  cols > 1 << xdec {
       filter_v_edge(deblock, blocks, BlockOffset { x: 1 << xdec, y }, p, pli, bd, xdec, ydec);
     }
     // run the rest of the row with both vertical and horizontal edge filtering.
     // Horizontal lags vertical edge by one row and two columns.
-    for x in (2 << xdec..blocks.cols).step_by(1 << xdec) {
+    for x in (2 << xdec..cols).step_by(1 << xdec) {
       filter_v_edge(deblock, blocks, BlockOffset { x, y }, p, pli, bd, xdec, ydec);
       filter_h_edge(
         deblock,
@@ -1305,22 +1314,22 @@ pub fn deblock_plane<T: Pixel>(
       );
     }
     // ..and the last two horizontal edges for the row
-    if blocks.cols - (2 << xdec) > 0 {
+    if cols > 2 << xdec {
       filter_h_edge(
         deblock,
         blocks,
-        BlockOffset { x: blocks.cols - (2 << xdec), y: y - (1 << ydec) },
+        BlockOffset { x: cols - (2 << xdec), y: y - (1 << ydec) },
         p,
         pli,
         bd,
         xdec,
         ydec
       );
-      if blocks.cols - (1 << xdec) > 0 {
+      if cols > 1 << xdec {
         filter_h_edge(
           deblock,
           blocks,
-          BlockOffset { x: blocks.cols - (1 << xdec), y: y - (1 << ydec) },
+          BlockOffset { x: cols - (1 << xdec), y: y - (1 << ydec) },
           p,
           pli,
           bd,
@@ -1332,12 +1341,12 @@ pub fn deblock_plane<T: Pixel>(
   }
 
   // Last horizontal row, vertical is already complete
-  if blocks.rows > 1 << ydec {
-    for x in (0..blocks.cols).step_by(1 << xdec) {
+  if rows > 1 << ydec {
+    for x in (0..cols).step_by(1 << xdec) {
       filter_h_edge(
         deblock,
         blocks,
-        BlockOffset { x, y: blocks.rows - (1 << ydec) },
+        BlockOffset { x, y: rows - (1 << ydec) },
         p,
         pli,
         bd,
@@ -1350,25 +1359,30 @@ pub fn deblock_plane<T: Pixel>(
 
 // sse count of all edges in a single plane, accumulates into vertical and horizontal counts
 fn sse_plane<T: Pixel>(
-  rec: &Plane<T>, src: &Plane<T>, v_sse: &mut [i64; MAX_LOOP_FILTER + 2],
-  h_sse: &mut [i64; MAX_LOOP_FILTER + 2], pli: usize, blocks: &FrameBlocks,
-  bd: usize
+  fi: &FrameInvariants<T>, rec: &Plane<T>, src: &Plane<T>, v_sse: &mut [i64; MAX_LOOP_FILTER + 2],
+  h_sse: &mut [i64; MAX_LOOP_FILTER + 2], pli: usize, blocks: &FrameBlocks
 ) {
   let xdec = rec.cfg.xdec;
   let ydec = rec.cfg.ydec;
 
+  // Deblocking happens in 4x4 (luma) units; luma x,y are clipped to
+  // the *crop frame* by 4x4 block.
+  let cols = cmp::min(blocks.cols, (fi.width + MI_SIZE - 1) >> MI_SIZE_LOG2);
+  let rows = cmp::min(blocks.rows, (fi.height + MI_SIZE - 1) >> MI_SIZE_LOG2);
+
+  let bd = fi.sequence.bit_depth;
   // No horizontal edge filtering along top of frame
-  for x in (1 << xdec..blocks.cols).step_by(1 << xdec) {
+  for x in (1 << xdec..cols).step_by(1 << xdec) {
     sse_v_edge(blocks, BlockOffset { x, y: 0 }, rec, src, v_sse, pli, bd, xdec, ydec);
   }
 
   // Unlike actual filtering, we're counting horizontal and vertical
   // as separable cases.  No need to lag the horizontal processing
   // behind vertical.
-  for y in (1 << ydec..blocks.rows).step_by(1 << ydec) {
+  for y in (1 << ydec..rows).step_by(1 << ydec) {
     // No vertical filtering along left edge of frame
     sse_h_edge(blocks, BlockOffset { x: 0, y }, rec, src, h_sse, pli, bd, xdec, ydec);
-    for x in (1 << xdec..blocks.cols).step_by(1 << xdec) {
+    for x in (1 << xdec..cols).step_by(1 << xdec) {
       sse_v_edge(blocks, BlockOffset { x, y }, rec, src, v_sse, pli, bd, xdec, ydec);
       sse_h_edge(blocks, BlockOffset { x, y }, rec, src, h_sse, pli, bd, xdec, ydec);
     }
@@ -1377,14 +1391,14 @@ fn sse_plane<T: Pixel>(
 
 // Deblocks all edges in all planes of a frame
 pub fn deblock_filter_frame<T: Pixel>(
-  fs: &mut FrameState<T>, blocks: &FrameBlocks, bit_depth: usize
+  fi: &FrameInvariants<T>, fs: &mut FrameState<T>, blocks: &FrameBlocks
 ) {
   for pli in 0..PLANES {
-    deblock_plane(&fs.deblock, &mut fs.rec.planes[pli], pli, blocks, bit_depth);
+    deblock_plane(fi, &fs.deblock, &mut fs.rec.planes[pli], pli, blocks);
   }
 }
 
-fn sse_optimize<T: Pixel>(fs: &mut FrameState<T>, blocks: &FrameBlocks, bit_depth: usize) {
+fn sse_optimize<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>, blocks: &FrameBlocks) {
   // i64 allows us to accumulate a total of ~ 35 bits worth of pixels
   assert!(
     fs.input.planes[0].cfg.width.ilog() + fs.input.planes[0].cfg.height.ilog()
@@ -1396,13 +1410,13 @@ fn sse_optimize<T: Pixel>(fs: &mut FrameState<T>, blocks: &FrameBlocks, bit_dept
     let mut h_tally: [i64; MAX_LOOP_FILTER + 2] = [0; MAX_LOOP_FILTER + 2];
 
     sse_plane(
+      fi,
       &fs.rec.planes[pli],
       &fs.input.planes[pli],
       &mut v_tally,
       &mut h_tally,
       pli,
-      blocks,
-      bit_depth
+      blocks
     );
 
     for i in 1..=MAX_LOOP_FILTER {
@@ -1478,6 +1492,6 @@ pub fn deblock_filter_optimize<T: Pixel>(
     fs.deblock.levels[2] = level;
     fs.deblock.levels[3] = level;
   } else {
-    sse_optimize(fs, blocks, fi.sequence.bit_depth);
+    sse_optimize(fi, fs, blocks);
   }
 }

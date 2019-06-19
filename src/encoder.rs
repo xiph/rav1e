@@ -1983,7 +1983,7 @@ fn encode_tile_group<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) 
   /* TODO: Don't apply if lossless */
   deblock_filter_optimize(fi, fs, &blocks);
   if fs.deblock.levels[0] != 0 || fs.deblock.levels[1] != 0 {
-    deblock_filter_frame(fs, &blocks, fi.sequence.bit_depth);
+    deblock_filter_frame(fi, fs, &blocks);
   }
 
   // Until the loop filters are pipelined, we'll need to keep
