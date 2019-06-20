@@ -1262,11 +1262,10 @@ pub fn deblock_plane<T: Pixel>(
   // Deblocking happens in 4x4 (luma) units; luma x,y are clipped to
   // the *crop frame* by 4x4 block.  Rounding is to handle chroma
   // fenceposts here instead of throughout the code.
-
-  let cols = ((cmp::min(blocks.cols, (fi.width + MI_SIZE - 1) >> MI_SIZE_LOG2) + (1<<xdec>>1)) >>
-              xdec) << xdec;  // Clippy can go suck an egg
-  let rows = ((cmp::min(blocks.rows, (fi.height + MI_SIZE - 1) >> MI_SIZE_LOG2) + (1<<ydec>>1)) >>
-              ydec) << ydec;  // Clippy can go suck an egg
+  let cols = (((fi.width + MI_SIZE - 1) >> MI_SIZE_LOG2) + (1<<xdec>>1)) >>
+              xdec << xdec;  // Clippy can go suck an egg
+  let rows = (((fi.height + MI_SIZE - 1) >> MI_SIZE_LOG2) + (1<<ydec>>1)) >>
+              ydec << ydec;  // Clippy can go suck an egg
 
   // vertical edge filtering leads horizonal by one full MI-sized
   // row (and horizontal filtering doesn't happen along the upper
