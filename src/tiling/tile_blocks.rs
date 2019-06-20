@@ -9,6 +9,7 @@
 
 use crate::context::*;
 use crate::partition::*;
+use crate::predict::PredictionMode;
 use crate::transform::*;
 
 use std::cmp;
