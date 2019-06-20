@@ -8,6 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::context::*;
+use crate::mc::MotionVector;
 use crate::partition::*;
 use crate::predict::PredictionMode;
 use crate::transform::*;

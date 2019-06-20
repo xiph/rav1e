@@ -22,6 +22,7 @@ use crate::encode_block_with_modes;
 use crate::encoder::FrameInvariants;
 use crate::frame::Frame;
 use crate::luma_ac;
+use crate::mc::MotionVector;
 use crate::me::*;
 use crate::motion_compensate;
 use crate::partition::*;

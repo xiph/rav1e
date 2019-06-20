@@ -15,6 +15,43 @@ pub use self::native::*;
 use crate::tiling::*;
 use crate::util::Pixel;
 
+use std::ops;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct MotionVector {
+  pub row: i16,
+  pub col: i16
+}
+
+impl ops::Add<MotionVector> for MotionVector {
+    type Output = MotionVector;
+
+    fn add(self, _rhs: MotionVector) -> MotionVector {
+        MotionVector{row: self.row + _rhs.row, col: self.col + _rhs.col}
+    }
+}
+
+impl ops::Div<i16> for MotionVector {
+    type Output = MotionVector;
+
+    fn div(self, _rhs: i16) -> MotionVector {
+        MotionVector{row: self.row  / _rhs, col: self.col / _rhs}
+    }
+}
+
+impl MotionVector {
+  pub fn quantize_to_fullpel(self) -> Self {
+    Self {
+      row: (self.row / 8) * 8,
+      col: (self.col / 8) * 8
+    }
+  }
+
+  pub fn is_zero(self) -> bool {
+    self.row == 0 && self.col == 0
+  }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 #[allow(unused)]
 pub enum FilterMode {

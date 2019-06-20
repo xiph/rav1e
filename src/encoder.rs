@@ -14,6 +14,7 @@ use crate::deblock::*;
 use crate::frame::*;
 use crate::ec::*;
 use crate::lrf::*;
+use crate::mc::MotionVector;
 use crate::me::*;
 use crate::partition::*;
 use crate::predict::PredictionMode;
