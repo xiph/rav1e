@@ -236,8 +236,52 @@ impl BlockSize {
     }
   }
 
+  /// Source: Subsampled_Size (AV1 specification section 5.11.38)
+  pub fn subsampled_size(self, xdec: usize, ydec: usize) -> BlockSize {
+    match (xdec, ydec) {
+      (0, 0) /* 4:4:4 */ => self,
+      (1, 0) /* 4:2:2 */ => match self {
+        BLOCK_4X4 | BLOCK_8X4 => BLOCK_4X4,
+        BLOCK_8X8 => BLOCK_4X8,
+        BLOCK_16X4 => BLOCK_8X4,
+        BLOCK_16X8 => BLOCK_8X8,
+        BLOCK_16X16 => BLOCK_8X16,
+        BLOCK_32X8 => BLOCK_16X8,
+        BLOCK_32X16 => BLOCK_16X16,
+        BLOCK_32X32 => BLOCK_16X32,
+        BLOCK_64X16 => BLOCK_32X16,
+        BLOCK_64X32 => BLOCK_32X32,
+        BLOCK_64X64 => BLOCK_32X64,
+        BLOCK_128X64 => BLOCK_64X64,
+        BLOCK_128X128 => BLOCK_64X128,
+        _ => BLOCK_INVALID
+      },
+      (1, 1) /* 4:2:0 */ => match self {
+        BLOCK_4X4 | BLOCK_4X8 | BLOCK_8X4 | BLOCK_8X8 => BLOCK_4X4,
+        BLOCK_4X16 | BLOCK_8X16 => BLOCK_4X8,
+        BLOCK_8X32 => BLOCK_4X16,
+        BLOCK_16X4 | BLOCK_16X8 => BLOCK_8X4,
+        BLOCK_16X16 => BLOCK_8X8,
+        BLOCK_16X32 => BLOCK_8X16,
+        BLOCK_16X64 => BLOCK_8X32,
+        BLOCK_32X8 => BLOCK_16X4,
+        BLOCK_32X16 => BLOCK_16X8,
+        BLOCK_32X32 => BLOCK_16X16,
+        BLOCK_32X64 => BLOCK_16X32,
+        BLOCK_64X16 => BLOCK_32X8,
+        BLOCK_64X32 => BLOCK_32X16,
+        BLOCK_64X64 => BLOCK_32X32,
+        BLOCK_64X128 => BLOCK_32X64,
+        BLOCK_128X64 => BLOCK_64X32,
+        BLOCK_128X128 => BLOCK_64X64,
+        _ => BLOCK_INVALID
+      },
+      _ => unreachable!()
+    }
+  }
+
   pub fn largest_chroma_tx_size(self, xdec: usize, ydec: usize) -> TxSize {
-    let plane_bsize = get_plane_block_size(self, xdec, ydec);
+    let plane_bsize = self.subsampled_size(xdec, ydec);
     let uv_tx = max_txsize_rect_lookup[plane_bsize as usize];
 
     av1_get_coded_tx_size(uv_tx)

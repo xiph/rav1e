@@ -168,38 +168,6 @@ pub static sub_tx_size_map: [TxSize; TxSize::TX_SIZES_ALL] = [
   TX_32X16,  // TX_64X16
 ];
 
-static ss_size_lookup: [[[BlockSize; 2]; 2]; BlockSize::BLOCK_SIZES_ALL] = [
-  //  ss_x == 0    ss_x == 0        ss_x == 1      ss_x == 1
-  //  ss_y == 0    ss_y == 1        ss_y == 0      ss_y == 1
-  [  [ BLOCK_4X4, BLOCK_4X4 ], [BLOCK_4X4, BLOCK_4X4 ] ],
-  [  [ BLOCK_4X8, BLOCK_4X4 ], [BLOCK_4X4, BLOCK_4X4 ] ],
-  [  [ BLOCK_8X4, BLOCK_4X4 ], [BLOCK_4X4, BLOCK_4X4 ] ],
-  [  [ BLOCK_8X8, BLOCK_8X4 ], [BLOCK_4X8, BLOCK_4X4 ] ],
-  [  [ BLOCK_8X16, BLOCK_8X8 ], [BLOCK_4X16, BLOCK_4X8 ] ],
-  [  [ BLOCK_16X8, BLOCK_16X4 ], [BLOCK_8X8, BLOCK_8X4 ] ],
-  [  [ BLOCK_16X16, BLOCK_16X8 ], [BLOCK_8X16, BLOCK_8X8 ] ],
-  [  [ BLOCK_16X32, BLOCK_16X16 ], [BLOCK_8X32, BLOCK_8X16 ] ],
-  [  [ BLOCK_32X16, BLOCK_32X8 ], [BLOCK_16X16, BLOCK_16X8 ] ],
-  [  [ BLOCK_32X32, BLOCK_32X16 ], [BLOCK_16X32, BLOCK_16X16 ] ],
-  [  [ BLOCK_32X64, BLOCK_32X32 ], [BLOCK_16X64, BLOCK_16X32 ] ],
-  [  [ BLOCK_64X32, BLOCK_64X16 ], [BLOCK_32X32, BLOCK_32X16 ] ],
-  [  [ BLOCK_64X64, BLOCK_64X32 ], [BLOCK_32X64, BLOCK_32X32 ] ],
-  [  [ BLOCK_64X128, BLOCK_64X64 ], [ BLOCK_INVALID, BLOCK_32X64 ] ],
-  [  [ BLOCK_128X64, BLOCK_INVALID ], [ BLOCK_64X64, BLOCK_64X32 ] ],
-  [  [ BLOCK_128X128, BLOCK_128X64 ], [ BLOCK_64X128, BLOCK_64X64 ] ],
-  [  [ BLOCK_4X16, BLOCK_4X8 ], [BLOCK_4X16, BLOCK_4X8 ] ],
-  [  [ BLOCK_16X4, BLOCK_16X4 ], [BLOCK_8X4, BLOCK_8X4 ] ],
-  [  [ BLOCK_8X32, BLOCK_8X16 ], [BLOCK_INVALID, BLOCK_4X16 ] ],
-  [  [ BLOCK_32X8, BLOCK_INVALID ], [BLOCK_16X8, BLOCK_16X4 ] ],
-  [  [ BLOCK_16X64, BLOCK_16X32 ], [BLOCK_INVALID, BLOCK_8X32 ] ],
-  [  [ BLOCK_64X16, BLOCK_INVALID ], [BLOCK_32X16, BLOCK_32X8 ] ]
-];
-
-pub fn get_plane_block_size(bsize: BlockSize, subsampling_x: usize, subsampling_y: usize)
-    -> BlockSize {
-  ss_size_lookup[bsize as usize][subsampling_x][subsampling_y]
-}
-
 // Generates 4 bit field in which each bit set to 1 represents
 // a blocksize partition  1111 means we split 64x64, 32x32, 16x16
 // and 8x8.  1000 means we just split the 64x64 to 32x32
@@ -1538,7 +1506,7 @@ impl<'a> BlockContext<'a> {
       let plane_bsize = if plane == 0 {
         bsize
       } else {
-        get_plane_block_size(bsize, xdec2, ydec2)
+        bsize.subsampled_size(xdec2, ydec2)
       };
       let bw = plane_bsize.width_mi();
       let bh = plane_bsize.height_mi();
