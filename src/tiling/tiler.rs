@@ -206,6 +206,7 @@ pub mod test {
   use crate::api::*;
   use crate::lrf::*;
   use crate::partition::*;
+  use crate::predict::PredictionMode;
 
   #[test]
   fn test_tiling_info_from_tile_count() {

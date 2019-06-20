@@ -11,6 +11,7 @@
 
 use crate::context::*;
 use crate::partition::*;
+use crate::predict::*;
 use crate::transform::*;
 
 const PALATTE_BSIZE_CTXS: usize = 7;

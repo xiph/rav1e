@@ -16,6 +16,7 @@ use crate::ec::*;
 use crate::lrf::*;
 use crate::me::*;
 use crate::partition::*;
+use crate::predict::PredictionMode;
 use crate::plane::*;
 use crate::quantize::*;
 use crate::rate::QuantizerParameters;

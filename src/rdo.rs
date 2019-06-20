@@ -27,7 +27,7 @@ use crate::motion_compensate;
 use crate::partition::*;
 use crate::partition::RefType::*;
 use crate::plane::*;
-use crate::predict::{RAV1E_INTRA_MODES, RAV1E_INTER_MODES_MINIMAL, RAV1E_INTER_COMPOUND_MODES};
+use crate::predict::{RAV1E_INTRA_MODES, RAV1E_INTER_MODES_MINIMAL, RAV1E_INTER_COMPOUND_MODES, PredictionMode};
 use crate::Tune;
 use crate::write_tx_blocks;
 use crate::write_tx_tree;

@@ -8,10 +8,16 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 #![allow(non_upper_case_globals)]
+#![allow(non_camel_case_types)]
+#![allow(dead_code)]
 
 use crate::context::{INTRA_MODES, MAX_TX_SIZE};
+use crate::encoder::FrameInvariants;
+use crate::mc::*;
 use crate::partition::*;
+use crate::plane::*;
 use crate::tiling::*;
+use crate::transform::*;
 use crate::util::*;
 
 #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
@@ -53,6 +59,334 @@ pub static RAV1E_INTER_COMPOUND_MODES: &'static [PredictionMode] = &[
   PredictionMode::NEAREST_NEWMV,
   PredictionMode::NEW_NEARESTMV
 ];
+
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+pub enum PredictionMode {
+  DC_PRED,     // Average of above and left pixels
+  V_PRED,      // Vertical
+  H_PRED,      // Horizontal
+  D45_PRED,    // Directional 45  deg = round(arctan(1/1) * 180/pi)
+  D135_PRED,   // Directional 135 deg = 180 - 45
+  D117_PRED,   // Directional 117 deg = 180 - 63
+  D153_PRED,   // Directional 153 deg = 180 - 27
+  D207_PRED,   // Directional 207 deg = 180 + 27
+  D63_PRED,    // Directional 63  deg = round(arctan(2/1) * 180/pi)
+  SMOOTH_PRED, // Combination of horizontal and vertical interpolation
+  SMOOTH_V_PRED,
+  SMOOTH_H_PRED,
+  PAETH_PRED,
+  UV_CFL_PRED,
+  NEARESTMV,
+  NEAR0MV,
+  NEAR1MV,
+  NEAR2MV,
+  GLOBALMV,
+  NEWMV,
+  // Compound ref compound modes
+  NEAREST_NEARESTMV,
+  NEAR_NEARMV,
+  NEAREST_NEWMV,
+  NEW_NEARESTMV,
+  NEAR_NEWMV,
+  NEW_NEARMV,
+  GLOBAL_GLOBALMV,
+  NEW_NEWMV
+}
+
+impl PredictionMode {
+  pub fn predict_intra<T: Pixel>(
+    self, tile_rect: TileRect, dst: &mut PlaneRegionMut<'_, T>, tx_size: TxSize, bit_depth: usize,
+    ac: &[i16], alpha: i16, edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>
+  ) {
+    assert!(self.is_intra());
+
+    match tx_size {
+      TxSize::TX_4X4 =>
+        self.predict_intra_inner::<Block4x4, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
+      TxSize::TX_8X8 =>
+        self.predict_intra_inner::<Block8x8, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
+      TxSize::TX_16X16 =>
+        self.predict_intra_inner::<Block16x16, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
+      TxSize::TX_32X32 =>
+        self.predict_intra_inner::<Block32x32, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
+      TxSize::TX_64X64 =>
+        self.predict_intra_inner::<Block64x64, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
+
+      TxSize::TX_4X8 =>
+        self.predict_intra_inner::<Block4x8, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
+      TxSize::TX_8X4 =>
+        self.predict_intra_inner::<Block8x4, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
+      TxSize::TX_8X16 =>
+        self.predict_intra_inner::<Block8x16, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
+      TxSize::TX_16X8 =>
+        self.predict_intra_inner::<Block16x8, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
+      TxSize::TX_16X32 =>
+        self.predict_intra_inner::<Block16x32, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
+      TxSize::TX_32X16 =>
+        self.predict_intra_inner::<Block32x16, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
+      TxSize::TX_32X64 =>
+        self.predict_intra_inner::<Block32x64, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
+      TxSize::TX_64X32 =>
+        self.predict_intra_inner::<Block64x32, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
+
+      TxSize::TX_4X16 =>
+        self.predict_intra_inner::<Block4x16, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
+      TxSize::TX_16X4 =>
+        self.predict_intra_inner::<Block16x4, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
+      TxSize::TX_8X32 =>
+        self.predict_intra_inner::<Block8x32, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
+      TxSize::TX_32X8 =>
+        self.predict_intra_inner::<Block32x8, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
+      TxSize::TX_16X64 =>
+        self.predict_intra_inner::<Block16x64, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
+      TxSize::TX_64X16 =>
+        self.predict_intra_inner::<Block64x16, _>(tile_rect, dst, bit_depth, ac, alpha, edge_buf),
+    }
+  }
+
+  #[inline(always)]
+  fn predict_intra_inner<B: Intra<T>, T: Pixel>(
+    self, tile_rect: TileRect, dst: &mut PlaneRegionMut<'_, T>, bit_depth: usize, ac: &[i16],
+    alpha: i16, edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>
+  ) {
+    // left pixels are order from bottom to top and right-aligned
+    let (left, not_left) = edge_buf.array.split_at(2*MAX_TX_SIZE);
+    let (top_left, above) = not_left.split_at(1);
+
+    let &Rect { x: frame_x, y: frame_y, .. } = dst.rect();
+    debug_assert!(frame_x >= 0 && frame_y >= 0);
+    // x and y are expressed relative to the tile
+    let x = frame_x as usize - tile_rect.x;
+    let y = frame_y as usize - tile_rect.y;
+
+    let mode: PredictionMode = match self {
+      PredictionMode::PAETH_PRED => match (x, y) {
+        (0, 0) => PredictionMode::DC_PRED,
+        (_, 0) => PredictionMode::H_PRED,
+        (0, _) => PredictionMode::V_PRED,
+        _ => PredictionMode::PAETH_PRED
+      },
+      PredictionMode::UV_CFL_PRED =>
+        if alpha == 0 {
+          PredictionMode::DC_PRED
+        } else {
+          self
+        },
+      _ => self
+    };
+
+    let above_slice = &above[..B::W + B::H];
+    let left_slice = &left[2 * MAX_TX_SIZE - B::H..];
+    let left_and_left_below_slice = &left[2 * MAX_TX_SIZE - B::H - B::W..];
+
+    match mode {
+      PredictionMode::DC_PRED => match (x, y) {
+        (0, 0) => B::pred_dc_128(dst, bit_depth),
+        (_, 0) => B::pred_dc_left(dst, above_slice, left_slice),
+        (0, _) => B::pred_dc_top(dst, above_slice, left_slice),
+        _ => B::pred_dc(dst, above_slice, left_slice)
+      },
+      PredictionMode::UV_CFL_PRED => match (x, y) {
+        (0, 0) => B::pred_cfl_128(dst, &ac, alpha, bit_depth),
+        (_, 0) => B::pred_cfl_left(
+          dst,
+          &ac,
+          alpha,
+          bit_depth,
+          above_slice,
+          left_slice
+        ),
+        (0, _) => B::pred_cfl_top(
+          dst,
+          &ac,
+          alpha,
+          bit_depth,
+          above_slice,
+          left_slice
+        ),
+        _ => B::pred_cfl(
+          dst,
+          &ac,
+          alpha,
+          bit_depth,
+          above_slice,
+          left_slice
+        )
+      },
+      PredictionMode::H_PRED => B::pred_h(dst, left_slice),
+      PredictionMode::V_PRED => B::pred_v(dst, above_slice),
+      PredictionMode::PAETH_PRED =>
+        B::pred_paeth(dst, above_slice, left_slice, top_left[0]),
+      PredictionMode::SMOOTH_PRED =>
+        B::pred_smooth(dst, above_slice, left_slice),
+      PredictionMode::SMOOTH_H_PRED =>
+        B::pred_smooth_h(dst, above_slice, left_slice),
+      PredictionMode::SMOOTH_V_PRED =>
+        B::pred_smooth_v(dst, above_slice, left_slice),
+      PredictionMode::D45_PRED =>
+        B::pred_directional(dst, above_slice, left_and_left_below_slice, top_left, 45, bit_depth),
+      PredictionMode::D135_PRED =>
+        B::pred_directional(dst, above_slice, left_and_left_below_slice, top_left, 135, bit_depth),
+      PredictionMode::D117_PRED =>
+        B::pred_directional(dst, above_slice, left_and_left_below_slice, top_left, 113, bit_depth),
+      PredictionMode::D153_PRED =>
+        B::pred_directional(dst, above_slice, left_and_left_below_slice, top_left, 157, bit_depth),
+      PredictionMode::D207_PRED =>
+        B::pred_directional(dst, above_slice, left_and_left_below_slice, top_left, 203, bit_depth),
+      PredictionMode::D63_PRED =>
+        B::pred_directional(dst, above_slice, left_and_left_below_slice, top_left, 67, bit_depth),
+      _ => unimplemented!()
+    }
+  }
+
+  pub fn is_intra(self) -> bool {
+    self < PredictionMode::NEARESTMV
+  }
+
+  pub fn is_cfl(self) -> bool {
+    self == PredictionMode::UV_CFL_PRED
+  }
+
+  pub fn is_directional(self) -> bool {
+    self >= PredictionMode::V_PRED && self <= PredictionMode::D63_PRED
+  }
+
+  pub fn predict_inter<T: Pixel>(
+    self, fi: &FrameInvariants<T>, tile_rect: TileRect, p: usize, po: PlaneOffset,
+    dst: &mut PlaneRegionMut<'_, T>, width: usize, height: usize,
+    ref_frames: [RefType; 2], mvs: [MotionVector; 2]
+  ) {
+    assert!(!self.is_intra());
+    let frame_po = tile_rect.to_frame_plane_offset(po);
+
+    let mode = FilterMode::REGULAR;
+    let is_compound =
+      ref_frames[1] != RefType::INTRA_FRAME && ref_frames[1] != RefType::NONE_FRAME;
+
+    fn get_params<'a, T: Pixel>(
+      rec_plane: &'a Plane<T>, po: PlaneOffset, mv: MotionVector
+    ) -> (i32, i32, PlaneSlice<'a, T>) {
+      let rec_cfg = &rec_plane.cfg;
+      let shift_row = 3 + rec_cfg.ydec;
+      let shift_col = 3 + rec_cfg.xdec;
+      let row_offset = mv.row as i32 >> shift_row;
+      let col_offset = mv.col as i32 >> shift_col;
+      let row_frac =
+        (mv.row as i32 - (row_offset << shift_row)) << (4 - shift_row);
+      let col_frac =
+        (mv.col as i32 - (col_offset << shift_col)) << (4 - shift_col);
+      let qo = PlaneOffset {
+        x: po.x + col_offset as isize - 3,
+        y: po.y + row_offset as isize - 3
+      };
+      (row_frac, col_frac, rec_plane.slice(qo).clamp().subslice(3, 3))
+    };
+
+    if !is_compound {
+      if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[ref_frames[0].to_index()] as usize] {
+        let (row_frac, col_frac, src) = get_params(&rec.frame.planes[p], frame_po, mvs[0]);
+        put_8tap(
+          dst,
+          src,
+          width,
+          height,
+          col_frac,
+          row_frac,
+          mode,
+          mode,
+          fi.sequence.bit_depth
+        );
+      }
+    } else {
+      let mut tmp: [AlignedArray<[i16; 128 * 128]>; 2] =
+        [UninitializedAlignedArray(), UninitializedAlignedArray()];
+      for i in 0..2 {
+        if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[ref_frames[i].to_index()] as usize] {
+          let (row_frac, col_frac, src) = get_params(&rec.frame.planes[p], frame_po, mvs[i]);
+          prep_8tap(
+            &mut tmp[i].array,
+            src,
+            width,
+            height,
+            col_frac,
+            row_frac,
+            mode,
+            mode,
+            fi.sequence.bit_depth
+          );
+        }
+      }
+      mc_avg(
+        dst,
+        &tmp[0].array,
+        &tmp[1].array,
+        width,
+        height,
+        fi.sequence.bit_depth
+      );
+    }
+  }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+pub enum InterIntraMode {
+  II_DC_PRED,
+  II_V_PRED,
+  II_H_PRED,
+  II_SMOOTH_PRED,
+  INTERINTRA_MODES
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+pub enum CompoundType {
+  COMPOUND_AVERAGE,
+  COMPOUND_WEDGE,
+  COMPOUND_DIFFWTD,
+  COMPOUND_TYPES,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+pub enum MotionMode {
+  SIMPLE_TRANSLATION,
+  OBMC_CAUSAL,    // 2-sided OBMC
+  WARPED_CAUSAL,  // 2-sided WARPED
+  MOTION_MODES
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+pub enum PaletteSize {
+  TWO_COLORS,
+  THREE_COLORS,
+  FOUR_COLORS,
+  FIVE_COLORS,
+  SIX_COLORS,
+  SEVEN_COLORS,
+  EIGHT_COLORS,
+  PALETTE_SIZES
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+pub enum PaletteColor {
+  PALETTE_COLOR_ONE,
+  PALETTE_COLOR_TWO,
+  PALETTE_COLOR_THREE,
+  PALETTE_COLOR_FOUR,
+  PALETTE_COLOR_FIVE,
+  PALETTE_COLOR_SIX,
+  PALETTE_COLOR_SEVEN,
+  PALETTE_COLOR_EIGHT,
+  PALETTE_COLORS
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+pub enum FilterIntraMode {
+  FILTER_DC_PRED,
+  FILTER_V_PRED,
+  FILTER_H_PRED,
+  FILTER_D157_PRED,
+  FILTER_PAETH_PRED,
+  FILTER_INTRA_MODES
+}
 
 // Weights are quadratic from '1' to '1 / block_size', scaled by 2^sm_weight_log2_scale.
 const sm_weight_log2_scale: u8 = 8;
@@ -888,7 +1222,6 @@ pub trait Inter: Dim {}
 mod test {
   use super::*;
   use num_traits::*;
-  use crate::plane::*;
 
   #[test]
   fn pred_matches_u8() {

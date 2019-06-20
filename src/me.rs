@@ -16,6 +16,7 @@ use crate::encoder::ReferenceFrame;
 use crate::FrameInvariants;
 use crate::partition::*;
 use crate::partition::RefType::*;
+use crate::predict::PredictionMode;
 use crate::plane::*;
 use crate::tiling::*;
 use crate::util::Pixel;
