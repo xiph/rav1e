@@ -7,20 +7,244 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+#![allow(non_camel_case_types)]
+#![allow(dead_code)]
+
 pub use self::forward::*;
 pub use self::inverse::*;
 
-use crate::partition::{TxSize, TxType, TX_TYPES};
+use crate::context::*;
+use crate::partition::*;
+use crate::partition::BlockSize::*;
 use crate::predict::*;
 use crate::tiling::*;
 use crate::util::*;
 
+use TxSize::*;
+
 mod forward;
 mod inverse;
+
+pub static RAV1E_TX_TYPES: &'static [TxType] = &[
+  TxType::DCT_DCT,
+  TxType::ADST_DCT,
+  TxType::DCT_ADST,
+  TxType::ADST_ADST,
+  TxType::IDTX,
+  TxType::V_DCT,
+  TxType::H_DCT
+];
 
 static SQRT2_BITS: usize = 12;
 static SQRT2: i32 = 5793;       // 2^12 * sqrt(2)
 static INV_SQRT2: i32 = 2896;   // 2^12 / sqrt(2)
+
+pub const TX_TYPES: usize = 16;
+
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
+#[repr(C)]
+pub enum TxType {
+  DCT_DCT = 0,   // DCT  in both horizontal and vertical
+  ADST_DCT = 1,  // ADST in vertical, DCT in horizontal
+  DCT_ADST = 2,  // DCT  in vertical, ADST in horizontal
+  ADST_ADST = 3, // ADST in both directions
+  FLIPADST_DCT = 4,
+  DCT_FLIPADST = 5,
+  FLIPADST_FLIPADST = 6,
+  ADST_FLIPADST = 7,
+  FLIPADST_ADST = 8,
+  IDTX = 9,
+  V_DCT = 10,
+  H_DCT = 11,
+  V_ADST = 12,
+  H_ADST = 13,
+  V_FLIPADST = 14,
+  H_FLIPADST = 15
+}
+
+/// Transform Size
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[repr(C)]
+pub enum TxSize {
+  TX_4X4,
+  TX_8X8,
+  TX_16X16,
+  TX_32X32,
+  TX_64X64,
+
+  TX_4X8,
+  TX_8X4,
+  TX_8X16,
+  TX_16X8,
+  TX_16X32,
+  TX_32X16,
+  TX_32X64,
+  TX_64X32,
+
+  TX_4X16,
+  TX_16X4,
+  TX_8X32,
+  TX_32X8,
+  TX_16X64,
+  TX_64X16
+}
+
+impl TxSize {
+  /// Number of square transform sizes
+  pub const TX_SIZES: usize = 5;
+
+  /// Number of transform sizes (including non-square sizes)
+  pub const TX_SIZES_ALL: usize = 14 + 5;
+
+  pub fn width(self) -> usize {
+    1 << self.width_log2()
+  }
+
+  pub fn width_log2(self) -> usize {
+    match self {
+      TX_4X4 | TX_4X8 | TX_4X16 => 2,
+      TX_8X8 | TX_8X4 | TX_8X16 | TX_8X32 => 3,
+      TX_16X16 | TX_16X8 | TX_16X32 | TX_16X4 | TX_16X64 => 4,
+      TX_32X32 | TX_32X16 | TX_32X64 | TX_32X8 => 5,
+      TX_64X64 | TX_64X32 | TX_64X16 => 6
+    }
+  }
+
+  pub fn width_index(self) -> usize {
+    self.width_log2() - TX_4X4.width_log2()
+  }
+
+  pub fn height(self) -> usize {
+    1 << self.height_log2()
+  }
+
+  pub fn height_log2(self) -> usize {
+    match self {
+      TX_4X4 | TX_8X4 | TX_16X4 => 2,
+      TX_8X8 | TX_4X8 | TX_16X8 | TX_32X8 => 3,
+      TX_16X16 | TX_8X16 | TX_32X16 | TX_4X16 | TX_64X16 => 4,
+      TX_32X32 | TX_16X32 | TX_64X32 | TX_8X32 => 5,
+      TX_64X64 | TX_32X64 | TX_16X64 => 6
+    }
+  }
+
+  pub fn height_index(self) -> usize {
+    self.height_log2() - TX_4X4.height_log2()
+  }
+
+  pub fn width_mi(self) -> usize {
+    self.width() >> MI_SIZE_LOG2
+  }
+
+  pub fn area(self) -> usize {
+    1 << self.area_log2()
+  }
+
+  pub fn area_log2(self) -> usize {
+    self.width_log2() + self.height_log2()
+  }
+
+  pub fn height_mi(self) -> usize {
+    self.height() >> MI_SIZE_LOG2
+  }
+
+  pub fn block_size(self) -> BlockSize {
+    match self {
+      TX_4X4 => BLOCK_4X4,
+      TX_8X8 => BLOCK_8X8,
+      TX_16X16 => BLOCK_16X16,
+      TX_32X32 => BLOCK_32X32,
+      TX_64X64 => BLOCK_64X64,
+      TX_4X8 => BLOCK_4X8,
+      TX_8X4 => BLOCK_8X4,
+      TX_8X16 => BLOCK_8X16,
+      TX_16X8 => BLOCK_16X8,
+      TX_16X32 => BLOCK_16X32,
+      TX_32X16 => BLOCK_32X16,
+      TX_32X64 => BLOCK_32X64,
+      TX_64X32 => BLOCK_64X32,
+      TX_4X16 => BLOCK_4X16,
+      TX_16X4 => BLOCK_16X4,
+      TX_8X32 => BLOCK_8X32,
+      TX_32X8 => BLOCK_32X8,
+      TX_16X64 => BLOCK_16X64,
+      TX_64X16 => BLOCK_64X16
+    }
+  }
+
+  pub fn sqr(self) -> TxSize {
+    match self {
+      TX_4X4 | TX_4X8 | TX_8X4 | TX_4X16 | TX_16X4 => TX_4X4,
+      TX_8X8 | TX_8X16 | TX_16X8 | TX_8X32 | TX_32X8 => TX_8X8,
+      TX_16X16 | TX_16X32 | TX_32X16 | TX_16X64 | TX_64X16 => TX_16X16,
+      TX_32X32 | TX_32X64 | TX_64X32 => TX_32X32,
+      TX_64X64 => TX_64X64
+    }
+  }
+
+  pub fn sqr_up(self) -> TxSize {
+    match self {
+      TX_4X4 => TX_4X4,
+      TX_8X8 | TX_4X8 | TX_8X4 => TX_8X8,
+      TX_16X16 | TX_8X16 | TX_16X8 | TX_4X16 | TX_16X4 => TX_16X16,
+      TX_32X32 | TX_16X32 | TX_32X16 | TX_8X32 | TX_32X8 => TX_32X32,
+      TX_64X64 | TX_32X64 | TX_64X32 | TX_16X64 | TX_64X16 => TX_64X64
+    }
+  }
+
+  pub fn by_dims(w: usize, h: usize) -> TxSize {
+    match (w, h) {
+      (4, 4) => TX_4X4,
+      (8, 8) => TX_8X8,
+      (16, 16) => TX_16X16,
+      (32, 32) => TX_32X32,
+      (64, 64) => TX_64X64,
+      (4, 8) => TX_4X8,
+      (8, 4) => TX_8X4,
+      (8, 16) => TX_8X16,
+      (16, 8) => TX_16X8,
+      (16, 32) => TX_16X32,
+      (32, 16) => TX_32X16,
+      (32, 64) => TX_32X64,
+      (64, 32) => TX_64X32,
+      (4, 16) => TX_4X16,
+      (16, 4) => TX_16X4,
+      (8, 32) => TX_8X32,
+      (32, 8) => TX_32X8,
+      (16, 64) => TX_16X64,
+      (64, 16) => TX_64X16,
+      _ => unreachable!()
+    }
+  }
+
+  pub fn is_rect(self) -> bool {
+    self.width_log2() != self.height_log2()
+  }
+}
+
+#[derive(Copy, Clone, PartialEq, PartialOrd)]
+pub enum TxSet {
+  // DCT only
+  TX_SET_DCTONLY,
+  // DCT + Identity only
+  TX_SET_DCT_IDTX,
+  // Discrete Trig transforms w/o flip (4) + Identity (1)
+  TX_SET_DTT4_IDTX,
+  // Discrete Trig transforms w/o flip (4) + Identity (1) + 1D Hor/vert DCT (2)
+  // for 16x16 only
+  TX_SET_DTT4_IDTX_1DDCT_16X16,
+  // Discrete Trig transforms w/o flip (4) + Identity (1) + 1D Hor/vert DCT (2)
+  TX_SET_DTT4_IDTX_1DDCT,
+  // Discrete Trig transforms w/ flip (9) + Identity (1)
+  TX_SET_DTT9_IDTX,
+  // Discrete Trig transforms w/ flip (9) + Identity (1) + 1D Hor/Ver DCT (2)
+  TX_SET_DTT9_IDTX_1DDCT,
+  // Discrete Trig transforms w/ flip (9) + Identity (1) + 1D Hor/Ver (6)
+  // for 16x16 only
+  TX_SET_ALL16_16X16,
+  // Discrete Trig transforms w/ flip (9) + Identity (1) + 1D Hor/Ver (6)
+  TX_SET_ALL16
+}
 
 /// Utility function that returns the log of the ratio of the col and row sizes.
 #[inline]
@@ -206,6 +430,7 @@ pub fn inverse_transform_add<T: Pixel>(
 #[cfg(test)]
 mod test {
   use super::*;
+  use super::TxType::*;
   use rand::random;
   use crate::plane::*;
 
@@ -263,8 +488,6 @@ mod test {
   }
 
   fn roundtrips<T: Pixel>() {
-    use crate::partition::TxSize::*;
-    use crate::partition::TxType::*;
     let combinations = [
       (TX_4X4, DCT_DCT, 0),
       (TX_4X4, ADST_DCT, 0),

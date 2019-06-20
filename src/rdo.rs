@@ -32,6 +32,7 @@ use crate::Tune;
 use crate::write_tx_blocks;
 use crate::write_tx_tree;
 use crate::tiling::*;
+use crate::transform::{RAV1E_TX_TYPES, TxSet, TxSize, TxType};
 use crate::util::{AlignedArray, CastFromPrimitive, Pixel, UninitializedAlignedArray};
 use crate::rdo_tables::*;
 

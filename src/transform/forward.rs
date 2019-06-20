@@ -8,7 +8,6 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use super::*;
-use crate::partition::{TxSize, TxType};
 
 type TxfmShift = [i8; 3];
 type TxfmShifts = [TxfmShift; 3];

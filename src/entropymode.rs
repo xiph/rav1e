@@ -11,6 +11,7 @@
 
 use crate::context::*;
 use crate::partition::*;
+use crate::transform::*;
 
 const PALATTE_BSIZE_CTXS: usize = 7;
 const PALETTE_Y_MODE_CONTEXTS: usize = 3;
