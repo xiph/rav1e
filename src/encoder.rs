@@ -1010,7 +1010,7 @@ pub fn motion_compensate<T: Pixel>(
   let luma_tile_rect = ts.tile_rect();
   for p in 0..num_planes {
     let plane_bsize = if p == 0 { bsize }
-    else { get_plane_block_size(bsize, u_xdec, u_ydec) };
+    else { bsize.subsampled_size(u_xdec, u_ydec) };
 
     let rec = &mut ts.rec.planes[p];
     let po = tile_bo.plane_offset(&rec.plane_cfg);
@@ -1278,7 +1278,7 @@ pub fn luma_ac<T: Pixel>(
   ac: &mut [i16], ts: &mut TileStateMut<'_, T>, tile_bo: BlockOffset, bsize: BlockSize
 ) {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
-  let plane_bsize = get_plane_block_size(bsize, xdec, ydec);
+  let plane_bsize = bsize.subsampled_size(xdec, ydec);
   let bo = if bsize.is_sub8x8(xdec, ydec) {
     let offset = bsize.sub8x8_offset(xdec, ydec);
     tile_bo.with_offset(offset.0, offset.1)
@@ -1367,7 +1367,7 @@ pub fn write_tx_blocks<T: Pixel>(
   bw_uv /= uv_tx_size.width_mi();
   bh_uv /= uv_tx_size.height_mi();
 
-  let plane_bsize = get_plane_block_size(bsize, xdec, ydec);
+  let plane_bsize = bsize.subsampled_size(xdec, ydec);
 
   if chroma_mode.is_cfl() {
     luma_ac(&mut ac.array, ts, tile_bo, bsize);
@@ -1456,7 +1456,7 @@ pub fn write_tx_tree<T: Pixel>(
   bw_uv /= uv_tx_size.width_mi();
   bh_uv /= uv_tx_size.height_mi();
 
-  let plane_bsize = get_plane_block_size(bsize, xdec, ydec);
+  let plane_bsize = bsize.subsampled_size(xdec, ydec);
 
   if bw_uv > 0 && bh_uv > 0 {
     // TODO: Disable these asserts temporarilly, since chroma_sampling_422_aom and chroma_sampling_444_aom
