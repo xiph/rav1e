@@ -902,7 +902,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
   ts: &mut TileStateMut<'_, T>, tile_bo: BlockOffset, bsize: BlockSize, bit_depth: usize
 ) -> Option<CFLParams> {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
-  let uv_tx_size = bsize.largest_uv_tx_size(xdec, ydec);
+  let uv_tx_size = bsize.largest_chroma_tx_size(xdec, ydec);
 
   let mut ac: AlignedArray<[i16; 32 * 32]> = UninitializedAlignedArray();
   luma_ac(&mut ac.array, ts, tile_bo, bsize);

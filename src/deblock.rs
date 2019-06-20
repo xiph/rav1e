@@ -129,7 +129,7 @@ fn deblock_size<T: Pixel>(
     let (txsize, prev_txsize) = if pli==0 {
       (block.txsize, prev_block.txsize)
     } else {
-      (block.bsize.largest_uv_tx_size(xdec, ydec), prev_block.bsize.largest_uv_tx_size(xdec, ydec))
+      (block.bsize.largest_chroma_tx_size(xdec, ydec), prev_block.bsize.largest_chroma_tx_size(xdec, ydec))
     };
     let (tx_n, prev_tx_n) = if vertical {
       (cmp::max(txsize.width_mi(), 1), cmp::max(prev_txsize.width_mi(), 1))
@@ -1030,7 +1030,7 @@ fn filter_v_edge<T: Pixel>(
   pli: usize, bd: usize, xdec: usize, ydec: usize
 ) {
   let block = &blocks[bo];
-  let txsize = if pli==0 { block.txsize } else { block.bsize.largest_uv_tx_size(xdec, ydec) };
+  let txsize = if pli==0 { block.txsize } else { block.bsize.largest_chroma_tx_size(xdec, ydec) };
   let tx_edge = bo.x >> xdec & (txsize.width_mi() - 1) == 0;
   if tx_edge {
     let prev_block = deblock_left(blocks, bo, p);
@@ -1068,7 +1068,7 @@ fn sse_v_edge<T: Pixel>(
   tally: &mut [i64; MAX_LOOP_FILTER + 2], pli: usize, bd: usize, xdec: usize, ydec: usize
 ) {
   let block = &blocks[bo];
-  let txsize = if pli==0 { block.txsize } else { block.bsize.largest_uv_tx_size(xdec, ydec) };
+  let txsize = if pli==0 { block.txsize } else { block.bsize.largest_chroma_tx_size(xdec, ydec) };
   let tx_edge = bo.x >> xdec & (txsize.width_mi() - 1) == 0;
   if tx_edge {
     let prev_block = deblock_left(blocks, bo, rec_plane);
@@ -1135,7 +1135,7 @@ fn filter_h_edge<T: Pixel>(
   pli: usize, bd: usize, xdec: usize, ydec: usize
 ) {
   let block = &blocks[bo];
-  let txsize = if pli==0 { block.txsize } else { block.bsize.largest_uv_tx_size(xdec, ydec) };
+  let txsize = if pli==0 { block.txsize } else { block.bsize.largest_chroma_tx_size(xdec, ydec) };
   let tx_edge = bo.y >> ydec & (txsize.height_mi() - 1) == 0;
   if tx_edge {
     let prev_block = deblock_up(blocks, bo, p);
@@ -1173,7 +1173,7 @@ fn sse_h_edge<T: Pixel>(
   tally: &mut [i64; MAX_LOOP_FILTER + 2], pli: usize, bd: usize, xdec: usize, ydec: usize
 ) {
   let block = &blocks[bo];
-  let txsize = if pli==0 { block.txsize } else { block.bsize.largest_uv_tx_size(xdec, ydec) };
+  let txsize = if pli==0 { block.txsize } else { block.bsize.largest_chroma_tx_size(xdec, ydec) };
   let tx_edge = bo.y >> ydec & (txsize.height_mi() - 1) == 0;
   if tx_edge {
     let prev_block = deblock_up(blocks, bo, rec_plane);
