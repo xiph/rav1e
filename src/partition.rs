@@ -459,32 +459,12 @@ impl BlockSize {
   }
 
   pub fn is_rect_tx_allowed(self) -> bool {
-    static LUT: [u8; BlockSize::BLOCK_SIZES_ALL] = [
-      0,  // BLOCK_4X4
-      1,  // BLOCK_4X8
-      1,  // BLOCK_8X4
-      0,  // BLOCK_8X8
-      1,  // BLOCK_8X16
-      1,  // BLOCK_16X8
-      0,  // BLOCK_16X16
-      1,  // BLOCK_16X32
-      1,  // BLOCK_32X16
-      0,  // BLOCK_32X32
-      1,  // BLOCK_32X64
-      1,  // BLOCK_64X32
-      0,  // BLOCK_64X64
-      0,  // BLOCK_64X128
-      0,  // BLOCK_128X64
-      0,  // BLOCK_128X128
-      1,  // BLOCK_4X16
-      1,  // BLOCK_16X4
-      1,  // BLOCK_8X32
-      1,  // BLOCK_32X8
-      1,  // BLOCK_16X64
-      1,  // BLOCK_64X16
-    ];
-
-    LUT[self as usize] == 1
+    match self {
+      BLOCK_4X4 | BLOCK_8X8 | BLOCK_16X16 | BLOCK_32X32 |
+      BLOCK_64X64 | BLOCK_64X128 | BLOCK_128X64 | BLOCK_128X128 => false,
+      BLOCK_INVALID => unreachable!(),
+      _ => true
+    }
   }
 }
 
