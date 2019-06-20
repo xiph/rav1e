@@ -236,7 +236,7 @@ impl BlockSize {
     }
   }
 
-  pub fn largest_uv_tx_size(self, xdec: usize, ydec: usize) -> TxSize {
+  pub fn largest_chroma_tx_size(self, xdec: usize, ydec: usize) -> TxSize {
     let plane_bsize = get_plane_block_size(self, xdec, ydec);
     let uv_tx = max_txsize_rect_lookup[plane_bsize as usize];
 
