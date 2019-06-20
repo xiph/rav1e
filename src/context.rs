@@ -1797,17 +1797,12 @@ macro_rules! symbol_with_update {
 }
 
 pub fn av1_get_coded_tx_size(tx_size: TxSize) -> TxSize {
-  if tx_size == TX_64X64 || tx_size == TX_64X32 || tx_size == TX_32X64 {
-    return TX_32X32
+  match tx_size {
+    TX_64X64 | TX_64X32 | TX_32X64 => TX_32X32,
+    TX_16X64 => TX_16X32,
+    TX_64X16 => TX_32X16,
+    _ => tx_size
   }
-  if tx_size == TX_16X64 {
-    return TX_16X32
-  }
-  if tx_size == TX_64X16 {
-    return TX_32X16
-  }
-
-  tx_size
 }
 
 #[derive(Clone)]
