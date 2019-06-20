@@ -9,6 +9,7 @@
 
 use crate::context::*;
 use crate::partition::*;
+use crate::transform::*;
 
 use std::cmp;
 use std::marker::PhantomData;

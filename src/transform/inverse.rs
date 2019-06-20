@@ -15,7 +15,6 @@ pub use self::native::*;
 // TODO: move 1d txfm code to native module.
 
 use super::*;
-use crate::partition::TxType;
 
 static COSPI_INV: [i32; 64] = [
   4096, 4095, 4091, 4085, 4076, 4065, 4052, 4036, 4017, 3996, 3973, 3948,
@@ -1510,7 +1509,6 @@ static INV_TXFM_FNS: [[InvTxfmFn; 5]; 4] = [
 #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 mod nasm {
   use super::*;
-  use crate::partition::TxType;
 
   type InvTxfmFunc =
     unsafe extern fn(*mut u8, libc::ptrdiff_t, *const i16, i32);
@@ -1653,7 +1651,6 @@ mod nasm {
 
 mod native {
   use super::*;
-  use crate::partition::TxType;
   use crate::util::clamp;
 
   use std::cmp;

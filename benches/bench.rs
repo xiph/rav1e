@@ -18,6 +18,7 @@ use rav1e::bench::context::*;
 use rav1e::bench::ec::*;
 use rav1e::bench::partition::*;
 use rav1e::bench::predict::*;
+use rav1e::bench::transform::*;
 use rav1e::bench::rdo::*;
 
 use crate::transform::transform;

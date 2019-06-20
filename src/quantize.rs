@@ -9,7 +9,7 @@
 
 #![allow(non_upper_case_globals)]
 
-use crate::partition::TxSize;
+use crate::transform::TxSize;
 use crate::util::*;
 
 use num_traits::*;
@@ -143,7 +143,7 @@ fn divu_pair(x: i32, d: (u32, u32, u32)) -> i32 {
 #[cfg(test)]
 mod test {
   use super::*;
-  use crate::partition::TxSize::*;
+  use crate::transform::TxSize::*;
 
   #[test]
   fn test_divu_pair() {
