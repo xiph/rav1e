@@ -205,7 +205,7 @@ pub mod test {
   use super::*;
   use crate::api::*;
   use crate::lrf::*;
-  use crate::partition::*;
+  use crate::mc::MotionVector;
   use crate::predict::PredictionMode;
 
   #[test]

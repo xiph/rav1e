@@ -14,6 +14,7 @@ pub use self::native::get_sad;
 use crate::context::{BlockOffset, BLOCK_TO_PLANE_SHIFT, MI_SIZE};
 use crate::encoder::ReferenceFrame;
 use crate::FrameInvariants;
+use crate::mc::MotionVector;
 use crate::partition::*;
 use crate::partition::RefType::*;
 use crate::predict::PredictionMode;

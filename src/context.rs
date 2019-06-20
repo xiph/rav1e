@@ -17,6 +17,7 @@ use crate::ec::OD_BITRES;
 use crate::encoder::FrameInvariants;
 use crate::entropymode::*;
 use crate::header::ReferenceMode;
+use crate::mc::MotionVector;
 use crate::partition::BlockSize::*;
 use crate::partition::RefType::*;
 use crate::partition::*;

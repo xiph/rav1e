@@ -7,8 +7,8 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use crate::mc::MotionVector;
 use crate::me::*;
-use crate::partition::*;
 
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
