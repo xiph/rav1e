@@ -138,12 +138,6 @@ pub enum BlockSize {
 impl BlockSize {
   pub const BLOCK_SIZES_ALL: usize = 22;
 
-  const BLOCK_SIZE_WIDTH_LOG2: [usize; BlockSize::BLOCK_SIZES_ALL] =
-    [2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 2, 4, 3, 5, 4, 6];
-
-  const BLOCK_SIZE_HEIGHT_LOG2: [usize; BlockSize::BLOCK_SIZES_ALL] =
-    [2, 3, 2, 3, 4, 3, 4, 5, 4, 5, 6, 5, 6, 7, 6, 7, 4, 2, 5, 3, 6, 4];
-
   pub fn from_width_and_height(w: usize, h: usize) -> BlockSize {
     match (w, h) {
       (4, 4) => BLOCK_4X4,
@@ -182,7 +176,15 @@ impl BlockSize {
   }
 
   pub fn width_log2(self) -> usize {
-    BlockSize::BLOCK_SIZE_WIDTH_LOG2[self as usize]
+    match self {
+      BLOCK_4X4 | BLOCK_4X8 | BLOCK_4X16 => 2,
+      BLOCK_8X4 | BLOCK_8X8 | BLOCK_8X16 | BLOCK_8X32 => 3,
+      BLOCK_16X4 | BLOCK_16X8 | BLOCK_16X16 | BLOCK_16X32 | BLOCK_16X64 => 4,
+      BLOCK_32X8 | BLOCK_32X16 | BLOCK_32X32 | BLOCK_32X64 => 5,
+      BLOCK_64X16 | BLOCK_64X32 | BLOCK_64X64 | BLOCK_64X128 => 6,
+      BLOCK_128X64 | BLOCK_128X128 => 7,
+      BLOCK_INVALID => unreachable!()
+    }
   }
 
   pub fn width_mi(self) -> usize {
@@ -194,7 +196,15 @@ impl BlockSize {
   }
 
   pub fn height_log2(self) -> usize {
-    BlockSize::BLOCK_SIZE_HEIGHT_LOG2[self as usize]
+    match self {
+      BLOCK_4X4 | BLOCK_8X4 | BLOCK_16X4 => 2,
+      BLOCK_4X8 | BLOCK_8X8 | BLOCK_16X8 | BLOCK_32X8 => 3,
+      BLOCK_4X16 | BLOCK_8X16 | BLOCK_16X16 | BLOCK_32X16 | BLOCK_64X16 => 4,
+      BLOCK_8X32 | BLOCK_16X32 | BLOCK_32X32 | BLOCK_64X32 => 5,
+      BLOCK_16X64 | BLOCK_32X64 | BLOCK_64X64 | BLOCK_128X64 => 6,
+      BLOCK_64X128 | BLOCK_128X128 => 7,
+      BLOCK_INVALID => unreachable!()
+    }
   }
 
   pub fn height_mi(self) -> usize {
