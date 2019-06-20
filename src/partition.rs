@@ -280,6 +280,10 @@ impl BlockSize {
 
   pub fn largest_chroma_tx_size(self, xdec: usize, ydec: usize) -> TxSize {
     let plane_bsize = self.subsampled_size(xdec, ydec);
+    if plane_bsize == BLOCK_INVALID {
+      panic!("invalid block size for this subsampling mode");
+    }
+
     let uv_tx = max_txsize_rect_lookup[plane_bsize as usize];
 
     av1_get_coded_tx_size(uv_tx)
