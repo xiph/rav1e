@@ -16,8 +16,7 @@ use crate::lrf::*;
 use crate::context::*;
 use crate::ec::{OD_BITRES, Writer, WriterCounter};
 use crate::header::ReferenceMode;
-use crate::encode_block_a;
-use crate::encode_block_b;
+use crate::{encode_block_pre_cdef, encode_block_post_cdef};
 use crate::encode_block_with_modes;
 use crate::encoder::FrameInvariants;
 use crate::frame::Frame;
@@ -613,9 +612,9 @@ pub fn rdo_mode_decision<T: Pixel>(
         // TODO(yushin): luma and chroma would have different decision based on chroma format
         let need_recon_pixel = luma_mode_is_intra && tx_size.block_size() != bsize;
 
-        encode_block_a(&fi.sequence, ts, cw, wr, bsize, tile_bo, skip);
+        encode_block_pre_cdef(&fi.sequence, ts, cw, wr, bsize, tile_bo, skip);
         let tx_dist =
-          encode_block_b(
+          encode_block_post_cdef(
             fi,
             ts,
             cw,
@@ -833,8 +832,8 @@ pub fn rdo_mode_decision<T: Pixel>(
       let wr: &mut dyn Writer = &mut WriterCounter::new();
       let tell = wr.tell_frac();
 
-      encode_block_a(&fi.sequence, ts, cw, wr, bsize, tile_bo, best.skip);
-      let _ = encode_block_b(
+      encode_block_pre_cdef(&fi.sequence, ts, cw, wr, bsize, tile_bo, best.skip);
+      let _ = encode_block_post_cdef(
         fi,
         ts,
         cw,

@@ -1092,7 +1092,7 @@ pub fn save_block_motion<T: Pixel>(
   }
 }
 
-pub fn encode_block_a<T: Pixel>(
+pub fn encode_block_pre_cdef<T: Pixel>(
   seq: &Sequence, ts: &TileStateMut<'_, T>,
   cw: &mut ContextWriter, w: &mut dyn Writer,
   bsize: BlockSize, tile_bo: BlockOffset, skip: bool
@@ -1111,7 +1111,7 @@ pub fn encode_block_a<T: Pixel>(
   cw.bc.cdef_coded
 }
 
-pub fn encode_block_b<T: Pixel>(
+pub fn encode_block_post_cdef<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w: &mut dyn Writer,
   luma_mode: PredictionMode, chroma_mode: PredictionMode,
@@ -1511,9 +1511,9 @@ pub fn encode_block_with_modes<T: Pixel>(
   let is_compound = ref_frames[1] != NONE_FRAME;
   let mode_context = cw.find_mvrefs(tile_bo, ref_frames, &mut mv_stack, bsize, fi, is_compound);
 
-  cdef_coded = encode_block_a(&fi.sequence, ts, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
+  cdef_coded = encode_block_pre_cdef(&fi.sequence, ts, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                               bsize, tile_bo, skip);
-  encode_block_b(fi, ts, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
+  encode_block_post_cdef(fi, ts, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                  mode_luma, mode_chroma, ref_frames, mvs, bsize, tile_bo, skip, cfl,
                  tx_size, tx_type, mode_context, &mv_stack, rdo_type, true);
 }
@@ -1893,9 +1893,9 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       }
 
       // FIXME: every final block that has gone through the RDO decision process is encoded twice
-      cdef_coded = encode_block_a(&fi.sequence, ts, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
+      cdef_coded = encode_block_pre_cdef(&fi.sequence, ts, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                                   bsize, tile_bo, skip);
-      encode_block_b(fi, ts, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
+      encode_block_post_cdef(fi, ts, cw, if cdef_coded  {w_post_cdef} else {w_pre_cdef},
                      mode_luma, mode_chroma, ref_frames, mvs, bsize, tile_bo, skip, cfl,
                      tx_size, tx_type, mode_context, &mv_stack, RDOType::PixelDistRealRate, true);
     },
