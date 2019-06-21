@@ -215,230 +215,6 @@ bidir_fn w_avg
 bidir_fn mask
 
 
-// This has got the same signature as the put_8tap functions,
-// assumes that the caller has loaded the h argument into r5,
-// and assumes that r8 is set to (clz(w)-24).
-function put_neon
-        adr             r9,  L(put_tbl)
-        ldr             r8,  [r9, r8, lsl #2]
-        add             r9,  r9,  r8
-        bx              r9
-
-        .align 2
-L(put_tbl):
-        .word 1280f - L(put_tbl) + CONFIG_THUMB
-        .word 640f  - L(put_tbl) + CONFIG_THUMB
-        .word 32f   - L(put_tbl) + CONFIG_THUMB
-        .word 160f  - L(put_tbl) + CONFIG_THUMB
-        .word 8f    - L(put_tbl) + CONFIG_THUMB
-        .word 4f    - L(put_tbl) + CONFIG_THUMB
-        .word 2f    - L(put_tbl) + CONFIG_THUMB
-
-2:
-        vld1.16         {d0[]}, [r2], r3
-        vld1.16         {d1[]}, [r2], r3
-        subs            r5,  r5,  #2
-        vst1.16         {d0[0]}, [r0, :16], r1
-        vst1.16         {d1[0]}, [r0, :16], r1
-        bgt             2b
-        pop             {r4-r11,pc}
-4:
-        vld1.32         {d0[]}, [r2], r3
-        vld1.32         {d1[]}, [r2], r3
-        subs            r5,  r5,  #2
-        vst1.32         {d0[0]}, [r0, :32], r1
-        vst1.32         {d1[0]}, [r0, :32], r1
-        bgt             4b
-        pop             {r4-r11,pc}
-8:
-        vld1.8          {d0}, [r2], r3
-        vld1.8          {d1}, [r2], r3
-        subs            r5,  r5,  #2
-        vst1.8          {d0}, [r0, :64], r1
-        vst1.8          {d1}, [r0, :64], r1
-        bgt             8b
-        pop             {r4-r11,pc}
-160:
-        add             r8,  r0,  r1
-        lsl             r1,  r1,  #1
-        add             r9,  r2,  r3
-        lsl             r3,  r3,  #1
-16:
-        vld1.8          {q0}, [r2], r3
-        vld1.8          {q1}, [r9], r3
-        subs            r5,  r5,  #2
-        vst1.8          {q0}, [r0, :128], r1
-        vst1.8          {q1}, [r8, :128], r1
-        bgt             16b
-        pop             {r4-r11,pc}
-32:
-        vld1.8          {q0,  q1},  [r2], r3
-        subs            r5,  r5,  #1
-        vst1.8          {q0,  q1},  [r0, :128], r1
-        bgt             32b
-        pop             {r4-r11,pc}
-640:
-        sub             r1,  r1,  #32
-        sub             r3,  r3,  #32
-64:
-        vld1.8          {q0,  q1},  [r2]!
-        vst1.8          {q0,  q1},  [r0, :128]!
-        vld1.8          {q2,  q3},  [r2], r3
-        subs            r5,  r5,  #1
-        vst1.8          {q2,  q3},  [r0, :128], r1
-        bgt             64b
-        pop             {r4-r11,pc}
-1280:
-        sub             r1,  r1,  #96
-        sub             r3,  r3,  #96
-128:
-        vld1.8          {q8,  q9},  [r2]!
-        vst1.8          {q8,  q9},  [r0, :128]!
-        vld1.8          {q10, q11}, [r2]!
-        vst1.8          {q10, q11}, [r0, :128]!
-        vld1.8          {q12, q13}, [r2]!
-        vst1.8          {q12, q13}, [r0, :128]!
-        vld1.8          {q14, q15}, [r2], r3
-        subs            r5,  r5,  #1
-        vst1.8          {q14, q15}, [r0, :128], r1
-        bgt             128b
-        pop             {r4-r11,pc}
-endfunc
-
-
-// This has got the same signature as the put_8tap functions,
-// assumes that the caller has loaded the h argument into r4,
-// and assumes that r8 is set to (clz(w)-24), and r7 to w*2.
-function prep_neon
-        adr             r9,  L(prep_tbl)
-        ldr             r8,  [r9, r8, lsl #2]
-        add             r9,  r9,  r8
-        bx              r9
-
-        .align 2
-L(prep_tbl):
-        .word 1280f - L(prep_tbl) + CONFIG_THUMB
-        .word 640f  - L(prep_tbl) + CONFIG_THUMB
-        .word 320f  - L(prep_tbl) + CONFIG_THUMB
-        .word 160f  - L(prep_tbl) + CONFIG_THUMB
-        .word 8f    - L(prep_tbl) + CONFIG_THUMB
-        .word 4f    - L(prep_tbl) + CONFIG_THUMB
-
-4:
-        vld1.32         {d0[]}, [r1], r2
-        vld1.32         {d2[]}, [r1], r2
-        subs            r4,  r4,  #2
-        vshll.u8        q0,  d0,  #4
-        vshll.u8        q1,  d2,  #4
-        vst1.16         {d1, d2}, [r0, :64]!
-        bgt             4b
-        pop             {r4-r11,pc}
-8:
-        vld1.8          {d0}, [r1], r2
-        vld1.8          {d2}, [r1], r2
-        subs            r4,  r4,  #2
-        vshll.u8        q0,  d0,  #4
-        vshll.u8        q1,  d2,  #4
-        vst1.16         {q0, q1}, [r0, :128]!
-        bgt             8b
-        pop             {r4-r11,pc}
-160:
-        add             r9,  r1,  r2
-        lsl             r2,  r2,  #1
-        add             r8,  r0,  r7
-        lsl             r7,  r7,  #1
-16:
-        vld1.8          {q2}, [r1], r2
-        vld1.8          {q3}, [r9], r2
-        subs            r4,  r4,  #2
-        vshll.u8        q0,  d4,  #4
-        vshll.u8        q1,  d5,  #4
-        vshll.u8        q2,  d6,  #4
-        vshll.u8        q3,  d7,  #4
-        vst1.16         {q0, q1}, [r0, :128], r7
-        vst1.16         {q2, q3}, [r8, :128], r7
-        bgt             16b
-        pop             {r4-r11,pc}
-320:
-        add             r8,  r0,  r3
-32:
-        vld1.8          {q0,  q1},  [r1], r2
-        subs            r4,  r4,  #2
-        vshll.u8        q8,  d0,  #4
-        vshll.u8        q9,  d1,  #4
-        vld1.8          {q2,  q3},  [r1], r2
-        vshll.u8        q10, d2,  #4
-        vshll.u8        q11, d3,  #4
-        vshll.u8        q12, d4,  #4
-        vst1.16         {q8,  q9},  [r0, :128], r7
-        vshll.u8        q13, d5,  #4
-        vst1.16         {q10, q11}, [r8, :128], r7
-        vshll.u8        q14, d6,  #4
-        vst1.16         {q12, q13}, [r0, :128], r7
-        vshll.u8        q15, d7,  #4
-        vst1.16         {q14, q15}, [r8, :128], r7
-        bgt             32b
-        pop             {r4-r11,pc}
-640:
-        sub             r2,  r2,  #32
-        add             r8,  r0,  #32
-        mov             r6,  #64
-64:
-        vld1.8          {q0,  q1},  [r1]!
-        subs            r4,  r4,  #1
-        vshll.u8        q8,  d0,  #4
-        vshll.u8        q9,  d1,  #4
-        vld1.8          {q2,  q3},  [r1], r2
-        vshll.u8        q10, d2,  #4
-        vshll.u8        q11, d3,  #4
-        vshll.u8        q12, d4,  #4
-        vst1.16         {q8,  q9},  [r0, :128], r6
-        vshll.u8        q13, d5,  #4
-        vshll.u8        q14, d6,  #4
-        vst1.16         {q10, q11}, [r8, :128], r6
-        vshll.u8        q15, d7,  #4
-        vst1.16         {q12, q13}, [r0, :128], r6
-        vst1.16         {q14, q15}, [r8, :128], r6
-        bgt             64b
-        pop             {r4-r11,pc}
-1280:
-        sub             r2,  r2,  #96
-        add             r8,  r0,  #32
-        mov             r6,  #64
-128:
-        vld1.8          {q0,  q1},  [r1]!
-        vld1.8          {q2,  q3},  [r1]!
-        vshll.u8        q10, d0,  #4
-        vshll.u8        q11, d1,  #4
-        vshll.u8        q12, d2,  #4
-        vshll.u8        q13, d3,  #4
-        vshll.u8        q14, d4,  #4
-        vshll.u8        q15, d5,  #4
-        vld1.8          {q8,  q9},  [r1]!
-        vst1.16         {q10, q11}, [r0, :128], r6
-        vst1.16         {q12, q13}, [r8, :128], r6
-        vshll.u8        q0,  d6,  #4
-        vshll.u8        q1,  d7,  #4
-        vshll.u8        q2,  d16, #4
-        vshll.u8        q3,  d17, #4
-        vshll.u8        q8,  d18, #4
-        vshll.u8        q9,  d19, #4
-        vld1.8          {q10, q11}, [r1], r2
-        vst1.16         {q14, q15}, [r0, :128], r6
-        vst1.16         {q0,  q1},  [r8, :128], r6
-        vshll.u8        q12, d20, #4
-        vshll.u8        q13, d21, #4
-        vshll.u8        q14, d22, #4
-        vshll.u8        q15, d23, #4
-        subs            r4,  r4,  #1
-        vst1.16         {q2,  q3},  [r0, :128], r6
-        vst1.16         {q8,  q9},  [r8, :128], r6
-        vst1.16         {q12, q13}, [r0, :128], r6
-        vst1.16         {q14, q15}, [r8, :128], r6
-        bgt             128b
-        pop             {r4-r11,pc}
-endfunc
-
 function blend_8bpc_neon, export=1
         push            {r4-r8,lr}
         ldr             r4,  [sp, #24]
@@ -854,6 +630,232 @@ L(blend_v_tbl):
         bgt             32b
         pop             {r4-r8,pc}
 endfunc
+
+
+// This has got the same signature as the put_8tap functions,
+// assumes that the caller has loaded the h argument into r5,
+// and assumes that r8 is set to (clz(w)-24).
+function put_neon
+        adr             r9,  L(put_tbl)
+        ldr             r8,  [r9, r8, lsl #2]
+        add             r9,  r9,  r8
+        bx              r9
+
+        .align 2
+L(put_tbl):
+        .word 1280f - L(put_tbl) + CONFIG_THUMB
+        .word 640f  - L(put_tbl) + CONFIG_THUMB
+        .word 32f   - L(put_tbl) + CONFIG_THUMB
+        .word 160f  - L(put_tbl) + CONFIG_THUMB
+        .word 8f    - L(put_tbl) + CONFIG_THUMB
+        .word 4f    - L(put_tbl) + CONFIG_THUMB
+        .word 2f    - L(put_tbl) + CONFIG_THUMB
+
+2:
+        vld1.16         {d0[]}, [r2], r3
+        vld1.16         {d1[]}, [r2], r3
+        subs            r5,  r5,  #2
+        vst1.16         {d0[0]}, [r0, :16], r1
+        vst1.16         {d1[0]}, [r0, :16], r1
+        bgt             2b
+        pop             {r4-r11,pc}
+4:
+        vld1.32         {d0[]}, [r2], r3
+        vld1.32         {d1[]}, [r2], r3
+        subs            r5,  r5,  #2
+        vst1.32         {d0[0]}, [r0, :32], r1
+        vst1.32         {d1[0]}, [r0, :32], r1
+        bgt             4b
+        pop             {r4-r11,pc}
+8:
+        vld1.8          {d0}, [r2], r3
+        vld1.8          {d1}, [r2], r3
+        subs            r5,  r5,  #2
+        vst1.8          {d0}, [r0, :64], r1
+        vst1.8          {d1}, [r0, :64], r1
+        bgt             8b
+        pop             {r4-r11,pc}
+160:
+        add             r8,  r0,  r1
+        lsl             r1,  r1,  #1
+        add             r9,  r2,  r3
+        lsl             r3,  r3,  #1
+16:
+        vld1.8          {q0}, [r2], r3
+        vld1.8          {q1}, [r9], r3
+        subs            r5,  r5,  #2
+        vst1.8          {q0}, [r0, :128], r1
+        vst1.8          {q1}, [r8, :128], r1
+        bgt             16b
+        pop             {r4-r11,pc}
+32:
+        vld1.8          {q0,  q1},  [r2], r3
+        subs            r5,  r5,  #1
+        vst1.8          {q0,  q1},  [r0, :128], r1
+        bgt             32b
+        pop             {r4-r11,pc}
+640:
+        sub             r1,  r1,  #32
+        sub             r3,  r3,  #32
+64:
+        vld1.8          {q0,  q1},  [r2]!
+        vst1.8          {q0,  q1},  [r0, :128]!
+        vld1.8          {q2,  q3},  [r2], r3
+        subs            r5,  r5,  #1
+        vst1.8          {q2,  q3},  [r0, :128], r1
+        bgt             64b
+        pop             {r4-r11,pc}
+1280:
+        sub             r1,  r1,  #96
+        sub             r3,  r3,  #96
+128:
+        vld1.8          {q8,  q9},  [r2]!
+        vst1.8          {q8,  q9},  [r0, :128]!
+        vld1.8          {q10, q11}, [r2]!
+        vst1.8          {q10, q11}, [r0, :128]!
+        vld1.8          {q12, q13}, [r2]!
+        vst1.8          {q12, q13}, [r0, :128]!
+        vld1.8          {q14, q15}, [r2], r3
+        subs            r5,  r5,  #1
+        vst1.8          {q14, q15}, [r0, :128], r1
+        bgt             128b
+        pop             {r4-r11,pc}
+endfunc
+
+
+// This has got the same signature as the put_8tap functions,
+// assumes that the caller has loaded the h argument into r4,
+// and assumes that r8 is set to (clz(w)-24), and r7 to w*2.
+function prep_neon
+        adr             r9,  L(prep_tbl)
+        ldr             r8,  [r9, r8, lsl #2]
+        add             r9,  r9,  r8
+        bx              r9
+
+        .align 2
+L(prep_tbl):
+        .word 1280f - L(prep_tbl) + CONFIG_THUMB
+        .word 640f  - L(prep_tbl) + CONFIG_THUMB
+        .word 320f  - L(prep_tbl) + CONFIG_THUMB
+        .word 160f  - L(prep_tbl) + CONFIG_THUMB
+        .word 8f    - L(prep_tbl) + CONFIG_THUMB
+        .word 4f    - L(prep_tbl) + CONFIG_THUMB
+
+4:
+        vld1.32         {d0[]}, [r1], r2
+        vld1.32         {d2[]}, [r1], r2
+        subs            r4,  r4,  #2
+        vshll.u8        q0,  d0,  #4
+        vshll.u8        q1,  d2,  #4
+        vst1.16         {d1, d2}, [r0, :64]!
+        bgt             4b
+        pop             {r4-r11,pc}
+8:
+        vld1.8          {d0}, [r1], r2
+        vld1.8          {d2}, [r1], r2
+        subs            r4,  r4,  #2
+        vshll.u8        q0,  d0,  #4
+        vshll.u8        q1,  d2,  #4
+        vst1.16         {q0, q1}, [r0, :128]!
+        bgt             8b
+        pop             {r4-r11,pc}
+160:
+        add             r9,  r1,  r2
+        lsl             r2,  r2,  #1
+        add             r8,  r0,  r7
+        lsl             r7,  r7,  #1
+16:
+        vld1.8          {q2}, [r1], r2
+        vld1.8          {q3}, [r9], r2
+        subs            r4,  r4,  #2
+        vshll.u8        q0,  d4,  #4
+        vshll.u8        q1,  d5,  #4
+        vshll.u8        q2,  d6,  #4
+        vshll.u8        q3,  d7,  #4
+        vst1.16         {q0, q1}, [r0, :128], r7
+        vst1.16         {q2, q3}, [r8, :128], r7
+        bgt             16b
+        pop             {r4-r11,pc}
+320:
+        add             r8,  r0,  r3
+32:
+        vld1.8          {q0,  q1},  [r1], r2
+        subs            r4,  r4,  #2
+        vshll.u8        q8,  d0,  #4
+        vshll.u8        q9,  d1,  #4
+        vld1.8          {q2,  q3},  [r1], r2
+        vshll.u8        q10, d2,  #4
+        vshll.u8        q11, d3,  #4
+        vshll.u8        q12, d4,  #4
+        vst1.16         {q8,  q9},  [r0, :128], r7
+        vshll.u8        q13, d5,  #4
+        vst1.16         {q10, q11}, [r8, :128], r7
+        vshll.u8        q14, d6,  #4
+        vst1.16         {q12, q13}, [r0, :128], r7
+        vshll.u8        q15, d7,  #4
+        vst1.16         {q14, q15}, [r8, :128], r7
+        bgt             32b
+        pop             {r4-r11,pc}
+640:
+        sub             r2,  r2,  #32
+        add             r8,  r0,  #32
+        mov             r6,  #64
+64:
+        vld1.8          {q0,  q1},  [r1]!
+        subs            r4,  r4,  #1
+        vshll.u8        q8,  d0,  #4
+        vshll.u8        q9,  d1,  #4
+        vld1.8          {q2,  q3},  [r1], r2
+        vshll.u8        q10, d2,  #4
+        vshll.u8        q11, d3,  #4
+        vshll.u8        q12, d4,  #4
+        vst1.16         {q8,  q9},  [r0, :128], r6
+        vshll.u8        q13, d5,  #4
+        vshll.u8        q14, d6,  #4
+        vst1.16         {q10, q11}, [r8, :128], r6
+        vshll.u8        q15, d7,  #4
+        vst1.16         {q12, q13}, [r0, :128], r6
+        vst1.16         {q14, q15}, [r8, :128], r6
+        bgt             64b
+        pop             {r4-r11,pc}
+1280:
+        sub             r2,  r2,  #96
+        add             r8,  r0,  #32
+        mov             r6,  #64
+128:
+        vld1.8          {q0,  q1},  [r1]!
+        vld1.8          {q2,  q3},  [r1]!
+        vshll.u8        q10, d0,  #4
+        vshll.u8        q11, d1,  #4
+        vshll.u8        q12, d2,  #4
+        vshll.u8        q13, d3,  #4
+        vshll.u8        q14, d4,  #4
+        vshll.u8        q15, d5,  #4
+        vld1.8          {q8,  q9},  [r1]!
+        vst1.16         {q10, q11}, [r0, :128], r6
+        vst1.16         {q12, q13}, [r8, :128], r6
+        vshll.u8        q0,  d6,  #4
+        vshll.u8        q1,  d7,  #4
+        vshll.u8        q2,  d16, #4
+        vshll.u8        q3,  d17, #4
+        vshll.u8        q8,  d18, #4
+        vshll.u8        q9,  d19, #4
+        vld1.8          {q10, q11}, [r1], r2
+        vst1.16         {q14, q15}, [r0, :128], r6
+        vst1.16         {q0,  q1},  [r8, :128], r6
+        vshll.u8        q12, d20, #4
+        vshll.u8        q13, d21, #4
+        vshll.u8        q14, d22, #4
+        vshll.u8        q15, d23, #4
+        subs            r4,  r4,  #1
+        vst1.16         {q2,  q3},  [r0, :128], r6
+        vst1.16         {q8,  q9},  [r8, :128], r6
+        vst1.16         {q12, q13}, [r0, :128], r6
+        vst1.16         {q14, q15}, [r8, :128], r6
+        bgt             128b
+        pop             {r4-r11,pc}
+endfunc
+
 
 .macro load_slice s0, s1, strd, wd, d0, d1, d2, d3, d4, d5, d6
         vld1.\wd        {\d0[]}, [\s0], \strd
