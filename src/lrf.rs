@@ -131,32 +131,30 @@ fn sgrproj_box_sum_slow<T: Pixel>(a: &mut u32, b: &mut u32,
                                   stripe_y: isize, stripe_h: usize,
                                   x: isize, y: isize,
                                   r: usize, n: u32, one_over_n: u32, s: u32, bdm8: usize,
-                                  backing: &PlaneSlice<T>, backing_w: usize, backing_h: usize,
-                                  cdeffed: &PlaneSlice<T>, cdeffed_w: usize, cdeffed_h: usize) {
+                                  backing: &PlaneSlice<T>, cdeffed: &PlaneSlice<T>,
+                                  crop_w: usize, crop_h: usize) {
   let mut ssq = 0;
   let mut sum = 0;
 
   for yi in y-r as isize..=y+r as isize {
-    // decide if we're vertically inside or outside the stripe
-    let (src_plane, src_w, src_h) = if yi >= stripe_y && yi < stripe_y + stripe_h as isize {
-      (cdeffed,
-       (cdeffed_w as isize - x + r as isize) as usize,
-       cdeffed_h as isize)
-    } else {
-      (backing,
-       (backing_w as isize - x + r as isize) as usize,
-       backing_h as isize)
-    };
-    // clamp vertically to storage at top and passed-in height at bottom
-    let cropped_y = clamp(yi, -src_plane.y, src_h - 1);
+    // clamp to crop rectangle before deciding source.
+    let clamp_y = clamp(yi, -cdeffed.y, crop_h as isize - 1);
+    let clamp_w = (crop_w as isize - x + r as isize) as usize;
     // clamp vertically to stripe limits
-    let ly = clamp(cropped_y, stripe_y - 2, stripe_y + stripe_h as isize + 1);
+    let ly = clamp(clamp_y, stripe_y - 2, stripe_y + stripe_h as isize + 1);
+    // left-hand addressing limit
+    let left = cmp::max(0, r as isize - x - cdeffed.x) as usize;
+    // right-hand addressing limit
+    let right = cmp::min(2*r+1, clamp_w);
+
+    // decide if we're vertically inside or outside the stripe
+    let src_plane = if clamp_y >= stripe_y && clamp_y < stripe_y + stripe_h as isize {
+      cdeffed
+    } else {
+      backing
+    };
     // Reslice to avoid a negative X index.
     let p = &src_plane.reslice(x - r as isize,ly)[0];
-    // left-hand addressing limit
-    let left = cmp::max(0, r as isize - x - src_plane.x) as usize;
-    // right-hand addressing limit
-    let right = cmp::min(2*r+1, src_w);
 
     // run accumulation to left of frame storage (if any)
     for _xi in 0..left {
@@ -172,7 +170,7 @@ fn sgrproj_box_sum_slow<T: Pixel>(a: &mut u32, b: &mut u32,
     }
     // run accumulation to right of frame (if any)
     for _xi in right..=2*r {
-      let c = u32::cast_from(p[src_w - 1]);
+      let c = u32::cast_from(p[clamp_w - 1]);
       ssq += c*c;
       sum += c;
     }
@@ -223,23 +221,22 @@ fn sgrproj_box_sum_fastx_r1<T: Pixel>(a: &mut u32, b: &mut u32,
                                       stripe_y: isize, stripe_h: usize,
                                       x: isize, y: isize,
                                       s: u32, bdm8: usize,
-                                      backing: &PlaneSlice<T>, backing_h: usize,
-                                      cdeffed: &PlaneSlice<T>, cdeffed_h: usize) {
+                                      backing: &PlaneSlice<T>, cdeffed: &PlaneSlice<T>,
+                                      crop_h: usize) {
   let mut ssq = 0;
   let mut sum = 0;
+
   for yi in y-1..=y+1 {
+    // clamp to crop rectangle before deciding source.
+    let clamp_y = clamp(yi, -cdeffed.y, crop_h as isize - 1);
     // decide if we're vertically inside or outside the stripe
-    let (src_plane, src_h) = if yi >= stripe_y && yi < stripe_y + stripe_h as isize {
-      (cdeffed,
-       cdeffed_h as isize)
+    let src_plane = if clamp_y >= stripe_y && clamp_y < stripe_y + stripe_h as isize {
+      cdeffed
     } else {
-      (backing,
-       backing_h as isize)
+      backing
     };
-    // clamp vertically to storage addressing limit
-    let cropped_y = clamp(yi, -src_plane.y, src_h - 1);
     // clamp vertically to stripe limits
-    let ly = clamp(cropped_y, stripe_y - 2, stripe_y + stripe_h as isize + 1);
+    let ly = clamp(clamp_y, stripe_y - 2, stripe_y + stripe_h as isize + 1);
     let x = &src_plane.reslice(x - 1, ly)[0];
     ssq += u32::cast_from(x[0]) * u32::cast_from(x[0]) +
       u32::cast_from(x[1]) * u32::cast_from(x[1]) +
@@ -255,23 +252,21 @@ fn sgrproj_box_sum_fastx_r2<T: Pixel>(a: &mut u32, b: &mut u32,
                                       stripe_y: isize, stripe_h: usize,
                                       x: isize, y: isize,
                                       s: u32, bdm8: usize,
-                                      backing: &PlaneSlice<T>, backing_h: usize,
-                                      cdeffed: &PlaneSlice<T>, cdeffed_h: usize) {
+                                      backing: &PlaneSlice<T>, cdeffed: &PlaneSlice<T>,
+                                      crop_h: usize) {
   let mut ssq = 0;
   let mut sum = 0;
   for yi in y - 2..=y + 2 {
+    // clamp to crop rectangle before deciding source.
+    let clamp_y = clamp(yi, -cdeffed.y, crop_h as isize - 1);
     // decide if we're vertically inside or outside the stripe
-    let (src_plane, src_h) = if yi >= stripe_y && yi < stripe_y + stripe_h as isize {
-      (cdeffed,
-       cdeffed_h as isize)
+    let src_plane = if clamp_y >= stripe_y && clamp_y < stripe_y + stripe_h as isize {
+      cdeffed
     } else {
-      (backing,
-       backing_h as isize)
+      backing
     };
-    // clamp vertically to storage addressing limit
-    let cropped_y = clamp(yi, -src_plane.y, src_h as isize - 1);
     // clamp vertically to stripe limits
-    let ly = clamp(cropped_y, stripe_y - 2, stripe_y + stripe_h as isize + 1);
+    let ly = clamp(clamp_y, stripe_y - 2, stripe_y + stripe_h as isize + 1);
     let x = &src_plane.reslice(x - 2, ly)[0];
     ssq += u32::cast_from(x[0]) * u32::cast_from(x[0]) +
       u32::cast_from(x[1]) * u32::cast_from(x[1]) +
@@ -293,14 +288,13 @@ fn sgrproj_box_ab_r1<T: Pixel>(af: &mut[u32; 64+2],
                                bf: &mut[u32; 64+2],
                                stripe_x: isize, stripe_y: isize, stripe_h: usize,
                                s: u32, bdm8: usize,
-                               backing: &PlaneSlice<T>, backing_w: usize, backing_h: usize,
-                               cdeffed: &PlaneSlice<T>, cdeffed_w: usize, cdeffed_h: usize) {
+                               backing: &PlaneSlice<T>, cdeffed: &PlaneSlice<T>,
+                               crop_w: usize, crop_h: usize) {
   // we will fill the af and bf arrays from 0..stripe_h+1 (ni),
   // representing stripe_y-1 to stripe_y+stripe_h+1 inclusive
   let boundary0 = 0;
   let boundary3 = stripe_h + 2;
-  if backing.x + stripe_x > 0 && stripe_x < backing_w as isize - 1 &&
-    cdeffed.x + stripe_x > 0 && stripe_x < cdeffed_w as isize - 1 {
+  if backing.x + stripe_x > 0 && cdeffed.x + stripe_x > 0 && stripe_x < crop_w as isize - 1 {
     // Addressing is away from left and right edges of cdeffed storage;
     // no X clipping to worry about, but the top/bottom few rows still
     // need to worry about storage and stripe limits
@@ -310,7 +304,7 @@ fn sgrproj_box_ab_r1<T: Pixel>(af: &mut[u32; 64+2],
     let boundary1 = cmp::max(2, 2 - cdeffed.y - stripe_y) as usize;
     // boundary 2 is when we have to bounds check along the bottom of
     // the stripe or bottom of storage
-    let boundary2 = cmp::min(cdeffed_h as isize - stripe_y - 1, stripe_h as isize - 1) as usize;
+    let boundary2 = cmp::min(crop_h as isize - stripe_y - 1, stripe_h as isize - 1) as usize;
 
     // top rows (if any), away from left and right columns
     for i in boundary0..boundary1 {
@@ -318,8 +312,8 @@ fn sgrproj_box_ab_r1<T: Pixel>(af: &mut[u32; 64+2],
                                stripe_y, stripe_h,
                                stripe_x, stripe_y + i as isize - 1,
                                s, bdm8,
-                               backing, backing_h,
-                               cdeffed, cdeffed_h);
+                               backing, cdeffed,
+                               crop_h);
     }
     // middle rows, away from left and right columns
     for i in boundary1..boundary2 {
@@ -332,8 +326,8 @@ fn sgrproj_box_ab_r1<T: Pixel>(af: &mut[u32; 64+2],
                                stripe_y, stripe_h,
                                stripe_x, stripe_y + i as isize - 1,
                                s, bdm8,
-                               backing, backing_h,
-                               cdeffed, cdeffed_h);
+                               backing, cdeffed,
+                               crop_h);
     }
   } else {
     // top/bottom rows and left/right columns, where we need to worry about frame and stripe clipping
@@ -342,8 +336,8 @@ fn sgrproj_box_ab_r1<T: Pixel>(af: &mut[u32; 64+2],
                            stripe_y, stripe_h,
                            stripe_x, stripe_y + i as isize - 1,
                            1, 9, 455, s, bdm8,
-                           backing, backing_w, backing_h,
-                           cdeffed, cdeffed_w, cdeffed_h);
+                           backing, cdeffed,
+                           crop_w, crop_h);
     }
   }
 }
@@ -359,14 +353,14 @@ fn sgrproj_box_ab_r2<T: Pixel>(af: &mut[u32; 64+2],
                                bf: &mut[u32; 64+2],
                                stripe_x: isize, stripe_y: isize, stripe_h: usize,
                                s: u32, bdm8: usize,
-                               backing: &PlaneSlice<T>, backing_w: usize, backing_h: usize,
-                               cdeffed: &PlaneSlice<T>, cdeffed_w: usize, cdeffed_h: usize) {
+                               backing: &PlaneSlice<T>, cdeffed: &PlaneSlice<T>,
+                               crop_w: usize, crop_h: usize){
+
   // we will fill the af and bf arrays from 0..stripe_h+1 (ni),
   // representing stripe_y-1 to stripe_y+stripe_h+1 inclusive
   let boundary0 = 0; // even
   let boundary3 = stripe_h + 2; // don't care if odd
-  if backing.x + stripe_x > 1 && stripe_x < backing_w as isize - 2 &&
-    cdeffed.x + stripe_x > 1 && stripe_x < cdeffed_w as isize - 2 {
+  if backing.x + stripe_x > 1 && cdeffed.x + stripe_x > 1 && stripe_x < crop_w as isize - 2 {
     // Addressing is away from left and right edges of cdeffed storage;
     // no X clipping to worry about, but the top/bottom few rows still
     // need to worry about storage and stripe limits
@@ -378,7 +372,7 @@ fn sgrproj_box_ab_r2<T: Pixel>(af: &mut[u32; 64+2],
     // boundary 2 is when we have to bounds check along the bottom of
     // the stripe or bottom of storage
     // must be even, rounding of +1 cancels fencepost of -1
-    let boundary2 = (cmp::min(cdeffed_h as isize - stripe_y, stripe_h as isize) >> 1 << 1) as usize;
+    let boundary2 = (cmp::min(crop_h as isize - stripe_y, stripe_h as isize) >> 1 << 1) as usize;
 
     // top rows, away from left and right columns
     for i in (boundary0..boundary1).step_by(2) {
@@ -386,8 +380,8 @@ fn sgrproj_box_ab_r2<T: Pixel>(af: &mut[u32; 64+2],
                                stripe_y, stripe_h,
                                stripe_x, stripe_y + i as isize - 1,
                                s, bdm8,
-                               backing, backing_h,
-                               cdeffed, cdeffed_h);
+                               backing, cdeffed,
+                               crop_h);
     }
     // middle rows, away from left and right columns
     for i in (boundary1..boundary2).step_by(2) {
@@ -401,8 +395,8 @@ fn sgrproj_box_ab_r2<T: Pixel>(af: &mut[u32; 64+2],
                                stripe_y, stripe_h,
                                stripe_x, stripe_y + i as isize - 1,
                                s, bdm8,
-                               backing, backing_h,
-                               cdeffed, cdeffed_h);
+                               backing, cdeffed,
+                               crop_h);
     }
   } else {
     // top/bottom rows and left/right columns, where we need to worry about frame and stripe clipping
@@ -411,8 +405,8 @@ fn sgrproj_box_ab_r2<T: Pixel>(af: &mut[u32; 64+2],
                            stripe_y, stripe_h,
                            stripe_x, stripe_y + i as isize - 1,
                            2, 25, 164, s, bdm8,
-                           backing, backing_w, backing_h,
-                           cdeffed, cdeffed_w, cdeffed_h);
+                           backing, cdeffed,
+                           crop_w, crop_h);
     }
   }
 }
@@ -487,25 +481,25 @@ pub fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvarian
     sgrproj_box_ab_r2(&mut a_r2[0], &mut b_r2[0],
                       -1, 0, stripe_h,
                       s_r2, bdm8,
-                      &deblocked, crop_w, crop_h,
-                      &cdeffed, crop_w, crop_h);
+                      &deblocked, &cdeffed,
+                      crop_w, crop_h);
     sgrproj_box_ab_r2(&mut a_r2[1], &mut b_r2[1],
                       0, 0, stripe_h,
                       s_r2, bdm8,
-                      &deblocked, crop_w, crop_h,
-                      &cdeffed, crop_w, crop_h);
+                      &deblocked, &cdeffed,
+                      crop_w, crop_h);
   }
   if s_r1 > 0 {
     sgrproj_box_ab_r1(&mut a_r1[0], &mut b_r1[0],
                       -1, 0, stripe_h,
                       s_r1, bdm8,
-                      &deblocked, crop_w, crop_h,
-                      &cdeffed, crop_w, crop_h);
+                      &deblocked, &cdeffed,
+                      crop_w, crop_h);
     sgrproj_box_ab_r1(&mut a_r1[1], &mut b_r1[1],
                       0, 0, stripe_h,
                       s_r1, bdm8,
-                      &deblocked, crop_w, crop_h,
-                      &cdeffed, crop_w, crop_h);
+                      &deblocked, &cdeffed,
+                      crop_w, crop_h);
   }
 
   /* iterate by column */
@@ -515,8 +509,8 @@ pub fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvarian
       sgrproj_box_ab_r2(&mut a_r2[(xi+2)%3], &mut b_r2[(xi+2)%3],
                         xi as isize + 1, 0, stripe_h,
                         s_r2, bdm8,
-                        &deblocked, crop_w, crop_h,
-                        &cdeffed, crop_w, crop_h);
+                        &deblocked, &cdeffed,
+                        crop_w, crop_h);
       let ap0: [&[u32; 64+2]; 3] = [&a_r2[xi%3], &a_r2[(xi+1)%3], &a_r2[(xi+2)%3]];
       let bp0: [&[u32; 64+2]; 3] = [&b_r2[xi%3], &b_r2[(xi+1)%3], &b_r2[(xi+2)%3]];
       sgrproj_box_f_r2(&ap0, &bp0, &mut f_r2, xi, 0, stripe_h as usize, &cdeffed);
@@ -527,8 +521,8 @@ pub fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvarian
       sgrproj_box_ab_r1(&mut a_r1[(xi+2)%3], &mut b_r1[(xi+2)%3],
                         xi as isize + 1, 0, stripe_h,
                         s_r1, bdm8,
-                        &deblocked, crop_w, crop_h,
-                        &cdeffed, crop_w, crop_h);
+                        &deblocked, &cdeffed,
+                        crop_w, crop_h);
       let ap1: [&[u32; 64+2]; 3] = [&a_r1[xi%3], &a_r1[(xi+1)%3], &a_r1[(xi+2)%3]];
       let bp1: [&[u32; 64+2]; 3] = [&b_r1[xi%3], &b_r1[(xi+1)%3], &b_r1[(xi+2)%3]];
 
@@ -590,25 +584,25 @@ pub fn sgrproj_solve<T: Pixel>(set: u8, fi: &FrameInvariants<T>,
     sgrproj_box_ab_r2(&mut a_r2[0], &mut b_r2[0],
                       -1, 0, cdef_h,
                       s_r2, bdm8,
-                      &cdeffed, cdef_w, cdef_h,
-                      &cdeffed, cdef_w, cdef_h);
+                      &cdeffed, &cdeffed,
+                      cdef_w, cdef_h);
     sgrproj_box_ab_r2(&mut a_r2[1], &mut b_r2[1],
                       0, 0, cdef_h,
                       s_r2, bdm8,
-                      &cdeffed, cdef_w, cdef_h,
-                      &cdeffed, cdef_w, cdef_h);
+                      &cdeffed, &cdeffed,
+                      cdef_w, cdef_h);
   }
   if s_r1 > 0 {
     sgrproj_box_ab_r1(&mut a_r1[0], &mut b_r1[0],
                       -1, 0, cdef_h,
                       s_r1, bdm8,
-                      &cdeffed, cdef_w, cdef_h,
-                      &cdeffed, cdef_w, cdef_h);
+                      &cdeffed, &cdeffed,
+                      cdef_w, cdef_h);
     sgrproj_box_ab_r1(&mut a_r1[1], &mut b_r1[1],
                       0, 0, cdef_h,
                       s_r1, bdm8,
-                      &cdeffed, cdef_w, cdef_h,
-                      &cdeffed, cdef_w, cdef_h);
+                      &cdeffed, &cdeffed,
+                      cdef_w, cdef_h);
   }
 
   /* iterate by column */
@@ -618,8 +612,8 @@ pub fn sgrproj_solve<T: Pixel>(set: u8, fi: &FrameInvariants<T>,
       sgrproj_box_ab_r2(&mut a_r2[(xi+2)%3], &mut b_r2[(xi+2)%3],
                         xi as isize + 1, 0, cdef_h,
                         s_r2, bdm8,
-                        &cdeffed, cdef_w, cdef_h,
-                        &cdeffed, cdef_w, cdef_h);
+                        &cdeffed, &cdeffed,
+                        cdef_w, cdef_h);
       let ap0: [&[u32; 64+2]; 3] = [&a_r2[xi%3], &a_r2[(xi+1)%3], &a_r2[(xi+2)%3]];
       let bp0: [&[u32; 64+2]; 3] = [&b_r2[xi%3], &b_r2[(xi+1)%3], &b_r2[(xi+2)%3]];
       sgrproj_box_f_r2(&ap0, &bp0, &mut f_r2, xi, 0, cdef_h as usize, &cdeffed);
@@ -630,8 +624,8 @@ pub fn sgrproj_solve<T: Pixel>(set: u8, fi: &FrameInvariants<T>,
       sgrproj_box_ab_r1(&mut a_r1[(xi+2)%3], &mut b_r1[(xi+2)%3],
                         xi as isize + 1, 0, cdef_h,
                         s_r1, bdm8,
-                        &cdeffed, cdef_w, cdef_h,
-                        &cdeffed, cdef_w, cdef_h);
+                        &cdeffed, &cdeffed,
+                        cdef_w, cdef_h);
       let ap1: [&[u32; 64+2]; 3] = [&a_r1[xi%3], &a_r1[(xi+1)%3], &a_r1[(xi+2)%3]];
       let bp1: [&[u32; 64+2]; 3] = [&b_r1[xi%3], &b_r1[(xi+1)%3], &b_r1[(xi+2)%3]];
 
