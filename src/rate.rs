@@ -47,7 +47,7 @@ const TWOPASS_PACKET_SZ: usize = 8;
 const SEF_BITS: i64 = 24;
 
 // The scale of AV1 quantizer tables (relative to the pixel domain), i.e., Q3.
-const QSCALE: i32 = 3;
+pub const QSCALE: i32 = 3;
 
 // We clamp the actual I and B frame delays to a minimum of 10 to work
 //  within the range of values where later incrementing the delay works as
@@ -92,7 +92,7 @@ fn ilog64(v: i64) -> i32 {
 
 // Convert an integer into a Q57 fixed-point fraction.
 // The integer must be in the range -64 to 63, inclusive.
-const fn q57(v: i32) -> i64 {
+pub const fn q57(v: i32) -> i64 {
   // TODO: Add assert if it ever becomes possible to do in a const function.
   (v as i64) << 57
 }
@@ -116,7 +116,7 @@ const ATANH_LOG2: &[i64; 32] = &[
 // input: a log base 2 in Q57 format.
 // output: a 64 bit integer in Q0 (no fraction).
 // TODO: Mark const once we can use local variables in a const function.
-fn bexp64(logq57: i64) -> i64 {
+pub fn bexp64(logq57: i64) -> i64 {
   let ipart = (logq57 >> 57) as i32;
   if ipart < 0 {
     return 0;
