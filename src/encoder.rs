@@ -635,7 +635,8 @@ impl<T: Pixel> FrameInvariants<T> {
       fi.ref_frames[i] = 0;
     }
 
-    fi.tx_mode_select = fi.config.speed_settings.rdo_tx_decision;
+    // Until has_tr() and has_bl() is fixed to use partition info, disable intra tx partition
+    fi.tx_mode_select = false;
 
     fi
   }
