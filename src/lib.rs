@@ -180,12 +180,6 @@ pub mod version {
 #[cfg(all(test, any(feature="decode_test", feature="decode_test_dav1d")))]
 mod test_encode_decode;
 
-#[cfg(all(test, feature="decode_test"))]
-mod test_encode_decode_aom;
-
-#[cfg(all(test, feature="decode_test_dav1d"))]
-mod test_encode_decode_dav1d;
-
 #[cfg(feature="bench")]
 pub mod bench {
   pub mod api { pub use crate::api::*; }

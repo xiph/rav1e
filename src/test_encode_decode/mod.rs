@@ -14,12 +14,18 @@ use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use std::sync::Arc;
 use crate::util::Pixel;
-#[cfg(feature="decode_test")]
-use crate::test_encode_decode_aom::AomDecoder;
-#[cfg(feature="decode_test_dav1d")]
-use crate::test_encode_decode_dav1d::Dav1dDecoder;
 use std::collections::VecDeque;
 use interpolate_name::interpolate_test;
+
+#[cfg(all(test, feature="decode_test"))]
+mod aom;
+#[cfg(all(test, feature="decode_test_dav1d"))]
+mod dav1d;
+
+#[cfg(feature="decode_test")]
+use aom::AomDecoder;
+#[cfg(feature="decode_test_dav1d")]
+use dav1d::Dav1dDecoder;
 
 fn fill_frame<T: Pixel>(ra: &mut ChaChaRng, frame: &mut Frame<T>) {
   for plane in frame.planes.iter_mut() {
