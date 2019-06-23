@@ -10,7 +10,7 @@
 use criterion::*;
 use rav1e::bench::partition::*;
 use rav1e::bench::partition::BlockSize::*;
-use rav1e::bench::plane::*;
+use rav1e::bench::frame::*;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use rav1e::bench::me;

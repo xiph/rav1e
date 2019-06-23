@@ -8,11 +8,13 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::util::*;
-use crate::plane::*;
 use crate::tiling::*;
 use crate::api::ChromaSampling;
 use crate::context::MAX_SB_SIZE;
 use crate::mc::SUBPEL_FILTER_SIZE;
+
+mod plane;
+pub use plane::*;
 
 const FRAME_MARGIN: usize = 16 + SUBPEL_FILTER_SIZE;
 

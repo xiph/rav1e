@@ -432,7 +432,7 @@ mod test {
   use super::*;
   use super::TxType::*;
   use rand::random;
-  use crate::plane::*;
+  use crate::frame::*;
 
   fn test_roundtrip<T: Pixel>(tx_size: TxSize, tx_type: TxType, tolerance: i16) {
     let mut src_storage = [T::cast_from(0); 64 * 64];

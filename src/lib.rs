@@ -17,7 +17,6 @@ extern crate pretty_assertions;
 
 mod ec;
 mod partition;
-mod plane;
 mod transform;
 mod quantize;
 mod predict;
@@ -189,7 +188,7 @@ pub mod bench {
   pub mod encoder { pub use crate::encoder::*; }
   pub mod me { pub use crate::me::*; }
   pub mod partition { pub use crate::partition::*; }
-  pub mod plane { pub use crate::plane::*; }
+  pub mod frame { pub use crate::frame::*; }
   pub mod predict { pub use crate::predict::*; }
   pub mod rdo { pub use crate::rdo::*; }
   pub mod transform { pub use crate::transform::*; }

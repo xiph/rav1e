@@ -177,7 +177,7 @@ const SUBPEL_FILTERS: [[[i32; SUBPEL_FILTER_SIZE]; 16]; 6] = [
 #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 mod nasm {
   use super::*;
-  use crate::plane::*;
+  use crate::frame::*;
 
   use std::mem;
 
@@ -368,7 +368,7 @@ mod nasm {
 mod native {
   use super::*;
   use num_traits::*;
-  use crate::plane::*;
+  use crate::frame::*;
   use crate::util::*;
 
   unsafe fn run_filter<T: AsPrimitive<i32>>(

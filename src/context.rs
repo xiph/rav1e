@@ -27,7 +27,7 @@ use crate::transform::TxSize::*;
 use crate::transform::TxType::*;
 use crate::transform::*;
 use crate::lrf::*;
-use crate::plane::*;
+use crate::frame::*;
 use crate::scan_order::*;
 use crate::tiling::*;
 use crate::token_cdfs::*;

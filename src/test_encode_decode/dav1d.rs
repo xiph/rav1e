@@ -86,7 +86,7 @@ impl<T: Pixel> Drop for Dav1dDecoder<T> {
 }
 
 fn compare_pic<T: Pixel>(pic: &Dav1dPicture, frame: &Frame<T>, bit_depth: usize, width: usize, height: usize) {
-  use plane::Plane;
+  use crate::frame::Plane;
 
   let cmp_plane = |data, stride, frame_plane: &Plane<T>| {
     let w = width >> frame_plane.cfg.xdec;

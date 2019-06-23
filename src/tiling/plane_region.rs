@@ -8,7 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::context::*;
-use crate::plane::*;
+use crate::frame::*;
 use crate::util::*;
 
 use std::marker::PhantomData;

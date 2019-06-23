@@ -12,7 +12,7 @@
 use crate::context::*;
 use crate::frame::Frame;
 use crate::encoder::FrameInvariants;
-use crate::plane::*;
+use crate::frame::*;
 use crate::tiling::*;
 use crate::util::{clamp, msb, Pixel, CastFromPrimitive};
 

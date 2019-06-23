@@ -15,7 +15,7 @@ use crate::encoder::FrameInvariants;
 use crate::encoder::FrameState;
 use crate::api::FrameType;
 use crate::partition::RefType::*;
-use crate::plane::*;
+use crate::frame::*;
 use crate::predict::PredictionMode::*;
 use crate::quantize::*;
 use crate::util::Pixel;
