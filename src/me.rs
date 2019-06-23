@@ -18,7 +18,7 @@ use crate::mc::MotionVector;
 use crate::partition::*;
 use crate::partition::RefType::*;
 use crate::predict::PredictionMode;
-use crate::plane::*;
+use crate::frame::*;
 use crate::tiling::*;
 use crate::util::Pixel;
 

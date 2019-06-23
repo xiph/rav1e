@@ -13,7 +13,7 @@
 use self::BlockSize::*;
 use self::TxSize::*;
 use crate::context::*;
-use crate::plane::*;
+use crate::frame::*;
 use crate::predict::*;
 use crate::tiling::*;
 use crate::transform::TxSize;

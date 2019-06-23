@@ -11,7 +11,6 @@ use super::*;
 
 use crate::context::*;
 use crate::frame::*;
-use crate::plane::*;
 use crate::util::*;
 
 /// Rectangle of a tile, in pixels

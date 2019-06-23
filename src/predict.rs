@@ -15,7 +15,7 @@ use crate::context::{INTRA_MODES, MAX_TX_SIZE};
 use crate::encoder::FrameInvariants;
 use crate::mc::*;
 use crate::partition::*;
-use crate::plane::*;
+use crate::frame::*;
 use crate::tiling::*;
 use crate::transform::*;
 use crate::util::*;

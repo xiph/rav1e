@@ -12,7 +12,7 @@ use rand::{Rng, RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
 use rav1e::bench::partition::BlockSize;
 use rav1e::bench::predict::{Block4x4, Intra};
-use rav1e::bench::plane::*;
+use rav1e::bench::frame::*;
 use rav1e::bench::util::*;
 
 pub const BLOCK_SIZE: BlockSize = BlockSize::BLOCK_32X32;

@@ -8,7 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::frame::Frame;
-use crate::plane::Plane;
+use crate::frame::Plane;
 use crate::util::{CastFromPrimitive, Pixel};
 
 /// Calculates the PSNR for a `Frame` by comparing the original (uncompressed) to the compressed
