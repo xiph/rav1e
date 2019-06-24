@@ -15,6 +15,9 @@
 #[macro_use]
 extern crate pretty_assertions;
 
+#[cfg(cargo_c)]
+mod capi;
+
 mod ec;
 mod partition;
 mod transform;
