@@ -1473,17 +1473,27 @@ pub fn write_tx_tree<T: Pixel>(
 
     for p in 1..3 {
       ts.qc.update(qidx, uv_tx_size, false, fi.sequence.bit_depth, fi.dc_delta_q[p], fi.ac_delta_q[p]);
-      let tx_bo = BlockOffset {
-        x: tile_bo.x  - ((bw * tx_size.width_mi() == 1) as usize),
-        y: tile_bo.y  - ((bh * tx_size.height_mi() == 1) as usize)
-      };
 
-      let po = tile_bo.plane_offset(&ts.input.planes[p].cfg);
-      let (_, dist) =
-        encode_tx_block(fi, ts, cw, w, p, tx_bo, luma_mode, uv_tx_size, uv_tx_type,
+      for by in 0..bh_uv {
+        for bx in 0..bw_uv {
+          let tx_bo =
+            BlockOffset {
+              x: tile_bo.x + ((bx * uv_tx_size.width_mi()) << xdec) -
+                ((bw * tx_size.width_mi() == 1) as usize) * xdec,
+              y: tile_bo.y + ((by * uv_tx_size.height_mi()) << ydec) -
+                ((bh * tx_size.height_mi() == 1) as usize) * ydec
+            };
+
+          let mut po = tile_bo.plane_offset(&ts.input.planes[p].cfg);
+          po.x += (bx * uv_tx_size.width()) as isize;
+          po.y += (by * uv_tx_size.height()) as isize;
+          let (_, dist) =
+            encode_tx_block(fi, ts, cw, w, p, tx_bo, luma_mode, uv_tx_size, uv_tx_type,
                         plane_bsize, po, skip, ac, 0, rdo_type, need_recon_pixel);
-      assert!(!fi.use_tx_domain_distortion || need_recon_pixel || skip || dist >= 0);
-      tx_dist += dist;
+          assert!(!fi.use_tx_domain_distortion || need_recon_pixel || skip || dist >= 0);
+          tx_dist += dist;
+        }
+      }
     }
   }
 
@@ -1548,7 +1558,14 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
                     bsize.greater_than(BlockSize::BLOCK_64X64)) && is_square;
 
   // must_split overrides the minimum partition size when applicable
-  let can_split = (bsize > fi.min_partition_size && is_square) || must_split;
+  let can_split = // FIXME: sub-8x8 inter blocks not supported for non-4:2:0 sampling
+    if fi.frame_type == FrameType::INTER &&
+    fi.config.chroma_sampling != ChromaSampling::Cs420 &&
+    bsize <= BlockSize::BLOCK_8X8 {
+    false
+  } else {
+    (bsize > fi.min_partition_size && is_square) || must_split
+  };
 
   let mut best_partition = PartitionType::PARTITION_INVALID;
 
@@ -1772,7 +1789,12 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   if must_split && (!split_vert && !split_horz) {
     // Oversized blocks are split automatically
     partition = PartitionType::PARTITION_SPLIT;
-  } else if must_split || (bsize > fi.min_partition_size && is_square) {
+  } else if (must_split || (bsize > fi.min_partition_size && is_square)) && (
+    // FIXME: sub-8x8 inter blocks not supported for non-4:2:0 sampling
+    fi.frame_type != FrameType::INTER ||
+    fi.config.chroma_sampling == ChromaSampling::Cs420 ||
+    bsize > BlockSize::BLOCK_8X8)
+  {
     debug_assert!(bsize.is_sqr());
     // Blocks of sizes within the supported range are subjected to a partitioning decision
     let mut partition_types: Vec<PartitionType> = Vec::new();

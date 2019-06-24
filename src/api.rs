@@ -507,12 +507,7 @@ impl Config {
 
     // FIXME: inter unsupported with 4:2:2 and 4:4:4 chroma sampling
     let chroma_sampling = config.chroma_sampling;
-    let keyframe_only = chroma_sampling == ChromaSampling::Cs444 ||
-      chroma_sampling == ChromaSampling::Cs422;
-    if keyframe_only {
-      config.max_key_frame_interval = 1;
-      config.min_key_frame_interval = 1;
-    }
+
     // FIXME: tx partition for intra not supported for chroma 422
     if chroma_sampling == ChromaSampling::Cs422 {
       config.speed_settings.rdo_tx_decision = false;
