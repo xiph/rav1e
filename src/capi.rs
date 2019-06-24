@@ -5,12 +5,6 @@
 //!
 //! This is the C-compatible API
 
-extern crate rav1e;
-extern crate libc;
-extern crate num_traits;
-#[macro_use]
-extern crate num_derive;
-
 use std::slice;
 use std::sync::Arc;
 
@@ -22,7 +16,10 @@ use std::os::raw::c_int;
 use libc::size_t;
 use libc::ptrdiff_t;
 
+use num_derive::*;
 use num_traits::cast::FromPrimitive;
+
+use crate::prelude as rav1e;
 
 /// Raw video Frame
 ///
@@ -87,7 +84,7 @@ pub struct Context {
     last_err: Option<rav1e::EncoderStatus>,
 }
 
-type FrameType = rav1e::data::FrameType;
+type FrameType = rav1e::FrameType;
 
 /// Encoded Packet
 ///
@@ -106,18 +103,18 @@ pub struct Packet {
     pub frame_type: FrameType,
 }
 
-type PixelRange=rav1e::color::PixelRange;
-type ChromaSamplePosition=rav1e::color::ChromaSamplePosition;
-type ChromaSampling=rav1e::color::ChromaSampling;
-type MatrixCoefficients=rav1e::color::MatrixCoefficients;
-type ColorPrimaries=rav1e::color::ColorPrimaries;
-type TransferCharacteristics=rav1e::color::TransferCharacteristics;
-type Rational=rav1e::data::Rational;
+type PixelRange=rav1e::PixelRange;
+type ChromaSamplePosition=rav1e::ChromaSamplePosition;
+type ChromaSampling=rav1e::ChromaSampling;
+type MatrixCoefficients=rav1e::MatrixCoefficients;
+type ColorPrimaries=rav1e::ColorPrimaries;
+type TransferCharacteristics=rav1e::TransferCharacteristics;
+type Rational=rav1e::Rational;
 
 #[no_mangle]
 pub unsafe extern "C" fn rav1e_config_default() -> *mut Config {
     let cfg = rav1e::Config {
-        enc: rav1e::config::EncoderConfig::default(),
+        enc: rav1e::EncoderConfig::default(),
         threads: 0,
     };
 
@@ -192,7 +189,7 @@ pub unsafe extern "C" fn rav1e_config_set_color_description(cfg: *mut Config,
                                                             primaries: ColorPrimaries,
                                                             transfer: TransferCharacteristics
 ) -> c_int {
-    (*cfg).cfg.enc.color_description = Some(rav1e::color::ColorDescription {
+    (*cfg).cfg.enc.color_description = Some(rav1e::ColorDescription {
         matrix_coefficients: matrix,
         color_primaries: primaries,
         transfer_characteristics: transfer,
@@ -209,7 +206,7 @@ pub unsafe extern "C" fn rav1e_config_set_content_light(cfg: *mut Config,
                                                         max_content_light_level: u16,
                                                         max_frame_average_light_level: u16
 ) -> c_int {
-    (*cfg).cfg.enc.content_light = Some(rav1e::color::ContentLight {
+    (*cfg).cfg.enc.content_light = Some(rav1e::ContentLight {
         max_content_light_level,
         max_frame_average_light_level,
     });
@@ -226,12 +223,12 @@ pub unsafe extern "C" fn rav1e_config_set_content_light(cfg: *mut Config,
 /// Returns a negative value on error or 0.
 #[no_mangle]
 pub unsafe extern "C" fn rav1e_config_set_mastering_display(cfg: *mut Config,
-                                                            primaries: [rav1e::data::Point; 3],
-                                                            white_point: rav1e::data::Point,
+                                                            primaries: [rav1e::Point; 3],
+                                                            white_point: rav1e::Point,
                                                             max_luminance: u32,
                                                             min_luminance: u32
 ) -> c_int {
-    (*cfg).cfg.enc.mastering_display = Some(rav1e::color::MasteringDisplay {
+    (*cfg).cfg.enc.mastering_display = Some(rav1e::MasteringDisplay {
         primaries,
         white_point,
         max_luminance,
@@ -260,7 +257,7 @@ unsafe fn option_match(
     match key {
         "width" => enc.width = value.parse().map_err(|_| ())?,
         "height" => enc.height = value.parse().map_err(|_| ())?,
-        "speed" => enc.speed_settings = rav1e::config::SpeedSettings::from_preset(value.parse().map_err(|_| ())?),
+        "speed" => enc.speed_settings = rav1e::SpeedSettings::from_preset(value.parse().map_err(|_| ())?),
 
         "threads" => (*cfg).cfg.threads = value.parse().map_err(|_| ())?,
 

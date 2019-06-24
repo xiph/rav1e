@@ -91,4 +91,4 @@ codegen-units = 1
 lto = true
 
 [workspace]
-members = ["ivf", "crates/nasm_rs", "crates/avformat-sys"]
+members = [".", "ivf", "crates/nasm_rs", "crates/avformat-sys"]
