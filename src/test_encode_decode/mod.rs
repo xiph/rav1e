@@ -385,10 +385,8 @@ fn chroma_sampling(decoder: &str, cs: ChromaSampling) {
   let w = 64;
   let h = 80;
 
-  // TODO: bump keyint when inter is supported
-
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
-  dec.encode_decode(w, h, speed, quantizer, limit, 8, cs, 1, 1, true, 0, 0, 0);
+  dec.encode_decode(w, h, speed, quantizer, limit, 8, cs, 15, 15, true, 0, 0, 0);
 }
 
 macro_rules! test_chroma_sampling {
