@@ -46,6 +46,10 @@ pub enum EncoderStatus {
     Encoded,
     /// Generic fatal error
     Failure = -1,
+    /// A frame was encoded in the first pass of a 2-pass encode, but its stats
+    /// data was not retrieved with rav1e_twopass_out(), or not enough stats data was
+    /// provided in the second pass of a 2-pass encode to encode the next frame.
+    NotReady = -2,
 }
 
 impl From<Option<rav1e::EncoderStatus>> for EncoderStatus {
@@ -58,6 +62,7 @@ impl From<Option<rav1e::EncoderStatus>> for EncoderStatus {
                 rav1e::EncoderStatus::LimitReached => EncoderStatus::LimitReached,
                 rav1e::EncoderStatus::Encoded => EncoderStatus::Encoded,
                 rav1e::EncoderStatus::Failure => EncoderStatus::Failure,
+                rav1e::EncoderStatus::NotReady => EncoderStatus::NotReady,
             }
         }
     }
@@ -349,6 +354,71 @@ pub unsafe extern "C" fn rav1e_frame_new(ctx: *const Context) -> *mut Frame {
 pub unsafe extern "C" fn rav1e_frame_unref(frame: *mut Frame) {
     if !frame.is_null() {
         let _ = Box::from_raw(frame);
+    }
+}
+
+/// Retrieve the first-pass data of a two-pass encode for the frame that was
+/// just encoded. This should be called BEFORE every call to rav1e_receive_packet()
+/// (including the very first one), even if no packet was produced by the
+/// last call to rav1e_receive_packet, if any (i.e., RA_ENCODER_STATUS_ENCODED
+/// was returned). It needs to be called once more after
+/// RA_ENCODER_STATUS_LIMIT_REACHED is returned, to retrieve the header that
+/// should be written to the front of the stats file (overwriting the
+/// placeholder header that was emitted at the start of encoding).
+///
+/// It is still safe to call this function when rav1e_receive_packet() returns any
+/// other error. It will return NULL instead of returning a duplicate copy
+/// of the previous frame's data.
+///
+/// Must be freed with rav1e_twopass_unref().
+#[no_mangle]
+pub unsafe extern "C" fn rav1e_twopass_out(ctx: *mut Context, buf_size: *mut size_t) -> *mut u8 {
+    let buf = (*ctx).ctx.twopass_out();
+
+    if buf.is_none() {
+        return std::ptr::null_mut();
+    }
+
+    let v = buf.unwrap().to_vec();
+    *buf_size = v.len();
+    Box::into_raw(v.into_boxed_slice()) as *mut u8
+}
+
+#[no_mangle]
+pub unsafe extern fn rav1e_twopass_unref(buf: *mut u8) {
+    if !buf.is_null() {
+        let _ = Box::from_raw(buf);
+    }
+}
+
+/// Ask how many bytes of the stats file are needed before the next frame
+/// of the second pass in a two-pass encode can be encoded. This is a lower
+/// bound (more might be required), but if 0 is returned, then encoding can
+/// proceed. This is just a hint to the application, and does not need to
+/// be called for encoding the second pass to work, so long as the
+/// application continues to provide more data to rav1e_twopass_in() in a loop
+/// until rav1e_twopass_in() returns 0.
+#[no_mangle]
+pub unsafe extern "C" fn rav1e_twopass_bytes_needed(ctx: *mut Context) -> size_t {
+    (*ctx).ctx.twopass_bytes_needed() as size_t
+}
+
+/// Provide stats data produced in the first pass of a two-pass encode to the
+/// second pass. On success this returns the number of bytes of that data
+/// which were consumed. When encoding the second pass of a two-pass encode,
+/// this should be called repeatedly in a loop before every call to
+/// rav1e_receive_packet() (including the very first one) until no bytes are
+/// consumed, or until twopass_bytes_needed() returns 0. Returns -1 on failure.
+#[no_mangle]
+pub unsafe extern "C" fn rav1e_twopass_in(ctx: *mut Context, buf: *mut u8, buf_size: size_t) -> c_int {
+    let buf_slice = slice::from_raw_parts(buf, buf_size as usize);
+    let r = (*ctx).ctx.twopass_in(buf_slice);
+    match r {
+        Ok(v) => v as c_int,
+        Err(v) => {
+            (*ctx).last_err = Some(v);
+            -1
+        },
     }
 }
 
