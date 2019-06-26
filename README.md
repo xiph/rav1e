@@ -47,6 +47,16 @@ To build release binary in `target/release/rav1e` run:
 cargo build --release
 ```
 
+## Building the C-API
+
+**rav1e** provides a C-compatible set of library, header and pkg-config file.
+
+To build and install it you can use [cargo-c](https://crates.io/crates/cargo-c):
+```
+cargo install cargo-c
+cargo cinstall --release
+```
+
 # Compressing video
 
 Input videos must be in y4m format and have 4:2:0 chroma subsampling.
