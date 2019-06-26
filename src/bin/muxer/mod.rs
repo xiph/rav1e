@@ -16,6 +16,8 @@ use mp4::Mp4Muxer;
 mod y4m;
 pub use self::y4m::write_y4m_frame;
 
+use rav1e::prelude::*;
+
 #[cfg(feature = "avformat-sys")]
 mod avformat;
 
@@ -30,7 +32,7 @@ pub trait Muxer {
     framerate_den: usize
   );
 
-  fn write_frame(&mut self, pts: u64, data: &[u8]);
+  fn write_frame(&mut self, pts: u64, data: &[u8], frame_type: FrameType);
 
   fn flush(&mut self) -> io::Result<()>;
 }

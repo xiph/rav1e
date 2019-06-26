@@ -1,5 +1,6 @@
 use super::Muxer;
 use ivf::*;
+use rav1e::prelude::*;
 use std::fs::File;
 use std::io;
 use std::io::Write;
@@ -25,7 +26,7 @@ impl Muxer for IvfMuxer {
     );
   }
 
-  fn write_frame(&mut self, pts: u64, data: &[u8]) {
+  fn write_frame(&mut self, pts: u64, data: &[u8], _frame_type: FrameType) {
     write_ivf_frame(&mut self.output, pts, data);
   }
 

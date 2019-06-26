@@ -11,6 +11,8 @@
 use avformat_sys::*;
 
 #[allow(unused_imports)]
+use rav1e::prelude::*;
+#[allow(unused_imports)]
 use super::Muxer;
 #[allow(unused_imports)]
 use std::ffi::CString;
@@ -90,12 +92,15 @@ impl Muxer for AvformatMuxer {
     }
   }
 
-  fn write_frame(&mut self, pts: u64, data: &[u8]) {
+  fn write_frame(&mut self, pts: u64, data: &[u8], frame_type: FrameType) {
     unsafe {
       let mut pkt: AVPacket = mem::zeroed();
       av_init_packet(&mut pkt);
       pkt.data = data.as_ptr() as *mut _;
       pkt.size = data.len() as i32;
+      if frame_type == FrameType::KEY {
+        pkt.flags = AV_PKT_FLAG_KEY as i32;
+      }
 
       let pts = av_rescale_q(pts as i64, self.time_base, self.stream_time_base);
       pkt.pts = pts;
