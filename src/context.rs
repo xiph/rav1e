@@ -1350,6 +1350,8 @@ impl IndexMut<BlockOffset> for FrameBlocks {
 const PARTITION_CONTEXT_GRANULARITY: usize = 8;
 const PARTITION_CONTEXT_MAX_WIDTH: usize = MAX_TILE_WIDTH / PARTITION_CONTEXT_GRANULARITY;
 
+const COEFF_CONTEXT_MAX_WIDTH: usize = MAX_TILE_WIDTH / MI_SIZE;
+
 #[derive(Clone)]
 pub struct BlockContextCheckpoint {
   cdef_coded: bool,
@@ -1358,7 +1360,7 @@ pub struct BlockContextCheckpoint {
   left_partition_context: [u8; MAX_MIB_SIZE >> 1],
   above_tx_context: [u8; PARTITION_CONTEXT_MAX_WIDTH],
   left_tx_context: [u8; MAX_MIB_SIZE],
-  above_coeff_context: [[u8; PARTITION_CONTEXT_MAX_WIDTH]; PLANES],
+  above_coeff_context: [[u8; COEFF_CONTEXT_MAX_WIDTH]; PLANES],
   left_coeff_context: [[u8; MAX_MIB_SIZE]; PLANES],
 }
 
@@ -1371,7 +1373,7 @@ pub struct BlockContext<'a> {
   left_partition_context: [u8; MAX_MIB_SIZE >> 1],
   above_tx_context: [u8; PARTITION_CONTEXT_MAX_WIDTH],
   left_tx_context: [u8; MAX_MIB_SIZE],
-  above_coeff_context: [[u8; PARTITION_CONTEXT_MAX_WIDTH]; PLANES],
+  above_coeff_context: [[u8; COEFF_CONTEXT_MAX_WIDTH]; PLANES],
   left_coeff_context: [[u8; MAX_MIB_SIZE]; PLANES],
   pub blocks: &'a mut TileBlocksMut<'a>,
 }
@@ -1388,9 +1390,9 @@ impl<'a> BlockContext<'a> {
       above_tx_context: [0; PARTITION_CONTEXT_MAX_WIDTH],
       left_tx_context: [0; MAX_MIB_SIZE],
       above_coeff_context: [
-        [0; PARTITION_CONTEXT_MAX_WIDTH],
-        [0; PARTITION_CONTEXT_MAX_WIDTH],
-        [0; PARTITION_CONTEXT_MAX_WIDTH]
+        [0; COEFF_CONTEXT_MAX_WIDTH],
+        [0; COEFF_CONTEXT_MAX_WIDTH],
+        [0; COEFF_CONTEXT_MAX_WIDTH]
       ],
       left_coeff_context: [[0; MAX_MIB_SIZE]; PLANES],
       blocks,
