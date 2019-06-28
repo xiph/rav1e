@@ -385,7 +385,7 @@ pub unsafe extern "C" fn rav1e_twopass_out(ctx: *mut Context, buf_size: *mut siz
 }
 
 #[no_mangle]
-pub unsafe extern fn rav1e_twopass_unref(buf: *mut u8) {
+pub unsafe extern "C" fn rav1e_twopass_unref(buf: *mut u8) {
     if !buf.is_null() {
         let _ = Box::from_raw(buf);
     }
