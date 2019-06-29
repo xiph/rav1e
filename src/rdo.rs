@@ -447,6 +447,121 @@ impl Default for EncodingSettings {
     }
   }
 }
+
+#[inline]
+fn luma_chroma_mode_rdo<T: Pixel> (luma_mode: PredictionMode,
+  fi: &FrameInvariants<T>,
+  bsize: BlockSize,
+  tile_bo: BlockOffset,
+  ts: &mut TileStateMut<'_, T>,
+  cw: &mut ContextWriter,
+  rdo_type: RDOType,
+  cw_checkpoint: &ContextWriterCheckpoint,
+  best: &mut EncodingSettings,
+  mvs: [MotionVector; 2],
+  ref_frames: [RefType; 2],
+  mode_set_chroma: &[PredictionMode],
+  luma_mode_is_intra: bool,
+  mode_context: usize,
+  mv_stack: &ArrayVec<[CandidateMV; 9]>) {
+    let (tx_size, mut tx_type) = rdo_tx_size_type(
+      fi, ts, cw, bsize, tile_bo, luma_mode, ref_frames, mvs, false,
+    );
+
+    // Get block luma and chroma dimensions
+    let w = bsize.width();
+    let h = bsize.height();
+
+    let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
+
+    let is_chroma_block = has_chroma(tile_bo, bsize, xdec, ydec);
+    
+    // Find the best chroma prediction mode for the current luma prediction mode
+    let mut chroma_rdo = |skip: bool| {
+      mode_set_chroma.iter().for_each(|&chroma_mode| {
+        let wr = &mut WriterCounter::new();
+        let tell = wr.tell_frac();
+
+        if skip { tx_type = TxType::DCT_DCT; };
+
+        if bsize >= BlockSize::BLOCK_8X8 && bsize.is_sqr() {
+          cw.write_partition(wr, tile_bo, PartitionType::PARTITION_NONE, bsize);
+        }
+
+        // TODO(yushin): luma and chroma would have different decision based on chroma format
+        let need_recon_pixel = luma_mode_is_intra && tx_size.block_size() != bsize;
+
+        encode_block_pre_cdef(&fi.sequence, ts, cw, wr, bsize, tile_bo, skip);
+        let tx_dist =
+          encode_block_post_cdef(
+            fi,
+            ts,
+            cw,
+            wr,
+            luma_mode,
+            chroma_mode,
+            ref_frames,
+            mvs,
+            bsize,
+            tile_bo,
+            skip,
+            CFLParams::default(),
+            tx_size,
+            tx_type,
+            mode_context,
+            &mv_stack,
+            rdo_type,
+            need_recon_pixel
+          );
+
+        let rate = wr.tell_frac() - tell;
+        let distortion = if fi.use_tx_domain_distortion && !need_recon_pixel {
+          compute_tx_distortion(
+            fi,
+            ts,
+            w,
+            h,
+            is_chroma_block,
+            tile_bo,
+            tx_dist,
+            skip,
+            false
+          )
+        } else {
+          compute_distortion(
+            fi,
+            ts,
+            w,
+            h,
+            is_chroma_block,
+            tile_bo,
+            false
+          )
+        };
+        let rd = compute_rd_cost(fi, rate, distortion);
+        if rd < best.rd {
+          //if rd < best.rd || luma_mode == PredictionMode::NEW_NEWMV {
+          best.rd = rd;
+          best.mode_luma = luma_mode;
+          best.mode_chroma = chroma_mode;
+          best.ref_frames = ref_frames;
+          best.mvs = mvs;
+          best.skip = skip;
+          best.tx_size = tx_size;
+          best.tx_type = tx_type;
+        }
+
+        cw.rollback(cw_checkpoint);
+      });
+    };
+
+    chroma_rdo(false);
+    // Don't skip when using intra modes
+    if !luma_mode_is_intra {
+      chroma_rdo(true);
+    };
+  }
+
 // RDO-based mode decision
 pub fn rdo_mode_decision<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
@@ -583,106 +698,6 @@ pub fn rdo_mode_decision<T: Pixel>(
     }
   }
 
-  let luma_chroma_mode_rdo = |luma_mode: PredictionMode,
-  ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter,
-  best: &mut EncodingSettings,
-  mvs: [MotionVector; 2],
-  ref_frames: [RefType; 2],
-  mode_set_chroma: &[PredictionMode],
-  luma_mode_is_intra: bool,
-  mode_context: usize,
-  mv_stack: &ArrayVec<[CandidateMV; 9]>| {
-    let (tx_size, mut tx_type) = rdo_tx_size_type(
-      fi, ts, cw, bsize, tile_bo, luma_mode, ref_frames, mvs, false,
-    );
-
-    // Find the best chroma prediction mode for the current luma prediction mode
-    let mut chroma_rdo = |skip: bool| {
-      mode_set_chroma.iter().for_each(|&chroma_mode| {
-        let wr = &mut WriterCounter::new();
-        let tell = wr.tell_frac();
-
-        if skip { tx_type = TxType::DCT_DCT; };
-
-        if bsize >= BlockSize::BLOCK_8X8 && bsize.is_sqr() {
-          cw.write_partition(wr, tile_bo, PartitionType::PARTITION_NONE, bsize);
-        }
-
-        // TODO(yushin): luma and chroma would have different decision based on chroma format
-        let need_recon_pixel = luma_mode_is_intra && tx_size.block_size() != bsize;
-
-        encode_block_pre_cdef(&fi.sequence, ts, cw, wr, bsize, tile_bo, skip);
-        let tx_dist =
-          encode_block_post_cdef(
-            fi,
-            ts,
-            cw,
-            wr,
-            luma_mode,
-            chroma_mode,
-            ref_frames,
-            mvs,
-            bsize,
-            tile_bo,
-            skip,
-            CFLParams::default(),
-            tx_size,
-            tx_type,
-            mode_context,
-            &mv_stack,
-            rdo_type,
-            need_recon_pixel
-          );
-
-        let rate = wr.tell_frac() - tell;
-        let distortion = if fi.use_tx_domain_distortion && !need_recon_pixel {
-          compute_tx_distortion(
-            fi,
-            ts,
-            w,
-            h,
-            is_chroma_block,
-            tile_bo,
-            tx_dist,
-            skip,
-            false
-          )
-        } else {
-          compute_distortion(
-            fi,
-            ts,
-            w,
-            h,
-            is_chroma_block,
-            tile_bo,
-            false
-          )
-        };
-        let rd = compute_rd_cost(fi, rate, distortion);
-        if rd < best.rd {
-          //if rd < best.rd || luma_mode == PredictionMode::NEW_NEWMV {
-          best.rd = rd;
-          best.mode_luma = luma_mode;
-          best.mode_chroma = chroma_mode;
-          best.ref_frames = ref_frames;
-          best.mvs = mvs;
-          best.skip = skip;
-          best.tx_size = tx_size;
-          best.tx_type = tx_type;
-        }
-
-        cw.rollback(&cw_checkpoint);
-      });
-    };
-
-    chroma_rdo(false);
-    // Don't skip when using intra modes
-    if !luma_mode_is_intra {
-      chroma_rdo(true);
-    };
-  };
-
   if fi.frame_type != FrameType::INTER {
     assert!(inter_mode_set.is_empty());
   }
@@ -709,7 +724,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     };
     let mode_set_chroma = ArrayVec::from([luma_mode]);
 
-    luma_chroma_mode_rdo(luma_mode, ts, cw, &mut best, mvs, ref_frames_set[i], &mode_set_chroma, false,
+    luma_chroma_mode_rdo(luma_mode, fi, bsize, tile_bo, ts, cw, rdo_type, &cw_checkpoint, &mut best, mvs, ref_frames_set[i], &mode_set_chroma, false,
              mode_contexts[i], &mv_stacks[i]);
   });
 
@@ -801,7 +816,7 @@ pub fn rdo_mode_decision<T: Pixel>(
       if is_chroma_block && luma_mode != PredictionMode::DC_PRED {
         mode_set_chroma.push(PredictionMode::DC_PRED);
       }
-      luma_chroma_mode_rdo(luma_mode, ts, cw, &mut best, mvs, ref_frames, &mode_set_chroma, true,
+      luma_chroma_mode_rdo(luma_mode, fi, bsize, tile_bo, ts, cw, rdo_type, &cw_checkpoint, &mut best, mvs, ref_frames, &mode_set_chroma, true,
                            0, &ArrayVec::<[CandidateMV; 9]>::new());
     });
   }
