@@ -527,7 +527,12 @@ impl Config {
 
     let inner = ContextInner::new(&config);
 
-    Context { inner, pool, config }
+    Context {
+      is_flushing: false,
+      inner,
+      pool,
+      config
+    }
   }
 }
 
@@ -709,7 +714,8 @@ pub(crate) struct ContextInner<T: Pixel> {
 pub struct Context<T: Pixel> {
   inner: ContextInner<T>,
   config: EncoderConfig,
-  pool: rayon::ThreadPool
+  pool: rayon::ThreadPool,
+  is_flushing: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -776,7 +782,13 @@ impl<T: Pixel> Context<T> {
     let frame = frame.into();
 
     if frame.is_none() {
+      if self.is_flushing {
+        return Ok(());
+      }
       self.inner.limit = self.inner.frame_count;
+      self.is_flushing = true;
+    } else if self.is_flushing {
+      return Err(EncoderStatus::EnoughData)
     }
 
     self.inner.send_frame(frame)
