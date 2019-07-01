@@ -527,6 +527,7 @@ L(blend_v_tbl):
         add             r12, r0,  r1
         lsl             r1,  r1,  #1
         vsub.i8         d5,  d22, d4
+        sub             r1,  r1,  #3
 4:
         vld1.32         {d2[]},  [r2],  r3
         vld1.32         {d0[]},  [r0]
@@ -540,8 +541,6 @@ L(blend_v_tbl):
         vst1.16         {d20[2]}, [r12]!
         vst1.8          {d20[2]}, [r0]!
         vst1.8          {d20[6]}, [r12]!
-        sub             r0,  r0,  #3
-        sub             r12, r12, #3
         add             r0,  r0,  r1
         add             r12, r12, r1
         bgt             4b
@@ -552,6 +551,7 @@ L(blend_v_tbl):
         add             r12, r0,  r1
         lsl             r1,  r1,  #1
         vsub.i8         d17, d16, d2
+        sub             r1,  r1,  #6
 8:
         vld1.u8         {d4},  [r2],  r3
         vld1.u8         {d0},  [r0]
@@ -568,8 +568,6 @@ L(blend_v_tbl):
         vst1.32         {d23[0]}, [r12]!
         vst1.16         {d22[2]}, [r0]!
         vst1.16         {d23[2]}, [r12]!
-        sub             r0,  r0,  #6
-        sub             r12, r12, #6
         add             r0,  r0,  r1
         add             r12, r12, r1
         bgt             8b
@@ -580,6 +578,7 @@ L(blend_v_tbl):
         add             r12, r0,  r1
         lsl             r1,  r1,  #1
         vsub.i8         q11, q12, q2
+        sub             r1,  r1,  #12
 16:
         vld1.u8         {q1},  [r2],  r3
         vld1.u8         {q0},  [r0]
@@ -602,8 +601,6 @@ L(blend_v_tbl):
         vst1.u8         {d20},    [r12]!
         vst1.32         {d19[0]}, [r0]!
         vst1.32         {d21[0]}, [r12]!
-        sub             r0,  r0,  #12
-        sub             r12, r12, #12
         add             r0,  r0,  r1
         add             r12, r12, r1
         bgt             16b
