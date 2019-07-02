@@ -119,7 +119,8 @@ pub fn parse_cli() -> CliOptions {
     .arg(
       Arg::with_name("MINQP")
         .help("Minimum quantizer (0-255) to use in bitrate mode [default: 0]")
-        .long("min_quantizer")
+        .long("min-quantizer")
+        .alias("min_quantizer")
         .takes_value(true)
     )
     .arg(
@@ -182,14 +183,16 @@ pub fn parse_cli() -> CliOptions {
       Arg::with_name("RESERVOIR_FRAME_DELAY")
         .help("Number of frames over which rate control should distribute the reservoir [default: max(240, 1.5x keyint)]\n\
          A minimum value of 12 is enforced.")
-        .long("reservoir_frame_delay")
+        .long("reservoir-frame-delay")
+        .alias("reservoir_frame_delay")
         .takes_value(true)
     )
     .arg(
       Arg::with_name("LOW_LATENCY")
         .help("Low latency mode; disables frame reordering\n\
             Has a significant speed-to-quality trade-off")
-        .long("low_latency")
+        .long("low-latency")
+        .alias("low_latency")
     )
     .arg(
       Arg::with_name("TUNE")
@@ -257,14 +260,16 @@ pub fn parse_cli() -> CliOptions {
     .arg(
       Arg::with_name("MASTERING_DISPLAY")
         .help("Mastering display primaries in the form of G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min)")
-        .long("mastering_display")
+        .long("mastering-display")
+        .alias("mastering_display")
         .default_value("unspecified")
         .case_insensitive(true)
     )
     .arg(
       Arg::with_name("CONTENT_LIGHT")
         .help("Content light level used to describe content luminosity (cll,fall)")
-        .long("content_light")
+        .long("content-light")
+        .alias("content_light")
         .default_value("0,0")
         .case_insensitive(true)
     )
