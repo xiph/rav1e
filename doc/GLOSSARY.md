@@ -20,9 +20,9 @@ In the input, this is one picture of YUV data.
 In the bitstream, this is a Frame Header followed by zero or more Tile Groups.
 With reordering, there will be more frames in the output than the input, but some will not be shown.
   
-Segment
+GOP
 --------
-A sequence of groups. The first group will start with a keyframe, and the rest of the groups will start with inter frames.
+Group Of Pictures, A sequence of groups. The first group will start with a keyframe, and the rest of the groups will start with inter frames.
 
 MI
 --
