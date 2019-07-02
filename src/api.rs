@@ -573,21 +573,21 @@ impl InterConfig {
   }
 
   // Get the index of an output frame in its re-ordering group given the output
-  //  frame number of the frame in the current keyframe segment.
+  //  frame number of the frame in the current keyframe gop.
   // When re-ordering is disabled, this always returns 0.
   pub(crate) fn get_idx_in_group_output(&self,
-   output_frameno_in_segment: u64) -> u64 {
-    (output_frameno_in_segment - 1) % self.group_output_len
+   output_frameno_in_gop: u64) -> u64 {
+    (output_frameno_in_gop - 1) % self.group_output_len
   }
 
   // Get the order-hint of an output frame given the output frame number of the
-  //  frame in the current keyframe segment and the index of that output frame
+  //  frame in the current keyframe gop and the index of that output frame
   //  in its re-ordering gorup.
-  pub(crate) fn get_order_hint(&self, output_frameno_in_segment: u64,
+  pub(crate) fn get_order_hint(&self, output_frameno_in_gop: u64,
    idx_in_group_output: u64) -> u32 {
-    // Which P-frame group in the current segment is this output frame in?
-    // Subtract 1 because the first frame in the segment is always a keyframe.
-    let group_idx = (output_frameno_in_segment - 1) / self.group_output_len;
+    // Which P-frame group in the current gop is this output frame in?
+    // Subtract 1 because the first frame in the gop is always a keyframe.
+    let group_idx = (output_frameno_in_gop - 1) / self.group_output_len;
     // Get the offset to the corresponding input frame.
     // TODO: This only works with pyramid_depth <= 2.
     let offset = if idx_in_group_output < self.pyramid_depth {
@@ -660,8 +660,8 @@ pub(crate) struct ContextInner<T: Pixel> {
   keyframes: BTreeSet<u64>,
   /// A storage space for reordered frames.
   packet_data: Vec<u8>,
-  segment_output_frameno_start: u64,
-  pub(crate) segment_input_frameno_start: u64,
+  gop_output_frameno_start: u64,
+  pub(crate) gop_input_frameno_start: u64,
   keyframe_detector: SceneChangeDetector<T>,
   pub(crate) config: EncoderConfig,
   rc_state: RCState,
@@ -853,8 +853,8 @@ impl<T: Pixel> ContextInner<T> {
         frame_invariants: BTreeMap::new(),
         keyframes: BTreeSet::new(),
         packet_data,
-        segment_output_frameno_start: 0,
-        segment_input_frameno_start: 0,
+        gop_output_frameno_start: 0,
+        gop_input_frameno_start: 0,
         keyframe_detector: SceneChangeDetector::new(enc.bit_depth),
         config: enc.clone(),
         rc_state: RCState::new(
@@ -901,14 +901,14 @@ impl<T: Pixel> ContextInner<T> {
   }
 
   fn next_keyframe_input_frameno(&self,
-   segment_input_frameno_start: u64, ignore_limit: bool) -> u64 {
+   gop_input_frameno_start: u64, ignore_limit: bool) -> u64 {
     let next_detected = self.frame_invariants.values()
       .find(|fi| {
         fi.frame_type == FrameType::KEY
-         && fi.input_frameno > segment_input_frameno_start
+         && fi.input_frameno > gop_input_frameno_start
       }).map(|fi| fi.input_frameno);
     let mut next_limit =
-     segment_input_frameno_start + self.config.max_key_frame_interval;
+     gop_input_frameno_start + self.config.max_key_frame_interval;
     if !ignore_limit && self.limit != 0 {
       next_limit = next_limit.min(self.limit);
     }
@@ -947,27 +947,27 @@ impl<T: Pixel> ContextInner<T> {
     //  frame type.
     // If reordering is enabled, the output_frameno may not match the
     //  input_frameno.
-    let output_frameno_in_segment =
-     output_frameno - self.segment_output_frameno_start;
-    if output_frameno_in_segment > 0 {
+    let output_frameno_in_gop =
+     output_frameno - self.gop_output_frameno_start;
+    if output_frameno_in_gop > 0 {
       let next_keyframe_input_frameno = self.next_keyframe_input_frameno(
-       self.segment_input_frameno_start, false);
+       self.gop_input_frameno_start, false);
       let (fi_temp, end_of_subgop) = FrameInvariants::new_inter_frame(
         &fi,
         &self.inter_cfg,
-        self.segment_input_frameno_start,
-        output_frameno_in_segment,
+        self.gop_input_frameno_start,
+        output_frameno_in_gop,
         next_keyframe_input_frameno
       );
       fi = fi_temp;
       if !end_of_subgop {
         if !self.inter_cfg.reorder
-          || ((output_frameno_in_segment - 1) %
+          || ((output_frameno_in_gop - 1) %
           self.inter_cfg.group_output_len == 0
           && fi.input_frameno == (next_keyframe_input_frameno - 1))
         {
-          self.segment_output_frameno_start = output_frameno;
-          self.segment_input_frameno_start = next_keyframe_input_frameno;
+          self.gop_output_frameno_start = output_frameno;
+          self.gop_input_frameno_start = next_keyframe_input_frameno;
           fi.input_frameno = next_keyframe_input_frameno;
         } else {
           return Ok((fi, false));
@@ -983,25 +983,25 @@ impl<T: Pixel> ContextInner<T> {
     // Now that we know the input_frameno, look up the correct frame type
     let frame_type = self.determine_frame_type(fi.input_frameno);
     if frame_type == FrameType::KEY {
-      self.segment_output_frameno_start = output_frameno;
-      self.segment_input_frameno_start = fi.input_frameno;
+      self.gop_output_frameno_start = output_frameno;
+      self.gop_input_frameno_start = fi.input_frameno;
       self.keyframes.insert(fi.input_frameno);
     }
     fi.frame_type = frame_type;
 
-    let output_frameno_in_segment =
-     output_frameno - self.segment_output_frameno_start;
-    if output_frameno_in_segment == 0 {
+    let output_frameno_in_gop =
+     output_frameno - self.gop_output_frameno_start;
+    if output_frameno_in_gop == 0 {
       fi = FrameInvariants::new_key_frame(&fi,
-       self.segment_input_frameno_start);
+       self.gop_input_frameno_start);
     } else {
       let next_keyframe_input_frameno = self.next_keyframe_input_frameno(
-       self.segment_input_frameno_start, false);
+       self.gop_input_frameno_start, false);
       let (fi_temp, end_of_subgop) = FrameInvariants::new_inter_frame(
         &fi,
         &self.inter_cfg,
-        self.segment_input_frameno_start,
-        output_frameno_in_segment,
+        self.gop_input_frameno_start,
+        output_frameno_in_gop,
         next_keyframe_input_frameno
       );
       fi = fi_temp;
@@ -1235,8 +1235,8 @@ impl<T: Pixel> ContextInner<T> {
     for fti in 0..=FRAME_NSUBTYPES {
       nframes[fti] = 0;
     }
-    let mut prev_keyframe_input_frameno = self.segment_input_frameno_start;
-    let mut prev_keyframe_output_frameno = self.segment_output_frameno_start;
+    let mut prev_keyframe_input_frameno = self.gop_input_frameno_start;
+    let mut prev_keyframe_output_frameno = self.gop_output_frameno_start;
     let mut prev_keyframe_ntus = 0;
     // Does not include SEF frames.
     let mut prev_keyframe_nframes = 0;
@@ -1274,12 +1274,12 @@ impl<T: Pixel> ContextInner<T> {
           continue;
         }
       }
-      let output_frameno_in_segment =
+      let output_frameno_in_gop =
        output_frameno - prev_keyframe_output_frameno;
       let idx_in_group_output =
-       self.inter_cfg.get_idx_in_group_output(output_frameno_in_segment);
+       self.inter_cfg.get_idx_in_group_output(output_frameno_in_gop);
       let input_frameno = prev_keyframe_input_frameno
-       + self.inter_cfg.get_order_hint(output_frameno_in_segment,
+       + self.inter_cfg.get_order_hint(output_frameno_in_gop,
        idx_in_group_output) as u64;
       // For rate control purposes, ignore any limit on frame count that has
       //  been set.
@@ -1292,7 +1292,7 @@ impl<T: Pixel> ContextInner<T> {
       //  re-order group of the GOP.
       if input_frameno >= next_keyframe_input_frameno {
         // If we have encoded enough whole groups to reach the next keyframe,
-        //  then start the next keyframe segment.
+        //  then start the next keyframe gop.
         if 1 + (output_frameno - prev_keyframe_output_frameno)/
          self.inter_cfg.group_output_len*self.inter_cfg.group_input_len >=
           next_keyframe_input_frameno - prev_keyframe_input_frameno {

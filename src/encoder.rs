@@ -619,7 +619,7 @@ impl<T: Pixel> FrameInvariants<T> {
   }
 
   pub fn new_key_frame(previous_fi: &Self,
-   segment_input_frameno_start: u64) -> Self {
+   gop_input_frameno_start: u64) -> Self {
     let mut fi = previous_fi.clone();
     fi.frame_type = FrameType::KEY;
     fi.intra_only = true;
@@ -631,7 +631,7 @@ impl<T: Pixel> FrameInvariants<T> {
     fi.show_existing_frame = false;
     fi.frame_to_show_map_idx = 0;
     fi.primary_ref_frame = PRIMARY_REF_NONE;
-    fi.input_frameno = segment_input_frameno_start;
+    fi.input_frameno = gop_input_frameno_start;
     for i in 0..INTER_REFS_PER_FRAME {
       fi.ref_frames[i] = 0;
     }
@@ -647,19 +647,19 @@ impl<T: Pixel> FrameInvariants<T> {
   /// FrameInvariants regardless of success or failure.
   pub(crate) fn new_inter_frame(
     previous_fi: &Self, inter_cfg: &InterConfig,
-    segment_input_frameno_start: u64, output_frameno_in_segment: u64,
+    gop_input_frameno_start: u64, output_frameno_in_gop: u64,
     next_keyframe_input_frameno: u64
   ) -> (Self, bool) {
     let mut fi = previous_fi.clone();
     fi.frame_type = FrameType::INTER;
     fi.intra_only = false;
     fi.idx_in_group_output =
-     inter_cfg.get_idx_in_group_output(output_frameno_in_segment);
+     inter_cfg.get_idx_in_group_output(output_frameno_in_gop);
     fi.tx_mode_select = false;
 
-    fi.order_hint = inter_cfg.get_order_hint(output_frameno_in_segment,
+    fi.order_hint = inter_cfg.get_order_hint(output_frameno_in_gop,
      fi.idx_in_group_output);
-    let input_frameno = segment_input_frameno_start + fi.order_hint as u64;
+    let input_frameno = gop_input_frameno_start + fi.order_hint as u64;
     if input_frameno >= next_keyframe_input_frameno {
       fi.show_existing_frame = false;
       fi.show_frame = false;

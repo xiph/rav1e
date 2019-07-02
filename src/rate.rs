@@ -877,12 +877,12 @@ impl RCState {
           // We position the target where the first forced keyframe beyond the
           //  end of the file would be (for consistency with 1-pass mode).
           if reservoir_tus >= self.ntus_left
-           && self.ntus_total as u64 > ctx.segment_input_frameno_start {
-            let nfinal_segment_tus = self.ntus_total
-             - (ctx.segment_input_frameno_start as i32);
-            if ctx.config.max_key_frame_interval as i32 > nfinal_segment_tus {
+           && self.ntus_total as u64 > ctx.gop_input_frameno_start {
+            let nfinal_gop_tus = self.ntus_total
+             - (ctx.gop_input_frameno_start as i32);
+            if ctx.config.max_key_frame_interval as i32 > nfinal_gop_tus {
               let reservoir_pad = (ctx.config.max_key_frame_interval as i32
-               - nfinal_segment_tus)
+               - nfinal_gop_tus)
                .min(self.reservoir_frame_delay - reservoir_tus);
               let (guessed_reservoir_frames, guessed_reservoir_tus) =
                ctx.guess_frame_subtypes(&mut nframes,
