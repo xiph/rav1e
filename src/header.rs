@@ -851,11 +851,10 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       assert!(fi.cdef_bits < 4);
       self.write(2, fi.cdef_bits)?; // cdef bits
       for i in 0..(1 << fi.cdef_bits) {
-        let j = i << (3 - fi.cdef_bits);
-        assert!(fi.cdef_y_strengths[j] < 64);
-        assert!(fi.cdef_uv_strengths[j] < 64);
-        self.write(6, fi.cdef_y_strengths[j])?; // cdef y strength
-        self.write(6, fi.cdef_uv_strengths[j])?; // cdef uv strength
+        assert!(fi.cdef_y_strengths[i] < 64);
+        assert!(fi.cdef_uv_strengths[i] < 64);
+        self.write(6, fi.cdef_y_strengths[i])?; // cdef y strength
+        self.write(6, fi.cdef_uv_strengths[i])?; // cdef uv strength
       }
     }
     Ok(())
