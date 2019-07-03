@@ -3,7 +3,7 @@
 max_width = 79
 comment_width = 79
 force_explicit_abi = false
-fn_args_density = "Compressed"
+fn_args_layout = "Compressed"
 use_small_heuristics = "Max"
 match_arm_blocks = false
 reorder_imports = true
