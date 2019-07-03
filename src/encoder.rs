@@ -471,7 +471,6 @@ pub struct FrameInvariants<T: Pixel> {
   pub dc_delta_q: [i8; 3],
   pub ac_delta_q: [i8; 3],
   pub lambda: f64,
-  pub log_target_q: i64,
   pub me_lambda: f64,
   pub me_range_scale: u8,
   pub use_tx_domain_distortion: bool,
@@ -610,7 +609,6 @@ impl<T: Pixel> FrameInvariants<T> {
       dc_delta_q: [0; 3],
       ac_delta_q: [0; 3],
       lambda: 0.0,
-      log_target_q: 0,
       me_lambda: 0.0,
       me_range_scale: 1,
       use_tx_domain_distortion,
@@ -780,10 +778,9 @@ impl<T: Pixel> FrameInvariants<T> {
     }
     self.lambda =
       qps.lambda * ((1 << (2 * (self.sequence.bit_depth - 8))) as f64);
-    self.log_target_q = qps.log_target_q;
     self.me_lambda = self.lambda.sqrt();
 
-    let q = bexp64(self.log_target_q as i64 + q57(QSCALE)) as f32;
+    let q = bexp64(qps.log_target_q as i64 + q57(QSCALE)) as f32;
     /* These coefficients were trained on libaom. */
     if !self.intra_only {
         let predicted_y_f1 = clamp((-q * q * 0.00000235939456_f32 + q * 0.0068615186_f32 + 0.02709886_f32).round() as i32, 0, 15);
