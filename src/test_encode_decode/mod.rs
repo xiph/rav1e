@@ -71,10 +71,10 @@ pub(crate) trait TestDecoder<T: Pixel> {
                     min_keyint, max_keyint, low_latency, bitrate,
                     tile_cols_log2, tile_rows_log2);
 
-    println!("Encoding {}x{} speed {} quantizer {} bit-depth {}", w, h, speed, quantizer, bit_depth);
+    println!("Encoding {}x{} speed {} quantizer {} bit-depth {} bitrate {}", w, h, speed, quantizer, bit_depth, bitrate);
     #[cfg(feature="dump_ivf")]
-    let mut out = std::fs::File::create(&format!("out-{}x{}-s{}-q{}-{:?}.ivf",
-                                                   w, h, speed, quantizer, chroma_sampling)).unwrap();
+    let mut out = std::fs::File::create(&format!("out-{}x{}-s{}-q{}-r{}-{:?}.ivf",
+                                                   w, h, speed, quantizer, bitrate, chroma_sampling)).unwrap();
     #[cfg(feature="dump_ivf")]
     ivf::write_ivf_header(&mut out, w, h, 30, 1);
 
