@@ -19,6 +19,9 @@ use crate::partition::*;
 use crate::predict::PredictionMode;
 use crate::frame::*;
 use crate::quantize::*;
+use crate::rate::bexp64;
+use crate::rate::q57;
+use crate::rate::QSCALE;
 use crate::rate::QuantizerParameters;
 use crate::rate::FRAME_SUBTYPE_I;
 use crate::rate::FRAME_SUBTYPE_P;
@@ -595,7 +598,7 @@ impl<T: Pixel> FrameInvariants<T> {
       disable_frame_end_update_cdf: false,
       allow_warped_motion: false,
       cdef_damping: 3,
-      cdef_bits: 3,
+      cdef_bits: 0,
       cdef_y_strengths: [0*4+0, 1*4+0, 2*4+1, 3*4+1, 5*4+2, 7*4+3, 10*4+3, 13*4+3],
       cdef_uv_strengths: [0*4+0, 1*4+0, 2*4+1, 3*4+1, 5*4+2, 7*4+3, 10*4+3, 13*4+3],
       delta_q_present: false,
@@ -759,11 +762,6 @@ impl<T: Pixel> FrameInvariants<T> {
 
   pub fn set_quantizers(&mut self, qps: &QuantizerParameters) {
     self.base_q_idx = qps.ac_qi[0];
-    if self.frame_type != FrameType::KEY {
-      self.cdef_bits = 3 - ((self.base_q_idx.max(128) - 128) >> 5);
-    } else {
-      self.cdef_bits = 3;
-    }
     let base_q_idx = self.base_q_idx as i32;
     for pi in 0..3 {
       debug_assert!(qps.dc_qi[pi] as i32 - base_q_idx >= -128);
@@ -776,6 +774,24 @@ impl<T: Pixel> FrameInvariants<T> {
     self.lambda =
       qps.lambda * ((1 << (2 * (self.sequence.bit_depth - 8))) as f64);
     self.me_lambda = self.lambda.sqrt();
+
+    let q = bexp64(qps.log_target_q as i64 + q57(QSCALE)) as f32;
+    /* These coefficients were trained on libaom. */
+    if !self.intra_only {
+        let predicted_y_f1 = clamp((-q * q * 0.0000023593946_f32 + q * 0.0068615186_f32 + 0.02709886_f32).round() as i32, 0, 15);
+        let predicted_y_f2 = clamp((-q * q * 0.00000057629734_f32 + q * 0.0013993345_f32 + 0.03831067_f32).round() as i32, 0, 3);
+        let predicted_uv_f1 = clamp((-q * q * 0.0000007095069_f32 + q * 0.0034628846_f32 + 0.00887099_f32).round() as i32, 0, 15);
+        let predicted_uv_f2 = clamp((q * q * 0.00000023874085_f32 + q * 0.00028223585_f32 + 0.05576307_f32).round() as i32, 0, 3);
+        self.cdef_y_strengths[0] = (predicted_y_f1 * CDEF_SEC_STRENGTHS as i32 + predicted_y_f2) as u8;
+        self.cdef_uv_strengths[0] = (predicted_uv_f1 * CDEF_SEC_STRENGTHS as i32 + predicted_uv_f2) as u8;
+    } else {
+        let predicted_y_f1 = clamp((q * q * 0.0000033731974_f32 + q * 0.008070594_f32 + 0.0187634_f32).round() as i32, 0, 15);
+        let predicted_y_f2 = clamp((-q * q * -0.0000029167343_f32 + q * 0.0027798624_f32 + 0.0079405_f32).round() as i32, 0, 3);
+        let predicted_uv_f1 = clamp((-q * q * 0.0000130790995_f32 + q * 0.012892405_f32 - 0.00748388_f32).round() as i32, 0, 15);
+        let predicted_uv_f2 = clamp((q * q * 0.0000032651783_f32 + q * 0.00035520183_f32 + 0.00228092_f32).round() as i32, 0, 3);
+        self.cdef_y_strengths[0] = (predicted_y_f1 * CDEF_SEC_STRENGTHS as i32 + predicted_y_f2) as u8;
+        self.cdef_uv_strengths[0] = (predicted_uv_f1 * CDEF_SEC_STRENGTHS as i32 + predicted_uv_f2) as u8;
+    }
   }
 
   #[inline(always)]

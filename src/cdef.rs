@@ -24,7 +24,7 @@ pub struct CdefDirections {
 }
 
 pub const CDEF_VERY_LARGE: u16 = 30000;
-const CDEF_SEC_STRENGTHS: u8 = 4;
+pub(crate) const CDEF_SEC_STRENGTHS: u8 = 4;
 
 // Instead of dividing by n between 2 and 8, we multiply by 3*5*7*8/n.
 // The output is then 840 times larger, but we don't care for finding
