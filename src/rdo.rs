@@ -256,19 +256,19 @@ pub fn sse_wxh<T: Pixel>(
 
 // Compute the pixel-domain distortion for an encode
 fn compute_distortion<T: Pixel>(
-  fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, w_y: usize, h_y: usize,
+  fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, bsize: BlockSize,
   is_chroma_block: bool, tile_bo: BlockOffset,
   luma_only: bool
 ) -> u64 {
   let input_region = ts.input_tile.planes[0].subregion(Area::BlockStartingAt { bo: tile_bo });
   let rec_region = ts.rec.planes[0].subregion(Area::BlockStartingAt { bo: tile_bo });
   let mut distortion = match fi.config.tune {
-    Tune::Psychovisual if w_y >= 8 && h_y >= 8 => {
+    Tune::Psychovisual if bsize.width() >= 8 && bsize.height() >= 8 => {
       cdef_dist_wxh(
         &input_region,
         &rec_region,
-        w_y,
-        h_y,
+        bsize.width(),
+        bsize.height(),
         fi.sequence.bit_depth
       )
     }
@@ -276,8 +276,8 @@ fn compute_distortion<T: Pixel>(
       sse_wxh(
         &input_region,
         &rec_region,
-        w_y,
-        h_y
+        bsize.width(),
+        bsize.height(),
       )
     }
   };
@@ -286,8 +286,8 @@ fn compute_distortion<T: Pixel>(
     let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
 
     let mask = !(MI_SIZE - 1);
-    let mut w_uv = (w_y >> xdec) & mask;
-    let mut h_uv = (h_y >> ydec) & mask;
+    let mut w_uv = (bsize.width() >> xdec) & mask;
+    let mut h_uv = (bsize.height() >> ydec) & mask;
 
     if (w_uv == 0 || h_uv == 0) && is_chroma_block {
       w_uv = MI_SIZE;
@@ -311,7 +311,7 @@ fn compute_distortion<T: Pixel>(
 
 // Compute the transform-domain distortion for an encode
 fn compute_tx_distortion<T: Pixel>(
-  fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, w_y: usize, h_y: usize,
+  fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, bsize: BlockSize,
   is_chroma_block: bool, tile_bo: BlockOffset, tx_dist: i64,
   skip: bool, luma_only: bool
 ) -> u64 {
@@ -320,8 +320,8 @@ fn compute_tx_distortion<T: Pixel>(
     sse_wxh(
       &ts.input_tile.planes[0].subregion(Area::BlockStartingAt { bo: tile_bo }),
       &ts.rec.planes[0].subregion(Area::BlockStartingAt { bo: tile_bo }),
-      w_y,
-      h_y
+      bsize.width(),
+      bsize.height()
     )
   } else {
     assert!(tx_dist >= 0);
@@ -332,8 +332,8 @@ fn compute_tx_distortion<T: Pixel>(
     let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
 
     let mask = !(MI_SIZE - 1);
-    let mut w_uv = (w_y >> xdec) & mask;
-    let mut h_uv = (h_y >> ydec) & mask;
+    let mut w_uv = (bsize.width() >> xdec) & mask;
+    let mut h_uv = (bsize.height() >> ydec) & mask;
 
     if (w_uv == 0 || h_uv == 0) && is_chroma_block {
       w_uv = MI_SIZE;
@@ -469,10 +469,6 @@ fn luma_chroma_mode_rdo<T: Pixel> (luma_mode: PredictionMode,
       fi, ts, cw, bsize, tile_bo, luma_mode, ref_frames, mvs, false,
     );
 
-    // Get block luma and chroma dimensions
-    let w = bsize.width();
-    let h = bsize.height();
-
     let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
 
     let is_chroma_block = has_chroma(tile_bo, bsize, xdec, ydec);
@@ -520,8 +516,7 @@ fn luma_chroma_mode_rdo<T: Pixel> (luma_mode: PredictionMode,
           compute_tx_distortion(
             fi,
             ts,
-            w,
-            h,
+            bsize,
             is_chroma_block,
             tile_bo,
             tx_dist,
@@ -532,8 +527,7 @@ fn luma_chroma_mode_rdo<T: Pixel> (luma_mode: PredictionMode,
           compute_distortion(
             fi,
             ts,
-            w,
-            h,
+            bsize,
             is_chroma_block,
             tile_bo,
             false
@@ -570,10 +564,6 @@ pub fn rdo_mode_decision<T: Pixel>(
   pmvs: &mut [Option<MotionVector>]
 ) -> RDOPartitionOutput {
   let mut best = EncodingSettings::default();
-
-  // Get block luma and chroma dimensions
-  let w = bsize.width();
-  let h = bsize.height();
 
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let is_chroma_block = has_chroma(tile_bo, bsize, xdec, ydec);
@@ -877,8 +867,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         compute_distortion(
           fi,
           ts,
-          w,
-          h,
+          bsize,
           is_chroma_block,
           tile_bo,
           false
@@ -976,10 +965,6 @@ pub fn rdo_tx_type_decision<T: Pixel>(
   let mut best_type = TxType::DCT_DCT;
   let mut best_rd = std::f64::MAX;
 
-  // Get block luma and chroma dimensions
-  let w = bsize.width();
-  let h = bsize.height();
-
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let is_chroma_block = has_chroma(tile_bo, bsize, xdec, ydec);
 
@@ -1035,8 +1020,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
       compute_tx_distortion(
         fi,
         ts,
-        w,
-        h,
+        bsize,
         is_chroma_block,
         tile_bo,
         tx_dist,
@@ -1047,8 +1031,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
       compute_distortion(
         fi,
         ts,
-        w,
-        h,
+        bsize,
         is_chroma_block,
         tile_bo,
         true
