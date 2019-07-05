@@ -47,7 +47,8 @@ fn build_nasm_files() {
           "src/x86/mc.asm",
           "src/x86/me.asm",
           "src/x86/sad_sse2.asm",
-          "src/x86/sad_avx.asm"
+          "src/x86/sad_avx.asm",
+          "src/x86/satd.asm"
       ],
       &[&config_include_arg, "-Isrc/"]
   );
