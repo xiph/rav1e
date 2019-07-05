@@ -12,6 +12,9 @@ pub use self::nasm::get_sad;
 #[cfg(any(not(target_arch = "x86_64"), not(feature = "nasm")))]
 pub use self::native::get_sad;
 
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
+pub use self::nasm::get_satd;
+#[cfg(any(not(target_arch = "x86_64"), not(feature = "nasm")))]
 pub use self::native::get_satd;
 
 #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
@@ -20,20 +23,17 @@ mod nasm {
   use crate::util::*;
   use std::mem;
 
-  use libc;
-
-  macro_rules! declare_asm_sad {
+  macro_rules! declare_asm_dist_fn {
     ($(($name: ident, $T: ident)),+) => (
       $(
         extern { fn $name (
-          src: *const $T, src_stride: libc::ptrdiff_t, dst: *const $T,
-          dst_stride: libc::ptrdiff_t
+          src: *const $T, src_stride: isize, dst: *const $T, dst_stride: isize
         ) -> u32; }
       )+
     )
   }
 
-  declare_asm_sad![
+  declare_asm_dist_fn![
     // SSSE3
     (rav1e_sad_4x4_hbd_ssse3, u16),
     (rav1e_sad_8x8_hbd10_ssse3, u16),
@@ -68,7 +68,34 @@ mod nasm {
     (rav1e_sad64x64_avx2, u8),
     (rav1e_sad64x128_avx2, u8),
     (rav1e_sad128x64_avx2, u8),
-    (rav1e_sad128x128_avx2, u8)
+    (rav1e_sad128x128_avx2, u8),
+
+    (rav1e_satd_4x4_avx2, u8),
+    (rav1e_satd_8x8_avx2, u8),
+    (rav1e_satd_16x16_avx2, u8),
+    (rav1e_satd_32x32_avx2, u8),
+    (rav1e_satd_64x64_avx2, u8),
+    (rav1e_satd_128x128_avx2, u8),
+
+    (rav1e_satd_4x8_avx2, u8),
+    (rav1e_satd_8x4_avx2, u8),
+    (rav1e_satd_8x16_avx2, u8),
+    (rav1e_satd_16x8_avx2, u8),
+    (rav1e_satd_16x32_avx2, u8),
+    (rav1e_satd_32x16_avx2, u8),
+    (rav1e_satd_32x64_avx2, u8),
+    (rav1e_satd_64x32_avx2, u8),
+    (rav1e_satd_64x128_avx2, u8),
+    (rav1e_satd_128x64_avx2, u8),
+
+    (rav1e_satd_4x16_avx2, u8),
+    (rav1e_satd_16x4_avx2, u8),
+    (rav1e_satd_8x32_avx2, u8),
+    (rav1e_satd_32x8_avx2, u8),
+    (rav1e_satd_16x64_avx2, u8),
+    (rav1e_satd_64x16_avx2, u8),
+    (rav1e_satd_32x128_avx2, u8),
+    (rav1e_satd_128x32_avx2, u8)
   ];
 
   #[target_feature(enable = "ssse3")]
@@ -77,8 +104,8 @@ mod nasm {
     blk_w: usize, blk_h: usize, bit_depth: usize
   ) -> u32 {
     let mut sum = 0 as u32;
-    let org_stride = (plane_org.plane_cfg.stride * 2) as libc::ptrdiff_t;
-    let ref_stride = (plane_ref.plane_cfg.stride * 2) as libc::ptrdiff_t;
+    let org_stride = (plane_org.plane_cfg.stride * 2) as isize;
+    let ref_stride = (plane_ref.plane_cfg.stride * 2) as isize;
     assert!(blk_h >= 4 && blk_w >= 4);
     let step_size =
       blk_h.min(blk_w).min(if bit_depth <= 10 { 128 } else { 4 });
@@ -109,8 +136,8 @@ mod nasm {
   ) -> u32 {
     let org_ptr = plane_org.data_ptr();
     let ref_ptr = plane_ref.data_ptr();
-    let org_stride = plane_org.plane_cfg.stride as libc::ptrdiff_t;
-    let ref_stride = plane_ref.plane_cfg.stride as libc::ptrdiff_t;
+    let org_stride = plane_org.plane_cfg.stride as isize;
+    let ref_stride = plane_ref.plane_cfg.stride as isize;
     if blk_w == 16 && blk_h == 16 && (org_ptr as usize & 15) == 0 {
       return rav1e_sad16x16_sse2(org_ptr, org_stride, ref_ptr, ref_stride);
     }
@@ -146,8 +173,8 @@ mod nasm {
   ) -> u32 {
     let org_ptr = plane_org.data_ptr();
     let ref_ptr = plane_ref.data_ptr();
-    let org_stride = plane_org.plane_cfg.stride as libc::ptrdiff_t;
-    let ref_stride = plane_ref.plane_cfg.stride as libc::ptrdiff_t;
+    let org_stride = plane_org.plane_cfg.stride as isize;
+    let ref_stride = plane_ref.plane_cfg.stride as isize;
 
     let func = match (blk_w, blk_h) {
       (4, 4) => rav1e_sad4x4_sse2,
@@ -231,6 +258,74 @@ mod nasm {
       }
     }
     super::native::get_sad(plane_org, plane_ref, blk_w, blk_h, bit_depth)
+  }
+
+  #[target_feature(enable = "avx2")]
+  unsafe fn satd_avx2(
+    plane_org: &PlaneRegion<'_, u8>, plane_ref: &PlaneRegion<'_, u8>,
+    blk_w: usize, blk_h: usize
+  ) -> u32 {
+    let org_ptr = plane_org.data_ptr();
+    let ref_ptr = plane_ref.data_ptr();
+    let org_stride = plane_org.plane_cfg.stride as isize;
+    let ref_stride = plane_ref.plane_cfg.stride as isize;
+
+    let func = match (blk_w, blk_h) {
+      (4, 4) => rav1e_satd_4x4_avx2,
+      (8, 8) => rav1e_satd_8x8_avx2,
+      (16, 16) => rav1e_satd_16x16_avx2,
+      (32, 32) => rav1e_satd_32x32_avx2,
+      (64, 64) => rav1e_satd_64x64_avx2,
+      (128, 128) => rav1e_satd_128x128_avx2,
+
+      (4, 8) => rav1e_satd_4x8_avx2,
+      (8, 4) => rav1e_satd_8x4_avx2,
+      (8, 16) => rav1e_satd_8x16_avx2,
+      (16, 8) => rav1e_satd_16x8_avx2,
+      (16, 32) => rav1e_satd_16x32_avx2,
+      (32, 16) => rav1e_satd_32x16_avx2,
+      (32, 64) => rav1e_satd_32x64_avx2,
+      (64, 32) => rav1e_satd_64x32_avx2,
+      (64, 128) => rav1e_satd_64x128_avx2,
+      (128, 64) => rav1e_satd_128x64_avx2,
+
+      (4, 16) => rav1e_satd_4x16_avx2,
+      (16, 4) => rav1e_satd_16x4_avx2,
+      (8, 32) => rav1e_satd_8x32_avx2,
+      (32, 8) => rav1e_satd_32x8_avx2,
+      (16, 64) => rav1e_satd_16x64_avx2,
+      (64, 16) => rav1e_satd_64x16_avx2,
+      (32, 128) => rav1e_satd_32x128_avx2,
+      (128, 32) => rav1e_satd_128x32_avx2,
+
+      _ => unreachable!()
+    };
+    func(org_ptr, org_stride, ref_ptr, ref_stride)
+  }
+
+  #[allow(unused)]
+  #[inline(always)]
+  pub fn get_satd<T: Pixel>(
+    plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>,
+    blk_w: usize, blk_h: usize, bit_depth: usize
+  ) -> u32 {
+    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
+    {
+      if mem::size_of::<T>() == 1
+        && is_x86_feature_detected!("avx2")
+        && blk_h >= 4
+        && blk_w >= 4
+      {
+        return unsafe {
+          let plane_org =
+            &*(plane_org as *const _ as *const PlaneRegion<'_, u8>);
+          let plane_ref =
+            &*(plane_ref as *const _ as *const PlaneRegion<'_, u8>);
+          satd_avx2(plane_org, plane_ref, blk_w, blk_h)
+        };
+      }
+    }
+    super::native::get_satd(plane_org, plane_ref, blk_w, blk_h, bit_depth)
   }
 }
 
@@ -396,8 +491,10 @@ pub mod test {
 
   // Generate plane data for get_sad_same()
   fn setup_planes<T: Pixel>() -> (Plane<T>, Plane<T>) {
+    // Two planes with different strides
     let mut input_plane = Plane::new(640, 480, 0, 0, 128 + 8, 128 + 8);
-    let mut rec_plane = input_plane.clone();
+    let mut rec_plane = Plane::new(640, 480, 0, 0, 2 * 128 + 8, 2 * 128 + 8);
+
     // Make the test pattern robust to data alignment
     let xpad_off =
       (input_plane.cfg.xorigin - input_plane.cfg.xpad) as i32 - 8i32;

@@ -192,6 +192,7 @@ pub mod bench {
   pub mod frame { pub use crate::frame::*; }
   pub mod predict { pub use crate::predict::*; }
   pub mod rdo { pub use crate::rdo::*; }
+  pub mod tiling { pub use crate::tiling::*; }
   pub mod transform { pub use crate::transform::*; }
   pub mod util { pub use crate::util::*; }
 }
