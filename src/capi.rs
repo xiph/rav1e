@@ -25,7 +25,23 @@ use crate::prelude as rav1e;
 ///
 /// It can be allocated throught rav1e_frame_new(), populated using rav1e_frame_fill_plane()
 /// and freed using rav1e_frame_unref().
-pub struct Frame(Arc<rav1e::Frame<u16>>);
+#[derive(Clone)]
+pub enum Frame {
+  U8(Arc<rav1e::Frame<u8>>),
+  U16(Arc<rav1e::Frame<u16>>),
+}
+
+impl From<Arc<rav1e::Frame<u8>>> for Frame {
+  fn from(f: Arc<rav1e::Frame<u8>>) -> Frame {
+    Frame::U8(f)
+  }
+}
+
+impl From<Arc<rav1e::Frame<u16>>> for Frame {
+  fn from(f: Arc<rav1e::Frame<u16>>) -> Frame {
+    Frame::U16(f)
+  }
+}
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, FromPrimitive)]
@@ -78,6 +94,82 @@ pub struct Config {
     cfg: rav1e::Config,
 }
 
+enum EncContext {
+  U8(rav1e::Context<u8>),
+  U16(rav1e::Context<u16>)
+}
+
+impl EncContext {
+  fn new_frame(&self) -> Frame {
+    match self {
+      EncContext::U8(ctx) => ctx.new_frame().into(),
+      EncContext::U16(ctx) => ctx.new_frame().into(),
+    }
+  }
+  fn send_frame(&mut self, frame: Option<Frame>) -> Result<(), rav1e::EncoderStatus> {
+    if let Some(frame) = frame {
+      match (self, frame) {
+        (EncContext::U8(ctx), Frame::U8(ref f)) => ctx.send_frame(f.clone()),
+        (EncContext::U16(ctx), Frame::U16(ref f)) => ctx.send_frame(f.clone()),
+        _ => Err(rav1e::EncoderStatus::Failure)
+      }
+    } else {
+      match self {
+         EncContext::U8(ctx) => ctx.send_frame(None),
+         EncContext::U16(ctx) => ctx.send_frame(None),
+      }
+    }
+  }
+
+  fn receive_packet(&mut self) -> Result<Packet, rav1e::EncoderStatus> {
+    fn receive_packet<T: rav1e::Pixel>(ctx: &mut rav1e::Context<T>) -> Result<Packet, rav1e::EncoderStatus> {
+      ctx.receive_packet().map(|p| {
+        let rav1e::Packet { data, input_frameno, frame_type, .. } = p;
+        let len  = data.len();
+        let data = Box::into_raw(data.into_boxed_slice()) as *const u8;
+        Packet {
+            data,
+            len,
+            input_frameno,
+            frame_type,
+        }
+      })
+    }
+    match self {
+      EncContext::U8(ctx) => receive_packet(ctx),
+      EncContext::U16(ctx) => receive_packet(ctx),
+    }
+  }
+
+  fn container_sequence_header(&mut self) -> Vec<u8> {
+    match self {
+      EncContext::U8(ctx) => ctx.container_sequence_header(),
+      EncContext::U16(ctx) => ctx.container_sequence_header(),
+    }
+  }
+
+  fn twopass_bytes_needed(&mut self) -> usize {
+    match self {
+      EncContext::U8(ctx) => ctx.twopass_bytes_needed(),
+      EncContext::U16(ctx) => ctx.twopass_bytes_needed(),
+    }
+  }
+
+  fn twopass_in(&mut self, buf: &[u8]) -> Result<usize, rav1e::EncoderStatus> {
+        match self {
+      EncContext::U8(ctx) => ctx.twopass_in(buf),
+      EncContext::U16(ctx) => ctx.twopass_in(buf),
+    }
+  }
+
+  fn twopass_out(&mut self) -> Option<&[u8]> {
+    match self {
+      EncContext::U8(ctx) => ctx.twopass_out(),
+      EncContext::U16(ctx) => ctx.twopass_out(),
+    }
+  }
+}
+
 /// Encoder context
 ///
 /// Contains the encoding state, it is created by rav1e_context_new() using an
@@ -85,7 +177,7 @@ pub struct Config {
 ///
 /// Use rav1e_context_unref() to free its memory.
 pub struct Context {
-    ctx: rav1e::Context<u16>,
+    ctx: EncContext,
     last_err: Option<rav1e::EncoderStatus>,
 }
 
@@ -322,8 +414,14 @@ pub unsafe extern "C" fn rav1e_config_parse_int(
 /// Multiple contexts can be generated through it.
 #[no_mangle]
 pub unsafe extern "C" fn rav1e_context_new(cfg: *const Config) -> *mut Context {
+  let cfg = &(*cfg).cfg;
+  let enc = &cfg.enc;
+
     let ctx = Context {
-        ctx: (*cfg).cfg.new_context(),
+        ctx: match enc.bit_depth {
+          8 => EncContext::U8(cfg.new_context()),
+          _ => EncContext::U16(cfg.new_context()),
+        },
         last_err: None,
     };
 
@@ -346,7 +444,7 @@ pub unsafe extern "C" fn rav1e_context_unref(ctx: *mut Context) {
 #[no_mangle]
 pub unsafe extern "C" fn rav1e_frame_new(ctx: *const Context) -> *mut Frame {
     let f = (*ctx).ctx.new_frame();
-    let frame = Box::new(Frame(f));
+    let frame = Box::new(f.into());
 
     Box::into_raw(frame)
 }
@@ -437,7 +535,7 @@ pub unsafe extern "C" fn rav1e_send_frame(ctx: *mut Context, frame: *const Frame
     let frame = if frame.is_null() {
         None
     } else {
-        Some((*frame).0.clone())
+        Some((*frame).clone())
     };
 
     let ret = (*ctx)
@@ -494,16 +592,7 @@ pub unsafe extern "C" fn rav1e_receive_packet(
     let ret = (*ctx)
         .ctx
         .receive_packet()
-        .map(|p| {
-            let rav1e::Packet { data, input_frameno, frame_type, .. } = p;
-            let len  = data.len();
-            let data = Box::into_raw(data.into_boxed_slice()) as *const u8;
-            let packet = Packet {
-                data,
-                len,
-                input_frameno,
-                frame_type,
-            };
+        .map(|packet| {
             *pkt = Box::into_raw(Box::new(packet));
             None
         }).unwrap_or_else(|e| {
@@ -543,6 +632,17 @@ pub unsafe extern fn rav1e_container_sequence_header_unref(sequence: *mut u8) {
     }
 }
 
+fn rav1e_frame_fill_plane_internal<T: rav1e::Pixel>(
+    f: &mut Arc<rav1e::Frame<T>>,
+    plane: c_int,
+    data_slice: &[u8],
+    stride: ptrdiff_t,
+    bytewidth: c_int,
+) {
+    let input = Arc::make_mut(f);
+    input.planes[plane as usize].copy_from_raw_u8(data_slice, stride as usize, bytewidth as usize);
+}
+
 /// Fill a frame plane
 ///
 /// Currently the frame contains 3 planes, the first is luminance followed by
@@ -565,9 +665,10 @@ pub unsafe extern "C" fn rav1e_frame_fill_plane(
     stride: ptrdiff_t,
     bytewidth: c_int,
 ) {
-    let f = &mut (*frame).0;
-    let input = Arc::make_mut(f);
     let data_slice = slice::from_raw_parts(data, data_len as usize);
 
-    input.planes[plane as usize].copy_from_raw_u8(data_slice, stride as usize, bytewidth as usize);
+    match *frame {
+      Frame::U8(ref mut f) => rav1e_frame_fill_plane_internal(f, plane, data_slice, stride, bytewidth),
+      Frame::U16(ref mut f) => rav1e_frame_fill_plane_internal(f, plane, data_slice, stride, bytewidth),
+    }
 }
