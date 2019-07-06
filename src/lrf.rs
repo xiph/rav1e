@@ -87,32 +87,258 @@ fn sgrproj_sum_finish(ssq: u32, sum: u32, n: u32, one_over_n: u32, s: u32, bdm8:
   (a, (b + (1 << SGRPROJ_RECIP_BITS >> 1)) >> SGRPROJ_RECIP_BITS)
 }
 
-// Using an integral image, compute the sum of a square region
-fn get_integral_square(
-  iimg: &[u32], stride: usize, x: usize, y: usize, size: usize
-) -> u32 {
-  // Cancel out overflow in iimg by using wrapping arithmetic
-  iimg[y * stride + x]
-    .wrapping_add(iimg[(y + size) * stride + x + size])
-    .wrapping_sub(iimg[(y + size) * stride + x])
-    .wrapping_sub(iimg[y * stride + x + size])
+// The addressing below is a bit confusing, made worse by LRF's odd
+// clipping requirements, and our reusing code for partial frames.  So
+// I'm documenting the LRF conventions here in detail.
+
+// 'Relative to plane storage' means that a coordinate or bound is
+// being applied as if to the full Plane backing the PlaneSlice.  For
+// example, a PlaneSlice may represent a subset of a middle of a
+// plane, but when we say the top/left bounds are clipped 'relative to
+// plane storage', that means relative to 0,0 of the plane, not 0,0 of
+// the plane slice.
+
+// 'Relative to the slice view' means that a coordinate or bound is
+// counted from the 0,0 of the PlaneSlice, not the Plane from which it
+// was sliced.
+
+// Passed in plane slices may be the same size or different sizes;
+// filter access will be clipped to 0,0..w,h of the underlying plane
+// storage for both planes, depending which is accessed.  Note that
+// the passed in w/h that specifies the storage clipping is actually
+// relative to the the slice view, not the plane storage (it
+// simplifies the math internally).  Eg, if a PlaceSlice has a y
+// offset of -2 (meaning its origin is two rows above the top row of
+// the backing plane), and we pass in a height of 4, the rows
+// 0,1,2,3,4 of the slice address -2, -1, 0, 1, 2 of the backing plane
+// with access clipped to 0, 0, 0, 1, 1.
+
+// Active area cropping is done by specifying a w,h smaller
+// than the actual underlying plane storage.
+
+// stripe_y is the beginning of the current stripe (used for source
+// buffer choice/clipping) relative to the passed in plane view.  It
+// may (and regularly will) be negative.
+
+// stripe_h is the hright of the current stripe, again used for source
+// buffer choice/clipping).  It may specify a stripe boundary less
+// than, eqqal to, or larger than the buffers we're accessing.
+
+// x and y specify the center pixel of the current filter kernel
+// application.  They are relative to the passed in slice views.
+
+fn sgrproj_box_sum_slow<T: Pixel>(a: &mut u32, b: &mut u32,
+                                  stripe_y: isize, stripe_h: usize,
+                                  x: isize, y: isize,
+                                  r: usize, n: u32, one_over_n: u32, s: u32, bdm8: usize,
+                                  backing: &PlaneSlice<T>, cdeffed: &PlaneSlice<T>,
+                                  crop_w: usize, crop_h: usize) {
+  let mut ssq = 0;
+  let mut sum = 0;
+
+  for yi in y-r as isize..=y+r as isize {
+    // clamp to crop rectangle before deciding source.
+    let clamp_y = clamp(yi, -cdeffed.y, crop_h as isize - 1);
+    let clamp_w = (crop_w as isize - x + r as isize) as usize;
+    // clamp vertically to stripe limits
+    let ly = clamp(clamp_y, stripe_y - 2, stripe_y + stripe_h as isize + 1);
+    // left-hand addressing limit
+    let left = cmp::max(0, r as isize - x - cdeffed.x) as usize;
+    // right-hand addressing limit
+    let right = cmp::min(2*r+1, clamp_w);
+
+    // decide if we're vertically inside or outside the stripe
+    let src_plane = if clamp_y >= stripe_y && clamp_y < stripe_y + stripe_h as isize {
+      cdeffed
+    } else {
+      backing
+    };
+    // Reslice to avoid a negative X index.
+    let p = &src_plane.reslice(x - r as isize,ly)[0];
+
+    // run accumulation to left of frame storage (if any)
+    for _xi in 0..left {
+      let c = u32::cast_from(p[(r as isize - x) as usize]);
+      ssq += c*c;
+      sum += c;
+    }
+    // run accumulation in-frame
+    for xi in left..right {
+      let c = u32::cast_from(p[xi]);
+      ssq += c*c;
+      sum += c;
+    }
+    // run accumulation to right of frame (if any)
+    for _xi in right..=2*r {
+      let c = u32::cast_from(p[clamp_w - 1]);
+      ssq += c*c;
+      sum += c;
+    }
+  }
+  let (reta, retb) = sgrproj_sum_finish(ssq, sum, n, one_over_n, s, bdm8);
+  *a = reta;
+  *b = retb;
 }
 
-// computes an intermediate (ab) column for stripe_h + 2 rows at
-// column stripe_x.
+// unrolled computation to be used when all bounds-checking has been satisfied.
+fn sgrproj_box_sum_fastxy_r1<T: Pixel>(a: &mut u32, b: &mut u32, x: isize, y: isize,
+                                       s: u32, bdm8: usize, p: &PlaneSlice<T>) {
+  let mut ssq = 0;
+  let mut sum = 0;
+  for yi in -1..=1 {
+    let x = &p.reslice(x - 1, y + yi)[0];
+    ssq += u32::cast_from(x[0]) * u32::cast_from(x[0]) +
+      u32::cast_from(x[1]) * u32::cast_from(x[1]) +
+      u32::cast_from(x[2]) * u32::cast_from(x[2]);
+    sum += u32::cast_from(x[0]) + u32::cast_from(x[1]) + u32::cast_from(x[2]);
+  }
+  let (reta, retb) = sgrproj_sum_finish(ssq, sum, 9, 455, s, bdm8);
+  *a = reta;
+  *b = retb;
+}
+
+fn sgrproj_box_sum_fastxy_r2<T: Pixel>(a: &mut u32, b: &mut u32, x: isize, y: isize,
+                                       s: u32, bdm8: usize, p: &PlaneSlice<T>) {
+  let mut ssq = 0;
+  let mut sum = 0;
+  for yi in -2..=2 {
+    let x = &p.reslice(x - 2, y + yi)[0];
+    ssq += u32::cast_from(x[0]) * u32::cast_from(x[0]) +
+      u32::cast_from(x[1]) * u32::cast_from(x[1]) +
+      u32::cast_from(x[2]) * u32::cast_from(x[2]) +
+      u32::cast_from(x[3]) * u32::cast_from(x[3]) +
+      u32::cast_from(x[4]) * u32::cast_from(x[4]);
+    sum += u32::cast_from(x[0]) + u32::cast_from(x[1]) + u32::cast_from(x[2]) +
+      u32::cast_from(x[3]) + u32::cast_from(x[4]);
+  }
+  let (reta, retb) = sgrproj_sum_finish(ssq, sum, 25, 164, s, bdm8);
+  *a = reta;
+  *b = retb;
+}
+
+// unrolled computation to be used when only X bounds-checking has been satisfied.
+fn sgrproj_box_sum_fastx_r1<T: Pixel>(a: &mut u32, b: &mut u32,
+                                      stripe_y: isize, stripe_h: usize,
+                                      x: isize, y: isize,
+                                      s: u32, bdm8: usize,
+                                      backing: &PlaneSlice<T>, cdeffed: &PlaneSlice<T>,
+                                      crop_h: usize) {
+  let mut ssq = 0;
+  let mut sum = 0;
+
+  for yi in y-1..=y+1 {
+    // clamp to crop rectangle before deciding source.
+    let clamp_y = clamp(yi, -cdeffed.y, crop_h as isize - 1);
+    // decide if we're vertically inside or outside the stripe
+    let src_plane = if clamp_y >= stripe_y && clamp_y < stripe_y + stripe_h as isize {
+      cdeffed
+    } else {
+      backing
+    };
+    // clamp vertically to stripe limits
+    let ly = clamp(clamp_y, stripe_y - 2, stripe_y + stripe_h as isize + 1);
+    let x = &src_plane.reslice(x - 1, ly)[0];
+    ssq += u32::cast_from(x[0]) * u32::cast_from(x[0]) +
+      u32::cast_from(x[1]) * u32::cast_from(x[1]) +
+      u32::cast_from(x[2]) * u32::cast_from(x[2]);
+    sum += u32::cast_from(x[0]) + u32::cast_from(x[1]) + u32::cast_from(x[2]);
+  }
+  let (reta, retb) = sgrproj_sum_finish(ssq, sum, 9, 455, s, bdm8);
+  *a = reta;
+  *b = retb;
+}
+
+fn sgrproj_box_sum_fastx_r2<T: Pixel>(a: &mut u32, b: &mut u32,
+                                      stripe_y: isize, stripe_h: usize,
+                                      x: isize, y: isize,
+                                      s: u32, bdm8: usize,
+                                      backing: &PlaneSlice<T>, cdeffed: &PlaneSlice<T>,
+                                      crop_h: usize) {
+  let mut ssq = 0;
+  let mut sum = 0;
+  for yi in y - 2..=y + 2 {
+    // clamp to crop rectangle before deciding source.
+    let clamp_y = clamp(yi, -cdeffed.y, crop_h as isize - 1);
+    // decide if we're vertically inside or outside the stripe
+    let src_plane = if clamp_y >= stripe_y && clamp_y < stripe_y + stripe_h as isize {
+      cdeffed
+    } else {
+      backing
+    };
+    // clamp vertically to stripe limits
+    let ly = clamp(clamp_y, stripe_y - 2, stripe_y + stripe_h as isize + 1);
+    let x = &src_plane.reslice(x - 2, ly)[0];
+    ssq += u32::cast_from(x[0]) * u32::cast_from(x[0]) +
+      u32::cast_from(x[1]) * u32::cast_from(x[1]) +
+      u32::cast_from(x[2]) * u32::cast_from(x[2]) +
+      u32::cast_from(x[3]) * u32::cast_from(x[3]) +
+      u32::cast_from(x[4]) * u32::cast_from(x[4]);
+    sum += u32::cast_from(x[0]) + u32::cast_from(x[1]) + u32::cast_from(x[2]) +
+      u32::cast_from(x[3]) + u32::cast_from(x[4]);
+  }
+  let (reta, retb) = sgrproj_sum_finish(ssq, sum, 25, 164, s, bdm8);
+  *a = reta;
+  *b = retb;
+}
+
+// computes an intermediate (ab) column for rows stripe_y through
+// stripe_y+stripe_h (no inclusize) at column stripe_x.
 // r=1 case computes every row as every row is used (see r2 version below)
-fn sgrproj_box_ab_r1(
-  af: &mut [u32; 64 + 2], bf: &mut [u32; 64 + 2], iimg: &[u32],
-  iimg_sq: &[u32], iimg_stride: usize, stripe_x: isize, stripe_h: usize,
-  s: u32, bdm8: usize
-) {
-  for y in 0..stripe_h + 2 {
-    let sum = get_integral_square(iimg, iimg_stride, stripe_x as usize, y, 3);
-    let ssq =
-      get_integral_square(iimg_sq, iimg_stride, stripe_x as usize, y, 3);
-    let (reta, retb) = sgrproj_sum_finish(ssq, sum, 9, 455, s, bdm8);
-    af[y] = reta;
-    bf[y] = retb;
+fn sgrproj_box_ab_r1<T: Pixel>(af: &mut[u32; 64+2],
+                               bf: &mut[u32; 64+2],
+                               stripe_x: isize, stripe_y: isize, stripe_h: usize,
+                               s: u32, bdm8: usize,
+                               backing: &PlaneSlice<T>, cdeffed: &PlaneSlice<T>,
+                               crop_w: usize, crop_h: usize) {
+  // we will fill the af and bf arrays from 0..stripe_h+1 (ni),
+  // representing stripe_y-1 to stripe_y+stripe_h+1 inclusive
+  let boundary0 = 0;
+  let boundary3 = stripe_h + 2;
+  if backing.x + stripe_x > 0 && cdeffed.x + stripe_x > 0 && stripe_x < crop_w as isize - 1 {
+    // Addressing is away from left and right edges of cdeffed storage;
+    // no X clipping to worry about, but the top/bottom few rows still
+    // need to worry about storage and stripe limits
+
+    // boundary1 is the point where we're guaranteed all our y
+    // addressing will be both in the stripe and in cdeffed storage
+    let boundary1 = cmp::max(2, 2 - cdeffed.y - stripe_y) as usize;
+    // boundary 2 is when we have to bounds check along the bottom of
+    // the stripe or bottom of storage
+    let boundary2 = cmp::min(crop_h as isize - stripe_y - 1, stripe_h as isize - 1) as usize;
+
+    // top rows (if any), away from left and right columns
+    for i in boundary0..boundary1 {
+      sgrproj_box_sum_fastx_r1(&mut af[i], &mut bf[i],
+                               stripe_y, stripe_h,
+                               stripe_x, stripe_y + i as isize - 1,
+                               s, bdm8,
+                               backing, cdeffed,
+                               crop_h);
+    }
+    // middle rows, away from left and right columns
+    for i in boundary1..boundary2 {
+      sgrproj_box_sum_fastxy_r1(&mut af[i], &mut bf[i],
+                                stripe_x, stripe_y + i as isize - 1, s, bdm8, cdeffed);
+    }
+    // bottom rows (if any), away from left and right columns
+    for i in boundary2..boundary3 {
+      sgrproj_box_sum_fastx_r1(&mut af[i], &mut bf[i],
+                               stripe_y, stripe_h,
+                               stripe_x, stripe_y + i as isize - 1,
+                               s, bdm8,
+                               backing, cdeffed,
+                               crop_h);
+    }
+  } else {
+    // top/bottom rows and left/right columns, where we need to worry about frame and stripe clipping
+    for i in boundary0..boundary3 {
+      sgrproj_box_sum_slow(&mut af[i], &mut bf[i],
+                           stripe_y, stripe_h,
+                           stripe_x, stripe_y + i as isize - 1,
+                           1, 9, 455, s, bdm8,
+                           backing, cdeffed,
+                           crop_w, crop_h);
+    }
   }
 }
 
@@ -123,18 +349,65 @@ fn sgrproj_box_ab_r1(
 // compute the even rows.  This is not so much optimization as trying
 // to illustrate what this convoluted filter is actually doing
 // (ie not as much as it may appear).
-fn sgrproj_box_ab_r2(
-  af: &mut [u32; 64 + 2], bf: &mut [u32; 64 + 2], iimg: &[u32],
-  iimg_sq: &[u32], iimg_stride: usize, stripe_x: isize, stripe_h: usize,
-  s: u32, bdm8: usize
-) {
-  for y in (0..stripe_h + 2).step_by(2) {
-    let sum = get_integral_square(iimg, iimg_stride, stripe_x as usize, y, 5);
-    let ssq =
-      get_integral_square(iimg_sq, iimg_stride, stripe_x as usize, y, 5);
-    let (reta, retb) = sgrproj_sum_finish(ssq, sum, 25, 164, s, bdm8);
-    af[y] = reta;
-    bf[y] = retb;
+fn sgrproj_box_ab_r2<T: Pixel>(af: &mut[u32; 64+2],
+                               bf: &mut[u32; 64+2],
+                               stripe_x: isize, stripe_y: isize, stripe_h: usize,
+                               s: u32, bdm8: usize,
+                               backing: &PlaneSlice<T>, cdeffed: &PlaneSlice<T>,
+                               crop_w: usize, crop_h: usize){
+
+  // we will fill the af and bf arrays from 0..stripe_h+1 (ni),
+  // representing stripe_y-1 to stripe_y+stripe_h+1 inclusive
+  let boundary0 = 0; // even
+  let boundary3 = stripe_h + 2; // don't care if odd
+  if backing.x + stripe_x > 1 && cdeffed.x + stripe_x > 1 && stripe_x < crop_w as isize - 2 {
+    // Addressing is away from left and right edges of cdeffed storage;
+    // no X clipping to worry about, but the top/bottom few rows still
+    // need to worry about storage and stripe limits
+
+    // boundary1 is the point where we're guaranteed all our y
+    // addressing will be both in the stripe and in cdeffed storage
+    // make even and round up
+    let boundary1 = ((cmp::max(3, 3 - cdeffed.y - stripe_y) + 1) >> 1 << 1) as usize;
+    // boundary 2 is when we have to bounds check along the bottom of
+    // the stripe or bottom of storage
+    // must be even, rounding of +1 cancels fencepost of -1
+    let boundary2 = (cmp::min(crop_h as isize - stripe_y, stripe_h as isize) >> 1 << 1) as usize;
+
+    // top rows, away from left and right columns
+    for i in (boundary0..boundary1).step_by(2) {
+      sgrproj_box_sum_fastx_r2(&mut af[i], &mut bf[i],
+                               stripe_y, stripe_h,
+                               stripe_x, stripe_y + i as isize - 1,
+                               s, bdm8,
+                               backing, cdeffed,
+                               crop_h);
+    }
+    // middle rows, away from left and right columns
+    for i in (boundary1..boundary2).step_by(2) {
+      sgrproj_box_sum_fastxy_r2(&mut af[i], &mut bf[i],
+                                stripe_x, stripe_y + i as isize - 1,
+                                s, bdm8, cdeffed);
+    }
+    // bottom rows, away from left and right columns
+    for i in (boundary2..boundary3).step_by(2) {
+      sgrproj_box_sum_fastx_r2(&mut af[i], &mut bf[i],
+                               stripe_y, stripe_h,
+                               stripe_x, stripe_y + i as isize - 1,
+                               s, bdm8,
+                               backing, cdeffed,
+                               crop_h);
+    }
+  } else {
+    // top/bottom rows and left/right columns, where we need to worry about frame and stripe clipping
+    for i in (boundary0..boundary3).step_by(2) {
+      sgrproj_box_sum_slow(&mut af[i], &mut bf[i],
+                           stripe_y, stripe_h,
+                           stripe_x, stripe_y + i as isize - 1,
+                           2, 25, 164, s, bdm8,
+                           backing, cdeffed,
+                           crop_w, crop_h);
+    }
   }
 }
 
@@ -183,230 +456,13 @@ fn sgrproj_box_f_r2<T: Pixel>(af: &[&[u32; 64+2]; 3], bf: &[&[u32; 64+2]; 3], f:
   }
 }
 
-struct VertPaddedIter<'a, T: Pixel> {
-  // The two sources that can be selected when clipping
-  deblocked: &'a Plane<T>,
-  cdeffed: &'a Plane<T>,
-  // x index to choice where on the row to start
-  x: isize,
-  // y index that will be mutated
-  y: isize,
-  // The index at which to terminate. Can be larger than the slice length.
-  end: isize,
-  // Used for source buffer choice/clipping. May (and regularly will)
-  // be negative.
-  stripe_begin: isize,
-  // Also used for source buffer choice/clipping. May specify a stripe boundary
-  // less than, equal to, or larger than the buffers we're accessing.
-  stripe_end: isize,
-  // Active area cropping is done by specifying a value smaller than the height
-  // of the plane.
-  crop: isize
-}
-
-impl<'a, 'b, T: Pixel> VertPaddedIter<'a, T> {
-  fn new(
-    cdeffed: &PlaneSlice<'a, T>, deblocked: &PlaneSlice<'a, T>,
-    stripe_h: usize, crop: usize, r: usize
-  ) -> VertPaddedIter<'a, T> {
-    // cdeffed and deblocked must start at the same coordinates from their
-    // underlying planes. Since cropping is provided via a separate params, the
-    // height of the underlying planes do not need to match.
-    assert_eq!(cdeffed.x, deblocked.x);
-    assert_eq!(cdeffed.y, deblocked.y);
-
-    // The number of rows outside the stripe are needed
-    let rows_above = r + 2;
-    let rows_below = 2;
-
-    // Offset crop and stripe_h so they are relative to the underlying plane
-    // and not the plane slice.
-    let crop = crop as isize + deblocked.y;
-    let stripe_end = stripe_h as isize + deblocked.y;
-
-    // Move y up the number rows above.
-    // If y is negative we repeat the first row
-    let y = deblocked.y - rows_above as isize;
-
-    VertPaddedIter {
-      deblocked: deblocked.plane,
-      cdeffed: cdeffed.plane,
-      x: deblocked.x,
-      y,
-      end: (rows_above + stripe_h + rows_below) as isize + y,
-      stripe_begin: deblocked.y,
-      stripe_end,
-      crop
-    }
-  }
-}
-
-impl<'a, T: Pixel> Iterator for VertPaddedIter<'a, T> {
-  type Item = &'a [T];
-
-  #[inline(always)]
-  fn next(&mut self) -> Option<Self::Item> {
-    if self.end > self.y {
-      // decide if we're vertically inside or outside the strip
-      let src_plane =
-        if self.y >= self.stripe_begin && self.y < self.stripe_end as isize {
-          self.cdeffed
-        } else {
-          self.deblocked
-        };
-      // clamp vertically to storage at top and passed-in height at bottom
-      let cropped_y = clamp(self.y, 0, self.crop - 1);
-      // clamp vertically to stripe limits
-      let ly = clamp(cropped_y, self.stripe_begin - 2, self.stripe_end + 1);
-      // cannot directly return self.ps.row(row) due to lifetime issue
-      let range = src_plane.row_range(self.x, ly);
-      self.y += 1;
-      Some(&src_plane.data[range])
-    } else {
-      None
-    }
-  }
-
-  fn size_hint(&self) -> (usize, Option<usize>) {
-    let remaining = self.end - self.y;
-    debug_assert!(remaining >= 0);
-    let remaining = remaining as usize;
-
-    (remaining, Some(remaining))
-  }
-}
-
-impl<T: Pixel> ExactSizeIterator for VertPaddedIter<'_, T> {}
-
-struct HorzPaddedIter<'a, T: Pixel> {
-  // Active area cropping is done using the length of the slice
-  slice: &'a [T],
-  // x index of the iterator
-  // When less than 0, repeat the first element. When greater than end, repeat
-  // the last element
-  index: isize,
-  // The index at which to terminate. Can be larger than the slice length.
-  end: usize
-}
-
-impl<'a, T: Pixel> HorzPaddedIter<'a, T> {
-  fn new(
-    slice: &'a [T], start_index: isize, width: usize
-  ) -> HorzPaddedIter<'a, T> {
-    HorzPaddedIter {
-      slice,
-      index: start_index,
-      end: (width as isize + start_index) as usize
-    }
-  }
-}
-
-impl<'a, T: Pixel> Iterator for HorzPaddedIter<'a, T> {
-  type Item = &'a T;
-
-  #[inline(always)]
-  fn next(&mut self) -> Option<Self::Item> {
-    if self.index < self.end as isize {
-      // clamp to the edges of the frame
-      let x = clamp(self.index, 0, self.slice.len() as isize - 1) as usize;
-      self.index += 1;
-      Some(&self.slice[x])
-    } else {
-      None
-    }
-  }
-
-  #[inline(always)]
-  fn size_hint(&self) -> (usize, Option<usize>) {
-    let size: usize = (self.end as isize - self.index) as usize;
-    (size, Some(size))
-  }
-}
-
-impl<T: Pixel> ExactSizeIterator for HorzPaddedIter<'_, T> {}
-
-fn setup_integral_image<'a, T: Pixel>(
-  rows_iter: &mut impl Iterator<Item = impl Iterator<Item = &'a T>>,
-  integral_image: &mut [u32], sq_integral_image: &mut [u32],
-  integral_image_stride: usize
-) {
-  // Setup the first row
-  {
-    let mut sum: u32 = 0;
-    let mut sq_sum: u32 = 0;
-    // Remove the first row and use it outside of the main loop
-    let row = rows_iter.next().unwrap();
-    for (src, (integral, sq_integral)) in
-      row.zip(integral_image.iter_mut().zip(sq_integral_image.iter_mut()))
-    {
-      let current = u32::cast_from(*src);
-
-      // Wrap adds to prevent undefined behaviour on overflow. Overflow is
-      // cancelled out when calculating the sum of a region.
-      sum = sum.wrapping_add(current);
-      *integral = sum;
-      sq_sum = sq_sum.wrapping_add(current * current);
-      *sq_integral = sq_sum;
-    }
-  }
-  // Calculate all other rows
-  let mut integral_slice = &mut integral_image[..];
-  let mut sq_integral_slice = &mut sq_integral_image[..];
-  for row in rows_iter {
-    let mut sum: u32 = 0;
-    let mut sq_sum: u32 = 0;
-
-    // Split the data between the previous row and future rows.
-    // This allows us to mutate the current row while accessing the
-    // previous row.
-    let (integral_row_prev, integral_row) =
-      integral_slice.split_at_mut(integral_image_stride);
-    let (sq_integral_row_prev, sq_integral_row) =
-      sq_integral_slice.split_at_mut(integral_image_stride);
-    for (
-      src,
-      ((integral_above, sq_integral_above), (integral, sq_integral))
-    ) in row.zip(
-      integral_row_prev
-        .iter()
-        .zip(sq_integral_row_prev.iter())
-        .zip(integral_row.iter_mut().zip(sq_integral_row.iter_mut()))
-    ) {
-      let current = u32::cast_from(*src);
-      // Wrap adds to prevent undefined behaviour on overflow. Overflow is
-      // cancelled out when calculating the sum of a region.
-      sum = sum.wrapping_add(current);
-      *integral = sum.wrapping_add(*integral_above);
-      sq_sum = sq_sum.wrapping_add(current * current);
-      *sq_integral = sq_sum.wrapping_add(*sq_integral_above);
-    }
-
-    // The current row also contains all future rows. Replacing the slice with
-    // it moves down a row.
-    integral_slice = integral_row;
-    sq_integral_slice = sq_integral_row;
-  }
-}
-
 pub fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvariants<T>,
                                        crop_w: usize, crop_h: usize,
                                        stripe_w: usize, stripe_h: usize,
                                        cdeffed: &PlaneSlice<T>,
                                        deblocked: &PlaneSlice<T>,
                                        out: &mut PlaneMutSlice<T>) {
-  const WIDTH_MAX: usize = (1 << RESTORATION_TILESIZE_MAX_LOG2) * 2;
   assert!(stripe_h <= 64);
-  assert!(stripe_w <= WIDTH_MAX);
-
-  const INTEGRAL_IMAGE_STRIDE: usize = WIDTH_MAX + 6 + 2;
-  const INTEGRAL_IMAGE_HEIGHT: usize = 64 + 6 + 2;
-  const INTEGRAL_IMAGE_SIZE: usize =
-    INTEGRAL_IMAGE_STRIDE * INTEGRAL_IMAGE_HEIGHT;
-  let mut integral_image: [u32; INTEGRAL_IMAGE_SIZE] =
-    [0; INTEGRAL_IMAGE_SIZE];
-  let mut sq_integral_image: [u32; INTEGRAL_IMAGE_SIZE] =
-    [0; INTEGRAL_IMAGE_SIZE];
-
   let bdm8 = fi.sequence.bit_depth - 8;
   let mut a_r2: [[u32; 64+2]; 3] = [[0; 64+2]; 3];
   let mut b_r2: [[u32; 64+2]; 3] = [[0; 64+2]; 3];
@@ -420,78 +476,30 @@ pub fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvarian
 
   let outstart = cmp::max(0, cmp::max(-cdeffed.y, -out.y)) as usize;
 
-  let max_r: usize = if s_r2 > 0 {
-    2
-  } else if s_r1 > 0 {
-    1
-  } else {
-    0
-  };
-  {
-    // Number of elements outside the stripe
-    let left_w = max_r + 2;
-    let right_w = max_r + 1;
-
-    assert_eq!(cdeffed.x, deblocked.x);
-
-    // Find how many unique elements to use to the left and right
-    let left_uniques = if cdeffed.x == 0 { 0 } else { left_w };
-    let right_uniques = right_w.min(crop_w - stripe_w);
-
-    // Find the total number of unique elements used
-    let row_uniques = left_uniques + stripe_w + right_uniques;
-
-    // Negative start indices result in repeating the first element of the row
-    let start_index_x = if cdeffed.x == 0 { -(left_w as isize) } else { 0 };
-
-    let mut rows_iter = VertPaddedIter::new(
-      // Move left to encompass all the used data
-      &cdeffed.go_left(left_uniques),
-      &deblocked.go_left(left_uniques),
-      stripe_h,
-      crop_h,
-      max_r
-    )
-    .map(|row: &[T]| {
-      HorzPaddedIter::new(
-        // Limit how many unique elements we use
-        &row[..row_uniques],
-        start_index_x,
-        left_w + stripe_w + right_w
-      )
-    });
-
-    setup_integral_image(
-      &mut rows_iter,
-      &mut integral_image,
-      &mut sq_integral_image,
-      INTEGRAL_IMAGE_STRIDE
-    );
-  }
   /* prime the intermediate arrays */
   if s_r2 > 0 {
     sgrproj_box_ab_r2(&mut a_r2[0], &mut b_r2[0],
-                      &integral_image, &sq_integral_image,
-                      INTEGRAL_IMAGE_STRIDE,
-                      0, stripe_h, s_r2, bdm8);
+                      -1, 0, stripe_h,
+                      s_r2, bdm8,
+                      &deblocked, &cdeffed,
+                      crop_w, crop_h);
     sgrproj_box_ab_r2(&mut a_r2[1], &mut b_r2[1],
-                      &integral_image, &sq_integral_image,
-                      INTEGRAL_IMAGE_STRIDE,
-                      1, stripe_h, s_r2, bdm8);
+                      0, 0, stripe_h,
+                      s_r2, bdm8,
+                      &deblocked, &cdeffed,
+                      crop_w, crop_h);
   }
   if s_r1 > 0 {
-    let r_diff = max_r - 1;
-    let integral_image_offset = r_diff + r_diff * INTEGRAL_IMAGE_STRIDE;
     sgrproj_box_ab_r1(&mut a_r1[0], &mut b_r1[0],
-                      &integral_image[integral_image_offset..],
-                      &sq_integral_image[integral_image_offset..],
-                      INTEGRAL_IMAGE_STRIDE,
-                      0, stripe_h, s_r1, bdm8);
+                      -1, 0, stripe_h,
+                      s_r1, bdm8,
+                      &deblocked, &cdeffed,
+                      crop_w, crop_h);
     sgrproj_box_ab_r1(&mut a_r1[1], &mut b_r1[1],
-                      &integral_image[integral_image_offset..],
-                      &sq_integral_image[integral_image_offset..],
-                      INTEGRAL_IMAGE_STRIDE,
-                      1, stripe_h, s_r1, bdm8);
+                      0, 0, stripe_h,
+                      s_r1, bdm8,
+                      &deblocked, &cdeffed,
+                      crop_w, crop_h);
   }
 
   /* iterate by column */
@@ -499,9 +507,10 @@ pub fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvarian
     /* build intermediate array columns */
     if s_r2 > 0 {
       sgrproj_box_ab_r2(&mut a_r2[(xi+2)%3], &mut b_r2[(xi+2)%3],
-                        &integral_image, &sq_integral_image,
-                        INTEGRAL_IMAGE_STRIDE,
-                        xi as isize + 2, stripe_h, s_r2, bdm8);
+                        xi as isize + 1, 0, stripe_h,
+                        s_r2, bdm8,
+                        &deblocked, &cdeffed,
+                        crop_w, crop_h);
       let ap0: [&[u32; 64+2]; 3] = [&a_r2[xi%3], &a_r2[(xi+1)%3], &a_r2[(xi+2)%3]];
       let bp0: [&[u32; 64+2]; 3] = [&b_r2[xi%3], &b_r2[(xi+1)%3], &b_r2[(xi+2)%3]];
       sgrproj_box_f_r2(&ap0, &bp0, &mut f_r2, xi, 0, stripe_h as usize, &cdeffed);
@@ -509,15 +518,14 @@ pub fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvarian
       sgrproj_box_f_r0(&mut f_r2, xi, 0, stripe_h as usize, &cdeffed);
     }
     if s_r1 > 0 {
-      let r_diff = max_r - 1;
-      let integral_image_offset = r_diff + r_diff * INTEGRAL_IMAGE_STRIDE;
       sgrproj_box_ab_r1(&mut a_r1[(xi+2)%3], &mut b_r1[(xi+2)%3],
-                        &integral_image[integral_image_offset..],
-                        &sq_integral_image[integral_image_offset..],
-                        INTEGRAL_IMAGE_STRIDE,
-                        xi as isize + 2, stripe_h, s_r1, bdm8);
+                        xi as isize + 1, 0, stripe_h,
+                        s_r1, bdm8,
+                        &deblocked, &cdeffed,
+                        crop_w, crop_h);
       let ap1: [&[u32; 64+2]; 3] = [&a_r1[xi%3], &a_r1[(xi+1)%3], &a_r1[(xi+2)%3]];
       let bp1: [&[u32; 64+2]; 3] = [&b_r1[xi%3], &b_r1[(xi+1)%3], &b_r1[(xi+2)%3]];
+
       sgrproj_box_f_r1(&ap1, &bp1, &mut f_r1, xi, 0, stripe_h as usize, &cdeffed);
     } else {
       sgrproj_box_f_r0(&mut f_r1, xi, 0, stripe_h as usize, &cdeffed);
@@ -555,18 +563,9 @@ pub fn sgrproj_solve<T: Pixel>(set: u8, fi: &FrameInvariants<T>,
                                input: &PlaneSlice<T>,
                                cdeffed: &PlaneSlice<T>,
                                cdef_w: usize, cdef_h: usize) -> (i8, i8) {
+
   assert!(cdef_h <= 64);
-  assert!(cdef_w <= 64);
-  const INTEGRAL_IMAGE_STRIDE: usize = 64 + 6 + 2;
-  let mut integral_image: [u32;
-    INTEGRAL_IMAGE_STRIDE * INTEGRAL_IMAGE_STRIDE] =
-    [0; INTEGRAL_IMAGE_STRIDE * INTEGRAL_IMAGE_STRIDE];
-  let mut sq_integral_image: [u32;
-    INTEGRAL_IMAGE_STRIDE * INTEGRAL_IMAGE_STRIDE] =
-    [0; INTEGRAL_IMAGE_STRIDE * INTEGRAL_IMAGE_STRIDE];
-
   let bdm8 = fi.sequence.bit_depth - 8;
-
   let mut a_r2: [[u32; 64+2]; 3] = [[0; 64+2]; 3];
   let mut b_r2: [[u32; 64+2]; 3] = [[0; 64+2]; 3];
   let mut f_r2: [u32; 64] = [0; 64];
@@ -580,55 +579,30 @@ pub fn sgrproj_solve<T: Pixel>(set: u8, fi: &FrameInvariants<T>,
   let mut h:[[f64; 2]; 2] = [[0.,0.],[0.,0.]];
   let mut c:[f64; 2] = [0., 0.];
 
-  let max_r = if s_r2 > 0 { 2 } else if s_r1 > 0 { 1 } else { 0 };
-  {
-    let mut rows_iter = VertPaddedIter::new(
-      cdeffed,
-      cdeffed,
-      cdef_h,
-      cdef_h,
-      max_r)
-    .map(|row: &[T]| {
-      let left_w = max_r + 2;
-      let right_w = max_r + 1;
-      HorzPaddedIter::new(
-        &row[..cdef_w],
-        -(left_w as isize),
-        left_w + cdef_w + right_w
-      )
-    });
-    setup_integral_image(
-      &mut rows_iter,
-      &mut integral_image,
-      &mut sq_integral_image,
-      INTEGRAL_IMAGE_STRIDE
-    );
-  }
-
   /* prime the intermediate arrays */
   if s_r2 > 0 {
     sgrproj_box_ab_r2(&mut a_r2[0], &mut b_r2[0],
-                      &integral_image, &sq_integral_image,
-                      INTEGRAL_IMAGE_STRIDE,
-                      0, cdef_h, s_r2, bdm8);
+                      -1, 0, cdef_h,
+                      s_r2, bdm8,
+                      &cdeffed, &cdeffed,
+                      cdef_w, cdef_h);
     sgrproj_box_ab_r2(&mut a_r2[1], &mut b_r2[1],
-                      &integral_image, &sq_integral_image,
-                      INTEGRAL_IMAGE_STRIDE,
-                      1, cdef_h, s_r2, bdm8);
+                      0, 0, cdef_h,
+                      s_r2, bdm8,
+                      &cdeffed, &cdeffed,
+                      cdef_w, cdef_h);
   }
   if s_r1 > 0 {
-    let r_diff = max_r - 1;
-    let integral_image_offset = r_diff + r_diff * INTEGRAL_IMAGE_STRIDE;
     sgrproj_box_ab_r1(&mut a_r1[0], &mut b_r1[0],
-                      &integral_image[integral_image_offset..],
-                      &sq_integral_image[integral_image_offset..],
-                      INTEGRAL_IMAGE_STRIDE,
-                      0, cdef_h, s_r1, bdm8);
+                      -1, 0, cdef_h,
+                      s_r1, bdm8,
+                      &cdeffed, &cdeffed,
+                      cdef_w, cdef_h);
     sgrproj_box_ab_r1(&mut a_r1[1], &mut b_r1[1],
-                      &integral_image[integral_image_offset..],
-                      &sq_integral_image[integral_image_offset..],
-                      INTEGRAL_IMAGE_STRIDE,
-                      1, cdef_h, s_r1, bdm8);
+                      0, 0, cdef_h,
+                      s_r1, bdm8,
+                      &cdeffed, &cdeffed,
+                      cdef_w, cdef_h);
   }
 
   /* iterate by column */
@@ -636,9 +610,10 @@ pub fn sgrproj_solve<T: Pixel>(set: u8, fi: &FrameInvariants<T>,
     /* build intermediate array columns */
     if s_r2 > 0 {
       sgrproj_box_ab_r2(&mut a_r2[(xi+2)%3], &mut b_r2[(xi+2)%3],
-                        &integral_image, &sq_integral_image,
-                        INTEGRAL_IMAGE_STRIDE,
-                        xi as isize + 2, cdef_h, s_r2, bdm8);
+                        xi as isize + 1, 0, cdef_h,
+                        s_r2, bdm8,
+                        &cdeffed, &cdeffed,
+                        cdef_w, cdef_h);
       let ap0: [&[u32; 64+2]; 3] = [&a_r2[xi%3], &a_r2[(xi+1)%3], &a_r2[(xi+2)%3]];
       let bp0: [&[u32; 64+2]; 3] = [&b_r2[xi%3], &b_r2[(xi+1)%3], &b_r2[(xi+2)%3]];
       sgrproj_box_f_r2(&ap0, &bp0, &mut f_r2, xi, 0, cdef_h as usize, &cdeffed);
@@ -646,15 +621,14 @@ pub fn sgrproj_solve<T: Pixel>(set: u8, fi: &FrameInvariants<T>,
       sgrproj_box_f_r0(&mut f_r2, xi, 0, cdef_h as usize, &cdeffed);
     }
     if s_r1 > 0 {
-      let r_diff = max_r - 1;
-      let integral_image_offset = r_diff + r_diff * INTEGRAL_IMAGE_STRIDE;
       sgrproj_box_ab_r1(&mut a_r1[(xi+2)%3], &mut b_r1[(xi+2)%3],
-                        &integral_image[integral_image_offset..],
-                        &sq_integral_image[integral_image_offset..],
-                        INTEGRAL_IMAGE_STRIDE,
-                        xi as isize + 2, cdef_h, s_r1, bdm8);
+                        xi as isize + 1, 0, cdef_h,
+                        s_r1, bdm8,
+                        &cdeffed, &cdeffed,
+                        cdef_w, cdef_h);
       let ap1: [&[u32; 64+2]; 3] = [&a_r1[xi%3], &a_r1[(xi+1)%3], &a_r1[(xi+2)%3]];
       let bp1: [&[u32; 64+2]; 3] = [&b_r1[xi%3], &b_r1[(xi+1)%3], &b_r1[(xi+2)%3]];
+
       sgrproj_box_f_r1(&ap1, &bp1, &mut f_r1, xi, 0, cdef_h as usize, &cdeffed);
     } else {
       sgrproj_box_f_r0(&mut f_r1, xi, 0, cdef_h as usize, &cdeffed);
