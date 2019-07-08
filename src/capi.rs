@@ -141,7 +141,7 @@ impl EncContext {
     }
   }
 
-  fn container_sequence_header(&mut self) -> Vec<u8> {
+  fn container_sequence_header(&self) -> Vec<u8> {
     match self {
       EncContext::U8(ctx) => ctx.container_sequence_header(),
       EncContext::U16(ctx) => ctx.container_sequence_header(),
@@ -618,7 +618,7 @@ pub unsafe extern fn rav1e_packet_unref(pkt: *mut Packet) {
 ///
 /// Use rav1e_container_sequence_header_unref() to free it.
 #[no_mangle]
-pub unsafe extern fn rav1e_container_sequence_header(ctx: *mut Context, buf_size: *mut size_t) -> *mut u8 {
+pub unsafe extern fn rav1e_container_sequence_header(ctx: *const Context, buf_size: *mut size_t) -> *mut u8 {
     let buf = (*ctx).ctx.container_sequence_header();
 
     *buf_size = buf.len();

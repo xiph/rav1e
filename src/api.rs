@@ -794,7 +794,7 @@ impl<T: Pixel> Context<T> {
     self.send_frame(None).unwrap();
   }
 
-  pub fn container_sequence_header(&mut self) -> Vec<u8> {
+  pub fn container_sequence_header(&self) -> Vec<u8> {
     fn sequence_header_inner(seq: &Sequence) -> io::Result<Vec<u8>> {
       let mut buf = Vec::new();
 
