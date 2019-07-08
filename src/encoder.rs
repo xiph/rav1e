@@ -671,6 +671,7 @@ impl<T: Pixel> FrameInvariants<T> {
 
     fi.pyramid_level = inter_cfg.get_level(fi.idx_in_group_output);
 
+    // this is the slot that the current frame is going to be saved into
     let slot_idx = inter_cfg.get_slot_idx(fi.pyramid_level, fi.order_hint);
     fi.show_frame = inter_cfg.get_show_frame(fi.idx_in_group_output);
     fi.show_existing_frame =
@@ -700,12 +701,19 @@ impl<T: Pixel> FrameInvariants<T> {
 
     for i in 0..INTER_REFS_PER_FRAME {
       fi.ref_frames[i] = if fi.pyramid_level == 0 {
+        // calculations done relative to the slot_idx for this frame.
+        // the last four frames can be found by subtracting from the current slot_idx
+        // add 4 to prevent underflow
+        // TODO: maybe use order_hint here like in get_slot_idx?
         if i == second_ref_frame.to_index() {
+          // this is the second-previous P frame
           (slot_idx + 4 - 2) as u8 % 4
         } else {
+          // this is the previous P frame
           (slot_idx + 4 - 1) as u8 % 4
         }
       } else if i == second_ref_frame.to_index() {
+        // find lower reference frame ahead of current frame
         let oh = fi.order_hint
          + (inter_cfg.group_input_len as u32 >> fi.pyramid_level);
         let lvl2 = pos_to_lvl(oh as u64, inter_cfg.pyramid_depth);
@@ -718,9 +726,11 @@ impl<T: Pixel> FrameInvariants<T> {
         if fi.pyramid_level == 0 {
           (slot_idx + 4 - 1) as u8 % 4
         } else {
+          // this is a reference horizontally to the previous frame of the same level
           slot_idx as u8
         }
       } else {
+        // find lower reference frame behind current reference frame
         let oh = fi.order_hint
          - (inter_cfg.group_input_len as u32 >> fi.pyramid_level);
         let lvl1 = pos_to_lvl(oh as u64, inter_cfg.pyramid_depth);
