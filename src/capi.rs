@@ -605,7 +605,7 @@ pub unsafe extern "C" fn rav1e_receive_packet(
 }
 
 #[no_mangle]
-pub unsafe extern fn rav1e_packet_unref(pkt: *mut Packet) {
+pub unsafe extern "C" fn rav1e_packet_unref(pkt: *mut Packet) {
     if !pkt.is_null() {
         let pkt = Box::from_raw(pkt);
         let _ = Box::from_raw(pkt.data as *mut u8);
@@ -618,7 +618,7 @@ pub unsafe extern fn rav1e_packet_unref(pkt: *mut Packet) {
 ///
 /// Use rav1e_container_sequence_header_unref() to free it.
 #[no_mangle]
-pub unsafe extern fn rav1e_container_sequence_header(ctx: *const Context, buf_size: *mut size_t) -> *mut u8 {
+pub unsafe extern "C" fn rav1e_container_sequence_header(ctx: *const Context, buf_size: *mut size_t) -> *mut u8 {
     let buf = (*ctx).ctx.container_sequence_header();
 
     *buf_size = buf.len();
@@ -626,7 +626,7 @@ pub unsafe extern fn rav1e_container_sequence_header(ctx: *const Context, buf_si
 }
 
 #[no_mangle]
-pub unsafe extern fn rav1e_container_sequence_header_unref(sequence: *mut u8) {
+pub unsafe extern "C" fn rav1e_container_sequence_header_unref(sequence: *mut u8) {
     if !sequence.is_null() {
         let _ = Box::from_raw(sequence);
     }
