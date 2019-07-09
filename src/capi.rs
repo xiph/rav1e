@@ -358,6 +358,7 @@ unsafe fn option_match(
 
         "threads" => (*cfg).cfg.threads = value.parse().map_err(|_| ())?,
 
+        "tiles" => enc.tiles = value.parse().map_err(|_| ())?,
         "tile_rows_log2" => enc.tile_rows_log2 = value.parse().map_err(|_| ())?,
         "tile_cols_log2" => enc.tile_cols_log2 = value.parse().map_err(|_| ())?,
 
