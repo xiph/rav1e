@@ -692,7 +692,7 @@ impl<T: Pixel> FrameInvariants<T> {
     let ref_in_previous_group = LAST3_FRAME;
 
     // reuse probability estimates from previous frames only in top level frames
-    fi.primary_ref_frame = if fi.pyramid_level > 0 {
+    fi.primary_ref_frame = if fi.pyramid_level > 2 {
       PRIMARY_REF_NONE
     } else {
       (ref_in_previous_group.to_index()) as u32
