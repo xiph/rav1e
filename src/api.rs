@@ -1588,6 +1588,35 @@ mod test {
 
   #[interpolate_test(0, 0)]
   #[interpolate_test(1, 1)]
+  fn pyramid_level_low_latency_minus(missing: u64) {
+    // Test pyramid_level configurations when there are <missing> less frames
+    // than the perfect subgop size, in no-reorder mode.
+
+    let ctx = setup_encoder::<u8>(
+      64,
+      80,
+      10,
+      100,
+      8,
+      ChromaSampling::Cs420,
+      5,
+      5,
+      0,
+      true,
+      true
+    );
+    let limit = 10 - missing;
+
+    // data[output_frameno] = pyramid_level
+    let data = encode_frames(ctx, limit, 0)
+      .map(|(fi, _)| fi.pyramid_level)
+      .collect::<Vec<_>>();
+
+    assert!(data.into_iter().all(|pyramid_level| pyramid_level == 0));
+  }
+
+  #[interpolate_test(0, 0)]
+  #[interpolate_test(1, 1)]
   #[interpolate_test(2, 2)]
   #[interpolate_test(3, 3)]
   #[interpolate_test(4, 4)]
@@ -1703,6 +1732,123 @@ mod test {
     );
   }
 
+  #[interpolate_test(0, 0)]
+  #[interpolate_test(1, 1)]
+  #[interpolate_test(2, 2)]
+  #[interpolate_test(3, 3)]
+  #[interpolate_test(4, 4)]
+  fn pyramid_level_reorder_minus(missing: u64) {
+    // Test pyramid_level configurations when there are <missing> less frames
+    // than the perfect subgop size.
+
+    // TODO: only works for pyramid_depth 2.
+    let ctx = setup_encoder::<u8>(
+      64,
+      80,
+      10,
+      100,
+      8,
+      ChromaSampling::Cs420,
+      5,
+      5,
+      0,
+      false,
+      true
+    );
+    let limit = 10 - missing;
+
+    // data[output_frameno] = pyramid_level
+    let data = encode_frames(ctx, limit, 0)
+      .map(|(fi, _)| fi.pyramid_level)
+      .collect::<Vec<_>>();
+
+    assert_eq!(
+      &data[..],
+      match missing {
+        0 =>
+          &[
+            0, // I-frame
+            0, // P-frame
+            1, // B0-frame
+            2, // B1-frame (first)
+            1, // B0-frame (show existing)
+            2, // B1-frame (second)
+            0, // P-frame (show existing)
+            0, // I-frame
+            0, // P-frame
+            1, // B0-frame
+            2, // B1-frame (first)
+            1, // B0-frame (show existing)
+            2, // B1-frame (second)
+            0  // P-frame (show existing)
+          ][..],
+        1 =>
+          &[
+            0, // I-frame
+            0, // P-frame
+            1, // B0-frame
+            2, // B1-frame (first)
+            1, // B0-frame (show existing)
+            2, // B1-frame (second)
+            0, // P-frame (show existing)
+            0, // I-frame
+            0, // Last frame (missing)
+            1, // B0-frame
+            2, // B1-frame (first)
+            1, // B0-frame (show existing)
+            2, // B1-frame (second)
+            2  // Last frame (missing)
+          ][..],
+        2 =>
+          &[
+            0, // I-frame
+            0, // P-frame
+            1, // B0-frame
+            2, // B1-frame (first)
+            1, // B0-frame (show existing)
+            2, // B1-frame (second)
+            0, // P-frame (show existing)
+            0, // I-frame
+            0, // Last frame (missing)
+            1, // B0-frame
+            2, // B1-frame (first)
+            1, // B0-frame (show existing)
+            1, // 2nd last (missing)
+            1  // Last frame (missing)
+          ][..],
+        3 =>
+          &[
+            0, // I-frame
+            0, // P-frame
+            1, // B0-frame
+            2, // B1-frame (first)
+            1, // B0-frame (show existing)
+            2, // B1-frame (second)
+            0, // P-frame (show existing)
+            0, // I-frame
+            0, // Last frame (missing)
+            0, // 3rd last (missing)
+            2, // B1-frame (first)
+            2, // 3rd last (missing)
+            2, // 2nd last (missing)
+            2  // Last frame (missing)
+          ][..],
+        4 =>
+          &[
+            0, // I-frame
+            0, // P-frame
+            1, // B0-frame
+            2, // B1-frame (first)
+            1, // B0-frame (show existing)
+            2, // B1-frame (second)
+            0, // P-frame (show existing)
+            0, // I-frame
+          ][..],
+        _ => unreachable!()
+      }
+    );
+  }
+
   // Commented out because (TODO):
   // 1. The scene change detector is fed frames in the wrong order (in the
   //    output order rather than in the input order).
@@ -1806,6 +1952,110 @@ mod test {
             (3, true),  // B1-frame (second)
             (3, false), // Missing
             (4, true)   // I-frame
+          ][..],
+        _ => unreachable!()
+      }
+    );
+  }
+
+  #[interpolate_test(0, 0)]
+  // #[interpolate_test(1, 1)]
+  // #[interpolate_test(2, 2)]
+  // #[interpolate_test(3, 3)]
+  // #[interpolate_test(4, 4)]
+  fn pyramid_level_reorder_scene_change_at(scene_change_at: u64) {
+    // Test pyramid_level configurations when there's a scene change at the
+    // <scene_change_at>th frame.
+
+    // TODO: only works for pyramid_depth 2.
+    let ctx = setup_encoder::<u8>(
+      64,
+      80,
+      10,
+      100,
+      8,
+      ChromaSampling::Cs420,
+      0,
+      5,
+      0,
+      false,
+      false
+    );
+    let limit = 5;
+
+    // data[output_frameno] = pyramid_level
+    let data = encode_frames(ctx, limit, scene_change_at)
+      .map(|(fi, _)| fi.pyramid_level)
+      .collect::<Vec<_>>();
+
+    assert_eq!(
+      &data[..],
+      match scene_change_at {
+        0 =>
+          &[
+            0, // I-frame
+            0, // P-frame
+            1, // B0-frame
+            2, // B1-frame (first)
+            1, // B0-frame (show existing)
+            2, // B1-frame (second)
+            0, // P-frame (show existing)
+          ][..],
+        1 =>
+          &[
+            0, // I-frame
+            0, // I-frame
+            0, // Missing
+            1, // B0-frame
+            2, // B1-frame (first)
+            1, // B0-frame (show existing)
+            2, // B1-frame (second)
+            2  // Missing
+          ][..],
+        2 =>
+          &[
+            0, // I-frame
+            0, // Missing
+            0, // Missing
+            2, // B1-frame (first)
+            2, // Missing
+            2, // Missing
+            2, // Missing
+            0, // I-frame
+            0, // Missing
+            1, // B0-frame
+            2, // B1-frame (first)
+            1, // B0-frame (show existing)
+            1, // Missing
+            1  // Missing
+          ][..],
+        3 =>
+          &[
+            0, // I-frame
+            0, // Missing
+            1, // B0-frame
+            2, // B1-frame (first)
+            1, // B0-frame (show existing)
+            1, // Missing
+            1, // Missing
+            0, // I-frame
+            0, // Missing
+            0, // Missing
+            2, // B1-frame (first)
+            2, // Missing
+            2, // Missing
+            2  // Missing
+          ][..],
+        4 =>
+          &[
+            0, // I-frame
+            0, // Missing
+            1, // B0-frame
+            2, // B1-frame (first)
+            1, // B0-frame (show existing)
+            2, // B1-frame (second)
+            2, // Missing
+            0  // I-frame
           ][..],
         _ => unreachable!()
       }
