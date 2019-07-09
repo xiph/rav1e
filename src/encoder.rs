@@ -699,47 +699,53 @@ impl<T: Pixel> FrameInvariants<T> {
       (ref_in_previous_group.to_index()) as u32
     };
 
-    for i in 0..INTER_REFS_PER_FRAME {
-      fi.ref_frames[i] = if fi.pyramid_level == 0 {
+    if fi.pyramid_level == 0 {
+      // level 0 has no forward references
+      // default to last P frame
+      fi.ref_frames = [
         // calculations done relative to the slot_idx for this frame.
         // the last four frames can be found by subtracting from the current slot_idx
         // add 4 to prevent underflow
         // TODO: maybe use order_hint here like in get_slot_idx?
-        if i == second_ref_frame.to_index() {
-          // this is the second-previous P frame
-          (slot_idx + 4 - 2) as u8 % 4
-        } else {
-          // this is the previous P frame
-          (slot_idx + 4 - 1) as u8 % 4
-        }
-      } else if i == second_ref_frame.to_index() {
-        // find lower reference frame ahead of current frame
+        // this is the previous P frame
+        (slot_idx + 4 - 1) as u8 % 4
+          ; INTER_REFS_PER_FRAME];
+      // use the second-previous p frame as a second reference frame
+      fi.ref_frames[second_ref_frame.to_index()] =
+        (slot_idx + 4 - 2) as u8 % 4;
+    } else {
+      // fill in defaults
+      // default to backwards reference in lower level
+      fi.ref_frames = [
+        {
+          let oh = fi.order_hint
+            - (inter_cfg.group_input_len as u32 >> fi.pyramid_level);
+          let lvl1 = pos_to_lvl(oh as u64, inter_cfg.pyramid_depth);
+          if lvl1 == 0 {
+            ((oh >> inter_cfg.pyramid_depth) % 4) as u8
+          } else {
+            3 + lvl1 as u8
+          }
+        }; INTER_REFS_PER_FRAME];
+      // use forward reference in lower level as a second reference frame
+      fi.ref_frames[second_ref_frame.to_index()] = {
         let oh = fi.order_hint
-         + (inter_cfg.group_input_len as u32 >> fi.pyramid_level);
+          + (inter_cfg.group_input_len as u32 >> fi.pyramid_level);
         let lvl2 = pos_to_lvl(oh as u64, inter_cfg.pyramid_depth);
         if lvl2 == 0 {
           ((oh >> inter_cfg.pyramid_depth) % 4) as u8
         } else {
           3 + lvl2 as u8
         }
-      } else if i == ref_in_previous_group.to_index() {
-        if fi.pyramid_level == 0 {
-          (slot_idx + 4 - 1) as u8 % 4
-        } else {
-          // this is a reference horizontally to the previous frame of the same level
-          slot_idx as u8
-        }
-      } else {
-        // find lower reference frame behind current reference frame
-        let oh = fi.order_hint
-         - (inter_cfg.group_input_len as u32 >> fi.pyramid_level);
-        let lvl1 = pos_to_lvl(oh as u64, inter_cfg.pyramid_depth);
-        if lvl1 == 0 {
-          ((oh >> inter_cfg.pyramid_depth) % 4) as u8
-        } else {
-          3 + lvl1 as u8
-        }
       };
+      // use a reference to the previous frame in the same level
+      // (horizontally) as a third reference
+      fi.ref_frames[ref_in_previous_group.to_index()] = {
+        slot_idx as u8
+      }
+    }
+
+    for i in 0..INTER_REFS_PER_FRAME {
       fi.ref_frame_sign_bias[i] = if !fi.sequence.enable_order_hint {
         false
       } else if let Some(ref rec) =
