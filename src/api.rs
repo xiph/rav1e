@@ -1036,7 +1036,7 @@ impl<T: Pixel> ContextInner<T> {
     let cur_output_frameno = self.output_frameno;
 
     let ret = {
-      let fi = self.frame_invariants.get_mut(&cur_output_frameno).unwrap();
+      let fi = self.frame_invariants.get(&cur_output_frameno).unwrap();
       if fi.show_existing_frame {
         if !self.rc_state.ready() {
           return Err(EncoderStatus::NotReady);
