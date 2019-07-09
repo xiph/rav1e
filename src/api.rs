@@ -1624,7 +1624,6 @@ mod test {
     // Test output_frameno configurations when there are <missing> less frames
     // than the perfect subgop size.
 
-    // TODO: only works for pyramid_depth 2.
     let ctx = setup_encoder::<u8>(
       64,
       80,
@@ -1638,6 +1637,10 @@ mod test {
       false,
       true
     );
+
+    // TODO: when we support more pyramid depths, this test will need tweaks.
+    assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
+
     let limit = 10 - missing;
 
     // data[output_frameno] = (input_frameno, end_of_subgop)
@@ -1741,7 +1744,6 @@ mod test {
     // Test pyramid_level configurations when there are <missing> less frames
     // than the perfect subgop size.
 
-    // TODO: only works for pyramid_depth 2.
     let ctx = setup_encoder::<u8>(
       64,
       80,
@@ -1755,6 +1757,10 @@ mod test {
       false,
       true
     );
+
+    // TODO: when we support more pyramid depths, this test will need tweaks.
+    assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
+
     let limit = 10 - missing;
 
     // data[output_frameno] = pyramid_level
@@ -1863,7 +1869,6 @@ mod test {
     // Test output_frameno configurations when there's a scene change at the
     // <scene_change_at>th frame.
 
-    // TODO: only works for pyramid_depth 2.
     let ctx = setup_encoder::<u8>(
       64,
       80,
@@ -1877,6 +1882,10 @@ mod test {
       false,
       false
     );
+
+    // TODO: when we support more pyramid depths, this test will need tweaks.
+    assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
+
     let limit = 5;
 
     // data[output_frameno] = (input_frameno, end_of_subgop)
@@ -1958,6 +1967,8 @@ mod test {
     );
   }
 
+  // Commented out because (TODO): see similar comment for the above test.
+
   #[interpolate_test(0, 0)]
   // #[interpolate_test(1, 1)]
   // #[interpolate_test(2, 2)]
@@ -1967,7 +1978,6 @@ mod test {
     // Test pyramid_level configurations when there's a scene change at the
     // <scene_change_at>th frame.
 
-    // TODO: only works for pyramid_depth 2.
     let ctx = setup_encoder::<u8>(
       64,
       80,
@@ -1981,6 +1991,10 @@ mod test {
       false,
       false
     );
+
+    // TODO: when we support more pyramid depths, this test will need tweaks.
+    assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
+
     let limit = 5;
 
     // data[output_frameno] = pyramid_level
