@@ -2281,7 +2281,7 @@ fn write_tile_group_header(tile_start_and_end_present_flag: bool) ->
 //
 // See `av1-spec` Section 6.8.2 and 7.18.
 pub fn encode_show_existing_frame<T: Pixel>(
-  fi: &mut FrameInvariants<T>, fs: &mut FrameState<T>
+  fi: &FrameInvariants<T>, fs: &mut FrameState<T>
 ) -> Vec<u8> {
   debug_assert!(fi.show_existing_frame);
   let mut packet = Vec::new();
