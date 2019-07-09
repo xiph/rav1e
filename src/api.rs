@@ -1708,107 +1708,107 @@ mod test {
   //    output order rather than in the input order).
   // 2. The output_framenos are incorrect for some reason.
 
-  // #[interpolate_test(0, 0)]
+  #[interpolate_test(0, 0)]
   // #[interpolate_test(1, 1)]
   // #[interpolate_test(2, 2)]
   // #[interpolate_test(3, 3)]
   // #[interpolate_test(4, 4)]
-  // fn output_frameno_reorder_scene_change_at(scene_change_at: u64) {
-  //   // Test output_frameno configurations when there's a scene change at the
-  //   // <scene_change_at>th frame.
-  //
-  //   // TODO: only works for pyramid_depth 2.
-  //   let ctx = setup_encoder::<u8>(
-  //     64,
-  //     80,
-  //     10,
-  //     100,
-  //     8,
-  //     ChromaSampling::Cs420,
-  //     0,
-  //     5,
-  //     0,
-  //     false,
-  //     false
-  //   );
-  //   let limit = 5;
-  //
-  //   // data[output_frameno] = (input_frameno, end_of_subgop)
-  //   let data = encode_frames(ctx, limit, scene_change_at)
-  //     .map(|(fi, end_of_subgop)| (fi.input_frameno, end_of_subgop))
-  //     .collect::<Vec<_>>();
-  //
-  //   assert_eq!(
-  //     &data[..],
-  //     match scene_change_at {
-  //       0 =>
-  //         &[
-  //           (0, true), // I-frame
-  //           (4, true), // P-frame
-  //           (2, true), // B0-frame
-  //           (1, true), // B1-frame (first)
-  //           (2, true), // B0-frame (show existing)
-  //           (3, true), // B1-frame (second)
-  //           (4, true), // P-frame (show existing)
-  //         ][..],
-  //       1 =>
-  //         &[
-  //           (0, true),  // I-frame
-  //           (1, true),  // I-frame
-  //           (1, false), // Missing
-  //           (3, true),  // B0-frame
-  //           (2, true),  // B1-frame (first)
-  //           (3, true),  // B0-frame (show existing)
-  //           (4, true),  // B1-frame (second)
-  //           (4, false)  // Missing
-  //         ][..],
-  //       2 =>
-  //         &[
-  //           (0, true),  // I-frame
-  //           (0, false), // Missing
-  //           (0, false), // Missing
-  //           (1, true),  // B1-frame (first)
-  //           (1, false), // Missing
-  //           (1, false), // Missing
-  //           (1, false), // Missing
-  //           (2, true),  // I-frame
-  //           (2, false), // Missing
-  //           (4, true),  // B0-frame
-  //           (3, true),  // B1-frame (first)
-  //           (4, true),  // B0-frame (show existing)
-  //           (4, false), // Missing
-  //           (4, false)  // Missing
-  //         ][..],
-  //       3 =>
-  //         &[
-  //           (0, true),  // I-frame
-  //           (0, false), // Missing
-  //           (2, true),  // B0-frame
-  //           (1, true),  // B1-frame (first)
-  //           (2, true),  // B0-frame (show existing)
-  //           (2, false), // Missing
-  //           (2, false), // Missing
-  //           (3, true),  // I-frame
-  //           (3, false), // Missing
-  //           (3, false), // Missing
-  //           (4, true),  // B1-frame (first)
-  //           (4, false), // Missing
-  //           (4, false), // Missing
-  //           (4, false)  // Missing
-  //         ][..],
-  //       4 =>
-  //         &[
-  //           (0, true),  // I-frame
-  //           (0, false), // Missing
-  //           (2, true),  // B0-frame
-  //           (1, true),  // B1-frame (first)
-  //           (2, true),  // B0-frame (show existing)
-  //           (3, true),  // B1-frame (second)
-  //           (3, false), // Missing
-  //           (4, true)   // I-frame
-  //         ][..],
-  //       _ => unreachable!()
-  //     }
-  //   );
-  // }
+  fn output_frameno_reorder_scene_change_at(scene_change_at: u64) {
+    // Test output_frameno configurations when there's a scene change at the
+    // <scene_change_at>th frame.
+
+    // TODO: only works for pyramid_depth 2.
+    let ctx = setup_encoder::<u8>(
+      64,
+      80,
+      10,
+      100,
+      8,
+      ChromaSampling::Cs420,
+      0,
+      5,
+      0,
+      false,
+      false
+    );
+    let limit = 5;
+
+    // data[output_frameno] = (input_frameno, end_of_subgop)
+    let data = encode_frames(ctx, limit, scene_change_at)
+      .map(|(fi, end_of_subgop)| (fi.input_frameno, end_of_subgop))
+      .collect::<Vec<_>>();
+
+    assert_eq!(
+      &data[..],
+      match scene_change_at {
+        0 =>
+          &[
+            (0, true), // I-frame
+            (4, true), // P-frame
+            (2, true), // B0-frame
+            (1, true), // B1-frame (first)
+            (2, true), // B0-frame (show existing)
+            (3, true), // B1-frame (second)
+            (4, true), // P-frame (show existing)
+          ][..],
+        1 =>
+          &[
+            (0, true),  // I-frame
+            (1, true),  // I-frame
+            (1, false), // Missing
+            (3, true),  // B0-frame
+            (2, true),  // B1-frame (first)
+            (3, true),  // B0-frame (show existing)
+            (4, true),  // B1-frame (second)
+            (4, false)  // Missing
+          ][..],
+        2 =>
+          &[
+            (0, true),  // I-frame
+            (0, false), // Missing
+            (0, false), // Missing
+            (1, true),  // B1-frame (first)
+            (1, false), // Missing
+            (1, false), // Missing
+            (1, false), // Missing
+            (2, true),  // I-frame
+            (2, false), // Missing
+            (4, true),  // B0-frame
+            (3, true),  // B1-frame (first)
+            (4, true),  // B0-frame (show existing)
+            (4, false), // Missing
+            (4, false)  // Missing
+          ][..],
+        3 =>
+          &[
+            (0, true),  // I-frame
+            (0, false), // Missing
+            (2, true),  // B0-frame
+            (1, true),  // B1-frame (first)
+            (2, true),  // B0-frame (show existing)
+            (2, false), // Missing
+            (2, false), // Missing
+            (3, true),  // I-frame
+            (3, false), // Missing
+            (3, false), // Missing
+            (4, true),  // B1-frame (first)
+            (4, false), // Missing
+            (4, false), // Missing
+            (4, false)  // Missing
+          ][..],
+        4 =>
+          &[
+            (0, true),  // I-frame
+            (0, false), // Missing
+            (2, true),  // B0-frame
+            (1, true),  // B1-frame (first)
+            (2, true),  // B0-frame (show existing)
+            (3, true),  // B1-frame (second)
+            (3, false), // Missing
+            (4, true)   // I-frame
+          ][..],
+        _ => unreachable!()
+      }
+    );
+  }
 }
