@@ -1497,8 +1497,8 @@ mod test {
   }
 
   fn encode_frames<T: Pixel>(
-    ctx: &mut Context<T>, limit: u64, scene_change_at: u64
-  ) -> Vec<(u64, bool)> {
+    mut ctx: Context<T>, limit: u64, scene_change_at: u64
+  ) -> impl Iterator<Item = (FrameInvariants<T>, bool)> {
     for i in 0..limit {
       let mut input = Arc::try_unwrap(ctx.new_frame()).unwrap();
 
@@ -1513,20 +1513,18 @@ mod test {
 
     ctx.flush();
 
-    (0..)
-      .map(|output_frameno| {
-        ctx.inner.set_frame_properties(output_frameno).ok().map(
-          |end_of_subgop| {
-            (
-              ctx.inner.frame_invariants[&output_frameno].input_frameno,
-              end_of_subgop
-            )
-          }
-        )
-      })
-      .take_while(Option::is_some)
-      .map(Option::unwrap)
-      .collect::<Vec<_>>()
+    let end_of_subgops = (0..)
+      .map(|output_frameno| ctx.inner.set_frame_properties(output_frameno))
+      .take_while(Result::is_ok)
+      .map(Result::unwrap)
+      .collect::<Vec<_>>();
+
+    ctx
+      .inner
+      .frame_invariants
+      .into_iter()
+      .map(|(_, v)| v)
+      .zip(end_of_subgops.into_iter())
   }
 
   #[interpolate_test(0, 0)]
@@ -1535,7 +1533,7 @@ mod test {
     // Test output_frameno configurations when there are <missing> less frames
     // than the perfect subgop size, in no-reorder mode.
 
-    let mut ctx = setup_encoder::<u8>(
+    let ctx = setup_encoder::<u8>(
       64,
       80,
       10,
@@ -1551,7 +1549,9 @@ mod test {
     let limit = 10 - missing;
 
     // data[output_frameno] = (input_frameno, end_of_subgop)
-    let data = encode_frames(&mut ctx, limit, 0);
+    let data = encode_frames(ctx, limit, 0)
+      .map(|(fi, end_of_subgop)| (fi.input_frameno, end_of_subgop))
+      .collect::<Vec<_>>();
 
     assert_eq!(
       &data[..],
@@ -1596,7 +1596,7 @@ mod test {
     // than the perfect subgop size.
 
     // TODO: only works for pyramid_depth 2.
-    let mut ctx = setup_encoder::<u8>(
+    let ctx = setup_encoder::<u8>(
       64,
       80,
       10,
@@ -1612,7 +1612,9 @@ mod test {
     let limit = 10 - missing;
 
     // data[output_frameno] = (input_frameno, end_of_subgop)
-    let data = encode_frames(&mut ctx, limit, 0);
+    let data = encode_frames(ctx, limit, 0)
+      .map(|(fi, end_of_subgop)| (fi.input_frameno, end_of_subgop))
+      .collect::<Vec<_>>();
 
     assert_eq!(
       &data[..],
@@ -1716,7 +1718,7 @@ mod test {
   //   // <scene_change_at>th frame.
   //
   //   // TODO: only works for pyramid_depth 2.
-  //   let mut ctx = setup_encoder::<u8>(
+  //   let ctx = setup_encoder::<u8>(
   //     64,
   //     80,
   //     10,
@@ -1732,7 +1734,9 @@ mod test {
   //   let limit = 5;
   //
   //   // data[output_frameno] = (input_frameno, end_of_subgop)
-  //   let data = encode_frames(&mut ctx, limit, scene_change_at);
+  //   let data = encode_frames(ctx, limit, scene_change_at)
+  //     .map(|(fi, end_of_subgop)| (fi.input_frameno, end_of_subgop))
+  //     .collect::<Vec<_>>();
   //
   //   assert_eq!(
   //     &data[..],
