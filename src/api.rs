@@ -1647,11 +1647,11 @@ mod test {
             (4, true),  // P-frame (show existing)
             (5, true),  // I-frame
             (5, false), // Last frame (missing)
-            (7, true),
-            (6, true),
-            (7, true),
-            (8, true),
-            (8, false) // Last frame (missing)
+            (7, true),  // B0-frame
+            (6, true),  // B1-frame (first)
+            (7, true),  // B0-frame (show existing)
+            (8, true),  // B1-frame (second)
+            (8, false)  // Last frame (missing)
           ][..],
         2 =>
           &[
@@ -1664,9 +1664,9 @@ mod test {
             (4, true),  // P-frame (show existing)
             (5, true),  // I-frame
             (5, false), // Last frame (missing)
-            (7, true),
-            (6, true),
-            (7, true),
+            (7, true),  // B0-frame
+            (6, true),  // B1-frame (first)
+            (7, true),  // B0-frame (show existing)
             (7, false), // 2nd last (missing)
             (7, false)  // Last frame (missing)
           ][..],
@@ -1682,7 +1682,7 @@ mod test {
             (5, true),  // I-frame
             (5, false), // Last frame (missing)
             (5, false), // 3rd last (missing)
-            (6, true),
+            (6, true),  // B1-frame (first)
             (6, false), // 3rd last (missing)
             (6, false), // 2nd last (missing)
             (6, false)  // Last frame (missing)
@@ -1756,26 +1756,26 @@ mod test {
   //           (0, true),  // I-frame
   //           (1, true),  // I-frame
   //           (1, false), // Missing
-  //           (3, true),
-  //           (2, true),
-  //           (3, true),
-  //           (4, true),
-  //           (4, false) // Missing
+  //           (3, true),  // B0-frame
+  //           (2, true),  // B1-frame (first)
+  //           (3, true),  // B0-frame (show existing)
+  //           (4, true),  // B1-frame (second)
+  //           (4, false)  // Missing
   //         ][..],
   //       2 =>
   //         &[
   //           (0, true),  // I-frame
   //           (0, false), // Missing
   //           (0, false), // Missing
-  //           (1, true),
+  //           (1, true),  // B1-frame (first)
   //           (1, false), // Missing
   //           (1, false), // Missing
   //           (1, false), // Missing
   //           (2, true),  // I-frame
   //           (2, false), // Missing
-  //           (4, true),
-  //           (3, true),
-  //           (4, true),
+  //           (4, true),  // B0-frame
+  //           (3, true),  // B1-frame (first)
+  //           (4, true),  // B0-frame (show existing)
   //           (4, false), // Missing
   //           (4, false)  // Missing
   //         ][..],
@@ -1783,15 +1783,15 @@ mod test {
   //         &[
   //           (0, true),  // I-frame
   //           (0, false), // Missing
-  //           (2, true),
-  //           (1, true),
-  //           (2, true),
+  //           (2, true),  // B0-frame
+  //           (1, true),  // B1-frame (first)
+  //           (2, true),  // B0-frame (show existing)
   //           (2, false), // Missing
   //           (2, false), // Missing
   //           (3, true),  // I-frame
   //           (3, false), // Missing
   //           (3, false), // Missing
-  //           (4, true),
+  //           (4, true),  // B1-frame (first)
   //           (4, false), // Missing
   //           (4, false), // Missing
   //           (4, false)  // Missing
@@ -1800,10 +1800,10 @@ mod test {
   //         &[
   //           (0, true),  // I-frame
   //           (0, false), // Missing
-  //           (2, true),
-  //           (1, true),
-  //           (2, true),
-  //           (3, true),
+  //           (2, true),  // B0-frame
+  //           (1, true),  // B1-frame (first)
+  //           (2, true),  // B0-frame (show existing)
+  //           (3, true),  // B1-frame (second)
   //           (3, false), // Missing
   //           (4, true)   // I-frame
   //         ][..],
