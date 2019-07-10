@@ -51,9 +51,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
     self.last_frame = Some((frame_num, ref_frame));
   }
 
-  pub fn detect_scene_change(&mut self, curr_frame: Arc<Frame<T>>, frame_num: usize) -> bool {
-    let mut is_change = false;
-
+  pub fn detect_scene_change(&self, curr_frame: &Frame<T>, frame_num: usize) -> bool {
     match self.last_frame {
       Some((last_num, ref last_frame)) if last_num == frame_num - 1 => {
         let len = curr_frame.planes[0].cfg.width * curr_frame.planes[0].cfg.height;
@@ -69,11 +67,9 @@ impl<T: Pixel> SceneChangeDetector<T> {
           (delta_yuv.2 / len as u64) as u16
         );
         let delta_avg = ((delta_yuv.0 + delta_yuv.1 + delta_yuv.2) / 3) as u8;
-        is_change = delta_avg >= self.threshold;
+        delta_avg >= self.threshold
       }
-      _ => ()
+      _ => panic!("Incorrect frame order in SceneChangeDetector")
     }
-    self.last_frame = Some((frame_num, curr_frame));
-    is_change
   }
 }
