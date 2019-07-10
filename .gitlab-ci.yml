@@ -10,7 +10,7 @@ before_script:
     - cargo --version
 
 Build, Test, Bench:
-    image: registry.gitlab.xiph.org/xiph/rav1e-docker/rust-1.34-rav1e:latest
+    image: registry.gitlab.xiph.org/xiph/rav1e-docker/rust-rav1e:1.36
     stage: build
     tags:
         - docker
@@ -24,7 +24,7 @@ Build, Test, Bench:
         - cargo bench --features=bench --verbose
 
 Doc and Clippy:
-    image: registry.gitlab.xiph.org/xiph/rav1e-docker/rust-1.34-rav1e:latest
+    image: registry.gitlab.xiph.org/xiph/rav1e-docker/rust-rav1e:1.36
     stage: test
     tags:
         - docker
