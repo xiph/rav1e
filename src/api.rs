@@ -675,7 +675,9 @@ pub(crate) struct ContextInner<T: Pixel> {
   pub(crate) config: EncoderConfig,
   rc_state: RCState,
   maybe_prev_log_base_q: Option<i64>,
-  pub first_pass_data: FirstPassData
+  pub first_pass_data: FirstPassData,
+  /// The next `input_frameno` to be processed by lookahead.
+  next_lookahead_frame: u64
 }
 
 pub struct Context<T: Pixel> {
@@ -873,7 +875,8 @@ impl<T: Pixel> ContextInner<T> {
         enc.reservoir_frame_delay
       ),
       maybe_prev_log_base_q: None,
-      first_pass_data: FirstPassData { frames: Vec::new() }
+      first_pass_data: FirstPassData { frames: Vec::new() },
+      next_lookahead_frame: 0
     }
   }
 
@@ -916,13 +919,10 @@ impl<T: Pixel> ContextInner<T> {
     &self, gop_input_frameno_start: u64, ignore_limit: bool
   ) -> u64 {
     let next_detected = self
-      .frame_invariants
-      .values()
-      .find(|fi| {
-        fi.frame_type == FrameType::KEY
-          && fi.input_frameno > gop_input_frameno_start
-      })
-      .map(|fi| fi.input_frameno);
+      .keyframes
+      .iter()
+      .find(|&&input_frameno| input_frameno > gop_input_frameno_start)
+      .cloned();
     let mut next_limit =
       gop_input_frameno_start + self.config.max_key_frame_interval;
     if !ignore_limit && self.limit != 0 {
@@ -997,11 +997,14 @@ impl<T: Pixel> ContextInner<T> {
     }
 
     // Now that we know the input_frameno, look up the correct frame type
-    let frame_type = self.determine_frame_type(fi.input_frameno);
+    let frame_type = if self.keyframes.contains(&fi.input_frameno) {
+      FrameType::KEY
+    } else {
+      FrameType::INTER
+    };
     if frame_type == FrameType::KEY {
       self.gop_output_frameno_start = output_frameno;
       self.gop_input_frameno_start = fi.input_frameno;
-      self.keyframes.insert(fi.input_frameno);
     }
     fi.frame_type = frame_type;
 
@@ -1030,6 +1033,36 @@ impl<T: Pixel> ContextInner<T> {
     self.limit != 0 && self.frames_processed == self.limit
   }
 
+  fn compute_lookahead_data(&mut self) {
+    // Process all new frames that we have received.
+    let frames_to_process = self
+      .frame_q
+      .iter()
+      .filter_map(|(&input_frameno, frame)| {
+        if input_frameno >= self.next_lookahead_frame {
+          frame.clone().map(|frame| (input_frameno, frame))
+        } else {
+          None
+        }
+      })
+      .collect::<Vec<_>>();
+
+    for &(input_frameno, ref frame) in frames_to_process.iter() {
+      if self.is_key_frame(input_frameno, frame) {
+        self.keyframes.insert(input_frameno);
+      }
+
+      self
+        .keyframe_detector
+        .set_last_frame(frame.clone(), input_frameno as usize);
+    }
+
+    // Update self.next_lookahead_frame.
+    if let Some((last_frame, _)) = frames_to_process.iter().last() {
+      self.next_lookahead_frame = last_frame + 1;
+    }
+  }
+
   pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
     if self.done_processing() {
       return Err(EncoderStatus::LimitReached);
@@ -1038,6 +1071,8 @@ impl<T: Pixel> ContextInner<T> {
     if self.needs_more_lookahead() {
       return Err(EncoderStatus::NeedMoreData);
     }
+
+    self.compute_lookahead_data();
 
     while !self.set_frame_properties(self.output_frameno)? {
       self.output_frameno += 1;
@@ -1198,49 +1233,39 @@ impl<T: Pixel> ContextInner<T> {
     }
   }
 
-  fn determine_frame_type(&mut self, input_frameno: u64) -> FrameType {
+  /// Determines if the passed frame should be a key frame.
+  ///
+  /// This function requires that all input frames are passed to it in order,
+  /// that `self.keyframes` is always up to date and that
+  /// `self.keyframe_detector` always has the correct last frame.
+  fn is_key_frame(&self, input_frameno: u64, frame: &Frame<T>) -> bool {
+    // The first frame is always a keyframe.
     if input_frameno == 0 {
-      return FrameType::KEY;
-    }
-    if self.config.speed_settings.no_scene_detection {
-      if input_frameno % self.config.max_key_frame_interval == 0 {
-        return FrameType::KEY;
-      } else {
-        return FrameType::INTER;
-      }
+      return true;
     }
 
-    let prev_keyframe_input_frameno = self
-      .keyframes
-      .iter()
-      .rfind(|&&keyframe_input_frameno| keyframe_input_frameno < input_frameno)
-      .cloned()
-      .unwrap_or(0);
-    let frame = match self.frame_q.get(&input_frameno).cloned() {
-      Some(frame) => frame,
-      None => {
-        return FrameType::KEY;
-      }
-    };
-    if let Some(frame) = frame {
-      let distance = input_frameno - prev_keyframe_input_frameno;
-      if distance < self.config.min_key_frame_interval {
-        if distance + 1 == self.config.min_key_frame_interval {
-          self.keyframe_detector.set_last_frame(frame, input_frameno as usize);
-        }
-        return FrameType::INTER;
-      }
-      if distance >= self.config.max_key_frame_interval {
-        return FrameType::KEY;
-      }
-      if self
+    // Find the distance to the previous keyframe.
+    let previous_keyframe = self.keyframes.iter().last().unwrap();
+    let distance = input_frameno - previous_keyframe;
+
+    // Handle minimum and maximum key frame intervals.
+    if distance < self.config.min_key_frame_interval {
+      return false;
+    }
+    if distance >= self.config.max_key_frame_interval {
+      return true;
+    }
+
+    // Use the scene change detector if it isn't disabled.
+    if !self.config.speed_settings.no_scene_detection
+      && self
         .keyframe_detector
         .detect_scene_change(frame, input_frameno as usize)
-      {
-        return FrameType::KEY;
-      }
+    {
+      return true;
     }
-    FrameType::INTER
+
+    false
   }
 
   // Count the number of output frames of each subtype in the next
@@ -1574,6 +1599,8 @@ mod test {
     }
 
     ctx.flush();
+
+    ctx.inner.compute_lookahead_data();
 
     let end_of_subgops = (0..)
       .map(|output_frameno| ctx.inner.set_frame_properties(output_frameno))
@@ -1917,16 +1944,11 @@ mod test {
     );
   }
 
-  // Commented out because (TODO):
-  // 1. The scene change detector is fed frames in the wrong order (in the
-  //    output order rather than in the input order).
-  // 2. The output_framenos are incorrect for some reason.
-
   #[interpolate_test(0, 0)]
-  // #[interpolate_test(1, 1)]
-  // #[interpolate_test(2, 2)]
-  // #[interpolate_test(3, 3)]
-  // #[interpolate_test(4, 4)]
+  #[interpolate_test(1, 1)]
+  #[interpolate_test(2, 2)]
+  #[interpolate_test(3, 3)]
+  #[interpolate_test(4, 4)]
   fn output_frameno_reorder_scene_change_at(scene_change_at: u64) {
     // Test output_frameno configurations when there's a scene change at the
     // <scene_change_at>th frame.
@@ -2029,13 +2051,11 @@ mod test {
     );
   }
 
-  // Commented out because (TODO): see similar comment for the above test.
-
   #[interpolate_test(0, 0)]
-  // #[interpolate_test(1, 1)]
-  // #[interpolate_test(2, 2)]
-  // #[interpolate_test(3, 3)]
-  // #[interpolate_test(4, 4)]
+  #[interpolate_test(1, 1)]
+  #[interpolate_test(2, 2)]
+  #[interpolate_test(3, 3)]
+  #[interpolate_test(4, 4)]
   fn pyramid_level_reorder_scene_change_at(scene_change_at: u64) {
     // Test pyramid_level configurations when there's a scene change at the
     // <scene_change_at>th frame.
