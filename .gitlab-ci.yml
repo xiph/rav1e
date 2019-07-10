@@ -1,35 +1,76 @@
 variables:
-    CARGO_HOME: $CI_PROJECT_DIR/cargo
+    CARGO_HOME: $CI_PROJECT_DIR/.cargo
+    DOCKER_IMAGE_TAG: '1.36'
+
+stages:
+    - build
+    - lint
+    - test
+    - bench
+    - doc
 
 cache:
     paths:
         - $CARGO_HOME
+    key: global-cache
 
 before_script:
+    - ls target/ || true
+    - ls $CARGO_HOME || true
     - rustc --version
     - cargo --version
+    - cargo clippy --version
+    #- kcov --version
 
-Build, Test, Bench:
-    image: registry.gitlab.xiph.org/xiph/rav1e-docker/rust-rav1e:1.36
+image: registry.gitlab.xiph.org/xiph/rav1e-docker/rust-rav1e:$DOCKER_IMAGE_TAG
+
+rav1e build:
     stage: build
     tags:
         - docker
         - alpine
     script:
-        - cargo install --force cargo-kcov
+        #- cargo install --force cargo-kcov
         - RUSTFLAGS="-C link-dead-code" cargo build --features=decode_test,quick_test --tests --verbose
-        - kcov --version
-        - cargo kcov -v --no-clean-rebuild -- --verify --exclude-pattern=$HOME/.cargo,aom_build,.h,test
-        - cargo test --verbose --release --features=decode_test -- --ignored
-        - cargo bench --features=bench --verbose
+        #- cargo kcov -v --no-clean-rebuild -- --verify --exclude-pattern=$HOME/.cargo,aom_build,.h,test
+    artifacts:
+        paths:
+            - target/
+        expire_in: 2 hours
 
-Doc and Clippy:
-    image: registry.gitlab.xiph.org/xiph/rav1e-docker/rust-rav1e:1.36
+rav1e test:
     stage: test
     tags:
         - docker
         - alpine
     script:
-        - cargo doc --verbose --no-deps
-        - cargo clippy --version
+        - cargo test --verbose --release --features=decode_test -- --ignored
+
+rav1e benchmark:
+    stage: bench
+    tags:
+        - docker
+        - alpine
+    script:
+        - cargo bench --features=bench --verbose
+
+rav1e lint:
+    stage: lint
+    tags:
+        - docker
+        - alpine
+    script:
         - cargo clippy -- -D warnings -A clippy::cast_lossless -A clippy::cast_ptr_alignment -A clippy::cognitive_complexity -A clippy::needless_range_loop -A clippy::too_many_arguments -A clippy::verbose_bit_mask -A clippy::unreadable_literal --verbose
+    allow_failure: true
+
+rav1e generate docs:
+    stage: doc
+    tags:
+        - docker
+        - alpine
+    script:
+        - cargo doc --verbose --no-deps
+    artifacts:
+        paths:
+            - target/doc/
+        expire_in: 1 week
