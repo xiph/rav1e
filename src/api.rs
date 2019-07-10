@@ -11,6 +11,7 @@ use arg_enum_proc_macro::ArgEnum;
 use bitstream_io::*;
 use num_derive::*;
 use serde_derive::{Serialize, Deserialize};
+use num_cpus;
 
 use crate::encoder::*;
 use crate::frame::Frame;
@@ -504,6 +505,11 @@ impl Config {
     let pool = rayon::ThreadPoolBuilder::new().num_threads(self.threads).build().unwrap();
 
     let mut config = self.enc.clone();
+
+    if config.tiles == 0 && config.tile_cols_log2 == 0 && config.tile_rows_log2 == 0 {
+      // no tiling setup has been specified, set one up according to core count
+      config.tiles = cmp::min(num_cpus::get(), 8);
+    }
 
     // FIXME: inter unsupported with 4:2:2 and 4:4:4 chroma sampling
     let chroma_sampling = config.chroma_sampling;
