@@ -652,7 +652,7 @@ impl<T: Pixel> FrameInvariants<T> {
     previous_fi: &Self, inter_cfg: &InterConfig,
     gop_input_frameno_start: u64, output_frameno_in_gop: u64,
     next_keyframe_input_frameno: u64
-  ) -> (Self, bool) {
+  ) -> Self {
     let mut fi = previous_fi.clone();
     fi.frame_type = FrameType::INTER;
     fi.intra_only = false;
@@ -662,11 +662,14 @@ impl<T: Pixel> FrameInvariants<T> {
 
     fi.order_hint = inter_cfg.get_order_hint(output_frameno_in_gop,
      fi.idx_in_group_output);
-    let input_frameno = gop_input_frameno_start + fi.order_hint as u64;
+    let input_frameno = inter_cfg.get_input_frameno(
+      output_frameno_in_gop,
+      gop_input_frameno_start
+    );
     if input_frameno >= next_keyframe_input_frameno {
       fi.show_existing_frame = false;
       fi.show_frame = false;
-      return (fi, false);
+      return fi;
     }
 
     fi.pyramid_level = inter_cfg.get_level(fi.idx_in_group_output);
@@ -765,7 +768,7 @@ impl<T: Pixel> FrameInvariants<T> {
     };
     fi.input_frameno = input_frameno;
     fi.me_range_scale = (inter_cfg.group_input_len >> fi.pyramid_level) as u8;
-    (fi, true)
+    fi
   }
 
   pub fn get_frame_subtype(&self) -> usize {

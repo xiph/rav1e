@@ -650,6 +650,20 @@ impl InterConfig {
       && (idx_in_group_output - self.pyramid_depth + 1).count_ones() == 1
       && idx_in_group_output != self.pyramid_depth
   }
+
+  pub(crate) fn get_input_frameno(
+    &self, output_frameno_in_gop: u64, gop_input_frameno_start: u64
+  ) -> u64 {
+    if output_frameno_in_gop == 0 {
+      gop_input_frameno_start
+    } else {
+      let idx_in_group_output =
+        self.get_idx_in_group_output(output_frameno_in_gop);
+      let order_hint =
+        self.get_order_hint(output_frameno_in_gop, idx_in_group_output);
+      gop_input_frameno_start + order_hint as u64
+    }
+  }
 }
 
 pub(crate) struct ContextInner<T: Pixel> {
@@ -946,50 +960,39 @@ impl<T: Pixel> ContextInner<T> {
   fn build_frame_properties(
     &mut self, output_frameno: u64
   ) -> Result<(FrameInvariants<T>, bool), EncoderStatus> {
-    let mut fi = if output_frameno == 0 {
-      let seq = Sequence::new(&self.config);
-      // The first frame will always be a key frame
-      FrameInvariants::new_key_frame(
-        &FrameInvariants::new(self.config.clone(), seq),
-        0
-      )
-    } else {
-      self.frame_invariants[&(output_frameno - 1)].clone()
-    };
-
-    // Initially set up the frame as an inter frame.
-    // We need to determine what the input_frameno is before we can look up the
-    //  frame type.
-    // If reordering is enabled, the output_frameno may not match the
-    //  input_frameno.
     let output_frameno_in_gop = output_frameno - self.gop_output_frameno_start;
+    let mut input_frameno = self
+      .inter_cfg
+      .get_input_frameno(output_frameno_in_gop, self.gop_input_frameno_start);
+
     if output_frameno_in_gop > 0 {
       let next_keyframe_input_frameno =
         self.next_keyframe_input_frameno(self.gop_input_frameno_start, false);
-      let (fi_temp, end_of_subgop) = FrameInvariants::new_inter_frame(
-        &fi,
-        &self.inter_cfg,
-        self.gop_input_frameno_start,
-        output_frameno_in_gop,
-        next_keyframe_input_frameno
-      );
-      fi = fi_temp;
-      if !end_of_subgop {
+      let prev_input_frameno =
+        self.frame_invariants[&(output_frameno - 1)].input_frameno;
+      if input_frameno >= next_keyframe_input_frameno {
         if !self.inter_cfg.reorder
           || ((output_frameno_in_gop - 1) % self.inter_cfg.group_output_len
             == 0
-            && fi.input_frameno == (next_keyframe_input_frameno - 1))
+            && prev_input_frameno == (next_keyframe_input_frameno - 1))
         {
           self.gop_output_frameno_start = output_frameno;
           self.gop_input_frameno_start = next_keyframe_input_frameno;
-          fi.input_frameno = next_keyframe_input_frameno;
+          input_frameno = next_keyframe_input_frameno;
         } else {
+          let fi = FrameInvariants::new_inter_frame(
+            &self.frame_invariants[&(output_frameno - 1)],
+            &self.inter_cfg,
+            self.gop_input_frameno_start,
+            output_frameno_in_gop,
+            next_keyframe_input_frameno
+          );
           return Ok((fi, false));
         }
       }
     }
 
-    match self.frame_q.get(&fi.input_frameno) {
+    match self.frame_q.get(&input_frameno) {
       Some(Some(_)) => {}
       _ => {
         return Err(EncoderStatus::NeedMoreData);
@@ -997,36 +1000,48 @@ impl<T: Pixel> ContextInner<T> {
     }
 
     // Now that we know the input_frameno, look up the correct frame type
-    let frame_type = if self.keyframes.contains(&fi.input_frameno) {
+    let frame_type = if self.keyframes.contains(&input_frameno) {
       FrameType::KEY
     } else {
       FrameType::INTER
     };
     if frame_type == FrameType::KEY {
       self.gop_output_frameno_start = output_frameno;
-      self.gop_input_frameno_start = fi.input_frameno;
+      self.gop_input_frameno_start = input_frameno;
     }
-    fi.frame_type = frame_type;
 
     let output_frameno_in_gop = output_frameno - self.gop_output_frameno_start;
     if output_frameno_in_gop == 0 {
-      fi = FrameInvariants::new_key_frame(&fi, self.gop_input_frameno_start);
+      if output_frameno == 0 {
+        let seq = Sequence::new(&self.config);
+        // The first frame has no previous frame to copy from
+        let fi = FrameInvariants::new_key_frame(
+          &FrameInvariants::new(self.config.clone(), seq),
+          self.gop_input_frameno_start
+        );
+        Ok((fi, true))
+      } else {
+        let fi = FrameInvariants::new_key_frame(
+          &self.frame_invariants[&(output_frameno - 1)],
+          self.gop_input_frameno_start
+        );
+        Ok((fi, true))
+      }
     } else {
       let next_keyframe_input_frameno =
         self.next_keyframe_input_frameno(self.gop_input_frameno_start, false);
-      let (fi_temp, end_of_subgop) = FrameInvariants::new_inter_frame(
-        &fi,
+      let fi = FrameInvariants::new_inter_frame(
+        &self.frame_invariants[&(output_frameno - 1)],
         &self.inter_cfg,
         self.gop_input_frameno_start,
         output_frameno_in_gop,
         next_keyframe_input_frameno
       );
-      fi = fi_temp;
-      if !end_of_subgop {
+      if input_frameno >= next_keyframe_input_frameno {
         return Ok((fi, false));
       }
+      Ok((fi, true))
     }
-    Ok((fi, true))
   }
 
   pub(crate) fn done_processing(&self) -> bool {
