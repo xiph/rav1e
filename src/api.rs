@@ -577,6 +577,9 @@ impl InterConfig {
   // When re-ordering is disabled, this always returns 0.
   pub(crate) fn get_idx_in_group_output(&self,
    output_frameno_in_gop: u64) -> u64 {
+    // The first frame in the GOP should be a keyframe and is not re-ordered,
+    //  so we should not be calling this function on it.
+    debug_assert!(output_frameno_in_gop > 0);
     (output_frameno_in_gop - 1) % self.group_output_len
   }
 
@@ -585,6 +588,10 @@ impl InterConfig {
   //  in its re-ordering gorup.
   pub(crate) fn get_order_hint(&self, output_frameno_in_gop: u64,
    idx_in_group_output: u64) -> u32 {
+    // The first frame in the GOP should be a keyframe, but currently this
+    //  function only handles inter frames.
+    // We could return 0 for keyframes if keyframe support is needed.
+    debug_assert!(output_frameno_in_gop > 0);
     // Which P-frame group in the current gop is this output frame in?
     // Subtract 1 because the first frame in the gop is always a keyframe.
     let group_idx = (output_frameno_in_gop - 1) / self.group_output_len;
@@ -1257,24 +1264,38 @@ impl<T: Pixel> ContextInner<T> {
     // Does not include SEF frames.
     let mut nframes_total = 0;
     while ntus < reservoir_frame_delay {
-      if let Some(fi) = self.frame_invariants.get(&output_frameno) {
-        if fi.frame_type == FrameType::KEY {
-          collect_counts(nframes, &mut acc);
-          prev_keyframe_input_frameno = fi.input_frameno;
-          prev_keyframe_output_frameno = output_frameno;
-          prev_keyframe_ntus = ntus;
-          prev_keyframe_nframes = nframes_total;
-          // We do not currently use forward keyframes, so they should always
-          //  end the current TU.
-          debug_assert!(fi.show_frame);
-          output_frameno += 1;
-          ntus += 1;
-          nframes_total += 1;
-          continue;
-        }
-      }
       let output_frameno_in_gop =
        output_frameno - prev_keyframe_output_frameno;
+      let is_kf = if let
+       Some(fi) = self.frame_invariants.get(&output_frameno) {
+        if fi.frame_type == FrameType::KEY {
+          prev_keyframe_input_frameno = fi.input_frameno;
+          // We do not currently use forward keyframes, so they should always
+          //  end the current TU (thus we always increment ntus below).
+          debug_assert!(fi.show_frame);
+          true
+        }
+        else {
+          false
+        }
+      }
+      else {
+        // It is possible to be invoked for the first time from twopass_out()
+        //  before receive_packet() is called, in which case frame_invariants
+        //  will not be populated.
+        // Force the first frame in each GOP to be a keyframe in that case.
+        output_frameno_in_gop == 0
+      };
+      if is_kf {
+        collect_counts(nframes, &mut acc);
+        prev_keyframe_output_frameno = output_frameno;
+        prev_keyframe_ntus = ntus;
+        prev_keyframe_nframes = nframes_total;
+        output_frameno += 1;
+        ntus += 1;
+        nframes_total += 1;
+        continue;
+      }
       let idx_in_group_output =
        self.inter_cfg.get_idx_in_group_output(output_frameno_in_gop);
       let input_frameno = prev_keyframe_input_frameno
