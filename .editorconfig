@@ -10,6 +10,7 @@ indent_style = space
 # understand that the line is complete and can be considered as a line.
 insert_final_newline = true
 trim_trailing_whitespace = true
+max_line_length = 79
 
 [*.md]
 # Trailing whitespace may have a special meaning. For example, two spaces at the
