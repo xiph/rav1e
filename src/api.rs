@@ -998,6 +998,7 @@ impl<T: Pixel> ContextInner<T> {
             output_frameno_in_gop,
             next_keyframe_input_frameno
           );
+          assert!(fi.invalid);
           return Ok((fi, false));
         }
       }
@@ -1028,6 +1029,7 @@ impl<T: Pixel> ContextInner<T> {
         self.seq,
         self.gop_input_frameno_start
       );
+      assert!(!fi.invalid);
       Ok((fi, true))
     } else {
       let next_keyframe_input_frameno =
@@ -1040,8 +1042,10 @@ impl<T: Pixel> ContextInner<T> {
         next_keyframe_input_frameno
       );
       if input_frameno >= next_keyframe_input_frameno {
+        assert!(fi.invalid);
         return Ok((fi, false));
       }
+      assert!(!fi.invalid);
       Ok((fi, true))
     }
   }

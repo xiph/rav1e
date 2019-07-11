@@ -479,6 +479,10 @@ pub struct FrameInvariants<T: Pixel> {
   pub pyramid_level: u64,
   pub enable_early_exit: bool,
   pub tx_mode_select: bool,
+  /// If true, this `FrameInvariants` corresponds to an invalid frame and
+  /// should be ignored. Invalid frames occur when a subgop is prematurely
+  /// ended, for example, by a key frame or the end of the video.
+  pub invalid: bool,
 }
 
 pub(crate) fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
@@ -618,6 +622,7 @@ impl<T: Pixel> FrameInvariants<T> {
       enable_early_exit: true,
       config,
       tx_mode_select : false,
+      invalid: false,
     }
   }
 
@@ -653,7 +658,10 @@ impl<T: Pixel> FrameInvariants<T> {
     if input_frameno >= next_keyframe_input_frameno {
       fi.show_existing_frame = false;
       fi.show_frame = false;
+      fi.invalid = true;
       return fi;
+    } else {
+      fi.invalid = false;
     }
 
     fi.pyramid_level = inter_cfg.get_level(fi.idx_in_group_output);
