@@ -683,8 +683,10 @@ pub(crate) struct ContextInner<T: Pixel> {
   keyframes: BTreeSet<u64>,
   /// A storage space for reordered frames.
   packet_data: Vec<u8>,
-  gop_output_frameno_start: u64,
-  pub(crate) gop_input_frameno_start: u64,
+  /// Maps `output_frameno` to `gop_output_frameno_start`.
+  gop_output_frameno_start: BTreeMap<u64, u64>,
+  /// Maps `output_frameno` to `gop_input_frameno_start`.
+  pub(crate) gop_input_frameno_start: BTreeMap<u64, u64>,
   keyframe_detector: SceneChangeDetector<T>,
   pub(crate) config: EncoderConfig,
   seq: Sequence,
@@ -784,7 +786,10 @@ impl<T: Pixel> Context<T> {
   /// other error. It will return *None* instead of returning a duplicate copy
   /// of the previous frame's data.
   pub fn twopass_out(&mut self) -> Option<&[u8]> {
-    let params = self.inner.rc_state.get_twopass_out_params(&self.inner);
+    let params = self
+      .inner
+      .rc_state
+      .get_twopass_out_params(&self.inner, self.inner.output_frameno);
     self.inner.rc_state.twopass_out(params)
   }
 
@@ -874,8 +879,8 @@ impl<T: Pixel> ContextInner<T> {
       frame_invariants: BTreeMap::new(),
       keyframes: BTreeSet::new(),
       packet_data,
-      gop_output_frameno_start: 0,
-      gop_input_frameno_start: 0,
+      gop_output_frameno_start: BTreeMap::new(),
+      gop_input_frameno_start: BTreeMap::new(),
       keyframe_detector: SceneChangeDetector::new(enc.bit_depth),
       config: enc.clone(),
       seq: Sequence::new(enc),
@@ -962,14 +967,35 @@ impl<T: Pixel> ContextInner<T> {
   fn build_frame_properties(
     &mut self, output_frameno: u64
   ) -> Result<(FrameInvariants<T>, bool), EncoderStatus> {
-    let output_frameno_in_gop = output_frameno - self.gop_output_frameno_start;
-    let mut input_frameno = self
-      .inter_cfg
-      .get_input_frameno(output_frameno_in_gop, self.gop_input_frameno_start);
+    let (prev_gop_output_frameno_start, prev_gop_input_frameno_start) =
+      if output_frameno == 0 {
+        (0, 0)
+      } else {
+        (
+          self.gop_output_frameno_start[&(output_frameno - 1)],
+          self.gop_input_frameno_start[&(output_frameno - 1)]
+        )
+      };
+
+    self
+      .gop_output_frameno_start
+      .insert(output_frameno, prev_gop_output_frameno_start);
+    self
+      .gop_input_frameno_start
+      .insert(output_frameno, prev_gop_input_frameno_start);
+
+    let output_frameno_in_gop =
+      output_frameno - self.gop_output_frameno_start[&output_frameno];
+    let mut input_frameno = self.inter_cfg.get_input_frameno(
+      output_frameno_in_gop,
+      self.gop_input_frameno_start[&output_frameno]
+    );
 
     if output_frameno_in_gop > 0 {
-      let next_keyframe_input_frameno =
-        self.next_keyframe_input_frameno(self.gop_input_frameno_start, false);
+      let next_keyframe_input_frameno = self.next_keyframe_input_frameno(
+        self.gop_input_frameno_start[&output_frameno],
+        false
+      );
       let prev_input_frameno =
         self.frame_invariants[&(output_frameno - 1)].input_frameno;
       if input_frameno >= next_keyframe_input_frameno {
@@ -988,13 +1014,15 @@ impl<T: Pixel> ContextInner<T> {
             }
           }
 
-          self.gop_output_frameno_start = output_frameno;
-          self.gop_input_frameno_start = next_keyframe_input_frameno;
+          *self.gop_output_frameno_start.get_mut(&output_frameno).unwrap() =
+            output_frameno;
+          *self.gop_input_frameno_start.get_mut(&output_frameno).unwrap() =
+            next_keyframe_input_frameno;
         } else {
           let fi = FrameInvariants::new_inter_frame(
             &self.frame_invariants[&(output_frameno - 1)],
             &self.inter_cfg,
-            self.gop_input_frameno_start,
+            self.gop_input_frameno_start[&output_frameno],
             output_frameno_in_gop,
             next_keyframe_input_frameno
           );
@@ -1018,26 +1046,31 @@ impl<T: Pixel> ContextInner<T> {
       FrameType::INTER
     };
     if frame_type == FrameType::KEY {
-      self.gop_output_frameno_start = output_frameno;
-      self.gop_input_frameno_start = input_frameno;
+      *self.gop_output_frameno_start.get_mut(&output_frameno).unwrap() =
+        output_frameno;
+      *self.gop_input_frameno_start.get_mut(&output_frameno).unwrap() =
+        input_frameno;
     }
 
-    let output_frameno_in_gop = output_frameno - self.gop_output_frameno_start;
+    let output_frameno_in_gop =
+      output_frameno - self.gop_output_frameno_start[&output_frameno];
     if output_frameno_in_gop == 0 {
       let fi = FrameInvariants::new_key_frame(
         self.config.clone(),
         self.seq,
-        self.gop_input_frameno_start
+        self.gop_input_frameno_start[&output_frameno]
       );
       assert!(!fi.invalid);
       Ok((fi, true))
     } else {
-      let next_keyframe_input_frameno =
-        self.next_keyframe_input_frameno(self.gop_input_frameno_start, false);
+      let next_keyframe_input_frameno = self.next_keyframe_input_frameno(
+        self.gop_input_frameno_start[&output_frameno],
+        false
+      );
       let fi = FrameInvariants::new_inter_frame(
         &self.frame_invariants[&(output_frameno - 1)],
         &self.inter_cfg,
-        self.gop_input_frameno_start,
+        self.gop_input_frameno_start[&output_frameno],
         output_frameno_in_gop,
         next_keyframe_input_frameno
       );
@@ -1136,8 +1169,12 @@ impl<T: Pixel> ContextInner<T> {
         }
         if let Some(frame) = f.clone() {
           let fti = fi.get_frame_subtype();
-          let qps =
-            self.rc_state.select_qi(self, fti, self.maybe_prev_log_base_q);
+          let qps = self.rc_state.select_qi(
+            self,
+            self.output_frameno,
+            fti,
+            self.maybe_prev_log_base_q
+          );
           let fi = self.frame_invariants.get_mut(&cur_output_frameno).unwrap();
           fi.set_quantizers(&qps);
 
@@ -1152,8 +1189,12 @@ impl<T: Pixel> ContextInner<T> {
               true,
               false
             );
-            let qps =
-              self.rc_state.select_qi(self, fti, self.maybe_prev_log_base_q);
+            let qps = self.rc_state.select_qi(
+              self,
+              self.output_frameno,
+              fti,
+              self.maybe_prev_log_base_q
+            );
             let fi =
               self.frame_invariants.get_mut(&cur_output_frameno).unwrap();
             fi.set_quantizers(&qps);
@@ -1251,6 +1292,8 @@ impl<T: Pixel> ContextInner<T> {
     }
     for i in 0..(self.output_frameno - 1) {
       self.frame_invariants.remove(&i);
+      self.gop_output_frameno_start.remove(&i);
+      self.gop_input_frameno_start.remove(&i);
     }
   }
 
@@ -1305,8 +1348,10 @@ impl<T: Pixel> ContextInner<T> {
     for fti in 0..=FRAME_NSUBTYPES {
       nframes[fti] = 0;
     }
-    let mut prev_keyframe_input_frameno = self.gop_input_frameno_start;
-    let mut prev_keyframe_output_frameno = self.gop_output_frameno_start;
+    let mut prev_keyframe_input_frameno =
+      self.gop_input_frameno_start[&self.output_frameno];
+    let mut prev_keyframe_output_frameno =
+      self.gop_output_frameno_start[&self.output_frameno];
     let mut prev_keyframe_ntus = 0;
     // Does not include SEF frames.
     let mut prev_keyframe_nframes = 0;

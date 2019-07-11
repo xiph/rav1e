@@ -749,7 +749,8 @@ impl RCState {
 
   // TODO: Separate quantizers for Cb and Cr.
   pub(crate) fn select_qi<T: Pixel>(
-    &self, ctx: &ContextInner<T>, fti: usize, maybe_prev_log_base_q: Option<i64>
+    &self, ctx: &ContextInner<T>, output_frameno: u64, fti: usize,
+    maybe_prev_log_base_q: Option<i64>
   ) -> QuantizerParameters {
     // Is rate control active?
     if self.target_bitrate <= 0 {
@@ -877,9 +878,10 @@ impl RCState {
           // We position the target where the first forced keyframe beyond the
           //  end of the file would be (for consistency with 1-pass mode).
           if reservoir_tus >= self.ntus_left
-           && self.ntus_total as u64 > ctx.gop_input_frameno_start {
+           && self.ntus_total as u64
+             > ctx.gop_input_frameno_start[&output_frameno] {
             let nfinal_gop_tus = self.ntus_total
-             - (ctx.gop_input_frameno_start as i32);
+             - (ctx.gop_input_frameno_start[&output_frameno] as i32);
             if ctx.config.max_key_frame_interval as i32 > nfinal_gop_tus {
               let reservoir_pad = (ctx.config.max_key_frame_interval as i32
                - nfinal_gop_tus)
@@ -1235,14 +1237,15 @@ impl RCState {
     cur_pos
   }
 
-  pub(crate) fn get_twopass_out_params<T: Pixel>(&self, ctx: &ContextInner<T>)
-   -> TwoPassOutParams {
+  pub(crate) fn get_twopass_out_params<T: Pixel>(
+    &self, ctx: &ContextInner<T>, output_frameno: u64
+  ) -> TwoPassOutParams {
     let mut pass1_log_base_q = 0;
     let mut done_processing = false;
     if !self.pass1_data_retrieved {
       if self.twopass_state == PASS_SINGLE {
         pass1_log_base_q =
-         self.select_qi(ctx, FRAME_SUBTYPE_I, None).log_base_q;
+         self.select_qi(ctx, output_frameno, FRAME_SUBTYPE_I, None).log_base_q;
       }
     }
     else {
