@@ -978,9 +978,18 @@ impl<T: Pixel> ContextInner<T> {
             == 0
             && prev_input_frameno == (next_keyframe_input_frameno - 1))
         {
+          input_frameno = next_keyframe_input_frameno;
+
+          // If we'll return early, do it before modifying the state.
+          match self.frame_q.get(&input_frameno) {
+            Some(Some(_)) => {}
+            _ => {
+              return Err(EncoderStatus::NeedMoreData);
+            }
+          }
+
           self.gop_output_frameno_start = output_frameno;
           self.gop_input_frameno_start = next_keyframe_input_frameno;
-          input_frameno = next_keyframe_input_frameno;
         } else {
           let fi = FrameInvariants::new_inter_frame(
             &self.frame_invariants[&(output_frameno - 1)],
