@@ -199,6 +199,28 @@ pub struct Packet {
   pub frame_type: FrameType
 }
 
+/// Simple Data
+///
+///
+///
+/// Use rav1e_data_unref() to free its memory.
+#[repr(C)]
+pub struct Data {
+  /// Pointer to the data buffer
+  pub data: *const u8,
+  /// Data buffer size
+  pub len: size_t
+}
+
+/// Free a RaData buffer
+#[no_mangle]
+pub unsafe extern fn rav1e_data_unref(data: *mut Data) {
+  if !data.is_null() {
+    let data = Box::from_raw(data);
+    let _ = Vec::from_raw_parts(data.data as *mut u8, data.len as usize, data.len as usize);
+  }
+}
+
 type PixelRange = rav1e::PixelRange;
 type ChromaSamplePosition = rav1e::ChromaSamplePosition;
 type ChromaSampling = rav1e::ChromaSampling;
@@ -479,11 +501,11 @@ pub unsafe extern fn rav1e_frame_unref(frame: *mut Frame) {
 /// other error. It will return NULL instead of returning a duplicate copy
 /// of the previous frame's data.
 ///
-/// Must be freed with rav1e_twopass_unref().
+/// Must be freed with rav1e_data_unref().
 #[no_mangle]
 pub unsafe extern fn rav1e_twopass_out(
-  ctx: *mut Context, buf_size: *mut size_t
-) -> *mut u8 {
+  ctx: *mut Context
+) -> *mut Data {
   let buf = (*ctx).ctx.twopass_out();
 
   if buf.is_none() {
@@ -491,15 +513,10 @@ pub unsafe extern fn rav1e_twopass_out(
   }
 
   let v = buf.unwrap().to_vec();
-  *buf_size = v.len();
-  Box::into_raw(v.into_boxed_slice()) as *mut u8
-}
-
-#[no_mangle]
-pub unsafe extern fn rav1e_twopass_unref(buf: *mut u8) {
-  if !buf.is_null() {
-    let _ = Box::from_raw(buf);
-  }
+  Box::into_raw(Box::new(Data {
+    len: v.len(),
+    data: Box::into_raw(v.into_boxed_slice()) as *mut u8
+  }))
 }
 
 /// Ask how many bytes of the stats file are needed before the next frame
@@ -614,7 +631,7 @@ pub unsafe extern fn rav1e_receive_packet(
 pub unsafe extern fn rav1e_packet_unref(pkt: *mut Packet) {
   if !pkt.is_null() {
     let pkt = Box::from_raw(pkt);
-    let _ = Box::from_raw(pkt.data as *mut u8);
+    let _ = Vec::from_raw_parts(pkt.data as *mut u8, pkt.len as usize, pkt.len as usize);
   }
 }
 
@@ -622,22 +639,17 @@ pub unsafe extern fn rav1e_packet_unref(pkt: *mut Packet) {
 ///
 /// Its format is compatible with the AV1 Matroska and ISOBMFF specification.
 ///
-/// Use rav1e_container_sequence_header_unref() to free it.
+/// Use rav1e_data_unref() to free it.
 #[no_mangle]
 pub unsafe extern fn rav1e_container_sequence_header(
-  ctx: *const Context, buf_size: *mut size_t
-) -> *mut u8 {
+  ctx: *const Context
+) -> *mut Data {
   let buf = (*ctx).ctx.container_sequence_header();
 
-  *buf_size = buf.len();
-  Box::into_raw(buf.into_boxed_slice()) as *mut u8
-}
-
-#[no_mangle]
-pub unsafe extern fn rav1e_container_sequence_header_unref(sequence: *mut u8) {
-  if !sequence.is_null() {
-    let _ = Box::from_raw(sequence);
-  }
+  Box::into_raw(Box::new(Data {
+    len: buf.len(),
+    data: Box::into_raw(buf.into_boxed_slice()) as *mut u8
+  }))
 }
 
 fn rav1e_frame_fill_plane_internal<T: rav1e::Pixel>(
