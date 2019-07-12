@@ -2299,6 +2299,7 @@ pub fn encode_frame<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>
 ) -> Vec<u8> {
   debug_assert!(!fi.show_existing_frame);
+  debug_assert!(!fi.invalid);
   let mut packet = Vec::new();
 
   fs.input_hres.downsample_from(&fs.input.planes[0]);
