@@ -960,16 +960,16 @@ impl<T: Pixel> ContextInner<T> {
 
   fn set_frame_properties(
     &mut self, output_frameno: u64
-  ) -> Result<bool, EncoderStatus> {
-    let (fi, end_of_subgop) = self.build_frame_properties(output_frameno)?;
+  ) -> Result<(), EncoderStatus> {
+    let fi = self.build_frame_properties(output_frameno)?;
     self.frame_invariants.insert(output_frameno, fi);
 
-    Ok(end_of_subgop)
+    Ok(())
   }
 
   fn build_frame_properties(
     &mut self, output_frameno: u64
-  ) -> Result<(FrameInvariants<T>, bool), EncoderStatus> {
+  ) -> Result<FrameInvariants<T>, EncoderStatus> {
     let (prev_gop_output_frameno_start, prev_gop_input_frameno_start) =
       if output_frameno == 0 {
         (0, 0)
@@ -1030,7 +1030,7 @@ impl<T: Pixel> ContextInner<T> {
             next_keyframe_input_frameno
           );
           assert!(fi.invalid);
-          return Ok((fi, false));
+          return Ok(fi);
         }
       }
     }
@@ -1064,7 +1064,7 @@ impl<T: Pixel> ContextInner<T> {
         self.gop_input_frameno_start[&output_frameno]
       );
       assert!(!fi.invalid);
-      Ok((fi, true))
+      Ok(fi)
     } else {
       let next_keyframe_input_frameno = self.next_keyframe_input_frameno(
         self.gop_input_frameno_start[&output_frameno],
@@ -1079,10 +1079,10 @@ impl<T: Pixel> ContextInner<T> {
       );
       if input_frameno >= next_keyframe_input_frameno {
         assert!(fi.invalid);
-        return Ok((fi, false));
+        return Ok(fi);
       }
       assert!(!fi.invalid);
-      Ok((fi, true))
+      Ok(fi)
     }
   }
 
