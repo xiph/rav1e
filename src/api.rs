@@ -1691,9 +1691,9 @@ mod test {
     assert_eq!(limit, count);
   }
 
-  fn encode_frames<T: Pixel>(
-    mut ctx: Context<T>, limit: u64, scene_change_at: u64
-  ) -> impl Iterator<Item = FrameInvariants<T>> {
+  fn send_frames<T: Pixel>(
+    ctx: &mut Context<T>, limit: u64, scene_change_at: u64
+  ) {
     for i in 0..limit {
       let mut input = Arc::try_unwrap(ctx.new_frame()).unwrap();
 
@@ -1705,16 +1705,12 @@ mod test {
 
       let _ = ctx.send_frame(Arc::new(input));
     }
+  }
 
-    ctx.flush();
-
-    ctx.inner.compute_lookahead_data();
-
-    ctx
-      .inner
-      .frame_invariants
-      .into_iter()
-      .map(|(_, v)| v)
+  fn get_frame_invariants<T: Pixel>(
+    ctx: Context<T>
+  ) -> impl Iterator<Item = FrameInvariants<T>> {
+    ctx.inner.frame_invariants.into_iter().map(|(_, v)| v)
   }
 
   #[interpolate_test(0, 0)]
@@ -1723,7 +1719,7 @@ mod test {
     // Test output_frameno configurations when there are <missing> less frames
     // than the perfect subgop size, in no-reorder mode.
 
-    let ctx = setup_encoder::<u8>(
+    let mut ctx = setup_encoder::<u8>(
       64,
       80,
       10,
@@ -1737,9 +1733,12 @@ mod test {
       true
     );
     let limit = 10 - missing;
+    send_frames(&mut ctx, limit, 0);
+    ctx.flush();
+    ctx.inner.compute_lookahead_data();
 
     // data[output_frameno] = (input_frameno, !invalid)
-    let data = encode_frames(ctx, limit, 0)
+    let data = get_frame_invariants(ctx)
       .map(|fi| (fi.input_frameno, !fi.invalid))
       .collect::<Vec<_>>();
 
@@ -1782,7 +1781,7 @@ mod test {
     // Test pyramid_level configurations when there are <missing> less frames
     // than the perfect subgop size, in no-reorder mode.
 
-    let ctx = setup_encoder::<u8>(
+    let mut ctx = setup_encoder::<u8>(
       64,
       80,
       10,
@@ -1796,11 +1795,13 @@ mod test {
       true
     );
     let limit = 10 - missing;
+    send_frames(&mut ctx, limit, 0);
+    ctx.flush();
+    ctx.inner.compute_lookahead_data();
 
     // data[output_frameno] = pyramid_level
-    let data = encode_frames(ctx, limit, 0)
-      .map(|fi| fi.pyramid_level)
-      .collect::<Vec<_>>();
+    let data =
+      get_frame_invariants(ctx).map(|fi| fi.pyramid_level).collect::<Vec<_>>();
 
     assert!(data.into_iter().all(|pyramid_level| pyramid_level == 0));
   }
@@ -1814,7 +1815,7 @@ mod test {
     // Test output_frameno configurations when there are <missing> less frames
     // than the perfect subgop size.
 
-    let ctx = setup_encoder::<u8>(
+    let mut ctx = setup_encoder::<u8>(
       64,
       80,
       10,
@@ -1832,9 +1833,12 @@ mod test {
     assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
 
     let limit = 10 - missing;
+    send_frames(&mut ctx, limit, 0);
+    ctx.flush();
+    ctx.inner.compute_lookahead_data();
 
     // data[output_frameno] = (input_frameno, !invalid)
-    let data = encode_frames(ctx, limit, 0)
+    let data = get_frame_invariants(ctx)
       .map(|fi| (fi.input_frameno, !fi.invalid))
       .collect::<Vec<_>>();
 
@@ -1934,7 +1938,7 @@ mod test {
     // Test pyramid_level configurations when there are <missing> less frames
     // than the perfect subgop size.
 
-    let ctx = setup_encoder::<u8>(
+    let mut ctx = setup_encoder::<u8>(
       64,
       80,
       10,
@@ -1952,11 +1956,13 @@ mod test {
     assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
 
     let limit = 10 - missing;
+    send_frames(&mut ctx, limit, 0);
+    ctx.flush();
+    ctx.inner.compute_lookahead_data();
 
     // data[output_frameno] = pyramid_level
-    let data = encode_frames(ctx, limit, 0)
-      .map(|fi| fi.pyramid_level)
-      .collect::<Vec<_>>();
+    let data =
+      get_frame_invariants(ctx).map(|fi| fi.pyramid_level).collect::<Vec<_>>();
 
     assert_eq!(
       &data[..],
@@ -2054,7 +2060,7 @@ mod test {
     // Test output_frameno configurations when there's a scene change at the
     // <scene_change_at>th frame.
 
-    let ctx = setup_encoder::<u8>(
+    let mut ctx = setup_encoder::<u8>(
       64,
       80,
       10,
@@ -2072,9 +2078,12 @@ mod test {
     assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
 
     let limit = 5;
+    send_frames(&mut ctx, limit, scene_change_at);
+    ctx.flush();
+    ctx.inner.compute_lookahead_data();
 
     // data[output_frameno] = (input_frameno, !invalid)
-    let data = encode_frames(ctx, limit, scene_change_at)
+    let data = get_frame_invariants(ctx)
       .map(|fi| (fi.input_frameno, !fi.invalid))
       .collect::<Vec<_>>();
 
@@ -2161,7 +2170,7 @@ mod test {
     // Test pyramid_level configurations when there's a scene change at the
     // <scene_change_at>th frame.
 
-    let ctx = setup_encoder::<u8>(
+    let mut ctx = setup_encoder::<u8>(
       64,
       80,
       10,
@@ -2179,11 +2188,13 @@ mod test {
     assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
 
     let limit = 5;
+    send_frames(&mut ctx, limit, scene_change_at);
+    ctx.flush();
+    ctx.inner.compute_lookahead_data();
 
     // data[output_frameno] = pyramid_level
-    let data = encode_frames(ctx, limit, scene_change_at)
-      .map(|fi| fi.pyramid_level)
-      .collect::<Vec<_>>();
+    let data =
+      get_frame_invariants(ctx).map(|fi| fi.pyramid_level).collect::<Vec<_>>();
 
     assert_eq!(
       &data[..],
