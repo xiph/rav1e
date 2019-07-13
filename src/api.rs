@@ -2269,4 +2269,243 @@ mod test {
       }
     );
   }
+
+  #[interpolate_test(0, 0)]
+  #[interpolate_test(1, 1)]
+  #[interpolate_test(2, 2)]
+  #[interpolate_test(3, 3)]
+  #[interpolate_test(4, 4)]
+  fn output_frameno_incremental_reorder_minus(missing: u64) {
+    // Test output_frameno configurations when there are <missing> less frames
+    // than the perfect subgop size, computing the lookahead data incrementally.
+
+    let mut ctx = setup_encoder::<u8>(
+      64,
+      80,
+      10,
+      100,
+      8,
+      ChromaSampling::Cs420,
+      5,
+      5,
+      0,
+      false,
+      true
+    );
+
+    // TODO: when we support more pyramid depths, this test will need tweaks.
+    assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
+
+    let limit = 10 - missing;
+    for _ in 0..limit {
+      send_frames(&mut ctx, 1, 0);
+      ctx.inner.compute_lookahead_data();
+    }
+    ctx.flush();
+    ctx.inner.compute_lookahead_data();
+
+    // data[output_frameno] = (input_frameno, !invalid)
+    let data = get_frame_invariants(ctx)
+      .map(|fi| (fi.input_frameno, !fi.invalid))
+      .collect::<Vec<_>>();
+
+    assert_eq!(
+      &data[..],
+      match missing {
+        0 =>
+          &[
+            (0, true), // I-frame
+            (4, true), // P-frame
+            (2, true), // B0-frame
+            (1, true), // B1-frame (first)
+            (2, true), // B0-frame (show existing)
+            (3, true), // B1-frame (second)
+            (4, true), // P-frame (show existing)
+            (5, true), // I-frame
+            (9, true), // P-frame
+            (7, true), // B0-frame
+            (6, true), // B1-frame (first)
+            (7, true), // B0-frame (show existing)
+            (8, true), // B1-frame (second)
+            (9, true)  // P-frame (show existing)
+          ][..],
+        1 =>
+          &[
+            (0, true),  // I-frame
+            (4, true),  // P-frame
+            (2, true),  // B0-frame
+            (1, true),  // B1-frame (first)
+            (2, true),  // B0-frame (show existing)
+            (3, true),  // B1-frame (second)
+            (4, true),  // P-frame (show existing)
+            (5, true),  // I-frame
+            (5, false), // Last frame (missing)
+            (7, true),  // B0-frame
+            (6, true),  // B1-frame (first)
+            (7, true),  // B0-frame (show existing)
+            (8, true),  // B1-frame (second)
+            (8, false)  // Last frame (missing)
+          ][..],
+        2 =>
+          &[
+            (0, true),  // I-frame
+            (4, true),  // P-frame
+            (2, true),  // B0-frame
+            (1, true),  // B1-frame (first)
+            (2, true),  // B0-frame (show existing)
+            (3, true),  // B1-frame (second)
+            (4, true),  // P-frame (show existing)
+            (5, true),  // I-frame
+            (5, false), // Last frame (missing)
+            (7, true),  // B0-frame
+            (6, true),  // B1-frame (first)
+            (7, true),  // B0-frame (show existing)
+            (7, false), // 2nd last (missing)
+            (7, false)  // Last frame (missing)
+          ][..],
+        3 =>
+          &[
+            (0, true),  // I-frame
+            (4, true),  // P-frame
+            (2, true),  // B0-frame
+            (1, true),  // B1-frame (first)
+            (2, true),  // B0-frame (show existing)
+            (3, true),  // B1-frame (second)
+            (4, true),  // P-frame (show existing)
+            (5, true),  // I-frame
+            (5, false), // Last frame (missing)
+            (5, false), // 3rd last (missing)
+            (6, true),  // B1-frame (first)
+            (6, false), // 3rd last (missing)
+            (6, false), // 2nd last (missing)
+            (6, false)  // Last frame (missing)
+          ][..],
+        4 =>
+          &[
+            (0, true), // I-frame
+            (4, true), // P-frame
+            (2, true), // B0-frame
+            (1, true), // B1-frame (first)
+            (2, true), // B0-frame (show existing)
+            (3, true), // B1-frame (second)
+            (4, true), // P-frame (show existing)
+            (5, true), // I-frame
+          ][..],
+        _ => unreachable!()
+      }
+    );
+  }
+
+  #[interpolate_test(0, 0)]
+  #[interpolate_test(1, 1)]
+  #[interpolate_test(2, 2)]
+  #[interpolate_test(3, 3)]
+  #[interpolate_test(4, 4)]
+  fn output_frameno_incremental_reorder_scene_change_at(scene_change_at: u64) {
+    // Test output_frameno configurations when there's a scene change at the
+    // <scene_change_at>th frame, computing the lookahead data incrementally.
+
+    let mut ctx = setup_encoder::<u8>(
+      64,
+      80,
+      10,
+      100,
+      8,
+      ChromaSampling::Cs420,
+      0,
+      5,
+      0,
+      false,
+      false
+    );
+
+    // TODO: when we support more pyramid depths, this test will need tweaks.
+    assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
+
+    let limit = 5;
+    for i in 0..limit {
+      send_frames(&mut ctx, 1, scene_change_at.saturating_sub(i));
+      ctx.inner.compute_lookahead_data();
+    }
+    ctx.flush();
+    ctx.inner.compute_lookahead_data();
+
+    // data[output_frameno] = (input_frameno, !invalid)
+    let data = get_frame_invariants(ctx)
+      .map(|fi| (fi.input_frameno, !fi.invalid))
+      .collect::<Vec<_>>();
+
+    assert_eq!(
+      &data[..],
+      match scene_change_at {
+        0 =>
+          &[
+            (0, true), // I-frame
+            (4, true), // P-frame
+            (2, true), // B0-frame
+            (1, true), // B1-frame (first)
+            (2, true), // B0-frame (show existing)
+            (3, true), // B1-frame (second)
+            (4, true), // P-frame (show existing)
+          ][..],
+        1 =>
+          &[
+            (0, true),  // I-frame
+            (1, true),  // I-frame
+            (1, false), // Missing
+            (3, true),  // B0-frame
+            (2, true),  // B1-frame (first)
+            (3, true),  // B0-frame (show existing)
+            (4, true),  // B1-frame (second)
+            (4, false)  // Missing
+          ][..],
+        2 =>
+          &[
+            (0, true),  // I-frame
+            (0, false), // Missing
+            (0, false), // Missing
+            (1, true),  // B1-frame (first)
+            (1, false), // Missing
+            (1, false), // Missing
+            (1, false), // Missing
+            (2, true),  // I-frame
+            (2, false), // Missing
+            (4, true),  // B0-frame
+            (3, true),  // B1-frame (first)
+            (4, true),  // B0-frame (show existing)
+            (4, false), // Missing
+            (4, false)  // Missing
+          ][..],
+        3 =>
+          &[
+            (0, true),  // I-frame
+            (0, false), // Missing
+            (2, true),  // B0-frame
+            (1, true),  // B1-frame (first)
+            (2, true),  // B0-frame (show existing)
+            (2, false), // Missing
+            (2, false), // Missing
+            (3, true),  // I-frame
+            (3, false), // Missing
+            (3, false), // Missing
+            (4, true),  // B1-frame (first)
+            (4, false), // Missing
+            (4, false), // Missing
+            (4, false)  // Missing
+          ][..],
+        4 =>
+          &[
+            (0, true),  // I-frame
+            (0, false), // Missing
+            (2, true),  // B0-frame
+            (1, true),  // B1-frame (first)
+            (2, true),  // B0-frame (show existing)
+            (3, true),  // B1-frame (second)
+            (3, false), // Missing
+            (4, true)   // I-frame
+          ][..],
+        _ => unreachable!()
+      }
+    );
+  }
 }
