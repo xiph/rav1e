@@ -694,7 +694,9 @@ pub(crate) struct ContextInner<T: Pixel> {
   maybe_prev_log_base_q: Option<i64>,
   pub first_pass_data: FirstPassData,
   /// The next `input_frameno` to be processed by lookahead.
-  next_lookahead_frame: u64
+  next_lookahead_frame: u64,
+  /// The next `output_frameno` to be computed by lookahead.
+  next_lookahead_output_frameno: u64
 }
 
 pub struct Context<T: Pixel> {
@@ -897,7 +899,8 @@ impl<T: Pixel> ContextInner<T> {
       ),
       maybe_prev_log_base_q: None,
       first_pass_data: FirstPassData { frames: Vec::new() },
-      next_lookahead_frame: 0
+      next_lookahead_frame: 0,
+      next_lookahead_output_frameno: 0
     }
   }
 
@@ -1115,6 +1118,12 @@ impl<T: Pixel> ContextInner<T> {
     if let Some((last_frame, _)) = frames_to_process.iter().last() {
       self.next_lookahead_frame = last_frame + 1;
     }
+
+    // Compute the frame invariants.
+    while self.set_frame_properties(self.next_lookahead_output_frameno).is_ok()
+    {
+      self.next_lookahead_output_frameno += 1;
+    }
   }
 
   pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
@@ -1128,9 +1137,14 @@ impl<T: Pixel> ContextInner<T> {
 
     self.compute_lookahead_data();
 
-    while !self.set_frame_properties(self.output_frameno)? {
-      self.output_frameno += 1;
-    }
+    // Find the next output_frameno corresponding to a non-skipped frame.
+    self.output_frameno = self
+      .frame_invariants
+      .iter()
+      .skip_while(|(&output_frameno, _)| output_frameno < self.output_frameno)
+      .find(|(_, fi)| !fi.invalid)
+      .map(|(&output_frameno, _)| output_frameno)
+      .ok_or(EncoderStatus::NeedMoreData)?; // TODO: doesn't play well with the below check?
 
     if !self.needs_more_frames(
       self.frame_invariants[&self.output_frameno].input_frameno
@@ -1221,6 +1235,34 @@ impl<T: Pixel> ContextInner<T> {
           let rec = if fi.show_frame { Some(fs.rec.clone()) } else { None };
 
           update_rec_buffer(fi, fs);
+
+          // Copy persistent fields into subsequent FrameInvariants.
+          let rec_buffer = fi.rec_buffer.clone();
+          for subsequent_fi in self
+            .frame_invariants
+            .iter_mut()
+            .skip_while(|(&output_frameno, _)| {
+              output_frameno <= cur_output_frameno
+            })
+            .map(|(_, fi)| fi)
+            // Here we want the next valid non-show-existing-frame inter frame.
+            //
+            // Copying to show-existing-frame frames isn't actually required
+            // for correct encoding, but it's needed for the reconstruction to
+            // work correctly.
+            .filter(|fi| !fi.invalid)
+            .take_while(|fi| fi.frame_type != FrameType::KEY)
+          {
+            subsequent_fi.rec_buffer = rec_buffer.clone();
+            subsequent_fi.set_ref_frame_sign_bias();
+
+            // Stop after the first non-show-existing-frame.
+            if !subsequent_fi.show_existing_frame {
+              break;
+            }
+          }
+
+          let fi = self.frame_invariants.get(&self.output_frameno).unwrap();
 
           self.output_frameno += 1;
 
@@ -1651,7 +1693,7 @@ mod test {
 
   fn encode_frames<T: Pixel>(
     mut ctx: Context<T>, limit: u64, scene_change_at: u64
-  ) -> impl Iterator<Item = (FrameInvariants<T>, bool)> {
+  ) -> impl Iterator<Item = FrameInvariants<T>> {
     for i in 0..limit {
       let mut input = Arc::try_unwrap(ctx.new_frame()).unwrap();
 
@@ -1668,18 +1710,11 @@ mod test {
 
     ctx.inner.compute_lookahead_data();
 
-    let end_of_subgops = (0..)
-      .map(|output_frameno| ctx.inner.set_frame_properties(output_frameno))
-      .take_while(Result::is_ok)
-      .map(Result::unwrap)
-      .collect::<Vec<_>>();
-
     ctx
       .inner
       .frame_invariants
       .into_iter()
       .map(|(_, v)| v)
-      .zip(end_of_subgops.into_iter())
   }
 
   #[interpolate_test(0, 0)]
@@ -1703,9 +1738,9 @@ mod test {
     );
     let limit = 10 - missing;
 
-    // data[output_frameno] = (input_frameno, end_of_subgop)
+    // data[output_frameno] = (input_frameno, !invalid)
     let data = encode_frames(ctx, limit, 0)
-      .map(|(fi, end_of_subgop)| (fi.input_frameno, end_of_subgop))
+      .map(|fi| (fi.input_frameno, !fi.invalid))
       .collect::<Vec<_>>();
 
     assert_eq!(
@@ -1764,7 +1799,7 @@ mod test {
 
     // data[output_frameno] = pyramid_level
     let data = encode_frames(ctx, limit, 0)
-      .map(|(fi, _)| fi.pyramid_level)
+      .map(|fi| fi.pyramid_level)
       .collect::<Vec<_>>();
 
     assert!(data.into_iter().all(|pyramid_level| pyramid_level == 0));
@@ -1798,9 +1833,9 @@ mod test {
 
     let limit = 10 - missing;
 
-    // data[output_frameno] = (input_frameno, end_of_subgop)
+    // data[output_frameno] = (input_frameno, !invalid)
     let data = encode_frames(ctx, limit, 0)
-      .map(|(fi, end_of_subgop)| (fi.input_frameno, end_of_subgop))
+      .map(|fi| (fi.input_frameno, !fi.invalid))
       .collect::<Vec<_>>();
 
     assert_eq!(
@@ -1920,7 +1955,7 @@ mod test {
 
     // data[output_frameno] = pyramid_level
     let data = encode_frames(ctx, limit, 0)
-      .map(|(fi, _)| fi.pyramid_level)
+      .map(|fi| fi.pyramid_level)
       .collect::<Vec<_>>();
 
     assert_eq!(
@@ -2038,9 +2073,9 @@ mod test {
 
     let limit = 5;
 
-    // data[output_frameno] = (input_frameno, end_of_subgop)
+    // data[output_frameno] = (input_frameno, !invalid)
     let data = encode_frames(ctx, limit, scene_change_at)
-      .map(|(fi, end_of_subgop)| (fi.input_frameno, end_of_subgop))
+      .map(|fi| (fi.input_frameno, !fi.invalid))
       .collect::<Vec<_>>();
 
     assert_eq!(
@@ -2147,7 +2182,7 @@ mod test {
 
     // data[output_frameno] = pyramid_level
     let data = encode_frames(ctx, limit, scene_change_at)
-      .map(|(fi, _)| fi.pyramid_level)
+      .map(|fi| fi.pyramid_level)
       .collect::<Vec<_>>();
 
     assert_eq!(
