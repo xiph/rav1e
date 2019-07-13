@@ -740,18 +740,7 @@ impl<T: Pixel> FrameInvariants<T> {
       }
     }
 
-    for i in 0..INTER_REFS_PER_FRAME {
-      fi.ref_frame_sign_bias[i] = if !fi.sequence.enable_order_hint {
-        false
-      } else if let Some(ref rec) =
-        fi.rec_buffer.frames[fi.ref_frames[i] as usize]
-      {
-        let hint = rec.order_hint;
-        fi.sequence.get_relative_dist(hint, fi.order_hint) > 0
-      } else {
-        false
-      };
-    }
+    fi.set_ref_frame_sign_bias();
 
     fi.reference_mode = if inter_cfg.multiref && fi.idx_in_group_output != 0 {
       ReferenceMode::SELECT
@@ -761,6 +750,21 @@ impl<T: Pixel> FrameInvariants<T> {
     fi.input_frameno = input_frameno;
     fi.me_range_scale = (inter_cfg.group_input_len >> fi.pyramid_level) as u8;
     fi
+  }
+
+  pub fn set_ref_frame_sign_bias(&mut self) {
+    for i in 0..INTER_REFS_PER_FRAME {
+      self.ref_frame_sign_bias[i] = if !self.sequence.enable_order_hint {
+        false
+      } else if let Some(ref rec) =
+        self.rec_buffer.frames[self.ref_frames[i] as usize]
+      {
+        let hint = rec.order_hint;
+        self.sequence.get_relative_dist(hint, self.order_hint) > 0
+      } else {
+        false
+      };
+    }
   }
 
   pub fn get_frame_subtype(&self) -> usize {
