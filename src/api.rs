@@ -687,6 +687,7 @@ pub(crate) struct ContextInner<T: Pixel> {
   pub(crate) gop_input_frameno_start: u64,
   keyframe_detector: SceneChangeDetector<T>,
   pub(crate) config: EncoderConfig,
+  seq: Sequence,
   rc_state: RCState,
   maybe_prev_log_base_q: Option<i64>,
   pub first_pass_data: FirstPassData,
@@ -877,6 +878,7 @@ impl<T: Pixel> ContextInner<T> {
       gop_input_frameno_start: 0,
       keyframe_detector: SceneChangeDetector::new(enc.bit_depth),
       config: enc.clone(),
+      seq: Sequence::new(enc),
       rc_state: RCState::new(
         enc.width as i32,
         enc.height as i32,
@@ -1012,21 +1014,12 @@ impl<T: Pixel> ContextInner<T> {
 
     let output_frameno_in_gop = output_frameno - self.gop_output_frameno_start;
     if output_frameno_in_gop == 0 {
-      if output_frameno == 0 {
-        let seq = Sequence::new(&self.config);
-        // The first frame has no previous frame to copy from
-        let fi = FrameInvariants::new_key_frame(
-          &FrameInvariants::new(self.config.clone(), seq),
-          self.gop_input_frameno_start
-        );
-        Ok((fi, true))
-      } else {
-        let fi = FrameInvariants::new_key_frame(
-          &self.frame_invariants[&(output_frameno - 1)],
-          self.gop_input_frameno_start
-        );
-        Ok((fi, true))
-      }
+      let fi = FrameInvariants::new_key_frame(
+        self.config.clone(),
+        self.seq,
+        self.gop_input_frameno_start
+      );
+      Ok((fi, true))
     } else {
       let next_keyframe_input_frameno =
         self.next_keyframe_input_frameno(self.gop_input_frameno_start, false);

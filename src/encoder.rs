@@ -574,7 +574,7 @@ impl<T: Pixel> FrameInvariants<T> {
       show_frame: true,
       showable_frame: true,
       error_resilient: false,
-      intra_only: false,
+      intra_only: true,
       allow_high_precision_mv: false,
       frame_type: FrameType::KEY,
       show_existing_frame: false,
@@ -590,7 +590,7 @@ impl<T: Pixel> FrameInvariants<T> {
       allow_screen_content_tools: 0,
       force_integer_mv: 0,
       primary_ref_frame: PRIMARY_REF_NONE,
-      refresh_frame_flags: 0,
+      refresh_frame_flags: ALL_REF_FRAMES_MASK,
       allow_intrabc: false,
       use_ref_frame_mvs: false,
       is_filter_switchable: false,
@@ -621,27 +621,11 @@ impl<T: Pixel> FrameInvariants<T> {
     }
   }
 
-  pub fn new_key_frame(previous_fi: &Self,
-   gop_input_frameno_start: u64) -> Self {
-    let mut fi = previous_fi.clone();
-    fi.frame_type = FrameType::KEY;
-    fi.intra_only = true;
-    fi.idx_in_group_output = 0;
-    fi.pyramid_level = 0;
-    fi.order_hint = 0;
-    fi.refresh_frame_flags = ALL_REF_FRAMES_MASK;
-    fi.show_frame = true;
-    fi.show_existing_frame = false;
-    fi.frame_to_show_map_idx = 0;
-    fi.primary_ref_frame = PRIMARY_REF_NONE;
+  pub fn new_key_frame(config: EncoderConfig,
+                       sequence: Sequence,
+                       gop_input_frameno_start: u64) -> Self {
+    let mut fi = Self::new(config, sequence);
     fi.input_frameno = gop_input_frameno_start;
-    for i in 0..INTER_REFS_PER_FRAME {
-      fi.ref_frames[i] = 0;
-    }
-
-    // Until has_tr() and has_bl() is fixed to use partition info, disable intra tx partition
-    fi.tx_mode_select = false;
-
     fi
   }
 
