@@ -1077,10 +1077,6 @@ impl<T: Pixel> ContextInner<T> {
         output_frameno_in_gop,
         next_keyframe_input_frameno
       );
-      if input_frameno >= next_keyframe_input_frameno {
-        assert!(fi.invalid);
-        return Ok(fi);
-      }
       assert!(!fi.invalid);
       Ok(fi)
     }
