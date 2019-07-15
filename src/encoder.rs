@@ -1991,7 +1991,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
 }
 
 #[inline(always)]
-fn build_coarse_pmvs<T: Pixel>(fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>) -> Vec<[Option<MotionVector>; REF_FRAMES]> {
+pub(crate) fn build_coarse_pmvs<T: Pixel>(fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>) -> Vec<[Option<MotionVector>; REF_FRAMES]> {
   assert!(!fi.sequence.use_128x128_superblock);
   if ts.mi_width >= 16 && ts.mi_height >= 16 {
     let mut frame_pmvs = Vec::with_capacity(ts.sb_width * ts.sb_height);
