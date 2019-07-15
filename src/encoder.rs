@@ -528,7 +528,7 @@ impl<T: Pixel> FrameInvariants<T> {
       sequence.sb_size_log2(),
       config.width,
       config.height,
-      config.tile_cols_log2.min(min_tile_cols),
+      config.tile_cols_log2,
       config.tile_rows_log2
     );
 
