@@ -10,8 +10,10 @@
 use arg_enum_proc_macro::ArgEnum;
 use bitstream_io::*;
 use num_derive::*;
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use serde_derive::{Deserialize, Serialize};
 
+use crate::context::{FrameBlocks, SuperBlockOffset};
 use crate::encoder::*;
 use crate::frame::Frame;
 use crate::metrics::calculate_frame_psnr;
@@ -1133,6 +1135,158 @@ impl<T: Pixel> ContextInner<T> {
     while self.set_frame_properties(self.next_lookahead_output_frameno).is_ok()
     {
       self.next_lookahead_output_frameno += 1;
+
+      // Compute the lookahead motion vectors.
+      let fi = self
+        .frame_invariants
+        .get_mut(&(self.next_lookahead_output_frameno - 1))
+        .unwrap();
+
+      // We're only interested in valid frames which are not
+      // show-existing-frame. Those two don't modify the rec_buffer so there's
+      // no need to do anything special about it either, it'll propagate on its
+      // own.
+      if fi.invalid || fi.show_existing_frame {
+        continue;
+      }
+
+      let frame = self.frame_q[&fi.input_frameno].as_ref().unwrap();
+
+      // TODO: some of this work, like downsampling, could be reused in the
+      // actual encoding.
+      let mut fs = FrameState::new_with_frame(fi, frame.clone());
+      fs.input_hres.downsample_from(&frame.planes[0]);
+      fs.input_hres.pad(fi.width, fi.height);
+      fs.input_qres.downsample_from(&fs.input_hres);
+      fs.input_qres.pad(fi.width, fi.height);
+
+      #[cfg(feature = "dump_lookahead_data")]
+      {
+        let plane = &fs.input_qres;
+        image::GrayImage::from_fn(
+          plane.cfg.width as u32,
+          plane.cfg.height as u32,
+          |x, y| image::Luma([plane.p(x as usize, y as usize).as_()])
+        )
+        .save(format!("{}-qres.png", fi.input_frameno))
+        .unwrap();
+        let plane = &fs.input_hres;
+        image::GrayImage::from_fn(
+          plane.cfg.width as u32,
+          plane.cfg.height as u32,
+          |x, y| image::Luma([plane.p(x as usize, y as usize).as_()])
+        )
+        .save(format!("{}-hres.png", fi.input_frameno))
+        .unwrap();
+      }
+
+      // Do not modify the next output frame's FrameInvariants.
+      if self.output_frameno == self.next_lookahead_output_frameno - 1 {
+        // We do want to propagate the lookahead_rec_buffer though.
+        let rfs = Arc::new(ReferenceFrame {
+          order_hint: fi.order_hint,
+          // Use the original frame contents.
+          frame: (&**frame).clone(), // TODO: get rid of the frame data clone.
+          input_hres: fs.input_hres,
+          input_qres: fs.input_qres,
+          cdfs: fs.cdfs,
+          // TODO: can we set MVs here? We can probably even compute these MVs
+          // right now instead of in encode_tile?
+          frame_mvs: fs.frame_mvs
+        });
+        for i in 0..(REF_FRAMES as usize) {
+          if (fi.refresh_frame_flags & (1 << i)) != 0 {
+            fi.lookahead_rec_buffer.frames[i] = Some(Arc::clone(&rfs));
+            fi.lookahead_rec_buffer.deblock[i] = fs.deblock;
+          }
+        }
+
+        continue;
+      }
+
+      // Our lookahead_rec_buffer should be filled with correct original frame
+      // data from the previous frames. Copy it into rec_buffer because that's
+      // what the MV search uses. During the actual encoding rec_buffer is
+      // overwritten with its correct values anyway.
+      fi.rec_buffer = fi.lookahead_rec_buffer.clone();
+
+      // TODO: as in the encoding code, key frames will have no references.
+      // However, for block importance purposes we want key frames to act as
+      // P-frames in this instance.
+      //
+      // Compute the motion vectors.
+      let mut blocks = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
+
+      fi.tiling
+        .tile_iter_mut(&mut fs, &mut blocks)
+        .collect::<Vec<_>>()
+        .into_par_iter()
+        .for_each(|mut ctx| {
+          let ts = &mut ctx.ts;
+
+          // Compute the quarter-resolution motion vectors.
+          let tile_pmvs = build_coarse_pmvs(fi, ts);
+
+          // Compute the half-resolution motion vectors.
+          for sby in 0..ts.sb_height {
+            for sbx in 0..ts.sb_width {
+              let tile_sbo = SuperBlockOffset { x: sbx, y: sby };
+              build_half_res_pmvs(fi, ts, tile_sbo, &tile_pmvs);
+            }
+          }
+        });
+
+      #[cfg(feature = "dump_lookahead_data")]
+      {
+        use crate::partition::RefType::*;
+
+        let second_ref_frame = if !self.inter_cfg.multiref {
+          LAST_FRAME // make second_ref_frame match first
+        } else if fi.idx_in_group_output == 0 {
+          LAST2_FRAME
+        } else {
+          ALTREF_FRAME
+        };
+
+        // Use the default index, it corresponds to the last P-frame or to the
+        // backwards lower reference (so the closest previous frame).
+        let index = if second_ref_frame.to_index() != 0 { 0 } else { 1 };
+
+        let mvs = &fs.frame_mvs[index];
+        use byteorder::{NativeEndian, WriteBytesExt};
+        let mut buf = vec![];
+        buf.write_u64::<NativeEndian>(mvs.rows as u64).unwrap();
+        buf.write_u64::<NativeEndian>(mvs.cols as u64).unwrap();
+        for y in 0..mvs.rows {
+          for x in 0..mvs.cols {
+            let mv = mvs[y][x];
+            buf.write_i16::<NativeEndian>(mv.row).unwrap();
+            buf.write_i16::<NativeEndian>(mv.col).unwrap();
+          }
+        }
+        ::std::fs::write(format!("{}-mvs.bin", fi.input_frameno), buf)
+          .unwrap();
+      }
+
+      // Set lookahead_rec_buffer on this FrameInvariants for future
+      // FrameInvariants to pick it up.
+      let rfs = Arc::new(ReferenceFrame {
+        order_hint: fi.order_hint,
+        // Use the original frame contents.
+        frame: (&**frame).clone(), // TODO: get rid of the frame data clone.
+        input_hres: fs.input_hres,
+        input_qres: fs.input_qres,
+        cdfs: fs.cdfs,
+        frame_mvs: fs.frame_mvs
+      });
+      for i in 0..(REF_FRAMES as usize) {
+        if (fi.refresh_frame_flags & (1 << i)) != 0 {
+          fi.lookahead_rec_buffer.frames[i] = Some(Arc::clone(&rfs));
+          fi.lookahead_rec_buffer.deblock[i] = fs.deblock;
+        }
+      }
+    }
+
     }
   }
 

@@ -485,6 +485,12 @@ pub struct FrameInvariants<T: Pixel> {
   /// should be ignored. Invalid frames occur when a subgop is prematurely
   /// ended, for example, by a key frame or the end of the video.
   pub invalid: bool,
+  /// The lookahead version of `rec_buffer`, used for storing and propagating
+  /// the original reference frames (rather than reconstructed ones). The
+  /// lookahead uses both `rec_buffer` and `lookahead_rec_buffer`, where
+  /// `rec_buffer` contains the current frame's reference frames and
+  /// `lookahead_rec_buffer` contains the next frame's reference frames.
+  pub lookahead_rec_buffer: ReferenceFramesSet<T>,
 }
 
 pub(crate) fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
@@ -610,6 +616,7 @@ impl<T: Pixel> FrameInvariants<T> {
       tx_mode_select : false,
       default_filter: FilterMode::REGULAR,
       invalid: false,
+      lookahead_rec_buffer: ReferenceFramesSet::new(),
     }
   }
 
@@ -2120,6 +2127,81 @@ fn build_raw_tile_group(ti: &TilingInfo, raw_tiles: &[Vec<u8>], max_tile_size_by
   raw
 }
 
+pub(crate) fn build_half_res_pmvs<T: Pixel>(
+  fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
+  tile_sbo: SuperBlockOffset,
+  tile_pmvs: &[[Option<MotionVector>; REF_FRAMES]],
+) -> [[Option<MotionVector>; REF_FRAMES]; 5] {
+  let estimate_motion_ss2 = if fi.config.speed_settings.diamond_me {
+    crate::me::DiamondSearch::estimate_motion_ss2
+  } else {
+    crate::me::FullSearch::estimate_motion_ss2
+  };
+
+  let SuperBlockOffset { x: sbx, y: sby } = tile_sbo;
+  let mut pmvs: [[Option<MotionVector>; REF_FRAMES]; 5] = [[None; REF_FRAMES]; 5];
+
+  if ts.mi_width >= 8 && ts.mi_height >= 8 {
+    for i in 0..INTER_REFS_PER_FRAME {
+      let r = fi.ref_frames[i] as usize;
+      if pmvs[0][r].is_none() {
+        pmvs[0][r] = tile_pmvs[sby * ts.sb_width + sbx][r];
+        if let Some(pmv) = pmvs[0][r] {
+          let pmv_w = if sbx > 0 {
+            tile_pmvs[sby * ts.sb_width + sbx - 1][r]
+          } else {
+            None
+          };
+          let pmv_e = if sbx < ts.sb_width - 1 {
+            tile_pmvs[sby * ts.sb_width + sbx + 1][r]
+          } else {
+            None
+          };
+          let pmv_n = if sby > 0 {
+            tile_pmvs[sby * ts.sb_width + sbx - ts.sb_width][r]
+          } else {
+            None
+          };
+          let pmv_s = if sby < ts.sb_height - 1 {
+            tile_pmvs[sby * ts.sb_width + sbx + ts.sb_width][r]
+          } else {
+            None
+          };
+
+          assert!(!fi.sequence.use_128x128_superblock);
+          pmvs[1][r] = estimate_motion_ss2(
+            fi, ts, BlockSize::BLOCK_32X32, r, tile_sbo.block_offset(0, 0), &[Some(pmv), pmv_w, pmv_n], i
+          );
+          pmvs[2][r] = estimate_motion_ss2(
+            fi, ts, BlockSize::BLOCK_32X32, r, tile_sbo.block_offset(8, 0), &[Some(pmv), pmv_e, pmv_n], i
+          );
+          pmvs[3][r] = estimate_motion_ss2(
+            fi, ts, BlockSize::BLOCK_32X32, r, tile_sbo.block_offset(0, 8), &[Some(pmv), pmv_w, pmv_s], i
+          );
+          pmvs[4][r] = estimate_motion_ss2(
+            fi, ts, BlockSize::BLOCK_32X32, r, tile_sbo.block_offset(8, 8), &[Some(pmv), pmv_e, pmv_s], i
+          );
+
+          if let Some(mv) = pmvs[1][r] {
+            save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(0, 0), i, mv);
+          }
+          if let Some(mv) = pmvs[2][r] {
+            save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(8, 0), i, mv);
+          }
+          if let Some(mv) = pmvs[3][r] {
+            save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(0, 8), i, mv);
+          }
+          if let Some(mv) = pmvs[4][r] {
+            save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(8, 8), i, mv);
+          }
+        }
+      }
+    }
+  }
+
+  pmvs
+}
+
 fn encode_tile<'a, T: Pixel>(
   fi: &FrameInvariants<T>,
   ts: &mut TileStateMut<'_, T>,
@@ -2127,12 +2209,6 @@ fn encode_tile<'a, T: Pixel>(
   blocks: &'a mut TileBlocksMut<'a>,
 ) -> Vec<u8> {
   let mut w = WriterEncoder::new();
-
-  let estimate_motion_ss2 = if fi.config.speed_settings.diamond_me {
-    crate::me::DiamondSearch::estimate_motion_ss2
-  } else {
-    crate::me::FullSearch::estimate_motion_ss2
-  };
 
   let bc = BlockContext::new(blocks);
   // For now, restoration unit size is locked to superblock size.
@@ -2153,64 +2229,7 @@ fn encode_tile<'a, T: Pixel>(
       cw.bc.code_deltas = fi.delta_q_present;
 
       // Do subsampled ME
-      let mut pmvs: [[Option<MotionVector>; REF_FRAMES]; 5] = [[None; REF_FRAMES]; 5];
-      if ts.mi_width >= 8 && ts.mi_height >= 8 {
-        for i in 0..INTER_REFS_PER_FRAME {
-          let r = fi.ref_frames[i] as usize;
-          if pmvs[0][r].is_none() {
-            pmvs[0][r] = tile_pmvs[sby * ts.sb_width + sbx][r];
-            if let Some(pmv) = pmvs[0][r] {
-              let pmv_w = if sbx > 0 {
-                tile_pmvs[sby * ts.sb_width + sbx - 1][r]
-              } else {
-                None
-              };
-              let pmv_e = if sbx < ts.sb_width - 1 {
-                tile_pmvs[sby * ts.sb_width + sbx + 1][r]
-              } else {
-                None
-              };
-              let pmv_n = if sby > 0 {
-                tile_pmvs[sby * ts.sb_width + sbx - ts.sb_width][r]
-              } else {
-                None
-              };
-              let pmv_s = if sby < ts.sb_height - 1 {
-                tile_pmvs[sby * ts.sb_width + sbx + ts.sb_width][r]
-              } else {
-                None
-              };
-
-              assert!(!fi.sequence.use_128x128_superblock);
-              pmvs[1][r] = estimate_motion_ss2(
-                fi, ts, BlockSize::BLOCK_32X32, r, tile_sbo.block_offset(0, 0), &[Some(pmv), pmv_w, pmv_n], i
-              );
-              pmvs[2][r] = estimate_motion_ss2(
-                fi, ts, BlockSize::BLOCK_32X32, r, tile_sbo.block_offset(8, 0), &[Some(pmv), pmv_e, pmv_n], i
-              );
-              pmvs[3][r] = estimate_motion_ss2(
-                fi, ts, BlockSize::BLOCK_32X32, r, tile_sbo.block_offset(0, 8), &[Some(pmv), pmv_w, pmv_s], i
-              );
-              pmvs[4][r] = estimate_motion_ss2(
-                fi, ts, BlockSize::BLOCK_32X32, r, tile_sbo.block_offset(8, 8), &[Some(pmv), pmv_e, pmv_s], i
-              );
-
-              if let Some(mv) = pmvs[1][r] {
-                save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(0, 0), i, mv);
-              }
-              if let Some(mv) = pmvs[2][r] {
-                save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(8, 0), i, mv);
-              }
-              if let Some(mv) = pmvs[3][r] {
-                save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(0, 8), i, mv);
-              }
-              if let Some(mv) = pmvs[4][r] {
-                save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(8, 8), i, mv);
-              }
-            }
-          }
-        }
-      }
+      let mut pmvs = build_half_res_pmvs(fi, ts, tile_sbo, &tile_pmvs);
 
       // Encode SuperBlock
       if fi.config.speed_settings.encode_bottomup {
