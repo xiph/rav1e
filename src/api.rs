@@ -21,7 +21,7 @@ use crate::rate::FRAME_NSUBTYPES;
 use crate::rate::FRAME_SUBTYPE_I;
 use crate::rate::FRAME_SUBTYPE_P;
 use crate::rate::FRAME_SUBTYPE_SEF;
-use crate::scenechange::SceneChangeDetector;
+use crate::util::CastFromPrimitive;
 use crate::util::Pixel;
 
 use std::collections::BTreeMap;
@@ -685,7 +685,6 @@ pub(crate) struct ContextInner<T: Pixel> {
   packet_data: Vec<u8>,
   gop_output_frameno_start: u64,
   pub(crate) gop_input_frameno_start: u64,
-  keyframe_detector: SceneChangeDetector<T>,
   pub(crate) config: EncoderConfig,
   rc_state: RCState,
   maybe_prev_log_base_q: Option<i64>,
@@ -875,7 +874,6 @@ impl<T: Pixel> ContextInner<T> {
       packet_data,
       gop_output_frameno_start: 0,
       gop_input_frameno_start: 0,
-      keyframe_detector: SceneChangeDetector::new(enc.bit_depth),
       config: enc.clone(),
       rc_state: RCState::new(
         enc.width as i32,
@@ -1055,26 +1053,22 @@ impl<T: Pixel> ContextInner<T> {
       .iter()
       .filter_map(|(&input_frameno, frame)| {
         if input_frameno >= self.next_lookahead_frame {
-          frame.clone().map(|frame| (input_frameno, frame))
+          frame.as_ref().map(|_| input_frameno)
         } else {
           None
         }
       })
       .collect::<Vec<_>>();
 
-    for &(input_frameno, ref frame) in frames_to_process.iter() {
-      if self.is_key_frame(input_frameno, frame) {
+    for input_frameno in frames_to_process.iter().cloned() {
+      if self.is_key_frame(input_frameno) {
         self.keyframes.insert(input_frameno);
       }
-
-      self
-        .keyframe_detector
-        .set_last_frame(frame.clone(), input_frameno as usize);
     }
 
     // Update self.next_lookahead_frame.
-    if let Some((last_frame, _)) = frames_to_process.iter().last() {
-      self.next_lookahead_frame = last_frame + 1;
+    if let Some(last_frame) = frames_to_process.iter().last() {
+      self.next_lookahead_frame = *last_frame + 1;
     }
   }
 
@@ -1251,9 +1245,8 @@ impl<T: Pixel> ContextInner<T> {
   /// Determines if the passed frame should be a key frame.
   ///
   /// This function requires that all input frames are passed to it in order,
-  /// that `self.keyframes` is always up to date and that
-  /// `self.keyframe_detector` always has the correct last frame.
-  fn is_key_frame(&self, input_frameno: u64, frame: &Frame<T>) -> bool {
+  /// and that `self.keyframes` is always up to date.
+  fn is_key_frame(&self, input_frameno: u64) -> bool {
     // The first frame is always a keyframe.
     if input_frameno == 0 {
       return true;
@@ -1271,16 +1264,50 @@ impl<T: Pixel> ContextInner<T> {
       return true;
     }
 
-    // Use the scene change detector if it isn't disabled.
-    if !self.config.speed_settings.no_scene_detection
-      && self
-        .keyframe_detector
-        .detect_scene_change(frame, input_frameno as usize)
-    {
-      return true;
+    // Skip adaptive scene change detection if it's disabled
+    if self.config.speed_settings.no_scene_detection {
+      return false;
     }
 
-    false
+    self.detect_scene_change(input_frameno)
+  }
+
+  /// Detects fast cuts using changes in colour and intensity between frames.
+  /// Since the difference between frames is used, only fast cuts are detected
+  /// with this method. This method will be improved in the future.
+  ///
+  /// This implementation is based on a Python implementation at
+  /// https://pyscenedetect.readthedocs.io/en/latest/reference/detection-methods/.
+  /// The Python implementation uses HSV values and a threshold of 30. Comparing the
+  /// YUV values was sufficient in most cases, and avoided a more costly YUV->RGB->HSV
+  /// conversion, but the deltas needed to be scaled down. The deltas for keyframes
+  /// in YUV were about 1/3 to 1/2 of what they were in HSV, but non-keyframes were
+  /// very unlikely to have a delta greater than 3 in YUV, whereas they may reach into
+  /// the double digits in HSV. Therefore, 12 was chosen as a reasonable default threshold.
+  /// This may be adjusted later.
+  ///
+  /// Assumes that `frame_num` is a frame which exists in `self.frame_q` and is not `None`
+  fn detect_scene_change(&self, frame_num: u64) -> bool {
+    const SCENE_CHANGE_THRESHOLD: u8 = 12;
+
+    let threshold = SCENE_CHANGE_THRESHOLD * self.config.bit_depth as u8 / 8;
+    let last_frame: &Frame<T> = &self.frame_q.get(&(frame_num - 1)).unwrap().clone().unwrap();
+    let curr_frame: &Frame<T> = &self.frame_q.get(&frame_num).unwrap().clone().unwrap();
+
+    let len = curr_frame.planes[0].cfg.width * curr_frame.planes[0].cfg.height;
+    let delta_yuv = last_frame.iter().zip(curr_frame.iter())
+        .map(|(last, cur)| (
+          (i16::cast_from(cur.0) - i16::cast_from(last.0)).abs() as u64,
+          (i16::cast_from(cur.1) - i16::cast_from(last.1)).abs() as u64,
+          (i16::cast_from(cur.2) - i16::cast_from(last.2)).abs() as u64
+        )).fold((0, 0, 0), |(ht, st, vt), (h, s, v)| (ht + h, st + s, vt + v));
+    let delta_yuv = (
+      (delta_yuv.0 / len as u64) as u16,
+      (delta_yuv.1 / len as u64) as u16,
+      (delta_yuv.2 / len as u64) as u16
+    );
+    let delta_avg = ((delta_yuv.0 + delta_yuv.1 + delta_yuv.2) / 3) as u8;
+    delta_avg >= threshold
   }
 
   // Count the number of output frames of each subtype in the next

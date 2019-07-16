@@ -40,7 +40,6 @@ mod mc;
 mod me;
 mod metrics;
 mod scan_order;
-mod scenechange;
 mod rate;
 mod tiling;
 
