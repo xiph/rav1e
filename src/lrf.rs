@@ -99,88 +99,86 @@ fn get_integral_square(
     .wrapping_sub(iimg[y * stride + x + size])
 }
 
-// computes an intermediate (ab) column for stripe_h + 2 rows at
-// column stripe_x.
-// r=1 case computes every row as every row is used (see r2 version below)
+// computes an intermediate (ab) row for stripe_w + 2 columns at row y
 fn sgrproj_box_ab_r1(
-  af: &mut [u32; 64 + 2], bf: &mut [u32; 64 + 2], iimg: &[u32],
-  iimg_sq: &[u32], iimg_stride: usize, stripe_x: isize, stripe_h: usize,
+  af: &mut [u32], bf: &mut [u32], iimg: &[u32],
+  iimg_sq: &[u32], iimg_stride: usize, y: usize, stripe_w: usize,
   s: u32, bdm8: usize
 ) {
-  for y in 0..stripe_h + 2 {
-    let sum = get_integral_square(iimg, iimg_stride, stripe_x as usize, y, 3);
+  for x in 0..stripe_w + 2 {
+    let sum =
+      get_integral_square(iimg, iimg_stride, x, y, 3);
     let ssq =
-      get_integral_square(iimg_sq, iimg_stride, stripe_x as usize, y, 3);
+      get_integral_square(iimg_sq, iimg_stride, x, y, 3);
     let (reta, retb) = sgrproj_sum_finish(ssq, sum, 9, 455, s, bdm8);
-    af[y] = reta;
-    bf[y] = retb;
+    af[x] = reta;
+    bf[x] = retb;
   }
 }
 
-// One oddness about the radius=2 intermediate array computations that
-// the spec doesn't make clear: Although the spec defines computation
-// of every row (of a, b and f), only half of the rows (every-other
-// row) are actually used.  We use the full-size array here but only
-// compute the even rows.  This is not so much optimization as trying
-// to illustrate what this convoluted filter is actually doing
-// (ie not as much as it may appear).
+// computes an intermediate (ab) row for stripe_w + 2 columns at row y
 fn sgrproj_box_ab_r2(
-  af: &mut [u32; 64 + 2], bf: &mut [u32; 64 + 2], iimg: &[u32],
-  iimg_sq: &[u32], iimg_stride: usize, stripe_x: isize, stripe_h: usize,
+  af: &mut [u32], bf: &mut [u32], iimg: &[u32],
+  iimg_sq: &[u32], iimg_stride: usize, y: usize, stripe_w: usize,
   s: u32, bdm8: usize
 ) {
-  for y in (0..stripe_h + 2).step_by(2) {
-    let sum = get_integral_square(iimg, iimg_stride, stripe_x as usize, y, 5);
+  for x in 0..stripe_w + 2 {
+    let sum =
+      get_integral_square(iimg, iimg_stride, x, y, 5);
     let ssq =
-      get_integral_square(iimg_sq, iimg_stride, stripe_x as usize, y, 5);
+      get_integral_square(iimg_sq, iimg_stride, x, y, 5);
     let (reta, retb) = sgrproj_sum_finish(ssq, sum, 25, 164, s, bdm8);
-    af[y] = reta;
-    bf[y] = retb;
+    af[x] = reta;
+    bf[x] = retb;
   }
 }
 
-fn sgrproj_box_f_r0<T: Pixel>(f: &mut[u32; 64], x: usize, y: isize, h: usize, cdeffed: &PlaneSlice<T>) {
-  for i in cmp::max(0, -y) as usize..h {
-    f[i as usize] = (u32::cast_from(cdeffed.p(x, (y + i as isize) as usize))) << SGRPROJ_RST_BITS;
+fn sgrproj_box_f_r0<T: Pixel>(f: &mut[u32], y: usize, w: usize, cdeffed: &PlaneSlice<T>) {
+  for x in 0..w {
+    f[x] = (u32::cast_from(cdeffed.p(x, y))) << SGRPROJ_RST_BITS;
   }
 }
 
-fn sgrproj_box_f_r1<T: Pixel>(af: &[&[u32; 64+2]; 3], bf: &[&[u32; 64+2]; 3], f: &mut[u32; 64],
-                              x: usize, y: isize, h: usize, cdeffed: &PlaneSlice<T>) {
+fn sgrproj_box_f_r1<T: Pixel>(
+  af: &[&[u32]; 3], bf: &[&[u32]; 3], f: &mut[u32],
+  y: usize, w: usize, cdeffed: &PlaneSlice<T>
+) {
   let shift = 5 + SGRPROJ_SGR_BITS - SGRPROJ_RST_BITS;
-  for i in cmp::max(0, -y) as usize..h {
+  for x in 0..w {
     let a =
-      3 * (af[0][i] + af[2][i]   + af[0][i+2] + af[2][i+2]) +
-      4 * (af[1][i] + af[0][i+1] + af[1][i+1] + af[2][i+1] + af[1][i+2]);
+      3 * (af[0][x] + af[2][x]   + af[0][x+2] + af[2][x+2]) +
+      4 * (af[1][x] + af[0][x+1] + af[1][x+1] + af[2][x+1] + af[1][x+2]);
     let b =
-      3 * (bf[0][i] + bf[2][i]   + bf[0][i+2] + bf[2][i+2]) +
-      4 * (bf[1][i] + bf[0][i+1] + bf[1][i+1] + bf[2][i+1] + bf[1][i+2]);
-    let v = a * u32::cast_from(cdeffed.p(x, (y + i as isize) as usize)) + b;
-    f[i as usize] = (v + (1 << shift >> 1)) >> shift;
+      3 * (bf[0][x] + bf[2][x]   + bf[0][x+2] + bf[2][x+2]) +
+      4 * (bf[1][x] + bf[0][x+1] + bf[1][x+1] + bf[2][x+1] + bf[1][x+2]);
+    let v = a * u32::cast_from(cdeffed.p(x, y)) + b;
+    f[x] = (v + (1 << shift >> 1)) >> shift;
   }
 }
 
-fn sgrproj_box_f_r2<T: Pixel>(af: &[&[u32; 64+2]; 3], bf: &[&[u32; 64+2]; 3], f: &mut[u32; 64],
-                              x: usize, y: isize, h: usize, cdeffed: &PlaneSlice<T>) {
+fn sgrproj_box_f_r2<T: Pixel>(
+  af: &[&[u32]; 2], bf: &[&[u32]; 2], f0: &mut[u32],
+  f1: &mut[u32], y: usize, w: usize, cdeffed: &PlaneSlice<T>
+) {
   let shift = 5 + SGRPROJ_SGR_BITS - SGRPROJ_RST_BITS;
   let shifto = 4 + SGRPROJ_SGR_BITS - SGRPROJ_RST_BITS;
-  for i in (cmp::max(0, -y) as usize..h).step_by(2) {
+  for x in 0..w {
     let a =
-      5 * (af[0][i] + af[2][i]) +
-      6 * (af[1][i]);
+      5 * (af[0][x] + af[0][x+2]) +
+      6 * (af[0][x+1]);
     let b =
-      5 * (bf[0][i] + bf[2][i]) +
-      6 * (bf[1][i]);
+      5 * (bf[0][x] + bf[0][x+2]) +
+      6 * (bf[0][x+1]);
     let ao =
-      5 * (af[0][i+2] + af[2][i+2]) +
-      6 * (af[1][i+2]);
+      5 * (af[1][x] + af[1][x+2]) +
+      6 * (af[1][x+1]);
     let bo =
-      5 * (bf[0][i+2] + bf[2][i+2]) +
-      6 * (bf[1][i+2]);
-    let v = (a + ao) * u32::cast_from(cdeffed.p(x, (y+i as isize) as usize)) + b + bo;
-    f[i as usize] = (v + (1 << shift >> 1)) >> shift;
-    let vo = ao * u32::cast_from(cdeffed.p(x, (y + i as isize) as usize + 1)) + bo;
-    f[i as usize + 1] = (vo + (1 << shifto >> 1)) >> shifto;
+      5 * (bf[1][x] + bf[1][x+2]) +
+      6 * (bf[1][x+1]);
+    let v = (a + ao) * u32::cast_from(cdeffed.p(x, y)) + b + bo;
+    f0[x] = (v + (1 << shift >> 1)) >> shift;
+    let vo = ao * u32::cast_from(cdeffed.p(x, y + 1)) + bo;
+    f1[x] = (vo + (1 << shifto >> 1)) >> shifto;
   }
 }
 
@@ -411,17 +409,16 @@ pub fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvarian
     [0; INTEGRAL_IMAGE_SIZE];
 
   let bdm8 = fi.sequence.bit_depth - 8;
-  let mut a_r2: [[u32; 64+2]; 3] = [[0; 64+2]; 3];
-  let mut b_r2: [[u32; 64+2]; 3] = [[0; 64+2]; 3];
-  let mut f_r2: [u32; 64] = [0; 64];
-  let mut a_r1: [[u32; 64+2]; 3] = [[0; 64+2]; 3];
-  let mut b_r1: [[u32; 64+2]; 3] = [[0; 64+2]; 3];
-  let mut f_r1: [u32; 64] = [0; 64];
+  let mut a_r2: [[u32; WIDTH_MAX+2]; 2] = [[0; WIDTH_MAX+2]; 2];
+  let mut b_r2: [[u32; WIDTH_MAX+2]; 2] = [[0; WIDTH_MAX+2]; 2];
+  let mut f_r2_0: [u32; WIDTH_MAX] = [0; WIDTH_MAX];
+  let mut f_r2_1: [u32; WIDTH_MAX] = [0; WIDTH_MAX];
+  let mut a_r1: [[u32; WIDTH_MAX+2]; 3] = [[0; WIDTH_MAX+2]; 3];
+  let mut b_r1: [[u32; WIDTH_MAX+2]; 3] = [[0; WIDTH_MAX+2]; 3];
+  let mut f_r1: [u32; WIDTH_MAX] = [0; WIDTH_MAX];
 
   let s_r2: u32 = SGRPROJ_PARAMS_S[set as usize][0];
   let s_r1: u32 = SGRPROJ_PARAMS_S[set as usize][1];
-
-  let outstart = cmp::max(0, cmp::max(-cdeffed.y, -out.y)) as usize;
 
   let max_r: usize = if s_r2 > 0 {
     2
@@ -472,16 +469,17 @@ pub fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvarian
       INTEGRAL_IMAGE_STRIDE
     );
   }
+
   /* prime the intermediate arrays */
+  // One oddness about the radius=2 intermediate array computations that
+  // the spec doesn't make clear: Although the spec defines computation
+  // of every row (of a, b and f), only half of the rows (every-other
+  // row) are actually used.
   if s_r2 > 0 {
     sgrproj_box_ab_r2(&mut a_r2[0], &mut b_r2[0],
                       &integral_image, &sq_integral_image,
                       INTEGRAL_IMAGE_STRIDE,
-                      0, stripe_h, s_r2, bdm8);
-    sgrproj_box_ab_r2(&mut a_r2[1], &mut b_r2[1],
-                      &integral_image, &sq_integral_image,
-                      INTEGRAL_IMAGE_STRIDE,
-                      1, stripe_h, s_r2, bdm8);
+                      0, stripe_w, s_r2, bdm8);
   }
   if s_r1 > 0 {
     let r_diff = max_r - 1;
@@ -490,53 +488,62 @@ pub fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvarian
                       &integral_image[integral_image_offset..],
                       &sq_integral_image[integral_image_offset..],
                       INTEGRAL_IMAGE_STRIDE,
-                      0, stripe_h, s_r1, bdm8);
+                      0, stripe_w, s_r1, bdm8);
     sgrproj_box_ab_r1(&mut a_r1[1], &mut b_r1[1],
                       &integral_image[integral_image_offset..],
                       &sq_integral_image[integral_image_offset..],
                       INTEGRAL_IMAGE_STRIDE,
-                      1, stripe_h, s_r1, bdm8);
+                      1, stripe_w, s_r1, bdm8);
   }
 
-  /* iterate by column */
-  for xi in 0..stripe_w {
-    /* build intermediate array columns */
-    if s_r2 > 0 {
-      sgrproj_box_ab_r2(&mut a_r2[(xi+2)%3], &mut b_r2[(xi+2)%3],
+  /* iterate by row */
+  // Increment by two to handle the use of even rows by r=2 and run a nested
+  //  loop to handle increments of one.
+  for y in (0..stripe_h).step_by(2) {
+    // get results to use y and y+1
+    let f_r2_ab: [&[u32]; 2] = if s_r2 > 0 {
+      sgrproj_box_ab_r2(&mut a_r2[(y / 2 + 1) % 2], &mut b_r2[(y / 2 + 1) % 2],
                         &integral_image, &sq_integral_image,
                         INTEGRAL_IMAGE_STRIDE,
-                        xi as isize + 2, stripe_h, s_r2, bdm8);
-      let ap0: [&[u32; 64+2]; 3] = [&a_r2[xi%3], &a_r2[(xi+1)%3], &a_r2[(xi+2)%3]];
-      let bp0: [&[u32; 64+2]; 3] = [&b_r2[xi%3], &b_r2[(xi+1)%3], &b_r2[(xi+2)%3]];
-      sgrproj_box_f_r2(&ap0, &bp0, &mut f_r2, xi, 0, stripe_h as usize, &cdeffed);
+                        y + 2, stripe_w, s_r2, bdm8);
+      let ap0: [&[u32]; 2] = [&a_r2[(y / 2) % 2], &a_r2[(y / 2 + 1) % 2]];
+      let bp0: [&[u32]; 2] = [&b_r2[(y / 2) % 2], &b_r2[(y / 2 + 1) % 2]];
+      sgrproj_box_f_r2(&ap0, &bp0, &mut f_r2_0, &mut f_r2_1, y, stripe_w, &cdeffed);
+      [&f_r2_0, &f_r2_1]
     } else {
-      sgrproj_box_f_r0(&mut f_r2, xi, 0, stripe_h as usize, &cdeffed);
-    }
-    if s_r1 > 0 {
-      let r_diff = max_r - 1;
-      let integral_image_offset = r_diff + r_diff * INTEGRAL_IMAGE_STRIDE;
-      sgrproj_box_ab_r1(&mut a_r1[(xi+2)%3], &mut b_r1[(xi+2)%3],
-                        &integral_image[integral_image_offset..],
-                        &sq_integral_image[integral_image_offset..],
-                        INTEGRAL_IMAGE_STRIDE,
-                        xi as isize + 2, stripe_h, s_r1, bdm8);
-      let ap1: [&[u32; 64+2]; 3] = [&a_r1[xi%3], &a_r1[(xi+1)%3], &a_r1[(xi+2)%3]];
-      let bp1: [&[u32; 64+2]; 3] = [&b_r1[xi%3], &b_r1[(xi+1)%3], &b_r1[(xi+2)%3]];
-      sgrproj_box_f_r1(&ap1, &bp1, &mut f_r1, xi, 0, stripe_h as usize, &cdeffed);
-    } else {
-      sgrproj_box_f_r0(&mut f_r1, xi, 0, stripe_h as usize, &cdeffed);
-    }
+      sgrproj_box_f_r0(&mut f_r2_0, y, stripe_w, &cdeffed);
+      // share results for both rows
+      [&f_r2_0, &f_r2_0]
+    };
+    for dy in 0..(2.min(stripe_h - y)) {
+      let y = y + dy;
+      if s_r1 > 0 {
+        let r_diff = max_r - 1;
+        let integral_image_offset = r_diff + r_diff * INTEGRAL_IMAGE_STRIDE;
+        sgrproj_box_ab_r1(&mut a_r1[(y + 2) % 3], &mut b_r1[(y + 2) % 3],
+                          &integral_image[integral_image_offset..],
+                          &sq_integral_image[integral_image_offset..],
+                          INTEGRAL_IMAGE_STRIDE,
+                          y + 2, stripe_w, s_r1, bdm8);
+        let ap1: [&[u32]; 3] = [&a_r1[y % 3], &a_r1[(y + 1) % 3], &a_r1[(y + 2) % 3]];
+        let bp1: [&[u32]; 3] = [&b_r1[y % 3], &b_r1[(y + 1) % 3], &b_r1[(y + 2) % 3]];
+        sgrproj_box_f_r1(&ap1, &bp1, &mut f_r1, y, stripe_w, &cdeffed);
+      } else {
+        sgrproj_box_f_r0(&mut f_r1, y, stripe_w, &cdeffed);
+      }
 
-    /* apply filter */
-    let bit_depth = fi.sequence.bit_depth;
-    let w0 = xqd[0] as i32;
-    let w1 = xqd[1] as i32;
-    let w2 = (1 << SGRPROJ_PRJ_BITS) - w0 - w1;
-    for yi in outstart..stripe_h as usize {
-      let u = i32::cast_from(cdeffed.p(xi, yi)) << SGRPROJ_RST_BITS;
-      let v = w0*f_r2[yi] as i32 + w1*u + w2*f_r1[yi] as i32;
-      let s = (v + (1 << (SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS) >> 1)) >> (SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS);
-      out[yi][xi] = T::cast_from(clamp(s, 0, (1 << bit_depth) - 1));
+      /* apply filter */
+      let bit_depth = fi.sequence.bit_depth;
+      let w0 = xqd[0] as i32;
+      let w1 = xqd[1] as i32;
+      let w2 = (1 << SGRPROJ_PRJ_BITS) - w0 - w1;
+
+      for x in 0..stripe_w {
+        let u = i32::cast_from(cdeffed.p(x, y)) << SGRPROJ_RST_BITS;
+        let v = w0 * f_r2_ab[dy][x] as i32 + w1 * u + w2 * f_r1[x] as i32;
+        let s = (v + (1 << (SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS) >> 1)) >> (SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS);
+        out[y][x] = T::cast_from(clamp(s, 0, (1 << bit_depth) - 1));
+      }
     }
   }
 }
@@ -571,9 +578,10 @@ pub fn sgrproj_solve<T: Pixel>(set: u8, fi: &FrameInvariants<T>,
 
   let bdm8 = fi.sequence.bit_depth - 8;
 
-  let mut a_r2: [[u32; 64+2]; 3] = [[0; 64+2]; 3];
-  let mut b_r2: [[u32; 64+2]; 3] = [[0; 64+2]; 3];
-  let mut f_r2: [u32; 64] = [0; 64];
+  let mut a_r2: [[u32; 64+2]; 2] = [[0; 64+2]; 2];
+  let mut b_r2: [[u32; 64+2]; 2] = [[0; 64+2]; 2];
+  let mut f_r2_0: [u32; 64] = [0; 64];
+  let mut f_r2_1: [u32; 64] = [0; 64];
   let mut a_r1: [[u32; 64+2]; 3] = [[0; 64+2]; 3];
   let mut b_r1: [[u32; 64+2]; 3] = [[0; 64+2]; 3];
   let mut f_r1: [u32; 64] = [0; 64];
@@ -611,15 +619,15 @@ pub fn sgrproj_solve<T: Pixel>(set: u8, fi: &FrameInvariants<T>,
   }
 
   /* prime the intermediate arrays */
+  // One oddness about the radius=2 intermediate array computations that
+  // the spec doesn't make clear: Although the spec defines computation
+  // of every row (of a, b and f), only half of the rows (every-other
+  // row) are actually used.
   if s_r2 > 0 {
     sgrproj_box_ab_r2(&mut a_r2[0], &mut b_r2[0],
                       &integral_image, &sq_integral_image,
                       INTEGRAL_IMAGE_STRIDE,
-                      0, cdef_h, s_r2, bdm8);
-    sgrproj_box_ab_r2(&mut a_r2[1], &mut b_r2[1],
-                      &integral_image, &sq_integral_image,
-                      INTEGRAL_IMAGE_STRIDE,
-                      1, cdef_h, s_r2, bdm8);
+                      0, cdef_w, s_r2, bdm8);
   }
   if s_r1 > 0 {
     let r_diff = max_r - 1;
@@ -628,53 +636,61 @@ pub fn sgrproj_solve<T: Pixel>(set: u8, fi: &FrameInvariants<T>,
                       &integral_image[integral_image_offset..],
                       &sq_integral_image[integral_image_offset..],
                       INTEGRAL_IMAGE_STRIDE,
-                      0, cdef_h, s_r1, bdm8);
+                      0, cdef_w, s_r1, bdm8);
     sgrproj_box_ab_r1(&mut a_r1[1], &mut b_r1[1],
                       &integral_image[integral_image_offset..],
                       &sq_integral_image[integral_image_offset..],
                       INTEGRAL_IMAGE_STRIDE,
-                      1, cdef_h, s_r1, bdm8);
+                      1, cdef_w, s_r1, bdm8);
   }
 
-  /* iterate by column */
-  for xi in 0..cdef_w {
-    /* build intermediate array columns */
-    if s_r2 > 0 {
-      sgrproj_box_ab_r2(&mut a_r2[(xi+2)%3], &mut b_r2[(xi+2)%3],
+  /* iterate by row */
+  // Increment by two to handle the use of even rows by r=2 and run a nested
+  //  loop to handle increments of one.
+  for y in (0..cdef_h).step_by(2) {
+    // get results to use y and y+1
+    let f_r2_01: [&[u32]; 2] = if s_r2 > 0 {
+      sgrproj_box_ab_r2(&mut a_r2[(y / 2 + 1) % 2], &mut b_r2[(y / 2 + 1) % 2],
                         &integral_image, &sq_integral_image,
                         INTEGRAL_IMAGE_STRIDE,
-                        xi as isize + 2, cdef_h, s_r2, bdm8);
-      let ap0: [&[u32; 64+2]; 3] = [&a_r2[xi%3], &a_r2[(xi+1)%3], &a_r2[(xi+2)%3]];
-      let bp0: [&[u32; 64+2]; 3] = [&b_r2[xi%3], &b_r2[(xi+1)%3], &b_r2[(xi+2)%3]];
-      sgrproj_box_f_r2(&ap0, &bp0, &mut f_r2, xi, 0, cdef_h as usize, &cdeffed);
+                        y + 2, cdef_w, s_r2, bdm8);
+      let ap0: [&[u32]; 2] = [&a_r2[(y / 2) % 2], &a_r2[(y / 2 + 1) % 2]];
+      let bp0: [&[u32]; 2] = [&b_r2[(y / 2) % 2], &b_r2[(y / 2 + 1) % 2]];
+      sgrproj_box_f_r2(&ap0, &bp0, &mut f_r2_0, &mut f_r2_1, y, cdef_w, &cdeffed);
+      [&f_r2_0, &f_r2_1]
     } else {
-      sgrproj_box_f_r0(&mut f_r2, xi, 0, cdef_h as usize, &cdeffed);
-    }
-    if s_r1 > 0 {
-      let r_diff = max_r - 1;
-      let integral_image_offset = r_diff + r_diff * INTEGRAL_IMAGE_STRIDE;
-      sgrproj_box_ab_r1(&mut a_r1[(xi+2)%3], &mut b_r1[(xi+2)%3],
-                        &integral_image[integral_image_offset..],
-                        &sq_integral_image[integral_image_offset..],
-                        INTEGRAL_IMAGE_STRIDE,
-                        xi as isize + 2, cdef_h, s_r1, bdm8);
-      let ap1: [&[u32; 64+2]; 3] = [&a_r1[xi%3], &a_r1[(xi+1)%3], &a_r1[(xi+2)%3]];
-      let bp1: [&[u32; 64+2]; 3] = [&b_r1[xi%3], &b_r1[(xi+1)%3], &b_r1[(xi+2)%3]];
-      sgrproj_box_f_r1(&ap1, &bp1, &mut f_r1, xi, 0, cdef_h as usize, &cdeffed);
-    } else {
-      sgrproj_box_f_r0(&mut f_r1, xi, 0, cdef_h as usize, &cdeffed);
-    }
+      sgrproj_box_f_r0(&mut f_r2_0, y, cdef_w, &cdeffed);
+      // share results for both rows
+      [&f_r2_0, &f_r2_0]
+    };
+    for dy in 0..(2.min(cdef_h - y)) {
+      let y = y + dy;
+      if s_r1 > 0 {
+        let r_diff = max_r - 1;
+        let integral_image_offset = r_diff + r_diff * INTEGRAL_IMAGE_STRIDE;
+        sgrproj_box_ab_r1(&mut a_r1[(y + 2) % 3], &mut b_r1[(y + 2) % 3],
+                          &integral_image[integral_image_offset..],
+                          &sq_integral_image[integral_image_offset..],
+                          INTEGRAL_IMAGE_STRIDE,
+                          y + 2, cdef_w, s_r1, bdm8);
+        let ap1: [&[u32]; 3] = [&a_r1[y % 3], &a_r1[(y + 1) % 3], &a_r1[(y + 2) % 3]];
+        let bp1: [&[u32]; 3] = [&b_r1[y % 3], &b_r1[(y + 1) % 3], &b_r1[(y + 2) % 3]];
+        sgrproj_box_f_r1(&ap1, &bp1, &mut f_r1, y, cdef_w, &cdeffed);
+      } else {
+        sgrproj_box_f_r0(&mut f_r1, y, cdef_w, &cdeffed);
+      }
 
-    for yi in 0..cdef_h {
-      let u = i32::cast_from(cdeffed.p(xi,yi)) << SGRPROJ_RST_BITS;
-      let s = i32::cast_from(input.p(xi,yi)) << SGRPROJ_RST_BITS;
-      let f2 = f_r2[yi] as i32 - u;
-      let f1 = f_r1[yi] as i32 - u;
-      h[0][0] += f2 as f64 * f2 as f64;
-      h[1][1] += f1 as f64 * f1 as f64;
-      h[0][1] += f1 as f64 * f2 as f64;
-      c[0] += f2 as f64 * s as f64;
-      c[1] += f1 as f64 * s as f64;
+      for x in 0..cdef_w {
+        let u = i32::cast_from(cdeffed.p(x, y)) << SGRPROJ_RST_BITS;
+        let s = i32::cast_from(input.p(x,y)) << SGRPROJ_RST_BITS;
+        let f2 = f_r2_01[dy][x] as i32 - u;
+        let f1 = f_r1[x] as i32 - u;
+        h[0][0] += f2 as f64 * f2 as f64;
+        h[1][1] += f1 as f64 * f1 as f64;
+        h[0][1] += f1 as f64 * f2 as f64;
+        c[0] += f2 as f64 * s as f64;
+        c[1] += f1 as f64 * s as f64;
+      }
     }
   }
 
