@@ -962,9 +962,15 @@ impl RestorationState {
       let crop_h = (fi.height + (1 << ydec >> 1)) >> ydec;
 
       for si in 0..stripe_n {
-        // stripe y pixel locations must be able to overspan the frame
-        let stripe_start_y = (si as isize * 64 - 8) >> ydec;
-        let stripe_size = 64 >> ydec; // one past, unlike spec
+        let (stripe_start_y, stripe_size) = if si == 0 {
+          (0, (64 - 8) >> ydec)
+        }  else {
+          (
+            (si as isize * 64 - 8) >> ydec,
+            // one past, unlike spec
+            64 >> ydec
+          )
+        };
 
         // horizontally, go rdu-by-rdu
         for rux in 0..rp.cfg.cols {
