@@ -1192,7 +1192,8 @@ impl<T: Pixel> ContextInner<T> {
           cdfs: fs.cdfs,
           // TODO: can we set MVs here? We can probably even compute these MVs
           // right now instead of in encode_tile?
-          frame_mvs: fs.frame_mvs
+          frame_mvs: fs.frame_mvs,
+          output_frameno: self.next_lookahead_output_frameno - 1
         });
         for i in 0..(REF_FRAMES as usize) {
           if (fi.refresh_frame_flags & (1 << i)) != 0 {
@@ -1280,7 +1281,8 @@ impl<T: Pixel> ContextInner<T> {
         input_hres: fs.input_hres,
         input_qres: fs.input_qres,
         cdfs: fs.cdfs,
-        frame_mvs: fs.frame_mvs
+        frame_mvs: fs.frame_mvs,
+        output_frameno: self.next_lookahead_output_frameno - 1
       });
       for i in 0..(REF_FRAMES as usize) {
         if (fi.refresh_frame_flags & (1 << i)) != 0 {
@@ -1401,7 +1403,7 @@ impl<T: Pixel> ContextInner<T> {
           // TODO avoid the clone by having rec Arc.
           let rec = if fi.show_frame { Some(fs.rec.clone()) } else { None };
 
-          update_rec_buffer(fi, fs);
+          update_rec_buffer(self.output_frameno, fi, fs);
 
           // Copy persistent fields into subsequent FrameInvariants.
           let rec_buffer = fi.rec_buffer.clone();
