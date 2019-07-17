@@ -571,8 +571,8 @@ impl<T: Pixel> FrameInvariants<T> {
       config.width,
       config.height,
       frame_rate,
-      config.tile_cols_log2,
-      config.tile_rows_log2,
+      TilingInfo::tile_log2(1, config.tile_cols),
+      TilingInfo::tile_log2(1, config.tile_rows),
     );
 
     if config.tiles > 0 {

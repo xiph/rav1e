@@ -196,16 +196,16 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .case_insensitive(true)
     )
     .arg(
-      Arg::with_name("TILE_ROWS_LOG2")
-        .help("Log2 of number of tile rows")
-        .long("tile-rows-log2")
+      Arg::with_name("TILE_ROWS")
+        .help("Number of tile rows. Must be a power of 2.")
+        .long("tile-rows")
         .takes_value(true)
         .default_value("0")
     )
     .arg(
-      Arg::with_name("TILE_COLS_LOG2")
-        .help("Log2 of number of tile columns")
-        .long("tile-cols-log2")
+      Arg::with_name("TILE_COLS")
+        .help("Number of tile columns. Must be a power of 2.")
+        .long("tile-cols")
         .takes_value(true)
         .default_value("0")
     )
@@ -534,15 +534,13 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
   cfg.show_psnr = matches.is_present("PSNR");
   cfg.tune = matches.value_of("TUNE").unwrap().parse().unwrap();
 
-  cfg.tile_cols_log2 =
-    matches.value_of("TILE_COLS_LOG2").unwrap().parse().unwrap();
-  cfg.tile_rows_log2 =
-    matches.value_of("TILE_ROWS_LOG2").unwrap().parse().unwrap();
+  cfg.tile_cols = matches.value_of("TILE_COLS").unwrap().parse().unwrap();
+  cfg.tile_rows = matches.value_of("TILE_ROWS").unwrap().parse().unwrap();
 
   cfg.tiles = matches.value_of("TILES").unwrap().parse().unwrap();
 
-  if cfg.tile_cols_log2 > 6 || cfg.tile_rows_log2 > 6 {
-    panic!("Log2 of tile columns and rows may not be greater than 6");
+  if cfg.tile_cols > 64 || cfg.tile_rows > 64 {
+    panic!("Tile columns and rows may not be greater than 64");
   }
 
   cfg.low_latency = matches.is_present("LOW_LATENCY");

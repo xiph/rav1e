@@ -126,7 +126,7 @@ impl TilingInfo {
   /// or equal to `target`.
   ///
   /// <https://aomediacodec.github.io/av1-spec/#tile-size-calculation-function>
-  fn tile_log2(blk_size: usize, target: usize) -> usize {
+  pub fn tile_log2(blk_size: usize, target: usize) -> usize {
     let mut k = 0;
     while (blk_size << k) < target {
       k += 1;

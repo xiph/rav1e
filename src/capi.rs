@@ -381,6 +381,27 @@ pub unsafe extern fn rav1e_config_unref(cfg: *mut Config) {
   }
 }
 
+fn tile_log2(blk_size: usize, target: usize) -> usize {
+  let mut k = 0;
+  while (blk_size << k) < target {
+    k += 1;
+  }
+  k
+}
+
+fn check_tile_log2(n: Result<usize, ()>) -> Result<usize, ()> {
+  match n {
+    Ok(n) => {
+      if ((1 << tile_log2(1, n)) - n) == 0 || n == 0 {
+        Err(())
+      } else {
+        Ok(n)
+      }
+    }
+    Err(e) => Err(e),
+  }
+}
+
 unsafe fn option_match(
   cfg: *mut Config, key: *const c_char, value: *const c_char,
 ) -> Result<(), ()> {
@@ -399,8 +420,12 @@ unsafe fn option_match(
     "threads" => (*cfg).cfg.threads = value.parse().map_err(|_| ())?,
 
     "tiles" => enc.tiles = value.parse().map_err(|_| ())?,
-    "tile_rows_log2" => enc.tile_rows_log2 = value.parse().map_err(|_| ())?,
-    "tile_cols_log2" => enc.tile_cols_log2 = value.parse().map_err(|_| ())?,
+    "tile_rows" => {
+      enc.tile_rows = check_tile_log2(value.parse().map_err(|_| ()))?
+    }
+    "tile_cols" => {
+      enc.tile_cols = check_tile_log2(value.parse().map_err(|_| ()))?
+    }
 
     "tune" => enc.tune = value.parse().map_err(|_| ())?,
     "quantizer" => enc.quantizer = value.parse().map_err(|_| ())?,
@@ -467,12 +492,14 @@ pub unsafe extern fn rav1e_config_parse_int(
 /// Generate a new encoding context from a populated encoder configuration
 ///
 /// Multiple contexts can be generated through it.
+/// Returns Null if context creation failed, e.g. by passing
+/// an invalid Config.
 #[no_mangle]
 pub unsafe extern fn rav1e_context_new(cfg: *const Config) -> *mut Context {
   let cfg = &(*cfg).cfg;
   let enc = &cfg.enc;
 
-  let ctx = Context {
+  let ctx_maybe = Result::<Context> {
     ctx: match enc.bit_depth {
       8 => EncContext::U8(cfg.new_context()),
       _ => EncContext::U16(cfg.new_context()),
@@ -480,7 +507,11 @@ pub unsafe extern fn rav1e_context_new(cfg: *const Config) -> *mut Context {
     last_err: None,
   };
 
-  Box::into_raw(Box::new(ctx))
+  if Ok(ctx) = ctx_maybe {
+    Box::into_raw(Box::new(ctx))
+  } else {
+    std::ptr::null_mut()
+  }
 }
 
 #[no_mangle]

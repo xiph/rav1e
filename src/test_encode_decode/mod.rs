@@ -164,12 +164,12 @@ pub(crate) fn setup_encoder<T: Pixel>(
   enc.bit_depth = bit_depth;
   enc.chroma_sampling = chroma_sampling;
   enc.bitrate = bitrate;
-  enc.tile_cols_log2 = tile_cols_log2;
-  enc.tile_rows_log2 = tile_rows_log2;
+  enc.tile_cols = 1 << tile_cols_log2;
+  enc.tile_rows = 1 << tile_rows_log2;
 
   let cfg = Config { enc, threads: 0 };
 
-  cfg.new_context()
+  cfg.new_context().unwrap()
 }
 
 // TODO: support non-multiple-of-16 dimensions

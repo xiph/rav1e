@@ -10,7 +10,7 @@ fn main() {
 
   cfg.enc.speed_settings = SpeedSettings::from_preset(9);
 
-  let mut ctx: Context<u16> = cfg.new_context();
+  let mut ctx: Context<u16> = cfg.new_context().unwrap();
 
   let f = ctx.new_frame();
 
