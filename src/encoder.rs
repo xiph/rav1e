@@ -485,6 +485,9 @@ pub struct FrameInvariants<T: Pixel> {
   /// should be ignored. Invalid frames occur when a subgop is prematurely
   /// ended, for example, by a key frame or the end of the video.
   pub invalid: bool,
+  /// Motion vectors to the _original_ reference frames (not reconstructed).
+  /// Used for lookahead purposes.
+  pub lookahead_mvs: Box<[FrameMotionVectors]>,
   /// The lookahead version of `rec_buffer`, used for storing and propagating
   /// the original reference frames (rather than reconstructed ones). The
   /// lookahead uses both `rec_buffer` and `lookahead_rec_buffer`, where
@@ -616,6 +619,13 @@ impl<T: Pixel> FrameInvariants<T> {
       tx_mode_select : false,
       default_filter: FilterMode::REGULAR,
       invalid: false,
+      lookahead_mvs: {
+        let mut vec = Vec::with_capacity(REF_FRAMES);
+        for _ in 0..REF_FRAMES {
+          vec.push(FrameMotionVectors::new(w_in_b, h_in_b));
+        }
+        vec.into_boxed_slice()
+      },
       lookahead_rec_buffer: ReferenceFramesSet::new(),
     }
   }

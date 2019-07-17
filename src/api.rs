@@ -1236,6 +1236,9 @@ impl<T: Pixel> ContextInner<T> {
           }
         });
 
+      // Save the motion vectors to FrameInvariants.
+      fi.lookahead_mvs = fs.frame_mvs.clone().into_boxed_slice();
+
       #[cfg(feature = "dump_lookahead_data")]
       {
         use crate::partition::RefType::*;
