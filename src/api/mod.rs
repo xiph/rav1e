@@ -33,7 +33,7 @@ use crate::rate::FRAME_SUBTYPE_I;
 use crate::rate::FRAME_SUBTYPE_P;
 use crate::rate::FRAME_SUBTYPE_SEF;
 use crate::scenechange::SceneChangeDetector;
-use crate::tiling::{Area, TileRect};
+use crate::tiling::{Area, TileRect, TilingInfo};
 use crate::transform::TxSize;
 use crate::util::Pixel;
 
@@ -98,13 +98,15 @@ pub struct EncoderConfig {
   pub min_quantizer: u8,
   pub bitrate: i32,
   pub tune: Tune,
-  /// log2(tile columns). Unused if tiles is specified.
-  pub tile_cols_log2: usize,
-  /// log2(tile rows). Unused if tiles is specified.
-  pub tile_rows_log2: usize,
-  /// Number of tiles desired. The video is split automatically so that
-  /// it contains at least this many tiles. Overrides tile_cols_log2
-  /// and tile_rows_log2.
+  /// Number of tiles horizontally. Must be a power of two.
+  /// Overridden by the tiles parameter, if present.
+  pub tile_cols: usize,
+  /// Number of tiles vertically. Must be a power of two.
+  /// Overridden by the tiles parameter, if present.
+  pub tile_rows: usize,
+  /// Total number of tiles desired. Encoder will try to optimally split
+  /// to reach this number of tiles, rounded up. Overrides
+  /// tile_cols and tile_rows parameters.
   pub tiles: usize,
   /// Number of frames to read ahead for RDO lookahead computation.
   pub rdo_lookahead_frames: u64,
@@ -154,8 +156,8 @@ impl EncoderConfig {
       quantizer: 100,
       bitrate: 0,
       tune: Tune::default(),
-      tile_cols_log2: 0,
-      tile_rows_log2: 0,
+      tile_cols: 0,
+      tile_rows: 0,
       tiles: 0,
       rdo_lookahead_frames: 40,
       speed_settings: SpeedSettings::from_preset(speed),
@@ -363,8 +365,12 @@ pub struct Config {
   pub threads: usize,
 }
 
+fn check_tile_log2(n: usize) -> bool {
+  ((1 << TilingInfo::tile_log2(1, n)) - n) == 0 || n == 0
+}
+
 impl Config {
-  pub fn new_context<T: Pixel>(&self) -> Context<T> {
+  pub fn new_context<T: Pixel>(&self) -> Result<Context<T>, EncoderStatus> {
     assert!(
       8 * std::mem::size_of::<T>() >= self.enc.bit_depth,
       "The Pixel u{} does not match the Config bit_depth {}",
@@ -379,6 +385,13 @@ impl Config {
 
     let mut config = self.enc.clone();
 
+    if !check_tile_log2(config.tile_cols) {
+      return Err(EncoderStatus::Failure);
+    }
+    if !check_tile_log2(config.tile_rows) {
+      return Err(EncoderStatus::Failure);
+    }
+
     // FIXME: inter unsupported with 4:2:2 and 4:4:4 chroma sampling
     let chroma_sampling = config.chroma_sampling;
 
@@ -389,7 +402,7 @@ impl Config {
 
     let inner = ContextInner::new(&config);
 
-    Context { is_flushing: false, inner, pool, config }
+    Ok(Context { is_flushing: false, inner, pool, config })
   }
 }
 
@@ -676,7 +689,7 @@ impl<T: Pixel> Context<T> {
   /// use rav1e::prelude::*;
   ///
   /// let cfg = Config::default();
-  /// let mut ctx: Context<u8> = cfg.new_context();
+  /// let mut ctx: Context<u8> = cfg.new_context().unwrap();
   /// let f1 = ctx.new_frame();
   /// let f2 = f1.clone();
   /// let info = FrameParameters {
@@ -2002,7 +2015,7 @@ mod test {
 
     let cfg = Config { enc, threads: 0 };
 
-    cfg.new_context()
+    cfg.new_context().unwrap()
   }
 
   /*

@@ -176,7 +176,8 @@ fn do_encode<T: Pixel, D: Decoder>(
   pass1file_name: Option<&String>, pass2file_name: Option<&String>,
   mut y4m_enc: Option<y4m::Encoder<'_, Box<dyn Write>>>,
 ) -> Result<(), CliError> {
-  let mut ctx: Context<T> = cfg.new_context();
+  let mut ctx: Context<T> =
+    cfg.new_context().map_err(|e| e.context("Invalid encoder settings"))?;
 
   let mut pass2file = pass2file_name.map(|f| {
     File::open(f).unwrap_or_else(|_| {
