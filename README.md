@@ -159,7 +159,19 @@ Run unit tests with:
 cargo test
 ```
 
-Run encode-decode integration tests with:
+Encode-decode integration tests require libaom and libdav1d.
+
+Installation on Ubuntu:
+```
+sudo apt install libaom-dev libdav1d-dev
+```
+
+Installation on Fedora:
+```
+sudo dnf install libaom-devel libdav1d-devel
+```
+
+Run encode-decode integration tests against libaom with:
 ```
 cargo test --release --features=decode_test
 ```
