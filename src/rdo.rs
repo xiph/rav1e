@@ -355,9 +355,33 @@ fn compute_tx_distortion<T: Pixel>(
   distortion
 }
 
-pub fn compute_rd_cost<T: Pixel>(fi: &FrameInvariants<T>, rate: u32, distortion: u64) -> f64 {
+pub fn compute_rd_cost<T: Pixel>(
+  fi: &FrameInvariants<T>, frame_bo: BlockOffset, bsize: BlockSize, rate: u32,
+  distortion: u64
+) -> f64 {
+  let x1 = frame_bo.x;
+  let y1 = frame_bo.y;
+  let x2 = (x1 + bsize.width_mi()).min(fi.w_in_b);
+  let y2 = (y1 + bsize.height_mi()).min(fi.h_in_b);
+
+  let mut mean_importance = 0.;
+  for y in y1..y2 {
+    for x in x1..x2 {
+      mean_importance += fi.block_importances[y * fi.w_in_b + x];
+    }
+  }
+  // Divide by the full area even though some blocks were outside.
+  mean_importance /= (bsize.width_mi() * bsize.height_mi()) as f32;
+
+  // Chosen empirically so the bias ends up being around 1.
+  const FACTOR: f32 = 4.;
+  const ADDEND: f64 = 0.8;
+
+  let bias = (mean_importance / FACTOR) as f64 + ADDEND;
+  debug_assert!(bias.is_finite());
+
   let rate_in_bits = (rate as f64) / ((1 << OD_BITRES) as f64);
-  (distortion as f64) + fi.lambda * rate_in_bits
+  (distortion as f64) * bias + fi.lambda * rate_in_bits
 }
 
 pub fn rdo_tx_size_type<T: Pixel>(
@@ -532,7 +556,7 @@ fn luma_chroma_mode_rdo<T: Pixel> (luma_mode: PredictionMode,
           false
         )
       };
-      let rd = compute_rd_cost(fi, rate, distortion);
+      let rd = compute_rd_cost(fi, ts.to_frame_block_offset(tile_bo), bsize, rate, distortion);
       if rd < best.rd {
         //if rd < best.rd || luma_mode == PredictionMode::NEW_NEWMV {
         best.rd = rd;
@@ -876,7 +900,7 @@ pub fn rdo_mode_decision<T: Pixel>(
           tile_bo,
           false
         );
-      let rd = compute_rd_cost(fi, rate, distortion);
+      let rd = compute_rd_cost(fi, ts.to_frame_block_offset(tile_bo), bsize, rate, distortion);
       if rd < best.rd {
         best.rd = rd;
         best.mode_chroma = chroma_mode;
@@ -1041,7 +1065,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
         true
       )
     };
-    let rd = compute_rd_cost(fi, rate, distortion);
+    let rd = compute_rd_cost(fi, ts.to_frame_block_offset(tile_bo), bsize, rate, distortion);
     if rd < best_rd {
       best_rd = rd;
       best_type = tx_type;
@@ -1189,7 +1213,7 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
           let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
           let tell = w.tell_frac();
           cw.write_partition(w, tile_bo, partition, bsize);
-          cost = compute_rd_cost(fi, w.tell_frac() - tell, 0);
+          cost = compute_rd_cost(fi, ts.to_frame_block_offset(tile_bo), bsize, w.tell_frac() - tell, 0);
         }
         let mut rd_cost_sum = 0.0;
 
@@ -1348,7 +1372,8 @@ pub fn rdo_loop_decision<T: Pixel>(tile_sbo: SuperBlockOffset, fi: &FrameInvaria
                 } else {
                   0 // no relative cost differeneces to different CDEF params.  If cdef is on, it's a wash.
                 };
-                cost[pli] = compute_rd_cost(fi, rate, err);
+                let frame_bo = ts.to_frame_super_block_offset(tile_sbo).block_offset(0, 0);
+                cost[pli] = compute_rd_cost(fi, frame_bo, BlockSize::BLOCK_64X64, rate, err);
                 cost_acc += cost[pli];
               }
               RestorationFilter::Sgrproj{set, xqd} => {
@@ -1362,7 +1387,8 @@ pub fn rdo_loop_decision<T: Pixel>(tile_sbo: SuperBlockOffset, fi: &FrameInvaria
                                       &mut lrf_output.planes[pli].mut_slice(PlaneOffset{x:0, y:0}));
                 let err = rdo_loop_plane_error(tile_sbo, fi, ts, &cw.bc.blocks.as_const(), &lrf_output, pli);
                 let rate = cw.count_lrf_switchable(w, &ts.restoration.as_const(), best_lrf[pli], pli);
-                cost[pli] = compute_rd_cost(fi, rate, err);
+                let frame_bo = ts.to_frame_super_block_offset(tile_sbo).block_offset(0, 0);
+                cost[pli] = compute_rd_cost(fi, frame_bo, BlockSize::BLOCK_64X64, rate, err);
                 cost_acc += cost[pli];
               }
               RestorationFilter::Wiener{..} => unreachable!() // coming soon
@@ -1417,7 +1443,8 @@ pub fn rdo_loop_decision<T: Pixel>(tile_sbo: SuperBlockOffset, fi: &FrameInvaria
           }
           let err = rdo_loop_plane_error(tile_sbo, fi, ts, &cw.bc.blocks.as_const(), &lrf_output, pli);
           let rate = cw.count_lrf_switchable(w, &ts.restoration.as_const(), current_lrf, pli);
-          let cost = compute_rd_cost(fi, rate, err);
+          let frame_bo = ts.to_frame_super_block_offset(tile_sbo).block_offset(0, 0);
+          let cost = compute_rd_cost(fi, frame_bo, BlockSize::BLOCK_64X64, rate, err);
           if best_cost[pli] < 0. || cost < best_cost[pli] {
             best_cost[pli] = cost;
             best_lrf[pli] = current_lrf;
