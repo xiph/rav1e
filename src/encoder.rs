@@ -354,6 +354,7 @@ impl<T: Pixel> FrameState<T> {
     }
   }
 
+  #[cfg(feature="bench")]
   #[inline(always)]
   pub fn as_tile_state_mut(&mut self) -> TileStateMut<'_, T> {
     let PlaneConfig { width, height, .. } = self.rec.planes[0].cfg;
