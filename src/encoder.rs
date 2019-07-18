@@ -1609,7 +1609,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       let w: &mut W = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
       let tell = w.tell_frac();
       cw.write_partition(w, tile_bo, PartitionType::PARTITION_NONE, bsize);
-      (w.tell_frac() - tell) as f64 * fi.lambda / ((1 << OD_BITRES) as f64)
+      compute_rd_cost(fi, w.tell_frac() - tell, 0)
     } else {
       0.0
     };
@@ -1676,8 +1676,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
         let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
         let tell = w.tell_frac();
         cw.write_partition(w, tile_bo, partition, bsize);
-        rd_cost = (w.tell_frac() - tell) as f64 * fi.lambda
-          / ((1 << OD_BITRES) as f64);
+        rd_cost = compute_rd_cost(fi, w.tell_frac() - tell, 0);
       }
 
       let four_partitions = [
