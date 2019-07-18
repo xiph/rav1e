@@ -55,7 +55,7 @@ jobs:
       - name: "Tests"
         script: cargo test --verbose --release --features=decode_test -- --ignored
       - name: "Bench"
-        script: cargo bench --features=bench --verbose
+        script: cargo bench --features=bench --no-run --verbose
       - name: "Doc & Clippy (linter): verifying code quality"
         script:
          - cargo doc --verbose --no-deps
