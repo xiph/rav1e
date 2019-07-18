@@ -26,7 +26,6 @@ use crate::util::Pixel;
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::{cmp, fmt, io};
 
@@ -93,10 +92,7 @@ pub struct EncoderConfig {
   /// and tile_rows_log2.
   pub tiles: usize,
   pub speed_settings: SpeedSettings,
-  /// `None` for one-pass encode. `Some(1)` or `Some(2)` for two-pass encoding.
-  pub pass: Option<u8>,
   pub show_psnr: bool,
-  pub stats_file: Option<PathBuf>,
   pub train_rdo: bool
 }
 
@@ -143,9 +139,7 @@ impl EncoderConfig {
       tile_rows_log2: 0,
       tiles: 0,
       speed_settings: SpeedSettings::from_preset(speed),
-      pass: None,
       show_psnr: false,
-      stats_file: None,
       train_rdo: false
     }
   }
@@ -691,7 +685,6 @@ pub(crate) struct ContextInner<T: Pixel> {
   seq: Sequence,
   rc_state: RCState,
   maybe_prev_log_base_q: Option<i64>,
-  pub first_pass_data: FirstPassData,
   /// The next `input_frameno` to be processed by lookahead.
   next_lookahead_frame: u64,
   /// The next `output_frameno` to be computed by lookahead.
@@ -856,10 +849,6 @@ impl<T: Pixel> Context<T> {
 
     sequence_header_inner(&seq).unwrap()
   }
-
-  pub fn get_first_pass_data(&self) -> &FirstPassData {
-    &self.inner.first_pass_data
-  }
 }
 
 impl<T: Pixel> ContextInner<T> {
@@ -897,7 +886,6 @@ impl<T: Pixel> ContextInner<T> {
         enc.reservoir_frame_delay
       ),
       maybe_prev_log_base_q: None,
-      first_pass_data: FirstPassData { frames: Vec::new() },
       next_lookahead_frame: 0,
       next_lookahead_output_frameno: 0
     }
@@ -1303,10 +1291,6 @@ impl<T: Pixel> ContextInner<T> {
       }
     }
 
-    if self.config.pass == Some(1) {
-      self.first_pass_data.frames.push(FirstPassFrame::from(fi));
-    }
-
     self.frames_processed += 1;
     Ok(Packet {
       data,
@@ -1504,26 +1488,6 @@ impl<T: Pixel> ContextInner<T> {
       // Otherwise, we discard what remains in the accumulators as they contain
       //  the counts from and past the last keyframe.
       (prev_keyframe_nframes, prev_keyframe_ntus)
-    }
-  }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FirstPassData {
-  frames: Vec<FirstPassFrame>
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub struct FirstPassFrame {
-  input_frameno: u64,
-  frame_type: FrameType
-}
-
-impl<T: Pixel> From<&FrameInvariants<T>> for FirstPassFrame {
-  fn from(fi: &FrameInvariants<T>) -> FirstPassFrame {
-    FirstPassFrame {
-      input_frameno: fi.input_frameno,
-      frame_type: fi.frame_type
     }
   }
 }

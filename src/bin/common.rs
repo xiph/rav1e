@@ -16,7 +16,6 @@ use scan_fmt::scan_fmt;
 
 use std::fs::File;
 use std::io::prelude::*;
-use std::path::PathBuf;
 use std::time::Instant;
 use std::{fmt, io};
 
@@ -74,13 +73,6 @@ pub fn parse_cli() -> CliOptions {
         .long("output")
         .required_unless("FULLHELP")
         .takes_value(true)
-    )
-    .arg(
-      Arg::with_name("STATS_FILE")
-        .help("Custom location for first-pass stats file")
-        .long("stats")
-        .takes_value(true)
-        .default_value("rav1e_stats.json")
     )
     // ENCODING SETTINGS
     .arg(
@@ -480,12 +472,6 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
   cfg.bitrate = bitrate.checked_mul(1000).expect("Bitrate too high");
   cfg.reservoir_frame_delay = matches.value_of("RESERVOIR_FRAME_DELAY").map(|reservior_frame_delay| reservior_frame_delay.parse().unwrap());
   cfg.show_psnr = matches.is_present("PSNR");
-  cfg.pass = None;
-  cfg.stats_file = if cfg.pass.is_some() {
-    Some(PathBuf::from(matches.value_of("STATS_FILE").unwrap()))
-  } else {
-    None
-  };
   cfg.tune = matches.value_of("TUNE").unwrap().parse().unwrap();
 
   cfg.tile_cols_log2 = matches.value_of("TILE_COLS_LOG2").unwrap().parse().unwrap();
