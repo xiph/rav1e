@@ -15,17 +15,14 @@ mod muxer;
 use crate::common::*;
 use rav1e::prelude::*;
 
-use std::io;
 use std::io::Write;
 use std::io::Read;
 use std::io::Seek;
-use std::path::Path;
 use std::sync::Arc;
 use crate::decoder::Decoder;
 use crate::decoder::VideoDetails;
 use crate::muxer::*;
 use std::fs::File;
-use std::io::BufWriter;
 
 struct Source<D: Decoder> {
  limit: usize,
@@ -155,13 +152,6 @@ fn process_frame<T: Pixel, D: Decoder>(
   Some(frame_summaries)
 }
 
-fn write_stats_file<T: Pixel>(ctx: &Context<T>, filename: &Path) -> Result<(), io::Error> {
-  let file = File::create(filename)?;
-  let writer = BufWriter::new(file);
-  serde_json::to_writer(writer, ctx.get_first_pass_data()).expect("Serialization should not fail");
-  Ok(())
-}
-
 fn do_encode<T: Pixel, D: Decoder>(
   cfg: Config, verbose: bool, mut progress: ProgressInfo,
   output: &mut dyn Muxer,
@@ -198,14 +188,6 @@ fn do_encode<T: Pixel, D: Decoder>(
     }
 
     output.flush().unwrap();
-  }
-
-  if cfg.enc.pass == Some(1) {
-    if let Err(e) =
-      write_stats_file(&ctx, cfg.enc.stats_file.as_ref().unwrap())
-    {
-      eprintln!("\nError: Failed to write stats file! {}\n", e);
-    }
   }
   eprint!("\n{}\n", progress.print_summary());
 }
