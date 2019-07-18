@@ -663,8 +663,8 @@ pub fn sgrproj_solve<T: Pixel>(set: u8, fi: &FrameInvariants<T>,
     }
 
     for yi in 0..cdef_h {
-      let u = i32::cast_from(cdeffed.p(yi,xi)) << SGRPROJ_RST_BITS;
-      let s = i32::cast_from(input.p(yi,xi)) << SGRPROJ_RST_BITS;
+      let u = i32::cast_from(cdeffed.p(xi,yi)) << SGRPROJ_RST_BITS;
+      let s = i32::cast_from(input.p(xi,yi)) << SGRPROJ_RST_BITS;
       let f2 = f_r2[yi] as i32 - u;
       let f1 = f_r1[yi] as i32 - u;
       h[0][0] += f2 as f64 * f2 as f64;
