@@ -293,11 +293,6 @@ impl Sequence {
   pub fn sb_size_log2(&self) -> usize {
     if self.use_128x128_superblock { 7 } else { 6 }
   }
-
-  #[inline(always)]
-  pub fn sb_size(&self) -> usize {
-    1 << self.sb_size_log2()
-  }
 }
 
 #[derive(Debug)]
@@ -813,11 +808,6 @@ impl<T: Pixel> FrameInvariants<T> {
   #[inline(always)]
   pub fn sb_size_log2(&self) -> usize {
     self.sequence.sb_size_log2()
-  }
-
-  #[inline(always)]
-  pub fn sb_size(&self) -> usize {
-    self.sequence.sb_size()
   }
 }
 
