@@ -1317,6 +1317,12 @@ impl<T: Pixel> ContextInner<T> {
     // Now compute and propagate the block importances from the end. The
     // current output frame will get its block importances from the future
     // frames.
+    const BLOCK_SIZE: i64 = 4;
+    const MV_UNITS_PER_PIXEL: i64 = 8;
+    const BLOCK_SIZE_IN_MV_UNITS: i64 = BLOCK_SIZE * MV_UNITS_PER_PIXEL;
+    const BLOCK_AREA_IN_MV_UNITS: i64 =
+      BLOCK_SIZE_IN_MV_UNITS * BLOCK_SIZE_IN_MV_UNITS;
+
     for &output_frameno in output_framenos.iter().skip(1).rev() {
       // Remove fi from the map temporarily and put it back in in the end of
       // the iteration. This is required because we need to mutably borrow
@@ -1331,12 +1337,6 @@ impl<T: Pixel> ContextInner<T> {
       }
 
       let frame = self.frame_q[&fi.input_frameno].as_ref().unwrap();
-
-      const BLOCK_SIZE: i64 = 4;
-      const MV_UNITS_PER_PIXEL: i64 = 8;
-      const BLOCK_SIZE_IN_MV_UNITS: i64 = BLOCK_SIZE * MV_UNITS_PER_PIXEL;
-      const BLOCK_AREA_IN_MV_UNITS: i64 =
-        BLOCK_SIZE_IN_MV_UNITS * BLOCK_SIZE_IN_MV_UNITS;
 
       // There can be at most 3 of these.
       let mut unique_indices = ArrayVec::<[_; 3]>::new();
@@ -1546,6 +1546,100 @@ impl<T: Pixel> ContextInner<T> {
       }
 
       self.frame_invariants.insert(output_frameno, fi);
+    }
+
+    // Get the final block importance values for the current output frame.
+    if !output_framenos.is_empty() {
+      let fi = self.frame_invariants.get_mut(&output_framenos[0]).unwrap();
+      let frame = self.frame_q[&fi.input_frameno].as_ref().unwrap();
+
+      let mut plane_after_prediction = frame.planes[0].clone();
+
+      for y in 0..fi.h_in_b {
+        for x in 0..fi.w_in_b {
+          let plane_org = frame.planes[0].region(Area::Rect {
+            x: x as isize * BLOCK_SIZE as isize,
+            y: y as isize * BLOCK_SIZE as isize,
+            width: BLOCK_SIZE as usize,
+            height: BLOCK_SIZE as usize
+          });
+
+          // TODO: other intra prediction modes.
+          let edge_buf = get_intra_edges(
+            &frame.planes[0].as_region(),
+            PlaneOffset {
+              x: x as isize * BLOCK_SIZE as isize,
+              y: y as isize * BLOCK_SIZE as isize
+            },
+            TxSize::TX_4X4,
+            fi.sequence.bit_depth,
+            Some(PredictionMode::DC_PRED)
+          );
+
+          let mut plane_after_prediction_region = plane_after_prediction
+            .region_mut(Area::Rect {
+              x: x as isize * BLOCK_SIZE as isize,
+              y: y as isize * BLOCK_SIZE as isize,
+              width: BLOCK_SIZE as usize,
+              height: BLOCK_SIZE as usize
+            });
+
+          PredictionMode::DC_PRED.predict_intra(
+            TileRect {
+              x: x * BLOCK_SIZE as usize,
+              y: y * BLOCK_SIZE as usize,
+              width: BLOCK_SIZE as usize,
+              height: BLOCK_SIZE as usize
+            },
+            &mut plane_after_prediction_region,
+            TxSize::TX_4X4,
+            fi.sequence.bit_depth,
+            &[], // Not used by DC_PRED.
+            0,   // Not used by DC_PRED.
+            &edge_buf
+          );
+
+          let plane_after_prediction_region =
+            plane_after_prediction.region(Area::Rect {
+              x: x as isize * BLOCK_SIZE as isize,
+              y: y as isize * BLOCK_SIZE as isize,
+              width: BLOCK_SIZE as usize,
+              height: BLOCK_SIZE as usize
+            });
+
+          let intra_cost: f32 = get_satd(
+            &plane_org,
+            &plane_after_prediction_region,
+            BLOCK_SIZE as usize,
+            BLOCK_SIZE as usize,
+            self.config.bit_depth
+          ) as f32;
+
+          let importance = &mut fi.block_importances[y * fi.w_in_b + x];
+          if intra_cost > 0. {
+            *importance = (1. + *importance / intra_cost).log2();
+          } else {
+            *importance = 0.;
+          }
+        }
+      }
+
+      #[cfg(feature = "dump_lookahead_data")]
+      {
+        let data = &fi.block_importances;
+        use byteorder::{NativeEndian, WriteBytesExt};
+        let mut buf = vec![];
+        buf.write_u64::<NativeEndian>(fi.h_in_b as u64).unwrap();
+        buf.write_u64::<NativeEndian>(fi.w_in_b as u64).unwrap();
+        for y in 0..fi.h_in_b {
+          for x in 0..fi.w_in_b {
+            let importance = data[y * fi.w_in_b + x];
+            buf.write_f32::<NativeEndian>(importance).unwrap();
+          }
+        }
+        ::std::fs::write(format!("{}-imps.bin", fi.input_frameno), buf)
+          .unwrap();
+      }
     }
   }
 
