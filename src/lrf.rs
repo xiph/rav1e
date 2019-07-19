@@ -450,7 +450,8 @@ pub fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvarian
       // Move left to encompass all the used data
       &cdeffed.go_left(left_uniques),
       &deblocked.go_left(left_uniques),
-      stripe_h,
+      // since r2 uses every other row, we need an extra row if stripe_h is odd
+      stripe_h + if s_r2 > 0 { stripe_h & 1 } else { 0 },
       crop_h,
       max_r
     )
@@ -587,7 +588,8 @@ pub fn sgrproj_solve<T: Pixel>(set: u8, fi: &FrameInvariants<T>,
     let mut rows_iter = VertPaddedIter::new(
       cdeffed,
       cdeffed,
-      cdef_h,
+      // since r2 uses every other row, we need an extra row if cdef_h is odd
+      cdef_h + if s_r2 > 0 { cdef_h & 1 } else { 0 },
       cdef_h,
       max_r)
     .map(|row: &[T]| {
@@ -964,11 +966,12 @@ impl RestorationState {
       for si in 0..stripe_n {
         let (stripe_start_y, stripe_size) = if si == 0 {
           (0, (64 - 8) >> ydec)
-        }  else {
+        } else {
+          let start = (si * 64 - 8) >> ydec;
           (
-            (si as isize * 64 - 8) >> ydec,
+            start as isize,
             // one past, unlike spec
-            64 >> ydec
+            (64 >> ydec).min(crop_h - start)
           )
         };
 
