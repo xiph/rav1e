@@ -602,14 +602,6 @@ impl<'a, T: Pixel> ExactSizeIterator for RowsIterMut<'a, T> {}
 impl<'a, T: Pixel> FusedIterator for RowsIterMut<'a, T> {}
 
 impl<'a, T: Pixel> PlaneMutSlice<'a, T> {
-  pub fn as_ptr(&self) -> *const T {
-    self[0].as_ptr()
-  }
-
-  pub fn as_mut_ptr(&mut self) -> *mut T {
-    self[0].as_mut_ptr()
-  }
-
   pub fn rows_iter(&self) -> RowsIter<'_, T> {
     RowsIter {
       plane: self.plane,
@@ -625,15 +617,6 @@ impl<'a, T: Pixel> PlaneMutSlice<'a, T> {
       y: self.y,
       phantom: PhantomData,
     }
-  }
-
-  // FIXME: code duplication with PlaneSlice
-  pub fn p(&self, add_x: usize, add_y: usize) -> T {
-    let new_y =
-      (self.y + add_y as isize + self.plane.cfg.yorigin as isize) as usize;
-    let new_x =
-      (self.x + add_x as isize + self.plane.cfg.xorigin as isize) as usize;
-    self.plane.data[new_y * self.plane.cfg.stride + new_x]
   }
 }
 
