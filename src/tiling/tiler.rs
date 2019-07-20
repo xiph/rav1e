@@ -111,11 +111,10 @@ impl TilingInfo {
   ///
   /// <https://aomediacodec.github.io/av1-spec/#tile-size-calculation-function>
   fn tile_log2(blk_size: usize, target: usize) -> usize {
-    let mut k = 0;
-    while (blk_size << k) < target {
-      k += 1;
-    }
-    k
+    debug_assert!(blk_size != 0 && target > blk_size &&
+      blk_size.ilog() == (blk_size - 1).ilog() + 1 && // Block size is a power of 2
+      target.ilog() == (target - 1).ilog() + 1); // Target is a power of 2
+    if target <= blk_size { 0 } else { target.ilog() - blk_size.ilog() }
   }
 
   #[inline(always)]
