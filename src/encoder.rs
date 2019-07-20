@@ -524,7 +524,7 @@ impl<T: Pixel> FrameInvariants<T> {
       (config.width * config.height * frame_rate) / (4096_f64 * 2176_f64 * 60_f64 * 1.1) as usize
     );
 
-    let mut tiling = TilingInfo::new(
+    let mut tiling = TilingInfo::from_target_tiles(
       sequence.sb_size_log2(),
       config.width,
       config.height,
@@ -541,7 +541,7 @@ impl<T: Pixel> FrameInvariants<T> {
       let mut tile_cols_log2 = if config.tiles == 0 { config.tile_cols_log2 } else { min_tile_cols };
       while (tile_rows_log2 < tiling.max_tile_rows_log2) || (tile_cols_log2 < tiling.max_tile_cols_log2) {
 
-        tiling = TilingInfo::new(
+        tiling = TilingInfo::from_target_tiles(
           sequence.sb_size_log2(),
           config.width,
           config.height,

@@ -45,7 +45,7 @@ pub struct TilingInfo {
 }
 
 impl TilingInfo {
-  pub fn new(
+  pub fn from_target_tiles(
     sb_size_log2: usize,
     frame_width: usize,
     frame_height: usize,
@@ -213,32 +213,32 @@ pub mod test {
     let sb_size_log2 = 6;
     let (width, height) = (160, 144);
 
-    let ti = TilingInfo::new(sb_size_log2, width, height, 0, 0);
+    let ti = TilingInfo::from_target_tiles(sb_size_log2, width, height, 0, 0);
     assert_eq!(1, ti.cols);
     assert_eq!(1, ti.rows);
     assert_eq!(3, ti.tile_width_sb);
     assert_eq!(3, ti.tile_height_sb);
 
-    let ti = TilingInfo::new(sb_size_log2, width, height, 1, 1);
+    let ti = TilingInfo::from_target_tiles(sb_size_log2, width, height, 1, 1);
     assert_eq!(2, ti.cols);
     assert_eq!(2, ti.rows);
     assert_eq!(2, ti.tile_width_sb);
     assert_eq!(2, ti.tile_height_sb);
 
-    let ti = TilingInfo::new(sb_size_log2, width, height, 2, 2);
+    let ti = TilingInfo::from_target_tiles(sb_size_log2, width, height, 2, 2);
     assert_eq!(3, ti.cols);
     assert_eq!(3, ti.rows);
     assert_eq!(1, ti.tile_width_sb);
     assert_eq!(1, ti.tile_height_sb);
 
     // cannot split more than superblocks
-    let ti = TilingInfo::new(sb_size_log2, width, height, 10, 8);
+    let ti = TilingInfo::from_target_tiles(sb_size_log2, width, height, 10, 8);
     assert_eq!(3, ti.cols);
     assert_eq!(3, ti.rows);
     assert_eq!(1, ti.tile_width_sb);
     assert_eq!(1, ti.tile_height_sb);
 
-    let ti = TilingInfo::new(sb_size_log2, 1024, 1024, 0, 0);
+    let ti = TilingInfo::from_target_tiles(sb_size_log2, 1024, 1024, 0, 0);
     assert_eq!(1, ti.cols);
     assert_eq!(1, ti.rows);
     assert_eq!(16, ti.tile_width_sb);
@@ -273,7 +273,7 @@ pub mod test {
 
     {
       // 2x2 tiles
-      let ti = TilingInfo::new(fi.sb_size_log2(), fi.width, fi.height, 1, 1);
+      let ti = TilingInfo::from_target_tiles(fi.sb_size_log2(), fi.width, fi.height, 1, 1);
       let mut iter = ti.tile_iter_mut(&mut fs, &mut fb);
       assert_eq!(4, iter.len());
       assert!(iter.next().is_some());
@@ -289,7 +289,7 @@ pub mod test {
 
     {
       // 4x4 tiles requested, will actually get 3x3 tiles
-      let ti = TilingInfo::new(fi.sb_size_log2(), fi.width, fi.height, 2, 2);
+      let ti = TilingInfo::from_target_tiles(fi.sb_size_log2(), fi.width, fi.height, 2, 2);
       let mut iter = ti.tile_iter_mut(&mut fs, &mut fb);
       assert_eq!(9, iter.len());
       assert!(iter.next().is_some());
@@ -329,7 +329,7 @@ pub mod test {
     let mut fb = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
 
     // 4x4 tiles requested, will actually get 3x3 tiles
-    let ti = TilingInfo::new(fi.sb_size_log2(), fi.width, fi.height, 2, 2);
+    let ti = TilingInfo::from_target_tiles(fi.sb_size_log2(), fi.width, fi.height, 2, 2);
     let iter = ti.tile_iter_mut(&mut fs, &mut fb);
     let tile_states = iter.map(|ctx| ctx.ts).collect::<Vec<_>>();
 
@@ -400,7 +400,7 @@ pub mod test {
     let mut fb = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
 
     // 4x4 tiles requested, will actually get 3x3 tiles
-    let ti = TilingInfo::new(fi.sb_size_log2(), fi.width, fi.height, 2, 2);
+    let ti = TilingInfo::from_target_tiles(fi.sb_size_log2(), fi.width, fi.height, 2, 2);
     let iter = ti.tile_iter_mut(&mut fs, &mut fb);
     let tbs = iter.map(|ctx| ctx.tb).collect::<Vec<_>>();
 
@@ -433,7 +433,7 @@ pub mod test {
 
     {
       // 4x4 tiles requested, will actually get 3x3 tiles
-      let ti = TilingInfo::new(fi.sb_size_log2(), fi.width, fi.height, 2, 2);
+      let ti = TilingInfo::from_target_tiles(fi.sb_size_log2(), fi.width, fi.height, 2, 2);
       let iter = ti.tile_iter_mut(&mut fs, &mut fb);
       let mut tile_states = iter.map(|ctx| ctx.ts).collect::<Vec<_>>();
 
@@ -490,7 +490,7 @@ pub mod test {
     let fi = create_frame_invariants(64, 80, ChromaSampling::Cs420);
     let mut fs = FrameState::new(&fi);
     let mut fb = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
-    let ti = TilingInfo::new(fi.sb_size_log2(), fi.width, fi.height, 2, 2);
+    let ti = TilingInfo::from_target_tiles(fi.sb_size_log2(), fi.width, fi.height, 2, 2);
     let iter = ti.tile_iter_mut(&mut fs, &mut fb);
     let mut tile_states = iter.map(|ctx| ctx.ts).collect::<Vec<_>>();
 
@@ -523,7 +523,7 @@ pub mod test {
 
     {
       // 2x2 tiles, each one containing 2×2 restoration units (1 super-block per restoration unit)
-      let ti = TilingInfo::new(fi.sb_size_log2(), fi.width, fi.height, 1, 1);
+      let ti = TilingInfo::from_target_tiles(fi.sb_size_log2(), fi.width, fi.height, 1, 1);
       let iter = ti.tile_iter_mut(&mut fs, &mut fb);
       let mut tile_states = iter.map(|ctx| ctx.ts).collect::<Vec<_>>();
 
@@ -578,7 +578,7 @@ pub mod test {
 
     {
       // 4x4 tiles requested, will actually get 3x3 tiles
-      let ti = TilingInfo::new(fi.sb_size_log2(), fi.width, fi.height, 2, 2);
+      let ti = TilingInfo::from_target_tiles(fi.sb_size_log2(), fi.width, fi.height, 2, 2);
       let iter = ti.tile_iter_mut(&mut fs, &mut fb);
       let mut tile_states = iter.map(|ctx| ctx.ts).collect::<Vec<_>>();
 
@@ -615,7 +615,7 @@ pub mod test {
 
     {
       // 4x4 tiles requested, will actually get 3x3 tiles
-      let ti = TilingInfo::new(fi.sb_size_log2(), fi.width, fi.height, 2, 2);
+      let ti = TilingInfo::from_target_tiles(fi.sb_size_log2(), fi.width, fi.height, 2, 2);
       let iter = ti.tile_iter_mut(&mut fs, &mut fb);
       let mut tbs = iter.map(|ctx| ctx.tb).collect::<Vec<_>>();
 
