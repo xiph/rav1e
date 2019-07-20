@@ -13,8 +13,7 @@ use crate::quantize::ac_q;
 use crate::quantize::dc_q;
 use crate::quantize::select_ac_qi;
 use crate::quantize::select_dc_qi;
-use crate::util::clamp;
-use crate::util::Pixel;
+use crate::util::{clamp, ILog, Pixel};
 
 // The number of frame sub-types for which we track distinct parameters.
 // This does not include FRAME_SUBTYPE_SEF, because we don't need to do any
@@ -79,16 +78,6 @@ const DQP_Q57: &[i64; FRAME_NSUBTYPES] = &[
   ((33_810_170.0 / 86_043_287.0) * (1i64 << 57) as f64) as i64,
   (2.0 * (33_810_170.0 / 86_043_287.0) * (1i64 << 57) as f64) as i64
 ];
-
-// Integer binary logarithm of a 64-bit value.
-// v: A 64-bit value.
-// Returns floor(log2(v)) + 1, or 0 if v == 0.
-// This is the number of bits that would be required to represent v in two's
-//  complement notation with all of the leading zeros stripped.
-// TODO: Mark const once leading_zeros() as a constant function stabilizes.
-fn ilog64(v: i64) -> i32 {
-  64 - (v.leading_zeros() as i32)
-}
 
 // Convert an integer into a Q57 fixed-point fraction.
 // The integer must be in the range -64 to 63, inclusive.
@@ -218,7 +207,7 @@ fn blog64(w: i64) -> i64 {
   if w <= 0 {
     return -1;
   }
-  let ipart = ilog64(w) - 1;
+  let ipart = w.ilog() as i32 - 1;
   if ipart > 61 {
     w >>= ipart - 61;
   } else {
