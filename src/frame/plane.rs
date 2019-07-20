@@ -298,11 +298,11 @@ impl<T: Pixel> Plane<T> {
     }
   }
 
-  pub fn slice(&self, po: PlaneOffset) -> PlaneSlice<'_, T> {
+  pub(crate) fn slice(&self, po: PlaneOffset) -> PlaneSlice<'_, T> {
     PlaneSlice { plane: self, x: po.x, y: po.y }
   }
 
-  pub fn mut_slice(&mut self, po: PlaneOffset) -> PlaneMutSlice<'_, T> {
+  pub(crate) fn mut_slice(&mut self, po: PlaneOffset) -> PlaneMutSlice<'_, T> {
     PlaneMutSlice { plane: self, x: po.x, y: po.y }
   }
 
@@ -321,7 +321,7 @@ impl<T: Pixel> Plane<T> {
   }
 
   #[inline]
-  pub fn row_range(&self, x: isize, y: isize) -> Range<usize> {
+  pub(crate) fn row_range(&self, x: isize, y: isize) -> Range<usize> {
     debug_assert!(self.cfg.yorigin as isize + y >= 0);
     debug_assert!(self.cfg.xorigin as isize + x >= 0);
     let base_y = (self.cfg.yorigin as isize + y) as usize;
