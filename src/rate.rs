@@ -86,7 +86,7 @@ const DQP_Q57: &[i64; FRAME_NSUBTYPES] = &[
 // This is the number of bits that would be required to represent v in two's
 //  complement notation with all of the leading zeros stripped.
 // TODO: Mark const once leading_zeros() as a constant function stabilizes.
-fn ilog64(v: i64) -> i32 {
+const fn ilog64(v: i64) -> i32 {
   64 - (v.leading_zeros() as i32)
 }
 
