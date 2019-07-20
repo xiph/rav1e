@@ -41,7 +41,7 @@ pub struct AlignedArray<ARRAY>
 }
 
 #[allow(non_snake_case)]
-pub fn AlignedArray<ARRAY>(array: ARRAY) -> AlignedArray<ARRAY> {
+pub const fn AlignedArray<ARRAY>(array: ARRAY) -> AlignedArray<ARRAY> {
   AlignedArray { _alignment: [], array }
 }
 

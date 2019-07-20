@@ -119,7 +119,7 @@ impl TilingInfo {
   }
 
   #[inline(always)]
-  pub fn tile_count(&self) -> usize {
+  pub const fn tile_count(&self) -> usize {
     self.cols * self.rows
   }
 
