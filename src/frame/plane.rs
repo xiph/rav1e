@@ -456,41 +456,6 @@ pub struct PlaneSlice<'a, T: Pixel> {
   pub y: isize
 }
 
-pub struct IterWidth<'a, T: Pixel> {
-    ps: PlaneSlice<'a, T>,
-    width: usize,
-}
-
-impl<'a, T: Pixel> Iterator for IterWidth<'a, T> {
-    type Item = &'a [T];
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        let x = self.ps.plane.cfg.xorigin as isize + self.ps.x;
-        let y = self.ps.plane.cfg.yorigin as isize + self.ps.y;
-        let stride = self.ps.plane.cfg.stride;
-        let base = y as usize * stride + x as usize;
-
-        if self.ps.plane.data.len() < base + self.width {
-            None
-        } else {
-            self.ps.y += 1;
-            Some(&self.ps.plane.data[base..base + self.width])
-        }
-    }
-
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let size = self.ps.plane.cfg.height - self.ps.y as usize;
-
-        (size, Some(size))
-    }
-}
-
-impl<'a, T: Pixel> ExactSizeIterator for IterWidth<'a, T> { }
-
-impl<'a, T: Pixel> FusedIterator for IterWidth<'a, T> { }
-
 pub struct RowsIter<'a, T: Pixel> {
   plane: &'a Plane<T>,
   x: isize,
@@ -548,10 +513,6 @@ impl<'a, T: Pixel> PlaneSlice<'a, T> {
         .min(self.plane.cfg.height as isize)
         .max(-(self.plane.cfg.yorigin as isize))
     }
-  }
-
-  pub fn iter_width(&self, width: usize) -> IterWidth<'a, T> {
-    IterWidth { ps: *self, width }
   }
 
   pub fn subslice(&self, xo: usize, yo: usize) -> PlaneSlice<'a, T> {
