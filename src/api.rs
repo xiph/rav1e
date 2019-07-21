@@ -43,6 +43,17 @@ impl Rational {
   pub fn new(num: u64, den: u64) -> Self {
     Rational { num, den }
   }
+
+  pub fn from_reciprocal(reciprocal: Self) -> Self {
+    Rational {
+      num: reciprocal.den,
+      den: reciprocal.num,
+    }
+  }
+
+  pub fn as_f64(self) -> f64 {
+    self.num as f64 / self.den as f64
+  }
 }
 
 #[derive(Clone, Copy, Debug)]
