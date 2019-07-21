@@ -291,8 +291,8 @@ impl Sequence {
   }
 
   #[inline(always)]
-  pub fn sb_size_log2(&self) -> usize {
-    if self.use_128x128_superblock { 7 } else { 6 }
+  pub const fn sb_size_log2(&self) -> usize {
+    6 + (self.use_128x128_superblock as usize)
   }
 }
 
