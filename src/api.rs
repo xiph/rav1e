@@ -935,6 +935,11 @@ impl<T: Pixel> ContextInner<T> {
       self.frame_count += 1;
     }
     self.frame_q.insert(input_frameno, frame);
+
+    if !self.needs_more_lookahead() {
+      self.compute_lookahead_data();
+    }
+
     Ok(())
   }
 
@@ -1636,8 +1641,6 @@ impl<T: Pixel> ContextInner<T> {
       return Err(EncoderStatus::NeedMoreData);
     }
 
-    self.compute_lookahead_data();
-
     // Find the next output_frameno corresponding to a non-skipped frame.
     self.output_frameno = self
       .frame_invariants
@@ -2211,7 +2214,6 @@ mod test {
     let limit = 10 - missing;
     send_frames(&mut ctx, limit, 0);
     ctx.flush();
-    ctx.inner.compute_lookahead_data();
 
     // data[output_frameno] = (input_frameno, !invalid)
     let data = get_frame_invariants(ctx)
@@ -2273,7 +2275,6 @@ mod test {
     let limit = 10 - missing;
     send_frames(&mut ctx, limit, 0);
     ctx.flush();
-    ctx.inner.compute_lookahead_data();
 
     // data[output_frameno] = pyramid_level
     let data =
@@ -2311,7 +2312,6 @@ mod test {
     let limit = 10 - missing;
     send_frames(&mut ctx, limit, 0);
     ctx.flush();
-    ctx.inner.compute_lookahead_data();
 
     // data[output_frameno] = (input_frameno, !invalid)
     let data = get_frame_invariants(ctx)
@@ -2434,7 +2434,6 @@ mod test {
     let limit = 10 - missing;
     send_frames(&mut ctx, limit, 0);
     ctx.flush();
-    ctx.inner.compute_lookahead_data();
 
     // data[output_frameno] = pyramid_level
     let data =
@@ -2556,7 +2555,6 @@ mod test {
     let limit = 5;
     send_frames(&mut ctx, limit, scene_change_at);
     ctx.flush();
-    ctx.inner.compute_lookahead_data();
 
     // data[output_frameno] = (input_frameno, !invalid)
     let data = get_frame_invariants(ctx)
@@ -2666,7 +2664,6 @@ mod test {
     let limit = 5;
     send_frames(&mut ctx, limit, scene_change_at);
     ctx.flush();
-    ctx.inner.compute_lookahead_data();
 
     // data[output_frameno] = pyramid_level
     let data =
@@ -2775,10 +2772,8 @@ mod test {
     let limit = 10 - missing;
     for _ in 0..limit {
       send_frames(&mut ctx, 1, 0);
-      ctx.inner.compute_lookahead_data();
     }
     ctx.flush();
-    ctx.inner.compute_lookahead_data();
 
     // data[output_frameno] = (input_frameno, !invalid)
     let data = get_frame_invariants(ctx)
@@ -2901,10 +2896,8 @@ mod test {
     let limit = 5;
     for i in 0..limit {
       send_frames(&mut ctx, 1, scene_change_at.saturating_sub(i));
-      ctx.inner.compute_lookahead_data();
     }
     ctx.flush();
-    ctx.inner.compute_lookahead_data();
 
     // data[output_frameno] = (input_frameno, !invalid)
     let data = get_frame_invariants(ctx)
