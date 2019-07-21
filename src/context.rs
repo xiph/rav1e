@@ -18,6 +18,7 @@ use crate::entropymode::*;
 use crate::frame::*;
 use crate::header::ReferenceMode;
 use crate::lrf::*;
+use crate::mc::FilterMode;
 use crate::mc::MotionVector;
 use crate::partition::BlockSize::*;
 use crate::partition::RefType::*;
@@ -765,6 +766,8 @@ pub struct CDFContext {
   lrf_switchable_cdf: [u16; 3 + 1],
   lrf_sgrproj_cdf: [u16; 2 + 1],
   lrf_wiener_cdf: [u16; 2 + 1],
+  switchable_interp_cdf:
+    [[u16; cdf_size!(SWITCHABLE_FILTERS)]; SWITCHABLE_FILTER_CONTEXTS],
 
   // lv_map
   txb_skip_cdf: [[[u16; 3]; TXB_SKIP_CONTEXTS]; TxSize::TX_SIZES],
@@ -827,6 +830,7 @@ impl CDFContext {
       lrf_switchable_cdf: default_switchable_restore_cdf,
       lrf_sgrproj_cdf: default_sgrproj_restore_cdf,
       lrf_wiener_cdf: default_wiener_restore_cdf,
+      switchable_interp_cdf: default_switchable_interp_cdf,
 
       // lv_map
       txb_skip_cdf: av1_default_txb_skip_cdfs[qctx],
@@ -945,6 +949,7 @@ impl CDFContext {
       reset_1d!(self.nmv_context.comps[i].class0_cdf);
       reset_2d!(self.nmv_context.comps[i].bits_cdf);
     }
+    reset_2d!(self.switchable_interp_cdf);
 
     // lv_map
     reset_3d!(self.txb_skip_cdf);
@@ -1410,6 +1415,7 @@ pub struct Block {
   // deltas
   pub deblock_deltas: [i8; FRAME_LF_COUNT],
   pub segmentation_idx: u8,
+  pub interp_filter: [FilterMode; 2],
 }
 
 impl Block {
@@ -1427,7 +1433,7 @@ impl Default for Block {
       mode: PredictionMode::DC_PRED,
       partition: PartitionType::PARTITION_NONE,
       skip: false,
-      ref_frames: [INTRA_FRAME; 2],
+      ref_frames: [INTRA_FRAME, NONE_FRAME],
       mv: [MotionVector::default(); 2],
       neighbors_ref_counts: [0; INTER_REFS_PER_FRAME],
       cdef_index: 0,
@@ -1437,6 +1443,7 @@ impl Default for Block {
       txsize: TX_64X64,
       deblock_deltas: [0, 0, 0, 0],
       segmentation_idx: 0,
+      interp_filter: [FilterMode::REGULAR; 2],
     }
   }
 }
@@ -3749,6 +3756,67 @@ impl<'a> ContextWriter<'a> {
       is_inter as u32,
       &mut self.fc.intra_inter_cdfs[ctx]
     );
+  }
+
+  pub fn needs_interp_filter(bs: BlockSize, m: PredictionMode) -> bool {
+    // fixme for LOCALWARP
+    // fixme for global motion that is not IDENTITY
+    let large = (bs.width() >= 8) && (bs.height() >= 8);
+    !(large && (m == PredictionMode::GLOBALMV))
+  }
+
+  pub fn write_interp_filter(
+    &mut self, w: &mut dyn Writer, bo: TileBlockOffset, bsize: BlockSize,
+    dir: usize, filter: FilterMode,
+  ) {
+    let block = &self.bc.blocks[bo];
+    let has_second_ref = block.has_second_ref();
+    let mut ctx = (dir & 1) * 2;
+    if has_second_ref {
+      ctx += 1
+    };
+    ctx *= 4;
+    let mut left_type = 3;
+    let mut above_type = 3;
+
+    if bo.0.x > 0 {
+      let left_block = &self.bc.blocks.left_of(bo);
+      if left_block.ref_frames[0] == block.ref_frames[0]
+        || left_block.ref_frames[1] == block.ref_frames[0]
+      {
+        left_type = left_block.interp_filter[dir] as usize;
+      }
+    }
+    if bo.0.y > 0 {
+      let above_block = &self.bc.blocks.above_of(bo);
+      if above_block.ref_frames[0] == block.ref_frames[0]
+        || above_block.ref_frames[1] == block.ref_frames[0]
+      {
+        above_type = above_block.interp_filter[dir] as usize;
+      }
+    }
+    if left_type == above_type {
+      ctx += left_type;
+    } else if left_type == 3 {
+      ctx += above_type;
+    } else if above_type == 3 {
+      ctx += left_type;
+    } else {
+      ctx += 3;
+    }
+    symbol_with_update!(
+      self,
+      w,
+      filter as u32,
+      &mut self.fc.switchable_interp_cdf[ctx]
+    );
+    // set context
+    for y in 0..bsize.height_mi() {
+      for x in 0..bsize.width_mi() {
+        self.bc.blocks[bo.with_offset(x as isize, y as isize)].interp_filter =
+          [filter, filter];
+      }
+    }
   }
 
   pub fn get_txsize_entropy_ctx(tx_size: TxSize) -> usize {
