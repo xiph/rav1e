@@ -513,11 +513,13 @@ impl<T: Pixel> FrameInvariants<T> {
 
     let w_in_b = 2 * config.width.align_power_of_two_and_shift(3); // MiCols, ((width+7)/8)<<3 >> MI_SIZE_LOG2
     let h_in_b = 2 * config.height.align_power_of_two_and_shift(3); // MiRows, ((height+7)/8)<<3 >> MI_SIZE_LOG2
+    let frame_rate = config.frame_rate();
 
     let mut tiling = TilingInfo::from_target_tiles(
       sequence.sb_size_log2(),
       config.width,
       config.height,
+      frame_rate,
       config.tile_cols_log2,
       config.tile_rows_log2
     );
@@ -531,6 +533,7 @@ impl<T: Pixel> FrameInvariants<T> {
           sequence.sb_size_log2(),
           config.width,
           config.height,
+          frame_rate,
           tile_cols_log2,
           tile_rows_log2
         );
