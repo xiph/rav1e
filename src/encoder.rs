@@ -295,6 +295,12 @@ impl Sequence {
   }
 }
 
+impl Default for Sequence {
+  fn default() -> Self {
+    Sequence::new(&EncoderConfig::default())
+  }
+}
+
 #[derive(Debug)]
 pub struct FrameState<T: Pixel> {
   pub sb_size_log2: usize,
@@ -808,6 +814,12 @@ impl<T: Pixel> FrameInvariants<T> {
   #[inline(always)]
   pub fn sb_size_log2(&self) -> usize {
     self.sequence.sb_size_log2()
+  }
+}
+
+impl<T: Pixel> Default for FrameInvariants<T> {
+  fn default() -> Self {
+    FrameInvariants::new(EncoderConfig::default(), Sequence::default())
   }
 }
 
