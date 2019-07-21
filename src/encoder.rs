@@ -663,7 +663,7 @@ impl<T: Pixel> FrameInvariants<T> {
       refresh_frame_flags: ALL_REF_FRAMES_MASK,
       allow_intrabc: false,
       use_ref_frame_mvs: false,
-      is_filter_switchable: false,
+      is_filter_switchable: true,
       is_motion_mode_switchable: false, // 0: only the SIMPLE motion mode will be used.
       disable_frame_end_update_cdf: sequence.reduced_still_picture_hdr,
       allow_warped_motion: false,
@@ -1634,6 +1634,11 @@ pub fn encode_block_post_cdef<T: Pixel>(
           assert_eq!(mvs[0].row, mv_stack[0].this_mv.row);
           assert_eq!(mvs[0].col, mv_stack[0].this_mv.col);
         }
+      }
+      if fi.is_filter_switchable
+        && ContextWriter::needs_interp_filter(bsize, luma_mode)
+      {
+        cw.write_interp_filter(w, tile_bo, bsize, 0, FilterMode::REGULAR);
       }
     } else {
       cw.write_intra_mode(w, bsize, luma_mode);
