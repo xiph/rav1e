@@ -57,6 +57,7 @@ pub use crate::util::{CastFromPrimitive, Pixel};
 pub mod prelude {
   pub use crate::api::*;
   pub use crate::frame::Frame;
+  pub use crate::frame::FrameParameters;
   pub use crate::frame::Plane;
   pub use crate::frame::PlaneConfig;
   pub use crate::encoder::Tune;
@@ -67,6 +68,7 @@ pub mod prelude {
 /// Basic data structures
 pub mod data {
   pub use crate::frame::Frame;
+  pub use crate::frame::FrameParameters;
   pub use crate::api::{
     Packet, Point, Rational, FrameType, EncoderStatus
   };
