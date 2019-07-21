@@ -17,7 +17,7 @@ use serde_derive::{Deserialize, Serialize};
 use crate::context::{FrameBlocks, SuperBlockOffset, MI_SIZE};
 use crate::dist::get_satd;
 use crate::encoder::*;
-use crate::frame::{AsRegion, Frame, PlaneOffset};
+use crate::frame::*;
 use crate::metrics::calculate_frame_psnr;
 use crate::partition::*;
 use crate::predict::PredictionMode;
@@ -772,6 +772,28 @@ impl<T: Pixel> fmt::Display for Packet<T> {
   }
 }
 
+pub trait IntoFrame<T: Pixel> {
+  fn into(self) -> (Option<Arc<Frame<T>>>, Option<FrameParameters>);
+}
+
+impl<T: Pixel> IntoFrame<T> for Option<Arc<Frame<T>>> {
+  fn into(self) -> (Option<Arc<Frame<T>>>, Option<FrameParameters>) {
+    (self, None)
+  }
+}
+
+impl<T: Pixel> IntoFrame<T> for Arc<Frame<T>> {
+  fn into(self) -> (Option<Arc<Frame<T>>>, Option<FrameParameters>) {
+    (Some(self), None)
+  }
+}
+
+impl <T: Pixel> IntoFrame<T> for (Arc<Frame<T>>, FrameParameters) {
+  fn into(self) -> (Option<Arc<Frame<T>>>, Option<FrameParameters>) {
+    (Some(self.0), Some(self.1))
+  }
+}
+
 impl<T: Pixel> Context<T> {
   pub fn new_frame(&self) -> Arc<Frame<T>> {
     Arc::new(Frame::new(
@@ -781,11 +803,35 @@ impl<T: Pixel> Context<T> {
     ))
   }
 
+
+  /// Send the information to the encoder
+  ///
+  /// ``` no_run
+  /// use rav1e::prelude::*;
+  ///
+  /// let cfg = Config::default();
+  /// let mut ctx: Context<u8> = cfg.new_context();
+  /// let f1 = ctx.new_frame();
+  /// let f2 = f1.clone();
+  /// let info = FrameParameters { keyframe : true };
+  ///
+  /// // Send the plain frame data
+  /// ctx.send_frame(f1);
+  /// // Send the data and the per-frame parameters
+  /// // In this case the frame is forced to be a keyframe.
+  /// ctx.send_frame((f2, info));
+  /// // Flush the encoder, it is equivalent to a call to `flush()`
+  /// ctx.send_frame(None);
+  /// ```
+  ///
+  /// It could return `EncoderStatus::EnoughData` if the incoming
+  /// frame queue is full or `EncoderStatus::Failure` if the per-frame
+  /// parameters set an impossible constraint.
   pub fn send_frame<F>(&mut self, frame: F) -> Result<(), EncoderStatus>
   where
-    F: Into<Option<Arc<Frame<T>>>>
+    F: IntoFrame<T>
   {
-    let frame = frame.into();
+    let (frame, _) = frame.into();
 
     if frame.is_none() {
       if self.is_flushing {

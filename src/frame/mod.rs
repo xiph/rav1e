@@ -20,6 +20,12 @@ pub use plane::*;
 
 const FRAME_MARGIN: usize = 16 + SUBPEL_FILTER_SIZE;
 
+/// Optional per-frame encoder parameters
+pub struct FrameParameters {
+  /// Force the frame to be emitted as keyframe
+  pub keyframe: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct Frame<T: Pixel> {
   pub planes: [Plane<T>; 3]
