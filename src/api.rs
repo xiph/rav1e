@@ -154,6 +154,10 @@ impl EncoderConfig {
       train_rdo: false
     }
   }
+
+  pub fn frame_rate(&self) -> f64 {
+    Rational::from_reciprocal(self.time_base).as_f64()
+  }
 }
 
 /// Contains all the speed settings
