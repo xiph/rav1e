@@ -14,6 +14,7 @@ use crate::deblock::*;
 use crate::ec::*;
 use crate::lrf::*;
 use crate::mc::MotionVector;
+use crate::mc::FilterMode;
 use crate::me::*;
 use crate::partition::*;
 use crate::predict::PredictionMode;
@@ -481,6 +482,7 @@ pub struct FrameInvariants<T: Pixel> {
   pub pyramid_level: u64,
   pub enable_early_exit: bool,
   pub tx_mode_select: bool,
+  pub default_filter: FilterMode,
   /// If true, this `FrameInvariants` corresponds to an invalid frame and
   /// should be ignored. Invalid frames occur when a subgop is prematurely
   /// ended, for example, by a key frame or the end of the video.
@@ -624,6 +626,7 @@ impl<T: Pixel> FrameInvariants<T> {
       enable_early_exit: true,
       config,
       tx_mode_select : false,
+      default_filter: FilterMode::REGULAR,
       invalid: false,
     }
   }
