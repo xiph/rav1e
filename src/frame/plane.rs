@@ -141,7 +141,7 @@ impl<T: Pixel> PlaneData<T> {
 ///
 #[derive(Clone, PartialEq, Eq)]
 pub struct Plane<T: Pixel> {
-  pub data: PlaneData<T>,
+  pub(crate) data: PlaneData<T>,
   pub cfg: PlaneConfig
 }
 
