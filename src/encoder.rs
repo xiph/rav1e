@@ -3149,10 +3149,10 @@ fn encode_tile<'a, T: Pixel>(
   let mut w = WriterEncoder::new();
 
   let bc = BlockContext::new(blocks);
-  // For now, restoration unit size is locked to superblock size.
   let mut cw = ContextWriter::new(fc, bc);
   let mut sbs_q: VecDeque<SBSQueueEntry> = VecDeque::new();
   let mut last_lru_ready = [-1;3];
+  let mut last_lru_rdoed = [-1;3];
 
   let tile_pmvs = build_coarse_pmvs(fi, ts);
 
@@ -3230,7 +3230,33 @@ fn encode_tile<'a, T: Pixel>(
             if check_queue {
               // yes, this entry is ready
               if qe.cdef_coded || fi.sequence.enable_restoration {
-                rdo_loop_decision(qe.sbo, fi, ts, &mut cw, &mut w);
+                // only do this once for a given LRU.
+
+                // One quirk worth noting: LRUs in different planes
+                // may be different sizes; eg, one chroma LRU may
+                // cover four luma LRUs. However, we won't get here
+                // until all are ready for RDO because the smaller
+                // ones all fit inside the biggest, and the biggest
+                // doesn't trigger until everything is done.
+
+                // RDO happens on all LRUs within the confines of the
+                // biggest, all together.  If any of this SB's planes'
+                // LRUs are RDOed, in actuality they all are.
+                let mut already_rdoed = false;
+                for pli in 0..PLANES {
+                  if qe.lru_index[pli] <= last_lru_rdoed[pli] {
+                    already_rdoed = true;
+                    break;
+                  }
+                }
+                if !already_rdoed {
+                  rdo_loop_decision(qe.sbo, fi, ts, &mut cw, &mut w);
+                  for pli in 0..PLANES {
+                    if last_lru_rdoed[pli] < qe.lru_index[pli] {
+                      last_lru_rdoed[pli] = qe.lru_index[pli];
+                    }
+                  }
+                }
               }
               // write LRF information
               if fi.sequence.enable_restoration {
