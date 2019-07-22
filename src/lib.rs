@@ -35,6 +35,7 @@ mod deblock;
 mod segmentation;
 mod cdef;
 mod lrf;
+mod lrf_simd;
 mod encoder;
 mod mc;
 mod me;
