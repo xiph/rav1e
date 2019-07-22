@@ -20,10 +20,22 @@ pub use plane::*;
 
 const FRAME_MARGIN: usize = 16 + SUBPEL_FILTER_SIZE;
 
+/// Override the frame type decision
+///
+/// Only certain frame types can be selected.
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum FrameTypeOverride {
+  /// Do not force any decision.
+  No,
+  /// Force the frame to be a Keyframe.
+  Key,
+}
+
 /// Optional per-frame encoder parameters
+#[derive(Debug, Clone, Copy)]
 pub struct FrameParameters {
-  /// Force the frame to be emitted as keyframe
-  pub keyframe: bool,
+  /// Force emitted frame to be of the type selected
+  pub frame_type_override: FrameTypeOverride,
 }
 
 #[derive(Debug, Clone)]
