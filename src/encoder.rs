@@ -495,6 +495,10 @@ pub struct FrameInvariants<T: Pixel> {
   /// `rec_buffer` contains the current frame's reference frames and
   /// `lookahead_rec_buffer` contains the next frame's reference frames.
   pub lookahead_rec_buffer: ReferenceFramesSet<T>,
+  /// Future importance values for each 4×4 block. That is, a value indicating
+  /// how much future frames depend on the block (for example, via
+  /// inter-prediction).
+  pub block_importances: Box<[f32]>,
 }
 
 pub(crate) fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
@@ -628,6 +632,7 @@ impl<T: Pixel> FrameInvariants<T> {
         vec.into_boxed_slice()
       },
       lookahead_rec_buffer: ReferenceFramesSet::new(),
+      block_importances: vec![0.; w_in_b * h_in_b].into_boxed_slice(),
     }
   }
 
