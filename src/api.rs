@@ -700,6 +700,8 @@ pub(crate) struct ContextInner<T: Pixel> {
   ///  memory for the whole life of the encode.
   // TODO: Is this needed at all?
   keyframes: BTreeSet<u64>,
+  // TODO: Is this needed at all?
+  keyframes_forced: BTreeSet<u64>,
   /// A storage space for reordered frames.
   packet_data: Vec<u8>,
   /// Maps `output_frameno` to `gop_output_frameno_start`.
@@ -813,7 +815,9 @@ impl<T: Pixel> Context<T> {
   /// let mut ctx: Context<u8> = cfg.new_context();
   /// let f1 = ctx.new_frame();
   /// let f2 = f1.clone();
-  /// let info = FrameParameters { keyframe : true };
+  /// let info = FrameParameters {
+  ///   frame_type_override: FrameTypeOverride::Key
+  /// };
   ///
   /// // Send the plain frame data
   /// ctx.send_frame(f1);
@@ -831,7 +835,7 @@ impl<T: Pixel> Context<T> {
   where
     F: IntoFrame<T>
   {
-    let (frame, _) = frame.into();
+    let (frame, params) = frame.into();
 
     if frame.is_none() {
       if self.is_flushing {
@@ -843,7 +847,7 @@ impl<T: Pixel> Context<T> {
       return Err(EncoderStatus::EnoughData)
     }
 
-    self.inner.send_frame(frame)
+    self.inner.send_frame(frame, params)
   }
 
   /// Retrieve the first-pass data of a two-pass encode for the frame that was
@@ -947,6 +951,7 @@ impl<T: Pixel> ContextInner<T> {
       frame_q: BTreeMap::new(),
       frame_invariants: BTreeMap::new(),
       keyframes: BTreeSet::new(),
+      keyframes_forced: BTreeSet::new(),
       packet_data,
       gop_output_frameno_start: BTreeMap::new(),
       gop_input_frameno_start: BTreeMap::new(),
@@ -970,16 +975,21 @@ impl<T: Pixel> ContextInner<T> {
     }
   }
 
-  pub fn send_frame<F>(&mut self, frame: F) -> Result<(), EncoderStatus>
-  where
-    F: Into<Option<Arc<Frame<T>>>>
+  pub fn send_frame(&mut self,
+                    frame: Option<Arc<Frame<T>>>,
+                    params: Option<FrameParameters>) -> Result<(), EncoderStatus>
   {
     let input_frameno = self.frame_count;
-    let frame = frame.into();
     if frame.is_some() {
       self.frame_count += 1;
     }
     self.frame_q.insert(input_frameno, frame);
+
+    if let Some(params) = params {
+      if params.frame_type_override == FrameTypeOverride::Key {
+        self.keyframes_forced.insert(input_frameno);
+      }
+    }
 
     if !self.needs_more_lookahead() {
       self.compute_lookahead_data();
@@ -1891,6 +1901,10 @@ impl<T: Pixel> ContextInner<T> {
   fn is_key_frame(&self, input_frameno: u64, frame: &Frame<T>) -> bool {
     // The first frame is always a keyframe.
     if input_frameno == 0 {
+      return true;
+    }
+
+    if self.keyframes_forced.contains(&input_frameno) {
       return true;
     }
 
@@ -3022,4 +3036,132 @@ mod test {
       }
     );
   }
+
+  fn send_frame_kf<T: Pixel>(
+    ctx: &mut Context<T>, keyframe: bool
+  ) {
+    let input = ctx.new_frame();
+
+    let frame_type_override = if keyframe {
+      FrameTypeOverride::Key
+    } else {
+      FrameTypeOverride::No
+    };
+
+    let fp = FrameParameters { frame_type_override };
+
+    let _ = ctx.send_frame((input, fp));
+  }
+
+  #[interpolate_test(0, 0)]
+  #[interpolate_test(1, 1)]
+  #[interpolate_test(2, 2)]
+  #[interpolate_test(3, 3)]
+  #[interpolate_test(4, 4)]
+  fn output_frameno_incremental_reorder_keyframe_at(kf_at: u64) {
+    // Test output_frameno configurations when there's a forced keyframe at the
+    // <kf_at>th frame, computing the lookahead data incrementally.
+
+    let mut ctx = setup_encoder::<u8>(
+      64,
+      80,
+      10,
+      100,
+      8,
+      ChromaSampling::Cs420,
+      0,
+      5,
+      0,
+      false,
+      false
+    );
+
+    // TODO: when we support more pyramid depths, this test will need tweaks.
+    assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
+
+    let limit = 5;
+    for i in 0..limit {
+      send_frame_kf(&mut ctx, kf_at == i);
+    }
+    ctx.flush();
+
+    // data[output_frameno] = (input_frameno, !invalid)
+    let data = get_frame_invariants(ctx)
+      .map(|fi| (fi.input_frameno, !fi.invalid))
+      .collect::<Vec<_>>();
+
+    assert_eq!(
+      &data[..],
+      match kf_at {
+        0 =>
+          &[
+            (0, true), // I-frame
+            (4, true), // P-frame
+            (2, true), // B0-frame
+            (1, true), // B1-frame (first)
+            (2, true), // B0-frame (show existing)
+            (3, true), // B1-frame (second)
+            (4, true), // P-frame (show existing)
+          ][..],
+        1 =>
+          &[
+            (0, true),  // I-frame
+            (1, true),  // I-frame
+            (1, false), // Missing
+            (3, true),  // B0-frame
+            (2, true),  // B1-frame (first)
+            (3, true),  // B0-frame (show existing)
+            (4, true),  // B1-frame (second)
+            (4, false)  // Missing
+          ][..],
+        2 =>
+          &[
+            (0, true),  // I-frame
+            (0, false), // Missing
+            (0, false), // Missing
+            (1, true),  // B1-frame (first)
+            (1, false), // Missing
+            (1, false), // Missing
+            (1, false), // Missing
+            (2, true),  // I-frame
+            (2, false), // Missing
+            (4, true),  // B0-frame
+            (3, true),  // B1-frame (first)
+            (4, true),  // B0-frame (show existing)
+            (4, false), // Missing
+            (4, false)  // Missing
+          ][..],
+        3 =>
+          &[
+            (0, true),  // I-frame
+            (0, false), // Missing
+            (2, true),  // B0-frame
+            (1, true),  // B1-frame (first)
+            (2, true),  // B0-frame (show existing)
+            (2, false), // Missing
+            (2, false), // Missing
+            (3, true),  // I-frame
+            (3, false), // Missing
+            (3, false), // Missing
+            (4, true),  // B1-frame (first)
+            (4, false), // Missing
+            (4, false), // Missing
+            (4, false)  // Missing
+          ][..],
+        4 =>
+          &[
+            (0, true),  // I-frame
+            (0, false), // Missing
+            (2, true),  // B0-frame
+            (1, true),  // B1-frame (first)
+            (2, true),  // B0-frame (show existing)
+            (3, true),  // B1-frame (second)
+            (3, false), // Missing
+            (4, true)   // I-frame
+          ][..],
+        _ => unreachable!()
+      }
+    );
+  }
+
 }
