@@ -12,40 +12,26 @@ use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use rav1e::bench::transform;
 
-fn bench_idct4(b: &mut Bencher, bit_depth: &usize) {
+fn init_buffers(size: usize) -> (Vec<i32>, Vec<i32>) {
   let mut ra = ChaChaRng::from_seed([0; 32]);
-  let input: [i32; 4] = ra.gen();
-  let mut output = [0i32; 4];
-  let range = bit_depth + 8;
+  let input: Vec<i32> = (0..size).map(|_| ra.gen()).collect();
+  let output = vec![0i32; size];
 
-  b.iter(|| {
-    transform::av1_idct4(&input[..], &mut output[..], range);
-  });
+  (input, output)
 }
 
 pub fn av1_idct4(c: &mut Criterion) {
-  let plain = Fun::new("plain", bench_idct4);
-  let funcs = vec![plain];
+  let (input, mut output) = init_buffers(4);
 
-  c.bench_functions("av1_idct4_8", funcs, 8);
-}
-
-fn bench_idct8(b: &mut Bencher, bit_depth: &usize) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
-  let input: [i32; 8] = ra.gen();
-  let mut output = [0i32; 8];
-  let range = bit_depth + 8;
-
-  b.iter(|| {
-    transform::av1_idct8(&input[..], &mut output[..], range);
-  });
+  c.bench_function("av1_idct4_8", move |b| b.iter(
+    || transform::av1_idct4(&input[..], &mut output[..], 16)));
 }
 
 pub fn av1_idct8(c: &mut Criterion) {
-  let plain = Fun::new("plain", bench_idct8);
-  let funcs = vec![plain];
+  let (input, mut output) = init_buffers(8);
 
-  c.bench_functions("av1_idct8_8", funcs, 8);
+  c.bench_function("av1_idct8_8", move |b| b.iter(
+    || transform::av1_idct8(&input[..], &mut output[..], 16)));
 }
 
 criterion_group!(transform, av1_idct4, av1_idct8);
