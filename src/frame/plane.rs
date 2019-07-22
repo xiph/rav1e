@@ -489,6 +489,7 @@ impl<'a, T: Pixel> ExactSizeIterator for RowsIter<'a, T> {}
 impl<'a, T: Pixel> FusedIterator for RowsIter<'a, T> {}
 
 impl<'a, T: Pixel> PlaneSlice<'a, T> {
+  #[cfg(feature = "nasm")]
   pub fn as_ptr(&self) -> *const T {
     self[0].as_ptr()
   }
