@@ -165,8 +165,8 @@ impl_cast_from_pixel_to_primitive!(i32);
 impl_cast_from_pixel_to_primitive!(u32);
 
 pub trait ILog: PrimInt {
-  fn ilog(self) -> Self {
-    Self::from(size_of::<Self>() * 8 - self.leading_zeros() as usize).unwrap()
+  fn ilog(self) -> usize {
+    size_of::<Self>() * 8 - self.leading_zeros() as usize
   }
 }
 
