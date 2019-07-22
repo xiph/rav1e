@@ -1212,11 +1212,12 @@ impl RestorationState {
   pub fn new<T: Pixel>(fi: &FrameInvariants<T>, input: &Frame<T>) -> Self {
     let PlaneConfig { xdec, ydec, .. } = input.planes[1].cfg;
     let stripe_uv_decimate = if xdec > 0 && ydec > 0 { 1 } else { 0 };
-    // Currrently opt for smallest possible restoration unit size (1
-    // superblock) This is *temporary*.  Counting on it will break
-    // very shortly; the 1-superblock hardwiring is only until the
-    // upper level encoder is capable of dealing with the delayed
-    // writes that RU size > SB size will require.
+
+    //Largest possible restoration unit size (256) for both luma and chroma
+    //let lrf_y_shift = 0;
+    //let lrf_uv_shift = 0;
+
+    // Smallest possible LRF size (the size of the superblock and no smaller)
     let lrf_y_shift = if fi.sequence.use_128x128_superblock { 1 } else { 2 };
     let lrf_uv_shift = lrf_y_shift + stripe_uv_decimate;
 
