@@ -472,12 +472,12 @@ L(blend_tbl):
         add             r12, r0,  r1
         lsl             r1,  r1,  #1
 4:
-        vld1.32         {d2[]},   [r5],  r3
-        vld1.32         {d1[]},   [r2],  r3
+        vld1.32         {d2[]},   [r5]!
+        vld1.32         {d1[]},   [r2]!
         vld1.32         {d0[]},   [r0]
         subs            r4,  r4,  #2
-        vld1.32         {d2[1]},  [r5],  r3
-        vld1.32         {d1[1]},  [r2],  r3
+        vld1.32         {d2[1]},  [r5]!
+        vld1.32         {d1[1]},  [r2]!
         vld1.32         {d0[1]},  [r12]
         vsub.i8         d3,  d22, d2
         vmull.u8        q8,  d1,  d2
@@ -492,12 +492,12 @@ L(blend_tbl):
         add             r12, r0,  r1
         lsl             r1,  r1,  #1
 8:
-        vld1.u8         {d2},  [r5],  r3
-        vld1.u8         {d4},  [r2],  r3
+        vld1.u8         {d2},  [r5]!
+        vld1.u8         {d4},  [r2]!
         vld1.u8         {d0},  [r0]
         vsub.i8         d17, d16, d2
-        vld1.u8         {d3},  [r5],  r3
-        vld1.u8         {d5},  [r2],  r3
+        vld1.u8         {d3},  [r5]!
+        vld1.u8         {d5},  [r2]!
         vld1.u8         {d1},  [r12]
         subs            r4,  r4,  #2
         vsub.i8         d18, d16, d3
@@ -516,13 +516,13 @@ L(blend_tbl):
         add             r12, r0,  r1
         lsl             r1,  r1,  #1
 16:
-        vld1.u8         {q2},  [r5],  r3
-        vld1.u8         {q1},  [r2],  r3
+        vld1.u8         {q2},  [r5]!
+        vld1.u8         {q1},  [r2]!
         vld1.u8         {q0},  [r0]
         subs            r4,  r4,  #2
         vsub.i8         q11, q12, q2
-        vld1.u8         {q15}, [r5],  r3
-        vld1.u8         {q14}, [r2],  r3
+        vld1.u8         {q15}, [r5]!
+        vld1.u8         {q14}, [r2]!
         vld1.u8         {q13}, [r12]
         vmull.u8        q3,  d2,  d4
         vmlal.u8        q3,  d0,  d22
@@ -545,8 +545,8 @@ L(blend_tbl):
 320:
         vmov.i8         q10, #64
 32:
-        vld1.u8         {q2, q3},  [r5],  r3
-        vld1.u8         {q8, q9},  [r2],  r3
+        vld1.u8         {q2, q3},  [r5]!
+        vld1.u8         {q8, q9},  [r2]!
         vld1.u8         {q0, q1},  [r0]
         subs            r4,  r4,  #1
         vsub.i8         q11, q10, q2
@@ -596,11 +596,11 @@ L(blend_h_tbl):
         lsl             r1,  r1,  #1
 2:
         vld1.16         {d2[], d3[]},  [r5]!
-        vld1.16         {d1[]},  [r2],  r3
+        vld1.16         {d1[]},  [r2]!
         subs            r4,  r4,  #2
         vld1.16         {d0[]},  [r0]
         vzip.8          d2,  d3
-        vld1.16         {d1[1]}, [r2],  r3
+        vld1.16         {d1[1]}, [r2]!
         vsub.i8         d4,  d22, d2
         vld1.16         {d0[1]}, [r12]
         vmull.u8        q8,  d1,  d2
@@ -616,10 +616,10 @@ L(blend_h_tbl):
         lsl             r1,  r1,  #1
 4:
         vld1.u8         {d2[]},  [r5]!
-        vld1.32         {d1[]},  [r2],  r3
+        vld1.32         {d1[]},  [r2]!
         subs            r4,  r4,  #2
         vld1.u8         {d6[]},  [r5]!
-        vld1.32         {d1[1]}, [r2],  r3
+        vld1.32         {d1[1]}, [r2]!
         vext.u8         d2,  d2,  d6,   #4
         vld1.32         {d0[]},  [r0]
         vsub.i8         d3,  d22, d2
@@ -637,11 +637,11 @@ L(blend_h_tbl):
         lsl             r1,  r1,  #1
 8:
         vld1.u8         {d2[]}, [r5]!
-        vld1.u8         {d4},   [r2],  r3
+        vld1.u8         {d4},   [r2]!
         vld1.u8         {d0},   [r0]
         vsub.i8         d17, d16, d2
         vld1.u8         {d3[]}, [r5]!
-        vld1.u8         {d5},   [r2],  r3
+        vld1.u8         {d5},   [r2]!
         vld1.u8         {d1},   [r12]
         subs            r4,  r4,  #2
         vsub.i8         d18, d16, d3
@@ -661,12 +661,12 @@ L(blend_h_tbl):
         lsl             r1,  r1,  #1
 16:
         vld1.u8         {d4[]},  [r5]!
-        vld1.u8         {q1},    [r2],  r3
+        vld1.u8         {q1},    [r2]!
         vsub.i8         d5,  d24, d4
         vld1.u8         {q0},    [r0]
         subs            r4,  r4,  #2
         vld1.u8         {d30[]}, [r5]!
-        vld1.u8         {q14},   [r2],  r3
+        vld1.u8         {q14},   [r2]!
         vsub.i8         d31, d24, d30
         vld1.u8         {q13},   [r12]
         vmull.u8        q3,  d2,  d4
@@ -744,14 +744,15 @@ L(blend_v_tbl):
         lsl             r1,  r1,  #1
         vsub.i8         d3,  d22, d2
 2:
-        vld1.8          {d1[]},  [r2],  r3
+        vld1.16         {d1[]},  [r2]!
         vld1.8          {d0[]},  [r0]
         subs            r4,  r4,  #2
-        vld1.8          {d1[1]}, [r2],  r3
+        vld1.8          {d1[1]}, [r2]
         vld1.8          {d0[1]}, [r12]
         vmull.u8        q2,  d1,  d2
         vmlal.u8        q2,  d0,  d3
         vrshrn.i16      d6,  q2,  #6
+        add             r2,  r2,  #2
         vst1.8          {d6[0]}, [r0],  r1
         vst1.8          {d6[1]}, [r12], r1
         bgt             2b
@@ -764,9 +765,9 @@ L(blend_v_tbl):
         vsub.i8         d5,  d22, d4
         sub             r1,  r1,  #3
 4:
-        vld1.32         {d2[]},  [r2],  r3
+        vld1.32         {d2[]},  [r2]!
         vld1.32         {d0[]},  [r0]
-        vld1.32         {d2[1]}, [r2],  r3
+        vld1.32         {d2[1]}, [r2]!
         vld1.32         {d0[1]}, [r12]
         subs            r4,  r4,  #2
         vmull.u8        q3,  d2,  d4
@@ -788,9 +789,9 @@ L(blend_v_tbl):
         vsub.i8         d17, d16, d2
         sub             r1,  r1,  #6
 8:
-        vld1.u8         {d4},  [r2],  r3
+        vld1.u8         {d4},  [r2]!
         vld1.u8         {d0},  [r0]
-        vld1.u8         {d5},  [r2],  r3
+        vld1.u8         {d5},  [r2]!
         vld1.u8         {d1},  [r12]
         subs            r4,  r4,  #2
         vmull.u8        q3,  d2,  d4
@@ -815,10 +816,10 @@ L(blend_v_tbl):
         vsub.i8         q11, q12, q2
         sub             r1,  r1,  #12
 16:
-        vld1.u8         {q1},  [r2],  r3
+        vld1.u8         {q1},  [r2]!
         vld1.u8         {q0},  [r0]
         subs            r4,  r4,  #2
-        vld1.u8         {q14}, [r2],  r3
+        vld1.u8         {q14}, [r2]!
         vld1.u8         {q13}, [r12]
         vmull.u8        q3,  d2,  d4
         vmlal.u8        q3,  d0,  d22
@@ -846,7 +847,7 @@ L(blend_v_tbl):
         vsub.i8         q11, q10, q2
         vsub.i8         q12, q10, q3
 32:
-        vld1.u8         {q8, q9},  [r2],  r3
+        vld1.u8         {q8, q9},  [r2]!
         vld1.u8         {q0, q1},  [r0]
         subs            r4,  r4,  #1
         vmull.u8        q15, d16, d4
