@@ -206,7 +206,7 @@ impl Build {
         let objects = self.compile_objects();
         self.archive(&dst, &output, &objects[..]);
 
-        println!("cargo:rustc-flags=-L {}",
+        println!("cargo:rustc-link-search={}",
                  dst.display());
     }
 
