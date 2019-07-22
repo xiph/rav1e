@@ -471,10 +471,11 @@ fn luma_chroma_mode_rdo<T: Pixel> (luma_mode: PredictionMode,
   let is_chroma_block = has_chroma(tile_bo, bsize, xdec, ydec);
 
   // Find the best chroma prediction mode for the current luma prediction mode
-  let mut chroma_rdo = |skip: bool| {
+  let mut chroma_rdo = |skip: bool| -> bool {
     let (tx_size, tx_type) = rdo_tx_size_type(
       fi, ts, cw, bsize, tile_bo, luma_mode, ref_frames, mvs, skip,
     );
+    let mut zero_distortion = false;
     for &chroma_mode in mode_set_chroma.iter() {
       let wr = &mut WriterCounter::new();
       let tell = wr.tell_frac();
@@ -542,17 +543,22 @@ fn luma_chroma_mode_rdo<T: Pixel> (luma_mode: PredictionMode,
         best.skip = skip;
         best.tx_size = tx_size;
         best.tx_type = tx_type;
+        zero_distortion = distortion == 0;
       }
 
       cw.rollback(cw_checkpoint);
     }
+    zero_distortion
   };
 
   // Don't skip when using intra modes
-  if !luma_mode_is_intra {
-    chroma_rdo(true);
-  };
-  chroma_rdo(false);
+  let zero_distortion = if !luma_mode_is_intra {
+    chroma_rdo(true)
+  } else { false };
+  // early skip
+  if !zero_distortion {
+    chroma_rdo(false);
+  }
 }
 
 // RDO-based mode decision
