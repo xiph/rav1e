@@ -9,6 +9,8 @@
 
 use crate::context::*;
 use crate::lrf::*;
+use crate::encoder::FrameInvariants;
+use crate::util::Pixel;
 
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
@@ -184,22 +186,37 @@ macro_rules! tile_restoration_plane_common {
       }
 
       fn restoration_unit_index(&self, sbo: TileSuperBlockOffset) -> Option<(usize, usize)> {
+        // is this a stretch block?
+        let x_stretch = sbo.0.x >> self.rp_cfg.sb_shift >= self.units.cols;
+        let y_stretch = sbo.0.y >> self.rp_cfg.sb_shift >= self.units.rows;
+
+        let x = (sbo.0.x >> self.rp_cfg.sb_shift) - if x_stretch {1}else{0};
+        let y = (sbo.0.y >> self.rp_cfg.sb_shift) - if y_stretch {1}else{0};
+        Some((x, y))
+      }
+
+      pub fn restoration_unit_countable(&self, sbo: TileSuperBlockOffset) -> usize {
+        if let Some((x,y)) = self.restoration_unit_index(sbo) {
+          y*self.units.cols+x
+        } else {
+          unreachable!()
+        }
+      }
+
+      // Is this the last sb (in scan order) in the restoration unit?
+      // Stretch makes this a bit annoying to compute.
+      pub fn restoration_unit_last_sb<T: Pixel>(&self, fi: &FrameInvariants<T>,
+                                            sbo: TileSuperBlockOffset) -> bool {
         // there is 1 restoration unit for (1 << sb_shift) super-blocks
         let mask = (1 << self.rp_cfg.sb_shift) - 1;
-        let first_sbo = sbo.0.x & mask == 0 && sbo.0.y & mask == 0;
-        if first_sbo {
-          let x = sbo.0.x >> self.rp_cfg.sb_shift;
-          let y = sbo.0.y >> self.rp_cfg.sb_shift;
-          if x < self.units.cols && y < self.units.rows {
-            Some((x, y))
-          } else {
-            // this super-block will share the "stretched" restoration unit from its neighbours
-            None
-          }
-        } else {
-          // the restoration unit is ignored for others super-blocks
-          None
-        }
+        // is this a stretch block?
+        let x_stretch = sbo.0.x >> self.rp_cfg.sb_shift >= self.units.cols;
+        let y_stretch = sbo.0.y >> self.rp_cfg.sb_shift >= self.units.rows;
+
+        let last_x = (sbo.0.x & mask == mask && !x_stretch) || sbo.0.x == fi.sb_width-1;
+        let last_y = (sbo.0.y & mask == mask && !y_stretch) || sbo.0.y == fi.sb_height-1;
+
+        last_x && last_y
       }
 
       #[inline(always)]

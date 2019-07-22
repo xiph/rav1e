@@ -44,6 +44,7 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::sync::Arc;
 use std::{fmt, io, mem};
+use std::collections::VecDeque;
 
 pub static TEMPORAL_DELIMITER: [u8; 2] = [0x12, 0x00];
 
@@ -3131,15 +3132,27 @@ pub(crate) fn build_full_res_pmvs<T: Pixel>(
   }
 }
 
+pub struct SBSQueueEntry {
+  pub sbo: TileSuperBlockOffset,
+  pub lru_index: [i32; PLANES],
+  pub cdef_coded: bool,
+  pub w_pre_cdef: WriterBase<WriterRecorder>,
+  pub w_post_cdef: WriterBase<WriterRecorder>
+}
+
 fn encode_tile<'a, T: Pixel>(
-  fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  fc: &'a mut CDFContext, blocks: &'a mut TileBlocksMut<'a>,
+  fi: &FrameInvariants<T>,
+  ts: &mut TileStateMut<'_, T>,
+  fc: &'a mut CDFContext,
+  blocks: &'a mut TileBlocksMut<'a>,
 ) -> Vec<u8> {
   let mut w = WriterEncoder::new();
 
   let bc = BlockContext::new(blocks);
   // For now, restoration unit size is locked to superblock size.
   let mut cw = ContextWriter::new(fc, bc);
+  let mut sbs_q: VecDeque<SBSQueueEntry> = VecDeque::new();
+  let mut last_lru_ready = [-1;3];
 
   let tile_pmvs = build_coarse_pmvs(fi, ts);
 
@@ -3148,9 +3161,15 @@ fn encode_tile<'a, T: Pixel>(
     cw.bc.reset_left_contexts();
 
     for sbx in 0..ts.sb_width {
-      let mut w_pre_cdef = WriterRecorder::new();
-      let mut w_post_cdef = WriterRecorder::new();
       let tile_sbo = TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
+      let mut sbs_qe = SBSQueueEntry {
+        sbo: tile_sbo,
+        lru_index: [-1; PLANES],
+        cdef_coded: false,
+        w_pre_cdef:  WriterRecorder::new(),
+        w_post_cdef:  WriterRecorder::new()
+      };
+
       let tile_bo = tile_sbo.block_offset(0, 0);
       cw.bc.cdef_coded = false;
       cw.bc.code_deltas = fi.delta_q_present;
@@ -3164,8 +3183,8 @@ fn encode_tile<'a, T: Pixel>(
           fi,
           ts,
           &mut cw,
-          &mut w_pre_cdef,
-          &mut w_post_cdef,
+          &mut sbs_qe.w_pre_cdef,
+          &mut sbs_qe.w_post_cdef,
           BlockSize::BLOCK_64X64,
           tile_bo,
           &mut pmvs,
@@ -3176,8 +3195,8 @@ fn encode_tile<'a, T: Pixel>(
           fi,
           ts,
           &mut cw,
-          &mut w_pre_cdef,
-          &mut w_post_cdef,
+          &mut sbs_qe.w_pre_cdef,
+          &mut sbs_qe.w_post_cdef,
           BlockSize::BLOCK_64X64,
           tile_bo,
           &None,
@@ -3185,25 +3204,53 @@ fn encode_tile<'a, T: Pixel>(
         );
       }
 
-      // CDEF has to be decided before loop restoration, but coded after.
-      // loop restoration must be decided last but coded before anything else.
-      if cw.bc.cdef_coded || fi.sequence.enable_restoration {
-        rdo_loop_decision(tile_sbo, fi, ts, &mut cw, &mut w);
-      }
+      {
+        let mut check_queue = false;
+        // queue our superblock for cdef/LRF RDO when the RDU is complete
+        sbs_qe.cdef_coded = cw.bc.cdef_coded;
+        for pli in 0..PLANES {
+          let lru_index = ts.restoration.planes[pli].restoration_unit_countable(tile_sbo) as i32;
+          sbs_qe.lru_index[pli] = lru_index;
+          if ts.restoration.planes[pli].restoration_unit_last_sb(fi, tile_sbo) {
+            last_lru_ready[pli] = lru_index;
+            check_queue = true;
+          }
+        }
+        sbs_q.push_back(sbs_qe);
 
-      if fi.sequence.enable_restoration {
-        cw.write_lrf(&mut w, fi, &mut ts.restoration, tile_sbo);
-      }
-
-      // Once loop restoration is coded, we can replay the initial block bits
-      w_pre_cdef.replay(&mut w);
-
-      if cw.bc.cdef_coded {
-        // CDEF index must be written in the middle, we can code it now
-        let cdef_index = cw.bc.blocks.get_cdef(tile_sbo);
-        cw.write_cdef(&mut w, cdef_index, fi.cdef_bits);
-        // ...and then finally code what comes after the CDEF index
-        w_post_cdef.replay(&mut w);
+        // Walk queue from the head, see if anything is ready for RDO and flush
+        while check_queue {
+          if let Some(qe) = sbs_q.front_mut(){
+            for pli in 0..PLANES {
+              if qe.lru_index[pli] > last_lru_ready[pli] {
+                check_queue = false;
+                break;
+              }
+            }
+            if check_queue {
+              // yes, this entry is ready
+              if qe.cdef_coded || fi.sequence.enable_restoration {
+                rdo_loop_decision(qe.sbo, fi, ts, &mut cw, &mut w);
+              }
+              // write LRF information
+              if fi.sequence.enable_restoration {
+                cw.write_lrf(&mut w, fi, &mut ts.restoration, qe.sbo);
+              }
+              // Now that loop restoration is coded, we can replay the initial block bits
+              qe.w_pre_cdef.replay(&mut w);
+              // Now code CDEF into the middle of the block
+              if qe.cdef_coded {
+                let cdef_index = cw.bc.blocks.get_cdef(qe.sbo);
+                cw.write_cdef(&mut w, cdef_index, fi.cdef_bits);
+                // Code queued symbols that come after the CDEF index
+                qe.w_post_cdef.replay(&mut w);
+              }
+              sbs_q.pop_front();
+            }
+          } else {
+            check_queue = false;
+          }
+        }
       }
     }
   }
