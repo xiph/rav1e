@@ -570,7 +570,7 @@ mod native {
       let dst_slice = &mut dst[r];
       for c in 0..width {
         dst_slice[c] = T::cast_from(round_shift(
-          (tmp1[r * width + c] + tmp2[r * width + c]) as i32,
+          tmp1[r * width + c] as i32 + tmp2[r * width + c] as i32,
           intermediate_bits + 1
         )
         .max(0)
