@@ -61,4 +61,4 @@ jobs:
          - cargo doc --verbose --no-deps
          - rustup component add clippy
          - cargo clippy --version
-         - cargo clippy -- -D warnings -A clippy::cast_lossless -A clippy::cast_ptr_alignment -A clippy::cognitive_complexity -A clippy::needless_range_loop -A clippy::too_many_arguments -A clippy::verbose_bit_mask -A clippy::unreadable_literal --verbose
+         - cargo clippy -- -D warnings -A clippy::cast_lossless -A clippy::cast_ptr_alignment -A clippy::cognitive_complexity -A clippy::needless_range_loop -A clippy::too_many_arguments -A clippy::verbose_bit_mask -A clippy::unreadable_literal -A clippy::many_single_char_names --verbose
