@@ -46,6 +46,7 @@ avformat-sys = { version = "0.1", path = "crates/avformat-sys/", optional = true
 rayon = "1.0"
 bincode = "1.1"
 arrayvec = "0.4.10"
+better-panic = "0.1"
 
 [build-dependencies]
 nasm-rs = { version = "0.1", path = "crates/nasm_rs/", optional = true }
