@@ -14,7 +14,7 @@ use num_derive::*;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use serde_derive::{Deserialize, Serialize};
 
-use crate::context::{FrameBlocks, SuperBlockOffset};
+use crate::context::{FrameBlocks, SuperBlockOffset, MI_SIZE};
 use crate::dist::get_satd;
 use crate::encoder::*;
 use crate::frame::{AsRegion, Frame, PlaneOffset};
@@ -1262,6 +1262,85 @@ impl<T: Pixel> ContextInner<T> {
     }
   }
 
+  /// Computes lookahead intra cost approximations and fills in
+  /// `lookahead_intra_costs` on the `FrameInvariants`.
+  fn compute_lookahead_intra_costs(&mut self, output_frameno: u64) {
+    let fi = self.frame_invariants.get_mut(&output_frameno).unwrap();
+
+    // We're only interested in valid frames which are not show-existing-frame.
+    if fi.invalid || fi.show_existing_frame {
+      return;
+    }
+
+    let frame = self.frame_q[&fi.input_frameno].as_ref().unwrap();
+
+    let mut plane_after_prediction = frame.planes[0].clone();
+
+    for y in 0..fi.h_in_b {
+      for x in 0..fi.w_in_b {
+        let plane_org = frame.planes[0].region(Area::Rect {
+          x: x as isize * MI_SIZE as isize,
+          y: y as isize * MI_SIZE as isize,
+          width: MI_SIZE,
+          height: MI_SIZE
+        });
+
+        // TODO: other intra prediction modes.
+        let edge_buf = get_intra_edges(
+          &frame.planes[0].as_region(),
+          PlaneOffset {
+            x: x as isize * MI_SIZE as isize,
+            y: y as isize * MI_SIZE as isize
+          },
+          TxSize::TX_4X4,
+          fi.sequence.bit_depth,
+          Some(PredictionMode::DC_PRED)
+        );
+
+        let mut plane_after_prediction_region = plane_after_prediction
+          .region_mut(Area::Rect {
+            x: x as isize * MI_SIZE as isize,
+            y: y as isize * MI_SIZE as isize,
+            width: MI_SIZE,
+            height: MI_SIZE
+          });
+
+        PredictionMode::DC_PRED.predict_intra(
+          TileRect {
+            x: x * MI_SIZE,
+            y: y * MI_SIZE,
+            width: MI_SIZE,
+            height: MI_SIZE
+          },
+          &mut plane_after_prediction_region,
+          TxSize::TX_4X4,
+          fi.sequence.bit_depth,
+          &[], // Not used by DC_PRED.
+          0,   // Not used by DC_PRED.
+          &edge_buf
+        );
+
+        let plane_after_prediction_region =
+          plane_after_prediction.region(Area::Rect {
+            x: x as isize * MI_SIZE as isize,
+            y: y as isize * MI_SIZE as isize,
+            width: MI_SIZE,
+            height: MI_SIZE
+          });
+
+        let intra_cost = get_satd(
+          &plane_org,
+          &plane_after_prediction_region,
+          MI_SIZE,
+          MI_SIZE,
+          self.config.bit_depth
+        );
+
+        fi.lookahead_intra_costs[y * fi.w_in_b + x] = intra_cost;
+      }
+    }
+  }
+
   fn compute_lookahead_data(&mut self) {
     // Process all new frames that we have received.
     let frames_to_process = self
@@ -1299,6 +1378,9 @@ impl<T: Pixel> ContextInner<T> {
       self.compute_lookahead_motion_vectors(
         self.next_lookahead_output_frameno - 1
       );
+
+      self
+        .compute_lookahead_intra_costs(self.next_lookahead_output_frameno - 1);
     }
   }
 
@@ -1332,11 +1414,10 @@ impl<T: Pixel> ContextInner<T> {
     // Now compute and propagate the block importances from the end. The
     // current output frame will get its block importances from the future
     // frames.
-    const BLOCK_SIZE: i64 = 4;
     const MV_UNITS_PER_PIXEL: i64 = 8;
-    const BLOCK_SIZE_IN_MV_UNITS: i64 = BLOCK_SIZE * MV_UNITS_PER_PIXEL;
+    const MI_SIZE_IN_MV_UNITS: i64 = MI_SIZE as i64 * MV_UNITS_PER_PIXEL;
     const BLOCK_AREA_IN_MV_UNITS: i64 =
-      BLOCK_SIZE_IN_MV_UNITS * BLOCK_SIZE_IN_MV_UNITS;
+      MI_SIZE_IN_MV_UNITS * MI_SIZE_IN_MV_UNITS;
 
     for &output_frameno in output_framenos.iter().skip(1).rev() {
       // Remove fi from the map temporarily and put it back in in the end of
@@ -1378,90 +1459,39 @@ impl<T: Pixel> ContextInner<T> {
         // We should never use frame as its own reference.
         assert_ne!(reference_output_frameno, output_frameno);
 
-        let mut plane_after_prediction = frame.planes[0].clone();
-
         for y in 0..fi.h_in_b {
           for x in 0..fi.w_in_b {
             let mv = fi.lookahead_mvs[mv_index][y][x];
 
             // Coordinates of the top-left corner of the reference block, in MV
             // units.
-            let reference_x =
-              x as i64 * BLOCK_SIZE_IN_MV_UNITS + mv.col as i64;
-            let reference_y =
-              y as i64 * BLOCK_SIZE_IN_MV_UNITS + mv.row as i64;
+            let reference_x = x as i64 * MI_SIZE_IN_MV_UNITS + mv.col as i64;
+            let reference_y = y as i64 * MI_SIZE_IN_MV_UNITS + mv.row as i64;
 
             let plane_org = frame.planes[0].region(Area::Rect {
-              x: x as isize * BLOCK_SIZE as isize,
-              y: y as isize * BLOCK_SIZE as isize,
-              width: BLOCK_SIZE as usize,
-              height: BLOCK_SIZE as usize
+              x: x as isize * MI_SIZE as isize,
+              y: y as isize * MI_SIZE as isize,
+              width: MI_SIZE,
+              height: MI_SIZE
             });
 
             let plane_ref = reference_frame.planes[0].region(Area::Rect {
               x: reference_x as isize / MV_UNITS_PER_PIXEL as isize,
               y: reference_y as isize / MV_UNITS_PER_PIXEL as isize,
-              width: BLOCK_SIZE as usize,
-              height: BLOCK_SIZE as usize
+              width: MI_SIZE,
+              height: MI_SIZE
             });
 
-            // TODO: other intra prediction modes.
-            let edge_buf = get_intra_edges(
-              &frame.planes[0].as_region(),
-              PlaneOffset {
-                x: x as isize * BLOCK_SIZE as isize,
-                y: y as isize * BLOCK_SIZE as isize
-              },
-              TxSize::TX_4X4,
-              fi.sequence.bit_depth,
-              Some(PredictionMode::DC_PRED)
-            );
-
-            let mut plane_after_prediction_region = plane_after_prediction
-              .region_mut(Area::Rect {
-                x: x as isize * BLOCK_SIZE as isize,
-                y: y as isize * BLOCK_SIZE as isize,
-                width: BLOCK_SIZE as usize,
-                height: BLOCK_SIZE as usize
-              });
-
-            PredictionMode::DC_PRED.predict_intra(
-              TileRect {
-                x: x * BLOCK_SIZE as usize,
-                y: y * BLOCK_SIZE as usize,
-                width: BLOCK_SIZE as usize,
-                height: BLOCK_SIZE as usize
-              },
-              &mut plane_after_prediction_region,
-              TxSize::TX_4X4,
-              fi.sequence.bit_depth,
-              &[], // Not used by DC_PRED.
-              0,   // Not used by DC_PRED.
-              &edge_buf
-            );
-
-            let plane_after_prediction_region =
-              plane_after_prediction.region(Area::Rect {
-                x: x as isize * BLOCK_SIZE as isize,
-                y: y as isize * BLOCK_SIZE as isize,
-                width: BLOCK_SIZE as usize,
-                height: BLOCK_SIZE as usize
-              });
-
-            let intra_cost: f32 = get_satd(
-              &plane_org,
-              &plane_after_prediction_region,
-              BLOCK_SIZE as usize,
-              BLOCK_SIZE as usize,
-              self.config.bit_depth
-            ) as f32;
             let inter_cost = get_satd(
               &plane_org,
               &plane_ref,
-              BLOCK_SIZE as usize,
-              BLOCK_SIZE as usize,
+              MI_SIZE,
+              MI_SIZE,
               self.config.bit_depth
             ) as f32;
+
+            let intra_cost =
+              fi.lookahead_intra_costs[y * fi.w_in_b + x] as f32;
 
             let future_importance = fi.block_importances[y * fi.w_in_b + x];
 
@@ -1477,8 +1507,8 @@ impl<T: Pixel> ContextInner<T> {
             {
               let mut propagate =
                 |block_x_in_mv_units, block_y_in_mv_units, fraction| {
-                  let x = block_x_in_mv_units / BLOCK_SIZE_IN_MV_UNITS;
-                  let y = block_y_in_mv_units / BLOCK_SIZE_IN_MV_UNITS;
+                  let x = block_x_in_mv_units / MI_SIZE_IN_MV_UNITS;
+                  let y = block_y_in_mv_units / MI_SIZE_IN_MV_UNITS;
 
                   // TODO: propagate partially if the block is partially off-frame
                   // (possible on right and bottom edges)?
@@ -1496,16 +1526,14 @@ impl<T: Pixel> ContextInner<T> {
               // Coordinates of the top-left corner of the block intersecting the
               // reference block from the top-left.
               let top_left_block_x =
-                reference_x / BLOCK_SIZE_IN_MV_UNITS * BLOCK_SIZE_IN_MV_UNITS;
+                reference_x / MI_SIZE_IN_MV_UNITS * MI_SIZE_IN_MV_UNITS;
               let top_left_block_y =
-                reference_y / BLOCK_SIZE_IN_MV_UNITS * BLOCK_SIZE_IN_MV_UNITS;
+                reference_y / MI_SIZE_IN_MV_UNITS * MI_SIZE_IN_MV_UNITS;
 
-              let top_right_block_x =
-                top_left_block_x + BLOCK_SIZE_IN_MV_UNITS;
+              let top_right_block_x = top_left_block_x + MI_SIZE_IN_MV_UNITS;
               let top_right_block_y = top_left_block_y;
               let bottom_left_block_x = top_left_block_x;
-              let bottom_left_block_y =
-                top_left_block_y + BLOCK_SIZE_IN_MV_UNITS;
+              let bottom_left_block_y = top_left_block_y + MI_SIZE_IN_MV_UNITS;
               let bottom_right_block_x = top_right_block_x;
               let bottom_right_block_y = bottom_left_block_y;
 
@@ -1521,7 +1549,7 @@ impl<T: Pixel> ContextInner<T> {
               );
 
               let top_right_block_fraction =
-                ((reference_x + BLOCK_SIZE_IN_MV_UNITS - top_right_block_x)
+                ((reference_x + MI_SIZE_IN_MV_UNITS - top_right_block_x)
                   * (bottom_left_block_y - reference_y))
                   as f32
                   / BLOCK_AREA_IN_MV_UNITS as f32;
@@ -1534,7 +1562,7 @@ impl<T: Pixel> ContextInner<T> {
 
               let bottom_left_block_fraction = ((top_right_block_x
                 - reference_x)
-                * (reference_y + BLOCK_SIZE_IN_MV_UNITS - bottom_left_block_y))
+                * (reference_y + MI_SIZE_IN_MV_UNITS - bottom_left_block_y))
                 as f32
                 / BLOCK_AREA_IN_MV_UNITS as f32;
 
@@ -1545,9 +1573,9 @@ impl<T: Pixel> ContextInner<T> {
               );
 
               let bottom_right_block_fraction =
-                ((reference_x + BLOCK_SIZE_IN_MV_UNITS - top_right_block_x)
-                  * (reference_y + BLOCK_SIZE_IN_MV_UNITS
-                    - bottom_left_block_y)) as f32
+                ((reference_x + MI_SIZE_IN_MV_UNITS - top_right_block_x)
+                  * (reference_y + MI_SIZE_IN_MV_UNITS - bottom_left_block_y))
+                  as f32
                   / BLOCK_AREA_IN_MV_UNITS as f32;
 
               propagate(
@@ -1566,69 +1594,10 @@ impl<T: Pixel> ContextInner<T> {
     // Get the final block importance values for the current output frame.
     if !output_framenos.is_empty() {
       let fi = self.frame_invariants.get_mut(&output_framenos[0]).unwrap();
-      let frame = self.frame_q[&fi.input_frameno].as_ref().unwrap();
-
-      let mut plane_after_prediction = frame.planes[0].clone();
 
       for y in 0..fi.h_in_b {
         for x in 0..fi.w_in_b {
-          let plane_org = frame.planes[0].region(Area::Rect {
-            x: x as isize * BLOCK_SIZE as isize,
-            y: y as isize * BLOCK_SIZE as isize,
-            width: BLOCK_SIZE as usize,
-            height: BLOCK_SIZE as usize
-          });
-
-          // TODO: other intra prediction modes.
-          let edge_buf = get_intra_edges(
-            &frame.planes[0].as_region(),
-            PlaneOffset {
-              x: x as isize * BLOCK_SIZE as isize,
-              y: y as isize * BLOCK_SIZE as isize
-            },
-            TxSize::TX_4X4,
-            fi.sequence.bit_depth,
-            Some(PredictionMode::DC_PRED)
-          );
-
-          let mut plane_after_prediction_region = plane_after_prediction
-            .region_mut(Area::Rect {
-              x: x as isize * BLOCK_SIZE as isize,
-              y: y as isize * BLOCK_SIZE as isize,
-              width: BLOCK_SIZE as usize,
-              height: BLOCK_SIZE as usize
-            });
-
-          PredictionMode::DC_PRED.predict_intra(
-            TileRect {
-              x: x * BLOCK_SIZE as usize,
-              y: y * BLOCK_SIZE as usize,
-              width: BLOCK_SIZE as usize,
-              height: BLOCK_SIZE as usize
-            },
-            &mut plane_after_prediction_region,
-            TxSize::TX_4X4,
-            fi.sequence.bit_depth,
-            &[], // Not used by DC_PRED.
-            0,   // Not used by DC_PRED.
-            &edge_buf
-          );
-
-          let plane_after_prediction_region =
-            plane_after_prediction.region(Area::Rect {
-              x: x as isize * BLOCK_SIZE as isize,
-              y: y as isize * BLOCK_SIZE as isize,
-              width: BLOCK_SIZE as usize,
-              height: BLOCK_SIZE as usize
-            });
-
-          let intra_cost: f32 = get_satd(
-            &plane_org,
-            &plane_after_prediction_region,
-            BLOCK_SIZE as usize,
-            BLOCK_SIZE as usize,
-            self.config.bit_depth
-          ) as f32;
+          let intra_cost = fi.lookahead_intra_costs[y * fi.w_in_b + x] as f32;
 
           let importance = &mut fi.block_importances[y * fi.w_in_b + x];
           if intra_cost > 0. {
