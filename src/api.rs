@@ -1300,9 +1300,16 @@ impl<T: Pixel> ContextInner<T> {
         self.next_lookahead_output_frameno - 1
       );
     }
+  }
 
-    // Compute the block importances for all frames down to the current output
-    // frame. First, initialize them all with zeros.
+  /// Computes the block importances for the current output frame.
+  fn compute_block_importances(&mut self) {
+    // SEF don't need block importances.
+    if self.frame_invariants[&self.output_frameno].show_existing_frame {
+      return;
+    }
+
+    // Get a list of output_framenos that we want to propagate through.
     let output_framenos = self
       .frame_invariants
       .iter()
@@ -1311,6 +1318,10 @@ impl<T: Pixel> ContextInner<T> {
       .map(|(&output_frameno, _)| output_frameno)
       .collect::<Vec<_>>();
 
+    // The first one should be the current output frame.
+    assert_eq!(output_framenos[0], self.output_frameno);
+
+    // First, initialize them all with zeros.
     for output_frameno in output_framenos.iter() {
       let fi = self.frame_invariants.get_mut(output_frameno).unwrap();
       for x in fi.block_importances.iter_mut() {
@@ -1672,6 +1683,9 @@ impl<T: Pixel> ContextInner<T> {
     ) {
       return Err(EncoderStatus::LimitReached);
     }
+
+    // Compute the block importances for the current output frame.
+    self.compute_block_importances();
 
     let cur_output_frameno = self.output_frameno;
 
