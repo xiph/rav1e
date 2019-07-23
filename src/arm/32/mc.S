@@ -451,15 +451,15 @@ w_mask_fn 420
 
 
 function blend_8bpc_neon, export=1
-        push            {r4-r8,lr}
-        ldr             r4,  [sp, #24]
-        ldr             r5,  [sp, #28]
-        clz             r6,  r3
-        adr             r7,  L(blend_tbl)
-        sub             r6,  r6,  #26
-        ldr             r6,  [r7, r6, lsl #2]
-        add             r7,  r7,  r6
-        bx              r7
+        push            {r4-r5,lr}
+        ldr             r4,  [sp, #12]
+        ldr             r5,  [sp, #16]
+        clz             lr,  r3
+        adr             r3,  L(blend_tbl)
+        sub             lr,  lr,  #26
+        ldr             lr,  [r3, lr, lsl #2]
+        add             r3,  r3,  lr
+        bx              r3
         .align 2
 L(blend_tbl):
         .word 320f  - L(blend_tbl) + CONFIG_THUMB
@@ -486,7 +486,7 @@ L(blend_tbl):
         vst1.32         {d20[0]}, [r0],  r1
         vst1.32         {d20[1]}, [r12], r1
         bgt             4b
-        pop             {r4-r8,pc}
+        pop             {r4-r5,pc}
 80:
         vmov.i8         d16, #64
         add             r12, r0,  r1
@@ -510,7 +510,7 @@ L(blend_tbl):
         vst1.u8         {d22}, [r0],  r1
         vst1.u8         {d23}, [r12], r1
         bgt             8b
-        pop             {r4-r8,pc}
+        pop             {r4-r5,pc}
 160:
         vmov.i8         q12, #64
         add             r12, r0,  r1
@@ -540,8 +540,7 @@ L(blend_tbl):
         vst1.u8         {q9},  [r0],  r1
         vst1.u8         {q10}, [r12], r1
         bgt             16b
-        pop             {r4-r8,pc}
-
+        pop             {r4-r5,pc}
 320:
         vmov.i8         q10, #64
 32:
@@ -565,7 +564,7 @@ L(blend_tbl):
         vrshrn.i16      d27, q14, #6
         vst1.u8         {q12, q13}, [r0],  r1
         bgt             32b
-        pop             {r4-r8,pc}
+        pop             {r4-r5,pc}
 endfunc
 
 function blend_h_8bpc_neon, export=1
@@ -719,16 +718,16 @@ L(blend_h_tbl):
 endfunc
 
 function blend_v_8bpc_neon, export=1
-        push            {r4-r8,lr}
-        ldr             r4,  [sp, #24]
+        push            {r4-r5,lr}
+        ldr             r4,  [sp, #12]
         movrel          r5,  X(obmc_masks)
         add             r5,  r5,  r3
-        clz             r8,  r3
-        adr             r7,  L(blend_v_tbl)
-        sub             r8,  r8,  #26
-        ldr             r8,  [r7, r8, lsl #2]
-        add             r7,  r7,  r8
-        bx              r7
+        clz             lr,  r3
+        adr             r3,  L(blend_v_tbl)
+        sub             lr,  lr,  #26
+        ldr             lr,  [r3, lr, lsl #2]
+        add             r3,  r3,  lr
+        bx              r3
         .align 2
 L(blend_v_tbl):
         .word 320f  - L(blend_v_tbl) + CONFIG_THUMB
@@ -756,7 +755,7 @@ L(blend_v_tbl):
         vst1.8          {d6[0]}, [r0],  r1
         vst1.8          {d6[1]}, [r12], r1
         bgt             2b
-        pop             {r4-r8,pc}
+        pop             {r4-r5,pc}
 40:
         vmov.i8         d22, #64
         vld1.32         {d4[]},  [r5]
@@ -780,7 +779,7 @@ L(blend_v_tbl):
         add             r0,  r0,  r1
         add             r12, r12, r1
         bgt             4b
-        pop             {r4-r8,pc}
+        pop             {r4-r5,pc}
 80:
         vmov.i8         d16, #64
         vld1.u8         {d2}, [r5]
@@ -807,7 +806,7 @@ L(blend_v_tbl):
         add             r0,  r0,  r1
         add             r12, r12, r1
         bgt             8b
-        pop             {r4-r8,pc}
+        pop             {r4-r5,pc}
 160:
         vmov.i8         q12, #64
         vld1.u8         {q2},  [r5]
@@ -840,7 +839,7 @@ L(blend_v_tbl):
         add             r0,  r0,  r1
         add             r12, r12, r1
         bgt             16b
-        pop             {r4-r8,pc}
+        pop             {r4-r5,pc}
 320:
         vmov.i8         q10, #64
         vld1.u8         {q2, q3},  [r5]
@@ -861,7 +860,7 @@ L(blend_v_tbl):
         vrshrn.i16      d2,  q15, #6
         vst1.u8         {d0, d1, d2}, [r0], r1
         bgt             32b
-        pop             {r4-r8,pc}
+        pop             {r4-r5,pc}
 endfunc
 
 
