@@ -354,6 +354,8 @@ fn compute_distortion<T: Pixel>(
     ),
   };
 
+  distortion = (fi.dist_scale[0] * distortion as f64) as u64;
+
   if !luma_only {
     let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
 
@@ -371,7 +373,7 @@ fn compute_distortion<T: Pixel>(
       for p in 1..3 {
         let input_region = ts.input_tile.planes[p].subregion(area);
         let rec_region = ts.rec.planes[p].subregion(area);
-        distortion += sse_wxh(
+        distortion += (sse_wxh(
           &input_region,
           &rec_region,
           w_uv,
@@ -383,7 +385,8 @@ fn compute_distortion<T: Pixel>(
               bsize,
             )
           },
-        );
+        ) as f64
+          * fi.dist_scale[p]) as u64;
       }
     };
   }
@@ -401,7 +404,7 @@ fn compute_tx_distortion<T: Pixel>(
   let input_region = ts.input_tile.planes[0].subregion(area);
   let rec_region = ts.rec.planes[0].subregion(area);
   let mut distortion = if skip {
-    sse_wxh(
+    (sse_wxh(
       &input_region,
       &rec_region,
       bsize.width(),
@@ -413,12 +416,11 @@ fn compute_tx_distortion<T: Pixel>(
           bsize,
         )
       },
-    )
+    ) as f64
+      * fi.dist_scale[0]) as u64
   } else {
     assert!(tx_dist >= 0);
-    let bias =
-      compute_distortion_bias(fi, ts.to_frame_block_offset(tile_bo), bsize);
-    (tx_dist as f64 * bias) as u64
+    tx_dist as u64
   };
 
   if !luma_only && skip {
@@ -438,7 +440,7 @@ fn compute_tx_distortion<T: Pixel>(
       for p in 1..3 {
         let input_region = ts.input_tile.planes[p].subregion(area);
         let rec_region = ts.rec.planes[p].subregion(area);
-        distortion += sse_wxh(
+        distortion += (sse_wxh(
           &input_region,
           &rec_region,
           w_uv,
@@ -450,7 +452,8 @@ fn compute_tx_distortion<T: Pixel>(
               bsize,
             )
           },
-        );
+        ) as f64
+          * fi.dist_scale[p]) as u64;
       }
     }
   }
@@ -475,7 +478,7 @@ fn compute_mean_importance<T: Pixel>(
   total_importance / (bsize.width_mi() * bsize.height_mi()) as f32
 }
 
-fn compute_distortion_bias<T: Pixel>(
+pub fn compute_distortion_bias<T: Pixel>(
   fi: &FrameInvariants<T>, frame_bo: PlaneBlockOffset, bsize: BlockSize,
 ) -> f64 {
   let mean_importance = compute_mean_importance(fi, frame_bo, bsize);
@@ -1650,24 +1653,22 @@ fn rdo_loop_plane_error<T: Pixel>(
         let test_region =
           test_plane.region(Area::BlockStartingAt { bo: test_bo.0 });
 
-        let value = if pli == 0 {
-          cdef_dist_wxh_8x8(&in_region, &test_region, fi.sequence.bit_depth)
-        } else {
-          // The closure returns 1. because we bias the distortion right
-          // below.
-          sse_wxh(&in_region, &test_region, 8 >> xdec, 8 >> ydec, |_, _| 1.)
-        };
-
         let bias = compute_distortion_bias(
           fi,
           ts.to_frame_block_offset(bo),
           BlockSize::BLOCK_8X8,
         );
-        err += (value as f64 * bias) as u64;
+        err += if pli == 0 {
+          (cdef_dist_wxh_8x8(&in_region, &test_region, fi.sequence.bit_depth)
+            as f64
+            * bias) as u64
+        } else {
+          sse_wxh(&in_region, &test_region, 8 >> xdec, 8 >> ydec, |_, _| bias)
+        };
       }
     }
   }
-  err
+  (err as f64 * fi.dist_scale[pli]) as u64
 }
 
 // Passed in a superblock offset representing the upper left corner of
