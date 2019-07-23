@@ -9,10 +9,16 @@
 
 #![deny(bare_trait_objects)]
 
+#[macro_use]
+extern crate err_derive;
+
 mod common;
 mod decoder;
+mod error;
 mod muxer;
+
 use crate::common::*;
+use crate::error::*;
 use rav1e::prelude::*;
 
 use std::io::Write;
@@ -72,7 +78,7 @@ fn process_frame<T: Pixel, D: Decoder>(
   buffer: &mut [u8],
   buf_pos: &mut usize,
   mut y4m_enc: Option<&mut y4m::Encoder<'_, Box<dyn Write>>>
-) -> Option<Vec<FrameSummary>> {
+) -> Result<Option<Vec<FrameSummary>>, CliError> {
   let y4m_details = source.input.get_video_details();
   let mut frame_summaries = Vec::new();
   let mut pass1file = pass1file;
@@ -139,17 +145,17 @@ fn process_frame<T: Pixel, D: Decoder>(
            .expect("Unable to write to two-pass data file.");
         }
       }
-      return None;
+      return Ok(None);
     }
-    Err(EncoderStatus::Failure) => {
-      panic!("Failed to encode video");
+    e @ Err(EncoderStatus::Failure) => {
+      let _ = e.map_err(|e| e.context("Failed to encode video"))?;
     }
-    Err(EncoderStatus::NotReady) => {
-      panic!("Mis-managed handling of two-pass stats data");
+    e @ Err(EncoderStatus::NotReady) => {
+      let _ = e.map_err(|e| e.context("Mismanaged handling of two-pass stats data"))?;
     }
     Err(EncoderStatus::Encoded) => {}
   }
-  Some(frame_summaries)
+  Ok(Some(frame_summaries))
 }
 
 fn do_encode<T: Pixel, D: Decoder>(
@@ -159,7 +165,7 @@ fn do_encode<T: Pixel, D: Decoder>(
   pass1file_name: Option<&String>,
   pass2file_name: Option<&String>,
   mut y4m_enc: Option<y4m::Encoder<'_, Box<dyn Write>>>
-) {
+) -> Result<(), CliError> {
   let mut ctx: Context<T> = cfg.new_context();
 
   let mut pass2file = pass2file_name.map(|f| {
@@ -176,7 +182,7 @@ fn do_encode<T: Pixel, D: Decoder>(
 
   while let Some(frame_info) =
     process_frame(&mut ctx, &mut *output, source, pass1file.as_mut(),
-     pass2file.as_mut(), &mut buffer, &mut buf_pos, y4m_enc.as_mut())
+     pass2file.as_mut(), &mut buffer, &mut buf_pos, y4m_enc.as_mut())?
   {
     for frame in frame_info {
       progress.add_frame(frame);
@@ -190,12 +196,20 @@ fn do_encode<T: Pixel, D: Decoder>(
     output.flush().unwrap();
   }
   eprint!("\n{}\n", progress.print_summary());
+  Ok(())
 }
 
 fn main() {
   better_panic::install();
 
-  let mut cli = parse_cli();
+  match run() {
+    Ok(()) => {},
+    Err(e) => error::print_error(&e),
+  }
+}
+
+fn run() -> Result<(), error::CliError> {
+  let mut cli = parse_cli()?;
   let mut y4m_dec = y4m::decode(&mut cli.io.input).expect("input is not a y4m file");
   let video_info = y4m_dec.get_video_details();
   let y4m_enc = match cli.io.rec.as_mut() {
@@ -291,11 +305,13 @@ fn main() {
     do_encode::<u8, y4m::Decoder<'_, Box<dyn Read>>>(
       cfg, cli.verbose, progress, &mut *cli.io.output, &mut source,
       cli.pass1file_name.as_ref(), cli.pass2file_name.as_ref(), y4m_enc
-    )
+    )?
   } else {
     do_encode::<u16, y4m::Decoder<'_, Box<dyn Read>>>(
       cfg, cli.verbose, progress, &mut *cli.io.output, &mut source,
       cli.pass1file_name.as_ref(), cli.pass2file_name.as_ref(), y4m_enc
-    )
+    )?
   }
+
+  Ok(())
 }

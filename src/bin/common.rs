@@ -9,6 +9,7 @@
 
 use crate::muxer::{create_muxer, Muxer};
 use crate::{ColorPrimaries, MatrixCoefficients, TransferCharacteristics};
+use crate::error::*;
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand, Shell};
 use rav1e::prelude::*;
 use rav1e::version;
@@ -37,7 +38,7 @@ pub struct CliOptions {
   pub pass2file_name: Option<String>
 }
 
-pub fn parse_cli() -> CliOptions {
+pub fn parse_cli() -> Result<CliOptions, CliError> {
   let ver_short = version::short();
   let ver_long = version::full();
   let ver = version::full();
@@ -326,7 +327,7 @@ pub fn parse_cli() -> CliOptions {
   let io = EncoderIO {
     input: match matches.value_of("INPUT").unwrap() {
       "-" => Box::new(io::stdin()) as Box<dyn Read>,
-      f => Box::new(File::open(&f).unwrap()) as Box<dyn Read>
+      f => Box::new(File::open(&f).map_err(|e| e.context("Cannot open input file"))?) as Box<dyn Read>
     },
     output: create_muxer(matches.value_of("OUTPUT").unwrap()),
     rec: matches
@@ -334,7 +335,7 @@ pub fn parse_cli() -> CliOptions {
       .map(|f| Box::new(File::create(&f).unwrap()) as Box<dyn Write>)
   };
 
-  CliOptions {
+  Ok(CliOptions {
     io,
     enc: parse_config(&matches),
     limit: matches.value_of("LIMIT").unwrap().parse().unwrap(),
@@ -346,7 +347,7 @@ pub fn parse_cli() -> CliOptions {
     threads,
     pass1file_name: matches.value_of("FIRST_PASS").map(|s| s.to_owned()),
     pass2file_name: matches.value_of("SECOND_PASS").map(|s| s.to_owned())
-  }
+  })
 }
 
 fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
