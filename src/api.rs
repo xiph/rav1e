@@ -1191,7 +1191,7 @@ impl<T: Pixel> ContextInner<T> {
         let rfs = Arc::new(ReferenceFrame {
           order_hint: fi.order_hint,
           // Use the original frame contents.
-          frame: (&**frame).clone(), // TODO: get rid of the frame data clone.
+          frame: frame.clone(),
           input_hres: fs.input_hres,
           input_qres: fs.input_qres,
           cdfs: fs.cdfs,
@@ -1282,7 +1282,7 @@ impl<T: Pixel> ContextInner<T> {
       let rfs = Arc::new(ReferenceFrame {
         order_hint: fi.order_hint,
         // Use the original frame contents.
-        frame: (&**frame).clone(), // TODO: get rid of the frame data clone.
+        frame: frame.clone(),
         input_hres: fs.input_hres,
         input_qres: fs.input_qres,
         cdfs: fs.cdfs,

@@ -54,7 +54,7 @@ const MAX_NUM_OPERATING_POINTS: usize = MAX_NUM_TEMPORAL_LAYERS * MAX_NUM_SPATIA
 #[derive(Debug, Clone)]
 pub struct ReferenceFrame<T: Pixel> {
   pub order_hint: u32,
-  pub frame: Frame<T>,
+  pub frame: Arc<Frame<T>>,
   pub input_hres: Plane<T>,
   pub input_qres: Plane<T>,
   pub cdfs: CDFContext,
@@ -2359,7 +2359,7 @@ pub fn update_rec_buffer<T: Pixel>(
   let rfs = Arc::new(
     ReferenceFrame {
       order_hint: fi.order_hint,
-      frame: fs.rec,
+      frame: Arc::new(fs.rec),
       input_hres: fs.input_hres,
       input_qres: fs.input_qres,
       cdfs: fs.cdfs,
