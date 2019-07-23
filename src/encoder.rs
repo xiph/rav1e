@@ -495,6 +495,9 @@ pub struct FrameInvariants<T: Pixel> {
   /// `rec_buffer` contains the current frame's reference frames and
   /// `lookahead_rec_buffer` contains the next frame's reference frames.
   pub lookahead_rec_buffer: ReferenceFramesSet<T>,
+  /// Intra prediction cost estimations for each 4×4 block. Used for block
+  /// importance computation.
+  pub lookahead_intra_costs: Box<[u32]>,
   /// Future importance values for each 4×4 block. That is, a value indicating
   /// how much future frames depend on the block (for example, via
   /// inter-prediction).
@@ -632,6 +635,7 @@ impl<T: Pixel> FrameInvariants<T> {
         vec.into_boxed_slice()
       },
       lookahead_rec_buffer: ReferenceFramesSet::new(),
+      lookahead_intra_costs: vec![0; w_in_b * h_in_b].into_boxed_slice(),
       block_importances: vec![0.; w_in_b * h_in_b].into_boxed_slice(),
     }
   }
