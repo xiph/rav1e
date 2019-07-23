@@ -193,6 +193,8 @@ fn do_encode<T: Pixel, D: Decoder>(
 }
 
 fn main() {
+  better_panic::install();
+
   let mut cli = parse_cli();
   let mut y4m_dec = y4m::decode(&mut cli.io.input).expect("input is not a y4m file");
   let video_info = y4m_dec.get_video_details();
