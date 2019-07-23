@@ -552,6 +552,7 @@ pub struct QuantizerParameters {
   pub dc_qi: [u8; 3],
   pub ac_qi: [u8; 3],
   pub lambda: f64,
+  pub dist_scale: [f64; 3],
 }
 
 const Q57_SQUARE_EXP_SCALE: f64 =
@@ -573,8 +574,16 @@ impl QuantizerParameters {
     let scale = q57(QSCALE + bit_depth as i32 - 8);
     let quantizer = bexp64(log_target_q + scale);
     let (offset_u, offset_v) = chroma_offset(log_target_q);
-    let quantizer_u = bexp64(log_target_q + offset_u + scale);
-    let quantizer_v = bexp64(log_target_q + offset_v + scale);
+    let log_target_q_u = log_target_q + offset_u;
+    let log_target_q_v = log_target_q + offset_v;
+    let quantizer_u = bexp64(log_target_q_u + scale);
+    let quantizer_v = bexp64(log_target_q_v + scale);
+    let lambda = (::std::f64::consts::LN_2 / 6.0)
+      * ((log_target_q as f64) * Q57_SQUARE_EXP_SCALE).exp();
+    let lambda_u = (::std::f64::consts::LN_2 / 6.0)
+      * ((log_target_q_u as f64) * Q57_SQUARE_EXP_SCALE).exp();
+    let lambda_v = (::std::f64::consts::LN_2 / 6.0)
+      * ((log_target_q_v as f64) * Q57_SQUARE_EXP_SCALE).exp();
     QuantizerParameters {
       log_base_q,
       log_target_q,
@@ -589,8 +598,8 @@ impl QuantizerParameters {
         select_ac_qi(quantizer_u, bit_depth).max(1),
         select_ac_qi(quantizer_v, bit_depth).max(1),
       ],
-      lambda: (::std::f64::consts::LN_2 / 6.0)
-        * ((log_target_q as f64) * Q57_SQUARE_EXP_SCALE).exp(),
+      lambda,
+      dist_scale: [1.0, lambda / lambda_u, lambda / lambda_v],
     }
   }
 }
