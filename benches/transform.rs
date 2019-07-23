@@ -62,7 +62,54 @@ pub fn av1_iadst8(c: &mut Criterion) {
     || transform::av1_iadst8(&input[..], &mut output[..], 16)));
 }
 
-criterion_group!(transform,
+pub fn daala_fdct4(c: &mut Criterion) {
+  let (input, mut output) = init_buffers(4);
+
+  c.bench_function("daala_fdct4", move |b| b.iter(
+    || transform::daala_fdct4(&input[..], &mut output[..])));
+}
+
+pub fn daala_fdct8(c: &mut Criterion) {
+  let (input, mut output) = init_buffers(8);
+
+  c.bench_function("daala_fdct8", move |b| b.iter(
+    || transform::daala_fdct8(&input[..], &mut output[..])));
+}
+
+pub fn fidentity4(c: &mut Criterion) {
+  let (input, mut output) = init_buffers(4);
+
+  c.bench_function("fidentity4", move |b| b.iter(
+    || transform::fidentity4(&input[..], &mut output[..])));
+}
+
+pub fn fidentity8(c: &mut Criterion) {
+  let (input, mut output) = init_buffers(8);
+
+  c.bench_function("fidentity8", move |b| b.iter(
+    || transform::fidentity8(&input[..], &mut output[..])));
+}
+
+pub fn daala_fdst_vii_4(c: &mut Criterion) {
+  let (input, mut output) = init_buffers(4);
+
+  c.bench_function("daala_fdst_vii_4", move |b| b.iter(
+    || transform::daala_fdst_vii_4(&input[..], &mut output[..])));
+}
+
+pub fn daala_fdst8(c: &mut Criterion) {
+  let (input, mut output) = init_buffers(8);
+
+  c.bench_function("daala_fdst8", move |b| b.iter(
+    || transform::daala_fdst8(&input[..], &mut output[..])));
+}
+
+criterion_group!(inverse_transforms,
   av1_idct4, av1_idct8,
   av1_iidentity4, av1_iidentity8,
   av1_iadst4, av1_iadst8);
+
+criterion_group!(forward_transforms,
+  daala_fdct4, daala_fdct8,
+  fidentity4, fidentity8,
+  daala_fdst_vii_4, daala_fdst8);

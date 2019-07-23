@@ -21,7 +21,7 @@ use rav1e::bench::predict::*;
 use rav1e::bench::transform::*;
 use rav1e::bench::rdo::*;
 
-use crate::transform::transform;
+use crate::transform::{forward_transforms, inverse_transforms};
 
 use criterion::*;
 use std::time::Duration;
@@ -190,5 +190,6 @@ criterion_group!{ name = me;
 
 criterion_group!(ec, ec_bench);
 
-criterion_main!(write_block, intra_prediction, cdef, cfl, me, transform, ec);
+criterion_main!(write_block, intra_prediction, cdef, cfl, me,
+  forward_transforms, inverse_transforms, ec);
 
