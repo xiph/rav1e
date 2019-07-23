@@ -34,4 +34,35 @@ pub fn av1_idct8(c: &mut Criterion) {
     || transform::av1_idct8(&input[..], &mut output[..], 16)));
 }
 
-criterion_group!(transform, av1_idct4, av1_idct8);
+pub fn av1_iidentity4(c: &mut Criterion) {
+  let (input, mut output) = init_buffers(4);
+
+  c.bench_function("av1_iidentity4_8", move |b| b.iter(
+    || transform::av1_iidentity4(&input[..], &mut output[..], 16)));
+}
+
+pub fn av1_iidentity8(c: &mut Criterion) {
+  let (input, mut output) = init_buffers(8);
+
+  c.bench_function("av1_iidentity8_8", move |b| b.iter(
+    || transform::av1_iidentity8(&input[..], &mut output[..], 16)));
+}
+
+pub fn av1_iadst4(c: &mut Criterion) {
+  let (input, mut output) = init_buffers(4);
+
+  c.bench_function("av1_iadst4_8", move |b| b.iter(
+    || transform::av1_iadst4(&input[..], &mut output[..], 16)));
+}
+
+pub fn av1_iadst8(c: &mut Criterion) {
+  let (input, mut output) = init_buffers(8);
+
+  c.bench_function("av1_iadst8_8", move |b| b.iter(
+    || transform::av1_iadst8(&input[..], &mut output[..], 16)));
+}
+
+criterion_group!(transform,
+  av1_idct4, av1_idct8,
+  av1_iidentity4, av1_iidentity8,
+  av1_iadst4, av1_iadst8);
