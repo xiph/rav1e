@@ -61,7 +61,7 @@ type TxfmFunc = dyn Fn(&[i32], &mut [i32]);
 
 use std::ops::*;
 
-trait TxOperations:
+pub trait TxOperations:
   Copy + Default + Add<Output = Self> + Sub<Output = Self>
 {
   fn tx_mul(self, _: (i32, i32)) -> Self;
@@ -291,7 +291,7 @@ fn daala_fdct_ii_4<T: TxOperations>(
   store_coeffs!(output, q0, q1, q2, q3);
 }
 
-fn daala_fdct4<T: TxOperations>(input: &[T], output: &mut [T]) {
+pub fn daala_fdct4<T: TxOperations>(input: &[T], output: &mut [T]) {
   let mut temp_out: [T; 4] = [T::default(); 4];
   daala_fdct_ii_4(input[0], input[1], input[2], input[3], &mut temp_out);
 
@@ -301,7 +301,7 @@ fn daala_fdct4<T: TxOperations>(input: &[T], output: &mut [T]) {
   output[3] = temp_out[3];
 }
 
-fn daala_fdst_vii_4<T: TxOperations>(input: &[T], output: &mut [T]) {
+pub fn daala_fdst_vii_4<T: TxOperations>(input: &[T], output: &mut [T]) {
   let q0 = input[0];
   let q1 = input[1];
   let q2 = input[2];
@@ -406,7 +406,7 @@ fn daala_fdct_ii_8<T: TxOperations>(
   output[4..8].reverse();
 }
 
-fn daala_fdct8<T: TxOperations>(input: &[T], output: &mut [T]) {
+pub fn daala_fdct8<T: TxOperations>(input: &[T], output: &mut [T]) {
   let mut temp_out: [T; 8] = [T::default(); 8];
   daala_fdct_ii_8(
     input[0],
@@ -485,7 +485,7 @@ fn daala_fdst_iv_8<T: TxOperations>(
   store_coeffs!(output, r0, r1, r2, r3, r4, r5, r6, r7);
 }
 
-fn daala_fdst8<T: TxOperations>(input: &[T], output: &mut [T]) {
+pub fn daala_fdst8<T: TxOperations>(input: &[T], output: &mut [T]) {
   let mut temp_out: [T; 8] = [T::default(); 8];
   daala_fdst_iv_8(
     input[0],
@@ -1597,11 +1597,11 @@ fn daala_fdct64<T: TxOperations>(input: &[T], output: &mut [T]) {
   reorder_4(15, 15);
 }
 
-fn fidentity4<T: TxOperations>(input: &[T], output: &mut [T]) {
+pub fn fidentity4<T: TxOperations>(input: &[T], output: &mut [T]) {
   output[..4].copy_from_slice(&input[..4]);
 }
 
-fn fidentity8<T: TxOperations>(input: &[T], output: &mut [T]) {
+pub fn fidentity8<T: TxOperations>(input: &[T], output: &mut [T]) {
   output[..8].copy_from_slice(&input[..8]);
 }
 
