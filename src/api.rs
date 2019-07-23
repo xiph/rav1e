@@ -1691,9 +1691,12 @@ impl<T: Pixel> ContextInner<T> {
           false
         );
         let rec = if fi.show_frame { Some(fs.rec) } else { None };
-        let fi = fi.clone();
         self.output_frameno += 1;
-        self.finalize_packet(rec, &fi)
+
+        let input_frameno = fi.input_frameno;
+        let frame_type = fi.frame_type;
+        let bit_depth = fi.sequence.bit_depth;
+        self.finalize_packet(rec, input_frameno, frame_type, bit_depth)
       } else if let Some(f) = self.frame_q.get(&fi.input_frameno) {
         if !self.rc_state.ready() {
           return Err(EncoderStatus::NotReady);
@@ -1784,8 +1787,10 @@ impl<T: Pixel> ContextInner<T> {
           self.output_frameno += 1;
 
           if fi.show_frame {
-            let fi = fi.clone();
-            self.finalize_packet(rec, &fi)
+            let input_frameno = fi.input_frameno;
+            let frame_type = fi.frame_type;
+            let bit_depth = fi.sequence.bit_depth;
+            self.finalize_packet(rec, input_frameno, frame_type, bit_depth)
           } else {
             Err(EncoderStatus::Encoded)
           }
@@ -1805,7 +1810,8 @@ impl<T: Pixel> ContextInner<T> {
   }
 
   fn finalize_packet(
-    &mut self, rec: Option<Frame<T>>, fi: &FrameInvariants<T>
+    &mut self, rec: Option<Frame<T>>, input_frameno: u64,
+    frame_type: FrameType, bit_depth: usize
   ) -> Result<Packet<T>, EncoderStatus> {
     let data = self.packet_data.clone();
     self.packet_data.clear();
@@ -1816,23 +1822,13 @@ impl<T: Pixel> ContextInner<T> {
     let mut psnr = None;
     if self.config.show_psnr {
       if let Some(ref rec) = rec {
-        let original_frame = self.get_frame(fi.input_frameno);
-        psnr = Some(calculate_frame_psnr(
-          &*original_frame,
-          rec,
-          fi.sequence.bit_depth
-        ));
+        let original_frame = self.get_frame(input_frameno);
+        psnr = Some(calculate_frame_psnr(&*original_frame, rec, bit_depth));
       }
     }
 
     self.frames_processed += 1;
-    Ok(Packet {
-      data,
-      rec,
-      input_frameno: fi.input_frameno,
-      frame_type: fi.frame_type,
-      psnr
-    })
+    Ok(Packet { data, rec, input_frameno, frame_type, psnr })
   }
 
   fn garbage_collect(&mut self, cur_input_frameno: u64) {
