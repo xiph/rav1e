@@ -1905,7 +1905,7 @@ impl<T: Pixel> ContextInner<T> {
   /// `self.keyframe_detector` always has the correct last frame.
   fn is_key_frame(&self, input_frameno: u64, frame: &Frame<T>) -> bool {
     // The first frame is always a keyframe.
-    if input_frameno == 0 {
+    if input_frameno == 0 || self.config.still_picture {
       return true;
     }
 
