@@ -254,17 +254,23 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
   fn write_sequence_header_obu<T: Pixel>(
     &mut self, fi: &FrameInvariants<T>
   ) -> io::Result<()> {
+    debug_assert!(fi.sequence.still_picture == false
+      && fi.sequence.reduced_still_picture_hdr == true);
+
     self.write(3, fi.sequence.profile)?; // profile
-    self.write_bit(false)?; // still_picture
-    self.write_bit(false)?; // reduced_still_picture_header
-    self.write_bit(false)?; // timing info present
-    self.write_bit(false)?; // initial display delay present flag
-    self.write(5, 0)?; // one operating point
-    self.write(12, 0)?; // idc
-    self.write(5, 31)?; // level
-    self.write(1, 0)?; // tier
+    self.write_bit(fi.sequence.still_picture)?; // still_picture
+    self.write_bit(fi.sequence.reduced_still_picture_hdr)?; // reduced_still_picture_header
+
     if fi.sequence.reduced_still_picture_hdr {
-      unimplemented!();
+      self.write(5, 31)?; // level
+    }
+    else {
+      self.write_bit(false)?; // timing info present
+      self.write_bit(false)?; // initial display delay present flag
+      self.write(5, 0)?; // one operating point
+      self.write(12, 0)?; // idc
+      self.write(5, 31)?; // level
+      self.write(1, 0)?; // tier
     }
 
     self.write_sequence_header(fi)?;
