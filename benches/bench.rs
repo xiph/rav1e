@@ -84,6 +84,8 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
               &mut w,
               p,
               bo,
+              0,0,
+              tx_bo,
               mode,
               tx_size,
               tx_type,

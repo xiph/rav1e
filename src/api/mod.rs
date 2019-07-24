@@ -23,6 +23,7 @@ use crate::encoder::*;
 use crate::frame::*;
 use crate::metrics::calculate_frame_psnr;
 use crate::partition::*;
+use crate::context::*;
 use crate::predict::PredictionMode;
 use crate::rate::RCState;
 use crate::rate::FRAME_NSUBTYPES;
@@ -1199,6 +1200,8 @@ impl<T: Pixel> ContextInner<T> {
         // TODO: other intra prediction modes.
         let edge_buf = get_intra_edges(
           &frame.planes[0].as_region(),
+          BlockOffset{ x, y },
+          0, 0, BlockSize::BLOCK_4X4,
           PlaneOffset {
             x: x as isize * MI_SIZE as isize,
             y: y as isize * MI_SIZE as isize

@@ -43,6 +43,7 @@ mod scan_order;
 mod scenechange;
 mod rate;
 mod tiling;
+mod recon_intra;
 
 mod api;
 mod header;
