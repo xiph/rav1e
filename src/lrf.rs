@@ -1012,6 +1012,8 @@ impl RestorationState {
                                    &mut out.planes[pli]);
             },
             RestorationFilter::Sgrproj{set, xqd} => {
+              if !fi.sequence.enable_cdef { continue; }
+
               sgrproj_stripe_filter(set, xqd, fi,
                                     crop_w - x,
                                     (crop_h as isize - stripe_start_y) as usize,
