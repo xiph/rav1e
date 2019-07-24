@@ -55,7 +55,8 @@ pub static RAV1E_INTER_COMPOUND_MODES: &'static [PredictionMode] = &[
   PredictionMode::NEAREST_NEARESTMV,
   PredictionMode::NEW_NEWMV,
   PredictionMode::NEAREST_NEWMV,
-  PredictionMode::NEW_NEARESTMV
+  PredictionMode::NEW_NEARESTMV,
+  PredictionMode::NEAR_NEARMV,
 ];
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
@@ -92,6 +93,15 @@ pub enum PredictionMode {
 }
 
 impl PredictionMode {
+  pub fn is_compound(self) -> bool {
+    self >= PredictionMode::NEAREST_NEARESTMV
+  }
+  pub fn has_near(self) -> bool {
+    (self >= PredictionMode::NEAR0MV && self <= PredictionMode::NEAR2MV)
+      || self == PredictionMode::NEAR_NEARMV
+      || self == PredictionMode::NEAR_NEWMV
+      || self == PredictionMode::NEW_NEARMV
+  }
   pub fn predict_intra<T: Pixel>(
     self, tile_rect: TileRect, dst: &mut PlaneRegionMut<'_, T>, tx_size: TxSize, bit_depth: usize,
     ac: &[i16], alpha: i16, edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>

@@ -323,8 +323,8 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
       std::process::exit(0);
     }
   }
-  
-   let rec = match matches.value_of("RECONSTRUCTION") {
+
+  let rec = match matches.value_of("RECONSTRUCTION") {
     Some(f) => Some(Box::new(File::create(&f).map_err(|e| e.context("Cannot create reconstruction file"))?) as Box<dyn Write>),
     None => None
   };
