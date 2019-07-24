@@ -332,7 +332,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     output: create_muxer(matches.value_of("OUTPUT").unwrap()),
     rec: matches
       .value_of("RECONSTRUCTION")
-      .map(|f| Box::new(File::create(&f).unwrap()) as Box<dyn Write>)
+      .map(|f| Box::new(File::create(&f).map_err(|e| e.context("Cannot create Reconstruction file"))?) as Box<dyn Write>)
   };
 
   Ok(CliOptions {
