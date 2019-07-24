@@ -86,6 +86,9 @@ pub struct EncoderConfig {
   pub mastering_display: Option<MasteringDisplay>,
   pub content_light: Option<ContentLight>,
 
+  /// Still picture mode flag
+  pub still_picture: bool,
+
   // encoder configuration
   pub time_base: Rational,
   /// The *minimum* interval between two keyframes
@@ -143,6 +146,8 @@ impl EncoderConfig {
       color_description: None,
       mastering_display: None,
       content_light: None,
+
+      still_picture: false,
 
       time_base: Rational { num: 1, den: 30 },
       min_key_frame_interval: 12,
