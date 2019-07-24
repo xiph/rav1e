@@ -7,7 +7,10 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use arg_enum_proc_macro::ArgEnum;
+pub mod color;
+
+pub use color::*;
+
 use arrayvec::ArrayVec;
 use bitstream_io::*;
 use num_derive::*;
@@ -61,13 +64,6 @@ impl Rational {
   pub fn as_f64(self) -> f64 {
     self.num as f64 / self.den as f64
   }
-}
-
-#[derive(Clone, Copy, Debug)]
-#[repr(C)]
-pub struct Point {
-  pub x: u16,
-  pub y: u16
 }
 
 /// Encoder Settings impacting the bitstream produced
@@ -352,157 +348,7 @@ pub enum PredictionModesSetting {
   ComplexAll
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, FromPrimitive)]
-#[repr(C)]
-pub enum ChromaSampling {
-  Cs420,
-  Cs422,
-  Cs444,
-  Cs400
-}
 
-impl Default for ChromaSampling {
-  fn default() -> Self {
-    ChromaSampling::Cs420
-  }
-}
-
-impl ChromaSampling {
-  // Provides the sampling period in the horizontal and vertical axes.
-  pub fn sampling_period(self) -> (usize, usize) {
-    use self::ChromaSampling::*;
-    match self {
-      Cs420 => (2, 2),
-      Cs422 => (2, 1),
-      Cs444 => (1, 1),
-      Cs400 => (2, 2)
-    }
-  }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, FromPrimitive)]
-#[repr(C)]
-pub enum ChromaSamplePosition {
-  Unknown,
-  Vertical,
-  Colocated
-}
-
-impl Default for ChromaSamplePosition {
-  fn default() -> Self {
-    ChromaSamplePosition::Unknown
-  }
-}
-
-#[derive(ArgEnum, Debug, Clone, Copy, PartialEq, FromPrimitive)]
-#[repr(C)]
-pub enum PixelRange {
-  Limited,
-  Full
-}
-
-impl Default for PixelRange {
-  fn default() -> Self {
-    PixelRange::Limited
-  }
-}
-
-#[derive(ArgEnum, Debug, Clone, Copy, PartialEq, FromPrimitive)]
-#[repr(C)]
-pub enum MatrixCoefficients {
-  Identity = 0,
-  BT709,
-  Unspecified,
-  BT470M = 4,
-  BT470BG,
-  ST170M,
-  ST240M,
-  YCgCo,
-  BT2020NonConstantLuminance,
-  BT2020ConstantLuminance,
-  ST2085,
-  ChromaticityDerivedNonConstantLuminance,
-  ChromaticityDerivedConstantLuminance,
-  ICtCp
-}
-
-impl Default for MatrixCoefficients {
-  fn default() -> Self {
-    MatrixCoefficients::Unspecified
-  }
-}
-
-#[derive(ArgEnum, Debug, Clone, Copy, PartialEq, FromPrimitive)]
-#[repr(C)]
-pub enum ColorPrimaries {
-  BT709 = 1,
-  Unspecified,
-  BT470M = 4,
-  BT470BG,
-  ST170M,
-  ST240M,
-  Film,
-  BT2020,
-  ST428,
-  P3DCI,
-  P3Display,
-  Tech3213 = 22
-}
-
-impl Default for ColorPrimaries {
-  fn default() -> Self {
-    ColorPrimaries::Unspecified
-  }
-}
-
-#[derive(ArgEnum, Debug, Clone, Copy, PartialEq, FromPrimitive)]
-#[repr(C)]
-pub enum TransferCharacteristics {
-  BT1886 = 1,
-  Unspecified,
-  BT470M = 4,
-  BT470BG,
-  ST170M,
-  ST240M,
-  Linear,
-  Logarithmic100,
-  Logarithmic316,
-  XVYCC,
-  BT1361E,
-  SRGB,
-  BT2020Ten,
-  BT2020Twelve,
-  PerceptualQuantizer,
-  ST428,
-  HybridLogGamma
-}
-
-impl Default for TransferCharacteristics {
-  fn default() -> Self {
-    TransferCharacteristics::Unspecified
-  }
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct ColorDescription {
-  pub color_primaries: ColorPrimaries,
-  pub transfer_characteristics: TransferCharacteristics,
-  pub matrix_coefficients: MatrixCoefficients
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct MasteringDisplay {
-  pub primaries: [Point; 3],
-  pub white_point: Point,
-  pub max_luminance: u32,
-  pub min_luminance: u32
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct ContentLight {
-  pub max_content_light_level: u16,
-  pub max_frame_average_light_level: u16
-}
 
 /// Contains all the encoder configuration
 #[derive(Clone, Debug, Default)]

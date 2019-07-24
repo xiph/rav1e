@@ -78,17 +78,7 @@ pub mod data {
 
 /// Color model information
 pub mod color {
-  pub use crate::api::{
-    ChromaSamplePosition,
-    ChromaSampling,
-    ColorPrimaries,
-    TransferCharacteristics,
-    PixelRange,
-    ContentLight,
-    ColorDescription,
-    MasteringDisplay,
-    MatrixCoefficients,
-  };
+  pub use crate::api::color::*;
 }
 
 /// Encoder configuration and settings
