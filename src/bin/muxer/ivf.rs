@@ -5,6 +5,8 @@ use std::fs::File;
 use std::io;
 use std::io::Write;
 
+use crate::error::*;
+
 pub struct IvfMuxer {
   output: Box<dyn Write>,
 }
@@ -36,13 +38,14 @@ impl Muxer for IvfMuxer {
 }
 
 impl IvfMuxer {
-  pub fn open(path: &str) -> Box<dyn Muxer> {
+  pub fn open(path: &str) -> Result<Box<dyn Muxer>, CliError> {
+
     let ivf = IvfMuxer {
       output: match path {
         "-" => Box::new(std::io::stdout()),
-        f => Box::new(File::create(&f).unwrap())
+        f => Box::new(File::create(&f).map_err(|e| e.context("Cannot open output file"))?)
       }
     };
-    Box::new(ivf)
+    Ok(Box::new(ivf))
   }
 }
