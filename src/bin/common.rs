@@ -323,6 +323,11 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
       std::process::exit(0);
     }
   }
+  
+   let rec = match matches.value_of("RECONSTRUCTION") {
+    Some(f) => Some(Box::new(File::create(&f).map_err(|e| e.context("Cannot create reconstruction file"))?) as Box<dyn Write>),
+    None => None
+  };
 
   let io = EncoderIO {
     input: match matches.value_of("INPUT").unwrap() {
@@ -330,9 +335,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
       f => Box::new(File::open(&f).map_err(|e| e.context("Cannot open input file"))?) as Box<dyn Read>
     },
     output: create_muxer(matches.value_of("OUTPUT").unwrap()),
-    rec: matches
-      .value_of("RECONSTRUCTION")
-      .map(|f| Box::new(File::create(&f).map_err(|e| e.context("Cannot create Reconstruction file"))?) as Box<dyn Write>)
+    rec
   };
 
   Ok(CliOptions {
