@@ -644,6 +644,7 @@ impl<T: Pixel> FrameInvariants<T> {
                        gop_input_frameno_start: u64) -> Self {
     let mut fi = Self::new(config, sequence);
     fi.input_frameno = gop_input_frameno_start;
+    fi.tx_mode_select = fi.config.speed_settings.rdo_tx_decision;
     fi
   }
 
@@ -955,8 +956,10 @@ fn get_qidx<T: Pixel>(fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, cw: &Co
 // dequantize, inverse-transform.
 pub fn encode_tx_block<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>, cw: &mut ContextWriter,
-  w: &mut dyn Writer, p: usize, tile_bo: BlockOffset, mode: PredictionMode,
-  tx_size: TxSize, tx_type: TxType, plane_bsize: BlockSize, po: PlaneOffset,
+  w: &mut dyn Writer, p: usize, tile_partition_bo: BlockOffset,
+  bx: usize, by: usize, // tx block position within a partition, unit: tx block number
+  tile_bo: BlockOffset, mode: PredictionMode,
+  tx_size: TxSize, tx_type: TxType, bsize: BlockSize, po: PlaneOffset,
   skip: bool, ac: &[i16], alpha: i16, rdo_type: RDOType, need_recon_pixel: bool
 ) -> (bool, i64) {
   let qidx = get_qidx(fi, ts, cw, tile_bo);
@@ -965,14 +968,18 @@ pub fn encode_tx_block<T: Pixel>(
   let rec = &mut ts.rec.planes[p];
   let area = Area::BlockStartingAt { bo: tile_bo };
 
-  assert!(tx_size.sqr() <= TxSize::TX_32X32 || tx_type == TxType::DCT_DCT);
+  debug_assert!(tx_size.sqr() <= TxSize::TX_32X32 || tx_type == TxType::DCT_DCT);
+
+  let plane_bsize = bsize.subsampled_size(xdec, ydec);
+
   debug_assert!(p != 0 || !mode.is_intra() || tx_size.block_size() == plane_bsize || need_recon_pixel,
     "mode.is_intra()={:#?}, plane={:#?}, tx_size.block_size()={:#?}, plane_bsize={:#?}, need_recon_pixel={:#?}",
     mode.is_intra(), p, tx_size.block_size(), plane_bsize, need_recon_pixel);
 
   if mode.is_intra() {
     let bit_depth = fi.sequence.bit_depth;
-    let edge_buf = get_intra_edges(&rec.as_const(), po, tx_size, bit_depth, Some(mode));
+    let edge_buf = get_intra_edges(&rec.as_const(), tile_partition_bo, bx, by, bsize,
+                                    po, tx_size, bit_depth, Some(mode), );
     mode.predict_intra(tile_rect, &mut rec.subregion_mut(area), tx_size, bit_depth, &ac, alpha, &edge_buf);
   }
 
@@ -1395,7 +1402,7 @@ pub fn write_tx_blocks<T: Pixel>(
       let po = tx_bo.plane_offset(&ts.input.planes[0].cfg);
       let (_, dist) =
         encode_tx_block(
-          fi, ts, cw, w, 0, tx_bo, luma_mode, tx_size, tx_type, bsize, po,
+          fi, ts, cw, w, 0, tile_bo, bx, by, tx_bo, luma_mode, tx_size, tx_type, bsize, po,
           skip, &ac.array, 0, rdo_type, need_recon_pixel
         );
       assert!(!fi.use_tx_domain_distortion || need_recon_pixel || skip || dist >= 0);
@@ -1417,8 +1424,6 @@ pub fn write_tx_blocks<T: Pixel>(
 
   bw_uv /= uv_tx_size.width_mi();
   bh_uv /= uv_tx_size.height_mi();
-
-  let plane_bsize = bsize.subsampled_size(xdec, ydec);
 
   if chroma_mode.is_cfl() {
     luma_ac(&mut ac.array, ts, tile_bo, bsize);
@@ -1455,8 +1460,8 @@ pub fn write_tx_blocks<T: Pixel>(
           po.x += (bx * uv_tx_size.width()) as isize;
           po.y += (by * uv_tx_size.height()) as isize;
           let (_, dist) =
-            encode_tx_block(fi, ts, cw, w, p, tx_bo, chroma_mode, uv_tx_size, uv_tx_type,
-                            plane_bsize, po, skip, &ac.array, alpha, rdo_type, need_recon_pixel);
+            encode_tx_block(fi, ts, cw, w, p, tile_bo, bx, by, tx_bo, chroma_mode, uv_tx_size, uv_tx_type,
+                            bsize, po, skip, &ac.array, alpha, rdo_type, need_recon_pixel);
           assert!(!fi.use_tx_domain_distortion || need_recon_pixel || skip || dist >= 0);
           tx_dist += dist;
         }
@@ -1487,7 +1492,7 @@ pub fn write_tx_tree<T: Pixel>(
 
   let po = tile_bo.plane_offset(&ts.input.planes[0].cfg);
   let (has_coeff, dist) = encode_tx_block(
-    fi, ts, cw, w, 0, tile_bo, luma_mode, tx_size, tx_type, bsize, po, skip, ac, 0, rdo_type, need_recon_pixel
+    fi, ts, cw, w, 0, tile_bo, 0, 0, tile_bo, luma_mode, tx_size, tx_type, bsize, po, skip, ac, 0, rdo_type, need_recon_pixel
   );
   assert!(!fi.use_tx_domain_distortion || need_recon_pixel || skip || dist >= 0);
   tx_dist += dist;
@@ -1506,8 +1511,6 @@ pub fn write_tx_tree<T: Pixel>(
 
   bw_uv /= uv_tx_size.width_mi();
   bh_uv /= uv_tx_size.height_mi();
-
-  let plane_bsize = bsize.subsampled_size(xdec, ydec);
 
   if bw_uv > 0 && bh_uv > 0 {
     // TODO: Disable these asserts temporarilly, since chroma_sampling_422_aom and chroma_sampling_444_aom
@@ -1536,8 +1539,8 @@ pub fn write_tx_tree<T: Pixel>(
           po.x += (bx * uv_tx_size.width()) as isize;
           po.y += (by * uv_tx_size.height()) as isize;
           let (_, dist) =
-            encode_tx_block(fi, ts, cw, w, p, tx_bo, luma_mode, uv_tx_size, uv_tx_type,
-                        plane_bsize, po, skip, ac, 0, rdo_type, need_recon_pixel);
+            encode_tx_block(fi, ts, cw, w, p, tile_bo, bx, by, tx_bo, luma_mode, uv_tx_size, uv_tx_type,
+                            bsize, po, skip, ac, 0, rdo_type, need_recon_pixel);
           assert!(!fi.use_tx_domain_distortion || need_recon_pixel || skip || dist >= 0);
           tx_dist += dist;
         }

@@ -18,6 +18,7 @@ use crate::predict::*;
 use crate::tiling::*;
 use crate::transform::TxSize;
 use crate::util::*;
+use crate::recon_intra::*;
 
 // LAST_FRAME through ALTREF_FRAME correspond to slots 0-6.
 #[derive(PartialEq, Eq, Copy, Clone)]
@@ -135,6 +136,7 @@ pub enum BlockSize {
 
 impl BlockSize {
   pub const BLOCK_SIZES_ALL: usize = 22;
+  pub const BLOCK_SIZES: usize = BlockSize::BLOCK_SIZES_ALL - 6; // BLOCK_SIZES_ALL minus 4:1 non-squares, six of them
 
   pub fn from_width_and_height(w: usize, h: usize) -> BlockSize {
     match (w, h) {
@@ -412,8 +414,61 @@ pub enum MvJointType {
   MV_JOINT_HNZVNZ = 3  /* Both components nonzero */
 }
 
+fn supersample_chroma_bsize(bsize: BlockSize, ss_x: usize, ss_y: usize)
+  -> BlockSize {
+  debug_assert!(ss_x < 2);
+  debug_assert!(ss_y < 2);
+
+  match bsize {
+    BLOCK_4X4 => {
+      match (ss_x, ss_y) {
+        (1,1) => BLOCK_8X8,
+        (1,0) => BLOCK_8X4,
+        (0,1) => BLOCK_4X8,
+        _ => bsize
+      }
+    },
+    BLOCK_4X8 => {
+      match (ss_x, ss_y) {
+        (1,1) => BLOCK_8X8,
+        (1,0) => BLOCK_8X8,
+        (0,1) => BLOCK_4X8,
+        _ => bsize
+      }
+    },
+    BLOCK_8X4 => {
+      match (ss_x, ss_y) {
+        (1,1) => BLOCK_8X8,
+        (1,0) => BLOCK_8X4,
+        (0,1) => BLOCK_8X8,
+        _ => bsize
+      }
+    },
+    BLOCK_4X16 => {
+      match (ss_x, ss_y) {
+        (1,1) => BLOCK_8X16,
+        (1,0) => BLOCK_8X16,
+        (0,1) => BLOCK_4X16,
+        _ => bsize
+      }
+    },
+    BLOCK_16X4 => {
+      match (ss_x, ss_y) {
+        (1,1) => BLOCK_16X8,
+        (1,0) => BLOCK_16X4,
+        (0,1) => BLOCK_16X8,
+        _ => bsize
+      }
+    },
+    _ => bsize
+  }
+}
+
 pub fn get_intra_edges<T: Pixel>(
   dst: &PlaneRegion<'_, T>,
+  partition_bo: BlockOffset, // partition bo, BlockOffset
+  bx: usize, by: usize,
+  partition_size: BlockSize, // partition size, BlockSize
   po: PlaneOffset,
   tx_size: TxSize,
   bit_depth: usize,
@@ -498,21 +553,26 @@ pub fn get_intra_edges<T: Pixel>(
       }
     }
 
+    let bx4 = bx * (tx_size.width() >> MI_SIZE_LOG2);  // bx,by are in tx block indices
+    let by4 = by * (tx_size.height() >> MI_SIZE_LOG2);
+
+    let have_top = by4 != 0 || if plane_cfg.ydec != 0 { partition_bo.y > 1 } else { partition_bo.y > 0 };
+    let have_left = bx4 != 0 || if plane_cfg.xdec != 0 { partition_bo.x > 1 } else { partition_bo.x > 0 };
+
+    let right_available = x + tx_size.width() < dst.rect().width;
+    let bottom_available = y + tx_size.height() < dst.rect().height;
+
+    let scaled_partition_size = supersample_chroma_bsize(partition_size, plane_cfg.xdec, plane_cfg.ydec);
+
     // Needs top right
     if needs_topright {
       debug_assert!(plane_cfg.xdec <= 1 && plane_cfg.ydec <= 1);
 
-      let bo = BlockOffset {
-        x: x >> (2 - plane_cfg.xdec),
-        y: y >> (2 - plane_cfg.ydec)
-      };
-
-      let bsize = BlockSize::from_width_and_height(
-          tx_size.width() << plane_cfg.xdec,
-          tx_size.height() << plane_cfg.ydec
-        );
-
-      let num_avail = if y != 0 && has_tr(bo, bsize) {
+      let num_avail = if y != 0 &&
+          has_top_right(scaled_partition_size, partition_bo,
+                         have_top, right_available,
+                         tx_size,
+                         by4, bx4, plane_cfg.xdec, plane_cfg.ydec) {
         tx_size.width().min(dst.rect().width - x - tx_size.width())
       } else {
         0
@@ -533,17 +593,11 @@ pub fn get_intra_edges<T: Pixel>(
     if needs_bottomleft {
       debug_assert!(plane_cfg.xdec <= 1 && plane_cfg.ydec <= 1);
 
-      let bo = BlockOffset {
-        x: x >> (2 - plane_cfg.xdec),
-        y: y >> (2 - plane_cfg.ydec)
-        };
-
-      let bsize = BlockSize::from_width_and_height(
-        tx_size.width() << plane_cfg.xdec,
-        tx_size.height() << plane_cfg.ydec
-        );
-
-      let num_avail = if x != 0 && has_bl(bo, bsize) {
+      let num_avail = if x != 0 &&
+          has_bottom_left(scaled_partition_size, partition_bo,
+                         bottom_available, have_left,
+                         tx_size,
+                         by4, bx4, plane_cfg.xdec, plane_cfg.ydec) {
         tx_size.height().min(dst.rect().height - y - tx_size.height())
       } else {
         0

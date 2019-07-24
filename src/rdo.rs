@@ -754,10 +754,15 @@ pub fn rdo_mode_decision<T: Pixel>(
   });
 
   if !best.skip {
+    let num_modes_rdo: usize;
+    let mut modes = ArrayVec::<[_;INTRA_MODES]>::new();
+
+    // If tx partition (i.e. fi.tx_mode_select) is enabled, don't use below intra prediction screening
+    if !fi.tx_mode_select {
     let tx_size = bsize.tx_size();
 
     // Reduce number of prediction modes at higher speed levels
-    let num_modes_rdo = if (fi.frame_type == FrameType::KEY
+    num_modes_rdo = if (fi.frame_type == FrameType::KEY
                             && fi.config.speed_settings.prediction_modes
                             >= PredictionModesSetting::ComplexKeyframes)
       || (fi.frame_type == FrameType::INTER
@@ -771,10 +776,13 @@ pub fn rdo_mode_decision<T: Pixel>(
 
     let intra_mode_set = RAV1E_INTRA_MODES;
     let mut sads = {
+      // FIXME: If tx partition is used, this whole sads block should be fixed
+      debug_assert!(bsize == tx_size.block_size());
       let edge_buf = {
         let rec = &ts.rec.planes[0].as_const();
         let po = tile_bo.plane_offset(&rec.plane_cfg);
-        get_intra_edges(rec, po, tx_size, fi.sequence.bit_depth, None)
+        // FIXME: If tx partition is used, get_intra_edges() should be called for each tx block
+        get_intra_edges(rec, tile_bo, 0, 0, bsize, po, tx_size, fi.sequence.bit_depth, None)
       };
       intra_mode_set
         .iter()
@@ -782,6 +790,7 @@ pub fn rdo_mode_decision<T: Pixel>(
           let tile_rect = ts.tile_rect();
           let rec = &mut ts.rec.planes[0];
           let mut rec_region = rec.subregion_mut(Area::BlockStartingAt { bo: tile_bo });
+          // FIXME: If tx partition is used, luma_mode.predict_intra() should be called for each tx block
           luma_mode.predict_intra(
             tile_rect,
             &mut rec_region,
@@ -819,11 +828,9 @@ pub fn rdo_mode_decision<T: Pixel>(
       cw.get_cdf_intra_mode_kf(tile_bo)
     }.iter().take(INTRA_MODES).map(|&a| { let d = z - a; z = a; d }).collect::<Vec<_>>();
 
-
     let mut probs = intra_mode_set.iter().map(|&a| (a, probs_all[a as usize])).collect::<Vec<_>>();
     probs.sort_by_key(|a| !a.1);
 
-    let mut modes = ArrayVec::<[_;INTRA_MODES]>::new();
     probs
       .iter()
       .take(num_modes_rdo / 2)
@@ -833,11 +840,20 @@ pub fn rdo_mode_decision<T: Pixel>(
         modes.push(luma_mode)
       }
     });
+    } else {
+      // FIXME: please... (Just wanted to copy RAV1E_INTRA_MODES --> modes)
+      RAV1E_INTRA_MODES.iter().for_each(|&luma_mode| modes.push(luma_mode));
+      num_modes_rdo = modes.len();
+      debug_assert!(num_modes_rdo == RAV1E_INTRA_MODES.len());
+    }
+
+    debug_assert!(num_modes_rdo >= 1);
 
     modes.iter().take(num_modes_rdo).for_each(|&luma_mode| {
       let mvs = [MotionVector::default(); 2];
       let ref_frames = [INTRA_FRAME, NONE_FRAME];
       let mut mode_set_chroma = vec![luma_mode];
+      //let mut mode_set_chroma = vec![PredictionMode::DC_PRED];
       if is_chroma_block && luma_mode != PredictionMode::DC_PRED {
         mode_set_chroma.push(PredictionMode::DC_PRED);
       }
@@ -955,8 +971,16 @@ pub fn rdo_cfl_alpha<T: Pixel>(
       let po = tile_bo.plane_offset(rec.plane_cfg);
       (-16i16..17i16)
         .min_by_key(|&alpha| {
+          // FIXME: If uv_tx_size < subsampled bsize (i.e. bsize 128x128 with chroma 422, 444),
+          // get_intra_edges() should be called for each tx block
+          // However, there is chance that CFL mode only uses intra_edge pixels for DC_PRED when alpha == 0,
+          // so if that is true, then possibly able to call get_intra_edges() once for whole partition.
+          debug_assert!(bsize.subsampled_size(xdec, ydec) == uv_tx_size.block_size());
           let edge_buf = get_intra_edges(
             &rec.as_const(),
+            tile_bo,
+            0, 0,
+            bsize,
             po,
             uv_tx_size,
             bit_depth,
