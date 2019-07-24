@@ -1195,7 +1195,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
       cw.fill_neighbours_ref_counts(tile_bo);
       cw.write_ref_frames(w, fi, tile_bo);
 
-      if luma_mode >= PredictionMode::NEAREST_NEARESTMV {
+      if luma_mode.is_compound() {
         cw.write_compound_mode(w, luma_mode, mode_context);
       } else {
         cw.write_inter_mode(w, luma_mode, mode_context);
@@ -1241,8 +1241,12 @@ pub fn encode_block_post_cdef<T: Pixel>(
           cw.write_mv(w, mvs[1], ref_mvs[1], mv_precision);
         }
 
-      if luma_mode >= PredictionMode::NEAR0MV && luma_mode <= PredictionMode::NEAR2MV {
-        let ref_mv_idx = luma_mode as usize - PredictionMode::NEAR0MV as usize + 1;
+      if luma_mode.has_near() {
+        let ref_mv_idx = if luma_mode >= PredictionMode::NEAR0MV && luma_mode <= PredictionMode::NEAR2MV {
+          luma_mode as usize - PredictionMode::NEAR0MV as usize + 1
+        } else {
+          1
+        };
         if luma_mode != PredictionMode::NEAR0MV { assert!(num_mv_found > ref_mv_idx); }
 
         for idx in 1..3 {
@@ -1917,8 +1921,13 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
           let match0 = mv_stack[0].this_mv.row == mvs[0].row && mv_stack[0].this_mv.col == mvs[0].col;
           let match1 = mv_stack[0].comp_mv.row == mvs[1].row && mv_stack[0].comp_mv.col == mvs[1].col;
 
+          let match2 = mv_stack[1].this_mv.row == mvs[0].row && mv_stack[1].this_mv.col == mvs[0].col;
+          let match3 = mv_stack[1].comp_mv.row == mvs[1].row && mv_stack[1].comp_mv.col == mvs[1].col;
+
           mode_luma = if match0 && match1 {
             PredictionMode::NEAREST_NEARESTMV
+          } else if match2 && match3 {
+            PredictionMode::NEAR_NEARMV
           } else if match0 {
             PredictionMode::NEAREST_NEWMV
           } else if match1 {
@@ -1926,6 +1935,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
           } else {
             PredictionMode::NEW_NEWMV
           };
+
           if mode_luma != PredictionMode::NEAREST_NEARESTMV && mvs[0].row == 0 && mvs[0].col == 0 &&
             mvs[1].row == 0 && mvs[1].col == 0 {
               mode_luma = PredictionMode::GLOBAL_GLOBALMV;

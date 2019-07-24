@@ -724,22 +724,28 @@ pub fn rdo_mode_decision<T: Pixel>(
   inter_mode_set.iter().for_each(|&(luma_mode, i)| {
     let mvs = match luma_mode {
       PredictionMode::NEWMV | PredictionMode::NEW_NEWMV => mvs_from_me[i],
-      PredictionMode::NEARESTMV | PredictionMode::NEAREST_NEARESTMV => if !mv_stacks[i].is_empty() {
-        [mv_stacks[i][0].this_mv, mv_stacks[i][0].comp_mv]
-      } else {
-        [MotionVector::default(); 2]
-      },
-      PredictionMode::NEAR0MV => if mv_stacks[i].len() > 1 {
-        [mv_stacks[i][1].this_mv, mv_stacks[i][1].comp_mv]
-      } else {
-        [MotionVector::default(); 2]
-      },
+      PredictionMode::NEARESTMV | PredictionMode::NEAREST_NEARESTMV =>
+        if !mv_stacks[i].is_empty() {
+          [mv_stacks[i][0].this_mv, mv_stacks[i][0].comp_mv]
+        } else {
+          [MotionVector::default(); 2]
+        },
+      PredictionMode::NEAR0MV | PredictionMode::NEAR_NEARMV =>
+        if mv_stacks[i].len() > 1 {
+          [mv_stacks[i][1].this_mv, mv_stacks[i][1].comp_mv]
+        } else {
+          [MotionVector::default(); 2]
+        },
       PredictionMode::NEAR1MV | PredictionMode::NEAR2MV =>
         [mv_stacks[i][luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].this_mv,
          mv_stacks[i][luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].comp_mv],
       PredictionMode::NEAREST_NEWMV => [mv_stacks[i][0].this_mv, mvs_from_me[i][1]],
       PredictionMode::NEW_NEARESTMV => [mvs_from_me[i][0], mv_stacks[i][0].comp_mv],
-      _ => [MotionVector::default(); 2]
+      PredictionMode::GLOBALMV | PredictionMode::GLOBAL_GLOBALMV =>
+        [MotionVector::default(); 2],
+      _ => {
+        unimplemented!();
+      }
     };
     let mode_set_chroma = ArrayVec::from([luma_mode]);
 
