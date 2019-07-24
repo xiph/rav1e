@@ -266,6 +266,13 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .default_value("0,0")
         .case_insensitive(true)
     )
+    // STILL PICTURE
+    .arg(
+      Arg::with_name("STILL_PICTURE")
+        .help("Still picture mode")
+        .long("still-picture")
+        .alias("still_picture")
+    )
     // DEBUGGING
     .arg(
       Arg::with_name("VERBOSE")
@@ -471,6 +478,8 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
     cfg
   };
 
+  cfg.still_picture = matches.is_present("STILL_PICTURE");
+
   cfg.quantizer = quantizer;
   cfg.min_quantizer = matches.value_of("MINQP").unwrap_or("0").parse().unwrap();
   cfg.bitrate = bitrate.checked_mul(1000).expect("Bitrate too high");
@@ -489,6 +498,7 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
 
   cfg.low_latency = matches.is_present("LOW_LATENCY");
   cfg.train_rdo = train_rdo;
+
   cfg
 }
 
