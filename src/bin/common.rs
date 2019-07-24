@@ -334,7 +334,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
       "-" => Box::new(io::stdin()) as Box<dyn Read>,
       f => Box::new(File::open(&f).map_err(|e| e.context("Cannot open input file"))?) as Box<dyn Read>
     },
-    output: create_muxer(matches.value_of("OUTPUT").unwrap()),
+    output: create_muxer(matches.value_of("OUTPUT").unwrap())?,
     rec
   };
 

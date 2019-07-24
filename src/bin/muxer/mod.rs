@@ -25,6 +25,8 @@ use std::io;
 use std::ffi::OsStr;
 use std::path::Path;
 
+use crate::error::*;
+
 
 pub trait Muxer {
   fn write_header(
@@ -37,7 +39,7 @@ pub trait Muxer {
   fn flush(&mut self) -> io::Result<()>;
 }
 
-pub fn create_muxer(path: &str) -> Box<dyn Muxer> {
+pub fn create_muxer(path: &str) -> Result<Box<dyn Muxer>, CliError> {
   if path == "-" {
     return IvfMuxer::open(path);
   }
@@ -50,7 +52,7 @@ pub fn create_muxer(path: &str) -> Box<dyn Muxer> {
 
   match &ext[..] {
     "mp4" => {
-      Mp4Muxer::open(path)
+      Ok(Mp4Muxer::open(path))
     }
     "ivf" => {
       IvfMuxer::open(path)
