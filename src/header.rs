@@ -254,8 +254,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
   fn write_sequence_header_obu<T: Pixel>(
     &mut self, fi: &FrameInvariants<T>
   ) -> io::Result<()> {
-    assert!(fi.sequence.reduced_still_picture_hdr == false
-      || fi.sequence.still_picture == true);
+    assert!(!fi.sequence.reduced_still_picture_hdr
+      || fi.sequence.still_picture);
 
     self.write(3, fi.sequence.profile)?; // profile
     self.write_bit(fi.sequence.still_picture)?; // still_picture
@@ -432,10 +432,10 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     &mut self, fi: &FrameInvariants<T>, fs: &FrameState<T>
   ) -> io::Result<()> {
     if fi.sequence.reduced_still_picture_hdr {
-      assert!(fi.show_existing_frame == false);
+      assert!(!fi.show_existing_frame);
       assert!(fi.frame_type == FrameType::KEY);
       assert!(fi.show_frame);
-      assert!(fi.showable_frame == false);
+      assert!(!fi.showable_frame);
     } else {
       self.write_bit(fi.show_existing_frame)?;
 
