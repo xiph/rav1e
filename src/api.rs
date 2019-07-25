@@ -139,7 +139,7 @@ impl EncoderConfig {
       bit_depth: 8,
       chroma_sampling: ChromaSampling::Cs420,
       chroma_sample_position: ChromaSamplePosition::Unknown,
-      pixel_range: PixelRange::Unspecified,
+      pixel_range: Default::default(),
       color_description: None,
       mastering_display: None,
       content_light: None,
@@ -392,14 +392,13 @@ impl Default for ChromaSamplePosition {
 #[derive(ArgEnum, Debug, Clone, Copy, PartialEq, FromPrimitive)]
 #[repr(C)]
 pub enum PixelRange {
-  Unspecified = 0,
   Limited,
   Full
 }
 
 impl Default for PixelRange {
   fn default() -> Self {
-    PixelRange::Unspecified
+    PixelRange::Limited
   }
 }
 
