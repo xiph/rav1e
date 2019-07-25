@@ -1529,10 +1529,17 @@ impl<T: Pixel> ContextInner<T> {
 
               // Coordinates of the top-left corner of the block intersecting the
               // reference block from the top-left.
-              let top_left_block_x =
-                reference_x / MI_SIZE_IN_MV_UNITS * MI_SIZE_IN_MV_UNITS;
-              let top_left_block_y =
-                reference_y / MI_SIZE_IN_MV_UNITS * MI_SIZE_IN_MV_UNITS;
+              let top_left_block_x = (reference_x
+                - if reference_x < 0 { MI_SIZE_IN_MV_UNITS - 1 } else { 0 })
+                / MI_SIZE_IN_MV_UNITS
+                * MI_SIZE_IN_MV_UNITS;
+              let top_left_block_y = (reference_y
+                - if reference_y < 0 { MI_SIZE_IN_MV_UNITS - 1 } else { 0 })
+                / MI_SIZE_IN_MV_UNITS
+                * MI_SIZE_IN_MV_UNITS;
+
+              debug_assert!(reference_x >= top_left_block_x);
+              debug_assert!(reference_y >= top_left_block_y);
 
               let top_right_block_x = top_left_block_x + MI_SIZE_IN_MV_UNITS;
               let top_right_block_y = top_left_block_y;
@@ -1609,6 +1616,8 @@ impl<T: Pixel> ContextInner<T> {
           } else {
             *importance = 0.;
           }
+
+          assert!(*importance >= 0.);
         }
       }
 
