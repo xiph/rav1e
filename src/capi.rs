@@ -398,6 +398,7 @@ unsafe fn option_match(
     "reservoir_frame_delay" =>
       enc.reservoir_frame_delay = Some(value.parse().map_err(|_| ())?),
     "low_latency" => enc.low_latency = value.parse().map_err(|_| ())?,
+    "still_picture" => enc.still_picture = value.parse().map_err(|_| ())?,
 
     _ => return Err(())
   }
