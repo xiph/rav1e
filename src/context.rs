@@ -48,12 +48,14 @@ pub const PARTITION_TYPES: usize = 4;
 pub const MI_SIZE_LOG2: usize = 2;
 pub const MI_SIZE: usize = (1 << MI_SIZE_LOG2);
 pub const MAX_MIB_SIZE_LOG2: usize = (MAX_SB_SIZE_LOG2 - MI_SIZE_LOG2);
-pub const MAX_MIB_SIZE: usize = (1 << MAX_MIB_SIZE_LOG2);
-pub const MAX_MIB_MASK: usize = (MAX_MIB_SIZE - 1);
+pub const MIB_SIZE_LOG2: usize = (SB_SIZE_LOG2 - MI_SIZE_LOG2);
+pub const MIB_SIZE: usize = (1 << MIB_SIZE_LOG2);
+pub const MIB_MASK: usize = (MIB_SIZE - 1);
 
-const MAX_SB_SIZE_LOG2: usize = 6;
-pub const MAX_SB_SIZE: usize = (1 << MAX_SB_SIZE_LOG2);
-const MAX_SB_SQUARE: usize = (MAX_SB_SIZE * MAX_SB_SIZE);
+const MAX_SB_SIZE_LOG2: usize = 7;
+const SB_SIZE_LOG2: usize = 6;
+pub const SB_SIZE: usize = (1 << SB_SIZE_LOG2);
+const SB_SQUARE: usize = (SB_SIZE * SB_SIZE);
 
 pub const MAX_TX_SIZE: usize = 64;
 const MAX_TX_SQUARE: usize = MAX_TX_SIZE * MAX_TX_SIZE;
@@ -1152,8 +1154,8 @@ mod test {
   }
 }
 
-const SUPERBLOCK_TO_PLANE_SHIFT: usize = MAX_SB_SIZE_LOG2;
-const SUPERBLOCK_TO_BLOCK_SHIFT: usize = MAX_MIB_SIZE_LOG2;
+const SUPERBLOCK_TO_PLANE_SHIFT: usize = SB_SIZE_LOG2;
+const SUPERBLOCK_TO_BLOCK_SHIFT: usize = MIB_SIZE_LOG2;
 pub const BLOCK_TO_PLANE_SHIFT: usize = MI_SIZE_LOG2;
 pub const LOCAL_BLOCK_MASK: usize = (1 << SUPERBLOCK_TO_BLOCK_SHIFT) - 1;
 
@@ -1218,7 +1220,7 @@ impl BlockOffset {
   }
 
   pub fn y_in_sb(self) -> usize {
-    self.y % MAX_MIB_SIZE
+    self.y % MIB_SIZE
   }
 
   pub fn with_offset(self, col_offset: isize, row_offset: isize) -> BlockOffset {
@@ -1357,11 +1359,11 @@ pub struct BlockContextCheckpoint {
   cdef_coded: bool,
   above_partition_context: [u8; PARTITION_CONTEXT_MAX_WIDTH],
   // left context is also at 8x8 granularity
-  left_partition_context: [u8; MAX_MIB_SIZE >> 1],
+  left_partition_context: [u8; MIB_SIZE >> 1],
   above_tx_context: [u8; PARTITION_CONTEXT_MAX_WIDTH],
-  left_tx_context: [u8; MAX_MIB_SIZE],
+  left_tx_context: [u8; MIB_SIZE],
   above_coeff_context: [[u8; COEFF_CONTEXT_MAX_WIDTH]; PLANES],
-  left_coeff_context: [[u8; MAX_MIB_SIZE]; PLANES],
+  left_coeff_context: [[u8; MIB_SIZE]; PLANES],
 }
 
 pub struct BlockContext<'a> {
@@ -1370,11 +1372,11 @@ pub struct BlockContext<'a> {
   pub update_seg: bool,
   pub preskip_segid: bool,
   above_partition_context: [u8; PARTITION_CONTEXT_MAX_WIDTH],
-  left_partition_context: [u8; MAX_MIB_SIZE >> 1],
+  left_partition_context: [u8; MIB_SIZE >> 1],
   above_tx_context: [u8; PARTITION_CONTEXT_MAX_WIDTH],
-  left_tx_context: [u8; MAX_MIB_SIZE],
+  left_tx_context: [u8; MIB_SIZE],
   above_coeff_context: [[u8; COEFF_CONTEXT_MAX_WIDTH]; PLANES],
-  left_coeff_context: [[u8; MAX_MIB_SIZE]; PLANES],
+  left_coeff_context: [[u8; MIB_SIZE]; PLANES],
   pub blocks: &'a mut TileBlocksMut<'a>,
 }
 
@@ -1386,15 +1388,15 @@ impl<'a> BlockContext<'a> {
       update_seg: false,
       preskip_segid: true,
       above_partition_context: [0; PARTITION_CONTEXT_MAX_WIDTH],
-      left_partition_context: [0; MAX_MIB_SIZE >> 1],
+      left_partition_context: [0; MIB_SIZE >> 1],
       above_tx_context: [0; PARTITION_CONTEXT_MAX_WIDTH],
-      left_tx_context: [0; MAX_MIB_SIZE],
+      left_tx_context: [0; MIB_SIZE],
       above_coeff_context: [
         [0; COEFF_CONTEXT_MAX_WIDTH],
         [0; COEFF_CONTEXT_MAX_WIDTH],
         [0; COEFF_CONTEXT_MAX_WIDTH]
       ],
-      left_coeff_context: [[0; MAX_MIB_SIZE]; PLANES],
+      left_coeff_context: [[0; MIB_SIZE]; PLANES],
       blocks,
     }
   }

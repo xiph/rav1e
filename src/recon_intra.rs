@@ -216,7 +216,7 @@ pub fn has_top_right(/*const AV1_COMMON *cm,*/
     // General case (neither top row nor rightmost column): check if the
     // top-right block is coded before the current block.
     let this_blk_index =
-        (blk_row_in_sb << (5 - bw_in_mi_log2)) +
+        (blk_row_in_sb << (MAX_MIB_SIZE_LOG2 - bw_in_mi_log2)) +
         blk_col_in_sb;
     let idx1 = this_blk_index / 8;
     let idx2 = this_blk_index % 8;
@@ -423,7 +423,7 @@ pub fn has_bottom_left(/*const AV1_COMMON *cm,*/
     // General case (neither leftmost column nor bottom row): check if the
     // bottom-left block is coded before the current block.
     let this_blk_index =
-        (blk_row_in_sb << (5 - bw_in_mi_log2)) +
+        (blk_row_in_sb << (MAX_MIB_SIZE_LOG2 - bw_in_mi_log2)) +
         blk_col_in_sb;
     let idx1 = this_blk_index / 8;
     let idx2 = this_blk_index % 8;

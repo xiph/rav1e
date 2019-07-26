@@ -9,7 +9,7 @@
 
 use crate::util::*;
 use crate::api::ChromaSampling;
-use crate::context::MAX_SB_SIZE;
+use crate::context::SB_SIZE;
 use crate::mc::SUBPEL_FILTER_SIZE;
 
 #[cfg(test)]
@@ -47,7 +47,7 @@ impl<T: Pixel> Frame<T> {
   pub fn new(width: usize, height: usize, chroma_sampling: ChromaSampling) -> Self {
     let luma_width = width.align_power_of_two(3);
     let luma_height = height.align_power_of_two(3);
-    let luma_padding = MAX_SB_SIZE + FRAME_MARGIN;
+    let luma_padding = SB_SIZE + FRAME_MARGIN;
 
     let (chroma_sampling_period_x, chroma_sampling_period_y) =
       chroma_sampling.sampling_period();

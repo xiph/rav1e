@@ -241,8 +241,8 @@ impl TileBlocksMut<'_> {
   pub fn set_cdef(&mut self, sbo: SuperBlockOffset, cdef_index: u8) {
     let bo = sbo.block_offset(0, 0);
     // Checkme: Is 16 still the right block unit for 128x128 superblocks?
-    let bw = cmp::min(bo.x + MAX_MIB_SIZE, self.cols);
-    let bh = cmp::min(bo.y + MAX_MIB_SIZE, self.rows);
+    let bw = cmp::min(bo.x + MIB_SIZE, self.cols);
+    let bh = cmp::min(bo.y + MIB_SIZE, self.rows);
     for y in bo.y..bh {
       for x in bo.x..bw {
         self[y as usize][x as usize].cdef_index = cdef_index;

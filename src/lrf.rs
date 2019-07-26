@@ -12,7 +12,7 @@
 use crate::frame::Frame;
 use crate::encoder::FrameInvariants;
 use crate::context::PLANES;
-use crate::context::MAX_SB_SIZE;
+use crate::context::SB_SIZE;
 use crate::frame::Plane;
 use crate::frame::PlaneSlice;
 use crate::frame::PlaneMutSlice;
@@ -745,7 +745,7 @@ fn wiener_stripe_filter<T: Pixel>(coeffs: [[i8; 3]; 2], fi: &FrameInvariants<T>,
   let offset = 1 << (bit_depth + WIENER_BITS - round_h - 1);
   let limit = (1 << (bit_depth + 1 + WIENER_BITS - round_h)) - 1;
 
-  let mut work: [i32; MAX_SB_SIZE+7] = [0; MAX_SB_SIZE+7];
+  let mut work: [i32; SB_SIZE+7] = [0; SB_SIZE+7];
   let vfilter: [i32; 7] = [ coeffs[0][0] as i32,
                             coeffs[0][1] as i32,
                             coeffs[0][2] as i32,
