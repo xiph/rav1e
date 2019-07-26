@@ -263,8 +263,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
     if fi.sequence.reduced_still_picture_hdr {
       self.write(5, 31)?; // level
-    }
-    else {
+    } else {
       self.write_bit(false)?; // timing info present
       self.write_bit(false)?; // initial display delay present flag
       self.write(5, 0)?; // one operating point
@@ -525,8 +524,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       self.write(n, fi.order_hint & mask)?;
     }
 
-    if fi.error_resilient || fi.intra_only {
-    } else {
+    if !fi.error_resilient && !fi.intra_only {
       self.write(PRIMARY_REF_BITS, fi.primary_ref_frame)?;
     }
 
@@ -626,8 +624,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
     if fi.sequence.reduced_still_picture_hdr || fi.disable_cdf_update {
       assert!(fi.disable_frame_end_update_cdf);
-    }
-    else {
+    } else {
       self.write_bit(fi.disable_frame_end_update_cdf)?;
     }
 
