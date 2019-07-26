@@ -8,15 +8,35 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::util::*;
-use crate::tiling::*;
 use crate::api::ChromaSampling;
 use crate::context::MAX_SB_SIZE;
 use crate::mc::SUBPEL_FILTER_SIZE;
+
+#[cfg(test)]
+use crate::tiling::*;
 
 mod plane;
 pub use plane::*;
 
 const FRAME_MARGIN: usize = 16 + SUBPEL_FILTER_SIZE;
+
+/// Override the frame type decision
+///
+/// Only certain frame types can be selected.
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum FrameTypeOverride {
+  /// Do not force any decision.
+  No,
+  /// Force the frame to be a Keyframe.
+  Key,
+}
+
+/// Optional per-frame encoder parameters
+#[derive(Debug, Clone, Copy)]
+pub struct FrameParameters {
+  /// Force emitted frame to be of the type selected
+  pub frame_type_override: FrameTypeOverride,
+}
 
 #[derive(Debug, Clone)]
 pub struct Frame<T: Pixel> {
@@ -59,19 +79,21 @@ impl<T: Pixel> Frame<T> {
     }
   }
 
-  pub fn pad(&mut self, w: usize, h: usize) {
+  pub(crate) fn pad(&mut self, w: usize, h: usize) {
     for p in self.planes.iter_mut() {
       p.pad(w, h);
     }
   }
 
   #[inline(always)]
-  pub fn as_tile(&self) -> Tile<'_, T> {
+  #[cfg(test)]
+  pub(crate) fn as_tile(&self) -> Tile<'_, T> {
     let PlaneConfig { width, height, .. } = self.planes[0].cfg;
     Tile::new(self, TileRect { x: 0, y: 0, width, height })
   }
 
   #[inline(always)]
+  #[cfg(test)]
   pub fn as_tile_mut(&mut self) -> TileMut<'_, T> {
     let PlaneConfig { width, height, .. } = self.planes[0].cfg;
     TileMut::new(self, TileRect { x: 0, y: 0, width, height })
@@ -85,13 +107,13 @@ impl<T: Pixel> Frame<T> {
   /// This data retains any padding, e.g. it uses the width and height specifed in
   /// the Y-plane's `cfg` struct, and not the display width and height specied in
   /// `FrameInvariants`.
-  pub fn iter(&self) -> PixelIter<'_, T> {
+  pub(crate) fn iter(&self) -> PixelIter<'_, T> {
     PixelIter::new(&self.planes)
   }
 }
 
 #[derive(Debug)]
-pub struct PixelIter<'a, T: Pixel> {
+pub(crate) struct PixelIter<'a, T: Pixel> {
   planes: &'a [Plane<T>; 3],
   y: usize,
   x: usize,

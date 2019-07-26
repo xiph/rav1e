@@ -14,6 +14,7 @@ use crate::deblock::*;
 use crate::ec::*;
 use crate::lrf::*;
 use crate::mc::MotionVector;
+use crate::mc::FilterMode;
 use crate::me::*;
 use crate::partition::*;
 use crate::predict::PredictionMode;
@@ -38,10 +39,8 @@ use arg_enum_proc_macro::ArgEnum;
 use bitstream_io::{BitWriter, BigEndian};
 use bincode::{serialize, deserialize};
 use rayon::iter::*;
-use std;
 use std::{fmt, io, mem};
-use std::io::Write;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::sync::Arc;
 use std::fs::File;
 use arrayvec::*;
@@ -55,11 +54,12 @@ const MAX_NUM_OPERATING_POINTS: usize = MAX_NUM_TEMPORAL_LAYERS * MAX_NUM_SPATIA
 #[derive(Debug, Clone)]
 pub struct ReferenceFrame<T: Pixel> {
   pub order_hint: u32,
-  pub frame: Frame<T>,
+  pub frame: Arc<Frame<T>>,
   pub input_hres: Plane<T>,
   pub input_qres: Plane<T>,
   pub cdfs: CDFContext,
   pub frame_mvs: Vec<FrameMotionVectors>,
+  pub output_frameno: u64,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -202,23 +202,22 @@ impl Sequence {
       delta_frame_id_length: DELTA_FRAME_ID_LENGTH,
       use_128x128_superblock: false,
       order_hint_bits_minus_1: 5,
-      force_screen_content_tools: 0,
+      force_screen_content_tools: if config.still_picture { 2 } else { 0 },
       force_integer_mv: 2,
-      still_picture: false,
-      reduced_still_picture_hdr: false,
+      still_picture: config.still_picture,
+      reduced_still_picture_hdr: false, // FIXME: config.still_picture,
       enable_filter_intra: false,
       enable_intra_edge_filter: false,
       enable_interintra_compound: false,
       enable_masked_compound: false,
       enable_dual_filter: false,
-      enable_order_hint: true,
+      enable_order_hint: !config.still_picture,
       enable_jnt_comp: false,
       enable_ref_frame_mvs: false,
       enable_warped_motion: false,
       enable_superres: false,
       enable_cdef: config.speed_settings.cdef && config.chroma_sampling != ChromaSampling::Cs422,
-      enable_restoration: config.chroma_sampling != ChromaSampling::Cs422 &&
-        config.chroma_sampling != ChromaSampling::Cs444, // FIXME: not working yet
+      enable_restoration: config.chroma_sampling != ChromaSampling::Cs422,
       operating_points_cnt_minus_1: 0,
       operating_point_idc,
       display_model_info_present_flag: false,
@@ -290,13 +289,14 @@ impl Sequence {
   }
 
   #[inline(always)]
-  pub fn sb_size_log2(&self) -> usize {
-    if self.use_128x128_superblock { 7 } else { 6 }
+  pub const fn sb_size_log2(&self) -> usize {
+    6 + (self.use_128x128_superblock as usize)
   }
+}
 
-  #[inline(always)]
-  pub fn sb_size(&self) -> usize {
-    1 << self.sb_size_log2()
+impl Default for Sequence {
+  fn default() -> Self {
+    Sequence::new(&EncoderConfig::default())
   }
 }
 
@@ -354,6 +354,7 @@ impl<T: Pixel> FrameState<T> {
     }
   }
 
+  #[cfg(feature="bench")]
   #[inline(always)]
   pub fn as_tile_state_mut(&mut self) -> TileStateMut<'_, T> {
     let PlaneConfig { width, height, .. } = self.rec.planes[0].cfg;
@@ -479,10 +480,27 @@ pub struct FrameInvariants<T: Pixel> {
   pub pyramid_level: u64,
   pub enable_early_exit: bool,
   pub tx_mode_select: bool,
+  pub default_filter: FilterMode,
   /// If true, this `FrameInvariants` corresponds to an invalid frame and
   /// should be ignored. Invalid frames occur when a subgop is prematurely
   /// ended, for example, by a key frame or the end of the video.
   pub invalid: bool,
+  /// Motion vectors to the _original_ reference frames (not reconstructed).
+  /// Used for lookahead purposes.
+  pub lookahead_mvs: Box<[FrameMotionVectors]>,
+  /// The lookahead version of `rec_buffer`, used for storing and propagating
+  /// the original reference frames (rather than reconstructed ones). The
+  /// lookahead uses both `rec_buffer` and `lookahead_rec_buffer`, where
+  /// `rec_buffer` contains the current frame's reference frames and
+  /// `lookahead_rec_buffer` contains the next frame's reference frames.
+  pub lookahead_rec_buffer: ReferenceFramesSet<T>,
+  /// Intra prediction cost estimations for each 4×4 block. Used for block
+  /// importance computation.
+  pub lookahead_intra_costs: Box<[u32]>,
+  /// Future importance values for each 4×4 block. That is, a value indicating
+  /// how much future frames depend on the block (for example, via
+  /// inter-prediction).
+  pub block_importances: Box<[f32]>,
 }
 
 pub(crate) fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
@@ -511,48 +529,32 @@ impl<T: Pixel> FrameInvariants<T> {
 
     let w_in_b = 2 * config.width.align_power_of_two_and_shift(3); // MiCols, ((width+7)/8)<<3 >> MI_SIZE_LOG2
     let h_in_b = 2 * config.height.align_power_of_two_and_shift(3); // MiRows, ((height+7)/8)<<3 >> MI_SIZE_LOG2
+    let frame_rate = config.frame_rate();
 
-    let frame_rate = (config.time_base.den / config.time_base.num) as usize;
-    let min_tile_cols = (config.width - 1) / 4096;
-    // The minimum number of tiles is determined based on the following requirements:
-    // - A tile cannot be wider than 4096 pixels
-    // - A tile cannot be larger than 4096x2304 pixels
-    // - The tile size * the frame rate * a temporal ratio cannot exceed a given fixed rate
-    //   corresponding to 4K60 resolution with a 1.1 ratio.
-    let min_tiles = 1 + min_tile_cols.max(
-      (config.width * config.height) / (4096 * 2304)).max(
-      (config.width * config.height * frame_rate) / (4096_f64 * 2176_f64 * 60_f64 * 1.1) as usize
-    );
-
-    let mut tiling = TilingInfo::new(
+    let mut tiling = TilingInfo::from_target_tiles(
       sequence.sb_size_log2(),
       config.width,
       config.height,
+      frame_rate,
       config.tile_cols_log2,
       config.tile_rows_log2
     );
 
-    if config.tiles > 0 || tiling.rows * tiling.cols < min_tiles {
-      // If a number of automatically-assigned tiles is specified,
-      // start with the bare minimum number of tile rows and columns.
-      // Otherwise, the tile assignment is triggered because we need
-      // to add more tiles than the number set in the configuration.
-      let mut tile_rows_log2 = if config.tiles == 0 { config.tile_rows_log2 } else { 0 };
-      let mut tile_cols_log2 = if config.tiles == 0 { config.tile_cols_log2 } else { min_tile_cols };
+    if config.tiles > 0 {
+      let mut tile_rows_log2 = 0;
+      let mut tile_cols_log2 = 0;
       while (tile_rows_log2 < tiling.max_tile_rows_log2) || (tile_cols_log2 < tiling.max_tile_cols_log2) {
 
-        tiling = TilingInfo::new(
+        tiling = TilingInfo::from_target_tiles(
           sequence.sb_size_log2(),
           config.width,
           config.height,
+          frame_rate,
           tile_cols_log2,
           tile_rows_log2
         );
 
-        if tiling.rows * tiling.cols >= config.tiles &&
-          tiling.rows * tiling.cols >= min_tiles {
-            break;
-        }
+        if tiling.rows * tiling.cols >= config.tiles { break };
 
         if ((tiling.tile_height_sb >= tiling.tile_width_sb) &&
             (tiling.tile_rows_log2 < tiling.max_tile_rows_log2))
@@ -576,7 +578,7 @@ impl<T: Pixel> FrameInvariants<T> {
       input_frameno: 0,
       order_hint: 0,
       show_frame: true,
-      showable_frame: true,
+      showable_frame: !sequence.reduced_still_picture_hdr,
       error_resilient: false,
       intra_only: true,
       allow_high_precision_mv: false,
@@ -591,7 +593,7 @@ impl<T: Pixel> FrameInvariants<T> {
       num_tg: 1,
       large_scale_tile: false,
       disable_cdf_update: false,
-      allow_screen_content_tools: 0,
+      allow_screen_content_tools: sequence.force_screen_content_tools,
       force_integer_mv: 0,
       primary_ref_frame: PRIMARY_REF_NONE,
       refresh_frame_flags: ALL_REF_FRAMES_MASK,
@@ -599,7 +601,7 @@ impl<T: Pixel> FrameInvariants<T> {
       use_ref_frame_mvs: false,
       is_filter_switchable: false,
       is_motion_mode_switchable: false, // 0: only the SIMPLE motion mode will be used.
-      disable_frame_end_update_cdf: false,
+      disable_frame_end_update_cdf: sequence.reduced_still_picture_hdr,
       allow_warped_motion: false,
       cdef_damping: 3,
       cdef_bits: 0,
@@ -622,7 +624,18 @@ impl<T: Pixel> FrameInvariants<T> {
       enable_early_exit: true,
       config,
       tx_mode_select : false,
+      default_filter: FilterMode::REGULAR,
       invalid: false,
+      lookahead_mvs: {
+        let mut vec = Vec::with_capacity(REF_FRAMES);
+        for _ in 0..REF_FRAMES {
+          vec.push(FrameMotionVectors::new(w_in_b, h_in_b));
+        }
+        vec.into_boxed_slice()
+      },
+      lookahead_rec_buffer: ReferenceFramesSet::new(),
+      lookahead_intra_costs: vec![0; w_in_b * h_in_b].into_boxed_slice(),
+      block_importances: vec![0.; w_in_b * h_in_b].into_boxed_slice(),
     }
   }
 
@@ -813,10 +826,11 @@ impl<T: Pixel> FrameInvariants<T> {
   pub fn sb_size_log2(&self) -> usize {
     self.sequence.sb_size_log2()
   }
+}
 
-  #[inline(always)]
-  pub fn sb_size(&self) -> usize {
-    self.sequence.sb_size()
+impl<T: Pixel> Default for FrameInvariants<T> {
+  fn default() -> Self {
+    FrameInvariants::new(EncoderConfig::default(), Sequence::default())
   }
 }
 
@@ -1181,7 +1195,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
       cw.fill_neighbours_ref_counts(tile_bo);
       cw.write_ref_frames(w, fi, tile_bo);
 
-      if luma_mode >= PredictionMode::NEAREST_NEARESTMV {
+      if luma_mode.is_compound() {
         cw.write_compound_mode(w, luma_mode, mode_context);
       } else {
         cw.write_inter_mode(w, luma_mode, mode_context);
@@ -1227,8 +1241,12 @@ pub fn encode_block_post_cdef<T: Pixel>(
           cw.write_mv(w, mvs[1], ref_mvs[1], mv_precision);
         }
 
-      if luma_mode >= PredictionMode::NEAR0MV && luma_mode <= PredictionMode::NEAR2MV {
-        let ref_mv_idx = luma_mode as usize - PredictionMode::NEAR0MV as usize + 1;
+      if luma_mode.has_near() {
+        let ref_mv_idx = if luma_mode >= PredictionMode::NEAR0MV && luma_mode <= PredictionMode::NEAR2MV {
+          luma_mode as usize - PredictionMode::NEAR0MV as usize + 1
+        } else {
+          1
+        };
         if luma_mode != PredictionMode::NEAR0MV { assert!(num_mv_found > ref_mv_idx); }
 
         for idx in 1..3 {
@@ -1609,7 +1627,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       let w: &mut W = if cw.bc.cdef_coded {w_post_cdef} else {w_pre_cdef};
       let tell = w.tell_frac();
       cw.write_partition(w, tile_bo, PartitionType::PARTITION_NONE, bsize);
-      compute_rd_cost(fi, w.tell_frac() - tell, 0)
+      compute_rd_cost(fi, ts.to_frame_block_offset(tile_bo), bsize, w.tell_frac() - tell, 0)
     } else {
       0.0
     };
@@ -1676,7 +1694,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
         let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
         let tell = w.tell_frac();
         cw.write_partition(w, tile_bo, partition, bsize);
-        rd_cost = compute_rd_cost(fi, w.tell_frac() - tell, 0);
+        rd_cost = compute_rd_cost(fi, ts.to_frame_block_offset(tile_bo), bsize, w.tell_frac() - tell, 0);
       }
 
       let four_partitions = [
@@ -1903,8 +1921,13 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
           let match0 = mv_stack[0].this_mv.row == mvs[0].row && mv_stack[0].this_mv.col == mvs[0].col;
           let match1 = mv_stack[0].comp_mv.row == mvs[1].row && mv_stack[0].comp_mv.col == mvs[1].col;
 
+          let match2 = mv_stack[1].this_mv.row == mvs[0].row && mv_stack[1].this_mv.col == mvs[0].col;
+          let match3 = mv_stack[1].comp_mv.row == mvs[1].row && mv_stack[1].comp_mv.col == mvs[1].col;
+
           mode_luma = if match0 && match1 {
             PredictionMode::NEAREST_NEARESTMV
+          } else if match2 && match3 {
+            PredictionMode::NEAR_NEARMV
           } else if match0 {
             PredictionMode::NEAREST_NEWMV
           } else if match1 {
@@ -1912,6 +1935,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
           } else {
             PredictionMode::NEW_NEWMV
           };
+
           if mode_luma != PredictionMode::NEAREST_NEARESTMV && mvs[0].row == 0 && mvs[0].col == 0 &&
             mvs[1].row == 0 && mvs[1].col == 0 {
               mode_luma = PredictionMode::GLOBAL_GLOBALMV;
@@ -2003,7 +2027,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
 }
 
 #[inline(always)]
-fn build_coarse_pmvs<T: Pixel>(fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>) -> Vec<[Option<MotionVector>; REF_FRAMES]> {
+pub(crate) fn build_coarse_pmvs<T: Pixel>(fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>) -> Vec<[Option<MotionVector>; REF_FRAMES]> {
   assert!(!fi.sequence.use_128x128_superblock);
   if ts.mi_width >= 16 && ts.mi_height >= 16 {
     let mut frame_pmvs = Vec::with_capacity(ts.sb_width * ts.sb_height);
@@ -2105,7 +2129,7 @@ fn encode_tile_group<T: Pixel>(fi: &FrameInvariants<T>, fs: &mut FrameState<T>) 
   fs.cdfs = cdfs[idx_max];
   fs.cdfs.reset_counts();
 
-  let max_tile_size_bytes = ((max_len as u32).ilog() + 7) / 8;
+  let max_tile_size_bytes = ((max_len.ilog() + 7) / 8) as u32;
   debug_assert!(max_tile_size_bytes > 0 && max_tile_size_bytes <= 4);
   fs.max_tile_size_bytes = max_tile_size_bytes;
 
@@ -2132,6 +2156,81 @@ fn build_raw_tile_group(ti: &TilingInfo, raw_tiles: &[Vec<u8>], max_tile_size_by
   raw
 }
 
+pub(crate) fn build_half_res_pmvs<T: Pixel>(
+  fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
+  tile_sbo: SuperBlockOffset,
+  tile_pmvs: &[[Option<MotionVector>; REF_FRAMES]],
+) -> [[Option<MotionVector>; REF_FRAMES]; 5] {
+  let estimate_motion_ss2 = if fi.config.speed_settings.diamond_me {
+    crate::me::DiamondSearch::estimate_motion_ss2
+  } else {
+    crate::me::FullSearch::estimate_motion_ss2
+  };
+
+  let SuperBlockOffset { x: sbx, y: sby } = tile_sbo;
+  let mut pmvs: [[Option<MotionVector>; REF_FRAMES]; 5] = [[None; REF_FRAMES]; 5];
+
+  if ts.mi_width >= 8 && ts.mi_height >= 8 {
+    for i in 0..INTER_REFS_PER_FRAME {
+      let r = fi.ref_frames[i] as usize;
+      if pmvs[0][r].is_none() {
+        pmvs[0][r] = tile_pmvs[sby * ts.sb_width + sbx][r];
+        if let Some(pmv) = pmvs[0][r] {
+          let pmv_w = if sbx > 0 {
+            tile_pmvs[sby * ts.sb_width + sbx - 1][r]
+          } else {
+            None
+          };
+          let pmv_e = if sbx < ts.sb_width - 1 {
+            tile_pmvs[sby * ts.sb_width + sbx + 1][r]
+          } else {
+            None
+          };
+          let pmv_n = if sby > 0 {
+            tile_pmvs[sby * ts.sb_width + sbx - ts.sb_width][r]
+          } else {
+            None
+          };
+          let pmv_s = if sby < ts.sb_height - 1 {
+            tile_pmvs[sby * ts.sb_width + sbx + ts.sb_width][r]
+          } else {
+            None
+          };
+
+          assert!(!fi.sequence.use_128x128_superblock);
+          pmvs[1][r] = estimate_motion_ss2(
+            fi, ts, BlockSize::BLOCK_32X32, r, tile_sbo.block_offset(0, 0), &[Some(pmv), pmv_w, pmv_n], i
+          );
+          pmvs[2][r] = estimate_motion_ss2(
+            fi, ts, BlockSize::BLOCK_32X32, r, tile_sbo.block_offset(8, 0), &[Some(pmv), pmv_e, pmv_n], i
+          );
+          pmvs[3][r] = estimate_motion_ss2(
+            fi, ts, BlockSize::BLOCK_32X32, r, tile_sbo.block_offset(0, 8), &[Some(pmv), pmv_w, pmv_s], i
+          );
+          pmvs[4][r] = estimate_motion_ss2(
+            fi, ts, BlockSize::BLOCK_32X32, r, tile_sbo.block_offset(8, 8), &[Some(pmv), pmv_e, pmv_s], i
+          );
+
+          if let Some(mv) = pmvs[1][r] {
+            save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(0, 0), i, mv);
+          }
+          if let Some(mv) = pmvs[2][r] {
+            save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(8, 0), i, mv);
+          }
+          if let Some(mv) = pmvs[3][r] {
+            save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(0, 8), i, mv);
+          }
+          if let Some(mv) = pmvs[4][r] {
+            save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(8, 8), i, mv);
+          }
+        }
+      }
+    }
+  }
+
+  pmvs
+}
+
 fn encode_tile<'a, T: Pixel>(
   fi: &FrameInvariants<T>,
   ts: &mut TileStateMut<'_, T>,
@@ -2139,12 +2238,6 @@ fn encode_tile<'a, T: Pixel>(
   blocks: &'a mut TileBlocksMut<'a>,
 ) -> Vec<u8> {
   let mut w = WriterEncoder::new();
-
-  let estimate_motion_ss2 = if fi.config.speed_settings.diamond_me {
-    crate::me::DiamondSearch::estimate_motion_ss2
-  } else {
-    crate::me::FullSearch::estimate_motion_ss2
-  };
 
   let bc = BlockContext::new(blocks);
   // For now, restoration unit size is locked to superblock size.
@@ -2165,64 +2258,7 @@ fn encode_tile<'a, T: Pixel>(
       cw.bc.code_deltas = fi.delta_q_present;
 
       // Do subsampled ME
-      let mut pmvs: [[Option<MotionVector>; REF_FRAMES]; 5] = [[None; REF_FRAMES]; 5];
-      if ts.mi_width >= 8 && ts.mi_height >= 8 {
-        for i in 0..INTER_REFS_PER_FRAME {
-          let r = fi.ref_frames[i] as usize;
-          if pmvs[0][r].is_none() {
-            pmvs[0][r] = tile_pmvs[sby * ts.sb_width + sbx][r];
-            if let Some(pmv) = pmvs[0][r] {
-              let pmv_w = if sbx > 0 {
-                tile_pmvs[sby * ts.sb_width + sbx - 1][r]
-              } else {
-                None
-              };
-              let pmv_e = if sbx < ts.sb_width - 1 {
-                tile_pmvs[sby * ts.sb_width + sbx + 1][r]
-              } else {
-                None
-              };
-              let pmv_n = if sby > 0 {
-                tile_pmvs[sby * ts.sb_width + sbx - ts.sb_width][r]
-              } else {
-                None
-              };
-              let pmv_s = if sby < ts.sb_height - 1 {
-                tile_pmvs[sby * ts.sb_width + sbx + ts.sb_width][r]
-              } else {
-                None
-              };
-
-              assert!(!fi.sequence.use_128x128_superblock);
-              pmvs[1][r] = estimate_motion_ss2(
-                fi, ts, BlockSize::BLOCK_32X32, r, tile_sbo.block_offset(0, 0), &[Some(pmv), pmv_w, pmv_n], i
-              );
-              pmvs[2][r] = estimate_motion_ss2(
-                fi, ts, BlockSize::BLOCK_32X32, r, tile_sbo.block_offset(8, 0), &[Some(pmv), pmv_e, pmv_n], i
-              );
-              pmvs[3][r] = estimate_motion_ss2(
-                fi, ts, BlockSize::BLOCK_32X32, r, tile_sbo.block_offset(0, 8), &[Some(pmv), pmv_w, pmv_s], i
-              );
-              pmvs[4][r] = estimate_motion_ss2(
-                fi, ts, BlockSize::BLOCK_32X32, r, tile_sbo.block_offset(8, 8), &[Some(pmv), pmv_e, pmv_s], i
-              );
-
-              if let Some(mv) = pmvs[1][r] {
-                save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(0, 0), i, mv);
-              }
-              if let Some(mv) = pmvs[2][r] {
-                save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(8, 0), i, mv);
-              }
-              if let Some(mv) = pmvs[3][r] {
-                save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(0, 8), i, mv);
-              }
-              if let Some(mv) = pmvs[4][r] {
-                save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(8, 8), i, mv);
-              }
-            }
-          }
-        }
-      }
+      let mut pmvs = build_half_res_pmvs(fi, ts, tile_sbo, &tile_pmvs);
 
       // Encode SuperBlock
       if fi.config.speed_settings.encode_bottomup {
@@ -2330,15 +2366,18 @@ pub fn encode_frame<T: Pixel>(
   packet
 }
 
-pub fn update_rec_buffer<T: Pixel>(fi: &mut FrameInvariants<T>, fs: FrameState<T>) {
+pub fn update_rec_buffer<T: Pixel>(
+  output_frameno: u64, fi: &mut FrameInvariants<T>, fs: FrameState<T>
+) {
   let rfs = Arc::new(
     ReferenceFrame {
       order_hint: fi.order_hint,
-      frame: fs.rec,
+      frame: Arc::new(fs.rec),
       input_hres: fs.input_hres,
       input_qres: fs.input_qres,
       cdfs: fs.cdfs,
       frame_mvs: fs.frame_mvs,
+      output_frameno,
     }
   );
   for i in 0..(REF_FRAMES as usize) {

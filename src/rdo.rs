@@ -355,9 +355,33 @@ fn compute_tx_distortion<T: Pixel>(
   distortion
 }
 
-pub fn compute_rd_cost<T: Pixel>(fi: &FrameInvariants<T>, rate: u32, distortion: u64) -> f64 {
+pub fn compute_rd_cost<T: Pixel>(
+  fi: &FrameInvariants<T>, frame_bo: BlockOffset, bsize: BlockSize, rate: u32,
+  distortion: u64
+) -> f64 {
+  let x1 = frame_bo.x;
+  let y1 = frame_bo.y;
+  let x2 = (x1 + bsize.width_mi()).min(fi.w_in_b);
+  let y2 = (y1 + bsize.height_mi()).min(fi.h_in_b);
+
+  let mut mean_importance = 0.;
+  for y in y1..y2 {
+    for x in x1..x2 {
+      mean_importance += fi.block_importances[y * fi.w_in_b + x];
+    }
+  }
+  // Divide by the full area even though some blocks were outside.
+  mean_importance /= (bsize.width_mi() * bsize.height_mi()) as f32;
+
+  // Chosen empirically so the bias ends up being around 1.
+  const FACTOR: f32 = 4.;
+  const ADDEND: f64 = 0.8;
+
+  let bias = (mean_importance / FACTOR) as f64 + ADDEND;
+  debug_assert!(bias.is_finite());
+
   let rate_in_bits = (rate as f64) / ((1 << OD_BITRES) as f64);
-  (distortion as f64) + fi.lambda * rate_in_bits
+  (distortion as f64) * bias + fi.lambda * rate_in_bits
 }
 
 pub fn rdo_tx_size_type<T: Pixel>(
@@ -465,97 +489,101 @@ fn luma_chroma_mode_rdo<T: Pixel> (luma_mode: PredictionMode,
   luma_mode_is_intra: bool,
   mode_context: usize,
   mv_stack: &ArrayVec<[CandidateMV; 9]>) {
-    let (tx_size, mut tx_type) = rdo_tx_size_type(
-      fi, ts, cw, bsize, tile_bo, luma_mode, ref_frames, mvs, false,
+
+  let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
+
+  let is_chroma_block = has_chroma(tile_bo, bsize, xdec, ydec);
+
+  // Find the best chroma prediction mode for the current luma prediction mode
+  let mut chroma_rdo = |skip: bool| -> bool {
+    let (tx_size, tx_type) = rdo_tx_size_type(
+      fi, ts, cw, bsize, tile_bo, luma_mode, ref_frames, mvs, skip,
     );
+    let mut zero_distortion = false;
+    for &chroma_mode in mode_set_chroma.iter() {
+      let wr = &mut WriterCounter::new();
+      let tell = wr.tell_frac();
 
-    let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
+      if bsize >= BlockSize::BLOCK_8X8 && bsize.is_sqr() {
+        cw.write_partition(wr, tile_bo, PartitionType::PARTITION_NONE, bsize);
+      }
 
-    let is_chroma_block = has_chroma(tile_bo, bsize, xdec, ydec);
-    
-    // Find the best chroma prediction mode for the current luma prediction mode
-    let mut chroma_rdo = |skip: bool| {
-      mode_set_chroma.iter().for_each(|&chroma_mode| {
-        let wr = &mut WriterCounter::new();
-        let tell = wr.tell_frac();
+      // TODO(yushin): luma and chroma would have different decision based on chroma format
+      let need_recon_pixel = luma_mode_is_intra && tx_size.block_size() != bsize;
 
-        if skip { tx_type = TxType::DCT_DCT; };
+      encode_block_pre_cdef(&fi.sequence, ts, cw, wr, bsize, tile_bo, skip);
+      let tx_dist =
+        encode_block_post_cdef(
+          fi,
+          ts,
+          cw,
+          wr,
+          luma_mode,
+          chroma_mode,
+          ref_frames,
+          mvs,
+          bsize,
+          tile_bo,
+          skip,
+          CFLParams::default(),
+          tx_size,
+          tx_type,
+          mode_context,
+          &mv_stack,
+          rdo_type,
+          need_recon_pixel
+        );
 
-        if bsize >= BlockSize::BLOCK_8X8 && bsize.is_sqr() {
-          cw.write_partition(wr, tile_bo, PartitionType::PARTITION_NONE, bsize);
-        }
+      let rate = wr.tell_frac() - tell;
+      let distortion = if fi.use_tx_domain_distortion && !need_recon_pixel {
+        compute_tx_distortion(
+          fi,
+          ts,
+          bsize,
+          is_chroma_block,
+          tile_bo,
+          tx_dist,
+          skip,
+          false
+        )
+      } else {
+        compute_distortion(
+          fi,
+          ts,
+          bsize,
+          is_chroma_block,
+          tile_bo,
+          false
+        )
+      };
+      let rd = compute_rd_cost(fi, ts.to_frame_block_offset(tile_bo), bsize, rate, distortion);
+      if rd < best.rd {
+        //if rd < best.rd || luma_mode == PredictionMode::NEW_NEWMV {
+        best.rd = rd;
+        best.mode_luma = luma_mode;
+        best.mode_chroma = chroma_mode;
+        best.ref_frames = ref_frames;
+        best.mvs = mvs;
+        best.skip = skip;
+        best.tx_size = tx_size;
+        best.tx_type = tx_type;
+        zero_distortion = distortion == 0;
+      }
 
-        // TODO(yushin): luma and chroma would have different decision based on chroma format
-        let need_recon_pixel = luma_mode_is_intra && tx_size.block_size() != bsize;
+      cw.rollback(cw_checkpoint);
+    }
+    zero_distortion
+  };
 
-        encode_block_pre_cdef(&fi.sequence, ts, cw, wr, bsize, tile_bo, skip);
-        let tx_dist =
-          encode_block_post_cdef(
-            fi,
-            ts,
-            cw,
-            wr,
-            luma_mode,
-            chroma_mode,
-            ref_frames,
-            mvs,
-            bsize,
-            tile_bo,
-            skip,
-            CFLParams::default(),
-            tx_size,
-            tx_type,
-            mode_context,
-            &mv_stack,
-            rdo_type,
-            need_recon_pixel
-          );
-
-        let rate = wr.tell_frac() - tell;
-        let distortion = if fi.use_tx_domain_distortion && !need_recon_pixel {
-          compute_tx_distortion(
-            fi,
-            ts,
-            bsize,
-            is_chroma_block,
-            tile_bo,
-            tx_dist,
-            skip,
-            false
-          )
-        } else {
-          compute_distortion(
-            fi,
-            ts,
-            bsize,
-            is_chroma_block,
-            tile_bo,
-            false
-          )
-        };
-        let rd = compute_rd_cost(fi, rate, distortion);
-        if rd < best.rd {
-          //if rd < best.rd || luma_mode == PredictionMode::NEW_NEWMV {
-          best.rd = rd;
-          best.mode_luma = luma_mode;
-          best.mode_chroma = chroma_mode;
-          best.ref_frames = ref_frames;
-          best.mvs = mvs;
-          best.skip = skip;
-          best.tx_size = tx_size;
-          best.tx_type = tx_type;
-        }
-
-        cw.rollback(cw_checkpoint);
-      });
-    };
-
+  // Don't skip when using intra modes
+  let zero_distortion = if !luma_mode_is_intra {
+    chroma_rdo(true)
+  } else { false };
+  // early skip
+  if !zero_distortion {
     chroma_rdo(false);
-    // Don't skip when using intra modes
-    if !luma_mode_is_intra {
-      chroma_rdo(true);
-    };
   }
+}
 
 // RDO-based mode decision
 pub fn rdo_mode_decision<T: Pixel>(
@@ -696,22 +724,28 @@ pub fn rdo_mode_decision<T: Pixel>(
   inter_mode_set.iter().for_each(|&(luma_mode, i)| {
     let mvs = match luma_mode {
       PredictionMode::NEWMV | PredictionMode::NEW_NEWMV => mvs_from_me[i],
-      PredictionMode::NEARESTMV | PredictionMode::NEAREST_NEARESTMV => if !mv_stacks[i].is_empty() {
-        [mv_stacks[i][0].this_mv, mv_stacks[i][0].comp_mv]
-      } else {
-        [MotionVector::default(); 2]
-      },
-      PredictionMode::NEAR0MV => if mv_stacks[i].len() > 1 {
-        [mv_stacks[i][1].this_mv, mv_stacks[i][1].comp_mv]
-      } else {
-        [MotionVector::default(); 2]
-      },
+      PredictionMode::NEARESTMV | PredictionMode::NEAREST_NEARESTMV =>
+        if !mv_stacks[i].is_empty() {
+          [mv_stacks[i][0].this_mv, mv_stacks[i][0].comp_mv]
+        } else {
+          [MotionVector::default(); 2]
+        },
+      PredictionMode::NEAR0MV | PredictionMode::NEAR_NEARMV =>
+        if mv_stacks[i].len() > 1 {
+          [mv_stacks[i][1].this_mv, mv_stacks[i][1].comp_mv]
+        } else {
+          [MotionVector::default(); 2]
+        },
       PredictionMode::NEAR1MV | PredictionMode::NEAR2MV =>
         [mv_stacks[i][luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].this_mv,
          mv_stacks[i][luma_mode as usize - PredictionMode::NEAR0MV as usize + 1].comp_mv],
       PredictionMode::NEAREST_NEWMV => [mv_stacks[i][0].this_mv, mvs_from_me[i][1]],
       PredictionMode::NEW_NEARESTMV => [mvs_from_me[i][0], mv_stacks[i][0].comp_mv],
-      _ => [MotionVector::default(); 2]
+      PredictionMode::GLOBALMV | PredictionMode::GLOBAL_GLOBALMV =>
+        [MotionVector::default(); 2],
+      _ => {
+        unimplemented!();
+      }
     };
     let mode_set_chroma = ArrayVec::from([luma_mode]);
 
@@ -872,7 +906,7 @@ pub fn rdo_mode_decision<T: Pixel>(
           tile_bo,
           false
         );
-      let rd = compute_rd_cost(fi, rate, distortion);
+      let rd = compute_rd_cost(fi, ts.to_frame_block_offset(tile_bo), bsize, rate, distortion);
       if rd < best.rd {
         best.rd = rd;
         best.mode_chroma = chroma_mode;
@@ -1037,7 +1071,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
         true
       )
     };
-    let rd = compute_rd_cost(fi, rate, distortion);
+    let rd = compute_rd_cost(fi, ts.to_frame_block_offset(tile_bo), bsize, rate, distortion);
     if rd < best_rd {
       best_rd = rd;
       best_type = tx_type;
@@ -1185,7 +1219,7 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
           let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
           let tell = w.tell_frac();
           cw.write_partition(w, tile_bo, partition, bsize);
-          cost = compute_rd_cost(fi, w.tell_frac() - tell, 0);
+          cost = compute_rd_cost(fi, ts.to_frame_block_offset(tile_bo), bsize, w.tell_frac() - tell, 0);
         }
         let mut rd_cost_sum = 0.0;
 
@@ -1344,7 +1378,8 @@ pub fn rdo_loop_decision<T: Pixel>(tile_sbo: SuperBlockOffset, fi: &FrameInvaria
                 } else {
                   0 // no relative cost differeneces to different CDEF params.  If cdef is on, it's a wash.
                 };
-                cost[pli] = compute_rd_cost(fi, rate, err);
+                let frame_bo = ts.to_frame_super_block_offset(tile_sbo).block_offset(0, 0);
+                cost[pli] = compute_rd_cost(fi, frame_bo, BlockSize::BLOCK_64X64, rate, err);
                 cost_acc += cost[pli];
               }
               RestorationFilter::Sgrproj{set, xqd} => {
@@ -1358,7 +1393,8 @@ pub fn rdo_loop_decision<T: Pixel>(tile_sbo: SuperBlockOffset, fi: &FrameInvaria
                                       &mut lrf_output.planes[pli].mut_slice(PlaneOffset{x:0, y:0}));
                 let err = rdo_loop_plane_error(tile_sbo, fi, ts, &cw.bc.blocks.as_const(), &lrf_output, pli);
                 let rate = cw.count_lrf_switchable(w, &ts.restoration.as_const(), best_lrf[pli], pli);
-                cost[pli] = compute_rd_cost(fi, rate, err);
+                let frame_bo = ts.to_frame_super_block_offset(tile_sbo).block_offset(0, 0);
+                cost[pli] = compute_rd_cost(fi, frame_bo, BlockSize::BLOCK_64X64, rate, err);
                 cost_acc += cost[pli];
               }
               RestorationFilter::Wiener{..} => unreachable!() // coming soon
@@ -1413,7 +1449,8 @@ pub fn rdo_loop_decision<T: Pixel>(tile_sbo: SuperBlockOffset, fi: &FrameInvaria
           }
           let err = rdo_loop_plane_error(tile_sbo, fi, ts, &cw.bc.blocks.as_const(), &lrf_output, pli);
           let rate = cw.count_lrf_switchable(w, &ts.restoration.as_const(), current_lrf, pli);
-          let cost = compute_rd_cost(fi, rate, err);
+          let frame_bo = ts.to_frame_super_block_offset(tile_sbo).block_offset(0, 0);
+          let cost = compute_rd_cost(fi, frame_bo, BlockSize::BLOCK_64X64, rate, err);
           if best_cost[pli] < 0. || cost < best_cost[pli] {
             best_cost[pli] = cost;
             best_lrf[pli] = current_lrf;

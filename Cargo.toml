@@ -23,6 +23,13 @@ quick_test = []
 desync_finder = []
 bench = []
 
+# Enables debug dumping of lookahead computation results, specifically:
+# - i-qres.png: quarter-resolution luma planes,
+# - i-hres.png: half-resolution luma planes,
+# - i-mvs.bin: motion vectors,
+# - i-imps.bin: block importances.
+dump_lookahead_data = ["byteorder", "image"]
+
 [dependencies]
 arg_enum_proc_macro = "0.1.1"
 bitstream-io = "0.8"
@@ -46,6 +53,10 @@ avformat-sys = { version = "0.1", path = "crates/avformat-sys/", optional = true
 rayon = "1.0"
 bincode = "1.1"
 arrayvec = "0.4.10"
+better-panic = "0.1"
+err-derive = "0.1"
+image = { version = "0.21.2", optional = true }
+byteorder = { version = "1.3.2", optional = true }
 
 [build-dependencies]
 nasm-rs = { version = "0.1", path = "crates/nasm_rs/", optional = true }

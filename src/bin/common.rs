@@ -9,6 +9,7 @@
 
 use crate::muxer::{create_muxer, Muxer};
 use crate::{ColorPrimaries, MatrixCoefficients, TransferCharacteristics};
+use crate::error::*;
 use clap::{App, AppSettings, Arg, ArgMatches, SubCommand, Shell};
 use rav1e::prelude::*;
 use rav1e::version;
@@ -16,7 +17,6 @@ use scan_fmt::scan_fmt;
 
 use std::fs::File;
 use std::io::prelude::*;
-use std::path::PathBuf;
 use std::time::Instant;
 use std::{fmt, io};
 
@@ -38,7 +38,7 @@ pub struct CliOptions {
   pub pass2file_name: Option<String>
 }
 
-pub fn parse_cli() -> CliOptions {
+pub fn parse_cli() -> Result<CliOptions, CliError> {
   let ver_short = version::short();
   let ver_long = version::full();
   let ver = version::full();
@@ -74,13 +74,6 @@ pub fn parse_cli() -> CliOptions {
         .long("output")
         .required_unless("FULLHELP")
         .takes_value(true)
-    )
-    .arg(
-      Arg::with_name("STATS_FILE")
-        .help("Custom location for first-pass stats file")
-        .long("stats")
-        .takes_value(true)
-        .default_value("rav1e_stats.json")
     )
     // ENCODING SETTINGS
     .arg(
@@ -230,7 +223,7 @@ pub fn parse_cli() -> CliOptions {
         .help("Pixel range")
         .long("range")
         .possible_values(&PixelRange::variants())
-        .default_value("unspecified")
+        .default_value("limited")
         .case_insensitive(true)
     )
     .arg(
@@ -272,6 +265,13 @@ pub fn parse_cli() -> CliOptions {
         .alias("content_light")
         .default_value("0,0")
         .case_insensitive(true)
+    )
+    // STILL PICTURE
+    .arg(
+      Arg::with_name("STILL_PICTURE")
+        .help("Still picture mode")
+        .long("still-picture")
+        .alias("still_picture")
     )
     // DEBUGGING
     .arg(
@@ -331,18 +331,21 @@ pub fn parse_cli() -> CliOptions {
     }
   }
 
+  let rec = match matches.value_of("RECONSTRUCTION") {
+    Some(f) => Some(Box::new(File::create(&f).map_err(|e| e.context("Cannot create reconstruction file"))?) as Box<dyn Write>),
+    None => None
+  };
+
   let io = EncoderIO {
     input: match matches.value_of("INPUT").unwrap() {
       "-" => Box::new(io::stdin()) as Box<dyn Read>,
-      f => Box::new(File::open(&f).unwrap()) as Box<dyn Read>
+      f => Box::new(File::open(&f).map_err(|e| e.context("Cannot open input file"))?) as Box<dyn Read>
     },
-    output: create_muxer(matches.value_of("OUTPUT").unwrap()),
-    rec: matches
-      .value_of("RECONSTRUCTION")
-      .map(|f| Box::new(File::create(&f).unwrap()) as Box<dyn Write>)
+    output: create_muxer(matches.value_of("OUTPUT").unwrap())?,
+    rec
   };
 
-  CliOptions {
+  Ok(CliOptions {
     io,
     enc: parse_config(&matches),
     limit: matches.value_of("LIMIT").unwrap().parse().unwrap(),
@@ -354,7 +357,7 @@ pub fn parse_cli() -> CliOptions {
     threads,
     pass1file_name: matches.value_of("FIRST_PASS").map(|s| s.to_owned()),
     pass2file_name: matches.value_of("SECOND_PASS").map(|s| s.to_owned())
-  }
+  })
 }
 
 fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
@@ -475,17 +478,13 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
     cfg
   };
 
+  cfg.still_picture = matches.is_present("STILL_PICTURE");
+
   cfg.quantizer = quantizer;
   cfg.min_quantizer = matches.value_of("MINQP").unwrap_or("0").parse().unwrap();
   cfg.bitrate = bitrate.checked_mul(1000).expect("Bitrate too high");
   cfg.reservoir_frame_delay = matches.value_of("RESERVOIR_FRAME_DELAY").map(|reservior_frame_delay| reservior_frame_delay.parse().unwrap());
   cfg.show_psnr = matches.is_present("PSNR");
-  cfg.pass = None;
-  cfg.stats_file = if cfg.pass.is_some() {
-    Some(PathBuf::from(matches.value_of("STATS_FILE").unwrap()))
-  } else {
-    None
-  };
   cfg.tune = matches.value_of("TUNE").unwrap().parse().unwrap();
 
   cfg.tile_cols_log2 = matches.value_of("TILE_COLS_LOG2").unwrap().parse().unwrap();
@@ -499,6 +498,7 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
 
   cfg.low_latency = matches.is_present("LOW_LATENCY");
   cfg.train_rdo = train_rdo;
+
   cfg
 }
 

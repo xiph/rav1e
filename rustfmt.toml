@@ -9,7 +9,6 @@ match_arm_blocks = false
 reorder_imports = true
 tab_spaces = 2
 use_field_init_shorthand = true
-trailing_comma = "Never"
 ignore = [
     "build.rs",
     "src/context.rs", # Partial

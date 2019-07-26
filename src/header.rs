@@ -254,17 +254,22 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
   fn write_sequence_header_obu<T: Pixel>(
     &mut self, fi: &FrameInvariants<T>
   ) -> io::Result<()> {
+    assert!(!fi.sequence.reduced_still_picture_hdr
+      || fi.sequence.still_picture);
+
     self.write(3, fi.sequence.profile)?; // profile
-    self.write_bit(false)?; // still_picture
-    self.write_bit(false)?; // reduced_still_picture_header
-    self.write_bit(false)?; // timing info present
-    self.write_bit(false)?; // initial display delay present flag
-    self.write(5, 0)?; // one operating point
-    self.write(12, 0)?; // idc
-    self.write(5, 31)?; // level
-    self.write(1, 0)?; // tier
+    self.write_bit(fi.sequence.still_picture)?; // still_picture
+    self.write_bit(fi.sequence.reduced_still_picture_hdr)?; // reduced_still_picture_header
+
     if fi.sequence.reduced_still_picture_hdr {
-      unimplemented!();
+      self.write(5, 31)?; // level
+    } else {
+      self.write_bit(false)?; // timing info present
+      self.write_bit(false)?; // initial display delay present flag
+      self.write(5, 0)?; // one operating point
+      self.write(12, 0)?; // idc
+      self.write(5, 31)?; // level
+      self.write(1, 0)?; // tier
     }
 
     self.write_sequence_header(fi)?;
@@ -283,7 +288,9 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
     let seq = &fi.sequence;
 
-    if !seq.reduced_still_picture_hdr {
+    if seq.reduced_still_picture_hdr {
+      assert!(!seq.frame_id_numbers_present_flag);
+    } else {
       self.write_bit(seq.frame_id_numbers_present_flag)?;
     }
 
@@ -299,7 +306,17 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     self.write_bit(seq.enable_filter_intra)?; // enable filter intra
     self.write_bit(seq.enable_intra_edge_filter)?;
 
-    if !seq.reduced_still_picture_hdr {
+    if seq.reduced_still_picture_hdr {
+      assert!(!seq.enable_interintra_compound);
+      assert!(!seq.enable_masked_compound);
+      assert!(!seq.enable_warped_motion);
+      assert!(!seq.enable_dual_filter);
+      assert!(!seq.enable_order_hint);
+      assert!(!seq.enable_jnt_comp);
+      assert!(!seq.enable_ref_frame_mvs);
+      assert!(seq.force_screen_content_tools == 2);
+      assert!(seq.force_integer_mv == 2);
+    } else {
       self.write_bit(seq.enable_interintra_compound)?;
       self.write_bit(seq.enable_masked_compound)?;
       self.write_bit(seq.enable_warped_motion)?;
@@ -416,9 +433,10 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     &mut self, fi: &FrameInvariants<T>, fs: &FrameState<T>
   ) -> io::Result<()> {
     if fi.sequence.reduced_still_picture_hdr {
-      assert!(fi.show_existing_frame);
+      assert!(!fi.show_existing_frame);
       assert!(fi.frame_type == FrameType::KEY);
       assert!(fi.show_frame);
+      assert!(!fi.showable_frame);
     } else {
       self.write_bit(fi.show_existing_frame)?;
 
@@ -508,8 +526,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       self.write(n, fi.order_hint & mask)?;
     }
 
-    if fi.error_resilient || fi.intra_only {
-    } else {
+    if !fi.error_resilient && !fi.intra_only {
       self.write(PRIMARY_REF_BITS, fi.primary_ref_frame)?;
     }
 
@@ -599,15 +616,17 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       }
 
       self.write_bit(fi.is_filter_switchable)?;
+      self.write(2, fi.default_filter as u8)?;
       self.write_bit(fi.is_motion_mode_switchable)?;
-      self.write(2, 0)?; // EIGHTTAP_REGULAR
 
       if (!fi.error_resilient && fi.sequence.enable_ref_frame_mvs) {
         self.write_bit(fi.use_ref_frame_mvs)?;
       }
     }
 
-    if !fi.sequence.reduced_still_picture_hdr && !fi.disable_cdf_update {
+    if fi.sequence.reduced_still_picture_hdr || fi.disable_cdf_update {
+      assert!(fi.disable_frame_end_update_cdf);
+    } else {
       self.write_bit(fi.disable_frame_end_update_cdf)?;
     }
 

@@ -41,7 +41,7 @@ pub struct AlignedArray<ARRAY>
 }
 
 #[allow(non_snake_case)]
-pub fn AlignedArray<ARRAY>(array: ARRAY) -> AlignedArray<ARRAY> {
+pub const fn AlignedArray<ARRAY>(array: ARRAY) -> AlignedArray<ARRAY> {
   AlignedArray { _alignment: [], array }
 }
 
@@ -170,8 +170,8 @@ pub trait ILog: PrimInt {
   // This is the number of bits that would be required to represent self in two's
   //  complement notation with all of the leading zeros stripped.
   // TODO: Mark const once trait functions can be constant
-  fn ilog(self) -> Self {
-    Self::from(size_of::<Self>() * 8 - self.leading_zeros() as usize).unwrap()
+  fn ilog(self) -> usize {
+    size_of::<Self>() * 8 - self.leading_zeros() as usize
   }
 }
 

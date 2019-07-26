@@ -48,7 +48,7 @@ pub fn av1_idct4(input: &[i32], output: &mut [i32], range: usize) {
   output[3] = clamp_value(stg2[0] - stg2[3], range);
 }
 
-fn av1_iadst4(input: &[i32], output: &mut [i32], _range: usize) {
+pub fn av1_iadst4(input: &[i32], output: &mut [i32], _range: usize) {
   let bit = 12;
 
   let x0 = input[0];
@@ -93,7 +93,7 @@ fn av1_iadst4(input: &[i32], output: &mut [i32], _range: usize) {
   output[3] = round_shift(x3, bit);
 }
 
-fn av1_iidentity4(input: &[i32], output: &mut [i32], _range: usize) {
+pub fn av1_iidentity4(input: &[i32], output: &mut [i32], _range: usize) {
   for i in 0..4 {
     output[i] = round_shift(SQRT2 * input[i], 12);
   }
@@ -145,7 +145,7 @@ pub fn av1_idct8(input: &[i32], output: &mut [i32], range: usize) {
   output[7] = clamp_value(temp_out[0] - stg4[3], range);
 }
 
-fn av1_iadst8(input: &[i32], output: &mut [i32], range: usize) {
+pub fn av1_iadst8(input: &[i32], output: &mut [i32], range: usize) {
   // stage 1
   let stg1 = [
     input[7], input[0], input[5], input[2], input[3], input[4], input[1],
@@ -223,7 +223,7 @@ fn av1_iadst8(input: &[i32], output: &mut [i32], range: usize) {
   output[7] = -stg6[1];
 }
 
-fn av1_iidentity8(input: &[i32], output: &mut [i32], _range: usize) {
+pub fn av1_iidentity8(input: &[i32], output: &mut [i32], _range: usize) {
   for i in 0..8 {
     output[i] = 2 * input[i];
   }

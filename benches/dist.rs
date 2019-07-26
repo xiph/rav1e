@@ -18,7 +18,7 @@ use rav1e::Pixel;
 
 fn fill_plane<T: Pixel>(ra: &mut ChaChaRng, plane: &mut Plane<T>) {
   let stride = plane.cfg.stride;
-  for row in plane.data.chunks_mut(stride) {
+  for row in plane.data_origin_mut().chunks_mut(stride) {
     for pixel in row {
       let v: u8 = ra.gen();
       *pixel = T::cast_from(v);

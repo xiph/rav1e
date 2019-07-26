@@ -39,6 +39,10 @@ pub struct PlaneOffset {
   pub y: isize
 }
 
+/// Backing buffer for the Plane data
+///
+/// The buffer is padded and aligned according to the architecture-specific
+/// SIMD constraints.
 #[derive(Debug, PartialEq, Eq)]
 pub struct PlaneData<T: Pixel> {
   ptr: std::ptr::NonNull<T>,
@@ -123,7 +127,8 @@ impl<T: Pixel> PlaneData<T> {
     pd
   }
 
-  pub fn from_slice(data: &[T]) -> Self {
+  #[cfg(any(test, feature="bench"))]
+  fn from_slice(data: &[T]) -> Self {
     let mut pd = unsafe { Self::new_uninitialized(data.len()) };
 
     pd.copy_from_slice(data);
@@ -132,9 +137,11 @@ impl<T: Pixel> PlaneData<T> {
   }
 }
 
+/// Plane abstraction
+///
 #[derive(Clone, PartialEq, Eq)]
 pub struct Plane<T: Pixel> {
-  pub data: PlaneData<T>,
+  pub(crate) data: PlaneData<T>,
   pub cfg: PlaneConfig
 }
 
@@ -142,6 +149,47 @@ impl<T: Pixel> Debug for Plane<T>
     where T: Display {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     write!(f, "Plane {{ data: [{}, ...], cfg: {:?} }}", self.data[0], self.cfg)
+  }
+}
+
+pub trait AsRegion<T: Pixel> {
+  fn as_region(&self) -> PlaneRegion<'_, T>;
+  fn as_region_mut(&mut self) -> PlaneRegionMut<'_, T>;
+  fn region_mut(&mut self, area: Area) -> PlaneRegionMut<'_, T>;
+  fn region(&self, area: Area) -> PlaneRegion<'_, T>;
+}
+
+impl<T: Pixel> AsRegion<T> for Plane<T> {
+  #[inline(always)]
+  fn region(&self, area: Area) -> PlaneRegion<'_, T> {
+    let rect = area.to_rect(
+      self.cfg.xdec,
+      self.cfg.ydec,
+      self.cfg.stride - self.cfg.xorigin as usize,
+      self.cfg.alloc_height - self.cfg.yorigin as usize,
+    );
+    PlaneRegion::new(self, rect)
+  }
+
+  #[inline(always)]
+  fn region_mut(&mut self, area: Area) -> PlaneRegionMut<'_, T> {
+    let rect = area.to_rect(
+      self.cfg.xdec,
+      self.cfg.ydec,
+      self.cfg.stride - self.cfg.xorigin as usize,
+      self.cfg.alloc_height - self.cfg.yorigin as usize,
+    );
+    PlaneRegionMut::new(self, rect)
+  }
+
+  #[inline(always)]
+  fn as_region(&self) -> PlaneRegion<'_, T> {
+    self.region(Area::StartingAt { x: 0, y: 0 })
+  }
+
+  #[inline(always)]
+  fn as_region_mut(&mut self) -> PlaneRegionMut<'_, T> {
+    self.region_mut(Area::StartingAt { x: 0, y: 0 })
   }
 }
 
@@ -180,6 +228,7 @@ impl<T: Pixel> Plane<T> {
     }
   }
 
+  #[cfg(any(test, feature="bench"))]
   pub fn wrap(data: Vec<T>, stride: usize) -> Self {
     let len = data.len();
 
@@ -202,7 +251,7 @@ impl<T: Pixel> Plane<T> {
     }
   }
 
-  pub fn pad(&mut self, w: usize, h: usize) {
+  pub(crate) fn pad(&mut self, w: usize, h: usize) {
     let xorigin = self.cfg.xorigin;
     let yorigin = self.cfg.yorigin;
     let stride = self.cfg.stride;
@@ -249,52 +298,21 @@ impl<T: Pixel> Plane<T> {
     }
   }
 
-  pub fn slice(&self, po: PlaneOffset) -> PlaneSlice<'_, T> {
+  pub(crate) fn slice(&self, po: PlaneOffset) -> PlaneSlice<'_, T> {
     PlaneSlice { plane: self, x: po.x, y: po.y }
   }
 
-  pub fn mut_slice(&mut self, po: PlaneOffset) -> PlaneMutSlice<'_, T> {
+  pub(crate) fn mut_slice(&mut self, po: PlaneOffset) -> PlaneMutSlice<'_, T> {
     PlaneMutSlice { plane: self, x: po.x, y: po.y }
   }
 
-  pub fn as_slice(&self) -> PlaneSlice<'_, T> {
+  #[cfg(test)]
+  pub(crate) fn as_slice(&self) -> PlaneSlice<'_, T> {
     self.slice(PlaneOffset { x: 0, y: 0 })
   }
 
-  pub fn as_mut_slice(&mut self) -> PlaneMutSlice<'_, T> {
+  pub(crate) fn as_mut_slice(&mut self) -> PlaneMutSlice<'_, T> {
     self.mut_slice(PlaneOffset { x: 0, y: 0 })
-  }
-
-  #[inline(always)]
-  pub fn region(&self, area: Area) -> PlaneRegion<'_, T> {
-    let rect = area.to_rect(
-      self.cfg.xdec,
-      self.cfg.ydec,
-      self.cfg.stride - self.cfg.xorigin as usize,
-      self.cfg.alloc_height - self.cfg.yorigin as usize,
-    );
-    PlaneRegion::new(self, rect)
-  }
-
-  #[inline(always)]
-  pub fn region_mut(&mut self, area: Area) -> PlaneRegionMut<'_, T> {
-    let rect = area.to_rect(
-      self.cfg.xdec,
-      self.cfg.ydec,
-      self.cfg.stride - self.cfg.xorigin as usize,
-      self.cfg.alloc_height - self.cfg.yorigin as usize,
-    );
-    PlaneRegionMut::new(self, rect)
-  }
-
-  #[inline(always)]
-  pub fn as_region(&self) -> PlaneRegion<'_, T> {
-    self.region(Area::StartingAt { x: 0, y: 0 })
-  }
-
-  #[inline(always)]
-  pub fn as_region_mut(&mut self) -> PlaneRegionMut<'_, T> {
-    self.region_mut(Area::StartingAt { x: 0, y: 0 })
   }
 
   #[inline]
@@ -303,7 +321,7 @@ impl<T: Pixel> Plane<T> {
   }
 
   #[inline]
-  pub fn row_range(&self, x: isize, y: isize) -> Range<usize> {
+  pub(crate) fn row_range(&self, x: isize, y: isize) -> Range<usize> {
     debug_assert!(self.cfg.yorigin as isize + y >= 0);
     debug_assert!(self.cfg.xorigin as isize + x >= 0);
     let base_y = (self.cfg.yorigin as isize + y) as usize;
@@ -356,7 +374,7 @@ impl<T: Pixel> Plane<T> {
     }
   }
 
-  pub fn downsample_from(&mut self, src: &Plane<T>) {
+  pub(crate) fn downsample_from(&mut self, src: &Plane<T>) {
     let width = self.cfg.width;
     let height = self.cfg.height;
     let xorigin = self.cfg.xorigin;
@@ -382,7 +400,7 @@ impl<T: Pixel> Plane<T> {
     }
   }
 
-  /// Iterates over the pixels in the `Plane`, skipping stride data.
+  /// Iterates over the pixels in the `Plane`, skipping the padding.
   pub fn iter(&self) -> PlaneIter<'_, T> {
     PlaneIter::new(self)
   }
@@ -438,41 +456,6 @@ pub struct PlaneSlice<'a, T: Pixel> {
   pub y: isize
 }
 
-pub struct IterWidth<'a, T: Pixel> {
-    ps: PlaneSlice<'a, T>,
-    width: usize,
-}
-
-impl<'a, T: Pixel> Iterator for IterWidth<'a, T> {
-    type Item = &'a [T];
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        let x = self.ps.plane.cfg.xorigin as isize + self.ps.x;
-        let y = self.ps.plane.cfg.yorigin as isize + self.ps.y;
-        let stride = self.ps.plane.cfg.stride;
-        let base = y as usize * stride + x as usize;
-
-        if self.ps.plane.data.len() < base + self.width {
-            None
-        } else {
-            self.ps.y += 1;
-            Some(&self.ps.plane.data[base..base + self.width])
-        }
-    }
-
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let size = self.ps.plane.cfg.height - self.ps.y as usize;
-
-        (size, Some(size))
-    }
-}
-
-impl<'a, T: Pixel> ExactSizeIterator for IterWidth<'a, T> { }
-
-impl<'a, T: Pixel> FusedIterator for IterWidth<'a, T> { }
-
 pub struct RowsIter<'a, T: Pixel> {
   plane: &'a Plane<T>,
   x: isize,
@@ -506,6 +489,7 @@ impl<'a, T: Pixel> ExactSizeIterator for RowsIter<'a, T> {}
 impl<'a, T: Pixel> FusedIterator for RowsIter<'a, T> {}
 
 impl<'a, T: Pixel> PlaneSlice<'a, T> {
+  #[cfg(feature = "nasm")]
   pub fn as_ptr(&self) -> *const T {
     self[0].as_ptr()
   }
@@ -530,10 +514,6 @@ impl<'a, T: Pixel> PlaneSlice<'a, T> {
         .min(self.plane.cfg.height as isize)
         .max(-(self.plane.cfg.yorigin as isize))
     }
-  }
-
-  pub fn iter_width(&self, width: usize) -> IterWidth<'a, T> {
-    IterWidth { ps: *self, width }
   }
 
   pub fn subslice(&self, xo: usize, yo: usize) -> PlaneSlice<'a, T> {
@@ -623,14 +603,6 @@ impl<'a, T: Pixel> ExactSizeIterator for RowsIterMut<'a, T> {}
 impl<'a, T: Pixel> FusedIterator for RowsIterMut<'a, T> {}
 
 impl<'a, T: Pixel> PlaneMutSlice<'a, T> {
-  pub fn as_ptr(&self) -> *const T {
-    self[0].as_ptr()
-  }
-
-  pub fn as_mut_ptr(&mut self) -> *mut T {
-    self[0].as_mut_ptr()
-  }
-
   pub fn rows_iter(&self) -> RowsIter<'_, T> {
     RowsIter {
       plane: self.plane,
@@ -646,15 +618,6 @@ impl<'a, T: Pixel> PlaneMutSlice<'a, T> {
       y: self.y,
       phantom: PhantomData,
     }
-  }
-
-  // FIXME: code duplication with PlaneSlice
-  pub fn p(&self, add_x: usize, add_y: usize) -> T {
-    let new_y =
-      (self.y + add_y as isize + self.plane.cfg.yorigin as isize) as usize;
-    let new_x =
-      (self.x + add_x as isize + self.plane.cfg.xorigin as isize) as usize;
-    self.plane.data[new_y * self.plane.cfg.stride + new_x]
   }
 }
 

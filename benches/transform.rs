@@ -12,40 +12,104 @@ use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use rav1e::bench::transform;
 
-fn bench_idct4(b: &mut Bencher, bit_depth: &usize) {
+fn init_buffers(size: usize) -> (Vec<i32>, Vec<i32>) {
   let mut ra = ChaChaRng::from_seed([0; 32]);
-  let input: [i32; 4] = ra.gen();
-  let mut output = [0i32; 4];
-  let range = bit_depth + 8;
+  let input: Vec<i32> = (0..size).map(|_| ra.gen()).collect();
+  let output = vec![0i32; size];
 
-  b.iter(|| {
-    transform::av1_idct4(&input[..], &mut output[..], range);
-  });
+  (input, output)
 }
 
 pub fn av1_idct4(c: &mut Criterion) {
-  let plain = Fun::new("plain", bench_idct4);
-  let funcs = vec![plain];
+  let (input, mut output) = init_buffers(4);
 
-  c.bench_functions("av1_idct4_8", funcs, 8);
-}
-
-fn bench_idct8(b: &mut Bencher, bit_depth: &usize) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
-  let input: [i32; 8] = ra.gen();
-  let mut output = [0i32; 8];
-  let range = bit_depth + 8;
-
-  b.iter(|| {
-    transform::av1_idct8(&input[..], &mut output[..], range);
-  });
+  c.bench_function("av1_idct4_8", move |b| b.iter(
+    || transform::av1_idct4(&input[..], &mut output[..], 16)));
 }
 
 pub fn av1_idct8(c: &mut Criterion) {
-  let plain = Fun::new("plain", bench_idct8);
-  let funcs = vec![plain];
+  let (input, mut output) = init_buffers(8);
 
-  c.bench_functions("av1_idct8_8", funcs, 8);
+  c.bench_function("av1_idct8_8", move |b| b.iter(
+    || transform::av1_idct8(&input[..], &mut output[..], 16)));
 }
 
-criterion_group!(transform, av1_idct4, av1_idct8);
+pub fn av1_iidentity4(c: &mut Criterion) {
+  let (input, mut output) = init_buffers(4);
+
+  c.bench_function("av1_iidentity4_8", move |b| b.iter(
+    || transform::av1_iidentity4(&input[..], &mut output[..], 16)));
+}
+
+pub fn av1_iidentity8(c: &mut Criterion) {
+  let (input, mut output) = init_buffers(8);
+
+  c.bench_function("av1_iidentity8_8", move |b| b.iter(
+    || transform::av1_iidentity8(&input[..], &mut output[..], 16)));
+}
+
+pub fn av1_iadst4(c: &mut Criterion) {
+  let (input, mut output) = init_buffers(4);
+
+  c.bench_function("av1_iadst4_8", move |b| b.iter(
+    || transform::av1_iadst4(&input[..], &mut output[..], 16)));
+}
+
+pub fn av1_iadst8(c: &mut Criterion) {
+  let (input, mut output) = init_buffers(8);
+
+  c.bench_function("av1_iadst8_8", move |b| b.iter(
+    || transform::av1_iadst8(&input[..], &mut output[..], 16)));
+}
+
+pub fn daala_fdct4(c: &mut Criterion) {
+  let (input, mut output) = init_buffers(4);
+
+  c.bench_function("daala_fdct4", move |b| b.iter(
+    || transform::daala_fdct4(&input[..], &mut output[..])));
+}
+
+pub fn daala_fdct8(c: &mut Criterion) {
+  let (input, mut output) = init_buffers(8);
+
+  c.bench_function("daala_fdct8", move |b| b.iter(
+    || transform::daala_fdct8(&input[..], &mut output[..])));
+}
+
+pub fn fidentity4(c: &mut Criterion) {
+  let (input, mut output) = init_buffers(4);
+
+  c.bench_function("fidentity4", move |b| b.iter(
+    || transform::fidentity4(&input[..], &mut output[..])));
+}
+
+pub fn fidentity8(c: &mut Criterion) {
+  let (input, mut output) = init_buffers(8);
+
+  c.bench_function("fidentity8", move |b| b.iter(
+    || transform::fidentity8(&input[..], &mut output[..])));
+}
+
+pub fn daala_fdst_vii_4(c: &mut Criterion) {
+  let (input, mut output) = init_buffers(4);
+
+  c.bench_function("daala_fdst_vii_4", move |b| b.iter(
+    || transform::daala_fdst_vii_4(&input[..], &mut output[..])));
+}
+
+pub fn daala_fdst8(c: &mut Criterion) {
+  let (input, mut output) = init_buffers(8);
+
+  c.bench_function("daala_fdst8", move |b| b.iter(
+    || transform::daala_fdst8(&input[..], &mut output[..])));
+}
+
+criterion_group!(inverse_transforms,
+  av1_idct4, av1_idct8,
+  av1_iidentity4, av1_iidentity8,
+  av1_iadst4, av1_iadst8);
+
+criterion_group!(forward_transforms,
+  daala_fdct4, daala_fdct8,
+  fidentity4, fidentity8,
+  daala_fdst_vii_4, daala_fdst8);
