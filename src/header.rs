@@ -288,7 +288,9 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
     let seq = &fi.sequence;
 
-    if !seq.reduced_still_picture_hdr {
+    if seq.reduced_still_picture_hdr {
+      assert!(!seq.frame_id_numbers_present_flag);
+    } else {
       self.write_bit(seq.frame_id_numbers_present_flag)?;
     }
 
