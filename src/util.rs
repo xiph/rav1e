@@ -165,6 +165,11 @@ impl_cast_from_pixel_to_primitive!(i32);
 impl_cast_from_pixel_to_primitive!(u32);
 
 pub trait ILog: PrimInt {
+  // Integer binary logarithm of an integer value.
+  // Returns floor(log2(self)) + 1, or 0 if self == 0.
+  // This is the number of bits that would be required to represent self in two's
+  //  complement notation with all of the leading zeros stripped.
+  // TODO: Mark const once trait functions can be constant
   fn ilog(self) -> usize {
     size_of::<Self>() * 8 - self.leading_zeros() as usize
   }
