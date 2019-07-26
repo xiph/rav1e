@@ -223,7 +223,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .help("Pixel range")
         .long("range")
         .possible_values(&PixelRange::variants())
-        .default_value("unspecified")
+        .default_value("limited")
         .case_insensitive(true)
     )
     .arg(
