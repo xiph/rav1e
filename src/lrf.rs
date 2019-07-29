@@ -78,7 +78,8 @@ pub const STRIPE_FILTER_INTEGRAL_IMAGE_HEIGHT: usize = 64 + 6 + 2;
 pub const STRIPE_FILTER_INTEGRAL_IMAGE_SIZE: usize =
   STRIPE_FILTER_INTEGRAL_IMAGE_STRIDE * STRIPE_FILTER_INTEGRAL_IMAGE_HEIGHT;
 
-pub const SOLVE_INTEGRAL_IMAGE_STRIDE: usize = 64 + 6 + 2;
+pub const INTEGRAL_IMAGE_MAX: usize = 1 << RESTORATION_TILESIZE_MAX_LOG2;
+pub const SOLVE_INTEGRAL_IMAGE_STRIDE: usize = INTEGRAL_IMAGE_MAX + 6 + 2;
 pub const SOLVE_INTEGRAL_IMAGE_SIZE: usize =
   SOLVE_INTEGRAL_IMAGE_STRIDE * SOLVE_INTEGRAL_IMAGE_STRIDE;
 
@@ -108,6 +109,46 @@ pub enum RestorationFilter {
 impl RestorationFilter {
   pub fn default() -> RestorationFilter {
     RestorationFilter::None {}
+  }
+  pub fn notequal(&self, cmp: &RestorationFilter) -> bool {
+    match self {
+      RestorationFilter::None{} => {
+        if let RestorationFilter::None{} = cmp {
+          false
+        } else {
+          true
+        }
+      }
+      RestorationFilter::Sgrproj{set, xqd} => {
+        if let RestorationFilter::Sgrproj{set: set2, xqd: xqd2} = cmp {
+          if set == set2 &&
+            xqd[0] == xqd2[0] &&
+            xqd[1] == xqd2[1] {
+              false
+            } else {
+              true
+            }
+        } else {
+          true
+        }
+      }
+      RestorationFilter::Wiener{coeffs} => {
+        if let RestorationFilter::Wiener{coeffs: coeffs2} = cmp {
+          if coeffs[0][0] == coeffs2[0][0] &&
+            coeffs[0][1] == coeffs2[0][1] &&
+            coeffs[0][2] == coeffs2[0][2] &&
+            coeffs[1][0] == coeffs2[1][0] &&
+            coeffs[1][1] == coeffs2[1][1] &&
+            coeffs[1][2] == coeffs2[1][2] {
+              false
+            } else {
+              true
+            }
+        } else {
+          true
+        }
+      }
+    }
   }
 }
 
@@ -765,21 +806,18 @@ pub fn sgrproj_solve<T: Pixel>(
   integral_image_buffer: &mut IntegralImageBuffer, input: &PlaneSlice<T>,
   cdeffed: &PlaneSlice<T>, cdef_w: usize, cdef_h: usize,
 ) -> (i8, i8) {
-  assert!(cdef_h <= 64);
-  assert!(cdef_w <= 64);
 
   let integral_image = &mut integral_image_buffer.integral_image;
   let sq_integral_image = &mut integral_image_buffer.sq_integral_image;
-
   let bdm8 = fi.sequence.bit_depth - 8;
 
-  let mut a_r2: [[u32; 64 + 2]; 2] = [[0; 64 + 2]; 2];
-  let mut b_r2: [[u32; 64 + 2]; 2] = [[0; 64 + 2]; 2];
-  let mut f_r2_0: [u32; 64] = [0; 64];
-  let mut f_r2_1: [u32; 64] = [0; 64];
-  let mut a_r1: [[u32; 64 + 2]; 3] = [[0; 64 + 2]; 3];
-  let mut b_r1: [[u32; 64 + 2]; 3] = [[0; 64 + 2]; 3];
-  let mut f_r1: [u32; 64] = [0; 64];
+  let mut a_r2: [[u32; MAX + 2]; 2] = [[0; MAX + 2]; 2];
+  let mut b_r2: [[u32; MAX + 2]; 2] = [[0; MAX + 2]; 2];
+  let mut f_r2_0: [u32; MAX] = [0; MAX];
+  let mut f_r2_1: [u32; MAX] = [0; MAX];
+  let mut a_r1: [[u32; MAX + 2]; 3] = [[0; MAX + 2]; 3];
+  let mut b_r1: [[u32; MAX + 2]; 3] = [[0; MAX + 2]; 3];
+  let mut f_r1: [u32; MAX] = [0; MAX];
 
   let s_r2: u32 = SGRPROJ_PARAMS_S[set as usize][0];
   let s_r1: u32 = SGRPROJ_PARAMS_S[set as usize][1];
@@ -1142,6 +1180,8 @@ pub struct RestorationPlaneConfig {
   // (1 << sb_shift) gives the number of superblocks both horizontally and
   // vertically in a restoration unit, not accounting for RU stretching
   pub sb_shift: usize,
+  pub sb_cols: usize, // actual number of SB cols in this LRU (accounting for stretch and crop)
+  pub sb_rows: usize, // actual number of SB rows in this LRU (accounting for stretch and crop)
   // stripe height is 64 in all cases except 4:2:0 chroma planes where
   // it is 32.  This is independent of all other setup parameters
   pub stripe_height: usize,
@@ -1163,8 +1203,14 @@ pub struct RestorationPlaneOffset {
 
 impl RestorationPlane {
   pub fn new(
-    lrf_type: u8, unit_size: usize, sb_shift: usize, stripe_decimate: usize,
-    cols: usize, rows: usize,
+    lrf_type: u8,
+    unit_size: usize,
+    sb_shift: usize,
+    sb_cols: usize,
+    sb_rows: usize,
+    stripe_decimate: usize,
+    cols: usize,
+    rows: usize
   ) -> RestorationPlane {
     let stripe_height = if stripe_decimate != 0 { 32 } else { 64 };
     RestorationPlane {
@@ -1172,6 +1218,8 @@ impl RestorationPlane {
         lrf_type,
         unit_size,
         sb_shift,
+        sb_cols,
+        sb_rows,
         stripe_height,
         cols,
         rows,
@@ -1211,15 +1259,18 @@ pub struct RestorationState {
 impl RestorationState {
   pub fn new<T: Pixel>(fi: &FrameInvariants<T>, input: &Frame<T>) -> Self {
     let PlaneConfig { xdec, ydec, .. } = input.planes[1].cfg;
+    // stripe size is decimated in 4:2:0 (and only 4:2:0)
     let stripe_uv_decimate = if xdec > 0 && ydec > 0 { 1 } else { 0 };
 
-    //Largest possible restoration unit size (256) for both luma and chroma
-    //let lrf_y_shift = 0;
-    //let lrf_uv_shift = 0;
-
-    // Smallest possible LRF size (the size of the superblock and no smaller)
-    let lrf_y_shift = if fi.sequence.use_128x128_superblock { 1 } else { 2 };
-    let lrf_uv_shift = lrf_y_shift + stripe_uv_decimate;
+    let (lrf_y_shift, lrf_uv_shift) =
+      if fi.sequence.enable_large_lru {
+        // Largest possible restoration unit size (256) for both luma and chroma
+        (0, 0)
+      } else {
+        // Smallest possible LRF size (the size of the superblock and no smaller)
+        let lrf_y_shift = if fi.sequence.use_128x128_superblock { 1 } else { 2 };
+        (lrf_y_shift, lrf_y_shift + stripe_uv_decimate)
+      };
 
     // derive the rest
     let y_unit_log2 = RESTORATION_TILESIZE_MAX_LOG2 - lrf_y_shift;
@@ -1228,8 +1279,10 @@ impl RestorationState {
     let uv_unit_size = 1 << uv_unit_log2;
     let y_sb_log2 = if fi.sequence.use_128x128_superblock { 7 } else { 6 };
     let uv_sb_log2 = y_sb_log2 - stripe_uv_decimate;
-    let cols = ((fi.width + (y_unit_size >> 1)) / y_unit_size).max(1);
-    let rows = ((fi.height + (y_unit_size >> 1)) / y_unit_size).max(1);
+    let y_cols = ((fi.width + (y_unit_size >> 1)) / y_unit_size).max(1);
+    let y_rows = ((fi.height + (y_unit_size >> 1)) / y_unit_size).max(1);
+    let uv_cols = (((fi.width + (1<<xdec>>1) >> xdec) + (uv_unit_size >> 1)) / uv_unit_size).max(1);
+    let uv_rows = (((fi.height + (1<<ydec>>1) >> ydec) + (uv_unit_size >> 1)) / uv_unit_size).max(1);
 
     RestorationState {
       planes: [
@@ -1237,25 +1290,30 @@ impl RestorationState {
           RESTORE_SWITCHABLE,
           y_unit_size,
           y_unit_log2 - y_sb_log2,
+          fi.sb_width,
+          fi.sb_height,
           0,
-          cols,
-          rows,
+          y_cols,
+          y_rows
         ),
         RestorationPlane::new(
           RESTORE_SWITCHABLE,
           uv_unit_size,
           uv_unit_log2 - uv_sb_log2,
+          fi.sb_width,
+          fi.sb_height,
           stripe_uv_decimate,
-          cols,
-          rows,
+          uv_cols,
+          uv_rows
         ),
         RestorationPlane::new(
           RESTORE_SWITCHABLE,
           uv_unit_size,
           uv_unit_log2 - uv_sb_log2,
+          fi.sb_width,
+          fi.sb_height,
           stripe_uv_decimate,
-          cols,
-          rows,
+          uv_cols, uv_rows
         ),
       ],
     }

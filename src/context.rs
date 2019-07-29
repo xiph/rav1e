@@ -3600,112 +3600,111 @@ impl<'a> ContextWriter<'a> {
   pub fn write_lrf<T: Pixel>(
     &mut self, w: &mut dyn Writer, fi: &FrameInvariants<T>,
     rs: &mut TileRestorationStateMut, sbo: TileSuperBlockOffset,
+    pli: usize,
   ) {
     if !fi.allow_intrabc {
       // TODO: also disallow if lossless
-      for pli in 0..PLANES {
-        let rp = &mut rs.planes[pli];
-        if let Some(filter) = rp.restoration_unit(sbo).map(|ru| ru.filter) {
-          match filter {
-            RestorationFilter::None => match rp.rp_cfg.lrf_type {
-              RESTORE_WIENER => {
-                symbol_with_update!(self, w, 0, &mut self.fc.lrf_wiener_cdf);
-              }
+      let rp = &mut rs.planes[pli];
+      if let Some(filter) = rp.restoration_unit(sbo).map(|ru| ru.filter) {
+        match filter {
+          RestorationFilter::None => match rp.rp_cfg.lrf_type {
+            RESTORE_WIENER => {
+              symbol_with_update!(self, w, 0, &mut self.fc.lrf_wiener_cdf);
+            }
+            RESTORE_SGRPROJ => {
+              symbol_with_update!(self, w, 0, &mut self.fc.lrf_sgrproj_cdf);
+            }
+            RESTORE_SWITCHABLE => {
+              symbol_with_update!(
+                self,
+                w,
+                0,
+                &mut self.fc.lrf_switchable_cdf
+              );
+            }
+            RESTORE_NONE => {}
+            _ => unreachable!(),
+          },
+          RestorationFilter::Sgrproj { set, xqd } => {
+            match rp.rp_cfg.lrf_type {
               RESTORE_SGRPROJ => {
-                symbol_with_update!(self, w, 0, &mut self.fc.lrf_sgrproj_cdf);
-              }
-              RESTORE_SWITCHABLE => {
                 symbol_with_update!(
                   self,
                   w,
-                  0,
+                  1,
+                  &mut self.fc.lrf_sgrproj_cdf
+                );
+              }
+              RESTORE_SWITCHABLE => {
+                // Does *not* write 'RESTORE_SGRPROJ'
+                symbol_with_update!(
+                  self,
+                  w,
+                  2,
                   &mut self.fc.lrf_switchable_cdf
                 );
               }
-              RESTORE_NONE => {}
               _ => unreachable!(),
-            },
-            RestorationFilter::Sgrproj { set, xqd } => {
-              match rp.rp_cfg.lrf_type {
-                RESTORE_SGRPROJ => {
-                  symbol_with_update!(
-                    self,
-                    w,
-                    1,
-                    &mut self.fc.lrf_sgrproj_cdf
-                  );
-                }
-                RESTORE_SWITCHABLE => {
-                  // Does *not* write 'RESTORE_SGRPROJ'
-                  symbol_with_update!(
-                    self,
-                    w,
-                    2,
-                    &mut self.fc.lrf_switchable_cdf
-                  );
-                }
-                _ => unreachable!(),
-              }
-              w.literal(SGRPROJ_PARAMS_BITS, set as u32);
-              for i in 0..2 {
-                let s = SGRPROJ_PARAMS_S[set as usize][i];
-                let min = SGRPROJ_XQD_MIN[i] as i32;
-                let max = SGRPROJ_XQD_MAX[i] as i32;
-                if s > 0 {
-                  w.write_signed_subexp_with_ref(
-                    xqd[i] as i32,
-                    min,
+            }
+            w.literal(SGRPROJ_PARAMS_BITS, set as u32);
+            for i in 0..2 {
+              let s = SGRPROJ_PARAMS_S[set as usize][i];
+              let min = SGRPROJ_XQD_MIN[i] as i32;
+              let max = SGRPROJ_XQD_MAX[i] as i32;
+              if s > 0 {
+                w.write_signed_subexp_with_ref(
+                  xqd[i] as i32,
+                  min,
                     max + 1,
-                    SGRPROJ_PRJ_SUBEXP_K,
-                    rp.sgrproj_ref[i] as i32,
-                  );
-                  rp.sgrproj_ref[i] = xqd[i];
+                  SGRPROJ_PRJ_SUBEXP_K,
+                  rp.sgrproj_ref[i] as i32,
+                );
+                rp.sgrproj_ref[i] = xqd[i];
+              } else {
+                // Nothing written, just update the reference
+                if i == 0 {
+                  assert!(xqd[i] == 0);
+                  rp.sgrproj_ref[0] = 0;
                 } else {
-                  // Nothing written, just update the reference
-                  if i == 0 {
-                    assert!(xqd[i] == 0);
-                    rp.sgrproj_ref[0] = 0;
-                  } else {
-                    rp.sgrproj_ref[1] = 95; // LOL at spec.  The result is always 95.
-                  }
+                  rp.sgrproj_ref[1] = 95; // LOL at spec.  The result is always 95.
                 }
               }
             }
-            RestorationFilter::Wiener { coeffs } => {
-              match rp.rp_cfg.lrf_type {
-                RESTORE_WIENER => {
-                  symbol_with_update!(self, w, 1, &mut self.fc.lrf_wiener_cdf);
-                }
-                RESTORE_SWITCHABLE => {
-                  // Does *not* write 'RESTORE_WIENER'
-                  symbol_with_update!(
-                    self,
-                    w,
-                    1,
-                    &mut self.fc.lrf_switchable_cdf
-                  );
-                }
-                _ => unreachable!(),
+          }
+          RestorationFilter::Wiener { coeffs } => {
+            match rp.rp_cfg.lrf_type {
+              RESTORE_WIENER => {
+                symbol_with_update!(self, w, 1, &mut self.fc.lrf_wiener_cdf);
               }
-              for pass in 0..2 {
-                let first_coeff = if pli == 0 {
-                  0
-                } else {
-                  assert!(coeffs[pass][0] == 0);
-                  1
-                };
-                for i in first_coeff..3 {
-                  let min = WIENER_TAPS_MIN[i] as i32;
-                  let max = WIENER_TAPS_MAX[i] as i32;
-                  w.write_signed_subexp_with_ref(
-                    coeffs[pass][i] as i32,
-                    min,
-                    max + 1,
+              RESTORE_SWITCHABLE => {
+                // Does *not* write 'RESTORE_WIENER'
+                symbol_with_update!(
+                  self,
+                  w,
+                  1,
+                  &mut self.fc.lrf_switchable_cdf
+                );
+              }
+              _ => unreachable!(),
+            }
+            for pass in 0..2 {
+              let first_coeff = if pli == 0 {
+                0
+              } else {
+                assert!(coeffs[pass][0] == 0);
+                1
+              };
+              for i in first_coeff..3 {
+                let min = WIENER_TAPS_MIN[i] as i32;
+                let max = WIENER_TAPS_MAX[i] as i32;
+                w.write_signed_subexp_with_ref(
+                  coeffs[pass][i] as i32,
+                  min,
+                  max + 1,
                     (i + 1) as u8,
-                    rp.wiener_ref[pass][i] as i32,
-                  );
-                  rp.wiener_ref[pass][i] = coeffs[pass][i];
-                }
+                  rp.wiener_ref[pass][i] as i32,
+                );
+                rp.wiener_ref[pass][i] = coeffs[pass][i];
               }
             }
           }

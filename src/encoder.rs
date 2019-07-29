@@ -146,6 +146,7 @@ pub struct Sequence {
   //     enabled for that frame.
   pub enable_cdef: bool,        // To turn on/off CDEF
   pub enable_restoration: bool, // To turn on/off loop restoration
+  pub enable_large_lru: bool, // To turn on/off larger-than-superblock loop restoration units
   pub operating_points_cnt_minus_1: usize,
   pub operating_point_idc: [u16; MAX_NUM_OPERATING_POINTS],
   pub display_model_info_present_flag: bool,
@@ -220,6 +221,7 @@ impl Sequence {
       enable_cdef: config.speed_settings.cdef
         && config.chroma_sampling != ChromaSampling::Cs422,
       enable_restoration: config.chroma_sampling != ChromaSampling::Cs422,
+      enable_large_lru: true,
       operating_points_cnt_minus_1: 0,
       operating_point_idc,
       display_model_info_present_flag: false,
@@ -3153,6 +3155,7 @@ fn encode_tile<'a, T: Pixel>(
   let mut sbs_q: VecDeque<SBSQueueEntry> = VecDeque::new();
   let mut last_lru_ready = [-1;3];
   let mut last_lru_rdoed = [-1;3];
+  let mut last_lru_coded = [-1;3];
 
   let tile_pmvs = build_coarse_pmvs(fi, ts);
 
@@ -3206,7 +3209,7 @@ fn encode_tile<'a, T: Pixel>(
 
       {
         let mut check_queue = false;
-        // queue our superblock for cdef/LRF RDO when the RDU is complete
+        // queue our superblock for when the LRU is complete
         sbs_qe.cdef_coded = cw.bc.cdef_coded;
         for pli in 0..PLANES {
           let lru_index = ts.restoration.planes[pli].restoration_unit_countable(tile_sbo) as i32;
@@ -3260,7 +3263,12 @@ fn encode_tile<'a, T: Pixel>(
               }
               // write LRF information
               if fi.sequence.enable_restoration {
-                cw.write_lrf(&mut w, fi, &mut ts.restoration, qe.sbo);
+                for pli in 0..PLANES {
+                  if last_lru_coded[pli] < qe.lru_index[pli] {
+                    last_lru_coded[pli] = qe.lru_index[pli];
+                    cw.write_lrf(&mut w, fi, &mut ts.restoration, qe.sbo, pli);
+                  }
+                }
               }
               // Now that loop restoration is coded, we can replay the initial block bits
               qe.w_pre_cdef.replay(&mut w);

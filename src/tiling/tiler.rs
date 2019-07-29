@@ -308,7 +308,9 @@ pub mod test {
       chroma_sampling,
       ..Default::default()
     };
-    let sequence = Sequence::new(&config);
+    let mut sequence = Sequence::new(&config);
+    // smallest possible tiles smaller than smallest possible LRUs
+    sequence.enable_large_lru = false;
     FrameInvariants::new(config, sequence)
   }
 
