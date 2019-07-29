@@ -185,14 +185,20 @@ macro_rules! tile_restoration_plane_common {
         }
       }
 
-      fn restoration_unit_index(&self, sbo: TileSuperBlockOffset) -> Option<(usize, usize)> {
+      pub fn restoration_unit_index(&self, sbo: TileSuperBlockOffset) -> Option<(usize, usize)> {
         // is this a stretch block?
-        let x_stretch = sbo.0.x >> self.rp_cfg.sb_shift >= self.units.cols;
-        let y_stretch = sbo.0.y >> self.rp_cfg.sb_shift >= self.units.rows;
+        let x_stretch = sbo.0.x < self.rp_cfg.sb_cols &&
+          sbo.0.x >> self.rp_cfg.sb_shift >= self.units.cols;
+        let y_stretch = sbo.0.y < self.rp_cfg.sb_rows &&
+          sbo.0.y >> self.rp_cfg.sb_shift >= self.units.rows;
 
-        let x = (sbo.0.x >> self.rp_cfg.sb_shift) - if x_stretch {1}else{0};
-        let y = (sbo.0.y >> self.rp_cfg.sb_shift) - if y_stretch {1}else{0};
-        Some((x, y))
+        let x = (sbo.0.x >> self.rp_cfg.sb_shift) - if x_stretch { 1 } else { 0 };
+        let y = (sbo.0.y >> self.rp_cfg.sb_shift) - if y_stretch { 1 } else { 0 };
+        if x < self.units.cols && y < self.units.rows {
+          Some((x, y))
+        } else {
+          None
+        }
       }
 
       pub fn restoration_unit_countable(&self, sbo: TileSuperBlockOffset) -> usize {
@@ -286,24 +292,27 @@ macro_rules! tile_restoration_state_common {
         sb_width: usize,
         sb_height: usize,
       ) -> Self {
-        let (units_x, units_y, units_cols, units_rows) =
-          Self::get_units_region(rs, sbo, sb_width, sb_height);
-
+        let (units_x0, units_y0, units_cols0, units_rows0) =
+          Self::get_units_region(rs, sbo, sb_width, sb_height, 0);
+        let (units_x1, units_y1, units_cols1, units_rows1) =
+          Self::get_units_region(rs, sbo, sb_width, sb_height, 1);
+        let (units_x2, units_y2, units_cols2, units_rows2) =
+          Self::get_units_region(rs, sbo, sb_width, sb_height, 2);
         // we cannot retrieve &mut of slice items directly and safely
         let mut planes_iter = rs.planes.$iter();
         Self {
           planes: [
             {
               let plane = planes_iter.next().unwrap();
-              $trp_type::new(plane, units_x, units_y, units_cols, units_rows)
+              $trp_type::new(plane, units_x0, units_y0, units_cols0, units_rows0)
             },
             {
               let plane = planes_iter.next().unwrap();
-              $trp_type::new(plane, units_x, units_y, units_cols, units_rows)
+              $trp_type::new(plane, units_x1, units_y1, units_cols1, units_rows1)
             },
             {
               let plane = planes_iter.next().unwrap();
-              $trp_type::new(plane, units_x, units_y, units_cols, units_rows)
+              $trp_type::new(plane, units_x2, units_y2, units_cols2, units_rows2)
             },
           ],
         }
@@ -315,8 +324,9 @@ macro_rules! tile_restoration_state_common {
         sbo: PlaneSuperBlockOffset,
         sb_width: usize,
         sb_height: usize,
+        pli: usize,
       ) -> (usize, usize, usize, usize) {
-        let sb_shift = rs.planes[0].cfg.sb_shift;
+        let sb_shift = rs.planes[pli].cfg.sb_shift;
         // there may be several super-blocks per restoration unit
         // the given super-block offset must match the start of a restoration unit
         debug_assert!(sbo.0.x % (1 << sb_shift) == 0);
@@ -324,10 +334,10 @@ macro_rules! tile_restoration_state_common {
 
         let units_x = sbo.0.x >> sb_shift;
         let units_y = sbo.0.y >> sb_shift;
-        let units_cols = sb_width >> sb_shift;
-        let units_rows = sb_height >> sb_shift;
+        let units_cols = sb_width + (1 << sb_shift) - 1 >> sb_shift;
+        let units_rows = sb_height + (1<< sb_shift) - 1 >> sb_shift;
 
-        let FrameRestorationUnits { cols: rs_cols, rows: rs_rows, .. } = rs.planes[0].units;
+        let FrameRestorationUnits { cols: rs_cols, rows: rs_rows, .. } = rs.planes[pli].units;
         // +1 because the last super-block may use the "stretched" restoration unit
         // from its neighbours
         // <https://github.com/xiph/rav1e/issues/631#issuecomment-454419152>
@@ -344,10 +354,8 @@ macro_rules! tile_restoration_state_common {
       }
 
       #[inline(always)]
-      pub fn has_restoration_unit(&self, sbo: TileSuperBlockOffset) -> bool {
-        let is_some = self.planes[0].restoration_unit(sbo).is_some();
-        debug_assert_eq!(is_some, self.planes[1].restoration_unit(sbo).is_some());
-        debug_assert_eq!(is_some, self.planes[2].restoration_unit(sbo).is_some());
+      pub fn has_restoration_unit(&self, sbo: TileSuperBlockOffset, pli: usize) -> bool {
+        let is_some = self.planes[pli].restoration_unit(sbo).is_some();
         is_some
       }
     }
