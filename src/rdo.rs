@@ -1322,8 +1322,7 @@ pub fn rdo_loop_decision<T: Pixel>(tile_sbo: SuperBlockOffset, fi: &FrameInvaria
   let sbo_0 = SuperBlockOffset { x: 0, y: 0 };
 
   // all stages; reconstruction goes to cdef so it must be additionally padded
-  // TODO: use the new plane padding mechanism rather than this old kludge.  Will require
-  // altering CDEF code a little.
+  // TODO: use the new plane padding mechanism rather than this old kludge.
   let mut cdef_input = None;
   let const_rec = ts.rec.as_const();
   let mut lrf_input = cdef_sb_frame(fi, &const_rec);

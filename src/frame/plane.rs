@@ -311,6 +311,7 @@ impl<T: Pixel> Plane<T> {
     self.slice(PlaneOffset { x: 0, y: 0 })
   }
 
+  #[cfg(test)]
   pub(crate) fn as_mut_slice(&mut self) -> PlaneMutSlice<'_, T> {
     self.mut_slice(PlaneOffset { x: 0, y: 0 })
   }
