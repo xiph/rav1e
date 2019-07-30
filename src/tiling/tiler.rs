@@ -66,15 +66,20 @@ impl TilingInfo {
     let sb_cols = frame_width.align_power_of_two_and_shift(sb_size_log2);
     let sb_rows = frame_height.align_power_of_two_and_shift(sb_size_log2);
 
+    // these are bitstream-defined values and must not be changed
     let max_tile_width_sb = MAX_TILE_WIDTH >> sb_size_log2;
     let max_tile_area_sb = MAX_TILE_AREA >> (2 * sb_size_log2);
     let min_tile_cols_log2 = Self::tile_log2(max_tile_width_sb, sb_cols);
     let max_tile_cols_log2 = Self::tile_log2(1, sb_cols.min(MAX_TILE_COLS));
     let max_tile_rows_log2 = Self::tile_log2(1, sb_rows.min(MAX_TILE_ROWS));
-
     let min_tiles_log2 = min_tile_cols_log2
-      .max(Self::tile_log2(max_tile_area_sb, sb_cols * sb_rows))
-      .max((((frame_width * frame_height) as f64 * frame_rate
+      .max(Self::tile_log2(max_tile_area_sb, sb_cols * sb_rows));
+
+    // Implements restriction in Annex A of the spec.
+    // Unlike the other restrictions, this one does not change
+    // the header coding of the tile rows/cols.
+    let min_tiles_ratelimit_log2 = min_tiles_log2.max(
+      (((frame_width * frame_height) as f64 * frame_rate
         / MAX_TILE_RATE + 0.5) as usize).ilog());
 
     let tile_cols_log2 =
@@ -86,8 +91,15 @@ impl TilingInfo {
     } else {
       0
     };
+    let min_tile_rows_ratelimit_log2 = if min_tiles_ratelimit_log2 > tile_cols_log2 {
+      min_tiles_ratelimit_log2 - tile_cols_log2
+    } else {
+      0
+    };
     let tile_rows_log2 =
-      tile_rows_log2.max(min_tile_rows_log2).min(max_tile_rows_log2);
+      tile_rows_log2.max(min_tile_rows_log2)
+      .max(min_tile_rows_ratelimit_log2)
+      .min(max_tile_rows_log2);
     let tile_height_sb = sb_rows.align_power_of_two_and_shift(tile_rows_log2);
 
     let cols = (frame_width_sb + tile_width_sb - 1) / tile_width_sb;
