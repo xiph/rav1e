@@ -1360,7 +1360,7 @@ pub struct BlockContextCheckpoint {
   above_partition_context: [u8; PARTITION_CONTEXT_MAX_WIDTH],
   // left context is also at 8x8 granularity
   left_partition_context: [u8; MIB_SIZE >> 1],
-  above_tx_context: [u8; PARTITION_CONTEXT_MAX_WIDTH],
+  above_tx_context: [u8; COEFF_CONTEXT_MAX_WIDTH],
   left_tx_context: [u8; MIB_SIZE],
   above_coeff_context: [[u8; COEFF_CONTEXT_MAX_WIDTH]; PLANES],
   left_coeff_context: [[u8; MIB_SIZE]; PLANES],
@@ -1373,7 +1373,7 @@ pub struct BlockContext<'a> {
   pub preskip_segid: bool,
   above_partition_context: [u8; PARTITION_CONTEXT_MAX_WIDTH],
   left_partition_context: [u8; MIB_SIZE >> 1],
-  above_tx_context: [u8; PARTITION_CONTEXT_MAX_WIDTH],
+  above_tx_context: [u8; COEFF_CONTEXT_MAX_WIDTH],
   left_tx_context: [u8; MIB_SIZE],
   above_coeff_context: [[u8; COEFF_CONTEXT_MAX_WIDTH]; PLANES],
   left_coeff_context: [[u8; MIB_SIZE]; PLANES],
@@ -1389,7 +1389,7 @@ impl<'a> BlockContext<'a> {
       preskip_segid: true,
       above_partition_context: [0; PARTITION_CONTEXT_MAX_WIDTH],
       left_partition_context: [0; MIB_SIZE >> 1],
-      above_tx_context: [0; PARTITION_CONTEXT_MAX_WIDTH],
+      above_tx_context: [0; COEFF_CONTEXT_MAX_WIDTH],
       left_tx_context: [0; MIB_SIZE],
       above_coeff_context: [
         [0; COEFF_CONTEXT_MAX_WIDTH],
