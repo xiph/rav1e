@@ -647,6 +647,12 @@ impl <T: Pixel> IntoFrame<T> for (Arc<Frame<T>>, FrameParameters) {
   }
 }
 
+impl <T: Pixel> IntoFrame<T> for (Arc<Frame<T>>, Option<FrameParameters>) {
+  fn into(self) -> (Option<Arc<Frame<T>>>, Option<FrameParameters>) {
+    (Some(self.0), self.1)
+  }
+}
+
 impl<T: Pixel> Context<T> {
   pub fn new_frame(&self) -> Arc<Frame<T>> {
     Arc::new(Frame::new(
