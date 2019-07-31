@@ -355,23 +355,29 @@ fn compute_tx_distortion<T: Pixel>(
   distortion
 }
 
-pub fn compute_rd_cost<T: Pixel>(
-  fi: &FrameInvariants<T>, frame_bo: BlockOffset, bsize: BlockSize, rate: u32,
-  distortion: u64
-) -> f64 {
+fn compute_mean_importance<T: Pixel>(
+  fi: &FrameInvariants<T>, frame_bo: BlockOffset, bsize: BlockSize
+) -> f32 {
   let x1 = frame_bo.x;
   let y1 = frame_bo.y;
   let x2 = (x1 + bsize.width_mi()).min(fi.w_in_b);
   let y2 = (y1 + bsize.height_mi()).min(fi.h_in_b);
 
-  let mut mean_importance = 0.;
+  let mut total_importance = 0.;
   for y in y1..y2 {
     for x in x1..x2 {
-      mean_importance += fi.block_importances[y * fi.w_in_b + x];
+      total_importance += fi.block_importances[y * fi.w_in_b + x];
     }
   }
   // Divide by the full area even though some blocks were outside.
-  mean_importance /= (bsize.width_mi() * bsize.height_mi()) as f32;
+  total_importance / (bsize.width_mi() * bsize.height_mi()) as f32
+}
+
+pub fn compute_rd_cost<T: Pixel>(
+  fi: &FrameInvariants<T>, frame_bo: BlockOffset, bsize: BlockSize, rate: u32,
+  distortion: u64
+) -> f64 {
+  let mean_importance = compute_mean_importance(fi, frame_bo, bsize);
 
   // Chosen based on a series of AWCY runs.
   const FACTOR: f32 = 3.;
