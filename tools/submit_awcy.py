@@ -60,9 +60,9 @@ commit = subprocess.check_output('git rev-parse HEAD',shell=True).strip()
 short = subprocess.check_output('git rev-parse --short HEAD',shell=True).strip().decode("utf-8")
 date = GetTime().strip()
 date_short = date.split()[0]+'_'+date.split()[1].split('.')[0].replace(':', '')
-user = args.prefix
+prefix = args.prefix
 is_master = args.master
-run_id = user+'-'+date_short+'-'+short
+run_id = prefix+'-'+date_short+'-'+short
 
 print(GetTime(), 'Creating run '+run_id)
 r = requests.post("https://beta.arewecompressedyet.com/submit/job", {
