@@ -94,6 +94,7 @@ pub struct RDOPartitionOutput {
   pub skip: bool,
   pub tx_size: TxSize,
   pub tx_type: TxType,
+  pub sidx: u8,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -460,7 +461,8 @@ struct EncodingSettings {
   ref_frames: [RefType; 2],
   mvs: [MotionVector; 2],
   tx_size: TxSize,
-  tx_type: TxType
+  tx_type: TxType,
+  sidx: u8
 }
 
 impl Default for EncodingSettings {
@@ -474,7 +476,8 @@ impl Default for EncodingSettings {
       ref_frames: [INTRA_FRAME, NONE_FRAME],
       mvs: [MotionVector::default(); 2],
       tx_size: TxSize::TX_4X4,
-      tx_type: TxType::DCT_DCT
+      tx_type: TxType::DCT_DCT,
+      sidx: 0
     }
   }
 }
@@ -502,82 +505,93 @@ fn luma_chroma_mode_rdo<T: Pixel> (luma_mode: PredictionMode,
 
   // Find the best chroma prediction mode for the current luma prediction mode
   let mut chroma_rdo = |skip: bool| -> bool {
-    let (tx_size, tx_type) = rdo_tx_size_type(
-      fi, ts, cw, bsize, tile_bo, luma_mode, ref_frames, mvs, skip,
-    );
     let mut zero_distortion = false;
-    for &chroma_mode in mode_set_chroma.iter() {
-      let wr = &mut WriterCounter::new();
-      let tell = wr.tell_frac();
 
-      if bsize >= BlockSize::BLOCK_8X8 && bsize.is_sqr() {
-        cw.write_partition(wr, tile_bo, PartitionType::PARTITION_NONE, bsize);
+    // If skip is true, sidx is not coded.
+    // If quantizer RDO is disabled, sidx isn't coded either.
+    let sidx_range = if skip || !fi.config.speed_settings.quantizer_rdo { 0..=0 } else { 0..=2 };
+
+    for sidx in sidx_range {
+      cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, sidx);
+
+      let (tx_size, tx_type) = rdo_tx_size_type(
+        fi, ts, cw, bsize, tile_bo, luma_mode, ref_frames, mvs, skip,
+      );
+      for &chroma_mode in mode_set_chroma.iter() {
+        let wr = &mut WriterCounter::new();
+        let tell = wr.tell_frac();
+
+        if bsize >= BlockSize::BLOCK_8X8 && bsize.is_sqr() {
+          cw.write_partition(wr, tile_bo, PartitionType::PARTITION_NONE, bsize);
+        }
+
+        // TODO(yushin): luma and chroma would have different decision based on chroma format
+        let need_recon_pixel = luma_mode_is_intra && tx_size.block_size() != bsize;
+
+        encode_block_pre_cdef(&fi.sequence, ts, cw, wr, bsize, tile_bo, skip);
+        let tx_dist =
+          encode_block_post_cdef(
+            fi,
+            ts,
+            cw,
+            wr,
+            luma_mode,
+            chroma_mode,
+            ref_frames,
+            mvs,
+            bsize,
+            tile_bo,
+            skip,
+            CFLParams::default(),
+            tx_size,
+            tx_type,
+            mode_context,
+            &mv_stack,
+            rdo_type,
+            need_recon_pixel
+          );
+
+        let rate = wr.tell_frac() - tell;
+        let distortion = if fi.use_tx_domain_distortion && !need_recon_pixel {
+          compute_tx_distortion(
+            fi,
+            ts,
+            bsize,
+            is_chroma_block,
+            tile_bo,
+            tx_dist,
+            skip,
+            false
+          )
+        } else {
+          compute_distortion(
+            fi,
+            ts,
+            bsize,
+            is_chroma_block,
+            tile_bo,
+            false
+          )
+        };
+        let rd = compute_rd_cost(fi, ts.to_frame_block_offset(tile_bo), bsize, rate, distortion);
+        if rd < best.rd {
+          //if rd < best.rd || luma_mode == PredictionMode::NEW_NEWMV {
+          best.rd = rd;
+          best.mode_luma = luma_mode;
+          best.mode_chroma = chroma_mode;
+          best.ref_frames = ref_frames;
+          best.mvs = mvs;
+          best.skip = skip;
+          best.tx_size = tx_size;
+          best.tx_type = tx_type;
+          best.sidx = sidx;
+          zero_distortion = distortion == 0;
+        }
+
+        cw.rollback(cw_checkpoint);
       }
-
-      // TODO(yushin): luma and chroma would have different decision based on chroma format
-      let need_recon_pixel = luma_mode_is_intra && tx_size.block_size() != bsize;
-
-      encode_block_pre_cdef(&fi.sequence, ts, cw, wr, bsize, tile_bo, skip);
-      let tx_dist =
-        encode_block_post_cdef(
-          fi,
-          ts,
-          cw,
-          wr,
-          luma_mode,
-          chroma_mode,
-          ref_frames,
-          mvs,
-          bsize,
-          tile_bo,
-          skip,
-          CFLParams::default(),
-          tx_size,
-          tx_type,
-          mode_context,
-          &mv_stack,
-          rdo_type,
-          need_recon_pixel
-        );
-
-      let rate = wr.tell_frac() - tell;
-      let distortion = if fi.use_tx_domain_distortion && !need_recon_pixel {
-        compute_tx_distortion(
-          fi,
-          ts,
-          bsize,
-          is_chroma_block,
-          tile_bo,
-          tx_dist,
-          skip,
-          false
-        )
-      } else {
-        compute_distortion(
-          fi,
-          ts,
-          bsize,
-          is_chroma_block,
-          tile_bo,
-          false
-        )
-      };
-      let rd = compute_rd_cost(fi, ts.to_frame_block_offset(tile_bo), bsize, rate, distortion);
-      if rd < best.rd {
-        //if rd < best.rd || luma_mode == PredictionMode::NEW_NEWMV {
-        best.rd = rd;
-        best.mode_luma = luma_mode;
-        best.mode_chroma = chroma_mode;
-        best.ref_frames = ref_frames;
-        best.mvs = mvs;
-        best.skip = skip;
-        best.tx_size = tx_size;
-        best.tx_type = tx_type;
-        zero_distortion = distortion == 0;
-      }
-
-      cw.rollback(cw_checkpoint);
     }
+
     zero_distortion
   };
 
@@ -869,6 +883,8 @@ pub fn rdo_mode_decision<T: Pixel>(
   }
 
   if best.mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
+    cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, best.sidx);
+
     let chroma_mode = PredictionMode::UV_CFL_PRED;
     let cw_checkpoint = cw.checkpoint();
     let wr: &mut dyn Writer = &mut WriterCounter::new();
@@ -957,6 +973,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     skip: best.skip,
     tx_size: best.tx_size,
     tx_type: best.tx_type,
+    sidx: best.sidx,
   }
 }
 

@@ -10,31 +10,51 @@
 #![allow(safe_extern_statics)]
 
 use crate::context::*;
+use crate::header::PRIMARY_REF_NONE;
+use crate::util::Pixel;
 use crate::FrameInvariants;
 use crate::FrameState;
-use crate::util::Pixel;
 
-pub fn segmentation_optimize<T: Pixel>(_fi: &FrameInvariants<T>, fs: &mut FrameState<T>) {
-    fs.segmentation.enabled = false;
-    fs.segmentation.update_data = false;
-    fs.segmentation.update_map = false;
+pub fn segmentation_optimize<T: Pixel>(
+  fi: &FrameInvariants<T>, fs: &mut FrameState<T>,
+) {
+  // Segmentation is currently used only for the quantizer RDO.
+  if fi.config.speed_settings.quantizer_rdo {
+    fs.segmentation.enabled = true;
+    fs.segmentation.update_map = true;
 
-    fs.segmentation.features[0][SegLvl::SEG_LVL_ALT_Q as usize] = false;
-    fs.segmentation.data[0][SegLvl::SEG_LVL_ALT_Q as usize] = 0;
+    // We don't change the values between frames.
+    fs.segmentation.update_data = fi.primary_ref_frame == PRIMARY_REF_NONE;
 
-    /* Figure out parameters */
-    fs.segmentation.preskip = false;
-    fs.segmentation.last_active_segid = 0;
-    if fs.segmentation.enabled {
-        for i in 0..8 {
-            for j in 0..SegLvl::SEG_LVL_MAX as usize {
-                if fs.segmentation.features[i][j] {
-                    fs.segmentation.last_active_segid = i as u8;
-                    if j >= SegLvl::SEG_LVL_REF_FRAME as usize {
-                        fs.segmentation.preskip = true;
-                    }
-                }
-            }
-        }
+    // A series of AWCY runs with deltas 10, 13, 15, 17, 20 showed this to be
+    // the optimal one.
+    const TEMPORAL_RDO_QI_DELTA: i16 = 15;
+
+    // Fill in 3 slots with 0, delta, -delta.
+    for i in 0..3 {
+      fs.segmentation.features[i][SegLvl::SEG_LVL_ALT_Q as usize] = true;
+      fs.segmentation.data[i][SegLvl::SEG_LVL_ALT_Q as usize] = match i {
+        0 => 0,
+        1 => TEMPORAL_RDO_QI_DELTA,
+        2 => -TEMPORAL_RDO_QI_DELTA,
+        _ => unreachable!(),
+      };
     }
+  }
+
+  /* Figure out parameters */
+  fs.segmentation.preskip = false;
+  fs.segmentation.last_active_segid = 0;
+  if fs.segmentation.enabled {
+    for i in 0..8 {
+      for j in 0..SegLvl::SEG_LVL_MAX as usize {
+        if fs.segmentation.features[i][j] {
+          fs.segmentation.last_active_segid = i as u8;
+          if j >= SegLvl::SEG_LVL_REF_FRAME as usize {
+            fs.segmentation.preskip = true;
+          }
+        }
+      }
+    }
+  }
 }

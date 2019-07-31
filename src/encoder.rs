@@ -1566,6 +1566,10 @@ pub fn encode_block_with_modes<T: Pixel>(
   let mut cdef_coded = cw.bc.cdef_coded;
   let (tx_size, tx_type) = (mode_decision.tx_size, mode_decision.tx_type);
 
+  // Set correct segmentation ID before encoding and before
+  // rdo_tx_size_type().
+  cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, mode_decision.sidx);
+
   debug_assert!((tx_size, tx_type) ==
                 rdo_tx_size_type(fi, ts, cw, bsize, tile_bo, mode_luma, ref_frames, mvs, skip));
 
@@ -1907,6 +1911,10 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       let ref_frames = part_decision.ref_frames;
       let mvs = part_decision.mvs;
       let mut cdef_coded = cw.bc.cdef_coded;
+
+      // Set correct segmentation ID before encoding and before
+      // rdo_tx_size_type().
+      cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, part_decision.sidx);
 
       // NOTE: Cannot avoid calling rdo_tx_size_type() here again,
       // because, with top-down partition RDO, the neighnoring contexts
