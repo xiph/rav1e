@@ -1444,7 +1444,7 @@ pub fn write_tx_blocks<T: Pixel>(
     };
 
     for p in 1..3 {
-      ts.qc.update(fi.base_q_idx, uv_tx_size, true, fi.sequence.bit_depth, fi.dc_delta_q[p], fi.ac_delta_q[p]);
+      ts.qc.update(qidx, uv_tx_size, true, fi.sequence.bit_depth, fi.dc_delta_q[p], fi.ac_delta_q[p]);
       let alpha = cfl.alpha(p - 1);
       for by in 0..bh_uv {
         for bx in 0..bw_uv {
