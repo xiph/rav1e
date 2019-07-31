@@ -37,18 +37,18 @@ cache:
     - '%LOCALAPPDATA%\Mozilla\sccache'
 
 build_script:
-    - cargo build --release --target=%target%
+    - cargo build --target=%target%
 
 test_script:
     - cargo test --target=%target% --verbose
 
 artifacts:
-    - path: target\$(target)\release\rav1e.exe
+    - path: target\$(target)\debug\rav1e.exe
       name: rav1e-$(platform)
       
 deploy:
   - provider: GitHub
-    artifact: target\$(target)\release\rav1e.exe
+    artifact: target\$(target)\debug\rav1e.exe
     auth_token:
       secure: 'LPBjNyFOg+vBkVR4w+89YVNhByaXBGNwtN6UwkFkWTfPow5oeCbFMtJavU9ZLs+c'
     prerelease: true
