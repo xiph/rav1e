@@ -39,7 +39,7 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::{cmp, fmt, io};
 
-const LOOKAHEAD_FRAMES: u64 = 10;
+const RDO_LOOKAHEAD_FRAMES: u64 = 10;
 
 // TODO: use the num crate?
 #[derive(Clone, Copy, Debug)]
@@ -534,6 +534,14 @@ impl InterConfig {
       gop_input_frameno_start + order_hint as u64
     }
   }
+
+  fn max_reordering_latency(&self) -> u64 {
+    self.group_input_len
+  }
+
+  pub(crate) fn keyframe_lookahead_distance(&self) -> u64 {
+    cmp::max(1, self.max_reordering_latency()) + 1
+  }
 }
 
 pub(crate) struct ContextInner<T: Pixel> {
@@ -559,7 +567,7 @@ pub(crate) struct ContextInner<T: Pixel> {
   gop_output_frameno_start: BTreeMap<u64, u64>,
   /// Maps `output_frameno` to `gop_input_frameno_start`.
   pub(crate) gop_input_frameno_start: BTreeMap<u64, u64>,
-  keyframe_detector: SceneChangeDetector<T>,
+  keyframe_detector: SceneChangeDetector,
   pub(crate) config: EncoderConfig,
   seq: Sequence,
   rc_state: RCState,
@@ -806,7 +814,7 @@ impl<T: Pixel> ContextInner<T> {
       packet_data,
       gop_output_frameno_start: BTreeMap::new(),
       gop_input_frameno_start: BTreeMap::new(),
-      keyframe_detector: SceneChangeDetector::new(enc.bit_depth),
+      keyframe_detector: SceneChangeDetector::new(enc.bit_depth as u8),
       config: enc.clone(),
       seq: Sequence::new(enc),
       rc_state: RCState::new(
@@ -845,7 +853,6 @@ impl<T: Pixel> ContextInner<T> {
     if !self.needs_more_lookahead() {
       self.compute_lookahead_data();
     }
-
     Ok(())
   }
 
@@ -861,14 +868,25 @@ impl<T: Pixel> ContextInner<T> {
       .clone()
   }
 
+  /// Indicates whether more frames need to be read into the frame queue
+  /// in order for lookahead to be full.
   pub(crate) fn needs_more_lookahead(&self) -> bool {
-    self.needs_more_frames(self.frame_count)
-      && self.frames_processed + LOOKAHEAD_FRAMES
-        > self.frame_q.keys().last().cloned().unwrap_or(0)
+    let lookahead_end = self.frame_q.keys().last().cloned().unwrap_or(0);
+    let frames_needed = self.next_lookahead_frame + self.inter_cfg.keyframe_lookahead_distance();
+    lookahead_end < frames_needed && self.needs_more_frames(lookahead_end)
   }
 
   pub fn needs_more_frames(&self, frame_count: u64) -> bool {
     self.limit == 0 || frame_count < self.limit
+  }
+
+  fn get_rdo_lookahead_frames(&self) -> impl Iterator<Item=(&u64, &FrameInvariants<T>)> {
+    self
+      .frame_invariants
+      .iter()
+      .skip_while(move |(&output_frameno, _)| output_frameno < self.output_frameno)
+      .filter(|(_, fi)| !fi.invalid && !fi.show_existing_frame)
+      .take(RDO_LOOKAHEAD_FRAMES as usize + 1)
   }
 
   fn next_keyframe_input_frameno(
@@ -925,6 +943,10 @@ impl<T: Pixel> ContextInner<T> {
       output_frameno_in_gop,
       self.gop_input_frameno_start[&output_frameno]
     );
+    let frames_needed = input_frameno + self.inter_cfg.keyframe_lookahead_distance();
+    if frames_needed > self.next_lookahead_frame && self.needs_more_frames(frames_needed) {
+      return Err(EncoderStatus::NeedMoreData);
+    }
 
     if output_frameno_in_gop > 0 {
       let next_keyframe_input_frameno = self.next_keyframe_input_frameno(
@@ -1253,45 +1275,54 @@ impl<T: Pixel> ContextInner<T> {
   }
 
   fn compute_lookahead_data(&mut self) {
-    // Process all new frames that we have received.
-    let frames_to_process = self
-      .frame_q
-      .iter()
-      .filter_map(|(&input_frameno, frame)| {
-        if input_frameno >= self.next_lookahead_frame {
-          frame.clone().map(|frame| (input_frameno, frame))
-        } else {
-          None
-        }
-      })
-      .collect::<Vec<_>>();
+    let lookahead_frames = self
+        .frame_q
+        .iter()
+        .filter_map(|(&input_frameno, frame)| {
+          if input_frameno >= self.next_lookahead_frame {
+            frame.clone()
+          } else {
+            None
+          }
+        })
+        .take((self.inter_cfg.keyframe_lookahead_distance() +
+          self.inter_cfg.max_reordering_latency() + 1) as usize)
+        .collect::<Vec<_>>();
+    let mut lookahead_idx = 0;
 
-    for &(input_frameno, ref frame) in frames_to_process.iter() {
-      if self.is_key_frame(input_frameno, frame) {
-        self.keyframes.insert(input_frameno);
+    while !self.needs_more_lookahead() {
+      // Process the next unprocessed frame
+      // Start by getting that frame and all frames after it in the queue
+      let current_lookahead_frames = &lookahead_frames[lookahead_idx..];
+
+      if current_lookahead_frames.is_empty() {
+        // All frames have been processed
+        break;
       }
 
-      self
-        .keyframe_detector
-        .set_last_frame(frame.clone(), input_frameno as usize);
-    }
+      self.keyframe_detector.analyze_next_frame(
+        if self.next_lookahead_frame == 0 || self.config.still_picture {
+          None
+        } else {
+          self.frame_q.get(&(self.next_lookahead_frame - 1)).map(|f| f.as_ref().unwrap().clone() )
+        },
+        &current_lookahead_frames,
+        self.next_lookahead_frame,
+        &self.config,
+        &self.inter_cfg,
+        &mut self.keyframes,
+        &self.keyframes_forced,
+      );
 
-    // Update self.next_lookahead_frame.
-    if let Some((last_frame, _)) = frames_to_process.iter().last() {
-      self.next_lookahead_frame = last_frame + 1;
+      self.next_lookahead_frame += 1;
+      lookahead_idx += 1;
     }
 
     // Compute the frame invariants.
-    while self.set_frame_properties(self.next_lookahead_output_frameno).is_ok()
-    {
+    while self.set_frame_properties(self.next_lookahead_output_frameno).is_ok() {
+      self.compute_lookahead_motion_vectors(self.next_lookahead_output_frameno);
+      self.compute_lookahead_intra_costs(self.next_lookahead_output_frameno);
       self.next_lookahead_output_frameno += 1;
-
-      self.compute_lookahead_motion_vectors(
-        self.next_lookahead_output_frameno - 1
-      );
-
-      self
-        .compute_lookahead_intra_costs(self.next_lookahead_output_frameno - 1);
     }
   }
 
@@ -1303,11 +1334,7 @@ impl<T: Pixel> ContextInner<T> {
     }
 
     // Get a list of output_framenos that we want to propagate through.
-    let output_framenos = self
-      .frame_invariants
-      .iter()
-      .skip_while(|(&output_frameno, _)| output_frameno < self.output_frameno)
-      .filter(|(_, fi)| !fi.invalid && !fi.show_existing_frame)
+    let output_framenos = self.get_rdo_lookahead_frames()
       .map(|(&output_frameno, _)| output_frameno)
       .collect::<Vec<_>>();
 
@@ -1565,10 +1592,15 @@ impl<T: Pixel> ContextInner<T> {
       .map(|(&output_frameno, _)| output_frameno)
       .ok_or(EncoderStatus::NeedMoreData)?; // TODO: doesn't play well with the below check?
 
-    if !self.needs_more_frames(
-      self.frame_invariants[&self.output_frameno].input_frameno
-    ) {
+    let input_frameno = self.frame_invariants[&self.output_frameno].input_frameno;
+    if !self.needs_more_frames(input_frameno) {
       return Err(EncoderStatus::LimitReached);
+    }
+
+    // Block importance computation needs to have FI's already processed `LOOKAHEAD_FRAMES` frames into the future.
+    let ready_frames = self.get_rdo_lookahead_frames().count() as u64;
+    if ready_frames < RDO_LOOKAHEAD_FRAMES + 1 && self.needs_more_frames(self.next_lookahead_frame) {
+      return Err(EncoderStatus::NeedMoreData);
     }
 
     // Compute the block importances for the current output frame.
@@ -1751,45 +1783,6 @@ impl<T: Pixel> ContextInner<T> {
       self.gop_output_frameno_start.remove(&i);
       self.gop_input_frameno_start.remove(&i);
     }
-  }
-
-  /// Determines if the passed frame should be a key frame.
-  ///
-  /// This function requires that all input frames are passed to it in order,
-  /// that `self.keyframes` is always up to date and that
-  /// `self.keyframe_detector` always has the correct last frame.
-  fn is_key_frame(&self, input_frameno: u64, frame: &Frame<T>) -> bool {
-    // The first frame is always a keyframe.
-    if input_frameno == 0 || self.config.still_picture {
-      return true;
-    }
-
-    if self.keyframes_forced.contains(&input_frameno) {
-      return true;
-    }
-
-    // Find the distance to the previous keyframe.
-    let previous_keyframe = self.keyframes.iter().last().unwrap();
-    let distance = input_frameno - previous_keyframe;
-
-    // Handle minimum and maximum key frame intervals.
-    if distance < self.config.min_key_frame_interval {
-      return false;
-    }
-    if distance >= self.config.max_key_frame_interval {
-      return true;
-    }
-
-    // Use the scene change detector if it isn't disabled.
-    if !self.config.speed_settings.no_scene_detection
-      && self
-        .keyframe_detector
-        .detect_scene_change(frame, input_frameno as usize)
-    {
-      return true;
-    }
-
-    false
   }
 
   // Count the number of output frames of each subtype in the next
@@ -2093,16 +2086,20 @@ mod test {
     ctx: &mut Context<T>, limit: u64, scene_change_at: u64
   ) {
     for i in 0..limit {
-      let mut input = Arc::try_unwrap(ctx.new_frame()).unwrap();
-
       if i < scene_change_at {
-        fill_frame_const(&mut input, T::min_value());
+        send_test_frame(ctx, T::min_value());
       } else {
-        fill_frame_const(&mut input, T::max_value());
+        send_test_frame(ctx, T::max_value());
       }
-
-      let _ = ctx.send_frame(Arc::new(input));
     }
+  }
+
+  fn send_test_frame<T: Pixel>(
+    ctx: &mut Context<T>, content_value: T
+  ) {
+    let mut input = Arc::try_unwrap(ctx.new_frame()).unwrap();
+    fill_frame_const(&mut input, content_value);
+    let _ = ctx.send_frame(Arc::new(input));
   }
 
   fn get_frame_invariants<T: Pixel>(
@@ -3024,4 +3021,228 @@ mod test {
     );
   }
 
+  #[interpolate_test(1, 1)]
+  #[interpolate_test(2, 2)]
+  #[interpolate_test(3, 3)]
+  fn output_frameno_no_scene_change_at_short_flash(flash_at: u64) {
+    // Test output_frameno configurations when there's a single-frame flash at the
+    // <flash_at>th frame.
+    let mut ctx = setup_encoder::<u8>(
+      64,
+      80,
+      10,
+      100,
+      8,
+      ChromaSampling::Cs420,
+      0,
+      5,
+      0,
+      false,
+      false
+    );
+
+    // TODO: when we support more pyramid depths, this test will need tweaks.
+    assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
+
+    let limit = 5;
+    for i in 0..limit {
+      if i == flash_at {
+        send_test_frame(&mut ctx, u8::min_value());
+      } else {
+        send_test_frame(&mut ctx, u8::max_value());
+      }
+    }
+    ctx.flush();
+
+    // data[output_frameno] = (input_frameno, !invalid)
+    let data = get_frame_invariants(ctx)
+      .map(|fi| (fi.input_frameno, !fi.invalid))
+      .collect::<Vec<_>>();
+
+    assert_eq!(
+      &data[..],
+      &[
+        (0, true), // I-frame
+        (4, true), // P-frame
+        (2, true), // B0-frame
+        (1, true), // B1-frame (first)
+        (2, true), // B0-frame (show existing)
+        (3, true), // B1-frame (second)
+        (4, true), // P-frame (show existing)
+      ]
+    );
+  }
+
+  #[test]
+  fn output_frameno_no_scene_change_at_max_len_flash() {
+    // Test output_frameno configurations when there's a multi-frame flash
+    // with length equal to the max flash length
+
+    let mut ctx = setup_encoder::<u8>(
+      64,
+      80,
+      10,
+      100,
+      8,
+      ChromaSampling::Cs420,
+      0,
+      10,
+      0,
+      false,
+      false
+    );
+
+    // TODO: when we support more pyramid depths, this test will need tweaks.
+    assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
+    assert_eq!(ctx.inner.inter_cfg.group_input_len, 4);
+
+    send_test_frame(&mut ctx, u8::min_value());
+    send_test_frame(&mut ctx, u8::min_value());
+    send_test_frame(&mut ctx, u8::max_value());
+    send_test_frame(&mut ctx, u8::max_value());
+    send_test_frame(&mut ctx, u8::max_value());
+    send_test_frame(&mut ctx, u8::max_value());
+    send_test_frame(&mut ctx, u8::min_value());
+    send_test_frame(&mut ctx, u8::min_value());
+    ctx.flush();
+
+    let data = get_frame_invariants(ctx)
+      .map(|fi| (fi.input_frameno, !fi.invalid))
+      .collect::<Vec<_>>();
+
+    assert_eq!(
+      &data[..],
+      &[
+        (0, true), // I-frame
+        (4, true), // P-frame
+        (2, true), // B0-frame
+        (1, true), // B1-frame (first)
+        (2, true), // B0-frame (show existing)
+        (3, true), // B1-frame (second)
+        (4, true), // P-frame (show existing)
+        (4, false), // invalid
+        (6, true), // B0-frame
+        (5, true), // B1-frame (first)
+        (6, true), // B0-frame (show existing)
+        (7, true), // B1-frame (second)
+        (7, false), // invalid
+      ]
+    );
+  }
+
+  #[test]
+  fn output_frameno_scene_change_past_max_len_flash() {
+    // Test output_frameno configurations when there's a multi-frame flash
+    // with length greater than the max flash length
+
+    let mut ctx = setup_encoder::<u8>(
+      64,
+      80,
+      10,
+      100,
+      8,
+      ChromaSampling::Cs420,
+      0,
+      10,
+      0,
+      false,
+      false
+    );
+
+    // TODO: when we support more pyramid depths, this test will need tweaks.
+    assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
+    assert_eq!(ctx.inner.inter_cfg.group_input_len, 4);
+
+    send_test_frame(&mut ctx, u8::min_value());
+    send_test_frame(&mut ctx, u8::min_value());
+    send_test_frame(&mut ctx, u8::max_value());
+    send_test_frame(&mut ctx, u8::max_value());
+    send_test_frame(&mut ctx, u8::max_value());
+    send_test_frame(&mut ctx, u8::max_value());
+    send_test_frame(&mut ctx, u8::max_value());
+    send_test_frame(&mut ctx, u8::min_value());
+    ctx.flush();
+
+    let data = get_frame_invariants(ctx)
+      .map(|fi| (fi.input_frameno, !fi.invalid))
+      .collect::<Vec<_>>();
+
+    assert_eq!(
+      &data[..],
+      &[
+        (0, true), // I-frame
+        (0, false), // invalid
+        (0, false), // invalid
+        (1, true), // B1-frame (first)
+        (1, false), // invalid
+        (1, false), // invalid
+        (1, false), // invalid
+        (2, true), // I-frame
+        (6, true), // P-frame
+        (4, true), // B0-frame
+        (3, true), // B1-frame (first)
+        (4, true), // B0-frame (show existing)
+        (5, true), // B1-frame (second)
+        (6, true), // P-frame (show existing)
+        (7, true), // I-frame
+      ]
+    );
+  }
+
+  #[test]
+  fn output_frameno_no_scene_change_at_multiple_flashes() {
+    // Test output_frameno configurations when there are multiple consecutive flashes
+
+    let mut ctx = setup_encoder::<u8>(
+      64,
+      80,
+      10,
+      100,
+      8,
+      ChromaSampling::Cs420,
+      0,
+      10,
+      0,
+      false,
+      false
+    );
+
+    // TODO: when we support more pyramid depths, this test will need tweaks.
+    assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
+    assert_eq!(ctx.inner.inter_cfg.group_input_len, 4);
+
+    send_test_frame(&mut ctx, u8::min_value());
+    send_test_frame(&mut ctx, u8::min_value());
+    send_test_frame(&mut ctx, 40);
+    send_test_frame(&mut ctx, 100);
+    send_test_frame(&mut ctx, 160);
+    send_test_frame(&mut ctx, 240);
+    send_test_frame(&mut ctx, 240);
+    send_test_frame(&mut ctx, 240);
+    ctx.flush();
+
+    let data = get_frame_invariants(ctx)
+      .map(|fi| (fi.input_frameno, !fi.invalid))
+      .collect::<Vec<_>>();
+
+    assert_eq!(
+      &data[..],
+      &[
+        (0, true), // I-frame
+        (4, true), // P-frame
+        (2, true), // B0-frame
+        (1, true), // B1-frame (first)
+        (2, true), // B0-frame (show existing)
+        (3, true), // B1-frame (second)
+        (4, true), // P-frame (show existing),
+        (5, true), // P-frame
+        (5, false), // invalid
+        (7, true), // B0-frame
+        (6, true), // B1-frame (first)
+        (7, true), // B0-frame (show existing)
+        (7, false), // invalid
+        (7, false), // invalid
+      ]
+    );
+  }
 }
