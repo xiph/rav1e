@@ -39,7 +39,7 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::{cmp, fmt, io};
 
-const RDO_LOOKAHEAD_FRAMES: u64 = 10;
+const RDO_LOOKAHEAD_FRAMES: u64 = 40;
 
 // TODO: use the num crate?
 #[derive(Clone, Copy, Debug)]
