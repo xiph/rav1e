@@ -373,8 +373,8 @@ pub fn compute_rd_cost<T: Pixel>(
   // Divide by the full area even though some blocks were outside.
   mean_importance /= (bsize.width_mi() * bsize.height_mi()) as f32;
 
-  // Chosen empirically so the bias ends up being around 1.
-  const FACTOR: f32 = 4.;
+  // Chosen based on a series of AWCY runs.
+  const FACTOR: f32 = 3.;
   const ADDEND: f64 = 0.8;
 
   let bias = (mean_importance / FACTOR) as f64 + ADDEND;
