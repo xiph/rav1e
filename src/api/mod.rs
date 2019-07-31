@@ -184,7 +184,8 @@ pub struct SpeedSettings {
   pub include_near_mvs: bool,
   pub no_scene_detection: bool,
   pub diamond_me: bool,
-  pub cdef: bool
+  pub cdef: bool,
+  pub quantizer_rdo: bool
 }
 
 /// Default values for the speed settings.
@@ -203,7 +204,8 @@ impl Default for SpeedSettings {
       include_near_mvs: false,
       no_scene_detection: false,
       diamond_me: false,
-      cdef: false
+      cdef: false,
+      quantizer_rdo: false
     }
   }
 }
@@ -219,9 +221,9 @@ impl SpeedSettings {
   ///  - speed - 5, default, Min block size 8x8, reduced TX set, TX domain distortion, complex pred modes for keyframes,
   ///  - speed - 4, Min block size 8x8, TX domain distortion, complex pred modes for keyframes,
   ///  - speed - 3, Min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision,
-  ///  - speed - 2, Min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision, include near MVs,
-  ///  - speed - 1, Min block size 8x8, TX domain distortion, complex pred modes, RDO TX decision, include near MVs,
-  ///  - speed - 0, slowest,  Min block size 4x4, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, bottom-up encoding.
+  ///  - speed - 2, Min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision, include near MVs, quantizer RDO,
+  ///  - speed - 1, Min block size 8x8, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, quantizer RDO,
+  ///  - speed - 0, slowest,  Min block size 4x4, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, quantizer RDO, bottom-up encoding.
   pub fn from_preset(speed: usize) -> Self {
     SpeedSettings {
       min_block_size: Self::min_block_size_preset(speed),
@@ -236,7 +238,8 @@ impl SpeedSettings {
       include_near_mvs: Self::include_near_mvs_preset(speed),
       no_scene_detection: Self::no_scene_detection_preset(speed),
       diamond_me: Self::diamond_me_preset(speed),
-      cdef: Self::cdef_preset(speed)
+      cdef: Self::cdef_preset(speed),
+      quantizer_rdo: Self::quantizer_rdo_preset(speed)
     }
   }
 
@@ -317,6 +320,10 @@ impl SpeedSettings {
 
   fn cdef_preset(_speed: usize) -> bool {
     true
+  }
+
+  fn quantizer_rdo_preset(speed: usize) -> bool {
+    speed <= 2
   }
 }
 
