@@ -234,6 +234,228 @@ bidir_fn w_avg
 bidir_fn mask
 
 
+.macro w_mask_fn type
+function w_mask_\type\()_8bpc_neon, export=1
+        clz             w8,  w4
+        adr             x9,  L(w_mask_\type\()_tbl)
+        sub             w8,  w8,  #24
+        ldrh            w8,  [x9,  x8,  lsl #1]
+        sub             x9,  x9,  w8,  uxtw
+        mov             w10, #6903
+        dup             v0.8h,   w10
+.if \type == 444
+        movi            v1.16b,  #64
+.elseif \type == 422
+        dup             v2.8b,   w7
+        movi            v3.8b,   #129
+        sub             v3.8b,   v3.8b,   v2.8b
+.elseif \type == 420
+        dup             v2.8h,   w7
+        movi            v3.8h,   #1, lsl #8
+        sub             v3.8h,   v3.8h,   v2.8h
+.endif
+        add             x12,  x0,  x1
+        lsl             x1,   x1,  #1
+        br              x9
+4:
+        ld1             {v4.8h,   v5.8h},   [x2],  #32  // tmp1 (four rows at once)
+        ld1             {v6.8h,   v7.8h},   [x3],  #32  // tmp2 (four rows at once)
+        subs            w5,  w5,  #4
+        sub             v16.8h,  v6.8h,   v4.8h
+        sub             v17.8h,  v7.8h,   v5.8h
+        sabd            v18.8h,  v4.8h,   v6.8h
+        sabd            v19.8h,  v5.8h,   v7.8h
+        uqsub           v18.8h,  v0.8h,   v18.8h
+        uqsub           v19.8h,  v0.8h,   v19.8h
+        ushr            v18.8h,  v18.8h,  #8
+        ushr            v19.8h,  v19.8h,  #8
+        shl             v20.8h,  v18.8h,  #9
+        shl             v21.8h,  v19.8h,  #9
+        sqdmulh         v20.8h,  v20.8h,  v16.8h
+        sqdmulh         v21.8h,  v21.8h,  v17.8h
+        add             v20.8h,  v20.8h,  v4.8h
+        add             v21.8h,  v21.8h,  v5.8h
+        sqrshrun        v22.8b,  v20.8h,  #4
+        sqrshrun        v23.8b,  v21.8h,  #4
+.if \type == 444
+        xtn             v18.8b,   v18.8h
+        xtn2            v18.16b,  v19.8h
+        sub             v18.16b,  v1.16b,  v18.16b
+        st1             {v18.16b}, [x6],  #16
+.elseif \type == 422
+        addp            v18.8h,   v18.8h,  v19.8h
+        xtn             v18.8b,   v18.8h
+        uhsub           v18.8b,   v3.8b,   v18.8b
+        st1             {v18.8b},  [x6],  #8
+.elseif \type == 420
+        trn1            v24.2d,   v18.2d,  v19.2d
+        trn2            v25.2d,   v18.2d,  v19.2d
+        add             v24.8h,   v24.8h,  v25.8h
+        addp            v18.8h,   v24.8h,  v24.8h
+        sub             v18.4h,   v3.4h,   v18.4h
+        rshrn           v18.8b,   v18.8h,  #2
+        st1             {v18.s}[0],  [x6],  #4
+.endif
+        st1             {v22.s}[0],  [x0],  x1
+        st1             {v22.s}[1],  [x12], x1
+        st1             {v23.s}[0],  [x0],  x1
+        st1             {v23.s}[1],  [x12], x1
+        b.gt            4b
+        ret
+8:
+        ld1             {v4.8h,   v5.8h},   [x2],  #32
+        ld1             {v6.8h,   v7.8h},   [x3],  #32
+        subs            w5,  w5,  #2
+        sub             v16.8h,  v6.8h,   v4.8h
+        sub             v17.8h,  v7.8h,   v5.8h
+        sabd            v18.8h,  v4.8h,   v6.8h
+        sabd            v19.8h,  v5.8h,   v7.8h
+        uqsub           v18.8h,  v0.8h,   v18.8h
+        uqsub           v19.8h,  v0.8h,   v19.8h
+        ushr            v18.8h,  v18.8h,  #8
+        ushr            v19.8h,  v19.8h,  #8
+        shl             v20.8h,  v18.8h,  #9
+        shl             v21.8h,  v19.8h,  #9
+        sqdmulh         v20.8h,  v20.8h,  v16.8h
+        sqdmulh         v21.8h,  v21.8h,  v17.8h
+        add             v20.8h,  v20.8h,  v4.8h
+        add             v21.8h,  v21.8h,  v5.8h
+        sqrshrun        v22.8b,  v20.8h,  #4
+        sqrshrun        v23.8b,  v21.8h,  #4
+.if \type == 444
+        xtn             v18.8b,  v18.8h
+        xtn2            v18.16b, v19.8h
+        sub             v18.16b, v1.16b,  v18.16b
+        st1             {v18.16b}, [x6],  #16
+.elseif \type == 422
+        addp            v18.8h,  v18.8h,  v19.8h
+        xtn             v18.8b,  v18.8h
+        uhsub           v18.8b,  v3.8b,   v18.8b
+        st1             {v18.8b},  [x6],  #8
+.elseif \type == 420
+        add             v18.8h,  v18.8h,  v19.8h
+        addp            v18.8h,  v18.8h,  v18.8h
+        sub             v18.4h,  v3.4h,   v18.4h
+        rshrn           v18.8b,  v18.8h,  #2
+        st1             {v18.s}[0],  [x6],  #4
+.endif
+        st1             {v22.8b},  [x0],  x1
+        st1             {v23.8b},  [x12], x1
+        b.gt            8b
+        ret
+1280:
+640:
+320:
+160:
+        mov             w11, w4
+        sub             x1,  x1,  w4,  uxtw
+.if \type == 444
+        add             x10, x6,  w4,  uxtw
+.elseif \type == 422
+        add             x10, x6,  x11, lsr #1
+.endif
+        add             x9,  x3,  w4,  uxtw #1
+        add             x7,  x2,  w4,  uxtw #1
+161:
+        mov             w8,  w4
+16:
+        ld1             {v4.8h,   v5.8h},   [x2],  #32
+        ld1             {v6.8h,   v7.8h},   [x3],  #32
+        ld1             {v16.8h,  v17.8h},  [x7],  #32
+        ld1             {v18.8h,  v19.8h},  [x9],  #32
+        subs            w8,  w8,  #16
+        sub             v6.8h,   v6.8h,   v4.8h
+        sub             v7.8h,   v7.8h,   v5.8h
+        sub             v18.8h,  v18.8h,  v16.8h
+        sub             v19.8h,  v19.8h,  v17.8h
+        abs             v20.8h,  v6.8h
+        abs             v21.8h,  v7.8h
+        abs             v22.8h,  v18.8h
+        abs             v23.8h,  v19.8h
+        uqsub           v20.8h,  v0.8h,   v20.8h
+        uqsub           v21.8h,  v0.8h,   v21.8h
+        uqsub           v22.8h,  v0.8h,   v22.8h
+        uqsub           v23.8h,  v0.8h,   v23.8h
+        ushr            v20.8h,  v20.8h,  #8
+        ushr            v21.8h,  v21.8h,  #8
+        ushr            v22.8h,  v22.8h,  #8
+        ushr            v23.8h,  v23.8h,  #8
+        shl             v24.8h,  v20.8h,  #9
+        shl             v25.8h,  v21.8h,  #9
+        shl             v26.8h,  v22.8h,  #9
+        shl             v27.8h,  v23.8h,  #9
+        sqdmulh         v24.8h,  v24.8h,  v6.8h
+        sqdmulh         v25.8h,  v25.8h,  v7.8h
+        sqdmulh         v26.8h,  v26.8h,  v18.8h
+        sqdmulh         v27.8h,  v27.8h,  v19.8h
+        add             v24.8h,  v24.8h,  v4.8h
+        add             v25.8h,  v25.8h,  v5.8h
+        add             v26.8h,  v26.8h,  v16.8h
+        add             v27.8h,  v27.8h,  v17.8h
+        sqrshrun        v24.8b,  v24.8h,  #4
+        sqrshrun        v25.8b,  v25.8h,  #4
+        sqrshrun        v26.8b,  v26.8h,  #4
+        sqrshrun        v27.8b,  v27.8h,  #4
+.if \type == 444
+        xtn             v20.8b,  v20.8h
+        xtn2            v20.16b, v21.8h
+        xtn             v21.8b,  v22.8h
+        xtn2            v21.16b, v23.8h
+        sub             v20.16b, v1.16b,  v20.16b
+        sub             v21.16b, v1.16b,  v21.16b
+        st1             {v20.16b}, [x6],  #16
+        st1             {v21.16b}, [x10], #16
+.elseif \type == 422
+        addp            v20.8h,  v20.8h,  v21.8h
+        addp            v21.8h,  v22.8h,  v23.8h
+        xtn             v20.8b,  v20.8h
+        xtn             v21.8b,  v21.8h
+        uhsub           v20.8b,  v3.8b,   v20.8b
+        uhsub           v21.8b,  v3.8b,   v21.8b
+        st1             {v20.8b},  [x6],  #8
+        st1             {v21.8b},  [x10], #8
+.elseif \type == 420
+        add             v20.8h,  v20.8h,  v22.8h
+        add             v21.8h,  v21.8h,  v23.8h
+        addp            v20.8h,  v20.8h,  v21.8h
+        sub             v20.8h,  v3.8h,   v20.8h
+        rshrn           v20.8b,  v20.8h,  #2
+        st1             {v20.8b},  [x6],  #8
+.endif
+        st1             {v24.8b,  v25.8b},  [x0],  #16
+        st1             {v26.8b,  v27.8b},  [x12], #16
+        b.gt            16b
+        subs            w5,  w5,  #2
+        add             x2,  x2,  w4,  uxtw #1
+        add             x3,  x3,  w4,  uxtw #1
+        add             x7,  x7,  w4,  uxtw #1
+        add             x9,  x9,  w4,  uxtw #1
+.if \type == 444
+        add             x6,  x6,  w4,  uxtw
+        add             x10, x10, w4,  uxtw
+.elseif \type == 422
+        add             x6,  x6,  x11, lsr #1
+        add             x10, x10, x11, lsr #1
+.endif
+        add             x0,  x0,  x1
+        add             x12, x12, x1
+        b.gt            161b
+        ret
+L(w_mask_\type\()_tbl):
+        .hword L(w_mask_\type\()_tbl) - 1280b
+        .hword L(w_mask_\type\()_tbl) -  640b
+        .hword L(w_mask_\type\()_tbl) -  320b
+        .hword L(w_mask_\type\()_tbl) -  160b
+        .hword L(w_mask_\type\()_tbl) -    8b
+        .hword L(w_mask_\type\()_tbl) -    4b
+endfunc
+.endm
+
+w_mask_fn 444
+w_mask_fn 422
+w_mask_fn 420
+
+
 function blend_8bpc_neon, export=1
         adr             x6,  L(blend_tbl)
         clz             w3,  w3
