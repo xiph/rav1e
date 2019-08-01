@@ -74,7 +74,8 @@ impl SceneChangeDetector {
     self.exclude_scene_flashes(&frame_set, input_frameno, inter_cfg);
 
     if self.is_key_frame(
-      &frame_set,
+      &frame_set[0],
+      &frame_set[1],
       input_frameno,
       config,
       keyframes,
@@ -84,26 +85,23 @@ impl SceneChangeDetector {
     }
   }
 
-  /// Determines if the second frame in `frame_subset` should be a keyframe.
-  ///
-  /// The fact that the first frame in `frame_subset` refers to the previous frame
-  /// is an implementation detail and would make the public API more confusing,
-  /// which is why this method should remain private.
+  /// Determines if `current_frame` should be a keyframe.
   fn is_key_frame<T: Pixel>(
     &self,
-    frame_subset: &[Arc<Frame<T>>],
-    frameno: u64,
+    previous_frame: &Frame<T>,
+    current_frame: &Frame<T>,
+    current_frameno: u64,
     config: &EncoderConfig,
     keyframes: &mut BTreeSet<u64>,
     keyframes_forced: &BTreeSet<u64>,
   ) -> bool {
-    if keyframes_forced.contains(&frameno) {
+    if keyframes_forced.contains(&current_frameno) {
       return true;
     }
 
     // Find the distance to the previous keyframe.
     let previous_keyframe = keyframes.iter().last().unwrap();
-    let distance = frameno - previous_keyframe;
+    let distance = current_frameno - previous_keyframe;
 
     // Handle minimum and maximum key frame intervals.
     if distance < config.min_key_frame_interval {
@@ -118,11 +116,11 @@ impl SceneChangeDetector {
       return false;
     }
 
-    if self.excluded_frames.contains(&frameno) {
+    if self.excluded_frames.contains(&current_frameno) {
       return false;
     }
 
-    self.has_scenecut(&frame_subset[0], &frame_subset[1])
+    self.has_scenecut(previous_frame, current_frame)
   }
 
   /// Uses lookahead to avoid coding short flashes as scenecuts.
