@@ -14,7 +14,7 @@ $ cargo flamegraph -o flame.svg -b rav1e -- ~/sample.y4m -o /dev/null
 $ $browser flame.svg
 ```
 
-> **NOTE** Make sure the browser let you use the built-in interactivity in the
+> **NOTE** Make sure the browser lets you use the built-in interactivity in the
 > svg.
 
 ## Instruments
@@ -22,7 +22,7 @@ $ $browser flame.svg
 and integrates neatly with the XCode UI.
 
 ```
-$ cargo install cargo-install
+$ cargo install cargo-instruments
 $ cargo instruments --release --open --bin rav1e -- ~/sample.y4m -o /dev/null
 ```
 
@@ -41,7 +41,7 @@ $ perf report
 
 ## uftrace
 
-[uftrace](https://github.com/namhyung/uftrace) is a ELF-specific tracer.
+[uftrace](https://github.com/namhyung/uftrace) is an ELF-specific tracer.
 It leverages the `mcount` instrumentation.
 
 ```
