@@ -2,7 +2,7 @@
 
 ## Cargo integrations
 
-There are multiple integrations with `cargo` that simplify a lot your life.
+There are multiple integrations with `cargo` that simplify your life a lot .
 
 ## Flamegraph
 [flamegraph](https://github.com/ferrous-systems/flamegraph) works in any
