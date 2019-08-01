@@ -84,7 +84,7 @@ pub struct RDOOutput {
 #[derive(Clone)]
 pub struct RDOPartitionOutput {
   pub rd_cost: f64,
-  pub bo: BlockOffset,
+  pub bo: TileBlockOffset,
   pub bsize: BlockSize,
   pub pred_mode_luma: PredictionMode,
   pub pred_mode_chroma: PredictionMode,
@@ -258,11 +258,11 @@ pub fn sse_wxh<T: Pixel>(
 // Compute the pixel-domain distortion for an encode
 fn compute_distortion<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, bsize: BlockSize,
-  is_chroma_block: bool, tile_bo: BlockOffset,
+  is_chroma_block: bool, tile_bo: TileBlockOffset,
   luma_only: bool
 ) -> u64 {
-  let input_region = ts.input_tile.planes[0].subregion(Area::BlockStartingAt { bo: tile_bo });
-  let rec_region = ts.rec.planes[0].subregion(Area::BlockStartingAt { bo: tile_bo });
+  let input_region = ts.input_tile.planes[0].subregion(Area::BlockStartingAt { bo: tile_bo.0 });
+  let rec_region = ts.rec.planes[0].subregion(Area::BlockStartingAt { bo: tile_bo.0 });
   let mut distortion = match fi.config.tune {
     Tune::Psychovisual if bsize.width() >= 8 && bsize.height() >= 8 => {
       cdef_dist_wxh(
@@ -299,8 +299,8 @@ fn compute_distortion<T: Pixel>(
     if w_uv > 0 && h_uv > 0 {
       for p in 1..3 {
         distortion += sse_wxh(
-          &ts.input_tile.planes[p].subregion(Area::BlockStartingAt { bo: tile_bo }),
-          &ts.rec.planes[p].subregion(Area::BlockStartingAt { bo: tile_bo }),
+          &ts.input_tile.planes[p].subregion(Area::BlockStartingAt { bo: tile_bo.0 }),
+          &ts.rec.planes[p].subregion(Area::BlockStartingAt { bo: tile_bo.0 }),
           w_uv,
           h_uv
         );
@@ -313,14 +313,14 @@ fn compute_distortion<T: Pixel>(
 // Compute the transform-domain distortion for an encode
 fn compute_tx_distortion<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, bsize: BlockSize,
-  is_chroma_block: bool, tile_bo: BlockOffset, tx_dist: i64,
+  is_chroma_block: bool, tile_bo: TileBlockOffset, tx_dist: i64,
   skip: bool, luma_only: bool
 ) -> u64 {
   assert!(fi.config.tune == Tune::Psnr);
   let mut distortion = if skip {
     sse_wxh(
-      &ts.input_tile.planes[0].subregion(Area::BlockStartingAt { bo: tile_bo }),
-      &ts.rec.planes[0].subregion(Area::BlockStartingAt { bo: tile_bo }),
+      &ts.input_tile.planes[0].subregion(Area::BlockStartingAt { bo: tile_bo.0 }),
+      &ts.rec.planes[0].subregion(Area::BlockStartingAt { bo: tile_bo.0 }),
       bsize.width(),
       bsize.height()
     )
@@ -345,8 +345,8 @@ fn compute_tx_distortion<T: Pixel>(
     if w_uv > 0 && h_uv > 0 {
       for p in 1..3 {
         distortion += sse_wxh(
-          &ts.input_tile.planes[p].subregion(Area::BlockStartingAt { bo: tile_bo }),
-          &ts.rec.planes[p].subregion(Area::BlockStartingAt { bo: tile_bo }),
+          &ts.input_tile.planes[p].subregion(Area::BlockStartingAt { bo: tile_bo.0 }),
+          &ts.rec.planes[p].subregion(Area::BlockStartingAt { bo: tile_bo.0 }),
           w_uv,
           h_uv
         );
@@ -357,10 +357,10 @@ fn compute_tx_distortion<T: Pixel>(
 }
 
 fn compute_mean_importance<T: Pixel>(
-  fi: &FrameInvariants<T>, frame_bo: BlockOffset, bsize: BlockSize
+  fi: &FrameInvariants<T>, frame_bo: PlaneBlockOffset, bsize: BlockSize
 ) -> f32 {
-  let x1 = frame_bo.x;
-  let y1 = frame_bo.y;
+  let x1 = frame_bo.0.x;
+  let y1 = frame_bo.0.y;
   let x2 = (x1 + bsize.width_mi()).min(fi.w_in_b);
   let y2 = (y1 + bsize.height_mi()).min(fi.h_in_b);
 
@@ -375,8 +375,8 @@ fn compute_mean_importance<T: Pixel>(
 }
 
 pub fn compute_rd_cost<T: Pixel>(
-  fi: &FrameInvariants<T>, frame_bo: BlockOffset, bsize: BlockSize, rate: u32,
-  distortion: u64
+  fi: &FrameInvariants<T>, frame_bo: PlaneBlockOffset, bsize: BlockSize,
+  rate: u32, distortion: u64
 ) -> f64 {
   let mean_importance = compute_mean_importance(fi, frame_bo, bsize);
 
@@ -393,7 +393,7 @@ pub fn compute_rd_cost<T: Pixel>(
 
 pub fn rdo_tx_size_type<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, bsize: BlockSize, tile_bo: BlockOffset,
+  cw: &mut ContextWriter, bsize: BlockSize, tile_bo: TileBlockOffset,
   luma_mode: PredictionMode, ref_frames: [RefType; 2], mvs: [MotionVector; 2], skip: bool
 ) -> (TxSize, TxType) {
   let mut tx_size = max_txsize_rect_lookup[bsize as usize];
@@ -486,7 +486,7 @@ impl Default for EncodingSettings {
 fn luma_chroma_mode_rdo<T: Pixel> (luma_mode: PredictionMode,
   fi: &FrameInvariants<T>,
   bsize: BlockSize,
-  tile_bo: BlockOffset,
+  tile_bo: TileBlockOffset,
   ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter,
   rdo_type: RDOType,
@@ -608,7 +608,7 @@ fn luma_chroma_mode_rdo<T: Pixel> (luma_mode: PredictionMode,
 // RDO-based mode decision
 pub fn rdo_mode_decision<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, bsize: BlockSize, tile_bo: BlockOffset,
+  cw: &mut ContextWriter, bsize: BlockSize, tile_bo: TileBlockOffset,
   pmvs: &mut [Option<MotionVector>]
 ) -> RDOPartitionOutput {
   let mut best = EncodingSettings::default();
@@ -809,7 +809,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         .map(|&luma_mode| {
           let tile_rect = ts.tile_rect();
           let rec = &mut ts.rec.planes[0];
-          let mut rec_region = rec.subregion_mut(Area::BlockStartingAt { bo: tile_bo });
+          let mut rec_region = rec.subregion_mut(Area::BlockStartingAt { bo: tile_bo.0 });
           // FIXME: If tx partition is used, luma_mode.predict_intra() should be called for each tx block
           luma_mode.predict_intra(
             tile_rect,
@@ -821,7 +821,7 @@ pub fn rdo_mode_decision<T: Pixel>(
             &edge_buf
           );
 
-          let plane_org = ts.input_tile.planes[0].subregion(Area::BlockStartingAt { bo: tile_bo });
+          let plane_org = ts.input_tile.planes[0].subregion(Area::BlockStartingAt { bo: tile_bo.0 });
           let plane_ref = rec_region.as_const();
 
           (
@@ -978,7 +978,7 @@ pub fn rdo_mode_decision<T: Pixel>(
 }
 
 pub fn rdo_cfl_alpha<T: Pixel>(
-  ts: &mut TileStateMut<'_, T>, tile_bo: BlockOffset, bsize: BlockSize, bit_depth: usize
+  ts: &mut TileStateMut<'_, T>, tile_bo: TileBlockOffset, bsize: BlockSize, bit_depth: usize
 ) -> Option<CFLParams> {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let uv_tx_size = bsize.largest_chroma_tx_size(xdec, ydec);
@@ -1010,7 +1010,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
             Some(PredictionMode::UV_CFL_PRED)
           );
 
-          let mut rec_region = rec.subregion_mut(Area::BlockStartingAt { bo: tile_bo });
+          let mut rec_region = rec.subregion_mut(Area::BlockStartingAt { bo: tile_bo.0 });
           PredictionMode::UV_CFL_PRED.predict_intra(
             tile_rect,
             &mut rec_region,
@@ -1021,7 +1021,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
             &edge_buf
           );
           sse_wxh(
-            &input.subregion(Area::BlockStartingAt { bo: tile_bo }),
+            &input.subregion(Area::BlockStartingAt { bo: tile_bo.0 }),
             &rec_region.as_const(),
             uv_tx_size.width(),
             uv_tx_size.height()
@@ -1040,7 +1040,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
 pub fn rdo_tx_type_decision<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>, cw: &mut ContextWriter,
   mode: PredictionMode, ref_frames: [RefType; 2], mvs: [MotionVector; 2],
-  bsize: BlockSize, tile_bo: BlockOffset, tx_size: TxSize, tx_set: TxSet,
+  bsize: BlockSize, tile_bo: TileBlockOffset, tx_size: TxSize, tx_set: TxSet,
   tx_types: &[TxType]
 ) -> (TxType, f64) {
   let mut best_type = TxType::DCT_DCT;
@@ -1132,8 +1132,8 @@ pub fn rdo_tx_type_decision<T: Pixel>(
   (best_type, best_rd)
 }
 
-pub fn get_sub_partitions(four_partitions: &[BlockOffset; 4],
-                          partition: PartitionType) -> Vec<BlockOffset> {
+pub fn get_sub_partitions(four_partitions: &[TileBlockOffset; 4],
+                          partition: PartitionType) -> Vec<TileBlockOffset> {
   let mut partitions = vec![ four_partitions[0] ];
 
   if partition == PARTITION_NONE {
@@ -1153,12 +1153,12 @@ pub fn get_sub_partitions(four_partitions: &[BlockOffset; 4],
 }
 
 pub fn get_sub_partitions_with_border_check(
-  four_partitions: &[BlockOffset; 4],
+  four_partitions: &[TileBlockOffset; 4],
   partition: PartitionType,
   mi_width: usize,
   mi_height: usize,
   subsize: BlockSize
-) -> Vec<BlockOffset> {
+) -> Vec<TileBlockOffset> {
   let mut partitions = vec![ four_partitions[0] ];
 
   if partition == PARTITION_NONE {
@@ -1169,20 +1169,20 @@ pub fn get_sub_partitions_with_border_check(
   let hbsh = subsize.height_mi(); // Half the block size height in blocks
 
   if (partition == PARTITION_VERT || partition == PARTITION_SPLIT) &&
-    four_partitions[1].x + hbsw <= mi_width &&
-    four_partitions[1].y + hbsh <= mi_height {
+    four_partitions[1].0.x + hbsw <= mi_width &&
+    four_partitions[1].0.y + hbsh <= mi_height {
     partitions.push(four_partitions[1]);
   };
 
   if (partition == PARTITION_HORZ || partition == PARTITION_SPLIT) &&
-    four_partitions[2].x + hbsw <= mi_width &&
-    four_partitions[2].y + hbsh <= mi_height {
+    four_partitions[2].0.x + hbsw <= mi_width &&
+    four_partitions[2].0.y + hbsh <= mi_height {
     partitions.push(four_partitions[2]);
   };
 
   if partition == PARTITION_SPLIT &&
-    four_partitions[3].x + hbsw <= mi_width &&
-    four_partitions[3].y + hbsh <= mi_height {
+    four_partitions[3].0.x + hbsw <= mi_width &&
+    four_partitions[3].0.y + hbsh <= mi_height {
     partitions.push(four_partitions[3]);
   };
 
@@ -1193,7 +1193,7 @@ pub fn get_sub_partitions_with_border_check(
 pub fn rdo_partition_decision<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
-  bsize: BlockSize, tile_bo: BlockOffset,
+  bsize: BlockSize, tile_bo: TileBlockOffset,
   cached_block: &RDOOutput, pmvs: &mut [[Option<MotionVector>; REF_FRAMES]; 5],
   partition_types: &[PartitionType], rdo_type: RDOType
 ) -> RDOOutput {
@@ -1223,7 +1223,7 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
         let pmv_idx = if bsize > BlockSize::BLOCK_32X32 {
           0
         } else {
-          ((tile_bo.x & 32) >> 5) + ((tile_bo.y & 32) >> 4) + 1
+          ((tile_bo.0.x & 32) >> 5) + ((tile_bo.0.y & 32) >> 4) + 1
         };
 
         let spmvs = &mut pmvs[pmv_idx];
@@ -1248,9 +1248,9 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
         let hbsh = subsize.height_mi(); // Half the block size height in blocks
         let four_partitions = [
           tile_bo,
-          BlockOffset{ x: tile_bo.x + hbsw as usize, y: tile_bo.y },
-          BlockOffset{ x: tile_bo.x, y: tile_bo.y + hbsh as usize },
-          BlockOffset{ x: tile_bo.x + hbsw as usize, y: tile_bo.y + hbsh as usize }
+          TileBlockOffset(BlockOffset{ x: tile_bo.0.x + hbsw as usize, y: tile_bo.0.y }),
+          TileBlockOffset(BlockOffset{ x: tile_bo.0.x, y: tile_bo.0.y + hbsh as usize }),
+          TileBlockOffset(BlockOffset{ x: tile_bo.0.x + hbsw as usize, y: tile_bo.0.y + hbsh as usize })
         ];
         let partitions = get_sub_partitions_with_border_check(&four_partitions, partition, ts.mi_width, ts.mi_height, subsize);
 
@@ -1258,7 +1258,7 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
           if subsize.greater_than(BlockSize::BLOCK_32X32) {
             0
           } else {
-            ((offset.x & 32) >> 5) + ((offset.y & 32) >> 4) + 1
+            ((offset.0.x & 32) >> 5) + ((offset.0.y & 32) >> 4) + 1
           }
         }).collect::<Vec<_>>();
 
@@ -1318,10 +1318,10 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
   }
 }
 
-fn rdo_loop_plane_error<T: Pixel>(tile_sbo: SuperBlockOffset, fi: &FrameInvariants<T>,
+fn rdo_loop_plane_error<T: Pixel>(tile_sbo: TileSuperBlockOffset, fi: &FrameInvariants<T>,
                                   ts: &TileStateMut<'_, T>, blocks: &TileBlocks<'_>,
                                   test: &Frame<T>, pli: usize) -> u64 {
-  let sbo_0 = SuperBlockOffset { x: 0, y: 0 };
+  let sbo_0 = PlaneSuperBlockOffset(SuperBlockOffset { x: 0, y: 0 });
   let sb_blocks = if fi.sequence.use_128x128_superblock {16} else {8};
   // Each direction block is 8x8 in y, potentially smaller if subsampled in chroma
   // accumulating in-frame and unpadded
@@ -1329,7 +1329,7 @@ fn rdo_loop_plane_error<T: Pixel>(tile_sbo: SuperBlockOffset, fi: &FrameInvarian
   for by in 0..sb_blocks {
     for bx in 0..sb_blocks {
       let bo = tile_sbo.block_offset(bx<<1, by<<1);
-      if bo.x < blocks.cols() && bo.y < blocks.rows() {
+      if bo.0.x < blocks.cols() && bo.0.y < blocks.rows() {
         let skip = blocks[bo].skip;
         if !skip {
           let in_plane = &ts.input_tile.planes[pli];
@@ -1339,10 +1339,10 @@ fn rdo_loop_plane_error<T: Pixel>(tile_sbo: SuperBlockOffset, fi: &FrameInvarian
           debug_assert_eq!(ydec, test_plane.cfg.ydec);
 
           let in_bo = tile_sbo.block_offset(bx << 1, by << 1);
-          let in_region = in_plane.subregion(Area::BlockStartingAt { bo: in_bo });
+          let in_region = in_plane.subregion(Area::BlockStartingAt { bo: in_bo.0 });
 
           let test_bo = sbo_0.block_offset(bx << 1, by << 1);
-          let test_region = test_plane.region(Area::BlockStartingAt { bo: test_bo });
+          let test_region = test_plane.region(Area::BlockStartingAt { bo: test_bo.0 });
 
           if pli==0 {
             err += cdef_dist_wxh_8x8(&in_region, &test_region, fi.sequence.bit_depth);
@@ -1356,7 +1356,7 @@ fn rdo_loop_plane_error<T: Pixel>(tile_sbo: SuperBlockOffset, fi: &FrameInvarian
   err
 }
 
-pub fn rdo_loop_decision<T: Pixel>(tile_sbo: SuperBlockOffset, fi: &FrameInvariants<T>,
+pub fn rdo_loop_decision<T: Pixel>(tile_sbo: TileSuperBlockOffset, fi: &FrameInvariants<T>,
                                    ts: &mut TileStateMut<'_, T>,
                                    cw: &mut ContextWriter, w: &mut dyn Writer) {
   assert!(fi.sequence.enable_cdef || fi.sequence.enable_restoration);
@@ -1366,7 +1366,7 @@ pub fn rdo_loop_decision<T: Pixel>(tile_sbo: SuperBlockOffset, fi: &FrameInvaria
   let mut best_lrf = [RestorationFilter::None{}; PLANES];
   let mut best_cost_acc = -1.;
   let mut best_cost = [-1.; PLANES];
-  let sbo_0 = SuperBlockOffset { x: 0, y: 0 };
+  let sbo_0 = TileSuperBlockOffset(SuperBlockOffset { x: 0, y: 0 });
 
   // all stages; reconstruction goes to cdef so it must be additionally padded
   // TODO: use the new plane padding mechanism rather than this old kludge.

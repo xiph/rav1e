@@ -466,7 +466,7 @@ fn supersample_chroma_bsize(bsize: BlockSize, ss_x: usize, ss_y: usize)
 
 pub fn get_intra_edges<T: Pixel>(
   dst: &PlaneRegion<'_, T>,
-  partition_bo: BlockOffset, // partition bo, BlockOffset
+  partition_bo: TileBlockOffset, // partition bo, BlockOffset
   bx: usize, by: usize,
   partition_size: BlockSize, // partition size, BlockSize
   po: PlaneOffset,
@@ -556,8 +556,8 @@ pub fn get_intra_edges<T: Pixel>(
     let bx4 = bx * (tx_size.width() >> MI_SIZE_LOG2);  // bx,by are in tx block indices
     let by4 = by * (tx_size.height() >> MI_SIZE_LOG2);
 
-    let have_top = by4 != 0 || if plane_cfg.ydec != 0 { partition_bo.y > 1 } else { partition_bo.y > 0 };
-    let have_left = bx4 != 0 || if plane_cfg.xdec != 0 { partition_bo.x > 1 } else { partition_bo.x > 0 };
+    let have_top = by4 != 0 || if plane_cfg.ydec != 0 { partition_bo.0.y > 1 } else { partition_bo.0.y > 0 };
+    let have_left = bx4 != 0 || if plane_cfg.xdec != 0 { partition_bo.0.x > 1 } else { partition_bo.0.x > 0 };
 
     let right_available = x + tx_size.width() < dst.rect().width;
     let bottom_available = y + tx_size.height() < dst.rect().height;
@@ -622,10 +622,10 @@ pub fn get_intra_edges<T: Pixel>(
   edge_buf
 }
 
-pub fn has_tr(bo: BlockOffset, bsize: BlockSize) -> bool {
+pub fn has_tr(bo: TileBlockOffset, bsize: BlockSize) -> bool {
   let sb_mi_size = BLOCK_64X64.width_mi(); /* Assume 64x64 for now */
-  let mask_row = bo.y & LOCAL_BLOCK_MASK;
-  let mask_col = bo.x & LOCAL_BLOCK_MASK;
+  let mask_row = bo.0.y & LOCAL_BLOCK_MASK;
+  let mask_col = bo.0.x & LOCAL_BLOCK_MASK;
   let target_n4_w = bsize.width_mi();
   let target_n4_h = bsize.height_mi();
 
@@ -653,13 +653,13 @@ pub fn has_tr(bo: BlockOffset, bsize: BlockSize) -> bool {
 
   /* The left hand of two vertical rectangles always has a top right (as the
     * block above will have been decoded) */
-  if (target_n4_w < target_n4_h) && (bo.x & target_n4_w) == 0 {
+  if (target_n4_w < target_n4_h) && (bo.0.x & target_n4_w) == 0 {
     has_tr = true;
   }
 
   /* The bottom of two horizontal rectangles never has a top right (as the block
     * to the right won't have been decoded) */
-  if (target_n4_w > target_n4_h) && (bo.y & target_n4_h) != 0 {
+  if (target_n4_w > target_n4_h) && (bo.0.y & target_n4_h) != 0 {
     has_tr = false;
   }
 
@@ -679,10 +679,10 @@ pub fn has_tr(bo: BlockOffset, bsize: BlockSize) -> bool {
   has_tr
 }
 
-pub fn has_bl(bo: BlockOffset, bsize: BlockSize) -> bool {
+pub fn has_bl(bo: TileBlockOffset, bsize: BlockSize) -> bool {
   let sb_mi_size = BLOCK_64X64.width_mi(); /* Assume 64x64 for now */
-  let mask_row = bo.y & LOCAL_BLOCK_MASK;
-  let mask_col = bo.x & LOCAL_BLOCK_MASK;
+  let mask_row = bo.0.y & LOCAL_BLOCK_MASK;
+  let mask_col = bo.0.x & LOCAL_BLOCK_MASK;
   let target_n4_w = bsize.width_mi();
   let target_n4_h = bsize.height_mi();
 
@@ -710,13 +710,13 @@ pub fn has_bl(bo: BlockOffset, bsize: BlockSize) -> bool {
 
   /* The right hand of two vertical rectangles never has a bottom left (as the
     * block below won't have been decoded) */
-  if (target_n4_w < target_n4_h) && (bo.x & target_n4_w) != 0 {
+  if (target_n4_w < target_n4_h) && (bo.0.x & target_n4_w) != 0 {
     has_bl = false;
   }
 
   /* The top of two horizontal rectangles always has a bottom left (as the block
     * to the left will have been decoded) */
-  if (target_n4_w > target_n4_h) && (bo.y & target_n4_h) == 0 {
+  if (target_n4_w > target_n4_h) && (bo.0.y & target_n4_h) == 0 {
     has_bl = true;
   }
 

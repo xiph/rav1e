@@ -38,7 +38,7 @@ use crate::util::*;
 /// frame-wise once the tile views vanish (e.g. for deblocking).
 #[derive(Debug)]
 pub struct TileStateMut<'a, T: Pixel> {
-  pub sbo: SuperBlockOffset,
+  pub sbo: PlaneSuperBlockOffset,
   pub sb_size_log2: usize,
   pub sb_width: usize,
   pub sb_height: usize,
@@ -62,7 +62,7 @@ pub struct TileStateMut<'a, T: Pixel> {
 impl<'a, T: Pixel> TileStateMut<'a, T> {
   pub fn new(
     fs: &'a mut FrameState<T>,
-    sbo: SuperBlockOffset,
+    sbo: PlaneSuperBlockOffset,
     sb_size_log2: usize,
     width: usize,
     height: usize,
@@ -70,8 +70,8 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
     debug_assert!(width % MI_SIZE == 0, "Tile width must be a multiple of MI_SIZE");
     debug_assert!(height % MI_SIZE == 0, "Tile width must be a multiple of MI_SIZE");
     let luma_rect = TileRect {
-      x: sbo.x << sb_size_log2,
-      y: sbo.y << sb_size_log2,
+      x: sbo.0.x << sb_size_log2,
+      y: sbo.0.y << sb_size_log2,
       width,
       height,
     };
@@ -106,8 +106,8 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
         .map(|fmvs| {
           TileMotionVectorsMut::new(
             fmvs,
-            sbo.x << (sb_size_log2 - MI_SIZE_LOG2),
-            sbo.y << (sb_size_log2 - MI_SIZE_LOG2),
+            sbo.0.x << (sb_size_log2 - MI_SIZE_LOG2),
+            sbo.0.y << (sb_size_log2 - MI_SIZE_LOG2),
             width >> MI_SIZE_LOG2,
             height >> MI_SIZE_LOG2,
           )
@@ -120,28 +120,28 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
   #[inline(always)]
   pub fn tile_rect(&self) -> TileRect {
     TileRect {
-      x: self.sbo.x << self.sb_size_log2,
-      y: self.sbo.y << self.sb_size_log2,
+      x: self.sbo.0.x << self.sb_size_log2,
+      y: self.sbo.0.y << self.sb_size_log2,
       width: self.width,
       height: self.height,
     }
   }
 
   #[inline(always)]
-  pub fn to_frame_block_offset(&self, tile_bo: BlockOffset) -> BlockOffset {
-    let bx = self.sbo.x << (self.sb_size_log2 - MI_SIZE_LOG2);
-    let by = self.sbo.y << (self.sb_size_log2 - MI_SIZE_LOG2);
-    BlockOffset {
-      x: bx + tile_bo.x,
-      y: by + tile_bo.y,
-    }
+  pub fn to_frame_block_offset(&self, tile_bo: TileBlockOffset) -> PlaneBlockOffset {
+    let bx = self.sbo.0.x << (self.sb_size_log2 - MI_SIZE_LOG2);
+    let by = self.sbo.0.y << (self.sb_size_log2 - MI_SIZE_LOG2);
+    PlaneBlockOffset(BlockOffset {
+      x: bx + tile_bo.0.x,
+      y: by + tile_bo.0.y,
+    })
   }
 
   #[inline(always)]
-  pub fn to_frame_super_block_offset(&self, tile_sbo: SuperBlockOffset) -> SuperBlockOffset {
-    SuperBlockOffset {
-      x: self.sbo.x + tile_sbo.x,
-      y: self.sbo.y + tile_sbo.y,
-    }
+  pub fn to_frame_super_block_offset(&self, tile_sbo: TileSuperBlockOffset) -> PlaneSuperBlockOffset {
+    PlaneSuperBlockOffset(SuperBlockOffset {
+      x: self.sbo.0.x + tile_sbo.0.x,
+      y: self.sbo.0.y + tile_sbo.0.y,
+    })
   }
 }

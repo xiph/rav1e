@@ -166,7 +166,7 @@ pub fn get_has_tr_table(/*partition: PartitionType, */bsize: BlockSize) -> &'sta
 }
 
 pub fn has_top_right(/*const AV1_COMMON *cm,*/
-                         bsize: BlockSize, partition_bo: BlockOffset,
+                         bsize: BlockSize, partition_bo: TileBlockOffset,
                          top_available: bool, right_available: bool,
                          tx_size: TxSize,
                          row_off: usize, col_off: usize, ss_x: usize, _ss_y: usize) -> bool {
@@ -176,8 +176,8 @@ pub fn has_top_right(/*const AV1_COMMON *cm,*/
   let plane_bw_unit = (bw_unit >> ss_x).max(1);
   let top_right_count_unit = tx_size.width_mi();
 
-  let mi_col = partition_bo.x;
-  let mi_row = partition_bo.y;
+  let mi_col = partition_bo.0.x;
+  let mi_row = partition_bo.0.y;
 
   if row_off > 0 {  // Just need to check if enough pixels on the right.
     // 128x128 SB is not supported yet by rav1e
@@ -355,7 +355,7 @@ pub fn get_has_bl_table(/*partition: PartitionType, */bsize: BlockSize) -> &'sta
 }
 
 pub fn has_bottom_left(/*const AV1_COMMON *cm,*/
-                         bsize: BlockSize, partition_bo: BlockOffset,
+                         bsize: BlockSize, partition_bo: TileBlockOffset,
                          bottom_available: bool, left_available: bool,
                          tx_size: TxSize,
                          row_off: usize, col_off: usize, _ss_x: usize, ss_y: usize) -> bool {
@@ -392,8 +392,8 @@ pub fn has_bottom_left(/*const AV1_COMMON *cm,*/
     let plane_bh_unit = (bh_unit >> ss_y).max(1);
     let bottom_left_count_unit = tx_size.height_mi();
 
-    let mi_col = partition_bo.x;
-    let mi_row = partition_bo.y;
+    let mi_col = partition_bo.0.x;
+    let mi_row = partition_bo.0.y;
 
     // All bottom-left pixels are in the left block, which is already available.
     if row_off + bottom_left_count_unit < plane_bh_unit { return true };

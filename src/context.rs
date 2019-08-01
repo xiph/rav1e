@@ -529,14 +529,14 @@ static mag_ref_offset_with_txclass: [[[usize; 2]; CONTEXT_MAG_POSITION_NUM]; 3] 
 // End of Level Map
 
 pub fn has_chroma(
-  bo: BlockOffset, bsize: BlockSize, subsampling_x: usize,
+  bo: TileBlockOffset, bsize: BlockSize, subsampling_x: usize,
   subsampling_y: usize
 ) -> bool {
   let bw = bsize.width_mi();
   let bh = bsize.height_mi();
 
-  ((bo.x & 0x01) == 1 || (bw & 0x01) == 0 || subsampling_x == 0)
-    && ((bo.y & 0x01) == 1 || (bh & 0x01) == 0 || subsampling_y == 0)
+  ((bo.0.x & 0x01) == 1 || (bw & 0x01) == 0 || subsampling_x == 0)
+    && ((bo.0.y & 0x01) == 1 || (bh & 0x01) == 0 || subsampling_y == 0)
 }
 
 pub fn get_tx_set(
@@ -1159,7 +1159,7 @@ const SUPERBLOCK_TO_BLOCK_SHIFT: usize = MIB_SIZE_LOG2;
 pub const BLOCK_TO_PLANE_SHIFT: usize = MI_SIZE_LOG2;
 pub const LOCAL_BLOCK_MASK: usize = (1 << SUPERBLOCK_TO_BLOCK_SHIFT) - 1;
 
-/// Absolute offset in superblocks inside a plane, where a superblock is defined
+/// Absolute offset in superblocks, where a superblock is defined
 /// to be an N*N square where N = (1 << SUPERBLOCK_TO_PLANE_SHIFT).
 #[derive(Clone, Copy, Debug)]
 pub struct SuperBlockOffset {
@@ -1167,9 +1167,19 @@ pub struct SuperBlockOffset {
   pub y: usize
 }
 
+/// Absolute offset in superblocks inside a plane, where a superblock is defined
+/// to be an N*N square where N = (1 << SUPERBLOCK_TO_PLANE_SHIFT).
+#[derive(Clone, Copy, Debug)]
+pub struct PlaneSuperBlockOffset(pub SuperBlockOffset);
+
+/// Absolute offset in superblocks inside a tile, where a superblock is defined
+/// to be an N*N square where N = (1 << SUPERBLOCK_TO_PLANE_SHIFT).
+#[derive(Clone, Copy, Debug)]
+pub struct TileSuperBlockOffset(pub SuperBlockOffset);
+
 impl SuperBlockOffset {
   /// Offset of a block inside the current superblock.
-  pub fn block_offset(self, block_x: usize, block_y: usize) -> BlockOffset {
+  fn block_offset(self, block_x: usize, block_y: usize) -> BlockOffset {
     BlockOffset {
       x: (self.x << SUPERBLOCK_TO_BLOCK_SHIFT) + block_x,
       y: (self.y << SUPERBLOCK_TO_BLOCK_SHIFT) + block_y
@@ -1177,7 +1187,7 @@ impl SuperBlockOffset {
   }
 
   /// Offset of the top-left pixel of this block.
-  pub fn plane_offset(self, plane: &PlaneConfig) -> PlaneOffset {
+  fn plane_offset(self, plane: &PlaneConfig) -> PlaneOffset {
     PlaneOffset {
       x: (self.x as isize) << (SUPERBLOCK_TO_PLANE_SHIFT - plane.xdec),
       y: (self.y as isize) << (SUPERBLOCK_TO_PLANE_SHIFT - plane.ydec)
@@ -1185,7 +1195,35 @@ impl SuperBlockOffset {
   }
 }
 
-/// Absolute offset in blocks inside a plane, where a block is defined
+impl PlaneSuperBlockOffset {
+  /// Offset of a block inside the current superblock.
+  #[inline]
+  pub fn block_offset(self, block_x: usize, block_y: usize) -> PlaneBlockOffset {
+    PlaneBlockOffset(self.0.block_offset(block_x, block_y))
+  }
+
+  /// Offset of the top-left pixel of this block.
+  #[inline]
+  pub fn plane_offset(self, plane: &PlaneConfig) -> PlaneOffset {
+    self.0.plane_offset(plane)
+  }
+}
+
+impl TileSuperBlockOffset {
+  /// Offset of a block inside the current superblock.
+  #[inline]
+  pub fn block_offset(self, block_x: usize, block_y: usize) -> TileBlockOffset {
+    TileBlockOffset(self.0.block_offset(block_x, block_y))
+  }
+
+  /// Offset of the top-left pixel of this block.
+  #[inline]
+  pub fn plane_offset(self, plane: &PlaneConfig) -> PlaneOffset {
+    self.0.plane_offset(plane)
+  }
+}
+
+/// Absolute offset in blocks, where a block is defined
 /// to be an N*N square where N = (1 << BLOCK_TO_PLANE_SHIFT).
 #[derive(Clone, Copy, Debug)]
 pub struct BlockOffset {
@@ -1193,9 +1231,19 @@ pub struct BlockOffset {
   pub y: usize
 }
 
+/// Absolute offset in blocks inside a plane, where a block is defined
+/// to be an N*N square where N = (1 << BLOCK_TO_PLANE_SHIFT).
+#[derive(Clone, Copy, Debug)]
+pub struct PlaneBlockOffset(pub BlockOffset);
+
+/// Absolute offset in blocks inside a tile, where a block is defined
+/// to be an N*N square where N = (1 << BLOCK_TO_PLANE_SHIFT).
+#[derive(Clone, Copy, Debug)]
+pub struct TileBlockOffset(pub BlockOffset);
+
 impl BlockOffset {
   /// Offset of the superblock in which this block is located.
-  pub fn sb_offset(self) -> SuperBlockOffset {
+  fn sb_offset(self) -> SuperBlockOffset {
     SuperBlockOffset {
       x: self.x >> SUPERBLOCK_TO_BLOCK_SHIFT,
       y: self.y >> SUPERBLOCK_TO_BLOCK_SHIFT
@@ -1203,27 +1251,27 @@ impl BlockOffset {
   }
 
   /// Offset of the top-left pixel of this block.
-  pub fn plane_offset(self, plane: &PlaneConfig) -> PlaneOffset {
+  fn plane_offset(self, plane: &PlaneConfig) -> PlaneOffset {
     PlaneOffset {
         x: (self.x >> plane.xdec << BLOCK_TO_PLANE_SHIFT) as isize,
         y: (self.y >> plane.ydec << BLOCK_TO_PLANE_SHIFT) as isize,
     }
   }
 
-  /// Convert to plane offset without decimation
+  /// Convert to plane offset without decimation.
   #[inline]
-  pub fn to_luma_plane_offset(self) -> PlaneOffset {
+  fn to_luma_plane_offset(self) -> PlaneOffset {
     PlaneOffset {
       x: (self.x as isize) << BLOCK_TO_PLANE_SHIFT,
       y: (self.y as isize) << BLOCK_TO_PLANE_SHIFT,
     }
   }
 
-  pub fn y_in_sb(self) -> usize {
+  fn y_in_sb(self) -> usize {
     self.y % MIB_SIZE
   }
 
-  pub fn with_offset(self, col_offset: isize, row_offset: isize) -> BlockOffset {
+  fn with_offset(self, col_offset: isize, row_offset: isize) -> BlockOffset {
     let x = self.x as isize + col_offset;
     let y = self.y as isize + row_offset;
     debug_assert!(x >= 0);
@@ -1233,6 +1281,66 @@ impl BlockOffset {
       x: x as usize,
       y: y as usize
     }
+  }
+}
+
+impl PlaneBlockOffset {
+  /// Offset of the superblock in which this block is located.
+  #[inline]
+  pub fn sb_offset(self) -> PlaneSuperBlockOffset {
+    PlaneSuperBlockOffset(self.0.sb_offset())
+  }
+
+  /// Offset of the top-left pixel of this block.
+  #[inline]
+  pub fn plane_offset(self, plane: &PlaneConfig) -> PlaneOffset {
+    self.0.plane_offset(plane)
+  }
+
+  /// Convert to plane offset without decimation.
+  #[inline]
+  pub fn to_luma_plane_offset(self) -> PlaneOffset {
+    self.0.to_luma_plane_offset()
+  }
+
+  #[inline]
+  pub fn y_in_sb(self) -> usize {
+    self.0.y_in_sb()
+  }
+
+  #[inline]
+  pub fn with_offset(self, col_offset: isize, row_offset: isize) -> PlaneBlockOffset {
+    Self(self.0.with_offset(col_offset, row_offset))
+  }
+}
+
+impl TileBlockOffset {
+  /// Offset of the superblock in which this block is located.
+  #[inline]
+  pub fn sb_offset(self) -> TileSuperBlockOffset {
+    TileSuperBlockOffset(self.0.sb_offset())
+  }
+
+  /// Offset of the top-left pixel of this block.
+  #[inline]
+  pub fn plane_offset(self, plane: &PlaneConfig) -> PlaneOffset {
+    self.0.plane_offset(plane)
+  }
+
+  /// Convert to plane offset without decimation.
+  #[inline]
+  pub fn to_luma_plane_offset(self) -> PlaneOffset {
+    self.0.to_luma_plane_offset()
+  }
+
+  #[inline]
+  pub fn y_in_sb(self) -> usize {
+    self.0.y_in_sb()
+  }
+
+  #[inline]
+  pub fn with_offset(self, col_offset: isize, row_offset: isize) -> TileBlockOffset {
+    Self(self.0.with_offset(col_offset, row_offset))
   }
 }
 
@@ -1332,18 +1440,18 @@ impl IndexMut<usize> for FrameBlocks {
 
 // for convenience, also index by BlockOffset
 
-impl Index<BlockOffset> for FrameBlocks {
+impl Index<PlaneBlockOffset> for FrameBlocks {
   type Output = Block;
   #[inline]
-  fn index(&self, bo: BlockOffset) -> &Self::Output {
-    &self[bo.y][bo.x]
+  fn index(&self, bo: PlaneBlockOffset) -> &Self::Output {
+    &self[bo.0.y][bo.0.x]
   }
 }
 
-impl IndexMut<BlockOffset> for FrameBlocks {
+impl IndexMut<PlaneBlockOffset> for FrameBlocks {
   #[inline]
-  fn index_mut(&mut self, bo: BlockOffset) -> &mut Self::Output {
-    &mut self[bo.y][bo.x]
+  fn index_mut(&mut self, bo: PlaneBlockOffset) -> &mut Self::Output {
+    &mut self[bo.0.y][bo.0.x]
   }
 }
 
@@ -1432,11 +1540,11 @@ impl<'a> BlockContext<'a> {
   }
 
   fn set_coeff_context(
-    &mut self, plane: usize, bo: BlockOffset, tx_size: TxSize, xdec: usize,
+    &mut self, plane: usize, bo: TileBlockOffset, tx_size: TxSize, xdec: usize,
     ydec: usize, value: u8
   ) {
     for bx in 0..tx_size.width_mi() {
-      self.above_coeff_context[plane][(bo.x >> xdec) + bx] = value;
+      self.above_coeff_context[plane][(bo.0.x >> xdec) + bx] = value;
     }
     let bo_y = bo.y_in_sb();
     for by in 0..tx_size.height_mi() {
@@ -1457,7 +1565,7 @@ impl<'a> BlockContext<'a> {
   }
 
   pub fn update_tx_size_context(
-    &mut self, bo: BlockOffset, bsize: BlockSize, tx_size: TxSize, skip: bool
+    &mut self, bo: TileBlockOffset, bsize: BlockSize, tx_size: TxSize, skip: bool
   ) {
     let n4_w = bsize.width_mi();
     let n4_h = bsize.height_mi();
@@ -1469,7 +1577,7 @@ impl<'a> BlockContext<'a> {
     };
 
     let above_ctx =
-      &mut self.above_tx_context[bo.x..bo.x + n4_w as usize];
+      &mut self.above_tx_context[bo.0.x..bo.0.x + n4_w as usize];
     let left_ctx = &mut self.left_tx_context
       [bo.y_in_sb()..bo.y_in_sb() + n4_h as usize];
 
@@ -1489,7 +1597,7 @@ impl<'a> BlockContext<'a> {
   }
 
   pub fn reset_skip_context(
-    &mut self, bo: BlockOffset, bsize: BlockSize, xdec: usize, ydec: usize
+    &mut self, bo: TileBlockOffset, bsize: BlockSize, xdec: usize, ydec: usize
   ) {
     const num_planes: usize = 3;
     let nplanes = if bsize >= BLOCK_8X8 {
@@ -1519,7 +1627,7 @@ impl<'a> BlockContext<'a> {
       let bh = plane_bsize.height_mi();
 
       for bx in 0..bw {
-        self.above_coeff_context[plane][(bo.x >> xdec2) + bx] = 0;
+        self.above_coeff_context[plane][(bo.0.x >> xdec2) + bx] = 0;
       }
 
       let bo_y = bo.y_in_sb();
@@ -1539,10 +1647,10 @@ impl<'a> BlockContext<'a> {
   }
 
   fn partition_plane_context(
-    &self, bo: BlockOffset, bsize: BlockSize
+    &self, bo: TileBlockOffset, bsize: BlockSize
   ) -> usize {
     // TODO: this should be way simpler without sub8x8
-    let above_ctx = self.above_partition_context[bo.x >> 1];
+    let above_ctx = self.above_partition_context[bo.0.x >> 1];
     let left_ctx = self.left_partition_context[bo.y_in_sb() >> 1];
     let bsl = bsize.width_log2() - BLOCK_8X8.width_log2();
     let above = (above_ctx >> bsl) & 1;
@@ -1554,7 +1662,7 @@ impl<'a> BlockContext<'a> {
   }
 
   pub fn update_partition_context(
-    &mut self, bo: BlockOffset, subsize: BlockSize, bsize: BlockSize
+    &mut self, bo: TileBlockOffset, subsize: BlockSize, bsize: BlockSize
   ) {
     #[allow(dead_code)]
     assert!(bsize.is_sqr());
@@ -1563,7 +1671,7 @@ impl<'a> BlockContext<'a> {
     let bh = bsize.height_mi();
 
     let above_ctx =
-      &mut self.above_partition_context[bo.x >> 1..(bo.x + bw) >> 1 as usize];
+      &mut self.above_partition_context[bo.0.x >> 1..(bo.0.x + bw) >> 1 as usize];
     let left_ctx = &mut self.left_partition_context
       [bo.y_in_sb() >> 1..(bo.y_in_sb() + bh) >> 1 as usize];
 
@@ -1579,9 +1687,9 @@ impl<'a> BlockContext<'a> {
     }
   }
 
-  fn skip_context(&mut self, bo: BlockOffset) -> usize {
-    let above_skip = bo.y > 0 && self.blocks.above_of(bo).skip;
-    let left_skip = bo.x > 0 && self.blocks.left_of(bo).skip;
+  fn skip_context(&mut self, bo: TileBlockOffset) -> usize {
+    let above_skip = bo.0.y > 0 && self.blocks.above_of(bo).skip;
+    let left_skip = bo.0.x > 0 && self.blocks.left_of(bo).skip;
     above_skip as usize + left_skip as usize
   }
 
@@ -1592,9 +1700,9 @@ impl<'a> BlockContext<'a> {
   // 1 - intra/inter, inter/intra
   // 2 - intra/--, --/intra
   // 3 - intra/intra
-  pub fn intra_inter_context(&mut self, bo: BlockOffset) -> usize {
-    let has_above = bo.y > 0;
-    let has_left = bo.x > 0;
+  pub fn intra_inter_context(&mut self, bo: TileBlockOffset) -> usize {
+    let has_above = bo.0.y > 0;
+    let has_left = bo.0.x > 0;
 
     match (has_above, has_left) {
       (true, true) => {
@@ -1614,7 +1722,7 @@ impl<'a> BlockContext<'a> {
 
   pub fn get_txb_ctx(
     &mut self, plane_bsize: BlockSize, tx_size: TxSize, plane: usize,
-    bo: BlockOffset, xdec: usize, ydec: usize
+    bo: TileBlockOffset, xdec: usize, ydec: usize
   ) -> TXB_CTX {
     let mut txb_ctx = TXB_CTX {
       txb_skip_ctx: 0,
@@ -1633,7 +1741,7 @@ impl<'a> BlockContext<'a> {
 
     // Decide txb_ctx.dc_sign_ctx
     for k in 0..txb_w_unit {
-      let sign = self.above_coeff_context[plane][(bo.x >> xdec) + k]
+      let sign = self.above_coeff_context[plane][(bo.0.x >> xdec) + k]
         >> COEFF_CONTEXT_BITS;
       assert!(sign <= 2);
       dc_sign += signs[sign as usize] as i16;
@@ -1676,7 +1784,7 @@ impl<'a> BlockContext<'a> {
         let mut left: u8 = 0;
 
         for k in 0..txb_w_unit {
-          top |= self.above_coeff_context[0][(bo.x >> xdec) + k];
+          top |= self.above_coeff_context[0][(bo.0.x >> xdec) + k];
         }
         top &= COEFF_CONTEXT_MASK as u8;
 
@@ -1695,7 +1803,7 @@ impl<'a> BlockContext<'a> {
       let mut left: u8 = 0;
 
       for k in 0..txb_w_unit {
-        top |= self.above_coeff_context[plane][(bo.x >> xdec) + k];
+        top |= self.above_coeff_context[plane][(bo.0.x >> xdec) + k];
       }
       for k in 0..txb_h_unit {
         left |= self.left_coeff_context[plane][(bo.y_in_sb() >> ydec) + k];
@@ -1919,13 +2027,13 @@ impl<'a> ContextWriter<'a> {
   }
 
   pub fn write_partition(
-    &mut self, w: &mut impl Writer, bo: BlockOffset, p: PartitionType, bsize: BlockSize
+    &mut self, w: &mut impl Writer, bo: TileBlockOffset, p: PartitionType, bsize: BlockSize
   ) {
     debug_assert!(bsize.is_sqr());
     assert!(bsize >= BlockSize::BLOCK_8X8 );
     let hbs = bsize.width_mi() / 2;
-    let has_cols = (bo.x + hbs) < self.bc.blocks.cols();
-    let has_rows = (bo.y + hbs) < self.bc.blocks.rows();
+    let has_cols = (bo.0.x + hbs) < self.bc.blocks.cols();
+    let has_rows = (bo.0.y + hbs) < self.bc.blocks.rows();
     let ctx = self.bc.partition_plane_context(bo, bsize);
     assert!(ctx < PARTITION_CONTEXTS);
     let partition_cdf = if bsize <= BlockSize::BLOCK_8X8 {
@@ -1963,13 +2071,13 @@ impl<'a> ContextWriter<'a> {
     }
   }
 
-  pub fn get_tx_size_context(&self, bo: BlockOffset, bsize: BlockSize) -> usize {
+  pub fn get_tx_size_context(&self, bo: TileBlockOffset, bsize: BlockSize) -> usize {
     let max_tx_size = max_txsize_rect_lookup[bsize as usize];
     let max_tx_wide = max_tx_size.width();
     let max_tx_high = max_tx_size.height();
-    let has_above = bo.y > 0;
-    let has_left = bo.x > 0;
-    let mut above = self.bc.above_tx_context[bo.x] >= max_tx_wide as u8;
+    let has_above = bo.0.y > 0;
+    let has_left = bo.0.x > 0;
+    let mut above = self.bc.above_tx_context[bo.0.x] >= max_tx_wide as u8;
     let mut left = self.bc.left_tx_context[bo.y_in_sb()] >= max_tx_high as u8;
 
     if has_above {
@@ -1986,7 +2094,7 @@ impl<'a> ContextWriter<'a> {
     0
   }
 
-  pub fn write_tx_size_intra(&mut self, w: &mut dyn Writer, bo: BlockOffset,
+  pub fn write_tx_size_intra(&mut self, w: &mut dyn Writer, bo: TileBlockOffset,
                           bsize: BlockSize, tx_size: TxSize) {
     fn tx_size_to_depth(tx_size: TxSize, bsize: BlockSize ) -> usize {
       let mut ctx_size = max_txsize_rect_lookup[bsize as usize];
@@ -2037,22 +2145,22 @@ impl<'a> ContextWriter<'a> {
         &mut self.fc.tx_size_cdf[tx_size_cat][tx_size_ctx][..=max_depths+1]);
   }
 
-  pub fn get_cdf_intra_mode_kf(&self, bo: BlockOffset) -> &[u16; INTRA_MODES + 1] {
+  pub fn get_cdf_intra_mode_kf(&self, bo: TileBlockOffset) -> &[u16; INTRA_MODES + 1] {
     static intra_mode_context: [usize; INTRA_MODES] =
       [0, 1, 2, 3, 4, 4, 4, 4, 3, 0, 1, 2, 0];
-    let above_mode = if bo.y > 0 { self.bc.blocks.above_of(bo).mode } else { PredictionMode::DC_PRED };
-    let left_mode = if bo.x > 0 { self.bc.blocks.left_of(bo).mode } else { PredictionMode::DC_PRED };
+    let above_mode = if bo.0.y > 0 { self.bc.blocks.above_of(bo).mode } else { PredictionMode::DC_PRED };
+    let left_mode = if bo.0.x > 0 { self.bc.blocks.left_of(bo).mode } else { PredictionMode::DC_PRED };
     let above_ctx = intra_mode_context[above_mode as usize];
     let left_ctx = intra_mode_context[left_mode as usize];
     &self.fc.kf_y_cdf[above_ctx][left_ctx]
   }
   pub fn write_intra_mode_kf(
-    &mut self, w: &mut dyn Writer, bo: BlockOffset, mode: PredictionMode
+    &mut self, w: &mut dyn Writer, bo: TileBlockOffset, mode: PredictionMode
   ) {
     static intra_mode_context: [usize; INTRA_MODES] =
       [0, 1, 2, 3, 4, 4, 4, 4, 3, 0, 1, 2, 0];
-    let above_mode = if bo.y > 0 { self.bc.blocks.above_of(bo).mode } else { PredictionMode::DC_PRED };
-    let left_mode = if bo.x > 0 { self.bc.blocks.left_of(bo).mode } else { PredictionMode::DC_PRED };
+    let above_mode = if bo.0.y > 0 { self.bc.blocks.above_of(bo).mode } else { PredictionMode::DC_PRED };
+    let left_mode = if bo.0.x > 0 { self.bc.blocks.left_of(bo).mode } else { PredictionMode::DC_PRED };
     let above_ctx = intra_mode_context[above_mode as usize];
     let left_ctx = intra_mode_context[left_mode as usize];
     let cdf = &mut self.fc.kf_y_cdf[above_ctx][left_ctx];
@@ -2255,14 +2363,14 @@ impl<'a> ContextWriter<'a> {
     }
   }
 
-  fn scan_row_mbmi(&mut self, bo: BlockOffset, row_offset: isize, max_row_offs: isize,
+  fn scan_row_mbmi(&mut self, bo: TileBlockOffset, row_offset: isize, max_row_offs: isize,
                    processed_rows: &mut isize, ref_frames: [RefType; 2],
                    mv_stack: &mut ArrayVec<[CandidateMV; 9]>, newmv_count: &mut usize, bsize: BlockSize,
                    is_compound: bool) -> bool {
     let bc = &self.bc;
     let target_n4_w = bsize.width_mi();
 
-    let end_mi = cmp::min(cmp::min(target_n4_w, bc.blocks.cols() - bo.x),
+    let end_mi = cmp::min(cmp::min(target_n4_w, bc.blocks.cols() - bo.0.x),
                           BLOCK_64X64.width_mi());
     let n4_w_8 = BLOCK_8X8.width_mi();
     let n4_w_16 = BLOCK_16X16.width_mi();
@@ -2270,7 +2378,7 @@ impl<'a> ContextWriter<'a> {
 
     if row_offset.abs() > 1 {
       col_offset = 1;
-      if ((bo.x & 0x01) != 0) && (target_n4_w < n4_w_8) {
+      if ((bo.0.x & 0x01) != 0) && (target_n4_w < n4_w_8) {
         col_offset -= 1;
       }
     }
@@ -2309,7 +2417,7 @@ impl<'a> ContextWriter<'a> {
     found_match
   }
 
-  fn scan_col_mbmi(&mut self, bo: BlockOffset, col_offset: isize, max_col_offs: isize,
+  fn scan_col_mbmi(&mut self, bo: TileBlockOffset, col_offset: isize, max_col_offs: isize,
                    processed_cols: &mut isize, ref_frames: [RefType; 2],
                    mv_stack: &mut ArrayVec<[CandidateMV; 9]>, newmv_count: &mut usize, bsize: BlockSize,
                    is_compound: bool) -> bool {
@@ -2317,7 +2425,7 @@ impl<'a> ContextWriter<'a> {
 
     let target_n4_h = bsize.height_mi();
 
-    let end_mi = cmp::min(cmp::min(target_n4_h, bc.blocks.rows() - bo.y),
+    let end_mi = cmp::min(cmp::min(target_n4_h, bc.blocks.rows() - bo.0.y),
                           BLOCK_64X64.height_mi());
     let n4_h_8 = BLOCK_8X8.height_mi();
     let n4_h_16 = BLOCK_16X16.height_mi();
@@ -2325,7 +2433,7 @@ impl<'a> ContextWriter<'a> {
 
     if col_offset.abs() > 1 {
       row_offset = 1;
-      if ((bo.y & 0x01) != 0) && (target_n4_h < n4_h_8) {
+      if ((bo.0.y & 0x01) != 0) && (target_n4_h < n4_h_8) {
         row_offset -= 1;
       }
     }
@@ -2363,10 +2471,10 @@ impl<'a> ContextWriter<'a> {
     found_match
   }
 
-  fn scan_blk_mbmi(&mut self, bo: BlockOffset, ref_frames: [RefType; 2],
+  fn scan_blk_mbmi(&mut self, bo: TileBlockOffset, ref_frames: [RefType; 2],
                    mv_stack: &mut ArrayVec<[CandidateMV; 9]>, newmv_count: &mut usize,
                    is_compound: bool) -> bool {
-    if bo.x >= self.bc.blocks.cols() || bo.y >= self.bc.blocks.rows() {
+    if bo.0.x >= self.bc.blocks.cols() || bo.0.y >= self.bc.blocks.rows() {
       return false;
     }
 
@@ -2382,7 +2490,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   fn setup_mvref_list<T: Pixel>(
-    &mut self, bo: BlockOffset, ref_frames: [RefType; 2], mv_stack: &mut ArrayVec<[CandidateMV; 9]>,
+    &mut self, bo: TileBlockOffset, ref_frames: [RefType; 2], mv_stack: &mut ArrayVec<[CandidateMV; 9]>,
     bsize: BlockSize, fi: &FrameInvariants<T>, is_compound: bool
   ) -> usize {
     let (_rf, _rf_num) = (INTRA_FRAME, 1);
@@ -2391,16 +2499,16 @@ impl<'a> ContextWriter<'a> {
     let target_n4_w = bsize.width_mi();
 
     let mut max_row_offs = 0 as isize;
-    let row_adj = (target_n4_h < BLOCK_8X8.height_mi()) && (bo.y & 0x01) != 0x0;
+    let row_adj = (target_n4_h < BLOCK_8X8.height_mi()) && (bo.0.y & 0x01) != 0x0;
 
     let mut max_col_offs = 0 as isize;
-    let col_adj = (target_n4_w < BLOCK_8X8.width_mi()) && (bo.x & 0x01) != 0x0;
+    let col_adj = (target_n4_w < BLOCK_8X8.width_mi()) && (bo.0.x & 0x01) != 0x0;
 
     let mut processed_rows = 0 as isize;
     let mut processed_cols = 0 as isize;
 
-    let up_avail = bo.y > 0;
-    let left_avail = bo.x > 0;
+    let up_avail = bo.0.y > 0;
+    let left_avail = bo.0.x > 0;
 
     if up_avail {
       max_row_offs = -2 * MVREF_ROW_COLS as isize + row_adj as isize;
@@ -2411,7 +2519,7 @@ impl<'a> ContextWriter<'a> {
       }
 
       let rows = self.bc.blocks.rows();
-      max_row_offs = self.find_valid_row_offs(max_row_offs, bo.y, rows);
+      max_row_offs = self.find_valid_row_offs(max_row_offs, bo.0.y, rows);
     }
 
     if left_avail {
@@ -2423,7 +2531,7 @@ impl<'a> ContextWriter<'a> {
       }
 
       let cols = self.bc.blocks.cols();
-      max_col_offs = self.find_valid_col_offs(max_col_offs, bo.x, cols);
+      max_col_offs = self.find_valid_col_offs(max_col_offs, bo.0.x, cols);
     }
 
     let mut row_match = false;
@@ -2440,7 +2548,7 @@ impl<'a> ContextWriter<'a> {
                                            &mut newmv_count, bsize, is_compound);
       col_match |= found_match;
     }
-    if has_tr(bo, bsize) && bo.y > 0 {
+    if has_tr(bo, bsize) && bo.0.y > 0 {
       let found_match = self.scan_blk_mbmi(bo.with_offset(target_n4_w as isize, -1), ref_frames, mv_stack,
                                            &mut newmv_count, is_compound);
       row_match |= found_match;
@@ -2453,7 +2561,7 @@ impl<'a> ContextWriter<'a> {
     /* Scan the second outer area. */
     let mut far_newmv_count: usize = 0; // won't be used
 
-    let found_match = bo.x > 0 && bo.y > 0 && self.scan_blk_mbmi(
+    let found_match = bo.0.x > 0 && bo.0.y > 0 && self.scan_blk_mbmi(
       bo.with_offset(-1, -1), ref_frames, mv_stack, &mut far_newmv_count, is_compound
     );
     row_match |= found_match;
@@ -2495,8 +2603,8 @@ impl<'a> ContextWriter<'a> {
     if mv_stack.len() < 2 {
       // 7.10.2.12 Extra search process
 
-      let w4 = bsize.width_mi().min(16).min(self.bc.blocks.cols() - bo.x);
-      let h4 = bsize.height_mi().min(16).min(self.bc.blocks.rows() - bo.y);
+      let w4 = bsize.width_mi().min(16).min(self.bc.blocks.cols() - bo.0.x);
+      let h4 = bsize.height_mi().min(16).min(self.bc.blocks.rows() - bo.0.y);
       let num4x4 = w4.min(h4);
 
       let passes = if up_avail { 0 } else { 1 } .. if left_avail { 2 } else { 1 };
@@ -2581,20 +2689,20 @@ impl<'a> ContextWriter<'a> {
 
     /* TODO: Handle single reference frame extension */
 
-    let frame_bo = BlockOffset {
-      x: self.bc.blocks.x() + bo.x,
-      y: self.bc.blocks.y() + bo.y,
-    };
+    let frame_bo = PlaneBlockOffset(BlockOffset {
+      x: self.bc.blocks.x() + bo.0.x,
+      y: self.bc.blocks.y() + bo.0.y,
+    });
     // clamp mvs
     for mv in mv_stack {
       let blk_w = bsize.width();
       let blk_h = bsize.height();
       let border_w = 128 + blk_w as isize * 8;
       let border_h = 128 + blk_h as isize * 8;
-      let mvx_min = -(frame_bo.x as isize) * (8 * MI_SIZE) as isize - border_w;
-      let mvx_max = (self.bc.blocks.frame_cols - frame_bo.x - blk_w / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_w;
-      let mvy_min = -(frame_bo.y as isize) * (8 * MI_SIZE) as isize - border_h;
-      let mvy_max = (self.bc.blocks.frame_rows - frame_bo.y - blk_h / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_h;
+      let mvx_min = -(frame_bo.0.x as isize) * (8 * MI_SIZE) as isize - border_w;
+      let mvx_max = (self.bc.blocks.frame_cols - frame_bo.0.x - blk_w / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_w;
+      let mvy_min = -(frame_bo.0.y as isize) * (8 * MI_SIZE) as isize - border_h;
+      let mvy_max = (self.bc.blocks.frame_rows - frame_bo.0.y - blk_h / MI_SIZE) as isize * (8 * MI_SIZE) as isize + border_h;
       mv.this_mv.row = (mv.this_mv.row as isize).max(mvy_min).min(mvy_max) as i16;
       mv.this_mv.col = (mv.this_mv.col as isize).max(mvx_min).min(mvx_max) as i16;
       mv.comp_mv.row = (mv.comp_mv.row as isize).max(mvy_min).min(mvy_max) as i16;
@@ -2605,7 +2713,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   pub fn find_mvrefs<T: Pixel>(
-    &mut self, bo: BlockOffset, ref_frames: [RefType; 2],
+    &mut self, bo: TileBlockOffset, ref_frames: [RefType; 2],
     mv_stack: &mut ArrayVec<[CandidateMV; 9]>, bsize: BlockSize,
     fi: &FrameInvariants<T>, is_compound: bool
   ) -> usize {
@@ -2625,10 +2733,10 @@ impl<'a> ContextWriter<'a> {
     self.setup_mvref_list(bo, ref_frames, mv_stack, bsize, fi, is_compound)
   }
 
-  pub fn fill_neighbours_ref_counts(&mut self, bo: BlockOffset) {
+  pub fn fill_neighbours_ref_counts(&mut self, bo: TileBlockOffset) {
       let mut ref_counts = [0; INTER_REFS_PER_FRAME];
 
-      if bo.y > 0 {
+      if bo.0.y > 0 {
         let above_b = self.bc.blocks.above_of(bo);
         if above_b.is_inter() {
           ref_counts[above_b.ref_frames[0].to_index()] += 1;
@@ -2638,7 +2746,7 @@ impl<'a> ContextWriter<'a> {
         }
       }
 
-      if bo.x > 0 {
+      if bo.0.x > 0 {
         let left_b = self.bc.blocks.left_of(bo);
         if left_b.is_inter() {
           ref_counts[left_b.ref_frames[0].to_index()] += 1;
@@ -2660,7 +2768,7 @@ impl<'a> ContextWriter<'a> {
     }
   }
 
-  fn get_ref_frame_ctx_b0(&mut self, bo: BlockOffset) -> usize {
+  fn get_ref_frame_ctx_b0(&mut self, bo: TileBlockOffset) -> usize {
     let ref_counts = self.bc.blocks[bo].neighbors_ref_counts;
 
     let fwd_cnt = ref_counts[LAST_FRAME.to_index()] + ref_counts[LAST2_FRAME.to_index()] +
@@ -2672,7 +2780,7 @@ impl<'a> ContextWriter<'a> {
     ContextWriter::ref_count_ctx(fwd_cnt, bwd_cnt)
   }
 
-  fn get_pred_ctx_brfarf2_or_arf(&mut self, bo: BlockOffset) -> usize {
+  fn get_pred_ctx_brfarf2_or_arf(&mut self, bo: TileBlockOffset) -> usize {
     let ref_counts = self.bc.blocks[bo].neighbors_ref_counts;
 
     let brfarf2_count = ref_counts[BWDREF_FRAME.to_index()] + ref_counts[ALTREF2_FRAME.to_index()];
@@ -2681,7 +2789,7 @@ impl<'a> ContextWriter<'a> {
     ContextWriter::ref_count_ctx(brfarf2_count, arf_count)
   }
 
-  fn get_pred_ctx_ll2_or_l3gld(&mut self, bo: BlockOffset) -> usize {
+  fn get_pred_ctx_ll2_or_l3gld(&mut self, bo: TileBlockOffset) -> usize {
     let ref_counts = self.bc.blocks[bo].neighbors_ref_counts;
 
     let l_l2_count = ref_counts[LAST_FRAME.to_index()] + ref_counts[LAST2_FRAME.to_index()];
@@ -2690,7 +2798,7 @@ impl<'a> ContextWriter<'a> {
     ContextWriter::ref_count_ctx(l_l2_count, l3_gold_count)
   }
 
-  fn get_pred_ctx_last_or_last2(&mut self, bo: BlockOffset) -> usize {
+  fn get_pred_ctx_last_or_last2(&mut self, bo: TileBlockOffset) -> usize {
     let ref_counts = self.bc.blocks[bo].neighbors_ref_counts;
 
     let l_count = ref_counts[LAST_FRAME.to_index()];
@@ -2699,7 +2807,7 @@ impl<'a> ContextWriter<'a> {
     ContextWriter::ref_count_ctx(l_count, l2_count)
   }
 
-  fn get_pred_ctx_last3_or_gold(&mut self, bo: BlockOffset) -> usize {
+  fn get_pred_ctx_last3_or_gold(&mut self, bo: TileBlockOffset) -> usize {
     let ref_counts = self.bc.blocks[bo].neighbors_ref_counts;
 
     let l3_count = ref_counts[LAST3_FRAME.to_index()];
@@ -2708,7 +2816,7 @@ impl<'a> ContextWriter<'a> {
     ContextWriter::ref_count_ctx(l3_count, gold_count)
   }
 
-  fn get_pred_ctx_brf_or_arf2(&mut self, bo: BlockOffset) -> usize {
+  fn get_pred_ctx_brf_or_arf2(&mut self, bo: TileBlockOffset) -> usize {
     let ref_counts = self.bc.blocks[bo].neighbors_ref_counts;
 
     let brf_count = ref_counts[BWDREF_FRAME.to_index()];
@@ -2718,9 +2826,9 @@ impl<'a> ContextWriter<'a> {
   }
 
 
-  fn get_comp_mode_ctx(&self, bo: BlockOffset) -> usize {
-    let avail_left = bo.x > 0;
-    let avail_up = bo.y > 0;
+  fn get_comp_mode_ctx(&self, bo: TileBlockOffset) -> usize {
+    let avail_left = bo.0.x > 0;
+    let avail_up = bo.0.y > 0;
     let (left0, left1) = if avail_left {
       let bo_left = bo.with_offset(-1, 0);
       let ref_frames = &self.bc.blocks[bo_left].ref_frames;
@@ -2769,13 +2877,13 @@ impl<'a> ContextWriter<'a> {
     }
   }
 
-  fn get_comp_ref_type_ctx(&self, bo: BlockOffset) -> usize {
+  fn get_comp_ref_type_ctx(&self, bo: TileBlockOffset) -> usize {
     fn is_samedir_ref_pair(ref0: RefType, ref1: RefType) -> bool {
       (ref0.is_bwd_ref() && ref0 != NONE_FRAME) == (ref1.is_bwd_ref() && ref1 != NONE_FRAME)
     }
 
-    let avail_left = bo.x > 0;
-    let avail_up = bo.y > 0;
+    let avail_left = bo.0.x > 0;
+    let avail_up = bo.0.y > 0;
     let (left0, left1) = if avail_left {
       let bo_left = bo.with_offset(-1, 0);
       let ref_frames = &self.bc.blocks[bo_left].ref_frames;
@@ -2832,7 +2940,7 @@ impl<'a> ContextWriter<'a> {
     }
   }
 
-  pub fn write_ref_frames<T: Pixel>(&mut self, w: &mut dyn Writer, fi: &FrameInvariants<T>, bo: BlockOffset) {
+  pub fn write_ref_frames<T: Pixel>(&mut self, w: &mut dyn Writer, fi: &FrameInvariants<T>, bo: TileBlockOffset) {
     let rf = self.bc.blocks[bo].ref_frames;
     let sz = self.bc.blocks[bo].n4_w.min(self.bc.blocks[bo].n4_h);
 
@@ -3003,22 +3111,22 @@ impl<'a> ContextWriter<'a> {
       }
     }
   }
-  pub fn write_skip(&mut self, w: &mut dyn Writer, bo: BlockOffset, skip: bool) {
+  pub fn write_skip(&mut self, w: &mut dyn Writer, bo: TileBlockOffset, skip: bool) {
     let ctx = self.bc.skip_context(bo);
     symbol_with_update!(self, w, skip as u32, &mut self.fc.skip_cdfs[ctx]);
   }
 
-  fn get_segment_pred(&mut self, bo: BlockOffset) -> ( u8, u8 ) {
+  fn get_segment_pred(&mut self, bo: TileBlockOffset) -> ( u8, u8 ) {
     let mut prev_ul = -1;
     let mut prev_u  = -1;
     let mut prev_l  = -1;
-    if bo.x > 0 && bo.y > 0 {
+    if bo.0.x > 0 && bo.0.y > 0 {
       prev_ul = self.bc.blocks.above_left_of(bo).segmentation_idx as i8;
     }
-    if bo.y > 0 {
+    if bo.0.y > 0 {
       prev_u  = self.bc.blocks.above_of(bo).segmentation_idx as i8;
     }
-    if bo.x > 0 {
+    if bo.0.x > 0 {
       prev_l  = self.bc.blocks.left_of(bo).segmentation_idx as i8;
     }
 
@@ -3075,7 +3183,7 @@ impl<'a> ContextWriter<'a> {
     }
   }
 
-  pub fn write_segmentation(&mut self, w: &mut dyn Writer, bo: BlockOffset,
+  pub fn write_segmentation(&mut self, w: &mut dyn Writer, bo: TileBlockOffset,
                             bsize: BlockSize, skip: bool, last_active_segid: u8) {
     let ( pred, cdf_index ) = self.get_segment_pred(bo);
     if skip {
@@ -3118,7 +3226,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   pub fn write_lrf<T: Pixel>(
-    &mut self, w: &mut dyn Writer, fi: &FrameInvariants<T>, rs: &mut TileRestorationStateMut, sbo: SuperBlockOffset
+    &mut self, w: &mut dyn Writer, fi: &FrameInvariants<T>, rs: &mut TileRestorationStateMut, sbo: TileSuperBlockOffset
   ) {
     if !fi.allow_intrabc { // TODO: also disallow if lossless
       for pli in 0..PLANES {
@@ -3210,7 +3318,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   pub fn write_block_deblock_deltas(&mut self, w: &mut dyn Writer,
-                                    bo: BlockOffset, multi: bool) {
+                                    bo: TileBlockOffset, multi: bool) {
       let block = &self.bc.blocks[bo];
       let deltas = if multi { FRAME_LF_COUNT + PLANES - 3 } else { 1 };
       for i in 0..deltas {
@@ -3235,7 +3343,7 @@ impl<'a> ContextWriter<'a> {
       }
   }
 
-  pub fn write_is_inter(&mut self, w: &mut dyn Writer, bo: BlockOffset, is_inter: bool) {
+  pub fn write_is_inter(&mut self, w: &mut dyn Writer, bo: TileBlockOffset, is_inter: bool) {
     let ctx = self.bc.intra_inter_context(bo);
     symbol_with_update!(self, w, is_inter as u32, &mut self.fc.intra_inter_cdfs[ctx]);
   }
@@ -3467,7 +3575,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   pub fn write_coeffs_lv_map(
-    &mut self, w: &mut dyn Writer, plane: usize, bo: BlockOffset, coeffs_in: &[i32],
+    &mut self, w: &mut dyn Writer, plane: usize, bo: TileBlockOffset, coeffs_in: &[i32],
     pred_mode: PredictionMode,
     tx_size: TxSize, tx_type: TxType, plane_bsize: BlockSize, xdec: usize,
     ydec: usize, use_reduced_tx_set: bool

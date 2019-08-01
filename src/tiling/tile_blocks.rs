@@ -93,22 +93,22 @@ macro_rules! tile_blocks_common {
       }
 
       #[inline(always)]
-      pub fn above_of(&self, bo: BlockOffset) -> &Block {
-        &self[bo.y - 1][bo.x]
+      pub fn above_of(&self, bo: TileBlockOffset) -> &Block {
+        &self[bo.0.y - 1][bo.0.x]
       }
 
       #[inline(always)]
-      pub fn left_of(&self, bo: BlockOffset) -> &Block {
-        &self[bo.y][bo.x - 1]
+      pub fn left_of(&self, bo: TileBlockOffset) -> &Block {
+        &self[bo.0.y][bo.0.x - 1]
       }
 
       #[inline(always)]
-      pub fn above_left_of(&self, bo: BlockOffset) -> &Block {
-        &self[bo.y - 1][bo.x - 1]
+      pub fn above_left_of(&self, bo: TileBlockOffset) -> &Block {
+        &self[bo.0.y - 1][bo.0.x - 1]
       }
 
-      pub fn get_cdef(&self, sbo: SuperBlockOffset) -> u8 {
-        let bo = sbo.block_offset(0, 0);
+      pub fn get_cdef(&self, sbo: TileSuperBlockOffset) -> u8 {
+        let bo = sbo.block_offset(0, 0).0;
         self[bo.y][bo.x].cdef_index
       }
     }
@@ -128,12 +128,12 @@ macro_rules! tile_blocks_common {
       }
     }
 
-    // for convenience, also index by BlockOffset
-    impl Index<BlockOffset> for $name<'_> {
+    // for convenience, also index by TileBlockOffset
+    impl Index<TileBlockOffset> for $name<'_> {
       type Output = Block;
       #[inline(always)]
-      fn index(&self, bo: BlockOffset) -> &Self::Output {
-        &self[bo.y][bo.x]
+      fn index(&self, bo: TileBlockOffset) -> &Self::Output {
+        &self[bo.0.y][bo.0.x]
       }
     }
   }
@@ -158,7 +158,7 @@ impl TileBlocksMut<'_> {
   }
 
   #[inline(always)]
-  pub fn for_each<F>(&mut self, bo: BlockOffset, bsize: BlockSize, f: F)
+  pub fn for_each<F>(&mut self, bo: TileBlockOffset, bsize: BlockSize, f: F)
   where
     F: Fn(&mut Block) -> (),
   {
@@ -166,7 +166,7 @@ impl TileBlocksMut<'_> {
     let bh = bsize.height_mi();
     for y in 0..bh {
       for x in 0..bw {
-        f(&mut self[bo.y + y as usize][bo.x + x as usize]);
+        f(&mut self[bo.0.y + y as usize][bo.0.x + x as usize]);
       }
     }
   }
@@ -174,7 +174,7 @@ impl TileBlocksMut<'_> {
   #[inline(always)]
   pub fn set_mode(
     &mut self,
-    bo: BlockOffset,
+    bo: TileBlockOffset,
     bsize: BlockSize,
     mode: PredictionMode,
   ) {
@@ -182,7 +182,7 @@ impl TileBlocksMut<'_> {
   }
 
   #[inline(always)]
-  pub fn set_block_size(&mut self, bo: BlockOffset, bsize: BlockSize) {
+  pub fn set_block_size(&mut self, bo: TileBlockOffset, bsize: BlockSize) {
     let n4_w = bsize.width_mi();
     let n4_h = bsize.height_mi();
     self.for_each(bo, bsize, |block| {
@@ -195,7 +195,7 @@ impl TileBlocksMut<'_> {
   #[inline(always)]
   pub fn set_tx_size(
     &mut self,
-    bo: BlockOffset,
+    bo: TileBlockOffset,
     bsize: BlockSize,
     tx_size: TxSize,
   ) {
@@ -203,14 +203,14 @@ impl TileBlocksMut<'_> {
   }
 
   #[inline(always)]
-  pub fn set_skip(&mut self, bo: BlockOffset, bsize: BlockSize, skip: bool) {
+  pub fn set_skip(&mut self, bo: TileBlockOffset, bsize: BlockSize, skip: bool) {
     self.for_each(bo, bsize, |block| block.skip = skip);
   }
 
   #[inline(always)]
   pub fn set_segmentation_idx(
     &mut self,
-    bo: BlockOffset,
+    bo: TileBlockOffset,
     bsize: BlockSize,
     idx: u8,
   ) {
@@ -220,7 +220,7 @@ impl TileBlocksMut<'_> {
   #[inline(always)]
   pub fn set_ref_frames(
     &mut self,
-    bo: BlockOffset,
+    bo: TileBlockOffset,
     bsize: BlockSize,
     r: [RefType; 2],
   ) {
@@ -230,7 +230,7 @@ impl TileBlocksMut<'_> {
   #[inline(always)]
   pub fn set_motion_vectors(
     &mut self,
-    bo: BlockOffset,
+    bo: TileBlockOffset,
     bsize: BlockSize,
     mvs: [MotionVector; 2],
   ) {
@@ -238,8 +238,8 @@ impl TileBlocksMut<'_> {
   }
 
   #[inline(always)]
-  pub fn set_cdef(&mut self, sbo: SuperBlockOffset, cdef_index: u8) {
-    let bo = sbo.block_offset(0, 0);
+  pub fn set_cdef(&mut self, sbo: TileSuperBlockOffset, cdef_index: u8) {
+    let bo = sbo.block_offset(0, 0).0;
     // Checkme: Is 16 still the right block unit for 128x128 superblocks?
     let bw = cmp::min(bo.x + MIB_SIZE, self.cols);
     let bh = cmp::min(bo.y + MIB_SIZE, self.rows);
@@ -262,9 +262,9 @@ impl IndexMut<usize> for TileBlocksMut<'_> {
   }
 }
 
-impl IndexMut<BlockOffset> for TileBlocksMut<'_> {
+impl IndexMut<TileBlockOffset> for TileBlocksMut<'_> {
   #[inline(always)]
-  fn index_mut(&mut self, bo: BlockOffset) -> &mut Self::Output {
-    &mut self[bo.y][bo.x]
+  fn index_mut(&mut self, bo: TileBlockOffset) -> &mut Self::Output {
+    &mut self[bo.0.y][bo.0.x]
   }
 }

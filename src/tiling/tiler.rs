@@ -176,12 +176,12 @@ impl<'a, 'b, T: Pixel> Iterator for TileContextIterMut<'a, 'b, T> {
       let ctx = TileContextMut {
         ts: {
           let fs = unsafe { &mut *self.fs };
-          let sbo = SuperBlockOffset {
+          let sbo = PlaneSuperBlockOffset(SuperBlockOffset {
             x: tile_col * self.ti.tile_width_sb,
             y: tile_row * self.ti.tile_height_sb,
-          };
-          let x = sbo.x << self.ti.sb_size_log2;
-          let y = sbo.y << self.ti.sb_size_log2;
+          });
+          let x = sbo.0.x << self.ti.sb_size_log2;
+          let y = sbo.0.y << self.ti.sb_size_log2;
           let tile_width = self.ti.tile_width_sb << self.ti.sb_size_log2;
           let tile_height = self.ti.tile_height_sb << self.ti.sb_size_log2;
           let width = tile_width.min(self.ti.frame_width - x);

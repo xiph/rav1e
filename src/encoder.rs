@@ -358,7 +358,7 @@ impl<T: Pixel> FrameState<T> {
   #[inline(always)]
   pub fn as_tile_state_mut(&mut self) -> TileStateMut<'_, T> {
     let PlaneConfig { width, height, .. } = self.rec.planes[0].cfg;
-    let sbo_0 = SuperBlockOffset { x: 0, y: 0 };
+    let sbo_0 = PlaneSuperBlockOffset(SuperBlockOffset { x: 0, y: 0 });
     TileStateMut::new(self, sbo_0, self.sb_size_log2, width, height)
   }
 }
@@ -941,7 +941,7 @@ fn diff<T: Pixel>(
     }
 }
 
-fn get_qidx<T: Pixel>(fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, cw: &ContextWriter, tile_bo: BlockOffset) -> u8 {
+fn get_qidx<T: Pixel>(fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, cw: &ContextWriter, tile_bo: TileBlockOffset) -> u8 {
   let mut qidx = fi.base_q_idx;
   let sidx = cw.bc.blocks[tile_bo].segmentation_idx as usize;
   if ts.segmentation.features[sidx][SegLvl::SEG_LVL_ALT_Q as usize] {
@@ -956,9 +956,9 @@ fn get_qidx<T: Pixel>(fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, cw: &Co
 // dequantize, inverse-transform.
 pub fn encode_tx_block<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>, cw: &mut ContextWriter,
-  w: &mut dyn Writer, p: usize, tile_partition_bo: BlockOffset,
+  w: &mut dyn Writer, p: usize, tile_partition_bo: TileBlockOffset,
   bx: usize, by: usize, // tx block position within a partition, unit: tx block number
-  tile_bo: BlockOffset, mode: PredictionMode,
+  tile_bo: TileBlockOffset, mode: PredictionMode,
   tx_size: TxSize, tx_type: TxType, bsize: BlockSize, po: PlaneOffset,
   skip: bool, ac: &[i16], alpha: i16, rdo_type: RDOType, need_recon_pixel: bool
 ) -> (bool, i64) {
@@ -966,7 +966,7 @@ pub fn encode_tx_block<T: Pixel>(
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[p].cfg;
   let tile_rect = ts.tile_rect().decimated(xdec, ydec);
   let rec = &mut ts.rec.planes[p];
-  let area = Area::BlockStartingAt { bo: tile_bo };
+  let area = Area::BlockStartingAt { bo: tile_bo.0 };
 
   debug_assert!(tx_size.sqr() <= TxSize::TX_32X32 || tx_type == TxType::DCT_DCT);
 
@@ -1051,7 +1051,7 @@ pub fn encode_tx_block<T: Pixel>(
 pub fn motion_compensate<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>, cw: &mut ContextWriter,
   luma_mode: PredictionMode, ref_frames: [RefType; 2], mvs: [MotionVector; 2],
-  bsize: BlockSize, tile_bo: BlockOffset, luma_only: bool
+  bsize: BlockSize, tile_bo: TileBlockOffset, luma_only: bool
 ) {
   debug_assert!(!luma_mode.is_intra());
 
@@ -1071,7 +1071,7 @@ pub fn motion_compensate<T: Pixel>(
     let &PlaneConfig { xdec, ydec, .. } = rec.plane_cfg;
     let tile_rect = luma_tile_rect.decimated(xdec, ydec);
 
-    let area = Area::BlockStartingAt { bo: tile_bo };
+    let area = Area::BlockStartingAt { bo: tile_bo.0 };
     if p > 0 && bsize < BlockSize::BLOCK_8X8 {
       let mut some_use_intra = false;
       if bsize == BlockSize::BLOCK_4X4 || bsize == BlockSize::BLOCK_4X8 {
@@ -1131,14 +1131,14 @@ pub fn motion_compensate<T: Pixel>(
 
 pub fn save_block_motion<T: Pixel>(
    ts: &mut TileStateMut<'_, T>,
-   bsize: BlockSize, tile_bo: BlockOffset,
+   bsize: BlockSize, tile_bo: TileBlockOffset,
    ref_frame: usize, mv: MotionVector,
 ) {
   let tile_mvs = &mut ts.mvs[ref_frame];
-  let tile_bo_x_end = (tile_bo.x + bsize.width_mi()).min(ts.mi_width);
-  let tile_bo_y_end = (tile_bo.y + bsize.height_mi()).min(ts.mi_height);
-  for mi_y in tile_bo.y..tile_bo_y_end {
-    for mi_x in tile_bo.x..tile_bo_x_end {
+  let tile_bo_x_end = (tile_bo.0.x + bsize.width_mi()).min(ts.mi_width);
+  let tile_bo_y_end = (tile_bo.0.y + bsize.height_mi()).min(ts.mi_height);
+  for mi_y in tile_bo.0.y..tile_bo_y_end {
+    for mi_x in tile_bo.0.x..tile_bo_x_end {
       tile_mvs[mi_y][mi_x] = mv;
     }
   }
@@ -1147,7 +1147,7 @@ pub fn save_block_motion<T: Pixel>(
 pub fn encode_block_pre_cdef<T: Pixel>(
   seq: &Sequence, ts: &TileStateMut<'_, T>,
   cw: &mut ContextWriter, w: &mut dyn Writer,
-  bsize: BlockSize, tile_bo: BlockOffset, skip: bool
+  bsize: BlockSize, tile_bo: TileBlockOffset, skip: bool
 ) -> bool {
   cw.bc.blocks.set_skip(tile_bo, bsize, skip);
   if ts.segmentation.enabled && ts.segmentation.update_map && ts.segmentation.preskip {
@@ -1168,7 +1168,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
   cw: &mut ContextWriter, w: &mut dyn Writer,
   luma_mode: PredictionMode, chroma_mode: PredictionMode,
   ref_frames: [RefType; 2], mvs: [MotionVector; 2],
-  bsize: BlockSize, tile_bo: BlockOffset, skip: bool,
+  bsize: BlockSize, tile_bo: TileBlockOffset, skip: bool,
   cfl: CFLParams, tx_size: TxSize, tx_type: TxType,
   mode_context: usize, mv_stack: &[CandidateMV],
   rdo_type: RDOType, need_recon_pixel: bool
@@ -1333,7 +1333,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
 }
 
 pub fn luma_ac<T: Pixel>(
-  ac: &mut [i16], ts: &mut TileStateMut<'_, T>, tile_bo: BlockOffset, bsize: BlockSize
+  ac: &mut [i16], ts: &mut TileStateMut<'_, T>, tile_bo: TileBlockOffset, bsize: BlockSize
 ) {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let plane_bsize = bsize.subsampled_size(xdec, ydec);
@@ -1344,7 +1344,7 @@ pub fn luma_ac<T: Pixel>(
     tile_bo
   };
   let rec = &ts.rec.planes[0];
-  let luma = &rec.subregion(Area::BlockStartingAt { bo });
+  let luma = &rec.subregion(Area::BlockStartingAt { bo: bo.0 });
 
   let mut sum: i32 = 0;
   for sub_y in 0..plane_bsize.height() {
@@ -1377,7 +1377,7 @@ pub fn luma_ac<T: Pixel>(
 pub fn write_tx_blocks<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w: &mut dyn Writer,
-  luma_mode: PredictionMode, chroma_mode: PredictionMode, tile_bo: BlockOffset,
+  luma_mode: PredictionMode, chroma_mode: PredictionMode, tile_bo: TileBlockOffset,
   bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool,
   cfl: CFLParams, luma_only: bool, rdo_type: RDOType, need_recon_pixel: bool
 ) -> i64 {
@@ -1394,10 +1394,10 @@ pub fn write_tx_blocks<T: Pixel>(
 
   for by in 0..bh {
     for bx in 0..bw {
-      let tx_bo = BlockOffset {
-        x: tile_bo.x + bx * tx_size.width_mi(),
-        y: tile_bo.y + by * tx_size.height_mi()
-      };
+      let tx_bo = TileBlockOffset(BlockOffset {
+        x: tile_bo.0.x + bx * tx_size.width_mi(),
+        y: tile_bo.0.y + by * tx_size.height_mi()
+      });
 
       let po = tx_bo.plane_offset(&ts.input.planes[0].cfg);
       let (_, dist) =
@@ -1449,12 +1449,12 @@ pub fn write_tx_blocks<T: Pixel>(
       for by in 0..bh_uv {
         for bx in 0..bw_uv {
           let tx_bo =
-            BlockOffset {
-              x: tile_bo.x + ((bx * uv_tx_size.width_mi()) << xdec) -
+            TileBlockOffset(BlockOffset {
+              x: tile_bo.0.x + ((bx * uv_tx_size.width_mi()) << xdec) -
                 ((bw * tx_size.width_mi() == 1) as usize) * xdec,
-              y: tile_bo.y + ((by * uv_tx_size.height_mi()) << ydec) -
-                ((bh * tx_size.height_mi() == 1) as usize) * ydec
-            };
+                y: tile_bo.0.y + ((by * uv_tx_size.height_mi()) << ydec) -
+                  ((bh * tx_size.height_mi() == 1) as usize) * ydec
+            });
 
           let mut po = tile_bo.plane_offset(&ts.input.planes[p].cfg);
           po.x += (bx * uv_tx_size.width()) as isize;
@@ -1476,7 +1476,7 @@ pub fn write_tx_blocks<T: Pixel>(
 // which means only one tx block exist for a inter mode partition.
 pub fn write_tx_tree<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>, cw: &mut ContextWriter, w: &mut dyn Writer,
-  luma_mode: PredictionMode, tile_bo: BlockOffset,
+  luma_mode: PredictionMode, tile_bo: TileBlockOffset,
   bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool,
   luma_only: bool, rdo_type: RDOType, need_recon_pixel: bool
 ) -> i64 {
@@ -1528,12 +1528,12 @@ pub fn write_tx_tree<T: Pixel>(
       for by in 0..bh_uv {
         for bx in 0..bw_uv {
           let tx_bo =
-            BlockOffset {
-              x: tile_bo.x + ((bx * uv_tx_size.width_mi()) << xdec) -
+            TileBlockOffset(BlockOffset {
+              x: tile_bo.0.x + ((bx * uv_tx_size.width_mi()) << xdec) -
                 ((bw * tx_size.width_mi() == 1) as usize) * xdec,
-              y: tile_bo.y + ((by * uv_tx_size.height_mi()) << ydec) -
-                ((bh * tx_size.height_mi() == 1) as usize) * ydec
-            };
+                y: tile_bo.0.y + ((by * uv_tx_size.height_mi()) << ydec) -
+                  ((bh * tx_size.height_mi() == 1) as usize) * ydec
+            });
 
           let mut po = tile_bo.plane_offset(&ts.input.planes[p].cfg);
           po.x += (bx * uv_tx_size.width()) as isize;
@@ -1554,7 +1554,7 @@ pub fn write_tx_tree<T: Pixel>(
 pub fn encode_block_with_modes<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer, w_post_cdef: &mut dyn Writer,
-  bsize: BlockSize, tile_bo: BlockOffset, mode_decision: &RDOPartitionOutput,
+  bsize: BlockSize, tile_bo: TileBlockOffset, mode_decision: &RDOPartitionOutput,
   rdo_type: RDOType
 ) {
   let (mode_luma, mode_chroma) =
@@ -1587,7 +1587,7 @@ pub fn encode_block_with_modes<T: Pixel>(
 fn encode_partition_bottomup<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>, cw: &mut ContextWriter,
   w_pre_cdef: &mut W, w_post_cdef: &mut W, bsize: BlockSize,
-  tile_bo: BlockOffset, pmvs: &mut [[Option<MotionVector>; REF_FRAMES]; 5],
+  tile_bo: TileBlockOffset, pmvs: &mut [[Option<MotionVector>; REF_FRAMES]; 5],
   ref_rd_cost: f64
 ) -> (RDOOutput) {
   let rdo_type = RDOType::PixelDistRealRate;
@@ -1599,7 +1599,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
     part_modes: Vec::new()
   };
 
-  if tile_bo.x >= cw.bc.blocks.cols() || tile_bo.y >= cw.bc.blocks.rows() {
+  if tile_bo.0.x >= cw.bc.blocks.cols() || tile_bo.0.y >= cw.bc.blocks.rows() {
     return rdo_output
   }
 
@@ -1608,8 +1608,8 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
   let is_square = bsize.is_sqr();
 
   // Always split if the current partition is too large
-  let must_split = (tile_bo.x + bsw as usize > ts.mi_width ||
-                    tile_bo.y + bsh as usize > ts.mi_height ||
+  let must_split = (tile_bo.0.x + bsw as usize > ts.mi_width ||
+                    tile_bo.0.y + bsh as usize > ts.mi_height ||
                     bsize.greater_than(BlockSize::BLOCK_64X64)) && is_square;
 
   // must_split overrides the minimum partition size when applicable
@@ -1642,7 +1642,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
     let pmv_idx = if bsize.greater_than(BlockSize::BLOCK_32X32) {
       0
     } else {
-      ((tile_bo.x & 32) >> 5) + ((tile_bo.y & 32) >> 4) + 1
+      ((tile_bo.0.x & 32) >> 5) + ((tile_bo.0.y & 32) >> 4) + 1
     };
     let spmvs = &mut pmvs[pmv_idx];
 
@@ -1678,8 +1678,8 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
         partition == PartitionType::PARTITION_VERT { continue; }
 
       if must_split {
-        let cbw = (ts.mi_width - tile_bo.x).min(bsw); // clipped block width, i.e. having effective pixels
-        let cbh = (ts.mi_height - tile_bo.y).min(bsh);
+        let cbw = (ts.mi_width - tile_bo.0.x).min(bsw); // clipped block width, i.e. having effective pixels
+        let cbh = (ts.mi_height - tile_bo.0.y).min(bsh);
         let mut split_vert = false;
         let mut split_horz = false;
         if cbw == bsw/2 && cbh == bsh { split_vert = true; }
@@ -1706,9 +1706,9 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
 
       let four_partitions = [
         tile_bo,
-        BlockOffset{ x: tile_bo.x + hbsw as usize, y: tile_bo.y },
-        BlockOffset{ x: tile_bo.x, y: tile_bo.y + hbsh as usize },
-        BlockOffset{ x: tile_bo.x + hbsw as usize, y: tile_bo.y + hbsh as usize }
+        TileBlockOffset(BlockOffset{ x: tile_bo.0.x + hbsw as usize, y: tile_bo.0.y }),
+        TileBlockOffset(BlockOffset{ x: tile_bo.0.x, y: tile_bo.0.y + hbsh as usize }),
+        TileBlockOffset(BlockOffset{ x: tile_bo.0.x + hbsw as usize, y: tile_bo.0.y + hbsh as usize })
       ];
       let partitions = get_sub_partitions(&four_partitions, partition);
       let mut early_exit = false;
@@ -1806,11 +1806,11 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
 fn encode_partition_topdown<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
-  bsize: BlockSize, tile_bo: BlockOffset, block_output: &Option<RDOOutput>,
+  bsize: BlockSize, tile_bo: TileBlockOffset, block_output: &Option<RDOOutput>,
   pmvs: &mut [[Option<MotionVector>; REF_FRAMES]; 5]
 ) {
 
-  if tile_bo.x >= cw.bc.blocks.cols() || tile_bo.y >= cw.bc.blocks.rows() {
+  if tile_bo.0.x >= cw.bc.blocks.cols() || tile_bo.0.y >= cw.bc.blocks.rows() {
     return;
   }
   let bsw = bsize.width_mi();
@@ -1819,8 +1819,8 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   let rdo_type = RDOType::PixelDistRealRate;
 
   // Always split if the current partition is too large
-  let must_split = (tile_bo.x + bsw as usize > ts.mi_width ||
-                    tile_bo.y + bsh as usize > ts.mi_height ||
+  let must_split = (tile_bo.0.x + bsw as usize > ts.mi_width ||
+                    tile_bo.0.y + bsh as usize > ts.mi_height ||
                     bsize.greater_than(BlockSize::BLOCK_64X64)) && is_square;
 
   let mut rdo_output = block_output.clone().unwrap_or(RDOOutput {
@@ -1832,8 +1832,8 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   let mut split_vert = false;
   let mut split_horz = false;
   if must_split {
-    let cbw = (ts.mi_width - tile_bo.x).min(bsw); // clipped block width, i.e. having effective pixels
-    let cbh = (ts.mi_height - tile_bo.y).min(bsh);
+    let cbw = (ts.mi_width - tile_bo.0.x).min(bsw); // clipped block width, i.e. having effective pixels
+    let cbh = (ts.mi_height - tile_bo.0.y).min(bsh);
 
     if cbw == bsw/2 && cbh == bsh &&
       fi.sequence.chroma_sampling != ChromaSampling::Cs422 { split_vert = true; }
@@ -1895,7 +1895,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         let pmv_idx = if bsize.greater_than(BlockSize::BLOCK_32X32) {
           0
         } else {
-          ((tile_bo.x & 32) >> 5) + ((tile_bo.y & 32) >> 4) + 1
+          ((tile_bo.0.x & 32) >> 5) + ((tile_bo.0.y & 32) >> 4) + 1
         };
         let spmvs = &mut pmvs[pmv_idx];
 
@@ -2007,9 +2007,9 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         let hbsh = subsize.height_mi(); // Half the block size height in blocks
         let four_partitions = [
           tile_bo,
-          BlockOffset{ x: tile_bo.x + hbsw as usize, y: tile_bo.y },
-          BlockOffset{ x: tile_bo.x, y: tile_bo.y + hbsh as usize },
-          BlockOffset{ x: tile_bo.x + hbsw as usize, y: tile_bo.y + hbsh as usize }
+          TileBlockOffset(BlockOffset{ x: tile_bo.0.x + hbsw as usize, y: tile_bo.0.y }),
+          TileBlockOffset(BlockOffset{ x: tile_bo.0.x, y: tile_bo.0.y + hbsh as usize }),
+          TileBlockOffset(BlockOffset{ x: tile_bo.0.x + hbsw as usize, y: tile_bo.0.y + hbsh as usize })
         ];
         let partitions = get_sub_partitions(&four_partitions, partition);
 
@@ -2044,7 +2044,7 @@ pub(crate) fn build_coarse_pmvs<T: Pixel>(fi: &FrameInvariants<T>, ts: &TileStat
     let mut frame_pmvs = Vec::with_capacity(ts.sb_width * ts.sb_height);
     for sby in 0..ts.sb_height {
       for sbx in 0..ts.sb_width {
-        let sbo = SuperBlockOffset { x: sbx, y: sby };
+        let sbo = TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
         let bo = sbo.block_offset(0, 0);
         let mut pmvs: [Option<MotionVector>; REF_FRAMES] = [None; REF_FRAMES];
         for i in 0..INTER_REFS_PER_FRAME {
@@ -2169,7 +2169,7 @@ fn build_raw_tile_group(ti: &TilingInfo, raw_tiles: &[Vec<u8>], max_tile_size_by
 
 pub(crate) fn build_half_res_pmvs<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  tile_sbo: SuperBlockOffset,
+  tile_sbo: TileSuperBlockOffset,
   tile_pmvs: &[[Option<MotionVector>; REF_FRAMES]],
 ) -> [[Option<MotionVector>; REF_FRAMES]; 5] {
   let estimate_motion_ss2 = if fi.config.speed_settings.diamond_me {
@@ -2178,7 +2178,7 @@ pub(crate) fn build_half_res_pmvs<T: Pixel>(
     crate::me::FullSearch::estimate_motion_ss2
   };
 
-  let SuperBlockOffset { x: sbx, y: sby } = tile_sbo;
+  let TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby }) = tile_sbo;
   let mut pmvs: [[Option<MotionVector>; REF_FRAMES]; 5] = [[None; REF_FRAMES]; 5];
 
   if ts.mi_width >= 8 && ts.mi_height >= 8 {
@@ -2263,7 +2263,7 @@ fn encode_tile<'a, T: Pixel>(
     for sbx in 0..ts.sb_width {
       let mut w_pre_cdef = WriterRecorder::new();
       let mut w_post_cdef = WriterRecorder::new();
-      let tile_sbo = SuperBlockOffset { x: sbx, y: sby };
+      let tile_sbo = TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
       let tile_bo = tile_sbo.block_offset(0, 0);
       cw.bc.cdef_coded = false;
       cw.bc.code_deltas = fi.delta_q_present;
