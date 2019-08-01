@@ -192,8 +192,8 @@ fn adjust_strength(strength: i32, var: i32) -> i32 {
 pub fn cdef_analyze_superblock<T: Pixel>(
   in_frame: &Frame<T>,
   blocks: &TileBlocks<'_>,
-  sbo: SuperBlockOffset,
-  sbo_global: SuperBlockOffset,
+  sbo: TileSuperBlockOffset,
+  sbo_global: TileSuperBlockOffset,
   bit_depth: usize,
 ) -> CdefDirections {
   let coeff_shift = bit_depth as usize - 8;
@@ -206,7 +206,7 @@ pub fn cdef_analyze_superblock<T: Pixel>(
       // single-SB copy 'frame' that represents some superblock
       // in the main frame.
       let global_block_offset = sbo_global.block_offset(bx<<1, by<<1);
-      if global_block_offset.x < blocks.cols() && global_block_offset.y < blocks.rows() {
+      if global_block_offset.0.x < blocks.cols() && global_block_offset.0.y < blocks.rows() {
         let skip = blocks[global_block_offset].skip
           & blocks[sbo_global.block_offset(2*bx+1, 2*by)].skip
           & blocks[sbo_global.block_offset(2*bx, 2*by+1)].skip
@@ -253,7 +253,7 @@ pub fn cdef_sb_frame<T: Pixel>(fi: &FrameInvariants<T>, tile: &Tile<'_, T>) -> F
 }
 
 pub fn cdef_sb_padded_frame_copy<T: Pixel>(
-  fi: &FrameInvariants<T>, sbo: SuperBlockOffset,
+  fi: &FrameInvariants<T>, sbo: TileSuperBlockOffset,
   tile: &Tile<'_, T>, pad: usize
 ) -> Frame<u16> {
   let ipad = pad as isize;
@@ -317,8 +317,8 @@ pub fn cdef_filter_superblock<T: Pixel>(
   in_frame: &Frame<u16>,
   out_frame: &mut Frame<T>,
   blocks: &TileBlocks<'_>,
-  sbo: SuperBlockOffset,
-  sbo_global: SuperBlockOffset,
+  sbo: TileSuperBlockOffset,
+  sbo_global: TileSuperBlockOffset,
   cdef_index: u8,
   cdef_dirs: &CdefDirections,
 ) {
@@ -341,7 +341,7 @@ pub fn cdef_filter_superblock<T: Pixel>(
   for by in 0..8 {
     for bx in 0..8 {
       let global_block_offset = sbo_global.block_offset(bx<<1, by<<1);
-      if global_block_offset.x < blocks.cols() && global_block_offset.y < blocks.rows() {
+      if global_block_offset.0.x < blocks.cols() && global_block_offset.0.y < blocks.rows() {
         let skip = blocks[global_block_offset].skip
           & blocks[sbo_global.block_offset(2*bx+1, 2*by)].skip
           & blocks[sbo_global.block_offset(2*bx, 2*by+1)].skip
@@ -477,8 +477,12 @@ pub fn cdef_filter_frame<T: Pixel>(fi: &FrameInvariants<T>, rec: &mut Frame<T>, 
   // Perform actual CDEF, using the padded copy as source, and the input rec vector as destination.
   for fby in 0..fb_height {
     for fbx in 0..fb_width {
-      let sbo = SuperBlockOffset { x: fbx, y: fby };
+      let sbo = PlaneSuperBlockOffset(SuperBlockOffset { x: fbx, y: fby });
       let cdef_index = blocks[sbo.block_offset(0, 0)].cdef_index;
+
+      // In this particular instance CDEF application operates on the whole
+      // frame as if it were one tile.
+      let sbo = TileSuperBlockOffset(sbo.0);
       let cdef_dirs = cdef_analyze_superblock(&cdef_frame, &tb, sbo, sbo, fi.sequence.bit_depth);
       cdef_filter_superblock(fi, &cdef_frame, rec, &tb, sbo, sbo, cdef_index, &cdef_dirs);
     }
@@ -537,7 +541,7 @@ mod test {
     let (frame, fi) = create_frame();
     let tile = frame.as_tile();
     // a super-block in the middle (not near frame borders)
-    let sbo = SuperBlockOffset { x: 1, y: 2 };
+    let sbo = TileSuperBlockOffset(SuperBlockOffset { x: 1, y: 2 });
     let pad = 2;
     let padded_frame = cdef_sb_padded_frame_copy(&fi, sbo, &tile, pad);
 
@@ -569,7 +573,7 @@ mod test {
     let (frame, fi) = create_frame();
     let tile = frame.as_tile();
     // the top-right super-block (near top and right frame borders)
-    let sbo = SuperBlockOffset { x: 7, y: 0 };
+    let sbo = TileSuperBlockOffset(SuperBlockOffset { x: 7, y: 0 });
     let pad = 2;
     let padded_frame = cdef_sb_padded_frame_copy(&fi, sbo, &tile, pad);
 

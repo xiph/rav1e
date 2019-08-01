@@ -183,13 +183,13 @@ macro_rules! tile_restoration_plane_common {
         }
       }
 
-      fn restoration_unit_index(&self, sbo: SuperBlockOffset) -> Option<(usize, usize)> {
+      fn restoration_unit_index(&self, sbo: TileSuperBlockOffset) -> Option<(usize, usize)> {
         // there is 1 restoration unit for (1 << sb_shift) super-blocks
         let mask = (1 << self.rp_cfg.sb_shift) - 1;
-        let first_sbo = sbo.x & mask == 0 && sbo.y & mask == 0;
+        let first_sbo = sbo.0.x & mask == 0 && sbo.0.y & mask == 0;
         if first_sbo {
-          let x = sbo.x >> self.rp_cfg.sb_shift;
-          let y = sbo.y >> self.rp_cfg.sb_shift;
+          let x = sbo.0.x >> self.rp_cfg.sb_shift;
+          let y = sbo.0.y >> self.rp_cfg.sb_shift;
           if x < self.units.cols && y < self.units.rows {
             Some((x, y))
           } else {
@@ -203,7 +203,7 @@ macro_rules! tile_restoration_plane_common {
       }
 
       #[inline(always)]
-      pub fn restoration_unit(&self, sbo: SuperBlockOffset) -> Option<&RestorationUnit> {
+      pub fn restoration_unit(&self, sbo: TileSuperBlockOffset) -> Option<&RestorationUnit> {
         self.restoration_unit_index(sbo).map(|(x, y)| &self.units[y][x])
       }
     }
@@ -217,7 +217,7 @@ impl<'a> TileRestorationPlaneMut<'a> {
   #[inline(always)]
   pub fn restoration_unit_mut(
     &mut self,
-    sbo: SuperBlockOffset,
+    sbo: TileSuperBlockOffset,
   ) -> Option<&mut RestorationUnit> {
     // cannot use map() due to lifetime constraints
     if let Some((x, y)) = self.restoration_unit_index(sbo) {
@@ -262,7 +262,7 @@ macro_rules! tile_restoration_state_common {
       #[inline(always)]
       pub fn new(
         rs: &'a $($opt_mut)? RestorationState,
-        sbo: SuperBlockOffset,
+        sbo: PlaneSuperBlockOffset,
         sb_width: usize,
         sb_height: usize,
       ) -> Self {
@@ -292,18 +292,18 @@ macro_rules! tile_restoration_state_common {
       #[inline(always)]
       fn get_units_region(
         rs: &RestorationState,
-        sbo: SuperBlockOffset,
+        sbo: PlaneSuperBlockOffset,
         sb_width: usize,
         sb_height: usize,
       ) -> (usize, usize, usize, usize) {
         let sb_shift = rs.planes[0].cfg.sb_shift;
         // there may be several super-blocks per restoration unit
         // the given super-block offset must match the start of a restoration unit
-        debug_assert!(sbo.x % (1 << sb_shift) == 0);
-        debug_assert!(sbo.y % (1 << sb_shift) == 0);
+        debug_assert!(sbo.0.x % (1 << sb_shift) == 0);
+        debug_assert!(sbo.0.y % (1 << sb_shift) == 0);
 
-        let units_x = sbo.x >> sb_shift;
-        let units_y = sbo.y >> sb_shift;
+        let units_x = sbo.0.x >> sb_shift;
+        let units_y = sbo.0.y >> sb_shift;
         let units_cols = sb_width >> sb_shift;
         let units_rows = sb_height >> sb_shift;
 
@@ -324,7 +324,7 @@ macro_rules! tile_restoration_state_common {
       }
 
       #[inline(always)]
-      pub fn has_restoration_unit(&self, sbo: SuperBlockOffset) -> bool {
+      pub fn has_restoration_unit(&self, sbo: TileSuperBlockOffset) -> bool {
         let is_some = self.planes[0].restoration_unit(sbo).is_some();
         debug_assert_eq!(is_some, self.planes[1].restoration_unit(sbo).is_some());
         debug_assert_eq!(is_some, self.planes[2].restoration_unit(sbo).is_some());

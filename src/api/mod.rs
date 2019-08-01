@@ -17,7 +17,7 @@ use num_derive::*;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use serde_derive::{Deserialize, Serialize};
 
-use crate::context::{FrameBlocks, SuperBlockOffset, MI_SIZE};
+use crate::context::{FrameBlocks, TileSuperBlockOffset, SuperBlockOffset, MI_SIZE};
 use crate::dist::get_satd;
 use crate::encoder::*;
 use crate::frame::*;
@@ -1156,7 +1156,7 @@ impl<T: Pixel> ContextInner<T> {
         // Compute the half-resolution motion vectors.
         for sby in 0..ts.sb_height {
           for sbx in 0..ts.sb_width {
-            let tile_sbo = SuperBlockOffset { x: sbx, y: sby };
+            let tile_sbo = TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
             build_half_res_pmvs(fi, ts, tile_sbo, &tile_pmvs);
           }
         }
@@ -1242,7 +1242,7 @@ impl<T: Pixel> ContextInner<T> {
         // TODO: other intra prediction modes.
         let edge_buf = get_intra_edges(
           &frame.planes[0].as_region(),
-          BlockOffset{ x, y },
+          TileBlockOffset(BlockOffset{ x, y }),
           0, 0, BlockSize::BLOCK_4X4,
           PlaneOffset {
             x: x as isize * MI_SIZE as isize,

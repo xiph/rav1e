@@ -63,7 +63,7 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
 
   b.iter(|| {
     for &mode in RAV1E_INTRA_MODES {
-      let sbo = SuperBlockOffset { x: sbx, y: sby };
+      let sbo = TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
       for p in 1..3 {
         ts.qc.update(fi.base_q_idx, tx_size, mode.is_intra(), 8, fi.dc_delta_q[p], fi.ac_delta_q[p]);
         for by in 0..8 {
@@ -75,7 +75,7 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
               continue;
             };
             let bo = sbo.block_offset(bx, by);
-            let tx_bo = BlockOffset { x: bo.x + bx, y: bo.y + by };
+            let tx_bo = TileBlockOffset(BlockOffset { x: bo.0.x + bx, y: bo.0.y + by });
             let po = tx_bo.plane_offset(&ts.input.planes[p].cfg);
             encode_tx_block(
               &mut fi,
@@ -151,7 +151,7 @@ fn cfl_rdo_bench(b: &mut Bencher, bsize: BlockSize) {
   let fi = FrameInvariants::<u16>::new(config, sequence);
   let mut fs = FrameState::new(&fi);
   let mut ts = fs.as_tile_state_mut();
-  let offset = BlockOffset { x: 1, y: 1 };
+  let offset = TileBlockOffset(BlockOffset { x: 1, y: 1 });
   b.iter(|| rdo_cfl_alpha(&mut ts, offset, bsize, fi.sequence.bit_depth))
 }
 

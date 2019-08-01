@@ -232,7 +232,7 @@ macro_rules! plane_region_common {
       }
 
       #[inline(always)]
-      pub fn to_frame_block_offset(&self, tile_bo: BlockOffset) -> BlockOffset {
+      pub fn to_frame_block_offset(&self, tile_bo: TileBlockOffset) -> PlaneBlockOffset {
         debug_assert!(self.rect.x >= 0);
         debug_assert!(self.rect.y >= 0);
         let PlaneConfig { xdec, ydec, .. } = self.plane_cfg;
@@ -240,18 +240,18 @@ macro_rules! plane_region_common {
         debug_assert!(self.rect.y as usize % (MI_SIZE >> ydec) == 0);
         let bx = self.rect.x as usize >> MI_SIZE_LOG2 - xdec;
         let by = self.rect.y as usize >> MI_SIZE_LOG2 - ydec;
-        BlockOffset {
-          x: bx + tile_bo.x,
-          y: by + tile_bo.y,
-        }
+        PlaneBlockOffset(BlockOffset {
+          x: bx + tile_bo.0.x,
+          y: by + tile_bo.0.y,
+        })
       }
 
       #[inline(always)]
       pub fn to_frame_super_block_offset(
         &self,
-        tile_sbo: SuperBlockOffset,
+        tile_sbo: TileSuperBlockOffset,
         sb_size_log2: usize
-      ) -> SuperBlockOffset {
+      ) -> PlaneSuperBlockOffset {
         debug_assert!(sb_size_log2 == 6 || sb_size_log2 == 7);
         debug_assert!(self.rect.x >= 0);
         debug_assert!(self.rect.y >= 0);
@@ -260,10 +260,10 @@ macro_rules! plane_region_common {
         debug_assert!(self.rect.y as usize % (1 << sb_size_log2 - ydec) == 0);
         let sbx = self.rect.x as usize >> sb_size_log2 - xdec;
         let sby = self.rect.y as usize >> sb_size_log2 - ydec;
-        SuperBlockOffset {
-          x: sbx + tile_sbo.x,
-          y: sby + tile_sbo.y,
-        }
+        PlaneSuperBlockOffset(SuperBlockOffset {
+          x: sbx + tile_sbo.0.x,
+          y: sby + tile_sbo.0.y,
+        })
       }
     }
 
