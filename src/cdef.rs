@@ -262,14 +262,7 @@ pub fn cdef_sb_padded_frame_copy<T: Pixel>(
     planes: {
       let new_plane = |pli: usize| {
         let &PlaneConfig { xdec, ydec, .. } = tile.planes[pli].plane_cfg;
-        Plane::new(
-          (sb_size >> xdec) + pad,
-          (sb_size >> ydec) + pad,
-          xdec,
-          ydec,
-          pad,
-          pad
-        )
+        Plane::new(sb_size >> xdec, sb_size >> ydec, xdec, ydec, pad, pad)
       };
       [new_plane(0), new_plane(1), new_plane(2)]
     }
@@ -278,15 +271,15 @@ pub fn cdef_sb_padded_frame_copy<T: Pixel>(
   for p in 0..3 {
     let &PlaneConfig { xdec, ydec, .. } = tile.planes[p].plane_cfg;
     let &Rect { width, height, .. } = tile.planes[p].rect();
-    let w = width as isize;
-    let h = height as isize;
+    /*let w = width as isize;
+    let h = height as isize;*/
     let offset = sbo.plane_offset(&tile.planes[p].plane_cfg);
     let mut out_region = out.planes[p].region_mut(
       Area::StartingAt { x: -ipad, y: -ipad }
     );
     for y in 0..((sb_size>>ydec) + pad*2) as isize {
       let out_row = &mut out_region[y as usize];
-      if offset.y + y < ipad || offset.y+y >= h + ipad {
+      if offset.y + y < ipad || offset.y+y >= height as isize + ipad {
         // above or below the frame, fill with flag
         for x in 0..(sb_size>>xdec) + pad*2 {
           out_row[x] = CDEF_VERY_LARGE;
@@ -295,10 +288,10 @@ pub fn cdef_sb_padded_frame_copy<T: Pixel>(
         let in_plane_region = &tile.planes[p];
         let in_row = &in_plane_region[(offset.y - ipad + y) as usize];
         // are we guaranteed to be all in frame this row?
-        if offset.x < ipad || offset.x + (sb_size as isize >>xdec) + ipad >= w {
+        if offset.x < ipad || offset.x + (sb_size as isize >>xdec) + ipad >= width as isize {
           // No; do it the hard way.  off left or right edge, fill with flag.
           for x in 0..(sb_size>>xdec) as isize + ipad*2 {
-            if offset.x + x >= ipad && offset.x + x < w + ipad {
+            if offset.x + x >= ipad && offset.x + x < width as isize + ipad {
               out_row[x as usize] = u16::cast_from(in_row[(offset.x + x - ipad) as usize]);
             } else {
               out_row[x as usize] = CDEF_VERY_LARGE;
@@ -386,10 +379,13 @@ pub fn cdef_filter_superblock<T: Pixel>(
             unsafe {
               let xsize = 8 >> xdec;
               let ysize = 8 >> ydec;
+
+              let PlaneConfig { ypad, xpad, .. } = in_slice.plane.cfg;
               assert!(out_slice.rows_iter().len() >= ((8 * by) >> ydec) + ysize);
-              assert!(in_slice.rows_iter().len() >= ((8 * by) >> ydec) + ysize + 2);
-              assert!(in_slice.x - 2 >= -(in_slice.plane.cfg.xpad as isize));
-              assert!(in_slice.y - 2 >= -(in_slice.plane.cfg.ypad as isize));
+              assert!(in_slice.rows_iter().len() + ypad >= ((8 * by) >> ydec) + ysize + 2);
+              assert!(in_slice.x - 2 >= -(xpad as isize));
+              assert!(in_slice.y - 2 >= -(ypad as isize));
+
               let dst = out_slice[(8 * by) >> ydec][(8 * bx) >> xdec..].as_mut_ptr();
               let input = in_slice[(8 * by) >> ydec][(8 * bx) >> xdec..].as_ptr();
               cdef_filter_block(dst,
@@ -420,17 +416,12 @@ pub fn cdef_filter_frame<T: Pixel>(fi: &FrameInvariants<T>, rec: &mut Frame<T>, 
   let fb_height = (rec.planes[0].cfg.height + 63) / 64;
 
   // Construct a padded copy of the reconstructed frame.
-  let mut padded_px: [[usize; 2]; 3] = [[0; 2]; 3];
-  for p in 0..3 {
-    padded_px[p][0] = ((fb_width * 64) >> rec.planes[p].cfg.xdec) + 4;
-    padded_px[p][1] = ((fb_height * 64) >> rec.planes[p].cfg.ydec) + 4;
-  }
   let mut cdef_frame: Frame<u16> = Frame {
     planes: {
       let new_plane = |pli: usize| {
         Plane::new(
-          padded_px[pli][0] - 2,
-          padded_px[pli][1] - 2,
+          (fb_width * 64) >> rec.planes[pli].cfg.xdec,
+          (fb_height * 64) >> rec.planes[pli].cfg.ydec,
           rec.planes[pli].cfg.xdec,
           rec.planes[pli].cfg.ydec,
           2,
@@ -445,9 +436,9 @@ pub fn cdef_filter_frame<T: Pixel>(fi: &FrameInvariants<T>, rec: &mut Frame<T>, 
     let rec_w = rec.planes[p].cfg.width;
     let rec_h = rec.planes[p].cfg.height;
     let mut cdef_region = cdef_frame.planes[p].region_mut(
-      Area::StartingAt { x: -2, y: -2 }
+      Area::Rect { x: -2, y: -2, width: rec_w + 4, height: rec_h + 4 }
     );
-    for row in 0..padded_px[p][1] {
+    for row in 0..cdef_region.rect().height {
       // pad first two elements of current row
       {
         let cdef_row = &mut cdef_region[row][..2];
@@ -456,7 +447,8 @@ pub fn cdef_filter_frame<T: Pixel>(fi: &FrameInvariants<T>, rec: &mut Frame<T>, 
       }
       // pad out end of current row
       {
-        let cdef_row = &mut cdef_region[row][rec_w + 2..padded_px[p][0]];
+        let cdef_row =
+          &mut cdef_region[row][rec_w + 2..];
         for x in cdef_row {
           *x = CDEF_VERY_LARGE;
         }
@@ -550,10 +542,10 @@ mod test {
     let padded_frame = cdef_sb_padded_frame_copy(&fi, sbo, &tile, pad);
 
     // index (0, 0) of padded_frame should match index (64, 128) of the source
-    // frame, have 2 cols and rows from the source frame left and above, and
-    // have a size of (64+2, 64+2)
-    assert_eq!(padded_frame.planes[0].cfg.width, 66);
-    assert_eq!(padded_frame.planes[0].cfg.height, 66);
+    // frame, have 2 cols and rows padding from the source frame on all sides,
+    // and have a size of (64, 64)
+    assert_eq!(padded_frame.planes[0].cfg.width, 64);
+    assert_eq!(padded_frame.planes[0].cfg.height, 64);
 
     let po = PlaneOffset { x: 62, y: 126 };
     let in_luma_slice = frame.planes[0].slice(po);
@@ -582,10 +574,10 @@ mod test {
     let padded_frame = cdef_sb_padded_frame_copy(&fi, sbo, &tile, pad);
 
     // index (0, 0) of padded_frame should match index (448, 0) of the source
-    // frame, have 2 cols from the source frame left, 2 rows of padding value
-    // above, and have a size of (64+2, 64+2)
-    assert_eq!(padded_frame.planes[0].cfg.width, 66);
-    assert_eq!(padded_frame.planes[0].cfg.height, 66);
+    // frame, have 2 cols/rows from the source frame left and below, 2
+    // cols/rows of padding value right and above, and have a size of (64, 64)
+    assert_eq!(padded_frame.planes[0].cfg.width, 64);
+    assert_eq!(padded_frame.planes[0].cfg.height, 64);
 
     let po = PlaneOffset { x: 446, y: 0 };
     let in_luma_slice = frame.planes[0].slice(po);
