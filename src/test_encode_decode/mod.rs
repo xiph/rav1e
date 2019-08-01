@@ -395,6 +395,7 @@ macro_rules! test_chroma_sampling {
       paste::item_with_macros!{
         #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
         #[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
+        #[ignore]
         fn [<chroma_sampling_ $S>](decoder: &str) {
           chroma_sampling(decoder, $I);
         }
