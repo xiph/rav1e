@@ -29,26 +29,30 @@ type ColorPrimaries = rav1e::ColorPrimaries;
 type TransferCharacteristics = rav1e::TransferCharacteristics;
 type Rational = rav1e::Rational;
 
-/// Raw video Frame
-///
-/// It can be allocated throught rav1e_frame_new(), populated using rav1e_frame_fill_plane()
-/// and freed using rav1e_frame_unref().
 #[derive(Clone)]
-pub enum Frame {
+enum FrameInternal {
   U8(Arc<rav1e::Frame<u8>>),
   U16(Arc<rav1e::Frame<u16>>)
 }
 
-impl From<Arc<rav1e::Frame<u8>>> for Frame {
-  fn from(f: Arc<rav1e::Frame<u8>>) -> Frame {
-    Frame::U8(f)
+impl From<Arc<rav1e::Frame<u8>>> for FrameInternal {
+  fn from(f: Arc<rav1e::Frame<u8>>) -> FrameInternal {
+    FrameInternal::U8(f)
   }
 }
 
-impl From<Arc<rav1e::Frame<u16>>> for Frame {
-  fn from(f: Arc<rav1e::Frame<u16>>) -> Frame {
-    Frame::U16(f)
+impl From<Arc<rav1e::Frame<u16>>> for FrameInternal {
+  fn from(f: Arc<rav1e::Frame<u16>>) -> FrameInternal {
+    FrameInternal::U16(f)
   }
+}
+
+/// Raw video Frame
+///
+/// It can be allocated throught rav1e_frame_new(), populated using rav1e_frame_fill_plane()
+/// and freed using rav1e_frame_unref().
+pub struct Frame {
+  fi: FrameInternal
 }
 
 #[repr(C)]
@@ -108,19 +112,19 @@ enum EncContext {
 }
 
 impl EncContext {
-  fn new_frame(&self) -> Frame {
+  fn new_frame(&self) -> FrameInternal {
     match self {
       EncContext::U8(ctx) => ctx.new_frame().into(),
       EncContext::U16(ctx) => ctx.new_frame().into()
     }
   }
   fn send_frame(
-    &mut self, frame: Option<Frame>
+    &mut self, frame: Option<FrameInternal>
   ) -> Result<(), rav1e::EncoderStatus> {
     if let Some(frame) = frame {
       match (self, frame) {
-        (EncContext::U8(ctx), Frame::U8(ref f)) => ctx.send_frame(f.clone()),
-        (EncContext::U16(ctx), Frame::U16(ref f)) => ctx.send_frame(f.clone()),
+        (EncContext::U8(ctx), FrameInternal::U8(ref f)) => ctx.send_frame(f.clone()),
+        (EncContext::U16(ctx), FrameInternal::U16(ref f)) => ctx.send_frame(f.clone()),
         _ => Err(rav1e::EncoderStatus::Failure)
       }
     } else {
@@ -476,7 +480,8 @@ pub unsafe extern fn rav1e_context_unref(ctx: *mut Context) {
 /// see rav1e_send_frame().
 #[no_mangle]
 pub unsafe extern fn rav1e_frame_new(ctx: *const Context) -> *mut Frame {
-  let f = (*ctx).ctx.new_frame();
+  let fi = (*ctx).ctx.new_frame();
+  let f = Frame { fi };
   let frame = Box::new(f.into());
 
   Box::into_raw(frame)
@@ -566,7 +571,7 @@ pub unsafe extern fn rav1e_twopass_in(
 pub unsafe extern fn rav1e_send_frame(
   ctx: *mut Context, frame: *const Frame
 ) -> EncoderStatus {
-  let frame = if frame.is_null() { None } else { Some((*frame).clone()) };
+  let frame = if frame.is_null() { None } else { Some((*frame).fi.clone()) };
 
   let ret =
     (*ctx).ctx.send_frame(frame).map(|_v| None).unwrap_or_else(|e| Some(e));
@@ -685,10 +690,10 @@ pub unsafe extern fn rav1e_frame_fill_plane(
 ) {
   let data_slice = slice::from_raw_parts(data, data_len as usize);
 
-  match *frame {
-    Frame::U8(ref mut f) =>
+  match (*frame).fi {
+    FrameInternal::U8(ref mut f) =>
       rav1e_frame_fill_plane_internal(f, plane, data_slice, stride, bytewidth),
-    Frame::U16(ref mut f) =>
+    FrameInternal::U16(ref mut f) =>
       rav1e_frame_fill_plane_internal(f, plane, data_slice, stride, bytewidth),
   }
 }
