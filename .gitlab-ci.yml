@@ -44,7 +44,7 @@ rav1e test:
         - docker
         - alpine
     script:
-        - cargo test --verbose --release --features=decode_test -- --ignored
+        - cargo test --verbose --release --features=decode_test,check_asm -- --ignored
 
 rav1e benchmark:
     stage: bench
