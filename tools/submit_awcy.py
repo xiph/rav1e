@@ -44,6 +44,7 @@ parser.add_argument('-branch',default=None)
 parser.add_argument('-prefix',default=None)
 parser.add_argument('-master',action='store_true',default=False)
 parser.add_argument('-set',default='objective-1-fast')
+parser.add_argument('-nick',default=None)
 parser.add_argument('-extra_options',default='')
 args = parser.parse_args()
 
@@ -60,9 +61,9 @@ commit = subprocess.check_output('git rev-parse HEAD',shell=True).strip()
 short = subprocess.check_output('git rev-parse --short HEAD',shell=True).strip().decode("utf-8")
 date = GetTime().strip()
 date_short = date.split()[0]+'_'+date.split()[1].split('.')[0].replace(':', '')
-user = args.prefix
+prefix = args.prefix
 is_master = args.master
-run_id = user+'-'+date_short+'-'+short
+run_id = prefix+'-'+date_short+'-'+short
 
 print(GetTime(), 'Creating run '+run_id)
 r = requests.post("https://beta.arewecompressedyet.com/submit/job", {
@@ -72,6 +73,7 @@ r = requests.post("https://beta.arewecompressedyet.com/submit/job", {
     'key': key,
     'task': args.set,
     'codec': 'rav1e',
+    'nick': args.nick,
     'extra_options': args.extra_options,
 })
 print(GetTime(), r)
