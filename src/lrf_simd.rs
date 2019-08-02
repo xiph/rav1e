@@ -129,6 +129,13 @@ pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
       sgrproj_box_ab_internal(1, af, bf, iimg, iimg_sq, iimg_stride, x, y, stripe_w, s, bdm8);
     }
   }
+  #[cfg(feature = "check_asm")] {
+    let mut af_ref: Vec<u32> = vec![0; stripe_w + 2];
+    let mut bf_ref: Vec<u32> = vec![0; stripe_w + 2];
+    sgrproj_box_ab_internal(1, &mut af_ref, &mut bf_ref, iimg, iimg_sq, iimg_stride, 0, y, stripe_w, s, bdm8);
+    assert_eq!(af[..stripe_w + 2], af_ref[..]);
+    assert_eq!(bf[..stripe_w + 2], bf_ref[..]);
+  }
 }
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
@@ -144,6 +151,13 @@ pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
       // finish using scalar
       sgrproj_box_ab_internal(2, af, bf, iimg, iimg_sq, iimg_stride, x, y, stripe_w, s, bdm8);
     }
+  }
+  #[cfg(feature = "check_asm")] {
+    let mut af_ref: Vec<u32> = vec![0; stripe_w + 2];
+    let mut bf_ref: Vec<u32> = vec![0; stripe_w + 2];
+    sgrproj_box_ab_internal(2, &mut af_ref, &mut bf_ref, iimg, iimg_sq, iimg_stride, 0, y, stripe_w, s, bdm8);
+    assert_eq!(af[..stripe_w + 2], af_ref[..]);
+    assert_eq!(bf[..stripe_w + 2], bf_ref[..]);
   }
 }
 
@@ -187,6 +201,11 @@ pub(crate) unsafe fn sgrproj_box_f_r0_avx2<T: Pixel>(
       // finish using scalar
       sgrproj_box_f_r0_internal(f, x, y, w, cdeffed);
     }
+  }
+  #[cfg(feature = "check_asm")] {
+    let mut f_ref: Vec<u32> = vec![0; w];
+    sgrproj_box_f_r0_internal(&mut f_ref, 0, y, w, cdeffed);
+    assert_eq!(f[..w], f_ref[..]);
   }
 }
 
@@ -311,6 +330,11 @@ pub(crate) unsafe fn sgrproj_box_f_r1_avx2<T: Pixel>(
       // finish using scalar
       sgrproj_box_f_r1_internal(af, bf, f, x, y, w, cdeffed);
     }
+  }
+  #[cfg(feature = "check_asm")] {
+    let mut f_ref: Vec<u32> = vec![0; w];
+    sgrproj_box_f_r1_internal(af, bf, &mut f_ref, 0, y, w, cdeffed);
+    assert_eq!(f[..w], f_ref[..]);
   }
 }
 
@@ -446,5 +470,12 @@ pub(crate) unsafe fn sgrproj_box_f_r2_avx2<T: Pixel>(
       // finish using scalar
       sgrproj_box_f_r2_internal(af, bf, f0, f1, x, y, w, cdeffed);
     }
+  }
+  #[cfg(feature = "check_asm")] {
+    let mut f0_ref: Vec<u32> = vec![0; w];
+    let mut f1_ref: Vec<u32> = vec![0; w];
+    sgrproj_box_f_r2_internal(af, bf, &mut f0_ref, &mut f1_ref, 0, y, w, cdeffed);
+    assert_eq!(f0[..w], f0_ref[..]);
+    assert_eq!(f1[..w], f1_ref[..]);
   }
 }
