@@ -21,6 +21,14 @@ use num_traits::cast::FromPrimitive;
 
 use crate::prelude as rav1e;
 
+type PixelRange = rav1e::PixelRange;
+type ChromaSamplePosition = rav1e::ChromaSamplePosition;
+type ChromaSampling = rav1e::ChromaSampling;
+type MatrixCoefficients = rav1e::MatrixCoefficients;
+type ColorPrimaries = rav1e::ColorPrimaries;
+type TransferCharacteristics = rav1e::TransferCharacteristics;
+type Rational = rav1e::Rational;
+
 /// Raw video Frame
 ///
 /// It can be allocated throught rav1e_frame_new(), populated using rav1e_frame_fill_plane()
@@ -220,14 +228,6 @@ pub unsafe extern fn rav1e_data_unref(data: *mut Data) {
     let _ = Vec::from_raw_parts(data.data as *mut u8, data.len as usize, data.len as usize);
   }
 }
-
-type PixelRange = rav1e::PixelRange;
-type ChromaSamplePosition = rav1e::ChromaSamplePosition;
-type ChromaSampling = rav1e::ChromaSampling;
-type MatrixCoefficients = rav1e::MatrixCoefficients;
-type ColorPrimaries = rav1e::ColorPrimaries;
-type TransferCharacteristics = rav1e::TransferCharacteristics;
-type Rational = rav1e::Rational;
 
 #[no_mangle]
 pub unsafe extern fn rav1e_config_default() -> *mut Config {
