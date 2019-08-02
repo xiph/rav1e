@@ -85,6 +85,14 @@ cargo install cargo-criterion
 cargo criterion --features=bench
 ```
 
+## Reviews
+
+Commits which change coding efficiency should include a link to AWCY and results summary in their commit message.
+
+PRs must be reviewed by at least one other collaborator. Once they are reviewed and pass CI, anyone may merge (though it's convention for the author to if they have permissions).
+
+PRs should be landed by rebasing. All fixup commits should be squashed before merging.
+
 ## Fuzzing
 
 Install `cargo-fuzz` with `cargo install cargo-fuzz`. Running fuzz targets with stable Rust requires `--sanitizer=none` or the shorter `-s none`.
