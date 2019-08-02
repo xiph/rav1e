@@ -857,7 +857,7 @@ impl<T: Pixel> ContextInner<T> {
       }
     }
 
-    if !self.needs_more_lookahead() {
+    if !self.needs_more_frame_q_lookahead() {
       self.compute_lookahead_data();
     }
     Ok(())
@@ -876,11 +876,18 @@ impl<T: Pixel> ContextInner<T> {
   }
 
   /// Indicates whether more frames need to be read into the frame queue
-  /// in order for lookahead to be full.
-  pub(crate) fn needs_more_lookahead(&self) -> bool {
+  /// in order for frame queue lookahead to be full.
+  fn needs_more_frame_q_lookahead(&self) -> bool {
     let lookahead_end = self.frame_q.keys().last().cloned().unwrap_or(0);
     let frames_needed = self.next_lookahead_frame + self.inter_cfg.keyframe_lookahead_distance();
     lookahead_end < frames_needed && self.needs_more_frames(lookahead_end)
+  }
+
+  /// Indicates whether more frames need to be processed into FrameInvariants
+  /// in order for FI lookahead to be full.
+  fn needs_more_fi_lookahead(&self) -> bool {
+    let ready_frames = self.get_rdo_lookahead_frames().count() as u64;
+    ready_frames < RDO_LOOKAHEAD_FRAMES + 1 && self.needs_more_frames(self.next_lookahead_frame)
   }
 
   pub fn needs_more_frames(&self, frame_count: u64) -> bool {
@@ -1299,7 +1306,7 @@ impl<T: Pixel> ContextInner<T> {
         .collect::<Vec<_>>();
     let mut lookahead_idx = 0;
 
-    while !self.needs_more_lookahead() {
+    while !self.needs_more_frame_q_lookahead() {
       // Process the next unprocessed frame
       // Start by getting that frame and all frames after it in the queue
       let current_lookahead_frames = &lookahead_frames[lookahead_idx..];
@@ -1588,7 +1595,7 @@ impl<T: Pixel> ContextInner<T> {
       return Err(EncoderStatus::LimitReached);
     }
 
-    if self.needs_more_lookahead() {
+    if self.needs_more_fi_lookahead() {
       return Err(EncoderStatus::NeedMoreData);
     }
 
@@ -1604,12 +1611,6 @@ impl<T: Pixel> ContextInner<T> {
     let input_frameno = self.frame_invariants[&self.output_frameno].input_frameno;
     if !self.needs_more_frames(input_frameno) {
       return Err(EncoderStatus::LimitReached);
-    }
-
-    // Block importance computation needs to have FI's already processed `LOOKAHEAD_FRAMES` frames into the future.
-    let ready_frames = self.get_rdo_lookahead_frames().count() as u64;
-    if ready_frames < RDO_LOOKAHEAD_FRAMES + 1 && self.needs_more_frames(self.next_lookahead_frame) {
-      return Err(EncoderStatus::NeedMoreData);
     }
 
     // Compute the block importances for the current output frame.
@@ -1781,13 +1782,13 @@ impl<T: Pixel> ContextInner<T> {
     if cur_input_frameno == 0 {
       return;
     }
-    for i in 0..cur_input_frameno {
+    for i in self.frame_q.keys().next().cloned().unwrap_or(0)..cur_input_frameno {
       self.frame_q.remove(&i);
     }
     if self.output_frameno < 2 {
       return;
     }
-    for i in 0..(self.output_frameno - 1) {
+    for i in self.frame_invariants.keys().next().cloned().unwrap_or(0)..(self.output_frameno - 1) {
       self.frame_invariants.remove(&i);
       self.gop_output_frameno_start.remove(&i);
       self.gop_input_frameno_start.remove(&i);
