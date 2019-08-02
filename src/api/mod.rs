@@ -1781,13 +1781,16 @@ impl<T: Pixel> ContextInner<T> {
     if cur_input_frameno == 0 {
       return;
     }
-    for i in 0..cur_input_frameno {
+    let frame_q_start = self.frame_q.keys().next().cloned().unwrap_or(0);
+    for i in frame_q_start..cur_input_frameno {
       self.frame_q.remove(&i);
     }
+
     if self.output_frameno < 2 {
       return;
     }
-    for i in 0..(self.output_frameno - 1) {
+    let fi_start = self.frame_invariants.keys().next().cloned().unwrap_or(0);
+    for i in fi_start..(self.output_frameno - 1) {
       self.frame_invariants.remove(&i);
       self.gop_output_frameno_start.remove(&i);
       self.gop_input_frameno_start.remove(&i);
