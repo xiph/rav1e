@@ -28,6 +28,7 @@ type MatrixCoefficients = rav1e::MatrixCoefficients;
 type ColorPrimaries = rav1e::ColorPrimaries;
 type TransferCharacteristics = rav1e::TransferCharacteristics;
 type Rational = rav1e::Rational;
+type FrameTypeOverride = rav1e::FrameTypeOverride;
 
 #[derive(Clone)]
 enum FrameInternal {
@@ -52,7 +53,8 @@ impl From<Arc<rav1e::Frame<u16>>> for FrameInternal {
 /// It can be allocated throught rav1e_frame_new(), populated using rav1e_frame_fill_plane()
 /// and freed using rav1e_frame_unref().
 pub struct Frame {
-  fi: FrameInternal
+  fi: FrameInternal,
+  frame_type: FrameTypeOverride
 }
 
 #[repr(C)]
@@ -119,12 +121,13 @@ impl EncContext {
     }
   }
   fn send_frame(
-    &mut self, frame: Option<FrameInternal>
+    &mut self, frame: Option<FrameInternal>, frame_type: FrameTypeOverride
   ) -> Result<(), rav1e::EncoderStatus> {
+    let info = rav1e::FrameParameters { frame_type_override: frame_type };
     if let Some(frame) = frame {
       match (self, frame) {
-        (EncContext::U8(ctx), FrameInternal::U8(ref f)) => ctx.send_frame(f.clone()),
-        (EncContext::U16(ctx), FrameInternal::U16(ref f)) => ctx.send_frame(f.clone()),
+        (EncContext::U8(ctx), FrameInternal::U8(ref f)) => ctx.send_frame((f.clone(), info)),
+        (EncContext::U16(ctx), FrameInternal::U16(ref f)) => ctx.send_frame((f.clone(), info)),
         _ => Err(rav1e::EncoderStatus::Failure)
       }
     } else {
@@ -481,7 +484,8 @@ pub unsafe extern fn rav1e_context_unref(ctx: *mut Context) {
 #[no_mangle]
 pub unsafe extern fn rav1e_frame_new(ctx: *const Context) -> *mut Frame {
   let fi = (*ctx).ctx.new_frame();
-  let f = Frame { fi };
+  let frame_type = rav1e::FrameTypeOverride::No;
+  let f = Frame { fi, frame_type };
   let frame = Box::new(f.into());
 
   Box::into_raw(frame)
@@ -492,6 +496,20 @@ pub unsafe extern fn rav1e_frame_unref(frame: *mut Frame) {
   if !frame.is_null() {
     let _ = Box::from_raw(frame);
   }
+}
+
+/// Overrides the encoders frame type decision for a frame
+///
+/// Must be called before rav1e_send_frame() if used.
+#[no_mangle]
+pub unsafe extern fn rav1e_frame_set_type(frame: *mut Frame, frame_type: FrameTypeOverride) -> c_int{
+  let frame_type_val = std::mem::transmute::<FrameTypeOverride, i32>(frame_type);
+  if FrameTypeOverride::from_i32(frame_type_val).is_none() {
+    return -1;
+  }
+  (*frame).frame_type = frame_type;
+
+  0
 }
 
 /// Retrieve the first-pass data of a two-pass encode for the frame that was
@@ -571,10 +589,11 @@ pub unsafe extern fn rav1e_twopass_in(
 pub unsafe extern fn rav1e_send_frame(
   ctx: *mut Context, frame: *const Frame
 ) -> EncoderStatus {
-  let frame = if frame.is_null() { None } else { Some((*frame).fi.clone()) };
+  let frame_internal = if frame.is_null() { None } else { Some((*frame).fi.clone()) };
+  let frame_type = if frame.is_null() { rav1e::FrameTypeOverride::No } else { (*frame).frame_type };
 
   let ret =
-    (*ctx).ctx.send_frame(frame).map(|_v| None).unwrap_or_else(|e| Some(e));
+    (*ctx).ctx.send_frame(frame_internal, frame_type).map(|_v| None).unwrap_or_else(|e| Some(e));
 
   (*ctx).last_err = ret;
 
