@@ -7,6 +7,8 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use num_derive::FromPrimitive;
+
 use crate::util::*;
 use crate::api::ChromaSampling;
 use crate::context::SB_SIZE;
@@ -23,7 +25,8 @@ const FRAME_MARGIN: usize = 16 + SUBPEL_FILTER_SIZE;
 /// Override the frame type decision
 ///
 /// Only certain frame types can be selected.
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, FromPrimitive)]
+#[repr(C)]
 pub enum FrameTypeOverride {
   /// Do not force any decision.
   No,
