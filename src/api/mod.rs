@@ -40,8 +40,6 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::{cmp, fmt, io};
 
-const RDO_LOOKAHEAD_FRAMES: u64 = 40;
-
 // TODO: use the num crate?
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]
@@ -109,6 +107,8 @@ pub struct EncoderConfig {
   /// it contains at least this many tiles. Overrides tile_cols_log2
   /// and tile_rows_log2.
   pub tiles: usize,
+  /// Number of frames to read ahead for RDO lookahead computation.
+  pub rdo_lookahead_frames: u64,
   pub speed_settings: SpeedSettings,
   pub show_psnr: bool,
   pub train_rdo: bool
@@ -158,6 +158,7 @@ impl EncoderConfig {
       tile_cols_log2: 0,
       tile_rows_log2: 0,
       tiles: 0,
+      rdo_lookahead_frames: 40,
       speed_settings: SpeedSettings::from_preset(speed),
       show_psnr: false,
       train_rdo: false
@@ -894,7 +895,7 @@ impl<T: Pixel> ContextInner<T> {
   /// in order for FI lookahead to be full.
   fn needs_more_fi_lookahead(&self) -> bool {
     let ready_frames = self.get_rdo_lookahead_frames().count() as u64;
-    ready_frames < RDO_LOOKAHEAD_FRAMES + 1 && self.needs_more_frames(self.next_lookahead_frame)
+    ready_frames < self.config.rdo_lookahead_frames + 1 && self.needs_more_frames(self.next_lookahead_frame)
   }
 
   pub fn needs_more_frames(&self, frame_count: u64) -> bool {
@@ -907,7 +908,7 @@ impl<T: Pixel> ContextInner<T> {
       .iter()
       .skip_while(move |(&output_frameno, _)| output_frameno < self.output_frameno)
       .filter(|(_, fi)| !fi.invalid && !fi.show_existing_frame)
-      .take(RDO_LOOKAHEAD_FRAMES as usize + 1)
+      .take(self.config.rdo_lookahead_frames as usize + 1)
   }
 
   fn next_keyframe_input_frameno(
