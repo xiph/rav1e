@@ -717,6 +717,7 @@ impl<T: Pixel> Context<T> {
       }
       self.inner.limit = self.inner.frame_count;
       self.is_flushing = true;
+      self.inner.compute_lookahead_data();
     } else if self.is_flushing {
       return Err(EncoderStatus::EnoughData)
     }
@@ -865,9 +866,7 @@ impl<T: Pixel> ContextInner<T> {
       }
     }
 
-    if !self.needs_more_frame_q_lookahead() {
-      self.compute_lookahead_data();
-    }
+    self.compute_lookahead_data();
     Ok(())
   }
 
@@ -885,9 +884,9 @@ impl<T: Pixel> ContextInner<T> {
 
   /// Indicates whether more frames need to be read into the frame queue
   /// in order for frame queue lookahead to be full.
-  fn needs_more_frame_q_lookahead(&self) -> bool {
+  fn needs_more_frame_q_lookahead(&self, input_frameno: u64) -> bool {
     let lookahead_end = self.frame_q.keys().last().cloned().unwrap_or(0);
-    let frames_needed = self.next_lookahead_frame + self.inter_cfg.keyframe_lookahead_distance();
+    let frames_needed = input_frameno + self.inter_cfg.keyframe_lookahead_distance() + 1;
     lookahead_end < frames_needed && self.needs_more_frames(lookahead_end)
   }
 
@@ -965,8 +964,8 @@ impl<T: Pixel> ContextInner<T> {
       output_frameno_in_gop,
       self.gop_input_frameno_start[&output_frameno]
     );
-    let frames_needed = input_frameno + self.inter_cfg.keyframe_lookahead_distance();
-    if frames_needed > self.next_lookahead_frame && self.needs_more_frames(frames_needed) {
+
+    if self.needs_more_frame_q_lookahead(input_frameno) {
       return Err(EncoderStatus::NeedMoreData);
     }
 
@@ -1309,12 +1308,10 @@ impl<T: Pixel> ContextInner<T> {
             None
           }
         })
-        .take((self.inter_cfg.keyframe_lookahead_distance() +
-          self.inter_cfg.max_reordering_latency() + 1) as usize)
         .collect::<Vec<_>>();
     let mut lookahead_idx = 0;
 
-    while !self.needs_more_frame_q_lookahead() {
+    while !self.needs_more_frame_q_lookahead(self.next_lookahead_frame) {
       // Process the next unprocessed frame
       // Start by getting that frame and all frames after it in the queue
       let current_lookahead_frames = &lookahead_frames[lookahead_idx..];
@@ -1969,7 +1966,8 @@ mod test {
   fn setup_encoder<T: Pixel>(
     w: usize, h: usize, speed: usize, quantizer: usize, bit_depth: usize,
     chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
-    bitrate: i32, low_latency: bool, no_scene_detection: bool
+    bitrate: i32, low_latency: bool, no_scene_detection: bool,
+    rdo_lookahead_frames: u64
   ) -> Context<T> {
     assert!(bit_depth == 8 || std::mem::size_of::<T>() > 1);
     let mut enc = EncoderConfig::with_speed_preset(speed);
@@ -1983,6 +1981,7 @@ mod test {
     enc.chroma_sampling = chroma_sampling;
     enc.bitrate = bitrate;
     enc.speed_settings.no_scene_detection = no_scene_detection;
+    enc.rdo_lookahead_frames = rdo_lookahead_frames;
 
     let cfg = Config { enc, threads: 0 };
 
@@ -2030,7 +2029,8 @@ mod test {
       200,
       0,
       low_lantency,
-      no_scene_detection
+      no_scene_detection,
+      10
     );
     let limit = 41;
 
@@ -2082,7 +2082,8 @@ mod test {
       200,
       0,
       low_lantency,
-      no_scene_detection
+      no_scene_detection,
+      10
     );
     let limit = 41;
 
@@ -2161,7 +2162,8 @@ mod test {
       5,
       0,
       true,
-      true
+      true,
+      10
     );
     let limit = 10 - missing;
     send_frames(&mut ctx, limit, 0);
@@ -2222,7 +2224,8 @@ mod test {
       5,
       0,
       true,
-      true
+      true,
+      10
     );
     let limit = 10 - missing;
     send_frames(&mut ctx, limit, 0);
@@ -2255,7 +2258,8 @@ mod test {
       5,
       0,
       false,
-      true
+      true,
+      10
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -2377,7 +2381,8 @@ mod test {
       5,
       0,
       false,
-      true
+      true,
+      10
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -2498,7 +2503,8 @@ mod test {
       5,
       0,
       false,
-      false
+      false,
+      10
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -2607,7 +2613,8 @@ mod test {
       5,
       0,
       false,
-      false
+      false,
+      10
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -2715,7 +2722,8 @@ mod test {
       5,
       0,
       false,
-      true
+      true,
+      10
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -2839,7 +2847,8 @@ mod test {
       5,
       0,
       false,
-      false
+      false,
+      10
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -2966,7 +2975,8 @@ mod test {
       5,
       0,
       false,
-      false
+      false,
+      10
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -3074,7 +3084,8 @@ mod test {
       5,
       0,
       false,
-      false
+      false,
+      10
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -3125,7 +3136,8 @@ mod test {
       10,
       0,
       false,
-      false
+      false,
+      10
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -3182,7 +3194,8 @@ mod test {
       10,
       0,
       false,
-      false
+      false,
+      10
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -3240,7 +3253,8 @@ mod test {
       10,
       0,
       false,
-      false
+      false,
+      10
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -3280,5 +3294,95 @@ mod test {
         (7, false), // invalid
       ]
     );
+  }
+
+  #[interpolate_test(8, 8)]
+  #[interpolate_test(10, 10)]
+  #[interpolate_test(16, 16)]
+  fn lookahead_size_properly_bounded(rdo_lookahead: u64) {
+    // Test that lookahead reads in the proper number of frames at once
+
+    let mut ctx = setup_encoder::<u8>(
+      64,
+      80,
+      10,
+      100,
+      8,
+      ChromaSampling::Cs420,
+      0,
+      100,
+      0,
+      false,
+      true,
+      rdo_lookahead
+    );
+
+    let limit = 60;
+
+    let scenechange_lookahead_len = ctx.inner.inter_cfg.keyframe_lookahead_distance() as usize;
+    for frameno in 0..scenechange_lookahead_len {
+      let input = ctx.new_frame();
+      let _ = ctx.send_frame(input);
+      let res = ctx.receive_packet();
+      assert!(res.is_err());
+      assert_eq!(ctx.inner.frame_q.len(), frameno + 1);
+      assert_eq!(ctx.inner.frame_invariants.len(), 0);
+    }
+
+    let rdo_lookahead_len = ctx.config.rdo_lookahead_frames as usize;
+    for frameno in scenechange_lookahead_len..rdo_lookahead_len {
+      let input = ctx.new_frame();
+      let _ = ctx.send_frame(input);
+      let res = ctx.receive_packet();
+      assert!(res.is_err());
+      assert_eq!(ctx.inner.frame_q.len(), frameno + 1);
+      // The exact logic gets complicated here because of frame pyramids,
+      // but the size of the FI queue should always hold to this rule.
+      assert!(ctx.inner.frame_invariants.len() < rdo_lookahead_len);
+    }
+
+    let total_lookahead_len = rdo_lookahead_len + scenechange_lookahead_len + 1;
+    for frameno in rdo_lookahead_len..total_lookahead_len {
+      let input = ctx.new_frame();
+      let _ = ctx.send_frame(input);
+      let res = ctx.receive_packet();
+      assert!(res.is_err());
+      assert_eq!(ctx.inner.frame_q.len(), frameno + 1);
+      // The exact logic gets complicated here because of frame pyramids.
+      assert!(ctx.inner.frame_invariants.len() > 0);
+      // The max length of FI's is scaled up by 6/4 to account for the "show existing" frames (+2 output frames) in a sub-GOP (4 input frames)
+      assert!(ctx.inner.frame_invariants.len() < rdo_lookahead_len * 6 / 4);
+    }
+
+    for _ in total_lookahead_len..limit {
+      let input = ctx.new_frame();
+      let _ = ctx.send_frame(input);
+      while ctx.receive_packet().is_ok() {
+        // Receive packets until lookahead consumed, due to pyramids receiving frames in groups
+      }
+      // The exact logic gets complicated here because of frame pyramids.
+      assert!(ctx.inner.frame_q.len() > total_lookahead_len);
+      assert!(ctx.inner.frame_q.len() <= total_lookahead_len + scenechange_lookahead_len + 1);
+      assert!(ctx.inner.frame_invariants.len() > rdo_lookahead_len);
+      // The max length of FI's is scaled up by 6/4 to account for the "show existing" frames (+2 output frames) in a sub-GOP (4 input frames)
+      assert!(ctx.inner.frame_invariants.len() <= (rdo_lookahead_len + ctx.inner.inter_cfg.group_input_len as usize) * 6 / 4 + 1);
+    }
+
+    ctx.flush();
+    let end = ctx.inner.frame_q.get(&(limit as u64));
+    assert!(end.is_some());
+    assert!(end.unwrap().is_none());
+
+    loop {
+      match ctx.receive_packet() {
+        Ok(_) | Err(EncoderStatus::Encoded) => {
+          // Receive packets until all frames consumed
+        }
+        _ => {
+          break;
+        }
+      }
+    }
+    assert_eq!(ctx.inner.frames_processed, limit as u64);
   }
 }
