@@ -1821,10 +1821,25 @@ impl<T: Pixel> ContextInner<T> {
     for fti in 0..=FRAME_NSUBTYPES {
       nframes[fti] = 0;
     }
-    let mut prev_keyframe_input_frameno =
-      self.gop_input_frameno_start[&self.output_frameno];
-    let mut prev_keyframe_output_frameno =
-      self.gop_output_frameno_start[&self.output_frameno];
+
+    // Two-pass calls this function before receive_packet(), and in particular
+    // before the very first send_frame(), when the following maps are empty.
+    // In this case, return 0 as the default value.
+    let mut prev_keyframe_input_frameno = *self
+      .gop_input_frameno_start
+      .get(&self.output_frameno)
+      .unwrap_or_else(|| {
+        assert!(self.output_frameno == 0);
+        &0
+      });
+    let mut prev_keyframe_output_frameno = *self
+      .gop_output_frameno_start
+      .get(&self.output_frameno)
+      .unwrap_or_else(|| {
+        assert!(self.output_frameno == 0);
+        &0
+      });
+
     let mut prev_keyframe_ntus = 0;
     // Does not include SEF frames.
     let mut prev_keyframe_nframes = 0;
