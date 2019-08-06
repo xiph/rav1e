@@ -423,7 +423,7 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
       .unwrap_or_default();
 
     let mut cfg = EncoderConfig::with_speed_preset(speed);
-    cfg.max_key_frame_interval = min_interval;
+    cfg.min_key_frame_interval = min_interval;
     cfg.max_key_frame_interval = max_interval;
 
     cfg.pixel_range = matches.value_of("PIXEL_RANGE").unwrap().parse().unwrap_or_default();
