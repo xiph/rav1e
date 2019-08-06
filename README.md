@@ -1,14 +1,12 @@
+# rav1e [![Travis Build Status](https://travis-ci.org/xiph/rav1e.svg?branch=master)](https://travis-ci.org/xiph/rav1e) [![AppVeyor Build Status](https://ci.appveyor.com/api/projects/status/github/xiph/rav1e?branch=master&svg=true)](https://ci.appveyor.com/project/tdaede/rav1e/history) [![Coverage Status](https://coveralls.io/repos/github/xiph/rav1e/badge.svg?branch=master)](https://coveralls.io/github/xiph/rav1e?branch=master)
+
 The fastest and safest AV1 encoder.
 
-[![Travis Build Status](https://travis-ci.org/xiph/rav1e.svg?branch=master)](https://travis-ci.org/xiph/rav1e)
-[![AppVeyor Build Status](https://ci.appveyor.com/api/projects/status/github/xiph/rav1e?branch=master&svg=true)](https://ci.appveyor.com/project/tdaede/rav1e/history)
-[![Coverage Status](https://coveralls.io/repos/github/xiph/rav1e/badge.svg?branch=master)](https://coveralls.io/github/xiph/rav1e?branch=master)
-
-# Overview
+## Overview
 
 rav1e is an experimental AV1 video encoder. It is designed to eventually cover all use cases, though in its current form it is most suitable for cases where libaom (the reference encoder) is too slow.
 
-# Features
+## Features
 
 * Intra and inter frames
 * 64x64 superblocks
@@ -20,22 +18,22 @@ rav1e is an experimental AV1 video encoder. It is designed to eventually cover a
 * Variable speed settings
 * Near real-time encoding at high speed levels
 
-# Releases
+## Releases
 
 For the foreseeable future, a weekly pre-release of rav1e will be [published](https://github.com/xiph/rav1e/releases) every Tuesday.
 
-# Windows builds
+## Windows builds
 
 Automated AppVeyor builds can be found [here](https://ci.appveyor.com/project/tdaede/rav1e/history). Click on a build (it is recommended you select a build based on "master"), then click ARTIFACTS to reveal the rav1e.exe download link.
 
-# Building
+## Building
 
 **rav1e** can optionally use either `libaom` (default) or a `dav1d` installation to run some extended tests.
 Some `x86_64`-specific optimizations require a recent version of NASM.
 
 In order to build, test and link to the codec on UNIX, you need Perl, NASM, CMake, Clang and pkg-config. To install this on Ubuntu or Linux Mint, run:
 
-```
+```sh
 sudo apt install perl nasm cmake clang pkg-config
 ```
 
@@ -43,32 +41,34 @@ On Windows, pkg-config is not required. A Perl distribution such as Strawberry P
 
 To build release binary in `target/release/rav1e` run:
 
-```
+```cmd
 cargo build --release
 ```
 
-## Building the C-API
+### Building the C-API
 
 **rav1e** provides a C-compatible set of library, header and pkg-config file.
 
 To build and install it you can use [cargo-c](https://crates.io/crates/cargo-c):
-```
+
+```sh
 cargo install cargo-c
 cargo cinstall --release
 ```
 
-# Compressing video
+## Compressing video
 
 Input videos must be in y4m format and have 4:2:0 chroma subsampling.
 
-```
+```sh
 cargo run --release --bin rav1e -- input.y4m -o output.ivf
 ```
-# Decompressing video
+
+## Decompressing video
 
 Encoder output should be compatible with any AV1 decoder compliant with the v1.0.0 specification. You can build compatible aomdec using the following:
 
-```
+```sh
 mkdir aom_test
 cd aom_test
 cmake /path/to/aom -DAOM_TARGET_CPU=generic -DCONFIG_AV1_ENCODER=0 -DENABLE_TESTS=0 -DENABLE_DOCS=0 -DCONFIG_LOWBITDEPTH=1
@@ -76,21 +76,21 @@ make -j8
 ./aomdec ../output.ivf -o output.y4m
 ```
 
-# Configuring
+## Configuring
 
 rav1e has several optional features that can be enabled by passing --features to cargo test. Passing --all-features is discouraged.
 
 * nasm - enabled by default. When enabled, assembly is built for x86_64.
 
-# Using the AOMAnalyzer
+## Using the AOMAnalyzer
 
-## Local Analyzer
+### Local Analyzer
 
 1. Download the [AOM Analyzer](http://aomanalyzer.org).
 2. Download [inspect.js](https://people.xiph.org/~mbebenita/analyzer/inspect.js) and [inspect.wasm](https://people.xiph.org/~mbebenita/analyzer/inspect.wasm) and save them in the same directory.
 3. Run the analyzer: `AOMAnalyzer path_to_inspect.js output.ivf`
 
-## Online Analyzer
+### Online Analyzer
 
 If your `.ivf` file is hosted somewhere (and CORS is enabled on your web server) you can use:
 
@@ -98,7 +98,7 @@ If your `.ivf` file is hosted somewhere (and CORS is enabled on your web server)
 https://arewecompressedyet.com/analyzer/?d=https://people.xiph.org/~mbebenita/analyzer/inspect.js&f=path_to_output.ivf
 ```
 
-# Design
+## Design
 
 * src/context.rs - High-level functions that write symbols to the bitstream, and maintain context.
 * src/ec.rs - Low-level implementation of the entropy coder, which directly writes the bitstream.
@@ -112,81 +112,89 @@ https://arewecompressedyet.com/analyzer/?d=https://people.xiph.org/~mbebenita/an
 * src/bin/rav1e.rs - rav1e command line tool.
 * src/bin/rav1erepl.rs - Command line tool for debugging.
 
-# Contributing
+## Contributing
 
-## Toolchain
+### Toolchain
+
 rav1e uses the stable version of Rust (the stable toolchain).
 
 To install the toolchain:
-```
+
+```sh
 rustup install stable
 ```
 
+### Coding style
 
-## Coding style
 Check code formatting with [rustfmt](https://github.com/rust-lang-nursery/rustfmt) before submitting a PR.
 
 To install the rustfmt:
 
-```
+```sh
 rustup component add rustfmt
 ```
 
 then
 
-```
+```sh
 cargo fmt -- --check
 ```
 
+### Code Analysis
 
-## Code Analysis
 The [clippy](https://github.com/rust-lang-nursery/rust-clippy) will help catch common mistakes and improve your Rust code.
 
 We recommend you use it before submitting a PR.
 
 To install clippy:
 
-```
+```sh
 rustup component add clippy
 ```
 
 then you can search "cargo clippy" in [.travis.yml](https://github.com/xiph/rav1e/blob/master/.travis.yml) for detailed command and run it.
 
+### Testing
 
-## Testing
 Run unit tests with:
-```
+
+```sh
 cargo test
 ```
 
 Encode-decode integration tests require libaom and libdav1d.
 
 Installation on Ubuntu:
-```
+
+```sh
 sudo apt install libaom-dev libdav1d-dev
 ```
 
 Installation on Fedora:
-```
+
+```sh
 sudo dnf install libaom-devel libdav1d-devel
 ```
 
 Run encode-decode integration tests against libaom with:
-```
+
+```sh
 cargo test --release --features=decode_test
 ```
 
 Run the encode-decode tests against `dav1d` with:
-```
+
+```sh
 cargo test --release --features=decode_test_dav1d
 ```
 
 Run regular benchmarks with:
-```
+
+```sh
 cargo bench --features=bench
 ```
 
-# Getting in Touch
+## Getting in Touch
 
 Come chat with us on the IRC channel #daala on Freenode! If you don't have IRC set
 up you can easily connect from your [web browser](http://webchat.freenode.net/?channels=%23daala).
