@@ -313,6 +313,57 @@ pub trait MotionEstimation {
     blk_w: usize, blk_h: usize, best_mv: &mut MotionVector,
     lowest_cost: &mut u64, ref_frame: RefType,
   );
+
+  fn estimate_motion<T: Pixel>(
+    fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, bsize: BlockSize,
+    tile_bo: TileBlockOffset, pmvs: &[Option<MotionVector>],
+    ref_frame: RefType,
+  ) -> Option<MotionVector> {
+    debug_assert!(pmvs.len() <= 7);
+
+    if let Some(ref rec) =
+      fi.rec_buffer.frames[fi.ref_frames[ref_frame.to_index()] as usize]
+    {
+      let blk_w = bsize.width();
+      let blk_h = bsize.height();
+      let tile_bo_adj =
+        adjust_bo(tile_bo, ts.mi_width, ts.mi_height, blk_w, blk_h);
+      let frame_bo_adj = ts.to_frame_block_offset(tile_bo_adj);
+      let (mvx_min, mvx_max, mvy_min, mvy_max) =
+        get_mv_range(fi.w_in_b, fi.h_in_b, frame_bo_adj, blk_w, blk_h);
+
+      let global_mv = [MotionVector { row: 0, col: 0 }; 2];
+
+      let mut lowest_cost = std::u64::MAX;
+      let mut best_mv = MotionVector::default();
+
+      // 0.5 is a fudge factor
+      let lambda = (fi.me_lambda * 256.0 * 0.5) as u32;
+
+      Self::full_pixel_me(
+        fi,
+        ts,
+        rec,
+        tile_bo_adj,
+        lambda,
+        pmvs.iter().cloned().filter_map(identity).collect(),
+        global_mv,
+        mvx_min,
+        mvx_max,
+        mvy_min,
+        mvy_max,
+        blk_w,
+        blk_h,
+        &mut best_mv,
+        &mut lowest_cost,
+        ref_frame,
+      );
+
+      Some(MotionVector { row: best_mv.row, col: best_mv.col })
+    } else {
+      None
+    }
+  }
 }
 
 pub struct DiamondSearch {}
