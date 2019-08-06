@@ -256,8 +256,8 @@ impl<T: Pixel> Plane<T> {
     let yorigin = self.cfg.yorigin;
     let stride = self.cfg.stride;
     let alloc_height = self.cfg.alloc_height;
-    let width = w >> self.cfg.xdec;
-    let height = h >> self.cfg.ydec;
+    let width = w + self.cfg.xdec >> self.cfg.xdec;
+    let height = h + self.cfg.ydec >> self.cfg.ydec;
 
     if xorigin > 0 {
       for y in 0..height {
