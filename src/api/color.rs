@@ -51,14 +51,29 @@ impl Default for ChromaSampling {
 }
 
 impl ChromaSampling {
-  /// Provide the sampling period in the horizontal and vertical axes.
-  pub fn sampling_period(self) -> (usize, usize) {
+  /// Provides the amount to right shift the luma plane dimensions to get the
+  ///  chroma plane dimensions.
+  /// Only values 0 or 1 are ever returned.
+  /// The plane dimensions must also be rounded up to accomodate odd luma plane
+  ///  sizes.
+  /// Cs400 returns None, as there are no chroma planes.
+  pub fn get_decimation(&self) -> Option<(usize, usize)> {
     use self::ChromaSampling::*;
     match self {
-      Cs420 => (2, 2),
-      Cs422 => (2, 1),
-      Cs444 => (1, 1),
-      Cs400 => (2, 2)
+      Cs420 => Some((1, 1)),
+      Cs422 => Some((1, 0)),
+      Cs444 => Some((0, 0)),
+      Cs400 => None,
+    }
+  }
+
+  pub fn get_chroma_dimensions(&self, luma_width: usize, luma_height: usize)
+   -> (usize, usize) {
+    if let Some((ss_x, ss_y)) = self.get_decimation() {
+      ((luma_width + ss_x) >> ss_x, (luma_height + ss_y) >> ss_y)
+    }
+    else {
+      (0, 0)
     }
   }
 }

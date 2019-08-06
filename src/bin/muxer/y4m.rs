@@ -13,17 +13,16 @@ use std::slice;
 use rav1e::prelude::*;
 
 pub fn write_y4m_frame<T: Pixel>(y4m_enc: &mut y4m::Encoder<'_, Box<dyn Write>>, rec: &Frame<T>, y4m_details: VideoDetails) {
-  let pitch_y = if y4m_details.bit_depth > 8 { y4m_details.width * 2 } else { y4m_details.width };
-  let chroma_sampling_period = y4m_details.chroma_sampling.sampling_period();
-  let (pitch_uv, height_uv) = (
-    pitch_y / chroma_sampling_period.0,
-    y4m_details.height / chroma_sampling_period.1
-  );
+  let bytes_per_sample = if y4m_details.bit_depth > 8 { 2 } else { 1 };
+  let (chroma_width, chroma_height) = y4m_details.chroma_sampling
+   .get_chroma_dimensions(y4m_details.width, y4m_details.height);
+  let pitch_y = y4m_details.width * bytes_per_sample;
+  let pitch_uv = chroma_width * bytes_per_sample;
 
   let (mut rec_y, mut rec_u, mut rec_v) = (
     vec![128u8; pitch_y * y4m_details.height],
-    vec![128u8; pitch_uv * height_uv],
-    vec![128u8; pitch_uv * height_uv]
+    vec![128u8; pitch_uv * chroma_height],
+    vec![128u8; pitch_uv * chroma_height]
   );
 
   let (stride_y, stride_u, stride_v) = (

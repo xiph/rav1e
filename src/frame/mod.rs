@@ -52,14 +52,12 @@ impl<T: Pixel> Frame<T> {
     let luma_height = height.align_power_of_two(3);
     let luma_padding = SB_SIZE + FRAME_MARGIN;
 
-    let (chroma_sampling_period_x, chroma_sampling_period_y) =
-      chroma_sampling.sampling_period();
-    let chroma_width = luma_width / chroma_sampling_period_x;
-    let chroma_height = luma_height / chroma_sampling_period_y;
-    let chroma_padding_x = luma_padding / chroma_sampling_period_x;
-    let chroma_padding_y = luma_padding / chroma_sampling_period_y;
-    let chroma_decimation_x = chroma_sampling_period_x - 1;
-    let chroma_decimation_y = chroma_sampling_period_y - 1;
+    let (chroma_decimation_x, chroma_decimation_y) =
+     chroma_sampling.get_decimation().unwrap_or((0, 0));
+    let (chroma_width, chroma_height) = chroma_sampling
+     .get_chroma_dimensions(luma_width, luma_height);
+    let chroma_padding_x = luma_padding >> chroma_decimation_x;
+    let chroma_padding_y = luma_padding >> chroma_decimation_y;
 
     Frame {
       planes: [
