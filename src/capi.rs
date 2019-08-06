@@ -404,6 +404,8 @@ unsafe fn option_match(
       enc.min_key_frame_interval = value.parse().map_err(|_| ())?,
     "reservoir_frame_delay" =>
       enc.reservoir_frame_delay = Some(value.parse().map_err(|_| ())?),
+    "rdo_lookahead_frames" =>
+      enc.rdo_lookahead_frames = value.parse().map_err(|_| ())?,
     "low_latency" => enc.low_latency = value.parse().map_err(|_| ())?,
     "still_picture" => enc.still_picture = value.parse().map_err(|_| ())?,
 
