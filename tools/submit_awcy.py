@@ -50,7 +50,7 @@ args = parser.parse_args()
 
 if args.branch is None:
     try:
-        args.branch = subprocess.check_output('git symbolic-ref -q --short HEAD',shell=True).strip()
+        args.branch = subprocess.check_output('git symbolic-ref -q --short HEAD',shell=True).strip().decode('utf-8')
     except:
         args.branch = None
 
