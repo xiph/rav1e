@@ -1497,7 +1497,7 @@ pub fn rdo_loop_decision<T: Pixel>(tile_sbo: TileSuperBlockOffset, fi: &FrameInv
           let rate = cw.count_lrf_switchable(w, &ts.restoration.as_const(), current_lrf, pli);
           let frame_bo = ts.to_frame_super_block_offset(tile_sbo).block_offset(0, 0);
           let cost = compute_rd_cost(fi, frame_bo, BlockSize::BLOCK_64X64, rate, err);
-          if best_cost[pli] < 0. || cost < best_cost[pli] {
+          if (fi.sequence.enable_cdef && best_cost[pli] < 0.) || cost < best_cost[pli] {
             best_cost[pli] = cost;
             best_lrf[pli] = current_lrf;
             lrf_change = true;
