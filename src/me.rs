@@ -335,7 +335,7 @@ impl MotionEstimation for DiamondSearch {
     let mut predictors = get_subset_predictors::<T>(
       tile_bo_adj,
       pmvs.iter().cloned().filter_map(identity).collect(),
-      &tile_mvs, frame_ref, 0
+      &tile_mvs, frame_ref, ref_frame.to_index()
     );
 
     for predictor in &mut predictors {
@@ -351,7 +351,7 @@ impl MotionEstimation for DiamondSearch {
       mvx_min >> 1, mvx_max >> 1, mvy_min >> 1, mvy_max >> 1,
       blk_w >> 1, blk_h >> 1,
       best_mv, lowest_cost,
-      false, LAST_FRAME
+      false, ref_frame
     );
   }
 }
