@@ -214,8 +214,6 @@ pub trait MotionEstimation {
       let (mvx_min, mvx_max, mvy_min, mvy_max) = get_mv_range(fi.w_in_b, fi.h_in_b, frame_bo_adj, blk_w, blk_h);
 
       let global_mv = [MotionVector{row: 0, col: 0}; 2];
-      let tile_mvs = &ts.mvs[ref_frame.to_index()].as_const();
-      let frame_ref_opt = fi.rec_buffer.frames[fi.ref_frames[0] as usize].as_ref().map(Arc::as_ref);
 
       let mut lowest_cost = std::u64::MAX;
       let mut best_mv = MotionVector::default();
@@ -225,9 +223,9 @@ pub trait MotionEstimation {
 
       Self::me_ss2(
         fi, ts, pmvs, tile_bo_adj,
-        tile_mvs, frame_ref_opt, rec, global_mv, lambda,
+        rec, global_mv, lambda,
         mvx_min, mvx_max, mvy_min, mvy_max, blk_w, blk_h,
-        &mut best_mv, &mut lowest_cost
+        &mut best_mv, &mut lowest_cost, ref_frame
       );
 
       Some(MotionVector { row: best_mv.row * 2, col: best_mv.col * 2 })
@@ -239,11 +237,10 @@ pub trait MotionEstimation {
   fn me_ss2<T: Pixel>(
     fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>,
     pmvs: &[Option<MotionVector>; 3], tile_bo_adj: TileBlockOffset,
-    tile_mvs: &TileMotionVectors<'_>, frame_ref_opt: Option<&ReferenceFrame<T>>,
     rec: &ReferenceFrame<T>, global_mv: [MotionVector; 2], lambda: u32,
     mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
     blk_w: usize, blk_h: usize,
-    best_mv: &mut MotionVector, lowest_cost: &mut u64
+    best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: RefType
   );
 }
 
@@ -321,11 +318,10 @@ impl MotionEstimation for DiamondSearch {
   fn me_ss2<T: Pixel>(
     fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>,
     pmvs: &[Option<MotionVector>; 3], tile_bo_adj: TileBlockOffset,
-    tile_mvs: &TileMotionVectors<'_>, frame_ref_opt: Option<&ReferenceFrame<T>>,
     rec: &ReferenceFrame<T>, global_mv: [MotionVector; 2], lambda: u32,
     mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
     blk_w: usize, blk_h: usize,
-    best_mv: &mut MotionVector, lowest_cost: &mut u64
+    best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: RefType
   ) {
     let frame_bo_adj = ts.to_frame_block_offset(tile_bo_adj);
     let frame_po = PlaneOffset {
@@ -333,10 +329,13 @@ impl MotionEstimation for DiamondSearch {
       y: (frame_bo_adj.0.y as isize) << BLOCK_TO_PLANE_SHIFT >> 1,
     };
 
+    let tile_mvs = &ts.mvs[ref_frame.to_index()].as_const();
+    let frame_ref = fi.rec_buffer.frames[fi.ref_frames[0] as usize].as_ref().map(Arc::as_ref);
+
     let mut predictors = get_subset_predictors::<T>(
       tile_bo_adj,
       pmvs.iter().cloned().filter_map(identity).collect(),
-      &tile_mvs, frame_ref_opt, 0
+      &tile_mvs, frame_ref, 0
     );
 
     for predictor in &mut predictors {
@@ -427,11 +426,10 @@ impl MotionEstimation for FullSearch {
   fn me_ss2<T: Pixel>(
     fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>,
     pmvs: &[Option<MotionVector>; 3], tile_bo_adj: TileBlockOffset,
-    _tile_mvs: &TileMotionVectors<'_>, _frame_ref_opt: Option<&ReferenceFrame<T>>,
     rec: &ReferenceFrame<T>, _global_mv: [MotionVector; 2], lambda: u32,
     mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
     blk_w: usize, blk_h: usize,
-    best_mv: &mut MotionVector, lowest_cost: &mut u64
+    best_mv: &mut MotionVector, lowest_cost: &mut u64, _ref_frame: RefType
   ) {
     let frame_bo_adj = ts.to_frame_block_offset(tile_bo_adj);
     let frame_po = PlaneOffset {
