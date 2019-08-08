@@ -21,6 +21,8 @@ use crate::util::Pixel;
 
 use arrayvec::*;
 
+use std::convert::identity;
+use std::iter;
 use std::ops::{Index, IndexMut};
 use std::sync::Arc;
 
@@ -70,17 +72,17 @@ fn get_mv_range(
 }
 
 pub fn get_subset_predictors<T: Pixel>(
-  tile_bo: TileBlockOffset, cmv: MotionVector,
+  tile_bo: TileBlockOffset, cmvs: ArrayVec<[MotionVector; 7]>,
   tile_mvs: &TileMotionVectors<'_>, frame_ref_opt: Option<&ReferenceFrame<T>>,
   ref_frame_id: usize
-) -> (ArrayVec<[MotionVector; 11]>) {
-  let mut predictors = ArrayVec::<[_; 11]>::new();
+) -> (ArrayVec<[MotionVector; 17]>) {
+  let mut predictors = ArrayVec::<[_; 17]>::new();
 
   // Zero motion vector
   predictors.push(MotionVector::default());
 
   // Coarse motion estimation.
-  predictors.push(cmv.quantize_to_fullpel());
+  predictors.extend(cmvs.into_iter().map(MotionVector::quantize_to_fullpel));
 
   // EPZS subset A and B predictors.
 
@@ -259,7 +261,7 @@ impl MotionEstimation for DiamondSearch {
     let tile_mvs = &ts.mvs[ref_frame.to_index()].as_const();
     let frame_ref = fi.rec_buffer.frames[fi.ref_frames[0] as usize].as_ref().map(Arc::as_ref);
     let predictors =
-      get_subset_predictors(tile_bo, cmv, tile_mvs, frame_ref, ref_frame.to_index());
+      get_subset_predictors(tile_bo, iter::once(cmv).collect(), tile_mvs, frame_ref, ref_frame.to_index());
 
     let frame_bo = ts.to_frame_block_offset(tile_bo);
     diamond_me_search(
@@ -330,31 +332,28 @@ impl MotionEstimation for DiamondSearch {
       x: (frame_bo_adj.0.x as isize) << BLOCK_TO_PLANE_SHIFT >> 1,
       y: (frame_bo_adj.0.y as isize) << BLOCK_TO_PLANE_SHIFT >> 1,
     };
-    for omv in pmvs.iter() {
-      if let Some(pmv) = omv {
-        let mut predictors = get_subset_predictors::<T>(
-          tile_bo_adj,
-          MotionVector{row: pmv.row, col: pmv.col},
-          &tile_mvs, frame_ref_opt, 0
-        );
 
-        for predictor in &mut predictors {
-          predictor.row >>= 1;
-          predictor.col >>= 1;
-        }
+    let mut predictors = get_subset_predictors::<T>(
+      tile_bo_adj,
+      pmvs.iter().cloned().filter_map(identity).collect(),
+      &tile_mvs, frame_ref_opt, 0
+    );
 
-        diamond_me_search(
-          fi, frame_po,
-          &ts.input_hres, &rec.input_hres,
-          &predictors, fi.sequence.bit_depth,
-          global_mv, lambda,
-          mvx_min >> 1, mvx_max >> 1, mvy_min >> 1, mvy_max >> 1,
-          blk_w >> 1, blk_h >> 1,
-          best_mv, lowest_cost,
-          false, LAST_FRAME
-        );
-      }
+    for predictor in &mut predictors {
+      predictor.row >>= 1;
+      predictor.col >>= 1;
     }
+
+    diamond_me_search(
+      fi, frame_po,
+      &ts.input_hres, &rec.input_hres,
+      &predictors, fi.sequence.bit_depth,
+      global_mv, lambda,
+      mvx_min >> 1, mvx_max >> 1, mvy_min >> 1, mvy_max >> 1,
+      blk_w >> 1, blk_h >> 1,
+      best_mv, lowest_cost,
+      false, LAST_FRAME
+    );
   }
 }
 
