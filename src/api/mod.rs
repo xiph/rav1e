@@ -1153,10 +1153,28 @@ impl<T: Pixel> ContextInner<T> {
         let tile_pmvs = build_coarse_pmvs(fi, ts);
 
         // Compute the half-resolution motion vectors.
+        let mut half_res_pmvs = Vec::with_capacity(ts.sb_height * ts.sb_width);
+
         for sby in 0..ts.sb_height {
           for sbx in 0..ts.sb_width {
-            let tile_sbo = TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
-            build_half_res_pmvs(fi, ts, tile_sbo, &tile_pmvs);
+            let tile_sbo =
+              TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
+            half_res_pmvs
+              .push(build_half_res_pmvs(fi, ts, tile_sbo, &tile_pmvs));
+          }
+        }
+
+        // Compute the full-resolution motion vectors.
+        for sby in 0..ts.sb_height {
+          for sbx in 0..ts.sb_width {
+            let tile_sbo =
+              TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
+            build_full_res_pmvs(
+              fi,
+              ts,
+              tile_sbo,
+              &half_res_pmvs,
+            );
           }
         }
       });
