@@ -177,9 +177,10 @@ pub trait MotionEstimation {
   fn full_pixel_me<T: Pixel>(
     fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>,
     rec: &ReferenceFrame<T>, tile_bo: TileBlockOffset, lambda: u32,
-    cmv: MotionVector, pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize,
-    mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize,
-    best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: RefType,
+    cmvs: ArrayVec<[MotionVector; 7]>, pmv: [MotionVector; 2], mvx_min: isize,
+    mvx_max: isize, mvy_min: isize, mvy_max: isize, blk_w: usize,
+    blk_h: usize, best_mv: &mut MotionVector, lowest_cost: &mut u64,
+    ref_frame: RefType,
   );
 
   fn sub_pixel_me<T: Pixel>(
@@ -217,7 +218,7 @@ pub trait MotionEstimation {
           rec,
           tile_bo,
           lambda,
-          cmv,
+          iter::once(cmv).collect(),
           pmv,
           mvx_min,
           mvx_max,
@@ -321,9 +322,10 @@ impl MotionEstimation for DiamondSearch {
   fn full_pixel_me<T: Pixel>(
     fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>,
     rec: &ReferenceFrame<T>, tile_bo: TileBlockOffset, lambda: u32,
-    cmv: MotionVector, pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize,
-    mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize,
-    best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: RefType,
+    cmvs: ArrayVec<[MotionVector; 7]>, pmv: [MotionVector; 2], mvx_min: isize,
+    mvx_max: isize, mvy_min: isize, mvy_max: isize, blk_w: usize,
+    blk_h: usize, best_mv: &mut MotionVector, lowest_cost: &mut u64,
+    ref_frame: RefType,
   ) {
     let tile_mvs = &ts.mvs[ref_frame.to_index()].as_const();
     let frame_ref = fi.rec_buffer.frames[fi.ref_frames[0] as usize]
@@ -331,7 +333,7 @@ impl MotionEstimation for DiamondSearch {
       .map(Arc::as_ref);
     let predictors = get_subset_predictors(
       tile_bo,
-      iter::once(cmv).collect(),
+      cmvs,
       tile_mvs,
       frame_ref,
       ref_frame.to_index(),
@@ -450,40 +452,47 @@ impl MotionEstimation for FullSearch {
   fn full_pixel_me<T: Pixel>(
     fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>,
     rec: &ReferenceFrame<T>, tile_bo: TileBlockOffset, lambda: u32,
-    cmv: MotionVector, pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize,
-    mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize,
-    best_mv: &mut MotionVector, lowest_cost: &mut u64, _ref_frame: RefType,
+    cmvs: ArrayVec<[MotionVector; 7]>, pmv: [MotionVector; 2], mvx_min: isize,
+    mvx_max: isize, mvy_min: isize, mvy_max: isize, blk_w: usize,
+    blk_h: usize, best_mv: &mut MotionVector, lowest_cost: &mut u64,
+    _ref_frame: RefType,
   ) {
     let frame_bo = ts.to_frame_block_offset(tile_bo);
     let frame_po = frame_bo.to_luma_plane_offset();
     let range = 16;
-    let x_lo = frame_po.x
-      + ((-range + (cmv.col / 8) as isize).max(mvx_min / 8).min(mvx_max / 8));
-    let x_hi = frame_po.x
-      + ((range + (cmv.col / 8) as isize).max(mvx_min / 8).min(mvx_max / 8));
-    let y_lo = frame_po.y
-      + ((-range + (cmv.row / 8) as isize).max(mvy_min / 8).min(mvy_max / 8));
-    let y_hi = frame_po.y
-      + ((range + (cmv.row / 8) as isize).max(mvy_min / 8).min(mvy_max / 8));
+    for cmv in cmvs.into_iter() {
+      let x_lo = frame_po.x
+        + ((-range + (cmv.col / 8) as isize)
+          .max(mvx_min / 8)
+          .min(mvx_max / 8));
+      let x_hi = frame_po.x
+        + ((range + (cmv.col / 8) as isize).max(mvx_min / 8).min(mvx_max / 8));
+      let y_lo = frame_po.y
+        + ((-range + (cmv.row / 8) as isize)
+          .max(mvy_min / 8)
+          .min(mvy_max / 8));
+      let y_hi = frame_po.y
+        + ((range + (cmv.row / 8) as isize).max(mvy_min / 8).min(mvy_max / 8));
 
-    full_search(
-      x_lo,
-      x_hi,
-      y_lo,
-      y_hi,
-      blk_h,
-      blk_w,
-      &ts.input.planes[0],
-      &rec.frame.planes[0],
-      best_mv,
-      lowest_cost,
-      frame_po,
-      2,
-      fi.sequence.bit_depth,
-      lambda,
-      pmv,
-      fi.allow_high_precision_mv,
-    );
+      full_search(
+        x_lo,
+        x_hi,
+        y_lo,
+        y_hi,
+        blk_h,
+        blk_w,
+        &ts.input.planes[0],
+        &rec.frame.planes[0],
+        best_mv,
+        lowest_cost,
+        frame_po,
+        2,
+        fi.sequence.bit_depth,
+        lambda,
+        pmv,
+        fi.allow_high_precision_mv,
+      );
+    }
   }
 
   fn sub_pixel_me<T: Pixel>(
