@@ -312,9 +312,8 @@ impl SpeedSettings {
 
   /// Currently Diamond ME gives better quality than full search on most videos,
   /// in addition to being faster.
-  /// There are a few outliers, such as the Wikipedia test clip.
-  ///
-  /// TODO: Revisit this setting if full search quality improves in the future.
+  // There are a few outliers, such as the Wikipedia test clip.
+  // TODO: Revisit this setting if full search quality improves in the future.
   fn diamond_me_preset(_speed: usize) -> bool {
     true
   }
@@ -402,22 +401,22 @@ impl Config {
   }
 }
 
-// The set of options that controls frame re-ordering and reference picture
-//  selection.
-// The options stored here are invariant over the whole encode.
+/// The set of options that controls frame re-ordering and reference picture
+///  selection.
+/// The options stored here are invariant over the whole encode.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct InterConfig {
-  // Whether frame re-ordering is enabled.
+  /// Whether frame re-ordering is enabled.
   reorder: bool,
-  // Whether P-frames can use multiple references.
+  /// Whether P-frames can use multiple references.
   pub(crate) multiref: bool,
-  // The depth of the re-ordering pyramid.
-  // The current code cannot support values larger than 2.
+  /// The depth of the re-ordering pyramid.
+  /// The current code cannot support values larger than 2.
   pub(crate) pyramid_depth: u64,
-  // Number of input frames in group.
+  /// Number of input frames in group.
   pub(crate) group_input_len: u64,
-  // Number of output frames in group.
-  // This includes both hidden frames and "show existing frame" frames.
+  /// Number of output frames in group.
+  /// This includes both hidden frames and "show existing frame" frames.
   group_output_len: u64
 }
 
@@ -451,9 +450,9 @@ impl InterConfig {
     }
   }
 
-  // Get the index of an output frame in its re-ordering group given the output
-  //  frame number of the frame in the current keyframe gop.
-  // When re-ordering is disabled, this always returns 0.
+  /// Get the index of an output frame in its re-ordering group given the output
+  ///  frame number of the frame in the current keyframe gop.
+  /// When re-ordering is disabled, this always returns 0.
   pub(crate) fn get_idx_in_group_output(
     &self, output_frameno_in_gop: u64
   ) -> u64 {
@@ -463,9 +462,9 @@ impl InterConfig {
     (output_frameno_in_gop - 1) % self.group_output_len
   }
 
-  // Get the order-hint of an output frame given the output frame number of the
-  //  frame in the current keyframe gop and the index of that output frame
-  //  in its re-ordering gorup.
+  /// Get the order-hint of an output frame given the output frame number of the
+  ///  frame in the current keyframe gop and the index of that output frame
+  ///  in its re-ordering gorup.
   pub(crate) fn get_order_hint(
     &self, output_frameno_in_gop: u64, idx_in_group_output: u64
   ) -> u32 {
@@ -487,7 +486,7 @@ impl InterConfig {
     (self.group_input_len * group_idx + offset) as u32
   }
 
-  // Get the level of the current frame in the pyramid.
+  /// Get the level of the current frame in the pyramid.
   pub(crate) fn get_level(&self, idx_in_group_output: u64) -> u64 {
     if !self.reorder {
       0
@@ -1806,15 +1805,15 @@ impl<T: Pixel> ContextInner<T> {
     }
   }
 
-  // Count the number of output frames of each subtype in the next
-  //  reservoir_frame_delay temporal units (needed for rate control).
-  // Returns the number of output frames (excluding SEF frames) and output TUs
-  //  until the last keyframe in the next reservoir_frame_delay temporal units,
-  //  or the end of the interval, whichever comes first.
-  // The former is needed because it indicates the number of rate estimates we
-  //  will make.
-  // The latter is needed because it indicates the number of times new bitrate
-  //  is added to the buffer.
+  /// Counts the number of output frames of each subtype in the next
+  ///  reservoir_frame_delay temporal units (needed for rate control).
+  /// Returns the number of output frames (excluding SEF frames) and output TUs
+  ///  until the last keyframe in the next reservoir_frame_delay temporal units,
+  ///  or the end of the interval, whichever comes first.
+  /// The former is needed because it indicates the number of rate estimates we
+  ///  will make.
+  /// The latter is needed because it indicates the number of times new bitrate
+  ///  is added to the buffer.
   pub(crate) fn guess_frame_subtypes(
     &self, nframes: &mut [i32; FRAME_NSUBTYPES + 1],
     reservoir_frame_delay: i32
