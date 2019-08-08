@@ -2279,6 +2279,138 @@ pub(crate) fn build_half_res_pmvs<T: Pixel>(
   pmvs
 }
 
+pub(crate) fn build_full_res_pmvs<T: Pixel>(
+  fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
+  tile_sbo: TileSuperBlockOffset,
+  half_res_pmvs: &[[[Option<MotionVector>; REF_FRAMES]; 5]]
+) {
+  let estimate_motion = if fi.config.speed_settings.diamond_me {
+    crate::me::DiamondSearch::estimate_motion
+  } else {
+    crate::me::FullSearch::estimate_motion
+  };
+
+  let TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby }) = tile_sbo;
+  let mut pmvs: [Option<MotionVector>; REF_FRAMES] = [None; REF_FRAMES];
+  let half_res_pmvs_this_block = half_res_pmvs[sby * ts.sb_width + sbx];
+
+  if ts.mi_width >= 8 && ts.mi_height >= 8 {
+    for &i in ALL_INTER_REFS.iter() {
+      let r = fi.ref_frames[i.to_index()] as usize;
+      if pmvs[r].is_none() {
+        pmvs[r] = half_res_pmvs_this_block[0][r];
+        if let Some(pmv) = pmvs[r] {
+          assert!(!fi.sequence.use_128x128_superblock);
+
+          let pmvs_w = if sbx > 0 {
+            half_res_pmvs[sby * ts.sb_width + sbx - 1]
+          } else {
+            [[None; REF_FRAMES]; 5]
+          };
+          let pmvs_e = if sbx < ts.sb_width - 1 {
+            half_res_pmvs[sby * ts.sb_width + sbx + 1]
+          } else {
+            [[None; REF_FRAMES]; 5]
+          };
+          let pmvs_n = if sby > 0 {
+            half_res_pmvs[sby * ts.sb_width + sbx - ts.sb_width]
+          } else {
+            [[None; REF_FRAMES]; 5]
+          };
+          let pmvs_s = if sby < ts.sb_height - 1 {
+            half_res_pmvs[sby * ts.sb_width + sbx + ts.sb_width]
+          } else {
+            [[None; REF_FRAMES]; 5]
+          };
+
+          for y in 0..4 {
+            for x in 0..4 {
+              let bo = tile_sbo.block_offset(x * 4, y * 4);
+
+              // We start from half_res_pmvs which include five motion vectors
+              // for a 64×64 block, as described in build_half_res_pmvs. In
+              // this loop we go one level down and search motion vectors for
+              // 16×16 blocks using the full-resolution frames:
+              //
+              //               64×64
+              // ┏━━━━━━━┯━━━━━━━┳━━━━━━━┯━━━━━━━┓
+              // ┃       │       ┃       │       ┃
+              // ┃       │       ┃       │       ┃
+              // ┃       ╵       ┃       ╵       ┃
+              // ┠────── 1 ──────╂────── 2 ──────┨
+              // ┃       ╷       ┃       ╷       ┃
+              // ┃       │       ┃       │       ┃
+              // ┃       │       ╹       │       ┃
+              // ┣━━━━━━━┿━━━━━━ 0 ━━━━━━┿━━━━━━━┫
+              // ┃       │       ╻       │       ┃
+              // ┃       │       ┃       │       ┃
+              // ┃       ╵       ┃       ╵       ┃
+              // ┠────── 3 ──────╂────── 4 ──────┨
+              // ┃       ╷       ┃       ╷       ┃
+              // ┃       │       ┃       │       ┃
+              // ┃       │       ┃       │       ┃
+              // ┗━━━━━━━┷━━━━━━━┻━━━━━━━┷━━━━━━━┛
+              //
+              // Each search receives all covering and adjacent motion vectors
+              // as candidates.
+              let covering_half_res = match (x, y) {
+                (0..=1, 0..=1) => (half_res_pmvs_this_block[1][r]),
+                (2..=3, 0..=1) => (half_res_pmvs_this_block[2][r]),
+                (0..=1, 2..=3) => (half_res_pmvs_this_block[3][r]),
+                (2..=3, 2..=3) => (half_res_pmvs_this_block[4][r]),
+                _ => unreachable!(),
+              };
+
+              let (vertical_candidate_1, vertical_candidate_2) = match (x, y) {
+                (0..=1, 0) => (pmvs_n[0][r], pmvs_n[3][r]),
+                (2..=3, 0) => (pmvs_n[0][r], pmvs_n[4][r]),
+                (0..=1, 1) => (None, half_res_pmvs_this_block[3][r]),
+                (2..=3, 1) => (None, half_res_pmvs_this_block[4][r]),
+                (0..=1, 2) => (None, half_res_pmvs_this_block[1][r]),
+                (2..=3, 2) => (None, half_res_pmvs_this_block[2][r]),
+                (0..=1, 3) => (pmvs_s[0][r], pmvs_s[1][r]),
+                (2..=3, 3) => (pmvs_s[0][r], pmvs_s[2][r]),
+                _ => unreachable!(),
+              };
+
+              let (horizontal_candidate_1, horizontal_candidate_2) =
+                match (x, y) {
+                  (0, 0..=1) => (pmvs_w[0][r], pmvs_w[2][r]),
+                  (0, 2..=3) => (pmvs_w[0][r], pmvs_w[4][r]),
+                  (1, 0..=1) => (None, half_res_pmvs_this_block[2][r]),
+                  (1, 2..=3) => (None, half_res_pmvs_this_block[4][r]),
+                  (2, 0..=1) => (None, half_res_pmvs_this_block[1][r]),
+                  (2, 2..=3) => (None, half_res_pmvs_this_block[3][r]),
+                  (3, 0..=1) => (pmvs_e[0][r], pmvs_e[2][r]),
+                  (3, 2..=3) => (pmvs_e[0][r], pmvs_e[4][r]),
+                  _ => unreachable!(),
+                };
+
+              if let Some(mv) = estimate_motion(
+                fi,
+                ts,
+                BlockSize::BLOCK_16X16,
+                bo,
+                &[
+                  Some(pmv),
+                  covering_half_res,
+                  vertical_candidate_1,
+                  vertical_candidate_2,
+                  horizontal_candidate_1,
+                  horizontal_candidate_2,
+                ],
+                i,
+              ) {
+                save_block_motion(ts, BlockSize::BLOCK_16X16, bo, i.to_index(), mv);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 fn encode_tile<'a, T: Pixel>(
   fi: &FrameInvariants<T>,
   ts: &mut TileStateMut<'_, T>,
