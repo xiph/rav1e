@@ -2182,8 +2182,8 @@ pub(crate) fn build_half_res_pmvs<T: Pixel>(
   let mut pmvs: [[Option<MotionVector>; REF_FRAMES]; 5] = [[None; REF_FRAMES]; 5];
 
   if ts.mi_width >= 8 && ts.mi_height >= 8 {
-    for i in 0..INTER_REFS_PER_FRAME {
-      let r = fi.ref_frames[i] as usize;
+    for &i in ALL_INTER_REFS.iter() {
+      let r = fi.ref_frames[i.to_index()] as usize;
       if pmvs[0][r].is_none() {
         pmvs[0][r] = tile_pmvs[sby * ts.sb_width + sbx][r];
         if let Some(pmv) = pmvs[0][r] {
@@ -2210,29 +2210,29 @@ pub(crate) fn build_half_res_pmvs<T: Pixel>(
 
           assert!(!fi.sequence.use_128x128_superblock);
           pmvs[1][r] = estimate_motion_ss2(
-            fi, ts, BlockSize::BLOCK_32X32, r, tile_sbo.block_offset(0, 0), &[Some(pmv), pmv_w, pmv_n], i
+            fi, ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(0, 0), &[Some(pmv), pmv_w, pmv_n], i
           );
           pmvs[2][r] = estimate_motion_ss2(
-            fi, ts, BlockSize::BLOCK_32X32, r, tile_sbo.block_offset(8, 0), &[Some(pmv), pmv_e, pmv_n], i
+            fi, ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(8, 0), &[Some(pmv), pmv_e, pmv_n], i
           );
           pmvs[3][r] = estimate_motion_ss2(
-            fi, ts, BlockSize::BLOCK_32X32, r, tile_sbo.block_offset(0, 8), &[Some(pmv), pmv_w, pmv_s], i
+            fi, ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(0, 8), &[Some(pmv), pmv_w, pmv_s], i
           );
           pmvs[4][r] = estimate_motion_ss2(
-            fi, ts, BlockSize::BLOCK_32X32, r, tile_sbo.block_offset(8, 8), &[Some(pmv), pmv_e, pmv_s], i
+            fi, ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(8, 8), &[Some(pmv), pmv_e, pmv_s], i
           );
 
           if let Some(mv) = pmvs[1][r] {
-            save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(0, 0), i, mv);
+            save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(0, 0), i.to_index(), mv);
           }
           if let Some(mv) = pmvs[2][r] {
-            save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(8, 0), i, mv);
+            save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(8, 0), i.to_index(), mv);
           }
           if let Some(mv) = pmvs[3][r] {
-            save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(0, 8), i, mv);
+            save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(0, 8), i.to_index(), mv);
           }
           if let Some(mv) = pmvs[4][r] {
-            save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(8, 8), i, mv);
+            save_block_motion(ts, BlockSize::BLOCK_32X32, tile_sbo.block_offset(8, 8), i.to_index(), mv);
           }
         }
       }
