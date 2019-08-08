@@ -67,6 +67,7 @@ impl ChromaSampling {
     }
   }
 
+  /// Calculates the size of a chroma plane for this sampling type, given the luma plane dimensions.
   pub fn get_chroma_dimensions(self, luma_width: usize, luma_height: usize)
    -> (usize, usize) {
     if let Some((ss_x, ss_y)) = self.get_decimation() {
@@ -84,17 +85,29 @@ impl ChromaSampling {
 #[derive(ArgEnum, Debug, Clone, Copy, PartialEq, FromPrimitive)]
 #[repr(C)]
 pub enum ColorPrimaries {
+  /// BT.709
   BT709 = 1,
+  /// Unspecified, must be signaled or inferred outside of the bitstream
   Unspecified,
+  /// BT.470 System M (historical)
   BT470M = 4,
+  /// BT.470 System B, G (historical)
   BT470BG,
+  /// BT.601-7 525 (SMPTE 170 M)
   ST170M,
+  /// SMPTE 240M (historical)
   ST240M,
+  /// Generic film
   Film,
+  /// BT.2020, BT.2100
   BT2020,
+  /// SMPTE 248 (CIE 1921 XYZ)
   ST428,
+  /// SMPTE RP 431-2
   P3DCI,
+  /// SMPTE EG 432-1
   P3Display,
+  /// EBU Tech. 3213-E
   Tech3213 = 22
 }
 
@@ -110,22 +123,39 @@ impl Default for ColorPrimaries {
 #[derive(ArgEnum, Debug, Clone, Copy, PartialEq, FromPrimitive)]
 #[repr(C)]
 pub enum TransferCharacteristics {
+  /// BT.709
   BT1886 = 1,
+  /// Unspecified, must be signaled or inferred outside of the bitstream
   Unspecified,
+  /// BT.470 System M (historical)
   BT470M = 4,
+  /// BT.470 System B, G (historical)
   BT470BG,
+  /// BT.601-7 525 (SMPTE 170 M)
   ST170M,
+  /// SMPTE 240 M
   ST240M,
+  /// Linear
   Linear,
+  /// Logarithmic (100:1 range)
   Logarithmic100,
+  /// Logarithmic ((100 * √10):1 range)
   Logarithmic316,
+  /// IEC 61966-2-4
   XVYCC,
+  /// BT.1361 extended color gamut system (historical)
   BT1361E,
+  /// sRGB or sYCC
   SRGB,
+  /// BT.2020 10-bit systems
   BT2020Ten,
+  /// BT.2020 12-bit systems
   BT2020Twelve,
+  /// SMPTE ST 2084, ITU BT.2100 PQ
   PerceptualQuantizer,
+  /// SMPTE ST 428
   ST428,
+  /// BT.2100 HLG, ARIB STD-B67
   HybridLogGamma
 }
 
@@ -141,19 +171,33 @@ impl Default for TransferCharacteristics {
 #[derive(ArgEnum, Debug, Clone, Copy, PartialEq, FromPrimitive)]
 #[repr(C)]
 pub enum MatrixCoefficients {
+  /// Identity matrix
   Identity = 0,
+  /// BT.709
   BT709,
+  /// Unspecified, must be signaled or inferred outside of the bitstream.
   Unspecified,
+  /// US FCC 73.628
   BT470M = 4,
+  /// BT.470 System B, G (historical)
   BT470BG,
+  /// BT.601-7 525 (SMPTE 170 M)
   ST170M,
+  /// SMPTE 240 M
   ST240M,
+  /// YCgCo
   YCgCo,
+  /// BT.2020 non-constant luminance, BT.2100 YCbCr
   BT2020NonConstantLuminance,
+  /// BT.2020 constant luminance
   BT2020ConstantLuminance,
+  /// SMPTE ST 2085 YDzDx
   ST2085,
+  /// Chromaticity-derived non-constant luminance
   ChromaticityDerivedNonConstantLuminance,
+  /// Chromaticity-derived constant luminance
   ChromaticityDerivedConstantLuminance,
+  /// BT.2020 ICtCp
   ICtCp
 }
 
