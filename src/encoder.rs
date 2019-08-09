@@ -2181,6 +2181,43 @@ pub(crate) fn build_half_res_pmvs<T: Pixel>(
   let TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby }) = tile_sbo;
   let mut pmvs: [[Option<MotionVector>; REF_FRAMES]; 5] = [[None; REF_FRAMES]; 5];
 
+  // The pmvs array stores 5 motion vectors in the following order:
+  //
+  //       64×64
+  // ┌───────┬───────┐
+  // │       │       │
+  // │   1   │   2   │
+  // │       ╵       │
+  // ├────── 0 ──────┤
+  // │       ╷       │
+  // │   3   │   4   │
+  // │       │       │
+  // └───────┴───────┘
+  //
+  // That is, 0 is the motion vector for the whole 64×64 block, obtained from
+  // the quarter-resolution search, and 1 through 4 are the motion vectors for
+  // the 32×32 blocks, obtained below from the half-resolution search.
+  //
+  // Each of the four half-resolution searches uses three quarter-resolution
+  // candidates: one from the current 64×64 block and two from the two
+  // immediately adjacent 64×64 blocks.
+  //
+  //          ┌───────┐
+  //          │       │
+  //          │   n   │
+  //          │       │
+  //          └───────┘
+  // ┌───────┐┌───┬───┐┌───────┐
+  // │       ││ 1 ╵ 2 ││       │
+  // │   w   │├── 0 ──┤│   e   │
+  // │       ││ 3 ╷ 4 ││       │
+  // └───────┘└───┴───┘└───────┘
+  //          ┌───────┐
+  //          │       │
+  //          │   s   │
+  //          │       │
+  //          └───────┘
+
   if ts.mi_width >= 8 && ts.mi_height >= 8 {
     for &i in ALL_INTER_REFS.iter() {
       let r = fi.ref_frames[i.to_index()] as usize;
