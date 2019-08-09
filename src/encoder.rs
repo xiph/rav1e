@@ -2352,7 +2352,10 @@ pub(crate) fn build_full_res_pmvs<T: Pixel>(
               // ┗━━━━━━━┷━━━━━━━┻━━━━━━━┷━━━━━━━┛
               //
               // Each search receives all covering and adjacent motion vectors
-              // as candidates.
+              // as candidates. Additionally, the middle two rows of blocks
+              // also receive the 32×32 motion vectors from neighboring 64×64
+              // blocks, even though not directly adjacent; same with middle
+              // two columns.
               let covering_half_res = match (x, y) {
                 (0..=1, 0..=1) => (half_res_pmvs_this_block[1][r]),
                 (2..=3, 0..=1) => (half_res_pmvs_this_block[2][r]),
@@ -2364,10 +2367,10 @@ pub(crate) fn build_full_res_pmvs<T: Pixel>(
               let (vertical_candidate_1, vertical_candidate_2) = match (x, y) {
                 (0..=1, 0) => (pmvs_n[0][r], pmvs_n[3][r]),
                 (2..=3, 0) => (pmvs_n[0][r], pmvs_n[4][r]),
-                (0..=1, 1) => (None, half_res_pmvs_this_block[3][r]),
-                (2..=3, 1) => (None, half_res_pmvs_this_block[4][r]),
-                (0..=1, 2) => (None, half_res_pmvs_this_block[1][r]),
-                (2..=3, 2) => (None, half_res_pmvs_this_block[2][r]),
+                (0..=1, 1) => (pmvs_n[3][r], half_res_pmvs_this_block[3][r]),
+                (2..=3, 1) => (pmvs_n[4][r], half_res_pmvs_this_block[4][r]),
+                (0..=1, 2) => (pmvs_s[1][r], half_res_pmvs_this_block[1][r]),
+                (2..=3, 2) => (pmvs_s[2][r], half_res_pmvs_this_block[2][r]),
                 (0..=1, 3) => (pmvs_s[0][r], pmvs_s[1][r]),
                 (2..=3, 3) => (pmvs_s[0][r], pmvs_s[2][r]),
                 _ => unreachable!(),
@@ -2377,10 +2380,10 @@ pub(crate) fn build_full_res_pmvs<T: Pixel>(
                 match (x, y) {
                   (0, 0..=1) => (pmvs_w[0][r], pmvs_w[2][r]),
                   (0, 2..=3) => (pmvs_w[0][r], pmvs_w[4][r]),
-                  (1, 0..=1) => (None, half_res_pmvs_this_block[2][r]),
-                  (1, 2..=3) => (None, half_res_pmvs_this_block[4][r]),
-                  (2, 0..=1) => (None, half_res_pmvs_this_block[1][r]),
-                  (2, 2..=3) => (None, half_res_pmvs_this_block[3][r]),
+                  (1, 0..=1) => (pmvs_w[2][r], half_res_pmvs_this_block[2][r]),
+                  (1, 2..=3) => (pmvs_w[4][r], half_res_pmvs_this_block[4][r]),
+                  (2, 0..=1) => (pmvs_e[1][r], half_res_pmvs_this_block[1][r]),
+                  (2, 2..=3) => (pmvs_e[3][r], half_res_pmvs_this_block[3][r]),
                   (3, 0..=1) => (pmvs_e[0][r], pmvs_e[2][r]),
                   (3, 2..=3) => (pmvs_e[0][r], pmvs_e[4][r]),
                   _ => unreachable!(),
