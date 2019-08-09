@@ -1043,6 +1043,7 @@ mod test {
     assert_eq!(r.symbol(&cdf), 2);
   }
 
+  #[cfg(target_arch = "x86_64")]
   #[test]
   fn update_cdf_4_sse2() {
     let mut cdf = [7296, 3819, 1616, 0, 0];
