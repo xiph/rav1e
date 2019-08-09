@@ -3296,10 +3296,219 @@ mod test {
     );
   }
 
-  #[interpolate_test(8, 8)]
-  #[interpolate_test(10, 10)]
-  #[interpolate_test(16, 16)]
-  fn lookahead_size_properly_bounded(rdo_lookahead: u64) {
+  #[derive(Debug, Clone, Copy)]
+  struct LookaheadTestExpectations {
+    pre_receive_frame_q_len: usize,
+    pre_receive_fi_len: usize,
+    post_receive_frame_q_len: usize,
+    post_receive_fi_len: usize,
+  }
+
+  #[test]
+  fn lookahead_size_properly_bounded_8() {
+    const LOOKAHEAD_SIZE: u64 = 8;
+    const EXPECTATIONS: [LookaheadTestExpectations; 60] = [
+      LookaheadTestExpectations { pre_receive_frame_q_len: 1, pre_receive_fi_len: 0, post_receive_frame_q_len: 1, post_receive_fi_len: 0 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 2, pre_receive_fi_len: 0, post_receive_frame_q_len: 2, post_receive_fi_len: 0 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 3, pre_receive_fi_len: 0, post_receive_frame_q_len: 3, post_receive_fi_len: 0 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 4, pre_receive_fi_len: 0, post_receive_frame_q_len: 4, post_receive_fi_len: 0 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 5, pre_receive_fi_len: 0, post_receive_frame_q_len: 5, post_receive_fi_len: 0 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 6, pre_receive_fi_len: 0, post_receive_frame_q_len: 6, post_receive_fi_len: 0 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 7, pre_receive_fi_len: 1, post_receive_frame_q_len: 7, post_receive_fi_len: 1 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 8, pre_receive_fi_len: 1, post_receive_frame_q_len: 8, post_receive_fi_len: 1 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 9, pre_receive_fi_len: 1, post_receive_frame_q_len: 9, post_receive_fi_len: 1 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 10, pre_receive_fi_len: 1, post_receive_frame_q_len: 10, post_receive_fi_len: 1 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 11, pre_receive_fi_len: 7, post_receive_frame_q_len: 11, post_receive_fi_len: 7 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 12, pre_receive_fi_len: 7, post_receive_frame_q_len: 12, post_receive_fi_len: 7 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 13, pre_receive_fi_len: 7, post_receive_frame_q_len: 13, post_receive_fi_len: 7 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 14, pre_receive_fi_len: 7, post_receive_frame_q_len: 14, post_receive_fi_len: 7 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 15, pre_receive_fi_len: 13, post_receive_frame_q_len: 15, post_receive_fi_len: 13 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 16, pre_receive_fi_len: 13, post_receive_frame_q_len: 16, post_receive_fi_len: 13 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 17, pre_receive_fi_len: 13, post_receive_frame_q_len: 17, post_receive_fi_len: 13 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 18, pre_receive_fi_len: 13, post_receive_frame_q_len: 18, post_receive_fi_len: 13 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 19, pre_receive_fi_len: 19, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 18, post_receive_fi_len: 14 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 19, pre_receive_fi_len: 14, post_receive_frame_q_len: 19, post_receive_fi_len: 14 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 20, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 18, post_receive_fi_len: 14 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 19, pre_receive_fi_len: 14, post_receive_frame_q_len: 19, post_receive_fi_len: 14 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 20, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 18, post_receive_fi_len: 14 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 19, pre_receive_fi_len: 14, post_receive_frame_q_len: 19, post_receive_fi_len: 14 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 20, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 18, post_receive_fi_len: 14 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 19, pre_receive_fi_len: 14, post_receive_frame_q_len: 19, post_receive_fi_len: 14 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 20, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 18, post_receive_fi_len: 14 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 19, pre_receive_fi_len: 14, post_receive_frame_q_len: 19, post_receive_fi_len: 14 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 20, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 18, post_receive_fi_len: 14 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 19, pre_receive_fi_len: 14, post_receive_frame_q_len: 19, post_receive_fi_len: 14 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 20, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 18, post_receive_fi_len: 14 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 19, pre_receive_fi_len: 14, post_receive_frame_q_len: 19, post_receive_fi_len: 14 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 20, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 18, post_receive_fi_len: 14 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 19, pre_receive_fi_len: 14, post_receive_frame_q_len: 19, post_receive_fi_len: 14 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 20, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 18, post_receive_fi_len: 14 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 19, pre_receive_fi_len: 14, post_receive_frame_q_len: 19, post_receive_fi_len: 14 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 20, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 18, post_receive_fi_len: 14 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 19, pre_receive_fi_len: 14, post_receive_frame_q_len: 19, post_receive_fi_len: 14 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 20, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
+    ];
+    lookahead_size_properly_bounded(LOOKAHEAD_SIZE, &EXPECTATIONS);
+  }
+
+  #[test]
+  fn lookahead_size_properly_bounded_10() {
+    const LOOKAHEAD_SIZE: u64 = 10;
+    const EXPECTATIONS: [LookaheadTestExpectations; 60] = [
+      LookaheadTestExpectations { pre_receive_frame_q_len: 1, pre_receive_fi_len: 0, post_receive_frame_q_len: 1, post_receive_fi_len: 0 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 2, pre_receive_fi_len: 0, post_receive_frame_q_len: 2, post_receive_fi_len: 0 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 3, pre_receive_fi_len: 0, post_receive_frame_q_len: 3, post_receive_fi_len: 0 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 4, pre_receive_fi_len: 0, post_receive_frame_q_len: 4, post_receive_fi_len: 0 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 5, pre_receive_fi_len: 0, post_receive_frame_q_len: 5, post_receive_fi_len: 0 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 6, pre_receive_fi_len: 0, post_receive_frame_q_len: 6, post_receive_fi_len: 0 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 7, pre_receive_fi_len: 1, post_receive_frame_q_len: 7, post_receive_fi_len: 1 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 8, pre_receive_fi_len: 1, post_receive_frame_q_len: 8, post_receive_fi_len: 1 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 9, pre_receive_fi_len: 1, post_receive_frame_q_len: 9, post_receive_fi_len: 1 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 10, pre_receive_fi_len: 1, post_receive_frame_q_len: 10, post_receive_fi_len: 1 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 11, pre_receive_fi_len: 7, post_receive_frame_q_len: 11, post_receive_fi_len: 7 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 12, pre_receive_fi_len: 7, post_receive_frame_q_len: 12, post_receive_fi_len: 7 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 13, pre_receive_fi_len: 7, post_receive_frame_q_len: 13, post_receive_fi_len: 7 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 14, pre_receive_fi_len: 7, post_receive_frame_q_len: 14, post_receive_fi_len: 7 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 15, pre_receive_fi_len: 13, post_receive_frame_q_len: 15, post_receive_fi_len: 13 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 16, pre_receive_fi_len: 13, post_receive_frame_q_len: 16, post_receive_fi_len: 13 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 17, pre_receive_fi_len: 13, post_receive_frame_q_len: 17, post_receive_fi_len: 13 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 18, pre_receive_fi_len: 13, post_receive_frame_q_len: 18, post_receive_fi_len: 13 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 19, pre_receive_fi_len: 19, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 21, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 22, pre_receive_fi_len: 19, post_receive_frame_q_len: 22, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 23, pre_receive_fi_len: 25, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 21, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 22, pre_receive_fi_len: 19, post_receive_frame_q_len: 22, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 23, pre_receive_fi_len: 25, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 21, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 22, pre_receive_fi_len: 19, post_receive_frame_q_len: 22, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 23, pre_receive_fi_len: 25, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 21, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 22, pre_receive_fi_len: 19, post_receive_frame_q_len: 22, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 23, pre_receive_fi_len: 25, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 21, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 22, pre_receive_fi_len: 19, post_receive_frame_q_len: 22, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 23, pre_receive_fi_len: 25, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 21, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 22, pre_receive_fi_len: 19, post_receive_frame_q_len: 22, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 23, pre_receive_fi_len: 25, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 21, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 22, pre_receive_fi_len: 19, post_receive_frame_q_len: 22, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 23, pre_receive_fi_len: 25, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 21, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 22, pre_receive_fi_len: 19, post_receive_frame_q_len: 22, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 23, pre_receive_fi_len: 25, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 21, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 22, pre_receive_fi_len: 19, post_receive_frame_q_len: 22, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 23, pre_receive_fi_len: 25, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 21, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 22, pre_receive_fi_len: 19, post_receive_frame_q_len: 22, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 23, pre_receive_fi_len: 25, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
+    ];
+    lookahead_size_properly_bounded(LOOKAHEAD_SIZE, &EXPECTATIONS);
+  }
+
+#[test]
+  fn lookahead_size_properly_bounded_16() {
+    const LOOKAHEAD_SIZE: u64 = 16;
+    const EXPECTATIONS: [LookaheadTestExpectations; 60] = [
+      LookaheadTestExpectations { pre_receive_frame_q_len: 1, pre_receive_fi_len: 0, post_receive_frame_q_len: 1, post_receive_fi_len: 0 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 2, pre_receive_fi_len: 0, post_receive_frame_q_len: 2, post_receive_fi_len: 0 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 3, pre_receive_fi_len: 0, post_receive_frame_q_len: 3, post_receive_fi_len: 0 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 4, pre_receive_fi_len: 0, post_receive_frame_q_len: 4, post_receive_fi_len: 0 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 5, pre_receive_fi_len: 0, post_receive_frame_q_len: 5, post_receive_fi_len: 0 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 6, pre_receive_fi_len: 0, post_receive_frame_q_len: 6, post_receive_fi_len: 0 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 7, pre_receive_fi_len: 1, post_receive_frame_q_len: 7, post_receive_fi_len: 1 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 8, pre_receive_fi_len: 1, post_receive_frame_q_len: 8, post_receive_fi_len: 1 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 9, pre_receive_fi_len: 1, post_receive_frame_q_len: 9, post_receive_fi_len: 1 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 10, pre_receive_fi_len: 1, post_receive_frame_q_len: 10, post_receive_fi_len: 1 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 11, pre_receive_fi_len: 7, post_receive_frame_q_len: 11, post_receive_fi_len: 7 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 12, pre_receive_fi_len: 7, post_receive_frame_q_len: 12, post_receive_fi_len: 7 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 13, pre_receive_fi_len: 7, post_receive_frame_q_len: 13, post_receive_fi_len: 7 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 14, pre_receive_fi_len: 7, post_receive_frame_q_len: 14, post_receive_fi_len: 7 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 15, pre_receive_fi_len: 13, post_receive_frame_q_len: 15, post_receive_fi_len: 13 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 16, pre_receive_fi_len: 13, post_receive_frame_q_len: 16, post_receive_fi_len: 13 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 17, pre_receive_fi_len: 13, post_receive_frame_q_len: 17, post_receive_fi_len: 13 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 18, pre_receive_fi_len: 13, post_receive_frame_q_len: 18, post_receive_fi_len: 13 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 19, pre_receive_fi_len: 19, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 21, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 22, pre_receive_fi_len: 19, post_receive_frame_q_len: 22, post_receive_fi_len: 19 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 23, pre_receive_fi_len: 25, post_receive_frame_q_len: 23, post_receive_fi_len: 25 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 24, pre_receive_fi_len: 25, post_receive_frame_q_len: 24, post_receive_fi_len: 25 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 25, pre_receive_fi_len: 25, post_receive_frame_q_len: 25, post_receive_fi_len: 25 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 26, pre_receive_fi_len: 25, post_receive_frame_q_len: 26, post_receive_fi_len: 25 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 27, pre_receive_fi_len: 31, post_receive_frame_q_len: 27, post_receive_fi_len: 31 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 31, post_receive_frame_q_len: 28, post_receive_fi_len: 31 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 29, pre_receive_fi_len: 31, post_receive_frame_q_len: 26, post_receive_fi_len: 26 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 27, pre_receive_fi_len: 26, post_receive_frame_q_len: 27, post_receive_fi_len: 26 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 32, post_receive_frame_q_len: 27, post_receive_fi_len: 31 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 31, post_receive_frame_q_len: 28, post_receive_fi_len: 31 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 29, pre_receive_fi_len: 31, post_receive_frame_q_len: 26, post_receive_fi_len: 26 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 27, pre_receive_fi_len: 26, post_receive_frame_q_len: 27, post_receive_fi_len: 26 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 32, post_receive_frame_q_len: 27, post_receive_fi_len: 31 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 31, post_receive_frame_q_len: 28, post_receive_fi_len: 31 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 29, pre_receive_fi_len: 31, post_receive_frame_q_len: 26, post_receive_fi_len: 26 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 27, pre_receive_fi_len: 26, post_receive_frame_q_len: 27, post_receive_fi_len: 26 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 32, post_receive_frame_q_len: 27, post_receive_fi_len: 31 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 31, post_receive_frame_q_len: 28, post_receive_fi_len: 31 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 29, pre_receive_fi_len: 31, post_receive_frame_q_len: 26, post_receive_fi_len: 26 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 27, pre_receive_fi_len: 26, post_receive_frame_q_len: 27, post_receive_fi_len: 26 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 32, post_receive_frame_q_len: 27, post_receive_fi_len: 31 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 31, post_receive_frame_q_len: 28, post_receive_fi_len: 31 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 29, pre_receive_fi_len: 31, post_receive_frame_q_len: 26, post_receive_fi_len: 26 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 27, pre_receive_fi_len: 26, post_receive_frame_q_len: 27, post_receive_fi_len: 26 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 32, post_receive_frame_q_len: 27, post_receive_fi_len: 31 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 31, post_receive_frame_q_len: 28, post_receive_fi_len: 31 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 29, pre_receive_fi_len: 31, post_receive_frame_q_len: 26, post_receive_fi_len: 26 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 27, pre_receive_fi_len: 26, post_receive_frame_q_len: 27, post_receive_fi_len: 26 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 32, post_receive_frame_q_len: 27, post_receive_fi_len: 31 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 31, post_receive_frame_q_len: 28, post_receive_fi_len: 31 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 29, pre_receive_fi_len: 31, post_receive_frame_q_len: 26, post_receive_fi_len: 26 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 27, pre_receive_fi_len: 26, post_receive_frame_q_len: 27, post_receive_fi_len: 26 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 32, post_receive_frame_q_len: 27, post_receive_fi_len: 31 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 31, post_receive_frame_q_len: 28, post_receive_fi_len: 31 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 29, pre_receive_fi_len: 31, post_receive_frame_q_len: 26, post_receive_fi_len: 26 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 27, pre_receive_fi_len: 26, post_receive_frame_q_len: 27, post_receive_fi_len: 26 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 32, post_receive_frame_q_len: 27, post_receive_fi_len: 31 },
+      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 31, post_receive_frame_q_len: 28, post_receive_fi_len: 31 },
+    ];
+    lookahead_size_properly_bounded(LOOKAHEAD_SIZE, &EXPECTATIONS);
+  }
+
+  fn lookahead_size_properly_bounded(rdo_lookahead: u64, expectations: &[LookaheadTestExpectations]) {
     // Test that lookahead reads in the proper number of frames at once
 
     let mut ctx = setup_encoder::<u8>(
@@ -3317,59 +3526,22 @@ mod test {
       rdo_lookahead
     );
 
-    let limit = 60;
+    const LIMIT: usize = 60;
 
-    let scenechange_lookahead_len = ctx.inner.inter_cfg.keyframe_lookahead_distance() as usize;
-    for frameno in 0..scenechange_lookahead_len {
+    for i in 0..LIMIT {
       let input = ctx.new_frame();
       let _ = ctx.send_frame(input);
-      let res = ctx.receive_packet();
-      assert!(res.is_err());
-      assert_eq!(ctx.inner.frame_q.len(), frameno + 1);
-      assert_eq!(ctx.inner.frame_invariants.len(), 0);
-    }
-
-    let rdo_lookahead_len = ctx.config.rdo_lookahead_frames as usize;
-    for frameno in scenechange_lookahead_len..rdo_lookahead_len {
-      let input = ctx.new_frame();
-      let _ = ctx.send_frame(input);
-      let res = ctx.receive_packet();
-      assert!(res.is_err());
-      assert_eq!(ctx.inner.frame_q.len(), frameno + 1);
-      // The exact logic gets complicated here because of frame pyramids,
-      // but the size of the FI queue should always hold to this rule.
-      assert!(ctx.inner.frame_invariants.len() < rdo_lookahead_len);
-    }
-
-    let total_lookahead_len = rdo_lookahead_len + scenechange_lookahead_len + 1;
-    for frameno in rdo_lookahead_len..total_lookahead_len {
-      let input = ctx.new_frame();
-      let _ = ctx.send_frame(input);
-      let res = ctx.receive_packet();
-      assert!(res.is_err());
-      assert_eq!(ctx.inner.frame_q.len(), frameno + 1);
-      // The exact logic gets complicated here because of frame pyramids.
-      assert!(ctx.inner.frame_invariants.len() > 0);
-      // The max length of FI's is scaled up by 6/4 to account for the "show existing" frames (+2 output frames) in a sub-GOP (4 input frames)
-      assert!(ctx.inner.frame_invariants.len() < rdo_lookahead_len * 6 / 4);
-    }
-
-    for _ in total_lookahead_len..limit {
-      let input = ctx.new_frame();
-      let _ = ctx.send_frame(input);
+      assert_eq!(ctx.inner.frame_q.len(), expectations[i].pre_receive_frame_q_len);
+      assert_eq!(ctx.inner.frame_invariants.len(), expectations[i].pre_receive_fi_len);
       while ctx.receive_packet().is_ok() {
         // Receive packets until lookahead consumed, due to pyramids receiving frames in groups
       }
-      // The exact logic gets complicated here because of frame pyramids.
-      assert!(ctx.inner.frame_q.len() > total_lookahead_len);
-      assert!(ctx.inner.frame_q.len() <= total_lookahead_len + scenechange_lookahead_len + 1);
-      assert!(ctx.inner.frame_invariants.len() > rdo_lookahead_len);
-      // The max length of FI's is scaled up by 6/4 to account for the "show existing" frames (+2 output frames) in a sub-GOP (4 input frames)
-      assert!(ctx.inner.frame_invariants.len() <= (rdo_lookahead_len + ctx.inner.inter_cfg.group_input_len as usize) * 6 / 4 + 1);
+      assert_eq!(ctx.inner.frame_q.len(), expectations[i].post_receive_frame_q_len);
+      assert_eq!(ctx.inner.frame_invariants.len(), expectations[i].post_receive_fi_len);
     }
 
     ctx.flush();
-    let end = ctx.inner.frame_q.get(&(limit as u64));
+    let end = ctx.inner.frame_q.get(&(LIMIT as u64));
     assert!(end.is_some());
     assert!(end.unwrap().is_none());
 
@@ -3383,6 +3555,6 @@ mod test {
         }
       }
     }
-    assert_eq!(ctx.inner.frames_processed, limit as u64);
+    assert_eq!(ctx.inner.frames_processed, LIMIT as u64);
   }
 }
