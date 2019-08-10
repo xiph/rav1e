@@ -27,7 +27,7 @@
 
 SECTION_RODATA 64 ; avoids cacheline splits
 
-dw 60, 56, 52, 48, 44, 40, 36, 32, 28, 24, 20, 16, 12, 8, 4, 0
+min_prob:  dw 60, 56, 52, 48, 44, 40, 36, 32, 28, 24, 20, 16, 12, 8, 4, 0
 pw_0xff00: times 8 dw 0xff00
 pw_32:     times 8 dw 32
 
@@ -35,21 +35,24 @@ pw_32:     times 8 dw 32
 %define resp   resq
 %define movp   movq
 %define c_shuf q3333
-%define DECODE_SYMBOL_ADAPT_INIT
+%macro DECODE_SYMBOL_ADAPT_INIT 0-1
+%endmacro
 %else
 %define resp   resd
 %define movp   movd
 %define c_shuf q1111
-%macro DECODE_SYMBOL_ADAPT_INIT 0
+%macro DECODE_SYMBOL_ADAPT_INIT 0-1 0 ; hi_tok
     mov            t0, r0m
     mov            t1, r1m
+%if %1 == 0
     mov            t2, r2m
+%endif
 %if STACK_ALIGNMENT >= 16
-    sub           esp, 40
+    sub           esp, 40-%1*4
 %else
     mov           eax, esp
     and           esp, ~15
-    sub           esp, 40
+    sub           esp, 40-%1*4
     mov         [esp], eax
 %endif
 %endmacro
@@ -69,13 +72,13 @@ endstruc
 SECTION .text
 
 %if WIN64
-DECLARE_REG_TMP 0, 1, 2, 3, 4, 5, 7, 3
-%define buf rsp+8  ; shadow space
+DECLARE_REG_TMP 0, 1, 2, 3, 4, 5, 7, 3, 8
+%define buf rsp+stack_offset+8 ; shadow space
 %elif UNIX64
-DECLARE_REG_TMP 0, 1, 2, 3, 4, 5, 7, 0
+DECLARE_REG_TMP 0, 1, 2, 3, 4, 5, 7, 0, 8
 %define buf rsp-40 ; red zone
 %else
-DECLARE_REG_TMP 2, 3, 4, 1, 5, 6, 5, 2
+DECLARE_REG_TMP 2, 3, 4, 1, 5, 6, 5, 2, 3
 %define buf esp+8
 %endif
 
@@ -440,3 +443,158 @@ cglobal msac_decode_bool, 0, 6, 0
     movzx         eax, al
 %endif
     jmp m(msac_decode_symbol_adapt4).renorm3
+
+%macro HI_TOK 1 ; update_cdf
+%if ARCH_X86_64 == 0
+    mov           eax, -24
+%endif
+%%loop:
+%if %1
+    movzx         t2d, word [t1+3*2]
+%endif
+    mova           m1, m0
+    pshuflw        m2, m2, q0000
+    psrlw          m1, 6
+    movd     [buf+12], m2
+    pand           m2, m4
+    psllw          m1, 7
+    pmulhuw        m1, m2
+%if ARCH_X86_64 == 0
+    add           eax, 5
+    mov       [buf+8], eax
+%endif
+    pshuflw        m3, m3, c_shuf
+    paddw          m1, m5
+    movq     [buf+16], m1
+    psubusw        m1, m3
+    pxor           m2, m2
+    pcmpeqw        m1, m2
+    pmovmskb      eax, m1
+%if %1
+    lea           ecx, [t2+80]
+    pcmpeqw        m2, m2
+    shr           ecx, 4
+    cmp           t2d, 32
+    adc           t2d, 0
+    movd           m3, ecx
+    pavgw          m2, m1
+    psubw          m2, m0
+    psubw          m0, m1
+    psraw          m2, m3
+    paddw          m0, m2
+    movq         [t1], m0
+    mov      [t1+3*2], t2w
+%endif
+    tzcnt         eax, eax
+    movzx         ecx, word [buf+rax+16]
+    movzx         t2d, word [buf+rax+14]
+    not            t4
+%if ARCH_X86_64
+    add           t6d, 5
+%endif
+    sub           eax, 5   ; setup for merging the tok_br and tok branches
+    sub           t2d, ecx
+    shl           rcx, gprsize*8-16
+    add            t4, rcx
+    bsr           ecx, t2d
+    xor           ecx, 15
+    shl           t2d, cl
+    shl            t4, cl
+    movd           m2, t2d
+    mov [t7+msac.rng], t2d
+    not            t4
+    sub           t5d, ecx
+    jge %%end
+    mov            t2, [t7+msac.buf]
+    mov           rcx, [t7+msac.end]
+%if UNIX64 == 0
+    push           t8
+%endif
+    lea            t8, [t2+gprsize]
+    cmp            t8, rcx
+    ja %%refill_eob
+    mov            t2, [t2]
+    lea           ecx, [t5+23]
+    add           t5d, 16
+    shr           ecx, 3
+    bswap          t2
+    sub            t8, rcx
+    shl           ecx, 3
+    shr            t2, cl
+    sub           ecx, t5d
+    mov           t5d, gprsize*8-16
+    shl            t2, cl
+    mov [t7+msac.buf], t8
+%if UNIX64 == 0
+    pop            t8
+%endif
+    sub           t5d, ecx
+    xor            t4, t2
+%%end:
+    movp           m3, t4
+%if ARCH_X86_64
+    add           t6d, eax ; CF = tok_br < 3 || tok == 15
+    jnc %%loop
+    lea           eax, [t6+30]
+%else
+    add           eax, [buf+8]
+    jnc %%loop
+    add           eax, 30
+%if STACK_ALIGNMENT >= 16
+    add           esp, 36
+%else
+    mov           esp, [esp]
+%endif
+%endif
+    mov [t7+msac.dif], t4
+    shr           eax, 1
+    mov [t7+msac.cnt], t5d
+    RET
+%%refill_eob:
+    mov            t8, rcx
+    mov           ecx, gprsize*8-24
+    sub           ecx, t5d
+%%refill_eob_loop:
+    cmp            t2, t8
+    jae %%refill_eob_end
+    movzx         t5d, byte [t2]
+    inc            t2
+    shl            t5, cl
+    xor            t4, t5
+    sub           ecx, 8
+    jge %%refill_eob_loop
+%%refill_eob_end:
+%if UNIX64 == 0
+    pop            t8
+%endif
+    mov           t5d, gprsize*8-24
+    mov [t7+msac.buf], t2
+    sub           t5d, ecx
+    jmp %%end
+%endmacro
+
+cglobal msac_decode_hi_tok, 0, 7 + ARCH_X86_64, 6
+    DECODE_SYMBOL_ADAPT_INIT 1
+%if ARCH_X86_64 == 0 && PIC
+    LEA            t2, min_prob+12*2
+    %define base t2-(min_prob+12*2)
+%else
+    %define base 0
+%endif
+    movq           m0, [t1]
+    movd           m2, [t0+msac.rng]
+    mov           eax, [t0+msac.update_cdf]
+    movq           m4, [base+pw_0xff00]
+    movp           m3, [t0+msac.dif]
+    movq           m5, [base+min_prob+12*2]
+    mov            t4, [t0+msac.dif]
+    mov           t5d, [t0+msac.cnt]
+%if ARCH_X86_64
+    mov           t6d, -24
+%endif
+    movifnidn      t7, t0
+    test          eax, eax
+    jz .no_update_cdf
+    HI_TOK          1
+.no_update_cdf:
+    HI_TOK          0
