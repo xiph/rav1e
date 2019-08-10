@@ -3296,219 +3296,135 @@ mod test {
     );
   }
 
-  #[derive(Debug, Clone, Copy)]
+  #[derive(Clone, Copy)]
   struct LookaheadTestExpectations {
-    pre_receive_frame_q_len: usize,
-    pre_receive_fi_len: usize,
-    post_receive_frame_q_len: usize,
-    post_receive_fi_len: usize,
+    pre_receive_frame_q_lens: [usize; 60],
+    pre_receive_fi_lens: [usize; 60],
+    post_receive_frame_q_lens: [usize; 60],
+    post_receive_fi_lens: [usize; 60],
   }
 
   #[test]
   fn lookahead_size_properly_bounded_8() {
     const LOOKAHEAD_SIZE: u64 = 8;
-    const EXPECTATIONS: [LookaheadTestExpectations; 60] = [
-      LookaheadTestExpectations { pre_receive_frame_q_len: 1, pre_receive_fi_len: 0, post_receive_frame_q_len: 1, post_receive_fi_len: 0 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 2, pre_receive_fi_len: 0, post_receive_frame_q_len: 2, post_receive_fi_len: 0 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 3, pre_receive_fi_len: 0, post_receive_frame_q_len: 3, post_receive_fi_len: 0 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 4, pre_receive_fi_len: 0, post_receive_frame_q_len: 4, post_receive_fi_len: 0 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 5, pre_receive_fi_len: 0, post_receive_frame_q_len: 5, post_receive_fi_len: 0 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 6, pre_receive_fi_len: 0, post_receive_frame_q_len: 6, post_receive_fi_len: 0 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 7, pre_receive_fi_len: 1, post_receive_frame_q_len: 7, post_receive_fi_len: 1 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 8, pre_receive_fi_len: 1, post_receive_frame_q_len: 8, post_receive_fi_len: 1 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 9, pre_receive_fi_len: 1, post_receive_frame_q_len: 9, post_receive_fi_len: 1 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 10, pre_receive_fi_len: 1, post_receive_frame_q_len: 10, post_receive_fi_len: 1 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 11, pre_receive_fi_len: 7, post_receive_frame_q_len: 11, post_receive_fi_len: 7 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 12, pre_receive_fi_len: 7, post_receive_frame_q_len: 12, post_receive_fi_len: 7 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 13, pre_receive_fi_len: 7, post_receive_frame_q_len: 13, post_receive_fi_len: 7 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 14, pre_receive_fi_len: 7, post_receive_frame_q_len: 14, post_receive_fi_len: 7 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 15, pre_receive_fi_len: 13, post_receive_frame_q_len: 15, post_receive_fi_len: 13 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 16, pre_receive_fi_len: 13, post_receive_frame_q_len: 16, post_receive_fi_len: 13 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 17, pre_receive_fi_len: 13, post_receive_frame_q_len: 17, post_receive_fi_len: 13 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 18, pre_receive_fi_len: 13, post_receive_frame_q_len: 18, post_receive_fi_len: 13 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 19, pre_receive_fi_len: 19, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 18, post_receive_fi_len: 14 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 19, pre_receive_fi_len: 14, post_receive_frame_q_len: 19, post_receive_fi_len: 14 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 20, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 18, post_receive_fi_len: 14 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 19, pre_receive_fi_len: 14, post_receive_frame_q_len: 19, post_receive_fi_len: 14 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 20, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 18, post_receive_fi_len: 14 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 19, pre_receive_fi_len: 14, post_receive_frame_q_len: 19, post_receive_fi_len: 14 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 20, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 18, post_receive_fi_len: 14 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 19, pre_receive_fi_len: 14, post_receive_frame_q_len: 19, post_receive_fi_len: 14 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 20, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 18, post_receive_fi_len: 14 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 19, pre_receive_fi_len: 14, post_receive_frame_q_len: 19, post_receive_fi_len: 14 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 20, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 18, post_receive_fi_len: 14 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 19, pre_receive_fi_len: 14, post_receive_frame_q_len: 19, post_receive_fi_len: 14 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 20, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 18, post_receive_fi_len: 14 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 19, pre_receive_fi_len: 14, post_receive_frame_q_len: 19, post_receive_fi_len: 14 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 20, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 18, post_receive_fi_len: 14 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 19, pre_receive_fi_len: 14, post_receive_frame_q_len: 19, post_receive_fi_len: 14 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 20, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 18, post_receive_fi_len: 14 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 19, pre_receive_fi_len: 14, post_receive_frame_q_len: 19, post_receive_fi_len: 14 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 20, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 18, post_receive_fi_len: 14 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 19, pre_receive_fi_len: 14, post_receive_frame_q_len: 19, post_receive_fi_len: 14 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 20, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
-    ];
+    const EXPECTATIONS: LookaheadTestExpectations = LookaheadTestExpectations {
+      pre_receive_frame_q_lens: [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+        21, 19, 20, 20, 21, 19, 20, 20, 21, 19,
+        20, 20, 21, 19, 20, 20, 21, 19, 20, 20,
+        21, 19, 20, 20, 21, 19, 20, 20, 21, 19,
+        20, 20, 21, 19, 20, 20, 21, 19, 20, 20,
+      ],
+      pre_receive_fi_lens: [
+        0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
+        7, 7, 7, 7, 13, 13, 13, 13, 19, 19,
+        19, 14, 20, 19, 19, 14, 20, 19, 19, 14,
+        20, 19, 19, 14, 20, 19, 19, 14, 20, 19,
+        19, 14, 20, 19, 19, 14, 20, 19, 19, 14,
+        20, 19, 19, 14, 20, 19, 19, 14, 20, 19,
+      ],
+      post_receive_frame_q_lens: [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+        18, 19, 19, 20, 18, 19, 19, 20, 18, 19,
+        19, 20, 18, 19, 19, 20, 18, 19, 19, 20,
+        18, 19, 19, 20, 18, 19, 19, 20, 18, 19,
+        19, 20, 18, 19, 19, 20, 18, 19, 19, 20,
+      ],
+      post_receive_fi_lens: [
+        0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
+        7, 7, 7, 7, 13, 13, 13, 13, 19, 19,
+        14, 14, 19, 19, 14, 14, 19, 19, 14, 14,
+        19, 19, 14, 14, 19, 19, 14, 14, 19, 19,
+        14, 14, 19, 19, 14, 14, 19, 19, 14, 14,
+        19, 19, 14, 14, 19, 19, 14, 14, 19, 19,
+      ]
+    };
     lookahead_size_properly_bounded(LOOKAHEAD_SIZE, &EXPECTATIONS);
   }
 
   #[test]
   fn lookahead_size_properly_bounded_10() {
     const LOOKAHEAD_SIZE: u64 = 10;
-    const EXPECTATIONS: [LookaheadTestExpectations; 60] = [
-      LookaheadTestExpectations { pre_receive_frame_q_len: 1, pre_receive_fi_len: 0, post_receive_frame_q_len: 1, post_receive_fi_len: 0 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 2, pre_receive_fi_len: 0, post_receive_frame_q_len: 2, post_receive_fi_len: 0 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 3, pre_receive_fi_len: 0, post_receive_frame_q_len: 3, post_receive_fi_len: 0 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 4, pre_receive_fi_len: 0, post_receive_frame_q_len: 4, post_receive_fi_len: 0 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 5, pre_receive_fi_len: 0, post_receive_frame_q_len: 5, post_receive_fi_len: 0 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 6, pre_receive_fi_len: 0, post_receive_frame_q_len: 6, post_receive_fi_len: 0 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 7, pre_receive_fi_len: 1, post_receive_frame_q_len: 7, post_receive_fi_len: 1 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 8, pre_receive_fi_len: 1, post_receive_frame_q_len: 8, post_receive_fi_len: 1 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 9, pre_receive_fi_len: 1, post_receive_frame_q_len: 9, post_receive_fi_len: 1 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 10, pre_receive_fi_len: 1, post_receive_frame_q_len: 10, post_receive_fi_len: 1 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 11, pre_receive_fi_len: 7, post_receive_frame_q_len: 11, post_receive_fi_len: 7 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 12, pre_receive_fi_len: 7, post_receive_frame_q_len: 12, post_receive_fi_len: 7 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 13, pre_receive_fi_len: 7, post_receive_frame_q_len: 13, post_receive_fi_len: 7 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 14, pre_receive_fi_len: 7, post_receive_frame_q_len: 14, post_receive_fi_len: 7 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 15, pre_receive_fi_len: 13, post_receive_frame_q_len: 15, post_receive_fi_len: 13 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 16, pre_receive_fi_len: 13, post_receive_frame_q_len: 16, post_receive_fi_len: 13 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 17, pre_receive_fi_len: 13, post_receive_frame_q_len: 17, post_receive_fi_len: 13 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 18, pre_receive_fi_len: 13, post_receive_frame_q_len: 18, post_receive_fi_len: 13 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 19, pre_receive_fi_len: 19, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 21, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 22, pre_receive_fi_len: 19, post_receive_frame_q_len: 22, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 23, pre_receive_fi_len: 25, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 21, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 22, pre_receive_fi_len: 19, post_receive_frame_q_len: 22, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 23, pre_receive_fi_len: 25, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 21, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 22, pre_receive_fi_len: 19, post_receive_frame_q_len: 22, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 23, pre_receive_fi_len: 25, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 21, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 22, pre_receive_fi_len: 19, post_receive_frame_q_len: 22, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 23, pre_receive_fi_len: 25, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 21, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 22, pre_receive_fi_len: 19, post_receive_frame_q_len: 22, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 23, pre_receive_fi_len: 25, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 21, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 22, pre_receive_fi_len: 19, post_receive_frame_q_len: 22, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 23, pre_receive_fi_len: 25, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 21, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 22, pre_receive_fi_len: 19, post_receive_frame_q_len: 22, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 23, pre_receive_fi_len: 25, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 21, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 22, pre_receive_fi_len: 19, post_receive_frame_q_len: 22, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 23, pre_receive_fi_len: 25, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 21, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 22, pre_receive_fi_len: 19, post_receive_frame_q_len: 22, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 23, pre_receive_fi_len: 25, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 21, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 22, pre_receive_fi_len: 19, post_receive_frame_q_len: 22, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 23, pre_receive_fi_len: 25, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
-    ];
+    const EXPECTATIONS: LookaheadTestExpectations = LookaheadTestExpectations {
+      pre_receive_frame_q_lens: [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+        21, 22, 23, 20, 21, 22, 23, 20, 21, 22,
+        23, 20, 21, 22, 23, 20, 21, 22, 23, 20,
+        21, 22, 23, 20, 21, 22, 23, 20, 21, 22,
+        23, 20, 21, 22, 23, 20, 21, 22, 23, 20,
+      ],
+      pre_receive_fi_lens: [
+        0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
+        7, 7, 7, 7, 13, 13, 13, 13, 19, 19,
+        19, 19, 25, 19, 19, 19, 25, 19, 19, 19,
+        25, 19, 19, 19, 25, 19, 19, 19, 25, 19,
+        19, 19, 25, 19, 19, 19, 25, 19, 19, 19,
+        25, 19, 19, 19, 25, 19, 19, 19, 25, 19,
+      ],
+      post_receive_frame_q_lens: [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+        21, 22, 19, 20, 21, 22, 19, 20, 21, 22,
+        19, 20, 21, 22, 19, 20, 21, 22, 19, 20,
+        21, 22, 19, 20, 21, 22, 19, 20, 21, 22,
+        19, 20, 21, 22, 19, 20, 21, 22, 19, 20,
+      ],
+      post_receive_fi_lens: [
+        0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
+        7, 7, 7, 7, 13, 13, 13, 13, 19, 19,
+        19, 19, 19, 19, 19, 19, 19, 19, 19, 19,
+        19, 19, 19, 19, 19, 19, 19, 19, 19, 19,
+        19, 19, 19, 19, 19, 19, 19, 19, 19, 19,
+        19, 19, 19, 19, 19, 19, 19, 19, 19, 19,
+      ],
+    };
     lookahead_size_properly_bounded(LOOKAHEAD_SIZE, &EXPECTATIONS);
   }
 
 #[test]
   fn lookahead_size_properly_bounded_16() {
     const LOOKAHEAD_SIZE: u64 = 16;
-    const EXPECTATIONS: [LookaheadTestExpectations; 60] = [
-      LookaheadTestExpectations { pre_receive_frame_q_len: 1, pre_receive_fi_len: 0, post_receive_frame_q_len: 1, post_receive_fi_len: 0 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 2, pre_receive_fi_len: 0, post_receive_frame_q_len: 2, post_receive_fi_len: 0 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 3, pre_receive_fi_len: 0, post_receive_frame_q_len: 3, post_receive_fi_len: 0 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 4, pre_receive_fi_len: 0, post_receive_frame_q_len: 4, post_receive_fi_len: 0 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 5, pre_receive_fi_len: 0, post_receive_frame_q_len: 5, post_receive_fi_len: 0 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 6, pre_receive_fi_len: 0, post_receive_frame_q_len: 6, post_receive_fi_len: 0 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 7, pre_receive_fi_len: 1, post_receive_frame_q_len: 7, post_receive_fi_len: 1 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 8, pre_receive_fi_len: 1, post_receive_frame_q_len: 8, post_receive_fi_len: 1 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 9, pre_receive_fi_len: 1, post_receive_frame_q_len: 9, post_receive_fi_len: 1 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 10, pre_receive_fi_len: 1, post_receive_frame_q_len: 10, post_receive_fi_len: 1 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 11, pre_receive_fi_len: 7, post_receive_frame_q_len: 11, post_receive_fi_len: 7 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 12, pre_receive_fi_len: 7, post_receive_frame_q_len: 12, post_receive_fi_len: 7 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 13, pre_receive_fi_len: 7, post_receive_frame_q_len: 13, post_receive_fi_len: 7 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 14, pre_receive_fi_len: 7, post_receive_frame_q_len: 14, post_receive_fi_len: 7 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 15, pre_receive_fi_len: 13, post_receive_frame_q_len: 15, post_receive_fi_len: 13 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 16, pre_receive_fi_len: 13, post_receive_frame_q_len: 16, post_receive_fi_len: 13 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 17, pre_receive_fi_len: 13, post_receive_frame_q_len: 17, post_receive_fi_len: 13 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 18, pre_receive_fi_len: 13, post_receive_frame_q_len: 18, post_receive_fi_len: 13 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 19, pre_receive_fi_len: 19, post_receive_frame_q_len: 19, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 20, pre_receive_fi_len: 19, post_receive_frame_q_len: 20, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 21, pre_receive_fi_len: 19, post_receive_frame_q_len: 21, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 22, pre_receive_fi_len: 19, post_receive_frame_q_len: 22, post_receive_fi_len: 19 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 23, pre_receive_fi_len: 25, post_receive_frame_q_len: 23, post_receive_fi_len: 25 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 24, pre_receive_fi_len: 25, post_receive_frame_q_len: 24, post_receive_fi_len: 25 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 25, pre_receive_fi_len: 25, post_receive_frame_q_len: 25, post_receive_fi_len: 25 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 26, pre_receive_fi_len: 25, post_receive_frame_q_len: 26, post_receive_fi_len: 25 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 27, pre_receive_fi_len: 31, post_receive_frame_q_len: 27, post_receive_fi_len: 31 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 31, post_receive_frame_q_len: 28, post_receive_fi_len: 31 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 29, pre_receive_fi_len: 31, post_receive_frame_q_len: 26, post_receive_fi_len: 26 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 27, pre_receive_fi_len: 26, post_receive_frame_q_len: 27, post_receive_fi_len: 26 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 32, post_receive_frame_q_len: 27, post_receive_fi_len: 31 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 31, post_receive_frame_q_len: 28, post_receive_fi_len: 31 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 29, pre_receive_fi_len: 31, post_receive_frame_q_len: 26, post_receive_fi_len: 26 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 27, pre_receive_fi_len: 26, post_receive_frame_q_len: 27, post_receive_fi_len: 26 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 32, post_receive_frame_q_len: 27, post_receive_fi_len: 31 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 31, post_receive_frame_q_len: 28, post_receive_fi_len: 31 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 29, pre_receive_fi_len: 31, post_receive_frame_q_len: 26, post_receive_fi_len: 26 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 27, pre_receive_fi_len: 26, post_receive_frame_q_len: 27, post_receive_fi_len: 26 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 32, post_receive_frame_q_len: 27, post_receive_fi_len: 31 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 31, post_receive_frame_q_len: 28, post_receive_fi_len: 31 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 29, pre_receive_fi_len: 31, post_receive_frame_q_len: 26, post_receive_fi_len: 26 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 27, pre_receive_fi_len: 26, post_receive_frame_q_len: 27, post_receive_fi_len: 26 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 32, post_receive_frame_q_len: 27, post_receive_fi_len: 31 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 31, post_receive_frame_q_len: 28, post_receive_fi_len: 31 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 29, pre_receive_fi_len: 31, post_receive_frame_q_len: 26, post_receive_fi_len: 26 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 27, pre_receive_fi_len: 26, post_receive_frame_q_len: 27, post_receive_fi_len: 26 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 32, post_receive_frame_q_len: 27, post_receive_fi_len: 31 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 31, post_receive_frame_q_len: 28, post_receive_fi_len: 31 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 29, pre_receive_fi_len: 31, post_receive_frame_q_len: 26, post_receive_fi_len: 26 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 27, pre_receive_fi_len: 26, post_receive_frame_q_len: 27, post_receive_fi_len: 26 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 32, post_receive_frame_q_len: 27, post_receive_fi_len: 31 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 31, post_receive_frame_q_len: 28, post_receive_fi_len: 31 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 29, pre_receive_fi_len: 31, post_receive_frame_q_len: 26, post_receive_fi_len: 26 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 27, pre_receive_fi_len: 26, post_receive_frame_q_len: 27, post_receive_fi_len: 26 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 32, post_receive_frame_q_len: 27, post_receive_fi_len: 31 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 31, post_receive_frame_q_len: 28, post_receive_fi_len: 31 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 29, pre_receive_fi_len: 31, post_receive_frame_q_len: 26, post_receive_fi_len: 26 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 27, pre_receive_fi_len: 26, post_receive_frame_q_len: 27, post_receive_fi_len: 26 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 32, post_receive_frame_q_len: 27, post_receive_fi_len: 31 },
-      LookaheadTestExpectations { pre_receive_frame_q_len: 28, pre_receive_fi_len: 31, post_receive_frame_q_len: 28, post_receive_fi_len: 31 },
-    ];
+    const EXPECTATIONS: LookaheadTestExpectations = LookaheadTestExpectations {
+      pre_receive_frame_q_lens: [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+        21, 22, 23, 24, 25, 26, 27, 28, 29, 27,
+        28, 28, 29, 27, 28, 28, 29, 27, 28, 28,
+        29, 27, 28, 28, 29, 27, 28, 28, 29, 27,
+        28, 28, 29, 27, 28, 28, 29, 27, 28, 28,
+      ],
+      pre_receive_fi_lens: [
+        0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
+        7, 7, 7, 7, 13, 13, 13, 13, 19, 19,
+        19, 19, 25, 25, 25, 25, 31, 31, 31, 26,
+        32, 31, 31, 26, 32, 31, 31, 26, 32, 31,
+        31, 26, 32, 31, 31, 26, 32, 31, 31, 26,
+        32, 31, 31, 26, 32, 31, 31, 26, 32, 31,
+      ],
+      post_receive_frame_q_lens: [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+        21, 22, 23, 24, 25, 26, 27, 28, 26, 27,
+        27, 28, 26, 27, 27, 28, 26, 27, 27, 28,
+        26, 27, 27, 28, 26, 27, 27, 28, 26, 27,
+        27, 28, 26, 27, 27, 28, 26, 27, 27, 28,
+      ],
+      post_receive_fi_lens: [
+        0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
+        7, 7, 7, 7, 13, 13, 13, 13, 19, 19,
+        19, 19, 25, 25, 25, 25, 31, 31, 26, 26,
+        31, 31, 26, 26, 31, 31, 26, 26, 31, 31,
+        26, 26, 31, 31, 26, 26, 31, 31, 26, 26,
+        31, 31, 26, 26, 31, 31, 26, 26, 31, 31,
+      ],
+    };
     lookahead_size_properly_bounded(LOOKAHEAD_SIZE, &EXPECTATIONS);
   }
 
-  fn lookahead_size_properly_bounded(rdo_lookahead: u64, expectations: &[LookaheadTestExpectations]) {
+  fn lookahead_size_properly_bounded(rdo_lookahead: u64, expectations: &LookaheadTestExpectations) {
     // Test that lookahead reads in the proper number of frames at once
 
     let mut ctx = setup_encoder::<u8>(
@@ -3531,13 +3447,13 @@ mod test {
     for i in 0..LIMIT {
       let input = ctx.new_frame();
       let _ = ctx.send_frame(input);
-      assert_eq!(ctx.inner.frame_q.len(), expectations[i].pre_receive_frame_q_len);
-      assert_eq!(ctx.inner.frame_invariants.len(), expectations[i].pre_receive_fi_len);
+      assert_eq!(ctx.inner.frame_q.len(), expectations.pre_receive_frame_q_lens[i]);
+      assert_eq!(ctx.inner.frame_invariants.len(), expectations.pre_receive_fi_lens[i]);
       while ctx.receive_packet().is_ok() {
         // Receive packets until lookahead consumed, due to pyramids receiving frames in groups
       }
-      assert_eq!(ctx.inner.frame_q.len(), expectations[i].post_receive_frame_q_len);
-      assert_eq!(ctx.inner.frame_invariants.len(), expectations[i].post_receive_fi_len);
+      assert_eq!(ctx.inner.frame_q.len(), expectations.post_receive_frame_q_lens[i]);
+      assert_eq!(ctx.inner.frame_invariants.len(), expectations.post_receive_fi_lens[i]);
     }
 
     ctx.flush();
