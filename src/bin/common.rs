@@ -347,7 +347,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
 
   Ok(CliOptions {
     io,
-    enc: parse_config(&matches),
+    enc: parse_config(&matches)?,
     limit: matches.value_of("LIMIT").unwrap().parse().unwrap(),
     // Use `occurrences_of()` because `is_present()` is always true
     // if a parameter has a default value.
@@ -360,7 +360,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
   })
 }
 
-fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
+fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
   let maybe_quantizer = matches.value_of("QP").map(|qp| qp.parse().unwrap());
   let maybe_bitrate =
     matches.value_of("BITRATE").map(|bitrate| bitrate.parse().unwrap());
@@ -499,7 +499,7 @@ fn parse_config(matches: &ArgMatches<'_>) -> EncoderConfig {
   cfg.low_latency = matches.is_present("LOW_LATENCY");
   cfg.train_rdo = train_rdo;
 
-  cfg
+  Ok(cfg)
 }
 
 fn apply_speed_test_cfg(cfg: &mut EncoderConfig, setting: &str) {
