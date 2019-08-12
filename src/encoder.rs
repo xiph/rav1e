@@ -150,7 +150,7 @@ pub struct Sequence {
   pub operating_point_idc: [u16; MAX_NUM_OPERATING_POINTS],
   pub display_model_info_present_flag: bool,
   pub decoder_model_info_present_flag: bool,
-  pub level: [[usize; 2]; MAX_NUM_OPERATING_POINTS],	// minor, major
+  pub level: [[usize; 2]; MAX_NUM_OPERATING_POINTS],    // minor, major
   pub tier: [usize; MAX_NUM_OPERATING_POINTS],  // seq_tier in the spec. One bit: 0
   // or 1.
   pub film_grain_params_present: bool,
