@@ -54,7 +54,7 @@ impl ChromaSampling {
   /// Provides the amount to right shift the luma plane dimensions to get the
   ///  chroma plane dimensions.
   /// Only values 0 or 1 are ever returned.
-  /// The plane dimensions must also be rounded up to accomodate odd luma plane
+  /// The plane dimensions must also be rounded up to accommodate odd luma plane
   ///  sizes.
   /// Cs400 returns None, as there are no chroma planes.
   pub fn get_decimation(self) -> Option<(usize, usize)> {

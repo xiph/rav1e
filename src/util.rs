@@ -12,7 +12,7 @@ use std::mem;
 use std::mem::size_of;
 use std::fmt::{Debug, Display};
 
-//TODO: Nice to have (although I wasnt able to find a way to do it yet in rust): zero-fill arrays that are
+//TODO: Nice to have (although I wasn't able to find a way to do it yet in rust): zero-fill arrays that are
 // shorter than required.  Need const fn (Rust Issue #24111) or const generics (Rust RFC #2000)
 macro_rules! cdf {
     ($($x:expr),+) =>  {[$(32768 - $x),+, 0, 0]}

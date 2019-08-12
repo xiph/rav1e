@@ -50,7 +50,7 @@ impl From<Arc<rav1e::Frame<u16>>> for FrameInternal {
 
 /// Raw video Frame
 ///
-/// It can be allocated throught rav1e_frame_new(), populated using rav1e_frame_fill_plane()
+/// It can be allocated through rav1e_frame_new(), populated using rav1e_frame_fill_plane()
 /// and freed using rav1e_frame_unref().
 pub struct Frame {
   fi: FrameInternal,
@@ -701,7 +701,7 @@ fn rav1e_frame_fill_plane_internal<T: rav1e::Pixel>(
 /// frame: A frame provided by rav1e_frame_new()
 /// plane: The index of the plane starting from 0
 /// data: The data to be copied
-/// data_len: Lenght of the buffer
+/// data_len: Length of the buffer
 /// stride: Plane line in bytes, including padding
 /// bytewidth: Number of bytes per component, either 1 or 2
 #[no_mangle]
