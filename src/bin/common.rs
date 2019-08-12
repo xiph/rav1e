@@ -360,10 +360,21 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
   })
 }
 
+pub trait MatchGet {
+  fn value_of_int(&self, name: &str) -> Option<Result<i32, CliError>>;
+}
+
+impl MatchGet for ArgMatches<'_> {
+  fn value_of_int(&self, name: &str) -> Option<Result<i32, CliError>> {
+    self.value_of(name).map(|v|
+      v.parse().map_err(|e: std::num::ParseIntError | e.context(name))
+    )
+  }
+}
+
 fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
   let maybe_quantizer = matches.value_of("QP").map(|qp| qp.parse().unwrap());
-  let maybe_bitrate =
-    matches.value_of("BITRATE").map(|bitrate| bitrate.parse().unwrap());
+  let maybe_bitrate = matches.value_of_int("BITRATE");
   let quantizer = maybe_quantizer.unwrap_or_else(|| {
     if maybe_bitrate.is_some() {
       // If a bitrate is specified, the quantizer is the maximum allowed (e.g.,
@@ -374,7 +385,7 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
       100
     }
   });
-  let bitrate: i32 = maybe_bitrate.unwrap_or(0);
+  let bitrate: i32 = maybe_bitrate.unwrap_or(Ok(0))?;
   let train_rdo = matches.is_present("train-rdo");
   if quantizer == 0 {
     unimplemented!("Lossless encoding not yet implemented");
