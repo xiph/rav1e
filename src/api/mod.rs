@@ -716,6 +716,7 @@ impl<T: Pixel> Context<T> {
       }
       self.inner.limit = self.inner.frame_count;
       self.is_flushing = true;
+      self.inner.compute_lookahead_data();
     } else if self.is_flushing {
       return Err(EncoderStatus::EnoughData)
     }
@@ -864,9 +865,7 @@ impl<T: Pixel> ContextInner<T> {
       }
     }
 
-    if !self.needs_more_frame_q_lookahead() {
-      self.compute_lookahead_data();
-    }
+    self.compute_lookahead_data();
     Ok(())
   }
 
@@ -884,9 +883,9 @@ impl<T: Pixel> ContextInner<T> {
 
   /// Indicates whether more frames need to be read into the frame queue
   /// in order for frame queue lookahead to be full.
-  fn needs_more_frame_q_lookahead(&self) -> bool {
+  fn needs_more_frame_q_lookahead(&self, input_frameno: u64) -> bool {
     let lookahead_end = self.frame_q.keys().last().cloned().unwrap_or(0);
-    let frames_needed = self.next_lookahead_frame + self.inter_cfg.keyframe_lookahead_distance();
+    let frames_needed = input_frameno + self.inter_cfg.keyframe_lookahead_distance() + 1;
     lookahead_end < frames_needed && self.needs_more_frames(lookahead_end)
   }
 
@@ -964,8 +963,8 @@ impl<T: Pixel> ContextInner<T> {
       output_frameno_in_gop,
       self.gop_input_frameno_start[&output_frameno]
     );
-    let frames_needed = input_frameno + self.inter_cfg.keyframe_lookahead_distance();
-    if frames_needed > self.next_lookahead_frame && self.needs_more_frames(frames_needed) {
+
+    if self.needs_more_frame_q_lookahead(input_frameno) {
       return Err(EncoderStatus::NeedMoreData);
     }
 
@@ -1308,12 +1307,10 @@ impl<T: Pixel> ContextInner<T> {
             None
           }
         })
-        .take((self.inter_cfg.keyframe_lookahead_distance() +
-          self.inter_cfg.max_reordering_latency() + 1) as usize)
         .collect::<Vec<_>>();
     let mut lookahead_idx = 0;
 
-    while !self.needs_more_frame_q_lookahead() {
+    while !self.needs_more_frame_q_lookahead(self.next_lookahead_frame) {
       // Process the next unprocessed frame
       // Start by getting that frame and all frames after it in the queue
       let current_lookahead_frames = &lookahead_frames[lookahead_idx..];
@@ -1968,7 +1965,8 @@ mod test {
   fn setup_encoder<T: Pixel>(
     w: usize, h: usize, speed: usize, quantizer: usize, bit_depth: usize,
     chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
-    bitrate: i32, low_latency: bool, no_scene_detection: bool
+    bitrate: i32, low_latency: bool, no_scene_detection: bool,
+    rdo_lookahead_frames: u64
   ) -> Context<T> {
     assert!(bit_depth == 8 || std::mem::size_of::<T>() > 1);
     let mut enc = EncoderConfig::with_speed_preset(speed);
@@ -1982,6 +1980,7 @@ mod test {
     enc.chroma_sampling = chroma_sampling;
     enc.bitrate = bitrate;
     enc.speed_settings.no_scene_detection = no_scene_detection;
+    enc.rdo_lookahead_frames = rdo_lookahead_frames;
 
     let cfg = Config { enc, threads: 0 };
 
@@ -2029,7 +2028,8 @@ mod test {
       200,
       0,
       low_lantency,
-      no_scene_detection
+      no_scene_detection,
+      10
     );
     let limit = 41;
 
@@ -2081,7 +2081,8 @@ mod test {
       200,
       0,
       low_lantency,
-      no_scene_detection
+      no_scene_detection,
+      10
     );
     let limit = 41;
 
@@ -2160,7 +2161,8 @@ mod test {
       5,
       0,
       true,
-      true
+      true,
+      10
     );
     let limit = 10 - missing;
     send_frames(&mut ctx, limit, 0);
@@ -2221,7 +2223,8 @@ mod test {
       5,
       0,
       true,
-      true
+      true,
+      10
     );
     let limit = 10 - missing;
     send_frames(&mut ctx, limit, 0);
@@ -2254,7 +2257,8 @@ mod test {
       5,
       0,
       false,
-      true
+      true,
+      10
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -2376,7 +2380,8 @@ mod test {
       5,
       0,
       false,
-      true
+      true,
+      10
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -2497,7 +2502,8 @@ mod test {
       5,
       0,
       false,
-      false
+      false,
+      10
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -2606,7 +2612,8 @@ mod test {
       5,
       0,
       false,
-      false
+      false,
+      10
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -2714,7 +2721,8 @@ mod test {
       5,
       0,
       false,
-      true
+      true,
+      10
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -2838,7 +2846,8 @@ mod test {
       5,
       0,
       false,
-      false
+      false,
+      10
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -2965,7 +2974,8 @@ mod test {
       5,
       0,
       false,
-      false
+      false,
+      10
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -3073,7 +3083,8 @@ mod test {
       5,
       0,
       false,
-      false
+      false,
+      10
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -3124,7 +3135,8 @@ mod test {
       10,
       0,
       false,
-      false
+      false,
+      10
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -3181,7 +3193,8 @@ mod test {
       10,
       0,
       false,
-      false
+      false,
+      10
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -3239,7 +3252,8 @@ mod test {
       10,
       0,
       false,
-      false
+      false,
+      10
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -3279,5 +3293,183 @@ mod test {
         (7, false), // invalid
       ]
     );
+  }
+
+  #[derive(Clone, Copy)]
+  struct LookaheadTestExpectations {
+    pre_receive_frame_q_lens: [usize; 60],
+    pre_receive_fi_lens: [usize; 60],
+    post_receive_frame_q_lens: [usize; 60],
+    post_receive_fi_lens: [usize; 60],
+  }
+
+  #[test]
+  fn lookahead_size_properly_bounded_8() {
+    const LOOKAHEAD_SIZE: u64 = 8;
+    const EXPECTATIONS: LookaheadTestExpectations = LookaheadTestExpectations {
+      pre_receive_frame_q_lens: [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+        21, 19, 20, 20, 21, 19, 20, 20, 21, 19,
+        20, 20, 21, 19, 20, 20, 21, 19, 20, 20,
+        21, 19, 20, 20, 21, 19, 20, 20, 21, 19,
+        20, 20, 21, 19, 20, 20, 21, 19, 20, 20,
+      ],
+      pre_receive_fi_lens: [
+        0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
+        7, 7, 7, 7, 13, 13, 13, 13, 19, 19,
+        19, 14, 20, 19, 19, 14, 20, 19, 19, 14,
+        20, 19, 19, 14, 20, 19, 19, 14, 20, 19,
+        19, 14, 20, 19, 19, 14, 20, 19, 19, 14,
+        20, 19, 19, 14, 20, 19, 19, 14, 20, 19,
+      ],
+      post_receive_frame_q_lens: [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+        18, 19, 19, 20, 18, 19, 19, 20, 18, 19,
+        19, 20, 18, 19, 19, 20, 18, 19, 19, 20,
+        18, 19, 19, 20, 18, 19, 19, 20, 18, 19,
+        19, 20, 18, 19, 19, 20, 18, 19, 19, 20,
+      ],
+      post_receive_fi_lens: [
+        0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
+        7, 7, 7, 7, 13, 13, 13, 13, 19, 19,
+        14, 14, 19, 19, 14, 14, 19, 19, 14, 14,
+        19, 19, 14, 14, 19, 19, 14, 14, 19, 19,
+        14, 14, 19, 19, 14, 14, 19, 19, 14, 14,
+        19, 19, 14, 14, 19, 19, 14, 14, 19, 19,
+      ]
+    };
+    lookahead_size_properly_bounded(LOOKAHEAD_SIZE, &EXPECTATIONS);
+  }
+
+  #[test]
+  fn lookahead_size_properly_bounded_10() {
+    const LOOKAHEAD_SIZE: u64 = 10;
+    const EXPECTATIONS: LookaheadTestExpectations = LookaheadTestExpectations {
+      pre_receive_frame_q_lens: [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+        21, 22, 23, 20, 21, 22, 23, 20, 21, 22,
+        23, 20, 21, 22, 23, 20, 21, 22, 23, 20,
+        21, 22, 23, 20, 21, 22, 23, 20, 21, 22,
+        23, 20, 21, 22, 23, 20, 21, 22, 23, 20,
+      ],
+      pre_receive_fi_lens: [
+        0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
+        7, 7, 7, 7, 13, 13, 13, 13, 19, 19,
+        19, 19, 25, 19, 19, 19, 25, 19, 19, 19,
+        25, 19, 19, 19, 25, 19, 19, 19, 25, 19,
+        19, 19, 25, 19, 19, 19, 25, 19, 19, 19,
+        25, 19, 19, 19, 25, 19, 19, 19, 25, 19,
+      ],
+      post_receive_frame_q_lens: [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+        21, 22, 19, 20, 21, 22, 19, 20, 21, 22,
+        19, 20, 21, 22, 19, 20, 21, 22, 19, 20,
+        21, 22, 19, 20, 21, 22, 19, 20, 21, 22,
+        19, 20, 21, 22, 19, 20, 21, 22, 19, 20,
+      ],
+      post_receive_fi_lens: [
+        0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
+        7, 7, 7, 7, 13, 13, 13, 13, 19, 19,
+        19, 19, 19, 19, 19, 19, 19, 19, 19, 19,
+        19, 19, 19, 19, 19, 19, 19, 19, 19, 19,
+        19, 19, 19, 19, 19, 19, 19, 19, 19, 19,
+        19, 19, 19, 19, 19, 19, 19, 19, 19, 19,
+      ],
+    };
+    lookahead_size_properly_bounded(LOOKAHEAD_SIZE, &EXPECTATIONS);
+  }
+
+#[test]
+  fn lookahead_size_properly_bounded_16() {
+    const LOOKAHEAD_SIZE: u64 = 16;
+    const EXPECTATIONS: LookaheadTestExpectations = LookaheadTestExpectations {
+      pre_receive_frame_q_lens: [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+        21, 22, 23, 24, 25, 26, 27, 28, 29, 27,
+        28, 28, 29, 27, 28, 28, 29, 27, 28, 28,
+        29, 27, 28, 28, 29, 27, 28, 28, 29, 27,
+        28, 28, 29, 27, 28, 28, 29, 27, 28, 28,
+      ],
+      pre_receive_fi_lens: [
+        0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
+        7, 7, 7, 7, 13, 13, 13, 13, 19, 19,
+        19, 19, 25, 25, 25, 25, 31, 31, 31, 26,
+        32, 31, 31, 26, 32, 31, 31, 26, 32, 31,
+        31, 26, 32, 31, 31, 26, 32, 31, 31, 26,
+        32, 31, 31, 26, 32, 31, 31, 26, 32, 31,
+      ],
+      post_receive_frame_q_lens: [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+        21, 22, 23, 24, 25, 26, 27, 28, 26, 27,
+        27, 28, 26, 27, 27, 28, 26, 27, 27, 28,
+        26, 27, 27, 28, 26, 27, 27, 28, 26, 27,
+        27, 28, 26, 27, 27, 28, 26, 27, 27, 28,
+      ],
+      post_receive_fi_lens: [
+        0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
+        7, 7, 7, 7, 13, 13, 13, 13, 19, 19,
+        19, 19, 25, 25, 25, 25, 31, 31, 26, 26,
+        31, 31, 26, 26, 31, 31, 26, 26, 31, 31,
+        26, 26, 31, 31, 26, 26, 31, 31, 26, 26,
+        31, 31, 26, 26, 31, 31, 26, 26, 31, 31,
+      ],
+    };
+    lookahead_size_properly_bounded(LOOKAHEAD_SIZE, &EXPECTATIONS);
+  }
+
+  fn lookahead_size_properly_bounded(rdo_lookahead: u64, expectations: &LookaheadTestExpectations) {
+    // Test that lookahead reads in the proper number of frames at once
+
+    let mut ctx = setup_encoder::<u8>(
+      64,
+      80,
+      10,
+      100,
+      8,
+      ChromaSampling::Cs420,
+      0,
+      100,
+      0,
+      false,
+      true,
+      rdo_lookahead
+    );
+
+    const LIMIT: usize = 60;
+
+    for i in 0..LIMIT {
+      let input = ctx.new_frame();
+      let _ = ctx.send_frame(input);
+      assert_eq!(ctx.inner.frame_q.len(), expectations.pre_receive_frame_q_lens[i]);
+      assert_eq!(ctx.inner.frame_invariants.len(), expectations.pre_receive_fi_lens[i]);
+      while ctx.receive_packet().is_ok() {
+        // Receive packets until lookahead consumed, due to pyramids receiving frames in groups
+      }
+      assert_eq!(ctx.inner.frame_q.len(), expectations.post_receive_frame_q_lens[i]);
+      assert_eq!(ctx.inner.frame_invariants.len(), expectations.post_receive_fi_lens[i]);
+    }
+
+    ctx.flush();
+    let end = ctx.inner.frame_q.get(&(LIMIT as u64));
+    assert!(end.is_some());
+    assert!(end.unwrap().is_none());
+
+    loop {
+      match ctx.receive_packet() {
+        Ok(_) | Err(EncoderStatus::Encoded) => {
+          // Receive packets until all frames consumed
+        }
+        _ => {
+          break;
+        }
+      }
+    }
+    assert_eq!(ctx.inner.frames_processed, LIMIT as u64);
   }
 }
