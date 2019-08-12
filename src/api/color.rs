@@ -77,6 +77,16 @@ impl ChromaSampling {
       (0, 0)
     }
   }
+
+  /// The relative impact of chroma planes compared to luma
+  pub(crate) fn get_chroma_weight(self) -> f64 {
+    match self {
+      ChromaSampling::Cs420 => 0.25,
+      ChromaSampling::Cs422 => 0.5,
+      ChromaSampling::Cs444 => 1.0,
+      ChromaSampling::Cs400 => 0.0,
+    }
+  }
 }
 
 /// Supported Color Primaries

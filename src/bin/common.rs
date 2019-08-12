@@ -11,6 +11,7 @@ use crate::error::*;
 use crate::muxer::{create_muxer, Muxer};
 use crate::{ColorPrimaries, MatrixCoefficients, TransferCharacteristics};
 use clap::{App, AppSettings, Arg, ArgMatches, Shell, SubCommand};
+use rav1e::config::MetricsEnabled;
 use rav1e::prelude::*;
 use rav1e::version;
 use scan_fmt::scan_fmt;
@@ -285,6 +286,11 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .long("psnr")
     )
     .arg(
+      Arg::with_name("METRICS")
+        .help("Calculate and display several metrics including PSNR, SSMI, CIEDE 2000, and BD Rate")
+        .long("metrics")
+    )
+    .arg(
       Arg::with_name("RECONSTRUCTION")
         .help("Outputs a Y4M file containing the output from the decoder")
         .long("reconstruction")
@@ -530,7 +536,13 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
   cfg.reservoir_frame_delay = matches
     .value_of("RESERVOIR_FRAME_DELAY")
     .map(|reservior_frame_delay| reservior_frame_delay.parse().unwrap());
-  cfg.show_psnr = matches.is_present("PSNR");
+  cfg.metrics_enabled = if matches.is_present("METRICS") {
+    MetricsEnabled::All
+  } else if matches.is_present("PSNR") {
+    MetricsEnabled::Psnr
+  } else {
+    MetricsEnabled::None
+  };
   cfg.tune = matches.value_of("TUNE").unwrap().parse().unwrap();
 
   cfg.tile_cols = matches.value_of("TILE_COLS").unwrap().parse().unwrap();

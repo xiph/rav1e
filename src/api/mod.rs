@@ -23,7 +23,9 @@ use crate::cpu_features::*;
 use crate::dist::get_satd;
 use crate::encoder::*;
 use crate::frame::*;
-use crate::metrics::calculate_frame_psnr;
+use crate::metrics::{
+  calculate_frame_metrics, MetricsEnabled, QualityMetrics,
+};
 use crate::partition::*;
 use crate::predict::PredictionMode;
 use crate::rate::RCState;
@@ -111,7 +113,7 @@ pub struct EncoderConfig {
   /// Number of frames to read ahead for RDO lookahead computation.
   pub rdo_lookahead_frames: u64,
   pub speed_settings: SpeedSettings,
-  pub show_psnr: bool,
+  pub metrics_enabled: MetricsEnabled,
   pub train_rdo: bool,
 }
 
@@ -163,7 +165,7 @@ impl EncoderConfig {
       tiles: 0,
       rdo_lookahead_frames: 40,
       speed_settings: SpeedSettings::from_preset(speed),
-      show_psnr: false,
+      metrics_enabled: MetricsEnabled::None,
       train_rdo: false,
     }
   }
@@ -660,8 +662,8 @@ pub struct Packet<T: Pixel> {
   // stamp here.
   pub input_frameno: u64,
   pub frame_type: FrameType,
-  /// PSNR for Y, U, and V planes
-  pub psnr: Option<(f64, f64, f64)>,
+  /// Contains metrics such as PSNR, SSIM, etc. which may be enabled by CLI flags.
+  pub metrics: QualityMetrics,
 }
 
 impl<T: Pixel> fmt::Display for Packet<T> {
@@ -2022,16 +2024,20 @@ impl<T: Pixel> ContextInner<T> {
       return Err(EncoderStatus::Failure);
     }
 
-    let mut psnr = None;
-    if self.config.show_psnr {
-      if let Some(ref rec) = rec {
-        let original_frame = self.get_frame(input_frameno);
-        psnr = Some(calculate_frame_psnr(&*original_frame, rec, bit_depth));
-      }
+    let mut metrics = QualityMetrics::default();
+    if let Some(ref rec) = rec {
+      let original_frame = self.get_frame(input_frameno);
+      metrics = calculate_frame_metrics(
+        &*original_frame,
+        rec,
+        bit_depth,
+        self.config.chroma_sampling,
+        self.config.metrics_enabled,
+      );
     }
 
     self.frames_processed += 1;
-    Ok(Packet { data, rec, input_frameno, frame_type, psnr })
+    Ok(Packet { data, rec, input_frameno, frame_type, metrics })
   }
 
   fn garbage_collect(&mut self, cur_input_frameno: u64) {

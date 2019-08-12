@@ -284,7 +284,7 @@ fn run() -> Result<(), error::CliError> {
   let progress = ProgressInfo::new(
     Rational { num: video_info.time_base.den, den: video_info.time_base.num },
     if cli.limit == 0 { None } else { Some(cli.limit) },
-    cfg.enc.show_psnr,
+    cfg.enc.metrics_enabled,
   );
 
   for _ in 0..cli.skip {

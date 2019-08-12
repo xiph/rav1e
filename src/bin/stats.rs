@@ -1,3 +1,5 @@
+use rav1e::config::MetricsEnabled;
+use rav1e::data::QualityMetrics;
 use rav1e::prelude::*;
 use rav1e::{Packet, Pixel};
 use std::fmt;
@@ -9,8 +11,8 @@ pub struct FrameSummary {
   pub size: usize,
   pub input_frameno: u64,
   pub frame_type: FrameType,
-  // PSNR for Y, U, and V planes
-  pub psnr: Option<(f64, f64, f64)>,
+  /// Contains metrics such as PSNR, SSIM, etc.
+  pub metrics: QualityMetrics,
 }
 
 impl<T: Pixel> From<Packet<T>> for FrameSummary {
@@ -19,7 +21,7 @@ impl<T: Pixel> From<Packet<T>> for FrameSummary {
       size: packet.data.len(),
       input_frameno: packet.input_frameno,
       frame_type: packet.frame_type,
-      psnr: packet.psnr,
+      metrics: packet.metrics,
     }
   }
 }
@@ -32,10 +34,10 @@ impl fmt::Display for FrameSummary {
       self.input_frameno,
       self.frame_type,
       self.size,
-      if let Some(psnr) = self.psnr {
+      if let Some(psnr) = self.metrics.psnr {
         format!(
           " - PSNR: Y: {:.4}  Cb: {:.4}  Cr: {:.4}",
-          psnr.0, psnr.1, psnr.2
+          psnr.y, psnr.u, psnr.v
         )
       } else {
         String::new()
@@ -59,13 +61,14 @@ pub struct ProgressInfo {
   // This value will be updated in the CLI very frequently, so we cache the previous value
   // to reduce the overall complexity.
   encoded_size: usize,
-  // Whether to display PSNR statistics during and at end of encode
-  show_psnr: bool,
+  // Which metrics to display during and at end of encode
+  metrics_enabled: MetricsEnabled,
 }
 
 impl ProgressInfo {
   pub fn new(
-    frame_rate: Rational, total_frames: Option<usize>, show_psnr: bool,
+    frame_rate: Rational, total_frames: Option<usize>,
+    metrics_enabled: MetricsEnabled,
   ) -> Self {
     Self {
       frame_rate,
@@ -73,7 +76,7 @@ impl ProgressInfo {
       time_started: Instant::now(),
       frame_info: Vec::with_capacity(total_frames.unwrap_or_default()),
       encoded_size: 0,
-      show_psnr,
+      metrics_enabled,
     }
   }
 
@@ -163,7 +166,7 @@ impl ProgressInfo {
        Inter:      {:>6}    avg size: {:>7} B\n\
        Intra Only: {:>6}    avg size: {:>7} B\n\
        Switch:     {:>6}    avg size: {:>7} B\
-       {}",
+       {}{}",
       key,
       key_size / key,
       inter,
@@ -172,22 +175,47 @@ impl ProgressInfo {
       ionly_size / key,
       switch,
       switch_size / key,
-      if self.show_psnr {
+      if self.metrics_enabled != MetricsEnabled::None {
         let psnr_y =
-          self.frame_info.iter().map(|fi| fi.psnr.unwrap().0).sum::<f64>()
-            / self.frame_info.len() as f64;
+          sum_metric(&self.frame_info, |fi| fi.metrics.psnr.unwrap().y);
         let psnr_u =
-          self.frame_info.iter().map(|fi| fi.psnr.unwrap().1).sum::<f64>()
-            / self.frame_info.len() as f64;
+          sum_metric(&self.frame_info, |fi| fi.metrics.psnr.unwrap().u);
         let psnr_v =
-          self.frame_info.iter().map(|fi| fi.psnr.unwrap().2).sum::<f64>()
-            / self.frame_info.len() as f64;
+          sum_metric(&self.frame_info, |fi| fi.metrics.psnr.unwrap().v);
+        let psnr_avg = sum_metric(&self.frame_info, |fi| {
+          fi.metrics.psnr.unwrap().weighted_avg
+        });
         format!(
-          "\nMean PSNR: Y: {:.4}  Cb: {:.4}  Cr: {:.4}  Avg: {:.4}",
-          psnr_y,
-          psnr_u,
-          psnr_v,
-          (psnr_y + psnr_u + psnr_v) / 3.0
+          "\nMean PSNR: Avg: {:.4}  Y: {:.4}  Cb: {:.4}  Cr: {:.4}",
+          psnr_avg, psnr_y, psnr_u, psnr_v
+        )
+      } else {
+        String::new()
+      },
+      if self.metrics_enabled == MetricsEnabled::All {
+        let psnr_hvs = sum_metric(&self.frame_info, |fi| {
+          fi.metrics.psnr_hvs.unwrap().weighted_avg
+        });
+        let ssim = sum_metric(&self.frame_info, |fi| {
+          fi.metrics.ssim.unwrap().weighted_avg
+        });
+        let ms_ssim = sum_metric(&self.frame_info, |fi| {
+          fi.metrics.ms_ssim.unwrap().weighted_avg
+        });
+        let ciede =
+          sum_metric(&self.frame_info, |fi| fi.metrics.ciede.unwrap());
+        let apsnr_y =
+          sum_metric(&self.frame_info, |fi| fi.metrics.apsnr.unwrap().y);
+        let apsnr_u =
+          sum_metric(&self.frame_info, |fi| fi.metrics.apsnr.unwrap().u);
+        let apsnr_v =
+          sum_metric(&self.frame_info, |fi| fi.metrics.apsnr.unwrap().v);
+        let apsnr_avg = sum_metric(&self.frame_info, |fi| {
+          fi.metrics.apsnr.unwrap().weighted_avg
+        });
+        format!(
+          "\nPSNR HVS: {:.4}\nSSIM: {:.4}\nMS SSIM: {:.4}\nCIEDE2000: {:.4}\nAPSNR: Avg: {:.4}  Y: {:.4}  Cb: {:.4}  Cr: {:.4}",
+          psnr_hvs, ssim, ms_ssim, ciede, apsnr_avg, apsnr_y, apsnr_u, apsnr_v
         )
       } else {
         String::new()
@@ -196,19 +224,25 @@ impl ProgressInfo {
   }
 }
 
+fn sum_metric<F: FnMut(&FrameSummary) -> f64>(
+  frame_info: &[FrameSummary], map_fn: F,
+) -> f64 {
+  frame_info.iter().map(map_fn).sum::<f64>() / frame_info.len() as f64
+}
+
 impl fmt::Display for ProgressInfo {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     if let Some(total_frames) = self.total_frames {
       write!(
-                f,
-                "encoded {}/{} frames, {:.3} fps, {:.2} Kb/s, est. size: {:.2} MB, est. time: {:.0} s",
-                self.frames_encoded(),
-                total_frames,
-                self.encoding_fps(),
-                self.bitrate() as f64 / 1000f64,
-                self.estimated_size() as f64 / (1024 * 1024) as f64,
-                self.estimated_time()
-            )
+        f,
+        "encoded {}/{} frames, {:.3} fps, {:.2} Kb/s, est. size: {:.2} MB, est. time: {:.0} s",
+        self.frames_encoded(),
+        total_frames,
+        self.encoding_fps(),
+        self.bitrate() as f64 / 1000f64,
+        self.estimated_size() as f64 / (1024 * 1024) as f64,
+        self.estimated_time()
+      )
     } else {
       write!(
         f,

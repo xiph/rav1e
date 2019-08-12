@@ -76,6 +76,7 @@ pub mod data {
   pub use crate::api::{EncoderStatus, FrameType, Packet, Point, Rational};
   pub use crate::frame::Frame;
   pub use crate::frame::FrameParameters;
+  pub use crate::metrics::QualityMetrics;
   pub use crate::util::{CastFromPrimitive, Pixel};
 }
 
@@ -89,6 +90,7 @@ pub mod config {
   pub use crate::api::{
     Config, EncoderConfig, PredictionModesSetting, SpeedSettings,
   };
+  pub use crate::metrics::MetricsEnabled;
 }
 
 /// Version information
