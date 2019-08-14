@@ -112,7 +112,9 @@ pub struct QuantizationContext {
   dc_mul_add: (u32, u32, u32),
 
   ac_quant: u32,
-  ac_offset: i32,
+  ac_offset_eob: i32,
+  ac_offset0: i32,
+  ac_offset1: i32,
   ac_mul_add: (u32, u32, u32),
 }
 
@@ -212,10 +214,38 @@ impl QuantizationContext {
     self.ac_quant = ac_q(qindex, ac_delta_q, bit_depth) as u32;
     self.ac_mul_add = divu_gen(self.ac_quant);
 
-    self.dc_offset =
-      self.dc_quant as i32 * (if is_intra { 21 } else { 15 }) / 64;
-    self.ac_offset =
-      self.ac_quant as i32 * (if is_intra { 21 } else { 15 }) / 64;
+    // All of these biases were derived by measuring the cost of coding
+    // a zero vs coding a one on any given coefficient position, or, in
+    // the case of the EOB bias, the cost of coding the block with
+    // the chosen EOB (rounding to one) vs rounding to zero and continuing
+    // to choose a new EOB. This was done over several clips, with the
+    // average of the bit costs taken over all blocks in the set, and a new
+    // bias derived via the method outlined in Jean-Marc Valin's
+    // Journal of Dubious Theoretical Results[1], aka:
+    //
+    // lambda = ln(2) / 6.0
+    // threshold = 0.5 + (lambda * avg_rate_diff) / 2.0
+    // bias = 1 - threshold
+    //
+    // lambda is a constant since our offsets are already adjusted for the
+    // quantizer.
+    //
+    // Biases were then updated, and cost collection was re-run, until
+    // the calculated biases started to converge after 2-4 iterations.
+    //
+    // In theory, the rounding biases for inter should be somewhat smaller
+    // than the biases for intra, but this turns out to only be the case
+    // for EOB optimization, or at least, is covered by EOB optimization.
+    // The RD-optimal rounding biases for the actual coefficients seem
+    // to be quite close (+/- 1/256), for both inter and intra,
+    // post-deadzoning.
+    //
+    // [1] https://people.xiph.org/~jm/notes/theoretical_results.pdf
+    self.dc_offset = self.dc_quant as i32 * 109 / 256;
+    self.ac_offset0 = self.ac_quant as i32 * 98 / 256;
+    self.ac_offset1 = self.ac_quant as i32 * 109 / 256;
+    self.ac_offset_eob =
+      self.ac_quant as i32 * (if is_intra { 88 } else { 44 }) / 256;
   }
 
   #[inline]
@@ -224,20 +254,58 @@ impl QuantizationContext {
   ) where
     T: Coefficient,
   {
+    // Find the last non-zero coefficient using our smaller biases and
+    // zero everything else.
+    let mut is_zero = true;
+    let mut pos = coded_tx_size - 1;
+    while is_zero && pos != 1 {
+      let c = coeffs[pos] << (self.log_tx_scale as usize);
+      let qc = c + (c.signum() * T::cast_from(self.ac_offset_eob));
+      is_zero =
+        T::cast_from(divu_pair(qc.as_(), self.ac_mul_add)) == T::cast_from(0);
+      pos -= 1;
+    }
+
+    // We skip the DC coefficient since it has its own quantizer index.
+    let last_pos = if is_zero { pos } else { pos + 1 };
+
     qcoeffs[0] = coeffs[0] << (self.log_tx_scale as usize);
     qcoeffs[0] += qcoeffs[0].signum() * T::cast_from(self.dc_offset);
     qcoeffs[0] = T::cast_from(divu_pair(qcoeffs[0].as_(), self.dc_mul_add));
 
+    // Here we use different rounding biases depending on whether we've
+    // had recent coefficients that are larger than one, or less than
+    // one. The reason for this is that a block usually has a chunk of
+    // large coefficients and a tail of zeroes and ones, and the tradeoffs
+    // for coding these two are different. In the tail of zeroes and ones,
+    // you'll likely end up spending most bits just saying where that
+    // coefficient is in the block, whereas in the chunk of larger
+    // coefficients, most bits will be spent on coding its magnitude.
+    // To that end, we want to bias more toward rounding to zero for
+    // that tail of zeroes and ones than we do for the larger coefficients.
+    let mut level_mode = 1;
     for (qc, c) in
-      qcoeffs[1..].iter_mut().zip(coeffs[1..].iter()).take(coded_tx_size - 1)
+      qcoeffs[1..].iter_mut().zip(coeffs[1..].iter()).take(last_pos)
     {
-      *qc = *c << self.log_tx_scale;
-      *qc += qc.signum() * T::cast_from(self.ac_offset);
-      *qc = T::cast_from(divu_pair((*qc).as_(), self.ac_mul_add));
+      let coeff = *c << self.log_tx_scale;
+      let level0 = T::cast_from(divu_pair(coeff.as_(), self.ac_mul_add));
+      let offset = if level0 > T::cast_from(1 - level_mode) {
+        self.ac_offset1
+      } else {
+        self.ac_offset0
+      };
+      let qcoeff = coeff + (coeff.signum() * T::cast_from(offset));
+      *qc = T::cast_from(divu_pair(qcoeff.as_(), self.ac_mul_add));
+      if level_mode != 0 && *qc == T::cast_from(0) {
+        level_mode = 0;
+      } else if *qc > T::cast_from(1) {
+        level_mode = 1;
+      }
     }
 
-    if qcoeffs.len() > coded_tx_size {
-      for qc in qcoeffs[coded_tx_size..].iter_mut() {
+    let zero_start = coded_tx_size.min(last_pos + 1);
+    if qcoeffs.len() > zero_start {
+      for qc in qcoeffs[zero_start..].iter_mut() {
         *qc = T::cast_from(0);
       }
     }
