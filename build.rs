@@ -4,6 +4,8 @@
 use std::env;
 use std::fs;
 use std::path::Path;
+use rustc_version::{version, Version};
+use std::process::exit;
 
 #[allow(dead_code)]
 fn rerun_dir<P: AsRef<Path>>(dir: P) {
@@ -57,8 +59,19 @@ fn build_nasm_files() {
   rerun_dir("src/ext/x86");
 }
 
+fn rustc_version_check() {
+    // This should match the version in .travis.yml
+    const REQUIRED_VERSION: &str = "1.36.0";
+    if version().unwrap() < Version::parse(REQUIRED_VERSION).unwrap() {
+        eprintln!("rav1e requires rustc >= {}.", REQUIRED_VERSION);
+        exit(1);
+    }
+}
+
 #[allow(unused_variables)]
 fn main() {
+    rustc_version_check();
+
     let arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
     let os = env::var("CARGO_CFG_TARGET_OS").unwrap();
     // let env = env::var("CARGO_CFG_TARGET_ENV").unwrap();

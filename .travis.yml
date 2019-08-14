@@ -1,6 +1,9 @@
 language: rust
 rust:
+  # This should reference the earliest supported rustc version
+  # and should match the version number in build.rs
   - 1.36.0
+  - stable
 env:
   - RUST_BACKTRACE=1
 addons:
@@ -44,6 +47,9 @@ cache:
 after_script:
 - sccache -s
 
+# Run the tests on both the minimum and latest supported Rust version
+script: cargo test --verbose --release --features=decode_test -- --ignored
+
 jobs:
   include:
       - name: "Build & Coveralls"
@@ -52,8 +58,6 @@ jobs:
          - kcov --version
          - RUSTFLAGS="-C link-dead-code" cargo build --features=decode_test,quick_test --tests --verbose
          - travis_wait cargo kcov -v --coveralls --no-clean-rebuild -- --verify --exclude-pattern=$HOME/.cargo,aom_build,.h,test
-      - name: "Tests"
-        script: cargo test --verbose --release --features=decode_test -- --ignored
       - name: "Bench"
         script: cargo bench --features=bench --no-run --verbose
       - name: "Doc & Clippy (linter): verifying code quality"
