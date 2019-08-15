@@ -9,7 +9,7 @@
 
 use super::*;
 use std::marker::PhantomData;
-use std::{mem, ptr, slice};
+use std::{mem::MaybeUninit, ptr, slice};
 use std::collections::VecDeque;
 use crate::util::{Pixel, CastFromPrimitive};
 use crate::test_encode_decode::{compare_plane, TestDecoder, DecodeResult};
@@ -24,8 +24,8 @@ pub(crate) struct Dav1dDecoder<T: Pixel> {
 impl<T: Pixel> TestDecoder<T> for Dav1dDecoder<T> {
   fn setup_decoder(_w: usize, _h: usize) -> Self {
     unsafe {
-      let mut settings = mem::uninitialized();
-      let mut dec: Dav1dDecoder<T> = mem::uninitialized();
+      let mut settings = MaybeUninit::init().assume_init();
+      let mut dec: Dav1dDecoder<T> = MaybeUninit::init().assume_init();
 
       dav1d_default_settings(&mut settings);
 
