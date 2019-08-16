@@ -737,12 +737,15 @@ pub fn rdo_mode_decision<T: Pixel>(
           inter_mode_set.push((PredictionMode::NEAR2MV, i));
         }
       }
-      if !mv_stack.iter().take(if include_near_mvs { 4 } else { 2 }).any(
-        |ref x| {
-          x.this_mv.row == mvs_from_me[i][0].row
-            && x.this_mv.col == mvs_from_me[i][0].col
-        },
-      ) && (mvs_from_me[i][0].row != 0 || mvs_from_me[i][0].col != 0)
+      let same_row_col = |x: &CandidateMV| {
+        x.this_mv.row == mvs_from_me[i][0].row
+          && x.this_mv.col == mvs_from_me[i][0].col
+      };
+      if !mv_stack
+        .iter()
+        .take(if include_near_mvs { 4 } else { 2 })
+        .any(same_row_col)
+        && (mvs_from_me[i][0].row != 0 || mvs_from_me[i][0].col != 0)
       {
         inter_mode_set.push((PredictionMode::NEWMV, i));
       }
