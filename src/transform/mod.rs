@@ -25,7 +25,7 @@ use TxSize::*;
 mod forward;
 mod inverse;
 
-pub static RAV1E_TX_TYPES: &'static [TxType] = &[
+pub static RAV1E_TX_TYPES: &[TxType] = &[
   TxType::DCT_DCT,
   TxType::ADST_DCT,
   TxType::DCT_ADST,

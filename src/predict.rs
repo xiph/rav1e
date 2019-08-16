@@ -30,7 +30,7 @@ use std::mem::*;
 #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 use std::ptr;
 
-pub static RAV1E_INTRA_MODES: &'static [PredictionMode] = &[
+pub static RAV1E_INTRA_MODES: &[PredictionMode] = &[
   PredictionMode::DC_PRED,
   PredictionMode::H_PRED,
   PredictionMode::V_PRED,
@@ -46,11 +46,11 @@ pub static RAV1E_INTRA_MODES: &'static [PredictionMode] = &[
   PredictionMode::D63_PRED,
 ];
 
-pub static RAV1E_INTER_MODES_MINIMAL: &'static [PredictionMode] = &[
+pub static RAV1E_INTER_MODES_MINIMAL: &[PredictionMode] = &[
   PredictionMode::NEARESTMV
 ];
 
-pub static RAV1E_INTER_COMPOUND_MODES: &'static [PredictionMode] = &[
+pub static RAV1E_INTER_COMPOUND_MODES: &[PredictionMode] = &[
   PredictionMode::GLOBAL_GLOBALMV,
   PredictionMode::NEAREST_NEARESTMV,
   PredictionMode::NEW_NEWMV,
