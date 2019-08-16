@@ -126,9 +126,9 @@ rustup install stable
 
 ### Coding style
 
-Check code formatting with [rustfmt](https://github.com/rust-lang-nursery/rustfmt) before submitting a PR.
+Format code with [rustfmt](https://github.com/rust-lang-nursery/rustfmt) 1.3.0 and above (distributed with Rust 1.37.0 and above) before submitting a PR.
 
-To install the rustfmt:
+To install rustfmt:
 
 ```sh
 rustup component add rustfmt
@@ -137,7 +137,7 @@ rustup component add rustfmt
 then
 
 ```sh
-cargo fmt -- --check
+cargo fmt
 ```
 
 ### Code Analysis
