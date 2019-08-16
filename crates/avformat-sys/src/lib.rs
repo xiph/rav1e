@@ -6,7 +6,7 @@
 #[cfg_attr(feature = "cargo-clippy", allow(const_static_lifetime))]
 #[cfg_attr(feature = "cargo-clippy", allow(unreadable_literal))]
 
-pub mod av{
+pub mod av {
   include!(concat!(env!("OUT_DIR"), "/av.rs"));
 }
 
@@ -14,13 +14,13 @@ pub use av::*;
 
 #[cfg(test)]
 mod tests {
-    use super::av::*;
-    use std::ffi::CStr;
-    use std::mem;
-    #[test]
-    fn config() {
-        println!("{}", unsafe {
-            CStr::from_ptr(avformat_configuration()).to_string_lossy()
-        });
-    }
+  use super::av::*;
+  use std::ffi::CStr;
+  use std::mem;
+  #[test]
+  fn config() {
+    println!("{}", unsafe {
+      CStr::from_ptr(avformat_configuration()).to_string_lossy()
+    });
+  }
 }

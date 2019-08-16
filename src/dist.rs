@@ -69,14 +69,12 @@ mod nasm {
     (rav1e_sad64x128_avx2, u8),
     (rav1e_sad128x64_avx2, u8),
     (rav1e_sad128x128_avx2, u8),
-
     (rav1e_satd_4x4_avx2, u8),
     (rav1e_satd_8x8_avx2, u8),
     (rav1e_satd_16x16_avx2, u8),
     (rav1e_satd_32x32_avx2, u8),
     (rav1e_satd_64x64_avx2, u8),
     (rav1e_satd_128x128_avx2, u8),
-
     (rav1e_satd_4x8_avx2, u8),
     (rav1e_satd_8x4_avx2, u8),
     (rav1e_satd_8x16_avx2, u8),
@@ -87,7 +85,6 @@ mod nasm {
     (rav1e_satd_64x32_avx2, u8),
     (rav1e_satd_64x128_avx2, u8),
     (rav1e_satd_128x64_avx2, u8),
-
     (rav1e_satd_4x16_avx2, u8),
     (rav1e_satd_16x4_avx2, u8),
     (rav1e_satd_8x32_avx2, u8),
@@ -101,7 +98,7 @@ mod nasm {
   #[target_feature(enable = "ssse3")]
   unsafe fn sad_hbd_ssse3(
     plane_org: &PlaneRegion<'_, u16>, plane_ref: &PlaneRegion<'_, u16>,
-    blk_w: usize, blk_h: usize, bit_depth: usize
+    blk_w: usize, blk_h: usize, bit_depth: usize,
   ) -> u32 {
     let mut sum = 0 as u32;
     let org_stride = (plane_org.plane_cfg.stride * 2) as isize;
@@ -116,7 +113,7 @@ mod nasm {
       6 => rav1e_sad_32x32_hbd10_ssse3,
       7 => rav1e_sad_64x64_hbd10_ssse3,
       8 => rav1e_sad_128x128_hbd10_ssse3,
-      _ => rav1e_sad_128x128_hbd10_ssse3
+      _ => rav1e_sad_128x128_hbd10_ssse3,
     };
     for r in (0..blk_h).step_by(step_size) {
       for c in (0..blk_w).step_by(step_size) {
@@ -132,7 +129,7 @@ mod nasm {
   #[target_feature(enable = "sse2")]
   unsafe fn sad_sse2(
     plane_org: &PlaneRegion<'_, u8>, plane_ref: &PlaneRegion<'_, u8>,
-    blk_w: usize, blk_h: usize
+    blk_w: usize, blk_h: usize,
   ) -> u32 {
     let org_ptr = plane_org.data_ptr();
     let ref_ptr = plane_ref.data_ptr();
@@ -153,7 +150,7 @@ mod nasm {
       6 => rav1e_sad32x32_sse2,
       7 => rav1e_sad64x64_sse2,
       8 => rav1e_sad128x128_sse2,
-      _ => rav1e_sad128x128_sse2
+      _ => rav1e_sad128x128_sse2,
     };
     let mut sum = 0 as u32;
     for r in (0..blk_h).step_by(step_size) {
@@ -169,7 +166,7 @@ mod nasm {
   #[target_feature(enable = "avx2")]
   unsafe fn sad_avx2(
     plane_org: &PlaneRegion<'_, u8>, plane_ref: &PlaneRegion<'_, u8>,
-    blk_w: usize, blk_h: usize
+    blk_w: usize, blk_h: usize,
   ) -> u32 {
     let org_ptr = plane_org.data_ptr();
     let ref_ptr = plane_ref.data_ptr();
@@ -205,7 +202,7 @@ mod nasm {
       (128, 64) => rav1e_sad128x64_avx2,
       (128, 128) => rav1e_sad128x128_avx2,
 
-      _ => unreachable!()
+      _ => unreachable!(),
     };
     func(org_ptr, org_stride, ref_ptr, ref_stride)
   }
@@ -213,7 +210,7 @@ mod nasm {
   #[inline(always)]
   pub fn get_sad<T: Pixel>(
     plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>,
-    blk_w: usize, blk_h: usize, bit_depth: usize
+    blk_w: usize, blk_h: usize, bit_depth: usize,
   ) -> u32 {
     #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
@@ -263,7 +260,7 @@ mod nasm {
   #[target_feature(enable = "avx2")]
   unsafe fn satd_avx2(
     plane_org: &PlaneRegion<'_, u8>, plane_ref: &PlaneRegion<'_, u8>,
-    blk_w: usize, blk_h: usize
+    blk_w: usize, blk_h: usize,
   ) -> u32 {
     let org_ptr = plane_org.data_ptr();
     let ref_ptr = plane_ref.data_ptr();
@@ -298,7 +295,7 @@ mod nasm {
       (32, 128) => rav1e_satd_32x128_avx2,
       (128, 32) => rav1e_satd_128x32_avx2,
 
-      _ => unreachable!()
+      _ => unreachable!(),
     };
     func(org_ptr, org_stride, ref_ptr, ref_stride)
   }
@@ -307,7 +304,7 @@ mod nasm {
   #[inline(always)]
   pub fn get_satd<T: Pixel>(
     plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>,
-    blk_w: usize, blk_h: usize, bit_depth: usize
+    blk_w: usize, blk_h: usize, bit_depth: usize,
   ) -> u32 {
     #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
     {
@@ -336,7 +333,7 @@ mod native {
   #[inline(always)]
   pub fn get_sad<T: Pixel>(
     plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>,
-    blk_w: usize, blk_h: usize, _bit_depth: usize
+    blk_w: usize, blk_h: usize, _bit_depth: usize,
   ) -> u32 {
     let mut sum = 0 as u32;
 
@@ -432,7 +429,7 @@ mod native {
   #[inline(always)]
   pub fn get_satd<T: Pixel>(
     plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>,
-    blk_w: usize, blk_h: usize, _bit_depth: usize
+    blk_w: usize, blk_h: usize, _bit_depth: usize,
   ) -> u32 {
     // Size of hadamard transform should be 4x4 or 8x8
     // 4x* and *x4 use 4x4 and all other use 8x8
@@ -448,7 +445,7 @@ mod native {
           x: chunk_x as isize,
           y: chunk_y as isize,
           width: size,
-          height: size
+          height: size,
         };
         let chunk_org = plane_org.subregion(chunk_area);
         let chunk_ref = plane_ref.subregion(chunk_area);

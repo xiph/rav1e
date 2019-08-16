@@ -7,7 +7,7 @@ pub enum CliError {
   #[error(display = "{}: {:?}", msg, status)]
   Enc { msg: String, status: rav1e::EncoderStatus },
   #[error(display = "Cannot parse option `{}`: {}", opt, err)]
-  ParseInt { opt: String, err: std::num::ParseIntError }
+  ParseInt { opt: String, err: std::num::ParseIntError },
 }
 
 pub trait ToError {
@@ -33,10 +33,10 @@ impl ToError for std::num::ParseIntError {
 }
 
 pub fn print_error(e: &dyn Error) {
-    eprintln!("error: {}", e);
-    let mut cause = e.source();
-    while let Some(e) = cause {
-        eprintln!("caused by: {}", e);
-        cause = e.source();
-    }
+  eprintln!("error: {}", e);
+  let mut cause = e.source();
+  while let Some(e) = cause {
+    eprintln!("caused by: {}", e);
+    cause = e.source();
+  }
 }

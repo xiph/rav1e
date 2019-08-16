@@ -9,21 +9,21 @@
 
 #![allow(safe_extern_statics)]
 
-use crate::frame::Frame;
-use crate::encoder::FrameInvariants;
 use crate::context::PLANES;
 use crate::context::SB_SIZE;
+use crate::encoder::FrameInvariants;
+use crate::frame::Frame;
 use crate::frame::Plane;
-use crate::frame::PlaneSlice;
+use crate::frame::PlaneConfig;
 use crate::frame::PlaneMutSlice;
 use crate::frame::PlaneOffset;
-use crate::frame::PlaneConfig;
-use std::cmp;
-use std::mem::MaybeUninit;
+use crate::frame::PlaneSlice;
+use crate::lrf_simd::*;
 use crate::util::clamp;
 use crate::util::CastFromPrimitive;
 use crate::util::Pixel;
-use crate::lrf_simd::*;
+use std::cmp;
+use std::mem::MaybeUninit;
 
 use std::ops::{Index, IndexMut};
 
@@ -34,16 +34,16 @@ pub const RESTORE_SWITCHABLE: u8 = 1;
 pub const RESTORE_WIENER: u8 = 2;
 pub const RESTORE_SGRPROJ: u8 = 3;
 
-pub const WIENER_TAPS_MIN: [i8; 3] = [ -5, -23, -17 ];
-pub const WIENER_TAPS_MID: [i8; 3] = [ 3, -7, 15 ];
-pub const WIENER_TAPS_MAX: [i8; 3] = [ 10, 8, 46 ];
+pub const WIENER_TAPS_MIN: [i8; 3] = [-5, -23, -17];
+pub const WIENER_TAPS_MID: [i8; 3] = [3, -7, 15];
+pub const WIENER_TAPS_MAX: [i8; 3] = [10, 8, 46];
 #[allow(unused)]
-pub const WIENER_TAPS_K:   [i8; 3] = [ 1, 2, 3 ];
+pub const WIENER_TAPS_K: [i8; 3] = [1, 2, 3];
 pub const WIENER_BITS: usize = 7;
 
-pub const SGRPROJ_XQD_MIN: [i8; 2] = [ -96, -32 ];
-pub const SGRPROJ_XQD_MID: [i8; 2] = [ -32, 31 ];
-pub const SGRPROJ_XQD_MAX: [i8; 2] = [ 31, 95 ];
+pub const SGRPROJ_XQD_MIN: [i8; 2] = [-96, -32];
+pub const SGRPROJ_XQD_MID: [i8; 2] = [-32, 31];
+pub const SGRPROJ_XQD_MAX: [i8; 2] = [31, 95];
 pub const SGRPROJ_PRJ_SUBEXP_K: u8 = 4;
 pub const SGRPROJ_PRJ_BITS: u8 = 7;
 pub const SGRPROJ_PARAMS_BITS: u8 = 4;
@@ -52,39 +52,54 @@ pub const SGRPROJ_SGR_BITS: u8 = 8;
 pub const SGRPROJ_RECIP_BITS: u8 = 12;
 pub const SGRPROJ_RST_BITS: u8 = 4;
 pub const SGRPROJ_PARAMS_S: [[u32; 2]; 1 << SGRPROJ_PARAMS_BITS] = [
-  [140, 3236], [112, 2158], [ 93, 1618], [ 80, 1438],
-  [ 70, 1295], [ 58, 1177], [ 47, 1079], [ 37,  996],
-  [ 30,  925], [ 25,  863], [  0, 2589], [  0, 1618],
-  [  0, 1177], [  0,  925], [ 56,    0], [ 22,    0]
+  [140, 3236],
+  [112, 2158],
+  [93, 1618],
+  [80, 1438],
+  [70, 1295],
+  [58, 1177],
+  [47, 1079],
+  [37, 996],
+  [30, 925],
+  [25, 863],
+  [0, 2589],
+  [0, 1618],
+  [0, 1177],
+  [0, 925],
+  [56, 0],
+  [22, 0],
 ];
 
 #[allow(unused)] // Wiener coming soon!
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum RestorationFilter {
   None,
-  Wiener  { coeffs: [[i8; 3]; 2] },
-  Sgrproj { set: u8,
-            xqd: [i8; 2] },
+  Wiener { coeffs: [[i8; 3]; 2] },
+  Sgrproj { set: u8, xqd: [i8; 2] },
 }
 
 impl RestorationFilter {
   pub fn default() -> RestorationFilter {
-    RestorationFilter::None{}
+    RestorationFilter::None {}
   }
 }
 
 #[inline(always)]
-fn sgrproj_sum_finish(ssq: u32, sum: u32, n: u32, one_over_n: u32, s: u32, bdm8: usize) -> (u32, u32) {
+fn sgrproj_sum_finish(
+  ssq: u32, sum: u32, n: u32, one_over_n: u32, s: u32, bdm8: usize,
+) -> (u32, u32) {
   let scaled_ssq = (ssq + (1 << (2 * bdm8) >> 1)) >> (2 * bdm8);
   let scaled_sum = (sum + (1 << bdm8 >> 1)) >> bdm8;
-  let p = cmp::max(0, (scaled_ssq*n) as i32 - (scaled_sum*scaled_sum) as i32) as u32;
+  let p =
+    cmp::max(0, (scaled_ssq * n) as i32 - (scaled_sum * scaled_sum) as i32)
+      as u32;
   let z = (p * s + (1 << SGRPROJ_MTABLE_BITS >> 1)) >> SGRPROJ_MTABLE_BITS;
   let a = if z >= 255 {
     256
   } else if z == 0 {
     1
   } else {
-    (((z << SGRPROJ_SGR_BITS) + z/2) / (z+1))
+    (((z << SGRPROJ_SGR_BITS) + z / 2) / (z + 1))
   };
   let b = ((1 << SGRPROJ_SGR_BITS) - a) * sum * one_over_n;
   (a, (b + (1 << SGRPROJ_RECIP_BITS >> 1)) >> SGRPROJ_RECIP_BITS)
@@ -92,7 +107,7 @@ fn sgrproj_sum_finish(ssq: u32, sum: u32, n: u32, one_over_n: u32, s: u32, bdm8:
 
 // Using an integral image, compute the sum of a square region
 fn get_integral_square(
-  iimg: &[u32], stride: usize, x: usize, y: usize, size: usize
+  iimg: &[u32], stride: usize, x: usize, y: usize, size: usize,
 ) -> u32 {
   // Cancel out overflow in iimg by using wrapping arithmetic
   iimg[y * stride + x]
@@ -104,18 +119,18 @@ fn get_integral_square(
 #[inline(always)]
 pub(crate) fn sgrproj_box_ab_internal(
   r: usize, af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
-  iimg_stride: usize, start_x: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize
+  iimg_stride: usize, start_x: usize, y: usize, stripe_w: usize, s: u32,
+  bdm8: usize,
 ) {
   let d: usize = r * 2 + 1;
   let n: usize = d * d;
   let one_over_n = if r == 1 { 455 } else { 164 };
 
   for x in start_x..stripe_w + 2 {
-    let sum =
-      get_integral_square(iimg, iimg_stride, x, y, d);
-    let ssq =
-      get_integral_square(iimg_sq, iimg_stride, x, y, d);
-    let (reta, retb) = sgrproj_sum_finish(ssq, sum, n as u32, one_over_n, s, bdm8);
+    let sum = get_integral_square(iimg, iimg_stride, x, y, d);
+    let ssq = get_integral_square(iimg_sq, iimg_stride, x, y, d);
+    let (reta, retb) =
+      sgrproj_sum_finish(ssq, sum, n as u32, one_over_n, s, bdm8);
     af[x] = reta;
     bf[x] = retb;
   }
@@ -124,36 +139,82 @@ pub(crate) fn sgrproj_box_ab_internal(
 // computes an intermediate (ab) row for stripe_w + 2 columns at row y
 fn sgrproj_box_ab_r1(
   af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
-  iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize
+  iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
 ) {
   #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
   {
     if is_x86_feature_detected!("avx2") {
       return unsafe {
-        sgrproj_box_ab_r1_avx2(af, bf, iimg, iimg_sq, iimg_stride, y, stripe_w, s, bdm8);
+        sgrproj_box_ab_r1_avx2(
+          af,
+          bf,
+          iimg,
+          iimg_sq,
+          iimg_stride,
+          y,
+          stripe_w,
+          s,
+          bdm8,
+        );
       };
     }
   }
-  sgrproj_box_ab_internal(1, af, bf, iimg, iimg_sq, iimg_stride, 0, y, stripe_w, s, bdm8);
+  sgrproj_box_ab_internal(
+    1,
+    af,
+    bf,
+    iimg,
+    iimg_sq,
+    iimg_stride,
+    0,
+    y,
+    stripe_w,
+    s,
+    bdm8,
+  );
 }
 
 // computes an intermediate (ab) row for stripe_w + 2 columns at row y
 fn sgrproj_box_ab_r2(
   af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
-  iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize
+  iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
 ) {
   #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
   {
     if is_x86_feature_detected!("avx2") {
       return unsafe {
-        sgrproj_box_ab_r2_avx2(af, bf, iimg, iimg_sq, iimg_stride, y, stripe_w, s, bdm8);
+        sgrproj_box_ab_r2_avx2(
+          af,
+          bf,
+          iimg,
+          iimg_sq,
+          iimg_stride,
+          y,
+          stripe_w,
+          s,
+          bdm8,
+        );
       };
     }
   }
-  sgrproj_box_ab_internal(2, af, bf, iimg, iimg_sq, iimg_stride, 0, y, stripe_w, s, bdm8);
+  sgrproj_box_ab_internal(
+    2,
+    af,
+    bf,
+    iimg,
+    iimg_sq,
+    iimg_stride,
+    0,
+    y,
+    stripe_w,
+    s,
+    bdm8,
+  );
 }
 
-fn sgrproj_box_f_r0<T: Pixel>(f: &mut[u32], y: usize, w: usize, cdeffed: &PlaneSlice<T>) {
+fn sgrproj_box_f_r0<T: Pixel>(
+  f: &mut [u32], y: usize, w: usize, cdeffed: &PlaneSlice<T>,
+) {
   #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
   {
     if is_x86_feature_detected!("avx2") {
@@ -167,7 +228,7 @@ fn sgrproj_box_f_r0<T: Pixel>(f: &mut[u32], y: usize, w: usize, cdeffed: &PlaneS
 
 #[inline(always)]
 pub(crate) fn sgrproj_box_f_r0_internal<T: Pixel>(
-  f: &mut[u32], start_x: usize, y: usize, w: usize, cdeffed: &PlaneSlice<T>
+  f: &mut [u32], start_x: usize, y: usize, w: usize, cdeffed: &PlaneSlice<T>,
 ) {
   for x in start_x..w {
     f[x] = (u32::cast_from(cdeffed.p(x, y))) << SGRPROJ_RST_BITS;
@@ -175,8 +236,8 @@ pub(crate) fn sgrproj_box_f_r0_internal<T: Pixel>(
 }
 
 fn sgrproj_box_f_r1<T: Pixel>(
-  af: &[&[u32]; 3], bf: &[&[u32]; 3], f: &mut[u32], y: usize, w: usize,
-  cdeffed: &PlaneSlice<T>
+  af: &[&[u32]; 3], bf: &[&[u32]; 3], f: &mut [u32], y: usize, w: usize,
+  cdeffed: &PlaneSlice<T>,
 ) {
   #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
   {
@@ -191,25 +252,33 @@ fn sgrproj_box_f_r1<T: Pixel>(
 
 #[inline(always)]
 pub(crate) fn sgrproj_box_f_r1_internal<T: Pixel>(
-  af: &[&[u32]; 3], bf: &[&[u32]; 3], f: &mut[u32], start_x: usize, y: usize,
-  w: usize, cdeffed: &PlaneSlice<T>
+  af: &[&[u32]; 3], bf: &[&[u32]; 3], f: &mut [u32], start_x: usize, y: usize,
+  w: usize, cdeffed: &PlaneSlice<T>,
 ) {
   let shift = 5 + SGRPROJ_SGR_BITS - SGRPROJ_RST_BITS;
   for x in start_x..w {
-    let a =
-      3 * (af[0][x] + af[2][x]   + af[0][x+2] + af[2][x+2]) +
-      4 * (af[1][x] + af[0][x+1] + af[1][x+1] + af[2][x+1] + af[1][x+2]);
-    let b =
-      3 * (bf[0][x] + bf[2][x]   + bf[0][x+2] + bf[2][x+2]) +
-      4 * (bf[1][x] + bf[0][x+1] + bf[1][x+1] + bf[2][x+1] + bf[1][x+2]);
+    let a = 3 * (af[0][x] + af[2][x] + af[0][x + 2] + af[2][x + 2])
+      + 4
+        * (af[1][x]
+          + af[0][x + 1]
+          + af[1][x + 1]
+          + af[2][x + 1]
+          + af[1][x + 2]);
+    let b = 3 * (bf[0][x] + bf[2][x] + bf[0][x + 2] + bf[2][x + 2])
+      + 4
+        * (bf[1][x]
+          + bf[0][x + 1]
+          + bf[1][x + 1]
+          + bf[2][x + 1]
+          + bf[1][x + 2]);
     let v = a * u32::cast_from(cdeffed.p(x, y)) + b;
     f[x] = (v + (1 << shift >> 1)) >> shift;
   }
 }
 
 fn sgrproj_box_f_r2<T: Pixel>(
-  af: &[&[u32]; 2], bf: &[&[u32]; 2], f0: &mut[u32], f1: &mut[u32], y: usize,
-  w: usize, cdeffed: &PlaneSlice<T>
+  af: &[&[u32]; 2], bf: &[&[u32]; 2], f0: &mut [u32], f1: &mut [u32],
+  y: usize, w: usize, cdeffed: &PlaneSlice<T>,
 ) {
   #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
   {
@@ -224,24 +293,16 @@ fn sgrproj_box_f_r2<T: Pixel>(
 
 #[inline(always)]
 pub(crate) fn sgrproj_box_f_r2_internal<T: Pixel>(
-  af: &[&[u32]; 2], bf: &[&[u32]; 2], f0: &mut[u32], f1: &mut[u32],
-  start_x: usize, y: usize, w: usize, cdeffed: &PlaneSlice<T>
+  af: &[&[u32]; 2], bf: &[&[u32]; 2], f0: &mut [u32], f1: &mut [u32],
+  start_x: usize, y: usize, w: usize, cdeffed: &PlaneSlice<T>,
 ) {
   let shift = 5 + SGRPROJ_SGR_BITS - SGRPROJ_RST_BITS;
   let shifto = 4 + SGRPROJ_SGR_BITS - SGRPROJ_RST_BITS;
   for x in start_x..w {
-    let a =
-      5 * (af[0][x] + af[0][x+2]) +
-      6 * (af[0][x+1]);
-    let b =
-      5 * (bf[0][x] + bf[0][x+2]) +
-      6 * (bf[0][x+1]);
-    let ao =
-      5 * (af[1][x] + af[1][x+2]) +
-      6 * (af[1][x+1]);
-    let bo =
-      5 * (bf[1][x] + bf[1][x+2]) +
-      6 * (bf[1][x+1]);
+    let a = 5 * (af[0][x] + af[0][x + 2]) + 6 * (af[0][x + 1]);
+    let b = 5 * (bf[0][x] + bf[0][x + 2]) + 6 * (bf[0][x + 1]);
+    let ao = 5 * (af[1][x] + af[1][x + 2]) + 6 * (af[1][x + 1]);
+    let bo = 5 * (bf[1][x] + bf[1][x + 2]) + 6 * (bf[1][x + 1]);
     let v = (a + ao) * u32::cast_from(cdeffed.p(x, y)) + b + bo;
     f0[x] = (v + (1 << shift >> 1)) >> shift;
     let vo = ao * u32::cast_from(cdeffed.p(x, y + 1)) + bo;
@@ -267,13 +328,13 @@ struct VertPaddedIter<'a, T: Pixel> {
   stripe_end: isize,
   // Active area cropping is done by specifying a value smaller than the height
   // of the plane.
-  crop: isize
+  crop: isize,
 }
 
 impl<'a, 'b, T: Pixel> VertPaddedIter<'a, T> {
   fn new(
     cdeffed: &PlaneSlice<'a, T>, deblocked: &PlaneSlice<'a, T>,
-    stripe_h: usize, crop: usize, r: usize
+    stripe_h: usize, crop: usize, r: usize,
   ) -> VertPaddedIter<'a, T> {
     // cdeffed and deblocked must start at the same coordinates from their
     // underlying planes. Since cropping is provided via a separate params, the
@@ -302,7 +363,7 @@ impl<'a, 'b, T: Pixel> VertPaddedIter<'a, T> {
       end: (rows_above + stripe_h + rows_below) as isize + y,
       stripe_begin: deblocked.y,
       stripe_end,
-      crop
+      crop,
     }
   }
 }
@@ -354,17 +415,17 @@ struct HorzPaddedIter<'a, T: Pixel> {
   // the last element
   index: isize,
   // The index at which to terminate. Can be larger than the slice length.
-  end: usize
+  end: usize,
 }
 
 impl<'a, T: Pixel> HorzPaddedIter<'a, T> {
   fn new(
-    slice: &'a [T], start_index: isize, width: usize
+    slice: &'a [T], start_index: isize, width: usize,
   ) -> HorzPaddedIter<'a, T> {
     HorzPaddedIter {
       slice,
       index: start_index,
-      end: (width as isize + start_index) as usize
+      end: (width as isize + start_index) as usize,
     }
   }
 }
@@ -396,7 +457,7 @@ impl<T: Pixel> ExactSizeIterator for HorzPaddedIter<'_, T> {}
 fn setup_integral_image<'a, T: Pixel>(
   rows_iter: &mut impl Iterator<Item = impl Iterator<Item = &'a T>>,
   integral_image: &mut [u32], sq_integral_image: &mut [u32],
-  integral_image_stride: usize
+  integral_image_stride: usize,
 ) {
   // Setup the first row
   {
@@ -433,12 +494,12 @@ fn setup_integral_image<'a, T: Pixel>(
       sq_integral_slice.split_at_mut(integral_image_stride);
     for (
       src,
-      ((integral_above, sq_integral_above), (integral, sq_integral))
+      ((integral_above, sq_integral_above), (integral, sq_integral)),
     ) in row.zip(
       integral_row_prev
         .iter()
         .zip(sq_integral_row_prev.iter())
-        .zip(integral_row.iter_mut().zip(sq_integral_row.iter_mut()))
+        .zip(integral_row.iter_mut().zip(sq_integral_row.iter_mut())),
     ) {
       let current = u32::cast_from(*src);
       // Wrap adds to prevent undefined behaviour on overflow. Overflow is
@@ -456,12 +517,11 @@ fn setup_integral_image<'a, T: Pixel>(
   }
 }
 
-pub fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvariants<T>,
-                                       crop_w: usize, crop_h: usize,
-                                       stripe_w: usize, stripe_h: usize,
-                                       cdeffed: &PlaneSlice<T>,
-                                       deblocked: &PlaneSlice<T>,
-                                       out: &mut PlaneMutSlice<T>) {
+pub fn sgrproj_stripe_filter<T: Pixel>(
+  set: u8, xqd: [i8; 2], fi: &FrameInvariants<T>, crop_w: usize,
+  crop_h: usize, stripe_w: usize, stripe_h: usize, cdeffed: &PlaneSlice<T>,
+  deblocked: &PlaneSlice<T>, out: &mut PlaneMutSlice<T>,
+) {
   const WIDTH_MAX: usize = (1 << RESTORATION_TILESIZE_MAX_LOG2) * 2;
   assert!(stripe_h <= 64);
   assert!(stripe_w <= WIDTH_MAX);
@@ -476,12 +536,12 @@ pub fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvarian
     unsafe { MaybeUninit::uninit().assume_init() };
 
   let bdm8 = fi.sequence.bit_depth - 8;
-  let mut a_r2: [[u32; WIDTH_MAX+2]; 2] = [[0; WIDTH_MAX+2]; 2];
-  let mut b_r2: [[u32; WIDTH_MAX+2]; 2] = [[0; WIDTH_MAX+2]; 2];
+  let mut a_r2: [[u32; WIDTH_MAX + 2]; 2] = [[0; WIDTH_MAX + 2]; 2];
+  let mut b_r2: [[u32; WIDTH_MAX + 2]; 2] = [[0; WIDTH_MAX + 2]; 2];
   let mut f_r2_0: [u32; WIDTH_MAX] = [0; WIDTH_MAX];
   let mut f_r2_1: [u32; WIDTH_MAX] = [0; WIDTH_MAX];
-  let mut a_r1: [[u32; WIDTH_MAX+2]; 3] = [[0; WIDTH_MAX+2]; 3];
-  let mut b_r1: [[u32; WIDTH_MAX+2]; 3] = [[0; WIDTH_MAX+2]; 3];
+  let mut a_r1: [[u32; WIDTH_MAX + 2]; 3] = [[0; WIDTH_MAX + 2]; 3];
+  let mut b_r1: [[u32; WIDTH_MAX + 2]; 3] = [[0; WIDTH_MAX + 2]; 3];
   let mut f_r1: [u32; WIDTH_MAX] = [0; WIDTH_MAX];
 
   let s_r2: u32 = SGRPROJ_PARAMS_S[set as usize][0];
@@ -518,14 +578,14 @@ pub fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvarian
       // since r2 uses every other row, we need an extra row if stripe_h is odd
       stripe_h + if s_r2 > 0 { stripe_h & 1 } else { 0 },
       crop_h,
-      max_r
+      max_r,
     )
     .map(|row: &[T]| {
       HorzPaddedIter::new(
         // Limit how many unique elements we use
         &row[..row_uniques],
         start_index_x,
-        left_w + stripe_w + right_w
+        left_w + stripe_w + right_w,
       )
     });
 
@@ -533,7 +593,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvarian
       &mut rows_iter,
       &mut integral_image,
       &mut sq_integral_image,
-      INTEGRAL_IMAGE_STRIDE
+      INTEGRAL_IMAGE_STRIDE,
     );
   }
 
@@ -543,24 +603,43 @@ pub fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvarian
   // of every row (of a, b and f), only half of the rows (every-other
   // row) are actually used.
   if s_r2 > 0 {
-    sgrproj_box_ab_r2(&mut a_r2[0], &mut b_r2[0],
-                      &integral_image, &sq_integral_image,
-                      INTEGRAL_IMAGE_STRIDE,
-                      0, stripe_w, s_r2, bdm8);
+    sgrproj_box_ab_r2(
+      &mut a_r2[0],
+      &mut b_r2[0],
+      &integral_image,
+      &sq_integral_image,
+      INTEGRAL_IMAGE_STRIDE,
+      0,
+      stripe_w,
+      s_r2,
+      bdm8,
+    );
   }
   if s_r1 > 0 {
     let r_diff = max_r - 1;
     let integral_image_offset = r_diff + r_diff * INTEGRAL_IMAGE_STRIDE;
-    sgrproj_box_ab_r1(&mut a_r1[0], &mut b_r1[0],
-                      &integral_image[integral_image_offset..],
-                      &sq_integral_image[integral_image_offset..],
-                      INTEGRAL_IMAGE_STRIDE,
-                      0, stripe_w, s_r1, bdm8);
-    sgrproj_box_ab_r1(&mut a_r1[1], &mut b_r1[1],
-                      &integral_image[integral_image_offset..],
-                      &sq_integral_image[integral_image_offset..],
-                      INTEGRAL_IMAGE_STRIDE,
-                      1, stripe_w, s_r1, bdm8);
+    sgrproj_box_ab_r1(
+      &mut a_r1[0],
+      &mut b_r1[0],
+      &integral_image[integral_image_offset..],
+      &sq_integral_image[integral_image_offset..],
+      INTEGRAL_IMAGE_STRIDE,
+      0,
+      stripe_w,
+      s_r1,
+      bdm8,
+    );
+    sgrproj_box_ab_r1(
+      &mut a_r1[1],
+      &mut b_r1[1],
+      &integral_image[integral_image_offset..],
+      &sq_integral_image[integral_image_offset..],
+      INTEGRAL_IMAGE_STRIDE,
+      1,
+      stripe_w,
+      s_r1,
+      bdm8,
+    );
   }
 
   /* iterate by row */
@@ -569,13 +648,28 @@ pub fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvarian
   for y in (0..stripe_h).step_by(2) {
     // get results to use y and y+1
     let f_r2_ab: [&[u32]; 2] = if s_r2 > 0 {
-      sgrproj_box_ab_r2(&mut a_r2[(y / 2 + 1) % 2], &mut b_r2[(y / 2 + 1) % 2],
-                        &integral_image, &sq_integral_image,
-                        INTEGRAL_IMAGE_STRIDE,
-                        y + 2, stripe_w, s_r2, bdm8);
+      sgrproj_box_ab_r2(
+        &mut a_r2[(y / 2 + 1) % 2],
+        &mut b_r2[(y / 2 + 1) % 2],
+        &integral_image,
+        &sq_integral_image,
+        INTEGRAL_IMAGE_STRIDE,
+        y + 2,
+        stripe_w,
+        s_r2,
+        bdm8,
+      );
       let ap0: [&[u32]; 2] = [&a_r2[(y / 2) % 2], &a_r2[(y / 2 + 1) % 2]];
       let bp0: [&[u32]; 2] = [&b_r2[(y / 2) % 2], &b_r2[(y / 2 + 1) % 2]];
-      sgrproj_box_f_r2(&ap0, &bp0, &mut f_r2_0, &mut f_r2_1, y, stripe_w, &cdeffed);
+      sgrproj_box_f_r2(
+        &ap0,
+        &bp0,
+        &mut f_r2_0,
+        &mut f_r2_1,
+        y,
+        stripe_w,
+        &cdeffed,
+      );
       [&f_r2_0, &f_r2_1]
     } else {
       sgrproj_box_f_r0(&mut f_r2_0, y, stripe_w, &cdeffed);
@@ -587,13 +681,21 @@ pub fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvarian
       if s_r1 > 0 {
         let r_diff = max_r - 1;
         let integral_image_offset = r_diff + r_diff * INTEGRAL_IMAGE_STRIDE;
-        sgrproj_box_ab_r1(&mut a_r1[(y + 2) % 3], &mut b_r1[(y + 2) % 3],
-                          &integral_image[integral_image_offset..],
-                          &sq_integral_image[integral_image_offset..],
-                          INTEGRAL_IMAGE_STRIDE,
-                          y + 2, stripe_w, s_r1, bdm8);
-        let ap1: [&[u32]; 3] = [&a_r1[y % 3], &a_r1[(y + 1) % 3], &a_r1[(y + 2) % 3]];
-        let bp1: [&[u32]; 3] = [&b_r1[y % 3], &b_r1[(y + 1) % 3], &b_r1[(y + 2) % 3]];
+        sgrproj_box_ab_r1(
+          &mut a_r1[(y + 2) % 3],
+          &mut b_r1[(y + 2) % 3],
+          &integral_image[integral_image_offset..],
+          &sq_integral_image[integral_image_offset..],
+          INTEGRAL_IMAGE_STRIDE,
+          y + 2,
+          stripe_w,
+          s_r1,
+          bdm8,
+        );
+        let ap1: [&[u32]; 3] =
+          [&a_r1[y % 3], &a_r1[(y + 1) % 3], &a_r1[(y + 2) % 3]];
+        let bp1: [&[u32]; 3] =
+          [&b_r1[y % 3], &b_r1[(y + 1) % 3], &b_r1[(y + 2) % 3]];
         sgrproj_box_f_r1(&ap1, &bp1, &mut f_r1, y, stripe_w, &cdeffed);
       } else {
         sgrproj_box_f_r0(&mut f_r1, y, stripe_w, &cdeffed);
@@ -607,7 +709,8 @@ pub fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvarian
       for x in 0..stripe_w {
         let u = i32::cast_from(cdeffed.p(x, y)) << SGRPROJ_RST_BITS;
         let v = w0 * f_r2_ab[dy][x] as i32 + w1 * u + w2 * f_r1[x] as i32;
-        let s = (v + (1 << (SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS) >> 1)) >> (SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS);
+        let s = (v + (1 << (SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS) >> 1))
+          >> (SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS);
         out[y][x] = T::cast_from(clamp(s, 0, (1 << bit_depth) - 1));
       }
     }
@@ -628,10 +731,10 @@ pub fn sgrproj_stripe_filter<T: Pixel>(set: u8, xqd: [i8; 2], fi: &FrameInvarian
 
 // Input params follow the same rules as sgrproj_stripe_filter.
 // Inputs are relative to the colocated slice views.
-pub fn sgrproj_solve<T: Pixel>(set: u8, fi: &FrameInvariants<T>,
-                               input: &PlaneSlice<T>,
-                               cdeffed: &PlaneSlice<T>,
-                               cdef_w: usize, cdef_h: usize) -> (i8, i8) {
+pub fn sgrproj_solve<T: Pixel>(
+  set: u8, fi: &FrameInvariants<T>, input: &PlaneSlice<T>,
+  cdeffed: &PlaneSlice<T>, cdef_w: usize, cdef_h: usize,
+) -> (i8, i8) {
   assert!(cdef_h <= 64);
   assert!(cdef_w <= 64);
   const INTEGRAL_IMAGE_STRIDE: usize = 64 + 6 + 2;
@@ -644,21 +747,27 @@ pub fn sgrproj_solve<T: Pixel>(set: u8, fi: &FrameInvariants<T>,
 
   let bdm8 = fi.sequence.bit_depth - 8;
 
-  let mut a_r2: [[u32; 64+2]; 2] = [[0; 64+2]; 2];
-  let mut b_r2: [[u32; 64+2]; 2] = [[0; 64+2]; 2];
+  let mut a_r2: [[u32; 64 + 2]; 2] = [[0; 64 + 2]; 2];
+  let mut b_r2: [[u32; 64 + 2]; 2] = [[0; 64 + 2]; 2];
   let mut f_r2_0: [u32; 64] = [0; 64];
   let mut f_r2_1: [u32; 64] = [0; 64];
-  let mut a_r1: [[u32; 64+2]; 3] = [[0; 64+2]; 3];
-  let mut b_r1: [[u32; 64+2]; 3] = [[0; 64+2]; 3];
+  let mut a_r1: [[u32; 64 + 2]; 3] = [[0; 64 + 2]; 3];
+  let mut b_r1: [[u32; 64 + 2]; 3] = [[0; 64 + 2]; 3];
   let mut f_r1: [u32; 64] = [0; 64];
 
   let s_r2: u32 = SGRPROJ_PARAMS_S[set as usize][0];
   let s_r1: u32 = SGRPROJ_PARAMS_S[set as usize][1];
 
-  let mut h:[[f64; 2]; 2] = [[0.,0.],[0.,0.]];
-  let mut c:[f64; 2] = [0., 0.];
+  let mut h: [[f64; 2]; 2] = [[0., 0.], [0., 0.]];
+  let mut c: [f64; 2] = [0., 0.];
 
-  let max_r = if s_r2 > 0 { 2 } else if s_r1 > 0 { 1 } else { 0 };
+  let max_r = if s_r2 > 0 {
+    2
+  } else if s_r1 > 0 {
+    1
+  } else {
+    0
+  };
   {
     let mut rows_iter = VertPaddedIter::new(
       cdeffed,
@@ -666,21 +775,22 @@ pub fn sgrproj_solve<T: Pixel>(set: u8, fi: &FrameInvariants<T>,
       // since r2 uses every other row, we need an extra row if cdef_h is odd
       cdef_h + if s_r2 > 0 { cdef_h & 1 } else { 0 },
       cdef_h,
-      max_r)
+      max_r,
+    )
     .map(|row: &[T]| {
       let left_w = max_r + 2;
       let right_w = max_r + 1;
       HorzPaddedIter::new(
         &row[..cdef_w],
         -(left_w as isize),
-        left_w + cdef_w + right_w
+        left_w + cdef_w + right_w,
       )
     });
     setup_integral_image(
       &mut rows_iter,
       &mut integral_image,
       &mut sq_integral_image,
-      INTEGRAL_IMAGE_STRIDE
+      INTEGRAL_IMAGE_STRIDE,
     );
   }
 
@@ -690,24 +800,43 @@ pub fn sgrproj_solve<T: Pixel>(set: u8, fi: &FrameInvariants<T>,
   // of every row (of a, b and f), only half of the rows (every-other
   // row) are actually used.
   if s_r2 > 0 {
-    sgrproj_box_ab_r2(&mut a_r2[0], &mut b_r2[0],
-                      &integral_image, &sq_integral_image,
-                      INTEGRAL_IMAGE_STRIDE,
-                      0, cdef_w, s_r2, bdm8);
+    sgrproj_box_ab_r2(
+      &mut a_r2[0],
+      &mut b_r2[0],
+      &integral_image,
+      &sq_integral_image,
+      INTEGRAL_IMAGE_STRIDE,
+      0,
+      cdef_w,
+      s_r2,
+      bdm8,
+    );
   }
   if s_r1 > 0 {
     let r_diff = max_r - 1;
     let integral_image_offset = r_diff + r_diff * INTEGRAL_IMAGE_STRIDE;
-    sgrproj_box_ab_r1(&mut a_r1[0], &mut b_r1[0],
-                      &integral_image[integral_image_offset..],
-                      &sq_integral_image[integral_image_offset..],
-                      INTEGRAL_IMAGE_STRIDE,
-                      0, cdef_w, s_r1, bdm8);
-    sgrproj_box_ab_r1(&mut a_r1[1], &mut b_r1[1],
-                      &integral_image[integral_image_offset..],
-                      &sq_integral_image[integral_image_offset..],
-                      INTEGRAL_IMAGE_STRIDE,
-                      1, cdef_w, s_r1, bdm8);
+    sgrproj_box_ab_r1(
+      &mut a_r1[0],
+      &mut b_r1[0],
+      &integral_image[integral_image_offset..],
+      &sq_integral_image[integral_image_offset..],
+      INTEGRAL_IMAGE_STRIDE,
+      0,
+      cdef_w,
+      s_r1,
+      bdm8,
+    );
+    sgrproj_box_ab_r1(
+      &mut a_r1[1],
+      &mut b_r1[1],
+      &integral_image[integral_image_offset..],
+      &sq_integral_image[integral_image_offset..],
+      INTEGRAL_IMAGE_STRIDE,
+      1,
+      cdef_w,
+      s_r1,
+      bdm8,
+    );
   }
 
   /* iterate by row */
@@ -716,13 +845,28 @@ pub fn sgrproj_solve<T: Pixel>(set: u8, fi: &FrameInvariants<T>,
   for y in (0..cdef_h).step_by(2) {
     // get results to use y and y+1
     let f_r2_01: [&[u32]; 2] = if s_r2 > 0 {
-      sgrproj_box_ab_r2(&mut a_r2[(y / 2 + 1) % 2], &mut b_r2[(y / 2 + 1) % 2],
-                        &integral_image, &sq_integral_image,
-                        INTEGRAL_IMAGE_STRIDE,
-                        y + 2, cdef_w, s_r2, bdm8);
+      sgrproj_box_ab_r2(
+        &mut a_r2[(y / 2 + 1) % 2],
+        &mut b_r2[(y / 2 + 1) % 2],
+        &integral_image,
+        &sq_integral_image,
+        INTEGRAL_IMAGE_STRIDE,
+        y + 2,
+        cdef_w,
+        s_r2,
+        bdm8,
+      );
       let ap0: [&[u32]; 2] = [&a_r2[(y / 2) % 2], &a_r2[(y / 2 + 1) % 2]];
       let bp0: [&[u32]; 2] = [&b_r2[(y / 2) % 2], &b_r2[(y / 2 + 1) % 2]];
-      sgrproj_box_f_r2(&ap0, &bp0, &mut f_r2_0, &mut f_r2_1, y, cdef_w, &cdeffed);
+      sgrproj_box_f_r2(
+        &ap0,
+        &bp0,
+        &mut f_r2_0,
+        &mut f_r2_1,
+        y,
+        cdef_w,
+        &cdeffed,
+      );
       [&f_r2_0, &f_r2_1]
     } else {
       sgrproj_box_f_r0(&mut f_r2_0, y, cdef_w, &cdeffed);
@@ -734,20 +878,28 @@ pub fn sgrproj_solve<T: Pixel>(set: u8, fi: &FrameInvariants<T>,
       if s_r1 > 0 {
         let r_diff = max_r - 1;
         let integral_image_offset = r_diff + r_diff * INTEGRAL_IMAGE_STRIDE;
-        sgrproj_box_ab_r1(&mut a_r1[(y + 2) % 3], &mut b_r1[(y + 2) % 3],
-                          &integral_image[integral_image_offset..],
-                          &sq_integral_image[integral_image_offset..],
-                          INTEGRAL_IMAGE_STRIDE,
-                          y + 2, cdef_w, s_r1, bdm8);
-        let ap1: [&[u32]; 3] = [&a_r1[y % 3], &a_r1[(y + 1) % 3], &a_r1[(y + 2) % 3]];
-        let bp1: [&[u32]; 3] = [&b_r1[y % 3], &b_r1[(y + 1) % 3], &b_r1[(y + 2) % 3]];
+        sgrproj_box_ab_r1(
+          &mut a_r1[(y + 2) % 3],
+          &mut b_r1[(y + 2) % 3],
+          &integral_image[integral_image_offset..],
+          &sq_integral_image[integral_image_offset..],
+          INTEGRAL_IMAGE_STRIDE,
+          y + 2,
+          cdef_w,
+          s_r1,
+          bdm8,
+        );
+        let ap1: [&[u32]; 3] =
+          [&a_r1[y % 3], &a_r1[(y + 1) % 3], &a_r1[(y + 2) % 3]];
+        let bp1: [&[u32]; 3] =
+          [&b_r1[y % 3], &b_r1[(y + 1) % 3], &b_r1[(y + 2) % 3]];
         sgrproj_box_f_r1(&ap1, &bp1, &mut f_r1, y, cdef_w, &cdeffed);
       } else {
         sgrproj_box_f_r0(&mut f_r1, y, cdef_w, &cdeffed);
       }
       for x in 0..cdef_w {
         let u = i32::cast_from(cdeffed.p(x, y)) << SGRPROJ_RST_BITS;
-        let s = i32::cast_from(input.p(x,y)) << SGRPROJ_RST_BITS;
+        let s = i32::cast_from(input.p(x, y)) << SGRPROJ_RST_BITS;
         let f2 = f_r2_01[dy][x] as i32 - u;
         let f1 = f_r1[x] as i32 - u;
         h[0][0] += f2 as f64 * f2 as f64;
@@ -789,96 +941,118 @@ pub fn sgrproj_solve<T: Pixel>(set: u8, fi: &FrameInvariants<T>,
       (0, 0)
     } else {
       // If scaling up dividend would overflow, instead scale down the divisor
-      let div1 = (h[1][1] * c[0] - h[0][1] * c[1]) * (1 << SGRPROJ_PRJ_BITS) as f64;
-      let div2 = (h[0][0] * c[1] - h[1][0] * c[0]) * (1 << SGRPROJ_PRJ_BITS) as f64;
+      let div1 =
+        (h[1][1] * c[0] - h[0][1] * c[1]) * (1 << SGRPROJ_PRJ_BITS) as f64;
+      let div2 =
+        (h[0][0] * c[1] - h[1][0] * c[0]) * (1 << SGRPROJ_PRJ_BITS) as f64;
 
       ((div1 / det).round() as i32, (div2 / det).round() as i32)
     }
   };
-  (clamp(xq0, SGRPROJ_XQD_MIN[0] as i32, SGRPROJ_XQD_MAX[0] as i32) as i8,
-   clamp(xq1, SGRPROJ_XQD_MIN[1] as i32, SGRPROJ_XQD_MAX[1] as i32) as i8)
+  (
+    clamp(xq0, SGRPROJ_XQD_MIN[0] as i32, SGRPROJ_XQD_MAX[0] as i32) as i8,
+    clamp(xq1, SGRPROJ_XQD_MIN[1] as i32, SGRPROJ_XQD_MAX[1] as i32) as i8,
+  )
 }
 
-fn wiener_stripe_filter<T: Pixel>(coeffs: [[i8; 3]; 2], fi: &FrameInvariants<T>,
-                                  crop_w: usize, crop_h: usize,
-                                  stripe_w: usize, stripe_h: usize,
-                                  stripe_x: usize, stripe_y: isize,
-                                  cdeffed: &Plane<T>, deblocked: &Plane<T>, out: &mut Plane<T>) {
+fn wiener_stripe_filter<T: Pixel>(
+  coeffs: [[i8; 3]; 2], fi: &FrameInvariants<T>, crop_w: usize, crop_h: usize,
+  stripe_w: usize, stripe_h: usize, stripe_x: usize, stripe_y: isize,
+  cdeffed: &Plane<T>, deblocked: &Plane<T>, out: &mut Plane<T>,
+) {
   let bit_depth = fi.sequence.bit_depth;
-  let round_h = if bit_depth == 12 {5} else {3};
-  let round_v = if bit_depth == 12 {9} else {11};
+  let round_h = if bit_depth == 12 { 5 } else { 3 };
+  let round_v = if bit_depth == 12 { 9 } else { 11 };
   let offset = 1 << (bit_depth + WIENER_BITS - round_h - 1);
   let limit = (1 << (bit_depth + 1 + WIENER_BITS - round_h)) - 1;
 
-  let mut work: [i32; SB_SIZE+7] = [0; SB_SIZE+7];
-  let vfilter: [i32; 7] = [ coeffs[0][0] as i32,
-                            coeffs[0][1] as i32,
-                            coeffs[0][2] as i32,
-                            128 - 2 * (coeffs[0][0] as i32 +
-                                       coeffs[0][1] as i32 +
-                                       coeffs[0][2] as i32 ),
-                            coeffs[0][2] as i32,
-                            coeffs[0][1] as i32,
-                            coeffs[0][0] as i32];
-  let hfilter: [i32; 7] = [ coeffs[1][0] as i32,
-                            coeffs[1][1] as i32,
-                            coeffs[1][2] as i32,
-                            128 - 2 * (coeffs[1][0] as i32 +
-                                       coeffs[1][1] as i32 +
-                                       coeffs[1][2] as i32),
-                            coeffs[1][2] as i32,
-                            coeffs[1][1] as i32,
-                            coeffs[1][0] as i32];
+  let mut work: [i32; SB_SIZE + 7] = [0; SB_SIZE + 7];
+  let vfilter: [i32; 7] = [
+    coeffs[0][0] as i32,
+    coeffs[0][1] as i32,
+    coeffs[0][2] as i32,
+    128
+      - 2 * (coeffs[0][0] as i32 + coeffs[0][1] as i32 + coeffs[0][2] as i32),
+    coeffs[0][2] as i32,
+    coeffs[0][1] as i32,
+    coeffs[0][0] as i32,
+  ];
+  let hfilter: [i32; 7] = [
+    coeffs[1][0] as i32,
+    coeffs[1][1] as i32,
+    coeffs[1][2] as i32,
+    128
+      - 2 * (coeffs[1][0] as i32 + coeffs[1][1] as i32 + coeffs[1][2] as i32),
+    coeffs[1][2] as i32,
+    coeffs[1][1] as i32,
+    coeffs[1][0] as i32,
+  ];
 
   // unlike x, our y can be negative to start as the first stripe
   // starts off the top of the frame by 8 pixels, and can also run off the end of the frame
-  let start_wi = if stripe_y < 0 {-stripe_y} else {0} as usize;
-  let start_yi = if stripe_y < 0 {0} else {stripe_y} as usize;
-  let end_i = cmp::max(0, if stripe_h as isize + stripe_y > crop_h as isize {
-    crop_h as isize - stripe_y - start_wi as isize
-  } else {
-    stripe_h as isize - start_wi as isize
-  }) as usize;
+  let start_wi = if stripe_y < 0 { -stripe_y } else { 0 } as usize;
+  let start_yi = if stripe_y < 0 { 0 } else { stripe_y } as usize;
+  let end_i = cmp::max(
+    0,
+    if stripe_h as isize + stripe_y > crop_h as isize {
+      crop_h as isize - stripe_y - start_wi as isize
+    } else {
+      stripe_h as isize - start_wi as isize
+    },
+  ) as usize;
 
-  let mut out_slice = out.mut_slice(PlaneOffset{x: 0, y: start_yi as isize});
+  let mut out_slice =
+    out.mut_slice(PlaneOffset { x: 0, y: start_yi as isize });
 
-  for xi in stripe_x..stripe_x+stripe_w {
+  for xi in stripe_x..stripe_x + stripe_w {
     let n = cmp::min(7, crop_w as isize + 3 - xi as isize);
     for yi in stripe_y - 3..stripe_y + stripe_h as isize + 4 {
       let src_plane: &Plane<T>;
       let mut acc = 0;
       let ly;
       if yi < stripe_y {
-        ly = cmp::max(clamp(yi, 0, crop_h as isize - 1), stripe_y - 2) as usize;
+        ly =
+          cmp::max(clamp(yi, 0, crop_h as isize - 1), stripe_y - 2) as usize;
         src_plane = deblocked;
-      } else if yi < stripe_y+stripe_h as isize {
+      } else if yi < stripe_y + stripe_h as isize {
         ly = clamp(yi, 0, crop_h as isize - 1) as usize;
         src_plane = cdeffed;
       } else {
-        ly = cmp::min(clamp(yi, 0, crop_h as isize - 1), stripe_y + stripe_h as isize + 1) as usize;
+        ly = cmp::min(
+          clamp(yi, 0, crop_h as isize - 1),
+          stripe_y + stripe_h as isize + 1,
+        ) as usize;
         src_plane = deblocked;
       }
 
       for i in 0..3 - xi as isize {
         acc += hfilter[i as usize] * i32::cast_from(src_plane.p(0, ly));
       }
-      for i in cmp::max(0,3 - (xi as isize))..n {
-        acc += hfilter[i as usize] * i32::cast_from(src_plane.p((xi as isize + i - 3) as usize, ly));
+      for i in cmp::max(0, 3 - (xi as isize))..n {
+        acc += hfilter[i as usize]
+          * i32::cast_from(src_plane.p((xi as isize + i - 3) as usize, ly));
       }
       for i in n..7 {
-        acc += hfilter[i as usize] * i32::cast_from(src_plane.p(crop_w - 1, ly));
+        acc +=
+          hfilter[i as usize] * i32::cast_from(src_plane.p(crop_w - 1, ly));
       }
 
       acc = (acc + (1 << round_h >> 1)) >> round_h;
-      work[(yi-stripe_y+3) as usize] = clamp(acc, -offset, limit-offset);
+      work[(yi - stripe_y + 3) as usize] = clamp(acc, -offset, limit - offset);
     }
 
-    for (wi, dst) in (start_wi..start_wi+end_i).zip(out_slice.rows_iter_mut().map(|row| &mut row[xi]).take(end_i)) {
+    for (wi, dst) in (start_wi..start_wi + end_i)
+      .zip(out_slice.rows_iter_mut().map(|row| &mut row[xi]).take(end_i))
+    {
       let mut acc = 0;
-      for (i,src) in (0..7).zip(work[wi..wi+7].iter_mut()) {
+      for (i, src) in (0..7).zip(work[wi..wi + 7].iter_mut()) {
         acc += vfilter[i] * *src;
       }
-      *dst = T::cast_from(clamp((acc + (1 << round_v >> 1)) >> round_v, 0, (1 << bit_depth) - 1));
+      *dst = T::cast_from(clamp(
+        (acc + (1 << round_v >> 1)) >> round_v,
+        0,
+        (1 << bit_depth) - 1,
+      ));
     }
   }
 }
@@ -890,9 +1064,7 @@ pub struct RestorationUnit {
 
 impl RestorationUnit {
   pub fn default() -> RestorationUnit {
-    RestorationUnit {
-      filter: RestorationFilter::default(),
-    }
+    RestorationUnit { filter: RestorationFilter::default() }
   }
 }
 
@@ -951,13 +1123,15 @@ pub struct RestorationPlane {
 #[derive(Clone, Default)]
 pub struct RestorationPlaneOffset {
   pub row: usize,
-  pub col: usize
+  pub col: usize,
 }
 
 impl RestorationPlane {
-  pub fn new(lrf_type: u8, unit_size: usize, sb_shift: usize, stripe_decimate: usize,
-             cols: usize, rows: usize) -> RestorationPlane {
-    let stripe_height = if stripe_decimate != 0 {32} else {64};
+  pub fn new(
+    lrf_type: u8, unit_size: usize, sb_shift: usize, stripe_decimate: usize,
+    cols: usize, rows: usize,
+  ) -> RestorationPlane {
+    let stripe_height = if stripe_decimate != 0 { 32 } else { 64 };
     RestorationPlane {
       cfg: RestorationPlaneConfig {
         lrf_type,
@@ -974,14 +1148,21 @@ impl RestorationPlane {
   // Stripes are always 64 pixels high in a non-subsampled
   // frame, and decimated from 64 pixels in chroma.  When
   // filtering, they are not co-located on Y with superblocks.
-  fn restoration_unit_index_by_stripe(&self, stripenum: usize, rux: usize) -> (usize, usize) {
+  fn restoration_unit_index_by_stripe(
+    &self, stripenum: usize, rux: usize,
+  ) -> (usize, usize) {
     (
       cmp::min(rux, self.cfg.cols - 1),
-      cmp::min(stripenum * self.cfg.stripe_height / self.cfg.unit_size, self.cfg.rows - 1),
+      cmp::min(
+        stripenum * self.cfg.stripe_height / self.cfg.unit_size,
+        self.cfg.rows - 1,
+      ),
     )
   }
 
-  pub fn restoration_unit_by_stripe(&self, stripenum: usize, rux: usize) -> &RestorationUnit {
+  pub fn restoration_unit_by_stripe(
+    &self, stripenum: usize, rux: usize,
+  ) -> &RestorationUnit {
     let (x, y) = self.restoration_unit_index_by_stripe(stripenum, rux);
     &self.units[y][x]
   }
@@ -989,19 +1170,19 @@ impl RestorationPlane {
 
 #[derive(Clone, Debug)]
 pub struct RestorationState {
-  pub planes: [RestorationPlane; PLANES]
+  pub planes: [RestorationPlane; PLANES],
 }
 
 impl RestorationState {
   pub fn new<T: Pixel>(fi: &FrameInvariants<T>, input: &Frame<T>) -> Self {
     let PlaneConfig { xdec, ydec, .. } = input.planes[1].cfg;
-    let stripe_uv_decimate = if xdec>0 && ydec>0 {1} else {0};
+    let stripe_uv_decimate = if xdec > 0 && ydec > 0 { 1 } else { 0 };
     // Currrently opt for smallest possible restoration unit size (1
     // superblock) This is *temporary*.  Counting on it will break
     // very shortly; the 1-superblock hardwiring is only until the
     // upper level encoder is capable of dealing with the delayed
     // writes that RU size > SB size will require.
-    let lrf_y_shift = if fi.sequence.use_128x128_superblock {1} else {2};
+    let lrf_y_shift = if fi.sequence.use_128x128_superblock { 1 } else { 2 };
     let lrf_uv_shift = lrf_y_shift + stripe_uv_decimate;
 
     // derive the rest
@@ -1009,25 +1190,45 @@ impl RestorationState {
     let uv_unit_log2 = RESTORATION_TILESIZE_MAX_LOG2 - lrf_uv_shift;
     let y_unit_size = 1 << y_unit_log2;
     let uv_unit_size = 1 << uv_unit_log2;
-    let y_sb_log2 = if fi.sequence.use_128x128_superblock {7} else {6};
+    let y_sb_log2 = if fi.sequence.use_128x128_superblock { 7 } else { 6 };
     let uv_sb_log2 = y_sb_log2 - stripe_uv_decimate;
     let cols = ((fi.width + (y_unit_size >> 1)) / y_unit_size).max(1);
     let rows = ((fi.height + (y_unit_size >> 1)) / y_unit_size).max(1);
 
     RestorationState {
       planes: [
-        RestorationPlane::new(RESTORE_SWITCHABLE, y_unit_size, y_unit_log2 - y_sb_log2,
-                              0, cols, rows),
-        RestorationPlane::new(RESTORE_SWITCHABLE, uv_unit_size, uv_unit_log2 - uv_sb_log2,
-                              stripe_uv_decimate, cols, rows),
-        RestorationPlane::new(RESTORE_SWITCHABLE, uv_unit_size, uv_unit_log2 - uv_sb_log2,
-                              stripe_uv_decimate, cols, rows)
+        RestorationPlane::new(
+          RESTORE_SWITCHABLE,
+          y_unit_size,
+          y_unit_log2 - y_sb_log2,
+          0,
+          cols,
+          rows,
+        ),
+        RestorationPlane::new(
+          RESTORE_SWITCHABLE,
+          uv_unit_size,
+          uv_unit_log2 - uv_sb_log2,
+          stripe_uv_decimate,
+          cols,
+          rows,
+        ),
+        RestorationPlane::new(
+          RESTORE_SWITCHABLE,
+          uv_unit_size,
+          uv_unit_log2 - uv_sb_log2,
+          stripe_uv_decimate,
+          cols,
+          rows,
+        ),
       ],
     }
   }
 
-  pub fn lrf_filter_frame<T: Pixel>(&mut self, out: &mut Frame<T>, pre_cdef: &Frame<T>,
-                                    fi: &FrameInvariants<T>) {
+  pub fn lrf_filter_frame<T: Pixel>(
+    &mut self, out: &mut Frame<T>, pre_cdef: &Frame<T>,
+    fi: &FrameInvariants<T>,
+  ) {
     let cdeffed = out.clone();
 
     // unlike the other loop filters that operate over the padded
@@ -1053,7 +1254,7 @@ impl RestorationState {
           (
             start as isize,
             // one past, unlike spec
-            (64 >> ydec).min(crop_h - start)
+            (64 >> ydec).min(crop_h - start),
           )
         };
 
@@ -1061,35 +1262,46 @@ impl RestorationState {
         for rux in 0..rp.cfg.cols {
           // stripe x pixel locations must be clipped to frame, last may need to stretch
           let x = rux * rp.cfg.unit_size;
-          let size = if rux == rp.cfg.cols - 1 {
-            crop_w - x
-          } else {
-            rp.cfg.unit_size
-          };
+          let size =
+            if rux == rp.cfg.cols - 1 { crop_w - x } else { rp.cfg.unit_size };
           let ru = rp.restoration_unit_by_stripe(si, rux);
           match ru.filter {
-            RestorationFilter::Wiener{coeffs} => {
-              wiener_stripe_filter(coeffs, fi,
-                                   crop_w, crop_h,
-                                   size, stripe_size,
-                                   x, stripe_start_y,
-                                   &cdeffed.planes[pli], &pre_cdef.planes[pli],
-                                   &mut out.planes[pli]);
-            },
-            RestorationFilter::Sgrproj{set, xqd} => {
-              if !fi.sequence.enable_cdef { continue; }
+            RestorationFilter::Wiener { coeffs } => {
+              wiener_stripe_filter(
+                coeffs,
+                fi,
+                crop_w,
+                crop_h,
+                size,
+                stripe_size,
+                x,
+                stripe_start_y,
+                &cdeffed.planes[pli],
+                &pre_cdef.planes[pli],
+                &mut out.planes[pli],
+              );
+            }
+            RestorationFilter::Sgrproj { set, xqd } => {
+              if !fi.sequence.enable_cdef {
+                continue;
+              }
 
-              sgrproj_stripe_filter(set, xqd, fi,
-                                    crop_w - x,
-                                    (crop_h as isize - stripe_start_y) as usize,
-                                    size, stripe_size,
-                                    &cdeffed.planes[pli].slice(PlaneOffset{x: x as isize,
-                                                                           y: stripe_start_y}),
-                                    &pre_cdef.planes[pli].slice(PlaneOffset{x: x as isize,
-                                                                            y: stripe_start_y}),
-                                    &mut out.planes[pli].mut_slice(PlaneOffset{x: x as isize,
-                                                                               y: stripe_start_y}));
-            },
+              sgrproj_stripe_filter(
+                set,
+                xqd,
+                fi,
+                crop_w - x,
+                (crop_h as isize - stripe_start_y) as usize,
+                size,
+                stripe_size,
+                &cdeffed.planes[pli]
+                  .slice(PlaneOffset { x: x as isize, y: stripe_start_y }),
+                &pre_cdef.planes[pli]
+                  .slice(PlaneOffset { x: x as isize, y: stripe_start_y }),
+                &mut out.planes[pli]
+                  .mut_slice(PlaneOffset { x: x as isize, y: stripe_start_y }),
+              );
+            }
             RestorationFilter::None => {
               // do nothing
             }

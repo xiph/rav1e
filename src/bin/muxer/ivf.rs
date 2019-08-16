@@ -13,11 +13,8 @@ pub struct IvfMuxer {
 
 impl Muxer for IvfMuxer {
   fn write_header(
-    &mut self,
-    width: usize,
-    height: usize,
-    framerate_num: usize,
-    framerate_den: usize
+    &mut self, width: usize, height: usize, framerate_num: usize,
+    framerate_den: usize,
   ) {
     write_ivf_header(
       &mut self.output,
@@ -39,12 +36,14 @@ impl Muxer for IvfMuxer {
 
 impl IvfMuxer {
   pub fn open(path: &str) -> Result<Box<dyn Muxer>, CliError> {
-
     let ivf = IvfMuxer {
       output: match path {
         "-" => Box::new(std::io::stdout()),
-        f => Box::new(File::create(&f).map_err(|e| e.context("Cannot open output file"))?)
-      }
+        f => Box::new(
+          File::create(&f)
+            .map_err(|e| e.context("Cannot open output file"))?,
+        ),
+      },
     };
     Ok(Box::new(ivf))
   }

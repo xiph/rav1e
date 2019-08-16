@@ -173,10 +173,7 @@ impl TileBlocksMut<'_> {
 
   #[inline(always)]
   pub fn set_mode(
-    &mut self,
-    bo: TileBlockOffset,
-    bsize: BlockSize,
-    mode: PredictionMode,
+    &mut self, bo: TileBlockOffset, bsize: BlockSize, mode: PredictionMode,
   ) {
     self.for_each(bo, bsize, |block| block.mode = mode);
   }
@@ -194,45 +191,35 @@ impl TileBlocksMut<'_> {
 
   #[inline(always)]
   pub fn set_tx_size(
-    &mut self,
-    bo: TileBlockOffset,
-    bsize: BlockSize,
-    tx_size: TxSize,
+    &mut self, bo: TileBlockOffset, bsize: BlockSize, tx_size: TxSize,
   ) {
     self.for_each(bo, bsize, |block| block.txsize = tx_size);
   }
 
   #[inline(always)]
-  pub fn set_skip(&mut self, bo: TileBlockOffset, bsize: BlockSize, skip: bool) {
+  pub fn set_skip(
+    &mut self, bo: TileBlockOffset, bsize: BlockSize, skip: bool,
+  ) {
     self.for_each(bo, bsize, |block| block.skip = skip);
   }
 
   #[inline(always)]
   pub fn set_segmentation_idx(
-    &mut self,
-    bo: TileBlockOffset,
-    bsize: BlockSize,
-    idx: u8,
+    &mut self, bo: TileBlockOffset, bsize: BlockSize, idx: u8,
   ) {
     self.for_each(bo, bsize, |block| block.segmentation_idx = idx);
   }
 
   #[inline(always)]
   pub fn set_ref_frames(
-    &mut self,
-    bo: TileBlockOffset,
-    bsize: BlockSize,
-    r: [RefType; 2],
+    &mut self, bo: TileBlockOffset, bsize: BlockSize, r: [RefType; 2],
   ) {
     self.for_each(bo, bsize, |block| block.ref_frames = r);
   }
 
   #[inline(always)]
   pub fn set_motion_vectors(
-    &mut self,
-    bo: TileBlockOffset,
-    bsize: BlockSize,
-    mvs: [MotionVector; 2],
+    &mut self, bo: TileBlockOffset, bsize: BlockSize, mvs: [MotionVector; 2],
   ) {
     self.for_each(bo, bsize, |block| block.mv = mvs);
   }

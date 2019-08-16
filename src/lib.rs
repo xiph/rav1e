@@ -21,60 +21,58 @@ mod capi;
 mod dist;
 mod ec;
 mod partition;
-mod transform;
-mod quantize;
 mod predict;
+mod quantize;
 mod rdo;
 mod rdo_tables;
+mod transform;
 #[macro_use]
 mod util;
-mod context;
-mod entropymode;
-mod token_cdfs;
-mod deblock;
-mod segmentation;
 mod cdef;
+mod context;
+mod deblock;
+mod encoder;
+mod entropymode;
 mod lrf;
 mod lrf_simd;
-mod encoder;
 mod mc;
 mod me;
 mod metrics;
+mod rate;
+mod recon_intra;
 mod scan_order;
 mod scenechange;
-mod rate;
+mod segmentation;
 mod tiling;
-mod recon_intra;
+mod token_cdfs;
 
 mod api;
-mod header;
 mod frame;
+mod header;
 
 use crate::encoder::*;
 
-pub use crate::api::{Context, Config, Packet, EncoderStatus};
+pub use crate::api::{Config, Context, EncoderStatus, Packet};
 pub use crate::frame::Frame;
 pub use crate::util::{CastFromPrimitive, Pixel};
 
 pub mod prelude {
   pub use crate::api::*;
+  pub use crate::encoder::Tune;
   pub use crate::frame::Frame;
   pub use crate::frame::FrameParameters;
   pub use crate::frame::FrameTypeOverride;
   pub use crate::frame::Plane;
   pub use crate::frame::PlaneConfig;
-  pub use crate::encoder::Tune;
   pub use crate::partition::BlockSize;
   pub use crate::util::{CastFromPrimitive, Pixel};
 }
 
 /// Basic data structures
 pub mod data {
+  pub use crate::api::{EncoderStatus, FrameType, Packet, Point, Rational};
   pub use crate::frame::Frame;
   pub use crate::frame::FrameParameters;
-  pub use crate::api::{
-    Packet, Point, Rational, FrameType, EncoderStatus
-  };
   pub use crate::util::{CastFromPrimitive, Pixel};
 }
 
@@ -86,10 +84,9 @@ pub mod color {
 /// Encoder configuration and settings
 pub mod config {
   pub use crate::api::{
-    Config, EncoderConfig, SpeedSettings, PredictionModesSetting,
+    Config, EncoderConfig, PredictionModesSetting, SpeedSettings,
   };
 }
-
 
 /// Version information
 ///
@@ -177,22 +174,48 @@ pub mod version {
     format!("{} ({})", short(), semver)
   }
 }
-#[cfg(all(test, any(feature="decode_test", feature="decode_test_dav1d")))]
+#[cfg(all(test, any(feature = "decode_test", feature = "decode_test_dav1d")))]
 mod test_encode_decode;
 
-#[cfg(feature="bench")]
+#[cfg(feature = "bench")]
 pub mod bench {
-  pub mod api { pub use crate::api::*; }
-  pub mod cdef { pub use crate::cdef::*; }
-  pub mod context { pub use crate::context::*; }
-  pub mod dist { pub use crate::dist::*; }
-  pub mod ec { pub use crate::ec::*; }
-  pub mod encoder { pub use crate::encoder::*; }
-  pub mod partition { pub use crate::partition::*; }
-  pub mod frame { pub use crate::frame::*; }
-  pub mod predict { pub use crate::predict::*; }
-  pub mod rdo { pub use crate::rdo::*; }
-  pub mod tiling { pub use crate::tiling::*; }
-  pub mod transform { pub use crate::transform::*; }
-  pub mod util { pub use crate::util::*; }
+  pub mod api {
+    pub use crate::api::*;
+  }
+  pub mod cdef {
+    pub use crate::cdef::*;
+  }
+  pub mod context {
+    pub use crate::context::*;
+  }
+  pub mod dist {
+    pub use crate::dist::*;
+  }
+  pub mod ec {
+    pub use crate::ec::*;
+  }
+  pub mod encoder {
+    pub use crate::encoder::*;
+  }
+  pub mod partition {
+    pub use crate::partition::*;
+  }
+  pub mod frame {
+    pub use crate::frame::*;
+  }
+  pub mod predict {
+    pub use crate::predict::*;
+  }
+  pub mod rdo {
+    pub use crate::rdo::*;
+  }
+  pub mod tiling {
+    pub use crate::tiling::*;
+  }
+  pub mod transform {
+    pub use crate::transform::*;
+  }
+  pub mod util {
+    pub use crate::util::*;
+  }
 }

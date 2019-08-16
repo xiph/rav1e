@@ -12,17 +12,17 @@ use super::Muxer;
 #[cfg(feature = "avformat-sys")]
 use super::avformat::AvformatMuxer;
 
-pub struct Mp4Muxer {
-
-}
+pub struct Mp4Muxer {}
 
 #[allow(unused_variables)]
 impl Mp4Muxer {
   pub fn open(path: &str) -> Box<dyn Muxer> {
-    #[cfg(feature = "avformat-sys")] {
+    #[cfg(feature = "avformat-sys")]
+    {
       AvformatMuxer::open(path)
     }
-    #[cfg(not(feature = "avformat-sys"))] {
+    #[cfg(not(feature = "avformat-sys"))]
+    {
       panic!("need avformat-sys for .mp4, please build with --features=\"avformat-sys\", or you can use .ivf extension");
     }
   }

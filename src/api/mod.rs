@@ -17,13 +17,15 @@ use num_derive::*;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use serde_derive::{Deserialize, Serialize};
 
-use crate::context::{FrameBlocks, TileSuperBlockOffset, SuperBlockOffset, MI_SIZE};
+use crate::context::*;
+use crate::context::{
+  FrameBlocks, SuperBlockOffset, TileSuperBlockOffset, MI_SIZE,
+};
 use crate::dist::get_satd;
 use crate::encoder::*;
 use crate::frame::*;
 use crate::metrics::calculate_frame_psnr;
 use crate::partition::*;
-use crate::context::*;
 use crate::predict::PredictionMode;
 use crate::rate::RCState;
 use crate::rate::FRAME_NSUBTYPES;
@@ -45,7 +47,7 @@ use std::{cmp, fmt, io};
 #[repr(C)]
 pub struct Rational {
   pub num: u64,
-  pub den: u64
+  pub den: u64,
 }
 
 impl Rational {
@@ -54,10 +56,7 @@ impl Rational {
   }
 
   pub fn from_reciprocal(reciprocal: Self) -> Self {
-    Rational {
-      num: reciprocal.den,
-      den: reciprocal.num,
-    }
+    Rational { num: reciprocal.den, den: reciprocal.num }
   }
 
   pub fn as_f64(self) -> f64 {
@@ -111,7 +110,7 @@ pub struct EncoderConfig {
   pub rdo_lookahead_frames: u64,
   pub speed_settings: SpeedSettings,
   pub show_psnr: bool,
-  pub train_rdo: bool
+  pub train_rdo: bool,
 }
 
 /// Default preset for EncoderConfig: it is a balance between quality and speed.
@@ -161,7 +160,7 @@ impl EncoderConfig {
       rdo_lookahead_frames: 40,
       speed_settings: SpeedSettings::from_preset(speed),
       show_psnr: false,
-      train_rdo: false
+      train_rdo: false,
     }
   }
 
@@ -186,7 +185,7 @@ pub struct SpeedSettings {
   pub no_scene_detection: bool,
   pub diamond_me: bool,
   pub cdef: bool,
-  pub quantizer_rdo: bool
+  pub quantizer_rdo: bool,
 }
 
 /// Default values for the speed settings.
@@ -206,7 +205,7 @@ impl Default for SpeedSettings {
       no_scene_detection: false,
       diamond_me: false,
       cdef: false,
-      quantizer_rdo: false
+      quantizer_rdo: false,
     }
   }
 }
@@ -240,7 +239,7 @@ impl SpeedSettings {
       no_scene_detection: Self::no_scene_detection_preset(speed),
       diamond_me: Self::diamond_me_preset(speed),
       cdef: Self::cdef_preset(speed),
-      quantizer_rdo: Self::quantizer_rdo_preset(speed)
+      quantizer_rdo: Self::quantizer_rdo_preset(speed),
     }
   }
 
@@ -334,7 +333,7 @@ pub enum FrameType {
   KEY,
   INTER,
   INTRA_ONLY,
-  SWITCH
+  SWITCH,
 }
 
 impl fmt::Display for FrameType {
@@ -344,7 +343,7 @@ impl fmt::Display for FrameType {
       KEY => write!(f, "Key frame"),
       INTER => write!(f, "Inter frame"),
       INTRA_ONLY => write!(f, "Intra only frame"),
-      SWITCH => write!(f, "Switching frame")
+      SWITCH => write!(f, "Switching frame"),
     }
   }
 }
@@ -353,17 +352,15 @@ impl fmt::Display for FrameType {
 pub enum PredictionModesSetting {
   Simple,
   ComplexKeyframes,
-  ComplexAll
+  ComplexAll,
 }
-
-
 
 /// Contains all the encoder configuration
 #[derive(Clone, Debug, Default)]
 pub struct Config {
   pub enc: EncoderConfig,
   /// The number of threads in the threadpool.
-  pub threads: usize
+  pub threads: usize,
 }
 
 impl Config {
@@ -392,12 +389,7 @@ impl Config {
 
     let inner = ContextInner::new(&config);
 
-    Context {
-      is_flushing: false,
-      inner,
-      pool,
-      config
-    }
+    Context { is_flushing: false, inner, pool, config }
   }
 }
 
@@ -417,7 +409,7 @@ pub(crate) struct InterConfig {
   pub(crate) group_input_len: u64,
   /// Number of output frames in group.
   /// This includes both hidden frames and "show existing frame" frames.
-  group_output_len: u64
+  group_output_len: u64,
 }
 
 impl InterConfig {
@@ -446,7 +438,7 @@ impl InterConfig {
       multiref: reorder || enc_config.speed_settings.multiref,
       pyramid_depth,
       group_input_len,
-      group_output_len
+      group_output_len,
     }
   }
 
@@ -454,7 +446,7 @@ impl InterConfig {
   ///  frame number of the frame in the current keyframe gop.
   /// When re-ordering is disabled, this always returns 0.
   pub(crate) fn get_idx_in_group_output(
-    &self, output_frameno_in_gop: u64
+    &self, output_frameno_in_gop: u64,
   ) -> u64 {
     // The first frame in the GOP should be a keyframe and is not re-ordered,
     //  so we should not be calling this function on it.
@@ -466,7 +458,7 @@ impl InterConfig {
   ///  frame in the current keyframe gop and the index of that output frame
   ///  in its re-ordering gorup.
   pub(crate) fn get_order_hint(
-    &self, output_frameno_in_gop: u64, idx_in_group_output: u64
+    &self, output_frameno_in_gop: u64, idx_in_group_output: u64,
   ) -> u32 {
     // The first frame in the GOP should be a keyframe, but currently this
     //  function only handles inter frames.
@@ -498,7 +490,7 @@ impl InterConfig {
       // TODO: This only works with pyramid_depth <= 2.
       pos_to_lvl(
         idx_in_group_output - self.pyramid_depth + 1,
-        self.pyramid_depth
+        self.pyramid_depth,
       )
     }
   }
@@ -519,7 +511,7 @@ impl InterConfig {
   }
 
   pub(crate) fn get_show_existing_frame(
-    &self, idx_in_group_output: u64
+    &self, idx_in_group_output: u64,
   ) -> bool {
     // The self.reorder test here is redundant, but short-circuits the rest,
     //  avoiding a bunch of work when it's false.
@@ -530,7 +522,7 @@ impl InterConfig {
   }
 
   pub(crate) fn get_input_frameno(
-    &self, output_frameno_in_gop: u64, gop_input_frameno_start: u64
+    &self, output_frameno_in_gop: u64, gop_input_frameno_start: u64,
   ) -> u64 {
     if output_frameno_in_gop == 0 {
       gop_input_frameno_start
@@ -583,7 +575,7 @@ pub(crate) struct ContextInner<T: Pixel> {
   /// The next `input_frameno` to be processed by lookahead.
   next_lookahead_frame: u64,
   /// The next `output_frameno` to be computed by lookahead.
-  next_lookahead_output_frameno: u64
+  next_lookahead_output_frameno: u64,
 }
 
 pub struct Context<T: Pixel> {
@@ -612,7 +604,7 @@ pub enum EncoderStatus {
   /// A frame was encoded in the first pass of a 2-pass encode, but its stats
   /// data was not retrieved with twopass_out(), or not enough stats data was
   /// provided in the second pass of a 2-pass encode to encode the next frame.
-  NotReady
+  NotReady,
 }
 
 pub struct Packet<T: Pixel> {
@@ -626,7 +618,7 @@ pub struct Packet<T: Pixel> {
   pub input_frameno: u64,
   pub frame_type: FrameType,
   /// PSNR for Y, U, and V planes
-  pub psnr: Option<(f64, f64, f64)>
+  pub psnr: Option<(f64, f64, f64)>,
 }
 
 impl<T: Pixel> fmt::Display for Packet<T> {
@@ -657,13 +649,13 @@ impl<T: Pixel> IntoFrame<T> for Arc<Frame<T>> {
   }
 }
 
-impl <T: Pixel> IntoFrame<T> for (Arc<Frame<T>>, FrameParameters) {
+impl<T: Pixel> IntoFrame<T> for (Arc<Frame<T>>, FrameParameters) {
   fn into(self) -> (Option<Arc<Frame<T>>>, Option<FrameParameters>) {
     (Some(self.0), Some(self.1))
   }
 }
 
-impl <T: Pixel> IntoFrame<T> for (Arc<Frame<T>>, Option<FrameParameters>) {
+impl<T: Pixel> IntoFrame<T> for (Arc<Frame<T>>, Option<FrameParameters>) {
   fn into(self) -> (Option<Arc<Frame<T>>>, Option<FrameParameters>) {
     (Some(self.0), self.1)
   }
@@ -674,10 +666,9 @@ impl<T: Pixel> Context<T> {
     Arc::new(Frame::new(
       self.config.width,
       self.config.height,
-      self.config.chroma_sampling
+      self.config.chroma_sampling,
     ))
   }
-
 
   /// Send the information to the encoder
   ///
@@ -706,7 +697,7 @@ impl<T: Pixel> Context<T> {
   /// parameters set an impossible constraint.
   pub fn send_frame<F>(&mut self, frame: F) -> Result<(), EncoderStatus>
   where
-    F: IntoFrame<T>
+    F: IntoFrame<T>,
   {
     let (frame, params) = frame.into();
 
@@ -718,7 +709,7 @@ impl<T: Pixel> Context<T> {
       self.is_flushing = true;
       self.inner.compute_lookahead_data();
     } else if self.is_flushing {
-      return Err(EncoderStatus::EnoughData)
+      return Err(EncoderStatus::EnoughData);
     }
 
     self.inner.send_frame(frame, params)
@@ -841,18 +832,17 @@ impl<T: Pixel> ContextInner<T> {
         maybe_ac_qi_max,
         enc.min_quantizer,
         enc.max_key_frame_interval as i32,
-        enc.reservoir_frame_delay
+        enc.reservoir_frame_delay,
       ),
       maybe_prev_log_base_q: None,
       next_lookahead_frame: 0,
-      next_lookahead_output_frameno: 0
+      next_lookahead_output_frameno: 0,
     }
   }
 
-  pub fn send_frame(&mut self,
-                    frame: Option<Arc<Frame<T>>>,
-                    params: Option<FrameParameters>) -> Result<(), EncoderStatus>
-  {
+  pub fn send_frame(
+    &mut self, frame: Option<Arc<Frame<T>>>, params: Option<FrameParameters>,
+  ) -> Result<(), EncoderStatus> {
     let input_frameno = self.frame_count;
     if frame.is_some() {
       self.frame_count += 1;
@@ -885,7 +875,8 @@ impl<T: Pixel> ContextInner<T> {
   /// in order for frame queue lookahead to be full.
   fn needs_more_frame_q_lookahead(&self, input_frameno: u64) -> bool {
     let lookahead_end = self.frame_q.keys().last().cloned().unwrap_or(0);
-    let frames_needed = input_frameno + self.inter_cfg.keyframe_lookahead_distance() + 1;
+    let frames_needed =
+      input_frameno + self.inter_cfg.keyframe_lookahead_distance() + 1;
     lookahead_end < frames_needed && self.needs_more_frames(lookahead_end)
   }
 
@@ -893,24 +884,29 @@ impl<T: Pixel> ContextInner<T> {
   /// in order for FI lookahead to be full.
   fn needs_more_fi_lookahead(&self) -> bool {
     let ready_frames = self.get_rdo_lookahead_frames().count() as u64;
-    ready_frames < self.config.rdo_lookahead_frames + 1 && self.needs_more_frames(self.next_lookahead_frame)
+    ready_frames < self.config.rdo_lookahead_frames + 1
+      && self.needs_more_frames(self.next_lookahead_frame)
   }
 
   pub fn needs_more_frames(&self, frame_count: u64) -> bool {
     self.limit == 0 || frame_count < self.limit
   }
 
-  fn get_rdo_lookahead_frames(&self) -> impl Iterator<Item=(&u64, &FrameInvariants<T>)> {
+  fn get_rdo_lookahead_frames(
+    &self,
+  ) -> impl Iterator<Item = (&u64, &FrameInvariants<T>)> {
     self
       .frame_invariants
       .iter()
-      .skip_while(move |(&output_frameno, _)| output_frameno < self.output_frameno)
+      .skip_while(move |(&output_frameno, _)| {
+        output_frameno < self.output_frameno
+      })
       .filter(|(_, fi)| !fi.invalid && !fi.show_existing_frame)
       .take(self.config.rdo_lookahead_frames as usize + 1)
   }
 
   fn next_keyframe_input_frameno(
-    &self, gop_input_frameno_start: u64, ignore_limit: bool
+    &self, gop_input_frameno_start: u64, ignore_limit: bool,
   ) -> u64 {
     let next_detected = self
       .keyframes
@@ -929,7 +925,7 @@ impl<T: Pixel> ContextInner<T> {
   }
 
   fn set_frame_properties(
-    &mut self, output_frameno: u64
+    &mut self, output_frameno: u64,
   ) -> Result<(), EncoderStatus> {
     let fi = self.build_frame_properties(output_frameno)?;
     self.frame_invariants.insert(output_frameno, fi);
@@ -938,7 +934,7 @@ impl<T: Pixel> ContextInner<T> {
   }
 
   fn build_frame_properties(
-    &mut self, output_frameno: u64
+    &mut self, output_frameno: u64,
   ) -> Result<FrameInvariants<T>, EncoderStatus> {
     let (prev_gop_output_frameno_start, prev_gop_input_frameno_start) =
       if output_frameno == 0 {
@@ -946,7 +942,7 @@ impl<T: Pixel> ContextInner<T> {
       } else {
         (
           self.gop_output_frameno_start[&(output_frameno - 1)],
-          self.gop_input_frameno_start[&(output_frameno - 1)]
+          self.gop_input_frameno_start[&(output_frameno - 1)],
         )
       };
 
@@ -961,7 +957,7 @@ impl<T: Pixel> ContextInner<T> {
       output_frameno - self.gop_output_frameno_start[&output_frameno];
     let mut input_frameno = self.inter_cfg.get_input_frameno(
       output_frameno_in_gop,
-      self.gop_input_frameno_start[&output_frameno]
+      self.gop_input_frameno_start[&output_frameno],
     );
 
     if self.needs_more_frame_q_lookahead(input_frameno) {
@@ -971,7 +967,7 @@ impl<T: Pixel> ContextInner<T> {
     if output_frameno_in_gop > 0 {
       let next_keyframe_input_frameno = self.next_keyframe_input_frameno(
         self.gop_input_frameno_start[&output_frameno],
-        false
+        false,
       );
       let prev_input_frameno =
         self.frame_invariants[&(output_frameno - 1)].input_frameno;
@@ -1001,7 +997,7 @@ impl<T: Pixel> ContextInner<T> {
             &self.inter_cfg,
             self.gop_input_frameno_start[&output_frameno],
             output_frameno_in_gop,
-            next_keyframe_input_frameno
+            next_keyframe_input_frameno,
           );
           assert!(fi.invalid);
           return Ok(fi);
@@ -1035,21 +1031,21 @@ impl<T: Pixel> ContextInner<T> {
       let fi = FrameInvariants::new_key_frame(
         self.config.clone(),
         self.seq,
-        self.gop_input_frameno_start[&output_frameno]
+        self.gop_input_frameno_start[&output_frameno],
       );
       assert!(!fi.invalid);
       Ok(fi)
     } else {
       let next_keyframe_input_frameno = self.next_keyframe_input_frameno(
         self.gop_input_frameno_start[&output_frameno],
-        false
+        false,
       );
       let fi = FrameInvariants::new_inter_frame(
         &self.frame_invariants[&(output_frameno - 1)],
         &self.inter_cfg,
         self.gop_input_frameno_start[&output_frameno],
         output_frameno_in_gop,
-        next_keyframe_input_frameno
+        next_keyframe_input_frameno,
       );
       assert!(!fi.invalid);
       Ok(fi)
@@ -1090,7 +1086,7 @@ impl<T: Pixel> ContextInner<T> {
       image::GrayImage::from_fn(
         plane.cfg.width as u32,
         plane.cfg.height as u32,
-        |x, y| image::Luma([plane.p(x as usize, y as usize).as_()])
+        |x, y| image::Luma([plane.p(x as usize, y as usize).as_()]),
       )
       .save(format!("{}-qres.png", fi.input_frameno))
       .unwrap();
@@ -1098,7 +1094,7 @@ impl<T: Pixel> ContextInner<T> {
       image::GrayImage::from_fn(
         plane.cfg.width as u32,
         plane.cfg.height as u32,
-        |x, y| image::Luma([plane.p(x as usize, y as usize).as_()])
+        |x, y| image::Luma([plane.p(x as usize, y as usize).as_()]),
       )
       .save(format!("{}-hres.png", fi.input_frameno))
       .unwrap();
@@ -1117,7 +1113,7 @@ impl<T: Pixel> ContextInner<T> {
         // TODO: can we set MVs here? We can probably even compute these MVs
         // right now instead of in encode_tile?
         frame_mvs: fs.frame_mvs,
-        output_frameno
+        output_frameno,
       });
       for i in 0..(REF_FRAMES as usize) {
         if (fi.refresh_frame_flags & (1 << i)) != 0 {
@@ -1169,12 +1165,7 @@ impl<T: Pixel> ContextInner<T> {
           for sbx in 0..ts.sb_width {
             let tile_sbo =
               TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
-            build_full_res_pmvs(
-              fi,
-              ts,
-              tile_sbo,
-              &half_res_pmvs,
-            );
+            build_full_res_pmvs(fi, ts, tile_sbo, &half_res_pmvs);
           }
         }
       });
@@ -1223,7 +1214,7 @@ impl<T: Pixel> ContextInner<T> {
       input_qres: fs.input_qres,
       cdfs: fs.cdfs,
       frame_mvs: fs.frame_mvs,
-      output_frameno
+      output_frameno,
     });
     for i in 0..(REF_FRAMES as usize) {
       if (fi.refresh_frame_flags & (1 << i)) != 0 {
@@ -1253,21 +1244,23 @@ impl<T: Pixel> ContextInner<T> {
           x: x as isize * MI_SIZE as isize,
           y: y as isize * MI_SIZE as isize,
           width: MI_SIZE,
-          height: MI_SIZE
+          height: MI_SIZE,
         });
 
         // TODO: other intra prediction modes.
         let edge_buf = get_intra_edges(
           &frame.planes[0].as_region(),
-          TileBlockOffset(BlockOffset{ x, y }),
-          0, 0, BlockSize::BLOCK_4X4,
+          TileBlockOffset(BlockOffset { x, y }),
+          0,
+          0,
+          BlockSize::BLOCK_4X4,
           PlaneOffset {
             x: x as isize * MI_SIZE as isize,
-            y: y as isize * MI_SIZE as isize
+            y: y as isize * MI_SIZE as isize,
           },
           TxSize::TX_4X4,
           fi.sequence.bit_depth,
-          Some(PredictionMode::DC_PRED)
+          Some(PredictionMode::DC_PRED),
         );
 
         let mut plane_after_prediction_region = plane_after_prediction
@@ -1275,7 +1268,7 @@ impl<T: Pixel> ContextInner<T> {
             x: x as isize * MI_SIZE as isize,
             y: y as isize * MI_SIZE as isize,
             width: MI_SIZE,
-            height: MI_SIZE
+            height: MI_SIZE,
           });
 
         PredictionMode::DC_PRED.predict_intra(
@@ -1283,14 +1276,14 @@ impl<T: Pixel> ContextInner<T> {
             x: x * MI_SIZE,
             y: y * MI_SIZE,
             width: MI_SIZE,
-            height: MI_SIZE
+            height: MI_SIZE,
           },
           &mut plane_after_prediction_region,
           TxSize::TX_4X4,
           fi.sequence.bit_depth,
           &[], // Not used by DC_PRED.
           0,   // Not used by DC_PRED.
-          &edge_buf
+          &edge_buf,
         );
 
         let plane_after_prediction_region =
@@ -1298,7 +1291,7 @@ impl<T: Pixel> ContextInner<T> {
             x: x as isize * MI_SIZE as isize,
             y: y as isize * MI_SIZE as isize,
             width: MI_SIZE,
-            height: MI_SIZE
+            height: MI_SIZE,
           });
 
         let intra_cost = get_satd(
@@ -1306,7 +1299,7 @@ impl<T: Pixel> ContextInner<T> {
           &plane_after_prediction_region,
           MI_SIZE,
           MI_SIZE,
-          self.config.bit_depth
+          self.config.bit_depth,
         );
 
         fi.lookahead_intra_costs[y * fi.w_in_b + x] = intra_cost;
@@ -1316,16 +1309,16 @@ impl<T: Pixel> ContextInner<T> {
 
   fn compute_lookahead_data(&mut self) {
     let lookahead_frames = self
-        .frame_q
-        .iter()
-        .filter_map(|(&input_frameno, frame)| {
-          if input_frameno >= self.next_lookahead_frame {
-            frame.clone()
-          } else {
-            None
-          }
-        })
-        .collect::<Vec<_>>();
+      .frame_q
+      .iter()
+      .filter_map(|(&input_frameno, frame)| {
+        if input_frameno >= self.next_lookahead_frame {
+          frame.clone()
+        } else {
+          None
+        }
+      })
+      .collect::<Vec<_>>();
     let mut lookahead_idx = 0;
 
     while !self.needs_more_frame_q_lookahead(self.next_lookahead_frame) {
@@ -1342,7 +1335,10 @@ impl<T: Pixel> ContextInner<T> {
         if self.next_lookahead_frame == 0 || self.config.still_picture {
           None
         } else {
-          self.frame_q.get(&(self.next_lookahead_frame - 1)).map(|f| f.as_ref().unwrap().clone() )
+          self
+            .frame_q
+            .get(&(self.next_lookahead_frame - 1))
+            .map(|f| f.as_ref().unwrap().clone())
         },
         &current_lookahead_frames,
         self.next_lookahead_frame,
@@ -1357,8 +1353,10 @@ impl<T: Pixel> ContextInner<T> {
     }
 
     // Compute the frame invariants.
-    while self.set_frame_properties(self.next_lookahead_output_frameno).is_ok() {
-      self.compute_lookahead_motion_vectors(self.next_lookahead_output_frameno);
+    while self.set_frame_properties(self.next_lookahead_output_frameno).is_ok()
+    {
+      self
+        .compute_lookahead_motion_vectors(self.next_lookahead_output_frameno);
       self.compute_lookahead_intra_costs(self.next_lookahead_output_frameno);
       self.next_lookahead_output_frameno += 1;
     }
@@ -1372,7 +1370,8 @@ impl<T: Pixel> ContextInner<T> {
     }
 
     // Get a list of output_framenos that we want to propagate through.
-    let output_framenos = self.get_rdo_lookahead_frames()
+    let output_framenos = self
+      .get_rdo_lookahead_frames()
       .map(|(&output_frameno, _)| output_frameno)
       .collect::<Vec<_>>();
 
@@ -1448,14 +1447,14 @@ impl<T: Pixel> ContextInner<T> {
               x: x as isize * MI_SIZE as isize,
               y: y as isize * MI_SIZE as isize,
               width: MI_SIZE,
-              height: MI_SIZE
+              height: MI_SIZE,
             });
 
             let plane_ref = reference_frame.planes[0].region(Area::Rect {
               x: reference_x as isize / MV_UNITS_PER_PIXEL as isize,
               y: reference_y as isize / MV_UNITS_PER_PIXEL as isize,
               width: MI_SIZE,
-              height: MI_SIZE
+              height: MI_SIZE,
             });
 
             let inter_cost = get_satd(
@@ -1463,7 +1462,7 @@ impl<T: Pixel> ContextInner<T> {
               &plane_ref,
               MI_SIZE,
               MI_SIZE,
-              self.config.bit_depth
+              self.config.bit_depth,
             ) as f32;
 
             let intra_cost =
@@ -1528,7 +1527,7 @@ impl<T: Pixel> ContextInner<T> {
               propagate(
                 top_left_block_x,
                 top_left_block_y,
-                top_left_block_fraction
+                top_left_block_fraction,
               );
 
               let top_right_block_fraction =
@@ -1540,7 +1539,7 @@ impl<T: Pixel> ContextInner<T> {
               propagate(
                 top_right_block_x,
                 top_right_block_y,
-                top_right_block_fraction
+                top_right_block_fraction,
               );
 
               let bottom_left_block_fraction = ((top_right_block_x
@@ -1552,7 +1551,7 @@ impl<T: Pixel> ContextInner<T> {
               propagate(
                 bottom_left_block_x,
                 bottom_left_block_y,
-                bottom_left_block_fraction
+                bottom_left_block_fraction,
               );
 
               let bottom_right_block_fraction =
@@ -1564,7 +1563,7 @@ impl<T: Pixel> ContextInner<T> {
               propagate(
                 bottom_right_block_x,
                 bottom_right_block_y,
-                bottom_right_block_fraction
+                bottom_right_block_fraction,
               );
             }
           }
@@ -1630,7 +1629,8 @@ impl<T: Pixel> ContextInner<T> {
       .map(|(&output_frameno, _)| output_frameno)
       .ok_or(EncoderStatus::NeedMoreData)?; // TODO: doesn't play well with the below check?
 
-    let input_frameno = self.frame_invariants[&self.output_frameno].input_frameno;
+    let input_frameno =
+      self.frame_invariants[&self.output_frameno].input_frameno;
     if !self.needs_more_frames(input_frameno) {
       return Err(EncoderStatus::LimitReached);
     }
@@ -1657,7 +1657,7 @@ impl<T: Pixel> ContextInner<T> {
           fi.show_frame,
           0,
           false,
-          false
+          false,
         );
         let rec = if fi.show_frame { Some(fs.rec) } else { None };
         self.output_frameno += 1;
@@ -1676,7 +1676,7 @@ impl<T: Pixel> ContextInner<T> {
             self,
             self.output_frameno,
             fti,
-            self.maybe_prev_log_base_q
+            self.maybe_prev_log_base_q,
           );
           let fi = self.frame_invariants.get_mut(&cur_output_frameno).unwrap();
           fi.set_quantizers(&qps);
@@ -1690,13 +1690,13 @@ impl<T: Pixel> ContextInner<T> {
               fi.show_frame,
               qps.log_target_q,
               true,
-              false
+              false,
             );
             let qps = self.rc_state.select_qi(
               self,
               self.output_frameno,
               fti,
-              self.maybe_prev_log_base_q
+              self.maybe_prev_log_base_q,
             );
             let fi =
               self.frame_invariants.get_mut(&cur_output_frameno).unwrap();
@@ -1714,7 +1714,7 @@ impl<T: Pixel> ContextInner<T> {
             fi.show_frame,
             qps.log_target_q,
             false,
-            false
+            false,
           );
           self.packet_data.extend(data);
 
@@ -1780,7 +1780,7 @@ impl<T: Pixel> ContextInner<T> {
 
   fn finalize_packet(
     &mut self, rec: Option<Frame<T>>, input_frameno: u64,
-    frame_type: FrameType, bit_depth: usize
+    frame_type: FrameType, bit_depth: usize,
   ) -> Result<Packet<T>, EncoderStatus> {
     let data = self.packet_data.clone();
     self.packet_data.clear();
@@ -1831,7 +1831,7 @@ impl<T: Pixel> ContextInner<T> {
   ///  is added to the buffer.
   pub(crate) fn guess_frame_subtypes(
     &self, nframes: &mut [i32; FRAME_NSUBTYPES + 1],
-    reservoir_frame_delay: i32
+    reservoir_frame_delay: i32,
   ) -> (i32, i32) {
     for fti in 0..=FRAME_NSUBTYPES {
       nframes[fti] = 0;
@@ -1863,7 +1863,7 @@ impl<T: Pixel> ContextInner<T> {
     //  keyframe.
     fn collect_counts(
       nframes: &mut [i32; FRAME_NSUBTYPES + 1],
-      acc: &mut [i32; FRAME_NSUBTYPES + 1]
+      acc: &mut [i32; FRAME_NSUBTYPES + 1],
     ) {
       for fti in 0..=FRAME_NSUBTYPES {
         nframes[fti] += acc[fti];
@@ -1984,7 +1984,7 @@ mod test {
     w: usize, h: usize, speed: usize, quantizer: usize, bit_depth: usize,
     chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
     bitrate: i32, low_latency: bool, no_scene_detection: bool,
-    rdo_lookahead_frames: u64
+    rdo_lookahead_frames: u64,
   ) -> Context<T> {
     assert!(bit_depth == 8 || std::mem::size_of::<T>() > 1);
     let mut enc = EncoderConfig::with_speed_preset(speed);
@@ -2047,7 +2047,7 @@ mod test {
       0,
       low_lantency,
       no_scene_detection,
-      10
+      10,
     );
     let limit = 41;
 
@@ -2100,7 +2100,7 @@ mod test {
       0,
       low_lantency,
       no_scene_detection,
-      10
+      10,
     );
     let limit = 41;
 
@@ -2137,7 +2137,7 @@ mod test {
   }
 
   fn send_frames<T: Pixel>(
-    ctx: &mut Context<T>, limit: u64, scene_change_at: u64
+    ctx: &mut Context<T>, limit: u64, scene_change_at: u64,
   ) {
     for i in 0..limit {
       if i < scene_change_at {
@@ -2148,16 +2148,14 @@ mod test {
     }
   }
 
-  fn send_test_frame<T: Pixel>(
-    ctx: &mut Context<T>, content_value: T
-  ) {
+  fn send_test_frame<T: Pixel>(ctx: &mut Context<T>, content_value: T) {
     let mut input = Arc::try_unwrap(ctx.new_frame()).unwrap();
     fill_frame_const(&mut input, content_value);
     let _ = ctx.send_frame(Arc::new(input));
   }
 
   fn get_frame_invariants<T: Pixel>(
-    ctx: Context<T>
+    ctx: Context<T>,
   ) -> impl Iterator<Item = FrameInvariants<T>> {
     ctx.inner.frame_invariants.into_iter().map(|(_, v)| v)
   }
@@ -2180,7 +2178,7 @@ mod test {
       0,
       true,
       true,
-      10
+      10,
     );
     let limit = 10 - missing;
     send_frames(&mut ctx, limit, 0);
@@ -2194,7 +2192,7 @@ mod test {
     assert_eq!(
       &data[..],
       match missing {
-        0 =>
+        0 => {
           &[
             (0, true), // I-frame
             (1, true), // P-frame
@@ -2205,9 +2203,10 @@ mod test {
             (6, true), // P-frame
             (7, true), // P-frame
             (8, true), // P-frame
-            (9, true)  // P-frame
-          ][..],
-        1 =>
+            (9, true), // P-frame
+          ][..]
+        }
+        1 => {
           &[
             (0, true), // I-frame
             (1, true), // P-frame
@@ -2218,8 +2217,9 @@ mod test {
             (6, true), // P-frame
             (7, true), // P-frame
             (8, true), // P-frame
-          ][..],
-        _ => unreachable!()
+          ][..]
+        }
+        _ => unreachable!(),
       }
     );
   }
@@ -2242,7 +2242,7 @@ mod test {
       0,
       true,
       true,
-      10
+      10,
     );
     let limit = 10 - missing;
     send_frames(&mut ctx, limit, 0);
@@ -2276,7 +2276,7 @@ mod test {
       0,
       false,
       true,
-      10
+      10,
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -2294,7 +2294,7 @@ mod test {
     assert_eq!(
       &data[..],
       match missing {
-        0 =>
+        0 => {
           &[
             (0, true), // I-frame
             (4, true), // P-frame
@@ -2309,9 +2309,10 @@ mod test {
             (6, true), // B1-frame (first)
             (7, true), // B0-frame (show existing)
             (8, true), // B1-frame (second)
-            (9, true)  // P-frame (show existing)
-          ][..],
-        1 =>
+            (9, true), // P-frame (show existing)
+          ][..]
+        }
+        1 => {
           &[
             (0, true),  // I-frame
             (4, true),  // P-frame
@@ -2326,9 +2327,10 @@ mod test {
             (6, true),  // B1-frame (first)
             (7, true),  // B0-frame (show existing)
             (8, true),  // B1-frame (second)
-            (8, false)  // Last frame (missing)
-          ][..],
-        2 =>
+            (8, false), // Last frame (missing)
+          ][..]
+        }
+        2 => {
           &[
             (0, true),  // I-frame
             (4, true),  // P-frame
@@ -2343,9 +2345,10 @@ mod test {
             (6, true),  // B1-frame (first)
             (7, true),  // B0-frame (show existing)
             (7, false), // 2nd last (missing)
-            (7, false)  // Last frame (missing)
-          ][..],
-        3 =>
+            (7, false), // Last frame (missing)
+          ][..]
+        }
+        3 => {
           &[
             (0, true),  // I-frame
             (4, true),  // P-frame
@@ -2360,9 +2363,10 @@ mod test {
             (6, true),  // B1-frame (first)
             (6, false), // 3rd last (missing)
             (6, false), // 2nd last (missing)
-            (6, false)  // Last frame (missing)
-          ][..],
-        4 =>
+            (6, false), // Last frame (missing)
+          ][..]
+        }
+        4 => {
           &[
             (0, true), // I-frame
             (4, true), // P-frame
@@ -2372,8 +2376,9 @@ mod test {
             (3, true), // B1-frame (second)
             (4, true), // P-frame (show existing)
             (5, true), // I-frame
-          ][..],
-        _ => unreachable!()
+          ][..]
+        }
+        _ => unreachable!(),
       }
     );
   }
@@ -2399,7 +2404,7 @@ mod test {
       0,
       false,
       true,
-      10
+      10,
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -2416,7 +2421,7 @@ mod test {
     assert_eq!(
       &data[..],
       match missing {
-        0 =>
+        0 => {
           &[
             0, // I-frame
             0, // P-frame
@@ -2431,9 +2436,10 @@ mod test {
             2, // B1-frame (first)
             1, // B0-frame (show existing)
             2, // B1-frame (second)
-            0  // P-frame (show existing)
-          ][..],
-        1 =>
+            0, // P-frame (show existing)
+          ][..]
+        }
+        1 => {
           &[
             0, // I-frame
             0, // P-frame
@@ -2448,9 +2454,10 @@ mod test {
             2, // B1-frame (first)
             1, // B0-frame (show existing)
             2, // B1-frame (second)
-            2  // Last frame (missing)
-          ][..],
-        2 =>
+            2, // Last frame (missing)
+          ][..]
+        }
+        2 => {
           &[
             0, // I-frame
             0, // P-frame
@@ -2465,9 +2472,10 @@ mod test {
             2, // B1-frame (first)
             1, // B0-frame (show existing)
             1, // 2nd last (missing)
-            1  // Last frame (missing)
-          ][..],
-        3 =>
+            1, // Last frame (missing)
+          ][..]
+        }
+        3 => {
           &[
             0, // I-frame
             0, // P-frame
@@ -2482,9 +2490,10 @@ mod test {
             2, // B1-frame (first)
             2, // 3rd last (missing)
             2, // 2nd last (missing)
-            2  // Last frame (missing)
-          ][..],
-        4 =>
+            2, // Last frame (missing)
+          ][..]
+        }
+        4 => {
           &[
             0, // I-frame
             0, // P-frame
@@ -2494,8 +2503,9 @@ mod test {
             2, // B1-frame (second)
             0, // P-frame (show existing)
             0, // I-frame
-          ][..],
-        _ => unreachable!()
+          ][..]
+        }
+        _ => unreachable!(),
       }
     );
   }
@@ -2521,7 +2531,7 @@ mod test {
       0,
       false,
       false,
-      10
+      10,
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -2539,7 +2549,7 @@ mod test {
     assert_eq!(
       &data[..],
       match scene_change_at {
-        0 =>
+        0 => {
           &[
             (0, true), // I-frame
             (4, true), // P-frame
@@ -2548,8 +2558,9 @@ mod test {
             (2, true), // B0-frame (show existing)
             (3, true), // B1-frame (second)
             (4, true), // P-frame (show existing)
-          ][..],
-        1 =>
+          ][..]
+        }
+        1 => {
           &[
             (0, true),  // I-frame
             (1, true),  // I-frame
@@ -2558,9 +2569,10 @@ mod test {
             (2, true),  // B1-frame (first)
             (3, true),  // B0-frame (show existing)
             (4, true),  // B1-frame (second)
-            (4, false)  // Missing
-          ][..],
-        2 =>
+            (4, false), // Missing
+          ][..]
+        }
+        2 => {
           &[
             (0, true),  // I-frame
             (0, false), // Missing
@@ -2575,9 +2587,10 @@ mod test {
             (3, true),  // B1-frame (first)
             (4, true),  // B0-frame (show existing)
             (4, false), // Missing
-            (4, false)  // Missing
-          ][..],
-        3 =>
+            (4, false), // Missing
+          ][..]
+        }
+        3 => {
           &[
             (0, true),  // I-frame
             (0, false), // Missing
@@ -2592,9 +2605,10 @@ mod test {
             (4, true),  // B1-frame (first)
             (4, false), // Missing
             (4, false), // Missing
-            (4, false)  // Missing
-          ][..],
-        4 =>
+            (4, false), // Missing
+          ][..]
+        }
+        4 => {
           &[
             (0, true),  // I-frame
             (0, false), // Missing
@@ -2603,9 +2617,10 @@ mod test {
             (2, true),  // B0-frame (show existing)
             (3, true),  // B1-frame (second)
             (3, false), // Missing
-            (4, true)   // I-frame
-          ][..],
-        _ => unreachable!()
+            (4, true),  // I-frame
+          ][..]
+        }
+        _ => unreachable!(),
       }
     );
   }
@@ -2631,7 +2646,7 @@ mod test {
       0,
       false,
       false,
-      10
+      10,
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -2648,7 +2663,7 @@ mod test {
     assert_eq!(
       &data[..],
       match scene_change_at {
-        0 =>
+        0 => {
           &[
             0, // I-frame
             0, // P-frame
@@ -2657,8 +2672,9 @@ mod test {
             1, // B0-frame (show existing)
             2, // B1-frame (second)
             0, // P-frame (show existing)
-          ][..],
-        1 =>
+          ][..]
+        }
+        1 => {
           &[
             0, // I-frame
             0, // I-frame
@@ -2667,9 +2683,10 @@ mod test {
             2, // B1-frame (first)
             1, // B0-frame (show existing)
             2, // B1-frame (second)
-            2  // Missing
-          ][..],
-        2 =>
+            2, // Missing
+          ][..]
+        }
+        2 => {
           &[
             0, // I-frame
             0, // Missing
@@ -2684,9 +2701,10 @@ mod test {
             2, // B1-frame (first)
             1, // B0-frame (show existing)
             1, // Missing
-            1  // Missing
-          ][..],
-        3 =>
+            1, // Missing
+          ][..]
+        }
+        3 => {
           &[
             0, // I-frame
             0, // Missing
@@ -2701,9 +2719,10 @@ mod test {
             2, // B1-frame (first)
             2, // Missing
             2, // Missing
-            2  // Missing
-          ][..],
-        4 =>
+            2, // Missing
+          ][..]
+        }
+        4 => {
           &[
             0, // I-frame
             0, // Missing
@@ -2712,9 +2731,10 @@ mod test {
             1, // B0-frame (show existing)
             2, // B1-frame (second)
             2, // Missing
-            0  // I-frame
-          ][..],
-        _ => unreachable!()
+            0, // I-frame
+          ][..]
+        }
+        _ => unreachable!(),
       }
     );
   }
@@ -2740,7 +2760,7 @@ mod test {
       0,
       false,
       true,
-      10
+      10,
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -2760,7 +2780,7 @@ mod test {
     assert_eq!(
       &data[..],
       match missing {
-        0 =>
+        0 => {
           &[
             (0, true), // I-frame
             (4, true), // P-frame
@@ -2775,9 +2795,10 @@ mod test {
             (6, true), // B1-frame (first)
             (7, true), // B0-frame (show existing)
             (8, true), // B1-frame (second)
-            (9, true)  // P-frame (show existing)
-          ][..],
-        1 =>
+            (9, true), // P-frame (show existing)
+          ][..]
+        }
+        1 => {
           &[
             (0, true),  // I-frame
             (4, true),  // P-frame
@@ -2792,9 +2813,10 @@ mod test {
             (6, true),  // B1-frame (first)
             (7, true),  // B0-frame (show existing)
             (8, true),  // B1-frame (second)
-            (8, false)  // Last frame (missing)
-          ][..],
-        2 =>
+            (8, false), // Last frame (missing)
+          ][..]
+        }
+        2 => {
           &[
             (0, true),  // I-frame
             (4, true),  // P-frame
@@ -2809,9 +2831,10 @@ mod test {
             (6, true),  // B1-frame (first)
             (7, true),  // B0-frame (show existing)
             (7, false), // 2nd last (missing)
-            (7, false)  // Last frame (missing)
-          ][..],
-        3 =>
+            (7, false), // Last frame (missing)
+          ][..]
+        }
+        3 => {
           &[
             (0, true),  // I-frame
             (4, true),  // P-frame
@@ -2826,9 +2849,10 @@ mod test {
             (6, true),  // B1-frame (first)
             (6, false), // 3rd last (missing)
             (6, false), // 2nd last (missing)
-            (6, false)  // Last frame (missing)
-          ][..],
-        4 =>
+            (6, false), // Last frame (missing)
+          ][..]
+        }
+        4 => {
           &[
             (0, true), // I-frame
             (4, true), // P-frame
@@ -2838,8 +2862,9 @@ mod test {
             (3, true), // B1-frame (second)
             (4, true), // P-frame (show existing)
             (5, true), // I-frame
-          ][..],
-        _ => unreachable!()
+          ][..]
+        }
+        _ => unreachable!(),
       }
     );
   }
@@ -2865,7 +2890,7 @@ mod test {
       0,
       false,
       false,
-      10
+      10,
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -2885,7 +2910,7 @@ mod test {
     assert_eq!(
       &data[..],
       match scene_change_at {
-        0 =>
+        0 => {
           &[
             (0, true), // I-frame
             (4, true), // P-frame
@@ -2894,8 +2919,9 @@ mod test {
             (2, true), // B0-frame (show existing)
             (3, true), // B1-frame (second)
             (4, true), // P-frame (show existing)
-          ][..],
-        1 =>
+          ][..]
+        }
+        1 => {
           &[
             (0, true),  // I-frame
             (1, true),  // I-frame
@@ -2904,9 +2930,10 @@ mod test {
             (2, true),  // B1-frame (first)
             (3, true),  // B0-frame (show existing)
             (4, true),  // B1-frame (second)
-            (4, false)  // Missing
-          ][..],
-        2 =>
+            (4, false), // Missing
+          ][..]
+        }
+        2 => {
           &[
             (0, true),  // I-frame
             (0, false), // Missing
@@ -2921,9 +2948,10 @@ mod test {
             (3, true),  // B1-frame (first)
             (4, true),  // B0-frame (show existing)
             (4, false), // Missing
-            (4, false)  // Missing
-          ][..],
-        3 =>
+            (4, false), // Missing
+          ][..]
+        }
+        3 => {
           &[
             (0, true),  // I-frame
             (0, false), // Missing
@@ -2938,9 +2966,10 @@ mod test {
             (4, true),  // B1-frame (first)
             (4, false), // Missing
             (4, false), // Missing
-            (4, false)  // Missing
-          ][..],
-        4 =>
+            (4, false), // Missing
+          ][..]
+        }
+        4 => {
           &[
             (0, true),  // I-frame
             (0, false), // Missing
@@ -2949,23 +2978,19 @@ mod test {
             (2, true),  // B0-frame (show existing)
             (3, true),  // B1-frame (second)
             (3, false), // Missing
-            (4, true)   // I-frame
-          ][..],
-        _ => unreachable!()
+            (4, true),  // I-frame
+          ][..]
+        }
+        _ => unreachable!(),
       }
     );
   }
 
-  fn send_frame_kf<T: Pixel>(
-    ctx: &mut Context<T>, keyframe: bool
-  ) {
+  fn send_frame_kf<T: Pixel>(ctx: &mut Context<T>, keyframe: bool) {
     let input = ctx.new_frame();
 
-    let frame_type_override = if keyframe {
-      FrameTypeOverride::Key
-    } else {
-      FrameTypeOverride::No
-    };
+    let frame_type_override =
+      if keyframe { FrameTypeOverride::Key } else { FrameTypeOverride::No };
 
     let fp = FrameParameters { frame_type_override };
 
@@ -2993,7 +3018,7 @@ mod test {
       0,
       false,
       false,
-      10
+      10,
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -3013,7 +3038,7 @@ mod test {
     assert_eq!(
       &data[..],
       match kf_at {
-        0 =>
+        0 => {
           &[
             (0, true), // I-frame
             (4, true), // P-frame
@@ -3022,8 +3047,9 @@ mod test {
             (2, true), // B0-frame (show existing)
             (3, true), // B1-frame (second)
             (4, true), // P-frame (show existing)
-          ][..],
-        1 =>
+          ][..]
+        }
+        1 => {
           &[
             (0, true),  // I-frame
             (1, true),  // I-frame
@@ -3032,9 +3058,10 @@ mod test {
             (2, true),  // B1-frame (first)
             (3, true),  // B0-frame (show existing)
             (4, true),  // B1-frame (second)
-            (4, false)  // Missing
-          ][..],
-        2 =>
+            (4, false), // Missing
+          ][..]
+        }
+        2 => {
           &[
             (0, true),  // I-frame
             (0, false), // Missing
@@ -3049,9 +3076,10 @@ mod test {
             (3, true),  // B1-frame (first)
             (4, true),  // B0-frame (show existing)
             (4, false), // Missing
-            (4, false)  // Missing
-          ][..],
-        3 =>
+            (4, false), // Missing
+          ][..]
+        }
+        3 => {
           &[
             (0, true),  // I-frame
             (0, false), // Missing
@@ -3066,9 +3094,10 @@ mod test {
             (4, true),  // B1-frame (first)
             (4, false), // Missing
             (4, false), // Missing
-            (4, false)  // Missing
-          ][..],
-        4 =>
+            (4, false), // Missing
+          ][..]
+        }
+        4 => {
           &[
             (0, true),  // I-frame
             (0, false), // Missing
@@ -3077,9 +3106,10 @@ mod test {
             (2, true),  // B0-frame (show existing)
             (3, true),  // B1-frame (second)
             (3, false), // Missing
-            (4, true)   // I-frame
-          ][..],
-        _ => unreachable!()
+            (4, true),  // I-frame
+          ][..]
+        }
+        _ => unreachable!(),
       }
     );
   }
@@ -3102,7 +3132,7 @@ mod test {
       0,
       false,
       false,
-      10
+      10,
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -3154,7 +3184,7 @@ mod test {
       0,
       false,
       false,
-      10
+      10,
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -3178,18 +3208,18 @@ mod test {
     assert_eq!(
       &data[..],
       &[
-        (0, true), // I-frame
-        (4, true), // P-frame
-        (2, true), // B0-frame
-        (1, true), // B1-frame (first)
-        (2, true), // B0-frame (show existing)
-        (3, true), // B1-frame (second)
-        (4, true), // P-frame (show existing)
+        (0, true),  // I-frame
+        (4, true),  // P-frame
+        (2, true),  // B0-frame
+        (1, true),  // B1-frame (first)
+        (2, true),  // B0-frame (show existing)
+        (3, true),  // B1-frame (second)
+        (4, true),  // P-frame (show existing)
         (4, false), // invalid
-        (6, true), // B0-frame
-        (5, true), // B1-frame (first)
-        (6, true), // B0-frame (show existing)
-        (7, true), // B1-frame (second)
+        (6, true),  // B0-frame
+        (5, true),  // B1-frame (first)
+        (6, true),  // B0-frame (show existing)
+        (7, true),  // B1-frame (second)
         (7, false), // invalid
       ]
     );
@@ -3212,7 +3242,7 @@ mod test {
       0,
       false,
       false,
-      10
+      10,
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -3236,21 +3266,21 @@ mod test {
     assert_eq!(
       &data[..],
       &[
-        (0, true), // I-frame
+        (0, true),  // I-frame
         (0, false), // invalid
         (0, false), // invalid
-        (1, true), // B1-frame (first)
+        (1, true),  // B1-frame (first)
         (1, false), // invalid
         (1, false), // invalid
         (1, false), // invalid
-        (2, true), // I-frame
-        (6, true), // P-frame
-        (4, true), // B0-frame
-        (3, true), // B1-frame (first)
-        (4, true), // B0-frame (show existing)
-        (5, true), // B1-frame (second)
-        (6, true), // P-frame (show existing)
-        (7, true), // I-frame
+        (2, true),  // I-frame
+        (6, true),  // P-frame
+        (4, true),  // B0-frame
+        (3, true),  // B1-frame (first)
+        (4, true),  // B0-frame (show existing)
+        (5, true),  // B1-frame (second)
+        (6, true),  // P-frame (show existing)
+        (7, true),  // I-frame
       ]
     );
   }
@@ -3271,7 +3301,7 @@ mod test {
       0,
       false,
       false,
-      10
+      10,
     );
 
     // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -3295,18 +3325,18 @@ mod test {
     assert_eq!(
       &data[..],
       &[
-        (0, true), // I-frame
-        (4, true), // P-frame
-        (2, true), // B0-frame
-        (1, true), // B1-frame (first)
-        (2, true), // B0-frame (show existing)
-        (3, true), // B1-frame (second)
-        (4, true), // P-frame (show existing),
-        (5, true), // P-frame
+        (0, true),  // I-frame
+        (4, true),  // P-frame
+        (2, true),  // B0-frame
+        (1, true),  // B1-frame (first)
+        (2, true),  // B0-frame (show existing)
+        (3, true),  // B1-frame (second)
+        (4, true),  // P-frame (show existing),
+        (5, true),  // P-frame
         (5, false), // invalid
-        (7, true), // B0-frame
-        (6, true), // B1-frame (first)
-        (7, true), // B0-frame (show existing)
+        (7, true),  // B0-frame
+        (6, true),  // B1-frame (first)
+        (7, true),  // B0-frame (show existing)
         (7, false), // invalid
         (7, false), // invalid
       ]
@@ -3324,124 +3354,105 @@ mod test {
   #[test]
   fn lookahead_size_properly_bounded_8() {
     const LOOKAHEAD_SIZE: u64 = 8;
-    const EXPECTATIONS: LookaheadTestExpectations = LookaheadTestExpectations {
-      pre_receive_frame_q_lens: [
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-        11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
-        21, 19, 20, 20, 21, 19, 20, 20, 21, 19,
-        20, 20, 21, 19, 20, 20, 21, 19, 20, 20,
-        21, 19, 20, 20, 21, 19, 20, 20, 21, 19,
-        20, 20, 21, 19, 20, 20, 21, 19, 20, 20,
-      ],
-      pre_receive_fi_lens: [
-        0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
-        7, 7, 7, 7, 13, 13, 13, 13, 19, 19,
-        19, 14, 20, 19, 19, 14, 20, 19, 19, 14,
-        20, 19, 19, 14, 20, 19, 19, 14, 20, 19,
-        19, 14, 20, 19, 19, 14, 20, 19, 19, 14,
-        20, 19, 19, 14, 20, 19, 19, 14, 20, 19,
-      ],
-      post_receive_frame_q_lens: [
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-        11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
-        18, 19, 19, 20, 18, 19, 19, 20, 18, 19,
-        19, 20, 18, 19, 19, 20, 18, 19, 19, 20,
-        18, 19, 19, 20, 18, 19, 19, 20, 18, 19,
-        19, 20, 18, 19, 19, 20, 18, 19, 19, 20,
-      ],
-      post_receive_fi_lens: [
-        0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
-        7, 7, 7, 7, 13, 13, 13, 13, 19, 19,
-        14, 14, 19, 19, 14, 14, 19, 19, 14, 14,
-        19, 19, 14, 14, 19, 19, 14, 14, 19, 19,
-        14, 14, 19, 19, 14, 14, 19, 19, 14, 14,
-        19, 19, 14, 14, 19, 19, 14, 14, 19, 19,
-      ]
-    };
+    const EXPECTATIONS: LookaheadTestExpectations =
+      LookaheadTestExpectations {
+        pre_receive_frame_q_lens: [
+          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+          20, 21, 19, 20, 20, 21, 19, 20, 20, 21, 19, 20, 20, 21, 19, 20, 20,
+          21, 19, 20, 20, 21, 19, 20, 20, 21, 19, 20, 20, 21, 19, 20, 20, 21,
+          19, 20, 20, 21, 19, 20, 20,
+        ],
+        pre_receive_fi_lens: [
+          0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 7, 7, 7, 7, 13, 13, 13, 13, 19, 19,
+          19, 14, 20, 19, 19, 14, 20, 19, 19, 14, 20, 19, 19, 14, 20, 19, 19,
+          14, 20, 19, 19, 14, 20, 19, 19, 14, 20, 19, 19, 14, 20, 19, 19, 14,
+          20, 19, 19, 14, 20, 19,
+        ],
+        post_receive_frame_q_lens: [
+          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+          20, 18, 19, 19, 20, 18, 19, 19, 20, 18, 19, 19, 20, 18, 19, 19, 20,
+          18, 19, 19, 20, 18, 19, 19, 20, 18, 19, 19, 20, 18, 19, 19, 20, 18,
+          19, 19, 20, 18, 19, 19, 20,
+        ],
+        post_receive_fi_lens: [
+          0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 7, 7, 7, 7, 13, 13, 13, 13, 19, 19,
+          14, 14, 19, 19, 14, 14, 19, 19, 14, 14, 19, 19, 14, 14, 19, 19, 14,
+          14, 19, 19, 14, 14, 19, 19, 14, 14, 19, 19, 14, 14, 19, 19, 14, 14,
+          19, 19, 14, 14, 19, 19,
+        ],
+      };
     lookahead_size_properly_bounded(LOOKAHEAD_SIZE, &EXPECTATIONS);
   }
 
   #[test]
   fn lookahead_size_properly_bounded_10() {
     const LOOKAHEAD_SIZE: u64 = 10;
-    const EXPECTATIONS: LookaheadTestExpectations = LookaheadTestExpectations {
-      pre_receive_frame_q_lens: [
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-        11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
-        21, 22, 23, 20, 21, 22, 23, 20, 21, 22,
-        23, 20, 21, 22, 23, 20, 21, 22, 23, 20,
-        21, 22, 23, 20, 21, 22, 23, 20, 21, 22,
-        23, 20, 21, 22, 23, 20, 21, 22, 23, 20,
-      ],
-      pre_receive_fi_lens: [
-        0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
-        7, 7, 7, 7, 13, 13, 13, 13, 19, 19,
-        19, 19, 25, 19, 19, 19, 25, 19, 19, 19,
-        25, 19, 19, 19, 25, 19, 19, 19, 25, 19,
-        19, 19, 25, 19, 19, 19, 25, 19, 19, 19,
-        25, 19, 19, 19, 25, 19, 19, 19, 25, 19,
-      ],
-      post_receive_frame_q_lens: [
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-        11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
-        21, 22, 19, 20, 21, 22, 19, 20, 21, 22,
-        19, 20, 21, 22, 19, 20, 21, 22, 19, 20,
-        21, 22, 19, 20, 21, 22, 19, 20, 21, 22,
-        19, 20, 21, 22, 19, 20, 21, 22, 19, 20,
-      ],
-      post_receive_fi_lens: [
-        0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
-        7, 7, 7, 7, 13, 13, 13, 13, 19, 19,
-        19, 19, 19, 19, 19, 19, 19, 19, 19, 19,
-        19, 19, 19, 19, 19, 19, 19, 19, 19, 19,
-        19, 19, 19, 19, 19, 19, 19, 19, 19, 19,
-        19, 19, 19, 19, 19, 19, 19, 19, 19, 19,
-      ],
-    };
+    const EXPECTATIONS: LookaheadTestExpectations =
+      LookaheadTestExpectations {
+        pre_receive_frame_q_lens: [
+          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+          20, 21, 22, 23, 20, 21, 22, 23, 20, 21, 22, 23, 20, 21, 22, 23, 20,
+          21, 22, 23, 20, 21, 22, 23, 20, 21, 22, 23, 20, 21, 22, 23, 20, 21,
+          22, 23, 20, 21, 22, 23, 20,
+        ],
+        pre_receive_fi_lens: [
+          0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 7, 7, 7, 7, 13, 13, 13, 13, 19, 19,
+          19, 19, 25, 19, 19, 19, 25, 19, 19, 19, 25, 19, 19, 19, 25, 19, 19,
+          19, 25, 19, 19, 19, 25, 19, 19, 19, 25, 19, 19, 19, 25, 19, 19, 19,
+          25, 19, 19, 19, 25, 19,
+        ],
+        post_receive_frame_q_lens: [
+          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+          20, 21, 22, 19, 20, 21, 22, 19, 20, 21, 22, 19, 20, 21, 22, 19, 20,
+          21, 22, 19, 20, 21, 22, 19, 20, 21, 22, 19, 20, 21, 22, 19, 20, 21,
+          22, 19, 20, 21, 22, 19, 20,
+        ],
+        post_receive_fi_lens: [
+          0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 7, 7, 7, 7, 13, 13, 13, 13, 19, 19,
+          19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19,
+          19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19, 19,
+          19, 19, 19, 19, 19, 19,
+        ],
+      };
     lookahead_size_properly_bounded(LOOKAHEAD_SIZE, &EXPECTATIONS);
   }
 
-#[test]
+  #[test]
   fn lookahead_size_properly_bounded_16() {
     const LOOKAHEAD_SIZE: u64 = 16;
-    const EXPECTATIONS: LookaheadTestExpectations = LookaheadTestExpectations {
-      pre_receive_frame_q_lens: [
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-        11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
-        21, 22, 23, 24, 25, 26, 27, 28, 29, 27,
-        28, 28, 29, 27, 28, 28, 29, 27, 28, 28,
-        29, 27, 28, 28, 29, 27, 28, 28, 29, 27,
-        28, 28, 29, 27, 28, 28, 29, 27, 28, 28,
-      ],
-      pre_receive_fi_lens: [
-        0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
-        7, 7, 7, 7, 13, 13, 13, 13, 19, 19,
-        19, 19, 25, 25, 25, 25, 31, 31, 31, 26,
-        32, 31, 31, 26, 32, 31, 31, 26, 32, 31,
-        31, 26, 32, 31, 31, 26, 32, 31, 31, 26,
-        32, 31, 31, 26, 32, 31, 31, 26, 32, 31,
-      ],
-      post_receive_frame_q_lens: [
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-        11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
-        21, 22, 23, 24, 25, 26, 27, 28, 26, 27,
-        27, 28, 26, 27, 27, 28, 26, 27, 27, 28,
-        26, 27, 27, 28, 26, 27, 27, 28, 26, 27,
-        27, 28, 26, 27, 27, 28, 26, 27, 27, 28,
-      ],
-      post_receive_fi_lens: [
-        0, 0, 0, 0, 0, 0, 1, 1, 1, 1,
-        7, 7, 7, 7, 13, 13, 13, 13, 19, 19,
-        19, 19, 25, 25, 25, 25, 31, 31, 26, 26,
-        31, 31, 26, 26, 31, 31, 26, 26, 31, 31,
-        26, 26, 31, 31, 26, 26, 31, 31, 26, 26,
-        31, 31, 26, 26, 31, 31, 26, 26, 31, 31,
-      ],
-    };
+    const EXPECTATIONS: LookaheadTestExpectations =
+      LookaheadTestExpectations {
+        pre_receive_frame_q_lens: [
+          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+          20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 27, 28, 28, 29, 27, 28, 28,
+          29, 27, 28, 28, 29, 27, 28, 28, 29, 27, 28, 28, 29, 27, 28, 28, 29,
+          27, 28, 28, 29, 27, 28, 28,
+        ],
+        pre_receive_fi_lens: [
+          0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 7, 7, 7, 7, 13, 13, 13, 13, 19, 19,
+          19, 19, 25, 25, 25, 25, 31, 31, 31, 26, 32, 31, 31, 26, 32, 31, 31,
+          26, 32, 31, 31, 26, 32, 31, 31, 26, 32, 31, 31, 26, 32, 31, 31, 26,
+          32, 31, 31, 26, 32, 31,
+        ],
+        post_receive_frame_q_lens: [
+          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+          20, 21, 22, 23, 24, 25, 26, 27, 28, 26, 27, 27, 28, 26, 27, 27, 28,
+          26, 27, 27, 28, 26, 27, 27, 28, 26, 27, 27, 28, 26, 27, 27, 28, 26,
+          27, 27, 28, 26, 27, 27, 28,
+        ],
+        post_receive_fi_lens: [
+          0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 7, 7, 7, 7, 13, 13, 13, 13, 19, 19,
+          19, 19, 25, 25, 25, 25, 31, 31, 26, 26, 31, 31, 26, 26, 31, 31, 26,
+          26, 31, 31, 26, 26, 31, 31, 26, 26, 31, 31, 26, 26, 31, 31, 26, 26,
+          31, 31, 26, 26, 31, 31,
+        ],
+      };
     lookahead_size_properly_bounded(LOOKAHEAD_SIZE, &EXPECTATIONS);
   }
 
-  fn lookahead_size_properly_bounded(rdo_lookahead: u64, expectations: &LookaheadTestExpectations) {
+  fn lookahead_size_properly_bounded(
+    rdo_lookahead: u64, expectations: &LookaheadTestExpectations,
+  ) {
     // Test that lookahead reads in the proper number of frames at once
 
     let mut ctx = setup_encoder::<u8>(
@@ -3456,7 +3467,7 @@ mod test {
       0,
       false,
       true,
-      rdo_lookahead
+      rdo_lookahead,
     );
 
     const LIMIT: usize = 60;
@@ -3464,13 +3475,25 @@ mod test {
     for i in 0..LIMIT {
       let input = ctx.new_frame();
       let _ = ctx.send_frame(input);
-      assert_eq!(ctx.inner.frame_q.len(), expectations.pre_receive_frame_q_lens[i]);
-      assert_eq!(ctx.inner.frame_invariants.len(), expectations.pre_receive_fi_lens[i]);
+      assert_eq!(
+        ctx.inner.frame_q.len(),
+        expectations.pre_receive_frame_q_lens[i]
+      );
+      assert_eq!(
+        ctx.inner.frame_invariants.len(),
+        expectations.pre_receive_fi_lens[i]
+      );
       while ctx.receive_packet().is_ok() {
         // Receive packets until lookahead consumed, due to pyramids receiving frames in groups
       }
-      assert_eq!(ctx.inner.frame_q.len(), expectations.post_receive_frame_q_lens[i]);
-      assert_eq!(ctx.inner.frame_invariants.len(), expectations.post_receive_fi_lens[i]);
+      assert_eq!(
+        ctx.inner.frame_q.len(),
+        expectations.post_receive_frame_q_lens[i]
+      );
+      assert_eq!(
+        ctx.inner.frame_invariants.len(),
+        expectations.post_receive_fi_lens[i]
+      );
     }
 
     ctx.flush();

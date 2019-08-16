@@ -7,19 +7,19 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+mod dist;
 mod predict;
 mod transform;
-mod dist;
 
 use rav1e::bench::api::*;
-use rav1e::bench::encoder::*;
 use rav1e::bench::cdef::*;
 use rav1e::bench::context::*;
 use rav1e::bench::ec::*;
+use rav1e::bench::encoder::*;
 use rav1e::bench::partition::*;
 use rav1e::bench::predict::*;
-use rav1e::bench::transform::*;
 use rav1e::bench::rdo::*;
+use rav1e::bench::transform::*;
 
 use crate::transform::{forward_transforms, inverse_transforms};
 
@@ -65,7 +65,14 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
     for &mode in RAV1E_INTRA_MODES {
       let sbo = TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
       for p in 1..3 {
-        ts.qc.update(fi.base_q_idx, tx_size, mode.is_intra(), 8, fi.dc_delta_q[p], fi.ac_delta_q[p]);
+        ts.qc.update(
+          fi.base_q_idx,
+          tx_size,
+          mode.is_intra(),
+          8,
+          fi.dc_delta_q[p],
+          fi.ac_delta_q[p],
+        );
         for by in 0..8 {
           for bx in 0..8 {
             // For ex, 8x8 tx should be applied to even numbered (bx,by)
@@ -75,7 +82,8 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
               continue;
             };
             let bo = sbo.block_offset(bx, by);
-            let tx_bo = TileBlockOffset(BlockOffset { x: bo.0.x + bx, y: bo.0.y + by });
+            let tx_bo =
+              TileBlockOffset(BlockOffset { x: bo.0.x + bx, y: bo.0.y + by });
             let po = tx_bo.plane_offset(&ts.input.planes[p].cfg);
             encode_tx_block(
               &mut fi,
@@ -84,7 +92,8 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
               &mut w,
               p,
               bo,
-              0,0,
+              0,
+              0,
               tx_bo,
               mode,
               tx_size,
@@ -95,7 +104,7 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
               ac,
               0,
               RDOType::PixelDistRealRate,
-              true
+              true,
             );
           }
         }
@@ -132,7 +141,7 @@ fn cfl_rdo(c: &mut Criterion) {
     BlockSize::BLOCK_4X4,
     BlockSize::BLOCK_8X8,
     BlockSize::BLOCK_16X16,
-    BlockSize::BLOCK_32X32
+    BlockSize::BLOCK_32X32,
   ] {
     let n = format!("cfl_rdo({:?})", bsize);
     c.bench_function(&n, move |b| cfl_rdo_bench(b, bsize));
@@ -156,28 +165,28 @@ fn cfl_rdo_bench(b: &mut Bencher, bsize: BlockSize) {
 }
 
 fn ec_bench(c: &mut Criterion) {
-    c.bench_function("update_cdf_4_native", update_cdf_4_native);
-    c.bench_function("update_cdf_4_sse2", update_cdf_4_sse2);
+  c.bench_function("update_cdf_4_native", update_cdf_4_native);
+  c.bench_function("update_cdf_4_sse2", update_cdf_4_sse2);
 }
 
 fn update_cdf_4_native(b: &mut Bencher) {
-    let mut cdf = [7296, 3819, 1616, 0, 0];
-    b.iter(|| {
-        for i in 0..1000 {
-            WriterBase::<WriterRecorder>::update_cdf(&mut cdf, i & 3);
-            black_box(cdf);
-        }
-    });
+  let mut cdf = [7296, 3819, 1616, 0, 0];
+  b.iter(|| {
+    for i in 0..1000 {
+      WriterBase::<WriterRecorder>::update_cdf(&mut cdf, i & 3);
+      black_box(cdf);
+    }
+  });
 }
 
 fn update_cdf_4_sse2(b: &mut Bencher) {
-    let mut cdf = [7296, 3819, 1616, 0, 0];
-    b.iter(|| {
-        for i in 0..1000 {
-            WriterBase::<WriterRecorder>::update_cdf_4_sse2(&mut cdf, i & 3);
-            black_box(cdf);
-        }
-    });
+  let mut cdf = [7296, 3819, 1616, 0, 0];
+  b.iter(|| {
+    for i in 0..1000 {
+      WriterBase::<WriterRecorder>::update_cdf_4_sse2(&mut cdf, i & 3);
+      black_box(cdf);
+    }
+  });
 }
 
 criterion_group!(intra_prediction, predict::pred_bench,);
@@ -185,12 +194,20 @@ criterion_group!(intra_prediction, predict::pred_bench,);
 criterion_group!(cfl, cfl_rdo);
 criterion_group!(cdef, cdef_frame);
 criterion_group!(write_block, write_b);
-criterion_group!{ name = dist;
+criterion_group! { name = dist;
                   config = Criterion::default().warm_up_time(Duration::new(1,0));
                   targets = dist::get_sad, dist::get_satd
 }
 
 criterion_group!(ec, ec_bench);
 
-criterion_main!(write_block, intra_prediction, cdef, cfl, dist,
-  forward_transforms, inverse_transforms, ec);
+criterion_main!(
+  write_block,
+  intra_prediction,
+  cdef,
+  cfl,
+  dist,
+  forward_transforms,
+  inverse_transforms,
+  ec
+);
