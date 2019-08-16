@@ -52,6 +52,11 @@ script: cargo test --verbose --release --features=decode_test -- --ignored
 
 jobs:
   include:
+      - name: "Code Formatting"
+        rust: stable
+        script:
+         - rustup component add rustfmt
+         - cargo fmt -- --check
       - name: "Build & Coveralls"
         script:
          - cargo install cargo-kcov
