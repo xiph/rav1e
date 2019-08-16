@@ -130,17 +130,28 @@ static av1_tx_ind: [[usize; TX_TYPES]; TX_SETS] = [
 ];
 
 pub static max_txsize_rect_lookup: [TxSize; BlockSize::BLOCK_SIZES_ALL] = [
-  // 4X4
-  TX_4X4, // 4X8,    8X4,      8X8
-  TX_4X8, TX_8X4, TX_8X8, // 8X16,   16X8,     16X16
-  TX_8X16, TX_16X8, TX_16X16, // 16X32,  32X16,    32X32
-  TX_16X32, TX_32X16, TX_32X32, // 32X64,  64X32,
-  TX_32X64, TX_64X32, // 64X64
-  TX_64X64, // 64x128, 128x64,   128x128
-  TX_64X64, TX_64X64, TX_64X64, // 4x16,   16x4,
-  TX_4X16, TX_16X4, // 8x32,   32x8
-  TX_8X32, TX_32X8, // 16x64,  64x16
-  TX_16X64, TX_64X16,
+  TX_4X4,   // 4x4
+  TX_4X8,   // 4x8
+  TX_8X4,   // 8x4
+  TX_8X8,   // 8x8
+  TX_8X16,  // 8x16
+  TX_16X8,  // 16x8
+  TX_16X16, // 16x16
+  TX_16X32, // 16x32
+  TX_32X16, // 32x16
+  TX_32X32, // 32x32
+  TX_32X64, // 32x64
+  TX_64X32, // 64x32
+  TX_64X64, // 64x64
+  TX_64X64, // 64x128
+  TX_64X64, // 128x64
+  TX_64X64, // 128x128
+  TX_4X16,  // 4x16
+  TX_16X4,  // 16x4
+  TX_8X32,  // 8x32
+  TX_32X8,  // 32x8
+  TX_16X64, // 16x64
+  TX_64X16, // 64x16
 ];
 
 pub static sub_tx_size_map: [TxSize; TxSize::TX_SIZES_ALL] = [
