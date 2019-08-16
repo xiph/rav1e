@@ -1,54 +1,65 @@
 language: rust
+dist: bionic
 rust:
+  - stable
   # This should reference the earliest supported rustc version
   # and should match the version number in build.rs
   - 1.36.0
-  - stable
 env:
   - RUST_BACKTRACE=1
 addons:
   apt:
-    packages: binutils-dev libcurl4-openssl-dev zlib1g-dev libdw-dev libiberty-dev ninja-build
+    packages:
+      - binutils-dev
+      - libcurl4-openssl-dev
+      - zlib1g-dev
+      - libdw-dev
+      - libiberty-dev
+      - ninja-build
+      - python3-setuptools
+      - python3-pip
+      - python3-wheel
+      - libsdl2-dev
+      - libvulkan-dev
 before_install:
-    - wget -O cmake.sh https://cmake.org/files/v3.13/cmake-3.13.3-Linux-x86_64.sh
-    - sudo sh cmake.sh --skip-license --exclude-subdir --prefix=/usr
-    - sudo rm -fR /usr/local/cmake*
-    - hash -r
-    - which cmake
-    - cmake --version
-    - curl -L https://github.com/mozilla/sccache/releases/download/0.2.8/sccache-0.2.8-x86_64-unknown-linux-musl.tar.gz | tar xvz
-    - export PATH=$PATH:`pwd`/sccache-0.2.8-x86_64-unknown-linux-musl
+    - export BUILD_DIR="$TRAVIS_HOME/.build"
+    - mkdir -p "$BUILD_DIR"
+    - pip3 install meson
+    - bash "$TRAVIS_BUILD_DIR/.travis/install-sccache.sh"
+    - export PATH="$PATH:$BUILD_DIR/sccache"
     - export RUSTC_WRAPPER=sccache
     - export SCCACHE_CACHE_SIZE=500M
-    - export SCCACHE_DIR=~/.cache/sccache
-    - curl -L https://download.videolan.org/contrib/nasm/nasm-2.14.tar.gz | tar xvz
-    - cd nasm-2.14
-    - ./configure CC='sccache gcc' && make -j2 && sudo make install
+    - export SCCACHE_DIR="$TRAVIS_HOME/.cache/sccache"
+    - sccache --version
+    - bash "$TRAVIS_BUILD_DIR/.travis/install-nasm.sh"
+    - export PATH="$PATH:$BUILD_DIR/nasm/bin"
+    - export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$BUILD_DIR/nasm/lib/pkgconfig"
+    - export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$BUILD_DIR/nasm/lib"
     - nasm --version
-    - cd ..
-    - curl -L https://github.com/SimonKagstrom/kcov/archive/v36.tar.gz | tar xvz
-    - cd kcov-36
-    - mkdir .build && cd .build
-    - cmake -GNinja -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache .. && ninja && sudo ninja install
-    - cd ../..
-    - git clone --depth 1 -b v1.0.0-errata1 https://aomedia.googlesource.com/aom
-    - cd aom
-    - rm -rf CMakeCache.txt CMakeFiles
-    - mkdir -p .build
-    - cd .build
-    - cmake -GNinja .. -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DCMAKE_BUILD_TYPE=Release -DENABLE_TESTS=0 -DENABLE_DOCS=0 -DCONFIG_LOWBITDEPTH=1 -DCMAKE_INSTALL_PREFIX=/usr -DCONFIG_PIC=1
-    - ninja && sudo ninja install
-    - cd ../..
-
+    - bash "$TRAVIS_BUILD_DIR/.travis/install-kcov.sh"
+    - export PATH="$PATH:$BUILD_DIR/kcov/bin"
+    - kcov --version
+    - bash "$TRAVIS_BUILD_DIR/.travis/install-aom.sh"
+    - export PATH="$PATH:$BUILD_DIR/aom/bin"
+    - export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$BUILD_DIR/aom/lib/pkgconfig"
+    - export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$BUILD_DIR/aom/lib"
+    - which aomenc
+    - bash "$TRAVIS_BUILD_DIR/.travis/install-dav1d.sh"
+    - export PATH="$PATH:$BUILD_DIR/dav1d/bin"
+    - export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$BUILD_DIR/dav1d/lib/x86_64-linux-gnu/pkgconfig"
+    - export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$BUILD_DIR/dav1d/lib/x86_64-linux-gnu"
+    - dav1d --version
+    - cd "$TRAVIS_BUILD_DIR"
 cache:
+  cargo: true
   directories:
-  - "$HOME/.cache/sccache"
+    - $TRAVIS_HOME/.build
 
 after_script:
 - sccache -s
 
 # Run the tests on both the minimum and latest supported Rust version
-script: cargo test --verbose --release --features=decode_test -- --ignored
+script: cargo test --verbose --release --features=decode_test,decode_test_dav1d -- --ignored
 
 jobs:
   include:
@@ -57,17 +68,28 @@ jobs:
         script:
          - rustup component add rustfmt
          - cargo fmt -- --check
+        env:
+          - CACHE_NAME=RUSTFMT
       - name: "Build & Coveralls"
+        rust: stable
         script:
          - cargo install cargo-kcov
          - kcov --version
-         - RUSTFLAGS="-C link-dead-code" cargo build --features=decode_test,quick_test --tests --verbose
-         - travis_wait cargo kcov -v --coveralls --no-clean-rebuild -- --verify --exclude-pattern=$HOME/.cargo,aom_build,.h,test
+         - RUSTFLAGS="-C link-dead-code" cargo build --features=decode_test,decode_test_dav1d,quick_test --tests --verbose
+         - travis_wait cargo kcov -v --coveralls --no-clean-rebuild -- --verify --exclude-pattern="$HOME/.cargo,aom_build,.h,test"
+        env:
+         - CACHE_NAME=COVERALLS
       - name: "Bench"
+        rust: stable
         script: cargo bench --features=bench --no-run --verbose
+        env:
+          - CACHE_NAME=BENCH
       - name: "Doc & Clippy (linter): verifying code quality"
+        rust: stable
         script:
          - cargo doc --verbose --no-deps
          - rustup component add clippy
          - cargo clippy --version
          - cargo clippy -- -D warnings -A clippy::cast_lossless -A clippy::cast_ptr_alignment -A clippy::cognitive_complexity -A clippy::needless_range_loop -A clippy::too_many_arguments -A clippy::verbose_bit_mask -A clippy::unreadable_literal -A clippy::many_single_char_names --verbose
+        env:
+         - CACHE_NAME=CLIPPY
