@@ -16,7 +16,7 @@ use crate::partition::*;
 use crate::transform::*;
 use crate::partition::BlockSize::*;
 
-static has_null: &'static [u8] = &[];
+static has_null: &[u8] = &[];
 
 // Tables to store if the top-right reference pixels are available. The flags
 // are represented with bits, packed into 8-bit integers. E.g., for the 32x32
@@ -27,7 +27,7 @@ static has_null: &'static [u8] = &[];
 //       . . . .
 //       . . o .
 //       . . . .
-static has_tr_4x4: &'static [u8] = &[
+static has_tr_4x4: &[u8] = &[
   255, 255, 255, 255, 85, 85, 85, 85, 119, 119, 119, 119, 85, 85, 85, 85,
   127, 127, 127, 127, 85, 85, 85, 85, 119, 119, 119, 119, 85, 85, 85, 85,
   255, 127, 255, 127, 85, 85, 85, 85, 119, 119, 119, 119, 85, 85, 85, 85,
@@ -38,64 +38,64 @@ static has_tr_4x4: &'static [u8] = &[
   127, 127, 127, 127, 85, 85, 85, 85, 119, 119, 119, 119, 85, 85, 85, 85,
 ];
 
-static has_tr_4x8: &'static [u8] = &[
+static has_tr_4x8: &[u8] = &[
   255, 255, 255, 255, 119, 119, 119, 119, 127, 127, 127, 127, 119,
   119, 119, 119, 255, 127, 255, 127, 119, 119, 119, 119, 127, 127,
   127, 127, 119, 119, 119, 119, 255, 255, 255, 127, 119, 119, 119,
   119, 127, 127, 127, 127, 119, 119, 119, 119, 255, 127, 255, 127,
   119, 119, 119, 119, 127, 127, 127, 127, 119, 119, 119, 119,
 ];
-static has_tr_8x4: &'static [u8] = &[
+static has_tr_8x4: &[u8] = &[
   255, 255, 0, 0, 85, 85, 0, 0, 119, 119, 0, 0, 85, 85, 0, 0,
   127, 127, 0, 0, 85, 85, 0, 0, 119, 119, 0, 0, 85, 85, 0, 0,
   255, 127, 0, 0, 85, 85, 0, 0, 119, 119, 0, 0, 85, 85, 0, 0,
   127, 127, 0, 0, 85, 85, 0, 0, 119, 119, 0, 0, 85, 85, 0, 0,
 ];
-static has_tr_8x8: &'static [u8] = &[
+static has_tr_8x8: &[u8] = &[
   255, 255, 85, 85, 119, 119, 85, 85, 127, 127, 85, 85, 119, 119, 85, 85,
   255, 127, 85, 85, 119, 119, 85, 85, 127, 127, 85, 85, 119, 119, 85, 85,
 ];
-static has_tr_8x16: &'static [u8] = &[
+static has_tr_8x16: &[u8] = &[
   255, 255, 119, 119, 127, 127, 119, 119,
   255, 127, 119, 119, 127, 127, 119, 119,
 ];
-static has_tr_16x8: &'static [u8] = &[
+static has_tr_16x8: &[u8] = &[
   255, 0, 85, 0, 119, 0, 85, 0, 127, 0, 85, 0, 119, 0, 85, 0,
 ];
-static has_tr_16x16: &'static [u8] = &[
+static has_tr_16x16: &[u8] = &[
   255, 85, 119, 85, 127, 85, 119, 85,
 ];
-static has_tr_16x32: &'static [u8] = &[ 255, 119, 127, 119 ];
-static has_tr_32x16: &'static [u8] = &[ 15, 5, 7, 5 ];
+static has_tr_16x32: &[u8] = &[ 255, 119, 127, 119 ];
+static has_tr_32x16: &[u8] = &[ 15, 5, 7, 5 ];
 
 //pub static has_tr_32x32: [u8; 2] = [ 95, 87 ];
-static has_tr_32x32: &'static [u8] = &[ 95, 87 ];
+static has_tr_32x32: &[u8] = &[ 95, 87 ];
 
-static has_tr_32x64: &'static [u8] = &[ 127 ];
-static has_tr_64x32: &'static [u8] = &[ 19 ];
-static has_tr_64x64: &'static [u8] = &[ 7 ];
-static has_tr_64x128: &'static [u8] = &[ 3 ];
-static has_tr_128x64: &'static [u8] = &[ 1 ];
-static has_tr_128x128: &'static [u8] = &[ 1 ];
-static has_tr_4x16: &'static [u8] = &[
+static has_tr_32x64: &[u8] = &[ 127 ];
+static has_tr_64x32: &[u8] = &[ 19 ];
+static has_tr_64x64: &[u8] = &[ 7 ];
+static has_tr_64x128: &[u8] = &[ 3 ];
+static has_tr_128x64: &[u8] = &[ 1 ];
+static has_tr_128x128: &[u8] = &[ 1 ];
+static has_tr_4x16: &[u8] = &[
   255, 255, 255, 255, 127, 127, 127, 127, 255, 127, 255,
   127, 127, 127, 127, 127, 255, 255, 255, 127, 127, 127,
   127, 127, 255, 127, 255, 127, 127, 127, 127, 127,
 ];
-static has_tr_16x4: &'static [u8] = &[
+static has_tr_16x4: &[u8] = &[
   255, 0, 0, 0, 85, 0, 0, 0, 119, 0, 0, 0, 85, 0, 0, 0,
   127, 0, 0, 0, 85, 0, 0, 0, 119, 0, 0, 0, 85, 0, 0, 0,
 ];
-static has_tr_8x32: &'static [u8] = &[
+static has_tr_8x32: &[u8] = &[
   255, 255, 127, 127, 255, 127, 127, 127,
 ];
-static has_tr_32x8: &'static [u8] = &[
+static has_tr_32x8: &[u8] = &[
   15, 0, 5, 0, 7, 0, 5, 0,
 ];
-static has_tr_16x64: &'static [u8] = &[ 255, 127 ];
-static has_tr_64x16: &'static [u8] = &[ 3, 1 ];
+static has_tr_16x64: &[u8] = &[ 255, 127 ];
+static has_tr_64x16: &[u8] = &[ 3, 1 ];
 
-static has_tr_tables: &'static [&'static [u8]] = &[
+static has_tr_tables: &[&[u8]] = &[
   // 4X4
   has_tr_4x4,
   // 4X8,       8X4,            8X8
@@ -114,15 +114,15 @@ static has_tr_tables: &'static [&'static [u8]] = &[
   has_tr_32x8, has_tr_16x64, has_tr_64x16
 ];
 
-static has_tr_vert_8x8: &'static [u8] = &[
+static has_tr_vert_8x8: &[u8] = &[
   255, 255, 0, 0, 119, 119, 0, 0, 127, 127, 0, 0, 119, 119, 0, 0,
   255, 127, 0, 0, 119, 119, 0, 0, 127, 127, 0, 0, 119, 119, 0, 0,
 ];
-static has_tr_vert_16x16: &'static [u8] = &[
+static has_tr_vert_16x16: &[u8] = &[
   255, 0, 119, 0, 127, 0, 119, 0,
 ];
-static has_tr_vert_32x32: &'static [u8] = &[ 15, 7 ];
-static has_tr_vert_64x64: &'static [u8] = &[ 3 ];
+static has_tr_vert_32x32: &[u8] = &[ 15, 7 ];
+static has_tr_vert_64x64: &[u8] = &[ 3 ];
 
 // The _vert_* tables are like the ordinary tables above, but describe the
 // order we visit square blocks when doing a PARTITION_VERT_A or
@@ -134,7 +134,7 @@ static has_tr_vert_64x64: &'static [u8] = &[ 3 ];
 // There are tables for each of the square sizes. Vertical rectangles (like
 // BLOCK_16X32) use their respective "non-vert" table
 /*
-static has_tr_vert_tables: &'static [&'static [u8]] = &[
+static has_tr_vert_tables: &[&[u8]] = &[
   // 4X4
   has_null,
   // 4X8,      8X4,         8X8
@@ -151,7 +151,7 @@ static has_tr_vert_tables: &'static [&'static [u8]] = &[
 */
 // TODO: Enable the case for PARTITION_VERT_A/B once they can be encoded by rav1e.
 pub fn get_has_tr_table(/*partition: PartitionType, */bsize: BlockSize) -> &'static [u8] {
-  let ret: &'static [u8];
+  let ret: &[u8];
   // If this is a mixed vertical partition, look up bsize in orders_vert.
   /*if partition == PartitionType::PARTITION_VERT_A || partition == PartitionType::PARTITION_VERT_B {
     debug_assert!(bsize < BlockSize::BLOCK_SIZES);
@@ -228,7 +228,7 @@ pub fn has_top_right(/*const AV1_COMMON *cm,*/
 
 // Similar to the has_tr_* tables, but store if the bottom-left reference
 // pixels are available.
-static has_bl_4x4: &'static [u8] = &[
+static has_bl_4x4: &[u8] = &[
   84, 85, 85, 85, 16, 17, 17, 17, 84, 85, 85, 85, 0,  1,  1,  1,  84, 85, 85,
   85, 16, 17, 17, 17, 84, 85, 85, 85, 0,  0,  1,  0,  84, 85, 85, 85, 16, 17,
   17, 17, 84, 85, 85, 85, 0,  1,  1,  1,  84, 85, 85, 85, 16, 17, 17, 17, 84,
@@ -237,58 +237,58 @@ static has_bl_4x4: &'static [u8] = &[
   0,  84, 85, 85, 85, 16, 17, 17, 17, 84, 85, 85, 85, 0,  1,  1,  1,  84, 85,
   85, 85, 16, 17, 17, 17, 84, 85, 85, 85, 0,  0,  0,  0,
 ];
-static has_bl_4x8: &'static [u8] = &[
+static has_bl_4x8: &[u8] = &[
   16, 17, 17, 17, 0, 1, 1, 1, 16, 17, 17, 17, 0, 0, 1, 0,
   16, 17, 17, 17, 0, 1, 1, 1, 16, 17, 17, 17, 0, 0, 0, 0,
   16, 17, 17, 17, 0, 1, 1, 1, 16, 17, 17, 17, 0, 0, 1, 0,
   16, 17, 17, 17, 0, 1, 1, 1, 16, 17, 17, 17, 0, 0, 0, 0,
 ];
-static has_bl_8x4: &'static [u8] = &[
+static has_bl_8x4: &[u8] = &[
   254, 255, 84, 85, 254, 255, 16, 17, 254, 255, 84, 85, 254, 255, 0, 1,
   254, 255, 84, 85, 254, 255, 16, 17, 254, 255, 84, 85, 254, 255, 0, 0,
   254, 255, 84, 85, 254, 255, 16, 17, 254, 255, 84, 85, 254, 255, 0, 1,
   254, 255, 84, 85, 254, 255, 16, 17, 254, 255, 84, 85, 254, 255, 0, 0,
 ];
-static has_bl_8x8: &'static [u8] = &[
+static has_bl_8x8: &[u8] = &[
   84, 85, 16, 17, 84, 85, 0, 1, 84, 85, 16, 17, 84, 85, 0, 0,
   84, 85, 16, 17, 84, 85, 0, 1, 84, 85, 16, 17, 84, 85, 0, 0,
 ];
-static has_bl_8x16: &'static [u8] = &[
+static has_bl_8x16: &[u8] = &[
   16, 17, 0, 1, 16, 17, 0, 0, 16, 17, 0, 1, 16, 17, 0, 0,
 ];
-static has_bl_16x8: &'static [u8] = &[
+static has_bl_16x8: &[u8] = &[
   254, 84, 254, 16, 254, 84, 254, 0, 254, 84, 254, 16, 254, 84, 254, 0,
 ];
-static has_bl_16x16: &'static [u8] = &[
+static has_bl_16x16: &[u8] = &[
   84, 16, 84, 0, 84, 16, 84, 0,
 ];
-static has_bl_16x32: &'static [u8] = &[ 16, 0, 16, 0 ];
-static has_bl_32x16: &'static [u8] = &[ 78, 14, 78, 14 ];
-static has_bl_32x32: &'static [u8] = &[ 4, 4 ];
-static has_bl_32x64: &'static [u8] = &[ 0 ];
-static has_bl_64x32: &'static [u8] = &[ 34 ];
-static has_bl_64x64: &'static [u8] = &[ 0 ];
-static has_bl_64x128: &'static [u8] = &[ 0 ];
-static has_bl_128x64: &'static [u8] = &[ 0 ];
-static has_bl_128x128: &'static [u8] = &[ 0 ];
-static has_bl_4x16: &'static [u8] = &[
+static has_bl_16x32: &[u8] = &[ 16, 0, 16, 0 ];
+static has_bl_32x16: &[u8] = &[ 78, 14, 78, 14 ];
+static has_bl_32x32: &[u8] = &[ 4, 4 ];
+static has_bl_32x64: &[u8] = &[ 0 ];
+static has_bl_64x32: &[u8] = &[ 34 ];
+static has_bl_64x64: &[u8] = &[ 0 ];
+static has_bl_64x128: &[u8] = &[ 0 ];
+static has_bl_128x64: &[u8] = &[ 0 ];
+static has_bl_128x128: &[u8] = &[ 0 ];
+static has_bl_4x16: &[u8] = &[
   0, 1, 1, 1, 0, 0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0,
   0, 1, 1, 1, 0, 0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0,
 ];
-static has_bl_16x4: &'static [u8] = &[
+static has_bl_16x4: &[u8] = &[
   254, 254, 254, 84, 254, 254, 254, 16, 254, 254, 254, 84, 254, 254, 254, 0,
   254, 254, 254, 84, 254, 254, 254, 16, 254, 254, 254, 84, 254, 254, 254, 0,
 ];
-static has_bl_8x32: &'static [u8] = &[
+static has_bl_8x32: &[u8] = &[
   0, 1, 0, 0, 0, 1, 0, 0,
 ];
-static has_bl_32x8: &'static [u8] = &[
+static has_bl_32x8: &[u8] = &[
   238, 78, 238, 14, 238, 78, 238, 14,
 ];
-static has_bl_16x64: &'static [u8] = &[ 0, 0 ];
-static has_bl_64x16: &'static [u8] = &[ 42, 42 ];
+static has_bl_16x64: &[u8] = &[ 0, 0 ];
+static has_bl_64x16: &[u8] = &[ 42, 42 ];
 
-static has_bl_tables: &'static [&'static [u8]] = &[
+static has_bl_tables: &[&[u8]] = &[
   // 4X4
   has_bl_4x4,
   // 4X8,         8X4,         8X8
@@ -307,15 +307,15 @@ static has_bl_tables: &'static [&'static [u8]] = &[
   has_bl_32x8, has_bl_16x64, has_bl_64x16
 ];
 
-static has_bl_vert_8x8: &'static [u8] = &[
+static has_bl_vert_8x8: &[u8] = &[
   254, 255, 16, 17, 254, 255, 0, 1, 254, 255, 16, 17, 254, 255, 0, 0,
   254, 255, 16, 17, 254, 255, 0, 1, 254, 255, 16, 17, 254, 255, 0, 0,
 ];
-static has_bl_vert_16x16: &'static [u8] = &[
+static has_bl_vert_16x16: &[u8] = &[
   254, 16, 254, 0, 254, 16, 254, 0,
 ];
-static has_bl_vert_32x32: &'static [u8] = &[ 14, 14 ];
-static has_bl_vert_64x64: &'static [u8] = &[ 2 ];
+static has_bl_vert_32x32: &[u8] = &[ 14, 14 ];
+static has_bl_vert_64x64: &[u8] = &[ 2 ];
 
 // The _vert_* tables are like the ordinary tables above, but describe the
 // order we visit square blocks when doing a PARTITION_VERT_A or
@@ -326,7 +326,7 @@ static has_bl_vert_64x64: &'static [u8] = &[ 2 ];
 //
 // There are tables for each of the square sizes. Vertical rectangles (like
 // BLOCK_16X32) use their respective "non-vert" table
-static has_bl_vert_tables: &'static [&'static [u8]] = &[
+static has_bl_vert_tables: &[&[u8]] = &[
   // 4X4
   has_null,
   // 4X8,     8X4,         8X8
@@ -342,7 +342,7 @@ static has_bl_vert_tables: &'static [&'static [u8]] = &[
 ];
 
 pub fn get_has_bl_table(/*partition: PartitionType, */bsize: BlockSize) -> &'static [u8] {
-  let ret: &'static [u8];
+  let ret: &[u8];
   // If this is a mixed vertical partition, look up bsize in orders_vert.
   /*if (partition == PARTITION_VERT_A || partition == PARTITION_VERT_B) {
     //assert(bsize < BLOCK_SIZES);
