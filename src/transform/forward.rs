@@ -54,7 +54,7 @@ const FWD_TXFM_SHIFT_LS: [TxfmShifts; TxSize::TX_SIZES_ALL] = [
   FWD_SHIFT_8X32,
   FWD_SHIFT_32X8,
   FWD_SHIFT_16X64,
-  FWD_SHIFT_64X16
+  FWD_SHIFT_64X16,
 ];
 
 type TxfmFunc = dyn Fn(&[i32], &mut [i32]);
@@ -135,7 +135,7 @@ trait RotateKernel<T: TxOperations> {
   const SHIFT: fn(T) -> T;
 
   fn half_kernel(
-    p0: (T, T), p1: T, m: ((i32, i32), (i32, i32), (i32, i32))
+    p0: (T, T), p1: T, m: ((i32, i32), (i32, i32), (i32, i32)),
   ) -> (T, T) {
     let t = Self::ADD(p1, p0.0);
     let (a, b, c) = (p0.1.tx_mul(m.0), p1.tx_mul(m.1), t.tx_mul(m.2));
@@ -278,7 +278,7 @@ fn daala_fdst_iv_2_asym<T: TxOperations>(p0: (T, T), p1h: (T)) -> (T, T) {
 }
 
 fn daala_fdct_ii_4<T: TxOperations>(
-  q0: T, q1: T, q2: T, q3: T, output: &mut [T]
+  q0: T, q1: T, q2: T, q3: T, output: &mut [T],
 ) {
   // +/- Butterflies with asymmetric output.
   let (q0h, q3) = butterfly_neg(q0, q3);
@@ -345,7 +345,7 @@ fn daala_fdst_iv_2<T: TxOperations>(p0: T, p1: T) -> (T, T) {
 }
 
 fn daala_fdct_ii_4_asym<T: TxOperations>(
-  q0h: T, q1: (T, T), q2h: T, q3: (T, T), output: &mut [T]
+  q0h: T, q1: (T, T), q2h: T, q3: (T, T), output: &mut [T],
 ) {
   // +/- Butterflies with asymmetric input.
   let (q0, q3) = butterfly_neg_asym(q0h, q3);
@@ -359,7 +359,7 @@ fn daala_fdct_ii_4_asym<T: TxOperations>(
 }
 
 fn daala_fdst_iv_4_asym<T: TxOperations>(
-  q0: (T, T), q1h: T, q2: (T, T), q3h: T, output: &mut [T]
+  q0: (T, T), q1h: T, q2: (T, T), q3h: T, output: &mut [T],
 ) {
   // Stage 0
   //  9633/16384 = (Sin[7*Pi/16] + Cos[7*Pi/16])/2 = 0.5879378012096793
@@ -368,7 +368,7 @@ fn daala_fdst_iv_4_asym<T: TxOperations>(
   let (q0, q3) = RotateAddShift::half_kernel(
     q0,
     q3h,
-    ((9633, 14), (12873, 13), (12785, 15))
+    ((9633, 14), (12873, 13), (12785, 15)),
   );
   // 11363/16384 = (Sin[5*Pi/16] + Cos[5*Pi/16])/2 = 0.6935199226610738
   // 18081/32768 = (Sin[5*Pi/16] - Cos[5*Pi/16])*2 = 0.5517987585658861
@@ -376,7 +376,7 @@ fn daala_fdst_iv_4_asym<T: TxOperations>(
   let (q2, q1) = RotateSubShift::half_kernel(
     q2,
     q1h,
-    ((11363, 14), (18081, 15), (4551, 12))
+    ((11363, 14), (18081, 15), (4551, 12)),
   );
 
   // Stage 1
@@ -392,7 +392,7 @@ fn daala_fdst_iv_4_asym<T: TxOperations>(
 }
 
 fn daala_fdct_ii_8<T: TxOperations>(
-  r0: T, r1: T, r2: T, r3: T, r4: T, r5: T, r6: T, r7: T, output: &mut [T]
+  r0: T, r1: T, r2: T, r3: T, r4: T, r5: T, r6: T, r7: T, output: &mut [T],
 ) {
   // +/- Butterflies with asymmetric output.
   let (r0h, r7) = butterfly_neg(r0, r7);
@@ -417,7 +417,7 @@ pub fn daala_fdct8<T: TxOperations>(input: &[T], output: &mut [T]) {
     input[5],
     input[6],
     input[7],
-    &mut temp_out
+    &mut temp_out,
   );
 
   output[0] = temp_out[0];
@@ -431,7 +431,7 @@ pub fn daala_fdct8<T: TxOperations>(input: &[T], output: &mut [T]) {
 }
 
 fn daala_fdst_iv_8<T: TxOperations>(
-  r0: T, r1: T, r2: T, r3: T, r4: T, r5: T, r6: T, r7: T, output: &mut [T]
+  r0: T, r1: T, r2: T, r3: T, r4: T, r5: T, r6: T, r7: T, output: &mut [T],
 ) {
   // Stage 0
   // 17911/16384 = Sin[15*Pi/32] + Cos[15*Pi/32] = 1.0932018670017576
@@ -496,7 +496,7 @@ pub fn daala_fdst8<T: TxOperations>(input: &[T], output: &mut [T]) {
     input[5],
     input[6],
     input[7],
-    &mut temp_out
+    &mut temp_out,
   );
 
   output[0] = temp_out[0];
@@ -510,7 +510,7 @@ pub fn daala_fdst8<T: TxOperations>(input: &[T], output: &mut [T]) {
 }
 
 fn daala_fdst_iv_4<T: TxOperations>(
-  q0: T, q1: T, q2: T, q3: T, output: &mut [T]
+  q0: T, q1: T, q2: T, q3: T, output: &mut [T],
 ) {
   // Stage 0
   // 13623/16384 = (Sin[7*Pi/16] + Cos[7*Pi/16])/Sqrt[2] = 0.831469612302545
@@ -538,7 +538,7 @@ fn daala_fdst_iv_4<T: TxOperations>(
 
 fn daala_fdct_ii_8_asym<T: TxOperations>(
   r0h: T, r1: (T, T), r2h: T, r3: (T, T), r4h: T, r5: (T, T), r6h: T,
-  r7: (T, T), output: &mut [T]
+  r7: (T, T), output: &mut [T],
 ) {
   // +/- Butterflies with asymmetric input.
   let (r0, r7) = butterfly_neg_asym(r0h, r7);
@@ -554,7 +554,7 @@ fn daala_fdct_ii_8_asym<T: TxOperations>(
 
 fn daala_fdst_iv_8_asym<T: TxOperations>(
   r0: (T, T), r1h: T, r2: (T, T), r3h: T, r4: (T, T), r5h: T, r6: (T, T),
-  r7h: T, output: &mut [T]
+  r7h: T, output: &mut [T],
 ) {
   // Stage 0
   // 12665/16384 = (Sin[15*Pi/32] + Cos[15*Pi/32])/Sqrt[2] = 0.77301045336274
@@ -610,7 +610,7 @@ fn daala_fdst_iv_8_asym<T: TxOperations>(
 
 fn daala_fdct_ii_16<T: TxOperations>(
   s0: T, s1: T, s2: T, s3: T, s4: T, s5: T, s6: T, s7: T, s8: T, s9: T, sa: T,
-  sb: T, sc: T, sd: T, se: T, sf: T, output: &mut [T]
+  sb: T, sc: T, sd: T, se: T, sf: T, output: &mut [T],
 ) {
   // +/- Butterflies with asymmetric output.
   let (s0h, sf) = butterfly_neg(s0, sf);
@@ -647,7 +647,7 @@ fn daala_fdct16<T: TxOperations>(input: &[T], output: &mut [T]) {
     input[13],
     input[14],
     input[15],
-    &mut temp_out
+    &mut temp_out,
   );
 
   output[0] = temp_out[0];
@@ -670,7 +670,7 @@ fn daala_fdct16<T: TxOperations>(input: &[T], output: &mut [T]) {
 
 fn daala_fdst_iv_16<T: TxOperations>(
   s0: T, s1: T, s2: T, s3: T, s4: T, s5: T, s6: T, s7: T, s8: T, s9: T, sa: T,
-  sb: T, sc: T, sd: T, se: T, sf: T, output: &mut [T]
+  sb: T, sc: T, sd: T, se: T, sf: T, output: &mut [T],
 ) {
   // Stage 0
   // 24279/32768 = (Sin[31*Pi/64] + Cos[31*Pi/64])/Sqrt[2] = 0.74095112535496
@@ -811,7 +811,7 @@ fn daala_fdst16<T: TxOperations>(input: &[T], output: &mut [T]) {
     input[13],
     input[14],
     input[15],
-    &mut temp_out
+    &mut temp_out,
   );
 
   output[0] = temp_out[0];
@@ -835,7 +835,7 @@ fn daala_fdst16<T: TxOperations>(input: &[T], output: &mut [T]) {
 fn daala_fdct_ii_16_asym<T: TxOperations>(
   s0h: T, s1: (T, T), s2h: T, s3: (T, T), s4h: T, s5: (T, T), s6h: T,
   s7: (T, T), s8h: T, s9: (T, T), sah: T, sb: (T, T), sch: T, sd: (T, T),
-  seh: T, sf: (T, T), output: &mut [T]
+  seh: T, sf: (T, T), output: &mut [T],
 ) {
   // +/- Butterflies with asymmetric input.
   let (s0, sf) = butterfly_neg_asym(s0h, sf);
@@ -856,7 +856,7 @@ fn daala_fdct_ii_16_asym<T: TxOperations>(
 fn daala_fdst_iv_16_asym<T: TxOperations>(
   s0: (T, T), s1h: T, s2: (T, T), s3h: T, s4: (T, T), s5h: T, s6: (T, T),
   s7h: T, s8: (T, T), s9h: T, sa: (T, T), sbh: T, sc: (T, T), sdh: T,
-  se: (T, T), sfh: T, output: &mut [T]
+  se: (T, T), sfh: T, output: &mut [T],
 ) {
   // Stage 0
   //   1073/2048 = (Sin[31*Pi/64] + Cos[31*Pi/64])/2 = 0.5239315652662953
@@ -870,7 +870,7 @@ fn daala_fdst_iv_16_asym<T: TxOperations>(
   let (se, s1) = RotateSubShift::half_kernel(
     se,
     s1h,
-    ((18611, 15), (55211, 15), (601, 11))
+    ((18611, 15), (55211, 15), (601, 11)),
   );
   //  9937/16384 = (Sin[27*Pi/64] + Cos[27*Pi/64])/2 = 0.6065057165489039
   //   1489/1024 = (Sin[27*Pi/64] - Cos[27*Pi/64])*2 = 1.4541021465825602
@@ -883,7 +883,7 @@ fn daala_fdst_iv_16_asym<T: TxOperations>(
   let (sc, s3) = RotateSubShift::half_kernel(
     sc,
     s3h,
-    ((10473, 14), (39627, 15), (11039, 14))
+    ((10473, 14), (39627, 15), (11039, 14)),
   );
   // 2727/4096 = (Sin[23*Pi/64] + Cos[23*Pi/64])/2 = 0.6657721932768628
   // 3903/4096 = (Sin[23*Pi/64] - Cos[23*Pi/64])*2 = 0.9528683993863225
@@ -906,7 +906,7 @@ fn daala_fdst_iv_16_asym<T: TxOperations>(
   let (s8, s7) = RotateSubShift::half_kernel(
     s8,
     s7h,
-    ((23143, 15), (1137, 13), (11003, 13))
+    ((23143, 15), (1137, 13), (11003, 13)),
   );
 
   // Stage 1
@@ -991,7 +991,7 @@ fn daala_fdct_ii_32<T: TxOperations>(
   t0: T, t1: T, t2: T, t3: T, t4: T, t5: T, t6: T, t7: T, t8: T, t9: T, ta: T,
   tb: T, tc: T, td: T, te: T, tf: T, tg: T, th: T, ti: T, tj: T, tk: T, tl: T,
   tm: T, tn: T, to: T, tp: T, tq: T, tr: T, ts: T, tt: T, tu: T, tv: T,
-  output: &mut [T]
+  output: &mut [T],
 ) {
   // +/- Butterflies with asymmetric output.
   let (t0h, tv) = butterfly_neg(t0, tv);
@@ -1029,7 +1029,7 @@ fn daala_fdct_ii_32<T: TxOperations>(
     td,
     teh,
     tf,
-    &mut output[0..16]
+    &mut output[0..16],
   );
   daala_fdst_iv_16_asym(
     tv,
@@ -1048,7 +1048,7 @@ fn daala_fdct_ii_32<T: TxOperations>(
     tih,
     th,
     tgh,
-    &mut output[16..32]
+    &mut output[16..32],
   );
   output[16..32].reverse();
 }
@@ -1088,7 +1088,7 @@ fn daala_fdct32<T: TxOperations>(input: &[T], output: &mut [T]) {
     input[29],
     input[30],
     input[31],
-    &mut temp_out
+    &mut temp_out,
   );
 
   output[0] = temp_out[0];
@@ -1130,7 +1130,7 @@ fn daala_fdct_ii_32_asym<T: TxOperations>(
   t7: (T, T), t8h: T, t9: (T, T), tah: T, tb: (T, T), tch: T, td: (T, T),
   teh: T, tf: (T, T), tgh: T, th: (T, T), tih: T, tj: (T, T), tkh: T,
   tl: (T, T), tmh: T, tn: (T, T), toh: T, tp: (T, T), tqh: T, tr: (T, T),
-  tsh: T, tt: (T, T), tuh: T, tv: (T, T), output: &mut [T]
+  tsh: T, tt: (T, T), tuh: T, tv: (T, T), output: &mut [T],
 ) {
   // +/- Butterflies with asymmetric input.
   let (t0, tv) = butterfly_neg_asym(t0h, tv);
@@ -1168,7 +1168,7 @@ fn daala_fdct_ii_32_asym<T: TxOperations>(
     td,
     te,
     tf,
-    &mut output[0..16]
+    &mut output[0..16],
   );
   daala_fdst_iv_16(
     tv,
@@ -1187,7 +1187,7 @@ fn daala_fdct_ii_32_asym<T: TxOperations>(
     ti,
     th,
     tg,
-    &mut output[16..32]
+    &mut output[16..32],
   );
   output[16..32].reverse();
 }
@@ -1197,7 +1197,7 @@ fn daala_fdst_iv_32_asym<T: TxOperations>(
   t7h: T, t8: (T, T), t9h: T, ta: (T, T), tbh: T, tc: (T, T), tdh: T,
   te: (T, T), tfh: T, tg: (T, T), thh: T, ti: (T, T), tjh: T, tk: (T, T),
   tlh: T, tm: (T, T), tnh: T, to: (T, T), tph: T, tq: (T, T), trh: T,
-  ts: (T, T), tth: T, tu: (T, T), tvh: T, output: &mut [T]
+  ts: (T, T), tth: T, tu: (T, T), tvh: T, output: &mut [T],
 ) {
   // Stage 0
   //   5933/8192 = (Sin[63*Pi/128] + Cos[63*Pi/128])/Sqrt[2] = 0.72424708295147
@@ -1532,7 +1532,7 @@ fn daala_fdct64<T: TxOperations>(input: &[T], output: &mut [T]) {
     asym[14],
     half[15],
     asym[15],
-    &mut temp_out[0..32]
+    &mut temp_out[0..32],
   );
   daala_fdst_iv_32_asym(
     asym[31],
@@ -1567,7 +1567,7 @@ fn daala_fdct64<T: TxOperations>(input: &[T], output: &mut [T]) {
     half[17],
     asym[16],
     half[16],
-    &mut temp_out[32..64]
+    &mut temp_out[32..64],
   );
   temp_out[32..64].reverse();
 
@@ -1627,7 +1627,7 @@ enum TxfmType {
   Identity8,
   Identity16,
   Identity32,
-  Invalid
+  Invalid,
 }
 
 impl TxfmType {
@@ -1639,15 +1639,15 @@ impl TxfmType {
       TxfmType::DCT16,
       TxfmType::ADST16,
       TxfmType::ADST16,
-      TxfmType::Identity16
+      TxfmType::Identity16,
     ],
     [
       TxfmType::DCT32,
       TxfmType::Invalid,
       TxfmType::Invalid,
-      TxfmType::Identity32
+      TxfmType::Identity32,
     ],
-    [TxfmType::DCT64, TxfmType::Invalid, TxfmType::Invalid, TxfmType::Invalid]
+    [TxfmType::DCT64, TxfmType::Invalid, TxfmType::Invalid, TxfmType::Invalid],
   ];
 
   fn get_func(self) -> &'static TxfmFunc {
@@ -1665,7 +1665,7 @@ impl TxfmType {
       Identity8 => &fidentity8,
       Identity16 => &fidentity16,
       Identity32 => &fidentity32,
-      _ => unreachable!()
+      _ => unreachable!(),
     }
   }
 }
@@ -1679,7 +1679,7 @@ struct Txfm2DFlipCfg {
   lr_flip: bool,
   shift: TxfmShift,
   txfm_type_col: TxfmType,
-  txfm_type_row: TxfmType
+  txfm_type_row: TxfmType,
 }
 
 impl Txfm2DFlipCfg {
@@ -1702,7 +1702,7 @@ impl Txfm2DFlipCfg {
       lr_flip,
       shift: FWD_TXFM_SHIFT_LS[tx_size as usize][(bd - 8) / 2],
       txfm_type_col,
-      txfm_type_row
+      txfm_type_row,
     }
   }
 
@@ -1710,18 +1710,11 @@ impl Txfm2DFlipCfg {
   fn get_flip_cfg(tx_type: TxType) -> (bool, bool) {
     use self::TxType::*;
     match tx_type {
-      DCT_DCT
-      | ADST_DCT
-      | DCT_ADST
-      | ADST_ADST
-      | IDTX
-      | V_DCT
-      | H_DCT
-      | V_ADST
-      | H_ADST => (false, false),
+      DCT_DCT | ADST_DCT | DCT_ADST | ADST_ADST | IDTX | V_DCT | H_DCT
+      | V_ADST | H_ADST => (false, false),
       FLIPADST_DCT | FLIPADST_ADST | V_FLIPADST => (true, false),
       DCT_FLIPADST | ADST_FLIPADST | H_FLIPADST => (false, true),
-      FLIPADST_FLIPADST => (true, true)
+      FLIPADST_FLIPADST => (true, true),
     }
   }
 }
@@ -1729,7 +1722,7 @@ impl Txfm2DFlipCfg {
 trait FwdTxfm2D: Dim {
   fn fwd_txfm2d_daala(
     input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-    bd: usize
+    bd: usize,
   ) {
     let mut tmp: AlignedArray<[i32; 64 * 64]> = UninitializedAlignedArray();
     let buf = &mut tmp.array[..Self::W * Self::H];
@@ -1750,7 +1743,8 @@ trait FwdTxfm2D: Dim {
 
     // Columns
     for c in 0..txfm_size_col {
-      let mut col_flip_backing: AlignedArray<[i32; 64 * 64]> = UninitializedAlignedArray();
+      let mut col_flip_backing: AlignedArray<[i32; 64 * 64]> =
+        UninitializedAlignedArray();
       let col_flip = &mut col_flip_backing.array[..txfm_size_row];
       if cfg.ud_flip {
         // flip upside down
@@ -1763,14 +1757,11 @@ trait FwdTxfm2D: Dim {
         }
       }
       av1_round_shift_array(col_flip, txfm_size_row, -cfg.shift[0]);
-      txfm_func_col(
-        &col_flip,
-        &mut output[txfm_size_row..]
-      );
+      txfm_func_col(&col_flip, &mut output[txfm_size_row..]);
       av1_round_shift_array(
         &mut output[txfm_size_row..],
         txfm_size_row,
-        -cfg.shift[1]
+        -cfg.shift[1],
       );
       if cfg.lr_flip {
         for r in 0..txfm_size_row {
@@ -1789,12 +1780,12 @@ trait FwdTxfm2D: Dim {
     for r in 0..txfm_size_row {
       txfm_func_row(
         &buf[r * txfm_size_col..],
-        &mut output[r * txfm_size_col..]
+        &mut output[r * txfm_size_col..],
       );
       av1_round_shift_array(
         &mut output[r * txfm_size_col..],
         txfm_size_col,
-        -cfg.shift[2]
+        -cfg.shift[2],
       );
     }
   }
@@ -1818,35 +1809,35 @@ impl_fwd_txs! { (16, 4), (32, 8), (64, 16) }
 
 pub fn fht4x4(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize
+  bit_depth: usize,
 ) {
   Block4x4::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
 }
 
 pub fn fht8x8(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize
+  bit_depth: usize,
 ) {
   Block8x8::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
 }
 
 pub fn fht16x16(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize
+  bit_depth: usize,
 ) {
   Block16x16::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
 }
 
 pub fn fht32x32(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize
+  bit_depth: usize,
 ) {
   Block32x32::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
 }
 
 pub fn fht64x64(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize
+  bit_depth: usize,
 ) {
   assert!(tx_type == TxType::DCT_DCT);
   let mut aligned: AlignedArray<[i32; 4096]> = UninitializedAlignedArray();
@@ -1856,7 +1847,9 @@ pub fn fht64x64(
   Block64x64::fwd_txfm2d_daala(input, tmp, stride, tx_type, bit_depth);
 
   for i in 0..2 {
-    for (row_out, row_in) in output[2048*i..].chunks_mut(32).zip(tmp[32*i..].chunks(64)).take(64) {
+    for (row_out, row_in) in
+      output[2048 * i..].chunks_mut(32).zip(tmp[32 * i..].chunks(64)).take(64)
+    {
       row_out.copy_from_slice(&row_in[..32]);
     }
   }
@@ -1864,35 +1857,35 @@ pub fn fht64x64(
 
 pub fn fht4x8(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize
+  bit_depth: usize,
 ) {
   Block4x8::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
 }
 
 pub fn fht8x4(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize
+  bit_depth: usize,
 ) {
   Block8x4::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
 }
 
 pub fn fht8x16(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize
+  bit_depth: usize,
 ) {
   Block8x16::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
 }
 
 pub fn fht16x8(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize
+  bit_depth: usize,
 ) {
   Block16x8::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
 }
 
 pub fn fht16x32(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize
+  bit_depth: usize,
 ) {
   assert!(tx_type == TxType::DCT_DCT || tx_type == TxType::IDTX);
   Block16x32::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
@@ -1900,7 +1893,7 @@ pub fn fht16x32(
 
 pub fn fht32x16(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize
+  bit_depth: usize,
 ) {
   assert!(tx_type == TxType::DCT_DCT || tx_type == TxType::IDTX);
   Block32x16::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
@@ -1908,7 +1901,7 @@ pub fn fht32x16(
 
 pub fn fht32x64(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize
+  bit_depth: usize,
 ) {
   assert!(tx_type == TxType::DCT_DCT);
   let mut aligned: AlignedArray<[i32; 2048]> = UninitializedAlignedArray();
@@ -1916,15 +1909,14 @@ pub fn fht32x64(
 
   Block32x64::fwd_txfm2d_daala(input, tmp, stride, tx_type, bit_depth);
 
-  for (row_out, row_in) in output.chunks_mut(32).
-    zip(tmp.chunks(32)).take(64) {
+  for (row_out, row_in) in output.chunks_mut(32).zip(tmp.chunks(32)).take(64) {
     row_out.copy_from_slice(&row_in[..32]);
   }
 }
 
 pub fn fht64x32(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize
+  bit_depth: usize,
 ) {
   assert!(tx_type == TxType::DCT_DCT);
   let mut aligned: AlignedArray<[i32; 2048]> = UninitializedAlignedArray();
@@ -1933,8 +1925,9 @@ pub fn fht64x32(
   Block64x32::fwd_txfm2d_daala(input, tmp, stride, tx_type, bit_depth);
 
   for i in 0..2 {
-    for (row_out, row_in) in output[1024*i..].chunks_mut(32).
-      zip(tmp[32*i..].chunks(64)).take(32) {
+    for (row_out, row_in) in
+      output[1024 * i..].chunks_mut(32).zip(tmp[32 * i..].chunks(64)).take(32)
+    {
       row_out.copy_from_slice(&row_in[..32]);
     }
   }
@@ -1942,21 +1935,21 @@ pub fn fht64x32(
 
 pub fn fht4x16(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize
+  bit_depth: usize,
 ) {
   Block4x16::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
 }
 
 pub fn fht16x4(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize
+  bit_depth: usize,
 ) {
   Block16x4::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
 }
 
 pub fn fht8x32(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize
+  bit_depth: usize,
 ) {
   assert!(tx_type == TxType::DCT_DCT || tx_type == TxType::IDTX);
   Block8x32::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
@@ -1964,7 +1957,7 @@ pub fn fht8x32(
 
 pub fn fht32x8(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize
+  bit_depth: usize,
 ) {
   assert!(tx_type == TxType::DCT_DCT || tx_type == TxType::IDTX);
   Block32x8::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
@@ -1972,7 +1965,7 @@ pub fn fht32x8(
 
 pub fn fht16x64(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize
+  bit_depth: usize,
 ) {
   assert!(tx_type == TxType::DCT_DCT);
   let mut aligned: AlignedArray<[i32; 1024]> = UninitializedAlignedArray();
@@ -1980,15 +1973,14 @@ pub fn fht16x64(
 
   Block16x64::fwd_txfm2d_daala(input, tmp, stride, tx_type, bit_depth);
 
-  for (row_out, row_in) in output.chunks_mut(16).
-    zip(tmp.chunks(16)).take(64) {
+  for (row_out, row_in) in output.chunks_mut(16).zip(tmp.chunks(16)).take(64) {
     row_out.copy_from_slice(&row_in[..16]);
   }
 }
 
 pub fn fht64x16(
   input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize
+  bit_depth: usize,
 ) {
   assert!(tx_type == TxType::DCT_DCT);
   let mut aligned: AlignedArray<[i32; 1024]> = UninitializedAlignedArray();
@@ -1997,8 +1989,9 @@ pub fn fht64x16(
   Block64x16::fwd_txfm2d_daala(input, tmp, stride, tx_type, bit_depth);
 
   for i in 0..2 {
-    for (row_out, row_in) in output[512*i..].chunks_mut(32).
-      zip(tmp[32*i..].chunks(64)).take(16) {
+    for (row_out, row_in) in
+      output[512 * i..].chunks_mut(32).zip(tmp[32 * i..].chunks(64)).take(16)
+    {
       row_out.copy_from_slice(&row_in[..32]);
     }
   }

@@ -67,11 +67,7 @@ pub enum Area {
 impl Area {
   #[inline(always)]
   pub fn to_rect(
-    &self,
-    xdec: usize,
-    ydec: usize,
-    parent_width: usize,
-    parent_height: usize,
+    &self, xdec: usize, ydec: usize, parent_width: usize, parent_height: usize,
   ) -> Rect {
     match *self {
       Area::Rect { x, y, width, height } => Rect { x, y, width, height },
@@ -96,7 +92,7 @@ impl Area {
           width: (parent_width as isize - x) as usize,
           height: (parent_height as isize - y) as usize,
         }
-      },
+      }
     }
   }
 }

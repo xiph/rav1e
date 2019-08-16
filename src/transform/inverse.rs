@@ -38,7 +38,7 @@ pub fn av1_idct4(input: &[i32], output: &mut [i32], range: usize) {
     half_btf(COSPI_INV[32], stg1[0], COSPI_INV[32], stg1[1], INV_COS_BIT),
     half_btf(COSPI_INV[32], stg1[0], -COSPI_INV[32], stg1[1], INV_COS_BIT),
     half_btf(COSPI_INV[48], stg1[2], -COSPI_INV[16], stg1[3], INV_COS_BIT),
-    half_btf(COSPI_INV[16], stg1[2], COSPI_INV[48], stg1[3], INV_COS_BIT)
+    half_btf(COSPI_INV[16], stg1[2], COSPI_INV[48], stg1[3], INV_COS_BIT),
   ];
 
   // stage 3
@@ -115,7 +115,7 @@ pub fn av1_idct8(input: &[i32], output: &mut [i32], range: usize) {
     half_btf(COSPI_INV[56], stg1[0], -COSPI_INV[8], stg1[3], INV_COS_BIT),
     half_btf(COSPI_INV[24], stg1[1], -COSPI_INV[40], stg1[2], INV_COS_BIT),
     half_btf(COSPI_INV[40], stg1[1], COSPI_INV[24], stg1[2], INV_COS_BIT),
-    half_btf(COSPI_INV[8], stg1[0], COSPI_INV[56], stg1[3], INV_COS_BIT)
+    half_btf(COSPI_INV[8], stg1[0], COSPI_INV[56], stg1[3], INV_COS_BIT),
   ];
 
   // stage 3
@@ -123,7 +123,7 @@ pub fn av1_idct8(input: &[i32], output: &mut [i32], range: usize) {
     clamp_value(stg2[0] + stg2[1], range),
     clamp_value(stg2[0] - stg2[1], range),
     clamp_value(-stg2[2] + stg2[3], range),
-    clamp_value(stg2[2] + stg2[3], range)
+    clamp_value(stg2[2] + stg2[3], range),
   ];
 
   // stage 4
@@ -131,7 +131,7 @@ pub fn av1_idct8(input: &[i32], output: &mut [i32], range: usize) {
     stg3[0],
     half_btf(-COSPI_INV[32], stg3[1], COSPI_INV[32], stg3[2], INV_COS_BIT),
     half_btf(COSPI_INV[32], stg3[1], COSPI_INV[32], stg3[2], INV_COS_BIT),
-    stg3[3]
+    stg3[3],
   ];
 
   // stage 5
@@ -161,7 +161,7 @@ pub fn av1_iadst8(input: &[i32], output: &mut [i32], range: usize) {
     half_btf(COSPI_INV[36], stg1[4], COSPI_INV[28], stg1[5], INV_COS_BIT),
     half_btf(COSPI_INV[28], stg1[4], -COSPI_INV[36], stg1[5], INV_COS_BIT),
     half_btf(COSPI_INV[52], stg1[6], COSPI_INV[12], stg1[7], INV_COS_BIT),
-    half_btf(COSPI_INV[12], stg1[6], -COSPI_INV[52], stg1[7], INV_COS_BIT)
+    half_btf(COSPI_INV[12], stg1[6], -COSPI_INV[52], stg1[7], INV_COS_BIT),
   ];
 
   // stage 3
@@ -173,7 +173,7 @@ pub fn av1_iadst8(input: &[i32], output: &mut [i32], range: usize) {
     clamp_value(stg2[0] - stg2[4], range),
     clamp_value(stg2[1] - stg2[5], range),
     clamp_value(stg2[2] - stg2[6], range),
-    clamp_value(stg2[3] - stg2[7], range)
+    clamp_value(stg2[3] - stg2[7], range),
   ];
 
   // stage 4
@@ -185,7 +185,7 @@ pub fn av1_iadst8(input: &[i32], output: &mut [i32], range: usize) {
     half_btf(COSPI_INV[16], stg3[4], COSPI_INV[48], stg3[5], INV_COS_BIT),
     half_btf(COSPI_INV[48], stg3[4], -COSPI_INV[16], stg3[5], INV_COS_BIT),
     half_btf(-COSPI_INV[48], stg3[6], COSPI_INV[16], stg3[7], INV_COS_BIT),
-    half_btf(COSPI_INV[16], stg3[6], COSPI_INV[48], stg3[7], INV_COS_BIT)
+    half_btf(COSPI_INV[16], stg3[6], COSPI_INV[48], stg3[7], INV_COS_BIT),
   ];
 
   // stage 5
@@ -197,7 +197,7 @@ pub fn av1_iadst8(input: &[i32], output: &mut [i32], range: usize) {
     clamp_value(stg4[4] + stg4[6], range),
     clamp_value(stg4[5] + stg4[7], range),
     clamp_value(stg4[4] - stg4[6], range),
-    clamp_value(stg4[5] - stg4[7], range)
+    clamp_value(stg4[5] - stg4[7], range),
   ];
 
   // stage 6
@@ -209,7 +209,7 @@ pub fn av1_iadst8(input: &[i32], output: &mut [i32], range: usize) {
     stg5[4],
     stg5[5],
     half_btf(COSPI_INV[32], stg5[6], COSPI_INV[32], stg5[7], INV_COS_BIT),
-    half_btf(COSPI_INV[32], stg5[6], -COSPI_INV[32], stg5[7], INV_COS_BIT)
+    half_btf(COSPI_INV[32], stg5[6], -COSPI_INV[32], stg5[7], INV_COS_BIT),
   ];
 
   // stage 7
@@ -253,7 +253,7 @@ fn av1_idct16(input: &[i32], output: &mut [i32], range: usize) {
     half_btf(COSPI_INV[52], stg1[3], COSPI_INV[12], stg1[4], INV_COS_BIT),
     half_btf(COSPI_INV[20], stg1[2], COSPI_INV[44], stg1[5], INV_COS_BIT),
     half_btf(COSPI_INV[36], stg1[1], COSPI_INV[28], stg1[6], INV_COS_BIT),
-    half_btf(COSPI_INV[4], stg1[0], COSPI_INV[60], stg1[7], INV_COS_BIT)
+    half_btf(COSPI_INV[4], stg1[0], COSPI_INV[60], stg1[7], INV_COS_BIT),
   ];
 
   // stage 3
@@ -265,7 +265,7 @@ fn av1_idct16(input: &[i32], output: &mut [i32], range: usize) {
     clamp_value(stg2[4] + stg2[5], range),
     clamp_value(stg2[4] - stg2[5], range),
     clamp_value(-stg2[6] + stg2[7], range),
-    clamp_value(stg2[6] + stg2[7], range)
+    clamp_value(stg2[6] + stg2[7], range),
   ];
 
   // stage 4
@@ -277,7 +277,7 @@ fn av1_idct16(input: &[i32], output: &mut [i32], range: usize) {
     stg3[4],
     half_btf(-COSPI_INV[16], stg3[2], COSPI_INV[48], stg3[5], INV_COS_BIT),
     half_btf(COSPI_INV[48], stg3[1], COSPI_INV[16], stg3[6], INV_COS_BIT),
-    stg3[7]
+    stg3[7],
   ];
 
   // stage 5
@@ -289,7 +289,7 @@ fn av1_idct16(input: &[i32], output: &mut [i32], range: usize) {
     clamp_value(-stg4[4] + stg4[7], range),
     clamp_value(-stg4[5] + stg4[6], range),
     clamp_value(stg4[5] + stg4[6], range),
-    clamp_value(stg4[4] + stg4[7], range)
+    clamp_value(stg4[4] + stg4[7], range),
   ];
 
   // stage 6
@@ -301,7 +301,7 @@ fn av1_idct16(input: &[i32], output: &mut [i32], range: usize) {
     half_btf(COSPI_INV[32], stg5[3], COSPI_INV[32], stg5[4], INV_COS_BIT),
     half_btf(COSPI_INV[32], stg5[2], COSPI_INV[32], stg5[5], INV_COS_BIT),
     stg5[6],
-    stg5[7]
+    stg5[7],
   ];
 
   // stage 7
@@ -348,7 +348,7 @@ fn av1_iadst16(input: &[i32], output: &mut [i32], range: usize) {
     half_btf(COSPI_INV[50], stg1[12], COSPI_INV[14], stg1[13], INV_COS_BIT),
     half_btf(COSPI_INV[14], stg1[12], -COSPI_INV[50], stg1[13], INV_COS_BIT),
     half_btf(COSPI_INV[58], stg1[14], COSPI_INV[6], stg1[15], INV_COS_BIT),
-    half_btf(COSPI_INV[6], stg1[14], -COSPI_INV[58], stg1[15], INV_COS_BIT)
+    half_btf(COSPI_INV[6], stg1[14], -COSPI_INV[58], stg1[15], INV_COS_BIT),
   ];
 
   // stage 3
@@ -368,7 +368,7 @@ fn av1_iadst16(input: &[i32], output: &mut [i32], range: usize) {
     clamp_value(stg2[4] - stg2[12], range),
     clamp_value(stg2[5] - stg2[13], range),
     clamp_value(stg2[6] - stg2[14], range),
-    clamp_value(stg2[7] - stg2[15], range)
+    clamp_value(stg2[7] - stg2[15], range),
   ];
 
   // stage 4
@@ -388,7 +388,7 @@ fn av1_iadst16(input: &[i32], output: &mut [i32], range: usize) {
     half_btf(-COSPI_INV[56], stg3[12], COSPI_INV[8], stg3[13], INV_COS_BIT),
     half_btf(COSPI_INV[8], stg3[12], COSPI_INV[56], stg3[13], INV_COS_BIT),
     half_btf(-COSPI_INV[24], stg3[14], COSPI_INV[40], stg3[15], INV_COS_BIT),
-    half_btf(COSPI_INV[40], stg3[14], COSPI_INV[24], stg3[15], INV_COS_BIT)
+    half_btf(COSPI_INV[40], stg3[14], COSPI_INV[24], stg3[15], INV_COS_BIT),
   ];
 
   // stage 5
@@ -408,7 +408,7 @@ fn av1_iadst16(input: &[i32], output: &mut [i32], range: usize) {
     clamp_value(stg4[8] - stg4[12], range),
     clamp_value(stg4[9] - stg4[13], range),
     clamp_value(stg4[10] - stg4[14], range),
-    clamp_value(stg4[11] - stg4[15], range)
+    clamp_value(stg4[11] - stg4[15], range),
   ];
 
   // stage 6
@@ -428,7 +428,7 @@ fn av1_iadst16(input: &[i32], output: &mut [i32], range: usize) {
     half_btf(COSPI_INV[16], stg5[12], COSPI_INV[48], stg5[13], INV_COS_BIT),
     half_btf(COSPI_INV[48], stg5[12], -COSPI_INV[16], stg5[13], INV_COS_BIT),
     half_btf(-COSPI_INV[48], stg5[14], COSPI_INV[16], stg5[15], INV_COS_BIT),
-    half_btf(COSPI_INV[16], stg5[14], COSPI_INV[48], stg5[15], INV_COS_BIT)
+    half_btf(COSPI_INV[16], stg5[14], COSPI_INV[48], stg5[15], INV_COS_BIT),
   ];
 
   // stage 7
@@ -448,7 +448,7 @@ fn av1_iadst16(input: &[i32], output: &mut [i32], range: usize) {
     clamp_value(stg6[12] + stg6[14], range),
     clamp_value(stg6[13] + stg6[15], range),
     clamp_value(stg6[12] - stg6[14], range),
-    clamp_value(stg6[13] - stg6[15], range)
+    clamp_value(stg6[13] - stg6[15], range),
   ];
 
   // stage 8
@@ -468,7 +468,7 @@ fn av1_iadst16(input: &[i32], output: &mut [i32], range: usize) {
     stg7[12],
     stg7[13],
     half_btf(COSPI_INV[32], stg7[14], COSPI_INV[32], stg7[15], INV_COS_BIT),
-    half_btf(COSPI_INV[32], stg7[14], -COSPI_INV[32], stg7[15], INV_COS_BIT)
+    half_btf(COSPI_INV[32], stg7[14], -COSPI_INV[32], stg7[15], INV_COS_BIT),
   ];
 
   // stage 9
@@ -539,7 +539,7 @@ fn av1_idct32(input: &[i32], output: &mut [i32], range: usize) {
     half_btf(COSPI_INV[50], stg1[19], COSPI_INV[14], stg1[28], INV_COS_BIT),
     half_btf(COSPI_INV[18], stg1[18], COSPI_INV[46], stg1[29], INV_COS_BIT),
     half_btf(COSPI_INV[34], stg1[17], COSPI_INV[30], stg1[30], INV_COS_BIT),
-    half_btf(COSPI_INV[2], stg1[16], COSPI_INV[62], stg1[31], INV_COS_BIT)
+    half_btf(COSPI_INV[2], stg1[16], COSPI_INV[62], stg1[31], INV_COS_BIT),
   ];
 
   // stage 3
@@ -575,7 +575,7 @@ fn av1_idct32(input: &[i32], output: &mut [i32], range: usize) {
     clamp_value(stg2[28] + stg2[29], range),
     clamp_value(stg2[28] - stg2[29], range),
     clamp_value(-stg2[30] + stg2[31], range),
-    clamp_value(stg2[30] + stg2[31], range)
+    clamp_value(stg2[30] + stg2[31], range),
   ];
 
   // stage 4
@@ -611,7 +611,7 @@ fn av1_idct32(input: &[i32], output: &mut [i32], range: usize) {
     stg3[28],
     half_btf(-COSPI_INV[8], stg3[18], COSPI_INV[56], stg3[29], INV_COS_BIT),
     half_btf(COSPI_INV[56], stg3[17], COSPI_INV[8], stg3[30], INV_COS_BIT),
-    stg3[31]
+    stg3[31],
   ];
 
   // stage 5
@@ -647,7 +647,7 @@ fn av1_idct32(input: &[i32], output: &mut [i32], range: usize) {
     clamp_value(-stg4[28] + stg4[31], range),
     clamp_value(-stg4[29] + stg4[30], range),
     clamp_value(stg4[29] + stg4[30], range),
-    clamp_value(stg4[28] + stg4[31], range)
+    clamp_value(stg4[28] + stg4[31], range),
   ];
 
   // stage 6
@@ -683,7 +683,7 @@ fn av1_idct32(input: &[i32], output: &mut [i32], range: usize) {
     half_btf(COSPI_INV[48], stg5[19], COSPI_INV[16], stg5[28], INV_COS_BIT),
     half_btf(COSPI_INV[48], stg5[18], COSPI_INV[16], stg5[29], INV_COS_BIT),
     stg5[30],
-    stg5[31]
+    stg5[31],
   ];
 
   // stage 7
@@ -719,7 +719,7 @@ fn av1_idct32(input: &[i32], output: &mut [i32], range: usize) {
     clamp_value(stg6[27] + stg6[28], range),
     clamp_value(stg6[26] + stg6[29], range),
     clamp_value(stg6[25] + stg6[30], range),
-    clamp_value(stg6[24] + stg6[31], range)
+    clamp_value(stg6[24] + stg6[31], range),
   ];
 
   // stage 8
@@ -755,7 +755,7 @@ fn av1_idct32(input: &[i32], output: &mut [i32], range: usize) {
     stg7[28],
     stg7[29],
     stg7[30],
-    stg7[31]
+    stg7[31],
   ];
 
   // stage 9
@@ -800,16 +800,19 @@ fn av1_iidentity32(input: &[i32], output: &mut [i32], _range: usize) {
 }
 
 fn av1_idct64(input: &[i32], output: &mut [i32], range: usize) {
-    // stage 1;
+  // stage 1;
   let stg1 = [
-    input[0], input[32], input[16], input[48], input[8], input[40], input[24], input[56],
-    input[4], input[36], input[20], input[52], input[12], input[44], input[28], input[60],
-    input[2], input[34], input[18], input[50], input[10], input[42], input[26], input[58],
-    input[6], input[38], input[22], input[54], input[14], input[46], input[30], input[62],
-    input[1], input[33], input[17], input[49], input[9], input[41], input[25], input[57],
-    input[5], input[37], input[21], input[53], input[13], input[45], input[29], input[61],
-    input[3], input[35], input[19], input[51], input[11], input[43], input[27], input[59],
-    input[7], input[39], input[23], input[55], input[15], input[47], input[31], input[63]
+    input[0], input[32], input[16], input[48], input[8], input[40], input[24],
+    input[56], input[4], input[36], input[20], input[52], input[12],
+    input[44], input[28], input[60], input[2], input[34], input[18],
+    input[50], input[10], input[42], input[26], input[58], input[6],
+    input[38], input[22], input[54], input[14], input[46], input[30],
+    input[62], input[1], input[33], input[17], input[49], input[9], input[41],
+    input[25], input[57], input[5], input[37], input[21], input[53],
+    input[13], input[45], input[29], input[61], input[3], input[35],
+    input[19], input[51], input[11], input[43], input[27], input[59],
+    input[7], input[39], input[23], input[55], input[15], input[47],
+    input[31], input[63],
   ];
 
   // stage 2
@@ -877,7 +880,7 @@ fn av1_idct64(input: &[i32], output: &mut [i32], range: usize) {
     half_btf(COSPI_INV[49], stg1[35], COSPI_INV[15], stg1[60], INV_COS_BIT),
     half_btf(COSPI_INV[17], stg1[34], COSPI_INV[47], stg1[61], INV_COS_BIT),
     half_btf(COSPI_INV[33], stg1[33], COSPI_INV[31], stg1[62], INV_COS_BIT),
-    half_btf(COSPI_INV[1], stg1[32], COSPI_INV[63], stg1[63], INV_COS_BIT)
+    half_btf(COSPI_INV[1], stg1[32], COSPI_INV[63], stg1[63], INV_COS_BIT),
   ];
 
   // stage 3
@@ -945,7 +948,7 @@ fn av1_idct64(input: &[i32], output: &mut [i32], range: usize) {
     clamp_value(stg2[60] + stg2[61], range),
     clamp_value(stg2[60] - stg2[61], range),
     clamp_value(-stg2[62] + stg2[63], range),
-    clamp_value(stg2[62] + stg2[63], range)
+    clamp_value(stg2[62] + stg2[63], range),
   ];
 
   // stage 4
@@ -1013,7 +1016,7 @@ fn av1_idct64(input: &[i32], output: &mut [i32], range: usize) {
     stg3[60],
     half_btf(-COSPI_INV[4], stg3[34], COSPI_INV[60], stg3[61], INV_COS_BIT),
     half_btf(COSPI_INV[60], stg3[33], COSPI_INV[4], stg3[62], INV_COS_BIT),
-    stg3[63]
+    stg3[63],
   ];
 
   // stage 5
@@ -1081,7 +1084,7 @@ fn av1_idct64(input: &[i32], output: &mut [i32], range: usize) {
     clamp_value(-stg4[60] + stg4[63], range),
     clamp_value(-stg4[61] + stg4[62], range),
     clamp_value(stg4[61] + stg4[62], range),
-    clamp_value(stg4[60] + stg4[63], range)
+    clamp_value(stg4[60] + stg4[63], range),
   ];
 
   // stage 6
@@ -1149,7 +1152,7 @@ fn av1_idct64(input: &[i32], output: &mut [i32], range: usize) {
     half_btf(COSPI_INV[56], stg5[35], COSPI_INV[8], stg5[60], INV_COS_BIT),
     half_btf(COSPI_INV[56], stg5[34], COSPI_INV[8], stg5[61], INV_COS_BIT),
     stg5[62],
-    stg5[63]
+    stg5[63],
   ];
 
   // stage 7
@@ -1217,7 +1220,7 @@ fn av1_idct64(input: &[i32], output: &mut [i32], range: usize) {
     clamp_value(stg6[59] + stg6[60], range),
     clamp_value(stg6[58] + stg6[61], range),
     clamp_value(stg6[57] + stg6[62], range),
-    clamp_value(stg6[56] + stg6[63], range)
+    clamp_value(stg6[56] + stg6[63], range),
   ];
 
   // stage 8
@@ -1285,7 +1288,7 @@ fn av1_idct64(input: &[i32], output: &mut [i32], range: usize) {
     stg7[60],
     stg7[61],
     stg7[62],
-    stg7[63]
+    stg7[63],
   ];
 
   // stage 9
@@ -1353,7 +1356,7 @@ fn av1_idct64(input: &[i32], output: &mut [i32], range: usize) {
     clamp_value(stg8[51] + stg8[60], range),
     clamp_value(stg8[50] + stg8[61], range),
     clamp_value(stg8[49] + stg8[62], range),
-    clamp_value(stg8[48] + stg8[63], range)
+    clamp_value(stg8[48] + stg8[63], range),
   ];
 
   // stage 10
@@ -1421,7 +1424,7 @@ fn av1_idct64(input: &[i32], output: &mut [i32], range: usize) {
     stg9[60],
     stg9[61],
     stg9[62],
-    stg9[63]
+    stg9[63],
   ];
 
   // stage 11
@@ -1495,15 +1498,27 @@ type InvTxfmFn = fn(input: &[i32], output: &mut [i32], range: usize);
 
 static INV_TXFM_FNS: [[InvTxfmFn; 5]; 4] = [
   [av1_idct4, av1_idct8, av1_idct16, av1_idct32, av1_idct64],
-  [av1_iadst4, av1_iadst8, av1_iadst16, |_, _, _| unimplemented!(), |_, _, _| unimplemented!()],
+  [
+    av1_iadst4,
+    av1_iadst8,
+    av1_iadst16,
+    |_, _, _| unimplemented!(),
+    |_, _, _| unimplemented!(),
+  ],
   [
     |_, _, _| unimplemented!(),
     |_, _, _| unimplemented!(),
     |_, _, _| unimplemented!(),
     |_, _, _| unimplemented!(),
-    |_, _, _| unimplemented!()
+    |_, _, _| unimplemented!(),
   ],
-  [av1_iidentity4, av1_iidentity8, av1_iidentity16, av1_iidentity32, |_, _, _| unimplemented!()]
+  [
+    av1_iidentity4,
+    av1_iidentity8,
+    av1_iidentity16,
+    av1_iidentity32,
+    |_, _, _| unimplemented!(),
+  ],
 ];
 
 #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
@@ -1518,7 +1533,7 @@ mod nasm {
 
     fn inv_txfm2d_add<T>(
       input: &[i32], output: &mut PlaneRegionMut<'_, T>, tx_type: TxType,
-      bd: usize
+      bd: usize,
     ) where
       T: Pixel,
     {
@@ -1546,7 +1561,7 @@ mod nasm {
             output.data_ptr_mut() as *mut _,
             stride,
             coeff16.array.as_ptr(),
-            (coeff_w * coeff_h) as i32
+            (coeff_w * coeff_h) as i32,
           );
         }
         return;
@@ -1660,7 +1675,7 @@ mod native {
 
     fn inv_txfm2d_add<T: Pixel>(
       input: &[i32], output: &mut PlaneRegionMut<'_, T>, tx_type: TxType,
-      bd: usize
+      bd: usize,
     ) where
       T: Pixel,
     {

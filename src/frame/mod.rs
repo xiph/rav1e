@@ -9,10 +9,10 @@
 
 use num_derive::FromPrimitive;
 
-use crate::util::*;
 use crate::api::ChromaSampling;
 use crate::context::SB_SIZE;
 use crate::mc::SUBPEL_FILTER_SIZE;
+use crate::util::*;
 
 #[cfg(test)]
 use crate::tiling::*;
@@ -43,40 +43,44 @@ pub struct FrameParameters {
 
 #[derive(Debug, Clone)]
 pub struct Frame<T: Pixel> {
-  pub planes: [Plane<T>; 3]
+  pub planes: [Plane<T>; 3],
 }
 
 impl<T: Pixel> Frame<T> {
-  pub fn new(width: usize, height: usize, chroma_sampling: ChromaSampling) -> Self {
+  pub fn new(
+    width: usize, height: usize, chroma_sampling: ChromaSampling,
+  ) -> Self {
     let luma_width = width.align_power_of_two(3);
     let luma_height = height.align_power_of_two(3);
     let luma_padding = SB_SIZE + FRAME_MARGIN;
 
     let (chroma_decimation_x, chroma_decimation_y) =
-     chroma_sampling.get_decimation().unwrap_or((0, 0));
-    let (chroma_width, chroma_height) = chroma_sampling
-     .get_chroma_dimensions(luma_width, luma_height);
+      chroma_sampling.get_decimation().unwrap_or((0, 0));
+    let (chroma_width, chroma_height) =
+      chroma_sampling.get_chroma_dimensions(luma_width, luma_height);
     let chroma_padding_x = luma_padding >> chroma_decimation_x;
     let chroma_padding_y = luma_padding >> chroma_decimation_y;
 
     Frame {
       planes: [
+        Plane::new(luma_width, luma_height, 0, 0, luma_padding, luma_padding),
         Plane::new(
-          luma_width, luma_height,
-          0, 0,
-          luma_padding, luma_padding
+          chroma_width,
+          chroma_height,
+          chroma_decimation_x,
+          chroma_decimation_y,
+          chroma_padding_x,
+          chroma_padding_y,
         ),
         Plane::new(
-          chroma_width, chroma_height,
-          chroma_decimation_x, chroma_decimation_y,
-          chroma_padding_x, chroma_padding_y
+          chroma_width,
+          chroma_height,
+          chroma_decimation_x,
+          chroma_decimation_y,
+          chroma_padding_x,
+          chroma_padding_y,
         ),
-        Plane::new(
-          chroma_width, chroma_height,
-          chroma_decimation_x, chroma_decimation_y,
-          chroma_padding_x, chroma_padding_y
-        )
-      ]
+      ],
     }
   }
 
@@ -122,11 +126,7 @@ pub(crate) struct PixelIter<'a, T: Pixel> {
 
 impl<'a, T: Pixel> PixelIter<'a, T> {
   pub fn new(planes: &'a [Plane<T>; 3]) -> Self {
-    PixelIter {
-      planes,
-      y: 0,
-      x: 0,
-    }
+    PixelIter { planes, y: 0, x: 0 }
   }
 
   fn width(&self) -> usize {
@@ -147,8 +147,14 @@ impl<'a, T: Pixel> Iterator for PixelIter<'a, T> {
     }
     let pixel = (
       self.planes[0].p(self.x, self.y),
-      self.planes[1].p(self.x >> self.planes[1].cfg.xdec, self.y >> self.planes[1].cfg.ydec),
-      self.planes[2].p(self.x >> self.planes[2].cfg.xdec, self.y >> self.planes[2].cfg.ydec),
+      self.planes[1].p(
+        self.x >> self.planes[1].cfg.xdec,
+        self.y >> self.planes[1].cfg.ydec,
+      ),
+      self.planes[2].p(
+        self.x >> self.planes[2].cfg.xdec,
+        self.y >> self.planes[2].cfg.ydec,
+      ),
     );
     if self.x == self.width() - 1 {
       self.x = 0;
@@ -159,8 +165,3 @@ impl<'a, T: Pixel> Iterator for PixelIter<'a, T> {
     Some(pixel)
   }
 }
-
-
-
-
-

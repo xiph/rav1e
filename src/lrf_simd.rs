@@ -7,31 +7,30 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use crate::lrf::*;
 use crate::frame::PlaneSlice;
+use crate::lrf::*;
 use crate::util::Pixel;
 
 static X_BY_XPLUS1: [u32; 256] = [
   // Special case: Map 0 -> 1 (corresponding to a value of 1/256)
   // instead of 0. See comments in selfguided_restoration_internal() for why
-  1,   128, 171, 192, 205, 213, 219, 224, 228, 230, 233, 235, 236, 238, 239,
-  240, 241, 242, 243, 243, 244, 244, 245, 245, 246, 246, 247, 247, 247, 247,
-  248, 248, 248, 248, 249, 249, 249, 249, 249, 250, 250, 250, 250, 250, 250,
-  250, 251, 251, 251, 251, 251, 251, 251, 251, 251, 251, 252, 252, 252, 252,
-  252, 252, 252, 252, 252, 252, 252, 252, 252, 252, 252, 252, 252, 253, 253,
+  1, 128, 171, 192, 205, 213, 219, 224, 228, 230, 233, 235, 236, 238, 239, 240,
+  241, 242, 243, 243, 244, 244, 245, 245, 246, 246, 247, 247, 247, 247, 248,
+  248, 248, 248, 249, 249, 249, 249, 249, 250, 250, 250, 250, 250, 250, 250,
+  251, 251, 251, 251, 251, 251, 251, 251, 251, 251, 252, 252, 252, 252, 252,
+  252, 252, 252, 252, 252, 252, 252, 252, 252, 252, 252, 252, 253, 253, 253,
   253, 253, 253, 253, 253, 253, 253, 253, 253, 253, 253, 253, 253, 253, 253,
-  253, 253, 253, 253, 253, 253, 253, 253, 253, 253, 253, 253, 254, 254, 254,
+  253, 253, 253, 253, 253, 253, 253, 253, 253, 253, 253, 254, 254, 254, 254,
   254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254,
   254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254,
   254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254,
   254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254,
-  254, 254, 254, 254, 254, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+  254, 254, 254, 254, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
   255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
   255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
   255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
   255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-  256,
+  255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 256,
 ];
 
 #[inline]
@@ -39,7 +38,7 @@ static X_BY_XPLUS1: [u32; 256] = [
 #[target_feature(enable = "avx2")]
 unsafe fn sgrproj_box_ab_8_avx2(
   r: usize, af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
-  iimg_stride: usize, x: usize, y: usize, s: u32, bdm8: usize
+  iimg_stride: usize, x: usize, y: usize, s: u32, bdm8: usize,
 ) {
   #[cfg(target_arch = "x86")]
   use std::arch::x86::*;
@@ -55,19 +54,19 @@ unsafe fn sgrproj_box_ab_8_avx2(
   #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
   #[target_feature(enable = "avx2")]
   unsafe fn get_integral_square_avx2(
-    iimg: &[u32], stride: usize, x: usize, y: usize, size: usize
+    iimg: &[u32], stride: usize, x: usize, y: usize, size: usize,
   ) -> __m256i {
     let iimg = iimg.as_ptr().add(y * stride + x);
     // Cancel out overflow in iimg by using wrapping arithmetic
     _mm256_sub_epi32(
       _mm256_add_epi32(
-        _mm256_loadu_si256(iimg as * const _),
-        _mm256_loadu_si256(iimg.add(size * stride + size) as *const _)
+        _mm256_loadu_si256(iimg as *const _),
+        _mm256_loadu_si256(iimg.add(size * stride + size) as *const _),
       ),
       _mm256_add_epi32(
         _mm256_loadu_si256(iimg.add(size * stride) as *const _),
-        _mm256_loadu_si256(iimg.add(size) as *const _)
-      )
+        _mm256_loadu_si256(iimg.add(size) as *const _),
+      ),
     )
   }
 
@@ -75,41 +74,44 @@ unsafe fn sgrproj_box_ab_8_avx2(
   let ssq = get_integral_square_avx2(iimg_sq, iimg_stride, x, y, d);
   let scaled_sum = _mm256_srlv_epi32(
     _mm256_add_epi32(sum, _mm256_set1_epi32(1 << bdm8 as i32 >> 1)),
-    _mm256_set1_epi32(bdm8 as i32)
+    _mm256_set1_epi32(bdm8 as i32),
   );
   let scaled_ssq = _mm256_srlv_epi32(
     _mm256_add_epi32(ssq, _mm256_set1_epi32(1 << (2 * bdm8) as i32 >> 1)),
-    _mm256_set1_epi32(2 * bdm8 as i32)
+    _mm256_set1_epi32(2 * bdm8 as i32),
   );
   let p = _mm256_max_epi32(
     _mm256_setzero_si256(),
     _mm256_sub_epi32(
       _mm256_mullo_epi32(scaled_ssq, _mm256_set1_epi32(n as i32)),
-      _mm256_madd_epi16(scaled_sum, scaled_sum)
-    )
+      _mm256_madd_epi16(scaled_sum, scaled_sum),
+    ),
   );
   let z = _mm256_srli_epi32(
     _mm256_add_epi32(
       _mm256_mullo_epi32(p, _mm256_set1_epi32(s as i32)),
-      _mm256_set1_epi32(1 << SGRPROJ_MTABLE_BITS as i32 >> 1)
+      _mm256_set1_epi32(1 << SGRPROJ_MTABLE_BITS as i32 >> 1),
     ),
-    SGRPROJ_MTABLE_BITS as i32
+    SGRPROJ_MTABLE_BITS as i32,
   );
   let a = _mm256_i32gather_epi32(
-    X_BY_XPLUS1.as_ptr() as * const _,
+    X_BY_XPLUS1.as_ptr() as *const _,
     _mm256_min_epi32(z, _mm256_set1_epi32(255)),
-    4
+    4,
   );
   let b = _mm256_mullo_epi32(
     _mm256_madd_epi16(
       _mm256_sub_epi32(_mm256_set1_epi32(1 << SGRPROJ_SGR_BITS as i32), a),
-      sum
+      sum,
     ),
-    _mm256_set1_epi32(one_over_n)
+    _mm256_set1_epi32(one_over_n),
   );
   let b = _mm256_srlv_epi32(
-    _mm256_add_epi32(b,_mm256_set1_epi32(1 << SGRPROJ_RECIP_BITS as i32 >> 1)),
-    _mm256_set1_epi32(SGRPROJ_RECIP_BITS as i32)
+    _mm256_add_epi32(
+      b,
+      _mm256_set1_epi32(1 << SGRPROJ_RECIP_BITS as i32 >> 1),
+    ),
+    _mm256_set1_epi32(SGRPROJ_RECIP_BITS as i32),
   );
   _mm256_storeu_si256(af.as_mut_ptr().add(x) as *mut _, a);
   _mm256_storeu_si256(bf.as_mut_ptr().add(x) as *mut _, b);
@@ -119,20 +121,56 @@ unsafe fn sgrproj_box_ab_8_avx2(
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
   af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
-  iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize
+  iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
 ) {
   for x in (0..stripe_w + 2).step_by(8) {
     if x + 8 <= stripe_w + 2 {
-      sgrproj_box_ab_8_avx2(1, af, bf, iimg, iimg_sq, iimg_stride, x, y, s, bdm8);
+      sgrproj_box_ab_8_avx2(
+        1,
+        af,
+        bf,
+        iimg,
+        iimg_sq,
+        iimg_stride,
+        x,
+        y,
+        s,
+        bdm8,
+      );
     } else {
       // finish using scalar
-      sgrproj_box_ab_internal(1, af, bf, iimg, iimg_sq, iimg_stride, x, y, stripe_w, s, bdm8);
+      sgrproj_box_ab_internal(
+        1,
+        af,
+        bf,
+        iimg,
+        iimg_sq,
+        iimg_stride,
+        x,
+        y,
+        stripe_w,
+        s,
+        bdm8,
+      );
     }
   }
-  #[cfg(feature = "check_asm")] {
+  #[cfg(feature = "check_asm")]
+  {
     let mut af_ref: Vec<u32> = vec![0; stripe_w + 2];
     let mut bf_ref: Vec<u32> = vec![0; stripe_w + 2];
-    sgrproj_box_ab_internal(1, &mut af_ref, &mut bf_ref, iimg, iimg_sq, iimg_stride, 0, y, stripe_w, s, bdm8);
+    sgrproj_box_ab_internal(
+      1,
+      &mut af_ref,
+      &mut bf_ref,
+      iimg,
+      iimg_sq,
+      iimg_stride,
+      0,
+      y,
+      stripe_w,
+      s,
+      bdm8,
+    );
     assert_eq!(af[..stripe_w + 2], af_ref[..]);
     assert_eq!(bf[..stripe_w + 2], bf_ref[..]);
   }
@@ -142,20 +180,56 @@ pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
   af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
-  iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize
+  iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
 ) {
   for x in (0..stripe_w + 2).step_by(8) {
     if x + 8 <= stripe_w + 2 {
-      sgrproj_box_ab_8_avx2(2, af, bf, iimg, iimg_sq, iimg_stride, x, y, s, bdm8);
+      sgrproj_box_ab_8_avx2(
+        2,
+        af,
+        bf,
+        iimg,
+        iimg_sq,
+        iimg_stride,
+        x,
+        y,
+        s,
+        bdm8,
+      );
     } else {
       // finish using scalar
-      sgrproj_box_ab_internal(2, af, bf, iimg, iimg_sq, iimg_stride, x, y, stripe_w, s, bdm8);
+      sgrproj_box_ab_internal(
+        2,
+        af,
+        bf,
+        iimg,
+        iimg_sq,
+        iimg_stride,
+        x,
+        y,
+        stripe_w,
+        s,
+        bdm8,
+      );
     }
   }
-  #[cfg(feature = "check_asm")] {
+  #[cfg(feature = "check_asm")]
+  {
     let mut af_ref: Vec<u32> = vec![0; stripe_w + 2];
     let mut bf_ref: Vec<u32> = vec![0; stripe_w + 2];
-    sgrproj_box_ab_internal(2, &mut af_ref, &mut bf_ref, iimg, iimg_sq, iimg_stride, 0, y, stripe_w, s, bdm8);
+    sgrproj_box_ab_internal(
+      2,
+      &mut af_ref,
+      &mut bf_ref,
+      iimg,
+      iimg_sq,
+      iimg_stride,
+      0,
+      y,
+      stripe_w,
+      s,
+      bdm8,
+    );
     assert_eq!(af[..stripe_w + 2], af_ref[..]);
     assert_eq!(bf[..stripe_w + 2], bf_ref[..]);
   }
@@ -165,34 +239,34 @@ pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "avx2")]
 unsafe fn sgrproj_box_f_r0_8_avx2<T: Pixel>(
-  f: &mut[u32], x: usize, y: usize, cdeffed: &PlaneSlice<T>
+  f: &mut [u32], x: usize, y: usize, cdeffed: &PlaneSlice<T>,
 ) {
-  use std::mem;
   #[cfg(target_arch = "x86")]
   use std::arch::x86::*;
   #[cfg(target_arch = "x86_64")]
   use std::arch::x86_64::*;
+  use std::mem;
   _mm256_storeu_si256(
     f.as_mut_ptr().add(x) as *mut _,
     _mm256_slli_epi32(
       if mem::size_of::<T>() == 1 {
-        _mm256_cvtepu8_epi32(
-          _mm_loadl_epi64(cdeffed.subslice(x, y).as_ptr() as *const _)
-        )
+        _mm256_cvtepu8_epi32(_mm_loadl_epi64(
+          cdeffed.subslice(x, y).as_ptr() as *const _
+        ))
       } else {
-        _mm256_cvtepu16_epi32(
-          _mm_loadu_si128(cdeffed.subslice(x, y).as_ptr() as *const _)
-        )
+        _mm256_cvtepu16_epi32(_mm_loadu_si128(
+          cdeffed.subslice(x, y).as_ptr() as *const _
+        ))
       },
-      SGRPROJ_RST_BITS as i32
-    )
+      SGRPROJ_RST_BITS as i32,
+    ),
   );
 }
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn sgrproj_box_f_r0_avx2<T: Pixel>(
-  f: &mut[u32], y: usize, w: usize, cdeffed: &PlaneSlice<T>
+  f: &mut [u32], y: usize, w: usize, cdeffed: &PlaneSlice<T>,
 ) {
   for x in (0..w).step_by(8) {
     if x + 8 <= w {
@@ -202,7 +276,8 @@ pub(crate) unsafe fn sgrproj_box_f_r0_avx2<T: Pixel>(
       sgrproj_box_f_r0_internal(f, x, y, w, cdeffed);
     }
   }
-  #[cfg(feature = "check_asm")] {
+  #[cfg(feature = "check_asm")]
+  {
     let mut f_ref: Vec<u32> = vec![0; w];
     sgrproj_box_f_r0_internal(&mut f_ref, 0, y, w, cdeffed);
     assert_eq!(f[..w], f_ref[..]);
@@ -213,14 +288,14 @@ pub(crate) unsafe fn sgrproj_box_f_r0_avx2<T: Pixel>(
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "avx2")]
 unsafe fn sgrproj_box_f_r1_8_avx2<T: Pixel>(
-  af: &[&[u32]; 3], bf: &[&[u32]; 3], f: &mut[u32], x: usize, y: usize,
-  cdeffed: &PlaneSlice<T>
+  af: &[&[u32]; 3], bf: &[&[u32]; 3], f: &mut [u32], x: usize, y: usize,
+  cdeffed: &PlaneSlice<T>,
 ) {
-  use std::mem;
   #[cfg(target_arch = "x86")]
   use std::arch::x86::*;
   #[cfg(target_arch = "x86_64")]
   use std::arch::x86_64::*;
+  use std::mem;
 
   let three = _mm256_set1_epi32(3);
   let four = _mm256_set1_epi32(4);
@@ -235,30 +310,30 @@ unsafe fn sgrproj_box_f_r1_8_avx2<T: Pixel>(
       _mm256_add_epi32(
         _mm256_add_epi32(
           _mm256_loadu_si256(a0.add(x) as *const _),
-          _mm256_loadu_si256(a0.add(x + 2) as *const _)
+          _mm256_loadu_si256(a0.add(x + 2) as *const _),
         ),
         _mm256_add_epi32(
           _mm256_loadu_si256(a2.add(x) as *const _),
-          _mm256_loadu_si256(a2.add(x + 2) as *const _)
-        )
+          _mm256_loadu_si256(a2.add(x + 2) as *const _),
+        ),
       ),
-      three
+      three,
     ),
     _mm256_madd_epi16(
       _mm256_add_epi32(
         _mm256_add_epi32(
           _mm256_loadu_si256(a1.add(x) as *const _),
-          _mm256_loadu_si256(a0.add(x + 1) as *const _)
+          _mm256_loadu_si256(a0.add(x + 1) as *const _),
         ),
         _mm256_add_epi32(
           _mm256_add_epi32(
             _mm256_loadu_si256(a1.add(x + 1) as *const _),
-            _mm256_loadu_si256(a2.add(x + 1) as *const _)
+            _mm256_loadu_si256(a2.add(x + 1) as *const _),
           ),
           _mm256_loadu_si256(a1.add(x + 2) as *const _),
-        )
+        ),
       ),
-      four
+      four,
     ),
   );
   let b = _mm256_add_epi32(
@@ -266,62 +341,62 @@ unsafe fn sgrproj_box_f_r1_8_avx2<T: Pixel>(
       _mm256_add_epi32(
         _mm256_add_epi32(
           _mm256_loadu_si256(b0.add(x) as *const _),
-          _mm256_loadu_si256(b0.add(x + 2) as *const _)
+          _mm256_loadu_si256(b0.add(x + 2) as *const _),
         ),
         _mm256_add_epi32(
           _mm256_loadu_si256(b2.add(x) as *const _),
-          _mm256_loadu_si256(b2.add(x + 2) as *const _)
-        )
+          _mm256_loadu_si256(b2.add(x + 2) as *const _),
+        ),
       ),
-      three
+      three,
     ),
     _mm256_mullo_epi32(
       _mm256_add_epi32(
         _mm256_add_epi32(
           _mm256_loadu_si256(b1.add(x) as *const _),
-          _mm256_loadu_si256(b0.add(x + 1) as *const _)
+          _mm256_loadu_si256(b0.add(x + 1) as *const _),
         ),
         _mm256_add_epi32(
           _mm256_add_epi32(
             _mm256_loadu_si256(b1.add(x + 1) as *const _),
-            _mm256_loadu_si256(b2.add(x + 1) as *const _)
+            _mm256_loadu_si256(b2.add(x + 1) as *const _),
           ),
           _mm256_loadu_si256(b1.add(x + 2) as *const _),
-        )
+        ),
       ),
-      four
+      four,
     ),
   );
   let v = _mm256_add_epi32(
     _mm256_madd_epi16(
       a,
       if mem::size_of::<T>() == 1 {
-        _mm256_cvtepu8_epi32(
-          _mm_loadl_epi64(cdeffed.subslice(x, y).as_ptr() as *const _)
-        )
+        _mm256_cvtepu8_epi32(_mm_loadl_epi64(
+          cdeffed.subslice(x, y).as_ptr() as *const _
+        ))
       } else {
-        _mm256_cvtepu16_epi32(
-          _mm_loadu_si128(cdeffed.subslice(x, y).as_ptr() as *const _)
-        )
-      }
+        _mm256_cvtepu16_epi32(_mm_loadu_si128(
+          cdeffed.subslice(x, y).as_ptr() as *const _
+        ))
+      },
     ),
-    b
+    b,
   );
   const SHIFT: i32 = (5 + SGRPROJ_SGR_BITS - SGRPROJ_RST_BITS) as i32;
   _mm256_storeu_si256(
     f.as_mut_ptr().add(x) as *mut _,
     _mm256_srli_epi32(
       _mm256_add_epi32(v, _mm256_set1_epi32(1 << SHIFT >> 1)),
-      SHIFT
-    )
+      SHIFT,
+    ),
   );
 }
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn sgrproj_box_f_r1_avx2<T: Pixel>(
-  af: &[&[u32]; 3], bf: &[&[u32]; 3], f: &mut[u32],
-  y: usize, w: usize, cdeffed: &PlaneSlice<T>
+  af: &[&[u32]; 3], bf: &[&[u32]; 3], f: &mut [u32], y: usize, w: usize,
+  cdeffed: &PlaneSlice<T>,
 ) {
   for x in (0..w).step_by(8) {
     if x + 8 <= w {
@@ -331,7 +406,8 @@ pub(crate) unsafe fn sgrproj_box_f_r1_avx2<T: Pixel>(
       sgrproj_box_f_r1_internal(af, bf, f, x, y, w, cdeffed);
     }
   }
-  #[cfg(feature = "check_asm")] {
+  #[cfg(feature = "check_asm")]
+  {
     let mut f_ref: Vec<u32> = vec![0; w];
     sgrproj_box_f_r1_internal(af, bf, &mut f_ref, 0, y, w, cdeffed);
     assert_eq!(f[..w], f_ref[..]);
@@ -342,14 +418,14 @@ pub(crate) unsafe fn sgrproj_box_f_r1_avx2<T: Pixel>(
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "avx2")]
 unsafe fn sgrproj_box_f_r2_8_avx2<T: Pixel>(
-  af: &[&[u32]; 2], bf: &[&[u32]; 2], f0: &mut[u32], f1: &mut[u32], x: usize,
-  y: usize, cdeffed: &PlaneSlice<T>
+  af: &[&[u32]; 2], bf: &[&[u32]; 2], f0: &mut [u32], f1: &mut [u32],
+  x: usize, y: usize, cdeffed: &PlaneSlice<T>,
 ) {
-  use std::mem;
   #[cfg(target_arch = "x86")]
   use std::arch::x86::*;
   #[cfg(target_arch = "x86_64")]
   use std::arch::x86_64::*;
+  use std::mem;
 
   let five = _mm256_set1_epi32(5);
   let six = _mm256_set1_epi32(6);
@@ -361,107 +437,95 @@ unsafe fn sgrproj_box_f_r2_8_avx2<T: Pixel>(
     _mm256_madd_epi16(
       _mm256_add_epi32(
         _mm256_loadu_si256(a0.add(x) as *const _),
-        _mm256_loadu_si256(a0.add(x + 2) as *const _)
+        _mm256_loadu_si256(a0.add(x + 2) as *const _),
       ),
-      five
+      five,
     ),
-    _mm256_madd_epi16(
-      _mm256_loadu_si256(a0.add(x + 1) as *const _),
-      six
-    )
+    _mm256_madd_epi16(_mm256_loadu_si256(a0.add(x + 1) as *const _), six),
   );
   let b = _mm256_add_epi32(
     _mm256_mullo_epi32(
       _mm256_add_epi32(
         _mm256_loadu_si256(b0.add(x) as *const _),
-        _mm256_loadu_si256(b0.add(x + 2) as *const _)
+        _mm256_loadu_si256(b0.add(x + 2) as *const _),
       ),
-      five
+      five,
     ),
-    _mm256_mullo_epi32(
-      _mm256_loadu_si256(b0.add(x + 1) as *const _),
-      six
-    )
+    _mm256_mullo_epi32(_mm256_loadu_si256(b0.add(x + 1) as *const _), six),
   );
   let ao = _mm256_add_epi32(
     _mm256_madd_epi16(
       _mm256_add_epi32(
         _mm256_loadu_si256(a2.add(x) as *const _),
-        _mm256_loadu_si256(a2.add(x + 2) as *const _)
+        _mm256_loadu_si256(a2.add(x + 2) as *const _),
       ),
-      five
+      five,
     ),
-    _mm256_madd_epi16(
-      _mm256_loadu_si256(a2.add(x + 1) as *const _),
-      six
-    )
+    _mm256_madd_epi16(_mm256_loadu_si256(a2.add(x + 1) as *const _), six),
   );
   let bo = _mm256_add_epi32(
     _mm256_mullo_epi32(
       _mm256_add_epi32(
         _mm256_loadu_si256(b2.add(x) as *const _),
-        _mm256_loadu_si256(b2.add(x + 2) as *const _)
+        _mm256_loadu_si256(b2.add(x + 2) as *const _),
       ),
-      five
+      five,
     ),
-    _mm256_mullo_epi32(
-      _mm256_loadu_si256(b2.add(x + 1) as *const _),
-      six
-    )
+    _mm256_mullo_epi32(_mm256_loadu_si256(b2.add(x + 1) as *const _), six),
   );
   let v = _mm256_add_epi32(
     _mm256_madd_epi16(
       _mm256_add_epi32(a, ao),
       if mem::size_of::<T>() == 1 {
-        _mm256_cvtepu8_epi32(
-          _mm_loadl_epi64(cdeffed.subslice(x, y).as_ptr() as *const _)
-        )
+        _mm256_cvtepu8_epi32(_mm_loadl_epi64(
+          cdeffed.subslice(x, y).as_ptr() as *const _
+        ))
       } else {
-        _mm256_cvtepu16_epi32(
-          _mm_loadu_si128(cdeffed.subslice(x, y).as_ptr() as *const _)
-        )
-      }
+        _mm256_cvtepu16_epi32(_mm_loadu_si128(
+          cdeffed.subslice(x, y).as_ptr() as *const _
+        ))
+      },
     ),
-    _mm256_add_epi32(b, bo)
+    _mm256_add_epi32(b, bo),
   );
   let vo = _mm256_add_epi32(
     _mm256_madd_epi16(
       ao,
       if mem::size_of::<T>() == 1 {
-        _mm256_cvtepu8_epi32(
-          _mm_loadl_epi64(cdeffed.subslice(x, y + 1).as_ptr() as *const _)
-        )
+        _mm256_cvtepu8_epi32(_mm_loadl_epi64(
+          cdeffed.subslice(x, y + 1).as_ptr() as *const _,
+        ))
       } else {
-        _mm256_cvtepu16_epi32(
-          _mm_loadu_si128(cdeffed.subslice(x, y + 1).as_ptr() as *const _)
-        )
-      }
+        _mm256_cvtepu16_epi32(_mm_loadu_si128(
+          cdeffed.subslice(x, y + 1).as_ptr() as *const _,
+        ))
+      },
     ),
-    bo
+    bo,
   );
   const SHIFT: i32 = (5 + SGRPROJ_SGR_BITS - SGRPROJ_RST_BITS) as i32;
   _mm256_storeu_si256(
     f0.as_mut_ptr().add(x) as *mut _,
     _mm256_srli_epi32(
       _mm256_add_epi32(v, _mm256_set1_epi32(1 << SHIFT >> 1)),
-      SHIFT
-    )
+      SHIFT,
+    ),
   );
   const SHIFTO: i32 = (4 + SGRPROJ_SGR_BITS - SGRPROJ_RST_BITS) as i32;
   _mm256_storeu_si256(
     f1.as_mut_ptr().add(x) as *mut _,
     _mm256_srli_epi32(
       _mm256_add_epi32(vo, _mm256_set1_epi32(1 << SHIFTO >> 1)),
-      SHIFTO
-    )
+      SHIFTO,
+    ),
   );
 }
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn sgrproj_box_f_r2_avx2<T: Pixel>(
-  af: &[&[u32]; 2], bf: &[&[u32]; 2], f0: &mut[u32], f1: &mut[u32], y: usize,
-  w: usize, cdeffed: &PlaneSlice<T>
+  af: &[&[u32]; 2], bf: &[&[u32]; 2], f0: &mut [u32], f1: &mut [u32],
+  y: usize, w: usize, cdeffed: &PlaneSlice<T>,
 ) {
   for x in (0..w).step_by(8) {
     if x + 8 <= w {
@@ -471,10 +535,20 @@ pub(crate) unsafe fn sgrproj_box_f_r2_avx2<T: Pixel>(
       sgrproj_box_f_r2_internal(af, bf, f0, f1, x, y, w, cdeffed);
     }
   }
-  #[cfg(feature = "check_asm")] {
+  #[cfg(feature = "check_asm")]
+  {
     let mut f0_ref: Vec<u32> = vec![0; w];
     let mut f1_ref: Vec<u32> = vec![0; w];
-    sgrproj_box_f_r2_internal(af, bf, &mut f0_ref, &mut f1_ref, 0, y, w, cdeffed);
+    sgrproj_box_f_r2_internal(
+      af,
+      bf,
+      &mut f0_ref,
+      &mut f1_ref,
+      0,
+      y,
+      w,
+      cdeffed,
+    );
     assert_eq!(f0[..w], f0_ref[..]);
     assert_eq!(f1[..w], f1_ref[..]);
   }

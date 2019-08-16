@@ -12,9 +12,10 @@ impl Decoder for y4m::Decoder<'_, Box<dyn Read>> {
     let height = self.get_height();
     let color_space = self.get_colorspace();
     let bit_depth = color_space.get_bit_depth();
-    let (chroma_sampling, chroma_sample_position) = map_y4m_color_space(color_space);
+    let (chroma_sampling, chroma_sample_position) =
+      map_y4m_color_space(color_space);
     let framerate = self.get_framerate();
-    let time_base =  Rational::new(framerate.den as u64, framerate.num as u64);
+    let time_base = Rational::new(framerate.den as u64, framerate.num as u64);
 
     VideoDetails {
       width,
@@ -26,25 +27,33 @@ impl Decoder for y4m::Decoder<'_, Box<dyn Read>> {
     }
   }
 
-  fn read_frame<T: Pixel>(&mut self, cfg: &VideoDetails) -> Result<Frame<T>, DecodeError> {
+  fn read_frame<T: Pixel>(
+    &mut self, cfg: &VideoDetails,
+  ) -> Result<Frame<T>, DecodeError> {
     let bytes = self.get_bytes_per_sample();
-    self.read_frame()
+    self
+      .read_frame()
       .map(|frame| {
-        let mut f: Frame<T> = Frame::new(cfg.width, cfg.height, cfg.chroma_sampling);
+        let mut f: Frame<T> =
+          Frame::new(cfg.width, cfg.height, cfg.chroma_sampling);
 
-        let (chroma_width, _) = cfg.chroma_sampling
-         .get_chroma_dimensions(cfg.width, cfg.height);
+        let (chroma_width, _) =
+          cfg.chroma_sampling.get_chroma_dimensions(cfg.width, cfg.height);
 
-        f.planes[0].copy_from_raw_u8(frame.get_y_plane(), cfg.width * bytes, bytes);
+        f.planes[0].copy_from_raw_u8(
+          frame.get_y_plane(),
+          cfg.width * bytes,
+          bytes,
+        );
         f.planes[1].copy_from_raw_u8(
           frame.get_u_plane(),
           chroma_width * bytes,
-          bytes
+          bytes,
         );
         f.planes[2].copy_from_raw_u8(
           frame.get_v_plane(),
           chroma_width * bytes,
-          bytes
+          bytes,
         );
         f
       })
@@ -65,11 +74,11 @@ impl From<y4m::Error> for DecodeError {
 }
 
 pub fn map_y4m_color_space(
-  color_space: y4m::Colorspace
+  color_space: y4m::Colorspace,
 ) -> (ChromaSampling, ChromaSamplePosition) {
-  use y4m::Colorspace::*;
-  use crate::ChromaSampling::*;
   use crate::ChromaSamplePosition::*;
+  use crate::ChromaSampling::*;
+  use y4m::Colorspace::*;
   match color_space {
     Cmono => (Cs400, Unknown),
     C420jpeg | C420paldv => (Cs420, Unknown),

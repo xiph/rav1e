@@ -18,7 +18,9 @@ macro_rules! cdf {
 }
 
 macro_rules! cdf_size {
-    ($x:expr) => ($x+1);
+  ($x:expr) => {
+    $x + 1
+  };
 }
 
 #[repr(align(32))]
@@ -33,10 +35,9 @@ pub struct Align32;
 // let mut x: AlignedArray<[i16; 64 * 64]> = UninitializedAlignedArray();
 // assert!(x.array.as_ptr() as usize % 16 == 0);
 // ```
-pub struct AlignedArray<ARRAY>
-{
+pub struct AlignedArray<ARRAY> {
   _alignment: [Align32; 0],
-  pub array: ARRAY
+  pub array: ARRAY,
 }
 
 #[allow(non_snake_case)]
@@ -95,7 +96,7 @@ pub fn clamp<T: PartialOrd>(input: T, min: T, max: T) -> T {
   }
 }
 
-pub trait CastFromPrimitive<T> : Copy + 'static {
+pub trait CastFromPrimitive<T>: Copy + 'static {
   fn cast_from(v: T) -> Self;
 }
 
@@ -143,7 +144,8 @@ pub trait Pixel:
   + Send
   + Sync
   + 'static
-{}
+{
+}
 
 impl Pixel for u8 {}
 impl Pixel for u16 {}
@@ -152,7 +154,9 @@ macro_rules! impl_cast_from_pixel_to_primitive {
   ( $T:ty ) => {
     impl<T: Pixel> CastFromPrimitive<T> for $T {
       #[inline(always)]
-      fn cast_from(v: T) -> Self { v.as_() }
+      fn cast_from(v: T) -> Self {
+        v.as_()
+      }
     }
   };
 }

@@ -18,14 +18,23 @@ use std::mem;
 use std::ops::AddAssign;
 
 pub trait Coefficient:
-  PrimInt + Into<i32> + AsPrimitive<i32> + CastFromPrimitive<i32> + AddAssign + Signed + 'static {}
+  PrimInt
+  + Into<i32>
+  + AsPrimitive<i32>
+  + CastFromPrimitive<i32>
+  + AddAssign
+  + Signed
+  + 'static
+{
+}
 impl Coefficient for i16 {}
 impl Coefficient for i32 {}
 
 pub fn get_log_tx_scale(tx_size: TxSize) -> usize {
   let num_pixels = tx_size.area();
 
-  Into::<usize>::into(num_pixels > 256) + Into::<usize>::into(num_pixels > 1024)
+  Into::<usize>::into(num_pixels > 256)
+    + Into::<usize>::into(num_pixels > 1024)
 }
 
 pub fn dc_q(qindex: u8, delta_q: i8, bit_depth: usize) -> i16 {
@@ -33,7 +42,7 @@ pub fn dc_q(qindex: u8, delta_q: i8, bit_depth: usize) -> i16 {
     8 => &dc_qlookup_Q3,
     10 => &dc_qlookup_10_Q3,
     12 => &dc_qlookup_12_Q3,
-    _ => unimplemented!()
+    _ => unimplemented!(),
   };
 
   table[(qindex as isize + delta_q as isize).max(0).min(255) as usize]
@@ -44,7 +53,7 @@ pub fn ac_q(qindex: u8, delta_q: i8, bit_depth: usize) -> i16 {
     8 => &ac_qlookup_Q3,
     10 => &ac_qlookup_10_Q3,
     12 => &ac_qlookup_12_Q3,
-    _ => unimplemented!()
+    _ => unimplemented!(),
   };
 
   table[(qindex as isize + delta_q as isize).max(0).min(255) as usize]
@@ -80,7 +89,7 @@ pub fn select_dc_qi(quantizer: i64, bit_depth: usize) -> u8 {
     8 => &dc_qlookup_Q3,
     10 => &dc_qlookup_10_Q3,
     12 => &dc_qlookup_12_Q3,
-    _ => unimplemented!()
+    _ => unimplemented!(),
   };
   select_qi(quantizer, qlookup)
 }
@@ -90,7 +99,7 @@ pub fn select_ac_qi(quantizer: i64, bit_depth: usize) -> u8 {
     8 => &ac_qlookup_Q3,
     10 => &ac_qlookup_10_Q3,
     12 => &ac_qlookup_12_Q3,
-    _ => unimplemented!()
+    _ => unimplemented!(),
   };
   select_qi(quantizer, qlookup)
 }
@@ -104,7 +113,7 @@ pub struct QuantizationContext {
 
   ac_quant: u32,
   ac_offset: i32,
-  ac_mul_add: (u32, u32, u32)
+  ac_mul_add: (u32, u32, u32),
 }
 
 fn divu_gen(d: u32) -> (u32, u32, u32) {
@@ -193,7 +202,7 @@ mod test {
 impl QuantizationContext {
   pub fn update(
     &mut self, qindex: u8, tx_size: TxSize, is_intra: bool, bit_depth: usize,
-    dc_delta_q: i8, ac_delta_q: i8
+    dc_delta_q: i8, ac_delta_q: i8,
   ) {
     self.log_tx_scale = get_log_tx_scale(tx_size);
 
@@ -210,14 +219,18 @@ impl QuantizationContext {
   }
 
   #[inline]
-  pub fn quantize<T>(&self, coeffs: &[T], qcoeffs: &mut [T], coded_tx_size: usize)
-    where T: Coefficient
+  pub fn quantize<T>(
+    &self, coeffs: &[T], qcoeffs: &mut [T], coded_tx_size: usize,
+  ) where
+    T: Coefficient,
   {
     qcoeffs[0] = coeffs[0] << (self.log_tx_scale as usize);
     qcoeffs[0] += qcoeffs[0].signum() * T::cast_from(self.dc_offset);
     qcoeffs[0] = T::cast_from(divu_pair(qcoeffs[0].as_(), self.dc_mul_add));
 
-    for (qc, c) in qcoeffs[1..].iter_mut().zip(coeffs[1..].iter()).take(coded_tx_size - 1) {
+    for (qc, c) in
+      qcoeffs[1..].iter_mut().zip(coeffs[1..].iter()).take(coded_tx_size - 1)
+    {
       *qc = *c << self.log_tx_scale;
       *qc += qc.signum() * T::cast_from(self.ac_offset);
       *qc = T::cast_from(divu_pair((*qc).as_(), self.ac_mul_add));
@@ -233,7 +246,7 @@ impl QuantizationContext {
 
 pub fn dequantize(
   qindex: u8, coeffs: &[i32], rcoeffs: &mut [i32], tx_size: TxSize,
-  bit_depth: usize, dc_delta_q: i8, ac_delta_q: i8
+  bit_depth: usize, dc_delta_q: i8, ac_delta_q: i8,
 ) {
   let log_tx_scale = get_log_tx_scale(tx_size) as i32;
   let offset = (1 << log_tx_scale) - 1;

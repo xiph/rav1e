@@ -47,12 +47,8 @@ pub struct TilingInfo {
 
 impl TilingInfo {
   pub fn from_target_tiles(
-    sb_size_log2: usize,
-    frame_width: usize,
-    frame_height: usize,
-    frame_rate: f64,
-    tile_cols_log2: usize,
-    tile_rows_log2: usize,
+    sb_size_log2: usize, frame_width: usize, frame_height: usize,
+    frame_rate: f64, tile_cols_log2: usize, tile_rows_log2: usize,
   ) -> Self {
     // <https://aomediacodec.github.io/av1-spec/#tile-info-syntax>
 
@@ -78,9 +74,12 @@ impl TilingInfo {
     // Implements restriction in Annex A of the spec.
     // Unlike the other restrictions, this one does not change
     // the header coding of the tile rows/cols.
-    let min_tiles_ratelimit_log2 = min_tiles_log2.max(
-      (((frame_width * frame_height) as f64 * frame_rate
-        / MAX_TILE_RATE + 0.5) as usize).ilog());
+    let min_tiles_ratelimit_log2 =
+      min_tiles_log2.max(
+        (((frame_width * frame_height) as f64 * frame_rate / MAX_TILE_RATE
+          + 0.5) as usize)
+          .ilog(),
+      );
 
     let tile_cols_log2 =
       tile_cols_log2.max(min_tile_cols_log2).min(max_tile_cols_log2);
@@ -91,13 +90,14 @@ impl TilingInfo {
     } else {
       0
     };
-    let min_tile_rows_ratelimit_log2 = if min_tiles_ratelimit_log2 > tile_cols_log2 {
-      min_tiles_ratelimit_log2 - tile_cols_log2
-    } else {
-      0
-    };
-    let tile_rows_log2 =
-      tile_rows_log2.max(min_tile_rows_log2)
+    let min_tile_rows_ratelimit_log2 =
+      if min_tiles_ratelimit_log2 > tile_cols_log2 {
+        min_tiles_ratelimit_log2 - tile_cols_log2
+      } else {
+        0
+      };
+    let tile_rows_log2 = tile_rows_log2
+      .max(min_tile_rows_log2)
       .max(min_tile_rows_ratelimit_log2)
       .min(max_tile_rows_log2);
     let tile_height_sb = sb_rows.align_power_of_two_and_shift(tile_rows_log2);
@@ -143,9 +143,7 @@ impl TilingInfo {
   ///
   /// Provide mutable tiled views of frame-level structures.
   pub fn tile_iter_mut<'a, 'b, T: Pixel>(
-    &self,
-    fs: &'a mut FrameState<T>,
-    fb: &'b mut FrameBlocks,
+    &self, fs: &'a mut FrameState<T>, fb: &'b mut FrameBlocks,
   ) -> TileContextIterMut<'a, 'b, T> {
     TileContextIterMut { ti: *self, fs, fb, next: 0, phantom: PhantomData }
   }
@@ -230,32 +228,67 @@ pub mod test {
     let (width, height) = (160, 144);
     let frame_rate = 25f64;
 
-    let ti = TilingInfo::from_target_tiles(sb_size_log2, width, height, frame_rate, 0, 0);
+    let ti = TilingInfo::from_target_tiles(
+      sb_size_log2,
+      width,
+      height,
+      frame_rate,
+      0,
+      0,
+    );
     assert_eq!(1, ti.cols);
     assert_eq!(1, ti.rows);
     assert_eq!(3, ti.tile_width_sb);
     assert_eq!(3, ti.tile_height_sb);
 
-    let ti = TilingInfo::from_target_tiles(sb_size_log2, width, height, frame_rate, 1, 1);
+    let ti = TilingInfo::from_target_tiles(
+      sb_size_log2,
+      width,
+      height,
+      frame_rate,
+      1,
+      1,
+    );
     assert_eq!(2, ti.cols);
     assert_eq!(2, ti.rows);
     assert_eq!(2, ti.tile_width_sb);
     assert_eq!(2, ti.tile_height_sb);
 
-    let ti = TilingInfo::from_target_tiles(sb_size_log2, width, height, frame_rate, 2, 2);
+    let ti = TilingInfo::from_target_tiles(
+      sb_size_log2,
+      width,
+      height,
+      frame_rate,
+      2,
+      2,
+    );
     assert_eq!(3, ti.cols);
     assert_eq!(3, ti.rows);
     assert_eq!(1, ti.tile_width_sb);
     assert_eq!(1, ti.tile_height_sb);
 
     // cannot split more than superblocks
-    let ti = TilingInfo::from_target_tiles(sb_size_log2, width, height, frame_rate, 10, 8);
+    let ti = TilingInfo::from_target_tiles(
+      sb_size_log2,
+      width,
+      height,
+      frame_rate,
+      10,
+      8,
+    );
     assert_eq!(3, ti.cols);
     assert_eq!(3, ti.rows);
     assert_eq!(1, ti.tile_width_sb);
     assert_eq!(1, ti.tile_height_sb);
 
-    let ti = TilingInfo::from_target_tiles(sb_size_log2, 1024, 1024, frame_rate, 0, 0);
+    let ti = TilingInfo::from_target_tiles(
+      sb_size_log2,
+      1024,
+      1024,
+      frame_rate,
+      0,
+      0,
+    );
     assert_eq!(1, ti.cols);
     assert_eq!(1, ti.rows);
     assert_eq!(16, ti.tile_width_sb);
@@ -263,9 +296,7 @@ pub mod test {
   }
 
   fn create_frame_invariants(
-    width: usize,
-    height: usize,
-    chroma_sampling: ChromaSampling,
+    width: usize, height: usize, chroma_sampling: ChromaSampling,
   ) -> FrameInvariants<u16> {
     // FrameInvariants aligns to the next multiple of 8, so using other values could make tests confusing
     assert!(width & 7 == 0);
@@ -291,7 +322,14 @@ pub mod test {
 
     {
       // 2x2 tiles
-      let ti = TilingInfo::from_target_tiles(fi.sb_size_log2(), fi.width, fi.height, frame_rate, 1, 1);
+      let ti = TilingInfo::from_target_tiles(
+        fi.sb_size_log2(),
+        fi.width,
+        fi.height,
+        frame_rate,
+        1,
+        1,
+      );
       let mut iter = ti.tile_iter_mut(&mut fs, &mut fb);
       assert_eq!(4, iter.len());
       assert!(iter.next().is_some());
@@ -307,7 +345,14 @@ pub mod test {
 
     {
       // 4x4 tiles requested, will actually get 3x3 tiles
-      let ti = TilingInfo::from_target_tiles(fi.sb_size_log2(), fi.width, fi.height, frame_rate, 2, 2);
+      let ti = TilingInfo::from_target_tiles(
+        fi.sb_size_log2(),
+        fi.width,
+        fi.height,
+        frame_rate,
+        2,
+        2,
+      );
       let mut iter = ti.tile_iter_mut(&mut fs, &mut fb);
       assert_eq!(9, iter.len());
       assert!(iter.next().is_some());
@@ -347,7 +392,14 @@ pub mod test {
     let mut fb = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
 
     // 4x4 tiles requested, will actually get 3x3 tiles
-    let ti = TilingInfo::from_target_tiles(fi.sb_size_log2(), fi.width, fi.height, fi.config.frame_rate(), 2, 2);
+    let ti = TilingInfo::from_target_tiles(
+      fi.sb_size_log2(),
+      fi.width,
+      fi.height,
+      fi.config.frame_rate(),
+      2,
+      2,
+    );
     let iter = ti.tile_iter_mut(&mut fs, &mut fb);
     let tile_states = iter.map(|ctx| ctx.ts).collect::<Vec<_>>();
 
@@ -418,7 +470,14 @@ pub mod test {
     let mut fb = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
 
     // 4x4 tiles requested, will actually get 3x3 tiles
-    let ti = TilingInfo::from_target_tiles(fi.sb_size_log2(), fi.width, fi.height, fi.config.frame_rate(), 2, 2);
+    let ti = TilingInfo::from_target_tiles(
+      fi.sb_size_log2(),
+      fi.width,
+      fi.height,
+      fi.config.frame_rate(),
+      2,
+      2,
+    );
     let iter = ti.tile_iter_mut(&mut fs, &mut fb);
     let tbs = iter.map(|ctx| ctx.tb).collect::<Vec<_>>();
 
@@ -451,7 +510,14 @@ pub mod test {
 
     {
       // 4x4 tiles requested, will actually get 3x3 tiles
-      let ti = TilingInfo::from_target_tiles(fi.sb_size_log2(), fi.width, fi.height, fi.config.frame_rate(), 2, 2);
+      let ti = TilingInfo::from_target_tiles(
+        fi.sb_size_log2(),
+        fi.width,
+        fi.height,
+        fi.config.frame_rate(),
+        2,
+        2,
+      );
       let iter = ti.tile_iter_mut(&mut fs, &mut fb);
       let mut tile_states = iter.map(|ctx| ctx.ts).collect::<Vec<_>>();
 
@@ -508,7 +574,14 @@ pub mod test {
     let fi = create_frame_invariants(64, 80, ChromaSampling::Cs420);
     let mut fs = FrameState::new(&fi);
     let mut fb = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
-    let ti = TilingInfo::from_target_tiles(fi.sb_size_log2(), fi.width, fi.height, fi.config.frame_rate(), 2, 2);
+    let ti = TilingInfo::from_target_tiles(
+      fi.sb_size_log2(),
+      fi.width,
+      fi.height,
+      fi.config.frame_rate(),
+      2,
+      2,
+    );
     let iter = ti.tile_iter_mut(&mut fs, &mut fb);
     let mut tile_states = iter.map(|ctx| ctx.ts).collect::<Vec<_>>();
 
@@ -541,7 +614,14 @@ pub mod test {
 
     {
       // 2x2 tiles, each one containing 2×2 restoration units (1 super-block per restoration unit)
-      let ti = TilingInfo::from_target_tiles(fi.sb_size_log2(), fi.width, fi.height, fi.config.frame_rate(), 1, 1);
+      let ti = TilingInfo::from_target_tiles(
+        fi.sb_size_log2(),
+        fi.width,
+        fi.height,
+        fi.config.frame_rate(),
+        1,
+        1,
+      );
       let iter = ti.tile_iter_mut(&mut fs, &mut fb);
       let mut tile_states = iter.map(|ctx| ctx.ts).collect::<Vec<_>>();
 
@@ -596,7 +676,14 @@ pub mod test {
 
     {
       // 4x4 tiles requested, will actually get 3x3 tiles
-      let ti = TilingInfo::from_target_tiles(fi.sb_size_log2(), fi.width, fi.height, fi.config.frame_rate(), 2, 2);
+      let ti = TilingInfo::from_target_tiles(
+        fi.sb_size_log2(),
+        fi.width,
+        fi.height,
+        fi.config.frame_rate(),
+        2,
+        2,
+      );
       let iter = ti.tile_iter_mut(&mut fs, &mut fb);
       let mut tile_states = iter.map(|ctx| ctx.ts).collect::<Vec<_>>();
 
@@ -633,7 +720,14 @@ pub mod test {
 
     {
       // 4x4 tiles requested, will actually get 3x3 tiles
-      let ti = TilingInfo::from_target_tiles(fi.sb_size_log2(), fi.width, fi.height, fi.config.frame_rate(), 2, 2);
+      let ti = TilingInfo::from_target_tiles(
+        fi.sb_size_log2(),
+        fi.width,
+        fi.height,
+        fi.config.frame_rate(),
+        2,
+        2,
+      );
       let iter = ti.tile_iter_mut(&mut fs, &mut fb);
       let mut tbs = iter.map(|ctx| ctx.tb).collect::<Vec<_>>();
 
