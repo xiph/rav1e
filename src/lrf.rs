@@ -966,26 +966,31 @@ fn wiener_stripe_filter<T: Pixel>(
   let offset = 1 << (bit_depth + WIENER_BITS - round_h - 1);
   let limit = (1 << (bit_depth + 1 + WIENER_BITS - round_h)) - 1;
 
+  let mut coeffs_ = [[0; 3]; 2];
+  for i in 0..2 {
+    for j in 0..3 {
+      coeffs_[i][j] = i32::from(coeffs[i][j]);
+    }
+  }
+
   let mut work: [i32; SB_SIZE + 7] = [0; SB_SIZE + 7];
   let vfilter: [i32; 7] = [
-    coeffs[0][0] as i32,
-    coeffs[0][1] as i32,
-    coeffs[0][2] as i32,
-    128
-      - 2 * (coeffs[0][0] as i32 + coeffs[0][1] as i32 + coeffs[0][2] as i32),
-    coeffs[0][2] as i32,
-    coeffs[0][1] as i32,
-    coeffs[0][0] as i32,
+    coeffs_[0][0],
+    coeffs_[0][1],
+    coeffs_[0][2],
+    128 - 2 * (coeffs_[0][0] + coeffs_[0][1] + coeffs_[0][2]),
+    coeffs_[0][2],
+    coeffs_[0][1],
+    coeffs_[0][0],
   ];
   let hfilter: [i32; 7] = [
-    coeffs[1][0] as i32,
-    coeffs[1][1] as i32,
-    coeffs[1][2] as i32,
-    128
-      - 2 * (coeffs[1][0] as i32 + coeffs[1][1] as i32 + coeffs[1][2] as i32),
-    coeffs[1][2] as i32,
-    coeffs[1][1] as i32,
-    coeffs[1][0] as i32,
+    coeffs_[1][0],
+    coeffs_[1][1],
+    coeffs_[1][2],
+    128 - 2 * (coeffs_[1][0] + coeffs_[1][1] + coeffs_[1][2]),
+    coeffs_[1][2],
+    coeffs_[1][1],
+    coeffs_[1][0],
   ];
 
   // unlike x, our y can be negative to start as the first stripe
