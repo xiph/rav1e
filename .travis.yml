@@ -1,10 +1,5 @@
 language: rust
 dist: bionic
-rust:
-  - stable
-  # This should reference the earliest supported rustc version
-  # and should match the version number in build.rs
-  - 1.36.0
 env:
   - RUST_BACKTRACE=1
 addons:
@@ -58,11 +53,6 @@ cache:
 after_script:
   - sccache -s
 
-# Run the tests on both the minimum and latest supported Rust version
-script:
-  - cargo build --verbose --release --features=decode_test,decode_test_dav1d
-  - travis_wait 40 cargo test --verbose --release --features=decode_test,decode_test_dav1d -- --ignored
-
 jobs:
   include:
     - name: "Code Formatting"
@@ -81,6 +71,24 @@ jobs:
         - travis_wait 40 cargo kcov -v --coveralls --no-clean-rebuild -- --verify --exclude-pattern="$HOME/.cargo,aom_build,.h,test"
       env:
         - CACHE_NAME=COVERALLS
+    - name: "Minimum Supported Rustc"
+      # This should reference the earliest supported rustc version
+      # and should match the version number in build.rs
+      rust: 1.36.0
+      script:
+        - cargo install cargo-kcov
+        - kcov --version
+        - cargo build --features=decode_test,decode_test_dav1d,quick_test --tests --verbose
+        - travis_wait 40 cargo test --features=decode_test,decode_test_dav1d,quick_test --verbose
+      env:
+        - CACHE_NAME=MIN_RUSTC
+    - name: "Ignored Tests"
+      rust: stable
+      script:
+        - cargo build --verbose --release --features=decode_test,decode_test_dav1d
+        - travis_wait 40 cargo test --verbose --release --features=decode_test,decode_test_dav1d -- --ignored
+      env:
+        - CACHE_NAME=IGNORED_TESTS
     - name: "Bench"
       rust: stable
       script: cargo bench --features=bench --no-run --verbose
