@@ -22,74 +22,76 @@ addons:
       - libsdl2-dev
       - libvulkan-dev
 before_install:
-    - export BUILD_DIR="$TRAVIS_HOME/.build"
-    - mkdir -p "$BUILD_DIR"
-    - pip3 install meson
-    - bash "$TRAVIS_BUILD_DIR/.travis/install-sccache.sh"
-    - export PATH="$PATH:$BUILD_DIR/sccache"
-    - export RUSTC_WRAPPER=sccache
-    - export SCCACHE_CACHE_SIZE=500M
-    - export SCCACHE_DIR="$TRAVIS_HOME/.cache/sccache"
-    - sccache --version
-    - bash "$TRAVIS_BUILD_DIR/.travis/install-nasm.sh"
-    - export PATH="$PATH:$BUILD_DIR/nasm/bin"
-    - export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$BUILD_DIR/nasm/lib/pkgconfig"
-    - export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$BUILD_DIR/nasm/lib"
-    - nasm --version
-    - bash "$TRAVIS_BUILD_DIR/.travis/install-kcov.sh"
-    - export PATH="$PATH:$BUILD_DIR/kcov/bin"
-    - kcov --version
-    - bash "$TRAVIS_BUILD_DIR/.travis/install-aom.sh"
-    - export PATH="$PATH:$BUILD_DIR/aom/bin"
-    - export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$BUILD_DIR/aom/lib/pkgconfig"
-    - export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$BUILD_DIR/aom/lib"
-    - which aomenc
-    - bash "$TRAVIS_BUILD_DIR/.travis/install-dav1d.sh"
-    - export PATH="$PATH:$BUILD_DIR/dav1d/bin"
-    - export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$BUILD_DIR/dav1d/lib/x86_64-linux-gnu/pkgconfig"
-    - export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$BUILD_DIR/dav1d/lib/x86_64-linux-gnu"
-    - dav1d --version
-    - cd "$TRAVIS_BUILD_DIR"
+  - export BUILD_DIR="$TRAVIS_HOME/.build"
+  - mkdir -p "$BUILD_DIR"
+  - pip3 install meson
+  - bash "$TRAVIS_BUILD_DIR/.travis/install-sccache.sh"
+  - export PATH="$PATH:$BUILD_DIR/sccache"
+  - export RUSTC_WRAPPER=sccache
+  - export SCCACHE_CACHE_SIZE=500M
+  - export SCCACHE_DIR="$TRAVIS_HOME/.cache/sccache"
+  - sccache --version
+  - bash "$TRAVIS_BUILD_DIR/.travis/install-nasm.sh"
+  - export PATH="$PATH:$BUILD_DIR/nasm/bin"
+  - export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$BUILD_DIR/nasm/lib/pkgconfig"
+  - export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$BUILD_DIR/nasm/lib"
+  - nasm --version
+  - bash "$TRAVIS_BUILD_DIR/.travis/install-kcov.sh"
+  - export PATH="$PATH:$BUILD_DIR/kcov/bin"
+  - kcov --version
+  - bash "$TRAVIS_BUILD_DIR/.travis/install-aom.sh"
+  - export PATH="$PATH:$BUILD_DIR/aom/bin"
+  - export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$BUILD_DIR/aom/lib/pkgconfig"
+  - export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$BUILD_DIR/aom/lib"
+  - which aomenc
+  - bash "$TRAVIS_BUILD_DIR/.travis/install-dav1d.sh"
+  - export PATH="$PATH:$BUILD_DIR/dav1d/bin"
+  - export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$BUILD_DIR/dav1d/lib/x86_64-linux-gnu/pkgconfig"
+  - export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$BUILD_DIR/dav1d/lib/x86_64-linux-gnu"
+  - dav1d --version
+  - cd "$TRAVIS_BUILD_DIR"
 cache:
   cargo: true
   directories:
     - $TRAVIS_HOME/.build
 
 after_script:
-- sccache -s
+  - sccache -s
 
 # Run the tests on both the minimum and latest supported Rust version
-script: cargo test --verbose --release --features=decode_test,decode_test_dav1d -- --ignored
+script:
+  - cargo build --verbose --release --features=decode_test,decode_test_dav1d
+  - travis_wait 40 cargo test --verbose --release --features=decode_test,decode_test_dav1d -- --ignored
 
 jobs:
   include:
-      - name: "Code Formatting"
-        rust: stable
-        script:
-         - rustup component add rustfmt
-         - cargo fmt -- --check
-        env:
-          - CACHE_NAME=RUSTFMT
-      - name: "Build & Coveralls"
-        rust: stable
-        script:
-         - cargo install cargo-kcov
-         - kcov --version
-         - RUSTFLAGS="-C link-dead-code" cargo build --features=decode_test,decode_test_dav1d,quick_test --tests --verbose
-         - travis_wait cargo kcov -v --coveralls --no-clean-rebuild -- --verify --exclude-pattern="$HOME/.cargo,aom_build,.h,test"
-        env:
-         - CACHE_NAME=COVERALLS
-      - name: "Bench"
-        rust: stable
-        script: cargo bench --features=bench --no-run --verbose
-        env:
-          - CACHE_NAME=BENCH
-      - name: "Doc & Clippy (linter): verifying code quality"
-        rust: stable
-        script:
-         - cargo doc --verbose --no-deps
-         - rustup component add clippy
-         - cargo clippy --version
-         - cargo clippy -- -D warnings -A clippy::cast_lossless -A clippy::cast_ptr_alignment -A clippy::cognitive_complexity -A clippy::needless_range_loop -A clippy::too_many_arguments -A clippy::verbose_bit_mask -A clippy::unreadable_literal -A clippy::many_single_char_names --verbose
-        env:
-         - CACHE_NAME=CLIPPY
+    - name: "Code Formatting"
+      rust: stable
+      script:
+        - rustup component add rustfmt
+        - cargo fmt -- --check
+      env:
+        - CACHE_NAME=RUSTFMT
+    - name: "Build & Coveralls"
+      rust: stable
+      script:
+        - cargo install cargo-kcov
+        - kcov --version
+        - RUSTFLAGS="-C link-dead-code" cargo build --features=decode_test,decode_test_dav1d,quick_test --tests --verbose
+        - travis_wait 40 cargo kcov -v --coveralls --no-clean-rebuild -- --verify --exclude-pattern="$HOME/.cargo,aom_build,.h,test"
+      env:
+        - CACHE_NAME=COVERALLS
+    - name: "Bench"
+      rust: stable
+      script: cargo bench --features=bench --no-run --verbose
+      env:
+        - CACHE_NAME=BENCH
+    - name: "Doc & Clippy (linter): verifying code quality"
+      rust: stable
+      script:
+        - cargo doc --verbose --no-deps
+        - rustup component add clippy
+        - cargo clippy --version
+        - cargo clippy -- -D warnings -A clippy::cast_lossless -A clippy::cast_ptr_alignment -A clippy::cognitive_complexity -A clippy::needless_range_loop -A clippy::too_many_arguments -A clippy::verbose_bit_mask -A clippy::unreadable_literal -A clippy::many_single_char_names --verbose
+      env:
+        - CACHE_NAME=CLIPPY
