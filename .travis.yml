@@ -68,7 +68,7 @@ jobs:
         - cargo install cargo-kcov
         - kcov --version
         - RUSTFLAGS="-C link-dead-code" cargo build --features=decode_test,decode_test_dav1d,quick_test --tests --verbose
-        - travis_wait 40 cargo kcov -v --coveralls --no-clean-rebuild -- --verify --exclude-pattern="$HOME/.cargo,aom_build,.h,test"
+        - travis_wait 30 cargo kcov -v --coveralls --no-clean-rebuild -- --verify --exclude-pattern="$HOME/.cargo,aom_build,.h,test"
       env:
         - CACHE_NAME=COVERALLS
     - name: "Minimum Supported Rustc"
@@ -79,16 +79,19 @@ jobs:
         - cargo install cargo-kcov
         - kcov --version
         - cargo build --features=decode_test,decode_test_dav1d,quick_test --tests --verbose
-        - travis_wait 40 cargo test --features=decode_test,decode_test_dav1d,quick_test --verbose
+        - travis_wait 30 cargo test --features=decode_test,decode_test_dav1d,quick_test --verbose
       env:
         - CACHE_NAME=MIN_RUSTC
     - name: "Ignored Tests"
       rust: stable
       script:
         - cargo build --verbose --release --features=decode_test,decode_test_dav1d
-        - travis_wait 40 cargo test --verbose --release --features=decode_test,decode_test_dav1d -- --ignored
+        - travis_wait 60 cargo test --verbose --release --features=decode_test,decode_test_dav1d -- --ignored
       env:
         - CACHE_NAME=IGNORED_TESTS
+      branches:
+        only:
+          - master
     - name: "Bench"
       rust: stable
       script: cargo bench --features=bench --no-run --verbose

@@ -332,6 +332,7 @@ test_quantizer! {60, 80, 100, 120}
 
 #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
 #[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
+#[ignore]
 fn bitrate(decoder: &str) {
   let limit = 5;
   let w = 64;
@@ -475,6 +476,7 @@ fn odd_size_frame_with_full_rdo(decoder: &str) {
 
 #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
 #[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
+#[ignore]
 fn low_bit_depth(decoder: &str) {
   let quantizer = 100;
   let limit = 3; // Include inter frames
@@ -532,6 +534,7 @@ macro_rules! test_high_bit_depth {
       paste::item_with_macros!{
         #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
         #[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
+        #[ignore]
         fn [<high_bit_depth_ $B>](decoder: &str) {
           high_bit_depth(decoder, $B);
         }
