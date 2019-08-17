@@ -34,6 +34,7 @@ mod deblock;
 mod encoder;
 mod entropymode;
 mod lrf;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 mod lrf_simd;
 mod mc;
 mod me;
