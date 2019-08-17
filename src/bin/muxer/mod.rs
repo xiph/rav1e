@@ -21,17 +21,16 @@ use rav1e::prelude::*;
 #[cfg(feature = "avformat-sys")]
 mod avformat;
 
-use std::io;
 use std::ffi::OsStr;
+use std::io;
 use std::path::Path;
 
 use crate::error::*;
 
-
 pub trait Muxer {
   fn write_header(
     &mut self, width: usize, height: usize, framerate_num: usize,
-    framerate_den: usize
+    framerate_den: usize,
   );
 
   fn write_frame(&mut self, pts: u64, data: &[u8], frame_type: FrameType);
@@ -51,12 +50,8 @@ pub fn create_muxer(path: &str) -> Result<Box<dyn Muxer>, CliError> {
     .unwrap_or_else(|| "ivf".into());
 
   match &ext[..] {
-    "mp4" => {
-      Ok(Mp4Muxer::open(path))
-    }
-    "ivf" => {
-      IvfMuxer::open(path)
-    }
+    "mp4" => Ok(Mp4Muxer::open(path)),
+    "ivf" => IvfMuxer::open(path),
     _e => {
       panic!("{} is not a supported extension, please change to .ivf", ext);
     }

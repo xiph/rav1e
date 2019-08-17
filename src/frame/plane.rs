@@ -8,8 +8,8 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use std::alloc::{alloc, dealloc, Layout};
-use std::iter::FusedIterator;
 use std::fmt::{Debug, Display, Formatter};
+use std::iter::FusedIterator;
 use std::marker::PhantomData;
 use std::mem;
 use std::ops::{Index, IndexMut, Range};
@@ -29,14 +29,14 @@ pub struct PlaneConfig {
   pub xpad: usize,
   pub ypad: usize,
   pub xorigin: usize,
-  pub yorigin: usize
+  pub yorigin: usize,
 }
 
 /// Absolute offset in pixels inside a plane
 #[derive(Clone, Copy, Debug)]
 pub struct PlaneOffset {
   pub x: isize,
-  pub y: isize
+  pub y: isize,
 }
 
 /// Backing buffer for the Plane data
@@ -50,8 +50,8 @@ pub struct PlaneData<T: Pixel> {
   len: usize,
 }
 
-unsafe impl<T: Pixel + Send> Send for PlaneData<T> { }
-unsafe impl<T: Pixel + Sync> Sync for PlaneData<T> { }
+unsafe impl<T: Pixel + Send> Send for PlaneData<T> {}
+unsafe impl<T: Pixel + Sync> Sync for PlaneData<T> {}
 
 impl<T: Pixel> Clone for PlaneData<T> {
   fn clone(&self) -> Self {
@@ -100,7 +100,7 @@ impl<T: Pixel> PlaneData<T> {
   unsafe fn layout(len: usize) -> Layout {
     Layout::from_size_align_unchecked(
       len * mem::size_of::<T>(),
-      1 << Self::DATA_ALIGNMENT_LOG2
+      1 << Self::DATA_ALIGNMENT_LOG2,
     )
   }
 
@@ -110,11 +110,7 @@ impl<T: Pixel> PlaneData<T> {
       std::ptr::NonNull::new_unchecked(ptr)
     };
 
-    PlaneData {
-      ptr,
-      len,
-      _marker: PhantomData
-    }
+    PlaneData { ptr, len, _marker: PhantomData }
   }
 
   pub fn new(len: usize) -> Self {
@@ -127,7 +123,7 @@ impl<T: Pixel> PlaneData<T> {
     pd
   }
 
-  #[cfg(any(test, feature="bench"))]
+  #[cfg(any(test, feature = "bench"))]
   fn from_slice(data: &[T]) -> Self {
     let mut pd = unsafe { Self::new_uninitialized(data.len()) };
 
@@ -142,11 +138,13 @@ impl<T: Pixel> PlaneData<T> {
 #[derive(Clone, PartialEq, Eq)]
 pub struct Plane<T: Pixel> {
   pub(crate) data: PlaneData<T>,
-  pub cfg: PlaneConfig
+  pub cfg: PlaneConfig,
 }
 
 impl<T: Pixel> Debug for Plane<T>
-    where T: Display {
+where
+  T: Display,
+{
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     write!(f, "Plane {{ data: [{}, ...], cfg: {:?} }}", self.data[0], self.cfg)
   }
@@ -199,14 +197,14 @@ impl<T: Pixel> Plane<T> {
 
   pub fn new(
     width: usize, height: usize, xdec: usize, ydec: usize, xpad: usize,
-    ypad: usize
+    ypad: usize,
   ) -> Self {
     let xorigin = xpad.align_power_of_two(
-      Self::STRIDE_ALIGNMENT_LOG2 + 1 - mem::size_of::<T>()
+      Self::STRIDE_ALIGNMENT_LOG2 + 1 - mem::size_of::<T>(),
     );
     let yorigin = ypad;
     let stride = (xorigin + width + xpad).align_power_of_two(
-      Self::STRIDE_ALIGNMENT_LOG2 + 1 - mem::size_of::<T>()
+      Self::STRIDE_ALIGNMENT_LOG2 + 1 - mem::size_of::<T>(),
     );
     let alloc_height = yorigin + height + ypad;
     let data = PlaneData::new(stride * alloc_height);
@@ -223,12 +221,12 @@ impl<T: Pixel> Plane<T> {
         xpad,
         ypad,
         xorigin,
-        yorigin
-      }
+        yorigin,
+      },
     }
   }
 
-  #[cfg(any(test, feature="bench"))]
+  #[cfg(any(test, feature = "bench"))]
   pub fn wrap(data: Vec<T>, stride: usize) -> Self {
     let len = data.len();
 
@@ -247,7 +245,7 @@ impl<T: Pixel> Plane<T> {
         ypad: 0,
         xorigin: 0,
         yorigin: 0,
-      }
+      },
     }
   }
 
@@ -332,7 +330,6 @@ impl<T: Pixel> Plane<T> {
     base..base + width
   }
 
-
   pub fn p(&self, x: usize, y: usize) -> T {
     self.data[self.index(x, y)]
   }
@@ -347,7 +344,7 @@ impl<T: Pixel> Plane<T> {
   }
 
   pub fn copy_from_raw_u8(
-    &mut self, source: &[u8], source_stride: usize, source_bytewidth: usize
+    &mut self, source: &[u8], source_stride: usize, source_bytewidth: usize,
   ) {
     let stride = self.cfg.stride;
     for (self_row, source_row) in self
@@ -356,19 +353,27 @@ impl<T: Pixel> Plane<T> {
       .zip(source.chunks(source_stride))
     {
       match source_bytewidth {
-        1 => for (self_pixel, source_pixel) in
-          self_row.iter_mut().zip(source_row.iter())
-        {
-          *self_pixel = T::cast_from(*source_pixel);
-        },
+        1 => {
+          for (self_pixel, source_pixel) in
+            self_row.iter_mut().zip(source_row.iter())
+          {
+            *self_pixel = T::cast_from(*source_pixel);
+          }
+        }
         2 => {
-          assert!(mem::size_of::<T>() >= 2, "source bytewidth ({}) cannot fit in Plane<u8>", source_bytewidth);
+          assert!(
+            mem::size_of::<T>() >= 2,
+            "source bytewidth ({}) cannot fit in Plane<u8>",
+            source_bytewidth
+          );
           for (self_pixel, bytes) in
             self_row.iter_mut().zip(source_row.chunks(2))
           {
-            *self_pixel = T::cast_from(u16::cast_from(bytes[1]) << 8 | u16::cast_from(bytes[0]));
+            *self_pixel = T::cast_from(
+              u16::cast_from(bytes[1]) << 8 | u16::cast_from(bytes[0]),
+            );
           }
-        },
+        }
 
         _ => {}
       }
@@ -416,11 +421,7 @@ pub struct PlaneIter<'a, T: Pixel> {
 
 impl<'a, T: Pixel> PlaneIter<'a, T> {
   pub fn new(plane: &'a Plane<T>) -> Self {
-    Self {
-      plane,
-      y: 0,
-      x: 0,
-    }
+    Self { plane, y: 0, x: 0 }
   }
 
   fn width(&self) -> usize {
@@ -454,7 +455,7 @@ impl<'a, T: Pixel> Iterator for PlaneIter<'a, T> {
 pub struct PlaneSlice<'a, T: Pixel> {
   pub plane: &'a Plane<T>,
   pub x: isize,
-  pub y: isize
+  pub y: isize,
 }
 
 pub struct RowsIter<'a, T: Pixel> {
@@ -496,11 +497,7 @@ impl<'a, T: Pixel> PlaneSlice<'a, T> {
   }
 
   pub fn rows_iter(&self) -> RowsIter<'_, T> {
-    RowsIter {
-      plane: self.plane,
-      x: self.x,
-      y: self.y,
-    }
+    RowsIter { plane: self.plane, x: self.x, y: self.y }
   }
 
   pub fn clamp(&self) -> PlaneSlice<'a, T> {
@@ -513,7 +510,7 @@ impl<'a, T: Pixel> PlaneSlice<'a, T> {
       y: self
         .y
         .min(self.plane.cfg.height as isize)
-        .max(-(self.plane.cfg.yorigin as isize))
+        .max(-(self.plane.cfg.yorigin as isize)),
     }
   }
 
@@ -521,16 +518,12 @@ impl<'a, T: Pixel> PlaneSlice<'a, T> {
     PlaneSlice {
       plane: self.plane,
       x: self.x + xo as isize,
-      y: self.y + yo as isize
+      y: self.y + yo as isize,
     }
   }
 
   pub fn reslice(&self, xo: isize, yo: isize) -> PlaneSlice<'a, T> {
-    PlaneSlice {
-      plane: self.plane,
-      x: self.x + xo,
-      y: self.y + yo
-    }
+    PlaneSlice { plane: self.plane, x: self.x + xo, y: self.y + yo }
   }
 
   /// A slice starting i pixels above the current one.
@@ -563,7 +556,7 @@ impl<'a, T: Pixel> Index<usize> for PlaneSlice<'a, T> {
 pub struct PlaneMutSlice<'a, T: Pixel> {
   pub plane: &'a mut Plane<T>,
   pub x: isize,
-  pub y: isize
+  pub y: isize,
 }
 
 pub struct RowsIterMut<'a, T: Pixel> {
@@ -605,11 +598,7 @@ impl<'a, T: Pixel> FusedIterator for RowsIterMut<'a, T> {}
 
 impl<'a, T: Pixel> PlaneMutSlice<'a, T> {
   pub fn rows_iter(&self) -> RowsIter<'_, T> {
-    RowsIter {
-      plane: self.plane,
-      x: self.x,
-      y: self.y,
-    }
+    RowsIter { plane: self.plane, x: self.x, y: self.y }
   }
 
   pub fn rows_iter_mut(&mut self) -> RowsIterMut<'_, T> {
@@ -643,8 +632,9 @@ pub mod test {
 
   #[test]
   fn copy_from_raw_u8() {
+    #[rustfmt::skip]
     let mut plane = Plane::wrap(
-    vec![
+      vec![
         0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0,
@@ -654,7 +644,9 @@ pub mod test {
         0, 0, 2, 3, 4, 5, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0,
-    ], 8);
+      ],
+      8,
+    );
 
     let input = vec![42u8; 64];
 
@@ -667,6 +659,7 @@ pub mod test {
 
   #[test]
   fn test_plane_pad() {
+    #[rustfmt::skip]
     let mut plane = Plane::<u8> {
       data: PlaneData::from_slice(&vec![
         0, 0, 0, 0, 0, 0, 0, 0,
@@ -693,9 +686,11 @@ pub mod test {
       },
     };
     plane.pad(4, 4);
+
+    #[rustfmt::skip]
     assert_eq!(
       &[
-        1u8, 1, 1, 2, 3, 4, 4, 4,
+        1, 1, 1, 2, 3, 4, 4, 4,
         1, 1, 1, 2, 3, 4, 4, 4,
         1, 1, 1, 2, 3, 4, 4, 4,
         1, 1, 1, 2, 3, 4, 4, 4,

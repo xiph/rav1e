@@ -15,10 +15,10 @@ use self::TxSize::*;
 use crate::context::*;
 use crate::frame::*;
 use crate::predict::*;
+use crate::recon_intra::*;
 use crate::tiling::*;
 use crate::transform::TxSize;
 use crate::util::*;
-use crate::recon_intra::*;
 
 // LAST_FRAME through ALTREF_FRAME correspond to slots 0-6.
 #[derive(PartialEq, Eq, Copy, Clone)]
@@ -38,9 +38,13 @@ impl RefType {
   // convert to a ref list index, 0-6 (INTER_REFS_PER_FRAME)
   pub fn to_index(self) -> usize {
     match self {
-      NONE_FRAME => { panic!("Tried to get slot of NONE_FRAME"); },
-      INTRA_FRAME => { panic!("Tried to get slot of INTRA_FRAME"); },
-      _ => { (self as usize) - 1 }
+      NONE_FRAME => {
+        panic!("Tried to get slot of NONE_FRAME");
+      }
+      INTRA_FRAME => {
+        panic!("Tried to get slot of INTRA_FRAME");
+      }
+      _ => (self as usize) - 1,
     }
   }
   pub fn is_fwd_ref(self) -> bool {
@@ -60,7 +64,7 @@ pub const ALL_INTER_REFS: [RefType; 7] = [
   GOLDEN_FRAME,
   BWDREF_FRAME,
   ALTREF2_FRAME,
-  ALTREF_FRAME
+  ALTREF_FRAME,
 ];
 
 pub const LAST_LAST2_FRAMES: usize = 0; // { LAST_FRAME, LAST2_FRAME }
@@ -104,7 +108,7 @@ pub enum PartitionType {
   PARTITION_VERT_B, // VERT split and the right partition is split again
   PARTITION_HORZ_4, // 4:1 horizontal partition
   PARTITION_VERT_4, // 4:1 vertical partition
-  PARTITION_INVALID
+  PARTITION_INVALID,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Ord, Eq)]
@@ -131,7 +135,7 @@ pub enum BlockSize {
   BLOCK_32X8,
   BLOCK_16X64,
   BLOCK_64X16,
-  BLOCK_INVALID
+  BLOCK_INVALID,
 }
 
 impl BlockSize {
@@ -162,7 +166,7 @@ impl BlockSize {
       (32, 8) => BLOCK_32X8,
       (16, 64) => BLOCK_16X64,
       (64, 16) => BLOCK_64X16,
-      _ => unreachable!()
+      _ => unreachable!(),
     }
   }
 
@@ -183,7 +187,7 @@ impl BlockSize {
       BLOCK_32X8 | BLOCK_32X16 | BLOCK_32X32 | BLOCK_32X64 => 5,
       BLOCK_64X16 | BLOCK_64X32 | BLOCK_64X64 | BLOCK_64X128 => 6,
       BLOCK_128X64 | BLOCK_128X128 => 7,
-      BLOCK_INVALID => unreachable!()
+      BLOCK_INVALID => unreachable!(),
     }
   }
 
@@ -203,7 +207,7 @@ impl BlockSize {
       BLOCK_8X32 | BLOCK_16X32 | BLOCK_32X32 | BLOCK_64X32 => 5,
       BLOCK_16X64 | BLOCK_32X64 | BLOCK_64X64 | BLOCK_128X64 => 6,
       BLOCK_64X128 | BLOCK_128X128 => 7,
-      BLOCK_INVALID => unreachable!()
+      BLOCK_INVALID => unreachable!(),
     }
   }
 
@@ -232,7 +236,7 @@ impl BlockSize {
       BLOCK_16X64 => TX_16X64,
       BLOCK_64X16 => TX_64X16,
       BLOCK_INVALID => unreachable!(),
-      _ => TX_64X64
+      _ => TX_64X64,
     }
   }
 
@@ -307,13 +311,13 @@ impl BlockSize {
   }
 
   pub fn greater_than(self, other: BlockSize) -> bool {
-    (self.width() > other.width() && self.height() >= other.height()) ||
-    (self.width() >= other.width() && self.height() > other.height())
+    (self.width() > other.width() && self.height() >= other.height())
+      || (self.width() >= other.width() && self.height() > other.height())
   }
 
   pub fn gte(self, other: BlockSize) -> bool {
-    self.greater_than(other) ||
-    (self.width() == other.width() && self.height() == other.height())
+    self.greater_than(other)
+      || (self.width() == other.width() && self.height() == other.height())
   }
 
   pub fn subsize(self, partition: PartitionType) -> BlockSize {
@@ -327,15 +331,15 @@ impl BlockSize {
         BLOCK_32X32 => BLOCK_16X16,
         BLOCK_64X64 => BLOCK_32X32,
         BLOCK_128X128 => BLOCK_64X64,
-        _ => BLOCK_INVALID
-      }
+        _ => BLOCK_INVALID,
+      },
       PARTITION_HORZ | PARTITION_HORZ_A | PARTITION_HORZ_B => match self {
         BLOCK_8X8 => BLOCK_8X4,
         BLOCK_16X16 => BLOCK_16X8,
         BLOCK_32X32 => BLOCK_32X16,
         BLOCK_64X64 => BLOCK_64X32,
         BLOCK_128X128 => BLOCK_128X64,
-        _ => BLOCK_INVALID
+        _ => BLOCK_INVALID,
       },
       PARTITION_VERT | PARTITION_VERT_A | PARTITION_VERT_B => match self {
         BLOCK_8X8 => BLOCK_4X8,
@@ -343,30 +347,30 @@ impl BlockSize {
         BLOCK_32X32 => BLOCK_16X32,
         BLOCK_64X64 => BLOCK_32X64,
         BLOCK_128X128 => BLOCK_64X128,
-        _ => BLOCK_INVALID
+        _ => BLOCK_INVALID,
       },
       PARTITION_HORZ_4 => match self {
         BLOCK_16X16 => BLOCK_16X4,
         BLOCK_32X32 => BLOCK_32X8,
         BLOCK_64X64 => BLOCK_64X16,
-        _ => BLOCK_INVALID
+        _ => BLOCK_INVALID,
       },
       PARTITION_VERT_4 => match self {
         BLOCK_16X16 => BLOCK_4X16,
         BLOCK_32X32 => BLOCK_8X32,
         BLOCK_64X64 => BLOCK_16X64,
-        _ => BLOCK_INVALID
+        _ => BLOCK_INVALID,
       },
-      _ => BLOCK_INVALID
+      _ => BLOCK_INVALID,
     }
   }
 
   pub fn is_rect_tx_allowed(self) -> bool {
     match self {
-      BLOCK_4X4 | BLOCK_8X8 | BLOCK_16X16 | BLOCK_32X32 |
-      BLOCK_64X64 | BLOCK_64X128 | BLOCK_128X64 | BLOCK_128X128 => false,
+      BLOCK_4X4 | BLOCK_8X8 | BLOCK_16X16 | BLOCK_32X32 | BLOCK_64X64
+      | BLOCK_64X128 | BLOCK_128X64 | BLOCK_128X128 => false,
       BLOCK_INVALID => unreachable!(),
-      _ => true
+      _ => true,
     }
   }
 }
@@ -384,23 +388,26 @@ pub const GLOBALMV_CTX_MASK: usize =
   ((1 << (REFMV_OFFSET - GLOBALMV_OFFSET)) - 1);
 pub const REFMV_CTX_MASK: usize = ((1 << (8 - REFMV_OFFSET)) - 1);
 
-pub static RAV1E_PARTITION_TYPES: &'static [PartitionType] =
-  &[PartitionType::PARTITION_NONE, PartitionType::PARTITION_HORZ,
-    PartitionType::PARTITION_VERT, PartitionType::PARTITION_SPLIT];
+pub static RAV1E_PARTITION_TYPES: &[PartitionType] = &[
+  PartitionType::PARTITION_NONE,
+  PartitionType::PARTITION_HORZ,
+  PartitionType::PARTITION_VERT,
+  PartitionType::PARTITION_SPLIT,
+];
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 pub enum GlobalMVMode {
   IDENTITY = 0,    // identity transformation, 0-parameter
   TRANSLATION = 1, // translational motion 2-parameter
   ROTZOOM = 2,     // simplified affine with rotation + zoom only, 4-parameter
-  AFFINE = 3       // affine, 6-parameter
+  AFFINE = 3,      // affine, 6-parameter
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
 pub enum MvSubpelPrecision {
   MV_SUBPEL_NONE = -1,
   MV_SUBPEL_LOW_PRECISION = 0,
-  MV_SUBPEL_HIGH_PRECISION
+  MV_SUBPEL_HIGH_PRECISION,
 }
 
 /* Symbols for coding which components are zero jointly */
@@ -411,68 +418,60 @@ pub enum MvJointType {
   MV_JOINT_ZERO = 0,   /* Zero vector */
   MV_JOINT_HNZVZ = 1,  /* Vert zero, hor nonzero */
   MV_JOINT_HZVNZ = 2,  /* Hor zero, vert nonzero */
-  MV_JOINT_HNZVNZ = 3  /* Both components nonzero */
+  MV_JOINT_HNZVNZ = 3, /* Both components nonzero */
 }
 
-fn supersample_chroma_bsize(bsize: BlockSize, ss_x: usize, ss_y: usize)
-  -> BlockSize {
+fn supersample_chroma_bsize(
+  bsize: BlockSize, ss_x: usize, ss_y: usize,
+) -> BlockSize {
   debug_assert!(ss_x < 2);
   debug_assert!(ss_y < 2);
 
   match bsize {
-    BLOCK_4X4 => {
-      match (ss_x, ss_y) {
-        (1,1) => BLOCK_8X8,
-        (1,0) => BLOCK_8X4,
-        (0,1) => BLOCK_4X8,
-        _ => bsize
-      }
+    BLOCK_4X4 => match (ss_x, ss_y) {
+      (1, 1) => BLOCK_8X8,
+      (1, 0) => BLOCK_8X4,
+      (0, 1) => BLOCK_4X8,
+      _ => bsize,
     },
-    BLOCK_4X8 => {
-      match (ss_x, ss_y) {
-        (1,1) => BLOCK_8X8,
-        (1,0) => BLOCK_8X8,
-        (0,1) => BLOCK_4X8,
-        _ => bsize
-      }
+    BLOCK_4X8 => match (ss_x, ss_y) {
+      (1, 1) => BLOCK_8X8,
+      (1, 0) => BLOCK_8X8,
+      (0, 1) => BLOCK_4X8,
+      _ => bsize,
     },
-    BLOCK_8X4 => {
-      match (ss_x, ss_y) {
-        (1,1) => BLOCK_8X8,
-        (1,0) => BLOCK_8X4,
-        (0,1) => BLOCK_8X8,
-        _ => bsize
-      }
+    BLOCK_8X4 => match (ss_x, ss_y) {
+      (1, 1) => BLOCK_8X8,
+      (1, 0) => BLOCK_8X4,
+      (0, 1) => BLOCK_8X8,
+      _ => bsize,
     },
-    BLOCK_4X16 => {
-      match (ss_x, ss_y) {
-        (1,1) => BLOCK_8X16,
-        (1,0) => BLOCK_8X16,
-        (0,1) => BLOCK_4X16,
-        _ => bsize
-      }
+    BLOCK_4X16 => match (ss_x, ss_y) {
+      (1, 1) => BLOCK_8X16,
+      (1, 0) => BLOCK_8X16,
+      (0, 1) => BLOCK_4X16,
+      _ => bsize,
     },
-    BLOCK_16X4 => {
-      match (ss_x, ss_y) {
-        (1,1) => BLOCK_16X8,
-        (1,0) => BLOCK_16X4,
-        (0,1) => BLOCK_16X8,
-        _ => bsize
-      }
+    BLOCK_16X4 => match (ss_x, ss_y) {
+      (1, 1) => BLOCK_16X8,
+      (1, 0) => BLOCK_16X4,
+      (0, 1) => BLOCK_16X8,
+      _ => bsize,
     },
-    _ => bsize
+    _ => bsize,
   }
 }
 
 pub fn get_intra_edges<T: Pixel>(
   dst: &PlaneRegion<'_, T>,
   partition_bo: TileBlockOffset, // partition bo, BlockOffset
-  bx: usize, by: usize,
+  bx: usize,
+  by: usize,
   partition_size: BlockSize, // partition size, BlockSize
   po: PlaneOffset,
   tx_size: TxSize,
   bit_depth: usize,
-  opt_mode: Option<PredictionMode>
+  opt_mode: Option<PredictionMode>,
 ) -> AlignedArray<[T; 4 * MAX_TX_SIZE + 1]> {
   let plane_cfg = &dst.plane_cfg;
 
@@ -482,7 +481,7 @@ pub fn get_intra_edges<T: Pixel>(
 
   {
     // left pixels are order from bottom to top and right-aligned
-    let (left, not_left) = edge_buf.array.split_at_mut(2*MAX_TX_SIZE);
+    let (left, not_left) = edge_buf.array.split_at_mut(2 * MAX_TX_SIZE);
     let (top_left, above) = not_left.split_at_mut(1);
 
     let x = po.x as usize;
@@ -500,20 +499,25 @@ pub fn get_intra_edges<T: Pixel>(
           (0, 0) => PredictionMode::DC_PRED,
           (_, 0) => PredictionMode::H_PRED,
           (0, _) => PredictionMode::V_PRED,
-          _ => PredictionMode::PAETH_PRED
+          _ => PredictionMode::PAETH_PRED,
         },
-        _ => mode
+        _ => mode,
       };
 
       let dc_or_cfl =
         mode == PredictionMode::DC_PRED || mode == PredictionMode::UV_CFL_PRED;
 
-      needs_left = mode != PredictionMode::V_PRED && (!dc_or_cfl || x != 0)
-        && !(mode == PredictionMode::D45_PRED || mode == PredictionMode::D63_PRED);
-      needs_topleft = mode == PredictionMode::PAETH_PRED || mode == PredictionMode::D117_PRED
-      || mode == PredictionMode::D135_PRED || mode == PredictionMode::D153_PRED;
+      needs_left = mode != PredictionMode::V_PRED
+        && (!dc_or_cfl || x != 0)
+        && !(mode == PredictionMode::D45_PRED
+          || mode == PredictionMode::D63_PRED);
+      needs_topleft = mode == PredictionMode::PAETH_PRED
+        || mode == PredictionMode::D117_PRED
+        || mode == PredictionMode::D135_PRED
+        || mode == PredictionMode::D153_PRED;
       needs_top = mode != PredictionMode::H_PRED && (!dc_or_cfl || y != 0);
-      needs_topright = mode == PredictionMode::D45_PRED || mode == PredictionMode::D63_PRED;
+      needs_topright =
+        mode == PredictionMode::D45_PRED || mode == PredictionMode::D63_PRED;
       needs_bottomleft = mode == PredictionMode::D207_PRED;
     }
 
@@ -521,11 +525,12 @@ pub fn get_intra_edges<T: Pixel>(
     if needs_left {
       if x != 0 {
         for i in 0..tx_size.height() {
-          left[2*MAX_TX_SIZE - tx_size.height() + i] = dst[y + tx_size.height() - 1 - i][x - 1];
+          left[2 * MAX_TX_SIZE - tx_size.height() + i] =
+            dst[y + tx_size.height() - 1 - i][x - 1];
         }
       } else {
         let val = if y != 0 { dst[y - 1][0] } else { T::cast_from(base + 1) };
-        for v in left[2*MAX_TX_SIZE - tx_size.height()..].iter_mut() {
+        for v in left[2 * MAX_TX_SIZE - tx_size.height()..].iter_mut() {
           *v = val
         }
       }
@@ -544,7 +549,8 @@ pub fn get_intra_edges<T: Pixel>(
     // Needs top
     if needs_top {
       if y != 0 {
-        above[..tx_size.width()].copy_from_slice(&dst[y - 1][x..x + tx_size.width()]);
+        above[..tx_size.width()]
+          .copy_from_slice(&dst[y - 1][x..x + tx_size.width()]);
       } else {
         let val = if x != 0 { dst[0][x - 1] } else { T::cast_from(base - 1) };
         for v in above[..tx_size.width()].iter_mut() {
@@ -553,37 +559,59 @@ pub fn get_intra_edges<T: Pixel>(
       }
     }
 
-    let bx4 = bx * (tx_size.width() >> MI_SIZE_LOG2);  // bx,by are in tx block indices
+    let bx4 = bx * (tx_size.width() >> MI_SIZE_LOG2); // bx,by are in tx block indices
     let by4 = by * (tx_size.height() >> MI_SIZE_LOG2);
 
-    let have_top = by4 != 0 || if plane_cfg.ydec != 0 { partition_bo.0.y > 1 } else { partition_bo.0.y > 0 };
-    let have_left = bx4 != 0 || if plane_cfg.xdec != 0 { partition_bo.0.x > 1 } else { partition_bo.0.x > 0 };
+    let have_top = by4 != 0
+      || if plane_cfg.ydec != 0 {
+        partition_bo.0.y > 1
+      } else {
+        partition_bo.0.y > 0
+      };
+    let have_left = bx4 != 0
+      || if plane_cfg.xdec != 0 {
+        partition_bo.0.x > 1
+      } else {
+        partition_bo.0.x > 0
+      };
 
     let right_available = x + tx_size.width() < dst.rect().width;
     let bottom_available = y + tx_size.height() < dst.rect().height;
 
-    let scaled_partition_size = supersample_chroma_bsize(partition_size, plane_cfg.xdec, plane_cfg.ydec);
+    let scaled_partition_size =
+      supersample_chroma_bsize(partition_size, plane_cfg.xdec, plane_cfg.ydec);
 
     // Needs top right
     if needs_topright {
       debug_assert!(plane_cfg.xdec <= 1 && plane_cfg.ydec <= 1);
 
-      let num_avail = if y != 0 &&
-          has_top_right(scaled_partition_size, partition_bo,
-                         have_top, right_available,
-                         tx_size,
-                         by4, bx4, plane_cfg.xdec, plane_cfg.ydec) {
+      let num_avail = if y != 0
+        && has_top_right(
+          scaled_partition_size,
+          partition_bo,
+          have_top,
+          right_available,
+          tx_size,
+          by4,
+          bx4,
+          plane_cfg.xdec,
+          plane_cfg.ydec,
+        ) {
         tx_size.width().min(dst.rect().width - x - tx_size.width())
       } else {
         0
       };
       if num_avail > 0 {
-        above[tx_size.width()..tx_size.width() + num_avail]
-        .copy_from_slice(&dst[y - 1][x + tx_size.width()..x + tx_size.width() + num_avail]);
+        above[tx_size.width()..tx_size.width() + num_avail].copy_from_slice(
+          &dst[y - 1][x + tx_size.width()..x + tx_size.width() + num_avail],
+        );
       }
       if num_avail < tx_size.height() {
         let val = above[tx_size.width() + num_avail - 1];
-        for v in above[tx_size.width() + num_avail..tx_size.width() + tx_size.height()].iter_mut() {
+        for v in above
+          [tx_size.width() + num_avail..tx_size.width() + tx_size.height()]
+          .iter_mut()
+        {
           *v = val;
         }
       }
@@ -593,18 +621,26 @@ pub fn get_intra_edges<T: Pixel>(
     if needs_bottomleft {
       debug_assert!(plane_cfg.xdec <= 1 && plane_cfg.ydec <= 1);
 
-      let num_avail = if x != 0 &&
-          has_bottom_left(scaled_partition_size, partition_bo,
-                         bottom_available, have_left,
-                         tx_size,
-                         by4, bx4, plane_cfg.xdec, plane_cfg.ydec) {
+      let num_avail = if x != 0
+        && has_bottom_left(
+          scaled_partition_size,
+          partition_bo,
+          bottom_available,
+          have_left,
+          tx_size,
+          by4,
+          bx4,
+          plane_cfg.xdec,
+          plane_cfg.ydec,
+        ) {
         tx_size.height().min(dst.rect().height - y - tx_size.height())
       } else {
         0
       };
       if num_avail > 0 {
         for i in 0..num_avail {
-          left[2*MAX_TX_SIZE - tx_size.height() - 1 - i] = dst[y + tx_size.height() + i][x - 1];
+          left[2 * MAX_TX_SIZE - tx_size.height() - 1 - i] =
+            dst[y + tx_size.height() + i][x - 1];
         }
       }
       if num_avail < tx_size.width() {
@@ -617,7 +653,6 @@ pub fn get_intra_edges<T: Pixel>(
         }
       }
     }
-
   }
   edge_buf
 }
@@ -652,29 +687,29 @@ pub fn has_tr(bo: TileBlockOffset, bsize: BlockSize) -> bool {
   }
 
   /* The left hand of two vertical rectangles always has a top right (as the
-    * block above will have been decoded) */
+   * block above will have been decoded) */
   if (target_n4_w < target_n4_h) && (bo.0.x & target_n4_w) == 0 {
     has_tr = true;
   }
 
   /* The bottom of two horizontal rectangles never has a top right (as the block
-    * to the right won't have been decoded) */
+   * to the right won't have been decoded) */
   if (target_n4_w > target_n4_h) && (bo.0.y & target_n4_h) != 0 {
     has_tr = false;
   }
 
   /* The bottom left square of a Vertical A (in the old format) does
-    * not have a top right as it is decoded before the right hand
-    * rectangle of the partition */
-/*
-  if blk.partition == PartitionType::PARTITION_VERT_A {
-    if blk.n4_w == blk.n4_h {
-      if (mask_row & bs) != 0 {
-        has_tr = false;
+   * not have a top right as it is decoded before the right hand
+   * rectangle of the partition */
+  /*
+    if blk.partition == PartitionType::PARTITION_VERT_A {
+      if blk.n4_w == blk.n4_h {
+        if (mask_row & bs) != 0 {
+          has_tr = false;
+        }
       }
     }
-  }
-*/
+  */
 
   has_tr
 }
@@ -692,7 +727,8 @@ pub fn has_bl(bo: TileBlockOffset, bsize: BlockSize) -> bool {
     return false;
   }
 
-  let mut has_bl = (mask_row & bs) == 0 && (mask_col & bs) == 0 && bs < sb_mi_size;
+  let mut has_bl =
+    (mask_row & bs) == 0 && (mask_col & bs) == 0 && bs < sb_mi_size;
 
   /* TODO: assert its a power of two */
 
@@ -709,29 +745,29 @@ pub fn has_bl(bo: TileBlockOffset, bsize: BlockSize) -> bool {
   }
 
   /* The right hand of two vertical rectangles never has a bottom left (as the
-    * block below won't have been decoded) */
+   * block below won't have been decoded) */
   if (target_n4_w < target_n4_h) && (bo.0.x & target_n4_w) != 0 {
     has_bl = false;
   }
 
   /* The top of two horizontal rectangles always has a bottom left (as the block
-    * to the left will have been decoded) */
+   * to the left will have been decoded) */
   if (target_n4_w > target_n4_h) && (bo.0.y & target_n4_h) == 0 {
     has_bl = true;
   }
 
   /* The bottom left square of a Vertical A (in the old format) does
-    * not have a top right as it is decoded before the right hand
-    * rectangle of the partition */
-/*
-  if blk.partition == PartitionType::PARTITION_VERT_A {
-    if blk.n4_w == blk.n4_h {
-      if (mask_row & bs) != 0 {
-        has_tr = false;
+   * not have a top right as it is decoded before the right hand
+   * rectangle of the partition */
+  /*
+    if blk.partition == PartitionType::PARTITION_VERT_A {
+      if blk.n4_w == blk.n4_h {
+        if (mask_row & bs) != 0 {
+          has_tr = false;
+        }
       }
     }
-  }
-*/
+  */
 
   has_bl
 }

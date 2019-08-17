@@ -45,27 +45,18 @@ impl TileRect {
 
   #[inline(always)]
   pub fn to_frame_block_offset(
-    &self,
-    tile_bo: TileBlockOffset,
-    xdec: usize,
-    ydec: usize,
+    &self, tile_bo: TileBlockOffset, xdec: usize, ydec: usize,
   ) -> PlaneBlockOffset {
     debug_assert!(self.x as usize % (MI_SIZE >> xdec) == 0);
     debug_assert!(self.y as usize % (MI_SIZE >> ydec) == 0);
     let bx = self.x >> (MI_SIZE_LOG2 - xdec);
     let by = self.y >> (MI_SIZE_LOG2 - ydec);
-    PlaneBlockOffset(BlockOffset {
-      x: bx + tile_bo.0.x,
-      y: by + tile_bo.0.y,
-    })
+    PlaneBlockOffset(BlockOffset { x: bx + tile_bo.0.x, y: by + tile_bo.0.y })
   }
 
   #[inline(always)]
   pub fn to_frame_super_block_offset(
-    &self,
-    tile_sbo: TileSuperBlockOffset,
-    sb_size_log2: usize,
-    xdec: usize,
+    &self, tile_sbo: TileSuperBlockOffset, sb_size_log2: usize, xdec: usize,
     ydec: usize,
   ) -> PlaneSuperBlockOffset {
     debug_assert!(sb_size_log2 == 6 || sb_size_log2 == 7);
@@ -146,7 +137,6 @@ tile_common!(Tile, PlaneRegion, iter);
 tile_common!(TileMut, PlaneRegionMut, iter_mut, mut);
 
 impl<'a, T: Pixel> TileMut<'a, T> {
-
   #[inline(always)]
   pub fn as_const(&self) -> Tile<'_, T> {
     Tile {

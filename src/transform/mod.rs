@@ -14,8 +14,8 @@ pub use self::forward::*;
 pub use self::inverse::*;
 
 use crate::context::*;
-use crate::partition::*;
 use crate::partition::BlockSize::*;
+use crate::partition::*;
 use crate::predict::*;
 use crate::tiling::*;
 use crate::util::*;
@@ -25,19 +25,19 @@ use TxSize::*;
 mod forward;
 mod inverse;
 
-pub static RAV1E_TX_TYPES: &'static [TxType] = &[
+pub static RAV1E_TX_TYPES: &[TxType] = &[
   TxType::DCT_DCT,
   TxType::ADST_DCT,
   TxType::DCT_ADST,
   TxType::ADST_ADST,
   TxType::IDTX,
   TxType::V_DCT,
-  TxType::H_DCT
+  TxType::H_DCT,
 ];
 
 static SQRT2_BITS: usize = 12;
-static SQRT2: i32 = 5793;       // 2^12 * sqrt(2)
-static INV_SQRT2: i32 = 2896;   // 2^12 / sqrt(2)
+static SQRT2: i32 = 5793; // 2^12 * sqrt(2)
+static INV_SQRT2: i32 = 2896; // 2^12 / sqrt(2)
 
 pub const TX_TYPES: usize = 16;
 
@@ -59,7 +59,7 @@ pub enum TxType {
   V_ADST = 12,
   H_ADST = 13,
   V_FLIPADST = 14,
-  H_FLIPADST = 15
+  H_FLIPADST = 15,
 }
 
 /// Transform Size
@@ -86,7 +86,7 @@ pub enum TxSize {
   TX_8X32,
   TX_32X8,
   TX_16X64,
-  TX_64X16
+  TX_64X16,
 }
 
 impl TxSize {
@@ -106,7 +106,7 @@ impl TxSize {
       TX_8X8 | TX_8X4 | TX_8X16 | TX_8X32 => 3,
       TX_16X16 | TX_16X8 | TX_16X32 | TX_16X4 | TX_16X64 => 4,
       TX_32X32 | TX_32X16 | TX_32X64 | TX_32X8 => 5,
-      TX_64X64 | TX_64X32 | TX_64X16 => 6
+      TX_64X64 | TX_64X32 | TX_64X16 => 6,
     }
   }
 
@@ -124,7 +124,7 @@ impl TxSize {
       TX_8X8 | TX_4X8 | TX_16X8 | TX_32X8 => 3,
       TX_16X16 | TX_8X16 | TX_32X16 | TX_4X16 | TX_64X16 => 4,
       TX_32X32 | TX_16X32 | TX_64X32 | TX_8X32 => 5,
-      TX_64X64 | TX_32X64 | TX_16X64 => 6
+      TX_64X64 | TX_32X64 | TX_16X64 => 6,
     }
   }
 
@@ -168,7 +168,7 @@ impl TxSize {
       TX_8X32 => BLOCK_8X32,
       TX_32X8 => BLOCK_32X8,
       TX_16X64 => BLOCK_16X64,
-      TX_64X16 => BLOCK_64X16
+      TX_64X16 => BLOCK_64X16,
     }
   }
 
@@ -178,7 +178,7 @@ impl TxSize {
       TX_8X8 | TX_8X16 | TX_16X8 | TX_8X32 | TX_32X8 => TX_8X8,
       TX_16X16 | TX_16X32 | TX_32X16 | TX_16X64 | TX_64X16 => TX_16X16,
       TX_32X32 | TX_32X64 | TX_64X32 => TX_32X32,
-      TX_64X64 => TX_64X64
+      TX_64X64 => TX_64X64,
     }
   }
 
@@ -188,7 +188,7 @@ impl TxSize {
       TX_8X8 | TX_4X8 | TX_8X4 => TX_8X8,
       TX_16X16 | TX_8X16 | TX_16X8 | TX_4X16 | TX_16X4 => TX_16X16,
       TX_32X32 | TX_16X32 | TX_32X16 | TX_8X32 | TX_32X8 => TX_32X32,
-      TX_64X64 | TX_32X64 | TX_64X32 | TX_16X64 | TX_64X16 => TX_64X64
+      TX_64X64 | TX_32X64 | TX_64X32 | TX_16X64 | TX_64X16 => TX_64X64,
     }
   }
 
@@ -213,7 +213,7 @@ impl TxSize {
       (32, 8) => TX_32X8,
       (16, 64) => TX_16X64,
       (64, 16) => TX_64X16,
-      _ => unreachable!()
+      _ => unreachable!(),
     }
   }
 
@@ -243,7 +243,7 @@ pub enum TxSet {
   // for 16x16 only
   TX_SET_ALL16_16X16,
   // Discrete Trig transforms w/ flip (9) + Identity (1) + 1D Hor/Ver (6)
-  TX_SET_ALL16
+  TX_SET_ALL16,
 }
 
 /// Utility function that returns the log of the ratio of the col and row sizes.
@@ -310,7 +310,7 @@ enum TxType1D {
   DCT,
   ADST,
   FLIPADST,
-  IDTX
+  IDTX,
 }
 
 // Option can be removed when the table is completely filled
@@ -325,7 +325,7 @@ fn get_1d_tx_types(tx_type: TxType) -> Option<(TxType1D, TxType1D)> {
     TxType::H_DCT => Some((TxType1D::IDTX, TxType1D::DCT)),
     TxType::V_ADST => Some((TxType1D::ADST, TxType1D::IDTX)),
     TxType::H_ADST => Some((TxType1D::IDTX, TxType1D::ADST)),
-    _ => None
+    _ => None,
   }
 }
 
@@ -345,7 +345,7 @@ const VTX_TAB: [TxType1D; TX_TYPES] = [
   TxType1D::ADST,
   TxType1D::IDTX,
   TxType1D::FLIPADST,
-  TxType1D::IDTX
+  TxType1D::IDTX,
 ];
 
 const HTX_TAB: [TxType1D; TX_TYPES] = [
@@ -364,12 +364,12 @@ const HTX_TAB: [TxType1D; TX_TYPES] = [
   TxType1D::IDTX,
   TxType1D::ADST,
   TxType1D::IDTX,
-  TxType1D::FLIPADST
+  TxType1D::FLIPADST,
 ];
 
 pub fn forward_transform(
   input: &[i16], output: &mut [i32], stride: usize, tx_size: TxSize,
-  tx_type: TxType, bit_depth: usize
+  tx_type: TxType, bit_depth: usize,
 ) {
   use self::TxSize::*;
   match tx_size {
@@ -399,7 +399,7 @@ pub fn forward_transform(
 
 pub fn inverse_transform_add<T: Pixel>(
   input: &[i32], output: &mut PlaneRegionMut<'_, T>, tx_size: TxSize,
-  tx_type: TxType, bit_depth: usize
+  tx_type: TxType, bit_depth: usize,
 ) {
   use self::TxSize::*;
   match tx_size {
@@ -429,20 +429,25 @@ pub fn inverse_transform_add<T: Pixel>(
 
 #[cfg(test)]
 mod test {
-  use super::*;
   use super::TxType::*;
-  use rand::random;
+  use super::*;
   use crate::frame::*;
+  use rand::random;
 
-  fn test_roundtrip<T: Pixel>(tx_size: TxSize, tx_type: TxType, tolerance: i16) {
+  fn test_roundtrip<T: Pixel>(
+    tx_size: TxSize, tx_type: TxType, tolerance: i16,
+  ) {
     let mut src_storage = [T::cast_from(0); 64 * 64];
     let src = &mut src_storage[..tx_size.area()];
-    let mut dst = Plane::wrap(vec![T::cast_from(0); tx_size.area()], tx_size.width());
+    let mut dst =
+      Plane::wrap(vec![T::cast_from(0); tx_size.area()], tx_size.width());
     let mut res_storage = [0i16; 64 * 64];
     let res = &mut res_storage[..tx_size.area()];
     let mut freq_storage = [0i32; 64 * 64];
     let freq = &mut freq_storage[..tx_size.area()];
-    for ((r, s), d) in res.iter_mut().zip(src.iter_mut()).zip(dst.data.iter_mut()) {
+    for ((r, s), d) in
+      res.iter_mut().zip(src.iter_mut()).zip(dst.data.iter_mut())
+    {
       *s = T::cast_from(random::<u8>());
       *d = T::cast_from(random::<u8>());
       *r = i16::cast_from(*s) - i16::cast_from(*d);
@@ -463,7 +468,6 @@ mod test {
       (TxSize::TX_16X16, 0),
       (TxSize::TX_32X32, 0),
       (TxSize::TX_64X64, 0),
-
       (TxSize::TX_4X8, -1),
       (TxSize::TX_8X4, 1),
       (TxSize::TX_8X16, -1),
@@ -472,7 +476,6 @@ mod test {
       (TxSize::TX_32X16, 1),
       (TxSize::TX_32X64, -1),
       (TxSize::TX_64X32, 1),
-
       (TxSize::TX_4X16, -2),
       (TxSize::TX_16X4, 2),
       (TxSize::TX_8X32, -2),
@@ -482,8 +485,14 @@ mod test {
     ];
 
     for &(tx_size, expected) in combinations.iter() {
-      println!("Testing combination {:?}, {:?}", tx_size.width(), tx_size.height());
-      assert!(get_rect_tx_log_ratio(tx_size.width(), tx_size.height()) == expected);
+      println!(
+        "Testing combination {:?}, {:?}",
+        tx_size.width(),
+        tx_size.height()
+      );
+      assert!(
+        get_rect_tx_log_ratio(tx_size.width(), tx_size.height()) == expected
+      );
     }
   }
 

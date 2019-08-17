@@ -53,17 +53,15 @@ impl SceneChangeDetector {
   ///
   /// This will gracefully handle the first frame in the video as well.
   pub fn analyze_next_frame<T: Pixel>(
-    &mut self,
-    previous_frame: Option<Arc<Frame<T>>>,
-    frame_set: &[Arc<Frame<T>>],
-    input_frameno: u64,
-    config: &EncoderConfig,
-    inter_cfg: &InterConfig,
-    keyframes: &mut BTreeSet<u64>,
+    &mut self, previous_frame: Option<Arc<Frame<T>>>,
+    frame_set: &[Arc<Frame<T>>], input_frameno: u64, config: &EncoderConfig,
+    inter_cfg: &InterConfig, keyframes: &mut BTreeSet<u64>,
     keyframes_forced: &BTreeSet<u64>,
   ) {
     let frame_set = match previous_frame {
-      Some(frame) => [frame].iter().chain(frame_set.iter()).cloned().collect::<Vec<_>>(),
+      Some(frame) => {
+        [frame].iter().chain(frame_set.iter()).cloned().collect::<Vec<_>>()
+      }
       None => {
         // The first frame is always a keyframe.
         keyframes.insert(0);
@@ -87,13 +85,9 @@ impl SceneChangeDetector {
 
   /// Determines if `current_frame` should be a keyframe.
   fn is_key_frame<T: Pixel>(
-    &self,
-    previous_frame: &Frame<T>,
-    current_frame: &Frame<T>,
-    current_frameno: u64,
-    config: &EncoderConfig,
-    keyframes: &mut BTreeSet<u64>,
-    keyframes_forced: &BTreeSet<u64>,
+    &self, previous_frame: &Frame<T>, current_frame: &Frame<T>,
+    current_frameno: u64, config: &EncoderConfig,
+    keyframes: &mut BTreeSet<u64>, keyframes_forced: &BTreeSet<u64>,
   ) -> bool {
     if keyframes_forced.contains(&current_frameno) {
       return true;
@@ -126,9 +120,7 @@ impl SceneChangeDetector {
   /// Uses lookahead to avoid coding short flashes as scenecuts.
   /// Saves excluded frame numbers in `self.excluded_frames`.
   fn exclude_scene_flashes<T: Pixel>(
-    &mut self,
-    frame_subset: &[Arc<Frame<T>>],
-    frameno: u64,
+    &mut self, frame_subset: &[Arc<Frame<T>>], frameno: u64,
     inter_cfg: &InterConfig,
   ) {
     let lookahead_distance = cmp::min(
@@ -174,9 +166,7 @@ impl SceneChangeDetector {
   /// Since the difference between frames is used, only fast cuts are detected
   /// with this method. This is intended to change via https://github.com/xiph/rav1e/issues/794.
   fn has_scenecut<T: Pixel>(
-    &self,
-    frame1: &Frame<T>,
-    frame2: &Frame<T>,
+    &self, frame1: &Frame<T>, frame2: &Frame<T>,
   ) -> bool {
     let len = frame2.planes[0].cfg.width * frame2.planes[0].cfg.height;
     let delta_yuv = frame2

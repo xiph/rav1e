@@ -33,7 +33,7 @@ type FrameTypeOverride = rav1e::FrameTypeOverride;
 #[derive(Clone)]
 enum FrameInternal {
   U8(Arc<rav1e::Frame<u8>>),
-  U16(Arc<rav1e::Frame<u16>>)
+  U16(Arc<rav1e::Frame<u16>>),
 }
 
 impl From<Arc<rav1e::Frame<u8>>> for FrameInternal {
@@ -50,11 +50,11 @@ impl From<Arc<rav1e::Frame<u16>>> for FrameInternal {
 
 /// Raw video Frame
 ///
-/// It can be allocated throught rav1e_frame_new(), populated using rav1e_frame_fill_plane()
+/// It can be allocated through rav1e_frame_new(), populated using rav1e_frame_fill_plane()
 /// and freed using rav1e_frame_unref().
 pub struct Frame {
   fi: FrameInternal,
-  frame_type: FrameTypeOverride
+  frame_type: FrameTypeOverride,
 }
 
 #[repr(C)]
@@ -79,7 +79,7 @@ pub enum EncoderStatus {
   /// A frame was encoded in the first pass of a 2-pass encode, but its stats
   /// data was not retrieved with rav1e_twopass_out(), or not enough stats data was
   /// provided in the second pass of a 2-pass encode to encode the next frame.
-  NotReady = -2
+  NotReady = -2,
 }
 
 impl From<Option<rav1e::EncoderStatus>> for EncoderStatus {
@@ -92,8 +92,8 @@ impl From<Option<rav1e::EncoderStatus>> for EncoderStatus {
         rav1e::EncoderStatus::LimitReached => EncoderStatus::LimitReached,
         rav1e::EncoderStatus::Encoded => EncoderStatus::Encoded,
         rav1e::EncoderStatus::Failure => EncoderStatus::Failure,
-        rav1e::EncoderStatus::NotReady => EncoderStatus::NotReady
-      }
+        rav1e::EncoderStatus::NotReady => EncoderStatus::NotReady,
+      },
     }
   }
 }
@@ -105,42 +105,46 @@ impl From<Option<rav1e::EncoderStatus>> for EncoderStatus {
 ///
 /// Use rav1e_config_unref() to free its memory.
 pub struct Config {
-  cfg: rav1e::Config
+  cfg: rav1e::Config,
 }
 
 enum EncContext {
   U8(rav1e::Context<u8>),
-  U16(rav1e::Context<u16>)
+  U16(rav1e::Context<u16>),
 }
 
 impl EncContext {
   fn new_frame(&self) -> FrameInternal {
     match self {
       EncContext::U8(ctx) => ctx.new_frame().into(),
-      EncContext::U16(ctx) => ctx.new_frame().into()
+      EncContext::U16(ctx) => ctx.new_frame().into(),
     }
   }
   fn send_frame(
-    &mut self, frame: Option<FrameInternal>, frame_type: FrameTypeOverride
+    &mut self, frame: Option<FrameInternal>, frame_type: FrameTypeOverride,
   ) -> Result<(), rav1e::EncoderStatus> {
     let info = rav1e::FrameParameters { frame_type_override: frame_type };
     if let Some(frame) = frame {
       match (self, frame) {
-        (EncContext::U8(ctx), FrameInternal::U8(ref f)) => ctx.send_frame((f.clone(), info)),
-        (EncContext::U16(ctx), FrameInternal::U16(ref f)) => ctx.send_frame((f.clone(), info)),
-        _ => Err(rav1e::EncoderStatus::Failure)
+        (EncContext::U8(ctx), FrameInternal::U8(ref f)) => {
+          ctx.send_frame((f.clone(), info))
+        }
+        (EncContext::U16(ctx), FrameInternal::U16(ref f)) => {
+          ctx.send_frame((f.clone(), info))
+        }
+        _ => Err(rav1e::EncoderStatus::Failure),
       }
     } else {
       match self {
         EncContext::U8(ctx) => ctx.send_frame(None),
-        EncContext::U16(ctx) => ctx.send_frame(None)
+        EncContext::U16(ctx) => ctx.send_frame(None),
       }
     }
   }
 
   fn receive_packet(&mut self) -> Result<Packet, rav1e::EncoderStatus> {
     fn receive_packet<T: rav1e::Pixel>(
-      ctx: &mut rav1e::Context<T>
+      ctx: &mut rav1e::Context<T>,
     ) -> Result<Packet, rav1e::EncoderStatus> {
       ctx.receive_packet().map(|p| {
         let rav1e::Packet { data, input_frameno, frame_type, .. } = p;
@@ -151,35 +155,35 @@ impl EncContext {
     }
     match self {
       EncContext::U8(ctx) => receive_packet(ctx),
-      EncContext::U16(ctx) => receive_packet(ctx)
+      EncContext::U16(ctx) => receive_packet(ctx),
     }
   }
 
   fn container_sequence_header(&self) -> Vec<u8> {
     match self {
       EncContext::U8(ctx) => ctx.container_sequence_header(),
-      EncContext::U16(ctx) => ctx.container_sequence_header()
+      EncContext::U16(ctx) => ctx.container_sequence_header(),
     }
   }
 
   fn twopass_bytes_needed(&mut self) -> usize {
     match self {
       EncContext::U8(ctx) => ctx.twopass_bytes_needed(),
-      EncContext::U16(ctx) => ctx.twopass_bytes_needed()
+      EncContext::U16(ctx) => ctx.twopass_bytes_needed(),
     }
   }
 
   fn twopass_in(&mut self, buf: &[u8]) -> Result<usize, rav1e::EncoderStatus> {
     match self {
       EncContext::U8(ctx) => ctx.twopass_in(buf),
-      EncContext::U16(ctx) => ctx.twopass_in(buf)
+      EncContext::U16(ctx) => ctx.twopass_in(buf),
     }
   }
 
   fn twopass_out(&mut self) -> Option<&[u8]> {
     match self {
       EncContext::U8(ctx) => ctx.twopass_out(),
-      EncContext::U16(ctx) => ctx.twopass_out()
+      EncContext::U16(ctx) => ctx.twopass_out(),
     }
   }
 }
@@ -192,7 +196,7 @@ impl EncContext {
 /// Use rav1e_context_unref() to free its memory.
 pub struct Context {
   ctx: EncContext,
-  last_err: Option<rav1e::EncoderStatus>
+  last_err: Option<rav1e::EncoderStatus>,
 }
 
 type FrameType = rav1e::FrameType;
@@ -211,7 +215,7 @@ pub struct Packet {
   /// Frame sequence number
   pub input_frameno: u64,
   /// Frame type
-  pub frame_type: FrameType
+  pub frame_type: FrameType,
 }
 
 /// Simple Data
@@ -224,7 +228,7 @@ pub struct Data {
   /// Pointer to the data buffer
   pub data: *const u8,
   /// Data buffer size
-  pub len: size_t
+  pub len: size_t,
 }
 
 /// Free a RaData buffer
@@ -232,7 +236,11 @@ pub struct Data {
 pub unsafe extern fn rav1e_data_unref(data: *mut Data) {
   if !data.is_null() {
     let data = Box::from_raw(data);
-    let _ = Vec::from_raw_parts(data.data as *mut u8, data.len as usize, data.len as usize);
+    let _ = Vec::from_raw_parts(
+      data.data as *mut u8,
+      data.len as usize,
+      data.len as usize,
+    );
   }
 }
 
@@ -250,7 +258,7 @@ pub unsafe extern fn rav1e_config_default() -> *mut Config {
 /// Needed for rate control.
 #[no_mangle]
 pub unsafe extern fn rav1e_config_set_time_base(
-  cfg: *mut Config, time_base: Rational
+  cfg: *mut Config, time_base: Rational,
 ) {
   (*cfg).cfg.enc.time_base = time_base
 }
@@ -265,7 +273,7 @@ pub unsafe extern fn rav1e_config_set_time_base(
 #[no_mangle]
 pub unsafe extern fn rav1e_config_set_pixel_format(
   cfg: *mut Config, bit_depth: u8, subsampling: ChromaSampling,
-  chroma_pos: ChromaSamplePosition, pixel_range: PixelRange
+  chroma_pos: ChromaSamplePosition, pixel_range: PixelRange,
 ) -> c_int {
   if bit_depth != 8 && bit_depth != 10 && bit_depth != 12 {
     return -1;
@@ -305,12 +313,12 @@ pub unsafe extern fn rav1e_config_set_pixel_format(
 #[no_mangle]
 pub unsafe extern fn rav1e_config_set_color_description(
   cfg: *mut Config, matrix: MatrixCoefficients, primaries: ColorPrimaries,
-  transfer: TransferCharacteristics
+  transfer: TransferCharacteristics,
 ) -> c_int {
   (*cfg).cfg.enc.color_description = Some(rav1e::ColorDescription {
     matrix_coefficients: matrix,
     color_primaries: primaries,
-    transfer_characteristics: transfer
+    transfer_characteristics: transfer,
   });
 
   if (*cfg).cfg.enc.color_description.is_some() {
@@ -326,11 +334,11 @@ pub unsafe extern fn rav1e_config_set_color_description(
 #[no_mangle]
 pub unsafe extern fn rav1e_config_set_content_light(
   cfg: *mut Config, max_content_light_level: u16,
-  max_frame_average_light_level: u16
+  max_frame_average_light_level: u16,
 ) -> c_int {
   (*cfg).cfg.enc.content_light = Some(rav1e::ContentLight {
     max_content_light_level,
-    max_frame_average_light_level
+    max_frame_average_light_level,
   });
 
   if (*cfg).cfg.enc.content_light.is_some() {
@@ -350,13 +358,13 @@ pub unsafe extern fn rav1e_config_set_content_light(
 #[no_mangle]
 pub unsafe extern fn rav1e_config_set_mastering_display(
   cfg: *mut Config, primaries: [rav1e::Point; 3], white_point: rav1e::Point,
-  max_luminance: u32, min_luminance: u32
+  max_luminance: u32, min_luminance: u32,
 ) -> c_int {
   (*cfg).cfg.enc.mastering_display = Some(rav1e::MasteringDisplay {
     primaries,
     white_point,
     max_luminance,
-    min_luminance
+    min_luminance,
   });
 
   if (*cfg).cfg.enc.mastering_display.is_some() {
@@ -374,7 +382,7 @@ pub unsafe extern fn rav1e_config_unref(cfg: *mut Config) {
 }
 
 unsafe fn option_match(
-  cfg: *mut Config, key: *const c_char, value: *const c_char
+  cfg: *mut Config, key: *const c_char, value: *const c_char,
 ) -> Result<(), ()> {
   let key = CStr::from_ptr(key).to_str().map_err(|_| ())?;
   let value = CStr::from_ptr(value).to_str().map_err(|_| ())?;
@@ -383,9 +391,10 @@ unsafe fn option_match(
   match key {
     "width" => enc.width = value.parse().map_err(|_| ())?,
     "height" => enc.height = value.parse().map_err(|_| ())?,
-    "speed" =>
+    "speed" => {
       enc.speed_settings =
-        rav1e::SpeedSettings::from_preset(value.parse().map_err(|_| ())?),
+        rav1e::SpeedSettings::from_preset(value.parse().map_err(|_| ())?)
+    }
 
     "threads" => (*cfg).cfg.threads = value.parse().map_err(|_| ())?,
 
@@ -398,18 +407,22 @@ unsafe fn option_match(
     "min_quantizer" => enc.min_quantizer = value.parse().map_err(|_| ())?,
     "bitrate" => enc.bitrate = value.parse().map_err(|_| ())?,
 
-    "key_frame_interval" =>
-      enc.max_key_frame_interval = value.parse().map_err(|_| ())?,
-    "min_key_frame_interval" =>
-      enc.min_key_frame_interval = value.parse().map_err(|_| ())?,
-    "reservoir_frame_delay" =>
-      enc.reservoir_frame_delay = Some(value.parse().map_err(|_| ())?),
-    "rdo_lookahead_frames" =>
-      enc.rdo_lookahead_frames = value.parse().map_err(|_| ())?,
+    "key_frame_interval" => {
+      enc.max_key_frame_interval = value.parse().map_err(|_| ())?
+    }
+    "min_key_frame_interval" => {
+      enc.min_key_frame_interval = value.parse().map_err(|_| ())?
+    }
+    "reservoir_frame_delay" => {
+      enc.reservoir_frame_delay = Some(value.parse().map_err(|_| ())?)
+    }
+    "rdo_lookahead_frames" => {
+      enc.rdo_lookahead_frames = value.parse().map_err(|_| ())?
+    }
     "low_latency" => enc.low_latency = value.parse().map_err(|_| ())?,
     "still_picture" => enc.still_picture = value.parse().map_err(|_| ())?,
 
-    _ => return Err(())
+    _ => return Err(()),
   }
 
   Ok(())
@@ -425,7 +438,7 @@ unsafe fn option_match(
 /// Return a negative value on error or 0.
 #[no_mangle]
 pub unsafe extern fn rav1e_config_parse(
-  cfg: *mut Config, key: *const c_char, value: *const c_char
+  cfg: *mut Config, key: *const c_char, value: *const c_char,
 ) -> c_int {
   if option_match(cfg, key, value) == Ok(()) {
     0
@@ -441,7 +454,7 @@ pub unsafe extern fn rav1e_config_parse(
 /// Return a negative value on error or 0.
 #[no_mangle]
 pub unsafe extern fn rav1e_config_parse_int(
-  cfg: *mut Config, key: *const c_char, value: c_int
+  cfg: *mut Config, key: *const c_char, value: c_int,
 ) -> c_int {
   let val = CString::new(value.to_string()).unwrap();
   if option_match(cfg, key, val.as_ptr()) == Ok(()) {
@@ -462,9 +475,9 @@ pub unsafe extern fn rav1e_context_new(cfg: *const Config) -> *mut Context {
   let ctx = Context {
     ctx: match enc.bit_depth {
       8 => EncContext::U8(cfg.new_context()),
-      _ => EncContext::U16(cfg.new_context())
+      _ => EncContext::U16(cfg.new_context()),
     },
-    last_err: None
+    last_err: None,
   };
 
   Box::into_raw(Box::new(ctx))
@@ -504,8 +517,11 @@ pub unsafe extern fn rav1e_frame_unref(frame: *mut Frame) {
 ///
 /// Must be called before rav1e_send_frame() if used.
 #[no_mangle]
-pub unsafe extern fn rav1e_frame_set_type(frame: *mut Frame, frame_type: FrameTypeOverride) -> c_int{
-  let frame_type_val = std::mem::transmute::<FrameTypeOverride, i32>(frame_type);
+pub unsafe extern fn rav1e_frame_set_type(
+  frame: *mut Frame, frame_type: FrameTypeOverride,
+) -> c_int {
+  let frame_type_val =
+    std::mem::transmute::<FrameTypeOverride, i32>(frame_type);
   if FrameTypeOverride::from_i32(frame_type_val).is_none() {
     return -1;
   }
@@ -529,9 +545,7 @@ pub unsafe extern fn rav1e_frame_set_type(frame: *mut Frame, frame_type: FrameTy
 ///
 /// Must be freed with rav1e_data_unref().
 #[no_mangle]
-pub unsafe extern fn rav1e_twopass_out(
-  ctx: *mut Context
-) -> *mut Data {
+pub unsafe extern fn rav1e_twopass_out(ctx: *mut Context) -> *mut Data {
   let buf = (*ctx).ctx.twopass_out();
 
   if buf.is_none() {
@@ -541,7 +555,7 @@ pub unsafe extern fn rav1e_twopass_out(
   let v = buf.unwrap().to_vec();
   Box::into_raw(Box::new(Data {
     len: v.len(),
-    data: Box::into_raw(v.into_boxed_slice()) as *mut u8
+    data: Box::into_raw(v.into_boxed_slice()) as *mut u8,
   }))
 }
 
@@ -565,7 +579,7 @@ pub unsafe extern fn rav1e_twopass_bytes_needed(ctx: *mut Context) -> size_t {
 /// consumed, or until twopass_bytes_needed() returns 0. Returns -1 on failure.
 #[no_mangle]
 pub unsafe extern fn rav1e_twopass_in(
-  ctx: *mut Context, buf: *mut u8, buf_size: size_t
+  ctx: *mut Context, buf: *mut u8, buf_size: size_t,
 ) -> c_int {
   let buf_slice = slice::from_raw_parts(buf, buf_size as usize);
   let r = (*ctx).ctx.twopass_in(buf_slice);
@@ -589,13 +603,21 @@ pub unsafe extern fn rav1e_twopass_in(
 /// - `< 0` on unrecoverable failure
 #[no_mangle]
 pub unsafe extern fn rav1e_send_frame(
-  ctx: *mut Context, frame: *const Frame
+  ctx: *mut Context, frame: *const Frame,
 ) -> EncoderStatus {
-  let frame_internal = if frame.is_null() { None } else { Some((*frame).fi.clone()) };
-  let frame_type = if frame.is_null() { rav1e::FrameTypeOverride::No } else { (*frame).frame_type };
+  let frame_internal =
+    if frame.is_null() { None } else { Some((*frame).fi.clone()) };
+  let frame_type = if frame.is_null() {
+    rav1e::FrameTypeOverride::No
+  } else {
+    (*frame).frame_type
+  };
 
-  let ret =
-    (*ctx).ctx.send_frame(frame_internal, frame_type).map(|_v| None).unwrap_or_else(|e| Some(e));
+  let ret = (*ctx)
+    .ctx
+    .send_frame(frame_internal, frame_type)
+    .map(|_v| None)
+    .unwrap_or_else(|e| Some(e));
 
   (*ctx).last_err = ret;
 
@@ -611,7 +633,7 @@ pub unsafe extern fn rav1e_last_status(ctx: *const Context) -> EncoderStatus {
 /// Return a string matching the EncooderStatus variant.
 #[no_mangle]
 pub unsafe extern fn rav1e_status_to_str(
-  status: EncoderStatus
+  status: EncoderStatus,
 ) -> *mut c_char {
   if EncoderStatus::from_i32(std::mem::transmute(status)).is_none() {
     return std::ptr::null_mut();
@@ -638,7 +660,7 @@ pub unsafe extern fn rav1e_status_to_str(
 /// - `< 0` on unrecoverable failure
 #[no_mangle]
 pub unsafe extern fn rav1e_receive_packet(
-  ctx: *mut Context, pkt: *mut *mut Packet
+  ctx: *mut Context, pkt: *mut *mut Packet,
 ) -> EncoderStatus {
   let ret = (*ctx)
     .ctx
@@ -658,7 +680,11 @@ pub unsafe extern fn rav1e_receive_packet(
 pub unsafe extern fn rav1e_packet_unref(pkt: *mut Packet) {
   if !pkt.is_null() {
     let pkt = Box::from_raw(pkt);
-    let _ = Vec::from_raw_parts(pkt.data as *mut u8, pkt.len as usize, pkt.len as usize);
+    let _ = Vec::from_raw_parts(
+      pkt.data as *mut u8,
+      pkt.len as usize,
+      pkt.len as usize,
+    );
   }
 }
 
@@ -669,25 +695,25 @@ pub unsafe extern fn rav1e_packet_unref(pkt: *mut Packet) {
 /// Use rav1e_data_unref() to free it.
 #[no_mangle]
 pub unsafe extern fn rav1e_container_sequence_header(
-  ctx: *const Context
+  ctx: *const Context,
 ) -> *mut Data {
   let buf = (*ctx).ctx.container_sequence_header();
 
   Box::into_raw(Box::new(Data {
     len: buf.len(),
-    data: Box::into_raw(buf.into_boxed_slice()) as *mut u8
+    data: Box::into_raw(buf.into_boxed_slice()) as *mut u8,
   }))
 }
 
 fn rav1e_frame_fill_plane_internal<T: rav1e::Pixel>(
   f: &mut Arc<rav1e::Frame<T>>, plane: c_int, data_slice: &[u8],
-  stride: ptrdiff_t, bytewidth: c_int
+  stride: ptrdiff_t, bytewidth: c_int,
 ) {
   let input = Arc::make_mut(f);
   input.planes[plane as usize].copy_from_raw_u8(
     data_slice,
     stride as usize,
-    bytewidth as usize
+    bytewidth as usize,
   );
 }
 
@@ -701,20 +727,22 @@ fn rav1e_frame_fill_plane_internal<T: rav1e::Pixel>(
 /// frame: A frame provided by rav1e_frame_new()
 /// plane: The index of the plane starting from 0
 /// data: The data to be copied
-/// data_len: Lenght of the buffer
+/// data_len: Length of the buffer
 /// stride: Plane line in bytes, including padding
 /// bytewidth: Number of bytes per component, either 1 or 2
 #[no_mangle]
 pub unsafe extern fn rav1e_frame_fill_plane(
   frame: *mut Frame, plane: c_int, data: *const u8, data_len: size_t,
-  stride: ptrdiff_t, bytewidth: c_int
+  stride: ptrdiff_t, bytewidth: c_int,
 ) {
   let data_slice = slice::from_raw_parts(data, data_len as usize);
 
   match (*frame).fi {
-    FrameInternal::U8(ref mut f) =>
-      rav1e_frame_fill_plane_internal(f, plane, data_slice, stride, bytewidth),
-    FrameInternal::U16(ref mut f) =>
-      rav1e_frame_fill_plane_internal(f, plane, data_slice, stride, bytewidth),
+    FrameInternal::U8(ref mut f) => {
+      rav1e_frame_fill_plane_internal(f, plane, data_slice, stride, bytewidth)
+    }
+    FrameInternal::U16(ref mut f) => {
+      rav1e_frame_fill_plane_internal(f, plane, data_slice, stride, bytewidth)
+    }
   }
 }

@@ -11,9 +11,9 @@
 use avformat_sys::*;
 
 #[allow(unused_imports)]
-use rav1e::prelude::*;
-#[allow(unused_imports)]
 use super::Muxer;
+#[allow(unused_imports)]
+use rav1e::prelude::*;
 #[allow(unused_imports)]
 use std::ffi::CString;
 #[allow(unused_imports)]
@@ -26,8 +26,8 @@ use std::ptr;
 #[cfg(feature = "avformat-sys")]
 pub struct AvformatMuxer {
   context: *mut AVFormatContext,
-  stream_time_base: AVRational ,  //time base get from container
-  time_base: AVRational ,         //set by muxer caller
+  stream_time_base: AVRational, //time base get from container
+  time_base: AVRational,        //set by muxer caller
   duration: i64,
 }
 
@@ -41,23 +41,28 @@ impl AvformatMuxer {
         &mut context,
         ptr::null_mut(),
         ptr::null(),
-        p.as_ptr() as *const i8
+        p.as_ptr() as *const i8,
       ) {
         0 => {
           let mut io = ptr::null_mut();
-          let ret =
-            avio_open(&mut io, p.as_ptr() as *const i8, AVIO_FLAG_WRITE as i32);
+          let ret = avio_open(
+            &mut io,
+            p.as_ptr() as *const i8,
+            AVIO_FLAG_WRITE as i32,
+          );
           if ret < 0 {
             panic!("open ouput file {} failed", path);
           }
           (*context).pb = io;
-          let default_time_base = AVRational {num: 1, den: 1};
-          Box::new(AvformatMuxer { context,
-            stream_time_base : default_time_base, time_base: default_time_base,
+          let default_time_base = AVRational { num: 1, den: 1 };
+          Box::new(AvformatMuxer {
+            context,
+            stream_time_base: default_time_base,
+            time_base: default_time_base,
             duration: 0,
           })
         }
-        e => panic!("open ouput failed, error = {}", e)
+        e => panic!("open ouput failed, error = {}", e),
       }
     }
   }
@@ -67,7 +72,7 @@ impl AvformatMuxer {
 impl Muxer for AvformatMuxer {
   fn write_header(
     &mut self, width: usize, height: usize, framerate_num: usize,
-    framerate_den: usize
+    framerate_den: usize,
   ) {
     unsafe {
       let stream = avformat_new_stream(self.context, ptr::null_mut());
@@ -102,7 +107,8 @@ impl Muxer for AvformatMuxer {
         pkt.flags = AV_PKT_FLAG_KEY as i32;
       }
 
-      let pts = av_rescale_q(pts as i64, self.time_base, self.stream_time_base);
+      let pts =
+        av_rescale_q(pts as i64, self.time_base, self.stream_time_base);
       pkt.pts = pts;
       //no b frame, pts equals dts
       pkt.dts = pts;
@@ -118,7 +124,7 @@ impl Muxer for AvformatMuxer {
     unsafe {
       loop {
         let ret = av_write_frame(self.context, ptr::null_mut());
-        if ret <0 {
+        if ret < 0 {
           panic!("write frame failed error = {}", ret)
         }
         if ret == 1 {

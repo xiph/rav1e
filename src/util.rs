@@ -8,18 +8,19 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use num_traits::*;
-use std::mem;
-use std::mem::size_of;
 use std::fmt::{Debug, Display};
+use std::mem::{size_of, MaybeUninit};
 
-//TODO: Nice to have (although I wasnt able to find a way to do it yet in rust): zero-fill arrays that are
+//TODO: Nice to have (although I wasn't able to find a way to do it yet in rust): zero-fill arrays that are
 // shorter than required.  Need const fn (Rust Issue #24111) or const generics (Rust RFC #2000)
 macro_rules! cdf {
     ($($x:expr),+) =>  {[$(32768 - $x),+, 0, 0]}
 }
 
 macro_rules! cdf_size {
-    ($x:expr) => ($x+1);
+  ($x:expr) => {
+    $x + 1
+  };
 }
 
 #[repr(align(32))]
@@ -34,10 +35,9 @@ pub struct Align32;
 // let mut x: AlignedArray<[i16; 64 * 64]> = UninitializedAlignedArray();
 // assert!(x.array.as_ptr() as usize % 16 == 0);
 // ```
-pub struct AlignedArray<ARRAY>
-{
+pub struct AlignedArray<ARRAY> {
   _alignment: [Align32; 0],
-  pub array: ARRAY
+  pub array: ARRAY,
 }
 
 #[allow(non_snake_case)]
@@ -47,7 +47,7 @@ pub const fn AlignedArray<ARRAY>(array: ARRAY) -> AlignedArray<ARRAY> {
 
 #[allow(non_snake_case)]
 pub fn UninitializedAlignedArray<ARRAY>() -> AlignedArray<ARRAY> {
-  AlignedArray(unsafe { mem::uninitialized() })
+  AlignedArray(unsafe { MaybeUninit::uninit().assume_init() })
 }
 
 #[test]
@@ -96,7 +96,7 @@ pub fn clamp<T: PartialOrd>(input: T, min: T, max: T) -> T {
   }
 }
 
-pub trait CastFromPrimitive<T> : Copy + 'static {
+pub trait CastFromPrimitive<T>: Copy + 'static {
   fn cast_from(v: T) -> Self;
 }
 
@@ -144,7 +144,8 @@ pub trait Pixel:
   + Send
   + Sync
   + 'static
-{}
+{
+}
 
 impl Pixel for u8 {}
 impl Pixel for u16 {}
@@ -153,7 +154,9 @@ macro_rules! impl_cast_from_pixel_to_primitive {
   ( $T:ty ) => {
     impl<T: Pixel> CastFromPrimitive<T> for $T {
       #[inline(always)]
-      fn cast_from(v: T) -> Self { v.as_() }
+      fn cast_from(v: T) -> Self {
+        v.as_()
+      }
     }
   };
 }

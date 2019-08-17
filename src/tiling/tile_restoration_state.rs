@@ -211,13 +211,16 @@ macro_rules! tile_restoration_plane_common {
 }
 
 tile_restoration_plane_common!(TileRestorationPlane, TileRestorationUnits);
-tile_restoration_plane_common!(TileRestorationPlaneMut, TileRestorationUnitsMut, mut);
+tile_restoration_plane_common!(
+  TileRestorationPlaneMut,
+  TileRestorationUnitsMut,
+  mut
+);
 
 impl<'a> TileRestorationPlaneMut<'a> {
   #[inline(always)]
   pub fn restoration_unit_mut(
-    &mut self,
-    sbo: TileSuperBlockOffset,
+    &mut self, sbo: TileSuperBlockOffset,
   ) -> Option<&mut RestorationUnit> {
     // cannot use map() due to lifetime constraints
     if let Some((x, y)) = self.restoration_unit_index(sbo) {
@@ -334,8 +337,17 @@ macro_rules! tile_restoration_state_common {
   }
 }
 
-tile_restoration_state_common!(TileRestorationState, TileRestorationPlane, iter);
-tile_restoration_state_common!(TileRestorationStateMut, TileRestorationPlaneMut, iter_mut, mut);
+tile_restoration_state_common!(
+  TileRestorationState,
+  TileRestorationPlane,
+  iter
+);
+tile_restoration_state_common!(
+  TileRestorationStateMut,
+  TileRestorationPlaneMut,
+  iter_mut,
+  mut
+);
 
 impl<'a> TileRestorationStateMut<'a> {
   #[inline(always)]

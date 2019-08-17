@@ -7,8 +7,8 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use num_derive::FromPrimitive;
 use arg_enum_proc_macro::ArgEnum;
+use num_derive::FromPrimitive;
 
 /// Sample position for subsampled chroma
 #[derive(Copy, Clone, Debug, PartialEq, FromPrimitive)]
@@ -21,7 +21,7 @@ pub enum ChromaSamplePosition {
   /// in the middle between two luma samples.
   Vertical,
   /// Co-located with (0, 0) luma sample.
-  Colocated
+  Colocated,
 }
 
 impl Default for ChromaSamplePosition {
@@ -41,7 +41,7 @@ pub enum ChromaSampling {
   /// Not subsampled.
   Cs444,
   /// Monochrome.
-  Cs400
+  Cs400,
 }
 
 impl Default for ChromaSampling {
@@ -54,7 +54,7 @@ impl ChromaSampling {
   /// Provides the amount to right shift the luma plane dimensions to get the
   ///  chroma plane dimensions.
   /// Only values 0 or 1 are ever returned.
-  /// The plane dimensions must also be rounded up to accomodate odd luma plane
+  /// The plane dimensions must also be rounded up to accommodate odd luma plane
   ///  sizes.
   /// Cs400 returns None, as there are no chroma planes.
   pub fn get_decimation(self) -> Option<(usize, usize)> {
@@ -68,12 +68,12 @@ impl ChromaSampling {
   }
 
   /// Calculates the size of a chroma plane for this sampling type, given the luma plane dimensions.
-  pub fn get_chroma_dimensions(self, luma_width: usize, luma_height: usize)
-   -> (usize, usize) {
+  pub fn get_chroma_dimensions(
+    self, luma_width: usize, luma_height: usize,
+  ) -> (usize, usize) {
     if let Some((ss_x, ss_y)) = self.get_decimation() {
       ((luma_width + ss_x) >> ss_x, (luma_height + ss_y) >> ss_y)
-    }
-    else {
+    } else {
       (0, 0)
     }
   }
@@ -108,7 +108,7 @@ pub enum ColorPrimaries {
   /// SMPTE EG 432-1
   SMPTE432,
   /// EBU Tech. 3213-E
-  EBU3213 = 22
+  EBU3213 = 22,
 }
 
 impl Default for ColorPrimaries {
@@ -156,7 +156,7 @@ pub enum TransferCharacteristics {
   /// SMPTE ST 428
   SMPTE428,
   /// BT.2100 HLG (Hybrid Log Gamma), ARIB STD-B67
-  HLG
+  HLG,
 }
 
 impl Default for TransferCharacteristics {
@@ -198,7 +198,7 @@ pub enum MatrixCoefficients {
   /// Chromaticity-derived constant luminance
   ChromatCL,
   /// BT.2020 ICtCp
-  ICtCp
+  ICtCp,
 }
 
 impl Default for MatrixCoefficients {
@@ -212,7 +212,7 @@ impl Default for MatrixCoefficients {
 pub struct ColorDescription {
   pub color_primaries: ColorPrimaries,
   pub transfer_characteristics: TransferCharacteristics,
-  pub matrix_coefficients: MatrixCoefficients
+  pub matrix_coefficients: MatrixCoefficients,
 }
 
 /// Allowed pixel value range
@@ -224,7 +224,7 @@ pub enum PixelRange {
   /// Studio swing representation
   Limited,
   /// Full swing representation
-  Full
+  Full,
 }
 
 impl Default for PixelRange {
@@ -241,7 +241,7 @@ pub struct ContentLight {
   /// Maximum content light level
   pub max_content_light_level: u16,
   /// Maximum frame-average light level
-  pub max_frame_average_light_level: u16
+  pub max_frame_average_light_level: u16,
 }
 
 /// Chromaticity coordinates expressed as 0.16 fixed-point values
@@ -249,7 +249,7 @@ pub struct ContentLight {
 #[repr(C)]
 pub struct Point {
   pub x: u16,
-  pub y: u16
+  pub y: u16,
 }
 
 /// High dynamic range mastering display color volume
@@ -265,7 +265,5 @@ pub struct MasteringDisplay {
   /// 24.8 fixed-point maximum luminance in candelas per square meter
   pub max_luminance: u32,
   /// 18.14 fixed-point minimum luminance in candelas per square meter
-  pub min_luminance: u32
+  pub min_luminance: u32,
 }
-
-

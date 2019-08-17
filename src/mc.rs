@@ -20,31 +20,28 @@ use std::ops;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct MotionVector {
   pub row: i16,
-  pub col: i16
+  pub col: i16,
 }
 
 impl ops::Add<MotionVector> for MotionVector {
-    type Output = MotionVector;
+  type Output = MotionVector;
 
-    fn add(self, _rhs: MotionVector) -> MotionVector {
-        MotionVector{row: self.row + _rhs.row, col: self.col + _rhs.col}
-    }
+  fn add(self, _rhs: MotionVector) -> MotionVector {
+    MotionVector { row: self.row + _rhs.row, col: self.col + _rhs.col }
+  }
 }
 
 impl ops::Div<i16> for MotionVector {
-    type Output = MotionVector;
+  type Output = MotionVector;
 
-    fn div(self, _rhs: i16) -> MotionVector {
-        MotionVector{row: self.row  / _rhs, col: self.col / _rhs}
-    }
+  fn div(self, _rhs: i16) -> MotionVector {
+    MotionVector { row: self.row / _rhs, col: self.col / _rhs }
+  }
 }
 
 impl MotionVector {
   pub fn quantize_to_fullpel(self) -> Self {
-    Self {
-      row: (self.row / 8) * 8,
-      col: (self.col / 8) * 8
-    }
+    Self { row: (self.row / 8) * 8, col: (self.col / 8) * 8 }
   }
 
   pub fn is_zero(self) -> bool {
@@ -58,7 +55,7 @@ pub enum FilterMode {
   REGULAR = 0,
   SMOOTH = 1,
   SHARP = 2,
-  BILINEAR = 3
+  BILINEAR = 3,
 }
 
 pub const SUBPEL_FILTER_SIZE: usize = 8;
@@ -80,7 +77,7 @@ const SUBPEL_FILTERS: [[[i32; SUBPEL_FILTER_SIZE]; 16]; 6] = [
     [0, 2, -10, 38, 110, -14, 2, 0],
     [0, 2, -8, 28, 116, -12, 2, 0],
     [0, 0, -4, 18, 122, -10, 2, 0],
-    [0, 0, -2, 8, 126, -6, 2, 0]
+    [0, 0, -2, 8, 126, -6, 2, 0],
   ],
   [
     [0, 0, 0, 128, 0, 0, 0, 0],
@@ -98,7 +95,7 @@ const SUBPEL_FILTERS: [[[i32; SUBPEL_FILTER_SIZE]; 16]; 6] = [
     [0, 0, 6, 42, 60, 20, 0, 0],
     [0, 0, 4, 40, 62, 22, 0, 0],
     [0, 0, 4, 36, 62, 26, 0, 0],
-    [0, 0, 2, 34, 62, 28, 2, 0]
+    [0, 0, 2, 34, 62, 28, 2, 0],
   ],
   [
     [0, 0, 0, 128, 0, 0, 0, 0],
@@ -116,7 +113,7 @@ const SUBPEL_FILTERS: [[[i32; SUBPEL_FILTER_SIZE]; 16]; 6] = [
     [-2, 6, -14, 38, 116, -22, 10, -4],
     [-2, 6, -10, 26, 120, -18, 8, -2],
     [-2, 4, -6, 16, 124, -12, 6, -2],
-    [0, 2, -2, 8, 126, -6, 2, -2]
+    [0, 2, -2, 8, 126, -6, 2, -2],
   ],
   [
     [0, 0, 0, 128, 0, 0, 0, 0],
@@ -134,7 +131,7 @@ const SUBPEL_FILTERS: [[[i32; SUBPEL_FILTER_SIZE]; 16]; 6] = [
     [0, 0, 0, 32, 96, 0, 0, 0],
     [0, 0, 0, 24, 104, 0, 0, 0],
     [0, 0, 0, 16, 112, 0, 0, 0],
-    [0, 0, 0, 8, 120, 0, 0, 0]
+    [0, 0, 0, 8, 120, 0, 0, 0],
   ],
   [
     [0, 0, 0, 128, 0, 0, 0, 0],
@@ -152,7 +149,7 @@ const SUBPEL_FILTERS: [[[i32; SUBPEL_FILTER_SIZE]; 16]; 6] = [
     [0, 0, -8, 38, 110, -12, 0, 0],
     [0, 0, -6, 28, 116, -10, 0, 0],
     [0, 0, -4, 18, 122, -8, 0, 0],
-    [0, 0, -2, 8, 126, -4, 0, 0]
+    [0, 0, -2, 8, 126, -4, 0, 0],
   ],
   [
     [0, 0, 0, 128, 0, 0, 0, 0],
@@ -170,8 +167,8 @@ const SUBPEL_FILTERS: [[[i32; SUBPEL_FILTER_SIZE]; 16]; 6] = [
     [0, 0, 6, 42, 60, 20, 0, 0],
     [0, 0, 4, 40, 62, 22, 0, 0],
     [0, 0, 4, 36, 62, 26, 0, 0],
-    [0, 0, 2, 34, 62, 30, 0, 0]
-  ]
+    [0, 0, 2, 34, 62, 30, 0, 0],
+  ],
 ];
 
 #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
@@ -189,7 +186,7 @@ mod nasm {
     i32,
     i32,
     i32,
-    i32
+    i32,
   );
 
   macro_rules! decl_mc_fns {
@@ -231,7 +228,7 @@ mod nasm {
       (SHARP, SMOOTH) => rav1e_put_8tap_sharp_smooth_avx2,
       (SHARP, SHARP) => rav1e_put_8tap_sharp_avx2,
       (BILINEAR, BILINEAR) => rav1e_put_bilin_avx2,
-      (_, _) => unreachable!()
+      (_, _) => unreachable!(),
     }
   }
 
@@ -277,21 +274,21 @@ mod nasm {
       (SHARP, SMOOTH) => rav1e_prep_8tap_sharp_smooth_avx2,
       (SHARP, SHARP) => rav1e_prep_8tap_sharp_avx2,
       (BILINEAR, BILINEAR) => rav1e_prep_bilin_avx2,
-      (_, _) => unreachable!()
+      (_, _) => unreachable!(),
     }
   }
 
   extern {
     fn rav1e_avg_avx2(
       dst: *mut u8, dst_stride: libc::ptrdiff_t, tmp1: *const i16,
-      tmp2: *const i16, w: i32, h: i32
+      tmp2: *const i16, w: i32, h: i32,
     );
   }
 
   pub fn put_8tap<T: Pixel>(
     dst: &mut PlaneRegionMut<'_, T>, src: PlaneSlice<'_, T>, width: usize,
     height: usize, col_frac: i32, row_frac: i32, mode_x: FilterMode,
-    mode_y: FilterMode, bit_depth: usize
+    mode_y: FilterMode, bit_depth: usize,
   ) {
     if mem::size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
       debug_assert!(bit_depth == 8);
@@ -306,7 +303,7 @@ mod nasm {
           width as i32,
           height as i32,
           col_frac,
-          row_frac
+          row_frac,
         );
       }
       return;
@@ -319,7 +316,7 @@ mod nasm {
   pub fn prep_8tap<T: Pixel>(
     tmp: &mut [i16], src: PlaneSlice<'_, T>, width: usize, height: usize,
     col_frac: i32, row_frac: i32, mode_x: FilterMode, mode_y: FilterMode,
-    bit_depth: usize
+    bit_depth: usize,
   ) {
     if mem::size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
       debug_assert!(bit_depth == 8);
@@ -332,19 +329,19 @@ mod nasm {
           width as i32,
           height as i32,
           col_frac,
-          row_frac
+          row_frac,
         );
       }
       return;
     }
     super::native::prep_8tap(
-      tmp, src, width, height, col_frac, row_frac, mode_x, mode_y, bit_depth
+      tmp, src, width, height, col_frac, row_frac, mode_x, mode_y, bit_depth,
     );
   }
 
   pub fn mc_avg<T: Pixel>(
     dst: &mut PlaneRegionMut<'_, T>, tmp1: &[i16], tmp2: &[i16], width: usize,
-    height: usize, bit_depth: usize
+    height: usize, bit_depth: usize,
   ) {
     if mem::size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
       debug_assert!(bit_depth == 8);
@@ -356,7 +353,7 @@ mod nasm {
           tmp1.as_ptr(),
           tmp2.as_ptr(),
           width as i32,
-          height as i32
+          height as i32,
         );
       }
       return;
@@ -367,12 +364,12 @@ mod nasm {
 
 mod native {
   use super::*;
-  use num_traits::*;
   use crate::frame::*;
   use crate::util::*;
+  use num_traits::*;
 
   unsafe fn run_filter<T: AsPrimitive<i32>>(
-    src: *const T, stride: usize, filter: [i32; 8]
+    src: *const T, stride: usize, filter: [i32; 8],
   ) -> i32 {
     filter
       .iter()
@@ -385,7 +382,7 @@ mod native {
   }
 
   fn get_filter(
-    mode: FilterMode, frac: i32, length: usize
+    mode: FilterMode, frac: i32, length: usize,
   ) -> [i32; SUBPEL_FILTER_SIZE] {
     let filter_idx = if mode == FilterMode::BILINEAR || length > 4 {
       mode as usize
@@ -398,7 +395,7 @@ mod native {
   pub fn put_8tap<T: Pixel>(
     dst: &mut PlaneRegionMut<'_, T>, src: PlaneSlice<'_, T>, width: usize,
     height: usize, col_frac: i32, row_frac: i32, mode_x: FilterMode,
-    mode_y: FilterMode, bit_depth: usize
+    mode_y: FilterMode, bit_depth: usize,
   ) {
     let ref_stride = src.plane.cfg.stride;
     let y_filter = get_filter(mode_y, row_frac, height);
@@ -419,18 +416,16 @@ mod native {
           let src_slice = &offset_slice[r];
           let dst_slice = &mut dst[r];
           for c in 0..width {
-            dst_slice[c] = T::cast_from(round_shift(
-              unsafe {
-                run_filter(
-                  src_slice[c..].as_ptr(),
-                  ref_stride,
-                  y_filter
-                )
-              },
-              7
-            )
-            .max(0)
-            .min(max_sample_val));
+            dst_slice[c] = T::cast_from(
+              round_shift(
+                unsafe {
+                  run_filter(src_slice[c..].as_ptr(), ref_stride, y_filter)
+                },
+                7,
+              )
+              .max(0)
+              .min(max_sample_val),
+            );
           }
         }
       }
@@ -440,15 +435,17 @@ mod native {
           let src_slice = &offset_slice[r];
           let dst_slice = &mut dst[r];
           for c in 0..width {
-            dst_slice[c] = T::cast_from(round_shift(
+            dst_slice[c] = T::cast_from(
               round_shift(
-                unsafe { run_filter(src_slice[c..].as_ptr(), 1, x_filter) },
-                7 - intermediate_bits
-              ),
-              intermediate_bits
-            )
-            .max(0)
-            .min(max_sample_val));
+                round_shift(
+                  unsafe { run_filter(src_slice[c..].as_ptr(), 1, x_filter) },
+                  7 - intermediate_bits,
+                ),
+                intermediate_bits,
+              )
+              .max(0)
+              .min(max_sample_val),
+            );
           }
         }
       }
@@ -462,7 +459,7 @@ mod native {
             for c in cg..(cg + 8).min(width) {
               intermediate[8 * r + (c - cg)] = round_shift(
                 unsafe { run_filter(src_slice[c..].as_ptr(), 1, x_filter) },
-                7 - intermediate_bits
+                7 - intermediate_bits,
               ) as i16;
             }
           }
@@ -470,12 +467,20 @@ mod native {
           for r in 0..height {
             let dst_slice = &mut dst[r];
             for c in cg..(cg + 8).min(width) {
-              dst_slice[c] = T::cast_from(round_shift(
-                unsafe { run_filter(intermediate[8 * r + c - cg..].as_ptr(), 8, y_filter) },
-                7 + intermediate_bits
-              )
-              .max(0)
-              .min(max_sample_val));
+              dst_slice[c] = T::cast_from(
+                round_shift(
+                  unsafe {
+                    run_filter(
+                      intermediate[8 * r + c - cg..].as_ptr(),
+                      8,
+                      y_filter,
+                    )
+                  },
+                  7 + intermediate_bits,
+                )
+                .max(0)
+                .min(max_sample_val),
+              );
             }
           }
         }
@@ -486,7 +491,7 @@ mod native {
   pub fn prep_8tap<T: Pixel>(
     tmp: &mut [i16], src: PlaneSlice<'_, T>, width: usize, height: usize,
     col_frac: i32, row_frac: i32, mode_x: FilterMode, mode_y: FilterMode,
-    bit_depth: usize
+    bit_depth: usize,
   ) {
     let ref_stride = src.plane.cfg.stride;
     let y_filter = get_filter(mode_y, row_frac, height);
@@ -509,13 +514,9 @@ mod native {
           for c in 0..width {
             tmp[r * width + c] = round_shift(
               unsafe {
-                run_filter(
-                  src_slice[c..].as_ptr(),
-                  ref_stride,
-                  y_filter
-                )
+                run_filter(src_slice[c..].as_ptr(), ref_stride, y_filter)
               },
-              7 - intermediate_bits
+              7 - intermediate_bits,
             ) as i16;
           }
         }
@@ -527,7 +528,7 @@ mod native {
           for c in 0..width {
             tmp[r * width + c] = round_shift(
               unsafe { run_filter(src_slice[c..].as_ptr(), 1, x_filter) },
-              7 - intermediate_bits
+              7 - intermediate_bits,
             ) as i16;
           }
         }
@@ -542,7 +543,7 @@ mod native {
             for c in cg..(cg + 8).min(width) {
               intermediate[8 * r + (c - cg)] = round_shift(
                 unsafe { run_filter(src_slice[c..].as_ptr(), 1, x_filter) },
-                7 - intermediate_bits
+                7 - intermediate_bits,
               ) as i16;
             }
           }
@@ -550,8 +551,14 @@ mod native {
           for r in 0..height {
             for c in cg..(cg + 8).min(width) {
               tmp[r * width + c] = round_shift(
-                unsafe { run_filter(intermediate[8 * r + c - cg..].as_ptr(), 8, y_filter) },
-                7
+                unsafe {
+                  run_filter(
+                    intermediate[8 * r + c - cg..].as_ptr(),
+                    8,
+                    y_filter,
+                  )
+                },
+                7,
               ) as i16;
             }
           }
@@ -562,19 +569,21 @@ mod native {
 
   pub fn mc_avg<T: Pixel>(
     dst: &mut PlaneRegionMut<'_, T>, tmp1: &[i16], tmp2: &[i16], width: usize,
-    height: usize, bit_depth: usize
+    height: usize, bit_depth: usize,
   ) {
     let max_sample_val = ((1 << bit_depth) - 1) as i32;
     let intermediate_bits = 4 - if bit_depth == 12 { 2 } else { 0 };
     for r in 0..height {
       let dst_slice = &mut dst[r];
       for c in 0..width {
-        dst_slice[c] = T::cast_from(round_shift(
-          tmp1[r * width + c] as i32 + tmp2[r * width + c] as i32,
-          intermediate_bits + 1
-        )
-        .max(0)
-        .min(max_sample_val));
+        dst_slice[c] = T::cast_from(
+          round_shift(
+            tmp1[r * width + c] as i32 + tmp2[r * width + c] as i32,
+            intermediate_bits + 1,
+          )
+          .max(0)
+          .min(max_sample_val),
+        );
       }
     }
   }

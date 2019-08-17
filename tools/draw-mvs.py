@@ -24,7 +24,7 @@ def draw_mvs(prefix):
     frame = frame.resize((frame.width * frame_size_multiplier, frame.height * frame_size_multiplier))
 
     mv_original_block_size = 4 // 2 # The MVs are in 4×4 blocks, but we use half-resolution images.
-    mv_subsampling = 8 # The MVs currently computed are the same in 8×8 blocks.
+    mv_subsampling = 4 # The MVs currently computed are the same in 4×4 blocks.
     mv_units_per_pixel = 8 # MVs are in 8ths of a pixel.
     mvs = mvs[::mv_subsampling, ::mv_subsampling]
     rows = rows // mv_subsampling

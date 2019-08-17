@@ -8,24 +8,27 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use super::*;
-use std::marker::PhantomData;
-use std::{mem, ptr, slice};
+use crate::test_encode_decode::{compare_plane, DecodeResult, TestDecoder};
+use crate::util::{CastFromPrimitive, Pixel};
 use std::collections::VecDeque;
-use crate::util::{Pixel, CastFromPrimitive};
-use crate::test_encode_decode::{compare_plane, TestDecoder, DecodeResult};
+use std::marker::PhantomData;
+use std::{
+  mem::{self, MaybeUninit},
+  ptr, slice,
+};
 
 use dav1d_sys::*;
 
 pub(crate) struct Dav1dDecoder<T: Pixel> {
   dec: *mut Dav1dContext,
-  pixel: PhantomData<T>
+  pixel: PhantomData<T>,
 }
 
 impl<T: Pixel> TestDecoder<T> for Dav1dDecoder<T> {
   fn setup_decoder(_w: usize, _h: usize) -> Self {
     unsafe {
-      let mut settings = mem::uninitialized();
-      let mut dec: Dav1dDecoder<T> = mem::uninitialized();
+      let mut settings = MaybeUninit::uninit().assume_init();
+      let mut dec: Dav1dDecoder<T> = MaybeUninit::uninit().assume_init();
 
       dav1d_default_settings(&mut settings);
 
@@ -39,15 +42,16 @@ impl<T: Pixel> TestDecoder<T> for Dav1dDecoder<T> {
     }
   }
 
-  fn decode_packet(&mut self, packet: &[u8], rec_fifo: &mut VecDeque<Frame<T>>, w: usize, h: usize, bit_depth: usize) -> DecodeResult {
+  fn decode_packet(
+    &mut self, packet: &[u8], rec_fifo: &mut VecDeque<Frame<T>>, w: usize,
+    h: usize, bit_depth: usize,
+  ) -> DecodeResult {
     let mut corrupted_count = 0;
     unsafe {
       let mut data: Dav1dData = mem::zeroed();
       let ptr = dav1d_data_create(&mut data, packet.len());
       ptr::copy_nonoverlapping(packet.as_ptr(), ptr, packet.len());
-      let ret = dav1d_send_data(
-        self.dec, &mut data
-      );
+      let ret = dav1d_send_data(self.dec, &mut data);
       println!("Decoded. -> {}", ret);
       if ret != 0 {
         corrupted_count += 1;
@@ -85,7 +89,10 @@ impl<T: Pixel> Drop for Dav1dDecoder<T> {
   }
 }
 
-fn compare_pic<T: Pixel>(pic: &Dav1dPicture, frame: &Frame<T>, bit_depth: usize, width: usize, height: usize) {
+fn compare_pic<T: Pixel>(
+  pic: &Dav1dPicture, frame: &Frame<T>, bit_depth: usize, width: usize,
+  height: usize,
+) {
   use crate::frame::Plane;
 
   let cmp_plane = |data, stride, frame_plane: &Plane<T>| {
