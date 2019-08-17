@@ -1,14 +1,14 @@
-#!/bin/sh
+#!/bin/bash
 set -ex
 
-AOM_VERSION="v1.0.0-errata1"
+AOM_VERSION="1.0.0-errata1"
 
-if [ ! -d "$BUILD_DIR/aom-$AOM_VERSION" ]; then
+if [[ "$("$BUILD_DIR/aom/bin/aomenc" --help)" != *"AV1 Encoder $AOM_VERSION"* ]]; then
   # Remove any old versions that might exist from the cache
-  rm -rf "$BUILD_DIR/aom*"
+  rm -rf "$BUILD_DIR/aom"
 
   mkdir -p "$BUILD_DIR/aom"
-  git clone --depth 1 -b v1.0.0-errata1 https://aomedia.googlesource.com/aom "aom-$AOM_VERSION"
+  git clone --depth 1 -b "v$AOM_VERSION" https://aomedia.googlesource.com/aom "aom-$AOM_VERSION"
   cd "aom-$AOM_VERSION"
   rm -rf CMakeCache.txt CMakeFiles
   mkdir -p .build

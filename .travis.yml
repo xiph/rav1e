@@ -65,10 +65,11 @@ jobs:
     - name: "Build & Coveralls"
       rust: stable
       script:
-        - cargo install cargo-kcov
-        - kcov --version
+        - which cargo-kcov || cargo install cargo-kcov
+        # We need to run cargo clean to avoid caching issues
+        - cargo clean
         - RUSTFLAGS="-C link-dead-code" cargo build --features=decode_test,decode_test_dav1d,quick_test --tests --verbose
-        - travis_wait 30 cargo kcov -v --coveralls --no-clean-rebuild -- --verify --exclude-pattern="$HOME/.cargo,aom_build,.h,test"
+        - cargo kcov -v --coveralls --no-clean-rebuild -- --verify --exclude-pattern="$HOME/.cargo,aom_build,.h,test"
       env:
         - CACHE_NAME=COVERALLS
     - name: "Minimum Supported Rustc"
@@ -76,10 +77,8 @@ jobs:
       # and should match the version number in build.rs
       rust: 1.36.0
       script:
-        - cargo install cargo-kcov
-        - kcov --version
         - cargo build --features=decode_test,decode_test_dav1d,quick_test --tests --verbose
-        - travis_wait 30 cargo test --features=decode_test,decode_test_dav1d,quick_test --verbose
+        - cargo test --features=decode_test,decode_test_dav1d,quick_test --verbose
       env:
         - CACHE_NAME=MIN_RUSTC
     - name: "Ignored Tests"
