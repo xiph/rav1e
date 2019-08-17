@@ -18,6 +18,7 @@ use crate::frame::PlaneConfig;
 use crate::frame::PlaneMutSlice;
 use crate::frame::PlaneOffset;
 use crate::frame::PlaneSlice;
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use crate::lrf_simd::*;
 use crate::util::clamp;
 use crate::util::CastFromPrimitive;
