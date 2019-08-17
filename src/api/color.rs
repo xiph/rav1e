@@ -94,21 +94,21 @@ pub enum ColorPrimaries {
   /// BT.470 System B, G (historical)
   BT470BG,
   /// BT.601-7 525 (SMPTE 170 M)
-  ST170M,
+  BT601,
   /// SMPTE 240M (historical)
-  ST240M,
+  SMPTE240,
   /// Generic film
-  Film,
+  GenericFilm,
   /// BT.2020, BT.2100
   BT2020,
   /// SMPTE 248 (CIE 1921 XYZ)
-  ST428,
+  XYZ,
   /// SMPTE RP 431-2
-  P3DCI,
+  SMPTE431,
   /// SMPTE EG 432-1
-  P3Display,
+  SMPTE432,
   /// EBU Tech. 3213-E
-  Tech3213 = 22,
+  EBU3213 = 22,
 }
 
 impl Default for ColorPrimaries {
@@ -124,7 +124,7 @@ impl Default for ColorPrimaries {
 #[repr(C)]
 pub enum TransferCharacteristics {
   /// BT.709
-  BT1886 = 1,
+  BT709 = 1,
   /// Unspecified, must be signaled or inferred outside of the bitstream
   Unspecified,
   /// BT.470 System M (historical)
@@ -132,31 +132,31 @@ pub enum TransferCharacteristics {
   /// BT.470 System B, G (historical)
   BT470BG,
   /// BT.601-7 525 (SMPTE 170 M)
-  ST170M,
+  BT601,
   /// SMPTE 240 M
-  ST240M,
+  SMPTE240,
   /// Linear
   Linear,
   /// Logarithmic (100:1 range)
-  Logarithmic100,
+  Log100,
   /// Logarithmic ((100 * √10):1 range)
-  Logarithmic316,
+  Log100Sqrt10,
   /// IEC 61966-2-4
-  XVYCC,
+  IEC61966,
   /// BT.1361 extended color gamut system (historical)
-  BT1361E,
+  BT1361,
   /// sRGB or sYCC
   SRGB,
   /// BT.2020 10-bit systems
-  BT2020Ten,
+  BT2020_10Bit,
   /// BT.2020 12-bit systems
-  BT2020Twelve,
+  BT2020_12Bit,
   /// SMPTE ST 2084, ITU BT.2100 PQ
-  PerceptualQuantizer,
+  SMPTE2084,
   /// SMPTE ST 428
-  ST428,
-  /// BT.2100 HLG, ARIB STD-B67
-  HybridLogGamma,
+  SMPTE428,
+  /// BT.2100 HLG (Hybrid Log Gamma), ARIB STD-B67
+  HLG,
 }
 
 impl Default for TransferCharacteristics {
@@ -178,25 +178,25 @@ pub enum MatrixCoefficients {
   /// Unspecified, must be signaled or inferred outside of the bitstream.
   Unspecified,
   /// US FCC 73.628
-  BT470M = 4,
+  FCC = 4,
   /// BT.470 System B, G (historical)
   BT470BG,
   /// BT.601-7 525 (SMPTE 170 M)
-  ST170M,
+  BT601,
   /// SMPTE 240 M
-  ST240M,
+  SMPTE240,
   /// YCgCo
   YCgCo,
   /// BT.2020 non-constant luminance, BT.2100 YCbCr
-  BT2020NonConstantLuminance,
+  BT2020NCL,
   /// BT.2020 constant luminance
-  BT2020ConstantLuminance,
+  BT2020CL,
   /// SMPTE ST 2085 YDzDx
-  ST2085,
+  SMPTE2085,
   /// Chromaticity-derived non-constant luminance
-  ChromaticityDerivedNonConstantLuminance,
+  ChromatNCL,
   /// Chromaticity-derived constant luminance
-  ChromaticityDerivedConstantLuminance,
+  ChromatCL,
   /// BT.2020 ICtCp
   ICtCp,
 }
