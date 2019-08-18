@@ -7,13 +7,15 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-pub use self::nasm::*;
 #[cfg(any(not(target_arch = "x86_64"), not(feature = "nasm")))]
 pub use self::native::*;
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
+pub use crate::asm::mc::*;
 
+use crate::cpu_features::CpuFeatureLevel;
+use crate::frame::*;
 use crate::tiling::*;
-use crate::util::Pixel;
+use crate::util::*;
 
 use std::ops;
 
@@ -171,201 +173,8 @@ const SUBPEL_FILTERS: [[[i32; SUBPEL_FILTER_SIZE]; 16]; 6] = [
   ],
 ];
 
-#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-mod nasm {
+pub(crate) mod native {
   use super::*;
-  use crate::frame::*;
-
-  use std::mem;
-
-  type PutFn = unsafe extern fn(
-    *mut u8,
-    libc::ptrdiff_t,
-    *const u8,
-    libc::ptrdiff_t,
-    i32,
-    i32,
-    i32,
-    i32,
-  );
-
-  macro_rules! decl_mc_fns {
-    ($($func_name:ident),+) => {
-      extern {
-        $(
-          fn $func_name(
-            dst: *mut u8, dst_stride: libc::ptrdiff_t, src: *const u8,
-            src_stride: libc::ptrdiff_t, w: i32, h: i32, mx: i32, my: i32
-          );
-        )*
-      }
-    }
-  }
-
-  decl_mc_fns!(
-    rav1e_put_8tap_regular_avx2,
-    rav1e_put_8tap_regular_smooth_avx2,
-    rav1e_put_8tap_regular_sharp_avx2,
-    rav1e_put_8tap_smooth_avx2,
-    rav1e_put_8tap_smooth_regular_avx2,
-    rav1e_put_8tap_smooth_sharp_avx2,
-    rav1e_put_8tap_sharp_avx2,
-    rav1e_put_8tap_sharp_regular_avx2,
-    rav1e_put_8tap_sharp_smooth_avx2,
-    rav1e_put_bilin_avx2
-  );
-
-  fn select_put_fn_avx2(mode_x: FilterMode, mode_y: FilterMode) -> PutFn {
-    use self::FilterMode::*;
-    match (mode_x, mode_y) {
-      (REGULAR, REGULAR) => rav1e_put_8tap_regular_avx2,
-      (REGULAR, SMOOTH) => rav1e_put_8tap_regular_smooth_avx2,
-      (REGULAR, SHARP) => rav1e_put_8tap_regular_sharp_avx2,
-      (SMOOTH, REGULAR) => rav1e_put_8tap_smooth_regular_avx2,
-      (SMOOTH, SMOOTH) => rav1e_put_8tap_smooth_avx2,
-      (SMOOTH, SHARP) => rav1e_put_8tap_smooth_sharp_avx2,
-      (SHARP, REGULAR) => rav1e_put_8tap_sharp_regular_avx2,
-      (SHARP, SMOOTH) => rav1e_put_8tap_sharp_smooth_avx2,
-      (SHARP, SHARP) => rav1e_put_8tap_sharp_avx2,
-      (BILINEAR, BILINEAR) => rav1e_put_bilin_avx2,
-      (_, _) => unreachable!(),
-    }
-  }
-
-  type PrepFn =
-    unsafe extern fn(*mut i16, *const u8, libc::ptrdiff_t, i32, i32, i32, i32);
-
-  macro_rules! decl_mct_fns {
-    ($($func_name:ident),+) => {
-      extern {
-        $(
-          fn $func_name(
-            tmp: *mut i16, src: *const u8, src_stride: libc::ptrdiff_t, w: i32,
-            h: i32, mx: i32, my: i32
-          );
-        )*
-      }
-    }
-  }
-
-  decl_mct_fns!(
-    rav1e_prep_8tap_regular_avx2,
-    rav1e_prep_8tap_regular_smooth_avx2,
-    rav1e_prep_8tap_regular_sharp_avx2,
-    rav1e_prep_8tap_smooth_avx2,
-    rav1e_prep_8tap_smooth_regular_avx2,
-    rav1e_prep_8tap_smooth_sharp_avx2,
-    rav1e_prep_8tap_sharp_avx2,
-    rav1e_prep_8tap_sharp_regular_avx2,
-    rav1e_prep_8tap_sharp_smooth_avx2,
-    rav1e_prep_bilin_avx2
-  );
-
-  fn select_prep_fn_avx2(mode_x: FilterMode, mode_y: FilterMode) -> PrepFn {
-    use self::FilterMode::*;
-    match (mode_x, mode_y) {
-      (REGULAR, REGULAR) => rav1e_prep_8tap_regular_avx2,
-      (REGULAR, SMOOTH) => rav1e_prep_8tap_regular_smooth_avx2,
-      (REGULAR, SHARP) => rav1e_prep_8tap_regular_sharp_avx2,
-      (SMOOTH, REGULAR) => rav1e_prep_8tap_smooth_regular_avx2,
-      (SMOOTH, SMOOTH) => rav1e_prep_8tap_smooth_avx2,
-      (SMOOTH, SHARP) => rav1e_prep_8tap_smooth_sharp_avx2,
-      (SHARP, REGULAR) => rav1e_prep_8tap_sharp_regular_avx2,
-      (SHARP, SMOOTH) => rav1e_prep_8tap_sharp_smooth_avx2,
-      (SHARP, SHARP) => rav1e_prep_8tap_sharp_avx2,
-      (BILINEAR, BILINEAR) => rav1e_prep_bilin_avx2,
-      (_, _) => unreachable!(),
-    }
-  }
-
-  extern {
-    fn rav1e_avg_avx2(
-      dst: *mut u8, dst_stride: libc::ptrdiff_t, tmp1: *const i16,
-      tmp2: *const i16, w: i32, h: i32,
-    );
-  }
-
-  pub fn put_8tap<T: Pixel>(
-    dst: &mut PlaneRegionMut<'_, T>, src: PlaneSlice<'_, T>, width: usize,
-    height: usize, col_frac: i32, row_frac: i32, mode_x: FilterMode,
-    mode_y: FilterMode, bit_depth: usize,
-  ) {
-    if mem::size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-      debug_assert!(bit_depth == 8);
-      let dst_stride = dst.plane_cfg.stride as isize;
-      let src_stride = src.plane.cfg.stride as isize;
-      unsafe {
-        select_put_fn_avx2(mode_x, mode_y)(
-          dst.data_ptr_mut() as *mut _,
-          dst_stride,
-          src.as_ptr() as *const _,
-          src_stride,
-          width as i32,
-          height as i32,
-          col_frac,
-          row_frac,
-        );
-      }
-      return;
-    }
-    super::native::put_8tap(
-      dst, src, width, height, col_frac, row_frac, mode_x, mode_y, bit_depth,
-    );
-  }
-
-  pub fn prep_8tap<T: Pixel>(
-    tmp: &mut [i16], src: PlaneSlice<'_, T>, width: usize, height: usize,
-    col_frac: i32, row_frac: i32, mode_x: FilterMode, mode_y: FilterMode,
-    bit_depth: usize,
-  ) {
-    if mem::size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-      debug_assert!(bit_depth == 8);
-      let src_stride = src.plane.cfg.stride as isize;
-      unsafe {
-        select_prep_fn_avx2(mode_x, mode_y)(
-          tmp.as_mut_ptr(),
-          src.as_ptr() as *const _,
-          src_stride,
-          width as i32,
-          height as i32,
-          col_frac,
-          row_frac,
-        );
-      }
-      return;
-    }
-    super::native::prep_8tap(
-      tmp, src, width, height, col_frac, row_frac, mode_x, mode_y, bit_depth,
-    );
-  }
-
-  pub fn mc_avg<T: Pixel>(
-    dst: &mut PlaneRegionMut<'_, T>, tmp1: &[i16], tmp2: &[i16], width: usize,
-    height: usize, bit_depth: usize,
-  ) {
-    if mem::size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-      debug_assert!(bit_depth == 8);
-      let dst_stride = dst.plane_cfg.stride as isize;
-      unsafe {
-        rav1e_avg_avx2(
-          dst.data_ptr_mut() as *mut _,
-          dst_stride,
-          tmp1.as_ptr(),
-          tmp2.as_ptr(),
-          width as i32,
-          height as i32,
-        );
-      }
-      return;
-    }
-    super::native::mc_avg(dst, tmp1, tmp2, width, height, bit_depth);
-  }
-}
-
-mod native {
-  use super::*;
-  use crate::frame::*;
-  use crate::util::*;
   use num_traits::*;
 
   unsafe fn run_filter<T: AsPrimitive<i32>>(
@@ -395,7 +204,7 @@ mod native {
   pub fn put_8tap<T: Pixel>(
     dst: &mut PlaneRegionMut<'_, T>, src: PlaneSlice<'_, T>, width: usize,
     height: usize, col_frac: i32, row_frac: i32, mode_x: FilterMode,
-    mode_y: FilterMode, bit_depth: usize,
+    mode_y: FilterMode, bit_depth: usize, _cpu: CpuFeatureLevel,
   ) {
     let ref_stride = src.plane.cfg.stride;
     let y_filter = get_filter(mode_y, row_frac, height);
@@ -491,7 +300,7 @@ mod native {
   pub fn prep_8tap<T: Pixel>(
     tmp: &mut [i16], src: PlaneSlice<'_, T>, width: usize, height: usize,
     col_frac: i32, row_frac: i32, mode_x: FilterMode, mode_y: FilterMode,
-    bit_depth: usize,
+    bit_depth: usize, _cpu: CpuFeatureLevel,
   ) {
     let ref_stride = src.plane.cfg.stride;
     let y_filter = get_filter(mode_y, row_frac, height);
@@ -569,7 +378,7 @@ mod native {
 
   pub fn mc_avg<T: Pixel>(
     dst: &mut PlaneRegionMut<'_, T>, tmp1: &[i16], tmp2: &[i16], width: usize,
-    height: usize, bit_depth: usize,
+    height: usize, bit_depth: usize, _cpu: CpuFeatureLevel,
   ) {
     let max_sample_val = ((1 << bit_depth) - 1) as i32;
     let intermediate_bits = 4 - if bit_depth == 12 { 2 } else { 0 };

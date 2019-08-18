@@ -123,6 +123,11 @@ impl_cast_from_primitive!(i16 => { i8, i16, i32, i64, isize });
 impl_cast_from_primitive!(i32 => { u32, u64, usize });
 impl_cast_from_primitive!(i32 => { i8, i16, i32, i64, isize });
 
+pub enum PixelType {
+  U8,
+  U16,
+}
+
 pub trait Pixel:
   PrimInt
   + Into<u32>
@@ -145,10 +150,24 @@ pub trait Pixel:
   + Sync
   + 'static
 {
+  fn type_enum() -> PixelType;
+
+  fn to_asm_stride(in_stride: usize) -> isize {
+    (in_stride * size_of::<Self>()) as isize
+  }
 }
 
-impl Pixel for u8 {}
-impl Pixel for u16 {}
+impl Pixel for u8 {
+  fn type_enum() -> PixelType {
+    PixelType::U8
+  }
+}
+
+impl Pixel for u16 {
+  fn type_enum() -> PixelType {
+    PixelType::U16
+  }
+}
 
 macro_rules! impl_cast_from_pixel_to_primitive {
   ( $T:ty ) => {

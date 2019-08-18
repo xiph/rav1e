@@ -18,6 +18,8 @@ extern crate pretty_assertions;
 #[cfg(cargo_c)]
 mod capi;
 
+pub(crate) mod asm;
+mod cpu_features;
 mod dist;
 mod ec;
 mod partition;

@@ -272,6 +272,20 @@ macro_rules! plane_region_common {
       pub fn frame_block_offset(&self) -> PlaneBlockOffset {
         self.to_frame_block_offset(TileBlockOffset(BlockOffset { x: 0, y: 0 }))
       }
+
+      #[cfg(feature = "check_asm")]
+      pub(crate) fn scratch_copy(&self) -> Plane<T> {
+        let &Rect { width, height, .. } = self.rect();
+        let &PlaneConfig { xdec, ydec, .. } = self.plane_cfg;
+        let mut ret: Plane<T> = Plane::new(width, height, xdec, ydec, 0, 0);
+        let mut dst: PlaneRegionMut<T> = ret.as_region_mut();
+        for (dst_row, src_row) in dst.rows_iter_mut().zip(self.rows_iter()) {
+          for (out, input) in dst_row.iter_mut().zip(src_row) {
+            *out = *input;
+          }
+        }
+        ret
+      }
     }
 
     unsafe impl<T: Pixel> Send for $name<'_, T> {}
