@@ -21,6 +21,7 @@ use crate::context::*;
 use crate::context::{
   FrameBlocks, SuperBlockOffset, TileSuperBlockOffset, MI_SIZE,
 };
+use crate::cpu_features::*;
 use crate::dist::get_satd;
 use crate::encoder::*;
 use crate::frame::*;
@@ -84,6 +85,7 @@ pub struct EncoderConfig {
   pub still_picture: bool,
 
   // encoder configuration
+  pub cpu_feature_level: CpuFeatureLevel,
   pub time_base: Rational,
   /// The *minimum* interval between two keyframes
   pub min_key_frame_interval: u64,
@@ -144,8 +146,10 @@ impl EncoderConfig {
       content_light: None,
 
       still_picture: false,
+      cpu_feature_level: detect_cpu_feature_level(),
 
       time_base: Rational { num: 1, den: 30 },
+
       min_key_frame_interval: 12,
       max_key_frame_interval: 240,
       min_quantizer: 0,
