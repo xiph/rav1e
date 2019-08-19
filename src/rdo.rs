@@ -469,7 +469,7 @@ fn compute_mean_importance<T: Pixel>(
   let mut total_importance = 0.;
   for y in y1..y2 {
     for x in x1..x2 {
-      total_importance += fi.block_importances[y * fi.w_in_b + x];
+      total_importance += fi.block_importances[y / 2 * fi.w_in_imp_b + x / 2];
     }
   }
   // Divide by the full area even though some blocks were outside.
