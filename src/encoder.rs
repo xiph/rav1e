@@ -52,6 +52,9 @@ const MAX_NUM_SPATIAL_LAYERS: usize = 4;
 const MAX_NUM_OPERATING_POINTS: usize =
   MAX_NUM_TEMPORAL_LAYERS * MAX_NUM_SPATIAL_LAYERS;
 
+/// Size of blocks for the importance computation, in pixels.
+pub const IMPORTANCE_BLOCK_SIZE: usize = 8;
+
 #[derive(Debug, Clone)]
 pub struct ReferenceFrame<T: Pixel> {
   pub order_hint: u32,
@@ -519,11 +522,14 @@ pub struct FrameInvariants<T: Pixel> {
   /// `rec_buffer` contains the current frame's reference frames and
   /// `lookahead_rec_buffer` contains the next frame's reference frames.
   pub lookahead_rec_buffer: ReferenceFramesSet<T>,
-  /// Intra prediction cost estimations for each 4×4 block. Used for block
-  /// importance computation.
+  /// Frame width in importance blocks.
+  pub w_in_imp_b: usize,
+  /// Frame height in importance blocks.
+  pub h_in_imp_b: usize,
+  /// Intra prediction cost estimations for each importance block.
   pub lookahead_intra_costs: Box<[u32]>,
-  /// Future importance values for each 4×4 block. That is, a value indicating
-  /// how much future frames depend on the block (for example, via
+  /// Future importance values for each importance block. That is, a value
+  /// indicating how much future frames depend on the block (for example, via
   /// inter-prediction).
   pub block_importances: Box<[f32]>,
 }
@@ -598,6 +604,10 @@ impl<T: Pixel> FrameInvariants<T> {
         }
       }
     }
+
+    // Width and height are padded to 8×8 block size.
+    let w_in_imp_b = w_in_b / 2;
+    let h_in_imp_b = h_in_b / 2;
 
     Self {
       sequence,
@@ -686,8 +696,11 @@ impl<T: Pixel> FrameInvariants<T> {
         vec.into_boxed_slice()
       },
       lookahead_rec_buffer: ReferenceFramesSet::new(),
-      lookahead_intra_costs: vec![0; w_in_b * h_in_b].into_boxed_slice(),
-      block_importances: vec![0.; w_in_b * h_in_b].into_boxed_slice(),
+      w_in_imp_b,
+      h_in_imp_b,
+      lookahead_intra_costs: vec![0; w_in_imp_b * h_in_imp_b]
+        .into_boxed_slice(),
+      block_importances: vec![0.; w_in_imp_b * h_in_imp_b].into_boxed_slice(),
     }
   }
 

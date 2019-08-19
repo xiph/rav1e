@@ -24,7 +24,7 @@ frame = Image.open(sys.argv[1])
 frame = frame.resize((frame.width * frame_size_multiplier, frame.height * frame_size_multiplier))
 frame = frame.convert(mode='RGB')
 
-mv_original_block_size = 4 // 2 # The MVs are in 4×4 blocks, but we use half-resolution images.
+mv_original_block_size = 8 // 2 # The importances are in 8×8 blocks, but we use half-resolution images.
 mv_block_size = mv_original_block_size * frame_size_multiplier
 
 draw = ImageDraw.Draw(frame, mode='RGBA')

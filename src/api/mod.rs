@@ -18,9 +18,7 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use serde_derive::{Deserialize, Serialize};
 
 use crate::context::*;
-use crate::context::{
-  FrameBlocks, SuperBlockOffset, TileSuperBlockOffset, MI_SIZE,
-};
+use crate::context::{FrameBlocks, SuperBlockOffset, TileSuperBlockOffset};
 use crate::cpu_features::*;
 use crate::dist::get_satd;
 use crate::encoder::*;
@@ -1242,13 +1240,13 @@ impl<T: Pixel> ContextInner<T> {
 
     let mut plane_after_prediction = frame.planes[0].clone();
 
-    for y in 0..fi.h_in_b {
-      for x in 0..fi.w_in_b {
+    for y in 0..fi.h_in_imp_b {
+      for x in 0..fi.w_in_imp_b {
         let plane_org = frame.planes[0].region(Area::Rect {
-          x: x as isize * MI_SIZE as isize,
-          y: y as isize * MI_SIZE as isize,
-          width: MI_SIZE,
-          height: MI_SIZE,
+          x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
+          y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
+          width: IMPORTANCE_BLOCK_SIZE,
+          height: IMPORTANCE_BLOCK_SIZE,
         });
 
         // TODO: other intra prediction modes.
@@ -1257,33 +1255,33 @@ impl<T: Pixel> ContextInner<T> {
           TileBlockOffset(BlockOffset { x, y }),
           0,
           0,
-          BlockSize::BLOCK_4X4,
+          BlockSize::BLOCK_8X8,
           PlaneOffset {
-            x: x as isize * MI_SIZE as isize,
-            y: y as isize * MI_SIZE as isize,
+            x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
+            y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
           },
-          TxSize::TX_4X4,
+          TxSize::TX_8X8,
           fi.sequence.bit_depth,
           Some(PredictionMode::DC_PRED),
         );
 
         let mut plane_after_prediction_region = plane_after_prediction
           .region_mut(Area::Rect {
-            x: x as isize * MI_SIZE as isize,
-            y: y as isize * MI_SIZE as isize,
-            width: MI_SIZE,
-            height: MI_SIZE,
+            x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
+            y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
+            width: IMPORTANCE_BLOCK_SIZE,
+            height: IMPORTANCE_BLOCK_SIZE,
           });
 
         PredictionMode::DC_PRED.predict_intra(
           TileRect {
-            x: x * MI_SIZE,
-            y: y * MI_SIZE,
-            width: MI_SIZE,
-            height: MI_SIZE,
+            x: x * IMPORTANCE_BLOCK_SIZE,
+            y: y * IMPORTANCE_BLOCK_SIZE,
+            width: IMPORTANCE_BLOCK_SIZE,
+            height: IMPORTANCE_BLOCK_SIZE,
           },
           &mut plane_after_prediction_region,
-          TxSize::TX_4X4,
+          TxSize::TX_8X8,
           fi.sequence.bit_depth,
           &[], // Not used by DC_PRED.
           0,   // Not used by DC_PRED.
@@ -1292,21 +1290,21 @@ impl<T: Pixel> ContextInner<T> {
 
         let plane_after_prediction_region =
           plane_after_prediction.region(Area::Rect {
-            x: x as isize * MI_SIZE as isize,
-            y: y as isize * MI_SIZE as isize,
-            width: MI_SIZE,
-            height: MI_SIZE,
+            x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
+            y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
+            width: IMPORTANCE_BLOCK_SIZE,
+            height: IMPORTANCE_BLOCK_SIZE,
           });
 
         let intra_cost = get_satd(
           &plane_org,
           &plane_after_prediction_region,
-          MI_SIZE,
-          MI_SIZE,
+          IMPORTANCE_BLOCK_SIZE,
+          IMPORTANCE_BLOCK_SIZE,
           self.config.bit_depth,
         );
 
-        fi.lookahead_intra_costs[y * fi.w_in_b + x] = intra_cost;
+        fi.lookahead_intra_costs[y * fi.w_in_imp_b + x] = intra_cost;
       }
     }
   }
@@ -1394,9 +1392,10 @@ impl<T: Pixel> ContextInner<T> {
     // current output frame will get its block importances from the future
     // frames.
     const MV_UNITS_PER_PIXEL: i64 = 8;
-    const MI_SIZE_IN_MV_UNITS: i64 = MI_SIZE as i64 * MV_UNITS_PER_PIXEL;
+    const BLOCK_SIZE_IN_MV_UNITS: i64 =
+      IMPORTANCE_BLOCK_SIZE as i64 * MV_UNITS_PER_PIXEL;
     const BLOCK_AREA_IN_MV_UNITS: i64 =
-      MI_SIZE_IN_MV_UNITS * MI_SIZE_IN_MV_UNITS;
+      BLOCK_SIZE_IN_MV_UNITS * BLOCK_SIZE_IN_MV_UNITS;
 
     for &output_frameno in output_framenos.iter().skip(1).rev() {
       // Remove fi from the map temporarily and put it back in in the end of
@@ -1438,41 +1437,44 @@ impl<T: Pixel> ContextInner<T> {
         // We should never use frame as its own reference.
         assert_ne!(reference_output_frameno, output_frameno);
 
-        for y in 0..fi.h_in_b {
-          for x in 0..fi.w_in_b {
-            let mv = fi.lookahead_mvs[mv_index][y][x];
+        for y in 0..fi.h_in_imp_b {
+          for x in 0..fi.w_in_imp_b {
+            let mv = fi.lookahead_mvs[mv_index][y * 2][x * 2];
 
             // Coordinates of the top-left corner of the reference block, in MV
             // units.
-            let reference_x = x as i64 * MI_SIZE_IN_MV_UNITS + mv.col as i64;
-            let reference_y = y as i64 * MI_SIZE_IN_MV_UNITS + mv.row as i64;
+            let reference_x =
+              x as i64 * BLOCK_SIZE_IN_MV_UNITS + mv.col as i64;
+            let reference_y =
+              y as i64 * BLOCK_SIZE_IN_MV_UNITS + mv.row as i64;
 
             let plane_org = frame.planes[0].region(Area::Rect {
-              x: x as isize * MI_SIZE as isize,
-              y: y as isize * MI_SIZE as isize,
-              width: MI_SIZE,
-              height: MI_SIZE,
+              x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
+              y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
+              width: IMPORTANCE_BLOCK_SIZE,
+              height: IMPORTANCE_BLOCK_SIZE,
             });
 
             let plane_ref = reference_frame.planes[0].region(Area::Rect {
               x: reference_x as isize / MV_UNITS_PER_PIXEL as isize,
               y: reference_y as isize / MV_UNITS_PER_PIXEL as isize,
-              width: MI_SIZE,
-              height: MI_SIZE,
+              width: IMPORTANCE_BLOCK_SIZE,
+              height: IMPORTANCE_BLOCK_SIZE,
             });
 
             let inter_cost = get_satd(
               &plane_org,
               &plane_ref,
-              MI_SIZE,
-              MI_SIZE,
+              IMPORTANCE_BLOCK_SIZE,
+              IMPORTANCE_BLOCK_SIZE,
               self.config.bit_depth,
             ) as f32;
 
             let intra_cost =
-              fi.lookahead_intra_costs[y * fi.w_in_b + x] as f32;
+              fi.lookahead_intra_costs[y * fi.w_in_imp_b + x] as f32;
 
-            let future_importance = fi.block_importances[y * fi.w_in_b + x];
+            let future_importance =
+              fi.block_importances[y * fi.w_in_imp_b + x];
 
             let propagate_fraction = (1. - inter_cost / intra_cost).max(0.);
             let propagate_amount = (intra_cost + future_importance)
@@ -1486,18 +1488,18 @@ impl<T: Pixel> ContextInner<T> {
             {
               let mut propagate =
                 |block_x_in_mv_units, block_y_in_mv_units, fraction| {
-                  let x = block_x_in_mv_units / MI_SIZE_IN_MV_UNITS;
-                  let y = block_y_in_mv_units / MI_SIZE_IN_MV_UNITS;
+                  let x = block_x_in_mv_units / BLOCK_SIZE_IN_MV_UNITS;
+                  let y = block_y_in_mv_units / BLOCK_SIZE_IN_MV_UNITS;
 
                   // TODO: propagate partially if the block is partially off-frame
                   // (possible on right and bottom edges)?
                   if x >= 0
                     && y >= 0
-                    && (x as usize) < fi.w_in_b
-                    && (y as usize) < fi.h_in_b
+                    && (x as usize) < fi.w_in_imp_b
+                    && (y as usize) < fi.h_in_imp_b
                   {
                     reference_frame_block_importances
-                      [y as usize * fi.w_in_b + x as usize] +=
+                      [y as usize * fi.w_in_imp_b + x as usize] +=
                       propagate_amount * fraction;
                   }
                 };
@@ -1505,21 +1507,31 @@ impl<T: Pixel> ContextInner<T> {
               // Coordinates of the top-left corner of the block intersecting the
               // reference block from the top-left.
               let top_left_block_x = (reference_x
-                - if reference_x < 0 { MI_SIZE_IN_MV_UNITS - 1 } else { 0 })
-                / MI_SIZE_IN_MV_UNITS
-                * MI_SIZE_IN_MV_UNITS;
+                - if reference_x < 0 {
+                  BLOCK_SIZE_IN_MV_UNITS - 1
+                } else {
+                  0
+                })
+                / BLOCK_SIZE_IN_MV_UNITS
+                * BLOCK_SIZE_IN_MV_UNITS;
               let top_left_block_y = (reference_y
-                - if reference_y < 0 { MI_SIZE_IN_MV_UNITS - 1 } else { 0 })
-                / MI_SIZE_IN_MV_UNITS
-                * MI_SIZE_IN_MV_UNITS;
+                - if reference_y < 0 {
+                  BLOCK_SIZE_IN_MV_UNITS - 1
+                } else {
+                  0
+                })
+                / BLOCK_SIZE_IN_MV_UNITS
+                * BLOCK_SIZE_IN_MV_UNITS;
 
               debug_assert!(reference_x >= top_left_block_x);
               debug_assert!(reference_y >= top_left_block_y);
 
-              let top_right_block_x = top_left_block_x + MI_SIZE_IN_MV_UNITS;
+              let top_right_block_x =
+                top_left_block_x + BLOCK_SIZE_IN_MV_UNITS;
               let top_right_block_y = top_left_block_y;
               let bottom_left_block_x = top_left_block_x;
-              let bottom_left_block_y = top_left_block_y + MI_SIZE_IN_MV_UNITS;
+              let bottom_left_block_y =
+                top_left_block_y + BLOCK_SIZE_IN_MV_UNITS;
               let bottom_right_block_x = top_right_block_x;
               let bottom_right_block_y = bottom_left_block_y;
 
@@ -1535,7 +1547,7 @@ impl<T: Pixel> ContextInner<T> {
               );
 
               let top_right_block_fraction =
-                ((reference_x + MI_SIZE_IN_MV_UNITS - top_right_block_x)
+                ((reference_x + BLOCK_SIZE_IN_MV_UNITS - top_right_block_x)
                   * (bottom_left_block_y - reference_y))
                   as f32
                   / BLOCK_AREA_IN_MV_UNITS as f32;
@@ -1548,7 +1560,7 @@ impl<T: Pixel> ContextInner<T> {
 
               let bottom_left_block_fraction = ((top_right_block_x
                 - reference_x)
-                * (reference_y + MI_SIZE_IN_MV_UNITS - bottom_left_block_y))
+                * (reference_y + BLOCK_SIZE_IN_MV_UNITS - bottom_left_block_y))
                 as f32
                 / BLOCK_AREA_IN_MV_UNITS as f32;
 
@@ -1559,9 +1571,9 @@ impl<T: Pixel> ContextInner<T> {
               );
 
               let bottom_right_block_fraction =
-                ((reference_x + MI_SIZE_IN_MV_UNITS - top_right_block_x)
-                  * (reference_y + MI_SIZE_IN_MV_UNITS - bottom_left_block_y))
-                  as f32
+                ((reference_x + BLOCK_SIZE_IN_MV_UNITS - top_right_block_x)
+                  * (reference_y + BLOCK_SIZE_IN_MV_UNITS
+                    - bottom_left_block_y)) as f32
                   / BLOCK_AREA_IN_MV_UNITS as f32;
 
               propagate(
@@ -1581,11 +1593,12 @@ impl<T: Pixel> ContextInner<T> {
     if !output_framenos.is_empty() {
       let fi = self.frame_invariants.get_mut(&output_framenos[0]).unwrap();
 
-      for y in 0..fi.h_in_b {
-        for x in 0..fi.w_in_b {
-          let intra_cost = fi.lookahead_intra_costs[y * fi.w_in_b + x] as f32;
+      for y in 0..fi.h_in_imp_b {
+        for x in 0..fi.w_in_imp_b {
+          let intra_cost =
+            fi.lookahead_intra_costs[y * fi.w_in_imp_b + x] as f32;
 
-          let importance = &mut fi.block_importances[y * fi.w_in_b + x];
+          let importance = &mut fi.block_importances[y * fi.w_in_imp_b + x];
           if intra_cost > 0. {
             *importance = (1. + *importance / intra_cost).log2();
           } else {
@@ -1601,11 +1614,11 @@ impl<T: Pixel> ContextInner<T> {
         let data = &fi.block_importances;
         use byteorder::{NativeEndian, WriteBytesExt};
         let mut buf = vec![];
-        buf.write_u64::<NativeEndian>(fi.h_in_b as u64).unwrap();
-        buf.write_u64::<NativeEndian>(fi.w_in_b as u64).unwrap();
-        for y in 0..fi.h_in_b {
-          for x in 0..fi.w_in_b {
-            let importance = data[y * fi.w_in_b + x];
+        buf.write_u64::<NativeEndian>(fi.h_in_imp_b).unwrap();
+        buf.write_u64::<NativeEndian>(fi.w_in_imp_b).unwrap();
+        for y in 0..fi.h_in_imp_b {
+          for x in 0..fi.w_in_imp_b {
+            let importance = data[y * fi.w_in_imp_b + x];
             buf.write_f32::<NativeEndian>(importance).unwrap();
           }
         }
