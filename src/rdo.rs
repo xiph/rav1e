@@ -520,8 +520,24 @@ fn luma_chroma_mode_rdo<T: Pixel>(
 
     // If skip is true, sidx is not coded.
     // If quantizer RDO is disabled, sidx isn't coded either.
-    let sidx_range = if skip || !fi.config.speed_settings.quantizer_rdo {
+    let sidx_range = if skip {
       0..=0
+    } else if !fi.config.speed_settings.quantizer_rdo {
+      let importance =
+        compute_mean_importance(fi, ts.to_frame_block_offset(tile_bo), bsize);
+      // Chosen based on the RDO segment ID statistics for speed 2 on the DOTA2
+      // clip. More precisely:
+      // - Mean importance and the corresponding best sidx chosen by RDO were
+      //   dumped from encoding the DOTA2 clip on --speed 2.
+      // - The values were plotted in a logarithmic 2D histogram.
+      // - Based on that, the value below were chosen.
+      let heuristic_sidx = match importance {
+        x if x >= 0. && x < 2. => 1,
+        x if x >= 2. && x < 4. => 0,
+        x if x >= 4. => 2,
+        _ => unreachable!(),
+      };
+      heuristic_sidx..=heuristic_sidx
     } else {
       0..=2
     };
