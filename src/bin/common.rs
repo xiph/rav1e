@@ -382,18 +382,18 @@ impl MatchGet for ArgMatches<'_> {
 }
 
 fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
-  let maybe_quantizer = matches.value_of("QP").map(|qp| qp.parse().unwrap());
+  let maybe_quantizer = matches.value_of_int("QP");
   let maybe_bitrate = matches.value_of_int("BITRATE");
   let quantizer = maybe_quantizer.unwrap_or_else(|| {
     if maybe_bitrate.is_some() {
       // If a bitrate is specified, the quantizer is the maximum allowed (e.g.,
       //  the minimum quality allowed), which by default should be
       //  unconstrained.
-      255
+      Ok(255)
     } else {
-      100
+      Ok(100)
     }
-  });
+  })? as usize;
   let bitrate: i32 = maybe_bitrate.unwrap_or(Ok(0))?;
   let train_rdo = matches.is_present("train-rdo");
   if quantizer == 0 {
