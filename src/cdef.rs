@@ -202,9 +202,8 @@ unsafe fn cdef_filter_block<T: Pixel>(
             );
         }
       }
-      let v =
-        T::cast_from(i32::cast_from(x) + ((8 + sum - (sum < 0) as i32) >> 4));
-      *ptr_out = clamp(v, T::cast_from(min), T::cast_from(max));
+      let v = i32::cast_from(x) + ((8 + sum - (sum < 0) as i32) >> 4);
+      *ptr_out = T::cast_from(clamp(v, min as i32, max as i32));
     }
   }
 }
