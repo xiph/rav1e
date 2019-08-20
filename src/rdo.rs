@@ -1587,6 +1587,9 @@ fn rdo_loop_plane_error<T: Pixel>(
 ) -> u64 {
   let sbo_0 = PlaneSuperBlockOffset(SuperBlockOffset { x: 0, y: 0 });
   let sb_blocks = if fi.sequence.use_128x128_superblock { 16 } else { 8 };
+  let in_plane = &ts.input_tile.planes[pli];
+  let test_plane = &test.planes[pli];
+  let &PlaneConfig { xdec, ydec, .. } = in_plane.plane_cfg;
   // Each direction block is 8x8 in y, potentially smaller if subsampled in chroma
   // accumulating in-frame and unpadded
   let mut err: u64 = 0;
@@ -1594,37 +1597,34 @@ fn rdo_loop_plane_error<T: Pixel>(
     for bx in 0..sb_blocks {
       let bo = tile_sbo.block_offset(bx << 1, by << 1);
       if bo.0.x < blocks.cols() && bo.0.y < blocks.rows() {
-        let skip = blocks[bo].skip;
-        if !skip {
-          let in_plane = &ts.input_tile.planes[pli];
-          let test_plane = &test.planes[pli];
-          let &PlaneConfig { xdec, ydec, .. } = in_plane.plane_cfg;
-          debug_assert_eq!(xdec, test_plane.cfg.xdec);
-          debug_assert_eq!(ydec, test_plane.cfg.ydec);
+        let in_plane = &ts.input_tile.planes[pli];
+        let test_plane = &test.planes[pli];
+        let &PlaneConfig { xdec, ydec, .. } = in_plane.plane_cfg;
+        debug_assert_eq!(xdec, test_plane.cfg.xdec);
+        debug_assert_eq!(ydec, test_plane.cfg.ydec);
 
-          let in_bo = tile_sbo.block_offset(bx << 1, by << 1);
-          let in_region =
-            in_plane.subregion(Area::BlockStartingAt { bo: in_bo.0 });
+        let in_bo = tile_sbo.block_offset(bx << 1, by << 1);
+        let in_region =
+          in_plane.subregion(Area::BlockStartingAt { bo: in_bo.0 });
 
-          let test_bo = sbo_0.block_offset(bx << 1, by << 1);
-          let test_region =
-            test_plane.region(Area::BlockStartingAt { bo: test_bo.0 });
+        let test_bo = sbo_0.block_offset(bx << 1, by << 1);
+        let test_region =
+          test_plane.region(Area::BlockStartingAt { bo: test_bo.0 });
 
-          let value = if pli == 0 {
-            cdef_dist_wxh_8x8(&in_region, &test_region, fi.sequence.bit_depth)
-          } else {
-            // The closure returns 1. because we bias the distortion right
-            // below.
-            sse_wxh(&in_region, &test_region, 8 >> xdec, 8 >> ydec, |_, _| 1.)
-          };
+        let value = if pli == 0 {
+          cdef_dist_wxh_8x8(&in_region, &test_region, fi.sequence.bit_depth)
+        } else {
+          // The closure returns 1. because we bias the distortion right
+          // below.
+          sse_wxh(&in_region, &test_region, 8 >> xdec, 8 >> ydec, |_, _| 1.)
+        };
 
-          let bias = compute_distortion_bias(
-            fi,
-            ts.to_frame_block_offset(bo),
-            BlockSize::BLOCK_8X8,
-          );
-          err += (value as f64 * bias) as u64;
-        }
+        let bias = compute_distortion_bias(
+          fi,
+          ts.to_frame_block_offset(bo),
+          BlockSize::BLOCK_8X8,
+        );
+        err += (value as f64 * bias) as u64;
       }
     }
   }
