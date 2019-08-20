@@ -200,6 +200,11 @@ pub fn estimate_rate(qindex: u8, ts: TxSize, fast_distortion: u64) -> u64 {
 fn cdef_dist_wxh_8x8<T: Pixel>(
   src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, bit_depth: usize,
 ) -> u64 {
+  debug_assert!(src1.plane_cfg.xdec == 0);
+  debug_assert!(src1.plane_cfg.ydec == 0);
+  debug_assert!(src2.plane_cfg.xdec == 0);
+  debug_assert!(src2.plane_cfg.ydec == 0);
+
   let coeff_shift = bit_depth - 8;
 
   let mut sum_s: i32 = 0;
@@ -229,47 +234,83 @@ fn cdef_dist_wxh_8x8<T: Pixel>(
 }
 
 #[allow(unused)]
-fn cdef_dist_wxh<T: Pixel>(
+fn cdef_dist_wxh<T: Pixel, F: Fn(Area, BlockSize) -> f64>(
   src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, w: usize, h: usize,
-  bit_depth: usize,
+  bit_depth: usize, compute_bias: F,
 ) -> u64 {
   assert!(w & 0x7 == 0);
   assert!(h & 0x7 == 0);
+  debug_assert!(src1.plane_cfg.xdec == 0);
+  debug_assert!(src1.plane_cfg.ydec == 0);
+  debug_assert!(src2.plane_cfg.xdec == 0);
+  debug_assert!(src2.plane_cfg.ydec == 0);
 
   let mut sum: u64 = 0;
   for j in 0isize..h as isize / 8 {
     for i in 0isize..w as isize / 8 {
-      sum += cdef_dist_wxh_8x8(
-        &src1.subregion(Area::StartingAt { x: i * 8, y: j * 8 }),
-        &src2.subregion(Area::StartingAt { x: i * 8, y: j * 8 }),
+      let area = Area::StartingAt { x: i * 8, y: j * 8 };
+      let value = cdef_dist_wxh_8x8(
+        &src1.subregion(area),
+        &src2.subregion(area),
         bit_depth,
-      )
+      );
+
+      // cdef is always called on non-subsampled planes, so BLOCK_8X8 is
+      // correct here.
+      let bias = compute_bias(area, BlockSize::BLOCK_8X8);
+      sum += (value as f64 * bias) as u64;
     }
   }
   sum
 }
 
 // Sum of Squared Error for a wxh block
-pub fn sse_wxh<T: Pixel>(
+pub fn sse_wxh<T: Pixel, F: Fn(Area, BlockSize) -> f64>(
   src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, w: usize, h: usize,
+  compute_bias: F,
 ) -> u64 {
   assert!(w & (MI_SIZE - 1) == 0);
   assert!(h & (MI_SIZE - 1) == 0);
 
-  let mut sse: u64 = 0;
-  for j in 0..h {
-    let s1 = &src1[j][..w];
-    let s2 = &src2[j][..w];
+  // To bias the distortion correctly, compute it in blocks which are
+  // equivalent to 4×4 blocks in a non-subsampled plane.
+  let block_w = MI_SIZE >> src1.plane_cfg.xdec;
+  let block_h = MI_SIZE >> src1.plane_cfg.ydec;
 
-    let row_sse = s1
-      .iter()
-      .zip(s2)
-      .map(|(&a, &b)| {
-        let c = (i16::cast_from(a) - i16::cast_from(b)) as i32;
-        (c * c) as u32
-      })
-      .sum::<u32>();
-    sse += row_sse as u64;
+  let mut sse: u64 = 0;
+  for block_y in 0..h / block_h {
+    for block_x in 0..w / block_w {
+      let mut value = 0;
+
+      for j in 0..block_h {
+        let s1 = &src1[block_y * block_h + j]
+          [block_x * block_w..(block_x + 1) * block_w];
+        let s2 = &src2[block_y * block_h + j]
+          [block_x * block_w..(block_x + 1) * block_w];
+
+        let row_sse = s1
+          .iter()
+          .zip(s2)
+          .map(|(&a, &b)| {
+            let c = (i16::cast_from(a) - i16::cast_from(b)) as i32;
+            (c * c) as u32
+          })
+          .sum::<u32>();
+        value += row_sse as u64;
+      }
+
+      let bias = compute_bias(
+        // StartingAt gives the correct block offset.
+        Area::StartingAt {
+          x: (block_x * block_w) as isize,
+          y: (block_y * block_h) as isize,
+        },
+        // Our block width and height are chosen in such a way as to match 4×4
+        // non-subsampled blocks.
+        BlockSize::BLOCK_4X4,
+      );
+      sse += (value as f64 * bias) as u64;
+    }
   }
   sse
 }
@@ -279,10 +320,9 @@ fn compute_distortion<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, bsize: BlockSize,
   is_chroma_block: bool, tile_bo: TileBlockOffset, luma_only: bool,
 ) -> u64 {
-  let input_region =
-    ts.input_tile.planes[0].subregion(Area::BlockStartingAt { bo: tile_bo.0 });
-  let rec_region =
-    ts.rec.planes[0].subregion(Area::BlockStartingAt { bo: tile_bo.0 });
+  let area = Area::BlockStartingAt { bo: tile_bo.0 };
+  let input_region = ts.input_tile.planes[0].subregion(area);
+  let rec_region = ts.rec.planes[0].subregion(area);
   let mut distortion = match fi.config.tune {
     Tune::Psychovisual if bsize.width() >= 8 && bsize.height() >= 8 => {
       cdef_dist_wxh(
@@ -291,11 +331,28 @@ fn compute_distortion<T: Pixel>(
         bsize.width(),
         bsize.height(),
         fi.sequence.bit_depth,
+        |bias_area, bsize| {
+          compute_distortion_bias(
+            fi,
+            input_region.subregion(bias_area).frame_block_offset(),
+            bsize,
+          )
+        },
       )
     }
-    Tune::Psnr | Tune::Psychovisual => {
-      sse_wxh(&input_region, &rec_region, bsize.width(), bsize.height())
-    }
+    Tune::Psnr | Tune::Psychovisual => sse_wxh(
+      &input_region,
+      &rec_region,
+      bsize.width(),
+      bsize.height(),
+      |bias_area, bsize| {
+        compute_distortion_bias(
+          fi,
+          input_region.subregion(bias_area).frame_block_offset(),
+          bsize,
+        )
+      },
+    ),
   };
 
   if !luma_only {
@@ -313,12 +370,20 @@ fn compute_distortion<T: Pixel>(
     // Add chroma distortion only when it is available
     if w_uv > 0 && h_uv > 0 {
       for p in 1..3 {
+        let input_region = ts.input_tile.planes[p].subregion(area);
+        let rec_region = ts.rec.planes[p].subregion(area);
         distortion += sse_wxh(
-          &ts.input_tile.planes[p]
-            .subregion(Area::BlockStartingAt { bo: tile_bo.0 }),
-          &ts.rec.planes[p].subregion(Area::BlockStartingAt { bo: tile_bo.0 }),
+          &input_region,
+          &rec_region,
           w_uv,
           h_uv,
+          |bias_area, bsize| {
+            compute_distortion_bias(
+              fi,
+              input_region.subregion(bias_area).frame_block_offset(),
+              bsize,
+            )
+          },
         );
       }
     };
@@ -333,17 +398,28 @@ fn compute_tx_distortion<T: Pixel>(
   luma_only: bool,
 ) -> u64 {
   assert!(fi.config.tune == Tune::Psnr);
+  let area = Area::BlockStartingAt { bo: tile_bo.0 };
+  let input_region = ts.input_tile.planes[0].subregion(area);
+  let rec_region = ts.rec.planes[0].subregion(area);
   let mut distortion = if skip {
     sse_wxh(
-      &ts.input_tile.planes[0]
-        .subregion(Area::BlockStartingAt { bo: tile_bo.0 }),
-      &ts.rec.planes[0].subregion(Area::BlockStartingAt { bo: tile_bo.0 }),
+      &input_region,
+      &rec_region,
       bsize.width(),
       bsize.height(),
+      |bias_area, bsize| {
+        compute_distortion_bias(
+          fi,
+          input_region.subregion(bias_area).frame_block_offset(),
+          bsize,
+        )
+      },
     )
   } else {
     assert!(tx_dist >= 0);
-    tx_dist as u64
+    let bias =
+      compute_distortion_bias(fi, ts.to_frame_block_offset(tile_bo), bsize);
+    (tx_dist as f64 * bias) as u64
   };
 
   if !luma_only && skip {
@@ -361,12 +437,20 @@ fn compute_tx_distortion<T: Pixel>(
     // Add chroma distortion only when it is available
     if w_uv > 0 && h_uv > 0 {
       for p in 1..3 {
+        let input_region = ts.input_tile.planes[p].subregion(area);
+        let rec_region = ts.rec.planes[p].subregion(area);
         distortion += sse_wxh(
-          &ts.input_tile.planes[p]
-            .subregion(Area::BlockStartingAt { bo: tile_bo.0 }),
-          &ts.rec.planes[p].subregion(Area::BlockStartingAt { bo: tile_bo.0 }),
+          &input_region,
+          &rec_region,
           w_uv,
           h_uv,
+          |bias_area, bsize| {
+            compute_distortion_bias(
+              fi,
+              input_region.subregion(bias_area).frame_block_offset(),
+              bsize,
+            )
+          },
         );
       }
     }
@@ -392,9 +476,8 @@ fn compute_mean_importance<T: Pixel>(
   total_importance / (bsize.width_mi() * bsize.height_mi()) as f32
 }
 
-pub fn compute_rd_cost<T: Pixel>(
+fn compute_distortion_bias<T: Pixel>(
   fi: &FrameInvariants<T>, frame_bo: PlaneBlockOffset, bsize: BlockSize,
-  rate: u32, distortion: u64,
 ) -> f64 {
   let mean_importance = compute_mean_importance(fi, frame_bo, bsize);
 
@@ -405,8 +488,14 @@ pub fn compute_rd_cost<T: Pixel>(
   let bias = (mean_importance / FACTOR) as f64 + ADDEND;
   debug_assert!(bias.is_finite());
 
+  bias
+}
+
+pub fn compute_rd_cost<T: Pixel>(
+  fi: &FrameInvariants<T>, rate: u32, distortion: u64,
+) -> f64 {
   let rate_in_bits = (rate as f64) / ((1 << OD_BITRES) as f64);
-  (distortion as f64) * bias + fi.lambda * rate_in_bits
+  distortion as f64 + fi.lambda * rate_in_bits
 }
 
 pub fn rdo_tx_size_type<T: Pixel>(
@@ -602,13 +691,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
         } else {
           compute_distortion(fi, ts, bsize, is_chroma_block, tile_bo, false)
         };
-        let rd = compute_rd_cost(
-          fi,
-          ts.to_frame_block_offset(tile_bo),
-          bsize,
-          rate,
-          distortion,
-        );
+        let rd = compute_rd_cost(fi, rate, distortion);
         if rd < best.rd {
           //if rd < best.rd || luma_mode == PredictionMode::NEW_NEWMV {
           best.rd = rd;
@@ -1074,13 +1157,7 @@ pub fn rdo_mode_decision<T: Pixel>(
       // For CFL, tx-domain distortion is not an option.
       let distortion =
         compute_distortion(fi, ts, bsize, is_chroma_block, tile_bo, false);
-      let rd = compute_rd_cost(
-        fi,
-        ts.to_frame_block_offset(tile_bo),
-        bsize,
-        rate,
-        distortion,
-      );
+      let rd = compute_rd_cost(fi, rate, distortion);
       if rd < best.rd {
         best.rd = rd;
         best.mode_chroma = chroma_mode;
@@ -1166,6 +1243,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
             &rec_region.as_const(),
             uv_tx_size.width(),
             uv_tx_size.height(),
+            |_, _| 1., // We're not doing RDO here.
           )
         })
         .unwrap()
@@ -1268,13 +1346,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
     } else {
       compute_distortion(fi, ts, bsize, is_chroma_block, tile_bo, true)
     };
-    let rd = compute_rd_cost(
-      fi,
-      ts.to_frame_block_offset(tile_bo),
-      bsize,
-      rate,
-      distortion,
-    );
+    let rd = compute_rd_cost(fi, rate, distortion);
     if rd < best_rd {
       best_rd = rd;
       best_type = tx_type;
@@ -1441,13 +1513,7 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
             if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
           let tell = w.tell_frac();
           cw.write_partition(w, tile_bo, partition, bsize);
-          cost = compute_rd_cost(
-            fi,
-            ts.to_frame_block_offset(tile_bo),
-            bsize,
-            w.tell_frac() - tell,
-            0,
-          );
+          cost = compute_rd_cost(fi, w.tell_frac() - tell, 0);
         }
         let mut rd_cost_sum = 0.0;
 
@@ -1544,15 +1610,20 @@ fn rdo_loop_plane_error<T: Pixel>(
           let test_region =
             test_plane.region(Area::BlockStartingAt { bo: test_bo.0 });
 
-          if pli == 0 {
-            err += cdef_dist_wxh_8x8(
-              &in_region,
-              &test_region,
-              fi.sequence.bit_depth,
-            );
+          let value = if pli == 0 {
+            cdef_dist_wxh_8x8(&in_region, &test_region, fi.sequence.bit_depth)
           } else {
-            err += sse_wxh(&in_region, &test_region, 8 >> xdec, 8 >> ydec);
-          }
+            // The closure returns 1. because we bias the distortion right
+            // below.
+            sse_wxh(&in_region, &test_region, 8 >> xdec, 8 >> ydec, |_, _| 1.)
+          };
+
+          let bias = compute_distortion_bias(
+            fi,
+            ts.to_frame_block_offset(bo),
+            BlockSize::BLOCK_8X8,
+          );
+          err += (value as f64 * bias) as u64;
         }
       }
     }
@@ -1659,15 +1730,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                 } else {
                   0 // no relative cost differeneces to different CDEF params.  If cdef is on, it's a wash.
                 };
-                let frame_bo =
-                  ts.to_frame_super_block_offset(tile_sbo).block_offset(0, 0);
-                cost[pli] = compute_rd_cost(
-                  fi,
-                  frame_bo,
-                  BlockSize::BLOCK_64X64,
-                  rate,
-                  err,
-                );
+                cost[pli] = compute_rd_cost(fi, rate, err);
                 cost_acc += cost[pli];
               }
               RestorationFilter::Sgrproj { set, xqd } => {
@@ -1698,15 +1761,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                   best_lrf[pli],
                   pli,
                 );
-                let frame_bo =
-                  ts.to_frame_super_block_offset(tile_sbo).block_offset(0, 0);
-                cost[pli] = compute_rd_cost(
-                  fi,
-                  frame_bo,
-                  BlockSize::BLOCK_64X64,
-                  rate,
-                  err,
-                );
+                cost[pli] = compute_rd_cost(fi, rate, err);
                 cost_acc += cost[pli];
               }
               RestorationFilter::Wiener { .. } => unreachable!(), // coming soon
@@ -1796,10 +1851,7 @@ pub fn rdo_loop_decision<T: Pixel>(
             current_lrf,
             pli,
           );
-          let frame_bo =
-            ts.to_frame_super_block_offset(tile_sbo).block_offset(0, 0);
-          let cost =
-            compute_rd_cost(fi, frame_bo, BlockSize::BLOCK_64X64, rate, err);
+          let cost = compute_rd_cost(fi, rate, err);
           if best_cost[pli] < 0. || cost < best_cost[pli] {
             best_cost[pli] = cost;
             best_lrf[pli] = current_lrf;
