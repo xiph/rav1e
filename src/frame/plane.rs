@@ -597,6 +597,7 @@ impl<'a, T: Pixel> ExactSizeIterator for RowsIterMut<'a, T> {}
 impl<'a, T: Pixel> FusedIterator for RowsIterMut<'a, T> {}
 
 impl<'a, T: Pixel> PlaneMutSlice<'a, T> {
+  #[allow(unused)]
   pub fn rows_iter(&self) -> RowsIter<'_, T> {
     RowsIter { plane: self.plane, x: self.x, y: self.y }
   }
@@ -610,6 +611,7 @@ impl<'a, T: Pixel> PlaneMutSlice<'a, T> {
     }
   }
 
+  #[allow(unused)]
   pub fn subslice(&mut self, xo: usize, yo: usize) -> PlaneMutSlice<'_, T> {
     PlaneMutSlice {
       plane: self.plane,

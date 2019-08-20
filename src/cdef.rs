@@ -16,14 +16,20 @@ use crate::frame::*;
 use crate::tiling::*;
 use crate::util::{clamp, msb, CastFromPrimitive, Pixel};
 
+use crate::cpu_features::CpuFeatureLevel;
 use std::cmp;
+
+#[cfg(any(not(target_arch = "x86_64"), not(feature = "nasm")))]
+pub use self::native::*;
+#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
+pub use crate::asm::cdef::*;
 
 pub struct CdefDirections {
   dir: [[u8; 8]; 8],
   var: [[i32; 8]; 8],
 }
 
-pub const CDEF_VERY_LARGE: u16 = 30000;
+pub const CDEF_VERY_LARGE: u16 = 0x8000;
 pub(crate) const CDEF_SEC_STRENGTHS: u8 = 4;
 
 // Instead of dividing by n between 2 and 8, we multiply by 3*5*7*8/n.
@@ -116,94 +122,102 @@ fn cdef_find_dir<T: Pixel>(
   best_dir as i32
 }
 
-#[inline(always)]
-fn constrain(diff: i32, threshold: i32, damping: i32) -> i32 {
-  if threshold != 0 {
-    let shift = cmp::max(0, damping - msb(threshold));
-    let magnitude =
-      cmp::min(diff.abs(), cmp::max(0, threshold - (diff.abs() >> shift)));
+pub(crate) mod native {
+  use super::*;
 
-    if diff < 0 {
-      -magnitude
-    } else {
-      magnitude
-    }
-  } else {
-    0
-  }
-}
+  #[inline(always)]
+  fn constrain(diff: i32, threshold: i32, damping: i32) -> i32 {
+    if threshold != 0 {
+      let shift = cmp::max(0, damping - msb(threshold));
+      let magnitude =
+        cmp::min(diff.abs(), cmp::max(0, threshold - (diff.abs() >> shift)));
 
-#[allow(clippy::erasing_op, clippy::identity_op, clippy::neg_multiply)]
-unsafe fn cdef_filter_block<T: Pixel>(
-  dst: *mut T, dstride: isize, input: *const u16, istride: isize,
-  pri_strength: i32, sec_strength: i32, dir: usize, damping: i32,
-  xsize: isize, ysize: isize, coeff_shift: i32,
-) {
-  let cdef_pri_taps = [[4, 2], [3, 3]];
-  let cdef_sec_taps = [[2, 1], [2, 1]];
-  let pri_taps = cdef_pri_taps[((pri_strength >> coeff_shift) & 1) as usize];
-  let sec_taps = cdef_sec_taps[((pri_strength >> coeff_shift) & 1) as usize];
-  let cdef_directions = [
-    [-1 * istride + 1, -2 * istride + 2],
-    [0 * istride + 1, -1 * istride + 2],
-    [0 * istride + 1, 0 * istride + 2],
-    [0 * istride + 1, 1 * istride + 2],
-    [1 * istride + 1, 2 * istride + 2],
-    [1 * istride + 0, 2 * istride + 1],
-    [1 * istride + 0, 2 * istride + 0],
-    [1 * istride + 0, 2 * istride - 1],
-  ];
-  for i in 0..ysize {
-    for j in 0..xsize {
-      let ptr_in = input.offset(i * istride + j);
-      let ptr_out = dst.offset(i * dstride + j);
-      let x = *ptr_in;
-      let mut sum = 0 as i32;
-      let mut max = x;
-      let mut min = x;
-      for k in 0..2usize {
-        let cdef_dirs = [
-          cdef_directions[dir][k],
-          cdef_directions[(dir + 2) & 7][k],
-          cdef_directions[(dir + 6) & 7][k],
-        ];
-        let pri_tap = pri_taps[k];
-        let p = [*ptr_in.offset(cdef_dirs[0]), *ptr_in.offset(-cdef_dirs[0])];
-        for p_elem in p.iter() {
-          sum += pri_tap
-            * constrain(
-              i32::cast_from(*p_elem) - i32::cast_from(x),
-              pri_strength,
-              damping,
-            );
-          if *p_elem != CDEF_VERY_LARGE {
-            max = cmp::max(*p_elem, max);
-          }
-          min = cmp::min(*p_elem, min);
-        }
-
-        let s = [
-          *ptr_in.offset(cdef_dirs[1]),
-          *ptr_in.offset(-cdef_dirs[1]),
-          *ptr_in.offset(cdef_dirs[2]),
-          *ptr_in.offset(-cdef_dirs[2]),
-        ];
-        let sec_tap = sec_taps[k];
-        for s_elem in s.iter() {
-          if *s_elem != CDEF_VERY_LARGE {
-            max = cmp::max(*s_elem, max);
-          }
-          min = cmp::min(*s_elem, min);
-          sum += sec_tap
-            * constrain(
-              i32::cast_from(*s_elem) - i32::cast_from(x),
-              sec_strength,
-              damping,
-            );
-        }
+      if diff < 0 {
+        -magnitude
+      } else {
+        magnitude
       }
-      let v = i32::cast_from(x) + ((8 + sum - (sum < 0) as i32) >> 4);
-      *ptr_out = T::cast_from(clamp(v, min as i32, max as i32));
+    } else {
+      0
+    }
+  }
+
+  #[allow(clippy::erasing_op, clippy::identity_op, clippy::neg_multiply)]
+  pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
+    dst: &mut PlaneRegionMut<'_, T>, input: *const u16, istride: isize,
+    pri_strength: i32, sec_strength: i32, dir: usize, damping: i32,
+    bit_depth: usize, xdec: usize, ydec: usize, _cpu: CpuFeatureLevel,
+  ) {
+    let xsize = (8 >> xdec) as isize;
+    let ysize = (8 >> ydec) as isize;
+    let coeff_shift = bit_depth as usize - 8;
+    let cdef_pri_taps = [[4, 2], [3, 3]];
+    let cdef_sec_taps = [[2, 1], [2, 1]];
+    let pri_taps = cdef_pri_taps[((pri_strength >> coeff_shift) & 1) as usize];
+    let sec_taps = cdef_sec_taps[((pri_strength >> coeff_shift) & 1) as usize];
+    let cdef_directions = [
+      [-1 * istride + 1, -2 * istride + 2],
+      [0 * istride + 1, -1 * istride + 2],
+      [0 * istride + 1, 0 * istride + 2],
+      [0 * istride + 1, 1 * istride + 2],
+      [1 * istride + 1, 2 * istride + 2],
+      [1 * istride + 0, 2 * istride + 1],
+      [1 * istride + 0, 2 * istride + 0],
+      [1 * istride + 0, 2 * istride - 1],
+    ];
+    for i in 0..ysize {
+      for j in 0..xsize {
+        let ptr_in = input.offset(i * istride + j);
+        let x = *ptr_in;
+        let mut sum = 0 as i32;
+        let mut max = x;
+        let mut min = x;
+        for k in 0..2usize {
+          let cdef_dirs = [
+            cdef_directions[dir][k],
+            cdef_directions[(dir + 2) & 7][k],
+            cdef_directions[(dir + 6) & 7][k],
+          ];
+          let pri_tap = pri_taps[k];
+          let p =
+            [*ptr_in.offset(cdef_dirs[0]), *ptr_in.offset(-cdef_dirs[0])];
+          for p_elem in p.iter() {
+            sum += pri_tap
+              * constrain(
+                i32::cast_from(*p_elem) - i32::cast_from(x),
+                pri_strength,
+                damping,
+              );
+            if *p_elem != CDEF_VERY_LARGE {
+              max = cmp::max(*p_elem, max);
+            }
+            min = cmp::min(*p_elem, min);
+          }
+
+          let s = [
+            *ptr_in.offset(cdef_dirs[1]),
+            *ptr_in.offset(-cdef_dirs[1]),
+            *ptr_in.offset(cdef_dirs[2]),
+            *ptr_in.offset(-cdef_dirs[2]),
+          ];
+          let sec_tap = sec_taps[k];
+          for s_elem in s.iter() {
+            if *s_elem != CDEF_VERY_LARGE {
+              max = cmp::max(*s_elem, max);
+            }
+            min = cmp::min(*s_elem, min);
+            sum += sec_tap
+              * constrain(
+                i32::cast_from(*s_elem) - i32::cast_from(x),
+                sec_strength,
+                damping,
+              );
+          }
+        }
+        let v = i32::cast_from(x) + ((8 + sum - (sum < 0) as i32) >> 4);
+        dst[i as usize][j as usize] =
+          T::cast_from(clamp(v, min as i32, max as i32));
+      }
     }
   }
 }
@@ -355,6 +369,7 @@ pub fn cdef_filter_superblock<T: Pixel>(
   sbo_global: TileSuperBlockOffset, cdef_index: u8,
   cdef_dirs: &CdefDirections,
 ) {
+  let bit_depth = fi.sequence.bit_depth;
   let coeff_shift = fi.sequence.bit_depth as i32 - 8;
   let cdef_damping = fi.cdef_damping as i32;
   let cdef_y_strength = fi.cdef_y_strengths[cdef_index as usize];
@@ -386,15 +401,15 @@ pub fn cdef_filter_superblock<T: Pixel>(
         let var = cdef_dirs.var[bx][by];
         for p in 0..3 {
           let out_plane = &mut out_frame.planes[p];
-          let out_po = sbo.plane_offset(&out_plane.cfg);
           let in_plane = &in_frame.planes[p];
           let in_po = sbo.plane_offset(&in_plane.cfg);
           let xdec = in_plane.cfg.xdec;
           let ydec = in_plane.cfg.ydec;
           let in_stride = in_plane.cfg.stride;
           let in_slice = &in_plane.slice(in_po);
-          let out_stride = out_plane.cfg.stride;
-          let out_slice = &mut out_plane.mut_slice(out_po);
+          let out_region = &mut out_plane.region_mut(Area::BlockStartingAt {
+            bo: sbo.block_offset(0, 0).0,
+          });
           let xsize = 8 >> xdec;
           let ysize = 8 >> ydec;
 
@@ -425,39 +440,42 @@ pub fn cdef_filter_superblock<T: Pixel>(
             unsafe {
               let PlaneConfig { ypad, xpad, .. } = in_slice.plane.cfg;
               assert!(
-                out_slice.rows_iter().len() >= ((8 * by) >> ydec) + ysize
-              );
-              assert!(
                 in_slice.rows_iter().len() + ypad
                   >= ((8 * by) >> ydec) + ysize + 2
               );
               assert!(in_slice.x - 2 >= -(xpad as isize));
               assert!(in_slice.y - 2 >= -(ypad as isize));
 
-              let dst =
-                out_slice[(8 * by) >> ydec][(8 * bx) >> xdec..].as_mut_ptr();
+              let mut dst = out_region.subregion_mut(Area::BlockRect {
+                bo: BlockOffset { x: 2 * bx, y: 2 * by },
+                width: xsize,
+                height: ysize,
+              });
               let input =
                 in_slice[(8 * by) >> ydec][(8 * bx) >> xdec..].as_ptr();
               cdef_filter_block(
-                dst,
-                out_stride as isize,
+                &mut dst,
                 input,
                 in_stride as isize,
                 local_pri_strength,
                 local_sec_strength,
                 local_dir,
                 local_damping,
-                xsize as isize,
-                ysize as isize,
-                coeff_shift as i32,
+                bit_depth,
+                xdec,
+                ydec,
+                fi.config.cpu_feature_level,
               );
             }
           } else {
             // we need to copy input to output
             let in_block =
               in_slice.subslice((8 * bx) >> xdec, (8 * by) >> ydec);
-            let mut out_block =
-              out_slice.subslice((8 * bx) >> xdec, (8 * by) >> ydec);
+            let mut out_block = out_region.subregion_mut(Area::BlockRect {
+              bo: BlockOffset { x: 2 * bx, y: 2 * by },
+              width: xsize,
+              height: ysize,
+            });
             for i in 0..ysize {
               for j in 0..xsize {
                 out_block[i][j] = T::cast_from(in_block[i][j]);
