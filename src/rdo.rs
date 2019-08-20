@@ -22,7 +22,7 @@ use crate::frame::*;
 use crate::header::ReferenceMode;
 use crate::lrf::*;
 use crate::luma_ac;
-use crate::mc::MotionVector;
+use crate::mc::{MotionVector, FilterMode};
 use crate::me::*;
 use crate::motion_compensate;
 use crate::partition::RefType::*;
@@ -99,6 +99,7 @@ pub struct PartitionParameters {
   pub tx_size: TxSize,
   pub tx_type: TxType,
   pub sidx: u8,
+  pub filter_mode: FilterMode
 }
 
 impl Default for PartitionParameters {
@@ -117,6 +118,7 @@ impl Default for PartitionParameters {
       tx_size: TxSize::TX_4X4,
       tx_type: TxType::DCT_DCT,
       sidx: 0,
+      filter_mode: FilterMode::REGULAR
     }
   }
 }
@@ -571,7 +573,7 @@ pub fn rdo_tx_size_type<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, bsize: BlockSize, tile_bo: TileBlockOffset,
   luma_mode: PredictionMode, ref_frames: [RefType; 2], mvs: [MotionVector; 2],
-  skip: bool,
+  skip: bool, filter_mode: FilterMode
 ) -> (TxSize, TxType) {
   let mut tx_size = max_txsize_rect_lookup[bsize as usize];
   let mut best_tx_type = TxType::DCT_DCT;
@@ -602,7 +604,7 @@ pub fn rdo_tx_size_type<T: Pixel>(
     // Luma plane transform type decision
     let (tx_type, rd_cost) = rdo_tx_type_decision(
       fi, ts, cw, luma_mode, ref_frames, mvs, bsize, tile_bo, tx_size, tx_set,
-      tx_types,
+      tx_types, filter_mode
     );
 
     if rd_cost < best_rd {
@@ -639,6 +641,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
   mvs: [MotionVector; 2], ref_frames: [RefType; 2],
   mode_set_chroma: &[PredictionMode], luma_mode_is_intra: bool,
   mode_context: usize, mv_stack: &ArrayVec<[CandidateMV; 9]>,
+  filter_mode: FilterMode
 ) {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
 
@@ -690,7 +693,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
       cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, sidx);
 
       let (tx_size, tx_type) = rdo_tx_size_type(
-        fi, ts, cw, bsize, tile_bo, luma_mode, ref_frames, mvs, skip,
+        fi, ts, cw, bsize, tile_bo, luma_mode, ref_frames, mvs, skip, filter_mode
       );
       for &chroma_mode in mode_set_chroma.iter() {
         let wr = &mut WriterCounter::new();
@@ -730,6 +733,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
           rdo_type,
           need_recon_pixel,
           false,
+          filter_mode
         );
 
         let rate = wr.tell_frac() - tell;
@@ -788,6 +792,8 @@ pub fn rdo_mode_decision<T: Pixel>(
 ) -> PartitionParameters {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
 
+  let filter_mode = FilterMode::REGULAR;
+
   let cw_checkpoint = cw.checkpoint();
 
   let rdo_type = if fi.config.train_rdo {
@@ -811,6 +817,7 @@ pub fn rdo_mode_decision<T: Pixel>(
       inter_cfg,
       &cw_checkpoint,
       rdo_type,
+      filter_mode
     )
   } else {
     PartitionParameters::default()
@@ -896,6 +903,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         rdo_type,
         true, // For CFL, luma should be always reconstructed.
         false,
+        filter_mode
       );
 
       let rate = wr.tell_frac() - tell;
@@ -935,6 +943,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     tx_size: best.tx_size,
     tx_type: best.tx_type,
     sidx: best.sidx,
+    filter_mode: FilterMode::REGULAR
   }
 }
 
@@ -943,6 +952,7 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
   cw: &mut ContextWriter, bsize: BlockSize, tile_bo: TileBlockOffset,
   pmvs: &mut [Option<MotionVector>], inter_cfg: &InterConfig,
   cw_checkpoint: &ContextWriterCheckpoint, rdo_type: RDOType,
+  filter_mode: FilterMode
 ) -> PartitionParameters {
   let mut best = PartitionParameters::default();
 
@@ -1135,6 +1145,7 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
       false,
       mode_contexts[i],
       &mv_stacks[i],
+      filter_mode
     );
   });
 
@@ -1254,7 +1265,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
       .for_each(|&(luma_mode, _prob)| modes.push(luma_mode));
     satds.iter().take(num_modes_rdo).for_each(|&(luma_mode, _stad)| {
       if !modes.contains(&luma_mode) {
-        modes.push(luma_mode)
+        modes.push(luma_mode);
       }
     });
   } else {
@@ -1289,6 +1300,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
       true,
       0,
       &ArrayVec::<[CandidateMV; 9]>::new(),
+      FilterMode::REGULAR // not needed for intra mode search
     );
   });
 
@@ -1377,7 +1389,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, mode: PredictionMode, ref_frames: [RefType; 2],
   mvs: [MotionVector; 2], bsize: BlockSize, tile_bo: TileBlockOffset,
-  tx_size: TxSize, tx_set: TxSet, tx_types: &[TxType],
+  tx_size: TxSize, tx_set: TxSet, tx_types: &[TxType], filter_mode: FilterMode
 ) -> (TxType, f64) {
   let mut best_type = TxType::DCT_DCT;
   let mut best_rd = std::f64::MAX;
@@ -1404,7 +1416,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
 
     if is_inter {
       motion_compensate(
-        fi, ts, cw, mode, ref_frames, mvs, bsize, tile_bo, true,
+        fi, ts, cw, mode, ref_frames, mvs, bsize, tile_bo, true, filter_mode
       );
     }
 

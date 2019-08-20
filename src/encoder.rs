@@ -1259,7 +1259,7 @@ pub fn motion_compensate<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, luma_mode: PredictionMode, ref_frames: [RefType; 2],
   mvs: [MotionVector; 2], bsize: BlockSize, tile_bo: TileBlockOffset,
-  luma_only: bool,
+  luma_only: bool, mode: FilterMode
 ) {
   debug_assert!(!luma_mode.is_intra());
 
@@ -1313,6 +1313,7 @@ pub fn motion_compensate<T: Pixel>(
           plane_bsize.height(),
           ref_frames,
           mvs,
+          mode
         );
       } else {
         assert!(u_xdec == 1 && u_ydec == 1);
@@ -1340,6 +1341,7 @@ pub fn motion_compensate<T: Pixel>(
             2,
             rf0,
             mv0,
+            mode
           );
           luma_mode.predict_inter(
             fi,
@@ -1351,6 +1353,7 @@ pub fn motion_compensate<T: Pixel>(
             2,
             rf1,
             mv1,
+            mode
           );
           luma_mode.predict_inter(
             fi,
@@ -1362,6 +1365,7 @@ pub fn motion_compensate<T: Pixel>(
             2,
             rf2,
             mv2,
+            mode
           );
           luma_mode.predict_inter(
             fi,
@@ -1373,6 +1377,7 @@ pub fn motion_compensate<T: Pixel>(
             2,
             ref_frames,
             mvs,
+            mode
           );
         }
         if bsize == BlockSize::BLOCK_8X4 {
@@ -1388,6 +1393,7 @@ pub fn motion_compensate<T: Pixel>(
             2,
             rf1,
             mv1,
+            mode
           );
           let po3 = PlaneOffset { x: po.x, y: po.y + 2 };
           let area3 = Area::StartingAt { x: po3.x, y: po3.y };
@@ -1401,6 +1407,7 @@ pub fn motion_compensate<T: Pixel>(
             2,
             ref_frames,
             mvs,
+            mode
           );
         }
         if bsize == BlockSize::BLOCK_4X8 {
@@ -1416,6 +1423,7 @@ pub fn motion_compensate<T: Pixel>(
             4,
             rf2,
             mv2,
+            mode
           );
           let po3 = PlaneOffset { x: po.x + 2, y: po.y };
           let area3 = Area::StartingAt { x: po3.x, y: po3.y };
@@ -1429,6 +1437,7 @@ pub fn motion_compensate<T: Pixel>(
             4,
             ref_frames,
             mvs,
+            mode
           );
         }
       }
@@ -1443,6 +1452,7 @@ pub fn motion_compensate<T: Pixel>(
         plane_bsize.height(),
         ref_frames,
         mvs,
+        mode
       );
     }
   }
@@ -1505,7 +1515,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
   mvs: [MotionVector; 2], bsize: BlockSize, tile_bo: TileBlockOffset,
   skip: bool, cfl: CFLParams, tx_size: TxSize, tx_type: TxType,
   mode_context: usize, mv_stack: &[CandidateMV], rdo_type: RDOType,
-  need_recon_pixel: bool, record_stats: bool,
+  need_recon_pixel: bool, record_stats: bool, filter_mode: FilterMode
 ) -> (bool, ScaledDistortion) {
   let is_inter = !luma_mode.is_intra();
   if is_inter {
@@ -1700,7 +1710,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
 
   if is_inter {
     motion_compensate(
-      fi, ts, cw, luma_mode, ref_frames, mvs, bsize, tile_bo, false,
+      fi, ts, cw, luma_mode, ref_frames, mvs, bsize, tile_bo, false, filter_mode
     );
     write_tx_tree(
       fi,
@@ -2075,6 +2085,7 @@ pub fn encode_block_with_modes<T: Pixel>(
   let ref_frames = mode_decision.ref_frames;
   let mvs = mode_decision.mvs;
   let mut skip = mode_decision.skip;
+  let filter_mode = mode_decision.filter_mode;
   let mut cdef_coded = cw.bc.cdef_coded;
   let (tx_size, tx_type) = (mode_decision.tx_size, mode_decision.tx_type);
 
@@ -2085,7 +2096,7 @@ pub fn encode_block_with_modes<T: Pixel>(
   debug_assert!(
     (tx_size, tx_type)
       == rdo_tx_size_type(
-        fi, ts, cw, bsize, tile_bo, mode_luma, ref_frames, mvs, skip
+        fi, ts, cw, bsize, tile_bo, mode_luma, ref_frames, mvs, skip, filter_mode
       )
   );
 
@@ -2126,6 +2137,7 @@ pub fn encode_block_with_modes<T: Pixel>(
     rdo_type,
     true,
     record_stats,
+    filter_mode,
   );
 }
 
@@ -2538,6 +2550,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
 
       let mut mode_luma = part_decision.pred_mode_luma;
       let mut mode_chroma = part_decision.pred_mode_chroma;
+      let filter_mode = part_decision.filter_mode;
 
       let cfl = part_decision.pred_cfl_params;
       let skip = part_decision.skip;
@@ -2553,7 +2566,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       // because, with top-down partition RDO, the neighnoring contexts
       // of current partition can change, i.e. neighboring partitions can split down more.
       let (tx_size, tx_type) = rdo_tx_size_type(
-        fi, ts, cw, bsize, tile_bo, mode_luma, ref_frames, mvs, skip,
+        fi, ts, cw, bsize, tile_bo, mode_luma, ref_frames, mvs, skip, filter_mode
       );
 
       let mut mv_stack = ArrayVec::<[CandidateMV; 9]>::new();
@@ -2670,6 +2683,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         RDOType::PixelDistRealRate,
         true,
         true,
+        filter_mode
       );
     }
     PARTITION_SPLIT | PARTITION_HORZ | PARTITION_VERT => {

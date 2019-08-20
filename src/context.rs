@@ -3825,64 +3825,6 @@ impl<'a> ContextWriter<'a> {
     }
   }
 
-  pub fn get_txsize_entropy_ctx(&mut self, tx_size: TxSize) -> usize {
-    (tx_size.sqr() as usize + tx_size.sqr_up() as usize + 1) >> 1
-  }
-
-  pub fn write_interp_filter(
-    &mut self, w: &mut dyn Writer, bo: TileBlockOffset, bsize: BlockSize,
-    dir: usize, filter: FilterMode,
-  ) {
-    let block = &self.bc.blocks[bo];
-    let has_second_ref = block.has_second_ref();
-    let mut ctx = (dir & 1) * 2;
-    if has_second_ref {
-      ctx += 1
-    };
-    ctx *= 4;
-    let mut left_type = 3;
-    let mut above_type = 3;
-
-    if bo.0.x > 0 {
-      let left_block = &self.bc.blocks.left_of(bo);
-      if left_block.ref_frames[0] == block.ref_frames[0]
-        || left_block.ref_frames[1] == block.ref_frames[0]
-      {
-        left_type = left_block.interp_filter[dir] as usize;
-      }
-    }
-    if bo.0.y > 0 {
-      let above_block = &self.bc.blocks.above_of(bo);
-      if above_block.ref_frames[0] == block.ref_frames[0]
-        || above_block.ref_frames[1] == block.ref_frames[0]
-      {
-        above_type = above_block.interp_filter[dir] as usize;
-      }
-    }
-    if left_type == above_type {
-      ctx += left_type;
-    } else if left_type == 3 {
-      ctx += above_type;
-    } else if above_type == 3 {
-      ctx += left_type;
-    } else {
-      ctx += 3;
-    }
-    symbol_with_update!(
-      self,
-      w,
-      filter as u32,
-      &mut self.fc.switchable_interp_cdf[ctx]
-    );
-    // set context
-    for y in 0..bsize.height_mi() {
-      for x in 0..bsize.width_mi() {
-        self.bc.blocks[bo.with_offset(x as isize, y as isize)].interp_filter =
-          [filter, filter];
-      }
-    }
-  }
-
   pub fn get_txsize_entropy_ctx(tx_size: TxSize) -> usize {
     (tx_size.sqr() as usize + tx_size.sqr_up() as usize + 1) >> 1
   }

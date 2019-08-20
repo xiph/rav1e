@@ -184,11 +184,11 @@ impl PredictionMode {
     self, fi: &FrameInvariants<T>, tile_rect: TileRect, p: usize,
     po: PlaneOffset, dst: &mut PlaneRegionMut<'_, T>, width: usize,
     height: usize, ref_frames: [RefType; 2], mvs: [MotionVector; 2],
+    mode: FilterMode
   ) {
     assert!(!self.is_intra());
     let frame_po = tile_rect.to_frame_plane_offset(po);
 
-    let mode = fi.default_filter;
     let is_compound = ref_frames[1] != RefType::INTRA_FRAME
       && ref_frames[1] != RefType::NONE_FRAME;
 
