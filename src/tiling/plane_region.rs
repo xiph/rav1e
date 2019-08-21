@@ -16,7 +16,7 @@ use std::ops::{Index, IndexMut};
 use std::slice;
 
 /// Rectangle of a plane region, in pixels
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Rect {
   // coordinates relative to the plane origin (xorigin, yorigin)
   pub x: isize,
@@ -66,6 +66,11 @@ pub enum Area {
 
 impl Area {
   #[inline(always)]
+  /// Convert to a rectangle of pixels.
+  /// For a BlockRect and BlockStartingAt, for subsampled chroma planes,
+  /// the returned rect will be aligned to a 4x4 chroma block.
+  /// This is necessary for compute_distortion and rdo_cfl_alpha as
+  /// the subsampled chroma block covers multiple luma blocks.
   pub fn to_rect(
     &self, xdec: usize, ydec: usize, parent_width: usize, parent_height: usize,
   ) -> Rect {
@@ -261,6 +266,12 @@ macro_rules! plane_region_common {
           y: sby + tile_sbo.0.y,
         })
       }
+
+      /// Returns the frame block offset of the subregion.
+      #[inline(always)]
+      pub fn frame_block_offset(&self) -> PlaneBlockOffset {
+        self.to_frame_block_offset(TileBlockOffset(BlockOffset { x: 0, y: 0 }))
+      }
     }
 
     unsafe impl<T: Pixel> Send for $name<'_, T> {}
@@ -443,3 +454,103 @@ impl<'a, T: Pixel> Iterator for RowsIterMut<'a, T> {
 
 impl<T: Pixel> ExactSizeIterator for RowsIter<'_, T> {}
 impl<T: Pixel> ExactSizeIterator for RowsIterMut<'_, T> {}
+
+#[test]
+fn area_test() {
+  assert_eq!(
+    (Area::BlockStartingAt { bo: BlockOffset { x: 0, y: 0 } })
+      .to_rect(0, 0, 100, 100),
+    Rect { x: 0, y: 0, width: 100, height: 100 }
+  );
+  assert_eq!(
+    (Area::BlockStartingAt { bo: BlockOffset { x: 1, y: 1 } })
+      .to_rect(0, 0, 100, 100),
+    Rect { x: 4, y: 4, width: 96, height: 96 }
+  );
+  assert_eq!(
+    (Area::BlockStartingAt { bo: BlockOffset { x: 1, y: 1 } })
+      .to_rect(1, 1, 50, 50),
+    Rect { x: 0, y: 0, width: 50, height: 50 }
+  );
+  assert_eq!(
+    (Area::BlockStartingAt { bo: BlockOffset { x: 2, y: 2 } })
+      .to_rect(1, 1, 50, 50),
+    Rect { x: 4, y: 4, width: 46, height: 46 }
+  );
+  assert_eq!(
+    (Area::BlockRect { bo: BlockOffset { x: 0, y: 0 }, width: 1, height: 1 })
+      .to_rect(0, 0, 100, 100),
+    Rect { x: 0, y: 0, width: 1, height: 1 }
+  );
+  assert_eq!(
+    (Area::BlockRect { bo: BlockOffset { x: 1, y: 1 }, width: 1, height: 1 })
+      .to_rect(0, 0, 100, 100),
+    Rect { x: 4, y: 4, width: 1, height: 1 }
+  );
+  assert_eq!(
+    (Area::BlockRect { bo: BlockOffset { x: 1, y: 1 }, width: 1, height: 1 })
+      .to_rect(1, 1, 50, 50),
+    Rect { x: 0, y: 0, width: 1, height: 1 }
+  );
+  assert_eq!(
+    (Area::BlockRect { bo: BlockOffset { x: 2, y: 2 }, width: 1, height: 1 })
+      .to_rect(1, 1, 50, 50),
+    Rect { x: 4, y: 4, width: 1, height: 1 }
+  );
+}
+
+#[test]
+fn frame_block_offset() {
+  {
+    let p = Plane::<u8>::new(100, 100, 0, 0, 0, 0);
+    let pr =
+      PlaneRegion::new(&p, Rect { x: 0, y: 0, width: 100, height: 100 });
+    let bo = BlockOffset { x: 0, y: 0 };
+    assert_eq!(
+      pr.to_frame_block_offset(TileBlockOffset(bo)),
+      PlaneBlockOffset { 0: bo }
+    );
+    assert_eq!(
+      pr.to_frame_block_offset(TileBlockOffset(bo)),
+      pr.subregion(Area::BlockStartingAt { bo }).frame_block_offset()
+    );
+  }
+  {
+    let p = Plane::<u8>::new(100, 100, 0, 0, 0, 0);
+    let pr =
+      PlaneRegion::new(&p, Rect { x: 0, y: 0, width: 100, height: 100 });
+    let bo = BlockOffset { x: 1, y: 1 };
+    assert_eq!(
+      pr.to_frame_block_offset(TileBlockOffset(bo)),
+      PlaneBlockOffset { 0: bo }
+    );
+    assert_eq!(
+      pr.to_frame_block_offset(TileBlockOffset(bo)),
+      pr.subregion(Area::BlockStartingAt { bo }).frame_block_offset()
+    );
+  }
+  {
+    let p = Plane::<u8>::new(100, 100, 1, 1, 0, 0);
+    let pr =
+      PlaneRegion::new(&p, Rect { x: 0, y: 0, width: 100, height: 100 });
+    let bo = BlockOffset { x: 1, y: 1 };
+    assert_eq!(
+      pr.to_frame_block_offset(TileBlockOffset(bo)),
+      PlaneBlockOffset { 0: bo }
+    );
+  }
+  {
+    let p = Plane::<u8>::new(100, 100, 1, 1, 0, 0);
+    let pr =
+      PlaneRegion::new(&p, Rect { x: 0, y: 0, width: 100, height: 100 });
+    let bo = BlockOffset { x: 2, y: 2 };
+    assert_eq!(
+      pr.to_frame_block_offset(TileBlockOffset(bo)),
+      PlaneBlockOffset { 0: bo }
+    );
+    assert_eq!(
+      pr.to_frame_block_offset(TileBlockOffset(bo)),
+      pr.subregion(Area::BlockStartingAt { bo }).frame_block_offset()
+    );
+  }
+}
