@@ -305,9 +305,16 @@ fn compute_distortion<T: Pixel>(
     let mut w_uv = (bsize.width() >> xdec) & mask;
     let mut h_uv = (bsize.height() >> ydec) & mask;
 
+    let mut area = area;
     if (w_uv == 0 || h_uv == 0) && is_chroma_block {
       w_uv = MI_SIZE;
       h_uv = MI_SIZE;
+
+      // Shift right first to round up-left.
+      area = Area::StartingAt {
+        x: (tile_bo.0.x >> xdec << BLOCK_TO_PLANE_SHIFT) as isize,
+        y: (tile_bo.0.y >> ydec << BLOCK_TO_PLANE_SHIFT) as isize,
+      };
     }
 
     // Add chroma distortion only when it is available
@@ -1134,8 +1141,17 @@ pub fn rdo_cfl_alpha<T: Pixel>(
             Some(PredictionMode::UV_CFL_PRED),
           );
 
-          let mut rec_region =
-            rec.subregion_mut(Area::BlockStartingAt { bo: tile_bo.0 });
+          let area = if p == 0 {
+            Area::BlockStartingAt { bo: tile_bo.0 }
+          } else {
+            // Shift right first to round up-left.
+            Area::StartingAt {
+              x: (tile_bo.0.x >> xdec << BLOCK_TO_PLANE_SHIFT) as isize,
+              y: (tile_bo.0.y >> ydec << BLOCK_TO_PLANE_SHIFT) as isize,
+            }
+          };
+
+          let mut rec_region = rec.subregion_mut(area);
           PredictionMode::UV_CFL_PRED.predict_intra(
             tile_rect,
             &mut rec_region,
@@ -1146,7 +1162,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
             &edge_buf,
           );
           sse_wxh(
-            &input.subregion(Area::BlockStartingAt { bo: tile_bo.0 }),
+            &input.subregion(area),
             &rec_region.as_const(),
             uv_tx_size.width(),
             uv_tx_size.height(),
