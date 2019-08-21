@@ -14,7 +14,7 @@ use aom_sys::*;
 use std::collections::VecDeque;
 use std::ffi::CStr;
 use std::marker::PhantomData;
-use std::{mem::MaybeUninit, ptr, slice};
+use std::{mem, ptr, slice};
 
 pub(crate) struct AomDecoder<T: Pixel> {
   dec: aom_codec_ctx,
@@ -26,7 +26,7 @@ impl<T: Pixel> TestDecoder<T> for AomDecoder<T> {
   fn setup_decoder(w: usize, h: usize) -> Self {
     unsafe {
       let interface = aom_codec_av1_dx();
-      let mut dec: aom_codec_ctx = MaybeUninit::uninit().assume_init();
+      let mut dec: aom_codec_ctx = mem::uninitialized();
       let cfg = aom_codec_dec_cfg_t {
         threads: 1,
         w: w as u32,

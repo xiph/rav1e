@@ -1,6 +1,6 @@
 variables:
     CARGO_HOME: $CI_PROJECT_DIR/.cargo
-    DOCKER_IMAGE_TAG: '1.36'
+    DOCKER_IMAGE_TAG: '1.35'
 
 stages:
     - build

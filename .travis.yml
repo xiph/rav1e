@@ -75,7 +75,7 @@ jobs:
     - name: "Minimum Supported Rustc"
       # This should reference the earliest supported rustc version
       # and should match the version number in build.rs
-      rust: 1.36.0
+      rust: 1.35.0
       script:
         - cargo build --features=decode_test,decode_test_dav1d,quick_test --tests --verbose
         - cargo test --features=decode_test,decode_test_dav1d,quick_test --verbose

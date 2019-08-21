@@ -24,7 +24,7 @@ use crate::util::clamp;
 use crate::util::CastFromPrimitive;
 use crate::util::Pixel;
 use std::cmp;
-use std::mem::MaybeUninit;
+use std::mem;
 
 use std::ops::{Index, IndexMut};
 
@@ -532,9 +532,9 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
   const INTEGRAL_IMAGE_SIZE: usize =
     INTEGRAL_IMAGE_STRIDE * INTEGRAL_IMAGE_HEIGHT;
   let mut integral_image: [u32; INTEGRAL_IMAGE_SIZE] =
-    unsafe { MaybeUninit::uninit().assume_init() };
+    unsafe { mem::uninitialized() };
   let mut sq_integral_image: [u32; INTEGRAL_IMAGE_SIZE] =
-    unsafe { MaybeUninit::uninit().assume_init() };
+    unsafe { mem::uninitialized() };
 
   let bdm8 = fi.sequence.bit_depth - 8;
   let mut a_r2: [[u32; WIDTH_MAX + 2]; 2] = [[0; WIDTH_MAX + 2]; 2];
@@ -741,10 +741,10 @@ pub fn sgrproj_solve<T: Pixel>(
   const INTEGRAL_IMAGE_STRIDE: usize = 64 + 6 + 2;
   let mut integral_image: [u32;
     INTEGRAL_IMAGE_STRIDE * INTEGRAL_IMAGE_STRIDE] =
-    unsafe { MaybeUninit::uninit().assume_init() };
+    unsafe { mem::uninitialized() };
   let mut sq_integral_image: [u32;
     INTEGRAL_IMAGE_STRIDE * INTEGRAL_IMAGE_STRIDE] =
-    unsafe { MaybeUninit::uninit().assume_init() };
+    unsafe { mem::uninitialized() };
 
   let bdm8 = fi.sequence.bit_depth - 8;
 

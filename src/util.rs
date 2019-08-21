@@ -9,7 +9,7 @@
 
 use num_traits::*;
 use std::fmt::{Debug, Display};
-use std::mem::{size_of, MaybeUninit};
+use std::mem::{self, size_of};
 
 //TODO: Nice to have (although I wasn't able to find a way to do it yet in rust): zero-fill arrays that are
 // shorter than required.  Need const fn (Rust Issue #24111) or const generics (Rust RFC #2000)
@@ -47,7 +47,7 @@ pub const fn AlignedArray<ARRAY>(array: ARRAY) -> AlignedArray<ARRAY> {
 
 #[allow(non_snake_case)]
 pub fn UninitializedAlignedArray<ARRAY>() -> AlignedArray<ARRAY> {
-  AlignedArray(unsafe { MaybeUninit::uninit().assume_init() })
+  AlignedArray(unsafe { mem::uninitialized() })
 }
 
 #[test]
