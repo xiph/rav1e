@@ -80,12 +80,21 @@ jobs:
         - cargo test --features=decode_test,decode_test_dav1d,quick_test --verbose
       env:
         - CACHE_NAME=MIN_RUSTC
-    - name: "Ignored Tests"
+    - name: "Ignored Tests (aom)"
       rust: stable
       script:
-        - travis_wait 60 cargo test --release --features=decode_test,decode_test_dav1d --verbose --color=always -- --color=always --ignored
+        - travis_wait 60 cargo test --release --features=decode_test --verbose --color=always -- --color=always --ignored
       env:
-        - CACHE_NAME=IGNORED_TESTS
+        - CACHE_NAME=IGNORED_TESTS_AOM
+      branches:
+        only:
+          - master
+    - name: "Ignored Tests (dav1d)"
+      rust: stable
+      script:
+        - travis_wait 60 cargo test --release --features=decode_test_dav1d --verbose --color=always -- --color=always --ignored
+      env:
+        - CACHE_NAME=IGNORED_TESTS_DAV1D
       branches:
         only:
           - master
