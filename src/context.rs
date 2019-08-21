@@ -1273,7 +1273,7 @@ impl TileSuperBlockOffset {
 
 /// Absolute offset in blocks, where a block is defined
 /// to be an N*N square where N = (1 << BLOCK_TO_PLANE_SHIFT).
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BlockOffset {
   pub x: usize,
   pub y: usize,
@@ -1281,12 +1281,12 @@ pub struct BlockOffset {
 
 /// Absolute offset in blocks inside a plane, where a block is defined
 /// to be an N*N square where N = (1 << BLOCK_TO_PLANE_SHIFT).
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PlaneBlockOffset(pub BlockOffset);
 
 /// Absolute offset in blocks inside a tile, where a block is defined
 /// to be an N*N square where N = (1 << BLOCK_TO_PLANE_SHIFT).
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TileBlockOffset(pub BlockOffset);
 
 impl BlockOffset {
