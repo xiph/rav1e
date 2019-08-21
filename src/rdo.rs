@@ -305,7 +305,7 @@ fn compute_distortion<T: Pixel>(
     let mut w_uv = (bsize.width() >> xdec) & mask;
     let mut h_uv = (bsize.height() >> ydec) & mask;
 
-    let mut area = area;
+    let mut area = Area::BlockStartingAt { bo: tile_bo.0 };
     if (w_uv == 0 || h_uv == 0) && is_chroma_block {
       w_uv = MI_SIZE;
       h_uv = MI_SIZE;
@@ -322,8 +322,8 @@ fn compute_distortion<T: Pixel>(
       for p in 1..3 {
         distortion += sse_wxh(
           &ts.input_tile.planes[p]
-            .subregion(Area::BlockStartingAt { bo: tile_bo.0 }),
-          &ts.rec.planes[p].subregion(Area::BlockStartingAt { bo: tile_bo.0 }),
+            .subregion(area),
+          &ts.rec.planes[p].subregion(area),
           w_uv,
           h_uv,
         );
