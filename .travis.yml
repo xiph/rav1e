@@ -77,15 +77,13 @@ jobs:
       # and should match the version number in build.rs
       rust: 1.36.0
       script:
-        - cargo build --features=decode_test,decode_test_dav1d,quick_test --tests --verbose
         - cargo test --features=decode_test,decode_test_dav1d,quick_test --verbose
       env:
         - CACHE_NAME=MIN_RUSTC
     - name: "Ignored Tests"
       rust: stable
       script:
-        - cargo build --release --features=decode_test,decode_test_dav1d --tests --verbose
-        - travis_wait 60 cargo test --release --features=decode_test,decode_test_dav1d --verbose -- --ignored
+        - travis_wait 60 cargo test --release --features=decode_test,decode_test_dav1d --verbose --color=always -- --color=always --ignored
       env:
         - CACHE_NAME=IGNORED_TESTS
       branches:
