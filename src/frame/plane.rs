@@ -609,6 +609,14 @@ impl<'a, T: Pixel> PlaneMutSlice<'a, T> {
       phantom: PhantomData,
     }
   }
+
+  pub fn subslice(&mut self, xo: usize, yo: usize) -> PlaneMutSlice<'_, T> {
+    PlaneMutSlice {
+      plane: self.plane,
+      x: self.x + xo as isize,
+      y: self.y + yo as isize
+    }
+  }
 }
 
 impl<'a, T: Pixel> Index<usize> for PlaneMutSlice<'a, T> {
