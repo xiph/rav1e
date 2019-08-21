@@ -84,8 +84,8 @@ jobs:
     - name: "Ignored Tests"
       rust: stable
       script:
-        - cargo build --verbose --release --features=decode_test,decode_test_dav1d
-        - travis_wait 60 cargo test --verbose --release --features=decode_test,decode_test_dav1d -- --ignored
+        - cargo build --release --features=decode_test,decode_test_dav1d --tests --verbose
+        - travis_wait 60 cargo test --release --features=decode_test,decode_test_dav1d --verbose -- --ignored
       env:
         - CACHE_NAME=IGNORED_TESTS
       branches:
