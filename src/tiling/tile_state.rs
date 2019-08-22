@@ -12,6 +12,10 @@ use super::*;
 use crate::context::*;
 use crate::encoder::*;
 use crate::frame::*;
+use crate::lrf::{
+  IntegralImageBuffer, SOLVE_INTEGRAL_IMAGE_SIZE,
+  STRIPE_FILTER_INTEGRAL_IMAGE_SIZE,
+};
 use crate::quantize::*;
 use crate::rdo::*;
 use crate::util::*;
@@ -57,6 +61,11 @@ pub struct TileStateMut<'a, T: Pixel> {
   pub restoration: TileRestorationStateMut<'a>,
   pub mvs: Vec<TileMotionVectorsMut<'a>>,
   pub rdo: RDOTracker,
+
+  // Used in sgrproj_stripe_filter().
+  pub stripe_filter_buffer: IntegralImageBuffer,
+  // Used in sgrproj_solve().
+  pub solve_buffer: IntegralImageBuffer,
 }
 
 impl<'a, T: Pixel> TileStateMut<'a, T> {
@@ -80,6 +89,7 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
     };
     let sb_width = width.align_power_of_two_and_shift(sb_size_log2);
     let sb_height = height.align_power_of_two_and_shift(sb_size_log2);
+
     Self {
       sbo,
       sb_size_log2,
@@ -117,6 +127,10 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
         })
         .collect(),
       rdo: RDOTracker::new(),
+      stripe_filter_buffer: IntegralImageBuffer::zeroed(
+        STRIPE_FILTER_INTEGRAL_IMAGE_SIZE,
+      ),
+      solve_buffer: IntegralImageBuffer::zeroed(SOLVE_INTEGRAL_IMAGE_SIZE),
     }
   }
 
