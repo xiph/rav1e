@@ -1735,6 +1735,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                   set,
                   xqd,
                   fi,
+                  &mut ts.stripe_filter_buffer,
                   lrf_input.planes[pli].cfg.width,
                   lrf_input.planes[pli].cfg.height,
                   lrf_input.planes[pli].cfg.width,
@@ -1811,6 +1812,7 @@ pub fn rdo_loop_decision<T: Pixel>(
           let (xqd0, xqd1) = sgrproj_solve(
             set,
             fi,
+            &mut ts.solve_buffer,
             &in_plane.slice(ipo),
             &cdef_plane.slice(PlaneOffset { x: 0, y: 0 }),
             cmp::min(cdef_plane.cfg.width, fi.width - ipo.x as usize),
@@ -1824,6 +1826,7 @@ pub fn rdo_loop_decision<T: Pixel>(
               set,
               xqd,
               fi,
+              &mut ts.stripe_filter_buffer,
               lrf_input.planes[pli].cfg.width,
               lrf_input.planes[pli].cfg.height,
               lrf_input.planes[pli].cfg.width,
