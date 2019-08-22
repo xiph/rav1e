@@ -26,7 +26,6 @@ impl<T: Pixel> TestDecoder<T> for AomDecoder<T> {
   fn setup_decoder(w: usize, h: usize) -> Self {
     unsafe {
       let interface = aom_codec_av1_dx();
-      let mut dec: aom_codec_ctx = MaybeUninit::uninit().assume_init();
       let cfg = aom_codec_dec_cfg_t {
         threads: 1,
         w: w as u32,
@@ -35,8 +34,9 @@ impl<T: Pixel> TestDecoder<T> for AomDecoder<T> {
         cfg: cfg_options { ext_partition: 1 },
       };
 
+      let mut dec = MaybeUninit::uninit();
       let ret = aom_codec_dec_init_ver(
-        &mut dec,
+        dec.as_mut_ptr(),
         interface,
         &cfg,
         0,
@@ -46,6 +46,8 @@ impl<T: Pixel> TestDecoder<T> for AomDecoder<T> {
         panic!("Cannot instantiate the decoder {}", ret);
       }
 
+      // Was initialized by aom_codec_dec_init_ver().
+      let dec = dec.assume_init();
       AomDecoder { dec, iter: ptr::null_mut(), pixel: PhantomData }
     }
   }
