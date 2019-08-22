@@ -397,7 +397,7 @@ pub fn cdef_filter_superblock<T: Pixel>(
           let out_slice = &mut out_plane.mut_slice(out_po);
           let xsize = 8 >> xdec;
           let ysize = 8 >> ydec;
-          
+
           if !skip {
             let local_pri_strength;
             let local_sec_strength;
@@ -454,8 +454,10 @@ pub fn cdef_filter_superblock<T: Pixel>(
             }
           } else {
             // we need to copy input to output
-            let in_block = in_slice.subslice((8 * bx) >> xdec, (8 * by) >> ydec);
-            let mut out_block = out_slice.subslice((8 * bx) >> xdec, (8 * by) >> ydec);
+            let in_block =
+              in_slice.subslice((8 * bx) >> xdec, (8 * by) >> ydec);
+            let mut out_block =
+              out_slice.subslice((8 * bx) >> xdec, (8 * by) >> ydec);
             for i in 0..ysize {
               for j in 0..xsize {
                 out_block[i][j] = T::cast_from(in_block[i][j]);
