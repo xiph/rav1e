@@ -186,6 +186,8 @@ pub struct SpeedSettings {
   pub diamond_me: bool,
   pub cdef: bool,
   pub quantizer_rdo: bool,
+  /// Use satd instead of sad for subpel search
+  pub use_satd_subpel: bool,
 }
 
 /// Default values for the speed settings.
@@ -206,6 +208,7 @@ impl Default for SpeedSettings {
       diamond_me: false,
       cdef: false,
       quantizer_rdo: false,
+      use_satd_subpel: false,
     }
   }
 }
@@ -240,6 +243,7 @@ impl SpeedSettings {
       diamond_me: Self::diamond_me_preset(speed),
       cdef: Self::cdef_preset(speed),
       quantizer_rdo: Self::quantizer_rdo_preset(speed),
+      use_satd_subpel: Self::use_satd_subpel(speed),
     }
   }
 
@@ -323,6 +327,10 @@ impl SpeedSettings {
 
   fn quantizer_rdo_preset(speed: usize) -> bool {
     speed <= 2
+  }
+
+  fn use_satd_subpel(speed: usize) -> bool {
+    speed <= 9
   }
 }
 
