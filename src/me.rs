@@ -187,8 +187,8 @@ pub trait MotionEstimation {
     fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>,
     rec: &ReferenceFrame<T>, tile_bo: TileBlockOffset, lambda: u32,
     pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize, mvy_min: isize,
-    mvy_max: isize, blk_w: usize, blk_h: usize, best_mv: &mut MotionVector,
-    lowest_cost: &mut u64, ref_frame: RefType,
+    mvy_max: isize, blk_w: usize, blk_h: usize, use_satd: bool,
+    best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: RefType,
   );
 
   fn motion_estimation<T: Pixel>(
@@ -231,6 +231,30 @@ pub trait MotionEstimation {
           ref_frame,
         );
 
+        let use_satd: bool = fi.config.speed_settings.use_satd_subpel;
+        if use_satd {
+          let mut tmp_plane_opt = None;
+          lowest_cost = get_mv_rd_cost(
+            fi,
+            frame_bo.to_luma_plane_offset(),
+            &ts.input.planes[0],
+            &rec.frame.planes[0],
+            fi.sequence.bit_depth,
+            pmv,
+            lambda,
+            use_satd,
+            mvx_min,
+            mvx_max,
+            mvy_min,
+            mvy_max,
+            blk_w,
+            blk_h,
+            best_mv,
+            &mut tmp_plane_opt,
+            ref_frame,
+          );
+        }
+
         Self::sub_pixel_me(
           fi,
           ts,
@@ -244,6 +268,7 @@ pub trait MotionEstimation {
           mvy_max,
           blk_w,
           blk_h,
+          use_satd,
           &mut best_mv,
           &mut lowest_cost,
           ref_frame,
@@ -406,6 +431,7 @@ impl MotionEstimation for DiamondSearch {
       mvy_max,
       blk_w,
       blk_h,
+      false,
       best_mv,
       lowest_cost,
       false,
@@ -417,8 +443,8 @@ impl MotionEstimation for DiamondSearch {
     fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>,
     rec: &ReferenceFrame<T>, tile_bo: TileBlockOffset, lambda: u32,
     pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize, mvy_min: isize,
-    mvy_max: isize, blk_w: usize, blk_h: usize, best_mv: &mut MotionVector,
-    lowest_cost: &mut u64, ref_frame: RefType,
+    mvy_max: isize, blk_w: usize, blk_h: usize, use_satd: bool,
+    best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: RefType,
   ) {
     let predictors = vec![*best_mv];
     let frame_bo = ts.to_frame_block_offset(tile_bo);
@@ -437,6 +463,7 @@ impl MotionEstimation for DiamondSearch {
       mvy_max,
       blk_w,
       blk_h,
+      use_satd,
       best_mv,
       lowest_cost,
       true,
@@ -491,6 +518,7 @@ impl MotionEstimation for DiamondSearch {
       mvy_max >> 1,
       blk_w >> 1,
       blk_h >> 1,
+      false,
       best_mv,
       lowest_cost,
       false,
@@ -550,8 +578,8 @@ impl MotionEstimation for FullSearch {
     fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>,
     _rec: &ReferenceFrame<T>, tile_bo: TileBlockOffset, lambda: u32,
     pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize, mvy_min: isize,
-    mvy_max: isize, blk_w: usize, blk_h: usize, best_mv: &mut MotionVector,
-    lowest_cost: &mut u64, ref_frame: RefType,
+    mvy_max: isize, blk_w: usize, blk_h: usize, use_satd: bool,
+    best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: RefType,
   ) {
     let frame_bo = ts.to_frame_block_offset(tile_bo);
     telescopic_subpel_search(
@@ -567,6 +595,7 @@ impl MotionEstimation for FullSearch {
       mvy_max,
       blk_w,
       blk_h,
+      use_satd,
       best_mv,
       lowest_cost,
     );
@@ -634,8 +663,8 @@ impl MotionEstimation for FullSearch {
 fn get_best_predictor<T: Pixel>(
   fi: &FrameInvariants<T>, po: PlaneOffset, p_org: &Plane<T>,
   p_ref: &Plane<T>, predictors: &[MotionVector], bit_depth: usize,
-  pmv: [MotionVector; 2], lambda: u32, mvx_min: isize, mvx_max: isize,
-  mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize,
+  pmv: [MotionVector; 2], lambda: u32, use_satd: bool, mvx_min: isize,
+  mvx_max: isize, mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize,
   center_mv: &mut MotionVector, center_mv_cost: &mut u64,
   tmp_plane_opt: &mut Option<Plane<T>>, ref_frame: RefType,
 ) {
@@ -651,6 +680,7 @@ fn get_best_predictor<T: Pixel>(
       bit_depth,
       pmv,
       lambda,
+      use_satd,
       mvx_min,
       mvx_max,
       mvy_min,
@@ -673,7 +703,7 @@ fn diamond_me_search<T: Pixel>(
   fi: &FrameInvariants<T>, po: PlaneOffset, p_org: &Plane<T>,
   p_ref: &Plane<T>, predictors: &[MotionVector], bit_depth: usize,
   pmv: [MotionVector; 2], lambda: u32, mvx_min: isize, mvx_max: isize,
-  mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize,
+  mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize, use_satd: bool,
   center_mv: &mut MotionVector, center_mv_cost: &mut u64, subpixel: bool,
   ref_frame: RefType,
 ) {
@@ -701,6 +731,7 @@ fn diamond_me_search<T: Pixel>(
     bit_depth,
     pmv,
     lambda,
+    use_satd,
     mvx_min,
     mvx_max,
     mvy_min,
@@ -731,6 +762,7 @@ fn diamond_me_search<T: Pixel>(
         bit_depth,
         pmv,
         lambda,
+        use_satd,
         mvx_min,
         mvx_max,
         mvy_min,
@@ -766,8 +798,8 @@ fn diamond_me_search<T: Pixel>(
 fn get_mv_rd_cost<T: Pixel>(
   fi: &FrameInvariants<T>, po: PlaneOffset, p_org: &Plane<T>,
   p_ref: &Plane<T>, bit_depth: usize, pmv: [MotionVector; 2], lambda: u32,
-  mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
-  blk_w: usize, blk_h: usize, cand_mv: MotionVector,
+  use_satd: bool, mvx_min: isize, mvx_max: isize, mvy_min: isize,
+  mvy_max: isize, blk_w: usize, blk_h: usize, cand_mv: MotionVector,
   tmp_plane_opt: &mut Option<Plane<T>>, ref_frame: RefType,
 ) -> u64 {
   if (cand_mv.col as isize) < mvx_min || (cand_mv.col as isize) > mvx_max {
@@ -800,7 +832,7 @@ fn get_mv_rd_cost<T: Pixel>(
     );
     let plane_ref = tmp_plane.as_region();
     compute_mv_rd_cost(
-      fi, pmv, lambda, bit_depth, blk_w, blk_h, cand_mv, &plane_org,
+      fi, pmv, lambda, use_satd, bit_depth, blk_w, blk_h, cand_mv, &plane_org,
       &plane_ref,
     )
   } else {
@@ -810,7 +842,7 @@ fn get_mv_rd_cost<T: Pixel>(
       y: po.y + (cand_mv.row / 8) as isize,
     });
     compute_mv_rd_cost(
-      fi, pmv, lambda, bit_depth, blk_w, blk_h, cand_mv, &plane_org,
+      fi, pmv, lambda, use_satd, bit_depth, blk_w, blk_h, cand_mv, &plane_org,
       &plane_ref,
     )
   }
@@ -818,10 +850,15 @@ fn get_mv_rd_cost<T: Pixel>(
 
 fn compute_mv_rd_cost<T: Pixel>(
   fi: &FrameInvariants<T>, pmv: [MotionVector; 2], lambda: u32,
-  bit_depth: usize, blk_w: usize, blk_h: usize, cand_mv: MotionVector,
-  plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>,
+  use_satd: bool, bit_depth: usize, blk_w: usize, blk_h: usize,
+  cand_mv: MotionVector, plane_org: &PlaneRegion<'_, T>,
+  plane_ref: &PlaneRegion<'_, T>,
 ) -> u64 {
-  let sad = get_sad(&plane_org, &plane_ref, blk_w, blk_h, bit_depth);
+  let sad = if use_satd {
+    get_satd(&plane_org, &plane_ref, blk_w, blk_h, bit_depth)
+  } else {
+    get_sad(&plane_org, &plane_ref, blk_w, blk_h, bit_depth)
+  };
 
   let rate1 = get_mv_rate(cand_mv, pmv[0], fi.allow_high_precision_mv);
   let rate2 = get_mv_rate(cand_mv, pmv[1], fi.allow_high_precision_mv);
@@ -834,7 +871,7 @@ fn telescopic_subpel_search<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, po: PlaneOffset,
   lambda: u32, ref_frame: RefType, pmv: [MotionVector; 2], mvx_min: isize,
   mvx_max: isize, mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize,
-  best_mv: &mut MotionVector, lowest_cost: &mut u64,
+  use_satd: bool, best_mv: &mut MotionVector, lowest_cost: &mut u64,
 ) {
   let mode = PredictionMode::NEWMV;
 
@@ -892,13 +929,18 @@ fn telescopic_subpel_search<T: Pixel>(
           ts.input.planes[0].region(Area::StartingAt { x: po.x, y: po.y });
         let plane_ref = tmp_plane.as_region();
 
-        let sad =
-          get_sad(&plane_org, &plane_ref, blk_w, blk_h, fi.sequence.bit_depth);
-
-        let rate1 = get_mv_rate(cand_mv, pmv[0], fi.allow_high_precision_mv);
-        let rate2 = get_mv_rate(cand_mv, pmv[1], fi.allow_high_precision_mv);
-        let rate = rate1.min(rate2 + 1);
-        let cost = 256 * sad as u64 + rate as u64 * lambda as u64;
+        let cost = compute_mv_rd_cost(
+          fi,
+          pmv,
+          lambda,
+          use_satd,
+          fi.sequence.bit_depth,
+          blk_w,
+          blk_h,
+          cand_mv,
+          &plane_org,
+          &plane_ref,
+        );
 
         if cost < *lowest_cost {
           *lowest_cost = cost;
