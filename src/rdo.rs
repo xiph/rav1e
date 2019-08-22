@@ -1587,9 +1587,6 @@ fn rdo_loop_plane_error<T: Pixel>(
 ) -> u64 {
   let sbo_0 = PlaneSuperBlockOffset(SuperBlockOffset { x: 0, y: 0 });
   let sb_blocks = if fi.sequence.use_128x128_superblock { 16 } else { 8 };
-  let in_plane = &ts.input_tile.planes[pli];
-  let test_plane = &test.planes[pli];
-  let &PlaneConfig { xdec, ydec, .. } = in_plane.plane_cfg;
   // Each direction block is 8x8 in y, potentially smaller if subsampled in chroma
   // accumulating in-frame and unpadded
   let mut err: u64 = 0;

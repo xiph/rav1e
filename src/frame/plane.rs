@@ -614,7 +614,7 @@ impl<'a, T: Pixel> PlaneMutSlice<'a, T> {
     PlaneMutSlice {
       plane: self.plane,
       x: self.x + xo as isize,
-      y: self.y + yo as isize
+      y: self.y + yo as isize,
     }
   }
 }
