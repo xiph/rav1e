@@ -27,11 +27,14 @@ pub(crate) struct Dav1dDecoder<T: Pixel> {
 impl<T: Pixel> TestDecoder<T> for Dav1dDecoder<T> {
   fn setup_decoder(_w: usize, _h: usize) -> Self {
     unsafe {
-      let mut settings = MaybeUninit::uninit().assume_init();
-      let mut dec: Dav1dDecoder<T> = MaybeUninit::uninit().assume_init();
+      let mut settings = MaybeUninit::uninit();
+      dav1d_default_settings(settings.as_mut_ptr());
 
-      dav1d_default_settings(&mut settings);
+      // Was initialized by dav1d_default_settings().
+      let settings = settings.assume_init();
 
+      let mut dec: Dav1dDecoder<T> =
+        Dav1dDecoder { dec: ptr::null_mut(), pixel: PhantomData };
       let ret = dav1d_open(&mut dec.dec, &settings);
 
       if ret != 0 {
