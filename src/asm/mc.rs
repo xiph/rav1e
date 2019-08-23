@@ -16,7 +16,7 @@ use crate::util::*;
 #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 use x86_64::*;
 
-pub(crate) type PutFn = unsafe extern fn(
+type PutFn = unsafe extern fn(
   dst: *mut u8,
   dst_stride: isize,
   src: *const u8,
@@ -27,7 +27,7 @@ pub(crate) type PutFn = unsafe extern fn(
   row_frac: i32,
 );
 
-pub(crate) type PutHBDFn = unsafe extern fn(
+type PutHBDFn = unsafe extern fn(
   dst: *mut u8,
   dst_stride: isize,
   src: *const u8,
@@ -39,7 +39,7 @@ pub(crate) type PutHBDFn = unsafe extern fn(
   bit_depth: i32,
 );
 
-pub(crate) type PrepFn = unsafe extern fn(
+type PrepFn = unsafe extern fn(
   tmp: *mut i16,
   src: *const u8,
   src_stride: isize,
@@ -49,7 +49,7 @@ pub(crate) type PrepFn = unsafe extern fn(
   row_frac: i32,
 );
 
-pub(crate) type PrepHBDFn = unsafe extern fn(
+type PrepHBDFn = unsafe extern fn(
   tmp: *mut i16,
   src: *const u16,
   src_stride: isize,
@@ -60,7 +60,7 @@ pub(crate) type PrepHBDFn = unsafe extern fn(
   bit_depth: i32,
 );
 
-pub(crate) type AvgFn = unsafe extern fn(
+type AvgFn = unsafe extern fn(
   dst: *mut u8,
   dst_stride: isize,
   tmp1: *const i16,
@@ -69,7 +69,7 @@ pub(crate) type AvgFn = unsafe extern fn(
   height: i32,
 );
 
-pub(crate) type AvgHBDFn = unsafe extern fn(
+type AvgHBDFn = unsafe extern fn(
   dst: *mut u16,
   dst_stride: isize,
   tmp1: *const i16,
@@ -80,9 +80,7 @@ pub(crate) type AvgHBDFn = unsafe extern fn(
 );
 
 // gets an index that can be mapped to a function for a pair of filter modes
-pub(crate) const fn get_2d_mode_idx(
-  mode_x: FilterMode, mode_y: FilterMode,
-) -> usize {
+const fn get_2d_mode_idx(mode_x: FilterMode, mode_y: FilterMode) -> usize {
   (mode_x as usize + 4 * (mode_y as usize)) & 15
 }
 
