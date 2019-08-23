@@ -1196,6 +1196,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
 ) -> Option<CFLParams> {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let uv_tx_size = bsize.largest_chroma_tx_size(xdec, ydec);
+  debug_assert!(bsize.subsampled_size(xdec, ydec) == uv_tx_size.block_size());
 
   let mut ac: AlignedArray<[i16; 32 * 32]> = UninitializedAlignedArray();
   luma_ac(&mut ac.array, ts, tile_bo, bsize);
@@ -1206,47 +1207,38 @@ pub fn rdo_cfl_alpha<T: Pixel>(
       let rec = &mut ts.rec.planes[p];
       let input = &ts.input_tile.planes[p];
       let po = tile_bo.plane_offset(rec.plane_cfg);
-      (-16i16..17i16)
-        .min_by_key(|&alpha| {
-          // FIXME: If uv_tx_size < subsampled bsize (i.e. bsize 128x128 with chroma 422, 444),
-          // get_intra_edges() should be called for each tx block
-          // However, there is chance that CFL mode only uses intra_edge pixels for DC_PRED when alpha == 0,
-          // so if that is true, then possibly able to call get_intra_edges() once for whole partition.
-          debug_assert!(
-            bsize.subsampled_size(xdec, ydec) == uv_tx_size.block_size()
-          );
-          let edge_buf = get_intra_edges(
-            &rec.as_const(),
-            tile_bo,
-            0,
-            0,
-            bsize,
-            po,
-            uv_tx_size,
-            bit_depth,
-            Some(PredictionMode::UV_CFL_PRED),
-          );
-
-          let mut rec_region =
-            rec.subregion_mut(Area::BlockStartingAt { bo: tile_bo.0 });
-          PredictionMode::UV_CFL_PRED.predict_intra(
-            tile_rect,
-            &mut rec_region,
-            uv_tx_size,
-            bit_depth,
-            &ac.array,
-            alpha,
-            &edge_buf,
-          );
-          sse_wxh(
-            &input.subregion(Area::BlockStartingAt { bo: tile_bo.0 }),
-            &rec_region.as_const(),
-            uv_tx_size.width(),
-            uv_tx_size.height(),
-            |_, _| 1., // We're not doing RDO here.
-          )
-        })
-        .unwrap()
+      let edge_buf = get_intra_edges(
+        &rec.as_const(),
+        tile_bo,
+        0,
+        0,
+        bsize,
+        po,
+        uv_tx_size,
+        bit_depth,
+        Some(PredictionMode::UV_CFL_PRED),
+      );
+      let alpha_cost = |alpha: &i16| -> u64 {
+        let mut rec_region =
+          rec.subregion_mut(Area::BlockStartingAt { bo: tile_bo.0 });
+        PredictionMode::UV_CFL_PRED.predict_intra(
+          tile_rect,
+          &mut rec_region,
+          uv_tx_size,
+          bit_depth,
+          &ac.array,
+          *alpha,
+          &edge_buf,
+        );
+        sse_wxh(
+          &input.subregion(Area::BlockStartingAt { bo: tile_bo.0 }),
+          &rec_region.as_const(),
+          uv_tx_size.width(),
+          uv_tx_size.height(),
+          |_, _| 1., // We're not doing RDO here.
+        )
+      };
+      (-16i16..17i16).min_by_key(alpha_cost).unwrap()
     })
     .collect();
 
