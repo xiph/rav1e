@@ -1218,7 +1218,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
         bit_depth,
         Some(PredictionMode::UV_CFL_PRED),
       );
-      let alpha_cost = |alpha: &i16| -> u64 {
+      let mut alpha_cost = |alpha: i16| -> u64 {
         let mut rec_region =
           rec.subregion_mut(Area::BlockStartingAt { bo: tile_bo.0 });
         PredictionMode::UV_CFL_PRED.predict_intra(
@@ -1227,7 +1227,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
           uv_tx_size,
           bit_depth,
           &ac.array,
-          *alpha,
+          alpha,
           &edge_buf,
         );
         sse_wxh(
@@ -1238,7 +1238,23 @@ pub fn rdo_cfl_alpha<T: Pixel>(
           |_, _| 1., // We're not doing RDO here.
         )
       };
-      (-16i16..17i16).min_by_key(alpha_cost).unwrap()
+      let mut best = (alpha_cost(0), 0);
+      let mut count = 2;
+      for alpha in 1i16..=16i16 {
+        let cost = (alpha_cost(alpha), alpha_cost(-alpha));
+        if cost.0 < best.0 {
+          best = (cost.0, alpha);
+          count += 2;
+        }
+        if cost.1 < best.0 {
+          best = (cost.1, -alpha);
+          count += 2;
+        }
+        if count < alpha {
+          break;
+        }
+      }
+      best.1
     })
     .collect();
 
