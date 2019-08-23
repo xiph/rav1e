@@ -900,7 +900,7 @@ pub fn sgrproj_solve<T: Pixel>(
       }
       for x in 0..cdef_w {
         let u = i32::cast_from(cdeffed.p(x, y)) << SGRPROJ_RST_BITS;
-        let s = i32::cast_from(input.p(x, y)) << SGRPROJ_RST_BITS;
+        let s = (i32::cast_from(input.p(x, y)) << SGRPROJ_RST_BITS) - u;
         let f2 = f_r2_01[dy][x] as i32 - u;
         let f1 = f_r1[x] as i32 - u;
         h[0][0] += f2 as f64 * f2 as f64;
@@ -918,8 +918,8 @@ pub fn sgrproj_solve<T: Pixel>(
   h[0][1] /= n;
   h[1][1] /= n;
   h[1][0] = h[0][1];
-  c[0] /= n;
-  c[1] /= n;
+  c[0] *= (1 << SGRPROJ_PRJ_BITS) as f64 / n;
+  c[1] *= (1 << SGRPROJ_PRJ_BITS) as f64 / n;
   let (xq0, xq1) = if s_r2 == 0 {
     // H matrix is now only the scalar h[1][1]
     // C vector is now only the scalar c[1]
@@ -942,18 +942,21 @@ pub fn sgrproj_solve<T: Pixel>(
       (0, 0)
     } else {
       // If scaling up dividend would overflow, instead scale down the divisor
-      let div1 =
-        (h[1][1] * c[0] - h[0][1] * c[1]) * (1 << SGRPROJ_PRJ_BITS) as f64;
-      let div2 =
-        (h[0][0] * c[1] - h[1][0] * c[0]) * (1 << SGRPROJ_PRJ_BITS) as f64;
-
+      let div1 = h[1][1] * c[0] - h[0][1] * c[1];
+      let div2 = h[0][0] * c[1] - h[1][0] * c[0];
       ((div1 / det).round() as i32, (div2 / det).round() as i32)
     }
   };
-  (
-    clamp(xq0, SGRPROJ_XQD_MIN[0] as i32, SGRPROJ_XQD_MAX[0] as i32) as i8,
-    clamp(xq1, SGRPROJ_XQD_MIN[1] as i32, SGRPROJ_XQD_MAX[1] as i32) as i8,
-  )
+  {
+    let xqd0 =
+      clamp(xq0, SGRPROJ_XQD_MIN[0] as i32, SGRPROJ_XQD_MAX[0] as i32);
+    let xqd1 = clamp(
+      (1 << SGRPROJ_PRJ_BITS) - xqd0 - xq1,
+      SGRPROJ_XQD_MIN[1] as i32,
+      SGRPROJ_XQD_MAX[1] as i32,
+    );
+    (xqd0 as i8, xqd1 as i8)
+  }
 }
 
 fn wiener_stripe_filter<T: Pixel>(
