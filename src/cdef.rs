@@ -20,7 +20,7 @@ use crate::cpu_features::CpuFeatureLevel;
 use std::cmp;
 
 #[cfg(any(not(target_arch = "x86_64"), not(feature = "nasm")))]
-pub use self::native::*;
+pub(crate) use self::native::*;
 #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 pub use crate::asm::cdef::*;
 
