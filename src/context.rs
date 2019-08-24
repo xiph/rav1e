@@ -1559,7 +1559,7 @@ impl<'a> BlockContext<'a> {
     }
   }
 
-  pub fn checkpoint(&mut self) -> BlockContextCheckpoint {
+  pub fn checkpoint(&self) -> BlockContextCheckpoint {
     BlockContextCheckpoint {
       cdef_coded: self.cdef_coded,
       above_partition_context: self.above_partition_context,
@@ -1581,7 +1581,7 @@ impl<'a> BlockContext<'a> {
     self.left_coeff_context = checkpoint.left_coeff_context;
   }
 
-  pub fn set_dc_sign(&mut self, cul_level: &mut u32, dc_val: i32) {
+  pub fn set_dc_sign(cul_level: &mut u32, dc_val: i32) {
     if dc_val < 0 {
       *cul_level |= 1 << COEFF_CONTEXT_BITS;
     } else if dc_val > 0 {
@@ -1726,7 +1726,7 @@ impl<'a> BlockContext<'a> {
     }
   }
 
-  fn skip_context(&mut self, bo: TileBlockOffset) -> usize {
+  fn skip_context(&self, bo: TileBlockOffset) -> usize {
     let above_skip = bo.0.y > 0 && self.blocks.above_of(bo).skip;
     let left_skip = bo.0.x > 0 && self.blocks.left_of(bo).skip;
     above_skip as usize + left_skip as usize
@@ -1739,7 +1739,7 @@ impl<'a> BlockContext<'a> {
   // 1 - intra/inter, inter/intra
   // 2 - intra/--, --/intra
   // 3 - intra/intra
-  pub fn intra_inter_context(&mut self, bo: TileBlockOffset) -> usize {
+  pub fn intra_inter_context(&self, bo: TileBlockOffset) -> usize {
     let has_above = bo.0.y > 0;
     let has_left = bo.0.x > 0;
 
@@ -1772,7 +1772,7 @@ impl<'a> BlockContext<'a> {
   }
 
   pub fn get_txb_ctx(
-    &mut self, plane_bsize: BlockSize, tx_size: TxSize, plane: usize,
+    &self, plane_bsize: BlockSize, tx_size: TxSize, plane: usize,
     bo: TileBlockOffset, xdec: usize, ydec: usize,
   ) -> TXB_CTX {
     let mut txb_ctx = TXB_CTX { txb_skip_ctx: 0, dc_sign_ctx: 0 };
@@ -2310,7 +2310,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   fn find_valid_row_offs(
-    &mut self, row_offset: isize, mi_row: usize, mi_rows: usize,
+    row_offset: isize, mi_row: usize, mi_rows: usize,
   ) -> isize {
     cmp::min(
       cmp::max(row_offset, -(mi_row as isize)),
@@ -2319,7 +2319,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   fn find_valid_col_offs(
-    &mut self, col_offset: isize, mi_col: usize, mi_cols: usize,
+    col_offset: isize, mi_col: usize, mi_cols: usize,
   ) -> isize {
     cmp::min(
       cmp::max(col_offset, -(mi_col as isize)),
@@ -2328,7 +2328,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   fn find_matching_mv(
-    &self, mv: MotionVector, mv_stack: &mut ArrayVec<[CandidateMV; 9]>,
+    mv: MotionVector, mv_stack: &mut ArrayVec<[CandidateMV; 9]>,
   ) -> bool {
     for mv_cand in mv_stack {
       if mv.row == mv_cand.this_mv.row && mv.col == mv_cand.this_mv.col {
@@ -2339,8 +2339,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   fn find_matching_mv_and_update_weight(
-    &self, mv: MotionVector, mv_stack: &mut ArrayVec<[CandidateMV; 9]>,
-    weight: u32,
+    mv: MotionVector, mv_stack: &mut ArrayVec<[CandidateMV; 9]>, weight: u32,
   ) -> bool {
     for mut mv_cand in mv_stack {
       if mv.row == mv_cand.this_mv.row && mv.col == mv_cand.this_mv.col {
@@ -2352,7 +2351,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   fn find_matching_comp_mv_and_update_weight(
-    &self, mvs: [MotionVector; 2], mv_stack: &mut ArrayVec<[CandidateMV; 9]>,
+    mvs: [MotionVector; 2], mv_stack: &mut ArrayVec<[CandidateMV; 9]>,
     weight: u32,
   ) -> bool {
     for mv_cand in mv_stack {
@@ -2369,7 +2368,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   fn add_ref_mv_candidate(
-    &self, ref_frames: [RefType; 2], blk: &Block,
+    ref_frames: [RefType; 2], blk: &Block,
     mv_stack: &mut ArrayVec<[CandidateMV; 9]>, weight: u32,
     newmv_count: &mut usize, is_compound: bool,
   ) -> bool {
@@ -2380,8 +2379,9 @@ impl<'a> ContextWriter<'a> {
       if blk.ref_frames[0] == ref_frames[0]
         && blk.ref_frames[1] == ref_frames[1]
       {
-        let found_match = self
-          .find_matching_comp_mv_and_update_weight(blk.mv, mv_stack, weight);
+        let found_match = Self::find_matching_comp_mv_and_update_weight(
+          blk.mv, mv_stack, weight,
+        );
 
         if !found_match && mv_stack.len() < MAX_REF_MV_STACK_SIZE {
           let mv_cand =
@@ -2407,8 +2407,9 @@ impl<'a> ContextWriter<'a> {
       let mut found = false;
       for i in 0..2 {
         if blk.ref_frames[i] == ref_frames[0] {
-          let found_match = self
-            .find_matching_mv_and_update_weight(blk.mv[i], mv_stack, weight);
+          let found_match = Self::find_matching_mv_and_update_weight(
+            blk.mv[i], mv_stack, weight,
+          );
 
           if !found_match && mv_stack.len() < MAX_REF_MV_STACK_SIZE {
             let mv_cand = CandidateMV {
@@ -2438,7 +2439,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   fn add_extra_mv_candidate<T: Pixel>(
-    &self, blk: &Block, ref_frames: [RefType; 2],
+    blk: &Block, ref_frames: [RefType; 2],
     mv_stack: &mut ArrayVec<[CandidateMV; 9]>, fi: &FrameInvariants<T>,
     is_compound: bool, ref_id_count: &mut [usize; 2],
     ref_id_mvs: &mut [[MotionVector; 2]; 2], ref_diff_count: &mut [usize; 2],
@@ -2478,7 +2479,7 @@ impl<'a> ContextWriter<'a> {
             mv.col = -mv.col;
           }
 
-          if !self.find_matching_mv(mv, mv_stack) {
+          if !Self::find_matching_mv(mv, mv_stack) {
             let mv_cand = CandidateMV {
               this_mv: mv,
               comp_mv: MotionVector::default(),
@@ -2492,7 +2493,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   fn scan_row_mbmi(
-    &mut self, bo: TileBlockOffset, row_offset: isize, max_row_offs: isize,
+    &self, bo: TileBlockOffset, row_offset: isize, max_row_offs: isize,
     processed_rows: &mut isize, ref_frames: [RefType; 2],
     mv_stack: &mut ArrayVec<[CandidateMV; 9]>, newmv_count: &mut usize,
     bsize: BlockSize, is_compound: bool,
@@ -2540,7 +2541,7 @@ impl<'a> ContextWriter<'a> {
         *processed_rows = (inc as isize) - row_offset - 1;
       }
 
-      if self.add_ref_mv_candidate(
+      if Self::add_ref_mv_candidate(
         ref_frames,
         cand,
         mv_stack,
@@ -2558,7 +2559,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   fn scan_col_mbmi(
-    &mut self, bo: TileBlockOffset, col_offset: isize, max_col_offs: isize,
+    &self, bo: TileBlockOffset, col_offset: isize, max_col_offs: isize,
     processed_cols: &mut isize, ref_frames: [RefType; 2],
     mv_stack: &mut ArrayVec<[CandidateMV; 9]>, newmv_count: &mut usize,
     bsize: BlockSize, is_compound: bool,
@@ -2606,7 +2607,7 @@ impl<'a> ContextWriter<'a> {
         *processed_cols = (inc as isize) - col_offset - 1;
       }
 
-      if self.add_ref_mv_candidate(
+      if Self::add_ref_mv_candidate(
         ref_frames,
         cand,
         mv_stack,
@@ -2624,7 +2625,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   fn scan_blk_mbmi(
-    &mut self, bo: TileBlockOffset, ref_frames: [RefType; 2],
+    &self, bo: TileBlockOffset, ref_frames: [RefType; 2],
     mv_stack: &mut ArrayVec<[CandidateMV; 9]>, newmv_count: &mut usize,
     is_compound: bool,
   ) -> bool {
@@ -2634,7 +2635,7 @@ impl<'a> ContextWriter<'a> {
 
     let weight = 2 * BLOCK_8X8.width_mi() as u32;
     /* Always assume its within a tile, probably wrong */
-    self.add_ref_mv_candidate(
+    Self::add_ref_mv_candidate(
       ref_frames,
       &self.bc.blocks[bo],
       mv_stack,
@@ -2644,14 +2645,14 @@ impl<'a> ContextWriter<'a> {
     )
   }
 
-  fn add_offset(&mut self, mv_stack: &mut ArrayVec<[CandidateMV; 9]>) {
+  fn add_offset(mv_stack: &mut ArrayVec<[CandidateMV; 9]>) {
     for mut cand_mv in mv_stack {
       cand_mv.weight += REF_CAT_LEVEL;
     }
   }
 
   fn setup_mvref_list<T: Pixel>(
-    &mut self, bo: TileBlockOffset, ref_frames: [RefType; 2],
+    &self, bo: TileBlockOffset, ref_frames: [RefType; 2],
     mv_stack: &mut ArrayVec<[CandidateMV; 9]>, bsize: BlockSize,
     fi: &FrameInvariants<T>, is_compound: bool,
   ) -> usize {
@@ -2683,7 +2684,7 @@ impl<'a> ContextWriter<'a> {
       }
 
       let rows = self.bc.blocks.rows();
-      max_row_offs = self.find_valid_row_offs(max_row_offs, bo.0.y, rows);
+      max_row_offs = Self::find_valid_row_offs(max_row_offs, bo.0.y, rows);
     }
 
     if left_avail {
@@ -2695,7 +2696,7 @@ impl<'a> ContextWriter<'a> {
       }
 
       let cols = self.bc.blocks.cols();
-      max_col_offs = self.find_valid_col_offs(max_col_offs, bo.0.x, cols);
+      max_col_offs = Self::find_valid_col_offs(max_col_offs, bo.0.x, cols);
     }
 
     let mut row_match = false;
@@ -2744,7 +2745,7 @@ impl<'a> ContextWriter<'a> {
     let nearest_match =
       if row_match { 1 } else { 0 } + if col_match { 1 } else { 0 };
 
-    self.add_offset(mv_stack);
+    Self::add_offset(mv_stack);
 
     /* Scan the second outer area. */
     let mut far_newmv_count: usize = 0; // won't be used
@@ -2842,7 +2843,7 @@ impl<'a> ContextWriter<'a> {
           };
 
           let blk = &self.bc.blocks[rbo];
-          self.add_extra_mv_candidate(
+          Self::add_extra_mv_candidate(
             blk,
             ref_frames,
             mv_stack,
@@ -2947,7 +2948,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   pub fn find_mvrefs<T: Pixel>(
-    &mut self, bo: TileBlockOffset, ref_frames: [RefType; 2],
+    &self, bo: TileBlockOffset, ref_frames: [RefType; 2],
     mv_stack: &mut ArrayVec<[CandidateMV; 9]>, bsize: BlockSize,
     fi: &FrameInvariants<T>, is_compound: bool,
   ) -> usize {
@@ -3002,7 +3003,7 @@ impl<'a> ContextWriter<'a> {
     }
   }
 
-  fn get_ref_frame_ctx_b0(&mut self, bo: TileBlockOffset) -> usize {
+  fn get_ref_frame_ctx_b0(&self, bo: TileBlockOffset) -> usize {
     let ref_counts = self.bc.blocks[bo].neighbors_ref_counts;
 
     let fwd_cnt = ref_counts[LAST_FRAME.to_index()]
@@ -3017,7 +3018,7 @@ impl<'a> ContextWriter<'a> {
     ContextWriter::ref_count_ctx(fwd_cnt, bwd_cnt)
   }
 
-  fn get_pred_ctx_brfarf2_or_arf(&mut self, bo: TileBlockOffset) -> usize {
+  fn get_pred_ctx_brfarf2_or_arf(&self, bo: TileBlockOffset) -> usize {
     let ref_counts = self.bc.blocks[bo].neighbors_ref_counts;
 
     let brfarf2_count = ref_counts[BWDREF_FRAME.to_index()]
@@ -3027,7 +3028,7 @@ impl<'a> ContextWriter<'a> {
     ContextWriter::ref_count_ctx(brfarf2_count, arf_count)
   }
 
-  fn get_pred_ctx_ll2_or_l3gld(&mut self, bo: TileBlockOffset) -> usize {
+  fn get_pred_ctx_ll2_or_l3gld(&self, bo: TileBlockOffset) -> usize {
     let ref_counts = self.bc.blocks[bo].neighbors_ref_counts;
 
     let l_l2_count =
@@ -3038,7 +3039,7 @@ impl<'a> ContextWriter<'a> {
     ContextWriter::ref_count_ctx(l_l2_count, l3_gold_count)
   }
 
-  fn get_pred_ctx_last_or_last2(&mut self, bo: TileBlockOffset) -> usize {
+  fn get_pred_ctx_last_or_last2(&self, bo: TileBlockOffset) -> usize {
     let ref_counts = self.bc.blocks[bo].neighbors_ref_counts;
 
     let l_count = ref_counts[LAST_FRAME.to_index()];
@@ -3047,7 +3048,7 @@ impl<'a> ContextWriter<'a> {
     ContextWriter::ref_count_ctx(l_count, l2_count)
   }
 
-  fn get_pred_ctx_last3_or_gold(&mut self, bo: TileBlockOffset) -> usize {
+  fn get_pred_ctx_last3_or_gold(&self, bo: TileBlockOffset) -> usize {
     let ref_counts = self.bc.blocks[bo].neighbors_ref_counts;
 
     let l3_count = ref_counts[LAST3_FRAME.to_index()];
@@ -3056,7 +3057,7 @@ impl<'a> ContextWriter<'a> {
     ContextWriter::ref_count_ctx(l3_count, gold_count)
   }
 
-  fn get_pred_ctx_brf_or_arf2(&mut self, bo: TileBlockOffset) -> usize {
+  fn get_pred_ctx_brf_or_arf2(&self, bo: TileBlockOffset) -> usize {
     let ref_counts = self.bc.blocks[bo].neighbors_ref_counts;
 
     let brf_count = ref_counts[BWDREF_FRAME.to_index()];
@@ -3465,7 +3466,7 @@ impl<'a> ContextWriter<'a> {
     symbol_with_update!(self, w, skip as u32, &mut self.fc.skip_cdfs[ctx]);
   }
 
-  fn get_segment_pred(&mut self, bo: TileBlockOffset) -> (u8, u8) {
+  fn get_segment_pred(&self, bo: TileBlockOffset) -> (u8, u8) {
     let mut prev_ul = -1;
     let mut prev_u = -1;
     let mut prev_l = -1;
@@ -3507,7 +3508,7 @@ impl<'a> ContextWriter<'a> {
     (r as u8, cdf_index)
   }
 
-  fn neg_interleave(&mut self, x: i32, r: i32, max: i32) -> i32 {
+  fn neg_interleave(x: i32, r: i32, max: i32) -> i32 {
     assert!(x < max);
     if r == 0 {
       return x;
@@ -3546,7 +3547,7 @@ impl<'a> ContextWriter<'a> {
       return;
     }
     let seg_idx = self.bc.blocks[bo].segmentation_idx;
-    let coded_id = self.neg_interleave(
+    let coded_id = Self::neg_interleave(
       seg_idx as i32,
       pred as i32,
       (last_active_segid + 1) as i32,
@@ -3561,7 +3562,7 @@ impl<'a> ContextWriter<'a> {
 
   // rather than test writing and rolling back the cdf, we just count Q8 bits using the current cdf
   pub fn count_lrf_switchable(
-    &mut self, w: &dyn Writer, rs: &TileRestorationState,
+    &self, w: &dyn Writer, rs: &TileRestorationState,
     filter: RestorationFilter, pli: usize,
   ) -> u32 {
     let nsym = &self.fc.lrf_switchable_cdf.len() - 1;
@@ -3766,13 +3767,12 @@ impl<'a> ContextWriter<'a> {
     );
   }
 
-  pub fn get_txsize_entropy_ctx(&mut self, tx_size: TxSize) -> usize {
+  pub fn get_txsize_entropy_ctx(tx_size: TxSize) -> usize {
     (tx_size.sqr() as usize + tx_size.sqr_up() as usize + 1) >> 1
   }
 
   pub fn txb_init_levels(
-    &mut self, coeffs: &[i32], width: usize, height: usize,
-    levels_buf: &mut [u8],
+    &self, coeffs: &[i32], width: usize, height: usize, levels_buf: &mut [u8],
   ) {
     let mut offset = TX_PAD_TOP * (width + TX_PAD_HOR);
 
@@ -3785,25 +3785,11 @@ impl<'a> ContextWriter<'a> {
     }
   }
 
-  pub fn av1_get_coded_tx_size(&mut self, tx_size: TxSize) -> TxSize {
-    if tx_size == TX_64X64 || tx_size == TX_64X32 || tx_size == TX_32X64 {
-      return TX_32X32;
-    }
-    if tx_size == TX_16X64 {
-      return TX_16X32;
-    }
-    if tx_size == TX_64X16 {
-      return TX_32X16;
-    }
-
-    tx_size
-  }
-
-  pub fn get_txb_bwl(&mut self, tx_size: TxSize) -> usize {
+  pub fn get_txb_bwl(tx_size: TxSize) -> usize {
     av1_get_coded_tx_size(tx_size).width_log2()
   }
 
-  pub fn get_eob_pos_token(&mut self, eob: usize, extra: &mut u32) -> u32 {
+  pub fn get_eob_pos_token(eob: usize, extra: &mut u32) -> u32 {
     let t = if eob < 33 {
       eob_to_pos_small[eob] as u32
     } else {
@@ -3816,9 +3802,7 @@ impl<'a> ContextWriter<'a> {
     t
   }
 
-  pub fn get_nz_mag(
-    &mut self, levels: &[u8], bwl: usize, tx_class: TxClass,
-  ) -> usize {
+  pub fn get_nz_mag(levels: &[u8], bwl: usize, tx_class: TxClass) -> usize {
     // May version.
     // Note: AOMMIN(level, 3) is useless for decoder since level < 3.
     let mut mag = clip_max3(levels[1]); // { 0, 1 }
@@ -3842,7 +3826,6 @@ impl<'a> ContextWriter<'a> {
   }
 
   pub fn get_nz_map_ctx_from_stats(
-    &mut self,
     stats: usize,
     coeff_idx: usize, // raster order
     bwl: usize,
@@ -3887,7 +3870,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   pub fn get_nz_map_ctx(
-    &mut self, levels: &[u8], coeff_idx: usize, bwl: usize, height: usize,
+    levels: &[u8], coeff_idx: usize, bwl: usize, height: usize,
     scan_idx: usize, is_eob: bool, tx_size: TxSize, tx_class: TxClass,
   ) -> usize {
     if is_eob {
@@ -3903,20 +3886,20 @@ impl<'a> ContextWriter<'a> {
       return 3;
     }
     let padded_idx = coeff_idx + ((coeff_idx >> bwl) << TX_PAD_HOR_LOG2);
-    let stats = self.get_nz_mag(&levels[padded_idx..], bwl, tx_class);
+    let stats = Self::get_nz_mag(&levels[padded_idx..], bwl, tx_class);
 
-    self.get_nz_map_ctx_from_stats(stats, coeff_idx, bwl, tx_size, tx_class)
+    Self::get_nz_map_ctx_from_stats(stats, coeff_idx, bwl, tx_size, tx_class)
   }
 
   pub fn get_nz_map_contexts(
-    &mut self, levels: &mut [u8], scan: &[u16], eob: u16, tx_size: TxSize,
+    &self, levels: &mut [u8], scan: &[u16], eob: u16, tx_size: TxSize,
     tx_class: TxClass, coeff_contexts: &mut [i8],
   ) {
-    let bwl = self.get_txb_bwl(tx_size);
+    let bwl = Self::get_txb_bwl(tx_size);
     let height = av1_get_coded_tx_size(tx_size).height();
     for i in 0..eob {
       let pos = scan[i as usize];
-      coeff_contexts[pos as usize] = self.get_nz_map_ctx(
+      coeff_contexts[pos as usize] = Self::get_nz_map_ctx(
         levels,
         pos as usize,
         bwl,
@@ -3930,7 +3913,6 @@ impl<'a> ContextWriter<'a> {
   }
 
   pub fn get_br_ctx(
-    &mut self,
     levels: &[u8],
     c: usize, // raster order
     bwl: usize,
@@ -3981,8 +3963,8 @@ impl<'a> ContextWriter<'a> {
   }
 
   pub fn get_level_mag_with_txclass(
-    &mut self, levels: &[u8], stride: usize, row: usize, col: usize,
-    mag: &mut [usize], tx_class: TxClass,
+    levels: &[u8], stride: usize, row: usize, col: usize, mag: &mut [usize],
+    tx_class: TxClass,
   ) {
     for idx in 0..CONTEXT_MAG_POSITION_NUM {
       let ref_row =
@@ -4023,7 +4005,7 @@ impl<'a> ContextWriter<'a> {
       coeffs.iter().rposition(|&v| v != 0).map(|i| i + 1).unwrap_or(0)
     };
 
-    let txs_ctx = self.get_txsize_entropy_ctx(tx_size);
+    let txs_ctx = Self::get_txsize_entropy_ctx(tx_size);
     let txb_ctx =
       self.bc.get_txb_ctx(plane_bsize, tx_size, plane, bo, xdec, ydec);
 
@@ -4058,7 +4040,7 @@ impl<'a> ContextWriter<'a> {
 
     // Encode EOB
     let mut eob_extra = 0 as u32;
-    let eob_pt = self.get_eob_pos_token(eob, &mut eob_extra);
+    let eob_pt = Self::get_eob_pos_token(eob, &mut eob_extra);
     let eob_multi_size: usize = tx_size.area_log2() - 4;
     let eob_multi_ctx: usize = if tx_class == TX_CLASS_2D { 0 } else { 1 };
 
@@ -4153,7 +4135,7 @@ impl<'a> ContextWriter<'a> {
       &mut coeff_contexts.array,
     );
 
-    let bwl = self.get_txb_bwl(tx_size);
+    let bwl = Self::get_txb_bwl(tx_size);
 
     for c in (0..eob).rev() {
       let pos = scan[c];
@@ -4188,7 +4170,7 @@ impl<'a> ContextWriter<'a> {
         }
 
         let base_range = level - 1 - NUM_BASE_LEVELS as u16;
-        let br_ctx = self.get_br_ctx(levels, pos as usize, bwl, tx_class);
+        let br_ctx = Self::get_br_ctx(levels, pos as usize, bwl, tx_class);
         let mut idx = 0;
 
         loop {
@@ -4246,13 +4228,13 @@ impl<'a> ContextWriter<'a> {
 
     cul_level = cmp::min(COEFF_CONTEXT_MASK as u32, cul_level);
 
-    self.bc.set_dc_sign(&mut cul_level, coeffs[0]);
+    BlockContext::set_dc_sign(&mut cul_level, coeffs[0]);
 
     self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, cul_level as u8);
     true
   }
 
-  pub fn checkpoint(&mut self) -> ContextWriterCheckpoint {
+  pub fn checkpoint(&self) -> ContextWriterCheckpoint {
     ContextWriterCheckpoint { fc: *self.fc, bc: self.bc.checkpoint() }
   }
 
