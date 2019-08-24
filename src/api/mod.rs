@@ -598,25 +598,42 @@ pub struct Context<T: Pixel> {
   is_flushing: bool,
 }
 
+/// Status that can be returned by [`Context`] functions.
+///
+/// [`Context`]: struct.Context.html
 #[derive(Clone, Copy, Debug)]
 pub enum EncoderStatus {
-  /// The encoder needs more data to produce an output Packet
-  /// May be emitted by `Context::receive_packet`  when frame reordering is enabled.
+  /// The encoder needs more data to produce an output packet.
+  ///
+  /// May be emitted by [`Context::receive_packet()`] when frame reordering is
+  /// enabled.
+  ///
+  /// [`Context::receive_packet()`]: struct.Context.html#method.receive_packet
   NeedMoreData,
-  /// There are enough Frames queue
-  /// May be emitted by `Context::send_frame` when the input queue is constrained
+  /// There are enough frames in the queue.
+  ///
+  /// May be emitted by [`Context::send_frame()`] when the input queue is
+  /// constrained.
+  ///
+  /// [`Context::send_frame()`]: struct.Context.html#method.send_frame
   EnoughData,
-  /// The encoder already produced the number of frames requested
-  /// May be emitted by `Context::receive_packet` after a flush request had been processed
-  /// or the frame limit had been reached.
+  /// The encoder has already produced the number of frames requested.
+  ///
+  /// May be emitted by [`Context::receive_packet()`] after a flush request had
+  /// been processed or the frame limit had been reached.
+  ///
+  /// [`Context::receive_packet()`]: struct.Context.html#method.receive_packet
   LimitReached,
-  /// A Frame had been encoded but not emitted yet
+  /// A frame had been encoded but not emitted yet.
   Encoded,
-  /// Generic fatal error
+  /// Generic fatal error.
   Failure,
   /// A frame was encoded in the first pass of a 2-pass encode, but its stats
-  /// data was not retrieved with twopass_out(), or not enough stats data was
-  /// provided in the second pass of a 2-pass encode to encode the next frame.
+  /// data was not retrieved with [`Context::twopass_out()`], or not enough
+  /// stats data was provided in the second pass of a 2-pass encode to encode
+  /// the next frame.
+  ///
+  /// [`Context::twopass_out()`]: struct.Context.html#method.twopass_out
   NotReady,
 }
 
