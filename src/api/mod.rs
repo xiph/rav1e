@@ -588,6 +588,9 @@ pub(crate) struct ContextInner<T: Pixel> {
   next_lookahead_output_frameno: u64,
 }
 
+/// The encoder context.
+///
+/// Contains the encoding state.
 pub struct Context<T: Pixel> {
   inner: ContextInner<T>,
   config: EncoderConfig,
@@ -672,6 +675,17 @@ impl<T: Pixel> IntoFrame<T> for (Arc<Frame<T>>, Option<FrameParameters>) {
 }
 
 impl<T: Pixel> Context<T> {
+  /// Allocates and returns a new frame.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// use rav1e::prelude::*;
+  ///
+  /// let cfg = Config::default();
+  /// let ctx: Context<u8> = cfg.new_context();
+  /// let frame = ctx.new_frame();
+  /// ```
   pub fn new_frame(&self) -> Arc<Frame<T>> {
     Arc::new(Frame::new(
       self.config.width,
@@ -680,11 +694,24 @@ impl<T: Pixel> Context<T> {
     ))
   }
 
-  /// Send the information to the encoder
+  /// Sends the frame for encoding.
   ///
-  /// ``` no_run
+  /// This method adds the frame into the frame queue and runs the first passes
+  /// of the look-ahead computation.
+  ///
+  /// Passing `None` is equivalent to calling [`flush`].
+  ///
+  /// # Errors
+  ///
+  /// If this method is called with a frame after the encoder has been flushed,
+  /// the [`EncoderStatus::EnoughData`] error is returned.
+  ///
+  /// # Examples
+  ///
+  /// ```
   /// use rav1e::prelude::*;
   ///
+  /// # fn main() -> Result<(), EncoderStatus> {
   /// let cfg = Config::default();
   /// let mut ctx: Context<u8> = cfg.new_context();
   /// let f1 = ctx.new_frame();
@@ -694,17 +721,18 @@ impl<T: Pixel> Context<T> {
   /// };
   ///
   /// // Send the plain frame data
-  /// ctx.send_frame(f1);
+  /// ctx.send_frame(f1)?;
   /// // Send the data and the per-frame parameters
   /// // In this case the frame is forced to be a keyframe.
-  /// ctx.send_frame((f2, info));
+  /// ctx.send_frame((f2, info))?;
   /// // Flush the encoder, it is equivalent to a call to `flush()`
-  /// ctx.send_frame(None);
+  /// ctx.send_frame(None)?;
+  /// # Ok(())
+  /// # }
   /// ```
   ///
-  /// It could return `EncoderStatus::EnoughData` if the incoming
-  /// frame queue is full or `EncoderStatus::Failure` if the per-frame
-  /// parameters set an impossible constraint.
+  /// [`flush`]: #method.flush
+  /// [`EncoderStatus::EnoughData`]: enum.EncoderStatus.html#variant.EnoughData
   pub fn send_frame<F>(&mut self, frame: F) -> Result<(), EncoderStatus>
   where
     F: IntoFrame<T>,
@@ -725,18 +753,25 @@ impl<T: Pixel> Context<T> {
     self.inner.send_frame(frame, params)
   }
 
-  /// Retrieve the first-pass data of a two-pass encode for the frame that was
-  /// just encoded. This should be called BEFORE every call to receive_packet()
-  /// (including the very first one), even if no packet was produced by the
-  /// last call to receive_packet, if any (i.e., *EncoderStatus::Encoded* was
-  /// returned). It needs to be called once more after
-  /// *EncoderStatus::LimitReached* is returned, to retrieve the header that
+  /// Returns the first-pass data of a two-pass encode for the frame that was
+  /// just encoded.
+  ///
+  /// This should be called BEFORE every call to [`receive_packet`] (including
+  /// the very first one), even if no packet was produced by the last call to
+  /// [`receive_packet`], if any (i.e., [`EncoderStatus::Encoded`] was
+  /// returned).  It needs to be called once more after
+  /// [`EncoderStatus::LimitReached`] is returned, to retrieve the header that
   /// should be written to the front of the stats file (overwriting the
   /// placeholder header that was emitted at the start of encoding).
   ///
-  /// It is still safe to call this function when receive_packet() returns any
-  /// other error. It will return *None* instead of returning a duplicate copy
-  /// of the previous frame's data.
+  /// It is still safe to call this function when [`receive_packet`] returns
+  /// any other error. It will return `None` instead of returning a duplicate
+  /// copy of the previous frame's data.
+  ///
+  /// [`receive_packet`]: #method.receive_packet
+  /// [`EncoderStatus::Encoded`]: enum.EncoderStatus.html#variant.Encoded
+  /// [`EncoderStatus::LimitReached`]:
+  /// enum.EncoderStatus.html#variant.LimitReached
   pub fn twopass_out(&mut self) -> Option<&[u8]> {
     let params = self
       .inner
@@ -745,27 +780,130 @@ impl<T: Pixel> Context<T> {
     self.inner.rc_state.twopass_out(params)
   }
 
-  /// Ask how many bytes of the stats file are needed before the next frame
-  /// of the second pass in a two-pass encode can be encoded. This is a lower
-  /// bound (more might be required), but if 0 is returned, then encoding can
-  /// proceed. This is just a hint to the application, and does not need to
-  /// be called for encoding the second pass to work, so long as the
-  /// application continues to provide more data to twopass_in() in a loop
-  /// until twopass_in() returns 0.
+  /// Returns the number of bytes of the stats file needed before the next
+  /// frame of the second pass in a two-pass encode can be encoded.
+  ///
+  /// This is a lower bound (more might be required), but if `0` is returned,
+  /// then encoding can proceed. This is just a hint to the application, and
+  /// does not need to be called for encoding the second pass to work, so long
+  /// as the application continues to provide more data to [`twopass_in`] in a
+  /// loop until [`twopass_in`] returns `0`.
+  ///
+  /// [`twopass_in`]: #method.twopass_in
   pub fn twopass_bytes_needed(&mut self) -> usize {
     self.inner.rc_state.twopass_in(None).unwrap_or(0)
   }
 
-  /// Provide stats data produced in the first pass of a two-pass encode to the
-  /// second pass. On success this returns the number of bytes of that data
-  /// which were consumed. When encoding the second pass of a two-pass encode,
-  /// this should be called repeatedly in a loop before every call to
-  /// receive_packet() (including the very first one) until no bytes are
-  /// consumed, or until twopass_bytes_needed() returns 0.
+  /// Provides the stats data produced in the first pass of a two-pass encode
+  /// to the second pass.
+  ///
+  /// On success this returns the number of bytes of the data which were
+  /// consumed. When encoding the second pass of a two-pass encode, this should
+  /// be called repeatedly in a loop before every call to [`receive_packet`]
+  /// (including the very first one) until no bytes are consumed, or until
+  /// [`twopass_bytes_needed`] returns `0`.
+  ///
+  /// [`receive_packet`]: #method.receive_packet
+  /// [`twopass_bytes_needed`]: #method.twopass_bytes_needed
   pub fn twopass_in(&mut self, buf: &[u8]) -> Result<usize, EncoderStatus> {
     self.inner.rc_state.twopass_in(Some(buf)).or(Err(EncoderStatus::Failure))
   }
 
+  /// Encodes the next frame and returns the encoded data.
+  ///
+  /// This method is where the main encoding work is done.
+  ///
+  /// # Examples
+  ///
+  /// Encoding a single frame:
+  ///
+  /// ```
+  /// use rav1e::prelude::*;
+  ///
+  /// # fn main() -> Result<(), EncoderStatus> {
+  /// let cfg = Config::default();
+  /// let mut ctx: Context<u8> = cfg.new_context();
+  /// let frame = ctx.new_frame();
+  ///
+  /// ctx.send_frame(frame)?;
+  /// ctx.flush();
+  ///
+  /// loop {
+  ///     match ctx.receive_packet() {
+  ///         Ok(packet) => { /* Mux the packet. */ },
+  ///         Err(EncoderStatus::Encoded) => (),
+  ///         Err(EncoderStatus::LimitReached) => break,
+  ///         Err(err) => return Err(err),
+  ///     }
+  /// }
+  /// # Ok(())
+  /// # }
+  /// ```
+  ///
+  /// Encoding a sequence of frames:
+  ///
+  /// ```
+  /// use std::sync::Arc;
+  /// use rav1e::prelude::*;
+  ///
+  /// fn encode_frames(
+  ///     ctx: &mut Context<u8>,
+  ///     mut frames: impl Iterator<Item=Arc<Frame<u8>>>
+  /// ) -> Result<(), EncoderStatus> {
+  ///     // This is a slightly contrived example, intended to showcase the
+  ///     // various statuses that can be returned from receive_packet().
+  ///     // Assume that, for example, there are a lot of frames in the
+  ///     // iterator, which are produced lazily, so you don't want to send
+  ///     // them all in at once as to not exhaust the memory.
+  ///     loop {
+  ///         match ctx.receive_packet() {
+  ///             Ok(packet) => { /* Mux the packet. */ },
+  ///             Err(EncoderStatus::Encoded) => {
+  ///                 // A frame was encoded without emitting a packet. This is
+  ///                 // normal, just proceed as usual.
+  ///             },
+  ///             Err(EncoderStatus::LimitReached) => {
+  ///                 // All frames have been encoded. Time to break out of the
+  ///                 // loop.
+  ///                 break;
+  ///             },
+  ///             Err(EncoderStatus::NeedMoreData) => {
+  ///                 // The encoder has requested additional frames. Push the
+  ///                 // next frame in, or flush the encoder if there are no
+  ///                 // frames left (on None).
+  ///                 ctx.send_frame(frames.next())?;
+  ///             },
+  ///             Err(EncoderStatus::EnoughData) => {
+  ///                 // Since we aren't trying to push frames after flushing,
+  ///                 // this should never happen in this example.
+  ///                 unreachable!();
+  ///             },
+  ///             Err(EncoderStatus::NotReady) => {
+  ///                 // We're not doing two-pass encoding, so this can never
+  ///                 // occur.
+  ///                 unreachable!();
+  ///             },
+  ///             Err(EncoderStatus::Failure) => {
+  ///                 return Err(EncoderStatus::Failure);
+  ///             },
+  ///         }
+  ///     }
+  ///
+  ///     Ok(())
+  /// }
+  /// # fn main() -> Result<(), EncoderStatus> {
+  /// #     let mut cfg = Config::default();
+  /// #     // So it runs faster.
+  /// #     cfg.enc.width = 16;
+  /// #     cfg.enc.height = 16;
+  /// #     let mut ctx: Context<u8> = cfg.new_context();
+  /// #
+  /// #     let frames = vec![ctx.new_frame(); 4].into_iter();
+  /// #     encode_frames(&mut ctx, frames);
+  /// #
+  /// #     Ok(())
+  /// # }
+  /// ```
   pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
     let inner = &mut self.inner;
     let pool = &mut self.pool;
@@ -773,10 +911,22 @@ impl<T: Pixel> Context<T> {
     pool.install(|| inner.receive_packet())
   }
 
+  /// Flushes the encoder.
+  ///
+  /// Flushing signals the end of the video. After the encoder has been
+  /// flushed, no additional frames are accepted.
   pub fn flush(&mut self) {
     self.send_frame(None).unwrap();
   }
 
+  /// Produces a sequence header matching the current encoding context.
+  ///
+  /// Its format is compatible with the AV1 Matroska and ISOBMFF specification.
+  /// Note that the returned header does not include any config OBUs which are
+  /// required for some uses. See [the specification].
+  ///
+  /// [the specification]:
+  /// https://aomediacodec.github.io/av1-isobmff/#av1codecconfigurationbox-section
   pub fn container_sequence_header(&self) -> Vec<u8> {
     fn sequence_header_inner(seq: &Sequence) -> io::Result<Vec<u8>> {
       let mut buf = Vec::new();
