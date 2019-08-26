@@ -3599,8 +3599,7 @@ impl<'a> ContextWriter<'a> {
 
   pub fn write_lrf<T: Pixel>(
     &mut self, w: &mut dyn Writer, fi: &FrameInvariants<T>,
-    rs: &mut TileRestorationStateMut, sbo: TileSuperBlockOffset,
-    pli: usize,
+    rs: &mut TileRestorationStateMut, sbo: TileSuperBlockOffset, pli: usize,
   ) {
     if !fi.allow_intrabc {
       // TODO: also disallow if lossless
@@ -3615,12 +3614,7 @@ impl<'a> ContextWriter<'a> {
               symbol_with_update!(self, w, 0, &mut self.fc.lrf_sgrproj_cdf);
             }
             RESTORE_SWITCHABLE => {
-              symbol_with_update!(
-                self,
-                w,
-                0,
-                &mut self.fc.lrf_switchable_cdf
-              );
+              symbol_with_update!(self, w, 0, &mut self.fc.lrf_switchable_cdf);
             }
             RESTORE_NONE => {}
             _ => unreachable!(),
@@ -3628,12 +3622,7 @@ impl<'a> ContextWriter<'a> {
           RestorationFilter::Sgrproj { set, xqd } => {
             match rp.rp_cfg.lrf_type {
               RESTORE_SGRPROJ => {
-                symbol_with_update!(
-                  self,
-                  w,
-                  1,
-                  &mut self.fc.lrf_sgrproj_cdf
-                );
+                symbol_with_update!(self, w, 1, &mut self.fc.lrf_sgrproj_cdf);
               }
               RESTORE_SWITCHABLE => {
                 // Does *not* write 'RESTORE_SGRPROJ'
@@ -3655,7 +3644,7 @@ impl<'a> ContextWriter<'a> {
                 w.write_signed_subexp_with_ref(
                   xqd[i] as i32,
                   min,
-                    max + 1,
+                  max + 1,
                   SGRPROJ_PRJ_SUBEXP_K,
                   rp.sgrproj_ref[i] as i32,
                 );
@@ -3701,7 +3690,7 @@ impl<'a> ContextWriter<'a> {
                   coeffs[pass][i] as i32,
                   min,
                   max + 1,
-                    (i + 1) as u8,
+                  (i + 1) as u8,
                   rp.wiener_ref[pass][i] as i32,
                 );
                 rp.wiener_ref[pass][i] = coeffs[pass][i];

@@ -8,8 +8,8 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::context::*;
-use crate::lrf::*;
 use crate::encoder::FrameInvariants;
+use crate::lrf::*;
 use crate::util::Pixel;
 
 use std::marker::PhantomData;
@@ -355,8 +355,7 @@ macro_rules! tile_restoration_state_common {
 
       #[inline(always)]
       pub fn has_restoration_unit(&self, sbo: TileSuperBlockOffset, pli: usize) -> bool {
-        let is_some = self.planes[pli].restoration_unit(sbo).is_some();
-        is_some
+        self.planes[pli].restoration_unit(sbo).is_some()
       }
     }
   }
