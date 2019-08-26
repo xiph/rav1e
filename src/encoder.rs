@@ -532,6 +532,8 @@ pub struct FrameInvariants<T: Pixel> {
   /// indicating how much future frames depend on the block (for example, via
   /// inter-prediction).
   pub block_importances: Box<[f32]>,
+
+  pub mc: crate::mc::McFunctions<T>,
 }
 
 pub(crate) fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
@@ -684,7 +686,6 @@ impl<T: Pixel> FrameInvariants<T> {
       idx_in_group_output: 0,
       pyramid_level: 0,
       enable_early_exit: true,
-      config,
       tx_mode_select: false,
       default_filter: FilterMode::REGULAR,
       invalid: false,
@@ -701,6 +702,8 @@ impl<T: Pixel> FrameInvariants<T> {
       lookahead_intra_costs: vec![0; w_in_imp_b * h_in_imp_b]
         .into_boxed_slice(),
       block_importances: vec![0.; w_in_imp_b * h_in_imp_b].into_boxed_slice(),
+      mc: crate::mc::McFunctions::new(config.cpu_feature_level),
+      config,
     }
   }
 

@@ -9,5 +9,5 @@
 
 #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
 pub mod cdef;
-#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-pub mod mc;
+// #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
+//pub mod mc;

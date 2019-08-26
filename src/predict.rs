@@ -340,7 +340,7 @@ impl PredictionMode {
       {
         let (row_frac, col_frac, src) =
           get_params(&rec.frame.planes[p], frame_po, mvs[0]);
-        put_8tap(
+        (fi.mc.put_8tap)(
           dst,
           src,
           width,
@@ -350,7 +350,6 @@ impl PredictionMode {
           mode,
           mode,
           fi.sequence.bit_depth,
-          fi.config.cpu_feature_level,
         );
       }
     } else {
@@ -362,7 +361,7 @@ impl PredictionMode {
         {
           let (row_frac, col_frac, src) =
             get_params(&rec.frame.planes[p], frame_po, mvs[i]);
-          prep_8tap(
+          (fi.mc.prep_8tap)(
             &mut tmp[i].array,
             src,
             width,
@@ -372,18 +371,16 @@ impl PredictionMode {
             mode,
             mode,
             fi.sequence.bit_depth,
-            fi.config.cpu_feature_level,
           );
         }
       }
-      mc_avg(
+      (fi.mc.mc_avg)(
         dst,
         &tmp[0].array,
         &tmp[1].array,
         width,
         height,
         fi.sequence.bit_depth,
-        fi.config.cpu_feature_level,
       );
     }
   }

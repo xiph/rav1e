@@ -7,10 +7,10 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-#[cfg(any(not(target_arch = "x86_64"), not(feature = "nasm")))]
-pub use self::native::*;
-#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-pub use crate::asm::mc::*;
+//#[cfg(any(not(target_arch = "x86_64"), not(feature = "nasm")))]
+//pub use self::native::*;
+// #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
+// pub use crate::asm::mc::*;
 
 use crate::cpu_features::CpuFeatureLevel;
 use crate::frame::*;
@@ -204,7 +204,7 @@ pub(crate) mod native {
   pub fn put_8tap<T: Pixel>(
     dst: &mut PlaneRegionMut<'_, T>, src: PlaneSlice<'_, T>, width: usize,
     height: usize, col_frac: i32, row_frac: i32, mode_x: FilterMode,
-    mode_y: FilterMode, bit_depth: usize, _cpu: CpuFeatureLevel,
+    mode_y: FilterMode, bit_depth: usize,
   ) {
     let ref_stride = src.plane.cfg.stride;
     let y_filter = get_filter(mode_y, row_frac, height);
@@ -300,7 +300,7 @@ pub(crate) mod native {
   pub fn prep_8tap<T: Pixel>(
     tmp: &mut [i16], src: PlaneSlice<'_, T>, width: usize, height: usize,
     col_frac: i32, row_frac: i32, mode_x: FilterMode, mode_y: FilterMode,
-    bit_depth: usize, _cpu: CpuFeatureLevel,
+    bit_depth: usize,
   ) {
     let ref_stride = src.plane.cfg.stride;
     let y_filter = get_filter(mode_y, row_frac, height);
@@ -378,7 +378,7 @@ pub(crate) mod native {
 
   pub fn mc_avg<T: Pixel>(
     dst: &mut PlaneRegionMut<'_, T>, tmp1: &[i16], tmp2: &[i16], width: usize,
-    height: usize, bit_depth: usize, _cpu: CpuFeatureLevel,
+    height: usize, bit_depth: usize,
   ) {
     let max_sample_val = ((1 << bit_depth) - 1) as i32;
     let intermediate_bits = 4 - if bit_depth == 12 { 2 } else { 0 };
@@ -395,5 +395,71 @@ pub(crate) mod native {
         );
       }
     }
+  }
+}
+
+type McAvgFn<T> = fn(
+  dst: &mut PlaneRegionMut<'_, T>,
+  tmp1: &[i16],
+  tmp2: &[i16],
+  width: usize,
+  height: usize,
+  bit_depth: usize,
+);
+
+type McPrep8TapFn<T> = fn(
+  tmp: &mut [i16],
+  src: PlaneSlice<'_, T>,
+  width: usize,
+  height: usize,
+  col_frac: i32,
+  row_frac: i32,
+  mode_x: FilterMode,
+  mode_y: FilterMode,
+  bit_depth: usize,
+);
+
+type McPut8TapFn<T> = fn(
+  dst: &mut PlaneRegionMut<'_, T>,
+  src: PlaneSlice<'_, T>,
+  width: usize,
+  height: usize,
+  col_frac: i32,
+  row_frac: i32,
+  mode_x: FilterMode,
+  mode_y: FilterMode,
+  bit_depth: usize,
+);
+
+#[derive(Clone)]
+pub struct McFunctions<T: Pixel> {
+  pub put_8tap: McPut8TapFn<T>,
+  pub prep_8tap: McPrep8TapFn<T>,
+  pub mc_avg: McAvgFn<T>,
+}
+
+impl<T: Pixel> std::fmt::Debug for McFunctions<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("McFunctions")
+          .field("put_8tap", &format_args!("{:p}", &self.put_8tap))
+          .field("prep_8tap", &format_args!("{:p}", &self.prep_8tap))
+          .field("mc_avg", &format_args!("{:p}", &self.mc_avg))
+          .finish()
+    }
+}
+
+impl<T: Pixel> Default for McFunctions<T> {
+  fn default() -> McFunctions<T> {
+    McFunctions {
+      put_8tap: self::native::put_8tap,
+      prep_8tap: self::native::prep_8tap,
+      mc_avg: self::native::mc_avg,
+    }
+  }
+}
+
+impl<T: Pixel> McFunctions<T> {
+  pub fn new(_cpu: CpuFeatureLevel) -> Self {
+    McFunctions::default()
   }
 }
