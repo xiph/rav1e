@@ -722,12 +722,12 @@ impl<T: Pixel> Context<T> {
   /// let frame = ctx.new_frame();
   /// ```
   #[inline]
-  pub fn new_frame(&self) -> Arc<Frame<T>> {
-    Arc::new(Frame::new(
+  pub fn new_frame(&self) -> Frame<T> {
+    Frame::new(
       self.config.width,
       self.config.height,
       self.config.chroma_sampling,
-    ))
+    )
   }
 
   /// Sends the frame for encoding.
@@ -888,7 +888,7 @@ impl<T: Pixel> Context<T> {
   ///
   /// fn encode_frames(
   ///     ctx: &mut Context<u8>,
-  ///     mut frames: impl Iterator<Item=Arc<Frame<u8>>>
+  ///     mut frames: impl Iterator<Item=Frame<u8>>
   /// ) -> Result<(), EncoderStatus> {
   ///     // This is a slightly contrived example, intended to showcase the
   ///     // various statuses that can be returned from receive_packet().
@@ -911,7 +911,7 @@ impl<T: Pixel> Context<T> {
   ///                 // The encoder has requested additional frames. Push the
   ///                 // next frame in, or flush the encoder if there are no
   ///                 // frames left (on None).
-  ///                 ctx.send_frame(frames.next())?;
+  ///                 ctx.send_frame(frames.next().map(Arc::new))?;
   ///             },
   ///             Err(EncoderStatus::EnoughData) => {
   ///                 // Since we aren't trying to push frames after flushing,
@@ -2367,7 +2367,7 @@ mod test {
   }
 
   fn send_test_frame<T: Pixel>(ctx: &mut Context<T>, content_value: T) {
-    let mut input = Arc::try_unwrap(ctx.new_frame()).unwrap();
+    let mut input = ctx.new_frame();
     fill_frame_const(&mut input, content_value);
     let _ = ctx.send_frame(Arc::new(input));
   }

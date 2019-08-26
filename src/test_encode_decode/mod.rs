@@ -15,7 +15,6 @@ use interpolate_name::interpolate_test;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use std::collections::VecDeque;
-use std::sync::Arc;
 
 #[cfg(all(test, feature = "decode_test"))]
 mod aom;
@@ -44,9 +43,9 @@ pub(crate) fn read_frame_batch<T: Pixel>(
 ) {
   for _ in 0..limit {
     let mut input = ctx.new_frame();
-    fill_frame(ra, Arc::get_mut(&mut input).unwrap());
+    fill_frame(ra, &mut input);
 
-    let _ = ctx.send_frame(Some(input));
+    let _ = ctx.send_frame(input);
   }
 
   ctx.flush();
