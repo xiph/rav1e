@@ -59,6 +59,7 @@ mod x86 {
 
 #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
 mod native {
+  #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd)]
   pub enum CpuFeatureLevel {
     NATIVE,
   }
