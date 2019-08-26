@@ -1822,6 +1822,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                           &lrf_input.planes[pli].slice(loop_po),
                           &lrf_input.planes[pli].slice(loop_po),
                           &mut lrf_output.planes[pli].mut_slice(loop_po),
+                          true,
                         );
                         sgrproj_stripe_filter(
                           set,
@@ -1835,6 +1836,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                           &lrf_input.planes[pli].slice(loop_po2),
                           &lrf_input.planes[pli].slice(loop_po2),
                           &mut lrf_output.planes[pli].mut_slice(loop_po2),
+                          true,
                         );
                       } else {
                         sgrproj_stripe_filter(
@@ -1849,6 +1851,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                           &lrf_input.planes[pli].slice(loop_po),
                           &lrf_input.planes[pli].slice(loop_po),
                           &mut lrf_output.planes[pli].mut_slice(loop_po),
+                          true,
                         );
                       }
                     }
@@ -1981,6 +1984,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                   &lrf_in_plane.slice(loop_po),
                   unit_width,
                   unit_height,
+                  set == 0,
                 );
                 let current_lrf =
                   RestorationFilter::Sgrproj { set, xqd: [xqd0, xqd1] };
@@ -2003,6 +2007,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                       &lrf_input.planes[pli].slice(stripe_po),
                       &lrf_input.planes[pli].slice(stripe_po),
                       &mut lrf_output.planes[pli].mut_slice(stripe_po),
+                      set == 0,
                     );
                   }
                 }

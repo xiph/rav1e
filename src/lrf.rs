@@ -580,6 +580,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
   integral_image_buffer: &mut IntegralImageBuffer, crop_w: usize,
   crop_h: usize, stripe_w: usize, stripe_h: usize, cdeffed: &PlaneSlice<T>,
   deblocked: &PlaneSlice<T>, out: &mut PlaneMutSlice<T>,
+  compute_integral_img: bool,
 ) {
   assert!(stripe_h <= 64);
   assert!(stripe_w <= STRIPE_FILTER_WIDTH_MAX);
@@ -604,15 +605,9 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
 
   let s_r2: u32 = SGRPROJ_PARAMS_S[set as usize][0];
   let s_r1: u32 = SGRPROJ_PARAMS_S[set as usize][1];
+  let max_r: usize = 2;
 
-  let max_r: usize = if s_r2 > 0 {
-    2
-  } else if s_r1 > 0 {
-    1
-  } else {
-    0
-  };
-  {
+  if compute_integral_img {
     // Number of elements outside the stripe
     let left_w = max_r + 2;
     let right_w = max_r + 1;
@@ -795,6 +790,7 @@ pub fn sgrproj_solve<T: Pixel>(
   set: u8, fi: &FrameInvariants<T>,
   integral_image_buffer: &mut IntegralImageBuffer, input: &PlaneSlice<T>,
   cdeffed: &PlaneSlice<T>, cdef_w: usize, cdef_h: usize,
+  compute_integral_img: bool,
 ) -> (i8, i8) {
   let integral_image = &mut integral_image_buffer.integral_image;
   let sq_integral_image = &mut integral_image_buffer.sq_integral_image;
@@ -817,15 +813,9 @@ pub fn sgrproj_solve<T: Pixel>(
 
   let mut h: [[f64; 2]; 2] = [[0., 0.], [0., 0.]];
   let mut c: [f64; 2] = [0., 0.];
+  let max_r: usize = 2;
 
-  let max_r = if s_r2 > 0 {
-    2
-  } else if s_r1 > 0 {
-    1
-  } else {
-    0
-  };
-  {
+  if compute_integral_img {
     let mut rows_iter = VertPaddedIter::new(
       cdeffed,
       cdeffed,
@@ -1392,6 +1382,7 @@ impl RestorationState {
                   .slice(PlaneOffset { x: x as isize, y: stripe_start_y }),
                 &mut out.planes[pli]
                   .mut_slice(PlaneOffset { x: x as isize, y: stripe_start_y }),
+                true,
               );
             }
             RestorationFilter::None => {
