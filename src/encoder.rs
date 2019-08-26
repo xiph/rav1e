@@ -40,11 +40,11 @@ use arrayvec::*;
 use bincode::{deserialize, serialize};
 use bitstream_io::{BigEndian, BitWriter};
 use rayon::iter::*;
+use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::sync::Arc;
 use std::{fmt, io, mem};
-use std::collections::VecDeque;
 
 pub static TEMPORAL_DELIMITER: [u8; 2] = [0x12, 0x00];
 
@@ -3139,23 +3139,21 @@ pub struct SBSQueueEntry {
   pub lru_index: [i32; PLANES],
   pub cdef_coded: bool,
   pub w_pre_cdef: WriterBase<WriterRecorder>,
-  pub w_post_cdef: WriterBase<WriterRecorder>
+  pub w_post_cdef: WriterBase<WriterRecorder>,
 }
 
 fn encode_tile<'a, T: Pixel>(
-  fi: &FrameInvariants<T>,
-  ts: &mut TileStateMut<'_, T>,
-  fc: &'a mut CDFContext,
-  blocks: &'a mut TileBlocksMut<'a>,
+  fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
+  fc: &'a mut CDFContext, blocks: &'a mut TileBlocksMut<'a>,
 ) -> Vec<u8> {
   let mut w = WriterEncoder::new();
 
   let bc = BlockContext::new(blocks);
   let mut cw = ContextWriter::new(fc, bc);
   let mut sbs_q: VecDeque<SBSQueueEntry> = VecDeque::new();
-  let mut last_lru_ready = [-1;3];
-  let mut last_lru_rdoed = [-1;3];
-  let mut last_lru_coded = [-1;3];
+  let mut last_lru_ready = [-1; 3];
+  let mut last_lru_rdoed = [-1; 3];
+  let mut last_lru_coded = [-1; 3];
 
   let tile_pmvs = build_coarse_pmvs(fi, ts);
 
@@ -3169,8 +3167,8 @@ fn encode_tile<'a, T: Pixel>(
         sbo: tile_sbo,
         lru_index: [-1; PLANES],
         cdef_coded: false,
-        w_pre_cdef:  WriterRecorder::new(),
-        w_post_cdef:  WriterRecorder::new()
+        w_pre_cdef: WriterRecorder::new(),
+        w_post_cdef: WriterRecorder::new(),
       };
 
       let tile_bo = tile_sbo.block_offset(0, 0);
@@ -3212,9 +3210,12 @@ fn encode_tile<'a, T: Pixel>(
         // queue our superblock for when the LRU is complete
         sbs_qe.cdef_coded = cw.bc.cdef_coded;
         for pli in 0..PLANES {
-          let lru_index = ts.restoration.planes[pli].restoration_unit_countable(tile_sbo) as i32;
+          let lru_index = ts.restoration.planes[pli]
+            .restoration_unit_countable(tile_sbo)
+            as i32;
           sbs_qe.lru_index[pli] = lru_index;
-          if ts.restoration.planes[pli].restoration_unit_last_sb(fi, tile_sbo) {
+          if ts.restoration.planes[pli].restoration_unit_last_sb(fi, tile_sbo)
+          {
             last_lru_ready[pli] = lru_index;
             check_queue = true;
           }
@@ -3223,7 +3224,7 @@ fn encode_tile<'a, T: Pixel>(
 
         // Walk queue from the head, see if anything is ready for RDO and flush
         while check_queue {
-          if let Some(qe) = sbs_q.front_mut(){
+          if let Some(qe) = sbs_q.front_mut() {
             for pli in 0..PLANES {
               if qe.lru_index[pli] > last_lru_ready[pli] {
                 check_queue = false;
