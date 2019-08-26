@@ -712,9 +712,12 @@ impl<T: Pixel> Context<T> {
   /// ```
   /// use rav1e::prelude::*;
   ///
+  /// # fn main() -> Result<(), EncoderStatus> {
   /// let cfg = Config::default();
-  /// let ctx: Context<u8> = cfg.new_context();
+  /// let ctx: Context<u8> = cfg.new_context()?;
   /// let frame = ctx.new_frame();
+  /// # Ok(())
+  /// # }
   /// ```
   pub fn new_frame(&self) -> Arc<Frame<T>> {
     Arc::new(Frame::new(
@@ -852,7 +855,7 @@ impl<T: Pixel> Context<T> {
   ///
   /// # fn main() -> Result<(), EncoderStatus> {
   /// let cfg = Config::default();
-  /// let mut ctx: Context<u8> = cfg.new_context();
+  /// let mut ctx: Context<u8> = cfg.new_context()?;
   /// let frame = ctx.new_frame();
   ///
   /// ctx.send_frame(frame)?;
@@ -926,7 +929,7 @@ impl<T: Pixel> Context<T> {
   /// #     // So it runs faster.
   /// #     cfg.enc.width = 16;
   /// #     cfg.enc.height = 16;
-  /// #     let mut ctx: Context<u8> = cfg.new_context();
+  /// #     let mut ctx: Context<u8> = cfg.new_context()?;
   /// #
   /// #     let frames = vec![ctx.new_frame(); 4].into_iter();
   /// #     encode_frames(&mut ctx, frames);
