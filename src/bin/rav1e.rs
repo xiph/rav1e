@@ -16,9 +16,11 @@ mod common;
 mod decoder;
 mod error;
 mod muxer;
+mod stats;
 
 use crate::common::*;
 use crate::error::*;
+use crate::stats::*;
 use rav1e::prelude::*;
 
 use crate::decoder::Decoder;
