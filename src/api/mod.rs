@@ -719,6 +719,7 @@ impl<T: Pixel> Context<T> {
   /// # Ok(())
   /// # }
   /// ```
+  #[inline]
   pub fn new_frame(&self) -> Arc<Frame<T>> {
     Arc::new(Frame::new(
       self.config.width,
@@ -766,6 +767,7 @@ impl<T: Pixel> Context<T> {
   ///
   /// [`flush`]: #method.flush
   /// [`EncoderStatus::EnoughData`]: enum.EncoderStatus.html#variant.EnoughData
+  #[inline]
   pub fn send_frame<F>(&mut self, frame: F) -> Result<(), EncoderStatus>
   where
     F: IntoFrame<T>,
@@ -805,6 +807,7 @@ impl<T: Pixel> Context<T> {
   /// [`EncoderStatus::Encoded`]: enum.EncoderStatus.html#variant.Encoded
   /// [`EncoderStatus::LimitReached`]:
   /// enum.EncoderStatus.html#variant.LimitReached
+  #[inline]
   pub fn twopass_out(&mut self) -> Option<&[u8]> {
     let params = self
       .inner
@@ -823,6 +826,7 @@ impl<T: Pixel> Context<T> {
   /// loop until [`twopass_in`] returns `0`.
   ///
   /// [`twopass_in`]: #method.twopass_in
+  #[inline]
   pub fn twopass_bytes_needed(&mut self) -> usize {
     self.inner.rc_state.twopass_in(None).unwrap_or(0)
   }
@@ -838,6 +842,7 @@ impl<T: Pixel> Context<T> {
   ///
   /// [`receive_packet`]: #method.receive_packet
   /// [`twopass_bytes_needed`]: #method.twopass_bytes_needed
+  #[inline]
   pub fn twopass_in(&mut self, buf: &[u8]) -> Result<usize, EncoderStatus> {
     self.inner.rc_state.twopass_in(Some(buf)).or(Err(EncoderStatus::Failure))
   }
@@ -937,6 +942,7 @@ impl<T: Pixel> Context<T> {
   /// #     Ok(())
   /// # }
   /// ```
+  #[inline]
   pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
     let inner = &mut self.inner;
     let pool = &mut self.pool;
@@ -948,6 +954,7 @@ impl<T: Pixel> Context<T> {
   ///
   /// Flushing signals the end of the video. After the encoder has been
   /// flushed, no additional frames are accepted.
+  #[inline]
   pub fn flush(&mut self) {
     self.send_frame(None).unwrap();
   }
@@ -960,6 +967,7 @@ impl<T: Pixel> Context<T> {
   ///
   /// [the specification]:
   /// https://aomediacodec.github.io/av1-isobmff/#av1codecconfigurationbox-section
+  #[inline]
   pub fn container_sequence_header(&self) -> Vec<u8> {
     fn sequence_header_inner(seq: &Sequence) -> io::Result<Vec<u8>> {
       let mut buf = Vec::new();
