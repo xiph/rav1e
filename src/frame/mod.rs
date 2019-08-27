@@ -41,12 +41,17 @@ pub struct FrameParameters {
   pub frame_type_override: FrameTypeOverride,
 }
 
+/// One video frame.
 #[derive(Debug, Clone)]
 pub struct Frame<T: Pixel> {
+  /// Planes constituting the frame.
   pub planes: [Plane<T>; 3],
 }
 
 impl<T: Pixel> Frame<T> {
+  /// Creates a new frame with the given parameters.
+  ///
+  /// Allocates data for the planes.
   pub fn new(
     width: usize, height: usize, chroma_sampling: ChromaSampling,
   ) -> Self {
