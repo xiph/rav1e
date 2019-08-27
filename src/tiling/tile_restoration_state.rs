@@ -202,8 +202,8 @@ macro_rules! tile_restoration_plane_common {
       }
 
       pub fn restoration_unit_countable(&self, sbo: TileSuperBlockOffset) -> usize {
-        if let Some((x,y)) = self.restoration_unit_index(sbo) {
-          y*self.units.cols+x
+        if let Some((x, y)) = self.restoration_unit_index(sbo) {
+          y * self.units.cols + x
         } else {
           unreachable!()
         }
@@ -211,8 +211,11 @@ macro_rules! tile_restoration_plane_common {
 
       // Is this the last sb (in scan order) in the restoration unit?
       // Stretch makes this a bit annoying to compute.
-      pub fn restoration_unit_last_sb<T: Pixel>(&self, fi: &FrameInvariants<T>,
-                                            sbo: TileSuperBlockOffset) -> bool {
+      pub fn restoration_unit_last_sb<T: Pixel>(
+        &self,
+        fi: &FrameInvariants<T>,
+        sbo: TileSuperBlockOffset,
+      ) -> bool {
         // there is 1 restoration unit for (1 << sb_shift) super-blocks
         let mask = (1 << self.rp_cfg.sb_shift) - 1;
         // is this a stretch block?
@@ -335,7 +338,7 @@ macro_rules! tile_restoration_state_common {
         let units_x = sbo.0.x >> sb_shift;
         let units_y = sbo.0.y >> sb_shift;
         let units_cols = sb_width + (1 << sb_shift) - 1 >> sb_shift;
-        let units_rows = sb_height + (1<< sb_shift) - 1 >> sb_shift;
+        let units_rows = sb_height + (1 << sb_shift) - 1 >> sb_shift;
 
         let FrameRestorationUnits { cols: rs_cols, rows: rs_rows, .. } = rs.planes[pli].units;
         // +1 because the last super-block may use the "stretched" restoration unit
