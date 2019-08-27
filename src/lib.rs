@@ -79,10 +79,7 @@ pub mod data {
   pub use crate::util::{CastFromPrimitive, Pixel};
 }
 
-/// Color model information
-pub mod color {
-  pub use crate::api::color::*;
-}
+pub use crate::api::color;
 
 /// Encoder configuration and settings
 pub mod config {
