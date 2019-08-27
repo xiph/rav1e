@@ -36,15 +36,15 @@ enum FrameInternal {
   U16(Arc<rav1e::Frame<u16>>),
 }
 
-impl From<Arc<rav1e::Frame<u8>>> for FrameInternal {
-  fn from(f: Arc<rav1e::Frame<u8>>) -> FrameInternal {
-    FrameInternal::U8(f)
+impl From<rav1e::Frame<u8>> for FrameInternal {
+  fn from(f: rav1e::Frame<u8>) -> FrameInternal {
+    FrameInternal::U8(Arc::new(f))
   }
 }
 
-impl From<Arc<rav1e::Frame<u16>>> for FrameInternal {
-  fn from(f: Arc<rav1e::Frame<u16>>) -> FrameInternal {
-    FrameInternal::U16(f)
+impl From<rav1e::Frame<u16>> for FrameInternal {
+  fn from(f: rav1e::Frame<u16>) -> FrameInternal {
+    FrameInternal::U16(Arc::new(f))
   }
 }
 
@@ -499,16 +499,13 @@ pub unsafe extern fn rav1e_context_new(cfg: *const Config) -> *mut Context {
   let cfg = &(*cfg).cfg;
   let enc = &cfg.enc;
 
-  let ctx_maybe = Result::<Context> {
-    ctx: match enc.bit_depth {
-      8 => EncContext::U8(cfg.new_context()),
-      _ => EncContext::U16(cfg.new_context()),
-    },
-    last_err: None,
+  let ctx = match enc.bit_depth {
+    8 => cfg.new_context().map(EncContext::U8),
+    _ => cfg.new_context().map(EncContext::U16),
   };
 
-  if Ok(ctx) = ctx_maybe {
-    Box::into_raw(Box::new(ctx))
+  if let Ok(ctx) = ctx {
+    Box::into_raw(Box::new(Context { ctx, last_err: None }))
   } else {
     std::ptr::null_mut()
   }
