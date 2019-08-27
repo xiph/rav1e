@@ -4,6 +4,7 @@
 //! encoder written in [Rust](https://rust-lang.org)
 //!
 //! This is the C-compatible API
+#![deny(missing_docs)]
 
 use std::slice;
 use std::sync::Arc;
