@@ -125,8 +125,11 @@ impl_cast_from_primitive!(i16 => { i8, i16, i32, i64, isize });
 impl_cast_from_primitive!(i32 => { u32, u64, usize });
 impl_cast_from_primitive!(i32 => { i8, i16, i32, i64, isize });
 
+/// Types that can be used as pixel types.
 pub enum PixelType {
+  /// 8 bits per pixel, stored in a `u8`.
   U8,
+  /// 10 or 12 bits per pixel, stored in a `u16`.
   U16,
 }
 
