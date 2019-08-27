@@ -70,60 +70,92 @@ impl Rational {
   }
 }
 
-/// Encoder Settings impacting the bitstream produced
+/// Encoder settings which impact the produced bitstream.
 #[derive(Clone, Debug)]
 pub struct EncoderConfig {
   // output size
+  /// Width of the frames in pixels.
   pub width: usize,
+  /// Height of the frames in pixels.
   pub height: usize,
 
   // data format and ancillary color information
+  /// Bit depth.
   pub bit_depth: usize,
+  /// Chroma subsampling.
   pub chroma_sampling: ChromaSampling,
+  /// Chroma sample position.
   pub chroma_sample_position: ChromaSamplePosition,
+  /// Pixel value range.
   pub pixel_range: PixelRange,
+  /// Content color description (primaries, transfer characteristics, matrix).
   pub color_description: Option<ColorDescription>,
+  /// HDR mastering display parameters.
   pub mastering_display: Option<MasteringDisplay>,
+  /// HDR content light parameters.
   pub content_light: Option<ContentLight>,
 
-  /// Still picture mode flag
+  /// Still picture mode flag.
   pub still_picture: bool,
 
   // encoder configuration
+  /// Target CPU feature level.
   pub cpu_feature_level: CpuFeatureLevel,
+  /// Video time base.
   pub time_base: Rational,
   /// The *minimum* interval between two keyframes
   pub min_key_frame_interval: u64,
   /// The *maximum* interval between two keyframes
   pub max_key_frame_interval: u64,
   /// The number of temporal units over which to distribute the reservoir
-  ///  usage.
+  /// usage.
   pub reservoir_frame_delay: Option<i32>,
+  /// Flag to enable low latency mode.
+  ///
+  /// In this mode the frame reordering is disabled.
   pub low_latency: bool,
+  /// The base quantizer to use.
   pub quantizer: usize,
   /// The minimum allowed base quantizer to use in bitrate mode.
   pub min_quantizer: u8,
+  /// The target bitrate for the bitrate mode.
   pub bitrate: i32,
+  /// Metric to tune the quality for.
   pub tune: Tune,
   /// Number of tiles horizontally. Must be a power of two.
-  /// Overridden by the tiles parameter, if present.
+  ///
+  /// Overridden by [`tiles`], if present.
+  ///
+  /// [`tiles`]: #structfield.tiles
   pub tile_cols: usize,
   /// Number of tiles vertically. Must be a power of two.
-  /// Overridden by the tiles parameter, if present.
+  ///
+  /// Overridden by [`tiles`], if present.
+  ///
+  /// [`tiles`]: #structfield.tiles
   pub tile_rows: usize,
-  /// Total number of tiles desired. Encoder will try to optimally split
-  /// to reach this number of tiles, rounded up. Overrides
-  /// tile_cols and tile_rows parameters.
+  /// Total number of tiles desired.
+  ///
+  /// Encoder will try to optimally split to reach this number of tiles,
+  /// rounded up. Overrides [`tile_cols`] and [`tile_rows`].
+  ///
+  /// [`tile_cols`]: #structfield.tile_cols
+  /// [`tile_rows`]: #structfield.tile_rows
   pub tiles: usize,
-  /// Number of frames to read ahead for RDO lookahead computation.
+  /// Number of frames to read ahead for the RDO lookahead computation.
   pub rdo_lookahead_frames: u64,
+  /// Settings which affect the enconding speed vs. quality trade-off.
   pub speed_settings: SpeedSettings,
+  /// If enabled, computes the PSNR values and stores them in [`Packet`].
+  ///
+  /// [`Packet`]: struct.Packet.html#structfield.psnr
   pub show_psnr: bool,
+  /// Enables dumping of internal RDO training data.
   pub train_rdo: bool,
 }
 
-/// Default preset for EncoderConfig: it is a balance between quality and speed.
-/// See [`with_speed_preset()`]
+/// Default preset for EncoderConfig: it is a balance between quality and
+/// speed. See [`with_speed_preset()`].
 ///
 /// [`with_speed_preset()`]: struct.EncoderConfig.html#method.with_speed_preset
 impl Default for EncoderConfig {
@@ -134,9 +166,10 @@ impl Default for EncoderConfig {
 }
 
 impl EncoderConfig {
-  /// This is a preset which provides default settings according to a speed value in the specific range 0-10.
-  /// For each speed value it is having different preset. See [`from_preset()`].
-  /// If the input value is greater than 10, it will result in the same settings of 10.
+  /// This is a preset which provides default settings according to a speed
+  /// value in the specific range 0–10. Each speed value corresponds to a
+  /// different preset. See [`from_preset()`]. If the input value is greater
+  /// than 10, it will result in the same settings as 10.
   ///
   /// [`from_preset()`]: struct.SpeedSettings.html#method.from_preset
   pub fn with_speed_preset(speed: usize) -> Self {
@@ -175,6 +208,9 @@ impl EncoderConfig {
     }
   }
 
+  /// Returns the video frame rate computed from [`time_base`].
+  ///
+  /// [`time_base`]: #structfield.time_base
   pub fn frame_rate(&self) -> f64 {
     Rational::from_reciprocal(self.time_base).as_f64()
   }
