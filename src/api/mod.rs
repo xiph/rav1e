@@ -737,8 +737,14 @@ pub enum EncoderStatus {
   NotReady,
 }
 
+/// Represents a packet.
+///
+/// A packet contains one shown frame together with zero or more additional
+/// frames.
 pub struct Packet<T: Pixel> {
+  /// The packet data.
   pub data: Vec<u8>,
+  /// The reconstruction of the shown frame.
   pub rec: Option<Frame<T>>,
   /// The number of the input frame corresponding to the one shown frame in the
   /// TU stored in this packet. Since AV1 does not explicitly reorder frames,
@@ -746,8 +752,9 @@ pub struct Packet<T: Pixel> {
   // TODO: When we want to add VFR support, we will need a more explicit time
   // stamp here.
   pub input_frameno: u64,
+  /// Type of the shown frame.
   pub frame_type: FrameType,
-  /// PSNR for Y, U, and V planes
+  /// PSNR for Y, U, and V planes for the shown frame.
   pub psnr: Option<(f64, f64, f64)>,
 }
 
