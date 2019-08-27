@@ -210,8 +210,11 @@ impl Default for MatrixCoefficients {
 /// Signal the content color description
 #[derive(Copy, Clone, Debug)]
 pub struct ColorDescription {
+  /// Color primaries.
   pub color_primaries: ColorPrimaries,
+  /// Transfer charasteristics.
   pub transfer_characteristics: TransferCharacteristics,
+  /// Matrix coefficients.
   pub matrix_coefficients: MatrixCoefficients,
 }
 
