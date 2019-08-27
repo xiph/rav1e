@@ -109,8 +109,7 @@ pub mod config {
 /// let v2 = Version::parse(&short).unwrap();
 ///
 /// assert_eq!(v1, v2);
-///```
-///
+/// ```
 pub mod version {
   /// Major version component
   ///
