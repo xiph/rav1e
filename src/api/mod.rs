@@ -770,7 +770,16 @@ impl<T: Pixel> fmt::Display for Packet<T> {
   }
 }
 
+/// Types which can be converted into frames.
+///
+/// This trait is used in [`Context::send_frame`] to allow for passing in
+/// frames with optional frame parameters and optionally frames wrapped in
+/// `Arc` (to allow for zero-copy, since the encoder uses frames in `Arc`
+/// internally).
+///
+/// [`Context::send_frame`]: struct.Context.html#method.send_frame
 pub trait IntoFrame<T: Pixel> {
+  /// Converts the type into a tuple of frame and parameters.
   fn into(self) -> (Option<Arc<Frame<T>>>, Option<FrameParameters>);
 }
 
