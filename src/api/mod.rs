@@ -712,8 +712,8 @@ pub enum EncoderStatus {
   NeedMoreData,
   /// There are enough frames in the queue.
   ///
-  /// May be emitted by [`Context::send_frame()`] when the input queue is
-  /// constrained.
+  /// May be emitted by [`Context::send_frame()`] when trying to send a frame
+  /// after the encoder has been flushed.
   ///
   /// [`Context::send_frame()`]: struct.Context.html#method.send_frame
   EnoughData,
