@@ -309,6 +309,7 @@ pub mod test {
       ..Default::default()
     };
     let mut sequence = Sequence::new(&config);
+    // FIXME: #1601
     // smallest possible tiles smaller than smallest possible LRUs
     sequence.enable_large_lru = false;
     FrameInvariants::new(config, sequence)
