@@ -59,6 +59,7 @@ pub use crate::api::{Config, Context, EncoderStatus, Packet};
 pub use crate::frame::Frame;
 pub use crate::util::{CastFromPrimitive, Pixel};
 
+/// Commonly used types and traits.
 pub mod prelude {
   pub use crate::api::*;
   pub use crate::encoder::Tune;
