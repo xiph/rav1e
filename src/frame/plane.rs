@@ -147,11 +147,13 @@ impl<T: Pixel> PlaneData<T> {
   }
 }
 
-/// Plane abstraction
+/// One data plane of a frame.
 ///
+/// For example, a plane can be a Y luma plane or a U or V chroma plane.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Plane<T: Pixel> {
   pub(crate) data: PlaneData<T>,
+  /// Plane configuration.
   pub cfg: PlaneConfig,
 }
 
@@ -209,6 +211,7 @@ impl<T: Pixel> Plane<T> {
   /// Stride alignment in bytes.
   const STRIDE_ALIGNMENT_LOG2: usize = 5;
 
+  /// Allocates and returns a new plane.
   pub fn new(
     width: usize, height: usize, xdec: usize, ydec: usize, xpad: usize,
     ypad: usize,
@@ -344,19 +347,23 @@ impl<T: Pixel> Plane<T> {
     base..base + width
   }
 
+  /// Returns the pixel at the given coordinates.
   pub fn p(&self, x: usize, y: usize) -> T {
     self.data[self.index(x, y)]
   }
 
+  /// Returns plane data starting from the origin.
   pub fn data_origin(&self) -> &[T] {
     &self.data[self.index(0, 0)..]
   }
 
+  /// Returns mutable plane data starting from the origin.
   pub fn data_origin_mut(&mut self) -> &mut [T] {
     let i = self.index(0, 0);
     &mut self.data[i..]
   }
 
+  /// Copies data into the plane from a pixel array.
   pub fn copy_from_raw_u8(
     &mut self, source: &[u8], source_stride: usize, source_bytewidth: usize,
   ) {
@@ -420,7 +427,7 @@ impl<T: Pixel> Plane<T> {
     }
   }
 
-  /// Iterates over the pixels in the `Plane`, skipping the padding.
+  /// Iterates over the pixels in the plane, skipping the padding.
   pub fn iter(&self) -> PlaneIter<'_, T> {
     PlaneIter::new(self)
   }
