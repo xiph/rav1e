@@ -20,15 +20,29 @@ use crate::util::*;
 /// Plane-specific configuration.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaneConfig {
+  /// Data stride.
   pub stride: usize,
+  /// Allocated height in pixels.
   pub alloc_height: usize,
+  /// Width in pixels.
   pub width: usize,
+  /// Height in pixels.
   pub height: usize,
+  /// Decimator along the X axis.
+  ///
+  /// For example, for chroma planes in a 4:2:0 configuration this would be 1.
   pub xdec: usize,
+  /// Decimator along the Y axis.
+  ///
+  /// For example, for chroma planes in a 4:2:0 configuration this would be 1.
   pub ydec: usize,
+  /// Number of padding pixels on the right.
   pub xpad: usize,
+  /// Number of padding pixels on the bottom.
   pub ypad: usize,
+  /// X where the data starts.
   pub xorigin: usize,
+  /// Y where the data starts.
   pub yorigin: usize,
 }
 
