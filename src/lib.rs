@@ -57,7 +57,7 @@ use crate::encoder::*;
 
 pub use crate::api::{Config, Context, EncoderStatus, Packet};
 pub use crate::frame::Frame;
-pub use crate::util::{CastFromPrimitive, Pixel};
+pub use crate::util::{CastFromPrimitive, Pixel, PixelType};
 
 /// Commonly used types and traits.
 pub mod prelude {
@@ -69,7 +69,7 @@ pub mod prelude {
   pub use crate::frame::Plane;
   pub use crate::frame::PlaneConfig;
   pub use crate::partition::BlockSize;
-  pub use crate::util::{CastFromPrimitive, Pixel};
+  pub use crate::util::{CastFromPrimitive, Pixel, PixelType};
 }
 
 /// Basic data structures
@@ -77,7 +77,7 @@ pub mod data {
   pub use crate::api::{EncoderStatus, FrameType, Packet, Point, Rational};
   pub use crate::frame::Frame;
   pub use crate::frame::FrameParameters;
-  pub use crate::util::{CastFromPrimitive, Pixel};
+  pub use crate::util::{CastFromPrimitive, Pixel, PixelType};
 }
 
 pub use crate::api::color;

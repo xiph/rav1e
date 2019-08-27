@@ -133,6 +133,7 @@ pub enum PixelType {
   U16,
 }
 
+/// A type that can be used as a pixel type.
 pub trait Pixel:
   PrimInt
   + Into<u32>
@@ -155,8 +156,12 @@ pub trait Pixel:
   + Sync
   + 'static
 {
+  /// Returns a [`PixelType`] variant corresponding to this type.
+  ///
+  /// [`PixelType`]: enum.PixelType.html
   fn type_enum() -> PixelType;
 
+  /// Converts stride in pixels to stride in bytes.
   fn to_asm_stride(in_stride: usize) -> isize {
     (in_stride * size_of::<Self>()) as isize
   }
