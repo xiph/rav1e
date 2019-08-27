@@ -15,8 +15,8 @@
 #[macro_use]
 extern crate pretty_assertions;
 
-#[cfg(cargo_c)]
-mod capi;
+#[cfg(any(cargo_c, feature = "capi"))]
+pub mod capi;
 
 pub(crate) mod asm;
 mod cpu_features;

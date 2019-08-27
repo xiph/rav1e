@@ -23,6 +23,7 @@ quick_test = []
 desync_finder = []
 bench = []
 check_asm = []
+capi = []
 
 # Enables debug dumping of lookahead computation results, specifically:
 # - i-qres.png: quarter-resolution luma planes,

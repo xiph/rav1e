@@ -77,7 +77,7 @@ jobs:
       # and should match the version number in build.rs
       rust: 1.36.0
       script:
-        - cargo test --features=decode_test,decode_test_dav1d,quick_test --verbose
+        - cargo test --features=decode_test,decode_test_dav1d,quick_test,capi --verbose
       env:
         - CACHE_NAME=MIN_RUSTC
     - name: "Ignored Tests (aom)"
@@ -118,3 +118,9 @@ jobs:
         - cargo check --no-default-features
       env:
         - CACHE_NAME=CHECK
+    - name: "Extra features"
+      rust: stable
+      script:
+        - cargo check --features=capi,dump_lookahead_data
+      env:
+        - CACHE_NAME=CHECK_EXTRA_FEATURES
