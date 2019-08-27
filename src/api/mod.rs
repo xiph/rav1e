@@ -216,28 +216,45 @@ impl EncoderConfig {
   }
 }
 
-/// Contains all the speed settings
+/// Contains the speed settings.
 #[derive(Clone, Copy, Debug)]
 pub struct SpeedSettings {
+  /// Minimum block size.
+  ///
+  /// Must be a square block size, so e.g. 8×4 isn't allowed here.
   pub min_block_size: BlockSize,
+  /// Enables inter-frames to have multiple reference frames.
   pub multiref: bool,
+  /// Enables fast deblocking filter.
   pub fast_deblock: bool,
+  /// Enables reduced transform set.
   pub reduced_tx_set: bool,
+  /// Enables using transform-domain distortion instead of pixel-domain.
   pub tx_domain_distortion: bool,
+  /// Enables using transform-domain rate estimation.
   pub tx_domain_rate: bool,
+  /// Enables bottom-up encoding, rather than top-down.
   pub encode_bottomup: bool,
+  /// Enables searching transform size and type with RDO.
   pub rdo_tx_decision: bool,
+  /// Prediction modes to search.
   pub prediction_modes: PredictionModesSetting,
+  /// Enables searching near motion vectors during RDO.
   pub include_near_mvs: bool,
+  /// Disables scene-cut detection.
   pub no_scene_detection: bool,
+  /// Enables diamond motion vector search rather than full search.
   pub diamond_me: bool,
+  /// Enables CDEF.
   pub cdef: bool,
+  /// Enables searching for the optimal segment ID (quantizer delta) with RDO.
+  ///
+  /// When disabled, the segment ID is chosen heuristically.
   pub quantizer_rdo: bool,
-  /// Use satd instead of sad for subpel search
+  /// Use SATD instead of SAD for subpixel search.
   pub use_satd_subpel: bool,
 }
 
-/// Default values for the speed settings.
 impl Default for SpeedSettings {
   fn default() -> Self {
     SpeedSettings {
@@ -262,18 +279,19 @@ impl Default for SpeedSettings {
 
 impl SpeedSettings {
   /// Set the speed setting according to a numeric speed preset.
-  /// The speed settings vary depending on speed value from 0 to 10:
-  ///  - speed - 10, fastest, Min block size 64x64, TX domain distortion, fast deblock, no scenechange detection,
-  ///  - speed - 9, Min block size 64x64, TX domain distortion, fast deblock,
-  ///  - speed - 8, Min block size 8x8, reduced TX set, TX domain distortion, fast deblock,
-  ///  - speed - 7, Min block size 8x8, reduced TX set, TX domain distortion,
-  ///  - speed - 6, Min block size 8x8, reduced TX set, TX domain distortion,
-  ///  - speed - 5, default, Min block size 8x8, reduced TX set, TX domain distortion, complex pred modes for keyframes,
-  ///  - speed - 4, Min block size 8x8, TX domain distortion, complex pred modes for keyframes,
-  ///  - speed - 3, Min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision,
-  ///  - speed - 2, Min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision, include near MVs, quantizer RDO,
-  ///  - speed - 1, Min block size 8x8, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, quantizer RDO,
-  ///  - speed - 0, slowest,  Min block size 4x4, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, quantizer RDO, bottom-up encoding.
+  ///
+  /// The speed settings vary depending on speed value from 0 to 10.
+  /// - 10 (fastest): min block size 64x64, TX domain distortion, fast deblock, no scenechange detection.
+  /// - 9: min block size 64x64, TX domain distortion, fast deblock.
+  /// - 8: min block size 8x8, reduced TX set, TX domain distortion, fast deblock.
+  /// - 7: min block size 8x8, reduced TX set, TX domain distortion.
+  /// - 6: min block size 8x8, reduced TX set, TX domain distortion.
+  /// - 5 (default): min block size 8x8, reduced TX set, TX domain distortion, complex pred modes for keyframes.
+  /// - 4: min block size 8x8, TX domain distortion, complex pred modes for keyframes.
+  /// - 3: min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision.
+  /// - 2: min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision, include near MVs, quantizer RDO.
+  /// - 1: min block size 8x8, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, quantizer RDO.
+  /// - 0 (slowest): min block size 4x4, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, quantizer RDO, bottom-up encoding.
   pub fn from_preset(speed: usize) -> Self {
     SpeedSettings {
       min_block_size: Self::min_block_size_preset(speed),
