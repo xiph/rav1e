@@ -96,7 +96,9 @@ pub fn clamp<T: PartialOrd>(input: T, min: T, max: T) -> T {
   }
 }
 
+/// Trait for casting between primitive types.
 pub trait CastFromPrimitive<T>: Copy + 'static {
+  /// Casts the given value into `Self`.
   fn cast_from(v: T) -> Self;
 }
 
