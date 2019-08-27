@@ -43,22 +43,28 @@ use std::sync::Arc;
 use std::{cmp, fmt, io};
 
 // TODO: use the num crate?
+/// A rational number.
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]
 pub struct Rational {
+  /// Numerator.
   pub num: u64,
+  /// Denominator.
   pub den: u64,
 }
 
 impl Rational {
+  /// Creates a rational number from the given numerator and denominator.
   pub fn new(num: u64, den: u64) -> Self {
     Rational { num, den }
   }
 
+  /// Returns a rational number that is the reciprocal of the given one.
   pub fn from_reciprocal(reciprocal: Self) -> Self {
     Rational { num: reciprocal.den, den: reciprocal.num }
   }
 
+  /// Returns the rational number as a floating-point number.
   pub fn as_f64(self) -> f64 {
     self.num as f64 / self.den as f64
   }
