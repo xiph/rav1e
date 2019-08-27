@@ -433,6 +433,7 @@ impl<T: Pixel> Plane<T> {
   }
 }
 
+/// Iterator over plane pixels, skipping padding.
 #[derive(Debug)]
 pub struct PlaneIter<'a, T: Pixel> {
   plane: &'a Plane<T>,
@@ -441,6 +442,7 @@ pub struct PlaneIter<'a, T: Pixel> {
 }
 
 impl<'a, T: Pixel> PlaneIter<'a, T> {
+  /// Creates a new iterator.
   pub fn new(plane: &'a Plane<T>) -> Self {
     Self { plane, y: 0, x: 0 }
   }
