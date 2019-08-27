@@ -438,9 +438,10 @@ pub enum PredictionModesSetting {
   ComplexAll,
 }
 
-/// Contains all the encoder configuration
+/// Contains the encoder configuration.
 #[derive(Clone, Debug, Default)]
 pub struct Config {
+  /// Settings which impact the produced bitstream.
   pub enc: EncoderConfig,
   /// The number of threads in the threadpool.
   pub threads: usize,
@@ -451,6 +452,21 @@ fn check_tile_log2(n: usize) -> bool {
 }
 
 impl Config {
+  /// Creates a [`Context`] with this configuration.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// use rav1e::prelude::*;
+  ///
+  /// # fn main() -> Result<(), EncoderStatus> {
+  /// let cfg = Config::default();
+  /// let ctx: Context<u8> = cfg.new_context()?;
+  /// # Ok(())
+  /// # }
+  /// ```
+  ///
+  /// [`Context`]: struct.Context.html
   pub fn new_context<T: Pixel>(&self) -> Result<Context<T>, EncoderStatus> {
     assert!(
       8 * std::mem::size_of::<T>() >= self.enc.bit_depth,
