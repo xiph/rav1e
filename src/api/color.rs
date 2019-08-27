@@ -247,11 +247,14 @@ pub struct ContentLight {
   pub max_frame_average_light_level: u16,
 }
 
-/// Chromaticity coordinates expressed as 0.16 fixed-point values
+/// Chromaticity coordinates as defined by CIE 1931, expressed as 0.16
+/// fixed-point values.
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]
 pub struct Point {
+  /// The X coordinate.
   pub x: u16,
+  /// The Y coordinate.
   pub y: u16,
 }
 
