@@ -426,10 +426,15 @@ impl fmt::Display for FrameType {
   }
 }
 
+/// Prediction modes to search.
 #[derive(Clone, Copy, Debug, PartialOrd, PartialEq, FromPrimitive)]
 pub enum PredictionModesSetting {
+  /// Only simple prediction modes.
   Simple,
+  /// Search all prediction modes on key frames and simple modes on other
+  /// frames.
   ComplexKeyframes,
+  /// Search all prediction modes on all frames.
   ComplexAll,
 }
 
