@@ -251,6 +251,7 @@ pub unsafe extern fn rav1e_data_unref(data: *mut Data) {
   }
 }
 
+/// Create a RaConfig filled with default parameters.
 #[no_mangle]
 pub unsafe extern fn rav1e_config_default() -> *mut Config {
   let cfg = rav1e::Config { enc: rav1e::EncoderConfig::default(), threads: 0 };
@@ -381,6 +382,7 @@ pub unsafe extern fn rav1e_config_set_mastering_display(
   }
 }
 
+/// Free the RaConfig.
 #[no_mangle]
 pub unsafe extern fn rav1e_config_unref(cfg: *mut Config) {
   if !cfg.is_null() {
@@ -518,6 +520,7 @@ pub unsafe extern fn rav1e_context_new(cfg: *const Config) -> *mut Context {
   }
 }
 
+/// Free the RaContext.
 #[no_mangle]
 pub unsafe extern fn rav1e_context_unref(ctx: *mut Context) {
   if !ctx.is_null() {
@@ -541,6 +544,7 @@ pub unsafe extern fn rav1e_frame_new(ctx: *const Context) -> *mut Frame {
   Box::into_raw(frame)
 }
 
+/// Free the RaFrame.
 #[no_mangle]
 pub unsafe extern fn rav1e_frame_unref(frame: *mut Frame) {
   if !frame.is_null() {
@@ -665,7 +669,7 @@ pub unsafe extern fn rav1e_last_status(ctx: *const Context) -> EncoderStatus {
   (*ctx).last_err.into()
 }
 
-/// Return a string matching the EncooderStatus variant.
+/// Return a string matching the EncoderStatus variant.
 #[no_mangle]
 pub unsafe extern fn rav1e_status_to_str(
   status: EncoderStatus,
@@ -711,6 +715,7 @@ pub unsafe extern fn rav1e_receive_packet(
   ret.into()
 }
 
+/// Free the RaPacket.
 #[no_mangle]
 pub unsafe extern fn rav1e_packet_unref(pkt: *mut Packet) {
   if !pkt.is_null() {
