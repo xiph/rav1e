@@ -399,13 +399,18 @@ impl SpeedSettings {
   }
 }
 
+/// Possible types of a frame.
 #[allow(dead_code, non_camel_case_types)]
 #[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 #[repr(C)]
 pub enum FrameType {
+  /// Key frame.
   KEY,
+  /// Inter-frame.
   INTER,
+  /// Intra-only frame.
   INTRA_ONLY,
+  /// Switching frame.
   SWITCH,
 }
 
