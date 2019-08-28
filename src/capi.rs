@@ -359,15 +359,17 @@ pub unsafe extern fn rav1e_config_set_content_light(
 
 /// Set the mastering display information for HDR10 streams.
 ///
-/// primaries and white_point arguments are RaPoint, containing 0.16 fixed point values.
+/// primaries and white_point arguments are RaChromaticityPoint, containing 0.16 fixed point
+/// values.
 /// max_luminance is a 24.8 fixed point value.
 /// min_luminance is a 18.14 fixed point value.
 ///
 /// Returns a negative value on error or 0.
 #[no_mangle]
 pub unsafe extern fn rav1e_config_set_mastering_display(
-  cfg: *mut Config, primaries: [rav1e::Point; 3], white_point: rav1e::Point,
-  max_luminance: u32, min_luminance: u32,
+  cfg: *mut Config, primaries: [rav1e::ChromaticityPoint; 3],
+  white_point: rav1e::ChromaticityPoint, max_luminance: u32,
+  min_luminance: u32,
 ) -> c_int {
   (*cfg).cfg.enc.mastering_display = Some(rav1e::MasteringDisplay {
     primaries,

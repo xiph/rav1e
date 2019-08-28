@@ -251,7 +251,7 @@ pub struct ContentLight {
 /// fixed-point values.
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]
-pub struct Point {
+pub struct ChromaticityPoint {
   /// The X coordinate.
   pub x: u16,
   /// The Y coordinate.
@@ -265,9 +265,9 @@ pub struct Point {
 pub struct MasteringDisplay {
   /// Chromaticity coordinates in Red, Green, Blue order
   /// expressed as 0.16 fixed-point
-  pub primaries: [Point; 3],
+  pub primaries: [ChromaticityPoint; 3],
   /// Chromaticity coordinates expressed as 0.16 fixed-point
-  pub white_point: Point,
+  pub white_point: ChromaticityPoint,
   /// 24.8 fixed-point maximum luminance in candelas per square meter
   pub max_luminance: u32,
   /// 18.14 fixed-point minimum luminance in candelas per square meter

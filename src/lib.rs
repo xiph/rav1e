@@ -105,7 +105,9 @@ pub mod prelude {
 
 /// Basic data structures
 pub mod data {
-  pub use crate::api::{EncoderStatus, FrameType, Packet, Point, Rational};
+  pub use crate::api::{
+    ChromaticityPoint, EncoderStatus, FrameType, Packet, Rational,
+  };
   pub use crate::frame::Frame;
   pub use crate::frame::FrameParameters;
   pub use crate::util::{CastFromPrimitive, Pixel, PixelType};
