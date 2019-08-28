@@ -738,8 +738,8 @@ cglobal iidentity_4x4_internal, 0, 5, 6, dst, stride, c, eob, tx2
     vpblendd             m0, m0, m4, 0xcc  ; out0 -out1
     shufps               m4, m2, m1, q1032 ; t3 t7
     vpblendd             m1, m2, m1, 0xcc  ; t2 t6
-    psubw                m2, m1, m4        ; t2-t3 t6-t7
-    paddw                m1, m4            ; t2+t3 t6+t7
+    psubsw               m2, m1, m4        ; t2-t3 t6-t7
+    paddsw               m1, m4            ; t2+t3 t6+t7
     pmulhrsw             m2, m5            ; out4 -out5
     pshufd               m1, m1, q1032
     pmulhrsw             m1, m5            ; out2 -out3
@@ -1184,8 +1184,8 @@ ALIGN function_align
     psubsw               m4, m2            ; t6 t7 t14a t15a
     shufps               m2, m1, m4, q1032 ; t2a t6  t10 t14a
     vpblendd             m4, m4, m1, 0x33  ; t3a t7  t11 t15a
-    paddw                m1, m2, m4
-    psubw                m2, m4
+    paddsw               m1, m2, m4
+    psubsw               m2, m4
     pmulhrsw             m1, m5     ; -out7   out4   out6  -out5
     pmulhrsw             m2, m5     ;  out8  -out11 -out9   out10
     ret
@@ -1955,10 +1955,10 @@ ALIGN function_align
     shufps               m5, m5, m7, q1032 ;  t14a   t6
     shufps               m7, m2, m0, q1032 ;  out14 -out15
     vpblendd             m0, m0, m2, 0x33  ; -out1   out0
-    paddw                m2, m5, m4        ; -out5   out4
-    psubw                m5, m4            ;  out10 -out11
-    psubw                m4, m6, m3        ;  out8  -out9
-    paddw                m3, m6            ; -out7   out6
+    paddsw               m2, m5, m4        ; -out5   out4
+    psubsw               m5, m4            ;  out10 -out11
+    psubsw               m4, m6, m3        ;  out8  -out9
+    paddsw               m3, m6            ; -out7   out6
     shufps               m6, m8, m1, q1032 ;  out12 -out13
     vpblendd             m1, m1, m8, 0x33  ; -out3   out2
     REPX  {pmulhrsw x, m12}, m2, m3, m4, m5
@@ -2598,10 +2598,10 @@ ALIGN function_align
     paddsw               m0, m2     ;  out0
     psubsw               m2, m1, m4 ;  t6
     paddsw               m1, m4     ; -out1
-    psubw                m4, m5, m3
-    paddw                m3, m5
-    psubw                m5, m2, m9
-    paddw                m2, m9
+    psubsw               m4, m5, m3
+    paddsw               m3, m5
+    psubsw               m5, m2, m9
+    paddsw               m2, m9
     pmulhrsw             m2, m8     ;  out2
     pmulhrsw             m3, m8     ; -out3
     pmulhrsw             m4, m8     ;  out4
@@ -3081,14 +3081,14 @@ ALIGN function_align
     paddsw               m0, m12      ;  out0
     paddsw              m12, m8, m5   ;  out12
     psubsw               m8, m5       ;  t7
-    paddw                m5, m10, m11 ; -out5
-    psubw               m10, m11      ;  out10
-    psubw               m11, m4, m8   ; -out11
-    paddw                m4, m8       ;  out4
-    psubw                m8, m7, m9   ;  out8
-    paddw                m7, m9       ; -out7
-    psubw                m9, m1, m6   ; -out9
-    paddw                m6, m1       ;  out6
+    paddsw               m5, m10, m11 ; -out5
+    psubsw              m10, m11      ;  out10
+    psubsw              m11, m4, m8   ; -out11
+    paddsw               m4, m8       ;  out4
+    psubsw               m8, m7, m9   ;  out8
+    paddsw               m7, m9       ; -out7
+    psubsw               m9, m1, m6   ; -out9
+    paddsw               m6, m1       ;  out6
     vpbroadcastd         m1, [o(pw_2896x8)]
     REPX   {pmulhrsw x, m1}, m4, m5, m6, m7, m8, m9, m10, m11
     ret

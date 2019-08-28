@@ -670,8 +670,8 @@ cglobal inv_txfm_add_wht_wht_4x4, 3, 3, 4, dst, stride, coeff
     shufps               m4, m1, m5, q1032         ;low:  t3    high:  t7
     shufps               m1, m5, q3210             ;low:  t2    high:  t6
     mova                 m5, [o(pw_2896x8)]
-    psubw                m2, m1, m4                ;low:  t2-t3 high:  t6-t7
-    paddw                m1, m4                    ;low:  t2+t3 high:  t6+t7
+    psubsw               m2, m1, m4                ;low:  t2-t3 high:  t6-t7
+    paddsw               m1, m4                    ;low:  t2+t3 high:  t6+t7
     pmulhrsw             m2, m5                    ;low:  out4  high: -out5
     shufps               m1, m1, q1032
     pmulhrsw             m1, m5                    ;low:  out2  high: -out3
@@ -1491,10 +1491,10 @@ ALIGN function_align
     psubsw                  m5, m6                        ;t6
     paddsw                  m6, m2, m7                    ;out6
     psubsw                  m2, m7                        ;t7
-    paddw                   m7, m4, m3                    ;t2 + t3
-    psubw                   m4, m3                        ;t2 - t3
-    paddw                   m3, m5, m2                    ;t6 + t7
-    psubw                   m5, m2                        ;t6 - t7
+    paddsw                  m7, m4, m3                    ;t2 + t3
+    psubsw                  m4, m3                        ;t2 - t3
+    paddsw                  m3, m5, m2                    ;t6 + t7
+    psubsw                  m5, m2                        ;t6 - t7
     mova                    m2, [o(pw_2896x8)]
     pmulhrsw                m4, m2                        ;out4
     pmulhrsw                m5, m2                        ;-out5
@@ -2254,8 +2254,8 @@ ALIGN function_align
     paddsw                m3, m2                     ;low:out2  high:-out13
     punpckhqdq            m2, m4, m1                 ;low:t11   high:t15a
     punpcklqdq            m4, m1                     ;low:t10   high:t14a
-    psubw                 m1, m4, m2
-    paddw                 m2, m4
+    psubsw                m1, m4, m2
+    paddsw                m2, m4
     mova       [coeffq+16*6], m0
     mova       [coeffq+16*7], m3
     mova                  m0, [coeffq+16*4]
@@ -2277,8 +2277,8 @@ ALIGN function_align
     mova                  m7, [o(pw_2896x8)]
     punpckhqdq            m6, m4, m5                 ;low:t3a   high:t7
     punpcklqdq            m4, m5                     ;low:t2a   high:t6
-    psubw                 m5, m4, m6
-    paddw                 m4, m6
+    psubsw                m5, m4, m6
+    paddsw                m4, m6
     pmulhrsw              m1, m7                     ;low:-out9 high:out10
     pmulhrsw              m2, m7                     ;low:out6  high:-out5
     pmulhrsw              m5, m7                     ;low:out8  high:-out11
@@ -2999,16 +2999,16 @@ ALIGN function_align
     psubsw                  m3, m0, m4                   ;t7
     paddsw                  m0, m4                       ;out12
     mova                    m7, [o(pw_2896x8)]
-    psubw                   m4, m2, m3
-    paddw                   m2, m3
+    psubsw                  m4, m2, m3
+    paddsw                  m2, m3
     mova                    m3, [rsp+gprsize*2+16*7]     ;t3
     pmulhrsw                m4, m7                       ;-out11
     pmulhrsw                m2, m7                       ;out4
     mova  [rsp+gprsize*2+16*7], m2                       ;out4
     psubsw                  m2, m5, m3                   ;t3a
     paddsw                  m5, m3                       ;-out15
-    psubw                   m3, m1, m2
-    paddw                   m1, m2
+    psubsw                  m3, m1, m2
+    paddsw                  m1, m2
     mova                    m2, [rsp+gprsize*2+32*5]     ;t15
     pmulhrsw                m3, m7                       ;out8
     pmulhrsw                m1, m7                       ;-out7
@@ -3044,8 +3044,8 @@ ALIGN function_align
     paddsw                  m2, m6                       ;-out1
     paddsw                  m6, m4, m1                   ;out14
     psubsw                  m4, m1                       ;t11
-    psubw                   m1, m3, m4
-    paddw                   m3, m4
+    psubsw                  m1, m3, m4
+    paddsw                  m3, m4
     pmulhrsw                m1, m7                       ;-out9
     pmulhrsw                m3, m7                       ;out6
     mova  [rsp+gprsize*2+16*4], m2                       ;-out1
@@ -3056,8 +3056,8 @@ ALIGN function_align
     paddsw                  m0, m4                       ;out2
     psubsw                  m4, m5, m2                   ;t15a
     paddsw                  m5, m2                       ;-out13
-    psubw                   m2, m3, m4
-    paddw                   m3, m4
+    psubsw                  m2, m3, m4
+    paddsw                  m3, m4
     mova  [rsp+gprsize*2+16*5], m0                       ;out2
     pmulhrsw                m3, m7                       ;-out5
     pmulhrsw                m2, m7                       ;out10
