@@ -485,20 +485,20 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
         .expect("Cannot parse the mastering display option");
       Some(MasteringDisplay {
         primaries: [
-          Point {
+          ChromaticityPoint {
             x: (r_x * ((1 << 16) as f64)).round() as u16,
             y: (r_y * ((1 << 16) as f64)).round() as u16,
           },
-          Point {
+          ChromaticityPoint {
             x: (g_x * ((1 << 16) as f64)).round() as u16,
             y: (g_y * ((1 << 16) as f64)).round() as u16,
           },
-          Point {
+          ChromaticityPoint {
             x: (b_x * ((1 << 16) as f64)).round() as u16,
             y: (b_y * ((1 << 16) as f64)).round() as u16,
           },
         ],
-        white_point: Point {
+        white_point: ChromaticityPoint {
           x: (wp_x * ((1 << 16) as f64)).round() as u16,
           y: (wp_y * ((1 << 16) as f64)).round() as u16,
         },
