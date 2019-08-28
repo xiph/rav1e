@@ -33,7 +33,7 @@ capi = []
 dump_lookahead_data = ["byteorder", "image"]
 
 [dependencies]
-arg_enum_proc_macro = "0.2"
+arg_enum_proc_macro = "0.3"
 bitstream-io = "0.8"
 clap = { version = "2", optional = true, default-features = false }
 libc = "0.2"
