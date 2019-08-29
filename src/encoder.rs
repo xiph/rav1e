@@ -1086,7 +1086,7 @@ pub fn encode_tx_block<T: Pixel>(
   alpha: i16,
   rdo_type: RDOType,
   need_recon_pixel: bool,
-) -> (bool, i64) {
+) -> (bool, ScaledDistortion) {
   let qidx = get_qidx(fi, ts, cw, tile_bo);
   assert_ne!(qidx, 0); // lossless is not yet supported
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[p].cfg;
@@ -1129,7 +1129,7 @@ pub fn encode_tx_block<T: Pixel>(
   }
 
   if skip {
-    return (false, -1);
+    return (false, ScaledDistortion::zero());
   }
 
   let mut residual_storage: AlignedArray<[i16; 64 * 64]> =
@@ -1195,7 +1195,7 @@ pub fn encode_tx_block<T: Pixel>(
     fi.ac_delta_q[p],
   );
 
-  let mut tx_dist: i64 = -1;
+  let mut tx_dist: u64 = 0;
 
   if !fi.use_tx_domain_distortion || need_recon_pixel {
     inverse_transform_add(
@@ -1215,29 +1215,24 @@ pub fn encode_tx_block<T: Pixel>(
         let c = *a as i32 - *b as i32;
         (c * c) as u64
       })
-      .sum::<u64>() as i64;
+      .sum::<u64>();
 
     let tx_dist_scale_bits = 2 * (3 - get_log_tx_scale(tx_size));
     let tx_dist_scale_rounding_offset = 1 << (tx_dist_scale_bits - 1);
     tx_dist = (tx_dist + tx_dist_scale_rounding_offset) >> tx_dist_scale_bits;
   }
   if fi.config.train_rdo {
-    ts.rdo.add_rate(
-      fi.base_q_idx,
-      tx_size,
-      tx_dist as u64,
-      cost_coeffs as u64,
-    );
+    ts.rdo.add_rate(fi.base_q_idx, tx_size, tx_dist, cost_coeffs as u64);
   }
 
   if rdo_type == RDOType::TxDistEstRate {
     // look up rate and distortion in table
-    let estimated_rate = estimate_rate(fi.base_q_idx, tx_size, tx_dist as u64);
+    let estimated_rate = estimate_rate(fi.base_q_idx, tx_size, tx_dist);
     w.add_bits_frac(estimated_rate as u32);
   }
   let bias =
     compute_distortion_bias(fi, ts.to_frame_block_offset(tile_bo), bsize);
-  (has_coeff, (tx_dist as f64 * bias * fi.dist_scale[p]) as i64)
+  (has_coeff, RawDistortion::new(tx_dist) * bias * fi.dist_scale[p])
 }
 
 pub fn motion_compensate<T: Pixel>(
@@ -1491,7 +1486,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
   skip: bool, cfl: CFLParams, tx_size: TxSize, tx_type: TxType,
   mode_context: usize, mv_stack: &[CandidateMV], rdo_type: RDOType,
   need_recon_pixel: bool, record_stats: bool,
-) -> (bool, i64) {
+) -> (bool, ScaledDistortion) {
   let is_inter = !luma_mode.is_intra();
   if is_inter {
     assert!(luma_mode == chroma_mode);
@@ -1764,7 +1759,7 @@ pub fn write_tx_blocks<T: Pixel>(
   chroma_mode: PredictionMode, tile_bo: TileBlockOffset, bsize: BlockSize,
   tx_size: TxSize, tx_type: TxType, skip: bool, cfl: CFLParams,
   luma_only: bool, rdo_type: RDOType, need_recon_pixel: bool,
-) -> (bool, i64) {
+) -> (bool, ScaledDistortion) {
   let bw = bsize.width_mi() / tx_size.width_mi();
   let bh = bsize.height_mi() / tx_size.height_mi();
   let qidx = get_qidx(fi, ts, cw, tile_bo);
@@ -1772,7 +1767,7 @@ pub fn write_tx_blocks<T: Pixel>(
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let mut ac: AlignedArray<[i16; 32 * 32]> = AlignedArray::uninitialized();
   let mut partition_has_coeff: bool = false;
-  let mut tx_dist: i64 = 0;
+  let mut tx_dist = ScaledDistortion::zero();
   let do_chroma = has_chroma(tile_bo, bsize, xdec, ydec);
 
   ts.qc.update(
@@ -1814,9 +1809,6 @@ pub fn write_tx_blocks<T: Pixel>(
         need_recon_pixel,
       );
       partition_has_coeff |= has_coeff;
-      assert!(
-        !fi.use_tx_domain_distortion || need_recon_pixel || skip || dist >= 0
-      );
       tx_dist += dist;
     }
   }
@@ -1900,12 +1892,6 @@ pub fn write_tx_blocks<T: Pixel>(
             need_recon_pixel,
           );
           partition_has_coeff |= has_coeff;
-          assert!(
-            !fi.use_tx_domain_distortion
-              || need_recon_pixel
-              || skip
-              || dist >= 0
-          );
           tx_dist += dist;
         }
       }
@@ -1923,9 +1909,9 @@ pub fn write_tx_tree<T: Pixel>(
   tile_bo: TileBlockOffset, bsize: BlockSize, tx_size: TxSize,
   tx_type: TxType, skip: bool, luma_only: bool, rdo_type: RDOType,
   need_recon_pixel: bool,
-) -> (bool, i64) {
+) -> (bool, ScaledDistortion) {
   if skip {
-    return (false, -1);
+    return (false, ScaledDistortion::zero());
   }
   let bw = bsize.width_mi() / tx_size.width_mi();
   let bh = bsize.height_mi() / tx_size.height_mi();
@@ -1933,7 +1919,6 @@ pub fn write_tx_tree<T: Pixel>(
 
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let ac = &[0i16; 0];
-  let mut tx_dist: i64 = 0;
   let mut partition_has_coeff: bool = false;
 
   ts.qc.update(
@@ -1968,10 +1953,7 @@ pub fn write_tx_tree<T: Pixel>(
     need_recon_pixel,
   );
   partition_has_coeff |= has_coeff;
-  assert!(
-    !fi.use_tx_domain_distortion || need_recon_pixel || skip || dist >= 0
-  );
-  tx_dist += dist;
+  let mut tx_dist = dist;
 
   if luma_only {
     return (partition_has_coeff, tx_dist);
@@ -2044,12 +2026,6 @@ pub fn write_tx_tree<T: Pixel>(
             need_recon_pixel,
           );
           partition_has_coeff |= has_coeff;
-          assert!(
-            !fi.use_tx_domain_distortion
-              || need_recon_pixel
-              || skip
-              || dist >= 0
-          );
           tx_dist += dist;
         }
       }
@@ -2176,7 +2152,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
       let tell = w.tell_frac();
       cw.write_partition(w, tile_bo, PartitionType::PARTITION_NONE, bsize);
-      compute_rd_cost(fi, w.tell_frac() - tell, 0)
+      compute_rd_cost(fi, w.tell_frac() - tell, ScaledDistortion::zero())
     } else {
       0.0
     };
@@ -2276,7 +2252,8 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
           if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
         let tell = w.tell_frac();
         cw.write_partition(w, tile_bo, partition, bsize);
-        rd_cost = compute_rd_cost(fi, w.tell_frac() - tell, 0);
+        rd_cost =
+          compute_rd_cost(fi, w.tell_frac() - tell, ScaledDistortion::zero());
       }
 
       let four_partitions = [
