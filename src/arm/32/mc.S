@@ -348,7 +348,6 @@ L(w_mask_\type\()_tbl):
 .elseif \type == 422
         add             r10, r6,  r4,  lsr #1
 .endif
-        mov             lr,  r7
         add             r9,  r3,  r4,  lsl #1
         add             r7,  r2,  r4,  lsl #1
 161:
