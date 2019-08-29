@@ -197,7 +197,7 @@ pub fn estimate_rate(qindex: u8, ts: TxSize, fast_distortion: u64) -> u64 {
 #[allow(unused)]
 fn cdef_dist_wxh_8x8<T: Pixel>(
   src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, bit_depth: usize,
-) -> u64 {
+) -> RawDistortion {
   debug_assert!(src1.plane_cfg.xdec == 0);
   debug_assert!(src1.plane_cfg.ydec == 0);
   debug_assert!(src2.plane_cfg.xdec == 0);
@@ -228,14 +228,14 @@ fn cdef_dist_wxh_8x8<T: Pixel>(
   let ssim_boost = (4033_f64 / 16_384_f64)
     * (svar + dvar + (16_384 << (2 * coeff_shift)) as f64)
     / f64::sqrt((16_265_089u64 << (4 * coeff_shift)) as f64 + svar * dvar);
-  (sse * ssim_boost + 0.5_f64) as u64
+  RawDistortion::new((sse * ssim_boost + 0.5_f64) as u64)
 }
 
 #[allow(unused)]
 fn cdef_dist_wxh<T: Pixel, F: Fn(Area, BlockSize) -> f64>(
   src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, w: usize, h: usize,
   bit_depth: usize, compute_bias: F,
-) -> u64 {
+) -> Distortion {
   assert!(w & 0x7 == 0);
   assert!(h & 0x7 == 0);
   debug_assert!(src1.plane_cfg.xdec == 0);
@@ -243,7 +243,7 @@ fn cdef_dist_wxh<T: Pixel, F: Fn(Area, BlockSize) -> f64>(
   debug_assert!(src2.plane_cfg.xdec == 0);
   debug_assert!(src2.plane_cfg.ydec == 0);
 
-  let mut sum: u64 = 0;
+  let mut sum = Distortion::zero();
   for j in 0isize..h as isize / 8 {
     for i in 0isize..w as isize / 8 {
       let area = Area::StartingAt { x: i * 8, y: j * 8 };
@@ -255,8 +255,7 @@ fn cdef_dist_wxh<T: Pixel, F: Fn(Area, BlockSize) -> f64>(
 
       // cdef is always called on non-subsampled planes, so BLOCK_8X8 is
       // correct here.
-      let bias = compute_bias(area, BlockSize::BLOCK_8X8);
-      sum += (value as f64 * bias) as u64;
+      sum += value * compute_bias(area, BlockSize::BLOCK_8X8);
     }
   }
   sum
@@ -266,7 +265,7 @@ fn cdef_dist_wxh<T: Pixel, F: Fn(Area, BlockSize) -> f64>(
 pub fn sse_wxh<T: Pixel, F: Fn(Area, BlockSize) -> f64>(
   src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, w: usize, h: usize,
   compute_bias: F,
-) -> u64 {
+) -> Distortion {
   assert!(w & (MI_SIZE - 1) == 0);
   assert!(h & (MI_SIZE - 1) == 0);
 
@@ -278,7 +277,7 @@ pub fn sse_wxh<T: Pixel, F: Fn(Area, BlockSize) -> f64>(
   let block_w = imp_block_w >> src1.plane_cfg.xdec;
   let block_h = imp_block_h >> src1.plane_cfg.ydec;
 
-  let mut sse: u64 = 0;
+  let mut sse = Distortion::zero();
   for block_y in 0..h / block_h {
     for block_x in 0..w / block_w {
       let mut value = 0;
@@ -308,7 +307,7 @@ pub fn sse_wxh<T: Pixel, F: Fn(Area, BlockSize) -> f64>(
         },
         imp_bsize,
       );
-      sse += (value as f64 * bias) as u64;
+      sse += RawDistortion::new(value) * bias;
     }
   }
   sse
@@ -318,7 +317,7 @@ pub fn sse_wxh<T: Pixel, F: Fn(Area, BlockSize) -> f64>(
 fn compute_distortion<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, bsize: BlockSize,
   is_chroma_block: bool, tile_bo: TileBlockOffset, luma_only: bool,
-) -> u64 {
+) -> ScaledDistortion {
   let area = Area::BlockStartingAt { bo: tile_bo.0 };
   let input_region = ts.input_tile.planes[0].subregion(area);
   let rec_region = ts.rec.planes[0].subregion(area);
@@ -352,9 +351,7 @@ fn compute_distortion<T: Pixel>(
         )
       },
     ),
-  };
-
-  distortion = (fi.dist_scale[0] * distortion as f64) as u64;
+  } * fi.dist_scale[0];
 
   if !luma_only {
     let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
@@ -373,7 +370,7 @@ fn compute_distortion<T: Pixel>(
       for p in 1..3 {
         let input_region = ts.input_tile.planes[p].subregion(area);
         let rec_region = ts.rec.planes[p].subregion(area);
-        distortion += (sse_wxh(
+        distortion += sse_wxh(
           &input_region,
           &rec_region,
           w_uv,
@@ -385,8 +382,7 @@ fn compute_distortion<T: Pixel>(
               bsize,
             )
           },
-        ) as f64
-          * fi.dist_scale[p]) as u64;
+        ) * fi.dist_scale[p];
       }
     };
   }
@@ -396,15 +392,15 @@ fn compute_distortion<T: Pixel>(
 // Compute the transform-domain distortion for an encode
 fn compute_tx_distortion<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, bsize: BlockSize,
-  is_chroma_block: bool, tile_bo: TileBlockOffset, tx_dist: i64, skip: bool,
-  luma_only: bool,
-) -> u64 {
+  is_chroma_block: bool, tile_bo: TileBlockOffset, tx_dist: ScaledDistortion,
+  skip: bool, luma_only: bool,
+) -> ScaledDistortion {
   assert!(fi.config.tune == Tune::Psnr);
   let area = Area::BlockStartingAt { bo: tile_bo.0 };
   let input_region = ts.input_tile.planes[0].subregion(area);
   let rec_region = ts.rec.planes[0].subregion(area);
   let mut distortion = if skip {
-    (sse_wxh(
+    sse_wxh(
       &input_region,
       &rec_region,
       bsize.width(),
@@ -416,11 +412,9 @@ fn compute_tx_distortion<T: Pixel>(
           bsize,
         )
       },
-    ) as f64
-      * fi.dist_scale[0]) as u64
+    ) * fi.dist_scale[0]
   } else {
-    assert!(tx_dist >= 0);
-    tx_dist as u64
+    tx_dist
   };
 
   if !luma_only && skip {
@@ -440,7 +434,7 @@ fn compute_tx_distortion<T: Pixel>(
       for p in 1..3 {
         let input_region = ts.input_tile.planes[p].subregion(area);
         let rec_region = ts.rec.planes[p].subregion(area);
-        distortion += (sse_wxh(
+        distortion += sse_wxh(
           &input_region,
           &rec_region,
           w_uv,
@@ -452,8 +446,7 @@ fn compute_tx_distortion<T: Pixel>(
               bsize,
             )
           },
-        ) as f64
-          * fi.dist_scale[p]) as u64;
+        ) * fi.dist_scale[p];
       }
     }
   }
@@ -493,11 +486,64 @@ pub fn compute_distortion_bias<T: Pixel>(
   bias
 }
 
+#[repr(transparent)]
+pub struct RawDistortion(u64);
+
+#[repr(transparent)]
+pub struct Distortion(u64);
+
+#[repr(transparent)]
+pub struct ScaledDistortion(u64);
+
+impl RawDistortion {
+  pub fn new(dist: u64) -> Self {
+    Self(dist)
+  }
+}
+
+impl std::ops::Mul<f64> for RawDistortion {
+  type Output = Distortion;
+  fn mul(self, rhs: f64) -> Distortion {
+    Distortion((self.0 as f64 * rhs) as u64)
+  }
+}
+
+impl Distortion {
+  pub fn zero() -> Self {
+    Self(0)
+  }
+}
+
+impl std::ops::Mul<f64> for Distortion {
+  type Output = ScaledDistortion;
+  fn mul(self, rhs: f64) -> ScaledDistortion {
+    ScaledDistortion((self.0 as f64 * rhs) as u64)
+  }
+}
+
+impl std::ops::AddAssign for Distortion {
+  fn add_assign(&mut self, other: Self) {
+    self.0 += other.0;
+  }
+}
+
+impl ScaledDistortion {
+  pub fn zero() -> Self {
+    Self(0)
+  }
+}
+
+impl std::ops::AddAssign for ScaledDistortion {
+  fn add_assign(&mut self, other: Self) {
+    self.0 += other.0;
+  }
+}
+
 pub fn compute_rd_cost<T: Pixel>(
-  fi: &FrameInvariants<T>, rate: u32, distortion: u64,
+  fi: &FrameInvariants<T>, rate: u32, distortion: ScaledDistortion,
 ) -> f64 {
   let rate_in_bits = (rate as f64) / ((1 << OD_BITRES) as f64);
-  distortion as f64 + fi.lambda * rate_in_bits
+  distortion.0 as f64 + fi.lambda * rate_in_bits
 }
 
 pub fn rdo_tx_size_type<T: Pixel>(
@@ -712,6 +758,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
         } else {
           compute_distortion(fi, ts, bsize, is_chroma_block, tile_bo, false)
         };
+        let is_zero_dist = distortion.0 == 0;
         let rd = compute_rd_cost(fi, rate, distortion);
         if rd < best.rd {
           //if rd < best.rd || luma_mode == PredictionMode::NEW_NEWMV {
@@ -725,7 +772,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
           best.tx_size = tx_size;
           best.tx_type = tx_type;
           best.sidx = sidx;
-          zero_distortion = distortion == 0;
+          zero_distortion = is_zero_dist;
         }
 
         cw.rollback(cw_checkpoint);
@@ -1263,6 +1310,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
           uv_tx_size.height(),
           |_, _| 1., // We're not doing RDO here.
         )
+        .0
       };
       let mut best = (alpha_cost(0), 0);
       let mut count = 2;
@@ -1548,7 +1596,11 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
             if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
           let tell = w.tell_frac();
           cw.write_partition(w, tile_bo, partition, bsize);
-          cost = compute_rd_cost(fi, w.tell_frac() - tell, 0);
+          cost = compute_rd_cost(
+            fi,
+            w.tell_frac() - tell,
+            ScaledDistortion::zero(),
+          );
         }
         let mut rd_cost_sum = 0.0;
 
@@ -1627,14 +1679,14 @@ fn rdo_loop_plane_error<T: Pixel>(
   sbo: TileSuperBlockOffset, tile_sbo: TileSuperBlockOffset, sb_w: usize,
   sb_h: usize, fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>,
   blocks: &TileBlocks<'_>, test: &Frame<T>, pli: usize,
-) -> u64 {
+) -> ScaledDistortion {
   let sb_w_blocks =
     if fi.sequence.use_128x128_superblock { 16 } else { 8 } * sb_w;
   let sb_h_blocks =
     if fi.sequence.use_128x128_superblock { 16 } else { 8 } * sb_h;
   // Each direction block is 8x8 in y, potentially smaller if subsampled in chroma
   // accumulating in-frame and unpadded
-  let mut err: u64 = 0;
+  let mut err = Distortion::zero();
   for by in 0..sb_h_blocks {
     for bx in 0..sb_w_blocks {
       let bo = tile_sbo.block_offset(bx << 1, by << 1);
@@ -1659,16 +1711,15 @@ fn rdo_loop_plane_error<T: Pixel>(
           BlockSize::BLOCK_8X8,
         );
         err += if pli == 0 {
-          (cdef_dist_wxh_8x8(&in_region, &test_region, fi.sequence.bit_depth)
-            as f64
-            * bias) as u64
+          cdef_dist_wxh_8x8(&in_region, &test_region, fi.sequence.bit_depth)
+            * bias
         } else {
           sse_wxh(&in_region, &test_region, 8 >> xdec, 8 >> ydec, |_, _| bias)
         };
       }
     }
   }
-  (err as f64 * fi.dist_scale[pli]) as u64
+  err * fi.dist_scale[pli]
 }
 
 // Passed in a superblock offset representing the upper left corner of
@@ -1791,7 +1842,7 @@ pub fn rdo_loop_decision<T: Pixel>(
           let mut best_new_index = -1i8;
 
           for cdef_index in 0..(1 << fi.cdef_bits) {
-            let mut err = 0;
+            let mut err = ScaledDistortion::zero();
             let mut rate = 0;
             cdef_filter_superblock(
               fi,
