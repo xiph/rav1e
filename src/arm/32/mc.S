@@ -217,11 +217,11 @@ bidir_fn mask
 
 .macro w_mask_fn type
 function w_mask_\type\()_8bpc_neon, export=1
-        push            {r4-r10,lr}
-        ldr             r4,  [sp, #32]
-        ldr             r5,  [sp, #36]
-        ldr             r6,  [sp, #40]
-        ldr             r7,  [sp, #44]
+        push            {r4-r9,lr}
+        ldr             r4,  [sp, #28]
+        ldr             r5,  [sp, #32]
+        ldr             r6,  [sp, #36]
+        ldr             r7,  [sp, #40]
         clz             r8,  r4
         adr             r9,  L(w_mask_\type\()_tbl)
         sub             r8,  r8,  #24
@@ -295,7 +295,7 @@ L(w_mask_\type\()_tbl):
         vst1.32         {d25[0]}, [r0,  :32], r1
         vst1.32         {d25[1]}, [r12, :32], r1
         bgt             4b
-        pop             {r4-r10,pc}
+        pop             {r4-r9,pc}
 8:
         vld1.16         {d0,  d1,  d2,  d3},  [r2,  :128]! // tmp1y1, tmp1y2
         vld1.16         {d4,  d5,  d6,  d7},  [r3,  :128]! // tmp2y1, tmp2y2
@@ -337,16 +337,16 @@ L(w_mask_\type\()_tbl):
         vst1.16         {d24}, [r0,  :64], r1
         vst1.16         {d25}, [r12, :64], r1
         bgt             8b
-        pop             {r4-r10,pc}
+        pop             {r4-r9,pc}
 1280:
 640:
 320:
 160:
         sub             r1,  r1,  r4
 .if \type == 444
-        add             r10, r6,  r4
+        add             lr,  r6,  r4
 .elseif \type == 422
-        add             r10, r6,  r4,  lsr #1
+        add             lr,  r6,  r4,  lsr #1
 .endif
         add             r9,  r3,  r4,  lsl #1
         add             r7,  r2,  r4,  lsl #1
@@ -401,13 +401,13 @@ L(w_mask_\type\()_tbl):
         vmovn.u16       d4,  q2         // 64 - my2
         vmovn.u16       d5,  q3
         vsub.i8         q2,  q15, q2    // my2
-        vst1.8          {d4,  d5},  [r10, :128]!
+        vst1.8          {d4,  d5},  [lr,  :128]!
 .elseif \type == 422
         vpadd.s16       d4,  d4,  d5    // (64 - my2) + (64 - ny2) (column wise addition)
         vpadd.s16       d5,  d6,  d7
         vmovn.s16       d4,  q2
         vhsub.u8        d4,  d30, d4    // ((129 - sign) - ((64 - my2) + (64 - ny2))) >> 1
-        vst1.8          {d4},  [r10, :64]!
+        vst1.8          {d4},  [lr,  :64]!
 .elseif \type == 420
         vadd.s16        q10, q10, q2    // (64 - my1) + (64 - my2) (row wise addition)
         vadd.s16        q11, q11, q3
@@ -432,15 +432,15 @@ L(w_mask_\type\()_tbl):
         add             r9,  r9,  r4,  lsl #1
 .if \type == 444
         add             r6,  r6,  r4
-        add             r10, r10, r4
+        add             lr,  lr,  r4
 .elseif \type == 422
         add             r6,  r6,  r4,  lsr #1
-        add             r10, r10, r4,  lsr #1
+        add             lr,  lr,  r4,  lsr #1
 .endif
         add             r0,  r0,  r1
         add             r12, r12, r1
         bgt             161b
-        pop             {r4-r10,pc}
+        pop             {r4-r9,pc}
 endfunc
 .endm
 
