@@ -165,7 +165,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     )
     .arg(
       Arg::with_name("KEYFRAME_INTERVAL")
-        .help("Maximum interval between keyframes")
+        .help("Maximum interval between keyframes. When set to 0, disables fixed-interval keyframes.")
         .short("I")
         .long("keyint")
         .takes_value(true)
@@ -419,11 +419,6 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
       min_interval = min_interval.min(max_interval);
     }
 
-    // Validate arguments
-    if max_interval < 1 {
-      panic!("Keyframe interval must be greater than 0");
-    }
-
     if speed > 10 {
       panic!("Speed must be between 0-10");
     } else if min_interval > max_interval {
@@ -444,8 +439,7 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
       .unwrap_or_default();
 
     let mut cfg = EncoderConfig::with_speed_preset(speed);
-    cfg.min_key_frame_interval = min_interval;
-    cfg.max_key_frame_interval = max_interval;
+    cfg.set_key_frame_interval(min_interval, max_interval);
 
     cfg.pixel_range =
       matches.value_of("PIXEL_RANGE").unwrap().parse().unwrap_or_default();

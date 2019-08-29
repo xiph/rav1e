@@ -209,6 +209,17 @@ impl EncoderConfig {
     }
   }
 
+  /// Sets the minimum and maximum keyframe interval, handling special cases as needed.
+  pub fn set_key_frame_interval(
+    &mut self, min_interval: u64, max_interval: u64,
+  ) {
+    self.min_key_frame_interval = min_interval;
+
+    // Map an input value of 0 to an infinite interval
+    self.max_key_frame_interval =
+      if max_interval == 0 { std::u64::MAX } else { max_interval };
+  }
+
   /// Returns the video frame rate computed from [`time_base`].
   ///
   /// [`time_base`]: #structfield.time_base
