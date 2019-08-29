@@ -7,12 +7,8 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-//! rav1e is an [AV1] video encoder.
-//!
-//! ## Overview
-//!
-//! rav1e is an experimental encoder. It is designed to eventually cover all
-//! use cases, though in its current form it is most suitable for cases where
+//! rav1e is an [AV1] video encoder. It is designed to eventually cover all use
+//! cases, though in its current form it is most suitable for cases where
 //! libaom (the reference encoder) is too slow.
 //!
 //! ## Features
