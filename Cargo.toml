@@ -86,6 +86,7 @@ bench = false
 
 [[bench]]
 name = "bench"
+path = "benches/bench.rs"
 harness = false
 
 [profile.dev]
