@@ -445,10 +445,16 @@ unsafe fn option_match(
     "bitrate" => enc.bitrate = value.parse().map_err(|_| ())?,
 
     "key_frame_interval" => {
-      enc.max_key_frame_interval = value.parse().map_err(|_| ())?
+      enc.set_key_frame_interval(
+        enc.min_key_frame_interval,
+        value.parse().map_err(|_| ())?,
+      );
     }
     "min_key_frame_interval" => {
-      enc.min_key_frame_interval = value.parse().map_err(|_| ())?
+      enc.set_key_frame_interval(
+        value.parse().map_err(|_| ())?,
+        enc.max_key_frame_interval,
+      );
     }
     "reservoir_frame_delay" => {
       enc.reservoir_frame_delay = Some(value.parse().map_err(|_| ())?)
