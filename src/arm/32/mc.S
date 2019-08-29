@@ -91,6 +91,7 @@ function \type\()_8bpc_neon, export=1
         \type           d16, d17, q0,  q1,  q2,  q3
         add             r12, r12, r4
         bx              r12
+
         .align 2
 L(\type\()_tbl):
         .word 1280f - L(\type\()_tbl) + CONFIG_THUMB
@@ -99,6 +100,7 @@ L(\type\()_tbl):
         .word 160f  - L(\type\()_tbl) + CONFIG_THUMB
         .word 80f   - L(\type\()_tbl) + CONFIG_THUMB
         .word 4f    - L(\type\()_tbl) + CONFIG_THUMB
+
 4:
         add             r6,  r0,  r1
         lsl             r1,  r1,  #1
@@ -243,6 +245,7 @@ function w_mask_\type\()_8bpc_neon, export=1
         add             r12, r0,  r1
         lsl             r1,  r1,  #1
         bx              r9
+
         .align 2
 L(w_mask_\type\()_tbl):
         .word 1280f  - L(w_mask_\type\()_tbl) + CONFIG_THUMB
@@ -251,6 +254,7 @@ L(w_mask_\type\()_tbl):
         .word 160f   - L(w_mask_\type\()_tbl) + CONFIG_THUMB
         .word 8f     - L(w_mask_\type\()_tbl) + CONFIG_THUMB
         .word 4f     - L(w_mask_\type\()_tbl) + CONFIG_THUMB
+
 4:
         vld1.16         {d0,  d1,  d2,  d3},  [r2,  :128]! // tmp1 (four rows at once)
         vld1.16         {d4,  d5,  d6,  d7},  [r3,  :128]! // tmp2 (four rows at once)
@@ -459,6 +463,7 @@ function blend_8bpc_neon, export=1
         ldr             lr,  [r3, lr, lsl #2]
         add             r3,  r3,  lr
         bx              r3
+
         .align 2
 L(blend_tbl):
         .word 320f  - L(blend_tbl) + CONFIG_THUMB
@@ -572,6 +577,7 @@ function blend_h_8bpc_neon, export=1
         ldr             r6,  [r7, r6, lsl #2]
         add             r7,  r7,  r6
         bx              r7
+
         .align 2
 L(blend_h_tbl):
         .word 1280f  - L(blend_h_tbl) + CONFIG_THUMB
@@ -712,6 +718,7 @@ function blend_v_8bpc_neon, export=1
         ldr             lr,  [r3, lr, lsl #2]
         add             r3,  r3,  lr
         bx              r3
+
         .align 2
 L(blend_v_tbl):
         .word 320f  - L(blend_v_tbl) + CONFIG_THUMB
