@@ -456,7 +456,7 @@ impl SpeedSettings {
 
 /// Possible types of a frame.
 #[allow(dead_code, non_camel_case_types)]
-#[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy, Serialize, Deserialize)]
 #[repr(C)]
 pub enum FrameType {
   /// Key frame.
@@ -772,7 +772,7 @@ pub struct Context<T: Pixel> {
 /// Status that can be returned by [`Context`] functions.
 ///
 /// [`Context`]: struct.Context.html
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EncoderStatus {
   /// The encoder needs more data to produce an output packet.
   ///
@@ -812,6 +812,7 @@ pub enum EncoderStatus {
 ///
 /// A packet contains one shown frame together with zero or more additional
 /// frames.
+#[derive(Debug, PartialEq)]
 pub struct Packet<T: Pixel> {
   /// The packet data.
   pub data: Vec<u8>,
