@@ -671,7 +671,7 @@ mod test {
       speed_settings: SpeedSettings::from_preset(10),
       ..Default::default()
     };
-    let sequence = Sequence::new(&config);
+    let sequence = Sequence::new(&config).unwrap();
     let fi = FrameInvariants::new(config, sequence);
     (frame, fi)
   }
