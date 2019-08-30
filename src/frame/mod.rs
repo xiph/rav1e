@@ -42,7 +42,7 @@ pub struct FrameParameters {
 }
 
 /// One video frame.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Frame<T: Pixel> {
   /// Planes constituting the frame.
   pub planes: [Plane<T>; 3],

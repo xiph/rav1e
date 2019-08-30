@@ -4,7 +4,7 @@ use crate::transform::TxType;
 use std::collections::BTreeMap;
 use std::ops::{Add, AddAssign};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EncoderStats {
   /// Stores counts of each block size used in this frame
   pub block_size_counts: BTreeMap<BlockSize, usize>,
