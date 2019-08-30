@@ -517,7 +517,13 @@ pub struct Config {
 }
 
 fn check_tile_log2(n: usize) -> bool {
-  ((1 << TilingInfo::tile_log2(1, n)) - n) == 0 || n == 0
+  let tile_log2 = TilingInfo::tile_log2(1, n);
+  if tile_log2.is_none() {
+    return false;
+  }
+  let tile_log2 = tile_log2.unwrap();
+
+  ((1 << tile_log2) - n) == 0 || n == 0
 }
 
 impl Config {
@@ -3950,5 +3956,12 @@ mod test {
     let mut ctx: Context<u8> = config.new_context().unwrap();
     ctx.flush();
     assert_eq!(ctx.receive_packet(), Err(EncoderStatus::LimitReached));
+  }
+
+  #[test]
+  fn tile_cols_overflow() {
+    let mut config = Config::default();
+    config.enc.tile_cols = usize::max_value();
+    let _: Result<Context<u8>, _> = config.new_context();
   }
 }
