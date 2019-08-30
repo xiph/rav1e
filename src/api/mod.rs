@@ -727,7 +727,7 @@ impl InterConfig {
 
 pub(crate) struct ContextInner<T: Pixel> {
   frame_count: u64,
-  limit: u64,
+  limit: Option<u64>,
   inter_cfg: InterConfig,
   output_frameno: u64,
   frames_processed: u64,
@@ -975,7 +975,7 @@ impl<T: Pixel> Context<T> {
       if self.is_flushing {
         return Ok(());
       }
-      self.inner.limit = self.inner.frame_count;
+      self.inner.limit = Some(self.inner.frame_count);
       self.is_flushing = true;
       self.inner.compute_lookahead_data();
     } else if self.is_flushing {
@@ -1207,7 +1207,7 @@ impl<T: Pixel> ContextInner<T> {
 
     ContextInner {
       frame_count: 0,
-      limit: 0,
+      limit: None,
       inter_cfg: InterConfig::new(enc),
       output_frameno: 0,
       frames_processed: 0,
@@ -1287,7 +1287,7 @@ impl<T: Pixel> ContextInner<T> {
   }
 
   pub fn needs_more_frames(&self, frame_count: u64) -> bool {
-    self.limit == 0 || frame_count < self.limit
+    self.limit.map(|limit| frame_count < limit).unwrap_or(true)
   }
 
   fn get_rdo_lookahead_frames(
@@ -1313,8 +1313,8 @@ impl<T: Pixel> ContextInner<T> {
       .cloned();
     let mut next_limit =
       gop_input_frameno_start + self.config.max_key_frame_interval;
-    if !ignore_limit && self.limit != 0 {
-      next_limit = next_limit.min(self.limit);
+    if !ignore_limit && self.limit.is_some() {
+      next_limit = next_limit.min(self.limit.unwrap());
     }
     if next_detected.is_none() {
       return next_limit;
@@ -1451,7 +1451,7 @@ impl<T: Pixel> ContextInner<T> {
   }
 
   pub(crate) fn done_processing(&self) -> bool {
-    self.limit != 0 && self.frames_processed == self.limit
+    self.limit.map(|limit| self.frames_processed == limit).unwrap_or(false)
   }
 
   /// Computes lookahead motion vectors and fills in `lookahead_mvs`,
@@ -3942,5 +3942,13 @@ mod test {
       }
     }
     assert_eq!(ctx.inner.frames_processed, LIMIT as u64);
+  }
+
+  #[test]
+  fn zero_frames() {
+    let config = Config::default();
+    let mut ctx: Context<u8> = config.new_context().unwrap();
+    ctx.flush();
+    assert_eq!(ctx.receive_packet(), Err(EncoderStatus::LimitReached));
   }
 }
