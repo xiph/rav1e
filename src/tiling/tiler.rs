@@ -65,11 +65,14 @@ impl TilingInfo {
     // these are bitstream-defined values and must not be changed
     let max_tile_width_sb = MAX_TILE_WIDTH >> sb_size_log2;
     let max_tile_area_sb = MAX_TILE_AREA >> (2 * sb_size_log2);
-    let min_tile_cols_log2 = Self::tile_log2(max_tile_width_sb, sb_cols);
-    let max_tile_cols_log2 = Self::tile_log2(1, sb_cols.min(MAX_TILE_COLS));
-    let max_tile_rows_log2 = Self::tile_log2(1, sb_rows.min(MAX_TILE_ROWS));
+    let min_tile_cols_log2 =
+      Self::tile_log2(max_tile_width_sb, sb_cols).unwrap();
+    let max_tile_cols_log2 =
+      Self::tile_log2(1, sb_cols.min(MAX_TILE_COLS)).unwrap();
+    let max_tile_rows_log2 =
+      Self::tile_log2(1, sb_rows.min(MAX_TILE_ROWS)).unwrap();
     let min_tiles_log2 = min_tile_cols_log2
-      .max(Self::tile_log2(max_tile_area_sb, sb_cols * sb_rows));
+      .max(Self::tile_log2(max_tile_area_sb, sb_cols * sb_rows).unwrap());
 
     // Implements restriction in Annex A of the spec.
     // Unlike the other restrictions, this one does not change
@@ -126,12 +129,12 @@ impl TilingInfo {
   /// or equal to `target`.
   ///
   /// <https://aomediacodec.github.io/av1-spec/#tile-size-calculation-function>
-  pub fn tile_log2(blk_size: usize, target: usize) -> usize {
+  pub fn tile_log2(blk_size: usize, target: usize) -> Option<usize> {
     let mut k = 0;
-    while (blk_size << k) < target {
+    while (blk_size.checked_shl(k)?) < target {
       k += 1;
     }
-    k
+    Some(k as usize)
   }
 
   #[inline(always)]
@@ -772,5 +775,10 @@ pub mod test {
 
     assert_eq!(PredictionMode::PAETH_PRED, fb[34][19].mode);
     assert_eq!(8, fb[33][17].n4_w);
+  }
+
+  #[test]
+  fn tile_log2_overflow() {
+    assert_eq!(TilingInfo::tile_log2(1, usize::max_value()), None);
   }
 }
