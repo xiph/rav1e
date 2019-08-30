@@ -644,7 +644,8 @@ impl RCState {
       40,
       0x4000_0000_0000,
     ) - (TEMPORAL_DELIMITER.len() * 8) as i64;
-    let reservoir_max = bits_per_tu * (reservoir_frame_delay as i64);
+    let reservoir_max =
+      bits_per_tu.checked_mul(reservoir_frame_delay as i64)?;
     // Start with a buffer fullness and fullness target of 50%.
     let reservoir_target = (reservoir_max + 1) >> 1;
     // Pick exponents and initial scales for quantizer selection.
