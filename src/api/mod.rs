@@ -15,12 +15,14 @@ pub use color::*;
 
 use arrayvec::ArrayVec;
 use bitstream_io::*;
+use itertools::Itertools;
 use num_derive::*;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use serde_derive::{Deserialize, Serialize};
 
 use crate::context::*;
 use crate::context::{FrameBlocks, SuperBlockOffset, TileSuperBlockOffset};
+use crate::cpu_features::CpuFeatureLevel;
 use crate::dist::get_satd;
 use crate::encoder::*;
 use crate::frame::*;
@@ -33,6 +35,7 @@ use crate::rate::FRAME_SUBTYPE_I;
 use crate::rate::FRAME_SUBTYPE_P;
 use crate::rate::FRAME_SUBTYPE_SEF;
 use crate::scenechange::SceneChangeDetector;
+use crate::stats::EncoderStats;
 use crate::tiling::{Area, TileRect, TilingInfo};
 use crate::transform::TxSize;
 use crate::util::Pixel;
@@ -221,6 +224,50 @@ impl EncoderConfig {
   /// [`time_base`]: #structfield.time_base
   pub fn frame_rate(&self) -> f64 {
     Rational::from_reciprocal(self.time_base).as_f64()
+  }
+}
+
+impl fmt::Display for EncoderConfig {
+  fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    let pairs = [
+      ("keyint_min", self.min_key_frame_interval.to_string()),
+      ("keyint_max", self.max_key_frame_interval.to_string()),
+      ("quantizer", self.quantizer.to_string()),
+      ("bitrate", self.bitrate.to_string()),
+      ("min_quantizer", self.min_quantizer.to_string()),
+      ("low_latency", self.low_latency.to_string()),
+      ("tune", self.tune.to_string()),
+      ("tiles", self.tiles.to_string()),
+      ("tile_rows", self.tile_rows.to_string()),
+      ("tile_cols", self.tile_cols.to_string()),
+      ("rdo_lookahead_frames", self.rdo_lookahead_frames.to_string()),
+      ("min_block_size", self.speed_settings.min_block_size.to_string()),
+      ("multiref", self.speed_settings.multiref.to_string()),
+      ("fast_deblock", self.speed_settings.fast_deblock.to_string()),
+      ("reduced_tx_set", self.speed_settings.reduced_tx_set.to_string()),
+      (
+        "tx_domain_distortion",
+        self.speed_settings.tx_domain_distortion.to_string(),
+      ),
+      ("tx_domain_rate", self.speed_settings.tx_domain_rate.to_string()),
+      ("encode_bottomup", self.speed_settings.encode_bottomup.to_string()),
+      ("rdo_tx_decision", self.speed_settings.rdo_tx_decision.to_string()),
+      ("prediction_modes", self.speed_settings.prediction_modes.to_string()),
+      ("include_near_mvs", self.speed_settings.include_near_mvs.to_string()),
+      (
+        "no_scene_detection",
+        self.speed_settings.no_scene_detection.to_string(),
+      ),
+      ("diamond_me", self.speed_settings.diamond_me.to_string()),
+      ("cdef", self.speed_settings.cdef.to_string()),
+      ("quantizer_rdo", self.speed_settings.quantizer_rdo.to_string()),
+      ("use_satd_subpel", self.speed_settings.use_satd_subpel.to_string()),
+    ];
+    write!(
+      f,
+      "{}",
+      pairs.iter().map(|pair| format!("{}={}", pair.0, pair.1)).join(" ")
+    )
   }
 }
 
@@ -446,6 +493,20 @@ pub enum PredictionModesSetting {
   ComplexAll,
 }
 
+impl fmt::Display for PredictionModesSetting {
+  fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    write!(
+      f,
+      "{}",
+      match self {
+        PredictionModesSetting::Simple => "Simple",
+        PredictionModesSetting::ComplexKeyframes => "Complex-KFs",
+        PredictionModesSetting::ComplexAll => "Complex-All",
+      }
+    )
+  }
+}
+
 /// Contains the encoder configuration.
 #[derive(Clone, Debug, Default)]
 pub struct Config {
@@ -482,6 +543,8 @@ impl Config {
       8 * std::mem::size_of::<T>(),
       self.enc.bit_depth
     );
+
+    info!("CPU Feature Level: {}", CpuFeatureLevel::default());
 
     let pool = rayon::ThreadPoolBuilder::new()
       .num_threads(self.threads)
@@ -764,6 +827,10 @@ pub struct Packet<T: Pixel> {
   pub frame_type: FrameType,
   /// PSNR for Y, U, and V planes for the shown frame.
   pub psnr: Option<(f64, f64, f64)>,
+  /// QP selected for the frame.
+  pub qp: u8,
+  /// Block-level encoding stats for the frame
+  pub enc_stats: EncoderStats,
 }
 
 impl<T: Pixel> fmt::Display for Packet<T> {
@@ -2010,7 +2077,15 @@ impl<T: Pixel> ContextInner<T> {
         let input_frameno = fi.input_frameno;
         let frame_type = fi.frame_type;
         let bit_depth = fi.sequence.bit_depth;
-        self.finalize_packet(rec, input_frameno, frame_type, bit_depth)
+        let qp = fi.base_q_idx;
+        self.finalize_packet(
+          rec,
+          input_frameno,
+          frame_type,
+          bit_depth,
+          qp,
+          fs.enc_stats,
+        )
       } else if let Some(f) = self.frame_q.get(&fi.input_frameno) {
         if !self.rc_state.ready() {
           return Err(EncoderStatus::NotReady);
@@ -2051,6 +2126,7 @@ impl<T: Pixel> ContextInner<T> {
           let fi = self.frame_invariants.get_mut(&cur_output_frameno).unwrap();
           let mut fs = FrameState::new_with_frame(fi, frame.clone());
           let data = encode_frame(fi, &mut fs);
+          let enc_stats = fs.enc_stats.clone();
           self.maybe_prev_log_base_q = Some(qps.log_base_q);
           // TODO: Add support for dropping frames.
           self.rc_state.update_state(
@@ -2104,7 +2180,15 @@ impl<T: Pixel> ContextInner<T> {
             let input_frameno = fi.input_frameno;
             let frame_type = fi.frame_type;
             let bit_depth = fi.sequence.bit_depth;
-            self.finalize_packet(rec, input_frameno, frame_type, bit_depth)
+            let qp = fi.base_q_idx;
+            self.finalize_packet(
+              rec,
+              input_frameno,
+              frame_type,
+              bit_depth,
+              qp,
+              enc_stats,
+            )
           } else {
             Err(EncoderStatus::Encoded)
           }
@@ -2125,7 +2209,7 @@ impl<T: Pixel> ContextInner<T> {
 
   fn finalize_packet(
     &mut self, rec: Option<Frame<T>>, input_frameno: u64,
-    frame_type: FrameType, bit_depth: usize,
+    frame_type: FrameType, bit_depth: usize, qp: u8, enc_stats: EncoderStats,
   ) -> Result<Packet<T>, EncoderStatus> {
     let data = self.packet_data.clone();
     self.packet_data.clear();
@@ -2142,7 +2226,7 @@ impl<T: Pixel> ContextInner<T> {
     }
 
     self.frames_processed += 1;
-    Ok(Packet { data, rec, input_frameno, frame_type, psnr })
+    Ok(Packet { data, rec, input_frameno, frame_type, psnr, qp, enc_stats })
   }
 
   fn garbage_collect(&mut self, cur_input_frameno: u64) {

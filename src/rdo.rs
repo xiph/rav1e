@@ -673,6 +673,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
           &mv_stack,
           rdo_type,
           need_recon_pixel,
+          false,
         );
 
         let rate = wr.tell_frac() - tell;
@@ -1149,6 +1150,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         &Vec::new(),
         rdo_type,
         true, // For CFL, luma should be always reconstructed.
+        false,
       );
 
       let rate = wr.tell_frac() - tell;
@@ -1555,6 +1557,7 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
             offset,
             &mode_decision,
             rdo_type,
+            false,
           );
           child_modes.push(mode_decision);
         }

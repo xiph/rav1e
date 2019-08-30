@@ -31,6 +31,7 @@ use crate::rate::FRAME_SUBTYPE_P;
 use crate::rate::QSCALE;
 use crate::rdo::*;
 use crate::segmentation::*;
+use crate::stats::EncoderStats;
 use crate::tiling::*;
 use crate::transform::*;
 use crate::util::*;
@@ -328,6 +329,7 @@ pub struct FrameState<T: Pixel> {
   pub restoration: RestorationState,
   pub frame_mvs: Vec<FrameMotionVectors>,
   pub t: RDOTracker,
+  pub enc_stats: EncoderStats,
 }
 
 impl<T: Pixel> FrameState<T> {
@@ -382,6 +384,7 @@ impl<T: Pixel> FrameState<T> {
         vec
       },
       t: RDOTracker::new(),
+      enc_stats: Default::default(),
     }
   }
 
@@ -1483,7 +1486,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
   mvs: [MotionVector; 2], bsize: BlockSize, tile_bo: TileBlockOffset,
   skip: bool, cfl: CFLParams, tx_size: TxSize, tx_type: TxType,
   mode_context: usize, mv_stack: &[CandidateMV], rdo_type: RDOType,
-  need_recon_pixel: bool,
+  need_recon_pixel: bool, record_stats: bool,
 ) -> i64 {
   let is_inter = !luma_mode.is_intra();
   if is_inter {
@@ -1655,6 +1658,16 @@ pub fn encode_block_post_cdef<T: Pixel>(
         }*/
     } else {
       cw.bc.update_tx_size_context(tile_bo, bsize, tx_size, is_inter && skip);
+    }
+  }
+
+  if record_stats {
+    *ts.enc_stats.block_size_counts.entry(bsize).or_insert(0) += 1;
+    *ts.enc_stats.tx_type_counts.entry(tx_type).or_insert(0) += 1;
+    *ts.enc_stats.luma_pred_mode_counts.entry(luma_mode).or_insert(0) += 1;
+    *ts.enc_stats.chroma_pred_mode_counts.entry(chroma_mode).or_insert(0) += 1;
+    if skip {
+      ts.enc_stats.skip_block_count += 1;
     }
   }
 
@@ -2037,7 +2050,7 @@ pub fn encode_block_with_modes<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer,
   w_post_cdef: &mut dyn Writer, bsize: BlockSize, tile_bo: TileBlockOffset,
-  mode_decision: &RDOPartitionOutput, rdo_type: RDOType,
+  mode_decision: &RDOPartitionOutput, rdo_type: RDOType, record_stats: bool,
 ) {
   let (mode_luma, mode_chroma) =
     (mode_decision.pred_mode_luma, mode_decision.pred_mode_chroma);
@@ -2092,6 +2105,7 @@ pub fn encode_block_with_modes<T: Pixel>(
     &mv_stack,
     rdo_type,
     true,
+    record_stats,
   );
 }
 
@@ -2188,6 +2202,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
         tile_bo,
         &mode_decision,
         rdo_type,
+        true,
       );
     }
   }
@@ -2344,6 +2359,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
           mode.bo,
           &mode,
           rdo_type,
+          true,
         );
       }
     }
@@ -2631,6 +2647,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         &mv_stack,
         RDOType::PixelDistRealRate,
         true,
+        true,
       );
     }
     PARTITION_SPLIT | PARTITION_HORZ | PARTITION_VERT => {
@@ -2754,16 +2771,22 @@ fn encode_tile_group<T: Pixel>(
   let initial_cdf = get_initial_cdfcontext(fi);
   let mut cdfs = vec![initial_cdf; ti.tile_count()];
 
-  let (raw_tiles, rdo_trackers): (Vec<_>, Vec<_>) = ti
+  let (raw_tiles, tile_states): (Vec<_>, Vec<_>) = ti
     .tile_iter_mut(fs, &mut blocks)
     .zip(cdfs.iter_mut())
     .collect::<Vec<_>>()
     .into_par_iter()
     .map(|(mut ctx, cdf)| {
       let raw = encode_tile(fi, &mut ctx.ts, cdf, &mut ctx.tb);
-      (raw, ctx.ts.rdo)
+      (raw, ctx.ts)
     })
     .unzip();
+  let (rdo_trackers, stats): (Vec<_>, Vec<_>) =
+    tile_states.into_iter().map(|ts| (ts.rdo, ts.enc_stats)).unzip();
+
+  for ts in stats {
+    fs.enc_stats += &ts;
+  }
 
   /* TODO: Don't apply if lossless */
   deblock_filter_optimize(fi, fs, &blocks);

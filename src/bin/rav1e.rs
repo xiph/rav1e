@@ -209,7 +209,7 @@ fn do_encode<T: Pixel, D: Decoder>(
     y4m_enc.as_mut(),
   )? {
     for frame in frame_info {
-      progress.add_frame(frame);
+      progress.add_frame(frame.clone());
       if verbose {
         info!("{} - {}", frame, progress);
       } else {
@@ -224,7 +224,7 @@ fn do_encode<T: Pixel, D: Decoder>(
     // Clear out the temporary progress indicator
     eprint!("\r");
   }
-  progress.print_summary();
+  progress.print_summary(verbose);
   Ok(())
 }
 
@@ -282,20 +282,23 @@ fn run() -> Result<(), error::CliError> {
   cli.enc.time_base = video_info.time_base;
   let cfg = Config { enc: cli.enc, threads: cli.threads };
 
-  info!(
-    "{}x{} @ {}/{} fps",
-    video_info.width,
-    video_info.height,
-    video_info.time_base.den,
-    video_info.time_base.num
-  );
-
   cli.io.output.write_header(
     video_info.width,
     video_info.height,
     video_info.time_base.den as usize,
     video_info.time_base.num as usize,
   );
+
+  info!(
+    "Using y4m decoder: {}x{}p @ {}/{} fps, {}, {}-bit",
+    video_info.width,
+    video_info.height,
+    video_info.time_base.den,
+    video_info.time_base.num,
+    video_info.chroma_sampling,
+    video_info.bit_depth
+  );
+  info!("Encoding settings: {}", cfg.enc);
 
   let progress = ProgressInfo::new(
     Rational { num: video_info.time_base.den, den: video_info.time_base.num },
@@ -319,7 +322,7 @@ fn run() -> Result<(), error::CliError> {
             std::process::exit(128 + sig);
           }
           e.store(true, Ordering::SeqCst);
-          info!("\rExit requested, flushing.\n");
+          info!("Exit requested, flushing.");
         })
         .expect("Cannot register the signal hooks");
       }

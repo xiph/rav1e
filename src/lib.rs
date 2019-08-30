@@ -76,6 +76,7 @@ mod recon_intra;
 mod scan_order;
 mod scenechange;
 mod segmentation;
+mod stats;
 mod tiling;
 mod token_cdfs;
 
@@ -99,6 +100,8 @@ pub mod prelude {
   pub use crate::frame::Plane;
   pub use crate::frame::PlaneConfig;
   pub use crate::partition::BlockSize;
+  pub use crate::predict::PredictionMode;
+  pub use crate::transform::TxType;
   pub use crate::util::{CastFromPrimitive, Pixel, PixelType};
 }
 
@@ -109,6 +112,7 @@ pub mod data {
   };
   pub use crate::frame::Frame;
   pub use crate::frame::FrameParameters;
+  pub use crate::stats::EncoderStats;
   pub use crate::util::{CastFromPrimitive, Pixel, PixelType};
 }
 

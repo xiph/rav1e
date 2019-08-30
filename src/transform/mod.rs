@@ -41,7 +41,7 @@ static INV_SQRT2: i32 = 2896; // 2^12 / sqrt(2)
 
 pub const TX_TYPES: usize = 16;
 
-#[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord)]
 #[repr(C)]
 pub enum TxType {
   DCT_DCT = 0,   // DCT  in both horizontal and vertical
@@ -63,7 +63,7 @@ pub enum TxType {
 }
 
 /// Transform Size
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd, Eq, Ord)]
 #[repr(C)]
 pub enum TxSize {
   TX_4X4,
