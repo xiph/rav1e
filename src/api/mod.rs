@@ -45,6 +45,9 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::{cmp, fmt, io};
 
+// We add 1 to rdo_lookahead_frames in a bunch of places.
+const MAX_RDO_LOOKAHEAD_FRAMES: usize = usize::max_value() - 1;
+
 // TODO: use the num crate?
 /// A rational number.
 #[derive(Clone, Copy, Debug)]
@@ -144,7 +147,7 @@ pub struct EncoderConfig {
   /// [`tile_rows`]: #structfield.tile_rows
   pub tiles: usize,
   /// Number of frames to read ahead for the RDO lookahead computation.
-  pub rdo_lookahead_frames: u64,
+  pub rdo_lookahead_frames: usize,
   /// Settings which affect the enconding speed vs. quality trade-off.
   pub speed_settings: SpeedSettings,
   /// If enabled, computes the PSNR values and stores them in [`Packet`].
@@ -560,6 +563,9 @@ impl Config {
     let mut config = self.enc.clone();
 
     if config.width == 0 || config.height == 0 {
+      return Err(EncoderStatus::Failure);
+    }
+    if config.rdo_lookahead_frames > MAX_RDO_LOOKAHEAD_FRAMES {
       return Err(EncoderStatus::Failure);
     }
 
@@ -1291,7 +1297,7 @@ impl<T: Pixel> ContextInner<T> {
   /// Indicates whether more frames need to be processed into FrameInvariants
   /// in order for FI lookahead to be full.
   fn needs_more_fi_lookahead(&self) -> bool {
-    let ready_frames = self.get_rdo_lookahead_frames().count() as u64;
+    let ready_frames = self.get_rdo_lookahead_frames().count();
     ready_frames < self.config.rdo_lookahead_frames + 1
       && self.needs_more_frames(self.next_lookahead_frame)
   }
@@ -1310,7 +1316,7 @@ impl<T: Pixel> ContextInner<T> {
         output_frameno < self.output_frameno
       })
       .filter(|(_, fi)| !fi.invalid && !fi.show_existing_frame)
-      .take(self.config.rdo_lookahead_frames as usize + 1)
+      .take(self.config.rdo_lookahead_frames + 1)
   }
 
   fn next_keyframe_input_frameno(
@@ -2424,7 +2430,7 @@ mod test {
     w: usize, h: usize, speed: usize, quantizer: usize, bit_depth: usize,
     chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
     bitrate: i32, low_latency: bool, no_scene_detection: bool,
-    rdo_lookahead_frames: u64,
+    rdo_lookahead_frames: usize,
   ) -> Context<T> {
     assert!(bit_depth == 8 || std::mem::size_of::<T>() > 1);
     let mut enc = EncoderConfig::with_speed_preset(speed);
@@ -3793,7 +3799,7 @@ mod test {
 
   #[test]
   fn lookahead_size_properly_bounded_8() {
-    const LOOKAHEAD_SIZE: u64 = 8;
+    const LOOKAHEAD_SIZE: usize = 8;
     const EXPECTATIONS: LookaheadTestExpectations =
       LookaheadTestExpectations {
         pre_receive_frame_q_lens: [
@@ -3826,7 +3832,7 @@ mod test {
 
   #[test]
   fn lookahead_size_properly_bounded_10() {
-    const LOOKAHEAD_SIZE: u64 = 10;
+    const LOOKAHEAD_SIZE: usize = 10;
     const EXPECTATIONS: LookaheadTestExpectations =
       LookaheadTestExpectations {
         pre_receive_frame_q_lens: [
@@ -3859,7 +3865,7 @@ mod test {
 
   #[test]
   fn lookahead_size_properly_bounded_16() {
-    const LOOKAHEAD_SIZE: u64 = 16;
+    const LOOKAHEAD_SIZE: usize = 16;
     const EXPECTATIONS: LookaheadTestExpectations =
       LookaheadTestExpectations {
         pre_receive_frame_q_lens: [
@@ -3891,7 +3897,7 @@ mod test {
   }
 
   fn lookahead_size_properly_bounded(
-    rdo_lookahead: u64, expectations: &LookaheadTestExpectations,
+    rdo_lookahead: usize, expectations: &LookaheadTestExpectations,
   ) {
     // Test that lookahead reads in the proper number of frames at once
 
@@ -4012,6 +4018,14 @@ mod test {
   fn zero_width() {
     let mut config = Config::default();
     config.enc.width = 0;
+    let res: Result<Context<u8>, _> = config.new_context();
+    assert!(res.is_err());
+  }
+
+  #[test]
+  fn rdo_lookahead_frames_overflow() {
+    let mut config = Config::default();
+    config.enc.rdo_lookahead_frames = usize::max_value();
     let res: Result<Context<u8>, _> = config.new_context();
     assert!(res.is_err());
   }
