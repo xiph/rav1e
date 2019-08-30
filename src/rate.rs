@@ -638,7 +638,9 @@ impl RCState {
     //  reported to update_state().
     // TODO: Support constraints imposed by levels.
     let bits_per_tu = clamp(
-      (target_bitrate as i64) * framerate_den / framerate_num,
+      (target_bitrate as i64)
+        .checked_mul(framerate_den)?
+        .checked_div(framerate_num)?,
       40,
       0x4000_0000_0000,
     ) - (TEMPORAL_DELIMITER.len() * 8) as i64;

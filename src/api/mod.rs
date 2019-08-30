@@ -3972,4 +3972,19 @@ mod test {
     config.enc.reservoir_frame_delay = None;
     let _: Result<Context<u8>, _> = config.new_context();
   }
+
+  #[test]
+  fn target_bitrate_overflow() {
+    let mut config = Config::default();
+    config.enc.bitrate = i32::max_value();
+    config.enc.time_base = Rational::new(i64::max_value() as u64, 1);
+    let _: Result<Context<u8>, _> = config.new_context();
+  }
+
+  #[test]
+  fn time_base_den_divide_by_zero() {
+    let mut config = Config::default();
+    config.enc.time_base = Rational::new(1, 0);
+    let _: Result<Context<u8>, _> = config.new_context();
+  }
 }
