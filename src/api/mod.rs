@@ -1197,7 +1197,7 @@ impl<T: Pixel> Context<T> {
       Ok(buf)
     }
 
-    let seq = Sequence::new(&self.config);
+    let seq = Sequence::new(&self.config).unwrap();
 
     sequence_header_inner(&seq).unwrap()
   }
@@ -1226,7 +1226,7 @@ impl<T: Pixel> ContextInner<T> {
       gop_input_frameno_start: BTreeMap::new(),
       keyframe_detector: SceneChangeDetector::new(enc.bit_depth as u8),
       config: enc.clone(),
-      seq: Sequence::new(enc),
+      seq: Sequence::new(enc)?,
       rc_state: RCState::new(
         enc.width as i32,
         enc.height as i32,
@@ -3985,6 +3985,13 @@ mod test {
   fn time_base_den_divide_by_zero() {
     let mut config = Config::default();
     config.enc.time_base = Rational::new(1, 0);
+    let _: Result<Context<u8>, _> = config.new_context();
+  }
+
+  #[test]
+  fn large_width_assert() {
+    let mut config = Config::default();
+    config.enc.width = u32::max_value() as usize;
     let _: Result<Context<u8>, _> = config.new_context();
   }
 }

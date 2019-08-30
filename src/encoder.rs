@@ -160,11 +160,12 @@ pub struct Sequence {
 }
 
 impl Sequence {
-  pub fn new(config: &EncoderConfig) -> Sequence {
+  pub fn new(config: &EncoderConfig) -> Option<Sequence> {
     let width_bits = 32 - (config.width as u32).leading_zeros();
     let height_bits = 32 - (config.height as u32).leading_zeros();
-    assert!(width_bits <= 16);
-    assert!(height_bits <= 16);
+    if width_bits > 16 || height_bits > 16 {
+      return None;
+    }
 
     let profile = if config.bit_depth == 12
       || config.chroma_sampling == ChromaSampling::Cs422
@@ -187,7 +188,7 @@ impl Sequence {
       tier[i] = 0;
     }
 
-    Sequence {
+    Some(Sequence {
       profile,
       num_bits_width: width_bits,
       num_bits_height: height_bits,
@@ -231,7 +232,7 @@ impl Sequence {
       tier,
       film_grain_params_present: false,
       separate_uv_delta_q: true,
-    }
+    })
   }
 
   pub fn get_relative_dist(&self, a: u32, b: u32) -> i32 {
@@ -310,7 +311,7 @@ impl Sequence {
 
 impl Default for Sequence {
   fn default() -> Self {
-    Sequence::new(&EncoderConfig::default())
+    Sequence::new(&EncoderConfig::default()).unwrap()
   }
 }
 
