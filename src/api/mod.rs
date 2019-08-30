@@ -559,6 +559,10 @@ impl Config {
 
     let mut config = self.enc.clone();
 
+    if config.width == 0 || config.height == 0 {
+      return Err(EncoderStatus::Failure);
+    }
+
     if !check_tile_log2(config.tile_cols) {
       return Err(EncoderStatus::Failure);
     }
@@ -4002,5 +4006,13 @@ mod test {
     config.enc.bitrate = i32::max_value();
     config.enc.time_base = Rational::new(i32::max_value() as u64 * 2, 1);
     let _: Result<Context<u8>, _> = config.new_context();
+  }
+
+  #[test]
+  fn zero_width() {
+    let mut config = Config::default();
+    config.enc.width = 0;
+    let res: Result<Context<u8>, _> = config.new_context();
+    assert!(res.is_err());
   }
 }
