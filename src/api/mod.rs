@@ -3994,4 +3994,13 @@ mod test {
     config.enc.width = u32::max_value() as usize;
     let _: Result<Context<u8>, _> = config.new_context();
   }
+
+  #[test]
+  fn reservoir_max_overflow() {
+    let mut config = Config::default();
+    config.enc.reservoir_frame_delay = Some(i32::max_value());
+    config.enc.bitrate = i32::max_value();
+    config.enc.time_base = Rational::new(i32::max_value() as u64 * 2, 1);
+    let _: Result<Context<u8>, _> = config.new_context();
+  }
 }
