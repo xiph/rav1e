@@ -574,7 +574,7 @@ impl Config {
       config.speed_settings.rdo_tx_decision = false;
     }
 
-    let inner = ContextInner::new(&config);
+    let inner = ContextInner::new(&config).ok_or(EncoderStatus::Failure)?;
 
     Ok(Context { is_flushing: false, inner, pool, config })
   }
@@ -1204,14 +1204,14 @@ impl<T: Pixel> Context<T> {
 }
 
 impl<T: Pixel> ContextInner<T> {
-  pub fn new(enc: &EncoderConfig) -> Self {
+  pub fn new(enc: &EncoderConfig) -> Option<Self> {
     // initialize with temporal delimiter
     let packet_data = TEMPORAL_DELIMITER.to_vec();
 
     let maybe_ac_qi_max =
       if enc.quantizer < 255 { Some(enc.quantizer as u8) } else { None };
 
-    ContextInner {
+    Some(ContextInner {
       frame_count: 0,
       limit: None,
       inter_cfg: InterConfig::new(enc),
@@ -1237,11 +1237,11 @@ impl<T: Pixel> ContextInner<T> {
         enc.min_quantizer,
         enc.max_key_frame_interval as i32,
         enc.reservoir_frame_delay,
-      ),
+      )?,
       maybe_prev_log_base_q: None,
       next_lookahead_frame: 0,
       next_lookahead_output_frameno: 0,
-    }
+    })
   }
 
   pub fn send_frame(
@@ -3962,6 +3962,14 @@ mod test {
   fn tile_cols_overflow() {
     let mut config = Config::default();
     config.enc.tile_cols = usize::max_value();
+    let _: Result<Context<u8>, _> = config.new_context();
+  }
+
+  #[test]
+  fn max_key_frame_interval_overflow() {
+    let mut config = Config::default();
+    config.enc.max_key_frame_interval = i32::max_value() as u64;
+    config.enc.reservoir_frame_delay = None;
     let _: Result<Context<u8>, _> = config.new_context();
   }
 }

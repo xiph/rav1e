@@ -615,7 +615,7 @@ impl RCState {
     framerate_den: i64, target_bitrate: i32, maybe_ac_qi_max: Option<u8>,
     ac_qi_min: u8, max_key_frame_interval: i32,
     maybe_reservoir_frame_delay: Option<i32>,
-  ) -> RCState {
+  ) -> Option<RCState> {
     // The default buffer size is set equal to 1.5x the keyframe interval, or 240
     //  frames; whichsever is smaller.
     // For user set values, we enforce a minimum of 12.
@@ -627,7 +627,7 @@ impl RCState {
     let reservoir_frame_delay = if maybe_reservoir_frame_delay.is_some() {
       maybe_reservoir_frame_delay.unwrap().max(12)
     } else {
-      ((max_key_frame_interval * 3) >> 1).max(240)
+      ((max_key_frame_interval.checked_mul(3)?) >> 1).max(240)
     };
     // TODO: What are the limits on these?
     let npixels = (frame_width as i64) * (frame_height as i64);
@@ -679,7 +679,7 @@ impl RCState {
     };
 
     // TODO: Add support for "golden" P frames.
-    RCState {
+    Some(RCState {
       target_bitrate,
       reservoir_frame_delay,
       reservoir_frame_delay_is_set: maybe_reservoir_frame_delay.is_some(),
@@ -732,7 +732,7 @@ impl RCState {
       scale_window_ntus: 0,
       scale_window_nframes: [0; FRAME_NSUBTYPES + 1],
       scale_window_sum: [0; FRAME_NSUBTYPES],
-    }
+    })
   }
 
   // TODO: Separate quantizers for Cb and Cr.
