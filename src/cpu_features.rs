@@ -35,24 +35,26 @@ mod x86 {
     }
   }
 
-  pub fn detect_cpu_feature_level() -> CpuFeatureLevel {
-    let detected: CpuFeatureLevel = if is_x86_feature_detected!("avx2") {
-      CpuFeatureLevel::AVX2
-    } else {
-      CpuFeatureLevel::NATIVE
-    };
-    let manual: CpuFeatureLevel = match env::var("RAV1E_CPU_TARGET") {
-      Ok(feature) => match feature.as_ref() {
-        "rust" => CpuFeatureLevel::NATIVE,
-        "avx2" => CpuFeatureLevel::AVX2,
-        _ => detected,
-      },
-      Err(_e) => detected,
-    };
-    if manual > detected {
-      detected
-    } else {
-      manual
+  impl Default for CpuFeatureLevel {
+    fn default() -> CpuFeatureLevel {
+      let detected: CpuFeatureLevel = if is_x86_feature_detected!("avx2") {
+        CpuFeatureLevel::AVX2
+      } else {
+        CpuFeatureLevel::NATIVE
+      };
+      let manual: CpuFeatureLevel = match env::var("RAV1E_CPU_TARGET") {
+        Ok(feature) => match feature.as_ref() {
+          "rust" => CpuFeatureLevel::NATIVE,
+          "avx2" => CpuFeatureLevel::AVX2,
+          _ => detected,
+        },
+        Err(_e) => detected,
+      };
+      if manual > detected {
+        detected
+      } else {
+        manual
+      }
     }
   }
 }
@@ -64,7 +66,9 @@ mod native {
     NATIVE,
   }
 
-  pub fn detect_cpu_feature_level() -> CpuFeatureLevel {
-    CpuFeatureLevel::NATIVE
+  impl Default for CpuFeatureLevel {
+    fn default() -> CpuFeatureLevel {
+      CpuFeatureLevel::NATIVE
+    }
   }
 }
