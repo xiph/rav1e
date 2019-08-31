@@ -1933,7 +1933,6 @@ impl FieldMap {
   /// Print the field the address belong to
   fn lookup(&self, addr: usize) {
     for (name, start, end) in &self.map {
-      // eprintln!("{} {} {} val {}", name, start, end, addr);
       if addr >= *start && addr < *end {
         println!(" CDF {}", name);
         println!();

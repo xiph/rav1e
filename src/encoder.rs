@@ -2781,7 +2781,7 @@ fn encode_tile_group<T: Pixel>(
   }
 
   if fi.config.train_rdo {
-    eprintln!("train rdo");
+    info!("Training RDO");
     for rdo_tracker in &rdo_trackers {
       fs.t.merge_in(&rdo_tracker);
     }

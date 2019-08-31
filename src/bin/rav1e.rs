@@ -11,6 +11,8 @@
 
 #[macro_use]
 extern crate err_derive;
+#[macro_use]
+extern crate log;
 
 mod common;
 mod decoder;
@@ -26,6 +28,7 @@ use rav1e::prelude::*;
 use crate::decoder::Decoder;
 use crate::decoder::VideoDetails;
 use crate::muxer::*;
+use std::env;
 use std::fs::File;
 use std::io::Read;
 use std::io::Seek;
@@ -208,25 +211,38 @@ fn do_encode<T: Pixel, D: Decoder>(
     for frame in frame_info {
       progress.add_frame(frame);
       if verbose {
-        eprintln!("{} - {}", frame, progress);
+        info!("{} - {}", frame, progress);
       } else {
+        // Print a one-line progress indicator that overrides itself with every update
         eprint!("\r{}                    ", progress);
       };
     }
 
     output.flush().unwrap();
   }
-  eprint!("\n{}\n", progress.print_summary());
+  if !verbose {
+    // Clear out the temporary progress indicator
+    eprint!("\r");
+  }
+  progress.print_summary();
   Ok(())
 }
 
 fn main() {
   better_panic::install();
+  init_logger();
 
   match run() {
     Ok(()) => {}
     Err(e) => error::print_error(&e),
   }
+}
+
+fn init_logger() {
+  if env::var("RUST_LOG").is_err() {
+    env::set_var("RUST_LOG", "info");
+  }
+  pretty_env_logger::init();
 }
 
 fn run() -> Result<(), error::CliError> {
@@ -266,7 +282,7 @@ fn run() -> Result<(), error::CliError> {
   cli.enc.time_base = video_info.time_base;
   let cfg = Config { enc: cli.enc, threads: cli.threads };
 
-  eprintln!(
+  info!(
     "{}x{} @ {}/{} fps",
     video_info.width,
     video_info.height,
@@ -303,7 +319,7 @@ fn run() -> Result<(), error::CliError> {
             std::process::exit(128 + sig);
           }
           e.store(true, Ordering::SeqCst);
-          eprintln!("\rExit requested, flushing.\n");
+          info!("\rExit requested, flushing.\n");
         })
         .expect("Cannot register the signal hooks");
       }
