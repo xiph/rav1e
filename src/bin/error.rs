@@ -33,10 +33,10 @@ impl ToError for std::num::ParseIntError {
 }
 
 pub fn print_error(e: &dyn Error) {
-  eprintln!("error: {}", e);
+  error!("{}", e);
   let mut cause = e.source();
   while let Some(e) = cause {
-    eprintln!("caused by: {}", e);
+    error!("Caused by: {}", e);
     cause = e.source();
   }
 }

@@ -402,7 +402,7 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
   }
 
   let mut cfg = if let Some(settings) = matches.value_of("SPEED_TEST") {
-    eprintln!("Running in speed test mode--ignoring other settings");
+    info!("Running in speed test mode--ignoring other settings");
     let mut cfg = EncoderConfig::default();
     settings
       .split_whitespace()

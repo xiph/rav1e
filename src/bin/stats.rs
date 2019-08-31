@@ -122,7 +122,7 @@ impl ProgressInfo {
   }
 
   // Number of frames of given type which appear in the video
-  pub fn get_frame_type_count(&self, frame_type: FrameType) -> usize {
+  fn get_frame_type_count(&self, frame_type: FrameType) -> usize {
     self
       .frame_info
       .iter()
@@ -130,68 +130,60 @@ impl ProgressInfo {
       .count()
   }
 
-  // Size in bytes of all frames of given frame type
-  pub fn get_frame_type_size(&self, frame_type: FrameType) -> usize {
+  fn get_frame_type_avg_size(&self, frame_type: FrameType) -> usize {
+    let count = self.get_frame_type_count(frame_type);
+    if count == 0 {
+      return 0;
+    }
     self
-      .frame_info
-      .iter()
-      .filter(|frame| frame.frame_type == frame_type)
-      .map(|frame| frame.size)
-      .sum()
+        .frame_info
+        .iter()
+        .filter(|frame| frame.frame_type == frame_type)
+        .map(|frame| frame.size)
+        .sum::<usize>()
+        / count
   }
 
-  pub fn print_summary(&self) -> String {
-    let (key, key_size) = (
-      self.get_frame_type_count(FrameType::KEY),
-      self.get_frame_type_size(FrameType::KEY),
+  pub fn print_summary(&self) {
+    info!("{}", self);
+    info!("----------");
+    self.print_frame_type_summary(FrameType::KEY);
+    self.print_frame_type_summary(FrameType::INTER);
+    self.print_frame_type_summary(FrameType::INTRA_ONLY);
+    self.print_frame_type_summary(FrameType::SWITCH);
+    if self.show_psnr {
+      self.print_video_psnr();
+    }
+  }
+
+  fn print_frame_type_summary(&self, frame_type: FrameType) {
+    let count = self.get_frame_type_count(frame_type);
+    let size = self.get_frame_type_avg_size(frame_type);
+    info!(
+      "{:17} {:>6}    avg size: {:>7} B",
+      format!("{}:", frame_type),
+      count,
+      size
     );
-    let (inter, inter_size) = (
-      self.get_frame_type_count(FrameType::INTER),
-      self.get_frame_type_size(FrameType::INTER),
-    );
-    let (ionly, ionly_size) = (
-      self.get_frame_type_count(FrameType::INTRA_ONLY),
-      self.get_frame_type_size(FrameType::INTRA_ONLY),
-    );
-    let (switch, switch_size) = (
-      self.get_frame_type_count(FrameType::SWITCH),
-      self.get_frame_type_size(FrameType::SWITCH),
-    );
-    format!(
-      "\
-       Key Frames: {:>6}    avg size: {:>7} B\n\
-       Inter:      {:>6}    avg size: {:>7} B\n\
-       Intra Only: {:>6}    avg size: {:>7} B\n\
-       Switch:     {:>6}    avg size: {:>7} B\
-       {}",
-      key,
-      key_size / key,
-      inter,
-      inter_size.checked_div(inter).unwrap_or(0),
-      ionly,
-      ionly_size / key,
-      switch,
-      switch_size / key,
-      if self.show_psnr {
-        let psnr_y =
-          self.frame_info.iter().map(|fi| fi.psnr.unwrap().0).sum::<f64>()
+  }
+
+  fn print_video_psnr(&self) {
+    info!("----------");
+    let psnr_y =
+        self.frame_info.iter().map(|fi| fi.psnr.unwrap().0).sum::<f64>()
             / self.frame_info.len() as f64;
-        let psnr_u =
-          self.frame_info.iter().map(|fi| fi.psnr.unwrap().1).sum::<f64>()
+    let psnr_u =
+        self.frame_info.iter().map(|fi| fi.psnr.unwrap().1).sum::<f64>()
             / self.frame_info.len() as f64;
-        let psnr_v =
-          self.frame_info.iter().map(|fi| fi.psnr.unwrap().2).sum::<f64>()
+    let psnr_v =
+        self.frame_info.iter().map(|fi| fi.psnr.unwrap().2).sum::<f64>()
             / self.frame_info.len() as f64;
-        format!(
-          "\nMean PSNR: Y: {:.4}  Cb: {:.4}  Cr: {:.4}  Avg: {:.4}",
-          psnr_y,
-          psnr_u,
-          psnr_v,
-          (psnr_y + psnr_u + psnr_v) / 3.0
-        )
-      } else {
-        String::new()
-      }
+    info!(
+      "Mean PSNR: Y: {:.4}  Cb: {:.4}  Cr: {:.4}  Avg: {:.4}",
+      psnr_y,
+      psnr_u,
+      psnr_v,
+      (psnr_y + psnr_u + psnr_v) / 3.0
     )
   }
 }

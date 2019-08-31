@@ -42,6 +42,9 @@
 #[macro_use]
 extern crate pretty_assertions;
 
+#[macro_use]
+extern crate log;
+
 #[cfg(any(cargo_c, feature = "capi"))]
 pub mod capi;
 

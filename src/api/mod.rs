@@ -2413,16 +2413,16 @@ mod test {
       loop {
         match ctx.receive_packet() {
           Ok(_) => {
-            eprintln!("Packet Received {}/{}", count, limit);
+            debug!("Packet Received {}/{}", count, limit);
             count += 1;
           }
           Err(EncoderStatus::EnoughData) => {
-            eprintln!("{:?}", EncoderStatus::EnoughData);
+            debug!("{:?}", EncoderStatus::EnoughData);
 
             break 'out;
           }
           Err(e) => {
-            eprintln!("{:?}", e);
+            debug!("{:?}", e);
             break;
           }
         }
@@ -2466,16 +2466,16 @@ mod test {
       loop {
         match ctx.receive_packet() {
           Ok(_) => {
-            eprintln!("Packet Received {}/{}", count, limit);
+            debug!("Packet Received {}/{}", count, limit);
             count += 1;
           }
           Err(EncoderStatus::EnoughData) => {
-            eprintln!("{:?}", EncoderStatus::EnoughData);
+            debug!("{:?}", EncoderStatus::EnoughData);
 
             break 'out;
           }
           Err(e) => {
-            eprintln!("{:?}", e);
+            debug!("{:?}", e);
             break;
           }
         }
