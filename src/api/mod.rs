@@ -187,7 +187,7 @@ impl EncoderConfig {
       content_light: None,
 
       still_picture: false,
-      cpu_feature_level: detect_cpu_feature_level(),
+      cpu_feature_level: Default::default(),
 
       time_base: Rational { num: 1, den: 30 },
 
