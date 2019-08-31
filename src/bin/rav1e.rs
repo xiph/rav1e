@@ -28,12 +28,12 @@ use rav1e::prelude::*;
 use crate::decoder::Decoder;
 use crate::decoder::VideoDetails;
 use crate::muxer::*;
+use std::env;
 use std::fs::File;
 use std::io::Read;
 use std::io::Seek;
 use std::io::Write;
 use std::sync::Arc;
-use std::env;
 
 struct Source<D: Decoder> {
   limit: usize,

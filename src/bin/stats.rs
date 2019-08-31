@@ -136,12 +136,12 @@ impl ProgressInfo {
       return 0;
     }
     self
-        .frame_info
-        .iter()
-        .filter(|frame| frame.frame_type == frame_type)
-        .map(|frame| frame.size)
-        .sum::<usize>()
-        / count
+      .frame_info
+      .iter()
+      .filter(|frame| frame.frame_type == frame_type)
+      .map(|frame| frame.size)
+      .sum::<usize>()
+      / count
   }
 
   pub fn print_summary(&self) {
@@ -170,14 +170,14 @@ impl ProgressInfo {
   fn print_video_psnr(&self) {
     info!("----------");
     let psnr_y =
-        self.frame_info.iter().map(|fi| fi.psnr.unwrap().0).sum::<f64>()
-            / self.frame_info.len() as f64;
+      self.frame_info.iter().map(|fi| fi.psnr.unwrap().0).sum::<f64>()
+        / self.frame_info.len() as f64;
     let psnr_u =
-        self.frame_info.iter().map(|fi| fi.psnr.unwrap().1).sum::<f64>()
-            / self.frame_info.len() as f64;
+      self.frame_info.iter().map(|fi| fi.psnr.unwrap().1).sum::<f64>()
+        / self.frame_info.len() as f64;
     let psnr_v =
-        self.frame_info.iter().map(|fi| fi.psnr.unwrap().2).sum::<f64>()
-            / self.frame_info.len() as f64;
+      self.frame_info.iter().map(|fi| fi.psnr.unwrap().2).sum::<f64>()
+        / self.frame_info.len() as f64;
     info!(
       "Mean PSNR: Y: {:.4}  Cb: {:.4}  Cr: {:.4}  Avg: {:.4}",
       psnr_y,
