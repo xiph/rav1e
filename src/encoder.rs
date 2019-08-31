@@ -535,6 +535,9 @@ pub struct FrameInvariants<T: Pixel> {
   /// indicating how much future frames depend on the block (for example, via
   /// inter-prediction).
   pub block_importances: Box<[f32]>,
+
+  /// Target CPU feature level.
+  pub cpu_feature_level: crate::cpu_features::CpuFeatureLevel,
 }
 
 pub(crate) fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
@@ -704,6 +707,7 @@ impl<T: Pixel> FrameInvariants<T> {
       lookahead_intra_costs: vec![0; w_in_imp_b * h_in_imp_b]
         .into_boxed_slice(),
       block_importances: vec![0.; w_in_imp_b * h_in_imp_b].into_boxed_slice(),
+      cpu_feature_level: Default::default(),
     }
   }
 

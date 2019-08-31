@@ -21,7 +21,6 @@ use serde_derive::{Deserialize, Serialize};
 
 use crate::context::*;
 use crate::context::{FrameBlocks, SuperBlockOffset, TileSuperBlockOffset};
-use crate::cpu_features::*;
 use crate::dist::get_satd;
 use crate::encoder::*;
 use crate::frame::*;
@@ -100,8 +99,6 @@ pub struct EncoderConfig {
   pub still_picture: bool,
 
   // encoder configuration
-  /// Target CPU feature level.
-  pub cpu_feature_level: CpuFeatureLevel,
   /// Video time base.
   pub time_base: Rational,
   /// The *minimum* interval between two keyframes
@@ -187,7 +184,6 @@ impl EncoderConfig {
       content_light: None,
 
       still_picture: false,
-      cpu_feature_level: Default::default(),
 
       time_base: Rational { num: 1, den: 30 },
 

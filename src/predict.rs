@@ -350,7 +350,7 @@ impl PredictionMode {
           mode,
           mode,
           fi.sequence.bit_depth,
-          fi.config.cpu_feature_level,
+          fi.cpu_feature_level,
         );
       }
     } else {
@@ -372,7 +372,7 @@ impl PredictionMode {
             mode,
             mode,
             fi.sequence.bit_depth,
-            fi.config.cpu_feature_level,
+            fi.cpu_feature_level,
           );
         }
       }
@@ -383,7 +383,7 @@ impl PredictionMode {
         width,
         height,
         fi.sequence.bit_depth,
-        fi.config.cpu_feature_level,
+        fi.cpu_feature_level,
       );
     }
   }
