@@ -172,6 +172,34 @@ macro_rules! plane_region_common {
         }
       }
 
+      pub fn vert_windows(&self, h: usize) -> VertWindows<'_, T> {
+        VertWindows {
+          data: self.data,
+          plane_cfg: self.plane_cfg,
+          remaining: (self.rect.height as isize - h as isize + 1).max(0) as usize,
+          output_rect: Rect {
+            x: self.rect.x,
+            y: self.rect.y,
+            width: self.rect.width,
+            height: h
+          }
+        }
+      }
+
+      pub fn horz_windows(&self, w: usize) -> HorzWindows<'_, T> {
+        HorzWindows {
+          data: self.data,
+          plane_cfg: self.plane_cfg,
+          remaining: (self.rect.width as isize - w as isize + 1).max(0) as usize,
+          output_rect: Rect {
+            x: self.rect.x,
+            y: self.rect.y,
+            width: w,
+            height: self.rect.height
+          }
+        }
+      }
+
       // Return a view to a subregion of the plane
       //
       // The subregion must be included in (i.e. must not exceed) this region.
@@ -468,6 +496,91 @@ impl<'a, T: Pixel> Iterator for RowsIterMut<'a, T> {
 
 impl<T: Pixel> ExactSizeIterator for RowsIter<'_, T> {}
 impl<T: Pixel> ExactSizeIterator for RowsIterMut<'_, T> {}
+
+pub struct VertWindows<'a, T: Pixel> {
+  data: *const T,
+  plane_cfg: &'a PlaneConfig,
+  remaining: usize,
+  output_rect: Rect,
+}
+
+pub struct HorzWindows<'a, T: Pixel> {
+  data: *const T,
+  plane_cfg: &'a PlaneConfig,
+  remaining: usize,
+  output_rect: Rect,
+}
+
+impl<'a, T: Pixel> Iterator for VertWindows<'a, T> {
+  type Item = PlaneRegion<'a, T>;
+
+  #[inline(always)]
+  fn next(&mut self) -> Option<Self::Item> {
+    self.nth(0)
+  }
+
+  #[inline(always)]
+  fn size_hint(&self) -> (usize, Option<usize>) {
+    (self.remaining, Some(self.remaining))
+  }
+
+  #[inline(always)]
+  fn nth(&mut self, n: usize) -> Option<Self::Item> {
+    if self.remaining > n {
+      self.data = unsafe { self.data.add(self.plane_cfg.stride * n) };
+      self.output_rect.y += n as isize;
+      let output = PlaneRegion {
+        data: self.data,
+        plane_cfg: &self.plane_cfg,
+        rect: self.output_rect,
+        phantom: PhantomData,
+      };
+      self.data = unsafe { self.data.add(self.plane_cfg.stride) };
+      self.output_rect.y += 1;
+      self.remaining -= (n + 1);
+      Some(output)
+    } else {
+      None
+    }
+  }
+}
+
+impl<'a, T: Pixel> Iterator for HorzWindows<'a, T> {
+  type Item = PlaneRegion<'a, T>;
+
+  #[inline(always)]
+  fn next(&mut self) -> Option<Self::Item> {
+    self.nth(0)
+  }
+
+  #[inline(always)]
+  fn size_hint(&self) -> (usize, Option<usize>) {
+    (self.remaining, Some(self.remaining))
+  }
+
+  #[inline(always)]
+  fn nth(&mut self, n: usize) -> Option<Self::Item> {
+    if self.remaining > n {
+      self.data = unsafe { self.data.add(n) };
+      self.output_rect.x += n as isize;
+      let output = PlaneRegion {
+        data: self.data,
+        plane_cfg: &self.plane_cfg,
+        rect: self.output_rect,
+        phantom: PhantomData,
+      };
+      self.data = unsafe { self.data.add(1) };
+      self.output_rect.x += 1;
+      self.remaining -= (n + 1);
+      Some(output)
+    } else {
+      None
+    }
+  }
+}
+
+impl<T: Pixel> ExactSizeIterator for VertWindows<'_, T> {}
+impl<T: Pixel> ExactSizeIterator for HorzWindows<'_, T> {}
 
 #[test]
 fn area_test() {
