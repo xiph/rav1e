@@ -958,16 +958,20 @@ fn full_search<T: Pixel>(
   step: usize, bit_depth: usize, lambda: u32, pmv: [MotionVector; 2],
   allow_high_precision_mv: bool,
 ) {
-  let search_range_y = (y_lo..=y_hi).step_by(step);
-  let search_range_x = (x_lo..=x_hi).step_by(step);
-  let search_area =
-    search_range_y.flat_map(|y| search_range_x.clone().map(move |x| (y, x)));
+  let plane_org = p_org.region(Area::StartingAt { x: po.x, y: po.y });
+  let search_region = p_ref.region(Area::Rect {
+    x: x_lo,
+    y: y_lo,
+    width: (x_hi - x_lo) as usize + blk_w,
+    height: (y_hi - y_lo) as usize + blk_h,
+  });
 
-  let (cost, mv) = search_area
-    .map(|(y, x)| {
-      let plane_org = p_org.region(Area::StartingAt { x: po.x, y: po.y });
-      let plane_ref = p_ref.region(Area::StartingAt { x, y });
-      let sad = get_sad(&plane_org, &plane_ref, blk_w, blk_h, bit_depth);
+  // Select rectangular regions within search region with vert+horz windows
+  for vert_window in search_region.vert_windows(blk_h).step_by(step) {
+    for ref_window in vert_window.horz_windows(blk_w).step_by(step) {
+      let sad = get_sad(&plane_org, &ref_window, blk_w, blk_h, bit_depth);
+
+      let &Rect { x, y, .. } = ref_window.rect();
 
       let mv = MotionVector {
         row: 8 * (y as i16 - po.y as i16),
@@ -979,13 +983,12 @@ fn full_search<T: Pixel>(
       let rate = rate1.min(rate2 + 1);
       let cost = 256 * sad as u64 + rate as u64 * lambda as u64;
 
-      (cost, mv)
-    })
-    .min_by_key(|(c, _)| *c)
-    .unwrap();
-
-  *lowest_cost = cost;
-  *best_mv = mv;
+      if cost < *lowest_cost {
+        *lowest_cost = cost;
+        *best_mv = mv;
+      }
+    }
+  }
 }
 
 // Adjust block offset such that entire block lies within boundaries
