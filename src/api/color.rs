@@ -9,6 +9,7 @@
 
 use arg_enum_proc_macro::ArgEnum;
 use num_derive::FromPrimitive;
+use std::fmt;
 
 /// Sample position for subsampled chroma
 #[derive(Copy, Clone, Debug, PartialEq, FromPrimitive)]
@@ -42,6 +43,21 @@ pub enum ChromaSampling {
   Cs444,
   /// Monochrome.
   Cs400,
+}
+
+impl fmt::Display for ChromaSampling {
+  fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    write!(
+      f,
+      "{}",
+      match self {
+        ChromaSampling::Cs420 => "4:2:0",
+        ChromaSampling::Cs422 => "4:2:2",
+        ChromaSampling::Cs444 => "4:4:4",
+        ChromaSampling::Cs400 => "Monochrome",
+      }
+    )
+  }
 }
 
 impl Default for ChromaSampling {

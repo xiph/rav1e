@@ -1,16 +1,21 @@
+use rav1e::data::EncoderStats;
 use rav1e::prelude::*;
 use rav1e::{Packet, Pixel};
 use std::fmt;
 use std::time::Instant;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct FrameSummary {
-  // Frame size in bytes
+  /// Frame size in bytes
   pub size: usize,
   pub input_frameno: u64,
   pub frame_type: FrameType,
-  // PSNR for Y, U, and V planes
+  /// PSNR for Y, U, and V planes
   pub psnr: Option<(f64, f64, f64)>,
+  /// QP selected for the frame.
+  pub qp: u8,
+  /// Block-level encoding stats for the frame
+  pub enc_stats: EncoderStats,
 }
 
 impl<T: Pixel> From<Packet<T>> for FrameSummary {
@@ -20,6 +25,8 @@ impl<T: Pixel> From<Packet<T>> for FrameSummary {
       input_frameno: packet.input_frameno,
       frame_type: packet.frame_type,
       psnr: packet.psnr,
+      qp: packet.qp,
+      enc_stats: packet.enc_stats,
     }
   }
 }
@@ -144,13 +151,175 @@ impl ProgressInfo {
       / count
   }
 
-  pub fn print_summary(&self) {
+  fn get_frame_type_avg_qp(&self, frame_type: FrameType) -> f32 {
+    let count = self.get_frame_type_count(frame_type);
+    if count == 0 {
+      return 0.;
+    }
+    self
+      .frame_info
+      .iter()
+      .filter(|frame| frame.frame_type == frame_type)
+      .map(|frame| frame.qp as f32)
+      .sum::<f32>()
+      / count as f32
+  }
+
+  fn get_block_count_by_frame_type(&self, frame_type: FrameType) -> usize {
+    self
+      .frame_info
+      .iter()
+      .filter(|frame| frame.frame_type == frame_type)
+      .map(|frame| frame.enc_stats.block_size_counts.values().sum::<usize>())
+      .sum()
+  }
+
+  fn get_tx_count_by_frame_type(&self, frame_type: FrameType) -> usize {
+    self
+      .frame_info
+      .iter()
+      .filter(|frame| frame.frame_type == frame_type)
+      .map(|frame| frame.enc_stats.tx_type_counts.values().sum::<usize>())
+      .sum()
+  }
+
+  fn get_bsize_pct_by_frame_type(
+    &self, bsize: BlockSize, frame_type: FrameType,
+  ) -> f32 {
+    let count = self.get_block_count_by_frame_type(frame_type);
+    if count == 0 {
+      return 0.;
+    }
+    self
+      .frame_info
+      .iter()
+      .filter(|frame| frame.frame_type == frame_type)
+      .map(|frame| {
+        frame.enc_stats.block_size_counts.get(&bsize).copied().unwrap_or(0)
+      })
+      .sum::<usize>() as f32
+      / count as f32
+      * 100.
+  }
+
+  fn get_skip_pct_by_frame_type(&self, frame_type: FrameType) -> f32 {
+    let count = self.get_block_count_by_frame_type(frame_type);
+    if count == 0 {
+      return 0.;
+    }
+    self
+      .frame_info
+      .iter()
+      .filter(|frame| frame.frame_type == frame_type)
+      .map(|frame| frame.enc_stats.skip_block_count)
+      .sum::<usize>() as f32
+      / count as f32
+      * 100.
+  }
+
+  fn get_txtype_pct_by_frame_type(
+    &self, txtype: TxType, frame_type: FrameType,
+  ) -> f32 {
+    let count = self.get_tx_count_by_frame_type(frame_type);
+    if count == 0 {
+      return 0.;
+    }
+    self
+      .frame_info
+      .iter()
+      .filter(|frame| frame.frame_type == frame_type)
+      .map(|frame| {
+        frame.enc_stats.tx_type_counts.get(&txtype).copied().unwrap_or(0)
+      })
+      .sum::<usize>() as f32
+      / count as f32
+      * 100.
+  }
+
+  fn get_luma_pred_count_by_frame_type(&self, frame_type: FrameType) -> usize {
+    self
+      .frame_info
+      .iter()
+      .filter(|frame| frame.frame_type == frame_type)
+      .map(|frame| {
+        frame.enc_stats.luma_pred_mode_counts.values().sum::<usize>()
+      })
+      .sum()
+  }
+
+  fn get_chroma_pred_count_by_frame_type(
+    &self, frame_type: FrameType,
+  ) -> usize {
+    self
+      .frame_info
+      .iter()
+      .filter(|frame| frame.frame_type == frame_type)
+      .map(|frame| {
+        frame.enc_stats.chroma_pred_mode_counts.values().sum::<usize>()
+      })
+      .sum()
+  }
+
+  fn get_luma_pred_mode_pct_by_frame_type(
+    &self, pred_mode: PredictionMode, frame_type: FrameType,
+  ) -> f32 {
+    let count = self.get_luma_pred_count_by_frame_type(frame_type);
+    if count == 0 {
+      return 0.;
+    }
+    self
+      .frame_info
+      .iter()
+      .filter(|frame| frame.frame_type == frame_type)
+      .map(|frame| {
+        frame
+          .enc_stats
+          .luma_pred_mode_counts
+          .get(&pred_mode)
+          .copied()
+          .unwrap_or(0)
+      })
+      .sum::<usize>() as f32
+      / count as f32
+      * 100.
+  }
+
+  fn get_chroma_pred_mode_pct_by_frame_type(
+    &self, pred_mode: PredictionMode, frame_type: FrameType,
+  ) -> f32 {
+    let count = self.get_chroma_pred_count_by_frame_type(frame_type);
+    if count == 0 {
+      return 0.;
+    }
+    self
+      .frame_info
+      .iter()
+      .filter(|frame| frame.frame_type == frame_type)
+      .map(|frame| {
+        frame
+          .enc_stats
+          .chroma_pred_mode_counts
+          .get(&pred_mode)
+          .copied()
+          .unwrap_or(0)
+      })
+      .sum::<usize>() as f32
+      / count as f32
+      * 100.
+  }
+
+  pub fn print_summary(&self, verbose: bool) {
     info!("{}", self);
     info!("----------");
     self.print_frame_type_summary(FrameType::KEY);
     self.print_frame_type_summary(FrameType::INTER);
     self.print_frame_type_summary(FrameType::INTRA_ONLY);
     self.print_frame_type_summary(FrameType::SWITCH);
+    if verbose {
+      self.print_block_type_summary();
+      self.print_transform_type_summary();
+      self.print_prediction_modes_summary();
+    }
     if self.show_psnr {
       self.print_video_psnr();
     }
@@ -159,10 +328,12 @@ impl ProgressInfo {
   fn print_frame_type_summary(&self, frame_type: FrameType) {
     let count = self.get_frame_type_count(frame_type);
     let size = self.get_frame_type_avg_size(frame_type);
+    let avg_qp = self.get_frame_type_avg_qp(frame_type);
     info!(
-      "{:17} {:>6}    avg size: {:>7} B",
+      "{:17} {:>6} | avg QP: {:6.2} | avg size: {:>7} B",
       format!("{}:", frame_type),
       count,
+      avg_qp,
       size
     );
   }
@@ -185,6 +356,227 @@ impl ProgressInfo {
       psnr_v,
       (psnr_y + psnr_u + psnr_v) / 3.0
     )
+  }
+
+  fn print_block_type_summary(&self) {
+    self.print_block_type_summary_for_frame_type(FrameType::KEY, 'I');
+    self.print_block_type_summary_for_frame_type(FrameType::INTER, 'P');
+  }
+
+  fn print_block_type_summary_for_frame_type(
+    &self, frame_type: FrameType, type_label: char,
+  ) {
+    info!("----------");
+    info!(
+      "bsize {}: {:>6} {:>6} {:>6} {:>6} {:>6} {:>6}",
+      type_label, "x128", "x64", "x32", "x16", "x8", "x4"
+    );
+    info!(
+      "   128x: {:>5.1}% {:>5.1}%                              {}",
+      self.get_bsize_pct_by_frame_type(BlockSize::BLOCK_128X128, frame_type),
+      self.get_bsize_pct_by_frame_type(BlockSize::BLOCK_128X64, frame_type),
+      if frame_type == FrameType::INTER {
+        format!("skip: {:>5.1}%", self.get_skip_pct_by_frame_type(frame_type))
+      } else {
+        String::new()
+      }
+    );
+    info!(
+      "    64x: {:>5.1}% {:>5.1}% {:>5.1}% {:>5.1}%",
+      self.get_bsize_pct_by_frame_type(BlockSize::BLOCK_64X128, frame_type),
+      self.get_bsize_pct_by_frame_type(BlockSize::BLOCK_64X64, frame_type),
+      self.get_bsize_pct_by_frame_type(BlockSize::BLOCK_64X32, frame_type),
+      self.get_bsize_pct_by_frame_type(BlockSize::BLOCK_64X16, frame_type),
+    );
+    info!(
+      "    32x:        {:>5.1}% {:>5.1}% {:>5.1}% {:>5.1}%",
+      self.get_bsize_pct_by_frame_type(BlockSize::BLOCK_32X64, frame_type),
+      self.get_bsize_pct_by_frame_type(BlockSize::BLOCK_32X32, frame_type),
+      self.get_bsize_pct_by_frame_type(BlockSize::BLOCK_32X16, frame_type),
+      self.get_bsize_pct_by_frame_type(BlockSize::BLOCK_32X8, frame_type),
+    );
+    info!(
+      "    16x:        {:>5.1}% {:>5.1}% {:>5.1}% {:>5.1}% {:>5.1}%",
+      self.get_bsize_pct_by_frame_type(BlockSize::BLOCK_16X64, frame_type),
+      self.get_bsize_pct_by_frame_type(BlockSize::BLOCK_16X32, frame_type),
+      self.get_bsize_pct_by_frame_type(BlockSize::BLOCK_16X16, frame_type),
+      self.get_bsize_pct_by_frame_type(BlockSize::BLOCK_16X8, frame_type),
+      self.get_bsize_pct_by_frame_type(BlockSize::BLOCK_16X4, frame_type),
+    );
+    info!(
+      "     8x:               {:>5.1}% {:>5.1}% {:>5.1}% {:>5.1}%",
+      self.get_bsize_pct_by_frame_type(BlockSize::BLOCK_8X32, frame_type),
+      self.get_bsize_pct_by_frame_type(BlockSize::BLOCK_8X16, frame_type),
+      self.get_bsize_pct_by_frame_type(BlockSize::BLOCK_8X8, frame_type),
+      self.get_bsize_pct_by_frame_type(BlockSize::BLOCK_8X4, frame_type),
+    );
+    info!(
+      "     4x:                      {:>5.1}% {:>5.1}% {:>5.1}%",
+      self.get_bsize_pct_by_frame_type(BlockSize::BLOCK_4X16, frame_type),
+      self.get_bsize_pct_by_frame_type(BlockSize::BLOCK_4X8, frame_type),
+      self.get_bsize_pct_by_frame_type(BlockSize::BLOCK_4X4, frame_type),
+    );
+  }
+
+  fn print_transform_type_summary(&self) {
+    info!("----------");
+    self.print_transform_type_summary_by_frame_type(FrameType::KEY, 'I');
+    self.print_transform_type_summary_by_frame_type(FrameType::INTER, 'P');
+  }
+
+  fn print_transform_type_summary_by_frame_type(
+    &self, frame_type: FrameType, type_label: char,
+  ) {
+    info!(
+      "txtypes {}: DCT_DCT: {:.1}% | ADST_DCT: {:.1}% | DCT_ADST: {:.1}% | ADST_ADST: {:.1}%",
+      type_label,
+      self.get_txtype_pct_by_frame_type(TxType::DCT_DCT, frame_type),
+      self.get_txtype_pct_by_frame_type(TxType::ADST_DCT, frame_type),
+      self.get_txtype_pct_by_frame_type(TxType::DCT_ADST, frame_type),
+      self.get_txtype_pct_by_frame_type(TxType::ADST_ADST, frame_type)
+    );
+    info!(
+      "           IDTX: {:.1}% | V_DCT: {:.1}% | H_DCT: {:.1}%",
+      self.get_txtype_pct_by_frame_type(TxType::IDTX, frame_type),
+      self.get_txtype_pct_by_frame_type(TxType::V_DCT, frame_type),
+      self.get_txtype_pct_by_frame_type(TxType::H_DCT, frame_type),
+    )
+  }
+
+  fn print_prediction_modes_summary(&self) {
+    info!("----------");
+    self.print_luma_prediction_mode_summary_by_frame_type(FrameType::KEY, 'I');
+    self
+      .print_chroma_prediction_mode_summary_by_frame_type(FrameType::KEY, 'I');
+    info!("----------");
+    self
+      .print_luma_prediction_mode_summary_by_frame_type(FrameType::INTER, 'P');
+    self.print_chroma_prediction_mode_summary_by_frame_type(
+      FrameType::INTER,
+      'P',
+    );
+  }
+
+  fn print_luma_prediction_mode_summary_by_frame_type(
+    &self, frame_type: FrameType, type_label: char,
+  ) {
+    if frame_type == FrameType::KEY {
+      info!(
+        "y modes {}: DC: {:.1}% | V: {:.1}% | H: {:.1}% | Paeth: {:.1}%",
+        type_label,
+        self.get_luma_pred_mode_pct_by_frame_type(
+          PredictionMode::DC_PRED,
+          frame_type
+        ),
+        self.get_luma_pred_mode_pct_by_frame_type(
+          PredictionMode::V_PRED,
+          frame_type
+        ),
+        self.get_luma_pred_mode_pct_by_frame_type(
+          PredictionMode::H_PRED,
+          frame_type
+        ),
+        self.get_luma_pred_mode_pct_by_frame_type(
+          PredictionMode::PAETH_PRED,
+          frame_type
+        ),
+      );
+      info!(
+        "           Smooth: {:.1}% | Smooth V: {:.1}% | Smooth H: {:.1}%",
+        self.get_luma_pred_mode_pct_by_frame_type(
+          PredictionMode::SMOOTH_PRED,
+          frame_type
+        ),
+        self.get_luma_pred_mode_pct_by_frame_type(
+          PredictionMode::SMOOTH_V_PRED,
+          frame_type
+        ),
+        self.get_luma_pred_mode_pct_by_frame_type(
+          PredictionMode::SMOOTH_H_PRED,
+          frame_type
+        ),
+      );
+      info!(
+      "        D: 45: {:.1}% | 63: {:.1}% | 117: {:.1}% | 135: {:.1}% | 153: {:.1}% | 207: {:.1}%",
+      self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::D45_PRED, frame_type),
+      self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::D63_PRED, frame_type),
+      self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::D117_PRED, frame_type),
+      self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::D135_PRED, frame_type),
+      self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::D153_PRED, frame_type),
+      self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::D207_PRED, frame_type),
+    );
+    } else if frame_type == FrameType::INTER {
+      info!(
+        "y modes {}: Nearest: {:.1}% | Near0: {:.1}% | Near1: {:.1}% | NearNear: {:.1}%",
+        type_label,
+        self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::NEARESTMV, frame_type),
+        self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::NEAR0MV, frame_type),
+        self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::NEAR1MV, frame_type),
+        self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::NEAR_NEARMV, frame_type),
+      );
+      info!("           New: {:.1}% | NewNew: {:.1}% | NearestNearest: {:.1}% | GlobalGlobal: {:.1}%",
+            self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::NEWMV, frame_type),
+            self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::NEW_NEWMV, frame_type),
+            self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::NEAREST_NEARESTMV, frame_type),
+            self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::GLOBAL_GLOBALMV, frame_type),);
+    }
+  }
+
+  fn print_chroma_prediction_mode_summary_by_frame_type(
+    &self, frame_type: FrameType, type_label: char,
+  ) {
+    if frame_type == FrameType::KEY {
+      info!(
+        "uv modes {}: DC: {:.1}% | V: {:.1}% | H: {:.1}% | Paeth: {:.1}%",
+        type_label,
+        self.get_chroma_pred_mode_pct_by_frame_type(
+          PredictionMode::DC_PRED,
+          frame_type
+        ),
+        self.get_chroma_pred_mode_pct_by_frame_type(
+          PredictionMode::V_PRED,
+          frame_type
+        ),
+        self.get_chroma_pred_mode_pct_by_frame_type(
+          PredictionMode::H_PRED,
+          frame_type
+        ),
+        self.get_chroma_pred_mode_pct_by_frame_type(
+          PredictionMode::PAETH_PRED,
+          frame_type
+        ),
+      );
+      info!(
+        "            Smooth: {:.1}% | Smooth V: {:.1}% | Smooth H: {:.1}% | UV CFL: {:.1}%",
+        self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::SMOOTH_PRED, frame_type),
+        self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::SMOOTH_V_PRED, frame_type),
+        self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::SMOOTH_H_PRED, frame_type),
+        self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::UV_CFL_PRED, frame_type),
+      );
+      info!(
+        "         D: 45: {:.1}% | 63: {:.1}% | 117: {:.1}% | 135: {:.1}% | 153: {:.1}% | 207: {:.1}%",
+        self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::D45_PRED, frame_type),
+        self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::D63_PRED, frame_type),
+        self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::D117_PRED, frame_type),
+        self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::D135_PRED, frame_type),
+        self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::D153_PRED, frame_type),
+        self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::D207_PRED, frame_type),
+      );
+    } else if frame_type == FrameType::INTER {
+      info!(
+        "uv modes {}: Nearest: {:.1}% | Near0: {:.1}% | Near1: {:.1}% | NearNear: {:.1}%",
+        type_label,
+        self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::NEARESTMV, frame_type),
+        self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::NEAR0MV, frame_type),
+        self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::NEAR1MV, frame_type),
+        self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::NEAR_NEARMV, frame_type),
+      );
+      info!("            New: {:.1}% | NewNew: {:.1}% | NearestNearest: {:.1}% | GlobalGlobal: {:.1}%",
+            self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::NEWMV, frame_type),
+            self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::NEW_NEWMV, frame_type),
+            self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::NEAREST_NEARESTMV, frame_type),
+            self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::GLOBAL_GLOBALMV, frame_type),);
+    }
   }
 }
 

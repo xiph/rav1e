@@ -56,6 +56,7 @@ impl RefType {
 }
 
 use self::RefType::*;
+use std::fmt;
 
 pub const ALL_INTER_REFS: [RefType; 7] = [
   LAST_FRAME,
@@ -372,6 +373,40 @@ impl BlockSize {
       BLOCK_INVALID => unreachable!(),
       _ => true,
     }
+  }
+}
+
+impl fmt::Display for BlockSize {
+  fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    write!(
+      f,
+      "{}",
+      match self {
+        BlockSize::BLOCK_4X4 => "4x4",
+        BlockSize::BLOCK_4X8 => "4x8",
+        BlockSize::BLOCK_8X4 => "8x4",
+        BlockSize::BLOCK_8X8 => "8x8",
+        BlockSize::BLOCK_8X16 => "8x16",
+        BlockSize::BLOCK_16X8 => "16x8",
+        BlockSize::BLOCK_16X16 => "16x16",
+        BlockSize::BLOCK_16X32 => "16x32",
+        BlockSize::BLOCK_32X16 => "32x16",
+        BlockSize::BLOCK_32X32 => "32x32",
+        BlockSize::BLOCK_32X64 => "32x64",
+        BlockSize::BLOCK_64X32 => "64x32",
+        BlockSize::BLOCK_64X64 => "64x64",
+        BlockSize::BLOCK_64X128 => "64x128",
+        BlockSize::BLOCK_128X64 => "128x64",
+        BlockSize::BLOCK_128X128 => "128x128",
+        BlockSize::BLOCK_4X16 => "4x16",
+        BlockSize::BLOCK_16X4 => "16x4",
+        BlockSize::BLOCK_8X32 => "8x32",
+        BlockSize::BLOCK_32X8 => "32x8",
+        BlockSize::BLOCK_16X64 => "16x64",
+        BlockSize::BLOCK_64X16 => "64x16",
+        BlockSize::BLOCK_INVALID => "Invalid",
+      }
+    )
   }
 }
 

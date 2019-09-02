@@ -14,9 +14,10 @@ pub use x86::*;
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 mod x86 {
+  use arg_enum_proc_macro::ArgEnum;
   use std::env;
 
-  #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd)]
+  #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, ArgEnum)]
   pub enum CpuFeatureLevel {
     NATIVE,
     AVX2,
@@ -61,7 +62,9 @@ mod x86 {
 
 #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
 mod native {
-  #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd)]
+  use arg_enum_proc_macro::ArgEnum;
+
+  #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, ArgEnum)]
   pub enum CpuFeatureLevel {
     NATIVE,
   }

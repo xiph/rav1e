@@ -58,7 +58,7 @@ pub static RAV1E_INTER_COMPOUND_MODES: &[PredictionMode] = &[
   PredictionMode::NEAR_NEARMV,
 ];
 
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd, Eq, Ord)]
 pub enum PredictionMode {
   DC_PRED,     // Average of above and left pixels
   V_PRED,      // Vertical

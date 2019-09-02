@@ -18,6 +18,7 @@ use crate::lrf::{
 };
 use crate::quantize::*;
 use crate::rdo::*;
+use crate::stats::EncoderStats;
 use crate::util::*;
 
 /// Tiled view of FrameState
@@ -66,6 +67,8 @@ pub struct TileStateMut<'a, T: Pixel> {
   pub stripe_filter_buffer: IntegralImageBuffer,
   // Used in sgrproj_solve().
   pub solve_buffer: IntegralImageBuffer,
+
+  pub enc_stats: EncoderStats,
 }
 
 impl<'a, T: Pixel> TileStateMut<'a, T> {
@@ -131,6 +134,7 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
         STRIPE_FILTER_INTEGRAL_IMAGE_SIZE,
       ),
       solve_buffer: IntegralImageBuffer::zeroed(SOLVE_INTEGRAL_IMAGE_SIZE),
+      enc_stats: EncoderStats::default(),
     }
   }
 
