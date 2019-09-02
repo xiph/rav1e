@@ -787,7 +787,7 @@ cglobal satd_8x16, 4, 8, 11, src, src_stride, dst, dst_stride, \
 ; Less optimized, boilerplate implementations
 
 INIT_YMM avx2
-cglobal satd_8x32, 4, 8, 13, src, src_stride, dst, dst_stride, \
+cglobal satd_8x32, 4, 9, 13, src, src_stride, dst, dst_stride, \
                              src8, dst8, src_stride3, dst_stride3, cnt
     ; ones for converting to 32-bit with pmaddwd
     pcmpeqw            m11, m11
