@@ -625,7 +625,7 @@ cglobal satd_4x16, 4, 8, 7, src, src_stride, dst, dst_stride, \
 
 ; Only works with 128 bit vectors
 %macro SATD_8x8_FN 0
-cglobal satd_8x8, 4, 6, 9, src, src_stride, dst, dst_stride, \
+cglobal satd_8x8, 4, 6, 10, src, src_stride, dst, dst_stride, \
                            src_stride3, dst_stride3
     %define           hsub  m0
     mova              hsub, [maddubsw_hsub]
