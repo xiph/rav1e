@@ -78,8 +78,8 @@ pub struct Build {
   debug: bool,
 }
 
-impl Build {
-  pub fn new() -> Self {
+impl Default for Build {
+  fn default() -> Self {
     Self {
       files: Vec::new(),
       flags: Vec::new(),
@@ -89,6 +89,12 @@ impl Build {
       target: None,
       debug: env::var("DEBUG").ok().map_or(false, |d| d != "false"),
     }
+  }
+}
+
+impl Build {
+  pub fn new() -> Self {
+    Self::default()
   }
 
   /// Add a file which will be compiled
@@ -113,7 +119,7 @@ impl Build {
   pub fn include<P: AsRef<Path>>(&mut self, dir: P) -> &mut Self {
     let mut flag = format!("-I{}", dir.as_ref().display());
     // nasm requires trailing slash, but `Path` may omit it.
-    if !flag.ends_with("/") {
+    if !flag.ends_with('/') {
       flag += "/";
     }
     self.flags.push(flag);
