@@ -1004,21 +1004,23 @@ impl RCState {
         // We want to use at least this many bits next frame.
         let soft_limit = self.reservoir_fullness + self.bits_per_tu
           - (self.reservoir_max - margin);
-        let log_soft_limit = blog64(soft_limit);
-        // If we're predicting we won't use that many bits...
-        // TODO: When using frame re-ordering, we should include the rate
-        //  for all of the frames in the current TU.
-        // When there is more than one frame, there will be no direct
-        //  solution for the required adjustment, however.
-        let log_scale_pixels = log_cur_scale + self.log_npixels;
-        let exp = self.exp[fti] as i64;
-        let mut log_q_exp = ((log_q + 32) >> 6) * exp;
-        if log_scale_pixels - log_q_exp < log_soft_limit {
-          // Scale the adjustment based on how far into the margin we are.
-          log_q_exp += ((log_scale_pixels - log_soft_limit - log_q_exp) >> 32)
-            * (margin.min(soft_limit) << 32)
-            / margin;
-          log_q = ((log_q_exp + (exp >> 1)) / exp) << 6;
+        if soft_limit > 0 {
+          let log_soft_limit = blog64(soft_limit);
+          // If we're predicting we won't use that many bits...
+          // TODO: When using frame re-ordering, we should include the rate
+          //  for all of the frames in the current TU.
+          // When there is more than one frame, there will be no direct
+          //  solution for the required adjustment, however.
+          let log_scale_pixels = log_cur_scale + self.log_npixels;
+          let exp = self.exp[fti] as i64;
+          let mut log_q_exp = ((log_q + 32) >> 6) * exp;
+          if log_scale_pixels - log_q_exp < log_soft_limit {
+            // Scale the adjustment based on how far into the margin we are.
+            log_q_exp += ((log_scale_pixels - log_soft_limit - log_q_exp)
+              >> 32)
+              * ((margin.min(soft_limit) << 32) / margin);
+            log_q = ((log_q_exp + (exp >> 1)) / exp) << 6;
+          }
         }
       }
       // We just checked we don't overflow the reservoir next frame, now
