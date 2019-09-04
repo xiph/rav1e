@@ -342,8 +342,8 @@ impl SpeedSettings {
   /// Set the speed setting according to a numeric speed preset.
   ///
   /// The speed settings vary depending on speed value from 0 to 10.
-  /// - 10 (fastest): min block size 64x64, TX domain distortion, fast deblock, no scenechange detection.
-  /// - 9: min block size 64x64, TX domain distortion, fast deblock.
+  /// - 10 (fastest): min block size 64x64, reduced TX set, TX domain distortion, fast deblock, no scenechange detection.
+  /// - 9: min block size 64x64, reduced TX set, TX domain distortion, fast deblock.
   /// - 8: min block size 8x8, reduced TX set, TX domain distortion, fast deblock.
   /// - 7: min block size 8x8, reduced TX set, TX domain distortion.
   /// - 6: min block size 8x8, reduced TX set, TX domain distortion.
