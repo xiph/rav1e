@@ -229,7 +229,7 @@ function w_mask_\type\()_8bpc_neon, export=1
         sub             r8,  r8,  #24
         ldr             r8,  [r9,  r8,  lsl #2]
         add             r9,  r9,  r8
-        mov             r12, #6903
+        movw            r12, #6903
         vdup.16         q14, r12
 .if \type == 444
         vmov.i8         q15, #64
