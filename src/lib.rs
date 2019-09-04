@@ -210,7 +210,10 @@ pub mod version {
     format!("{} ({})", short(), semver)
   }
 }
-#[cfg(all(test, any(feature = "decode_test", feature = "decode_test_dav1d")))]
+#[cfg(all(
+  any(test, fuzzing),
+  any(feature = "decode_test", feature = "decode_test_dav1d")
+))]
 mod test_encode_decode;
 
 #[cfg(feature = "bench")]
@@ -255,3 +258,6 @@ pub mod bench {
     pub use crate::util::*;
   }
 }
+
+#[cfg(fuzzing)]
+pub mod fuzzing;
