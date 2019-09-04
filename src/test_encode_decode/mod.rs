@@ -7,6 +7,9 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+// Fuzzing only uses a subset of these.
+#![cfg_attr(fuzzing, allow(unused))]
+
 use crate::color::ChromaSampling;
 use crate::config::*;
 use crate::util::Pixel;
@@ -16,9 +19,9 @@ use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use std::collections::VecDeque;
 
-#[cfg(all(test, feature = "decode_test"))]
+#[cfg(feature = "decode_test")]
 mod aom;
-#[cfg(all(test, feature = "decode_test_dav1d"))]
+#[cfg(feature = "decode_test_dav1d")]
 mod dav1d;
 
 #[cfg(feature = "decode_test")]
@@ -38,7 +41,7 @@ fn fill_frame<T: Pixel>(ra: &mut ChaChaRng, frame: &mut Frame<T>) {
   }
 }
 
-pub(crate) fn read_frame_batch<T: Pixel>(
+fn read_frame_batch<T: Pixel>(
   ctx: &mut Context<T>, ra: &mut ChaChaRng, limit: usize,
 ) {
   for _ in 0..limit {
@@ -137,7 +140,7 @@ pub(crate) trait TestDecoder<T: Pixel> {
   ) -> DecodeResult;
 }
 
-pub(crate) fn compare_plane<T: Ord + std::fmt::Debug>(
+pub fn compare_plane<T: Ord + std::fmt::Debug>(
   rec: &[T], rec_stride: usize, dec: &[T], dec_stride: usize, width: usize,
   height: usize,
 ) {
@@ -146,7 +149,7 @@ pub(crate) fn compare_plane<T: Ord + std::fmt::Debug>(
   }
 }
 
-pub(crate) fn setup_encoder<T: Pixel>(
+fn setup_encoder<T: Pixel>(
   w: usize, h: usize, speed: usize, quantizer: usize, bit_depth: usize,
   chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
   low_latency: bool, bitrate: i32, tile_cols_log2: usize,
@@ -604,7 +607,7 @@ fn tile_encoding_with_stretched_restoration_units(decoder: &str) {
   );
 }
 
-fn get_decoder<T: Pixel>(
+pub(crate) fn get_decoder<T: Pixel>(
   decoder: &str, w: usize, h: usize,
 ) -> Box<dyn TestDecoder<T>> {
   match decoder {

@@ -194,6 +194,22 @@ Run regular benchmarks with:
 cargo bench --features=bench
 ```
 
+### Fuzzing
+
+Install `cargo-fuzz` with `cargo install cargo-fuzz`. Running fuzz targets requires nightly Rust, so install that too with `rustup install nightly`.
+
+* List the fuzz targets with `cargo fuzz list`.
+* Run a fuzz target with `cargo +nightly fuzz run <target>`.
+  * Parallel fuzzing: `cargo +nightly fuzz run --jobs <n> <target> -- -workers=<n>`.
+  * Disable memory leak detection (seems to trigger always): `cargo +nightly fuzz run <target> -- -detect_leaks=0`.
+  * Bump the "slow unit" time limit: `cargo +nightly fuzz run <target> -- -report_slow_units=600`.
+  * Make the fuzzer generate long inputs right away (useful because fuzzing uses a ring buffer for data, so when the fuzzer generates big inputs it has a chance to affect different settings individually): `cargo +nightly fuzz run <target> -- -max_len=256 -len_control=0`.
+  * Release configuration (not really recommended because it disables debug assertions and integer overflow assertions): `RUSTFLAGS='-C codegen-units=1' cargo +nightly fuzz run --release <target>`
+    * `codegen-units=1` fixes https://github.com/rust-fuzz/cargo-fuzz/issues/161.
+  * Just give me the complete command line: `RUSTFLAGS='-C codegen-units=1' cargo +nightly fuzz run -j10 encode -- -workers=10 -detect_leaks=0 -timeout=600 -report_slow_units=600 -max_len=256 -len_control=0`.
+* Run a single artifact with debug output: `RUST_LOG=debug <path/to/fuzz/target/executable> <path/to/artifact>`, for example, `RUST_LOG=debug fuzz/target/x86_64-unknown-linux-gnu/debug/encode fuzz/artifacts/encode/crash-2f5672cb76691b989bbd2022a5349939a2d7b952`.
+* For adding new fuzz targets, see comment at the top of `src/fuzzing.rs`.
+
 ## Getting in Touch
 
 Come chat with us on the IRC channel #daala on Freenode! If you don't have IRC set

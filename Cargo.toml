@@ -79,6 +79,12 @@ rand = "0.7"
 rand_chacha = "0.2"
 semver = "0.9"
 
+[target.'cfg(fuzzing)'.dependencies]
+arbitrary = "0.2"
+interpolate_name = "0.2.2"
+rand = "0.7"
+rand_chacha = "0.2"
+
 [[bin]]
 name = "rav1e"
 required-features = ["binaries"]
