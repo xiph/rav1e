@@ -2529,7 +2529,6 @@ impl<T: Pixel> ContextInner<T> {
           prev_keyframe_nframes = nframes_total;
           // We do not currently use forward keyframes, so they should always
           //  end the current TU.
-          debug_assert!(self.inter_cfg.get_show_frame(idx_in_group_output));
           output_frameno += 1;
           ntus += 1;
         }

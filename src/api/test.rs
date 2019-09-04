@@ -1662,3 +1662,60 @@ fn log_q_exp_overflow() {
   ctx.receive_packet().unwrap();
   let _ = ctx.receive_packet();
 }
+
+#[test]
+fn guess_frame_subtypes_assert() {
+  let config = Config {
+    enc: EncoderConfig {
+      width: 1,
+      height: 1,
+      bit_depth: 8,
+      chroma_sampling: ChromaSampling::Cs420,
+      chroma_sample_position: ChromaSamplePosition::Unknown,
+      pixel_range: PixelRange::Limited,
+      color_description: None,
+      mastering_display: None,
+      content_light: None,
+      still_picture: false,
+      time_base: Rational { num: 1, den: 25 },
+      min_key_frame_interval: 0,
+      max_key_frame_interval: 1,
+      reservoir_frame_delay: None,
+      low_latency: false,
+      quantizer: 100,
+      min_quantizer: 0,
+      bitrate: 16384,
+      tune: Tune::Psychovisual,
+      tile_cols: 0,
+      tile_rows: 0,
+      tiles: 0,
+      rdo_lookahead_frames: 40,
+      speed_settings: SpeedSettings {
+        min_block_size: BlockSize::BLOCK_64X64,
+        multiref: false,
+        fast_deblock: true,
+        reduced_tx_set: true,
+        tx_domain_distortion: true,
+        tx_domain_rate: false,
+        encode_bottomup: false,
+        rdo_tx_decision: false,
+        prediction_modes: PredictionModesSetting::Simple,
+        include_near_mvs: false,
+        no_scene_detection: true,
+        diamond_me: true,
+        cdef: true,
+        quantizer_rdo: false,
+        use_satd_subpel: false,
+      },
+      show_psnr: false,
+      train_rdo: false,
+    },
+    threads: 1,
+  };
+
+  let mut ctx: Context<u8> = config.new_context().unwrap();
+  ctx.send_frame(ctx.new_frame()).unwrap();
+  ctx.flush();
+
+  ctx.receive_packet().unwrap();
+}
