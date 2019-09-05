@@ -259,18 +259,15 @@ impl QuantizationContext {
   {
     // Find the last non-zero coefficient using our smaller biases and
     // zero everything else.
-    let mut is_zero = true;
-    let mut pos = coded_tx_size - 1;
-    while is_zero && pos != 1 {
-      let c = coeffs[pos] << (self.log_tx_scale as usize);
-      let qc = c + (c.signum() * T::cast_from(self.ac_offset_eob));
-      is_zero =
-        T::cast_from(divu_pair(qc.as_(), self.ac_mul_add)) == T::cast_from(0);
-      pos -= 1;
-    }
-
+    // This threshold is such that `abs(coeff) < deadzone` implies:
+    // (abs(coeff << log_tx_scale) + ac_offset_eob) / ac_quant == 0
+    let deadzone = (self.ac_quant as usize - self.ac_offset_eob as usize)
+      .align_power_of_two_and_shift(self.log_tx_scale)
+      as i32;
+    let pos =
+      coeffs[1..coded_tx_size].iter().rposition(|c| c.as_().abs() >= deadzone);
     // We skip the DC coefficient since it has its own quantizer index.
-    let last_pos = if is_zero { pos } else { pos + 1 };
+    let last_pos = pos.map(|pos| pos + 1).unwrap_or(1);
 
     qcoeffs[0] = coeffs[0] << (self.log_tx_scale as usize);
     qcoeffs[0] += qcoeffs[0].signum() * T::cast_from(self.dc_offset);
