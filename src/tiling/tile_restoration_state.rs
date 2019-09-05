@@ -185,33 +185,44 @@ macro_rules! tile_restoration_plane_common {
         }
       }
 
-      pub fn restoration_unit_index(&self, sbo: TileSuperBlockOffset) -> Option<(usize, usize)> {
-        // is this a stretch block?
-        let x_stretch = sbo.0.x < self.rp_cfg.sb_cols &&
-          sbo.0.x >> self.rp_cfg.sb_shift >= self.units.cols;
-        let y_stretch = sbo.0.y < self.rp_cfg.sb_rows &&
-          sbo.0.y >> self.rp_cfg.sb_shift >= self.units.rows;
-
-        let x = (sbo.0.x >> self.rp_cfg.sb_shift) - if x_stretch { 1 } else { 0 };
-        let y = (sbo.0.y >> self.rp_cfg.sb_shift) - if y_stretch { 1 } else { 0 };
-        if x < self.units.cols && y < self.units.rows {
-          Some((x, y))
+      // determines the loop restoration unit row and column a
+      // superblock belongs to.  The stretch boolean indicates if a
+      // superblock that belongs to a stretched LRU should return an
+      // index (stretch == true) or None (stretch == false).
+      pub fn restoration_unit_index(&self, sbo: TileSuperBlockOffset, stretch: bool)
+        -> Option<(usize, usize)> {
+        if self.units.rows > 0 && self.units.cols > 0 {
+          // is this a stretch block?
+          let x_stretch = sbo.0.x < self.rp_cfg.sb_cols &&
+            sbo.0.x >> self.rp_cfg.sb_shift >= self.units.cols;
+          let y_stretch = sbo.0.y < self.rp_cfg.sb_rows &&
+            sbo.0.y >> self.rp_cfg.sb_shift >= self.units.rows;
+          if (x_stretch || y_stretch) && !stretch {
+            None
+          } else {
+            let x = (sbo.0.x >> self.rp_cfg.sb_shift) - if x_stretch { 1 } else { 0 };
+            let y = (sbo.0.y >> self.rp_cfg.sb_shift) - if y_stretch { 1 } else { 0 };
+            if x < self.units.cols && y < self.units.rows {
+              Some((x, y))
+            } else {
+              None
+            }
+          }
         } else {
           None
         }
       }
 
-      pub fn restoration_unit_countable(&self, sbo: TileSuperBlockOffset) -> usize {
-        if let Some((x, y)) = self.restoration_unit_index(sbo) {
-          y * self.units.cols + x
-        } else {
-          unreachable!()
-        }
+      pub fn restoration_unit_countable(&self, x: usize, y: usize) -> usize {
+        y * self.units.cols + x
       }
 
-      // Is this the last sb (in scan order) in the restoration unit?
-      // Stretch makes this a bit annoying to compute.
-      pub fn restoration_unit_last_sb<T: Pixel>(
+      // Is this the last sb (in scan order) in the restoration unit
+      // that we will be considering for RDO?  This would be a
+      // straightforward calculation but for stretch; if the LRU
+      // stretches into a different tile, we don't consider those SBs
+      // in the other tile to be part of the LRU for RDO purposes.
+      pub fn restoration_unit_last_sb_for_rdo<T: Pixel>(
         &self,
         fi: &FrameInvariants<T>,
         sbo: TileSuperBlockOffset,
@@ -229,8 +240,9 @@ macro_rules! tile_restoration_plane_common {
       }
 
       #[inline(always)]
-      pub fn restoration_unit(&self, sbo: TileSuperBlockOffset) -> Option<&RestorationUnit> {
-        self.restoration_unit_index(sbo).map(|(x, y)| &self.units[y][x])
+      pub fn restoration_unit(&self, sbo: TileSuperBlockOffset, stretch: bool)
+                              -> Option<&RestorationUnit> {
+        self.restoration_unit_index(sbo, stretch).map(|(x, y)| &self.units[y][x])
       }
     }
   }
@@ -249,7 +261,7 @@ impl<'a> TileRestorationPlaneMut<'a> {
     &mut self, sbo: TileSuperBlockOffset,
   ) -> Option<&mut RestorationUnit> {
     // cannot use map() due to lifetime constraints
-    if let Some((x, y)) = self.restoration_unit_index(sbo) {
+    if let Some((x, y)) = self.restoration_unit_index(sbo, true) {
       Some(&mut self.units[y][x])
     } else {
       None
@@ -357,8 +369,9 @@ macro_rules! tile_restoration_state_common {
       }
 
       #[inline(always)]
-      pub fn has_restoration_unit(&self, sbo: TileSuperBlockOffset, pli: usize) -> bool {
-        self.planes[pli].restoration_unit(sbo).is_some()
+      pub fn has_restoration_unit(&self, sbo: TileSuperBlockOffset, pli: usize, stretch: bool)
+        -> bool {
+        self.planes[pli].restoration_unit(sbo, stretch).is_some()
       }
     }
   }

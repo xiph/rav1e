@@ -574,9 +574,8 @@ macro_rules! test_chroma_sampling {
 
 test_chroma_sampling! {(420, ChromaSampling::Cs420), (422, ChromaSampling::Cs422), (444, ChromaSampling::Cs444)}
 
-// FIXME: #1601
-//#[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
-//#[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
+#[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
+#[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
 fn tile_encoding_with_stretched_restoration_units(decoder: &str) {
   let limit = 5;
   let w = 256;

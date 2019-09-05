@@ -312,8 +312,7 @@ pub mod test {
       ..Default::default()
     };
     let mut sequence = Sequence::new(&config).unwrap();
-    // FIXME: #1601
-    // smallest possible tiles smaller than smallest possible LRUs
+    // These tests are all assuming SB-sized LRUs, so set that.
     sequence.enable_large_lru = false;
     FrameInvariants::new(config, sequence)
   }

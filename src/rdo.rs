@@ -1771,113 +1771,129 @@ pub fn rdo_loop_decision<T: Pixel>(
               let height = (wh + (1 << ydec >> 1)) >> ydec;
               // which LRU are we currently testing against?
               let rp = &ts.restoration.planes[pli];
-              if let Some((tile_lru_x, tile_lru_y)) =
-                rp.restoration_unit_index(tile_sbo)
-              {
-                if let Some((loop_tile_lru_x, loop_tile_lru_y)) =
-                  rp.restoration_unit_index(loop_tile_sbo)
-                {
-                  let lru_x = loop_tile_lru_x - tile_lru_x;
-                  let lru_y = loop_tile_lru_y - tile_lru_y;
+              if let (
+                Some((tile_lru_x, tile_lru_y)),
+                Some((loop_tile_lru_x, loop_tile_lru_y)),
+              ) = (
+                rp.restoration_unit_index(tile_sbo, false),
+                rp.restoration_unit_index(loop_tile_sbo, false),
+              ) {
+                let lru_x = loop_tile_lru_x - tile_lru_x;
+                let lru_y = loop_tile_lru_y - tile_lru_y;
 
-                  match best_lrf[pli][lru_y][lru_x] {
-                    RestorationFilter::None {} => {
-                      err += rdo_loop_plane_error(
-                        loop_sbo,
-                        loop_tile_sbo,
-                        1,
-                        fi,
-                        ts,
-                        &cw.bc.blocks.as_const(),
-                        &lrf_input,
+                match best_lrf[pli][lru_y][lru_x] {
+                  RestorationFilter::None {} => {
+                    err += rdo_loop_plane_error(
+                      loop_sbo,
+                      loop_tile_sbo,
+                      1,
+                      fi,
+                      ts,
+                      &cw.bc.blocks.as_const(),
+                      &lrf_input,
+                      pli,
+                    );
+
+                    rate += if fi.sequence.enable_restoration {
+                      cw.count_lrf_switchable(
+                        w,
+                        &ts.restoration.as_const(),
+                        best_lrf[pli][lru_y][lru_x],
                         pli,
-                      );
-
-                      rate += if fi.sequence.enable_restoration {
-                        cw.count_lrf_switchable(
-                          w,
-                          &ts.restoration.as_const(),
-                          best_lrf[pli][lru_y][lru_x],
-                          pli,
-                        )
-                      } else {
-                        0 // no relative cost differeneces to different
-                          // CDEF params.  If cdef is on, it's a wash.
-                      };
-                    }
-                    RestorationFilter::Sgrproj { set, xqd } => {
-                      // only run on this superblock
-                      // if height is 128x128, we'll need to run two stripes
-                      let loop_po =
-                        loop_sbo.plane_offset(&lrf_input.planes[pli].cfg);
-                      if height > 64 {
-                        let loop_po2 =
-                          PlaneOffset { x: loop_po.x, y: loop_po.y + 64 };
-                        sgrproj_stripe_filter(
-                          set,
-                          xqd,
-                          fi,
-                          &mut ts.stripe_filter_buffer,
-                          width,
-                          64,
-                          width,
-                          64,
-                          &lrf_input.planes[pli].slice(loop_po),
-                          &lrf_input.planes[pli].slice(loop_po),
-                          &mut lrf_output.planes[pli].mut_slice(loop_po),
-                        );
-                        sgrproj_stripe_filter(
-                          set,
-                          xqd,
-                          fi,
-                          &mut ts.stripe_filter_buffer,
-                          width,
-                          64,
-                          width,
-                          64,
-                          &lrf_input.planes[pli].slice(loop_po2),
-                          &lrf_input.planes[pli].slice(loop_po2),
-                          &mut lrf_output.planes[pli].mut_slice(loop_po2),
-                        );
-                      } else {
-                        sgrproj_stripe_filter(
-                          set,
-                          xqd,
-                          fi,
-                          &mut ts.stripe_filter_buffer,
-                          width,
-                          height,
-                          width,
-                          height,
-                          &lrf_input.planes[pli].slice(loop_po),
-                          &lrf_input.planes[pli].slice(loop_po),
-                          &mut lrf_output.planes[pli].mut_slice(loop_po),
-                        );
-                      }
-                    }
-                    RestorationFilter::Wiener { .. } => unreachable!(), // coming soon
+                      )
+                    } else {
+                      0 // no relative cost differeneces to different
+                        // CDEF params.  If cdef is on, it's a wash.
+                    };
                   }
-                  let this_err = rdo_loop_plane_error(
-                    loop_sbo,
-                    loop_tile_sbo,
-                    1,
-                    fi,
-                    ts,
-                    &cw.bc.blocks.as_const(),
-                    &lrf_output,
-                    pli,
-                  );
-                  err += this_err;
-                  let this_rate = cw.count_lrf_switchable(
-                    w,
-                    &ts.restoration.as_const(),
-                    best_lrf[pli][lru_y][lru_x],
-                    pli,
-                  );
-                  rate += this_rate;
+                  RestorationFilter::Sgrproj { set, xqd } => {
+                    // only run on this superblock
+                    // if height is 128x128, we'll need to run two stripes
+                    let loop_po =
+                      loop_sbo.plane_offset(&lrf_input.planes[pli].cfg);
+                    if height > 64 {
+                      let loop_po2 =
+                        PlaneOffset { x: loop_po.x, y: loop_po.y + 64 };
+                      sgrproj_stripe_filter(
+                        set,
+                        xqd,
+                        fi,
+                        &mut ts.stripe_filter_buffer,
+                        width,
+                        64,
+                        width,
+                        64,
+                        &lrf_input.planes[pli].slice(loop_po),
+                        &lrf_input.planes[pli].slice(loop_po),
+                        &mut lrf_output.planes[pli].mut_slice(loop_po),
+                      );
+                      sgrproj_stripe_filter(
+                        set,
+                        xqd,
+                        fi,
+                        &mut ts.stripe_filter_buffer,
+                        width,
+                        64,
+                        width,
+                        64,
+                        &lrf_input.planes[pli].slice(loop_po2),
+                        &lrf_input.planes[pli].slice(loop_po2),
+                        &mut lrf_output.planes[pli].mut_slice(loop_po2),
+                      );
+                    } else {
+                      sgrproj_stripe_filter(
+                        set,
+                        xqd,
+                        fi,
+                        &mut ts.stripe_filter_buffer,
+                        width,
+                        height,
+                        width,
+                        height,
+                        &lrf_input.planes[pli].slice(loop_po),
+                        &lrf_input.planes[pli].slice(loop_po),
+                        &mut lrf_output.planes[pli].mut_slice(loop_po),
+                      );
+                    }
+                  }
+                  RestorationFilter::Wiener { .. } => unreachable!(), // coming soon
                 }
+                let this_err = rdo_loop_plane_error(
+                  loop_sbo,
+                  loop_tile_sbo,
+                  1,
+                  fi,
+                  ts,
+                  &cw.bc.blocks.as_const(),
+                  &lrf_output,
+                  pli,
+                );
+                err += this_err;
+                let this_rate = cw.count_lrf_switchable(
+                  w,
+                  &ts.restoration.as_const(),
+                  best_lrf[pli][lru_y][lru_x],
+                  pli,
+                );
+                rate += this_rate;
+              } else {
+                // No LRU here, compute error directly from CDEF output.
+                err += rdo_loop_plane_error(
+                  loop_sbo,
+                  loop_tile_sbo,
+                  1,
+                  fi,
+                  ts,
+                  &cw.bc.blocks.as_const(),
+                  &lrf_input,
+                  pli,
+                );
+                // no aelative cost differeneces to different
+                // CDEF params.  If cdef is on, it's a wash.
+                // rate += 0;
               }
             }
+
             let cost = compute_rd_cost(fi, rate, err);
             if best_cost < 0. || cost < best_cost {
               best_cost = cost;
@@ -1945,7 +1961,7 @@ pub fn rdo_loop_decision<T: Pixel>(
               y: tile_sbo.0.y + loop_sbo.0.y,
             });
             if fi.sequence.enable_restoration
-              && ts.restoration.has_restoration_unit(loop_tile_sbo, pli)
+              && ts.restoration.has_restoration_unit(loop_tile_sbo, pli, false)
             {
               let ref_plane = &ts.input.planes[pli]; // reference
               let lrf_in_plane = &lrf_input.planes[pli];
@@ -1989,7 +2005,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                   RestorationFilter::Sgrproj { set, xqd: [xqd0, xqd1] };
                 if let RestorationFilter::Sgrproj { set, xqd } = current_lrf {
                   // one stripe at a time
-                  // doesn't consider stretch yet
+                  // do not consider any stretch; we might fall off the tile
                   for y in (0..unit_height).step_by(stripe_height) {
                     let stripe_po =
                       PlaneOffset { x: loop_po.x, y: loop_po.y + y as isize };
