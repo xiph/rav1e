@@ -64,16 +64,16 @@ impl<T: Pixel> TestDecoder<T> for AomDecoder<T> {
         packet.len(),
         ptr::null_mut(),
       );
-      println!("Decoded. -> {}", ret);
+      debug!("Decoded. -> {}", ret);
       if ret != 0 {
         let error_msg = aom_codec_error(&mut self.dec);
-        println!(
+        debug!(
           "  Decode codec_decode failed: {}",
           CStr::from_ptr(error_msg).to_string_lossy()
         );
         let detail = aom_codec_error_detail(&mut self.dec);
         if !detail.is_null() {
-          println!(
+          debug!(
             "  Decode codec_decode failed {}",
             CStr::from_ptr(detail).to_string_lossy()
           );
@@ -84,9 +84,9 @@ impl<T: Pixel> TestDecoder<T> for AomDecoder<T> {
 
       if ret == 0 {
         loop {
-          println!("Retrieving frame");
+          debug!("Retrieving frame");
           let img = aom_codec_get_frame(&mut self.dec, &mut self.iter);
-          println!("Retrieved.");
+          debug!("Retrieved.");
           if img.is_null() {
             return DecodeResult::Done;
           }

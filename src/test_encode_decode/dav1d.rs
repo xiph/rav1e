@@ -55,7 +55,7 @@ impl<T: Pixel> TestDecoder<T> for Dav1dDecoder<T> {
       let ptr = dav1d_data_create(&mut data, packet.len());
       ptr::copy_nonoverlapping(packet.as_ptr(), ptr, packet.len());
       let ret = dav1d_send_data(self.dec, &mut data);
-      println!("Decoded. -> {}", ret);
+      debug!("Decoded. -> {}", ret);
       if ret != 0 {
         corrupted_count += 1;
       }
@@ -63,9 +63,9 @@ impl<T: Pixel> TestDecoder<T> for Dav1dDecoder<T> {
       if ret == 0 {
         loop {
           let mut pic: Dav1dPicture = mem::zeroed();
-          println!("Retrieving frame");
+          debug!("Retrieving frame");
           let ret = dav1d_get_picture(self.dec, &mut pic);
-          println!("Retrieved.");
+          debug!("Retrieved.");
           if ret == -(EAGAIN as i32) {
             return DecodeResult::Done;
           }
