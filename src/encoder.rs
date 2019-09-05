@@ -3238,13 +3238,23 @@ fn encode_tile<'a, T: Pixel>(
         // queue our superblock for when the LRU is complete
         sbs_qe.cdef_coded = cw.bc.cdef_coded;
         for pli in 0..PLANES {
-          let lru_index = ts.restoration.planes[pli]
-            .restoration_unit_countable(tile_sbo)
-            as i32;
-          sbs_qe.lru_index[pli] = lru_index;
-          if ts.restoration.planes[pli].restoration_unit_last_sb(fi, tile_sbo)
+          if let Some((lru_x, lru_y)) =
+            ts.restoration.planes[pli].restoration_unit_index(tile_sbo, false)
           {
-            last_lru_ready[pli] = lru_index;
+            let lru_index = ts.restoration.planes[pli]
+              .restoration_unit_countable(lru_x, lru_y)
+              as i32;
+            sbs_qe.lru_index[pli] = lru_index;
+            if ts.restoration.planes[pli]
+              .restoration_unit_last_sb_for_rdo(fi, tile_sbo)
+            {
+              last_lru_ready[pli] = lru_index;
+              check_queue = true;
+            }
+          } else {
+            // we're likely in an area stretched into a new tile
+            // tag this SB to be ignored in LRU decisions
+            sbs_qe.lru_index[pli] = -1;
             check_queue = true;
           }
         }
@@ -3262,7 +3272,7 @@ fn encode_tile<'a, T: Pixel>(
             if check_queue {
               // yes, this entry is ready
               if qe.cdef_coded || fi.sequence.enable_restoration {
-                // only do this once for a given LRU.
+                // only RDO once for a given LRU.
 
                 // One quirk worth noting: LRUs in different planes
                 // may be different sizes; eg, one chroma LRU may
@@ -3274,9 +3284,15 @@ fn encode_tile<'a, T: Pixel>(
                 // RDO happens on all LRUs within the confines of the
                 // biggest, all together.  If any of this SB's planes'
                 // LRUs are RDOed, in actuality they all are.
+
+                // SBs tagged with a lru index of -1 are ignored in
+                // LRU coding/rdoing decisions (but still need to rdo
+                // for cdef).
                 let mut already_rdoed = false;
                 for pli in 0..PLANES {
-                  if qe.lru_index[pli] <= last_lru_rdoed[pli] {
+                  if qe.lru_index[pli] != -1
+                    && qe.lru_index[pli] <= last_lru_rdoed[pli]
+                  {
                     already_rdoed = true;
                     break;
                   }
@@ -3284,7 +3300,9 @@ fn encode_tile<'a, T: Pixel>(
                 if !already_rdoed {
                   rdo_loop_decision(qe.sbo, fi, ts, &mut cw, &mut w);
                   for pli in 0..PLANES {
-                    if last_lru_rdoed[pli] < qe.lru_index[pli] {
+                    if qe.lru_index[pli] != -1
+                      && last_lru_rdoed[pli] < qe.lru_index[pli]
+                    {
                       last_lru_rdoed[pli] = qe.lru_index[pli];
                     }
                   }
@@ -3293,7 +3311,9 @@ fn encode_tile<'a, T: Pixel>(
               // write LRF information
               if fi.sequence.enable_restoration {
                 for pli in 0..PLANES {
-                  if last_lru_coded[pli] < qe.lru_index[pli] {
+                  if qe.lru_index[pli] != -1
+                    && last_lru_coded[pli] < qe.lru_index[pli]
+                  {
                     last_lru_coded[pli] = qe.lru_index[pli];
                     cw.write_lrf(&mut w, fi, &mut ts.restoration, qe.sbo, pli);
                   }

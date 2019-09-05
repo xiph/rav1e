@@ -22,6 +22,7 @@ use crate::frame::PlaneSlice;
 use crate::lrf_simd::*;
 use crate::util::clamp;
 use crate::util::CastFromPrimitive;
+use crate::util::ILog;
 use crate::util::Pixel;
 
 use std::cmp;
@@ -1248,6 +1249,8 @@ impl RestorationState {
     let PlaneConfig { xdec, ydec, .. } = input.planes[1].cfg;
     // stripe size is decimated in 4:2:0 (and only 4:2:0)
     let stripe_uv_decimate = if xdec > 0 && ydec > 0 { 1 } else { 0 };
+    let y_sb_log2 = if fi.sequence.use_128x128_superblock { 7 } else { 6 };
+    let uv_sb_log2 = y_sb_log2 - stripe_uv_decimate;
 
     let (lrf_y_shift, lrf_uv_shift) = if fi.sequence.enable_large_lru {
       // Largest possible restoration unit size (256) for both luma and chroma
@@ -1258,13 +1261,40 @@ impl RestorationState {
       (lrf_y_shift, lrf_y_shift + stripe_uv_decimate)
     };
 
+    let mut y_unit_size = 1 << (RESTORATION_TILESIZE_MAX_LOG2 - lrf_y_shift);
+    let mut uv_unit_size = 1 << (RESTORATION_TILESIZE_MAX_LOG2 - lrf_uv_shift);
+
+    // Right now we defer to tiling setup: don't choose an LRU size
+    // large enough that a tile is not an integer number of LRUs
+    // wide/high.
+    if fi.tiling.cols > 1 || fi.tiling.rows > 1 {
+      let tile_y_unit_width = fi.tiling.tile_width_sb << y_sb_log2;
+      let tile_y_unit_height = fi.tiling.tile_height_sb << y_sb_log2;
+      let tile_uv_unit_width = fi.tiling.tile_width_sb << uv_sb_log2;
+      let tile_uv_unit_height = fi.tiling.tile_height_sb << uv_sb_log2;
+
+      y_unit_size = y_unit_size.min(tile_y_unit_width).min(tile_y_unit_height);
+      uv_unit_size =
+        uv_unit_size.min(tile_uv_unit_width).min(tile_uv_unit_height);
+
+      // But it's actually worse: LRUs can't span tiles (in our design
+      // that is, spec allows it).  However, the spec mandates the last
+      // LRU stretches forward into any less-than-half-LRU span of
+      // superblocks at the right and bottom of a frame.  These
+      // superblocks may well be in a different tile!  Even if LRUs are
+      // minimum size (one superblock), when the right or bottom edge of
+      // the frame is a superblock that's less than half the
+      // width/height of a normal superblock, the LRU is forced by the
+      // spec to span into it (and thus a different tile).  Tiling is
+      // under no such restriction; it could decide the right/left
+      // sliver will be in its own tile row/column.  We can't disallow
+      // the combination here.  The tiling code will have to either
+      // prevent it or tolerate it.  (prayer mechanic == Issue #1629).
+    }
+
     // derive the rest
-    let y_unit_log2 = RESTORATION_TILESIZE_MAX_LOG2 - lrf_y_shift;
-    let uv_unit_log2 = RESTORATION_TILESIZE_MAX_LOG2 - lrf_uv_shift;
-    let y_unit_size = 1 << y_unit_log2;
-    let uv_unit_size = 1 << uv_unit_log2;
-    let y_sb_log2 = if fi.sequence.use_128x128_superblock { 7 } else { 6 };
-    let uv_sb_log2 = y_sb_log2 - stripe_uv_decimate;
+    let y_unit_log2 = y_unit_size.ilog() - 1;
+    let uv_unit_log2 = uv_unit_size.ilog() - 1;
     let y_cols = ((fi.width + (y_unit_size >> 1)) / y_unit_size).max(1);
     let y_rows = ((fi.height + (y_unit_size >> 1)) / y_unit_size).max(1);
     let uv_cols = ((((fi.width + (1 << xdec >> 1)) >> xdec)
