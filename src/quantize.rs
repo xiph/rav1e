@@ -241,9 +241,12 @@ impl QuantizationContext {
     // post-deadzoning.
     //
     // [1] https://people.xiph.org/~jm/notes/theoretical_results.pdf
-    self.dc_offset = self.dc_quant as i32 * 109 / 256;
-    self.ac_offset0 = self.ac_quant as i32 * 98 / 256;
-    self.ac_offset1 = self.ac_quant as i32 * 109 / 256;
+    self.dc_offset =
+      self.dc_quant as i32 * (if is_intra { 109 } else { 108 }) / 256;
+    self.ac_offset0 =
+      self.ac_quant as i32 * (if is_intra { 98 } else { 97 }) / 256;
+    self.ac_offset1 =
+      self.ac_quant as i32 * (if is_intra { 109 } else { 108 }) / 256;
     self.ac_offset_eob =
       self.ac_quant as i32 * (if is_intra { 88 } else { 44 }) / 256;
   }
