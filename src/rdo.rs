@@ -481,8 +481,8 @@ fn compute_distortion_bias<T: Pixel>(
   let mean_importance = compute_mean_importance(fi, frame_bo, bsize);
 
   // Chosen based on a series of AWCY runs.
-  const FACTOR: f32 = 3.;
-  const ADDEND: f64 = 0.65;
+  const FACTOR: f32 = 0.9;
+  const ADDEND: f64 = 0.8;
 
   let bias = (mean_importance / FACTOR) as f64 + ADDEND;
   debug_assert!(bias.is_finite());
