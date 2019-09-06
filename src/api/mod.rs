@@ -514,6 +514,85 @@ impl fmt::Display for PredictionModesSetting {
   }
 }
 
+/// Enumeration of possible invalid configuration errors.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Error)]
+pub enum InvalidConfig {
+  /// The width is invalid.
+  #[error(display = "invalid width {} (expected > 0, <= 32767)", _0)]
+  InvalidWidth(usize),
+  /// The height is invalid.
+  #[error(display = "invalid height {} (expected > 0, <= 32767)", _0)]
+  InvalidHeight(usize),
+  /// RDO lookahead frame count is invalid.
+  #[error(
+    display = "invalid rdo lookahead frames {} (expected <= {})",
+    actual,
+    max
+  )]
+  InvalidRdoLookaheadFrames {
+    /// The actual value.
+    actual: usize,
+    /// The maximal supported value.
+    max: usize,
+  },
+  /// Maximal keyframe interval is invalid.
+  #[error(
+    display = "invalid max keyframe interval {} (expected > 0, <= {})",
+    actual,
+    max
+  )]
+  InvalidMaxKeyFrameInterval {
+    /// The actual value.
+    actual: u64,
+    /// The maximal supported value.
+    max: u64,
+  },
+  /// Tile columns is invalid.
+  #[error(display = "invalid tile cols {} (expected power of 2)", _0)]
+  InvalidTileCols(usize),
+  /// Tile rows is invalid.
+  #[error(display = "invalid tile rows {} (expected power of 2)", _0)]
+  InvalidTileRows(usize),
+  /// Framerate numerator is invalid.
+  #[error(
+    display = "invalid framerate numerator {} (expected > 0, <= {})",
+    actual,
+    max
+  )]
+  InvalidFrameRateNum {
+    /// The actual value.
+    actual: u64,
+    /// The maximal supported value.
+    max: u64,
+  },
+  /// Framerate denominator is invalid.
+  #[error(
+    display = "invalid framerate denominator {} (expected > 0, <= {})",
+    actual,
+    max
+  )]
+  InvalidFrameRateDen {
+    /// The actual value.
+    actual: u64,
+    /// The maximal supported value.
+    max: u64,
+  },
+  /// Reservoir frame delay is invalid.
+  #[error(
+    display = "invalid reservoir frame delay {} (expected >= 12, <= 131072)",
+    _0
+  )]
+  InvalidReservoirFrameDelay(i32),
+
+  // This variant prevents people from exhaustively matching on this enum,
+  // which allows us to add more variants without it being a breaking change.
+  // This can be replaced with #[non_exhaustive] when it's stable:
+  // https://github.com/rust-lang/rust/issues/44109
+  #[doc(hidden)]
+  #[error(display = "")]
+  __NonExhaustive,
+}
+
 /// Contains the encoder configuration.
 #[derive(Clone, Debug, Default)]
 pub struct Config {
@@ -541,7 +620,7 @@ impl Config {
   /// ```
   /// use rav1e::prelude::*;
   ///
-  /// # fn main() -> Result<(), EncoderStatus> {
+  /// # fn main() -> Result<(), InvalidConfig> {
   /// let cfg = Config::default();
   /// let ctx: Context<u8> = cfg.new_context()?;
   /// # Ok(())
@@ -549,13 +628,15 @@ impl Config {
   /// ```
   ///
   /// [`Context`]: struct.Context.html
-  pub fn new_context<T: Pixel>(&self) -> Result<Context<T>, EncoderStatus> {
+  pub fn new_context<T: Pixel>(&self) -> Result<Context<T>, InvalidConfig> {
     assert!(
       8 * std::mem::size_of::<T>() >= self.enc.bit_depth,
       "The Pixel u{} does not match the Config bit_depth {}",
       8 * std::mem::size_of::<T>(),
       self.enc.bit_depth
     );
+
+    self.validate()?;
 
     info!("CPU Feature Level: {}", CpuFeatureLevel::default());
 
@@ -566,20 +647,6 @@ impl Config {
 
     let mut config = self.enc.clone();
 
-    if config.width == 0 || config.height == 0 {
-      return Err(EncoderStatus::Failure);
-    }
-    if config.rdo_lookahead_frames > MAX_RDO_LOOKAHEAD_FRAMES {
-      return Err(EncoderStatus::Failure);
-    }
-
-    if !check_tile_log2(config.tile_cols) {
-      return Err(EncoderStatus::Failure);
-    }
-    if !check_tile_log2(config.tile_rows) {
-      return Err(EncoderStatus::Failure);
-    }
-
     // FIXME: inter unsupported with 4:2:2 and 4:4:4 chroma sampling
     let chroma_sampling = config.chroma_sampling;
 
@@ -588,9 +655,70 @@ impl Config {
       config.speed_settings.rdo_tx_decision = false;
     }
 
-    let inner = ContextInner::new(&config).ok_or(EncoderStatus::Failure)?;
+    let inner = ContextInner::new(&config);
 
     Ok(Context { is_flushing: false, inner, pool, config })
+  }
+
+  /// Validates the configuration.
+  pub fn validate(&self) -> Result<(), InvalidConfig> {
+    use InvalidConfig::*;
+
+    let config = &self.enc;
+
+    if config.width == 0 || config.width > u16::max_value() as usize {
+      return Err(InvalidWidth(config.width));
+    }
+    if config.height == 0 || config.height > u16::max_value() as usize {
+      return Err(InvalidHeight(config.height));
+    }
+
+    if config.rdo_lookahead_frames > MAX_RDO_LOOKAHEAD_FRAMES {
+      return Err(InvalidRdoLookaheadFrames {
+        actual: config.rdo_lookahead_frames,
+        max: MAX_RDO_LOOKAHEAD_FRAMES,
+      });
+    }
+    if config.max_key_frame_interval == 0
+      || config.max_key_frame_interval > i32::max_value() as u64 / 3
+    {
+      return Err(InvalidMaxKeyFrameInterval {
+        actual: config.max_key_frame_interval,
+        max: i32::max_value() as u64 / 3,
+      });
+    }
+
+    if !check_tile_log2(config.tile_cols) {
+      return Err(InvalidTileCols(config.tile_cols));
+    }
+    if !check_tile_log2(config.tile_rows) {
+      return Err(InvalidTileRows(config.tile_rows));
+    }
+
+    if config.time_base.num == 0
+      || config.time_base.num > u32::max_value() as u64
+    {
+      return Err(InvalidFrameRateNum {
+        actual: config.time_base.num,
+        max: u32::max_value() as u64,
+      });
+    }
+    if config.time_base.den == 0
+      || config.time_base.den > u32::max_value() as u64
+    {
+      return Err(InvalidFrameRateDen {
+        actual: config.time_base.den,
+        max: u32::max_value() as u64,
+      });
+    }
+
+    if let Some(delay) = config.reservoir_frame_delay {
+      if delay < 12 || delay > 131_072 {
+        return Err(InvalidReservoirFrameDelay(delay));
+      }
+    }
+
+    Ok(())
   }
 }
 
@@ -935,7 +1063,7 @@ impl<T: Pixel> Context<T> {
   /// ```
   /// use rav1e::prelude::*;
   ///
-  /// # fn main() -> Result<(), EncoderStatus> {
+  /// # fn main() -> Result<(), InvalidConfig> {
   /// let cfg = Config::default();
   /// let ctx: Context<u8> = cfg.new_context()?;
   /// let frame = ctx.new_frame();
@@ -968,7 +1096,7 @@ impl<T: Pixel> Context<T> {
   /// ```
   /// use rav1e::prelude::*;
   ///
-  /// # fn main() -> Result<(), EncoderStatus> {
+  /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
   /// let cfg = Config::default();
   /// let mut ctx: Context<u8> = cfg.new_context().unwrap();
   /// let f1 = ctx.new_frame();
@@ -1081,7 +1209,7 @@ impl<T: Pixel> Context<T> {
   /// ```
   /// use rav1e::prelude::*;
   ///
-  /// # fn main() -> Result<(), EncoderStatus> {
+  /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
   /// let cfg = Config::default();
   /// let mut ctx: Context<u8> = cfg.new_context()?;
   /// let frame = ctx.new_frame();
@@ -1094,7 +1222,7 @@ impl<T: Pixel> Context<T> {
   ///         Ok(packet) => { /* Mux the packet. */ },
   ///         Err(EncoderStatus::Encoded) => (),
   ///         Err(EncoderStatus::LimitReached) => break,
-  ///         Err(err) => return Err(err),
+  ///         Err(err) => Err(err)?,
   ///     }
   /// }
   /// # Ok(())
@@ -1152,7 +1280,7 @@ impl<T: Pixel> Context<T> {
   ///
   ///     Ok(())
   /// }
-  /// # fn main() -> Result<(), EncoderStatus> {
+  /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
   /// #     let mut cfg = Config::default();
   /// #     // So it runs faster.
   /// #     cfg.enc.width = 16;
@@ -1217,21 +1345,21 @@ impl<T: Pixel> Context<T> {
       Ok(buf)
     }
 
-    let seq = Sequence::new(&self.config).unwrap();
+    let seq = Sequence::new(&self.config);
 
     sequence_header_inner(&seq).unwrap()
   }
 }
 
 impl<T: Pixel> ContextInner<T> {
-  pub fn new(enc: &EncoderConfig) -> Option<Self> {
+  pub fn new(enc: &EncoderConfig) -> Self {
     // initialize with temporal delimiter
     let packet_data = TEMPORAL_DELIMITER.to_vec();
 
     let maybe_ac_qi_max =
       if enc.quantizer < 255 { Some(enc.quantizer as u8) } else { None };
 
-    Some(ContextInner {
+    ContextInner {
       frame_count: 0,
       limit: None,
       inter_cfg: InterConfig::new(enc),
@@ -1246,7 +1374,7 @@ impl<T: Pixel> ContextInner<T> {
       gop_input_frameno_start: BTreeMap::new(),
       keyframe_detector: SceneChangeDetector::new(enc.bit_depth as u8),
       config: enc.clone(),
-      seq: Sequence::new(enc)?,
+      seq: Sequence::new(enc),
       rc_state: RCState::new(
         enc.width as i32,
         enc.height as i32,
@@ -1257,11 +1385,11 @@ impl<T: Pixel> ContextInner<T> {
         enc.min_quantizer,
         enc.max_key_frame_interval as i32,
         enc.reservoir_frame_delay,
-      )?,
+      ),
       maybe_prev_log_base_q: None,
       next_lookahead_frame: 0,
       next_lookahead_output_frameno: 0,
-    })
+    }
   }
 
   pub fn send_frame(

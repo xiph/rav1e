@@ -6,6 +6,8 @@ pub enum CliError {
   Io { msg: String, io: std::io::Error },
   #[error(display = "{}: {:?}", msg, status)]
   Enc { msg: String, status: rav1e::EncoderStatus },
+  #[error(display = "{}: {}", msg, status)]
+  Config { msg: String, status: rav1e::InvalidConfig },
   #[error(display = "Cannot parse option `{}`: {}", opt, err)]
   ParseInt { opt: String, err: std::num::ParseIntError },
 }
@@ -23,6 +25,12 @@ impl ToError for std::io::Error {
 impl ToError for rav1e::EncoderStatus {
   fn context(self, msg: &str) -> CliError {
     CliError::Enc { msg: msg.to_owned(), status: self }
+  }
+}
+
+impl ToError for rav1e::InvalidConfig {
+  fn context(self, msg: &str) -> CliError {
+    CliError::Config { msg: msg.to_owned(), status: self }
   }
 }
 
