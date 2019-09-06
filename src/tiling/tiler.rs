@@ -311,7 +311,7 @@ pub mod test {
       chroma_sampling,
       ..Default::default()
     };
-    let mut sequence = Sequence::new(&config).unwrap();
+    let mut sequence = Sequence::new(&config);
     // These tests are all assuming SB-sized LRUs, so set that.
     sequence.enable_large_lru = false;
     FrameInvariants::new(config, sequence)
