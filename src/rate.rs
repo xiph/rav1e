@@ -627,7 +627,7 @@ impl RCState {
     let reservoir_frame_delay = if maybe_reservoir_frame_delay.is_some() {
       maybe_reservoir_frame_delay.unwrap().max(12)
     } else {
-      ((max_key_frame_interval.checked_mul(3)?) >> 1).max(240)
+      ((max_key_frame_interval.checked_mul(3)?) >> 1).min(240)
     };
     // TODO: What are the limits on these?
     let npixels = (frame_width as i64) * (frame_height as i64);
