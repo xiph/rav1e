@@ -173,7 +173,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     )
     .arg(
       Arg::with_name("RESERVOIR_FRAME_DELAY")
-        .help("Number of frames over which rate control should distribute the reservoir [default: max(240, 1.5x keyint)]\n\
+        .help("Number of frames over which rate control should distribute the reservoir [default: min(240, 1.5x keyint)]\n\
          A minimum value of 12 is enforced.")
         .long("reservoir-frame-delay")
         .alias("reservoir_frame_delay")
