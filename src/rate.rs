@@ -617,7 +617,7 @@ impl RCState {
     maybe_reservoir_frame_delay: Option<i32>,
   ) -> Option<RCState> {
     // The default buffer size is set equal to 1.5x the keyframe interval, or 240
-    //  frames; whichsever is smaller, with a minimum of 12.
+    //  frames; whichever is smaller, with a minimum of 12.
     // For user set values, we enforce a minimum of 12.
     // The interval is short enough to allow reaction, but long enough to allow
     //  looking into the next GOP (avoiding the case where the last frames
