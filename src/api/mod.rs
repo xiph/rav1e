@@ -18,6 +18,7 @@ pub use color::*;
 
 use arrayvec::ArrayVec;
 use bitstream_io::*;
+use err_derive::Error;
 use itertools::Itertools;
 use num_derive::*;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -791,7 +792,7 @@ pub struct Context<T: Pixel> {
 /// Status that can be returned by [`Context`] functions.
 ///
 /// [`Context`]: struct.Context.html
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Error)]
 pub enum EncoderStatus {
   /// The encoder needs more data to produce an output packet.
   ///
@@ -799,6 +800,7 @@ pub enum EncoderStatus {
   /// enabled.
   ///
   /// [`Context::receive_packet()`]: struct.Context.html#method.receive_packet
+  #[error(display = "need more data")]
   NeedMoreData,
   /// There are enough frames in the queue.
   ///
@@ -806,6 +808,7 @@ pub enum EncoderStatus {
   /// after the encoder has been flushed.
   ///
   /// [`Context::send_frame()`]: struct.Context.html#method.send_frame
+  #[error(display = "enough data")]
   EnoughData,
   /// The encoder has already produced the number of frames requested.
   ///
@@ -813,10 +816,13 @@ pub enum EncoderStatus {
   /// been processed or the frame limit had been reached.
   ///
   /// [`Context::receive_packet()`]: struct.Context.html#method.receive_packet
+  #[error(display = "limit reached")]
   LimitReached,
   /// A frame had been encoded but not emitted yet.
+  #[error(display = "encoded")]
   Encoded,
   /// Generic fatal error.
+  #[error(display = "failure")]
   Failure,
   /// A frame was encoded in the first pass of a 2-pass encode, but its stats
   /// data was not retrieved with [`Context::twopass_out()`], or not enough
@@ -824,6 +830,7 @@ pub enum EncoderStatus {
   /// the next frame.
   ///
   /// [`Context::twopass_out()`]: struct.Context.html#method.twopass_out
+  #[error(display = "not ready")]
   NotReady,
 }
 
