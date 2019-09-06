@@ -547,12 +547,14 @@ pub fn rdo_tx_size_type<T: Pixel>(
       tx_size.sqr() <= TxSize::TX_32X32 || tx_type == TxType::DCT_DCT
     );
 
-    tx_size = sub_tx_size_map[tx_size as usize];
-    if tx_size == best_tx_size {
-      break;
-    };
-
+    let next_tx_size = sub_tx_size_map[tx_size as usize];
     cw.rollback(&cw_checkpoint);
+
+    if next_tx_size == tx_size {
+      break;
+    } else {
+      tx_size = next_tx_size;
+    };
   }
 
   (best_tx_size, best_tx_type)
