@@ -520,6 +520,9 @@ pub struct FrameInvariants<T: Pixel> {
   /// should be ignored. Invalid frames occur when a subgop is prematurely
   /// ended, for example, by a key frame or the end of the video.
   pub invalid: bool,
+  /// All lookahead computations (block importances, frame type, etc) have been
+  /// completed and this frame is ready for encoding.
+  pub lookahead_complete: bool,
   /// Motion vectors to the _original_ reference frames (not reconstructed).
   /// Used for lookahead purposes.
   pub lookahead_mvs: Box<[FrameMotionVectors]>,
@@ -535,6 +538,8 @@ pub struct FrameInvariants<T: Pixel> {
   pub h_in_imp_b: usize,
   /// Intra prediction cost estimations for each importance block.
   pub lookahead_intra_costs: Box<[u32]>,
+  /// Inter prediction cost estimations for each importance block.
+  pub lookahead_inter_costs: Vec<Vec<u32>>,
   /// Future importance values for each importance block. That is, a value
   /// indicating how much future frames depend on the block (for example, via
   /// inter-prediction).
@@ -698,6 +703,7 @@ impl<T: Pixel> FrameInvariants<T> {
       tx_mode_select: false,
       default_filter: FilterMode::REGULAR,
       invalid: false,
+      lookahead_complete: false,
       lookahead_mvs: {
         let mut vec = Vec::with_capacity(REF_FRAMES);
         for _ in 0..REF_FRAMES {
@@ -710,6 +716,7 @@ impl<T: Pixel> FrameInvariants<T> {
       h_in_imp_b,
       lookahead_intra_costs: vec![0; w_in_imp_b * h_in_imp_b]
         .into_boxed_slice(),
+      lookahead_inter_costs: Vec::new(),
       block_importances: vec![0.; w_in_imp_b * h_in_imp_b].into_boxed_slice(),
       cpu_feature_level: Default::default(),
     }
@@ -830,6 +837,11 @@ impl<T: Pixel> FrameInvariants<T> {
     };
     fi.input_frameno = input_frameno;
     fi.me_range_scale = (inter_cfg.group_input_len >> fi.pyramid_level) as u8;
+    fi.lookahead_inter_costs = vec![
+      vec![0; fi.w_in_imp_b * fi.h_in_imp_b];
+      inter_cfg.keyframe_lookahead_distance()
+        as usize
+    ];
     fi
   }
 

@@ -7,43 +7,25 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use crate::api::EncoderConfig;
 use crate::api::InterConfig;
-use crate::frame::Frame;
-use crate::util::CastFromPrimitive;
+use crate::api::{EncoderConfig, FrameType};
 use crate::util::Pixel;
 
+use crate::encoder::FrameInvariants;
 use std::cmp;
 use std::collections::BTreeSet;
-use std::sync::Arc;
+
+const SCENECUT_THRESHOLD: f32 = 40.;
 
 /// Runs keyframe detection on frames from the lookahead queue.
+#[derive(Default)]
 pub(crate) struct SceneChangeDetector {
-  /// Minimum average difference between YUV deltas that will trigger a scene change.
-  threshold: u8,
   /// Frames that cannot be marked as keyframes due to the algorithm excluding them.
   /// Storing the frame numbers allows us to avoid looking back more than one frame.
   excluded_frames: BTreeSet<u64>,
 }
 
 impl SceneChangeDetector {
-  pub fn new(bit_depth: u8) -> Self {
-    // This implementation is based on a Python implementation at
-    // https://pyscenedetect.readthedocs.io/en/latest/reference/detection-methods/.
-    // The Python implementation uses HSV values and a threshold of 30. Comparing the
-    // YUV values was sufficient in most cases, and avoided a more costly YUV->RGB->HSV
-    // conversion, but the deltas needed to be scaled down. The deltas for keyframes
-    // in YUV were about 1/3 to 1/2 of what they were in HSV, but non-keyframes were
-    // very unlikely to have a delta greater than 3 in YUV, whereas they may reach into
-    // the double digits in HSV. Therefore, 12 was chosen as a reasonable default threshold.
-    // This may be adjusted later.
-    const BASE_THRESHOLD: u8 = 12;
-    Self {
-      threshold: BASE_THRESHOLD * bit_depth / 8,
-      excluded_frames: BTreeSet::new(),
-    }
-  }
-
   /// Runs keyframe detection on the next frame in the lookahead queue.
   ///
   /// This function requires that a subset of input frames
@@ -53,27 +35,27 @@ impl SceneChangeDetector {
   ///
   /// This will gracefully handle the first frame in the video as well.
   pub fn analyze_next_frame<T: Pixel>(
-    &mut self, previous_frame: Option<Arc<Frame<T>>>,
-    frame_set: &[Arc<Frame<T>>], input_frameno: u64, config: &EncoderConfig,
+    &mut self, frame_set: &[&FrameInvariants<T>], config: &EncoderConfig,
     inter_cfg: &InterConfig, keyframes: &mut BTreeSet<u64>,
     keyframes_forced: &BTreeSet<u64>,
   ) {
-    let frame_set = match previous_frame {
-      Some(frame) => {
-        [frame].iter().chain(frame_set.iter()).cloned().collect::<Vec<_>>()
-      }
-      None => {
-        // The first frame is always a keyframe.
-        keyframes.insert(0);
-        return;
-      }
-    };
+    let input_frameno = frame_set[0].input_frameno;
+    if keyframes.iter().any(|f| *f >= input_frameno) {
+      // Already analyzed past this frame--this is only a concern due to
+      // frame reordering.
+      return;
+    }
 
-    self.exclude_scene_flashes(&frame_set, input_frameno, inter_cfg);
+    self.exclude_scene_flashes(
+      &frame_set,
+      input_frameno,
+      keyframes,
+      inter_cfg,
+      config,
+    );
 
     if self.is_key_frame(
       &frame_set[0],
-      &frame_set[1],
       input_frameno,
       config,
       keyframes,
@@ -85,9 +67,9 @@ impl SceneChangeDetector {
 
   /// Determines if `current_frame` should be a keyframe.
   fn is_key_frame<T: Pixel>(
-    &self, previous_frame: &Frame<T>, current_frame: &Frame<T>,
-    current_frameno: u64, config: &EncoderConfig,
-    keyframes: &mut BTreeSet<u64>, keyframes_forced: &BTreeSet<u64>,
+    &self, current_frame: &FrameInvariants<T>, current_frameno: u64,
+    config: &EncoderConfig, keyframes: &mut BTreeSet<u64>,
+    keyframes_forced: &BTreeSet<u64>,
   ) -> bool {
     if keyframes_forced.contains(&current_frameno) {
       return true;
@@ -101,8 +83,17 @@ impl SceneChangeDetector {
     if distance < config.min_key_frame_interval {
       return false;
     }
-    if distance >= config.max_key_frame_interval {
+    if distance == config.max_key_frame_interval {
       return true;
+    }
+    if distance > config.max_key_frame_interval {
+      // This resolves an issue where more frames than necessary
+      // would be selected as keyframes, due to scene analysis not
+      // always being performed in input frame order.
+      //
+      // The frame will be properly analyzed on the next pass
+      // after the FIs are reset.
+      return false;
     }
 
     // Skip smart scene detection if it's disabled
@@ -114,28 +105,29 @@ impl SceneChangeDetector {
       return false;
     }
 
-    self.has_scenecut(previous_frame, current_frame)
+    self.has_scenecut(current_frame, 1, keyframes, config)
   }
 
   /// Uses lookahead to avoid coding short flashes as scenecuts.
   /// Saves excluded frame numbers in `self.excluded_frames`.
   fn exclude_scene_flashes<T: Pixel>(
-    &mut self, frame_subset: &[Arc<Frame<T>>], frameno: u64,
-    inter_cfg: &InterConfig,
+    &mut self, frame_subset: &[&FrameInvariants<T>], frameno: u64,
+    keyframes: &mut BTreeSet<u64>, inter_cfg: &InterConfig,
+    config: &EncoderConfig,
   ) {
     let lookahead_distance = cmp::min(
       inter_cfg.keyframe_lookahead_distance() as usize,
-      frame_subset.len() - 1,
+      frame_subset.len(),
     );
 
     // Where A and B are scenes: AAAAAABBBAAAAAA
     // If BBB is shorter than lookahead_distance, it is detected as a flash
     // and not considered a scenecut.
-    if lookahead_distance > 1 {
-      for j in 1..=lookahead_distance {
-        if !self.has_scenecut(&frame_subset[0], &frame_subset[j]) {
-          // Any frame in between `0` and `j` cannot be a real scenecut.
-          for i in 0..=j {
+    if lookahead_distance > 1 && frameno > 0 {
+      for j in 1..lookahead_distance {
+        if !self.has_scenecut(&frame_subset[j], j + 1, keyframes, config) {
+          // Any frame in between the previous frame and `j` cannot be a real scenecut.
+          for i in 0..=(j + 1) {
             let frameno = frameno + i as u64 - 1;
             self.excluded_frames.insert(frameno);
           }
@@ -148,11 +140,13 @@ impl SceneChangeDetector {
     // detected as flashes and not considered scenecuts.
     // Instead, the first F frame becomes a scenecut.
     // If the video ends before F, no frame becomes a scenecut.
-    for i in 1..=lookahead_distance {
-      if i < lookahead_distance
-        && self
-          .has_scenecut(&frame_subset[i], &frame_subset[lookahead_distance])
-      {
+    for i in 0..lookahead_distance {
+      if self.has_scenecut(
+        &frame_subset[lookahead_distance - 1],
+        lookahead_distance - i,
+        keyframes,
+        config,
+      ) {
         // If the current frame is the frame before a scenecut, it cannot also be the frame of a scenecut.
         let frameno = frameno + i as u64 - 1;
         self.excluded_frames.insert(frameno);
@@ -160,32 +154,80 @@ impl SceneChangeDetector {
     }
   }
 
-  /// Run a comparison between two frames to determine if they qualify for a scenecut.
-  ///
-  /// The current algorithm detects fast cuts using changes in colour and intensity between frames.
-  /// Since the difference between frames is used, only fast cuts are detected
-  /// with this method. This is intended to change via https://github.com/xiph/rav1e/issues/794.
+  /// Check the inter costs between two frames to determine if they qualify for a scenecut.
+  /// Based on the x264 algorithm.
   fn has_scenecut<T: Pixel>(
-    &self, frame1: &Frame<T>, frame2: &Frame<T>,
+    &self, fi: &FrameInvariants<T>, ref_frame_distance: usize,
+    keyframes: &BTreeSet<u64>, config: &EncoderConfig,
   ) -> bool {
-    let len = frame2.planes[0].cfg.width * frame2.planes[0].cfg.height;
-    let delta_yuv = frame2
+    debug_assert!(fi.input_frameno >= ref_frame_distance as u64);
+    if fi.frame_type == FrameType::KEY {
+      return true;
+    }
+
+    let intra_cost =
+      &fi.lookahead_intra_costs.iter().map(|&v| v as f32).sum::<f32>()
+        / fi.lookahead_intra_costs.len() as f32;
+    let inter_cost = &fi.lookahead_inter_costs[ref_frame_distance - 1]
       .iter()
-      .zip(frame1.iter())
-      .map(|(last, cur)| {
-        (
-          (i16::cast_from(cur.0) - i16::cast_from(last.0)).abs() as u64,
-          (i16::cast_from(cur.1) - i16::cast_from(last.1)).abs() as u64,
-          (i16::cast_from(cur.2) - i16::cast_from(last.2)).abs() as u64,
-        )
-      })
-      .fold((0, 0, 0), |(ht, st, vt), (h, s, v)| (ht + h, st + s, vt + v));
-    let delta_yuv = (
-      (delta_yuv.0 / len as u64) as u16,
-      (delta_yuv.1 / len as u64) as u16,
-      (delta_yuv.2 / len as u64) as u16,
+      .map(|&v| v as f32)
+      .sum::<f32>()
+      / fi.lookahead_inter_costs[ref_frame_distance - 1].len() as f32;
+    // Avoid a division by zero error
+    if intra_cost < std::f32::EPSILON {
+      if inter_cost < std::f32::EPSILON {
+        // This is going to be all-SKIP anyway, so mark it a non-scenechange.
+        debug!(
+          "frame {} to {}: no scenecut; icost 0; pcost 0",
+          fi.input_frameno,
+          fi.input_frameno - ref_frame_distance as u64
+        );
+        return false;
+      } else {
+        debug!(
+          "frame {} to {}: scenecut; icost 0; pcost {:.3}",
+          fi.input_frameno,
+          fi.input_frameno - ref_frame_distance as u64,
+          inter_cost
+        );
+        return true;
+      }
+    }
+
+    let distance_from_last_keyframe =
+      fi.input_frameno - *keyframes.iter().last().unwrap();
+    let thresh_max = SCENECUT_THRESHOLD / 100.;
+    let thresh_min = thresh_max * 0.25;
+
+    let bias = if distance_from_last_keyframe
+      <= config.min_key_frame_interval / 4
+    {
+      thresh_min / 4.
+    } else if distance_from_last_keyframe <= config.min_key_frame_interval {
+      thresh_min * distance_from_last_keyframe as f32
+        / config.min_key_frame_interval as f32
+    } else if config.min_key_frame_interval == config.max_key_frame_interval {
+      thresh_max
+    } else {
+      thresh_min
+        + (thresh_max - thresh_min)
+          * (distance_from_last_keyframe - config.min_key_frame_interval)
+            as f32
+          / (config.max_key_frame_interval - config.min_key_frame_interval)
+            as f32
+    };
+
+    let is_scenecut = inter_cost >= (1. - bias) * intra_cost;
+    debug!(
+      "frame {} to {}: {}; icost {}; pcost {}; ratio {:.3}; thresh {:.3}",
+      fi.input_frameno,
+      fi.input_frameno - ref_frame_distance as u64,
+      if is_scenecut { "scenecut" } else { "no scenecut" },
+      intra_cost,
+      inter_cost,
+      1. - inter_cost / intra_cost,
+      bias
     );
-    let delta_avg = ((delta_yuv.0 + delta_yuv.1 + delta_yuv.2) / 3) as u8;
-    delta_avg >= self.threshold
+    is_scenecut
   }
 }

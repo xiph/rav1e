@@ -108,18 +108,6 @@ impl<T: Pixel> Frame<T> {
     let PlaneConfig { width, height, .. } = self.planes[0].cfg;
     TileMut::new(self, TileRect { x: 0, y: 0, width, height })
   }
-
-  /// Returns a `PixelIter` containing the data of this frame's planes in YUV format.
-  /// Each point in the `PixelIter` is a triple consisting of a Y, U, and V component.
-  /// The `PixelIter` is laid out as contiguous rows, e.g. to get a given 0-indexed row
-  /// you could use `data.skip(width * row_idx).take(width)`.
-  ///
-  /// This data retains any padding, e.g. it uses the width and height specifed in
-  /// the Y-plane's `cfg` struct, and not the display width and height specied in
-  /// `FrameInvariants`.
-  pub(crate) fn iter(&self) -> PixelIter<'_, T> {
-    PixelIter::new(&self.planes)
-  }
 }
 
 #[derive(Debug)]
@@ -130,10 +118,6 @@ pub(crate) struct PixelIter<'a, T: Pixel> {
 }
 
 impl<'a, T: Pixel> PixelIter<'a, T> {
-  pub fn new(planes: &'a [Plane<T>; 3]) -> Self {
-    PixelIter { planes, y: 0, x: 0 }
-  }
-
   fn width(&self) -> usize {
     self.planes[0].cfg.width
   }
