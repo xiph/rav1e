@@ -51,6 +51,8 @@ use std::{cmp, fmt, io};
 
 // We add 1 to rdo_lookahead_frames in a bunch of places.
 const MAX_RDO_LOOKAHEAD_FRAMES: usize = usize::max_value() - 1;
+// Due to the math in RCState::new() regarding the reservoir frame delay.
+const MAX_MAX_KEY_FRAME_INTERVAL: u64 = i32::max_value() as u64 / 3;
 
 // TODO: use the num crate?
 /// A rational number.
@@ -222,8 +224,11 @@ impl EncoderConfig {
     self.min_key_frame_interval = min_interval;
 
     // Map an input value of 0 to an infinite interval
-    self.max_key_frame_interval =
-      if max_interval == 0 { std::u64::MAX } else { max_interval };
+    self.max_key_frame_interval = if max_interval == 0 {
+      MAX_MAX_KEY_FRAME_INTERVAL
+    } else {
+      max_interval
+    };
   }
 
   /// Returns the video frame rate computed from [`time_base`].
@@ -537,7 +542,7 @@ pub enum InvalidConfig {
   },
   /// Maximal keyframe interval is invalid.
   #[error(
-    display = "invalid max keyframe interval {} (expected > 0, <= {})",
+    display = "invalid max keyframe interval {} (expected <= {})",
     actual,
     max
   )]
@@ -646,6 +651,10 @@ impl Config {
       .unwrap();
 
     let mut config = self.enc.clone();
+    config.set_key_frame_interval(
+      config.min_key_frame_interval,
+      config.max_key_frame_interval,
+    );
 
     // FIXME: inter unsupported with 4:2:2 and 4:4:4 chroma sampling
     let chroma_sampling = config.chroma_sampling;
@@ -679,12 +688,10 @@ impl Config {
         max: MAX_RDO_LOOKAHEAD_FRAMES,
       });
     }
-    if config.max_key_frame_interval == 0
-      || config.max_key_frame_interval > i32::max_value() as u64 / 3
-    {
+    if config.max_key_frame_interval > MAX_MAX_KEY_FRAME_INTERVAL {
       return Err(InvalidMaxKeyFrameInterval {
         actual: config.max_key_frame_interval,
-        max: i32::max_value() as u64 / 3,
+        max: MAX_MAX_KEY_FRAME_INTERVAL,
       });
     }
 
