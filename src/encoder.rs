@@ -1131,13 +1131,13 @@ pub fn encode_tx_block<T: Pixel>(
   }
 
   let mut residual_storage: AlignedArray<[i16; 64 * 64]> =
-    UninitializedAlignedArray();
+    AlignedArray::uninitialized();
   let mut coeffs_storage: AlignedArray<[i32; 64 * 64]> =
-    UninitializedAlignedArray();
+    AlignedArray::uninitialized();
   let mut qcoeffs_storage: AlignedArray<[i32; 64 * 64]> =
-    UninitializedAlignedArray();
+    AlignedArray::uninitialized();
   let mut rcoeffs_storage: AlignedArray<[i32; 64 * 64]> =
-    UninitializedAlignedArray();
+    AlignedArray::uninitialized();
   let residual = &mut residual_storage.array[..tx_size.area()];
   let coeffs = &mut coeffs_storage.array[..tx_size.area()];
   let qcoeffs = &mut qcoeffs_storage.array[..tx_size.area()];
@@ -1766,7 +1766,7 @@ pub fn write_tx_blocks<T: Pixel>(
   let qidx = get_qidx(fi, ts, cw, tile_bo);
 
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
-  let mut ac: AlignedArray<[i16; 32 * 32]> = UninitializedAlignedArray();
+  let mut ac: AlignedArray<[i16; 32 * 32]> = AlignedArray::uninitialized();
   let mut tx_dist: i64 = 0;
   let do_chroma = has_chroma(tile_bo, bsize, xdec, ydec);
 

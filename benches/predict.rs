@@ -205,7 +205,7 @@ pub fn intra_cfl_4x4(b: &mut Bencher) {
 
 pub fn intra_dc_4x4_u8(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
-  let mut edge_buf = UninitializedAlignedArray();
+  let mut edge_buf = AlignedArray::uninitialized();
   let (mut block, above, left) = generate_block_u8(&mut rng, &mut edge_buf);
 
   b.iter(|| {
@@ -219,7 +219,7 @@ pub fn intra_dc_4x4_u8(b: &mut Bencher) {
 
 pub fn intra_dc_128_4x4_u8(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
-  let mut edge_buf = UninitializedAlignedArray();
+  let mut edge_buf = AlignedArray::uninitialized();
   let (mut block, _above, _left) = generate_block_u8(&mut rng, &mut edge_buf);
 
   b.iter(|| {
@@ -229,7 +229,7 @@ pub fn intra_dc_128_4x4_u8(b: &mut Bencher) {
 
 pub fn intra_dc_left_4x4_u8(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
-  let mut edge_buf = UninitializedAlignedArray();
+  let mut edge_buf = AlignedArray::uninitialized();
   let (mut block, above, left) = generate_block_u8(&mut rng, &mut edge_buf);
 
   b.iter(|| {
@@ -243,7 +243,7 @@ pub fn intra_dc_left_4x4_u8(b: &mut Bencher) {
 
 pub fn intra_dc_top_4x4_u8(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
-  let mut edge_buf = UninitializedAlignedArray();
+  let mut edge_buf = AlignedArray::uninitialized();
   let (mut block, above, left) = generate_block_u8(&mut rng, &mut edge_buf);
 
   b.iter(|| {
@@ -257,7 +257,7 @@ pub fn intra_dc_top_4x4_u8(b: &mut Bencher) {
 
 pub fn intra_h_4x4_u8(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
-  let mut edge_buf = UninitializedAlignedArray();
+  let mut edge_buf = AlignedArray::uninitialized();
   let (mut block, _above, left) = generate_block_u8(&mut rng, &mut edge_buf);
 
   b.iter(|| {
@@ -267,7 +267,7 @@ pub fn intra_h_4x4_u8(b: &mut Bencher) {
 
 pub fn intra_v_4x4_u8(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
-  let mut edge_buf = UninitializedAlignedArray();
+  let mut edge_buf = AlignedArray::uninitialized();
   let (mut block, above, _left) = generate_block_u8(&mut rng, &mut edge_buf);
 
   b.iter(|| {
@@ -277,7 +277,7 @@ pub fn intra_v_4x4_u8(b: &mut Bencher) {
 
 pub fn intra_paeth_4x4_u8(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
-  let mut edge_buf = UninitializedAlignedArray();
+  let mut edge_buf = AlignedArray::uninitialized();
   let (mut block, above, left) = generate_block_u8(&mut rng, &mut edge_buf);
   let above_left = unsafe { *above.as_ptr().offset(-1) };
 
@@ -293,7 +293,7 @@ pub fn intra_paeth_4x4_u8(b: &mut Bencher) {
 
 pub fn intra_smooth_4x4_u8(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
-  let mut edge_buf = UninitializedAlignedArray();
+  let mut edge_buf = AlignedArray::uninitialized();
   let (mut block, above, left) = generate_block_u8(&mut rng, &mut edge_buf);
 
   b.iter(|| {
@@ -307,7 +307,7 @@ pub fn intra_smooth_4x4_u8(b: &mut Bencher) {
 
 pub fn intra_smooth_h_4x4_u8(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
-  let mut edge_buf = UninitializedAlignedArray();
+  let mut edge_buf = AlignedArray::uninitialized();
   let (mut block, above, left) = generate_block_u8(&mut rng, &mut edge_buf);
 
   b.iter(|| {
@@ -321,7 +321,7 @@ pub fn intra_smooth_h_4x4_u8(b: &mut Bencher) {
 
 pub fn intra_smooth_v_4x4_u8(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
-  let mut edge_buf = UninitializedAlignedArray();
+  let mut edge_buf = AlignedArray::uninitialized();
   let (mut block, above, left) = generate_block_u8(&mut rng, &mut edge_buf);
 
   b.iter(|| {
