@@ -40,14 +40,23 @@ pub struct AlignedArray<ARRAY> {
   pub array: ARRAY,
 }
 
+impl<A> AlignedArray<A> {
+  pub const fn new(array: A) -> Self {
+    AlignedArray { _alignment: [], array }
+  }
+  pub fn uninitialized() -> Self {
+    Self::new(unsafe { MaybeUninit::uninit().assume_init() })
+  }
+}
+
 #[allow(non_snake_case)]
 pub const fn AlignedArray<ARRAY>(array: ARRAY) -> AlignedArray<ARRAY> {
-  AlignedArray { _alignment: [], array }
+  AlignedArray::new(array)
 }
 
 #[allow(non_snake_case)]
 pub fn UninitializedAlignedArray<ARRAY>() -> AlignedArray<ARRAY> {
-  AlignedArray(unsafe { MaybeUninit::uninit().assume_init() })
+  AlignedArray::uninitialized()
 }
 
 #[test]
