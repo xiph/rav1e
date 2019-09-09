@@ -292,6 +292,8 @@ fn daala_fdct_ii_4<T: TxOperations>(
 }
 
 pub fn daala_fdct4<T: TxOperations>(input: &[T], output: &mut [T]) {
+  assert!(input.len() >= 4);
+  assert!(output.len() >= 4);
   let mut temp_out: [T; 4] = [T::default(); 4];
   daala_fdct_ii_4(input[0], input[1], input[2], input[3], &mut temp_out);
 
@@ -302,6 +304,9 @@ pub fn daala_fdct4<T: TxOperations>(input: &[T], output: &mut [T]) {
 }
 
 pub fn daala_fdst_vii_4<T: TxOperations>(input: &[T], output: &mut [T]) {
+  assert!(input.len() >= 4);
+  assert!(output.len() >= 4);
+
   let q0 = input[0];
   let q1 = input[1];
   let q2 = input[2];
@@ -407,6 +412,8 @@ fn daala_fdct_ii_8<T: TxOperations>(
 }
 
 pub fn daala_fdct8<T: TxOperations>(input: &[T], output: &mut [T]) {
+  assert!(input.len() >= 8);
+  assert!(output.len() >= 8);
   let mut temp_out: [T; 8] = [T::default(); 8];
   daala_fdct_ii_8(
     input[0],
@@ -486,6 +493,8 @@ fn daala_fdst_iv_8<T: TxOperations>(
 }
 
 pub fn daala_fdst8<T: TxOperations>(input: &[T], output: &mut [T]) {
+  assert!(input.len() >= 8);
+  assert!(output.len() >= 8);
   let mut temp_out: [T; 8] = [T::default(); 8];
   daala_fdst_iv_8(
     input[0],
@@ -629,6 +638,8 @@ fn daala_fdct_ii_16<T: TxOperations>(
 }
 
 fn daala_fdct16<T: TxOperations>(input: &[T], output: &mut [T]) {
+  assert!(input.len() >= 16);
+  assert!(output.len() >= 16);
   let mut temp_out: [T; 16] = [T::default(); 16];
   daala_fdct_ii_16(
     input[0],
@@ -793,6 +804,8 @@ fn daala_fdst_iv_16<T: TxOperations>(
 }
 
 fn daala_fdst16<T: TxOperations>(input: &[T], output: &mut [T]) {
+  assert!(input.len() >= 16);
+  assert!(output.len() >= 16);
   let mut temp_out: [T; 16] = [T::default(); 16];
   daala_fdst_iv_16(
     input[0],
@@ -1054,6 +1067,8 @@ fn daala_fdct_ii_32<T: TxOperations>(
 }
 
 fn daala_fdct32<T: TxOperations>(input: &[T], output: &mut [T]) {
+  assert!(input.len() >= 32);
+  assert!(output.len() >= 32);
   let mut temp_out: [T; 32] = [T::default(); 32];
   daala_fdct_ii_32(
     input[0],
@@ -1465,6 +1480,8 @@ fn daala_fdst_iv_32_asym<T: TxOperations>(
 
 #[allow(clippy::identity_op)]
 fn daala_fdct64<T: TxOperations>(input: &[T], output: &mut [T]) {
+  assert!(input.len() >= 64);
+  assert!(output.len() >= 64);
   // Use arrays to avoid ridiculous variable names
   let mut asym: [(T, T); 32] = [<(T, T)>::default(); 32];
   let mut half: [T; 32] = [T::default(); 32];
