@@ -1741,7 +1741,7 @@ trait FwdTxfm2D: Dim {
     input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
     bd: usize,
   ) {
-    let mut tmp: AlignedArray<[i32; 64 * 64]> = UninitializedAlignedArray();
+    let mut tmp: AlignedArray<[i32; 64 * 64]> = AlignedArray::uninitialized();
     let buf = &mut tmp.array[..Self::W * Self::H];
     let cfg =
       Txfm2DFlipCfg::fwd(tx_type, TxSize::by_dims(Self::W, Self::H), bd);
@@ -1761,7 +1761,7 @@ trait FwdTxfm2D: Dim {
     // Columns
     for c in 0..txfm_size_col {
       let mut col_flip_backing: AlignedArray<[i32; 64 * 64]> =
-        UninitializedAlignedArray();
+        AlignedArray::uninitialized();
       let col_flip = &mut col_flip_backing.array[..txfm_size_row];
       if cfg.ud_flip {
         // flip upside down
@@ -1857,7 +1857,7 @@ pub fn fht64x64(
   bit_depth: usize,
 ) {
   assert!(tx_type == TxType::DCT_DCT);
-  let mut aligned: AlignedArray<[i32; 4096]> = UninitializedAlignedArray();
+  let mut aligned: AlignedArray<[i32; 4096]> = AlignedArray::uninitialized();
   let tmp = &mut aligned.array;
 
   //Block64x64::fwd_txfm2d(input, &mut tmp, stride, tx_type, bit_depth);
@@ -1921,7 +1921,7 @@ pub fn fht32x64(
   bit_depth: usize,
 ) {
   assert!(tx_type == TxType::DCT_DCT);
-  let mut aligned: AlignedArray<[i32; 2048]> = UninitializedAlignedArray();
+  let mut aligned: AlignedArray<[i32; 2048]> = AlignedArray::uninitialized();
   let tmp = &mut aligned.array;
 
   Block32x64::fwd_txfm2d_daala(input, tmp, stride, tx_type, bit_depth);
@@ -1936,7 +1936,7 @@ pub fn fht64x32(
   bit_depth: usize,
 ) {
   assert!(tx_type == TxType::DCT_DCT);
-  let mut aligned: AlignedArray<[i32; 2048]> = UninitializedAlignedArray();
+  let mut aligned: AlignedArray<[i32; 2048]> = AlignedArray::uninitialized();
   let tmp = &mut aligned.array;
 
   Block64x32::fwd_txfm2d_daala(input, tmp, stride, tx_type, bit_depth);
@@ -1985,7 +1985,7 @@ pub fn fht16x64(
   bit_depth: usize,
 ) {
   assert!(tx_type == TxType::DCT_DCT);
-  let mut aligned: AlignedArray<[i32; 1024]> = UninitializedAlignedArray();
+  let mut aligned: AlignedArray<[i32; 1024]> = AlignedArray::uninitialized();
   let tmp = &mut aligned.array;
 
   Block16x64::fwd_txfm2d_daala(input, tmp, stride, tx_type, bit_depth);
@@ -2000,7 +2000,7 @@ pub fn fht64x16(
   bit_depth: usize,
 ) {
   assert!(tx_type == TxType::DCT_DCT);
-  let mut aligned: AlignedArray<[i32; 1024]> = UninitializedAlignedArray();
+  let mut aligned: AlignedArray<[i32; 1024]> = AlignedArray::uninitialized();
   let tmp = &mut aligned.array;
 
   Block64x16::fwd_txfm2d_daala(input, tmp, stride, tx_type, bit_depth);

@@ -1572,7 +1572,7 @@ mod nasm {
         let coeff_w = Self::W.min(32);
         let coeff_h = Self::H.min(32);
         let mut coeff16: AlignedArray<[i16; 32 * 32]> =
-          UninitializedAlignedArray();
+          AlignedArray::uninitialized();
 
         // Transpose the input.
         // TODO: should be possible to remove changing how coeffs are written
