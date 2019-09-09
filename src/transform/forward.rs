@@ -57,8 +57,6 @@ const FWD_TXFM_SHIFT_LS: [TxfmShifts; TxSize::TX_SIZES_ALL] = [
   FWD_SHIFT_64X16,
 ];
 
-type TxfmFunc = dyn Fn(&[i32], &mut [i32]);
-
 use std::ops::*;
 
 pub trait TxOperations:
@@ -1667,21 +1665,21 @@ impl TxfmType {
     [TxfmType::DCT64, TxfmType::Invalid, TxfmType::Invalid, TxfmType::Invalid],
   ];
 
-  fn get_func(self) -> &'static TxfmFunc {
+  fn do_transform(self, input: &[i32], output: &mut [i32]) {
     use self::TxfmType::*;
     match self {
-      DCT4 => &daala_fdct4,
-      DCT8 => &daala_fdct8,
-      DCT16 => &daala_fdct16,
-      DCT32 => &daala_fdct32,
-      DCT64 => &daala_fdct64,
-      ADST4 => &daala_fdst_vii_4,
-      ADST8 => &daala_fdst8,
-      ADST16 => &daala_fdst16,
-      Identity4 => &fidentity4,
-      Identity8 => &fidentity8,
-      Identity16 => &fidentity16,
-      Identity32 => &fidentity32,
+      DCT4 => daala_fdct4(input, output),
+      DCT8 => daala_fdct8(input, output),
+      DCT16 => daala_fdct16(input, output),
+      DCT32 => daala_fdct32(input, output),
+      DCT64 => daala_fdct64(input, output),
+      ADST4 => daala_fdst_vii_4(input, output),
+      ADST8 => daala_fdst8(input, output),
+      ADST16 => daala_fdst16(input, output),
+      Identity4 => fidentity4(input, output),
+      Identity8 => fidentity8(input, output),
+      Identity16 => fidentity16(input, output),
+      Identity32 => fidentity32(input, output),
       _ => unreachable!(),
     }
   }
@@ -1755,9 +1753,6 @@ trait FwdTxfm2D: Dim {
     let txfm_size_col = TxSize::width(cfg.tx_size);
     let txfm_size_row = TxSize::height(cfg.tx_size);
 
-    let txfm_func_col = cfg.txfm_type_col.get_func();
-    let txfm_func_row = cfg.txfm_type_row.get_func();
-
     // Columns
     for c in 0..txfm_size_col {
       let mut col_flip_backing: AlignedArray<[i32; 64 * 64]> =
@@ -1774,7 +1769,7 @@ trait FwdTxfm2D: Dim {
         }
       }
       av1_round_shift_array(col_flip, txfm_size_row, -cfg.shift[0]);
-      txfm_func_col(&col_flip, &mut output[txfm_size_row..]);
+      cfg.txfm_type_col.do_transform(&col_flip, &mut output[txfm_size_row..]);
       av1_round_shift_array(
         &mut output[txfm_size_row..],
         txfm_size_row,
@@ -1795,7 +1790,7 @@ trait FwdTxfm2D: Dim {
 
     // Rows
     for r in 0..txfm_size_row {
-      txfm_func_row(
+      cfg.txfm_type_row.do_transform(
         &buf[r * txfm_size_col..],
         &mut output[r * txfm_size_col..],
       );
