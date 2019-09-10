@@ -538,8 +538,8 @@ pub struct FrameInvariants<T: Pixel> {
   pub h_in_imp_b: usize,
   /// Intra prediction cost estimations for each importance block.
   pub lookahead_intra_costs: Box<[u32]>,
-  /// Inter prediction cost estimations for each importance block.
-  pub lookahead_inter_costs: Vec<Vec<u32>>,
+  /// Inter prediction cost estimations for each importance block, for the past `keyframe_lookahead_distance` frames.
+  pub lookahead_inter_costs: Box<[Box<[u32]>]>,
   /// Future importance values for each importance block. That is, a value
   /// indicating how much future frames depend on the block (for example, via
   /// inter-prediction).
@@ -716,7 +716,7 @@ impl<T: Pixel> FrameInvariants<T> {
       h_in_imp_b,
       lookahead_intra_costs: vec![0; w_in_imp_b * h_in_imp_b]
         .into_boxed_slice(),
-      lookahead_inter_costs: Vec::new(),
+      lookahead_inter_costs: vec![].into_boxed_slice(),
       block_importances: vec![0.; w_in_imp_b * h_in_imp_b].into_boxed_slice(),
       cpu_feature_level: Default::default(),
     }
@@ -837,11 +837,12 @@ impl<T: Pixel> FrameInvariants<T> {
     };
     fi.input_frameno = input_frameno;
     fi.me_range_scale = (inter_cfg.group_input_len >> fi.pyramid_level) as u8;
-    fi.lookahead_inter_costs = vec![
-      vec![0; fi.w_in_imp_b * fi.h_in_imp_b];
-      inter_cfg.keyframe_lookahead_distance()
-        as usize
-    ];
+    fi.lookahead_inter_costs =
+      vec![
+        vec![0; fi.w_in_imp_b * fi.h_in_imp_b].into_boxed_slice();
+        inter_cfg.keyframe_lookahead_distance() as usize
+      ]
+      .into_boxed_slice();
     fi
   }
 

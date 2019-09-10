@@ -46,7 +46,7 @@ use crate::util::Pixel;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
-use std::{cmp, fmt, io};
+use std::{cmp, fmt, io, iter};
 
 // We add 1 to rdo_lookahead_frames in a bunch of places.
 const MAX_RDO_LOOKAHEAD_FRAMES: usize = usize::max_value() - 1;
@@ -1230,7 +1230,7 @@ impl<T: Pixel> ContextInner<T> {
       frame_invariants: BTreeMap::new(),
       // As an optimization for lookahead,
       // Initialize this with the first frame set as a keyframe.
-      keyframes: [0].iter().copied().collect::<BTreeSet<_>>(),
+      keyframes: iter::once(0).collect(),
       keyframes_forced: BTreeSet::new(),
       packet_data,
       gop_output_frameno_start: BTreeMap::new(),
@@ -1829,8 +1829,8 @@ impl<T: Pixel> ContextInner<T> {
       // At this point we have `rdo_lookahead_frames` lookahead computed.
       // Now we take frames until we no longer have `rdo_lookahead_frames`
       // (or we are at the end of the video) and run frame type detection on them.
-      while self.lookahead_buffer_filled()
-        || self.is_flushing() && self.needs_more_frame_types_decided()
+      while (self.lookahead_buffer_filled() || self.is_flushing())
+        && self.needs_more_frame_types_decided()
       {
         let output_frameno = self
           .frame_invariants
