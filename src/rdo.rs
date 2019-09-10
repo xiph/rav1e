@@ -624,9 +624,9 @@ fn luma_chroma_mode_rdo<T: Pixel>(
       // - The values were plotted in a logarithmic 2D histogram.
       // - Based on that, the value below were chosen.
       let heuristic_sidx = match importance {
-        x if x >= 0. && x < 2. => 1,
-        x if x >= 2. && x < 4. => 0,
-        x if x >= 4. => 2,
+        x if x >= 0. && x < 1. => 1,
+        x if x >= 1. && x < 2. => 0,
+        x if x >= 2. => 2,
         _ => unreachable!(),
       };
       heuristic_sidx..=heuristic_sidx
