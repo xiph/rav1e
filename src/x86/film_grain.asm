@@ -28,19 +28,20 @@
 %if ARCH_X86_64
 
 SECTION_RODATA
+pw_1024: times 16 dw 1024
 pb_mask: db 0, 0x80, 0x80, 0, 0x80, 0, 0, 0x80, 0x80, 0, 0, 0x80, 0, 0x80, 0x80, 0
 rnd_next_upperbit_mask: dw 0x100B, 0x2016, 0x402C, 0x8058
 byte_blend: db 0, 0, 0, 0xff, 0, 0, 0, 0
-pw_1024: times 2 dw 1024
 pd_m65536: dd ~0xffff
+pb_23_22: times 2 db 23, 22
+pb_1: times 4 db 1
 hmul_bits: dw 32768, 16384, 8192, 4096
 round: dw 2048, 1024, 512
 mul_bits: dw 256, 128, 64, 32, 16
 round_vals: dw 32, 64, 128, 256, 512
-max: dw 255, 235
+max: dw 255, 240, 235
 min: dw 0, 16
 pb_27_17_17_27: db 27, 17, 17, 27
-pb_1: db 1
 
 %macro JMP_TABLE 1-*
     %xdefine %1_table %%table
@@ -417,7 +418,7 @@ cglobal fgy_32x32xn, 6, 13, 16, dst, src, stride, fg_data, w, scaling, grain_lut
 %define base r8-pb_mask
     vpbroadcastw    m11, [base+mul_bits+r7*2-14]
     mov             r7d, [fg_dataq+FGData.clip_to_restricted_range]
-    vpbroadcastw    m12, [base+max+r7*2]
+    vpbroadcastw    m12, [base+max+r7*4]
     vpbroadcastw    m13, [base+min+r7*2]
 
     DEFINE_ARGS dst, src, stride, fg_data, w, scaling, grain_lut, unused, sby, see, overlap
@@ -434,7 +435,6 @@ cglobal fgy_32x32xn, 6, 13, 16, dst, src, stride, fg_data, w, scaling, grain_lut
     rol            seed, 8
     movzx          seed, seew
     xor            seed, [fg_dataq+FGData.seed]
-
 
     DEFINE_ARGS dst, src, stride, src_bak, w, scaling, grain_lut, \
                 unused1, unused2, see, overlap
@@ -816,7 +816,7 @@ cglobal fgy_32x32xn, 6, 13, 16, dst, src, stride, fg_data, w, scaling, grain_lut
 
     ; scaling[src]
     pcmpeqw          m3, m3
-; FIXME it would be nice to have another register here to do 2 vpgatherdd's in parallel
+    ; FIXME it would be nice to have another register here to do 2 vpgatherdd's in parallel
     vpgatherdd       m9, [scalingq+m4], m3
     pcmpeqw          m3, m3
     vpgatherdd       m4, [scalingq+m5], m3
@@ -896,5 +896,687 @@ cglobal fgy_32x32xn, 6, 13, 16, dst, src, stride, fg_data, w, scaling, grain_lut
 
 .end_hv:
     RET
+
+cglobal fguv_32x32xn_i420, 6, 15, 16, dst, src, stride, fg_data, w, scaling, \
+                                      grain_lut, h, sby, luma, lstride, uv_pl, is_id
+    pcmpeqw         m10, m10
+    psrld           m10, 24
+    mov             r7d, [fg_dataq+FGData.scaling_shift]
+    lea              r8, [pb_mask]
+%define base r8-pb_mask
+    vpbroadcastw    m11, [base+mul_bits+r7*2-14]
+    mov             r7d, [fg_dataq+FGData.clip_to_restricted_range]
+    mov             r9d, dword is_idm
+    vpbroadcastw    m13, [base+min+r7*2]
+    shlx            r7d, r7d, r9d
+    vpbroadcastw    m12, [base+max+r7*2]
+
+    cmp byte [fg_dataq+FGData.chroma_scaling_from_luma], 0
+    jne .csfl
+
+%macro FGUV_32x32xN_LOOP 1 ; not-csfl
+    DEFINE_ARGS dst, src, stride, fg_data, w, scaling, grain_lut, unused, sby, see, overlap
+
+%if %1
+    mov             r7d, dword r11m
+    vpbroadcastb     m0, [fg_dataq+FGData.uv_mult+r7*4]
+    vpbroadcastb     m1, [fg_dataq+FGData.uv_luma_mult+r7*4]
+    punpcklbw       m14, m1, m0
+    vpbroadcastw    m15, [fg_dataq+FGData.uv_offset+r7*4]
+%else
+    vpbroadcastd    m14, [pw_1024]
+    vpbroadcastd    m15, [pb_23_22]
+%endif
+
+    mov        overlapd, [fg_dataq+FGData.overlap_flag]
+    movifnidn      sbyd, sbym
+    test           sbyd, sbyd
+    setnz           r7b
+    test            r7b, overlapb
+    jnz %%vertical_overlap
+
+    imul           seed, sbyd, (173 << 24) | 37
+    add            seed, (105 << 24) | 178
+    rol            seed, 8
+    movzx          seed, seew
+    xor            seed, [fg_dataq+FGData.seed]
+
+    DEFINE_ARGS dst, src, stride, luma, w, scaling, grain_lut, \
+                unused2, unused3, see, overlap, unused4, unused5, lstride
+
+    mov           lumaq, r9mp
+    lea             r12, [srcq+wq]
+    lea             r13, [dstq+wq]
+    lea             r14, [lumaq+wq*2]
+    mov           r11mp, r12
+    mov           r12mp, r13
+    mov        lstrideq, r10mp
+    neg              wq
+
+%%loop_x:
+    mov             r6d, seed
+    or             seed, 0xEFF4
+    shr             r6d, 1
+    test           seeb, seeh
+    lea            seed, [r6+0x8000]
+    cmovp          seed, r6d               ; updated seed
+
+    DEFINE_ARGS dst, src, stride, luma, w, scaling, grain_lut, \
+                offx, offy, see, overlap, unused1, unused2, lstride
+
+    mov           offxd, seed
+    rorx          offyd, seed, 8
+    shr           offxd, 12
+    and           offyd, 0xf
+    imul          offyd, 82
+    lea           offyq, [offyq+offxq+498]  ; offy*stride+offx
+
+    DEFINE_ARGS dst, src, stride, luma, w, scaling, grain_lut, \
+                h, offxy, see, overlap, unused1, unused2, lstride
+
+    mov              hd, hm
+    mov      grain_lutq, grain_lutmp
+%%loop_y:
+    ; src
+    mova            xm4, [lumaq+lstrideq*0+ 0]
+    mova            xm6, [lumaq+lstrideq*0+16]
+    mova            xm0, [srcq]
+    vpbroadcastd     m7, [pb_1]
+    vinserti128      m4, [lumaq+lstrideq*2 +0], 1
+    vinserti128      m6, [lumaq+lstrideq*2+16], 1
+    vinserti128      m0, [srcq+strideq], 1
+    pxor             m2, m2
+    pmaddubsw        m4, m7
+    pmaddubsw        m6, m7
+    pavgw            m4, m2
+    pavgw            m6, m2
+
+%if %1
+    packuswb         m4, m6                 ; luma
+    punpckhbw        m6, m4, m0
+    punpcklbw        m4, m0                 ; { luma, chroma }
+    pmaddubsw        m6, m14
+    pmaddubsw        m4, m14
+    psraw            m6, 6
+    psraw            m4, 6
+    paddw            m6, m15
+    paddw            m4, m15
+    packuswb         m4, m6                 ; pack+unpack = clip
+    punpckhbw        m6, m4, m2
+    punpcklbw        m4, m2
+%endif
+
+    punpckhwd        m5, m4, m2
+    punpcklwd        m4, m2
+    punpckhwd        m7, m6, m2
+    punpcklwd        m6, m2                 ; m4-7: luma_src as dword
+
+    ; scaling[luma_src]
+    pcmpeqw          m3, m3
+    pcmpeqw          m9, m9
+    vpgatherdd       m8, [scalingq+m4], m3
+    vpgatherdd       m4, [scalingq+m5], m9
+    pcmpeqw          m3, m3
+    pcmpeqw          m9, m9
+    vpgatherdd       m5, [scalingq+m6], m3
+    vpgatherdd       m6, [scalingq+m7], m9
+    pand             m8, m10
+    pand             m4, m10
+    pand             m5, m10
+    pand             m6, m10
+    packusdw         m8, m4
+    packusdw         m5, m6
+
+    ; unpack chroma_source
+    punpckhbw        m1, m0, m2
+    punpcklbw        m0, m2                 ; m0-1: src as word
+
+    ; grain = grain_lut[offy+y][offx+x]
+    movu            xm3, [grain_lutq+offxyq+ 0]
+    vinserti128      m3, [grain_lutq+offxyq+82], 1
+    pcmpgtb          m7, m2, m3
+    punpcklbw        m2, m3, m7
+    punpckhbw        m3, m7
+
+    ; noise = round2(scaling[luma_src] * grain, scaling_shift)
+    pmullw           m2, m8
+    pmullw           m3, m5
+    pmulhrsw         m2, m11
+    pmulhrsw         m3, m11
+
+    ; dst = clip_pixel(src, noise)
+    paddw            m0, m2
+    paddw            m1, m3
+    pmaxsw           m0, m13
+    pmaxsw           m1, m13
+    pminsw           m0, m12
+    pminsw           m1, m12
+    packuswb         m0, m1
+    mova         [dstq], xm0
+    vextracti128 [dstq+strideq], m0, 1
+
+    lea            srcq, [srcq+strideq*2]
+    lea            dstq, [dstq+strideq*2]
+    lea           lumaq, [lumaq+lstrideq*4]
+    add      grain_lutq, 82*2
+    sub              hb, 2
+    jg %%loop_y
+
+    add              wq, 16
+    jge %%end
+    mov            srcq, r11mp
+    mov            dstq, r12mp
+    lea           lumaq, [r14+wq*2]
+    add            srcq, wq
+    add            dstq, wq
+    test       overlapd, overlapd
+    jz %%loop_x
+
+    ; r8m = sbym
+    cmp       dword r8m, 0
+    jne %%loop_x_hv_overlap
+
+    ; horizontal overlap (without vertical overlap)
+%%loop_x_h_overlap:
+    mov             r6d, seed
+    or             seed, 0xEFF4
+    shr             r6d, 1
+    test           seeb, seeh
+    lea            seed, [r6+0x8000]
+    cmovp          seed, r6d               ; updated seed
+
+    DEFINE_ARGS dst, src, stride, luma, w, scaling, grain_lut, \
+                offx, offy, see, left_offxy, unused1, unused2, lstride
+
+    lea     left_offxyd, [offyd+16]         ; previous column's offy*stride+offx
+    mov           offxd, seed
+    rorx          offyd, seed, 8
+    shr           offxd, 12
+    and           offyd, 0xf
+    imul          offyd, 82
+    lea           offyq, [offyq+offxq+498]  ; offy*stride+offx
+
+    DEFINE_ARGS dst, src, stride, luma, w, scaling, grain_lut, \
+                h, offxy, see, left_offxy, unused1, unused2, lstride
+
+    mov              hd, hm
+    mov      grain_lutq, grain_lutmp
+%%loop_y_h_overlap:
+    ; src
+    mova            xm4, [lumaq+lstrideq*0+ 0]
+    mova            xm6, [lumaq+lstrideq*0+16]
+    mova            xm0, [srcq]
+    vpbroadcastd     m7, [pb_1]
+    vinserti128      m4, [lumaq+lstrideq*2 +0], 1
+    vinserti128      m6, [lumaq+lstrideq*2+16], 1
+    vinserti128      m0, [srcq+strideq], 1
+    pxor             m2, m2
+    pmaddubsw        m4, m7
+    pmaddubsw        m6, m7
+    pavgw            m4, m2
+    pavgw            m6, m2
+
+%if %1
+    packuswb         m4, m6                 ; luma
+    punpckhbw        m6, m4, m0
+    punpcklbw        m4, m0                 ; { luma, chroma }
+    pmaddubsw        m6, m14
+    pmaddubsw        m4, m14
+    psraw            m6, 6
+    psraw            m4, 6
+    paddw            m6, m15
+    paddw            m4, m15
+    packuswb         m4, m6                 ; pack+unpack = clip
+    punpckhbw        m6, m4, m2
+    punpcklbw        m4, m2
+%endif
+
+    punpckhwd        m5, m4, m2
+    punpcklwd        m4, m2
+    punpckhwd        m7, m6, m2
+    punpcklwd        m6, m2                 ; m4-7: luma_src as dword
+
+    ; scaling[luma_src]
+    pcmpeqw          m3, m3
+    pcmpeqw          m9, m9
+    vpgatherdd       m8, [scalingq+m4], m3
+    vpgatherdd       m4, [scalingq+m5], m9
+    pcmpeqw          m3, m3
+    pcmpeqw          m9, m9
+    vpgatherdd       m5, [scalingq+m6], m3
+    vpgatherdd       m6, [scalingq+m7], m9
+    pand             m8, m10
+    pand             m4, m10
+    pand             m5, m10
+    pand             m6, m10
+    packusdw         m8, m4
+    packusdw         m5, m6
+
+    ; unpack chroma_source
+    punpckhbw        m1, m0, m2
+    punpcklbw        m0, m2                 ; m0-1: src as word
+
+    ; grain = grain_lut[offy+y][offx+x]
+%if %1
+    vpbroadcastd     m6, [pb_23_22] ; FIXME
+%endif
+    movu            xm3, [grain_lutq+offxyq+ 0]
+    movd            xm4, [grain_lutq+left_offxyq+ 0]
+    vinserti128      m3, [grain_lutq+offxyq+82], 1
+    vinserti128      m4, [grain_lutq+left_offxyq+82], 1
+    punpcklbw        m4, m3
+%if %1
+    pmaddubsw        m4, m6, m4
+    pmulhrsw         m4, [pw_1024]
+%else
+    pmaddubsw        m4, m15, m4
+    pmulhrsw         m4, m14
+%endif
+    packsswb         m4, m4
+    pcmpeqw          m6, m6 ; FIXME
+    psrldq           m6, 15 ; FIXME
+    vpblendvb        m3, m3, m4, m6
+    pcmpgtb          m7, m2, m3
+    punpcklbw        m2, m3, m7
+    punpckhbw        m3, m7
+
+    ; noise = round2(scaling[luma_src] * grain, scaling_shift)
+    pmullw           m2, m8
+    pmullw           m3, m5
+    pmulhrsw         m2, m11
+    pmulhrsw         m3, m11
+
+    ; dst = clip_pixel(src, noise)
+    paddw            m0, m2
+    paddw            m1, m3
+    pmaxsw           m0, m13
+    pmaxsw           m1, m13
+    pminsw           m0, m12
+    pminsw           m1, m12
+    packuswb         m0, m1
+    mova         [dstq], xm0
+    vextracti128 [dstq+strideq], m0, 1
+
+    lea            srcq, [srcq+strideq*2]
+    lea            dstq, [dstq+strideq*2]
+    lea           lumaq, [lumaq+lstrideq*4]
+    add      grain_lutq, 82*2
+    sub              hb, 2
+    jg %%loop_y_h_overlap
+
+    add              wq, 16
+    jge %%end
+    mov            srcq, r11mp
+    mov            dstq, r12mp
+    lea           lumaq, [r14+wq*2]
+    add            srcq, wq
+    add            dstq, wq
+
+    ; r8m = sbym
+    cmp       dword r8m, 0
+    jne %%loop_x_hv_overlap
+    jmp %%loop_x_h_overlap
+
+%%end:
+    RET
+
+%%vertical_overlap:
+    DEFINE_ARGS dst, src, stride, fg_data, w, scaling, grain_lut, unused, \
+                sby, see, overlap, unused1, unused2, lstride
+
+    movzx          sbyd, sbyb
+    imul           seed, [fg_dataq+FGData.seed], 0x00010001
+    imul            r7d, sbyd, 173 * 0x00010001
+    imul           sbyd, 37 * 0x01000100
+    add             r7d, (105 << 16) | 188
+    add            sbyd, (178 << 24) | (141 << 8)
+    and             r7d, 0x00ff00ff
+    and            sbyd, 0xff00ff00
+    xor            seed, r7d
+    xor            seed, sbyd               ; (cur_seed << 16) | top_seed
+
+    DEFINE_ARGS dst, src, stride, luma, w, scaling, grain_lut, \
+                unused1, unused2, see, overlap, unused3, unused4, lstride
+
+    mov           lumaq, r9mp
+    lea             r12, [srcq+wq]
+    lea             r13, [dstq+wq]
+    lea             r14, [lumaq+wq*2]
+    mov           r11mp, r12
+    mov           r12mp, r13
+    mov        lstrideq, r10mp
+    neg              wq
+
+%%loop_x_v_overlap:
+    ; we assume from the block above that bits 8-15 of r7d are zero'ed
+    mov             r6d, seed
+    or             seed, 0xeff4eff4
+    test           seeb, seeh
+    setp            r7b                     ; parity of top_seed
+    shr            seed, 16
+    shl             r7d, 16
+    test           seeb, seeh
+    setp            r7b                     ; parity of cur_seed
+    or              r6d, 0x00010001
+    xor             r7d, r6d
+    rorx           seed, r7d, 1             ; updated (cur_seed << 16) | top_seed
+
+    DEFINE_ARGS dst, src, stride, luma, w, scaling, grain_lut, \
+                offx, offy, see, overlap, top_offxy, unused, lstride
+
+    rorx          offyd, seed, 8
+    rorx          offxd, seed, 12
+    and           offyd, 0xf000f
+    and           offxd, 0xf000f
+    imul          offyd, 82
+    ; offxy=offy*stride+offx, (cur_offxy << 16) | top_offxy
+    lea           offyq, [offyq+offxq+0x10001*498+16*82]
+
+    DEFINE_ARGS dst, src, stride, luma, w, scaling, grain_lut, \
+                h, offxy, see, overlap, top_offxy, unused, lstride
+
+    movzx    top_offxyd, offxyw
+    shr          offxyd, 16
+
+    mov              hd, hm
+    mov      grain_lutq, grain_lutmp
+%%loop_y_v_overlap:
+    ; src
+    mova            xm4, [lumaq+lstrideq*0+ 0]
+    mova            xm6, [lumaq+lstrideq*0+16]
+    mova            xm0, [srcq]
+    vpbroadcastd     m7, [pb_1]
+    vinserti128      m4, [lumaq+lstrideq*2 +0], 1
+    vinserti128      m6, [lumaq+lstrideq*2+16], 1
+    vinserti128      m0, [srcq+strideq], 1
+    pxor             m2, m2
+    pmaddubsw        m4, m7
+    pmaddubsw        m6, m7
+    pavgw            m4, m2
+    pavgw            m6, m2
+
+%if %1
+    packuswb         m4, m6                 ; luma
+    punpckhbw        m6, m4, m0
+    punpcklbw        m4, m0                 ; { luma, chroma }
+    pmaddubsw        m6, m14
+    pmaddubsw        m4, m14
+    psraw            m6, 6
+    psraw            m4, 6
+    paddw            m6, m15
+    paddw            m4, m15
+    packuswb         m4, m6                 ; pack+unpack = clip
+    punpckhbw        m6, m4, m2
+    punpcklbw        m4, m2
+%endif
+
+    punpckhwd        m5, m4, m2
+    punpcklwd        m4, m2
+    punpckhwd        m7, m6, m2
+    punpcklwd        m6, m2                 ; m4-7: luma_src as dword
+
+    ; scaling[luma_src]
+    pcmpeqw          m3, m3
+    pcmpeqw          m9, m9
+    vpgatherdd       m8, [scalingq+m4], m3
+    vpgatherdd       m4, [scalingq+m5], m9
+    pcmpeqw          m3, m3
+    pcmpeqw          m9, m9
+    vpgatherdd       m5, [scalingq+m6], m3
+    vpgatherdd       m6, [scalingq+m7], m9
+    pand             m8, m10
+    pand             m4, m10
+    pand             m5, m10
+    pand             m6, m10
+    packusdw         m8, m4
+    packusdw         m5, m6
+
+    ; unpack chroma_source
+    punpckhbw        m1, m0, m2
+    punpcklbw        m0, m2                 ; m0-1: src as word
+
+    ; grain = grain_lut[offy+y][offx+x]
+%if %1
+    vpbroadcastd     m6, [pb_23_22]
+%endif
+    movq            xm3, [grain_lutq+offxyq]
+    movq            xm4, [grain_lutq+top_offxyq]
+    vinserti128      m3, [grain_lutq+offxyq+8], 1
+    vinserti128      m4, [grain_lutq+top_offxyq+8], 1
+    punpcklbw        m4, m3
+%if %1
+    pmaddubsw        m4, m6, m4
+    pmulhrsw         m4, [pw_1024]
+%else
+    pmaddubsw        m4, m15, m4
+    pmulhrsw         m4, m14
+%endif
+    packsswb         m4, m4
+    vpermq           m4, m4, q3120
+    ; only interpolate first line, insert second line unmodified
+    vinserti128      m3, m4, [grain_lutq+offxyq+82], 1
+    pcmpgtb          m7, m2, m3
+    punpcklbw        m2, m3, m7
+    punpckhbw        m3, m7
+
+    ; noise = round2(scaling[luma_src] * grain, scaling_shift)
+    pmullw           m2, m8
+    pmullw           m3, m5
+    pmulhrsw         m2, m11
+    pmulhrsw         m3, m11
+
+    ; dst = clip_pixel(src, noise)
+    paddw            m0, m2
+    paddw            m1, m3
+    pmaxsw           m0, m13
+    pmaxsw           m1, m13
+    pminsw           m0, m12
+    pminsw           m1, m12
+    packuswb         m0, m1
+    mova         [dstq], xm0
+    vextracti128 [dstq+strideq], m0, 1
+
+    sub              hb, 2
+    jl %%end_y_v_overlap
+    lea            srcq, [srcq+strideq*2]
+    lea            dstq, [dstq+strideq*2]
+    lea           lumaq, [lumaq+lstrideq*4]
+    add      grain_lutq, 82*2
+    jmp %%loop_y
+
+%%end_y_v_overlap:
+    add              wq, 16
+    jge %%end_hv
+    mov            srcq, r11mp
+    mov            dstq, r12mp
+    lea           lumaq, [r14+wq*2]
+    add            srcq, wq
+    add            dstq, wq
+
+    ; since fg_dataq.overlap is guaranteed to be set, we never jump
+    ; back to .loop_x_v_overlap, and instead always fall-through to
+    ; h+v overlap
+
+%%loop_x_hv_overlap:
+    ; we assume from the block above that bits 8-15 of r7d are zero'ed
+    mov             r6d, seed
+    or             seed, 0xeff4eff4
+    test           seeb, seeh
+    setp            r7b                     ; parity of top_seed
+    shr            seed, 16
+    shl             r7d, 16
+    test           seeb, seeh
+    setp            r7b                     ; parity of cur_seed
+    or              r6d, 0x00010001
+    xor             r7d, r6d
+    rorx           seed, r7d, 1             ; updated (cur_seed << 16) | top_seed
+
+    DEFINE_ARGS dst, src, stride, luma, w, scaling, grain_lut, \
+                offx, offy, see, left_offxy, top_offxy, topleft_offxy, lstride
+
+    lea  topleft_offxyq, [top_offxyq+16]
+    lea     left_offxyq, [offyq+16]
+    rorx          offyd, seed, 8
+    rorx          offxd, seed, 12
+    and           offyd, 0xf000f
+    and           offxd, 0xf000f
+    imul          offyd, 82
+    ; offxy=offy*stride+offx, (cur_offxy << 16) | top_offxy
+    lea           offyq, [offyq+offxq+0x10001*498+16*82]
+
+    DEFINE_ARGS dst, src, stride, luma, w, scaling, grain_lut, \
+                h, offxy, see, left_offxy, top_offxy, topleft_offxy, lstride
+
+    movzx    top_offxyd, offxyw
+    shr          offxyd, 16
+
+    mov              hd, hm
+    mov      grain_lutq, grain_lutmp
+%%loop_y_hv_overlap:
+    ; src
+    mova            xm4, [lumaq+lstrideq*0+ 0]
+    mova            xm6, [lumaq+lstrideq*0+16]
+    mova            xm0, [srcq]
+    vpbroadcastd     m7, [pb_1]
+    vinserti128      m4, [lumaq+lstrideq*2 +0], 1
+    vinserti128      m6, [lumaq+lstrideq*2+16], 1
+    vinserti128      m0, [srcq+strideq], 1
+    pxor             m2, m2
+    pmaddubsw        m4, m7
+    pmaddubsw        m6, m7
+    pavgw            m4, m2
+    pavgw            m6, m2
+
+%if %1
+    packuswb         m4, m6                 ; luma
+    punpckhbw        m6, m4, m0
+    punpcklbw        m4, m0                 ; { luma, chroma }
+    pmaddubsw        m6, m14
+    pmaddubsw        m4, m14
+    psraw            m6, 6
+    psraw            m4, 6
+    paddw            m6, m15
+    paddw            m4, m15
+    packuswb         m4, m6                 ; pack+unpack = clip
+    punpckhbw        m6, m4, m2
+    punpcklbw        m4, m2
+%endif
+
+    punpckhwd        m5, m4, m2
+    punpcklwd        m4, m2
+    punpckhwd        m7, m6, m2
+    punpcklwd        m6, m2                 ; m4-7: src as dword
+
+    ; scaling[src]
+    pcmpeqw          m9, m9
+    pcmpeqw          m3, m3
+    vpgatherdd       m8, [scalingq+m4], m9
+    vpgatherdd       m4, [scalingq+m5], m3
+    pcmpeqw          m9, m9
+    pcmpeqw          m3, m3
+    vpgatherdd       m5, [scalingq+m6], m9
+    vpgatherdd       m6, [scalingq+m7], m3
+    pand             m8, m10
+    pand             m4, m10
+    pand             m5, m10
+    pand             m6, m10
+    packusdw         m8, m4
+    packusdw         m5, m6
+
+    ; unpack chroma source
+    punpckhbw        m1, m0, m2
+    punpcklbw        m0, m2                 ; m0-1: src as word
+
+    ; grain = grain_lut[offy+y][offx+x]
+%if %1
+    vpbroadcastd     m9, [pb_23_22]
+%endif
+    movu            xm3, [grain_lutq+offxyq]
+    movq            xm6, [grain_lutq+top_offxyq]
+    vinserti128      m3, [grain_lutq+offxyq+82], 1
+    vinserti128      m6, [grain_lutq+top_offxyq+8], 1
+    movd            xm4, [grain_lutq+left_offxyq]
+    movd            xm7, [grain_lutq+topleft_offxyq]
+    vinserti128      m4, [grain_lutq+left_offxyq+82], 1
+    ; do h interpolation first (so top | top/left -> top, left | cur -> cur)
+    punpcklbw        m4, m3
+    punpcklbw       xm7, xm6
+%if %1
+    pmaddubsw        m4, m9, m4
+    pmaddubsw       xm7, xm9, xm7
+    pmulhrsw         m4, [pw_1024]
+    pmulhrsw        xm7, [pw_1024]
+%else
+    pmaddubsw        m4, m15, m4
+    pmaddubsw       xm7, xm15, xm7
+    pmulhrsw         m4, m14
+    pmulhrsw        xm7, xm14
+%endif
+    packsswb         m4, m4
+    packsswb        xm7, xm7
+    pcmpeqw          m9, m9                 ; this is kind of ugly
+    psrldq           m9, 15
+    vpblendvb        m3, m3, m4, m9
+    shufpd           m9, m9, m9, 1110b
+    vpblendvb        m6, m6, m7, m9
+    vpermq           m9, m3, q3120
+    ; followed by v interpolation (top | cur -> cur)
+    punpcklbw        m6, m9
+%if %1
+    vpbroadcastd     m9, [pb_23_22]
+    pmaddubsw        m6, m9, m6
+    pmulhrsw         m6, [pw_1024]
+%else
+    pmaddubsw        m6, m15, m6
+    pmulhrsw         m6, m14
+%endif
+    packsswb         m6, m6
+    vpermq           m6, m6, q3120
+    vpblendd         m3, m3, m6, 00001111b
+    pcmpgtb          m7, m2, m3
+    punpcklbw        m2, m3, m7
+    punpckhbw        m3, m7
+
+    ; noise = round2(scaling[src] * grain, scaling_shift)
+    pmullw           m2, m8
+    pmullw           m3, m5
+    pmulhrsw         m2, m11
+    pmulhrsw         m3, m11
+
+    ; dst = clip_pixel(src, noise)
+    paddw            m0, m2
+    paddw            m1, m3
+    pmaxsw           m0, m13
+    pmaxsw           m1, m13
+    pminsw           m0, m12
+    pminsw           m1, m12
+    packuswb         m0, m1
+    mova         [dstq], xm0
+    vextracti128 [dstq+strideq], m0, 1
+
+    lea            srcq, [srcq+strideq*2]
+    lea            dstq, [dstq+strideq*2]
+    lea           lumaq, [lumaq+lstrideq*4]
+    add      grain_lutq, 82*2
+    sub              hb, 2
+    jg %%loop_y_h_overlap
+
+%%end_y_hv_overlap:
+    add              wq, 16
+    jge %%end_hv
+    mov            srcq, r11mp
+    mov            dstq, r12mp
+    lea           lumaq, [r14+wq*2]
+    add            srcq, wq
+    add            dstq, wq
+    jmp %%loop_x_hv_overlap
+
+%%end_hv:
+    RET
+%endmacro
+
+    FGUV_32x32xN_LOOP 1
+.csfl:
+    FGUV_32x32xN_LOOP 0
 
 %endif ; ARCH_X86_64
