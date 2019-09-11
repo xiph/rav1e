@@ -1057,8 +1057,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         }
       });
     } else {
-      // FIXME: please... (Just wanted to copy RAV1E_INTRA_MODES --> modes)
-      RAV1E_INTRA_MODES.iter().for_each(|&luma_mode| modes.push(luma_mode));
+      modes.extend(RAV1E_INTRA_MODES.iter().copied());
       num_modes_rdo = modes.len();
       debug_assert!(num_modes_rdo == RAV1E_INTRA_MODES.len());
     }
