@@ -20,16 +20,13 @@ use arrayvec::ArrayVec;
 use bitstream_io::*;
 use itertools::Itertools;
 use num_derive::*;
-use rayon::prelude::*;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::context::*;
-use crate::context::{FrameBlocks, SuperBlockOffset, TileSuperBlockOffset};
 use crate::cpu_features::CpuFeatureLevel;
 use crate::dist::get_satd;
 use crate::encoder::*;
 use crate::frame::*;
-use crate::me::{adjust_bo, FrameMotionVectors};
 use crate::metrics::calculate_frame_psnr;
 use crate::partition::*;
 use crate::predict::PredictionMode;
@@ -46,7 +43,7 @@ use crate::util::Pixel;
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::{cmp, fmt, io, iter};
 
 // We add 1 to rdo_lookahead_frames in a bunch of places.
@@ -1581,44 +1578,7 @@ impl<T: Pixel> ContextInner<T> {
     // TODO: as in the encoding code, key frames will have no references.
     // However, for block importance purposes we want key frames to act as
     // P-frames in this instance.
-    //
-    // Compute the motion vectors.
-    let mut blocks = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
-
-    fi.tiling
-      .tile_iter_mut(&mut fs, &mut blocks)
-      .collect::<Vec<_>>()
-      .into_par_iter()
-      .for_each(|mut ctx| {
-        let ts = &mut ctx.ts;
-
-        // Compute the quarter-resolution motion vectors.
-        let tile_pmvs = build_coarse_pmvs(fi, ts);
-
-        // Compute the half-resolution motion vectors.
-        let mut half_res_pmvs = Vec::with_capacity(ts.sb_height * ts.sb_width);
-
-        for sby in 0..ts.sb_height {
-          for sbx in 0..ts.sb_width {
-            let tile_sbo =
-              TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
-            half_res_pmvs
-              .push(build_half_res_pmvs(fi, ts, tile_sbo, &tile_pmvs));
-          }
-        }
-
-        // Compute the full-resolution motion vectors.
-        for sby in 0..ts.sb_height {
-          for sbx in 0..ts.sb_width {
-            let tile_sbo =
-              TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
-            build_full_res_pmvs(fi, ts, tile_sbo, &half_res_pmvs);
-          }
-        }
-      });
-
-    // Save the motion vectors to FrameInvariants.
-    fi.lookahead_mvs = fs.frame_mvs.clone().into_boxed_slice();
+    fi.compute_lookahead_motion_vectors(&mut fs);
 
     #[cfg(feature = "dump_lookahead_data")]
     {
@@ -1685,11 +1645,59 @@ impl<T: Pixel> ContextInner<T> {
 
     let mut plane_after_prediction = frame.planes[0].clone();
 
-    // Some of the reference frames will have MVs computed--use them if available.
-    // These are indexed by distance behind the current frame, e.g. index 0
-    // is 1 frame in the past by input_frameno, similar to lookahead_inter_costs.
-    let mut reference_mvs =
-      vec![None; self.inter_cfg.keyframe_lookahead_distance() as usize];
+    // Unfortunately we can't reuse the motion vectors calculated earlier in
+    // lookahead, because those only apply to the ref frames of this frame.
+    // We need to know the motion vectors of the previous `keyframe_lookahead_distance`
+    // frames to have correct inter costs for scene flash detection.
+    //
+    // TODO: The MV calculation code is currently very tightly coupled to ref frames.
+    // It would be better to decouple it so that we can calculate MVs between any two
+    // frames, but that is a major undertaking. So for now, this code checkpoints
+    // the real ref frames, and sets the previous `keyframe_lookahead_distance` as
+    // ref frames so that we can calculate MVs for them.
+    let ref_frame_checkpoint = fi.ref_frames.clone();
+
+    let mut fs = FrameState::new_with_frame(fi, frame.clone());
+    fs.input_hres.downsample_from(&frame.planes[0]);
+    fs.input_hres.pad(fi.width, fi.height);
+    fs.input_qres.downsample_from(&fs.input_hres);
+    fs.input_qres.pad(fi.width, fi.height);
+    let output_framenos = (1..=self.inter_cfg.keyframe_lookahead_distance())
+      .filter_map(|distance| {
+        let input_frameno = fi.input_frameno.checked_sub(distance);
+        input_frameno.map(|input_frameno| {
+          *self
+            .frame_invariants
+            .iter()
+            .find(|&(_, this_fi)| {
+              this_fi.input_frameno == input_frameno
+                && !this_fi.show_existing_frame
+                && !this_fi.invalid
+            })
+            .unwrap()
+            .0
+        })
+      })
+      .collect::<Vec<u64>>();
+
+    // Work around the borrow checker by flipping this to mutable
+    let fi = self.frame_invariants.get_mut(&output_frameno).unwrap();
+    for (distance, output_frameno) in
+      (1..=self.inter_cfg.keyframe_lookahead_distance())
+        .zip(output_framenos.into_iter())
+    {
+      let idx = (distance as usize) - 1;
+      fi.ref_frames[idx] = idx as u8;
+      // We don't need to checkpoint the rec_buffer because it will be overwritten during
+      // encoding anyway.
+      update_rec_buffer(output_frameno, fi, fs.clone());
+    }
+
+    // Work around the borrow checker by flipping this back to immutable
+    let fi = self.frame_invariants.get(&output_frameno).unwrap();
+
+    // Map the MVs we just calculated to their correct input framenos.
+    let mut mv_idxs_to_framenos = ArrayVec::<[_; 3]>::new();
 
     for (mv_index, &rec_index) in fi.ref_frames.iter().enumerate() {
       let ref_input_frameno = fi.rec_buffer.frames[rec_index as usize]
@@ -1701,88 +1709,19 @@ impl<T: Pixel> ContextInner<T> {
             .map(|fi| fi.input_frameno)
         });
       if let Some(ref_input_frameno) = ref_input_frameno {
-        if ref_input_frameno < fi.input_frameno {
-          let distance = fi.input_frameno - ref_input_frameno;
-          if distance <= self.inter_cfg.keyframe_lookahead_distance() {
-            reference_mvs[(distance as usize) - 1] =
-              Some(fi.lookahead_mvs[mv_index].clone());
-          }
+        if !mv_idxs_to_framenos
+          .iter()
+          .any(|&(_, fno)| fno == ref_input_frameno)
+        {
+          mv_idxs_to_framenos.push((mv_index, ref_input_frameno));
         }
       }
     }
 
-    // For frames that don't have cached MVs, compute them.
-    for distance in 1..=self.inter_cfg.keyframe_lookahead_distance() {
-      if fi.input_frameno < distance
-        || fi.frame_type == FrameType::KEY
-        || reference_mvs[(distance as usize) - 1].is_some()
-      {
-        break;
-      }
-      let ref_input_frameno = fi.input_frameno - distance;
-      dbg!(fi.input_frameno);
-      dbg!(ref_input_frameno);
-      let ref_frame = self.frame_q[&ref_input_frameno].as_ref().unwrap();
-      let ref_fi = self.frame_invariants.values().find(|fi| {
-        fi.input_frameno == ref_input_frameno
-          && !fi.invalid
-          && !fi.show_existing_frame
-      });
-      if let Some(ref_fi) = ref_fi {
-        dbg!("ref fi is some");
-        // If we have a cached MV available, use it. Otherwise, compute MVs from the qres frame.
-
-        let mut fs = FrameState::new_with_frame(fi, frame.clone());
-        fs.input_hres.downsample_from(&frame.planes[0]);
-        fs.input_hres.pad(fi.width, fi.height);
-        fs.input_qres.downsample_from(&fs.input_hres);
-        fs.input_qres.pad(fi.width, fi.height);
-
-        let mut ref_fs = FrameState::new_with_frame(ref_fi, ref_frame.clone());
-        ref_fs.input_hres.downsample_from(&ref_frame.planes[0]);
-        ref_fs.input_hres.pad(ref_fi.width, ref_fi.height);
-        ref_fs.input_qres.downsample_from(&ref_fs.input_hres);
-        ref_fs.input_qres.pad(ref_fi.width, ref_fi.height);
-
-        let mut blocks = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
-        let fmvs = Mutex::new(FrameMotionVectors::new(fi.w_in_b, fi.h_in_b));
-        fi.tiling
-          .tile_iter_mut(&mut fs, &mut blocks)
-          .collect::<Vec<_>>()
-          .into_par_iter()
-          .for_each(|ctx| {
-            let ts = &ctx.ts;
-            let mvs = build_coarse_pmv_single_ref(fi, ts, &ref_fs.input_qres);
-            if let Some(mvs) = mvs {
-              let blk_w = BlockSize::BLOCK_64X64.width();
-              let blk_h = BlockSize::BLOCK_64X64.height();
-              for sby in 0..ts.sb_height {
-                for sbx in 0..ts.sb_width {
-                  let sbo =
-                    TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
-                  let tile_bo = sbo.block_offset(0, 0);
-                  let tile_bo_adj = adjust_bo(
-                    tile_bo,
-                    ts.mi_width,
-                    ts.mi_height,
-                    blk_w,
-                    blk_h,
-                  );
-                  let frame_bo_adj = ts.to_frame_block_offset(tile_bo_adj);
-                  let mut fmv_lock = fmvs.lock().unwrap();
-                  fmv_lock[frame_bo_adj.0.y][frame_bo_adj.0.x] =
-                    mvs[tile_bo_adj.0.y * ts.sb_width + tile_bo_adj.0.x];
-                }
-              }
-            }
-          });
-        reference_mvs[(distance as usize) - 1] =
-          Some(fmvs.into_inner().unwrap());
-      }
-      dbg!(reference_mvs[(distance as usize) - 1].as_ref().map(|mvs| (mvs.cols, mvs.rows)));
-    }
-
     let fi = self.frame_invariants.get_mut(&output_frameno).unwrap();
+
+    // Restore the checkpointed ref frames
+    fi.ref_frames = ref_frame_checkpoint;
 
     for y in 0..fi.h_in_imp_b {
       for x in 0..fi.w_in_imp_b {
@@ -1855,6 +1794,10 @@ impl<T: Pixel> ContextInner<T> {
           }
           let ref_input_frameno = fi.input_frameno - distance;
           let ref_frame = self.frame_q[&ref_input_frameno].as_ref().unwrap();
+          let mv_idx = mv_idxs_to_framenos
+            .iter()
+            .find(|&(_, fno)| *fno == ref_input_frameno)
+            .map(|(idx, _)| *idx);
 
           fi.lookahead_inter_costs[distance as usize - 1]
             [y * fi.w_in_imp_b + x] = compute_inter_costs(
@@ -1862,8 +1805,7 @@ impl<T: Pixel> ContextInner<T> {
             &ref_frame,
             x,
             y,
-              reference_mvs[(distance as usize) - 1].as_ref().map(|mvs| mvs[y * 2]
-                [x * 2]),
+            mv_idx.map(|idx| fi.lookahead_mvs[idx][y * 2][x * 2]),
             self.config.bit_depth,
           );
         }

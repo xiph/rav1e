@@ -42,7 +42,7 @@ use arrayvec::*;
 use bincode::{deserialize, serialize};
 use bitstream_io::{BigEndian, BitWriter};
 use rayon::iter::*;
-use std::collections::{BTreeSet, VecDeque};
+use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::sync::Arc;
@@ -321,7 +321,7 @@ impl Default for Sequence {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FrameState<T: Pixel> {
   pub sb_size_log2: usize,
   pub input: Arc<Frame<T>>,
@@ -956,6 +956,49 @@ impl<T: Pixel> FrameInvariants<T> {
   #[inline(always)]
   pub fn sb_size_log2(&self) -> usize {
     self.sequence.sb_size_log2()
+  }
+
+  /// Computes lookahead motion vectors for this frame and stores them in `self.lookahead_mvs`.
+  pub(crate) fn compute_lookahead_motion_vectors(
+    &mut self, fs: &mut FrameState<T>,
+  ) {
+    let mut blocks = FrameBlocks::new(self.w_in_b, self.h_in_b);
+
+    self
+      .tiling
+      .tile_iter_mut(fs, &mut blocks)
+      .collect::<Vec<_>>()
+      .into_par_iter()
+      .for_each(|mut ctx| {
+        let ts = &mut ctx.ts;
+
+        // Compute the quarter-resolution motion vectors.
+        let tile_pmvs = build_coarse_pmvs(self, ts);
+
+        // Compute the half-resolution motion vectors.
+        let mut half_res_pmvs = Vec::with_capacity(ts.sb_height * ts.sb_width);
+
+        for sby in 0..ts.sb_height {
+          for sbx in 0..ts.sb_width {
+            let tile_sbo =
+              TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
+            half_res_pmvs
+              .push(build_half_res_pmvs(self, ts, tile_sbo, &tile_pmvs));
+          }
+        }
+
+        // Compute the full-resolution motion vectors.
+        for sby in 0..ts.sb_height {
+          for sbx in 0..ts.sb_width {
+            let tile_sbo =
+              TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
+            build_full_res_pmvs(self, ts, tile_sbo, &half_res_pmvs);
+          }
+        }
+      });
+
+    // Save the motion vectors to this `FrameInvariants`.
+    self.lookahead_mvs = fs.frame_mvs.clone().into_boxed_slice();
   }
 }
 
@@ -2744,49 +2787,28 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
 pub(crate) fn build_coarse_pmvs<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>,
 ) -> Vec<[Option<MotionVector>; REF_FRAMES]> {
-  let mut frame_pmvs = vec![[None; REF_FRAMES]; ts.sb_width * ts.sb_height];
-  let mut checked_ref_idxs = BTreeSet::new();
-  for i in 0..INTER_REFS_PER_FRAME {
-    let r = fi.ref_frames[i] as usize;
-    if checked_ref_idxs.insert(r) {
-      if let Some(pmvs) =
-        fi.rec_buffer.frames[r].as_ref().and_then(|ref rec| {
-          build_coarse_pmv_single_ref(fi, ts, &rec.input_qres)
-        })
-      {
-        frame_pmvs.iter_mut().zip(pmvs.iter()).for_each(|(fpmv, pmv)| {
-          fpmv[r] = Some(*pmv);
-        });
-      }
-    }
-  }
-  frame_pmvs
-}
-
-#[inline(always)]
-pub(crate) fn build_coarse_pmv_single_ref<T: Pixel>(
-  fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, ref_plane_qres: &Plane<T>,
-) -> Option<Vec<MotionVector>> {
   assert!(!fi.sequence.use_128x128_superblock);
   if ts.mi_width >= 16 && ts.mi_height >= 16 {
-    let mut frame_pmv = Vec::with_capacity(ts.sb_width * ts.sb_height);
+    let mut frame_pmvs = Vec::with_capacity(ts.sb_width * ts.sb_height);
     for sby in 0..ts.sb_height {
       for sbx in 0..ts.sb_width {
         let sbo = TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
         let bo = sbo.block_offset(0, 0);
-        frame_pmv.push(estimate_motion_ss4(
-          fi,
-          ts,
-          ref_plane_qres,
-          BlockSize::BLOCK_64X64,
-          bo,
-        ));
+        let mut pmvs: [Option<MotionVector>; REF_FRAMES] = [None; REF_FRAMES];
+        for i in 0..INTER_REFS_PER_FRAME {
+          let r = fi.ref_frames[i] as usize;
+          if pmvs[r].is_none() {
+            pmvs[r] =
+              estimate_motion_ss4(fi, ts, BlockSize::BLOCK_64X64, r, bo);
+          }
+        }
+        frame_pmvs.push(pmvs);
       }
     }
-    Some(frame_pmv)
+    frame_pmvs
   } else {
     // the block use for motion estimation would be smaller than the whole image
-    None
+    vec![[None; REF_FRAMES]; ts.sb_width * ts.sb_height]
   }
 }
 
