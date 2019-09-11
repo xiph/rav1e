@@ -45,6 +45,7 @@ parser.add_argument('-prefix',default=None)
 parser.add_argument('-master',action='store_true',default=False)
 parser.add_argument('-set',default='objective-1-fast')
 parser.add_argument('-nick',default=None)
+parser.add_argument('-qualities',default=None,nargs='+',type=int)
 parser.add_argument('-extra_options',default='')
 args = parser.parse_args()
 
@@ -65,8 +66,7 @@ prefix = args.prefix
 is_master = args.master
 run_id = prefix+'-'+date_short+'-'+short
 
-print(GetTime(), 'Creating run '+run_id)
-r = requests.post("https://beta.arewecompressedyet.com/submit/job", {
+params = {
     'run_id': run_id,
     'commit': commit,
     'master': is_master,
@@ -75,5 +75,11 @@ r = requests.post("https://beta.arewecompressedyet.com/submit/job", {
     'codec': 'rav1e',
     'nick': args.nick,
     'extra_options': args.extra_options,
-})
+}
+
+if args.qualities is not None:
+    params['qualities'] = ' '.join(map(str, args.qualities))
+
+print(GetTime(), 'Creating run '+run_id)
+r = requests.post("https://beta.arewecompressedyet.com/submit/job", params)
 print(GetTime(), r)
