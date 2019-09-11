@@ -11,6 +11,7 @@ use crate::api::*;
 use crate::cdef::*;
 use crate::context::*;
 use crate::deblock::*;
+use crate::dist::get_satd;
 use crate::ec::*;
 use crate::frame::*;
 use crate::header::*;
@@ -56,6 +57,11 @@ const MAX_NUM_OPERATING_POINTS: usize =
 
 /// Size of blocks for the importance computation, in pixels.
 pub const IMPORTANCE_BLOCK_SIZE: usize = 8;
+pub(crate) const MV_UNITS_PER_PIXEL: i64 = 8;
+pub(crate) const BLOCK_SIZE_IN_MV_UNITS: i64 =
+  IMPORTANCE_BLOCK_SIZE as i64 * MV_UNITS_PER_PIXEL;
+pub(crate) const BLOCK_AREA_IN_MV_UNITS: i64 =
+  BLOCK_SIZE_IN_MV_UNITS * BLOCK_SIZE_IN_MV_UNITS;
 
 #[derive(Debug, Clone)]
 pub struct ReferenceFrame<T: Pixel> {
@@ -3439,6 +3445,49 @@ pub fn update_rec_buffer<T: Pixel>(
       fi.rec_buffer.deblock[i] = fs.deblock;
     }
   }
+}
+
+/// Estimates the inter costs for the importance blocks within a frame.
+/// If motion vectors are provided, those will be taken into account for the computation.
+pub(crate) fn compute_inter_costs<T: Pixel>(
+  frame_org: &Frame<T>, frame_ref: &Frame<T>, x: usize, y: usize,
+  mv: Option<MotionVector>, bit_depth: usize,
+) -> u32 {
+  let (reference_x, reference_y) = compute_reference_coordinates(x, y, mv);
+
+  let plane_org = frame_org.planes[0].region(Area::Rect {
+    x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
+    y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
+    width: IMPORTANCE_BLOCK_SIZE,
+    height: IMPORTANCE_BLOCK_SIZE,
+  });
+
+  let plane_ref = frame_ref.planes[0].region(Area::Rect {
+    x: reference_x as isize / MV_UNITS_PER_PIXEL as isize,
+    y: reference_y as isize / MV_UNITS_PER_PIXEL as isize,
+    width: IMPORTANCE_BLOCK_SIZE,
+    height: IMPORTANCE_BLOCK_SIZE,
+  });
+
+  get_satd(
+    &plane_org,
+    &plane_ref,
+    IMPORTANCE_BLOCK_SIZE,
+    IMPORTANCE_BLOCK_SIZE,
+    bit_depth,
+  )
+}
+
+/// Returns the coordinates of the top-left corner of the reference block,
+/// in MV units.
+pub(crate) fn compute_reference_coordinates(
+  x: usize, y: usize, mv: Option<MotionVector>,
+) -> (i64, i64) {
+  let reference_x = x as i64 * BLOCK_SIZE_IN_MV_UNITS
+    + mv.map(|mv| mv.col).unwrap_or(0) as i64;
+  let reference_y = y as i64 * BLOCK_SIZE_IN_MV_UNITS
+    + mv.map(|mv| mv.row).unwrap_or(0) as i64;
+  (reference_x, reference_y)
 }
 
 #[cfg(test)]
