@@ -1673,7 +1673,7 @@ impl<T: Pixel> ContextInner<T> {
   /// Computes lookahead intra cost approximations and fills in
   /// `lookahead_intra_costs` and `lookahead_inter_costs` on the `FrameInvariants`.
   fn compute_lookahead_costs(&mut self, output_frameno: u64) {
-    let fi = self.frame_invariants.get(&output_frameno).unwrap();
+    let fi = self.frame_invariants.get_mut(&output_frameno).unwrap();
 
     // We're only interested in valid frames which are not show-existing-frame.
     if fi.invalid || fi.show_existing_frame {
@@ -1683,30 +1683,6 @@ impl<T: Pixel> ContextInner<T> {
     let frame = self.frame_q[&fi.input_frameno].as_ref().unwrap();
 
     let mut plane_after_prediction = frame.planes[0].clone();
-
-    // Some of the reference frames will have MVs computed--use them if available.
-    let mut mv_idxs_to_framenos = ArrayVec::<[_; 3]>::new();
-
-    for (mv_index, &rec_index) in fi.ref_frames.iter().enumerate() {
-      let ref_input_frameno = fi.rec_buffer.frames[rec_index as usize]
-        .as_ref()
-        .and_then(|reference| {
-          self
-            .frame_invariants
-            .get(&reference.output_frameno)
-            .map(|fi| fi.input_frameno)
-        });
-      if let Some(ref_input_frameno) = ref_input_frameno {
-        if !mv_idxs_to_framenos
-          .iter()
-          .any(|&(_, fno)| fno == ref_input_frameno)
-        {
-          mv_idxs_to_framenos.push((mv_index, ref_input_frameno));
-        }
-      }
-    }
-
-    let fi = self.frame_invariants.get_mut(&output_frameno).unwrap();
 
     for y in 0..fi.h_in_imp_b {
       for x in 0..fi.w_in_imp_b {
@@ -1777,20 +1753,20 @@ impl<T: Pixel> ContextInner<T> {
           if fi.input_frameno < distance || fi.frame_type == FrameType::KEY {
             break;
           }
-          let ref_input_frameno = fi.input_frameno - distance;
-          let ref_frame = self.frame_q[&ref_input_frameno].as_ref().unwrap();
-          let mv_idx = mv_idxs_to_framenos
-            .iter()
-            .find(|&(_, fno)| *fno == ref_input_frameno)
-            .map(|(idx, _)| *idx);
-
+          let ref_frame =
+            self.frame_q[&(fi.input_frameno - distance)].as_ref().unwrap();
+          let plane_ref = ref_frame.planes[0].region(Area::Rect {
+            x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
+            y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
+            width: IMPORTANCE_BLOCK_SIZE,
+            height: IMPORTANCE_BLOCK_SIZE,
+          });
           fi.lookahead_inter_costs[distance as usize - 1]
-            [y * fi.w_in_imp_b + x] = compute_inter_costs(
-            &frame,
-            &ref_frame,
-            x,
-            y,
-            mv_idx.map(|idx| fi.lookahead_mvs[idx][y * 2][x * 2]),
+            [y * fi.w_in_imp_b + x] = get_satd(
+            &plane_org,
+            &plane_ref,
+            IMPORTANCE_BLOCK_SIZE,
+            IMPORTANCE_BLOCK_SIZE,
             self.config.bit_depth,
           );
         }
@@ -1967,6 +1943,12 @@ impl<T: Pixel> ContextInner<T> {
     // Now compute and propagate the block importances from the end. The
     // current output frame will get its block importances from the future
     // frames.
+    const MV_UNITS_PER_PIXEL: i64 = 8;
+    const BLOCK_SIZE_IN_MV_UNITS: i64 =
+      IMPORTANCE_BLOCK_SIZE as i64 * MV_UNITS_PER_PIXEL;
+    const BLOCK_AREA_IN_MV_UNITS: i64 =
+      BLOCK_SIZE_IN_MV_UNITS * BLOCK_SIZE_IN_MV_UNITS;
+
     for &output_frameno in output_framenos.iter().skip(1).rev() {
       // Remove fi from the map temporarily and put it back in in the end of
       // the iteration. This is required because we need to mutably borrow
@@ -2013,35 +1995,35 @@ impl<T: Pixel> ContextInner<T> {
 
             // Coordinates of the top-left corner of the reference block, in MV
             // units.
-            let (reference_x, reference_y) =
-              compute_reference_coordinates(x, y, Some(mv));
+            let reference_x =
+              x as i64 * BLOCK_SIZE_IN_MV_UNITS + mv.col as i64;
+            let reference_y =
+              y as i64 * BLOCK_SIZE_IN_MV_UNITS + mv.row as i64;
 
-            // Use a cached inter cost if it's available, otherwise compute it now.
-            let reference_input_frameno = self
-              .frame_invariants
-              .get(&reference_output_frameno)
-              .map(|fi| fi.input_frameno);
-            let cached_inter_cost_idx =
-              reference_input_frameno.and_then(|reference_input_frameno| {
-                if fi.input_frameno > reference_input_frameno {
-                  Some(fi.input_frameno - reference_input_frameno - 1)
-                } else {
-                  None
-                }
-              });
-            let inter_cost = cached_inter_cost_idx
-              .and_then(|idx| fi.lookahead_inter_costs.get(idx as usize))
-              .map(|costs| costs[y * fi.w_in_imp_b + x])
-              .unwrap_or_else(|| {
-                compute_inter_costs(
-                  &frame,
-                  &reference_frame,
-                  x,
-                  y,
-                  Some(mv),
-                  self.config.bit_depth,
-                )
-              }) as f32;
+            let plane_org = frame.planes[0].region(Area::Rect {
+              x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
+              y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
+              width: IMPORTANCE_BLOCK_SIZE,
+              height: IMPORTANCE_BLOCK_SIZE,
+            });
+
+            let plane_ref = reference_frame.planes[0].region(Area::Rect {
+              x: reference_x as isize / MV_UNITS_PER_PIXEL as isize,
+              y: reference_y as isize / MV_UNITS_PER_PIXEL as isize,
+              width: IMPORTANCE_BLOCK_SIZE,
+              height: IMPORTANCE_BLOCK_SIZE,
+            });
+
+            // This may compare frames quite far in the past or future,
+            // so it isn't reasonable to precalculate inter costs during
+            // lookahead for every frame we might need to reference here.
+            let inter_cost = get_satd(
+              &plane_org,
+              &plane_ref,
+              IMPORTANCE_BLOCK_SIZE,
+              IMPORTANCE_BLOCK_SIZE,
+              self.config.bit_depth,
+            ) as f32;
 
             let intra_cost =
               fi.lookahead_intra_costs[y * fi.w_in_imp_b + x] as f32;
