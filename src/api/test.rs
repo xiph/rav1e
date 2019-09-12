@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::partition::BlockSize;
+
 use interpolate_name::interpolate_test;
 
 fn setup_encoder<T: Pixel>(
