@@ -219,7 +219,6 @@ fn output_frameno_low_latency_minus(missing: u64) {
     .collect::<Vec<_>>();
 
   assert_eq!(
-    &data[..],
     match missing {
       0 => {
         &[
@@ -249,7 +248,8 @@ fn output_frameno_low_latency_minus(missing: u64) {
         ][..]
       }
       _ => unreachable!(),
-    }
+    },
+    &data[..],
   );
 }
 
@@ -297,7 +297,6 @@ fn output_frameno_reorder_minus(missing: u64) {
     .collect::<Vec<_>>();
 
   assert_eq!(
-    &data[..],
     match missing {
       0 => {
         &[
@@ -384,7 +383,8 @@ fn output_frameno_reorder_minus(missing: u64) {
         ][..]
       }
       _ => unreachable!(),
-    }
+    },
+    &data[..],
   );
 }
 
@@ -432,7 +432,6 @@ fn output_frameno_reorder_scene_change_at(scene_change_at: u64) {
     .collect::<Vec<_>>();
 
   assert_eq!(
-    &data[..],
     match scene_change_at {
       0 => {
         &[
@@ -506,7 +505,8 @@ fn output_frameno_reorder_scene_change_at(scene_change_at: u64) {
         ][..]
       }
       _ => unreachable!(),
-    }
+    },
+    &data[..],
   );
 }
 
@@ -535,7 +535,7 @@ fn output_frameno_incremental_reorder_minus(missing: u64) {
   );
 
   // TODO: when we support more pyramid depths, this test will need tweaks.
-  assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
+  assert_eq!(2, ctx.inner.inter_cfg.pyramid_depth);
 
   let limit = 10 - missing;
   for _ in 0..limit {
@@ -556,7 +556,6 @@ fn output_frameno_incremental_reorder_minus(missing: u64) {
     .collect::<Vec<_>>();
 
   assert_eq!(
-    &data[..],
     match missing {
       0 => {
         &[
@@ -643,7 +642,8 @@ fn output_frameno_incremental_reorder_minus(missing: u64) {
         ][..]
       }
       _ => unreachable!(),
-    }
+    },
+    &data[..],
   );
 }
 
@@ -672,7 +672,7 @@ fn output_frameno_incremental_reorder_scene_change_at(scene_change_at: u64) {
   );
 
   // TODO: when we support more pyramid depths, this test will need tweaks.
-  assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
+  assert_eq!(2, ctx.inner.inter_cfg.pyramid_depth);
 
   let limit = 5;
   for i in 0..limit {
@@ -693,7 +693,6 @@ fn output_frameno_incremental_reorder_scene_change_at(scene_change_at: u64) {
     .collect::<Vec<_>>();
 
   assert_eq!(
-    &data[..],
     match scene_change_at {
       0 => {
         &[
@@ -767,7 +766,8 @@ fn output_frameno_incremental_reorder_scene_change_at(scene_change_at: u64) {
         ][..]
       }
       _ => unreachable!(),
-    }
+    },
+    &data[..],
   );
 }
 
@@ -807,7 +807,7 @@ fn output_frameno_incremental_reorder_keyframe_at(kf_at: u64) {
   );
 
   // TODO: when we support more pyramid depths, this test will need tweaks.
-  assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
+  assert_eq!(2, ctx.inner.inter_cfg.pyramid_depth);
 
   let limit = 5;
   for i in 0..limit {
@@ -828,7 +828,6 @@ fn output_frameno_incremental_reorder_keyframe_at(kf_at: u64) {
     .collect::<Vec<_>>();
 
   assert_eq!(
-    &data[..],
     match kf_at {
       0 => {
         &[
@@ -902,7 +901,8 @@ fn output_frameno_incremental_reorder_keyframe_at(kf_at: u64) {
         ][..]
       }
       _ => unreachable!(),
-    }
+    },
+    &data[..],
   );
 }
 
@@ -928,7 +928,7 @@ fn output_frameno_no_scene_change_at_short_flash(flash_at: u64) {
   );
 
   // TODO: when we support more pyramid depths, this test will need tweaks.
-  assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
+  assert_eq!(2, ctx.inner.inter_cfg.pyramid_depth);
 
   let limit = 5;
   for i in 0..limit {
@@ -953,7 +953,6 @@ fn output_frameno_no_scene_change_at_short_flash(flash_at: u64) {
     .collect::<Vec<_>>();
 
   assert_eq!(
-    &data[..],
     &[
       (0, FrameType::KEY, 0, false, true),
       (4, FrameType::INTER, 0, false, true),
@@ -962,7 +961,8 @@ fn output_frameno_no_scene_change_at_short_flash(flash_at: u64) {
       (2, FrameType::INTER, 1, true, true),
       (3, FrameType::INTER, 2, false, true),
       (4, FrameType::INTER, 0, true, true),
-    ]
+    ],
+    &data[..],
   );
 }
 
@@ -987,8 +987,8 @@ fn output_frameno_no_scene_change_at_max_len_flash() {
   );
 
   // TODO: when we support more pyramid depths, this test will need tweaks.
-  assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
-  assert_eq!(ctx.inner.inter_cfg.group_input_len, 4);
+  assert_eq!(2, ctx.inner.inter_cfg.pyramid_depth);
+  assert_eq!(4, ctx.inner.inter_cfg.group_input_len);
 
   send_test_frame(&mut ctx, u8::min_value());
   send_test_frame(&mut ctx, u8::min_value());
@@ -1013,7 +1013,6 @@ fn output_frameno_no_scene_change_at_max_len_flash() {
     .collect::<Vec<_>>();
 
   assert_eq!(
-    &data[..],
     &[
       (0, FrameType::KEY, 0, false, true),
       (4, FrameType::INTER, 0, false, true),
@@ -1028,7 +1027,8 @@ fn output_frameno_no_scene_change_at_max_len_flash() {
       (6, FrameType::INTER, 1, true, true),
       (7, FrameType::INTER, 2, false, true),
       (7, FrameType::INTER, 2, false, false),
-    ]
+    ],
+    &data[..],
   );
 }
 
@@ -1053,8 +1053,8 @@ fn output_frameno_scene_change_past_max_len_flash() {
   );
 
   // TODO: when we support more pyramid depths, this test will need tweaks.
-  assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
-  assert_eq!(ctx.inner.inter_cfg.group_input_len, 4);
+  assert_eq!(2, ctx.inner.inter_cfg.pyramid_depth);
+  assert_eq!(4, ctx.inner.inter_cfg.group_input_len);
 
   send_test_frame(&mut ctx, u8::min_value());
   send_test_frame(&mut ctx, u8::min_value());
@@ -1079,7 +1079,6 @@ fn output_frameno_scene_change_past_max_len_flash() {
     .collect::<Vec<_>>();
 
   assert_eq!(
-    &data[..],
     &[
       (0, FrameType::KEY, 0, false, true),
       (0, FrameType::INTER, 0, false, false),
@@ -1102,7 +1101,8 @@ fn output_frameno_scene_change_past_max_len_flash() {
       (6, FrameType::INTER, 0, false, false),
       (6, FrameType::INTER, 0, false, false),
       (7, FrameType::KEY, 0, false, true),
-    ]
+    ],
+    &data[..],
   );
 }
 
@@ -1126,8 +1126,8 @@ fn output_frameno_no_scene_change_at_multiple_flashes() {
   );
 
   // TODO: when we support more pyramid depths, this test will need tweaks.
-  assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
-  assert_eq!(ctx.inner.inter_cfg.group_input_len, 4);
+  assert_eq!(2, ctx.inner.inter_cfg.pyramid_depth);
+  assert_eq!(4, ctx.inner.inter_cfg.group_input_len);
 
   send_test_frame(&mut ctx, u8::min_value());
   send_test_frame(&mut ctx, u8::min_value());
@@ -1152,7 +1152,6 @@ fn output_frameno_no_scene_change_at_multiple_flashes() {
     .collect::<Vec<_>>();
 
   assert_eq!(
-    &data[..],
     &[
       (0, FrameType::KEY, 0, false, true),
       (4, FrameType::INTER, 0, false, true),
@@ -1167,7 +1166,8 @@ fn output_frameno_no_scene_change_at_multiple_flashes() {
       (6, FrameType::INTER, 1, true, true),
       (7, FrameType::INTER, 2, false, true),
       (7, FrameType::INTER, 2, false, false),
-    ]
+    ],
+    &data[..],
   );
 }
 
@@ -1301,23 +1301,23 @@ fn lookahead_size_properly_bounded(
     let input = ctx.new_frame();
     let _ = ctx.send_frame(input);
     assert_eq!(
+      expectations.pre_receive_frame_q_lens[i],
       ctx.inner.frame_q.len(),
-      expectations.pre_receive_frame_q_lens[i]
     );
     assert_eq!(
+      expectations.pre_receive_fi_lens[i],
       ctx.inner.frame_invariants.len(),
-      expectations.pre_receive_fi_lens[i]
     );
     while ctx.receive_packet().is_ok() {
       // Receive packets until lookahead consumed, due to pyramids receiving frames in groups
     }
     assert_eq!(
+      expectations.post_receive_frame_q_lens[i],
       ctx.inner.frame_q.len(),
-      expectations.post_receive_frame_q_lens[i]
     );
     assert_eq!(
+      expectations.post_receive_fi_lens[i],
       ctx.inner.frame_invariants.len(),
-      expectations.post_receive_fi_lens[i]
     );
   }
 
@@ -1336,7 +1336,7 @@ fn lookahead_size_properly_bounded(
       }
     }
   }
-  assert_eq!(ctx.inner.frames_processed, LIMIT as u64);
+  assert_eq!(LIMIT as u64, ctx.inner.frames_processed);
 }
 
 #[test]
@@ -1344,7 +1344,7 @@ fn zero_frames() {
   let config = Config::default();
   let mut ctx: Context<u8> = config.new_context().unwrap();
   ctx.flush();
-  assert_eq!(ctx.receive_packet(), Err(EncoderStatus::LimitReached));
+  assert_eq!(Err(EncoderStatus::LimitReached), ctx.receive_packet());
 }
 
 #[test]
