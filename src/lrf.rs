@@ -1268,14 +1268,17 @@ impl RestorationState {
     // large enough that a tile is not an integer number of LRUs
     // wide/high.
     if fi.tiling.cols > 1 || fi.tiling.rows > 1 {
-      let tile_y_unit_width = fi.tiling.tile_width_sb << y_sb_log2;
-      let tile_y_unit_height = fi.tiling.tile_height_sb << y_sb_log2;
-      let tile_uv_unit_width = fi.tiling.tile_width_sb << uv_sb_log2;
-      let tile_uv_unit_height = fi.tiling.tile_height_sb << uv_sb_log2;
-
-      y_unit_size = y_unit_size.min(tile_y_unit_width).min(tile_y_unit_height);
-      uv_unit_size =
-        uv_unit_size.min(tile_uv_unit_width).min(tile_uv_unit_height);
+      // despite suggestions to the contrary, apparently tiles can be
+      // non-powers-of-2.
+      let trailing_zeros =
+        fi.tiling
+          .tile_width_sb
+          .trailing_zeros()
+          .min(fi.tiling.tile_height_sb.trailing_zeros()) as usize;
+      let tile_aligned_y_unit_size = 1 << (y_sb_log2 + trailing_zeros);
+      let tile_aligned_uv_unit_size = 1 << (uv_sb_log2 + trailing_zeros);
+      y_unit_size = y_unit_size.min(tile_aligned_y_unit_size);
+      uv_unit_size = uv_unit_size.min(tile_aligned_uv_unit_size);
 
       // But it's actually worse: LRUs can't span tiles (in our design
       // that is, spec allows it).  However, the spec mandates the last
