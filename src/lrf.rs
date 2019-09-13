@@ -1256,10 +1256,45 @@ impl RestorationState {
     let uv_sb_log2 = y_sb_log2 - stripe_uv_decimate;
 
     let (lrf_y_shift, lrf_uv_shift) = if fi.sequence.enable_large_lru {
-      // Largest possible restoration unit size (256) for both luma and chroma
-      (0, 0)
+      // Specific content does affect optimal LRU size choice, but the
+      // quantizer in use is a surprisingly strong selector.
+      let lrf_base_shift = if fi.base_q_idx > 200 {
+        0 // big
+      } else if fi.base_q_idx > 160 {
+        1
+      } else {
+        2 // small
+      };
+      let lrf_chroma_shift = if stripe_uv_decimate > 0 {
+        // 4:2:0 only
+        if lrf_base_shift == 2 {
+          1 // smallest chroma LRU is a win at low quant
+        } else {
+          // Will a down-shifted chroma LRU eliminate stretch in chroma?
+          // If so, that's generally a win.
+          let lrf_unit_size =
+            1 << (RESTORATION_TILESIZE_MAX_LOG2 - lrf_base_shift);
+          let unshifted_stretch = ((fi.width >> xdec) - 1) % lrf_unit_size
+            <= lrf_unit_size / 2
+            || ((fi.height >> ydec) - 1) % lrf_unit_size <= lrf_unit_size / 2;
+          let shifted_stretch = ((fi.width >> xdec) - 1)
+            % (lrf_unit_size >> 1)
+            <= lrf_unit_size / 4
+            || ((fi.height >> ydec) - 1) % (lrf_unit_size >> 1)
+              <= lrf_unit_size / 4;
+          if unshifted_stretch && !shifted_stretch {
+            1 // shift to eliminate stretch
+          } else {
+            0 // don't shift; save the signaling bits
+          }
+        }
+      } else {
+        0
+      };
+      (lrf_base_shift, lrf_base_shift + lrf_chroma_shift)
     } else {
-      // Smallest possible LRF size (the size of the superblock and no smaller)
+      // Explicit request to tie LRU size to superblock size ==
+      // smallest possible LRU size
       let lrf_y_shift = if fi.sequence.use_128x128_superblock { 1 } else { 2 };
       (lrf_y_shift, lrf_y_shift + stripe_uv_decimate)
     };
