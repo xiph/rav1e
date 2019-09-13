@@ -405,9 +405,9 @@ fn check_tile_log2(n: Result<usize, ()>) -> Result<usize, ()> {
   match n {
     Ok(n) => {
       if ((1 << tile_log2(1, n)) - n) == 0 || n == 0 {
-        Err(())
-      } else {
         Ok(n)
+      } else {
+        Err(())
       }
     }
     Err(e) => Err(e),
