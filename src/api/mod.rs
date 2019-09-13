@@ -769,6 +769,8 @@ pub(crate) struct ContextInner<T: Pixel> {
   seq: Sequence,
   rc_state: RCState,
   maybe_prev_log_base_q: Option<i64>,
+  /// The next `output_frameno` to be assigned MVs and costs by the lookahead.
+  next_lookahead_output_frameno: u64,
   /// The next `input_frameno` to be processed by frame type selection.
   next_frametype_selection_frame: u64,
 }
@@ -1248,6 +1250,7 @@ impl<T: Pixel> ContextInner<T> {
         enc.reservoir_frame_delay,
       )?,
       maybe_prev_log_base_q: None,
+      next_lookahead_output_frameno: 0,
       next_frametype_selection_frame: 0,
     })
   }
@@ -1283,12 +1286,12 @@ impl<T: Pixel> ContextInner<T> {
       .clone()
   }
 
-  fn get_lookahead_ready_frames_count(&self) -> usize {
+  fn get_lookahead_ready_frames_count(&self, out_frameno: u64) -> usize {
     self
       .frame_invariants
       .iter()
       .filter(|&(&out_no, fi)| {
-        out_no >= self.output_frameno
+        out_no >= out_frameno
           && !fi.show_existing_frame
           && !fi.invalid
           && !fi.lookahead_complete
@@ -1319,11 +1322,40 @@ impl<T: Pixel> ContextInner<T> {
       .count()
   }
 
-  fn lookahead_buffer_filled(&self) -> bool {
-    let ready_frames = self.get_lookahead_ready_frames_count();
+  fn get_last_unencoded_ready_output_frameno(&self) -> u64 {
+    self
+      .frame_invariants
+      .iter()
+      .rfind(|&(&out_no, fi)| {
+        out_no >= self.output_frameno
+          && !fi.show_existing_frame
+          && !fi.invalid
+          && fi.lookahead_complete
+      })
+      .map(|(&out_no, _)| out_no)
+      .unwrap_or(0)
+  }
+
+  fn lookahead_fis_filled(&self) -> bool {
+    let ready_frames =
+      self.get_lookahead_ready_frames_count(self.output_frameno);
     ready_frames
       > cmp::max(self.config.rdo_lookahead_frames, REF_FRAMES)
         + self.inter_cfg.keyframe_lookahead_distance() as usize
+  }
+
+  fn lookahead_buffer_filled(&self) -> bool {
+    let ready_frames = self
+      .next_lookahead_output_frameno
+      .saturating_sub(self.get_last_unencoded_ready_output_frameno());
+    ready_frames as usize
+      > cmp::max(self.config.rdo_lookahead_frames, REF_FRAMES)
+  }
+
+  fn can_analyze_lookahead(&self) -> bool {
+    let ready_frames = self
+      .get_lookahead_ready_frames_count(self.next_lookahead_output_frameno);
+    ready_frames > self.inter_cfg.keyframe_lookahead_distance() as usize
   }
 
   /// Indicates whether more frames need to have lookahead computations performed
@@ -1650,21 +1682,21 @@ impl<T: Pixel> ContextInner<T> {
     // We need to know the motion vectors of the previous `keyframe_lookahead_distance`
     // frames to have correct inter costs for scene flash detection.
     //
-    // TODO: The MV calculation code is currently very tightly coupled to ref frames.
+    // FIXME: The MV calculation code is currently very tightly coupled to ref frames.
     // It would be better to decouple it so that we can calculate MVs between any two
     // frames, but that is a major undertaking. So for now, this code checkpoints
-    // the real ref frames, and sets the previous `keyframe_lookahead_distance` as
-    // ref frames so that we can calculate MVs for them.
-    let ref_frame_checkpoint = fi.ref_frames.clone();
+    // the FI state then does the temporary MV calculations on that copy, only
+    // modifying the real FI state to save the computed intra/inter costs.
+    let mut fi_copy = fi.clone();
 
-    let mut fs = FrameState::new_with_frame(fi, frame.clone());
+    let mut fs = FrameState::new_with_frame(&fi_copy, frame.clone());
     fs.input_hres.downsample_from(&frame.planes[0]);
-    fs.input_hres.pad(fi.width, fi.height);
+    fs.input_hres.pad(fi_copy.width, fi_copy.height);
     fs.input_qres.downsample_from(&fs.input_hres);
-    fs.input_qres.pad(fi.width, fi.height);
+    fs.input_qres.pad(fi_copy.width, fi_copy.height);
     let output_framenos = (1..=self.inter_cfg.keyframe_lookahead_distance())
       .filter_map(|distance| {
-        let input_frameno = fi.input_frameno.checked_sub(distance);
+        let input_frameno = fi_copy.input_frameno.checked_sub(distance);
         input_frameno.map(|input_frameno| {
           *self
             .frame_invariants
@@ -1680,27 +1712,22 @@ impl<T: Pixel> ContextInner<T> {
       })
       .collect::<Vec<u64>>();
 
-    // Work around the borrow checker by flipping this to mutable
-    let fi = self.frame_invariants.get_mut(&output_frameno).unwrap();
     for (distance, output_frameno) in
       (1..=self.inter_cfg.keyframe_lookahead_distance())
         .zip(output_framenos.into_iter())
     {
       let idx = (distance as usize) - 1;
-      fi.ref_frames[idx] = idx as u8;
-      // We don't need to checkpoint the rec_buffer because it will be overwritten during
-      // encoding anyway.
-      update_rec_buffer(output_frameno, fi, fs.clone());
+      fi_copy.ref_frames[idx] = idx as u8;
+      update_rec_buffer(output_frameno, &mut fi_copy, fs.clone());
     }
 
-    // Work around the borrow checker by flipping this back to immutable
-    let fi = self.frame_invariants.get(&output_frameno).unwrap();
+    fi_copy.compute_lookahead_motion_vectors(&mut fs);
 
     // Map the MVs we just calculated to their correct input framenos.
-    let mut mv_idxs_to_framenos = ArrayVec::<[_; 3]>::new();
+    let mut mv_idxs_to_framenos = ArrayVec::<[_; 5]>::new();
 
-    for (mv_index, &rec_index) in fi.ref_frames.iter().enumerate() {
-      let ref_input_frameno = fi.rec_buffer.frames[rec_index as usize]
+    for (mv_index, &rec_index) in fi_copy.ref_frames.iter().enumerate() {
+      let ref_input_frameno = fi_copy.rec_buffer.frames[rec_index as usize]
         .as_ref()
         .and_then(|reference| {
           self
@@ -1720,11 +1747,8 @@ impl<T: Pixel> ContextInner<T> {
 
     let fi = self.frame_invariants.get_mut(&output_frameno).unwrap();
 
-    // Restore the checkpointed ref frames
-    fi.ref_frames = ref_frame_checkpoint;
-
-    for y in 0..fi.h_in_imp_b {
-      for x in 0..fi.w_in_imp_b {
+    for y in 0..fi_copy.h_in_imp_b {
+      for x in 0..fi_copy.w_in_imp_b {
         let plane_org = frame.planes[0].region(Area::Rect {
           x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
           y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
@@ -1744,7 +1768,7 @@ impl<T: Pixel> ContextInner<T> {
             y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
           },
           TxSize::TX_8X8,
-          fi.sequence.bit_depth,
+          fi_copy.sequence.bit_depth,
           Some(PredictionMode::DC_PRED),
         );
 
@@ -1765,7 +1789,7 @@ impl<T: Pixel> ContextInner<T> {
           },
           &mut plane_after_prediction_region,
           TxSize::TX_8X8,
-          fi.sequence.bit_depth,
+          fi_copy.sequence.bit_depth,
           &[], // Not used by DC_PRED.
           0,   // Not used by DC_PRED.
           &edge_buf,
@@ -1805,7 +1829,7 @@ impl<T: Pixel> ContextInner<T> {
             &ref_frame,
             x,
             y,
-            mv_idx.map(|idx| fi.lookahead_mvs[idx][y * 2][x * 2]),
+            mv_idx.map(|idx| fi_copy.lookahead_mvs[idx][y * 2][x * 2]),
             self.config.bit_depth,
           );
         }
@@ -1853,16 +1877,28 @@ impl<T: Pixel> ContextInner<T> {
     'reset: loop {
       // Compute lookahead frame invariants--these are initially tried as Inter frames,
       // and will have MVs and costs calculated on them.
-      while !self.lookahead_buffer_filled() || self.is_flushing() {
+      while !self.lookahead_fis_filled() || self.is_flushing() {
         let next_output_frameno =
           self.frame_invariants.keys().last().map(|key| key + 1).unwrap_or(0);
         if self.set_frame_properties(next_output_frameno).is_ok() {
           self.compute_lookahead_motion_vectors(next_output_frameno);
-          self.compute_lookahead_costs(next_output_frameno);
         } else {
           // Frame not yet read into frame queue
           break;
         }
+      }
+
+      while (self.can_analyze_lookahead() && !self.lookahead_buffer_filled())
+        || (self.is_flushing()
+          && self
+            .frame_invariants
+            .keys()
+            .last()
+            .map(|out_no| *out_no >= self.next_lookahead_output_frameno)
+            .unwrap_or(false))
+      {
+        self.compute_lookahead_costs(self.next_lookahead_output_frameno);
+        self.next_lookahead_output_frameno += 1;
       }
 
       // At this point we have `rdo_lookahead_frames` lookahead computed.
@@ -1904,6 +1940,7 @@ impl<T: Pixel> ContextInner<T> {
         if frame_set[0].frame_type == FrameType::KEY {
           // If this is already marked as a key frame, we've already run analysis
           // on it and we want to avoid extra work (or an infinite reset loop).
+          self.keyframes.insert(self.next_frametype_selection_frame);
           self.next_frametype_selection_frame += 1;
           continue;
         }
@@ -1940,15 +1977,18 @@ impl<T: Pixel> ContextInner<T> {
   }
 
   fn reset_lookahead_queue(&mut self, starting_input_frame: u64) {
-    let cutoff_output_frame = self
+    // If we don't match a frame, it means we're already at the end of the video.
+    if let Some(cutoff_output_frame) = self
       .frame_invariants
       .iter()
       .find(|&(_, fi)| fi.input_frameno >= starting_input_frame)
       .map(|(output_frame, _)| *output_frame)
-      .unwrap();
-    self.frame_invariants.split_off(&cutoff_output_frame);
-    self.gop_output_frameno_start.split_off(&cutoff_output_frame);
-    self.gop_input_frameno_start.split_off(&cutoff_output_frame);
+    {
+      self.next_lookahead_output_frameno = cutoff_output_frame;
+      self.frame_invariants.split_off(&cutoff_output_frame);
+      self.gop_output_frameno_start.split_off(&cutoff_output_frame);
+      self.gop_input_frameno_start.split_off(&cutoff_output_frame);
+    }
   }
 
   /// Computes the block importances for the current output frame.

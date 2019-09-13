@@ -46,6 +46,18 @@ impl SceneChangeDetector {
       return;
     }
 
+    let previous_keyframe = keyframes.iter().last().unwrap();
+    let distance = input_frameno - previous_keyframe;
+    if distance > config.max_key_frame_interval {
+      // This resolves an issue where more frames than necessary
+      // would be selected as keyframes, due to scene analysis not
+      // always being performed in input frame order.
+      //
+      // The frame will be properly analyzed on the next pass
+      // after the FIs are reset.
+      return;
+    }
+
     self.exclude_scene_flashes(
       &frame_set,
       input_frameno,
@@ -85,15 +97,6 @@ impl SceneChangeDetector {
     }
     if distance == config.max_key_frame_interval {
       return true;
-    }
-    if distance > config.max_key_frame_interval {
-      // This resolves an issue where more frames than necessary
-      // would be selected as keyframes, due to scene analysis not
-      // always being performed in input frame order.
-      //
-      // The frame will be properly analyzed on the next pass
-      // after the FIs are reset.
-      return false;
     }
 
     // Skip smart scene detection if it's disabled
@@ -173,25 +176,27 @@ impl SceneChangeDetector {
       .map(|&v| v as f32)
       .sum::<f32>()
       / fi.lookahead_inter_costs[ref_frame_distance - 1].len() as f32;
-    // Avoid a division by zero error
+
+    if inter_cost < std::f32::EPSILON {
+      // This is going to be all-SKIP, so always mark it as a non-scenechange.
+      debug!(
+        "frame {} to {}: no scenecut; icost {}; pcost 0",
+        fi.input_frameno,
+        fi.input_frameno - ref_frame_distance as u64,
+        intra_cost
+      );
+      return false;
+    }
+
     if intra_cost < std::f32::EPSILON {
-      if inter_cost < std::f32::EPSILON {
-        // This is going to be all-SKIP anyway, so mark it a non-scenechange.
-        debug!(
-          "frame {} to {}: no scenecut; icost 0; pcost 0",
-          fi.input_frameno,
-          fi.input_frameno - ref_frame_distance as u64
-        );
-        return false;
-      } else {
-        debug!(
-          "frame {} to {}: scenecut; icost 0; pcost {:.3}",
-          fi.input_frameno,
-          fi.input_frameno - ref_frame_distance as u64,
-          inter_cost
-        );
-        return true;
-      }
+      // This avoids a division by zero error.
+      debug!(
+        "frame {} to {}: scenecut; icost 0; pcost {:.3}",
+        fi.input_frameno,
+        fi.input_frameno - ref_frame_distance as u64,
+        inter_cost
+      );
+      return true;
     }
 
     let distance_from_last_keyframe =
@@ -211,8 +216,10 @@ impl SceneChangeDetector {
     } else {
       thresh_min
         + (thresh_max - thresh_min)
-          * (distance_from_last_keyframe - config.min_key_frame_interval)
-            as f32
+          * (cmp::min(
+            distance_from_last_keyframe - config.min_key_frame_interval,
+            config.max_key_frame_interval - config.min_key_frame_interval,
+          )) as f32
           / (config.max_key_frame_interval - config.min_key_frame_interval)
             as f32
     };
