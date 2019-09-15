@@ -906,9 +906,6 @@ fn output_frameno_incremental_reorder_keyframe_at(kf_at: u64) {
   );
 }
 
-#[interpolate_test(1, 1)]
-#[interpolate_test(2, 2)]
-#[interpolate_test(3, 3)]
 fn output_frameno_no_scene_change_at_short_flash(flash_at: u64) {
   // Test output_frameno configurations when there's a single-frame flash at the
   // <flash_at>th frame.
@@ -966,7 +963,6 @@ fn output_frameno_no_scene_change_at_short_flash(flash_at: u64) {
   );
 }
 
-#[test]
 fn output_frameno_no_scene_change_at_max_len_flash() {
   // Test output_frameno configurations when there's a multi-frame flash
   // with length equal to the max flash length
@@ -1106,7 +1102,6 @@ fn output_frameno_scene_change_past_max_len_flash() {
   );
 }
 
-#[test]
 fn output_frameno_no_scene_change_at_multiple_flashes() {
   // Test output_frameno configurations when there are multiple consecutive flashes
 
