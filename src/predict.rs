@@ -355,7 +355,7 @@ impl PredictionMode {
       }
     } else {
       let mut tmp: [AlignedArray<[i16; 128 * 128]>; 2] =
-        [UninitializedAlignedArray(), UninitializedAlignedArray()];
+        [AlignedArray::uninitialized(), AlignedArray::uninitialized()];
       for i in 0..2 {
         if let Some(ref rec) = fi.rec_buffer.frames
           [fi.ref_frames[ref_frames[i].to_index()] as usize]
@@ -1316,7 +1316,7 @@ mod test {
   #[test]
   fn pred_matches_u8() {
     let mut edge_buf: AlignedArray<[u8; 2 * MAX_TX_SIZE + 1]> =
-      UninitializedAlignedArray();
+      AlignedArray::uninitialized();
     for i in 0..edge_buf.array.len() {
       edge_buf.array[i] = (i + 32).saturating_sub(MAX_TX_SIZE).as_();
     }

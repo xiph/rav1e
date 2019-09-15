@@ -18,37 +18,32 @@ addons:
       - libvulkan-dev
 before_install:
   - export BUILD_DIR="$TRAVIS_HOME/.build"
+  - export DEPS_DIR="$TRAVIS_HOME/.local"
   - mkdir -p "$BUILD_DIR"
+  - mkdir -p "$DEPS_DIR/bin"
+  - mkdir -p "$DEPS_DIR/lib/pkgconfig"
+  - export PATH="$PATH:$DEPS_DIR/bin"
+  - export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$DEPS_DIR/lib/pkgconfig:$DEPS_DIR/lib/x86_64-linux-gnu/pkgconfig"
+  - export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$DEPS_DIR/lib:$DEPS_DIR/lib/x86_64-linux-gnu"
   - pip3 install meson
   - bash "$TRAVIS_BUILD_DIR/.travis/install-sccache.sh"
-  - export PATH="$PATH:$BUILD_DIR/sccache"
   - export RUSTC_WRAPPER=sccache
   - export SCCACHE_CACHE_SIZE=500M
   - export SCCACHE_DIR="$TRAVIS_HOME/.cache/sccache"
   - sccache --version
   - bash "$TRAVIS_BUILD_DIR/.travis/install-nasm.sh"
-  - export PATH="$PATH:$BUILD_DIR/nasm/bin"
-  - export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$BUILD_DIR/nasm/lib/pkgconfig"
-  - export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$BUILD_DIR/nasm/lib"
   - nasm --version
   - bash "$TRAVIS_BUILD_DIR/.travis/install-kcov.sh"
-  - export PATH="$PATH:$BUILD_DIR/kcov/bin"
   - kcov --version
   - bash "$TRAVIS_BUILD_DIR/.travis/install-aom.sh"
-  - export PATH="$PATH:$BUILD_DIR/aom/bin"
-  - export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$BUILD_DIR/aom/lib/pkgconfig"
-  - export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$BUILD_DIR/aom/lib"
-  - which aomenc
+  - aomenc --help | grep "AV1 Encoder"
   - bash "$TRAVIS_BUILD_DIR/.travis/install-dav1d.sh"
-  - export PATH="$PATH:$BUILD_DIR/dav1d/bin"
-  - export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$BUILD_DIR/dav1d/lib/x86_64-linux-gnu/pkgconfig"
-  - export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$BUILD_DIR/dav1d/lib/x86_64-linux-gnu"
   - dav1d --version
   - cd "$TRAVIS_BUILD_DIR"
 cache:
-  cargo: true
   directories:
-    - $TRAVIS_HOME/.build
+    - $TRAVIS_HOME/.cache/sccache
+    - $TRAVIS_HOME/.local
 
 after_script:
   - sccache -s

@@ -30,6 +30,9 @@ static SINPI_INV: [i32; 5] = [0, 1321, 2482, 3344, 3803];
 const INV_COS_BIT: usize = 12;
 
 pub fn av1_idct4(input: &[i32], output: &mut [i32], range: usize) {
+  assert!(input.len() >= 4);
+  assert!(output.len() >= 4);
+
   // stage 1
   let stg1 = [input[0], input[2], input[1], input[3]];
 
@@ -49,6 +52,9 @@ pub fn av1_idct4(input: &[i32], output: &mut [i32], range: usize) {
 }
 
 pub fn av1_iadst4(input: &[i32], output: &mut [i32], _range: usize) {
+  assert!(input.len() >= 4);
+  assert!(output.len() >= 4);
+
   let bit = 12;
 
   let x0 = input[0];
@@ -94,12 +100,16 @@ pub fn av1_iadst4(input: &[i32], output: &mut [i32], _range: usize) {
 }
 
 pub fn av1_iidentity4(input: &[i32], output: &mut [i32], _range: usize) {
-  for i in 0..4 {
-    output[i] = round_shift(SQRT2 * input[i], 12);
-  }
+  output[..4]
+    .iter_mut()
+    .zip(input[..4].iter())
+    .for_each(|(outp, inp)| *outp = round_shift(SQRT2 * *inp, 12));
 }
 
 pub fn av1_idct8(input: &[i32], output: &mut [i32], range: usize) {
+  assert!(input.len() >= 8);
+  assert!(output.len() >= 8);
+
   // call idct4
   let temp_in = [input[0], input[2], input[4], input[6]];
   let mut temp_out: [i32; 4] = [0; 4];
@@ -146,6 +156,9 @@ pub fn av1_idct8(input: &[i32], output: &mut [i32], range: usize) {
 }
 
 pub fn av1_iadst8(input: &[i32], output: &mut [i32], range: usize) {
+  assert!(input.len() >= 8);
+  assert!(output.len() >= 8);
+
   // stage 1
   let stg1 = [
     input[7], input[0], input[5], input[2], input[3], input[4], input[1],
@@ -224,12 +237,16 @@ pub fn av1_iadst8(input: &[i32], output: &mut [i32], range: usize) {
 }
 
 pub fn av1_iidentity8(input: &[i32], output: &mut [i32], _range: usize) {
-  for i in 0..8 {
-    output[i] = 2 * input[i];
-  }
+  output[..8]
+    .iter_mut()
+    .zip(input[..8].iter())
+    .for_each(|(outp, inp)| *outp = 2 * *inp);
 }
 
 fn av1_idct16(input: &[i32], output: &mut [i32], range: usize) {
+  assert!(input.len() >= 16);
+  assert!(output.len() >= 16);
+
   // call idct8
   let temp_in = [
     input[0], input[2], input[4], input[6], input[8], input[10], input[12],
@@ -324,6 +341,9 @@ fn av1_idct16(input: &[i32], output: &mut [i32], range: usize) {
 }
 
 fn av1_iadst16(input: &[i32], output: &mut [i32], range: usize) {
+  assert!(input.len() >= 16);
+  assert!(output.len() >= 16);
+
   // stage 1
   let stg1 = [
     input[15], input[0], input[13], input[2], input[11], input[4], input[9],
@@ -491,12 +511,16 @@ fn av1_iadst16(input: &[i32], output: &mut [i32], range: usize) {
 }
 
 fn av1_iidentity16(input: &[i32], output: &mut [i32], _range: usize) {
-  for i in 0..16 {
-    output[i] = round_shift(SQRT2 * 2 * input[i], 12);
-  }
+  output[..16]
+    .iter_mut()
+    .zip(input[..16].iter())
+    .for_each(|(outp, inp)| *outp = round_shift(SQRT2 * 2 * *inp, 12));
 }
 
 fn av1_idct32(input: &[i32], output: &mut [i32], range: usize) {
+  assert!(input.len() >= 32);
+  assert!(output.len() >= 32);
+
   // stage 1;
   let stg1 = [
     input[0], input[16], input[8], input[24], input[4], input[20], input[12],
@@ -794,12 +818,16 @@ fn av1_idct32(input: &[i32], output: &mut [i32], range: usize) {
 }
 
 fn av1_iidentity32(input: &[i32], output: &mut [i32], _range: usize) {
-  for i in 0..32 {
-    output[i] = input[i] * 4;
-  }
+  output[..32]
+    .iter_mut()
+    .zip(input[..32].iter())
+    .for_each(|(outp, inp)| *outp = 4 * *inp);
 }
 
 fn av1_idct64(input: &[i32], output: &mut [i32], range: usize) {
+  assert!(input.len() >= 64);
+  assert!(output.len() >= 64);
+
   // stage 1;
   let stg1 = [
     input[0], input[32], input[16], input[48], input[8], input[40], input[24],
@@ -1544,10 +1572,11 @@ mod nasm {
         let coeff_w = Self::W.min(32);
         let coeff_h = Self::H.min(32);
         let mut coeff16: AlignedArray<[i16; 32 * 32]> =
-          UninitializedAlignedArray();
+          AlignedArray::uninitialized();
 
         // Transpose the input.
         // TODO: should be possible to remove changing how coeffs are written
+        assert!(input.len() >= coeff_w * coeff_h);
         for j in 0..coeff_h {
           for i in 0..coeff_w {
             coeff16.array[i * coeff_h + j] = input[j * coeff_w + i] as i16;

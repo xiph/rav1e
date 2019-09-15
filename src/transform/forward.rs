@@ -292,6 +292,8 @@ fn daala_fdct_ii_4<T: TxOperations>(
 }
 
 pub fn daala_fdct4<T: TxOperations>(input: &[T], output: &mut [T]) {
+  assert!(input.len() >= 4);
+  assert!(output.len() >= 4);
   let mut temp_out: [T; 4] = [T::default(); 4];
   daala_fdct_ii_4(input[0], input[1], input[2], input[3], &mut temp_out);
 
@@ -302,6 +304,9 @@ pub fn daala_fdct4<T: TxOperations>(input: &[T], output: &mut [T]) {
 }
 
 pub fn daala_fdst_vii_4<T: TxOperations>(input: &[T], output: &mut [T]) {
+  assert!(input.len() >= 4);
+  assert!(output.len() >= 4);
+
   let q0 = input[0];
   let q1 = input[1];
   let q2 = input[2];
@@ -407,6 +412,8 @@ fn daala_fdct_ii_8<T: TxOperations>(
 }
 
 pub fn daala_fdct8<T: TxOperations>(input: &[T], output: &mut [T]) {
+  assert!(input.len() >= 8);
+  assert!(output.len() >= 8);
   let mut temp_out: [T; 8] = [T::default(); 8];
   daala_fdct_ii_8(
     input[0],
@@ -486,6 +493,8 @@ fn daala_fdst_iv_8<T: TxOperations>(
 }
 
 pub fn daala_fdst8<T: TxOperations>(input: &[T], output: &mut [T]) {
+  assert!(input.len() >= 8);
+  assert!(output.len() >= 8);
   let mut temp_out: [T; 8] = [T::default(); 8];
   daala_fdst_iv_8(
     input[0],
@@ -629,6 +638,8 @@ fn daala_fdct_ii_16<T: TxOperations>(
 }
 
 fn daala_fdct16<T: TxOperations>(input: &[T], output: &mut [T]) {
+  assert!(input.len() >= 16);
+  assert!(output.len() >= 16);
   let mut temp_out: [T; 16] = [T::default(); 16];
   daala_fdct_ii_16(
     input[0],
@@ -793,6 +804,8 @@ fn daala_fdst_iv_16<T: TxOperations>(
 }
 
 fn daala_fdst16<T: TxOperations>(input: &[T], output: &mut [T]) {
+  assert!(input.len() >= 16);
+  assert!(output.len() >= 16);
   let mut temp_out: [T; 16] = [T::default(); 16];
   daala_fdst_iv_16(
     input[0],
@@ -1054,6 +1067,8 @@ fn daala_fdct_ii_32<T: TxOperations>(
 }
 
 fn daala_fdct32<T: TxOperations>(input: &[T], output: &mut [T]) {
+  assert!(input.len() >= 32);
+  assert!(output.len() >= 32);
   let mut temp_out: [T; 32] = [T::default(); 32];
   daala_fdct_ii_32(
     input[0],
@@ -1465,6 +1480,8 @@ fn daala_fdst_iv_32_asym<T: TxOperations>(
 
 #[allow(clippy::identity_op)]
 fn daala_fdct64<T: TxOperations>(input: &[T], output: &mut [T]) {
+  assert!(input.len() >= 64);
+  assert!(output.len() >= 64);
   // Use arrays to avoid ridiculous variable names
   let mut asym: [(T, T); 32] = [<(T, T)>::default(); 32];
   let mut half: [T; 32] = [T::default(); 32];
@@ -1724,7 +1741,7 @@ trait FwdTxfm2D: Dim {
     input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
     bd: usize,
   ) {
-    let mut tmp: AlignedArray<[i32; 64 * 64]> = UninitializedAlignedArray();
+    let mut tmp: AlignedArray<[i32; 64 * 64]> = AlignedArray::uninitialized();
     let buf = &mut tmp.array[..Self::W * Self::H];
     let cfg =
       Txfm2DFlipCfg::fwd(tx_type, TxSize::by_dims(Self::W, Self::H), bd);
@@ -1744,7 +1761,7 @@ trait FwdTxfm2D: Dim {
     // Columns
     for c in 0..txfm_size_col {
       let mut col_flip_backing: AlignedArray<[i32; 64 * 64]> =
-        UninitializedAlignedArray();
+        AlignedArray::uninitialized();
       let col_flip = &mut col_flip_backing.array[..txfm_size_row];
       if cfg.ud_flip {
         // flip upside down
@@ -1840,7 +1857,7 @@ pub fn fht64x64(
   bit_depth: usize,
 ) {
   assert!(tx_type == TxType::DCT_DCT);
-  let mut aligned: AlignedArray<[i32; 4096]> = UninitializedAlignedArray();
+  let mut aligned: AlignedArray<[i32; 4096]> = AlignedArray::uninitialized();
   let tmp = &mut aligned.array;
 
   //Block64x64::fwd_txfm2d(input, &mut tmp, stride, tx_type, bit_depth);
@@ -1904,7 +1921,7 @@ pub fn fht32x64(
   bit_depth: usize,
 ) {
   assert!(tx_type == TxType::DCT_DCT);
-  let mut aligned: AlignedArray<[i32; 2048]> = UninitializedAlignedArray();
+  let mut aligned: AlignedArray<[i32; 2048]> = AlignedArray::uninitialized();
   let tmp = &mut aligned.array;
 
   Block32x64::fwd_txfm2d_daala(input, tmp, stride, tx_type, bit_depth);
@@ -1919,7 +1936,7 @@ pub fn fht64x32(
   bit_depth: usize,
 ) {
   assert!(tx_type == TxType::DCT_DCT);
-  let mut aligned: AlignedArray<[i32; 2048]> = UninitializedAlignedArray();
+  let mut aligned: AlignedArray<[i32; 2048]> = AlignedArray::uninitialized();
   let tmp = &mut aligned.array;
 
   Block64x32::fwd_txfm2d_daala(input, tmp, stride, tx_type, bit_depth);
@@ -1968,7 +1985,7 @@ pub fn fht16x64(
   bit_depth: usize,
 ) {
   assert!(tx_type == TxType::DCT_DCT);
-  let mut aligned: AlignedArray<[i32; 1024]> = UninitializedAlignedArray();
+  let mut aligned: AlignedArray<[i32; 1024]> = AlignedArray::uninitialized();
   let tmp = &mut aligned.array;
 
   Block16x64::fwd_txfm2d_daala(input, tmp, stride, tx_type, bit_depth);
@@ -1983,7 +2000,7 @@ pub fn fht64x16(
   bit_depth: usize,
 ) {
   assert!(tx_type == TxType::DCT_DCT);
-  let mut aligned: AlignedArray<[i32; 1024]> = UninitializedAlignedArray();
+  let mut aligned: AlignedArray<[i32; 1024]> = AlignedArray::uninitialized();
   let tmp = &mut aligned.array;
 
   Block64x16::fwd_txfm2d_daala(input, tmp, stride, tx_type, bit_depth);

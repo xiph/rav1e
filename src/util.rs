@@ -29,10 +29,10 @@ pub struct Align32;
 // A 16 byte aligned array.
 // # Examples
 // ```
-// let mut x: AlignedArray<[i16; 64 * 64]> = AlignedArray([0; 64 * 64]);
+// let mut x: AlignedArray<[i16; 64 * 64]> = AlignedArray::new([0; 64 * 64]);
 // assert!(x.array.as_ptr() as usize % 16 == 0);
 //
-// let mut x: AlignedArray<[i16; 64 * 64]> = UninitializedAlignedArray();
+// let mut x: AlignedArray<[i16; 64 * 64]> = AlignedArray::uninitialized();
 // assert!(x.array.as_ptr() as usize % 16 == 0);
 // ```
 pub struct AlignedArray<ARRAY> {
@@ -40,14 +40,13 @@ pub struct AlignedArray<ARRAY> {
   pub array: ARRAY,
 }
 
-#[allow(non_snake_case)]
-pub const fn AlignedArray<ARRAY>(array: ARRAY) -> AlignedArray<ARRAY> {
-  AlignedArray { _alignment: [], array }
-}
-
-#[allow(non_snake_case)]
-pub fn UninitializedAlignedArray<ARRAY>() -> AlignedArray<ARRAY> {
-  AlignedArray(unsafe { MaybeUninit::uninit().assume_init() })
+impl<A> AlignedArray<A> {
+  pub const fn new(array: A) -> Self {
+    AlignedArray { _alignment: [], array }
+  }
+  pub fn uninitialized() -> Self {
+    Self::new(unsafe { MaybeUninit::uninit().assume_init() })
+  }
 }
 
 #[test]
@@ -56,7 +55,7 @@ fn sanity() {
     ((ptr as usize) & ((1 << n) - 1)) == 0
   }
 
-  let a: AlignedArray<_> = AlignedArray([0u8; 3]);
+  let a: AlignedArray<_> = AlignedArray::new([0u8; 3]);
   assert!(is_aligned(a.array.as_ptr(), 4));
 }
 

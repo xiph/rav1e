@@ -511,7 +511,7 @@ pub fn get_intra_edges<T: Pixel>(
   let plane_cfg = &dst.plane_cfg;
 
   let mut edge_buf: AlignedArray<[T; 4 * MAX_TX_SIZE + 1]> =
-    UninitializedAlignedArray();
+    AlignedArray::uninitialized();
   let base = 128u16 << (bit_depth - 8);
 
   {

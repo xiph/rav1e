@@ -31,9 +31,7 @@ use crate::token_cdfs::*;
 use crate::transform::TxSize::*;
 use crate::transform::TxType::*;
 use crate::transform::*;
-use crate::util::{
-  clamp, msb, AlignedArray, Pixel, UninitializedAlignedArray,
-};
+use crate::util::{clamp, msb, AlignedArray, Pixel};
 
 use arrayvec::*;
 use std::ops::{Index, IndexMut};
@@ -3978,7 +3976,7 @@ impl<'a> ContextWriter<'a> {
     let width = av1_get_coded_tx_size(tx_size).width();
     let height = av1_get_coded_tx_size(tx_size).height();
     let mut coeffs_storage: AlignedArray<[i32; 32 * 32]> =
-      UninitializedAlignedArray();
+      AlignedArray::uninitialized();
     let coeffs = &mut coeffs_storage.array[..width * height];
     let mut cul_level = 0 as u32;
 
@@ -4111,7 +4109,7 @@ impl<'a> ContextWriter<'a> {
     }
 
     let mut coeff_contexts: AlignedArray<[i8; MAX_TX_SQUARE]> =
-      UninitializedAlignedArray();
+      AlignedArray::uninitialized();
     let levels = &mut levels_buf[TX_PAD_TOP * (width + TX_PAD_HOR)..];
 
     self.get_nz_map_contexts(

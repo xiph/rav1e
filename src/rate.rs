@@ -615,7 +615,7 @@ impl RCState {
     framerate_den: i64, target_bitrate: i32, maybe_ac_qi_max: Option<u8>,
     ac_qi_min: u8, max_key_frame_interval: i32,
     maybe_reservoir_frame_delay: Option<i32>,
-  ) -> Option<RCState> {
+  ) -> RCState {
     // The default buffer size is set equal to 1.5x the keyframe interval, or 240
     //  frames; whichever is smaller, with a minimum of 12.
     // For user set values, we enforce a minimum of 12.
@@ -624,13 +624,9 @@ impl RCState {
     //  before an I-frame get starved), in most cases.
     // The 12 frame minimum gives us some chance to distribute bit estimation
     //  errors in the worst case.
-    let reservoir_frame_delay = if let Some(rfd) = maybe_reservoir_frame_delay
-    {
-      rfd
-    } else {
-      ((max_key_frame_interval.checked_mul(3)?) >> 1).min(240)
-    }
-    .max(12);
+    let reservoir_frame_delay = maybe_reservoir_frame_delay
+      .unwrap_or_else(|| ((max_key_frame_interval * 3) >> 1).min(240))
+      .max(12);
     // TODO: What are the limits on these?
     let npixels = (frame_width as i64) * (frame_height as i64);
     // Insane framerates or frame sizes mean insane bitrates.
@@ -640,14 +636,11 @@ impl RCState {
     //  reported to update_state().
     // TODO: Support constraints imposed by levels.
     let bits_per_tu = clamp(
-      (target_bitrate as i64)
-        .checked_mul(framerate_den)?
-        .checked_div(framerate_num)?,
+      (target_bitrate as i64) * framerate_den / framerate_num,
       40,
       0x4000_0000_0000,
     ) - (TEMPORAL_DELIMITER.len() * 8) as i64;
-    let reservoir_max =
-      bits_per_tu.checked_mul(reservoir_frame_delay as i64)?;
+    let reservoir_max = bits_per_tu * (reservoir_frame_delay as i64);
     // Start with a buffer fullness and fullness target of 50%.
     let reservoir_target = (reservoir_max + 1) >> 1;
     // Pick exponents and initial scales for quantizer selection.
@@ -684,7 +677,7 @@ impl RCState {
     };
 
     // TODO: Add support for "golden" P frames.
-    Some(RCState {
+    RCState {
       target_bitrate,
       reservoir_frame_delay,
       reservoir_frame_delay_is_set: maybe_reservoir_frame_delay.is_some(),
@@ -737,7 +730,7 @@ impl RCState {
       scale_window_ntus: 0,
       scale_window_nframes: [0; FRAME_NSUBTYPES + 1],
       scale_window_sum: [0; FRAME_NSUBTYPES],
-    })
+    }
   }
 
   // TODO: Separate quantizers for Cb and Cr.
