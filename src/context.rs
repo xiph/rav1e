@@ -1221,7 +1221,7 @@ pub struct TileSuperBlockOffset(pub SuperBlockOffset);
 
 impl SuperBlockOffset {
   /// Offset of a block inside the current superblock.
-  fn block_offset(self, block_x: usize, block_y: usize) -> BlockOffset {
+  const fn block_offset(self, block_x: usize, block_y: usize) -> BlockOffset {
     BlockOffset {
       x: (self.x << SUPERBLOCK_TO_BLOCK_SHIFT) + block_x,
       y: (self.y << SUPERBLOCK_TO_BLOCK_SHIFT) + block_y,
@@ -1229,7 +1229,7 @@ impl SuperBlockOffset {
   }
 
   /// Offset of the top-left pixel of this block.
-  fn plane_offset(self, plane: &PlaneConfig) -> PlaneOffset {
+  const fn plane_offset(self, plane: &PlaneConfig) -> PlaneOffset {
     PlaneOffset {
       x: (self.x as isize) << (SUPERBLOCK_TO_PLANE_SHIFT - plane.xdec),
       y: (self.y as isize) << (SUPERBLOCK_TO_PLANE_SHIFT - plane.ydec),
@@ -1240,7 +1240,7 @@ impl SuperBlockOffset {
 impl PlaneSuperBlockOffset {
   /// Offset of a block inside the current superblock.
   #[inline]
-  pub fn block_offset(
+  pub const fn block_offset(
     self, block_x: usize, block_y: usize,
   ) -> PlaneBlockOffset {
     PlaneBlockOffset(self.0.block_offset(block_x, block_y))
@@ -1248,7 +1248,7 @@ impl PlaneSuperBlockOffset {
 
   /// Offset of the top-left pixel of this block.
   #[inline]
-  pub fn plane_offset(self, plane: &PlaneConfig) -> PlaneOffset {
+  pub const fn plane_offset(self, plane: &PlaneConfig) -> PlaneOffset {
     self.0.plane_offset(plane)
   }
 }
@@ -1256,7 +1256,7 @@ impl PlaneSuperBlockOffset {
 impl TileSuperBlockOffset {
   /// Offset of a block inside the current superblock.
   #[inline]
-  pub fn block_offset(
+  pub const fn block_offset(
     self, block_x: usize, block_y: usize,
   ) -> TileBlockOffset {
     TileBlockOffset(self.0.block_offset(block_x, block_y))
@@ -1264,7 +1264,7 @@ impl TileSuperBlockOffset {
 
   /// Offset of the top-left pixel of this block.
   #[inline]
-  pub fn plane_offset(self, plane: &PlaneConfig) -> PlaneOffset {
+  pub const fn plane_offset(self, plane: &PlaneConfig) -> PlaneOffset {
     self.0.plane_offset(plane)
   }
 }
@@ -1289,7 +1289,7 @@ pub struct TileBlockOffset(pub BlockOffset);
 
 impl BlockOffset {
   /// Offset of the superblock in which this block is located.
-  fn sb_offset(self) -> SuperBlockOffset {
+  const fn sb_offset(self) -> SuperBlockOffset {
     SuperBlockOffset {
       x: self.x >> SUPERBLOCK_TO_BLOCK_SHIFT,
       y: self.y >> SUPERBLOCK_TO_BLOCK_SHIFT,
@@ -1297,7 +1297,7 @@ impl BlockOffset {
   }
 
   /// Offset of the top-left pixel of this block.
-  fn plane_offset(self, plane: &PlaneConfig) -> PlaneOffset {
+  const fn plane_offset(self, plane: &PlaneConfig) -> PlaneOffset {
     PlaneOffset {
       x: (self.x >> plane.xdec << BLOCK_TO_PLANE_SHIFT) as isize,
       y: (self.y >> plane.ydec << BLOCK_TO_PLANE_SHIFT) as isize,
@@ -1306,14 +1306,14 @@ impl BlockOffset {
 
   /// Convert to plane offset without decimation.
   #[inline]
-  fn to_luma_plane_offset(self) -> PlaneOffset {
+  const fn to_luma_plane_offset(self) -> PlaneOffset {
     PlaneOffset {
       x: (self.x as isize) << BLOCK_TO_PLANE_SHIFT,
       y: (self.y as isize) << BLOCK_TO_PLANE_SHIFT,
     }
   }
 
-  fn y_in_sb(self) -> usize {
+  const fn y_in_sb(self) -> usize {
     self.y % MIB_SIZE
   }
 
@@ -1330,24 +1330,24 @@ impl BlockOffset {
 impl PlaneBlockOffset {
   /// Offset of the superblock in which this block is located.
   #[inline]
-  pub fn sb_offset(self) -> PlaneSuperBlockOffset {
+  pub const fn sb_offset(self) -> PlaneSuperBlockOffset {
     PlaneSuperBlockOffset(self.0.sb_offset())
   }
 
   /// Offset of the top-left pixel of this block.
   #[inline]
-  pub fn plane_offset(self, plane: &PlaneConfig) -> PlaneOffset {
+  pub const fn plane_offset(self, plane: &PlaneConfig) -> PlaneOffset {
     self.0.plane_offset(plane)
   }
 
   /// Convert to plane offset without decimation.
   #[inline]
-  pub fn to_luma_plane_offset(self) -> PlaneOffset {
+  pub const fn to_luma_plane_offset(self) -> PlaneOffset {
     self.0.to_luma_plane_offset()
   }
 
   #[inline]
-  pub fn y_in_sb(self) -> usize {
+  pub const fn y_in_sb(self) -> usize {
     self.0.y_in_sb()
   }
 
@@ -1362,24 +1362,24 @@ impl PlaneBlockOffset {
 impl TileBlockOffset {
   /// Offset of the superblock in which this block is located.
   #[inline]
-  pub fn sb_offset(self) -> TileSuperBlockOffset {
+  pub const fn sb_offset(self) -> TileSuperBlockOffset {
     TileSuperBlockOffset(self.0.sb_offset())
   }
 
   /// Offset of the top-left pixel of this block.
   #[inline]
-  pub fn plane_offset(self, plane: &PlaneConfig) -> PlaneOffset {
+  pub const fn plane_offset(self, plane: &PlaneConfig) -> PlaneOffset {
     self.0.plane_offset(plane)
   }
 
   /// Convert to plane offset without decimation.
   #[inline]
-  pub fn to_luma_plane_offset(self) -> PlaneOffset {
+  pub const fn to_luma_plane_offset(self) -> PlaneOffset {
     self.0.to_luma_plane_offset()
   }
 
   #[inline]
-  pub fn y_in_sb(self) -> usize {
+  pub const fn y_in_sb(self) -> usize {
     self.0.y_in_sb()
   }
 
@@ -1557,7 +1557,7 @@ impl<'a> BlockContext<'a> {
     }
   }
 
-  pub fn checkpoint(&self) -> BlockContextCheckpoint {
+  pub const fn checkpoint(&self) -> BlockContextCheckpoint {
     BlockContextCheckpoint {
       cdef_coded: self.cdef_coded,
       above_partition_context: self.above_partition_context,
@@ -4220,7 +4220,7 @@ impl<'a> ContextWriter<'a> {
     true
   }
 
-  pub fn checkpoint(&self) -> ContextWriterCheckpoint {
+  pub const fn checkpoint(&self) -> ContextWriterCheckpoint {
     ContextWriterCheckpoint { fc: *self.fc, bc: self.bc.checkpoint() }
   }
 

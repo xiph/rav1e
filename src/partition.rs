@@ -47,10 +47,10 @@ impl RefType {
       _ => (self as usize) - 1,
     }
   }
-  pub fn is_fwd_ref(self) -> bool {
+  pub const fn is_fwd_ref(self) -> bool {
     (self as usize) < 5
   }
-  pub fn is_bwd_ref(self) -> bool {
+  pub const fn is_bwd_ref(self) -> bool {
     (self as usize) >= 5
   }
 }

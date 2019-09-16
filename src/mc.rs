@@ -42,7 +42,7 @@ impl ops::Div<i16> for MotionVector {
 }
 
 impl MotionVector {
-  pub fn quantize_to_fullpel(self) -> Self {
+  pub const fn quantize_to_fullpel(self) -> Self {
     Self { row: (self.row / 8) * 8, col: (self.col / 8) * 8 }
   }
 

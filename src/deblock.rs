@@ -257,7 +257,7 @@ fn filter_narrow4_12(
 
 // six taps, 4 outputs
 #[rustfmt::skip]
-fn filter_wide6_4(
+const fn filter_wide6_4(
   p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32
 ) -> [i32; 4] {
   [
@@ -270,7 +270,7 @@ fn filter_wide6_4(
 
 // eight taps, 6 outputs
 #[rustfmt::skip]
-fn filter_wide8_6(
+const fn filter_wide8_6(
   p3: i32, p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32, q3: i32
 ) -> [i32; 6] {
   [
@@ -284,7 +284,7 @@ fn filter_wide8_6(
 }
 
 // 12 taps, 12 outputs (six are trivial)
-fn filter_wide8_12(
+const fn filter_wide8_12(
   p5: i32, p4: i32, p3: i32, p2: i32, p1: i32, p0: i32, q0: i32, q1: i32,
   q2: i32, q3: i32, q4: i32, q5: i32,
 ) -> [i32; 12] {
@@ -294,7 +294,7 @@ fn filter_wide8_12(
 
 // fourteen taps, 12 outputs
 #[rustfmt::skip]
-fn filter_wide14_12(
+const fn filter_wide14_12(
   p6: i32, p5: i32, p4: i32, p3: i32, p2: i32, p1: i32, p0: i32, q0: i32,
   q1: i32, q2: i32, q3: i32, q4: i32, q5: i32, q6: i32
 ) -> [i32; 12] {
@@ -343,27 +343,27 @@ fn stride_sse<T: Pixel>(a: &[T], b: &[i32], pitch: usize) -> i64 {
   acc as i64
 }
 
-fn _level_to_limit(level: i32, shift: usize) -> i32 {
+const fn _level_to_limit(level: i32, shift: usize) -> i32 {
   level << shift
 }
 
-fn limit_to_level(limit: i32, shift: usize) -> i32 {
+const fn limit_to_level(limit: i32, shift: usize) -> i32 {
   (limit + (1 << shift) - 1) >> shift
 }
 
-fn _level_to_blimit(level: i32, shift: usize) -> i32 {
+const fn _level_to_blimit(level: i32, shift: usize) -> i32 {
   (3 * level + 4) << shift
 }
 
-fn blimit_to_level(blimit: i32, shift: usize) -> i32 {
+const fn blimit_to_level(blimit: i32, shift: usize) -> i32 {
   (((blimit + (1 << shift) - 1) >> shift) - 2) / 3
 }
 
-fn _level_to_thresh(level: i32, shift: usize) -> i32 {
+const fn _level_to_thresh(level: i32, shift: usize) -> i32 {
   level >> 4 << shift
 }
 
-fn thresh_to_level(thresh: i32, shift: usize) -> i32 {
+const fn thresh_to_level(thresh: i32, shift: usize) -> i32 {
   (thresh + (1 << shift) - 1) >> shift << 4
 }
 

@@ -150,7 +150,7 @@ impl InterConfig {
     }
   }
 
-  pub(crate) fn get_show_frame(&self, idx_in_group_output: u64) -> bool {
+  pub(crate) const fn get_show_frame(&self, idx_in_group_output: u64) -> bool {
     idx_in_group_output >= self.pyramid_depth
   }
 
@@ -179,7 +179,7 @@ impl InterConfig {
     }
   }
 
-  fn max_reordering_latency(&self) -> u64 {
+  const fn max_reordering_latency(&self) -> u64 {
     self.group_input_len
   }
 

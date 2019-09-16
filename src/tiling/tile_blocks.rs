@@ -73,22 +73,22 @@ macro_rules! tile_blocks_common {
       }
 
       #[inline(always)]
-      pub fn x(&self) -> usize {
+      pub const fn x(&self) -> usize {
         self.x
       }
 
       #[inline(always)]
-      pub fn y(&self) -> usize {
+      pub const fn y(&self) -> usize {
         self.y
       }
 
       #[inline(always)]
-      pub fn cols(&self) -> usize {
+      pub const fn cols(&self) -> usize {
         self.cols
       }
 
       #[inline(always)]
-      pub fn rows(&self) -> usize {
+      pub const fn rows(&self) -> usize {
         self.rows
       }
 
@@ -144,7 +144,7 @@ tile_blocks_common!(TileBlocksMut, mut);
 
 impl TileBlocksMut<'_> {
   #[inline(always)]
-  pub fn as_const(&self) -> TileBlocks<'_> {
+  pub const fn as_const(&self) -> TileBlocks<'_> {
     TileBlocks {
       data: self.data,
       x: self.x,

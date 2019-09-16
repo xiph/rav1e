@@ -76,22 +76,22 @@ macro_rules! tile_restoration_units_common {
       }
 
       #[inline(always)]
-      pub fn x(&self) -> usize {
+      pub const fn x(&self) -> usize {
         self.x
       }
 
       #[inline(always)]
-      pub fn y(&self) -> usize {
+      pub const fn y(&self) -> usize {
         self.y
       }
 
       #[inline(always)]
-      pub fn cols(&self) -> usize {
+      pub const fn cols(&self) -> usize {
         self.cols
       }
 
       #[inline(always)]
-      pub fn rows(&self) -> usize {
+      pub const fn rows(&self) -> usize {
         self.rows
       }
     }
@@ -119,7 +119,7 @@ tile_restoration_units_common!(TileRestorationUnitsMut, null_mut, mut);
 
 impl TileRestorationUnitsMut<'_> {
   #[inline(always)]
-  pub fn as_const(&self) -> TileRestorationUnits<'_> {
+  pub const fn as_const(&self) -> TileRestorationUnits<'_> {
     TileRestorationUnits {
       data: self.data,
       x: self.x,
@@ -213,7 +213,7 @@ macro_rules! tile_restoration_plane_common {
         }
       }
 
-      pub fn restoration_unit_countable(&self, x: usize, y: usize) -> usize {
+      pub const fn restoration_unit_countable(&self, x: usize, y: usize) -> usize {
         y * self.units.cols + x
       }
 
@@ -269,7 +269,7 @@ impl<'a> TileRestorationPlaneMut<'a> {
   }
 
   #[inline(always)]
-  pub fn as_const(&self) -> TileRestorationPlane<'_> {
+  pub const fn as_const(&self) -> TileRestorationPlane<'_> {
     TileRestorationPlane {
       rp_cfg: self.rp_cfg,
       wiener_ref: self.wiener_ref,
@@ -391,7 +391,7 @@ tile_restoration_state_common!(
 
 impl<'a> TileRestorationStateMut<'a> {
   #[inline(always)]
-  pub fn as_const(&self) -> TileRestorationState {
+  pub const fn as_const(&self) -> TileRestorationState {
     TileRestorationState {
       planes: [
         self.planes[0].as_const(),

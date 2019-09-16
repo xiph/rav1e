@@ -234,7 +234,7 @@ impl Sequence {
     }
   }
 
-  pub fn get_relative_dist(&self, a: u32, b: u32) -> i32 {
+  pub const fn get_relative_dist(&self, a: u32, b: u32) -> i32 {
     let diff = a as i32 - b as i32;
     let m = 1 << self.order_hint_bits_minus_1;
     (diff & (m - 1)) - (diff & m)
@@ -543,7 +543,7 @@ pub struct FrameInvariants<T: Pixel> {
   pub cpu_feature_level: crate::cpu_features::CpuFeatureLevel,
 }
 
-pub(crate) fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
+pub(crate) const fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
   // Derive level within pyramid for a frame with a given coding order position
   // For example, with a pyramid of depth 2, the 2 least significant bits of the
   // position determine the level:

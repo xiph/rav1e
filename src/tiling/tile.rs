@@ -26,7 +26,7 @@ pub struct TileRect {
 
 impl TileRect {
   #[inline(always)]
-  pub fn decimated(&self, xdec: usize, ydec: usize) -> Self {
+  pub const fn decimated(&self, xdec: usize, ydec: usize) -> Self {
     Self {
       x: self.x >> xdec,
       y: self.y >> ydec,
@@ -36,7 +36,9 @@ impl TileRect {
   }
 
   #[inline(always)]
-  pub fn to_frame_plane_offset(&self, tile_po: PlaneOffset) -> PlaneOffset {
+  pub const fn to_frame_plane_offset(
+    &self, tile_po: PlaneOffset,
+  ) -> PlaneOffset {
     PlaneOffset {
       x: self.x as isize + tile_po.x,
       y: self.y as isize + tile_po.y,
