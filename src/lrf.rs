@@ -107,10 +107,13 @@ pub enum RestorationFilter {
   Sgrproj { set: u8, xqd: [i8; 2] },
 }
 
-impl RestorationFilter {
-  pub fn default() -> RestorationFilter {
-    RestorationFilter::None {}
+impl Default for RestorationFilter {
+  fn default() -> RestorationFilter {
+    RestorationFilter::None
   }
+}
+
+impl RestorationFilter {
   pub fn notequal(self, cmp: RestorationFilter) -> bool {
     match self {
       RestorationFilter::None {} => {
@@ -1129,8 +1132,8 @@ pub struct RestorationUnit {
   pub filter: RestorationFilter,
 }
 
-impl RestorationUnit {
-  pub fn default() -> RestorationUnit {
+impl Default for RestorationUnit {
+  fn default() -> RestorationUnit {
     RestorationUnit { filter: RestorationFilter::default() }
   }
 }
