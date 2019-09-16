@@ -313,7 +313,6 @@ impl<T: Pixel> Context<T> {
       }
       self.inner.limit = Some(self.inner.frame_count);
       self.is_flushing = true;
-      self.inner.compute_lookahead_data();
     } else if self.is_flushing {
       return Err(EncoderStatus::EnoughData);
     }
