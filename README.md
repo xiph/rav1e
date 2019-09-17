@@ -58,7 +58,7 @@ cargo cinstall --release
 
 ## Compressing video
 
-Input videos must be in y4m format and have 4:2:0 chroma subsampling.
+Input videos must be in y4m format. The monochrome color format is not supported.
 
 ```sh
 cargo run --release --bin rav1e -- input.y4m -o output.ivf
