@@ -7,6 +7,7 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use bitstream_io::*;
 use err_derive::Error;
 use itertools::Itertools;
 use num_derive::*;
@@ -15,12 +16,12 @@ use crate::api::color::*;
 use crate::api::Rational;
 use crate::api::{Context, ContextInner};
 use crate::cpu_features::CpuFeatureLevel;
-use crate::encoder::Tune;
+use crate::encoder::{Sequence, Tune};
 use crate::partition::BlockSize;
 use crate::tiling::TilingInfo;
 use crate::util::Pixel;
 
-use std::fmt;
+use std::{fmt, io};
 
 // We add 1 to rdo_lookahead_frames in a bunch of places.
 const MAX_RDO_LOOKAHEAD_FRAMES: usize = usize::max_value() - 1;
@@ -181,6 +182,45 @@ impl EncoderConfig {
   /// [`time_base`]: #structfield.time_base
   pub fn frame_rate(&self) -> f64 {
     Rational::from_reciprocal(self.time_base).as_f64()
+  }
+
+  /// Produces a sequence header matching the current encoding context.
+  ///
+  /// Its format is compatible with the AV1 Matroska and ISOBMFF specification.
+  /// Note that the returned header does not include any config OBUs which are
+  /// required for some uses. See [the specification].
+  ///
+  /// [the specification]:
+  /// https://aomediacodec.github.io/av1-isobmff/#av1codecconfigurationbox-section
+  pub fn container_sequence_header(&self) -> Vec<u8> {
+    fn sequence_header_inner(seq: &Sequence) -> io::Result<Vec<u8>> {
+      let mut buf = Vec::new();
+
+      {
+        let mut bw = BitWriter::endian(&mut buf, BigEndian);
+        bw.write_bit(true)?; // marker
+        bw.write(7, 1)?; // version
+        bw.write(3, seq.profile)?;
+        bw.write(5, 31)?; // level
+        bw.write_bit(false)?; // tier
+        bw.write_bit(seq.bit_depth > 8)?; // high_bitdepth
+        bw.write_bit(seq.bit_depth == 12)?; // twelve_bit
+        bw.write_bit(seq.bit_depth == 1)?; // monochrome
+        bw.write_bit(seq.chroma_sampling != ChromaSampling::Cs444)?; // chroma_subsampling_x
+        bw.write_bit(seq.chroma_sampling == ChromaSampling::Cs420)?; // chroma_subsampling_y
+        bw.write(2, 0)?; // sample_position
+        bw.write(3, 0)?; // reserved
+        bw.write_bit(false)?; // initial_presentation_delay_present
+
+        bw.write(4, 0)?; // reserved
+      }
+
+      Ok(buf)
+    }
+
+    let seq = Sequence::new(&self);
+
+    sequence_header_inner(&seq).unwrap()
   }
 }
 

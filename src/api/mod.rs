@@ -22,17 +22,15 @@ pub use color::*;
 pub use config::*;
 pub(crate) use internal::*;
 
-use bitstream_io::*;
 use err_derive::Error;
 use serde_derive::{Deserialize, Serialize};
 
-use crate::encoder::*;
 use crate::frame::*;
 use crate::stats::EncoderStats;
 use crate::util::Pixel;
 
+use std::fmt;
 use std::sync::Arc;
-use std::{fmt, io};
 
 // TODO: use the num crate?
 /// A rational number.
@@ -501,33 +499,6 @@ impl<T: Pixel> Context<T> {
   /// https://aomediacodec.github.io/av1-isobmff/#av1codecconfigurationbox-section
   #[inline]
   pub fn container_sequence_header(&self) -> Vec<u8> {
-    fn sequence_header_inner(seq: &Sequence) -> io::Result<Vec<u8>> {
-      let mut buf = Vec::new();
-
-      {
-        let mut bw = BitWriter::endian(&mut buf, BigEndian);
-        bw.write_bit(true)?; // marker
-        bw.write(7, 1)?; // version
-        bw.write(3, seq.profile)?;
-        bw.write(5, 31)?; // level
-        bw.write_bit(false)?; // tier
-        bw.write_bit(seq.bit_depth > 8)?; // high_bitdepth
-        bw.write_bit(seq.bit_depth == 12)?; // twelve_bit
-        bw.write_bit(seq.bit_depth == 1)?; // monochrome
-        bw.write_bit(seq.chroma_sampling != ChromaSampling::Cs444)?; // chroma_subsampling_x
-        bw.write_bit(seq.chroma_sampling == ChromaSampling::Cs420)?; // chroma_subsampling_y
-        bw.write(2, 0)?; // sample_position
-        bw.write(3, 0)?; // reserved
-        bw.write_bit(false)?; // initial_presentation_delay_present
-
-        bw.write(4, 0)?; // reserved
-      }
-
-      Ok(buf)
-    }
-
-    let seq = Sequence::new(&self.config);
-
-    sequence_header_inner(&seq).unwrap()
+    self.config.container_sequence_header()
   }
 }

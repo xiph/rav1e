@@ -1,5 +1,6 @@
 use super::*;
 
+use crate::encoder::{FrameInvariants, Tune};
 use crate::partition::BlockSize;
 
 use interpolate_name::interpolate_test;
