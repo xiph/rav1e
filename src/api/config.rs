@@ -327,7 +327,7 @@ impl SpeedSettings {
   /// This preset is set this way because 8x8 with reduced TX set is faster but with equivalent
   /// or better quality compared to 16x16 or 32x32 (to which reduced TX set does not apply).
   fn min_block_size_preset(speed: usize) -> BlockSize {
-    let min_block_size = if speed == 0 {
+    let min_block_size = if speed <= 1 {
       BlockSize::BLOCK_4X4
     } else if speed <= 8 {
       BlockSize::BLOCK_8X8
