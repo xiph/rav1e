@@ -41,7 +41,7 @@ use std::sync::Arc;
 ///  selection.
 /// The options stored here are invariant over the whole encode.
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct InterConfig {
+pub struct InterConfig {
   /// Whether frame re-ordering is enabled.
   reorder: bool,
   /// Whether P-frames can use multiple references.
@@ -185,6 +185,14 @@ impl InterConfig {
 
   pub(crate) fn keyframe_lookahead_distance(&self) -> u64 {
     cmp::max(1, self.max_reordering_latency()) + 1
+  }
+
+  pub(crate) fn inter_refs_per_frame(&self) -> usize {
+    if self.multiref {
+      INTER_REFS_PER_FRAME
+    } else {
+      2
+    }
   }
 }
 // the fields pub(super) are accessed only by the tests
@@ -560,7 +568,7 @@ impl<T: Pixel> ContextInner<T> {
     //
     // Compute the motion vectors.
     let mut blocks = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
-
+    let inter_cfg = self.inter_cfg;
     fi.tiling
       .tile_iter_mut(&mut fs, &mut blocks)
       .collect::<Vec<_>>()
@@ -569,7 +577,7 @@ impl<T: Pixel> ContextInner<T> {
         let ts = &mut ctx.ts;
 
         // Compute the quarter-resolution motion vectors.
-        let tile_pmvs = build_coarse_pmvs(fi, ts);
+        let tile_pmvs = build_coarse_pmvs(fi, ts, &inter_cfg);
 
         // Compute the half-resolution motion vectors.
         let mut half_res_pmvs = Vec::with_capacity(ts.sb_height * ts.sb_width);
@@ -1086,7 +1094,8 @@ impl<T: Pixel> ContextInner<T> {
         }
         let mut fs = FrameState::new(fi);
 
-        let sef_data = encode_show_existing_frame(fi, &mut fs);
+        let sef_data =
+          encode_show_existing_frame(fi, &mut fs, &self.inter_cfg);
         let bits = (sef_data.len() * 8) as i64;
         self.packet_data.extend(sef_data);
         self.rc_state.update_state(
@@ -1129,7 +1138,7 @@ impl<T: Pixel> ContextInner<T> {
 
           if self.rc_state.needs_trial_encode(fti) {
             let mut fs = FrameState::new_with_frame(fi, frame.clone());
-            let data = encode_frame(fi, &mut fs);
+            let data = encode_frame(fi, &mut fs, &self.inter_cfg);
             self.rc_state.update_state(
               (data.len() * 8) as i64,
               fti,
@@ -1151,7 +1160,7 @@ impl<T: Pixel> ContextInner<T> {
 
           let fi = self.frame_invariants.get_mut(&cur_output_frameno).unwrap();
           let mut fs = FrameState::new_with_frame(fi, frame.clone());
-          let data = encode_frame(fi, &mut fs);
+          let data = encode_frame(fi, &mut fs, &self.inter_cfg);
           let enc_stats = fs.enc_stats.clone();
           self.maybe_prev_log_base_q = Some(qps.log_base_q);
           // TODO: Add support for dropping frames.
@@ -1190,7 +1199,7 @@ impl<T: Pixel> ContextInner<T> {
             .take_while(|fi| fi.frame_type != FrameType::KEY)
           {
             subsequent_fi.rec_buffer = rec_buffer.clone();
-            subsequent_fi.set_ref_frame_sign_bias();
+            subsequent_fi.set_ref_frame_sign_bias(&self.inter_cfg);
 
             // Stop after the first non-show-existing-frame.
             if !subsequent_fi.show_existing_frame {

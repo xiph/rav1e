@@ -241,7 +241,8 @@ impl Sequence {
   }
 
   pub fn get_skip_mode_allowed<T: Pixel>(
-    &self, fi: &FrameInvariants<T>, reference_select: bool,
+    &self, fi: &FrameInvariants<T>, inter_cfg: &InterConfig,
+    reference_select: bool,
   ) -> bool {
     if fi.intra_only || !reference_select || !self.enable_order_hint {
       return false;
@@ -252,7 +253,7 @@ impl Sequence {
     let mut forward_hint = 0;
     let mut backward_hint = 0;
 
-    for i in 0..INTER_REFS_PER_FRAME {
+    for i in 0..inter_cfg.inter_refs_per_frame() {
       if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[i] as usize] {
         let ref_hint = rec.order_hint;
 
@@ -282,7 +283,7 @@ impl Sequence {
       let mut second_forward_idx: isize = -1;
       let mut second_forward_hint = 0;
 
-      for i in 0..INTER_REFS_PER_FRAME {
+      for i in 0..inter_cfg.inter_refs_per_frame() {
         if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[i] as usize]
         {
           let ref_hint = rec.order_hint;
@@ -820,7 +821,7 @@ impl<T: Pixel> FrameInvariants<T> {
       fi.ref_frames[ref_in_previous_group.to_index()] = { slot_idx as u8 }
     }
 
-    fi.set_ref_frame_sign_bias();
+    fi.set_ref_frame_sign_bias(inter_cfg);
 
     fi.reference_mode = if inter_cfg.multiref && fi.idx_in_group_output != 0 {
       ReferenceMode::SELECT
@@ -832,8 +833,8 @@ impl<T: Pixel> FrameInvariants<T> {
     fi
   }
 
-  pub fn set_ref_frame_sign_bias(&mut self) {
-    for i in 0..INTER_REFS_PER_FRAME {
+  pub fn set_ref_frame_sign_bias(&mut self, inter_cfg: &InterConfig) {
+    for i in 0..inter_cfg.inter_refs_per_frame() {
       self.ref_frame_sign_bias[i] = if !self.sequence.enable_order_hint {
         false
       } else if let Some(ref rec) =
@@ -958,6 +959,7 @@ pub fn write_temporal_delimiter(packet: &mut dyn io::Write) -> io::Result<()> {
 
 fn write_obus<T: Pixel>(
   packet: &mut dyn io::Write, fi: &FrameInvariants<T>, fs: &FrameState<T>,
+  inter_cfg: &InterConfig,
 ) -> io::Result<()> {
   let obu_extension = 0 as u32;
 
@@ -1008,7 +1010,7 @@ fn write_obus<T: Pixel>(
   let mut buf2 = Vec::new();
   {
     let mut bw2 = BitWriter::endian(&mut buf2, BigEndian);
-    bw2.write_frame_header_obu(fi, fs)?;
+    bw2.write_frame_header_obu(fi, fs, inter_cfg)?;
   }
 
   {
@@ -2714,7 +2716,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
 
 #[inline(always)]
 pub(crate) fn build_coarse_pmvs<T: Pixel>(
-  fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>,
+  fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, inter_cfg: &InterConfig,
 ) -> Vec<[Option<MotionVector>; REF_FRAMES]> {
   assert!(!fi.sequence.use_128x128_superblock);
   if ts.mi_width >= 16 && ts.mi_height >= 16 {
@@ -2724,7 +2726,7 @@ pub(crate) fn build_coarse_pmvs<T: Pixel>(
         let sbo = TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
         let bo = sbo.block_offset(0, 0);
         let mut pmvs: [Option<MotionVector>; REF_FRAMES] = [None; REF_FRAMES];
-        for i in 0..INTER_REFS_PER_FRAME {
+        for i in 0..inter_cfg.inter_refs_per_frame() {
           let r = fi.ref_frames[i] as usize;
           if pmvs[r].is_none() {
             pmvs[r] =
@@ -2755,7 +2757,7 @@ fn get_initial_cdfcontext<T: Pixel>(fi: &FrameInvariants<T>) -> CDFContext {
 }
 
 fn encode_tile_group<T: Pixel>(
-  fi: &FrameInvariants<T>, fs: &mut FrameState<T>,
+  fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
 ) -> Vec<u8> {
   let mut blocks = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
   let ti = &fi.tiling;
@@ -2769,7 +2771,7 @@ fn encode_tile_group<T: Pixel>(
     .collect::<Vec<_>>()
     .into_par_iter()
     .map(|(mut ctx, cdf)| {
-      let raw = encode_tile(fi, &mut ctx.ts, cdf, &mut ctx.tb);
+      let raw = encode_tile(fi, &mut ctx.ts, cdf, &mut ctx.tb, inter_cfg);
       (raw, ctx.ts)
     })
     .unzip();
@@ -3164,6 +3166,7 @@ pub struct SBSQueueEntry {
 fn encode_tile<'a, T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   fc: &'a mut CDFContext, blocks: &'a mut TileBlocksMut<'a>,
+  inter_cfg: &InterConfig,
 ) -> Vec<u8> {
   let mut w = WriterEncoder::new();
 
@@ -3174,7 +3177,7 @@ fn encode_tile<'a, T: Pixel>(
   let mut last_lru_rdoed = [-1; 3];
   let mut last_lru_coded = [-1; 3];
 
-  let tile_pmvs = build_coarse_pmvs(fi, ts);
+  let tile_pmvs = build_coarse_pmvs(fi, ts, inter_cfg);
 
   // main loop
   for sby in 0..ts.sb_height {
@@ -3348,12 +3351,12 @@ fn write_tile_group_header(tile_start_and_end_present_flag: bool) -> Vec<u8> {
 //
 // See `av1-spec` Section 6.8.2 and 7.18.
 pub fn encode_show_existing_frame<T: Pixel>(
-  fi: &FrameInvariants<T>, fs: &mut FrameState<T>,
+  fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
 ) -> Vec<u8> {
   debug_assert!(fi.show_existing_frame);
   let mut packet = Vec::new();
 
-  write_obus(&mut packet, fi, fs).unwrap();
+  write_obus(&mut packet, fi, fs, inter_cfg).unwrap();
   let map_idx = fi.frame_to_show_map_idx as usize;
   if let Some(ref rec) = fi.rec_buffer.frames[map_idx] {
     for p in 0..3 {
@@ -3364,7 +3367,7 @@ pub fn encode_show_existing_frame<T: Pixel>(
 }
 
 pub fn encode_frame<T: Pixel>(
-  fi: &FrameInvariants<T>, fs: &mut FrameState<T>,
+  fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
 ) -> Vec<u8> {
   debug_assert!(!fi.show_existing_frame);
   debug_assert!(!fi.invalid);
@@ -3377,9 +3380,9 @@ pub fn encode_frame<T: Pixel>(
 
   segmentation_optimize(fi, fs);
 
-  let tile_group = encode_tile_group(fi, fs);
+  let tile_group = encode_tile_group(fi, fs, inter_cfg);
 
-  write_obus(&mut packet, fi, fs).unwrap();
+  write_obus(&mut packet, fi, fs, inter_cfg).unwrap();
   let mut buf1 = Vec::new();
   {
     let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);

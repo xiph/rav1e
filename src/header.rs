@@ -158,6 +158,7 @@ pub trait UncompressedHeader {
   ) -> io::Result<()>;
   fn write_frame_header_obu<T: Pixel>(
     &mut self, fi: &FrameInvariants<T>, fs: &FrameState<T>,
+    inter_cfg: &InterConfig,
   ) -> io::Result<()>;
   fn write_sequence_header<T: Pixel>(
     &mut self, fi: &FrameInvariants<T>,
@@ -434,6 +435,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
   #[allow(unused)]
   fn write_frame_header_obu<T: Pixel>(
     &mut self, fi: &FrameInvariants<T>, fs: &FrameState<T>,
+    inter_cfg: &InterConfig,
   ) -> io::Result<()> {
     if fi.sequence.reduced_still_picture_hdr {
       assert!(!fi.show_existing_frame);
@@ -716,7 +718,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     }
 
     let skip_mode_allowed =
-      fi.sequence.get_skip_mode_allowed(fi, reference_select);
+      fi.sequence.get_skip_mode_allowed(fi, inter_cfg, reference_select);
     if skip_mode_allowed {
       self.write_bit(false)?; // skip_mode_present
     }
