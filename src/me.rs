@@ -61,7 +61,7 @@ impl IndexMut<usize> for FrameMotionVectors {
   }
 }
 
-fn get_mv_range(
+const fn get_mv_range(
   w_in_b: usize, h_in_b: usize, bo: PlaneBlockOffset, blk_w: usize,
   blk_h: usize,
 ) -> (isize, isize, isize, isize) {

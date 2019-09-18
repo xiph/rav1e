@@ -404,7 +404,7 @@ struct RCFrameMetrics {
 }
 
 impl RCFrameMetrics {
-  fn new() -> RCFrameMetrics {
+  const fn new() -> RCFrameMetrics {
     RCFrameMetrics { log_scale_q24: 0, fti: 0, show_frame: false }
   }
 }

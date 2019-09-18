@@ -27,7 +27,7 @@ pub struct Rect {
 
 impl Rect {
   #[inline(always)]
-  pub fn decimated(&self, xdec: usize, ydec: usize) -> Self {
+  pub const fn decimated(&self, xdec: usize, ydec: usize) -> Self {
     Self {
       x: self.x >> xdec,
       y: self.y >> ydec,

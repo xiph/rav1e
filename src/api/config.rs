@@ -343,32 +343,32 @@ impl SpeedSettings {
   /// but if someone is setting low_latency to true manually,
   /// multiref has a large speed penalty with low quality gain.
   /// Because low_latency can be set manually, this setting is conservative.
-  fn multiref_preset(speed: usize) -> bool {
+  const fn multiref_preset(speed: usize) -> bool {
     speed <= 1
   }
 
-  fn fast_deblock_preset(speed: usize) -> bool {
+  const fn fast_deblock_preset(speed: usize) -> bool {
     speed >= 8
   }
 
-  fn reduced_tx_set_preset(speed: usize) -> bool {
+  const fn reduced_tx_set_preset(speed: usize) -> bool {
     speed >= 5
   }
 
   /// TX domain distortion is always faster, with no significant quality change
-  fn tx_domain_distortion_preset(_speed: usize) -> bool {
+  const fn tx_domain_distortion_preset(_speed: usize) -> bool {
     true
   }
 
-  fn tx_domain_rate_preset(_speed: usize) -> bool {
+  const fn tx_domain_rate_preset(_speed: usize) -> bool {
     false
   }
 
-  fn encode_bottomup_preset(speed: usize) -> bool {
+  const fn encode_bottomup_preset(speed: usize) -> bool {
     speed == 0
   }
 
-  fn rdo_tx_decision_preset(speed: usize) -> bool {
+  const fn rdo_tx_decision_preset(speed: usize) -> bool {
     speed <= 3
   }
 
@@ -382,11 +382,11 @@ impl SpeedSettings {
     }
   }
 
-  fn include_near_mvs_preset(speed: usize) -> bool {
+  const fn include_near_mvs_preset(speed: usize) -> bool {
     speed <= 2
   }
 
-  fn no_scene_detection_preset(speed: usize) -> bool {
+  const fn no_scene_detection_preset(speed: usize) -> bool {
     speed == 10
   }
 
@@ -394,19 +394,19 @@ impl SpeedSettings {
   /// in addition to being faster.
   // There are a few outliers, such as the Wikipedia test clip.
   // TODO: Revisit this setting if full search quality improves in the future.
-  fn diamond_me_preset(_speed: usize) -> bool {
+  const fn diamond_me_preset(_speed: usize) -> bool {
     true
   }
 
-  fn cdef_preset(_speed: usize) -> bool {
+  const fn cdef_preset(_speed: usize) -> bool {
     true
   }
 
-  fn quantizer_rdo_preset(speed: usize) -> bool {
+  const fn quantizer_rdo_preset(speed: usize) -> bool {
     speed <= 2
   }
 
-  fn use_satd_subpel(speed: usize) -> bool {
+  const fn use_satd_subpel(speed: usize) -> bool {
     speed <= 9
   }
 }

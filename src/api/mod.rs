@@ -47,12 +47,12 @@ pub struct Rational {
 
 impl Rational {
   /// Creates a rational number from the given numerator and denominator.
-  pub fn new(num: u64, den: u64) -> Self {
+  pub const fn new(num: u64, den: u64) -> Self {
     Rational { num, den }
   }
 
   /// Returns a rational number that is the reciprocal of the given one.
-  pub fn from_reciprocal(reciprocal: Self) -> Self {
+  pub const fn from_reciprocal(reciprocal: Self) -> Self {
     Rational { num: reciprocal.den, den: reciprocal.num }
   }
 

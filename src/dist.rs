@@ -352,7 +352,7 @@ mod native {
   }
 
   #[inline(always)]
-  fn butterfly(a: i32, b: i32) -> (i32, i32) {
+  const fn butterfly(a: i32, b: i32) -> (i32, i32) {
     ((a + b), (a - b))
   }
 

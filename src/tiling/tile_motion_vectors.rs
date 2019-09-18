@@ -71,22 +71,22 @@ macro_rules! tile_motion_vectors_common {
       }
 
       #[inline(always)]
-      pub fn x(&self) -> usize {
+      pub const fn x(&self) -> usize {
         self.x
       }
 
       #[inline(always)]
-      pub fn y(&self) -> usize {
+      pub const fn y(&self) -> usize {
         self.y
       }
 
       #[inline(always)]
-      pub fn cols(&self) -> usize {
+      pub const fn cols(&self) -> usize {
         self.cols
       }
 
       #[inline(always)]
-      pub fn rows(&self) -> usize {
+      pub const fn rows(&self) -> usize {
         self.rows
       }
     }
@@ -114,7 +114,7 @@ tile_motion_vectors_common!(TileMotionVectorsMut, mut);
 
 impl TileMotionVectorsMut<'_> {
   #[inline(always)]
-  pub fn as_const(&self) -> TileMotionVectors<'_> {
+  pub const fn as_const(&self) -> TileMotionVectors<'_> {
     TileMotionVectors {
       data: self.data,
       x: self.x,
