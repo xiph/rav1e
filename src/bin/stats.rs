@@ -119,13 +119,13 @@ impl ProgressInfo {
   }
 
   // Estimates the remaining encoding time in seconds, if the number of frames is known
-  pub fn estimated_time(&self) -> f64 {
+  pub fn estimated_time(&self) -> u64 {
     self
       .total_frames
       .map(|frames| {
         (frames - self.frames_encoded()) as f64 / self.encoding_fps()
       })
-      .unwrap_or_default()
+      .unwrap_or_default() as u64
   }
 
   // Number of frames of given type which appear in the video
@@ -585,13 +585,13 @@ impl fmt::Display for ProgressInfo {
     if let Some(total_frames) = self.total_frames {
       write!(
                 f,
-                "encoded {}/{} frames, {:.3} fps, {:.2} Kb/s, est. size: {:.2} MB, est. time: {:.0} s",
+                "encoded {}/{} frames, {:.3} fps, {:.2} Kb/s, est. size: {:.2} MB, est. time: {}",
                 self.frames_encoded(),
                 total_frames,
                 self.encoding_fps(),
                 self.bitrate() as f64 / 1000f64,
                 self.estimated_size() as f64 / (1024 * 1024) as f64,
-                self.estimated_time()
+                secs_to_human_time(self.estimated_time())
             )
     } else {
       write!(
@@ -602,5 +602,19 @@ impl fmt::Display for ProgressInfo {
         self.bitrate() as f64 / 1000f64
       )
     }
+  }
+}
+
+fn secs_to_human_time(mut secs: u64) -> String {
+  let mut mins = secs / 60;
+  secs %= 60;
+  let hours = mins / 60;
+  mins %= 60;
+  if hours > 0 {
+    format!("{}h {}m {}s", hours, mins, secs)
+  } else if mins > 0 {
+    format!("{}m {}s", mins, secs)
+  } else {
+    format!("{}s", secs)
   }
 }
