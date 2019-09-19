@@ -187,11 +187,11 @@ impl InterConfig {
     cmp::max(1, self.max_reordering_latency()) + 1
   }
 
-  pub(crate) fn inter_refs_per_frame(&self) -> usize {
+  pub(crate) fn ref_frames_to_use(&self) -> usize {
     if self.multiref {
       INTER_REFS_PER_FRAME
     } else {
-      2
+      1
     }
   }
 }
@@ -1199,7 +1199,7 @@ impl<T: Pixel> ContextInner<T> {
             .take_while(|fi| fi.frame_type != FrameType::KEY)
           {
             subsequent_fi.rec_buffer = rec_buffer.clone();
-            subsequent_fi.set_ref_frame_sign_bias(&self.inter_cfg);
+            subsequent_fi.set_ref_frame_sign_bias();
 
             // Stop after the first non-show-existing-frame.
             if !subsequent_fi.show_existing_frame {

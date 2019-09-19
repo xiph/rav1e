@@ -253,7 +253,7 @@ impl Sequence {
     let mut forward_hint = 0;
     let mut backward_hint = 0;
 
-    for i in 0..inter_cfg.inter_refs_per_frame() {
+    for i in 0..inter_cfg.ref_frames_to_use() {
       if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[i] as usize] {
         let ref_hint = rec.order_hint;
 
@@ -283,7 +283,7 @@ impl Sequence {
       let mut second_forward_idx: isize = -1;
       let mut second_forward_hint = 0;
 
-      for i in 0..inter_cfg.inter_refs_per_frame() {
+      for i in 0..inter_cfg.ref_frames_to_use() {
         if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[i] as usize]
         {
           let ref_hint = rec.order_hint;
@@ -821,7 +821,7 @@ impl<T: Pixel> FrameInvariants<T> {
       fi.ref_frames[ref_in_previous_group.to_index()] = { slot_idx as u8 }
     }
 
-    fi.set_ref_frame_sign_bias(inter_cfg);
+    fi.set_ref_frame_sign_bias();
 
     fi.reference_mode = if inter_cfg.multiref && fi.idx_in_group_output != 0 {
       ReferenceMode::SELECT
@@ -833,8 +833,8 @@ impl<T: Pixel> FrameInvariants<T> {
     fi
   }
 
-  pub fn set_ref_frame_sign_bias(&mut self, inter_cfg: &InterConfig) {
-    for i in 0..inter_cfg.inter_refs_per_frame() {
+  pub fn set_ref_frame_sign_bias(&mut self) {
+    for i in 0..INTER_REFS_PER_FRAME {
       self.ref_frame_sign_bias[i] = if !self.sequence.enable_order_hint {
         false
       } else if let Some(ref rec) =
@@ -2116,6 +2116,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
   bsize: BlockSize, tile_bo: TileBlockOffset,
   pmvs: &mut [[Option<MotionVector>; REF_FRAMES]; 5], ref_rd_cost: f64,
+  inter_cfg: &InterConfig,
 ) -> (RDOOutput) {
   let rdo_type = RDOType::PixelDistRealRate;
   let mut rd_cost = std::f64::MAX;
@@ -2174,7 +2175,8 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
     };
     let spmvs = &mut pmvs[pmv_idx];
 
-    let mode_decision = rdo_mode_decision(fi, ts, cw, bsize, tile_bo, spmvs);
+    let mode_decision =
+      rdo_mode_decision(fi, ts, cw, bsize, tile_bo, spmvs, inter_cfg);
 
     if !mode_decision.pred_mode_luma.is_intra() {
       // Fill the saved motion structure
@@ -2291,6 +2293,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
           offset,
           pmvs, //&best_decision.mvs[0]
           best_rd,
+          inter_cfg,
         );
         let cost = child_rdo_output.rd_cost;
         assert!(cost >= 0.0);
@@ -2395,7 +2398,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
   bsize: BlockSize, tile_bo: TileBlockOffset,
   block_output: &Option<RDOOutput>,
-  pmvs: &mut [[Option<MotionVector>; REF_FRAMES]; 5],
+  pmvs: &mut [[Option<MotionVector>; REF_FRAMES]; 5], inter_cfg: &InterConfig,
 ) {
   if tile_bo.0.x >= cw.bc.blocks.cols() || tile_bo.0.y >= cw.bc.blocks.rows() {
     return;
@@ -2472,6 +2475,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       pmvs,
       &partition_types,
       rdo_type,
+      inter_cfg,
     );
     partition = rdo_output.part_type;
   } else {
@@ -2505,7 +2509,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         let spmvs = &mut pmvs[pmv_idx];
 
         // Make a prediction mode decision for blocks encoded with no rdo_partition_decision call (e.g. edges)
-        rdo_mode_decision(fi, ts, cw, bsize, tile_bo, spmvs)
+        rdo_mode_decision(fi, ts, cw, bsize, tile_bo, spmvs, inter_cfg)
       };
 
       let mut mode_luma = part_decision.pred_mode_luma;
@@ -2665,6 +2669,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
               part_modes: vec![mode],
             }),
             pmvs,
+            inter_cfg,
           );
         }
       } else {
@@ -2698,6 +2703,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
             offset,
             &None,
             pmvs,
+            inter_cfg,
           );
         });
       }
@@ -2726,7 +2732,7 @@ pub(crate) fn build_coarse_pmvs<T: Pixel>(
         let sbo = TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
         let bo = sbo.block_offset(0, 0);
         let mut pmvs: [Option<MotionVector>; REF_FRAMES] = [None; REF_FRAMES];
-        for i in 0..inter_cfg.inter_refs_per_frame() {
+        for i in 0..inter_cfg.ref_frames_to_use() {
           let r = fi.ref_frames[i] as usize;
           if pmvs[r].is_none() {
             pmvs[r] =
@@ -3212,6 +3218,7 @@ fn encode_tile<'a, T: Pixel>(
           tile_bo,
           &mut pmvs,
           std::f64::MAX,
+          inter_cfg,
         );
       } else {
         encode_partition_topdown(
@@ -3224,6 +3231,7 @@ fn encode_tile<'a, T: Pixel>(
           tile_bo,
           &None,
           &mut pmvs,
+          inter_cfg,
         );
       }
 
