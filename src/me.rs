@@ -178,16 +178,15 @@ pub trait MotionEstimation {
     fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>,
     rec: &ReferenceFrame<T>, tile_bo: TileBlockOffset, lambda: u32,
     cmvs: ArrayVec<[MotionVector; 7]>, pmv: [MotionVector; 2], mvx_min: isize,
-    mvx_max: isize, mvy_min: isize, mvy_max: isize, blk_w: usize,
-    blk_h: usize, best_mv: &mut MotionVector, lowest_cost: &mut u64,
-    ref_frame: RefType,
+    mvx_max: isize, mvy_min: isize, mvy_max: isize, bsize: BlockSize,
+    best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: RefType,
   );
 
   fn sub_pixel_me<T: Pixel>(
     fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>,
     rec: &ReferenceFrame<T>, tile_bo: TileBlockOffset, lambda: u32,
     pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize, mvy_min: isize,
-    mvy_max: isize, blk_w: usize, blk_h: usize, use_satd: bool,
+    mvy_max: isize, bsize: BlockSize, use_satd: bool,
     best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: RefType,
   );
 
@@ -224,8 +223,7 @@ pub trait MotionEstimation {
           mvx_max,
           mvy_min,
           mvy_max,
-          blk_w,
-          blk_h,
+          bsize,
           &mut best_mv,
           &mut lowest_cost,
           ref_frame,
@@ -247,8 +245,7 @@ pub trait MotionEstimation {
             mvx_max,
             mvy_min,
             mvy_max,
-            blk_w,
-            blk_h,
+            bsize,
             best_mv,
             &mut tmp_plane_opt,
             ref_frame,
@@ -266,8 +263,7 @@ pub trait MotionEstimation {
           mvx_max,
           mvy_min,
           mvy_max,
-          blk_w,
-          blk_h,
+          bsize,
           use_satd,
           &mut best_mv,
           &mut lowest_cost,
@@ -317,8 +313,7 @@ pub trait MotionEstimation {
         mvx_max,
         mvy_min,
         mvy_max,
-        blk_w,
-        blk_h,
+        bsize,
         &mut best_mv,
         &mut lowest_cost,
         ref_frame,
@@ -335,8 +330,8 @@ pub trait MotionEstimation {
     pmvs: &[Option<MotionVector>; 3], tile_bo_adj: TileBlockOffset,
     rec: &ReferenceFrame<T>, global_mv: [MotionVector; 2], lambda: u32,
     mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
-    blk_w: usize, blk_h: usize, best_mv: &mut MotionVector,
-    lowest_cost: &mut u64, ref_frame: RefType,
+    bsize: BlockSize, best_mv: &mut MotionVector, lowest_cost: &mut u64,
+    ref_frame: RefType,
   );
 
   fn estimate_motion<T: Pixel>(
@@ -377,8 +372,7 @@ pub trait MotionEstimation {
         mvx_max,
         mvy_min,
         mvy_max,
-        blk_w,
-        blk_h,
+        bsize,
         &mut best_mv,
         &mut lowest_cost,
         ref_frame,
@@ -399,9 +393,8 @@ impl MotionEstimation for DiamondSearch {
     fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>,
     rec: &ReferenceFrame<T>, tile_bo: TileBlockOffset, lambda: u32,
     cmvs: ArrayVec<[MotionVector; 7]>, pmv: [MotionVector; 2], mvx_min: isize,
-    mvx_max: isize, mvy_min: isize, mvy_max: isize, blk_w: usize,
-    blk_h: usize, best_mv: &mut MotionVector, lowest_cost: &mut u64,
-    ref_frame: RefType,
+    mvx_max: isize, mvy_min: isize, mvy_max: isize, bsize: BlockSize,
+    best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: RefType,
   ) {
     let tile_mvs = &ts.mvs[ref_frame.to_index()].as_const();
     let frame_ref = fi.rec_buffer.frames[fi.ref_frames[0] as usize]
@@ -429,8 +422,7 @@ impl MotionEstimation for DiamondSearch {
       mvx_max,
       mvy_min,
       mvy_max,
-      blk_w,
-      blk_h,
+      bsize,
       false,
       best_mv,
       lowest_cost,
@@ -443,7 +435,7 @@ impl MotionEstimation for DiamondSearch {
     fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>,
     rec: &ReferenceFrame<T>, tile_bo: TileBlockOffset, lambda: u32,
     pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize, mvy_min: isize,
-    mvy_max: isize, blk_w: usize, blk_h: usize, use_satd: bool,
+    mvy_max: isize, bsize: BlockSize, use_satd: bool,
     best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: RefType,
   ) {
     let predictors = vec![*best_mv];
@@ -461,8 +453,7 @@ impl MotionEstimation for DiamondSearch {
       mvx_max,
       mvy_min,
       mvy_max,
-      blk_w,
-      blk_h,
+      bsize,
       use_satd,
       best_mv,
       lowest_cost,
@@ -476,8 +467,8 @@ impl MotionEstimation for DiamondSearch {
     pmvs: &[Option<MotionVector>; 3], tile_bo_adj: TileBlockOffset,
     rec: &ReferenceFrame<T>, global_mv: [MotionVector; 2], lambda: u32,
     mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
-    blk_w: usize, blk_h: usize, best_mv: &mut MotionVector,
-    lowest_cost: &mut u64, ref_frame: RefType,
+    bsize: BlockSize, best_mv: &mut MotionVector, lowest_cost: &mut u64,
+    ref_frame: RefType,
   ) {
     let frame_bo_adj = ts.to_frame_block_offset(tile_bo_adj);
     let frame_po = PlaneOffset {
@@ -516,8 +507,10 @@ impl MotionEstimation for DiamondSearch {
       mvx_max >> 1,
       mvy_min >> 1,
       mvy_max >> 1,
-      blk_w >> 1,
-      blk_h >> 1,
+      BlockSize::from_width_and_height(
+        bsize.width() >> 1,
+        bsize.height() >> 1,
+      ),
       false,
       best_mv,
       lowest_cost,
@@ -532,9 +525,8 @@ impl MotionEstimation for FullSearch {
     fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>,
     rec: &ReferenceFrame<T>, tile_bo: TileBlockOffset, lambda: u32,
     cmvs: ArrayVec<[MotionVector; 7]>, pmv: [MotionVector; 2], mvx_min: isize,
-    mvx_max: isize, mvy_min: isize, mvy_max: isize, blk_w: usize,
-    blk_h: usize, best_mv: &mut MotionVector, lowest_cost: &mut u64,
-    _ref_frame: RefType,
+    mvx_max: isize, mvy_min: isize, mvy_max: isize, bsize: BlockSize,
+    best_mv: &mut MotionVector, lowest_cost: &mut u64, _ref_frame: RefType,
   ) {
     let frame_bo = ts.to_frame_block_offset(tile_bo);
     let frame_po = frame_bo.to_luma_plane_offset();
@@ -554,19 +546,18 @@ impl MotionEstimation for FullSearch {
         + ((range + (cmv.row / 8) as isize).max(mvy_min / 8).min(mvy_max / 8));
 
       full_search(
+        fi,
         x_lo,
         x_hi,
         y_lo,
         y_hi,
-        blk_h,
-        blk_w,
+        bsize,
         &ts.input.planes[0],
         &rec.frame.planes[0],
         best_mv,
         lowest_cost,
         frame_po,
         2,
-        fi.sequence.bit_depth,
         lambda,
         pmv,
         fi.allow_high_precision_mv,
@@ -578,7 +569,7 @@ impl MotionEstimation for FullSearch {
     fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>,
     _rec: &ReferenceFrame<T>, tile_bo: TileBlockOffset, lambda: u32,
     pmv: [MotionVector; 2], mvx_min: isize, mvx_max: isize, mvy_min: isize,
-    mvy_max: isize, blk_w: usize, blk_h: usize, use_satd: bool,
+    mvy_max: isize, bsize: BlockSize, use_satd: bool,
     best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: RefType,
   ) {
     let frame_bo = ts.to_frame_block_offset(tile_bo);
@@ -593,8 +584,7 @@ impl MotionEstimation for FullSearch {
       mvx_max,
       mvy_min,
       mvy_max,
-      blk_w,
-      blk_h,
+      bsize,
       use_satd,
       best_mv,
       lowest_cost,
@@ -606,8 +596,8 @@ impl MotionEstimation for FullSearch {
     pmvs: &[Option<MotionVector>; 3], tile_bo_adj: TileBlockOffset,
     rec: &ReferenceFrame<T>, _global_mv: [MotionVector; 2], lambda: u32,
     mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
-    blk_w: usize, blk_h: usize, best_mv: &mut MotionVector,
-    lowest_cost: &mut u64, _ref_frame: RefType,
+    bsize: BlockSize, best_mv: &mut MotionVector, lowest_cost: &mut u64,
+    _ref_frame: RefType,
   ) {
     let frame_bo_adj = ts.to_frame_block_offset(tile_bo_adj);
     let frame_po = PlaneOffset {
@@ -638,19 +628,21 @@ impl MotionEstimation for FullSearch {
             .min(mvy_max / 8))
             >> 1);
         full_search(
+          fi,
           x_lo,
           x_hi,
           y_lo,
           y_hi,
-          blk_h >> 1,
-          blk_w >> 1,
+          BlockSize::from_width_and_height(
+            bsize.width() >> 1,
+            bsize.height() >> 1,
+          ),
           &ts.input_hres,
           &rec.input_hres,
           best_mv,
           lowest_cost,
           frame_po,
           1,
-          fi.sequence.bit_depth,
           lambda,
           [MotionVector::default(); 2],
           fi.allow_high_precision_mv,
@@ -664,7 +656,7 @@ fn get_best_predictor<T: Pixel>(
   fi: &FrameInvariants<T>, po: PlaneOffset, p_org: &Plane<T>,
   p_ref: &Plane<T>, predictors: &[MotionVector], bit_depth: usize,
   pmv: [MotionVector; 2], lambda: u32, use_satd: bool, mvx_min: isize,
-  mvx_max: isize, mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize,
+  mvx_max: isize, mvy_min: isize, mvy_max: isize, bsize: BlockSize,
   center_mv: &mut MotionVector, center_mv_cost: &mut u64,
   tmp_plane_opt: &mut Option<Plane<T>>, ref_frame: RefType,
 ) {
@@ -685,8 +677,7 @@ fn get_best_predictor<T: Pixel>(
       mvx_max,
       mvy_min,
       mvy_max,
-      blk_w,
-      blk_h,
+      bsize,
       init_mv,
       tmp_plane_opt,
       ref_frame,
@@ -703,7 +694,7 @@ fn diamond_me_search<T: Pixel>(
   fi: &FrameInvariants<T>, po: PlaneOffset, p_org: &Plane<T>,
   p_ref: &Plane<T>, predictors: &[MotionVector], bit_depth: usize,
   pmv: [MotionVector; 2], lambda: u32, mvx_min: isize, mvx_max: isize,
-  mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize, use_satd: bool,
+  mvy_min: isize, mvy_max: isize, bsize: BlockSize, use_satd: bool,
   center_mv: &mut MotionVector, center_mv_cost: &mut u64, subpixel: bool,
   ref_frame: RefType,
 ) {
@@ -714,7 +705,7 @@ fn diamond_me_search<T: Pixel>(
       (
         4i16,
         if fi.allow_high_precision_mv { 1i16 } else { 2i16 },
-        Some(Plane::new(blk_w, blk_h, 0, 0, 0, 0)),
+        Some(Plane::new(bsize.width(), bsize.height(), 0, 0, 0, 0)),
       )
     } else {
       // Full pixel motion estimation
@@ -736,8 +727,7 @@ fn diamond_me_search<T: Pixel>(
     mvx_max,
     mvy_min,
     mvy_max,
-    blk_w,
-    blk_h,
+    bsize,
     center_mv,
     center_mv_cost,
     &mut tmp_plane_opt,
@@ -767,8 +757,7 @@ fn diamond_me_search<T: Pixel>(
         mvx_max,
         mvy_min,
         mvy_max,
-        blk_w,
-        blk_h,
+        bsize,
         cand_mv,
         &mut tmp_plane_opt,
         ref_frame,
@@ -799,7 +788,7 @@ fn get_mv_rd_cost<T: Pixel>(
   fi: &FrameInvariants<T>, po: PlaneOffset, p_org: &Plane<T>,
   p_ref: &Plane<T>, bit_depth: usize, pmv: [MotionVector; 2], lambda: u32,
   use_satd: bool, mvx_min: isize, mvx_max: isize, mvy_min: isize,
-  mvy_max: isize, blk_w: usize, blk_h: usize, cand_mv: MotionVector,
+  mvy_max: isize, bsize: BlockSize, cand_mv: MotionVector,
   tmp_plane_opt: &mut Option<Plane<T>>, ref_frame: RefType,
 ) -> u64 {
   if (cand_mv.col as isize) < mvx_min || (cand_mv.col as isize) > mvx_max {
@@ -825,14 +814,14 @@ fn get_mv_rd_cost<T: Pixel>(
       0,
       po,
       &mut tmp_plane.as_region_mut(),
-      blk_w,
-      blk_h,
+      bsize.width(),
+      bsize.height(),
       [ref_frame, NONE_FRAME],
       [cand_mv, MotionVector { row: 0, col: 0 }],
     );
     let plane_ref = tmp_plane.as_region();
     compute_mv_rd_cost(
-      fi, pmv, lambda, use_satd, bit_depth, blk_w, blk_h, cand_mv, &plane_org,
+      fi, pmv, lambda, use_satd, bit_depth, bsize, cand_mv, &plane_org,
       &plane_ref,
     )
   } else {
@@ -842,7 +831,7 @@ fn get_mv_rd_cost<T: Pixel>(
       y: po.y + (cand_mv.row / 8) as isize,
     });
     compute_mv_rd_cost(
-      fi, pmv, lambda, use_satd, bit_depth, blk_w, blk_h, cand_mv, &plane_org,
+      fi, pmv, lambda, use_satd, bit_depth, bsize, cand_mv, &plane_org,
       &plane_ref,
     )
   }
@@ -850,14 +839,13 @@ fn get_mv_rd_cost<T: Pixel>(
 
 fn compute_mv_rd_cost<T: Pixel>(
   fi: &FrameInvariants<T>, pmv: [MotionVector; 2], lambda: u32,
-  use_satd: bool, bit_depth: usize, blk_w: usize, blk_h: usize,
-  cand_mv: MotionVector, plane_org: &PlaneRegion<'_, T>,
-  plane_ref: &PlaneRegion<'_, T>,
+  use_satd: bool, bit_depth: usize, bsize: BlockSize, cand_mv: MotionVector,
+  plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>,
 ) -> u64 {
   let sad = if use_satd {
-    get_satd(&plane_org, &plane_ref, blk_w, blk_h, bit_depth)
+    get_satd(&plane_org, &plane_ref, bsize, bit_depth, fi.cpu_feature_level)
   } else {
-    get_sad(&plane_org, &plane_ref, blk_w, blk_h, bit_depth)
+    get_sad(&plane_org, &plane_ref, bsize, bit_depth, fi.cpu_feature_level)
   };
 
   let rate1 = get_mv_rate(cand_mv, pmv[0], fi.allow_high_precision_mv);
@@ -870,10 +858,12 @@ fn compute_mv_rd_cost<T: Pixel>(
 fn telescopic_subpel_search<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, po: PlaneOffset,
   lambda: u32, ref_frame: RefType, pmv: [MotionVector; 2], mvx_min: isize,
-  mvx_max: isize, mvy_min: isize, mvy_max: isize, blk_w: usize, blk_h: usize,
+  mvx_max: isize, mvy_min: isize, mvy_max: isize, bsize: BlockSize,
   use_satd: bool, best_mv: &mut MotionVector, lowest_cost: &mut u64,
 ) {
   let mode = PredictionMode::NEWMV;
+  let blk_w = bsize.width();
+  let blk_h = bsize.height();
 
   let mut steps = vec![8, 4, 2];
   if fi.allow_high_precision_mv {
@@ -935,8 +925,7 @@ fn telescopic_subpel_search<T: Pixel>(
           lambda,
           use_satd,
           fi.sequence.bit_depth,
-          blk_w,
-          blk_h,
+          bsize,
           cand_mv,
           &plane_org,
           &plane_ref,
@@ -952,12 +941,15 @@ fn telescopic_subpel_search<T: Pixel>(
 }
 
 fn full_search<T: Pixel>(
-  x_lo: isize, x_hi: isize, y_lo: isize, y_hi: isize, blk_h: usize,
-  blk_w: usize, p_org: &Plane<T>, p_ref: &Plane<T>,
+  fi: &FrameInvariants<T>, x_lo: isize, x_hi: isize, y_lo: isize, y_hi: isize,
+  bsize: BlockSize, p_org: &Plane<T>, p_ref: &Plane<T>,
   best_mv: &mut MotionVector, lowest_cost: &mut u64, po: PlaneOffset,
-  step: usize, bit_depth: usize, lambda: u32, pmv: [MotionVector; 2],
+  step: usize, lambda: u32, pmv: [MotionVector; 2],
   allow_high_precision_mv: bool,
 ) {
+  let bit_depth = fi.sequence.bit_depth;
+  let blk_w = bsize.width();
+  let blk_h = bsize.height();
   let plane_org = p_org.region(Area::StartingAt { x: po.x, y: po.y });
   let search_region = p_ref.region(Area::Rect {
     x: x_lo,
@@ -969,7 +961,13 @@ fn full_search<T: Pixel>(
   // Select rectangular regions within search region with vert+horz windows
   for vert_window in search_region.vert_windows(blk_h).step_by(step) {
     for ref_window in vert_window.horz_windows(blk_w).step_by(step) {
-      let sad = get_sad(&plane_org, &ref_window, blk_w, blk_h, bit_depth);
+      let sad = get_sad(
+        &plane_org,
+        &ref_window,
+        bsize,
+        bit_depth,
+        fi.cpu_feature_level,
+      );
 
       let &Rect { x, y, .. } = ref_window.rect();
 
@@ -1053,19 +1051,18 @@ pub fn estimate_motion_ss4<T: Pixel>(
     let lambda = (fi.me_lambda * 256.0 / 16.0 * 0.125) as u32;
 
     full_search(
+      fi,
       x_lo,
       x_hi,
       y_lo,
       y_hi,
-      blk_h >> 2,
-      blk_w >> 2,
+      BlockSize::from_width_and_height(blk_w >> 2, blk_h >> 2),
       &ts.input_qres,
       &rec.input_qres,
       &mut best_mv,
       &mut lowest_cost,
       po,
       1,
-      fi.sequence.bit_depth,
       lambda,
       [MotionVector::default(); 2],
       fi.allow_high_precision_mv,

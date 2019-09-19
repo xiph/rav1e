@@ -661,6 +661,11 @@ impl<T: Pixel> ContextInner<T> {
 
     let mut plane_after_prediction = frame.planes[0].clone();
 
+    let bsize = BlockSize::from_width_and_height(
+      IMPORTANCE_BLOCK_SIZE,
+      IMPORTANCE_BLOCK_SIZE,
+    );
+
     for y in 0..fi.h_in_imp_b {
       for x in 0..fi.w_in_imp_b {
         let plane_org = frame.planes[0].region(Area::Rect {
@@ -720,9 +725,9 @@ impl<T: Pixel> ContextInner<T> {
         let intra_cost = get_satd(
           &plane_org,
           &plane_after_prediction_region,
-          IMPORTANCE_BLOCK_SIZE,
-          IMPORTANCE_BLOCK_SIZE,
+          bsize,
           self.config.bit_depth,
+          fi.cpu_feature_level,
         );
 
         fi.lookahead_intra_costs[y * fi.w_in_imp_b + x] = intra_cost;
@@ -818,6 +823,11 @@ impl<T: Pixel> ContextInner<T> {
     const BLOCK_AREA_IN_MV_UNITS: i64 =
       BLOCK_SIZE_IN_MV_UNITS * BLOCK_SIZE_IN_MV_UNITS;
 
+    let bsize = BlockSize::from_width_and_height(
+      IMPORTANCE_BLOCK_SIZE,
+      IMPORTANCE_BLOCK_SIZE,
+    );
+
     for &output_frameno in output_framenos.iter().skip(1).rev() {
       // Remove fi from the map temporarily and put it back in in the end of
       // the iteration. This is required because we need to mutably borrow
@@ -886,9 +896,9 @@ impl<T: Pixel> ContextInner<T> {
             let inter_cost = get_satd(
               &plane_org,
               &plane_ref,
-              IMPORTANCE_BLOCK_SIZE,
-              IMPORTANCE_BLOCK_SIZE,
+              bsize,
               self.config.bit_depth,
+              fi.cpu_feature_level,
             ) as f32;
 
             let intra_cost =
