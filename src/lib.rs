@@ -258,6 +258,9 @@ pub mod bench {
   pub mod util {
     pub use crate::util::*;
   }
+  pub mod cpu_features {
+    pub use crate::cpu_features::*;
+  }
 }
 
 #[cfg(fuzzing)]

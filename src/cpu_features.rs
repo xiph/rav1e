@@ -20,6 +20,8 @@ mod x86 {
   #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, ArgEnum)]
   pub enum CpuFeatureLevel {
     NATIVE,
+    SSE2,
+    SSSE3,
     AVX2,
   }
 
