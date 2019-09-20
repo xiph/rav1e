@@ -970,7 +970,7 @@ pub fn rdo_mode_decision<T: Pixel>(
       };
 
       let intra_mode_set = RAV1E_INTRA_MODES;
-      let mut sads = {
+      let mut satds = {
         // FIXME: If tx partition is used, this whole sads block should be fixed
         debug_assert!(bsize == tx_size.block_size());
         let edge_buf = {
@@ -1013,7 +1013,7 @@ pub fn rdo_mode_decision<T: Pixel>(
 
             (
               luma_mode,
-              get_sad(
+              get_satd(
                 &plane_org,
                 &plane_ref,
                 tx_size.block_size(),
@@ -1025,7 +1025,7 @@ pub fn rdo_mode_decision<T: Pixel>(
           .collect::<Vec<_>>()
       };
 
-      sads.sort_by_key(|a| a.1);
+      satds.sort_by_key(|a| a.1);
 
       // Find mode with lowest rate cost
       let mut z = 32768;
@@ -1053,7 +1053,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         .iter()
         .take(num_modes_rdo / 2)
         .for_each(|&(luma_mode, _prob)| modes.push(luma_mode));
-      sads.iter().take(num_modes_rdo).for_each(|&(luma_mode, _sad)| {
+      satds.iter().take(num_modes_rdo).for_each(|&(luma_mode, _stad)| {
         if !modes.contains(&luma_mode) {
           modes.push(luma_mode)
         }
