@@ -14,7 +14,7 @@ autobins = false
 [features]
 decode_test = ["aom-sys"]
 decode_test_dav1d = ["dav1d-sys"]
-binaries = ["ivf", "y4m", "clap", "scan_fmt", "pretty_env_logger"]
+binaries = ["ivf", "y4m", "clap", "scan_fmt", "pretty_env_logger", "better-panic"]
 default = ["binaries", "nasm", "signal_support"]
 nasm = ["nasm-rs"]
 signal_support = ["signal-hook"]
@@ -52,7 +52,7 @@ avformat-sys = { version = "0.1", path = "crates/avformat-sys/", optional = true
 rayon = "1.0"
 bincode = "1.1"
 arrayvec = "0.4.10"
-better-panic = "0.1"
+better-panic = { version = "0.2", optional = true }
 err-derive = "0.1"
 image = { version = "0.22.1", optional = true }
 byteorder = { version = "1.3.2", optional = true }
