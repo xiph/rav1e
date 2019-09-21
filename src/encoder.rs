@@ -253,7 +253,7 @@ impl Sequence {
     let mut forward_hint = 0;
     let mut backward_hint = 0;
 
-    for i in 0..inter_cfg.ref_frames_to_use() {
+    for i in inter_cfg.allowed_ref_frames().iter().map(|rf| rf.to_index()) {
       if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[i] as usize] {
         let ref_hint = rec.order_hint;
 
@@ -283,7 +283,7 @@ impl Sequence {
       let mut second_forward_idx: isize = -1;
       let mut second_forward_hint = 0;
 
-      for i in 0..inter_cfg.ref_frames_to_use() {
+      for i in inter_cfg.allowed_ref_frames().iter().map(|rf| rf.to_index()) {
         if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[i] as usize]
         {
           let ref_hint = rec.order_hint;
@@ -762,13 +762,8 @@ impl<T: Pixel> FrameInvariants<T> {
     fi.refresh_frame_flags =
       if fi.show_existing_frame { 0 } else { 1 << slot_idx };
 
-    let second_ref_frame = if !inter_cfg.multiref {
-      LAST_FRAME // make second_ref_frame match first
-    } else if fi.idx_in_group_output == 0 {
-      LAST2_FRAME
-    } else {
-      ALTREF_FRAME
-    };
+    let second_ref_frame =
+      if fi.idx_in_group_output == 0 { LAST2_FRAME } else { ALTREF_FRAME };
     let ref_in_previous_group = LAST3_FRAME;
 
     // reuse probability estimates from previous frames only in top level frames
@@ -789,10 +784,14 @@ impl<T: Pixel> FrameInvariants<T> {
         // this is the previous P frame
         (slot_idx + 4 - 1) as u8 % 4
           ; INTER_REFS_PER_FRAME];
-      // use the second-previous p frame as a second reference frame
-      fi.ref_frames[second_ref_frame.to_index()] =
-        (slot_idx + 4 - 2) as u8 % 4;
+      if inter_cfg.multiref {
+        // use the second-previous p frame as a second reference frame
+        fi.ref_frames[second_ref_frame.to_index()] =
+          (slot_idx + 4 - 2) as u8 % 4;
+      }
     } else {
+      debug_assert!(inter_cfg.multiref);
+
       // fill in defaults
       // default to backwards reference in lower level
       fi.ref_frames = [{
@@ -2732,7 +2731,8 @@ pub(crate) fn build_coarse_pmvs<T: Pixel>(
         let sbo = TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
         let bo = sbo.block_offset(0, 0);
         let mut pmvs: [Option<MotionVector>; REF_FRAMES] = [None; REF_FRAMES];
-        for i in 0..inter_cfg.ref_frames_to_use() {
+        for i in inter_cfg.allowed_ref_frames().iter().map(|rf| rf.to_index())
+        {
           let r = fi.ref_frames[i] as usize;
           if pmvs[r].is_none() {
             pmvs[r] =

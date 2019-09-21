@@ -187,11 +187,14 @@ impl InterConfig {
     cmp::max(1, self.max_reordering_latency()) + 1
   }
 
-  pub(crate) fn ref_frames_to_use(&self) -> usize {
-    if self.multiref {
-      INTER_REFS_PER_FRAME
+  pub(crate) fn allowed_ref_frames(&self) -> &[RefType] {
+    use crate::partition::RefType::*;
+    if self.reorder {
+      &ALL_INTER_REFS
+    } else if self.multiref {
+      &[LAST_FRAME, LAST2_FRAME, LAST3_FRAME, GOLDEN_FRAME]
     } else {
-      1
+      &[LAST_FRAME]
     }
   }
 }

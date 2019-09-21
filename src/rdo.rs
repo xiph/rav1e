@@ -755,12 +755,7 @@ pub fn rdo_mode_decision<T: Pixel>(
   };
 
   if fi.frame_type == FrameType::INTER {
-    for i in ALL_INTER_REFS.iter().copied() {
-      // Only look at LAST_FRAME for non-multiref
-      if !inter_cfg.multiref && i > LAST_FRAME {
-        break;
-      }
-
+    for i in inter_cfg.allowed_ref_frames().iter().copied() {
       // Don't search LAST3 since it's used only for probs
       if i == LAST3_FRAME {
         continue;
