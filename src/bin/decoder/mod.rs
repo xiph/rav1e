@@ -17,6 +17,7 @@ pub enum DecodeError {
   UnknownColorspace,
   ParseError,
   IoError(io::Error),
+  MemoryLimitExceeded,
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -37,7 +37,7 @@ arg_enum_proc_macro = "0.3"
 bitstream-io = "0.8"
 clap = { version = "2", optional = true, default-features = false }
 libc = "0.2"
-y4m = { version = "0.3.2", optional = true }
+y4m = { version = "0.4", optional = true }
 backtrace = "0.3"
 num-traits = "0.2"
 num-derive = "0.2"
