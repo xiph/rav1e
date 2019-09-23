@@ -36,11 +36,7 @@ mod nasm {
   declare_asm_dist_fn![
     // SSSE3
     (rav1e_sad_4x4_hbd_ssse3, u16),
-    (rav1e_sad_8x8_hbd10_ssse3, u16),
     (rav1e_sad_16x16_hbd_ssse3, u16),
-    (rav1e_sad_32x32_hbd10_ssse3, u16),
-    (rav1e_sad_64x64_hbd10_ssse3, u16),
-    (rav1e_sad_128x128_hbd10_ssse3, u16),
     // SSE2
     (rav1e_sad4x4_sse2, u8),
     (rav1e_sad4x8_sse2, u8),
@@ -96,23 +92,18 @@ mod nasm {
   #[target_feature(enable = "ssse3")]
   unsafe fn sad_hbd_ssse3(
     plane_org: &PlaneRegion<'_, u16>, plane_ref: &PlaneRegion<'_, u16>,
-    blk_w: usize, blk_h: usize, bit_depth: usize,
+    blk_w: usize, blk_h: usize, _bit_depth: usize,
   ) -> u32 {
     let mut sum = 0 as u32;
     let org_stride = (plane_org.plane_cfg.stride * 2) as isize;
     let ref_stride = (plane_ref.plane_cfg.stride * 2) as isize;
     assert!(blk_h >= 4 && blk_w >= 4);
-    let step_size =
-      blk_h.min(blk_w).min(if bit_depth <= 10 { 128 } else { 4 });
-    let func = match step_size.ilog() {
-      3 => rav1e_sad_4x4_hbd_ssse3,
-      4 => rav1e_sad_8x8_hbd10_ssse3,
-      5 => rav1e_sad_16x16_hbd_ssse3,
-      6 => rav1e_sad_32x32_hbd10_ssse3,
-      7 => rav1e_sad_64x64_hbd10_ssse3,
-      8 => rav1e_sad_128x128_hbd10_ssse3,
-      _ => rav1e_sad_128x128_hbd10_ssse3,
-    };
+    let (step_size, func): (usize, unsafe extern fn(_, _, _, _) -> _) =
+      if blk_h.min(blk_w) < 16 {
+        (4, rav1e_sad_4x4_hbd_ssse3)
+      } else {
+        (16, rav1e_sad_16x16_hbd_ssse3)
+      };
     for r in (0..blk_h).step_by(step_size) {
       for c in (0..blk_w).step_by(step_size) {
         // FIXME for now, T == u16
