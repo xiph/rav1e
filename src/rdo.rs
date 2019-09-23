@@ -16,7 +16,7 @@ use crate::context::*;
 use crate::dist::*;
 use crate::ec::{Writer, WriterCounter, OD_BITRES};
 use crate::encode_block_with_modes;
-use crate::encoder::FrameInvariants;
+use crate::encoder::{FrameInvariants, IMPORTANCE_BLOCK_SIZE};
 use crate::frame::Frame;
 use crate::frame::*;
 use crate::header::ReferenceMode;
@@ -269,10 +269,13 @@ pub fn sse_wxh<T: Pixel, F: Fn(Area, BlockSize) -> f64>(
   assert!(w & (MI_SIZE - 1) == 0);
   assert!(h & (MI_SIZE - 1) == 0);
 
-  // To bias the distortion correctly, compute it in blocks which are
-  // equivalent to 4×4 blocks in a non-subsampled plane.
-  let block_w = MI_SIZE >> src1.plane_cfg.xdec;
-  let block_h = MI_SIZE >> src1.plane_cfg.ydec;
+  // To bias the distortion correctly, compute it in blocks up to the size
+  // importance block size in a non-subsampled plane.
+  let imp_block_w = IMPORTANCE_BLOCK_SIZE.min(w);
+  let imp_block_h = IMPORTANCE_BLOCK_SIZE.min(h);
+  let imp_bsize = BlockSize::from_width_and_height(imp_block_w, imp_block_h);
+  let block_w = imp_block_w >> src1.plane_cfg.xdec;
+  let block_h = imp_block_h >> src1.plane_cfg.ydec;
 
   let mut sse: u64 = 0;
   for block_y in 0..h / block_h {
@@ -302,9 +305,7 @@ pub fn sse_wxh<T: Pixel, F: Fn(Area, BlockSize) -> f64>(
           x: (block_x * block_w) as isize,
           y: (block_y * block_h) as isize,
         },
-        // Our block width and height are chosen in such a way as to match 4×4
-        // non-subsampled blocks.
-        BlockSize::BLOCK_4X4,
+        imp_bsize,
       );
       sse += (value as f64 * bias) as u64;
     }
