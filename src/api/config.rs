@@ -115,7 +115,7 @@ pub struct EncoderConfig {
 /// [`with_speed_preset()`]: struct.EncoderConfig.html#method.with_speed_preset
 impl Default for EncoderConfig {
   fn default() -> Self {
-    const DEFAULT_SPEED: usize = 5;
+    const DEFAULT_SPEED: usize = 6;
     Self::with_speed_preset(DEFAULT_SPEED)
   }
 }
@@ -222,6 +222,10 @@ impl fmt::Display for EncoderConfig {
       ("cdef", self.speed_settings.cdef.to_string()),
       ("quantizer_rdo", self.speed_settings.quantizer_rdo.to_string()),
       ("use_satd_subpel", self.speed_settings.use_satd_subpel.to_string()),
+      (
+        "non_square_partition",
+        self.speed_settings.non_square_partition.to_string(),
+      ),
     ];
     write!(
       f,
@@ -268,6 +272,8 @@ pub struct SpeedSettings {
   pub quantizer_rdo: bool,
   /// Use SATD instead of SAD for subpixel search.
   pub use_satd_subpel: bool,
+  /// Use non-square partition type everywhere
+  pub non_square_partition: bool,
 }
 
 impl Default for SpeedSettings {
@@ -288,6 +294,7 @@ impl Default for SpeedSettings {
       cdef: false,
       quantizer_rdo: false,
       use_satd_subpel: false,
+      non_square_partition: false,
     }
   }
 }
@@ -300,13 +307,13 @@ impl SpeedSettings {
   /// - 9: min block size 64x64, reduced TX set, TX domain distortion, fast deblock.
   /// - 8: min block size 8x8, reduced TX set, TX domain distortion, fast deblock.
   /// - 7: min block size 8x8, reduced TX set, TX domain distortion.
-  /// - 6: min block size 8x8, reduced TX set, TX domain distortion.
-  /// - 5 (default): min block size 8x8, reduced TX set, TX domain distortion, complex pred modes for keyframes.
-  /// - 4: min block size 8x8, TX domain distortion, complex pred modes for keyframes.
-  /// - 3: min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision.
-  /// - 2: min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision, include near MVs, quantizer RDO.
-  /// - 1: min block size 8x8, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, quantizer RDO.
-  /// - 0 (slowest): min block size 4x4, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, quantizer RDO, bottom-up encoding.
+  /// - 6 (default): min block size 8x8, reduced TX set, TX domain distortion, complex pred modes for keyframes.
+  /// - 5: min block size 8x8, TX domain distortion, complex pred modes for keyframes.
+  /// - 4: min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision.
+  /// - 3: min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision, include near MVs, quantizer RDO.
+  /// - 2: min block size 8x8, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, quantizer RDO.
+  /// - 1: min block size 4x4, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, quantizer RDO, bottom-up encoding.
+  /// - 0 (slowest): min block size 4x4, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, quantizer RDO, bottom-up encoding with non-square partitions everywhere
   pub fn from_preset(speed: usize) -> Self {
     SpeedSettings {
       min_block_size: Self::min_block_size_preset(speed),
@@ -324,13 +331,14 @@ impl SpeedSettings {
       cdef: Self::cdef_preset(speed),
       quantizer_rdo: Self::quantizer_rdo_preset(speed),
       use_satd_subpel: Self::use_satd_subpel(speed),
+      non_square_partition: Self::non_square_partition_preset(speed),
     }
   }
 
   /// This preset is set this way because 8x8 with reduced TX set is faster but with equivalent
   /// or better quality compared to 16x16 or 32x32 (to which reduced TX set does not apply).
   fn min_block_size_preset(speed: usize) -> BlockSize {
-    let min_block_size = if speed <= 1 {
+    let min_block_size = if speed <= 2 {
       BlockSize::BLOCK_4X4
     } else if speed <= 8 {
       BlockSize::BLOCK_8X8
@@ -356,7 +364,7 @@ impl SpeedSettings {
   }
 
   const fn reduced_tx_set_preset(speed: usize) -> bool {
-    speed >= 5
+    speed >= 6
   }
 
   /// TX domain distortion is always faster, with no significant quality change
@@ -369,17 +377,17 @@ impl SpeedSettings {
   }
 
   const fn encode_bottomup_preset(speed: usize) -> bool {
-    speed == 0
+    speed <= 1
   }
 
   const fn rdo_tx_decision_preset(speed: usize) -> bool {
-    speed <= 3
+    speed <= 4
   }
 
   fn prediction_modes_preset(speed: usize) -> PredictionModesSetting {
-    if speed <= 1 {
+    if speed <= 2 {
       PredictionModesSetting::ComplexAll
-    } else if speed <= 5 {
+    } else if speed <= 6 {
       PredictionModesSetting::ComplexKeyframes
     } else {
       PredictionModesSetting::Simple
@@ -387,7 +395,7 @@ impl SpeedSettings {
   }
 
   const fn include_near_mvs_preset(speed: usize) -> bool {
-    speed <= 2
+    speed <= 3
   }
 
   const fn no_scene_detection_preset(speed: usize) -> bool {
@@ -407,11 +415,15 @@ impl SpeedSettings {
   }
 
   const fn quantizer_rdo_preset(speed: usize) -> bool {
-    speed <= 2
+    speed <= 3
   }
 
   const fn use_satd_subpel(speed: usize) -> bool {
     speed <= 9
+  }
+
+  const fn non_square_partition_preset(speed: usize) -> bool {
+    speed == 0
   }
 }
 
