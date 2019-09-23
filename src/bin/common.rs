@@ -136,20 +136,20 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         Min block size 8x8, reduced TX set, TX domain distortion, fast deblock\n\
         - 7:\n\
         Min block size 8x8, reduced TX set, TX domain distortion\n\
-        - 6:\n\
-        Min block size 8x8, reduced TX set, TX domain distortion\n\
-        - 5 (default):\n\
+        - 6 (default):\n\
         Min block size 8x8, reduced TX set, TX domain distortion, complex pred modes for keyframes\n\
-        - 4:\n\
+        - 5:\n\
         Min block size 8x8, TX domain distortion, complex pred modes for keyframes\n\
-        - 3:\n\
+        - 4:\n\
         Min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision\n\
-        - 2:\n\
+        - 3:\n\
         Min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision, include near MVs\n\
+        - 2:\n\
+        Min block size 4x4, TX domain distortion, complex pred modes, RDO TX decision, include near MVs\n\
         - 1:\n\
-        Min block size 8x8, TX domain distortion, complex pred modes, RDO TX decision, include near MVs\n\
+        Min block size 4x4, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, bottom-up encoding\n\
         - 0 (slowest):\n\
-        Min block size 4x4, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, bottom-up encoding\n")
+        Min block size 4x4, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, bottom-up encoding with non-square paritions not just right and bottom tile borders but everywhere\n")
         .short("s")
         .long("speed")
         .takes_value(true)

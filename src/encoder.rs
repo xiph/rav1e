@@ -562,9 +562,6 @@ impl<T: Pixel> FrameInvariants<T> {
       sequence.bit_depth <= mem::size_of::<T>() * 8,
       "bit depth cannot fit into u8"
     );
-    // Speed level decides the minimum partition size, i.e. higher speed --> larger min partition size,
-    // with exception that SBs on right or bottom frame borders split down to BLOCK_4X4.
-    // At speed = 0, RDO search is exhaustive.
     let min_partition_size = config.speed_settings.min_block_size;
     assert!(min_partition_size.is_sqr());
     let use_reduced_tx_set = config.speed_settings.reduced_tx_set;
@@ -2134,7 +2131,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
   let bsh = bsize.height_mi();
   let is_square = bsize.is_sqr();
 
-  // Always split if the current partition is too large
+  // Always split if the current partition is too large, i.e. right or bottom tile border
   let must_split = (tile_bo.0.x + bsw as usize > ts.mi_width
     || tile_bo.0.y + bsh as usize > ts.mi_height
     || bsize.greater_than(BlockSize::BLOCK_64X64))
@@ -2149,7 +2146,6 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
   } else {
     (bsize > fi.min_partition_size && is_square) || must_split
   };
-
   let mut best_partition = PartitionType::PARTITION_INVALID;
 
   let cw_checkpoint = cw.checkpoint();
@@ -2241,6 +2237,11 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
         if !split_vert && partition == PartitionType::PARTITION_VERT {
           continue;
         };
+      } else if !fi.config.speed_settings.non_square_partition
+        && (partition == PartitionType::PARTITION_HORZ
+          || partition == PartitionType::PARTITION_VERT)
+      {
+        continue;
       }
       cw.rollback(&cw_checkpoint);
       w_pre_cdef.rollback(&w_pre_checkpoint);
@@ -2407,7 +2408,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   let is_square = bsize.is_sqr();
   let rdo_type = RDOType::PixelDistRealRate;
 
-  // Always split if the current partition is too large
+  // Always split if the current partition is too large, i.e. right or bottom tile border
   let must_split = (tile_bo.0.x + bsw as usize > ts.mi_width
     || tile_bo.0.y + bsh as usize > ts.mi_height
     || bsize.greater_than(BlockSize::BLOCK_64X64))

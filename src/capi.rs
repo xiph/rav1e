@@ -475,8 +475,8 @@ unsafe fn option_match(
 ///
 /// Available keys and values
 /// - "quantizer": 0-255, default 100
-/// - "speed": 0-10, default 3
-/// - "tune": "psnr"-"psychovisual", default "psnr"
+/// - "speed": 0-10, default 6
+/// - "tune": "psnr"-"psychovisual", default "psychovisual"
 ///
 /// Return a negative value on error or 0.
 #[no_mangle]
