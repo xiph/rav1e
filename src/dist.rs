@@ -90,9 +90,7 @@ mod nasm {
     (rav1e_satd_8x32_avx2, u8),
     (rav1e_satd_32x8_avx2, u8),
     (rav1e_satd_16x64_avx2, u8),
-    (rav1e_satd_64x16_avx2, u8),
-    (rav1e_satd_32x128_avx2, u8),
-    (rav1e_satd_128x32_avx2, u8)
+    (rav1e_satd_64x16_avx2, u8)
   ];
 
   #[target_feature(enable = "ssse3")]
@@ -292,8 +290,6 @@ mod nasm {
       (32, 8) => rav1e_satd_32x8_avx2,
       (16, 64) => rav1e_satd_16x64_avx2,
       (64, 16) => rav1e_satd_64x16_avx2,
-      (32, 128) => rav1e_satd_32x128_avx2,
-      (128, 32) => rav1e_satd_128x32_avx2,
 
       _ => unreachable!(),
     };
