@@ -199,7 +199,10 @@ impl fmt::Display for EncoderConfig {
       ("tile_cols", self.tile_cols.to_string()),
       ("rdo_lookahead_frames", self.rdo_lookahead_frames.to_string()),
       ("min_block_size", self.speed_settings.min_block_size.to_string()),
-      ("multiref", self.speed_settings.multiref.to_string()),
+      (
+        "multiref",
+        (!self.low_latency || self.speed_settings.multiref).to_string(),
+      ),
       ("fast_deblock", self.speed_settings.fast_deblock.to_string()),
       ("reduced_tx_set", self.speed_settings.reduced_tx_set.to_string()),
       (
@@ -339,12 +342,13 @@ impl SpeedSettings {
     min_block_size
   }
 
-  /// Multiref is enabled automatically if low_latency is false,
-  /// but if someone is setting low_latency to true manually,
-  /// multiref has a large speed penalty with low quality gain.
-  /// Because low_latency can be set manually, this setting is conservative.
+  /// Multiref is enabled automatically if low_latency is false.
+  ///
+  /// If low_latency is true, enabling multiref allows using multiple
+  /// backwards references. low_latency false enables both forward and
+  /// backwards references.
   const fn multiref_preset(speed: usize) -> bool {
-    speed <= 1
+    speed <= 7
   }
 
   const fn fast_deblock_preset(speed: usize) -> bool {

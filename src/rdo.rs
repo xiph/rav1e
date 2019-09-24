@@ -726,7 +726,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
 pub fn rdo_mode_decision<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, bsize: BlockSize, tile_bo: TileBlockOffset,
-  pmvs: &mut [Option<MotionVector>],
+  pmvs: &mut [Option<MotionVector>], inter_cfg: &InterConfig,
 ) -> RDOPartitionOutput {
   let mut best = EncodingSettings::default();
 
@@ -755,11 +755,12 @@ pub fn rdo_mode_decision<T: Pixel>(
   };
 
   if fi.frame_type == FrameType::INTER {
-    for i in ALL_INTER_REFS.iter() {
+    for i in inter_cfg.allowed_ref_frames().iter().copied() {
       // Don't search LAST3 since it's used only for probs
-      if *i == LAST3_FRAME {
+      if i == LAST3_FRAME {
         continue;
       }
+
       if !ref_slot_set.contains(&fi.ref_frames[i.to_index()]) {
         if fwdref == None && i.is_fwd_ref() {
           fwdref = Some(ref_frames_set.len());
@@ -767,7 +768,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         if bwdref == None && i.is_bwd_ref() {
           bwdref = Some(ref_frames_set.len());
         }
-        ref_frames_set.push([*i, NONE_FRAME]);
+        ref_frames_set.push([i, NONE_FRAME]);
         let slot_idx = fi.ref_frames[i.to_index()];
         ref_slot_set.push(slot_idx);
       }
@@ -1433,6 +1434,7 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
   bsize: BlockSize, tile_bo: TileBlockOffset, cached_block: &RDOOutput,
   pmvs: &mut [[Option<MotionVector>; REF_FRAMES]; 5],
   partition_types: &[PartitionType], rdo_type: RDOType,
+  inter_cfg: &InterConfig,
 ) -> RDOOutput {
   let mut best_partition = cached_block.part_type;
   let mut best_rd = cached_block.rd_cost;
@@ -1466,7 +1468,7 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
         let spmvs = &mut pmvs[pmv_idx];
 
         let mode_decision =
-          rdo_mode_decision(fi, ts, cw, bsize, tile_bo, spmvs);
+          rdo_mode_decision(fi, ts, cw, bsize, tile_bo, spmvs, inter_cfg);
         child_modes.push(mode_decision);
       }
       PARTITION_SPLIT | PARTITION_HORZ | PARTITION_VERT => {
@@ -1526,8 +1528,15 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
         let mut rd_cost_sum = 0.0;
 
         for (&offset, pmv_idx) in partitions.iter().zip(pmv_idxs) {
-          let mode_decision =
-            rdo_mode_decision(fi, ts, cw, subsize, offset, &mut pmvs[pmv_idx]);
+          let mode_decision = rdo_mode_decision(
+            fi,
+            ts,
+            cw,
+            subsize,
+            offset,
+            &mut pmvs[pmv_idx],
+            inter_cfg,
+          );
 
           rd_cost_sum += mode_decision.rd_cost;
 

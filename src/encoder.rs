@@ -241,7 +241,8 @@ impl Sequence {
   }
 
   pub fn get_skip_mode_allowed<T: Pixel>(
-    &self, fi: &FrameInvariants<T>, reference_select: bool,
+    &self, fi: &FrameInvariants<T>, inter_cfg: &InterConfig,
+    reference_select: bool,
   ) -> bool {
     if fi.intra_only || !reference_select || !self.enable_order_hint {
       return false;
@@ -252,7 +253,7 @@ impl Sequence {
     let mut forward_hint = 0;
     let mut backward_hint = 0;
 
-    for i in 0..INTER_REFS_PER_FRAME {
+    for i in inter_cfg.allowed_ref_frames().iter().map(|rf| rf.to_index()) {
       if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[i] as usize] {
         let ref_hint = rec.order_hint;
 
@@ -282,7 +283,7 @@ impl Sequence {
       let mut second_forward_idx: isize = -1;
       let mut second_forward_hint = 0;
 
-      for i in 0..INTER_REFS_PER_FRAME {
+      for i in inter_cfg.allowed_ref_frames().iter().map(|rf| rf.to_index()) {
         if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[i] as usize]
         {
           let ref_hint = rec.order_hint;
@@ -761,13 +762,8 @@ impl<T: Pixel> FrameInvariants<T> {
     fi.refresh_frame_flags =
       if fi.show_existing_frame { 0 } else { 1 << slot_idx };
 
-    let second_ref_frame = if !inter_cfg.multiref {
-      LAST_FRAME // make second_ref_frame match first
-    } else if fi.idx_in_group_output == 0 {
-      LAST2_FRAME
-    } else {
-      ALTREF_FRAME
-    };
+    let second_ref_frame =
+      if fi.idx_in_group_output == 0 { LAST2_FRAME } else { ALTREF_FRAME };
     let ref_in_previous_group = LAST3_FRAME;
 
     // reuse probability estimates from previous frames only in top level frames
@@ -788,10 +784,14 @@ impl<T: Pixel> FrameInvariants<T> {
         // this is the previous P frame
         (slot_idx + 4 - 1) as u8 % 4
           ; INTER_REFS_PER_FRAME];
-      // use the second-previous p frame as a second reference frame
-      fi.ref_frames[second_ref_frame.to_index()] =
-        (slot_idx + 4 - 2) as u8 % 4;
+      if inter_cfg.multiref {
+        // use the second-previous p frame as a second reference frame
+        fi.ref_frames[second_ref_frame.to_index()] =
+          (slot_idx + 4 - 2) as u8 % 4;
+      }
     } else {
+      debug_assert!(inter_cfg.multiref);
+
       // fill in defaults
       // default to backwards reference in lower level
       fi.ref_frames = [{
@@ -958,6 +958,7 @@ pub fn write_temporal_delimiter(packet: &mut dyn io::Write) -> io::Result<()> {
 
 fn write_obus<T: Pixel>(
   packet: &mut dyn io::Write, fi: &FrameInvariants<T>, fs: &FrameState<T>,
+  inter_cfg: &InterConfig,
 ) -> io::Result<()> {
   let obu_extension = 0 as u32;
 
@@ -1008,7 +1009,7 @@ fn write_obus<T: Pixel>(
   let mut buf2 = Vec::new();
   {
     let mut bw2 = BitWriter::endian(&mut buf2, BigEndian);
-    bw2.write_frame_header_obu(fi, fs)?;
+    bw2.write_frame_header_obu(fi, fs, inter_cfg)?;
   }
 
   {
@@ -2114,6 +2115,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
   bsize: BlockSize, tile_bo: TileBlockOffset,
   pmvs: &mut [[Option<MotionVector>; REF_FRAMES]; 5], ref_rd_cost: f64,
+  inter_cfg: &InterConfig,
 ) -> (RDOOutput) {
   let rdo_type = RDOType::PixelDistRealRate;
   let mut rd_cost = std::f64::MAX;
@@ -2172,7 +2174,8 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
     };
     let spmvs = &mut pmvs[pmv_idx];
 
-    let mode_decision = rdo_mode_decision(fi, ts, cw, bsize, tile_bo, spmvs);
+    let mode_decision =
+      rdo_mode_decision(fi, ts, cw, bsize, tile_bo, spmvs, inter_cfg);
 
     if !mode_decision.pred_mode_luma.is_intra() {
       // Fill the saved motion structure
@@ -2289,6 +2292,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
           offset,
           pmvs, //&best_decision.mvs[0]
           best_rd,
+          inter_cfg,
         );
         let cost = child_rdo_output.rd_cost;
         assert!(cost >= 0.0);
@@ -2393,7 +2397,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
   bsize: BlockSize, tile_bo: TileBlockOffset,
   block_output: &Option<RDOOutput>,
-  pmvs: &mut [[Option<MotionVector>; REF_FRAMES]; 5],
+  pmvs: &mut [[Option<MotionVector>; REF_FRAMES]; 5], inter_cfg: &InterConfig,
 ) {
   if tile_bo.0.x >= cw.bc.blocks.cols() || tile_bo.0.y >= cw.bc.blocks.rows() {
     return;
@@ -2470,6 +2474,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       pmvs,
       &partition_types,
       rdo_type,
+      inter_cfg,
     );
     partition = rdo_output.part_type;
   } else {
@@ -2503,7 +2508,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         let spmvs = &mut pmvs[pmv_idx];
 
         // Make a prediction mode decision for blocks encoded with no rdo_partition_decision call (e.g. edges)
-        rdo_mode_decision(fi, ts, cw, bsize, tile_bo, spmvs)
+        rdo_mode_decision(fi, ts, cw, bsize, tile_bo, spmvs, inter_cfg)
       };
 
       let mut mode_luma = part_decision.pred_mode_luma;
@@ -2663,6 +2668,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
               part_modes: vec![mode],
             }),
             pmvs,
+            inter_cfg,
           );
         }
       } else {
@@ -2696,6 +2702,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
             offset,
             &None,
             pmvs,
+            inter_cfg,
           );
         });
       }
@@ -2714,7 +2721,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
 
 #[inline(always)]
 pub(crate) fn build_coarse_pmvs<T: Pixel>(
-  fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>,
+  fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, inter_cfg: &InterConfig,
 ) -> Vec<[Option<MotionVector>; REF_FRAMES]> {
   assert!(!fi.sequence.use_128x128_superblock);
   if ts.mi_width >= 16 && ts.mi_height >= 16 {
@@ -2724,7 +2731,8 @@ pub(crate) fn build_coarse_pmvs<T: Pixel>(
         let sbo = TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
         let bo = sbo.block_offset(0, 0);
         let mut pmvs: [Option<MotionVector>; REF_FRAMES] = [None; REF_FRAMES];
-        for i in 0..INTER_REFS_PER_FRAME {
+        for i in inter_cfg.allowed_ref_frames().iter().map(|rf| rf.to_index())
+        {
           let r = fi.ref_frames[i] as usize;
           if pmvs[r].is_none() {
             pmvs[r] =
@@ -2755,7 +2763,7 @@ fn get_initial_cdfcontext<T: Pixel>(fi: &FrameInvariants<T>) -> CDFContext {
 }
 
 fn encode_tile_group<T: Pixel>(
-  fi: &FrameInvariants<T>, fs: &mut FrameState<T>,
+  fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
 ) -> Vec<u8> {
   let mut blocks = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
   let ti = &fi.tiling;
@@ -2769,7 +2777,7 @@ fn encode_tile_group<T: Pixel>(
     .collect::<Vec<_>>()
     .into_par_iter()
     .map(|(mut ctx, cdf)| {
-      let raw = encode_tile(fi, &mut ctx.ts, cdf, &mut ctx.tb);
+      let raw = encode_tile(fi, &mut ctx.ts, cdf, &mut ctx.tb, inter_cfg);
       (raw, ctx.ts)
     })
     .unzip();
@@ -3164,6 +3172,7 @@ pub struct SBSQueueEntry {
 fn encode_tile<'a, T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   fc: &'a mut CDFContext, blocks: &'a mut TileBlocksMut<'a>,
+  inter_cfg: &InterConfig,
 ) -> Vec<u8> {
   let mut w = WriterEncoder::new();
 
@@ -3174,7 +3183,7 @@ fn encode_tile<'a, T: Pixel>(
   let mut last_lru_rdoed = [-1; 3];
   let mut last_lru_coded = [-1; 3];
 
-  let tile_pmvs = build_coarse_pmvs(fi, ts);
+  let tile_pmvs = build_coarse_pmvs(fi, ts, inter_cfg);
 
   // main loop
   for sby in 0..ts.sb_height {
@@ -3209,6 +3218,7 @@ fn encode_tile<'a, T: Pixel>(
           tile_bo,
           &mut pmvs,
           std::f64::MAX,
+          inter_cfg,
         );
       } else {
         encode_partition_topdown(
@@ -3221,6 +3231,7 @@ fn encode_tile<'a, T: Pixel>(
           tile_bo,
           &None,
           &mut pmvs,
+          inter_cfg,
         );
       }
 
@@ -3348,12 +3359,12 @@ fn write_tile_group_header(tile_start_and_end_present_flag: bool) -> Vec<u8> {
 //
 // See `av1-spec` Section 6.8.2 and 7.18.
 pub fn encode_show_existing_frame<T: Pixel>(
-  fi: &FrameInvariants<T>, fs: &mut FrameState<T>,
+  fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
 ) -> Vec<u8> {
   debug_assert!(fi.show_existing_frame);
   let mut packet = Vec::new();
 
-  write_obus(&mut packet, fi, fs).unwrap();
+  write_obus(&mut packet, fi, fs, inter_cfg).unwrap();
   let map_idx = fi.frame_to_show_map_idx as usize;
   if let Some(ref rec) = fi.rec_buffer.frames[map_idx] {
     for p in 0..3 {
@@ -3364,7 +3375,7 @@ pub fn encode_show_existing_frame<T: Pixel>(
 }
 
 pub fn encode_frame<T: Pixel>(
-  fi: &FrameInvariants<T>, fs: &mut FrameState<T>,
+  fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
 ) -> Vec<u8> {
   debug_assert!(!fi.show_existing_frame);
   debug_assert!(!fi.invalid);
@@ -3377,9 +3388,9 @@ pub fn encode_frame<T: Pixel>(
 
   segmentation_optimize(fi, fs);
 
-  let tile_group = encode_tile_group(fi, fs);
+  let tile_group = encode_tile_group(fi, fs, inter_cfg);
 
-  write_obus(&mut packet, fi, fs).unwrap();
+  write_obus(&mut packet, fi, fs, inter_cfg).unwrap();
   let mut buf1 = Vec::new();
   {
     let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
