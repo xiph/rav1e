@@ -25,6 +25,8 @@ extern crate log;
 mod common;
 mod decoder;
 mod error;
+#[cfg(feature = "serialize")]
+mod kv;
 mod muxer;
 mod stats;
 

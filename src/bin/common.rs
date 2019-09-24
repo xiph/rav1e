@@ -39,10 +39,38 @@ pub struct CliOptions {
   pub save_config: Option<String>,
 }
 
+#[cfg(feature = "serialize")]
+fn build_speed_long_help() -> String {
+  let levels = (0..=10)
+    .map(|speed| {
+      let s = SpeedSettings::from_preset(speed);
+      let o = crate::kv::to_string(&s).unwrap().replace(", ", "\n    ");
+      format!("{:2} :\n    {}", speed, o)
+    })
+    .collect::<Vec<String>>()
+    .join("\n");
+
+  format!(
+    "Speed level (0 is best quality, 10 is fastest)\n\
+     Speeds 10 and 0 are extremes and are generally not recommended\n\
+     {}",
+    levels
+  )
+}
+
+#[cfg(not(feature = "serialize"))]
+fn build_speed_long_help() -> String {
+  "Speed level (0 is best quality, 10 is fastest)\n\
+   Speeds 10 and 0 are extremes and are generally not recommended"
+    .into()
+}
+
+#[allow(unused_mut)]
 pub fn parse_cli() -> Result<CliOptions, CliError> {
   let ver_short = version::short();
   let ver_long = version::full();
   let ver = version::full();
+  let speed_long_help = build_speed_long_help();
   let mut app = App::new("rav1e")
     .version(ver.as_str())
     .long_version(ver_long.as_str())
@@ -128,30 +156,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
       Arg::with_name("SPEED")
         .help("Speed level (0 is best quality, 10 is fastest)\n\
         Speeds 10 and 0 are extremes and are generally not recommended")
-        .long_help("Speed level (0 is best quality, 10 is fastest)\n\
-        Speeds 10 and 0 are extremes and are generally not recommended\n\
-        - 10 (fastest):\n\
-        Min block size 64x64, reduced TX set, fast deblock, fast scenechange detection\n\
-        - 9:\n\
-        Min block size 32x32, reduced TX set, fast deblock\n\
-        - 8:\n\
-        Min block size 8x8, reduced TX set, fast deblock\n\
-        - 7:\n\
-        Min block size 8x8, reduced TX set\n\
-        - 6 (default):\n\
-        Min block size 8x8, reduced TX set, complex pred modes for keyframes\n\
-        - 5:\n\
-        Min block size 8x8, complex pred modes for keyframes, reduced TX set, RDO TX decision\n\
-        - 4:\n\
-        Min block size 8x8, complex pred modes for keyframes, RDO TX decision\n\
-        - 3:\n\
-        Min block size 8x8, complex pred modes for keyframes, RDO TX decision, include near MVs\n\
-        - 2:\n\
-        Min block size 4x4, complex pred modes, RDO TX decision, include near MVs\n\
-        - 1:\n\
-        Min block size 4x4, complex pred modes, RDO TX decision, include near MVs, quantizer RDO, bottom-up encoding\n\
-        - 0 (slowest):\n\
-        Min block size 4x4, complex pred modes, RDO TX decision, include near MVs, quantizer RDO, bottom-up encoding with non-square partitions everywhere\n")
+        .long_help(&speed_long_help)
         .short("s")
         .long("speed")
         .takes_value(true)
