@@ -129,27 +129,27 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .long_help("Speed level (0 is best quality, 10 is fastest)\n\
         Speeds 10 and 0 are extremes and are generally not recommended\n\
         - 10 (fastest):\n\
-        Min block size 64x64, reduced TX set, TX domain distortion, fast deblock, no scenechange detection\n\
+        Min block size 64x64, reduced TX set, fast deblock, no scenechange detection\n\
         - 9:\n\
-        Min block size 64x64, reduced TX set, TX domain distortion, fast deblock\n\
+        Min block size 64x64, reduced TX set, fast deblock\n\
         - 8:\n\
-        Min block size 8x8, reduced TX set, TX domain distortion, fast deblock\n\
+        Min block size 8x8, reduced TX set, fast deblock\n\
         - 7:\n\
-        Min block size 8x8, reduced TX set, TX domain distortion\n\
+        Min block size 8x8, reduced TX set\n\
         - 6 (default):\n\
-        Min block size 8x8, reduced TX set, TX domain distortion, complex pred modes for keyframes\n\
+        Min block size 8x8, reduced TX set, complex pred modes for keyframes\n\
         - 5:\n\
-        Min block size 8x8, TX domain distortion, complex pred modes for keyframes\n\
+        Min block size 8x8, complex pred modes for keyframes\n\
         - 4:\n\
-        Min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision\n\
+        Min block size 8x8, complex pred modes for keyframes, RDO TX decision\n\
         - 3:\n\
-        Min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision, include near MVs\n\
+        Min block size 8x8, complex pred modes for keyframes, RDO TX decision, include near MVs\n\
         - 2:\n\
-        Min block size 4x4, TX domain distortion, complex pred modes, RDO TX decision, include near MVs\n\
+        Min block size 4x4, complex pred modes, RDO TX decision, include near MVs\n\
         - 1:\n\
-        Min block size 4x4, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, bottom-up encoding\n\
+        Min block size 4x4, complex pred modes, RDO TX decision, include near MVs, bottom-up encoding\n\
         - 0 (slowest):\n\
-        Min block size 4x4, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, bottom-up encoding with non-square paritions not just right and bottom tile borders but everywhere\n")
+        Min block size 4x4, complex pred modes, RDO TX decision, include near MVs, bottom-up encoding with non-square paritions not just right and bottom tile borders but everywhere\n")
         .short("s")
         .long("speed")
         .takes_value(true)
@@ -526,6 +526,10 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
     .map(|reservior_frame_delay| reservior_frame_delay.parse().unwrap());
   cfg.show_psnr = matches.is_present("PSNR");
   cfg.tune = matches.value_of("TUNE").unwrap().parse().unwrap();
+
+  if cfg.tune == Tune::Psychovisual {
+    cfg.speed_settings.tx_domain_distortion = false;
+  }
 
   cfg.tile_cols = matches.value_of("TILE_COLS").unwrap().parse().unwrap();
   cfg.tile_rows = matches.value_of("TILE_ROWS").unwrap().parse().unwrap();

@@ -303,17 +303,17 @@ impl SpeedSettings {
   /// Set the speed setting according to a numeric speed preset.
   ///
   /// The speed settings vary depending on speed value from 0 to 10.
-  /// - 10 (fastest): min block size 64x64, reduced TX set, TX domain distortion, fast deblock, no scenechange detection.
-  /// - 9: min block size 64x64, reduced TX set, TX domain distortion, fast deblock.
-  /// - 8: min block size 8x8, reduced TX set, TX domain distortion, fast deblock.
-  /// - 7: min block size 8x8, reduced TX set, TX domain distortion.
-  /// - 6 (default): min block size 8x8, reduced TX set, TX domain distortion, complex pred modes for keyframes.
-  /// - 5: min block size 8x8, TX domain distortion, complex pred modes for keyframes.
-  /// - 4: min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision.
-  /// - 3: min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision, include near MVs, quantizer RDO.
-  /// - 2: min block size 4x4, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, quantizer RDO.
-  /// - 1: min block size 4x4, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, quantizer RDO, bottom-up encoding.
-  /// - 0 (slowest): min block size 4x4, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, quantizer RDO, bottom-up encoding with non-square partitions everywhere
+  /// - 10 (fastest): min block size 64x64, reduced TX set, fast deblock, no scenechange detection.
+  /// - 9: min block size 64x64, reduced TX set, fast deblock.
+  /// - 8: min block size 8x8, reduced TX set, fast deblock.
+  /// - 7: min block size 8x8, reduced TX set.
+  /// - 6 (default): min block size 8x8, reduced TX set, complex pred modes for keyframes.
+  /// - 5: min block size 8x8, complex pred modes for keyframes.
+  /// - 4: min block size 8x8, complex pred modes for keyframes, RDO TX decision.
+  /// - 3: min block size 8x8, complex pred modes for keyframes, RDO TX decision, include near MVs, quantizer RDO.
+  /// - 2: min block size 4x4, complex pred modes, RDO TX decision, include near MVs, quantizer RDO.
+  /// - 1: min block size 4x4, complex pred modes, RDO TX decision, include near MVs, quantizer RDO, bottom-up encoding.
+  /// - 0 (slowest): min block size 4x4, complex pred modes, RDO TX decision, include near MVs, quantizer RDO, bottom-up encoding with non-square partitions everywhere
   pub fn from_preset(speed: usize) -> Self {
     SpeedSettings {
       min_block_size: Self::min_block_size_preset(speed),
