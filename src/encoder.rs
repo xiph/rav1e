@@ -1085,6 +1085,7 @@ pub fn encode_tx_block<T: Pixel>(
   need_recon_pixel: bool,
 ) -> (bool, i64) {
   let qidx = get_qidx(fi, ts, cw, tile_bo);
+  assert_ne!(qidx, 0); // lossless is not yet supported
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[p].cfg;
   let tile_rect = ts.tile_rect().decimated(xdec, ydec);
   let rec = &mut ts.rec.planes[p];
