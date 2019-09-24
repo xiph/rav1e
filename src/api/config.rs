@@ -311,7 +311,7 @@ impl SpeedSettings {
   /// - 5: min block size 8x8, TX domain distortion, complex pred modes for keyframes.
   /// - 4: min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision.
   /// - 3: min block size 8x8, TX domain distortion, complex pred modes for keyframes, RDO TX decision, include near MVs, quantizer RDO.
-  /// - 2: min block size 8x8, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, quantizer RDO.
+  /// - 2: min block size 4x4, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, quantizer RDO.
   /// - 1: min block size 4x4, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, quantizer RDO, bottom-up encoding.
   /// - 0 (slowest): min block size 4x4, TX domain distortion, complex pred modes, RDO TX decision, include near MVs, quantizer RDO, bottom-up encoding with non-square partitions everywhere
   pub fn from_preset(speed: usize) -> Self {
