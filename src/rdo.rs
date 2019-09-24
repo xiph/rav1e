@@ -629,7 +629,21 @@ fn luma_chroma_mode_rdo<T: Pixel>(
         x if x >= 4. => 2,
         _ => unreachable!(),
       };
-      heuristic_sidx..=heuristic_sidx
+      // prevent the highest sidx from bringing us into lossless
+      if fi.base_q_idx as i16
+        + ts.segmentation.data[heuristic_sidx as usize]
+          [SegLvl::SEG_LVL_ALT_Q as usize]
+        < 1
+      {
+        0..=0
+      } else {
+        heuristic_sidx..=heuristic_sidx
+      }
+    } else if fi.base_q_idx as i16
+      + ts.segmentation.data[2][SegLvl::SEG_LVL_ALT_Q as usize]
+      < 1
+    {
+      0..=1
     } else {
       0..=2
     };
