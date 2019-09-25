@@ -194,14 +194,14 @@ macro_rules! tile_restoration_plane_common {
         if self.units.rows > 0 && self.units.cols > 0 {
           // is this a stretch block?
           let x_stretch = sbo.0.x < self.rp_cfg.sb_cols &&
-            sbo.0.x >> self.rp_cfg.sb_shift >= self.units.cols;
+            sbo.0.x >> self.rp_cfg.sb_h_shift >= self.units.cols;
           let y_stretch = sbo.0.y < self.rp_cfg.sb_rows &&
-            sbo.0.y >> self.rp_cfg.sb_shift >= self.units.rows;
+            sbo.0.y >> self.rp_cfg.sb_v_shift >= self.units.rows;
           if (x_stretch || y_stretch) && !stretch {
             None
           } else {
-            let x = (sbo.0.x >> self.rp_cfg.sb_shift) - if x_stretch { 1 } else { 0 };
-            let y = (sbo.0.y >> self.rp_cfg.sb_shift) - if y_stretch { 1 } else { 0 };
+            let x = (sbo.0.x >> self.rp_cfg.sb_h_shift) - if x_stretch { 1 } else { 0 };
+            let y = (sbo.0.y >> self.rp_cfg.sb_v_shift) - if y_stretch { 1 } else { 0 };
             if x < self.units.cols && y < self.units.rows {
               Some((x, y))
             } else {
@@ -228,13 +228,14 @@ macro_rules! tile_restoration_plane_common {
         sbo: TileSuperBlockOffset,
       ) -> bool {
         // there is 1 restoration unit for (1 << sb_shift) super-blocks
-        let mask = (1 << self.rp_cfg.sb_shift) - 1;
+        let h_mask = (1 << self.rp_cfg.sb_h_shift) - 1;
+        let v_mask = (1 << self.rp_cfg.sb_v_shift) - 1;
         // is this a stretch block?
-        let x_stretch = sbo.0.x >> self.rp_cfg.sb_shift >= self.units.cols;
-        let y_stretch = sbo.0.y >> self.rp_cfg.sb_shift >= self.units.rows;
+        let x_stretch = sbo.0.x >> self.rp_cfg.sb_h_shift >= self.units.cols;
+        let y_stretch = sbo.0.y >> self.rp_cfg.sb_v_shift >= self.units.rows;
 
-        let last_x = (sbo.0.x & mask == mask && !x_stretch) || sbo.0.x == fi.sb_width-1;
-        let last_y = (sbo.0.y & mask == mask && !y_stretch) || sbo.0.y == fi.sb_height-1;
+        let last_x = (sbo.0.x & h_mask == h_mask && !x_stretch) || sbo.0.x == fi.sb_width-1;
+        let last_y = (sbo.0.y & v_mask == v_mask && !y_stretch) || sbo.0.y == fi.sb_height-1;
 
         last_x && last_y
       }
@@ -341,16 +342,17 @@ macro_rules! tile_restoration_state_common {
         sb_height: usize,
         pli: usize,
       ) -> (usize, usize, usize, usize) {
-        let sb_shift = rs.planes[pli].cfg.sb_shift;
+        let sb_h_shift = rs.planes[pli].cfg.sb_h_shift;
+        let sb_v_shift = rs.planes[pli].cfg.sb_v_shift;
         // there may be several super-blocks per restoration unit
         // the given super-block offset must match the start of a restoration unit
-        debug_assert!(sbo.0.x % (1 << sb_shift) == 0);
-        debug_assert!(sbo.0.y % (1 << sb_shift) == 0);
+        debug_assert!(sbo.0.x % (1 << sb_h_shift) == 0);
+        debug_assert!(sbo.0.y % (1 << sb_v_shift) == 0);
 
-        let units_x = sbo.0.x >> sb_shift;
-        let units_y = sbo.0.y >> sb_shift;
-        let units_cols = sb_width + (1 << sb_shift) - 1 >> sb_shift;
-        let units_rows = sb_height + (1 << sb_shift) - 1 >> sb_shift;
+        let units_x = sbo.0.x >> sb_h_shift;
+        let units_y = sbo.0.y >> sb_v_shift;
+        let units_cols = sb_width + (1 << sb_h_shift) - 1 >> sb_h_shift;
+        let units_rows = sb_height + (1 << sb_v_shift) - 1 >> sb_v_shift;
 
         let FrameRestorationUnits { cols: rs_cols, rows: rs_rows, .. } = rs.planes[pli].units;
         // +1 because the last super-block may use the "stretched" restoration unit

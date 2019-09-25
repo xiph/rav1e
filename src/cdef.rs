@@ -238,12 +238,13 @@ fn adjust_strength(strength: i32, var: i32) -> i32 {
 
 pub fn cdef_analyze_superblock_range<T: Pixel>(
   in_frame: &Frame<T>, blocks: &TileBlocks<'_>, sbo: TileSuperBlockOffset,
-  sbo_global: TileSuperBlockOffset, sb_wh: usize, bit_depth: usize,
+  sbo_global: TileSuperBlockOffset, sb_w: usize, sb_h: usize,
+  bit_depth: usize,
 ) -> Vec<Vec<CdefDirections>> {
   let mut ret: Vec<Vec<CdefDirections>> = Vec::new();
-  for sby in 0..sb_wh {
+  for sby in 0..sb_h {
     ret.push(Vec::new());
-    for sbx in 0..sb_wh {
+    for sbx in 0..sb_w {
       let local_sbo = TileSuperBlockOffset(SuperBlockOffset {
         x: sbo.0.x + sbx,
         y: sbo.0.y + sby,
@@ -310,41 +311,45 @@ pub fn cdef_analyze_superblock<T: Pixel>(
 }
 
 pub fn cdef_sb_frame<T: Pixel>(
-  fi: &FrameInvariants<T>, sb_wh: usize, tile: &Tile<'_, T>,
+  fi: &FrameInvariants<T>, sb_w: usize, sb_h: usize, tile: &Tile<'_, T>,
 ) -> Frame<T> {
-  let sb_size =
-    if fi.sequence.use_128x128_superblock { 128 } else { 64 } * sb_wh;
+  let sb_h_size =
+    if fi.sequence.use_128x128_superblock { 128 } else { 64 } * sb_w;
+  let sb_v_size =
+    if fi.sequence.use_128x128_superblock { 128 } else { 64 } * sb_h;
 
   Frame {
     planes: [
       {
         let &PlaneConfig { xdec, ydec, .. } = tile.planes[0].plane_cfg;
-        Plane::new(sb_size >> xdec, sb_size >> ydec, xdec, ydec, 3, 3)
+        Plane::new(sb_h_size >> xdec, sb_v_size >> ydec, xdec, ydec, 3, 3)
       },
       {
         let &PlaneConfig { xdec, ydec, .. } = tile.planes[1].plane_cfg;
-        Plane::new(sb_size >> xdec, sb_size >> ydec, xdec, ydec, 3, 3)
+        Plane::new(sb_h_size >> xdec, sb_v_size >> ydec, xdec, ydec, 3, 3)
       },
       {
         let &PlaneConfig { xdec, ydec, .. } = tile.planes[2].plane_cfg;
-        Plane::new(sb_size >> xdec, sb_size >> ydec, xdec, ydec, 3, 3)
+        Plane::new(sb_h_size >> xdec, sb_v_size >> ydec, xdec, ydec, 3, 3)
       },
     ],
   }
 }
 
 pub fn cdef_sb_padded_frame_copy<T: Pixel>(
-  fi: &FrameInvariants<T>, sbo: TileSuperBlockOffset, sb_wh: usize,
-  tile: &Tile<'_, T>, pad: usize,
+  fi: &FrameInvariants<T>, sbo: TileSuperBlockOffset, sb_w: usize,
+  sb_h: usize, tile: &Tile<'_, T>, pad: usize,
 ) -> Frame<u16> {
   let ipad = pad as isize;
-  let sb_size =
-    if fi.sequence.use_128x128_superblock { 128 } else { 64 } * sb_wh;
+  let sb_h_size =
+    if fi.sequence.use_128x128_superblock { 128 } else { 64 } * sb_w;
+  let sb_v_size =
+    if fi.sequence.use_128x128_superblock { 128 } else { 64 } * sb_h;
   let mut out = Frame {
     planes: {
       let new_plane = |pli: usize| {
         let &PlaneConfig { xdec, ydec, .. } = tile.planes[pli].plane_cfg;
-        Plane::new(sb_size >> xdec, sb_size >> ydec, xdec, ydec, pad, pad)
+        Plane::new(sb_h_size >> xdec, sb_v_size >> ydec, xdec, ydec, pad, pad)
       };
       [new_plane(0), new_plane(1), new_plane(2)]
     },
@@ -358,11 +363,11 @@ pub fn cdef_sb_padded_frame_copy<T: Pixel>(
     let offset = sbo.plane_offset(&tile.planes[p].plane_cfg);
     let mut out_region =
       out.planes[p].region_mut(Area::StartingAt { x: -ipad, y: -ipad });
-    for y in 0..((sb_size >> ydec) + pad * 2) as isize {
+    for y in 0..((sb_v_size >> ydec) + pad * 2) as isize {
       let out_row = &mut out_region[y as usize];
       if offset.y + y < ipad || offset.y + y >= height as isize + ipad {
         // above or below the frame, fill with flag
-        for x in 0..(sb_size >> xdec) + pad * 2 {
+        for x in 0..(sb_h_size >> xdec) + pad * 2 {
           out_row[x] = CDEF_VERY_LARGE;
         }
       } else {
@@ -370,10 +375,10 @@ pub fn cdef_sb_padded_frame_copy<T: Pixel>(
         let in_row = &in_plane_region[(offset.y - ipad + y) as usize];
         // are we guaranteed to be all in frame this row?
         if offset.x < ipad
-          || offset.x + (sb_size as isize >> xdec) + ipad >= width as isize
+          || offset.x + (sb_h_size as isize >> xdec) + ipad >= width as isize
         {
           // No; do it the hard way.  off left or right edge, fill with flag.
-          for x in 0..(sb_size >> xdec) as isize + ipad * 2 {
+          for x in 0..(sb_h_size >> xdec) as isize + ipad * 2 {
             if offset.x + x >= ipad && offset.x + x < width as isize + ipad {
               out_row[x as usize] =
                 u16::cast_from(in_row[(offset.x + x - ipad) as usize]);
@@ -383,7 +388,7 @@ pub fn cdef_sb_padded_frame_copy<T: Pixel>(
           }
         } else {
           // Yes, do it the easy way: just copy
-          for x in 0..(sb_size >> xdec) as isize + ipad * 2 {
+          for x in 0..(sb_h_size >> xdec) as isize + ipad * 2 {
             out_row[x as usize] =
               u16::cast_from(in_row[(offset.x + x - ipad) as usize]);
           }
@@ -683,7 +688,7 @@ mod test {
     // a super-block in the middle (not near frame borders)
     let sbo = TileSuperBlockOffset(SuperBlockOffset { x: 1, y: 2 });
     let pad = 2;
-    let padded_frame = cdef_sb_padded_frame_copy(&fi, sbo, 1, &tile, pad);
+    let padded_frame = cdef_sb_padded_frame_copy(&fi, sbo, 1, 1, &tile, pad);
 
     // index (0, 0) of padded_frame should match index (64, 128) of the source
     // frame, have 2 cols and rows padding from the source frame on all sides,
@@ -714,7 +719,7 @@ mod test {
     // the top-right super-block (near top and right frame borders)
     let sbo = TileSuperBlockOffset(SuperBlockOffset { x: 7, y: 0 });
     let pad = 2;
-    let padded_frame = cdef_sb_padded_frame_copy(&fi, sbo, 1, &tile, pad);
+    let padded_frame = cdef_sb_padded_frame_copy(&fi, sbo, 1, 1, &tile, pad);
 
     // index (0, 0) of padded_frame should match index (448, 0) of the source
     // frame, have 2 cols/rows from the source frame left and below, 2

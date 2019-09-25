@@ -1174,9 +1174,10 @@ impl IndexMut<usize> for FrameRestorationUnits {
 pub struct RestorationPlaneConfig {
   pub lrf_type: u8,
   pub unit_size: usize,
-  // (1 << sb_shift) gives the number of superblocks both horizontally and
+  // (1 << sb_x_shift) gives the number of superblocks horizontally or
   // vertically in a restoration unit, not accounting for RU stretching
-  pub sb_shift: usize,
+  pub sb_h_shift: usize,
+  pub sb_v_shift: usize,
   pub sb_cols: usize, // actual number of SB cols in this LRU (accounting for stretch and crop)
   pub sb_rows: usize, // actual number of SB rows in this LRU (accounting for stretch and crop)
   // stripe height is 64 in all cases except 4:2:0 chroma planes where
@@ -1200,15 +1201,17 @@ pub struct RestorationPlaneOffset {
 
 impl RestorationPlane {
   pub fn new(
-    lrf_type: u8, unit_size: usize, sb_shift: usize, sb_cols: usize,
-    sb_rows: usize, stripe_decimate: usize, cols: usize, rows: usize,
+    lrf_type: u8, unit_size: usize, sb_h_shift: usize,
+    sb_v_shift: usize, sb_cols: usize, sb_rows: usize,
+    stripe_decimate: usize, cols: usize, rows: usize,
   ) -> RestorationPlane {
     let stripe_height = if stripe_decimate != 0 { 32 } else { 64 };
     RestorationPlane {
       cfg: RestorationPlaneConfig {
         lrf_type,
         unit_size,
-        sb_shift,
+        sb_h_shift,
+        sb_v_shift,
         sb_cols,
         sb_rows,
         stripe_height,
@@ -1253,7 +1256,8 @@ impl RestorationState {
     // stripe size is decimated in 4:2:0 (and only 4:2:0)
     let stripe_uv_decimate = if xdec > 0 && ydec > 0 { 1 } else { 0 };
     let y_sb_log2 = if fi.sequence.use_128x128_superblock { 7 } else { 6 };
-    let uv_sb_log2 = y_sb_log2 - stripe_uv_decimate;
+    let uv_sb_h_log2 = y_sb_log2 - xdec;
+    let uv_sb_v_log2 = y_sb_log2 - ydec;
 
     let (lrf_y_shift, lrf_uv_shift) = if fi.sequence.enable_large_lru {
       // Specific content does affect optimal LRU size choice, but the
@@ -1308,15 +1312,15 @@ impl RestorationState {
     if fi.tiling.cols > 1 || fi.tiling.rows > 1 {
       // despite suggestions to the contrary, apparently tiles can be
       // non-powers-of-2.
-      let trailing_zeros =
-        fi.tiling
-          .tile_width_sb
-          .trailing_zeros()
-          .min(fi.tiling.tile_height_sb.trailing_zeros()) as usize;
-      let tile_aligned_y_unit_size = 1 << (y_sb_log2 + trailing_zeros);
-      let tile_aligned_uv_unit_size = 1 << (uv_sb_log2 + trailing_zeros);
+      let trailing_h_zeros = fi.tiling.tile_width_sb.trailing_zeros() as usize;
+      let trailing_v_zeros = fi.tiling.tile_height_sb.trailing_zeros() as usize;
+      let tile_aligned_y_unit_size = 1 << (y_sb_log2 + trailing_h_zeros
+        .min(trailing_v_zeros));
+      let tile_aligned_uv_h_unit_size = 1 << (uv_sb_h_log2 + trailing_h_zeros);
+      let tile_aligned_uv_v_unit_size = 1 << (uv_sb_v_log2 + trailing_v_zeros);
       y_unit_size = y_unit_size.min(tile_aligned_y_unit_size);
-      uv_unit_size = uv_unit_size.min(tile_aligned_uv_unit_size);
+      uv_unit_size = uv_unit_size.min(tile_aligned_uv_h_unit_size
+        .min(tile_aligned_uv_v_unit_size));
 
       // But it's actually worse: LRUs can't span tiles (in our design
       // that is, spec allows it).  However, the spec mandates the last
@@ -1353,6 +1357,7 @@ impl RestorationState {
           RESTORE_SWITCHABLE,
           y_unit_size,
           y_unit_log2 - y_sb_log2,
+          y_unit_log2 - y_sb_log2,
           fi.sb_width,
           fi.sb_height,
           0,
@@ -1362,7 +1367,8 @@ impl RestorationState {
         RestorationPlane::new(
           RESTORE_SWITCHABLE,
           uv_unit_size,
-          uv_unit_log2 - uv_sb_log2,
+          uv_unit_log2 - uv_sb_h_log2,
+          uv_unit_log2 - uv_sb_v_log2,
           fi.sb_width,
           fi.sb_height,
           stripe_uv_decimate,
@@ -1372,7 +1378,8 @@ impl RestorationState {
         RestorationPlane::new(
           RESTORE_SWITCHABLE,
           uv_unit_size,
-          uv_unit_log2 - uv_sb_log2,
+          uv_unit_log2 - uv_sb_h_log2,
+          uv_unit_log2 - uv_sb_v_log2,
           fi.sb_width,
           fi.sb_height,
           stripe_uv_decimate,

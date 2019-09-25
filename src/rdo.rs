@@ -1590,17 +1590,19 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
 }
 
 fn rdo_loop_plane_error<T: Pixel>(
-  sbo: TileSuperBlockOffset, tile_sbo: TileSuperBlockOffset, sb_wh: usize,
-  fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, blocks: &TileBlocks<'_>,
-  test: &Frame<T>, pli: usize,
+  sbo: TileSuperBlockOffset, tile_sbo: TileSuperBlockOffset, sb_w: usize,
+  sb_h: usize, fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>,
+  blocks: &TileBlocks<'_>, test: &Frame<T>, pli: usize,
 ) -> u64 {
-  let sb_blocks =
-    if fi.sequence.use_128x128_superblock { 16 } else { 8 } * sb_wh;
+  let sb_w_blocks =
+    if fi.sequence.use_128x128_superblock { 16 } else { 8 } * sb_w;
+  let sb_h_blocks =
+    if fi.sequence.use_128x128_superblock { 16 } else { 8 } * sb_h;
   // Each direction block is 8x8 in y, potentially smaller if subsampled in chroma
   // accumulating in-frame and unpadded
   let mut err: u64 = 0;
-  for by in 0..sb_blocks {
-    for bx in 0..sb_blocks {
+  for by in 0..sb_h_blocks {
+    for bx in 0..sb_w_blocks {
       let bo = tile_sbo.block_offset(bx << 1, by << 1);
       if bo.0.x < blocks.cols() && bo.0.y < blocks.rows() {
         let in_plane = &ts.input_tile.planes[pli];
@@ -1648,30 +1650,38 @@ pub fn rdo_loop_decision<T: Pixel>(
   assert!(fi.sequence.enable_cdef || fi.sequence.enable_restoration);
   // Determine area of optimization: Which plane has the largest LRUs?
   // How many LRUs for each?
-  let mut sb_wh = 1; // how many superblocks wide the largest LRU
-                     // is/how much we're processing (same thing)
-  let mut lru_wh = [0; PLANES]; // how manu LRUs we're processing
+  let mut sb_w = 1; // how many superblocks wide the largest LRU
+                    // is/how much we're processing (same thing)
+  let mut sb_h = 1; // how many superblocks wide the largest LRU
+                    // is/how much we're processing (same thing)
+  let mut lru_w = [0; PLANES]; // how manu LRUs we're processing
+  let mut lru_h = [0; PLANES]; // how manu LRUs we're processing
   for pli in 0..PLANES {
-    let sb_shift = ts.restoration.planes[pli].rp_cfg.sb_shift;
-    if sb_wh < (1 << sb_shift) {
-      sb_wh = 1 << sb_shift;
+    let sb_h_shift = ts.restoration.planes[pli].rp_cfg.sb_h_shift;
+    let sb_v_shift = ts.restoration.planes[pli].rp_cfg.sb_v_shift;
+    if sb_w < (1 << sb_h_shift) {
+      sb_w = 1 << sb_h_shift;
+    }
+    if sb_h < (1 << sb_v_shift) {
+      sb_h = 1 << sb_v_shift;
     }
   }
   for pli in 0..PLANES {
-    let sb_shift = ts.restoration.planes[pli].rp_cfg.sb_shift;
-    let wh = 1 << sb_shift;
-    lru_wh[pli] = sb_wh / wh;
+    let sb_h_shift = ts.restoration.planes[pli].rp_cfg.sb_h_shift;
+    let sb_v_shift = ts.restoration.planes[pli].rp_cfg.sb_v_shift;
+    lru_w[pli] = sb_w / (1 << sb_h_shift);
+    lru_h[pli] = sb_h / (1 << sb_v_shift);
   }
 
-  let mut best_index = vec![vec![-1; sb_wh]; sb_wh];
+  let mut best_index = vec![vec![-1; sb_w]; sb_h];
   let mut best_lrf: Vec<Vec<Vec<RestorationFilter>>> = Vec::new();
   let sbo_0 = TileSuperBlockOffset(SuperBlockOffset { x: 0, y: 0 });
 
   for pli in 0..PLANES {
     best_lrf.push(Vec::new());
-    for lrfy in 0..lru_wh[pli] {
+    for lrfy in 0..lru_h[pli] {
       best_lrf[pli].push(Vec::new());
-      for _lrfx in 0..lru_wh[pli] {
+      for _lrfx in 0..lru_h[pli] {
         best_lrf[pli][lrfy].push(RestorationFilter::None);
       }
     }
@@ -1682,12 +1692,12 @@ pub fn rdo_loop_decision<T: Pixel>(
   // all stages; reconstruction goes to cdef so it must be additionally padded
   let mut cdef_input = None;
   let const_rec = ts.rec.as_const();
-  let mut lrf_input = cdef_sb_frame(fi, sb_wh, &const_rec);
-  let mut lrf_output = cdef_sb_frame(fi, sb_wh, &const_rec);
+  let mut lrf_input = cdef_sb_frame(fi, sb_w, sb_h, &const_rec);
+  let mut lrf_output = cdef_sb_frame(fi, sb_w, sb_h, &const_rec);
   if fi.sequence.enable_cdef {
     // min sized temporary frame; sb_wh number of superblocks with padding
     cdef_input =
-      Some(cdef_sb_padded_frame_copy(fi, tile_sbo, sb_wh, &const_rec, 2));
+      Some(cdef_sb_padded_frame_copy(fi, tile_sbo, sb_w, sb_h, &const_rec, 2));
   } else {
     // No cdef; copy lrf input from reconstructiton
     for pli in 0..PLANES {
@@ -1724,7 +1734,8 @@ pub fn rdo_loop_decision<T: Pixel>(
         &cw.bc.blocks.as_const(),
         sbo_0,
         tile_sbo,
-        sb_wh,
+        sb_w,
+        sb_h,
         bd,
       ),
     )
@@ -1735,8 +1746,8 @@ pub fn rdo_loop_decision<T: Pixel>(
   while cdef_change || lrf_change {
     // check for [new] cdef indices if cdef is enabled.
     if let Some((cdef_input, cdef_dirs)) = cdef_data.as_ref() {
-      for sby in 0..sb_wh {
-        for sbx in 0..sb_wh {
+      for sby in 0..sb_h {
+        for sbx in 0..sb_w {
           let prev_best_index = best_index[sby][sbx];
           let loop_sbo =
             TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
@@ -1785,6 +1796,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                     err += rdo_loop_plane_error(
                       loop_sbo,
                       loop_tile_sbo,
+                      1,
                       1,
                       fi,
                       ts,
@@ -1861,6 +1873,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                   loop_sbo,
                   loop_tile_sbo,
                   1,
+                  1,
                   fi,
                   ts,
                   &cw.bc.blocks.as_const(),
@@ -1880,6 +1893,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                 err += rdo_loop_plane_error(
                   loop_sbo,
                   loop_tile_sbo,
+                  1,
                   1,
                   fi,
                   ts,
@@ -1917,11 +1931,11 @@ pub fn rdo_loop_decision<T: Pixel>(
 
     // check for new best restoration filter if enabled
     if fi.sequence.enable_restoration {
-      // need cdef output from best index, not just last iteration
 
+      // need cdef output from best index, not just last iteration
       if let Some((cdef_input, cdef_dirs)) = cdef_data.as_ref() {
-        for sby in 0..sb_wh {
-          for sbx in 0..sb_wh {
+        for sby in 0..sb_h {
+          for sbx in 0..sb_w {
             let loop_sbo =
               TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
             let loop_tile_sbo = TileSuperBlockOffset(SuperBlockOffset {
@@ -1943,17 +1957,19 @@ pub fn rdo_loop_decision<T: Pixel>(
       }
 
       for pli in 0..PLANES {
-        let sb_shift = ts.restoration.planes[pli].rp_cfg.sb_shift;
+        let sb_h_shift = ts.restoration.planes[pli].rp_cfg.sb_h_shift;
+        let sb_v_shift = ts.restoration.planes[pli].rp_cfg.sb_v_shift;
         let stripe_height = ts.restoration.planes[pli].rp_cfg.stripe_height;
         let unit_size = ts.restoration.planes[pli].rp_cfg.unit_size;
-        let wh = 1 << sb_shift; // width/height, in sb, of this LRU in this plane
-        for lru_y in 0..lru_wh[pli] {
+        let lru_sb_w = 1 << sb_h_shift; // width, in sb, of an LRU in this plane
+        let lru_sb_h = 1 << sb_v_shift; // height, in sb, of an LRU in this plane
+        for lru_y in 0..lru_h[pli] {
           // number of LRUs vertically
-          for lru_x in 0..lru_wh[pli] {
+          for lru_x in 0..lru_w[pli] {
             // number of LRUs horizontally
             let loop_sbo = TileSuperBlockOffset(SuperBlockOffset {
-              x: lru_x * wh,
-              y: lru_y * wh,
+              x: lru_x * lru_sb_w,
+              y: lru_y * lru_sb_h,
             });
             let loop_tile_sbo = TileSuperBlockOffset(SuperBlockOffset {
               x: tile_sbo.0.x + loop_sbo.0.x,
@@ -1970,7 +1986,8 @@ pub fn rdo_loop_decision<T: Pixel>(
               let err = rdo_loop_plane_error(
                 loop_sbo,
                 loop_tile_sbo,
-                wh,
+                lru_sb_w,
+                lru_sb_h,
                 fi,
                 ts,
                 &cw.bc.blocks.as_const(),
@@ -2027,7 +2044,8 @@ pub fn rdo_loop_decision<T: Pixel>(
                 let err = rdo_loop_plane_error(
                   loop_sbo,
                   loop_tile_sbo,
-                  wh,
+                  lru_sb_w,
+                  lru_sb_h,
                   fi,
                   ts,
                   &cw.bc.blocks.as_const(),
