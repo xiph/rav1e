@@ -400,13 +400,16 @@ struct VertPaddedIter<'a, T: Pixel> {
 impl<'a, 'b, T: Pixel> VertPaddedIter<'a, T> {
   fn new(
     cdeffed: &PlaneSlice<'a, T>, deblocked: &PlaneSlice<'a, T>,
-    stripe_h: usize, crop: usize, r: usize,
+    stripe_h: usize, crop: usize,
   ) -> VertPaddedIter<'a, T> {
     // cdeffed and deblocked must start at the same coordinates from their
     // underlying planes. Since cropping is provided via a separate params, the
     // height of the underlying planes do not need to match.
     assert_eq!(cdeffed.x, deblocked.x);
     assert_eq!(cdeffed.y, deblocked.y);
+
+    // To share integral images, always use the max box filter radius of 2
+    let r = 2;
 
     // The number of rows outside the stripe are needed
     let rows_above = r + 2;
@@ -613,55 +616,45 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
   let s_r2: u32 = SGRPROJ_PARAMS_S[set as usize][0];
   let s_r1: u32 = SGRPROJ_PARAMS_S[set as usize][1];
 
-  let max_r: usize = if s_r2 > 0 {
-    2
-  } else if s_r1 > 0 {
-    1
-  } else {
-    0
-  };
-  {
-    // Number of elements outside the stripe
-    let left_w = max_r + 2;
-    let right_w = max_r + 1;
+  // Number of elements outside the stripe
+  let left_w = 4; // max radius of 2 + 2 padding
+  let right_w = 3; // max radius of 2 + 1 padding
 
-    assert_eq!(cdeffed.x, deblocked.x);
+  assert_eq!(cdeffed.x, deblocked.x);
 
-    // Find how many unique elements to use to the left and right
-    let left_uniques = if cdeffed.x == 0 { 0 } else { left_w };
-    let right_uniques = right_w.min(crop_w - stripe_w);
+  // Find how many unique elements to use to the left and right
+  let left_uniques = if cdeffed.x == 0 { 0 } else { left_w };
+  let right_uniques = right_w.min(crop_w - stripe_w);
 
-    // Find the total number of unique elements used
-    let row_uniques = left_uniques + stripe_w + right_uniques;
+  // Find the total number of unique elements used
+  let row_uniques = left_uniques + stripe_w + right_uniques;
 
-    // Negative start indices result in repeating the first element of the row
-    let start_index_x = if cdeffed.x == 0 { -(left_w as isize) } else { 0 };
+  // Negative start indices result in repeating the first element of the row
+  let start_index_x = if cdeffed.x == 0 { -(left_w as isize) } else { 0 };
 
-    let mut rows_iter = VertPaddedIter::new(
-      // Move left to encompass all the used data
-      &cdeffed.go_left(left_uniques),
-      &deblocked.go_left(left_uniques),
-      // since r2 uses every other row, we need an extra row if stripe_h is odd
-      stripe_h + if s_r2 > 0 { stripe_h & 1 } else { 0 },
-      crop_h,
-      max_r,
+  let mut rows_iter = VertPaddedIter::new(
+    // Move left to encompass all the used data
+    &cdeffed.go_left(left_uniques),
+    &deblocked.go_left(left_uniques),
+    // since r2 uses every other row, we need an extra row if stripe_h is odd
+    stripe_h + if s_r2 > 0 { stripe_h & 1 } else { 0 },
+    crop_h,
+  )
+  .map(|row: &[T]| {
+    HorzPaddedIter::new(
+      // Limit how many unique elements we use
+      &row[..row_uniques],
+      start_index_x,
+      left_w + stripe_w + right_w,
     )
-    .map(|row: &[T]| {
-      HorzPaddedIter::new(
-        // Limit how many unique elements we use
-        &row[..row_uniques],
-        start_index_x,
-        left_w + stripe_w + right_w,
-      )
-    });
+  });
 
-    setup_integral_image(
-      &mut rows_iter,
-      integral_image,
-      sq_integral_image,
-      STRIPE_FILTER_INTEGRAL_IMAGE_STRIDE,
-    );
-  }
+  setup_integral_image(
+    &mut rows_iter,
+    integral_image,
+    sq_integral_image,
+    STRIPE_FILTER_INTEGRAL_IMAGE_STRIDE,
+  );
 
   /* prime the intermediate arrays */
   // One oddness about the radius=2 intermediate array computations that
@@ -682,9 +675,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
     );
   }
   if s_r1 > 0 {
-    let r_diff = max_r - 1;
-    let integral_image_offset =
-      r_diff + r_diff * STRIPE_FILTER_INTEGRAL_IMAGE_STRIDE;
+    let integral_image_offset = STRIPE_FILTER_INTEGRAL_IMAGE_STRIDE + 1;
     sgrproj_box_ab_r1(
       &mut a_r1[0],
       &mut b_r1[0],
@@ -746,9 +737,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
     for dy in 0..(2.min(stripe_h - y)) {
       let y = y + dy;
       if s_r1 > 0 {
-        let r_diff = max_r - 1;
-        let integral_image_offset =
-          r_diff + r_diff * STRIPE_FILTER_INTEGRAL_IMAGE_STRIDE;
+        let integral_image_offset = STRIPE_FILTER_INTEGRAL_IMAGE_STRIDE + 1;
         sgrproj_box_ab_r1(
           &mut a_r1[(y + 2) % 3],
           &mut b_r1[(y + 2) % 3],
@@ -826,38 +815,28 @@ pub fn sgrproj_solve<T: Pixel>(
   let mut h: [[f64; 2]; 2] = [[0., 0.], [0., 0.]];
   let mut c: [f64; 2] = [0., 0.];
 
-  let max_r = if s_r2 > 0 {
-    2
-  } else if s_r1 > 0 {
-    1
-  } else {
-    0
-  };
-  {
-    let mut rows_iter = VertPaddedIter::new(
-      cdeffed,
-      cdeffed,
-      // since r2 uses every other row, we need an extra row if cdef_h is odd
-      cdef_h + if s_r2 > 0 { cdef_h & 1 } else { 0 },
-      cdef_h,
-      max_r,
+  let mut rows_iter = VertPaddedIter::new(
+    cdeffed,
+    cdeffed,
+    // since r2 uses every other row, we need an extra row if cdef_h is odd
+    cdef_h + if s_r2 > 0 { cdef_h & 1 } else { 0 },
+    cdef_h,
+  )
+  .map(|row: &[T]| {
+    let left_w = 4; // max radius of 2 + 2 padding
+    let right_w = 3; // max radius of 2 + 1 padding
+    HorzPaddedIter::new(
+      &row[..cdef_w],
+      -(left_w as isize),
+      left_w + cdef_w + right_w,
     )
-    .map(|row: &[T]| {
-      let left_w = max_r + 2;
-      let right_w = max_r + 1;
-      HorzPaddedIter::new(
-        &row[..cdef_w],
-        -(left_w as isize),
-        left_w + cdef_w + right_w,
-      )
-    });
-    setup_integral_image(
-      &mut rows_iter,
-      integral_image,
-      sq_integral_image,
-      SOLVE_INTEGRAL_IMAGE_STRIDE,
-    );
-  }
+  });
+  setup_integral_image(
+    &mut rows_iter,
+    integral_image,
+    sq_integral_image,
+    SOLVE_INTEGRAL_IMAGE_STRIDE,
+  );
 
   /* prime the intermediate arrays */
   // One oddness about the radius=2 intermediate array computations that
@@ -878,8 +857,7 @@ pub fn sgrproj_solve<T: Pixel>(
     );
   }
   if s_r1 > 0 {
-    let r_diff = max_r - 1;
-    let integral_image_offset = r_diff + r_diff * SOLVE_INTEGRAL_IMAGE_STRIDE;
+    let integral_image_offset = SOLVE_INTEGRAL_IMAGE_STRIDE + 1;
     sgrproj_box_ab_r1(
       &mut a_r1[0],
       &mut b_r1[0],
@@ -941,9 +919,7 @@ pub fn sgrproj_solve<T: Pixel>(
     for dy in 0..(2.min(cdef_h - y)) {
       let y = y + dy;
       if s_r1 > 0 {
-        let r_diff = max_r - 1;
-        let integral_image_offset =
-          r_diff + r_diff * SOLVE_INTEGRAL_IMAGE_STRIDE;
+        let integral_image_offset = SOLVE_INTEGRAL_IMAGE_STRIDE + 1;
         sgrproj_box_ab_r1(
           &mut a_r1[(y + 2) % 3],
           &mut b_r1[(y + 2) % 3],
