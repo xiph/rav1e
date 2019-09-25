@@ -36,10 +36,13 @@ use crate::stats::EncoderStats;
 use crate::tiling::*;
 use crate::transform::*;
 use crate::util::*;
+use crate::serialize::{Deserialize, Serialize};
+
 use arg_enum_proc_macro::ArgEnum;
 use arrayvec::*;
 use bitstream_io::{BigEndian, BitWriter};
 use rayon::iter::*;
+
 use std::collections::VecDeque;
 use std::io::Write;
 use std::sync::Arc;
@@ -81,7 +84,7 @@ impl<T: Pixel> ReferenceFramesSet<T> {
   }
 }
 
-#[derive(ArgEnum, Copy, Clone, Debug, PartialEq)]
+#[derive(ArgEnum, Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[repr(C)]
 pub enum Tune {
   Psnr,
