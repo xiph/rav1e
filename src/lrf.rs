@@ -520,7 +520,7 @@ impl<'a, T: Pixel> Iterator for HorzPaddedIter<'a, T> {
 
 impl<T: Pixel> ExactSizeIterator for HorzPaddedIter<'_, T> {}
 
-fn setup_integral_image<'a, T: Pixel>(
+pub fn setup_integral_image<'a, T: Pixel>(
   integral_image_buffer: &mut IntegralImageBuffer,
   integral_image_stride: usize, crop_w: usize, crop_h: usize, stripe_w: usize,
   stripe_h: usize, cdeffed: &PlaneSlice<T>, deblocked: &PlaneSlice<T>,
@@ -622,9 +622,8 @@ fn setup_integral_image<'a, T: Pixel>(
 pub fn sgrproj_stripe_filter<T: Pixel>(
   set: u8, xqd: [i8; 2], fi: &FrameInvariants<T>,
   integral_image_buffer: &mut IntegralImageBuffer,
-  integral_image_stride: usize, crop_w: usize, crop_h: usize, stripe_w: usize,
-  stripe_h: usize, cdeffed: &PlaneSlice<T>, deblocked: &PlaneSlice<T>,
-  out: &mut PlaneMutSlice<T>,
+  integral_image_stride: usize, stripe_w: usize, stripe_h: usize,
+  cdeffed: &PlaneSlice<T>, out: &mut PlaneMutSlice<T>,
 ) {
   let bdm8 = fi.sequence.bit_depth - 8;
   let mut a_r2: [[u32; IMAGE_WIDTH_MAX + 2]; 2] =
@@ -641,17 +640,6 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
 
   let s_r2: u32 = SGRPROJ_PARAMS_S[set as usize][0];
   let s_r1: u32 = SGRPROJ_PARAMS_S[set as usize][1];
-
-  setup_integral_image(
-    integral_image_buffer,
-    integral_image_stride,
-    crop_w,
-    crop_h,
-    stripe_w,
-    stripe_h,
-    cdeffed,
-    deblocked,
-  );
 
   /* prime the intermediate arrays */
   // One oddness about the radius=2 intermediate array computations that
@@ -811,17 +799,6 @@ pub fn sgrproj_solve<T: Pixel>(
 
   let mut h: [[f64; 2]; 2] = [[0., 0.], [0., 0.]];
   let mut c: [f64; 2] = [0., 0.];
-
-  setup_integral_image(
-    integral_image_buffer,
-    SOLVE_IMAGE_STRIDE,
-    cdef_w,
-    cdef_h,
-    cdef_w,
-    cdef_h,
-    cdeffed,
-    cdeffed,
-  );
 
   /* prime the intermediate arrays */
   // One oddness about the radius=2 intermediate array computations that
@@ -1425,10 +1402,7 @@ impl RestorationState {
                 continue;
               }
 
-              sgrproj_stripe_filter(
-                set,
-                xqd,
-                fi,
+              setup_integral_image(
                 &mut stripe_filter_buffer,
                 STRIPE_IMAGE_STRIDE,
                 crop_w - x,
@@ -1438,6 +1412,18 @@ impl RestorationState {
                 &cdeffed.planes[pli]
                   .slice(PlaneOffset { x: x as isize, y: stripe_start_y }),
                 &pre_cdef.planes[pli]
+                  .slice(PlaneOffset { x: x as isize, y: stripe_start_y }),
+              );
+
+              sgrproj_stripe_filter(
+                set,
+                xqd,
+                fi,
+                &mut stripe_filter_buffer,
+                STRIPE_IMAGE_STRIDE,
+                size,
+                stripe_size,
+                &cdeffed.planes[pli]
                   .slice(PlaneOffset { x: x as isize, y: stripe_start_y }),
                 &mut out.planes[pli]
                   .mut_slice(PlaneOffset { x: x as isize, y: stripe_start_y }),
