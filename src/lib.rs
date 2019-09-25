@@ -54,6 +54,16 @@ extern crate pretty_assertions;
 #[macro_use]
 extern crate log;
 
+mod serialize {
+  cfg_if::cfg_if! {
+    if #[cfg(feature="serialize")] {
+      pub use serde::*;
+    } else {
+      pub use noop_proc_macro::{Deserialize, Serialize};
+    }
+  }
+}
+
 mod hawktracer {
   cfg_if::cfg_if! {
     if #[cfg(feature="tracing")] {

@@ -11,6 +11,7 @@ use err_derive::Error;
 use itertools::Itertools;
 use num_derive::*;
 
+use crate::serialize::{Deserialize, Serialize};
 use crate::api::color::*;
 use crate::api::Rational;
 use crate::api::{Context, ContextInner};
@@ -28,13 +29,15 @@ const MAX_RDO_LOOKAHEAD_FRAMES: usize = usize::max_value() - 1;
 const MAX_MAX_KEY_FRAME_INTERVAL: u64 = i32::max_value() as u64 / 3;
 
 /// Encoder settings which impact the produced bitstream.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct EncoderConfig {
   // output size
   /// Width of the frames in pixels.
   pub width: usize,
   /// Height of the frames in pixels.
   pub height: usize,
+  /// Video time base.
+  pub time_base: Rational,
 
   // data format and ancillary color information
   /// Bit depth.
@@ -59,8 +62,6 @@ pub struct EncoderConfig {
   pub still_picture: bool,
 
   // encoder configuration
-  /// Video time base.
-  pub time_base: Rational,
   /// The *minimum* interval between two keyframes
   pub min_key_frame_interval: u64,
   /// The *maximum* interval between two keyframes
@@ -102,12 +103,13 @@ pub struct EncoderConfig {
   pub tiles: usize,
   /// Number of frames to read ahead for the RDO lookahead computation.
   pub rdo_lookahead_frames: usize,
-  /// Settings which affect the enconding speed vs. quality trade-off.
-  pub speed_settings: SpeedSettings,
   /// If enabled, computes the PSNR values and stores them in [`Packet`].
   ///
   /// [`Packet`]: struct.Packet.html#structfield.psnr
   pub show_psnr: bool,
+
+  /// Settings which affect the enconding speed vs. quality trade-off.
+  pub speed_settings: SpeedSettings,
 }
 
 /// Default preset for EncoderConfig: it is a balance between quality and
@@ -236,7 +238,7 @@ impl fmt::Display for EncoderConfig {
 }
 
 /// Contains the speed settings.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct SpeedSettings {
   /// Minimum block size. Smaller is slower.
   ///
@@ -464,7 +466,16 @@ impl SpeedSettings {
 }
 
 /// Prediction modes to search.
-#[derive(Clone, Copy, Debug, PartialOrd, PartialEq, FromPrimitive)]
+#[derive(
+  Clone,
+  Copy,
+  Debug,
+  PartialOrd,
+  PartialEq,
+  FromPrimitive,
+  Serialize,
+  Deserialize,
+)]
 pub enum PredictionModesSetting {
   /// Only simple prediction modes.
   Simple,

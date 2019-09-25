@@ -60,6 +60,27 @@ impl Rational {
     self.num as f64 / self.den as f64
   }
 }
+#[cfg(feature = "serialize")]
+impl serde::Serialize for Rational {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    (self.num, self.den).serialize(serializer)
+  }
+}
+
+#[cfg(feature = "serialize")]
+impl<'a> serde::Deserialize<'a> for Rational {
+  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+  where
+    D: serde::Deserializer<'a>,
+  {
+    let (num, den) = serde::Deserialize::deserialize(deserializer)?;
+
+    Ok(Rational::new(num, den))
+  }
+}
 
 /// Possible types of a frame.
 #[allow(dead_code, non_camel_case_types)]

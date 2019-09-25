@@ -10,6 +10,8 @@
 #![allow(non_camel_case_types)]
 #![allow(dead_code)]
 
+use crate::serialize::{Deserialize, Serialize};
+
 use self::BlockSize::*;
 use self::TxSize::*;
 use crate::context::*;
@@ -112,7 +114,9 @@ pub enum PartitionType {
   PARTITION_INVALID,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Ord, Eq)]
+#[derive(
+  Debug, Copy, Clone, PartialEq, PartialOrd, Ord, Eq, Serialize, Deserialize,
+)]
 pub enum BlockSize {
   BLOCK_4X4,
   BLOCK_4X8,
