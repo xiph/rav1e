@@ -12,7 +12,7 @@ use super::*;
 use crate::context::*;
 use crate::encoder::*;
 use crate::frame::*;
-use crate::lrf::{IntegralImageBuffer, INTEGRAL_IMAGE_SIZE};
+use crate::lrf::{IntegralImageBuffer, SOLVE_IMAGE_SIZE};
 use crate::quantize::*;
 use crate::rdo::*;
 use crate::stats::EncoderStats;
@@ -122,7 +122,7 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
         })
         .collect(),
       rdo: RDOTracker::new(),
-      integral_buffer: IntegralImageBuffer::zeroed(INTEGRAL_IMAGE_SIZE),
+      integral_buffer: IntegralImageBuffer::zeroed(SOLVE_IMAGE_SIZE),
       enc_stats: EncoderStats::default(),
     }
   }

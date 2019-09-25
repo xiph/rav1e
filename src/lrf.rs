@@ -71,22 +71,19 @@ pub const SGRPROJ_PARAMS_S: [[u32; 2]; 1 << SGRPROJ_PARAMS_BITS] = [
   [22, 0],
 ];
 
-pub const STRIPE_FILTER_WIDTH_MAX: usize =
-  (1 << RESTORATION_TILESIZE_MAX_LOG2) * 2;
-pub const STRIPE_FILTER_INTEGRAL_IMAGE_STRIDE: usize =
-  STRIPE_FILTER_WIDTH_MAX + 6 + 2;
-pub const STRIPE_FILTER_INTEGRAL_IMAGE_HEIGHT: usize = 64 + 6 + 2;
-pub const STRIPE_FILTER_INTEGRAL_IMAGE_SIZE: usize =
-  STRIPE_FILTER_INTEGRAL_IMAGE_STRIDE * STRIPE_FILTER_INTEGRAL_IMAGE_HEIGHT;
+pub const SOLVE_IMAGE_MAX: usize = (1 << RESTORATION_TILESIZE_MAX_LOG2);
+pub const SOLVE_IMAGE_STRIDE: usize = SOLVE_IMAGE_MAX + 6 + 2;
+pub const SOLVE_IMAGE_HEIGHT: usize = SOLVE_IMAGE_STRIDE;
+pub const SOLVE_IMAGE_SIZE: usize = SOLVE_IMAGE_STRIDE * SOLVE_IMAGE_HEIGHT;
 
-pub const INTEGRAL_IMAGE_MAX: usize = 1 << RESTORATION_TILESIZE_MAX_LOG2;
-pub const SOLVE_INTEGRAL_IMAGE_STRIDE: usize = INTEGRAL_IMAGE_MAX + 6 + 2;
-pub const SOLVE_INTEGRAL_IMAGE_SIZE: usize =
-  SOLVE_INTEGRAL_IMAGE_STRIDE * SOLVE_INTEGRAL_IMAGE_STRIDE;
+pub const STRIPE_IMAGE_MAX: usize = (1 << RESTORATION_TILESIZE_MAX_LOG2)
+  + (1 << RESTORATION_TILESIZE_MAX_LOG2 - 1);
+pub const STRIPE_IMAGE_STRIDE: usize = STRIPE_IMAGE_MAX + 6 + 2;
+pub const STRIPE_IMAGE_HEIGHT: usize = 64 + 6 + 2;
+pub const STRIPE_IMAGE_SIZE: usize = STRIPE_IMAGE_STRIDE * STRIPE_IMAGE_HEIGHT;
 
-pub const INTEGRAL_IMAGE_SIZE: usize =
-  [SOLVE_INTEGRAL_IMAGE_SIZE, STRIPE_FILTER_INTEGRAL_IMAGE_SIZE]
-    [(SOLVE_INTEGRAL_IMAGE_SIZE < STRIPE_FILTER_INTEGRAL_IMAGE_SIZE) as usize];
+pub const IMAGE_WIDTH_MAX: usize = [STRIPE_IMAGE_MAX, SOLVE_IMAGE_MAX]
+  [(STRIPE_IMAGE_MAX < SOLVE_IMAGE_MAX) as usize];
 
 /// The buffer used in `sgrproj_stripe_filter()` and `sgrproj_solve()`.
 #[derive(Debug)]
@@ -588,30 +585,26 @@ fn setup_integral_image<'a, T: Pixel>(
 
 pub fn sgrproj_stripe_filter<T: Pixel>(
   set: u8, xqd: [i8; 2], fi: &FrameInvariants<T>,
-  integral_image_buffer: &mut IntegralImageBuffer, crop_w: usize,
-  crop_h: usize, stripe_w: usize, stripe_h: usize, cdeffed: &PlaneSlice<T>,
-  deblocked: &PlaneSlice<T>, out: &mut PlaneMutSlice<T>,
+  integral_image_buffer: &mut IntegralImageBuffer,
+  integral_image_stride: usize, crop_w: usize, crop_h: usize, stripe_w: usize,
+  stripe_h: usize, cdeffed: &PlaneSlice<T>, deblocked: &PlaneSlice<T>,
+  out: &mut PlaneMutSlice<T>,
 ) {
-  assert!(stripe_h <= 64);
-  assert!(stripe_w <= STRIPE_FILTER_WIDTH_MAX);
-
   let integral_image = &mut integral_image_buffer.integral_image;
   let sq_integral_image = &mut integral_image_buffer.sq_integral_image;
 
   let bdm8 = fi.sequence.bit_depth - 8;
-  let mut a_r2: [[u32; STRIPE_FILTER_WIDTH_MAX + 2]; 2] =
-    [[0; STRIPE_FILTER_WIDTH_MAX + 2]; 2];
-  let mut b_r2: [[u32; STRIPE_FILTER_WIDTH_MAX + 2]; 2] =
-    [[0; STRIPE_FILTER_WIDTH_MAX + 2]; 2];
-  let mut f_r2_0: [u32; STRIPE_FILTER_WIDTH_MAX] =
-    [0; STRIPE_FILTER_WIDTH_MAX];
-  let mut f_r2_1: [u32; STRIPE_FILTER_WIDTH_MAX] =
-    [0; STRIPE_FILTER_WIDTH_MAX];
-  let mut a_r1: [[u32; STRIPE_FILTER_WIDTH_MAX + 2]; 3] =
-    [[0; STRIPE_FILTER_WIDTH_MAX + 2]; 3];
-  let mut b_r1: [[u32; STRIPE_FILTER_WIDTH_MAX + 2]; 3] =
-    [[0; STRIPE_FILTER_WIDTH_MAX + 2]; 3];
-  let mut f_r1: [u32; STRIPE_FILTER_WIDTH_MAX] = [0; STRIPE_FILTER_WIDTH_MAX];
+  let mut a_r2: [[u32; IMAGE_WIDTH_MAX + 2]; 2] =
+    [[0; IMAGE_WIDTH_MAX + 2]; 2];
+  let mut b_r2: [[u32; IMAGE_WIDTH_MAX + 2]; 2] =
+    [[0; IMAGE_WIDTH_MAX + 2]; 2];
+  let mut f_r2_0: [u32; IMAGE_WIDTH_MAX] = [0; IMAGE_WIDTH_MAX];
+  let mut f_r2_1: [u32; IMAGE_WIDTH_MAX] = [0; IMAGE_WIDTH_MAX];
+  let mut a_r1: [[u32; IMAGE_WIDTH_MAX + 2]; 3] =
+    [[0; IMAGE_WIDTH_MAX + 2]; 3];
+  let mut b_r1: [[u32; IMAGE_WIDTH_MAX + 2]; 3] =
+    [[0; IMAGE_WIDTH_MAX + 2]; 3];
+  let mut f_r1: [u32; IMAGE_WIDTH_MAX] = [0; IMAGE_WIDTH_MAX];
 
   let s_r2: u32 = SGRPROJ_PARAMS_S[set as usize][0];
   let s_r1: u32 = SGRPROJ_PARAMS_S[set as usize][1];
@@ -648,12 +641,11 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
       left_w + stripe_w + right_w,
     )
   });
-
   setup_integral_image(
     &mut rows_iter,
     integral_image,
     sq_integral_image,
-    STRIPE_FILTER_INTEGRAL_IMAGE_STRIDE,
+    integral_image_stride,
   );
 
   /* prime the intermediate arrays */
@@ -667,7 +659,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
       &mut b_r2[0],
       integral_image,
       sq_integral_image,
-      STRIPE_FILTER_INTEGRAL_IMAGE_STRIDE,
+      integral_image_stride,
       0,
       stripe_w,
       s_r2,
@@ -675,13 +667,13 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
     );
   }
   if s_r1 > 0 {
-    let integral_image_offset = STRIPE_FILTER_INTEGRAL_IMAGE_STRIDE + 1;
+    let integral_image_offset = integral_image_stride + 1;
     sgrproj_box_ab_r1(
       &mut a_r1[0],
       &mut b_r1[0],
       &integral_image[integral_image_offset..],
       &sq_integral_image[integral_image_offset..],
-      STRIPE_FILTER_INTEGRAL_IMAGE_STRIDE,
+      integral_image_stride,
       0,
       stripe_w,
       s_r1,
@@ -692,7 +684,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
       &mut b_r1[1],
       &integral_image[integral_image_offset..],
       &sq_integral_image[integral_image_offset..],
-      STRIPE_FILTER_INTEGRAL_IMAGE_STRIDE,
+      integral_image_stride,
       1,
       stripe_w,
       s_r1,
@@ -711,7 +703,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
         &mut b_r2[(y / 2 + 1) % 2],
         integral_image,
         sq_integral_image,
-        STRIPE_FILTER_INTEGRAL_IMAGE_STRIDE,
+        integral_image_stride,
         y + 2,
         stripe_w,
         s_r2,
@@ -737,13 +729,13 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
     for dy in 0..(2.min(stripe_h - y)) {
       let y = y + dy;
       if s_r1 > 0 {
-        let integral_image_offset = STRIPE_FILTER_INTEGRAL_IMAGE_STRIDE + 1;
+        let integral_image_offset = integral_image_stride + 1;
         sgrproj_box_ab_r1(
           &mut a_r1[(y + 2) % 3],
           &mut b_r1[(y + 2) % 3],
           &integral_image[integral_image_offset..],
           &sq_integral_image[integral_image_offset..],
-          STRIPE_FILTER_INTEGRAL_IMAGE_STRIDE,
+          integral_image_stride,
           y + 2,
           stripe_w,
           s_r1,
@@ -797,17 +789,17 @@ pub fn sgrproj_solve<T: Pixel>(
   let sq_integral_image = &mut integral_image_buffer.sq_integral_image;
   let bdm8 = fi.sequence.bit_depth - 8;
 
-  let mut a_r2: [[u32; INTEGRAL_IMAGE_MAX + 2]; 2] =
-    [[0; INTEGRAL_IMAGE_MAX + 2]; 2];
-  let mut b_r2: [[u32; INTEGRAL_IMAGE_MAX + 2]; 2] =
-    [[0; INTEGRAL_IMAGE_MAX + 2]; 2];
-  let mut f_r2_0: [u32; INTEGRAL_IMAGE_MAX] = [0; INTEGRAL_IMAGE_MAX];
-  let mut f_r2_1: [u32; INTEGRAL_IMAGE_MAX] = [0; INTEGRAL_IMAGE_MAX];
-  let mut a_r1: [[u32; INTEGRAL_IMAGE_MAX + 2]; 3] =
-    [[0; INTEGRAL_IMAGE_MAX + 2]; 3];
-  let mut b_r1: [[u32; INTEGRAL_IMAGE_MAX + 2]; 3] =
-    [[0; INTEGRAL_IMAGE_MAX + 2]; 3];
-  let mut f_r1: [u32; INTEGRAL_IMAGE_MAX] = [0; INTEGRAL_IMAGE_MAX];
+  let mut a_r2: [[u32; IMAGE_WIDTH_MAX + 2]; 2] =
+    [[0; IMAGE_WIDTH_MAX + 2]; 2];
+  let mut b_r2: [[u32; IMAGE_WIDTH_MAX + 2]; 2] =
+    [[0; IMAGE_WIDTH_MAX + 2]; 2];
+  let mut f_r2_0: [u32; IMAGE_WIDTH_MAX] = [0; IMAGE_WIDTH_MAX];
+  let mut f_r2_1: [u32; IMAGE_WIDTH_MAX] = [0; IMAGE_WIDTH_MAX];
+  let mut a_r1: [[u32; IMAGE_WIDTH_MAX + 2]; 3] =
+    [[0; IMAGE_WIDTH_MAX + 2]; 3];
+  let mut b_r1: [[u32; IMAGE_WIDTH_MAX + 2]; 3] =
+    [[0; IMAGE_WIDTH_MAX + 2]; 3];
+  let mut f_r1: [u32; IMAGE_WIDTH_MAX] = [0; IMAGE_WIDTH_MAX];
 
   let s_r2: u32 = SGRPROJ_PARAMS_S[set as usize][0];
   let s_r1: u32 = SGRPROJ_PARAMS_S[set as usize][1];
@@ -835,7 +827,7 @@ pub fn sgrproj_solve<T: Pixel>(
     &mut rows_iter,
     integral_image,
     sq_integral_image,
-    SOLVE_INTEGRAL_IMAGE_STRIDE,
+    SOLVE_IMAGE_STRIDE,
   );
 
   /* prime the intermediate arrays */
@@ -849,7 +841,7 @@ pub fn sgrproj_solve<T: Pixel>(
       &mut b_r2[0],
       integral_image,
       sq_integral_image,
-      SOLVE_INTEGRAL_IMAGE_STRIDE,
+      SOLVE_IMAGE_STRIDE,
       0,
       cdef_w,
       s_r2,
@@ -857,13 +849,13 @@ pub fn sgrproj_solve<T: Pixel>(
     );
   }
   if s_r1 > 0 {
-    let integral_image_offset = SOLVE_INTEGRAL_IMAGE_STRIDE + 1;
+    let integral_image_offset = SOLVE_IMAGE_STRIDE + 1;
     sgrproj_box_ab_r1(
       &mut a_r1[0],
       &mut b_r1[0],
       &integral_image[integral_image_offset..],
       &sq_integral_image[integral_image_offset..],
-      SOLVE_INTEGRAL_IMAGE_STRIDE,
+      SOLVE_IMAGE_STRIDE,
       0,
       cdef_w,
       s_r1,
@@ -874,7 +866,7 @@ pub fn sgrproj_solve<T: Pixel>(
       &mut b_r1[1],
       &integral_image[integral_image_offset..],
       &sq_integral_image[integral_image_offset..],
-      SOLVE_INTEGRAL_IMAGE_STRIDE,
+      SOLVE_IMAGE_STRIDE,
       1,
       cdef_w,
       s_r1,
@@ -893,7 +885,7 @@ pub fn sgrproj_solve<T: Pixel>(
         &mut b_r2[(y / 2 + 1) % 2],
         integral_image,
         sq_integral_image,
-        SOLVE_INTEGRAL_IMAGE_STRIDE,
+        SOLVE_IMAGE_STRIDE,
         y + 2,
         cdef_w,
         s_r2,
@@ -919,13 +911,13 @@ pub fn sgrproj_solve<T: Pixel>(
     for dy in 0..(2.min(cdef_h - y)) {
       let y = y + dy;
       if s_r1 > 0 {
-        let integral_image_offset = SOLVE_INTEGRAL_IMAGE_STRIDE + 1;
+        let integral_image_offset = SOLVE_IMAGE_STRIDE + 1;
         sgrproj_box_ab_r1(
           &mut a_r1[(y + 2) % 3],
           &mut b_r1[(y + 2) % 3],
           &integral_image[integral_image_offset..],
           &sq_integral_image[integral_image_offset..],
-          SOLVE_INTEGRAL_IMAGE_STRIDE,
+          SOLVE_IMAGE_STRIDE,
           y + 2,
           cdef_w,
           s_r1,
@@ -1389,7 +1381,7 @@ impl RestorationState {
 
     // Buffers for the stripe filter.
     let mut stripe_filter_buffer =
-      IntegralImageBuffer::zeroed(INTEGRAL_IMAGE_SIZE);
+      IntegralImageBuffer::zeroed(STRIPE_IMAGE_SIZE);
 
     for pli in 0..PLANES {
       let rp = &self.planes[pli];
@@ -1443,6 +1435,7 @@ impl RestorationState {
                 xqd,
                 fi,
                 &mut stripe_filter_buffer,
+                STRIPE_IMAGE_STRIDE,
                 crop_w - x,
                 (crop_h as isize - stripe_start_y) as usize,
                 size,

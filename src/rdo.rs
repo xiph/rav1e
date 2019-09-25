@@ -1839,50 +1839,20 @@ pub fn rdo_loop_decision<T: Pixel>(
                     // if height is 128x128, we'll need to run two stripes
                     let loop_po =
                       loop_sbo.plane_offset(&lrf_input.planes[pli].cfg);
-                    if height > 64 {
-                      let loop_po2 =
-                        PlaneOffset { x: loop_po.x, y: loop_po.y + 64 };
-                      sgrproj_stripe_filter(
-                        set,
-                        xqd,
-                        fi,
-                        &mut ts.integral_buffer,
-                        width,
-                        64,
-                        width,
-                        64,
-                        &lrf_input.planes[pli].slice(loop_po),
-                        &lrf_input.planes[pli].slice(loop_po),
-                        &mut lrf_output.planes[pli].mut_slice(loop_po),
-                      );
-                      sgrproj_stripe_filter(
-                        set,
-                        xqd,
-                        fi,
-                        &mut ts.integral_buffer,
-                        width,
-                        64,
-                        width,
-                        64,
-                        &lrf_input.planes[pli].slice(loop_po2),
-                        &lrf_input.planes[pli].slice(loop_po2),
-                        &mut lrf_output.planes[pli].mut_slice(loop_po2),
-                      );
-                    } else {
-                      sgrproj_stripe_filter(
-                        set,
-                        xqd,
-                        fi,
-                        &mut ts.integral_buffer,
-                        width,
-                        height,
-                        width,
-                        height,
-                        &lrf_input.planes[pli].slice(loop_po),
-                        &lrf_input.planes[pli].slice(loop_po),
-                        &mut lrf_output.planes[pli].mut_slice(loop_po),
-                      );
-                    }
+                    sgrproj_stripe_filter(
+                      set,
+                      xqd,
+                      fi,
+                      &mut ts.integral_buffer,
+                      SOLVE_IMAGE_STRIDE,
+                      width,
+                      height,
+                      width,
+                      height,
+                      &lrf_input.planes[pli].slice(loop_po),
+                      &lrf_input.planes[pli].slice(loop_po),
+                      &mut lrf_output.planes[pli].mut_slice(loop_po),
+                    );
                   }
                   RestorationFilter::Wiener { .. } => unreachable!(), // coming soon
                 }
@@ -1975,7 +1945,6 @@ pub fn rdo_loop_decision<T: Pixel>(
       for pli in 0..PLANES {
         let sb_h_shift = ts.restoration.planes[pli].rp_cfg.sb_h_shift;
         let sb_v_shift = ts.restoration.planes[pli].rp_cfg.sb_v_shift;
-        let stripe_height = ts.restoration.planes[pli].rp_cfg.stripe_height;
         let unit_size = ts.restoration.planes[pli].rp_cfg.unit_size;
         let lru_sb_w = 1 << sb_h_shift; // width, in sb, of an LRU in this plane
         let lru_sb_h = 1 << sb_v_shift; // height, in sb, of an LRU in this plane
@@ -2036,26 +2005,20 @@ pub fn rdo_loop_decision<T: Pixel>(
                 let current_lrf =
                   RestorationFilter::Sgrproj { set, xqd: [xqd0, xqd1] };
                 if let RestorationFilter::Sgrproj { set, xqd } = current_lrf {
-                  // one stripe at a time
-                  // do not consider any stretch; we might fall off the tile
-                  for y in (0..unit_height).step_by(stripe_height) {
-                    let stripe_po =
-                      PlaneOffset { x: loop_po.x, y: loop_po.y + y as isize };
-                    let stripe_h = unit_size.min(stripe_height);
-                    sgrproj_stripe_filter(
-                      set,
-                      xqd,
-                      fi,
-                      &mut ts.integral_buffer,
-                      unit_width,
-                      stripe_h,
-                      unit_width,
-                      stripe_h,
-                      &lrf_input.planes[pli].slice(stripe_po),
-                      &lrf_input.planes[pli].slice(stripe_po),
-                      &mut lrf_output.planes[pli].mut_slice(stripe_po),
-                    );
-                  }
+                  sgrproj_stripe_filter(
+                    set,
+                    xqd,
+                    fi,
+                    &mut ts.integral_buffer,
+                    SOLVE_IMAGE_STRIDE,
+                    unit_width,
+                    unit_height,
+                    unit_width,
+                    unit_height,
+                    &lrf_input.planes[pli].slice(loop_po),
+                    &lrf_input.planes[pli].slice(loop_po),
+                    &mut lrf_output.planes[pli].mut_slice(loop_po),
+                  );
                 }
                 let err = rdo_loop_plane_error(
                   loop_sbo,
