@@ -36,6 +36,7 @@ pub struct CliOptions {
   pub threads: usize,
   pub pass1file_name: Option<String>,
   pub pass2file_name: Option<String>,
+  pub save_config: Option<String>,
 }
 
 pub fn parse_cli() -> Result<CliOptions, CliError> {
@@ -331,6 +332,18 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
                      .takes_value(true)
                      .possible_values(&Shell::variants())
                 )
+                .arg(Arg::with_name("SAVE_CONFIG")
+                     .help("Save the current configuration in a toml file")
+                     .short("s")
+                     .long("save_config")
+                     .takes_value(true)
+                )
+                .arg(Arg::with_name("LOAD_CONFIG")
+                     .help("Load the encoder configuration from a toml file")
+                     .short("l")
+                     .long("load_config")
+                     .takes_value(true)
+                )
     );
 
   let matches = app.clone().get_matches();
@@ -345,11 +358,39 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     .map(|v| v.parse().expect("Threads must be an integer"))
     .unwrap();
 
+  let mut save_config = None;
+  let mut enc = None;
+
   if let Some(matches) = matches.subcommand_matches("advanced") {
     if let Some(shell) = matches.value_of("SHELL").map(|v| v.parse().unwrap())
     {
       app.gen_completions_to("rav1e", shell, &mut std::io::stdout());
       std::process::exit(0);
+    }
+
+    #[cfg(feature = "serialize")]
+    {
+      save_config = matches.value_of("SAVE_CONFIG").map(|v| v.to_owned());
+      if let Some(load_config) = matches.value_of("LOAD_CONFIG") {
+        let mut config = String::new();
+        File::open(load_config)
+          .and_then(|mut f| f.read_to_string(&mut config))
+          .map_err(|e| e.context("Cannot open the configuration file"))?;
+
+        enc = Some(toml::from_str(&config).unwrap());
+      }
+    }
+    #[cfg(not(feature = "serialize"))]
+    {
+      if matches.value_of("SAVE_CONFIG").is_some()
+        || matches.value_of("LOAD_CONFIG").is_some()
+      {
+        let e: io::Error = io::ErrorKind::InvalidInput.into();
+        return Err(e.context(
+          "The load/save config advanced option requires the
+            `serialize` feature, rebuild adding it.",
+        ));
+      }
     }
   }
 
@@ -372,9 +413,11 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     rec,
   };
 
+  let enc = enc.map_or_else(|| parse_config(&matches), Ok)?;
+
   Ok(CliOptions {
     io,
-    enc: parse_config(&matches)?,
+    enc,
     limit: matches.value_of("LIMIT").unwrap().parse().unwrap(),
     // Use `occurrences_of()` because `is_present()` is always true
     // if a parameter has a default value.
@@ -385,6 +428,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     threads,
     pass1file_name: matches.value_of("FIRST_PASS").map(|s| s.to_owned()),
     pass2file_name: matches.value_of("SECOND_PASS").map(|s| s.to_owned()),
+    save_config,
   })
 }
 

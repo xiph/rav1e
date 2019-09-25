@@ -312,6 +312,18 @@ fn run() -> Result<(), error::CliError> {
 
   let cfg = Config { enc: cli.enc, threads: cli.threads };
 
+  #[cfg(feature = "serialize")]
+  {
+    if let Some(save_config) = cli.save_config {
+      let mut out = File::create(save_config)
+        .map_err(|e| e.context("Cannot create configuration file"))?;
+      let s = toml::to_string(&cfg.enc).unwrap();
+      out
+        .write_all(s.as_bytes())
+        .map_err(|e| e.context("Cannot write the configuration file"))?
+    }
+  }
+
   cli.io.output.write_header(
     video_info.width,
     video_info.height,
