@@ -32,11 +32,11 @@ use crate::rate::FRAME_SUBTYPE_P;
 use crate::rate::QSCALE;
 use crate::rdo::*;
 use crate::segmentation::*;
+use crate::serialize::{Deserialize, Serialize};
 use crate::stats::EncoderStats;
 use crate::tiling::*;
 use crate::transform::*;
 use crate::util::*;
-use crate::serialize::{Deserialize, Serialize};
 
 use arg_enum_proc_macro::ArgEnum;
 use arrayvec::*;

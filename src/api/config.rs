@@ -11,13 +11,13 @@ use err_derive::Error;
 use itertools::Itertools;
 use num_derive::*;
 
-use crate::serialize::{Deserialize, Serialize};
 use crate::api::color::*;
 use crate::api::Rational;
 use crate::api::{Context, ContextInner};
 use crate::cpu_features::CpuFeatureLevel;
 use crate::encoder::Tune;
 use crate::partition::BlockSize;
+use crate::serialize::{Deserialize, Serialize};
 use crate::tiling::TilingInfo;
 use crate::util::Pixel;
 
