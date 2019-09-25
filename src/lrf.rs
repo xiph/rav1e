@@ -84,7 +84,11 @@ pub const SOLVE_INTEGRAL_IMAGE_STRIDE: usize = INTEGRAL_IMAGE_MAX + 6 + 2;
 pub const SOLVE_INTEGRAL_IMAGE_SIZE: usize =
   SOLVE_INTEGRAL_IMAGE_STRIDE * SOLVE_INTEGRAL_IMAGE_STRIDE;
 
-/// The buffers used in `sgrproj_stripe_filter()` and `sgrproj_solve()`.
+pub const INTEGRAL_IMAGE_SIZE: usize =
+  [SOLVE_INTEGRAL_IMAGE_SIZE, STRIPE_FILTER_INTEGRAL_IMAGE_SIZE]
+    [(SOLVE_INTEGRAL_IMAGE_SIZE < STRIPE_FILTER_INTEGRAL_IMAGE_SIZE) as usize];
+
+/// The buffer used in `sgrproj_stripe_filter()` and `sgrproj_solve()`.
 #[derive(Debug)]
 pub struct IntegralImageBuffer {
   pub integral_image: Vec<u32>,
@@ -1409,7 +1413,7 @@ impl RestorationState {
 
     // Buffers for the stripe filter.
     let mut stripe_filter_buffer =
-      IntegralImageBuffer::zeroed(STRIPE_FILTER_INTEGRAL_IMAGE_SIZE);
+      IntegralImageBuffer::zeroed(INTEGRAL_IMAGE_SIZE);
 
     for pli in 0..PLANES {
       let rp = &self.planes[pli];
