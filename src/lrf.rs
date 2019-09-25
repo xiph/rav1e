@@ -77,7 +77,7 @@ pub const SOLVE_IMAGE_HEIGHT: usize = SOLVE_IMAGE_STRIDE;
 pub const SOLVE_IMAGE_SIZE: usize = SOLVE_IMAGE_STRIDE * SOLVE_IMAGE_HEIGHT;
 
 pub const STRIPE_IMAGE_MAX: usize = (1 << RESTORATION_TILESIZE_MAX_LOG2)
-  + (1 << RESTORATION_TILESIZE_MAX_LOG2 - 1);
+  + (1 << (RESTORATION_TILESIZE_MAX_LOG2 - 1));
 pub const STRIPE_IMAGE_STRIDE: usize = STRIPE_IMAGE_MAX + 6 + 2;
 pub const STRIPE_IMAGE_HEIGHT: usize = 64 + 6 + 2;
 pub const STRIPE_IMAGE_SIZE: usize = STRIPE_IMAGE_STRIDE * STRIPE_IMAGE_HEIGHT;
@@ -520,7 +520,7 @@ impl<'a, T: Pixel> Iterator for HorzPaddedIter<'a, T> {
 
 impl<T: Pixel> ExactSizeIterator for HorzPaddedIter<'_, T> {}
 
-pub fn setup_integral_image<'a, T: Pixel>(
+pub fn setup_integral_image<T: Pixel>(
   integral_image_buffer: &mut IntegralImageBuffer,
   integral_image_stride: usize, crop_w: usize, crop_h: usize, stripe_w: usize,
   stripe_h: usize, cdeffed: &PlaneSlice<T>, deblocked: &PlaneSlice<T>,
