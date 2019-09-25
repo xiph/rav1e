@@ -17,6 +17,7 @@ use crate::frame::*;
 use crate::tiling::*;
 use crate::util::*;
 
+use simd_helpers::cold_for_target_arch;
 use std::ops;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -201,6 +202,7 @@ pub(crate) mod native {
     SUBPEL_FILTERS[filter_idx][frac as usize]
   }
 
+  #[cold_for_target_arch("x86_64")]
   pub fn put_8tap<T: Pixel>(
     dst: &mut PlaneRegionMut<'_, T>, src: PlaneSlice<'_, T>, width: usize,
     height: usize, col_frac: i32, row_frac: i32, mode_x: FilterMode,
@@ -297,6 +299,7 @@ pub(crate) mod native {
     }
   }
 
+  #[cold_for_target_arch("x86_64")]
   pub fn prep_8tap<T: Pixel>(
     tmp: &mut [i16], src: PlaneSlice<'_, T>, width: usize, height: usize,
     col_frac: i32, row_frac: i32, mode_x: FilterMode, mode_y: FilterMode,
@@ -376,6 +379,7 @@ pub(crate) mod native {
     }
   }
 
+  #[cold_for_target_arch("x86_64")]
   pub fn mc_avg<T: Pixel>(
     dst: &mut PlaneRegionMut<'_, T>, tmp1: &[i16], tmp2: &[i16], width: usize,
     height: usize, bit_depth: usize, _cpu: CpuFeatureLevel,

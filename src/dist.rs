@@ -18,6 +18,9 @@ pub(crate) mod native {
   use crate::tiling::*;
   use crate::util::*;
 
+  use simd_helpers::cold_for_target_arch;
+
+  #[cold_for_target_arch("x86_64")]
   pub fn get_sad<T: Pixel>(
     plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>,
     bsize: BlockSize, _bit_depth: usize, _cpu: CpuFeatureLevel,
@@ -115,6 +118,7 @@ pub(crate) mod native {
   /// Sum of absolute transformed differences
   /// Use the sum of 4x4 and 8x8 hadamard transforms for the transform. 4x* and
   /// *x4 blocks use 4x4 and all others use 8x8.
+  #[cold_for_target_arch("x86_64")]
   pub fn get_satd<T: Pixel>(
     plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>,
     bsize: BlockSize, _bit_depth: usize, _cpu: CpuFeatureLevel,
