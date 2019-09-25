@@ -125,6 +125,8 @@ fn cdef_find_dir<T: Pixel>(
 pub(crate) mod native {
   use super::*;
 
+  use simd_helpers::cold_for_target_arch;
+
   #[inline(always)]
   fn constrain(diff: i32, threshold: i32, damping: i32) -> i32 {
     if threshold != 0 {
@@ -142,6 +144,7 @@ pub(crate) mod native {
     }
   }
 
+  #[cold_for_target_arch("x86_64")]
   #[allow(clippy::erasing_op, clippy::identity_op, clippy::neg_multiply)]
   pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
     dst: &mut PlaneRegionMut<'_, T>, input: *const u16, istride: isize,
