@@ -1259,7 +1259,8 @@ impl RestorationState {
     let uv_sb_h_log2 = y_sb_log2 - xdec;
     let uv_sb_v_log2 = y_sb_log2 - ydec;
 
-    let (lrf_y_shift, lrf_uv_shift) = if fi.sequence.enable_large_lru {
+    let (lrf_y_shift, lrf_uv_shift) = if fi.sequence.enable_large_lru
+      && fi.sequence.enable_restoration {
       // Specific content does affect optimal LRU size choice, but the
       // quantizer in use is a surprisingly strong selector.
       let lrf_base_shift = if fi.base_q_idx > 200 {
