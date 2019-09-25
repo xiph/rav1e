@@ -521,10 +521,46 @@ impl<'a, T: Pixel> Iterator for HorzPaddedIter<'a, T> {
 impl<T: Pixel> ExactSizeIterator for HorzPaddedIter<'_, T> {}
 
 fn setup_integral_image<'a, T: Pixel>(
-  rows_iter: &mut impl Iterator<Item = impl Iterator<Item = &'a T>>,
-  integral_image: &mut [u32], sq_integral_image: &mut [u32],
-  integral_image_stride: usize,
+  integral_image_buffer: &mut IntegralImageBuffer,
+  integral_image_stride: usize, crop_w: usize, crop_h: usize, stripe_w: usize,
+  stripe_h: usize, cdeffed: &PlaneSlice<T>, deblocked: &PlaneSlice<T>,
 ) {
+  let integral_image = &mut integral_image_buffer.integral_image;
+  let sq_integral_image = &mut integral_image_buffer.sq_integral_image;
+
+  // Number of elements outside the stripe
+  let left_w = 4; // max radius of 2 + 2 padding
+  let right_w = 3; // max radius of 2 + 1 padding
+
+  assert_eq!(cdeffed.x, deblocked.x);
+
+  // Find how many unique elements to use to the left and right
+  let left_uniques = if cdeffed.x == 0 { 0 } else { left_w };
+  let right_uniques = right_w.min(crop_w - stripe_w);
+
+  // Find the total number of unique elements used
+  let row_uniques = left_uniques + stripe_w + right_uniques;
+
+  // Negative start indices result in repeating the first element of the row
+  let start_index_x = if cdeffed.x == 0 { -(left_w as isize) } else { 0 };
+
+  let mut rows_iter = VertPaddedIter::new(
+    // Move left to encompass all the used data
+    &cdeffed.go_left(left_uniques),
+    &deblocked.go_left(left_uniques),
+    // since r2 uses every other row, we need an extra row if stripe_h is odd
+    stripe_h + (stripe_h & 1),
+    crop_h,
+  )
+  .map(|row: &[T]| {
+    HorzPaddedIter::new(
+      // Limit how many unique elements we use
+      &row[..row_uniques],
+      start_index_x,
+      left_w + stripe_w + right_w,
+    )
+  });
+
   // Setup the first row
   {
     let mut sum: u32 = 0;
@@ -590,9 +626,6 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
   stripe_h: usize, cdeffed: &PlaneSlice<T>, deblocked: &PlaneSlice<T>,
   out: &mut PlaneMutSlice<T>,
 ) {
-  let integral_image = &mut integral_image_buffer.integral_image;
-  let sq_integral_image = &mut integral_image_buffer.sq_integral_image;
-
   let bdm8 = fi.sequence.bit_depth - 8;
   let mut a_r2: [[u32; IMAGE_WIDTH_MAX + 2]; 2] =
     [[0; IMAGE_WIDTH_MAX + 2]; 2];
@@ -609,43 +642,15 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
   let s_r2: u32 = SGRPROJ_PARAMS_S[set as usize][0];
   let s_r1: u32 = SGRPROJ_PARAMS_S[set as usize][1];
 
-  // Number of elements outside the stripe
-  let left_w = 4; // max radius of 2 + 2 padding
-  let right_w = 3; // max radius of 2 + 1 padding
-
-  assert_eq!(cdeffed.x, deblocked.x);
-
-  // Find how many unique elements to use to the left and right
-  let left_uniques = if cdeffed.x == 0 { 0 } else { left_w };
-  let right_uniques = right_w.min(crop_w - stripe_w);
-
-  // Find the total number of unique elements used
-  let row_uniques = left_uniques + stripe_w + right_uniques;
-
-  // Negative start indices result in repeating the first element of the row
-  let start_index_x = if cdeffed.x == 0 { -(left_w as isize) } else { 0 };
-
-  let mut rows_iter = VertPaddedIter::new(
-    // Move left to encompass all the used data
-    &cdeffed.go_left(left_uniques),
-    &deblocked.go_left(left_uniques),
-    // since r2 uses every other row, we need an extra row if stripe_h is odd
-    stripe_h + if s_r2 > 0 { stripe_h & 1 } else { 0 },
-    crop_h,
-  )
-  .map(|row: &[T]| {
-    HorzPaddedIter::new(
-      // Limit how many unique elements we use
-      &row[..row_uniques],
-      start_index_x,
-      left_w + stripe_w + right_w,
-    )
-  });
   setup_integral_image(
-    &mut rows_iter,
-    integral_image,
-    sq_integral_image,
+    integral_image_buffer,
     integral_image_stride,
+    crop_w,
+    crop_h,
+    stripe_w,
+    stripe_h,
+    cdeffed,
+    deblocked,
   );
 
   /* prime the intermediate arrays */
@@ -653,6 +658,8 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
   // the spec doesn't make clear: Although the spec defines computation
   // of every row (of a, b and f), only half of the rows (every-other
   // row) are actually used.
+  let integral_image = &integral_image_buffer.integral_image;
+  let sq_integral_image = &integral_image_buffer.sq_integral_image;
   if s_r2 > 0 {
     sgrproj_box_ab_r2(
       &mut a_r2[0],
@@ -785,8 +792,6 @@ pub fn sgrproj_solve<T: Pixel>(
   integral_image_buffer: &mut IntegralImageBuffer, input: &PlaneSlice<T>,
   cdeffed: &PlaneSlice<T>, cdef_w: usize, cdef_h: usize,
 ) -> (i8, i8) {
-  let integral_image = &mut integral_image_buffer.integral_image;
-  let sq_integral_image = &mut integral_image_buffer.sq_integral_image;
   let bdm8 = fi.sequence.bit_depth - 8;
 
   let mut a_r2: [[u32; IMAGE_WIDTH_MAX + 2]; 2] =
@@ -807,27 +812,15 @@ pub fn sgrproj_solve<T: Pixel>(
   let mut h: [[f64; 2]; 2] = [[0., 0.], [0., 0.]];
   let mut c: [f64; 2] = [0., 0.];
 
-  let mut rows_iter = VertPaddedIter::new(
-    cdeffed,
-    cdeffed,
-    // since r2 uses every other row, we need an extra row if cdef_h is odd
-    cdef_h + if s_r2 > 0 { cdef_h & 1 } else { 0 },
-    cdef_h,
-  )
-  .map(|row: &[T]| {
-    let left_w = 4; // max radius of 2 + 2 padding
-    let right_w = 3; // max radius of 2 + 1 padding
-    HorzPaddedIter::new(
-      &row[..cdef_w],
-      -(left_w as isize),
-      left_w + cdef_w + right_w,
-    )
-  });
   setup_integral_image(
-    &mut rows_iter,
-    integral_image,
-    sq_integral_image,
+    integral_image_buffer,
     SOLVE_IMAGE_STRIDE,
+    cdef_w,
+    cdef_h,
+    cdef_w,
+    cdef_h,
+    cdeffed,
+    cdeffed,
   );
 
   /* prime the intermediate arrays */
@@ -835,6 +828,8 @@ pub fn sgrproj_solve<T: Pixel>(
   // the spec doesn't make clear: Although the spec defines computation
   // of every row (of a, b and f), only half of the rows (every-other
   // row) are actually used.
+  let integral_image = &integral_image_buffer.integral_image;
+  let sq_integral_image = &integral_image_buffer.sq_integral_image;
   if s_r2 > 0 {
     sgrproj_box_ab_r2(
       &mut a_r2[0],
