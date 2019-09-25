@@ -12,10 +12,7 @@ use super::*;
 use crate::context::*;
 use crate::encoder::*;
 use crate::frame::*;
-use crate::lrf::{
-  IntegralImageBuffer, SOLVE_INTEGRAL_IMAGE_SIZE,
-  STRIPE_FILTER_INTEGRAL_IMAGE_SIZE,
-};
+use crate::lrf::{IntegralImageBuffer, INTEGRAL_IMAGE_SIZE};
 use crate::quantize::*;
 use crate::rdo::*;
 use crate::stats::EncoderStats;
@@ -62,12 +59,7 @@ pub struct TileStateMut<'a, T: Pixel> {
   pub restoration: TileRestorationStateMut<'a>,
   pub mvs: Vec<TileMotionVectorsMut<'a>>,
   pub rdo: RDOTracker,
-
-  // Used in sgrproj_stripe_filter().
-  pub stripe_filter_buffer: IntegralImageBuffer,
-  // Used in sgrproj_solve().
-  pub solve_buffer: IntegralImageBuffer,
-
+  pub integral_buffer: IntegralImageBuffer,
   pub enc_stats: EncoderStats,
 }
 
@@ -130,10 +122,7 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
         })
         .collect(),
       rdo: RDOTracker::new(),
-      stripe_filter_buffer: IntegralImageBuffer::zeroed(
-        STRIPE_FILTER_INTEGRAL_IMAGE_SIZE,
-      ),
-      solve_buffer: IntegralImageBuffer::zeroed(SOLVE_INTEGRAL_IMAGE_SIZE),
+      integral_buffer: IntegralImageBuffer::zeroed(INTEGRAL_IMAGE_SIZE),
       enc_stats: EncoderStats::default(),
     }
   }
