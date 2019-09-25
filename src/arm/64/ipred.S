@@ -1326,3 +1326,94 @@ L(ipred_smooth_h_tbl):
         .hword L(ipred_smooth_h_tbl) -  80b
         .hword L(ipred_smooth_h_tbl) -  40b
 endfunc
+
+// void pal_pred_neon(pixel *dst, const ptrdiff_t stride,
+//                    const uint16_t *const pal, const uint8_t *idx,
+//                    const int w, const int h);
+function pal_pred_neon, export=1
+        ld1             {v0.8h}, [x2]
+        clz             w9,  w4
+        adr             x6,  L(pal_pred_tbl)
+        sub             w9,  w9,  #25
+        ldrh            w9,  [x6, w9, uxtw #1]
+        xtn             v0.8b,  v0.8h
+        sub             x6,  x6,  w9, uxtw
+        add             x2,  x0,  x1
+        lsl             x1,  x1,  #1
+        br              x6
+4:
+        ld1             {v1.16b}, [x3], #16
+        subs            w5,  w5,  #4
+        tbl             v1.16b, {v0.16b}, v1.16b
+        st1             {v1.s}[0], [x0], x1
+        st1             {v1.s}[1], [x2], x1
+        st1             {v1.s}[2], [x0], x1
+        st1             {v1.s}[3], [x2], x1
+        b.gt            4b
+        ret
+8:
+        ld1             {v1.16b, v2.16b}, [x3], #32
+        subs            w5,  w5,  #4
+        tbl             v1.16b, {v0.16b}, v1.16b
+        st1             {v1.d}[0], [x0], x1
+        tbl             v2.16b, {v0.16b}, v2.16b
+        st1             {v1.d}[1], [x2], x1
+        st1             {v2.d}[0], [x0], x1
+        st1             {v2.d}[1], [x2], x1
+        b.gt            8b
+        ret
+16:
+        ld1             {v1.16b, v2.16b, v3.16b, v4.16b}, [x3], #64
+        subs            w5,  w5,  #4
+        tbl             v1.16b, {v0.16b}, v1.16b
+        tbl             v2.16b, {v0.16b}, v2.16b
+        st1             {v1.16b}, [x0], x1
+        tbl             v3.16b, {v0.16b}, v3.16b
+        st1             {v2.16b}, [x2], x1
+        tbl             v4.16b, {v0.16b}, v4.16b
+        st1             {v3.16b}, [x0], x1
+        st1             {v4.16b}, [x2], x1
+        b.gt            16b
+        ret
+32:
+        ld1             {v16.16b, v17.16b, v18.16b, v19.16b}, [x3], #64
+        ld1             {v20.16b, v21.16b, v22.16b, v23.16b}, [x3], #64
+        subs            w5,  w5,  #4
+        tbl             v16.16b, {v0.16b}, v16.16b
+        tbl             v17.16b, {v0.16b}, v17.16b
+        tbl             v18.16b, {v0.16b}, v18.16b
+        tbl             v19.16b, {v0.16b}, v19.16b
+        tbl             v20.16b, {v0.16b}, v20.16b
+        st1             {v16.16b, v17.16b}, [x0], x1
+        tbl             v21.16b, {v0.16b}, v21.16b
+        st1             {v18.16b, v19.16b}, [x2], x1
+        tbl             v22.16b, {v0.16b}, v22.16b
+        st1             {v20.16b, v21.16b}, [x0], x1
+        tbl             v23.16b, {v0.16b}, v23.16b
+        st1             {v22.16b, v23.16b}, [x2], x1
+        b.gt            32b
+        ret
+64:
+        ld1             {v16.16b, v17.16b, v18.16b, v19.16b}, [x3], #64
+        ld1             {v20.16b, v21.16b, v22.16b, v23.16b}, [x3], #64
+        subs            w5,  w5,  #2
+        tbl             v16.16b, {v0.16b}, v16.16b
+        tbl             v17.16b, {v0.16b}, v17.16b
+        tbl             v18.16b, {v0.16b}, v18.16b
+        tbl             v19.16b, {v0.16b}, v19.16b
+        st1             {v16.16b, v17.16b, v18.16b, v19.16b}, [x0], x1
+        tbl             v20.16b, {v0.16b}, v20.16b
+        tbl             v21.16b, {v0.16b}, v21.16b
+        tbl             v22.16b, {v0.16b}, v22.16b
+        tbl             v23.16b, {v0.16b}, v23.16b
+        st1             {v20.16b, v21.16b, v22.16b, v23.16b}, [x2], x1
+        b.gt            64b
+        ret
+
+L(pal_pred_tbl):
+        .hword L(pal_pred_tbl) - 64b
+        .hword L(pal_pred_tbl) - 32b
+        .hword L(pal_pred_tbl) - 16b
+        .hword L(pal_pred_tbl) -  8b
+        .hword L(pal_pred_tbl) -  4b
+endfunc
