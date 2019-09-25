@@ -1832,6 +1832,18 @@ pub fn rdo_loop_decision<T: Pixel>(
                     // if height is 128x128, we'll need to run two stripes
                     let loop_po =
                       loop_sbo.plane_offset(&lrf_input.planes[pli].cfg);
+
+                    setup_integral_image(
+                      &mut ts.integral_buffer,
+                      SOLVE_IMAGE_STRIDE,
+                      width,
+                      height,
+                      width,
+                      height,
+                      &lrf_input.planes[pli].slice(loop_po),
+                      &lrf_input.planes[pli].slice(loop_po),
+                    );
+
                     sgrproj_stripe_filter(
                       set,
                       xqd,
@@ -1840,9 +1852,6 @@ pub fn rdo_loop_decision<T: Pixel>(
                       SOLVE_IMAGE_STRIDE,
                       width,
                       height,
-                      width,
-                      height,
-                      &lrf_input.planes[pli].slice(loop_po),
                       &lrf_input.planes[pli].slice(loop_po),
                       &mut lrf_output.planes[pli].mut_slice(loop_po),
                     );
@@ -1979,13 +1988,23 @@ pub fn rdo_loop_decision<T: Pixel>(
                 pli,
               );
               let mut best_cost = compute_rd_cost(fi, rate, err);
+              let unit_width =
+                unit_size.min(ref_plane.cfg.width - loop_tile_po.x as usize);
+              let unit_height =
+                unit_size.min(ref_plane.cfg.height - loop_tile_po.y as usize);
+              setup_integral_image(
+                &mut ts.integral_buffer,
+                SOLVE_IMAGE_STRIDE,
+                unit_width,
+                unit_height,
+                unit_width,
+                unit_height,
+                &lrf_input.planes[pli].slice(loop_po),
+                &lrf_input.planes[pli].slice(loop_po),
+              );
 
               for set in 0..16 {
                 // clip to encoded area
-                let unit_width =
-                  unit_size.min(ref_plane.cfg.width - loop_tile_po.x as usize);
-                let unit_height = unit_size
-                  .min(ref_plane.cfg.height - loop_tile_po.y as usize);
                 let (xqd0, xqd1) = sgrproj_solve(
                   set,
                   fi,
@@ -2006,9 +2025,6 @@ pub fn rdo_loop_decision<T: Pixel>(
                     SOLVE_IMAGE_STRIDE,
                     unit_width,
                     unit_height,
-                    unit_width,
-                    unit_height,
-                    &lrf_input.planes[pli].slice(loop_po),
                     &lrf_input.planes[pli].slice(loop_po),
                     &mut lrf_output.planes[pli].mut_slice(loop_po),
                   );
