@@ -1201,9 +1201,9 @@ pub struct RestorationPlaneOffset {
 
 impl RestorationPlane {
   pub fn new(
-    lrf_type: u8, unit_size: usize, sb_h_shift: usize,
-    sb_v_shift: usize, sb_cols: usize, sb_rows: usize,
-    stripe_decimate: usize, cols: usize, rows: usize,
+    lrf_type: u8, unit_size: usize, sb_h_shift: usize, sb_v_shift: usize,
+    sb_cols: usize, sb_rows: usize, stripe_decimate: usize, cols: usize,
+    rows: usize,
   ) -> RestorationPlane {
     let stripe_height = if stripe_decimate != 0 { 32 } else { 64 };
     RestorationPlane {
@@ -1260,7 +1260,8 @@ impl RestorationState {
     let uv_sb_v_log2 = y_sb_log2 - ydec;
 
     let (lrf_y_shift, lrf_uv_shift) = if fi.sequence.enable_large_lru
-      && fi.sequence.enable_restoration {
+      && fi.sequence.enable_restoration
+    {
       // Specific content does affect optimal LRU size choice, but the
       // quantizer in use is a surprisingly strong selector.
       let lrf_base_shift = if fi.base_q_idx > 200 {
@@ -1314,14 +1315,15 @@ impl RestorationState {
       // despite suggestions to the contrary, apparently tiles can be
       // non-powers-of-2.
       let trailing_h_zeros = fi.tiling.tile_width_sb.trailing_zeros() as usize;
-      let trailing_v_zeros = fi.tiling.tile_height_sb.trailing_zeros() as usize;
-      let tile_aligned_y_unit_size = 1 << (y_sb_log2 + trailing_h_zeros
-        .min(trailing_v_zeros));
+      let trailing_v_zeros =
+        fi.tiling.tile_height_sb.trailing_zeros() as usize;
+      let tile_aligned_y_unit_size =
+        1 << (y_sb_log2 + trailing_h_zeros.min(trailing_v_zeros));
       let tile_aligned_uv_h_unit_size = 1 << (uv_sb_h_log2 + trailing_h_zeros);
       let tile_aligned_uv_v_unit_size = 1 << (uv_sb_v_log2 + trailing_v_zeros);
       y_unit_size = y_unit_size.min(tile_aligned_y_unit_size);
-      uv_unit_size = uv_unit_size.min(tile_aligned_uv_h_unit_size
-        .min(tile_aligned_uv_v_unit_size));
+      uv_unit_size = uv_unit_size
+        .min(tile_aligned_uv_h_unit_size.min(tile_aligned_uv_v_unit_size));
 
       // But it's actually worse: LRUs can't span tiles (in our design
       // that is, spec allows it).  However, the spec mandates the last

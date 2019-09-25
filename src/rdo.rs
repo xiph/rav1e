@@ -1651,11 +1651,11 @@ pub fn rdo_loop_decision<T: Pixel>(
   // Determine area of optimization: Which plane has the largest LRUs?
   // How many LRUs for each?
   let mut sb_w = 1; // how many superblocks wide the largest LRU
-                    // is/how much we're processing (same thing)
+                    // is/how many SBs we're processing (same thing)
   let mut sb_h = 1; // how many superblocks wide the largest LRU
-                    // is/how much we're processing (same thing)
-  let mut lru_w = [0; PLANES]; // how manu LRUs we're processing
-  let mut lru_h = [0; PLANES]; // how manu LRUs we're processing
+                    // is/how many SBs we're processing (same thing)
+  let mut lru_w = [0; PLANES]; // how many LRUs we're processing
+  let mut lru_h = [0; PLANES]; // how many LRUs we're processing
   for pli in 0..PLANES {
     let sb_h_shift = ts.restoration.planes[pli].rp_cfg.sb_h_shift;
     let sb_v_shift = ts.restoration.planes[pli].rp_cfg.sb_v_shift;
@@ -1931,7 +1931,6 @@ pub fn rdo_loop_decision<T: Pixel>(
 
     // check for new best restoration filter if enabled
     if fi.sequence.enable_restoration {
-
       // need cdef output from best index, not just last iteration
       if let Some((cdef_input, cdef_dirs)) = cdef_data.as_ref() {
         for sby in 0..sb_h {
