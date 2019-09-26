@@ -1350,7 +1350,7 @@ impl RCState {
     let fti = (ft_val & 0x7FFFFFFF) as usize;
     // Make sure the frame type is valid.
     if fti > FRAME_NSUBTYPES {
-      Err(())?;
+      return Err(());
     }
     let log_scale_q24 = self.unbuffer_val(4) as i32;
     Ok(RCFrameMetrics { log_scale_q24, fti, show_frame })
@@ -1394,14 +1394,14 @@ impl RCState {
           if self.unbuffer_val(4) != TWOPASS_MAGIC as i64
             || self.unbuffer_val(4) != TWOPASS_VERSION as i64
           {
-            Err(())?;
+            return Err(());
           }
           let ntus_total = self.unbuffer_val(4) as i32;
           // Make sure the file claims to have at least one TU.
           // Otherwise we probably got the placeholder data from an aborted
           //  pass 1.
           if ntus_total < 1 {
-            Err(())?;
+            return Err(());
           }
           let mut maybe_nframes_total_total: Option<i32> = Some(0);
           let mut nframes_total: [i32; FRAME_NSUBTYPES + 1] =
@@ -1409,7 +1409,7 @@ impl RCState {
           for fti in 0..=FRAME_NSUBTYPES {
             nframes_total[fti] = self.unbuffer_val(4) as i32;
             if nframes_total[fti] < 0 {
-              Err(())?;
+              return Err(());
             }
             maybe_nframes_total_total = maybe_nframes_total_total
               .and_then(|n| n.checked_add(nframes_total[fti]));
@@ -1417,7 +1417,7 @@ impl RCState {
           if let Some(nframes_total_total) = maybe_nframes_total_total {
             // We can't have more TUs than frames.
             if ntus_total > nframes_total_total {
-              Err(())?;
+              return Err(());
             }
             let mut exp: [u8; FRAME_NSUBTYPES] = [0; FRAME_NSUBTYPES];
             for fti in 0..FRAME_NSUBTYPES {
@@ -1427,7 +1427,7 @@ impl RCState {
             for fti in 0..FRAME_NSUBTYPES {
               scale_sum[fti] = self.unbuffer_val(8);
               if scale_sum[fti] < 0 {
-                Err(())?;
+                return Err(());
               }
             }
             // Got a valid header.
@@ -1456,7 +1456,7 @@ impl RCState {
           } else {
             // The sum of the frame counts for each type overflowed a 32-bit
             //  integer.
-            Err(())?;
+            return Err(());
           }
         }
       } else {
@@ -1516,7 +1516,7 @@ impl RCState {
                 // Add them to the circular buffer.
                 if self.nframe_metrics >= self.frame_metrics.len() {
                   // We read too many frames without finding enough TUs.
-                  Err(())?;
+                  return Err(());
                 }
                 let mut fmi = self.frame_metrics_head + self.nframe_metrics;
                 if fmi >= self.frame_metrics.len() {
