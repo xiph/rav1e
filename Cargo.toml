@@ -20,7 +20,7 @@ nasm = ["nasm-rs"]
 signal_support = ["signal-hook"]
 dump_ivf = ["ivf"]
 quick_test = []
-desync_finder = []
+desync_finder = ["backtrace"]
 bench = []
 check_asm = []
 capi = []
@@ -38,7 +38,7 @@ bitstream-io = "0.8"
 clap = { version = "2", optional = true, default-features = false }
 libc = "0.2"
 y4m = { version = "0.4", optional = true }
-backtrace = "0.3"
+backtrace = { version = "0.3", optional = true }
 num-traits = "0.2"
 num-derive = "0.2"
 paste = "0.1"
