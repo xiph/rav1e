@@ -92,6 +92,7 @@ bench = false
 
 [lib]
 bench = false
+crate-type = ["lib", "staticlib"]
 
 [[bench]]
 name = "bench"
