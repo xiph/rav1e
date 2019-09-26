@@ -1327,6 +1327,166 @@ L(ipred_smooth_h_tbl):
         .hword L(ipred_smooth_h_tbl) -  40b
 endfunc
 
+// void ipred_filter_neon(pixel *dst, const ptrdiff_t stride,
+//                        const pixel *const topleft,
+//                        const int width, const int height, const int filt_idx,
+//                        const int max_width, const int max_height);
+function ipred_filter_neon, export=1
+        and             w5,  w5,  #511
+        movrel          x6,  X(filter_intra_taps)
+        lsl             w5,  w5,  #6
+        add             x6,  x6,  w5, uxtw
+        ld1             {v16.8b, v17.8b, v18.8b, v19.8b}, [x6], #32
+        clz             w9,  w3
+        adr             x5,  L(ipred_filter_tbl)
+        ld1             {v20.8b, v21.8b, v22.8b}, [x6]
+        sub             w9,  w9,  #26
+        ldrh            w9,  [x5, w9, uxtw #1]
+        sxtl            v16.8h,  v16.8b
+        sxtl            v17.8h,  v17.8b
+        sub             x5,  x5,  w9, uxtw
+        sxtl            v18.8h,  v18.8b
+        sxtl            v19.8h,  v19.8b
+        add             x6,  x0,  x1
+        lsl             x1,  x1,  #1
+        sxtl            v20.8h,  v20.8b
+        sxtl            v21.8h,  v21.8b
+        sxtl            v22.8h,  v22.8b
+        br              x5
+40:
+        ldur            s0,  [x2, #1]             // top (0-3)
+        sub             x2,  x2,  #2
+        mov             x7,  #-2
+        uxtl            v0.8h,   v0.8b            // top (0-3)
+4:
+        ld1             {v1.s}[0], [x2], x7       // left (0-1) + topleft (2)
+        mul             v2.8h,   v17.8h,  v0.h[0] // p1(top[0]) * filter(1)
+        mla             v2.8h,   v18.8h,  v0.h[1] // p2(top[1]) * filter(2)
+        mla             v2.8h,   v19.8h,  v0.h[2] // p3(top[2]) * filter(3)
+        uxtl            v1.8h,   v1.8b            // left (0-1) + topleft (2)
+        mla             v2.8h,   v20.8h,  v0.h[3] // p4(top[3]) * filter(4)
+        mla             v2.8h,   v16.8h,  v1.h[2] // p0(topleft) * filter(0)
+        mla             v2.8h,   v21.8h,  v1.h[1] // p5(left[0]) * filter(5)
+        mla             v2.8h,   v22.8h,  v1.h[0] // p6(left[1]) * filter(6)
+        sqrshrun        v2.8b,   v2.8h,   #4
+        subs            w4,  w4,  #2
+        st1             {v2.s}[0], [x0], x1
+        uxtl            v0.8h,   v2.8b
+        st1             {v2.s}[1], [x6], x1
+        ext             v0.16b,  v0.16b,  v0.16b, #8 // move top from [4-7] to [0-3]
+        b.gt            4b
+        ret
+80:
+        ldur            d0,  [x2, #1]             // top (0-7)
+        sub             x2,  x2,  #2
+        mov             x7,  #-2
+        uxtl            v0.8h,   v0.8b            // top (0-7)
+8:
+        ld1             {v1.s}[0], [x2], x7       // left (0-1) + topleft (2)
+        mul             v2.8h,   v17.8h,  v0.h[0] // p1(top[0]) * filter(1)
+        mla             v2.8h,   v18.8h,  v0.h[1] // p2(top[1]) * filter(2)
+        mla             v2.8h,   v19.8h,  v0.h[2] // p3(top[2]) * filter(3)
+        uxtl            v1.8h,   v1.8b            // left (0-1) + topleft (2)
+        mla             v2.8h,   v20.8h,  v0.h[3] // p4(top[3]) * filter(4)
+        mla             v2.8h,   v16.8h,  v1.h[2] // p0(topleft) * filter(0)
+        mla             v2.8h,   v21.8h,  v1.h[1] // p5(left[0]) * filter(5)
+        mla             v2.8h,   v22.8h,  v1.h[0] // p6(left[1]) * filter(6)
+        mul             v3.8h,   v17.8h,  v0.h[4] // p1(top[0]) * filter(1)
+        mla             v3.8h,   v18.8h,  v0.h[5] // p2(top[1]) * filter(2)
+        mla             v3.8h,   v19.8h,  v0.h[6] // p3(top[2]) * filter(3)
+        sqrshrun        v2.8b,   v2.8h,   #4
+        uxtl            v1.8h,   v2.8b            // first block, in 16 bit
+        mla             v3.8h,   v20.8h,  v0.h[7] // p4(top[3]) * filter(4)
+        mla             v3.8h,   v16.8h,  v0.h[3] // p0(topleft) * filter(0)
+        mla             v3.8h,   v21.8h,  v1.h[3] // p5(left[0]) * filter(5)
+        mla             v3.8h,   v22.8h,  v1.h[7] // p6(left[1]) * filter(6)
+        sqrshrun        v3.8b,   v3.8h,   #4
+        subs            w4,  w4,  #2
+        st2             {v2.s, v3.s}[0], [x0], x1
+        zip2            v0.2s,   v2.2s,   v3.2s
+        st2             {v2.s, v3.s}[1], [x6], x1
+        uxtl            v0.8h,   v0.8b
+        b.gt            8b
+        ret
+160:
+320:
+        add             x8,  x2,  #1
+        sub             x2,  x2,  #2
+        mov             x7,  #-2
+        sub             x1,  x1,  w3, uxtw
+        mov             w9,  w3
+
+1:
+        ld1             {v0.s}[0], [x2], x7       // left (0-1) + topleft (2)
+        uxtl            v0.8h,   v0.8b            // left (0-1) + topleft (2)
+2:
+        ld1             {v2.16b}, [x8],   #16     // top(0-15)
+        mul             v3.8h,   v16.8h,  v0.h[2] // p0(topleft) * filter(0)
+        mla             v3.8h,   v21.8h,  v0.h[1] // p5(left[0]) * filter(5)
+        uxtl            v1.8h,   v2.8b            // top(0-7)
+        uxtl2           v2.8h,   v2.16b           // top(8-15)
+        mla             v3.8h,   v22.8h,  v0.h[0] // p6(left[1]) * filter(6)
+        mla             v3.8h,   v17.8h,  v1.h[0] // p1(top[0]) * filter(1)
+        mla             v3.8h,   v18.8h,  v1.h[1] // p2(top[1]) * filter(2)
+        mla             v3.8h,   v19.8h,  v1.h[2] // p3(top[2]) * filter(3)
+        mla             v3.8h,   v20.8h,  v1.h[3] // p4(top[3]) * filter(4)
+
+        mul             v4.8h,   v17.8h,  v1.h[4] // p1(top[0]) * filter(1)
+        mla             v4.8h,   v18.8h,  v1.h[5] // p2(top[1]) * filter(2)
+        mla             v4.8h,   v19.8h,  v1.h[6] // p3(top[2]) * filter(3)
+        sqrshrun        v3.8b,   v3.8h,   #4
+        uxtl            v0.8h,   v3.8b            // first block, in 16 bit
+        mla             v4.8h,   v20.8h,  v1.h[7] // p4(top[3]) * filter(4)
+        mla             v4.8h,   v16.8h,  v1.h[3] // p0(topleft) * filter(0)
+        mla             v4.8h,   v21.8h,  v0.h[3] // p5(left[0]) * filter(5)
+        mla             v4.8h,   v22.8h,  v0.h[7] // p6(left[1]) * filter(6)
+
+        mul             v5.8h,   v17.8h,  v2.h[0] // p1(top[0]) * filter(1)
+        mla             v5.8h,   v18.8h,  v2.h[1] // p2(top[1]) * filter(2)
+        mla             v5.8h,   v19.8h,  v2.h[2] // p3(top[2]) * filter(3)
+        sqrshrun        v4.8b,   v4.8h,   #4
+        uxtl            v0.8h,   v4.8b            // second block, in 16 bit
+        mla             v5.8h,   v20.8h,  v2.h[3] // p4(top[3]) * filter(4)
+        mla             v5.8h,   v16.8h,  v1.h[7] // p0(topleft) * filter(0)
+        mla             v5.8h,   v21.8h,  v0.h[3] // p5(left[0]) * filter(5)
+        mla             v5.8h,   v22.8h,  v0.h[7] // p6(left[1]) * filter(6)
+
+        mul             v6.8h,   v17.8h,  v2.h[4] // p1(top[0]) * filter(1)
+        mla             v6.8h,   v18.8h,  v2.h[5] // p2(top[1]) * filter(2)
+        mla             v6.8h,   v19.8h,  v2.h[6] // p3(top[2]) * filter(3)
+        sqrshrun        v5.8b,   v5.8h,   #4
+        uxtl            v0.8h,   v5.8b            // third block, in 16 bit
+        mla             v6.8h,   v20.8h,  v2.h[7] // p4(top[3]) * filter(4)
+        mla             v6.8h,   v16.8h,  v2.h[3] // p0(topleft) * filter(0)
+        mla             v6.8h,   v21.8h,  v0.h[3] // p5(left[0]) * filter(5)
+        mla             v6.8h,   v22.8h,  v0.h[7] // p6(left[1]) * filter(6)
+
+        subs            w3,  w3,  #16
+        sqrshrun        v6.8b,   v6.8h,   #4
+
+        ins             v0.h[2], v2.h[7]
+        st4             {v3.s, v4.s, v5.s, v6.s}[0], [x0], #16
+        ins             v0.b[0], v6.b[7]
+        st4             {v3.s, v4.s, v5.s, v6.s}[1], [x6], #16
+        ins             v0.b[2], v6.b[3]
+        b.gt            2b
+        subs            w4,  w4,  #2
+        b.le            9f
+        sub             x8,  x6,  w9, uxtw
+        add             x0,  x0,  x1
+        add             x6,  x6,  x1
+        mov             w3,  w9
+        b               1b
+9:
+        ret
+
+L(ipred_filter_tbl):
+        .hword L(ipred_filter_tbl) - 320b
+        .hword L(ipred_filter_tbl) - 160b
+        .hword L(ipred_filter_tbl) -  80b
+        .hword L(ipred_filter_tbl) -  40b
+endfunc
+
 // void pal_pred_neon(pixel *dst, const ptrdiff_t stride,
 //                    const uint16_t *const pal, const uint8_t *idx,
 //                    const int w, const int h);
