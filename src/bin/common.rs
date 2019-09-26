@@ -196,14 +196,14 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     )
     .arg(
       Arg::with_name("TILE_ROWS")
-        .help("Number of tile rows. Must be a power of 2.")
+        .help("Number of tile rows. Must be a power of 2. rav1e may override this based on video resolution.")
         .long("tile-rows")
         .takes_value(true)
         .default_value("0")
     )
     .arg(
       Arg::with_name("TILE_COLS")
-        .help("Number of tile columns. Must be a power of 2.")
+        .help("Number of tile columns. Must be a power of 2. rav1e may override this based on video resolution.")
         .long("tile-cols")
         .takes_value(true)
         .default_value("0")

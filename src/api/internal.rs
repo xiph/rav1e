@@ -9,10 +9,6 @@
 #![deny(missing_docs)]
 
 use crate::api::{EncoderConfig, EncoderStatus, FrameType, Packet};
-
-use arrayvec::ArrayVec;
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
-
 use crate::context::*;
 use crate::context::{FrameBlocks, SuperBlockOffset, TileSuperBlockOffset};
 use crate::dist::get_satd;
@@ -31,6 +27,9 @@ use crate::stats::EncoderStats;
 use crate::tiling::{Area, TileRect};
 use crate::transform::TxSize;
 use crate::util::Pixel;
+use arrayvec::ArrayVec;
+use log::Level::Info;
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use std::cmp;
 use std::collections::BTreeMap;
@@ -362,6 +361,20 @@ impl<T: Pixel> ContextInner<T> {
     &mut self, output_frameno: u64,
   ) -> Result<(), EncoderStatus> {
     let fi = self.build_frame_properties(output_frameno)?;
+
+    if output_frameno == 0 && log_enabled!(Info) {
+      if fi.tiling.tile_count() == 1 {
+        info!("Using 1 tile");
+      } else {
+        info!(
+          "Using {} tiles ({}x{})",
+          fi.tiling.tile_count(),
+          fi.tiling.cols,
+          fi.tiling.rows
+        );
+      }
+    }
+
     self.frame_invariants.insert(output_frameno, fi);
 
     Ok(())

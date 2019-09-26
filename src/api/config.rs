@@ -194,9 +194,6 @@ impl fmt::Display for EncoderConfig {
       ("min_quantizer", self.min_quantizer.to_string()),
       ("low_latency", self.low_latency.to_string()),
       ("tune", self.tune.to_string()),
-      ("tiles", self.tiles.to_string()),
-      ("tile_rows", self.tile_rows.to_string()),
-      ("tile_cols", self.tile_cols.to_string()),
       ("rdo_lookahead_frames", self.rdo_lookahead_frames.to_string()),
       ("min_block_size", self.speed_settings.min_block_size.to_string()),
       (
