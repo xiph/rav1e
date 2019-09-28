@@ -16,7 +16,7 @@ libavutil = "56.0.0"
 build_sources = []
 
 [build-dependencies]
-bindgen = "0.49"
+bindgen = "0.51"
 metadeps = "1.1.2"
 
 [dependencies]
