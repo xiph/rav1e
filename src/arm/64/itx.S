@@ -844,16 +844,14 @@ endfunc
         sqsub           v5\sz,     v5\sz, v19\sz // t7
         sqneg           \o1\()\sz, \o1\()\sz     // out1
 
-        movi            v0.4h,  #2896>>4
-
-        smull_smlal     v18, v19, v2,  v4,  v0.h[0], v0.h[0], \sz // -> out3 (v19 or v20)
-        smull_smlsl     v6,  v7,  v2,  v4,  v0.h[0], v0.h[0], \sz // -> out4 (v20 or v19)
-        smull_smlsl     v20, v21, v3,  v5,  v0.h[0], v0.h[0], \sz // -> out5 (v21 or v18)
-        rshrn_sz        v2,  v18, v19, #8,  \sz // out3
-        smull_smlal     v18, v19, v3,  v5,  v0.h[0], v0.h[0], \sz // -> out2 (v18 or v21)
-        rshrn_sz        v3,  v20, v21, #8,  \sz // out5
-        rshrn_sz        \o2, v18, v19, #8,  \sz // out2 (v18 or v21)
-        rshrn_sz        \o4, v6,  v7,  #8,  \sz // out4 (v20 or v19)
+        smull_smlal     v18, v19, v2,  v4,  v1.h[0], v1.h[0], \sz // -> out3 (v19 or v20)
+        smull_smlsl     v6,  v7,  v2,  v4,  v1.h[0], v1.h[0], \sz // -> out4 (v20 or v19)
+        smull_smlsl     v20, v21, v3,  v5,  v1.h[0], v1.h[0], \sz // -> out5 (v21 or v18)
+        rshrn_sz        v2,  v18, v19, #12, \sz // out3
+        smull_smlal     v18, v19, v3,  v5,  v1.h[0], v1.h[0], \sz // -> out2 (v18 or v21)
+        rshrn_sz        v3,  v20, v21, #12, \sz // out5
+        rshrn_sz        \o2, v18, v19, #12, \sz // out2 (v18 or v21)
+        rshrn_sz        \o4, v6,  v7,  #12, \sz // out4 (v20 or v19)
 
         sqneg           \o3\()\sz, v2\sz     // out3
         sqneg           \o5\()\sz, v3\sz     // out5
@@ -1283,27 +1281,25 @@ endfunc
         sqsub           v23\sz,  v25\sz,  v23\sz // t7
         sqneg           \o3\sz,  \o3\sz          // out3
 
-        movi            v0.4h,  #2896>>4
-
         smull_smlsl     v24, v25, v2,  v21, v0.h[0], v0.h[0], \sz // -> out8 (v24 or v23)
         smull_smlal     v4,  v5,  v2,  v21, v0.h[0], v0.h[0], \sz // -> out7 (v23 or v24)
         smull_smlal     v6,  v7,  v26, v3,  v0.h[0], v0.h[0], \sz // -> out5 (v21 or v26)
 
-        rshrn_sz        v24, v24, v25, #8,  \sz // out8
-        rshrn_sz        v4,  v4,  v5,  #8,  \sz // out7
-        rshrn_sz        v5,  v6,  v7,  #8,  \sz // out5
+        rshrn_sz        v24, v24, v25, #12, \sz // out8
+        rshrn_sz        v4,  v4,  v5,  #12, \sz // out7
+        rshrn_sz        v5,  v6,  v7,  #12, \sz // out5
         smull_smlsl     v6,  v7,  v26, v3,  v0.h[0], v0.h[0], \sz // -> out10 (v26 or v21)
         smull_smlal     v2,  v3,  v22, v23, v0.h[0], v0.h[0], \sz // -> out4 (v20 or v27)
-        rshrn_sz        v26, v6,  v7,  #8,  \sz // out10
+        rshrn_sz        v26, v6,  v7,  #12, \sz // out10
 
         smull_smlsl     v6,  v7,  v22, v23, v0.h[0], v0.h[0], \sz // -> out11 (v27 or v20)
         smull_smlal     v22, v23, v27, v20, v0.h[0], v0.h[0], \sz // -> out6 (v22 or v25)
         smull_smlsl     v21, v25, v27, v20, v0.h[0], v0.h[0], \sz // -> out9 (v25 or v22)
 
-        rshrn_sz        \o4, v2,  v3,  #8,  \sz // out4
-        rshrn_sz        v6,  v6,  v7,  #8,  \sz // out11
-        rshrn_sz        v7,  v21, v25, #8,  \sz // out9
-        rshrn_sz        \o6, v22, v23, #8,  \sz // out6
+        rshrn_sz        \o4, v2,  v3,  #12, \sz // out4
+        rshrn_sz        v6,  v6,  v7,  #12, \sz // out11
+        rshrn_sz        v7,  v21, v25, #12, \sz // out9
+        rshrn_sz        \o6, v22, v23, #12, \sz // out6
 
 .ifc \o8, v23
         mov             \o8\szb,  v24\szb
