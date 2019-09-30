@@ -147,13 +147,13 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         - 2:\n\
         Min block size 4x4, complex pred modes, RDO TX decision, include near MVs\n\
         - 1:\n\
-        Min block size 4x4, complex pred modes, RDO TX decision, include near MVs, bottom-up encoding\n\
+        Min block size 4x4, complex pred modes, RDO TX decision, include near MVs, quantizer RDO, bottom-up encoding\n\
         - 0 (slowest):\n\
-        Min block size 4x4, complex pred modes, RDO TX decision, include near MVs, bottom-up encoding with non-square paritions not just right and bottom tile borders but everywhere\n")
+        Min block size 4x4, complex pred modes, RDO TX decision, include near MVs, quantizer RDO, bottom-up encoding with non-square partitions not just right and bottom tile borders but everywhere\n")
         .short("s")
         .long("speed")
         .takes_value(true)
-        .default_value("5")
+        .default_value("6")
     )
     .arg(
       Arg::with_name("MIN_KEYFRAME_INTERVAL")
