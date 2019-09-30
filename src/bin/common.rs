@@ -149,7 +149,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         - 1:\n\
         Min block size 4x4, complex pred modes, RDO TX decision, include near MVs, quantizer RDO, bottom-up encoding\n\
         - 0 (slowest):\n\
-        Min block size 4x4, complex pred modes, RDO TX decision, include near MVs, quantizer RDO, bottom-up encoding with non-square partitions not just right and bottom tile borders but everywhere\n")
+        Min block size 4x4, complex pred modes, RDO TX decision, include near MVs, quantizer RDO, bottom-up encoding with non-square partitions everywhere\n")
         .short("s")
         .long("speed")
         .takes_value(true)
