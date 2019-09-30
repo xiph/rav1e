@@ -310,10 +310,10 @@ impl SpeedSettings {
   /// - 6 (default): min block size 8x8, reduced TX set, complex pred modes for keyframes.
   /// - 5: min block size 8x8, complex pred modes for keyframes.
   /// - 4: min block size 8x8, complex pred modes for keyframes, RDO TX decision.
-  /// - 3: min block size 8x8, complex pred modes for keyframes, RDO TX decision, include near MVs, quantizer RDO.
-  /// - 2: min block size 4x4, complex pred modes, RDO TX decision, include near MVs, quantizer RDO.
+  /// - 3: min block size 8x8, complex pred modes for keyframes, RDO TX decision, include near MVs.
+  /// - 2: min block size 4x4, complex pred modes, RDO TX decision, include near MVs.
   /// - 1: min block size 4x4, complex pred modes, RDO TX decision, include near MVs, quantizer RDO, bottom-up encoding.
-  /// - 0 (slowest): min block size 4x4, complex pred modes, RDO TX decision, include near MVs, quantizer RDO, bottom-up encoding with non-square partitions everywhere
+  /// - 0 (slowest): min block size 4x4, complex pred modes, RDO TX decision, include near MVs, quantizer RDO, bottom-up encoding with non-square partitions not just right and bottom tile borders but everywhere
   pub fn from_preset(speed: usize) -> Self {
     SpeedSettings {
       min_block_size: Self::min_block_size_preset(speed),
