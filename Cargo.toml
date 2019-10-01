@@ -66,9 +66,6 @@ nasm-rs = { version = "0.1", path = "crates/nasm_rs/", optional = true }
 vergen = { version = "3", path = "crates/vergen" }
 rustc_version = "0.2"
 
-[target.'cfg(unix)'.build-dependencies]
-pkg-config = "0.3.12"
-
 [target.'cfg(unix)'.dependencies]
 signal-hook = { version = "0.1.9", optional = true }
 
