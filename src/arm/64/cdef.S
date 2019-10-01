@@ -299,17 +299,17 @@ endconst
         uabd            v20.8h, v0.8h,  \s2\().8h   // abs(diff)
         ushl            v17.8h, v16.8h, \shift      // abs(diff) >> shift
         ushl            v21.8h, v20.8h, \shift      // abs(diff) >> shift
-        uqsub           v17.8h, \thresh_vec, v17.8h // imax(0, threshold - (abs(diff) >> shift))
-        uqsub           v21.8h, \thresh_vec, v21.8h // imax(0, threshold - (abs(diff) >> shift))
-        cmhi            v18.8h, v0.8h,  \s1\().8h   // px > p0
-        cmhi            v22.8h, v0.8h,  \s2\().8h   // px > p1
-        umin            v17.8h, v17.8h, v16.8h      // imin(abs(diff), imax())
-        umin            v21.8h, v21.8h, v20.8h      // imin(abs(diff), imax())
+        uqsub           v17.8h, \thresh_vec, v17.8h // clip = imax(0, threshold - (abs(diff) >> shift))
+        uqsub           v21.8h, \thresh_vec, v21.8h // clip = imax(0, threshold - (abs(diff) >> shift))
+        sub             v18.8h, \s1\().8h,  v0.8h   // diff = p0 - px
+        sub             v22.8h, \s2\().8h,  v0.8h   // diff = p1 - px
+        neg             v16.8h, v17.8h              // -clip
+        neg             v20.8h, v21.8h              // -clip
+        smin            v18.8h, v18.8h, v17.8h      // imin(diff, clip)
+        smin            v22.8h, v22.8h, v21.8h      // imin(diff, clip)
         dup             v19.8h, \tap                // taps[k]
-        neg             v16.8h, v17.8h              // -imin()
-        neg             v20.8h, v21.8h              // -imin()
-        bsl             v18.16b, v16.16b, v17.16b   // constrain() = apply_sign()
-        bsl             v22.16b, v20.16b, v21.16b   // constrain() = apply_sign()
+        smax            v18.8h, v18.8h, v16.8h      // constrain() = imax(imin(diff, clip), -clip)
+        smax            v22.8h, v22.8h, v20.8h      // constrain() = imax(imin(diff, clip), -clip)
         mla             v1.8h,  v18.8h, v19.8h      // sum += taps[k] * constrain()
         mla             v1.8h,  v22.8h, v19.8h      // sum += taps[k] * constrain()
 3:
