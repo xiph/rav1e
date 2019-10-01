@@ -280,7 +280,6 @@ mod x86_64 {
     CpuFeatureLevel::len()] = {
     let mut out = [[None; DIST_FNS_LENGTH]; CpuFeatureLevel::len()];
 
-    out[CpuFeatureLevel::SSE2 as usize] = SAD_HBD_FNS_SSSE3;
     out[CpuFeatureLevel::SSSE3 as usize] = SAD_HBD_FNS_SSSE3;
     out[CpuFeatureLevel::AVX2 as usize] = SAD_HBD_FNS_SSSE3;
 

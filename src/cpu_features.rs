@@ -7,12 +7,21 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-#[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+#[cfg(not(all(
+  feature = "nasm",
+  any(target_arch = "x86", target_arch = "x86_64")
+)))]
 pub use native::*;
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[cfg(all(
+  feature = "nasm",
+  any(target_arch = "x86", target_arch = "x86_64")
+))]
 pub use x86::*;
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[cfg(all(
+  feature = "nasm",
+  any(target_arch = "x86", target_arch = "x86_64")
+))]
 mod x86 {
   use arg_enum_proc_macro::ArgEnum;
   use std::env;
@@ -42,6 +51,10 @@ mod x86 {
     fn default() -> CpuFeatureLevel {
       let detected: CpuFeatureLevel = if is_x86_feature_detected!("avx2") {
         CpuFeatureLevel::AVX2
+      } else if is_x86_feature_detected!("ssse3") {
+        CpuFeatureLevel::SSSE3
+      } else if is_x86_feature_detected!("sse2") {
+        CpuFeatureLevel::SSE2
       } else {
         CpuFeatureLevel::NATIVE
       };
@@ -49,6 +62,8 @@ mod x86 {
         Ok(feature) => match feature.as_ref() {
           "rust" => CpuFeatureLevel::NATIVE,
           "avx2" => CpuFeatureLevel::AVX2,
+          "ssse3" => CpuFeatureLevel::SSSE3,
+          "sse2" => CpuFeatureLevel::SSE2,
           _ => detected,
         },
         Err(_e) => detected,
@@ -62,7 +77,10 @@ mod x86 {
   }
 }
 
-#[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+#[cfg(not(all(
+  feature = "nasm",
+  any(target_arch = "x86", target_arch = "x86_64")
+)))]
 mod native {
   use arg_enum_proc_macro::ArgEnum;
 
