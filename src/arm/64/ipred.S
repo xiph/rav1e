@@ -1945,3 +1945,497 @@ L(ipred_cfl_tbl):
         .hword L(ipred_cfl_tbl) - L(ipred_cfl_w8)
         .hword L(ipred_cfl_tbl) - L(ipred_cfl_w4)
 endfunc
+
+// void cfl_ac_420_neon(int16_t *const ac, const pixel *const ypx,
+//                      const ptrdiff_t stride, const int w_pad,
+//                      const int h_pad, const int cw, const int ch);
+function ipred_cfl_ac_420_neon, export=1
+        clz             w8,  w5
+        lsl             w4,  w4,  #2
+        adr             x7,  L(ipred_cfl_ac_420_tbl)
+        sub             w8,  w8,  #27
+        ldrh            w8,  [x7, w8, uxtw #1]
+        sub             x7,  x7,  w8, uxtw
+        sub             w8,  w6,  w4         // height - h_pad
+        rbit            w9,  w5              // rbit(width)
+        rbit            w10, w6              // rbit(height)
+        clz             w9,  w9              // ctz(width)
+        clz             w10, w10             // ctz(height)
+        add             w9,  w9,  w10        // log2sz
+        movi            v16.4s,  #1
+        add             x10, x1,  x2
+        lsl             x2,  x2,  #1
+        dup             v17.4s,  w9
+        sshl            v16.4s,  v16.4s,  v17.4s // 1 << log2sz
+        neg             v17.4s,  v17.4s          // -log2sz
+        ushr            v16.4s,  v16.4s,  #1     // 1 << (log2sz - 1)
+        mov             w9,  w6
+        br              x7
+
+L(ipred_cfl_ac_420_w4):
+1:      // Copy and subsample input
+        ld1             {v0.8b},   [x1],  x2
+        ld1             {v1.8b},   [x10], x2
+        ld1             {v0.d}[1], [x1],  x2
+        ld1             {v1.d}[1], [x10], x2
+        uaddlp          v0.8h,   v0.16b
+        uaddlp          v1.8h,   v1.16b
+        add             v0.8h,   v0.8h,   v1.8h
+        shl             v0.8h,   v0.8h,   #1
+        subs            w8,  w8,  #2
+        st1             {v0.8h}, [x0], #16
+        b.gt            1b
+        trn2            v1.2d,   v0.2d,   v0.2d
+        trn2            v0.2d,   v0.2d,   v0.2d
+L(ipred_cfl_ac_420_w4_hpad):
+        cbz             w4,  3f
+2:      // Vertical padding (h_pad > 0)
+        subs            w4,  w4,  #4
+        st1             {v0.8h, v1.8h}, [x0], #32
+        b.gt            2b
+3:
+        sub             x0,  x0,  w6, uxtw #3
+        // Sum the produced ac values
+        subs            w6,  w6,  #4
+        ld1             {v0.8h, v1.8h}, [x0], #32
+        b.le            5f
+4:
+        ld1             {v2.8h, v3.8h}, [x0], #32
+        subs            w6,  w6,  #4
+        add             v0.8h,   v0.8h,   v2.8h
+        add             v1.8h,   v1.8h,   v3.8h
+        b.gt            4b
+5:
+        add             v0.8h,   v0.8h,   v1.8h
+        uaddlv          s0,  v0.8h                // sum
+        sub             x0,  x0,  w9, uxtw #3
+        add             v0.2s,   v0.2s,   v16.2s  // sum += 1 << (log2sz - 1)
+        ushl            v4.2s,   v0.2s,   v17.2s  // sum >>= log2sz
+        dup             v4.8h,   v4.h[0]
+6:      // Subtract dc from ac
+        ld1             {v0.8h, v1.8h}, [x0]
+        subs            w9,  w9,  #4
+        sub             v0.8h,   v0.8h,   v4.8h
+        sub             v1.8h,   v1.8h,   v4.8h
+        st1             {v0.8h, v1.8h}, [x0], #32
+        b.gt            6b
+        ret
+
+L(ipred_cfl_ac_420_w8):
+        cbnz            w3,  L(ipred_cfl_ac_420_w8_wpad)
+1:      // Copy and subsample input, without padding
+        ld1             {v0.16b}, [x1],  x2
+        ld1             {v1.16b}, [x10], x2
+        ld1             {v2.16b}, [x1],  x2
+        uaddlp          v0.8h,   v0.16b
+        ld1             {v3.16b}, [x10], x2
+        uaddlp          v1.8h,   v1.16b
+        uaddlp          v2.8h,   v2.16b
+        uaddlp          v3.8h,   v3.16b
+        add             v0.8h,   v0.8h,   v1.8h
+        add             v2.8h,   v2.8h,   v3.8h
+        shl             v0.8h,   v0.8h,   #1
+        shl             v1.8h,   v2.8h,   #1
+        subs            w8,  w8,  #2
+        st1             {v0.8h, v1.8h}, [x0], #32
+        b.gt            1b
+        mov             v0.16b,  v1.16b
+        b               L(ipred_cfl_ac_420_w8_hpad)
+
+L(ipred_cfl_ac_420_w8_wpad):
+1:      // Copy and subsample input, padding 4
+        ld1             {v0.8b},   [x1],  x2
+        ld1             {v1.8b},   [x10], x2
+        ld1             {v0.d}[1], [x1],  x2
+        ld1             {v1.d}[1], [x10], x2
+        uaddlp          v0.8h,   v0.16b
+        uaddlp          v1.8h,   v1.16b
+        add             v0.8h,   v0.8h,   v1.8h
+        shl             v0.8h,   v0.8h,   #1
+        dup             v1.4h,   v0.h[3]
+        dup             v3.4h,   v0.h[7]
+        trn2            v2.2d,   v0.2d,   v0.2d
+        subs            w8,  w8,  #2
+        st1             {v0.4h, v1.4h, v2.4h, v3.4h}, [x0], #32
+        b.gt            1b
+        trn1            v0.2d,   v2.2d,   v3.2d
+        trn1            v1.2d,   v2.2d,   v3.2d
+
+L(ipred_cfl_ac_420_w8_hpad):
+        cbz             w4,  3f
+2:      // Vertical padding (h_pad > 0)
+        subs            w4,  w4,  #4
+        st1             {v0.8h, v1.8h}, [x0], #32
+        st1             {v0.8h, v1.8h}, [x0], #32
+        b.gt            2b
+3:
+
+L(ipred_cfl_ac_420_w8_calc_subtract_dc):
+        sub             x0,  x0,  w6, uxtw #4
+        // Sum the produced ac values
+        subs            w6,  w6,  #4
+        ld1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], #64
+        b.le            5f
+4:
+        ld1             {v4.8h, v5.8h, v6.8h, v7.8h}, [x0], #64
+        subs            w6,  w6,  #4
+        add             v0.8h,   v0.8h,   v4.8h
+        add             v1.8h,   v1.8h,   v5.8h
+        add             v2.8h,   v2.8h,   v6.8h
+        add             v3.8h,   v3.8h,   v7.8h
+        b.gt            4b
+5:
+        add             v0.8h,   v0.8h,   v1.8h
+        add             v2.8h,   v2.8h,   v3.8h
+        uaddlp          v0.4s,   v0.8h
+        uaddlp          v2.4s,   v2.8h
+        add             v0.4s,   v0.4s,   v2.4s
+        addv            s0,  v0.4s                // sum
+        sub             x0,  x0,  w9, uxtw #4
+        add             v0.2s,   v0.2s,   v16.2s  // sum += 1 << (log2sz - 1)
+        ushl            v4.2s,   v0.2s,   v17.2s  // sum >>= log2sz
+        dup             v4.8h,   v4.h[0]
+6:      // Subtract dc from ac
+        ld1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0]
+        subs            w9,  w9,  #4
+        sub             v0.8h,   v0.8h,   v4.8h
+        sub             v1.8h,   v1.8h,   v4.8h
+        sub             v2.8h,   v2.8h,   v4.8h
+        sub             v3.8h,   v3.8h,   v4.8h
+        st1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], #64
+        b.gt            6b
+        ret
+
+L(ipred_cfl_ac_420_w16):
+        adr             x7,  L(ipred_cfl_ac_420_w16_tbl)
+        ldrh            w3,  [x7, w3, uxtw #1]
+        sub             x7,  x7,  w3, uxtw
+        br              x7
+
+L(ipred_cfl_ac_420_w16_wpad0):
+1:      // Copy and subsample input, without padding
+        ld1             {v0.16b, v1.16b}, [x1],  x2
+        ld1             {v2.16b, v3.16b}, [x10], x2
+        uaddlp          v0.8h,   v0.16b
+        ld1             {v4.16b, v5.16b}, [x1],  x2
+        uaddlp          v1.8h,   v1.16b
+        ld1             {v6.16b, v7.16b}, [x10], x2
+        uaddlp          v2.8h,   v2.16b
+        uaddlp          v3.8h,   v3.16b
+        uaddlp          v4.8h,   v4.16b
+        uaddlp          v5.8h,   v5.16b
+        uaddlp          v6.8h,   v6.16b
+        uaddlp          v7.8h,   v7.16b
+        add             v0.8h,   v0.8h,   v2.8h
+        add             v1.8h,   v1.8h,   v3.8h
+        add             v4.8h,   v4.8h,   v6.8h
+        add             v5.8h,   v5.8h,   v7.8h
+        shl             v0.8h,   v0.8h,   #1
+        shl             v1.8h,   v1.8h,   #1
+        shl             v2.8h,   v4.8h,   #1
+        shl             v3.8h,   v5.8h,   #1
+        subs            w8,  w8,  #2
+        st1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], #64
+        b.gt            1b
+        mov             v0.16b,  v2.16b
+        mov             v1.16b,  v3.16b
+        b               L(ipred_cfl_ac_420_w16_hpad)
+
+L(ipred_cfl_ac_420_w16_wpad1):
+1:      // Copy and subsample input, padding 4
+        ldr             d1,  [x1,  #16]
+        ld1             {v0.16b}, [x1],  x2
+        ldr             d3,  [x10, #16]
+        ld1             {v2.16b}, [x10], x2
+        uaddlp          v1.4h,   v1.8b
+        ldr             d5,  [x1,  #16]
+        uaddlp          v0.8h,   v0.16b
+        ld1             {v4.16b}, [x1],  x2
+        uaddlp          v3.4h,   v3.8b
+        ldr             d7,  [x10, #16]
+        uaddlp          v2.8h,   v2.16b
+        ld1             {v6.16b}, [x10], x2
+        uaddlp          v5.4h,   v5.8b
+        uaddlp          v4.8h,   v4.16b
+        uaddlp          v7.4h,   v7.8b
+        uaddlp          v6.8h,   v6.16b
+        add             v1.4h,   v1.4h,   v3.4h
+        add             v0.8h,   v0.8h,   v2.8h
+        add             v5.4h,   v5.4h,   v7.4h
+        add             v4.8h,   v4.8h,   v6.8h
+        shl             v1.4h,   v1.4h,   #1
+        shl             v0.8h,   v0.8h,   #1
+        shl             v3.4h,   v5.4h,   #1
+        shl             v2.8h,   v4.8h,   #1
+        dup             v4.4h,   v1.h[3]
+        dup             v5.4h,   v3.h[3]
+        trn1            v1.2d,   v1.2d,   v4.2d
+        trn1            v3.2d,   v3.2d,   v5.2d
+        subs            w8,  w8,  #2
+        st1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], #64
+        b.gt            1b
+        mov             v0.16b,  v2.16b
+        mov             v1.16b,  v3.16b
+        b               L(ipred_cfl_ac_420_w16_hpad)
+
+L(ipred_cfl_ac_420_w16_wpad2):
+1:      // Copy and subsample input, padding 8
+        ld1             {v0.16b}, [x1],  x2
+        ld1             {v2.16b}, [x10], x2
+        ld1             {v4.16b}, [x1],  x2
+        uaddlp          v0.8h,   v0.16b
+        ld1             {v6.16b}, [x10], x2
+        uaddlp          v2.8h,   v2.16b
+        uaddlp          v4.8h,   v4.16b
+        uaddlp          v6.8h,   v6.16b
+        add             v0.8h,   v0.8h,   v2.8h
+        add             v4.8h,   v4.8h,   v6.8h
+        shl             v0.8h,   v0.8h,   #1
+        shl             v2.8h,   v4.8h,   #1
+        dup             v1.8h,   v0.h[7]
+        dup             v3.8h,   v2.h[7]
+        subs            w8,  w8,  #2
+        st1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], #64
+        b.gt            1b
+        mov             v0.16b,  v2.16b
+        mov             v1.16b,  v3.16b
+        b               L(ipred_cfl_ac_420_w16_hpad)
+
+L(ipred_cfl_ac_420_w16_wpad3):
+1:      // Copy and subsample input, padding 12
+        ld1             {v0.8b}, [x1],  x2
+        ld1             {v2.8b}, [x10], x2
+        ld1             {v4.8b}, [x1],  x2
+        uaddlp          v0.4h,   v0.8b
+        ld1             {v6.8b}, [x10], x2
+        uaddlp          v2.4h,   v2.8b
+        uaddlp          v4.4h,   v4.8b
+        uaddlp          v6.4h,   v6.8b
+        add             v0.4h,   v0.4h,   v2.4h
+        add             v4.4h,   v4.4h,   v6.4h
+        shl             v0.4h,   v0.4h,   #1
+        shl             v2.4h,   v4.4h,   #1
+        dup             v1.8h,   v0.h[3]
+        dup             v3.8h,   v2.h[3]
+        trn1            v0.2d,   v0.2d,   v1.2d
+        trn1            v2.2d,   v2.2d,   v3.2d
+        subs            w8,  w8,  #2
+        st1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], #64
+        b.gt            1b
+        mov             v0.16b,  v2.16b
+        mov             v1.16b,  v3.16b
+        b               L(ipred_cfl_ac_420_w16_hpad)
+
+L(ipred_cfl_ac_420_w16_hpad):
+        cbz             w4,  3f
+2:      // Vertical padding (h_pad > 0)
+        subs            w4,  w4,  #4
+        st1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], #64
+        st1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], #64
+        b.gt            2b
+3:
+
+        // Double the height and reuse the w8 summing/subtracting
+        lsl             w6,  w6,  #1
+        lsl             w9,  w9,  #1
+        b               L(ipred_cfl_ac_420_w8_calc_subtract_dc)
+
+L(ipred_cfl_ac_420_tbl):
+        .hword L(ipred_cfl_ac_420_tbl) - L(ipred_cfl_ac_420_w16)
+        .hword L(ipred_cfl_ac_420_tbl) - L(ipred_cfl_ac_420_w8)
+        .hword L(ipred_cfl_ac_420_tbl) - L(ipred_cfl_ac_420_w4)
+
+L(ipred_cfl_ac_420_w16_tbl):
+        .hword L(ipred_cfl_ac_420_w16_tbl) - L(ipred_cfl_ac_420_w16_wpad0)
+        .hword L(ipred_cfl_ac_420_w16_tbl) - L(ipred_cfl_ac_420_w16_wpad1)
+        .hword L(ipred_cfl_ac_420_w16_tbl) - L(ipred_cfl_ac_420_w16_wpad2)
+        .hword L(ipred_cfl_ac_420_w16_tbl) - L(ipred_cfl_ac_420_w16_wpad3)
+endfunc
+
+// void cfl_ac_422_neon(int16_t *const ac, const pixel *const ypx,
+//                      const ptrdiff_t stride, const int w_pad,
+//                      const int h_pad, const int cw, const int ch);
+function ipred_cfl_ac_422_neon, export=1
+        clz             w8,  w5
+        lsl             w4,  w4,  #2
+        adr             x7,  L(ipred_cfl_ac_422_tbl)
+        sub             w8,  w8,  #27
+        ldrh            w8,  [x7, w8, uxtw #1]
+        sub             x7,  x7,  w8, uxtw
+        sub             w8,  w6,  w4         // height - h_pad
+        rbit            w9,  w5              // rbit(width)
+        rbit            w10, w6              // rbit(height)
+        clz             w9,  w9              // ctz(width)
+        clz             w10, w10             // ctz(height)
+        add             w9,  w9,  w10        // log2sz
+        movi            v16.4s,  #1
+        add             x10, x1,  x2
+        lsl             x2,  x2,  #1
+        dup             v17.4s,  w9
+        sshl            v16.4s,  v16.4s,  v17.4s // 1 << log2sz
+        neg             v17.4s,  v17.4s          // -log2sz
+        ushr            v16.4s,  v16.4s,  #1     // 1 << (log2sz - 1)
+        mov             w9,  w6
+        br              x7
+
+L(ipred_cfl_ac_422_w4):
+1:      // Copy and subsample input
+        ld1             {v0.8b},   [x1],  x2
+        ld1             {v0.d}[1], [x10], x2
+        ld1             {v1.8b},   [x1],  x2
+        ld1             {v1.d}[1], [x10], x2
+        uaddlp          v0.8h,   v0.16b
+        uaddlp          v1.8h,   v1.16b
+        shl             v0.8h,   v0.8h,   #2
+        shl             v1.8h,   v1.8h,   #2
+        subs            w8,  w8,  #4
+        st1             {v0.8h, v1.8h}, [x0], #32
+        b.gt            1b
+        trn2            v0.2d,   v1.2d,   v1.2d
+        trn2            v1.2d,   v1.2d,   v1.2d
+        b               L(ipred_cfl_ac_420_w4_hpad)
+
+L(ipred_cfl_ac_422_w8):
+        cbnz            w3,  L(ipred_cfl_ac_422_w8_wpad)
+1:      // Copy and subsample input, without padding
+        ld1             {v0.16b}, [x1],  x2
+        ld1             {v1.16b}, [x10], x2
+        ld1             {v2.16b}, [x1],  x2
+        uaddlp          v0.8h,   v0.16b
+        ld1             {v3.16b}, [x10], x2
+        uaddlp          v1.8h,   v1.16b
+        uaddlp          v2.8h,   v2.16b
+        uaddlp          v3.8h,   v3.16b
+        shl             v0.8h,   v0.8h,   #2
+        shl             v1.8h,   v1.8h,   #2
+        shl             v2.8h,   v2.8h,   #2
+        shl             v3.8h,   v3.8h,   #2
+        subs            w8,  w8,  #4
+        st1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], #64
+        b.gt            1b
+        mov             v0.16b,  v3.16b
+        mov             v1.16b,  v3.16b
+        b               L(ipred_cfl_ac_420_w8_hpad)
+
+L(ipred_cfl_ac_422_w8_wpad):
+1:      // Copy and subsample input, padding 4
+        ld1             {v0.8b},   [x1],  x2
+        ld1             {v0.d}[1], [x10], x2
+        ld1             {v2.8b},   [x1],  x2
+        ld1             {v2.d}[1], [x10], x2
+        uaddlp          v0.8h,   v0.16b
+        uaddlp          v2.8h,   v2.16b
+        shl             v0.8h,   v0.8h,   #2
+        shl             v2.8h,   v2.8h,   #2
+        dup             v4.4h,   v0.h[3]
+        dup             v5.8h,   v0.h[7]
+        dup             v6.4h,   v2.h[3]
+        dup             v7.8h,   v2.h[7]
+        trn2            v1.2d,   v0.2d,   v5.2d
+        trn1            v0.2d,   v0.2d,   v4.2d
+        trn2            v3.2d,   v2.2d,   v7.2d
+        trn1            v2.2d,   v2.2d,   v6.2d
+        subs            w8,  w8,  #4
+        st1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], #64
+        b.gt            1b
+        mov             v0.16b,  v3.16b
+        mov             v1.16b,  v3.16b
+        b               L(ipred_cfl_ac_420_w8_hpad)
+
+L(ipred_cfl_ac_422_w16):
+        adr             x7,  L(ipred_cfl_ac_422_w16_tbl)
+        ldrh            w3,  [x7, w3, uxtw #1]
+        sub             x7,  x7,  w3, uxtw
+        br              x7
+
+L(ipred_cfl_ac_422_w16_wpad0):
+1:      // Copy and subsample input, without padding
+        ld1             {v0.16b, v1.16b}, [x1],  x2
+        ld1             {v2.16b, v3.16b}, [x10], x2
+        uaddlp          v0.8h,   v0.16b
+        uaddlp          v1.8h,   v1.16b
+        uaddlp          v2.8h,   v2.16b
+        uaddlp          v3.8h,   v3.16b
+        shl             v0.8h,   v0.8h,   #2
+        shl             v1.8h,   v1.8h,   #2
+        shl             v2.8h,   v2.8h,   #2
+        shl             v3.8h,   v3.8h,   #2
+        subs            w8,  w8,  #2
+        st1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], #64
+        b.gt            1b
+        mov             v0.16b,  v2.16b
+        mov             v1.16b,  v3.16b
+        b               L(ipred_cfl_ac_420_w16_hpad)
+
+L(ipred_cfl_ac_422_w16_wpad1):
+1:      // Copy and subsample input, padding 4
+        ldr             d1,  [x1,  #16]
+        ld1             {v0.16b}, [x1],  x2
+        ldr             d3,  [x10, #16]
+        ld1             {v2.16b}, [x10], x2
+        uaddlp          v1.4h,   v1.8b
+        uaddlp          v0.8h,   v0.16b
+        uaddlp          v3.4h,   v3.8b
+        uaddlp          v2.8h,   v2.16b
+        shl             v1.4h,   v1.4h,   #2
+        shl             v0.8h,   v0.8h,   #2
+        shl             v3.4h,   v3.4h,   #2
+        shl             v2.8h,   v2.8h,   #2
+        dup             v4.4h,   v1.h[3]
+        dup             v5.4h,   v3.h[3]
+        trn1            v1.2d,   v1.2d,   v4.2d
+        trn1            v3.2d,   v3.2d,   v5.2d
+        subs            w8,  w8,  #2
+        st1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], #64
+        b.gt            1b
+        mov             v0.16b,  v2.16b
+        mov             v1.16b,  v3.16b
+        b               L(ipred_cfl_ac_420_w16_hpad)
+
+L(ipred_cfl_ac_422_w16_wpad2):
+1:      // Copy and subsample input, padding 8
+        ld1             {v0.16b}, [x1],  x2
+        ld1             {v2.16b}, [x10], x2
+        uaddlp          v0.8h,   v0.16b
+        uaddlp          v2.8h,   v2.16b
+        shl             v0.8h,   v0.8h,   #2
+        shl             v2.8h,   v2.8h,   #2
+        dup             v1.8h,   v0.h[7]
+        dup             v3.8h,   v2.h[7]
+        subs            w8,  w8,  #2
+        st1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], #64
+        b.gt            1b
+        mov             v0.16b,  v2.16b
+        mov             v1.16b,  v3.16b
+        b               L(ipred_cfl_ac_420_w16_hpad)
+
+L(ipred_cfl_ac_422_w16_wpad3):
+1:      // Copy and subsample input, padding 12
+        ld1             {v0.8b}, [x1],  x2
+        ld1             {v2.8b}, [x10], x2
+        uaddlp          v0.4h,   v0.8b
+        uaddlp          v2.4h,   v2.8b
+        shl             v0.4h,   v0.4h,   #2
+        shl             v2.4h,   v2.4h,   #2
+        dup             v1.8h,   v0.h[3]
+        dup             v3.8h,   v2.h[3]
+        trn1            v0.2d,   v0.2d,   v1.2d
+        trn1            v2.2d,   v2.2d,   v3.2d
+        subs            w8,  w8,  #2
+        st1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], #64
+        b.gt            1b
+        mov             v0.16b,  v2.16b
+        mov             v1.16b,  v3.16b
+        b               L(ipred_cfl_ac_420_w16_hpad)
+
+L(ipred_cfl_ac_422_tbl):
+        .hword L(ipred_cfl_ac_422_tbl) - L(ipred_cfl_ac_422_w16)
+        .hword L(ipred_cfl_ac_422_tbl) - L(ipred_cfl_ac_422_w8)
+        .hword L(ipred_cfl_ac_422_tbl) - L(ipred_cfl_ac_422_w4)
+
+L(ipred_cfl_ac_422_w16_tbl):
+        .hword L(ipred_cfl_ac_422_w16_tbl) - L(ipred_cfl_ac_422_w16_wpad0)
+        .hword L(ipred_cfl_ac_422_w16_tbl) - L(ipred_cfl_ac_422_w16_wpad1)
+        .hword L(ipred_cfl_ac_422_w16_tbl) - L(ipred_cfl_ac_422_w16_wpad2)
+        .hword L(ipred_cfl_ac_422_w16_tbl) - L(ipred_cfl_ac_422_w16_wpad3)
+endfunc
