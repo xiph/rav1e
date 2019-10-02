@@ -10,6 +10,7 @@
 
 #![allow(non_camel_case_types)]
 
+use crate::api::FrameType;
 use crate::api::*;
 use crate::cdef::*;
 use crate::context::*;
@@ -355,6 +356,7 @@ fn compute_distortion<T: Pixel>(
             fi,
             input_region.subregion(bias_area).frame_block_offset(),
             bsize,
+            0,
           )
         },
       )
@@ -369,6 +371,7 @@ fn compute_distortion<T: Pixel>(
           fi,
           input_region.subregion(bias_area).frame_block_offset(),
           bsize,
+          0,
         )
       },
     ),
@@ -401,6 +404,7 @@ fn compute_distortion<T: Pixel>(
               fi,
               input_region.subregion(bias_area).frame_block_offset(),
               bsize,
+              p,
             )
           },
         ) * fi.dist_scale[p];
@@ -431,11 +435,14 @@ fn compute_tx_distortion<T: Pixel>(
           fi,
           input_region.subregion(bias_area).frame_block_offset(),
           bsize,
+          0,
         )
       },
     ) * fi.dist_scale[0]
   } else {
-    tx_dist
+    let bias =
+      compute_distortion_bias(fi, ts.to_frame_block_offset(tile_bo), bsize, 0);
+    ScaledDistortion((tx_dist.0 as f64 * bias) as u64)
   };
 
   if !luma_only && skip {
@@ -465,6 +472,7 @@ fn compute_tx_distortion<T: Pixel>(
               fi,
               input_region.subregion(bias_area).frame_block_offset(),
               bsize,
+              p,
             )
           },
         ) * fi.dist_scale[p];
@@ -492,16 +500,44 @@ fn compute_mean_importance<T: Pixel>(
   total_importance / (bsize.width_mi() * bsize.height_mi()) as f32
 }
 
+fn compute_activity<T: Pixel>(
+  fi: &FrameInvariants<T>, frame_bo: PlaneBlockOffset, bsize: BlockSize,
+) -> Option<f64> {
+  if bsize == BlockSize::BLOCK_8X8 {
+    fi.activity_mask.mean_activity_of(Rect {
+      x: frame_bo.0.x as isize,
+      y: frame_bo.0.y as isize,
+      width: 8,
+      height: 8,
+    })
+  } else {
+    None
+  }
+}
+
 pub fn compute_distortion_bias<T: Pixel>(
   fi: &FrameInvariants<T>, frame_bo: PlaneBlockOffset, bsize: BlockSize,
+  pli: usize,
 ) -> f64 {
   let mean_importance = compute_mean_importance(fi, frame_bo, bsize);
 
   // Chosen based on a series of AWCY runs.
   const FACTOR: f32 = 3.;
   const ADDEND: f64 = 0.65;
+  const ACTIVITY_MIN: f64 = 0.0;
+  const ACTIVITY_MAX: f64 = 7.0;
 
-  let bias = (mean_importance / FACTOR) as f64 + ADDEND;
+  let mut bias = (mean_importance / FACTOR) as f64 + ADDEND;
+
+  if pli == 0 && fi.frame_type == FrameType::KEY {
+    const ACTIVITY_SCALE: f64 = 0.15;
+    const ACTIVITY_ADDEND: f64 = 0.25;
+    if let Some(activity) = compute_activity(fi, frame_bo, bsize) {
+      bias /= (ACTIVITY_SCALE * activity.min(ACTIVITY_MAX).max(ACTIVITY_MIN))
+        + ACTIVITY_ADDEND;
+    }
+  }
+
   debug_assert!(bias.is_finite());
 
   bias
@@ -1706,6 +1742,7 @@ fn rdo_loop_plane_error<T: Pixel>(
           fi,
           ts.to_frame_block_offset(bo),
           BlockSize::BLOCK_8X8,
+          pli,
         );
         err += if pli == 0 {
           cdef_dist_wxh_8x8(&in_region, &test_region, fi.sequence.bit_depth)

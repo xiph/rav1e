@@ -1235,7 +1235,7 @@ pub fn encode_tx_block<T: Pixel>(
     w.add_bits_frac(estimated_rate as u32);
   }
   let bias =
-    compute_distortion_bias(fi, ts.to_frame_block_offset(tile_bo), bsize);
+    compute_distortion_bias(fi, ts.to_frame_block_offset(tile_bo), bsize, p);
   (has_coeff, RawDistortion::new(tx_dist) * bias * fi.dist_scale[p])
 }
 
