@@ -3047,14 +3047,10 @@ endfunc
 .macro warp t, shift
 function warp_affine_8x8\t\()_8bpc_neon, export=1
         ldr             x4,  [x4]
-        ubfx            x7,  x4, #0,  #16
-        ubfx            x8,  x4, #16, #16
-        ubfx            x9,  x4, #32, #16
-        ubfx            x4,  x4, #48, #16
-        sxth            w7,  w7
-        sxth            w8,  w8
-        sxth            w9,  w9
-        sxth            w4,  w4
+        sbfx            x7,  x4, #0,  #16
+        sbfx            x8,  x4, #16, #16
+        sbfx            x9,  x4, #32, #16
+        sbfx            x4,  x4, #48, #16
         mov             w10, #8
         sub             x2,  x2,  x3, lsl #1
         sub             x2,  x2,  x3
