@@ -7,7 +7,9 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use crate::cpu_features::CpuFeatureLevel;
 use crate::frame::PlaneSlice;
+use crate::lrf::native;
 use crate::lrf::*;
 use crate::util::Pixel;
 #[cfg(target_arch = "x86")]
@@ -21,8 +23,9 @@ use std::mem;
 pub fn sgrproj_box_ab_r1(
   af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
   iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
+  cpu: CpuFeatureLevel,
 ) {
-  if is_x86_feature_detected!("avx2") {
+  if cpu >= CpuFeatureLevel::AVX2 {
     return unsafe {
       sgrproj_box_ab_r1_avx2(
         af,
@@ -48,6 +51,7 @@ pub fn sgrproj_box_ab_r1(
     stripe_w,
     s,
     bdm8,
+    cpu,
   );
 }
 
@@ -56,8 +60,9 @@ pub fn sgrproj_box_ab_r1(
 pub fn sgrproj_box_ab_r2(
   af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
   iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
+  cpu: CpuFeatureLevel,
 ) {
-  if is_x86_feature_detected!("avx2") {
+  if cpu >= CpuFeatureLevel::AVX2 {
     return unsafe {
       sgrproj_box_ab_r2_avx2(
         af,
@@ -83,48 +88,50 @@ pub fn sgrproj_box_ab_r2(
     stripe_w,
     s,
     bdm8,
+    cpu,
   );
 }
 
 #[inline]
 pub fn sgrproj_box_f_r0<T: Pixel>(
   f: &mut [u32], y: usize, w: usize, cdeffed: &PlaneSlice<T>,
+  cpu: CpuFeatureLevel,
 ) {
-  if is_x86_feature_detected!("avx2") {
+  if cpu >= CpuFeatureLevel::AVX2 {
     return unsafe {
       sgrproj_box_f_r0_avx2(f, y, w, cdeffed);
     };
   }
 
-  native::sgrproj_box_f_r0(f, y, w, cdeffed);
+  native::sgrproj_box_f_r0(f, y, w, cdeffed, cpu);
 }
 
 #[inline]
 pub fn sgrproj_box_f_r1<T: Pixel>(
   af: &[&[u32]; 3], bf: &[&[u32]; 3], f: &mut [u32], y: usize, w: usize,
-  cdeffed: &PlaneSlice<T>,
+  cdeffed: &PlaneSlice<T>, cpu: CpuFeatureLevel,
 ) {
-  if is_x86_feature_detected!("avx2") {
+  if cpu >= CpuFeatureLevel::AVX2 {
     return unsafe {
       sgrproj_box_f_r1_avx2(af, bf, f, y, w, cdeffed);
     };
   }
 
-  native::sgrproj_box_f_r1(af, bf, f, y, w, cdeffed);
+  native::sgrproj_box_f_r1(af, bf, f, y, w, cdeffed, cpu);
 }
 
 #[inline]
 pub fn sgrproj_box_f_r2<T: Pixel>(
   af: &[&[u32]; 2], bf: &[&[u32]; 2], f0: &mut [u32], f1: &mut [u32],
-  y: usize, w: usize, cdeffed: &PlaneSlice<T>,
+  y: usize, w: usize, cdeffed: &PlaneSlice<T>, cpu: CpuFeatureLevel,
 ) {
-  if is_x86_feature_detected!("avx2") {
+  if cpu >= CpuFeatureLevel::AVX2 {
     return unsafe {
       sgrproj_box_f_r2_avx2(af, bf, f0, f1, y, w, cdeffed);
     };
   }
 
-  native::sgrproj_box_f_r2(af, bf, f0, f1, y, w, cdeffed);
+  native::sgrproj_box_f_r2(af, bf, f0, f1, y, w, cdeffed, cpu);
 }
 
 static X_BY_XPLUS1: [u32; 256] = [
@@ -262,6 +269,7 @@ pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
       );
     }
   }
+
   #[cfg(feature = "check_asm")]
   {
     let mut af_ref: Vec<u32> = vec![0; stripe_w + 2];
@@ -320,6 +328,7 @@ pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
       );
     }
   }
+
   #[cfg(feature = "check_asm")]
   {
     let mut af_ref: Vec<u32> = vec![0; stripe_w + 2];
@@ -376,6 +385,7 @@ pub(crate) unsafe fn sgrproj_box_f_r0_avx2<T: Pixel>(
       native::sgrproj_box_f_r0_internal(f, x, y, w, cdeffed);
     }
   }
+
   #[cfg(feature = "check_asm")]
   {
     let mut f_ref: Vec<u32> = vec![0; w];
@@ -498,6 +508,7 @@ pub(crate) unsafe fn sgrproj_box_f_r1_avx2<T: Pixel>(
       native::sgrproj_box_f_r1_internal(af, bf, f, x, y, w, cdeffed);
     }
   }
+
   #[cfg(feature = "check_asm")]
   {
     let mut f_ref: Vec<u32> = vec![0; w];
@@ -619,6 +630,7 @@ pub(crate) unsafe fn sgrproj_box_f_r2_avx2<T: Pixel>(
       native::sgrproj_box_f_r2_internal(af, bf, f0, f1, x, y, w, cdeffed);
     }
   }
+
   #[cfg(feature = "check_asm")]
   {
     let mut f0_ref: Vec<u32> = vec![0; w];

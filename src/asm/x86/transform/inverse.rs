@@ -1,3 +1,4 @@
+use crate::cpu_features::CpuFeatureLevel;
 use crate::tiling::PlaneRegionMut;
 use crate::transform::*;
 use crate::util::AlignedArray;
@@ -10,102 +11,115 @@ pub trait InvTxfm2D: native::InvTxfm2D {
 
   fn inv_txfm2d_add<T>(
     input: &[i32], output: &mut PlaneRegionMut<'_, T>, tx_type: TxType,
+    bd: usize, cpu: CpuFeatureLevel,
+  ) where
+    T: Pixel,
+  {
+    if std::mem::size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
+      return unsafe {
+        Self::inv_txfm2d_add_avx2(input, output, tx_type, bd);
+      };
+    }
+    <Self as native::InvTxfm2D>::inv_txfm2d_add(
+      input, output, tx_type, bd, cpu,
+    );
+  }
+
+  #[inline]
+  #[target_feature(enable = "avx2")]
+  unsafe fn inv_txfm2d_add_avx2<T>(
+    input: &[i32], output: &mut PlaneRegionMut<'_, T>, tx_type: TxType,
     bd: usize,
   ) where
     T: Pixel,
   {
-    if std::mem::size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-      debug_assert!(bd == 8);
+    debug_assert!(bd == 8);
 
-      // 64x only uses 32 coeffs
-      let coeff_w = Self::W.min(32);
-      let coeff_h = Self::H.min(32);
-      let mut coeff16: AlignedArray<[i16; 32 * 32]> =
-        AlignedArray::uninitialized();
+    // 64x only uses 32 coeffs
+    let coeff_w = Self::W.min(32);
+    let coeff_h = Self::H.min(32);
+    let mut coeff16: AlignedArray<[i16; 32 * 32]> =
+      AlignedArray::uninitialized();
 
-      // Transpose the input.
-      // TODO: should be possible to remove changing how coeffs are written
-      assert!(input.len() >= coeff_w * coeff_h);
-      for j in 0..coeff_h {
-        for i in 0..coeff_w {
-          coeff16.array[i * coeff_h + j] = input[j * coeff_w + i] as i16;
-        }
+    // Transpose the input.
+    // TODO: should be possible to remove changing how coeffs are written
+    assert!(input.len() >= coeff_w * coeff_h);
+    for j in 0..coeff_h {
+      for i in 0..coeff_w {
+        coeff16.array[i * coeff_h + j] = input[j * coeff_w + i] as i16;
       }
-
-      let stride = output.plane_cfg.stride as isize;
-      unsafe {
-        // perform the inverse transform
-        Self::match_tx_type(tx_type)(
-          output.data_ptr_mut() as *mut _,
-          stride,
-          coeff16.array.as_ptr(),
-          (coeff_w * coeff_h) as i32,
-        );
-      }
-      return;
     }
-    <Self as native::InvTxfm2D>::inv_txfm2d_add(input, output, tx_type, bd);
+
+    let stride = output.plane_cfg.stride as isize;
+
+    // perform the inverse transform
+    Self::match_tx_type(tx_type)(
+      output.data_ptr_mut() as *mut _,
+      stride,
+      coeff16.array.as_ptr(),
+      (coeff_w * coeff_h) as i32,
+    );
   }
 }
 
 macro_rules! impl_itx_fns {
-    // Takes a 2d list of tx types for W and H
-    ([$([$(($ENUM:pat, $TYPE1:ident, $TYPE2:ident)),*]),*], $W:expr, $H:expr,
-     $OPT:ident) => {
-      paste::item! {
-        // For each tx type, declare an function for the current WxH
+  // Takes a 2d list of tx types for W and H
+  ([$([$(($ENUM:pat, $TYPE1:ident, $TYPE2:ident)),*]),*], $W:expr, $H:expr,
+   $OPT:ident) => {
+    paste::item! {
+      // For each tx type, declare an function for the current WxH
+      $(
         $(
-          $(
-            extern {
-              // Note: type1 and type2 are flipped
-              fn [<rav1e_inv_txfm_add_ $TYPE2 _$TYPE1 _$W x $H _$OPT>](
-                dst: *mut u8, dst_stride: libc::ptrdiff_t, coeff: *const i16,
-                eob: i32
-              );
-            }
-          )*
+          extern {
+            // Note: type1 and type2 are flipped
+            fn [<rav1e_inv_txfm_add_ $TYPE2 _$TYPE1 _$W x $H _$OPT>](
+              dst: *mut u8, dst_stride: libc::ptrdiff_t, coeff: *const i16,
+              eob: i32
+            );
+          }
         )*
+      )*
 
-        // Implement InvTxfm2D for WxH
-        impl InvTxfm2D for crate::predict::[<Block $W x $H>] {
-          fn match_tx_type(tx_type: TxType) -> InvTxfmFunc {
-            // Match tx types we declared earlier to its rust enum
-            match tx_type {
+      // Implement InvTxfm2D for WxH
+      impl InvTxfm2D for crate::predict::[<Block $W x $H>] {
+        fn match_tx_type(tx_type: TxType) -> InvTxfmFunc {
+          // Match tx types we declared earlier to its rust enum
+          match tx_type {
+            $(
               $(
-                $(
-                  // Suppress unreachable pattern warning for _
-                  a if a == $ENUM => {
-                    // Note: type1 and type2 are flipped
-                    [<rav1e_inv_txfm_add_$TYPE2 _$TYPE1 _$W x $H _$OPT>]
-                  },
-                )*
+                // Suppress unreachable pattern warning for _
+                a if a == $ENUM => {
+                  // Note: type1 and type2 are flipped
+                  [<rav1e_inv_txfm_add_$TYPE2 _$TYPE1 _$W x $H _$OPT>]
+                },
               )*
-              _ => unreachable!()
-            }
+            )*
+            _ => unreachable!()
           }
         }
       }
-    };
+    }
+  };
 
-    // Loop over a list of dimensions
-    ($TYPES_VALID:tt, [$(($W:expr, $H:expr)),*], $OPT:ident) => {
-      $(
-        impl_itx_fns!($TYPES_VALID, $W, $H, $OPT);
-      )*
-    };
+  // Loop over a list of dimensions
+  ($TYPES_VALID:tt, [$(($W:expr, $H:expr)),*], $OPT:ident) => {
+    $(
+      impl_itx_fns!($TYPES_VALID, $W, $H, $OPT);
+    )*
+  };
 
-    ($TYPES64:tt, $DIMS64:tt, $TYPES32:tt, $DIMS32:tt, $TYPES16:tt, $DIMS16:tt,
-     $TYPES84:tt, $DIMS84:tt, $OPT:ident) => {
-      // Make 2d list of tx types for each set of dimensions. Each set of
-      //   dimensions uses a superset of the previous set of tx types.
-      impl_itx_fns!([$TYPES64], $DIMS64, $OPT);
-      impl_itx_fns!([$TYPES64, $TYPES32], $DIMS32, $OPT);
-      impl_itx_fns!([$TYPES64, $TYPES32, $TYPES16], $DIMS16, $OPT);
-      impl_itx_fns!(
-        [$TYPES64, $TYPES32, $TYPES16, $TYPES84], $DIMS84, $OPT
-      );
-    };
-  }
+  ($TYPES64:tt, $DIMS64:tt, $TYPES32:tt, $DIMS32:tt, $TYPES16:tt, $DIMS16:tt,
+   $TYPES84:tt, $DIMS84:tt, $OPT:ident) => {
+    // Make 2d list of tx types for each set of dimensions. Each set of
+    //   dimensions uses a superset of the previous set of tx types.
+    impl_itx_fns!([$TYPES64], $DIMS64, $OPT);
+    impl_itx_fns!([$TYPES64, $TYPES32], $DIMS32, $OPT);
+    impl_itx_fns!([$TYPES64, $TYPES32, $TYPES16], $DIMS16, $OPT);
+    impl_itx_fns!(
+      [$TYPES64, $TYPES32, $TYPES16, $TYPES84], $DIMS84, $OPT
+    );
+  };
+}
 
 impl_itx_fns!(
   // 64x

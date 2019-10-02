@@ -540,9 +540,6 @@ pub struct FrameInvariants<T: Pixel> {
   /// indicating how much future frames depend on the block (for example, via
   /// inter-prediction).
   pub block_importances: Box<[f32]>,
-
-  /// Target CPU feature level.
-  pub cpu_feature_level: crate::cpu_features::CpuFeatureLevel,
 }
 
 pub(crate) const fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
@@ -710,7 +707,6 @@ impl<T: Pixel> FrameInvariants<T> {
       lookahead_intra_costs: vec![0; w_in_imp_b * h_in_imp_b]
         .into_boxed_slice(),
       block_importances: vec![0.; w_in_imp_b * h_in_imp_b].into_boxed_slice(),
-      cpu_feature_level: Default::default(),
     }
   }
 
@@ -1125,6 +1121,7 @@ pub fn encode_tx_block<T: Pixel>(
       &ac,
       alpha,
       &edge_buf,
+      fi.config.cpu_feature_level,
     );
   }
 
@@ -1204,6 +1201,7 @@ pub fn encode_tx_block<T: Pixel>(
       tx_size,
       tx_type,
       fi.sequence.bit_depth,
+      fi.config.cpu_feature_level,
     );
   }
   if rdo_type.needs_tx_dist() {
@@ -3170,7 +3168,7 @@ fn encode_tile<'a, T: Pixel>(
   fc: &'a mut CDFContext, blocks: &'a mut TileBlocksMut<'a>,
   inter_cfg: &InterConfig,
 ) -> Vec<u8> {
-  let mut w = WriterEncoder::new();
+  let mut w = WriterEncoder::new(fi.config.cpu_feature_level);
 
   let bc = BlockContext::new(blocks);
   let mut cw = ContextWriter::new(fc, bc);
@@ -3191,8 +3189,8 @@ fn encode_tile<'a, T: Pixel>(
         sbo: tile_sbo,
         lru_index: [-1; PLANES],
         cdef_coded: false,
-        w_pre_cdef: WriterRecorder::new(),
-        w_post_cdef: WriterRecorder::new(),
+        w_pre_cdef: WriterRecorder::new(fi.config.cpu_feature_level),
+        w_post_cdef: WriterRecorder::new(fi.config.cpu_feature_level),
       };
 
       let tile_bo = tile_sbo.block_offset(0, 0);

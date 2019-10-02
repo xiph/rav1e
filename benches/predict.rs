@@ -10,6 +10,7 @@
 use criterion::*;
 use rand::{Rng, RngCore, SeedableRng};
 use rand_chacha::ChaChaRng;
+use rav1e::bench::cpu_features::CpuFeatureLevel;
 use rav1e::bench::frame::*;
 use rav1e::bench::partition::BlockSize;
 use rav1e::bench::predict::{Block4x4, Intra};
@@ -89,21 +90,29 @@ pub fn pred_bench(c: &mut Criterion) {
 pub fn intra_dc_4x4(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
   let (mut block, above, left) = generate_block(&mut rng);
+  let cpu = CpuFeatureLevel::default();
 
   b.iter(|| {
-    Block4x4::pred_dc(&mut block.as_region_mut(), &above[..4], &left[..4]);
+    Block4x4::pred_dc(
+      &mut block.as_region_mut(),
+      &above[..4],
+      &left[..4],
+      cpu,
+    );
   })
 }
 
 pub fn intra_dc_left_4x4(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
   let (mut block, above, left) = generate_block(&mut rng);
+  let cpu = CpuFeatureLevel::default();
 
   b.iter(|| {
     Block4x4::pred_dc_left(
       &mut block.as_region_mut(),
       &above[..4],
       &left[..4],
+      cpu,
     );
   })
 }
@@ -111,27 +120,35 @@ pub fn intra_dc_left_4x4(b: &mut Bencher) {
 pub fn intra_dc_top_4x4(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
   let (mut block, above, left) = generate_block(&mut rng);
+  let cpu = CpuFeatureLevel::default();
 
   b.iter(|| {
-    Block4x4::pred_dc_top(&mut block.as_region_mut(), &above[..4], &left[..4]);
+    Block4x4::pred_dc_top(
+      &mut block.as_region_mut(),
+      &above[..4],
+      &left[..4],
+      cpu,
+    );
   })
 }
 
 pub fn intra_h_4x4(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
   let (mut block, _above, left) = generate_block(&mut rng);
+  let cpu = CpuFeatureLevel::default();
 
   b.iter(|| {
-    Block4x4::pred_h(&mut block.as_region_mut(), &left[..4]);
+    Block4x4::pred_h(&mut block.as_region_mut(), &left[..4], cpu);
   })
 }
 
 pub fn intra_v_4x4(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
   let (mut block, above, _left) = generate_block(&mut rng);
+  let cpu = CpuFeatureLevel::default();
 
   b.iter(|| {
-    Block4x4::pred_v(&mut block.as_region_mut(), &above[..4]);
+    Block4x4::pred_v(&mut block.as_region_mut(), &above[..4], cpu);
   })
 }
 
@@ -139,6 +156,7 @@ pub fn intra_paeth_4x4(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
   let (mut block, above, left) = generate_block(&mut rng);
   let above_left = unsafe { *above.as_ptr().offset(-1) };
+  let cpu = CpuFeatureLevel::default();
 
   b.iter(|| {
     Block4x4::pred_paeth(
@@ -146,6 +164,7 @@ pub fn intra_paeth_4x4(b: &mut Bencher) {
       &above[..4],
       &left[..4],
       above_left,
+      cpu,
     );
   })
 }
@@ -153,21 +172,29 @@ pub fn intra_paeth_4x4(b: &mut Bencher) {
 pub fn intra_smooth_4x4(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
   let (mut block, above, left) = generate_block(&mut rng);
+  let cpu = CpuFeatureLevel::default();
 
   b.iter(|| {
-    Block4x4::pred_smooth(&mut block.as_region_mut(), &above[..4], &left[..4]);
+    Block4x4::pred_smooth(
+      &mut block.as_region_mut(),
+      &above[..4],
+      &left[..4],
+      cpu,
+    );
   })
 }
 
 pub fn intra_smooth_h_4x4(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
   let (mut block, above, left) = generate_block(&mut rng);
+  let cpu = CpuFeatureLevel::default();
 
   b.iter(|| {
     Block4x4::pred_smooth_h(
       &mut block.as_region_mut(),
       &above[..4],
       &left[..4],
+      cpu,
     );
   })
 }
@@ -175,12 +202,14 @@ pub fn intra_smooth_h_4x4(b: &mut Bencher) {
 pub fn intra_smooth_v_4x4(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
   let (mut block, above, left) = generate_block(&mut rng);
+  let cpu = CpuFeatureLevel::default();
 
   b.iter(|| {
     Block4x4::pred_smooth_v(
       &mut block.as_region_mut(),
       &above[..4],
       &left[..4],
+      cpu,
     );
   })
 }
@@ -190,6 +219,7 @@ pub fn intra_cfl_4x4(b: &mut Bencher) {
   let (mut block, above, left) = generate_block(&mut rng);
   let ac: Vec<i16> = (0..(32 * 32)).map(|_| rng.gen()).collect();
   let alpha = -1 as i16;
+  let cpu = CpuFeatureLevel::default();
 
   b.iter(|| {
     Block4x4::pred_cfl(
@@ -199,6 +229,7 @@ pub fn intra_cfl_4x4(b: &mut Bencher) {
       8,
       &above,
       &left,
+      cpu,
     );
   })
 }
@@ -207,12 +238,14 @@ pub fn intra_dc_4x4_u8(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
   let mut edge_buf = AlignedArray::uninitialized();
   let (mut block, above, left) = generate_block_u8(&mut rng, &mut edge_buf);
+  let cpu = CpuFeatureLevel::default();
 
   b.iter(|| {
     Block4x4::pred_dc(
       &mut block.as_region_mut(),
       &above[..4],
       &left[32 - 4..],
+      cpu,
     );
   })
 }
@@ -221,9 +254,10 @@ pub fn intra_dc_128_4x4_u8(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
   let mut edge_buf = AlignedArray::uninitialized();
   let (mut block, _above, _left) = generate_block_u8(&mut rng, &mut edge_buf);
+  let cpu = CpuFeatureLevel::default();
 
   b.iter(|| {
-    Block4x4::pred_dc_128(&mut block.as_region_mut(), 8);
+    Block4x4::pred_dc_128(&mut block.as_region_mut(), 8, cpu);
   })
 }
 
@@ -231,12 +265,14 @@ pub fn intra_dc_left_4x4_u8(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
   let mut edge_buf = AlignedArray::uninitialized();
   let (mut block, above, left) = generate_block_u8(&mut rng, &mut edge_buf);
+  let cpu = CpuFeatureLevel::default();
 
   b.iter(|| {
     Block4x4::pred_dc_left(
       &mut block.as_region_mut(),
       &above[..4],
       &left[32 - 4..],
+      cpu,
     );
   })
 }
@@ -245,12 +281,14 @@ pub fn intra_dc_top_4x4_u8(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
   let mut edge_buf = AlignedArray::uninitialized();
   let (mut block, above, left) = generate_block_u8(&mut rng, &mut edge_buf);
+  let cpu = CpuFeatureLevel::default();
 
   b.iter(|| {
     Block4x4::pred_dc_top(
       &mut block.as_region_mut(),
       &above[..4],
       &left[32 - 4..],
+      cpu,
     );
   })
 }
@@ -259,9 +297,10 @@ pub fn intra_h_4x4_u8(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
   let mut edge_buf = AlignedArray::uninitialized();
   let (mut block, _above, left) = generate_block_u8(&mut rng, &mut edge_buf);
+  let cpu = CpuFeatureLevel::default();
 
   b.iter(|| {
-    Block4x4::pred_h(&mut block.as_region_mut(), &left[32 - 4..]);
+    Block4x4::pred_h(&mut block.as_region_mut(), &left[32 - 4..], cpu);
   })
 }
 
@@ -269,9 +308,10 @@ pub fn intra_v_4x4_u8(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
   let mut edge_buf = AlignedArray::uninitialized();
   let (mut block, above, _left) = generate_block_u8(&mut rng, &mut edge_buf);
+  let cpu = CpuFeatureLevel::default();
 
   b.iter(|| {
-    Block4x4::pred_v(&mut block.as_region_mut(), &above[..4]);
+    Block4x4::pred_v(&mut block.as_region_mut(), &above[..4], cpu);
   })
 }
 
@@ -280,6 +320,7 @@ pub fn intra_paeth_4x4_u8(b: &mut Bencher) {
   let mut edge_buf = AlignedArray::uninitialized();
   let (mut block, above, left) = generate_block_u8(&mut rng, &mut edge_buf);
   let above_left = unsafe { *above.as_ptr().offset(-1) };
+  let cpu = CpuFeatureLevel::default();
 
   b.iter(|| {
     Block4x4::pred_paeth(
@@ -287,6 +328,7 @@ pub fn intra_paeth_4x4_u8(b: &mut Bencher) {
       &above[..4],
       &left[32 - 4..],
       above_left,
+      cpu,
     );
   })
 }
@@ -295,12 +337,14 @@ pub fn intra_smooth_4x4_u8(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
   let mut edge_buf = AlignedArray::uninitialized();
   let (mut block, above, left) = generate_block_u8(&mut rng, &mut edge_buf);
+  let cpu = CpuFeatureLevel::default();
 
   b.iter(|| {
     Block4x4::pred_smooth(
       &mut block.as_region_mut(),
       &above[..4],
       &left[32 - 4..],
+      cpu,
     );
   })
 }
@@ -309,12 +353,14 @@ pub fn intra_smooth_h_4x4_u8(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
   let mut edge_buf = AlignedArray::uninitialized();
   let (mut block, above, left) = generate_block_u8(&mut rng, &mut edge_buf);
+  let cpu = CpuFeatureLevel::default();
 
   b.iter(|| {
     Block4x4::pred_smooth_h(
       &mut block.as_region_mut(),
       &above[..4],
       &left[32 - 4..],
+      cpu,
     );
   })
 }
@@ -323,12 +369,14 @@ pub fn intra_smooth_v_4x4_u8(b: &mut Bencher) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
   let mut edge_buf = AlignedArray::uninitialized();
   let (mut block, above, left) = generate_block_u8(&mut rng, &mut edge_buf);
+  let cpu = CpuFeatureLevel::default();
 
   b.iter(|| {
     Block4x4::pred_smooth_v(
       &mut block.as_region_mut(),
       &above[..4],
       &left[32 - 4..],
+      cpu,
     );
   })
 }

@@ -1,15 +1,25 @@
+// Copyright (c) 2019, The rav1e contributors. All rights reserved
+//
+// This source code is subject to the terms of the BSD 2 Clause License and
+// the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
+// was not distributed with this source code in the LICENSE file, you can
+// obtain it at www.aomedia.org/license/software. If the Alliance for Open
+// Media Patent License 1.0 was not distributed with this source code in the
+// PATENTS file, you can obtain it at www.aomedia.org/license/patent.
+
+use crate::cpu_features::CpuFeatureLevel;
 use crate::ec::native;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
-pub fn update_cdf(cdf: &mut [u16], val: u32) {
-  if cdf.len() == 5 && cfg!(target_feature = "sse2") {
+pub fn update_cdf(cdf: &mut [u16], val: u32, cpu: CpuFeatureLevel) {
+  if cdf.len() == 5 && cpu >= CpuFeatureLevel::SSE2 {
     return unsafe {
       update_cdf_4_sse2(cdf, val);
     };
   }
 
-  native::update_cdf(cdf, val);
+  native::update_cdf(cdf, val, cpu);
 }
 
 #[target_feature(enable = "sse2")]
@@ -42,6 +52,7 @@ unsafe fn update_cdf_4_sse2(cdf: &mut [u16], val: u32) {
 
 #[cfg(test)]
 mod test {
+  use crate::cpu_features::CpuFeatureLevel;
   use crate::ec::native;
 
   #[test]
@@ -49,7 +60,7 @@ mod test {
     let mut cdf = [7296, 3819, 1616, 0, 0];
     let mut cdf2 = [7296, 3819, 1616, 0, 0];
     for i in 0..4 {
-      native::update_cdf(&mut cdf, i);
+      native::update_cdf(&mut cdf, i, CpuFeatureLevel::default());
       unsafe {
         super::update_cdf_4_sse2(&mut cdf2, i);
       }

@@ -20,6 +20,7 @@ use crate::predict::*;
 use crate::tiling::*;
 use crate::util::*;
 
+use crate::cpu_features::CpuFeatureLevel;
 use TxSize::*;
 
 mod forward;
@@ -399,31 +400,31 @@ pub fn forward_transform(
 
 pub fn inverse_transform_add<T: Pixel>(
   input: &[i32], output: &mut PlaneRegionMut<'_, T>, tx_size: TxSize,
-  tx_type: TxType, bit_depth: usize,
+  tx_type: TxType, bit_depth: usize, cpu: CpuFeatureLevel,
 ) {
   use self::TxSize::*;
   match tx_size {
-    TX_4X4 => iht4x4_add(input, output, tx_type, bit_depth),
-    TX_8X8 => iht8x8_add(input, output, tx_type, bit_depth),
-    TX_16X16 => iht16x16_add(input, output, tx_type, bit_depth),
-    TX_32X32 => iht32x32_add(input, output, tx_type, bit_depth),
-    TX_64X64 => iht64x64_add(input, output, tx_type, bit_depth),
+    TX_4X4 => iht4x4_add(input, output, tx_type, bit_depth, cpu),
+    TX_8X8 => iht8x8_add(input, output, tx_type, bit_depth, cpu),
+    TX_16X16 => iht16x16_add(input, output, tx_type, bit_depth, cpu),
+    TX_32X32 => iht32x32_add(input, output, tx_type, bit_depth, cpu),
+    TX_64X64 => iht64x64_add(input, output, tx_type, bit_depth, cpu),
 
-    TX_4X8 => iht4x8_add(input, output, tx_type, bit_depth),
-    TX_8X4 => iht8x4_add(input, output, tx_type, bit_depth),
-    TX_8X16 => iht8x16_add(input, output, tx_type, bit_depth),
-    TX_16X8 => iht16x8_add(input, output, tx_type, bit_depth),
-    TX_16X32 => iht16x32_add(input, output, tx_type, bit_depth),
-    TX_32X16 => iht32x16_add(input, output, tx_type, bit_depth),
-    TX_32X64 => iht32x64_add(input, output, tx_type, bit_depth),
-    TX_64X32 => iht64x32_add(input, output, tx_type, bit_depth),
+    TX_4X8 => iht4x8_add(input, output, tx_type, bit_depth, cpu),
+    TX_8X4 => iht8x4_add(input, output, tx_type, bit_depth, cpu),
+    TX_8X16 => iht8x16_add(input, output, tx_type, bit_depth, cpu),
+    TX_16X8 => iht16x8_add(input, output, tx_type, bit_depth, cpu),
+    TX_16X32 => iht16x32_add(input, output, tx_type, bit_depth, cpu),
+    TX_32X16 => iht32x16_add(input, output, tx_type, bit_depth, cpu),
+    TX_32X64 => iht32x64_add(input, output, tx_type, bit_depth, cpu),
+    TX_64X32 => iht64x32_add(input, output, tx_type, bit_depth, cpu),
 
-    TX_4X16 => iht4x16_add(input, output, tx_type, bit_depth),
-    TX_16X4 => iht16x4_add(input, output, tx_type, bit_depth),
-    TX_8X32 => iht8x32_add(input, output, tx_type, bit_depth),
-    TX_32X8 => iht32x8_add(input, output, tx_type, bit_depth),
-    TX_16X64 => iht16x64_add(input, output, tx_type, bit_depth),
-    TX_64X16 => iht64x16_add(input, output, tx_type, bit_depth),
+    TX_4X16 => iht4x16_add(input, output, tx_type, bit_depth, cpu),
+    TX_16X4 => iht16x4_add(input, output, tx_type, bit_depth, cpu),
+    TX_8X32 => iht8x32_add(input, output, tx_type, bit_depth, cpu),
+    TX_32X8 => iht32x8_add(input, output, tx_type, bit_depth, cpu),
+    TX_16X64 => iht16x64_add(input, output, tx_type, bit_depth, cpu),
+    TX_64X16 => iht64x16_add(input, output, tx_type, bit_depth, cpu),
   }
 }
 
@@ -453,7 +454,14 @@ mod test {
       *r = i16::cast_from(*s) - i16::cast_from(*d);
     }
     forward_transform(res, freq, tx_size.width(), tx_size, tx_type, 8);
-    inverse_transform_add(freq, &mut dst.as_region_mut(), tx_size, tx_type, 8);
+    inverse_transform_add(
+      freq,
+      &mut dst.as_region_mut(),
+      tx_size,
+      tx_type,
+      8,
+      CpuFeatureLevel::default(),
+    );
 
     for (s, d) in src.iter().zip(dst.data.iter()) {
       assert!(i16::abs(i16::cast_from(*s) - i16::cast_from(*d)) <= tolerance);

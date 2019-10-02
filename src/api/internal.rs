@@ -736,6 +736,7 @@ impl<T: Pixel> ContextInner<T> {
           &[], // Not used by DC_PRED.
           0,   // Not used by DC_PRED.
           &edge_buf,
+          fi.config.cpu_feature_level,
         );
 
         let plane_after_prediction_region =
@@ -751,7 +752,7 @@ impl<T: Pixel> ContextInner<T> {
           &plane_after_prediction_region,
           bsize,
           self.config.bit_depth,
-          fi.cpu_feature_level,
+          self.config.cpu_feature_level,
         );
 
         fi.lookahead_intra_costs[y * fi.w_in_imp_b + x] = intra_cost;
@@ -922,7 +923,7 @@ impl<T: Pixel> ContextInner<T> {
               &plane_ref,
               bsize,
               self.config.bit_depth,
-              fi.cpu_feature_level,
+              self.config.cpu_feature_level,
             ) as f32;
 
             let intra_cost =

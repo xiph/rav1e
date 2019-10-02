@@ -506,7 +506,7 @@ pub fn cdef_filter_superblock<T: Pixel>(
                 bit_depth,
                 xdec,
                 ydec,
-                fi.cpu_feature_level,
+                fi.config.cpu_feature_level,
               );
             }
           } else {

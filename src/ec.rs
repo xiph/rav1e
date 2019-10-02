@@ -14,6 +14,7 @@
 pub use self::native::*;
 #[cfg(all(feature = "nasm", target_arch = "x86_64"))]
 pub use crate::asm::x86::ec::*;
+use crate::cpu_features::CpuFeatureLevel;
 use crate::util::msb;
 use crate::util::ILog;
 use bitstream_io::{BigEndian, BitWriter};
@@ -121,6 +122,8 @@ pub struct WriterBase<S> {
   fake_bits_frac: u32,
   /// Use-specific storage
   s: S,
+  /// CPU assembly level to use
+  cpu: CpuFeatureLevel,
 }
 
 #[derive(Debug, Clone)]
@@ -159,22 +162,22 @@ pub struct WriterCheckpoint {
 
 /// Constructor for a counting Writer
 impl WriterCounter {
-  pub fn new() -> WriterBase<WriterCounter> {
-    WriterBase::new(WriterCounter { bytes: 0 })
+  pub fn new(cpu: CpuFeatureLevel) -> WriterBase<WriterCounter> {
+    WriterBase::new(WriterCounter { bytes: 0 }, cpu)
   }
 }
 
 /// Constructor for a recording Writer
 impl WriterRecorder {
-  pub fn new() -> WriterBase<WriterRecorder> {
-    WriterBase::new(WriterRecorder { storage: Vec::new(), bytes: 0 })
+  pub fn new(cpu: CpuFeatureLevel) -> WriterBase<WriterRecorder> {
+    WriterBase::new(WriterRecorder { storage: Vec::new(), bytes: 0 }, cpu)
   }
 }
 
 /// Constructor for a encoding Writer
 impl WriterEncoder {
-  pub fn new() -> WriterBase<WriterEncoder> {
-    WriterBase::new(WriterEncoder { precarry: Vec::new(), low: 0 })
+  pub fn new(cpu: CpuFeatureLevel) -> WriterBase<WriterEncoder> {
+    WriterBase::new(WriterEncoder { precarry: Vec::new(), low: 0 }, cpu)
   }
 }
 
@@ -313,7 +316,7 @@ impl StorageBackend for WriterBase<WriterEncoder> {
 impl<S> WriterBase<S> {
   /// Internal constructor called by the subtypes that implement the
   /// actual encoder and Recorder.
-  fn new(storage: S) -> Self {
+  fn new(storage: S, cpu: CpuFeatureLevel) -> Self {
     #[cfg(feature = "desync_finder")]
     {
       WriterBase {
@@ -322,11 +325,12 @@ impl<S> WriterBase<S> {
         debug: std::env::var_os("RAV1E_DEBUG").is_some(),
         fake_bits_frac: 0,
         s: storage,
+        cpu,
       }
     }
     #[cfg(not(feature = "desync_finder"))]
     {
-      WriterBase { rng: 0x8000, cnt: -9, fake_bits_frac: 0, s: storage }
+      WriterBase { rng: 0x8000, cnt: -9, fake_bits_frac: 0, s: storage, cpu }
     }
   }
 
@@ -542,7 +546,7 @@ where
     }
     self.symbol(s, &cdf[..nsymbs]);
 
-    update_cdf(cdf, s);
+    update_cdf(cdf, s, self.cpu);
   }
   /// Returns approximate cost for a symbol given a cumulative
   /// distribution function (CDF) table and current write state.
@@ -882,8 +886,10 @@ impl<W: io::Write> BCodeWriter for BitWriter<W, BigEndian> {
 }
 
 pub(crate) mod native {
+  use crate::cpu_features::CpuFeatureLevel;
+
   // Function to update the CDF for Writer calls that do so.
-  pub fn update_cdf(cdf: &mut [u16], val: u32) {
+  pub fn update_cdf(cdf: &mut [u16], val: u32, _cpu: CpuFeatureLevel) {
     let nsymbs = cdf.len() - 1;
     let rate = 3 + (nsymbs >> 1).min(2) + (cdf[nsymbs] >> 4) as usize;
     cdf[nsymbs] += 1 - (cdf[nsymbs] >> 5);
@@ -1002,7 +1008,7 @@ mod test {
 
   #[test]
   fn booleans() {
-    let mut w = WriterEncoder::new();
+    let mut w = WriterEncoder::new(CpuFeatureLevel::default());
 
     w.bool(false, 1);
     w.bool(true, 2);
@@ -1027,7 +1033,7 @@ mod test {
   fn cdf() {
     let cdf = [7296, 3819, 1716, 0];
 
-    let mut w = WriterEncoder::new();
+    let mut w = WriterEncoder::new(CpuFeatureLevel::default());
 
     w.symbol(0, &cdf);
     w.symbol(0, &cdf);
@@ -1058,7 +1064,7 @@ mod test {
   fn mixed() {
     let cdf = [7296, 3819, 1716, 0];
 
-    let mut w = WriterEncoder::new();
+    let mut w = WriterEncoder::new(CpuFeatureLevel::default());
 
     w.symbol(0, &cdf);
     w.bool(true, 2);
