@@ -129,6 +129,14 @@
 3:
 .endm
 
+.macro load_n_incr dst, src, incr, w
+.if \w == 4
+        ld1             {\dst\().s}[0], [\src], \incr
+.else
+        ld1             {\dst\().8b},   [\src], \incr
+.endif
+.endm
+
 // void dav1d_cdef_paddingX_neon(uint16_t *tmp, const pixel *src,
 //                               ptrdiff_t src_stride, const pixel (*left)[2],
 //                               /*const*/ pixel *const top[2], int h,
@@ -163,9 +171,8 @@ function cdef_padding\w\()_neon, export=1
         // CDEF_HAVE_LEFT+CDEF_HAVE_RIGHT
 0:
         ld1             {v0.h}[0], [x3], #2
-        ldr             \rn\()1, [x1]
         ldr             h2,      [x1, #\w]
-        add             x1,  x1,  x2
+        load_n_incr     v1,  x1,  x2,  \w
         subs            w5,  w5,  #1
         uxtl            v0.8h,  v0.8b
         uxtl            v1.8h,  v1.8b
@@ -179,11 +186,7 @@ function cdef_padding\w\()_neon, export=1
 1:
         // CDEF_HAVE_LEFT+!CDEF_HAVE_RIGHT
         ld1             {v0.h}[0], [x3], #2
-.if \w == 8
-        ld1             {v1.8b},   [x1], x2
-.else
-        ld1             {v1.s}[0], [x1], x2
-.endif
+        load_n_incr     v1,  x1,  x2,  \w
         subs            w5,  w5,  #1
         uxtl            v0.8h,  v0.8b
         uxtl            v1.8h,  v1.8b
@@ -198,9 +201,8 @@ function cdef_padding\w\()_neon, export=1
         b.eq            1f
         // !CDEF_HAVE_LEFT+CDEF_HAVE_RIGHT
 0:
-        ldr             \rn\()0, [x1]
         ldr             h1,      [x1, #\w]
-        add             x1,  x1,  x2
+        load_n_incr     v0,  x1,  x2,  \w
         subs            w5,  w5,  #1
         uxtl            v0.8h,  v0.8b
         uxtl            v1.8h,  v1.8b
@@ -212,11 +214,7 @@ function cdef_padding\w\()_neon, export=1
         b               3f
 1:
         // !CDEF_HAVE_LEFT+!CDEF_HAVE_RIGHT
-.if \w == 8
-        ld1             {v0.8b},   [x1], x2
-.else
-        ld1             {v0.s}[0], [x1], x2
-.endif
+        load_n_incr     v0,  x1,  x2,  \w
         subs            w5,  w5,  #1
         uxtl            v0.8h,  v0.8b
         str             s31,     [x0]
