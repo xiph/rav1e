@@ -13,6 +13,16 @@ use arg_enum_proc_macro::ArgEnum;
 pub enum CpuFeatureLevel {
   NATIVE,
 }
+impl CpuFeatureLevel {
+  pub const fn len() -> usize {
+    CpuFeatureLevel::NATIVE as usize + 1
+  }
+
+  #[inline(always)]
+  pub fn as_index(self) -> usize {
+    self as usize
+  }
+}
 
 impl Default for CpuFeatureLevel {
   fn default() -> CpuFeatureLevel {

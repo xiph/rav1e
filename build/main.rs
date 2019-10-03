@@ -1,13 +1,17 @@
 // build.rs
+// The `quote!` macro requires deep recursion.
+#![recursion_limit = "512"]
+#![allow(dead_code, unused_imports)] // yeah, yeah, shhh
 
 use rustc_version::{version, Version};
-#[allow(unused_imports)]
 use std::env;
-use std::fs;
+use std::fs::{self, File};
+use std::io::Write;
 use std::path::Path;
 use std::process::exit;
 
-#[allow(dead_code)]
+pub mod kernel;
+
 fn rerun_dir<P: AsRef<Path>>(dir: P) {
   for entry in fs::read_dir(dir).unwrap() {
     let entry = entry.unwrap();
@@ -22,8 +26,6 @@ fn rerun_dir<P: AsRef<Path>>(dir: P) {
 
 #[cfg(feature = "asm")]
 fn build_nasm_files() {
-  use std::fs::File;
-  use std::io::Write;
   let out_dir = env::var("OUT_DIR").unwrap();
   {
     let dest_path = Path::new(&out_dir).join("config.asm");
@@ -119,4 +121,6 @@ fn main() {
 
   vergen::generate_cargo_keys(vergen::ConstantsFlags::all())
     .expect("Unable to generate the cargo keys!");
+
+  kernel::gen::write_kernels();
 }

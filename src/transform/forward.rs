@@ -8,6 +8,10 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use super::*;
+use crate::util::Block;
+use crate::util::ISimd;
+
+use packed_simd::*;
 
 type TxfmShift = [i8; 3];
 type TxfmShifts = [TxfmShift; 3];
@@ -35,34 +39,67 @@ const FWD_SHIFT_32X8: TxfmShifts = [[4, -1, 0], [2, 0, 1], [0, 0, 3]];
 const FWD_SHIFT_16X64: TxfmShifts = [[4, -2, 0], [2, 0, 0], [0, 0, 2]];
 const FWD_SHIFT_64X16: TxfmShifts = [[4, -2, 0], [2, 0, 0], [0, 0, 2]];
 
-const FWD_TXFM_SHIFT_LS: [TxfmShifts; TxSize::TX_SIZES_ALL] = [
-  FWD_SHIFT_4X4,
-  FWD_SHIFT_8X8,
-  FWD_SHIFT_16X16,
-  FWD_SHIFT_32X32,
-  FWD_SHIFT_64X64,
-  FWD_SHIFT_4X8,
-  FWD_SHIFT_8X4,
-  FWD_SHIFT_8X16,
-  FWD_SHIFT_16X8,
-  FWD_SHIFT_16X32,
-  FWD_SHIFT_32X16,
-  FWD_SHIFT_32X64,
-  FWD_SHIFT_64X32,
-  FWD_SHIFT_4X16,
-  FWD_SHIFT_16X4,
-  FWD_SHIFT_8X32,
-  FWD_SHIFT_32X8,
-  FWD_SHIFT_16X64,
-  FWD_SHIFT_64X16,
-];
+pub trait FwdBlock: tx_sizes::Detail + Block {
+  const SHIFT: TxfmShifts;
+  type IColSimd: ISimd<i16> + Cast<Self::ColSimd>;
+  type ColSimd: TxOperations + ISimd<i32>;
+  type RowSimd: TxOperations + ISimd<i32>;
+}
 
-type TxfmFunc = dyn Fn(&[i32], &mut [i32]);
+macro_rules! block_detail {
+  ($W:expr, $H:expr, $col_simd:expr, $row_simd:expr, ) => {
+    paste::item! {
+      impl FwdBlock for [<Block $W x $H>] {
+        const SHIFT: TxfmShifts = [<FWD_SHIFT_ $W X $H>];
+        type IColSimd = [<i16x $col_simd>];
+        type ColSimd  = [<i32x $col_simd>];
+        type RowSimd  = [<i32x $row_simd>];
+      }
+    }
+  };
+}
+macro_rules! blocks_detail {
+  ($(($W:expr, $H:expr, $col_simd:expr, $row_simd:expr), )+) => {
+    $(
+      block_detail! { $W, $H, $col_simd, $row_simd, }
+    )*
+  };
+}
+blocks_detail! {
+  ( 4,  4,  4,  4),
+  ( 8,  8,  8,  8),
+  (16, 16, 16, 16),
+  (32, 32, 16, 16),
+  (64, 64, 16, 16),
+}
+blocks_detail! {
+  (4, 8,   4, 8),
+  (8, 16,  8, 16),
+  (16, 32, 16, 16),
+  (32, 64, 16, 16),
+}
+blocks_detail! {
+  (8, 4,   8, 4),
+  (16, 8,  16, 8),
+  (32, 16, 16, 16),
+  (64, 32, 16, 16),
+}
+blocks_detail! {
+  (4, 16,  4, 16),
+  (8, 32,  8, 16),
+  (16, 64, 16, 16),
+}
+blocks_detail! {
+  (16, 4,  16, 4),
+  (32, 8,  16, 8),
+  (64, 16, 16, 16),
+}
 
 use std::ops::*;
 
-pub trait TxOperations:
-  Copy + Default + Add<Output = Self> + Sub<Output = Self>
+pub trait TxOperations
+where
+  Self: Copy + Default + Add<Output = Self> + Sub<Output = Self>,
 {
   fn tx_mul(self, _: (i32, i32)) -> Self;
   fn add_avg(self, b: Self) -> Self;
@@ -91,6 +128,38 @@ impl TxOperations for i32 {
     (self - b) >> 1
   }
 }
+macro_rules! impl_tx_ops_simd {
+  ($($simd:ident,)*) => {$(
+
+impl TxOperations for $simd {
+  fn tx_mul(self, mul: (i32, i32)) -> Self {
+    let l = self * $simd::splat(mul.0);
+    let r = $simd::splat(1 << mul.1 >> 1);
+    (l + r) >> $simd::splat(mul.1)
+  }
+
+  fn rshift1(self) -> Self {
+    let one = $simd::splat(1);
+    let zero = $simd::splat(0);
+
+    let cmp = self.lt(zero);
+    let r = cmp.select(one, zero);
+
+    (self + r) >> 1
+  }
+
+  fn add_avg(self, b: Self) -> Self {
+    (self + b) >> 1
+  }
+
+  fn sub_avg(self, b: Self) -> Self {
+    (self - b) >> 1
+  }
+}
+
+  )*};
+}
+impl_tx_ops_simd!(i32x2, i32x4, i32x8, i32x16,);
 
 trait RotateKernelPi4<T: TxOperations> {
   const ADD: fn(T, T) -> T;
@@ -174,7 +243,7 @@ struct RotateNegAvg;
 impl<T: TxOperations> RotateKernel<T> for RotateAdd {
   const ADD: fn(T, T) -> T = Add::add;
   const SUB: fn(T, T) -> T = Sub::sub;
-  const SHIFT: fn(T) -> T = T::copy_fn;
+  const SHIFT: fn(T) -> T = T::into;
 }
 
 impl<T: TxOperations> RotateKernel<T> for RotateAddAvg {
@@ -291,7 +360,7 @@ fn daala_fdct_ii_4<T: TxOperations>(
   store_coeffs!(output, q0, q1, q2, q3);
 }
 
-pub fn daala_fdct4<T: TxOperations>(input: &[T], output: &mut [T]) {
+fn daala_fdct4<T: TxOperations>(input: &[T], output: &mut [T]) {
   assert!(input.len() >= 4);
   assert!(output.len() >= 4);
   let mut temp_out: [T; 4] = [T::default(); 4];
@@ -303,7 +372,7 @@ pub fn daala_fdct4<T: TxOperations>(input: &[T], output: &mut [T]) {
   output[3] = temp_out[3];
 }
 
-pub fn daala_fdst_vii_4<T: TxOperations>(input: &[T], output: &mut [T]) {
+fn daala_fdst_vii_4<T: TxOperations>(input: &[T], output: &mut [T]) {
   assert!(input.len() >= 4);
   assert!(output.len() >= 4);
 
@@ -411,9 +480,9 @@ fn daala_fdct_ii_8<T: TxOperations>(
   output[4..8].reverse();
 }
 
-pub fn daala_fdct8<T: TxOperations>(input: &[T], output: &mut [T]) {
-  assert!(input.len() >= 8);
-  assert!(output.len() >= 8);
+fn daala_fdct8<T: TxOperations>(input: &[T], output: &mut [T]) {
+  debug_assert!(input.len() >= 8);
+  debug_assert!(output.len() >= 8);
   let mut temp_out: [T; 8] = [T::default(); 8];
   daala_fdct_ii_8(
     input[0],
@@ -492,9 +561,9 @@ fn daala_fdst_iv_8<T: TxOperations>(
   store_coeffs!(output, r0, r1, r2, r3, r4, r5, r6, r7);
 }
 
-pub fn daala_fdst8<T: TxOperations>(input: &[T], output: &mut [T]) {
-  assert!(input.len() >= 8);
-  assert!(output.len() >= 8);
+fn daala_fdst8<T: TxOperations>(input: &[T], output: &mut [T]) {
+  debug_assert!(input.len() >= 8);
+  debug_assert!(output.len() >= 8);
   let mut temp_out: [T; 8] = [T::default(); 8];
   daala_fdst_iv_8(
     input[0],
@@ -638,8 +707,8 @@ fn daala_fdct_ii_16<T: TxOperations>(
 }
 
 fn daala_fdct16<T: TxOperations>(input: &[T], output: &mut [T]) {
-  assert!(input.len() >= 16);
-  assert!(output.len() >= 16);
+  debug_assert!(input.len() >= 16);
+  debug_assert!(output.len() >= 16);
   let mut temp_out: [T; 16] = [T::default(); 16];
   daala_fdct_ii_16(
     input[0],
@@ -804,8 +873,8 @@ fn daala_fdst_iv_16<T: TxOperations>(
 }
 
 fn daala_fdst16<T: TxOperations>(input: &[T], output: &mut [T]) {
-  assert!(input.len() >= 16);
-  assert!(output.len() >= 16);
+  debug_assert!(input.len() >= 16);
+  debug_assert!(output.len() >= 16);
   let mut temp_out: [T; 16] = [T::default(); 16];
   daala_fdst_iv_16(
     input[0],
@@ -1067,8 +1136,8 @@ fn daala_fdct_ii_32<T: TxOperations>(
 }
 
 fn daala_fdct32<T: TxOperations>(input: &[T], output: &mut [T]) {
-  assert!(input.len() >= 32);
-  assert!(output.len() >= 32);
+  debug_assert!(input.len() >= 32);
+  debug_assert!(output.len() >= 32);
   let mut temp_out: [T; 32] = [T::default(); 32];
   daala_fdct_ii_32(
     input[0],
@@ -1480,8 +1549,8 @@ fn daala_fdst_iv_32_asym<T: TxOperations>(
 
 #[allow(clippy::identity_op)]
 fn daala_fdct64<T: TxOperations>(input: &[T], output: &mut [T]) {
-  assert!(input.len() >= 64);
-  assert!(output.len() >= 64);
+  debug_assert!(input.len() >= 64);
+  debug_assert!(output.len() >= 64);
   // Use arrays to avoid ridiculous variable names
   let mut asym: [(T, T); 32] = [<(T, T)>::default(); 32];
   let mut half: [T; 32] = [T::default(); 32];
@@ -1614,11 +1683,11 @@ fn daala_fdct64<T: TxOperations>(input: &[T], output: &mut [T]) {
   reorder_4(15, 15);
 }
 
-pub fn fidentity4<T: TxOperations>(input: &[T], output: &mut [T]) {
+fn fidentity4<T: TxOperations>(input: &[T], output: &mut [T]) {
   output[..4].copy_from_slice(&input[..4]);
 }
 
-pub fn fidentity8<T: TxOperations>(input: &[T], output: &mut [T]) {
+fn fidentity8<T: TxOperations>(input: &[T], output: &mut [T]) {
   output[..8].copy_from_slice(&input[..8]);
 }
 
@@ -1630,121 +1699,116 @@ fn fidentity32<T: TxOperations>(input: &[T], output: &mut [T]) {
   output[..32].copy_from_slice(&input[..32]);
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum TxfmType {
-  DCT4,
-  DCT8,
-  DCT16,
-  DCT32,
-  DCT64,
-  ADST4,
-  ADST8,
-  ADST16,
-  Identity4,
-  Identity8,
-  Identity16,
-  Identity32,
-  Invalid,
-}
+pub mod txfm_types {
+  use super::TxOperations;
+  use crate::transform::tx_1d_types;
+  use crate::util::*;
 
-impl TxfmType {
-  const TX_TYPES_1D: usize = 4;
-  const AV1_TXFM_TYPE_LS: [[TxfmType; Self::TX_TYPES_1D]; 5] = [
-    [TxfmType::DCT4, TxfmType::ADST4, TxfmType::ADST4, TxfmType::Identity4],
-    [TxfmType::DCT8, TxfmType::ADST8, TxfmType::ADST8, TxfmType::Identity8],
-    [
-      TxfmType::DCT16,
-      TxfmType::ADST16,
-      TxfmType::ADST16,
-      TxfmType::Identity16,
-    ],
-    [
-      TxfmType::DCT32,
-      TxfmType::Invalid,
-      TxfmType::Invalid,
-      TxfmType::Identity32,
-    ],
-    [TxfmType::DCT64, TxfmType::Invalid, TxfmType::Invalid, TxfmType::Invalid],
-  ];
+  pub trait Detail {
+    fn forward<T>(input: &[T], output: &mut [T])
+    where
+      T: TxOperations;
+  }
 
-  fn get_func(self) -> &'static TxfmFunc {
-    use self::TxfmType::*;
-    match self {
-      DCT4 => &daala_fdct4,
-      DCT8 => &daala_fdct8,
-      DCT16 => &daala_fdct16,
-      DCT32 => &daala_fdct32,
-      DCT64 => &daala_fdct64,
-      ADST4 => &daala_fdst_vii_4,
-      ADST8 => &daala_fdst8,
-      ADST16 => &daala_fdst16,
-      Identity4 => &fidentity4,
-      Identity8 => &fidentity8,
-      Identity16 => &fidentity16,
-      Identity32 => &fidentity32,
-      _ => unreachable!(),
-    }
+  macro_rules! d {
+    ($(($tx:ident, $size:expr, ), )*) => {
+      $(
+        paste::item! {
+          impl Detail for (tx_1d_types::$tx, [<Line $size>]) {
+            #[cold]
+            fn forward<T>(_input: &[T], _output: &mut [T])
+              where T: TxOperations,
+            {
+              let this: Self = Default::default();
+              unimplemented!("(size, type): {:?}", this);
+            }
+          }
+        }
+      )*
+    };
+    ($(($tx:ident, $size:expr, $f:expr, ), )*) => {
+      $(
+        paste::item! {
+          impl Detail for (tx_1d_types::$tx, [<Line $size>]) {
+            #[inline(always)]
+            fn forward<T>(input: &[T], output: &mut [T])
+              where T: TxOperations,
+            {
+              super::$f(input, output)
+            }
+          }
+        }
+      )*
+    };
+  }
+
+  d! {
+    (Dct, 4, daala_fdct4, ),
+    (Dct, 8, daala_fdct8, ),
+    (Dct, 16, daala_fdct16, ),
+    (Dct, 32, daala_fdct32, ),
+    (Dct, 64, daala_fdct64, ),
+    (Adst, 4, daala_fdst_vii_4, ),
+    (Adst, 8, daala_fdst8, ),
+    (Adst, 16, daala_fdst16, ),
+    (FlipAdst, 4, daala_fdst_vii_4, ),
+    (FlipAdst, 8, daala_fdst8, ),
+    (FlipAdst, 16, daala_fdst16, ),
+    (Id, 4, fidentity4, ),
+    (Id, 8, fidentity8, ),
+    (Id, 16, fidentity16, ),
+    (Id, 32, fidentity32, ),
+  }
+  d! {
+    (Adst, 32, ),
+    (Adst, 64, ),
+    (FlipAdst, 32, ),
+    (FlipAdst, 64, ),
+    (Id,   64, ),
   }
 }
 
-#[derive(Debug, Clone, Copy)]
-struct Txfm2DFlipCfg {
-  tx_size: TxSize,
-  /// Flip upside down
-  ud_flip: bool,
-  /// Flip left to right
-  lr_flip: bool,
-  shift: TxfmShift,
-  txfm_type_col: TxfmType,
-  txfm_type_row: TxfmType,
+pub trait FwdTxfm2D<P>: Transform<P>
+where
+  P: Pixel,
+  Self::Size: FwdBlock,
+{
+  const SHIFT: TxfmShifts = <Self::Size as FwdBlock>::SHIFT;
+
+  type ColTx: txfm_types::Detail;
+  type RowTx: txfm_types::Detail;
+
+  // These functions are implemented over tuples and not here due
+  // to a Rust compiler limitations.
+
+  fn fht(input: &[i16], output: &mut [i32], bd: usize);
 }
 
-impl Txfm2DFlipCfg {
-  fn fwd(tx_type: TxType, tx_size: TxSize, bd: usize) -> Self {
-    let tx_type_1d_col = VTX_TAB[tx_type as usize];
-    let tx_type_1d_row = HTX_TAB[tx_type as usize];
-    let txw_idx = tx_size.width_index();
-    let txh_idx = tx_size.height_index();
-    let txfm_type_col =
-      TxfmType::AV1_TXFM_TYPE_LS[txh_idx][tx_type_1d_col as usize];
-    let txfm_type_row =
-      TxfmType::AV1_TXFM_TYPE_LS[txw_idx][tx_type_1d_row as usize];
-    assert_ne!(txfm_type_col, TxfmType::Invalid);
-    assert_ne!(txfm_type_row, TxfmType::Invalid);
-    let (ud_flip, lr_flip) = Self::get_flip_cfg(tx_type);
+/// This is generic over a tuple due to a Rust bug.
+/// Rust thinks `<Self as Transform<P>>::Size` is invalid because
+/// `Self` "doesn't" implement `Transform<P>` despite a where clause.
+/// Another bug requires an explicit `S: Block` bound, despite `InvBlock`
+/// already requiring it (and the where clauses don't have an issue).
+impl<P, S, T> FwdTxfm2D<P> for (S, T)
+where
+  Self: Transform<P, Size = S, Type = T, Col = T::Col, Row = T::Row>,
+  P: Pixel,
+  S: Block + FwdBlock,
+  T: tx_2d_types::Detail,
+  (T::Col, <S as Block>::Vert): txfm_types::Detail,
+  (T::Row, <S as Block>::Hori): txfm_types::Detail,
+{
+  type ColTx = (T::Col, <Self::Size as Block>::Vert);
+  type RowTx = (T::Row, <Self::Size as Block>::Hori);
 
-    Txfm2DFlipCfg {
-      tx_size,
-      ud_flip,
-      lr_flip,
-      shift: FWD_TXFM_SHIFT_LS[tx_size as usize][(bd - 8) / 2],
-      txfm_type_col,
-      txfm_type_row,
-    }
-  }
-
-  /// Determine the flip config, returning (ud_flip, lr_flip)
-  fn get_flip_cfg(tx_type: TxType) -> (bool, bool) {
-    use self::TxType::*;
-    match tx_type {
-      DCT_DCT | ADST_DCT | DCT_ADST | ADST_ADST | IDTX | V_DCT | H_DCT
-      | V_ADST | H_ADST => (false, false),
-      FLIPADST_DCT | FLIPADST_ADST | V_FLIPADST => (true, false),
-      DCT_FLIPADST | ADST_FLIPADST | H_FLIPADST => (false, true),
-      FLIPADST_FLIPADST => (true, true),
-    }
-  }
-}
-
-trait FwdTxfm2D: Dim {
-  fn fwd_txfm2d_daala(
-    input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-    bd: usize,
-  ) {
+  fn fht(input: &[i16], output: &mut [i32], bd: usize) {
     let mut tmp: AlignedArray<[i32; 64 * 64]> = AlignedArray::uninitialized();
-    let buf = &mut tmp.array[..Self::W * Self::H];
-    let cfg =
-      Txfm2DFlipCfg::fwd(tx_type, TxSize::by_dims(Self::W, Self::H), bd);
+    let mut col_flip: AlignedArray<[i32; 16 * 64]> =
+      AlignedArray::uninitialized();
+
+    let buf = &mut tmp.array[..Self::Size::AREA];
+
+    let shift_idx = (bd - 8) / 2;
 
     // Note when assigning txfm_size_col, we use the txfm_size from the
     // row configuration and vice versa. This is intentionally done to
@@ -1752,264 +1816,85 @@ trait FwdTxfm2D: Dim {
     // rectangular, the number of columns will be the same as the
     // txfm_size stored in the row cfg struct. It will make no difference
     // for square transforms.
-    let txfm_size_col = TxSize::width(cfg.tx_size);
-    let txfm_size_row = TxSize::height(cfg.tx_size);
+    let txfm_size_col = Self::Size::WIDTH;
+    let txfm_size_row = Self::Size::HEIGHT;
+    let stride = Self::Size::WIDTH;
 
-    let txfm_func_col = cfg.txfm_type_col.get_func();
-    let txfm_func_row = cfg.txfm_type_row.get_func();
+    let col_line = S::ColSimd::LANES * txfm_size_row;
 
     // Columns
-    for c in 0..txfm_size_col {
-      let mut col_flip_backing: AlignedArray<[i32; 64 * 64]> =
-        AlignedArray::uninitialized();
-      let col_flip = &mut col_flip_backing.array[..txfm_size_row];
-      if cfg.ud_flip {
-        // flip upside down
-        for r in 0..txfm_size_row {
-          col_flip[r] = (input[(txfm_size_row - r - 1) * stride + c]).into();
-        }
-      } else {
-        for r in 0..txfm_size_row {
-          col_flip[r] = (input[r * stride + c]).into();
-        }
+    for c in (0..txfm_size_col).step_by(S::ColSimd::LANES) {
+      let col_flip = &mut col_flip.array[..col_line];
+      for r in 0..txfm_size_row {
+        let input_start = if !Self::Col::FLIPPED {
+          r * stride + c
+        } else {
+          // flip upside down
+          (txfm_size_row - r - 1) * stride + c
+        };
+        let input = S::IColSimd::load_from_slice(&input[input_start..]);
+        let input: S::ColSimd = input.cast();
+        input.store_to_slice(&mut col_flip[r * S::ColSimd::LANES..]);
       }
-      av1_round_shift_array(col_flip, txfm_size_row, -cfg.shift[0]);
-      txfm_func_col(&col_flip, &mut output[txfm_size_row..]);
-      av1_round_shift_array(
-        &mut output[txfm_size_row..],
-        txfm_size_row,
-        -cfg.shift[1],
+
+      let mut tout = AlignedArray::new([0i32; 16 * 64]);
+      let tout = &mut tout.array[..col_line];
+
+      round_shift_array::<S::ColSimd>(
+        col_flip,
+        col_line,
+        -Self::SHIFT[shift_idx][0],
       );
-      if cfg.lr_flip {
+      Self::ColTx::forward(
+        S::ColSimd::slice_cast_ref(col_flip),
+        S::ColSimd::slice_cast_mut(tout),
+      );
+      round_shift_array::<S::ColSimd>(
+        tout,
+        col_line,
+        -Self::SHIFT[shift_idx][1],
+      );
+
+      if Self::Row::FLIPPED {
         for r in 0..txfm_size_row {
           // flip from left to right
-          buf[r * txfm_size_col + (txfm_size_col - c - 1)] =
-            output[txfm_size_row + r];
+          buf[r * txfm_size_col + (txfm_size_col - c - 1)] = tout[r];
         }
       } else {
         for r in 0..txfm_size_row {
-          buf[r * txfm_size_col + c] = output[txfm_size_row + r];
+          S::ColSimd::load_from_slice(&tout[r * S::ColSimd::LANES..])
+            .store_to_slice(&mut buf[r * txfm_size_col + c..]);
         }
       }
     }
 
     // Rows
-    for r in 0..txfm_size_row {
-      txfm_func_row(
-        &buf[r * txfm_size_col..],
-        &mut output[r * txfm_size_col..],
-      );
-      av1_round_shift_array(
-        &mut output[r * txfm_size_col..],
-        txfm_size_col,
-        -cfg.shift[2],
-      );
-    }
-  }
-}
-
-macro_rules! impl_fwd_txs {
-  ($(($W:expr, $H:expr)),+) => {
-    $(
-      paste::item! {
-        impl FwdTxfm2D for [<Block $W x $H>] {}
+    for r in (0..txfm_size_row).step_by(S::RowSimd::LANES) {
+      let mut t = AlignedArray::new([0i32; 16 * 64]);
+      for r_off in 0..S::RowSimd::LANES {
+        for c in 0..txfm_size_col {
+          let idx = c * S::RowSimd::LANES + r_off;
+          t.array[idx] = buf[(r + r_off) * txfm_size_col + c];
+        }
       }
-    )*
-  }
-}
+      let mut tout = AlignedArray::new([0i32; 16 * 64]);
+      Self::RowTx::forward(
+        S::RowSimd::slice_cast_ref(&t.array),
+        S::RowSimd::slice_cast_mut(&mut tout.array),
+      );
+      for c in 0..txfm_size_col {
+        for r_off in 0..S::RowSimd::LANES {
+          let idx = c * S::RowSimd::LANES + r_off;
+          output[(r + r_off) * txfm_size_col + c] = tout.array[idx];
+        }
+      }
 
-impl_fwd_txs! { (4, 4), (8, 8), (16, 16), (32, 32), (64, 64) }
-impl_fwd_txs! { (4, 8), (8, 16), (16, 32), (32, 64) }
-impl_fwd_txs! { (8, 4), (16, 8), (32, 16), (64, 32) }
-impl_fwd_txs! { (4, 16), (8, 32), (16, 64) }
-impl_fwd_txs! { (16, 4), (32, 8), (64, 16) }
-
-pub fn fht4x4(
-  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize,
-) {
-  Block4x4::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
-}
-
-pub fn fht8x8(
-  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize,
-) {
-  Block8x8::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
-}
-
-pub fn fht16x16(
-  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize,
-) {
-  Block16x16::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
-}
-
-pub fn fht32x32(
-  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize,
-) {
-  Block32x32::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
-}
-
-pub fn fht64x64(
-  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize,
-) {
-  assert!(tx_type == TxType::DCT_DCT);
-  let mut aligned: AlignedArray<[i32; 4096]> = AlignedArray::uninitialized();
-  let tmp = &mut aligned.array;
-
-  //Block64x64::fwd_txfm2d(input, &mut tmp, stride, tx_type, bit_depth);
-  Block64x64::fwd_txfm2d_daala(input, tmp, stride, tx_type, bit_depth);
-
-  for i in 0..2 {
-    for (row_out, row_in) in
-      output[2048 * i..].chunks_mut(32).zip(tmp[32 * i..].chunks(64)).take(64)
-    {
-      row_out.copy_from_slice(&row_in[..32]);
-    }
-  }
-}
-
-pub fn fht4x8(
-  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize,
-) {
-  Block4x8::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
-}
-
-pub fn fht8x4(
-  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize,
-) {
-  Block8x4::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
-}
-
-pub fn fht8x16(
-  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize,
-) {
-  Block8x16::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
-}
-
-pub fn fht16x8(
-  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize,
-) {
-  Block16x8::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
-}
-
-pub fn fht16x32(
-  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize,
-) {
-  assert!(tx_type == TxType::DCT_DCT || tx_type == TxType::IDTX);
-  Block16x32::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
-}
-
-pub fn fht32x16(
-  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize,
-) {
-  assert!(tx_type == TxType::DCT_DCT || tx_type == TxType::IDTX);
-  Block32x16::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
-}
-
-pub fn fht32x64(
-  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize,
-) {
-  assert!(tx_type == TxType::DCT_DCT);
-  let mut aligned: AlignedArray<[i32; 2048]> = AlignedArray::uninitialized();
-  let tmp = &mut aligned.array;
-
-  Block32x64::fwd_txfm2d_daala(input, tmp, stride, tx_type, bit_depth);
-
-  for (row_out, row_in) in output.chunks_mut(32).zip(tmp.chunks(32)).take(64) {
-    row_out.copy_from_slice(&row_in[..32]);
-  }
-}
-
-pub fn fht64x32(
-  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize,
-) {
-  assert!(tx_type == TxType::DCT_DCT);
-  let mut aligned: AlignedArray<[i32; 2048]> = AlignedArray::uninitialized();
-  let tmp = &mut aligned.array;
-
-  Block64x32::fwd_txfm2d_daala(input, tmp, stride, tx_type, bit_depth);
-
-  for i in 0..2 {
-    for (row_out, row_in) in
-      output[1024 * i..].chunks_mut(32).zip(tmp[32 * i..].chunks(64)).take(32)
-    {
-      row_out.copy_from_slice(&row_in[..32]);
-    }
-  }
-}
-
-pub fn fht4x16(
-  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize,
-) {
-  Block4x16::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
-}
-
-pub fn fht16x4(
-  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize,
-) {
-  Block16x4::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
-}
-
-pub fn fht8x32(
-  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize,
-) {
-  assert!(tx_type == TxType::DCT_DCT || tx_type == TxType::IDTX);
-  Block8x32::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
-}
-
-pub fn fht32x8(
-  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize,
-) {
-  assert!(tx_type == TxType::DCT_DCT || tx_type == TxType::IDTX);
-  Block32x8::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth);
-}
-
-pub fn fht16x64(
-  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize,
-) {
-  assert!(tx_type == TxType::DCT_DCT);
-  let mut aligned: AlignedArray<[i32; 1024]> = AlignedArray::uninitialized();
-  let tmp = &mut aligned.array;
-
-  Block16x64::fwd_txfm2d_daala(input, tmp, stride, tx_type, bit_depth);
-
-  for (row_out, row_in) in output.chunks_mut(16).zip(tmp.chunks(16)).take(64) {
-    row_out.copy_from_slice(&row_in[..16]);
-  }
-}
-
-pub fn fht64x16(
-  input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-  bit_depth: usize,
-) {
-  assert!(tx_type == TxType::DCT_DCT);
-  let mut aligned: AlignedArray<[i32; 1024]> = AlignedArray::uninitialized();
-  let tmp = &mut aligned.array;
-
-  Block64x16::fwd_txfm2d_daala(input, tmp, stride, tx_type, bit_depth);
-
-  for i in 0..2 {
-    for (row_out, row_in) in
-      output[512 * i..].chunks_mut(32).zip(tmp[32 * i..].chunks(64)).take(16)
-    {
-      row_out.copy_from_slice(&row_in[..32]);
+      let start = r * txfm_size_col;
+      round_shift_array::<S::RowSimd>(
+        &mut output[start..],
+        txfm_size_col,
+        -Self::SHIFT[shift_idx][2],
+      );
     }
   }
 }

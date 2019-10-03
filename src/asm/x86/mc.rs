@@ -87,6 +87,20 @@ pub fn put_8tap<T: Pixel>(
   height: usize, col_frac: i32, row_frac: i32, mode_x: FilterMode,
   mode_y: FilterMode, bit_depth: usize, cpu: CpuFeatureLevel,
 ) {
+  assert!(
+    dst.rect().height >= height && dst.rect().width >= width,
+    "dst is smaller than the compute block: ({}, {}) vs expected ({}, {})",
+    dst.rect().width,
+    dst.rect().height,
+    width,
+    height,
+  );
+  assert!(
+    src.plane.data.len() >= height * src.plane.cfg.stride + width,
+    "src is smaller than the compute block: {} vs expected {}",
+    src.plane.data.len(),
+    height * src.plane.cfg.stride + width,
+  );
   let call_native = |dst: &mut PlaneRegionMut<'_, T>| {
     native::put_8tap(
       dst, src, width, height, col_frac, row_frac, mode_x, mode_y, bit_depth,
@@ -153,6 +167,16 @@ pub fn prep_8tap<T: Pixel>(
   col_frac: i32, row_frac: i32, mode_x: FilterMode, mode_y: FilterMode,
   bit_depth: usize, cpu: CpuFeatureLevel,
 ) {
+  assert!(
+    tmp.len() >= width * height,
+    "tmp is smaller than the compute block"
+  );
+  assert!(
+    src.plane.data.len() >= height * src.plane.cfg.stride + width,
+    "src is smaller than the compute block: {} vs expected {}",
+    src.plane.data.len(),
+    height * src.plane.cfg.stride + width,
+  );
   let call_native = |tmp: &mut [i16]| {
     native::prep_8tap(
       tmp, src, width, height, col_frac, row_frac, mode_x, mode_y, bit_depth,
@@ -211,6 +235,18 @@ pub fn mc_avg<T: Pixel>(
   dst: &mut PlaneRegionMut<'_, T>, tmp1: &[i16], tmp2: &[i16], width: usize,
   height: usize, bit_depth: usize, cpu: CpuFeatureLevel,
 ) {
+  assert!(
+    tmp1.len() >= width * height,
+    "tmp1 is smaller than the compute block"
+  );
+  assert!(
+    tmp2.len() >= width * height,
+    "tmp2 is smaller than the compute block"
+  );
+  assert!(
+    dst.rect().height >= height && dst.rect().width >= width,
+    "dst is smaller than the compute block"
+  );
   let call_native = |dst: &mut PlaneRegionMut<'_, T>| {
     native::mc_avg(dst, tmp1, tmp2, width, height, bit_depth, cpu);
   };

@@ -3,7 +3,7 @@ name = "rav1e"
 version = "0.1.0"
 authors = ["Thomas Daede <tdaede@xiph.org>"]
 edition = "2018"
-build = "build.rs"
+build = "build/main.rs"
 include = ["/src/**", "/Cargo.toml", "/build.rs"]
 license = "BSD-2-Clause"
 description = "The fastest and safest AV1 encoder"
@@ -61,6 +61,8 @@ log = "0.4"
 pretty_env_logger = { version = "0.3", optional = true }
 itertools = "0.8"
 simd_helpers = "0.1"
+# the version on crates.io is *8 months* old.
+packed_simd = { git = "https://github.com/rust-lang-nursery/packed_simd.git", features = ["into_bits"] }
 
 [build-dependencies]
 nasm-rs = { version = "0.1", path = "crates/nasm_rs/", optional = true }
@@ -68,6 +70,9 @@ cc = { version = "1.0", optional = true }
 # Vendored to remove the dependency on `failure`, which takes a long time to build.
 vergen = { version = "3", path = "crates/vergen" }
 rustc_version = "0.2"
+# used to create the rust kernels
+proc-macro2 = "1.0"
+quote = "1.0"
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = { version = "0.1.9", optional = true }
@@ -113,6 +118,11 @@ lto = true
 [profile.bench]
 codegen-units = 1
 lto = true
+
+# To fix a LLVM X86 target machine assert when no optimization
+# is performed.
+[profile.test]
+opt-level = 2
 
 [workspace]
 members = [".", "ivf", "crates/nasm_rs", "crates/avformat-sys"]

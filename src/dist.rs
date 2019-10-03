@@ -21,10 +21,8 @@ pub(crate) mod native {
   use crate::tiling::*;
   use crate::util::*;
 
-  use simd_helpers::cold_for_target_arch;
-
-  #[cold_for_target_arch("x86_64")]
-  pub fn get_sad<T: Pixel>(
+  #[cold]
+  pub fn get_sad_ref<T: Pixel>(
     plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>,
     bsize: BlockSize, _bit_depth: usize, _cpu: CpuFeatureLevel,
   ) -> u32 {
@@ -47,85 +45,240 @@ pub(crate) mod native {
     sum
   }
 
-  #[inline(always)]
-  const fn butterfly(a: i32, b: i32) -> (i32, i32) {
-    ((a + b), (a - b))
-  }
+  pub fn get_sad<T: Pixel>(
+    porg: &PlaneRegion<'_, T>, pref: &PlaneRegion<'_, T>, bsize: BlockSize,
+    bit_depth: usize, cpu: CpuFeatureLevel,
+  ) -> u32 {
+    let width = bsize.width();
+    let height = bsize.height();
+    assert!(
+      porg.rect().height >= height && porg.rect().width >= width,
+      "porg is smaller than the compute block: ({}, {}) vs expected ({}, {})",
+      porg.rect().width,
+      porg.rect().height,
+      width,
+      height,
+    );
+    assert!(
+      pref.rect().height >= height && pref.rect().width >= width,
+      "pref is smaller than the compute block: ({}, {}) vs expected ({}, {})",
+      pref.rect().width,
+      pref.rect().height,
+      width,
+      height,
+    );
+    let block = bsize;
+    let cpu_i = cpu.as_index();
 
-  #[inline(always)]
-  #[allow(clippy::identity_op, clippy::erasing_op)]
-  fn hadamard4_1d(data: &mut [i32], n: usize, stride0: usize, stride1: usize) {
-    for i in 0..n {
-      let sub: &mut [i32] = &mut data[i * stride0..];
-      let (a0, a1) = butterfly(sub[0 * stride1], sub[1 * stride1]);
-      let (a2, a3) = butterfly(sub[2 * stride1], sub[3 * stride1]);
-      let (b0, b2) = butterfly(a0, a2);
-      let (b1, b3) = butterfly(a1, a3);
-      sub[0 * stride1] = b0;
-      sub[1 * stride1] = b1;
-      sub[2 * stride1] = b2;
-      sub[3 * stride1] = b3;
+    let porg_stride = porg.plane_cfg.stride as u32;
+    let pref_stride = pref.plane_cfg.stride as u32;
+
+    let r = match T::type_enum() {
+      PixelType::U8 => {
+        let porg = porg.as_u8().unwrap();
+        let pref = pref.as_u8().unwrap();
+        let f = sad_kernels::U8_SAD_KERNELS[cpu_i][block as usize];
+        let f = match f {
+          Some(f) => f,
+          // These are always present
+          None => unsafe { ::std::hint::unreachable_unchecked() },
+        };
+        unsafe {
+          f(&*porg.data_ptr(), porg_stride, &*pref.data_ptr(), pref_stride)
+        }
+      }
+      PixelType::U16 => {
+        let porg = porg.as_u16().unwrap();
+        let pref = pref.as_u16().unwrap();
+        let f = sad_kernels::U16_SAD_KERNELS[cpu_i][block as usize];
+        let f = match f {
+          Some(f) => f,
+          // These are always present
+          None => unsafe { ::std::hint::unreachable_unchecked() },
+        };
+        unsafe {
+          f(&*porg.data_ptr(), porg_stride, &*pref.data_ptr(), pref_stride)
+        }
+      }
+    };
+
+    if cfg!(feature = "check_asm") {
+      let expected = get_sad_ref(porg, pref, bsize, bit_depth, cpu);
+      assert_eq!(expected, r, "reference/kernel SAD sum mismatch");
     }
+
+    r
   }
 
-  #[inline(always)]
-  #[allow(clippy::identity_op, clippy::erasing_op)]
-  fn hadamard8_1d(data: &mut [i32], n: usize, stride0: usize, stride1: usize) {
-    for i in 0..n {
-      let sub: &mut [i32] = &mut data[i * stride0..];
-
-      let (a0, a1) = butterfly(sub[0 * stride1], sub[1 * stride1]);
-      let (a2, a3) = butterfly(sub[2 * stride1], sub[3 * stride1]);
-      let (a4, a5) = butterfly(sub[4 * stride1], sub[5 * stride1]);
-      let (a6, a7) = butterfly(sub[6 * stride1], sub[7 * stride1]);
-
-      let (b0, b2) = butterfly(a0, a2);
-      let (b1, b3) = butterfly(a1, a3);
-      let (b4, b6) = butterfly(a4, a6);
-      let (b5, b7) = butterfly(a5, a7);
-
-      let (c0, c4) = butterfly(b0, b4);
-      let (c1, c5) = butterfly(b1, b5);
-      let (c2, c6) = butterfly(b2, b6);
-      let (c3, c7) = butterfly(b3, b7);
-
-      sub[0 * stride1] = c0;
-      sub[1 * stride1] = c1;
-      sub[2 * stride1] = c2;
-      sub[3 * stride1] = c3;
-      sub[4 * stride1] = c4;
-      sub[5 * stride1] = c5;
-      sub[6 * stride1] = c6;
-      sub[7 * stride1] = c7;
-    }
-  }
-
-  #[inline(always)]
-  fn hadamard2d(data: &mut [i32], (w, h): (usize, usize)) {
-    /*Vertical transform.*/
-    let vert_func = if h == 4 { hadamard4_1d } else { hadamard8_1d };
-    vert_func(data, w, 1, h);
-    /*Horizontal transform.*/
-    let horz_func = if w == 4 { hadamard4_1d } else { hadamard8_1d };
-    horz_func(data, h, w, 1);
-  }
-
-  fn hadamard4x4(data: &mut [i32]) {
-    hadamard2d(data, (4, 4));
-  }
-
-  fn hadamard8x8(data: &mut [i32]) {
-    hadamard2d(data, (8, 8));
+  mod sad_kernels {
+    #![allow(unused_imports)]
+    include!(concat!(env!("OUT_DIR"), "/sad_kernels.rs"));
   }
 
   /// Sum of absolute transformed differences
   /// Use the sum of 4x4 and 8x8 hadamard transforms for the transform. 4x* and
   /// *x4 blocks use 4x4 and all others use 8x8.
-  #[cold_for_target_arch("x86_64")]
   pub fn get_satd<T: Pixel>(
+    porg: &PlaneRegion<'_, T>, pref: &PlaneRegion<'_, T>, bsize: BlockSize,
+    bit_depth: usize, cpu: CpuFeatureLevel,
+  ) -> u32 {
+    let width = bsize.width();
+    let height = bsize.height();
+    assert!(
+      porg.rect().height >= height && porg.rect().width >= width,
+      "porg is smaller than the compute block: ({}, {}) vs expected ({}, {})",
+      porg.rect().width,
+      porg.rect().height,
+      width,
+      height,
+    );
+    assert!(
+      pref.rect().height >= height && pref.rect().width >= width,
+      "pref is smaller than the compute block: ({}, {}) vs expected ({}, {})",
+      pref.rect().width,
+      pref.rect().height,
+      width,
+      height,
+    );
+    let block = bsize as usize;
+    let cpu_i = cpu.as_index();
+
+    let porg_stride = porg.plane_cfg.stride as u32;
+    let pref_stride = pref.plane_cfg.stride as u32;
+
+    let r = match T::type_enum() {
+      PixelType::U8 => {
+        let porg = porg.as_u8().unwrap();
+        let pref = pref.as_u8().unwrap();
+        let f = satd_kernels::U8_SATD_KERNELS[cpu_i][block];
+        let f = match f {
+          Some(f) => f,
+          // These are always present
+          None => unsafe { ::std::hint::unreachable_unchecked() },
+        };
+        unsafe {
+          f(&*porg.data_ptr(), porg_stride, &*pref.data_ptr(), pref_stride)
+        }
+      }
+      PixelType::U16 => {
+        let porg = porg.as_u16().unwrap();
+        let pref = pref.as_u16().unwrap();
+        let f = satd_kernels::U16_SATD_KERNELS[cpu_i][block];
+        let f = match f {
+          Some(f) => f,
+          // These are always present
+          None => unsafe { ::std::hint::unreachable_unchecked() },
+        };
+        unsafe {
+          f(&*porg.data_ptr(), porg_stride, &*pref.data_ptr(), pref_stride)
+        }
+      }
+    };
+
+    if cfg!(feature = "check_asm") {
+      let expected = get_satd_ref(porg, pref, bsize, bit_depth, cpu);
+      assert_eq!(
+        expected, r,
+        "reference/kernel SATD sum mismatch, b = {:?}",
+        bsize
+      );
+    }
+
+    r
+  }
+
+  mod satd_kernels {
+    #![allow(unused_imports)]
+    include!(concat!(env!("OUT_DIR"), "/satd_kernels.rs"));
+  }
+
+  /// A reference, but slow, implementation.
+  #[allow(unused)]
+  pub fn get_satd_ref<T: Pixel>(
     plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>,
     bsize: BlockSize, _bit_depth: usize, _cpu: CpuFeatureLevel,
   ) -> u32 {
+    #[inline(always)]
+    const fn butterfly(a: i32, b: i32) -> (i32, i32) {
+      ((a + b), (a - b))
+    }
+
+    #[inline(always)]
+    #[allow(clippy::identity_op, clippy::erasing_op)]
+    fn hadamard4_1d(
+      data: &mut [i32], n: usize, stride0: usize, stride1: usize,
+    ) {
+      for i in 0..n {
+        let sub: &mut [i32] = &mut data[i * stride0..];
+        let (a0, a1) = butterfly(sub[0 * stride1], sub[1 * stride1]);
+        let (a2, a3) = butterfly(sub[2 * stride1], sub[3 * stride1]);
+        let (b0, b2) = butterfly(a0, a2);
+        let (b1, b3) = butterfly(a1, a3);
+        sub[0 * stride1] = b0;
+        sub[1 * stride1] = b1;
+        sub[2 * stride1] = b2;
+        sub[3 * stride1] = b3;
+      }
+    }
+
+    #[inline(always)]
+    #[allow(clippy::identity_op, clippy::erasing_op)]
+    fn hadamard8_1d(
+      data: &mut [i32], n: usize, stride0: usize, stride1: usize,
+    ) {
+      for i in 0..n {
+        let sub: &mut [i32] = &mut data[i * stride0..];
+
+        let (a0, a1) = butterfly(sub[0 * stride1], sub[1 * stride1]);
+        let (a2, a3) = butterfly(sub[2 * stride1], sub[3 * stride1]);
+        let (a4, a5) = butterfly(sub[4 * stride1], sub[5 * stride1]);
+        let (a6, a7) = butterfly(sub[6 * stride1], sub[7 * stride1]);
+
+        let (b0, b2) = butterfly(a0, a2);
+        let (b1, b3) = butterfly(a1, a3);
+        let (b4, b6) = butterfly(a4, a6);
+        let (b5, b7) = butterfly(a5, a7);
+
+        let (c0, c4) = butterfly(b0, b4);
+        let (c1, c5) = butterfly(b1, b5);
+        let (c2, c6) = butterfly(b2, b6);
+        let (c3, c7) = butterfly(b3, b7);
+
+        sub[0 * stride1] = c0;
+        sub[1 * stride1] = c1;
+        sub[2 * stride1] = c2;
+        sub[3 * stride1] = c3;
+        sub[4 * stride1] = c4;
+        sub[5 * stride1] = c5;
+        sub[6 * stride1] = c6;
+        sub[7 * stride1] = c7;
+      }
+    }
+
+    #[inline(always)]
+    fn hadamard2d(data: &mut [i32], (w, h): (usize, usize)) {
+      /*Vertical transform.*/
+      if h == 4 {
+        hadamard4_1d(data, w, 1, h)
+      } else {
+        hadamard8_1d(data, w, 1, h)
+      }
+      /*Horizontal transform.*/
+      if w == 4 {
+        hadamard4_1d(data, h, w, 1)
+      } else {
+        hadamard8_1d(data, h, w, 1)
+      }
+    }
+
+    fn hadamard4x4(data: &mut [i32]) {
+      hadamard2d(data, (4, 4));
+    }
+
+    fn hadamard8x8(data: &mut [i32]) {
+      hadamard2d(data, (8, 8));
+    }
+
     let blk_w = bsize.width();
     let blk_h = bsize.height();
 
@@ -309,22 +462,28 @@ pub mod test {
     let bit_depth: usize = 8;
     let (input_plane, rec_plane) = setup_planes::<T>();
 
+    let mut fail = false;
     for block in blocks {
       let area = Area::StartingAt { x: 32, y: 40 };
 
       let input_region = input_plane.region(area);
       let rec_region = rec_plane.region(area);
 
-      assert_eq!(
-        block.1,
-        get_satd(
-          &input_region,
-          &rec_region,
-          block.0,
-          bit_depth,
-          CpuFeatureLevel::default()
-        )
+      let actual = get_satd(
+        &mut input_region,
+        &mut rec_region,
+        block.0,
+        bit_depth,
+        CpuFeatureLevel::default(),
       );
+      if block.1 != actual {
+        eprintln!("block: {:?}, {} != {}", block.0, block.1, actual);
+        fail = true;
+      }
+    }
+
+    if fail {
+      panic!();
     }
   }
 
