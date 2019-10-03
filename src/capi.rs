@@ -20,6 +20,7 @@ use libc::size_t;
 use num_derive::*;
 use num_traits::cast::FromPrimitive;
 
+use crate::api::config::InvalidConfig;
 use crate::prelude as rav1e;
 
 type PixelRange = rav1e::PixelRange;
@@ -114,6 +115,31 @@ impl From<Option<rav1e::EncoderStatus>> for EncoderStatus {
 /// Use rav1e_config_unref() to free its memory.
 pub struct Config {
   cfg: rav1e::Config,
+  last_err: Option<InvalidConfig>,
+}
+
+impl Config {
+  fn rav1e_config_validate(&mut self) -> bool {
+    if let Err(err) = self.cfg.validate() {
+      self.last_err = Some(err);
+      return false;
+    }
+    true
+  }
+  /// Returns the last error as a string
+  pub unsafe fn rav1e_last_config_error_str(&self) -> *mut c_char {
+    let last_error = format!("{:?}", self.last_err);
+    let cbuf = CString::new(last_error).unwrap();
+    let len = cbuf.as_bytes_with_nul().len();
+    let ret = libc::malloc(len);
+
+    if !ret.is_null() {
+      let cptr = cbuf.as_ptr() as *const libc::c_void;
+      libc::memcpy(ret, cptr, len);
+    }
+
+    ret as *mut c_char
+  }
 }
 
 enum EncContext {
@@ -257,7 +283,7 @@ pub unsafe extern fn rav1e_data_unref(data: *mut Data) {
 pub unsafe extern fn rav1e_config_default() -> *mut Config {
   let cfg = rav1e::Config { enc: rav1e::EncoderConfig::default(), threads: 0 };
 
-  let c = Box::new(Config { cfg });
+  let c = Box::new(Config { cfg, last_err: None });
 
   Box::into_raw(c)
 }
