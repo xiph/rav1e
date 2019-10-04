@@ -323,19 +323,18 @@ function cdef_filter\w\()_neon, export=1
         add             x8,  x8,  w9, uxtw #1
         movrel          x9,  directions\w
         add             x5,  x9,  w5, uxtw #1
-        movi            v30.8h,   #15
-        dup             v28.8h,   w6                // damping
+        movi            v30.4h,   #15
+        dup             v28.4h,   w6                // damping
 
         dup             v25.8h, w3                  // threshold
         dup             v27.8h, w4                  // threshold
-        clz             v24.8h, v25.8h              // clz(threshold)
-        clz             v26.8h, v27.8h              // clz(threshold)
-        sub             v24.8h, v30.8h, v24.8h      // ulog2(threshold)
-        sub             v26.8h, v30.8h, v26.8h      // ulog2(threshold)
-        uqsub           v24.8h, v28.8h, v24.8h      // shift = imax(0, damping - ulog2(threshold))
-        uqsub           v26.8h, v28.8h, v26.8h      // shift = imax(0, damping - ulog2(threshold))
-        neg             v24.8h, v24.8h              // -shift
-        neg             v26.8h, v26.8h              // -shift
+        trn1            v24.4h, v25.4h, v27.4h
+        clz             v24.4h, v24.4h              // clz(threshold)
+        sub             v24.4h, v30.4h, v24.4h      // ulog2(threshold)
+        uqsub           v24.4h, v28.4h, v24.4h      // shift = imax(0, damping - ulog2(threshold))
+        neg             v24.4h, v24.4h              // -shift
+        dup             v26.8h, v24.h[1]
+        dup             v24.8h, v24.h[0]
 
 1:
 .if \w == 8
