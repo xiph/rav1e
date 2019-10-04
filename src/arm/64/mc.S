@@ -2975,7 +2975,9 @@ function warp_filter_horz_neon
         ld1             {v16.8b, v17.8b}, [x2], x3
 
         load_filter_row d0, w12, w7
+        uxtl            v16.8h,  v16.8b
         load_filter_row d1, w12, w7
+        uxtl            v17.8h,  v17.8b
         load_filter_row d2, w12, w7
         sxtl            v0.8h,   v0.8b
         load_filter_row d3, w12, w7
@@ -2988,16 +2990,12 @@ function warp_filter_horz_neon
         sxtl            v4.8h,   v4.8b
         load_filter_row d7, w12, w7
         sxtl            v5.8h,   v5.8b
-        sxtl            v6.8h,   v6.8b
-        sxtl            v7.8h,   v7.8b
-
-        uxtl            v16.8h,  v16.8b
-        uxtl            v17.8h,  v17.8b
-
         ext             v18.16b, v16.16b, v17.16b, #2*1
         mul             v23.8h,  v16.8h,  v0.8h
+        sxtl            v6.8h,   v6.8b
         ext             v19.16b, v16.16b, v17.16b, #2*2
         mul             v18.8h,  v18.8h,  v1.8h
+        sxtl            v7.8h,   v7.8b
         ext             v20.16b, v16.16b, v17.16b, #2*3
         mul             v19.8h,  v19.8h,  v2.8h
         ext             v21.16b, v16.16b, v17.16b, #2*4
