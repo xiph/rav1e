@@ -464,15 +464,15 @@ function cdef_find_dir_neon, export=1
         ext             v24.16b, v30.16b, v29.16b, #(16-2*\i)
         ext             v25.16b, v29.16b, v30.16b, #(16-2*\i)
         add             v6.8h,   v6.8h,   v22.8h      // sum_alt[0]
-        add             v7.8h,   v7.8h,   v23.8h      // sum_alt[0]
+        add             v7.4h,   v7.4h,   v23.4h      // sum_alt[0]
         add             v16.8h,  v16.8h,  v24.8h      // sum_alt[1]
-        add             v17.8h,  v17.8h,  v25.8h      // sum_alt[1]
+        add             v17.4h,  v17.4h,  v25.4h      // sum_alt[1]
 .endif
 .if \i < 6
         ext             v22.16b, v30.16b, v26.16b, #(16-2*(3-(\i/2)))
         ext             v23.16b, v26.16b, v30.16b, #(16-2*(3-(\i/2)))
         add             v18.8h,  v18.8h,  v22.8h      // sum_alt[2]
-        add             v19.8h,  v19.8h,  v23.8h      // sum_alt[2]
+        add             v19.4h,  v19.4h,  v23.4h      // sum_alt[2]
 .else
         add             v18.8h,  v18.8h,  v26.8h      // sum_alt[2]
 .endif
@@ -484,7 +484,7 @@ function cdef_find_dir_neon, export=1
         ext             v24.16b, v30.16b, v26.16b, #(16-2*(\i/2))
         ext             v25.16b, v26.16b, v30.16b, #(16-2*(\i/2))
         add             v20.8h,  v20.8h,  v24.8h      // sum_alt[3]
-        add             v21.8h,  v21.8h,  v25.8h      // sum_alt[3]
+        add             v21.4h,  v21.4h,  v25.4h      // sum_alt[3]
 .endif
 .endr
 
@@ -501,10 +501,8 @@ function cdef_find_dir_neon, export=1
 
         rev64           v1.8h,   v1.8h
         rev64           v3.8h,   v3.8h
-        ext             v1.16b,  v1.16b,  v1.16b, #8  // sum_diag[0][15-n]
-        ext             v3.16b,  v3.16b,  v3.16b, #8  // sum_diag[1][15-n]
-        ext             v1.16b,  v1.16b,  v1.16b, #2  // sum_diag[0][14-n]
-        ext             v3.16b,  v3.16b,  v3.16b, #2  // sum_diag[1][14-n]
+        ext             v1.16b,  v1.16b,  v1.16b, #10 // sum_diag[0][14-n]
+        ext             v3.16b,  v3.16b,  v3.16b, #10 // sum_diag[1][14-n]
 
         str             s4,  [sp, #2*4]               // cost[2]
         str             s5,  [sp, #6*4]               // cost[6]
@@ -556,15 +554,16 @@ function cdef_find_dir_neon, export=1
         addv            \d2, v25.4s                   // *cost_ptr
 .endm
         cost_alt        s6,  s16, v6,  v7,  v16, v17  // cost[1], cost[3]
+        cost_alt        s18, s20, v18, v19, v20, v21  // cost[5], cost[7]
         str             s6,  [sp, #1*4]               // cost[1]
         str             s16, [sp, #3*4]               // cost[3]
-        cost_alt        s18, s20, v18, v19, v20, v21  // cost[5], cost[7]
-        str             s18, [sp, #5*4]               // cost[5]
-        str             s20, [sp, #7*4]               // cost[7]
 
         mov             w0,  #0                       // best_dir
         mov             w1,  v0.s[0]                  // best_cost
         mov             w3,  #1                       // n
+
+        str             s18, [sp, #5*4]               // cost[5]
+        str             s20, [sp, #7*4]               // cost[7]
 
         mov             w4,  v6.s[0]
 
