@@ -3007,28 +3007,20 @@ function warp_filter_horz_neon
         saddlp          v19.4s,  v19.8h
         mul             v22.8h,  v22.8h,  v5.8h
         saddlp          v20.4s,  v20.8h
-        addv            s23,     v23.4s
         saddlp          v21.4s,  v21.8h
-        addv            s18,     v18.4s
         saddlp          v22.4s,  v22.8h
-        addv            s19,     v19.4s
-        trn1            v18.2s,  v23.2s,  v18.2s
-        addv            s20,     v20.4s
+        addp            v18.4s,  v23.4s,  v18.4s
         ext             v23.16b, v16.16b, v17.16b, #2*6
-        trn1            v19.2s,  v19.2s,  v20.2s
-        addv            s21,     v21.4s
+        addp            v19.4s,  v19.4s,  v20.4s
         mul             v23.8h,  v23.8h,  v6.8h
         ext             v20.16b, v16.16b, v17.16b, #2*7
-        addv            s22,     v22.4s
         mul             v20.8h,  v20.8h,  v7.8h
         saddlp          v23.4s,  v23.8h
-        trn1            v21.2s,  v21.2s,  v22.2s
+        addp            v21.4s,  v21.4s,  v22.4s
         saddlp          v20.4s,  v20.8h
-        addv            s23,     v23.4s
-        addv            s20,     v20.4s
-        trn1            v20.2s,  v23.2s,  v20.2s
-        trn1            v18.2d,  v18.2d,  v19.2d
-        trn1            v20.2d,  v21.2d,  v20.2d
+        addp            v20.4s,  v23.4s,  v20.4s
+        addp            v18.4s,  v18.4s,  v19.4s
+        addp            v20.4s,  v21.4s,  v20.4s
 
         add             w5,  w5,  w8
 
