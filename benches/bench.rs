@@ -165,25 +165,14 @@ fn cfl_rdo_bench(b: &mut Bencher, bsize: BlockSize) {
 }
 
 fn ec_bench(c: &mut Criterion) {
-  c.bench_function("update_cdf_4_native", update_cdf_4_native);
-  c.bench_function("update_cdf_4_sse2", update_cdf_4_sse2);
+  c.bench_function("update_cdf_4", update_cdf_4);
 }
 
-fn update_cdf_4_native(b: &mut Bencher) {
+fn update_cdf_4(b: &mut Bencher) {
   let mut cdf = [7296, 3819, 1616, 0, 0];
   b.iter(|| {
     for i in 0..1000 {
-      WriterBase::<WriterRecorder>::update_cdf(&mut cdf, i & 3);
-      black_box(cdf);
-    }
-  });
-}
-
-fn update_cdf_4_sse2(b: &mut Bencher) {
-  let mut cdf = [7296, 3819, 1616, 0, 0];
-  b.iter(|| {
-    for i in 0..1000 {
-      WriterBase::<WriterRecorder>::update_cdf_4_sse2(&mut cdf, i & 3);
+      update_cdf(&mut cdf, i & 3);
       black_box(cdf);
     }
   });

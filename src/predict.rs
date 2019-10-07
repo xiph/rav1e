@@ -11,6 +11,16 @@
 #![allow(non_camel_case_types)]
 #![allow(dead_code)]
 
+#[cfg(not(all(
+  feature = "nasm",
+  any(target_arch = "x86", target_arch = "x86_64")
+)))]
+pub use self::native::*;
+#[cfg(all(
+  feature = "nasm",
+  any(target_arch = "x86", target_arch = "x86_64")
+))]
+pub use crate::asm::x86::predict::*;
 use crate::context::{INTRA_MODES, MAX_TX_SIZE};
 use crate::encoder::FrameInvariants;
 use crate::frame::*;
@@ -19,16 +29,6 @@ use crate::partition::*;
 use crate::tiling::*;
 use crate::transform::*;
 use crate::util::*;
-
-#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-use libc;
-#[cfg(target_arch = "x86")]
-use std::arch::x86::*;
-#[cfg(target_arch = "x86_64")]
-use std::arch::x86_64::*;
-use std::mem::*;
-#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-use std::ptr;
 
 pub static RAV1E_INTRA_MODES: &[PredictionMode] = &[
   PredictionMode::DC_PRED,
@@ -210,34 +210,51 @@ impl PredictionMode {
 
     match mode {
       PredictionMode::DC_PRED => match (x, y) {
-        (0, 0) => B::pred_dc_128(dst, bit_depth),
-        (_, 0) => B::pred_dc_left(dst, above_slice, left_slice),
-        (0, _) => B::pred_dc_top(dst, above_slice, left_slice),
-        _ => B::pred_dc(dst, above_slice, left_slice),
+        (0, 0) => <B as Intra<T>>::pred_dc_128(dst, bit_depth),
+        (_, 0) => <B as Intra<T>>::pred_dc_left(dst, above_slice, left_slice),
+        (0, _) => <B as Intra<T>>::pred_dc_top(dst, above_slice, left_slice),
+        _ => <B as Intra<T>>::pred_dc(dst, above_slice, left_slice),
       },
       PredictionMode::UV_CFL_PRED => match (x, y) {
-        (0, 0) => B::pred_cfl_128(dst, &ac, alpha, bit_depth),
-        (_, 0) => {
-          B::pred_cfl_left(dst, &ac, alpha, bit_depth, above_slice, left_slice)
-        }
-        (0, _) => {
-          B::pred_cfl_top(dst, &ac, alpha, bit_depth, above_slice, left_slice)
-        }
-        _ => B::pred_cfl(dst, &ac, alpha, bit_depth, above_slice, left_slice),
+        (0, 0) => <B as Intra<T>>::pred_cfl_128(dst, &ac, alpha, bit_depth),
+        (_, 0) => <B as Intra<T>>::pred_cfl_left(
+          dst,
+          &ac,
+          alpha,
+          bit_depth,
+          above_slice,
+          left_slice,
+        ),
+        (0, _) => <B as Intra<T>>::pred_cfl_top(
+          dst,
+          &ac,
+          alpha,
+          bit_depth,
+          above_slice,
+          left_slice,
+        ),
+        _ => <B as Intra<T>>::pred_cfl(
+          dst,
+          &ac,
+          alpha,
+          bit_depth,
+          above_slice,
+          left_slice,
+        ),
       },
-      PredictionMode::H_PRED => B::pred_h(dst, left_slice),
-      PredictionMode::V_PRED => B::pred_v(dst, above_slice),
+      PredictionMode::H_PRED => <B as Intra<T>>::pred_h(dst, left_slice),
+      PredictionMode::V_PRED => <B as Intra<T>>::pred_v(dst, above_slice),
       PredictionMode::PAETH_PRED => {
-        B::pred_paeth(dst, above_slice, left_slice, top_left[0])
+        <B as Intra<T>>::pred_paeth(dst, above_slice, left_slice, top_left[0])
       }
       PredictionMode::SMOOTH_PRED => {
-        B::pred_smooth(dst, above_slice, left_slice)
+        <B as Intra<T>>::pred_smooth(dst, above_slice, left_slice)
       }
       PredictionMode::SMOOTH_H_PRED => {
-        B::pred_smooth_h(dst, above_slice, left_slice)
+        <B as Intra<T>>::pred_smooth_h(dst, above_slice, left_slice)
       }
       PredictionMode::SMOOTH_V_PRED => {
-        B::pred_smooth_v(dst, above_slice, left_slice)
+        <B as Intra<T>>::pred_smooth_v(dst, above_slice, left_slice)
       }
       PredictionMode::D45_PRED => B::pred_directional(
         dst,
@@ -518,7 +535,7 @@ macro_rules! block_dimension {
         const H: usize = $H;
       }
 
-      impl<T: Pixel> Intra<T> for [<Block $W x $H>] {}
+      impl<T: Pixel> native::Intra<T> for [<Block $W x $H>] {}
     }
   };
 }
@@ -548,758 +565,439 @@ fn get_scaled_luma_q0(alpha_q3: i16, ac_pred_q3: i16) -> i32 {
   }
 }
 
-#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-macro_rules! decl_angular_ipred_fn {
-  ($f:ident) => {
-    extern {
-      fn $f(
-        dst: *mut u8, stride: libc::ptrdiff_t, topleft: *const u8,
-        width: libc::c_int, height: libc::c_int, angle: libc::c_int,
-      );
-    }
+pub(crate) mod native {
+  use crate::predict::{
+    get_scaled_luma_q0, sm_weight_arrays, sm_weight_log2_scale, Dim,
   };
-}
+  use crate::tiling::PlaneRegionMut;
+  use crate::util::round_shift;
+  use crate::Pixel;
+  use std::mem::size_of;
 
-#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-decl_angular_ipred_fn!(rav1e_ipred_dc_avx2);
-#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-decl_angular_ipred_fn!(rav1e_ipred_dc_128_avx2);
-#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-decl_angular_ipred_fn!(rav1e_ipred_dc_left_avx2);
-#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-decl_angular_ipred_fn!(rav1e_ipred_dc_top_avx2);
-#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-decl_angular_ipred_fn!(rav1e_ipred_h_avx2);
-#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-decl_angular_ipred_fn!(rav1e_ipred_v_avx2);
-#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-decl_angular_ipred_fn!(rav1e_ipred_paeth_avx2);
-#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-decl_angular_ipred_fn!(rav1e_ipred_smooth_avx2);
-#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-decl_angular_ipred_fn!(rav1e_ipred_smooth_h_avx2);
-#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-decl_angular_ipred_fn!(rav1e_ipred_smooth_v_avx2);
+  pub trait Intra<T>: Dim
+  where
+    T: Pixel,
+  {
+    fn pred_dc(output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T]) {
+      let edges = left[..Self::H].iter().chain(above[..Self::W].iter());
+      let len = (Self::W + Self::H) as u32;
+      let avg = (edges.fold(0u32, |acc, &v| {
+        let v: u32 = v.into();
+        v + acc
+      }) + (len >> 1))
+        / len;
+      let avg = T::cast_from(avg);
 
-#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-macro_rules! decl_cfl_pred_fn {
-  ($f:ident) => {
-    extern {
-      fn $f(
-        dst: *mut u8, stride: libc::ptrdiff_t, topleft: *const u8,
-        width: libc::c_int, height: libc::c_int, ac: *const u8,
-        alpha: libc::c_int,
-      );
-    }
-  };
-}
-
-#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-decl_cfl_pred_fn!(rav1e_ipred_cfl_avx2);
-#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-decl_cfl_pred_fn!(rav1e_ipred_cfl_128_avx2);
-#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-decl_cfl_pred_fn!(rav1e_ipred_cfl_left_avx2);
-#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-decl_cfl_pred_fn!(rav1e_ipred_cfl_top_avx2);
-
-pub trait Intra<T>: Dim
-where
-  T: Pixel,
-{
-  fn pred_dc(output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T]) {
-    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-    {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-        return unsafe {
-          rav1e_ipred_dc_avx2(
-            output.data_ptr_mut() as *mut _,
-            output.plane_cfg.stride as libc::ptrdiff_t,
-            above.as_ptr().offset(-1) as *const _,
-            Self::W as libc::c_int,
-            Self::H as libc::c_int,
-            0,
-          )
-        };
-      }
-    }
-    let edges = left[..Self::H].iter().chain(above[..Self::W].iter());
-    let len = (Self::W + Self::H) as u32;
-    let avg = (edges.fold(0u32, |acc, &v| {
-      let v: u32 = v.into();
-      v + acc
-    }) + (len >> 1))
-      / len;
-    let avg = T::cast_from(avg);
-
-    for line in output.rows_iter_mut().take(Self::H) {
-      for v in &mut line[..Self::W] {
-        *v = avg;
-      }
-    }
-  }
-
-  fn pred_dc_128(output: &mut PlaneRegionMut<'_, T>, bit_depth: usize) {
-    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-    {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-        return unsafe {
-          rav1e_ipred_dc_128_avx2(
-            output.data_ptr_mut() as *mut _,
-            output.plane_cfg.stride as libc::ptrdiff_t,
-            ptr::null(),
-            Self::W as libc::c_int,
-            Self::H as libc::c_int,
-            0,
-          )
-        };
-      }
-    }
-    let v = T::cast_from(128u32 << (bit_depth - 8));
-    for y in 0..Self::H {
-      for x in 0..Self::W {
-        output[y][x] = v;
-      }
-    }
-  }
-
-  fn pred_dc_left(
-    output: &mut PlaneRegionMut<'_, T>, _above: &[T], left: &[T],
-  ) {
-    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-    {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-        return unsafe {
-          rav1e_ipred_dc_left_avx2(
-            output.data_ptr_mut() as *mut _,
-            output.plane_cfg.stride as libc::ptrdiff_t,
-            left.as_ptr().add(Self::H) as *const _,
-            Self::W as libc::c_int,
-            Self::H as libc::c_int,
-            0,
-          )
-        };
-      }
-    }
-    let sum = left[..Self::H].iter().fold(0u32, |acc, &v| {
-      let v: u32 = v.into();
-      v + acc
-    });
-    let avg = T::cast_from((sum + (Self::H >> 1) as u32) / Self::H as u32);
-    for line in output.rows_iter_mut().take(Self::H) {
-      line[..Self::W].iter_mut().for_each(|v| *v = avg);
-    }
-  }
-
-  fn pred_dc_top(
-    output: &mut PlaneRegionMut<'_, T>, above: &[T], _left: &[T],
-  ) {
-    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-    {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-        return unsafe {
-          rav1e_ipred_dc_top_avx2(
-            output.data_ptr_mut() as *mut _,
-            output.plane_cfg.stride as libc::ptrdiff_t,
-            above.as_ptr().offset(-1) as *const _,
-            Self::W as libc::c_int,
-            Self::H as libc::c_int,
-            0,
-          )
-        };
-      }
-    }
-    let sum = above[..Self::W].iter().fold(0u32, |acc, &v| {
-      let v: u32 = v.into();
-      v + acc
-    });
-    let avg = T::cast_from((sum + (Self::W >> 1) as u32) / Self::W as u32);
-    for line in output.rows_iter_mut().take(Self::H) {
-      line[..Self::W].iter_mut().for_each(|v| *v = avg);
-    }
-  }
-
-  fn pred_h(output: &mut PlaneRegionMut<'_, T>, left: &[T]) {
-    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-    {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-        return unsafe {
-          rav1e_ipred_h_avx2(
-            output.data_ptr_mut() as *mut _,
-            output.plane_cfg.stride as libc::ptrdiff_t,
-            left.as_ptr().add(Self::H) as *const _,
-            Self::W as libc::c_int,
-            Self::H as libc::c_int,
-            0,
-          )
-        };
-      }
-    }
-    for (line, l) in output.rows_iter_mut().zip(left[..Self::H].iter().rev()) {
-      for v in &mut line[..Self::W] {
-        *v = *l;
-      }
-    }
-  }
-
-  fn pred_v(output: &mut PlaneRegionMut<'_, T>, above: &[T]) {
-    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-    {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-        return unsafe {
-          rav1e_ipred_v_avx2(
-            output.data_ptr_mut() as *mut _,
-            output.plane_cfg.stride as libc::ptrdiff_t,
-            above.as_ptr().offset(-1) as *const _,
-            Self::W as libc::c_int,
-            Self::H as libc::c_int,
-            0,
-          )
-        };
-      }
-    }
-    for line in output.rows_iter_mut().take(Self::H) {
-      line[..Self::W].clone_from_slice(&above[..Self::W])
-    }
-  }
-
-  fn pred_paeth(
-    output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T], above_left: T,
-  ) {
-    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-    {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-        return unsafe {
-          rav1e_ipred_paeth_avx2(
-            output.data_ptr_mut() as *mut _,
-            output.plane_cfg.stride as libc::ptrdiff_t,
-            above.as_ptr().offset(-1) as *const _,
-            Self::W as libc::c_int,
-            Self::H as libc::c_int,
-            0,
-          )
-        };
-      }
-    }
-    for r in 0..Self::H {
-      let row = &mut output[r];
-      for c in 0..Self::W {
-        // Top-left pixel is fixed in libaom
-        let raw_top_left: i32 = above_left.into();
-        let raw_left: i32 = left[Self::H - 1 - r].into();
-        let raw_top: i32 = above[c].into();
-
-        let p_base = raw_top + raw_left - raw_top_left;
-        let p_left = (p_base - raw_left).abs();
-        let p_top = (p_base - raw_top).abs();
-        let p_top_left = (p_base - raw_top_left).abs();
-
-        // Return nearest to base of left, top and top_left
-        if p_left <= p_top && p_left <= p_top_left {
-          row[c] = T::cast_from(raw_left);
-        } else if p_top <= p_top_left {
-          row[c] = T::cast_from(raw_top);
-        } else {
-          row[c] = T::cast_from(raw_top_left);
+      for line in output.rows_iter_mut().take(Self::H) {
+        for v in &mut line[..Self::W] {
+          *v = avg;
         }
       }
     }
-  }
 
-  fn pred_smooth(output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T]) {
-    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-    {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-        return unsafe {
-          rav1e_ipred_smooth_avx2(
-            output.data_ptr_mut() as *mut _,
-            output.plane_cfg.stride as libc::ptrdiff_t,
-            above.as_ptr().offset(-1) as *const _,
-            Self::W as libc::c_int,
-            Self::H as libc::c_int,
-            0,
-          )
-        };
-      }
-    }
-    let below_pred = left[0]; // estimated by bottom-left pixel
-    let right_pred = above[Self::W - 1]; // estimated by top-right pixel
-    let sm_weights_w = &sm_weight_arrays[Self::W..];
-    let sm_weights_h = &sm_weight_arrays[Self::H..];
-
-    let log2_scale = 1 + sm_weight_log2_scale;
-    let scale = 1_u16 << sm_weight_log2_scale;
-
-    // Weights sanity checks
-    assert!((sm_weights_w[0] as u16) < scale);
-    assert!((sm_weights_h[0] as u16) < scale);
-    assert!((scale - sm_weights_w[Self::W - 1] as u16) < scale);
-    assert!((scale - sm_weights_h[Self::H - 1] as u16) < scale);
-    // ensures no overflow when calculating predictor
-    assert!(log2_scale as usize + size_of::<T>() < 31);
-
-    for r in 0..Self::H {
-      let row = &mut output[r];
-      for c in 0..Self::W {
-        let pixels = [above[c], below_pred, left[Self::H - 1 - r], right_pred];
-
-        let weights = [
-          sm_weights_h[r] as u16,
-          scale - sm_weights_h[r] as u16,
-          sm_weights_w[c] as u16,
-          scale - sm_weights_w[c] as u16,
-        ];
-
-        assert!(
-          scale >= (sm_weights_h[r] as u16)
-            && scale >= (sm_weights_w[c] as u16)
-        );
-
-        // Sum up weighted pixels
-        let mut this_pred: u32 = weights
-          .iter()
-          .zip(pixels.iter())
-          .map(|(w, p)| {
-            let p: u32 = (*p).into();
-            (*w as u32) * p
-          })
-          .sum();
-        this_pred = (this_pred + (1 << (log2_scale - 1))) >> log2_scale;
-
-        row[c] = T::cast_from(this_pred);
-      }
-    }
-  }
-
-  fn pred_smooth_h(
-    output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
-  ) {
-    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-    {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-        return unsafe {
-          rav1e_ipred_smooth_h_avx2(
-            output.data_ptr_mut() as *mut _,
-            output.plane_cfg.stride as libc::ptrdiff_t,
-            above.as_ptr().offset(-1) as *const _,
-            Self::W as libc::c_int,
-            Self::H as libc::c_int,
-            0,
-          )
-        };
-      }
-    }
-    let right_pred = above[Self::W - 1]; // estimated by top-right pixel
-    let sm_weights = &sm_weight_arrays[Self::W..];
-
-    let log2_scale = sm_weight_log2_scale;
-    let scale = 1_u16 << sm_weight_log2_scale;
-
-    // Weights sanity checks
-    assert!((sm_weights[0] as u16) < scale);
-    assert!((scale - sm_weights[Self::W - 1] as u16) < scale);
-    // ensures no overflow when calculating predictor
-    assert!(log2_scale as usize + size_of::<T>() < 31);
-
-    for r in 0..Self::H {
-      let row = &mut output[r];
-      for c in 0..Self::W {
-        let pixels = [left[Self::H - 1 - r], right_pred];
-        let weights = [sm_weights[c] as u16, scale - sm_weights[c] as u16];
-
-        assert!(scale >= sm_weights[c] as u16);
-
-        let mut this_pred: u32 = weights
-          .iter()
-          .zip(pixels.iter())
-          .map(|(w, p)| {
-            let p: u32 = (*p).into();
-            (*w as u32) * p
-          })
-          .sum();
-        this_pred = (this_pred + (1 << (log2_scale - 1))) >> log2_scale;
-
-        row[c] = T::cast_from(this_pred);
-      }
-    }
-  }
-
-  fn pred_smooth_v(
-    output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
-  ) {
-    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-    {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-        return unsafe {
-          rav1e_ipred_smooth_v_avx2(
-            output.data_ptr_mut() as *mut _,
-            output.plane_cfg.stride as libc::ptrdiff_t,
-            above.as_ptr().offset(-1) as *const _,
-            Self::W as libc::c_int,
-            Self::H as libc::c_int,
-            0,
-          )
-        };
-      }
-    }
-    let below_pred = left[0]; // estimated by bottom-left pixel
-    let sm_weights = &sm_weight_arrays[Self::H..];
-
-    let log2_scale = sm_weight_log2_scale;
-    let scale = 1_u16 << sm_weight_log2_scale;
-
-    // Weights sanity checks
-    assert!((sm_weights[0] as u16) < scale);
-    assert!((scale - sm_weights[Self::H - 1] as u16) < scale);
-    // ensures no overflow when calculating predictor
-    assert!(log2_scale as usize + size_of::<T>() < 31);
-
-    for r in 0..Self::H {
-      let row = &mut output[r];
-      for c in 0..Self::W {
-        let pixels = [above[c], below_pred];
-        let weights = [sm_weights[r] as u16, scale - sm_weights[r] as u16];
-
-        assert!(scale >= sm_weights[r] as u16);
-
-        let mut this_pred: u32 = weights
-          .iter()
-          .zip(pixels.iter())
-          .map(|(w, p)| {
-            let p: u32 = (*p).into();
-            (*w as u32) * p
-          })
-          .sum();
-        this_pred = (this_pred + (1 << (log2_scale - 1))) >> log2_scale;
-
-        row[c] = T::cast_from(this_pred);
-      }
-    }
-  }
-
-  #[target_feature(enable = "ssse3")]
-  #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-  unsafe fn pred_cfl_ssse3(
-    output: *mut T, stride: usize, ac: *const i16, alpha: i16,
-    bit_depth: usize,
-  ) {
-    let alpha_sign = _mm_set1_epi16(alpha);
-    let alpha_q12 = _mm_slli_epi16(_mm_abs_epi16(alpha_sign), 9);
-    let dc_scalar: u32 = (*output).into();
-    let dc_q0 = _mm_set1_epi16(dc_scalar as i16);
-    let max = _mm_set1_epi16((1 << bit_depth) - 1);
-
-    for j in 0..Self::H {
-      let luma = ac.add(Self::W * j);
-      let line = output.add(stride * j);
-
-      let mut i = 0isize;
-      let mut last = _mm_setzero_si128();
-      while (i as usize) < Self::W {
-        let ac_q3 = _mm_loadu_si128(luma.offset(i) as *const _);
-        let ac_sign = _mm_sign_epi16(alpha_sign, ac_q3);
-        let abs_scaled_luma_q0 =
-          _mm_mulhrs_epi16(_mm_abs_epi16(ac_q3), alpha_q12);
-        let scaled_luma_q0 = _mm_sign_epi16(abs_scaled_luma_q0, ac_sign);
-        let pred = _mm_add_epi16(scaled_luma_q0, dc_q0);
-        if size_of::<T>() == 1 {
-          if Self::W < 16 {
-            let res = _mm_packus_epi16(pred, pred);
-            if Self::W == 4 {
-              *(line.offset(i) as *mut i32) = _mm_cvtsi128_si32(res);
-            } else {
-              _mm_storel_epi64(line.offset(i) as *mut _, res);
-            }
-          } else if (i & 15) == 0 {
-            last = pred;
-          } else {
-            let res = _mm_packus_epi16(last, pred);
-            _mm_storeu_si128(line.offset(i - 8) as *mut _, res);
-          }
-        } else {
-          let res =
-            _mm_min_epi16(max, _mm_max_epi16(pred, _mm_setzero_si128()));
-          if Self::W == 4 {
-            _mm_storel_epi64(line.offset(i) as *mut _, res);
-          } else {
-            _mm_storeu_si128(line.offset(i) as *mut _, res);
-          }
-        }
-        i += 8;
-      }
-    }
-  }
-
-  fn pred_cfl_inner(
-    output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16,
-    bit_depth: usize,
-  ) {
-    if alpha == 0 {
-      return;
-    }
-    assert!(32 >= Self::W);
-    assert!(ac.len() >= 32 * (Self::H - 1) + Self::W);
-    assert!(output.plane_cfg.stride >= Self::W);
-    assert!(output.rows_iter().len() >= Self::H);
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    {
-      if is_x86_feature_detected!("ssse3") {
-        return unsafe {
-          Self::pred_cfl_ssse3(
-            output.data_ptr_mut(),
-            output.plane_cfg.stride,
-            ac.as_ptr(),
-            alpha,
-            bit_depth,
-          )
-        };
-      }
-    }
-
-    let sample_max = (1 << bit_depth) - 1;
-    let avg: i32 = output[0][0].into();
-
-    for (line, luma) in
-      output.rows_iter_mut().zip(ac.chunks(Self::W)).take(Self::H)
-    {
-      for (v, &l) in line[..Self::W].iter_mut().zip(luma[..Self::W].iter()) {
-        *v = T::cast_from(
-          (avg + get_scaled_luma_q0(alpha, l)).max(0).min(sample_max),
-        );
-      }
-    }
-  }
-
-  fn pred_cfl(
-    output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16,
-    bit_depth: usize, above: &[T], left: &[T],
-  ) {
-    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-    {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-        return unsafe {
-          rav1e_ipred_cfl_avx2(
-            output.data_ptr_mut() as *mut _,
-            output.plane_cfg.stride as libc::ptrdiff_t,
-            above.as_ptr().offset(-1) as *const _,
-            Self::W as libc::c_int,
-            Self::H as libc::c_int,
-            ac.as_ptr() as *const _,
-            alpha as libc::c_int,
-          )
-        };
-      }
-    }
-    Self::pred_dc(output, above, left);
-    Self::pred_cfl_inner(output, &ac, alpha, bit_depth);
-  }
-
-  fn pred_cfl_128(
-    output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16,
-    bit_depth: usize,
-  ) {
-    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-    {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-        return unsafe {
-          rav1e_ipred_cfl_128_avx2(
-            output.data_ptr_mut() as *mut _,
-            output.plane_cfg.stride as libc::ptrdiff_t,
-            ptr::null(),
-            Self::W as libc::c_int,
-            Self::H as libc::c_int,
-            ac.as_ptr() as *const _,
-            alpha as libc::c_int,
-          )
-        };
-      }
-    }
-    Self::pred_dc_128(output, bit_depth);
-    Self::pred_cfl_inner(output, &ac, alpha, bit_depth);
-  }
-
-  fn pred_cfl_left(
-    output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16,
-    bit_depth: usize, above: &[T], left: &[T],
-  ) {
-    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-    {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-        return unsafe {
-          rav1e_ipred_cfl_left_avx2(
-            output.data_ptr_mut() as *mut _,
-            output.plane_cfg.stride as libc::ptrdiff_t,
-            above.as_ptr().offset(-1) as *const _,
-            Self::W as libc::c_int,
-            Self::H as libc::c_int,
-            ac.as_ptr() as *const _,
-            alpha as libc::c_int,
-          )
-        };
-      }
-    }
-    Self::pred_dc_left(output, above, left);
-    Self::pred_cfl_inner(output, &ac, alpha, bit_depth);
-  }
-
-  fn pred_cfl_top(
-    output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16,
-    bit_depth: usize, above: &[T], left: &[T],
-  ) {
-    #[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-    {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-        return unsafe {
-          rav1e_ipred_cfl_top_avx2(
-            output.data_ptr_mut() as *mut _,
-            output.plane_cfg.stride as libc::ptrdiff_t,
-            above.as_ptr().offset(-1) as *const _,
-            Self::W as libc::c_int,
-            Self::H as libc::c_int,
-            ac.as_ptr() as *const _,
-            alpha as libc::c_int,
-          )
-        };
-      }
-    }
-    Self::pred_dc_top(output, above, left);
-    Self::pred_cfl_inner(output, &ac, alpha, bit_depth);
-  }
-
-  fn pred_directional(
-    output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
-    top_left: &[T], angle: usize, bit_depth: usize,
-  ) {
-    let sample_max = ((1 << bit_depth) - 1) as i32;
-    let _angle_delta = 0;
-
-    let p_angle = angle; // TODO use Mode_to_Angle
-
-    let upsample_above = 0;
-    let upsample_left = 0;
-
-    let enable_intra_edge_filter = false; // FIXME
-
-    if enable_intra_edge_filter {
-      // TODO
-    }
-
-    fn dr_intra_derivative(p_angle: usize) -> usize {
-      match p_angle {
-        4 => 1023,
-        7 => 547,
-        10 => 372,
-        14 => 273,
-        17 => 215,
-        20 => 178,
-        23 => 151,
-        26 => 132,
-        29 => 116,
-        32 => 102,
-        36 => 90,
-        39 => 80,
-        42 => 71,
-        45 => 64,
-        48 => 57,
-        51 => 51,
-        54 => 45,
-        58 => 40,
-        61 => 35,
-        64 => 31,
-        67 => 27,
-        70 => 23,
-        73 => 19,
-        76 => 15,
-        81 => 11,
-        84 => 7,
-        87 => 3,
-        _ => 0,
-      }
-    }
-
-    let dx = if p_angle < 90 {
-      dr_intra_derivative(p_angle)
-    } else if p_angle > 90 && p_angle < 180 {
-      dr_intra_derivative(180 - p_angle)
-    } else {
-      0 // undefined
-    };
-
-    let dy = if p_angle > 90 && p_angle < 180 {
-      dr_intra_derivative(p_angle - 90)
-    } else if p_angle > 180 {
-      dr_intra_derivative(270 - p_angle)
-    } else {
-      0 // undefined
-    };
-
-    if p_angle < 90 {
-      for i in 0..Self::H {
-        let row = &mut output[i];
-        for j in 0..Self::W {
-          let idx = (i + 1) * dx;
-          let base = (idx >> (6 - upsample_above)) + (j << upsample_above);
-          let shift = (((idx << upsample_above) >> 1) & 31) as i32;
-          let max_base_x = (Self::H + Self::W - 1) << upsample_above;
-          let v = if base < max_base_x {
-            let a: i32 = above[base].into();
-            let b: i32 = above[base + 1].into();
-            round_shift(a * (32 - shift) + b * shift, 5)
-          } else {
-            let c: i32 = above[max_base_x].into();
-            c
-          }
-          .max(0)
-          .min(sample_max);
-          row[j] = T::cast_from(v);
+    fn pred_dc_128(output: &mut PlaneRegionMut<'_, T>, bit_depth: usize) {
+      let v = T::cast_from(128u32 << (bit_depth - 8));
+      for y in 0..Self::H {
+        for x in 0..Self::W {
+          output[y][x] = v;
         }
       }
-    } else if p_angle > 90 && p_angle < 180 {
-      for i in 0..Self::H {
-        let row = &mut output[i];
-        for j in 0..Self::W {
-          let idx = (j << 6) as isize - ((i + 1) * dx) as isize;
-          let base = idx >> (6 - upsample_above);
-          if base >= -(1 << upsample_above) {
+    }
+
+    fn pred_dc_left(
+      output: &mut PlaneRegionMut<'_, T>, _above: &[T], left: &[T],
+    ) {
+      let sum = left[..Self::H].iter().fold(0u32, |acc, &v| {
+        let v: u32 = v.into();
+        v + acc
+      });
+      let avg = T::cast_from((sum + (Self::H >> 1) as u32) / Self::H as u32);
+      for line in output.rows_iter_mut().take(Self::H) {
+        line[..Self::W].iter_mut().for_each(|v| *v = avg);
+      }
+    }
+
+    fn pred_dc_top(
+      output: &mut PlaneRegionMut<'_, T>, above: &[T], _left: &[T],
+    ) {
+      let sum = above[..Self::W].iter().fold(0u32, |acc, &v| {
+        let v: u32 = v.into();
+        v + acc
+      });
+      let avg = T::cast_from((sum + (Self::W >> 1) as u32) / Self::W as u32);
+      for line in output.rows_iter_mut().take(Self::H) {
+        line[..Self::W].iter_mut().for_each(|v| *v = avg);
+      }
+    }
+
+    fn pred_h(output: &mut PlaneRegionMut<'_, T>, left: &[T]) {
+      for (line, l) in output.rows_iter_mut().zip(left[..Self::H].iter().rev())
+      {
+        for v in &mut line[..Self::W] {
+          *v = *l;
+        }
+      }
+    }
+
+    fn pred_v(output: &mut PlaneRegionMut<'_, T>, above: &[T]) {
+      for line in output.rows_iter_mut().take(Self::H) {
+        line[..Self::W].clone_from_slice(&above[..Self::W])
+      }
+    }
+
+    fn pred_paeth(
+      output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
+      above_left: T,
+    ) {
+      for r in 0..Self::H {
+        let row = &mut output[r];
+        for c in 0..Self::W {
+          // Top-left pixel is fixed in libaom
+          let raw_top_left: i32 = above_left.into();
+          let raw_left: i32 = left[Self::H - 1 - r].into();
+          let raw_top: i32 = above[c].into();
+
+          let p_base = raw_top + raw_left - raw_top_left;
+          let p_left = (p_base - raw_left).abs();
+          let p_top = (p_base - raw_top).abs();
+          let p_top_left = (p_base - raw_top_left).abs();
+
+          // Return nearest to base of left, top and top_left
+          if p_left <= p_top && p_left <= p_top_left {
+            row[c] = T::cast_from(raw_left);
+          } else if p_top <= p_top_left {
+            row[c] = T::cast_from(raw_top);
+          } else {
+            row[c] = T::cast_from(raw_top_left);
+          }
+        }
+      }
+    }
+
+    fn pred_smooth(
+      output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
+    ) {
+      let below_pred = left[0]; // estimated by bottom-left pixel
+      let right_pred = above[Self::W - 1]; // estimated by top-right pixel
+      let sm_weights_w = &sm_weight_arrays[Self::W..];
+      let sm_weights_h = &sm_weight_arrays[Self::H..];
+
+      let log2_scale = 1 + sm_weight_log2_scale;
+      let scale = 1_u16 << sm_weight_log2_scale;
+
+      // Weights sanity checks
+      assert!((sm_weights_w[0] as u16) < scale);
+      assert!((sm_weights_h[0] as u16) < scale);
+      assert!((scale - sm_weights_w[Self::W - 1] as u16) < scale);
+      assert!((scale - sm_weights_h[Self::H - 1] as u16) < scale);
+      // ensures no overflow when calculating predictor
+      assert!(log2_scale as usize + size_of::<T>() < 31);
+
+      for r in 0..Self::H {
+        let row = &mut output[r];
+        for c in 0..Self::W {
+          let pixels =
+            [above[c], below_pred, left[Self::H - 1 - r], right_pred];
+
+          let weights = [
+            sm_weights_h[r] as u16,
+            scale - sm_weights_h[r] as u16,
+            sm_weights_w[c] as u16,
+            scale - sm_weights_w[c] as u16,
+          ];
+
+          assert!(
+            scale >= (sm_weights_h[r] as u16)
+              && scale >= (sm_weights_w[c] as u16)
+          );
+
+          // Sum up weighted pixels
+          let mut this_pred: u32 = weights
+            .iter()
+            .zip(pixels.iter())
+            .map(|(w, p)| {
+              let p: u32 = (*p).into();
+              (*w as u32) * p
+            })
+            .sum();
+          this_pred = (this_pred + (1 << (log2_scale - 1))) >> log2_scale;
+
+          row[c] = T::cast_from(this_pred);
+        }
+      }
+    }
+
+    fn pred_smooth_h(
+      output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
+    ) {
+      let right_pred = above[Self::W - 1]; // estimated by top-right pixel
+      let sm_weights = &sm_weight_arrays[Self::W..];
+
+      let log2_scale = sm_weight_log2_scale;
+      let scale = 1_u16 << sm_weight_log2_scale;
+
+      // Weights sanity checks
+      assert!((sm_weights[0] as u16) < scale);
+      assert!((scale - sm_weights[Self::W - 1] as u16) < scale);
+      // ensures no overflow when calculating predictor
+      assert!(log2_scale as usize + size_of::<T>() < 31);
+
+      for r in 0..Self::H {
+        let row = &mut output[r];
+        for c in 0..Self::W {
+          let pixels = [left[Self::H - 1 - r], right_pred];
+          let weights = [sm_weights[c] as u16, scale - sm_weights[c] as u16];
+
+          assert!(scale >= sm_weights[c] as u16);
+
+          let mut this_pred: u32 = weights
+            .iter()
+            .zip(pixels.iter())
+            .map(|(w, p)| {
+              let p: u32 = (*p).into();
+              (*w as u32) * p
+            })
+            .sum();
+          this_pred = (this_pred + (1 << (log2_scale - 1))) >> log2_scale;
+
+          row[c] = T::cast_from(this_pred);
+        }
+      }
+    }
+
+    fn pred_smooth_v(
+      output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
+    ) {
+      let below_pred = left[0]; // estimated by bottom-left pixel
+      let sm_weights = &sm_weight_arrays[Self::H..];
+
+      let log2_scale = sm_weight_log2_scale;
+      let scale = 1_u16 << sm_weight_log2_scale;
+
+      // Weights sanity checks
+      assert!((sm_weights[0] as u16) < scale);
+      assert!((scale - sm_weights[Self::H - 1] as u16) < scale);
+      // ensures no overflow when calculating predictor
+      assert!(log2_scale as usize + size_of::<T>() < 31);
+
+      for r in 0..Self::H {
+        let row = &mut output[r];
+        for c in 0..Self::W {
+          let pixels = [above[c], below_pred];
+          let weights = [sm_weights[r] as u16, scale - sm_weights[r] as u16];
+
+          assert!(scale >= sm_weights[r] as u16);
+
+          let mut this_pred: u32 = weights
+            .iter()
+            .zip(pixels.iter())
+            .map(|(w, p)| {
+              let p: u32 = (*p).into();
+              (*w as u32) * p
+            })
+            .sum();
+          this_pred = (this_pred + (1 << (log2_scale - 1))) >> log2_scale;
+
+          row[c] = T::cast_from(this_pred);
+        }
+      }
+    }
+
+    fn pred_cfl_inner(
+      output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16,
+      bit_depth: usize,
+    ) {
+      if alpha == 0 {
+        return;
+      }
+      assert!(32 >= Self::W);
+      assert!(ac.len() >= 32 * (Self::H - 1) + Self::W);
+      assert!(output.plane_cfg.stride >= Self::W);
+      assert!(output.rows_iter().len() >= Self::H);
+
+      let sample_max = (1 << bit_depth) - 1;
+      let avg: i32 = output[0][0].into();
+
+      for (line, luma) in
+        output.rows_iter_mut().zip(ac.chunks(Self::W)).take(Self::H)
+      {
+        for (v, &l) in line[..Self::W].iter_mut().zip(luma[..Self::W].iter()) {
+          *v = T::cast_from(
+            (avg + get_scaled_luma_q0(alpha, l)).max(0).min(sample_max),
+          );
+        }
+      }
+    }
+
+    fn pred_cfl(
+      output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16,
+      bit_depth: usize, above: &[T], left: &[T],
+    ) {
+      Self::pred_dc(output, above, left);
+      Self::pred_cfl_inner(output, &ac, alpha, bit_depth);
+    }
+
+    fn pred_cfl_128(
+      output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16,
+      bit_depth: usize,
+    ) {
+      Self::pred_dc_128(output, bit_depth);
+      Self::pred_cfl_inner(output, &ac, alpha, bit_depth);
+    }
+
+    fn pred_cfl_left(
+      output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16,
+      bit_depth: usize, above: &[T], left: &[T],
+    ) {
+      Self::pred_dc_left(output, above, left);
+      Self::pred_cfl_inner(output, &ac, alpha, bit_depth);
+    }
+
+    fn pred_cfl_top(
+      output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16,
+      bit_depth: usize, above: &[T], left: &[T],
+    ) {
+      Self::pred_dc_top(output, above, left);
+      Self::pred_cfl_inner(output, &ac, alpha, bit_depth);
+    }
+
+    fn pred_directional(
+      output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
+      top_left: &[T], angle: usize, bit_depth: usize,
+    ) {
+      let sample_max = ((1 << bit_depth) - 1) as i32;
+      let _angle_delta = 0;
+
+      let p_angle = angle; // TODO use Mode_to_Angle
+
+      let upsample_above = 0;
+      let upsample_left = 0;
+
+      let enable_intra_edge_filter = false; // FIXME
+
+      if enable_intra_edge_filter {
+        // TODO
+      }
+
+      fn dr_intra_derivative(p_angle: usize) -> usize {
+        match p_angle {
+          4 => 1023,
+          7 => 547,
+          10 => 372,
+          14 => 273,
+          17 => 215,
+          20 => 178,
+          23 => 151,
+          26 => 132,
+          29 => 116,
+          32 => 102,
+          36 => 90,
+          39 => 80,
+          42 => 71,
+          45 => 64,
+          48 => 57,
+          51 => 51,
+          54 => 45,
+          58 => 40,
+          61 => 35,
+          64 => 31,
+          67 => 27,
+          70 => 23,
+          73 => 19,
+          76 => 15,
+          81 => 11,
+          84 => 7,
+          87 => 3,
+          _ => 0,
+        }
+      }
+
+      let dx = if p_angle < 90 {
+        dr_intra_derivative(p_angle)
+      } else if p_angle > 90 && p_angle < 180 {
+        dr_intra_derivative(180 - p_angle)
+      } else {
+        0 // undefined
+      };
+
+      let dy = if p_angle > 90 && p_angle < 180 {
+        dr_intra_derivative(p_angle - 90)
+      } else if p_angle > 180 {
+        dr_intra_derivative(270 - p_angle)
+      } else {
+        0 // undefined
+      };
+
+      if p_angle < 90 {
+        for i in 0..Self::H {
+          let row = &mut output[i];
+          for j in 0..Self::W {
+            let idx = (i + 1) * dx;
+            let base = (idx >> (6 - upsample_above)) + (j << upsample_above);
             let shift = (((idx << upsample_above) >> 1) & 31) as i32;
-            let a: i32 =
-              if base < 0 { top_left[0] } else { above[base as usize] }.into();
-            let b: i32 = above[(base + 1) as usize].into();
-            let v = round_shift(a * (32 - shift) + b * shift, 5)
-              .max(0)
-              .min(sample_max);
-            row[j] = T::cast_from(v);
-          } else {
-            let idx = (i << 6) as isize - ((j + 1) * dy) as isize;
-            let base = idx >> (6 - upsample_left);
-            let shift = (((idx << upsample_left) >> 1) & 31) as i32;
-            let a: i32 = if base < 0 {
-              top_left[0]
+            let max_base_x = (Self::H + Self::W - 1) << upsample_above;
+            let v = if base < max_base_x {
+              let a: i32 = above[base].into();
+              let b: i32 = above[base + 1].into();
+              round_shift(a * (32 - shift) + b * shift, 5)
             } else {
-              left[Self::W + Self::H - 1 - base as usize]
+              let c: i32 = above[max_base_x].into();
+              c
             }
-            .into();
-            let b: i32 = left[Self::W + Self::H - (2 + base) as usize].into();
-            let v = round_shift(a * (32 - shift) + b * shift, 5)
-              .max(0)
-              .min(sample_max);
-            row[j] = T::cast_from(v);
-          }
-        }
-      }
-    } else if p_angle > 180 {
-      for i in 0..Self::H {
-        let row = &mut output[i];
-        for j in 0..Self::W {
-          let idx = (j + 1) * dy;
-          let base = (idx >> (6 - upsample_left)) + (i << upsample_left);
-          let shift = (((idx << upsample_left) >> 1) & 31) as i32;
-          let a: i32 = left[Self::W + Self::H - 1 - base].into();
-          let b: i32 = left[Self::W + Self::H - 2 - base].into();
-          let v = round_shift(a * (32 - shift) + b * shift, 5)
             .max(0)
             .min(sample_max);
-          row[j] = T::cast_from(v);
+            row[j] = T::cast_from(v);
+          }
+        }
+      } else if p_angle > 90 && p_angle < 180 {
+        for i in 0..Self::H {
+          let row = &mut output[i];
+          for j in 0..Self::W {
+            let idx = (j << 6) as isize - ((i + 1) * dx) as isize;
+            let base = idx >> (6 - upsample_above);
+            if base >= -(1 << upsample_above) {
+              let shift = (((idx << upsample_above) >> 1) & 31) as i32;
+              let a: i32 =
+                if base < 0 { top_left[0] } else { above[base as usize] }
+                  .into();
+              let b: i32 = above[(base + 1) as usize].into();
+              let v = round_shift(a * (32 - shift) + b * shift, 5)
+                .max(0)
+                .min(sample_max);
+              row[j] = T::cast_from(v);
+            } else {
+              let idx = (i << 6) as isize - ((j + 1) * dy) as isize;
+              let base = idx >> (6 - upsample_left);
+              let shift = (((idx << upsample_left) >> 1) & 31) as i32;
+              let a: i32 = if base < 0 {
+                top_left[0]
+              } else {
+                left[Self::W + Self::H - 1 - base as usize]
+              }
+              .into();
+              let b: i32 =
+                left[Self::W + Self::H - (2 + base) as usize].into();
+              let v = round_shift(a * (32 - shift) + b * shift, 5)
+                .max(0)
+                .min(sample_max);
+              row[j] = T::cast_from(v);
+            }
+          }
+        }
+      } else if p_angle > 180 {
+        for i in 0..Self::H {
+          let row = &mut output[i];
+          for j in 0..Self::W {
+            let idx = (j + 1) * dy;
+            let base = (idx >> (6 - upsample_left)) + (i << upsample_left);
+            let shift = (((idx << upsample_left) >> 1) & 31) as i32;
+            let a: i32 = left[Self::W + Self::H - 1 - base].into();
+            let b: i32 = left[Self::W + Self::H - 2 - base].into();
+            let v = round_shift(a * (32 - shift) + b * shift, 5)
+              .max(0)
+              .min(sample_max);
+            row[j] = T::cast_from(v);
+          }
         }
       }
     }

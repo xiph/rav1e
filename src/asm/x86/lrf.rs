@@ -10,6 +10,122 @@
 use crate::frame::PlaneSlice;
 use crate::lrf::*;
 use crate::util::Pixel;
+#[cfg(target_arch = "x86")]
+use std::arch::x86::*;
+#[cfg(target_arch = "x86_64")]
+use std::arch::x86_64::*;
+use std::mem;
+
+// computes an intermediate (ab) row for stripe_w + 2 columns at row y
+#[inline]
+pub fn sgrproj_box_ab_r1(
+  af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
+  iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
+) {
+  if is_x86_feature_detected!("avx2") {
+    return unsafe {
+      sgrproj_box_ab_r1_avx2(
+        af,
+        bf,
+        iimg,
+        iimg_sq,
+        iimg_stride,
+        y,
+        stripe_w,
+        s,
+        bdm8,
+      );
+    };
+  }
+
+  native::sgrproj_box_ab_r1(
+    af,
+    bf,
+    iimg,
+    iimg_sq,
+    iimg_stride,
+    y,
+    stripe_w,
+    s,
+    bdm8,
+  );
+}
+
+// computes an intermediate (ab) row for stripe_w + 2 columns at row y
+#[inline]
+pub fn sgrproj_box_ab_r2(
+  af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
+  iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
+) {
+  if is_x86_feature_detected!("avx2") {
+    return unsafe {
+      sgrproj_box_ab_r2_avx2(
+        af,
+        bf,
+        iimg,
+        iimg_sq,
+        iimg_stride,
+        y,
+        stripe_w,
+        s,
+        bdm8,
+      );
+    };
+  }
+
+  native::sgrproj_box_ab_r2(
+    af,
+    bf,
+    iimg,
+    iimg_sq,
+    iimg_stride,
+    y,
+    stripe_w,
+    s,
+    bdm8,
+  );
+}
+
+#[inline]
+pub fn sgrproj_box_f_r0<T: Pixel>(
+  f: &mut [u32], y: usize, w: usize, cdeffed: &PlaneSlice<T>,
+) {
+  if is_x86_feature_detected!("avx2") {
+    return unsafe {
+      sgrproj_box_f_r0_avx2(f, y, w, cdeffed);
+    };
+  }
+
+  native::sgrproj_box_f_r0(f, y, w, cdeffed);
+}
+
+#[inline]
+pub fn sgrproj_box_f_r1<T: Pixel>(
+  af: &[&[u32]; 3], bf: &[&[u32]; 3], f: &mut [u32], y: usize, w: usize,
+  cdeffed: &PlaneSlice<T>,
+) {
+  if is_x86_feature_detected!("avx2") {
+    return unsafe {
+      sgrproj_box_f_r1_avx2(af, bf, f, y, w, cdeffed);
+    };
+  }
+
+  native::sgrproj_box_f_r1(af, bf, f, y, w, cdeffed);
+}
+
+#[inline]
+pub fn sgrproj_box_f_r2<T: Pixel>(
+  af: &[&[u32]; 2], bf: &[&[u32]; 2], f0: &mut [u32], f1: &mut [u32],
+  y: usize, w: usize, cdeffed: &PlaneSlice<T>,
+) {
+  if is_x86_feature_detected!("avx2") {
+    return unsafe {
+      sgrproj_box_f_r2_avx2(af, bf, f0, f1, y, w, cdeffed);
+    };
+  }
+
+  native::sgrproj_box_f_r2(af, bf, f0, f1, y, w, cdeffed);
+}
 
 static X_BY_XPLUS1: [u32; 256] = [
   // Special case: Map 0 -> 1 (corresponding to a value of 1/256)
@@ -34,24 +150,17 @@ static X_BY_XPLUS1: [u32; 256] = [
 ];
 
 #[inline]
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "avx2")]
 unsafe fn sgrproj_box_ab_8_avx2(
   r: usize, af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
   iimg_stride: usize, x: usize, y: usize, s: u32, bdm8: usize,
 ) {
-  #[cfg(target_arch = "x86")]
-  use std::arch::x86::*;
-  #[cfg(target_arch = "x86_64")]
-  use std::arch::x86_64::*;
-
   let d: usize = r * 2 + 1;
   let n: i32 = (d * d) as i32;
   let one_over_n = if r == 1 { 455 } else { 164 };
 
   // Using an integral image, compute the sum of a square region
   #[inline]
-  #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
   #[target_feature(enable = "avx2")]
   unsafe fn get_integral_square_avx2(
     iimg: &[u32], stride: usize, x: usize, y: usize, size: usize,
@@ -117,7 +226,6 @@ unsafe fn sgrproj_box_ab_8_avx2(
   _mm256_storeu_si256(bf.as_mut_ptr().add(x) as *mut _, b);
 }
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
   af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
@@ -139,7 +247,7 @@ pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
       );
     } else {
       // finish using scalar
-      sgrproj_box_ab_internal(
+      native::sgrproj_box_ab_internal(
         1,
         af,
         bf,
@@ -158,7 +266,7 @@ pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
   {
     let mut af_ref: Vec<u32> = vec![0; stripe_w + 2];
     let mut bf_ref: Vec<u32> = vec![0; stripe_w + 2];
-    sgrproj_box_ab_internal(
+    native::sgrproj_box_ab_internal(
       1,
       &mut af_ref,
       &mut bf_ref,
@@ -171,12 +279,11 @@ pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
       s,
       bdm8,
     );
-    assert_eq!(af[..stripe_w + 2], af_ref[..]);
-    assert_eq!(bf[..stripe_w + 2], bf_ref[..]);
+    assert_eq!(&af[..stripe_w + 2], &af_ref[..]);
+    assert_eq!(&bf[..stripe_w + 2], &bf_ref[..]);
   }
 }
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
   af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
@@ -198,7 +305,7 @@ pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
       );
     } else {
       // finish using scalar
-      sgrproj_box_ab_internal(
+      native::sgrproj_box_ab_internal(
         2,
         af,
         bf,
@@ -217,7 +324,7 @@ pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
   {
     let mut af_ref: Vec<u32> = vec![0; stripe_w + 2];
     let mut bf_ref: Vec<u32> = vec![0; stripe_w + 2];
-    sgrproj_box_ab_internal(
+    native::sgrproj_box_ab_internal(
       2,
       &mut af_ref,
       &mut bf_ref,
@@ -230,22 +337,16 @@ pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
       s,
       bdm8,
     );
-    assert_eq!(af[..stripe_w + 2], af_ref[..]);
-    assert_eq!(bf[..stripe_w + 2], bf_ref[..]);
+    assert_eq!(&af[..stripe_w + 2], &af_ref[..]);
+    assert_eq!(&bf[..stripe_w + 2], &bf_ref[..]);
   }
 }
 
 #[inline]
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "avx2")]
 unsafe fn sgrproj_box_f_r0_8_avx2<T: Pixel>(
   f: &mut [u32], x: usize, y: usize, cdeffed: &PlaneSlice<T>,
 ) {
-  #[cfg(target_arch = "x86")]
-  use std::arch::x86::*;
-  #[cfg(target_arch = "x86_64")]
-  use std::arch::x86_64::*;
-  use std::mem;
   _mm256_storeu_si256(
     f.as_mut_ptr().add(x) as *mut _,
     _mm256_slli_epi32(
@@ -263,7 +364,6 @@ unsafe fn sgrproj_box_f_r0_8_avx2<T: Pixel>(
   );
 }
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn sgrproj_box_f_r0_avx2<T: Pixel>(
   f: &mut [u32], y: usize, w: usize, cdeffed: &PlaneSlice<T>,
@@ -273,30 +373,23 @@ pub(crate) unsafe fn sgrproj_box_f_r0_avx2<T: Pixel>(
       sgrproj_box_f_r0_8_avx2(f, x, y, cdeffed);
     } else {
       // finish using scalar
-      sgrproj_box_f_r0_internal(f, x, y, w, cdeffed);
+      native::sgrproj_box_f_r0_internal(f, x, y, w, cdeffed);
     }
   }
   #[cfg(feature = "check_asm")]
   {
     let mut f_ref: Vec<u32> = vec![0; w];
-    sgrproj_box_f_r0_internal(&mut f_ref, 0, y, w, cdeffed);
-    assert_eq!(f[..w], f_ref[..]);
+    native::sgrproj_box_f_r0_internal(&mut f_ref, 0, y, w, cdeffed);
+    assert_eq!(&f[..w], &f_ref[..]);
   }
 }
 
 #[inline]
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "avx2")]
 unsafe fn sgrproj_box_f_r1_8_avx2<T: Pixel>(
   af: &[&[u32]; 3], bf: &[&[u32]; 3], f: &mut [u32], x: usize, y: usize,
   cdeffed: &PlaneSlice<T>,
 ) {
-  #[cfg(target_arch = "x86")]
-  use std::arch::x86::*;
-  #[cfg(target_arch = "x86_64")]
-  use std::arch::x86_64::*;
-  use std::mem;
-
   let three = _mm256_set1_epi32(3);
   let four = _mm256_set1_epi32(4);
   let a0 = af[0].as_ptr();
@@ -392,7 +485,6 @@ unsafe fn sgrproj_box_f_r1_8_avx2<T: Pixel>(
   );
 }
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn sgrproj_box_f_r1_avx2<T: Pixel>(
   af: &[&[u32]; 3], bf: &[&[u32]; 3], f: &mut [u32], y: usize, w: usize,
@@ -403,30 +495,23 @@ pub(crate) unsafe fn sgrproj_box_f_r1_avx2<T: Pixel>(
       sgrproj_box_f_r1_8_avx2(af, bf, f, x, y, cdeffed);
     } else {
       // finish using scalar
-      sgrproj_box_f_r1_internal(af, bf, f, x, y, w, cdeffed);
+      native::sgrproj_box_f_r1_internal(af, bf, f, x, y, w, cdeffed);
     }
   }
   #[cfg(feature = "check_asm")]
   {
     let mut f_ref: Vec<u32> = vec![0; w];
-    sgrproj_box_f_r1_internal(af, bf, &mut f_ref, 0, y, w, cdeffed);
-    assert_eq!(f[..w], f_ref[..]);
+    native::sgrproj_box_f_r1_internal(af, bf, &mut f_ref, 0, y, w, cdeffed);
+    assert_eq!(&f[..w], &f_ref[..]);
   }
 }
 
 #[inline]
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "avx2")]
 unsafe fn sgrproj_box_f_r2_8_avx2<T: Pixel>(
   af: &[&[u32]; 2], bf: &[&[u32]; 2], f0: &mut [u32], f1: &mut [u32],
   x: usize, y: usize, cdeffed: &PlaneSlice<T>,
 ) {
-  #[cfg(target_arch = "x86")]
-  use std::arch::x86::*;
-  #[cfg(target_arch = "x86_64")]
-  use std::arch::x86_64::*;
-  use std::mem;
-
   let five = _mm256_set1_epi32(5);
   let six = _mm256_set1_epi32(6);
   let a0 = af[0].as_ptr();
@@ -521,7 +606,6 @@ unsafe fn sgrproj_box_f_r2_8_avx2<T: Pixel>(
   );
 }
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn sgrproj_box_f_r2_avx2<T: Pixel>(
   af: &[&[u32]; 2], bf: &[&[u32]; 2], f0: &mut [u32], f1: &mut [u32],
@@ -532,14 +616,14 @@ pub(crate) unsafe fn sgrproj_box_f_r2_avx2<T: Pixel>(
       sgrproj_box_f_r2_8_avx2(af, bf, f0, f1, x, y, cdeffed);
     } else {
       // finish using scalar
-      sgrproj_box_f_r2_internal(af, bf, f0, f1, x, y, w, cdeffed);
+      native::sgrproj_box_f_r2_internal(af, bf, f0, f1, x, y, w, cdeffed);
     }
   }
   #[cfg(feature = "check_asm")]
   {
     let mut f0_ref: Vec<u32> = vec![0; w];
     let mut f1_ref: Vec<u32> = vec![0; w];
-    sgrproj_box_f_r2_internal(
+    native::sgrproj_box_f_r2_internal(
       af,
       bf,
       &mut f0_ref,
@@ -549,7 +633,7 @@ pub(crate) unsafe fn sgrproj_box_f_r2_avx2<T: Pixel>(
       w,
       cdeffed,
     );
-    assert_eq!(f0[..w], f0_ref[..]);
-    assert_eq!(f1[..w], f1_ref[..]);
+    assert_eq!(&f0[..w], &f0_ref[..]);
+    assert_eq!(&f1[..w], &f1_ref[..]);
   }
 }
