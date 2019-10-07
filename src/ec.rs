@@ -10,6 +10,16 @@
 
 #![allow(non_camel_case_types)]
 
+#[cfg(not(all(
+  feature = "nasm",
+  any(target_arch = "x86", target_arch = "x86_64")
+)))]
+pub use self::native::*;
+#[cfg(all(
+  feature = "nasm",
+  any(target_arch = "x86", target_arch = "x86_64")
+))]
+pub use crate::asm::x86::ec::*;
 use crate::util::msb;
 use crate::util::ILog;
 use bitstream_io::{BigEndian, BitWriter};
@@ -378,54 +388,6 @@ impl<S> WriterBase<S> {
     nbits - l
   }
 
-  // Function to update the CDF for Writer calls that do so.
-  pub fn update_cdf(cdf: &mut [u16], val: u32) {
-    let nsymbs = cdf.len() - 1;
-    let rate = 3 + (nsymbs >> 1).min(2) + (cdf[nsymbs] >> 4) as usize;
-    cdf[nsymbs] += 1 - (cdf[nsymbs] >> 5);
-
-    // Single loop (faster)
-    for (i, v) in cdf[..nsymbs - 1].iter_mut().enumerate() {
-      if i as u32 >= val {
-        *v -= *v >> rate;
-      } else {
-        *v += (32768 - *v) >> rate;
-      }
-    }
-  }
-
-  #[cfg(target_arch = "x86_64")]
-  pub fn update_cdf_4_sse2(cdf: &mut [u16], val: u32) {
-    #[cfg(target_arch = "x86_64")]
-    use std::arch::x86_64::*;
-    let nsymbs = 4;
-    let rate = 3 + (nsymbs >> 1).min(2) + (cdf[nsymbs] >> 4) as usize;
-    cdf[nsymbs] += 1 - (cdf[nsymbs] >> 5);
-    #[target_feature(enable = "sse2")]
-    unsafe {
-      let val_idx = _mm_set_epi16(0, 0, 0, 0, 3, 2, 1, 0);
-      let val_splat = _mm_set1_epi16(val as i16);
-      let mask = _mm_cmpgt_epi16(val_splat, val_idx);
-      let v = _mm_loadl_epi64(cdf.as_ptr() as *const __m128i);
-      // *v -= *v >> rate;
-      let shrunk_v =
-        _mm_sub_epi16(v, _mm_srl_epi16(v, _mm_cvtsi64_si128(rate as i64)));
-      // *v += (32768 - *v) >> rate;
-      let expanded_v = _mm_add_epi16(
-        v,
-        _mm_srl_epi16(
-          _mm_sub_epi16(_mm_set1_epi16(-32768), v),
-          _mm_cvtsi64_si128(rate as i64),
-        ),
-      );
-      let out_v = _mm_or_si128(
-        _mm_andnot_si128(mask, shrunk_v),
-        _mm_and_si128(mask, expanded_v),
-      );
-      _mm_storel_epi64(cdf.as_mut_ptr() as *mut __m128i, out_v);
-    }
-  }
-
   fn recenter(r: u32, v: u32) -> u32 {
     if v > (r << 1) {
       v
@@ -586,14 +548,7 @@ where
     }
     self.symbol(s, &cdf[..nsymbs]);
 
-    #[cfg(target_arch = "x86_64")]
-    {
-      if cdf.len() == 5 && cfg!(target_feature = "sse2") {
-        return Self::update_cdf_4_sse2(cdf, s);
-      }
-    }
-
-    Self::update_cdf(cdf, s);
+    update_cdf(cdf, s);
   }
   /// Returns approximate cost for a symbol given a cumulative
   /// distribution function (CDF) table and current write state.
@@ -932,6 +887,24 @@ impl<W: io::Write> BCodeWriter for BitWriter<W, BigEndian> {
   }
 }
 
+pub(crate) mod native {
+  // Function to update the CDF for Writer calls that do so.
+  pub fn update_cdf(cdf: &mut [u16], val: u32) {
+    let nsymbs = cdf.len() - 1;
+    let rate = 3 + (nsymbs >> 1).min(2) + (cdf[nsymbs] >> 4) as usize;
+    cdf[nsymbs] += 1 - (cdf[nsymbs] >> 5);
+
+    // Single loop (faster)
+    for (i, v) in cdf[..nsymbs - 1].iter_mut().enumerate() {
+      if i as u32 >= val {
+        *v -= *v >> rate;
+      } else {
+        *v += (32768 - *v) >> rate;
+      }
+    }
+  }
+}
+
 #[cfg(test)]
 mod test {
   use super::*;
@@ -1085,18 +1058,6 @@ mod test {
     assert_eq!(r.symbol(&cdf), 2);
     assert_eq!(r.symbol(&cdf), 2);
     assert_eq!(r.symbol(&cdf), 2);
-  }
-
-  #[cfg(target_arch = "x86_64")]
-  #[test]
-  fn update_cdf_4_sse2() {
-    let mut cdf = [7296, 3819, 1616, 0, 0];
-    let mut cdf2 = [7296, 3819, 1616, 0, 0];
-    for i in 0..4 {
-      WriterBase::<WriterRecorder>::update_cdf(&mut cdf, i);
-      WriterBase::<WriterRecorder>::update_cdf_4_sse2(&mut cdf2, i);
-      assert_eq!(cdf, cdf2);
-    }
   }
 
   #[test]

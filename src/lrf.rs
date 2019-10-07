@@ -9,6 +9,16 @@
 
 #![allow(safe_extern_statics)]
 
+#[cfg(not(all(
+  feature = "nasm",
+  any(target_arch = "x86", target_arch = "x86_64")
+)))]
+use self::native::*;
+#[cfg(all(
+  feature = "nasm",
+  any(target_arch = "x86", target_arch = "x86_64")
+))]
+use crate::asm::x86::lrf::*;
 use crate::context::PLANES;
 use crate::context::SB_SIZE;
 use crate::encoder::FrameInvariants;
@@ -18,8 +28,6 @@ use crate::frame::PlaneConfig;
 use crate::frame::PlaneMutSlice;
 use crate::frame::PlaneOffset;
 use crate::frame::PlaneSlice;
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-use crate::lrf_simd::*;
 use crate::util::clamp;
 use crate::util::CastFromPrimitive;
 use crate::util::ILog;
@@ -147,6 +155,150 @@ impl RestorationFilter {
   }
 }
 
+pub(crate) mod native {
+  use crate::frame::PlaneSlice;
+  use crate::lrf::{
+    get_integral_square, sgrproj_sum_finish, SGRPROJ_RST_BITS,
+    SGRPROJ_SGR_BITS,
+  };
+  use crate::util::CastFromPrimitive;
+  use crate::Pixel;
+
+  #[inline(always)]
+  pub(crate) fn sgrproj_box_ab_internal(
+    r: usize, af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
+    iimg_stride: usize, start_x: usize, y: usize, stripe_w: usize, s: u32,
+    bdm8: usize,
+  ) {
+    let d: usize = r * 2 + 1;
+    let n: usize = d * d;
+    let one_over_n = if r == 1 { 455 } else { 164 };
+
+    for x in start_x..stripe_w + 2 {
+      let sum = get_integral_square(iimg, iimg_stride, x, y, d);
+      let ssq = get_integral_square(iimg_sq, iimg_stride, x, y, d);
+      let (reta, retb) =
+        sgrproj_sum_finish(ssq, sum, n as u32, one_over_n, s, bdm8);
+      af[x] = reta;
+      bf[x] = retb;
+    }
+  }
+
+  // computes an intermediate (ab) row for stripe_w + 2 columns at row y
+  pub(crate) fn sgrproj_box_ab_r1(
+    af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
+    iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
+  ) {
+    sgrproj_box_ab_internal(
+      1,
+      af,
+      bf,
+      iimg,
+      iimg_sq,
+      iimg_stride,
+      0,
+      y,
+      stripe_w,
+      s,
+      bdm8,
+    );
+  }
+
+  // computes an intermediate (ab) row for stripe_w + 2 columns at row y
+  pub(crate) fn sgrproj_box_ab_r2(
+    af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
+    iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
+  ) {
+    sgrproj_box_ab_internal(
+      2,
+      af,
+      bf,
+      iimg,
+      iimg_sq,
+      iimg_stride,
+      0,
+      y,
+      stripe_w,
+      s,
+      bdm8,
+    );
+  }
+
+  pub(crate) fn sgrproj_box_f_r0<T: Pixel>(
+    f: &mut [u32], y: usize, w: usize, cdeffed: &PlaneSlice<T>,
+  ) {
+    sgrproj_box_f_r0_internal(f, 0, y, w, cdeffed);
+  }
+
+  #[inline(always)]
+  pub(crate) fn sgrproj_box_f_r0_internal<T: Pixel>(
+    f: &mut [u32], start_x: usize, y: usize, w: usize, cdeffed: &PlaneSlice<T>,
+  ) {
+    for x in start_x..w {
+      f[x] = (u32::cast_from(cdeffed.p(x, y))) << SGRPROJ_RST_BITS;
+    }
+  }
+
+  pub(crate) fn sgrproj_box_f_r1<T: Pixel>(
+    af: &[&[u32]; 3], bf: &[&[u32]; 3], f: &mut [u32], y: usize, w: usize,
+    cdeffed: &PlaneSlice<T>,
+  ) {
+    sgrproj_box_f_r1_internal(af, bf, f, 0, y, w, cdeffed);
+  }
+
+  #[inline(always)]
+  pub(crate) fn sgrproj_box_f_r1_internal<T: Pixel>(
+    af: &[&[u32]; 3], bf: &[&[u32]; 3], f: &mut [u32], start_x: usize,
+    y: usize, w: usize, cdeffed: &PlaneSlice<T>,
+  ) {
+    let shift = 5 + SGRPROJ_SGR_BITS - SGRPROJ_RST_BITS;
+    for x in start_x..w {
+      let a = 3 * (af[0][x] + af[2][x] + af[0][x + 2] + af[2][x + 2])
+        + 4
+          * (af[1][x]
+            + af[0][x + 1]
+            + af[1][x + 1]
+            + af[2][x + 1]
+            + af[1][x + 2]);
+      let b = 3 * (bf[0][x] + bf[2][x] + bf[0][x + 2] + bf[2][x + 2])
+        + 4
+          * (bf[1][x]
+            + bf[0][x + 1]
+            + bf[1][x + 1]
+            + bf[2][x + 1]
+            + bf[1][x + 2]);
+      let v = a * u32::cast_from(cdeffed.p(x, y)) + b;
+      f[x] = (v + (1 << shift >> 1)) >> shift;
+    }
+  }
+
+  pub(crate) fn sgrproj_box_f_r2<T: Pixel>(
+    af: &[&[u32]; 2], bf: &[&[u32]; 2], f0: &mut [u32], f1: &mut [u32],
+    y: usize, w: usize, cdeffed: &PlaneSlice<T>,
+  ) {
+    sgrproj_box_f_r2_internal(af, bf, f0, f1, 0, y, w, cdeffed);
+  }
+
+  #[inline(always)]
+  pub(crate) fn sgrproj_box_f_r2_internal<T: Pixel>(
+    af: &[&[u32]; 2], bf: &[&[u32]; 2], f0: &mut [u32], f1: &mut [u32],
+    start_x: usize, y: usize, w: usize, cdeffed: &PlaneSlice<T>,
+  ) {
+    let shift = 5 + SGRPROJ_SGR_BITS - SGRPROJ_RST_BITS;
+    let shifto = 4 + SGRPROJ_SGR_BITS - SGRPROJ_RST_BITS;
+    for x in start_x..w {
+      let a = 5 * (af[0][x] + af[0][x + 2]) + 6 * (af[0][x + 1]);
+      let b = 5 * (bf[0][x] + bf[0][x + 2]) + 6 * (bf[0][x + 1]);
+      let ao = 5 * (af[1][x] + af[1][x + 2]) + 6 * (af[1][x + 1]);
+      let bo = 5 * (bf[1][x] + bf[1][x + 2]) + 6 * (bf[1][x + 1]);
+      let v = (a + ao) * u32::cast_from(cdeffed.p(x, y)) + b + bo;
+      f0[x] = (v + (1 << shift >> 1)) >> shift;
+      let vo = ao * u32::cast_from(cdeffed.p(x, y + 1)) + bo;
+      f1[x] = (vo + (1 << shifto >> 1)) >> shifto;
+    }
+  }
+}
+
 #[inline(always)]
 fn sgrproj_sum_finish(
   ssq: u32, sum: u32, n: u32, one_over_n: u32, s: u32, bdm8: usize,
@@ -177,200 +329,6 @@ fn get_integral_square(
     .wrapping_add(iimg[(y + size) * stride + x + size])
     .wrapping_sub(iimg[(y + size) * stride + x])
     .wrapping_sub(iimg[y * stride + x + size])
-}
-
-#[inline(always)]
-pub(crate) fn sgrproj_box_ab_internal(
-  r: usize, af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
-  iimg_stride: usize, start_x: usize, y: usize, stripe_w: usize, s: u32,
-  bdm8: usize,
-) {
-  let d: usize = r * 2 + 1;
-  let n: usize = d * d;
-  let one_over_n = if r == 1 { 455 } else { 164 };
-
-  for x in start_x..stripe_w + 2 {
-    let sum = get_integral_square(iimg, iimg_stride, x, y, d);
-    let ssq = get_integral_square(iimg_sq, iimg_stride, x, y, d);
-    let (reta, retb) =
-      sgrproj_sum_finish(ssq, sum, n as u32, one_over_n, s, bdm8);
-    af[x] = reta;
-    bf[x] = retb;
-  }
-}
-
-// computes an intermediate (ab) row for stripe_w + 2 columns at row y
-fn sgrproj_box_ab_r1(
-  af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
-  iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
-) {
-  #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-  {
-    if is_x86_feature_detected!("avx2") {
-      return unsafe {
-        sgrproj_box_ab_r1_avx2(
-          af,
-          bf,
-          iimg,
-          iimg_sq,
-          iimg_stride,
-          y,
-          stripe_w,
-          s,
-          bdm8,
-        );
-      };
-    }
-  }
-  sgrproj_box_ab_internal(
-    1,
-    af,
-    bf,
-    iimg,
-    iimg_sq,
-    iimg_stride,
-    0,
-    y,
-    stripe_w,
-    s,
-    bdm8,
-  );
-}
-
-// computes an intermediate (ab) row for stripe_w + 2 columns at row y
-fn sgrproj_box_ab_r2(
-  af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
-  iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
-) {
-  #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-  {
-    if is_x86_feature_detected!("avx2") {
-      return unsafe {
-        sgrproj_box_ab_r2_avx2(
-          af,
-          bf,
-          iimg,
-          iimg_sq,
-          iimg_stride,
-          y,
-          stripe_w,
-          s,
-          bdm8,
-        );
-      };
-    }
-  }
-  sgrproj_box_ab_internal(
-    2,
-    af,
-    bf,
-    iimg,
-    iimg_sq,
-    iimg_stride,
-    0,
-    y,
-    stripe_w,
-    s,
-    bdm8,
-  );
-}
-
-fn sgrproj_box_f_r0<T: Pixel>(
-  f: &mut [u32], y: usize, w: usize, cdeffed: &PlaneSlice<T>,
-) {
-  #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-  {
-    if is_x86_feature_detected!("avx2") {
-      return unsafe {
-        sgrproj_box_f_r0_avx2(f, y, w, cdeffed);
-      };
-    }
-  }
-  sgrproj_box_f_r0_internal(f, 0, y, w, cdeffed);
-}
-
-#[inline(always)]
-pub(crate) fn sgrproj_box_f_r0_internal<T: Pixel>(
-  f: &mut [u32], start_x: usize, y: usize, w: usize, cdeffed: &PlaneSlice<T>,
-) {
-  for x in start_x..w {
-    f[x] = (u32::cast_from(cdeffed.p(x, y))) << SGRPROJ_RST_BITS;
-  }
-}
-
-fn sgrproj_box_f_r1<T: Pixel>(
-  af: &[&[u32]; 3], bf: &[&[u32]; 3], f: &mut [u32], y: usize, w: usize,
-  cdeffed: &PlaneSlice<T>,
-) {
-  #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-  {
-    if is_x86_feature_detected!("avx2") {
-      return unsafe {
-        sgrproj_box_f_r1_avx2(af, bf, f, y, w, cdeffed);
-      };
-    }
-  }
-  sgrproj_box_f_r1_internal(af, bf, f, 0, y, w, cdeffed);
-}
-
-#[inline(always)]
-pub(crate) fn sgrproj_box_f_r1_internal<T: Pixel>(
-  af: &[&[u32]; 3], bf: &[&[u32]; 3], f: &mut [u32], start_x: usize, y: usize,
-  w: usize, cdeffed: &PlaneSlice<T>,
-) {
-  let shift = 5 + SGRPROJ_SGR_BITS - SGRPROJ_RST_BITS;
-  for x in start_x..w {
-    let a = 3 * (af[0][x] + af[2][x] + af[0][x + 2] + af[2][x + 2])
-      + 4
-        * (af[1][x]
-          + af[0][x + 1]
-          + af[1][x + 1]
-          + af[2][x + 1]
-          + af[1][x + 2]);
-    let b = 3 * (bf[0][x] + bf[2][x] + bf[0][x + 2] + bf[2][x + 2])
-      + 4
-        * (bf[1][x]
-          + bf[0][x + 1]
-          + bf[1][x + 1]
-          + bf[2][x + 1]
-          + bf[1][x + 2]);
-    let v = a * u32::cast_from(cdeffed.p(x, y)) + b;
-    f[x] = (v + (1 << shift >> 1)) >> shift;
-  }
-}
-
-fn sgrproj_box_f_r2<T: Pixel>(
-  af: &[&[u32]; 2], bf: &[&[u32]; 2], f0: &mut [u32], f1: &mut [u32],
-  y: usize, w: usize, cdeffed: &PlaneSlice<T>,
-) {
-  #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-  {
-    if is_x86_feature_detected!("avx2") {
-      return unsafe {
-        sgrproj_box_f_r2_avx2(af, bf, f0, f1, y, w, cdeffed);
-      };
-    }
-  }
-  sgrproj_box_f_r2_internal(af, bf, f0, f1, 0, y, w, cdeffed);
-}
-
-#[inline(always)]
-pub(crate) fn sgrproj_box_f_r2_internal<T: Pixel>(
-  af: &[&[u32]; 2], bf: &[&[u32]; 2], f0: &mut [u32], f1: &mut [u32],
-  start_x: usize, y: usize, w: usize, cdeffed: &PlaneSlice<T>,
-) {
-  let shift = 5 + SGRPROJ_SGR_BITS - SGRPROJ_RST_BITS;
-  let shifto = 4 + SGRPROJ_SGR_BITS - SGRPROJ_RST_BITS;
-  for x in start_x..w {
-    let a = 5 * (af[0][x] + af[0][x + 2]) + 6 * (af[0][x + 1]);
-    let b = 5 * (bf[0][x] + bf[0][x + 2]) + 6 * (bf[0][x + 1]);
-    let ao = 5 * (af[1][x] + af[1][x + 2]) + 6 * (af[1][x + 1]);
-    let bo = 5 * (bf[1][x] + bf[1][x + 2]) + 6 * (bf[1][x + 1]);
-    let v = (a + ao) * u32::cast_from(cdeffed.p(x, y)) + b + bo;
-    f0[x] = (v + (1 << shift >> 1)) >> shift;
-    let vo = ao * u32::cast_from(cdeffed.p(x, y + 1)) + bo;
-    f1[x] = (vo + (1 << shifto >> 1)) >> shifto;
-  }
 }
 
 struct VertPaddedIter<'a, T: Pixel> {

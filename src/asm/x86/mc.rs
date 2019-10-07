@@ -205,7 +205,7 @@ pub fn prep_8tap<T: Pixel>(
   }
   #[cfg(feature = "check_asm")]
   {
-    assert_eq!(tmp[..width * height], ref_tmp[..]);
+    assert_eq!(&tmp[..width * height], &ref_tmp[..]);
   }
 }
 
