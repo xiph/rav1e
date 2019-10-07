@@ -78,9 +78,10 @@ jobs:
     - name: "Arm build and test"
       rust: stable
       arch: arm64
+      before_install: skip
       script:
         - cargo build --release --tests --verbose
-        - cargo test --release --features=decode_test,decode_test_dav1d,quick_test,capi --verbose
+        - cargo test --release --verbose
     - name: "Ignored Tests (aom)"
       rust: stable
       script:
