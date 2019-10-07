@@ -32,8 +32,9 @@
 #include "config.h"
 #include "src/arm/asm.S"
 
-.macro movrel rd, val, offset=0
+.macro movrel rd, val, offset=0, global=1
 #if defined(PIC) && defined(__APPLE__)
+.if \global
         ldr             \rd,  1f
         b               2f
 1:
@@ -50,13 +51,18 @@
         .indirect_symbol \val
         .word       0
         .text
-#elif defined(PIC)
+.else
+#endif
+#if defined(PIC)
         ldr             \rd,  1f
         b               2f
 1:
         .word           \val + \offset - (2f + 8 - 4 * CONFIG_THUMB)
 2:
         add             \rd,  \rd,  pc
+#if defined(__APPLE__)
+.endif
+#endif
 #else
         movw            \rd, #:lower16:\val+\offset
         movt            \rd, #:upper16:\val+\offset
