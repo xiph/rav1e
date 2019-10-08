@@ -519,12 +519,9 @@ pub enum InvalidConfig {
     _0
   )]
   InvalidReservoirFrameDelay(i32),
-  
+
   /// Bit Depth is Invalid
-  #[error(
-    display = "invalid bit depth {} (expected 8, 10 or 12)",
-    _0
-  )]
+  #[error(display = "invalid bit depth {} (expected 8, 10 or 12)", _0)]
   InvalidBitDepth(u8),
 
   /// Chroma Sampling is Invalid
@@ -542,30 +539,21 @@ pub enum InvalidConfig {
   InvalidChromaSamplingPosition(i32),
 
   /// Pixel Range is Invalid
-  #[error(
-    display = "invalid pixel range {} (expected 0, 1)",
-    _0
-  )]
+  #[error(display = "invalid pixel range {} (expected 0, 1)", _0)]
   InvalidPixelRange(i32),
 
   /// Color Description is Invalid
-  #[error(
-    display = "invalid Color Description",
-  )]
+  #[error(display = "invalid Color Description")]
   InvalidColorDescription(),
 
   /// Color Description is Invalid
-  #[error(
-    display = "invalid content light",
-  )]
+  #[error(display = "invalid content light")]
   InvalidContentLight(),
-  
+
   /// Color Description is Invalid
-  #[error(
-    display = "invalid mastering display",
-  )]
+  #[error(display = "invalid mastering display")]
   InvalidMasteringDisplay(),
-  
+
   // This variant prevents people from exhaustively matching on this enum,
   // which allows us to add more variants without it being a breaking change.
   // This can be replaced with #[non_exhaustive] when it's stable:

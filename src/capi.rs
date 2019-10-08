@@ -115,7 +115,7 @@ impl From<Option<rav1e::EncoderStatus>> for EncoderStatus {
 /// Use rav1e_config_unref() to free its memory.
 pub struct Config {
   cfg: rav1e::Config,
-  last_err: Option<rav1e::InvalidConfig>
+  last_err: Option<rav1e::InvalidConfig>,
 }
 
 enum EncContext {
@@ -272,9 +272,9 @@ pub unsafe extern fn rav1e_config_set_time_base(
   cfg: *mut Config, time_base: Rational,
 ) {
   let temp_time_base = (*cfg).cfg.enc.time_base;
-  
+
   (*cfg).cfg.enc.time_base = time_base;
-  
+
   if let Err(err) = (*cfg).cfg.validate() {
     (*cfg).last_err = Some(err);
     (*cfg).cfg.enc.time_base = temp_time_base;
@@ -302,7 +302,8 @@ pub unsafe extern fn rav1e_config_set_pixel_format(
   let subsampling_val =
     std::mem::transmute::<ChromaSampling, i32>(subsampling);
   if ChromaSampling::from_i32(subsampling_val).is_none() {
-    (*cfg).last_err = Some(rav1e::InvalidConfig::InvalidChromaSampling(subsampling_val));
+    (*cfg).last_err =
+      Some(rav1e::InvalidConfig::InvalidChromaSampling(subsampling_val));
     return -1;
   }
   (*cfg).cfg.enc.chroma_sampling = subsampling;
@@ -310,14 +311,17 @@ pub unsafe extern fn rav1e_config_set_pixel_format(
   let chroma_pos_val =
     std::mem::transmute::<ChromaSamplePosition, i32>(chroma_pos);
   if ChromaSamplePosition::from_i32(chroma_pos_val).is_none() {
-    (*cfg).last_err = Some(rav1e::InvalidConfig::InvalidChromaSamplingPosition(chroma_pos_val));
+    (*cfg).last_err = Some(
+      rav1e::InvalidConfig::InvalidChromaSamplingPosition(chroma_pos_val),
+    );
     return -1;
   }
   (*cfg).cfg.enc.chroma_sample_position = chroma_pos;
 
   let pixel_range_val = std::mem::transmute::<PixelRange, i32>(pixel_range);
   if PixelRange::from_i32(pixel_range_val).is_none() {
-    (*cfg).last_err = Some(rav1e::InvalidConfig::InvalidPixelRange(pixel_range_val));
+    (*cfg).last_err =
+      Some(rav1e::InvalidConfig::InvalidPixelRange(pixel_range_val));
     return -1;
   }
   (*cfg).cfg.enc.pixel_range = pixel_range;
