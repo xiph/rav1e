@@ -1894,12 +1894,12 @@ endfunc
 //                               const int16_t wt[2]);
 function sgr_weighted2_neon, export=1
         ldr             x8,  [sp]
-        ld1             {v31.s}[0], [x8]
         cmp             x7,  #2
         add             x10, x0,  x1
         add             x11, x2,  x3
         add             x12, x4,  #2*FILTER_OUT_STRIDE
         add             x13, x5,  #2*FILTER_OUT_STRIDE
+        ld2r            {v30.8h, v31.8h}, [x8] // wt[0], wt[1]
         mov             x8,  #4*FILTER_OUT_STRIDE
         lsl             x1,  x1,  #1
         lsl             x3,  x3,  #1
@@ -1908,8 +1908,6 @@ function sgr_weighted2_neon, export=1
         sub             x1,  x1,  x9
         sub             x3,  x3,  x9
         sub             x8,  x8,  x9, lsl #1
-        dup             v30.8h, v31.h[0] // wt[0]
-        dup             v31.8h, v31.h[1] // wt[1]
         mov             x9,  x6
         b.lt            2f
 1:
