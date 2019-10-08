@@ -9,12 +9,10 @@
 
 use crate::cpu_features::CpuFeatureLevel;
 use crate::frame::*;
+use crate::mc::FilterMode::*;
 use crate::mc::*;
 use crate::tiling::*;
 use crate::util::*;
-
-#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-use x86_64::*;
 
 type PutFn = unsafe extern fn(
   dst: *mut u8,
@@ -263,111 +261,105 @@ pub fn mc_avg<T: Pixel>(
   }
 }
 
-#[cfg(all(target_arch = "x86_64", feature = "nasm"))]
-mod x86_64 {
-  use self::FilterMode::*;
-  use super::*;
-
-  macro_rules! decl_mc_fns {
-    ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),+) => {
-      extern {
-        $(
-          fn $func_name(
-            dst: *mut u8, dst_stride: isize, src: *const u8, src_stride: isize,
-            w: i32, h: i32, mx: i32, my: i32
-          );
-        )*
-      }
-
-      static PUT_FNS_AVX2: [Option<PutFn>; 16] = {
-        let mut out: [Option<PutFn>; 16] = [None; 16];
-        $(
-          out[get_2d_mode_idx($mode_x, $mode_y)] = Some($func_name);
-        )*
-        out
-      };
+macro_rules! decl_mc_fns {
+  ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),+) => {
+    extern {
+      $(
+        fn $func_name(
+          dst: *mut u8, dst_stride: isize, src: *const u8, src_stride: isize,
+          w: i32, h: i32, mx: i32, my: i32
+        );
+      )*
     }
+
+    static PUT_FNS_AVX2: [Option<PutFn>; 16] = {
+      let mut out: [Option<PutFn>; 16] = [None; 16];
+      $(
+        out[get_2d_mode_idx($mode_x, $mode_y)] = Some($func_name);
+      )*
+      out
+    };
   }
-
-  decl_mc_fns!(
-    (REGULAR, REGULAR, rav1e_put_8tap_regular_avx2),
-    (REGULAR, SMOOTH, rav1e_put_8tap_regular_smooth_avx2),
-    (REGULAR, SHARP, rav1e_put_8tap_regular_sharp_avx2),
-    (SMOOTH, REGULAR, rav1e_put_8tap_smooth_regular_avx2),
-    (SMOOTH, SMOOTH, rav1e_put_8tap_smooth_avx2),
-    (SMOOTH, SHARP, rav1e_put_8tap_smooth_sharp_avx2),
-    (SHARP, REGULAR, rav1e_put_8tap_sharp_regular_avx2),
-    (SHARP, SMOOTH, rav1e_put_8tap_sharp_smooth_avx2),
-    (SHARP, SHARP, rav1e_put_8tap_sharp_avx2),
-    (BILINEAR, BILINEAR, rav1e_put_bilin_avx2)
-  );
-
-  pub(crate) static PUT_FNS: [[Option<PutFn>; 16]; CpuFeatureLevel::len()] = {
-    let mut out = [[None; 16]; CpuFeatureLevel::len()];
-    out[CpuFeatureLevel::AVX2 as usize] = PUT_FNS_AVX2;
-    out
-  };
-
-  pub(crate) static PUT_HBD_FNS: [[Option<PutHBDFn>; 16];
-    CpuFeatureLevel::len()] = [[None; 16]; CpuFeatureLevel::len()];
-
-  macro_rules! decl_mct_fns {
-    ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),+) => {
-      extern {
-        $(
-          fn $func_name(
-            tmp: *mut i16, src: *const u8, src_stride: libc::ptrdiff_t, w: i32,
-            h: i32, mx: i32, my: i32
-          );
-        )*
-      }
-
-      static PREP_FNS_AVX2: [Option<PrepFn>; 16] = {
-        let mut out: [Option<PrepFn>; 16] = [None; 16];
-        $(
-          out[get_2d_mode_idx($mode_x, $mode_y)] = Some($func_name);
-        )*
-        out
-      };
-    }
-  }
-
-  decl_mct_fns!(
-    (REGULAR, REGULAR, rav1e_prep_8tap_regular_avx2),
-    (REGULAR, SMOOTH, rav1e_prep_8tap_regular_smooth_avx2),
-    (REGULAR, SHARP, rav1e_prep_8tap_regular_sharp_avx2),
-    (SMOOTH, REGULAR, rav1e_prep_8tap_smooth_regular_avx2),
-    (SMOOTH, SMOOTH, rav1e_prep_8tap_smooth_avx2),
-    (SMOOTH, SHARP, rav1e_prep_8tap_smooth_sharp_avx2),
-    (SHARP, REGULAR, rav1e_prep_8tap_sharp_regular_avx2),
-    (SHARP, SMOOTH, rav1e_prep_8tap_sharp_smooth_avx2),
-    (SHARP, SHARP, rav1e_prep_8tap_sharp_avx2),
-    (BILINEAR, BILINEAR, rav1e_prep_bilin_avx2)
-  );
-
-  pub(crate) static PREP_FNS: [[Option<PrepFn>; 16]; CpuFeatureLevel::len()] = {
-    let mut out = [[None; 16]; CpuFeatureLevel::len()];
-    out[CpuFeatureLevel::AVX2 as usize] = PREP_FNS_AVX2;
-    out
-  };
-
-  pub(crate) static PREP_HBD_FNS: [[Option<PrepHBDFn>; 16];
-    CpuFeatureLevel::len()] = [[None; 16]; CpuFeatureLevel::len()];
-
-  extern {
-    fn rav1e_avg_avx2(
-      dst: *mut u8, dst_stride: libc::ptrdiff_t, tmp1: *const i16,
-      tmp2: *const i16, w: i32, h: i32,
-    );
-  }
-
-  pub(crate) static AVG_FNS: [Option<AvgFn>; CpuFeatureLevel::len()] = {
-    let mut out: [Option<AvgFn>; CpuFeatureLevel::len()] =
-      [None; CpuFeatureLevel::len()];
-    out[CpuFeatureLevel::AVX2 as usize] = Some(rav1e_avg_avx2);
-    out
-  };
-
-  pub(crate) static AVG_HBD_FNS: [Option<AvgHBDFn>; CpuFeatureLevel::len()] =
-    [None; CpuFeatureLevel::len()];
 }
+
+decl_mc_fns!(
+  (REGULAR, REGULAR, rav1e_put_8tap_regular_avx2),
+  (REGULAR, SMOOTH, rav1e_put_8tap_regular_smooth_avx2),
+  (REGULAR, SHARP, rav1e_put_8tap_regular_sharp_avx2),
+  (SMOOTH, REGULAR, rav1e_put_8tap_smooth_regular_avx2),
+  (SMOOTH, SMOOTH, rav1e_put_8tap_smooth_avx2),
+  (SMOOTH, SHARP, rav1e_put_8tap_smooth_sharp_avx2),
+  (SHARP, REGULAR, rav1e_put_8tap_sharp_regular_avx2),
+  (SHARP, SMOOTH, rav1e_put_8tap_sharp_smooth_avx2),
+  (SHARP, SHARP, rav1e_put_8tap_sharp_avx2),
+  (BILINEAR, BILINEAR, rav1e_put_bilin_avx2)
+);
+
+pub(crate) static PUT_FNS: [[Option<PutFn>; 16]; CpuFeatureLevel::len()] = {
+  let mut out = [[None; 16]; CpuFeatureLevel::len()];
+  out[CpuFeatureLevel::AVX2 as usize] = PUT_FNS_AVX2;
+  out
+};
+
+pub(crate) static PUT_HBD_FNS: [[Option<PutHBDFn>; 16];
+  CpuFeatureLevel::len()] = [[None; 16]; CpuFeatureLevel::len()];
+
+macro_rules! decl_mct_fns {
+  ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),+) => {
+    extern {
+      $(
+        fn $func_name(
+          tmp: *mut i16, src: *const u8, src_stride: libc::ptrdiff_t, w: i32,
+          h: i32, mx: i32, my: i32
+        );
+      )*
+    }
+
+    static PREP_FNS_AVX2: [Option<PrepFn>; 16] = {
+      let mut out: [Option<PrepFn>; 16] = [None; 16];
+      $(
+        out[get_2d_mode_idx($mode_x, $mode_y)] = Some($func_name);
+      )*
+      out
+    };
+  }
+}
+
+decl_mct_fns!(
+  (REGULAR, REGULAR, rav1e_prep_8tap_regular_avx2),
+  (REGULAR, SMOOTH, rav1e_prep_8tap_regular_smooth_avx2),
+  (REGULAR, SHARP, rav1e_prep_8tap_regular_sharp_avx2),
+  (SMOOTH, REGULAR, rav1e_prep_8tap_smooth_regular_avx2),
+  (SMOOTH, SMOOTH, rav1e_prep_8tap_smooth_avx2),
+  (SMOOTH, SHARP, rav1e_prep_8tap_smooth_sharp_avx2),
+  (SHARP, REGULAR, rav1e_prep_8tap_sharp_regular_avx2),
+  (SHARP, SMOOTH, rav1e_prep_8tap_sharp_smooth_avx2),
+  (SHARP, SHARP, rav1e_prep_8tap_sharp_avx2),
+  (BILINEAR, BILINEAR, rav1e_prep_bilin_avx2)
+);
+
+pub(crate) static PREP_FNS: [[Option<PrepFn>; 16]; CpuFeatureLevel::len()] = {
+  let mut out = [[None; 16]; CpuFeatureLevel::len()];
+  out[CpuFeatureLevel::AVX2 as usize] = PREP_FNS_AVX2;
+  out
+};
+
+pub(crate) static PREP_HBD_FNS: [[Option<PrepHBDFn>; 16];
+  CpuFeatureLevel::len()] = [[None; 16]; CpuFeatureLevel::len()];
+
+extern {
+  fn rav1e_avg_avx2(
+    dst: *mut u8, dst_stride: libc::ptrdiff_t, tmp1: *const i16,
+    tmp2: *const i16, w: i32, h: i32,
+  );
+}
+
+pub(crate) static AVG_FNS: [Option<AvgFn>; CpuFeatureLevel::len()] = {
+  let mut out: [Option<AvgFn>; CpuFeatureLevel::len()] =
+    [None; CpuFeatureLevel::len()];
+  out[CpuFeatureLevel::AVX2 as usize] = Some(rav1e_avg_avx2);
+  out
+};
+
+pub(crate) static AVG_HBD_FNS: [Option<AvgHBDFn>; CpuFeatureLevel::len()] =
+  [None; CpuFeatureLevel::len()];
