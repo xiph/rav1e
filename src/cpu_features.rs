@@ -10,6 +10,7 @@
 use arrayvec::ArrayVec;
 
 // This macro helps reduce some code duplication
+#[allow(unused_macros)]
 macro_rules! detect_feature {
   ($platform:ident, $feature:literal, $arr:ident) => {
     paste::expr! {
@@ -20,6 +21,7 @@ macro_rules! detect_feature {
   };
 }
 
+#[allow(unused_mut)]
 pub fn get_detected_cpu_features() -> ArrayVec<[&'static str; 3]> {
   let mut features = ArrayVec::new();
 

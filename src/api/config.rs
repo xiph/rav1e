@@ -574,7 +574,10 @@ impl Config {
 
     self.validate()?;
 
-    info!("Using CPU Features: {}", get_detected_cpu_features().join(" "));
+    info!(
+      "Using CPU Features: {}",
+      get_detected_cpu_features().join(" ").to_ascii_uppercase()
+    );
 
     let pool = rayon::ThreadPoolBuilder::new()
       .num_threads(self.threads)

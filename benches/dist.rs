@@ -10,7 +10,6 @@
 use criterion::*;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
-use rav1e::bench::cpu_features::*;
 use rav1e::bench::dist;
 use rav1e::bench::frame::*;
 use rav1e::bench::partition::BlockSize::*;
@@ -90,14 +89,12 @@ type DistFn<T> = fn(
   plane_ref: &PlaneRegion<'_, T>,
   bsize: BlockSize,
   bit_depth: usize,
-  cpu: CpuFeatureLevel,
 ) -> u32;
 
 fn run_dist_bench<T: Pixel>(
   b: &mut Bencher, &(bs, bit_depth): &(BlockSize, usize), func: DistFn<T>,
 ) {
   let mut ra = ChaChaRng::from_seed([0; 32]);
-  let cpu = CpuFeatureLevel::default();
   let w = 640;
   let h = 480;
   let input_plane = new_plane::<T>(&mut ra, w, h);
@@ -107,7 +104,7 @@ fn run_dist_bench<T: Pixel>(
   let plane_ref = rec_plane.as_region();
 
   b.iter(|| {
-    let _ = black_box(func(&plane_org, &plane_ref, bs, bit_depth, cpu));
+    let _ = black_box(func(&plane_org, &plane_ref, bs, bit_depth));
   })
 }
 

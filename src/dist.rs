@@ -256,13 +256,7 @@ pub mod test {
 
       assert_eq!(
         block.1,
-        get_sad(
-          &mut input_region,
-          &mut rec_region,
-          block.0,
-          bit_depth,
-          CpuFeatureLevel::default()
-        )
+        get_sad(&mut input_region, &mut rec_region, block.0, bit_depth,)
       );
     }
   }
