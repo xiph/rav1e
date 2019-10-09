@@ -18,7 +18,6 @@ pub use self::native::*;
 ))]
 pub use crate::asm::x86::mc::*;
 
-use crate::cpu_features::CpuFeatureLevel;
 use crate::frame::*;
 use crate::tiling::*;
 use crate::util::*;
@@ -210,7 +209,7 @@ pub(crate) mod native {
   pub fn put_8tap<T: Pixel>(
     dst: &mut PlaneRegionMut<'_, T>, src: PlaneSlice<'_, T>, width: usize,
     height: usize, col_frac: i32, row_frac: i32, mode_x: FilterMode,
-    mode_y: FilterMode, bit_depth: usize, _cpu: CpuFeatureLevel,
+    mode_y: FilterMode, bit_depth: usize,
   ) {
     let ref_stride = src.plane.cfg.stride;
     let y_filter = get_filter(mode_y, row_frac, height);
@@ -306,7 +305,7 @@ pub(crate) mod native {
   pub fn prep_8tap<T: Pixel>(
     tmp: &mut [i16], src: PlaneSlice<'_, T>, width: usize, height: usize,
     col_frac: i32, row_frac: i32, mode_x: FilterMode, mode_y: FilterMode,
-    bit_depth: usize, _cpu: CpuFeatureLevel,
+    bit_depth: usize,
   ) {
     let ref_stride = src.plane.cfg.stride;
     let y_filter = get_filter(mode_y, row_frac, height);
@@ -384,7 +383,7 @@ pub(crate) mod native {
 
   pub fn mc_avg<T: Pixel>(
     dst: &mut PlaneRegionMut<'_, T>, tmp1: &[i16], tmp2: &[i16], width: usize,
-    height: usize, bit_depth: usize, _cpu: CpuFeatureLevel,
+    height: usize, bit_depth: usize,
   ) {
     let max_sample_val = ((1 << bit_depth) - 1) as i32;
     let intermediate_bits = 4 - if bit_depth == 12 { 2 } else { 0 };

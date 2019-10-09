@@ -8,7 +8,6 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::cdef::*;
-use crate::cpu_features::CpuFeatureLevel;
 #[cfg(feature = "check_asm")]
 use crate::frame::*;
 use crate::tiling::PlaneRegionMut;
@@ -45,7 +44,7 @@ const fn decimate_index(xdec: usize, ydec: usize) -> usize {
 pub unsafe fn cdef_filter_block<T: Pixel>(
   dst: &mut PlaneRegionMut<'_, T>, src: *const u16, src_stride: isize,
   pri_strength: i32, sec_strength: i32, dir: usize, damping: i32,
-  bit_depth: usize, xdec: usize, ydec: usize, cpu: CpuFeatureLevel,
+  bit_depth: usize, xdec: usize, ydec: usize,
 ) {
   let call_native = |dst: &mut PlaneRegionMut<T>| {
     native::cdef_filter_block(
@@ -59,7 +58,6 @@ pub unsafe fn cdef_filter_block<T: Pixel>(
       bit_depth,
       xdec,
       ydec,
-      cpu,
     );
   };
   #[cfg(feature = "check_asm")]

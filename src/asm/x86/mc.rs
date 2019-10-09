@@ -7,7 +7,6 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use crate::cpu_features::CpuFeatureLevel;
 use crate::frame::*;
 use crate::mc::FilterMode::*;
 use crate::mc::*;
@@ -85,12 +84,11 @@ const fn get_2d_mode_idx(mode_x: FilterMode, mode_y: FilterMode) -> usize {
 pub fn put_8tap<T: Pixel>(
   dst: &mut PlaneRegionMut<'_, T>, src: PlaneSlice<'_, T>, width: usize,
   height: usize, col_frac: i32, row_frac: i32, mode_x: FilterMode,
-  mode_y: FilterMode, bit_depth: usize, cpu: CpuFeatureLevel,
+  mode_y: FilterMode, bit_depth: usize,
 ) {
   let call_native = |dst: &mut PlaneRegionMut<'_, T>| {
     native::put_8tap(
       dst, src, width, height, col_frac, row_frac, mode_x, mode_y, bit_depth,
-      cpu,
     );
   };
   #[cfg(feature = "check_asm")]
@@ -151,12 +149,11 @@ pub fn put_8tap<T: Pixel>(
 pub fn prep_8tap<T: Pixel>(
   tmp: &mut [i16], src: PlaneSlice<'_, T>, width: usize, height: usize,
   col_frac: i32, row_frac: i32, mode_x: FilterMode, mode_y: FilterMode,
-  bit_depth: usize, cpu: CpuFeatureLevel,
+  bit_depth: usize,
 ) {
   let call_native = |tmp: &mut [i16]| {
     native::prep_8tap(
       tmp, src, width, height, col_frac, row_frac, mode_x, mode_y, bit_depth,
-      cpu,
     );
   };
   #[cfg(feature = "check_asm")]
@@ -209,10 +206,10 @@ pub fn prep_8tap<T: Pixel>(
 
 pub fn mc_avg<T: Pixel>(
   dst: &mut PlaneRegionMut<'_, T>, tmp1: &[i16], tmp2: &[i16], width: usize,
-  height: usize, bit_depth: usize, cpu: CpuFeatureLevel,
+  height: usize, bit_depth: usize,
 ) {
   let call_native = |dst: &mut PlaneRegionMut<'_, T>| {
-    native::mc_avg(dst, tmp1, tmp2, width, height, bit_depth, cpu);
+    native::mc_avg(dst, tmp1, tmp2, width, height, bit_depth);
   };
   #[cfg(feature = "check_asm")]
   let ref_dst = {

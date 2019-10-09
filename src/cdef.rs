@@ -16,7 +16,6 @@ use crate::frame::*;
 use crate::tiling::*;
 use crate::util::{clamp, msb, CastFromPrimitive, Pixel};
 
-use crate::cpu_features::CpuFeatureLevel;
 use std::cmp;
 
 #[cfg(not(all(
@@ -152,7 +151,7 @@ pub(crate) mod native {
   pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
     dst: &mut PlaneRegionMut<'_, T>, input: *const u16, istride: isize,
     pri_strength: i32, sec_strength: i32, dir: usize, damping: i32,
-    bit_depth: usize, xdec: usize, ydec: usize, _cpu: CpuFeatureLevel,
+    bit_depth: usize, xdec: usize, ydec: usize,
   ) {
     let xsize = (8 >> xdec) as isize;
     let ysize = (8 >> ydec) as isize;
@@ -509,7 +508,6 @@ pub fn cdef_filter_superblock<T: Pixel>(
                 bit_depth,
                 xdec,
                 ydec,
-                fi.cpu_feature_level,
               );
             }
           } else {

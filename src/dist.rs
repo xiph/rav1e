@@ -19,14 +19,13 @@ pub use self::native::*;
 pub use crate::asm::x86::dist::*;
 
 pub(crate) mod native {
-  use crate::cpu_features::CpuFeatureLevel;
   use crate::partition::BlockSize;
   use crate::tiling::*;
   use crate::util::*;
 
   pub fn get_sad<T: Pixel>(
     plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>,
-    bsize: BlockSize, _bit_depth: usize, _cpu: CpuFeatureLevel,
+    bsize: BlockSize, _bit_depth: usize,
   ) -> u32 {
     let blk_w = bsize.width();
     let blk_h = bsize.height();
@@ -123,7 +122,7 @@ pub(crate) mod native {
   /// *x4 blocks use 4x4 and all others use 8x8.
   pub fn get_satd<T: Pixel>(
     plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>,
-    bsize: BlockSize, _bit_depth: usize, _cpu: CpuFeatureLevel,
+    bsize: BlockSize, _bit_depth: usize,
   ) -> u32 {
     let blk_w = bsize.width();
     let blk_h = bsize.height();
@@ -177,7 +176,6 @@ pub(crate) mod native {
 #[cfg(test)]
 pub mod test {
   use super::*;
-  use crate::cpu_features::CpuFeatureLevel;
   use crate::frame::*;
   use crate::partition::BlockSize;
   use crate::partition::BlockSize::*;
@@ -316,13 +314,7 @@ pub mod test {
 
       assert_eq!(
         block.1,
-        get_satd(
-          &mut input_region,
-          &mut rec_region,
-          block.0,
-          bit_depth,
-          CpuFeatureLevel::default()
-        )
+        get_satd(&mut input_region, &mut rec_region, block.0, bit_depth)
       );
     }
   }

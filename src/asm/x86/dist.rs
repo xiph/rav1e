@@ -7,7 +7,6 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use crate::cpu_features::CpuFeatureLevel;
 use crate::dist::*;
 use crate::partition::BlockSize;
 use crate::tiling::*;
@@ -108,10 +107,9 @@ fn to_index(bsize: BlockSize) -> usize {
 #[allow(clippy::let_and_return)]
 pub fn get_sad<T: Pixel>(
   src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, bsize: BlockSize,
-  bit_depth: usize, cpu: CpuFeatureLevel,
+  bit_depth: usize,
 ) -> u32 {
-  let call_native =
-    || -> u32 { native::get_sad(dst, src, bsize, bit_depth, cpu) };
+  let call_native = || -> u32 { native::get_sad(dst, src, bsize, bit_depth) };
 
   #[cfg(feature = "check_asm")]
   let ref_dist = call_native();
@@ -151,10 +149,9 @@ pub fn get_sad<T: Pixel>(
 #[allow(clippy::let_and_return)]
 pub fn get_satd<T: Pixel>(
   src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, bsize: BlockSize,
-  bit_depth: usize, cpu: CpuFeatureLevel,
+  bit_depth: usize,
 ) -> u32 {
-  let call_native =
-    || -> u32 { native::get_satd(dst, src, bsize, bit_depth, cpu) };
+  let call_native = || -> u32 { native::get_satd(dst, src, bsize, bit_depth) };
 
   #[cfg(feature = "check_asm")]
   let ref_dist = call_native();

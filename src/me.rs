@@ -843,9 +843,9 @@ fn compute_mv_rd_cost<T: Pixel>(
   plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>,
 ) -> u64 {
   let sad = if use_satd {
-    get_satd(&plane_org, &plane_ref, bsize, bit_depth, fi.cpu_feature_level)
+    get_satd(&plane_org, &plane_ref, bsize, bit_depth)
   } else {
-    get_sad(&plane_org, &plane_ref, bsize, bit_depth, fi.cpu_feature_level)
+    get_sad(&plane_org, &plane_ref, bsize, bit_depth)
   };
 
   let rate1 = get_mv_rate(cand_mv, pmv[0], fi.allow_high_precision_mv);
@@ -961,13 +961,7 @@ fn full_search<T: Pixel>(
   // Select rectangular regions within search region with vert+horz windows
   for vert_window in search_region.vert_windows(blk_h).step_by(step) {
     for ref_window in vert_window.horz_windows(blk_w).step_by(step) {
-      let sad = get_sad(
-        &plane_org,
-        &ref_window,
-        bsize,
-        bit_depth,
-        fi.cpu_feature_level,
-      );
+      let sad = get_sad(&plane_org, &ref_window, bsize, bit_depth);
 
       let &Rect { x, y, .. } = ref_window.rect();
 

@@ -14,7 +14,7 @@ use num_derive::*;
 use crate::api::color::*;
 use crate::api::Rational;
 use crate::api::{Context, ContextInner};
-use crate::cpu_features::CpuFeatureLevel;
+use crate::cpu_features::get_detected_cpu_features;
 use crate::encoder::Tune;
 use crate::partition::BlockSize;
 use crate::tiling::TilingInfo;
@@ -574,7 +574,7 @@ impl Config {
 
     self.validate()?;
 
-    info!("CPU Feature Level: {}", CpuFeatureLevel::default());
+    info!("Using CPU Features: {}", get_detected_cpu_features().join(" "));
 
     let pool = rayon::ThreadPoolBuilder::new()
       .num_threads(self.threads)
