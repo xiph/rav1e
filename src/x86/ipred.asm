@@ -1361,11 +1361,11 @@ cglobal ipred_z1, 3, 8, 0, dst, stride, tl, w, h, angle, dx, maxbase
     shr                 r5d, 6 ; base3
     movhps              xm0, [rsp+r5]
     vpblendd             m1, m2, 0xc0
-    pand                 m2, m4, m6 ; frac << 1
+    pand                 m2, m4, m6 ; frac
     vpblendd             m0, m1, 0xf0
-    psubw                m1, m5, m2 ; (32 - frac) << 1
+    psubw                m1, m5, m2 ; 64-frac
     psllw                m2, 8
-    por                  m1, m2     ; (32-frac, frac) << 1
+    por                  m1, m2     ; 64-frac, frac
     pmaddubsw            m0, m1
     paddw                m6, m7     ; xpos += dx
     pmulhrsw             m0, m3
@@ -1462,12 +1462,12 @@ ALIGN function_align
     shr                 r5d, 6 ; base3
     movhps              xm0, [tlq+r5]
     vpblendd             m1, m2, 0xc0
-    pand                 m2, m4, m6 ; frac << 1
+    pand                 m2, m4, m6 ; frac
     vpblendd             m0, m1, 0xf0
-    psubw                m1, m5, m2 ; (32 - frac) << 1
+    psubw                m1, m5, m2 ; 64-frac
     psllw                m2, 8
     pshufb               m0, m8
-    por                  m1, m2     ; (32-frac, frac) << 1
+    por                  m1, m2     ; 64-frac, frac
     pmaddubsw            m0, m1
     pcmpgtw              m1, m9, m6 ; base < max_base_x
     pmulhrsw             m0, m3
@@ -2299,12 +2299,12 @@ ALIGN function_align
     sar                  r5, 6 ; base3
     movhps              xm0, [tlq+r5]
     vpblendd             m1, m2, 0xc0
-    pand                 m2, m4, m6 ; frac << 1
+    pand                 m2, m4, m6 ; frac
     vpblendd             m0, m1, 0xf0
-    psubw                m1, m5, m2 ; (32 - frac) << 1
+    psubw                m1, m5, m2 ; 64-frac
     psllw                m2, 8
     pshufb               m0, m8
-    por                  m1, m2     ; (32-frac, frac) << 1
+    por                  m1, m2     ; 64-frac, frac
     pmaddubsw            m0, m1
     pcmpgtw              m1, m9, m6 ; base < max_base_y
     pmulhrsw             m0, m3
