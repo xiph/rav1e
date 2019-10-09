@@ -332,7 +332,7 @@ fn get_output(cmd: &mut Command) -> Result<String, String> {
   if out.status.success() {
     Ok(String::from_utf8_lossy(&out.stdout).to_string())
   } else {
-    Err(String::from_utf8_lossy(&out.stderr))?
+    Err(String::from_utf8_lossy(&out.stderr).to_string())
   }
 }
 
@@ -342,12 +342,12 @@ fn is_nasm_new_enough(nasm_path: &Path) -> Result<(), String> {
   match get_output(Command::new(nasm_path).arg("-v")) {
     Ok(version) => {
       if version.contains("NASM version 0.") {
-        Err(version)?
+        Err(version)
       } else {
         Ok(())
       }
     }
-    Err(err) => Err(err)?,
+    Err(err) => Err(err),
   }
 }
 
