@@ -96,47 +96,23 @@ declare_asm_dist_fn![
   (rav1e_satd_64x16_avx2, u8)
 ];
 
-// BlockSize::BLOCK_SIZES.next_power_of_two();
-const DIST_FNS_LENGTH: usize = 32;
-
-fn to_index(bsize: BlockSize) -> usize {
-  bsize as usize & (DIST_FNS_LENGTH - 1)
-}
-
 #[inline(always)]
 #[allow(clippy::let_and_return)]
 pub fn get_sad<T: Pixel>(
   src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, bsize: BlockSize,
   bit_depth: usize,
 ) -> u32 {
-  let call_native = || -> u32 { native::get_sad(dst, src, bsize, bit_depth) };
-
   #[cfg(feature = "check_asm")]
-  let ref_dist = call_native();
+  let ref_dist = SadNative::get_sad(dst, src, bsize, bit_depth);
 
-  let dist = match T::type_enum() {
-    PixelType::U8 => match SAD_FNS[cpu.as_index()][to_index(bsize)] {
-      Some(func) => unsafe {
-        (func)(
-          src.data_ptr() as *const _,
-          T::to_asm_stride(src.plane_cfg.stride),
-          dst.data_ptr() as *const _,
-          T::to_asm_stride(dst.plane_cfg.stride),
-        )
-      },
-      None => call_native(),
-    },
-    PixelType::U16 => match SAD_HBD_FNS[cpu.as_index()][to_index(bsize)] {
-      Some(func) => unsafe {
-        (func)(
-          src.data_ptr() as *const _,
-          T::to_asm_stride(src.plane_cfg.stride),
-          dst.data_ptr() as *const _,
-          T::to_asm_stride(dst.plane_cfg.stride),
-        )
-      },
-      None => call_native(),
-    },
+  let dist = if is_x86_feature_detected!("avx2") {
+    SadAvx2::get_sad(src, dst, bsize, bit_depth)
+  } else if is_x86_feature_detected!("ssse3") {
+    SadSsse3::get_sad(src, dst, bsize, bit_depth)
+  } else if is_x86_feature_detected!("sse2") {
+    SadSse2::get_sad(src, dst, bsize, bit_depth)
+  } else {
+    SadNative::get_sad(src, dst, bsize, bit_depth)
   };
 
   #[cfg(feature = "check_asm")]
@@ -151,34 +127,13 @@ pub fn get_satd<T: Pixel>(
   src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, bsize: BlockSize,
   bit_depth: usize,
 ) -> u32 {
-  let call_native = || -> u32 { native::get_satd(dst, src, bsize, bit_depth) };
-
   #[cfg(feature = "check_asm")]
-  let ref_dist = call_native();
+  let ref_dist = SatdNative::get_satd(dst, src, bsize, bit_depth);
 
-  let dist = match T::type_enum() {
-    PixelType::U8 => match SATD_FNS[cpu.as_index()][to_index(bsize)] {
-      Some(func) => unsafe {
-        (func)(
-          src.data_ptr() as *const _,
-          T::to_asm_stride(src.plane_cfg.stride),
-          dst.data_ptr() as *const _,
-          T::to_asm_stride(dst.plane_cfg.stride),
-        )
-      },
-      None => call_native(),
-    },
-    PixelType::U16 => match SATD_HBD_FNS[cpu.as_index()][to_index(bsize)] {
-      Some(func) => unsafe {
-        (func)(
-          src.data_ptr() as *const _,
-          T::to_asm_stride(src.plane_cfg.stride),
-          dst.data_ptr() as *const _,
-          T::to_asm_stride(dst.plane_cfg.stride),
-        )
-      },
-      None => call_native(),
-    },
+  let dist = if is_x86_feature_detected!("avx2") {
+    SatdAvx2::get_satd(src, dst, bsize, bit_depth)
+  } else {
+    SatdNative::get_satd(src, dst, bsize, bit_depth)
   };
 
   #[cfg(feature = "check_asm")]
@@ -187,137 +142,214 @@ pub fn get_satd<T: Pixel>(
   dist
 }
 
-static SAD_FNS_SSE2: [Option<SadFn>; DIST_FNS_LENGTH] = {
-  let mut out: [Option<SadFn>; DIST_FNS_LENGTH] = [None; DIST_FNS_LENGTH];
+trait Sad<T: Pixel> {
+  fn get_sad(
+    src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, bsize: BlockSize,
+    bit_depth: usize,
+  ) -> u32;
+}
 
-  use BlockSize::*;
+struct SadAvx2;
 
-  out[BLOCK_4X4 as usize] = Some(rav1e_sad4x4_sse2);
-  out[BLOCK_4X8 as usize] = Some(rav1e_sad4x8_sse2);
-  out[BLOCK_4X16 as usize] = Some(rav1e_sad4x16_sse2);
+impl<T: Pixel> Sad<T> for SadAvx2 {
+  fn get_sad(
+    src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, bsize: BlockSize,
+    bit_depth: usize,
+  ) -> u32 {
+    if T::type_enum() == PixelType::U8 {
+      let func: Option<SadFn> = match bsize {
+        BlockSize::BLOCK_4X4 => Some(rav1e_sad4x4_sse2),
+        BlockSize::BLOCK_4X8 => Some(rav1e_sad4x8_sse2),
+        BlockSize::BLOCK_4X16 => Some(rav1e_sad4x16_sse2),
 
-  out[BLOCK_8X4 as usize] = Some(rav1e_sad8x4_sse2);
-  out[BLOCK_8X8 as usize] = Some(rav1e_sad8x8_sse2);
-  out[BLOCK_8X16 as usize] = Some(rav1e_sad8x16_sse2);
-  out[BLOCK_8X32 as usize] = Some(rav1e_sad8x32_sse2);
+        BlockSize::BLOCK_8X4 => Some(rav1e_sad8x4_sse2),
+        BlockSize::BLOCK_8X8 => Some(rav1e_sad8x8_sse2),
+        BlockSize::BLOCK_8X16 => Some(rav1e_sad8x16_sse2),
+        BlockSize::BLOCK_8X32 => Some(rav1e_sad8x32_sse2),
 
-  out[BLOCK_16X16 as usize] = Some(rav1e_sad16x16_sse2);
-  out[BLOCK_32X32 as usize] = Some(rav1e_sad32x32_sse2);
-  out[BLOCK_64X64 as usize] = Some(rav1e_sad64x64_sse2);
-  out[BLOCK_128X128 as usize] = Some(rav1e_sad128x128_sse2);
+        BlockSize::BLOCK_16X4 => Some(rav1e_sad16x4_avx2),
+        BlockSize::BLOCK_16X8 => Some(rav1e_sad16x8_avx2),
+        BlockSize::BLOCK_16X16 => Some(rav1e_sad16x16_avx2),
+        BlockSize::BLOCK_16X32 => Some(rav1e_sad16x32_avx2),
+        BlockSize::BLOCK_16X64 => Some(rav1e_sad16x64_avx2),
 
-  out
-};
+        BlockSize::BLOCK_32X8 => Some(rav1e_sad32x8_avx2),
+        BlockSize::BLOCK_32X16 => Some(rav1e_sad32x16_avx2),
+        BlockSize::BLOCK_32X32 => Some(rav1e_sad32x32_avx2),
+        BlockSize::BLOCK_32X64 => Some(rav1e_sad32x64_avx2),
 
-static SAD_FNS_AVX2: [Option<SadFn>; DIST_FNS_LENGTH] = {
-  let mut out: [Option<SadFn>; DIST_FNS_LENGTH] = [None; DIST_FNS_LENGTH];
+        BlockSize::BLOCK_64X16 => Some(rav1e_sad64x16_avx2),
+        BlockSize::BLOCK_64X32 => Some(rav1e_sad64x32_avx2),
+        BlockSize::BLOCK_64X64 => Some(rav1e_sad64x64_avx2),
+        BlockSize::BLOCK_64X128 => Some(rav1e_sad64x128_avx2),
 
-  use BlockSize::*;
+        BlockSize::BLOCK_128X64 => Some(rav1e_sad128x64_avx2),
+        BlockSize::BLOCK_128X128 => Some(rav1e_sad128x128_avx2),
+        _ => None,
+      };
+      if let Some(func) = func {
+        unsafe {
+          return func(
+            src.data_ptr() as *const _,
+            T::to_asm_stride(src.plane_cfg.stride),
+            dst.data_ptr() as *const _,
+            T::to_asm_stride(dst.plane_cfg.stride),
+          );
+        }
+      }
+    }
 
-  out[BLOCK_4X4 as usize] = Some(rav1e_sad4x4_sse2);
-  out[BLOCK_4X8 as usize] = Some(rav1e_sad4x8_sse2);
-  out[BLOCK_4X16 as usize] = Some(rav1e_sad4x16_sse2);
+    SadSsse3::get_sad(src, dst, bsize, bit_depth)
+  }
+}
 
-  out[BLOCK_8X4 as usize] = Some(rav1e_sad8x4_sse2);
-  out[BLOCK_8X8 as usize] = Some(rav1e_sad8x8_sse2);
-  out[BLOCK_8X16 as usize] = Some(rav1e_sad8x16_sse2);
-  out[BLOCK_8X32 as usize] = Some(rav1e_sad8x32_sse2);
+struct SadSsse3;
 
-  out[BLOCK_16X4 as usize] = Some(rav1e_sad16x4_avx2);
-  out[BLOCK_16X8 as usize] = Some(rav1e_sad16x8_avx2);
-  out[BLOCK_16X16 as usize] = Some(rav1e_sad16x16_avx2);
-  out[BLOCK_16X32 as usize] = Some(rav1e_sad16x32_avx2);
-  out[BLOCK_16X64 as usize] = Some(rav1e_sad16x64_avx2);
+impl<T: Pixel> Sad<T> for SadSsse3 {
+  fn get_sad(
+    src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, bsize: BlockSize,
+    bit_depth: usize,
+  ) -> u32 {
+    if T::type_enum() == PixelType::U16 {
+      let func: Option<SadHBDFn> = match bsize {
+        BlockSize::BLOCK_4X4 => Some(rav1e_sad_4x4_hbd_ssse3),
+        BlockSize::BLOCK_16X16 => Some(rav1e_sad_16x16_hbd_ssse3),
+        _ => None,
+      };
+      if let Some(func) = func {
+        unsafe {
+          return func(
+            src.data_ptr() as *const _,
+            T::to_asm_stride(src.plane_cfg.stride),
+            dst.data_ptr() as *const _,
+            T::to_asm_stride(dst.plane_cfg.stride),
+          );
+        }
+      }
+    }
 
-  out[BLOCK_32X8 as usize] = Some(rav1e_sad32x8_avx2);
-  out[BLOCK_32X16 as usize] = Some(rav1e_sad32x16_avx2);
-  out[BLOCK_32X32 as usize] = Some(rav1e_sad32x32_avx2);
-  out[BLOCK_32X64 as usize] = Some(rav1e_sad32x64_avx2);
+    SadSse2::get_sad(src, dst, bsize, bit_depth)
+  }
+}
 
-  out[BLOCK_64X16 as usize] = Some(rav1e_sad64x16_avx2);
-  out[BLOCK_64X32 as usize] = Some(rav1e_sad64x32_avx2);
-  out[BLOCK_64X64 as usize] = Some(rav1e_sad64x64_avx2);
-  out[BLOCK_64X128 as usize] = Some(rav1e_sad64x128_avx2);
+struct SadSse2;
 
-  out[BLOCK_128X64 as usize] = Some(rav1e_sad128x64_avx2);
-  out[BLOCK_128X128 as usize] = Some(rav1e_sad128x128_avx2);
+impl<T: Pixel> Sad<T> for SadSse2 {
+  fn get_sad(
+    src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, bsize: BlockSize,
+    bit_depth: usize,
+  ) -> u32 {
+    if T::type_enum() == PixelType::U8 {
+      let func: Option<SadFn> = match bsize {
+        BlockSize::BLOCK_4X4 => Some(rav1e_sad4x4_sse2),
+        BlockSize::BLOCK_4X8 => Some(rav1e_sad4x8_sse2),
+        BlockSize::BLOCK_4X16 => Some(rav1e_sad4x16_sse2),
 
-  out
-};
+        BlockSize::BLOCK_8X4 => Some(rav1e_sad8x4_sse2),
+        BlockSize::BLOCK_8X8 => Some(rav1e_sad8x8_sse2),
+        BlockSize::BLOCK_8X16 => Some(rav1e_sad8x16_sse2),
+        BlockSize::BLOCK_8X32 => Some(rav1e_sad8x32_sse2),
 
-pub static SAD_FNS: [[Option<SadFn>; DIST_FNS_LENGTH];
-  CpuFeatureLevel::len()] = {
-  let mut out = [[None; DIST_FNS_LENGTH]; CpuFeatureLevel::len()];
+        BlockSize::BLOCK_16X16 => Some(rav1e_sad16x16_sse2),
+        BlockSize::BLOCK_32X32 => Some(rav1e_sad32x32_sse2),
+        BlockSize::BLOCK_64X64 => Some(rav1e_sad64x64_sse2),
+        BlockSize::BLOCK_128X128 => Some(rav1e_sad128x128_sse2),
+        _ => None,
+      };
+      if let Some(func) = func {
+        unsafe {
+          return func(
+            src.data_ptr() as *const _,
+            T::to_asm_stride(src.plane_cfg.stride),
+            dst.data_ptr() as *const _,
+            T::to_asm_stride(dst.plane_cfg.stride),
+          );
+        }
+      }
+    }
 
-  out[CpuFeatureLevel::SSE2 as usize] = SAD_FNS_SSE2;
-  out[CpuFeatureLevel::SSSE3 as usize] = SAD_FNS_SSE2;
-  out[CpuFeatureLevel::AVX2 as usize] = SAD_FNS_AVX2;
+    SadNative::get_sad(src, dst, bsize, bit_depth)
+  }
+}
 
-  out
-};
+struct SadNative;
 
-static SAD_HBD_FNS_SSSE3: [Option<SadHBDFn>; DIST_FNS_LENGTH] = {
-  let mut out: [Option<SadHBDFn>; DIST_FNS_LENGTH] = [None; DIST_FNS_LENGTH];
+impl<T: Pixel> Sad<T> for SadNative {
+  #[inline(always)]
+  fn get_sad(
+    src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, bsize: BlockSize,
+    bit_depth: usize,
+  ) -> u32 {
+    native::get_sad(src, dst, bsize, bit_depth)
+  }
+}
 
-  use BlockSize::*;
+trait Satd<T: Pixel> {
+  fn get_satd(
+    src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, bsize: BlockSize,
+    bit_depth: usize,
+  ) -> u32;
+}
 
-  out[BLOCK_4X4 as usize] = Some(rav1e_sad_4x4_hbd_ssse3);
-  out[BLOCK_16X16 as usize] = Some(rav1e_sad_16x16_hbd_ssse3);
+struct SatdAvx2;
 
-  out
-};
+impl<T: Pixel> Satd<T> for SatdAvx2 {
+  fn get_satd(
+    src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, bsize: BlockSize,
+    bit_depth: usize,
+  ) -> u32 {
+    if T::type_enum() == PixelType::U8 {
+      let func: Option<SatdFn> = match bsize {
+        BlockSize::BLOCK_4X4 => Some(rav1e_satd_4x4_avx2),
+        BlockSize::BLOCK_8X8 => Some(rav1e_satd_8x8_avx2),
+        BlockSize::BLOCK_16X16 => Some(rav1e_satd_16x16_avx2),
+        BlockSize::BLOCK_32X32 => Some(rav1e_satd_32x32_avx2),
+        BlockSize::BLOCK_64X64 => Some(rav1e_satd_64x64_avx2),
+        BlockSize::BLOCK_128X128 => Some(rav1e_satd_128x128_avx2),
 
-pub(crate) static SAD_HBD_FNS: [[Option<SadHBDFn>; DIST_FNS_LENGTH];
-  CpuFeatureLevel::len()] = {
-  let mut out = [[None; DIST_FNS_LENGTH]; CpuFeatureLevel::len()];
+        BlockSize::BLOCK_4X8 => Some(rav1e_satd_4x8_avx2),
+        BlockSize::BLOCK_8X4 => Some(rav1e_satd_8x4_avx2),
+        BlockSize::BLOCK_8X16 => Some(rav1e_satd_8x16_avx2),
+        BlockSize::BLOCK_16X8 => Some(rav1e_satd_16x8_avx2),
+        BlockSize::BLOCK_16X32 => Some(rav1e_satd_16x32_avx2),
+        BlockSize::BLOCK_32X16 => Some(rav1e_satd_32x16_avx2),
+        BlockSize::BLOCK_32X64 => Some(rav1e_satd_32x64_avx2),
+        BlockSize::BLOCK_64X32 => Some(rav1e_satd_64x32_avx2),
+        BlockSize::BLOCK_64X128 => Some(rav1e_satd_64x128_avx2),
+        BlockSize::BLOCK_128X64 => Some(rav1e_satd_128x64_avx2),
 
-  out[CpuFeatureLevel::SSSE3 as usize] = SAD_HBD_FNS_SSSE3;
-  out[CpuFeatureLevel::AVX2 as usize] = SAD_HBD_FNS_SSSE3;
+        BlockSize::BLOCK_4X16 => Some(rav1e_satd_4x16_avx2),
+        BlockSize::BLOCK_16X4 => Some(rav1e_satd_16x4_avx2),
+        BlockSize::BLOCK_8X32 => Some(rav1e_satd_8x32_avx2),
+        BlockSize::BLOCK_32X8 => Some(rav1e_satd_32x8_avx2),
+        BlockSize::BLOCK_16X64 => Some(rav1e_satd_16x64_avx2),
+        BlockSize::BLOCK_64X16 => Some(rav1e_satd_64x16_avx2),
+        _ => None,
+      };
+      if let Some(func) = func {
+        unsafe {
+          return func(
+            src.data_ptr() as *const _,
+            T::to_asm_stride(src.plane_cfg.stride),
+            dst.data_ptr() as *const _,
+            T::to_asm_stride(dst.plane_cfg.stride),
+          );
+        }
+      }
+    }
 
-  out
-};
+    SatdNative::get_satd(src, dst, bsize, bit_depth)
+  }
+}
 
-static SATD_FNS_AVX2: [Option<SatdFn>; DIST_FNS_LENGTH] = {
-  let mut out: [Option<SatdFn>; DIST_FNS_LENGTH] = [None; DIST_FNS_LENGTH];
+struct SatdNative;
 
-  use BlockSize::*;
-
-  out[BLOCK_4X4 as usize] = Some(rav1e_satd_4x4_avx2);
-  out[BLOCK_8X8 as usize] = Some(rav1e_satd_8x8_avx2);
-  out[BLOCK_16X16 as usize] = Some(rav1e_satd_16x16_avx2);
-  out[BLOCK_32X32 as usize] = Some(rav1e_satd_32x32_avx2);
-  out[BLOCK_64X64 as usize] = Some(rav1e_satd_64x64_avx2);
-  out[BLOCK_128X128 as usize] = Some(rav1e_satd_128x128_avx2);
-
-  out[BLOCK_4X8 as usize] = Some(rav1e_satd_4x8_avx2);
-  out[BLOCK_8X4 as usize] = Some(rav1e_satd_8x4_avx2);
-  out[BLOCK_8X16 as usize] = Some(rav1e_satd_8x16_avx2);
-  out[BLOCK_16X8 as usize] = Some(rav1e_satd_16x8_avx2);
-  out[BLOCK_16X32 as usize] = Some(rav1e_satd_16x32_avx2);
-  out[BLOCK_32X16 as usize] = Some(rav1e_satd_32x16_avx2);
-  out[BLOCK_32X64 as usize] = Some(rav1e_satd_32x64_avx2);
-  out[BLOCK_64X32 as usize] = Some(rav1e_satd_64x32_avx2);
-  out[BLOCK_64X128 as usize] = Some(rav1e_satd_64x128_avx2);
-  out[BLOCK_128X64 as usize] = Some(rav1e_satd_128x64_avx2);
-
-  out[BLOCK_4X16 as usize] = Some(rav1e_satd_4x16_avx2);
-  out[BLOCK_16X4 as usize] = Some(rav1e_satd_16x4_avx2);
-  out[BLOCK_8X32 as usize] = Some(rav1e_satd_8x32_avx2);
-  out[BLOCK_32X8 as usize] = Some(rav1e_satd_32x8_avx2);
-  out[BLOCK_16X64 as usize] = Some(rav1e_satd_16x64_avx2);
-  out[BLOCK_64X16 as usize] = Some(rav1e_satd_64x16_avx2);
-
-  out
-};
-
-pub(crate) static SATD_FNS: [[Option<SatdFn>; DIST_FNS_LENGTH];
-  CpuFeatureLevel::len()] = {
-  let mut out = [[None; DIST_FNS_LENGTH]; CpuFeatureLevel::len()];
-
-  out[CpuFeatureLevel::AVX2 as usize] = SATD_FNS_AVX2;
-
-  out
-};
-
-pub(crate) static SATD_HBD_FNS: [[Option<SatdHBDFn>; DIST_FNS_LENGTH];
-  CpuFeatureLevel::len()] = [[None; DIST_FNS_LENGTH]; CpuFeatureLevel::len()];
+impl<T: Pixel> Satd<T> for SatdNative {
+  #[inline(always)]
+  fn get_satd(
+    src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, bsize: BlockSize,
+    bit_depth: usize,
+  ) -> u32 {
+    native::get_satd(src, dst, bsize, bit_depth)
+  }
+}
