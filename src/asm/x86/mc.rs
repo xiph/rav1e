@@ -34,15 +34,6 @@ type PrepFn = unsafe extern fn(
   row_frac: i32,
 );
 
-type AvgFn = unsafe extern fn(
-  dst: *mut u8,
-  dst_stride: isize,
-  tmp1: *const i16,
-  tmp2: *const i16,
-  width: i32,
-  height: i32,
-);
-
 pub fn put_8tap<T: Pixel>(
   dst: &mut PlaneRegionMut<'_, T>, src: PlaneSlice<'_, T>, width: usize,
   height: usize, col_frac: i32, row_frac: i32, mode_x: FilterMode,

@@ -24,30 +24,31 @@ type CdefFilterFn = unsafe extern fn(
   damping: i32,
 );
 
-type CdefFilterHBDFn = unsafe extern fn(
-  dst: *mut u8,
-  dst_stride: isize,
-  tmp: *const u16,
-  tmp_stride: isize,
-  pri_strength: i32,
-  sec_strength: i32,
-  dir: i32,
-  damping: i32,
-  bit_depth: i32,
-);
-
-#[inline(always)]
-const fn decimate_index(xdec: usize, ydec: usize) -> usize {
-  ((ydec << 1) | xdec) & 3
-}
-
 pub unsafe fn cdef_filter_block<T: Pixel>(
   dst: &mut PlaneRegionMut<'_, T>, src: *const u16, src_stride: isize,
   pri_strength: i32, sec_strength: i32, dir: usize, damping: i32,
   bit_depth: usize, xdec: usize, ydec: usize,
 ) {
-  let call_native = |dst: &mut PlaneRegionMut<T>| {
-    native::cdef_filter_block(
+  #[cfg(feature = "check_asm")]
+  let ref_dst = {
+    let mut copy = dst.scratch_copy();
+    CdefFilterNative::cdef_filter_block(
+      &mut copy.as_region_mut(),
+      src,
+      src_stride,
+      pri_strength,
+      sec_strength,
+      dir,
+      damping,
+      bit_depth,
+      xdec,
+      ydec,
+    );
+    copy
+  };
+
+  if is_x86_feature_detected!("avx2") {
+    CdefFilterAvx2::cdef_filter_block(
       dst,
       src,
       src_stride,
@@ -59,50 +60,21 @@ pub unsafe fn cdef_filter_block<T: Pixel>(
       xdec,
       ydec,
     );
-  };
-  #[cfg(feature = "check_asm")]
-  let ref_dst = {
-    let mut copy = dst.scratch_copy();
-    call_native(&mut copy.as_region_mut());
-    copy
-  };
-  match T::type_enum() {
-    PixelType::U8 => {
-      match CDEF_FILTER_FNS[cpu.as_index()][decimate_index(xdec, ydec)] {
-        Some(func) => {
-          (func)(
-            dst.data_ptr_mut() as *mut _,
-            T::to_asm_stride(dst.plane_cfg.stride),
-            src,
-            src_stride,
-            pri_strength,
-            sec_strength,
-            dir as i32,
-            damping,
-          );
-        }
-        None => call_native(dst),
-      }
-    }
-    PixelType::U16 => {
-      match CDEF_FILTER_HBD_FNS[cpu.as_index()][decimate_index(xdec, ydec)] {
-        Some(func) => {
-          (func)(
-            dst.data_ptr_mut() as *mut _,
-            T::to_asm_stride(dst.plane_cfg.stride),
-            src,
-            src_stride,
-            pri_strength,
-            sec_strength,
-            dir as i32,
-            damping,
-            bit_depth as i32,
-          );
-        }
-        None => call_native(dst),
-      }
-    }
+  } else {
+    CdefFilterNative::cdef_filter_block(
+      dst,
+      src,
+      src_stride,
+      pri_strength,
+      sec_strength,
+      dir,
+      damping,
+      bit_depth,
+      xdec,
+      ydec,
+    );
   }
+
   #[cfg(feature = "check_asm")]
   {
     for (dst_row, ref_row) in
@@ -132,21 +104,78 @@ extern {
   );
 }
 
-static CDEF_FILTER_FNS_AVX2: [Option<CdefFilterFn>; 4] = {
-  let mut out: [Option<CdefFilterFn>; 4] = [None; 4];
-  out[decimate_index(1, 1)] = Some(rav1e_cdef_filter_4x4_avx2);
-  out[decimate_index(1, 0)] = Some(rav1e_cdef_filter_4x8_avx2);
-  out[decimate_index(0, 0)] = Some(rav1e_cdef_filter_8x8_avx2);
-  out
-};
+trait CdefFilter<T: Pixel> {
+  unsafe fn cdef_filter_block(
+    dst: &mut PlaneRegionMut<'_, T>, src: *const u16, src_stride: isize,
+    pri_strength: i32, sec_strength: i32, dir: usize, damping: i32,
+    bit_depth: usize, xdec: usize, ydec: usize,
+  );
+}
 
-pub(crate) static CDEF_FILTER_FNS: [[Option<CdefFilterFn>; 4];
-  CpuFeatureLevel::len()] = {
-  let mut out: [[Option<CdefFilterFn>; 4]; CpuFeatureLevel::len()] =
-    [[None; 4]; CpuFeatureLevel::len()];
-  out[CpuFeatureLevel::AVX2 as usize] = CDEF_FILTER_FNS_AVX2;
-  out
-};
+struct CdefFilterAvx2;
 
-pub(crate) static CDEF_FILTER_HBD_FNS: [[Option<CdefFilterHBDFn>; 4];
-  CpuFeatureLevel::len()] = [[None; 4]; CpuFeatureLevel::len()];
+impl<T: Pixel> CdefFilter<T> for CdefFilterAvx2 {
+  unsafe fn cdef_filter_block(
+    dst: &mut PlaneRegionMut<'_, T>, src: *const u16, src_stride: isize,
+    pri_strength: i32, sec_strength: i32, dir: usize, damping: i32,
+    bit_depth: usize, xdec: usize, ydec: usize,
+  ) {
+    if T::type_enum() == PixelType::U8 {
+      let func: Option<CdefFilterFn> = match (xdec, ydec) {
+        (1, 1) => Some(rav1e_cdef_filter_4x4_avx2),
+        (1, 0) => Some(rav1e_cdef_filter_4x8_avx2),
+        (0, 0) => Some(rav1e_cdef_filter_8x8_avx2),
+        _ => None,
+      };
+      if let Some(func) = func {
+        return func(
+          dst.data_ptr_mut() as *mut _,
+          T::to_asm_stride(dst.plane_cfg.stride),
+          src,
+          src_stride,
+          pri_strength,
+          sec_strength,
+          dir as i32,
+          damping,
+        );
+      }
+    }
+
+    CdefFilterNative::cdef_filter_block(
+      dst,
+      src,
+      src_stride,
+      pri_strength,
+      sec_strength,
+      dir,
+      damping,
+      bit_depth,
+      xdec,
+      ydec,
+    )
+  }
+}
+
+struct CdefFilterNative;
+
+impl<T: Pixel> CdefFilter<T> for CdefFilterNative {
+  #[inline(always)]
+  unsafe fn cdef_filter_block(
+    dst: &mut PlaneRegionMut<'_, T>, src: *const u16, src_stride: isize,
+    pri_strength: i32, sec_strength: i32, dir: usize, damping: i32,
+    bit_depth: usize, xdec: usize, ydec: usize,
+  ) {
+    native::cdef_filter_block(
+      dst,
+      src,
+      src_stride,
+      pri_strength,
+      sec_strength,
+      dir,
+      damping,
+      bit_depth,
+      xdec,
+      ydec,
+    );
+  }
+}

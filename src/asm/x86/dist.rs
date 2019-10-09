@@ -28,8 +28,6 @@ type SadHBDFn = unsafe extern fn(
   dst_stride: isize,
 ) -> u32;
 
-type SatdHBDFn = SadHBDFn;
-
 macro_rules! declare_asm_dist_fn {
   ($(($name: ident, $T: ident)),+) => (
     $(
