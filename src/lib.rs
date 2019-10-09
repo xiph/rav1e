@@ -36,6 +36,14 @@
 
 #![allow(safe_extern_statics)]
 #![deny(bare_trait_objects)]
+#![allow(clippy::cast_lossless)]
+#![allow(clippy::cast_ptr_alignment)]
+#![allow(clippy::cognitive_complexity)]
+#![allow(clippy::needless_range_loop)]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::verbose_bit_mask)]
+#![allow(clippy::unreadable_literal)]
+#![allow(clippy::many_single_char_names)]
 
 // Override assert! and assert_eq! in tests
 #[cfg(test)]
