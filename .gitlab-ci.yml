@@ -82,9 +82,7 @@ Clippy Lints:
   script:
     - touch src/lib.rs # Ensure cargo re-checks rav1e, since we ran `cargo check` earlier
     - >-
-      cargo clippy -- -D warnings -A clippy::cast_lossless -A clippy::cast_ptr_alignment
-      -A clippy::cognitive_complexity -A clippy::needless_range_loop -A clippy::too_many_arguments
-      -A clippy::verbose_bit_mask -A clippy::unreadable_literal -A clippy::many_single_char_names
+      cargo clippy -- -D warnings
 
 Code Styles:
   stage: lint
