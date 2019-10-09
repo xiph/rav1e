@@ -96,7 +96,7 @@ fn run_command(command: &mut Command) -> String {
       return String::from_utf8_lossy(&o.stdout).trim().to_owned();
     }
   }
-  return "UNKNOWN".to_owned();
+  "UNKNOWN".to_owned()
 }
 
 /// Build information keys.
