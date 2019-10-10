@@ -19,15 +19,9 @@ use crate::util::{clamp, msb, CastFromPrimitive, Pixel};
 use crate::cpu_features::CpuFeatureLevel;
 use std::cmp;
 
-#[cfg(not(all(
-  feature = "nasm",
-  any(target_arch = "x86", target_arch = "x86_64")
-)))]
+#[cfg(not(all(feature = "nasm", target_arch = "x86_64")))]
 pub(crate) use self::native::*;
-#[cfg(all(
-  feature = "nasm",
-  any(target_arch = "x86", target_arch = "x86_64")
-))]
+#[cfg(all(feature = "nasm", target_arch = "x86_64"))]
 pub use crate::asm::x86::cdef::*;
 
 pub struct CdefDirections {
