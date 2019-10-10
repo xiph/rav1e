@@ -152,7 +152,7 @@ To install clippy:
 rustup component add clippy
 ```
 
-then you can search "cargo clippy" in [.travis.yml](https://github.com/xiph/rav1e/blob/master/.travis.yml) for detailed command and run it.
+then you can run `cargo clippy` in place of `cargo check`.
 
 ### Testing
 
