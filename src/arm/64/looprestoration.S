@@ -1688,14 +1688,14 @@ function sgr_finish_filter2_neon, export=1
 
 2:
         subs            x5,  x5,  #8
-        ext             v22.16b, v0.16b,  v1.16b, #2  // -stride
-        ext             v23.16b, v2.16b,  v3.16b, #2  // +stride
         ext             v24.16b, v0.16b,  v1.16b, #4  // +1-stride
         ext             v25.16b, v2.16b,  v3.16b, #4  // +1+stride
+        ext             v22.16b, v0.16b,  v1.16b, #2  // -stride
+        ext             v23.16b, v2.16b,  v3.16b, #2  // +stride
         add             v0.8h,   v0.8h,   v24.8h      // -1-stride, +1-stride
         add             v25.8h,  v2.8h,   v25.8h      // -1+stride, +1+stride
-        add             v0.8h,   v0.8h,   v25.8h
         add             v2.8h,   v22.8h,  v23.8h      // -stride, +stride
+        add             v0.8h,   v0.8h,   v25.8h
 
         ext             v22.16b, v16.16b, v17.16b, #4 // -stride
         ext             v23.16b, v17.16b, v18.16b, #4
@@ -1760,8 +1760,8 @@ function sgr_finish_filter2_neon, export=1
 
 4:
         subs            x5,  x5,  #8
-        ext             v22.16b, v0.16b,  v1.16b, #2  // 0
         ext             v23.16b, v0.16b,  v1.16b, #4  // +1
+        ext             v22.16b, v0.16b,  v1.16b, #2  // 0
         add             v0.8h,   v0.8h,   v23.8h      // -1, +1
 
         ext             v24.16b, v16.16b, v17.16b, #4 // 0
