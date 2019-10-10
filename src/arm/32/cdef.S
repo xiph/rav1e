@@ -348,10 +348,10 @@ function cdef_filter\w\()_neon, export=1
         vpush           {q4-q7}
         ldrd            r4,  r5,  [sp, #92]
         ldrd            r6,  r7,  [sp, #100]
-        movrel          r8,  pri_taps, global=0
+        movrel_local    r8,  pri_taps
         and             r9,  r3,  #1
         add             r8,  r8,  r9, lsl #1
-        movrel          r9,  directions\w, global=0
+        movrel_local    r9,  directions\w
         add             r5,  r9,  r5, lsl #1
         vmov.u16        d17, #15
         vdup.16         d16, r6              // damping
@@ -563,7 +563,7 @@ function cdef_find_dir_neon, export=1
         vstr            s16, [sp, #2*4]        // cost[2]
         vstr            s17, [sp, #6*4]        // cost[6]
 
-        movrel          r12, div_table, global=0
+        movrel_local    r12, div_table
         vld1.16         {q14}, [r12, :128]
 
         vmull.s16       q5,  d0,  d0           // sum_diag[0]*sum_diag[0]
@@ -584,7 +584,7 @@ function cdef_find_dir_neon, export=1
         vadd.i32        d0,  d0,  d1
         vpadd.i32       d0,  d10, d0           // cost[0,4] = s0,s1
 
-        movrel          r12, alt_fact, global=0
+        movrel_local    r12, alt_fact
         vld1.16         {d29, d30, d31}, [r12, :64] // div_table[2*m+1] + 105
 
         vstr            s0,  [sp, #0*4]        // cost[0]
