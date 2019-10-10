@@ -961,8 +961,8 @@ mod test {
       let r = self.rng as u32;
       assert!(self.dif >> (WINDOW_SIZE - 16) < r);
       assert!(32768 <= r);
-      let v =
-        ((r >> 8) * (f >> EC_PROB_SHIFT) >> (7 - EC_PROB_SHIFT)) + EC_MIN_PROB;
+      let v = (((r >> 8) * (f >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT))
+        + EC_MIN_PROB;
       let vw = v << (WINDOW_SIZE - 16);
       let (dif, rng, ret) = if self.dif >= vw {
         (self.dif - vw, r - v, false)
@@ -982,13 +982,13 @@ mod test {
       let mut v = self.rng as u32;
       let mut ret = 0i32;
       let mut u = v;
-      v = (r >> 8) * (icdf[ret as usize] as u32 >> EC_PROB_SHIFT)
+      v = ((r >> 8) * (icdf[ret as usize] as u32 >> EC_PROB_SHIFT))
         >> (7 - EC_PROB_SHIFT);
       v += EC_MIN_PROB * (n - ret as u32);
       while c < v {
         u = v;
         ret += 1;
-        v = (r >> 8) * (icdf[ret as usize] as u32 >> EC_PROB_SHIFT)
+        v = ((r >> 8) * (icdf[ret as usize] as u32 >> EC_PROB_SHIFT))
           >> (7 - EC_PROB_SHIFT);
         v += EC_MIN_PROB * (n - ret as u32);
       }

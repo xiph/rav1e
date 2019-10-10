@@ -191,8 +191,8 @@ pub mod test {
     for (i, row) in
       input_plane.data.chunks_mut(input_plane.cfg.stride).enumerate()
     {
-      for (j, pixel) in row.into_iter().enumerate() {
-        let val = (j + i) as i32 - xpad_off & 255i32;
+      for (j, pixel) in row.iter_mut().enumerate() {
+        let val = ((j + i) as i32 - xpad_off) & 255i32;
         assert!(
           val >= u8::min_value().into() && val <= u8::max_value().into()
         );
@@ -202,8 +202,8 @@ pub mod test {
 
     for (i, row) in rec_plane.data.chunks_mut(rec_plane.cfg.stride).enumerate()
     {
-      for (j, pixel) in row.into_iter().enumerate() {
-        let val = j as i32 - i as i32 - xpad_off & 255i32;
+      for (j, pixel) in row.iter_mut().enumerate() {
+        let val = (j as i32 - i as i32 - xpad_off) & 255i32;
         assert!(
           val >= u8::min_value().into() && val <= u8::max_value().into()
         );
@@ -247,14 +247,14 @@ pub mod test {
     for block in blocks {
       let area = Area::StartingAt { x: 32, y: 40 };
 
-      let mut input_region = input_plane.region(area);
-      let mut rec_region = rec_plane.region(area);
+      let input_region = input_plane.region(area);
+      let rec_region = rec_plane.region(area);
 
       assert_eq!(
         block.1,
         get_sad(
-          &mut input_region,
-          &mut rec_region,
+          &input_region,
+          &rec_region,
           block.0,
           bit_depth,
           CpuFeatureLevel::default()
@@ -305,14 +305,14 @@ pub mod test {
     for block in blocks {
       let area = Area::StartingAt { x: 32, y: 40 };
 
-      let mut input_region = input_plane.region(area);
-      let mut rec_region = rec_plane.region(area);
+      let input_region = input_plane.region(area);
+      let rec_region = rec_plane.region(area);
 
       assert_eq!(
         block.1,
         get_satd(
-          &mut input_region,
-          &mut rec_region,
+          &input_region,
+          &rec_region,
           block.0,
           bit_depth,
           CpuFeatureLevel::default()

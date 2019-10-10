@@ -1569,13 +1569,13 @@ mod test {
   use super::{bexp64, blog64};
 
   #[test]
-  fn blog64_vectors() -> () {
+  fn blog64_vectors() {
     assert!(blog64(1793) == 0x159dc71e24d32daf);
     assert!(blog64(0x678dde6e5fd29f05) == 0x7d6373ad151ca685);
   }
 
   #[test]
-  fn bexp64_vectors() -> () {
+  fn bexp64_vectors() {
     assert!(bexp64(0x159dc71e24d32daf) == 1793);
     assert!((bexp64(0x7d6373ad151ca685) - 0x678dde6e5fd29f05).abs() < 29);
   }

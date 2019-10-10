@@ -44,7 +44,7 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
     ..Default::default()
   };
   let sequence = Sequence::new(&Default::default());
-  let mut fi = FrameInvariants::<u16>::new(config, sequence);
+  let fi = FrameInvariants::<u16>::new(config, sequence);
   let mut w = WriterEncoder::new();
   let mut fc = CDFContext::new(fi.base_q_idx);
   let mut fb = FrameBlocks::new(fi.sb_width * 16, fi.sb_height * 16);
@@ -86,7 +86,7 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
               TileBlockOffset(BlockOffset { x: bo.0.x + bx, y: bo.0.y + by });
             let po = tx_bo.plane_offset(&ts.input.planes[p].cfg);
             encode_tx_block(
-              &mut fi,
+              &fi,
               &mut ts,
               &mut cw,
               &mut w,
