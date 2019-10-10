@@ -11,15 +11,9 @@
 #![allow(non_camel_case_types)]
 #![allow(dead_code)]
 
-#[cfg(not(all(
-  feature = "nasm",
-  any(target_arch = "x86", target_arch = "x86_64")
-)))]
+#[cfg(not(all(feature = "nasm", target_arch = "x86_64")))]
 pub use self::native::*;
-#[cfg(all(
-  feature = "nasm",
-  any(target_arch = "x86", target_arch = "x86_64")
-))]
+#[cfg(all(feature = "nasm", target_arch = "x86_64"))]
 pub use crate::asm::x86::predict::*;
 use crate::context::{INTRA_MODES, MAX_TX_SIZE};
 use crate::encoder::FrameInvariants;

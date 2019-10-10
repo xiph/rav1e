@@ -277,7 +277,7 @@ fn clamp_value(value: i32, bit: usize) -> i32 {
 
 pub fn av1_round_shift_array(arr: &mut [i32], size: usize, bit: i8) {
   // FIXME
-  //  #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+  //  #[cfg(target_arch = "x86_64")]
   //      {
   //        if is_x86_feature_detected!("sse4.1") {
   //          return unsafe {

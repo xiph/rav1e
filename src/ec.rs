@@ -10,15 +10,9 @@
 
 #![allow(non_camel_case_types)]
 
-#[cfg(not(all(
-  feature = "nasm",
-  any(target_arch = "x86", target_arch = "x86_64")
-)))]
+#[cfg(not(all(feature = "nasm", target_arch = "x86_64")))]
 pub use self::native::*;
-#[cfg(all(
-  feature = "nasm",
-  any(target_arch = "x86", target_arch = "x86_64")
-))]
+#[cfg(all(feature = "nasm", target_arch = "x86_64"))]
 pub use crate::asm::x86::ec::*;
 use crate::util::msb;
 use crate::util::ILog;

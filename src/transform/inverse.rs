@@ -7,15 +7,9 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-#[cfg(not(all(
-  feature = "nasm",
-  any(target_arch = "x86", target_arch = "x86_64")
-)))]
+#[cfg(not(all(feature = "nasm", target_arch = "x86_64")))]
 pub use self::native::*;
-#[cfg(all(
-  feature = "nasm",
-  any(target_arch = "x86", target_arch = "x86_64")
-))]
+#[cfg(all(feature = "nasm", target_arch = "x86_64"))]
 pub use crate::asm::x86::transform::inverse::*;
 
 // TODO: move 1d txfm code to native module.
