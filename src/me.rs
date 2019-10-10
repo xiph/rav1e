@@ -843,21 +843,9 @@ fn compute_mv_rd_cost<T: Pixel>(
   plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>,
 ) -> u64 {
   let sad = if use_satd {
-    get_satd(
-      &plane_org,
-      &plane_ref,
-      bsize,
-      bit_depth,
-      fi.config.cpu_feature_level,
-    )
+    get_satd(&plane_org, &plane_ref, bsize, bit_depth, fi.cpu_feature_level)
   } else {
-    get_sad(
-      &plane_org,
-      &plane_ref,
-      bsize,
-      bit_depth,
-      fi.config.cpu_feature_level,
-    )
+    get_sad(&plane_org, &plane_ref, bsize, bit_depth, fi.cpu_feature_level)
   };
 
   let rate1 = get_mv_rate(cand_mv, pmv[0], fi.allow_high_precision_mv);
@@ -978,7 +966,7 @@ fn full_search<T: Pixel>(
         &ref_window,
         bsize,
         bit_depth,
-        fi.config.cpu_feature_level,
+        fi.cpu_feature_level,
       );
 
       let &Rect { x, y, .. } = ref_window.rect();

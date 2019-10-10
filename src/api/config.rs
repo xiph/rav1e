@@ -14,6 +14,7 @@ use num_derive::*;
 use crate::api::color::*;
 use crate::api::Rational;
 use crate::api::{Context, ContextInner};
+use crate::cpu_features::CpuFeatureLevel;
 use crate::encoder::Tune;
 use crate::partition::BlockSize;
 use crate::tiling::TilingInfo;
@@ -106,8 +107,6 @@ pub struct EncoderConfig {
   pub show_psnr: bool,
   /// Enables dumping of internal RDO training data.
   pub train_rdo: bool,
-  /// Target CPU feature level.
-  pub cpu_feature_level: crate::cpu_features::CpuFeatureLevel,
 }
 
 /// Default preset for EncoderConfig: it is a balance between quality and
@@ -160,7 +159,6 @@ impl EncoderConfig {
       speed_settings: SpeedSettings::from_preset(speed),
       show_psnr: false,
       train_rdo: false,
-      cpu_feature_level: Default::default(),
     }
   }
 
@@ -576,7 +574,11 @@ impl Config {
 
     self.validate()?;
 
-    info!("CPU Feature Level: {}", self.enc.cpu_feature_level);
+    // Because we don't have a FrameInvariants yet,
+    // this is the only way to get the CpuFeatureLevel in use.
+    // Since we only call this once, this shouldn't cause
+    // performance issues.
+    info!("CPU Feature Level: {}", CpuFeatureLevel::default());
 
     let pool = rayon::ThreadPoolBuilder::new()
       .num_threads(self.threads)

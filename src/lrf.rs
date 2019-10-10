@@ -615,7 +615,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
       stripe_w,
       s_r2,
       bdm8,
-      fi.config.cpu_feature_level,
+      fi.cpu_feature_level,
     );
   }
   if s_r1 > 0 {
@@ -630,7 +630,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
       stripe_w,
       s_r1,
       bdm8,
-      fi.config.cpu_feature_level,
+      fi.cpu_feature_level,
     );
     sgrproj_box_ab_r1(
       &mut a_r1[1],
@@ -642,7 +642,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
       stripe_w,
       s_r1,
       bdm8,
-      fi.config.cpu_feature_level,
+      fi.cpu_feature_level,
     );
   }
 
@@ -662,7 +662,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
         stripe_w,
         s_r2,
         bdm8,
-        fi.config.cpu_feature_level,
+        fi.cpu_feature_level,
       );
       let ap0: [&[u32]; 2] = [&a_r2[(y / 2) % 2], &a_r2[(y / 2 + 1) % 2]];
       let bp0: [&[u32]; 2] = [&b_r2[(y / 2) % 2], &b_r2[(y / 2 + 1) % 2]];
@@ -674,7 +674,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
         y,
         stripe_w,
         &cdeffed,
-        fi.config.cpu_feature_level,
+        fi.cpu_feature_level,
       );
       [&f_r2_0, &f_r2_1]
     } else {
@@ -683,7 +683,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
         y,
         stripe_w,
         &cdeffed,
-        fi.config.cpu_feature_level,
+        fi.cpu_feature_level,
       );
       // share results for both rows
       [&f_r2_0, &f_r2_0]
@@ -702,7 +702,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
           stripe_w,
           s_r1,
           bdm8,
-          fi.config.cpu_feature_level,
+          fi.cpu_feature_level,
         );
         let ap1: [&[u32]; 3] =
           [&a_r1[y % 3], &a_r1[(y + 1) % 3], &a_r1[(y + 2) % 3]];
@@ -715,7 +715,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
           y,
           stripe_w,
           &cdeffed,
-          fi.config.cpu_feature_level,
+          fi.cpu_feature_level,
         );
       } else {
         sgrproj_box_f_r0(
@@ -723,7 +723,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
           y,
           stripe_w,
           &cdeffed,
-          fi.config.cpu_feature_level,
+          fi.cpu_feature_level,
         );
       }
 
@@ -800,7 +800,7 @@ pub fn sgrproj_solve<T: Pixel>(
       cdef_w,
       s_r2,
       bdm8,
-      fi.config.cpu_feature_level,
+      fi.cpu_feature_level,
     );
   }
   if s_r1 > 0 {
@@ -815,7 +815,7 @@ pub fn sgrproj_solve<T: Pixel>(
       cdef_w,
       s_r1,
       bdm8,
-      fi.config.cpu_feature_level,
+      fi.cpu_feature_level,
     );
     sgrproj_box_ab_r1(
       &mut a_r1[1],
@@ -827,7 +827,7 @@ pub fn sgrproj_solve<T: Pixel>(
       cdef_w,
       s_r1,
       bdm8,
-      fi.config.cpu_feature_level,
+      fi.cpu_feature_level,
     );
   }
 
@@ -847,7 +847,7 @@ pub fn sgrproj_solve<T: Pixel>(
         cdef_w,
         s_r2,
         bdm8,
-        fi.config.cpu_feature_level,
+        fi.cpu_feature_level,
       );
       let ap0: [&[u32]; 2] = [&a_r2[(y / 2) % 2], &a_r2[(y / 2 + 1) % 2]];
       let bp0: [&[u32]; 2] = [&b_r2[(y / 2) % 2], &b_r2[(y / 2 + 1) % 2]];
@@ -859,17 +859,11 @@ pub fn sgrproj_solve<T: Pixel>(
         y,
         cdef_w,
         &cdeffed,
-        fi.config.cpu_feature_level,
+        fi.cpu_feature_level,
       );
       [&f_r2_0, &f_r2_1]
     } else {
-      sgrproj_box_f_r0(
-        &mut f_r2_0,
-        y,
-        cdef_w,
-        &cdeffed,
-        fi.config.cpu_feature_level,
-      );
+      sgrproj_box_f_r0(&mut f_r2_0, y, cdef_w, &cdeffed, fi.cpu_feature_level);
       // share results for both rows
       [&f_r2_0, &f_r2_0]
     };
@@ -887,7 +881,7 @@ pub fn sgrproj_solve<T: Pixel>(
           cdef_w,
           s_r1,
           bdm8,
-          fi.config.cpu_feature_level,
+          fi.cpu_feature_level,
         );
         let ap1: [&[u32]; 3] =
           [&a_r1[y % 3], &a_r1[(y + 1) % 3], &a_r1[(y + 2) % 3]];
@@ -900,16 +894,10 @@ pub fn sgrproj_solve<T: Pixel>(
           y,
           cdef_w,
           &cdeffed,
-          fi.config.cpu_feature_level,
+          fi.cpu_feature_level,
         );
       } else {
-        sgrproj_box_f_r0(
-          &mut f_r1,
-          y,
-          cdef_w,
-          &cdeffed,
-          fi.config.cpu_feature_level,
-        );
+        sgrproj_box_f_r0(&mut f_r1, y, cdef_w, &cdeffed, fi.cpu_feature_level);
       }
       for x in 0..cdef_w {
         let u = i32::cast_from(cdeffed.p(x, y)) << SGRPROJ_RST_BITS;

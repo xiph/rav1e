@@ -167,7 +167,7 @@ fn cfl_rdo_bench(b: &mut Bencher, bsize: BlockSize) {
       offset,
       bsize,
       fi.sequence.bit_depth,
-      fi.config.cpu_feature_level,
+      fi.cpu_feature_level,
     )
   })
 }

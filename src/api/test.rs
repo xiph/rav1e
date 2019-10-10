@@ -2,7 +2,6 @@ use super::*;
 
 use crate::partition::BlockSize;
 
-use crate::cpu_features::CpuFeatureLevel;
 use interpolate_name::interpolate_test;
 
 fn setup_encoder<T: Pixel>(
@@ -1653,7 +1652,6 @@ fn log_q_exp_overflow() {
       },
       show_psnr: false,
       train_rdo: false,
-      cpu_feature_level: CpuFeatureLevel::default(),
     },
     threads: 1,
   };
@@ -1715,7 +1713,6 @@ fn guess_frame_subtypes_assert() {
       },
       show_psnr: false,
       train_rdo: false,
-      cpu_feature_level: CpuFeatureLevel::default(),
     },
     threads: 1,
   };

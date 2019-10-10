@@ -1074,7 +1074,7 @@ pub fn rdo_mode_decision<T: Pixel>(
               &[0i16; 2],
               0,
               &edge_buf,
-              fi.config.cpu_feature_level,
+              fi.cpu_feature_level,
             );
 
             let plane_org = ts.input_tile.planes[0]
@@ -1088,7 +1088,7 @@ pub fn rdo_mode_decision<T: Pixel>(
                 &plane_ref,
                 tx_size.block_size(),
                 fi.sequence.bit_depth,
-                fi.config.cpu_feature_level,
+                fi.cpu_feature_level,
               ),
             )
           })
@@ -1194,7 +1194,7 @@ pub fn rdo_mode_decision<T: Pixel>(
       tile_bo,
       bsize,
       fi.sequence.bit_depth,
-      fi.config.cpu_feature_level,
+      fi.cpu_feature_level,
     ) {
       let wr: &mut dyn Writer = &mut WriterCounter::new();
       let tell = wr.tell_frac();
