@@ -24,7 +24,6 @@ use rav1e::bench::transform::*;
 use crate::transform::{forward_transforms, inverse_transforms};
 
 use criterion::*;
-use rav1e::bench::cpu_features::CpuFeatureLevel;
 use std::time::Duration;
 
 fn write_b(c: &mut Criterion) {
@@ -46,7 +45,7 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
   };
   let sequence = Sequence::new(&Default::default());
   let fi = FrameInvariants::<u16>::new(config, sequence);
-  let mut w = WriterEncoder::new(CpuFeatureLevel::default());
+  let mut w = WriterEncoder::new();
   let mut fc = CDFContext::new(fi.base_q_idx);
   let mut fb = FrameBlocks::new(fi.sb_width * 16, fi.sb_height * 16);
   let mut tb = fb.as_tile_blocks_mut();
@@ -179,10 +178,9 @@ fn ec_bench(c: &mut Criterion) {
 
 fn update_cdf_4(b: &mut Bencher) {
   let mut cdf = [7296, 3819, 1616, 0, 0];
-  let cpu = CpuFeatureLevel::default();
   b.iter(|| {
     for i in 0..1000 {
-      update_cdf(&mut cdf, i & 3, cpu);
+      update_cdf(&mut cdf, i & 3);
       black_box(cdf);
     }
   });

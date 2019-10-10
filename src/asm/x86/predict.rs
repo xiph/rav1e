@@ -58,7 +58,7 @@ decl_cfl_pred_fn!(rav1e_ipred_cfl_128_avx2);
 decl_cfl_pred_fn!(rav1e_ipred_cfl_left_avx2);
 decl_cfl_pred_fn!(rav1e_ipred_cfl_top_avx2);
 
-pub trait Intra<T: Pixel>: native::Intra<T>
+pub trait Intra<T>: native::Intra<T>
 where
   T: Pixel,
 {

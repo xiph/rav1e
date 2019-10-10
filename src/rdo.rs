@@ -705,7 +705,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
         fi, ts, cw, bsize, tile_bo, luma_mode, ref_frames, mvs, skip,
       );
       for &chroma_mode in mode_set_chroma.iter() {
-        let wr = &mut WriterCounter::new(fi.config.cpu_feature_level);
+        let wr = &mut WriterCounter::new();
         let tell = wr.tell_frac();
 
         if bsize >= BlockSize::BLOCK_8X8 && bsize.is_sqr() {
@@ -1169,8 +1169,7 @@ pub fn rdo_mode_decision<T: Pixel>(
 
     let chroma_mode = PredictionMode::UV_CFL_PRED;
     let cw_checkpoint = cw.checkpoint();
-    let wr: &mut dyn Writer =
-      &mut WriterCounter::new(fi.config.cpu_feature_level);
+    let wr: &mut dyn Writer = &mut WriterCounter::new();
 
     write_tx_blocks(
       fi,
@@ -1197,8 +1196,7 @@ pub fn rdo_mode_decision<T: Pixel>(
       fi.sequence.bit_depth,
       fi.config.cpu_feature_level,
     ) {
-      let wr: &mut dyn Writer =
-        &mut WriterCounter::new(fi.config.cpu_feature_level);
+      let wr: &mut dyn Writer = &mut WriterCounter::new();
       let tell = wr.tell_frac();
 
       encode_block_pre_cdef(
@@ -1385,8 +1383,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
       );
     }
 
-    let wr: &mut dyn Writer =
-      &mut WriterCounter::new(fi.config.cpu_feature_level);
+    let wr: &mut dyn Writer = &mut WriterCounter::new();
     let tell = wr.tell_frac();
     let (_, tx_dist) = if is_inter {
       write_tx_tree(

@@ -3168,7 +3168,7 @@ fn encode_tile<'a, T: Pixel>(
   fc: &'a mut CDFContext, blocks: &'a mut TileBlocksMut<'a>,
   inter_cfg: &InterConfig,
 ) -> Vec<u8> {
-  let mut w = WriterEncoder::new(fi.config.cpu_feature_level);
+  let mut w = WriterEncoder::new();
 
   let bc = BlockContext::new(blocks);
   let mut cw = ContextWriter::new(fc, bc);
@@ -3189,8 +3189,8 @@ fn encode_tile<'a, T: Pixel>(
         sbo: tile_sbo,
         lru_index: [-1; PLANES],
         cdef_coded: false,
-        w_pre_cdef: WriterRecorder::new(fi.config.cpu_feature_level),
-        w_post_cdef: WriterRecorder::new(fi.config.cpu_feature_level),
+        w_pre_cdef: WriterRecorder::new(),
+        w_post_cdef: WriterRecorder::new(),
       };
 
       let tile_bo = tile_sbo.block_offset(0, 0);
