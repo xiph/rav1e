@@ -531,7 +531,7 @@ pub mod test {
         let tile_plane = &mut tile_states[0].rec.planes[0];
         let row = &mut tile_plane[12];
         assert_eq!(64, row.len());
-        &mut row[35..41].copy_from_slice(&[4, 42, 12, 18, 15, 31]);
+        row[35..41].copy_from_slice(&[4, 42, 12, 18, 15, 31]);
       }
 
       {
@@ -539,7 +539,7 @@ pub mod test {
         let tile_plane = &mut tile_states[5].rec.planes[1];
         let row = &mut tile_plane[8];
         assert_eq!(16, row.len());
-        &mut row[..4].copy_from_slice(&[14, 121, 1, 3]);
+        row[..4].copy_from_slice(&[14, 121, 1, 3]);
       }
 
       {
@@ -547,7 +547,7 @@ pub mod test {
         let tile_plane = &mut tile_states[7].rec.planes[2];
         let row = &mut tile_plane[1];
         assert_eq!(32, row.len());
-        &mut row[11..16].copy_from_slice(&[6, 5, 2, 11, 8]);
+        row[11..16].copy_from_slice(&[6, 5, 2, 11, 8]);
       }
     }
 

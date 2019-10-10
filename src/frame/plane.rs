@@ -322,11 +322,6 @@ impl<T: Pixel> Plane<T> {
   }
 
   #[cfg(test)]
-  pub(crate) fn as_slice(&self) -> PlaneSlice<'_, T> {
-    self.slice(PlaneOffset { x: 0, y: 0 })
-  }
-
-  #[cfg(test)]
   pub(crate) fn as_mut_slice(&mut self) -> PlaneMutSlice<'_, T> {
     self.mut_slice(PlaneOffset { x: 0, y: 0 })
   }
@@ -694,7 +689,7 @@ pub mod test {
   fn test_plane_pad() {
     #[rustfmt::skip]
     let mut plane = Plane::<u8> {
-      data: PlaneData::from_slice(&vec![
+      data: PlaneData::from_slice(&[
         0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0,
