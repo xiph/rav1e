@@ -42,9 +42,9 @@ mod x86 {
     fn default() -> CpuFeatureLevel {
       let detected: CpuFeatureLevel = if is_x86_feature_detected!("avx2") {
         CpuFeatureLevel::AVX2
-      } else if is_x86_feature_detected!("ssse3") {
-        CpuFeatureLevel::SSSE3
       // FIXME: SSE2 is currently broken, see https://github.com/xiph/rav1e/issues/1715
+      // } else if is_x86_feature_detected!("ssse3") {
+      //   CpuFeatureLevel::SSSE3
       // } else if is_x86_feature_detected!("sse2") {
       //   CpuFeatureLevel::SSE2
       } else {
@@ -54,7 +54,7 @@ mod x86 {
         Ok(feature) => match feature.as_ref() {
           "rust" => CpuFeatureLevel::NATIVE,
           "avx2" => CpuFeatureLevel::AVX2,
-          "ssse3" => CpuFeatureLevel::SSSE3,
+          // "ssse3" => CpuFeatureLevel::SSSE3,
           // "sse2" => CpuFeatureLevel::SSE2,
           _ => detected,
         },
