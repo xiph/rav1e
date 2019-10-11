@@ -2244,6 +2244,7 @@ L(ipred_cfl_ac_420_tbl):
         .hword L(ipred_cfl_ac_420_tbl) - L(ipred_cfl_ac_420_w16)
         .hword L(ipred_cfl_ac_420_tbl) - L(ipred_cfl_ac_420_w8)
         .hword L(ipred_cfl_ac_420_tbl) - L(ipred_cfl_ac_420_w4)
+        .hword 0
 
 L(ipred_cfl_ac_420_w16_tbl):
         .hword L(ipred_cfl_ac_420_w16_tbl) - L(ipred_cfl_ac_420_w16_wpad0)
@@ -2432,6 +2433,7 @@ L(ipred_cfl_ac_422_tbl):
         .hword L(ipred_cfl_ac_422_tbl) - L(ipred_cfl_ac_422_w16)
         .hword L(ipred_cfl_ac_422_tbl) - L(ipred_cfl_ac_422_w8)
         .hword L(ipred_cfl_ac_422_tbl) - L(ipred_cfl_ac_422_w4)
+        .hword 0
 
 L(ipred_cfl_ac_422_w16_tbl):
         .hword L(ipred_cfl_ac_422_w16_tbl) - L(ipred_cfl_ac_422_w16_wpad0)
