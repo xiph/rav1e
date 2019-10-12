@@ -12,9 +12,9 @@ rav1e is an AV1 video encoder. It is designed to eventually cover all use cases,
 * 64x64 superblocks
 * 4x4 to 64x64 RDO-selected square and 2:1/1:2 rectangular blocks
 * DC, H, V, Paeth, smooth, and a subset of directional prediction modes
-* DCT, ADST and identity transforms (up to 64x64, 16x16 and 32x32 respectively)
-* 8-, 10- and 12-bit depth color
-* 4:2:0 (full support), 4:2:2 and 4:4:4 (limited) chroma sampling
+* DCT, ADST, and identity transforms (up to 64x64, 16x16 and 32x32 respectively)
+* 8-, 10-, and 12-bit depth color
+* 4:2:0 (full support), 4:2:2, and 4:4:4 (limited) chroma sampling
 * Variable speed settings
 * Near real-time encoding at high speed levels
 
@@ -31,7 +31,7 @@ Automated AppVeyor builds can be found [here](https://ci.appveyor.com/project/td
 **rav1e** can optionally use either `libaom` (default) or a `dav1d` installation to run some extended tests.
 Some `x86_64`-specific optimizations require a recent version of NASM.
 
-In order to build, test and link to the codec on UNIX, you need Perl, NASM, CMake, Clang and pkg-config. To install this on Ubuntu or Linux Mint, run:
+To build, test and link to the codec on UNIX, you need Perl, NASM, CMake, Clang and pkg-config. To install this on Ubuntu or Linux Mint, run:
 
 ```sh
 sudo apt install perl nasm cmake clang pkg-config
@@ -47,7 +47,7 @@ cargo build --release
 
 ### Building the C-API
 
-**rav1e** provides a C-compatible set of library, header and pkg-config file.
+**rav1e** provides a C-compatible set of libraries, header, and pkg-config file.
 
 To build and install it you can use [cargo-c](https://crates.io/crates/cargo-c):
 
