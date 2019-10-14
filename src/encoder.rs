@@ -1125,6 +1125,7 @@ pub fn encode_tx_block<T: Pixel>(
       &ac,
       alpha,
       &edge_buf,
+      fi.cpu_feature_level,
     );
   }
 
@@ -1204,6 +1205,7 @@ pub fn encode_tx_block<T: Pixel>(
       tx_size,
       tx_type,
       fi.sequence.bit_depth,
+      fi.cpu_feature_level,
     );
   }
   if rdo_type.needs_tx_dist() {

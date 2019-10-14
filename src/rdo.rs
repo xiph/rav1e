@@ -40,6 +40,7 @@ use crate::write_tx_tree;
 use crate::Tune;
 use crate::{encode_block_post_cdef, encode_block_pre_cdef};
 
+use crate::cpu_features::CpuFeatureLevel;
 use crate::partition::PartitionType::*;
 use arrayvec::*;
 use serde_derive::{Deserialize, Serialize};
@@ -1073,6 +1074,7 @@ pub fn rdo_mode_decision<T: Pixel>(
               &[0i16; 2],
               0,
               &edge_buf,
+              fi.cpu_feature_level,
             );
 
             let plane_org = ts.input_tile.planes[0]
@@ -1187,8 +1189,13 @@ pub fn rdo_mode_decision<T: Pixel>(
       true,
     );
     cw.rollback(&cw_checkpoint);
-    if let Some(cfl) = rdo_cfl_alpha(ts, tile_bo, bsize, fi.sequence.bit_depth)
-    {
+    if let Some(cfl) = rdo_cfl_alpha(
+      ts,
+      tile_bo,
+      bsize,
+      fi.sequence.bit_depth,
+      fi.cpu_feature_level,
+    ) {
       let wr: &mut dyn Writer = &mut WriterCounter::new();
       let tell = wr.tell_frac();
 
@@ -1265,7 +1272,7 @@ pub fn rdo_mode_decision<T: Pixel>(
 
 pub fn rdo_cfl_alpha<T: Pixel>(
   ts: &mut TileStateMut<'_, T>, tile_bo: TileBlockOffset, bsize: BlockSize,
-  bit_depth: usize,
+  bit_depth: usize, cpu: CpuFeatureLevel,
 ) -> Option<CFLParams> {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let uv_tx_size = bsize.largest_chroma_tx_size(xdec, ydec);
@@ -1302,6 +1309,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
           &ac.array,
           alpha,
           &edge_buf,
+          cpu,
         );
         sse_wxh(
           &input.subregion(Area::BlockStartingAt { bo: tile_bo.0 }),

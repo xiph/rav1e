@@ -322,6 +322,7 @@ impl<S> WriterBase<S> {
         debug: std::env::var_os("RAV1E_DEBUG").is_some(),
         fake_bits_frac: 0,
         s: storage,
+        cpu,
       }
     }
     #[cfg(not(feature = "desync_finder"))]

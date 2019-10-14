@@ -1,9 +1,18 @@
+// Copyright (c) 2019, The rav1e contributors. All rights reserved
+//
+// This source code is subject to the terms of the BSD 2 Clause License and
+// the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
+// was not distributed with this source code in the LICENSE file, you can
+// obtain it at www.aomedia.org/license/software. If the Alliance for Open
+// Media Patent License 1.0 was not distributed with this source code in the
+// PATENTS file, you can obtain it at www.aomedia.org/license/patent.
+
 use crate::ec::native;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
 pub fn update_cdf(cdf: &mut [u16], val: u32) {
-  if cdf.len() == 5 && cfg!(target_feature = "sse2") {
+  if cdf.len() == 5 {
     return unsafe {
       update_cdf_4_sse2(cdf, val);
     };

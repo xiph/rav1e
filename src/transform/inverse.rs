@@ -11,6 +11,7 @@
 pub use self::native::*;
 #[cfg(all(feature = "nasm", target_arch = "x86_64"))]
 pub use crate::asm::x86::transform::inverse::*;
+use crate::cpu_features::CpuFeatureLevel;
 
 // TODO: move 1d txfm code to native module.
 
@@ -1551,16 +1552,16 @@ static INV_TXFM_FNS: [[InvTxfmFn; 5]; 4] = [
 
 pub(crate) mod native {
   use super::*;
+  use crate::cpu_features::CpuFeatureLevel;
   use crate::util::clamp;
-
   use std::cmp;
 
   pub trait InvTxfm2D: Dim {
     const INTERMEDIATE_SHIFT: usize;
 
-    fn inv_txfm2d_add<T: Pixel>(
+    fn inv_txfm2d_add<T>(
       input: &[i32], output: &mut PlaneRegionMut<'_, T>, tx_type: TxType,
-      bd: usize,
+      bd: usize, _cpu: CpuFeatureLevel,
     ) where
       T: Pixel,
     {
@@ -1655,12 +1656,12 @@ macro_rules! impl_iht_fns {
       paste::item! {
         pub fn [<iht $W x $H _add>]<T: Pixel>(
           input: &[i32], output: &mut PlaneRegionMut<'_, T>, tx_type: TxType,
-          bit_depth: usize
+          bit_depth: usize, cpu: CpuFeatureLevel
         ) where
           T: Pixel,
         {
           [<Block $W x $H>]::inv_txfm2d_add(
-            input, output, tx_type, bit_depth
+            input, output, tx_type, bit_depth, cpu
           );
         }
       }

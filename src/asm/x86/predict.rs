@@ -1,3 +1,13 @@
+// Copyright (c) 2019, The rav1e contributors. All rights reserved
+//
+// This source code is subject to the terms of the BSD 2 Clause License and
+// the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
+// was not distributed with this source code in the LICENSE file, you can
+// obtain it at www.aomedia.org/license/software. If the Alliance for Open
+// Media Patent License 1.0 was not distributed with this source code in the
+// PATENTS file, you can obtain it at www.aomedia.org/license/patent.
+
+use crate::cpu_features::CpuFeatureLevel;
 use crate::predict::{self, native};
 use crate::tiling::PlaneRegionMut;
 use crate::Pixel;
@@ -52,204 +62,203 @@ pub trait Intra<T>: native::Intra<T>
 where
   T: Pixel,
 {
-  fn pred_dc(output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T]) {
-    {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-        return unsafe {
-          rav1e_ipred_dc_avx2(
-            output.data_ptr_mut() as *mut _,
-            output.plane_cfg.stride as libc::ptrdiff_t,
-            above.as_ptr().offset(-1) as *const _,
-            Self::W as libc::c_int,
-            Self::H as libc::c_int,
-            0,
-          )
-        };
-      }
+  fn pred_dc(
+    output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
+    cpu: CpuFeatureLevel,
+  ) {
+    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
+      return unsafe {
+        rav1e_ipred_dc_avx2(
+          output.data_ptr_mut() as *mut _,
+          output.plane_cfg.stride as libc::ptrdiff_t,
+          above.as_ptr().offset(-1) as *const _,
+          Self::W as libc::c_int,
+          Self::H as libc::c_int,
+          0,
+        )
+      };
     }
 
-    <Self as native::Intra<T>>::pred_dc(output, above, left)
+    <Self as native::Intra<T>>::pred_dc(output, above, left, cpu)
   }
 
-  fn pred_dc_128(output: &mut PlaneRegionMut<'_, T>, bit_depth: usize) {
-    {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-        return unsafe {
-          rav1e_ipred_dc_128_avx2(
-            output.data_ptr_mut() as *mut _,
-            output.plane_cfg.stride as libc::ptrdiff_t,
-            ptr::null(),
-            Self::W as libc::c_int,
-            Self::H as libc::c_int,
-            0,
-          )
-        };
-      }
+  fn pred_dc_128(
+    output: &mut PlaneRegionMut<'_, T>, bit_depth: usize, cpu: CpuFeatureLevel,
+  ) {
+    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
+      return unsafe {
+        rav1e_ipred_dc_128_avx2(
+          output.data_ptr_mut() as *mut _,
+          output.plane_cfg.stride as libc::ptrdiff_t,
+          ptr::null(),
+          Self::W as libc::c_int,
+          Self::H as libc::c_int,
+          0,
+        )
+      };
     }
 
-    <Self as native::Intra<T>>::pred_dc_128(output, bit_depth)
+    <Self as native::Intra<T>>::pred_dc_128(output, bit_depth, cpu)
   }
 
   fn pred_dc_left(
     output: &mut PlaneRegionMut<'_, T>, _above: &[T], left: &[T],
+    cpu: CpuFeatureLevel,
   ) {
-    {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-        return unsafe {
-          rav1e_ipred_dc_left_avx2(
-            output.data_ptr_mut() as *mut _,
-            output.plane_cfg.stride as libc::ptrdiff_t,
-            left.as_ptr().add(Self::H) as *const _,
-            Self::W as libc::c_int,
-            Self::H as libc::c_int,
-            0,
-          )
-        };
-      }
+    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
+      return unsafe {
+        rav1e_ipred_dc_left_avx2(
+          output.data_ptr_mut() as *mut _,
+          output.plane_cfg.stride as libc::ptrdiff_t,
+          left.as_ptr().add(Self::H) as *const _,
+          Self::W as libc::c_int,
+          Self::H as libc::c_int,
+          0,
+        )
+      };
     }
 
-    <Self as native::Intra<T>>::pred_dc_left(output, _above, left)
+    <Self as native::Intra<T>>::pred_dc_left(output, _above, left, cpu)
   }
 
   fn pred_dc_top(
     output: &mut PlaneRegionMut<'_, T>, above: &[T], _left: &[T],
+    cpu: CpuFeatureLevel,
   ) {
-    {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-        return unsafe {
-          rav1e_ipred_dc_top_avx2(
-            output.data_ptr_mut() as *mut _,
-            output.plane_cfg.stride as libc::ptrdiff_t,
-            above.as_ptr().offset(-1) as *const _,
-            Self::W as libc::c_int,
-            Self::H as libc::c_int,
-            0,
-          )
-        };
-      }
+    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
+      return unsafe {
+        rav1e_ipred_dc_top_avx2(
+          output.data_ptr_mut() as *mut _,
+          output.plane_cfg.stride as libc::ptrdiff_t,
+          above.as_ptr().offset(-1) as *const _,
+          Self::W as libc::c_int,
+          Self::H as libc::c_int,
+          0,
+        )
+      };
     }
 
-    <Self as native::Intra<T>>::pred_dc_top(output, above, _left)
+    <Self as native::Intra<T>>::pred_dc_top(output, above, _left, cpu)
   }
 
-  fn pred_h(output: &mut PlaneRegionMut<'_, T>, left: &[T]) {
-    {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-        return unsafe {
-          rav1e_ipred_h_avx2(
-            output.data_ptr_mut() as *mut _,
-            output.plane_cfg.stride as libc::ptrdiff_t,
-            left.as_ptr().add(Self::H) as *const _,
-            Self::W as libc::c_int,
-            Self::H as libc::c_int,
-            0,
-          )
-        };
-      }
+  fn pred_h(
+    output: &mut PlaneRegionMut<'_, T>, left: &[T], cpu: CpuFeatureLevel,
+  ) {
+    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
+      return unsafe {
+        rav1e_ipred_h_avx2(
+          output.data_ptr_mut() as *mut _,
+          output.plane_cfg.stride as libc::ptrdiff_t,
+          left.as_ptr().add(Self::H) as *const _,
+          Self::W as libc::c_int,
+          Self::H as libc::c_int,
+          0,
+        )
+      };
     }
 
-    <Self as native::Intra<T>>::pred_h(output, left)
+    <Self as native::Intra<T>>::pred_h(output, left, cpu)
   }
 
-  fn pred_v(output: &mut PlaneRegionMut<'_, T>, above: &[T]) {
-    {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-        return unsafe {
-          rav1e_ipred_v_avx2(
-            output.data_ptr_mut() as *mut _,
-            output.plane_cfg.stride as libc::ptrdiff_t,
-            above.as_ptr().offset(-1) as *const _,
-            Self::W as libc::c_int,
-            Self::H as libc::c_int,
-            0,
-          )
-        };
-      }
+  fn pred_v(
+    output: &mut PlaneRegionMut<'_, T>, above: &[T], cpu: CpuFeatureLevel,
+  ) {
+    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
+      return unsafe {
+        rav1e_ipred_v_avx2(
+          output.data_ptr_mut() as *mut _,
+          output.plane_cfg.stride as libc::ptrdiff_t,
+          above.as_ptr().offset(-1) as *const _,
+          Self::W as libc::c_int,
+          Self::H as libc::c_int,
+          0,
+        )
+      };
     }
 
-    <Self as native::Intra<T>>::pred_v(output, above)
+    <Self as native::Intra<T>>::pred_v(output, above, cpu)
   }
 
   fn pred_paeth(
-    output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T], above_left: T,
+    output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
+    above_left: T, cpu: CpuFeatureLevel,
   ) {
-    {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-        return unsafe {
-          rav1e_ipred_paeth_avx2(
-            output.data_ptr_mut() as *mut _,
-            output.plane_cfg.stride as libc::ptrdiff_t,
-            above.as_ptr().offset(-1) as *const _,
-            Self::W as libc::c_int,
-            Self::H as libc::c_int,
-            0,
-          )
-        };
-      }
+    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
+      return unsafe {
+        rav1e_ipred_paeth_avx2(
+          output.data_ptr_mut() as *mut _,
+          output.plane_cfg.stride as libc::ptrdiff_t,
+          above.as_ptr().offset(-1) as *const _,
+          Self::W as libc::c_int,
+          Self::H as libc::c_int,
+          0,
+        )
+      };
     }
 
-    <Self as native::Intra<T>>::pred_paeth(output, above, left, above_left)
+    <Self as native::Intra<T>>::pred_paeth(
+      output, above, left, above_left, cpu,
+    )
   }
 
-  fn pred_smooth(output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T]) {
-    {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-        return unsafe {
-          rav1e_ipred_smooth_avx2(
-            output.data_ptr_mut() as *mut _,
-            output.plane_cfg.stride as libc::ptrdiff_t,
-            above.as_ptr().offset(-1) as *const _,
-            Self::W as libc::c_int,
-            Self::H as libc::c_int,
-            0,
-          )
-        };
-      }
+  fn pred_smooth(
+    output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
+    cpu: CpuFeatureLevel,
+  ) {
+    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
+      return unsafe {
+        rav1e_ipred_smooth_avx2(
+          output.data_ptr_mut() as *mut _,
+          output.plane_cfg.stride as libc::ptrdiff_t,
+          above.as_ptr().offset(-1) as *const _,
+          Self::W as libc::c_int,
+          Self::H as libc::c_int,
+          0,
+        )
+      };
     }
 
-    <Self as native::Intra<T>>::pred_smooth(output, above, left)
+    <Self as native::Intra<T>>::pred_smooth(output, above, left, cpu)
   }
 
   fn pred_smooth_h(
     output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
+    cpu: CpuFeatureLevel,
   ) {
-    {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-        return unsafe {
-          rav1e_ipred_smooth_h_avx2(
-            output.data_ptr_mut() as *mut _,
-            output.plane_cfg.stride as libc::ptrdiff_t,
-            above.as_ptr().offset(-1) as *const _,
-            Self::W as libc::c_int,
-            Self::H as libc::c_int,
-            0,
-          )
-        };
-      }
+    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
+      return unsafe {
+        rav1e_ipred_smooth_h_avx2(
+          output.data_ptr_mut() as *mut _,
+          output.plane_cfg.stride as libc::ptrdiff_t,
+          above.as_ptr().offset(-1) as *const _,
+          Self::W as libc::c_int,
+          Self::H as libc::c_int,
+          0,
+        )
+      };
     }
 
-    <Self as native::Intra<T>>::pred_smooth_h(output, above, left)
+    <Self as native::Intra<T>>::pred_smooth_h(output, above, left, cpu)
   }
 
   fn pred_smooth_v(
     output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
+    cpu: CpuFeatureLevel,
   ) {
-    {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
-        return unsafe {
-          rav1e_ipred_smooth_v_avx2(
-            output.data_ptr_mut() as *mut _,
-            output.plane_cfg.stride as libc::ptrdiff_t,
-            above.as_ptr().offset(-1) as *const _,
-            Self::W as libc::c_int,
-            Self::H as libc::c_int,
-            0,
-          )
-        };
-      }
+    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
+      return unsafe {
+        rav1e_ipred_smooth_v_avx2(
+          output.data_ptr_mut() as *mut _,
+          output.plane_cfg.stride as libc::ptrdiff_t,
+          above.as_ptr().offset(-1) as *const _,
+          Self::W as libc::c_int,
+          Self::H as libc::c_int,
+          0,
+        )
+      };
     }
 
-    <Self as native::Intra<T>>::pred_smooth_v(output, above, left)
+    <Self as native::Intra<T>>::pred_smooth_v(output, above, left, cpu)
   }
 
   #[target_feature(enable = "ssse3")]
@@ -306,7 +315,7 @@ where
 
   fn pred_cfl_inner(
     output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16,
-    bit_depth: usize,
+    bit_depth: usize, cpu: CpuFeatureLevel,
   ) {
     if alpha == 0 {
       return;
@@ -316,7 +325,7 @@ where
     assert!(output.plane_cfg.stride >= Self::W);
     assert!(output.rows_iter().len() >= Self::H);
 
-    if is_x86_feature_detected!("ssse3") {
+    if cpu >= CpuFeatureLevel::SSSE3 {
       return unsafe {
         Self::pred_cfl_ssse3(
           output.data_ptr_mut(),
@@ -328,15 +337,15 @@ where
       };
     }
 
-    <Self as Intra<T>>::pred_cfl_inner(output, &ac, alpha, bit_depth);
+    <Self as Intra<T>>::pred_cfl_inner(output, &ac, alpha, bit_depth, cpu);
   }
 
   fn pred_cfl(
     output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16,
-    bit_depth: usize, above: &[T], left: &[T],
+    bit_depth: usize, above: &[T], left: &[T], cpu: CpuFeatureLevel,
   ) {
     {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
+      if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
         return unsafe {
           rav1e_ipred_cfl_avx2(
             output.data_ptr_mut() as *mut _,
@@ -350,16 +359,16 @@ where
         };
       }
     }
-    <Self as Intra<T>>::pred_dc(output, above, left);
-    <Self as Intra<T>>::pred_cfl_inner(output, &ac, alpha, bit_depth);
+    <Self as Intra<T>>::pred_dc(output, above, left, cpu);
+    <Self as Intra<T>>::pred_cfl_inner(output, &ac, alpha, bit_depth, cpu);
   }
 
   fn pred_cfl_128(
     output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16,
-    bit_depth: usize,
+    bit_depth: usize, cpu: CpuFeatureLevel,
   ) {
     {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
+      if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
         return unsafe {
           rav1e_ipred_cfl_128_avx2(
             output.data_ptr_mut() as *mut _,
@@ -373,16 +382,16 @@ where
         };
       }
     }
-    <Self as Intra<T>>::pred_dc_128(output, bit_depth);
-    <Self as Intra<T>>::pred_cfl_inner(output, &ac, alpha, bit_depth);
+    <Self as Intra<T>>::pred_dc_128(output, bit_depth, cpu);
+    <Self as Intra<T>>::pred_cfl_inner(output, &ac, alpha, bit_depth, cpu);
   }
 
   fn pred_cfl_left(
     output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16,
-    bit_depth: usize, above: &[T], left: &[T],
+    bit_depth: usize, above: &[T], left: &[T], cpu: CpuFeatureLevel,
   ) {
     {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
+      if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
         return unsafe {
           rav1e_ipred_cfl_left_avx2(
             output.data_ptr_mut() as *mut _,
@@ -396,16 +405,16 @@ where
         };
       }
     }
-    <Self as Intra<T>>::pred_dc_left(output, above, left);
-    <Self as Intra<T>>::pred_cfl_inner(output, &ac, alpha, bit_depth);
+    <Self as Intra<T>>::pred_dc_left(output, above, left, cpu);
+    <Self as Intra<T>>::pred_cfl_inner(output, &ac, alpha, bit_depth, cpu);
   }
 
   fn pred_cfl_top(
     output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16,
-    bit_depth: usize, above: &[T], left: &[T],
+    bit_depth: usize, above: &[T], left: &[T], cpu: CpuFeatureLevel,
   ) {
     {
-      if size_of::<T>() == 1 && is_x86_feature_detected!("avx2") {
+      if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
         return unsafe {
           rav1e_ipred_cfl_top_avx2(
             output.data_ptr_mut() as *mut _,
@@ -419,8 +428,8 @@ where
         };
       }
     }
-    <Self as Intra<T>>::pred_dc_top(output, above, left);
-    <Self as Intra<T>>::pred_cfl_inner(output, &ac, alpha, bit_depth);
+    <Self as Intra<T>>::pred_dc_top(output, above, left, cpu);
+    <Self as Intra<T>>::pred_cfl_inner(output, &ac, alpha, bit_depth, cpu);
   }
 }
 

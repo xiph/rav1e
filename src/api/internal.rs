@@ -736,6 +736,7 @@ impl<T: Pixel> ContextInner<T> {
           &[], // Not used by DC_PRED.
           0,   // Not used by DC_PRED.
           &edge_buf,
+          fi.cpu_feature_level,
         );
 
         let plane_after_prediction_region =

@@ -150,6 +150,7 @@ impl RestorationFilter {
 }
 
 pub(crate) mod native {
+  use crate::cpu_features::CpuFeatureLevel;
   use crate::frame::PlaneSlice;
   use crate::lrf::{
     get_integral_square, sgrproj_sum_finish, SGRPROJ_RST_BITS,
@@ -182,6 +183,7 @@ pub(crate) mod native {
   pub(crate) fn sgrproj_box_ab_r1(
     af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
     iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
+    _cpu: CpuFeatureLevel,
   ) {
     sgrproj_box_ab_internal(
       1,
@@ -202,6 +204,7 @@ pub(crate) mod native {
   pub(crate) fn sgrproj_box_ab_r2(
     af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
     iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
+    _cpu: CpuFeatureLevel,
   ) {
     sgrproj_box_ab_internal(
       2,
@@ -220,6 +223,7 @@ pub(crate) mod native {
 
   pub(crate) fn sgrproj_box_f_r0<T: Pixel>(
     f: &mut [u32], y: usize, w: usize, cdeffed: &PlaneSlice<T>,
+    _cpu: CpuFeatureLevel,
   ) {
     sgrproj_box_f_r0_internal(f, 0, y, w, cdeffed);
   }
@@ -235,7 +239,7 @@ pub(crate) mod native {
 
   pub(crate) fn sgrproj_box_f_r1<T: Pixel>(
     af: &[&[u32]; 3], bf: &[&[u32]; 3], f: &mut [u32], y: usize, w: usize,
-    cdeffed: &PlaneSlice<T>,
+    cdeffed: &PlaneSlice<T>, _cpu: CpuFeatureLevel,
   ) {
     sgrproj_box_f_r1_internal(af, bf, f, 0, y, w, cdeffed);
   }
@@ -268,7 +272,7 @@ pub(crate) mod native {
 
   pub(crate) fn sgrproj_box_f_r2<T: Pixel>(
     af: &[&[u32]; 2], bf: &[&[u32]; 2], f0: &mut [u32], f1: &mut [u32],
-    y: usize, w: usize, cdeffed: &PlaneSlice<T>,
+    y: usize, w: usize, cdeffed: &PlaneSlice<T>, _cpu: CpuFeatureLevel,
   ) {
     sgrproj_box_f_r2_internal(af, bf, f0, f1, 0, y, w, cdeffed);
   }
@@ -611,6 +615,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
       stripe_w,
       s_r2,
       bdm8,
+      fi.cpu_feature_level,
     );
   }
   if s_r1 > 0 {
@@ -625,6 +630,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
       stripe_w,
       s_r1,
       bdm8,
+      fi.cpu_feature_level,
     );
     sgrproj_box_ab_r1(
       &mut a_r1[1],
@@ -636,6 +642,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
       stripe_w,
       s_r1,
       bdm8,
+      fi.cpu_feature_level,
     );
   }
 
@@ -655,6 +662,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
         stripe_w,
         s_r2,
         bdm8,
+        fi.cpu_feature_level,
       );
       let ap0: [&[u32]; 2] = [&a_r2[(y / 2) % 2], &a_r2[(y / 2 + 1) % 2]];
       let bp0: [&[u32]; 2] = [&b_r2[(y / 2) % 2], &b_r2[(y / 2 + 1) % 2]];
@@ -666,10 +674,17 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
         y,
         stripe_w,
         &cdeffed,
+        fi.cpu_feature_level,
       );
       [&f_r2_0, &f_r2_1]
     } else {
-      sgrproj_box_f_r0(&mut f_r2_0, y, stripe_w, &cdeffed);
+      sgrproj_box_f_r0(
+        &mut f_r2_0,
+        y,
+        stripe_w,
+        &cdeffed,
+        fi.cpu_feature_level,
+      );
       // share results for both rows
       [&f_r2_0, &f_r2_0]
     };
@@ -687,14 +702,29 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
           stripe_w,
           s_r1,
           bdm8,
+          fi.cpu_feature_level,
         );
         let ap1: [&[u32]; 3] =
           [&a_r1[y % 3], &a_r1[(y + 1) % 3], &a_r1[(y + 2) % 3]];
         let bp1: [&[u32]; 3] =
           [&b_r1[y % 3], &b_r1[(y + 1) % 3], &b_r1[(y + 2) % 3]];
-        sgrproj_box_f_r1(&ap1, &bp1, &mut f_r1, y, stripe_w, &cdeffed);
+        sgrproj_box_f_r1(
+          &ap1,
+          &bp1,
+          &mut f_r1,
+          y,
+          stripe_w,
+          &cdeffed,
+          fi.cpu_feature_level,
+        );
       } else {
-        sgrproj_box_f_r0(&mut f_r1, y, stripe_w, &cdeffed);
+        sgrproj_box_f_r0(
+          &mut f_r1,
+          y,
+          stripe_w,
+          &cdeffed,
+          fi.cpu_feature_level,
+        );
       }
 
       /* apply filter */
@@ -770,6 +800,7 @@ pub fn sgrproj_solve<T: Pixel>(
       cdef_w,
       s_r2,
       bdm8,
+      fi.cpu_feature_level,
     );
   }
   if s_r1 > 0 {
@@ -784,6 +815,7 @@ pub fn sgrproj_solve<T: Pixel>(
       cdef_w,
       s_r1,
       bdm8,
+      fi.cpu_feature_level,
     );
     sgrproj_box_ab_r1(
       &mut a_r1[1],
@@ -795,6 +827,7 @@ pub fn sgrproj_solve<T: Pixel>(
       cdef_w,
       s_r1,
       bdm8,
+      fi.cpu_feature_level,
     );
   }
 
@@ -814,6 +847,7 @@ pub fn sgrproj_solve<T: Pixel>(
         cdef_w,
         s_r2,
         bdm8,
+        fi.cpu_feature_level,
       );
       let ap0: [&[u32]; 2] = [&a_r2[(y / 2) % 2], &a_r2[(y / 2 + 1) % 2]];
       let bp0: [&[u32]; 2] = [&b_r2[(y / 2) % 2], &b_r2[(y / 2 + 1) % 2]];
@@ -825,10 +859,11 @@ pub fn sgrproj_solve<T: Pixel>(
         y,
         cdef_w,
         &cdeffed,
+        fi.cpu_feature_level,
       );
       [&f_r2_0, &f_r2_1]
     } else {
-      sgrproj_box_f_r0(&mut f_r2_0, y, cdef_w, &cdeffed);
+      sgrproj_box_f_r0(&mut f_r2_0, y, cdef_w, &cdeffed, fi.cpu_feature_level);
       // share results for both rows
       [&f_r2_0, &f_r2_0]
     };
@@ -846,14 +881,23 @@ pub fn sgrproj_solve<T: Pixel>(
           cdef_w,
           s_r1,
           bdm8,
+          fi.cpu_feature_level,
         );
         let ap1: [&[u32]; 3] =
           [&a_r1[y % 3], &a_r1[(y + 1) % 3], &a_r1[(y + 2) % 3]];
         let bp1: [&[u32]; 3] =
           [&b_r1[y % 3], &b_r1[(y + 1) % 3], &b_r1[(y + 2) % 3]];
-        sgrproj_box_f_r1(&ap1, &bp1, &mut f_r1, y, cdef_w, &cdeffed);
+        sgrproj_box_f_r1(
+          &ap1,
+          &bp1,
+          &mut f_r1,
+          y,
+          cdef_w,
+          &cdeffed,
+          fi.cpu_feature_level,
+        );
       } else {
-        sgrproj_box_f_r0(&mut f_r1, y, cdef_w, &cdeffed);
+        sgrproj_box_f_r0(&mut f_r1, y, cdef_w, &cdeffed, fi.cpu_feature_level);
       }
       for x in 0..cdef_w {
         let u = i32::cast_from(cdeffed.p(x, y)) << SGRPROJ_RST_BITS;

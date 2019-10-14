@@ -574,6 +574,10 @@ impl Config {
 
     self.validate()?;
 
+    // Because we don't have a FrameInvariants yet,
+    // this is the only way to get the CpuFeatureLevel in use.
+    // Since we only call this once, this shouldn't cause
+    // performance issues.
     info!("CPU Feature Level: {}", CpuFeatureLevel::default());
 
     let pool = rayon::ThreadPoolBuilder::new()
