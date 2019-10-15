@@ -9,10 +9,14 @@
 
 #![allow(safe_extern_statics)]
 
-#[cfg(not(all(feature = "nasm", target_arch = "x86_64")))]
-use self::native::*;
-#[cfg(all(feature = "nasm", target_arch = "x86_64"))]
-use crate::asm::x86::lrf::*;
+cfg_if::cfg_if! {
+  if #[cfg(all(feature = "nasm", target_arch = "x86_64"))] {
+    use crate::asm::x86::lrf::*;
+  } else {
+    use self::native::*;
+  }
+}
+
 use crate::context::PLANES;
 use crate::context::SB_SIZE;
 use crate::encoder::FrameInvariants;
