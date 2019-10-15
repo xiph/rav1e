@@ -3294,15 +3294,6 @@ static av1_default_iscan_32x32 : [u16; 1024] = [
 ];
 
 #[rustfmt::skip]
-pub static av1_default_scan_orders: [SCAN_ORDER; TxSize::TX_SIZES] = [
-  SCAN_ORDER { scan: &default_scan_4x4, iscan: &av1_default_iscan_4x4, neighbors: &default_scan_4x4_neighbors },
-  SCAN_ORDER { scan: &default_scan_8x8, iscan: &av1_default_iscan_8x8, neighbors: &default_scan_8x8_neighbors },
-  SCAN_ORDER { scan: &default_scan_16x16, iscan: &av1_default_iscan_16x16, neighbors: &default_scan_16x16_neighbors },
-  SCAN_ORDER { scan: &default_scan_32x32, iscan: &av1_default_iscan_32x32, neighbors: &default_scan_32x32_neighbors },
-  SCAN_ORDER { scan: &default_scan_32x32, iscan: &av1_default_iscan_32x32, neighbors: &default_scan_32x32_neighbors }
-];
-
-#[rustfmt::skip]
 pub static av1_scan_orders: [[SCAN_ORDER; TX_TYPES]; TxSize::TX_SIZES_ALL] = [
 	[
 		// TX_4X4
