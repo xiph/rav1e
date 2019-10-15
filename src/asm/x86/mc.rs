@@ -348,6 +348,11 @@ pub(crate) static PREP_HBD_FNS: [[Option<PrepHBDFn>; 16];
   CpuFeatureLevel::len()] = [[None; 16]; CpuFeatureLevel::len()];
 
 extern {
+  fn rav1e_avg_ssse3(
+    dst: *mut u8, dst_stride: libc::ptrdiff_t, tmp1: *const i16,
+    tmp2: *const i16, w: i32, h: i32,
+  );
+
   fn rav1e_avg_avx2(
     dst: *mut u8, dst_stride: libc::ptrdiff_t, tmp1: *const i16,
     tmp2: *const i16, w: i32, h: i32,
@@ -357,6 +362,7 @@ extern {
 pub(crate) static AVG_FNS: [Option<AvgFn>; CpuFeatureLevel::len()] = {
   let mut out: [Option<AvgFn>; CpuFeatureLevel::len()] =
     [None; CpuFeatureLevel::len()];
+  out[CpuFeatureLevel::SSSE3 as usize] = Some(rav1e_avg_ssse3);
   out[CpuFeatureLevel::AVX2 as usize] = Some(rav1e_avg_avx2);
   out
 };
