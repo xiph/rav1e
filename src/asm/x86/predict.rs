@@ -20,43 +20,51 @@ use std::mem::size_of;
 use std::ptr;
 
 macro_rules! decl_angular_ipred_fn {
-  ($f:ident) => {
+  ($($f:ident),+) => {
     extern {
-      fn $f(
-        dst: *mut u8, stride: libc::ptrdiff_t, topleft: *const u8,
-        width: libc::c_int, height: libc::c_int, angle: libc::c_int,
-      );
+      $(
+        fn $f(
+          dst: *mut u8, stride: libc::ptrdiff_t, topleft: *const u8,
+          width: libc::c_int, height: libc::c_int, angle: libc::c_int,
+        );
+      )*
     }
   };
 }
 
-decl_angular_ipred_fn!(rav1e_ipred_dc_avx2);
-decl_angular_ipred_fn!(rav1e_ipred_dc_128_avx2);
-decl_angular_ipred_fn!(rav1e_ipred_dc_left_avx2);
-decl_angular_ipred_fn!(rav1e_ipred_dc_top_avx2);
-decl_angular_ipred_fn!(rav1e_ipred_h_avx2);
-decl_angular_ipred_fn!(rav1e_ipred_v_avx2);
-decl_angular_ipred_fn!(rav1e_ipred_paeth_avx2);
-decl_angular_ipred_fn!(rav1e_ipred_smooth_avx2);
-decl_angular_ipred_fn!(rav1e_ipred_smooth_h_avx2);
-decl_angular_ipred_fn!(rav1e_ipred_smooth_v_avx2);
+decl_angular_ipred_fn! {
+  rav1e_ipred_dc_avx2,
+  rav1e_ipred_dc_128_avx2,
+  rav1e_ipred_dc_left_avx2,
+  rav1e_ipred_dc_top_avx2,
+  rav1e_ipred_h_avx2,
+  rav1e_ipred_v_avx2,
+  rav1e_ipred_paeth_avx2,
+  rav1e_ipred_smooth_avx2,
+  rav1e_ipred_smooth_h_avx2,
+  rav1e_ipred_smooth_v_avx2
+}
 
 macro_rules! decl_cfl_pred_fn {
-  ($f:ident) => {
+  ($($f:ident),+) => {
     extern {
-      fn $f(
-        dst: *mut u8, stride: libc::ptrdiff_t, topleft: *const u8,
-        width: libc::c_int, height: libc::c_int, ac: *const u8,
-        alpha: libc::c_int,
-      );
+      $(
+        fn $f(
+          dst: *mut u8, stride: libc::ptrdiff_t, topleft: *const u8,
+          width: libc::c_int, height: libc::c_int, ac: *const u8,
+          alpha: libc::c_int,
+        );
+      )*
     }
   };
 }
 
-decl_cfl_pred_fn!(rav1e_ipred_cfl_avx2);
-decl_cfl_pred_fn!(rav1e_ipred_cfl_128_avx2);
-decl_cfl_pred_fn!(rav1e_ipred_cfl_left_avx2);
-decl_cfl_pred_fn!(rav1e_ipred_cfl_top_avx2);
+decl_cfl_pred_fn! {
+  rav1e_ipred_cfl_avx2,
+  rav1e_ipred_cfl_128_avx2,
+  rav1e_ipred_cfl_left_avx2,
+  rav1e_ipred_cfl_top_avx2
+}
 
 pub trait Intra<T>: native::Intra<T>
 where
