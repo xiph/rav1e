@@ -20,6 +20,15 @@ pub trait InvTxfm2D: native::InvTxfm2D {
         Self::inv_txfm2d_add_avx2(input, output, tx_type, bd);
       };
     }
+    if Self::W == 4
+      && Self::H == 4
+      && std::mem::size_of::<T>() == 1
+      && cpu >= CpuFeatureLevel::SSSE3
+    {
+      return unsafe {
+        Self::inv_txfm2d_add_ssse3(input, output, tx_type, bd);
+      };
+    }
     <Self as native::InvTxfm2D>::inv_txfm2d_add(
       input, output, tx_type, bd, cpu,
     );
@@ -58,6 +67,60 @@ pub trait InvTxfm2D: native::InvTxfm2D {
       stride,
       coeff16.array.as_ptr(),
       (coeff_w * coeff_h) as i32,
+    );
+  }
+
+  #[inline]
+  #[target_feature(enable = "ssse3")]
+  unsafe fn inv_txfm2d_add_ssse3<T>(
+    input: &[i32], output: &mut PlaneRegionMut<'_, T>, tx_type: TxType,
+    bd: usize,
+  ) where
+    T: Pixel,
+  {
+    debug_assert!(bd == 8);
+
+    // TODO: Support more than Block_4x4 when SSSE3 and AVX2 match.
+    debug_assert!(Self::W == 4 && Self::H == 4);
+
+    let mut coeff16: AlignedArray<[i16; 4 * 4]> =
+      AlignedArray::uninitialized();
+
+    // Transpose the input.
+    assert!(input.len() >= 4 * 4);
+    for j in 0..4 {
+      for i in 0..4 {
+        coeff16.array[i * 4 + j] = input[j * 4 + i] as i16;
+      }
+    }
+
+    let stride = output.plane_cfg.stride as isize;
+
+    // perform the inverse transform
+    (match tx_type {
+      TxType::DCT_DCT => rav1e_inv_txfm_add_dct_dct_4x4_ssse3,
+      TxType::IDTX => rav1e_inv_txfm_add_identity_identity_4x4_ssse3,
+      TxType::DCT_ADST => rav1e_inv_txfm_add_adst_dct_4x4_ssse3,
+      TxType::ADST_DCT => rav1e_inv_txfm_add_dct_adst_4x4_ssse3,
+      TxType::DCT_FLIPADST => rav1e_inv_txfm_add_flipadst_dct_4x4_ssse3,
+      TxType::FLIPADST_DCT => rav1e_inv_txfm_add_dct_flipadst_4x4_ssse3,
+      TxType::V_DCT => rav1e_inv_txfm_add_identity_dct_4x4_ssse3,
+      TxType::H_DCT => rav1e_inv_txfm_add_dct_identity_4x4_ssse3,
+      TxType::ADST_ADST => rav1e_inv_txfm_add_adst_adst_4x4_ssse3,
+      TxType::ADST_FLIPADST => rav1e_inv_txfm_add_flipadst_adst_4x4_ssse3,
+      TxType::FLIPADST_ADST => rav1e_inv_txfm_add_adst_flipadst_4x4_ssse3,
+      TxType::FLIPADST_FLIPADST => {
+        rav1e_inv_txfm_add_flipadst_flipadst_4x4_ssse3
+      }
+      TxType::V_ADST => rav1e_inv_txfm_add_identity_adst_4x4_ssse3,
+      TxType::H_ADST => rav1e_inv_txfm_add_adst_identity_4x4_ssse3,
+      TxType::V_FLIPADST => rav1e_inv_txfm_add_identity_flipadst_4x4_ssse3,
+      TxType::H_FLIPADST => rav1e_inv_txfm_add_flipadst_identity_4x4_ssse3,
+    })(
+      output.data_ptr_mut() as *mut _,
+      stride,
+      coeff16.array.as_ptr(),
+      (4 * 4) as i32,
     );
   }
 }
@@ -152,3 +215,35 @@ impl_itx_fns!(
   [(16, 8), (8, 16), (16, 4), (4, 16), (8, 8), (8, 4), (4, 8), (4, 4)],
   avx2
 );
+
+macro_rules! decl_tx_fns {
+  ($($f:ident),+) => {
+    extern {
+      $(
+        fn $f(
+          dst: *mut u8, dst_stride: libc::ptrdiff_t, coeff: *const i16,
+          eob: i32
+        );
+      )*
+    }
+  };
+}
+
+decl_tx_fns! {
+  rav1e_inv_txfm_add_dct_dct_4x4_ssse3,
+  rav1e_inv_txfm_add_identity_identity_4x4_ssse3,
+  rav1e_inv_txfm_add_adst_dct_4x4_ssse3,
+  rav1e_inv_txfm_add_dct_adst_4x4_ssse3,
+  rav1e_inv_txfm_add_flipadst_dct_4x4_ssse3,
+  rav1e_inv_txfm_add_dct_flipadst_4x4_ssse3,
+  rav1e_inv_txfm_add_identity_dct_4x4_ssse3,
+  rav1e_inv_txfm_add_dct_identity_4x4_ssse3,
+  rav1e_inv_txfm_add_adst_adst_4x4_ssse3,
+  rav1e_inv_txfm_add_flipadst_adst_4x4_ssse3,
+  rav1e_inv_txfm_add_adst_flipadst_4x4_ssse3,
+  rav1e_inv_txfm_add_flipadst_flipadst_4x4_ssse3,
+  rav1e_inv_txfm_add_identity_adst_4x4_ssse3,
+  rav1e_inv_txfm_add_adst_identity_4x4_ssse3,
+  rav1e_inv_txfm_add_identity_flipadst_4x4_ssse3,
+  rav1e_inv_txfm_add_flipadst_identity_4x4_ssse3
+}
