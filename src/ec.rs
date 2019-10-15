@@ -10,10 +10,14 @@
 
 #![allow(non_camel_case_types)]
 
-#[cfg(not(all(feature = "nasm", target_arch = "x86_64")))]
-pub use self::native::*;
-#[cfg(all(feature = "nasm", target_arch = "x86_64"))]
-pub use crate::asm::x86::ec::*;
+cfg_if::cfg_if! {
+  if #[cfg(all(feature = "nasm", target_arch = "x86_64"))] {
+    pub use crate::asm::x86::ec::*;
+  } else {
+    pub use self::native::*;
+  }
+}
+
 use crate::util::msb;
 use crate::util::ILog;
 use bitstream_io::{BigEndian, BitWriter};

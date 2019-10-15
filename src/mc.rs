@@ -7,10 +7,13 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-#[cfg(not(all(feature = "nasm", target_arch = "x86_64")))]
-pub use self::native::*;
-#[cfg(all(feature = "nasm", target_arch = "x86_64"))]
-pub use crate::asm::x86::mc::*;
+cfg_if::cfg_if! {
+  if #[cfg(all(feature = "nasm", target_arch = "x86_64"))] {
+    pub use crate::asm::x86::mc::*;
+  } else {
+    pub use self::native::*;
+  }
+}
 
 use crate::cpu_features::CpuFeatureLevel;
 use crate::frame::*;
