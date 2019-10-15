@@ -12,7 +12,7 @@
 #![allow(dead_code)]
 
 cfg_if::cfg_if! {
-  if #[cfg(all(feature = "nasm", target_arch = "x86_64"))] {
+  if #[cfg(nasm_x86_64)] {
     pub use crate::asm::x86::predict::*;
   } else {
     pub use self::native::*;

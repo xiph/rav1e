@@ -20,7 +20,7 @@ fn rerun_dir<P: AsRef<Path>>(dir: P) {
   }
 }
 
-#[cfg(feature = "nasm")]
+#[cfg(feature = "asm")]
 fn build_nasm_files() {
   use std::fs::File;
   use std::io::Write;
@@ -77,9 +77,10 @@ fn main() {
   let os = env::var("CARGO_CFG_TARGET_OS").unwrap();
   // let env = env::var("CARGO_CFG_TARGET_ENV").unwrap();
 
-  #[cfg(feature = "nasm")]
+  #[cfg(feature = "asm")]
   {
     if arch == "x86_64" {
+      println!("cargo:rustc-cfg={}", "nasm_x86_64");
       build_nasm_files()
     }
   }
