@@ -44,6 +44,7 @@ fn build_nasm_files() {
     "rav1easm",
     &[
       "src/x86/ipred.asm",
+      "src/x86/ipred_ssse3.asm",
       "src/x86/itx.asm",
       "src/x86/mc.asm",
       "src/x86/mc_ssse3.asm",
