@@ -9,9 +9,10 @@
 
 #![allow(non_upper_case_globals)]
 
-use crate::transform::TxSize;
+use crate::transform::{TxSize, TxType};
 use crate::util::*;
 
+use crate::scan_order::av1_scan_orders;
 use num_traits::*;
 use std::convert::Into;
 use std::mem;
@@ -253,10 +254,12 @@ impl QuantizationContext {
 
   #[inline]
   pub fn quantize<T>(
-    &self, coeffs: &[T], qcoeffs: &mut [T], coded_tx_size: usize,
+    &self, coeffs: &[T], qcoeffs: &mut [T], tx_size: TxSize, tx_type: TxType,
   ) where
     T: Coefficient,
   {
+    let scan = av1_scan_orders[tx_size as usize][tx_type as usize].scan;
+
     // Find the last non-zero coefficient using our smaller biases and
     // zero everything else.
     // This threshold is such that `abs(coeff) < deadzone` implies:
@@ -264,10 +267,13 @@ impl QuantizationContext {
     let deadzone = (self.ac_quant as usize - self.ac_offset_eob as usize)
       .align_power_of_two_and_shift(self.log_tx_scale)
       as i32;
-    let pos =
-      coeffs[1..coded_tx_size].iter().rposition(|c| c.as_().abs() >= deadzone);
-    // We skip the DC coefficient since it has its own quantizer index.
-    let last_pos = pos.map(|pos| pos + 1).unwrap_or(1);
+    let eob = {
+      let eob_minus_one = scan[1..]
+        .iter()
+        .rposition(|&i| coeffs[i as usize].as_().abs() >= deadzone);
+      // We skip the DC coefficient since it has its own quantizer index.
+      eob_minus_one.map(|n| n + 1).unwrap_or(1)
+    };
 
     qcoeffs[0] = coeffs[0] << (self.log_tx_scale as usize);
     qcoeffs[0] += qcoeffs[0].signum() * T::cast_from(self.dc_offset);
@@ -284,30 +290,28 @@ impl QuantizationContext {
     // To that end, we want to bias more toward rounding to zero for
     // that tail of zeroes and ones than we do for the larger coefficients.
     let mut level_mode = 1;
-    for (qc, c) in
-      qcoeffs[1..].iter_mut().zip(coeffs[1..].iter()).take(last_pos)
-    {
-      let coeff = *c << self.log_tx_scale;
+    for &pos in scan[1..].iter().take(eob) {
+      let coeff = coeffs[pos as usize] << self.log_tx_scale;
       let level0 = T::cast_from(divu_pair(coeff.as_(), self.ac_mul_add));
       let offset = if level0 > T::cast_from(1 - level_mode) {
         self.ac_offset1
       } else {
         self.ac_offset0
       };
-      let qcoeff = coeff + (coeff.signum() * T::cast_from(offset));
-      *qc = T::cast_from(divu_pair(qcoeff.as_(), self.ac_mul_add));
-      if level_mode != 0 && *qc == T::cast_from(0) {
+      let qcoeff = T::cast_from(divu_pair(
+        (coeff + (coeff.signum() * T::cast_from(offset))).as_(),
+        self.ac_mul_add,
+      ));
+      qcoeffs[pos as usize] = qcoeff;
+      if level_mode != 0 && qcoeff == T::cast_from(0) {
         level_mode = 0;
-      } else if *qc > T::cast_from(1) {
+      } else if qcoeff > T::cast_from(1) {
         level_mode = 1;
       }
     }
 
-    let zero_start = coded_tx_size.min(last_pos + 1);
-    if qcoeffs.len() > zero_start {
-      for qc in qcoeffs[zero_start..].iter_mut() {
-        *qc = T::cast_from(0);
-      }
+    for &pos in scan.iter().skip(eob + 1) {
+      qcoeffs[pos as usize] = T::cast_from(0);
     }
   }
 }

@@ -1164,8 +1164,7 @@ pub fn encode_tx_block<T: Pixel>(
     fi.sequence.bit_depth,
   );
 
-  let coded_tx_size = av1_get_coded_tx_size(tx_size).area();
-  ts.qc.quantize(coeffs, qcoeffs, coded_tx_size);
+  ts.qc.quantize(coeffs, qcoeffs, tx_size, tx_type);
 
   let tell_coeffs = w.tell_frac();
   let has_coeff = if need_recon_pixel || rdo_type.needs_coeff_rate() {
