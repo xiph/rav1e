@@ -7,5 +7,5 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-#[cfg(all(feature = "nasm", target_arch = "x86_64"))]
+#[cfg(nasm_x86_64)]
 pub mod x86;

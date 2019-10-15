@@ -8,7 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 cfg_if::cfg_if! {
-  if #[cfg(all(feature = "nasm", target_arch = "x86_64"))] {
+  if #[cfg(nasm_x86_64)] {
     mod x86;
     pub use x86::*;
   } else {

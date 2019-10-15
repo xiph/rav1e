@@ -20,7 +20,7 @@ use crate::cpu_features::CpuFeatureLevel;
 use std::cmp;
 
 cfg_if::cfg_if! {
-  if #[cfg(all(feature = "nasm", target_arch = "x86_64"))] {
+  if #[cfg(nasm_x86_64)] {
     pub use crate::asm::x86::cdef::*;
   } else {
     pub(crate) use self::native::*;

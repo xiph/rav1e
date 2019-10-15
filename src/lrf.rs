@@ -10,7 +10,7 @@
 #![allow(safe_extern_statics)]
 
 cfg_if::cfg_if! {
-  if #[cfg(all(feature = "nasm", target_arch = "x86_64"))] {
+  if #[cfg(nasm_x86_64)] {
     use crate::asm::x86::lrf::*;
   } else {
     use self::native::*;
