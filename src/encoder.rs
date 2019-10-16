@@ -1133,18 +1133,19 @@ pub fn encode_tx_block<T: Pixel>(
     return (false, ScaledDistortion::zero());
   }
 
+  let coded_tx_area = av1_get_coded_tx_size(tx_size).area();
   let mut residual_storage: AlignedArray<[i16; 64 * 64]> =
     AlignedArray::uninitialized();
   let mut coeffs_storage: AlignedArray<[i32; 64 * 64]> =
     AlignedArray::uninitialized();
-  let mut qcoeffs_storage: AlignedArray<[i32; 64 * 64]> =
+  let mut qcoeffs_storage: AlignedArray<[i32; 32 * 32]> =
     AlignedArray::uninitialized();
-  let mut rcoeffs_storage: AlignedArray<[i32; 64 * 64]> =
+  let mut rcoeffs_storage: AlignedArray<[i32; 32 * 32]> =
     AlignedArray::uninitialized();
   let residual = &mut residual_storage.array[..tx_size.area()];
   let coeffs = &mut coeffs_storage.array[..tx_size.area()];
-  let qcoeffs = &mut qcoeffs_storage.array[..tx_size.area()];
-  let rcoeffs = &mut rcoeffs_storage.array[..tx_size.area()];
+  let qcoeffs = &mut qcoeffs_storage.array[..coded_tx_area];
+  let rcoeffs = &mut rcoeffs_storage.array[..coded_tx_area];
 
   diff(
     residual,
