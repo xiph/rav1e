@@ -253,7 +253,10 @@ impl<T: Pixel> ContextInner<T> {
       packet_data,
       gop_output_frameno_start: BTreeMap::new(),
       gop_input_frameno_start: BTreeMap::new(),
-      keyframe_detector: SceneChangeDetector::new(enc.bit_depth as u8),
+      keyframe_detector: SceneChangeDetector::new(
+        enc.bit_depth as u8,
+        false,
+      ),
       config: enc.clone(),
       seq: Sequence::new(enc),
       rc_state: RCState::new(

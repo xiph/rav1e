@@ -21,13 +21,15 @@ use std::sync::Arc;
 pub(crate) struct SceneChangeDetector {
   /// Minimum average difference between YUV deltas that will trigger a scene change.
   threshold: u8,
+  /// Fast scene cut detection mode, ignoing chroma planes.
+  fast_mode: bool,
   /// Frames that cannot be marked as keyframes due to the algorithm excluding them.
   /// Storing the frame numbers allows us to avoid looking back more than one frame.
   excluded_frames: BTreeSet<u64>,
 }
 
 impl SceneChangeDetector {
-  pub fn new(bit_depth: u8) -> Self {
+  pub fn new(bit_depth: u8, fast_mode: bool) -> Self {
     // This implementation is based on a Python implementation at
     // https://pyscenedetect.readthedocs.io/en/latest/reference/detection-methods/.
     // The Python implementation uses HSV values and a threshold of 30. Comparing the
@@ -40,6 +42,7 @@ impl SceneChangeDetector {
     const BASE_THRESHOLD: u8 = 12;
     Self {
       threshold: BASE_THRESHOLD * bit_depth / 8,
+      fast_mode,
       excluded_frames: BTreeSet::new(),
     }
   }
@@ -169,23 +172,37 @@ impl SceneChangeDetector {
     &self, frame1: &Frame<T>, frame2: &Frame<T>,
   ) -> bool {
     let len = frame2.planes[0].cfg.width * frame2.planes[0].cfg.height;
-    let delta_yuv = frame2
-      .iter()
-      .zip(frame1.iter())
-      .map(|(last, cur)| {
-        (
-          (i16::cast_from(cur.0) - i16::cast_from(last.0)).abs() as u64,
-          (i16::cast_from(cur.1) - i16::cast_from(last.1)).abs() as u64,
-          (i16::cast_from(cur.2) - i16::cast_from(last.2)).abs() as u64,
-        )
-      })
-      .fold((0, 0, 0), |(ht, st, vt), (h, s, v)| (ht + h, st + s, vt + v));
-    let delta_yuv = (
-      (delta_yuv.0 / len as u64) as u16,
-      (delta_yuv.1 / len as u64) as u16,
-      (delta_yuv.2 / len as u64) as u16,
-    );
-    let delta_avg = ((delta_yuv.0 + delta_yuv.1 + delta_yuv.2) / 3) as u8;
-    delta_avg >= self.threshold
+
+    let delta_avg = if self.fast_mode {
+      frame2
+        .iter()
+        .zip(frame1.iter())
+        .map(|(last, cur)| {
+          (i16::cast_from(cur.0) - i16::cast_from(last.0)).abs() as u64
+        })
+        .fold(0, | ht, h | ht + h) / len as u64
+    } else {
+      let delta_yuv = frame2
+        .iter()
+        .zip(frame1.iter())
+        .map(|(last, cur)| {
+          (
+            (i16::cast_from(cur.0) - i16::cast_from(last.0)).abs() as u64,
+            (i16::cast_from(cur.1) - i16::cast_from(last.1)).abs() as u64,
+            (i16::cast_from(cur.2) - i16::cast_from(last.2)).abs() as u64,
+          )
+        })
+        .fold((0, 0, 0), |(ht, st, vt), (h, s, v)| (ht + h, st + s, vt + v));
+
+        let delta_yuv = (
+          (delta_yuv.0 / len as u64) as u16,
+          (delta_yuv.1 / len as u64) as u16,
+          (delta_yuv.2 / len as u64) as u16,
+        );
+
+        ((delta_yuv.0 + delta_yuv.1 + delta_yuv.2) / 3) as u64
+    };
+
+    delta_avg >= self.threshold as u64
   }
 }
