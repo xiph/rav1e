@@ -255,7 +255,7 @@ impl<T: Pixel> ContextInner<T> {
       gop_input_frameno_start: BTreeMap::new(),
       keyframe_detector: SceneChangeDetector::new(
         enc.bit_depth as u8,
-        false,
+        enc.speed_settings.fast_scene_detection,
       ),
       config: enc.clone(),
       seq: Sequence::new(enc),

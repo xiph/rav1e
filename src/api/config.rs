@@ -259,6 +259,8 @@ pub struct SpeedSettings {
   pub include_near_mvs: bool,
   /// Disables scene-cut detection.
   pub no_scene_detection: bool,
+  /// Fast scene detection mode, ignoring chroma planes.
+  pub fast_scene_detection: bool,
   /// Enables diamond motion vector search rather than full search.
   pub diamond_me: bool,
   /// Enables CDEF.
@@ -287,6 +289,7 @@ impl Default for SpeedSettings {
       prediction_modes: PredictionModesSetting::Simple,
       include_near_mvs: false,
       no_scene_detection: false,
+      fast_scene_detection: false,
       diamond_me: false,
       cdef: false,
       quantizer_rdo: false,
@@ -324,6 +327,7 @@ impl SpeedSettings {
       prediction_modes: Self::prediction_modes_preset(speed),
       include_near_mvs: Self::include_near_mvs_preset(speed),
       no_scene_detection: Self::no_scene_detection_preset(speed),
+      fast_scene_detection: Self::fast_scene_detection_preset(speed),
       diamond_me: Self::diamond_me_preset(speed),
       cdef: Self::cdef_preset(speed),
       quantizer_rdo: Self::quantizer_rdo_preset(speed),
@@ -395,7 +399,11 @@ impl SpeedSettings {
     speed <= 3
   }
 
-  const fn no_scene_detection_preset(speed: usize) -> bool {
+  const fn no_scene_detection_preset(_speed: usize) -> bool {
+    false
+  }
+
+  const fn fast_scene_detection_preset(speed: usize) -> bool {
     speed == 10
   }
 
