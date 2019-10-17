@@ -101,9 +101,13 @@ pub mod native {
       input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
       bd: usize, _cpu: CpuFeatureLevel,
     ) {
-      let mut tmp: AlignedArray<[i32; 64 * 64]> =
+      let mut tmp1: AlignedArray<[i32; 64 * 64]> =
         AlignedArray::uninitialized();
-      let buf = &mut tmp.array[..Self::W * Self::H];
+      let mut tmp2: AlignedArray<[i32; 64 * 64]> =
+        AlignedArray::uninitialized();
+      let buf1 = &mut tmp1.array[..Self::W * Self::H];
+      let buf2 = &mut tmp2.array[..Self::W * Self::H];
+
       let cfg =
         Txfm2DFlipCfg::fwd(tx_type, TxSize::by_dims(Self::W, Self::H), bd);
 
@@ -142,11 +146,11 @@ pub mod native {
         if cfg.lr_flip {
           for r in 0..txfm_size_row {
             // flip from left to right
-            buf[r * txfm_size_col + (txfm_size_col - c - 1)] = output[r];
+            buf1[r * txfm_size_col + (txfm_size_col - c - 1)] = output[r];
           }
         } else {
           for r in 0..txfm_size_row {
-            buf[r * txfm_size_col + c] = output[r];
+            buf1[r * txfm_size_col + c] = output[r];
           }
         }
       }
@@ -154,14 +158,17 @@ pub mod native {
       // Rows
       for r in 0..txfm_size_row {
         txfm_func_row(
-          &buf[r * txfm_size_col..],
-          &mut output[r * txfm_size_col..],
+          &buf1[r * txfm_size_col..],
+          &mut buf2[r * txfm_size_col..],
         );
         av1_round_shift_array(
-          &mut output[r * txfm_size_col..],
+          &mut buf2[r * txfm_size_col..],
           txfm_size_col,
           -cfg.shift[2],
         );
+        for c in 0..txfm_size_col {
+          output[c * txfm_size_row + r] = buf2[r * txfm_size_col + c];
+        }
       }
     }
   }
@@ -271,8 +278,12 @@ pub fn fht32x64(
 
   Block32x64::fwd_txfm2d_daala(input, tmp, stride, tx_type, bit_depth, cpu);
 
-  for (row_out, row_in) in output.chunks_mut(32).zip(tmp.chunks(32)).take(64) {
-    row_out.copy_from_slice(&row_in[..32]);
+  for i in 0..2 {
+    for (row_out, row_in) in
+      output[1024 * i..].chunks_mut(32).zip(tmp[32 * i..].chunks(64)).take(32)
+    {
+      row_out.copy_from_slice(&row_in[..32]);
+    }
   }
 }
 
@@ -286,12 +297,8 @@ pub fn fht64x32(
 
   Block64x32::fwd_txfm2d_daala(input, tmp, stride, tx_type, bit_depth, cpu);
 
-  for i in 0..2 {
-    for (row_out, row_in) in
-      output[1024 * i..].chunks_mut(32).zip(tmp[32 * i..].chunks(64)).take(32)
-    {
-      row_out.copy_from_slice(&row_in[..32]);
-    }
+  for (row_out, row_in) in output.chunks_mut(32).zip(tmp.chunks(32)).take(64) {
+    row_out.copy_from_slice(&row_in[..32]);
   }
 }
 
@@ -335,8 +342,12 @@ pub fn fht16x64(
 
   Block16x64::fwd_txfm2d_daala(input, tmp, stride, tx_type, bit_depth, cpu);
 
-  for (row_out, row_in) in output.chunks_mut(16).zip(tmp.chunks(16)).take(64) {
-    row_out.copy_from_slice(&row_in[..16]);
+  for i in 0..2 {
+    for (row_out, row_in) in
+      output[512 * i..].chunks_mut(32).zip(tmp[32 * i..].chunks(64)).take(16)
+    {
+      row_out.copy_from_slice(&row_in[..32]);
+    }
   }
 }
 
@@ -350,11 +361,7 @@ pub fn fht64x16(
 
   Block64x16::fwd_txfm2d_daala(input, tmp, stride, tx_type, bit_depth, cpu);
 
-  for i in 0..2 {
-    for (row_out, row_in) in
-      output[512 * i..].chunks_mut(32).zip(tmp[32 * i..].chunks(64)).take(16)
-    {
-      row_out.copy_from_slice(&row_in[..32]);
-    }
+  for (row_out, row_in) in output.chunks_mut(16).zip(tmp.chunks(16)).take(64) {
+    row_out.copy_from_slice(&row_in[..16]);
   }
 }
