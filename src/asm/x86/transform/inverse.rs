@@ -128,7 +128,7 @@ pub trait InvTxfm2D: native::InvTxfm2D {
 macro_rules! impl_itx_fns {
   // Takes a 2d list of tx types for W and H
   ([$([$(($ENUM:pat, $TYPE1:ident, $TYPE2:ident)),*]),*], $W:expr, $H:expr,
-   $OPT:ident, $OPTLIT:literal) => {
+   $OPT:ident) => {
     paste::item! {
       // For each tx type, declare an function for the current WxH
       $(
@@ -161,76 +161,29 @@ macro_rules! impl_itx_fns {
           }
         }
       }
-
-      $(
-        $(
-          #[cfg(test)]
-          #[test]
-          fn [<test_inv_txfm2d_add_$TYPE2 _$TYPE1 _$W x $H _$OPT>]() {
-            use crate::frame::{Plane, AsRegion};
-            use crate::transform::TxSize::*;
-            use rand::random;
-
-            if !is_x86_feature_detected!($OPTLIT) {
-              eprintln!("Ignoring {} test, not supported on this machine!", $OPTLIT);
-              return;
-            }
-
-            let tx_size = [<TX_ $W X $H>];
-            let mut src_storage = [0u8; 64 * 64];
-            let src = &mut src_storage[..tx_size.area()];
-            let mut dst = Plane::wrap(vec![0u8; tx_size.area()], tx_size.width());
-            let mut res_storage = [0i16; 64 * 64];
-            let res = &mut res_storage[..tx_size.area()];
-            let mut freq_storage = [0i32; 64 * 64];
-            let freq = &mut freq_storage[..tx_size.area()];
-            for ((r, s), d) in
-              res.iter_mut().zip(src.iter_mut()).zip(dst.data.iter_mut())
-            {
-              *s = random::<u8>();
-              *d = random::<u8>();
-              *r = i16::from(*s) - i16::from(*d);
-            }
-            forward_transform(res, freq, tx_size.width(), tx_size, $ENUM, 8);
-            let mut native_dst = dst.clone();
-
-            unsafe { crate::predict::[<Block $W x $H>]::[<inv_txfm2d_add_ $OPT>](
-              freq, &mut dst.as_region_mut(), $ENUM, 8
-            ); }
-            <crate::predict::[<Block $W x $H>] as native::InvTxfm2D>::inv_txfm2d_add(
-              freq, &mut native_dst.as_region_mut(), $ENUM, 8, CpuFeatureLevel::NATIVE
-            );
-            assert_eq!(native_dst.data_origin(), dst.data_origin());
-          }
-        )*
-      )*
     }
   };
 
   // Loop over a list of dimensions
-  ($TYPES_VALID:tt, [$(($W:expr, $H:expr)),*], $OPT:ident, $OPTLIT:literal) => {
+  ($TYPES_VALID:tt, [$(($W:expr, $H:expr)),*], $OPT:ident) => {
     $(
-      impl_itx_fns!($TYPES_VALID, $W, $H, $OPT, $OPTLIT);
+      impl_itx_fns!($TYPES_VALID, $W, $H, $OPT);
     )*
   };
 
   ($TYPES64:tt, $DIMS64:tt, $TYPES32:tt, $DIMS32:tt, $TYPES16:tt, $DIMS16:tt,
-   $TYPES84:tt, $DIMS84:tt, $OPT:ident, $OPTLIT:literal) => {
+   $TYPES84:tt, $DIMS84:tt, $OPT:ident) => {
     // Make 2d list of tx types for each set of dimensions. Each set of
     //   dimensions uses a superset of the previous set of tx types.
-    impl_itx_fns!([$TYPES64], $DIMS64, $OPT, $OPTLIT);
-    impl_itx_fns!([$TYPES64, $TYPES32], $DIMS32, $OPT, $OPTLIT);
-    impl_itx_fns!([$TYPES64, $TYPES32, $TYPES16], $DIMS16, $OPT, $OPTLIT);
+    impl_itx_fns!([$TYPES64], $DIMS64, $OPT);
+    impl_itx_fns!([$TYPES64, $TYPES32], $DIMS32, $OPT);
+    impl_itx_fns!([$TYPES64, $TYPES32, $TYPES16], $DIMS16, $OPT);
     impl_itx_fns!(
-      [$TYPES64, $TYPES32, $TYPES16, $TYPES84], $DIMS84, $OPT, $OPTLIT
+      [$TYPES64, $TYPES32, $TYPES16, $TYPES84], $DIMS84, $OPT
     );
   };
 }
 
-// TODO: There is no Rust code for FLIPADST,
-// which we need before we can enable the SIMD versions
-// (or else the tests will fail).
-#[rustfmt::skip]
 impl_itx_fns!(
   // 64x
   [(TxType::DCT_DCT, dct, dct)],
@@ -242,26 +195,25 @@ impl_itx_fns!(
   [
     (TxType::DCT_ADST, dct, adst),
     (TxType::ADST_DCT, adst, dct),
-//    (TxType::DCT_FLIPADST, dct, flipadst),
-//    (TxType::FLIPADST_DCT, flipadst, dct),
+    (TxType::DCT_FLIPADST, dct, flipadst),
+    (TxType::FLIPADST_DCT, flipadst, dct),
     (TxType::V_DCT, dct, identity),
     (TxType::H_DCT, identity, dct),
-    (TxType::ADST_ADST, adst, adst)
-//    (TxType::ADST_FLIPADST, adst, flipadst),
-//    (TxType::FLIPADST_ADST, flipadst, adst),
-//    (TxType::FLIPADST_FLIPADST, flipadst, flipadst)
+    (TxType::ADST_ADST, adst, adst),
+    (TxType::ADST_FLIPADST, adst, flipadst),
+    (TxType::FLIPADST_ADST, flipadst, adst),
+    (TxType::FLIPADST_FLIPADST, flipadst, flipadst)
   ],
   [(16, 16)],
   // 8x, 4x and 16x (minus 16x16)
   [
     (TxType::V_ADST, adst, identity),
-    (TxType::H_ADST, identity, adst)
-//    (TxType::V_FLIPADST, flipadst, identity),
-//    (TxType::H_FLIPADST, identity, flipadst)
+    (TxType::H_ADST, identity, adst),
+    (TxType::V_FLIPADST, flipadst, identity),
+    (TxType::H_FLIPADST, identity, flipadst)
   ],
   [(16, 8), (8, 16), (16, 4), (4, 16), (8, 8), (8, 4), (4, 8), (4, 4)],
-  avx2,
-  "avx2"
+  avx2
 );
 
 macro_rules! decl_tx_fns {
@@ -294,4 +246,126 @@ decl_tx_fns! {
   rav1e_inv_txfm_add_adst_identity_4x4_ssse3,
   rav1e_inv_txfm_add_identity_flipadst_4x4_ssse3,
   rav1e_inv_txfm_add_flipadst_identity_4x4_ssse3
+}
+
+#[cfg(test)]
+#[rustfmt::skip]
+mod test {
+  use super::*;
+  use crate::frame::{AsRegion, Plane};
+  use crate::transform::TxSize::*;
+  use rand::random;
+
+  macro_rules! decl_tx_fn_test {
+    ($ENUM:pat, $TYPE1:ident, $TYPE2:ident, $W:expr, $H:expr, $OPT:ident, $OPTLIT:literal) => {
+      paste::item! {
+        #[test]
+        fn [<inv_txfm2d_add_$TYPE2 _$TYPE1 _$W x $H _$OPT>]() {
+          if !is_x86_feature_detected!($OPTLIT) {
+            eprintln!("Ignoring {} test, not supported on this machine!", $OPTLIT);
+            return;
+          }
+
+          let tx_size = [<TX_ $W X $H>];
+          let mut src_storage = [0u8; 64 * 64];
+          let src = &mut src_storage[..tx_size.area()];
+          let mut dst = Plane::wrap(vec![0u8; tx_size.area()], tx_size.width());
+          let mut res_storage = [0i16; 64 * 64];
+          let res = &mut res_storage[..tx_size.area()];
+          let mut freq_storage = [0i32; 64 * 64];
+          let freq = &mut freq_storage[..tx_size.area()];
+          for ((r, s), d) in
+            res.iter_mut().zip(src.iter_mut()).zip(dst.data.iter_mut())
+          {
+            *s = random::<u8>();
+            *d = random::<u8>();
+            *r = i16::from(*s) - i16::from(*d);
+          }
+          forward_transform(res, freq, tx_size.width(), tx_size, $ENUM, 8);
+          let mut native_dst = dst.clone();
+
+          unsafe { crate::predict::[<Block $W x $H>]::[<inv_txfm2d_add_ $OPT>](
+            freq, &mut dst.as_region_mut(), $ENUM, 8
+          ); }
+          <crate::predict::[<Block $W x $H>] as native::InvTxfm2D>::inv_txfm2d_add(
+            freq, &mut native_dst.as_region_mut(), $ENUM, 8, CpuFeatureLevel::NATIVE
+          );
+          assert_eq!(native_dst.data_origin(), dst.data_origin());
+        }
+      }
+    }
+  }
+
+  // TODO: There is no Rust code for FLIPADST,
+  // so those tests will currently fail.
+  // They are commented out below for reference.
+  decl_tx_fn_test!(TxType::DCT_DCT, dct, dct, 64, 64, avx2, "avx2");
+  decl_tx_fn_test!(TxType::DCT_DCT, dct, dct, 64, 32, avx2, "avx2");
+  decl_tx_fn_test!(TxType::DCT_DCT, dct, dct, 32, 64, avx2, "avx2");
+  decl_tx_fn_test!(TxType::DCT_DCT, dct, dct, 16, 64, avx2, "avx2");
+  decl_tx_fn_test!(TxType::DCT_DCT, dct, dct, 64, 16, avx2, "avx2");
+  decl_tx_fn_test!(TxType::IDTX, identity, identity, 32, 32, avx2, "avx2");
+  decl_tx_fn_test!(TxType::IDTX, identity, identity, 32, 16, avx2, "avx2");
+  decl_tx_fn_test!(TxType::IDTX, identity, identity, 16, 32, avx2, "avx2");
+  decl_tx_fn_test!(TxType::IDTX, identity, identity, 32, 8, avx2, "avx2");
+  decl_tx_fn_test!(TxType::IDTX, identity, identity, 8, 32, avx2, "avx2");
+  decl_tx_fn_test!(TxType::DCT_ADST, dct, adst, 16, 16, avx2, "avx2");
+  decl_tx_fn_test!(TxType::ADST_DCT, adst, dct, 16, 16, avx2, "avx2");
+//  decl_tx_fn_test!(TxType::DCT_FLIPADST, dct, flipadst, 16, 16, avx2, "avx2");
+//  decl_tx_fn_test!(TxType::FLIPADST_DCT, flipadst, dct, 16, 16, avx2, "avx2");
+  decl_tx_fn_test!(TxType::V_DCT, dct, identity, 16, 16, avx2, "avx2");
+  decl_tx_fn_test!(TxType::H_DCT, identity, dct, 16, 16, avx2, "avx2");
+  decl_tx_fn_test!(TxType::ADST_ADST, adst, adst, 16, 16, avx2, "avx2");
+//  decl_tx_fn_test!(TxType::ADST_FLIPADST, adst, flipadst, 16, 16, avx2, "avx2");
+//  decl_tx_fn_test!(TxType::FLIPADST_ADST, flipadst, adst, 16, 16, avx2, "avx2");
+//  decl_tx_fn_test!(TxType::FLIPADST_FLIPADST, flipadst, flipadst, 16, 16, avx2, "avx2");
+  decl_tx_fn_test!(TxType::V_ADST, adst, identity, 16, 8, avx2, "avx2");
+  decl_tx_fn_test!(TxType::H_ADST, identity, adst, 16, 8, avx2, "avx2");
+//  decl_tx_fn_test!(TxType::V_FLIPADST, flipadst, identity, 16, 8, avx2, "avx2");
+//  decl_tx_fn_test!(TxType::H_FLIPADST, identity, flipadst, 16, 8, avx2, "avx2");
+  decl_tx_fn_test!(TxType::V_ADST, adst, identity, 8, 16, avx2, "avx2");
+  decl_tx_fn_test!(TxType::H_ADST, identity, adst, 8, 16, avx2, "avx2");
+//  decl_tx_fn_test!(TxType::V_FLIPADST, flipadst, identity, 8, 16, avx2, "avx2");
+//  decl_tx_fn_test!(TxType::H_FLIPADST, identity, flipadst, 8, 16, avx2, "avx2");
+  decl_tx_fn_test!(TxType::V_ADST, adst, identity, 16, 4, avx2, "avx2");
+  decl_tx_fn_test!(TxType::H_ADST, identity, adst, 16, 4, avx2, "avx2");
+//  decl_tx_fn_test!(TxType::V_FLIPADST, flipadst, identity, 16, 4, avx2, "avx2");
+//  decl_tx_fn_test!(TxType::H_FLIPADST, identity, flipadst, 16, 4, avx2, "avx2");
+  decl_tx_fn_test!(TxType::V_ADST, adst, identity, 4, 16, avx2, "avx2");
+  decl_tx_fn_test!(TxType::H_ADST, identity, adst, 4, 16, avx2, "avx2");
+//  decl_tx_fn_test!(TxType::V_FLIPADST, flipadst, identity, 4, 16, avx2, "avx2");
+//  decl_tx_fn_test!(TxType::H_FLIPADST, identity, flipadst, 4, 16, avx2, "avx2");
+  decl_tx_fn_test!(TxType::V_ADST, adst, identity, 8, 8, avx2, "avx2");
+  decl_tx_fn_test!(TxType::H_ADST, identity, adst, 8, 8, avx2, "avx2");
+//  decl_tx_fn_test!(TxType::V_FLIPADST, flipadst, identity, 8, 8, avx2, "avx2");
+//  decl_tx_fn_test!(TxType::H_FLIPADST, identity, flipadst, 8, 8, avx2, "avx2");
+  decl_tx_fn_test!(TxType::V_ADST, adst, identity, 8, 4, avx2, "avx2");
+  decl_tx_fn_test!(TxType::H_ADST, identity, adst, 8, 4, avx2, "avx2");
+//  decl_tx_fn_test!(TxType::V_FLIPADST, flipadst, identity, 8, 4, avx2, "avx2");
+//  decl_tx_fn_test!(TxType::H_FLIPADST, identity, flipadst, 8, 4, avx2, "avx2");
+  decl_tx_fn_test!(TxType::V_ADST, adst, identity, 4, 8, avx2, "avx2");
+  decl_tx_fn_test!(TxType::H_ADST, identity, adst, 4, 8, avx2, "avx2");
+//  decl_tx_fn_test!(TxType::V_FLIPADST, flipadst, identity, 4, 8, avx2, "avx2");
+//  decl_tx_fn_test!(TxType::H_FLIPADST, identity, flipadst, 4, 8, avx2, "avx2");
+  decl_tx_fn_test!(TxType::V_ADST, adst, identity, 4, 4, avx2, "avx2");
+  decl_tx_fn_test!(TxType::H_ADST, identity, adst, 4, 4, avx2, "avx2");
+//  decl_tx_fn_test!(TxType::V_FLIPADST, flipadst, identity, 4, 4, avx2, "avx2");
+//  decl_tx_fn_test!(TxType::H_FLIPADST, identity, flipadst, 4, 4, avx2, "avx2");
+
+  decl_tx_fn_test!(TxType::DCT_DCT, dct, dct, 4, 4, ssse3, "ssse3");
+  decl_tx_fn_test!(TxType::IDTX, identity, identity, 4, 4, ssse3, "ssse3");
+  decl_tx_fn_test!(TxType::DCT_ADST, dct, adst, 4, 4, ssse3, "ssse3");
+  decl_tx_fn_test!(TxType::ADST_DCT, adst, dct, 4, 4, ssse3, "ssse3");
+//  decl_tx_fn_test!(TxType::DCT_FLIPADST, dct, flipadst, 4, 4, ssse3, "ssse3");
+//  decl_tx_fn_test!(TxType::FLIPADST_DCT, flipadst, dct, 4, 4, ssse3, "ssse3");
+  decl_tx_fn_test!(TxType::V_DCT, dct, identity, 4, 4, ssse3, "ssse3");
+  decl_tx_fn_test!(TxType::H_DCT, identity, dct, 4, 4, ssse3, "ssse3");
+  decl_tx_fn_test!(TxType::ADST_ADST, adst, adst, 4, 4, ssse3, "ssse3");
+//  decl_tx_fn_test!(TxType::ADST_FLIPADST, adst, flipadst, 4, 4, ssse3, "ssse3");
+//  decl_tx_fn_test!(TxType::FLIPADST_ADST, flipadst, adst, 4, 4, ssse3, "ssse3");
+//  decl_tx_fn_test!(TxType::FLIPADST_FLIPADST, flipadst, flipadst, 4, 4, ssse3, "ssse3");
+  decl_tx_fn_test!(TxType::V_ADST, adst, identity, 4, 4, ssse3, "ssse3");
+  decl_tx_fn_test!(TxType::H_ADST, identity, adst, 4, 4, ssse3, "ssse3");
+//  decl_tx_fn_test!(TxType::V_FLIPADST, flipadst, identity, 4, 4, ssse3, "ssse3");
+//  decl_tx_fn_test!(TxType::H_FLIPADST, identity, flipadst, 4, 4, ssse3, "ssse3");
 }
