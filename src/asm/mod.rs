@@ -9,3 +9,5 @@
 
 #[cfg(nasm_x86_64)]
 pub mod x86;
+
+pub mod tables;
