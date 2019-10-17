@@ -368,7 +368,7 @@ impl SpeedSettings {
   }
 
   const fn reduced_tx_set_preset(speed: usize) -> bool {
-    speed >= 6
+    speed >= 5
   }
 
   /// TX domain distortion is always faster, with no significant quality change
@@ -385,7 +385,7 @@ impl SpeedSettings {
   }
 
   const fn rdo_tx_decision_preset(speed: usize) -> bool {
-    speed <= 4
+    speed <= 5
   }
 
   fn prediction_modes_preset(speed: usize) -> PredictionModesSetting {
