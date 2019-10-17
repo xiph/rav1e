@@ -25,7 +25,7 @@ pub fn sgrproj_box_ab_r1(
   iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
   cpu: CpuFeatureLevel,
 ) {
-  if cpu >= CpuFeatureLevel::AVX2 {
+  /*if cpu >= CpuFeatureLevel::AVX2 {
     return unsafe {
       sgrproj_box_ab_r1_avx2(
         af,
@@ -39,7 +39,7 @@ pub fn sgrproj_box_ab_r1(
         bdm8,
       );
     };
-  }
+  }*/
 
   native::sgrproj_box_ab_r1(
     af,
@@ -62,7 +62,7 @@ pub fn sgrproj_box_ab_r2(
   iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
   cpu: CpuFeatureLevel,
 ) {
-  if cpu >= CpuFeatureLevel::AVX2 {
+  /*if cpu >= CpuFeatureLevel::AVX2 {
     return unsafe {
       sgrproj_box_ab_r2_avx2(
         af,
@@ -76,7 +76,7 @@ pub fn sgrproj_box_ab_r2(
         bdm8,
       );
     };
-  }
+  }*/
 
   native::sgrproj_box_ab_r2(
     af,

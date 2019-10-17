@@ -96,13 +96,20 @@ pub const IMAGE_WIDTH_MAX: usize = [STRIPE_IMAGE_MAX, SOLVE_IMAGE_MAX]
 pub struct IntegralImageBuffer {
   pub integral_image: Vec<u32>,
   pub sq_integral_image: Vec<u32>,
+
+  pub sum_3x3: Vec<u32>,
+  pub sum_5x5: Vec<u32>,
+  pub sum_sq_3x3: Vec<u32>,
+  pub sum_sq_5x5: Vec<u32>,
 }
 
 impl IntegralImageBuffer {
   /// Creates a new buffer with the given size, filled with zeros.
   #[inline]
   pub fn zeroed(size: usize) -> Self {
-    Self { integral_image: vec![0; size], sq_integral_image: vec![0; size] }
+    Self { integral_image: vec![0; size], sq_integral_image: vec![0; size],
+           sum_3x3: vec![0; size], sum_5x5: vec![0; size],
+           sum_sq_3x3: vec![0; size], sum_sq_5x5: vec![0; size], }
   }
 }
 
@@ -323,7 +330,7 @@ fn sgrproj_sum_finish(
 }
 
 // Using an integral image, compute the sum of a square region
-fn get_integral_square(
+pub fn get_integral_square(
   iimg: &[u32], stride: usize, x: usize, y: usize, size: usize,
 ) -> u32 {
   // Cancel out overflow in iimg by using wrapping arithmetic
