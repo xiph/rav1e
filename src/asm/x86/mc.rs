@@ -365,7 +365,8 @@ pub(crate) static AVG_HBD_FNS: [Option<AvgHBDFn>; CpuFeatureLevel::len()] =
   [None; CpuFeatureLevel::len()];
 
 #[rustfmt::skip]
-static MC_SUBPEL_FILTERS: AlignedArray<[i8; 600]> = AlignedArray::new([
+#[no_mangle]
+pub static rav1e_mc_subpel_filters: AlignedArray<[i8; 600]> = AlignedArray::new([
 0,   1,  -3,  63,   4,  -1,   0,   0, // REGULAR
 0,   1,  -5,  61,   9,  -2,   0,   0,
 0,   1,  -6,  58,  14,  -4,   1,   0,
@@ -445,6 +446,3 @@ static MC_SUBPEL_FILTERS: AlignedArray<[i8; 600]> = AlignedArray::new([
 0,   0,   2,  20,  31,  11,   0,   0,
 0,   0,   2,  18,  31,  13,   0,   0,
 0,   0,   1,  17,  31,  15,   0,   0 ]);
-
-#[no_mangle]
-pub static rav1e_mc_subpel_filters: &[i8] = &MC_SUBPEL_FILTERS.array;
