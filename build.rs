@@ -43,7 +43,6 @@ fn build_nasm_files() {
   nasm_rs::compile_library_args(
     "rav1easm",
     &[
-      "src/x86/data.asm",
       "src/x86/ipred.asm",
       "src/x86/itx.asm",
       "src/x86/mc.asm",
