@@ -581,9 +581,9 @@ pub fn setup_integral_image<T: Pixel>(
 
 pub fn sgrproj_stripe_filter<T: Pixel>(
   set: u8, xqd: [i8; 2], fi: &FrameInvariants<T>,
-  integral_image_buffer: &mut IntegralImageBuffer,
-  integral_image_stride: usize, stripe_w: usize, stripe_h: usize,
-  cdeffed: &PlaneSlice<T>, out: &mut PlaneMutSlice<T>,
+  integral_image_buffer: &IntegralImageBuffer, integral_image_stride: usize,
+  stripe_w: usize, stripe_h: usize, cdeffed: &PlaneSlice<T>,
+  out: &mut PlaneMutSlice<T>,
 ) {
   let bdm8 = fi.sequence.bit_depth - 8;
   let mut a_r2: [[u32; IMAGE_WIDTH_MAX + 2]; 2] =
@@ -763,7 +763,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
 // Inputs are relative to the colocated slice views.
 pub fn sgrproj_solve<T: Pixel>(
   set: u8, fi: &FrameInvariants<T>,
-  integral_image_buffer: &mut IntegralImageBuffer, input: &PlaneSlice<T>,
+  integral_image_buffer: &IntegralImageBuffer, input: &PlaneSlice<T>,
   cdeffed: &PlaneSlice<T>, cdef_w: usize, cdef_h: usize,
 ) -> (i8, i8) {
   let bdm8 = fi.sequence.bit_depth - 8;
@@ -1419,7 +1419,7 @@ impl RestorationState {
                 set,
                 xqd,
                 fi,
-                &mut stripe_filter_buffer,
+                &stripe_filter_buffer,
                 STRIPE_IMAGE_STRIDE,
                 size,
                 stripe_size,
