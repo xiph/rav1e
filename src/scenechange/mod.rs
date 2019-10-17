@@ -180,7 +180,8 @@ impl SceneChangeDetector {
         .map(|(last, cur)| {
           (i16::cast_from(cur.0) - i16::cast_from(last.0)).abs() as u64
         })
-        .fold(0, | ht, h | ht + h) / len as u64
+        .sum::<u64>()
+        / len as u64
     } else {
       let delta_yuv = frame2
         .iter()
@@ -194,13 +195,13 @@ impl SceneChangeDetector {
         })
         .fold((0, 0, 0), |(ht, st, vt), (h, s, v)| (ht + h, st + s, vt + v));
 
-        let delta_yuv = (
-          (delta_yuv.0 / len as u64) as u16,
-          (delta_yuv.1 / len as u64) as u16,
-          (delta_yuv.2 / len as u64) as u16,
-        );
+      let delta_yuv = (
+        (delta_yuv.0 / len as u64) as u16,
+        (delta_yuv.1 / len as u64) as u16,
+        (delta_yuv.2 / len as u64) as u16,
+      );
 
-        ((delta_yuv.0 + delta_yuv.1 + delta_yuv.2) / 3) as u64
+      ((delta_yuv.0 + delta_yuv.1 + delta_yuv.2) / 3) as u64
     };
 
     delta_avg >= self.threshold as u64
