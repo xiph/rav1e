@@ -31,16 +31,17 @@ pub static RAV1E_TX_TYPES: &[TxType] = &[
   TxType::ADST_DCT,
   TxType::DCT_ADST,
   TxType::ADST_ADST,
-  TxType::FLIPADST_DCT,
-  TxType::DCT_FLIPADST,
-  TxType::FLIPADST_FLIPADST,
-  TxType::ADST_FLIPADST,
-  TxType::FLIPADST_ADST,
+  // TODO: Add a speed setting for FLIPADST
+  // TxType::FLIPADST_DCT,
+  // TxType::DCT_FLIPADST,
+  // TxType::FLIPADST_FLIPADST,
+  // TxType::ADST_FLIPADST,
+  // TxType::FLIPADST_ADST,
   TxType::IDTX,
   TxType::V_DCT,
   TxType::H_DCT,
-  TxType::V_FLIPADST,
-  TxType::H_FLIPADST,
+  //TxType::V_FLIPADST,
+  //TxType::H_FLIPADST,
 ];
 
 static SQRT2_BITS: usize = 12;
