@@ -78,14 +78,14 @@ impl RDOType {
 }
 
 #[derive(Clone)]
-pub struct RDOOutput {
+pub struct PartitionGroupParameters {
   pub rd_cost: f64,
   pub part_type: PartitionType,
-  pub part_modes: Vec<RDOPartitionOutput>,
+  pub part_modes: Vec<PartitionParameters>,
 }
 
 #[derive(Clone)]
-pub struct RDOPartitionOutput {
+pub struct PartitionParameters {
   pub rd_cost: f64,
   pub bo: TileBlockOffset,
   pub bsize: BlockSize,
@@ -797,7 +797,7 @@ pub fn rdo_mode_decision<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, bsize: BlockSize, tile_bo: TileBlockOffset,
   pmvs: &mut [Option<MotionVector>], inter_cfg: &InterConfig,
-) -> RDOPartitionOutput {
+) -> PartitionParameters {
   let mut best = EncodingSettings::default();
 
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
@@ -1253,7 +1253,7 @@ pub fn rdo_mode_decision<T: Pixel>(
 
   assert!(best.rd >= 0_f64);
 
-  RDOPartitionOutput {
+  PartitionParameters {
     bo: tile_bo,
     bsize,
     pred_mode_luma: best.mode_luma,
@@ -1512,11 +1512,12 @@ pub fn get_sub_partitions_with_border_check(
 pub fn rdo_partition_decision<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
-  bsize: BlockSize, tile_bo: TileBlockOffset, cached_block: &RDOOutput,
+  bsize: BlockSize, tile_bo: TileBlockOffset,
+  cached_block: &PartitionGroupParameters,
   pmvs: &mut [[Option<MotionVector>; REF_FRAMES]; 5],
   partition_types: &[PartitionType], rdo_type: RDOType,
   inter_cfg: &InterConfig,
-) -> RDOOutput {
+) -> PartitionGroupParameters {
   let mut best_partition = cached_block.part_type;
   let mut best_rd = cached_block.rd_cost;
   let mut best_pred_modes = cached_block.part_modes.clone();
@@ -1676,7 +1677,7 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
 
   assert!(best_rd >= 0_f64);
 
-  RDOOutput {
+  PartitionGroupParameters {
     rd_cost: best_rd,
     part_type: best_partition,
     part_modes: best_pred_modes,
