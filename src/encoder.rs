@@ -2041,7 +2041,7 @@ pub fn encode_block_with_modes<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer,
   w_post_cdef: &mut dyn Writer, bsize: BlockSize, tile_bo: TileBlockOffset,
-  mode_decision: &RDOPartitionOutput, rdo_type: RDOType, record_stats: bool,
+  mode_decision: &PartitionParameters, rdo_type: RDOType, record_stats: bool,
 ) {
   let (mode_luma, mode_chroma) =
     (mode_decision.pred_mode_luma, mode_decision.pred_mode_chroma);
@@ -2109,11 +2109,11 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
   bsize: BlockSize, tile_bo: TileBlockOffset,
   pmvs: &mut [[Option<MotionVector>; REF_FRAMES]; 5], ref_rd_cost: f64,
   inter_cfg: &InterConfig,
-) -> (RDOOutput) {
+) -> (PartitionGroupParameters) {
   let rdo_type = RDOType::PixelDistRealRate;
   let mut rd_cost = std::f64::MAX;
   let mut best_rd = std::f64::MAX;
-  let mut rdo_output = RDOOutput {
+  let mut rdo_output = PartitionGroupParameters {
     rd_cost,
     part_type: PartitionType::PARTITION_INVALID,
     part_modes: Vec::new(),
@@ -2246,7 +2246,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       let subsize = bsize.subsize(partition);
       let hbsw = subsize.width_mi(); // Half the block size width in blocks
       let hbsh = subsize.height_mi(); // Half the block size height in blocks
-      let mut child_modes: Vec<RDOPartitionOutput> = Vec::new();
+      let mut child_modes: Vec<PartitionParameters> = Vec::new();
       rd_cost = 0.0;
 
       if bsize.gte(BlockSize::BLOCK_8X8) {
@@ -2394,7 +2394,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
   bsize: BlockSize, tile_bo: TileBlockOffset,
-  block_output: &Option<RDOOutput>,
+  block_output: &Option<PartitionGroupParameters>,
   pmvs: &mut [[Option<MotionVector>; REF_FRAMES]; 5], inter_cfg: &InterConfig,
 ) {
   if tile_bo.0.x >= cw.bc.blocks.cols() || tile_bo.0.y >= cw.bc.blocks.rows() {
@@ -2411,11 +2411,12 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
     || bsize.greater_than(BlockSize::BLOCK_64X64))
     && is_square;
 
-  let mut rdo_output = block_output.clone().unwrap_or(RDOOutput {
-    part_type: PartitionType::PARTITION_INVALID,
-    rd_cost: std::f64::MAX,
-    part_modes: Vec::new(),
-  });
+  let mut rdo_output =
+    block_output.clone().unwrap_or(PartitionGroupParameters {
+      part_type: PartitionType::PARTITION_INVALID,
+      rd_cost: std::f64::MAX,
+      part_modes: Vec::new(),
+    });
   let partition: PartitionType;
   let mut split_vert = false;
   let mut split_horz = false;
@@ -2660,7 +2661,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
             w_post_cdef,
             subsize,
             mode.bo,
-            &Some(RDOOutput {
+            &Some(PartitionGroupParameters {
               rd_cost: mode.rd_cost,
               part_type: PartitionType::PARTITION_NONE,
               part_modes: vec![mode],
