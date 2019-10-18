@@ -31,9 +31,17 @@ pub static RAV1E_TX_TYPES: &[TxType] = &[
   TxType::ADST_DCT,
   TxType::DCT_ADST,
   TxType::ADST_ADST,
+  // TODO: Add a speed setting for FLIPADST
+  // TxType::FLIPADST_DCT,
+  // TxType::DCT_FLIPADST,
+  // TxType::FLIPADST_FLIPADST,
+  // TxType::ADST_FLIPADST,
+  // TxType::FLIPADST_ADST,
   TxType::IDTX,
   TxType::V_DCT,
   TxType::H_DCT,
+  //TxType::V_FLIPADST,
+  //TxType::H_FLIPADST,
 ];
 
 static SQRT2_BITS: usize = 12;
@@ -321,12 +329,20 @@ fn get_1d_tx_types(tx_type: TxType) -> Option<(TxType1D, TxType1D)> {
     TxType::ADST_DCT => Some((TxType1D::ADST, TxType1D::DCT)),
     TxType::DCT_ADST => Some((TxType1D::DCT, TxType1D::ADST)),
     TxType::ADST_ADST => Some((TxType1D::ADST, TxType1D::ADST)),
+    TxType::FLIPADST_DCT => Some((TxType1D::FLIPADST, TxType1D::DCT)),
+    TxType::DCT_FLIPADST => Some((TxType1D::DCT, TxType1D::FLIPADST)),
+    TxType::FLIPADST_FLIPADST => {
+      Some((TxType1D::FLIPADST, TxType1D::FLIPADST))
+    }
+    TxType::ADST_FLIPADST => Some((TxType1D::ADST, TxType1D::FLIPADST)),
+    TxType::FLIPADST_ADST => Some((TxType1D::FLIPADST, TxType1D::ADST)),
     TxType::IDTX => Some((TxType1D::IDTX, TxType1D::IDTX)),
     TxType::V_DCT => Some((TxType1D::DCT, TxType1D::IDTX)),
     TxType::H_DCT => Some((TxType1D::IDTX, TxType1D::DCT)),
     TxType::V_ADST => Some((TxType1D::ADST, TxType1D::IDTX)),
     TxType::H_ADST => Some((TxType1D::IDTX, TxType1D::ADST)),
-    _ => None,
+    TxType::V_FLIPADST => Some((TxType1D::FLIPADST, TxType1D::IDTX)),
+    TxType::H_FLIPADST => Some((TxType1D::IDTX, TxType1D::FLIPADST)),
   }
 }
 

@@ -56,6 +56,11 @@ pub fn av1_idct4(input: &[i32], output: &mut [i32], range: usize) {
   output[3] = clamp_value(stg2[0] - stg2[3], range);
 }
 
+pub fn av1_iflipadst4(input: &[i32], output: &mut [i32], range: usize) {
+  av1_iadst4(input, output, range);
+  output[..4].reverse();
+}
+
 pub fn av1_iadst4(input: &[i32], output: &mut [i32], _range: usize) {
   assert!(input.len() >= 4);
   assert!(output.len() >= 4);
@@ -158,6 +163,11 @@ pub fn av1_idct8(input: &[i32], output: &mut [i32], range: usize) {
   output[5] = clamp_value(temp_out[2] - stg4[1], range);
   output[6] = clamp_value(temp_out[1] - stg4[2], range);
   output[7] = clamp_value(temp_out[0] - stg4[3], range);
+}
+
+pub fn av1_iflipadst8(input: &[i32], output: &mut [i32], range: usize) {
+  av1_iadst8(input, output, range);
+  output[..8].reverse();
 }
 
 pub fn av1_iadst8(input: &[i32], output: &mut [i32], range: usize) {
@@ -343,6 +353,11 @@ fn av1_idct16(input: &[i32], output: &mut [i32], range: usize) {
   output[13] = clamp_value(temp_out[2] - stg6[5], range);
   output[14] = clamp_value(temp_out[1] - stg6[6], range);
   output[15] = clamp_value(temp_out[0] - stg6[7], range);
+}
+
+pub fn av1_iflipadst16(input: &[i32], output: &mut [i32], range: usize) {
+  av1_iadst16(input, output, range);
+  output[..16].reverse();
 }
 
 fn av1_iadst16(input: &[i32], output: &mut [i32], range: usize) {
@@ -1539,9 +1554,9 @@ static INV_TXFM_FNS: [[InvTxfmFn; 5]; 4] = [
     |_, _, _| unimplemented!(),
   ],
   [
-    |_, _, _| unimplemented!(),
-    |_, _, _| unimplemented!(),
-    |_, _, _| unimplemented!(),
+    av1_iflipadst4,
+    av1_iflipadst8,
+    av1_iflipadst16,
     |_, _, _| unimplemented!(),
     |_, _, _| unimplemented!(),
   ],
