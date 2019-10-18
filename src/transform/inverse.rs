@@ -61,6 +61,7 @@ pub fn av1_iflipadst4(input: &[i32], output: &mut [i32], range: usize) {
   output[..4].reverse();
 }
 
+#[inline(always)]
 pub fn av1_iadst4(input: &[i32], output: &mut [i32], _range: usize) {
   assert!(input.len() >= 4);
   assert!(output.len() >= 4);
@@ -170,6 +171,7 @@ pub fn av1_iflipadst8(input: &[i32], output: &mut [i32], range: usize) {
   output[..8].reverse();
 }
 
+#[inline(always)]
 pub fn av1_iadst8(input: &[i32], output: &mut [i32], range: usize) {
   assert!(input.len() >= 8);
   assert!(output.len() >= 8);
@@ -360,6 +362,7 @@ pub fn av1_iflipadst16(input: &[i32], output: &mut [i32], range: usize) {
   output[..16].reverse();
 }
 
+#[inline(always)]
 fn av1_iadst16(input: &[i32], output: &mut [i32], range: usize) {
   assert!(input.len() >= 16);
   assert!(output.len() >= 16);
