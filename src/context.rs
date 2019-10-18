@@ -2227,6 +2227,7 @@ impl<'a> ContextWriter<'a> {
     let left_ctx = intra_mode_context[left_mode as usize];
     &self.fc.kf_y_cdf[above_ctx][left_ctx]
   }
+
   pub fn write_intra_mode_kf(
     &mut self, w: &mut dyn Writer, bo: TileBlockOffset, mode: PredictionMode,
   ) {
@@ -2247,11 +2248,13 @@ impl<'a> ContextWriter<'a> {
     let cdf = &mut self.fc.kf_y_cdf[above_ctx][left_ctx];
     symbol_with_update!(self, w, mode as u32, cdf);
   }
+
   pub fn get_cdf_intra_mode(
     &self, bsize: BlockSize,
   ) -> &[u16; INTRA_MODES + 1] {
     &self.fc.y_mode_cdf[size_group_lookup[bsize as usize] as usize]
   }
+
   pub fn write_intra_mode(
     &mut self, w: &mut dyn Writer, bsize: BlockSize, mode: PredictionMode,
   ) {
@@ -2259,6 +2262,7 @@ impl<'a> ContextWriter<'a> {
       &mut self.fc.y_mode_cdf[size_group_lookup[bsize as usize] as usize];
     symbol_with_update!(self, w, mode as u32, cdf);
   }
+
   pub fn write_intra_uv_mode(
     &mut self, w: &mut dyn Writer, uv_mode: PredictionMode,
     y_mode: PredictionMode, bs: BlockSize,
@@ -2271,6 +2275,7 @@ impl<'a> ContextWriter<'a> {
       symbol_with_update!(self, w, uv_mode as u32, &mut cdf[..UV_INTRA_MODES]);
     }
   }
+
   pub fn write_cfl_alphas(&mut self, w: &mut dyn Writer, cfl: CFLParams) {
     symbol_with_update!(self, w, cfl.joint_sign(), &mut self.fc.cfl_sign_cdf);
     for uv in 0..2 {
@@ -2284,6 +2289,7 @@ impl<'a> ContextWriter<'a> {
       }
     }
   }
+
   pub fn write_angle_delta(
     &mut self, w: &mut dyn Writer, angle: i8, mode: PredictionMode,
   ) {
@@ -2295,6 +2301,7 @@ impl<'a> ContextWriter<'a> {
         [mode as usize - PredictionMode::V_PRED as usize]
     );
   }
+
   pub fn write_use_filter_intra(
     &mut self, w: &mut dyn Writer, enable: bool, block_size: BlockSize,
   ) {
