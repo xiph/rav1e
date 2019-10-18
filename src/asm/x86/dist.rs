@@ -325,3 +325,123 @@ pub(crate) static SATD_FNS: [[Option<SatdFn>; DIST_FNS_LENGTH];
 
 pub(crate) static SATD_HBD_FNS: [[Option<SatdHBDFn>; DIST_FNS_LENGTH];
   CpuFeatureLevel::len()] = [[None; DIST_FNS_LENGTH]; CpuFeatureLevel::len()];
+
+#[cfg(test)]
+mod test {
+  use super::*;
+  use crate::frame::{AsRegion, Plane};
+  use rand::random;
+  use std::str::FromStr;
+
+  macro_rules! test_dist_fns {
+    ($(($W:expr, $H:expr)),*, $DIST_TY:ident, $BD:expr, $OPT:ident, $OPTLIT:literal) => {
+      $(
+        paste::item! {
+          #[test]
+          fn [<get_ $DIST_TY _ $W x $H _bd_ $BD _ $OPT>]() {
+            if !is_x86_feature_detected!($OPTLIT) {
+              eprintln!("Ignoring {} test, not supported on this machine!", $OPTLIT);
+              return;
+            }
+
+            let bsize = BlockSize::[<BLOCK_ $W X $H>];
+            if $BD > 8 {
+              let mut src = Plane::wrap(vec![0u16; $W * $H], $W);
+              let mut dst = Plane::wrap(vec![0u16; $W * $H], $W);
+              for (s, d) in src.data.iter_mut().zip(dst.data.iter_mut()) {
+                *s = random::<u8>() as u16 * $BD / 8;
+                *d = random::<u8>() as u16 * $BD / 8;
+              }
+              let result = [<get_ $DIST_TY>](&src.as_region(), &dst.as_region(), bsize, $BD, CpuFeatureLevel::from_str($OPTLIT).unwrap());
+              let native_result = [<get_ $DIST_TY>](&src.as_region(), &dst.as_region(), bsize, $BD, CpuFeatureLevel::NATIVE);
+
+              assert_eq!(native_result, result);
+            } else {
+              let mut src = Plane::wrap(vec![0u8; $W * $H], $W);
+              let mut dst = Plane::wrap(vec![0u8; $W * $H], $W);
+              for (s, d) in src.data.iter_mut().zip(dst.data.iter_mut()) {
+                *s = random::<u8>();
+                *d = random::<u8>();
+              }
+              let result = [<get_ $DIST_TY>](&src.as_region(), &dst.as_region(), bsize, $BD, CpuFeatureLevel::from_str($OPTLIT).unwrap());
+              let native_result = [<get_ $DIST_TY>](&src.as_region(), &dst.as_region(), bsize, $BD, CpuFeatureLevel::NATIVE);
+
+              assert_eq!(native_result, result);
+            }
+          }
+        }
+      )*
+    }
+  }
+
+  test_dist_fns!((4, 4), (16, 16), sad, 10, ssse3, "ssse3");
+
+  test_dist_fns!(
+    (4, 4),
+    (4, 8),
+    (4, 16),
+    (8, 4),
+    (8, 8),
+    (8, 16),
+    (8, 32),
+    (16, 16),
+    (32, 32),
+    (64, 64),
+    (128, 128),
+    sad,
+    8,
+    sse2,
+    "sse2"
+  );
+
+  test_dist_fns!(
+    (16, 4),
+    (16, 8),
+    (16, 16),
+    (16, 32),
+    (16, 64),
+    (32, 8),
+    (32, 16),
+    (32, 32),
+    (32, 64),
+    (64, 16),
+    (64, 32),
+    (64, 64),
+    (64, 128),
+    (128, 64),
+    (128, 128),
+    sad,
+    8,
+    avx2,
+    "avx2"
+  );
+
+  test_dist_fns!(
+    (4, 4),
+    (8, 8),
+    (16, 16),
+    (32, 32),
+    (64, 64),
+    (128, 128),
+    (4, 8),
+    (8, 4),
+    (8, 16),
+    (16, 8),
+    (16, 32),
+    (32, 16),
+    (32, 64),
+    (64, 32),
+    (64, 128),
+    (128, 64),
+    (4, 16),
+    (16, 4),
+    (8, 32),
+    (32, 8),
+    (16, 64),
+    (64, 16),
+    satd,
+    8,
+    avx2,
+    "avx2"
+  );
+}
