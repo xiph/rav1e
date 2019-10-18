@@ -34,9 +34,9 @@ use crate::transform::*;
 use crate::util::{clamp, msb, AlignedArray, Pixel};
 
 use arrayvec::*;
+use std::default::Default;
 use std::ops::{Index, IndexMut};
 use std::*;
-use std::default::Default;
 
 pub const PLANES: usize = 3;
 
@@ -1272,7 +1272,7 @@ impl TileSuperBlockOffset {
 
 /// Absolute offset in blocks, where a block is defined
 /// to be an N*N square where N = (1 << BLOCK_TO_PLANE_SHIFT).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct BlockOffset {
   pub x: usize,
   pub y: usize,
@@ -1285,7 +1285,7 @@ pub struct PlaneBlockOffset(pub BlockOffset);
 
 /// Absolute offset in blocks inside a tile, where a block is defined
 /// to be an N*N square where N = (1 << BLOCK_TO_PLANE_SHIFT).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct TileBlockOffset(pub BlockOffset);
 
 impl BlockOffset {

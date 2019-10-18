@@ -90,6 +90,12 @@ pub enum PredictionMode {
   NEW_NEWMV,
 }
 
+impl Default for PredictionMode {
+  fn default() -> Self {
+    PredictionMode::DC_PRED
+  }
+}
+
 impl PredictionMode {
   pub fn is_compound(self) -> bool {
     self >= PredictionMode::NEAREST_NEARESTMV

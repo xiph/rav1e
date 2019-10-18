@@ -101,6 +101,26 @@ pub struct PartitionParameters {
   pub sidx: u8,
 }
 
+impl Default for PartitionParameters {
+  fn default() -> Self {
+    PartitionParameters {
+      rd_cost: std::f64::MAX,
+      bo: TileBlockOffset::default(),
+      bsize: BlockSize::BLOCK_INVALID,
+      pred_mode_luma: PredictionMode::default(),
+      pred_mode_chroma: PredictionMode::default(),
+      pred_cfl_params: CFLParams::default(),
+      ref_frames: [RefType::INTRA_FRAME, RefType::NONE_FRAME],
+      mvs: [MotionVector::default(); 2],
+      skip: false,
+      has_coeff: true,
+      tx_size: TxSize::TX_4X4,
+      tx_type: TxType::DCT_DCT,
+      sidx: 0,
+    }
+  }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct RDOTracker {
   rate_bins: Vec<Vec<Vec<u64>>>,
@@ -610,44 +630,12 @@ pub fn rdo_tx_size_type<T: Pixel>(
   (best_tx_size, best_tx_type)
 }
 
-struct EncodingSettings {
-  mode_luma: PredictionMode,
-  mode_chroma: PredictionMode,
-  cfl_params: CFLParams,
-  skip: bool,
-  has_coeff: bool,
-  rd: f64,
-  ref_frames: [RefType; 2],
-  mvs: [MotionVector; 2],
-  tx_size: TxSize,
-  tx_type: TxType,
-  sidx: u8,
-}
-
-impl Default for EncodingSettings {
-  fn default() -> Self {
-    Self {
-      mode_luma: PredictionMode::DC_PRED,
-      mode_chroma: PredictionMode::DC_PRED,
-      cfl_params: CFLParams::default(),
-      skip: false,
-      has_coeff: false,
-      rd: std::f64::MAX,
-      ref_frames: [INTRA_FRAME, NONE_FRAME],
-      mvs: [MotionVector::default(); 2],
-      tx_size: TxSize::TX_4X4,
-      tx_type: TxType::DCT_DCT,
-      sidx: 0,
-    }
-  }
-}
-
 #[inline]
 fn luma_chroma_mode_rdo<T: Pixel>(
   luma_mode: PredictionMode, fi: &FrameInvariants<T>, bsize: BlockSize,
   tile_bo: TileBlockOffset, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, rdo_type: RDOType,
-  cw_checkpoint: &ContextWriterCheckpoint, best: &mut EncodingSettings,
+  cw_checkpoint: &ContextWriterCheckpoint, best: &mut PartitionParameters,
   mvs: [MotionVector; 2], ref_frames: [RefType; 2],
   mode_set_chroma: &[PredictionMode], luma_mode_is_intra: bool,
   mode_context: usize, mv_stack: &ArrayVec<[CandidateMV; 9]>,
@@ -761,11 +749,11 @@ fn luma_chroma_mode_rdo<T: Pixel>(
         };
         let is_zero_dist = distortion.0 == 0;
         let rd = compute_rd_cost(fi, rate, distortion);
-        if rd < best.rd {
-          //if rd < best.rd || luma_mode == PredictionMode::NEW_NEWMV {
-          best.rd = rd;
-          best.mode_luma = luma_mode;
-          best.mode_chroma = chroma_mode;
+        if rd < best.rd_cost {
+          //if rd < best.rd_cost || luma_mode == PredictionMode::NEW_NEWMV {
+          best.rd_cost = rd;
+          best.pred_mode_luma = luma_mode;
+          best.pred_mode_chroma = chroma_mode;
           best.ref_frames = ref_frames;
           best.mvs = mvs;
           best.skip = skip;
@@ -798,7 +786,7 @@ pub fn rdo_mode_decision<T: Pixel>(
   cw: &mut ContextWriter, bsize: BlockSize, tile_bo: TileBlockOffset,
   pmvs: &mut [Option<MotionVector>], inter_cfg: &InterConfig,
 ) -> PartitionParameters {
-  let mut best = EncodingSettings::default();
+  let mut best = PartitionParameters::default();
 
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let is_chroma_block = has_chroma(tile_bo, bsize, xdec, ydec);
@@ -1164,7 +1152,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     });
   }
 
-  if best.mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
+  if best.pred_mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
     cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, best.sidx);
 
     let chroma_mode = PredictionMode::UV_CFL_PRED;
@@ -1176,8 +1164,8 @@ pub fn rdo_mode_decision<T: Pixel>(
       ts,
       cw,
       wr,
-      best.mode_luma,
-      best.mode_luma,
+      best.pred_mode_luma,
+      best.pred_mode_luma,
       tile_bo,
       bsize,
       best.tx_size,
@@ -1213,7 +1201,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         ts,
         cw,
         wr,
-        best.mode_luma,
+        best.pred_mode_luma,
         chroma_mode,
         best.ref_frames,
         best.mvs,
@@ -1236,32 +1224,32 @@ pub fn rdo_mode_decision<T: Pixel>(
       let distortion =
         compute_distortion(fi, ts, bsize, is_chroma_block, tile_bo, false);
       let rd = compute_rd_cost(fi, rate, distortion);
-      if rd < best.rd {
-        best.rd = rd;
-        best.mode_chroma = chroma_mode;
+      if rd < best.rd_cost {
+        best.rd_cost = rd;
+        best.pred_mode_chroma = chroma_mode;
         best.has_coeff = has_coeff;
-        best.cfl_params = cfl;
+        best.pred_cfl_params = cfl;
       }
 
       cw.rollback(&cw_checkpoint);
     }
   }
 
-  cw.bc.blocks.set_mode(tile_bo, bsize, best.mode_luma);
+  cw.bc.blocks.set_mode(tile_bo, bsize, best.pred_mode_luma);
   cw.bc.blocks.set_ref_frames(tile_bo, bsize, best.ref_frames);
   cw.bc.blocks.set_motion_vectors(tile_bo, bsize, best.mvs);
 
-  assert!(best.rd >= 0_f64);
+  assert!(best.rd_cost >= 0_f64);
 
   PartitionParameters {
     bo: tile_bo,
     bsize,
-    pred_mode_luma: best.mode_luma,
-    pred_mode_chroma: best.mode_chroma,
-    pred_cfl_params: best.cfl_params,
+    pred_mode_luma: best.pred_mode_luma,
+    pred_mode_chroma: best.pred_mode_chroma,
+    pred_cfl_params: best.pred_cfl_params,
     ref_frames: best.ref_frames,
     mvs: best.mvs,
-    rd_cost: best.rd,
+    rd_cost: best.rd_cost,
     skip: best.skip,
     has_coeff: best.has_coeff,
     tx_size: best.tx_size,
