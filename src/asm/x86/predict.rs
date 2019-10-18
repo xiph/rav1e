@@ -34,16 +34,24 @@ macro_rules! decl_angular_ipred_fn {
 
 decl_angular_ipred_fn! {
   rav1e_ipred_dc_avx2,
+  rav1e_ipred_dc_ssse3,
   rav1e_ipred_dc_128_avx2,
+  rav1e_ipred_dc_128_ssse3,
   rav1e_ipred_dc_left_avx2,
+  rav1e_ipred_dc_left_ssse3,
   rav1e_ipred_dc_top_avx2,
+  rav1e_ipred_dc_top_ssse3,
   rav1e_ipred_h_avx2,
   rav1e_ipred_h_ssse3,
   rav1e_ipred_v_avx2,
+  rav1e_ipred_v_ssse3,
   rav1e_ipred_paeth_avx2,
   rav1e_ipred_smooth_avx2,
+  rav1e_ipred_smooth_ssse3,
   rav1e_ipred_smooth_h_avx2,
-  rav1e_ipred_smooth_v_avx2
+  rav1e_ipred_smooth_h_ssse3,
+  rav1e_ipred_smooth_v_avx2,
+  rav1e_ipred_smooth_v_ssse3
 }
 
 macro_rules! decl_cfl_pred_fn {
@@ -62,9 +70,13 @@ macro_rules! decl_cfl_pred_fn {
 
 decl_cfl_pred_fn! {
   rav1e_ipred_cfl_avx2,
+  rav1e_ipred_cfl_ssse3,
   rav1e_ipred_cfl_128_avx2,
+  rav1e_ipred_cfl_128_ssse3,
   rav1e_ipred_cfl_left_avx2,
-  rav1e_ipred_cfl_top_avx2
+  rav1e_ipred_cfl_left_ssse3,
+  rav1e_ipred_cfl_top_avx2,
+  rav1e_ipred_cfl_top_ssse3
 }
 
 pub trait Intra<T>: native::Intra<T>
@@ -75,9 +87,13 @@ where
     output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
     cpu: CpuFeatureLevel,
   ) {
-    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
+    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::SSSE3 {
       return unsafe {
-        rav1e_ipred_dc_avx2(
+        (if cpu >= CpuFeatureLevel::AVX2 {
+          rav1e_ipred_dc_avx2
+        } else {
+          rav1e_ipred_dc_ssse3
+        })(
           output.data_ptr_mut() as *mut _,
           output.plane_cfg.stride as libc::ptrdiff_t,
           above.as_ptr().offset(-1) as *const _,
@@ -94,9 +110,13 @@ where
   fn pred_dc_128(
     output: &mut PlaneRegionMut<'_, T>, bit_depth: usize, cpu: CpuFeatureLevel,
   ) {
-    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
+    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::SSSE3 {
       return unsafe {
-        rav1e_ipred_dc_128_avx2(
+        (if cpu >= CpuFeatureLevel::AVX2 {
+          rav1e_ipred_dc_128_avx2
+        } else {
+          rav1e_ipred_dc_128_ssse3
+        })(
           output.data_ptr_mut() as *mut _,
           output.plane_cfg.stride as libc::ptrdiff_t,
           ptr::null(),
@@ -114,9 +134,13 @@ where
     output: &mut PlaneRegionMut<'_, T>, _above: &[T], left: &[T],
     cpu: CpuFeatureLevel,
   ) {
-    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
+    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::SSSE3 {
       return unsafe {
-        rav1e_ipred_dc_left_avx2(
+        (if cpu >= CpuFeatureLevel::AVX2 {
+          rav1e_ipred_dc_left_avx2
+        } else {
+          rav1e_ipred_dc_left_ssse3
+        })(
           output.data_ptr_mut() as *mut _,
           output.plane_cfg.stride as libc::ptrdiff_t,
           left.as_ptr().add(Self::H) as *const _,
@@ -134,9 +158,13 @@ where
     output: &mut PlaneRegionMut<'_, T>, above: &[T], _left: &[T],
     cpu: CpuFeatureLevel,
   ) {
-    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
+    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::SSSE3 {
       return unsafe {
-        rav1e_ipred_dc_top_avx2(
+        (if cpu >= CpuFeatureLevel::AVX2 {
+          rav1e_ipred_dc_top_avx2
+        } else {
+          rav1e_ipred_dc_top_ssse3
+        })(
           output.data_ptr_mut() as *mut _,
           output.plane_cfg.stride as libc::ptrdiff_t,
           above.as_ptr().offset(-1) as *const _,
@@ -176,9 +204,13 @@ where
   fn pred_v(
     output: &mut PlaneRegionMut<'_, T>, above: &[T], cpu: CpuFeatureLevel,
   ) {
-    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
+    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::SSSE3 {
       return unsafe {
-        rav1e_ipred_v_avx2(
+        (if cpu >= CpuFeatureLevel::AVX2 {
+          rav1e_ipred_v_avx2
+        } else {
+          rav1e_ipred_v_ssse3
+        })(
           output.data_ptr_mut() as *mut _,
           output.plane_cfg.stride as libc::ptrdiff_t,
           above.as_ptr().offset(-1) as *const _,
@@ -218,9 +250,13 @@ where
     output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
     cpu: CpuFeatureLevel,
   ) {
-    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
+    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::SSSE3 {
       return unsafe {
-        rav1e_ipred_smooth_avx2(
+        (if cpu >= CpuFeatureLevel::AVX2 {
+          rav1e_ipred_smooth_avx2
+        } else {
+          rav1e_ipred_smooth_ssse3
+        })(
           output.data_ptr_mut() as *mut _,
           output.plane_cfg.stride as libc::ptrdiff_t,
           above.as_ptr().offset(-1) as *const _,
@@ -238,9 +274,13 @@ where
     output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
     cpu: CpuFeatureLevel,
   ) {
-    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
+    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::SSSE3 {
       return unsafe {
-        rav1e_ipred_smooth_h_avx2(
+        (if cpu >= CpuFeatureLevel::AVX2 {
+          rav1e_ipred_smooth_h_avx2
+        } else {
+          rav1e_ipred_smooth_h_ssse3
+        })(
           output.data_ptr_mut() as *mut _,
           output.plane_cfg.stride as libc::ptrdiff_t,
           above.as_ptr().offset(-1) as *const _,
@@ -258,9 +298,13 @@ where
     output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
     cpu: CpuFeatureLevel,
   ) {
-    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
+    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::SSSE3 {
       return unsafe {
-        rav1e_ipred_smooth_v_avx2(
+        (if cpu >= CpuFeatureLevel::AVX2 {
+          rav1e_ipred_smooth_v_avx2
+        } else {
+          rav1e_ipred_smooth_v_ssse3
+        })(
           output.data_ptr_mut() as *mut _,
           output.plane_cfg.stride as libc::ptrdiff_t,
           above.as_ptr().offset(-1) as *const _,
@@ -358,9 +402,13 @@ where
     bit_depth: usize, above: &[T], left: &[T], cpu: CpuFeatureLevel,
   ) {
     {
-      if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
+      if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::SSSE3 {
         return unsafe {
-          rav1e_ipred_cfl_avx2(
+          (if cpu >= CpuFeatureLevel::AVX2 {
+            rav1e_ipred_cfl_avx2
+          } else {
+            rav1e_ipred_cfl_ssse3
+          })(
             output.data_ptr_mut() as *mut _,
             output.plane_cfg.stride as libc::ptrdiff_t,
             above.as_ptr().offset(-1) as *const _,
@@ -381,9 +429,13 @@ where
     bit_depth: usize, cpu: CpuFeatureLevel,
   ) {
     {
-      if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
+      if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::SSSE3 {
         return unsafe {
-          rav1e_ipred_cfl_128_avx2(
+          (if cpu >= CpuFeatureLevel::AVX2 {
+            rav1e_ipred_cfl_128_avx2
+          } else {
+            rav1e_ipred_cfl_128_ssse3
+          })(
             output.data_ptr_mut() as *mut _,
             output.plane_cfg.stride as libc::ptrdiff_t,
             ptr::null(),
@@ -404,9 +456,13 @@ where
     bit_depth: usize, above: &[T], left: &[T], cpu: CpuFeatureLevel,
   ) {
     {
-      if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
+      if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::SSSE3 {
         return unsafe {
-          rav1e_ipred_cfl_left_avx2(
+          (if cpu >= CpuFeatureLevel::AVX2 {
+            rav1e_ipred_cfl_left_avx2
+          } else {
+            rav1e_ipred_cfl_left_ssse3
+          })(
             output.data_ptr_mut() as *mut _,
             output.plane_cfg.stride as libc::ptrdiff_t,
             above.as_ptr().offset(-1) as *const _,
@@ -427,9 +483,13 @@ where
     bit_depth: usize, above: &[T], left: &[T], cpu: CpuFeatureLevel,
   ) {
     {
-      if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
+      if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::SSSE3 {
         return unsafe {
-          rav1e_ipred_cfl_top_avx2(
+          (if cpu >= CpuFeatureLevel::AVX2 {
+            rav1e_ipred_cfl_top_avx2
+          } else {
+            rav1e_ipred_cfl_top_ssse3
+          })(
             output.data_ptr_mut() as *mut _,
             output.plane_cfg.stride as libc::ptrdiff_t,
             above.as_ptr().offset(-1) as *const _,
