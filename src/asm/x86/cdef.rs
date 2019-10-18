@@ -152,3 +152,59 @@ pub(crate) static CDEF_FILTER_FNS: [[Option<CdefFilterFn>; 4];
 
 pub(crate) static CDEF_FILTER_HBD_FNS: [[Option<CdefFilterHBDFn>; 4];
   CpuFeatureLevel::len()] = [[None; 4]; CpuFeatureLevel::len()];
+
+#[cfg(test)]
+mod test {
+  use super::*;
+  use crate::frame::{AsRegion, Plane};
+  use interpolate_name::interpolate_test;
+  use rand::random;
+
+  macro_rules! test_cdef_fns {
+    ($(($XDEC:expr, $YDEC:expr)),*, $OPT:ident, $OPTLIT:literal) => {
+      $(
+        paste::item! {
+          #[interpolate_test(dir_0, 0)]
+          #[interpolate_test(dir_1, 1)]
+          #[interpolate_test(dir_2, 2)]
+          #[interpolate_test(dir_3, 3)]
+          #[interpolate_test(dir_4, 4)]
+          #[interpolate_test(dir_5, 5)]
+          #[interpolate_test(dir_6, 6)]
+          #[interpolate_test(dir_7, 7)]
+          fn [<cdef_filter_block_dec_ $XDEC _ $YDEC _ $OPT>](dir: usize) {
+            if !is_x86_feature_detected!($OPTLIT) {
+              eprintln!("Ignoring {} test, not supported on this machine!", $OPTLIT);
+              return;
+            }
+
+            let width = 8 >> $XDEC;
+            let height = 8 >> $YDEC;
+            let area = width * height;
+            let mut src = vec![0u16; area];
+            let mut dst = Plane::wrap(vec![0u8; area], width);
+            for (s, d) in src.iter_mut().zip(dst.data.iter_mut()) {
+              *s = random::<u8>() as u16;
+              *d = random::<u8>();
+            }
+            let mut native_dst = dst.clone();
+
+            let src_stride = width as isize;
+            let pri_strength = 1;
+            let sec_strength = 0;
+            let damping = 2;
+            let bit_depth = 8;
+
+            unsafe {
+              cdef_filter_block(&mut dst.as_region_mut(), src.as_ptr(), src_stride, pri_strength, sec_strength, dir, damping, bit_depth, $XDEC, $YDEC, CpuFeatureLevel::AVX2);
+              cdef_filter_block(&mut native_dst.as_region_mut(), src.as_ptr(), src_stride, pri_strength, sec_strength, dir, damping, bit_depth, $XDEC, $YDEC, CpuFeatureLevel::NATIVE);
+              assert_eq!(native_dst.data_origin(), dst.data_origin());
+            }
+          }
+        }
+      )*
+    }
+  }
+
+  test_cdef_fns!((1, 1), (1, 0), (0, 0), avx2, "avx2");
+}
