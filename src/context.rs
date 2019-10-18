@@ -36,6 +36,7 @@ use crate::util::{clamp, msb, AlignedArray, Pixel};
 use arrayvec::*;
 use std::ops::{Index, IndexMut};
 use std::*;
+use std::default::Default;
 
 pub const PLANES: usize = 3;
 
@@ -1413,7 +1414,16 @@ pub struct Block {
 }
 
 impl Block {
-  pub fn default() -> Block {
+  pub fn is_inter(&self) -> bool {
+    self.mode >= PredictionMode::NEARESTMV
+  }
+  pub fn has_second_ref(&self) -> bool {
+    self.ref_frames[1] != INTRA_FRAME && self.ref_frames[1] != NONE_FRAME
+  }
+}
+
+impl Default for Block {
+  fn default() -> Block {
     Block {
       mode: PredictionMode::DC_PRED,
       partition: PartitionType::PARTITION_NONE,
@@ -1429,12 +1439,6 @@ impl Block {
       deblock_deltas: [0, 0, 0, 0],
       segmentation_idx: 0,
     }
-  }
-  pub fn is_inter(&self) -> bool {
-    self.mode >= PredictionMode::NEARESTMV
-  }
-  pub fn has_second_ref(&self) -> bool {
-    self.ref_frames[1] != INTRA_FRAME && self.ref_frames[1] != NONE_FRAME
   }
 }
 
