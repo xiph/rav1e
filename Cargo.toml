@@ -16,7 +16,7 @@ decode_test = ["aom-sys"]
 decode_test_dav1d = ["dav1d-sys"]
 binaries = ["ivf", "y4m", "clap", "scan_fmt", "pretty_env_logger", "better-panic"]
 default = ["binaries", "asm", "signal_support"]
-asm = ["nasm-rs"]
+asm = ["nasm-rs", "cc"]
 signal_support = ["signal-hook"]
 dump_ivf = ["ivf"]
 quick_test = []
@@ -64,6 +64,7 @@ simd_helpers = "0.1"
 
 [build-dependencies]
 nasm-rs = { version = "0.1", path = "crates/nasm_rs/", optional = true }
+cc = { version = "1.0", optional = true }
 # Vendored to remove the dependency on `failure`, which takes a long time to build.
 vergen = { version = "3", path = "crates/vergen" }
 rustc_version = "0.2"
