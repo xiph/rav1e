@@ -159,6 +159,7 @@ mod test {
   use crate::frame::{AsRegion, Plane};
   use interpolate_name::interpolate_test;
   use rand::random;
+  use std::str::FromStr;
 
   macro_rules! test_cdef_fns {
     ($(($XDEC:expr, $YDEC:expr)),*, $OPT:ident, $OPTLIT:literal) => {
@@ -196,7 +197,7 @@ mod test {
             let bit_depth = 8;
 
             unsafe {
-              cdef_filter_block(&mut dst.as_region_mut(), src.as_ptr(), src_stride, pri_strength, sec_strength, dir, damping, bit_depth, $XDEC, $YDEC, CpuFeatureLevel::AVX2);
+              cdef_filter_block(&mut dst.as_region_mut(), src.as_ptr(), src_stride, pri_strength, sec_strength, dir, damping, bit_depth, $XDEC, $YDEC, CpuFeatureLevel::from_str($OPTLIT).unwrap());
               cdef_filter_block(&mut native_dst.as_region_mut(), src.as_ptr(), src_stride, pri_strength, sec_strength, dir, damping, bit_depth, $XDEC, $YDEC, CpuFeatureLevel::NATIVE);
               assert_eq!(native_dst.data_origin(), dst.data_origin());
             }
