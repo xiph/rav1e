@@ -308,8 +308,7 @@ fn av1_round_shift_array_rs(arr: &mut [i32], size: usize, bit: i8) {
     }
   } else {
     for i in 0..size {
-      arr[i] =
-        clamp((1 << (-bit)) * arr[i], i32::min_value(), i32::max_value());
+      arr[i] <<= -bit;
     }
   }
 }
