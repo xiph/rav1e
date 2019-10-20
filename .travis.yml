@@ -76,8 +76,7 @@ jobs:
       rust: stable
       arch: arm64
       script:
-        - cargo build --release --tests --verbose
-        - cargo test --release --verbose
+        - cargo test --features=decode_test,decode_test_dav1d,quick_test,capi --verbose
     - name: "Ignored Tests (aom)"
       rust: stable
       script:
