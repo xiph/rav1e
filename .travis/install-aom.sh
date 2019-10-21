@@ -9,7 +9,10 @@ if [[ "$(aomenc --help)" != *"AV1 Encoder $AOM_VERSION"* ]]; then
   rm -rf CMakeCache.txt CMakeFiles
   mkdir -p .build
   cd .build
-  cmake -GNinja .. -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DCMAKE_BUILD_TYPE=Release -DENABLE_TESTS=0 -DENABLE_DOCS=0 -DCONFIG_LOWBITDEPTH=1 -DCMAKE_INSTALL_PREFIX="$DEPS_DIR" -DCONFIG_PIC=1
+  if command -v sccache; then
+    LAUNCHER_OPTS="-DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache"
+  fi
+  cmake -GNinja .. $LAUNCHER_OPTS -DCMAKE_BUILD_TYPE=Release -DENABLE_TESTS=0 -DENABLE_DOCS=0 -DCONFIG_LOWBITDEPTH=1 -DCMAKE_INSTALL_PREFIX="$DEPS_DIR" -DCONFIG_PIC=1
   ninja && ninja install
 else
   echo "Using cached directory."

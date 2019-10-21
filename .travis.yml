@@ -19,22 +19,19 @@ addons:
 before_install:
   - export BUILD_DIR="$TRAVIS_HOME/.build"
   - export DEPS_DIR="$TRAVIS_HOME/.local"
+  - export ARCH="`uname -m`"
   - mkdir -p "$BUILD_DIR"
   - mkdir -p "$DEPS_DIR/bin"
   - mkdir -p "$DEPS_DIR/lib/pkgconfig"
   - export PATH="$PATH:$DEPS_DIR/bin"
-  - export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$DEPS_DIR/lib/pkgconfig:$DEPS_DIR/lib/x86_64-linux-gnu/pkgconfig"
-  - export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$DEPS_DIR/lib:$DEPS_DIR/lib/x86_64-linux-gnu"
+  - export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$DEPS_DIR/lib/pkgconfig:$DEPS_DIR/lib/$ARCH-linux-gnu/pkgconfig"
+  - export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$DEPS_DIR/lib:$DEPS_DIR/lib/$ARCH-linux-gnu"
   - pip3 install meson
-  - bash "$TRAVIS_BUILD_DIR/.travis/install-sccache.sh"
-  - export RUSTC_WRAPPER=sccache
+  - source "$TRAVIS_BUILD_DIR/.travis/install-sccache.sh"
   - export SCCACHE_CACHE_SIZE=500M
   - export SCCACHE_DIR="$TRAVIS_HOME/.cache/sccache"
-  - sccache --version
   - bash "$TRAVIS_BUILD_DIR/.travis/install-nasm.sh"
-  - nasm --version
   - bash "$TRAVIS_BUILD_DIR/.travis/install-kcov.sh"
-  - kcov --version
   - bash "$TRAVIS_BUILD_DIR/.travis/install-aom.sh"
   - aomenc --help | grep "AV1 Encoder"
   - bash "$TRAVIS_BUILD_DIR/.travis/install-dav1d.sh"
@@ -78,10 +75,8 @@ jobs:
     - name: "Arm build and test"
       rust: stable
       arch: arm64
-      before_install: skip
       script:
-        - cargo build --release --tests --verbose
-        - cargo test --release --verbose
+        - cargo test --features=decode_test,decode_test_dav1d,quick_test,capi --verbose
     - name: "Ignored Tests (aom)"
       rust: stable
       script:
