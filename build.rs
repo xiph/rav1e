@@ -62,6 +62,28 @@ fn build_nasm_files() {
   rerun_dir("src/ext/x86");
 }
 
+#[cfg(feature = "asm")]
+fn build_asm_files() {
+  use std::fs::File;
+  use std::io::Write;
+  let out_dir = env::var("OUT_DIR").unwrap();
+  {
+    let dest_path = Path::new(&out_dir).join("config.h");
+    let mut config_file = File::create(dest_path).unwrap();
+    config_file.write(b" #define PRIVATE_PREFIX rav1e_\n").unwrap();
+    config_file.write(b" #define ARCH_AARCH64 1\n").unwrap();
+    config_file.write(b" #define ARCH_ARM 0\n").unwrap();
+    config_file.write(b" #define CONFIG_LOG 1 \n").unwrap();
+    config_file.write(b" #define HAVE_ASM 1\n").unwrap();
+  }
+  cc::Build::new()
+    .files(&["src/arm/64/mc.S"])
+    .include(".")
+    .include(&out_dir)
+    .compile("rav1e-aarch64");
+  rerun_dir("src/arm");
+}
+
 fn rustc_version_check() {
   // This should match the version in .travis.yml
   const REQUIRED_VERSION: &str = "1.36.0";
@@ -84,6 +106,10 @@ fn main() {
     if arch == "x86_64" {
       println!("cargo:rustc-cfg={}", "nasm_x86_64");
       build_nasm_files()
+    }
+    if arch == "aarch64" {
+      println!("cargo:rustc-cfg={}", "asm_neon");
+      build_asm_files()
     }
   }
 
