@@ -949,8 +949,8 @@ function sgr_box5_h_neon, export=1
         ext             v4.16b, v5.16b, v4.16b, #13
         b               2f
 0:
-        // !LR_HAVE_LEFT, fill v2 with the leftmost byte
-        // and shift v3 to have 2x the first byte at the front.
+        // !LR_HAVE_LEFT, fill v1 with the leftmost byte
+        // and shift v0 to have 2x the first byte at the front.
         dup             v1.16b, v0.b[0]
         dup             v5.16b, v4.b[0]
         // Move x3 back to account for the last 3 bytes we loaded before,
@@ -1053,15 +1053,15 @@ function sgr_box5_h_neon, export=1
         ext             v4.16b,  v4.16b,  v4.16b, #4
 
 6:      // Pad the right edge and produce the last few pixels.
-        // w < 7, w+1 pixels valid in v3/v5
+        // w < 7, w+1 pixels valid in v0/v4
         sub             w13,  w5,  #1
         // w13 = pixels valid - 2
         adr             x14, L(box5_variable_shift_tbl)
         ldrh            w13, [x14, w13, uxtw #1]
         sub             x13, x14, w13, uxth
         br              x13
-        // Shift v3 right, shifting out invalid pixels,
-        // shift v3 left to the original offset, shifting in padding pixels.
+        // Shift v0 right, shifting out invalid pixels,
+        // shift v0 left to the original offset, shifting in padding pixels.
 22:     // 2 pixels valid
         ext             v0.16b,  v0.16b,  v0.16b,  #2
         ext             v4.16b,  v4.16b,  v4.16b,  #2
