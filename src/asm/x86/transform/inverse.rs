@@ -7,7 +7,8 @@ use crate::Pixel;
 type InvTxfmFunc = unsafe extern fn(*mut u8, libc::ptrdiff_t, *const i16, i32);
 
 pub trait InvTxfm2D: native::InvTxfm2D {
-  fn match_tx_type(tx_type: TxType) -> InvTxfmFunc;
+  fn match_tx_type_avx2(tx_type: TxType) -> InvTxfmFunc;
+  fn match_tx_type_ssse3(tx_type: TxType) -> InvTxfmFunc;
 
   fn inv_txfm2d_add<T>(
     input: &[i32], output: &mut PlaneRegionMut<'_, T>, tx_type: TxType,
@@ -20,11 +21,7 @@ pub trait InvTxfm2D: native::InvTxfm2D {
         Self::inv_txfm2d_add_avx2(input, output, tx_type, bd);
       };
     }
-    if Self::W == 4
-      && Self::H == 4
-      && std::mem::size_of::<T>() == 1
-      && cpu >= CpuFeatureLevel::SSSE3
-    {
+    if std::mem::size_of::<T>() == 1 && cpu >= CpuFeatureLevel::SSSE3 {
       return unsafe {
         Self::inv_txfm2d_add_ssse3(input, output, tx_type, bd);
       };
@@ -62,7 +59,7 @@ pub trait InvTxfm2D: native::InvTxfm2D {
     let stride = output.plane_cfg.stride as isize;
 
     // perform the inverse transform
-    Self::match_tx_type(tx_type)(
+    Self::match_tx_type_avx2(tx_type)(
       output.data_ptr_mut() as *mut _,
       stride,
       coeff16.array.as_ptr(),
@@ -80,52 +77,34 @@ pub trait InvTxfm2D: native::InvTxfm2D {
   {
     debug_assert!(bd == 8);
 
-    // TODO: Support more than Block_4x4 when SSSE3 and AVX2 match.
-    debug_assert!(Self::W == 4 && Self::H == 4);
-
-    let mut coeff16: AlignedArray<[i16; 4 * 4]> =
+    // 64x only uses 32 coeffs
+    let coeff_w = Self::W.min(32);
+    let coeff_h = Self::H.min(32);
+    let mut coeff16: AlignedArray<[i16; 32 * 32]> =
       AlignedArray::uninitialized();
 
     // Transpose the input.
-    assert!(input.len() >= 4 * 4);
-    for j in 0..4 {
-      for i in 0..4 {
-        coeff16.array[i * 4 + j] = input[j * 4 + i] as i16;
+    // TODO: should be possible to remove changing how coeffs are written
+    assert!(input.len() >= coeff_w * coeff_h);
+    for j in 0..coeff_h {
+      for i in 0..coeff_w {
+        coeff16.array[i * coeff_h + j] = input[j * coeff_w + i] as i16;
       }
     }
 
     let stride = output.plane_cfg.stride as isize;
 
     // perform the inverse transform
-    (match tx_type {
-      TxType::DCT_DCT => rav1e_inv_txfm_add_dct_dct_4x4_ssse3,
-      TxType::IDTX => rav1e_inv_txfm_add_identity_identity_4x4_ssse3,
-      TxType::DCT_ADST => rav1e_inv_txfm_add_adst_dct_4x4_ssse3,
-      TxType::ADST_DCT => rav1e_inv_txfm_add_dct_adst_4x4_ssse3,
-      TxType::DCT_FLIPADST => rav1e_inv_txfm_add_flipadst_dct_4x4_ssse3,
-      TxType::FLIPADST_DCT => rav1e_inv_txfm_add_dct_flipadst_4x4_ssse3,
-      TxType::V_DCT => rav1e_inv_txfm_add_identity_dct_4x4_ssse3,
-      TxType::H_DCT => rav1e_inv_txfm_add_dct_identity_4x4_ssse3,
-      TxType::ADST_ADST => rav1e_inv_txfm_add_adst_adst_4x4_ssse3,
-      TxType::ADST_FLIPADST => rav1e_inv_txfm_add_flipadst_adst_4x4_ssse3,
-      TxType::FLIPADST_ADST => rav1e_inv_txfm_add_adst_flipadst_4x4_ssse3,
-      TxType::FLIPADST_FLIPADST => {
-        rav1e_inv_txfm_add_flipadst_flipadst_4x4_ssse3
-      }
-      TxType::V_ADST => rav1e_inv_txfm_add_identity_adst_4x4_ssse3,
-      TxType::H_ADST => rav1e_inv_txfm_add_adst_identity_4x4_ssse3,
-      TxType::V_FLIPADST => rav1e_inv_txfm_add_identity_flipadst_4x4_ssse3,
-      TxType::H_FLIPADST => rav1e_inv_txfm_add_flipadst_identity_4x4_ssse3,
-    })(
+    Self::match_tx_type_ssse3(tx_type)(
       output.data_ptr_mut() as *mut _,
       stride,
       coeff16.array.as_ptr(),
-      (4 * 4) as i32,
+      (coeff_w * coeff_h) as i32,
     );
   }
 }
 
-macro_rules! impl_itx_fns {
+macro_rules! decl_itx_fns {
   // Takes a 2d list of tx types for W and H
   ([$([$(($ENUM:pat, $TYPE1:ident, $TYPE2:ident)),*]),*], $W:expr, $H:expr,
    $OPT:ident) => {
@@ -142,37 +121,56 @@ macro_rules! impl_itx_fns {
           }
         )*
       )*
+    }
+  };
+}
 
+macro_rules! impl_itx_fns {
+  ($TYPES:tt, $W:expr, $H:expr, [$($OPT:ident),+]) => {
+    $(
+      decl_itx_fns!($TYPES, $W, $H, $OPT);
+    )*
+    paste::item! {
       // Implement InvTxfm2D for WxH
       impl InvTxfm2D for crate::predict::[<Block $W x $H>] {
-        fn match_tx_type(tx_type: TxType) -> InvTxfmFunc {
-          // Match tx types we declared earlier to its rust enum
-          match tx_type {
+        $(
+          impl_itx_fns!($TYPES, $W, $H, $OPT);
+        )*
+      }
+    }
+  };
+
+  // Takes a 2d list of tx types for W and H
+  ([$([$(($ENUM:pat, $TYPE1:ident, $TYPE2:ident)),*]),*], $W:expr, $H:expr,
+   $OPT:ident) => {
+    paste::item! {
+      fn [<match_tx_type_$OPT>](tx_type: TxType) -> InvTxfmFunc {
+        // Match tx types we declared earlier to its rust enum
+        match tx_type {
+          $(
             $(
-              $(
-                // Suppress unreachable pattern warning for _
-                a if a == $ENUM => {
-                  // Note: type1 and type2 are flipped
-                  [<rav1e_inv_txfm_add_$TYPE2 _$TYPE1 _$W x $H _$OPT>]
-                },
-              )*
+              // Suppress unreachable pattern warning for _
+              a if a == $ENUM => {
+                // Note: type1 and type2 are flipped
+                [<rav1e_inv_txfm_add_$TYPE2 _$TYPE1 _$W x $H _$OPT>]
+              },
             )*
-            _ => unreachable!()
-          }
+          )*
+          _ => unreachable!()
         }
       }
     }
   };
 
   // Loop over a list of dimensions
-  ($TYPES_VALID:tt, [$(($W:expr, $H:expr)),*], $OPT:ident) => {
+  ($TYPES_VALID:tt, [$(($W:expr, $H:expr)),*], $OPT:tt) => {
     $(
       impl_itx_fns!($TYPES_VALID, $W, $H, $OPT);
     )*
   };
 
   ($TYPES64:tt, $DIMS64:tt, $TYPES32:tt, $DIMS32:tt, $TYPES16:tt, $DIMS16:tt,
-   $TYPES84:tt, $DIMS84:tt, $OPT:ident) => {
+   $TYPES84:tt, $DIMS84:tt, $OPT:tt) => {
     // Make 2d list of tx types for each set of dimensions. Each set of
     //   dimensions uses a superset of the previous set of tx types.
     impl_itx_fns!([$TYPES64], $DIMS64, $OPT);
@@ -213,40 +211,8 @@ impl_itx_fns!(
     (TxType::H_FLIPADST, identity, flipadst)
   ],
   [(16, 8), (8, 16), (16, 4), (4, 16), (8, 8), (8, 4), (4, 8), (4, 4)],
-  avx2
+  [avx2, ssse3]
 );
-
-macro_rules! decl_tx_fns {
-  ($($f:ident),+) => {
-    extern {
-      $(
-        fn $f(
-          dst: *mut u8, dst_stride: libc::ptrdiff_t, coeff: *const i16,
-          eob: i32
-        );
-      )*
-    }
-  };
-}
-
-decl_tx_fns! {
-  rav1e_inv_txfm_add_dct_dct_4x4_ssse3,
-  rav1e_inv_txfm_add_identity_identity_4x4_ssse3,
-  rav1e_inv_txfm_add_adst_dct_4x4_ssse3,
-  rav1e_inv_txfm_add_dct_adst_4x4_ssse3,
-  rav1e_inv_txfm_add_flipadst_dct_4x4_ssse3,
-  rav1e_inv_txfm_add_dct_flipadst_4x4_ssse3,
-  rav1e_inv_txfm_add_identity_dct_4x4_ssse3,
-  rav1e_inv_txfm_add_dct_identity_4x4_ssse3,
-  rav1e_inv_txfm_add_adst_adst_4x4_ssse3,
-  rav1e_inv_txfm_add_flipadst_adst_4x4_ssse3,
-  rav1e_inv_txfm_add_adst_flipadst_4x4_ssse3,
-  rav1e_inv_txfm_add_flipadst_flipadst_4x4_ssse3,
-  rav1e_inv_txfm_add_identity_adst_4x4_ssse3,
-  rav1e_inv_txfm_add_adst_identity_4x4_ssse3,
-  rav1e_inv_txfm_add_identity_flipadst_4x4_ssse3,
-  rav1e_inv_txfm_add_flipadst_identity_4x4_ssse3
-}
 
 #[cfg(test)]
 mod test {
@@ -355,18 +321,54 @@ mod test {
   );
 
   test_itx_fns!(
-    (TxType::DCT_DCT, dct, dct, 4, 4),
-    (TxType::IDTX, identity, identity, 4, 4),
-    (TxType::DCT_ADST, dct, adst, 4, 4),
-    (TxType::ADST_DCT, adst, dct, 4, 4),
-    (TxType::DCT_FLIPADST, dct, flipadst, 4, 4),
-    (TxType::FLIPADST_DCT, flipadst, dct, 4, 4),
-    (TxType::V_DCT, dct, identity, 4, 4),
-    (TxType::H_DCT, identity, dct, 4, 4),
-    (TxType::ADST_ADST, adst, adst, 4, 4),
-    (TxType::ADST_FLIPADST, adst, flipadst, 4, 4),
-    (TxType::FLIPADST_ADST, flipadst, adst, 4, 4),
-    (TxType::FLIPADST_FLIPADST, flipadst, flipadst, 4, 4),
+    (TxType::DCT_DCT, dct, dct, 64, 64),
+    (TxType::DCT_DCT, dct, dct, 64, 32),
+    (TxType::DCT_DCT, dct, dct, 32, 64),
+    (TxType::DCT_DCT, dct, dct, 16, 64),
+    (TxType::DCT_DCT, dct, dct, 64, 16),
+    (TxType::IDTX, identity, identity, 32, 32),
+    (TxType::IDTX, identity, identity, 32, 16),
+    (TxType::IDTX, identity, identity, 16, 32),
+    (TxType::IDTX, identity, identity, 32, 8),
+    (TxType::IDTX, identity, identity, 8, 32),
+    (TxType::DCT_ADST, dct, adst, 16, 16),
+    (TxType::ADST_DCT, adst, dct, 16, 16),
+    (TxType::DCT_FLIPADST, dct, flipadst, 16, 16),
+    (TxType::FLIPADST_DCT, flipadst, dct, 16, 16),
+    (TxType::V_DCT, dct, identity, 16, 16),
+    (TxType::H_DCT, identity, dct, 16, 16),
+    (TxType::ADST_ADST, adst, adst, 16, 16),
+    (TxType::ADST_FLIPADST, adst, flipadst, 16, 16),
+    (TxType::FLIPADST_ADST, flipadst, adst, 16, 16),
+    (TxType::FLIPADST_FLIPADST, flipadst, flipadst, 16, 16),
+    (TxType::V_ADST, adst, identity, 16, 8),
+    (TxType::H_ADST, identity, adst, 16, 8),
+    (TxType::V_FLIPADST, flipadst, identity, 16, 8),
+    (TxType::H_FLIPADST, identity, flipadst, 16, 8),
+    (TxType::V_ADST, adst, identity, 8, 16),
+    (TxType::H_ADST, identity, adst, 8, 16),
+    (TxType::V_FLIPADST, flipadst, identity, 8, 16),
+    (TxType::H_FLIPADST, identity, flipadst, 8, 16),
+    (TxType::V_ADST, adst, identity, 16, 4),
+    (TxType::H_ADST, identity, adst, 16, 4),
+    (TxType::V_FLIPADST, flipadst, identity, 16, 4),
+    (TxType::H_FLIPADST, identity, flipadst, 16, 4),
+    (TxType::V_ADST, adst, identity, 4, 16),
+    (TxType::H_ADST, identity, adst, 4, 16),
+    (TxType::V_FLIPADST, flipadst, identity, 4, 16),
+    (TxType::H_FLIPADST, identity, flipadst, 4, 16),
+    (TxType::V_ADST, adst, identity, 8, 8),
+    (TxType::H_ADST, identity, adst, 8, 8),
+    (TxType::V_FLIPADST, flipadst, identity, 8, 8),
+    (TxType::H_FLIPADST, identity, flipadst, 8, 8),
+    (TxType::V_ADST, adst, identity, 8, 4),
+    (TxType::H_ADST, identity, adst, 8, 4),
+    (TxType::V_FLIPADST, flipadst, identity, 8, 4),
+    (TxType::H_FLIPADST, identity, flipadst, 8, 4),
+    (TxType::V_ADST, adst, identity, 4, 8),
+    (TxType::H_ADST, identity, adst, 4, 8),
+    (TxType::V_FLIPADST, flipadst, identity, 4, 8),
+    (TxType::H_FLIPADST, identity, flipadst, 4, 8),
     (TxType::V_ADST, adst, identity, 4, 4),
     (TxType::H_ADST, identity, adst, 4, 4),
     (TxType::V_FLIPADST, flipadst, identity, 4, 4),
