@@ -16,6 +16,7 @@ addons:
       - python3-wheel
       - libsdl2-dev
       - libvulkan-dev
+      - ruby # needed by casher on arm64
 before_install:
   - export BUILD_DIR="$TRAVIS_HOME/.build"
   - export DEPS_DIR="$TRAVIS_HOME/.local"
