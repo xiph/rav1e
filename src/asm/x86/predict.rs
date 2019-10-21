@@ -46,6 +46,7 @@ decl_angular_ipred_fn! {
   rav1e_ipred_v_avx2,
   rav1e_ipred_v_ssse3,
   rav1e_ipred_paeth_avx2,
+  rav1e_ipred_paeth_ssse3,
   rav1e_ipred_smooth_avx2,
   rav1e_ipred_smooth_ssse3,
   rav1e_ipred_smooth_h_avx2,
@@ -228,9 +229,13 @@ where
     output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
     above_left: T, cpu: CpuFeatureLevel,
   ) {
-    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::AVX2 {
+    if size_of::<T>() == 1 && cpu >= CpuFeatureLevel::SSSE3 {
       return unsafe {
-        rav1e_ipred_paeth_avx2(
+        (if cpu >= CpuFeatureLevel::AVX2 {
+          rav1e_ipred_paeth_avx2
+        } else {
+          rav1e_ipred_paeth_ssse3
+        })(
           output.data_ptr_mut() as *mut _,
           output.plane_cfg.stride as libc::ptrdiff_t,
           above.as_ptr().offset(-1) as *const _,
