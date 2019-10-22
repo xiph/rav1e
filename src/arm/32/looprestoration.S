@@ -269,7 +269,7 @@ function wiener_filter_h_neon, export=1
 
 7:      // 1 <= w < 5, 4-7 pixels valid in q1
         sub             r9,  r5,  #1
-        // w9 = (pixels valid - 4)
+        // r9 = (pixels valid - 4)
         adr             r11, L(variable_shift_tbl)
         ldr             r9,  [r11, r9, lsl #2]
         add             r11, r11, r9
