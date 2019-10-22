@@ -77,12 +77,12 @@ impl TilingInfo {
     // Implements restriction in Annex A of the spec.
     // Unlike the other restrictions, this one does not change
     // the header coding of the tile rows/cols.
-    let min_tiles_ratelimit_log2 =
-      min_tiles_log2.max(
-        (((frame_width * frame_height) as f64 * frame_rate / MAX_TILE_RATE
-          + 0.5) as usize)
-          .ilog(),
-      );
+    let min_tiles_ratelimit_log2 = min_tiles_log2.max(
+      ((frame_width * frame_height) as f64 * frame_rate / MAX_TILE_RATE)
+        .ceil()
+        .log2()
+        .ceil() as usize,
+    );
 
     let tile_cols_log2 =
       tile_cols_log2.max(min_tile_cols_log2).min(max_tile_cols_log2);
