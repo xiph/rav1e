@@ -22,6 +22,7 @@ use std::mem;
 #[inline]
 pub fn sgrproj_box_ab_r1(
   af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
+  integral_image_buffer: &IntegralImageBuffer,
   iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
   cpu: CpuFeatureLevel,
 ) {
@@ -46,6 +47,7 @@ pub fn sgrproj_box_ab_r1(
     bf,
     iimg,
     iimg_sq,
+    integral_image_buffer,
     iimg_stride,
     y,
     stripe_w,
@@ -59,6 +61,7 @@ pub fn sgrproj_box_ab_r1(
 #[inline]
 pub fn sgrproj_box_ab_r2(
   af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
+  integral_image_buffer: &IntegralImageBuffer,
   iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
   cpu: CpuFeatureLevel,
 ) {
@@ -83,6 +86,7 @@ pub fn sgrproj_box_ab_r2(
     bf,
     iimg,
     iimg_sq,
+    integral_image_buffer,
     iimg_stride,
     y,
     stripe_w,
@@ -236,6 +240,7 @@ unsafe fn sgrproj_box_ab_8_avx2(
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
   af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
+  integral_image_buffer: &IntegralImageBuffer,
   iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
 ) {
   for x in (0..stripe_w + 2).step_by(8) {
@@ -260,6 +265,7 @@ pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
         bf,
         iimg,
         iimg_sq,
+        integral_image_buffer,
         iimg_stride,
         x,
         y,
@@ -280,6 +286,7 @@ pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
       &mut bf_ref,
       iimg,
       iimg_sq,
+      integral_image_buffer,
       iimg_stride,
       0,
       y,
@@ -295,6 +302,7 @@ pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
   af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
+  integral_image_buffer: &IntegralImageBuffer,
   iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
 ) {
   for x in (0..stripe_w + 2).step_by(8) {
@@ -319,6 +327,7 @@ pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
         bf,
         iimg,
         iimg_sq,
+        integral_image_buffer,
         iimg_stride,
         x,
         y,
@@ -339,6 +348,7 @@ pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
       &mut bf_ref,
       iimg,
       iimg_sq,
+      integral_image_buffer,
       iimg_stride,
       0,
       y,
