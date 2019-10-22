@@ -80,7 +80,11 @@ make -j8
 
 rav1e has several optional features that can be enabled by passing --features to cargo test. Passing --all-features is discouraged.
 
-* asm - enabled by default. When enabled, assembly is built for the platforms supporting it. It requires `nasm` on `x86_64`.
+* asm - enabled by default. When enabled, assembly is built for the platforms supporting it.
+  * It requires `nasm` on `x86_64`.
+  * It requires `gas` on `aarch64`.
+
+**NOTE**: `SSE2` is always enabled on `x86_64`, `neon` is always enabled for aarch64, you may set the environment variable `RAV1E_CPU_TARGET` to `rust` to disable all the assembly-optimized routines at the runtime.
 
 ## Using the AOMAnalyzer
 
