@@ -993,7 +993,7 @@ function sgr_box5_h_neon, export=1
         ext             v20.16b, v4.16b,  v4.16b, #1
         ext             v21.16b, v4.16b,  v4.16b, #2
         ext             v22.16b, v4.16b,  v4.16b, #3
-        ext             v23.16b, v4.16b,  v5.16b, #4
+        ext             v23.16b, v4.16b,  v4.16b, #4
         uaddl           v3.8h,   v0.8b,   v16.8b
         uaddl           v24.8h,  v17.8b,  v18.8b
         uaddl           v7.8h,   v4.8b,   v20.8b
