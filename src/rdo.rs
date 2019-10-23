@@ -2114,7 +2114,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                 &lrf_input.planes[pli].slice(loop_po),
               );
 
-              // Place to do compute sum and sum of square
+              /*// Place to do compute sum and sum of square
               let r = 2;  // do 5x5 first for now
               let d: usize = r * 2 + 1;
               // TODO: repeat for the case r = 1, i.e. d = 3
@@ -2133,7 +2133,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                 ts.integral_buffer.sum_5x5[y*SOLVE_IMAGE_STRIDE + x + 1] = sum;
                 ts.integral_buffer.sum_sq_5x5[y*SOLVE_IMAGE_STRIDE + x + 1] = ssq;
               }
-              }
+              }*/
 
               for set in 0..16 {
                 // clip to encoded area

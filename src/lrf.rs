@@ -597,6 +597,27 @@ pub fn setup_integral_image<T: Pixel>(
     integral_slice = integral_row;
     sq_integral_slice = sq_integral_row;
   }
+
+  // Place to do compute sum and sum of square
+  let r = 2;  // do 5x5 first for now
+  let d: usize = r * 2 + 1;
+  // TODO: repeat for the case r = 1, i.e. d = 3
+  // and save the results sum and sum of square in different storage
+  let integral_image_offset = if d == 3 { SOLVE_IMAGE_STRIDE + 1 } else { 0 };
+  let iimg = &integral_image_buffer.integral_image[integral_image_offset..];
+  let iimg_sq = &integral_image_buffer.sq_integral_image[integral_image_offset..];
+
+  for y in 0..stripe_h {
+  for x in 0..stripe_w + 2 {
+    let sum = get_integral_square(iimg, SOLVE_IMAGE_STRIDE, x, y, d);
+    let ssq = get_integral_square(iimg_sq, SOLVE_IMAGE_STRIDE, x, y, d);
+    // save sum and sum of square in storage
+    //ts.integral_buffer.sum_3x3[y*SOLVE_IMAGE_STRIDE + x + 1] = sum;
+    //ts.integral_buffer.sum_sq_3x3[y*SOLVE_IMAGE_STRIDE + x + 1] = ssq;
+    integral_image_buffer.sum_5x5[y*SOLVE_IMAGE_STRIDE + x + 1] = sum;
+    integral_image_buffer.sum_sq_5x5[y*SOLVE_IMAGE_STRIDE + x + 1] = ssq;
+  }
+  }
 }
 
 pub fn sgrproj_stripe_filter<T: Pixel>(
