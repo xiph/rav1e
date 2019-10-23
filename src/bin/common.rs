@@ -129,9 +129,9 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .long_help("Speed level (0 is best quality, 10 is fastest)\n\
         Speeds 10 and 0 are extremes and are generally not recommended\n\
         - 10 (fastest):\n\
-        Min block size 64x64, reduced TX set, fast deblock, no scenechange detection\n\
+        Min block size 64x64, reduced TX set, fast deblock, fast scenechange detection\n\
         - 9:\n\
-        Min block size 64x64, reduced TX set, fast deblock\n\
+        Min block size 32x32, reduced TX set, fast deblock\n\
         - 8:\n\
         Min block size 8x8, reduced TX set, fast deblock\n\
         - 7:\n\
@@ -139,7 +139,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         - 6 (default):\n\
         Min block size 8x8, reduced TX set, complex pred modes for keyframes\n\
         - 5:\n\
-        Min block size 8x8, complex pred modes for keyframes\n\
+        Min block size 8x8, complex pred modes for keyframes, reduced TX set, RDO TX decision\n\
         - 4:\n\
         Min block size 8x8, complex pred modes for keyframes, RDO TX decision\n\
         - 3:\n\
