@@ -90,6 +90,25 @@ pub enum PredictionMode {
   NEW_NEWMV,
 }
 
+#[derive(Copy, Clone, Debug)]
+pub enum PredictionVariant {
+  NONE,
+  LEFT,
+  TOP,
+  BOTH,
+}
+
+impl PredictionVariant {
+  fn new(x: usize, y: usize) -> Self {
+    match (x, y) {
+      (0, 0) => PredictionVariant::NONE,
+      (_, 0) => PredictionVariant::LEFT,
+      (0, _) => PredictionVariant::TOP,
+      _ => PredictionVariant::BOTH,
+    }
+  }
+}
+
 impl Default for PredictionMode {
   fn default() -> Self {
     PredictionMode::DC_PRED
@@ -112,218 +131,39 @@ impl PredictionMode {
     edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>, cpu: CpuFeatureLevel,
   ) {
     assert!(self.is_intra());
-
-    match tx_size {
-      TxSize::TX_4X4 => self.predict_intra_inner::<Block4x4, _>(
-        tile_rect, dst, bit_depth, ac, alpha, edge_buf, cpu,
-      ),
-      TxSize::TX_8X8 => self.predict_intra_inner::<Block8x8, _>(
-        tile_rect, dst, bit_depth, ac, alpha, edge_buf, cpu,
-      ),
-      TxSize::TX_16X16 => self.predict_intra_inner::<Block16x16, _>(
-        tile_rect, dst, bit_depth, ac, alpha, edge_buf, cpu,
-      ),
-      TxSize::TX_32X32 => self.predict_intra_inner::<Block32x32, _>(
-        tile_rect, dst, bit_depth, ac, alpha, edge_buf, cpu,
-      ),
-      TxSize::TX_64X64 => self.predict_intra_inner::<Block64x64, _>(
-        tile_rect, dst, bit_depth, ac, alpha, edge_buf, cpu,
-      ),
-
-      TxSize::TX_4X8 => self.predict_intra_inner::<Block4x8, _>(
-        tile_rect, dst, bit_depth, ac, alpha, edge_buf, cpu,
-      ),
-      TxSize::TX_8X4 => self.predict_intra_inner::<Block8x4, _>(
-        tile_rect, dst, bit_depth, ac, alpha, edge_buf, cpu,
-      ),
-      TxSize::TX_8X16 => self.predict_intra_inner::<Block8x16, _>(
-        tile_rect, dst, bit_depth, ac, alpha, edge_buf, cpu,
-      ),
-      TxSize::TX_16X8 => self.predict_intra_inner::<Block16x8, _>(
-        tile_rect, dst, bit_depth, ac, alpha, edge_buf, cpu,
-      ),
-      TxSize::TX_16X32 => self.predict_intra_inner::<Block16x32, _>(
-        tile_rect, dst, bit_depth, ac, alpha, edge_buf, cpu,
-      ),
-      TxSize::TX_32X16 => self.predict_intra_inner::<Block32x16, _>(
-        tile_rect, dst, bit_depth, ac, alpha, edge_buf, cpu,
-      ),
-      TxSize::TX_32X64 => self.predict_intra_inner::<Block32x64, _>(
-        tile_rect, dst, bit_depth, ac, alpha, edge_buf, cpu,
-      ),
-      TxSize::TX_64X32 => self.predict_intra_inner::<Block64x32, _>(
-        tile_rect, dst, bit_depth, ac, alpha, edge_buf, cpu,
-      ),
-
-      TxSize::TX_4X16 => self.predict_intra_inner::<Block4x16, _>(
-        tile_rect, dst, bit_depth, ac, alpha, edge_buf, cpu,
-      ),
-      TxSize::TX_16X4 => self.predict_intra_inner::<Block16x4, _>(
-        tile_rect, dst, bit_depth, ac, alpha, edge_buf, cpu,
-      ),
-      TxSize::TX_8X32 => self.predict_intra_inner::<Block8x32, _>(
-        tile_rect, dst, bit_depth, ac, alpha, edge_buf, cpu,
-      ),
-      TxSize::TX_32X8 => self.predict_intra_inner::<Block32x8, _>(
-        tile_rect, dst, bit_depth, ac, alpha, edge_buf, cpu,
-      ),
-      TxSize::TX_16X64 => self.predict_intra_inner::<Block16x64, _>(
-        tile_rect, dst, bit_depth, ac, alpha, edge_buf, cpu,
-      ),
-      TxSize::TX_64X16 => self.predict_intra_inner::<Block64x16, _>(
-        tile_rect, dst, bit_depth, ac, alpha, edge_buf, cpu,
-      ),
-    }
-  }
-
-  #[inline(always)]
-  fn predict_intra_inner<B: Intra<T>, T: Pixel>(
-    self, tile_rect: TileRect, dst: &mut PlaneRegionMut<'_, T>,
-    bit_depth: usize, ac: &[i16], alpha: i16,
-    edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>, cpu: CpuFeatureLevel,
-  ) {
-    // left pixels are order from bottom to top and right-aligned
-    let (left, not_left) = edge_buf.array.split_at(2 * MAX_TX_SIZE);
-    let (top_left, above) = not_left.split_at(1);
-
     let &Rect { x: frame_x, y: frame_y, .. } = dst.rect();
     debug_assert!(frame_x >= 0 && frame_y >= 0);
     // x and y are expressed relative to the tile
     let x = frame_x as usize - tile_rect.x;
     let y = frame_y as usize - tile_rect.y;
 
-    let mode: PredictionMode = match self {
-      PredictionMode::PAETH_PRED => match (x, y) {
-        (0, 0) => PredictionMode::DC_PRED,
-        (_, 0) => PredictionMode::H_PRED,
-        (0, _) => PredictionMode::V_PRED,
-        _ => PredictionMode::PAETH_PRED,
+    let variant = PredictionVariant::new(x, y);
+
+    let mode = match self {
+      PredictionMode::PAETH_PRED => match variant {
+        PredictionVariant::NONE => PredictionMode::DC_PRED,
+        PredictionVariant::LEFT => PredictionMode::H_PRED,
+        PredictionVariant::TOP => PredictionMode::V_PRED,
+        PredictionVariant::BOTH => PredictionMode::PAETH_PRED,
       },
-      PredictionMode::UV_CFL_PRED => {
-        if alpha == 0 {
-          PredictionMode::DC_PRED
-        } else {
-          self
-        }
-      }
+      PredictionMode::UV_CFL_PRED if alpha == 0 => PredictionMode::DC_PRED,
       _ => self,
     };
 
-    let above_slice = &above[..B::W + B::H];
-    let left_slice = &left[2 * MAX_TX_SIZE - B::H..];
-    let left_and_left_below_slice = &left[2 * MAX_TX_SIZE - B::H - B::W..];
+    let angle = match mode {
+      PredictionMode::UV_CFL_PRED => alpha as isize,
+      PredictionMode::D45_PRED => 45,
+      PredictionMode::D135_PRED => 135,
+      PredictionMode::D117_PRED => 113,
+      PredictionMode::D153_PRED => 157,
+      PredictionMode::D207_PRED => 203,
+      PredictionMode::D63_PRED => 67,
+      _ => 0,
+    };
 
-    match mode {
-      PredictionMode::DC_PRED => match (x, y) {
-        (0, 0) => <B as Intra<T>>::pred_dc_128(dst, bit_depth, cpu),
-        (_, 0) => {
-          <B as Intra<T>>::pred_dc_left(dst, above_slice, left_slice, cpu)
-        }
-        (0, _) => {
-          <B as Intra<T>>::pred_dc_top(dst, above_slice, left_slice, cpu)
-        }
-        _ => <B as Intra<T>>::pred_dc(dst, above_slice, left_slice, cpu),
-      },
-      PredictionMode::UV_CFL_PRED => match (x, y) {
-        (0, 0) => {
-          <B as Intra<T>>::pred_cfl_128(dst, &ac, alpha, bit_depth, cpu)
-        }
-        (_, 0) => <B as Intra<T>>::pred_cfl_left(
-          dst,
-          &ac,
-          alpha,
-          bit_depth,
-          above_slice,
-          left_slice,
-          cpu,
-        ),
-        (0, _) => <B as Intra<T>>::pred_cfl_top(
-          dst,
-          &ac,
-          alpha,
-          bit_depth,
-          above_slice,
-          left_slice,
-          cpu,
-        ),
-        _ => <B as Intra<T>>::pred_cfl(
-          dst,
-          &ac,
-          alpha,
-          bit_depth,
-          above_slice,
-          left_slice,
-          cpu,
-        ),
-      },
-      PredictionMode::H_PRED => <B as Intra<T>>::pred_h(dst, left_slice, cpu),
-      PredictionMode::V_PRED => <B as Intra<T>>::pred_v(dst, above_slice, cpu),
-      PredictionMode::PAETH_PRED => <B as Intra<T>>::pred_paeth(
-        dst,
-        above_slice,
-        left_slice,
-        top_left[0],
-        cpu,
-      ),
-      PredictionMode::SMOOTH_PRED => {
-        <B as Intra<T>>::pred_smooth(dst, above_slice, left_slice, cpu)
-      }
-      PredictionMode::SMOOTH_H_PRED => {
-        <B as Intra<T>>::pred_smooth_h(dst, above_slice, left_slice, cpu)
-      }
-      PredictionMode::SMOOTH_V_PRED => {
-        <B as Intra<T>>::pred_smooth_v(dst, above_slice, left_slice, cpu)
-      }
-      PredictionMode::D45_PRED => B::pred_directional(
-        dst,
-        above_slice,
-        left_and_left_below_slice,
-        top_left,
-        45,
-        bit_depth,
-      ),
-      PredictionMode::D135_PRED => B::pred_directional(
-        dst,
-        above_slice,
-        left_and_left_below_slice,
-        top_left,
-        135,
-        bit_depth,
-      ),
-      PredictionMode::D117_PRED => B::pred_directional(
-        dst,
-        above_slice,
-        left_and_left_below_slice,
-        top_left,
-        113,
-        bit_depth,
-      ),
-      PredictionMode::D153_PRED => B::pred_directional(
-        dst,
-        above_slice,
-        left_and_left_below_slice,
-        top_left,
-        157,
-        bit_depth,
-      ),
-      PredictionMode::D207_PRED => B::pred_directional(
-        dst,
-        above_slice,
-        left_and_left_below_slice,
-        top_left,
-        203,
-        bit_depth,
-      ),
-      PredictionMode::D63_PRED => B::pred_directional(
-        dst,
-        above_slice,
-        left_and_left_below_slice,
-        top_left,
-        67,
-        bit_depth,
-      ),
-      _ => unimplemented!(),
-    }
+    dispatch_predict_intra::<T>(
+      mode, variant, dst, tx_size, bit_depth, ac, angle, edge_buf, cpu,
+    );
   }
 
   pub fn is_intra(self) -> bool {
@@ -543,34 +383,28 @@ pub trait Dim {
   const H: usize;
 }
 
-macro_rules! block_dimension {
-  ($W:expr, $H:expr) => {
+macro_rules! blocks_dimension {
+  ($(($W:expr, $H:expr)),+) => {
     paste::item! {
-      pub struct [<Block $W x $H>];
+      $(
+        pub struct [<Block $W x $H>];
 
-      impl Dim for [<Block $W x $H>] {
-        const W: usize = $W;
-        const H: usize = $H;
-      }
-
-      impl<T: Pixel> native::Intra<T> for [<Block $W x $H>] {}
+        impl Dim for [<Block $W x $H>] {
+          const W: usize = $W;
+          const H: usize = $H;
+        }
+      )*
     }
   };
 }
 
-macro_rules! blocks_dimension {
-  ($(($W:expr, $H:expr)),+) => {
-    $(
-      block_dimension! { $W, $H }
-    )*
-  }
+blocks_dimension! {
+  (4, 4), (8, 8), (16, 16), (32, 32), (64, 64),
+  (4, 8), (8, 16), (16, 32), (32, 64),
+  (8, 4), (16, 8), (32, 16), (64, 32),
+  (4, 16), (8, 32), (16, 64),
+  (16, 4), (32, 8), (64, 16)
 }
-
-blocks_dimension! { (4, 4), (8, 8), (16, 16), (32, 32), (64, 64) }
-blocks_dimension! { (4, 8), (8, 16), (16, 32), (32, 64) }
-blocks_dimension! { (8, 4), (16, 8), (32, 16), (64, 32) }
-blocks_dimension! { (4, 16), (8, 32), (16, 64) }
-blocks_dimension! { (16, 4), (32, 8), (64, 16) }
 
 #[inline(always)]
 fn get_scaled_luma_q0(alpha_q3: i16, ac_pred_q3: i16) -> i32 {
@@ -584,14 +418,111 @@ fn get_scaled_luma_q0(alpha_q3: i16, ac_pred_q3: i16) -> i32 {
 }
 
 pub(crate) mod native {
+  use super::*;
+  use crate::context::MAX_TX_SIZE;
   use crate::cpu_features::CpuFeatureLevel;
-  use crate::predict::{
-    get_scaled_luma_q0, sm_weight_arrays, sm_weight_log2_scale, Dim,
-  };
   use crate::tiling::PlaneRegionMut;
+  use crate::transform::TxSize;
   use crate::util::round_shift;
+  use crate::util::AlignedArray;
   use crate::Pixel;
   use std::mem::size_of;
+
+  macro_rules! impl_intra {
+    ($(($W:expr, $H:expr)),+) => {
+      paste::item! {
+        $(
+          impl<T: Pixel> Intra<T> for [<Block $W x $H>] {}
+        )*
+        #[inline(always)]
+        pub fn dispatch_predict_intra<T: Pixel>(
+          mode: PredictionMode, variant: PredictionVariant,
+          dst: &mut PlaneRegionMut<'_, T>, tx_size: TxSize, bit_depth: usize,
+          ac: &[i16], angle: isize,
+          edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>,
+          _cpu: CpuFeatureLevel,
+        ) {
+          (match tx_size {
+            $(
+              TxSize::[<TX_$W X $H>] => {
+                predict_intra_inner::<[<Block $W x $H>], _>
+              }
+            )*
+          })(mode, variant, dst, bit_depth, ac, angle, edge_buf);
+        }
+      }
+    };
+  }
+
+  impl_intra! {
+    (4, 4), (8, 8), (16, 16), (32, 32), (64, 64),
+    (4, 8), (8, 16), (16, 32), (32, 64),
+    (8, 4), (16, 8), (32, 16), (64, 32),
+    (4, 16), (8, 32), (16, 64),
+    (16, 4), (32, 8), (64, 16)
+  }
+
+  #[inline(always)]
+  pub fn predict_intra_inner<B: Intra<T>, T: Pixel>(
+    mode: PredictionMode, variant: PredictionVariant,
+    dst: &mut PlaneRegionMut<'_, T>, bit_depth: usize, ac: &[i16],
+    angle: isize, edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>,
+  ) {
+    // left pixels are order from bottom to top and right-aligned
+    let (left, not_left) = edge_buf.array.split_at(2 * MAX_TX_SIZE);
+    let (top_left, above) = not_left.split_at(1);
+
+    let above_slice = &above[..B::W + B::H];
+    let left_slice = &left[2 * MAX_TX_SIZE - B::H..];
+    let left_and_left_below_slice = &left[2 * MAX_TX_SIZE - B::H - B::W..];
+
+    match mode {
+      PredictionMode::DC_PRED => {
+        (match variant {
+          PredictionVariant::NONE => B::pred_dc_128,
+          PredictionVariant::LEFT => B::pred_dc_left,
+          PredictionVariant::TOP => B::pred_dc_top,
+          PredictionVariant::BOTH => B::pred_dc,
+        })(dst, above_slice, left_slice, bit_depth)
+      }
+      PredictionMode::UV_CFL_PRED => {
+        (match variant {
+          PredictionVariant::NONE => B::pred_cfl_128,
+          PredictionVariant::LEFT => B::pred_cfl_left,
+          PredictionVariant::TOP => B::pred_cfl_top,
+          PredictionVariant::BOTH => B::pred_cfl,
+        })(dst, &ac, angle as i16, bit_depth, above_slice, left_slice)
+      }
+      PredictionMode::H_PRED => B::pred_h(dst, left_slice),
+      PredictionMode::V_PRED => B::pred_v(dst, above_slice),
+      PredictionMode::PAETH_PRED => {
+        B::pred_paeth(dst, above_slice, left_slice, top_left[0])
+      }
+      PredictionMode::SMOOTH_PRED => {
+        B::pred_smooth(dst, above_slice, left_slice)
+      }
+      PredictionMode::SMOOTH_H_PRED => {
+        B::pred_smooth_h(dst, above_slice, left_slice)
+      }
+      PredictionMode::SMOOTH_V_PRED => {
+        B::pred_smooth_v(dst, above_slice, left_slice)
+      }
+      PredictionMode::D45_PRED
+      | PredictionMode::D135_PRED
+      | PredictionMode::D117_PRED
+      | PredictionMode::D153_PRED
+      | PredictionMode::D207_PRED
+      | PredictionMode::D63_PRED => B::pred_directional(
+        dst,
+        above_slice,
+        left_and_left_below_slice,
+        top_left,
+        angle as usize,
+        bit_depth,
+      ),
+      _ => unimplemented!(),
+    }
+  }
 
   pub trait Intra<T>: Dim
   where
@@ -599,7 +530,7 @@ pub(crate) mod native {
   {
     fn pred_dc(
       output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
-      _cpu: CpuFeatureLevel,
+      _bit_depth: usize,
     ) {
       let edges = left[..Self::H].iter().chain(above[..Self::W].iter());
       let len = (Self::W + Self::H) as u32;
@@ -618,8 +549,8 @@ pub(crate) mod native {
     }
 
     fn pred_dc_128(
-      output: &mut PlaneRegionMut<'_, T>, bit_depth: usize,
-      _cpu: CpuFeatureLevel,
+      output: &mut PlaneRegionMut<'_, T>, _above: &[T], _left: &[T],
+      bit_depth: usize,
     ) {
       let v = T::cast_from(128u32 << (bit_depth - 8));
       for y in 0..Self::H {
@@ -631,7 +562,7 @@ pub(crate) mod native {
 
     fn pred_dc_left(
       output: &mut PlaneRegionMut<'_, T>, _above: &[T], left: &[T],
-      _cpu: CpuFeatureLevel,
+      _bit_depth: usize,
     ) {
       let sum = left[..Self::H].iter().fold(0u32, |acc, &v| {
         let v: u32 = v.into();
@@ -645,7 +576,7 @@ pub(crate) mod native {
 
     fn pred_dc_top(
       output: &mut PlaneRegionMut<'_, T>, above: &[T], _left: &[T],
-      _cpu: CpuFeatureLevel,
+      _bit_depth: usize,
     ) {
       let sum = above[..Self::W].iter().fold(0u32, |acc, &v| {
         let v: u32 = v.into();
@@ -657,9 +588,7 @@ pub(crate) mod native {
       }
     }
 
-    fn pred_h(
-      output: &mut PlaneRegionMut<'_, T>, left: &[T], _cpu: CpuFeatureLevel,
-    ) {
+    fn pred_h(output: &mut PlaneRegionMut<'_, T>, left: &[T]) {
       for (line, l) in output.rows_iter_mut().zip(left[..Self::H].iter().rev())
       {
         for v in &mut line[..Self::W] {
@@ -668,9 +597,7 @@ pub(crate) mod native {
       }
     }
 
-    fn pred_v(
-      output: &mut PlaneRegionMut<'_, T>, above: &[T], _cpu: CpuFeatureLevel,
-    ) {
+    fn pred_v(output: &mut PlaneRegionMut<'_, T>, above: &[T]) {
       for line in output.rows_iter_mut().take(Self::H) {
         line[..Self::W].clone_from_slice(&above[..Self::W])
       }
@@ -678,7 +605,7 @@ pub(crate) mod native {
 
     fn pred_paeth(
       output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
-      above_left: T, _cpu: CpuFeatureLevel,
+      above_left: T,
     ) {
       for r in 0..Self::H {
         let row = &mut output[r];
@@ -707,7 +634,6 @@ pub(crate) mod native {
 
     fn pred_smooth(
       output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
-      _cpu: CpuFeatureLevel,
     ) {
       let below_pred = left[0]; // estimated by bottom-left pixel
       let right_pred = above[Self::W - 1]; // estimated by top-right pixel
@@ -761,7 +687,6 @@ pub(crate) mod native {
 
     fn pred_smooth_h(
       output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
-      _cpu: CpuFeatureLevel,
     ) {
       let right_pred = above[Self::W - 1]; // estimated by top-right pixel
       let sm_weights = &sm_weight_arrays[Self::W..];
@@ -800,7 +725,6 @@ pub(crate) mod native {
 
     fn pred_smooth_v(
       output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
-      _cpu: CpuFeatureLevel,
     ) {
       let below_pred = left[0]; // estimated by bottom-left pixel
       let sm_weights = &sm_weight_arrays[Self::H..];
@@ -839,7 +763,7 @@ pub(crate) mod native {
 
     fn pred_cfl_inner(
       output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16,
-      bit_depth: usize, _cpu: CpuFeatureLevel,
+      bit_depth: usize,
     ) {
       if alpha == 0 {
         return;
@@ -865,34 +789,34 @@ pub(crate) mod native {
 
     fn pred_cfl(
       output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16,
-      bit_depth: usize, above: &[T], left: &[T], _cpu: CpuFeatureLevel,
+      bit_depth: usize, above: &[T], left: &[T],
     ) {
-      Self::pred_dc(output, above, left, _cpu);
-      Self::pred_cfl_inner(output, &ac, alpha, bit_depth, _cpu);
+      Self::pred_dc(output, above, left, bit_depth);
+      Self::pred_cfl_inner(output, &ac, alpha, bit_depth);
     }
 
     fn pred_cfl_128(
       output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16,
-      bit_depth: usize, _cpu: CpuFeatureLevel,
+      bit_depth: usize, above: &[T], left: &[T],
     ) {
-      Self::pred_dc_128(output, bit_depth, _cpu);
-      Self::pred_cfl_inner(output, &ac, alpha, bit_depth, _cpu);
+      Self::pred_dc_128(output, above, left, bit_depth);
+      Self::pred_cfl_inner(output, &ac, alpha, bit_depth);
     }
 
     fn pred_cfl_left(
       output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16,
-      bit_depth: usize, above: &[T], left: &[T], _cpu: CpuFeatureLevel,
+      bit_depth: usize, above: &[T], left: &[T],
     ) {
-      Self::pred_dc_left(output, above, left, _cpu);
-      Self::pred_cfl_inner(output, &ac, alpha, bit_depth, _cpu);
+      Self::pred_dc_left(output, above, left, bit_depth);
+      Self::pred_cfl_inner(output, &ac, alpha, bit_depth);
     }
 
     fn pred_cfl_top(
       output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16,
-      bit_depth: usize, above: &[T], left: &[T], _cpu: CpuFeatureLevel,
+      bit_depth: usize, above: &[T], left: &[T],
     ) {
-      Self::pred_dc_top(output, above, left, _cpu);
-      Self::pred_cfl_inner(output, &ac, alpha, bit_depth, _cpu);
+      Self::pred_dc_top(output, above, left, bit_depth);
+      Self::pred_cfl_inner(output, &ac, alpha, bit_depth);
     }
 
     fn pred_directional(
@@ -1044,11 +968,11 @@ pub trait Inter: Dim {}
 mod test {
   use super::*;
   use crate::frame::AsRegion;
+  use crate::predict::native::Intra;
   use num_traits::*;
 
   #[test]
   fn pred_matches_u8() {
-    let cpu = CpuFeatureLevel::default();
     let mut edge_buf: AlignedArray<[u8; 2 * MAX_TX_SIZE + 1]> =
       AlignedArray::uninitialized();
     for i in 0..edge_buf.array.len() {
@@ -1060,55 +984,49 @@ mod test {
 
     let mut output = Plane::wrap(vec![0u8; 4 * 4], 4);
 
-    Block4x4::pred_dc(&mut output.as_region_mut(), above, left, cpu);
+    Block4x4::pred_dc(&mut output.as_region_mut(), above, left, 8);
     assert_eq!(&output.data[..], [32u8; 16]);
 
-    Block4x4::pred_dc_top(&mut output.as_region_mut(), above, left, cpu);
+    Block4x4::pred_dc_top(&mut output.as_region_mut(), above, left, 8);
     assert_eq!(&output.data[..], [35u8; 16]);
 
-    Block4x4::pred_dc_left(&mut output.as_region_mut(), above, left, cpu);
+    Block4x4::pred_dc_left(&mut output.as_region_mut(), above, left, 8);
     assert_eq!(&output.data[..], [30u8; 16]);
 
-    Block4x4::pred_dc_128(&mut output.as_region_mut(), 8, cpu);
+    Block4x4::pred_dc_128(&mut output.as_region_mut(), above, left, 8);
     assert_eq!(&output.data[..], [128u8; 16]);
 
-    Block4x4::pred_v(&mut output.as_region_mut(), above, cpu);
+    Block4x4::pred_v(&mut output.as_region_mut(), above);
     assert_eq!(
       &output.data[..],
       [33, 34, 35, 36, 33, 34, 35, 36, 33, 34, 35, 36, 33, 34, 35, 36]
     );
 
-    Block4x4::pred_h(&mut output.as_region_mut(), left, cpu);
+    Block4x4::pred_h(&mut output.as_region_mut(), left);
     assert_eq!(
       &output.data[..],
       [31, 31, 31, 31, 30, 30, 30, 30, 29, 29, 29, 29, 28, 28, 28, 28]
     );
 
-    Block4x4::pred_paeth(
-      &mut output.as_region_mut(),
-      above,
-      left,
-      top_left,
-      cpu,
-    );
+    Block4x4::pred_paeth(&mut output.as_region_mut(), above, left, top_left);
     assert_eq!(
       &output.data[..],
       [32, 34, 35, 36, 30, 32, 32, 36, 29, 32, 32, 32, 28, 28, 32, 32]
     );
 
-    Block4x4::pred_smooth(&mut output.as_region_mut(), above, left, cpu);
+    Block4x4::pred_smooth(&mut output.as_region_mut(), above, left);
     assert_eq!(
       &output.data[..],
       [32, 34, 35, 35, 30, 32, 33, 34, 29, 31, 32, 32, 29, 30, 32, 32]
     );
 
-    Block4x4::pred_smooth_h(&mut output.as_region_mut(), above, left, cpu);
+    Block4x4::pred_smooth_h(&mut output.as_region_mut(), above, left);
     assert_eq!(
       &output.data[..],
       [31, 33, 34, 35, 30, 33, 34, 35, 29, 32, 34, 34, 28, 31, 33, 34]
     );
 
-    Block4x4::pred_smooth_v(&mut output.as_region_mut(), above, left, cpu);
+    Block4x4::pred_smooth_v(&mut output.as_region_mut(), above, left);
     assert_eq!(
       &output.data[..],
       [33, 34, 35, 36, 31, 31, 32, 33, 30, 30, 30, 31, 29, 30, 30, 30]
@@ -1117,14 +1035,13 @@ mod test {
 
   #[test]
   fn pred_max() {
-    let cpu = CpuFeatureLevel::default();
     let max12bit = 4096 - 1;
     let above = [max12bit; 32];
     let left = [max12bit; 32];
 
     let mut o = Plane::wrap(vec![0u16; 32 * 32], 32);
 
-    Block4x4::pred_dc(&mut o.as_region_mut(), &above[..4], &left[..4], cpu);
+    Block4x4::pred_dc(&mut o.as_region_mut(), &above[..4], &left[..4], 16);
 
     for l in o.data.chunks(32).take(4) {
       for v in l[..4].iter() {
@@ -1132,7 +1049,7 @@ mod test {
       }
     }
 
-    Block4x4::pred_h(&mut o.as_region_mut(), &left[..4], cpu);
+    Block4x4::pred_h(&mut o.as_region_mut(), &left[..4]);
 
     for l in o.data.chunks(32).take(4) {
       for v in l[..4].iter() {
@@ -1140,7 +1057,7 @@ mod test {
       }
     }
 
-    Block4x4::pred_v(&mut o.as_region_mut(), &above[..4], cpu);
+    Block4x4::pred_v(&mut o.as_region_mut(), &above[..4]);
 
     for l in o.data.chunks(32).take(4) {
       for v in l[..4].iter() {
@@ -1155,7 +1072,6 @@ mod test {
       &above[..4],
       &left[..4],
       above_left,
-      cpu,
     );
 
     for l in o.data.chunks(32).take(4) {
@@ -1164,12 +1080,7 @@ mod test {
       }
     }
 
-    Block4x4::pred_smooth(
-      &mut o.as_region_mut(),
-      &above[..4],
-      &left[..4],
-      cpu,
-    );
+    Block4x4::pred_smooth(&mut o.as_region_mut(), &above[..4], &left[..4]);
 
     for l in o.data.chunks(32).take(4) {
       for v in l[..4].iter() {
@@ -1177,12 +1088,7 @@ mod test {
       }
     }
 
-    Block4x4::pred_smooth_h(
-      &mut o.as_region_mut(),
-      &above[..4],
-      &left[..4],
-      cpu,
-    );
+    Block4x4::pred_smooth_h(&mut o.as_region_mut(), &above[..4], &left[..4]);
 
     for l in o.data.chunks(32).take(4) {
       for v in l[..4].iter() {
@@ -1190,12 +1096,7 @@ mod test {
       }
     }
 
-    Block4x4::pred_smooth_v(
-      &mut o.as_region_mut(),
-      &above[..4],
-      &left[..4],
-      cpu,
-    );
+    Block4x4::pred_smooth_v(&mut o.as_region_mut(), &above[..4], &left[..4]);
 
     for l in o.data.chunks(32).take(4) {
       for v in l[..4].iter() {
