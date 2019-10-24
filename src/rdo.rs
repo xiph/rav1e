@@ -1936,28 +1936,28 @@ pub fn rdo_loop_decision<T: Pixel>(
                       &lrf_input.planes[pli].slice(loop_po),
                       &mut lrf_output.planes[pli].mut_slice(loop_po),
                     );
+                    let this_err = rdo_loop_plane_error(
+                      loop_sbo,
+                      loop_tile_sbo,
+                      1,
+                      1,
+                      fi,
+                      ts,
+                      &cw.bc.blocks.as_const(),
+                      &lrf_output,
+                      pli,
+                    );
+                    err += this_err;
+                    let this_rate = cw.count_lrf_switchable(
+                      w,
+                      &ts.restoration.as_const(),
+                      best_lrf[pli][lru_y][lru_x],
+                      pli,
+                    );
+                    rate += this_rate;
                   }
                   RestorationFilter::Wiener { .. } => unreachable!(), // coming soon
                 }
-                let this_err = rdo_loop_plane_error(
-                  loop_sbo,
-                  loop_tile_sbo,
-                  1,
-                  1,
-                  fi,
-                  ts,
-                  &cw.bc.blocks.as_const(),
-                  &lrf_output,
-                  pli,
-                );
-                err += this_err;
-                let this_rate = cw.count_lrf_switchable(
-                  w,
-                  &ts.restoration.as_const(),
-                  best_lrf[pli][lru_y][lru_x],
-                  pli,
-                );
-                rate += this_rate;
               } else {
                 // No LRU here, compute error directly from CDEF output.
                 err += rdo_loop_plane_error(
