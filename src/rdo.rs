@@ -1778,24 +1778,23 @@ pub fn rdo_loop_decision<T: Pixel>(
     // min sized temporary frame; sb_wh number of superblocks with padding
     cdef_input =
       Some(cdef_sb_padded_frame_copy(fi, tile_sbo, sb_w, sb_h, &const_rec, 2));
-  } else {
-    // No cdef; copy lrf input from reconstructiton
-    for pli in 0..PLANES {
-      let po = tile_sbo.plane_offset(&ts.rec.planes[pli].plane_cfg);
-      let rec_region =
-        ts.rec.planes[pli].subregion(Area::StartingAt { x: po.x, y: po.y });
-      let width = lrf_input.planes[pli].cfg.width.min(rec_region.rect().width);
-      let height =
-        lrf_input.planes[pli].cfg.height.min(rec_region.rect().height);
-      for (rec, inp) in rec_region
-        .rows_iter()
-        .zip(lrf_input.planes[pli].as_region_mut().rows_iter_mut())
-        .take(height)
-      {
-        inp[..width].copy_from_slice(&rec[..width]);
-      }
-      lrf_input.planes[pli].pad(width, height);
+  }
+  // Initialize cdef output
+  for pli in 0..PLANES {
+    let po = tile_sbo.plane_offset(&ts.rec.planes[pli].plane_cfg);
+    let rec_region =
+      ts.rec.planes[pli].subregion(Area::StartingAt { x: po.x, y: po.y });
+    let width = lrf_input.planes[pli].cfg.width.min(rec_region.rect().width);
+    let height =
+      lrf_input.planes[pli].cfg.height.min(rec_region.rect().height);
+    for (rec, inp) in rec_region
+      .rows_iter()
+      .zip(lrf_input.planes[pli].as_region_mut().rows_iter_mut())
+      .take(height)
+    {
+      inp[..width].copy_from_slice(&rec[..width]);
     }
+    lrf_input.planes[pli].pad(width, height);
   }
 
   // CDEF/LRF decision iteration
@@ -1978,6 +1977,19 @@ pub fn rdo_loop_decision<T: Pixel>(
             best_index[sby][sbx] = best_new_index;
             cw.bc.blocks.set_cdef(loop_tile_sbo, best_new_index as u8);
           }
+
+          // Keep cdef output up to date; we need it for restoration
+          // both below and above (padding)
+          cdef_filter_superblock(
+            fi,
+            &cdef_input,
+            &mut lrf_input,
+            &cw.bc.blocks.as_const(),
+            loop_sbo,
+            loop_tile_sbo,
+            best_index[sby][sbx] as u8,
+            &cdef_dirs[sby][sbx],
+          );
         }
       }
     }
@@ -1990,30 +2002,6 @@ pub fn rdo_loop_decision<T: Pixel>(
 
     // check for new best restoration filter if enabled
     if fi.sequence.enable_restoration {
-      // need cdef output from best index, not just last iteration
-      if let Some((cdef_input, cdef_dirs)) = cdef_data.as_ref() {
-        for sby in 0..sb_h {
-          for sbx in 0..sb_w {
-            let loop_sbo =
-              TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
-            let loop_tile_sbo = TileSuperBlockOffset(SuperBlockOffset {
-              x: tile_sbo.0.x + sbx,
-              y: tile_sbo.0.y + sby,
-            });
-            cdef_filter_superblock(
-              fi,
-              &cdef_input,
-              &mut lrf_input,
-              &cw.bc.blocks.as_const(),
-              loop_sbo,
-              loop_tile_sbo,
-              best_index[sby][sbx] as u8,
-              &cdef_dirs[sby][sbx],
-            );
-          }
-        }
-      }
-
       for pli in 0..PLANES {
         let sb_h_shift = ts.restoration.planes[pli].rp_cfg.sb_h_shift;
         let sb_v_shift = ts.restoration.planes[pli].rp_cfg.sb_v_shift;
