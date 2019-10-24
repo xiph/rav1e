@@ -328,15 +328,15 @@ pub fn cdef_sb_frame<T: Pixel>(
     planes: [
       {
         let &PlaneConfig { xdec, ydec, .. } = tile.planes[0].plane_cfg;
-        Plane::new(sb_h_size >> xdec, sb_v_size >> ydec, xdec, ydec, 3, 3)
+        Plane::new(sb_h_size >> xdec, sb_v_size >> ydec, xdec, ydec, 0, 0)
       },
       {
         let &PlaneConfig { xdec, ydec, .. } = tile.planes[1].plane_cfg;
-        Plane::new(sb_h_size >> xdec, sb_v_size >> ydec, xdec, ydec, 3, 3)
+        Plane::new(sb_h_size >> xdec, sb_v_size >> ydec, xdec, ydec, 0, 0)
       },
       {
         let &PlaneConfig { xdec, ydec, .. } = tile.planes[2].plane_cfg;
-        Plane::new(sb_h_size >> xdec, sb_v_size >> ydec, xdec, ydec, 3, 3)
+        Plane::new(sb_h_size >> xdec, sb_v_size >> ydec, xdec, ydec, 0, 0)
       },
     ],
   }
