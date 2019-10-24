@@ -1789,18 +1789,19 @@ impl<'a> BlockContext<'a> {
     let txb_w_unit = tx_size.width_mi();
     let txb_h_unit = tx_size.height_mi();
 
+    let above_ctxs =
+      &self.above_coeff_context[plane][(bo.0.x >> xdec)..][..txb_w_unit];
+    let left_ctxs =
+      &self.left_coeff_context[plane][(bo.y_in_sb() >> ydec)..][..txb_h_unit];
+
     // Decide txb_ctx.dc_sign_ctx
-    for k in 0..txb_w_unit {
-      let sign = self.above_coeff_context[plane][(bo.0.x >> xdec) + k]
-        >> COEFF_CONTEXT_BITS;
-      assert!(sign <= 2);
+    for &ctx in above_ctxs {
+      let sign = ctx >> COEFF_CONTEXT_BITS;
       dc_sign += signs[sign as usize] as i16;
     }
 
-    for k in 0..txb_h_unit {
-      let sign = self.left_coeff_context[plane][(bo.y_in_sb() >> ydec) + k]
-        >> COEFF_CONTEXT_BITS;
-      assert!(sign <= 2);
+    for &ctx in left_ctxs {
+      let sign = ctx >> COEFF_CONTEXT_BITS;
       dc_sign += signs[sign as usize] as i16;
     }
 
@@ -1830,18 +1831,12 @@ impl<'a> BlockContext<'a> {
           [1, 4, 4, 4, 5],
           [1, 4, 4, 4, 6],
         ];
-        let mut top: u8 = 0;
-        let mut left: u8 = 0;
 
-        for k in 0..txb_w_unit {
-          top |= self.above_coeff_context[0][(bo.0.x >> xdec) + k];
-        }
-        top &= COEFF_CONTEXT_MASK as u8;
+        let top: u8 = above_ctxs.iter().fold(0, |acc, ctx| acc | *ctx)
+          & COEFF_CONTEXT_MASK as u8;
 
-        for k in 0..txb_h_unit {
-          left |= self.left_coeff_context[0][(bo.y_in_sb() >> ydec) + k];
-        }
-        left &= COEFF_CONTEXT_MASK as u8;
+        let left: u8 = left_ctxs.iter().fold(0, |acc, ctx| acc | *ctx)
+          & COEFF_CONTEXT_MASK as u8;
 
         let max = cmp::min(top | left, 4);
         let min = cmp::min(cmp::min(top, left), 4);
@@ -1849,15 +1844,8 @@ impl<'a> BlockContext<'a> {
           skip_contexts[min as usize][max as usize] as usize;
       }
     } else {
-      let mut top: u8 = 0;
-      let mut left: u8 = 0;
-
-      for k in 0..txb_w_unit {
-        top |= self.above_coeff_context[plane][(bo.0.x >> xdec) + k];
-      }
-      for k in 0..txb_h_unit {
-        left |= self.left_coeff_context[plane][(bo.y_in_sb() >> ydec) + k];
-      }
+      let top: u8 = above_ctxs.iter().fold(0, |acc, ctx| acc | *ctx);
+      let left: u8 = left_ctxs.iter().fold(0, |acc, ctx| acc | *ctx);
       let ctx_base = (top != 0) as usize + (left != 0) as usize;
       let ctx_offset = if num_pels_log2_lookup[plane_bsize as usize]
         > num_pels_log2_lookup[tx_size.block_size() as usize]
@@ -3774,11 +3762,12 @@ impl<'a> ContextWriter<'a> {
     let mut offset = TX_PAD_TOP * (width + TX_PAD_HOR);
 
     for y in 0..height {
-      for x in 0..width {
-        levels_buf[offset] = clamp(coeffs[y * width + x].abs(), 0, 127) as u8;
-        offset += 1;
+      let coeffs_row = &coeffs[(y * width)..][..width];
+      let levels_row = &mut levels_buf[offset..][..width];
+      for (coeff, level) in coeffs_row.iter().zip(levels_row.iter_mut()) {
+        *level = clamp(coeff.abs(), 0, 127) as u8;
       }
-      offset += TX_PAD_HOR;
+      offset += width + TX_PAD_HOR;
     }
   }
 
@@ -3989,12 +3978,11 @@ impl<'a> ContextWriter<'a> {
     let mut coeffs_storage: AlignedArray<[i32; 32 * 32]> =
       AlignedArray::uninitialized();
     let coeffs = &mut coeffs_storage.array[..width * height];
-    let mut cul_level = 0 as u32;
 
-    for i in 0..width * height {
-      coeffs[i] = coeffs_in[scan[i] as usize];
-      cul_level += coeffs[i].abs() as u32;
+    for (i, &scan_idx) in scan.iter().take(width * height).enumerate() {
+      coeffs[i] = coeffs_in[scan_idx as usize];
     }
+    let mut cul_level = coeffs.iter().map(|c| c.abs() as u32).sum();
 
     let eob = if cul_level == 0 {
       0
