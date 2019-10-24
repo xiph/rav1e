@@ -1916,8 +1916,8 @@ pub fn rdo_loop_decision<T: Pixel>(
                     setup_integral_image(
                       &mut ts.integral_buffer,
                       SOLVE_IMAGE_STRIDE,
-                      width,
-                      height,
+                      lrf_input.planes[pli].cfg.width - loop_po.x as usize,
+                      lrf_input.planes[pli].cfg.height - loop_po.y as usize,
                       width,
                       height,
                       &lrf_input.planes[pli].slice(loop_po),
@@ -2064,8 +2064,8 @@ pub fn rdo_loop_decision<T: Pixel>(
               setup_integral_image(
                 &mut ts.integral_buffer,
                 SOLVE_IMAGE_STRIDE,
-                unit_width,
-                unit_height,
+                lrf_input.planes[pli].cfg.width - loop_po.x as usize,
+                lrf_input.planes[pli].cfg.height - loop_po.y as usize,
                 unit_width,
                 unit_height,
                 &lrf_input.planes[pli].slice(loop_po),
