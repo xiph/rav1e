@@ -293,6 +293,8 @@ pub struct SpeedSettings {
   pub diamond_me: bool,
   /// Enables CDEF.
   pub cdef: bool,
+  /// Enables LRF.
+  pub lrf: bool,
   /// Enables searching for the optimal segment ID (quantizer delta) with RDO.
   /// When disabled, the segment ID is chosen heuristically.
   ///
@@ -330,6 +332,7 @@ impl Default for SpeedSettings {
       fast_scene_detection: false,
       diamond_me: true,
       cdef: true,
+      lrf: false,
       quantizer_rdo: true,
       use_satd_subpel: true,
       non_square_partition: true,
@@ -369,6 +372,7 @@ impl SpeedSettings {
       fast_scene_detection: Self::fast_scene_detection_preset(speed),
       diamond_me: Self::diamond_me_preset(speed),
       cdef: Self::cdef_preset(speed),
+      lrf: Self::lrf_preset(speed),
       quantizer_rdo: Self::quantizer_rdo_preset(speed),
       use_satd_subpel: Self::use_satd_subpel(speed),
       non_square_partition: Self::non_square_partition_preset(speed),
@@ -459,6 +463,10 @@ impl SpeedSettings {
   }
 
   const fn cdef_preset(_speed: usize) -> bool {
+    true
+  }
+
+  const fn lrf_preset(_speed: usize) -> bool {
     true
   }
 
