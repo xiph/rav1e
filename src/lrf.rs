@@ -1206,6 +1206,11 @@ impl RestorationState {
     let (lrf_y_shift, lrf_uv_shift) = if fi.sequence.enable_large_lru
       && fi.sequence.enable_restoration
     {
+      assert!(
+        fi.width > 1 && fi.height > 1,
+        "Width and height must be higher than 1 for LRF setup"
+      );
+
       // Specific content does affect optimal LRU size choice, but the
       // quantizer in use is a surprisingly strong selector.
       let lrf_base_shift = if fi.base_q_idx > 200 {

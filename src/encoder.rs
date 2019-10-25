@@ -187,6 +187,10 @@ impl Sequence {
       tier[i] = 0;
     }
 
+    // Restoration filters are not useful for very small frame sizes,
+    // so disable them in that case.
+    let enable_restoration_filters = config.width >= 32 && config.height >= 32;
+
     Sequence {
       profile,
       num_bits_width: width_bits,
@@ -220,8 +224,10 @@ impl Sequence {
       enable_warped_motion: false,
       enable_superres: false,
       enable_cdef: config.speed_settings.cdef
-        && config.chroma_sampling != ChromaSampling::Cs422,
-      enable_restoration: config.chroma_sampling != ChromaSampling::Cs422,
+        && config.chroma_sampling != ChromaSampling::Cs422
+        && enable_restoration_filters,
+      enable_restoration: config.chroma_sampling != ChromaSampling::Cs422
+        && enable_restoration_filters,
       enable_large_lru: true,
       operating_points_cnt_minus_1: 0,
       operating_point_idc,
