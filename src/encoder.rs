@@ -231,7 +231,8 @@ impl Sequence {
       enable_cdef: config.speed_settings.cdef
         && config.chroma_sampling != ChromaSampling::Cs422
         && enable_restoration_filters,
-      enable_restoration: config.chroma_sampling != ChromaSampling::Cs422
+      enable_restoration: config.speed_settings.lrf
+        && config.chroma_sampling != ChromaSampling::Cs422
         && enable_restoration_filters,
       enable_large_lru: true,
       operating_points_cnt_minus_1: 0,
