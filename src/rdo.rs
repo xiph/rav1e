@@ -786,21 +786,9 @@ pub fn rdo_mode_decision<T: Pixel>(
   cw: &mut ContextWriter, bsize: BlockSize, tile_bo: TileBlockOffset,
   pmvs: &mut [Option<MotionVector>], inter_cfg: &InterConfig,
 ) -> PartitionParameters {
-  let mut best = PartitionParameters::default();
-
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
-  let is_chroma_block = has_chroma(tile_bo, bsize, xdec, ydec);
 
   let cw_checkpoint = cw.checkpoint();
-
-  // we can never have more than 7 reference frame sets
-  let mut ref_frames_set = ArrayVec::<[_; 7]>::new();
-  // again, max of 7 ref slots
-  let mut ref_slot_set = ArrayVec::<[_; 7]>::new();
-  // our implementation never returns more than 3 at the moment
-  let mut mvs_from_me = ArrayVec::<[_; 3]>::new();
-  let mut fwdref = None;
-  let mut bwdref = None;
 
   let rdo_type = if fi.config.train_rdo {
     RDOType::Train
@@ -812,344 +800,36 @@ pub fn rdo_mode_decision<T: Pixel>(
     RDOType::PixelDistRealRate
   };
 
-  if fi.frame_type == FrameType::INTER {
-    for i in inter_cfg.allowed_ref_frames().iter().copied() {
-      // Don't search LAST3 since it's used only for probs
-      if i == LAST3_FRAME {
-        continue;
-      }
-
-      if !ref_slot_set.contains(&fi.ref_frames[i.to_index()]) {
-        if fwdref == None && i.is_fwd_ref() {
-          fwdref = Some(ref_frames_set.len());
-        }
-        if bwdref == None && i.is_bwd_ref() {
-          bwdref = Some(ref_frames_set.len());
-        }
-        ref_frames_set.push([i, NONE_FRAME]);
-        let slot_idx = fi.ref_frames[i.to_index()];
-        ref_slot_set.push(slot_idx);
-      }
-    }
-    assert!(!ref_frames_set.is_empty());
-  }
-
-  let mut inter_mode_set = ArrayVec::<[(PredictionMode, usize); 20]>::new();
-  let mut mv_stacks = ArrayVec::<[_; 20]>::new();
-  let mut mode_contexts = ArrayVec::<[_; 7]>::new();
-
-  let motion_estimation = if fi.config.speed_settings.diamond_me {
-    crate::me::DiamondSearch::motion_estimation
-  } else {
-    crate::me::FullSearch::motion_estimation
-  };
-
-  for (i, &ref_frames) in ref_frames_set.iter().enumerate() {
-    let mut mv_stack = ArrayVec::<[CandidateMV; 9]>::new();
-    mode_contexts.push(cw.find_mvrefs(
-      tile_bo,
-      ref_frames,
-      &mut mv_stack,
-      bsize,
+  let mut best = if fi.frame_type == FrameType::INTER {
+    inter_frame_rdo_mode_decision(
       fi,
-      false,
-    ));
-
-    if fi.frame_type == FrameType::INTER {
-      let mut pmv = [MotionVector::default(); 2];
-      if !mv_stack.is_empty() {
-        pmv[0] = mv_stack[0].this_mv;
-      }
-      if mv_stack.len() > 1 {
-        pmv[1] = mv_stack[1].this_mv;
-      }
-      let ref_slot = ref_slot_set[i] as usize;
-      let cmv = pmvs[ref_slot].unwrap_or_else(Default::default);
-
-      let b_me =
-        motion_estimation(fi, ts, bsize, tile_bo, ref_frames[0], cmv, pmv);
-
-      if !fi.config.speed_settings.encode_bottomup
-        && (bsize == BlockSize::BLOCK_32X32 || bsize == BlockSize::BLOCK_64X64)
-      {
-        pmvs[ref_slot] = Some(b_me);
-      };
-
-      mvs_from_me.push([b_me, MotionVector::default()]);
-
-      for &x in RAV1E_INTER_MODES_MINIMAL {
-        inter_mode_set.push((x, i));
-      }
-      if !mv_stack.is_empty() {
-        inter_mode_set.push((PredictionMode::NEAR0MV, i));
-      }
-      if mv_stack.len() >= 2 {
-        inter_mode_set.push((PredictionMode::GLOBALMV, i));
-      }
-      let include_near_mvs = fi.config.speed_settings.include_near_mvs;
-      if include_near_mvs {
-        if mv_stack.len() >= 3 {
-          inter_mode_set.push((PredictionMode::NEAR1MV, i));
-        }
-        if mv_stack.len() >= 4 {
-          inter_mode_set.push((PredictionMode::NEAR2MV, i));
-        }
-      }
-      let same_row_col = |x: &CandidateMV| {
-        x.this_mv.row == mvs_from_me[i][0].row
-          && x.this_mv.col == mvs_from_me[i][0].col
-      };
-      if !mv_stack
-        .iter()
-        .take(if include_near_mvs { 4 } else { 2 })
-        .any(same_row_col)
-        && (mvs_from_me[i][0].row != 0 || mvs_from_me[i][0].col != 0)
-      {
-        inter_mode_set.push((PredictionMode::NEWMV, i));
-      }
-    }
-    mv_stacks.push(mv_stack);
-  }
-
-  let sz = bsize.width_mi().min(bsize.height_mi());
-
-  if fi.frame_type == FrameType::INTER
-    && fi.reference_mode != ReferenceMode::SINGLE
-    && sz >= 2
-  {
-    // Adding compound candidate
-    if let Some(r0) = fwdref {
-      if let Some(r1) = bwdref {
-        let ref_frames = [ref_frames_set[r0][0], ref_frames_set[r1][0]];
-        ref_frames_set.push(ref_frames);
-        let mv0 = mvs_from_me[r0][0];
-        let mv1 = mvs_from_me[r1][0];
-        mvs_from_me.push([mv0, mv1]);
-        let mut mv_stack = ArrayVec::<[CandidateMV; 9]>::new();
-        mode_contexts.push(cw.find_mvrefs(
-          tile_bo,
-          ref_frames,
-          &mut mv_stack,
-          bsize,
-          fi,
-          true,
-        ));
-        for &x in RAV1E_INTER_COMPOUND_MODES {
-          inter_mode_set.push((x, ref_frames_set.len() - 1));
-        }
-        mv_stacks.push(mv_stack);
-      }
-    }
-  }
-
-  if fi.frame_type != FrameType::INTER {
-    assert!(inter_mode_set.is_empty());
-  }
-
-  inter_mode_set.iter().for_each(|&(luma_mode, i)| {
-    let mvs = match luma_mode {
-      PredictionMode::NEWMV | PredictionMode::NEW_NEWMV => mvs_from_me[i],
-      PredictionMode::NEARESTMV | PredictionMode::NEAREST_NEARESTMV => {
-        if !mv_stacks[i].is_empty() {
-          [mv_stacks[i][0].this_mv, mv_stacks[i][0].comp_mv]
-        } else {
-          [MotionVector::default(); 2]
-        }
-      }
-      PredictionMode::NEAR0MV | PredictionMode::NEAR_NEARMV => {
-        if mv_stacks[i].len() > 1 {
-          [mv_stacks[i][1].this_mv, mv_stacks[i][1].comp_mv]
-        } else {
-          [MotionVector::default(); 2]
-        }
-      }
-      PredictionMode::NEAR1MV | PredictionMode::NEAR2MV => [
-        mv_stacks[i]
-          [luma_mode as usize - PredictionMode::NEAR0MV as usize + 1]
-          .this_mv,
-        mv_stacks[i]
-          [luma_mode as usize - PredictionMode::NEAR0MV as usize + 1]
-          .comp_mv,
-      ],
-      PredictionMode::NEAREST_NEWMV => {
-        [mv_stacks[i][0].this_mv, mvs_from_me[i][1]]
-      }
-      PredictionMode::NEW_NEARESTMV => {
-        [mvs_from_me[i][0], mv_stacks[i][0].comp_mv]
-      }
-      PredictionMode::GLOBALMV | PredictionMode::GLOBAL_GLOBALMV => {
-        [MotionVector::default(); 2]
-      }
-      _ => {
-        unimplemented!();
-      }
-    };
-    let mode_set_chroma = ArrayVec::from([luma_mode]);
-
-    luma_chroma_mode_rdo(
-      luma_mode,
-      fi,
-      bsize,
-      tile_bo,
       ts,
       cw,
-      rdo_type,
+      bsize,
+      tile_bo,
+      pmvs,
+      inter_cfg,
       &cw_checkpoint,
-      &mut best,
-      mvs,
-      ref_frames_set[i],
-      &mode_set_chroma,
-      false,
-      mode_contexts[i],
-      &mv_stacks[i],
-    );
-  });
+      rdo_type,
+    )
+  } else {
+    PartitionParameters::default()
+  };
+
+  let is_chroma_block = has_chroma(tile_bo, bsize, xdec, ydec);
 
   if !best.skip {
-    let num_modes_rdo: usize;
-    let mut modes = ArrayVec::<[_; INTRA_MODES]>::new();
-
-    // If tx partition (i.e. fi.tx_mode_select) is enabled, don't use below intra prediction screening
-    if !fi.tx_mode_select {
-      let tx_size = bsize.tx_size();
-
-      // Reduce number of prediction modes at higher speed levels
-      num_modes_rdo = if (fi.frame_type == FrameType::KEY
-        && fi.config.speed_settings.prediction_modes
-          >= PredictionModesSetting::ComplexKeyframes)
-        || (fi.frame_type == FrameType::INTER
-          && fi.config.speed_settings.prediction_modes
-            >= PredictionModesSetting::ComplexAll)
-      {
-        7
-      } else {
-        3
-      };
-
-      let intra_mode_set = RAV1E_INTRA_MODES;
-      let mut satds = {
-        // FIXME: If tx partition is used, this whole sads block should be fixed
-        debug_assert!(bsize == tx_size.block_size());
-        let edge_buf = {
-          let rec = &ts.rec.planes[0].as_const();
-          let po = tile_bo.plane_offset(&rec.plane_cfg);
-          // FIXME: If tx partition is used, get_intra_edges() should be called for each tx block
-          get_intra_edges(
-            rec,
-            tile_bo,
-            0,
-            0,
-            bsize,
-            po,
-            tx_size,
-            fi.sequence.bit_depth,
-            None,
-          )
-        };
-        intra_mode_set
-          .iter()
-          .map(|&luma_mode| {
-            let tile_rect = ts.tile_rect();
-            let rec = &mut ts.rec.planes[0];
-            let mut rec_region =
-              rec.subregion_mut(Area::BlockStartingAt { bo: tile_bo.0 });
-            // FIXME: If tx partition is used, luma_mode.predict_intra() should be called for each tx block
-            luma_mode.predict_intra(
-              tile_rect,
-              &mut rec_region,
-              tx_size,
-              fi.sequence.bit_depth,
-              &[0i16; 2],
-              0,
-              &edge_buf,
-              fi.cpu_feature_level,
-            );
-
-            let plane_org = ts.input_tile.planes[0]
-              .subregion(Area::BlockStartingAt { bo: tile_bo.0 });
-            let plane_ref = rec_region.as_const();
-
-            (
-              luma_mode,
-              get_satd(
-                &plane_org,
-                &plane_ref,
-                tx_size.block_size(),
-                fi.sequence.bit_depth,
-                fi.cpu_feature_level,
-              ),
-            )
-          })
-          .collect::<Vec<_>>()
-      };
-
-      satds.sort_by_key(|a| a.1);
-
-      // Find mode with lowest rate cost
-      let mut z = 32768;
-      let probs_all = if fi.frame_type == FrameType::INTER {
-        cw.get_cdf_intra_mode(bsize)
-      } else {
-        cw.get_cdf_intra_mode_kf(tile_bo)
-      }
-      .iter()
-      .take(INTRA_MODES)
-      .map(|&a| {
-        let d = z - a;
-        z = a;
-        d
-      })
-      .collect::<Vec<_>>();
-
-      let mut probs = intra_mode_set
-        .iter()
-        .map(|&a| (a, probs_all[a as usize]))
-        .collect::<Vec<_>>();
-      probs.sort_by_key(|a| !a.1);
-
-      probs
-        .iter()
-        .take(num_modes_rdo / 2)
-        .for_each(|&(luma_mode, _prob)| modes.push(luma_mode));
-      satds.iter().take(num_modes_rdo).for_each(|&(luma_mode, _stad)| {
-        if !modes.contains(&luma_mode) {
-          modes.push(luma_mode)
-        }
-      });
-    } else {
-      modes.extend(RAV1E_INTRA_MODES.iter().copied());
-      num_modes_rdo = modes.len();
-      debug_assert!(num_modes_rdo == RAV1E_INTRA_MODES.len());
-    }
-
-    debug_assert!(num_modes_rdo >= 1);
-
-    modes.iter().take(num_modes_rdo).for_each(|&luma_mode| {
-      let mvs = [MotionVector::default(); 2];
-      let ref_frames = [INTRA_FRAME, NONE_FRAME];
-      let mut mode_set_chroma = vec![luma_mode];
-      //let mut mode_set_chroma = vec![PredictionMode::DC_PRED];
-      if is_chroma_block && luma_mode != PredictionMode::DC_PRED {
-        mode_set_chroma.push(PredictionMode::DC_PRED);
-      }
-      luma_chroma_mode_rdo(
-        luma_mode,
-        fi,
-        bsize,
-        tile_bo,
-        ts,
-        cw,
-        rdo_type,
-        &cw_checkpoint,
-        &mut best,
-        mvs,
-        ref_frames,
-        &mode_set_chroma,
-        true,
-        0,
-        &ArrayVec::<[CandidateMV; 9]>::new(),
-      );
-    });
+    best = intra_frame_rdo_mode_decision(
+      fi,
+      ts,
+      cw,
+      bsize,
+      tile_bo,
+      &cw_checkpoint,
+      rdo_type,
+      best,
+      is_chroma_block,
+    );
   }
 
   if best.pred_mode_luma.is_intra() && is_chroma_block && bsize.cfl_allowed() {
@@ -1256,6 +936,363 @@ pub fn rdo_mode_decision<T: Pixel>(
     tx_type: best.tx_type,
     sidx: best.sidx,
   }
+}
+
+fn inter_frame_rdo_mode_decision<T: Pixel>(
+  fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
+  cw: &mut ContextWriter, bsize: BlockSize, tile_bo: TileBlockOffset,
+  pmvs: &mut [Option<MotionVector>], inter_cfg: &InterConfig,
+  cw_checkpoint: &ContextWriterCheckpoint, rdo_type: RDOType,
+) -> PartitionParameters {
+  let mut best = PartitionParameters::default();
+
+  // we can never have more than 7 reference frame sets
+  let mut ref_frames_set = ArrayVec::<[_; 7]>::new();
+  // again, max of 7 ref slots
+  let mut ref_slot_set = ArrayVec::<[_; 7]>::new();
+  // our implementation never returns more than 3 at the moment
+  let mut mvs_from_me = ArrayVec::<[_; 3]>::new();
+  let mut fwdref = None;
+  let mut bwdref = None;
+
+  for i in inter_cfg.allowed_ref_frames().iter().copied() {
+    // Don't search LAST3 since it's used only for probs
+    if i == LAST3_FRAME {
+      continue;
+    }
+
+    if !ref_slot_set.contains(&fi.ref_frames[i.to_index()]) {
+      if fwdref == None && i.is_fwd_ref() {
+        fwdref = Some(ref_frames_set.len());
+      }
+      if bwdref == None && i.is_bwd_ref() {
+        bwdref = Some(ref_frames_set.len());
+      }
+      ref_frames_set.push([i, NONE_FRAME]);
+      let slot_idx = fi.ref_frames[i.to_index()];
+      ref_slot_set.push(slot_idx);
+    }
+  }
+  assert!(!ref_frames_set.is_empty());
+
+  let mut inter_mode_set = ArrayVec::<[(PredictionMode, usize); 20]>::new();
+  let mut mv_stacks = ArrayVec::<[_; 20]>::new();
+  let mut mode_contexts = ArrayVec::<[_; 7]>::new();
+
+  let motion_estimation = if fi.config.speed_settings.diamond_me {
+    crate::me::DiamondSearch::motion_estimation
+  } else {
+    crate::me::FullSearch::motion_estimation
+  };
+
+  for (i, &ref_frames) in ref_frames_set.iter().enumerate() {
+    let mut mv_stack = ArrayVec::<[CandidateMV; 9]>::new();
+    mode_contexts.push(cw.find_mvrefs(
+      tile_bo,
+      ref_frames,
+      &mut mv_stack,
+      bsize,
+      fi,
+      false,
+    ));
+
+    let mut pmv = [MotionVector::default(); 2];
+    if !mv_stack.is_empty() {
+      pmv[0] = mv_stack[0].this_mv;
+    }
+    if mv_stack.len() > 1 {
+      pmv[1] = mv_stack[1].this_mv;
+    }
+    let ref_slot = ref_slot_set[i] as usize;
+    let cmv = pmvs[ref_slot].unwrap_or_else(Default::default);
+
+    let b_me =
+      motion_estimation(fi, ts, bsize, tile_bo, ref_frames[0], cmv, pmv);
+
+    if !fi.config.speed_settings.encode_bottomup
+      && (bsize == BlockSize::BLOCK_32X32 || bsize == BlockSize::BLOCK_64X64)
+    {
+      pmvs[ref_slot] = Some(b_me);
+    };
+
+    mvs_from_me.push([b_me, MotionVector::default()]);
+
+    for &x in RAV1E_INTER_MODES_MINIMAL {
+      inter_mode_set.push((x, i));
+    }
+    if !mv_stack.is_empty() {
+      inter_mode_set.push((PredictionMode::NEAR0MV, i));
+    }
+    if mv_stack.len() >= 2 {
+      inter_mode_set.push((PredictionMode::GLOBALMV, i));
+    }
+    let include_near_mvs = fi.config.speed_settings.include_near_mvs;
+    if include_near_mvs {
+      if mv_stack.len() >= 3 {
+        inter_mode_set.push((PredictionMode::NEAR1MV, i));
+      }
+      if mv_stack.len() >= 4 {
+        inter_mode_set.push((PredictionMode::NEAR2MV, i));
+      }
+    }
+    let same_row_col = |x: &CandidateMV| {
+      x.this_mv.row == mvs_from_me[i][0].row
+        && x.this_mv.col == mvs_from_me[i][0].col
+    };
+    if !mv_stack
+      .iter()
+      .take(if include_near_mvs { 4 } else { 2 })
+      .any(same_row_col)
+      && (mvs_from_me[i][0].row != 0 || mvs_from_me[i][0].col != 0)
+    {
+      inter_mode_set.push((PredictionMode::NEWMV, i));
+    }
+
+    mv_stacks.push(mv_stack);
+  }
+
+  let sz = bsize.width_mi().min(bsize.height_mi());
+
+  if fi.reference_mode != ReferenceMode::SINGLE && sz >= 2 {
+    // Adding compound candidate
+    if let Some(r0) = fwdref {
+      if let Some(r1) = bwdref {
+        let ref_frames = [ref_frames_set[r0][0], ref_frames_set[r1][0]];
+        ref_frames_set.push(ref_frames);
+        let mv0 = mvs_from_me[r0][0];
+        let mv1 = mvs_from_me[r1][0];
+        mvs_from_me.push([mv0, mv1]);
+        let mut mv_stack = ArrayVec::<[CandidateMV; 9]>::new();
+        mode_contexts.push(cw.find_mvrefs(
+          tile_bo,
+          ref_frames,
+          &mut mv_stack,
+          bsize,
+          fi,
+          true,
+        ));
+        for &x in RAV1E_INTER_COMPOUND_MODES {
+          inter_mode_set.push((x, ref_frames_set.len() - 1));
+        }
+        mv_stacks.push(mv_stack);
+      }
+    }
+  }
+
+  inter_mode_set.iter().for_each(|&(luma_mode, i)| {
+    let mvs = match luma_mode {
+      PredictionMode::NEWMV | PredictionMode::NEW_NEWMV => mvs_from_me[i],
+      PredictionMode::NEARESTMV | PredictionMode::NEAREST_NEARESTMV => {
+        if !mv_stacks[i].is_empty() {
+          [mv_stacks[i][0].this_mv, mv_stacks[i][0].comp_mv]
+        } else {
+          [MotionVector::default(); 2]
+        }
+      }
+      PredictionMode::NEAR0MV | PredictionMode::NEAR_NEARMV => {
+        if mv_stacks[i].len() > 1 {
+          [mv_stacks[i][1].this_mv, mv_stacks[i][1].comp_mv]
+        } else {
+          [MotionVector::default(); 2]
+        }
+      }
+      PredictionMode::NEAR1MV | PredictionMode::NEAR2MV => [
+        mv_stacks[i]
+          [luma_mode as usize - PredictionMode::NEAR0MV as usize + 1]
+          .this_mv,
+        mv_stacks[i]
+          [luma_mode as usize - PredictionMode::NEAR0MV as usize + 1]
+          .comp_mv,
+      ],
+      PredictionMode::NEAREST_NEWMV => {
+        [mv_stacks[i][0].this_mv, mvs_from_me[i][1]]
+      }
+      PredictionMode::NEW_NEARESTMV => {
+        [mvs_from_me[i][0], mv_stacks[i][0].comp_mv]
+      }
+      PredictionMode::GLOBALMV | PredictionMode::GLOBAL_GLOBALMV => {
+        [MotionVector::default(); 2]
+      }
+      _ => {
+        unimplemented!();
+      }
+    };
+    let mode_set_chroma = ArrayVec::from([luma_mode]);
+
+    luma_chroma_mode_rdo(
+      luma_mode,
+      fi,
+      bsize,
+      tile_bo,
+      ts,
+      cw,
+      rdo_type,
+      &cw_checkpoint,
+      &mut best,
+      mvs,
+      ref_frames_set[i],
+      &mode_set_chroma,
+      false,
+      mode_contexts[i],
+      &mv_stacks[i],
+    );
+  });
+
+  best
+}
+
+fn intra_frame_rdo_mode_decision<T: Pixel>(
+  fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
+  cw: &mut ContextWriter, bsize: BlockSize, tile_bo: TileBlockOffset,
+  cw_checkpoint: &ContextWriterCheckpoint, rdo_type: RDOType,
+  mut best: PartitionParameters, is_chroma_block: bool,
+) -> PartitionParameters {
+  let num_modes_rdo: usize;
+  let mut modes = ArrayVec::<[_; INTRA_MODES]>::new();
+
+  // If tx partition (i.e. fi.tx_mode_select) is enabled, don't use below intra prediction screening
+  if !fi.tx_mode_select {
+    let tx_size = bsize.tx_size();
+
+    // Reduce number of prediction modes at higher speed levels
+    num_modes_rdo = if (fi.frame_type == FrameType::KEY
+      && fi.config.speed_settings.prediction_modes
+        >= PredictionModesSetting::ComplexKeyframes)
+      || (fi.frame_type == FrameType::INTER
+        && fi.config.speed_settings.prediction_modes
+          >= PredictionModesSetting::ComplexAll)
+    {
+      7
+    } else {
+      3
+    };
+
+    let intra_mode_set = RAV1E_INTRA_MODES;
+    let mut satds = {
+      // FIXME: If tx partition is used, this whole sads block should be fixed
+      debug_assert!(bsize == tx_size.block_size());
+      let edge_buf = {
+        let rec = &ts.rec.planes[0].as_const();
+        let po = tile_bo.plane_offset(&rec.plane_cfg);
+        // FIXME: If tx partition is used, get_intra_edges() should be called for each tx block
+        get_intra_edges(
+          rec,
+          tile_bo,
+          0,
+          0,
+          bsize,
+          po,
+          tx_size,
+          fi.sequence.bit_depth,
+          None,
+        )
+      };
+      intra_mode_set
+        .iter()
+        .map(|&luma_mode| {
+          let tile_rect = ts.tile_rect();
+          let rec = &mut ts.rec.planes[0];
+          let mut rec_region =
+            rec.subregion_mut(Area::BlockStartingAt { bo: tile_bo.0 });
+          // FIXME: If tx partition is used, luma_mode.predict_intra() should be called for each tx block
+          luma_mode.predict_intra(
+            tile_rect,
+            &mut rec_region,
+            tx_size,
+            fi.sequence.bit_depth,
+            &[0i16; 2],
+            0,
+            &edge_buf,
+            fi.cpu_feature_level,
+          );
+
+          let plane_org = ts.input_tile.planes[0]
+            .subregion(Area::BlockStartingAt { bo: tile_bo.0 });
+          let plane_ref = rec_region.as_const();
+
+          (
+            luma_mode,
+            get_satd(
+              &plane_org,
+              &plane_ref,
+              tx_size.block_size(),
+              fi.sequence.bit_depth,
+              fi.cpu_feature_level,
+            ),
+          )
+        })
+        .collect::<Vec<_>>()
+    };
+
+    satds.sort_by_key(|a| a.1);
+
+    // Find mode with lowest rate cost
+    let mut z = 32768;
+    let probs_all = if fi.frame_type == FrameType::INTER {
+      cw.get_cdf_intra_mode(bsize)
+    } else {
+      cw.get_cdf_intra_mode_kf(tile_bo)
+    }
+    .iter()
+    .take(INTRA_MODES)
+    .map(|&a| {
+      let d = z - a;
+      z = a;
+      d
+    })
+    .collect::<Vec<_>>();
+
+    let mut probs = intra_mode_set
+      .iter()
+      .map(|&a| (a, probs_all[a as usize]))
+      .collect::<Vec<_>>();
+    probs.sort_by_key(|a| !a.1);
+
+    probs
+      .iter()
+      .take(num_modes_rdo / 2)
+      .for_each(|&(luma_mode, _prob)| modes.push(luma_mode));
+    satds.iter().take(num_modes_rdo).for_each(|&(luma_mode, _stad)| {
+      if !modes.contains(&luma_mode) {
+        modes.push(luma_mode)
+      }
+    });
+  } else {
+    modes.extend(RAV1E_INTRA_MODES.iter().copied());
+    num_modes_rdo = modes.len();
+    debug_assert!(num_modes_rdo == RAV1E_INTRA_MODES.len());
+  }
+
+  debug_assert!(num_modes_rdo >= 1);
+
+  modes.iter().take(num_modes_rdo).for_each(|&luma_mode| {
+    let mvs = [MotionVector::default(); 2];
+    let ref_frames = [INTRA_FRAME, NONE_FRAME];
+    let mut mode_set_chroma = vec![luma_mode];
+    //let mut mode_set_chroma = vec![PredictionMode::DC_PRED];
+    if is_chroma_block && luma_mode != PredictionMode::DC_PRED {
+      mode_set_chroma.push(PredictionMode::DC_PRED);
+    }
+    luma_chroma_mode_rdo(
+      luma_mode,
+      fi,
+      bsize,
+      tile_bo,
+      ts,
+      cw,
+      rdo_type,
+      &cw_checkpoint,
+      &mut best,
+      mvs,
+      ref_frames,
+      &mode_set_chroma,
+      true,
+      0,
+      &ArrayVec::<[CandidateMV; 9]>::new(),
+    );
+  });
+
+  best
 }
 
 pub fn rdo_cfl_alpha<T: Pixel>(
