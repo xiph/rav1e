@@ -259,7 +259,6 @@ mod small_dimension {
 
 mod tiny_dimension {
   test_dimensions! {
-    (8, 8),
     (16, 16),
     (32, 32),
     (64, 64),

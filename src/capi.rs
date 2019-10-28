@@ -414,6 +414,19 @@ fn check_tile_log2(n: Result<usize, ()>) -> Result<usize, ()> {
   }
 }
 
+fn check_frame_size(n: Result<usize, ()>) -> Result<usize, ()> {
+  match n {
+    Ok(n) => {
+      if n >= 16 && n < u16::max_value().into() {
+        Ok(n)
+      } else {
+        Err(())
+      }
+    }
+    Err(e) => Err(e),
+  }
+}
+
 unsafe fn option_match(
   cfg: *mut Config, key: *const c_char, value: *const c_char,
 ) -> Result<(), ()> {
@@ -422,8 +435,8 @@ unsafe fn option_match(
   let enc = &mut (*cfg).cfg.enc;
 
   match key {
-    "width" => enc.width = value.parse().map_err(|_| ())?,
-    "height" => enc.height = value.parse().map_err(|_| ())?,
+    "width" => enc.width = check_frame_size(value.parse().map_err(|_| ()))?,
+    "height" => enc.height = check_frame_size(value.parse().map_err(|_| ()))?,
     "speed" => {
       enc.speed_settings =
         rav1e::SpeedSettings::from_preset(value.parse().map_err(|_| ())?)
