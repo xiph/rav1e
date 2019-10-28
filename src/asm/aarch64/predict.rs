@@ -68,12 +68,21 @@ decl_cfl_pred_fn! {
 pub fn dispatch_predict_intra<T: Pixel>(
   mode: PredictionMode, variant: PredictionVariant,
   dst: &mut PlaneRegionMut<'_, T>, tx_size: TxSize, bit_depth: usize,
-  ac: &[i16], angle: isize, edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>,
-  cpu: CpuFeatureLevel,
+  ac: &[i16], angle: isize, enable_edge_filter: bool,
+  edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>, cpu: CpuFeatureLevel,
 ) {
   let call_native = |dst: &mut PlaneRegionMut<'_, T>| {
     native::dispatch_predict_intra(
-      mode, variant, dst, tx_size, bit_depth, ac, angle, edge_buf, cpu,
+      mode,
+      variant,
+      dst,
+      tx_size,
+      bit_depth,
+      ac,
+      angle,
+      enable_edge_filter,
+      edge_buf,
+      cpu,
     );
   };
 

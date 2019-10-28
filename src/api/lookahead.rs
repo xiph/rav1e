@@ -85,8 +85,9 @@ pub(crate) fn estimate_intra_costs<T: Pixel>(
         &mut plane_after_prediction_region,
         tx_size,
         bit_depth,
-        &[], // Not used by DC_PRED.
+        &[], // Not used by DC_PRED
         IntraParam::None,
+        false, // Not used by DC_PRED
         &edge_buf,
         cpu_feature_level,
       );

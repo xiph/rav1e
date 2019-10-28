@@ -40,7 +40,6 @@ use crate::write_tx_tree;
 use crate::Tune;
 use crate::{encode_block_post_cdef, encode_block_pre_cdef};
 
-use crate::cpu_features::CpuFeatureLevel;
 use crate::partition::PartitionType::*;
 use arrayvec::*;
 use itertools::izip;
@@ -816,13 +815,7 @@ pub fn rdo_mode_decision<T: Pixel>(
       true,
     );
     cw.rollback(&cw_checkpoint);
-    if let Some(cfl) = rdo_cfl_alpha(
-      ts,
-      tile_bo,
-      bsize,
-      fi.sequence.bit_depth,
-      fi.cpu_feature_level,
-    ) {
+    if let Some(cfl) = rdo_cfl_alpha(ts, tile_bo, bsize, fi) {
       let wr: &mut dyn Writer = &mut WriterCounter::new();
       let tell = wr.tell_frac();
 
@@ -1166,6 +1159,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
             fi.sequence.bit_depth,
             &[0i16; 2],
             IntraParam::None,
+            fi.sequence.enable_intra_edge_filter,
             &edge_buf,
             fi.cpu_feature_level,
           );
@@ -1310,7 +1304,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
 
 pub fn rdo_cfl_alpha<T: Pixel>(
   ts: &mut TileStateMut<'_, T>, tile_bo: TileBlockOffset, bsize: BlockSize,
-  bit_depth: usize, cpu: CpuFeatureLevel,
+  fi: &FrameInvariants<T>,
 ) -> Option<CFLParams> {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let uv_tx_size = bsize.largest_chroma_tx_size(xdec, ydec);
@@ -1333,7 +1327,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
         bsize,
         po,
         uv_tx_size,
-        bit_depth,
+        fi.sequence.bit_depth,
         Some(PredictionMode::UV_CFL_PRED),
       );
       let mut alpha_cost = |alpha: i16| -> u64 {
@@ -1343,11 +1337,12 @@ pub fn rdo_cfl_alpha<T: Pixel>(
           tile_rect,
           &mut rec_region,
           uv_tx_size,
-          bit_depth,
+          fi.sequence.bit_depth,
           &ac.array,
           IntraParam::Alpha(alpha),
+          fi.sequence.enable_intra_edge_filter,
           &edge_buf,
-          cpu,
+          fi.cpu_feature_level,
         );
         sse_wxh(
           &input.subregion(Area::BlockStartingAt { bo: tile_bo.0 }),
