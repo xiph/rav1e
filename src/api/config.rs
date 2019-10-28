@@ -465,10 +465,10 @@ impl fmt::Display for PredictionModesSetting {
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Error)]
 pub enum InvalidConfig {
   /// The width is invalid.
-  #[error(display = "invalid width {} (expected > 0, <= 32767)", _0)]
+  #[error(display = "invalid width {} (expected >= 16, <= 32767)", _0)]
   InvalidWidth(usize),
   /// The height is invalid.
-  #[error(display = "invalid height {} (expected > 0, <= 32767)", _0)]
+  #[error(display = "invalid height {} (expected >= 16, <= 32767)", _0)]
   InvalidHeight(usize),
   /// RDO lookahead frame count is invalid.
   #[error(
@@ -621,10 +621,10 @@ impl Config {
 
     let config = &self.enc;
 
-    if config.width == 0 || config.width > u16::max_value() as usize {
+    if config.width < 16 || config.width > u16::max_value() as usize {
       return Err(InvalidWidth(config.width));
     }
-    if config.height == 0 || config.height > u16::max_value() as usize {
+    if config.height < 16 || config.height > u16::max_value() as usize {
       return Err(InvalidHeight(config.height));
     }
 

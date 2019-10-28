@@ -1609,8 +1609,8 @@ fn rdo_lookahead_frames_overflow() {
 fn log_q_exp_overflow() {
   let config = Config {
     enc: EncoderConfig {
-      width: 1,
-      height: 1,
+      width: 16,
+      height: 16,
       bit_depth: 8,
       chroma_sampling: ChromaSampling::Cs420,
       chroma_sample_position: ChromaSamplePosition::Unknown,
@@ -1671,8 +1671,8 @@ fn log_q_exp_overflow() {
 fn guess_frame_subtypes_assert() {
   let config = Config {
     enc: EncoderConfig {
-      width: 1,
-      height: 1,
+      width: 16,
+      height: 16,
       bit_depth: 8,
       chroma_sampling: ChromaSampling::Cs420,
       chroma_sample_position: ChromaSamplePosition::Unknown,
