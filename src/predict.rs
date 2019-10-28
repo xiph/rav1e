@@ -21,7 +21,7 @@ cfg_if::cfg_if! {
   }
 }
 
-use crate::context::{INTRA_MODES, MAX_TX_SIZE};
+use crate::context::MAX_TX_SIZE;
 use crate::cpu_features::CpuFeatureLevel;
 use crate::encoder::FrameInvariants;
 use crate::frame::*;
@@ -30,6 +30,9 @@ use crate::partition::*;
 use crate::tiling::*;
 use crate::transform::*;
 use crate::util::*;
+use std::convert::TryInto;
+
+const ANGLE_STEP: i8 = 3;
 
 // TODO: Review the order of this list.
 // The order impacts compression efficiency.
@@ -148,6 +151,7 @@ impl PredictionMode {
   pub fn predict_intra<T: Pixel>(
     self, tile_rect: TileRect, dst: &mut PlaneRegionMut<'_, T>,
     tx_size: TxSize, bit_depth: usize, ac: &[i16], intra_param: IntraParam,
+    enable_edge_filter: bool,
     edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>, cpu: CpuFeatureLevel,
   ) {
     assert!(self.is_intra());
@@ -185,7 +189,16 @@ impl PredictionMode {
     };
 
     dispatch_predict_intra::<T>(
-      mode, variant, dst, tx_size, bit_depth, ac, angle, edge_buf, cpu,
+      mode,
+      variant,
+      dst,
+      tx_size,
+      bit_depth,
+      ac,
+      angle,
+      enable_edge_filter,
+      edge_buf,
+      cpu,
     );
   }
 
@@ -407,36 +420,6 @@ static sm_weight_arrays: [u8; 2 * MAX_TX_SIZE] = [
     13, 12, 10, 9, 8, 7, 6, 6, 5, 5, 4, 4, 4,
 ];
 
-const NEED_LEFT: u8 = 1 << 1;
-const NEED_ABOVE: u8 = 1 << 2;
-const NEED_ABOVERIGHT: u8 = 1 << 3;
-const NEED_ABOVELEFT: u8 = 1 << 4;
-#[allow(unused)]
-const NEED_BOTTOMLEFT: u8 = 1 << 5;
-
-/*const INTRA_EDGE_FILT: usize = 3;
-const INTRA_EDGE_TAPS: usize = 5;
-const MAX_UPSAMPLE_SZ: usize = 16;*/
-
-const ANGLE_STEP: i8 = 3;
-
-#[allow(unused)]
-pub static extend_modes: [u8; INTRA_MODES] = [
-  NEED_ABOVE | NEED_LEFT,                  // DC
-  NEED_ABOVE,                              // V
-  NEED_LEFT,                               // H
-  NEED_ABOVE | NEED_ABOVERIGHT,            // D45
-  NEED_LEFT | NEED_ABOVE | NEED_ABOVELEFT, // D135
-  NEED_LEFT | NEED_ABOVE | NEED_ABOVELEFT, // D113
-  NEED_LEFT | NEED_ABOVE | NEED_ABOVELEFT, // D157
-  NEED_LEFT | NEED_BOTTOMLEFT,             // D203
-  NEED_ABOVE | NEED_ABOVERIGHT,            // D67
-  NEED_LEFT | NEED_ABOVE,                  // SMOOTH
-  NEED_LEFT | NEED_ABOVE,                  // SMOOTH_V
-  NEED_LEFT | NEED_ABOVE,                  // SMOOTH_H
-  NEED_LEFT | NEED_ABOVE | NEED_ABOVELEFT, // PAETH
-];
-
 #[inline(always)]
 fn get_scaled_luma_q0(alpha_q3: i16, ac_pred_q3: i16) -> i32 {
   let scaled_luma_q6 = (alpha_q3 as i32) * (ac_pred_q3 as i32);
@@ -463,13 +446,13 @@ pub(crate) mod native {
   pub fn dispatch_predict_intra<T: Pixel>(
     mode: PredictionMode, variant: PredictionVariant,
     dst: &mut PlaneRegionMut<'_, T>, tx_size: TxSize, bit_depth: usize,
-    ac: &[i16], angle: isize,
+    ac: &[i16], angle: isize, enable_edge_filter: bool,
     edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>, _cpu: CpuFeatureLevel,
   ) {
     let width = tx_size.width();
     let height = tx_size.height();
 
-    // left pixels are order from bottom to top and right-aligned
+    // left pixels are ordered from bottom to top and right-aligned
     let (left, not_left) = edge_buf.array.split_at(2 * MAX_TX_SIZE);
     let (top_left, above) = not_left.split_at(1);
 
@@ -508,6 +491,7 @@ pub(crate) mod native {
         width,
         height,
         bit_depth,
+        enable_edge_filter,
       ),
       PredictionMode::SMOOTH_PRED => {
         pred_smooth(dst, above_slice, left_slice, width, height)
@@ -841,17 +825,242 @@ pub(crate) mod native {
   pub(crate) fn pred_directional<T: Pixel>(
     output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
     top_left: &[T], p_angle: usize, width: usize, height: usize,
-    bit_depth: usize,
+    bit_depth: usize, enable_edge_filter: bool,
   ) {
+    fn select_ief_strength(
+      width: usize, height: usize, smooth_filter: bool, angle_delta: isize,
+    ) -> u8 {
+      let block_wh = width + height;
+      let abs_delta = angle_delta.abs() as usize;
+
+      if smooth_filter {
+        if block_wh <= 8 {
+          if abs_delta >= 64 {
+            return 2;
+          }
+          if abs_delta >= 40 {
+            return 1;
+          }
+        } else if block_wh <= 16 {
+          if abs_delta >= 48 {
+            return 2;
+          }
+          if abs_delta >= 20 {
+            return 1;
+          }
+        } else if block_wh <= 24 {
+          if abs_delta >= 4 {
+            return 3;
+          }
+        } else {
+          return 3;
+        }
+      } else {
+        if block_wh <= 8 {
+          if abs_delta >= 56 {
+            return 1;
+          }
+        } else if block_wh <= 16 {
+          if abs_delta >= 40 {
+            return 1;
+          }
+        } else if block_wh <= 24 {
+          if abs_delta >= 32 {
+            return 3;
+          }
+          if abs_delta >= 16 {
+            return 2;
+          }
+          if abs_delta >= 8 {
+            return 1;
+          }
+        } else if block_wh <= 32 {
+          if abs_delta >= 32 {
+            return 3;
+          }
+          if abs_delta >= 4 {
+            return 2;
+          }
+          return 1;
+        } else {
+          return 3;
+        }
+      }
+
+      return 0;
+    }
+
+    fn select_ief_upsample(
+      width: usize, height: usize, smooth_filter: bool, angle_delta: isize,
+    ) -> bool {
+      let block_wh = width + height;
+      let abs_delta = angle_delta.abs() as usize;
+
+      if abs_delta == 0 || abs_delta >= 40 {
+        false
+      } else if smooth_filter {
+        block_wh <= 8
+      } else {
+        block_wh <= 16
+      }
+    }
+
+    fn filter_edge<T: Pixel>(size: usize, strength: u8, edge: &mut [T]) {
+      const INTRA_EDGE_KERNEL: [[u32; 5]; 3] =
+        [[0, 4, 8, 4, 0], [0, 5, 6, 5, 0], [2, 4, 4, 4, 2]];
+
+      if strength == 0 {
+        return;
+      }
+
+      let mut edge_filtered = vec![T::cast_from(0); edge.len()];
+      edge_filtered.copy_from_slice(&edge[..edge.len()]);
+
+      for i in 1..size {
+        let mut s = 0;
+
+        for j in 0..INTRA_EDGE_KERNEL[0].len() {
+          let k = (i + j).saturating_sub(2).min(size - 1);
+          s += INTRA_EDGE_KERNEL[(strength - 1) as usize][j]
+            * edge[k].to_u32().unwrap();
+        }
+
+        edge_filtered[i] = T::cast_from((s + 8) >> 4);
+      }
+      edge.copy_from_slice(&edge_filtered[..]);
+    }
+
+    fn upsample_edge<T: Pixel>(size: usize, edge: &mut [T], bit_depth: usize) {
+      let mut dup = Vec::with_capacity(size + 3);
+      dup.push(edge[0]); // top left pixel
+      for i in 0..size + 1 {
+        dup.push(edge[i]); // [i + 1]
+      }
+      dup.push(edge[size]); // [size + 2]
+
+      // Past here the edge is being filtered, and
+      // its effective range is shifted from -1..size-1
+      // to -2..size-2, affecting future offsets.
+      // It would be less confusing if we could actually
+      // use negative offsets in our slices, but this is Rust.
+      edge[0] = dup[0];
+
+      for i in 0..size {
+        let mut s = dup[i].to_i32().unwrap() * -1
+          + (9 * dup[i + 1].to_i32().unwrap())
+          + (9 * dup[i + 2].to_i32().unwrap())
+          - dup[i + 3].to_i32().unwrap();
+        s = ((((s + 8) as f32 / 16.0).floor()) as i32)
+          .max(0)
+          .min(2i32.pow(bit_depth.try_into().unwrap()) - 1);
+
+        edge[2 * i + 1] = T::cast_from(s);
+        edge[2 * i + 2] = dup[i + 2];
+      }
+    }
+
     let sample_max = ((1 << bit_depth) - 1) as i32;
 
-    let upsample_above = 0;
-    let upsample_left = 0;
+    let smooth_filter = false;
 
-    let enable_intra_edge_filter = false; // FIXME
+    let max_x = output.plane_cfg.width as isize - 1;
+    let max_y = output.plane_cfg.height as isize - 1;
 
-    if enable_intra_edge_filter {
-      // TODO
+    let mut upsample_above = 0;
+    let mut upsample_left = 0;
+
+    let mut above_edge: &[T] = above;
+    let mut left_edge: &[T] = left;
+    let mut top_left_edge: T = top_left[0];
+
+    // Initialize above and left edge buffers of the largest possible needed size if upsampled
+    // The first value is the top left pixel, also mutable and indexed at -1 in the spec
+    let mut above_filtered: Vec<T> = vec![T::cast_from(0); width * 4 + 1];
+    let mut left_filtered: Vec<T> = vec![T::cast_from(0); height * 4 + 1];
+
+    let left_clone: &mut [T] = &mut left.clone().to_owned();
+    left_clone.as_mut().reverse();
+
+    if enable_edge_filter {
+      above_filtered[1..above.len() + 1].clone_from_slice(above);
+      left_filtered[1..left.len() + 1].clone_from_slice(left_clone);
+
+      if p_angle != 90 && p_angle != 180 {
+        let top_left_px =
+          if p_angle > 90 && p_angle < 180 && width + height >= 24 {
+            let (l, a, tl): (u32, u32, u32) =
+              (left_clone[0].into(), above[0].into(), top_left[0].into());
+            let s = l * 5 + tl * 6 + a * 5;
+            T::cast_from((s + (1 << 3)) >> 4)
+          } else {
+            top_left[0]
+          };
+
+        above_filtered[0] = top_left_px;
+        left_filtered[0] = top_left_px;
+        top_left_edge = top_left_px;
+
+        let num_px = (
+          width.min((max_x - output.rect().x + 1).try_into().unwrap())
+            + if p_angle < 90 { height } else { 0 }
+            + 1, // above
+          height.min((max_y - output.rect().y + 1).try_into().unwrap())
+            + if p_angle > 180 { width } else { 0 }
+            + 1, // left
+        );
+
+        // TODO let smooth_filter = true in this scope IF the left
+        // or above blocks are coded with a smooth prediction mode
+
+        if output.rect().y > 0 {
+          let filter_strength = select_ief_strength(
+            width,
+            height,
+            smooth_filter,
+            p_angle as isize - 90,
+          );
+          filter_edge(num_px.0, filter_strength, &mut above_filtered[..]);
+        }
+        if output.rect().x > 0 {
+          let filter_strength = select_ief_strength(
+            width,
+            height,
+            smooth_filter,
+            p_angle as isize - 180,
+          );
+          filter_edge(num_px.1, filter_strength, &mut left_filtered[..]);
+        }
+      }
+
+      let num_px = (
+        width + if p_angle < 90 { height } else { 0 }, // above
+        height + if p_angle > 180 { width } else { 0 }, // left
+      );
+
+      upsample_above = select_ief_upsample(
+        width,
+        height,
+        smooth_filter,
+        p_angle as isize - 90,
+      )
+      .into();
+      if upsample_above == 1 {
+        upsample_edge(num_px.0, &mut above_filtered[..], bit_depth);
+      }
+      upsample_left = select_ief_upsample(
+        width,
+        height,
+        smooth_filter,
+        p_angle as isize - 180,
+      )
+      .into();
+      if upsample_left == 1 {
+        upsample_edge(num_px.1, &mut left_filtered[..], bit_depth);
+      }
+
+      left_filtered.reverse();
+      above_edge = &above_filtered[..];
+      left_edge = &left_filtered[..];
     }
 
     fn dr_intra_derivative(p_angle: usize) -> usize {
@@ -903,6 +1112,11 @@ pub(crate) mod native {
       0 // undefined
     };
 
+    // edge buffer index offsets applied due to the fact
+    // that we cannot safely use negative indices in Rust
+    let offset_above = (enable_edge_filter as usize) << upsample_above;
+    let offset_left = (enable_edge_filter as usize) << upsample_left;
+
     if p_angle < 90 {
       for i in 0..height {
         let row = &mut output[i];
@@ -912,11 +1126,11 @@ pub(crate) mod native {
           let shift = (((idx << upsample_above) >> 1) & 31) as i32;
           let max_base_x = (height + width - 1) << upsample_above;
           let v = if base < max_base_x {
-            let a: i32 = above[base].into();
-            let b: i32 = above[base + 1].into();
+            let a: i32 = above_edge[base + offset_above].into();
+            let b: i32 = above_edge[base + 1 + offset_above].into();
             round_shift(a * (32 - shift) + b * shift, 5)
           } else {
-            let c: i32 = above[max_base_x].into();
+            let c: i32 = above_edge[max_base_x + offset_above].into();
             c
           }
           .max(0)
@@ -932,9 +1146,14 @@ pub(crate) mod native {
           let base = idx >> (6 - upsample_above);
           if base >= -(1 << upsample_above) {
             let shift = (((idx << upsample_above) >> 1) & 31) as i32;
-            let a: i32 =
-              if base < 0 { top_left[0] } else { above[base as usize] }.into();
-            let b: i32 = above[(base + 1) as usize].into();
+            let a: i32 = if !enable_edge_filter && base < 0 {
+              top_left_edge
+            } else {
+              above_edge[(base + offset_above as isize) as usize]
+            }
+            .into();
+            let b: i32 =
+              above_edge[(base + 1 + offset_above as isize) as usize].into();
             let v = round_shift(a * (32 - shift) + b * shift, 5)
               .max(0)
               .min(sample_max);
@@ -943,13 +1162,23 @@ pub(crate) mod native {
             let idx = (i << 6) as isize - ((j + 1) * dy) as isize;
             let base = idx >> (6 - upsample_left);
             let shift = (((idx << upsample_left) >> 1) & 31) as i32;
-            let a: i32 = if base < 0 {
-              top_left[0]
+            let l = left_edge.len() - 1;
+            let a: i32 = if !enable_edge_filter && base < 0 {
+              top_left_edge
             } else {
-              left[width + height - 1 - base as usize]
+              if (base + offset_left as isize) == -2 {
+                left_edge[0]
+              } else {
+                left_edge[l - (base + offset_left as isize) as usize]
+              }
             }
             .into();
-            let b: i32 = left[width + height - (2 + base) as usize].into();
+            let b: i32 = if (base + offset_left as isize) == -2 {
+              left_edge[1]
+            } else {
+              left_edge[l - (base + offset_left as isize + 1) as usize]
+            }
+            .into();
             let v = round_shift(a * (32 - shift) + b * shift, 5)
               .max(0)
               .min(sample_max);
@@ -964,8 +1193,10 @@ pub(crate) mod native {
           let idx = (j + 1) * dy;
           let base = (idx >> (6 - upsample_left)) + (i << upsample_left);
           let shift = (((idx << upsample_left) >> 1) & 31) as i32;
-          let a: i32 = left[(width + height - 1).saturating_sub(base)].into();
-          let b: i32 = left[(width + height - 2).saturating_sub(base)].into();
+          let l = left_edge.len() - 1;
+          let a: i32 = left_edge[l.saturating_sub(base + offset_left)].into();
+          let b: i32 =
+            left_edge[l.saturating_sub(base + offset_left + 1)].into();
           let v = round_shift(a * (32 - shift) + b * shift, 5)
             .max(0)
             .min(sample_max);
@@ -1090,6 +1321,7 @@ mod test {
         4,
         4,
         8,
+        false,
       );
       assert_eq!(&output.data[..], expected);
     }

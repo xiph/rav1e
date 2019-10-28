@@ -533,7 +533,7 @@ pub fn get_intra_edges<T: Pixel>(
   let base = 128u16 << (bit_depth - 8);
 
   {
-    // left pixels are order from bottom to top and right-aligned
+    // left pixels are ordered from bottom to top and right-aligned
     let (left, not_left) = edge_buf.array.split_at_mut(2 * MAX_TX_SIZE);
     let (top_left, above) = not_left.split_at_mut(1);
 
@@ -565,9 +565,12 @@ pub fn get_intra_edges<T: Pixel>(
           || mode == PredictionMode::D67_PRED);
       needs_topleft = mode == PredictionMode::V_PRED
         || mode == PredictionMode::H_PRED
+        || mode == PredictionMode::D45_PRED
         || mode == PredictionMode::D135_PRED
         || mode == PredictionMode::D113_PRED
         || mode == PredictionMode::D157_PRED
+        || mode == PredictionMode::D203_PRED
+        || mode == PredictionMode::D67_PRED
         || mode == PredictionMode::PAETH_PRED;
       needs_top = !dc_or_cfl || y != 0;
       needs_topright = mode == PredictionMode::V_PRED

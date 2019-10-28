@@ -221,6 +221,7 @@ impl Sequence {
       still_picture: config.still_picture,
       reduced_still_picture_hdr: false, // FIXME: config.still_picture,
       enable_filter_intra: false,
+      // FIXME: incompatible with smooth prediction modes
       enable_intra_edge_filter: false,
       enable_interintra_compound: false,
       enable_masked_compound: false,
@@ -1169,6 +1170,7 @@ pub fn encode_tx_block<T: Pixel>(
       bit_depth,
       ac,
       pred_intra_param,
+      fi.sequence.enable_intra_edge_filter,
       &edge_buf,
       fi.cpu_feature_level,
     );
