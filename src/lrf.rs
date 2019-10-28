@@ -187,11 +187,19 @@ pub(crate) mod native {
       // if r = 1, i.e. 3x3, do as before
       //let sum = get_integral_square(iimg, iimg_stride, x, y, d);
       //let ssq = get_integral_square(iimg_sq, iimg_stride, x, y, d);
+      let sum2 = get_integral_square(iimg, iimg_stride, x, y, d);
+      let ssq2 = get_integral_square(iimg_sq, iimg_stride, x, y, d);
 
-      let sum = if r == 1 { get_integral_square(iimg, iimg_stride, x, y, d) }
-                else { integral_image_buffer.sum_5x5[sum_array_offset + x] };
-      let ssq = if r == 1 { get_integral_square(iimg_sq, iimg_stride, x, y, d) }
-                else { integral_image_buffer.sum_sq_5x5[sum_array_offset + x] };
+      if r == 1 {
+        let s2 = integral_image_buffer.sum_3x3[sum_array_offset + x];
+        let sq2 = integral_image_buffer.sum_sq_3x3[sum_array_offset + x];
+        assert!(sum2 == s2);
+        assert!(ssq2 == sq2);
+      }
+      let sum = if r == 2 { get_integral_square(iimg, iimg_stride, x, y, d) }
+                else { integral_image_buffer.sum_3x3[sum_array_offset + x] };
+      let ssq = if r == 2 { get_integral_square(iimg_sq, iimg_stride, x, y, d) }
+                else { integral_image_buffer.sum_sq_3x3[sum_array_offset + x] };
       let (reta, retb) =
         sgrproj_sum_finish(ssq, sum, n as u32, one_over_n, s, bdm8);
       af[x] = reta;
@@ -599,24 +607,26 @@ pub fn setup_integral_image<T: Pixel>(
   }
 
   // Place to do compute sum and sum of square
-  let r = 2;  // do 5x5 first for now
+  //let r = 2;  // do 5x5 first for now
+  let r = 1;  // do 3x3 first for now
   let d: usize = r * 2 + 1;
   // TODO: repeat for the case r = 1, i.e. d = 3
   // and save the results sum and sum of square in different storage
-  let integral_image_offset = if d == 3 { SOLVE_IMAGE_STRIDE + 1 } else { 0 };
+  let integral_image_offset = if d == 3 { integral_image_stride + 1 } else { 0 };
   let iimg = &integral_image_buffer.integral_image[integral_image_offset..];
   let iimg_sq = &integral_image_buffer.sq_integral_image[integral_image_offset..];
 
-  for y in 0..stripe_h {
-  for x in 0..stripe_w + 2 {
-    let sum = get_integral_square(iimg, SOLVE_IMAGE_STRIDE, x, y, d);
-    let ssq = get_integral_square(iimg_sq, SOLVE_IMAGE_STRIDE, x, y, d);
-    // save sum and sum of square in storage
-    //ts.integral_buffer.sum_3x3[y*SOLVE_IMAGE_STRIDE + x + 1] = sum;
-    //ts.integral_buffer.sum_sq_3x3[y*SOLVE_IMAGE_STRIDE + x + 1] = ssq;
-    integral_image_buffer.sum_5x5[y*SOLVE_IMAGE_STRIDE + x + 1] = sum;
-    integral_image_buffer.sum_sq_5x5[y*SOLVE_IMAGE_STRIDE + x + 1] = ssq;
-  }
+  for y in 0..stripe_h + 2 {
+    //if r == 2 && (y & 1) == 1 { continue; }
+    for x in 0..stripe_w + 2 {
+      let sum = get_integral_square(iimg, integral_image_stride, x, y, d);
+      let ssq = get_integral_square(iimg_sq, integral_image_stride, x, y, d);
+      // save sum and sum of square in storage
+      integral_image_buffer.sum_3x3[y * integral_image_stride + x] = sum;
+      integral_image_buffer.sum_sq_3x3[y * integral_image_stride + x] = ssq;
+      //integral_image_buffer.sum_5x5[y * integral_image_stride + x] = sum;
+      //integral_image_buffer.sum_sq_5x5[y * integral_image_stride + x] = ssq;
+    }
   }
 }
 
