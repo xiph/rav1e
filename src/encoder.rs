@@ -38,12 +38,12 @@ use crate::transform::*;
 use crate::util::*;
 use arg_enum_proc_macro::ArgEnum;
 use arrayvec::*;
+#[cfg(feature = "train_fastrdo")]
 use bincode::{deserialize, serialize};
 use bitstream_io::{BigEndian, BitWriter};
 use rayon::iter::*;
 use std::collections::VecDeque;
-use std::fs::File;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::sync::Arc;
 use std::{fmt, io, mem};
 
@@ -2788,10 +2788,11 @@ fn encode_tile_group<T: Pixel>(
       (raw, ctx.ts)
     })
     .unzip();
-  let (rdo_trackers, stats): (Vec<_>, Vec<_>) =
+
+  let stats: (Vec<_>, Vec<_>) =
     tile_states.into_iter().map(|ts| (ts.rdo, ts.enc_stats)).unzip();
 
-  for ts in stats {
+  for ts in stats.1 {
     fs.enc_stats += &ts;
   }
 
@@ -2814,19 +2815,25 @@ fn encode_tile_group<T: Pixel>(
     fs.restoration.lrf_filter_frame(&mut fs.rec, &pre_cdef_frame, &fi);
   }
 
-  if fi.config.train_rdo {
-    info!("Training RDO");
-    for rdo_tracker in &rdo_trackers {
-      fs.t.merge_in(&rdo_tracker);
+  #[cfg(feature = "train_fastrdo")]
+  {
+    if fi.config.train_rdo {
+      use std::fs::File;
+      use std::io::Read;
+
+      info!("Training RDO");
+      for rdo_tracker in stats.0 {
+        fs.t.merge_in(&rdo_tracker);
+      }
+      if let Ok(mut file) = File::open("rdo.dat") {
+        let mut data = vec![];
+        file.read_to_end(&mut data).unwrap();
+        fs.t.merge_in(&deserialize(data.as_slice()).unwrap());
+      }
+      let mut rdo_file = File::create("rdo.dat").unwrap();
+      rdo_file.write_all(&serialize(&fs.t).unwrap()).unwrap();
+      fs.t.print_code();
     }
-    if let Ok(mut file) = File::open("rdo.dat") {
-      let mut data = vec![];
-      file.read_to_end(&mut data).unwrap();
-      fs.t.merge_in(&deserialize(data.as_slice()).unwrap());
-    }
-    let mut rdo_file = File::create("rdo.dat").unwrap();
-    rdo_file.write_all(&serialize(&fs.t).unwrap()).unwrap();
-    fs.t.print_code();
   }
 
   let (idx_max, max_len) = raw_tiles

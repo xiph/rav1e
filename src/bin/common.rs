@@ -301,6 +301,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     .arg(
       Arg::with_name("train-rdo")
         .long("train-rdo")
+        .hidden(true)
     )
     .subcommand(SubCommand::with_name("advanced")
                 .setting(AppSettings::Hidden)
