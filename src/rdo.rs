@@ -42,8 +42,8 @@ use crate::{encode_block_post_cdef, encode_block_pre_cdef};
 
 use crate::cpu_features::CpuFeatureLevel;
 use crate::partition::PartitionType::*;
+use crate::{Deserialize, Serialize};
 use arrayvec::*;
-use serde_derive::{Deserialize, Serialize};
 use std;
 use std::vec::Vec;
 

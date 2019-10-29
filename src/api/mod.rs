@@ -24,7 +24,8 @@ pub(crate) use internal::*;
 
 use bitstream_io::*;
 use err_derive::Error;
-use serde_derive::{Deserialize, Serialize};
+
+use crate::{Deserialize, Serialize};
 
 use crate::encoder::*;
 use crate::frame::*;
