@@ -1671,12 +1671,15 @@ pub fn encode_block_post_cdef<T: Pixel>(
   }
 
   if record_stats {
-    *ts.enc_stats.block_size_counts.entry(bsize).or_insert(0) += 1;
-    *ts.enc_stats.tx_type_counts.entry(tx_type).or_insert(0) += 1;
-    *ts.enc_stats.luma_pred_mode_counts.entry(luma_mode).or_insert(0) += 1;
-    *ts.enc_stats.chroma_pred_mode_counts.entry(chroma_mode).or_insert(0) += 1;
+    let pixels = tx_size.area();
+    *ts.enc_stats.block_size_counts.entry(bsize).or_insert(0) += pixels;
+    *ts.enc_stats.tx_type_counts.entry(tx_type).or_insert(0) += pixels;
+    *ts.enc_stats.luma_pred_mode_counts.entry(luma_mode).or_insert(0) +=
+      pixels;
+    *ts.enc_stats.chroma_pred_mode_counts.entry(chroma_mode).or_insert(0) +=
+      pixels;
     if skip {
-      ts.enc_stats.skip_block_count += 1;
+      ts.enc_stats.skip_block_count += pixels;
     }
   }
 

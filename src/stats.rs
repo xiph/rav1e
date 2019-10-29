@@ -6,15 +6,15 @@ use std::ops::{Add, AddAssign};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EncoderStats {
-  /// Stores counts of each block size used in this frame
+  /// Stores count of pixels belonging to each block size in this frame
   pub block_size_counts: BTreeMap<BlockSize, usize>,
-  /// Stores the number of skip blocks used in this frame
+  /// Stores count of pixels belonging to skip blocks in this frame
   pub skip_block_count: usize,
-  /// Stores counts of each transform type used in this frame
+  /// Stores count of pixels belonging to each transform type in this frame
   pub tx_type_counts: BTreeMap<TxType, usize>,
-  /// Stores counts of each prediction mode used for luma in this frame
+  /// Stores count of pixels belonging to each luma prediction mode in this frame
   pub luma_pred_mode_counts: BTreeMap<PredictionMode, usize>,
-  /// Stores counts of each prediction mode used in this frame
+  /// Stores count of pixels belonging to each chroma prediction mode in this frame
   pub chroma_pred_mode_counts: BTreeMap<PredictionMode, usize>,
 }
 
