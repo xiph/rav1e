@@ -73,6 +73,11 @@ jobs:
         - cargo test --features=decode_test,decode_test_dav1d,quick_test,capi --verbose
       env:
         - CACHE_NAME=MIN_RUSTC
+    - name: "Arm build and test"
+      rust: stable
+      arch: arm64
+      script:
+        - cargo test --features=decode_test,decode_test_dav1d,quick_test,capi --verbose
     - name: "Ignored Tests (aom)"
       rust: stable
       script:
