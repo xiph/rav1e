@@ -251,6 +251,36 @@ pub struct Packet {
   pub frame_type: FrameType,
 }
 
+/// Version information as presented in `[package]` `version`.
+///
+/// e.g. `0.1.0``
+///
+/// Can be parsed by [semver](https://crates.io/crates/semver).
+/// This returns the version of the loaded library, regardless
+/// of which version the library user was built against.
+#[no_mangle]
+pub unsafe extern fn rav1e_version_short() -> *const c_char {
+  concat!(env!("CARGO_PKG_VERSION"), "\0").as_ptr() as *const c_char
+}
+
+/// Version information with the information
+/// provided by `git describe --tags`.
+///
+/// e.g. `0.1.0 (v0.1.0-1-g743d464)`
+///
+/// This returns the version of the loaded library, regardless
+/// of which version the library user was built against.
+#[no_mangle]
+pub unsafe extern fn rav1e_version_full() -> *const c_char {
+  concat!(
+    env!("CARGO_PKG_VERSION"),
+    " (",
+    env!("VERGEN_SEMVER_LIGHTWEIGHT"),
+    ")\0"
+  )
+  .as_ptr() as *const c_char
+}
+
 /// Simple Data
 ///
 ///
