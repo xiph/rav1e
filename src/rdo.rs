@@ -892,7 +892,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         best.tx_size,
         best.tx_type,
         0,
-        &Vec::new(),
+        &[],
         rdo_type,
         true, // For CFL, luma should be always reconstructed.
         false,
