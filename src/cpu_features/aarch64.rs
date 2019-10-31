@@ -34,7 +34,7 @@ impl Default for CpuFeatureLevel {
     let detected = CpuFeatureLevel::NEON;
     let manual: CpuFeatureLevel = match env::var("RAV1E_CPU_TARGET") {
       Ok(feature) => match feature.as_ref() {
-        "rust" => CpuFeatureLevel::NATIVE,
+        "rust" | "native" => CpuFeatureLevel::NATIVE,
         "neon" => CpuFeatureLevel::NEON,
         _ => detected,
       },

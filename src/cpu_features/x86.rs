@@ -44,7 +44,7 @@ impl Default for CpuFeatureLevel {
     };
     let manual: CpuFeatureLevel = match env::var("RAV1E_CPU_TARGET") {
       Ok(feature) => match feature.as_ref() {
-        "rust" => CpuFeatureLevel::NATIVE,
+        "rust" | "native" => CpuFeatureLevel::NATIVE,
         "avx2" => CpuFeatureLevel::AVX2,
         "ssse3" => CpuFeatureLevel::SSSE3,
         "sse2" => CpuFeatureLevel::SSE2,
