@@ -184,10 +184,7 @@ pub(crate) mod native {
     let sum_array_offset = y * iimg_stride;
 
     for x in start_x..stripe_w + 2 {
-      // if r = 1, i.e. 3x3, do as before
-      //let sum = get_integral_square(iimg, iimg_stride, x, y, d);
-      //let ssq = get_integral_square(iimg_sq, iimg_stride, x, y, d);
-      let sum2 = get_integral_square(iimg, iimg_stride, x, y, d);
+      /*let sum2 = get_integral_square(iimg, iimg_stride, x, y, d);
       let ssq2 = get_integral_square(iimg_sq, iimg_stride, x, y, d);
 
       if r == 1 {
@@ -201,7 +198,7 @@ pub(crate) mod native {
         let sq2 = integral_image_buffer.sum_sq_5x5[sum_array_offset + x];
         debug_assert!(sum2 == s2);
         debug_assert!(ssq2 == sq2);
-      }
+      }*/
       let sum = if r == 2 {integral_image_buffer.sum_5x5[sum_array_offset + x] }
                 else { integral_image_buffer.sum_3x3[sum_array_offset + x] };
       let ssq = if r == 2 { integral_image_buffer.sum_sq_5x5[sum_array_offset + x] }
