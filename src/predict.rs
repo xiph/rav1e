@@ -57,7 +57,81 @@ pub static RAV1E_INTER_COMPOUND_MODES: &[PredictionMode] = &[
   PredictionMode::NEAR_NEARMV,
 ];
 
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd, Eq, Ord)]
+/// This exists purely to allow specializing kernels to a single
+/// prediction mode.
+pub mod detail {
+  use crate::util::*;
+
+  use super::*;
+
+  pub trait Detail {
+    const MODE: PredictionMode;
+    /*
+    const IS_INTRA: bool = Self::MODE < PredictionMode::NEARESTMV;
+    const IS_CFL: bool = Self::MODE == PredictionMode::UV_CFL_PRED;
+    const IS_DIRECTIONAL: bool =
+      Self::MODE >= PredictionMode::V_PRED &&
+        Self::MODE <= PredictionMode::D63_PRED;
+    */
+    fn predict_intra<S, P>(
+      tile_rect: TileRect, dst: &mut PlaneRegionMut<'_, P>, bit_depth: usize,
+      ac: &[i16], alpha: i16,
+      edge_buf: &AlignedArray<[P; 4 * MAX_TX_SIZE + 1]>,
+      cpu: CpuFeatureLevel,
+    ) where
+      P: Pixel,
+      S: Intra<P> + tx_sizes::Detail,
+    {
+      Self::MODE.predict_intra::<P>(
+        tile_rect, dst, S::TX_SIZE, bit_depth, ac, alpha, edge_buf, cpu,
+
+      )
+    }
+  }
+
+  macro_rules! d {
+    ($(($ty:ident, $mode:ident,),)*) => {$(
+      #[derive(Clone, Copy, Debug)]
+      pub struct $ty;
+
+      impl Detail for $ty {
+        const MODE: PredictionMode = PredictionMode::$mode;
+      }
+    )*};
+  }
+  d! {
+    (Dc, DC_PRED, ),
+    (V,  V_PRED, ),
+    (H,  H_PRED, ),
+    (D45, D45_PRED, ),
+    (D135, D135_PRED, ),
+    (D117, D117_PRED, ),
+    (D153, D153_PRED, ),
+    (D207, D207_PRED, ),
+    (D63, D63_PRED, ),
+    (Smooth, SMOOTH_PRED, ),
+    (SmoothV, SMOOTH_V_PRED, ),
+    (SmoothH, SMOOTH_H_PRED, ),
+    (Paeth, PAETH_PRED, ),
+    (UvCfl, UV_CFL_PRED, ),
+    (NearestMv, NEARESTMV, ),
+    (Near0Mv, NEAR0MV, ),
+    (Near1Mv, NEAR1MV, ),
+    (Near2Mv, NEAR2MV, ),
+    (GlobalMv, GLOBALMV, ),
+    (NewMv, NEWMV, ),
+    (NearestNearestMv, NEAREST_NEARESTMV, ),
+    (NearNearMv, NEAR_NEARMV, ),
+    (NearestNewMv, NEAREST_NEWMV, ),
+    (NewNearestMv, NEW_NEARESTMV, ),
+    (NearNewMv, NEAR_NEWMV, ),
+    (NewNearMv, NEW_NEARMV, ),
+    (GlobalGlobalMv, GLOBAL_GLOBALMV, ),
+    (NewNewMv, NEW_NEWMV, ),
+  }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd, Ord, Eq)]
 pub enum PredictionMode {
   DC_PRED,     // Average of above and left pixels
   V_PRED,      // Vertical
@@ -383,22 +457,23 @@ pub trait Dim {
   const H: usize;
 }
 
-macro_rules! blocks_dimension {
-  ($(($W:expr, $H:expr)),+) => {
-    paste::item! {
-      $(
-        pub struct [<Block $W x $H>];
-
-        impl Dim for [<Block $W x $H>] {
-          const W: usize = $W;
-          const H: usize = $H;
-        }
-      )*
-    }
-  };
+impl<T> Dim for T
+where
+  T: Block,
+{
+  const W: usize = T::Hori::LENGTH;
+  const H: usize = T::Vert::LENGTH;
 }
 
-blocks_dimension! {
+macro_rules! block_dimension {
+  ($(($W:expr, $H:expr)),*) => {$(
+    paste::item! {
+      impl<T: Pixel> Intra<T> for [<Block $W x $H>] {}
+    }
+  )*};
+}
+
+block_dimension! {
   (4, 4), (8, 8), (16, 16), (32, 32), (64, 64),
   (4, 8), (8, 16), (16, 32), (32, 64),
   (8, 4), (16, 8), (32, 16), (64, 32),
@@ -431,9 +506,6 @@ pub(crate) mod native {
   macro_rules! impl_intra {
     ($(($W:expr, $H:expr)),+) => {
       paste::item! {
-        $(
-          impl<T: Pixel> Intra<T> for [<Block $W x $H>] {}
-        )*
         #[inline(always)]
         pub fn dispatch_predict_intra<T: Pixel>(
           mode: PredictionMode, variant: PredictionVariant,

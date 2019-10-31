@@ -8,10 +8,10 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 cfg_if::cfg_if! {
-  if #[cfg(nasm_x86_64)] {
+  if #[cfg(any(target_arch = "x86_64", target_arch = "x86"))] {
     mod x86;
     pub use x86::*;
-  } else if #[cfg(asm_neon)] {
+  } else if #[cfg(any(target_arch = "arm", target_arch = "aarch64"))] {
     mod aarch64;
     pub use aarch64::*;
   } else {

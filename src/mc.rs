@@ -22,7 +22,6 @@ use crate::frame::*;
 use crate::tiling::*;
 use crate::util::*;
 
-use simd_helpers::cold_for_target_arch;
 use std::ops;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -180,8 +179,11 @@ const SUBPEL_FILTERS: [[[i32; SUBPEL_FILTER_SIZE]; 16]; 6] = [
 ];
 
 pub(crate) mod native {
+  use crate::partition::*;
+
   use super::*;
   use num_traits::*;
+  use packed_simd::*;
 
   unsafe fn run_filter<T: AsPrimitive<i32>>(
     src: *const T, stride: usize, filter: [i32; 8],
@@ -207,8 +209,8 @@ pub(crate) mod native {
     SUBPEL_FILTERS[filter_idx][frac as usize]
   }
 
-  #[cold_for_target_arch("x86_64")]
-  pub fn put_8tap<T: Pixel>(
+  #[cold]
+  pub fn put_8tap_ref<T: Pixel>(
     dst: &mut PlaneRegionMut<'_, T>, src: PlaneSlice<'_, T>, width: usize,
     height: usize, col_frac: i32, row_frac: i32, mode_x: FilterMode,
     mode_y: FilterMode, bit_depth: usize, _cpu: CpuFeatureLevel,
@@ -304,8 +306,8 @@ pub(crate) mod native {
     }
   }
 
-  #[cold_for_target_arch("x86_64")]
-  pub fn prep_8tap<T: Pixel>(
+  #[cold]
+  pub fn prep_8tap_ref<T: Pixel>(
     tmp: &mut [i16], src: PlaneSlice<'_, T>, width: usize, height: usize,
     col_frac: i32, row_frac: i32, mode_x: FilterMode, mode_y: FilterMode,
     bit_depth: usize, _cpu: CpuFeatureLevel,
@@ -383,9 +385,8 @@ pub(crate) mod native {
       }
     }
   }
-
-  #[cold_for_target_arch("x86_64")]
-  pub fn mc_avg<T: Pixel>(
+  #[cold]
+  pub fn mc_avg_ref<T: Pixel>(
     dst: &mut PlaneRegionMut<'_, T>, tmp1: &[i16], tmp2: &[i16], width: usize,
     height: usize, bit_depth: usize, _cpu: CpuFeatureLevel,
   ) {
@@ -404,5 +405,335 @@ pub(crate) mod native {
         );
       }
     }
+  }
+
+  pub fn put_8tap<T: Pixel>(
+    dst: &mut PlaneRegionMut<'_, T>, src: PlaneSlice<'_, T>, width: usize,
+    height: usize, col_frac: i32, row_frac: i32, mode_x: FilterMode,
+    mode_y: FilterMode, bit_depth: usize, cpu: CpuFeatureLevel,
+  ) {
+    assert!(
+      dst.rect().height >= height && dst.rect().width >= width,
+      "dst is smaller than the compute block: ({}, {}) vs expected ({}, {})",
+      dst.rect().width,
+      dst.rect().height,
+      width,
+      height,
+    );
+    assert!(
+      src.plane.data.len() >= height * src.plane.cfg.stride + width,
+      "src is smaller than the compute block: {} vs expected {}",
+      src.plane.data.len(),
+      height * src.plane.cfg.stride + width,
+    );
+    let block = BlockSize::from_width_and_height(width, height) as usize;
+    let y_filter = get_filter(mode_y, row_frac, height);
+    let y_filter = i32x8::load_from_slice_u(&y_filter);
+    let x_filter = get_filter(mode_x, col_frac, width);
+    let x_filter = i32x8::load_from_slice_u(&x_filter);
+
+    let col_frac_i = (col_frac == 0) as usize;
+    let row_frac_i = (row_frac == 0) as usize;
+
+    let cpu_i = cpu.as_index();
+
+    let origin_dst = if cfg!(feature = "check_asm") {
+      Some(dst.scratch_copy())
+    } else {
+      None
+    };
+
+    match T::type_enum() {
+      PixelType::U8 => {
+        let mut dst = dst.as_u8().unwrap();
+        let src = src.as_u8().unwrap();
+        let f = put_8tap_kernels::U8_PUT_8TAP_KERNELS[cpu_i][block]
+          [col_frac_i][row_frac_i];
+        let f = match f {
+          Some(f) => f,
+          // These are always present
+          None => unsafe { ::std::hint::unreachable_unchecked() },
+        };
+        unsafe {
+          f(
+            &mut *dst.data_ptr_mut(),
+            dst.plane_cfg.stride as _,
+            &*src.as_ptr(),
+            src.plane.cfg.stride as _,
+            x_filter,
+            y_filter,
+            bit_depth as _,
+          );
+        }
+      }
+      PixelType::U16 => {
+        let mut dst = dst.as_u16().unwrap();
+        let src = src.as_u16().unwrap();
+        let f = put_8tap_kernels::U16_PUT_8TAP_KERNELS[cpu_i][block]
+          [col_frac_i][row_frac_i];
+        let f = match f {
+          Some(f) => f,
+          // These are always present
+          None => unsafe { ::std::hint::unreachable_unchecked() },
+        };
+        unsafe {
+          f(
+            &mut *dst.data_ptr_mut(),
+            dst.plane_cfg.stride as _,
+            &*src.as_ptr(),
+            src.plane.cfg.stride as _,
+            x_filter,
+            y_filter,
+            bit_depth as _,
+          );
+        }
+      }
+    }
+
+    if let Some(mut origin_dst) = origin_dst {
+      put_8tap_ref(
+        &mut origin_dst.as_region_mut(),
+        src,
+        width,
+        height,
+        col_frac,
+        row_frac,
+        mode_x,
+        mode_y,
+        bit_depth,
+        cpu,
+      );
+
+      let ne = origin_dst
+        .as_region()
+        .rows_iter()
+        .flat_map(|row| row[..width].iter().cloned())
+        .zip({ dst.rows_iter().flat_map(|row| row[..width].iter().cloned()) })
+        .enumerate()
+        .filter(|(_, (r, asm))| r != asm)
+        .map(|v| format!("{:?}", v))
+        .collect::<Vec<_>>();
+      if ne.len() != 0 {
+        eprintln!(
+          "col_frac = {}, row_frac = {}, block = {:?}",
+          col_frac, row_frac, block
+        );
+        eprintln!("put_8tap: ref vs asm mismatch: {:#?}", ne);
+        panic!();
+      }
+    }
+  }
+  pub fn prep_8tap<T: Pixel>(
+    tmp: &mut [i16], src: PlaneSlice<'_, T>, width: usize, height: usize,
+    col_frac: i32, row_frac: i32, mode_x: FilterMode, mode_y: FilterMode,
+    bit_depth: usize, cpu: CpuFeatureLevel,
+  ) {
+    assert!(
+      tmp.len() >= width * height,
+      "tmp is smaller than the compute block"
+    );
+    assert!(
+      src.plane.data.len() >= height * src.plane.cfg.stride + width,
+      "src is smaller than the compute block: {} vs expected {}",
+      src.plane.data.len(),
+      height * src.plane.cfg.stride + width,
+    );
+
+    let block = BlockSize::from_width_and_height(width, height) as usize;
+    let y_filter = get_filter(mode_y, row_frac, height);
+    let y_filter = i32x8::load_from_slice_u(&y_filter);
+    let x_filter = get_filter(mode_x, col_frac, width);
+    let x_filter = i32x8::load_from_slice_u(&x_filter);
+
+    let col_frac_i = (col_frac == 0) as usize;
+    let row_frac_i = (row_frac == 0) as usize;
+
+    let origin_tmp =
+      if cfg!(feature = "check_asm") { Some(tmp.to_owned()) } else { None };
+
+    let cpu_i = cpu.as_index();
+    match T::type_enum() {
+      PixelType::U8 => {
+        let src = src.as_u8().unwrap();
+        let f = prep_8tap_kernels::U8_PREP_8TAP_KERNELS[cpu_i][block]
+          [col_frac_i][row_frac_i];
+        let f = match f {
+          Some(f) => f,
+          // These are always present
+          None => unsafe { ::std::hint::unreachable_unchecked() },
+        };
+        unsafe {
+          f(
+            &mut *tmp.as_mut_ptr(),
+            &*src.as_ptr(),
+            src.plane.cfg.stride as _,
+            x_filter,
+            y_filter,
+            bit_depth as _,
+          );
+        }
+      }
+      PixelType::U16 => {
+        let src = src.as_u16().unwrap();
+        let f = prep_8tap_kernels::U16_PREP_8TAP_KERNELS[cpu_i][block]
+          [col_frac_i][row_frac_i];
+        let f = match f {
+          Some(f) => f,
+          // These are always present
+          None => unsafe { ::std::hint::unreachable_unchecked() },
+        };
+        unsafe {
+          f(
+            &mut *tmp.as_mut_ptr(),
+            &*src.as_ptr(),
+            src.plane.cfg.stride as _,
+            x_filter,
+            y_filter,
+            bit_depth as _,
+          );
+        }
+      }
+    }
+
+    if let Some(mut origin_tmp) = origin_tmp {
+      prep_8tap_ref(
+        &mut origin_tmp,
+        src,
+        width,
+        height,
+        col_frac,
+        row_frac,
+        mode_x,
+        mode_y,
+        bit_depth,
+        cpu,
+      );
+      let ne = origin_tmp
+        .into_iter()
+        .enumerate()
+        .zip(tmp.iter())
+        .map(|((idx, r), &asm)| (idx, r, asm))
+        .filter(|(_, r, asm)| r != asm)
+        .map(|v| format!("{:?}", v))
+        .collect::<Vec<_>>();
+      if ne.len() != 0 {
+        eprintln!(
+          "col_frac = {}, row_frac = {}, block = {:?}",
+          col_frac, row_frac, block
+        );
+        eprintln!("prep_8tap: ref vs asm mismatch: {:#?}", ne);
+        panic!();
+      }
+    }
+  }
+  pub fn mc_avg<T: Pixel>(
+    dst: &mut PlaneRegionMut<'_, T>, tmp1: &[i16], tmp2: &[i16], width: usize,
+    height: usize, bit_depth: usize, cpu: CpuFeatureLevel,
+  ) {
+    assert!(
+      tmp1.len() >= width * height,
+      "tmp1 is smaller than the compute block"
+    );
+    assert!(
+      tmp2.len() >= width * height,
+      "tmp2 is smaller than the compute block"
+    );
+    assert!(
+      dst.rect().height >= height && dst.rect().width >= width,
+      "dst is smaller than the compute block"
+    );
+    let block = BlockSize::from_width_and_height(width, height) as usize;
+    let cpu_i = cpu.as_index();
+
+    let origin_dst = if cfg!(feature = "check_asm") {
+      Some(dst.scratch_copy())
+    } else {
+      None
+    };
+
+    match T::type_enum() {
+      PixelType::U8 => {
+        let mut dst = dst.as_u8().unwrap();
+        let f = mc_avg_kernels::U8_MC_AVG_KERNELS[cpu_i][block];
+        let f = match f {
+          Some(f) => f,
+          // These are always present
+          None => unsafe { ::std::hint::unreachable_unchecked() },
+        };
+        unsafe {
+          f(
+            &mut *dst.data_ptr_mut(),
+            dst.plane_cfg.stride as _,
+            &*tmp1.as_ptr(),
+            &*tmp2.as_ptr(),
+            bit_depth as _,
+          );
+        }
+      }
+      PixelType::U16 => {
+        let mut dst = dst.as_u16().unwrap();
+        let f = mc_avg_kernels::U16_MC_AVG_KERNELS[cpu_i][block];
+        let f = match f {
+          Some(f) => f,
+          // These are always present
+          None => unsafe { ::std::hint::unreachable_unchecked() },
+        };
+        unsafe {
+          f(
+            &mut *dst.data_ptr_mut(),
+            dst.plane_cfg.stride as _,
+            &*tmp1.as_ptr(),
+            &*tmp2.as_ptr(),
+            bit_depth as _,
+          );
+        }
+      }
+    }
+
+    if let Some(mut origin_dst) = origin_dst {
+      mc_avg_ref(
+        &mut origin_dst.as_region_mut(),
+        tmp1,
+        tmp2,
+        width,
+        height,
+        bit_depth,
+        cpu,
+      );
+      let ne = origin_dst
+        .as_region()
+        .rows_iter()
+        .flat_map(|row| row[..width].iter().cloned())
+        .zip({ dst.rows_iter().flat_map(|row| row[..width].iter().cloned()) })
+        .enumerate()
+        .filter(|(_, (r, asm))| r != asm)
+        .map(|v| format!("{:?}", v))
+        .collect::<Vec<_>>();
+      if ne.len() != 0 {
+        eprintln!("block = {:?}", block);
+        eprintln!("put_8tap: ref vs asm mismatch: {:#?}", ne);
+        panic!();
+      }
+    }
+  }
+
+  // note: keep these in separate modules!
+  // rustc uses modules to decide how to split functions into
+  // multiple codegen units for parallel codegenning (as of time
+  // of writ), so by putting these in separate modules, Rust will
+  // optimize and codegen them in parallel (for dev builds at
+  // least).
+
+  mod put_8tap_kernels {
+    #![allow(unused_imports)]
+    include!(concat!(env!("OUT_DIR"), "/put_8tap_kernels.rs"));
+  }
+  mod prep_8tap_kernels {
+    #![allow(unused_imports)]
+    include!(concat!(env!("OUT_DIR"), "/prep_8tap_kernels.rs"));
+  }
+  mod mc_avg_kernels {
+    #![allow(unused_imports)]
+    include!(concat!(env!("OUT_DIR"), "/mc_avg_kernels.rs"));
   }
 }

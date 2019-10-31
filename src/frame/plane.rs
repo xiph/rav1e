@@ -561,6 +561,26 @@ impl<'a, T: Pixel> PlaneSlice<'a, T> {
       (self.x + add_x as isize + self.plane.cfg.xorigin as isize) as usize;
     self.plane.data[new_y * self.plane.cfg.stride + new_x]
   }
+  pub(crate) fn as_pty<T2>(&self) -> Option<PlaneSlice<T2>>
+  where
+    T2: Pixel,
+  {
+    if T::type_enum() == T2::type_enum() {
+      Some(PlaneSlice {
+        plane: unsafe { ::std::mem::transmute(self.plane) },
+        x: self.x,
+        y: self.y,
+      })
+    } else {
+      None
+    }
+  }
+  pub(crate) fn as_u8(&self) -> Option<PlaneSlice<u8>> {
+    self.as_pty()
+  }
+  pub(crate) fn as_u16(&self) -> Option<PlaneSlice<u16>> {
+    self.as_pty()
+  }
 }
 
 impl<'a, T: Pixel> Index<usize> for PlaneSlice<'a, T> {

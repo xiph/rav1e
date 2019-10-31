@@ -1163,14 +1163,9 @@ pub fn encode_tx_block<T: Pixel>(
     tx_size.height(),
   );
 
-  forward_transform(
-    residual,
-    coeffs,
-    tx_size.width(),
-    tx_size,
-    tx_type,
-    fi.sequence.bit_depth,
-  );
+  crate::specialize_f!(@forall tx_size, tx_type,
+    forward_transform(residual, coeffs, fi.sequence.bit_depth,
+                      T::cast_from(0)));
 
   ts.qc.quantize(coeffs, qcoeffs, tx_size, tx_type);
 
@@ -1207,14 +1202,10 @@ pub fn encode_tx_block<T: Pixel>(
   let mut tx_dist: u64 = 0;
 
   if !fi.use_tx_domain_distortion || need_recon_pixel {
-    inverse_transform_add(
-      rcoeffs,
-      &mut rec.subregion_mut(area),
-      tx_size,
-      tx_type,
-      fi.sequence.bit_depth,
-      fi.cpu_feature_level,
-    );
+    crate::specialize_f!(@forall tx_size, tx_type,
+      inverse_transform_add(rcoeffs, &mut rec.subregion_mut(area),
+                            fi.sequence.bit_depth,
+                            fi.cpu_feature_level));
   }
   if rdo_type.needs_tx_dist() {
     // Store tx-domain distortion of this block
