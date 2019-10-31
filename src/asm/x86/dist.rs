@@ -45,6 +45,7 @@ declare_asm_dist_fn![
   // SSSE3
   (rav1e_sad_4x4_hbd_ssse3, u16),
   (rav1e_sad_16x16_hbd_ssse3, u16),
+  (rav1e_satd_8x8_ssse3, u8),
   // SSE2
   (rav1e_sad4x4_sse2, u8),
   (rav1e_sad4x8_sse2, u8),
@@ -57,6 +58,8 @@ declare_asm_dist_fn![
   (rav1e_sad32x32_sse2, u8),
   (rav1e_sad64x64_sse2, u8),
   (rav1e_sad128x128_sse2, u8),
+  // SSE4
+  (rav1e_satd_4x4_sse4, u8),
   // AVX
   (rav1e_sad16x4_avx2, u8),
   (rav1e_sad16x8_avx2, u8),
@@ -255,6 +258,7 @@ pub static SAD_FNS: [[Option<SadFn>; DIST_FNS_LENGTH];
 
   out[CpuFeatureLevel::SSE2 as usize] = SAD_FNS_SSE2;
   out[CpuFeatureLevel::SSSE3 as usize] = SAD_FNS_SSE2;
+  out[CpuFeatureLevel::SSE4_1 as usize] = SAD_FNS_SSE2;
   out[CpuFeatureLevel::AVX2 as usize] = SAD_FNS_AVX2;
 
   out
@@ -276,7 +280,29 @@ pub(crate) static SAD_HBD_FNS: [[Option<SadHBDFn>; DIST_FNS_LENGTH];
   let mut out = [[None; DIST_FNS_LENGTH]; CpuFeatureLevel::len()];
 
   out[CpuFeatureLevel::SSSE3 as usize] = SAD_HBD_FNS_SSSE3;
+  out[CpuFeatureLevel::SSE4_1 as usize] = SAD_HBD_FNS_SSSE3;
   out[CpuFeatureLevel::AVX2 as usize] = SAD_HBD_FNS_SSSE3;
+
+  out
+};
+
+static SATD_FNS_SSSE3: [Option<SatdFn>; DIST_FNS_LENGTH] = {
+  let mut out: [Option<SatdFn>; DIST_FNS_LENGTH] = [None; DIST_FNS_LENGTH];
+
+  use BlockSize::*;
+
+  out[BLOCK_8X8 as usize] = Some(rav1e_satd_8x8_ssse3);
+
+  out
+};
+
+static SATD_FNS_SSE4: [Option<SatdFn>; DIST_FNS_LENGTH] = {
+  let mut out: [Option<SatdFn>; DIST_FNS_LENGTH] = [None; DIST_FNS_LENGTH];
+
+  use BlockSize::*;
+
+  out[BLOCK_4X4 as usize] = Some(rav1e_satd_4x4_sse4);
+  out[BLOCK_8X8 as usize] = Some(rav1e_satd_8x8_ssse3);
 
   out
 };
@@ -318,6 +344,8 @@ pub(crate) static SATD_FNS: [[Option<SatdFn>; DIST_FNS_LENGTH];
   CpuFeatureLevel::len()] = {
   let mut out = [[None; DIST_FNS_LENGTH]; CpuFeatureLevel::len()];
 
+  out[CpuFeatureLevel::SSSE3 as usize] = SATD_FNS_SSSE3;
+  out[CpuFeatureLevel::SSE4_1 as usize] = SATD_FNS_SSE4;
   out[CpuFeatureLevel::AVX2 as usize] = SATD_FNS_AVX2;
 
   out
@@ -415,6 +443,10 @@ mod test {
     avx2,
     "avx2"
   );
+
+  test_dist_fns!((8, 8), satd, 8, ssse3, "ssse3");
+
+  test_dist_fns!((4, 4), satd, 8, sse4, "sse4.1");
 
   test_dist_fns!(
     (4, 4),

@@ -23,9 +23,7 @@ impl CpuFeatureLevel {
 
   #[inline(always)]
   pub fn as_index(self) -> usize {
-    const LEN: usize = CpuFeatureLevel::len();
-    assert_eq!(LEN & (LEN - 1), 0);
-    self as usize & (LEN - 1)
+    self as usize
   }
 }
 
