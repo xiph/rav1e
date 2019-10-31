@@ -54,6 +54,7 @@ fn build_nasm_files() {
       "src/x86/sad_avx.asm",
       "src/x86/satd.asm",
       "src/x86/cdef.asm",
+      "src/x86/tables.asm",
     ],
     &[&config_include_arg, "-Isrc/"],
   );
@@ -77,7 +78,7 @@ fn build_asm_files() {
     config_file.write(b" #define HAVE_ASM 1\n").unwrap();
   }
   cc::Build::new()
-    .files(&["src/arm/64/mc.S"])
+    .files(&["src/arm/64/mc.S", "src/arm/tables.S"])
     .include(".")
     .include(&out_dir)
     .compile("rav1e-aarch64");
