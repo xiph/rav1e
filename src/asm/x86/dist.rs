@@ -53,7 +53,7 @@ declare_asm_dist_fn![
   (rav1e_sad8x8_sse2, u8),
   (rav1e_sad8x16_sse2, u8),
   (rav1e_sad8x32_sse2, u8),
-  //  (rav1e_sad16x16_sse2, u8),
+  (rav1e_sad16x16_sse2, u8),
   (rav1e_sad32x32_sse2, u8),
   (rav1e_sad64x64_sse2, u8),
   (rav1e_sad128x128_sse2, u8),
@@ -204,8 +204,7 @@ static SAD_FNS_SSE2: [Option<SadFn>; DIST_FNS_LENGTH] = {
   out[BLOCK_8X16 as usize] = Some(rav1e_sad8x16_sse2);
   out[BLOCK_8X32 as usize] = Some(rav1e_sad8x32_sse2);
 
-  // FIXME: This function is currently broken, see https://github.com/xiph/rav1e/issues/1715
-  // out[BLOCK_16X16 as usize] = Some(rav1e_sad16x16_sse2);
+  out[BLOCK_16X16 as usize] = Some(rav1e_sad16x16_sse2);
   out[BLOCK_32X32 as usize] = Some(rav1e_sad32x32_sse2);
   out[BLOCK_64X64 as usize] = Some(rav1e_sad64x64_sse2);
   out[BLOCK_128X128 as usize] = Some(rav1e_sad128x128_sse2);
