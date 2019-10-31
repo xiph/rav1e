@@ -8,49 +8,16 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use std::env;
-use std::fmt;
 use std::str::FromStr;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, ArgEnum)]
 pub enum CpuFeatureLevel {
   NATIVE,
   SSE2,
   SSSE3,
+  #[arg_enum(alias = "sse4.1")]
   SSE4_1,
   AVX2,
-}
-
-impl FromStr for CpuFeatureLevel {
-  type Err = ();
-
-  fn from_str(s: &str) -> Result<Self, Self::Err> {
-    Ok(match s.to_lowercase().as_str() {
-      "rust" | "native" => CpuFeatureLevel::NATIVE,
-      "avx2" => CpuFeatureLevel::AVX2,
-      "sse4" | "sse4_1" | "sse4.1" => CpuFeatureLevel::SSE4_1,
-      "ssse3" => CpuFeatureLevel::SSSE3,
-      "sse2" => CpuFeatureLevel::SSE2,
-      _ => {
-        return Err(());
-      }
-    })
-  }
-}
-
-impl fmt::Display for CpuFeatureLevel {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(
-      f,
-      "{}",
-      match self {
-        CpuFeatureLevel::NATIVE => "Native",
-        CpuFeatureLevel::SSE2 => "SSE2",
-        CpuFeatureLevel::SSSE3 => "SSSE3",
-        CpuFeatureLevel::SSE4_1 => "SSE4.1",
-        CpuFeatureLevel::AVX2 => "AVX2",
-      }
-    )
-  }
 }
 
 impl CpuFeatureLevel {
