@@ -12,5 +12,3 @@ pub mod x86;
 
 #[cfg(asm_neon)]
 pub mod aarch64;
-
-pub mod tables;
