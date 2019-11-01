@@ -644,6 +644,9 @@ fn luma_chroma_mode_rdo<T: Pixel>(
 
   let is_chroma_block = has_chroma(tile_bo, bsize, xdec, ydec);
 
+  let min_delta_q =
+    *fi.ac_delta_q.iter().chain(fi.dc_delta_q.iter()).min().unwrap();
+
   // Find the best chroma prediction mode for the current luma prediction mode
   let mut chroma_rdo = |skip: bool| -> bool {
     let mut zero_distortion = false;
@@ -669,17 +672,19 @@ fn luma_chroma_mode_rdo<T: Pixel>(
       };
       // prevent the highest sidx from bringing us into lossless
       if fi.base_q_idx as i16
+        + min_delta_q as i16
         + ts.segmentation.data[heuristic_sidx as usize]
           [SegLvl::SEG_LVL_ALT_Q as usize]
-        < 2
+        < 1
       {
         0..=0
       } else {
         heuristic_sidx..=heuristic_sidx
       }
     } else if fi.base_q_idx as i16
+      + min_delta_q as i16
       + ts.segmentation.data[2][SegLvl::SEG_LVL_ALT_Q as usize]
-      < 2
+      < 1
     {
       0..=1
     } else {
