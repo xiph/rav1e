@@ -9,12 +9,16 @@
 
 use arg_enum_proc_macro::ArgEnum;
 use std::env;
+use std::str::FromStr;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, ArgEnum)]
 pub enum CpuFeatureLevel {
+  #[arg_enum(alias = "rust")]
   NATIVE,
   SSE2,
   SSSE3,
+  #[arg_enum(alias = "sse4.1")]
+  SSE4_1,
   AVX2,
 }
 
@@ -25,9 +29,7 @@ impl CpuFeatureLevel {
 
   #[inline(always)]
   pub fn as_index(self) -> usize {
-    const LEN: usize = CpuFeatureLevel::len();
-    assert_eq!(LEN & (LEN - 1), 0);
-    self as usize & (LEN - 1)
+    self as usize
   }
 }
 
@@ -35,6 +37,8 @@ impl Default for CpuFeatureLevel {
   fn default() -> CpuFeatureLevel {
     let detected: CpuFeatureLevel = if is_x86_feature_detected!("avx2") {
       CpuFeatureLevel::AVX2
+    } else if is_x86_feature_detected!("sse4.1") {
+      CpuFeatureLevel::SSE4_1
     } else if is_x86_feature_detected!("ssse3") {
       CpuFeatureLevel::SSSE3
     } else if is_x86_feature_detected!("sse2") {
@@ -43,13 +47,7 @@ impl Default for CpuFeatureLevel {
       CpuFeatureLevel::NATIVE
     };
     let manual: CpuFeatureLevel = match env::var("RAV1E_CPU_TARGET") {
-      Ok(feature) => match feature.as_ref() {
-        "rust" => CpuFeatureLevel::NATIVE,
-        "avx2" => CpuFeatureLevel::AVX2,
-        "ssse3" => CpuFeatureLevel::SSSE3,
-        "sse2" => CpuFeatureLevel::SSE2,
-        _ => detected,
-      },
+      Ok(feature) => CpuFeatureLevel::from_str(&feature).unwrap_or(detected),
       Err(_e) => detected,
     };
     if manual > detected {

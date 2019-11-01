@@ -313,6 +313,7 @@ decl_mc_fns!(
 pub(crate) static PUT_FNS: [[Option<PutFn>; 16]; CpuFeatureLevel::len()] = {
   let mut out = [[None; 16]; CpuFeatureLevel::len()];
   out[CpuFeatureLevel::SSSE3 as usize] = PUT_FNS_SSSE3;
+  out[CpuFeatureLevel::SSE4_1 as usize] = PUT_FNS_SSSE3;
   out[CpuFeatureLevel::AVX2 as usize] = PUT_FNS_AVX2;
   out
 };
@@ -372,6 +373,7 @@ decl_mct_fns!(
 pub(crate) static PREP_FNS: [[Option<PrepFn>; 16]; CpuFeatureLevel::len()] = {
   let mut out = [[None; 16]; CpuFeatureLevel::len()];
   out[CpuFeatureLevel::SSSE3 as usize] = PREP_FNS_SSSE3;
+  out[CpuFeatureLevel::SSE4_1 as usize] = PREP_FNS_SSSE3;
   out[CpuFeatureLevel::AVX2 as usize] = PREP_FNS_AVX2;
   out
 };
@@ -395,6 +397,7 @@ pub(crate) static AVG_FNS: [Option<AvgFn>; CpuFeatureLevel::len()] = {
   let mut out: [Option<AvgFn>; CpuFeatureLevel::len()] =
     [None; CpuFeatureLevel::len()];
   out[CpuFeatureLevel::SSSE3 as usize] = Some(rav1e_avg_ssse3);
+  out[CpuFeatureLevel::SSE4_1 as usize] = Some(rav1e_avg_ssse3);
   out[CpuFeatureLevel::AVX2 as usize] = Some(rav1e_avg_avx2);
   out
 };
