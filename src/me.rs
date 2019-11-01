@@ -990,13 +990,15 @@ fn full_search<T: Pixel>(
 }
 
 // Adjust block offset such that entire block lies within boundaries
+// Align to block width, to admit aligned SAD instructions
 fn adjust_bo(
   bo: TileBlockOffset, mi_width: usize, mi_height: usize, blk_w: usize,
   blk_h: usize,
 ) -> TileBlockOffset {
   TileBlockOffset(BlockOffset {
     x: (bo.0.x as isize).min(mi_width as isize - blk_w as isize / 4).max(0)
-      as usize,
+      as usize
+      & !(blk_w / 4 - 1),
     y: (bo.0.y as isize).min(mi_height as isize - blk_h as isize / 4).max(0)
       as usize,
   })
