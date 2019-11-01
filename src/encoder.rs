@@ -66,6 +66,7 @@ pub struct ReferenceFrame<T: Pixel> {
   pub cdfs: CDFContext,
   pub frame_mvs: Vec<FrameMotionVectors>,
   pub output_frameno: u64,
+  pub segmentation: SegmentationState,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -3395,6 +3396,21 @@ pub fn encode_show_existing_frame<T: Pixel>(
   packet
 }
 
+fn get_initial_segmentation<T: Pixel>(
+  fi: &FrameInvariants<T>,
+) -> SegmentationState {
+  let segmentation = if fi.primary_ref_frame == PRIMARY_REF_NONE {
+    None
+  } else {
+    let ref_frame_idx = fi.ref_frames[fi.primary_ref_frame as usize] as usize;
+    let ref_frame = fi.rec_buffer.frames[ref_frame_idx].as_ref();
+    ref_frame.map(|rec| rec.segmentation)
+  };
+
+  // return the retrieved instance if any, a new one otherwise
+  segmentation.unwrap_or_default()
+}
+
 pub fn encode_frame<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
 ) -> Vec<u8> {
@@ -3407,6 +3423,7 @@ pub fn encode_frame<T: Pixel>(
   fs.input_qres.downsample_from(&fs.input_hres);
   fs.input_qres.pad(fi.width, fi.height);
 
+  fs.segmentation = get_initial_segmentation(fi);
   segmentation_optimize(fi, fs);
 
   let tile_group = encode_tile_group(fi, fs, inter_cfg);
@@ -3442,6 +3459,7 @@ pub fn update_rec_buffer<T: Pixel>(
     cdfs: fs.cdfs,
     frame_mvs: fs.frame_mvs,
     output_frameno,
+    segmentation: fs.segmentation,
   });
   for i in 0..(REF_FRAMES as usize) {
     if (fi.refresh_frame_flags & (1 << i)) != 0 {

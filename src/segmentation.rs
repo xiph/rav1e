@@ -24,6 +24,10 @@ pub fn segmentation_optimize<T: Pixel>(
   // We don't change the values between frames.
   fs.segmentation.update_data = fi.primary_ref_frame == PRIMARY_REF_NONE;
 
+  if !fs.segmentation.update_data {
+    return;
+  }
+
   // A series of AWCY runs with deltas 13, 15, 17, 18, 19, 20, 21, 22, 23
   // showed this to be the optimal one.
   const TEMPORAL_RDO_QI_DELTA: i16 = 21;

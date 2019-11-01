@@ -671,7 +671,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
       if fi.base_q_idx as i16
         + ts.segmentation.data[heuristic_sidx as usize]
           [SegLvl::SEG_LVL_ALT_Q as usize]
-        < 2
+        < 1
       {
         0..=0
       } else {
@@ -679,7 +679,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
       }
     } else if fi.base_q_idx as i16
       + ts.segmentation.data[2][SegLvl::SEG_LVL_ALT_Q as usize]
-      < 2
+      < 1
     {
       0..=1
     } else {
