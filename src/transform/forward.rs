@@ -61,13 +61,15 @@ type TxfmFunc = dyn Fn(&[i32], &mut [i32]);
 
 use std::ops::*;
 
-pub trait TxOperations:
-  Copy + Default + Add<Output = Self> + Sub<Output = Self>
-{
+pub trait TxOperations: Copy {
+  fn zero() -> Self;
+
   fn tx_mul(self, _: (i32, i32)) -> Self;
+  fn rshift1(self) -> Self;
+  fn add(self, b: Self) -> Self;
+  fn sub(self, b: Self) -> Self;
   fn add_avg(self, b: Self) -> Self;
   fn sub_avg(self, b: Self) -> Self;
-  fn rshift1(self) -> Self;
 
   fn copy_fn(self) -> Self {
     self
@@ -75,12 +77,24 @@ pub trait TxOperations:
 }
 
 impl TxOperations for i32 {
+  fn zero() -> Self {
+    0
+  }
+
   fn tx_mul(self, mul: (i32, i32)) -> Self {
     ((self * mul.0) + (1 << mul.1 >> 1)) >> mul.1
   }
 
   fn rshift1(self) -> Self {
     (self + if self < 0 { 1 } else { 0 }) >> 1
+  }
+
+  fn add(self, b: Self) -> Self {
+    self + b
+  }
+
+  fn sub(self, b: Self) -> Self {
+    self - b
   }
 
   fn add_avg(self, b: Self) -> Self {
@@ -90,6 +104,18 @@ impl TxOperations for i32 {
   fn sub_avg(self, b: Self) -> Self {
     (self - b) >> 1
   }
+}
+
+macro_rules! store_coeffs {
+  ( $arr:expr, $( $x:expr ),* ) => {
+      {
+      let mut i: i32 = -1;
+      $(
+        i += 1;
+        $arr[i as usize] = $x;
+      )*
+    }
+  };
 }
 
 trait RotateKernelPi4<T: TxOperations> {
@@ -110,23 +136,23 @@ struct RotatePi4Sub;
 struct RotatePi4SubAvg;
 
 impl<T: TxOperations> RotateKernelPi4<T> for RotatePi4Add {
-  const ADD: fn(T, T) -> T = Add::add;
-  const SUB: fn(T, T) -> T = Sub::sub;
+  const ADD: fn(T, T) -> T = T::add;
+  const SUB: fn(T, T) -> T = T::sub;
 }
 
 impl<T: TxOperations> RotateKernelPi4<T> for RotatePi4AddAvg {
   const ADD: fn(T, T) -> T = T::add_avg;
-  const SUB: fn(T, T) -> T = Sub::sub;
+  const SUB: fn(T, T) -> T = T::sub;
 }
 
 impl<T: TxOperations> RotateKernelPi4<T> for RotatePi4Sub {
-  const ADD: fn(T, T) -> T = Sub::sub;
-  const SUB: fn(T, T) -> T = Add::add;
+  const ADD: fn(T, T) -> T = T::sub;
+  const SUB: fn(T, T) -> T = T::add;
 }
 
 impl<T: TxOperations> RotateKernelPi4<T> for RotatePi4SubAvg {
   const ADD: fn(T, T) -> T = T::sub_avg;
-  const SUB: fn(T, T) -> T = Add::add;
+  const SUB: fn(T, T) -> T = T::add;
 }
 
 trait RotateKernel<T: TxOperations> {
@@ -139,7 +165,7 @@ trait RotateKernel<T: TxOperations> {
   ) -> (T, T) {
     let t = Self::ADD(p1, p0.0);
     let (a, b, c) = (p0.1.tx_mul(m.0), p1.tx_mul(m.1), t.tx_mul(m.2));
-    let out0 = b + c;
+    let out0 = b.add(c);
     let shifted = Self::SHIFT(c);
     let out1 = Self::SUB(a, shifted);
     (out0, out1)
@@ -156,8 +182,8 @@ trait RotateKernelNeg<T: TxOperations> {
   fn kernel(p0: T, p1: T, m: ((i32, i32), (i32, i32), (i32, i32))) -> (T, T) {
     let t = Self::ADD(p0, p1);
     let (a, b, c) = (p0.tx_mul(m.0), p1.tx_mul(m.1), t.tx_mul(m.2));
-    let out0 = b - c;
-    let out1 = c - a;
+    let out0 = b.sub(c);
+    let out1 = c.sub(a);
     (out0, out1)
   }
 }
@@ -172,98 +198,92 @@ struct RotateNeg;
 struct RotateNegAvg;
 
 impl<T: TxOperations> RotateKernel<T> for RotateAdd {
-  const ADD: fn(T, T) -> T = Add::add;
-  const SUB: fn(T, T) -> T = Sub::sub;
+  const ADD: fn(T, T) -> T = T::add;
+  const SUB: fn(T, T) -> T = T::sub;
   const SHIFT: fn(T) -> T = T::copy_fn;
 }
 
 impl<T: TxOperations> RotateKernel<T> for RotateAddAvg {
   const ADD: fn(T, T) -> T = T::add_avg;
-  const SUB: fn(T, T) -> T = Sub::sub;
+  const SUB: fn(T, T) -> T = T::sub;
   const SHIFT: fn(T) -> T = T::copy_fn;
 }
 
 impl<T: TxOperations> RotateKernel<T> for RotateAddShift {
-  const ADD: fn(T, T) -> T = Add::add;
-  const SUB: fn(T, T) -> T = Sub::sub;
+  const ADD: fn(T, T) -> T = T::add;
+  const SUB: fn(T, T) -> T = T::sub;
   const SHIFT: fn(T) -> T = T::rshift1;
 }
 
 impl<T: TxOperations> RotateKernel<T> for RotateSub {
-  const ADD: fn(T, T) -> T = Sub::sub;
-  const SUB: fn(T, T) -> T = Add::add;
+  const ADD: fn(T, T) -> T = T::sub;
+  const SUB: fn(T, T) -> T = T::add;
   const SHIFT: fn(T) -> T = T::copy_fn;
 }
 
 impl<T: TxOperations> RotateKernel<T> for RotateSubAvg {
   const ADD: fn(T, T) -> T = T::sub_avg;
-  const SUB: fn(T, T) -> T = Add::add;
+  const SUB: fn(T, T) -> T = T::add;
   const SHIFT: fn(T) -> T = T::copy_fn;
 }
 
 impl<T: TxOperations> RotateKernel<T> for RotateSubShift {
   const ADD: fn(T, T) -> T = T::sub;
-  const SUB: fn(T, T) -> T = Add::add;
+  const SUB: fn(T, T) -> T = T::add;
   const SHIFT: fn(T) -> T = T::rshift1;
 }
 
 impl<T: TxOperations> RotateKernelNeg<T> for RotateNeg {
-  const ADD: fn(T, T) -> T = Sub::sub;
+  const ADD: fn(T, T) -> T = T::sub;
 }
 
 impl<T: TxOperations> RotateKernelNeg<T> for RotateNegAvg {
   const ADD: fn(T, T) -> T = T::sub_avg;
 }
 
+#[inline]
 fn butterfly_add<T: TxOperations>(p0: T, p1: T) -> ((T, T), T) {
-  let p0 = p0 + p1;
+  let p0 = p0.add(p1);
   let p0h = p0.rshift1();
-  let p1h = p1 - p0h;
+  let p1h = p1.sub(p0h);
   ((p0h, p0), p1h)
 }
 
+#[inline]
 fn butterfly_sub<T: TxOperations>(p0: T, p1: T) -> ((T, T), T) {
-  let p0 = p0 - p1;
+  let p0 = p0.sub(p1);
   let p0h = p0.rshift1();
-  let p1h = p1 + p0h;
+  let p1h = p1.add(p0h);
   ((p0h, p0), p1h)
 }
 
+#[inline]
 fn butterfly_neg<T: TxOperations>(p0: T, p1: T) -> (T, (T, T)) {
-  let p1 = p0 - p1;
+  let p1 = p0.sub(p1);
   let p1h = p1.rshift1();
-  let p0h = p0 - p1h;
+  let p0h = p0.sub(p1h);
   (p0h, (p1h, p1))
 }
 
+#[inline]
 fn butterfly_add_asym<T: TxOperations>(p0: (T, T), p1h: T) -> (T, T) {
-  let p1 = p1h + p0.0;
-  let p0 = p0.1 - p1;
+  let p1 = p1h.add(p0.0);
+  let p0 = p0.1.sub(p1);
   (p0, p1)
 }
 
+#[inline]
 fn butterfly_sub_asym<T: TxOperations>(p0: (T, T), p1h: T) -> (T, T) {
-  let p1 = p1h - p0.0;
-  let p0 = p0.1 + p1;
+  let p1 = p1h.sub(p0.0);
+  let p0 = p0.1.add(p1);
   (p0, p1)
 }
 
+#[inline]
 fn butterfly_neg_asym<T: TxOperations>(p0h: T, p1: (T, T)) -> (T, T) {
-  let p0 = p0h + p1.0;
-  let p1 = p0 - p1.1;
+  let p0 = p0h.add(p1.0);
+  let p1 = p0.sub(p1.1);
   (p0, p1)
-}
-
-macro_rules! store_coeffs {
-  ( $arr:expr, $( $x:expr ),* ) => {
-      {
-      let mut i: i32 = -1;
-      $(
-        i += 1;
-        $arr[i as usize] = $x;
-      )*
-    }
-  };
 }
 
 fn daala_fdct_ii_2_asym<T: TxOperations>(p0h: T, p1: (T, T)) -> (T, T) {
@@ -294,7 +314,7 @@ fn daala_fdct_ii_4<T: TxOperations>(
 pub fn daala_fdct4<T: TxOperations>(input: &[T], output: &mut [T]) {
   assert!(input.len() >= 4);
   assert!(output.len() >= 4);
-  let mut temp_out: [T; 4] = [T::default(); 4];
+  let mut temp_out: [T; 4] = [T::zero(); 4];
   daala_fdct_ii_4(input[0], input[1], input[2], input[3], &mut temp_out);
 
   output[0] = temp_out[0];
@@ -311,12 +331,12 @@ pub fn daala_fdst_vii_4<T: TxOperations>(input: &[T], output: &mut [T]) {
   let q1 = input[1];
   let q2 = input[2];
   let q3 = input[3];
-  let t0 = q1 + q3;
+  let t0 = q1.add(q3);
   // t1 = (q0 + q1 - q3)/2
-  let t1 = q1 + q0.sub_avg(t0);
-  let t2 = q0 - q1;
+  let t1 = q1.add(q0.sub_avg(t0));
+  let t2 = q0.sub(q1);
   let t3 = q2;
-  let t4 = q0 + q3;
+  let t4 = q0.add(q3);
   // 7021/16384 ~= 2*Sin[2*Pi/9]/3 ~= 0.428525073124360
   let t0 = t0.tx_mul((7021, 14));
   // 37837/32768 ~= 4*Sin[3*Pi/9]/3 ~= 1.154700538379252
@@ -328,11 +348,11 @@ pub fn daala_fdst_vii_4<T: TxOperations>(input: &[T], output: &mut [T]) {
   // 467/2048 ~= 2*Sin[1*Pi/9]/3 ~= 0.228013428883779
   let t4 = t4.tx_mul((467, 11));
   let t3h = t3.rshift1();
-  let u4 = t4 + t3h;
-  output[0] = t0 + u4;
+  let u4 = t4.add(t3h);
+  output[0] = t0.add(u4);
   output[1] = t1;
-  output[2] = t0 + (t2 - t3h);
-  output[3] = t2 + (t3 - u4);
+  output[2] = t0.add(t2.sub(t3h));
+  output[3] = t2.add(t3.sub(u4));
 }
 
 fn daala_fdct_ii_2<T: TxOperations>(p0: T, p1: T) -> (T, T) {
@@ -414,7 +434,7 @@ fn daala_fdct_ii_8<T: TxOperations>(
 pub fn daala_fdct8<T: TxOperations>(input: &[T], output: &mut [T]) {
   assert!(input.len() >= 8);
   assert!(output.len() >= 8);
-  let mut temp_out: [T; 8] = [T::default(); 8];
+  let mut temp_out: [T; 8] = [T::zero(); 8];
   daala_fdct_ii_8(
     input[0],
     input[1],
@@ -495,7 +515,7 @@ fn daala_fdst_iv_8<T: TxOperations>(
 pub fn daala_fdst8<T: TxOperations>(input: &[T], output: &mut [T]) {
   assert!(input.len() >= 8);
   assert!(output.len() >= 8);
-  let mut temp_out: [T; 8] = [T::default(); 8];
+  let mut temp_out: [T; 8] = [T::zero(); 8];
   daala_fdst_iv_8(
     input[0],
     input[1],
@@ -640,7 +660,7 @@ fn daala_fdct_ii_16<T: TxOperations>(
 fn daala_fdct16<T: TxOperations>(input: &[T], output: &mut [T]) {
   assert!(input.len() >= 16);
   assert!(output.len() >= 16);
-  let mut temp_out: [T; 16] = [T::default(); 16];
+  let mut temp_out: [T; 16] = [T::zero(); 16];
   daala_fdct_ii_16(
     input[0],
     input[1],
@@ -806,7 +826,7 @@ fn daala_fdst_iv_16<T: TxOperations>(
 fn daala_fdst16<T: TxOperations>(input: &[T], output: &mut [T]) {
   assert!(input.len() >= 16);
   assert!(output.len() >= 16);
-  let mut temp_out: [T; 16] = [T::default(); 16];
+  let mut temp_out: [T; 16] = [T::zero(); 16];
   daala_fdst_iv_16(
     input[0],
     input[1],
@@ -1069,7 +1089,7 @@ fn daala_fdct_ii_32<T: TxOperations>(
 fn daala_fdct32<T: TxOperations>(input: &[T], output: &mut [T]) {
   assert!(input.len() >= 32);
   assert!(output.len() >= 32);
-  let mut temp_out: [T; 32] = [T::default(); 32];
+  let mut temp_out: [T; 32] = [T::zero(); 32];
   daala_fdct_ii_32(
     input[0],
     input[1],
@@ -1483,11 +1503,14 @@ fn daala_fdct64<T: TxOperations>(input: &[T], output: &mut [T]) {
   assert!(input.len() >= 64);
   assert!(output.len() >= 64);
   // Use arrays to avoid ridiculous variable names
-  let mut asym: [(T, T); 32] = [<(T, T)>::default(); 32];
-  let mut half: [T; 32] = [T::default(); 32];
+  let mut asym: [(T, T); 32] = [(T::zero(), T::zero()); 32];
+  let mut half: [T; 32] = [T::zero(); 32];
   // +/- Butterflies with asymmetric output.
   {
-    let mut butterfly_pair = |i: usize| {
+    #[inline]
+    fn butterfly_pair<T: TxOperations>(
+      half: &mut [T; 32], asym: &mut [(T, T); 32], input: &[T], i: usize,
+    ) {
       let j = i * 2;
       let (ah, c) = butterfly_neg(input[j], input[63 - j]);
       let (b, dh) = butterfly_add(input[j + 1], input[63 - j - 1]);
@@ -1495,26 +1518,26 @@ fn daala_fdct64<T: TxOperations>(input: &[T], output: &mut [T]) {
       half[31 - i] = dh;
       asym[i] = b;
       asym[31 - i] = c;
-    };
-    butterfly_pair(0);
-    butterfly_pair(1);
-    butterfly_pair(2);
-    butterfly_pair(3);
-    butterfly_pair(4);
-    butterfly_pair(5);
-    butterfly_pair(6);
-    butterfly_pair(7);
-    butterfly_pair(8);
-    butterfly_pair(9);
-    butterfly_pair(10);
-    butterfly_pair(11);
-    butterfly_pair(12);
-    butterfly_pair(13);
-    butterfly_pair(14);
-    butterfly_pair(15);
+    }
+    butterfly_pair(&mut half, &mut asym, input, 0);
+    butterfly_pair(&mut half, &mut asym, input, 1);
+    butterfly_pair(&mut half, &mut asym, input, 2);
+    butterfly_pair(&mut half, &mut asym, input, 3);
+    butterfly_pair(&mut half, &mut asym, input, 4);
+    butterfly_pair(&mut half, &mut asym, input, 5);
+    butterfly_pair(&mut half, &mut asym, input, 6);
+    butterfly_pair(&mut half, &mut asym, input, 7);
+    butterfly_pair(&mut half, &mut asym, input, 8);
+    butterfly_pair(&mut half, &mut asym, input, 9);
+    butterfly_pair(&mut half, &mut asym, input, 10);
+    butterfly_pair(&mut half, &mut asym, input, 11);
+    butterfly_pair(&mut half, &mut asym, input, 12);
+    butterfly_pair(&mut half, &mut asym, input, 13);
+    butterfly_pair(&mut half, &mut asym, input, 14);
+    butterfly_pair(&mut half, &mut asym, input, 15);
   }
 
-  let mut temp_out: [T; 64] = [T::default(); 64];
+  let mut temp_out: [T; 64] = [T::zero(); 64];
   // Embedded 2-point transforms with asymmetric input.
   daala_fdct_ii_32_asym(
     half[0],
@@ -1589,29 +1612,32 @@ fn daala_fdct64<T: TxOperations>(input: &[T], output: &mut [T]) {
   temp_out[32..64].reverse();
 
   // Store a reordered version of output in temp_out
-  let mut reorder_4 = |i: usize, j: usize| {
-    output[0 + i * 4] = temp_out[0 + j];
-    output[1 + i * 4] = temp_out[32 + j];
-    output[2 + i * 4] = temp_out[16 + j];
-    output[3 + i * 4] = temp_out[48 + j];
-  };
-  reorder_4(0, 0);
-  reorder_4(1, 8);
-  reorder_4(2, 4);
-  reorder_4(3, 12);
-  reorder_4(4, 2);
-  reorder_4(5, 10);
-  reorder_4(6, 6);
-  reorder_4(7, 14);
+  #[inline]
+  fn reorder_4<T: TxOperations>(
+    output: &mut [T], i: usize, tmp: [T; 64], j: usize,
+  ) {
+    output[0 + i * 4] = tmp[0 + j];
+    output[1 + i * 4] = tmp[32 + j];
+    output[2 + i * 4] = tmp[16 + j];
+    output[3 + i * 4] = tmp[48 + j];
+  }
+  reorder_4(output, 0, temp_out, 0);
+  reorder_4(output, 1, temp_out, 8);
+  reorder_4(output, 2, temp_out, 4);
+  reorder_4(output, 3, temp_out, 12);
+  reorder_4(output, 4, temp_out, 2);
+  reorder_4(output, 5, temp_out, 10);
+  reorder_4(output, 6, temp_out, 6);
+  reorder_4(output, 7, temp_out, 14);
 
-  reorder_4(8, 1);
-  reorder_4(9, 9);
-  reorder_4(10, 5);
-  reorder_4(11, 13);
-  reorder_4(12, 3);
-  reorder_4(13, 11);
-  reorder_4(14, 7);
-  reorder_4(15, 15);
+  reorder_4(output, 8, temp_out, 1);
+  reorder_4(output, 9, temp_out, 9);
+  reorder_4(output, 10, temp_out, 5);
+  reorder_4(output, 11, temp_out, 13);
+  reorder_4(output, 12, temp_out, 3);
+  reorder_4(output, 13, temp_out, 11);
+  reorder_4(output, 14, temp_out, 7);
+  reorder_4(output, 15, temp_out, 15);
 }
 
 pub fn fidentity4<T: TxOperations>(input: &[T], output: &mut [T]) {
