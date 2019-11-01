@@ -565,6 +565,7 @@ impl<T: Pixel> ContextInner<T> {
         // right now instead of in encode_tile?
         frame_mvs: fs.frame_mvs,
         output_frameno,
+        segmentation: fs.segmentation,
       });
       for i in 0..(REF_FRAMES as usize) {
         if (fi.refresh_frame_flags & (1 << i)) != 0 {
@@ -666,6 +667,7 @@ impl<T: Pixel> ContextInner<T> {
       cdfs: fs.cdfs,
       frame_mvs: fs.frame_mvs,
       output_frameno,
+      segmentation: fs.segmentation,
     });
     for i in 0..(REF_FRAMES as usize) {
       if (fi.refresh_frame_flags & (1 << i)) != 0 {
