@@ -9,9 +9,11 @@
 
 use arg_enum_proc_macro::ArgEnum;
 use std::env;
+use std::str::FromStr;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, ArgEnum)]
 pub enum CpuFeatureLevel {
+  #[arg_enum(alias = "rust")]
   NATIVE,
   NEON,
 }
@@ -31,11 +33,7 @@ impl Default for CpuFeatureLevel {
   fn default() -> CpuFeatureLevel {
     let detected = CpuFeatureLevel::NEON;
     let manual: CpuFeatureLevel = match env::var("RAV1E_CPU_TARGET") {
-      Ok(feature) => match feature.as_ref() {
-        "rust" => CpuFeatureLevel::NATIVE,
-        "neon" => CpuFeatureLevel::NEON,
-        _ => detected,
-      },
+      Ok(feature) =>  CpuFeatureLevel::from_str(&feature).unwrap_or(detected),
       Err(_e) => detected,
     };
     if manual > detected {
