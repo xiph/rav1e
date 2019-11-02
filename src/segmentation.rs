@@ -32,7 +32,9 @@ pub fn segmentation_optimize<T: Pixel>(
   // Because base_q_idx changes more frequently than the segmentation
   // data, it is still possible for a segment to enter lossless, so
   // enforcement elsewhere is needed.
-  let offset_lower_limit = 1 - fi.base_q_idx as i16;
+  let min_delta_q =
+    *fi.ac_delta_q.iter().chain(fi.dc_delta_q.iter()).min().unwrap();
+  let offset_lower_limit = 1 - fi.base_q_idx as i16 - min_delta_q as i16;
 
   // Fill in 3 slots with 0, delta, -delta. The slot IDs are also used in
   // luma_chroma_mode_rdo() so if you change things here make sure to check
