@@ -692,6 +692,8 @@ pub unsafe extern fn rav1e_last_status(ctx: *const Context) -> EncoderStatus {
 }
 
 /// Return a string matching the EncoderStatus variant.
+///
+/// Must be freed with free().
 #[no_mangle]
 pub unsafe extern fn rav1e_status_to_str(
   status: EncoderStatus,
