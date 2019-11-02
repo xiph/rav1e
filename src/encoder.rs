@@ -1220,7 +1220,11 @@ pub fn encode_tx_block<T: Pixel>(
     // Store tx-domain distortion of this block
     tx_dist = coeffs
       .iter()
-      .zip(rcoeffs)
+      .zip(
+        // rcoeffs above 32 rows/cols are always 0. The first 32x32 is stored
+        // first in coeffs, so just chain repeating zeroes to rcoeff.
+        rcoeffs.iter().chain(std::iter::repeat(&0)),
+      )
       .map(|(a, b)| {
         let c = *a as i32 - *b as i32;
         (c * c) as u64
