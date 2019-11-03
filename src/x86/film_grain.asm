@@ -27,7 +27,7 @@
 
 %if ARCH_X86_64
 
-SECTION_RODATA
+SECTION_RODATA 32
 pw_1024: times 16 dw 1024
 pb_mask: db 0, 0x80, 0x80, 0, 0x80, 0, 0, 0x80, 0x80, 0, 0, 0x80, 0, 0x80, 0x80, 0
 rnd_next_upperbit_mask: dw 0x100B, 0x2016, 0x402C, 0x8058
