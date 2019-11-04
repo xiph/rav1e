@@ -100,6 +100,21 @@ pub enum EncoderStatus {
   NotReady = -2,
 }
 
+impl EncoderStatus {
+  fn to_c(&self) -> *const u8 {
+    use self::EncoderStatus::*;
+    match self {
+      Success => "Normal operation\0".as_ptr(),
+      NeedMoreData => "The encoder needs more data to produce an output packet\0".as_ptr(),
+      EnoughData => "There are enough frames in the queue\0".as_ptr(),
+      LimitReached => "The encoder has already produced the number of frames requested\0".as_ptr(),
+      Encoded => "A Frame had been encoded but not emitted yet\0".as_ptr(),
+      Failure => "Generic fatal error\0".as_ptr(),
+      NotReady => "First-pass stats data not retrieved or not enough second-pass data provided\0".as_ptr(),
+    }
+  }
+}
+
 impl From<Option<rav1e::EncoderStatus>> for EncoderStatus {
   fn from(status: Option<rav1e::EncoderStatus>) -> Self {
     match status {
@@ -701,28 +716,17 @@ pub unsafe extern fn rav1e_last_status(ctx: *const Context) -> EncoderStatus {
   (*ctx).last_err.into()
 }
 
-/// Return a string matching the EncoderStatus variant.
+/// Return a static string matching the EncoderStatus variant.
 ///
-/// Must be freed with free().
 #[no_mangle]
 pub unsafe extern fn rav1e_status_to_str(
   status: EncoderStatus,
-) -> *mut c_char {
+) -> *const c_char {
   if EncoderStatus::from_i32(std::mem::transmute(status)).is_none() {
-    return std::ptr::null_mut();
+    return std::ptr::null();
   }
 
-  let status = format!("{:?}", status);
-  let cbuf = CString::new(status).unwrap();
-  let len = cbuf.as_bytes_with_nul().len();
-  let ret = libc::malloc(len);
-
-  if !ret.is_null() {
-    let cptr = cbuf.as_ptr() as *const libc::c_void;
-    libc::memcpy(ret, cptr, len);
-  }
-
-  ret as *mut c_char
+  status.to_c() as *const c_char
 }
 
 /// Receive encoded data
