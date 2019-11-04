@@ -10,7 +10,6 @@
 
 #![allow(non_camel_case_types)]
 
-use crate::lrf::get_integral_square;
 use crate::api::*;
 use crate::cdef::*;
 use crate::context::*;

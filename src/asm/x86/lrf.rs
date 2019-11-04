@@ -21,7 +21,7 @@ use std::mem;
 // computes an intermediate (ab) row for stripe_w + 2 columns at row y
 #[inline]
 pub fn sgrproj_box_ab_r1(
-  af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
+  af: &mut [u32], bf: &mut [u32],
   integral_image_buffer: &IntegralImageBuffer,
   iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
   cpu: CpuFeatureLevel,
@@ -45,8 +45,6 @@ pub fn sgrproj_box_ab_r1(
   native::sgrproj_box_ab_r1(
     af,
     bf,
-    iimg,
-    iimg_sq,
     integral_image_buffer,
     iimg_stride,
     y,
@@ -60,7 +58,7 @@ pub fn sgrproj_box_ab_r1(
 // computes an intermediate (ab) row for stripe_w + 2 columns at row y
 #[inline]
 pub fn sgrproj_box_ab_r2(
-  af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
+  af: &mut [u32], bf: &mut [u32],
   integral_image_buffer: &IntegralImageBuffer,
   iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
   cpu: CpuFeatureLevel,
@@ -84,8 +82,6 @@ pub fn sgrproj_box_ab_r2(
   native::sgrproj_box_ab_r2(
     af,
     bf,
-    iimg,
-    iimg_sq,
     integral_image_buffer,
     iimg_stride,
     y,
@@ -138,6 +134,7 @@ pub fn sgrproj_box_f_r2<T: Pixel>(
   native::sgrproj_box_f_r2(af, bf, f0, f1, y, w, cdeffed, cpu);
 }
 
+#[allow(unused)]
 static X_BY_XPLUS1: [u32; 256] = [
   // Special case: Map 0 -> 1 (corresponding to a value of 1/256)
   // instead of 0. See comments in selfguided_restoration_internal() for why
@@ -160,6 +157,7 @@ static X_BY_XPLUS1: [u32; 256] = [
   255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 256,
 ];
 
+#[allow(unused)]
 #[inline]
 #[target_feature(enable = "avx2")]
 unsafe fn sgrproj_box_ab_8_avx2(
@@ -237,6 +235,7 @@ unsafe fn sgrproj_box_ab_8_avx2(
   _mm256_storeu_si256(bf.as_mut_ptr().add(x) as *mut _, b);
 }
 
+#[allow(unused)]
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
   af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
@@ -263,8 +262,6 @@ pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
         1,
         af,
         bf,
-        iimg,
-        iimg_sq,
         integral_image_buffer,
         iimg_stride,
         x,
@@ -284,8 +281,6 @@ pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
       1,
       &mut af_ref,
       &mut bf_ref,
-      iimg,
-      iimg_sq,
       integral_image_buffer,
       iimg_stride,
       0,
@@ -299,6 +294,7 @@ pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
   }
 }
 
+#[allow(unused)]
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
   af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
@@ -325,8 +321,6 @@ pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
         2,
         af,
         bf,
-        iimg,
-        iimg_sq,
         integral_image_buffer,
         iimg_stride,
         x,
@@ -346,8 +340,6 @@ pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
       2,
       &mut af_ref,
       &mut bf_ref,
-      iimg,
-      iimg_sq,
       integral_image_buffer,
       iimg_stride,
       0,

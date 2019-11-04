@@ -164,7 +164,7 @@ pub(crate) mod native {
   use crate::cpu_features::CpuFeatureLevel;
   use crate::frame::PlaneSlice;
   use crate::lrf::{
-    get_integral_square, sgrproj_sum_finish, SGRPROJ_RST_BITS,
+    sgrproj_sum_finish, SGRPROJ_RST_BITS,
     SGRPROJ_SGR_BITS, IntegralImageBuffer,
   };
   use crate::util::CastFromPrimitive;
@@ -172,7 +172,7 @@ pub(crate) mod native {
 
   #[inline(always)]
   pub(crate) fn sgrproj_box_ab_internal(
-    r: usize, af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
+    r: usize, af: &mut [u32], bf: &mut [u32],
     integral_image_buffer: &IntegralImageBuffer,
     iimg_stride: usize, start_x: usize, y: usize, stripe_w: usize, s: u32,
     bdm8: usize,
@@ -184,21 +184,6 @@ pub(crate) mod native {
     let sum_array_offset = y * iimg_stride;
 
     for x in start_x..stripe_w + 2 {
-      /*let sum2 = get_integral_square(iimg, iimg_stride, x, y, d);
-      let ssq2 = get_integral_square(iimg_sq, iimg_stride, x, y, d);
-
-      if r == 1 {
-        let s2 = integral_image_buffer.sum_3x3[sum_array_offset + x];
-        let sq2 = integral_image_buffer.sum_sq_3x3[sum_array_offset + x];
-        debug_assert!(sum2 == s2);
-        debug_assert!(ssq2 == sq2);
-      }
-      if r == 2 {
-        let s2 = integral_image_buffer.sum_5x5[sum_array_offset + x];
-        let sq2 = integral_image_buffer.sum_sq_5x5[sum_array_offset + x];
-        debug_assert!(sum2 == s2);
-        debug_assert!(ssq2 == sq2);
-      }*/
       let sum = if r == 2 {integral_image_buffer.sum_5x5[sum_array_offset + x] }
                 else { integral_image_buffer.sum_3x3[sum_array_offset + x] };
       let ssq = if r == 2 { integral_image_buffer.sum_sq_5x5[sum_array_offset + x] }
@@ -212,7 +197,7 @@ pub(crate) mod native {
 
   // computes an intermediate (ab) row for stripe_w + 2 columns at row y
   pub(crate) fn sgrproj_box_ab_r1(
-    af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
+    af: &mut [u32], bf: &mut [u32],
     integral_image_buffer: &IntegralImageBuffer,
     iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
     _cpu: CpuFeatureLevel,
@@ -221,8 +206,6 @@ pub(crate) mod native {
       1,
       af,
       bf,
-      iimg,
-      iimg_sq,
       integral_image_buffer,
       iimg_stride,
       0,
@@ -235,7 +218,7 @@ pub(crate) mod native {
 
   // computes an intermediate (ab) row for stripe_w + 2 columns at row y
   pub(crate) fn sgrproj_box_ab_r2(
-    af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
+    af: &mut [u32], bf: &mut [u32],
     integral_image_buffer: &IntegralImageBuffer,
     iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
     _cpu: CpuFeatureLevel,
@@ -244,8 +227,6 @@ pub(crate) mod native {
       2,
       af,
       bf,
-      iimg,
-      iimg_sq,
       integral_image_buffer,
       iimg_stride,
       0,
@@ -677,14 +658,10 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
   // the spec doesn't make clear: Although the spec defines computation
   // of every row (of a, b and f), only half of the rows (every-other
   // row) are actually used.
-  let integral_image = &integral_image_buffer.integral_image;
-  let sq_integral_image = &integral_image_buffer.sq_integral_image;
   if s_r2 > 0 {
     sgrproj_box_ab_r2(
       &mut a_r2[0],
       &mut b_r2[0],
-      integral_image,
-      sq_integral_image,
       integral_image_buffer,
       integral_image_stride,
       0,
@@ -695,12 +672,9 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
     );
   }
   if s_r1 > 0 {
-    let integral_image_offset = integral_image_stride + 1;
     sgrproj_box_ab_r1(
       &mut a_r1[0],
       &mut b_r1[0],
-      &integral_image[integral_image_offset..],
-      &sq_integral_image[integral_image_offset..],
       integral_image_buffer,
       integral_image_stride,
       0,
@@ -712,8 +686,6 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
     sgrproj_box_ab_r1(
       &mut a_r1[1],
       &mut b_r1[1],
-      &integral_image[integral_image_offset..],
-      &sq_integral_image[integral_image_offset..],
       integral_image_buffer,
       integral_image_stride,
       1,
@@ -733,8 +705,6 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
       sgrproj_box_ab_r2(
         &mut a_r2[(y / 2 + 1) % 2],
         &mut b_r2[(y / 2 + 1) % 2],
-        integral_image,
-        sq_integral_image,
         integral_image_buffer,
         integral_image_stride,
         y + 2,
@@ -770,12 +740,9 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
     for dy in 0..(2.min(stripe_h - y)) {
       let y = y + dy;
       if s_r1 > 0 {
-        let integral_image_offset = integral_image_stride + 1;
         sgrproj_box_ab_r1(
           &mut a_r1[(y + 2) % 3],
           &mut b_r1[(y + 2) % 3],
-          &integral_image[integral_image_offset..],
-          &sq_integral_image[integral_image_offset..],
           integral_image_buffer,
           integral_image_stride,
           y + 2,
@@ -867,14 +834,10 @@ pub fn sgrproj_solve<T: Pixel>(
   // the spec doesn't make clear: Although the spec defines computation
   // of every row (of a, b and f), only half of the rows (every-other
   // row) are actually used.
-  let integral_image = &integral_image_buffer.integral_image;
-  let sq_integral_image = &integral_image_buffer.sq_integral_image;
   if s_r2 > 0 {
     sgrproj_box_ab_r2(
       &mut a_r2[0],
       &mut b_r2[0],
-      integral_image,
-      sq_integral_image,
       integral_image_buffer,
       SOLVE_IMAGE_STRIDE,
       0,
@@ -885,12 +848,9 @@ pub fn sgrproj_solve<T: Pixel>(
     );
   }
   if s_r1 > 0 {
-    let integral_image_offset = SOLVE_IMAGE_STRIDE + 1;
     sgrproj_box_ab_r1(
       &mut a_r1[0],
       &mut b_r1[0],
-      &integral_image[integral_image_offset..],
-      &sq_integral_image[integral_image_offset..],
       integral_image_buffer,
       SOLVE_IMAGE_STRIDE,
       0,
@@ -902,8 +862,6 @@ pub fn sgrproj_solve<T: Pixel>(
     sgrproj_box_ab_r1(
       &mut a_r1[1],
       &mut b_r1[1],
-      &integral_image[integral_image_offset..],
-      &sq_integral_image[integral_image_offset..],
       integral_image_buffer,
       SOLVE_IMAGE_STRIDE,
       1,
@@ -923,8 +881,6 @@ pub fn sgrproj_solve<T: Pixel>(
       sgrproj_box_ab_r2(
         &mut a_r2[(y / 2 + 1) % 2],
         &mut b_r2[(y / 2 + 1) % 2],
-        integral_image,
-        sq_integral_image,
         integral_image_buffer,
         SOLVE_IMAGE_STRIDE,
         y + 2,
@@ -954,12 +910,9 @@ pub fn sgrproj_solve<T: Pixel>(
     for dy in 0..(2.min(cdef_h - y)) {
       let y = y + dy;
       if s_r1 > 0 {
-        let integral_image_offset = SOLVE_IMAGE_STRIDE + 1;
         sgrproj_box_ab_r1(
           &mut a_r1[(y + 2) % 3],
           &mut b_r1[(y + 2) % 3],
-          &integral_image[integral_image_offset..],
-          &sq_integral_image[integral_image_offset..],
           integral_image_buffer,
           SOLVE_IMAGE_STRIDE,
           y + 2,
