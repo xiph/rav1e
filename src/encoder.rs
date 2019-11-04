@@ -66,6 +66,7 @@ pub struct ReferenceFrame<T: Pixel> {
   pub cdfs: CDFContext,
   pub frame_mvs: Vec<FrameMotionVectors>,
   pub output_frameno: u64,
+  pub base_q_idx: u8,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -3435,6 +3436,7 @@ pub fn update_rec_buffer<T: Pixel>(
     cdfs: fs.cdfs,
     frame_mvs: fs.frame_mvs,
     output_frameno,
+    base_q_idx: fi.base_q_idx,
   });
   for i in 0..(REF_FRAMES as usize) {
     if (fi.refresh_frame_flags & (1 << i)) != 0 {
