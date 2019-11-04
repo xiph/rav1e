@@ -21,8 +21,7 @@ use std::mem;
 // computes an intermediate (ab) row for stripe_w + 2 columns at row y
 #[inline]
 pub fn sgrproj_box_ab_r1(
-  af: &mut [u32], bf: &mut [u32],
-  integral_image_buffer: &IntegralImageBuffer,
+  af: &mut [u32], bf: &mut [u32], integral_image_buffer: &IntegralImageBuffer,
   iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
   cpu: CpuFeatureLevel,
 ) {
@@ -58,8 +57,7 @@ pub fn sgrproj_box_ab_r1(
 // computes an intermediate (ab) row for stripe_w + 2 columns at row y
 #[inline]
 pub fn sgrproj_box_ab_r2(
-  af: &mut [u32], bf: &mut [u32],
-  integral_image_buffer: &IntegralImageBuffer,
+  af: &mut [u32], bf: &mut [u32], integral_image_buffer: &IntegralImageBuffer,
   iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
   cpu: CpuFeatureLevel,
 ) {
@@ -239,8 +237,8 @@ unsafe fn sgrproj_box_ab_8_avx2(
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
   af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
-  integral_image_buffer: &IntegralImageBuffer,
-  iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
+  integral_image_buffer: &IntegralImageBuffer, iimg_stride: usize, y: usize,
+  stripe_w: usize, s: u32, bdm8: usize,
 ) {
   for x in (0..stripe_w + 2).step_by(8) {
     if x + 8 <= stripe_w + 2 {
@@ -298,8 +296,8 @@ pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
   af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
-  integral_image_buffer: &IntegralImageBuffer,
-  iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
+  integral_image_buffer: &IntegralImageBuffer, iimg_stride: usize, y: usize,
+  stripe_w: usize, s: u32, bdm8: usize,
 ) {
   for x in (0..stripe_w + 2).step_by(8) {
     if x + 8 <= stripe_w + 2 {
