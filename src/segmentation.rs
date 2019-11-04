@@ -10,7 +10,6 @@
 #![allow(safe_extern_statics)]
 
 use crate::context::*;
-use crate::header::PRIMARY_REF_NONE;
 use crate::util::Pixel;
 use crate::FrameInvariants;
 use crate::FrameState;
@@ -21,8 +20,8 @@ pub fn segmentation_optimize<T: Pixel>(
   fs.segmentation.enabled = true;
   fs.segmentation.update_map = true;
 
-  // We don't change the values between frames.
-  fs.segmentation.update_data = fi.primary_ref_frame == PRIMARY_REF_NONE;
+  // Force an update on every frame until we carry over data.
+  fs.segmentation.update_data = true;
 
   // A series of AWCY runs with deltas 13, 15, 17, 18, 19, 20, 21, 22, 23
   // showed this to be the optimal one.
