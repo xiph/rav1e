@@ -423,11 +423,11 @@ impl SpeedSettings {
   }
 
   const fn cdef_preset(_speed: usize) -> bool {
-    true
+    false
   }
 
   const fn lrf_preset(_speed: usize) -> bool {
-    true
+    false
   }
 
   const fn quantizer_rdo_preset(speed: usize) -> bool {
