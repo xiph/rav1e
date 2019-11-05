@@ -41,7 +41,7 @@ pub fn write_y4m_frame<T: Pixel>(
     if y4m_details.bit_depth > 8 {
       unsafe {
         line_out.copy_from_slice(slice::from_raw_parts::<u8>(
-          line.as_ptr() as (*const u8),
+          line.as_ptr() as *const u8,
           pitch_y,
         ));
       }
@@ -60,7 +60,7 @@ pub fn write_y4m_frame<T: Pixel>(
     if y4m_details.bit_depth > 8 {
       unsafe {
         line_out.copy_from_slice(slice::from_raw_parts::<u8>(
-          line.as_ptr() as (*const u8),
+          line.as_ptr() as *const u8,
           pitch_uv,
         ));
       }
@@ -79,7 +79,7 @@ pub fn write_y4m_frame<T: Pixel>(
     if y4m_details.bit_depth > 8 {
       unsafe {
         line_out.copy_from_slice(slice::from_raw_parts::<u8>(
-          line.as_ptr() as (*const u8),
+          line.as_ptr() as *const u8,
           pitch_uv,
         ));
       }

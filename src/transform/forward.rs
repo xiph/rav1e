@@ -290,7 +290,7 @@ fn daala_fdct_ii_2_asym<T: TxOperations>(p0h: T, p1: (T, T)) -> (T, T) {
   butterfly_neg_asym(p0h, p1)
 }
 
-fn daala_fdst_iv_2_asym<T: TxOperations>(p0: (T, T), p1h: (T)) -> (T, T) {
+fn daala_fdst_iv_2_asym<T: TxOperations>(p0: (T, T), p1h: T) -> (T, T) {
   //   473/512 = (Sin[3*Pi/8] + Cos[3*Pi/8])/Sqrt[2] = 0.9238795325112867
   // 3135/4096 = (Sin[3*Pi/8] - Cos[3*Pi/8])*Sqrt[2] = 0.7653668647301795
   // 4433/8192 = Cos[3*Pi/8]*Sqrt[2]                 = 0.5411961001461971
