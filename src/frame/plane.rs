@@ -488,6 +488,8 @@ impl<'a, T: Pixel> Iterator for PlaneIter<'a, T> {
   }
 }
 
+impl<T: Pixel> FusedIterator for PlaneIter<'_, T> {}
+
 #[derive(Clone, Copy, Debug)]
 pub struct PlaneSlice<'a, T: Pixel> {
   pub plane: &'a Plane<T>,

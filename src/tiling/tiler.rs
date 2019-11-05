@@ -13,6 +13,7 @@ use crate::context::*;
 use crate::encoder::*;
 use crate::util::*;
 
+use std::iter::FusedIterator;
 use std::marker::PhantomData;
 
 pub const MAX_TILE_WIDTH: usize = 4096;
@@ -216,6 +217,7 @@ impl<'a, 'b, T: Pixel> Iterator for TileContextIterMut<'a, 'b, T> {
 }
 
 impl<T: Pixel> ExactSizeIterator for TileContextIterMut<'_, '_, T> {}
+impl<T: Pixel> FusedIterator for TileContextIterMut<'_, '_, T> {}
 
 #[cfg(test)]
 pub mod test {
