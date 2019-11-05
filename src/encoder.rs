@@ -2117,7 +2117,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
   bsize: BlockSize, tile_bo: TileBlockOffset,
   pmvs: &mut [[Option<MotionVector>; REF_FRAMES]; 5], ref_rd_cost: f64,
   inter_cfg: &InterConfig,
-) -> (PartitionGroupParameters) {
+) -> PartitionGroupParameters {
   let rdo_type = RDOType::PixelDistRealRate;
   let mut rd_cost = std::f64::MAX;
   let mut best_rd = std::f64::MAX;
