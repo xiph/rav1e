@@ -118,3 +118,6 @@ lto = true
 
 [workspace]
 members = [".", "ivf", "crates/nasm_rs", "crates/avformat-sys"]
+
+[replace]
+"rayon:1.2.0" = { git = 'https://github.com/nikomatsakis/rayon.git', branch = 'latch-target-thread' }
