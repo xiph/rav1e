@@ -84,4 +84,11 @@
         vtrn.8          \r6,  \r7
 .endm
 
+.macro transpose_4x8b q0, q1, r0, r1, r2, r3
+        vtrn.16         \q0,  \q1
+
+        vtrn.8          \r0,  \r1
+        vtrn.8          \r2,  \r3
+.endm
+
 #endif /* DAV1D_SRC_ARM_32_UTIL_S */
