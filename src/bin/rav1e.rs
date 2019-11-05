@@ -237,8 +237,18 @@ fn do_encode<T: Pixel, D: Decoder>(
 }
 
 fn main() {
+  #[cfg(feature = "tracing")]
+  use rust_hawktracer::*;
   better_panic::install();
   init_logger();
+
+  #[cfg(feature = "tracing")]
+  let instance = HawktracerInstance::new();
+  #[cfg(feature = "tracing")]
+  let _listener = instance.create_listener(HawktracerListenerType::ToFile {
+    file_path: "trace.bin".into(),
+    buffer_size: 4096,
+  });
 
   match run() {
     Ok(()) => {}

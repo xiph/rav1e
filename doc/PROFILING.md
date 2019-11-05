@@ -49,3 +49,11 @@ $ cargo rustc --release --bin rav1e -- -Z instrument-mcount
 $ uftrace record --no-libcall -D 5 target/release/rav1e ~/sample.y4m -o /dev/null
 $ uftrace report
 ```
+
+## Tracing
+
+### Hawktracer
+
+We use [rust\_hawktracer](https://github.com/AlexEne/rust_hawktracer) to
+measure specific codepath timings. Building `--features=tracing` enables it.
+Use the standard [hawktrace-convert](https://hawktracer.org) to produce graphs.

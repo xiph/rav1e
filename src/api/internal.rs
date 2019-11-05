@@ -37,6 +37,8 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
+use crate::hawktracer::*;
+
 /// The set of options that controls frame re-ordering and reference picture
 ///  selection.
 /// The options stored here are invariant over the whole encode.
@@ -277,6 +279,7 @@ impl<T: Pixel> ContextInner<T> {
     }
   }
 
+  #[hawktracer(send_frame)]
   pub fn send_frame(
     &mut self, frame: Option<Arc<Frame<T>>>, params: Option<FrameParameters>,
   ) -> Result<(), EncoderStatus> {
@@ -511,6 +514,7 @@ impl<T: Pixel> ContextInner<T> {
   /// `rec_buffer` and `lookahead_rec_buffer` on the `FrameInvariants`. This
   /// function must be called after every new `FrameInvariants` is initially
   /// computed.
+  #[hawktracer(compute_lookahead_motion_vectors)]
   fn compute_lookahead_motion_vectors(&mut self, output_frameno: u64) {
     let fi = self.frame_invariants.get_mut(&output_frameno).unwrap();
 
@@ -679,6 +683,7 @@ impl<T: Pixel> ContextInner<T> {
 
   /// Computes lookahead intra cost approximations and fills in
   /// `lookahead_intra_costs` on the `FrameInvariants`.
+  #[hawktracer(compute_lookahead_intra_costs)]
   fn compute_lookahead_intra_costs(&mut self, output_frameno: u64) {
     let fi = self.frame_invariants.get_mut(&output_frameno).unwrap();
 
@@ -766,6 +771,7 @@ impl<T: Pixel> ContextInner<T> {
     }
   }
 
+  #[hawktracer(compute_lookahead_data)]
   pub fn compute_lookahead_data(&mut self) {
     let lookahead_frames = self
       .frame_q
@@ -822,6 +828,7 @@ impl<T: Pixel> ContextInner<T> {
   }
 
   /// Computes the block importances for the current output frame.
+  #[hawktracer(compute_block_importances)]
   fn compute_block_importances(&mut self) {
     // SEF don't need block importances.
     if self.frame_invariants[&self.output_frameno].show_existing_frame {
@@ -1090,6 +1097,7 @@ impl<T: Pixel> ContextInner<T> {
     }
   }
 
+  #[hawktracer(receive_packet)]
   pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
     if self.done_processing() {
       return Err(EncoderStatus::LimitReached);
