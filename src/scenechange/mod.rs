@@ -13,6 +13,8 @@ use crate::frame::*;
 use crate::util::CastFromPrimitive;
 use crate::util::Pixel;
 
+use crate::hawktracer::*;
+
 use std::cmp;
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -55,6 +57,7 @@ impl SceneChangeDetector {
   /// to the first frame in `frame_set`.
   ///
   /// This will gracefully handle the first frame in the video as well.
+  #[hawktracer(analyze_next_frame)]
   pub fn analyze_next_frame<T: Pixel>(
     &mut self, previous_frame: Option<Arc<Frame<T>>>,
     frame_set: &[Arc<Frame<T>>], input_frameno: u64, config: &EncoderConfig,

@@ -47,6 +47,8 @@ use std::io::Write;
 use std::sync::Arc;
 use std::{fmt, io, mem};
 
+use crate::hawktracer::*;
+
 pub static TEMPORAL_DELIMITER: [u8; 2] = [0x12, 0x00];
 
 const MAX_NUM_TEMPORAL_LAYERS: usize = 8;
@@ -2780,6 +2782,7 @@ fn get_initial_cdfcontext<T: Pixel>(fi: &FrameInvariants<T>) -> CDFContext {
   cdf.unwrap_or_else(|| CDFContext::new(fi.base_q_idx))
 }
 
+#[hawktracer(encode_tile_group)]
 fn encode_tile_group<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
 ) -> Vec<u8> {
@@ -3194,6 +3197,7 @@ pub struct SBSQueueEntry {
   pub w_post_cdef: WriterBase<WriterRecorder>,
 }
 
+#[hawktracer(encode_tile)]
 fn encode_tile<'a, T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   fc: &'a mut CDFContext, blocks: &'a mut TileBlocksMut<'a>,
@@ -3420,7 +3424,6 @@ pub fn encode_frame<T: Pixel>(
   debug_assert!(!fi.show_existing_frame);
   debug_assert!(!fi.invalid);
   let mut packet = Vec::new();
-
   fs.input_hres.downsample_from(&fs.input.planes[0]);
   fs.input_hres.pad(fi.width, fi.height);
   fs.input_qres.downsample_from(&fs.input_hres);
@@ -3428,7 +3431,6 @@ pub fn encode_frame<T: Pixel>(
 
   fs.segmentation = get_initial_segmentation(fi);
   segmentation_optimize(fi, fs);
-
   let tile_group = encode_tile_group(fi, fs, inter_cfg);
 
   write_obus(&mut packet, fi, fs, inter_cfg).unwrap();
