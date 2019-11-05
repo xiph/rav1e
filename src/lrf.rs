@@ -30,6 +30,7 @@ use crate::util::ILog;
 use crate::util::Pixel;
 
 use std::cmp;
+use std::iter::FusedIterator;
 use std::ops::{Index, IndexMut};
 
 pub const RESTORATION_TILESIZE_MAX_LOG2: usize = 8;
@@ -430,6 +431,7 @@ impl<'a, T: Pixel> Iterator for VertPaddedIter<'a, T> {
 }
 
 impl<T: Pixel> ExactSizeIterator for VertPaddedIter<'_, T> {}
+impl<T: Pixel> FusedIterator for VertPaddedIter<'_, T> {}
 
 struct HorzPaddedIter<'a, T: Pixel> {
   // Active area cropping is done using the length of the slice
@@ -477,6 +479,7 @@ impl<'a, T: Pixel> Iterator for HorzPaddedIter<'a, T> {
 }
 
 impl<T: Pixel> ExactSizeIterator for HorzPaddedIter<'_, T> {}
+impl<T: Pixel> FusedIterator for HorzPaddedIter<'_, T> {}
 
 pub fn setup_integral_image<T: Pixel>(
   integral_image_buffer: &mut IntegralImageBuffer,

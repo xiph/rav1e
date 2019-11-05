@@ -11,6 +11,7 @@ use crate::context::*;
 use crate::frame::*;
 use crate::util::*;
 
+use std::iter::FusedIterator;
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 use std::slice;
@@ -499,7 +500,9 @@ impl<'a, T: Pixel> Iterator for RowsIterMut<'a, T> {
 }
 
 impl<T: Pixel> ExactSizeIterator for RowsIter<'_, T> {}
+impl<T: Pixel> FusedIterator for RowsIter<'_, T> {}
 impl<T: Pixel> ExactSizeIterator for RowsIterMut<'_, T> {}
+impl<T: Pixel> FusedIterator for RowsIterMut<'_, T> {}
 
 pub struct VertWindows<'a, T: Pixel> {
   data: *const T,
@@ -584,7 +587,9 @@ impl<'a, T: Pixel> Iterator for HorzWindows<'a, T> {
 }
 
 impl<T: Pixel> ExactSizeIterator for VertWindows<'_, T> {}
+impl<T: Pixel> FusedIterator for VertWindows<'_, T> {}
 impl<T: Pixel> ExactSizeIterator for HorzWindows<'_, T> {}
+impl<T: Pixel> FusedIterator for HorzWindows<'_, T> {}
 
 #[test]
 fn area_test() {
