@@ -303,7 +303,6 @@ function lpf_16_wd\wd\()_neon
         rshrn           v13.8b,  v8.8h,   #3      // out q0
         rshrn2          v13.16b, v9.8h,   #3
 
-
         add             v8.8h,   v8.8h,   v6.8h
         add             v9.8h,   v9.8h,   v7.8h
         sub             v2.8h,   v2.8h,   v0.8h   // q2 + q3 - p1 - q1
