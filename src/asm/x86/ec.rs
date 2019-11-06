@@ -24,29 +24,66 @@ pub fn update_cdf(cdf: &mut [u16], val: u32) {
 #[target_feature(enable = "sse2")]
 unsafe fn update_cdf_4_sse2(cdf: &mut [u16], val: u32) {
   let nsymbs = 4;
-  let rate = 3 + (nsymbs >> 1).min(2) + (cdf[nsymbs] >> 4) as usize;
-  cdf[nsymbs] += 1 - (cdf[nsymbs] >> 5);
+  let rate = 5 + (cdf[nsymbs] >> 4) as usize;
+  cdf[nsymbs] += (cdf[nsymbs] < 32) as u16;
 
-  let val_idx = _mm_set_epi16(0, 0, 0, 0, 3, 2, 1, 0);
+  // A bit of explanation of what is happening down here. First of all, let's look at the simple
+  // implementation:
+  //
+  // ```
+  // if i as u32 >= val {
+  //   *v -= *v >> rate;
+  // } else {
+  //   *v += (32768 - *v) >> rate;
+  // }
+  // ```
+  //
+  // We want to perform the same arithmetic operation in the two branches, therefore we can
+  // transform in something like:
+  //
+  // ```
+  // if i as u32 >= val {
+  //   *v -= *v >> rate;
+  // } else {
+  //   *v -= -((32768 - *v) >> rate);
+  // }
+  // ```
+  //
+  // It is possible to bring the "minus" for the second branch logically before the right shift
+  // using the following rule:
+  // -(x >> y) = (-1 - x) >> y + 1
+  // So we obtain
+  //
+  // ```
+  // if i as u32 >= val {
+  //   *v -= *v >> rate;
+  // } else {
+  //   *v -= (-1 - (32768 - *v)) >> rate + 1;
+  // }
+  // ```
+  //
+  // Good. A range `0..4` can be compared against `val` in order to have a starting point to work
+  // in different ways on the two branches. `cmplt` returns `-1` if `lhs < rhs`, 0 otherwise.
+  // It is possible to use the `avg` SIMD operator, which performs `(lhs + rhs + 1) >> 1`. This is
+  // useful because `avg` treats numbers as unsigned, `-1 = 0xFFFF`, therefore `(0xFFFF + 0 + 1) >>
+  // 1 = 0x8000 = 32768`. Obviously `(0 + 0 + 1) >> 1 = 0`.
+  //
+  // Now the result of `cmplt` can be used along with the result from `avg` and the data in `cdf`
+  // in order to obtain the right hand side of the subtraction from `cdf`.
+
   let val_splat = _mm_set1_epi16(val as i16);
-  let mask = _mm_cmpgt_epi16(val_splat, val_idx);
-  let v = _mm_loadl_epi64(cdf.as_ptr() as *const __m128i);
-  // *v -= *v >> rate;
-  let shrunk_v =
-    _mm_sub_epi16(v, _mm_srl_epi16(v, _mm_cvtsi64_si128(rate as i64)));
-  // *v += (32768 - *v) >> rate;
-  let expanded_v = _mm_add_epi16(
-    v,
-    _mm_srl_epi16(
-      _mm_sub_epi16(_mm_set1_epi16(-32768), v),
-      _mm_cvtsi64_si128(rate as i64),
-    ),
-  );
-  let out_v = _mm_or_si128(
-    _mm_andnot_si128(mask, shrunk_v),
-    _mm_and_si128(mask, expanded_v),
-  );
-  _mm_storel_epi64(cdf.as_mut_ptr() as *mut __m128i, out_v);
+  let indices = _mm_set_epi16(0, 0, 0, 0, 3, 2, 1, 0);
+  let index_lt_val = _mm_cmplt_epi16(indices, val_splat);
+  let k = _mm_avg_epu16(index_lt_val, _mm_setzero_si128());
+  let cdf_simd = _mm_loadl_epi64(cdf.as_mut_ptr() as *const __m128i);
+  let k_minus_v = _mm_sub_epi16(k, cdf_simd);
+  let negated_if_lt_val = _mm_sub_epi16(index_lt_val, k_minus_v);
+  let shifted =
+    _mm_sra_epi16(negated_if_lt_val, _mm_set_epi32(0, 0, 0, rate as i32));
+  let fixed_if_lt_val = _mm_sub_epi16(shifted, index_lt_val);
+  let result = _mm_sub_epi16(cdf_simd, fixed_if_lt_val);
+
+  _mm_storel_epi64(cdf.as_mut_ptr() as *mut __m128i, result);
 }
 
 #[cfg(test)]
@@ -57,6 +94,16 @@ mod test {
   fn update_cdf_4_sse2() {
     let mut cdf = [7296, 3819, 1616, 0, 0];
     let mut cdf2 = [7296, 3819, 1616, 0, 0];
+    for i in 0..4 {
+      native::update_cdf(&mut cdf, i);
+      unsafe {
+        super::update_cdf_4_sse2(&mut cdf2, i);
+      }
+      assert_eq!(cdf, cdf2);
+    }
+
+    let mut cdf = [7297, 3820, 1617, 0, 0];
+    let mut cdf2 = cdf.clone();
     for i in 0..4 {
       native::update_cdf(&mut cdf, i);
       unsafe {
