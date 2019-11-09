@@ -7,6 +7,7 @@ build = "build.rs"
 include = ["/src/**", "/Cargo.toml", "/build.rs"]
 license = "BSD-2-Clause"
 description = "The fastest and safest AV1 encoder"
+readme = "README.md"
 repository = "https://github.com/xiph/rav1e/"
 autobenches = false
 autobins = false
