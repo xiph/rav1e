@@ -82,7 +82,7 @@ pub enum EncoderStatus {
   /// There are enough frames in the queue.
   ///
   /// May be emitted by `rav1e_send_frame` when trying to send a frame after
-  /// the encoder has been flushed.
+  /// the encoder has been flushed or the internal queue is full.
   EnoughData,
   /// The encoder has already produced the number of frames requested.
   ///
