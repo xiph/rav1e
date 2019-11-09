@@ -42,7 +42,7 @@ const fn decimate_index(xdec: usize, ydec: usize) -> usize {
   ((ydec << 1) | xdec) & 3
 }
 
-pub unsafe fn cdef_filter_block<T: Pixel>(
+pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
   dst: &mut PlaneRegionMut<'_, T>, src: *const u16, src_stride: isize,
   pri_strength: i32, sec_strength: i32, dir: usize, damping: i32,
   bit_depth: usize, xdec: usize, ydec: usize, cpu: CpuFeatureLevel,
