@@ -552,11 +552,11 @@ fn apply_speed_test_cfg(cfg: &mut EncoderConfig, setting: &str) {
     "baseline" => {
       cfg.speed_settings = SpeedSettings::default();
     }
-    "min_block_size_4x4" => {
-      cfg.speed_settings.min_block_size = BlockSize::BLOCK_4X4;
-    }
     "min_block_size_8x8" => {
       cfg.speed_settings.min_block_size = BlockSize::BLOCK_8X8;
+    }
+    "min_block_size_16x16" => {
+      cfg.speed_settings.min_block_size = BlockSize::BLOCK_16X16;
     }
     "min_block_size_32x32" => {
       cfg.speed_settings.min_block_size = BlockSize::BLOCK_32X32;
@@ -564,8 +564,8 @@ fn apply_speed_test_cfg(cfg: &mut EncoderConfig, setting: &str) {
     "min_block_size_64x64" => {
       cfg.speed_settings.min_block_size = BlockSize::BLOCK_64X64;
     }
-    "multiref" => {
-      cfg.speed_settings.multiref = true;
+    "no_multiref" => {
+      cfg.speed_settings.multiref = false;
     }
     "fast_deblock" => {
       cfg.speed_settings.fast_deblock = true;
@@ -579,30 +579,33 @@ fn apply_speed_test_cfg(cfg: &mut EncoderConfig, setting: &str) {
     "tx_domain_rate" => {
       cfg.speed_settings.tx_domain_rate = true;
     }
-    "encode_bottomup" => {
-      cfg.speed_settings.encode_bottomup = true;
+    "encode_topdown" => {
+      cfg.speed_settings.encode_bottomup = false;
     }
-    "rdo_tx_decision" => {
-      cfg.speed_settings.rdo_tx_decision = true;
+    "no_rdo_tx_decision" => {
+      cfg.speed_settings.rdo_tx_decision = false;
+    }
+    "prediction_modes_simple" => {
+      cfg.speed_settings.prediction_modes = PredictionModesSetting::Simple;
     }
     "prediction_modes_keyframes" => {
       cfg.speed_settings.prediction_modes =
         PredictionModesSetting::ComplexKeyframes;
     }
-    "prediction_modes_all" => {
-      cfg.speed_settings.prediction_modes = PredictionModesSetting::ComplexAll;
-    }
-    "include_near_mvs" => {
-      cfg.speed_settings.include_near_mvs = true;
+    "exclude_near_mvs" => {
+      cfg.speed_settings.include_near_mvs = false;
     }
     "no_scene_detection" => {
       cfg.speed_settings.no_scene_detection = true;
     }
-    "diamond_me" => {
-      cfg.speed_settings.diamond_me = true;
+    "fast_scene_detection" => {
+      cfg.speed_settings.fast_scene_detection = true;
     }
-    "cdef" => {
-      cfg.speed_settings.cdef = true;
+    "full_search_me" => {
+      cfg.speed_settings.diamond_me = false;
+    }
+    "no_cdef" => {
+      cfg.speed_settings.cdef = false;
     }
     setting => {
       panic!("Unrecognized speed test setting {}", setting);
