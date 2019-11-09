@@ -107,7 +107,7 @@ jobs:
         - cargo doc --verbose --no-deps
         - rustup component add clippy
         - cargo clippy --version
-        - cargo clippy -- -D warnings --verbose
+        - cargo clippy -- -D warnings --verbose -A clippy::wrong-self-convention
       env:
         - CACHE_NAME=CLIPPY
     - name: "No default features"
