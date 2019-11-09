@@ -21,7 +21,7 @@ use std::cmp;
 
 cfg_if::cfg_if! {
   if #[cfg(nasm_x86_64)] {
-    pub use crate::asm::x86::cdef::*;
+    pub(crate) use crate::asm::x86::cdef::*;
   } else {
     pub(crate) use self::native::*;
   }
