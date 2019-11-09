@@ -33,7 +33,7 @@ impl Default for CpuFeatureLevel {
   fn default() -> CpuFeatureLevel {
     let detected = CpuFeatureLevel::NEON;
     let manual: CpuFeatureLevel = match env::var("RAV1E_CPU_TARGET") {
-      Ok(feature) =>  CpuFeatureLevel::from_str(&feature).unwrap_or(detected),
+      Ok(feature) => CpuFeatureLevel::from_str(&feature).unwrap_or(detected),
       Err(_e) => detected,
     };
     if manual > detected {
