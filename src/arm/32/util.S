@@ -34,11 +34,11 @@
 
 .macro movrel_local rd, val, offset=0
 #if defined(PIC)
-        ldr             \rd,  1f
-        b               2f
-1:
-        .word           \val + \offset - (2f + 8 - 4 * CONFIG_THUMB)
-2:
+        ldr             \rd,  90001f
+        b               90002f
+90001:
+        .word           \val + \offset - (90002f + 8 - 4 * CONFIG_THUMB)
+90002:
         add             \rd,  \rd,  pc
 #else
         movw            \rd, #:lower16:\val+\offset
