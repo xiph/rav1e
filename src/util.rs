@@ -44,6 +44,7 @@ impl<A> AlignedArray<A> {
   pub const fn new(array: A) -> Self {
     AlignedArray { _alignment: [], array }
   }
+  #[allow(clippy::uninit_assumed_init)]
   pub fn uninitialized() -> Self {
     Self::new(unsafe { MaybeUninit::uninit().assume_init() })
   }

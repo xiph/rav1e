@@ -44,6 +44,8 @@
 #![allow(clippy::verbose_bit_mask)]
 #![allow(clippy::unreadable_literal)]
 #![allow(clippy::many_single_char_names)]
+#![allow(clippy::wrong_self_convention)]
+#![allow(clippy::missing_safety_doc)]
 
 // Override assert! and assert_eq! in tests
 #[cfg(test)]
