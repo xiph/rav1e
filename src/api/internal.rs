@@ -258,7 +258,7 @@ impl<T: Pixel> ContextInner<T> {
         enc.bit_depth as u8,
         enc.speed_settings.fast_scene_detection,
       ),
-      config: enc.clone(),
+      config: *enc,
       seq: Sequence::new(enc),
       rc_state: RCState::new(
         enc.width as i32,
@@ -480,7 +480,7 @@ impl<T: Pixel> ContextInner<T> {
       output_frameno - self.gop_output_frameno_start[&output_frameno];
     if output_frameno_in_gop == 0 {
       let fi = FrameInvariants::new_key_frame(
-        self.config.clone(),
+        self.config,
         self.seq,
         self.gop_input_frameno_start[&output_frameno],
       );
