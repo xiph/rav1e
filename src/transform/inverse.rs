@@ -1591,8 +1591,7 @@ pub(crate) mod native {
       //   to zero for filling out missing input coeffs.
       let buffer = &mut [0i32; 64 * 64][..Self::W * Self::H];
       let rect_type = get_rect_tx_log_ratio(Self::W, Self::H);
-      let tx_types_1d = get_1d_tx_types(tx_type)
-        .expect("TxType not supported by rust txfm code.");
+      let tx_types_1d = get_1d_tx_types(tx_type);
 
       // perform inv txfm on every row
       let range = bd + 8;
