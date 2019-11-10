@@ -158,6 +158,7 @@ pub struct Sequence {
   // or 1.
   pub film_grain_params_present: bool,
   pub separate_uv_delta_q: bool,
+  pub timing_info_present: bool,
 }
 
 impl Sequence {
@@ -238,6 +239,7 @@ impl Sequence {
       tier,
       film_grain_params_present: false,
       separate_uv_delta_q: true,
+      timing_info_present: false,
     }
   }
 
