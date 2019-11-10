@@ -37,10 +37,10 @@ function lpf_16_wd\wd\()_neon
 .if \wd >= 6
         uabd            v4.16b,  v21.16b, v22.16b // abs(p2 - p1)
         uabd            v5.16b,  v26.16b, v25.16b // abs(q2 - q1)
+.endif
 .if \wd >= 8
         uabd            v6.16b,  v20.16b, v21.16b // abs(p3 - p2)
         uabd            v7.16b,  v27.16b, v26.16b // abs(q3 - q3)
-.endif
 .endif
 .if \wd >= 6
         umax            v4.16b,  v4.16b,  v5.16b
