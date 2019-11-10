@@ -70,7 +70,7 @@ function lpf_16_wd\wd\()_neon
 .if \wd >= 6
         and             v14.16b, v14.16b, v1.16b  // fm && wd > 4
 .endif
-.if \wd >= 6
+.if \wd >= 16
         and             v15.16b, v15.16b, v1.16b  // fm && wd == 16
 .endif
 
