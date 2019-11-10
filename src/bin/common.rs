@@ -30,6 +30,7 @@ pub struct CliOptions {
   pub enc: EncoderConfig,
   pub limit: usize,
   pub color_range_specified: bool,
+  pub override_time_base: bool,
   pub skip: usize,
   pub verbose: bool,
   pub threads: usize,
@@ -265,6 +266,22 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .default_value("0,0")
         .case_insensitive(true)
     )
+    // TIMING INFO
+    .arg(
+      Arg::with_name("FRAME_RATE")
+        .help("Constant frame rate to set at the output (inferred from input when omitted)")
+        .long("frame-rate")
+        .alias("frame_rate")
+        .takes_value(true)
+    )
+    .arg(
+      Arg::with_name("TIME_SCALE")
+        .help("The time scale associated with the frame rate if provided (ignored otherwise)")
+        .long("time-scale")
+        .alias("time_scale")
+        .default_value("1")
+        .takes_value(true)
+    )
     // STILL PICTURE
     .arg(
       Arg::with_name("STILL_PICTURE")
@@ -361,6 +378,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     // Use `occurrences_of()` because `is_present()` is always true
     // if a parameter has a default value.
     color_range_specified: matches.occurrences_of("PIXEL_RANGE") > 0,
+    override_time_base: matches.is_present("FRAME_RATE"),
     skip: matches.value_of("SKIP").unwrap().parse().unwrap(),
     verbose: matches.is_present("VERBOSE"),
     threads,
@@ -539,6 +557,13 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
 
   if cfg.tile_cols > 64 || cfg.tile_rows > 64 {
     panic!("Tile columns and rows may not be greater than 64");
+  }
+
+  if let Some(frame_rate) = matches.value_of("FRAME_RATE") {
+    cfg.time_base = Rational::new(
+      matches.value_of("TIME_SCALE").unwrap().parse().unwrap(),
+      frame_rate.parse().unwrap(),
+    );
   }
 
   cfg.low_latency = matches.is_present("LOW_LATENCY");

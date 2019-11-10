@@ -287,14 +287,17 @@ fn run() -> Result<(), error::CliError> {
     cli.enc.pixel_range = PixelRange::Limited;
   }
 
-  cli.enc.time_base = video_info.time_base;
+  if !cli.override_time_base {
+    cli.enc.time_base = video_info.time_base;
+  }
+
   let cfg = Config { enc: cli.enc, threads: cli.threads };
 
   cli.io.output.write_header(
     video_info.width,
     video_info.height,
-    video_info.time_base.den as usize,
-    video_info.time_base.num as usize,
+    cli.enc.time_base.den as usize,
+    cli.enc.time_base.num as usize,
   );
 
   info!(

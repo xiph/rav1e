@@ -28,7 +28,7 @@ const MAX_RDO_LOOKAHEAD_FRAMES: usize = usize::max_value() - 1;
 const MAX_MAX_KEY_FRAME_INTERVAL: u64 = i32::max_value() as u64 / 3;
 
 /// Encoder settings which impact the produced bitstream.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct EncoderConfig {
   // output size
   /// Width of the frames in pixels.
