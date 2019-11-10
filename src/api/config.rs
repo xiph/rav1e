@@ -596,7 +596,7 @@ impl Config {
       .build()
       .unwrap();
 
-    let mut config = self.enc.clone();
+    let mut config = self.enc;
     config.set_key_frame_interval(
       config.min_key_frame_interval,
       config.max_key_frame_interval,
