@@ -265,7 +265,17 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     if fi.sequence.reduced_still_picture_hdr {
       self.write(5, 31)?; // level
     } else {
-      self.write_bit(false)?; // timing info present
+      self.write_bit(fi.sequence.timing_info_present)?; // timing info present
+
+      if fi.sequence.timing_info_present {
+        self.write(32, fi.config.time_base.num)?;
+        self.write(32, fi.config.time_base.den)?;
+
+        self.write_bit(true)?; // equal picture interval
+        self.write_bit(true)?; // zero interval
+        self.write_bit(false)?; // decoder model info present flag
+      }
+
       self.write_bit(false)?; // initial display delay present flag
       self.write(5, 0)?; // one operating point
       self.write(12, 0)?; // idc
