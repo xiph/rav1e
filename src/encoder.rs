@@ -866,6 +866,7 @@ impl<T: Pixel> FrameInvariants<T> {
   pub fn set_quantizers(&mut self, qps: &QuantizerParameters) {
     self.base_q_idx = qps.ac_qi[0];
     let base_q_idx = self.base_q_idx as i32;
+    self.cdef_damping = 3 + (self.base_q_idx >> 6);
     for pi in 0..3 {
       debug_assert!(qps.dc_qi[pi] as i32 - base_q_idx >= -128);
       debug_assert!((qps.dc_qi[pi] as i32 - base_q_idx) < 128);
