@@ -975,6 +975,7 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
   }
   assert!(!ref_frames_set.is_empty());
 
+  // pairs of (prediction_mode, reference_frame_set_index)
   let mut inter_mode_set = ArrayVec::<[(PredictionMode, usize); 20]>::new();
   let mut mv_stacks = ArrayVec::<[_; 20]>::new();
   let mut mode_contexts = ArrayVec::<[_; 7]>::new();
@@ -1079,44 +1080,53 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
     }
   }
 
-  inter_mode_set.iter().for_each(|&(luma_mode, i)| {
-    let mvs = match luma_mode {
-      PredictionMode::NEWMV | PredictionMode::NEW_NEWMV => mvs_from_me[i],
-      PredictionMode::NEARESTMV | PredictionMode::NEAREST_NEARESTMV => {
-        if !mv_stacks[i].is_empty() {
-          [mv_stacks[i][0].this_mv, mv_stacks[i][0].comp_mv]
-        } else {
-          [MotionVector::default(); 2]
-        }
-      }
-      PredictionMode::NEAR0MV | PredictionMode::NEAR_NEARMV => {
-        if mv_stacks[i].len() > 1 {
-          [mv_stacks[i][1].this_mv, mv_stacks[i][1].comp_mv]
-        } else {
-          [MotionVector::default(); 2]
-        }
-      }
-      PredictionMode::NEAR1MV | PredictionMode::NEAR2MV => [
-        mv_stacks[i]
-          [luma_mode as usize - PredictionMode::NEAR0MV as usize + 1]
-          .this_mv,
-        mv_stacks[i]
-          [luma_mode as usize - PredictionMode::NEAR0MV as usize + 1]
-          .comp_mv,
-      ],
-      PredictionMode::NEAREST_NEWMV => {
-        [mv_stacks[i][0].this_mv, mvs_from_me[i][1]]
-      }
-      PredictionMode::NEW_NEARESTMV => {
-        [mvs_from_me[i][0], mv_stacks[i][0].comp_mv]
-      }
-      PredictionMode::GLOBALMV | PredictionMode::GLOBAL_GLOBALMV => {
-        [MotionVector::default(); 2]
-      }
-      _ => {
-        unimplemented!();
-      }
-    };
+  // prune (mode, reference set) pair by residual satd
+  let mut satds = inter_mode_set
+    .iter()
+    .map(|&(luma_mode, i)| {
+      let mvs = get_mvs_for_mode(luma_mode, &mv_stacks, &mvs_from_me, i);
+      let tx_size = bsize.tx_size();
+      motion_compensate(
+        fi,
+        ts,
+        cw,
+        luma_mode,
+        ref_frames_set[i],
+        mvs,
+        bsize,
+        tile_bo,
+        true,
+      );
+      let rec = &ts.rec.planes[0];
+      let rec_region = rec.subregion(Area::BlockStartingAt { bo: tile_bo.0 });
+      let plane_org = ts.input_tile.planes[0]
+        .subregion(Area::BlockStartingAt { bo: tile_bo.0 });
+      let plane_ref = rec_region;
+
+      (
+        luma_mode,
+        i,
+        get_satd(
+          &plane_org,
+          &plane_ref,
+          tx_size.block_size(),
+          fi.sequence.bit_depth,
+          fi.cpu_feature_level,
+        ),
+      )
+    })
+    .collect::<Vec<_>>();
+
+  let mut inter_mode_set_pruned =
+    ArrayVec::<[(PredictionMode, usize); 20]>::new();
+  satds.sort_by_key(|a| a.2);
+  //dbg!(satds);
+  satds.iter().take(8).for_each(|&(luma_mode, i, _satd)| {
+    inter_mode_set_pruned.push((luma_mode, i));
+  });
+
+  inter_mode_set_pruned.iter().for_each(|&(luma_mode, i)| {
+    let mvs = get_mvs_for_mode(luma_mode, &mv_stacks, &mvs_from_me, i);
     let mode_set_chroma = ArrayVec::from([luma_mode]);
 
     luma_chroma_mode_rdo(
@@ -1139,6 +1149,51 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
   });
 
   best
+}
+
+fn get_mvs_for_mode(
+  luma_mode: PredictionMode,
+  mv_stacks: &ArrayVec<[arrayvec::ArrayVec<[CandidateMV; 9]>; 20]>,
+  mvs_from_me: &ArrayVec<[[MotionVector; 2]; 3]>, i: usize,
+) -> [MotionVector; 2] {
+  match luma_mode {
+    // For NEWMV, we can choose whatever MV we like.
+    PredictionMode::NEWMV | PredictionMode::NEW_NEWMV => mvs_from_me[i],
+    // For NEAREST/NEAR/etc, we are forced to use the same MV
+    // that the decoder would have found.
+    PredictionMode::NEARESTMV | PredictionMode::NEAREST_NEARESTMV => {
+      if !mv_stacks[i].is_empty() {
+        [mv_stacks[i][0].this_mv, mv_stacks[i][0].comp_mv]
+      } else {
+        [MotionVector::default(); 2]
+      }
+    }
+    PredictionMode::NEAR0MV | PredictionMode::NEAR_NEARMV => {
+      if mv_stacks[i].len() > 1 {
+        [mv_stacks[i][1].this_mv, mv_stacks[i][1].comp_mv]
+      } else {
+        [MotionVector::default(); 2]
+      }
+    }
+    PredictionMode::NEAR1MV | PredictionMode::NEAR2MV => [
+      mv_stacks[i][luma_mode as usize - PredictionMode::NEAR0MV as usize + 1]
+        .this_mv,
+      mv_stacks[i][luma_mode as usize - PredictionMode::NEAR0MV as usize + 1]
+        .comp_mv,
+    ],
+    PredictionMode::NEAREST_NEWMV => {
+      [mv_stacks[i][0].this_mv, mvs_from_me[i][1]]
+    }
+    PredictionMode::NEW_NEARESTMV => {
+      [mvs_from_me[i][0], mv_stacks[i][0].comp_mv]
+    }
+    PredictionMode::GLOBALMV | PredictionMode::GLOBAL_GLOBALMV => {
+      [MotionVector::default(); 2]
+    }
+    _ => {
+      unimplemented!();
+    }
+  }
 }
 
 fn intra_frame_rdo_mode_decision<T: Pixel>(
