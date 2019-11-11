@@ -66,8 +66,8 @@ itertools = "0.8"
 simd_helpers = "0.1"
 
 [build-dependencies]
-nasm-rs = { version = "0.1", path = "crates/nasm_rs/", optional = true }
-cc = { version = "1.0", optional = true }
+nasm-rs = { version = "0.1", path = "crates/nasm_rs/", optional = true, features = ["parallel"] }
+cc = { version = "1.0", optional = true, features = ["parallel"] }
 # Vendored to remove the dependency on `failure`, which takes a long time to build.
 vergen = { version = "3", path = "crates/vergen" }
 rustc_version = "0.2"
