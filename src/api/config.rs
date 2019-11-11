@@ -235,29 +235,47 @@ impl fmt::Display for EncoderConfig {
 /// Contains the speed settings.
 #[derive(Clone, Copy, Debug)]
 pub struct SpeedSettings {
-  /// Minimum block size.
+  /// Minimum block size. Smaller is slower.
   ///
   /// Must be a square block size, so e.g. 8×4 isn't allowed here.
   pub min_block_size: BlockSize,
   /// Enables inter-frames to have multiple reference frames.
+  ///
+  /// Enabled is slower.
   pub multiref: bool,
   /// Enables fast deblocking filter.
   pub fast_deblock: bool,
   /// Enables reduced transform set.
+  ///
+  /// Enabled is faster.
   pub reduced_tx_set: bool,
   /// Enables using transform-domain distortion instead of pixel-domain.
+  ///
+  /// Enabled is faster.
   pub tx_domain_distortion: bool,
   /// Enables using transform-domain rate estimation.
+  ///
+  /// Enabled is faster.
   pub tx_domain_rate: bool,
   /// Enables bottom-up encoding, rather than top-down.
+  ///
+  /// Enabled is slower.
   pub encode_bottomup: bool,
   /// Enables searching transform size and type with RDO.
+  ///
+  /// Enabled is slower.
   pub rdo_tx_decision: bool,
   /// Prediction modes to search.
+  ///
+  /// Complex settings are slower.
   pub prediction_modes: PredictionModesSetting,
   /// Enables searching near motion vectors during RDO.
+  ///
+  /// Enabled is slower.
   pub include_near_mvs: bool,
   /// Disables scene-cut detection.
+  ///
+  /// Enabled is faster.
   pub no_scene_detection: bool,
   /// Fast scene detection mode, ignoring chroma planes.
   pub fast_scene_detection: bool,
@@ -266,35 +284,42 @@ pub struct SpeedSettings {
   /// Enables CDEF.
   pub cdef: bool,
   /// Enables searching for the optimal segment ID (quantizer delta) with RDO.
-  ///
   /// When disabled, the segment ID is chosen heuristically.
+  ///
+  /// Enabled is slower.
   pub quantizer_rdo: bool,
   /// Use SATD instead of SAD for subpixel search.
+  ///
+  /// Enabled is slower.
   pub use_satd_subpel: bool,
   /// Use non-square partition type everywhere
+  ///
+  /// Enabled is slower.
   pub non_square_partition: bool,
 }
 
 impl Default for SpeedSettings {
+  /// This is currently used exclusively for feature testing and comparison.
+  /// It is set to the slowest settings possible.
   fn default() -> Self {
     SpeedSettings {
-      min_block_size: BlockSize::BLOCK_16X16,
-      multiref: false,
+      min_block_size: BlockSize::BLOCK_4X4,
+      multiref: true,
       fast_deblock: false,
       reduced_tx_set: false,
       tx_domain_distortion: false,
       tx_domain_rate: false,
-      encode_bottomup: false,
-      rdo_tx_decision: false,
-      prediction_modes: PredictionModesSetting::Simple,
-      include_near_mvs: false,
+      encode_bottomup: true,
+      rdo_tx_decision: true,
+      prediction_modes: PredictionModesSetting::ComplexAll,
+      include_near_mvs: true,
       no_scene_detection: false,
       fast_scene_detection: false,
-      diamond_me: false,
-      cdef: false,
-      quantizer_rdo: false,
-      use_satd_subpel: false,
-      non_square_partition: false,
+      diamond_me: true,
+      cdef: true,
+      quantizer_rdo: true,
+      use_satd_subpel: true,
+      non_square_partition: true,
     }
   }
 }
