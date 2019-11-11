@@ -531,6 +531,9 @@ unsafe fn option_match(
       enc.rdo_lookahead_frames = value.parse().map_err(|_| ())?
     }
     "low_latency" => enc.low_latency = value.parse().map_err(|_| ())?,
+    "enable_timing_info" => {
+      enc.enable_timing_info = value.parse().map_err(|_| ())?
+    }
     "still_picture" => enc.still_picture = value.parse().map_err(|_| ())?,
 
     _ => return Err(()),

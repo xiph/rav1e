@@ -239,7 +239,7 @@ impl Sequence {
       tier,
       film_grain_params_present: false,
       separate_uv_delta_q: true,
-      timing_info_present: false,
+      timing_info_present: config.enable_timing_info,
     }
   }
 

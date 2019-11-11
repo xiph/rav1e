@@ -52,6 +52,9 @@ pub struct EncoderConfig {
   /// HDR content light parameters.
   pub content_light: Option<ContentLight>,
 
+  /// Enable signaling timing info in the bitstream.
+  pub enable_timing_info: bool,
+
   /// Still picture mode flag.
   pub still_picture: bool,
 
@@ -140,6 +143,8 @@ impl EncoderConfig {
       mastering_display: None,
       content_light: None,
 
+      enable_timing_info: false,
+
       still_picture: false,
 
       time_base: Rational { num: 1, den: 30 },
@@ -223,6 +228,7 @@ impl fmt::Display for EncoderConfig {
         "non_square_partition",
         self.speed_settings.non_square_partition.to_string(),
       ),
+      ("enable_timing_info", self.enable_timing_info.to_string()),
     ];
     write!(
       f,
