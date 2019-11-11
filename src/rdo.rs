@@ -1221,7 +1221,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
             ),
           )
         })
-        .collect::<Vec<_>>()
+        .collect::<ArrayVec<[_; INTRA_MODES]>>()
     };
 
     satds.sort_by_key(|a| a.1);
@@ -1240,12 +1240,12 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
       z = a;
       d
     })
-    .collect::<Vec<_>>();
+    .collect::<ArrayVec<[_; INTRA_MODES]>>();
 
     let mut probs = intra_mode_set
       .iter()
       .map(|&a| (a, probs_all[a as usize]))
-      .collect::<Vec<_>>();
+      .collect::<ArrayVec<[_; INTRA_MODES]>>();
     probs.sort_by_key(|a| !a.1);
 
     probs
