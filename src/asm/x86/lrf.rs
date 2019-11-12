@@ -185,34 +185,9 @@ unsafe fn sgrproj_box_ab_8_avx2(
   let d: usize = r * 2 + 1;
   let n: i32 = (d * d) as i32;
   let one_over_n = if r == 1 { 455 } else { 164 };
-  /*
-    // Using an integral image, compute the sum of a square region
-    #[inline]
-    #[target_feature(enable = "avx2")]
-    unsafe fn get_integral_square_avx2(
-      iimg: &[u32], stride: usize, x: usize, y: usize, size: usize,
-    ) -> __m256i {
-      let iimg = iimg.as_ptr().add(y * stride + x);
-      // Cancel out overflow in iimg by using wrapping arithmetic
-      _mm256_sub_epi32(
-        _mm256_add_epi32(
-          _mm256_loadu_si256(iimg as *const _),
-          _mm256_loadu_si256(iimg.add(size * stride + size) as *const _),
-        ),
-        _mm256_add_epi32(
-          _mm256_loadu_si256(iimg.add(size * stride) as *const _),
-          _mm256_loadu_si256(iimg.add(size) as *const _),
-        ),
-      )
-    }
-  */
 
   // Box sum and box square sum are already done by setup_integral_image() and done by only once.
   // fetch sum and ssq from pre-computed array under IntegralImageBuffer
-
-  //let sum = get_integral_square_avx2(iimg, iimg_stride, x, y, d);
-  //let ssq = get_integral_square_avx2(iimg_sq, iimg_stride, x, y, d);
-
   let sum_array_offset = y * iimg_stride;
 
   let sum_ptr = if r == 2 {
