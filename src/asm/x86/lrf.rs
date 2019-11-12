@@ -25,13 +25,12 @@ pub fn sgrproj_box_ab_r1(
   iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
   cpu: CpuFeatureLevel,
 ) {
-  /*if cpu >= CpuFeatureLevel::AVX2 {
+  if cpu >= CpuFeatureLevel::AVX2 {
     return unsafe {
       sgrproj_box_ab_r1_avx2(
         af,
         bf,
-        iimg,
-        iimg_sq,
+        integral_image_buffer,
         iimg_stride,
         y,
         stripe_w,
@@ -39,7 +38,7 @@ pub fn sgrproj_box_ab_r1(
         bdm8,
       );
     };
-  }*/
+  }
 
   native::sgrproj_box_ab_r1(
     af,
@@ -61,13 +60,12 @@ pub fn sgrproj_box_ab_r2(
   iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
   cpu: CpuFeatureLevel,
 ) {
-  /*if cpu >= CpuFeatureLevel::AVX2 {
+  if cpu >= CpuFeatureLevel::AVX2 {
     return unsafe {
       sgrproj_box_ab_r2_avx2(
         af,
         bf,
-        iimg,
-        iimg_sq,
+        integral_image_buffer,
         iimg_stride,
         y,
         stripe_w,
@@ -75,7 +73,7 @@ pub fn sgrproj_box_ab_r2(
         bdm8,
       );
     };
-  }*/
+  }
 
   native::sgrproj_box_ab_r2(
     af,
@@ -180,7 +178,7 @@ pub unsafe fn get_integral_square_avx2(
 #[inline]
 #[target_feature(enable = "avx2")]
 unsafe fn sgrproj_box_ab_8_avx2(
-  r: usize, af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
+  r: usize, af: &mut [u32], bf: &mut [u32], integral_image_buffer: &IntegralImageBuffer,
   iimg_stride: usize, x: usize, y: usize, s: u32, bdm8: usize,
 ) {
   let d: usize = r * 2 + 1;
@@ -207,15 +205,33 @@ unsafe fn sgrproj_box_ab_8_avx2(
     )
   }
 */
+
+  // Box sum and box square sum are already done by setup_integral_image() and done by only once.
   // fetch sum and ssq from pre-computed array under IntegralImageBuffer
-  let sum = get_integral_square_avx2(iimg, iimg_stride, x, y, d);
-  let ssq = get_integral_square_avx2(iimg_sq, iimg_stride, x, y, d);
+
+  //let sum = get_integral_square_avx2(iimg, iimg_stride, x, y, d);
+  //let ssq = get_integral_square_avx2(iimg_sq, iimg_stride, x, y, d);
+
+  let sum_array_offset = y * iimg_stride;
+
+  let sum_ptr = if r == 2 {
+    &integral_image_buffer.sum_5x5 as &[u32]
+  } else {
+    &integral_image_buffer.sum_3x3 as &[u32]
+  };
+
+  let ssq_ptr = if r == 2 {
+    &integral_image_buffer.sum_sq_5x5 as &[u32]
+  } else {
+    &integral_image_buffer.sum_sq_3x3 as &[u32]
+  };
+
   let scaled_sum = _mm256_srlv_epi32(
-    _mm256_add_epi32(sum, _mm256_set1_epi32(1 << bdm8 as i32 >> 1)),
+    _mm256_add_epi32(_mm256_loadu_si256(sum_ptr.as_ptr().add(sum_array_offset) as *const _), _mm256_set1_epi32(1 << bdm8 as i32 >> 1)),
     _mm256_set1_epi32(bdm8 as i32),
   );
   let scaled_ssq = _mm256_srlv_epi32(
-    _mm256_add_epi32(ssq, _mm256_set1_epi32(1 << (2 * bdm8) as i32 >> 1)),
+    _mm256_add_epi32(_mm256_loadu_si256(ssq_ptr.as_ptr().add(sum_array_offset) as *const _), _mm256_set1_epi32(1 << (2 * bdm8) as i32 >> 1)),
     _mm256_set1_epi32(2 * bdm8 as i32),
   );
   let p = _mm256_max_epi32(
@@ -240,7 +256,7 @@ unsafe fn sgrproj_box_ab_8_avx2(
   let b = _mm256_mullo_epi32(
     _mm256_madd_epi16(
       _mm256_sub_epi32(_mm256_set1_epi32(1 << SGRPROJ_SGR_BITS as i32), a),
-      sum,
+      _mm256_loadu_si256(sum_ptr.as_ptr().add(sum_array_offset) as *const _),
     ),
     _mm256_set1_epi32(one_over_n),
   );
@@ -258,7 +274,7 @@ unsafe fn sgrproj_box_ab_8_avx2(
 #[allow(unused)]
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
-  af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
+  af: &mut [u32], bf: &mut [u32],
   integral_image_buffer: &IntegralImageBuffer, iimg_stride: usize, y: usize,
   stripe_w: usize, s: u32, bdm8: usize,
 ) {
@@ -268,8 +284,7 @@ pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
         1,
         af,
         bf,
-        iimg,
-        iimg_sq,
+        integral_image_buffer,
         iimg_stride,
         x,
         y,
@@ -317,7 +332,7 @@ pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
 #[allow(unused)]
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
-  af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
+  af: &mut [u32], bf: &mut [u32],
   integral_image_buffer: &IntegralImageBuffer, iimg_stride: usize, y: usize,
   stripe_w: usize, s: u32, bdm8: usize,
 ) {
@@ -327,8 +342,7 @@ pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
         2,
         af,
         bf,
-        iimg,
-        iimg_sq,
+        integral_image_buffer,
         iimg_stride,
         x,
         y,
