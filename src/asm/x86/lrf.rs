@@ -178,33 +178,34 @@ pub unsafe fn get_integral_square_avx2(
 #[inline]
 #[target_feature(enable = "avx2")]
 unsafe fn sgrproj_box_ab_8_avx2(
-  r: usize, af: &mut [u32], bf: &mut [u32], integral_image_buffer: &IntegralImageBuffer,
-  iimg_stride: usize, x: usize, y: usize, s: u32, bdm8: usize,
+  r: usize, af: &mut [u32], bf: &mut [u32],
+  integral_image_buffer: &IntegralImageBuffer, iimg_stride: usize, x: usize,
+  y: usize, s: u32, bdm8: usize,
 ) {
   let d: usize = r * 2 + 1;
   let n: i32 = (d * d) as i32;
   let one_over_n = if r == 1 { 455 } else { 164 };
-/*
-  // Using an integral image, compute the sum of a square region
-  #[inline]
-  #[target_feature(enable = "avx2")]
-  unsafe fn get_integral_square_avx2(
-    iimg: &[u32], stride: usize, x: usize, y: usize, size: usize,
-  ) -> __m256i {
-    let iimg = iimg.as_ptr().add(y * stride + x);
-    // Cancel out overflow in iimg by using wrapping arithmetic
-    _mm256_sub_epi32(
-      _mm256_add_epi32(
-        _mm256_loadu_si256(iimg as *const _),
-        _mm256_loadu_si256(iimg.add(size * stride + size) as *const _),
-      ),
-      _mm256_add_epi32(
-        _mm256_loadu_si256(iimg.add(size * stride) as *const _),
-        _mm256_loadu_si256(iimg.add(size) as *const _),
-      ),
-    )
-  }
-*/
+  /*
+    // Using an integral image, compute the sum of a square region
+    #[inline]
+    #[target_feature(enable = "avx2")]
+    unsafe fn get_integral_square_avx2(
+      iimg: &[u32], stride: usize, x: usize, y: usize, size: usize,
+    ) -> __m256i {
+      let iimg = iimg.as_ptr().add(y * stride + x);
+      // Cancel out overflow in iimg by using wrapping arithmetic
+      _mm256_sub_epi32(
+        _mm256_add_epi32(
+          _mm256_loadu_si256(iimg as *const _),
+          _mm256_loadu_si256(iimg.add(size * stride + size) as *const _),
+        ),
+        _mm256_add_epi32(
+          _mm256_loadu_si256(iimg.add(size * stride) as *const _),
+          _mm256_loadu_si256(iimg.add(size) as *const _),
+        ),
+      )
+    }
+  */
 
   // Box sum and box square sum are already done by setup_integral_image() and done by only once.
   // fetch sum and ssq from pre-computed array under IntegralImageBuffer
@@ -227,11 +228,17 @@ unsafe fn sgrproj_box_ab_8_avx2(
   };
 
   let scaled_sum = _mm256_srlv_epi32(
-    _mm256_add_epi32(_mm256_loadu_si256(sum_ptr.as_ptr().add(sum_array_offset) as *const _), _mm256_set1_epi32(1 << bdm8 as i32 >> 1)),
+    _mm256_add_epi32(
+      _mm256_loadu_si256(sum_ptr.as_ptr().add(sum_array_offset) as *const _),
+      _mm256_set1_epi32(1 << bdm8 as i32 >> 1),
+    ),
     _mm256_set1_epi32(bdm8 as i32),
   );
   let scaled_ssq = _mm256_srlv_epi32(
-    _mm256_add_epi32(_mm256_loadu_si256(ssq_ptr.as_ptr().add(sum_array_offset) as *const _), _mm256_set1_epi32(1 << (2 * bdm8) as i32 >> 1)),
+    _mm256_add_epi32(
+      _mm256_loadu_si256(ssq_ptr.as_ptr().add(sum_array_offset) as *const _),
+      _mm256_set1_epi32(1 << (2 * bdm8) as i32 >> 1),
+    ),
     _mm256_set1_epi32(2 * bdm8 as i32),
   );
   let p = _mm256_max_epi32(
@@ -274,9 +281,8 @@ unsafe fn sgrproj_box_ab_8_avx2(
 #[allow(unused)]
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
-  af: &mut [u32], bf: &mut [u32],
-  integral_image_buffer: &IntegralImageBuffer, iimg_stride: usize, y: usize,
-  stripe_w: usize, s: u32, bdm8: usize,
+  af: &mut [u32], bf: &mut [u32], integral_image_buffer: &IntegralImageBuffer,
+  iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
 ) {
   for x in (0..stripe_w + 2).step_by(8) {
     if x + 8 <= stripe_w + 2 {
@@ -332,9 +338,8 @@ pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
 #[allow(unused)]
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
-  af: &mut [u32], bf: &mut [u32],
-  integral_image_buffer: &IntegralImageBuffer, iimg_stride: usize, y: usize,
-  stripe_w: usize, s: u32, bdm8: usize,
+  af: &mut [u32], bf: &mut [u32], integral_image_buffer: &IntegralImageBuffer,
+  iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
 ) {
   for x in (0..stripe_w + 2).step_by(8) {
     if x + 8 <= stripe_w + 2 {
