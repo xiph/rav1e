@@ -608,7 +608,7 @@ L(ipred_dc_w32):
         cmp             w4,  #32
         add             v0.4h,   v0.4h,   v1.4h
         add             v0.4h,   v0.4h,   v2.4h
-        ushl            v0.4h,   v0.4h,   v17.4h
+        ushl            v4.4h,   v0.4h,   v17.4h
         b.eq            1f
         // h = 8/16/64
         cmp             w4,  #8
@@ -616,10 +616,10 @@ L(ipred_dc_w32):
         mov             w17, #(0x5556/2)
         csel            w16, w16, w17, eq
         dup             v16.4h,  w16
-        sqdmulh         v0.4h,   v0.4h,   v16.4h
+        sqdmulh         v4.4h,   v4.4h,   v16.4h
 1:
-        dup             v0.16b,  v0.b[0]
-        dup             v1.16b,  v0.b[0]
+        dup             v0.16b,  v4.b[0]
+        dup             v1.16b,  v4.b[0]
 2:
         st1             {v0.16b, v1.16b}, [x0], x1
         st1             {v0.16b, v1.16b}, [x6], x1
@@ -656,19 +656,19 @@ L(ipred_dc_w64):
         cmp             w4,  #64
         add             v0.4h,   v0.4h,   v1.4h
         add             v0.4h,   v0.4h,   v3.4h
-        ushl            v0.4h,   v0.4h,   v17.4h
+        ushl            v4.4h,   v0.4h,   v17.4h
         b.eq            1f
         // h = 16/32
         mov             w16, #(0x5556/2)
         movk            w16, #(0x3334/2), lsl #16
         lsr             w16, w16, w4
         dup             v16.4h,  w16
-        sqdmulh         v0.4h,   v0.4h,   v16.4h
+        sqdmulh         v4.4h,   v4.4h,   v16.4h
 1:
-        dup             v0.16b,  v0.b[0]
-        dup             v1.16b,  v0.b[0]
-        dup             v2.16b,  v0.b[0]
-        dup             v3.16b,  v0.b[0]
+        dup             v0.16b,  v4.b[0]
+        dup             v1.16b,  v4.b[0]
+        dup             v2.16b,  v4.b[0]
+        dup             v3.16b,  v4.b[0]
 2:
         st1             {v0.16b, v1.16b, v2.16b, v3.16b}, [x0], x1
         st1             {v0.16b, v1.16b, v2.16b, v3.16b}, [x6], x1
