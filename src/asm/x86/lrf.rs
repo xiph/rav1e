@@ -188,7 +188,7 @@ unsafe fn sgrproj_box_ab_8_avx2(
 
   // Box sum and box square sum are already done by setup_integral_image() and done by only once.
   // fetch sum and ssq from pre-computed array under IntegralImageBuffer
-  let sum_array_offset = y * iimg_stride;
+  let sum_array_offset = y * iimg_stride + x;
 
   let sum_ptr = if r == 2 {
     &integral_image_buffer.sum_5x5 as &[u32]
