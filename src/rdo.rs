@@ -1952,6 +1952,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                       height,
                       &lrf_input.planes[pli].slice(loop_po),
                       &lrf_input.planes[pli].slice(loop_po),
+                      fi.cpu_feature_level,
                     );
 
                     sgrproj_stripe_filter(
@@ -2111,6 +2112,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                 unit_height,
                 &lrf_input.planes[pli].slice(loop_po),
                 &lrf_input.planes[pli].slice(loop_po),
+                fi.cpu_feature_level,
               );
 
               for set in 0..16 {

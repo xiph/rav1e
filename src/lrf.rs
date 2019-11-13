@@ -499,11 +499,13 @@ impl<'a, T: Pixel> Iterator for HorzPaddedIter<'a, T> {
 }
 
 impl<T: Pixel> ExactSizeIterator for HorzPaddedIter<'_, T> {}
+use crate::cpu_features::CpuFeatureLevel;
 
 pub fn setup_integral_image<T: Pixel>(
   integral_image_buffer: &mut IntegralImageBuffer,
   integral_image_stride: usize, crop_w: usize, crop_h: usize, stripe_w: usize,
   stripe_h: usize, cdeffed: &PlaneSlice<T>, deblocked: &PlaneSlice<T>,
+  cpu: CpuFeatureLevel,
 ) {
   let integral_image = &mut integral_image_buffer.integral_image;
   let sq_integral_image = &mut integral_image_buffer.sq_integral_image;
@@ -613,101 +615,90 @@ pub fn setup_integral_image<T: Pixel>(
     let iimg_sq =
       &integral_image_buffer.sq_integral_image[integral_image_offset..];
 
-    for y in 0..stripe_h + 2 {
-      if d == 5 && (y & 1) == 1 {
-        continue;
-      }
-      for x in (0..stripe_w + 2).step_by(8) {
-        if x + 8 <= stripe_w + 2 {
-          unsafe {
-            let sum =
-              get_integral_square_avx2(iimg, integral_image_stride, x, y, d);
-            let ssq = get_integral_square_avx2(
-              iimg_sq,
-              integral_image_stride,
-              x,
-              y,
-              d,
-            );
-            // save 4 x u32 sum and sum of square in storage
-            let ptr = if d == 3 {
-              &mut integral_image_buffer.sum_3x3
-            } else {
-              &mut integral_image_buffer.sum_5x5
-            };
-            let ptr_sq = if d == 3 {
-              &mut integral_image_buffer.sum_sq_3x3
-            } else {
-              &mut integral_image_buffer.sum_sq_5x5
-            };
+    if cpu >= CpuFeatureLevel::AVX2 {
+      for y in 0..stripe_h + 2 {
+        if d == 5 && (y & 1) == 1 {
+          continue;
+        }
+        for x in (0..stripe_w + 2).step_by(8) {
+          if x + 8 <= stripe_w + 2 {
+            unsafe {
+              let sum =
+                get_integral_square_avx2(iimg, integral_image_stride, x, y, d);
+              let ssq = get_integral_square_avx2(
+                iimg_sq,
+                integral_image_stride,
+                x,
+                y,
+                d,
+              );
+              // save 4 x u32 sum and sum of square in storage
+              let ptr = if d == 3 {
+                &mut integral_image_buffer.sum_3x3
+              } else {
+                &mut integral_image_buffer.sum_5x5
+              };
+              let ptr_sq = if d == 3 {
+                &mut integral_image_buffer.sum_sq_3x3
+              } else {
+                &mut integral_image_buffer.sum_sq_5x5
+              };
 
-            _mm256_storeu_si256(
-              ptr.as_mut_ptr().add(y * integral_image_stride + x) as *mut _,
-              sum,
-            );
-            _mm256_storeu_si256(
-              ptr_sq.as_mut_ptr().add(y * integral_image_stride + x) as *mut _,
-              ssq,
-            );
-          }
-        } else {
-          for x2 in x..stripe_w + 2 {
-            let sum =
-              get_integral_square(iimg, integral_image_stride, x2, y, d);
-            let ssq =
-              get_integral_square(iimg_sq, integral_image_stride, x2, y, d);
-            // save sum and sum of square in storage
-            if d == 3 {
-              integral_image_buffer.sum_3x3[y * integral_image_stride + x2] =
-                sum;
-              integral_image_buffer.sum_sq_3x3
-                [y * integral_image_stride + x2] = ssq;
-            } else {
-              integral_image_buffer.sum_5x5[y * integral_image_stride + x2] =
-                sum;
-              integral_image_buffer.sum_sq_5x5
-                [y * integral_image_stride + x2] = ssq;
+              _mm256_storeu_si256(
+                ptr.as_mut_ptr().add(y * integral_image_stride + x) as *mut _,
+                sum,
+              );
+              _mm256_storeu_si256(
+                ptr_sq.as_mut_ptr().add(y * integral_image_stride + x)
+                  as *mut _,
+                ssq,
+              );
             }
+          } else {
+            for x2 in x..stripe_w + 2 {
+              let sum =
+                get_integral_square(iimg, integral_image_stride, x2, y, d);
+              let ssq =
+                get_integral_square(iimg_sq, integral_image_stride, x2, y, d);
+              // save sum and sum of square in storage
+              if d == 3 {
+                integral_image_buffer.sum_3x3
+                  [y * integral_image_stride + x2] = sum;
+                integral_image_buffer.sum_sq_3x3
+                  [y * integral_image_stride + x2] = ssq;
+              } else {
+                integral_image_buffer.sum_5x5
+                  [y * integral_image_stride + x2] = sum;
+                integral_image_buffer.sum_sq_5x5
+                  [y * integral_image_stride + x2] = ssq;
+              }
+            }
+          }
+        }
+      }
+    } else {
+      for y in 0..stripe_h + 2 {
+        if d == 5 && (y & 1) == 1 {
+          continue;
+        }
+        for x in 0..stripe_w + 2 {
+          let sum = get_integral_square(iimg, integral_image_stride, x, y, d);
+          let ssq =
+            get_integral_square(iimg_sq, integral_image_stride, x, y, d);
+          // save sum and sum of square in storage
+          if d == 3 {
+            integral_image_buffer.sum_3x3[y * integral_image_stride + x] = sum;
+            integral_image_buffer.sum_sq_3x3[y * integral_image_stride + x] =
+              ssq;
+          } else {
+            integral_image_buffer.sum_5x5[y * integral_image_stride + x] = sum;
+            integral_image_buffer.sum_sq_5x5[y * integral_image_stride + x] =
+              ssq;
           }
         }
       }
     }
   }
-  /*
-    for y in 0..stripe_h + 2 {
-      for x in 0..stripe_w + 2 {
-        let sum = get_integral_square(iimg, integral_image_stride, x, y, d);
-        let ssq = get_integral_square(iimg_sq, integral_image_stride, x, y, d);
-        // save sum and sum of square in storage
-        integral_image_buffer.sum_3x3[y * integral_image_stride + x] = sum;
-        integral_image_buffer.sum_sq_3x3[y * integral_image_stride + x] = ssq;
-      }
-    }
-  */
-  /*
-  {
-    let r = 2; // now for 5x5
-    let d: usize = r * 2 + 1;
-    let integral_image_offset =
-      if d == 3 { integral_image_stride + 1 } else { 0 };
-    let iimg = &integral_image_buffer.integral_image[integral_image_offset..];
-    let iimg_sq =
-      &integral_image_buffer.sq_integral_image[integral_image_offset..];
-
-    for y in 0..stripe_h + 2 {
-      if r == 2 && (y & 1) == 1 {
-        continue;
-      }
-      for x in 0..stripe_w + 2 {
-        let sum = get_integral_square(iimg, integral_image_stride, x, y, d);
-        let ssq = get_integral_square(iimg_sq, integral_image_stride, x, y, d);
-        // save sum and sum of square in storage
-        integral_image_buffer.sum_5x5[y * integral_image_stride + x] = sum;
-        integral_image_buffer.sum_sq_5x5[y * integral_image_stride + x] = ssq;
-      }
-    }
-  }
-  */
 }
 
 pub fn sgrproj_stripe_filter<T: Pixel>(
@@ -1531,6 +1522,7 @@ impl RestorationState {
                   .slice(PlaneOffset { x: x as isize, y: stripe_start_y }),
                 &pre_cdef.planes[pli]
                   .slice(PlaneOffset { x: x as isize, y: stripe_start_y }),
+                fi.cpu_feature_level,
               );
 
               sgrproj_stripe_filter(
