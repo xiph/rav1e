@@ -132,7 +132,7 @@ function ipred_v_neon, export=1
         b.gt            8b
         ret
 160:
-        ld1             {v0.16b}, [x2], #16
+        ld1             {v0.16b}, [x2]
 16:
         st1             {v0.16b}, [x0], x1
         st1             {v0.16b}, [x6], x1
