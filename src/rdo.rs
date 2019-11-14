@@ -1952,6 +1952,13 @@ pub fn rdo_loop_decision<T: Pixel>(
                       height,
                       &lrf_input.planes[pli].slice(loop_po),
                       &lrf_input.planes[pli].slice(loop_po),
+                    );
+
+                    sgrproj_compute_3x3_and_5x5_box_sums(
+                      &mut ts.integral_buffer,
+                      SOLVE_IMAGE_STRIDE,
+                      width,
+                      height,
                       fi.cpu_feature_level,
                     );
 
@@ -2112,6 +2119,13 @@ pub fn rdo_loop_decision<T: Pixel>(
                 unit_height,
                 &lrf_input.planes[pli].slice(loop_po),
                 &lrf_input.planes[pli].slice(loop_po),
+              );
+
+              sgrproj_compute_3x3_and_5x5_box_sums(
+                &mut ts.integral_buffer,
+                SOLVE_IMAGE_STRIDE,
+                unit_width,
+                unit_height,
                 fi.cpu_feature_level,
               );
 

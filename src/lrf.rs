@@ -505,7 +505,6 @@ pub fn setup_integral_image<T: Pixel>(
   integral_image_buffer: &mut IntegralImageBuffer,
   integral_image_stride: usize, crop_w: usize, crop_h: usize, stripe_w: usize,
   stripe_h: usize, cdeffed: &PlaneSlice<T>, deblocked: &PlaneSlice<T>,
-  cpu: CpuFeatureLevel,
 ) {
   let integral_image = &mut integral_image_buffer.integral_image;
   let sq_integral_image = &mut integral_image_buffer.sq_integral_image;
@@ -599,7 +598,13 @@ pub fn setup_integral_image<T: Pixel>(
     integral_slice = integral_row;
     sq_integral_slice = sq_integral_row;
   }
+}
 
+pub fn sgrproj_compute_3x3_and_5x5_box_sums(
+  integral_image_buffer: &mut IntegralImageBuffer,
+  integral_image_stride: usize, stripe_w: usize, stripe_h: usize,
+  cpu: CpuFeatureLevel,
+) {
   // Place to do compute sum and sum of square
   #[cfg(target_arch = "x86")]
   use std::arch::x86::*;
@@ -1522,6 +1527,13 @@ impl RestorationState {
                   .slice(PlaneOffset { x: x as isize, y: stripe_start_y }),
                 &pre_cdef.planes[pli]
                   .slice(PlaneOffset { x: x as isize, y: stripe_start_y }),
+              );
+
+              sgrproj_compute_3x3_and_5x5_box_sums(
+                &mut stripe_filter_buffer,
+                STRIPE_IMAGE_STRIDE,
+                size,
+                stripe_size,
                 fi.cpu_feature_level,
               );
 
