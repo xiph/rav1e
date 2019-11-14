@@ -319,6 +319,56 @@ pub(crate) mod native {
       f1[x] = (vo + (1 << shifto >> 1)) >> shifto;
     }
   }
+
+  // Using an integral image, compute the sum of a square region
+  #[inline(always)]
+  pub(crate) fn get_integral_square(
+    iimg: &[u32], stride: usize, x: usize, y: usize, size: usize,
+  ) -> u32 {
+    // Cancel out overflow in iimg by using wrapping arithmetic
+    iimg[y * stride + x]
+      .wrapping_add(iimg[(y + size) * stride + x + size])
+      .wrapping_sub(iimg[(y + size) * stride + x])
+      .wrapping_sub(iimg[y * stride + x + size])
+  }
+
+  pub(crate) fn sgrproj_compute_3x3_and_5x5_box_sums(
+    integral_image_buffer: &mut IntegralImageBuffer,
+    integral_image_stride: usize, stripe_w: usize, stripe_h: usize,
+    _cpu: CpuFeatureLevel,
+  ) {
+    for r in 1..=2 {
+      let d: usize = r * 2 + 1;
+      // and save the results sum and sum of square in different storage
+      let integral_image_offset =
+        if d == 3 { integral_image_stride + 1 } else { 0 };
+      let iimg =
+        &integral_image_buffer.integral_image[integral_image_offset..];
+      let iimg_sq =
+        &integral_image_buffer.sq_integral_image[integral_image_offset..];
+
+      for y in 0..stripe_h + 2 {
+        if d == 5 && (y & 1) == 1 {
+          continue;
+        }
+        for x in 0..stripe_w + 2 {
+          let sum = get_integral_square(iimg, integral_image_stride, x, y, d);
+          let ssq =
+            get_integral_square(iimg_sq, integral_image_stride, x, y, d);
+          // save sum and sum of square in storage
+          if d == 3 {
+            integral_image_buffer.sum_3x3[y * integral_image_stride + x] = sum;
+            integral_image_buffer.sum_sq_3x3[y * integral_image_stride + x] =
+              ssq;
+          } else {
+            integral_image_buffer.sum_5x5[y * integral_image_stride + x] = sum;
+            integral_image_buffer.sum_sq_5x5[y * integral_image_stride + x] =
+              ssq;
+          }
+        }
+      }
+    }
+  }
 }
 
 #[inline(always)]
@@ -340,17 +390,6 @@ fn sgrproj_sum_finish(
   };
   let b = ((1 << SGRPROJ_SGR_BITS) - a) * sum * one_over_n;
   (a, (b + (1 << SGRPROJ_RECIP_BITS >> 1)) >> SGRPROJ_RECIP_BITS)
-}
-
-// Using an integral image, compute the sum of a square region
-pub fn get_integral_square(
-  iimg: &[u32], stride: usize, x: usize, y: usize, size: usize,
-) -> u32 {
-  // Cancel out overflow in iimg by using wrapping arithmetic
-  iimg[y * stride + x]
-    .wrapping_add(iimg[(y + size) * stride + x + size])
-    .wrapping_sub(iimg[(y + size) * stride + x])
-    .wrapping_sub(iimg[y * stride + x + size])
 }
 
 struct VertPaddedIter<'a, T: Pixel> {
@@ -499,7 +538,6 @@ impl<'a, T: Pixel> Iterator for HorzPaddedIter<'a, T> {
 }
 
 impl<T: Pixel> ExactSizeIterator for HorzPaddedIter<'_, T> {}
-use crate::cpu_features::CpuFeatureLevel;
 
 pub fn setup_integral_image<T: Pixel>(
   integral_image_buffer: &mut IntegralImageBuffer,
@@ -599,113 +637,6 @@ pub fn setup_integral_image<T: Pixel>(
     sq_integral_slice = sq_integral_row;
   }
 }
-
-pub fn sgrproj_compute_3x3_and_5x5_box_sums(
-  integral_image_buffer: &mut IntegralImageBuffer,
-  integral_image_stride: usize, stripe_w: usize, stripe_h: usize,
-  cpu: CpuFeatureLevel,
-) {
-  // Place to do compute sum and sum of square
-  #[cfg(target_arch = "x86")]
-  use std::arch::x86::*;
-  #[cfg(target_arch = "x86_64")]
-  use std::arch::x86_64::*;
-
-  for r in 1..=2 {
-    let d: usize = r * 2 + 1;
-    // and save the results sum and sum of square in different storage
-    let integral_image_offset =
-      if d == 3 { integral_image_stride + 1 } else { 0 };
-    let iimg = &integral_image_buffer.integral_image[integral_image_offset..];
-    let iimg_sq =
-      &integral_image_buffer.sq_integral_image[integral_image_offset..];
-
-    if cpu >= CpuFeatureLevel::AVX2 {
-      for y in 0..stripe_h + 2 {
-        if d == 5 && (y & 1) == 1 {
-          continue;
-        }
-        for x in (0..stripe_w + 2).step_by(8) {
-          if x + 8 <= stripe_w + 2 {
-            unsafe {
-              let sum =
-                get_integral_square_avx2(iimg, integral_image_stride, x, y, d);
-              let ssq = get_integral_square_avx2(
-                iimg_sq,
-                integral_image_stride,
-                x,
-                y,
-                d,
-              );
-              // save 4 x u32 sum and sum of square in storage
-              let ptr = if d == 3 {
-                &mut integral_image_buffer.sum_3x3
-              } else {
-                &mut integral_image_buffer.sum_5x5
-              };
-              let ptr_sq = if d == 3 {
-                &mut integral_image_buffer.sum_sq_3x3
-              } else {
-                &mut integral_image_buffer.sum_sq_5x5
-              };
-
-              _mm256_storeu_si256(
-                ptr.as_mut_ptr().add(y * integral_image_stride + x) as *mut _,
-                sum,
-              );
-              _mm256_storeu_si256(
-                ptr_sq.as_mut_ptr().add(y * integral_image_stride + x)
-                  as *mut _,
-                ssq,
-              );
-            }
-          } else {
-            for x2 in x..stripe_w + 2 {
-              let sum =
-                get_integral_square(iimg, integral_image_stride, x2, y, d);
-              let ssq =
-                get_integral_square(iimg_sq, integral_image_stride, x2, y, d);
-              // save sum and sum of square in storage
-              if d == 3 {
-                integral_image_buffer.sum_3x3
-                  [y * integral_image_stride + x2] = sum;
-                integral_image_buffer.sum_sq_3x3
-                  [y * integral_image_stride + x2] = ssq;
-              } else {
-                integral_image_buffer.sum_5x5
-                  [y * integral_image_stride + x2] = sum;
-                integral_image_buffer.sum_sq_5x5
-                  [y * integral_image_stride + x2] = ssq;
-              }
-            }
-          }
-        }
-      }
-    } else {
-      for y in 0..stripe_h + 2 {
-        if d == 5 && (y & 1) == 1 {
-          continue;
-        }
-        for x in 0..stripe_w + 2 {
-          let sum = get_integral_square(iimg, integral_image_stride, x, y, d);
-          let ssq =
-            get_integral_square(iimg_sq, integral_image_stride, x, y, d);
-          // save sum and sum of square in storage
-          if d == 3 {
-            integral_image_buffer.sum_3x3[y * integral_image_stride + x] = sum;
-            integral_image_buffer.sum_sq_3x3[y * integral_image_stride + x] =
-              ssq;
-          } else {
-            integral_image_buffer.sum_5x5[y * integral_image_stride + x] = sum;
-            integral_image_buffer.sum_sq_5x5[y * integral_image_stride + x] =
-              ssq;
-          }
-        }
-      }
-    }
-  }
-}
-
 pub fn sgrproj_stripe_filter<T: Pixel>(
   set: u8, xqd: [i8; 2], fi: &FrameInvariants<T>,
   integral_image_buffer: &IntegralImageBuffer, integral_image_stride: usize,

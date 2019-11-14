@@ -1954,7 +1954,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                       &lrf_input.planes[pli].slice(loop_po),
                     );
 
-                    sgrproj_compute_3x3_and_5x5_box_sums(
+                    crate::lrf::native::sgrproj_compute_3x3_and_5x5_box_sums(
                       &mut ts.integral_buffer,
                       SOLVE_IMAGE_STRIDE,
                       width,
@@ -2121,7 +2121,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                 &lrf_input.planes[pli].slice(loop_po),
               );
 
-              sgrproj_compute_3x3_and_5x5_box_sums(
+              crate::lrf::native::sgrproj_compute_3x3_and_5x5_box_sums(
                 &mut ts.integral_buffer,
                 SOLVE_IMAGE_STRIDE,
                 unit_width,
