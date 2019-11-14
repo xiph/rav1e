@@ -633,15 +633,15 @@ fn output_frameno_reorder_scene_change_at(scene_change_at: u64) {
         ][..]
       }
       4 => {
+        // The algorithm cannot put a scenechange at the last frame of a video
         &[
-          (0, true),  // I-frame
-          (0, false), // Missing
-          (2, true),  // B0-frame
-          (1, true),  // B1-frame (first)
-          (2, true),  // B0-frame (show existing)
-          (3, true),  // B1-frame (second)
-          (3, false), // Missing
-          (4, true),  // I-frame
+          (0, true), // I-frame
+          (4, true), // P-frame
+          (2, true), // B0-frame
+          (1, true), // B1-frame (first)
+          (2, true), // B0-frame (show existing)
+          (3, true), // B1-frame (second)
+          (4, true), // P-frame (show existing)
         ][..]
       }
       _ => unreachable!(),
@@ -747,15 +747,15 @@ fn pyramid_level_reorder_scene_change_at(scene_change_at: u64) {
         ][..]
       }
       4 => {
+        // The algorithm cannot put a scenechange at the last frame of a video
         &[
           0, // I-frame
-          0, // Missing
+          0, // P-frame
           1, // B0-frame
           2, // B1-frame (first)
           1, // B0-frame (show existing)
           2, // B1-frame (second)
-          2, // Missing
-          0, // I-frame
+          0, // P-frame (show existing)
         ][..]
       }
       _ => unreachable!(),
@@ -994,15 +994,15 @@ fn output_frameno_incremental_reorder_scene_change_at(scene_change_at: u64) {
         ][..]
       }
       4 => {
+        // The algorithm cannot put a scenechange at the last frame of a video
         &[
-          (0, true),  // I-frame
-          (0, false), // Missing
-          (2, true),  // B0-frame
-          (1, true),  // B1-frame (first)
-          (2, true),  // B0-frame (show existing)
-          (3, true),  // B1-frame (second)
-          (3, false), // Missing
-          (4, true),  // I-frame
+          (0, true), // I-frame
+          (4, true), // P-frame
+          (2, true), // B0-frame
+          (1, true), // B1-frame (first)
+          (2, true), // B0-frame (show existing)
+          (3, true), // B1-frame (second)
+          (4, true), // P-frame (show existing)
         ][..]
       }
       _ => unreachable!(),
@@ -1281,6 +1281,7 @@ fn output_frameno_scene_change_past_max_len_flash() {
   send_test_frame(&mut ctx, u8::max_value());
   send_test_frame(&mut ctx, u8::max_value());
   send_test_frame(&mut ctx, u8::min_value());
+  send_test_frame(&mut ctx, u8::min_value());
   ctx.flush();
 
   let data = get_frame_invariants(ctx)
@@ -1305,6 +1306,12 @@ fn output_frameno_scene_change_past_max_len_flash() {
       (5, true),  // B1-frame (second)
       (6, true),  // P-frame (show existing)
       (7, true),  // I-frame
+      (7, false), // invalid
+      (7, false), // invalid
+      (8, true),  // P-frame
+      (8, false), // invalid
+      (8, false), // invalid
+      (8, false), // invalid
     ]
   );
 }

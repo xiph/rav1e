@@ -126,6 +126,12 @@ impl SceneChangeDetector {
     &mut self, frame_subset: &[Arc<Frame<T>>], frameno: u64,
     inter_cfg: &InterConfig,
   ) {
+    if frame_subset.len() == 2 {
+      // This is the last frame in the video,
+      // which is effectively a "flash" of content.
+      self.excluded_frames.insert(frameno);
+    }
+
     let lookahead_distance = cmp::min(
       inter_cfg.keyframe_lookahead_distance() as usize,
       frame_subset.len() - 1,
