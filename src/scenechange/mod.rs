@@ -9,7 +9,7 @@
 
 use crate::api::EncoderConfig;
 use crate::api::InterConfig;
-use crate::frame::Frame;
+use crate::frame::*;
 use crate::util::CastFromPrimitive;
 use crate::util::Pixel;
 
@@ -171,39 +171,61 @@ impl SceneChangeDetector {
   fn has_scenecut<T: Pixel>(
     &self, frame1: &Frame<T>, frame2: &Frame<T>,
   ) -> bool {
-    let len = frame2.planes[0].cfg.width * frame2.planes[0].cfg.height;
+    let y_lines =
+      frame1.planes[0].rows_iter().zip(frame2.planes[0].rows_iter());
 
-    let delta_avg = if self.fast_mode {
-      frame2
+    let mut len = frame2.planes[0].cfg.width * frame2.planes[0].cfg.height;
+    let mut delta = 0;
+
+    for (l1, l2) in y_lines {
+      let delta_line = l1
         .iter()
-        .zip(frame1.iter())
-        .map(|(last, cur)| {
-          (i16::cast_from(cur.0) - i16::cast_from(last.0)).abs() as u64
+        .zip(l2.iter())
+        .map(|(&p1, &p2)| {
+          (i16::cast_from(p1) - i16::cast_from(p2)).abs() as u64
         })
-        .sum::<u64>()
-        / len as u64
-    } else {
-      let delta_yuv = frame2
-        .iter()
-        .zip(frame1.iter())
-        .map(|(last, cur)| {
-          (
-            (i16::cast_from(cur.0) - i16::cast_from(last.0)).abs() as u64,
-            (i16::cast_from(cur.1) - i16::cast_from(last.1)).abs() as u64,
-            (i16::cast_from(cur.2) - i16::cast_from(last.2)).abs() as u64,
-          )
-        })
-        .fold((0, 0, 0), |(ht, st, vt), (h, s, v)| (ht + h, st + s, vt + v));
+        .sum::<u64>();
+      delta += delta_line;
+    }
 
-      let delta_yuv = (
-        (delta_yuv.0 / len as u64) as u16,
-        (delta_yuv.1 / len as u64) as u16,
-        (delta_yuv.2 / len as u64) as u16,
-      );
+    if !self.fast_mode {
+      let u_dec = frame1.planes[1].cfg.xdec + frame1.planes[1].cfg.ydec;
+      len +=
+        (frame2.planes[1].cfg.width * frame2.planes[1].cfg.height) << u_dec;
 
-      ((delta_yuv.0 + delta_yuv.1 + delta_yuv.2) / 3) as u64
-    };
+      let u_lines =
+        frame1.planes[1].rows_iter().zip(frame2.planes[1].rows_iter());
 
-    delta_avg >= self.threshold as u64
+      for (l1, l2) in u_lines {
+        let delta_line = l1
+          .iter()
+          .zip(l2.iter())
+          .map(|(&p1, &p2)| {
+            (i16::cast_from(p1) - i16::cast_from(p2)).abs() as u64
+          })
+          .sum::<u64>();
+        delta += delta_line << u_dec;
+      }
+
+      let v_dec = frame1.planes[2].cfg.xdec + frame1.planes[2].cfg.ydec;
+      len +=
+        (frame2.planes[2].cfg.width * frame2.planes[2].cfg.height) << v_dec;
+
+      let v_lines =
+        frame1.planes[2].rows_iter().zip(frame2.planes[2].rows_iter());
+
+      for (l1, l2) in v_lines {
+        let delta_line = l1
+          .iter()
+          .zip(l2.iter())
+          .map(|(&p1, &p2)| {
+            (i16::cast_from(p1) - i16::cast_from(p2)).abs() as u64
+          })
+          .sum::<u64>();
+        delta += delta_line << v_dec;
+      }
+    }
+
+    delta >= self.threshold as u64 * len as u64
   }
 }

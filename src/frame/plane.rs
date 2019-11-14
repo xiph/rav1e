@@ -426,6 +426,10 @@ impl<T: Pixel> Plane<T> {
   pub fn iter(&self) -> PlaneIter<'_, T> {
     PlaneIter::new(self)
   }
+
+  pub(crate) fn rows_iter(&self) -> RowsIter<'_, T> {
+    RowsIter { plane: self, x: 0, y: 0 }
+  }
 }
 
 /// Iterator over plane pixels, skipping padding.
