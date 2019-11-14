@@ -899,55 +899,55 @@ impl<T: Pixel> ContextInner<T> {
         // We should never use frame as its own reference.
         assert_ne!(reference_output_frameno, output_frameno);
 
-        for y in 0..fi.h_in_imp_b {
-          for x in 0..fi.w_in_imp_b {
-            let mv = fi.lookahead_mvs[mv_index][y * 2][x * 2];
+        if let Some(reference_frame_block_importances) = self
+          .frame_invariants
+          .get_mut(&reference_output_frameno)
+          .map(|rfi| &mut rfi.block_importances)
+        {
+          for y in 0..fi.h_in_imp_b {
+            for x in 0..fi.w_in_imp_b {
+              let mv = fi.lookahead_mvs[mv_index][y * 2][x * 2];
 
-            // Coordinates of the top-left corner of the reference block, in MV
-            // units.
-            let reference_x =
-              x as i64 * BLOCK_SIZE_IN_MV_UNITS + mv.col as i64;
-            let reference_y =
-              y as i64 * BLOCK_SIZE_IN_MV_UNITS + mv.row as i64;
+              // Coordinates of the top-left corner of the reference block, in MV
+              // units.
+              let reference_x =
+                x as i64 * BLOCK_SIZE_IN_MV_UNITS + mv.col as i64;
+              let reference_y =
+                y as i64 * BLOCK_SIZE_IN_MV_UNITS + mv.row as i64;
 
-            let plane_org = frame.planes[0].region(Area::Rect {
-              x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
-              y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
-              width: IMPORTANCE_BLOCK_SIZE,
-              height: IMPORTANCE_BLOCK_SIZE,
-            });
+              let plane_org = frame.planes[0].region(Area::Rect {
+                x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
+                y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
+                width: IMPORTANCE_BLOCK_SIZE,
+                height: IMPORTANCE_BLOCK_SIZE,
+              });
 
-            let plane_ref = reference_frame.planes[0].region(Area::Rect {
-              x: reference_x as isize / MV_UNITS_PER_PIXEL as isize,
-              y: reference_y as isize / MV_UNITS_PER_PIXEL as isize,
-              width: IMPORTANCE_BLOCK_SIZE,
-              height: IMPORTANCE_BLOCK_SIZE,
-            });
+              let plane_ref = reference_frame.planes[0].region(Area::Rect {
+                x: reference_x as isize / MV_UNITS_PER_PIXEL as isize,
+                y: reference_y as isize / MV_UNITS_PER_PIXEL as isize,
+                width: IMPORTANCE_BLOCK_SIZE,
+                height: IMPORTANCE_BLOCK_SIZE,
+              });
 
-            let inter_cost = get_satd(
-              &plane_org,
-              &plane_ref,
-              bsize,
-              self.config.bit_depth,
-              fi.cpu_feature_level,
-            ) as f32;
+              let inter_cost = get_satd(
+                &plane_org,
+                &plane_ref,
+                bsize,
+                self.config.bit_depth,
+                fi.cpu_feature_level,
+              ) as f32;
 
-            let intra_cost =
-              fi.lookahead_intra_costs[y * fi.w_in_imp_b + x] as f32;
+              let intra_cost =
+                fi.lookahead_intra_costs[y * fi.w_in_imp_b + x] as f32;
 
-            let future_importance =
-              fi.block_importances[y * fi.w_in_imp_b + x];
+              let future_importance =
+                fi.block_importances[y * fi.w_in_imp_b + x];
 
-            let propagate_fraction = (1. - inter_cost / intra_cost).max(0.);
-            let propagate_amount = (intra_cost + future_importance)
-              * propagate_fraction
-              / unique_indices.len() as f32;
+              let propagate_fraction = (1. - inter_cost / intra_cost).max(0.);
+              let propagate_amount = (intra_cost + future_importance)
+                * propagate_fraction
+                / unique_indices.len() as f32;
 
-            if let Some(reference_frame_block_importances) = self
-              .frame_invariants
-              .get_mut(&reference_output_frameno)
-              .map(|fi| &mut fi.block_importances)
-            {
               let mut propagate =
                 |block_x_in_mv_units, block_y_in_mv_units, fraction| {
                   let x = block_x_in_mv_units / BLOCK_SIZE_IN_MV_UNITS;
