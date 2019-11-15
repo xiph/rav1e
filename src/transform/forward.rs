@@ -1799,22 +1799,19 @@ trait FwdTxfm2D: Dim {
           col_flip[r] = (input[r * stride + c]).into();
         }
       }
+
+      let output = &mut output[txfm_size_row..][..txfm_size_row];
       av1_round_shift_array(col_flip, txfm_size_row, -cfg.shift[0]);
-      txfm_func_col(&col_flip, &mut output[txfm_size_row..]);
-      av1_round_shift_array(
-        &mut output[txfm_size_row..],
-        txfm_size_row,
-        -cfg.shift[1],
-      );
+      txfm_func_col(&col_flip, output);
+      av1_round_shift_array(output, txfm_size_row, -cfg.shift[1]);
       if cfg.lr_flip {
         for r in 0..txfm_size_row {
           // flip from left to right
-          buf[r * txfm_size_col + (txfm_size_col - c - 1)] =
-            output[txfm_size_row + r];
+          buf[r * txfm_size_col + (txfm_size_col - c - 1)] = output[r];
         }
       } else {
         for r in 0..txfm_size_row {
-          buf[r * txfm_size_col + c] = output[txfm_size_row + r];
+          buf[r * txfm_size_col + c] = output[r];
         }
       }
     }
