@@ -303,12 +303,12 @@ fn av1_round_shift_array_rs(arr: &mut [i32], size: usize, bit: i8) {
   }
   if bit > 0 {
     let bit = bit as usize;
-    for i in 0..size {
-      arr[i] = round_shift(arr[i], bit);
+    for i in arr.iter_mut().take(size) {
+      *i = round_shift(*i, bit);
     }
   } else {
-    for i in 0..size {
-      arr[i] <<= -bit;
+    for i in arr.iter_mut().take(size) {
+      *i <<= -bit;
     }
   }
 }
