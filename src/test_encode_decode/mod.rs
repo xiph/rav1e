@@ -114,7 +114,7 @@ pub(crate) trait TestDecoder<T: Pixel> {
           ivf::write_ivf_frame(&mut out, pkt.input_frameno, &pkt.data);
 
           if let Some(pkt_rec) = pkt.rec {
-            rec_fifo.push_back(pkt_rec.clone());
+            rec_fifo.push_back((*pkt_rec).clone());
           }
           let packet = pkt.data;
           debug!("Decoding frame {}", pkt.input_frameno);
