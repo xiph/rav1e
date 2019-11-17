@@ -24,6 +24,7 @@ use rav1e::bench::transform::*;
 use crate::transform::{forward_transforms, inverse_transforms};
 
 use criterion::*;
+use std::sync::Arc;
 use std::time::Duration;
 
 fn write_b(c: &mut Criterion) {
@@ -133,7 +134,7 @@ fn cdef_frame_bench(b: &mut Bencher, width: usize, height: usize) {
   let fb = FrameBlocks::new(fi.sb_width * 16, fi.sb_height * 16);
   let mut fs = FrameState::new(&fi);
 
-  b.iter(|| cdef_filter_frame(&fi, &mut fs.rec, &fb));
+  b.iter(|| cdef_filter_frame(&fi, Arc::make_mut(&mut fs.rec), &fb));
 }
 
 fn cfl_rdo(c: &mut Criterion) {

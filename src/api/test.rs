@@ -190,7 +190,7 @@ fn send_test_frame<T: Pixel>(ctx: &mut Context<T>, content_value: T) {
 fn get_frame_invariants<T: Pixel>(
   ctx: Context<T>,
 ) -> impl Iterator<Item = FrameInvariants<T>> {
-  ctx.inner.frame_invariants.into_iter().map(|(_, v)| v)
+  ctx.inner.frame_data.into_iter().map(|(_, v)| v.fi)
 }
 
 #[interpolate_test(0, 0)]
@@ -1510,7 +1510,7 @@ fn lookahead_size_properly_bounded(
       expectations.pre_receive_frame_q_lens[i]
     );
     assert_eq!(
-      ctx.inner.frame_invariants.len(),
+      ctx.inner.frame_data.len(),
       expectations.pre_receive_fi_lens[i]
     );
     while ctx.receive_packet().is_ok() {
@@ -1521,7 +1521,7 @@ fn lookahead_size_properly_bounded(
       expectations.post_receive_frame_q_lens[i]
     );
     assert_eq!(
-      ctx.inner.frame_invariants.len(),
+      ctx.inner.frame_data.len(),
       expectations.post_receive_fi_lens[i]
     );
   }

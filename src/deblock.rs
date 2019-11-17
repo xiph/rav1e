@@ -19,6 +19,7 @@ use crate::util::Pixel;
 use crate::util::{clamp, ILog};
 use crate::DeblockState;
 use std::cmp;
+use std::sync::Arc;
 
 fn deblock_adjusted_level(
   deblock: &DeblockState, block: &Block, pli: usize, vertical: bool,
@@ -1408,8 +1409,9 @@ fn sse_plane<T: Pixel>(
 pub fn deblock_filter_frame<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, blocks: &FrameBlocks,
 ) {
+  let fs_rec = Arc::make_mut(&mut fs.rec);
   for pli in 0..PLANES {
-    deblock_plane(fi, &fs.deblock, &mut fs.rec.planes[pli], pli, blocks);
+    deblock_plane(fi, &fs.deblock, &mut fs_rec.planes[pli], pli, blocks);
   }
 }
 

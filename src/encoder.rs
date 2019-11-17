@@ -63,8 +63,8 @@ pub const IMPORTANCE_BLOCK_SIZE: usize = 8;
 pub struct ReferenceFrame<T: Pixel> {
   pub order_hint: u32,
   pub frame: Arc<Frame<T>>,
-  pub input_hres: Plane<T>,
-  pub input_qres: Plane<T>,
+  pub input_hres: Arc<Plane<T>>,
+  pub input_qres: Arc<Plane<T>>,
   pub cdfs: CDFContext,
   pub frame_mvs: Vec<FrameMotionVectors>,
   pub output_frameno: u64,
@@ -326,19 +326,24 @@ impl Default for Sequence {
   }
 }
 
-#[derive(Debug)]
+pub type BlockPmv = [[Option<MotionVector>; REF_FRAMES]; 5];
+
+#[derive(Debug, Clone)]
 pub struct FrameState<T: Pixel> {
   pub sb_size_log2: usize,
   pub input: Arc<Frame<T>>,
-  pub input_hres: Plane<T>, // half-resolution version of input luma
-  pub input_qres: Plane<T>, // quarter-resolution version of input luma
-  pub rec: Frame<T>,
+  pub input_hres: Arc<Plane<T>>, // half-resolution version of input luma
+  pub input_qres: Arc<Plane<T>>, // quarter-resolution version of input luma
+  pub rec: Arc<Frame<T>>,
   pub cdfs: CDFContext,
   pub context_update_tile_id: usize, // tile id used for the CDFontext
   pub max_tile_size_bytes: u32,
   pub deblock: DeblockState,
   pub segmentation: SegmentationState,
   pub restoration: RestorationState,
+  // Because we only reference these within a tile context,
+  // these are stored per-tile for easier access.
+  pub half_res_pmvs: Vec<(PlaneSuperBlockOffset, Vec<BlockPmv>)>,
   pub frame_mvs: Vec<FrameMotionVectors>,
   pub t: RDOTracker,
   pub enc_stats: EncoderStats,
@@ -362,32 +367,44 @@ impl<T: Pixel> FrameState<T> {
     let luma_padding_x = frame.planes[0].cfg.xpad;
     let luma_padding_y = frame.planes[0].cfg.ypad;
 
+    let mut hres = Plane::new(
+      luma_width / 2,
+      luma_height / 2,
+      1,
+      1,
+      luma_padding_x / 2,
+      luma_padding_y / 2,
+    );
+    hres.downsample_from(&frame.planes[0]);
+    hres.pad(fi.width, fi.height);
+    let mut qres = Plane::new(
+      luma_width / 4,
+      luma_height / 4,
+      2,
+      2,
+      luma_padding_x / 4,
+      luma_padding_y / 4,
+    );
+    qres.downsample_from(&hres);
+    qres.pad(fi.width, fi.height);
+
     Self {
       sb_size_log2: fi.sb_size_log2(),
       input: frame,
-      input_hres: Plane::new(
-        luma_width / 2,
-        luma_height / 2,
-        1,
-        1,
-        luma_padding_x / 2,
-        luma_padding_y / 2,
-      ),
-      input_qres: Plane::new(
-        luma_width / 4,
-        luma_height / 4,
-        2,
-        2,
-        luma_padding_x / 4,
-        luma_padding_y / 4,
-      ),
-      rec: Frame::new(luma_width, luma_height, fi.sequence.chroma_sampling),
+      input_hres: Arc::new(hres),
+      input_qres: Arc::new(qres),
+      rec: Arc::new(Frame::new(
+        luma_width,
+        luma_height,
+        fi.sequence.chroma_sampling,
+      )),
       cdfs: CDFContext::new(0),
       context_update_tile_id: 0,
       max_tile_size_bytes: 0,
       deblock: Default::default(),
       segmentation: Default::default(),
       restoration: rs,
+      half_res_pmvs: Vec::with_capacity(fi.tiling.cols * fi.tiling.rows),
       frame_mvs: {
         let mut vec = Vec::with_capacity(REF_FRAMES);
         for _ in 0..REF_FRAMES {
@@ -2127,9 +2144,8 @@ pub fn encode_block_with_modes<T: Pixel>(
 fn encode_partition_bottomup<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
-  bsize: BlockSize, tile_bo: TileBlockOffset,
-  pmvs: &mut [[Option<MotionVector>; REF_FRAMES]; 5], ref_rd_cost: f64,
-  inter_cfg: &InterConfig,
+  bsize: BlockSize, tile_bo: TileBlockOffset, pmv_idx: usize,
+  ref_rd_cost: f64, inter_cfg: &InterConfig,
 ) -> PartitionGroupParameters {
   let rdo_type = RDOType::PixelDistRealRate;
   let mut rd_cost = std::f64::MAX;
@@ -2180,15 +2196,21 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       0.0
     };
 
-    let pmv_idx = if bsize.greater_than(BlockSize::BLOCK_32X32) {
+    let pmv_inner_idx = if bsize.greater_than(BlockSize::BLOCK_32X32) {
       0
     } else {
       ((tile_bo.0.x & 32) >> 5) + ((tile_bo.0.y & 32) >> 4) + 1
     };
-    let spmvs = &mut pmvs[pmv_idx];
 
-    let mode_decision =
-      rdo_mode_decision(fi, ts, cw, bsize, tile_bo, spmvs, inter_cfg);
+    let mode_decision = rdo_mode_decision(
+      fi,
+      ts,
+      cw,
+      bsize,
+      tile_bo,
+      (pmv_idx, pmv_inner_idx),
+      inter_cfg,
+    );
 
     if !mode_decision.pred_mode_luma.is_intra() {
       // Fill the saved motion structure
@@ -2309,7 +2331,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
           w_post_cdef,
           subsize,
           offset,
-          pmvs, //&best_decision.mvs[0]
+          pmv_idx,
           best_rd,
           inter_cfg,
         );
@@ -2415,8 +2437,8 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
   bsize: BlockSize, tile_bo: TileBlockOffset,
-  block_output: &Option<PartitionGroupParameters>,
-  pmvs: &mut [[Option<MotionVector>; REF_FRAMES]; 5], inter_cfg: &InterConfig,
+  block_output: &Option<PartitionGroupParameters>, pmv_idx: usize,
+  inter_cfg: &InterConfig,
 ) {
   if tile_bo.0.x >= cw.bc.blocks.cols() || tile_bo.0.y >= cw.bc.blocks.rows() {
     return;
@@ -2491,7 +2513,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       bsize,
       tile_bo,
       &rdo_output,
-      pmvs,
+      pmv_idx,
       &partition_types,
       rdo_type,
       inter_cfg,
@@ -2520,15 +2542,22 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         // The optimal prediction mode is known from a previous iteration
         rdo_output.part_modes[0].clone()
       } else {
-        let pmv_idx = if bsize.greater_than(BlockSize::BLOCK_32X32) {
+        let pmv_inner_idx = if bsize.greater_than(BlockSize::BLOCK_32X32) {
           0
         } else {
           ((tile_bo.0.x & 32) >> 5) + ((tile_bo.0.y & 32) >> 4) + 1
         };
-        let spmvs = &mut pmvs[pmv_idx];
 
         // Make a prediction mode decision for blocks encoded with no rdo_partition_decision call (e.g. edges)
-        rdo_mode_decision(fi, ts, cw, bsize, tile_bo, spmvs, inter_cfg)
+        rdo_mode_decision(
+          fi,
+          ts,
+          cw,
+          bsize,
+          tile_bo,
+          (pmv_idx, pmv_inner_idx),
+          inter_cfg,
+        )
       };
 
       let mut mode_luma = part_decision.pred_mode_luma;
@@ -2687,7 +2716,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
               part_type: PartitionType::PARTITION_NONE,
               part_modes: vec![mode],
             }),
-            pmvs,
+            pmv_idx,
             inter_cfg,
           );
         }
@@ -2721,7 +2750,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
             subsize,
             offset,
             &None,
-            pmvs,
+            pmv_idx,
             inter_cfg,
           );
         });
@@ -2821,12 +2850,13 @@ fn encode_tile_group<T: Pixel>(
   let pre_cdef_frame = fs.rec.clone();
 
   /* TODO: Don't apply if lossless */
+  let rec = Arc::make_mut(&mut fs.rec);
   if fi.sequence.enable_cdef {
-    cdef_filter_frame(fi, &mut fs.rec, &blocks);
+    cdef_filter_frame(fi, rec, &blocks);
   }
   /* TODO: Don't apply if lossless */
   if fi.sequence.enable_restoration {
-    fs.restoration.lrf_filter_frame(&mut fs.rec, &pre_cdef_frame, &fi);
+    fs.restoration.lrf_filter_frame(rec, &pre_cdef_frame, &fi);
   }
 
   #[cfg(feature = "train_fastrdo")]
@@ -2895,7 +2925,7 @@ pub(crate) fn build_half_res_pmvs<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   tile_sbo: TileSuperBlockOffset,
   tile_pmvs: &[[Option<MotionVector>; REF_FRAMES]],
-) -> [[Option<MotionVector>; REF_FRAMES]; 5] {
+) -> BlockPmv {
   let estimate_motion_ss2 = if fi.config.speed_settings.diamond_me {
     crate::me::DiamondSearch::estimate_motion_ss2
   } else {
@@ -2903,8 +2933,7 @@ pub(crate) fn build_half_res_pmvs<T: Pixel>(
   };
 
   let TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby }) = tile_sbo;
-  let mut pmvs: [[Option<MotionVector>; REF_FRAMES]; 5] =
-    [[None; REF_FRAMES]; 5];
+  let mut pmvs: BlockPmv = [[None; REF_FRAMES]; 5];
 
   // The pmvs array stores 5 motion vectors in the following order:
   //
@@ -3212,8 +3241,6 @@ fn encode_tile<'a, T: Pixel>(
   let mut last_lru_rdoed = [-1; 3];
   let mut last_lru_coded = [-1; 3];
 
-  let tile_pmvs = build_coarse_pmvs(fi, ts, inter_cfg);
-
   // main loop
   for sby in 0..ts.sb_height {
     cw.bc.reset_left_contexts();
@@ -3232,8 +3259,7 @@ fn encode_tile<'a, T: Pixel>(
       cw.bc.cdef_coded = false;
       cw.bc.code_deltas = fi.delta_q_present;
 
-      // Do subsampled ME
-      let mut pmvs = build_half_res_pmvs(fi, ts, tile_sbo, &tile_pmvs);
+      let pmv_idx = sbx + sby * ts.sb_width;
 
       // Encode SuperBlock
       if fi.config.speed_settings.encode_bottomup {
@@ -3245,7 +3271,7 @@ fn encode_tile<'a, T: Pixel>(
           &mut sbs_qe.w_post_cdef,
           BlockSize::BLOCK_64X64,
           tile_bo,
-          &mut pmvs,
+          pmv_idx,
           std::f64::MAX,
           inter_cfg,
         );
@@ -3259,7 +3285,7 @@ fn encode_tile<'a, T: Pixel>(
           BlockSize::BLOCK_64X64,
           tile_bo,
           &None,
-          &mut pmvs,
+          pmv_idx,
           inter_cfg,
         );
       }
@@ -3396,8 +3422,9 @@ pub fn encode_show_existing_frame<T: Pixel>(
   write_obus(&mut packet, fi, fs, inter_cfg).unwrap();
   let map_idx = fi.frame_to_show_map_idx as usize;
   if let Some(ref rec) = fi.rec_buffer.frames[map_idx] {
+    let fs_rec = Arc::make_mut(&mut fs.rec);
     for p in 0..3 {
-      fs.rec.planes[p].data.copy_from_slice(&rec.frame.planes[p].data);
+      fs_rec.planes[p].data.copy_from_slice(&rec.frame.planes[p].data);
     }
   }
   packet
@@ -3424,10 +3451,6 @@ pub fn encode_frame<T: Pixel>(
   debug_assert!(!fi.show_existing_frame);
   debug_assert!(!fi.invalid);
   let mut packet = Vec::new();
-  fs.input_hres.downsample_from(&fs.input.planes[0]);
-  fs.input_hres.pad(fi.width, fi.height);
-  fs.input_qres.downsample_from(&fs.input_hres);
-  fs.input_qres.pad(fi.width, fi.height);
 
   fs.segmentation = get_initial_segmentation(fi);
   segmentation_optimize(fi, fs);
@@ -3454,15 +3477,15 @@ pub fn encode_frame<T: Pixel>(
 }
 
 pub fn update_rec_buffer<T: Pixel>(
-  output_frameno: u64, fi: &mut FrameInvariants<T>, fs: FrameState<T>,
+  output_frameno: u64, fi: &mut FrameInvariants<T>, fs: &FrameState<T>,
 ) {
   let rfs = Arc::new(ReferenceFrame {
     order_hint: fi.order_hint,
-    frame: Arc::new(fs.rec),
-    input_hres: fs.input_hres,
-    input_qres: fs.input_qres,
+    frame: fs.rec.clone(),
+    input_hres: fs.input_hres.clone(),
+    input_qres: fs.input_qres.clone(),
     cdfs: fs.cdfs,
-    frame_mvs: fs.frame_mvs,
+    frame_mvs: fs.frame_mvs.clone(),
     output_frameno,
     segmentation: fs.segmentation,
   });

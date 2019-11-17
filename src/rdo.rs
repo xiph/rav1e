@@ -784,7 +784,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
 pub fn rdo_mode_decision<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, bsize: BlockSize, tile_bo: TileBlockOffset,
-  pmvs: &mut [Option<MotionVector>], inter_cfg: &InterConfig,
+  pmv_idxs: (usize, usize), inter_cfg: &InterConfig,
 ) -> PartitionParameters {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
 
@@ -807,7 +807,7 @@ pub fn rdo_mode_decision<T: Pixel>(
       cw,
       bsize,
       tile_bo,
-      pmvs,
+      pmv_idxs,
       inter_cfg,
       &cw_checkpoint,
       rdo_type,
@@ -941,7 +941,7 @@ pub fn rdo_mode_decision<T: Pixel>(
 fn inter_frame_rdo_mode_decision<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, bsize: BlockSize, tile_bo: TileBlockOffset,
-  pmvs: &mut [Option<MotionVector>], inter_cfg: &InterConfig,
+  pmv_idxs: (usize, usize), inter_cfg: &InterConfig,
   cw_checkpoint: &ContextWriterCheckpoint, rdo_type: RDOType,
 ) -> PartitionParameters {
   let mut best = PartitionParameters::default();
@@ -978,6 +978,7 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
   let mut inter_mode_set = ArrayVec::<[(PredictionMode, usize); 20]>::new();
   let mut mv_stacks = ArrayVec::<[_; 20]>::new();
   let mut mode_contexts = ArrayVec::<[_; 7]>::new();
+  let pmvs = ts.half_res_pmvs[pmv_idxs.0][pmv_idxs.1];
 
   let motion_estimation = if fi.config.speed_settings.diamond_me {
     crate::me::DiamondSearch::motion_estimation
@@ -1012,7 +1013,7 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
     if !fi.config.speed_settings.encode_bottomup
       && (bsize == BlockSize::BLOCK_32X32 || bsize == BlockSize::BLOCK_64X64)
     {
-      pmvs[ref_slot] = Some(b_me);
+      ts.half_res_pmvs[pmv_idxs.0][pmv_idxs.1][ref_slot] = Some(b_me);
     };
 
     mvs_from_me.push([b_me, MotionVector::default()]);
@@ -1538,8 +1539,7 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
   bsize: BlockSize, tile_bo: TileBlockOffset,
-  cached_block: &PartitionGroupParameters,
-  pmvs: &mut [[Option<MotionVector>; REF_FRAMES]; 5],
+  cached_block: &PartitionGroupParameters, pmv_idx: usize,
   partition_types: &[PartitionType], rdo_type: RDOType,
   inter_cfg: &InterConfig,
 ) -> PartitionGroupParameters {
@@ -1566,16 +1566,21 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
           continue;
         }
 
-        let pmv_idx = if bsize > BlockSize::BLOCK_32X32 {
+        let pmv_inner_idx = if bsize > BlockSize::BLOCK_32X32 {
           0
         } else {
           ((tile_bo.0.x & 32) >> 5) + ((tile_bo.0.y & 32) >> 4) + 1
         };
 
-        let spmvs = &mut pmvs[pmv_idx];
-
-        let mode_decision =
-          rdo_mode_decision(fi, ts, cw, bsize, tile_bo, spmvs, inter_cfg);
+        let mode_decision = rdo_mode_decision(
+          fi,
+          ts,
+          cw,
+          bsize,
+          tile_bo,
+          (pmv_idx, pmv_inner_idx),
+          inter_cfg,
+        );
         child_modes.push(mode_decision);
       }
       PARTITION_SPLIT | PARTITION_HORZ | PARTITION_VERT => {
@@ -1638,14 +1643,14 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
         }
         let mut rd_cost_sum = 0.0;
 
-        for (&offset, pmv_idx) in partitions.iter().zip(pmv_idxs) {
+        for (&offset, pmv_inner_idx) in partitions.iter().zip(pmv_idxs) {
           let mode_decision = rdo_mode_decision(
             fi,
             ts,
             cw,
             subsize,
             offset,
-            &mut pmvs[pmv_idx],
+            (pmv_idx, pmv_inner_idx),
             inter_cfg,
           );
 
