@@ -68,7 +68,7 @@ simd_helpers = "0.1"
 
 [dependencies.rust_hawktracer]
 version = "0.5.0"
-features = ["profiling_enabled"]
+features = ["profiling_enabled", "generate_bindings"]
 optional = true
 
 [build-dependencies]
