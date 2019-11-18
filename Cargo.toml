@@ -125,3 +125,6 @@ lto = true
 
 [workspace]
 members = [".", "ivf", "crates/nasm_rs", "crates/avformat-sys"]
+
+[package.metadata.docs.rs]
+no-default-features = true
