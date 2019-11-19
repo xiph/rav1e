@@ -7,8 +7,6 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-#![allow(safe_extern_statics)]
-
 use crate::context::*;
 use crate::header::PRIMARY_REF_NONE;
 use crate::util::Pixel;

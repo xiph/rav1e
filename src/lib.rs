@@ -34,7 +34,6 @@
 //! [`Context`]: struct.Context.html
 //! [`Context::receive_packet`]: struct.Context.html#method.receive_packet
 
-#![allow(safe_extern_statics)]
 #![deny(bare_trait_objects)]
 #![allow(clippy::cast_lossless)]
 #![allow(clippy::cast_ptr_alignment)]

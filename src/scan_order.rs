@@ -7,7 +7,6 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-#![allow(safe_extern_statics)]
 #![allow(non_upper_case_globals)]
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
