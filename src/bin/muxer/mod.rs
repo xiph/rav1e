@@ -10,16 +10,10 @@
 mod ivf;
 use self::ivf::IvfMuxer;
 
-mod mp4;
-use mp4::Mp4Muxer;
-
 mod y4m;
 pub use self::y4m::write_y4m_frame;
 
 use rav1e::prelude::*;
-
-#[cfg(feature = "avformat-sys")]
-mod avformat;
 
 use std::ffi::OsStr;
 use std::io;
@@ -50,7 +44,6 @@ pub fn create_muxer(path: &str) -> Result<Box<dyn Muxer>, CliError> {
     .unwrap_or_else(|| "ivf".into());
 
   match &ext[..] {
-    "mp4" => Ok(Mp4Muxer::open(path)),
     "ivf" => IvfMuxer::open(path),
     _e => {
       panic!("{} is not a supported extension, please change to .ivf", ext);
