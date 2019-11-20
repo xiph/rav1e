@@ -30,13 +30,13 @@ Automated AppVeyor builds can be found [here](https://ci.appveyor.com/project/td
 
 Some `x86_64`-specific optimizations require a recent version of [NASM](https://nasm.us/) and are enabled by default.
 
-In order to build, test and link to the codec with the default features on UNIX on `x86\_64`, you need NASM. To install this on Ubuntu or Linux Mint, run:
+In order to build, test and link to the codec with the default features on UNIX on `x86_64`, you need NASM. To install this on Ubuntu or Linux Mint, run:
 
 ```sh
-sudo apt install nasm libaom-dev
+sudo apt install nasm
 ```
 
-On Windows a [NASM binary](https://www.nasm.us/pub/nasm/releasebuilds/) in your system PATH are required.
+On Windows, a [NASM binary](https://www.nasm.us/pub/nasm/releasebuilds/) in your system PATH is required.
 
 To build release binary in `target/release/rav1e` run:
 
