@@ -28,16 +28,15 @@ Automated AppVeyor builds can be found [here](https://ci.appveyor.com/project/td
 
 ## Building
 
-**rav1e** can optionally use either `libaom` (default) or a `dav1d` installation to run some extended tests.
-Some `x86_64`-specific optimizations require a recent version of NASM.
+Some `x86_64`-specific optimizations require a recent version of [NASM](https://nasm.us/) and are enabled by default.
 
-In order to build, test and link to the codec on UNIX, you need Perl, NASM, CMake, Clang and pkg-config. To install this on Ubuntu or Linux Mint, run:
+In order to build, test and link to the codec with the default features on UNIX on `x86\_64`, you need NASM. To install this on Ubuntu or Linux Mint, run:
 
 ```sh
-sudo apt install perl nasm cmake clang pkg-config
+sudo apt install nasm libaom-dev
 ```
 
-On Windows, pkg-config is not required. A Perl distribution such as Strawberry Perl, CMake, and a NASM binary in your system PATH are required.
+On Windows a [NASM binary](https://www.nasm.us/pub/nasm/releasebuilds/) in your system PATH are required.
 
 To build release binary in `target/release/rav1e` run:
 
