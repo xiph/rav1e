@@ -78,7 +78,7 @@ fn build_asm_files() {
     config_file.write(b" #define HAVE_ASM 1\n").unwrap();
   }
   cc::Build::new()
-    .files(&["src/arm/64/mc.S", "src/arm/tables.S"])
+    .files(&["src/arm/64/mc.S", "src/arm/64/itx.S", "src/arm/tables.S"])
     .include(".")
     .include(&out_dir)
     .compile("rav1e-aarch64");

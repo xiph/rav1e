@@ -10,6 +10,8 @@
 cfg_if::cfg_if! {
   if #[cfg(nasm_x86_64)] {
     pub use crate::asm::x86::transform::inverse::*;
+  } else if #[cfg(asm_neon)] {
+    pub use crate::asm::aarch64::transform::inverse::*;
   } else {
     pub use self::native::*;
   }
