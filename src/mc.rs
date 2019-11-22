@@ -64,6 +64,7 @@ pub enum FilterMode {
   SMOOTH = 1,
   SHARP = 2,
   BILINEAR = 3,
+  SWITCHABLE = 4,
 }
 
 pub const SUBPEL_FILTER_SIZE: usize = 8;
