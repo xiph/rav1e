@@ -577,6 +577,9 @@ pub fn setup_integral_image<T: Pixel>(
   }
 }
 
+use crate::hawktracer::*;
+
+#[hawktracer(sgrproj_stripe_filter)]
 pub fn sgrproj_stripe_filter<T: Pixel>(
   set: u8, xqd: [i8; 2], fi: &FrameInvariants<T>,
   integral_image_buffer: &IntegralImageBuffer, integral_image_stride: usize,
@@ -734,13 +737,41 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
       let w0 = xqd[0] as i32;
       let w1 = xqd[1] as i32;
       let w2 = (1 << SGRPROJ_PRJ_BITS) - w0 - w1;
-      for x in 0..stripe_w {
-        let u = i32::cast_from(cdeffed.p(x, y)) << SGRPROJ_RST_BITS;
-        let v = w0 * f_r2_ab[dy][x] as i32 + w1 * u + w2 * f_r1[x] as i32;
-        let s = (v + (1 << (SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS) >> 1))
-          >> (SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS);
-        out[y][x] = T::cast_from(clamp(s, 0, (1 << bit_depth) - 1));
+
+      let line = &cdeffed[y];
+
+      #[inline(always)]
+      fn apply_filter<T: Pixel>(
+        out: &mut [T], line: &[T], f_r1: &[u32], f_r2_ab: &[u32],
+        stripe_w: usize, bit_depth: usize, w0: i32, w1: i32, w2: i32,
+      ) {
+        let line_it = line[..stripe_w].iter();
+        let f_r2_ab_it = f_r2_ab[..stripe_w].iter();
+        let f_r1_it = f_r1[..stripe_w].iter();
+        let out_it = out[..stripe_w].iter_mut();
+
+        for ((o, &u), (&f_r2_ab, &f_r1)) in
+          out_it.zip(line_it).zip(f_r2_ab_it.zip(f_r1_it))
+        {
+          let u = i32::cast_from(u) << SGRPROJ_RST_BITS;
+          let v = w0 * f_r2_ab as i32 + w1 * u + w2 * f_r1 as i32;
+          let s = (v + (1 << (SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS) >> 1))
+            >> (SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS);
+          *o = T::cast_from(clamp(s, 0, (1 << bit_depth) - 1));
+        }
       }
+
+      apply_filter(
+        &mut out[y],
+        line,
+        &f_r1,
+        &f_r2_ab[dy],
+        stripe_w,
+        bit_depth,
+        w0,
+        w1,
+        w2,
+      );
     }
   }
 }
