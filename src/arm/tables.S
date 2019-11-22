@@ -295,3 +295,43 @@ X(mc_warp_filter):
 /* dummy (replicate row index 191) */
 .byte 0, 0, 0,   0,   2, 127, - 1, 0
 endconst
+
+.global X(sm_weights)
+.hidden X(sm_weights)
+const X(sm_weights)
+X(sm_weights):
+.byte   0,   0 /* Unused, because we always offset by bs, which is at least 2. */
+.byte 255, 128 /* bs = 2 */
+.byte 255, 149,  85,  64 /* bs = 4 */
+.byte 255, 197, 146, 105,  73,  50,  37,  32 /* bs = 8 */
+.byte 255, 225, 196, 170, 145, 123, 102,  84 /* bs = 16 */
+.byte  68,  54,  43,  33,  26,  20,  17,  16
+.byte 255, 240, 225, 210, 196, 182, 169, 157 /* bs =32 */
+.byte 145, 133, 122, 111, 101,  92,  83,  74
+.byte  66,  59,  52,  45,  39,  34,  29,  25
+.byte  21,  17,  14,  12,  10,   9,   8,   8
+.byte 255, 248, 240, 233, 225, 218, 210, 203 /* bs = 64 */
+.byte 196, 189, 182, 176, 169, 163, 156, 150
+.byte 144, 138, 133, 127, 121, 116, 111, 106
+.byte 101,  96,  91,  86,  82,  77,  73,  69
+.byte  65,  61,  57,  54,  50,  47,  44,  41
+.byte  38,  35,  32,  29,  27,  25,  22,  20
+.byte  18,  16,  15,  13,  12,  10,   9,   8
+.byte   7,   6,   6,   5,   5,   4,   4,   4
+endconst
+
+.global X(obmc_masks)
+.hidden X(obmc_masks)
+const X(obmc_masks), align=4
+X(obmc_masks):
+.byte  0,  0 /* Unused */
+.byte 19,  0 /* 2 */
+.byte 25, 14,  5,  0 /* 4 */
+.byte 28, 22, 16, 11,  7,  3,  0,  0 /* 8 */
+.byte 30, 27, 24, 21, 18, 15, 12, 10
+.byte  8,  6,  4,  3,  0,  0,  0,  0 /* 16 */
+.byte 31, 29, 28, 26, 24, 23, 21, 20
+.byte 19, 17, 16, 14, 13, 12, 11,  9
+.byte  8,  7,  6,  5,  4,  4,  3,  2
+.byte  0,  0,  0,  0,  0,  0,  0,  0 /* 32 */
+endconst
