@@ -632,7 +632,9 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       }
 
       self.write_bit(fi.is_filter_switchable)?;
-      self.write(2, fi.default_filter as u8)?;
+      if !fi.is_filter_switchable {
+        self.write(2, fi.default_filter as u8)?;
+      }
       self.write_bit(fi.is_motion_mode_switchable)?;
 
       if (!fi.error_resilient && fi.sequence.enable_ref_frame_mvs) {
