@@ -65,7 +65,7 @@ pub fn generate_build_info(
   if flags.contains(ConstantsFlags::SEMVER) {
     let describe = run_command(Command::new("git").args(&["describe"]));
 
-    let semver = if describe.is_empty() {
+    let semver = if describe.eq_ignore_ascii_case(&"UNKNOWN") {
       env::var("CARGO_PKG_VERSION")?
     } else {
       describe
@@ -79,7 +79,7 @@ pub fn generate_build_info(
     let describe =
       run_command(Command::new("git").args(&["describe", "--tags"]));
 
-    let semver = if describe.is_empty() {
+    let semver = if describe.eq_ignore_ascii_case(&"UNKNOWN") {
       env::var("CARGO_PKG_VERSION")?
     } else {
       describe
