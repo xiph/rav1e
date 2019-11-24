@@ -890,9 +890,12 @@ impl<T: Pixel> ContextInner<T> {
         }
       }
 
+      let bit_depth = self.config.bit_depth;
+      let frame_invariants = &mut self.frame_invariants;
+
       // Compute and propagate the importance, split evenly between the
       // referenced frames.
-      for &(mv_index, rec_index) in unique_indices.iter() {
+      unique_indices.iter().for_each(|&(mv_index, rec_index)| {
         // Use rec_buffer here rather than lookahead_rec_buffer because
         // rec_buffer still contains the reference frames for the current frame
         // (it's only overwritten when the frame is encoded), while
@@ -902,18 +905,18 @@ impl<T: Pixel> ContextInner<T> {
           fi.rec_buffer.frames[rec_index as usize].as_ref().unwrap();
         let reference_frame = &reference.frame;
         let reference_output_frameno = reference.output_frameno;
+        let mvs = &fi.lookahead_mvs[mv_index];
 
         // We should never use frame as its own reference.
         assert_ne!(reference_output_frameno, output_frameno);
 
-        if let Some(reference_frame_block_importances) = self
-          .frame_invariants
+        if let Some(reference_frame_block_importances) = frame_invariants
           .get_mut(&reference_output_frameno)
           .map(|rfi| &mut rfi.block_importances)
         {
-          for y in 0..fi.h_in_imp_b {
+          (0..fi.h_in_imp_b).for_each(|y| {
             for x in 0..fi.w_in_imp_b {
-              let mv = fi.lookahead_mvs[mv_index][y * 2][x * 2];
+              let mv = mvs[y * 2][x * 2];
 
               // Coordinates of the top-left corner of the reference block, in MV
               // units.
@@ -940,7 +943,7 @@ impl<T: Pixel> ContextInner<T> {
                 &plane_org,
                 &plane_ref,
                 bsize,
-                self.config.bit_depth,
+                bit_depth,
                 fi.cpu_feature_level,
               ) as f32;
 
@@ -1051,9 +1054,9 @@ impl<T: Pixel> ContextInner<T> {
                 bottom_right_block_fraction,
               );
             }
-          }
+          });
         }
-      }
+      });
 
       self.frame_invariants.insert(output_frameno, fi);
     }
