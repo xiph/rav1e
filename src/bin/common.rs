@@ -188,6 +188,12 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .alias("low_latency")
     )
     .arg(
+      Arg::with_name("RDO_LOOKAHEAD_FRAMES")
+        .help("Number of frames encoder should lookahead for RDO purposes [default: 40]\n")
+        .long("rdo-lookahead-frames")
+        .takes_value(true)
+    )
+    .arg(
       Arg::with_name("TUNE")
         .help("Quality tuning")
         .long("tune")
@@ -543,6 +549,8 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
   cfg.reservoir_frame_delay = matches
     .value_of("RESERVOIR_FRAME_DELAY")
     .map(|reservior_frame_delay| reservior_frame_delay.parse().unwrap());
+  cfg.rdo_lookahead_frames =
+    matches.value_of("RDO_LOOKAHEAD_FRAMES").unwrap_or("40").parse().unwrap();
   cfg.show_psnr = matches.is_present("PSNR");
   cfg.tune = matches.value_of("TUNE").unwrap().parse().unwrap();
 
