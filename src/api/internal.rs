@@ -939,6 +939,8 @@ impl<T: Pixel> ContextInner<T> {
             len,
             reference_frame_block_importances,
           );
+
+          #[hawktracer(update_block_importances)]
           fn update_block_importances<T: Pixel>(
             fi: &FrameInvariants<T>, mvs: &crate::me::FrameMotionVectors,
             frame: &Frame<T>, reference_frame: &Frame<T>, bit_depth: usize,
