@@ -1,0 +1,103 @@
+name: deploy
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  release:
+    types:
+      - prereleased
+
+jobs:
+  create-binaries:
+
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: Install nasm
+      run: |
+        $NASM_VERSION="nasm-2.14.02"
+        curl -LO "https://people.xiph.org/~tdaede/$NASM_VERSION-win64.zip"
+        7z e -y "$NASM_VERSION-win64.zip" -o"C:\nasm"
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable-x86_64-pc-windows-gnu
+        override: true
+    - name: Install cargo-c
+      run: |
+        cargo install cargo-c
+    - name: Set environment variables
+      run: |
+        echo "::add-path::C:\nasm"
+    - name: Build rav1e
+      run: |
+        cargo build --release
+    - name: Run cargo-c
+      run: |
+        cargo cinstall --release --destdir="C:\"
+    - name: Create zip
+      run: |
+        $RAV1E_PATH="$Env:GITHUB_WORKSPACE\target\release"
+        7z a rav1e.zip "Cargo.lock" "$RAV1E_PATH\rav1e.exe" "C:\usr\local"
+    - name: Upload binaries
+      uses: actions/upload-artifact@v1
+      with:
+        name: rav1e-binaries
+        path: rav1e.zip
+
+  deploy:
+
+    needs: create-binaries
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@master
+    - name: Download the zip
+      uses: actions/download-artifact@v1
+      with:
+        name: rav1e-binaries
+    - name: Unzip rav1e Windows binaries
+      run: |
+        unzip rav1e-binaries/rav1e.zip -d rav1e-binaries
+        cp rav1e-binaries/Cargo.lock .
+    - name: Handle release data and binaries
+      if: github.event_name == 'push'
+      id: data
+      run: |
+        VERSION=$(cargo pkgid | cut -d# -f2 | cut -d: -f2)
+        FILENAME=rav1e-$VERSION-windows-sdk
+        echo "::set-output name=version::$VERSION"
+        mv rav1e-binaries/local rav1e-binaries/$FILENAME
+        cd rav1e-binaries
+        zip -r $FILENAME.zip $FILENAME
+        strip rav1e.exe
+        zip -r rav1e-$VERSION.zip rav1e.exe Cargo.lock
+    - name: Package binaries for pre-release
+      if: github.event_name == 'release'
+      run: |
+        FILENAME=rav1e-windows-sdk
+        mv rav1e-binaries/local rav1e-binaries/$FILENAME
+        cd rav1e-binaries
+        strip rav1e.exe
+        zip -r rav1e.zip $FILENAME rav1e.exe Cargo.lock
+    - name: Upload rav1e binaries to pre-release
+      if: github.event_name == 'release'
+      uses: skx/github-action-publish-binaries@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        args: 'rav1e-binaries/rav1e.zip'
+    - name: Create a release
+      if: github.event_name == 'push'
+      uses: softprops/action-gh-release@v1
+      with:
+        name: Version ${{ steps.data.outputs.version }}
+        files: |
+          rav1e-binaries/rav1e-${{ steps.data.outputs.version }}-windows-sdk.zip
+          rav1e-binaries/rav1e-${{ steps.data.outputs.version }}.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
