@@ -906,6 +906,7 @@ impl<T: Pixel> ContextInner<T> {
 
       let bit_depth = self.config.bit_depth;
       let frame_data = &mut self.frame_data;
+      let len = unique_indices.len();
 
       // Compute and propagate the importance, split evenly between the
       // referenced frames.
@@ -928,147 +929,171 @@ impl<T: Pixel> ContextInner<T> {
           .get_mut(&reference_output_frameno)
           .map(|data| &mut data.fi.block_importances)
         {
-          (0..fi.h_in_imp_b).for_each(|y| {
-            for x in 0..fi.w_in_imp_b {
-              let mv = mvs[y * 2][x * 2];
+          update_block_importances(
+            &fi,
+            mvs,
+            frame,
+            reference_frame,
+            bit_depth,
+            bsize,
+            len,
+            reference_frame_block_importances,
+          );
+          fn update_block_importances<T: Pixel>(
+            fi: &FrameInvariants<T>, mvs: &crate::me::FrameMotionVectors,
+            frame: &Frame<T>, reference_frame: &Frame<T>, bit_depth: usize,
+            bsize: BlockSize, len: usize,
+            reference_frame_block_importances: &mut [f32],
+          ) {
+            let plane_org = &frame.planes[0];
+            let plane_ref = &reference_frame.planes[0];
 
-              // Coordinates of the top-left corner of the reference block, in MV
-              // units.
-              let reference_x =
-                x as i64 * BLOCK_SIZE_IN_MV_UNITS + mv.col as i64;
-              let reference_y =
-                y as i64 * BLOCK_SIZE_IN_MV_UNITS + mv.row as i64;
+            (0..fi.h_in_imp_b)
+              .zip(fi.lookahead_intra_costs.chunks_exact(fi.w_in_imp_b))
+              .zip(fi.block_importances.chunks_exact(fi.w_in_imp_b))
+              .for_each(|((y, lookahead_intra_costs), block_importances)| {
+                (0..fi.w_in_imp_b).for_each(|x| {
+                  let mv = mvs[y * 2][x * 2];
 
-              let plane_org = frame.planes[0].region(Area::Rect {
-                x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
-                y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
-                width: IMPORTANCE_BLOCK_SIZE,
-                height: IMPORTANCE_BLOCK_SIZE,
+                  // Coordinates of the top-left corner of the reference block, in MV
+                  // units.
+                  let reference_x =
+                    x as i64 * BLOCK_SIZE_IN_MV_UNITS + mv.col as i64;
+                  let reference_y =
+                    y as i64 * BLOCK_SIZE_IN_MV_UNITS + mv.row as i64;
+
+                  let region_org = plane_org.region(Area::Rect {
+                    x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
+                    y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
+                    width: IMPORTANCE_BLOCK_SIZE,
+                    height: IMPORTANCE_BLOCK_SIZE,
+                  });
+
+                  let region_ref = plane_ref.region(Area::Rect {
+                    x: reference_x as isize / MV_UNITS_PER_PIXEL as isize,
+                    y: reference_y as isize / MV_UNITS_PER_PIXEL as isize,
+                    width: IMPORTANCE_BLOCK_SIZE,
+                    height: IMPORTANCE_BLOCK_SIZE,
+                  });
+
+                  let inter_cost = get_satd(
+                    &region_org,
+                    &region_ref,
+                    bsize,
+                    bit_depth,
+                    fi.cpu_feature_level,
+                  ) as f32;
+
+                  let intra_cost = lookahead_intra_costs[x] as f32;
+                  let future_importance = block_importances[x];
+
+                  let propagate_fraction =
+                    (1. - inter_cost / intra_cost).max(0.);
+                  let propagate_amount = (intra_cost + future_importance)
+                    * propagate_fraction
+                    / len as f32;
+
+                  let mut propagate =
+                    |block_x_in_mv_units, block_y_in_mv_units, fraction| {
+                      let x = block_x_in_mv_units / BLOCK_SIZE_IN_MV_UNITS;
+                      let y = block_y_in_mv_units / BLOCK_SIZE_IN_MV_UNITS;
+
+                      // TODO: propagate partially if the block is partially off-frame
+                      // (possible on right and bottom edges)?
+                      if x >= 0
+                        && y >= 0
+                        && (x as usize) < fi.w_in_imp_b
+                        && (y as usize) < fi.h_in_imp_b
+                      {
+                        reference_frame_block_importances
+                          [y as usize * fi.w_in_imp_b + x as usize] +=
+                          propagate_amount * fraction;
+                      }
+                    };
+
+                  // Coordinates of the top-left corner of the block intersecting the
+                  // reference block from the top-left.
+                  let top_left_block_x = (reference_x
+                    - if reference_x < 0 {
+                      BLOCK_SIZE_IN_MV_UNITS - 1
+                    } else {
+                      0
+                    })
+                    / BLOCK_SIZE_IN_MV_UNITS
+                    * BLOCK_SIZE_IN_MV_UNITS;
+                  let top_left_block_y = (reference_y
+                    - if reference_y < 0 {
+                      BLOCK_SIZE_IN_MV_UNITS - 1
+                    } else {
+                      0
+                    })
+                    / BLOCK_SIZE_IN_MV_UNITS
+                    * BLOCK_SIZE_IN_MV_UNITS;
+
+                  debug_assert!(reference_x >= top_left_block_x);
+                  debug_assert!(reference_y >= top_left_block_y);
+
+                  let top_right_block_x =
+                    top_left_block_x + BLOCK_SIZE_IN_MV_UNITS;
+                  let top_right_block_y = top_left_block_y;
+                  let bottom_left_block_x = top_left_block_x;
+                  let bottom_left_block_y =
+                    top_left_block_y + BLOCK_SIZE_IN_MV_UNITS;
+                  let bottom_right_block_x = top_right_block_x;
+                  let bottom_right_block_y = bottom_left_block_y;
+
+                  let top_left_block_fraction = ((top_right_block_x
+                    - reference_x)
+                    * (bottom_left_block_y - reference_y))
+                    as f32
+                    / BLOCK_AREA_IN_MV_UNITS as f32;
+
+                  propagate(
+                    top_left_block_x,
+                    top_left_block_y,
+                    top_left_block_fraction,
+                  );
+
+                  let top_right_block_fraction = ((reference_x
+                    + BLOCK_SIZE_IN_MV_UNITS
+                    - top_right_block_x)
+                    * (bottom_left_block_y - reference_y))
+                    as f32
+                    / BLOCK_AREA_IN_MV_UNITS as f32;
+
+                  propagate(
+                    top_right_block_x,
+                    top_right_block_y,
+                    top_right_block_fraction,
+                  );
+
+                  let bottom_left_block_fraction =
+                    ((top_right_block_x - reference_x)
+                      * (reference_y + BLOCK_SIZE_IN_MV_UNITS
+                        - bottom_left_block_y)) as f32
+                      / BLOCK_AREA_IN_MV_UNITS as f32;
+
+                  propagate(
+                    bottom_left_block_x,
+                    bottom_left_block_y,
+                    bottom_left_block_fraction,
+                  );
+
+                  let bottom_right_block_fraction =
+                    ((reference_x + BLOCK_SIZE_IN_MV_UNITS
+                      - top_right_block_x)
+                      * (reference_y + BLOCK_SIZE_IN_MV_UNITS
+                        - bottom_left_block_y)) as f32
+                      / BLOCK_AREA_IN_MV_UNITS as f32;
+
+                  propagate(
+                    bottom_right_block_x,
+                    bottom_right_block_y,
+                    bottom_right_block_fraction,
+                  );
+                });
               });
-
-              let plane_ref = reference_frame.planes[0].region(Area::Rect {
-                x: reference_x as isize / MV_UNITS_PER_PIXEL as isize,
-                y: reference_y as isize / MV_UNITS_PER_PIXEL as isize,
-                width: IMPORTANCE_BLOCK_SIZE,
-                height: IMPORTANCE_BLOCK_SIZE,
-              });
-
-              let inter_cost = get_satd(
-                &plane_org,
-                &plane_ref,
-                bsize,
-                bit_depth,
-                fi.cpu_feature_level,
-              ) as f32;
-
-              let intra_cost =
-                fi.lookahead_intra_costs[y * fi.w_in_imp_b + x] as f32;
-
-              let future_importance =
-                fi.block_importances[y * fi.w_in_imp_b + x];
-
-              let propagate_fraction = (1. - inter_cost / intra_cost).max(0.);
-              let propagate_amount = (intra_cost + future_importance)
-                * propagate_fraction
-                / unique_indices.len() as f32;
-
-              let mut propagate =
-                |block_x_in_mv_units, block_y_in_mv_units, fraction| {
-                  let x = block_x_in_mv_units / BLOCK_SIZE_IN_MV_UNITS;
-                  let y = block_y_in_mv_units / BLOCK_SIZE_IN_MV_UNITS;
-
-                  // TODO: propagate partially if the block is partially off-frame
-                  // (possible on right and bottom edges)?
-                  if x >= 0
-                    && y >= 0
-                    && (x as usize) < fi.w_in_imp_b
-                    && (y as usize) < fi.h_in_imp_b
-                  {
-                    reference_frame_block_importances
-                      [y as usize * fi.w_in_imp_b + x as usize] +=
-                      propagate_amount * fraction;
-                  }
-                };
-
-              // Coordinates of the top-left corner of the block intersecting the
-              // reference block from the top-left.
-              let top_left_block_x = (reference_x
-                - if reference_x < 0 {
-                  BLOCK_SIZE_IN_MV_UNITS - 1
-                } else {
-                  0
-                })
-                / BLOCK_SIZE_IN_MV_UNITS
-                * BLOCK_SIZE_IN_MV_UNITS;
-              let top_left_block_y = (reference_y
-                - if reference_y < 0 {
-                  BLOCK_SIZE_IN_MV_UNITS - 1
-                } else {
-                  0
-                })
-                / BLOCK_SIZE_IN_MV_UNITS
-                * BLOCK_SIZE_IN_MV_UNITS;
-
-              debug_assert!(reference_x >= top_left_block_x);
-              debug_assert!(reference_y >= top_left_block_y);
-
-              let top_right_block_x =
-                top_left_block_x + BLOCK_SIZE_IN_MV_UNITS;
-              let top_right_block_y = top_left_block_y;
-              let bottom_left_block_x = top_left_block_x;
-              let bottom_left_block_y =
-                top_left_block_y + BLOCK_SIZE_IN_MV_UNITS;
-              let bottom_right_block_x = top_right_block_x;
-              let bottom_right_block_y = bottom_left_block_y;
-
-              let top_left_block_fraction = ((top_right_block_x - reference_x)
-                * (bottom_left_block_y - reference_y))
-                as f32
-                / BLOCK_AREA_IN_MV_UNITS as f32;
-
-              propagate(
-                top_left_block_x,
-                top_left_block_y,
-                top_left_block_fraction,
-              );
-
-              let top_right_block_fraction =
-                ((reference_x + BLOCK_SIZE_IN_MV_UNITS - top_right_block_x)
-                  * (bottom_left_block_y - reference_y))
-                  as f32
-                  / BLOCK_AREA_IN_MV_UNITS as f32;
-
-              propagate(
-                top_right_block_x,
-                top_right_block_y,
-                top_right_block_fraction,
-              );
-
-              let bottom_left_block_fraction = ((top_right_block_x
-                - reference_x)
-                * (reference_y + BLOCK_SIZE_IN_MV_UNITS - bottom_left_block_y))
-                as f32
-                / BLOCK_AREA_IN_MV_UNITS as f32;
-
-              propagate(
-                bottom_left_block_x,
-                bottom_left_block_y,
-                bottom_left_block_fraction,
-              );
-
-              let bottom_right_block_fraction =
-                ((reference_x + BLOCK_SIZE_IN_MV_UNITS - top_right_block_x)
-                  * (reference_y + BLOCK_SIZE_IN_MV_UNITS
-                    - bottom_left_block_y)) as f32
-                  / BLOCK_AREA_IN_MV_UNITS as f32;
-
-              propagate(
-                bottom_right_block_x,
-                bottom_right_block_y,
-                bottom_right_block_fraction,
-              );
-            }
-          });
+          }
         }
       });
     }
