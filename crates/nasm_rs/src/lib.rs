@@ -352,13 +352,13 @@ fn is_nasm_new_enough(nasm_path: &Path) -> Result<(), String> {
 }
 
 fn run(cmd: &mut Command) {
-  println!("running: {:?}", cmd);
+  eprintln!("running: {:?}", cmd);
 
   let status =
     match cmd.stdout(Stdio::inherit()).stderr(Stdio::inherit()).status() {
       Ok(status) => status,
 
-      Err(e) => panic!("failed to spawn process: {}", e),
+      Err(e) => panic!("failed to spawn process: {:?} - {}", cmd, e),
     };
 
   if !status.success() {
