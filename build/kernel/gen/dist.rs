@@ -36,7 +36,7 @@ fn sad_kernel(
 
   let load_simd = SimdType::new(px.into(), lanes);
   let calc_simd = SimdType::new(calc_prim, lanes);
-  let hsum_simd = SimdType::new(PrimType::U32, lanes);
+  let hsum = PrimType::U32;
 
   if b.w() <= src_lanes || b.area() / src_lanes <= MAX_UNROLL {
     // completely unroll the small blocks (ie those <= 8).
@@ -50,8 +50,7 @@ fn sad_kernel(
         let l = l.cast(calc_simd).let_(&mut body, "l");
         let r = r.cast(calc_simd).let_(&mut body, "r");
         let abs = (&l - &r).abs().let_(&mut body, "abs");
-        let v = abs.cast(hsum_simd).let_(&mut body, "abs");
-        sum.add_assign(&mut body, quote!(#v.wrapping_sum()));
+        sum.add_assign(&mut body, quote!(#abs.wrapping_sum() as #hsum));
       }
     }
   // the remaining else branches only partially unroll.
@@ -78,8 +77,7 @@ fn sad_kernel(
         let l = l.cast(calc_simd).let_(&mut inner, "l");
         let r = r.cast(calc_simd).let_(&mut inner, "r");
         let abs = (&l - &r).abs().let_(&mut inner, "abs");
-        let v = abs.cast(hsum_simd).let_(&mut inner, "abs");
-        sum.add_assign(&mut inner, quote!(#v.wrapping_sum()));
+        sum.add_assign(&mut inner, quote!(#abs.wrapping_sum() as #hsum));
 
         check.check();
       }
