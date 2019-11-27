@@ -879,19 +879,23 @@ impl<T: Pixel> ContextInner<T> {
     );
 
     for &output_frameno in output_framenos.iter().skip(1).rev() {
-      // Copy fi from the map to avoid the borrow checker complaining
-      // when we mutably borrow another fi.
-      let fi = self
-        .frame_data
-        .get(&output_frameno)
-        .map(|data| data.fi.clone())
-        .unwrap();
-
       // TODO: see comment above about key frames not having references.
-      if fi.frame_type == FrameType::KEY {
-        // No need to update the existing frame invariants alone
+      if self.frame_data.get(&output_frameno).unwrap().fi.frame_type
+        == FrameType::KEY
+      {
         continue;
       }
+
+      // Remove fi from the map temporarily and put it back in in the end of
+      // the iteration. This is required because we need to mutably borrow
+      // referenced fis from the map, and that wouldn't be possible if this was
+      // an active borrow.
+      //
+      // Performance note: Contrary to intuition,
+      // removing the data and re-inserting it at the end
+      // is more performant because it avoids a very expensive clone.
+      let output_frame_data = self.frame_data.remove(&output_frameno).unwrap();
+      let fi = &output_frame_data.fi;
 
       let frame = self.frame_q[&fi.input_frameno].as_ref().unwrap();
 
@@ -1071,6 +1075,8 @@ impl<T: Pixel> ContextInner<T> {
           });
         }
       });
+
+      self.frame_data.insert(output_frameno, output_frame_data);
     }
 
     // Get the final block importance values for the current output frame.
