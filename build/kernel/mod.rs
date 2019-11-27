@@ -330,10 +330,9 @@ impl SimdValue {
     T: ToTokens,
   {
     let w = ty.w();
+    let ety = ty.ty();
     let v = quote! {
-      <#ty>::from_slice_unaligned_unchecked({
-        from_raw_parts(#ptr, #w)
-      })
+      <#ty>::from(*(#ptr as *const [#ety; #w]))
     };
     SimdValue(ty, v)
   }
@@ -341,11 +340,8 @@ impl SimdValue {
   where
     T: ToTokens,
   {
-    let w = ty.w();
     let v = quote! {
-      <#ty>::from_slice_aligned_unchecked({
-        from_raw_parts(#ptr, #w)
-      })
+      *(#ptr as *const #ty)
     };
     SimdValue(ty, v)
   }
@@ -354,10 +350,9 @@ impl SimdValue {
     T: ToTokens,
   {
     let w = self.ty().w();
+    let ety = self.ty().ty();
     let v = quote! {
-      #self.write_to_slice_unaligned_unchecked({
-        from_raw_parts_mut(#ptr, #w)
-      });
+      *(#ptr as *mut [#ety; #w]) = ::std::mem::transmute::<_, [#ety; #w]>(#self);
     };
     dst.extend(v);
   }
@@ -365,11 +360,9 @@ impl SimdValue {
   where
     T: ToTokens,
   {
-    let w = self.ty().w();
+    let ty = self.ty();
     let v = quote! {
-      #self.write_to_slice_aligned_unchecked({
-        from_raw_parts_mut(#ptr, #w)
-      });
+      *(#ptr as *mut #ty) = #self;
     };
     dst.extend(v);
   }
