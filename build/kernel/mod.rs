@@ -402,6 +402,13 @@ impl SimdValue {
     let v = quote!(#self.clamp(#min as #elem, #max as #elem));
     SimdValue::from(self.ty(), v)
   }
+  fn shl<T>(&self, bits: T) -> Self
+    where
+      T: ToTokens,
+  {
+    let v = quote!(#self << (#bits as u32));
+    SimdValue::from(self.ty(), v)
+  }
   fn round_shift<T>(&self, bit: T) -> Self
   where
     T: ToTokens,

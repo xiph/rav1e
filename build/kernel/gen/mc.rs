@@ -47,7 +47,8 @@ impl EightTapFrac {
     };
     // the simd width:
     let step = 8usize;
-    let calc_simd = quote! { Simd::<[#calc_ty; #step]> };
+    let calc_simd = SimdType::new(calc_ty, step);
+    let px_simd = SimdType::new(px, step);
 
     let mut idxs = TokenStream::default();
     for i in 0..step {
@@ -64,12 +65,10 @@ impl EightTapFrac {
     let load_unit_stride_src = |px, src, j| {
       let t_ident = t_ident(j);
       let src = if j != 0 { quote!(#src.add(#j)) } else { src };
-      let t = quote! {
-        Simd::<[#px; #step]>::from_slice_unaligned_unchecked({
-          from_raw_parts(#src, #step)
-        })
-      };
-      (quote!(let #t_ident = #calc_simd ::from_cast(#t);), quote!(#t_ident))
+      let t = SimdType::new(px, step)
+        .uload(&src)
+        .cast(calc_simd);
+      (quote!(let #t_ident = #t;), quote!(#t_ident))
     };
     let load_src = |px, src, j, stride| {
       let t_ident = t_ident(j);
@@ -82,7 +81,7 @@ impl EightTapFrac {
           .read(Simd::<[m8; #step]>::splat(true),
                 Default::default())
       }};
-      (quote!(let #t_ident = #calc_simd ::from_cast(#t);), quote!(#t_ident))
+      (quote!(let #t_ident = <#calc_simd> ::from_cast(#t);), quote!(#t_ident))
     };
 
     let run_filter = |src, filter, bits: &[_]| {
@@ -159,15 +158,9 @@ impl EightTapFrac {
           for j in (0..b.w()).step_by(step) {
             let src = if j != 0 { quote!(src.add(#j)) } else { quote!(src) };
             let dst = if j != 0 { quote!(dst.add(#j)) } else { quote!(dst) };
-            let t = quote! {
-              let t = Simd::<[#px; #step]>::from_slice_unaligned_unchecked({
-                from_raw_parts(#src, #step)
-              });
-              t.write_to_slice_unaligned_unchecked({
-                from_raw_parts_mut(#dst, #step)
-              });
-            };
-            out.extend(t);
+            let px_simd = SimdType::new(px, step);
+            px_simd.uload(&src)
+              .ustore(out, &dst);
           }
         };
         // unroll both loops for small blocks
@@ -178,7 +171,7 @@ impl EightTapFrac {
         out.extend(quote! {
           //let src = src.go_up(3);
           src = src.offset(-3 * (src_stride as isize));
-          let y_filter = #calc_simd ::from_cast(y_filter);
+          let y_filter = <#calc_simd> ::from_cast(y_filter);
         });
         let inner_loop = |out: &mut TokenStream| {
           let mut ts = Vec::new();
@@ -205,7 +198,7 @@ impl EightTapFrac {
         out.extend(quote! {
           //let src = src.go_left(3);
           src = src.offset(-3);
-          let x_filter = #calc_simd ::from_cast(x_filter);
+          let x_filter = <#calc_simd> ::from_cast(x_filter);
         });
         let bits = &[quote!(7 - intermediate_bits), quote!(intermediate_bits)];
         let inner_loop = |out: &mut TokenStream| {
@@ -241,11 +234,10 @@ impl EightTapFrac {
         let bits2 = &[quote!(7 + intermediate_bits)];
 
         for c in 0..8.min(width) {
-          inner1.extend(quote! {
-            let t = from_raw_parts(src.add(#c + cg), #step);
-            let t = Simd::<[#px; #step]>::from_slice_unaligned_unchecked(t);
-            let t = #calc_simd ::from_cast(t);
-          });
+          px_simd
+            .uload(&quote!(src.add(#c + cg)))
+            .cast(calc_simd)
+            .let_(&mut inner1, "t");
 
           let t = run_filter(quote!(t), &x_filter, bits1);
           let write = quote! {
@@ -268,11 +260,10 @@ impl EightTapFrac {
 
         for c in 0..8.min(width) {
           let ty = PrimType::I16;
-          inner2.extend(quote! {
-            let t = from_raw_parts(iptr.add(#c * (#height + 7usize)), #step);
-            let t = Simd::<[#ty; #step]>::from_slice_unaligned_unchecked(t);
-            let t = #calc_simd ::from_cast(t);
-          });
+          SimdType::new(ty, step)
+            .uload(&quote!(iptr.add(#c * (#height + 7usize))))
+            .cast(calc_simd)
+            .let_(&mut inner2, "t");
 
           let t = run_filter(quote!(t), &y_filter, bits2);
           let mut t = quote!(#t.max(0));
@@ -294,8 +285,8 @@ impl EightTapFrac {
         }
         out.extend(quote! {
           src = src.offset(-3isize * (src_stride as isize) - 3);
-          let x_filter = #calc_simd ::from_cast(x_filter);
-          let y_filter = #calc_simd ::from_cast(y_filter);
+          let x_filter = <#calc_simd> ::from_cast(x_filter);
+          let y_filter = <#calc_simd> ::from_cast(y_filter);
           let mut intermediate: AlignedArray<[i16; 8 * (#height + 7)]> =
             AlignedArray::uninitialized();
           for cg in (0..#width).step_by(8) {
@@ -331,7 +322,8 @@ impl EightTapFrac {
     };
     // the simd width:
     let step = 8usize;
-    let calc_simd = quote! { Simd::<[#calc_ty; #step]> };
+    let calc_simd = SimdType::new(calc_ty, step);
+    let px_simd = SimdType::new(px, step);
 
     let x_filter = Ident::new("x_filter", Span::call_site());
     let y_filter = Ident::new("y_filter", Span::call_site());
@@ -340,12 +332,10 @@ impl EightTapFrac {
     let load_unit_stride_src = |px, src, j| {
       let t_ident = t_ident(j);
       let src = if j != 0 { quote!(#src.add(#j)) } else { src };
-      let t = quote! {
-        Simd::<[#px; #step]>::from_slice_unaligned_unchecked({
-          from_raw_parts(#src, #step)
-        })
-      };
-      (quote!(let #t_ident = #calc_simd ::from_cast(#t);), quote!(#t_ident))
+      let t = SimdType::new(px, step)
+        .uload(&src)
+        .cast(calc_simd);
+      (quote!(let #t_ident = #t;), quote!(#t_ident))
     };
     let load_src = |px, src, j, stride| {
       let t_ident = t_ident(j);
@@ -365,7 +355,7 @@ impl EightTapFrac {
           .read(Simd::<[m8; #step]>::splat(true),
                 Default::default())
       }};
-      (quote!(let #t_ident = #calc_simd ::from_cast(#t);), quote!(#t_ident))
+      (quote!(let #t_ident = <#calc_simd> ::from_cast(#t);), quote!(#t_ident))
     };
 
     let run_filter = |src, filter, bits: &[_]| {
@@ -432,16 +422,10 @@ impl EightTapFrac {
           for j in (0..b.w()).step_by(step) {
             let src = if j != 0 { quote!(src.add(#j)) } else { quote!(src) };
             let dst = if j != 0 { quote!(tmp.add(#j)) } else { quote!(tmp) };
-            let t = quote! {
-              let t = Simd::<[#px; #step]>::from_slice_unaligned_unchecked({
-                from_raw_parts(#src, #step)
-              });
-              let t = Simd::<[i16; #step]>::from_cast(t) << (intermediate_bits as u32);
-              t.write_to_slice_unaligned_unchecked({
-                from_raw_parts_mut(#dst, #step)
-              });
-            };
-            out.extend(t);
+            let px_simd = SimdType::new(px, step);
+            let t = px_simd.uload(&src);
+            let t = t.shl(quote!(intermediate_bits));
+            t.astore(out, dst);
           }
         };
         outer_loop(&mut out, &inner_loop, Some(px.avx2_width()));
@@ -451,7 +435,7 @@ impl EightTapFrac {
         out.extend(quote! {
           // src.go_up(3)
           src = src.offset(-3isize * (src_stride as isize));
-          let y_filter = #calc_simd ::from_cast(y_filter);
+          let y_filter = <#calc_simd> ::from_cast(y_filter);
         });
         let inner_loop = |out: &mut TokenStream| {
           let mut ts = Vec::new();
@@ -473,7 +457,7 @@ impl EightTapFrac {
         out.extend(quote! {
           // src.go_left(3)
           src = src.offset(-3isize);
-          let x_filter = #calc_simd ::from_cast(x_filter);
+          let x_filter = <#calc_simd> ::from_cast(x_filter);
         });
         let inner_loop = |out: &mut TokenStream| {
           let mut ts = Vec::new();
@@ -502,11 +486,11 @@ impl EightTapFrac {
         let mut inner1 = TokenStream::default();
 
         for c in 0..8.min(width) {
-          inner1.extend(quote! {
-            let t = from_raw_parts(src.add(#c + cg), #step);
-            let t = Simd::<[#px; #step]>::from_slice_unaligned_unchecked(t);
-            let t = #calc_simd ::from_cast(t);
-          });
+          px_simd
+            .uload(&quote!(src.add(#c + cg)))
+            .cast(calc_simd)
+            .let_(&mut inner1, "t");
+
           let t = run_filter(quote!(t), &x_filter, bits);
           let write = quote! {
             *iptr.add(#c * (#height + 7usize)) = #t as i16;
@@ -528,11 +512,11 @@ impl EightTapFrac {
         let bits = &[quote!(7)];
         for c in 0..8.min(width) {
           let ty = PrimType::I16;
-          inner2.extend(quote! {
-            let t = from_raw_parts(iptr.add(#c * (#height + 7usize)), #step);
-            let t = Simd::<[#ty; #step]>::from_slice_unaligned_unchecked(t);
-            let t = #calc_simd ::from_cast(t);
-          });
+          SimdType::new(ty, step)
+            .uload(&quote!(iptr.add(#c * (#height + 7usize))))
+            .cast(calc_simd)
+            .let_(&mut inner2, "t");
+
           let t = run_filter(quote!(t), &y_filter, bits);
           let write = quote! {
             *tmp.add(cg + #c) = #t as i16;
@@ -549,8 +533,8 @@ impl EightTapFrac {
         }
         out.extend(quote! {
           src = src.offset(-3isize * (src_stride as isize) - 3);
-          let x_filter = #calc_simd ::from_cast(x_filter);
-          let y_filter = #calc_simd ::from_cast(y_filter);
+          let x_filter = <#calc_simd> ::from_cast(x_filter);
+          let y_filter = <#calc_simd> ::from_cast(y_filter);
           let mut intermediate: AlignedArray<[i16; 8 * (#height + 7)]> =
             AlignedArray::uninitialized();
           for cg in (0..#width).step_by(8) {
@@ -598,6 +582,7 @@ fn put_8tap_kernel(
     #[allow(unused_variables)]
     #[allow(unused_mut)]
     #[allow(unused_assignments)]
+    #[allow(unused_parens)]
     pub unsafe fn #fn_name(mut dst: &mut #px, dst_stride: u32,
                            mut src: &#px, src_stride: u32,
                            x_filter: i32x8, y_filter: i32x8,
@@ -632,6 +617,7 @@ fn prep_8tap_kernel(
     #[allow(unused_variables)]
     #[allow(unused_mut)]
     #[allow(unused_assignments)]
+    #[allow(unused_parens)]
     pub unsafe fn #fn_name(tmp: &mut i16,
                            src: &#px, src_stride: u32,
                            x_filter: i32x8, y_filter: i32x8,
@@ -667,6 +653,9 @@ fn mc_avg_kernel(
   } else {
     PrimType::I16.avx2_width()
   };
+  let load_simd = SimdType::new(PrimType::I16, inner_step);
+  let calc_simd = SimdType::new(PrimType::I32, inner_step);
+  let px_simd = SimdType::new(px.into(), inner_step);
 
   if px == PixelType::U8 {
     body.extend(quote! {
@@ -694,41 +683,29 @@ fn mc_avg_kernel(
       }
       for c in (0..width).step_by(inner_step) {
         let idx = r * width + c;
-        body.extend(quote! {
-          let t1 = from_raw_parts(tmp1.add(#idx), #inner_step);
-          let t1 = Simd::<[i16; #inner_step]>::
-            from_slice_aligned_unchecked(t1);
-          let t1 = Simd::<[i32; #inner_step]>::from_cast(t1);
-        });
-        body.extend(quote! {
-          let t2 = from_raw_parts(tmp2.add(#idx), #inner_step);
-          let t2 = Simd::<[i16; #inner_step]>::
-            from_slice_aligned_unchecked(t2);
-          let t2 = Simd::<[i32; #inner_step]>::from_cast(t2);
-        });
-        body.extend(quote! {
-          let t = t1 + t2;
-          let t = t.round_shift(intermediate_bits + 1);
-        });
-        if px == PixelType::U8 {
+        let t1 = load_simd.aload(&quote!(tmp1.add(#idx)))
+          .cast(calc_simd)
+          .let_(&mut body, "t1");
+        let t2 = load_simd.aload(&quote!(tmp2.add(#idx)))
+          .cast(calc_simd)
+          .let_(&mut body, "t2");
+        let t = (&t1 + &t2)
+          .let_(&mut body, "t");
+        let t = t.round_shift(quote!(intermediate_bits + 1))
+          .let_(&mut body, "t");
+        let t = if px == PixelType::U8 {
           // here, we just need to ensure negative numbers
           // don't get wrapped to positive values.
           // XXX assumes u8 <=> 8-bit depth.
-          body.extend(quote! {
-            let t = t.max(zero);
-          });
+          t.max(&SimdValue::from(t.ty(), quote!(zero)))
         } else {
-          body.extend(quote! {
-            let t = t.clamp(0, max_sample_val);
-          });
+          t.clamp(quote!(0), quote!(max_sample_val))
         }
+          .let_(&mut body, "t");
+        let t = t.cast(px_simd)
+          .let_(&mut body, "t");
         let dst = if c != 0 { quote!(dst.add(#c)) } else { quote!(dst) };
-        body.extend(quote! {
-          let t = Simd::<[#px; #inner_step]>::from_cast(t);
-          t.write_to_slice_unaligned_unchecked({
-            from_raw_parts_mut(#dst, #inner_step)
-          });
-        });
+        t.ustore(&mut body, &dst);
       }
     }
   } else {
@@ -746,45 +723,33 @@ fn mc_avg_kernel(
       };
       for c in (0..inner_size).step_by(inner_step) {
         let idx = r * width + c;
-        inner.extend(quote! {
-          let t1 = from_raw_parts(tmp1.add(#idx), #inner_step);
-          let t1 = Simd::<[i16; #inner_step]>::
-            from_slice_aligned_unchecked(t1);
-          let t1 = Simd::<[i32; #inner_step]>::from_cast(t1);
-        });
-        inner.extend(quote! {
-          let t2 = from_raw_parts(tmp2.add(#idx), #inner_step);
-          let t2 = Simd::<[i16; #inner_step]>::
-            from_slice_aligned_unchecked(t2);
-          let t2 = Simd::<[i32; #inner_step]>::from_cast(t2);
-        });
-        inner.extend(quote! {
-          let t = t1 + t2;
-          let t = t.round_shift(intermediate_bits + 1);
-        });
-        if px == PixelType::U8 {
+        let t1 = load_simd.aload(&quote!(tmp1.add(#idx)))
+          .cast(calc_simd)
+          .let_(&mut inner, "t1");
+        let t2 = load_simd.aload(&quote!(tmp2.add(#idx)))
+          .cast(calc_simd)
+          .let_(&mut inner, "t2");
+        let t = (&t1 + &t2)
+          .let_(&mut inner, "t");
+        let t = t.round_shift(quote!(intermediate_bits + 1))
+          .let_(&mut inner, "t");
+        let t = if px == PixelType::U8 {
           // here, we just need to ensure negative numbers
           // don't get wrapped to positive values.
           // XXX assumes u8 <=> 8-bit depth.
-          inner.extend(quote! {
-            let t = t.max(zero);
-          });
+          t.max(&SimdValue::from(t.ty(), quote!(zero)))
         } else {
-          inner.extend(quote! {
-            let t = t.clamp(0, max_sample_val);
-          });
+          t.clamp(quote!(0), quote!(max_sample_val))
         }
+          .let_(&mut inner, "t");
+        let t = t.cast(px_simd)
+          .let_(&mut inner, "t");
         let dst = if r == 0 && c == 0 {
           quote!(dst)
         } else {
           quote!(dst.add(#dst_base #c))
         };
-        inner.extend(quote! {
-          let t = Simd::<[#px; #inner_step]>::from_cast(t);
-          t.write_to_slice_unaligned_unchecked({
-            from_raw_parts_mut(#dst, #inner_step)
-          });
-        });
+        t.ustore(&mut inner, &dst);
       }
     }
     let iter = if unrolled_rows > 1 {
@@ -836,6 +801,7 @@ fn mc_avg_kernel(
     #[allow(unused_variables)]
     #[allow(unused_mut)]
     #[allow(unused_assignments)]
+    #[allow(unused_parens)]
     pub unsafe fn #fn_name(dst: &mut #px, dst_stride: u32,
                            tmp1: &i16, tmp2: &i16,
                            bit_depth: u8, ) {
