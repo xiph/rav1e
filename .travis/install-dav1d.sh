@@ -1,20 +1,23 @@
 #!/bin/bash
 set -ex
 
-DAV1D_VERSION="0.4.0"
+DAV1D_VERSION="0.5.1-dmo1"
+PKG_URL="http://www.deb-multimedia.org/pool/main/d/dav1d-dmo"
 
-# dav1d prints the version number to stderr
-if [ "$(dav1d --version 2>&1 > /dev/null)" != "$DAV1D_VERSION" ]; then
-  curl -L "https://code.videolan.org/videolan/dav1d/-/archive/$DAV1D_VERSION/dav1d-$DAV1D_VERSION.tar.gz" | tar xz
-  cd "dav1d-$DAV1D_VERSION"
-  if command -v nasm; then
-    # Tell meson where to look for nasm, because it doesn't respect our $PATH
-    export NASM_PATH="$DEPS_DIR/bin/nasm"
-    export NASM_PATH="${NASM_PATH//'/'/'\/'}"
-    sed -i "s/nasm = find_program('nasm')/nasm = find_program(['nasm', '$NASM_PATH'])/g" meson.build
-  fi
-  meson build --buildtype release --prefix "$DEPS_DIR"
-  ninja -C build install
-else
-  echo "Using cached directory."
-fi
+case "$ARCH" in
+  x86_64) ARCH=amd64 ;;
+  aarch64) ARCH=arm64 ;;
+esac
+
+curl -O "$PKG_URL/libdav1d-dev_${DAV1D_VERSION}_$ARCH.deb" \
+     -O "$PKG_URL/libdav1d3_${DAV1D_VERSION}_$ARCH.deb"
+
+sha256sum --check --ignore-missing <<EOF
+682fd52fcfd73c225f9aaee200cbe69eceefdc687b8ce03f354731f5288a28ce  libdav1d3_0.5.1-dmo1_amd64.deb
+de8550873cd7c7a7ede789f9be5db079cb3eafa91facc883dec833da887fa831  libdav1d3_0.5.1-dmo1_arm64.deb
+feb8fd535ae7747963d3d17ed394dc5bdb3e6163fdb77df787ec72a8ca9aac2e  libdav1d-dev_0.5.1-dmo1_amd64.deb
+a4ebf7794c9ac2b9eeef90386c4655c7f16e4e299435fccb41c815dd380d05da  libdav1d-dev_0.5.1-dmo1_arm64.deb
+EOF
+
+sudo dpkg -i "libdav1d3_${DAV1D_VERSION}_$ARCH.deb" \
+             "libdav1d-dev_${DAV1D_VERSION}_$ARCH.deb"
