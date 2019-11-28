@@ -17,6 +17,7 @@ jobs:
     - uses: actions/checkout@v1
     - name: Install nasm
       run: |
+        sudo apt-get update &&
         sudo apt-get install nasm
     - name: Install stable
       uses: actions-rs/toolchain@v1
@@ -78,6 +79,7 @@ jobs:
     - uses: actions/checkout@v1
     - name: Install deps
       run: |
+        sudo apt-get update &&
         sudo apt-get install libsdl2-dev libvulkan-dev libcurl4-openssl-dev \
                      zlib1g-dev libdw-dev libiberty-dev
     - name: Install nasm
