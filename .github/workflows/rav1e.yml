@@ -162,6 +162,14 @@ jobs:
           -Zno-landing-pads
       run: |
         cargo test --features=decode_test,decode_test_dav1d,quick_test --verbose
+    - name: Install grcov
+      if: matrix.conf == 'grcov-coveralls'
+      env:
+        LINK: https://github.com/mozilla/grcov/releases/download
+        GRCOV_VERSION: 0.5.5
+      run: |
+        curl -L "$LINK/v$GRCOV_VERSION/grcov-linux-x86_64.tar.bz2" |
+        tar xj -C ~/.cargo/bin
     - name: Run grcov
       if: matrix.conf == 'grcov-coveralls'
       id: coverage
