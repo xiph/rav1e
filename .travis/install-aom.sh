@@ -1,19 +1,23 @@
 #!/bin/bash
 set -ex
 
-AOM_VERSION="1.0.0-errata1"
+AOM_VERSION="1.0.0.errata1-2"
+PKG_URL="http://http.us.debian.org/debian/pool/main/a/aom"
 
-if [[ "$(aomenc --help)" != *"AV1 Encoder $AOM_VERSION"* ]]; then
-  git clone --depth 1 -b "v$AOM_VERSION" https://aomedia.googlesource.com/aom "aom-$AOM_VERSION"
-  cd "aom-$AOM_VERSION"
-  rm -rf CMakeCache.txt CMakeFiles
-  mkdir -p .build
-  cd .build
-  if command -v sccache; then
-    LAUNCHER_OPTS="-DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache"
-  fi
-  cmake -GNinja .. $LAUNCHER_OPTS -DCMAKE_BUILD_TYPE=Release -DENABLE_TESTS=0 -DENABLE_DOCS=0 -DCONFIG_LOWBITDEPTH=1 -DCMAKE_INSTALL_PREFIX="$DEPS_DIR" -DCONFIG_PIC=1
-  ninja && ninja install
-else
-  echo "Using cached directory."
-fi
+case "$ARCH" in
+  x86_64) ARCH=amd64 ;;
+  aarch64) ARCH=arm64 ;;
+esac
+
+curl -O "$PKG_URL/libaom-dev_${AOM_VERSION}_$ARCH.deb" \
+     -O "$PKG_URL/libaom0_${AOM_VERSION}_$ARCH.deb"
+
+sha256sum --check --ignore-missing <<EOF
+3f096b6057871c12bbdfdf8b2e18d12ed0f643b8e23fdbeddd80b860c55c53ff  libaom0_1.0.0.errata1-2_amd64.deb
+76cf5487ce1e4dccb6dc11fd59ac358181b9fe2bd6422c755f2490b712f20d34  libaom0_1.0.0.errata1-2_arm64.deb
+fd07d90dafe1512d79c1734adb1c4f33215f40856e89e9d505c7e8c8b0ae6a0f  libaom-dev_1.0.0.errata1-2_amd64.deb
+df1ec43f66bb243c7dfac70877c56033791475f91d068589e26f7ade9fd11001  libaom-dev_1.0.0.errata1-2_arm64.deb
+EOF
+
+sudo dpkg -i "libaom0_${AOM_VERSION}_$ARCH.deb" \
+             "libaom-dev_${AOM_VERSION}_$ARCH.deb"

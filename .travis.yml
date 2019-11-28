@@ -34,7 +34,6 @@ before_install:
   - bash "$TRAVIS_BUILD_DIR/.travis/install-nasm.sh"
   - bash "$TRAVIS_BUILD_DIR/.travis/install-kcov.sh"
   - bash "$TRAVIS_BUILD_DIR/.travis/install-aom.sh"
-  - aomenc --help | grep "AV1 Encoder"
   - bash "$TRAVIS_BUILD_DIR/.travis/install-dav1d.sh"
   - dav1d --version
   - cd "$TRAVIS_BUILD_DIR"
