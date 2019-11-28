@@ -19,8 +19,10 @@ jobs:
       env:
         LINK: http://debian-archive.trafficmanager.net/debian/pool/main/n/nasm
         NASM_VERSION: 2.14.02-1
+        NASM_SHA256: 5225d0654783134ae616f56ce8649e4df09cba191d612a0300cfd0494bb5a3ef
       run: |
         curl -O "$LINK/nasm_${NASM_VERSION}_amd64.deb"
+        echo "$NASM_SHA256  nasm_${NASM_VERSION}_amd64.deb" | sha256sum --check
         sudo dpkg -i "nasm_${NASM_VERSION}_amd64.deb"
     - name: Install stable
       uses: actions-rs/toolchain@v1
@@ -82,8 +84,10 @@ jobs:
       env:
         LINK: http://debian-archive.trafficmanager.net/debian/pool/main/n/nasm
         NASM_VERSION: 2.14.02-1
+        NASM_SHA256: 5225d0654783134ae616f56ce8649e4df09cba191d612a0300cfd0494bb5a3ef
       run: |
         curl -O "$LINK/nasm_${NASM_VERSION}_amd64.deb"
+        echo "$NASM_SHA256  nasm_${NASM_VERSION}_amd64.deb" | sha256sum --check
         sudo dpkg -i "nasm_${NASM_VERSION}_amd64.deb"
     - name: Install aom
       if: >
@@ -92,9 +96,13 @@ jobs:
       env:
         LINK: http://debian-archive.trafficmanager.net/debian/pool/main/a/aom
         AOM_VERSION: 1.0.0.errata1-2
+        AOM_DEV_SHA256: fd07d90dafe1512d79c1734adb1c4f33215f40856e89e9d505c7e8c8b0ae6a0f
+        AOM_LIB_SHA256: 3f096b6057871c12bbdfdf8b2e18d12ed0f643b8e23fdbeddd80b860c55c53ff
       run: |
         curl -O "$LINK/libaom-dev_${AOM_VERSION}_amd64.deb" \
              -O "$LINK/libaom0_${AOM_VERSION}_amd64.deb"
+        echo "$AOM_DEV_SHA256  libaom-dev_${AOM_VERSION}_amd64.deb" | sha256sum --check
+        echo "$AOM_LIB_SHA256  libaom0_${AOM_VERSION}_amd64.deb" | sha256sum --check
         sudo dpkg -i "libaom-dev_${AOM_VERSION}_amd64.deb" \
                      "libaom0_${AOM_VERSION}_amd64.deb"
     - name: Install dav1d
@@ -104,9 +112,13 @@ jobs:
       env:
         LINK: http://www.deb-multimedia.org/pool/main/d/dav1d-dmo
         DAV1D_VERSION: 0.5.1-dmo1
+        DAV1D_DEV_SHA256: feb8fd535ae7747963d3d17ed394dc5bdb3e6163fdb77df787ec72a8ca9aac2e
+        DAV1D_LIB_SHA256: 682fd52fcfd73c225f9aaee200cbe69eceefdc687b8ce03f354731f5288a28ce
       run: |
         curl -O "$LINK/libdav1d-dev_${DAV1D_VERSION}_amd64.deb" \
              -O "$LINK/libdav1d3_${DAV1D_VERSION}_amd64.deb"
+        echo "$DAV1D_DEV_SHA256  libdav1d-dev_${DAV1D_VERSION}_amd64.deb" | sha256sum --check
+        echo "$DAV1D_LIB_SHA256  libdav1d3_${DAV1D_VERSION}_amd64.deb" | sha256sum --check
         sudo dpkg -i "libdav1d-dev_${DAV1D_VERSION}_amd64.deb" \
                      "libdav1d3_${DAV1D_VERSION}_amd64.deb"
     - name: Install stable
