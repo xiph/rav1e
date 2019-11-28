@@ -1,14 +1,18 @@
 #!/bin/bash
 set -ex
 
-NASM_VERSION="2.14"
+NASM_VERSION="2.14.02-1"
+PKG_URL="http://http.us.debian.org/debian/pool/main/n/nasm"
 
-if [[ "$(nasm --version)" = "NASM version $NASM_VERSION"* ]]; then
-  echo "Using cached directory."
-elif [ "$ARCH" = "x86_64" ]; then
-  curl -L "https://download.videolan.org/contrib/nasm/nasm-$NASM_VERSION.tar.gz" | tar xz
-  cd "nasm-$NASM_VERSION"
-  ./configure CC='sccache gcc' --prefix="$DEPS_DIR" && make -j2 && make install
-else
-  echo "Skipping nasm installation on $ARCH."
-fi
+case "$ARCH" in
+  x86_64) ARCH=amd64 ;;
+  *) echo "Skipping nasm installation on $ARCH."; exit 0 ;;
+esac
+
+curl -O "$PKG_URL/nasm_${NASM_VERSION}_$ARCH.deb"
+
+sha256sum --check --ignore-missing <<EOF
+5225d0654783134ae616f56ce8649e4df09cba191d612a0300cfd0494bb5a3ef  nasm_2.14.02-1_amd64.deb
+EOF
+
+sudo dpkg -i "nasm_${NASM_VERSION}_$ARCH.deb"
