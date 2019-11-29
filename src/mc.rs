@@ -198,6 +198,7 @@ pub(crate) mod native {
       .sum::<i32>()
   }
 
+  #[inline(always)]
   fn get_filter(
     mode: FilterMode, frac: i32, length: usize,
   ) -> [i32; SUBPEL_FILTER_SIZE] {
@@ -427,10 +428,6 @@ pub(crate) mod native {
       height * src.plane.cfg.stride + width,
     );
     let block = BlockSize::from_width_and_height(width, height) as usize;
-    let y_filter = get_filter(mode_y, row_frac, height);
-    let y_filter = i32x8::load_from_slice_u(&y_filter);
-    let x_filter = get_filter(mode_x, col_frac, width);
-    let x_filter = i32x8::load_from_slice_u(&x_filter);
 
     let col_frac_i = (col_frac == 0) as usize;
     let row_frac_i = (row_frac == 0) as usize;
@@ -448,7 +445,7 @@ pub(crate) mod native {
         let mut dst = dst.as_u8().unwrap();
         let src = src.as_u8().unwrap();
         let f = put_8tap_kernels::U8_PUT_8TAP_KERNELS[cpu_i][block]
-          [col_frac_i][row_frac_i];
+          [col_frac_i][row_frac_i][mode_x as usize][mode_y as usize];
         let f = match f {
           Some(f) => f,
           // These are always present
@@ -460,8 +457,7 @@ pub(crate) mod native {
             dst.plane_cfg.stride as _,
             &*src.as_ptr(),
             src.plane.cfg.stride as _,
-            x_filter,
-            y_filter,
+            col_frac, row_frac,
             bit_depth as _,
           );
         }
@@ -470,7 +466,7 @@ pub(crate) mod native {
         let mut dst = dst.as_u16().unwrap();
         let src = src.as_u16().unwrap();
         let f = put_8tap_kernels::U16_PUT_8TAP_KERNELS[cpu_i][block]
-          [col_frac_i][row_frac_i];
+          [col_frac_i][row_frac_i][mode_x as usize][mode_y as usize];
         let f = match f {
           Some(f) => f,
           // These are always present
@@ -482,8 +478,7 @@ pub(crate) mod native {
             dst.plane_cfg.stride as _,
             &*src.as_ptr(),
             src.plane.cfg.stride as _,
-            x_filter,
-            y_filter,
+            col_frac, row_frac,
             bit_depth as _,
           );
         }
@@ -540,10 +535,6 @@ pub(crate) mod native {
     );
 
     let block = BlockSize::from_width_and_height(width, height) as usize;
-    let y_filter = get_filter(mode_y, row_frac, height);
-    let y_filter = i32x8::load_from_slice_u(&y_filter);
-    let x_filter = get_filter(mode_x, col_frac, width);
-    let x_filter = i32x8::load_from_slice_u(&x_filter);
 
     let col_frac_i = (col_frac == 0) as usize;
     let row_frac_i = (row_frac == 0) as usize;
@@ -556,7 +547,7 @@ pub(crate) mod native {
       PixelType::U8 => {
         let src = src.as_u8().unwrap();
         let f = prep_8tap_kernels::U8_PREP_8TAP_KERNELS[cpu_i][block]
-          [col_frac_i][row_frac_i];
+          [col_frac_i][row_frac_i][mode_x as usize][mode_y as usize];
         let f = match f {
           Some(f) => f,
           // These are always present
@@ -567,8 +558,7 @@ pub(crate) mod native {
             &mut *tmp.as_mut_ptr(),
             &*src.as_ptr(),
             src.plane.cfg.stride as _,
-            x_filter,
-            y_filter,
+            col_frac, row_frac,
             bit_depth as _,
           );
         }
@@ -576,7 +566,7 @@ pub(crate) mod native {
       PixelType::U16 => {
         let src = src.as_u16().unwrap();
         let f = prep_8tap_kernels::U16_PREP_8TAP_KERNELS[cpu_i][block]
-          [col_frac_i][row_frac_i];
+          [col_frac_i][row_frac_i][mode_x as usize][mode_y as usize];
         let f = match f {
           Some(f) => f,
           // These are always present
@@ -587,8 +577,7 @@ pub(crate) mod native {
             &mut *tmp.as_mut_ptr(),
             &*src.as_ptr(),
             src.plane.cfg.stride as _,
-            x_filter,
-            y_filter,
+            col_frac, row_frac,
             bit_depth as _,
           );
         }

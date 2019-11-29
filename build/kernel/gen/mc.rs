@@ -5,6 +5,70 @@ use std::path::Path;
 
 use super::*;
 
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+pub enum FilterMode {
+  REGULAR = 0,
+  SMOOTH = 1,
+  SHARP = 2,
+  BILINEAR = 3,
+}
+impl FilterMode {
+  fn modes() -> &'static [Self] {
+    const C: &'static [FilterMode] = &[
+      FilterMode::REGULAR,
+      FilterMode::SMOOTH,
+      FilterMode::SHARP,
+      FilterMode::BILINEAR,
+    ];
+    C
+  }
+  fn fn_suffix(&self) -> &'static str {
+    match self {
+      FilterMode::REGULAR => "reg",
+      FilterMode::SMOOTH => "smooth",
+      FilterMode::SHARP => "sharp",
+      FilterMode::BILINEAR => "bilinear",
+    }
+  }
+}
+impl ToTokens for FilterMode {
+  fn to_tokens(&self, tokens: &mut TokenStream) {
+    let t = match self {
+      FilterMode::REGULAR => quote!(FilterMode::REGULAR),
+      FilterMode::SMOOTH => quote!(FilterMode::SMOOTH),
+      FilterMode::SHARP => quote!(FilterMode::SHARP),
+      FilterMode::BILINEAR => quote!(FilterMode::BILINEAR),
+    };
+    tokens.extend(t);
+  }
+}
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+pub struct BlockFilterMode {
+  pub x: FilterMode,
+  pub y: FilterMode,
+}
+impl BlockFilterMode {
+  fn modes() -> Vec<Self> {
+    let modes = FilterMode::modes();
+    let mut out = Vec::with_capacity(modes.len() * modes.len());
+    for &mode_x in modes.iter() {
+      for &mode_y in modes.iter() {
+        out.push(BlockFilterMode {
+          x: mode_x,
+          y: mode_y,
+        });
+      }
+    }
+    out
+  }
+  fn fn_suffix(&self) -> String {
+    format!("{}_{}", self.x.fn_suffix(), self.y.fn_suffix())
+  }
+  fn module_name(&self) -> Ident {
+    Ident::new(&self.fn_suffix(), Span::call_site())
+  }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct EightTapFrac(bool, bool);
 impl EightTapFrac {
@@ -36,7 +100,7 @@ impl EightTapFrac {
   /// loop to load the row from intermediates with a stride of 1,
   /// saving us from having to use a vector gather.
   /// Ditto for `Self::prep_body`.
-  fn put_body(&self, px: PixelType, b: Block) -> TokenStream {
+  fn put_body(&self, px: PixelType, bfm: BlockFilterMode, b: Block) -> TokenStream {
     let width = b.w();
     let height = b.h();
 
@@ -57,6 +121,9 @@ impl EightTapFrac {
       });
     }
     let idxs = quote!(Simd::<[usize; #step]>::new(#idxs));
+
+    let mode_x = bfm.x;
+    let mode_y = bfm.y;
 
     let x_filter = Ident::new("x_filter", Span::call_site());
     let y_filter = Ident::new("y_filter", Span::call_site());
@@ -149,6 +216,8 @@ impl EightTapFrac {
     out.extend(quote! {
       let max_sample_val = ((1 << bit_depth) - 1) as i32;
       let intermediate_bits = 4 - if bit_depth == 12 { 2 } else { 0 };
+      let #x_filter = get_filter(#mode_x, col_frac, #width);
+      let #y_filter = get_filter(#mode_y, row_frac, #height);
     });
 
     match self {
@@ -171,7 +240,7 @@ impl EightTapFrac {
         out.extend(quote! {
           //let src = src.go_up(3);
           src = src.offset(-3 * (src_stride as isize));
-          let y_filter = <#calc_simd> ::from_cast(y_filter);
+          let y_filter = <#calc_simd> ::from(y_filter);
         });
         let inner_loop = |out: &mut TokenStream| {
           let mut ts = Vec::new();
@@ -198,7 +267,7 @@ impl EightTapFrac {
         out.extend(quote! {
           //let src = src.go_left(3);
           src = src.offset(-3);
-          let x_filter = <#calc_simd> ::from_cast(x_filter);
+          let x_filter = <#calc_simd> ::from(x_filter);
         });
         let bits = &[quote!(7 - intermediate_bits), quote!(intermediate_bits)];
         let inner_loop = |out: &mut TokenStream| {
@@ -285,8 +354,8 @@ impl EightTapFrac {
         }
         out.extend(quote! {
           src = src.offset(-3isize * (src_stride as isize) - 3);
-          let x_filter = <#calc_simd> ::from_cast(x_filter);
-          let y_filter = <#calc_simd> ::from_cast(y_filter);
+          let x_filter = <#calc_simd> ::from(x_filter);
+          let y_filter = <#calc_simd> ::from(y_filter);
           let mut intermediate: AlignedArray<[i16; 8 * (#height + 7)]> =
             AlignedArray::uninitialized();
           for cg in (0..#width).step_by(8) {
@@ -311,7 +380,7 @@ impl EightTapFrac {
 
     out
   }
-  fn prep_body(&self, px: PixelType, b: Block) -> TokenStream {
+  fn prep_body(&self, px: PixelType, bfm: BlockFilterMode, b: Block) -> TokenStream {
     let width = b.w();
     let height = b.h();
 
@@ -324,6 +393,9 @@ impl EightTapFrac {
     let step = 8usize;
     let calc_simd = SimdType::new(calc_ty, step);
     let px_simd = SimdType::new(px, step);
+
+    let mode_x = bfm.x;
+    let mode_y = bfm.y;
 
     let x_filter = Ident::new("x_filter", Span::call_site());
     let y_filter = Ident::new("y_filter", Span::call_site());
@@ -413,6 +485,8 @@ impl EightTapFrac {
     out.extend(quote! {
       let max_sample_val = ((1 << bit_depth) - 1) as i32;
       let intermediate_bits = 4 - if bit_depth == 12 { 2 } else { 0 };
+      let #x_filter = get_filter(#mode_x, col_frac, #width);
+      let #y_filter = get_filter(#mode_y, row_frac, #height);
     });
 
     match self {
@@ -435,7 +509,7 @@ impl EightTapFrac {
         out.extend(quote! {
           // src.go_up(3)
           src = src.offset(-3isize * (src_stride as isize));
-          let y_filter = <#calc_simd> ::from_cast(y_filter);
+          let y_filter = <#calc_simd> ::from(y_filter);
         });
         let inner_loop = |out: &mut TokenStream| {
           let mut ts = Vec::new();
@@ -457,7 +531,7 @@ impl EightTapFrac {
         out.extend(quote! {
           // src.go_left(3)
           src = src.offset(-3isize);
-          let x_filter = <#calc_simd> ::from_cast(x_filter);
+          let x_filter = <#calc_simd> ::from(x_filter);
         });
         let inner_loop = |out: &mut TokenStream| {
           let mut ts = Vec::new();
@@ -533,8 +607,8 @@ impl EightTapFrac {
         }
         out.extend(quote! {
           src = src.offset(-3isize * (src_stride as isize) - 3);
-          let x_filter = <#calc_simd> ::from_cast(x_filter);
-          let y_filter = <#calc_simd> ::from_cast(y_filter);
+          let x_filter = <#calc_simd> ::from(x_filter);
+          let y_filter = <#calc_simd> ::from(y_filter);
           let mut intermediate: AlignedArray<[i16; 8 * (#height + 7)]> =
             AlignedArray::uninitialized();
           for cg in (0..#width).step_by(8) {
@@ -562,21 +636,44 @@ impl EightTapFrac {
 }
 
 fn put_8tap_kernel(
-  out: &mut TokenStream, frac: &EightTapFrac, feature: &IsaFeature,
-  px: PixelType, block: Block,
-) -> Ident {
-  let body = frac.put_body(px, block);
+  out: &mut Module, frac: &EightTapFrac, feature: &IsaFeature,
+  px: PixelType, block: Block, bfm: BlockFilterMode,
+) -> TokenStream {
+  let mut pseudo_bfm = bfm;
 
-  feature.to_tokens(out);
-
+  // don't generate extra kernels for these unused permutations
+  if frac.0 {
+    pseudo_bfm.x = FilterMode::REGULAR;
+  }
+  if frac.1 {
+    pseudo_bfm.y = FilterMode::REGULAR;
+  }
   let fn_name_str = format!(
-    "put_8tap_{}_{}_{}_{}",
+    "put_8tap_{}_{}_{}_{}_{}",
     frac.fn_suffix(),
     block.fn_suffix(),
+    pseudo_bfm.fn_suffix(),
     feature.fn_suffix(),
     px.type_str()
   );
   let fn_name = Ident::new(&fn_name_str, Span::call_site());
+  if pseudo_bfm != bfm {
+    // don't generate a body.
+
+    let isam = feature.module_name();
+    let pxm = px.module_name();
+    let fracm = frac.module_name();
+    let bfm = pseudo_bfm.module_name();
+
+    return quote! {
+      self::#isam::#pxm::#fracm::#bfm::#fn_name
+    };
+  }
+
+  let body = frac.put_body(px, pseudo_bfm, block);
+
+  feature.to_tokens(out);
+
   out.extend(quote! {
     #[inline(never)]
     #[allow(unused_variables)]
@@ -585,7 +682,7 @@ fn put_8tap_kernel(
     #[allow(unused_parens)]
     pub unsafe fn #fn_name(mut dst: &mut #px, dst_stride: u32,
                            mut src: &#px, src_stride: u32,
-                           x_filter: i32x8, y_filter: i32x8,
+                           col_frac: i32, row_frac: i32,
                            bit_depth: u8, ) {
       let mut dst = dst as *mut #px;
       let mut src = src as *const #px;
@@ -593,25 +690,47 @@ fn put_8tap_kernel(
     }
   });
 
-  fn_name
+  out.item_path(&fn_name)
 }
 
 fn prep_8tap_kernel(
-  out: &mut TokenStream, frac: &EightTapFrac, feature: &IsaFeature,
-  px: PixelType, block: Block,
-) -> Ident {
-  let body = frac.prep_body(px, block);
+  out: &mut Module, frac: &EightTapFrac, feature: &IsaFeature,
+  px: PixelType, block: Block, bfm: BlockFilterMode,
+) -> TokenStream {
+  let mut pseudo_bfm = bfm;
 
-  feature.to_tokens(out);
-
+  // don't generate extra kernels for these unused permutations
+  if frac.0 {
+    pseudo_bfm.x = FilterMode::REGULAR;
+  }
+  if frac.1 {
+    pseudo_bfm.y = FilterMode::REGULAR;
+  }
   let fn_name_str = format!(
-    "prep_8tap_{}_{}_{}_{}",
+    "prep_8tap_{}_{}_{}_{}_{}",
     frac.fn_suffix(),
     block.fn_suffix(),
+    pseudo_bfm.fn_suffix(),
     feature.fn_suffix(),
     px.type_str()
   );
   let fn_name = Ident::new(&fn_name_str, Span::call_site());
+  if pseudo_bfm != bfm {
+    // don't generate a body.
+
+    let isam = feature.module_name();
+    let pxm = px.module_name();
+    let fracm = frac.module_name();
+    let bfm = pseudo_bfm.module_name();
+
+    return quote! {
+      self::#isam::#pxm::#fracm::#bfm::#fn_name
+    };
+  }
+  let body = frac.prep_body(px, pseudo_bfm, block);
+
+  feature.to_tokens(out);
+
   out.extend(quote! {
     #[inline(never)]
     #[allow(unused_variables)]
@@ -620,7 +739,7 @@ fn prep_8tap_kernel(
     #[allow(unused_parens)]
     pub unsafe fn #fn_name(tmp: &mut i16,
                            src: &#px, src_stride: u32,
-                           x_filter: i32x8, y_filter: i32x8,
+                           col_frac: i32, row_frac: i32,
                            bit_depth: u8, ) {
       let mut tmp = tmp as *mut i16;
       let mut src = src as *const #px;
@@ -628,7 +747,7 @@ fn prep_8tap_kernel(
     }
   });
 
-  fn_name
+  out.item_path(&fn_name)
 }
 
 fn mc_avg_kernel(
@@ -827,13 +946,20 @@ pub(super) fn put_8tap_kernels(file: &mut dyn Write) {
     quote!(dst_stride: u32),
     quote!(src: &T),
     quote!(src_stride: u32),
-    quote!(x_filter: i32x8),
-    quote!(y_filter: i32x8),
+    quote!(col_frac: i32),
+    quote!(row_frac: i32),
     quote!(bd: u8),
   ];
   let ret = None;
+  let table_array_sizes = vec![
+    quote!(4),
+    quote!(4),
+    quote!(2),
+    quote!(2),
+  ];
   let mut kernels =
-    KernelSet::new("Put8TapF", &args, ret, "PUT_8TAP", vec![quote!(2); 2]);
+    KernelSet::new("Put8TapF", &args, ret, "PUT_8TAP",
+                   table_array_sizes);
 
   for isa in IsaFeature::sets() {
     let mut isa_module = Module::new_root(isa.module_name());
@@ -841,19 +967,29 @@ pub(super) fn put_8tap_kernels(file: &mut dyn Write) {
       let mut px_module = isa_module.new_child(px.module_name());
       for frac in EightTapFrac::fracs().iter() {
         let mut frac_module =
-          px_module.new_child_file("put_8tap", frac.module_name());
-        StdImports.to_tokens(&mut frac_module);
-        for block in Block::blocks_iter() {
-          let n = put_8tap_kernel(&mut frac_module, &frac, &isa, px, block);
-          let feature_idx = isa.index();
-          let b_enum = block.table_idx();
-          let row_frac = frac.0 as usize;
-          let col_frac = frac.1 as usize;
-          let idx = quote! {
-            [#feature_idx][#b_enum][#row_frac][#col_frac]
-          };
-          let path = frac_module.item_path(&n);
-          kernels.push_kernel(px, idx, path);
+          px_module.new_child(frac.module_name());
+        for bfm in BlockFilterMode::modes().into_iter() {
+          let mut bfm_module = frac_module.new_child_file("put_8tap",
+                                                          bfm.module_name());
+          bfm_module.extend(quote! {
+            use crate::mc::{FilterMode, native::get_filter, };
+          });
+          StdImports.to_tokens(&mut bfm_module);
+          for block in Block::blocks_iter() {
+            let path = put_8tap_kernel(&mut bfm_module, &frac, &isa,
+                                    px, block, bfm);
+            let feature_idx = isa.index();
+            let b_enum = block.table_idx();
+            let row_frac = frac.0 as usize;
+            let col_frac = frac.1 as usize;
+            let x_mode = bfm.x as usize;
+            let y_mode = bfm.y as usize;
+            let idx = quote! {
+              [#feature_idx][#b_enum][#row_frac][#col_frac][#x_mode][#y_mode]
+            };
+            kernels.push_kernel(px, idx, path);
+          }
+          bfm_module.finish_child(&mut frac_module);
         }
         frac_module.finish_child(&mut px_module);
       }
@@ -874,13 +1010,20 @@ pub(super) fn prep_8tap_kernels(file: &mut dyn Write) {
     quote!(tmp: &mut i16),
     quote!(src: &T),
     quote!(stride: u32),
-    quote!(x_filter: i32x8),
-    quote!(y_filter: i32x8),
+    quote!(col_frac: i32),
+    quote!(row_frac: i32),
     quote!(bd: u8),
   ];
   let ret = None;
+  let table_array_sizes = vec![
+    quote!(4),
+    quote!(4),
+    quote!(2),
+    quote!(2),
+  ];
   let mut kernels =
-    KernelSet::new("Prep8TapF", &args, ret, "PREP_8TAP", vec![quote!(2); 2]);
+    KernelSet::new("Prep8TapF", &args, ret, "PREP_8TAP",
+                   table_array_sizes);
 
   for isa in IsaFeature::sets() {
     let mut isa_module = Module::new_root(isa.module_name());
@@ -888,19 +1031,29 @@ pub(super) fn prep_8tap_kernels(file: &mut dyn Write) {
       let mut px_module = isa_module.new_child(px.module_name());
       for frac in EightTapFrac::fracs().iter() {
         let mut frac_module =
-          px_module.new_child_file("prep_8tap", frac.module_name());
-        StdImports.to_tokens(&mut frac_module);
-        for block in Block::blocks_iter() {
-          let n = prep_8tap_kernel(&mut frac_module, &frac, &isa, px, block);
-          let feature_idx = isa.index();
-          let b_enum = block.table_idx();
-          let row_frac = frac.0 as usize;
-          let col_frac = frac.1 as usize;
-          let idx = quote! {
-            [#feature_idx][#b_enum][#row_frac][#col_frac]
-          };
-          let path = frac_module.item_path(&n);
-          kernels.push_kernel(px, idx, path);
+          px_module.new_child(frac.module_name());
+        for bfm in BlockFilterMode::modes().into_iter() {
+          let mut bfm_module = frac_module.new_child_file("prep_8tap",
+                                                          bfm.module_name());
+          bfm_module.extend(quote! {
+            use crate::mc::{FilterMode, native::get_filter, };
+          });
+          StdImports.to_tokens(&mut bfm_module);
+          for block in Block::blocks_iter() {
+            let path = prep_8tap_kernel(&mut bfm_module, &frac, &isa,
+                                       px, block, bfm);
+            let feature_idx = isa.index();
+            let b_enum = block.table_idx();
+            let row_frac = frac.0 as usize;
+            let col_frac = frac.1 as usize;
+            let x_mode = bfm.x as usize;
+            let y_mode = bfm.y as usize;
+            let idx = quote! {
+              [#feature_idx][#b_enum][#row_frac][#col_frac][#x_mode][#y_mode]
+            };
+            kernels.push_kernel(px, idx, path);
+          }
+          bfm_module.finish_child(&mut frac_module);
         }
         frac_module.finish_child(&mut px_module);
       }
