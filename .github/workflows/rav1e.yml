@@ -94,8 +94,7 @@ jobs:
         sudo dpkg -i "nasm_${NASM_VERSION}_amd64.deb"
     - name: Install aom
       if: >
-        matrix.conf == '1.36.0-tests' || matrix.conf == 'aom-tests' ||
-        matrix.conf == 'grcov-coveralls'
+        matrix.conf == '1.36.0-tests' || matrix.conf == 'aom-tests'
       env:
         LINK: http://debian-archive.trafficmanager.net/debian/pool/main/a/aom
         AOM_VERSION: 1.0.0.errata1-2
@@ -201,7 +200,7 @@ jobs:
           -Zprofile -Ccodegen-units=1 -Clink-dead-code -Coverflow-checks=off
           -Zno-landing-pads
       run: |
-        cargo test --features=decode_test,decode_test_dav1d,quick_test --verbose
+        cargo test --features=decode_test_dav1d,quick_test --verbose
     - name: Install grcov
       if: matrix.conf == 'grcov-coveralls'
       env:
