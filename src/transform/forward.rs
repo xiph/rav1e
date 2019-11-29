@@ -7,7 +7,14 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use super::*;
+use crate::predict::Dim;
+use crate::util::*;
+
+use super::av1_round_shift_array;
+use super::TxSize;
+use super::TxType;
+use super::HTX_TAB;
+use super::VTX_TAB;
 
 type TxfmShift = [i8; 3];
 type TxfmShifts = [TxfmShift; 3];
@@ -1835,6 +1842,7 @@ macro_rules! impl_fwd_txs {
   ($(($W:expr, $H:expr)),+) => {
     $(
       paste::item! {
+        use crate::predict::[<Block $W x $H>];
         impl FwdTxfm2D for [<Block $W x $H>] {}
       }
     )*

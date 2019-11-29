@@ -18,10 +18,18 @@ cfg_if::cfg_if! {
 }
 
 use crate::cpu_features::CpuFeatureLevel;
+use crate::predict::Dim;
+use crate::tiling::PlaneRegionMut;
+use crate::util::*;
 
 // TODO: move 1d txfm code to native module.
 
-use super::*;
+use super::clamp_value;
+use super::consts::*;
+use super::get_1d_tx_types;
+use super::get_rect_tx_log_ratio;
+use super::half_btf;
+use super::TxType;
 
 static COSPI_INV: [i32; 64] = [
   4096, 4095, 4091, 4085, 4076, 4065, 4052, 4036, 4017, 3996, 3973, 3948,
@@ -1683,7 +1691,7 @@ macro_rules! impl_iht_fns {
         ) where
           T: Pixel,
         {
-          [<Block $W x $H>]::inv_txfm2d_add(
+          crate::predict::[<Block $W x $H>]::inv_txfm2d_add(
             input, output, tx_type, bit_depth, cpu
           );
         }

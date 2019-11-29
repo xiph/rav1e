@@ -13,11 +13,9 @@
 pub use self::forward::*;
 pub use self::inverse::*;
 
-use crate::context::*;
-use crate::partition::BlockSize::*;
-use crate::partition::*;
-use crate::predict::*;
-use crate::tiling::*;
+use crate::context::MI_SIZE_LOG2;
+use crate::partition::{BlockSize, BlockSize::*};
+use crate::tiling::PlaneRegionMut;
 use crate::util::*;
 
 use crate::cpu_features::CpuFeatureLevel;
@@ -44,9 +42,11 @@ pub static RAV1E_TX_TYPES: &[TxType] = &[
   //TxType::H_FLIPADST,
 ];
 
-static SQRT2_BITS: usize = 12;
-static SQRT2: i32 = 5793; // 2^12 * sqrt(2)
-static INV_SQRT2: i32 = 2896; // 2^12 / sqrt(2)
+pub mod consts {
+  pub static SQRT2_BITS: usize = 12;
+  pub static SQRT2: i32 = 5793; // 2^12 * sqrt(2)
+  pub static INV_SQRT2: i32 = 2896; // 2^12 / sqrt(2)
+}
 
 pub const TX_TYPES: usize = 16;
 
