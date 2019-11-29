@@ -684,6 +684,298 @@ where
     &stg7,
   )
 }
+fn idct32<T, U>(dst: &mut TokenStream, disc: U, input: T) -> impl Array
+  where
+    T: Array,
+    U: Display,
+{
+  assert!(input.len() >= 32, "{} < {}", input.len(), 32);
+
+  let stg1 = vec![
+    0usize.into(),
+    16usize.into(),
+    8usize.into(),
+    24usize.into(),
+    4usize.into(),
+    20usize.into(),
+    12usize.into(),
+    28usize.into(),
+    2usize.into(),
+    18usize.into(),
+    10usize.into(),
+    26usize.into(),
+    6usize.into(),
+    22usize.into(),
+    14usize.into(),
+    30usize.into(),
+    1usize.into(),
+    17usize.into(),
+    9usize.into(),
+    25usize.into(),
+    5usize.into(),
+    21usize.into(),
+    13usize.into(),
+    29usize.into(),
+    3usize.into(),
+    19usize.into(),
+    11usize.into(),
+    27usize.into(),
+    7usize.into(),
+    23usize.into(),
+    15usize.into(),
+    31usize.into(),
+  ];
+  let stg1 = Stage::next(&input, stg1);
+
+  let mut stg2 = vec![];
+  for i in 0..16usize {
+    stg2.push(i.into());
+  }
+  let stg2b = vec![
+    HalfBtf(Pos(62), 16, Neg(2), 31),
+    HalfBtf(Pos(30), 17, Neg(34), 30),
+    HalfBtf(Pos(46), 18, Neg(18), 29),
+    HalfBtf(Pos(14), 19, Neg(50), 28),
+    HalfBtf(Pos(54), 20, Neg(10), 27),
+    HalfBtf(Pos(22), 21, Neg(42), 26),
+    HalfBtf(Pos(38), 22, Neg(26), 25),
+    HalfBtf(Pos(6),  23, Neg(58), 24),
+    HalfBtf(Pos(58), 23, Pos(6), 24),
+    HalfBtf(Pos(26), 22, Pos(38), 25),
+    HalfBtf(Pos(42), 21, Pos(22), 26),
+    HalfBtf(Pos(10), 20, Pos(54), 27),
+    HalfBtf(Pos(50), 19, Pos(14), 28),
+    HalfBtf(Pos(18), 18, Pos(46), 29),
+    HalfBtf(Pos(34), 17, Pos(30), 30),
+    HalfBtf(Pos(2),  16, Pos(62), 31),
+  ];
+  stg2.extend(stg2b.into_iter());
+  let stg2 = Stage::next(stg1, stg2);
+  let stg2 = VarArr::let_(dst, format_args!("{}_idct32_stg2", disc),
+                          &stg2);
+
+  let mut stg3 = vec![];
+  for i in 0..8usize {
+    stg3.push(i.into());
+  }
+  let stg3b = vec![
+    HalfBtf(Pos(60), 8,  Neg(4),  15),
+    HalfBtf(Pos(28), 9,  Neg(36), 14),
+    HalfBtf(Pos(44), 10, Neg(20), 13),
+    HalfBtf(Pos(12), 11, Neg(52), 12),
+    HalfBtf(Pos(52), 11, Pos(12), 12),
+    HalfBtf(Pos(20), 10, Pos(44), 13),
+    HalfBtf(Pos(36), 9,  Pos(28), 14),
+    HalfBtf(Pos(4),  8,  Pos(60), 15),
+    AddClamp(Pos(16), Pos(17)),
+    AddClamp(Pos(16), Neg(17)),
+    AddClamp(Neg(18), Pos(19)),
+    AddClamp(Pos(18), Pos(19)),
+    AddClamp(Pos(20), Pos(21)),
+    AddClamp(Pos(20), Neg(21)),
+    AddClamp(Neg(22), Pos(23)),
+    AddClamp(Pos(22), Pos(23)),
+    AddClamp(Pos(24), Pos(25)),
+    AddClamp(Pos(24), Neg(25)),
+    AddClamp(Neg(26), Pos(27)),
+    AddClamp(Pos(26), Pos(27)),
+    AddClamp(Pos(28), Pos(29)),
+    AddClamp(Pos(28), Neg(29)),
+    AddClamp(Neg(30), Pos(31)),
+    AddClamp(Pos(30), Pos(31)),
+  ];
+  stg3.extend(stg3b.into_iter());
+  let stg3 = Stage::next(stg2, stg3);
+  let stg3 = VarArr::let_(dst, format_args!("{}_idct32_stg3", disc),
+                          &stg3);
+
+  let stg4 = vec![
+    0usize.into(),
+    1usize.into(),
+    2usize.into(),
+    3usize.into(),
+    HalfBtf(Pos(56), 4,  Neg(8),  7),
+    HalfBtf(Pos(24), 5,  Neg(40), 6),
+    HalfBtf(Pos(40), 5, Pos(24), 6),
+    HalfBtf(Pos(8),  4, Pos(56), 7),
+    AddClamp(Pos(8), Pos(9)),
+    AddClamp(Pos(8), Neg(9)),
+    AddClamp(Neg(10), Pos(11)),
+    AddClamp(Pos(10), Pos(11)),
+    AddClamp(Pos(12), Pos(13)),
+    AddClamp(Pos(12), Neg(13)),
+    AddClamp(Neg(14), Pos(15)),
+    AddClamp(Pos(14), Pos(15)),
+    16usize.into(),
+    HalfBtf(Neg(8), 17, Pos(56), 30),
+    HalfBtf(Neg(56), 18, Neg(8), 29),
+    19usize.into(),
+    20usize.into(),
+    HalfBtf(Neg(40), 21, Pos(24), 26),
+    HalfBtf(Neg(24), 22, Neg(40), 25),
+    23usize.into(),
+    24usize.into(),
+    HalfBtf(Neg(40), 22,  Pos(24),  25),
+    HalfBtf(Pos(24), 21,  Pos(40), 26),
+    27usize.into(),
+    28usize.into(),
+    HalfBtf(Neg(8), 18, Pos(56), 29),
+    HalfBtf(Pos(56), 17, Pos(8), 30),
+    31usize.into(),
+  ];
+  let stg4 = Stage::next(stg3, stg4);
+  let stg4 = VarArr::let_(dst, format_args!("{}_idct32_stg4", disc), &stg4);
+
+  let stg5 = vec![
+    HalfBtf(Pos(32), 0, Pos(32), 1),
+    HalfBtf(Pos(32), 0, Neg(32), 1),
+    HalfBtf(Pos(48), 2, Neg(16), 3),
+    HalfBtf(Pos(16), 2, Pos(48), 3),
+    AddClamp(Pos(4), Pos(5)),
+    AddClamp(Pos(4), Neg(5)),
+    AddClamp(Neg(6), Pos(7)),
+    AddClamp(Pos(6), Pos(7)),
+    8usize.into(),
+    HalfBtf(Neg(16), 9, Pos(48), 14),
+    HalfBtf(Neg(48), 10, Neg(16), 13),
+    11usize.into(),
+    12usize.into(),
+    HalfBtf(Neg(16), 10, Pos(48), 13),
+    HalfBtf(Pos(48), 9, Pos(16), 14),
+    15usize.into(),
+    AddClamp(Pos(16), Pos(19)),
+    AddClamp(Pos(17), Pos(18)),
+    AddClamp(Pos(17), Neg(18)),
+    AddClamp(Pos(16), Neg(19)),
+    AddClamp(Neg(20), Pos(23)),
+    AddClamp(Neg(21), Pos(22)),
+    AddClamp(Pos(21), Pos(22)),
+    AddClamp(Pos(20), Pos(23)),
+    AddClamp(Pos(24), Pos(27)),
+    AddClamp(Pos(25), Pos(26)),
+    AddClamp(Pos(25), Neg(26)),
+    AddClamp(Pos(24), Neg(27)),
+    AddClamp(Neg(28), Pos(31)),
+    AddClamp(Neg(29), Pos(30)),
+    AddClamp(Pos(29), Pos(30)),
+    AddClamp(Pos(28), Pos(31)),
+  ];
+  let stg5 = Stage::next(stg4, stg5);
+  let stg5 = VarArr::let_(dst, format_args!("{}_idct32_stg5", disc), &stg5);
+
+  let stg6 = vec![
+    AddClamp(Pos(0), Pos(3)),
+    AddClamp(Pos(1), Pos(2)),
+    AddClamp(Pos(1), Neg(2)),
+    AddClamp(Pos(0), Neg(3)),
+    4usize.into(),
+    HalfBtf(Neg(32), 5, Pos(32), 6),
+    HalfBtf(Pos(32), 5, Pos(32), 6),
+    7usize.into(),
+    AddClamp(Pos(8), Pos(11)),
+    AddClamp(Pos(9), Pos(10)),
+    AddClamp(Pos(9), Neg(10)),
+    AddClamp(Pos(8), Neg(11)),
+    AddClamp(Neg(12), Pos(15)),
+    AddClamp(Neg(13), Pos(14)),
+    AddClamp(Pos(13), Pos(14)),
+    AddClamp(Pos(12), Pos(15)),
+    16usize.into(),
+    17usize.into(),
+    HalfBtf(Neg(16), 18, Pos(48), 29),
+    HalfBtf(Neg(16), 19, Pos(48), 28),
+    HalfBtf(Neg(48), 20, Neg(16), 27),
+    HalfBtf(Neg(48), 21, Neg(16), 26),
+    22usize.into(),
+    23usize.into(),
+    24usize.into(),
+    25usize.into(),
+    HalfBtf(Neg(16), 21, Pos(48), 26),
+    HalfBtf(Neg(16), 20, Pos(48), 27),
+    HalfBtf(Pos(48), 19, Pos(16), 28),
+    HalfBtf(Pos(48), 18, Pos(16), 29),
+    30usize.into(),
+    31usize.into(),
+  ];
+  let stg6 = Stage::next(stg5, stg6);
+  let stg6 = VarArr::let_(dst, format_args!("{}_idct32_stg6", disc), &stg6);
+
+  let stg7 = vec![
+    AddClamp(Pos(0), Pos(7)),
+    AddClamp(Pos(1), Pos(6)),
+    AddClamp(Pos(2), Pos(5)),
+    AddClamp(Pos(3), Pos(4)),
+    AddClamp(Pos(3), Neg(4)),
+    AddClamp(Pos(2), Neg(5)),
+    AddClamp(Pos(1), Neg(6)),
+    AddClamp(Pos(0), Neg(7)),
+    8usize.into(),
+    9usize.into(),
+    HalfBtf(Neg(32), 10, Pos(32), 13),
+    HalfBtf(Neg(32), 11, Pos(32), 12),
+    HalfBtf(Pos(32), 11, Pos(32), 12),
+    HalfBtf(Pos(32), 10, Pos(32), 13),
+    14usize.into(),
+    15usize.into(),
+    AddClamp(Pos(16), Pos(23)),
+    AddClamp(Pos(17), Pos(22)),
+    AddClamp(Pos(18), Pos(21)),
+    AddClamp(Pos(19), Pos(20)),
+    AddClamp(Pos(19), Neg(20)),
+    AddClamp(Pos(18), Neg(21)),
+    AddClamp(Pos(17), Neg(22)),
+    AddClamp(Pos(16), Neg(23)),
+    AddClamp(Neg(24), Pos(31)),
+    AddClamp(Neg(25), Pos(30)),
+    AddClamp(Neg(26), Pos(29)),
+    AddClamp(Neg(27), Pos(28)),
+    AddClamp(Pos(27), Pos(28)),
+    AddClamp(Pos(26), Pos(29)),
+    AddClamp(Pos(25), Pos(30)),
+    AddClamp(Pos(24), Pos(31)),
+  ];
+  let stg7 = Stage::next(stg6, stg7);
+  let stg7 = VarArr::let_(dst, format_args!("{}_idct32_stg7", disc), &stg7);
+
+  let mut stg8 = Vec::new();
+  for i in 0..8 {
+    stg8.push(AddClamp(Pos(i), Pos(16 - i)));
+  }
+  for i in 0..8 {
+    stg8.push(AddClamp(Pos(7 - i), Neg(i + 8)));
+  }
+  for i in 16..20usize {
+    stg8.push(i.into())
+  }
+  stg8.extend(vec![
+    HalfBtf(Neg(32), 20, Pos(32), 27),
+    HalfBtf(Neg(32), 21, Pos(32), 26),
+    HalfBtf(Neg(32), 22, Pos(32), 25),
+    HalfBtf(Neg(32), 23, Pos(32), 24),
+    HalfBtf(Pos(32), 23, Pos(32), 24),
+    HalfBtf(Pos(32), 22, Pos(32), 25),
+    HalfBtf(Pos(32), 21, Pos(32), 26),
+    HalfBtf(Pos(32), 20, Pos(32), 27),
+  ].into_iter());
+  for i in 28..32usize {
+    stg8.push(i.into())
+  }
+  let stg8 = Stage::next(stg7, stg8);
+  let stg8 = VarArr::let_(dst, format_args!("{}_idct32_stg8", disc), &stg8);
+
+  let mut stg9 = Vec::new();
+  for i in 0..16 {
+    stg9.push(AddClamp(Pos(i), Pos(31 - i)));
+  }
+  for i in 0..16 {
+    stg9.push(AddClamp(Pos(15 - i), Neg(i + 16)));
+  }
+  let stg9 = Stage::next(stg8, stg9);
+  let stg9 = VarArr::let_(dst, format_args!("{}_idct32", disc),
+                          &stg9);
+
+  stg9
+}
 
 fn inv_tx_kernel(
   dst: &mut Module, ty: Tx2dType, b: Block, px: PixelType, feature: IsaFeature,
@@ -819,6 +1111,7 @@ fn inv_tx_kernel(
         (TxType::Dct, 4) => Box::new(idct4(&mut body, "row", input)),
         (TxType::Dct, 8) => Box::new(idct8(&mut body, "row", input)),
         (TxType::Dct, 16) => Box::new(idct16(&mut body, "row", input)),
+        (TxType::Dct, 32) => Box::new(idct32(&mut body, "row", input)),
         (TxType::Adst { flip: false }, 4) => {
           Box::new(iadst4(&mut body, "row", input))
         }
@@ -902,6 +1195,7 @@ fn inv_tx_kernel(
         (TxType::Dct, 4) => Box::new(idct4(&mut body, "col", input)),
         (TxType::Dct, 8) => Box::new(idct8(&mut body, "col", input)),
         (TxType::Dct, 16) => Box::new(idct16(&mut body, "col", input)),
+        (TxType::Dct, 32) => Box::new(idct32(&mut body, "col", input)),
         (TxType::Adst { flip: false }, 4) => {
           Box::new(iadst4(&mut body, "col", input))
         }
