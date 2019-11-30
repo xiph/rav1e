@@ -266,7 +266,14 @@ fn init_logger() {
 fn run() -> Result<(), error::CliError> {
   let mut cli = parse_cli()?;
   // Maximum frame size by specification + maximum y4m header
-  let limit = y4m::Limits { bytes: 64 * 64 * 4096 * 2304 + 1024 };
+  let limit = y4m::Limits {
+    // Use saturating operations to gracefully handle 32-bit architectures
+    bytes: 64usize
+      .saturating_mul(64)
+      .saturating_mul(4096)
+      .saturating_mul(2304)
+      .saturating_add(1024),
+  };
   let mut y4m_dec = y4m::Decoder::new_with_limits(&mut cli.io.input, limit)
     .expect("cannot decode the input");
   let video_info = y4m_dec.get_video_details();
