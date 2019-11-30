@@ -615,8 +615,8 @@ L(ipred_dc_w4):
         vadd.s16        d0,  d0,  d1
         vshl.u16        d0,  d0,  d28
         beq             1f                  // h = 8/16
-        mov             lr,  #(0x3334/2)
-        mov             r5,  #(0x5556/2)
+        movw            lr,  #(0x3334/2)
+        movw            r5,  #(0x5556/2)
         cmp             r4,  #16
         it              ne
         movne           lr,  r5
@@ -651,8 +651,8 @@ L(ipred_dc_w8):
         vshl.u16        d0,  d0,  d28
         beq             1f                  // h = 4/16/32
         cmp             r4,  #32
-        mov             lr,  #(0x3334/2)
-        mov             r5,  #(0x5556/2)
+        movw            lr,  #(0x3334/2)
+        movw            r5,  #(0x5556/2)
         it              ne
         movne           lr,  r5
         vdup.16         q12, lr
@@ -688,8 +688,8 @@ L(ipred_dc_w16):
         vshl.u16        d0,  d0,  d28
         beq             1f                  // h = 4/8/32/64
         tst             r4,  #(32+16+8)     // 16 added to make a consecutive bitmask
-        mov             lr,  #(0x3334/2)
-        mov             r5,  #(0x5556/2)
+        movw            lr,  #(0x3334/2)
+        movw            r5,  #(0x5556/2)
         it              ne
         movne           lr,  r5
         vdup.16         q12, lr
@@ -732,8 +732,8 @@ L(ipred_dc_w32):
         vshl.u16        d4,  d0,  d28
         beq             1f                  // h = 8/16/64
         cmp             r4,  #8
-        mov             lr,  #(0x3334/2)
-        mov             r5,  #(0x5556/2)
+        movw            lr,  #(0x3334/2)
+        movw            r5,  #(0x5556/2)
         it              ne
         movne           lr,  r5
         vdup.16         q12, lr
@@ -796,7 +796,7 @@ L(ipred_dc_w64):
         vadd.s16        d0,  d0,  d3
         vshl.u16        d18, d0,  d28
         beq             1f                  // h = 16/32
-        mov             lr,  #(0x5556/2)
+        movw            lr,  #(0x5556/2)
         movt            lr,  #(0x3334/2)
         mov             r5,  r4
         and             r5,  r5,  #31
