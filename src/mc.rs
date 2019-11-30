@@ -183,7 +183,6 @@ pub(crate) mod native {
 
   use super::*;
   use num_traits::*;
-  use packed_simd::*;
 
   unsafe fn run_filter<T: AsPrimitive<i32>>(
     src: *const T, stride: usize, filter: [i32; 8],
