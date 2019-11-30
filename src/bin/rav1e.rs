@@ -265,8 +265,10 @@ fn init_logger() {
 
 fn run() -> Result<(), error::CliError> {
   let mut cli = parse_cli()?;
-  let mut y4m_dec =
-    y4m::decode(&mut cli.io.input).expect("input is not a y4m file");
+  // Maximum frame size by specification + maximum y4m header
+  let limit = y4m::Limits { bytes: 64 * 64 * 4096 * 2304 + 1024 };
+  let mut y4m_dec = y4m::Decoder::new_with_limits(&mut cli.io.input, limit)
+    .expect("cannot decode the input");
   let video_info = y4m_dec.get_video_details();
   let y4m_enc = match cli.io.rec.as_mut() {
     Some(rec) => Some(
