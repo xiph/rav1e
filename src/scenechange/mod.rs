@@ -170,13 +170,36 @@ impl SceneChangeDetector {
   fn has_scenecut<T: Pixel>(
     &self, frame1: &Frame<T>, frame2: &Frame<T>,
   ) -> bool {
-    let y_lines =
-      frame1.planes[0].rows_iter().zip(frame2.planes[0].rows_iter());
-
     let mut len = frame2.planes[0].cfg.width * frame2.planes[0].cfg.height;
     let mut delta = 0;
 
-    for (l1, l2) in y_lines {
+    delta += self.delta_in_planes(&frame1.planes[0], &frame2.planes[0]);
+
+    if !self.fast_mode {
+      let u_dec = frame1.planes[1].cfg.xdec + frame1.planes[1].cfg.ydec;
+      len +=
+        (frame2.planes[1].cfg.width * frame2.planes[1].cfg.height) << u_dec;
+
+      delta +=
+        self.delta_in_planes(&frame1.planes[1], &frame2.planes[1]) << u_dec;
+
+      let v_dec = frame1.planes[2].cfg.xdec + frame1.planes[2].cfg.ydec;
+      len +=
+        (frame2.planes[2].cfg.width * frame2.planes[2].cfg.height) << v_dec;
+      delta +=
+        self.delta_in_planes(&frame1.planes[2], &frame2.planes[2]) << v_dec;
+    }
+
+    delta >= self.threshold as u64 * len as u64
+  }
+
+  fn delta_in_planes<T: Pixel>(
+    &self, plane1: &Plane<T>, plane2: &Plane<T>,
+  ) -> u64 {
+    let mut delta = 0;
+    let lines = plane1.rows_iter().zip(plane2.rows_iter());
+
+    for (l1, l2) in lines {
       let delta_line = l1
         .iter()
         .zip(l2.iter())
@@ -186,45 +209,6 @@ impl SceneChangeDetector {
         .sum::<u64>();
       delta += delta_line;
     }
-
-    if !self.fast_mode {
-      let u_dec = frame1.planes[1].cfg.xdec + frame1.planes[1].cfg.ydec;
-      len +=
-        (frame2.planes[1].cfg.width * frame2.planes[1].cfg.height) << u_dec;
-
-      let u_lines =
-        frame1.planes[1].rows_iter().zip(frame2.planes[1].rows_iter());
-
-      for (l1, l2) in u_lines {
-        let delta_line = l1
-          .iter()
-          .zip(l2.iter())
-          .map(|(&p1, &p2)| {
-            (i16::cast_from(p1) - i16::cast_from(p2)).abs() as u64
-          })
-          .sum::<u64>();
-        delta += delta_line << u_dec;
-      }
-
-      let v_dec = frame1.planes[2].cfg.xdec + frame1.planes[2].cfg.ydec;
-      len +=
-        (frame2.planes[2].cfg.width * frame2.planes[2].cfg.height) << v_dec;
-
-      let v_lines =
-        frame1.planes[2].rows_iter().zip(frame2.planes[2].rows_iter());
-
-      for (l1, l2) in v_lines {
-        let delta_line = l1
-          .iter()
-          .zip(l2.iter())
-          .map(|(&p1, &p2)| {
-            (i16::cast_from(p1) - i16::cast_from(p2)).abs() as u64
-          })
-          .sum::<u64>();
-        delta += delta_line << v_dec;
-      }
-    }
-
-    delta >= self.threshold as u64 * len as u64
+    delta
   }
 }
