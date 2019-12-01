@@ -66,7 +66,7 @@ pub struct ReferenceFrame<T: Pixel> {
   pub input_hres: Arc<Plane<T>>,
   pub input_qres: Arc<Plane<T>>,
   pub cdfs: CDFContext,
-  pub frame_mvs: Vec<FrameMotionVectors>,
+  pub frame_mvs: Arc<Vec<FrameMotionVectors>>,
   pub output_frameno: u64,
   pub segmentation: SegmentationState,
 }
@@ -344,7 +344,7 @@ pub struct FrameState<T: Pixel> {
   // Because we only reference these within a tile context,
   // these are stored per-tile for easier access.
   pub half_res_pmvs: Vec<(PlaneSuperBlockOffset, Vec<BlockPmv>)>,
-  pub frame_mvs: Vec<FrameMotionVectors>,
+  pub frame_mvs: Arc<Vec<FrameMotionVectors>>,
   pub t: RDOTracker,
   pub enc_stats: EncoderStats,
 }
@@ -410,7 +410,7 @@ impl<T: Pixel> FrameState<T> {
         for _ in 0..REF_FRAMES {
           vec.push(FrameMotionVectors::new(fi.w_in_b, fi.h_in_b));
         }
-        vec
+        Arc::new(vec)
       },
       t: RDOTracker::new(),
       enc_stats: Default::default(),
@@ -551,7 +551,7 @@ pub struct FrameInvariants<T: Pixel> {
   pub invalid: bool,
   /// Motion vectors to the _original_ reference frames (not reconstructed).
   /// Used for lookahead purposes.
-  pub lookahead_mvs: Box<[FrameMotionVectors]>,
+  pub lookahead_mvs: Arc<Vec<FrameMotionVectors>>,
   /// The lookahead version of `rec_buffer`, used for storing and propagating
   /// the original reference frames (rather than reconstructed ones). The
   /// lookahead uses both `rec_buffer` and `lookahead_rec_buffer`, where
@@ -731,7 +731,7 @@ impl<T: Pixel> FrameInvariants<T> {
         for _ in 0..REF_FRAMES {
           vec.push(FrameMotionVectors::new(w_in_b, h_in_b));
         }
-        vec.into_boxed_slice()
+        Arc::new(vec)
       },
       lookahead_rec_buffer: ReferenceFramesSet::new(),
       w_in_imp_b,

@@ -124,8 +124,7 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
         .find(|(key, _)| *key == sbo)
         .unwrap()
         .1,
-      mvs: fs
-        .frame_mvs
+      mvs: Arc::make_mut(&mut fs.frame_mvs)
         .iter_mut()
         .map(|fmvs| {
           TileMotionVectorsMut::new(
