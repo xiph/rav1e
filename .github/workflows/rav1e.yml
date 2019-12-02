@@ -85,11 +85,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
-    - name: Cache sccache output
-      uses: actions/cache@v1
-      with:
-        path: /home/runner/.cache/sccache
-        key: ${{ runner.os }}-${{ matrix.conf }}-sccache-${{ hashFiles('**/Cargo.toml') }}
     - name: Install sccache
       env:
         LINK: https://github.com/mozilla/sccache/releases/download
@@ -164,6 +159,23 @@ jobs:
         profile: minimal
         toolchain: ${{ matrix.toolchain }}
         override: true
+    - name: Generate Cargo.lock
+      run: |
+        cargo update
+    - name: Cache cargo registry
+      uses: actions/cache@v1
+      with:
+        path: ~/.cargo/registry/cache
+        key: ${{ runner.os }}-${{ matrix.conf }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.conf }}-cargo-registry-
+    - name: Cache sccache output
+      uses: actions/cache@v1
+      with:
+        path: /home/runner/.cache/sccache
+        key: ${{ runner.os }}-${{ matrix.conf }}-sccache-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.conf }}-sccache-
     - name: Start sccache server
       run: |
         sccache --start-server
@@ -248,11 +260,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
-    - name: Cache sccache output
-      uses: actions/cache@v1
-      with:
-        path: C:\sccache
-        key: ${{ runner.os }}-${{ matrix.conf }}-sccache-${{ hashFiles('**/Cargo.toml') }}
     - name: Install sccache
       run: |
         $LINK="https://github.com/mozilla/sccache/releases/download/0.2.12"
@@ -274,6 +281,23 @@ jobs:
         profile: minimal
         toolchain: stable
         override: true
+    - name: Generate Cargo.lock
+      run: |
+        cargo update
+    - name: Cache cargo registry
+      uses: actions/cache@v1
+      with:
+        path: ~/.cargo/registry/cache
+        key: ${{ runner.os }}-${{ matrix.conf }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.conf }}-cargo-registry-
+    - name: Cache sccache output
+      uses: actions/cache@v1
+      with:
+        path: C:\sccache
+        key: ${{ runner.os }}-${{ matrix.conf }}-sccache-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.conf }}-sccache-
     - name: Start sccache server
       run: |
         sccache --start-server
