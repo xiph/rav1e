@@ -231,7 +231,6 @@ pub trait MotionEstimation {
 
         let use_satd: bool = fi.config.speed_settings.use_satd_subpel;
         if use_satd {
-          let mut tmp_plane_opt = None;
           lowest_cost = get_mv_rd_cost(
             fi,
             frame_bo.to_luma_plane_offset(),
@@ -247,7 +246,7 @@ pub trait MotionEstimation {
             mvy_max,
             bsize,
             best_mv,
-            &mut tmp_plane_opt,
+            None,
             ref_frame,
           );
         }
@@ -658,7 +657,7 @@ fn get_best_predictor<T: Pixel>(
   pmv: [MotionVector; 2], lambda: u32, use_satd: bool, mvx_min: isize,
   mvx_max: isize, mvy_min: isize, mvy_max: isize, bsize: BlockSize,
   center_mv: &mut MotionVector, center_mv_cost: &mut u64,
-  tmp_plane_opt: &mut Option<Plane<T>>, ref_frame: RefType,
+  tmp_region_opt: &mut Option<PlaneRegionMut<T>>, ref_frame: RefType,
 ) {
   *center_mv = MotionVector::default();
   *center_mv_cost = std::u64::MAX;
@@ -679,7 +678,7 @@ fn get_best_predictor<T: Pixel>(
       mvy_max,
       bsize,
       init_mv,
-      tmp_plane_opt,
+      tmp_region_opt.as_mut(),
       ref_frame,
     );
 
@@ -698,14 +697,30 @@ fn diamond_me_search<T: Pixel>(
   center_mv: &mut MotionVector, center_mv_cost: &mut u64, subpixel: bool,
   ref_frame: RefType,
 ) {
+  use crate::util::AlignedArray;
+
+  let cfg = PlaneConfig::new(
+    bsize.width(),
+    bsize.height(),
+    0,
+    0,
+    0,
+    0,
+    std::mem::size_of::<T>(),
+  );
+
+  let mut buf: AlignedArray<[T; 128 * 128]> = AlignedArray::uninitialized();
+
   let diamond_pattern = [(1i16, 0i16), (0, 1), (-1, 0), (0, -1)];
-  let (mut diamond_radius, diamond_radius_end, mut tmp_plane_opt) = {
+  let (mut diamond_radius, diamond_radius_end, mut tmp_region_opt) = {
     if subpixel {
+      let rect = Rect { x: 0, y: 0, width: cfg.width, height: cfg.height };
+
       // Sub-pixel motion estimation
       (
         4i16,
         if fi.allow_high_precision_mv { 1i16 } else { 2i16 },
-        Some(Plane::new(bsize.width(), bsize.height(), 0, 0, 0, 0)),
+        Some(PlaneRegionMut::from_slice(&mut buf.array, &cfg, rect)),
       )
     } else {
       // Full pixel motion estimation
@@ -730,7 +745,7 @@ fn diamond_me_search<T: Pixel>(
     bsize,
     center_mv,
     center_mv_cost,
-    &mut tmp_plane_opt,
+    &mut tmp_region_opt,
     ref_frame,
   );
 
@@ -759,7 +774,7 @@ fn diamond_me_search<T: Pixel>(
         mvy_max,
         bsize,
         cand_mv,
-        &mut tmp_plane_opt,
+        tmp_region_opt.as_mut(),
         ref_frame,
       );
 
@@ -789,7 +804,7 @@ fn get_mv_rd_cost<T: Pixel>(
   p_ref: &Plane<T>, bit_depth: usize, pmv: [MotionVector; 2], lambda: u32,
   use_satd: bool, mvx_min: isize, mvx_max: isize, mvy_min: isize,
   mvy_max: isize, bsize: BlockSize, cand_mv: MotionVector,
-  tmp_plane_opt: &mut Option<Plane<T>>, ref_frame: RefType,
+  tmp_region_opt: Option<&mut PlaneRegionMut<T>>, ref_frame: RefType,
 ) -> u64 {
   if (cand_mv.col as isize) < mvx_min || (cand_mv.col as isize) > mvx_max {
     return std::u64::MAX;
@@ -800,26 +815,25 @@ fn get_mv_rd_cost<T: Pixel>(
 
   let plane_org = p_org.region(Area::StartingAt { x: po.x, y: po.y });
 
-  if let Some(ref mut tmp_plane) = tmp_plane_opt {
+  if let Some(region) = tmp_region_opt {
     let tile_rect = TileRect {
       x: 0,
       y: 0,
-      width: tmp_plane.cfg.width,
-      height: tmp_plane.cfg.height,
+      width: region.plane_cfg.width,
+      height: region.plane_cfg.height,
     };
-
     PredictionMode::NEWMV.predict_inter(
       fi,
       tile_rect,
       0,
       po,
-      &mut tmp_plane.as_region_mut(),
+      region,
       bsize.width(),
       bsize.height(),
       [ref_frame, NONE_FRAME],
       [cand_mv, MotionVector { row: 0, col: 0 }],
     );
-    let plane_ref = tmp_plane.as_region();
+    let plane_ref = region.as_const();
     compute_mv_rd_cost(
       fi, pmv, lambda, use_satd, bit_depth, bsize, cand_mv, &plane_org,
       &plane_ref,
