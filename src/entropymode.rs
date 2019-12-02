@@ -851,9 +851,8 @@ pub static default_cfl_alpha_cdf: [[u16; cdf_size!(CFL_ALPHABET_SIZE)];
   ),
 ];
 
-// This does not appear to be used in the rust project currently
-const SWITCHABLE_FILTERS: usize = 3;
-const SWITCHABLE_FILTER_CONTEXTS: usize = (SWITCHABLE_FILTERS + 1) * 4;
+pub const SWITCHABLE_FILTERS: usize = 3;
+pub const SWITCHABLE_FILTER_CONTEXTS: usize = (SWITCHABLE_FILTERS + 1) * 4;
 
 #[allow(unused)]
 pub static default_switchable_interp_cdf: [[u16;

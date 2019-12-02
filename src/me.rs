@@ -14,7 +14,7 @@ use crate::context::{
 use crate::dist::*;
 use crate::encoder::ReferenceFrame;
 use crate::frame::*;
-use crate::mc::MotionVector;
+use crate::mc::{MotionVector, FilterMode};
 use crate::partition::RefType::*;
 use crate::partition::*;
 use crate::predict::PredictionMode;
@@ -249,6 +249,7 @@ pub trait MotionEstimation {
             best_mv,
             &mut tmp_plane_opt,
             ref_frame,
+            FilterMode::REGULAR // always search with REGULAR
           );
         }
 
@@ -681,6 +682,7 @@ fn get_best_predictor<T: Pixel>(
       init_mv,
       tmp_plane_opt,
       ref_frame,
+      FilterMode::REGULAR,
     );
 
     if cost < *center_mv_cost {
@@ -761,6 +763,7 @@ fn diamond_me_search<T: Pixel>(
         cand_mv,
         &mut tmp_plane_opt,
         ref_frame,
+        FilterMode::REGULAR
       );
 
       if rd_cost < best_diamond_rd_cost {
@@ -790,6 +793,7 @@ fn get_mv_rd_cost<T: Pixel>(
   use_satd: bool, mvx_min: isize, mvx_max: isize, mvy_min: isize,
   mvy_max: isize, bsize: BlockSize, cand_mv: MotionVector,
   tmp_plane_opt: &mut Option<Plane<T>>, ref_frame: RefType,
+  filter_mode: FilterMode
 ) -> u64 {
   if (cand_mv.col as isize) < mvx_min || (cand_mv.col as isize) > mvx_max {
     return std::u64::MAX;
@@ -818,6 +822,7 @@ fn get_mv_rd_cost<T: Pixel>(
       bsize.height(),
       [ref_frame, NONE_FRAME],
       [cand_mv, MotionVector { row: 0, col: 0 }],
+      filter_mode
     );
     let plane_ref = tmp_plane.as_region();
     compute_mv_rd_cost(
@@ -912,6 +917,7 @@ fn telescopic_subpel_search<T: Pixel>(
             blk_h,
             [ref_frame, NONE_FRAME],
             [cand_mv, MotionVector { row: 0, col: 0 }],
+            FilterMode::REGULAR
           );
         }
 
