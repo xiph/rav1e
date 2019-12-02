@@ -38,8 +38,6 @@ use crate::transform::*;
 use crate::util::*;
 use arg_enum_proc_macro::ArgEnum;
 use arrayvec::*;
-#[cfg(feature = "train_fastrdo")]
-use bincode::{deserialize, serialize};
 use bitstream_io::{BigEndian, BitWriter};
 use rayon::iter::*;
 use std::collections::VecDeque;
@@ -345,7 +343,6 @@ pub struct FrameState<T: Pixel> {
   // these are stored per-tile for easier access.
   pub half_res_pmvs: Vec<(PlaneSuperBlockOffset, Vec<BlockPmv>)>,
   pub frame_mvs: Arc<Vec<FrameMotionVectors>>,
-  pub t: RDOTracker,
   pub enc_stats: EncoderStats,
 }
 
@@ -412,7 +409,6 @@ impl<T: Pixel> FrameState<T> {
         }
         Arc::new(vec)
       },
-      t: RDOTracker::new(),
       enc_stats: Default::default(),
     }
   }
@@ -1197,7 +1193,6 @@ pub fn encode_tx_block<T: Pixel>(
 
   ts.qc.quantize(coeffs, qcoeffs, tx_size, tx_type);
 
-  let tell_coeffs = w.tell_frac();
   let has_coeff = if need_recon_pixel || rdo_type.needs_coeff_rate() {
     cw.write_coeffs_lv_map(
       w,
@@ -1215,7 +1210,7 @@ pub fn encode_tx_block<T: Pixel>(
   } else {
     true
   };
-  let cost_coeffs = w.tell_frac() - tell_coeffs;
+
   // Reconstruct
   dequantize(
     qidx,
@@ -1257,9 +1252,6 @@ pub fn encode_tx_block<T: Pixel>(
     let tx_dist_scale_bits = 2 * (3 - get_log_tx_scale(tx_size));
     let tx_dist_scale_rounding_offset = 1 << (tx_dist_scale_bits - 1);
     tx_dist = (tx_dist + tx_dist_scale_rounding_offset) >> tx_dist_scale_bits;
-  }
-  if fi.config.train_rdo {
-    ts.rdo.add_rate(fi.base_q_idx, tx_size, tx_dist, cost_coeffs as u64);
   }
 
   if rdo_type == RDOType::TxDistEstRate {
@@ -2832,11 +2824,10 @@ fn encode_tile_group<T: Pixel>(
     })
     .unzip();
 
-  let stats: (Vec<_>, Vec<_>) =
-    tile_states.into_iter().map(|ts| (ts.rdo, ts.enc_stats)).unzip();
-
-  for ts in stats.1 {
-    fs.enc_stats += &ts;
+  let stats =
+    tile_states.into_iter().map(|ts| ts.enc_stats).collect::<Vec<_>>();
+  for tile_stats in stats {
+    fs.enc_stats += &tile_stats;
   }
 
   /* TODO: Don't apply if lossless */
@@ -2857,27 +2848,6 @@ fn encode_tile_group<T: Pixel>(
   /* TODO: Don't apply if lossless */
   if fi.sequence.enable_restoration {
     fs.restoration.lrf_filter_frame(rec, &pre_cdef_frame, &fi);
-  }
-
-  #[cfg(feature = "train_fastrdo")]
-  {
-    if fi.config.train_rdo {
-      use std::fs::File;
-      use std::io::Read;
-
-      info!("Training RDO");
-      for rdo_tracker in stats.0 {
-        fs.t.merge_in(&rdo_tracker);
-      }
-      if let Ok(mut file) = File::open("rdo.dat") {
-        let mut data = vec![];
-        file.read_to_end(&mut data).unwrap();
-        fs.t.merge_in(&deserialize(data.as_slice()).unwrap());
-      }
-      let mut rdo_file = File::create("rdo.dat").unwrap();
-      rdo_file.write_all(&serialize(&fs.t).unwrap()).unwrap();
-      fs.t.print_code();
-    }
   }
 
   let (idx_max, max_len) = raw_tiles

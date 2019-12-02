@@ -42,7 +42,6 @@ use crate::{encode_block_post_cdef, encode_block_pre_cdef};
 
 use crate::cpu_features::CpuFeatureLevel;
 use crate::partition::PartitionType::*;
-use crate::{Deserialize, Serialize};
 use arrayvec::*;
 use std;
 use std::vec::Vec;
@@ -52,7 +51,6 @@ pub enum RDOType {
   PixelDistRealRate,
   TxDistRealRate,
   TxDistEstRate,
-  Train,
 }
 
 impl RDOType {
@@ -64,7 +62,6 @@ impl RDOType {
       RDOType::TxDistRealRate => true,
       // Tx-domain distortion and txdist-based rate
       RDOType::TxDistEstRate => true,
-      RDOType::Train => true,
     }
   }
   pub fn needs_coeff_rate(self) -> bool {
@@ -72,7 +69,6 @@ impl RDOType {
       RDOType::PixelDistRealRate => true,
       RDOType::TxDistRealRate => true,
       RDOType::TxDistEstRate => false,
-      RDOType::Train => true,
     }
   }
 }
@@ -118,86 +114,6 @@ impl Default for PartitionParameters {
       tx_type: TxType::DCT_DCT,
       sidx: 0,
     }
-  }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct RDOTracker {
-  rate_bins: Vec<Vec<Vec<u64>>>,
-  rate_counts: Vec<Vec<Vec<u64>>>,
-}
-
-impl RDOTracker {
-  pub fn new() -> RDOTracker {
-    RDOTracker {
-      rate_bins: vec![
-        vec![vec![0; RDO_NUM_BINS]; TxSize::TX_SIZES_ALL];
-        RDO_QUANT_BINS
-      ],
-      rate_counts: vec![
-        vec![vec![0; RDO_NUM_BINS]; TxSize::TX_SIZES_ALL];
-        RDO_QUANT_BINS
-      ],
-    }
-  }
-  fn merge_array(new: &mut Vec<u64>, old: &[u64]) {
-    for (n, o) in new.iter_mut().zip(old.iter()) {
-      *n += o;
-    }
-  }
-  fn merge_2d_array(new: &mut Vec<Vec<u64>>, old: &[Vec<u64>]) {
-    for (n, o) in new.iter_mut().zip(old.iter()) {
-      RDOTracker::merge_array(n, o);
-    }
-  }
-  fn merge_3d_array(new: &mut Vec<Vec<Vec<u64>>>, old: &[Vec<Vec<u64>>]) {
-    for (n, o) in new.iter_mut().zip(old.iter()) {
-      RDOTracker::merge_2d_array(n, o);
-    }
-  }
-  pub fn merge_in(&mut self, input: &RDOTracker) {
-    RDOTracker::merge_3d_array(&mut self.rate_bins, &input.rate_bins);
-    RDOTracker::merge_3d_array(&mut self.rate_counts, &input.rate_counts);
-  }
-  pub fn add_rate(
-    &mut self, qindex: u8, ts: TxSize, fast_distortion: u64, rate: u64,
-  ) {
-    if fast_distortion != 0 {
-      let bs_index = ts as usize;
-      let q_bin_idx = (qindex as usize) / RDO_QUANT_DIV;
-      let bin_idx_tmp = ((fast_distortion as i64
-        - (RATE_EST_BIN_SIZE as i64) / 2) as u64
-        / RATE_EST_BIN_SIZE) as usize;
-      let bin_idx = if bin_idx_tmp >= RDO_NUM_BINS {
-        RDO_NUM_BINS - 1
-      } else {
-        bin_idx_tmp
-      };
-      self.rate_counts[q_bin_idx][bs_index][bin_idx] += 1;
-      self.rate_bins[q_bin_idx][bs_index][bin_idx] += rate;
-    }
-  }
-  pub fn print_code(&self) {
-    println!("pub static RDO_RATE_TABLE: [[[u64; RDO_NUM_BINS]; TxSize::TX_SIZES_ALL]; RDO_QUANT_BINS] = [");
-    for q_bin in 0..RDO_QUANT_BINS {
-      print!("[");
-      for bs_index in 0..TxSize::TX_SIZES_ALL {
-        print!("[");
-        for (rate_total, rate_count) in self.rate_bins[q_bin][bs_index]
-          .iter()
-          .zip(self.rate_counts[q_bin][bs_index].iter())
-        {
-          if *rate_count > 100 {
-            print!("{},", rate_total / rate_count);
-          } else {
-            print!("99999,");
-          }
-        }
-        println!("],");
-      }
-      println!("],");
-    }
-    println!("];");
   }
 }
 
@@ -790,9 +706,7 @@ pub fn rdo_mode_decision<T: Pixel>(
 
   let cw_checkpoint = cw.checkpoint();
 
-  let rdo_type = if fi.config.train_rdo {
-    RDOType::Train
-  } else if fi.use_tx_domain_rate {
+  let rdo_type = if fi.use_tx_domain_rate {
     RDOType::TxDistEstRate
   } else if fi.use_tx_domain_distortion {
     RDOType::TxDistRealRate

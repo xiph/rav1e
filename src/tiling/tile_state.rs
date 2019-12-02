@@ -62,7 +62,6 @@ pub struct TileStateMut<'a, T: Pixel> {
   pub restoration: TileRestorationStateMut<'a>,
   pub half_res_pmvs: &'a mut Vec<BlockPmv>,
   pub mvs: Vec<TileMotionVectorsMut<'a>>,
-  pub rdo: RDOTracker,
   pub integral_buffer: IntegralImageBuffer,
   pub enc_stats: EncoderStats,
 }
@@ -136,7 +135,6 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
           )
         })
         .collect(),
-      rdo: RDOTracker::new(),
       integral_buffer: IntegralImageBuffer::zeroed(SOLVE_IMAGE_SIZE),
       enc_stats: EncoderStats::default(),
     }

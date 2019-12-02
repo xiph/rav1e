@@ -25,8 +25,6 @@ pub(crate) use internal::*;
 use bitstream_io::*;
 use err_derive::Error;
 
-use crate::{Deserialize, Serialize};
-
 use crate::encoder::*;
 use crate::frame::*;
 use crate::stats::EncoderStats;
@@ -65,7 +63,7 @@ impl Rational {
 
 /// Possible types of a frame.
 #[allow(dead_code, non_camel_case_types)]
-#[derive(Debug, Eq, PartialEq, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy)]
 #[repr(C)]
 pub enum FrameType {
   /// Key frame.

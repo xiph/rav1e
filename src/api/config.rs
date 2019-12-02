@@ -108,8 +108,6 @@ pub struct EncoderConfig {
   ///
   /// [`Packet`]: struct.Packet.html#structfield.psnr
   pub show_psnr: bool,
-  /// Enables dumping of internal RDO training data.
-  pub train_rdo: bool,
 }
 
 /// Default preset for EncoderConfig: it is a balance between quality and
@@ -163,7 +161,6 @@ impl EncoderConfig {
       rdo_lookahead_frames: 40,
       speed_settings: SpeedSettings::from_preset(speed),
       show_psnr: false,
-      train_rdo: false,
     }
   }
 

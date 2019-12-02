@@ -321,11 +321,6 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .long("speed-test")
         .takes_value(true)
     )
-    .arg(
-      Arg::with_name("train-rdo")
-        .long("train-rdo")
-        .hidden(true)
-    )
     .subcommand(SubCommand::with_name("advanced")
                 .setting(AppSettings::Hidden)
                 .about("Advanced features")
@@ -419,7 +414,6 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
     }
   })? as usize;
   let bitrate: i32 = maybe_bitrate.unwrap_or(Ok(0))?;
-  let train_rdo = matches.is_present("train-rdo");
   if quantizer == 0 {
     unimplemented!("Lossless encoding not yet implemented");
   } else if quantizer > 255 {
@@ -575,7 +569,6 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
   }
 
   cfg.low_latency = matches.is_present("LOW_LATENCY");
-  cfg.train_rdo = train_rdo;
 
   Ok(cfg)
 }
