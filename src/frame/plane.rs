@@ -51,7 +51,7 @@ impl PlaneConfig {
   const STRIDE_ALIGNMENT_LOG2: usize = 5;
 
   #[inline]
-  fn new(
+  pub fn new(
     width: usize, height: usize, xdec: usize, ydec: usize, xpad: usize,
     ypad: usize, type_size: usize,
   ) -> Self {

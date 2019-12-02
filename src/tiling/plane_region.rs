@@ -134,21 +134,25 @@ macro_rules! plane_region_common {
   // $opt_mut: nothing or mut
   ($name:ident, $as_ptr:ident $(,$opt_mut:tt)?) => {
     impl<'a, T: Pixel> $name<'a, T> {
-
       #[inline(always)]
-      pub fn new(plane: &'a $($opt_mut)? Plane<T>, rect: Rect) -> Self {
-        assert!(rect.x >= -(plane.cfg.xorigin as isize));
-        assert!(rect.y >= -(plane.cfg.yorigin as isize));
-        assert!(plane.cfg.xorigin as isize + rect.x + rect.width as isize <= plane.cfg.stride as isize);
-        assert!(plane.cfg.yorigin as isize + rect.y + rect.height as isize <= plane.cfg.alloc_height as isize);
-        let origin = (plane.cfg.yorigin as isize + rect.y) * plane.cfg.stride as isize
-                    + plane.cfg.xorigin as isize + rect.x;
+      pub fn from_slice(data: &'a $($opt_mut)? [T], cfg: &'a PlaneConfig, rect:
+        Rect) -> Self {
+        assert!(rect.x >= -(cfg.xorigin as isize));
+        assert!(rect.y >= -(cfg.yorigin as isize));
+        assert!(cfg.xorigin as isize + rect.x + rect.width as isize <= cfg.stride as isize);
+        assert!(cfg.yorigin as isize + rect.y + rect.height as isize <= cfg.alloc_height as isize);
+        let origin = (cfg.yorigin as isize + rect.y) * cfg.stride as isize
+                    + cfg.xorigin as isize + rect.x;
         Self {
-          data: unsafe { plane.data.$as_ptr().offset(origin) },
-          plane_cfg: &plane.cfg,
+          data: unsafe { data.$as_ptr().offset(origin) },
+          plane_cfg: cfg,
           rect,
           phantom: PhantomData,
         }
+      }
+      #[inline(always)]
+      pub fn new(plane: &'a $($opt_mut)? Plane<T>, rect: Rect) -> Self {
+        Self::from_slice(& $($opt_mut)? plane.data, &plane.cfg, rect)
       }
 
       #[inline(always)]
