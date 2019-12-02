@@ -162,6 +162,13 @@ jobs:
     - name: Generate Cargo.lock
       run: |
         cargo update
+    - name: Cache cargo registry
+      uses: actions/cache@v1
+      with:
+        path: ~/.cargo/registry/cache
+        key: ${{ runner.os }}-${{ matrix.conf }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.conf }}-cargo-registry-
     - name: Cache sccache output
       uses: actions/cache@v1
       with:
@@ -277,6 +284,13 @@ jobs:
     - name: Generate Cargo.lock
       run: |
         cargo update
+    - name: Cache cargo registry
+      uses: actions/cache@v1
+      with:
+        path: ~/.cargo/registry/cache
+        key: ${{ runner.os }}-${{ matrix.conf }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.conf }}-cargo-registry-
     - name: Cache sccache output
       uses: actions/cache@v1
       with:
