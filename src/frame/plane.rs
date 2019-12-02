@@ -46,6 +46,37 @@ pub struct PlaneConfig {
   pub yorigin: usize,
 }
 
+impl PlaneConfig {
+  /// Stride alignment in bytes.
+  const STRIDE_ALIGNMENT_LOG2: usize = 5;
+
+  #[inline]
+  fn new(
+    width: usize, height: usize, xdec: usize, ydec: usize, xpad: usize,
+    ypad: usize, type_size: usize,
+  ) -> Self {
+    let xorigin =
+      xpad.align_power_of_two(Self::STRIDE_ALIGNMENT_LOG2 + 1 - type_size);
+    let yorigin = ypad;
+    let stride = (xorigin + width + xpad)
+      .align_power_of_two(Self::STRIDE_ALIGNMENT_LOG2 + 1 - type_size);
+    let alloc_height = yorigin + height + ypad;
+
+    PlaneConfig {
+      stride,
+      alloc_height,
+      width,
+      height,
+      xdec,
+      ydec,
+      xpad,
+      ypad,
+      xorigin,
+      yorigin,
+    }
+  }
+}
+
 /// Absolute offset in pixels inside a plane
 #[derive(Clone, Copy, Debug)]
 pub struct PlaneOffset {
@@ -208,39 +239,23 @@ impl<T: Pixel> AsRegion<T> for Plane<T> {
 }
 
 impl<T: Pixel> Plane<T> {
-  /// Stride alignment in bytes.
-  const STRIDE_ALIGNMENT_LOG2: usize = 5;
-
   /// Allocates and returns a new plane.
   pub fn new(
     width: usize, height: usize, xdec: usize, ydec: usize, xpad: usize,
     ypad: usize,
   ) -> Self {
-    let xorigin = xpad.align_power_of_two(
-      Self::STRIDE_ALIGNMENT_LOG2 + 1 - mem::size_of::<T>(),
+    let cfg = PlaneConfig::new(
+      width,
+      height,
+      xdec,
+      ydec,
+      xpad,
+      ypad,
+      mem::size_of::<T>(),
     );
-    let yorigin = ypad;
-    let stride = (xorigin + width + xpad).align_power_of_two(
-      Self::STRIDE_ALIGNMENT_LOG2 + 1 - mem::size_of::<T>(),
-    );
-    let alloc_height = yorigin + height + ypad;
-    let data = PlaneData::new(stride * alloc_height);
+    let data = PlaneData::new(cfg.stride * cfg.alloc_height);
 
-    Plane {
-      data,
-      cfg: PlaneConfig {
-        stride,
-        alloc_height,
-        width,
-        height,
-        xdec,
-        ydec,
-        xpad,
-        ypad,
-        xorigin,
-        yorigin,
-      },
-    }
+    Plane { data, cfg }
   }
 
   #[cfg(any(test, feature = "bench"))]
