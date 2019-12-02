@@ -1220,7 +1220,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
 
   let mut ac: AlignedArray<[i16; 32 * 32]> = AlignedArray::uninitialized();
   luma_ac(&mut ac.array, ts, tile_bo, bsize);
-  let best_alpha: Vec<i16> = (1..3)
+  let best_alpha: ArrayVec<[i16; 2]> = (1..3)
     .map(|p| {
       let &PlaneConfig { xdec, ydec, .. } = ts.rec.planes[p].plane_cfg;
       let tile_rect = ts.tile_rect().decimated(xdec, ydec);
