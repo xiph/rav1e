@@ -437,7 +437,7 @@ impl MotionEstimation for DiamondSearch {
     mvy_max: isize, bsize: BlockSize, use_satd: bool,
     best_mv: &mut MotionVector, lowest_cost: &mut u64, ref_frame: RefType,
   ) {
-    let predictors = vec![*best_mv];
+    let predictors = [*best_mv; 1];
     let frame_bo = ts.to_frame_block_offset(tile_bo);
     diamond_me_search(
       fi,
