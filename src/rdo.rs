@@ -1392,33 +1392,37 @@ pub fn rdo_tx_type_decision<T: Pixel>(
 
 pub fn get_sub_partitions(
   four_partitions: &[TileBlockOffset; 4], partition: PartitionType,
-) -> Vec<TileBlockOffset> {
-  let mut partitions = vec![four_partitions[0]];
+) -> ArrayVec<[TileBlockOffset; 4]> {
+  let mut partition_offsets = ArrayVec::<[TileBlockOffset; 4]>::new();
+
+  partition_offsets.push(four_partitions[0]);
 
   if partition == PARTITION_NONE {
-    return partitions;
+    return partition_offsets;
   }
   if partition == PARTITION_VERT || partition == PARTITION_SPLIT {
-    partitions.push(four_partitions[1]);
+    partition_offsets.push(four_partitions[1]);
   };
   if partition == PARTITION_HORZ || partition == PARTITION_SPLIT {
-    partitions.push(four_partitions[2]);
+    partition_offsets.push(four_partitions[2]);
   };
   if partition == PARTITION_SPLIT {
-    partitions.push(four_partitions[3]);
+    partition_offsets.push(four_partitions[3]);
   };
 
-  partitions
+  partition_offsets
 }
 
 pub fn get_sub_partitions_with_border_check(
   four_partitions: &[TileBlockOffset; 4], partition: PartitionType,
   mi_width: usize, mi_height: usize, subsize: BlockSize,
-) -> Vec<TileBlockOffset> {
-  let mut partitions = vec![four_partitions[0]];
+) -> ArrayVec<[TileBlockOffset; 4]> {
+  let mut partition_offsets = ArrayVec::<[TileBlockOffset; 4]>::new();
+
+  partition_offsets.push(four_partitions[0]);
 
   if partition == PARTITION_NONE {
-    return partitions;
+    return partition_offsets;
   }
 
   let hbsw = subsize.width_mi(); // Half the block size width in blocks
@@ -1428,24 +1432,24 @@ pub fn get_sub_partitions_with_border_check(
     && four_partitions[1].0.x + hbsw <= mi_width
     && four_partitions[1].0.y + hbsh <= mi_height
   {
-    partitions.push(four_partitions[1]);
+    partition_offsets.push(four_partitions[1]);
   };
 
   if (partition == PARTITION_HORZ || partition == PARTITION_SPLIT)
     && four_partitions[2].0.x + hbsw <= mi_width
     && four_partitions[2].0.y + hbsh <= mi_height
   {
-    partitions.push(four_partitions[2]);
+    partition_offsets.push(four_partitions[2]);
   };
 
   if partition == PARTITION_SPLIT
     && four_partitions[3].0.x + hbsw <= mi_width
     && four_partitions[3].0.y + hbsh <= mi_height
   {
-    partitions.push(four_partitions[3]);
+    partition_offsets.push(four_partitions[3]);
   };
 
-  partitions
+  partition_offsets
 }
 
 // RDO-based single level partitioning decision
