@@ -880,10 +880,8 @@ fn telescopic_subpel_search<T: Pixel>(
   let blk_w = bsize.width();
   let blk_h = bsize.height();
 
-  let mut steps = vec![8, 4, 2];
-  if fi.allow_high_precision_mv {
-    steps.push(1);
-  }
+  let steps: &[_] =
+    if fi.allow_high_precision_mv { &[8, 4, 2, 1] } else { &[8, 4, 2] };
 
   let mut tmp_plane = Plane::new(blk_w, blk_h, 0, 0, 0, 0);
   let tile_rect = TileRect {
