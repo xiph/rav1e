@@ -2,30 +2,14 @@ language: rust
 dist: bionic
 env:
   - RUST_BACKTRACE=1
-addons:
-  apt:
-    packages:
-      - binutils-dev
-      - libcurl4-openssl-dev
-      - zlib1g-dev
-      - libdw-dev
-      - libiberty-dev
-      - ninja-build
 before_install:
-  - export BUILD_DIR="$TRAVIS_HOME/.build"
   - export DEPS_DIR="$TRAVIS_HOME/.local"
   - export ARCH="`uname -m`"
-  - mkdir -p "$BUILD_DIR"
   - mkdir -p "$DEPS_DIR/bin"
-  - mkdir -p "$DEPS_DIR/lib/pkgconfig"
   - export PATH="$PATH:$DEPS_DIR/bin"
-  - export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$DEPS_DIR/lib/pkgconfig:$DEPS_DIR/lib/$ARCH-linux-gnu/pkgconfig"
-  - export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$DEPS_DIR/lib:$DEPS_DIR/lib/$ARCH-linux-gnu"
   - source "$TRAVIS_BUILD_DIR/.travis/install-sccache.sh"
-  - export SCCACHE_CACHE_SIZE=500M
+  - export SCCACHE_CACHE_SIZE=200M
   - export SCCACHE_DIR="$TRAVIS_HOME/.cache/sccache"
-  - bash "$TRAVIS_BUILD_DIR/.travis/install-nasm.sh"
-  - bash "$TRAVIS_BUILD_DIR/.travis/install-kcov.sh"
   - bash "$TRAVIS_BUILD_DIR/.travis/install-aom.sh"
   - bash "$TRAVIS_BUILD_DIR/.travis/install-dav1d.sh"
   - cd "$TRAVIS_BUILD_DIR"
@@ -39,77 +23,8 @@ after_script:
 
 jobs:
   include:
-    - name: "Code Formatting"
-      rust: stable
-      script:
-        - rustup component add rustfmt
-        - cargo fmt -- --check
-      env:
-        - CACHE_NAME=RUSTFMT
-    - name: "Build & Coveralls"
-      rust: stable
-      script:
-        - which cargo-kcov || cargo install cargo-kcov
-        # We need to run cargo clean to avoid caching issues
-        - cargo clean
-        - RUSTFLAGS="-C link-dead-code" cargo build --features=decode_test,decode_test_dav1d,quick_test --tests --verbose
-        - cargo kcov -v --coveralls --no-clean-rebuild -- --verify --exclude-pattern="$HOME/.cargo,aom_build,.h,test"
-      env:
-        - CACHE_NAME=COVERALLS
-    - name: "Minimum Supported Rustc"
-      # This should reference the earliest supported rustc version
-      # and should match the version number in build.rs
-      rust: 1.36.0
-      script:
-        - cargo test --features=decode_test,decode_test_dav1d,quick_test,capi --verbose
-      env:
-        - CACHE_NAME=MIN_RUSTC
     - name: "Arm build and test"
       rust: stable
       arch: arm64
       script:
         - cargo test --features=decode_test,decode_test_dav1d,quick_test,capi --verbose
-    - name: "Ignored Tests (aom)"
-      rust: stable
-      script:
-        - travis_wait 60 cargo test --release --features=decode_test --verbose --color=always -- --color=always --ignored
-      env:
-        - CACHE_NAME=IGNORED_TESTS_AOM
-      branches:
-        only:
-          - master
-    - name: "Ignored Tests (dav1d)"
-      rust: stable
-      script:
-        - travis_wait 60 cargo test --release --features=decode_test_dav1d --verbose --color=always -- --color=always --ignored
-      env:
-        - CACHE_NAME=IGNORED_TESTS_DAV1D
-      branches:
-        only:
-          - master
-    - name: "Bench"
-      rust: stable
-      script: cargo bench --features=bench --no-run --verbose
-      env:
-        - CACHE_NAME=BENCH
-    - name: "Doc & Clippy (linter): verifying code quality"
-      rust: stable
-      script:
-        - cargo doc --verbose --no-deps
-        - rustup component add clippy
-        - cargo clippy --version
-        - cargo clippy -- -D warnings --verbose -A clippy::wrong-self-convention
-      env:
-        - CACHE_NAME=CLIPPY
-    - name: "No default features"
-      rust: stable
-      script:
-        - cargo check --no-default-features
-      env:
-        - CACHE_NAME=CHECK
-    - name: "Extra features"
-      rust: stable
-      script:
-        - cargo check --features=capi,dump_lookahead_data
-      env:
-        - CACHE_NAME=CHECK_EXTRA_FEATURES
