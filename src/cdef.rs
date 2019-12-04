@@ -261,10 +261,9 @@ pub fn cdef_analyze_superblock_range<T: Pixel>(
   fi: &FrameInvariants<T>, in_frame: &Frame<u16>, blocks: &TileBlocks<'_>,
   sbo: TileSuperBlockOffset, sbo_global: TileSuperBlockOffset, sb_w: usize,
   sb_h: usize, bit_depth: usize,
-) -> Vec<Vec<CdefDirections>> {
-  let mut ret: Vec<Vec<CdefDirections>> = Vec::new();
+) -> Vec<CdefDirections> {
+  let mut ret = Vec::<CdefDirections>::with_capacity(sb_h * sb_w);
   for sby in 0..sb_h {
-    ret.push(Vec::new());
     for sbx in 0..sb_w {
       let local_sbo = TileSuperBlockOffset(SuperBlockOffset {
         x: sbo.0.x + sbx,
@@ -274,7 +273,7 @@ pub fn cdef_analyze_superblock_range<T: Pixel>(
         x: sbo_global.0.x + sbx,
         y: sbo_global.0.y + sby,
       });
-      ret[sby].push(cdef_analyze_superblock(
+      ret.push(cdef_analyze_superblock(
         fi,
         in_frame,
         blocks,
