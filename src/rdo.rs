@@ -1709,21 +1709,17 @@ pub fn rdo_loop_decision<T: Pixel>(
     lru_h[pli] = sb_h / (1 << sb_v_shift);
   }
 
-  let mut best_index = vec![vec![-1; sb_w]; sb_h];
-  let mut best_lrf: Vec<Vec<Vec<RestorationFilter>>> = Vec::new();
+  let mut best_index = vec![-1; sb_w * sb_h];
+  let mut best_lrf = ArrayVec::<[Vec<RestorationFilter>; 3]>::new();
   // due to imprecision in the reconstruction parameter solver, we
   // need to make sure we don't fall into a limit cycle.  Track our
   // best cost at LRF so that we can break if we get a solution that doesn't
   // improve at the reconstruction stage.
-  let mut best_lrf_cost: Vec<Vec<Vec<f64>>> = Vec::new();
+  let mut best_lrf_cost = ArrayVec::<[Vec<f64>; 3]>::new();
 
   for pli in 0..PLANES {
-    best_lrf.push(Vec::new());
-    best_lrf_cost.push(Vec::new());
-    for _lrfy in 0..lru_h[pli] {
-      best_lrf[pli].push(vec![RestorationFilter::None; lru_w[pli]]);
-      best_lrf_cost[pli].push(vec![-1.; lru_w[pli]]);
-    }
+    best_lrf.push(vec![RestorationFilter::None; lru_h[pli] * lru_w[pli]]);
+    best_lrf_cost.push(vec![-1.0; lru_h[pli] * lru_w[pli]]);
   }
 
   // Construct a largest-LRU-sized padded frame to filter from,
@@ -1787,7 +1783,7 @@ pub fn rdo_loop_decision<T: Pixel>(
     if let Some((cdef_input, cdef_dirs)) = cdef_data.as_ref() {
       for sby in 0..sb_h {
         for sbx in 0..sb_w {
-          let prev_best_index = best_index[sby][sbx];
+          let prev_best_index = best_index[sby * sb_w + sbx];
           let loop_sbo =
             TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
           let loop_tile_sbo = TileSuperBlockOffset(SuperBlockOffset {
@@ -1830,7 +1826,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                 let lru_x = loop_tile_lru_x - tile_lru_x;
                 let lru_y = loop_tile_lru_y - tile_lru_y;
 
-                match best_lrf[pli][lru_y][lru_x] {
+                match best_lrf[pli][lru_y * lru_w[pli] + lru_x] {
                   RestorationFilter::None {} => {
                     err += rdo_loop_plane_error(
                       loop_sbo,
@@ -1848,7 +1844,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                       cw.count_lrf_switchable(
                         w,
                         &ts.restoration.as_const(),
-                        best_lrf[pli][lru_y][lru_x],
+                        best_lrf[pli][lru_y * lru_w[pli] + lru_x],
                         pli,
                       )
                     } else {
@@ -1898,7 +1894,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                     rate += cw.count_lrf_switchable(
                       w,
                       &ts.restoration.as_const(),
-                      best_lrf[pli][lru_y][lru_x],
+                      best_lrf[pli][lru_y * lru_w[pli] + lru_x],
                       pli,
                     );
                   }
@@ -1932,7 +1928,7 @@ pub fn rdo_loop_decision<T: Pixel>(
 
           if best_new_index != prev_best_index {
             cdef_change = true;
-            best_index[sby][sbx] = best_new_index;
+            best_index[sby * sb_w + sbx] = best_new_index;
             cw.bc.blocks.set_cdef(loop_tile_sbo, best_new_index as u8);
           }
 
@@ -1945,7 +1941,7 @@ pub fn rdo_loop_decision<T: Pixel>(
             &cw.bc.blocks.as_const(),
             loop_sbo,
             loop_tile_sbo,
-            best_index[sby][sbx] as u8,
+            best_index[sby * sb_w + sbx] as u8,
             &cdef_dirs[sby][sbx],
           );
         }
@@ -1985,8 +1981,9 @@ pub fn rdo_loop_decision<T: Pixel>(
               let lrf_in_plane = &lrf_input.planes[pli];
               let loop_po = loop_sbo.plane_offset(&lrf_in_plane.cfg);
               let loop_tile_po = loop_tile_sbo.plane_offset(&ref_plane.cfg);
-              let mut best_new_lrf = best_lrf[pli][lru_y][lru_x];
-              let mut best_cost = best_lrf_cost[pli][lru_y][lru_x];
+              let mut best_new_lrf = best_lrf[pli][lru_y * lru_w[pli] + lru_x];
+              let mut best_cost =
+                best_lrf_cost[pli][lru_y * lru_w[pli] + lru_x];
 
               // Check the no filter option
               {
@@ -2011,7 +2008,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                 let cost = compute_rd_cost(fi, rate, err);
                 if best_cost < 0. || cost < best_cost {
                   best_cost = cost;
-                  best_lrf_cost[pli][lru_y][lru_x] = cost;
+                  best_lrf_cost[pli][lru_y * lru_w[pli] + lru_x] = cost;
                   best_new_lrf = RestorationFilter::None;
                 }
               }
@@ -2078,13 +2075,15 @@ pub fn rdo_loop_decision<T: Pixel>(
                 let cost = compute_rd_cost(fi, rate, err);
                 if cost < best_cost {
                   best_cost = cost;
-                  best_lrf_cost[pli][lru_y][lru_x] = cost;
+                  best_lrf_cost[pli][lru_y * lru_w[pli] + lru_x] = cost;
                   best_new_lrf = current_lrf;
                 }
               }
 
-              if best_lrf[pli][lru_y][lru_x].notequal(best_new_lrf) {
-                best_lrf[pli][lru_y][lru_x] = best_new_lrf;
+              if best_lrf[pli][lru_y * lru_w[pli] + lru_x]
+                .notequal(best_new_lrf)
+              {
+                best_lrf[pli][lru_y * lru_w[pli] + lru_x] = best_new_lrf;
                 lrf_change = true;
                 if let Some(ru) = ts.restoration.planes[pli]
                   .restoration_unit_mut(loop_tile_sbo)
