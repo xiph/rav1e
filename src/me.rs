@@ -39,6 +39,7 @@ pub struct FrameMotionVectors {
 impl FrameMotionVectors {
   pub fn new(cols: usize, rows: usize) -> Self {
     Self {
+      // dynamic allocation: once per frame
       mvs: vec![MotionVector::default(); cols * rows].into_boxed_slice(),
       cols,
       rows,

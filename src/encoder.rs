@@ -732,8 +732,10 @@ impl<T: Pixel> FrameInvariants<T> {
       lookahead_rec_buffer: ReferenceFramesSet::new(),
       w_in_imp_b,
       h_in_imp_b,
+      // dynamic allocation: once per frame
       lookahead_intra_costs: vec![0; w_in_imp_b * h_in_imp_b]
         .into_boxed_slice(),
+      // dynamic allocation: once per frame
       block_importances: vec![0.; w_in_imp_b * h_in_imp_b].into_boxed_slice(),
       cpu_feature_level: Default::default(),
       activity_mask: Default::default(),
@@ -2786,6 +2788,7 @@ pub(crate) fn build_coarse_pmvs<T: Pixel>(
     frame_pmvs
   } else {
     // the block use for motion estimation would be smaller than the whole image
+    // dynamic allocation: once per frmae
     vec![[None; REF_FRAMES]; ts.sb_width * ts.sb_height]
   }
 }
@@ -2811,6 +2814,7 @@ fn encode_tile_group<T: Pixel>(
   let ti = &fi.tiling;
 
   let initial_cdf = get_initial_cdfcontext(fi);
+  // dynamic allocation: once per frame
   let mut cdfs = vec![initial_cdf; ti.tile_count()];
 
   let (raw_tiles, tile_states): (Vec<_>, Vec<_>) = ti

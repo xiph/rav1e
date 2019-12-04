@@ -469,6 +469,7 @@ impl WriterBase<WriterEncoder> {
 
     let mut c = 0;
     let mut offs = self.s.precarry.len();
+    // dynamic allocation: grows during encode
     let mut out = vec![0 as u8; offs];
     while offs > 0 {
       offs -= 1;

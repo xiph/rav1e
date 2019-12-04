@@ -452,6 +452,7 @@ mod test {
   ) {
     let mut src_storage = [T::cast_from(0); 64 * 64];
     let src = &mut src_storage[..tx_size.area()];
+    // dynamic allocation: test
     let mut dst =
       Plane::wrap(vec![T::cast_from(0); tx_size.area()], tx_size.width());
     let mut res_storage = [0i16; 64 * 64];
