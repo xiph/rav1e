@@ -13,7 +13,7 @@ use crate::util::*;
 
 #[derive(Debug, Default, Clone)]
 pub struct ActivityMask {
-  variances: Vec<Vec<f64>>,
+  variances: Vec<f64>,
   // Width and height of the original frame that is masked
   width: usize,
   height: usize,
@@ -35,10 +35,10 @@ impl ActivityMask {
     };
     let luma = PlaneRegion::new(luma_plane, aligned_luma);
 
-    let mut variances = Vec::new();
+    let mut variances =
+      Vec::with_capacity((height >> granularity) * (width >> granularity));
 
     for y in 0..height >> granularity {
-      let mut row = Vec::new();
       for x in 0..width >> granularity {
         let block_rect = Area::Rect {
           x: (x << granularity) as isize,
@@ -66,21 +66,19 @@ impl ActivityMask {
             (pix as f64 - mean).powi(2)
           })
           .sum::<f64>();
-        row.push(variance);
+        variances.push(variance);
       }
-
-      variances.push(row)
     }
     ActivityMask { variances, width, height, granularity }
   }
 
   pub fn variance_at(&self, x: usize, y: usize) -> Option<f64> {
-    if x > self.width >> self.granularity
-      || y > self.height >> self.granularity
-    {
+    let (dec_width, dec_height) =
+      (self.width >> self.granularity, self.height >> self.granularity);
+    if x > dec_width || y > dec_height {
       None
     } else {
-      Some(*self.variances.get(x).unwrap().get(y).unwrap())
+      Some(*self.variances.get(x + dec_width * y).unwrap())
     }
   }
 
@@ -104,10 +102,10 @@ impl ActivityMask {
     } else {
       let activity = self
         .variances
-        .iter()
-        .skip(dec_x)
+        .chunks_exact(self.width >> granularity)
+        .skip(dec_y)
         .take(dec_height)
-        .map(|row| row.iter().skip(dec_y).take(dec_width).sum::<f64>())
+        .map(|row| row.iter().skip(dec_x).take(dec_width).sum::<f64>())
         .sum::<f64>()
         / (dec_width as f64 * dec_height as f64);
 
