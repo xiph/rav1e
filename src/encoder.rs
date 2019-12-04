@@ -2147,7 +2147,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
   let mut rdo_output = PartitionGroupParameters {
     rd_cost,
     part_type: PartitionType::PARTITION_INVALID,
-    part_modes: Vec::new(),
+    part_modes: ArrayVec::new(),
   };
 
   if tile_bo.0.x >= cw.bc.blocks.cols() || tile_bo.0.y >= cw.bc.blocks.rows() {
@@ -2283,7 +2283,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       let subsize = bsize.subsize(partition);
       let hbsw = subsize.width_mi(); // Half the block size width in blocks
       let hbsh = subsize.height_mi(); // Half the block size height in blocks
-      let mut child_modes: Vec<PartitionParameters> = Vec::new();
+      let mut child_modes = ArrayVec::<[PartitionParameters; 4]>::new();
       rd_cost = 0.0;
 
       if bsize.gte(BlockSize::BLOCK_8X8) {
@@ -2452,7 +2452,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
     block_output.clone().unwrap_or(PartitionGroupParameters {
       part_type: PartitionType::PARTITION_INVALID,
       rd_cost: std::f64::MAX,
-      part_modes: Vec::new(),
+      part_modes: ArrayVec::new(),
     });
   let partition: PartitionType;
   let mut split_vert = false;
@@ -2485,7 +2485,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   {
     debug_assert!(bsize.is_sqr());
     // Blocks of sizes within the supported range are subjected to a partitioning decision
-    let mut partition_types: Vec<PartitionType> = Vec::new();
+    let mut partition_types = ArrayVec::<[PartitionType; 3]>::new();
     if must_split {
       partition_types.push(PartitionType::PARTITION_SPLIT);
       if split_horz {
@@ -2696,6 +2696,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         assert!(subsize != BlockSize::BLOCK_INVALID);
 
         for mode in rdo_output.part_modes {
+          use std::iter::{once, FromIterator};
           // Each block is subjected to a new splitting decision
           encode_partition_topdown(
             fi,
@@ -2708,7 +2709,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
             &Some(PartitionGroupParameters {
               rd_cost: mode.rd_cost,
               part_type: PartitionType::PARTITION_NONE,
-              part_modes: vec![mode],
+              part_modes: ArrayVec::from_iter(once(mode)),
             }),
             pmv_idx,
             inter_cfg,

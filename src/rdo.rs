@@ -77,7 +77,7 @@ impl RDOType {
 pub struct PartitionGroupParameters {
   pub rd_cost: f64,
   pub part_type: PartitionType,
-  pub part_modes: Vec<PartitionParameters>,
+  pub part_modes: ArrayVec<[PartitionParameters; 4]>,
 }
 
 #[derive(Clone)]
@@ -1475,7 +1475,7 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
       continue;
     }
     let mut cost: f64 = 0.0;
-    let mut child_modes = std::vec::Vec::new();
+    let mut child_modes = ArrayVec::<[_; 4]>::new();
     let mut early_exit = false;
 
     match partition {
@@ -1546,7 +1546,7 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
               ((offset.0.x & 32) >> 5) + ((offset.0.y & 32) >> 4) + 1
             }
           })
-          .collect::<Vec<_>>();
+          .collect::<ArrayVec<[_; 4]>>();
 
         if bsize >= BlockSize::BLOCK_8X8 {
           let w: &mut W =
