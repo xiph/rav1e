@@ -223,6 +223,7 @@ pub mod test {
 
   // Regression and validation test for SAD computation
   fn get_sad_same_inner<T: Pixel>() {
+    // dynamic allocation: test
     let blocks: Vec<(BlockSize, u32)> = vec![
       (BLOCK_4X4, 1912),
       (BLOCK_4X8, 4296),

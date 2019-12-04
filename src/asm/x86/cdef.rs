@@ -182,7 +182,9 @@ mod test {
             let width = 8 >> $XDEC;
             let height = 8 >> $YDEC;
             let area = width * height;
+            // dynamic allocation: test
             let mut src = vec![0u16; area];
+            // dynamic allocation: test
             let mut dst = Plane::wrap(vec![0u8; area], width);
             for (s, d) in src.iter_mut().zip(dst.data.iter_mut()) {
               *s = random::<u8>() as u16;

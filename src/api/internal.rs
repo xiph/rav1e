@@ -658,6 +658,7 @@ impl<T: Pixel> ContextInner<T> {
 
       let mvs = &fs.frame_mvs[index];
       use byteorder::{NativeEndian, WriteBytesExt};
+      // dynamic allocation: debugging only
       let mut buf = vec![];
       buf.write_u64::<NativeEndian>(mvs.rows as u64).unwrap();
       buf.write_u64::<NativeEndian>(mvs.cols as u64).unwrap();
