@@ -568,7 +568,16 @@ fn luma_chroma_mode_rdo<T: Pixel>(
     // If quantizer RDO is disabled, sidx isn't coded either.
     let sidx_range = if skip {
       0..=0
-    } else if !fi.config.speed_settings.quantizer_rdo {
+    } else if fi.config.speed_settings.quantizer_rdo {
+      if fi.base_q_idx as i16
+        + ts.segmentation.data[2][SegLvl::SEG_LVL_ALT_Q as usize]
+        < 1
+      {
+        0..=1
+      } else {
+        0..=2
+      }
+    } else {
       let importance =
         compute_mean_importance(fi, ts.to_frame_block_offset(tile_bo), bsize);
       // Chosen based on the RDO segment ID statistics for speed 2 on the DOTA2
@@ -593,13 +602,6 @@ fn luma_chroma_mode_rdo<T: Pixel>(
       } else {
         heuristic_sidx..=heuristic_sidx
       }
-    } else if fi.base_q_idx as i16
-      + ts.segmentation.data[2][SegLvl::SEG_LVL_ALT_Q as usize]
-      < 1
-    {
-      0..=1
-    } else {
-      0..=2
     };
 
     for sidx in sidx_range {
