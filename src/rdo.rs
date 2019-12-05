@@ -578,6 +578,9 @@ fn luma_chroma_mode_rdo<T: Pixel>(
         0..=2
       }
     } else {
+      // FIXME:
+      // Until the desync caused by heuristic quantizer selection is fixed, disable this feature
+      /*
       let importance =
         compute_mean_importance(fi, ts.to_frame_block_offset(tile_bo), bsize);
       // Chosen based on the RDO segment ID statistics for speed 2 on the DOTA2
@@ -602,6 +605,8 @@ fn luma_chroma_mode_rdo<T: Pixel>(
       } else {
         heuristic_sidx..=heuristic_sidx
       }
+      */
+      0..=0
     };
 
     for sidx in sidx_range {
