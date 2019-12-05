@@ -450,8 +450,9 @@ impl SpeedSettings {
     true
   }
 
-  const fn quantizer_rdo_preset(speed: usize) -> bool {
-    speed <= 1
+  const fn quantizer_rdo_preset(_speed: usize) -> bool {
+    // Until the desync caused by quantizer_rdo is fixed, disable this feature
+    false
   }
 
   const fn use_satd_subpel(speed: usize) -> bool {
