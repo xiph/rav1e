@@ -1492,9 +1492,7 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
 ) -> Option<f64> {
   let subsize = bsize.subsize(partition);
 
-  if subsize == BlockSize::BLOCK_INVALID {
-    return None;
-  }
+  debug_assert!(subsize != BlockSize::BLOCK_INVALID);
 
   let cost = if bsize >= BlockSize::BLOCK_8X8 {
     let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
