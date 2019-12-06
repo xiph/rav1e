@@ -1545,7 +1545,7 @@ impl<'a> BlockContext<'a> {
       cdef_coded: false,
       code_deltas: false,
       update_seg: false,
-      preskip_segid: true,
+      preskip_segid: false,
       above_partition_context: [0; PARTITION_CONTEXT_MAX_WIDTH],
       left_partition_context: [0; MIB_SIZE >> 1],
       above_tx_context: [0; COEFF_CONTEXT_MAX_WIDTH],
