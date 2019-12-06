@@ -468,7 +468,7 @@ impl Default for SegmentationState {
       enabled: false,
       update_data: false,
       update_map: false,
-      preskip: true,
+      preskip: false,
       last_active_segid: 0,
       features: [[false; SegLvl::SEG_LVL_MAX as usize]; 8],
       data: [[0; SegLvl::SEG_LVL_MAX as usize]; 8],
@@ -3424,6 +3424,7 @@ pub fn encode_frame<T: Pixel>(
 
   fs.segmentation = get_initial_segmentation(fi);
   segmentation_optimize(fi, fs);
+
   let tile_group = encode_tile_group(fi, fs, inter_cfg);
 
   write_obus(&mut packet, fi, fs, inter_cfg).unwrap();
