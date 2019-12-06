@@ -566,7 +566,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
 
     // If skip is true, sidx is not coded.
     // The sidx is coded for both quantizer_rdo and heuristic quantizer selection.
-    let sidx_range = if skip {
+    let sidx_range = if skip || !fi.enable_segmentation {
       0..=0
     } else if !fi.config.speed_settings.quantizer_rdo {
       let importance =

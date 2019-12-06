@@ -568,6 +568,7 @@ pub struct FrameInvariants<T: Pixel> {
   /// Target CPU feature level.
   pub cpu_feature_level: crate::cpu_features::CpuFeatureLevel,
   pub activity_mask: ActivityMask,
+  pub enable_segmentation: bool,
 }
 
 pub(crate) const fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
@@ -739,6 +740,7 @@ impl<T: Pixel> FrameInvariants<T> {
       block_importances: vec![0.; w_in_imp_b * h_in_imp_b].into_boxed_slice(),
       cpu_feature_level: Default::default(),
       activity_mask: Default::default(),
+      enable_segmentation: false,
     }
   }
 
@@ -3427,9 +3429,10 @@ pub fn encode_frame<T: Pixel>(
   debug_assert!(!fi.invalid);
   let mut packet = Vec::new();
 
-  fs.segmentation = get_initial_segmentation(fi);
-  segmentation_optimize(fi, fs);
-
+  if fi.enable_segmentation {
+    fs.segmentation = get_initial_segmentation(fi);
+    segmentation_optimize(fi, fs);
+  }
   let tile_group = encode_tile_group(fi, fs, inter_cfg);
 
   write_obus(&mut packet, fi, fs, inter_cfg).unwrap();
