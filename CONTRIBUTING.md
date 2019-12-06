@@ -95,3 +95,20 @@ Install `cargo-fuzz` with `cargo install cargo-fuzz`. Running fuzz targets requi
   * Just give me the complete command line: `RUSTFLAGS='-C codegen-units=1' cargo +nightly fuzz run -j10 encode -- -workers=10 -detect_leaks=0 -timeout=600 -report_slow_units=600 -max_len=256 -len_control=0`.
 * Run a single artifact with debug output: `RUST_LOG=debug <path/to/fuzz/target/executable> <path/to/artifact>`, for example, `RUST_LOG=debug fuzz/target/x86_64-unknown-linux-gnu/debug/encode fuzz/artifacts/encode/crash-2f5672cb76691b989bbd2022a5349939a2d7b952`.
 * For adding new fuzz targets, see comment at the top of `src/fuzzing.rs`.
+
+## Finding Desyncs
+
+1. Encode the input video using rav1e.
+```
+/path/to/rav1e in.y4m -o out.ivf -r rec.y4m ${options}
+```
+
+2. Decode the output of rav1e using [dav1d](https://code.videolan.org/videolan/dav1d).
+```
+/path/to/dav1d -i out.ivf -o dec.y4m
+```
+
+3. Compare if the reconstruction and decoded video match.
+```
+cmp rec.y4m dec.y4m
+```
