@@ -301,6 +301,9 @@ pub struct SpeedSettings {
   ///
   /// Enabled is slower.
   pub non_square_partition: bool,
+
+  /// Use segmentation.
+  pub enable_segmentation: bool,
 }
 
 impl Default for SpeedSettings {
@@ -325,6 +328,7 @@ impl Default for SpeedSettings {
       quantizer_rdo: true,
       use_satd_subpel: true,
       non_square_partition: true,
+      enable_segmentation: false,
     }
   }
 }
@@ -363,6 +367,7 @@ impl SpeedSettings {
       quantizer_rdo: Self::quantizer_rdo_preset(speed),
       use_satd_subpel: Self::use_satd_subpel(speed),
       non_square_partition: Self::non_square_partition_preset(speed),
+      enable_segmentation: false,
     }
   }
 

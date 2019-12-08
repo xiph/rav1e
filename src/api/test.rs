@@ -1660,6 +1660,7 @@ fn log_q_exp_overflow() {
         quantizer_rdo: false,
         use_satd_subpel: false,
         non_square_partition: false,
+        ..Default::default()
       },
       show_psnr: false,
     },
@@ -1722,6 +1723,7 @@ fn guess_frame_subtypes_assert() {
         quantizer_rdo: false,
         use_satd_subpel: false,
         non_square_partition: false,
+        ..Default::default()
       },
       show_psnr: false,
     },
