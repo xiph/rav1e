@@ -7,9 +7,10 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use super::*;
+use crate::encoder::FrameInvariants;
+use crate::prelude::*;
 
-use crate::partition::BlockSize;
+use std::sync::Arc;
 
 use interpolate_name::interpolate_test;
 
