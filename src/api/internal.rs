@@ -534,6 +534,16 @@ impl<T: Pixel> ContextInner<T> {
   /// computed.
   #[hawktracer(compute_lookahead_motion_vectors)]
   fn compute_lookahead_motion_vectors(&mut self, output_frameno: u64) {
+    let qps = {
+      let frame_data = self.frame_data.get(&output_frameno).unwrap();
+      let fti = frame_data.fi.get_frame_subtype();
+      self.rc_state.select_qi(
+        self,
+        output_frameno,
+        fti,
+        self.maybe_prev_log_base_q,
+      )
+    };
     let frame_data = self.frame_data.get_mut(&output_frameno).unwrap();
     let fs = &mut frame_data.fs;
     let fi = &mut frame_data.fi;
@@ -594,6 +604,9 @@ impl<T: Pixel> ContextInner<T> {
     // what the MV search uses. During the actual encoding rec_buffer is
     // overwritten with its correct values anyway.
     fi.rec_buffer = fi.lookahead_rec_buffer.clone();
+
+    // Estimate lambda with rate-control dry-run
+    fi.set_quantizers(&qps);
 
     // TODO: as in the encoding code, key frames will have no references.
     // However, for block importance purposes we want key frames to act as
