@@ -743,7 +743,7 @@ impl<T: Pixel> FrameInvariants<T> {
       block_importances: vec![0.; w_in_imp_b * h_in_imp_b].into_boxed_slice(),
       cpu_feature_level: Default::default(),
       activity_mask: Default::default(),
-      enable_segmentation: false,
+      enable_segmentation: config.speed_settings.enable_segmentation,
     }
   }
 
