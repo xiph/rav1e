@@ -971,6 +971,9 @@ fn full_search<T: Pixel>(
     height: (y_hi - y_lo) as usize + blk_h,
   });
 
+  let mut lowest_sad = std::u32::MAX;
+  let mut lowest_sad_mv = MotionVector::default();
+
   // Select rectangular regions within search region with vert+horz windows
   for vert_window in search_region.vert_windows(blk_h).step_by(step) {
     for ref_window in vert_window.horz_windows(blk_w).step_by(step) {
@@ -982,24 +985,23 @@ fn full_search<T: Pixel>(
         fi.cpu_feature_level,
       );
 
-      let &Rect { x, y, .. } = ref_window.rect();
+      if sad < lowest_sad {
+        lowest_sad = sad;
 
-      let mv = MotionVector {
-        row: 8 * (y as i16 - po.y as i16),
-        col: 8 * (x as i16 - po.x as i16),
-      };
-
-      let rate1 = get_mv_rate(mv, pmv[0], allow_high_precision_mv);
-      let rate2 = get_mv_rate(mv, pmv[1], allow_high_precision_mv);
-      let rate = rate1.min(rate2 + 1);
-      let cost = 256 * sad as u64 + rate as u64 * lambda as u64;
-
-      if cost < *lowest_cost {
-        *lowest_cost = cost;
-        *best_mv = mv;
+        let &Rect { x, y, .. } = ref_window.rect();
+        lowest_sad_mv = MotionVector {
+          row: 8 * (y as i16 - po.y as i16),
+          col: 8 * (x as i16 - po.x as i16),
+        };
       }
     }
   }
+
+  let rate1 = get_mv_rate(lowest_sad_mv, pmv[0], allow_high_precision_mv);
+  let rate2 = get_mv_rate(lowest_sad_mv, pmv[1], allow_high_precision_mv);
+  let rate = rate1.min(rate2 + 1);
+  *lowest_cost = 256 * lowest_sad as u64 + rate as u64 * lambda as u64;
+  *best_mv = lowest_sad_mv;
 }
 
 // Adjust block offset such that entire block lies within boundaries
