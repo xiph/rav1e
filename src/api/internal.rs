@@ -311,7 +311,9 @@ impl<T: Pixel> ContextInner<T> {
       }
     }
 
-    self.compute_lookahead_data();
+    self.compute_keyframe_placement();
+    self.compute_frame_invariants();
+
     Ok(())
   }
 
@@ -797,8 +799,8 @@ impl<T: Pixel> ContextInner<T> {
     }
   }
 
-  #[hawktracer(compute_lookahead_data)]
-  pub fn compute_lookahead_data(&mut self) {
+  #[hawktracer(compute_keyframe_placement)]
+  pub fn compute_keyframe_placement(&mut self) {
     let lookahead_frames = self
       .frame_q
       .iter()
@@ -842,8 +844,10 @@ impl<T: Pixel> ContextInner<T> {
       self.next_lookahead_frame += 1;
       lookahead_idx += 1;
     }
+  }
 
-    // Compute the frame invariants.
+  #[hawktracer(compute_frame_invariants)]
+  pub fn compute_frame_invariants(&mut self) {
     while self.set_frame_properties(self.next_lookahead_output_frameno).is_ok()
     {
       self
