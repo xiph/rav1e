@@ -311,7 +311,12 @@ impl<T: Pixel> ContextInner<T> {
       }
     }
 
-    self.compute_keyframe_placement();
+    if self.config.still_picture {
+      self.keyframes.insert(input_frameno);
+    } else {
+      self.compute_keyframe_placement();
+    }
+
     self.compute_frame_invariants();
 
     Ok(())
@@ -812,7 +817,7 @@ impl<T: Pixel> ContextInner<T> {
       }
 
       self.keyframe_detector.analyze_next_frame(
-        if self.next_lookahead_frame == 0 || self.config.still_picture {
+        if self.next_lookahead_frame == 0 {
           None
         } else {
           self
