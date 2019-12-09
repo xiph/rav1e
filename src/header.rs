@@ -169,6 +169,9 @@ pub trait UncompressedHeader {
   fn write_frame_size<T: Pixel>(
     &mut self, fi: &FrameInvariants<T>,
   ) -> io::Result<()>;
+  fn write_frame_size_override<T: Pixel>(
+    &mut self, fi: &FrameInvariants<T>,
+  ) -> io::Result<()>;
   fn write_deblock_filter_a<T: Pixel>(
     &mut self, fi: &FrameInvariants<T>, deblock: &DeblockState,
   ) -> io::Result<()>;
@@ -487,6 +490,9 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         self.write_bit(fi.showable_frame)?;
       }
 
+      if fi.error_resilient {
+        assert!(fi.primary_ref_frame == PRIMARY_REF_NONE);
+      }
       if fi.frame_type == FrameType::SWITCH {
         assert!(fi.error_resilient);
       } else if !(fi.frame_type == FrameType::KEY && fi.show_frame) {
@@ -571,10 +577,16 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     if (!fi.intra_only || fi.refresh_frame_flags != ALL_REF_FRAMES_MASK) {
       // Write all ref frame order hints if error_resilient_mode == 1
       if (fi.error_resilient && fi.sequence.enable_order_hint) {
-        unimplemented!();
-        //for _ in 0..REF_FRAMES {
-        //  self.write(order_hint_bits_minus_1,ref_order_hint[i])?; // order_hint
-        //}
+        for i in 0..REF_FRAMES {
+          let n = fi.sequence.order_hint_bits_minus_1 + 1;
+          let mask = (1 << n) - 1;
+          if let Some(ref rec) = fi.rec_buffer.frames[i] {
+            let ref_hint = rec.order_hint;
+            self.write(n, ref_hint & mask)?;
+          } else {
+            self.write(n, 0)?;
+          }
+        }
       }
     }
 
@@ -582,7 +594,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     // FIXME: Not sure whether putting frame/render size here is good idea
     if fi.intra_only {
       if frame_size_override_flag {
-        unimplemented!();
+        self.write_frame_size_override(&fi);
       }
       if fi.sequence.enable_superres {
         unimplemented!();
@@ -615,11 +627,11 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         }
       }
 
-      if fi.error_resilient && frame_size_override_flag {
+      if !fi.error_resilient && frame_size_override_flag {
         unimplemented!();
       } else {
         if frame_size_override_flag {
-          unimplemented!();
+          self.write_frame_size_override(&fi);
         }
         if fi.sequence.enable_superres {
           unimplemented!();
@@ -809,6 +821,20 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     assert!(height_bits <= 16);
     self.write(4, width_bits - 1)?;
     self.write(4, height_bits - 1)?;
+    self.write(width_bits, (fi.width - 1) as u16)?;
+    self.write(height_bits, (fi.height - 1) as u16)?;
+    Ok(())
+  }
+
+  fn write_frame_size_override<T: Pixel>(
+    &mut self, fi: &FrameInvariants<T>,
+  ) -> io::Result<()> {
+    // width_bits and height_bits will have to be moved to the sequence header OBU
+    // when we add support for it.
+    let width_bits = 32 - (fi.width as u32).leading_zeros();
+    let height_bits = 32 - (fi.height as u32).leading_zeros();
+    assert!(width_bits <= 16);
+    assert!(height_bits <= 16);
     self.write(width_bits, (fi.width - 1) as u16)?;
     self.write(height_bits, (fi.height - 1) as u16)?;
     Ok(())

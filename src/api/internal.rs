@@ -472,6 +472,7 @@ impl<T: Pixel> ContextInner<T> {
             self.gop_input_frameno_start[&output_frameno],
             output_frameno_in_gop,
             next_keyframe_input_frameno,
+            self.config.error_resilient,
           );
           assert!(fi.invalid);
           return Ok(fi);
@@ -520,6 +521,7 @@ impl<T: Pixel> ContextInner<T> {
         self.gop_input_frameno_start[&output_frameno],
         output_frameno_in_gop,
         next_keyframe_input_frameno,
+        self.config.error_resilient,
       );
       assert!(!fi.invalid);
       Ok(fi)

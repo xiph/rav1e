@@ -762,9 +762,11 @@ impl<T: Pixel> FrameInvariants<T> {
   pub(crate) fn new_inter_frame(
     previous_fi: &Self, inter_cfg: &InterConfig, gop_input_frameno_start: u64,
     output_frameno_in_gop: u64, next_keyframe_input_frameno: u64,
+    error_resilient: bool,
   ) -> Self {
     let mut fi = previous_fi.clone();
     fi.frame_type = FrameType::INTER;
+    fi.error_resilient = error_resilient;
     fi.intra_only = false;
     fi.idx_in_group_output =
       inter_cfg.get_idx_in_group_output(output_frameno_in_gop);
@@ -799,7 +801,7 @@ impl<T: Pixel> FrameInvariants<T> {
     let ref_in_previous_group = LAST3_FRAME;
 
     // reuse probability estimates from previous frames only in top level frames
-    fi.primary_ref_frame = if fi.pyramid_level > 2 {
+    fi.primary_ref_frame = if fi.error_resilient || (fi.pyramid_level > 2) {
       PRIMARY_REF_NONE
     } else {
       (ref_in_previous_group.to_index()) as u32
