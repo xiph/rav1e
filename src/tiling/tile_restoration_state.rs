@@ -225,18 +225,21 @@ macro_rules! tile_restoration_plane_common {
       pub fn restoration_unit_last_sb_for_rdo<T: Pixel>(
         &self,
         fi: &FrameInvariants<T>,
-        sbo: TileSuperBlockOffset,
+        global_sbo: PlaneSuperBlockOffset,
+        tile_sbo: TileSuperBlockOffset,
       ) -> bool {
         // there is 1 restoration unit for (1 << sb_shift) super-blocks
         let h_mask = (1 << self.rp_cfg.sb_h_shift) - 1;
         let v_mask = (1 << self.rp_cfg.sb_v_shift) - 1;
         // is this a stretch block?
-        let x_stretch = sbo.0.x >> self.rp_cfg.sb_h_shift >= self.units.cols;
-        let y_stretch = sbo.0.y >> self.rp_cfg.sb_v_shift >= self.units.rows;
-
-        let last_x = (sbo.0.x & h_mask == h_mask && !x_stretch) || sbo.0.x == fi.sb_width-1;
-        let last_y = (sbo.0.y & v_mask == v_mask && !y_stretch) || sbo.0.y == fi.sb_height-1;
-
+        let x_stretch = tile_sbo.0.x >> self.rp_cfg.sb_h_shift >= self.units.cols;
+        let y_stretch = tile_sbo.0.y >> self.rp_cfg.sb_v_shift >= self.units.rows;
+        // Need absolute superblock offsets for edge check, not local to the tile.
+        let sbx = global_sbo.0.x + tile_sbo.0.x;
+        let sby = global_sbo.0.y + tile_sbo.0.y;
+        // edge-of-tile check + edge-of-frame check
+        let last_x = (tile_sbo.0.x & h_mask == h_mask && !x_stretch) || sbx == fi.sb_width-1;
+        let last_y = (tile_sbo.0.y & v_mask == v_mask && !y_stretch) || sby == fi.sb_height-1;
         last_x && last_y
       }
 
