@@ -267,7 +267,7 @@ fn compute_distortion<T: Pixel>(
         bsize.height(),
         fi.sequence.bit_depth,
         |bias_area, bsize| {
-          compute_distortion_bias(
+          compute_distortion_scale(
             fi,
             input_region.subregion(bias_area).frame_block_offset(),
             bsize,
@@ -281,7 +281,7 @@ fn compute_distortion<T: Pixel>(
       bsize.width(),
       bsize.height(),
       |bias_area, bsize| {
-        compute_distortion_bias(
+        compute_distortion_scale(
           fi,
           input_region.subregion(bias_area).frame_block_offset(),
           bsize,
@@ -313,7 +313,7 @@ fn compute_distortion<T: Pixel>(
           w_uv,
           h_uv,
           |bias_area, bsize| {
-            compute_distortion_bias(
+            compute_distortion_scale(
               fi,
               input_region.subregion(bias_area).frame_block_offset(),
               bsize,
@@ -343,7 +343,7 @@ fn compute_tx_distortion<T: Pixel>(
       bsize.width(),
       bsize.height(),
       |bias_area, bsize| {
-        compute_distortion_bias(
+        compute_distortion_scale(
           fi,
           input_region.subregion(bias_area).frame_block_offset(),
           bsize,
@@ -377,7 +377,7 @@ fn compute_tx_distortion<T: Pixel>(
           w_uv,
           h_uv,
           |bias_area, bsize| {
-            compute_distortion_bias(
+            compute_distortion_scale(
               fi,
               input_region.subregion(bias_area).frame_block_offset(),
               bsize,
@@ -390,7 +390,7 @@ fn compute_tx_distortion<T: Pixel>(
   distortion
 }
 
-pub fn compute_distortion_bias<T: Pixel>(
+pub fn compute_distortion_scale<T: Pixel>(
   fi: &FrameInvariants<T>, frame_bo: PlaneBlockOffset, bsize: BlockSize,
 ) -> f64 {
   let x1 = frame_bo.0.x;
@@ -1699,7 +1699,7 @@ fn rdo_loop_plane_error<T: Pixel>(
         let test_region =
           test_plane.region(Area::BlockStartingAt { bo: test_bo.0 });
 
-        let bias = compute_distortion_bias(
+        let bias = compute_distortion_scale(
           fi,
           ts.to_frame_block_offset(bo),
           BlockSize::BLOCK_8X8,
