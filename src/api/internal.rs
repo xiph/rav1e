@@ -901,8 +901,12 @@ impl<T: Pixel> ContextInner<T> {
                   let intra_cost = lookahead_intra_costs[x] as f32;
                   let future_importance = block_importances[x];
 
-                  let propagate_fraction =
-                    (1. - inter_cost / intra_cost).max(0.);
+                  let propagate_fraction = if intra_cost <= inter_cost {
+                    0.
+                  } else {
+                    1. - inter_cost / intra_cost
+                  };
+
                   let propagate_amount = (intra_cost + future_importance)
                     * propagate_fraction
                     / len as f32;
