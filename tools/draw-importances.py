@@ -19,7 +19,10 @@ with open(sys.argv[2], 'rb') as f:
 
 rows, cols = struct.unpack('qq', contents[:16])
 imps = np.frombuffer(contents[16:], dtype=np.float32).reshape((rows, cols))
-max_imp = np.max(imps)
+
+# Use a fixed scale where anything >= 10 cannot be distinguished
+# to allow visually comparing multiple pictures
+max_imp = 10 ## Replace by `np.max(imps)` for relative scaling
 
 frame_size_multiplier = 4
 
