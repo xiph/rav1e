@@ -311,8 +311,9 @@ impl<T: Pixel> ContextInner<T> {
       }
     }
 
-    if self.config.still_picture {
+    if self.config.still_picture || self.next_lookahead_frame == 0 {
       self.keyframes.insert(input_frameno);
+      self.next_lookahead_frame += 1;
     } else {
       self.compute_keyframe_placement();
     }
@@ -797,7 +798,7 @@ impl<T: Pixel> ContextInner<T> {
       .frame_q
       .iter()
       .filter_map(|(&input_frameno, frame)| {
-        if input_frameno >= self.next_lookahead_frame {
+        if input_frameno >= self.next_lookahead_frame - 1 {
           frame.clone()
         } else {
           None
@@ -811,20 +812,12 @@ impl<T: Pixel> ContextInner<T> {
       // Start by getting that frame and all frames after it in the queue
       let current_lookahead_frames = &lookahead_frames[lookahead_idx..];
 
-      if current_lookahead_frames.is_empty() {
+      if current_lookahead_frames.len() < 2 {
         // All frames have been processed
         break;
       }
 
       self.keyframe_detector.analyze_next_frame(
-        if self.next_lookahead_frame == 0 {
-          None
-        } else {
-          self
-            .frame_q
-            .get(&(self.next_lookahead_frame - 1))
-            .map(|f| f.as_ref().unwrap().clone())
-        },
         &current_lookahead_frames,
         self.next_lookahead_frame,
         &self.config,
