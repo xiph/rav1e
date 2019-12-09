@@ -75,7 +75,12 @@ impl SceneChangeDetector {
       }
     };
 
-    self.exclude_scene_flashes(&frame_set, input_frameno, inter_cfg);
+    if !(config.speed_settings.no_scene_detection
+      || config.min_key_frame_interval == config.max_key_frame_interval)
+    {
+      // Not needed if smart scene detection disabled
+      self.exclude_scene_flashes(&frame_set, input_frameno, inter_cfg);
+    }
 
     if self.is_key_frame(
       &frame_set[0],
