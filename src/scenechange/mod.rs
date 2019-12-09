@@ -137,6 +137,9 @@ impl SceneChangeDetector {
     // Where A and B are scenes: AAAAAABBBAAAAAA
     // If BBB is shorter than lookahead_distance, it is detected as a flash
     // and not considered a scenecut.
+    //
+    // Search starting with the furthest frame,
+    // to enable early loop exit if we find a scene flash.
     for j in (1..=lookahead_distance).rev() {
       if !self.has_scenecut(&frame_subset[0], &frame_subset[j]) {
         // Any frame in between `0` and `j` cannot be a real scenecut.
