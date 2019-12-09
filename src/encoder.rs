@@ -3280,7 +3280,7 @@ fn encode_tile<'a, T: Pixel>(
               as i32;
             sbs_qe.lru_index[pli] = lru_index;
             if ts.restoration.planes[pli]
-              .restoration_unit_last_sb_for_rdo(fi, tile_sbo)
+              .restoration_unit_last_sb_for_rdo(fi, ts.sbo, tile_sbo)
             {
               last_lru_ready[pli] = lru_index;
               check_queue = true;
@@ -3371,7 +3371,12 @@ fn encode_tile<'a, T: Pixel>(
       }
     }
   }
-
+  assert!(
+    sbs_q.is_empty(),
+    "Superblock queue not empty in tile at offset {}:{}",
+    ts.sbo.0.x,
+    ts.sbo.0.y
+  );
   w.done()
 }
 
