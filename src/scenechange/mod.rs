@@ -54,27 +54,15 @@ impl SceneChangeDetector {
   /// This function requires that a subset of input frames
   /// is passed to it in order, and that `keyframes` is only
   /// updated from this method. `input_frameno` should correspond
-  /// to the first frame in `frame_set`.
+  /// to the second frame in `frame_set`.
   ///
   /// This will gracefully handle the first frame in the video as well.
   #[hawktracer(analyze_next_frame)]
   pub fn analyze_next_frame<T: Pixel>(
-    &mut self, previous_frame: Option<Arc<Frame<T>>>,
-    frame_set: &[Arc<Frame<T>>], input_frameno: u64, config: &EncoderConfig,
-    inter_cfg: &InterConfig, keyframes: &mut BTreeSet<u64>,
-    keyframes_forced: &BTreeSet<u64>,
+    &mut self, frame_set: &[Arc<Frame<T>>], input_frameno: u64,
+    config: &EncoderConfig, inter_cfg: &InterConfig,
+    keyframes: &mut BTreeSet<u64>, keyframes_forced: &BTreeSet<u64>,
   ) {
-    let frame_set = match previous_frame {
-      Some(frame) => {
-        [frame].iter().chain(frame_set.iter()).cloned().collect::<Vec<_>>()
-      }
-      None => {
-        // The first frame is always a keyframe.
-        keyframes.insert(0);
-        return;
-      }
-    };
-
     self.exclude_scene_flashes(&frame_set, input_frameno, inter_cfg);
 
     if self.is_key_frame(
