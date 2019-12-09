@@ -61,6 +61,9 @@ pub struct EncoderConfig {
   /// Still picture mode flag.
   pub still_picture: bool,
 
+  /// Flag to force all frames to be error resilient.
+  pub error_resilient: bool,
+
   // encoder configuration
   /// The *minimum* interval between two keyframes
   pub min_key_frame_interval: u64,
@@ -146,6 +149,8 @@ impl EncoderConfig {
       enable_timing_info: false,
 
       still_picture: false,
+
+      error_resilient: false,
 
       time_base: Rational { num: 1, den: 30 },
 
