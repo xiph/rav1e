@@ -577,9 +577,6 @@ pub fn setup_integral_image<T: Pixel>(
   }
 }
 
-use crate::hawktracer::*;
-
-#[hawktracer(sgrproj_stripe_filter)]
 pub fn sgrproj_stripe_filter<T: Pixel>(
   set: u8, xqd: [i8; 2], fi: &FrameInvariants<T>,
   integral_image_buffer: &IntegralImageBuffer, integral_image_stride: usize,
