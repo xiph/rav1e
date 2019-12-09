@@ -82,7 +82,7 @@ simd_helpers = "0.1"
 version = "0.22.1"
 optional = true
 default-features = false
-features = ["png"]
+features = ["png_codec"]
 
 [dependencies.rust_hawktracer]
 version = "0.6.0"
