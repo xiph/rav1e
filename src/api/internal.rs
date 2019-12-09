@@ -1018,37 +1018,25 @@ impl<T: Pixel> ContextInner<T> {
       self.frame_data.insert(output_frameno, output_frame_data);
     }
 
-    // Get the final block importance values for the current output frame.
-    if !output_framenos.is_empty() {
-      let fi = &mut self.frame_data.get_mut(&output_framenos[0]).unwrap().fi;
-
-      for y in 0..fi.h_in_imp_b {
-        for x in 0..fi.w_in_imp_b {
-          let intra_cost =
-            fi.lookahead_intra_costs[y * fi.w_in_imp_b + x] as f32;
-
-          let importance = &mut fi.block_importances[y * fi.w_in_imp_b + x];
-          if intra_cost > 0. {
-            *importance = (1. + *importance / intra_cost).log2();
-          } else {
-            *importance = 0.;
-          }
-
-          assert!(*importance >= 0.);
-        }
-      }
-
-      #[cfg(feature = "dump_lookahead_data")]
-      {
-        let data = &fi.block_importances;
+    #[cfg(feature = "dump_lookahead_data")]
+    {
+      if !output_framenos.is_empty() {
+        let fi = &mut self.frame_data.get_mut(&output_framenos[0]).unwrap().fi;
         use byteorder::{NativeEndian, WriteBytesExt};
         let mut buf = vec![];
         buf.write_u64::<NativeEndian>(fi.h_in_imp_b as u64).unwrap();
         buf.write_u64::<NativeEndian>(fi.w_in_imp_b as u64).unwrap();
         for y in 0..fi.h_in_imp_b {
           for x in 0..fi.w_in_imp_b {
-            let importance = data[y * fi.w_in_imp_b + x];
-            buf.write_f32::<NativeEndian>(importance).unwrap();
+            let propagate_cost = fi.block_importances[y * fi.w_in_imp_b + x];
+            let intra_cost =
+              fi.lookahead_intra_costs[y * fi.w_in_imp_b + x] as f32;
+            let res = if propagate_cost == 0. {
+              1.
+            } else {
+              (intra_cost + propagate_cost) / intra_cost
+            };
+            buf.write_f32::<NativeEndian>(res).unwrap();
           }
         }
         ::std::fs::write(format!("{}-imps.bin", fi.input_frameno), buf)

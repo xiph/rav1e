@@ -390,37 +390,69 @@ fn compute_tx_distortion<T: Pixel>(
   distortion
 }
 
-fn compute_mean_importance<T: Pixel>(
+pub fn compute_distortion_bias<T: Pixel>(
   fi: &FrameInvariants<T>, frame_bo: PlaneBlockOffset, bsize: BlockSize,
-) -> f32 {
+) -> f64 {
   let x1 = frame_bo.0.x;
   let y1 = frame_bo.0.y;
   let x2 = (x1 + bsize.width_mi()).min(fi.w_in_b);
   let y2 = (y1 + bsize.height_mi()).min(fi.h_in_b);
 
-  let mut total_importance = 0.;
+  let mut total_propagate_cost = 0_f64;
+  let mut total_intra_cost = 0_f64;
   for y in y1..y2 {
     for x in x1..x2 {
-      total_importance += fi.block_importances[y / 2 * fi.w_in_imp_b + x / 2];
+      total_intra_cost +=
+        fi.lookahead_intra_costs[y / 2 * fi.w_in_imp_b + x / 2] as f64;
+      total_propagate_cost +=
+        fi.block_importances[y / 2 * fi.w_in_imp_b + x / 2] as f64;
     }
   }
-  // Divide by the full area even though some blocks were outside.
-  total_importance / (bsize.width_mi() * bsize.height_mi()) as f32
-}
 
-pub fn compute_distortion_bias<T: Pixel>(
-  fi: &FrameInvariants<T>, frame_bo: PlaneBlockOffset, bsize: BlockSize,
-) -> f64 {
-  let mean_importance = compute_mean_importance(fi, frame_bo, bsize);
+  // The mbtree paper \cite{mbtree} uses the following formula:
+  //
+  //     QP_delta = -strength * log2(1 + (propagate_cost / intra_cost))
+  //
+  // Since this is H.264, this corresponds to the following quantizer:
+  //
+  //     Q' = Q * 2^(QP_delta/6)
+  //
+  // Since lambda is proportial to Q^2, this means we want to minimize:
+  //
+  //     D + lambda' * R
+  //   = D + 2^(QP_delta / 3) * lambda * R
+  //
+  // If we want to keep lambda fixed, we can instead scale distortion and
+  // minimize:
+  //
+  //     D * scale + lambda * R
+  //
+  // where:
+  //
+  //     scale = 2^(QP_delta / -3)
+  //           = (1 + (propagate_cost / intra_cost))^(strength / 3)
+  //
+  //  The original paper empirically chooses strength = 2.0, but strength = 1.0
+  //  seems to work best in rav1e currently, this may have something to do with
+  //  the fact that they use 16x16 blocks whereas our "importance blocks" are
+  //  8x8, but everything should be scale invariant here so that's weird.
+  //
+  // @article{mbtree,
+  //   title={A novel macroblock-tree algorithm for high-performance
+  //    optimization of dependent video coding in H.264/AVC},
+  //   author={Garrett-Glaser, Jason},
+  //   journal={Tech. Rep.},
+  //   year={2009},
+  //   url={https://pdfs.semanticscholar.org/032f/1ab7d9db385780a02eb2d579af8303b266d2.pdf}
+  // }
 
-  // Chosen based on a series of AWCY runs.
-  const FACTOR: f32 = 3.;
-  const ADDEND: f64 = 0.65;
+  if total_intra_cost == 0. {
+    return 1.; // no scaling
+  }
 
-  let bias = (mean_importance / FACTOR) as f64 + ADDEND;
-  debug_assert!(bias.is_finite());
-
-  bias
+  let strength = 1.0; // empirical, see comment above
+  let frac = (total_intra_cost + total_propagate_cost) / total_intra_cost;
+  frac.powf(strength / 3.0)
 }
 
 #[repr(transparent)]
