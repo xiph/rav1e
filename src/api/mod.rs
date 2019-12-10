@@ -14,6 +14,8 @@ pub mod color;
 pub mod config;
 /// Internal implementation
 pub(crate) mod internal;
+/// Lookahead-specific methods
+pub(crate) mod lookahead;
 
 #[cfg(test)]
 mod test;

@@ -9,15 +9,14 @@
 #![deny(missing_docs)]
 
 use crate::activity::ActivityMask;
+use crate::api::lookahead::*;
 use crate::api::{EncoderConfig, EncoderStatus, FrameType, Packet};
-use crate::context::*;
-use crate::context::{FrameBlocks, SuperBlockOffset, TileSuperBlockOffset};
 use crate::dist::get_satd;
 use crate::encoder::*;
 use crate::frame::*;
+use crate::hawktracer::*;
 use crate::metrics::calculate_frame_psnr;
 use crate::partition::*;
-use crate::predict::PredictionMode;
 use crate::rate::RCState;
 use crate::rate::FRAME_NSUBTYPES;
 use crate::rate::FRAME_SUBTYPE_I;
@@ -25,19 +24,14 @@ use crate::rate::FRAME_SUBTYPE_P;
 use crate::rate::FRAME_SUBTYPE_SEF;
 use crate::scenechange::SceneChangeDetector;
 use crate::stats::EncoderStats;
-use crate::tiling::{Area, TileRect};
-use crate::transform::TxSize;
+use crate::tiling::Area;
 use crate::util::Pixel;
 use arrayvec::ArrayVec;
 use log::Level::Info;
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
-
 use std::cmp;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
-
-use crate::hawktracer::*;
 
 /// The set of options that controls frame re-ordering and reference picture
 ///  selection.
@@ -59,7 +53,7 @@ pub struct InterConfig {
 }
 
 impl InterConfig {
-  fn new(enc_config: &EncoderConfig) -> InterConfig {
+  pub(crate) fn new(enc_config: &EncoderConfig) -> InterConfig {
     let reorder = !enc_config.low_latency;
     // A group always starts with (group_output_len - group_input_len) hidden
     //  frames, followed by group_input_len shown frames.
@@ -621,42 +615,7 @@ impl<T: Pixel> ContextInner<T> {
     // P-frames in this instance.
     //
     // Compute the motion vectors.
-    let mut blocks = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
-    let inter_cfg = self.inter_cfg;
-    fs.half_res_pmvs = fi
-      .tiling
-      .tile_iter_mut(fs, &mut blocks)
-      .collect::<Vec<_>>()
-      .into_par_iter()
-      .map(|mut ctx| {
-        let ts = &mut ctx.ts;
-
-        // Compute the quarter-resolution motion vectors.
-        let tile_pmvs = build_coarse_pmvs(fi, ts, &inter_cfg);
-
-        // Compute the half-resolution motion vectors.
-        let mut half_res_pmvs = Vec::with_capacity(ts.sb_height * ts.sb_width);
-        for sby in 0..ts.sb_height {
-          for sbx in 0..ts.sb_width {
-            let tile_sbo =
-              TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
-            half_res_pmvs
-              .push(build_half_res_pmvs(fi, ts, tile_sbo, &tile_pmvs));
-          }
-        }
-
-        // Compute the full-resolution motion vectors.
-        for sby in 0..ts.sb_height {
-          for sbx in 0..ts.sb_width {
-            let tile_sbo =
-              TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
-            build_full_res_pmvs(fi, ts, tile_sbo, &half_res_pmvs);
-          }
-        }
-
-        (ts.sbo, half_res_pmvs)
-      })
-      .collect::<Vec<_>>();
+    compute_motion_vectors(fi, fs, &self.inter_cfg);
 
     // Save the motion vectors to FrameInvariants.
     fi.lookahead_mvs = fs.frame_mvs.clone();
@@ -718,91 +677,24 @@ impl<T: Pixel> ContextInner<T> {
   /// `lookahead_intra_costs` on the `FrameInvariants`.
   #[hawktracer(compute_lookahead_intra_costs)]
   fn compute_lookahead_intra_costs(&mut self, output_frameno: u64) {
-    let frame_data = self.frame_data.get_mut(&output_frameno).unwrap();
-    let fi = &mut frame_data.fi;
+    let frame_data = self.frame_data.get(&output_frameno).unwrap();
+    let fi = &frame_data.fi;
 
     // We're only interested in valid frames which are not show-existing-frame.
     if fi.invalid || fi.show_existing_frame {
       return;
     }
 
-    let frame = self.frame_q[&fi.input_frameno].as_ref().unwrap();
-
-    let mut plane_after_prediction = frame.planes[0].clone();
-
-    let bsize = BlockSize::from_width_and_height(
-      IMPORTANCE_BLOCK_SIZE,
-      IMPORTANCE_BLOCK_SIZE,
+    self
+      .frame_data
+      .get_mut(&output_frameno)
+      .unwrap()
+      .fi
+      .lookahead_intra_costs = estimate_intra_costs(
+      &*self.frame_q[&fi.input_frameno].as_ref().unwrap(),
+      fi.config.bit_depth,
+      fi.cpu_feature_level,
     );
-
-    for y in 0..fi.h_in_imp_b {
-      for x in 0..fi.w_in_imp_b {
-        let plane_org = frame.planes[0].region(Area::Rect {
-          x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
-          y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
-          width: IMPORTANCE_BLOCK_SIZE,
-          height: IMPORTANCE_BLOCK_SIZE,
-        });
-
-        // TODO: other intra prediction modes.
-        let edge_buf = get_intra_edges(
-          &frame.planes[0].as_region(),
-          TileBlockOffset(BlockOffset { x, y }),
-          0,
-          0,
-          BlockSize::BLOCK_8X8,
-          PlaneOffset {
-            x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
-            y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
-          },
-          TxSize::TX_8X8,
-          fi.sequence.bit_depth,
-          Some(PredictionMode::DC_PRED),
-        );
-
-        let mut plane_after_prediction_region = plane_after_prediction
-          .region_mut(Area::Rect {
-            x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
-            y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
-            width: IMPORTANCE_BLOCK_SIZE,
-            height: IMPORTANCE_BLOCK_SIZE,
-          });
-
-        PredictionMode::DC_PRED.predict_intra(
-          TileRect {
-            x: x * IMPORTANCE_BLOCK_SIZE,
-            y: y * IMPORTANCE_BLOCK_SIZE,
-            width: IMPORTANCE_BLOCK_SIZE,
-            height: IMPORTANCE_BLOCK_SIZE,
-          },
-          &mut plane_after_prediction_region,
-          TxSize::TX_8X8,
-          fi.sequence.bit_depth,
-          &[], // Not used by DC_PRED.
-          0,   // Not used by DC_PRED.
-          &edge_buf,
-          fi.cpu_feature_level,
-        );
-
-        let plane_after_prediction_region =
-          plane_after_prediction.region(Area::Rect {
-            x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
-            y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
-            width: IMPORTANCE_BLOCK_SIZE,
-            height: IMPORTANCE_BLOCK_SIZE,
-          });
-
-        let intra_cost = get_satd(
-          &plane_org,
-          &plane_after_prediction_region,
-          bsize,
-          self.config.bit_depth,
-          fi.cpu_feature_level,
-        );
-
-        fi.lookahead_intra_costs[y * fi.w_in_imp_b + x] = intra_cost;
-      }
-    }
   }
 
   #[hawktracer(compute_keyframe_placement)]
@@ -883,12 +775,6 @@ impl<T: Pixel> ContextInner<T> {
     // Now compute and propagate the block importances from the end. The
     // current output frame will get its block importances from the future
     // frames.
-    const MV_UNITS_PER_PIXEL: i64 = 8;
-    const BLOCK_SIZE_IN_MV_UNITS: i64 =
-      IMPORTANCE_BLOCK_SIZE as i64 * MV_UNITS_PER_PIXEL;
-    const BLOCK_AREA_IN_MV_UNITS: i64 =
-      BLOCK_SIZE_IN_MV_UNITS * BLOCK_SIZE_IN_MV_UNITS;
-
     let bsize = BlockSize::from_width_and_height(
       IMPORTANCE_BLOCK_SIZE,
       IMPORTANCE_BLOCK_SIZE,
@@ -980,9 +866,9 @@ impl<T: Pixel> ContextInner<T> {
                   // Coordinates of the top-left corner of the reference block, in MV
                   // units.
                   let reference_x =
-                    x as i64 * BLOCK_SIZE_IN_MV_UNITS + mv.col as i64;
+                    x as i64 * IMP_BLOCK_SIZE_IN_MV_UNITS + mv.col as i64;
                   let reference_y =
-                    y as i64 * BLOCK_SIZE_IN_MV_UNITS + mv.row as i64;
+                    y as i64 * IMP_BLOCK_SIZE_IN_MV_UNITS + mv.row as i64;
 
                   let region_org = plane_org.region(Area::Rect {
                     x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
@@ -992,8 +878,10 @@ impl<T: Pixel> ContextInner<T> {
                   });
 
                   let region_ref = plane_ref.region(Area::Rect {
-                    x: reference_x as isize / MV_UNITS_PER_PIXEL as isize,
-                    y: reference_y as isize / MV_UNITS_PER_PIXEL as isize,
+                    x: reference_x as isize
+                      / IMP_BLOCK_MV_UNITS_PER_PIXEL as isize,
+                    y: reference_y as isize
+                      / IMP_BLOCK_MV_UNITS_PER_PIXEL as isize,
                     width: IMPORTANCE_BLOCK_SIZE,
                     height: IMPORTANCE_BLOCK_SIZE,
                   });
@@ -1017,8 +905,8 @@ impl<T: Pixel> ContextInner<T> {
 
                   let mut propagate =
                     |block_x_in_mv_units, block_y_in_mv_units, fraction| {
-                      let x = block_x_in_mv_units / BLOCK_SIZE_IN_MV_UNITS;
-                      let y = block_y_in_mv_units / BLOCK_SIZE_IN_MV_UNITS;
+                      let x = block_x_in_mv_units / IMP_BLOCK_SIZE_IN_MV_UNITS;
+                      let y = block_y_in_mv_units / IMP_BLOCK_SIZE_IN_MV_UNITS;
 
                       // TODO: propagate partially if the block is partially off-frame
                       // (possible on right and bottom edges)?
@@ -1037,30 +925,30 @@ impl<T: Pixel> ContextInner<T> {
                   // reference block from the top-left.
                   let top_left_block_x = (reference_x
                     - if reference_x < 0 {
-                      BLOCK_SIZE_IN_MV_UNITS - 1
+                      IMP_BLOCK_SIZE_IN_MV_UNITS - 1
                     } else {
                       0
                     })
-                    / BLOCK_SIZE_IN_MV_UNITS
-                    * BLOCK_SIZE_IN_MV_UNITS;
+                    / IMP_BLOCK_SIZE_IN_MV_UNITS
+                    * IMP_BLOCK_SIZE_IN_MV_UNITS;
                   let top_left_block_y = (reference_y
                     - if reference_y < 0 {
-                      BLOCK_SIZE_IN_MV_UNITS - 1
+                      IMP_BLOCK_SIZE_IN_MV_UNITS - 1
                     } else {
                       0
                     })
-                    / BLOCK_SIZE_IN_MV_UNITS
-                    * BLOCK_SIZE_IN_MV_UNITS;
+                    / IMP_BLOCK_SIZE_IN_MV_UNITS
+                    * IMP_BLOCK_SIZE_IN_MV_UNITS;
 
                   debug_assert!(reference_x >= top_left_block_x);
                   debug_assert!(reference_y >= top_left_block_y);
 
                   let top_right_block_x =
-                    top_left_block_x + BLOCK_SIZE_IN_MV_UNITS;
+                    top_left_block_x + IMP_BLOCK_SIZE_IN_MV_UNITS;
                   let top_right_block_y = top_left_block_y;
                   let bottom_left_block_x = top_left_block_x;
                   let bottom_left_block_y =
-                    top_left_block_y + BLOCK_SIZE_IN_MV_UNITS;
+                    top_left_block_y + IMP_BLOCK_SIZE_IN_MV_UNITS;
                   let bottom_right_block_x = top_right_block_x;
                   let bottom_right_block_y = bottom_left_block_y;
 
@@ -1068,7 +956,7 @@ impl<T: Pixel> ContextInner<T> {
                     - reference_x)
                     * (bottom_left_block_y - reference_y))
                     as f32
-                    / BLOCK_AREA_IN_MV_UNITS as f32;
+                    / IMP_BLOCK_AREA_IN_MV_UNITS as f32;
 
                   propagate(
                     top_left_block_x,
@@ -1077,11 +965,11 @@ impl<T: Pixel> ContextInner<T> {
                   );
 
                   let top_right_block_fraction = ((reference_x
-                    + BLOCK_SIZE_IN_MV_UNITS
+                    + IMP_BLOCK_SIZE_IN_MV_UNITS
                     - top_right_block_x)
                     * (bottom_left_block_y - reference_y))
                     as f32
-                    / BLOCK_AREA_IN_MV_UNITS as f32;
+                    / IMP_BLOCK_AREA_IN_MV_UNITS as f32;
 
                   propagate(
                     top_right_block_x,
@@ -1091,9 +979,9 @@ impl<T: Pixel> ContextInner<T> {
 
                   let bottom_left_block_fraction =
                     ((top_right_block_x - reference_x)
-                      * (reference_y + BLOCK_SIZE_IN_MV_UNITS
+                      * (reference_y + IMP_BLOCK_SIZE_IN_MV_UNITS
                         - bottom_left_block_y)) as f32
-                      / BLOCK_AREA_IN_MV_UNITS as f32;
+                      / IMP_BLOCK_AREA_IN_MV_UNITS as f32;
 
                   propagate(
                     bottom_left_block_x,
@@ -1102,11 +990,11 @@ impl<T: Pixel> ContextInner<T> {
                   );
 
                   let bottom_right_block_fraction =
-                    ((reference_x + BLOCK_SIZE_IN_MV_UNITS
+                    ((reference_x + IMP_BLOCK_SIZE_IN_MV_UNITS
                       - top_right_block_x)
-                      * (reference_y + BLOCK_SIZE_IN_MV_UNITS
+                      * (reference_y + IMP_BLOCK_SIZE_IN_MV_UNITS
                         - bottom_left_block_y)) as f32
-                      / BLOCK_AREA_IN_MV_UNITS as f32;
+                      / IMP_BLOCK_AREA_IN_MV_UNITS as f32;
 
                   propagate(
                     bottom_right_block_x,
