@@ -722,14 +722,17 @@ impl<T: Pixel> ContextInner<T> {
         break;
       }
 
-      self.keyframe_detector.analyze_next_frame(
-        &current_lookahead_frames,
-        self.next_lookahead_frame,
-        &self.config,
-        &self.inter_cfg,
-        &mut self.keyframes,
-        &self.keyframes_forced,
-      );
+      if self.keyframes_forced.contains(&self.next_lookahead_frame)
+        || self.keyframe_detector.analyze_next_frame(
+          &current_lookahead_frames,
+          self.next_lookahead_frame,
+          &self.config,
+          &self.inter_cfg,
+          &self.keyframes,
+        )
+      {
+        self.keyframes.insert(self.next_lookahead_frame);
+      }
 
       self.next_lookahead_frame += 1;
       lookahead_idx += 1;

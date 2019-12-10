@@ -61,34 +61,27 @@ impl SceneChangeDetector {
   pub fn analyze_next_frame<T: Pixel>(
     &mut self, frame_set: &[Arc<Frame<T>>], input_frameno: u64,
     config: &EncoderConfig, inter_cfg: &InterConfig,
-    keyframes: &mut BTreeSet<u64>, keyframes_forced: &BTreeSet<u64>,
-  ) {
+    keyframes: &BTreeSet<u64>,
+  ) -> bool {
     if !config.speed_settings.no_scene_detection {
       self.exclude_scene_flashes(&frame_set, input_frameno, inter_cfg);
     }
 
-    if self.is_key_frame(
+    self.is_key_frame(
       &frame_set[0],
       &frame_set[1],
       input_frameno,
       config,
       keyframes,
-      keyframes_forced,
-    ) {
-      keyframes.insert(input_frameno);
-    }
+    )
   }
 
   /// Determines if `current_frame` should be a keyframe.
   fn is_key_frame<T: Pixel>(
     &self, previous_frame: &Frame<T>, current_frame: &Frame<T>,
     current_frameno: u64, config: &EncoderConfig,
-    keyframes: &mut BTreeSet<u64>, keyframes_forced: &BTreeSet<u64>,
+    keyframes: &BTreeSet<u64>,
   ) -> bool {
-    if keyframes_forced.contains(&current_frameno) {
-      return true;
-    }
-
     // Find the distance to the previous keyframe.
     let previous_keyframe = keyframes.iter().last().unwrap();
     let distance = current_frameno - previous_keyframe;
