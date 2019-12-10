@@ -393,19 +393,19 @@ fn compute_tx_distortion<T: Pixel>(
 pub fn compute_distortion_scale<T: Pixel>(
   fi: &FrameInvariants<T>, frame_bo: PlaneBlockOffset, bsize: BlockSize,
 ) -> f64 {
-  let x1 = frame_bo.0.x;
-  let y1 = frame_bo.0.y;
-  let x2 = (x1 + bsize.width_mi()).min(fi.w_in_b);
-  let y2 = (y1 + bsize.height_mi()).min(fi.h_in_b);
+  let x1 = frame_bo.0.x >> IMPORTANCE_BLOCK_TO_BLOCK_SHIFT;
+  let y1 = frame_bo.0.y >> IMPORTANCE_BLOCK_TO_BLOCK_SHIFT;
+  let x2 = (x1 + bsize.width_imp_b()).min(fi.w_in_imp_b);
+  let y2 = (y1 + bsize.height_imp_b()).min(fi.h_in_imp_b);
 
   let mut total_propagate_cost = 0_f64;
   let mut total_intra_cost = 0_f64;
   for y in y1..y2 {
     for x in x1..x2 {
       total_intra_cost +=
-        fi.lookahead_intra_costs[y / 2 * fi.w_in_imp_b + x / 2] as f64;
+        fi.lookahead_intra_costs[y * fi.w_in_imp_b + x] as f64;
       total_propagate_cost +=
-        fi.block_importances[y / 2 * fi.w_in_imp_b + x / 2] as f64;
+        fi.block_importances[y * fi.w_in_imp_b + x] as f64;
     }
   }
 

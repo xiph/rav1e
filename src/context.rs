@@ -1195,6 +1195,7 @@ mod test {
 const SUPERBLOCK_TO_PLANE_SHIFT: usize = SB_SIZE_LOG2;
 const SUPERBLOCK_TO_BLOCK_SHIFT: usize = MIB_SIZE_LOG2;
 pub const BLOCK_TO_PLANE_SHIFT: usize = MI_SIZE_LOG2;
+pub const IMPORTANCE_BLOCK_TO_BLOCK_SHIFT: usize = 1;
 pub const LOCAL_BLOCK_MASK: usize = (1 << SUPERBLOCK_TO_BLOCK_SHIFT) - 1;
 
 /// Absolute offset in superblocks, where a superblock is defined

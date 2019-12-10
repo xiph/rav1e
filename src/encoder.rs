@@ -58,7 +58,8 @@ const MAX_NUM_OPERATING_POINTS: usize =
   MAX_NUM_TEMPORAL_LAYERS * MAX_NUM_SPATIAL_LAYERS;
 
 /// Size of blocks for the importance computation, in pixels.
-pub const IMPORTANCE_BLOCK_SIZE: usize = 8;
+pub const IMPORTANCE_BLOCK_SIZE: usize =
+  1 << (IMPORTANCE_BLOCK_TO_BLOCK_SHIFT + BLOCK_TO_PLANE_SHIFT);
 
 #[derive(Debug, Clone)]
 pub struct ReferenceFrame<T: Pixel> {

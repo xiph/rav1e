@@ -200,6 +200,11 @@ impl BlockSize {
     self.width() >> MI_SIZE_LOG2
   }
 
+  pub fn width_imp_b(self) -> usize {
+    (self.width() >> (IMPORTANCE_BLOCK_TO_BLOCK_SHIFT + BLOCK_TO_PLANE_SHIFT))
+      .max(1)
+  }
+
   pub fn height(self) -> usize {
     1 << self.height_log2()
   }
@@ -218,6 +223,11 @@ impl BlockSize {
 
   pub fn height_mi(self) -> usize {
     self.height() >> MI_SIZE_LOG2
+  }
+
+  pub fn height_imp_b(self) -> usize {
+    (self.height() >> (IMPORTANCE_BLOCK_TO_BLOCK_SHIFT + BLOCK_TO_PLANE_SHIFT))
+      .max(1)
   }
 
   pub fn tx_size(self) -> TxSize {
