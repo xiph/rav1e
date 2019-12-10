@@ -63,28 +63,9 @@ impl SceneChangeDetector {
     config: &EncoderConfig, inter_cfg: &InterConfig,
     keyframes: &BTreeSet<u64>,
   ) -> bool {
-    if !config.speed_settings.no_scene_detection {
-      self.exclude_scene_flashes(&frame_set, input_frameno, inter_cfg);
-    }
-
-    self.is_key_frame(
-      &frame_set[0],
-      &frame_set[1],
-      input_frameno,
-      config,
-      keyframes,
-    )
-  }
-
-  /// Determines if `current_frame` should be a keyframe.
-  fn is_key_frame<T: Pixel>(
-    &self, previous_frame: &Frame<T>, current_frame: &Frame<T>,
-    current_frameno: u64, config: &EncoderConfig,
-    keyframes: &BTreeSet<u64>,
-  ) -> bool {
-    // Find the distance to the previous keyframe.
     let previous_keyframe = keyframes.iter().last().unwrap();
-    let distance = current_frameno - previous_keyframe;
+    // Find the distance to the previous keyframe.
+    let distance = input_frameno - previous_keyframe;
 
     // Handle minimum and maximum key frame intervals.
     if distance < config.min_key_frame_interval {
@@ -94,11 +75,24 @@ impl SceneChangeDetector {
       return true;
     }
 
-    // Skip smart scene detection if it's disabled
     if config.speed_settings.no_scene_detection {
       return false;
     }
 
+    self.exclude_scene_flashes(&frame_set, input_frameno, inter_cfg);
+
+    self.is_key_frame(
+      &frame_set[0],
+      &frame_set[1],
+      input_frameno,
+    )
+  }
+
+  /// Determines if `current_frame` should be a keyframe.
+  fn is_key_frame<T: Pixel>(
+    &self, previous_frame: &Frame<T>, current_frame: &Frame<T>,
+    current_frameno: u64,
+  ) -> bool {
     if self.excluded_frames.contains(&current_frameno) {
       return false;
     }
