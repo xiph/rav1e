@@ -63,7 +63,9 @@ impl SceneChangeDetector {
     config: &EncoderConfig, inter_cfg: &InterConfig,
     keyframes: &mut BTreeSet<u64>, keyframes_forced: &BTreeSet<u64>,
   ) {
-    self.exclude_scene_flashes(&frame_set, input_frameno, inter_cfg);
+    if !config.speed_settings.no_scene_detection {
+      self.exclude_scene_flashes(&frame_set, input_frameno, inter_cfg);
+    }
 
     if self.is_key_frame(
       &frame_set[0],
