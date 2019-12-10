@@ -114,7 +114,6 @@ pub(crate) fn estimate_intra_costs<T: Pixel>(
   intra_costs.into_boxed_slice()
 }
 
-#[allow(dead_code)]
 pub(crate) fn estimate_inter_costs<T: Pixel>(
   frame: Arc<Frame<T>>, ref_frame: Arc<Frame<T>>, bit_depth: usize,
   mut config: EncoderConfig, sequence: Sequence,
