@@ -304,7 +304,7 @@ pub struct SpeedSettings {
   ///
   /// Enabled is faster.
   pub no_scene_detection: bool,
-  /// Fast scene detection mode, ignoring chroma planes.
+  /// Fast scene detection mode, uses simple SAD instead of encoder cost estimates.
   pub fast_scene_detection: bool,
   /// Enables diamond motion vector search rather than full search.
   pub diamond_me: bool,

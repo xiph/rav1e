@@ -571,13 +571,14 @@ fn output_frameno_reorder_scene_change_at(scene_change_at: u64) {
   // TODO: when we support more pyramid depths, this test will need tweaks.
   assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
 
-  let limit = 5;
+  let limit = 10;
   send_frames(&mut ctx, limit, scene_change_at);
   ctx.flush();
 
   // data[output_frameno] = (input_frameno, !invalid)
   let data = get_frame_invariants(ctx)
     .map(|fi| (fi.input_frameno, !fi.invalid))
+    .filter(|&(frameno, _)| frameno < 5)
     .collect::<Vec<_>>();
 
   assert_eq!(
@@ -596,14 +597,12 @@ fn output_frameno_reorder_scene_change_at(scene_change_at: u64) {
       }
       1 => {
         &[
-          (0, true),  // I-frame
-          (1, true),  // I-frame
-          (1, false), // Missing
-          (3, true),  // B0-frame
-          (2, true),  // B1-frame (first)
-          (3, true),  // B0-frame (show existing)
-          (4, true),  // B1-frame (second)
-          (4, false), // Missing
+          (0, true), // I-frame
+          (1, true), // I-frame
+          (3, true), // B0-frame
+          (2, true), // B1-frame (first)
+          (3, true), // B0-frame (show existing)
+          (4, true), // B1-frame (second)
         ][..]
       }
       2 => {
@@ -616,12 +615,9 @@ fn output_frameno_reorder_scene_change_at(scene_change_at: u64) {
           (1, false), // Missing
           (1, false), // Missing
           (2, true),  // I-frame
-          (2, false), // Missing
           (4, true),  // B0-frame
           (3, true),  // B1-frame (first)
           (4, true),  // B0-frame (show existing)
-          (4, false), // Missing
-          (4, false), // Missing
         ][..]
       }
       3 => {
@@ -634,12 +630,7 @@ fn output_frameno_reorder_scene_change_at(scene_change_at: u64) {
           (2, false), // Missing
           (2, false), // Missing
           (3, true),  // I-frame
-          (3, false), // Missing
-          (3, false), // Missing
           (4, true),  // B1-frame (first)
-          (4, false), // Missing
-          (4, false), // Missing
-          (4, false), // Missing
         ][..]
       }
       4 => {
@@ -686,13 +677,15 @@ fn pyramid_level_reorder_scene_change_at(scene_change_at: u64) {
   // TODO: when we support more pyramid depths, this test will need tweaks.
   assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
 
-  let limit = 5;
+  let limit = 10;
   send_frames(&mut ctx, limit, scene_change_at);
   ctx.flush();
 
   // data[output_frameno] = pyramid_level
-  let data =
-    get_frame_invariants(ctx).map(|fi| fi.pyramid_level).collect::<Vec<_>>();
+  let data = get_frame_invariants(ctx)
+    .filter(|fi| fi.input_frameno < 5)
+    .map(|fi| fi.pyramid_level)
+    .collect::<Vec<_>>();
 
   assert_eq!(
     &data[..],
@@ -712,12 +705,10 @@ fn pyramid_level_reorder_scene_change_at(scene_change_at: u64) {
         &[
           0, // I-frame
           0, // I-frame
-          0, // Missing
           1, // B0-frame
           2, // B1-frame (first)
           1, // B0-frame (show existing)
           2, // B1-frame (second)
-          2, // Missing
         ][..]
       }
       2 => {
@@ -730,12 +721,9 @@ fn pyramid_level_reorder_scene_change_at(scene_change_at: u64) {
           2, // Missing
           2, // Missing
           0, // I-frame
-          0, // Missing
           1, // B0-frame
           2, // B1-frame (first)
           1, // B0-frame (show existing)
-          1, // Missing
-          1, // Missing
         ][..]
       }
       3 => {
@@ -748,12 +736,7 @@ fn pyramid_level_reorder_scene_change_at(scene_change_at: u64) {
           1, // Missing
           1, // Missing
           0, // I-frame
-          0, // Missing
-          0, // Missing
           2, // B1-frame (first)
-          2, // Missing
-          2, // Missing
-          2, // Missing
         ][..]
       }
       4 => {
@@ -930,7 +913,7 @@ fn output_frameno_incremental_reorder_scene_change_at(scene_change_at: u64) {
   // TODO: when we support more pyramid depths, this test will need tweaks.
   assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
 
-  let limit = 5;
+  let limit = 10;
   for i in 0..limit {
     send_frames(&mut ctx, 1, scene_change_at.saturating_sub(i));
   }
@@ -939,6 +922,7 @@ fn output_frameno_incremental_reorder_scene_change_at(scene_change_at: u64) {
   // data[output_frameno] = (input_frameno, !invalid)
   let data = get_frame_invariants(ctx)
     .map(|fi| (fi.input_frameno, !fi.invalid))
+    .filter(|&(frameno, _)| frameno < 5)
     .collect::<Vec<_>>();
 
   assert_eq!(
@@ -957,14 +941,12 @@ fn output_frameno_incremental_reorder_scene_change_at(scene_change_at: u64) {
       }
       1 => {
         &[
-          (0, true),  // I-frame
-          (1, true),  // I-frame
-          (1, false), // Missing
-          (3, true),  // B0-frame
-          (2, true),  // B1-frame (first)
-          (3, true),  // B0-frame (show existing)
-          (4, true),  // B1-frame (second)
-          (4, false), // Missing
+          (0, true), // I-frame
+          (1, true), // I-frame
+          (3, true), // B0-frame
+          (2, true), // B1-frame (first)
+          (3, true), // B0-frame (show existing)
+          (4, true), // B1-frame (second)
         ][..]
       }
       2 => {
@@ -977,12 +959,9 @@ fn output_frameno_incremental_reorder_scene_change_at(scene_change_at: u64) {
           (1, false), // Missing
           (1, false), // Missing
           (2, true),  // I-frame
-          (2, false), // Missing
           (4, true),  // B0-frame
           (3, true),  // B1-frame (first)
           (4, true),  // B0-frame (show existing)
-          (4, false), // Missing
-          (4, false), // Missing
         ][..]
       }
       3 => {
@@ -995,12 +974,7 @@ fn output_frameno_incremental_reorder_scene_change_at(scene_change_at: u64) {
           (2, false), // Missing
           (2, false), // Missing
           (3, true),  // I-frame
-          (3, false), // Missing
-          (3, false), // Missing
           (4, true),  // B1-frame (first)
-          (4, false), // Missing
-          (4, false), // Missing
-          (4, false), // Missing
         ][..]
       }
       4 => {
@@ -1291,10 +1265,15 @@ fn output_frameno_scene_change_past_max_len_flash() {
   send_test_frame(&mut ctx, u8::max_value());
   send_test_frame(&mut ctx, u8::max_value());
   send_test_frame(&mut ctx, u8::min_value());
+  send_test_frame(&mut ctx, u8::min_value());
+  send_test_frame(&mut ctx, u8::min_value());
+  send_test_frame(&mut ctx, u8::min_value());
+  send_test_frame(&mut ctx, u8::min_value());
   ctx.flush();
 
   let data = get_frame_invariants(ctx)
     .map(|fi| (fi.input_frameno, !fi.invalid))
+    .filter(|&(frameno, _)| frameno <= 7)
     .collect::<Vec<_>>();
 
   assert_eq!(
@@ -1350,29 +1329,30 @@ fn output_frameno_no_scene_change_at_multiple_flashes() {
   send_test_frame(&mut ctx, 240);
   send_test_frame(&mut ctx, 240);
   send_test_frame(&mut ctx, 240);
+  send_test_frame(&mut ctx, 240);
+  send_test_frame(&mut ctx, 240);
+  send_test_frame(&mut ctx, 240);
   ctx.flush();
 
   let data = get_frame_invariants(ctx)
     .map(|fi| (fi.input_frameno, !fi.invalid))
+    .filter(|&(frameno, _)| frameno <= 7)
     .collect::<Vec<_>>();
 
   assert_eq!(
     &data[..],
     &[
-      (0, true),  // I-frame
-      (4, true),  // P-frame
-      (2, true),  // B0-frame
-      (1, true),  // B1-frame (first)
-      (2, true),  // B0-frame (show existing)
-      (3, true),  // B1-frame (second)
-      (4, true),  // P-frame (show existing),
-      (5, true),  // P-frame
-      (5, false), // invalid
-      (7, true),  // B0-frame
-      (6, true),  // B1-frame (first)
-      (7, true),  // B0-frame (show existing)
-      (7, false), // invalid
-      (7, false), // invalid
+      (0, true), // I-frame
+      (4, true), // P-frame
+      (2, true), // B0-frame
+      (1, true), // B1-frame (first)
+      (2, true), // B0-frame (show existing)
+      (3, true), // B1-frame (second)
+      (4, true), // P-frame (show existing),
+      (5, true), // P-frame
+      (7, true), // B0-frame
+      (6, true), // B1-frame (first)
+      (7, true), // B0-frame (show existing)
     ]
   );
 }

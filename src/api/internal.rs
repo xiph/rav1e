@@ -11,6 +11,7 @@
 use crate::activity::ActivityMask;
 use crate::api::lookahead::*;
 use crate::api::{EncoderConfig, EncoderStatus, FrameType, Packet};
+use crate::cpu_features::CpuFeatureLevel;
 use crate::dist::get_satd;
 use crate::encoder::*;
 use crate::frame::*;
@@ -260,6 +261,7 @@ impl<T: Pixel> ContextInner<T> {
     let maybe_ac_qi_max =
       if enc.quantizer < 255 { Some(enc.quantizer as u8) } else { None };
 
+    let seq = Sequence::new(enc);
     ContextInner {
       frame_count: 0,
       limit: None,
@@ -274,11 +276,14 @@ impl<T: Pixel> ContextInner<T> {
       gop_output_frameno_start: BTreeMap::new(),
       gop_input_frameno_start: BTreeMap::new(),
       keyframe_detector: SceneChangeDetector::new(
-        enc.bit_depth as u8,
-        enc.speed_settings.fast_scene_detection,
+        enc.bit_depth,
+        enc.speed_settings.fast_scene_detection || enc.low_latency,
+        CpuFeatureLevel::default(),
+        *enc,
+        seq,
       ),
       config: *enc,
-      seq: Sequence::new(enc),
+      seq,
       rc_state: RCState::new(
         enc.width as i32,
         enc.height as i32,
