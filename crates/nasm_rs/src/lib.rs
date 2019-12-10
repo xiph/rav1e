@@ -9,35 +9,35 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::process::Stdio;
 
-fn x86_triple(os: &str) -> &'static str {
+fn x86_triple(os: &str) -> (&'static str, &'static str) {
   match os {
-    "darwin" => "-fmacho32",
-    "windows" => "-fwin32",
-    _ => "-felf32",
+    "darwin" => ("-fmacho32", "-g"),
+    "windows" => ("-fwin32", "-g"),
+    _ => ("-felf32", "-gdwarf"),
   }
 }
 
-fn x86_64_triple(os: &str) -> &'static str {
+fn x86_64_triple(os: &str) -> (&'static str, &'static str) {
   match os {
-    "darwin" => "-fmacho64",
-    "windows" => "-fwin64",
-    _ => "-felf64",
+    "darwin" => ("-fmacho64", "-g"),
+    "windows" => ("-fwin64", "-g"),
+    _ => ("-felf64", "-gdwarf"),
   }
 }
 
-fn parse_triple(trip: &str) -> &'static str {
+fn parse_triple(trip: &str) -> (&'static str, &'static str) {
   let parts = trip.split('-').collect::<Vec<_>>();
   // ARCH-VENDOR-OS-ENVIRONMENT
   // or ARCH-VENDOR-OS
   // we don't care about environ so doesn't matter if triple doesn't have it
   if parts.len() < 3 {
-    return "";
+    return ("", "");
   }
 
   match parts[0] {
     "x86_64" => x86_64_triple(parts[2]),
     "x86" | "i386" | "i586" | "i686" => x86_triple(parts[2]),
-    _ => "",
+    _ => ("", ""),
   }
 }
 
@@ -243,10 +243,11 @@ impl Build {
   }
 
   fn get_args(&self, target: &str) -> Vec<&str> {
-    let mut args = vec![parse_triple(&target)];
+    let (arch_flag, debug_flag) = parse_triple(&target);
+    let mut args = vec![arch_flag];
 
     if self.debug {
-      args.push("-g");
+      args.push(debug_flag);
     }
 
     for arg in &self.flags {
