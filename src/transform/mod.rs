@@ -10,8 +10,8 @@
 #![allow(non_camel_case_types)]
 #![allow(dead_code)]
 
-pub use self::forward::*;
-pub use self::inverse::*;
+use self::forward::*;
+use self::inverse::*;
 
 use crate::context::MI_SIZE_LOG2;
 use crate::partition::{BlockSize, BlockSize::*};
@@ -21,8 +21,8 @@ use crate::util::*;
 use crate::cpu_features::CpuFeatureLevel;
 use TxSize::*;
 
-mod forward;
-mod inverse;
+pub mod forward;
+pub mod inverse;
 
 pub static RAV1E_TX_TYPES: &[TxType] = &[
   TxType::DCT_DCT,
