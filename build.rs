@@ -63,7 +63,7 @@ fn build_nasm_files() {
       "src/x86/cdef.asm",
       "src/x86/tables.asm",
     ],
-    &[&config_include_arg, "-Isrc/"],
+    &[&config_include_arg, "-Isrc/", "-Fdwarf"],
   );
   println!("cargo:rustc-link-lib=static=rav1easm");
   rerun_dir("src/x86");
