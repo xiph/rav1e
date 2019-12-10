@@ -60,10 +60,8 @@ impl SceneChangeDetector {
   #[hawktracer(analyze_next_frame)]
   pub fn analyze_next_frame<T: Pixel>(
     &mut self, frame_set: &[Arc<Frame<T>>], input_frameno: u64,
-    config: &EncoderConfig, inter_cfg: &InterConfig,
-    keyframes: &BTreeSet<u64>,
+    previous_keyframe: u64, config: &EncoderConfig, inter_cfg: &InterConfig,
   ) -> bool {
-    let previous_keyframe = keyframes.iter().last().unwrap();
     // Find the distance to the previous keyframe.
     let distance = input_frameno - previous_keyframe;
 
@@ -81,11 +79,7 @@ impl SceneChangeDetector {
 
     self.exclude_scene_flashes(&frame_set, input_frameno, inter_cfg);
 
-    self.is_key_frame(
-      &frame_set[0],
-      &frame_set[1],
-      input_frameno,
-    )
+    self.is_key_frame(&frame_set[0], &frame_set[1], input_frameno)
   }
 
   /// Determines if `current_frame` should be a keyframe.

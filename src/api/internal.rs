@@ -726,9 +726,9 @@ impl<T: Pixel> ContextInner<T> {
         || self.keyframe_detector.analyze_next_frame(
           &current_lookahead_frames,
           self.next_lookahead_frame,
+          *self.keyframes.iter().last().unwrap(),
           &self.config,
           &self.inter_cfg,
-          &self.keyframes,
         )
       {
         self.keyframes.insert(self.next_lookahead_frame);
