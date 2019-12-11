@@ -446,7 +446,7 @@ impl std::ops::Mul<f64> for RawDistortion {
 }
 
 impl Distortion {
-  pub fn zero() -> Self {
+  pub const fn zero() -> Self {
     Self(0)
   }
 }
@@ -465,7 +465,7 @@ impl std::ops::AddAssign for Distortion {
 }
 
 impl ScaledDistortion {
-  pub fn zero() -> Self {
+  pub const fn zero() -> Self {
     Self(0)
   }
 }
