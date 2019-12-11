@@ -371,22 +371,17 @@ pub trait FwdTxfm2D: native::FwdTxfm2D {
         }
       }
 
-      txfm_func_col(
-        &temp_out[..txfm_size_row].to_vec(),
-        &mut temp_out[txfm_size_row..],
-      );
+      let (temp_in, mut temp_out) = temp_out.split_at_mut(txfm_size_row);
 
-      round_shift_array_avx2(
-        &mut temp_out[txfm_size_row..],
-        txfm_size_row,
-        -cfg.shift[1],
-      );
+      txfm_func_col(&temp_in, &mut temp_out);
+
+      round_shift_array_avx2(&mut temp_out, txfm_size_row, -cfg.shift[1]);
 
       for rg in (0..txfm_size_row).step_by(8) {
         if txfm_size_row >= 8 && txfm_size_col >= 8 {
           let buf = &mut buf[(rg / 8 * txfm_size_col) + cg..];
           let buf = &mut buf[..8];
-          let input = &temp_out[txfm_size_row + rg..];
+          let input = &temp_out[rg..];
           let input = &input[..8];
           let transposed = transpose_8x8_avx2((
             input[0], input[1], input[2], input[3], input[4], input[5],
@@ -404,7 +399,7 @@ pub trait FwdTxfm2D: native::FwdTxfm2D {
         } else if txfm_size_row >= 8 && txfm_size_col == 4 {
           let buf = &mut buf[(rg / 8 * txfm_size_col) + cg..];
           let buf = &mut buf[..4];
-          let input = &temp_out[txfm_size_row + rg..];
+          let input = &temp_out[rg..];
           let input = &input[..8];
           let transposed = transpose_8x4_avx2((
             input[0], input[1], input[2], input[3], input[4], input[5],
@@ -418,7 +413,7 @@ pub trait FwdTxfm2D: native::FwdTxfm2D {
         } else if txfm_size_row == 4 && txfm_size_col >= 8 {
           let buf = &mut buf[(rg / 8 * txfm_size_col) + cg..];
           let buf = &mut buf[..8];
-          let input = &temp_out[txfm_size_row + rg..];
+          let input = &temp_out[rg..];
           let input = &input[..8];
           let transposed =
             transpose_4x8_avx2((input[0], input[1], input[2], input[3]));
@@ -434,7 +429,7 @@ pub trait FwdTxfm2D: native::FwdTxfm2D {
         } else if txfm_size_row == 4 && txfm_size_col == 4 {
           let buf = &mut buf[(rg / 8 * txfm_size_col) + cg..];
           let buf = &mut buf[..4];
-          let input = &temp_out[txfm_size_row + rg..];
+          let input = &temp_out[rg..];
           let input = &input[..4];
           let transposed =
             transpose_4x4_avx2((input[0], input[1], input[2], input[3]));
