@@ -180,6 +180,14 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .default_value("240")
     )
     .arg(
+      Arg::with_name("SWITCH_FRAME_INTERVAL")
+        .help("Maximum interval between switch frames. When set to 0, disables switch frames.")
+        .short("S")
+        .long("switch-frame-interval")
+        .takes_value(true)
+        .default_value("0")
+    )
+    .arg(
       Arg::with_name("RESERVOIR_FRAME_DELAY")
         .help("Number of frames over which rate control should distribute the reservoir [default: min(240, 1.5x keyint)]\n\
          A minimum value of 12 is enforced.")
@@ -515,6 +523,8 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
 
     let mut cfg = EncoderConfig::with_speed_preset(speed);
     cfg.set_key_frame_interval(min_interval, max_interval);
+    cfg.switch_frame_interval =
+      matches.value_of("SWITCH_FRAME_INTERVAL").unwrap().parse().unwrap();
 
     cfg.pixel_range =
       matches.value_of("PIXEL_RANGE").unwrap().parse().unwrap_or_default();

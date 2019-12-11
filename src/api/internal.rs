@@ -50,6 +50,10 @@ pub struct InterConfig {
   /// Number of output frames in group.
   /// This includes both hidden frames and "show existing frame" frames.
   group_output_len: u64,
+  /// Interval between consecutive S-frames.
+  /// Keyframes reset this interval.
+  /// This MUST be a multiple of group_input_len.
+  pub(crate) switch_frame_interval: u64,
 }
 
 impl InterConfig {
@@ -73,12 +77,15 @@ impl InterConfig {
     let pyramid_depth = if reorder { 2 } else { 0 };
     let group_input_len = 1 << pyramid_depth;
     let group_output_len = group_input_len + pyramid_depth;
+    let switch_frame_interval = enc_config.switch_frame_interval;
+    assert!(switch_frame_interval % group_input_len == 0);
     InterConfig {
       reorder,
       multiref: reorder || enc_config.speed_settings.multiref,
       pyramid_depth,
       group_input_len,
       group_output_len,
+      switch_frame_interval,
     }
   }
 

@@ -563,6 +563,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       } else {
         assert!(fi.refresh_frame_flags == ALL_REF_FRAMES_MASK);
       }
+    } else if fi.frame_type == FrameType::SWITCH {
+      assert!(fi.refresh_frame_flags == ALL_REF_FRAMES_MASK);
     } else {
       // Inter frame info goes here
       if fi.intra_only {

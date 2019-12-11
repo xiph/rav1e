@@ -767,8 +767,6 @@ impl<T: Pixel> FrameInvariants<T> {
     error_resilient: bool,
   ) -> Self {
     let mut fi = previous_fi.clone();
-    fi.frame_type = FrameType::INTER;
-    fi.error_resilient = error_resilient;
     fi.intra_only = false;
     fi.idx_in_group_output =
       inter_cfg.get_idx_in_group_output(output_frameno_in_gop);
@@ -779,6 +777,7 @@ impl<T: Pixel> FrameInvariants<T> {
     let input_frameno = inter_cfg
       .get_input_frameno(output_frameno_in_gop, gop_input_frameno_start);
     if input_frameno >= next_keyframe_input_frameno {
+      fi.frame_type = FrameType::INTER;
       fi.show_existing_frame = false;
       fi.show_frame = false;
       fi.invalid = true;
@@ -789,14 +788,28 @@ impl<T: Pixel> FrameInvariants<T> {
 
     fi.pyramid_level = inter_cfg.get_level(fi.idx_in_group_output);
 
+    fi.frame_type =
+      if (inter_cfg.switch_frame_interval > 0) && (fi.pyramid_level == 0) {
+        FrameType::SWITCH
+      } else {
+        FrameType::INTER
+      };
+    fi.error_resilient =
+      if fi.frame_type == FrameType::SWITCH { true } else { error_resilient };
+
     // this is the slot that the current frame is going to be saved into
     let slot_idx = inter_cfg.get_slot_idx(fi.pyramid_level, fi.order_hint);
     fi.show_frame = inter_cfg.get_show_frame(fi.idx_in_group_output);
     fi.show_existing_frame =
       inter_cfg.get_show_existing_frame(fi.idx_in_group_output);
     fi.frame_to_show_map_idx = slot_idx;
-    fi.refresh_frame_flags =
-      if fi.show_existing_frame { 0 } else { 1 << slot_idx };
+    fi.refresh_frame_flags = if fi.frame_type == FrameType::SWITCH {
+      ALL_REF_FRAMES_MASK
+    } else if fi.show_existing_frame {
+      0
+    } else {
+      1 << slot_idx
+    };
 
     let second_ref_frame =
       if fi.idx_in_group_output == 0 { LAST2_FRAME } else { ALTREF_FRAME };
@@ -1564,7 +1577,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
   }
   cw.bc.code_deltas = false;
 
-  if fi.frame_type == FrameType::INTER {
+  if fi.frame_type.has_inter() {
     cw.write_is_inter(w, tile_bo, is_inter);
     if is_inter {
       cw.fill_neighbours_ref_counts(tile_bo);
@@ -2182,7 +2195,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
 
   // must_split overrides the minimum partition size when applicable
   let can_split = // FIXME: sub-8x8 inter blocks not supported for non-4:2:0 sampling
-    if fi.frame_type == FrameType::INTER &&
+    if fi.frame_type.has_inter() &&
     fi.config.chroma_sampling != ChromaSampling::Cs420 &&
     bsize <= BlockSize::BLOCK_8X8 {
     false
@@ -2494,7 +2507,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   } else if (must_split || (bsize > fi.min_partition_size && is_square))
     && (
       // FIXME: sub-8x8 inter blocks not supported for non-4:2:0 sampling
-      fi.frame_type != FrameType::INTER
+      !fi.frame_type.has_inter()
         || fi.config.chroma_sampling == ChromaSampling::Cs420
         || bsize > BlockSize::BLOCK_8X8
     )

@@ -731,7 +731,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     RDOType::PixelDistRealRate
   };
 
-  let mut best = if fi.frame_type == FrameType::INTER {
+  let mut best = if fi.frame_type.has_inter() {
     inter_frame_rdo_mode_decision(
       fi,
       ts,
@@ -1090,7 +1090,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
     num_modes_rdo = if (fi.frame_type == FrameType::KEY
       && fi.config.speed_settings.prediction_modes
         >= PredictionModesSetting::ComplexKeyframes)
-      || (fi.frame_type == FrameType::INTER
+      || (fi.frame_type.has_inter()
         && fi.config.speed_settings.prediction_modes
           >= PredictionModesSetting::ComplexAll)
     {
@@ -1160,7 +1160,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
 
     // Find mode with lowest rate cost
     let mut z = 32768;
-    let probs_all = if fi.frame_type == FrameType::INTER {
+    let probs_all = if fi.frame_type.has_inter() {
       cw.get_cdf_intra_mode(bsize)
     } else {
       cw.get_cdf_intra_mode_kf(tile_bo)

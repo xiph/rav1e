@@ -67,9 +67,9 @@ pub(crate) trait TestDecoder<T: Pixel> {
   fn encode_decode(
     &mut self, w: usize, h: usize, speed: usize, quantizer: usize,
     limit: usize, bit_depth: usize, chroma_sampling: ChromaSampling,
-    min_keyint: u64, max_keyint: u64, low_latency: bool,
-    error_resilient: bool, bitrate: i32, tile_cols_log2: usize,
-    tile_rows_log2: usize,
+    min_keyint: u64, max_keyint: u64, switch_frame_interval: u64,
+    low_latency: bool, error_resilient: bool, bitrate: i32,
+    tile_cols_log2: usize, tile_rows_log2: usize,
   ) {
     let mut ra = ChaChaRng::from_seed([0; 32]);
 
@@ -82,6 +82,7 @@ pub(crate) trait TestDecoder<T: Pixel> {
       chroma_sampling,
       min_keyint,
       max_keyint,
+      switch_frame_interval,
       low_latency,
       error_resilient,
       bitrate,
@@ -154,14 +155,15 @@ pub fn compare_plane<T: Ord + std::fmt::Debug>(
 fn setup_encoder<T: Pixel>(
   w: usize, h: usize, speed: usize, quantizer: usize, bit_depth: usize,
   chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
-  low_latency: bool, error_resilient: bool, bitrate: i32,
-  tile_cols_log2: usize, tile_rows_log2: usize,
+  switch_frame_interval: u64, low_latency: bool, error_resilient: bool,
+  bitrate: i32, tile_cols_log2: usize, tile_rows_log2: usize,
 ) -> Context<T> {
   assert!(bit_depth == 8 || std::mem::size_of::<T>() > 1);
   let mut enc = EncoderConfig::with_speed_preset(speed);
   enc.quantizer = quantizer;
   enc.min_key_frame_interval = min_keyint;
   enc.max_key_frame_interval = max_keyint;
+  enc.switch_frame_interval = switch_frame_interval;
   enc.low_latency = low_latency;
   enc.error_resilient = error_resilient;
   enc.width = w;
@@ -201,6 +203,7 @@ fn speed(s: usize, decoder: &str) {
       Default::default(),
       15,
       15,
+      0,
       true,
       false,
       0,
@@ -286,6 +289,7 @@ fn dimension(w: usize, h: usize, decoder: &str) {
     Default::default(),
     15,
     15,
+    0,
     true,
     false,
     0,
@@ -312,6 +316,7 @@ fn quantizer(decoder: &str, q: usize) {
       Default::default(),
       15,
       15,
+      0,
       true,
       false,
       0,
@@ -359,6 +364,7 @@ fn bitrate(decoder: &str) {
         Default::default(),
         15,
         15,
+        0,
         true,
         false,
         r,
@@ -389,6 +395,7 @@ fn keyframes(decoder: &str) {
     Default::default(),
     6,
     6,
+    0,
     true,
     false,
     0,
@@ -418,6 +425,7 @@ fn reordering(decoder: &str) {
       Default::default(),
       *keyint,
       *keyint,
+      0,
       false,
       false,
       0,
@@ -449,6 +457,7 @@ fn reordering_short_video(decoder: &str) {
     Default::default(),
     keyint,
     keyint,
+    0,
     false,
     false,
     0,
@@ -478,6 +487,7 @@ fn error_resilient(decoder: &str) {
     Default::default(),
     keyint,
     keyint,
+    0,
     true,
     true,
     0,
@@ -507,6 +517,7 @@ fn error_resilient_reordering(decoder: &str) {
       Default::default(),
       *keyint,
       *keyint,
+      0,
       false,
       true,
       0,
@@ -514,6 +525,36 @@ fn error_resilient_reordering(decoder: &str) {
       0,
     );
   }
+}
+
+#[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
+#[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
+fn switch_frame(decoder: &str) {
+  let limit = 3;
+  let w = 64;
+  let h = 80;
+  let speed = 10;
+  let q = 100;
+  let keyint = 12;
+
+  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+  dec.encode_decode(
+    w,
+    h,
+    speed,
+    q,
+    limit,
+    8,
+    Default::default(),
+    keyint,
+    keyint,
+    1,
+    true,
+    true,
+    0,
+    0,
+    0,
+  );
 }
 
 #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
@@ -537,6 +578,7 @@ fn odd_size_frame_with_full_rdo(decoder: &str) {
     Default::default(),
     15,
     15,
+    0,
     true,
     false,
     0,
@@ -567,6 +609,7 @@ fn low_bit_depth(decoder: &str) {
     Default::default(),
     15,
     15,
+    0,
     true,
     false,
     0,
@@ -593,6 +636,7 @@ fn high_bit_depth(decoder: &str, depth: usize) {
     Default::default(),
     15,
     15,
+    0,
     true,
     false,
     0,
@@ -627,7 +671,7 @@ fn chroma_sampling(decoder: &str, cs: ChromaSampling) {
 
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(
-    w, h, speed, quantizer, limit, 8, cs, 15, 15, true, false, 0, 0, 0,
+    w, h, speed, quantizer, limit, 8, cs, 15, 15, 0, true, false, 0, 0, 0,
   );
 }
 
@@ -670,6 +714,7 @@ fn tile_encoding_with_stretched_restoration_units(decoder: &str) {
     Default::default(),
     15,
     15,
+    0,
     true,
     false,
     0,
