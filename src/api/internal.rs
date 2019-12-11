@@ -309,7 +309,13 @@ impl<T: Pixel> ContextInner<T> {
       self.keyframes.insert(input_frameno);
       self.next_lookahead_frame += 1;
     } else {
-      self.compute_keyframe_placement();
+      let lookahead_frames = self
+        .frame_q
+        .range(self.next_lookahead_frame - 1..)
+        .filter_map(|(&_input_frameno, frame)| frame.clone())
+        .collect::<Vec<_>>();
+
+      self.compute_keyframe_placement(&lookahead_frames);
     }
 
     self.compute_frame_invariants();
@@ -700,18 +706,9 @@ impl<T: Pixel> ContextInner<T> {
   }
 
   #[hawktracer(compute_keyframe_placement)]
-  pub fn compute_keyframe_placement(&mut self) {
-    let lookahead_frames = self
-      .frame_q
-      .iter()
-      .filter_map(|(&input_frameno, frame)| {
-        if input_frameno >= self.next_lookahead_frame - 1 {
-          frame.clone()
-        } else {
-          None
-        }
-      })
-      .collect::<Vec<_>>();
+  pub fn compute_keyframe_placement(
+    &mut self, lookahead_frames: &[Arc<Frame<T>>],
+  ) {
     let mut lookahead_idx = 0;
 
     while !self.needs_more_frame_q_lookahead(self.next_lookahead_frame) {

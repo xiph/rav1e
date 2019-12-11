@@ -11,6 +11,7 @@ use crate::encoder::{
   FrameInvariants, FrameState, Sequence, IMPORTANCE_BLOCK_SIZE,
 };
 use crate::frame::{AsRegion, PlaneOffset};
+use crate::hawktracer::*;
 use crate::partition::{get_intra_edges, BlockSize};
 use crate::predict::PredictionMode;
 use crate::tiling::{Area, TileRect};
@@ -175,6 +176,7 @@ pub(crate) fn estimate_inter_costs<T: Pixel>(
   inter_costs.into_boxed_slice()
 }
 
+#[hawktracer(compute_motion_vectors)]
 pub(crate) fn compute_motion_vectors<T: Pixel>(
   fi: &mut FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
 ) {
