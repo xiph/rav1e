@@ -64,6 +64,9 @@ pub struct EncoderConfig {
   /// Flag to force all frames to be error resilient.
   pub error_resilient: bool,
 
+  /// Interval between switch frames (0 to disable)
+  pub switch_frame_interval: u64,
+
   // encoder configuration
   /// The *minimum* interval between two keyframes
   pub min_key_frame_interval: u64,
@@ -151,6 +154,7 @@ impl EncoderConfig {
       still_picture: false,
 
       error_resilient: false,
+      switch_frame_interval: 0,
 
       time_base: Rational { num: 1, den: 30 },
 
@@ -582,6 +586,12 @@ pub enum InvalidConfig {
     _0
   )]
   InvalidReservoirFrameDelay(i32),
+  /// Reservoir frame delay is invalid.
+  #[error(
+    display = "invalid switch frame interval {} (must only be used with low latency mode)",
+    _0
+  )]
+  InvalidSwitchFrameInterval(u64),
 
   // This variant prevents people from exhaustively matching on this enum,
   // which allows us to add more variants without it being a breaking change.
@@ -721,6 +731,10 @@ impl Config {
       if delay < 12 || delay > 131_072 {
         return Err(InvalidReservoirFrameDelay(delay));
       }
+    }
+
+    if config.switch_frame_interval > 0 && !config.low_latency {
+      return Err(InvalidSwitchFrameInterval(config.switch_frame_interval));
     }
 
     Ok(())
