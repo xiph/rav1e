@@ -33,6 +33,7 @@ pub enum RefType {
   BWDREF_FRAME = 5,
   ALTREF2_FRAME = 6,
   ALTREF_FRAME = 7,
+  // danger - AV1 spec assigns NONE_FRAME as -1!
   NONE_FRAME = 8,
 }
 
