@@ -131,11 +131,11 @@ jobs:
         matrix.conf == 'grcov-coveralls'
       env:
         LINK: http://www.deb-multimedia.org/pool/main/d/dav1d-dmo
-        DAV1D_VERSION: 0.5.1-dmo1
+        DAV1D_VERSION: 0.5.2-dmo1
         DAV1D_DEV_SHA256: >-
-          feb8fd535ae7747963d3d17ed394dc5bdb3e6163fdb77df787ec72a8ca9aac2e
+          9f61ffe439c95a934996a6c35ab986983bb36d93057f8d1c958fd839982b6cb1
         DAV1D_LIB_SHA256: >-
-          682fd52fcfd73c225f9aaee200cbe69eceefdc687b8ce03f354731f5288a28ce
+          9d9618445d5f79867d7aa2e338e11b48386c961a3c58002523efe2bad3b3f815
       run: |
         curl -O "$LINK/libdav1d-dev_${DAV1D_VERSION}_amd64.deb" \
              -O "$LINK/libdav1d3_${DAV1D_VERSION}_amd64.deb"
