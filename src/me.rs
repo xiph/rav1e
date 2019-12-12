@@ -560,7 +560,6 @@ impl MotionEstimation for FullSearch {
         2,
         lambda,
         pmv,
-        fi.allow_high_precision_mv,
       );
     }
   }
@@ -645,7 +644,6 @@ impl MotionEstimation for FullSearch {
           1,
           lambda,
           [MotionVector::default(); 2],
-          fi.allow_high_precision_mv,
         );
       }
     }
@@ -852,6 +850,7 @@ fn get_mv_rd_cost<T: Pixel>(
   }
 }
 
+#[inline(always)]
 fn compute_mv_rd_cost<T: Pixel>(
   fi: &FrameInvariants<T>, pmv: [MotionVector; 2], lambda: u32,
   use_satd: bool, bit_depth: usize, bsize: BlockSize, cand_mv: MotionVector,
@@ -958,9 +957,7 @@ fn full_search<T: Pixel>(
   bsize: BlockSize, p_org: &Plane<T>, p_ref: &Plane<T>,
   best_mv: &mut MotionVector, lowest_cost: &mut u64, po: PlaneOffset,
   step: usize, lambda: u32, pmv: [MotionVector; 2],
-  allow_high_precision_mv: bool,
 ) {
-  let bit_depth = fi.sequence.bit_depth;
   let blk_w = bsize.width();
   let blk_h = bsize.height();
   let plane_org = p_org.region(Area::StartingAt { x: po.x, y: po.y });
@@ -974,14 +971,6 @@ fn full_search<T: Pixel>(
   // Select rectangular regions within search region with vert+horz windows
   for vert_window in search_region.vert_windows(blk_h).step_by(step) {
     for ref_window in vert_window.horz_windows(blk_w).step_by(step) {
-      let sad = get_sad(
-        &plane_org,
-        &ref_window,
-        bsize,
-        bit_depth,
-        fi.cpu_feature_level,
-      );
-
       let &Rect { x, y, .. } = ref_window.rect();
 
       let mv = MotionVector {
@@ -989,10 +978,17 @@ fn full_search<T: Pixel>(
         col: 8 * (x as i16 - po.x as i16),
       };
 
-      let rate1 = get_mv_rate(mv, pmv[0], allow_high_precision_mv);
-      let rate2 = get_mv_rate(mv, pmv[1], allow_high_precision_mv);
-      let rate = rate1.min(rate2 + 1);
-      let cost = 256 * sad as u64 + rate as u64 * lambda as u64;
+      let cost = compute_mv_rd_cost(
+        fi,
+        pmv,
+        lambda,
+        false,
+        fi.sequence.bit_depth,
+        bsize,
+        mv,
+        &plane_org,
+        &ref_window,
+      );
 
       if cost < *lowest_cost {
         *lowest_cost = cost;
@@ -1080,7 +1076,6 @@ pub fn estimate_motion_ss4<T: Pixel>(
       1,
       lambda,
       [MotionVector::default(); 2],
-      fi.allow_high_precision_mv,
     );
 
     Some(MotionVector { row: best_mv.row * 4, col: best_mv.col * 4 })
