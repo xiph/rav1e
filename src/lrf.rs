@@ -929,17 +929,59 @@ pub fn sgrproj_solve<T: Pixel>(
       } else {
         sgrproj_box_f_r0(&mut f_r1, y, cdef_w, &cdeffed, fi.cpu_feature_level);
       }
-      for x in 0..cdef_w {
-        let u = i32::cast_from(cdeffed.p(x, y)) << SGRPROJ_RST_BITS;
-        let s = (i32::cast_from(input.p(x, y)) << SGRPROJ_RST_BITS) - u;
-        let f2 = f_r2_01[dy][x] as i32 - u;
-        let f1 = f_r1[x] as i32 - u;
-        h[0][0] += f2 as f64 * f2 as f64;
-        h[1][1] += f1 as f64 * f1 as f64;
-        h[0][1] += f1 as f64 * f2 as f64;
-        c[0] += f2 as f64 * s as f64;
-        c[1] += f1 as f64 * s as f64;
+
+      #[inline(always)]
+      fn process_line<T: Pixel>(
+        h: &mut [[f64; 2]; 2], c: &mut [f64; 2], cdeffed: &[T], input: &[T],
+        f_r1: &[u32], f_r2_ab: &[u32], cdef_w: usize,
+      ) {
+        let cdeffed_it = cdeffed[..cdef_w].iter();
+        let input_it = input[..cdef_w].iter();
+        let f_r2_ab_it = f_r2_ab[..cdef_w].iter();
+        let f_r1_it = f_r1[..cdef_w].iter();
+
+        #[derive(Debug, Copy, Clone)]
+        struct Sums {
+          h: [[i64; 2]; 2],
+          c: [i64; 2],
+        }
+
+        let sums: Sums = cdeffed_it
+          .zip(input_it)
+          .zip(f_r2_ab_it.zip(f_r1_it))
+          .map(|((&u, &i), (&f2, &f1))| {
+            let u = i32::cast_from(u) << SGRPROJ_RST_BITS;
+            let s = (i32::cast_from(i) << SGRPROJ_RST_BITS) - u;
+            let f2 = f2 as i32 - u;
+            let f1 = f1 as i32 - u;
+            (s as i64, f1 as i64, f2 as i64)
+          })
+          .fold(Sums { h: [[0; 2]; 2], c: [0; 2] }, |sums, (s, f1, f2)| {
+            let mut ret: Sums = sums;
+            ret.h[0][0] += f2 * f2;
+            ret.h[1][1] += f1 * f1;
+            ret.h[0][1] += f1 * f2;
+            ret.c[0] += f2 * s;
+            ret.c[1] += f1 * s;
+            ret
+          });
+
+        h[0][0] += sums.h[0][0] as f64;
+        h[1][1] += sums.h[1][1] as f64;
+        h[0][1] += sums.h[0][1] as f64;
+        c[0] += sums.c[0] as f64;
+        c[1] += sums.c[1] as f64;
       }
+
+      process_line(
+        &mut h,
+        &mut c,
+        &cdeffed[y],
+        &input[y],
+        &f_r1,
+        &f_r2_01[dy],
+        cdef_w,
+      );
     }
   }
 
