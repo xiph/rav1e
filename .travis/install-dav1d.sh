@@ -9,6 +9,10 @@ case "$ARCH" in
   aarch64) ARCH=arm64 ;;
 esac
 
+cd "$DEPS_DIR"
+
+[ -f "libdav1d-dev_${DAV1D_VERSION}_$ARCH.deb" ] &&
+[ -f "libdav1d3_${DAV1D_VERSION}_$ARCH.deb" ] ||
 curl -O "$PKG_URL/libdav1d-dev_${DAV1D_VERSION}_$ARCH.deb" \
      -O "$PKG_URL/libdav1d3_${DAV1D_VERSION}_$ARCH.deb"
 

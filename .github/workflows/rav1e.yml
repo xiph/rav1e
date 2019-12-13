@@ -95,17 +95,16 @@ jobs:
         curl -L "$LINK/$SCCACHE_VERSION/$SCCACHE_FILE.tar.gz" | tar xz
         mv -f $SCCACHE_FILE/sccache $HOME/.local/bin/sccache
         echo "::add-path::$HOME/.local/bin"
-    - name: Install nasm
+    - name: Add nasm
       env:
         LINK: http://debian-archive.trafficmanager.net/debian/pool/main/n/nasm
         NASM_VERSION: 2.14.02-1
         NASM_SHA256: >-
           5225d0654783134ae616f56ce8649e4df09cba191d612a0300cfd0494bb5a3ef
       run: |
-        curl -O "$LINK/nasm_${NASM_VERSION}_amd64.deb"
-        echo "$NASM_SHA256 nasm_${NASM_VERSION}_amd64.deb" | sha256sum --check
-        sudo dpkg -i "nasm_${NASM_VERSION}_amd64.deb"
-    - name: Install aom
+        echo "$LINK/nasm_${NASM_VERSION}_amd64.deb" >> DEBS
+        echo "$NASM_SHA256 nasm_${NASM_VERSION}_amd64.deb" >> CHECKSUMS
+    - name: Add aom
       if: >
         matrix.conf == '1.36.0-tests' || matrix.conf == 'aom-tests' ||
         matrix.conf == 'grcov-coveralls'
@@ -117,15 +116,11 @@ jobs:
         AOM_LIB_SHA256: >-
           3f096b6057871c12bbdfdf8b2e18d12ed0f643b8e23fdbeddd80b860c55c53ff
       run: |
-        curl -O "$LINK/libaom-dev_${AOM_VERSION}_amd64.deb" \
-             -O "$LINK/libaom0_${AOM_VERSION}_amd64.deb"
-        echo "$AOM_DEV_SHA256 libaom-dev_${AOM_VERSION}_amd64.deb" |
-        sha256sum --check
-        echo "$AOM_LIB_SHA256 libaom0_${AOM_VERSION}_amd64.deb" |
-        sha256sum --check
-        sudo dpkg -i "libaom-dev_${AOM_VERSION}_amd64.deb" \
-                     "libaom0_${AOM_VERSION}_amd64.deb"
-    - name: Install dav1d
+        echo "$LINK/libaom-dev_${AOM_VERSION}_amd64.deb" >> DEBS
+        echo "$LINK/libaom0_${AOM_VERSION}_amd64.deb" >> DEBS
+        echo "$AOM_DEV_SHA256 libaom-dev_${AOM_VERSION}_amd64.deb" >> CHECKSUMS
+        echo "$AOM_LIB_SHA256 libaom0_${AOM_VERSION}_amd64.deb" >> CHECKSUMS
+    - name: Add dav1d
       if: >
         matrix.conf == '1.36.0-tests' || matrix.conf == 'dav1d-tests' ||
         matrix.conf == 'grcov-coveralls'
@@ -137,14 +132,27 @@ jobs:
         DAV1D_LIB_SHA256: >-
           9d9618445d5f79867d7aa2e338e11b48386c961a3c58002523efe2bad3b3f815
       run: |
-        curl -O "$LINK/libdav1d-dev_${DAV1D_VERSION}_amd64.deb" \
-             -O "$LINK/libdav1d3_${DAV1D_VERSION}_amd64.deb"
-        echo "$DAV1D_DEV_SHA256 libdav1d-dev_${DAV1D_VERSION}_amd64.deb" |
-        sha256sum --check
-        echo "$DAV1D_LIB_SHA256 libdav1d3_${DAV1D_VERSION}_amd64.deb" |
-        sha256sum --check
-        sudo dpkg -i "libdav1d-dev_${DAV1D_VERSION}_amd64.deb" \
-                     "libdav1d3_${DAV1D_VERSION}_amd64.deb"
+        echo "$LINK/libdav1d-dev_${DAV1D_VERSION}_amd64.deb" >> DEBS
+        echo "$LINK/libdav1d3_${DAV1D_VERSION}_amd64.deb" >> DEBS
+        echo "$DAV1D_DEV_SHA256 libdav1d-dev_${DAV1D_VERSION}_amd64.deb" >> CHECKSUMS
+        echo "$DAV1D_LIB_SHA256 libdav1d3_${DAV1D_VERSION}_amd64.deb" >> CHECKSUMS
+    - name: Cache packages
+      uses: actions/cache@v1
+      id: debs
+      with:
+        path: ~/.cache/debs
+        key: debs-${{ hashFiles('CHECKSUMS') }}
+    - name: Fetch packages
+      if: steps.debs.outputs.cache-hit != 'true'
+      run: |
+        mkdir -p ~/.cache/debs
+        cp DEBS CHECKSUMS ~/.cache/debs
+        cd ~/.cache/debs
+        xargs -a DEBS curl --remote-name-all
+        sha256sum -c CHECKSUMS
+    - name: Install packages
+      run: |
+        sudo dpkg -i ~/.cache/debs/*.deb
     - name: Install grcov
       if: matrix.conf == 'grcov-coveralls'
       env:
