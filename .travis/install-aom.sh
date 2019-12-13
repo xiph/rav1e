@@ -9,6 +9,10 @@ case "$ARCH" in
   aarch64) ARCH=arm64 ;;
 esac
 
+cd "$DEPS_DIR"
+
+[ -f "libaom-dev_${AOM_VERSION}_$ARCH.deb" ] &&
+[ -f "libaom0_${AOM_VERSION}_$ARCH.deb" ] ||
 curl -O "$PKG_URL/libaom-dev_${AOM_VERSION}_$ARCH.deb" \
      -O "$PKG_URL/libaom0_${AOM_VERSION}_$ARCH.deb"
 
