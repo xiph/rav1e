@@ -308,7 +308,7 @@ impl<T: Pixel> ContextInner<T> {
     if self.config.still_picture || self.next_lookahead_frame == 0 {
       self.keyframes.insert(input_frameno);
       self.next_lookahead_frame += 1;
-    } else {
+    } else if !self.needs_more_frame_q_lookahead(self.next_lookahead_frame) {
       let lookahead_frames = self
         .frame_q
         .range(self.next_lookahead_frame - 1..)
@@ -709,13 +709,11 @@ impl<T: Pixel> ContextInner<T> {
   pub fn compute_keyframe_placement(
     &mut self, lookahead_frames: &[Arc<Frame<T>>],
   ) {
-    let mut lookahead_idx = 0;
-
-    while !self.needs_more_frame_q_lookahead(self.next_lookahead_frame) {
-      // Process the next unprocessed frame
-      // Start by getting that frame and all frames after it in the queue
-      let current_lookahead_frames = &lookahead_frames[lookahead_idx..];
-
+    // Process the next unprocessed frame
+    // Start by getting that frame and all frames after it in the queue
+    for current_lookahead_frames in
+      std::iter::successors(Some(lookahead_frames), |s| s.get(1..))
+    {
       if current_lookahead_frames.len() < 2 {
         // All frames have been processed
         break;
@@ -734,7 +732,6 @@ impl<T: Pixel> ContextInner<T> {
       }
 
       self.next_lookahead_frame += 1;
-      lookahead_idx += 1;
     }
   }
 
