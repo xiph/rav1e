@@ -318,8 +318,6 @@ pub trait FwdTxfm2D: native::FwdTxfm2D {
     input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
     bd: usize,
   ) {
-    //let mut tmp: AlignedArray<[i32; 64 * 64]> = AlignedArray::uninitialized();
-    //let buf = &mut tmp.array[..Self::W * Self::H];
     let mut tmp: AlignedArray<[I32X8; 64 * 64 / 8]> =
       AlignedArray::uninitialized();
     let buf = &mut tmp.array[..Self::W * (Self::H / 8).max(1)];
@@ -345,6 +343,7 @@ pub trait FwdTxfm2D: native::FwdTxfm2D {
       #[target_feature(enable = "avx2")]
       #[inline]
       unsafe fn load_columns(input_ptr: *const i16, shift: u8) -> I32X8 {
+        // TODO: load 64-bits for x4 wide columns
         shift_left(
           I32X8::new(_mm256_cvtepi16_epi32(_mm_loadu_si128(
             input_ptr as *const _,
@@ -360,14 +359,9 @@ pub trait FwdTxfm2D: native::FwdTxfm2D {
           temp_out[r] = load_columns(input_ptr, shift);
         }
       } else {
-        // TODO: load less of x4
-        for r in (0..txfm_size_row).step_by(4) {
-          let output = &mut temp_out[r..r + 4];
+        for r in 0..txfm_size_row {
           let input_ptr = input[r * stride + cg..].as_ptr();
-          output[0] = load_columns(input_ptr, shift);
-          output[1] = load_columns(input_ptr.add(stride), shift);
-          output[2] = load_columns(input_ptr.add(2 * stride), shift);
-          output[3] = load_columns(input_ptr.add(3 * stride), shift);
+          temp_out[r] = load_columns(input_ptr, shift);
         }
       }
 
