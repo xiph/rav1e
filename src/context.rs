@@ -666,10 +666,6 @@ pub struct NMVContext {
   comps: [NMVComponent; 2],
 }
 
-extern {
-  //static av1_scan_orders: [[SCAN_ORDER; TX_TYPES]; TxSize::TX_SIZES_ALL];
-}
-
 // lv_map
 static default_nmv_context: NMVContext = {
   NMVContext {
