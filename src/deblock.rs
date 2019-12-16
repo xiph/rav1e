@@ -1445,9 +1445,14 @@ fn sse_plane<T: Pixel>(
   let ydec = rec.cfg.ydec;
 
   // Deblocking happens in 4x4 (luma) units; luma x,y are clipped to
-  // the *crop frame* by 4x4 block.
-  let cols = cmp::min(blocks.cols, (fi.width + MI_SIZE - 1) >> MI_SIZE_LOG2);
-  let rows = cmp::min(blocks.rows, (fi.height + MI_SIZE - 1) >> MI_SIZE_LOG2);
+  // the *crop frame* by 4x4 block.  Rounding is to handle chroma
+  // fenceposts here instead of throughout the code.
+  let cols = (((fi.width + MI_SIZE - 1) >> MI_SIZE_LOG2) + (1 << xdec >> 1))
+    >> xdec
+    << xdec; // Clippy can go suck an egg
+  let rows = (((fi.height + MI_SIZE - 1) >> MI_SIZE_LOG2) + (1 << ydec >> 1))
+    >> ydec
+    << ydec; // Clippy can go suck an egg
 
   let bd = fi.sequence.bit_depth;
   // No horizontal edge filtering along top of frame
