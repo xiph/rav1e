@@ -4142,21 +4142,21 @@ impl<'a> ContextWriter<'a> {
       if level > NUM_BASE_LEVELS as u32 {
         let pos = scan[c as usize];
         let v = coeffs_in[pos as usize];
-        let level = v.abs() as u16;
+        let level = v.abs();
 
-        if level <= NUM_BASE_LEVELS as u16 {
+        if level <= NUM_BASE_LEVELS as i32 {
           continue;
         }
 
-        let base_range = level - 1 - NUM_BASE_LEVELS as u16;
+        let base_range = level - 1 - NUM_BASE_LEVELS as i32;
         let br_ctx = Self::get_br_ctx(levels, pos as usize, bhl, tx_class);
-        let mut idx = 0;
+        let mut idx: i32 = 0;
 
         loop {
-          if idx >= COEFF_BASE_RANGE {
+          if idx >= COEFF_BASE_RANGE as i32 {
             break;
           }
-          let k = cmp::min(base_range - idx as u16, BR_CDF_SIZE as u16 - 1);
+          let k = cmp::min(base_range - idx, BR_CDF_SIZE as i32 - 1);
           symbol_with_update!(
             self,
             w,
@@ -4165,10 +4165,10 @@ impl<'a> ContextWriter<'a> {
               [cmp::min(txs_ctx, TxSize::TX_32X32 as usize)][plane_type]
               [br_ctx]
           );
-          if k < BR_CDF_SIZE as u16 - 1 {
+          if k < BR_CDF_SIZE as i32 - 1 {
             break;
           }
-          idx += BR_CDF_SIZE - 1;
+          idx += BR_CDF_SIZE as i32 - 1;
         }
       }
     }
@@ -4177,7 +4177,7 @@ impl<'a> ContextWriter<'a> {
     // starting with the sign of DC (if applicable)
     for c in 0..eob {
       let v = coeffs_in[scan[c] as usize];
-      let level = v.abs() as u32;
+      let level = v.abs();
       if level == 0 {
         continue;
       }
@@ -4194,13 +4194,13 @@ impl<'a> ContextWriter<'a> {
         w.bit(sign as u16);
       }
       // save extra golomb codes for separate loop
-      if level > (COEFF_BASE_RANGE + NUM_BASE_LEVELS) as u32 {
+      if level > (COEFF_BASE_RANGE + NUM_BASE_LEVELS) as i32 {
         let pos = scan[c];
         w.write_golomb(
-          coeffs_in[pos as usize].abs() as u16
-            - COEFF_BASE_RANGE as u16
+          coeffs_in[pos as usize].abs() as u32
+            - COEFF_BASE_RANGE as u32
             - 1
-            - NUM_BASE_LEVELS as u16,
+            - NUM_BASE_LEVELS as u32,
         );
       }
     }
