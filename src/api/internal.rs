@@ -1134,7 +1134,7 @@ impl<T: Pixel> ContextInner<T> {
           let fti = frame_data.fi.get_frame_subtype();
           let qps = self.rc_state.select_qi(
             self,
-            self.output_frameno,
+            cur_output_frameno,
             fti,
             self.maybe_prev_log_base_q,
           );
@@ -1154,7 +1154,7 @@ impl<T: Pixel> ContextInner<T> {
             );
             let qps = self.rc_state.select_qi(
               self,
-              self.output_frameno,
+              cur_output_frameno,
               fti,
               self.maybe_prev_log_base_q,
             );
@@ -1190,7 +1190,7 @@ impl<T: Pixel> ContextInner<T> {
           };
 
           update_rec_buffer(
-            self.output_frameno,
+            cur_output_frameno,
             &mut frame_data.fi,
             &frame_data.fs,
           );
@@ -1222,7 +1222,7 @@ impl<T: Pixel> ContextInner<T> {
           }
 
           self.frame_data.insert(cur_output_frameno, frame_data);
-          let frame_data = &self.frame_data.get(&self.output_frameno).unwrap();
+          let frame_data = &self.frame_data.get(&cur_output_frameno).unwrap();
           let fi = &frame_data.fi;
 
           self.output_frameno += 1;
