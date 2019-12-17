@@ -33,6 +33,7 @@ pub struct CliOptions {
   pub override_time_base: bool,
   pub skip: usize,
   pub verbose: bool,
+  pub benchmark: bool,
   pub threads: usize,
   pub pass1file_name: Option<String>,
   pub pass2file_name: Option<String>,
@@ -303,6 +304,11 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     )
     // DEBUGGING
     .arg(
+      Arg::with_name("BENCHMARK")
+        .help("Provide a benchmark report at the end of the encoding")
+        .long("benchmark")
+    )
+    .arg(
       Arg::with_name("VERBOSE")
         .help("Verbose logging; outputs info for every frame")
         .long("verbose")
@@ -429,6 +435,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     color_range_specified: matches.occurrences_of("PIXEL_RANGE") > 0,
     override_time_base: matches.is_present("FRAME_RATE"),
     skip: matches.value_of("SKIP").unwrap().parse().unwrap(),
+    benchmark: matches.is_present("BENCHMARK"),
     verbose: matches.is_present("VERBOSE"),
     threads,
     pass1file_name: matches.value_of("FIRST_PASS").map(|s| s.to_owned()),
