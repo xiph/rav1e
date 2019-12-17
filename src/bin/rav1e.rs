@@ -265,6 +265,31 @@ fn init_logger() {
   pretty_env_logger::init();
 }
 
+cfg_if::cfg_if! {
+  if #[cfg(target_os = "windows")] {
+    fn print_rusage() {
+      eprintln!("Windows benchmarking is not supported currently.");
+    }
+  } else {
+    fn print_rusage() {
+      let (utime, stime, maxrss) = unsafe {
+        let mut usage = std::mem::zeroed();
+        let _ = libc::getrusage(libc::RUSAGE_SELF, &mut usage);
+        (usage.ru_utime, usage.ru_stime, usage.ru_maxrss)
+      };
+      eprintln!(
+        "user time: {} s",
+        utime.tv_sec as f64 + utime.tv_usec as f64 / 1_000_000f64
+      );
+      eprintln!(
+        "system time: {} s",
+        stime.tv_sec as f64 + stime.tv_usec as f64 / 1_000_000f64
+      );
+      eprintln!("maximum rss: {} KB", maxrss);
+    }
+  }
+}
+
 fn run() -> Result<(), error::CliError> {
   let mut cli = parse_cli()?;
   // Maximum frame size by specification + maximum y4m header
@@ -407,6 +432,9 @@ fn run() -> Result<(), error::CliError> {
       cli.pass2file_name.as_ref(),
       y4m_enc,
     )?
+  }
+  if cli.benchmark {
+    print_rusage();
   }
 
   Ok(())
