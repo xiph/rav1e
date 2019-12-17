@@ -52,7 +52,7 @@ pub trait Writer {
   /// Write literal bits with flat probability
   fn literal(&mut self, bits: u8, s: u32);
   /// Write passed level as a golomb code
-  fn write_golomb(&mut self, level: u16);
+  fn write_golomb(&mut self, level: u32);
   /// Write a value v in [0, n-1] quasi-uniformly
   fn write_quniform(&mut self, n: u32, v: u32);
   /// Return fractional bits needed to write Write a value v in [0,
@@ -592,7 +592,7 @@ where
   }
   /// Encode a golomb to the bitstream.
   /// 'level': passed in value to encode
-  fn write_golomb(&mut self, level: u16) {
+  fn write_golomb(&mut self, level: u32) {
     let x = level + 1;
     let mut i = x;
     let mut length = 0;
@@ -608,7 +608,7 @@ where
     }
 
     for i in (0..length).rev() {
-      self.bit((x >> i) & 0x01);
+      self.bit(((x >> i) & 0x01) as u16);
     }
   }
   /// Write a value v in [0, n-1] quasi-uniformly
