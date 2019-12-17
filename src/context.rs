@@ -3747,11 +3747,11 @@ impl<'a> ContextWriter<'a> {
     );
   }
 
-  pub fn get_txsize_entropy_ctx(tx_size: TxSize) -> usize {
+  fn get_txsize_entropy_ctx(tx_size: TxSize) -> usize {
     (tx_size.sqr() as usize + tx_size.sqr_up() as usize + 1) >> 1
   }
 
-  pub fn txb_init_levels(
+  fn txb_init_levels(
     &self, coeffs: &[i32], width: usize, height: usize, levels_buf: &mut [u8],
   ) {
     // Coefficients and levels are transposed from how they work in the spec
@@ -3770,11 +3770,11 @@ impl<'a> ContextWriter<'a> {
   // Since the coefficients and levels are transposed in relation to how they
   // work in the spec, use the log of block height in our calculations instead
   // of block width.
-  pub fn get_txb_bhl(tx_size: TxSize) -> usize {
+  fn get_txb_bhl(tx_size: TxSize) -> usize {
     av1_get_coded_tx_size(tx_size).height_log2()
   }
 
-  pub fn get_eob_pos_token(eob: usize, extra: &mut u32) -> u32 {
+  fn get_eob_pos_token(eob: usize, extra: &mut u32) -> u32 {
     let t = if eob < 33 {
       eob_to_pos_small[eob] as u32
     } else {
@@ -3787,7 +3787,7 @@ impl<'a> ContextWriter<'a> {
     t
   }
 
-  pub fn get_nz_mag(levels: &[u8], bhl: usize, tx_class: TxClass) -> usize {
+  fn get_nz_mag(levels: &[u8], bhl: usize, tx_class: TxClass) -> usize {
     // Levels are transposed from how they work in the spec
 
     // May version.
@@ -3812,7 +3812,7 @@ impl<'a> ContextWriter<'a> {
     mag as usize
   }
 
-  pub fn get_nz_map_ctx_from_stats(
+  fn get_nz_map_ctx_from_stats(
     stats: usize,
     coeff_idx: usize, // raster order
     bhl: usize,
@@ -3859,7 +3859,7 @@ impl<'a> ContextWriter<'a> {
     }
   }
 
-  pub fn get_nz_map_ctx(
+  fn get_nz_map_ctx(
     levels: &[u8], coeff_idx: usize, bhl: usize, width: usize,
     scan_idx: usize, is_eob: bool, tx_size: TxSize, tx_class: TxClass,
   ) -> usize {
@@ -3884,7 +3884,7 @@ impl<'a> ContextWriter<'a> {
     Self::get_nz_map_ctx_from_stats(stats, coeff_idx, bhl, tx_size, tx_class)
   }
 
-  pub fn get_nz_map_contexts(
+  fn get_nz_map_contexts(
     &self, levels: &mut [u8], scan: &[u16], eob: u16, tx_size: TxSize,
     tx_class: TxClass, coeff_contexts: &mut [i8],
   ) {
@@ -3905,7 +3905,7 @@ impl<'a> ContextWriter<'a> {
     }
   }
 
-  pub fn get_br_ctx(
+  fn get_br_ctx(
     levels: &[u8],
     c: usize, // raster order
     bhl: usize,
@@ -3954,20 +3954,6 @@ impl<'a> ContextWriter<'a> {
     }
 
     mag + 14
-  }
-
-  pub fn get_level_mag_with_txclass(
-    levels: &[u8], stride: usize, row: usize, col: usize, mag: &mut [usize],
-    tx_class: TxClass,
-  ) {
-    for idx in 0..CONTEXT_MAG_POSITION_NUM {
-      let ref_row =
-        row + mag_ref_offset_with_txclass[tx_class as usize][idx][0];
-      let ref_col =
-        col + mag_ref_offset_with_txclass[tx_class as usize][idx][1];
-      let pos = ref_row * stride + ref_col;
-      mag[idx] = levels[pos] as usize;
-    }
   }
 
   pub fn write_coeffs_lv_map(
