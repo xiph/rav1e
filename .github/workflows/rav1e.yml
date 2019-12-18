@@ -280,7 +280,6 @@ jobs:
         7z e -y "$NASM_VERSION-win64.zip" -o"C:\nasm"
         echo "::add-path::C:\nasm"
     - name: Set MSVC x86_64 linker path
-      shell: pwsh
       run: |
         $LinkGlob = "VC\Tools\MSVC\*\bin\Hostx64\x64"
         $env:PATH = "$env:PATH;${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
