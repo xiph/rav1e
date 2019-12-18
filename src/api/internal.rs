@@ -294,7 +294,8 @@ impl<T: Pixel> ContextInner<T> {
     &mut self, frame: Option<Arc<Frame<T>>>, params: Option<FrameParameters>,
   ) -> Result<(), EncoderStatus> {
     let input_frameno = self.frame_count;
-    if frame.is_some() {
+    let is_flushing = frame.is_none();
+    if !is_flushing {
       self.frame_count += 1;
     }
     self.frame_q.insert(input_frameno, frame);
@@ -315,7 +316,22 @@ impl<T: Pixel> ContextInner<T> {
         .filter_map(|(&_input_frameno, frame)| frame.clone())
         .collect::<Vec<_>>();
 
-      self.compute_keyframe_placement(&lookahead_frames);
+      if is_flushing {
+        // This is the last time send_frame is called, process all the
+        // remaining frames.
+        for cur_lookahead_frames in
+          std::iter::successors(Some(&lookahead_frames[..]), |s| s.get(1..))
+        {
+          if cur_lookahead_frames.len() < 2 {
+            // All frames have been processed
+            break;
+          }
+
+          self.compute_keyframe_placement(&cur_lookahead_frames);
+        }
+      } else {
+        self.compute_keyframe_placement(&lookahead_frames);
+      }
     }
 
     self.compute_frame_invariants();
@@ -709,30 +725,19 @@ impl<T: Pixel> ContextInner<T> {
   pub fn compute_keyframe_placement(
     &mut self, lookahead_frames: &[Arc<Frame<T>>],
   ) {
-    // Process the next unprocessed frame
-    // Start by getting that frame and all frames after it in the queue
-    for current_lookahead_frames in
-      std::iter::successors(Some(lookahead_frames), |s| s.get(1..))
+    if self.keyframes_forced.contains(&self.next_lookahead_frame)
+      || self.keyframe_detector.analyze_next_frame(
+        &lookahead_frames,
+        self.next_lookahead_frame,
+        *self.keyframes.iter().last().unwrap(),
+        &self.config,
+        &self.inter_cfg,
+      )
     {
-      if current_lookahead_frames.len() < 2 {
-        // All frames have been processed
-        break;
-      }
-
-      if self.keyframes_forced.contains(&self.next_lookahead_frame)
-        || self.keyframe_detector.analyze_next_frame(
-          &current_lookahead_frames,
-          self.next_lookahead_frame,
-          *self.keyframes.iter().last().unwrap(),
-          &self.config,
-          &self.inter_cfg,
-        )
-      {
-        self.keyframes.insert(self.next_lookahead_frame);
-      }
-
-      self.next_lookahead_frame += 1;
+      self.keyframes.insert(self.next_lookahead_frame);
     }
+
+    self.next_lookahead_frame += 1;
   }
 
   #[hawktracer(compute_frame_invariants)]
