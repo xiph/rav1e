@@ -282,9 +282,9 @@ jobs:
     - name: Set MSVC x86_64 linker path
       shell: pwsh
       run: |
-        $LinkGlob = "VC\Tools\MSVC\**\bin\Hostx64\x64\link.exe"
-        Set-Alias vswhere "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-        $LinkPath = Split-Path (& vswhere -latest -products * -find "$LinkGlob" | Select-Object -Last 1) -Parent
+        $LinkGlob = "VC\Tools\MSVC\*\bin\Hostx64\x64"
+        $env:PATH = "$env:PATH;${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
+        $LinkPath = vswhere -latest -products * -find "$LinkGlob" | Select-Object -Last 1
         echo "::add-path::$LinkPath"
     - name: Install Rust
       uses: actions-rs/toolchain@v1
