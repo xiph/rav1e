@@ -390,6 +390,15 @@ fn compute_tx_distortion<T: Pixel>(
   distortion
 }
 
+/// Compute a scaling factor to multiply the distortion of a block by,
+/// this factor is determined using temporal RDO.
+///
+/// Note: this can be applied at any block size, but is not linear in the block
+/// size, so the scaled distortion of four 8x8 blocks cannot be directly
+/// compared to the scaled distortion of one 16x16 blocks which is problematic
+/// for RDO. Thankfully we normally compute distortion using <= 8x8 blocks, so
+/// currently this is only a problem when `tx_domain_distortion` is on,
+/// we might want to turn off temporal RDO in that case.
 pub fn compute_distortion_scale<T: Pixel>(
   fi: &FrameInvariants<T>, frame_bo: PlaneBlockOffset, bsize: BlockSize,
 ) -> f64 {
