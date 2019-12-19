@@ -101,6 +101,7 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
               tx_size.block_size(),
               po,
               false,
+              qindex as u8,
               ac,
               0,
               RDOType::PixelDistRealRate,
