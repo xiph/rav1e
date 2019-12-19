@@ -3946,7 +3946,7 @@ impl<'a> ContextWriter<'a> {
 
   pub fn write_coeffs_lv_map(
     &mut self, w: &mut dyn Writer, plane: usize, bo: TileBlockOffset,
-    coeffs_in: &[i32], pred_mode: PredictionMode, tx_size: TxSize,
+    coeffs_in: &[i32], eob: usize, pred_mode: PredictionMode, tx_size: TxSize,
     tx_type: TxType, plane_bsize: BlockSize, xdec: usize, ydec: usize,
     use_reduced_tx_set: bool,
   ) -> bool {
@@ -3961,16 +3961,15 @@ impl<'a> ContextWriter<'a> {
       AlignedArray::uninitialized();
     let coeffs = &mut coeffs_storage.array[..width * height];
 
-    for (i, &scan_idx) in scan.iter().take(width * height).enumerate() {
+    // Zero initialize
+    for coeff in coeffs.iter_mut() {
+      *coeff = 0;
+    }
+
+    for (i, &scan_idx) in scan.iter().take(eob).enumerate() {
       coeffs[i] = coeffs_in[scan_idx as usize];
     }
-    let mut cul_level = coeffs.iter().map(|c| c.abs() as u32).sum();
-
-    let eob = if cul_level == 0 {
-      0
-    } else {
-      coeffs.iter().rposition(|&v| v != 0).map(|i| i + 1).unwrap_or(0)
-    };
+    let mut cul_level = coeffs.iter().take(eob).map(|c| c.abs() as u32).sum();
 
     let txs_ctx = Self::get_txsize_entropy_ctx(tx_size);
     let txb_ctx =

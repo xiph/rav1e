@@ -255,7 +255,8 @@ impl QuantizationContext {
   #[inline]
   pub fn quantize<T>(
     &self, coeffs: &[T], qcoeffs: &mut [T], tx_size: TxSize, tx_type: TxType,
-  ) where
+  ) -> usize
+  where
     T: Coefficient,
   {
     let scan = av1_scan_orders[tx_size as usize][tx_type as usize].scan;
@@ -279,6 +280,8 @@ impl QuantizationContext {
     qcoeffs[0] += qcoeffs[0].signum() * T::cast_from(self.dc_offset);
     qcoeffs[0] = T::cast_from(divu_pair(qcoeffs[0].as_(), self.dc_mul_add));
 
+    let mut actual_eob = if qcoeffs[0] == T::cast_from(0) { 0 } else { 1 };
+
     // Here we use different rounding biases depending on whether we've
     // had recent coefficients that are larger than one, or less than
     // one. The reason for this is that a block usually has a chunk of
@@ -290,7 +293,7 @@ impl QuantizationContext {
     // To that end, we want to bias more toward rounding to zero for
     // that tail of zeroes and ones than we do for the larger coefficients.
     let mut level_mode = 1;
-    for &pos in scan[1..].iter().take(eob) {
+    for (i, &pos) in (1..).zip(scan[1..].iter().take(eob)) {
       let coeff = coeffs[pos as usize] << self.log_tx_scale;
       let level0 = T::cast_from(divu_pair(coeff.as_(), self.ac_mul_add));
       let offset = if level0 > T::cast_from(1 - level_mode) {
@@ -303,6 +306,11 @@ impl QuantizationContext {
         self.ac_mul_add,
       ));
       qcoeffs[pos as usize] = qcoeff;
+
+      if qcoeff != T::cast_from(0) {
+        actual_eob = i + 1;
+      }
+
       if level_mode != 0 && qcoeff == T::cast_from(0) {
         level_mode = 0;
       } else if qcoeff > T::cast_from(1) {
@@ -313,12 +321,14 @@ impl QuantizationContext {
     for &pos in scan.iter().skip(eob + 1) {
       qcoeffs[pos as usize] = T::cast_from(0);
     }
+
+    actual_eob
   }
 }
 
 pub fn dequantize(
-  qindex: u8, coeffs: &[i32], rcoeffs: &mut [i32], tx_size: TxSize,
-  bit_depth: usize, dc_delta_q: i8, ac_delta_q: i8,
+  qindex: u8, coeffs: &[i32], _eob: usize, rcoeffs: &mut [i32],
+  tx_size: TxSize, bit_depth: usize, dc_delta_q: i8, ac_delta_q: i8,
 ) {
   let log_tx_scale = get_log_tx_scale(tx_size) as i32;
   let offset = (1 << log_tx_scale) - 1;

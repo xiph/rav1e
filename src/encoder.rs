@@ -1203,7 +1203,7 @@ pub fn encode_tx_block<T: Pixel>(
     fi.cpu_feature_level,
   );
 
-  ts.qc.quantize(coeffs, qcoeffs, tx_size, tx_type);
+  let eob = ts.qc.quantize(coeffs, qcoeffs, tx_size, tx_type);
 
   let has_coeff = if need_recon_pixel || rdo_type.needs_coeff_rate() {
     cw.write_coeffs_lv_map(
@@ -1211,6 +1211,7 @@ pub fn encode_tx_block<T: Pixel>(
       p,
       tile_bo,
       &qcoeffs,
+      eob,
       mode,
       tx_size,
       tx_type,
@@ -1227,6 +1228,7 @@ pub fn encode_tx_block<T: Pixel>(
   dequantize(
     qidx,
     qcoeffs,
+    eob,
     rcoeffs,
     tx_size,
     fi.sequence.bit_depth,
