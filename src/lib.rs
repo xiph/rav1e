@@ -45,6 +45,7 @@
 #![allow(clippy::many_single_char_names)]
 #![allow(clippy::wrong_self_convention)]
 #![allow(clippy::missing_safety_doc)]
+#![allow(clippy::comparison_chain)]
 
 // Override assert! and assert_eq! in tests
 #[cfg(test)]
