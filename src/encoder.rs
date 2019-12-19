@@ -3396,7 +3396,7 @@ fn write_tile_group_header(tile_start_and_end_present_flag: bool) -> Vec<u8> {
     bw.write_bit(tile_start_and_end_present_flag).unwrap();
     bw.byte_align().unwrap();
   }
-  buf.clone()
+  buf
 }
 
 // Write a packet containing only the placeholder that tells the decoder
