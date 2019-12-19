@@ -18,7 +18,6 @@ cfg_if::cfg_if! {
 }
 
 use crate::cpu_features::CpuFeatureLevel;
-use crate::predict::Dim;
 use crate::tiling::PlaneRegionMut;
 use crate::util::*;
 
@@ -1665,7 +1664,7 @@ pub(crate) mod native {
     ($(($W:expr, $H:expr)),+ $SH:expr) => {
       $(
         paste::item! {
-          impl InvTxfm2D for crate::predict::[<Block $W x $H>] {
+          impl InvTxfm2D for crate::util::[<Block $W x $H>] {
             const INTERMEDIATE_SHIFT: usize = $SH;
           }
         }
@@ -1693,7 +1692,7 @@ macro_rules! impl_iht_fns {
         ) where
           T: Pixel,
         {
-          crate::predict::[<Block $W x $H>]::inv_txfm2d_add(
+          crate::util::[<Block $W x $H>]::inv_txfm2d_add(
             input, output, tx_type, bit_depth, cpu
           );
         }

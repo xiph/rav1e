@@ -219,3 +219,31 @@ pub fn msb(x: i32) -> i32 {
 pub const fn round_shift(value: i32, bit: usize) -> i32 {
   (value + (1 << bit >> 1)) >> bit
 }
+
+pub trait Dim {
+  const W: usize;
+  const H: usize;
+}
+
+macro_rules! blocks_dimension {
+  ($(($W:expr, $H:expr)),+) => {
+    paste::item! {
+      $(
+        pub struct [<Block $W x $H>];
+
+        impl Dim for [<Block $W x $H>] {
+          const W: usize = $W;
+          const H: usize = $H;
+        }
+      )*
+    }
+  };
+}
+
+blocks_dimension! {
+  (4, 4), (8, 8), (16, 16), (32, 32), (64, 64),
+  (4, 8), (8, 16), (16, 32), (32, 64),
+  (8, 4), (16, 8), (32, 16), (64, 32),
+  (4, 16), (8, 32), (16, 64),
+  (16, 4), (32, 8), (64, 16)
+}

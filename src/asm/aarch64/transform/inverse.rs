@@ -109,7 +109,7 @@ macro_rules! impl_itx_fns {
     )*
     paste::item! {
       // Implement InvTxfm2D for WxH
-      impl InvTxfm2D for crate::predict::[<Block $W x $H>] {
+      impl InvTxfm2D for crate::util::[<Block $W x $H>] {
         $(
           impl_itx_fns!($TYPES, $W, $H, $OPT);
         )*
@@ -225,10 +225,10 @@ mod test {
             );
             let mut native_dst = dst.clone();
 
-            unsafe { crate::predict::[<Block $W x $H>]::[<inv_txfm2d_add_ $OPT>](
+            unsafe { crate::util::[<Block $W x $H>]::[<inv_txfm2d_add_ $OPT>](
               freq, &mut dst.as_region_mut(), $ENUM, 8
             ); }
-            <crate::predict::[<Block $W x $H>] as native::InvTxfm2D>::inv_txfm2d_add(
+            <crate::util::[<Block $W x $H>] as native::InvTxfm2D>::inv_txfm2d_add(
               freq, &mut native_dst.as_region_mut(), $ENUM, 8, CpuFeatureLevel::NATIVE
             );
             assert_eq!(native_dst.data_origin(), dst.data_origin());
