@@ -25,13 +25,9 @@ use std::path::PathBuf;
 /// # Example `build.rs`
 ///
 /// ```
-/// extern crate vergen;
-///
 /// use vergen::{ConstantsFlags, generate_cargo_keys};
 ///
-/// fn main() {
-///     generate_cargo_keys(ConstantsFlags::all()).expect("Unable to generate cargo keys!");
-/// }
+/// generate_cargo_keys(ConstantsFlags::all()).expect("Unable to generate cargo keys!");
 /// ```
 pub fn generate_cargo_keys(
   flags: ConstantsFlags,
