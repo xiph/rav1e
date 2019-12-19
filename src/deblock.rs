@@ -333,11 +333,10 @@ fn copy_vertical<T: Pixel>(
   }
 }
 
-fn stride_sse<T: Pixel>(a: &[T], b: &[i32], pitch: usize) -> i64 {
+fn stride_sse(a: &[i32], b: &[i32]) -> i64 {
   let mut acc: i32 = 0;
-  for (a, b) in a.iter().step_by(pitch).take(b.len()).zip(b) {
-    let v: i32 = (*a).as_();
-    acc += (v - *b) * (v - *b)
+  for (a, b) in a.iter().take(b.len()).zip(b) {
+    acc += (*a - *b) * (*a - *b)
   }
   acc as i64
 }
@@ -423,16 +422,17 @@ fn deblock_h_size4<T: Pixel>(
 // Accesses four taps, accumulates four pixels into the tally
 fn sse_size4<T: Pixel>(
   rec: &PlaneSlice<'_, T>, src: &PlaneSlice<'_, T>,
-  tally: &mut [i64; MAX_LOOP_FILTER + 2], rec_pitch: usize, src_pitch: usize,
+  tally: &mut [i64; MAX_LOOP_FILTER + 2], horizontal_p: bool,
   bd: usize,
 ) {
-  for y in 0..4 {
-    let p = &rec[y]; // four taps
-    let a = &src[y]; // four pixels to compare
-    let p1: i32 = p[0].as_();
-    let p0: i32 = p[rec_pitch].as_();
-    let q0: i32 = p[rec_pitch * 2].as_();
-    let q1: i32 = p[rec_pitch * 3].as_();
+  for i in 0..4 {
+    let (p1, p0, q0, q1, a) = if horizontal_p {
+      (rec[0][i].as_(), rec[1][i].as_(), rec[2][i].as_(), rec[3][i].as_(),
+       [src[0][i].as_(), src[1][i].as_(), src[2][i].as_(), src[3][i].as_()])
+    } else {
+      (rec[i][0].as_(), rec[i][1].as_(), rec[i][2].as_(), rec[i][3].as_(),
+       [src[i][0].as_(), src[i][1].as_(), src[i][2].as_(), src[i][3].as_()])
+    };
 
     // three possibilities: no filter, narrow2 and narrow4
     // All possibilities produce four outputs
@@ -448,11 +448,11 @@ fn sse_size4<T: Pixel>(
       clamp(nhev4(p1, p0, q0, q1, bd - 8), mask, MAX_LOOP_FILTER + 1) as usize;
 
     // sse for each; short-circuit the 'special' no-op cases.
-    let sse_none = stride_sse(a, &none, src_pitch);
+    let sse_none = stride_sse(&a, &none);
     let sse_narrow2 =
-      if nhev != mask { stride_sse(a, &narrow2, src_pitch) } else { sse_none };
+      if nhev != mask { stride_sse(&a, &narrow2) } else { sse_none };
     let sse_narrow4 = if nhev <= MAX_LOOP_FILTER {
-      stride_sse(a, &narrow4, src_pitch)
+      stride_sse(&a, &narrow4)
     } else {
       sse_none
     };
@@ -545,19 +545,33 @@ fn deblock_h_size6<T: Pixel>(
 // Accesses six taps, accumulates four pixels into the tally
 fn sse_size6<T: Pixel>(
   rec: &PlaneSlice<'_, T>, src: &PlaneSlice<'_, T>,
-  tally: &mut [i64; MAX_LOOP_FILTER + 2], rec_pitch: usize, src_pitch: usize,
+  tally: &mut [i64; MAX_LOOP_FILTER + 2], horizontal_p: bool,
   bd: usize,
 ) {
   let flat = 1 << (bd - 8);
-  for y in 0..4 {
-    let p = &rec[y]; // six taps
-    let a = &src[y][src_pitch..]; // four pixels to compare so offset one forward
-    let p2: i32 = p[0].as_();
-    let p1: i32 = p[rec_pitch].as_();
-    let p0: i32 = p[rec_pitch * 2].as_();
-    let q0: i32 = p[rec_pitch * 3].as_();
-    let q1: i32 = p[rec_pitch * 4].as_();
-    let q2: i32 = p[rec_pitch * 5].as_();
+  for i in 0..4 {
+
+    let (p2, p1, p0, q0, q1, q2, a) = if horizontal_p {
+       // six taps
+      (rec[0][i].as_(),
+       rec[1][i].as_(),
+       rec[2][i].as_(),
+       rec[3][i].as_(),
+       rec[4][i].as_(),
+       rec[5][i].as_(),
+       // four pixels to compare so offset one forward
+       [src[1][i].as_(), src[2][i].as_(), src[3][i].as_(), src[4][i].as_()])
+    } else {
+      // six taps
+      (rec[i][0].as_(),
+        rec[i][1].as_(),
+        rec[i][2].as_(),
+        rec[i][3].as_(),
+        rec[i][4].as_(),
+        rec[i][5].as_(),
+       // four pixels to compare so offset one forward
+       [src[i][1].as_(), src[i][2].as_(), src[i][3].as_(), src[i][4].as_()])
+    };
 
     // Four possibilities: no filter, wide6, narrow2 and narrow4
     // All possibilities produce four outputs
@@ -577,19 +591,19 @@ fn sse_size6<T: Pixel>(
       clamp(nhev4(p1, p0, q0, q1, bd - 8), mask, MAX_LOOP_FILTER + 1) as usize;
 
     // sse for each; short-circuit the 'special' no-op cases.
-    let sse_none = stride_sse(a, &none, src_pitch);
+    let sse_none = stride_sse(&a, &none);
     let sse_wide6 = if flatp && mask <= MAX_LOOP_FILTER {
-      stride_sse(a, &wide6, src_pitch)
+      stride_sse(&a, &wide6)
     } else {
       sse_none
     };
     let sse_narrow2 = if !flatp && nhev != mask {
-      stride_sse(a, &narrow2, src_pitch)
+      stride_sse(&a, &narrow2)
     } else {
       sse_none
     };
     let sse_narrow4 = if !flatp && nhev <= MAX_LOOP_FILTER {
-      stride_sse(a, &narrow4, src_pitch)
+      stride_sse(&a, &narrow4)
     } else {
       sse_none
     };
@@ -713,21 +727,50 @@ fn deblock_h_size8<T: Pixel>(
 // Accesses eight taps, accumulates six pixels into the tally
 fn sse_size8<T: Pixel>(
   rec: &PlaneSlice<'_, T>, src: &PlaneSlice<'_, T>,
-  tally: &mut [i64; MAX_LOOP_FILTER + 2], rec_pitch: usize, src_pitch: usize,
+  tally: &mut [i64; MAX_LOOP_FILTER + 2], horizontal_p: bool,
   bd: usize,
 ) {
   let flat = 1 << (bd - 8);
-  for y in 0..4 {
-    let p = &rec[y]; // eight taps
-    let a = &src[y][src_pitch..]; // six pixels to compare so offset one forward
-    let p3: i32 = p[0].as_();
-    let p2: i32 = p[rec_pitch].as_();
-    let p1: i32 = p[rec_pitch * 2].as_();
-    let p0: i32 = p[rec_pitch * 3].as_();
-    let q0: i32 = p[rec_pitch * 4].as_();
-    let q1: i32 = p[rec_pitch * 5].as_();
-    let q2: i32 = p[rec_pitch * 6].as_();
-    let q3: i32 = p[rec_pitch * 7].as_();
+
+  for i in 0..4 {
+
+    let (p3, p2, p1, p0, q0, q1, q2, q3, a) = if horizontal_p {
+       // eight taps
+      (rec[0][i].as_(),
+       rec[1][i].as_(),
+       rec[2][i].as_(),
+       rec[3][i].as_(),
+       rec[4][i].as_(),
+       rec[5][i].as_(),
+       rec[6][i].as_(),
+       rec[7][i].as_(),
+       // six pixels to compare so offset one forward
+       [src[1][i].as_(),
+        src[2][i].as_(),
+        src[3][i].as_(),
+        src[4][i].as_(),
+        src[5][i].as_(),
+        src[6][i].as_(),
+       ])
+    } else {
+      // eight taps
+      (rec[i][0].as_(),
+        rec[i][1].as_(),
+        rec[i][2].as_(),
+        rec[i][3].as_(),
+        rec[i][4].as_(),
+        rec[i][5].as_(),
+        rec[i][6].as_(),
+        rec[i][7].as_(),
+       // six pixels to compare so offset one forward
+       [src[i][1].as_(),
+        src[i][2].as_(),
+        src[i][3].as_(),
+        src[i][4].as_(),
+        src[i][5].as_(),
+        src[i][6].as_(),
+       ])
+    };
 
     // Four possibilities: no filter, wide8, narrow2 and narrow4
     let none: [_; 6] = [p2, p1, p0, q0, q1, q2];
@@ -748,19 +791,19 @@ fn sse_size8<T: Pixel>(
       clamp(nhev4(p1, p0, q0, q1, bd - 8), mask, MAX_LOOP_FILTER + 1) as usize;
 
     // sse for each; short-circuit the 'special' no-op cases.
-    let sse_none = stride_sse(a, &none, src_pitch);
+    let sse_none = stride_sse(&a, &none);
     let sse_wide8 = if flatp && mask <= MAX_LOOP_FILTER {
-      stride_sse(a, &wide8, src_pitch)
+      stride_sse(&a, &wide8)
     } else {
       sse_none
     };
     let sse_narrow2 = if !flatp && nhev != mask {
-      stride_sse(a, &narrow2, src_pitch)
+      stride_sse(&a, &narrow2)
     } else {
       sse_none
     };
     let sse_narrow4 = if !flatp && nhev <= MAX_LOOP_FILTER {
-      stride_sse(a, &narrow4, src_pitch)
+      stride_sse(&a, &narrow4)
     } else {
       sse_none
     };
@@ -884,28 +927,75 @@ fn deblock_h_size14<T: Pixel>(
 // Accesses fourteen taps, accumulates twelve pixels into the tally
 fn sse_size14<T: Pixel>(
   rec: &PlaneSlice<'_, T>, src: &PlaneSlice<'_, T>,
-  tally: &mut [i64; MAX_LOOP_FILTER + 2], rec_pitch: usize, src_pitch: usize,
+  tally: &mut [i64; MAX_LOOP_FILTER + 2], horizontal_p: bool,
   bd: usize,
 ) {
   let flat = 1 << (bd - 8);
-  for y in 0..4 {
-    let p = &rec[y]; // 14 taps
-    let a = &src[y][src_pitch..]; // 12 pixels to compare so offset one forward
-    let p6: i32 = p[0].as_();
-    let p5: i32 = p[rec_pitch].as_();
-    let p4: i32 = p[rec_pitch * 2].as_();
-    let p3: i32 = p[rec_pitch * 3].as_();
-    let p2: i32 = p[rec_pitch * 4].as_();
-    let p1: i32 = p[rec_pitch * 5].as_();
-    let p0: i32 = p[rec_pitch * 6].as_();
-    let q0: i32 = p[rec_pitch * 7].as_();
-    let q1: i32 = p[rec_pitch * 8].as_();
-    let q2: i32 = p[rec_pitch * 9].as_();
-    let q3: i32 = p[rec_pitch * 10].as_();
-    let q4: i32 = p[rec_pitch * 11].as_();
-    let q5: i32 = p[rec_pitch * 12].as_();
-    let q6: i32 = p[rec_pitch * 13].as_();
-
+  for i in 0..4 {
+    
+    let (p6, p5, p4, p3, p2, p1, p0,
+         q0, q1, q2, q3, q4, q5, q6, a) = if horizontal_p {
+      // 14 taps
+      (rec[0][i].as_(),
+       rec[1][i].as_(),
+       rec[2][i].as_(),
+       rec[3][i].as_(),
+       rec[4][i].as_(),
+       rec[5][i].as_(),
+       rec[6][i].as_(),
+       rec[7][i].as_(),
+       rec[8][i].as_(),
+       rec[9][i].as_(),
+       rec[10][i].as_(),
+       rec[11][i].as_(),
+       rec[12][i].as_(),
+       rec[13][i].as_(),
+       // 12 pixels to compare so offset one forward
+       [src[1][i].as_(),
+        src[2][i].as_(),
+        src[3][i].as_(),
+        src[4][i].as_(),
+        src[5][i].as_(),
+        src[6][i].as_(),
+        src[7][i].as_(),
+        src[8][i].as_(),
+        src[9][i].as_(),
+        src[10][i].as_(),
+        src[11][i].as_(),
+        src[12][i].as_(),
+       ])
+    } else {
+      // 14 taps
+      (rec[i][0].as_(),
+        rec[i][1].as_(),
+        rec[i][2].as_(),
+        rec[i][3].as_(),
+        rec[i][4].as_(),
+        rec[i][5].as_(),
+        rec[i][6].as_(),
+        rec[i][7].as_(),
+        rec[i][8].as_(),
+        rec[i][9].as_(),
+        rec[i][10].as_(),
+        rec[i][11].as_(),
+        rec[i][12].as_(),
+        rec[i][13].as_(),
+       // 12 pixels to compare so offset one forward
+       [src[i][1].as_(),
+        src[i][2].as_(),
+        src[i][3].as_(),
+        src[i][4].as_(),
+        src[i][5].as_(),
+        src[i][6].as_(),
+        src[i][7].as_(),
+        src[i][8].as_(),
+        src[i][9].as_(),
+        src[i][10].as_(),
+        src[i][11].as_(),
+        src[i][12].as_(),
+       ])
+    };
+  
     // Five possibilities: no filter, wide14, wide8, narrow2 and narrow4
     let none: [i32; 12] = [p5, p4, p3, p2, p1, p0, q0, q1, q2, q3, q4, q5];
     let wide14 =
@@ -958,24 +1048,24 @@ fn sse_size14<T: Pixel>(
       clamp(nhev4(p1, p0, q0, q1, bd - 8), mask, MAX_LOOP_FILTER + 1) as usize;
 
     // sse for each; short-circuit the 'special' no-op cases.
-    let sse_none = stride_sse(a, &none, src_pitch);
+    let sse_none = stride_sse(&a, &none);
     let sse_wide8 = if flat8p && !flat14p && mask <= MAX_LOOP_FILTER {
-      stride_sse(a, &wide8, src_pitch)
+      stride_sse(&a, &wide8)
     } else {
       sse_none
     };
     let sse_wide14 = if flat8p && flat14p && mask <= MAX_LOOP_FILTER {
-      stride_sse(a, &wide14, src_pitch)
+      stride_sse(&a, &wide14)
     } else {
       sse_none
     };
     let sse_narrow2 = if !flat8p && nhev != mask {
-      stride_sse(a, &narrow2, src_pitch)
+      stride_sse(&a, &narrow2)
     } else {
       sse_none
     };
     let sse_narrow4 = if !flat8p && nhev <= MAX_LOOP_FILTER {
-      stride_sse(a, &narrow4, src_pitch)
+      stride_sse(&a, &narrow4)
     } else {
       sse_none
     };
@@ -1066,16 +1156,16 @@ fn sse_v_edge<T: Pixel>(
       let src_slice = src_plane.slice(po);
       match filter_size {
         4 => {
-          sse_size4(&rec_slice, &src_slice, tally, 1, 1, bd);
+          sse_size4(&rec_slice, &src_slice, tally, false, bd);
         }
         6 => {
-          sse_size6(&rec_slice, &src_slice, tally, 1, 1, bd);
+          sse_size6(&rec_slice, &src_slice, tally, false, bd);
         }
         8 => {
-          sse_size8(&rec_slice, &src_slice, tally, 1, 1, bd);
+          sse_size8(&rec_slice, &src_slice, tally, false, bd);
         }
         14 => {
-          sse_size14(&rec_slice, &src_slice, tally, 1, 1, bd);
+          sse_size14(&rec_slice, &src_slice, tally, false, bd);
         }
         _ => unreachable!(),
       }
@@ -1145,23 +1235,39 @@ fn sse_h_edge<T: Pixel>(
     if filter_size > 0 {
       let po = {
         let mut po = bo.plane_offset(&rec_plane.cfg); // rec and src have identical subsampling
-        po.x -= (filter_size >> 1) as isize;
+        po.y -= (filter_size >> 1) as isize;
         po
       };
       let rec_slice = rec_plane.slice(po);
       let src_slice = src_plane.slice(po);
       match filter_size {
         4 => {
-          sse_size4(&rec_slice, &src_slice, tally, 1, 1, bd);
+          sse_size4(&rec_slice,
+                    &src_slice,
+                    tally,
+                    true,
+                    bd);
         }
         6 => {
-          sse_size6(&rec_slice, &src_slice, tally, 1, 1, bd);
+          sse_size6(&rec_slice,
+                    &src_slice,
+                    tally,
+                    true,
+                    bd);
         }
         8 => {
-          sse_size8(&rec_slice, &src_slice, tally, 1, 1, bd);
+          sse_size8(&rec_slice,
+                    &src_slice,
+                    tally,
+                    true,
+                    bd);
         }
         14 => {
-          sse_size14(&rec_slice, &src_slice, tally, 1, 1, bd);
+          sse_size14(&rec_slice,
+                     &src_slice,
+                     tally,
+                     true,
+                     bd);
         }
         _ => unreachable!(),
       }
