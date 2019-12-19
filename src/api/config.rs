@@ -329,7 +329,7 @@ impl Default for SpeedSettings {
       lrf: false,
       use_satd_subpel: true,
       non_square_partition: true,
-      enable_segmentation: false,
+      enable_segmentation: true,
     }
   }
 }
@@ -368,7 +368,7 @@ impl SpeedSettings {
       lrf: Self::lrf_preset(speed),
       use_satd_subpel: Self::use_satd_subpel(speed),
       non_square_partition: Self::non_square_partition_preset(speed),
-      enable_segmentation: false,
+      enable_segmentation: Self::enable_segmentation_preset(speed),
     }
   }
 
@@ -467,6 +467,13 @@ impl SpeedSettings {
   }
 
   const fn non_square_partition_preset(speed: usize) -> bool {
+    speed == 0
+  }
+
+  // FIXME: this is currently only enabled at speed 0 because choosing a segment
+  // requires doing RDO, but once that is replaced by a less bruteforce
+  // solution we should be able to enable segmentation at all speeds.
+  const fn enable_segmentation_preset(speed: usize) -> bool {
     speed == 0
   }
 }

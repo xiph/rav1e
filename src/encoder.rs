@@ -1110,9 +1110,16 @@ pub fn encode_tx_block<T: Pixel>(
   cw: &mut ContextWriter,
   w: &mut dyn Writer,
   p: usize,
+  // Offset in the luma plane of the partition enclosing this block.
   tile_partition_bo: TileBlockOffset,
+  // tx block position within a partition, unit: tx block number
   bx: usize,
-  by: usize, // tx block position within a partition, unit: tx block number
+  by: usize,
+  // Offset in the luma plane where this tx block is colocated. Note that for
+  // a chroma block, this offset might be outside of the current partition.
+  // For example in 4:2:0, four 4x4 luma partitions share one 4x4 chroma block,
+  // this block is part of the last 4x4 partition, but its `tx_bo` offset
+  // matches the offset of the first 4x4 partition.
   tx_bo: TileBlockOffset,
   mode: PredictionMode,
   tx_size: TxSize,
@@ -1120,13 +1127,12 @@ pub fn encode_tx_block<T: Pixel>(
   bsize: BlockSize,
   po: PlaneOffset,
   skip: bool,
+  qidx: u8,
   ac: &[i16],
   alpha: i16,
   rdo_type: RDOType,
   need_recon_pixel: bool,
 ) -> (bool, ScaledDistortion) {
-  let qidx = get_qidx(fi, ts, cw, tx_bo);
-  assert_ne!(qidx, 0); // lossless is not yet supported
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[p].cfg;
   let tile_rect = ts.tile_rect().decimated(xdec, ydec);
   let rec = &mut ts.rec.planes[p];
@@ -1807,6 +1813,7 @@ pub fn write_tx_blocks<T: Pixel>(
   let bw = bsize.width_mi() / tx_size.width_mi();
   let bh = bsize.height_mi() / tx_size.height_mi();
   let qidx = get_qidx(fi, ts, cw, tile_bo);
+  assert_ne!(qidx, 0); // lossless is not yet supported
 
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let mut ac: AlignedArray<[i16; 32 * 32]> = AlignedArray::uninitialized();
@@ -1847,6 +1854,7 @@ pub fn write_tx_blocks<T: Pixel>(
         bsize,
         po,
         skip,
+        qidx,
         &ac.array,
         0,
         rdo_type,
@@ -1930,6 +1938,7 @@ pub fn write_tx_blocks<T: Pixel>(
             bsize,
             po,
             skip,
+            qidx,
             &ac.array,
             alpha,
             rdo_type,
@@ -1991,6 +2000,7 @@ pub fn write_tx_tree<T: Pixel>(
     bsize,
     po,
     skip,
+    qidx,
     ac,
     0,
     rdo_type,
@@ -2064,6 +2074,7 @@ pub fn write_tx_tree<T: Pixel>(
             bsize,
             po,
             skip,
+            qidx,
             ac,
             0,
             rdo_type,
