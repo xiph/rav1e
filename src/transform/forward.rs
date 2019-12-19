@@ -23,9 +23,9 @@ cfg_if::cfg_if! {
 pub mod native {
   use super::*;
 
-  use crate::predict::Dim;
   use crate::transform::av1_round_shift_array;
   use crate::transform::forward_shared::*;
+  use crate::transform::Dim;
   use crate::transform::TxSize;
 
   pub trait TxOperations: Copy {

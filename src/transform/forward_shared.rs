@@ -160,7 +160,7 @@ macro_rules! impl_fwd_txs {
   ($(($W:expr, $H:expr)),+) => {
     $(
       paste::item! {
-        pub use crate::predict::[<Block $W x $H>];
+        pub use crate::util::[<Block $W x $H>];
         impl FwdTxfm2D for [<Block $W x $H>] {}
       }
     )*
