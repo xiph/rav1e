@@ -414,7 +414,7 @@ impl<T: Pixel> FrameState<T> {
     }
   }
 
-  #[cfg(feature = "bench")]
+
   #[inline(always)]
   pub fn as_tile_state_mut(&mut self) -> TileStateMut<'_, T> {
     let PlaneConfig { width, height, .. } = self.rec.planes[0].cfg;
@@ -2935,10 +2935,14 @@ fn encode_tile_group<T: Pixel>(
     fs.enc_stats += &tile_stats;
   }
 
+  /* Frame deblocking operates over a single large tile wrapping the
+   * frame rather than the frame itself so that deblocking is
+   * available inside RDO when needed */
   /* TODO: Don't apply if lossless */
   deblock_filter_optimize(fi, fs, &blocks);
   if fs.deblock.levels[0] != 0 || fs.deblock.levels[1] != 0 {
-    deblock_filter_frame(fi, fs, &blocks);
+    deblock_filter_frame(&mut fs.as_tile_state_mut(),
+                         &blocks.as_tile_blocks(), fi.width, fi.height, fi.sequence.bit_depth);
   }
 
   if fi.sequence.enable_restoration {
