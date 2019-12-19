@@ -54,6 +54,7 @@ jobs:
          - grcov-coveralls
          - bench
          - doc
+         - cargo-c
          - check-no-default
          - check-extra-feats
         include:
@@ -68,6 +69,8 @@ jobs:
          - conf: bench
            toolchain: stable
          - conf: doc
+           toolchain: stable
+         - conf: cargo-c
            toolchain: stable
          - conf: check-no-default
            toolchain: stable
@@ -220,6 +223,14 @@ jobs:
       if: matrix.toolchain == 'stable' && matrix.conf == 'check-extra-feats'
       run: |
         cargo check --features=capi,dump_lookahead_data
+    - name: Install cargo-c
+      if: matrix.conf == 'cargo-c'
+      run: |
+        cargo install cargo-c
+    - name: Run cargo-c
+      if: matrix.conf == 'cargo-c'
+      run: |
+        cargo cbuild
     - name: Run cargo clean
       if: matrix.conf == 'grcov-coveralls'
       uses: actions-rs/cargo@v1
@@ -255,6 +266,14 @@ jobs:
         conf:
          - cargo-build
          - cargo-test
+         - cargo-c
+        include:
+         - conf: cargo-build
+           toolchain: stable
+         - conf: cargo-test
+           toolchain: stable
+         - conf: cargo-c
+           toolchain: stable-x86_64-pc-windows-gnu
 
     env:
       RUST_BACKTRACE: 1
@@ -285,11 +304,11 @@ jobs:
         $env:PATH = "$env:PATH;${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
         $LinkPath = vswhere -latest -products * -find "$LinkGlob" | Select-Object -Last 1
         echo "::add-path::$LinkPath"
-    - name: Install Rust
+    - name: Install ${{ matrix.toolchain }}
       uses: actions-rs/toolchain@v1
       with:
         profile: minimal
-        toolchain: stable
+        toolchain: ${{ matrix.toolchain }}
         override: true
     - name: Generate Cargo.lock
       run: |
@@ -319,6 +338,14 @@ jobs:
       if: matrix.conf == 'cargo-test'
       run: |
         cargo test --verbose
+    - name: Install cargo-c
+      if: matrix.conf == 'cargo-c'
+      run: |
+        cargo install cargo-c
+    - name: Run cargo-c
+      if: matrix.conf == 'cargo-c'
+      run: |
+        cargo cbuild
     - name: Stop sccache server
       run: |
         sccache --stop-server
