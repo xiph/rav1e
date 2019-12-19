@@ -4,9 +4,7 @@ on:
   push:
     tags:
       - 'v*.*.*'
-  release:
-    types:
-      - prereleased
+      - 'p*'
 
 jobs:
   create-binaries:
@@ -52,6 +50,9 @@ jobs:
 
     needs: create-binaries
 
+    env:
+      FILENAME: rav1e-windows-sdk
+
     runs-on: ubuntu-latest
 
     steps:
@@ -63,41 +64,42 @@ jobs:
     - name: Unzip rav1e Windows binaries
       run: |
         unzip rav1e-binaries/rav1e.zip -d rav1e-binaries
-        cp rav1e-binaries/Cargo.lock .
-    - name: Handle release data and binaries
-      if: github.event_name == 'push'
+        mv rav1e-binaries/Cargo.lock .
+    - name: Handle binaries
+      run: |
+        mv rav1e-binaries/local rav1e-binaries/$FILENAME
+        strip rav1e-binaries/rav1e.exe
+    - name: Package pre-release binaries
+      if: startsWith(github.ref, 'refs/tags/p')
+      run: |
+        cd rav1e-binaries
+        zip -r rav1e-windows.zip rav1e.exe $FILENAME
+    - name: Package release binaries
+      if: startsWith(github.ref, 'refs/tags/v')
       id: data
       run: |
         VERSION=$(cargo pkgid | cut -d# -f2 | cut -d: -f2)
-        FILENAME=rav1e-$VERSION-windows-sdk
         echo "::set-output name=version::$VERSION"
-        mv rav1e-binaries/local rav1e-binaries/$FILENAME
         cd rav1e-binaries
-        zip -r $FILENAME.zip $FILENAME
-        strip rav1e.exe
-        zip -r rav1e-$VERSION.zip rav1e.exe Cargo.lock
-    - name: Package binaries for pre-release
-      if: github.event_name == 'release'
-      run: |
-        FILENAME=rav1e-windows-sdk
-        mv rav1e-binaries/local rav1e-binaries/$FILENAME
-        cd rav1e-binaries
-        strip rav1e.exe
-        zip -r rav1e.zip $FILENAME rav1e.exe Cargo.lock
-    - name: Upload rav1e binaries to pre-release
-      if: github.event_name == 'release'
-      uses: skx/github-action-publish-binaries@master
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        args: 'rav1e-binaries/rav1e.zip'
-    - name: Create a release
-      if: github.event_name == 'push'
+        zip -r rav1e-$VERSION-windows.zip rav1e.exe $FILENAME
+    - name: Create a pre-release
+      if: startsWith(github.ref, 'refs/tags/p')
       uses: softprops/action-gh-release@v1
       with:
-        name: Version ${{ steps.data.outputs.version }}
+        name: Weekly pre-release
+        prerelease: true
         files: |
-          rav1e-binaries/rav1e-${{ steps.data.outputs.version }}-windows-sdk.zip
-          rav1e-binaries/rav1e-${{ steps.data.outputs.version }}.zip
+          Cargo.lock
+          rav1e-binaries/rav1e-windows.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Create a release
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v1
+      with:
+        name: v${{ steps.data.outputs.version }}
+        files: |
+          Cargo.lock
+          rav1e-binaries/rav1e-${{ steps.data.outputs.version }}-windows.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
