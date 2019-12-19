@@ -2098,13 +2098,6 @@ pub fn encode_block_with_modes<T: Pixel>(
   // rdo_tx_size_type().
   cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, mode_decision.sidx);
 
-  debug_assert!(
-    (tx_size, tx_type)
-      == rdo_tx_size_type(
-        fi, ts, cw, bsize, tile_bo, mode_luma, ref_frames, mvs, skip
-      )
-  );
-
   let mut mv_stack = ArrayVec::<[CandidateMV; 9]>::new();
   let is_compound = ref_frames[1] != NONE_FRAME;
   let mode_context =
