@@ -1113,7 +1113,7 @@ pub fn encode_tx_block<T: Pixel>(
   tile_partition_bo: TileBlockOffset,
   bx: usize,
   by: usize, // tx block position within a partition, unit: tx block number
-  tile_bo: TileBlockOffset,
+  tx_bo: TileBlockOffset,
   mode: PredictionMode,
   tx_size: TxSize,
   tx_type: TxType,
@@ -1125,12 +1125,12 @@ pub fn encode_tx_block<T: Pixel>(
   rdo_type: RDOType,
   need_recon_pixel: bool,
 ) -> (bool, ScaledDistortion) {
-  let qidx = get_qidx(fi, ts, cw, tile_bo);
+  let qidx = get_qidx(fi, ts, cw, tx_bo);
   assert_ne!(qidx, 0); // lossless is not yet supported
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[p].cfg;
   let tile_rect = ts.tile_rect().decimated(xdec, ydec);
   let rec = &mut ts.rec.planes[p];
-  let area = Area::BlockStartingAt { bo: tile_bo.0 };
+  let area = Area::BlockStartingAt { bo: tx_bo.0 };
 
   debug_assert!(
     tx_size.sqr() <= TxSize::TX_32X32 || tx_type == TxType::DCT_DCT
@@ -1209,7 +1209,7 @@ pub fn encode_tx_block<T: Pixel>(
     cw.write_coeffs_lv_map(
       w,
       p,
-      tile_bo,
+      tx_bo,
       &qcoeffs,
       mode,
       tx_size,
@@ -1272,7 +1272,7 @@ pub fn encode_tx_block<T: Pixel>(
     w.add_bits_frac(estimated_rate as u32);
   }
   let bias =
-    compute_distortion_scale(fi, ts.to_frame_block_offset(tile_bo), bsize);
+    compute_distortion_scale(fi, ts.to_frame_block_offset(tx_bo), bsize);
   (has_coeff, RawDistortion::new(tx_dist) * bias * fi.dist_scale[p])
 }
 
