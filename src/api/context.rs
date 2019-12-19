@@ -110,8 +110,10 @@ impl<T: Pixel> Context<T> {
     } else if self.is_flushing {
       return Err(EncoderStatus::EnoughData);
     }
+    let inner = &mut self.inner;
+    let pool = &mut self.pool;
 
-    self.inner.send_frame(frame, params)
+    pool.install(|| inner.send_frame(frame, params))
   }
 
   /// Returns the first-pass data of a two-pass encode for the frame that was
