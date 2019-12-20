@@ -261,8 +261,6 @@ jobs:
       RUSTC_WRAPPER: sccache
       SCCACHE_CACHE_SIZE: 300M
       SCCACHE_DIR: C:\sccache
-      VS_PATH: C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise
-      COMPILER_SUBPATH: VC\Tools\MSVC\14.24.28314\bin\Hostx64\x64
 
     runs-on: windows-latest
 
@@ -280,9 +278,13 @@ jobs:
         $NASM_VERSION="nasm-2.14.02"
         curl -LO "https://people.xiph.org/~tdaede/$NASM_VERSION-win64.zip"
         7z e -y "$NASM_VERSION-win64.zip" -o"C:\nasm"
-    - name: Set environment variables
+        echo "::add-path::C:\nasm"
+    - name: Set MSVC x86_64 linker path
       run: |
-        echo "::add-path::$Env:VS_PATH\$Env:COMPILER_SUBPATH;C:\nasm"
+        $LinkGlob = "VC\Tools\MSVC\*\bin\Hostx64\x64"
+        $env:PATH = "$env:PATH;${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
+        $LinkPath = vswhere -latest -products * -find "$LinkGlob" | Select-Object -Last 1
+        echo "::add-path::$LinkPath"
     - name: Install Rust
       uses: actions-rs/toolchain@v1
       with:
