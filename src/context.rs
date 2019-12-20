@@ -30,7 +30,7 @@ use crate::token_cdfs::*;
 use crate::transform::TxSize::*;
 use crate::transform::TxType::*;
 use crate::transform::*;
-use crate::util::{clamp, msb, AlignedArray, Pixel};
+use crate::util::*;
 
 use arrayvec::*;
 use std::default::Default;
@@ -3753,8 +3753,8 @@ impl<'a> ContextWriter<'a> {
     (tx_size.sqr() as usize + tx_size.sqr_up() as usize + 1) >> 1
   }
 
-  fn txb_init_levels(
-    &self, coeffs: &[i32], height: usize, levels: &mut [u8],
+  fn txb_init_levels<T: Coefficient>(
+    &self, coeffs: &[T], height: usize, levels: &mut [u8],
     levels_stride: usize,
   ) {
     // Coefficients and levels are transposed from how they work in the spec
@@ -3762,7 +3762,7 @@ impl<'a> ContextWriter<'a> {
       coeffs.chunks(height).zip(levels.chunks_mut(levels_stride))
     {
       for (coeff, level) in coeffs_col.iter().zip(levels_col.iter_mut()) {
-        *level = clamp(coeff.abs(), 0, 127) as u8;
+        *level = clamp(coeff.abs(), T::cast_from(0), T::cast_from(127)).as_();
       }
     }
   }
@@ -3945,9 +3945,9 @@ impl<'a> ContextWriter<'a> {
     mag + 14
   }
 
-  pub fn write_coeffs_lv_map(
+  pub fn write_coeffs_lv_map<T: Coefficient>(
     &mut self, w: &mut dyn Writer, plane: usize, bo: TileBlockOffset,
-    coeffs_in: &[i32], eob: usize, pred_mode: PredictionMode, tx_size: TxSize,
+    coeffs_in: &[T], eob: usize, pred_mode: PredictionMode, tx_size: TxSize,
     tx_type: TxType, plane_bsize: BlockSize, xdec: usize, ydec: usize,
     use_reduced_tx_set: bool,
   ) -> bool {
@@ -3958,19 +3958,21 @@ impl<'a> ContextWriter<'a> {
       av1_scan_orders[tx_size as usize][tx_type as usize].scan;
     let width = av1_get_coded_tx_size(tx_size).width();
     let height = av1_get_coded_tx_size(tx_size).height();
-    let mut coeffs_storage: AlignedArray<[i32; 32 * 32]> =
+    let mut coeffs_storage: AlignedArray<[T; 32 * 32]> =
       AlignedArray::uninitialized();
     let coeffs = &mut coeffs_storage.array[..width * height];
 
     // Zero initialize
     for coeff in coeffs.iter_mut() {
-      *coeff = 0;
+      *coeff = T::cast_from(0);
     }
 
     for (i, &scan_idx) in scan.iter().take(eob).enumerate() {
       coeffs[i] = coeffs_in[scan_idx as usize];
     }
-    let mut cul_level = coeffs.iter().take(eob).map(|c| c.abs() as u32).sum();
+
+    let mut cul_level =
+      coeffs.iter().take(eob).map(|c| u32::cast_from(c.abs())).sum();
 
     let txs_ctx = Self::get_txsize_entropy_ctx(tx_size);
     let txb_ctx =
@@ -4071,7 +4073,7 @@ impl<'a> ContextWriter<'a> {
         symbol_with_update!(
           self,
           w,
-          (cmp::min(level, 3) - 1) as u32,
+          (cmp::min(u32::cast_from(level), 3) - 1) as u32,
           &mut self.fc.coeff_base_eob_cdf[txs_ctx][plane_type]
             [coeff_ctx as usize]
         );
@@ -4079,33 +4081,33 @@ impl<'a> ContextWriter<'a> {
         symbol_with_update!(
           self,
           w,
-          (cmp::min(level, 3)) as u32,
+          (cmp::min(u32::cast_from(level), 3)) as u32,
           &mut self.fc.coeff_base_cdf[txs_ctx][plane_type][coeff_ctx as usize]
         );
       }
 
-      if level > NUM_BASE_LEVELS as i32 {
-        let base_range = level - 1 - NUM_BASE_LEVELS as i32;
+      if level > T::cast_from(NUM_BASE_LEVELS) {
+        let base_range = level - T::cast_from(1 + NUM_BASE_LEVELS);
         let br_ctx = Self::get_br_ctx(levels, pos, bhl, tx_class);
-        let mut idx: i32 = 0;
+        let mut idx: T = T::cast_from(0);
 
         loop {
-          if idx >= COEFF_BASE_RANGE as i32 {
+          if idx >= T::cast_from(COEFF_BASE_RANGE) {
             break;
           }
-          let k = cmp::min(base_range - idx, BR_CDF_SIZE as i32 - 1);
+          let k = cmp::min(base_range - idx, T::cast_from(BR_CDF_SIZE - 1));
           symbol_with_update!(
             self,
             w,
-            k as u32,
+            u32::cast_from(k),
             &mut self.fc.coeff_br_cdf
               [cmp::min(txs_ctx, TxSize::TX_32X32 as usize)][plane_type]
               [br_ctx]
           );
-          if k < BR_CDF_SIZE as i32 - 1 {
+          if k < T::cast_from(BR_CDF_SIZE - 1) {
             break;
           }
-          idx += BR_CDF_SIZE as i32 - 1;
+          idx += T::cast_from(BR_CDF_SIZE - 1);
         }
       }
     }
@@ -4115,11 +4117,11 @@ impl<'a> ContextWriter<'a> {
     for c in 0..eob {
       let v = coeffs[c];
       let level = v.abs();
-      if level == 0 {
+      if level == T::cast_from(0) {
         continue;
       }
 
-      let sign = if v < 0 { 1 } else { 0 };
+      let sign = if v < T::cast_from(0) { 1 } else { 0 };
       if c == 0 {
         symbol_with_update!(
           self,
@@ -4131,16 +4133,16 @@ impl<'a> ContextWriter<'a> {
         w.bit(sign as u16);
       }
       // save extra golomb codes for separate loop
-      if level > (COEFF_BASE_RANGE + NUM_BASE_LEVELS) as i32 {
-        w.write_golomb(
-          (level - (COEFF_BASE_RANGE + NUM_BASE_LEVELS + 1) as i32) as u32,
-        );
+      if level > T::cast_from(COEFF_BASE_RANGE + NUM_BASE_LEVELS) {
+        w.write_golomb(u32::cast_from(
+          level - T::cast_from(COEFF_BASE_RANGE + NUM_BASE_LEVELS + 1),
+        ));
       }
     }
 
     cul_level = cmp::min(COEFF_CONTEXT_MASK as u32, cul_level);
 
-    BlockContext::set_dc_sign(&mut cul_level, coeffs[0]);
+    BlockContext::set_dc_sign(&mut cul_level, i32::cast_from(coeffs[0]));
 
     self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, cul_level as u8);
     true

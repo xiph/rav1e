@@ -370,8 +370,8 @@ const HTX_TAB: [TxType1D; TX_TYPES] = [
   TxType1D::FLIPADST,
 ];
 
-pub fn forward_transform(
-  input: &[i16], output: &mut [i32], stride: usize, tx_size: TxSize,
+pub fn forward_transform<T: Coefficient>(
+  input: &[i16], output: &mut [T], stride: usize, tx_size: TxSize,
   tx_type: TxType, bit_depth: usize, cpu: CpuFeatureLevel,
 ) {
   use self::TxSize::*;
@@ -401,7 +401,7 @@ pub fn forward_transform(
 }
 
 pub fn inverse_transform_add<T: Pixel>(
-  input: &[i32], output: &mut PlaneRegionMut<'_, T>, tx_size: TxSize,
+  input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, tx_size: TxSize,
   tx_type: TxType, bit_depth: usize, cpu: CpuFeatureLevel,
 ) {
   use self::TxSize::*;
@@ -449,7 +449,7 @@ mod test {
       Plane::wrap(vec![T::cast_from(0); tx_size.area()], tx_size.width());
     let mut res_storage = [0i16; 64 * 64];
     let res = &mut res_storage[..tx_size.area()];
-    let mut freq_storage = [0i32; 64 * 64];
+    let mut freq_storage = [T::Coeff::cast_from(0); 64 * 64];
     let freq = &mut freq_storage[..tx_size.area()];
     for ((r, s), d) in
       res.iter_mut().zip(src.iter_mut()).zip(dst.data.iter_mut())

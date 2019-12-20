@@ -297,8 +297,8 @@ unsafe fn round_shift_array_avx2(arr: &mut [I32X8], size: usize, bit: i8) {
 }
 
 pub trait FwdTxfm2D: native::FwdTxfm2D {
-  fn fwd_txfm2d_daala(
-    input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
+  fn fwd_txfm2d_daala<T: Coefficient>(
+    input: &[i16], output: &mut [T], stride: usize, tx_type: TxType,
     bd: usize, cpu: CpuFeatureLevel,
   ) {
     if cpu >= CpuFeatureLevel::AVX2 {
@@ -314,9 +314,8 @@ pub trait FwdTxfm2D: native::FwdTxfm2D {
 
   #[allow(clippy::identity_op, clippy::erasing_op)]
   #[target_feature(enable = "avx2")]
-  unsafe fn fwd_txfm2d_daala_avx2(
-    input: &[i16], output: &mut [i32], stride: usize, tx_type: TxType,
-    bd: usize,
+  unsafe fn fwd_txfm2d_daala_avx2<T: Coefficient>(
+    input: &[i16], output: &mut [T], stride: usize, tx_type: TxType, bd: usize,
   ) {
     let mut tmp: AlignedArray<[I32X8; 64 * 64 / 8]> =
       AlignedArray::uninitialized();
