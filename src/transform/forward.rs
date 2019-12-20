@@ -125,7 +125,7 @@ pub mod native {
 
       // Columns
       for c in 0..txfm_size_col {
-        let mut col_flip_backing: AlignedArray<[i32; 64 * 64]> =
+        let mut col_flip_backing: AlignedArray<[i32; 64]> =
           AlignedArray::uninitialized();
         let col_flip = &mut col_flip_backing.array[..txfm_size_row];
         if cfg.ud_flip {
@@ -139,18 +139,20 @@ pub mod native {
           }
         }
 
-        let output = &mut output[txfm_size_row..][..txfm_size_row];
+        let mut tx_output_backing: AlignedArray<[i32; 64]> =
+          AlignedArray::uninitialized();
+        let tx_output = &mut tx_output_backing.array[..txfm_size_row];
         av1_round_shift_array(col_flip, txfm_size_row, -cfg.shift[0]);
-        txfm_func_col(&col_flip, output);
-        av1_round_shift_array(output, txfm_size_row, -cfg.shift[1]);
+        txfm_func_col(&col_flip, tx_output);
+        av1_round_shift_array(tx_output, txfm_size_row, -cfg.shift[1]);
         if cfg.lr_flip {
           for r in 0..txfm_size_row {
             // flip from left to right
-            buf1[r * txfm_size_col + (txfm_size_col - c - 1)] = output[r];
+            buf1[r * txfm_size_col + (txfm_size_col - c - 1)] = tx_output[r];
           }
         } else {
           for r in 0..txfm_size_row {
-            buf1[r * txfm_size_col + c] = output[r];
+            buf1[r * txfm_size_col + c] = tx_output[r];
           }
         }
       }

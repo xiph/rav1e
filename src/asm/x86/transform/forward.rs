@@ -321,7 +321,8 @@ pub trait FwdTxfm2D: native::FwdTxfm2D {
     let mut tmp: AlignedArray<[I32X8; 64 * 64 / 8]> =
       AlignedArray::uninitialized();
     let buf = &mut tmp.array[..Self::W * (Self::H / 8).max(1)];
-    let temp_out = &mut [I32X8::zero(); 128];
+    let tx_in = &mut [I32X8::zero(); 64];
+    let tx_out = &mut [I32X8::zero(); 64];
     let cfg =
       Txfm2DFlipCfg::fwd(tx_type, TxSize::by_dims(Self::W, Self::H), bd);
 
@@ -356,26 +357,24 @@ pub trait FwdTxfm2D: native::FwdTxfm2D {
         for r in 0..txfm_size_row {
           let input_ptr =
             input[(txfm_size_row - r - 1) * stride + cg..].as_ptr();
-          temp_out[r] = load_columns(input_ptr, shift);
+          tx_in[r] = load_columns(input_ptr, shift);
         }
       } else {
         for r in 0..txfm_size_row {
           let input_ptr = input[r * stride + cg..].as_ptr();
-          temp_out[r] = load_columns(input_ptr, shift);
+          tx_in[r] = load_columns(input_ptr, shift);
         }
       }
 
-      let (temp_in, mut temp_out) = temp_out.split_at_mut(txfm_size_row);
+      txfm_func_col(tx_in, tx_out);
 
-      txfm_func_col(&temp_in, &mut temp_out);
-
-      round_shift_array_avx2(&mut temp_out, txfm_size_row, -cfg.shift[1]);
+      round_shift_array_avx2(tx_out, txfm_size_row, -cfg.shift[1]);
 
       for rg in (0..txfm_size_row).step_by(8) {
         if txfm_size_row >= 8 && txfm_size_col >= 8 {
           let buf = &mut buf[(rg / 8 * txfm_size_col) + cg..];
           let buf = &mut buf[..8];
-          let input = &temp_out[rg..];
+          let input = &tx_out[rg..];
           let input = &input[..8];
           let transposed = transpose_8x8_avx2((
             input[0], input[1], input[2], input[3], input[4], input[5],
@@ -393,7 +392,7 @@ pub trait FwdTxfm2D: native::FwdTxfm2D {
         } else if txfm_size_row >= 8 && txfm_size_col == 4 {
           let buf = &mut buf[(rg / 8 * txfm_size_col) + cg..];
           let buf = &mut buf[..4];
-          let input = &temp_out[rg..];
+          let input = &tx_out[rg..];
           let input = &input[..8];
           let transposed = transpose_8x4_avx2((
             input[0], input[1], input[2], input[3], input[4], input[5],
@@ -407,7 +406,7 @@ pub trait FwdTxfm2D: native::FwdTxfm2D {
         } else if txfm_size_row == 4 && txfm_size_col >= 8 {
           let buf = &mut buf[(rg / 8 * txfm_size_col) + cg..];
           let buf = &mut buf[..8];
-          let input = &temp_out[rg..];
+          let input = &tx_out[rg..];
           let input = &input[..8];
           let transposed =
             transpose_4x8_avx2((input[0], input[1], input[2], input[3]));
@@ -423,7 +422,7 @@ pub trait FwdTxfm2D: native::FwdTxfm2D {
         } else if txfm_size_row == 4 && txfm_size_col == 4 {
           let buf = &mut buf[(rg / 8 * txfm_size_col) + cg..];
           let buf = &mut buf[..4];
-          let input = &temp_out[rg..];
+          let input = &tx_out[rg..];
           let input = &input[..4];
           let transposed =
             transpose_4x4_avx2((input[0], input[1], input[2], input[3]));
@@ -441,18 +440,18 @@ pub trait FwdTxfm2D: native::FwdTxfm2D {
       if cfg.lr_flip {
         buf[rg / 8 * txfm_size_col..][..txfm_size_col].reverse();
       }
-      txfm_func_row(&buf[rg / 8 * txfm_size_col..], &mut temp_out[..]);
-      round_shift_array_avx2(temp_out, txfm_size_col, -cfg.shift[2]);
+      txfm_func_row(&buf[rg / 8 * txfm_size_col..], tx_out);
+      round_shift_array_avx2(tx_out, txfm_size_col, -cfg.shift[2]);
       for c in 0..txfm_size_col {
         if txfm_size_row >= 8 {
           _mm256_storeu_si256(
             output[c * txfm_size_row + rg..].as_mut_ptr() as *mut _,
-            temp_out[c].vec(),
+            tx_out[c].vec(),
           );
         } else {
           _mm_storeu_si128(
             output[c * txfm_size_row + rg..].as_mut_ptr() as *mut _,
-            _mm256_castsi256_si128(temp_out[c].vec()),
+            _mm256_castsi256_si128(tx_out[c].vec()),
           );
         }
       }
