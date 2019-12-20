@@ -1180,11 +1180,11 @@ pub fn encode_tx_block<T: Pixel>(
   let coded_tx_area = av1_get_coded_tx_size(tx_size).area();
   let mut residual_storage: AlignedArray<[i16; 64 * 64]> =
     AlignedArray::uninitialized();
-  let mut coeffs_storage: AlignedArray<[i32; 64 * 64]> =
+  let mut coeffs_storage: AlignedArray<[T::Coeff; 64 * 64]> =
     AlignedArray::uninitialized();
-  let mut qcoeffs_storage: AlignedArray<[i32; 32 * 32]> =
+  let mut qcoeffs_storage: AlignedArray<[T::Coeff; 32 * 32]> =
     AlignedArray::uninitialized();
-  let mut rcoeffs_storage: AlignedArray<[i32; 32 * 32]> =
+  let mut rcoeffs_storage: AlignedArray<[T::Coeff; 32 * 32]> =
     AlignedArray::uninitialized();
   let residual = &mut residual_storage.array[..tx_size.area()];
   let coeffs = &mut coeffs_storage.array[..tx_size.area()];
@@ -1261,10 +1261,10 @@ pub fn encode_tx_block<T: Pixel>(
       .zip(
         // rcoeffs above 32 rows/cols are always 0. The first 32x32 is stored
         // first in coeffs, so just chain repeating zeroes to rcoeff.
-        rcoeffs.iter().chain(std::iter::repeat(&0)),
+        rcoeffs.iter().chain(std::iter::repeat(&T::Coeff::cast_from(0))),
       )
       .map(|(a, b)| {
-        let c = *a as i32 - *b as i32;
+        let c = i32::cast_from(*a) - i32::cast_from(*b);
         (c * c) as u64
       })
       .sum::<u64>();

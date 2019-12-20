@@ -1591,13 +1591,13 @@ pub(crate) mod native {
     const INTERMEDIATE_SHIFT: usize;
 
     fn inv_txfm2d_add<T>(
-      input: &[i32], output: &mut PlaneRegionMut<'_, T>, tx_type: TxType,
+      input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, tx_type: TxType,
       bd: usize, _cpu: CpuFeatureLevel,
     ) where
       T: Pixel,
     {
       // Only use at most 32 columns and 32 rows of input coefficients.
-      let input: &[i32] = &input[..Self::W.min(32) * Self::H.min(32)];
+      let input: &[T::Coeff] = &input[..Self::W.min(32) * Self::H.min(32)];
 
       // For 64 point transforms, rely on the last 32 columns being initialized
       //   to zero for filling out missing input coeffs.
@@ -1616,11 +1616,11 @@ pub(crate) mod native {
         // For 64 point transforms, rely on the last 32 elements being
         //   initialized to zero for filling out the missing coeffs.
         let mut temp_in: [i32; 64] = [0; 64];
-        for (raw, clamped) in input[r..].iter().step_by(Self::H.min(32)).zip(temp_in.iter_mut()) {
+        for (raw, clamped) in input[r..].iter().map(|a| i32::cast_from(*a)).step_by(Self::H.min(32)).zip(temp_in.iter_mut()) {
           let val = if rect_type.abs() == 1 {
-            round_shift(*raw * INV_SQRT2, SQRT2_BITS)
+            round_shift(raw * INV_SQRT2, SQRT2_BITS)
           } else {
-            *raw
+            raw
           };
           *clamped = clamp_value(val, range);
         }
@@ -1687,7 +1687,7 @@ macro_rules! impl_iht_fns {
     $(
       paste::item! {
         pub fn [<iht $W x $H _add>]<T: Pixel>(
-          input: &[i32], output: &mut PlaneRegionMut<'_, T>, tx_type: TxType,
+          input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, tx_type: TxType,
           bit_depth: usize, cpu: CpuFeatureLevel
         ) where
           T: Pixel,

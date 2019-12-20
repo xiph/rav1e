@@ -21,7 +21,7 @@ pub trait InvTxfm2D: native::InvTxfm2D {
   fn match_tx_type_neon(tx_type: TxType) -> InvTxfmFunc;
 
   fn inv_txfm2d_add<T>(
-    input: &[i32], output: &mut PlaneRegionMut<'_, T>, tx_type: TxType,
+    input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, tx_type: TxType,
     bd: usize, cpu: CpuFeatureLevel,
   ) where
     T: Pixel,
@@ -47,7 +47,7 @@ pub trait InvTxfm2D: native::InvTxfm2D {
 
   #[inline]
   unsafe fn inv_txfm2d_add_neon<T>(
-    input: &[i32], output: &mut PlaneRegionMut<'_, T>, tx_type: TxType,
+    input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, tx_type: TxType,
     bd: usize,
   ) where
     T: Pixel,
@@ -59,15 +59,15 @@ pub trait InvTxfm2D: native::InvTxfm2D {
     let coeff_h = Self::H.min(32);
 
     // Only use at most 32 columns and 32 rows of input coefficients.
-    let input: &[i32] = &input[..coeff_w * coeff_h];
+    let input: &[T::Coeff] = &input[..coeff_w * coeff_h];
 
-    let mut coeff16: AlignedArray<[i16; 32 * 32]> =
+    let mut copied: AlignedArray<[i16; 32 * 32]> =
       AlignedArray::uninitialized();
 
     // Convert input to 16-bits.
     // TODO: Remove by changing coeff to 16-bits for 8-bit output
-    for (c16, c32) in coeff16.array.iter_mut().zip(input) {
-      *c16 = *c32 as i16;
+    for (a, b) in copied.array.iter_mut().zip(input) {
+      *a = i16::cast_from(*b);
     }
 
     let stride = output.plane_cfg.stride as isize;
@@ -76,7 +76,7 @@ pub trait InvTxfm2D: native::InvTxfm2D {
     Self::match_tx_type_neon(tx_type)(
       output.data_ptr_mut() as *mut _,
       stride,
-      coeff16.array.as_mut_ptr(),
+      copied.array.as_mut_ptr() as *mut _,
       (coeff_w * coeff_h) as i32,
     );
   }

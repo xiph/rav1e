@@ -13,23 +13,8 @@ use crate::transform::{TxSize, TxType};
 use crate::util::*;
 
 use crate::scan_order::av1_scan_orders;
-use num_traits::*;
 use std::convert::Into;
 use std::mem;
-use std::ops::AddAssign;
-
-pub trait Coefficient:
-  PrimInt
-  + Into<i32>
-  + AsPrimitive<i32>
-  + CastFromPrimitive<i32>
-  + AddAssign
-  + Signed
-  + 'static
-{
-}
-impl Coefficient for i16 {}
-impl Coefficient for i32 {}
 
 pub fn get_log_tx_scale(tx_size: TxSize) -> usize {
   let num_pixels = tx_size.area();
@@ -271,7 +256,7 @@ impl QuantizationContext {
     let eob = {
       let eob_minus_one = scan[1..]
         .iter()
-        .rposition(|&i| coeffs[i as usize].as_().abs() >= deadzone);
+        .rposition(|&i| i32::cast_from(coeffs[i as usize].abs()) >= deadzone);
       // We skip the DC coefficient since it has its own quantizer index.
       eob_minus_one.map(|n| n + 1).unwrap_or(1)
     };
@@ -326,9 +311,9 @@ impl QuantizationContext {
   }
 }
 
-pub fn dequantize(
-  qindex: u8, coeffs: &[i32], _eob: usize, rcoeffs: &mut [i32],
-  tx_size: TxSize, bit_depth: usize, dc_delta_q: i8, ac_delta_q: i8,
+pub fn dequantize<T: Coefficient>(
+  qindex: u8, coeffs: &[T], _eob: usize, rcoeffs: &mut [T], tx_size: TxSize,
+  bit_depth: usize, dc_delta_q: i8, ac_delta_q: i8,
 ) {
   let log_tx_scale = get_log_tx_scale(tx_size) as i32;
   let offset = (1 << log_tx_scale) - 1;
@@ -336,9 +321,13 @@ pub fn dequantize(
   let dc_quant = dc_q(qindex, dc_delta_q, bit_depth) as i32;
   let ac_quant = ac_q(qindex, ac_delta_q, bit_depth) as i32;
 
-  for (i, (r, &c)) in rcoeffs.iter_mut().zip(coeffs.iter()).enumerate() {
+  for (i, (r, c)) in rcoeffs
+    .iter_mut()
+    .zip(coeffs.iter().map(|&c| i32::cast_from(c)))
+    .enumerate()
+  {
     let quant = if i == 0 { dc_quant } else { ac_quant };
-    *r = (c * quant + ((c >> 31) & offset)) >> log_tx_scale;
+    *r = T::cast_from((c * quant + ((c >> 31) & offset)) >> log_tx_scale);
   }
 }
 
