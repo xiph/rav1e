@@ -38,7 +38,6 @@ use rav1e::prelude::*;
 use crate::decoder::Decoder;
 use crate::decoder::VideoDetails;
 use crate::muxer::*;
-use std::env;
 use std::fs::File;
 use std::io::Read;
 use std::io::Seek;
@@ -259,10 +258,46 @@ fn main() {
 }
 
 fn init_logger() {
-  if env::var("RUST_LOG").is_err() {
-    env::set_var("RUST_LOG", "info");
+  use std::str::FromStr;
+  fn level_colored(l: log::Level) -> console::StyledObject<&'static str> {
+    use console::style;
+    use log::Level;
+    match l {
+      Level::Trace => style("??").dim(),
+      Level::Debug => style("? ").dim(),
+      Level::Info => style("> ").green(),
+      Level::Warn => style("! ").yellow(),
+      Level::Error => style("!!").red(),
+    }
   }
-  pretty_env_logger::init();
+
+  // this can be changed to flatten
+  let level = std::env::var("RAV1E_LOG")
+    .ok()
+    .map(|l| log::LevelFilter::from_str(&l).ok())
+    .unwrap_or(Some(log::LevelFilter::Info))
+    .unwrap();
+
+  fern::Dispatch::new()
+    .format(move |out, message, record| {
+      out.finish(format_args!(
+        "{level} {message}",
+        level = level_colored(record.level()),
+        message = message,
+      ));
+    })
+    // set the default log level. to filter out verbose log messages from dependencies, set
+    // this to Warn and overwrite the log level for your crate.
+    .level(log::LevelFilter::Warn)
+    // change log levels for individual modules. Note: This looks for the record's target
+    // field which defaults to the module path but can be overwritten with the `target`
+    // parameter:
+    // `info!(target="special_target", "This log message is about special_target");`
+    .level_for("rav1e", level)
+    // output to stdout
+    .chain(std::io::stderr())
+    .apply()
+    .unwrap();
 }
 
 cfg_if::cfg_if! {
