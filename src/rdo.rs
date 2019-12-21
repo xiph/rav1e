@@ -131,7 +131,7 @@ pub fn estimate_rate(qindex: u8, ts: TxSize, fast_distortion: u64) -> u64 {
   (y0 + (((fast_distortion as i64 - x0) * slope) >> 8)).max(0) as u64
 }
 
-#[allow(unused)]
+#[inline(always)]
 fn cdef_dist_wxh_8x8<T: Pixel>(
   src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, bit_depth: usize,
 ) -> RawDistortion {
