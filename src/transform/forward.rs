@@ -12,7 +12,13 @@ use crate::util::*;
 
 use super::TxType;
 
-pub use self::native::*;
+cfg_if::cfg_if! {
+  if #[cfg(nasm_x86_64)] {
+    pub use crate::asm::x86::transform::forward::*;
+  } else {
+    pub use self::native::*;
+  }
+}
 
 pub mod native {
   use super::*;

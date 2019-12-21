@@ -214,7 +214,7 @@ impl Pixel for u16 {
 }
 
 pub trait Coefficient:
-  RegisteredPrimitive + Into<i32> + AddAssign + Signed + 'static
+  RegisteredPrimitive + Into<i32> + AddAssign + Signed + Debug + 'static
 {
   type Pixel: Pixel;
 }
