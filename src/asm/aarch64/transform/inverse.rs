@@ -61,13 +61,13 @@ pub trait InvTxfm2D: native::InvTxfm2D {
     // Only use at most 32 columns and 32 rows of input coefficients.
     let input: &[T::Coeff] = &input[..coeff_w * coeff_h];
 
-    let mut copied: AlignedArray<[i16; 32 * 32]> =
+    let mut copied: AlignedArray<[T::Coeff; 32 * 32]> =
       AlignedArray::uninitialized();
 
     // Convert input to 16-bits.
-    // TODO: Remove by changing coeff to 16-bits for 8-bit output
+    // TODO: Remove by changing inverse assembly to not overwrite its input
     for (a, b) in copied.array.iter_mut().zip(input) {
-      *a = i16::cast_from(*b);
+      *a = *b;
     }
 
     let stride = output.plane_cfg.stride as isize;
@@ -212,7 +212,7 @@ mod test {
             let mut dst = Plane::wrap(vec![0u8; tx_size.area()], tx_size.width());
             let mut res_storage = [0i16; 64 * 64];
             let res = &mut res_storage[..tx_size.area()];
-            let mut freq_storage = [0i32; 64 * 64];
+            let mut freq_storage = [0i16; 64 * 64];
             let freq = &mut freq_storage[..tx_size.area()];
             for ((r, s), d) in
               res.iter_mut().zip(src.iter_mut()).zip(dst.data.iter_mut())
