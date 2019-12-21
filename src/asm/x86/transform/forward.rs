@@ -443,15 +443,38 @@ pub trait FwdTxfm2D: native::FwdTxfm2D {
       round_shift_array_avx2(tx_out, txfm_size_col, -cfg.shift[2]);
       for c in 0..txfm_size_col {
         if txfm_size_row >= 8 {
-          _mm256_storeu_si256(
-            output[c * txfm_size_row + rg..].as_mut_ptr() as *mut _,
-            tx_out[c].vec(),
-          );
+          match T::Pixel::type_enum() {
+            PixelType::U8 => {
+              let lo = _mm256_castsi256_si128(tx_out[c].vec());
+              let hi = _mm256_extracti128_si256(tx_out[c].vec(), 1);
+              _mm_storeu_si128(
+                output[c * txfm_size_row + rg..].as_mut_ptr() as *mut _,
+                _mm_packs_epi32(lo, hi),
+              );
+            }
+            PixelType::U16 => {
+              _mm256_storeu_si256(
+                output[c * txfm_size_row + rg..].as_mut_ptr() as *mut _,
+                tx_out[c].vec(),
+              );
+            }
+          }
         } else {
-          _mm_storeu_si128(
-            output[c * txfm_size_row + rg..].as_mut_ptr() as *mut _,
-            _mm256_castsi256_si128(tx_out[c].vec()),
-          );
+          match T::Pixel::type_enum() {
+            PixelType::U8 => {
+              let lo = _mm256_castsi256_si128(tx_out[c].vec());
+              _mm_storel_epi64(
+                output[c * txfm_size_row + rg..].as_mut_ptr() as *mut _,
+                _mm_packs_epi32(lo, lo),
+              );
+            }
+            PixelType::U16 => {
+              _mm256_storeu_si256(
+                output[c * txfm_size_row + rg..].as_mut_ptr() as *mut _,
+                tx_out[c].vec(),
+              );
+            }
+          }
         }
       }
     }
