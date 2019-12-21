@@ -261,9 +261,14 @@ impl QuantizationContext {
       eob_minus_one.map(|n| n + 1).unwrap_or(1)
     };
 
-    qcoeffs[0] = coeffs[0] << (self.log_tx_scale as usize);
-    qcoeffs[0] += qcoeffs[0].signum() * T::cast_from(self.dc_offset);
-    qcoeffs[0] = T::cast_from(divu_pair(qcoeffs[0].as_(), self.dc_mul_add));
+    qcoeffs[0] = {
+      let coeff: i32 =
+        i32::cast_from(coeffs[0]) << (self.log_tx_scale as usize);
+      T::cast_from(divu_pair(
+        coeff + (coeff.signum() * self.dc_offset),
+        self.dc_mul_add,
+      ))
+    };
 
     let mut actual_eob = if qcoeffs[0] == T::cast_from(0) { 0 } else { 1 };
 
@@ -279,15 +284,16 @@ impl QuantizationContext {
     // that tail of zeroes and ones than we do for the larger coefficients.
     let mut level_mode = 1;
     for (i, &pos) in (1..).zip(scan[1..].iter().take(eob)) {
-      let coeff = coeffs[pos as usize] << self.log_tx_scale;
-      let level0 = T::cast_from(divu_pair(coeff.as_(), self.ac_mul_add));
+      let coeff = i32::cast_from(coeffs[pos as usize]) << self.log_tx_scale;
+      let level0 =
+        T::cast_from(divu_pair(i32::cast_from(coeff), self.ac_mul_add));
       let offset = if level0 > T::cast_from(1 - level_mode) {
         self.ac_offset1
       } else {
         self.ac_offset0
       };
       let qcoeff = T::cast_from(divu_pair(
-        (coeff + (coeff.signum() * T::cast_from(offset))).as_(),
+        coeff + (coeff.signum() * offset),
         self.ac_mul_add,
       ));
       qcoeffs[pos as usize] = qcoeff;
