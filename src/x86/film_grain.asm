@@ -469,7 +469,7 @@ cglobal generate_grain_uv_420, 4, 10, 16, buf, bufy, fg_data, uv
 .ar0:
     INIT_YMM avx2
     DEFINE_ARGS buf, bufy, fg_data, uv, unused, shift
-    imul            uvd, 25
+    imul            uvd, 28
     mov          shiftd, [fg_dataq+FGData.ar_coeff_shift]
     movd            xm4, [fg_dataq+FGData.ar_coeffs_uv+uvq]
     movd            xm3, [base+hmul_bits+shiftq*2]
@@ -539,7 +539,7 @@ cglobal generate_grain_uv_420, 4, 10, 16, buf, bufy, fg_data, uv
 .ar1:
     INIT_XMM avx2
     DEFINE_ARGS buf, bufy, fg_data, uv, val3, cf3, min, max, x, shift
-    imul            uvd, 25
+    imul            uvd, 28
     mov          shiftd, [fg_dataq+FGData.ar_coeff_shift]
     movsx          cf3d, byte [fg_dataq+FGData.ar_coeffs_uv+uvq+3]
     movd            xm4, [fg_dataq+FGData.ar_coeffs_uv+uvq]
@@ -606,7 +606,7 @@ cglobal generate_grain_uv_420, 4, 10, 16, buf, bufy, fg_data, uv
 .ar2:
     DEFINE_ARGS buf, bufy, fg_data, uv, unused, shift
     mov          shiftd, [fg_dataq+FGData.ar_coeff_shift]
-    imul            uvd, 25
+    imul            uvd, 28
     vpbroadcastw   xm15, [base+round_vals-12+shiftq*2]
     pmovsxbw        xm8, [fg_dataq+FGData.ar_coeffs_uv+uvq+0]   ; cf0-7
     pmovsxbw        xm9, [fg_dataq+FGData.ar_coeffs_uv+uvq+8]   ; cf8-12
@@ -696,7 +696,7 @@ cglobal generate_grain_uv_420, 4, 10, 16, buf, bufy, fg_data, uv
 %assign stack_size_padded (stack_size_padded+16*12)
 %assign stack_size (stack_size+16*12)
     mov          shiftd, [fg_dataq+FGData.ar_coeff_shift]
-    imul            uvd, 25
+    imul            uvd, 28
     vpbroadcastw   xm14, [base+round_vals-12+shiftq*2]
     pmovsxbw        xm0, [fg_dataq+FGData.ar_coeffs_uv+uvq+ 0]   ; cf0-7
     pmovsxbw        xm1, [fg_dataq+FGData.ar_coeffs_uv+uvq+ 8]   ; cf8-15
