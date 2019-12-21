@@ -148,9 +148,11 @@ fn cdef_dist_wxh_8x8<T: Pixel>(
   let mut sum_d2: i64 = 0;
   let mut sum_sd: i64 = 0;
   for j in 0..8 {
-    for i in 0..8 {
-      let s: i32 = src1[j][i].as_();
-      let d: i32 = src2[j][i].as_();
+    let row1 = &src1[j][0..8];
+    let row2 = &src2[j][0..8];
+    for (s, d) in row1.iter().zip(row2) {
+      let s: i32 = s.as_();
+      let d: i32 = d.as_();
       sum_s += s;
       sum_d += d;
       sum_s2 += (s * s) as i64;
