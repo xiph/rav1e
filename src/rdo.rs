@@ -160,13 +160,13 @@ fn cdef_dist_wxh_8x8<T: Pixel>(
       sum_sd += (s * d) as i64;
     }
   }
-  let svar = (sum_s2 - ((sum_s as i64 * sum_s as i64 + 32) >> 6)) as f64;
-  let dvar = (sum_d2 - ((sum_d as i64 * sum_d as i64 + 32) >> 6)) as f64;
+  let svar = sum_s2 - ((sum_s as i64 * sum_s as i64 + 32) >> 6);
+  let dvar = sum_d2 - ((sum_d as i64 * sum_d as i64 + 32) >> 6);
   let sse = (sum_d2 + sum_s2 - 2 * sum_sd) as f64;
   //The two constants were tuned for CDEF, but can probably be better tuned for use in general RDO
   let ssim_boost = (4033_f64 / 16_384_f64)
-    * (svar + dvar + (16_384 << (2 * coeff_shift)) as f64)
-    / f64::sqrt((16_265_089u64 << (4 * coeff_shift)) as f64 + svar * dvar);
+    * (svar + dvar + (16_384 << (2 * coeff_shift))) as f64
+    / f64::sqrt(((16_265_089i64 << (4 * coeff_shift)) + svar * dvar) as f64);
   RawDistortion::new((sse * ssim_boost + 0.5_f64) as u64)
 }
 
