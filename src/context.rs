@@ -1935,8 +1935,9 @@ macro_rules! symbol_with_update {
     $w.symbol_with_update($s, $cdf);
     #[cfg(feature = "desync_finder")]
     {
+      let cdf: &[_] = $cdf;
       if let Some(map) = $self.fc_map.as_ref() {
-        map.lookup($cdf.as_ptr() as usize);
+        map.lookup(cdf.as_ptr() as usize);
       }
     }
   };
