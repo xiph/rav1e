@@ -67,7 +67,8 @@ mod serialize {
 
 mod hawktracer {
   cfg_if::cfg_if! {
-    if #[cfg(feature="tracing")] {
+    // Do not mix tracing and tests
+    if #[cfg(all(feature="tracing", not(test)))] {
       pub use rust_hawktracer::*;
     } else {
       pub use noop_proc_macro::hawktracer;
