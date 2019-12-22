@@ -43,6 +43,7 @@ use crate::{encode_block_post_cdef, encode_block_pre_cdef};
 use crate::cpu_features::CpuFeatureLevel;
 use crate::partition::PartitionType::*;
 use arrayvec::*;
+use itertools::izip;
 use std;
 use std::vec::Vec;
 
@@ -131,7 +132,8 @@ pub fn estimate_rate(qindex: u8, ts: TxSize, fast_distortion: u64) -> u64 {
   (y0 + (((fast_distortion as i64 - x0) * slope) >> 8)).max(0) as u64
 }
 
-#[inline(always)]
+// The microbenchmarks perform better with inlining turned off
+#[inline(never)]
 fn cdef_dist_wxh_8x8<T: Pixel>(
   src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, bit_depth: usize,
 ) -> RawDistortion {
@@ -142,26 +144,53 @@ fn cdef_dist_wxh_8x8<T: Pixel>(
 
   let coeff_shift = bit_depth - 8;
 
-  let mut sum_s: i32 = 0;
-  let mut sum_d: i32 = 0;
-  let mut sum_s2: i64 = 0;
-  let mut sum_d2: i64 = 0;
-  let mut sum_sd: i64 = 0;
+  // Sum into columns to improve auto-vectorization
+  let mut sum_s_cols: [u16; 8] = [0; 8];
+  let mut sum_d_cols: [u16; 8] = [0; 8];
+  let mut sum_s2_cols: [u32; 8] = [0; 8];
+  let mut sum_d2_cols: [u32; 8] = [0; 8];
+  let mut sum_sd_cols: [u32; 8] = [0; 8];
+
   for j in 0..8 {
     let row1 = &src1[j][0..8];
     let row2 = &src2[j][0..8];
-    for (s, d) in row1.iter().zip(row2) {
-      let s: i32 = s.as_();
-      let d: i32 = d.as_();
-      sum_s += s;
-      sum_d += d;
-      sum_s2 += (s * s) as i64;
-      sum_d2 += (d * d) as i64;
-      sum_sd += (s * d) as i64;
+    for (sum_s, sum_d, sum_s2, sum_d2, sum_sd, s, d) in izip!(
+      &mut sum_s_cols,
+      &mut sum_d_cols,
+      &mut sum_s2_cols,
+      &mut sum_d2_cols,
+      &mut sum_sd_cols,
+      row1,
+      row2
+    ) {
+      // Don't convert directly to u32 to allow better vectorization
+      let s: u16 = u16::cast_from(*s);
+      let d: u16 = u16::cast_from(*d);
+      *sum_s += s;
+      *sum_d += d;
+
+      // Convert to u32 to avoid overflows when multiplying
+      let s: u32 = s as u32;
+      let d: u32 = d as u32;
+
+      *sum_s2 += s * s;
+      *sum_d2 += d * d;
+      *sum_sd += s * d;
     }
   }
-  let svar = sum_s2 - ((sum_s as i64 * sum_s as i64 + 32) >> 6);
-  let dvar = sum_d2 - ((sum_d as i64 * sum_d as i64 + 32) >> 6);
+
+  // Sum together the sum of columns
+  let sum_s: i64 =
+    sum_s_cols.iter().map(|&a| u32::cast_from(a)).sum::<u32>() as i64;
+  let sum_d: i64 =
+    sum_d_cols.iter().map(|&a| u32::cast_from(a)).sum::<u32>() as i64;
+  let sum_s2: i64 = sum_s2_cols.iter().sum::<u32>() as i64;
+  let sum_d2: i64 = sum_d2_cols.iter().sum::<u32>() as i64;
+  let sum_sd: i64 = sum_sd_cols.iter().sum::<u32>() as i64;
+
+  // Use sums to calculate distortion
+  let svar = sum_s2 - ((sum_s * sum_s + 32) >> 6);
+  let dvar = sum_d2 - ((sum_d * sum_d + 32) >> 6);
   let sse = (sum_d2 + sum_s2 - 2 * sum_sd) as f64;
   //The two constants were tuned for CDEF, but can probably be better tuned for use in general RDO
   let ssim_boost = (4033_f64 / 16_384_f64)
