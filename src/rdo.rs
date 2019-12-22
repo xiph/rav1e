@@ -171,7 +171,7 @@ fn cdef_dist_wxh_8x8<T: Pixel>(
 }
 
 #[allow(unused)]
-fn cdef_dist_wxh<T: Pixel, F: Fn(Area, BlockSize) -> f64>(
+pub fn cdef_dist_wxh<T: Pixel, F: Fn(Area, BlockSize) -> f64>(
   src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, w: usize, h: usize,
   bit_depth: usize, compute_bias: F,
 ) -> Distortion {

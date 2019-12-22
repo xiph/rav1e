@@ -9,6 +9,7 @@
 
 mod dist;
 mod predict;
+mod rdo;
 mod transform;
 
 use rav1e::bench::api::*;
@@ -21,6 +22,7 @@ use rav1e::bench::predict::*;
 use rav1e::bench::rdo::*;
 use rav1e::bench::transform::*;
 
+use crate::rdo::rdo;
 use crate::transform::{forward_transforms, inverse_transforms};
 
 use criterion::*;
@@ -209,5 +211,6 @@ criterion_main!(
   dist,
   forward_transforms,
   inverse_transforms,
-  ec
+  ec,
+  rdo
 );
