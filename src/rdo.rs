@@ -423,6 +423,24 @@ fn compute_tx_distortion<T: Pixel>(
   distortion
 }
 
+fn compute_mean_importance<T: Pixel>(
+  fi: &FrameInvariants<T>, frame_bo: PlaneBlockOffset, bsize: BlockSize,
+) -> f32 {
+  let x1 = frame_bo.0.x >> IMPORTANCE_BLOCK_TO_BLOCK_SHIFT;
+  let y1 = frame_bo.0.y >> IMPORTANCE_BLOCK_TO_BLOCK_SHIFT;
+  let x2 = (x1 + bsize.width_imp_b()).min(fi.w_in_imp_b);
+  let y2 = (y1 + bsize.height_imp_b()).min(fi.h_in_imp_b);
+
+  let mut total_importance = 0.;
+  for y in y1..y2 {
+    for x in x1..x2 {
+      total_importance += fi.block_importances[y / 2 * fi.w_in_imp_b + x / 2];
+    }
+  }
+  // Divide by the full area even though some blocks were outside.
+  total_importance / (bsize.width_mi() * bsize.height_mi()) as f32
+}
+
 /// Compute a scaling factor to multiply the distortion of a block by,
 /// this factor is determined using temporal RDO.
 pub fn compute_distortion_scale<T: Pixel>(
