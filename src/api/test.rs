@@ -1661,6 +1661,7 @@ fn log_q_exp_overflow() {
         diamond_me: true,
         cdef: true,
         lrf: true,
+        quantizer_rdo: false,
         use_satd_subpel: false,
         non_square_partition: false,
         ..Default::default()
@@ -1726,6 +1727,7 @@ fn guess_frame_subtypes_assert() {
         diamond_me: true,
         cdef: true,
         lrf: true,
+        quantizer_rdo: false,
         use_satd_subpel: false,
         non_square_partition: false,
         ..Default::default()

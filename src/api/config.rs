@@ -244,6 +244,7 @@ impl fmt::Display for EncoderConfig {
       ),
       ("diamond_me", self.speed_settings.diamond_me.to_string()),
       ("cdef", self.speed_settings.cdef.to_string()),
+      ("quantizer_rdo", self.speed_settings.quantizer_rdo.to_string()),
       ("use_satd_subpel", self.speed_settings.use_satd_subpel.to_string()),
       (
         "non_square_partition",
@@ -314,6 +315,11 @@ pub struct SpeedSettings {
   pub lrf: bool,
   /// The amount of search done for self guided restoration.
   pub sgr_complexity: SGRComplexityLevel,
+  /// Enables searching for the optimal segment ID (quantizer delta) with RDO.
+  /// When disabled, the segment ID is chosen heuristically.
+  ///
+  /// Enabled is slower.
+  pub quantizer_rdo: bool,
   /// Use SATD instead of SAD for subpixel search.
   ///
   /// Enabled is slower.
@@ -348,6 +354,7 @@ impl Default for SpeedSettings {
       cdef: true,
       lrf: false,
       sgr_complexity: SGRComplexityLevel::Full,
+      quantizer_rdo: true,
       use_satd_subpel: true,
       non_square_partition: true,
       enable_segmentation: true,
@@ -369,7 +376,7 @@ impl SpeedSettings {
   /// - 3: min block size 8x8, complex pred modes for keyframes, RDO TX decision, include near MVs.
   /// - 2: min block size 4x4, complex pred modes, RDO TX decision, include near MVs.
   /// - 1: min block size 4x4, complex pred modes, RDO TX decision, include near MVs, bottom-up encoding.
-  /// - 0 (slowest): min block size 4x4, complex pred modes, RDO TX decision, include near MVs, bottom-up encoding with non-square partitions everywhere
+  /// - 0 (slowest): min block size 4x4, complex pred modes, RDO TX decision, include near MVs, quantizer RDO, bottom-up encoding with non-square partitions everywhere
   pub fn from_preset(speed: usize) -> Self {
     SpeedSettings {
       min_block_size: Self::min_block_size_preset(speed),
@@ -388,6 +395,7 @@ impl SpeedSettings {
       cdef: Self::cdef_preset(speed),
       lrf: Self::lrf_preset(speed),
       sgr_complexity: Self::sgr_complexity_preset(speed),
+      quantizer_rdo: Self::quantizer_rdo_preset(speed),
       use_satd_subpel: Self::use_satd_subpel(speed),
       non_square_partition: Self::non_square_partition_preset(speed),
       enable_segmentation: Self::enable_segmentation_preset(speed),
@@ -492,6 +500,13 @@ impl SpeedSettings {
     }
   }
 
+  // This is currently only enabled at speed 0 because choosing a segment
+  // requires doing RDO, but once that is replaced by a less bruteforce
+  // solution we should be able to enable its faster version at all speeds.
+  const fn quantizer_rdo_preset(speed: usize) -> bool {
+    speed <= 0
+  }
+
   const fn use_satd_subpel(speed: usize) -> bool {
     speed <= 9
   }
@@ -500,11 +515,8 @@ impl SpeedSettings {
     speed == 0
   }
 
-  // FIXME: this is currently only enabled at speed 0 because choosing a segment
-  // requires doing RDO, but once that is replaced by a less bruteforce
-  // solution we should be able to enable segmentation at all speeds.
-  const fn enable_segmentation_preset(speed: usize) -> bool {
-    speed == 0
+  const fn enable_segmentation_preset(_speed: usize) -> bool {
+    true
   }
 }
 

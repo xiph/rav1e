@@ -434,7 +434,7 @@ fn compute_mean_importance<T: Pixel>(
   let mut total_importance = 0.;
   for y in y1..y2 {
     for x in x1..x2 {
-      total_importance += fi.block_importances[y / 2 * fi.w_in_imp_b + x / 2];
+      total_importance += fi.block_importances[y * fi.w_in_imp_b + x];
     }
   }
   // Divide by the full area even though some blocks were outside.
@@ -649,8 +649,34 @@ fn luma_chroma_mode_rdo<T: Pixel>(
     let mut zero_distortion = false;
 
     // If skip is true or segmentation is turned off, sidx is not coded.
+    // The sidx is coded for both quantizer_rdo and heuristic quantizer selection.
     let sidx_range = if skip || !fi.enable_segmentation {
       0..=0
+    } else if !fi.config.speed_settings.quantizer_rdo {
+      let importance =
+        compute_mean_importance(fi, ts.to_frame_block_offset(tile_bo), bsize);
+      // Chosen based on the RDO segment ID statistics for speed 2 on the DOTA2
+      // clip. More precisely:
+      // - Mean importance and the corresponding best sidx chosen by RDO were
+      //   dumped from encoding the DOTA2 clip on --speed 2.
+      // - The values were plotted in a logarithmic 2D histogram.
+      // - Based on that, the value below were chosen.
+      let heuristic_sidx = match importance {
+        x if x >= 0. && x < 2. => 1,
+        x if x >= 2. && x < 4. => 0,
+        x if x >= 4. => 2,
+        _ => unreachable!(),
+      };
+      // prevent the highest sidx from bringing us into lossless
+      if fi.base_q_idx as i16
+        + ts.segmentation.data[heuristic_sidx as usize]
+          [SegLvl::SEG_LVL_ALT_Q as usize]
+        < 1
+      {
+        0..=0
+      } else {
+        heuristic_sidx..=heuristic_sidx
+      }
     } else if fi.base_q_idx as i16
       + ts.segmentation.data[2][SegLvl::SEG_LVL_ALT_Q as usize]
       < 1
