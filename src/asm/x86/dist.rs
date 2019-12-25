@@ -193,6 +193,59 @@ pub fn get_satd<T: Pixel>(
   dist
 }
 
+// We have hand-written ASM for 4x4 and 16x16 HBD blocks,
+// so we can use those for other block sizes as well.
+macro_rules! get_sad_hbd_ssse3 {
+  ($(($W:expr, $H:expr, $BS:expr)),*) => {
+    $(
+      paste::item! {
+        #[target_feature(enable = "ssse3")]
+        unsafe extern fn [<rav1e_sad_ $W x $H _hbd_ssse3>](
+          src: *const u16, src_stride: isize, dst: *const u16, dst_stride: isize,
+        ) -> u32 {
+          let mut sum = 0;
+          for w in (0..$W).step_by($BS) {
+            for h in (0..$H).step_by($BS) {
+              sum += [<rav1e_sad_ $BS x $BS _hbd_ssse3>](
+                src.offset(w + h * src_stride / 2),
+                src_stride,
+                dst.offset(w + h * dst_stride / 2),
+                dst_stride
+              );
+            }
+          }
+          sum
+        }
+      }
+    )*
+  }
+}
+
+get_sad_hbd_ssse3!(
+  // 4x4 base
+  (8, 8, 4),
+  (4, 8, 4),
+  (8, 4, 4),
+  (8, 16, 4),
+  (16, 8, 4),
+  (4, 16, 4),
+  (16, 4, 4),
+  (8, 32, 4),
+  (32, 8, 4),
+  // 16x16 base
+  (32, 32, 16),
+  (64, 64, 16),
+  (128, 128, 16),
+  (16, 32, 16),
+  (32, 16, 16),
+  (32, 64, 16),
+  (64, 32, 16),
+  (64, 128, 16),
+  (128, 64, 16),
+  (16, 64, 16),
+  (64, 16, 16)
+);
+
 static SAD_FNS_SSE2: [Option<SadFn>; DIST_FNS_LENGTH] = {
   let mut out: [Option<SadFn>; DIST_FNS_LENGTH] = [None; DIST_FNS_LENGTH];
 
@@ -269,7 +322,29 @@ static SAD_HBD_FNS_SSSE3: [Option<SadHBDFn>; DIST_FNS_LENGTH] = {
   use BlockSize::*;
 
   out[BLOCK_4X4 as usize] = Some(rav1e_sad_4x4_hbd_ssse3);
+  out[BLOCK_8X8 as usize] = Some(rav1e_sad_8x8_hbd_ssse3);
   out[BLOCK_16X16 as usize] = Some(rav1e_sad_16x16_hbd_ssse3);
+  out[BLOCK_32X32 as usize] = Some(rav1e_sad_32x32_hbd_ssse3);
+  out[BLOCK_64X64 as usize] = Some(rav1e_sad_64x64_hbd_ssse3);
+  out[BLOCK_128X128 as usize] = Some(rav1e_sad_128x128_hbd_ssse3);
+
+  out[BLOCK_4X8 as usize] = Some(rav1e_sad_4x8_hbd_ssse3);
+  out[BLOCK_8X4 as usize] = Some(rav1e_sad_8x4_hbd_ssse3);
+  out[BLOCK_8X16 as usize] = Some(rav1e_sad_8x16_hbd_ssse3);
+  out[BLOCK_16X8 as usize] = Some(rav1e_sad_16x8_hbd_ssse3);
+  out[BLOCK_16X32 as usize] = Some(rav1e_sad_16x32_hbd_ssse3);
+  out[BLOCK_32X16 as usize] = Some(rav1e_sad_32x16_hbd_ssse3);
+  out[BLOCK_32X64 as usize] = Some(rav1e_sad_32x64_hbd_ssse3);
+  out[BLOCK_64X32 as usize] = Some(rav1e_sad_64x32_hbd_ssse3);
+  out[BLOCK_64X128 as usize] = Some(rav1e_sad_64x128_hbd_ssse3);
+  out[BLOCK_128X64 as usize] = Some(rav1e_sad_128x64_hbd_ssse3);
+
+  out[BLOCK_4X16 as usize] = Some(rav1e_sad_4x16_hbd_ssse3);
+  out[BLOCK_16X4 as usize] = Some(rav1e_sad_16x4_hbd_ssse3);
+  out[BLOCK_8X32 as usize] = Some(rav1e_sad_8x32_hbd_ssse3);
+  out[BLOCK_32X8 as usize] = Some(rav1e_sad_32x8_hbd_ssse3);
+  out[BLOCK_16X64 as usize] = Some(rav1e_sad_16x64_hbd_ssse3);
+  out[BLOCK_64X16 as usize] = Some(rav1e_sad_64x16_hbd_ssse3);
 
   out
 };
@@ -405,7 +480,34 @@ mod test {
     }
   }
 
-  test_dist_fns!((4, 4), (16, 16), sad, 10, ssse3, "ssse3");
+  test_dist_fns!(
+    (4, 4),
+    (16, 16),
+    (8, 8),
+    (4, 8),
+    (8, 4),
+    (8, 16),
+    (16, 8),
+    (4, 16),
+    (16, 4),
+    (8, 32),
+    (32, 8),
+    (32, 32),
+    (64, 64),
+    (128, 128),
+    (16, 32),
+    (32, 16),
+    (32, 64),
+    (64, 32),
+    (64, 128),
+    (128, 64),
+    (16, 64),
+    (64, 16),
+    sad,
+    10,
+    ssse3,
+    "ssse3"
+  );
 
   test_dist_fns!(
     (4, 4),
