@@ -796,9 +796,9 @@ pub(crate) mod native {
 
     fn dr_intra_derivative(p_angle: usize) -> usize {
       match p_angle {
-        4 => 1023,
-        7 => 547,
-        10 => 372,
+        3 => 1023,
+        6 => 547,
+        9 => 372,
         14 => 273,
         17 => 215,
         20 => 178,
