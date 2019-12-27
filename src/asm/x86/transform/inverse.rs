@@ -14,7 +14,8 @@ use crate::transform::*;
 use crate::util::AlignedArray;
 use crate::Pixel;
 
-type InvTxfmFunc = unsafe extern fn(*mut u8, libc::ptrdiff_t, *const i16, i32);
+// Note: Input coeffs are mutable since the assembly uses them as a scratchpad
+type InvTxfmFunc = unsafe extern fn(*mut u8, libc::ptrdiff_t, *mut i16, i32);
 
 pub trait InvTxfm2D: native::InvTxfm2D {
   fn match_tx_type_avx2(tx_type: TxType) -> InvTxfmFunc;
@@ -73,7 +74,7 @@ pub trait InvTxfm2D: native::InvTxfm2D {
     Self::match_tx_type_avx2(tx_type)(
       output.data_ptr_mut() as *mut _,
       stride,
-      coeff16.array.as_ptr(),
+      coeff16.array.as_mut_ptr(),
       (coeff_w * coeff_h) as i32,
     );
   }
@@ -110,7 +111,7 @@ pub trait InvTxfm2D: native::InvTxfm2D {
     Self::match_tx_type_ssse3(tx_type)(
       output.data_ptr_mut() as *mut _,
       stride,
-      coeff16.array.as_ptr(),
+      coeff16.array.as_mut_ptr(),
       (coeff_w * coeff_h) as i32,
     );
   }
@@ -127,7 +128,7 @@ macro_rules! decl_itx_fns {
           extern {
             // Note: type1 and type2 are flipped
             fn [<rav1e_inv_txfm_add_ $TYPE2 _$TYPE1 _$W x $H _$OPT>](
-              dst: *mut u8, dst_stride: libc::ptrdiff_t, coeff: *const i16,
+              dst: *mut u8, dst_stride: libc::ptrdiff_t, coeff: *mut i16,
               eob: i32
             );
           }
