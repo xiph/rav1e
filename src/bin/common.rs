@@ -645,16 +645,20 @@ fn apply_speed_test_cfg(cfg: &mut EncoderConfig, setting: &str) {
       cfg.speed_settings = SpeedSettings::default();
     }
     "min_block_size_8x8" => {
-      cfg.speed_settings.min_block_size = BlockSize::BLOCK_8X8;
+      cfg.speed_settings.partition_range =
+        PartitionRange::new(BlockSize::BLOCK_8X8, BlockSize::BLOCK_64X64);
     }
     "min_block_size_16x16" => {
-      cfg.speed_settings.min_block_size = BlockSize::BLOCK_16X16;
+      cfg.speed_settings.partition_range =
+        PartitionRange::new(BlockSize::BLOCK_16X16, BlockSize::BLOCK_64X64);
     }
     "min_block_size_32x32" => {
-      cfg.speed_settings.min_block_size = BlockSize::BLOCK_32X32;
+      cfg.speed_settings.partition_range =
+        PartitionRange::new(BlockSize::BLOCK_32X32, BlockSize::BLOCK_64X64);
     }
     "min_block_size_64x64" => {
-      cfg.speed_settings.min_block_size = BlockSize::BLOCK_64X64;
+      cfg.speed_settings.partition_range =
+        PartitionRange::new(BlockSize::BLOCK_64X64, BlockSize::BLOCK_64X64);
     }
     "no_multiref" => {
       cfg.speed_settings.multiref = false;

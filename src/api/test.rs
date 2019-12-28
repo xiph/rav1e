@@ -1688,7 +1688,10 @@ fn log_q_exp_overflow() {
       tiles: 0,
       rdo_lookahead_frames: 40,
       speed_settings: SpeedSettings {
-        min_block_size: BlockSize::BLOCK_64X64,
+        partition_range: PartitionRange::new(
+          BlockSize::BLOCK_64X64,
+          BlockSize::BLOCK_64X64,
+        ),
         multiref: false,
         fast_deblock: true,
         reduced_tx_set: true,
@@ -1753,7 +1756,10 @@ fn guess_frame_subtypes_assert() {
       tiles: 0,
       rdo_lookahead_frames: 40,
       speed_settings: SpeedSettings {
-        min_block_size: BlockSize::BLOCK_64X64,
+        partition_range: PartitionRange::new(
+          BlockSize::BLOCK_64X64,
+          BlockSize::BLOCK_64X64,
+        ),
         multiref: false,
         fast_deblock: true,
         reduced_tx_set: true,
