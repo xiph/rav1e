@@ -170,9 +170,10 @@ jobs:
         profile: minimal
         toolchain: ${{ matrix.toolchain }}
         override: true
-    - name: Generate Cargo.lock
+    - name: Generate Cargo.lock and Cargo.version
       run: |
         cargo update
+        cargo --version > Cargo.version
     - name: Cache cargo registry
       uses: actions/cache@v1
       with:
@@ -184,7 +185,7 @@ jobs:
       uses: actions/cache@v1
       with:
         path: /home/runner/.cache/sccache
-        key: ${{ runner.os }}-${{ matrix.conf }}-sccache-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-${{ matrix.conf }}-sccache-${{ hashFiles('**/Cargo.*') }}
         restore-keys: |
           ${{ runner.os }}-${{ matrix.conf }}-sccache-
     - name: Start sccache server
@@ -310,9 +311,10 @@ jobs:
         profile: minimal
         toolchain: ${{ matrix.toolchain }}
         override: true
-    - name: Generate Cargo.lock
+    - name: Generate Cargo.lock and Cargo.version
       run: |
         cargo update
+        cargo --version > Cargo.version
     - name: Cache cargo registry
       uses: actions/cache@v1
       with:
@@ -324,7 +326,7 @@ jobs:
       uses: actions/cache@v1
       with:
         path: C:\sccache
-        key: ${{ runner.os }}-${{ matrix.conf }}-sccache-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ runner.os }}-${{ matrix.conf }}-sccache-${{ hashFiles('**/Cargo.*') }}
         restore-keys: |
           ${{ runner.os }}-${{ matrix.conf }}-sccache-
     - name: Start sccache server
