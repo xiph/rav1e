@@ -286,7 +286,7 @@ impl QuantizationContext {
     for (i, &pos) in (1..).zip(scan[1..].iter().take(eob)) {
       let coeff = i32::cast_from(coeffs[pos as usize]) << self.log_tx_scale;
       let level0 =
-        T::cast_from(divu_pair(i32::cast_from(coeff), self.ac_mul_add));
+        T::cast_from(divu_pair(i32::cast_from(coeff.abs()), self.ac_mul_add));
       let offset = if level0 > T::cast_from(1 - level_mode) {
         self.ac_offset1
       } else {
@@ -304,7 +304,7 @@ impl QuantizationContext {
 
       if level_mode != 0 && qcoeff == T::cast_from(0) {
         level_mode = 0;
-      } else if qcoeff > T::cast_from(1) {
+      } else if qcoeff.abs() > T::cast_from(1) {
         level_mode = 1;
       }
     }
