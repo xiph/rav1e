@@ -904,8 +904,8 @@ pub(crate) mod native {
           let idx = (j + 1) * dy;
           let base = (idx >> (6 - upsample_left)) + (i << upsample_left);
           let shift = (((idx << upsample_left) >> 1) & 31) as i32;
-          let a: i32 = left[width + height - 1 - base].into();
-          let b: i32 = left[width + height - 2 - base].into();
+          let a: i32 = left[(width + height - 1).saturating_sub(base)].into();
+          let b: i32 = left[(width + height - 2).saturating_sub(base)].into();
           let v = round_shift(a * (32 - shift) + b * shift, 5)
             .max(0)
             .min(sample_max);
