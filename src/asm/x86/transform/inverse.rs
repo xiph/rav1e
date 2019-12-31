@@ -230,9 +230,8 @@ impl_itx_fns!(
 #[cfg(test)]
 mod test {
   use super::*;
-  use crate::frame::{AsRegion, Plane};
+  use crate::asm::shared::transform::inverse::test::*;
   use crate::transform::TxSize::*;
-  use rand::random;
 
   macro_rules! test_itx_fns {
     ($(($ENUM:pat, $TYPE1:ident, $TYPE2:ident, $W:expr, $H:expr)),*, $OPT:ident, $OPTLIT:literal) => {
@@ -245,35 +244,12 @@ mod test {
               return;
             }
 
-            let tx_size = [<TX_ $W X $H>];
-            let mut src_storage = [0u8; 64 * 64];
-            let src = &mut src_storage[..tx_size.area()];
-            let mut dst = Plane::wrap(vec![0u8; tx_size.area()], tx_size.width());
-            let mut res_storage: AlignedArray<[i16; 64 * 64]> =
-              AlignedArray::uninitialized();
-            let res = &mut res_storage.array[..tx_size.area()];
-            let mut freq_storage: AlignedArray<[i16; 64 * 64]> =
-              AlignedArray::uninitialized();
-            let freq = &mut freq_storage.array[..tx_size.area()];
-            for ((r, s), d) in
-              res.iter_mut().zip(src.iter_mut()).zip(dst.data.iter_mut())
-            {
-              *s = random::<u8>();
-              *d = random::<u8>();
-              *r = i16::from(*s) - i16::from(*d);
-            }
-            forward_transform(
-              res, freq, tx_size.width(), tx_size, $ENUM, 8, CpuFeatureLevel::NATIVE
+            test_transform(
+              [<TX_ $W X $H>],
+              $ENUM,
+              <crate::util::[<Block $W x $H>] as native::InvTxfm2D>::inv_txfm2d_add,
+              crate::util::[<Block $W x $H>]::[<inv_txfm2d_add_ $OPT>]
             );
-            let mut native_dst = dst.clone();
-
-            unsafe { crate::util::[<Block $W x $H>]::[<inv_txfm2d_add_ $OPT>](
-              freq, &mut dst.as_region_mut(), $ENUM, 8
-            ); }
-            <crate::util::[<Block $W x $H>] as native::InvTxfm2D>::inv_txfm2d_add(
-              freq, &mut native_dst.as_region_mut(), $ENUM, 8, CpuFeatureLevel::NATIVE
-            );
-            assert_eq!(native_dst.data_origin(), dst.data_origin());
           }
         }
       )*
