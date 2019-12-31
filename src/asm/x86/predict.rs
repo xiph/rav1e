@@ -187,3 +187,98 @@ pub fn dispatch_predict_intra<T: Pixel>(
     }
   }
 }
+
+#[cfg(test)]
+mod test {
+  use super::*;
+  use crate::frame::{AsRegion, Plane};
+  use crate::predict::native;
+  use num_traits::*;
+
+  #[test]
+  fn pred_matches_u8() {
+    let tx_size = TxSize::TX_4X4;
+    let bit_depth = 8;
+    let cpu = CpuFeatureLevel::default();
+    let ac = [0i16; 32 * 32];
+
+    let mut edge_buf: AlignedArray<[u8; 4 * MAX_TX_SIZE + 1]> =
+      AlignedArray::uninitialized();
+    for i in 0..edge_buf.array.len() {
+      edge_buf.array[i] = (i + 32).saturating_sub(2 * MAX_TX_SIZE).as_();
+    }
+
+    for (mode, variant) in [
+      (PredictionMode::DC_PRED, PredictionVariant::BOTH),
+      (PredictionMode::DC_PRED, PredictionVariant::TOP),
+      (PredictionMode::DC_PRED, PredictionVariant::LEFT),
+      (PredictionMode::DC_PRED, PredictionVariant::NONE),
+      (PredictionMode::V_PRED, PredictionVariant::BOTH),
+      (PredictionMode::H_PRED, PredictionVariant::BOTH),
+      (PredictionMode::PAETH_PRED, PredictionVariant::BOTH),
+      (PredictionMode::SMOOTH_PRED, PredictionVariant::BOTH),
+      (PredictionMode::SMOOTH_H_PRED, PredictionVariant::BOTH),
+      (PredictionMode::SMOOTH_V_PRED, PredictionVariant::BOTH),
+      (PredictionMode::D45_PRED, PredictionVariant::BOTH),
+      (PredictionMode::D135_PRED, PredictionVariant::BOTH),
+      (PredictionMode::D207_PRED, PredictionVariant::BOTH),
+    ]
+    .iter()
+    {
+      let angles = match mode {
+        PredictionMode::D45_PRED => [
+          3, 6, 9, 14, 17, 20, 23, 26, 29, 32, 36, 39, 42, 45, 48, 51, 54, 58,
+          61, 64, 67, 70, 73, 76, 81, 84, 87,
+        ]
+        .iter(),
+        PredictionMode::D135_PRED => [
+          93, 96, 99, 104, 107, 110, 113, 116, 119, 122, 126, 129, 132, 135,
+          138, 141, 144, 148, 151, 154, 157, 160, 163, 166, 171, 174, 177,
+        ]
+        .iter(),
+        PredictionMode::D207_PRED => [
+          183, 186, 189, 194, 197, 200, 203, 206, 209, 212, 216, 219, 222,
+          225, 228, 231, 234, 238, 241, 244, 247, 250, 253, 256, 261, 264,
+          267,
+        ]
+        .iter(),
+        _ => [0].iter(),
+      };
+      for angle in angles {
+        let expected = {
+          let mut plane = Plane::wrap(vec![0u8; 4 * 4], 4);
+          native::dispatch_predict_intra(
+            *mode,
+            *variant,
+            &mut plane.as_region_mut(),
+            tx_size,
+            bit_depth,
+            &ac,
+            *angle,
+            &edge_buf,
+            cpu,
+          );
+          let mut data = [0u8; 4 * 4];
+          for (v, d) in data.iter_mut().zip(plane.data[..].iter()) {
+            *v = *d;
+          }
+          data
+        };
+
+        let mut output = Plane::wrap(vec![0u8; 4 * 4], 4);
+        dispatch_predict_intra(
+          *mode,
+          *variant,
+          &mut output.as_region_mut(),
+          tx_size,
+          bit_depth,
+          &ac,
+          *angle,
+          &edge_buf,
+          cpu,
+        );
+        assert_eq!(expected, &output.data[..]);
+      }
+    }
+  }
+}
