@@ -50,7 +50,10 @@ decl_angular_ipred_fn! {
   rav1e_ipred_smooth_h_avx2,
   rav1e_ipred_smooth_h_ssse3,
   rav1e_ipred_smooth_v_avx2,
-  rav1e_ipred_smooth_v_ssse3
+  rav1e_ipred_smooth_v_ssse3,
+  rav1e_ipred_z1_avx2,
+  rav1e_ipred_z2_avx2,
+  rav1e_ipred_z3_avx2
 }
 
 macro_rules! decl_cfl_pred_fn {
@@ -140,6 +143,20 @@ pub fn dispatch_predict_intra<T: Pixel>(
         }
         PredictionMode::SMOOTH_V_PRED => {
           rav1e_ipred_smooth_v_avx2(dst_ptr, stride, edge_ptr, w, h, angle);
+        }
+        PredictionMode::D45_PRED
+        | PredictionMode::D63_PRED
+        | PredictionMode::D117_PRED
+        | PredictionMode::D135_PRED
+        | PredictionMode::D153_PRED
+        | PredictionMode::D207_PRED => {
+          (if angle <= 90 {
+            rav1e_ipred_z1_avx2
+          } else if angle < 180 {
+            rav1e_ipred_z2_avx2
+          } else {
+            rav1e_ipred_z3_avx2
+          })(dst_ptr, stride, edge_ptr, w, h, angle);
         }
         _ => call_native(dst),
       }
