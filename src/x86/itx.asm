@@ -1447,7 +1447,7 @@ cglobal iadst_8x4_internal, 0, 5, 7, dst, stride, c, eob, tx2
     punpckhwd          m2, m0, m1
     punpcklwd          m0, m1
     pxor               m3, m3
-    psubw              m3, m2
+    psubsw             m3, m2
     punpckhwd          m1, m0, m3
     punpcklwd          m0, m3
     jmp              tx2q
@@ -1492,7 +1492,7 @@ cglobal iflipadst_8x4_internal, 0, 5, 7, dst, stride, c, eob, tx2
     punpckhwd            m1, m3, m2
     punpcklwd            m3, m2
     pxor                 m0, m0
-    psubw                m0, m1
+    psubsw               m0, m1
     punpckhwd            m1, m0, m3
     punpcklwd            m0, m3
     jmp                tx2q
