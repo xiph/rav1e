@@ -298,6 +298,8 @@ pub struct SpeedSettings {
   pub cdef: bool,
   /// Enables LRF.
   pub lrf: bool,
+  /// The amount of search done for self guided restoration.
+  pub sgr_complexity: SGRComplexityLevel,
   /// Use SATD instead of SAD for subpixel search.
   ///
   /// Enabled is slower.
@@ -331,6 +333,7 @@ impl Default for SpeedSettings {
       diamond_me: true,
       cdef: true,
       lrf: false,
+      sgr_complexity: SGRComplexityLevel::Full,
       use_satd_subpel: true,
       non_square_partition: true,
       enable_segmentation: true,
@@ -370,6 +373,7 @@ impl SpeedSettings {
       diamond_me: Self::diamond_me_preset(speed),
       cdef: Self::cdef_preset(speed),
       lrf: Self::lrf_preset(speed),
+      sgr_complexity: Self::sgr_complexity_preset(speed),
       use_satd_subpel: Self::use_satd_subpel(speed),
       non_square_partition: Self::non_square_partition_preset(speed),
       enable_segmentation: Self::enable_segmentation_preset(speed),
@@ -466,6 +470,14 @@ impl SpeedSettings {
     true
   }
 
+  fn sgr_complexity_preset(speed: usize) -> SGRComplexityLevel {
+    if speed <= 9 {
+      SGRComplexityLevel::Full
+    } else {
+      SGRComplexityLevel::Reduced
+    }
+  }
+
   const fn use_satd_subpel(speed: usize) -> bool {
     speed <= 9
   }
@@ -512,6 +524,37 @@ impl fmt::Display for PredictionModesSetting {
         PredictionModesSetting::Simple => "Simple",
         PredictionModesSetting::ComplexKeyframes => "Complex-KFs",
         PredictionModesSetting::ComplexAll => "Complex-All",
+      }
+    )
+  }
+}
+
+/// Search level for self guided restoration
+#[derive(
+  Clone,
+  Copy,
+  Debug,
+  PartialOrd,
+  PartialEq,
+  FromPrimitive,
+  Serialize,
+  Deserialize,
+)]
+pub enum SGRComplexityLevel {
+  /// Search all sgr parameters
+  Full,
+  /// Search a reduced set of sgr parameters
+  Reduced,
+}
+
+impl fmt::Display for SGRComplexityLevel {
+  fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    write!(
+      f,
+      "{}",
+      match self {
+        SGRComplexityLevel::Full => "Full",
+        SGRComplexityLevel::Reduced => "Reduced",
       }
     )
   }
