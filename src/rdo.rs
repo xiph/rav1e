@@ -28,8 +28,8 @@ use crate::motion_compensate;
 use crate::partition::RefType::*;
 use crate::partition::*;
 use crate::predict::{
-  PredictionMode, RAV1E_INTER_COMPOUND_MODES, RAV1E_INTER_MODES_MINIMAL,
-  RAV1E_INTRA_MODES,
+  AngleDelta, PredictionMode, RAV1E_INTER_COMPOUND_MODES,
+  RAV1E_INTER_MODES_MINIMAL, RAV1E_INTRA_MODES,
 };
 use crate::rdo_tables::*;
 use crate::tiling::*;
@@ -89,6 +89,7 @@ pub struct PartitionParameters {
   pub pred_mode_luma: PredictionMode,
   pub pred_mode_chroma: PredictionMode,
   pub pred_cfl_params: CFLParams,
+  pub angle_delta: AngleDelta,
   pub ref_frames: [RefType; 2],
   pub mvs: [MotionVector; 2],
   pub skip: bool,
@@ -107,6 +108,7 @@ impl Default for PartitionParameters {
       pred_mode_luma: PredictionMode::default(),
       pred_mode_chroma: PredictionMode::default(),
       pred_cfl_params: CFLParams::default(),
+      angle_delta: AngleDelta::default(),
       ref_frames: [RefType::INTRA_FRAME, RefType::NONE_FRAME],
       mvs: [MotionVector::default(); 2],
       skip: false,
@@ -627,6 +629,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
   mvs: [MotionVector; 2], ref_frames: [RefType; 2],
   mode_set_chroma: &[PredictionMode], luma_mode_is_intra: bool,
   mode_context: usize, mv_stack: &ArrayVec<[CandidateMV; 9]>,
+  angle_delta: AngleDelta,
 ) {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
 
@@ -679,6 +682,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
           wr,
           luma_mode,
           chroma_mode,
+          angle_delta,
           ref_frames,
           mvs,
           bsize,
@@ -716,6 +720,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
           best.rd_cost = rd;
           best.pred_mode_luma = luma_mode;
           best.pred_mode_chroma = chroma_mode;
+          best.angle_delta = angle_delta;
           best.ref_frames = ref_frames;
           best.mvs = mvs;
           best.skip = skip;
@@ -806,6 +811,7 @@ pub fn rdo_mode_decision<T: Pixel>(
       wr,
       best.pred_mode_luma,
       best.pred_mode_luma,
+      best.angle_delta,
       tile_bo,
       bsize,
       best.tx_size,
@@ -843,6 +849,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         wr,
         best.pred_mode_luma,
         chroma_mode,
+        best.angle_delta,
         best.ref_frames,
         best.mvs,
         bsize,
@@ -887,6 +894,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     pred_mode_luma: best.pred_mode_luma,
     pred_mode_chroma: best.pred_mode_chroma,
     pred_cfl_params: best.pred_cfl_params,
+    angle_delta: best.angle_delta,
     ref_frames: best.ref_frames,
     mvs: best.mvs,
     rd_cost: best.rd_cost,
@@ -1096,6 +1104,7 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
       false,
       mode_contexts[i],
       &mv_stacks[i],
+      AngleDelta::default(),
     );
   });
 
@@ -1162,6 +1171,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
             tx_size,
             fi.sequence.bit_depth,
             &[0i16; 2],
+            0,
             0,
             &edge_buf,
             fi.cpu_feature_level,
@@ -1250,8 +1260,55 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
       true,
       0,
       &ArrayVec::<[CandidateMV; 9]>::new(),
+      AngleDelta::default(),
     );
   });
+
+  // Find the best angle delta for the current best prediction mode
+  let luma_angle_delta_count = best.pred_mode_luma.angle_delta_count();
+  let chroma_angle_delta_count = best.pred_mode_chroma.angle_delta_count();
+
+  'luma_loop: for i in 0..luma_angle_delta_count {
+    for j in 0..chroma_angle_delta_count {
+      let mvs = [MotionVector::default(); 2];
+      let ref_frames = [INTRA_FRAME, NONE_FRAME];
+      let mut mode_set_chroma = ArrayVec::<[_; 2]>::new();
+      mode_set_chroma.push(best.pred_mode_chroma);
+
+      let angle_delta_y: i8 = if luma_angle_delta_count == 1 {
+        0
+      } else {
+        i - MAX_ANGLE_DELTA as i8
+      };
+      let angle_delta_uv: i8 = if chroma_angle_delta_count == 1 {
+        0
+      } else {
+        j - MAX_ANGLE_DELTA as i8
+      };
+      if luma_angle_delta_count == 1 && chroma_angle_delta_count == 1 {
+        break 'luma_loop;
+      }
+
+      luma_chroma_mode_rdo(
+        best.pred_mode_luma,
+        fi,
+        bsize,
+        tile_bo,
+        ts,
+        cw,
+        rdo_type,
+        &cw_checkpoint,
+        &mut best,
+        mvs,
+        ref_frames,
+        &mode_set_chroma,
+        true,
+        0,
+        &ArrayVec::<[CandidateMV; 9]>::new(),
+        AngleDelta { y: angle_delta_y, uv: angle_delta_uv },
+      );
+    }
+  }
 
   best
 }
@@ -1293,6 +1350,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
           uv_tx_size,
           bit_depth,
           &ac.array,
+          0,
           alpha,
           &edge_buf,
           cpu,
@@ -1378,6 +1436,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
         cw,
         wr,
         mode,
+        0,
         tile_bo,
         bsize,
         tx_size,
@@ -1395,6 +1454,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
         wr,
         mode,
         mode,
+        AngleDelta::default(),
         tile_bo,
         bsize,
         tx_size,
