@@ -7,23 +7,54 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use crate::tiling::PlaneRegionMut;
+use crate::util::*;
+
+// Note: Input coeffs are mutable since the assembly uses them as a scratchpad
+pub type InvTxfmFunc =
+  unsafe extern fn(*mut u8, libc::ptrdiff_t, *mut i16, i32);
+
+pub fn call_inverse_func<T: Pixel>(
+  func: InvTxfmFunc, input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>,
+  width: usize, height: usize, bd: usize,
+) {
+  debug_assert!(bd == 8);
+
+  // 64x only uses 32 coeffs
+  let area = width.min(32) * height.min(32);
+
+  // Only use at most 32 columns and 32 rows of input coefficients.
+  let input: &[T::Coeff] = &input[..area];
+
+  let mut copied: AlignedArray<[T::Coeff; 32 * 32]> =
+    AlignedArray::uninitialized();
+
+  // Convert input to 16-bits.
+  // TODO: Remove by changing inverse assembly to not overwrite its input
+  for (a, b) in copied.array.iter_mut().zip(input) {
+    *a = *b;
+  }
+
+  // perform the inverse transform
+  unsafe {
+    func(
+      output.data_ptr_mut() as *mut _,
+      output.plane_cfg.stride as isize,
+      copied.array.as_mut_ptr() as *mut _,
+      area as i32,
+    );
+  }
+}
+
 #[cfg(test)]
 pub mod test {
+  use super::*;
   use crate::cpu_features::CpuFeatureLevel;
   use crate::frame::{AsRegion, Plane};
-  use crate::tiling::PlaneRegionMut;
   use crate::transform::*;
-  use crate::util::*;
   use rand::random;
 
-  pub type TestedInverseFn = unsafe fn(
-    input: &[i16],
-    output: &mut PlaneRegionMut<'_, u8>,
-    tx_type: TxType,
-    bd: usize,
-  );
-
-  pub type RefInverseFn = fn(
+  pub type TestedInverseFn = fn(
     input: &[i16],
     output: &mut PlaneRegionMut<'_, u8>,
     tx_type: TxType,
@@ -32,8 +63,8 @@ pub mod test {
   );
 
   pub fn test_transform(
-    tx_size: TxSize, tx_type: TxType, ref_func: RefInverseFn,
-    test_func: TestedInverseFn,
+    tx_size: TxSize, tx_type: TxType, ref_func: TestedInverseFn,
+    test_func: TestedInverseFn, test_cpu: CpuFeatureLevel,
   ) {
     let mut src_storage = [0u8; 64 * 64];
     let src = &mut src_storage[..tx_size.area()];
@@ -62,9 +93,7 @@ pub mod test {
     );
     let mut native_dst = dst.clone();
 
-    unsafe {
-      test_func(freq, &mut dst.as_region_mut(), tx_type, 8);
-    }
+    test_func(freq, &mut dst.as_region_mut(), tx_type, 8, test_cpu);
     ref_func(
       freq,
       &mut native_dst.as_region_mut(),

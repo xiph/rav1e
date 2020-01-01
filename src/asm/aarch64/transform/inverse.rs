@@ -11,11 +11,9 @@ use crate::cpu_features::CpuFeatureLevel;
 use crate::tiling::PlaneRegionMut;
 use crate::transform::inverse::*;
 use crate::transform::*;
-use crate::util::AlignedArray;
 use crate::Pixel;
 
-// Note: Input coeffs are mutable since the assembly uses them as a scratchpad
-type InvTxfmFunc = unsafe extern fn(*mut u8, libc::ptrdiff_t, *mut i16, i32);
+use crate::asm::shared::transform::inverse::*;
 
 pub trait InvTxfm2D: native::InvTxfm2D {
   fn match_tx_type_neon(tx_type: TxType) -> InvTxfmFunc;
@@ -36,49 +34,13 @@ pub trait InvTxfm2D: native::InvTxfm2D {
       && tx_type != TxType::IDTX
       && cpu >= CpuFeatureLevel::NEON
     {
-      return unsafe {
-        Self::inv_txfm2d_add_neon(input, output, tx_type, bd);
-      };
+      let func: InvTxfmFunc = Self::match_tx_type_neon(tx_type);
+      call_inverse_func(func, input, output, Self::W, Self::H, bd);
+    } else {
+      <Self as native::InvTxfm2D>::inv_txfm2d_add(
+        input, output, tx_type, bd, cpu,
+      );
     }
-    <Self as native::InvTxfm2D>::inv_txfm2d_add(
-      input, output, tx_type, bd, cpu,
-    );
-  }
-
-  #[inline]
-  unsafe fn inv_txfm2d_add_neon<T>(
-    input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, tx_type: TxType,
-    bd: usize,
-  ) where
-    T: Pixel,
-  {
-    debug_assert!(bd == 8);
-
-    // 64x only uses 32 coeffs
-    let coeff_w = Self::W.min(32);
-    let coeff_h = Self::H.min(32);
-
-    // Only use at most 32 columns and 32 rows of input coefficients.
-    let input: &[T::Coeff] = &input[..coeff_w * coeff_h];
-
-    let mut copied: AlignedArray<[T::Coeff; 32 * 32]> =
-      AlignedArray::uninitialized();
-
-    // Convert input to 16-bits.
-    // TODO: Remove by changing inverse assembly to not overwrite its input
-    for (a, b) in copied.array.iter_mut().zip(input) {
-      *a = *b;
-    }
-
-    let stride = output.plane_cfg.stride as isize;
-
-    // perform the inverse transform
-    Self::match_tx_type_neon(tx_type)(
-      output.data_ptr_mut() as *mut _,
-      stride,
-      copied.array.as_mut_ptr() as *mut _,
-      (coeff_w * coeff_h) as i32,
-    );
   }
 }
 
@@ -199,7 +161,7 @@ mod test {
   use crate::transform::TxSize::*;
 
   macro_rules! test_itx_fns {
-    ($(($ENUM:pat, $TYPE1:ident, $TYPE2:ident, $W:expr, $H:expr)),*, $OPT:ident, $OPTLIT:literal) => {
+    ($(($ENUM:pat, $TYPE1:ident, $TYPE2:ident, $W:expr, $H:expr)),*, $OPT:ident, $OPTLIT:literal, $OPT_ENUM:pat) => {
       $(
         paste::item! {
           #[test]
@@ -208,7 +170,8 @@ mod test {
               [<TX_ $W X $H>],
               $ENUM,
               <crate::util::[<Block $W x $H>] as native::InvTxfm2D>::inv_txfm2d_add,
-              crate::util::[<Block $W x $H>]::[<inv_txfm2d_add_ $OPT>]
+              crate::util::[<Block $W x $H>]::inv_txfm2d_add,
+              $OPT_ENUM,
             );
           }
         }
@@ -271,6 +234,7 @@ mod test {
     (TxType::V_FLIPADST, flipadst, identity, 4, 4),
     (TxType::H_FLIPADST, identity, flipadst, 4, 4),
     neon,
-    "neon"
+    "neon",
+    CpuFeatureLevel::NEON
   );
 }
