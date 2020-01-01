@@ -29,6 +29,7 @@ use crate::util::CastFromPrimitive;
 use crate::util::ILog;
 use crate::util::Pixel;
 
+use crate::api::SGRComplexityLevel;
 use std::cmp;
 use std::iter::FusedIterator;
 use std::ops::{Index, IndexMut};
@@ -75,6 +76,26 @@ pub const SGRPROJ_PARAMS_S: [[u32; 2]; 1 << SGRPROJ_PARAMS_BITS] = [
   [56, 0],
   [22, 0],
 ];
+
+// List of indices to SGRPROJ_PARAMS_S values that at a given complexity level.
+// SGRPROJ_ALL_SETS contains every possible index
+const SGRPROJ_ALL_SETS: &[u8] =
+  &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+// SGRPROJ_REDUCED_SETS has half of the values. Using only these values gives
+// most of the gains from sgr. The decision of which values to use is somewhat
+// arbitrary. The sgr parameters has 3 discontinuous groups. The first has both
+// parameters as non-zero. The other two are distinguishable by which of the
+// two parameters is zero. There are an even number of each of these groups and
+// the non-zero parameters grow as the indices increase. This array uses the
+// 1nd, 3rd, ... smallest params of each group.
+const SGRPROJ_REDUCED_SETS: &[u8] = &[1, 3, 5, 7, 9, 11, 13, 15];
+
+pub fn get_sgr_sets(complexity: SGRComplexityLevel) -> &'static [u8] {
+  match complexity {
+    SGRComplexityLevel::Full => SGRPROJ_ALL_SETS,
+    SGRComplexityLevel::Reduced => SGRPROJ_REDUCED_SETS,
+  }
+}
 
 pub const SOLVE_IMAGE_MAX: usize = (1 << RESTORATION_TILESIZE_MAX_LOG2);
 pub const SOLVE_IMAGE_STRIDE: usize = SOLVE_IMAGE_MAX + 6 + 2;

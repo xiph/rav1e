@@ -2110,7 +2110,8 @@ pub fn rdo_loop_decision<T: Pixel>(
                 &lrf_input.planes[pli].slice(loop_po),
               );
 
-              for set in 0..16 {
+              for &set in get_sgr_sets(fi.config.speed_settings.sgr_complexity)
+              {
                 // clip to encoded area
                 let (xqd0, xqd1) = sgrproj_solve(
                   set,
