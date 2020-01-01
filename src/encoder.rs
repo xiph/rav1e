@@ -22,7 +22,7 @@ use crate::me::*;
 use crate::partition::PartitionType::*;
 use crate::partition::RefType::*;
 use crate::partition::*;
-use crate::predict::PredictionMode;
+use crate::predict::{AngleDelta, PredictionMode};
 use crate::quantize::*;
 use crate::rate::bexp64;
 use crate::rate::q57;
@@ -1129,6 +1129,7 @@ pub fn encode_tx_block<T: Pixel>(
   skip: bool,
   qidx: u8,
   ac: &[i16],
+  angle_delta: i8,
   alpha: i16,
   rdo_type: RDOType,
   need_recon_pixel: bool,
@@ -1167,6 +1168,7 @@ pub fn encode_tx_block<T: Pixel>(
       tx_size,
       bit_depth,
       &ac,
+      angle_delta,
       alpha,
       &edge_buf,
       fi.cpu_feature_level,
@@ -1530,11 +1532,11 @@ pub fn encode_block_pre_cdef<T: Pixel>(
 pub fn encode_block_post_cdef<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w: &mut dyn Writer, luma_mode: PredictionMode,
-  chroma_mode: PredictionMode, ref_frames: [RefType; 2],
-  mvs: [MotionVector; 2], bsize: BlockSize, tile_bo: TileBlockOffset,
-  skip: bool, cfl: CFLParams, tx_size: TxSize, tx_type: TxType,
-  mode_context: usize, mv_stack: &[CandidateMV], rdo_type: RDOType,
-  need_recon_pixel: bool, record_stats: bool,
+  chroma_mode: PredictionMode, angle_delta: AngleDelta,
+  ref_frames: [RefType; 2], mvs: [MotionVector; 2], bsize: BlockSize,
+  tile_bo: TileBlockOffset, skip: bool, cfl: CFLParams, tx_size: TxSize,
+  tx_type: TxType, mode_context: usize, mv_stack: &[CandidateMV],
+  rdo_type: RDOType, need_recon_pixel: bool, record_stats: bool,
 ) -> (bool, ScaledDistortion) {
   let is_inter = !luma_mode.is_intra();
   if is_inter {
@@ -1673,7 +1675,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
 
   if !is_inter {
     if luma_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
-      cw.write_angle_delta(w, 0, luma_mode);
+      cw.write_angle_delta(w, angle_delta.y, luma_mode);
     }
     if has_chroma(tile_bo, bsize, xdec, ydec) {
       cw.write_intra_uv_mode(w, chroma_mode, luma_mode, bsize);
@@ -1682,7 +1684,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
         cw.write_cfl_alphas(w, cfl);
       }
       if chroma_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
-        cw.write_angle_delta(w, 0, chroma_mode);
+        cw.write_angle_delta(w, angle_delta.uv, chroma_mode);
       }
     }
     // TODO: Extra condition related to palette mode, see `read_filter_intra_mode_info` in decodemv.c
@@ -1732,6 +1734,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
       cw,
       w,
       luma_mode,
+      angle_delta.y,
       tile_bo,
       bsize,
       tx_size,
@@ -1749,6 +1752,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
       w,
       luma_mode,
       chroma_mode,
+      angle_delta,
       tile_bo,
       bsize,
       tx_size,
@@ -1808,9 +1812,10 @@ pub fn luma_ac<T: Pixel>(
 pub fn write_tx_blocks<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w: &mut dyn Writer, luma_mode: PredictionMode,
-  chroma_mode: PredictionMode, tile_bo: TileBlockOffset, bsize: BlockSize,
-  tx_size: TxSize, tx_type: TxType, skip: bool, cfl: CFLParams,
-  luma_only: bool, rdo_type: RDOType, need_recon_pixel: bool,
+  chroma_mode: PredictionMode, angle_delta: AngleDelta,
+  tile_bo: TileBlockOffset, bsize: BlockSize, tx_size: TxSize,
+  tx_type: TxType, skip: bool, cfl: CFLParams, luma_only: bool,
+  rdo_type: RDOType, need_recon_pixel: bool,
 ) -> (bool, ScaledDistortion) {
   let bw = bsize.width_mi() / tx_size.width_mi();
   let bh = bsize.height_mi() / tx_size.height_mi();
@@ -1858,6 +1863,7 @@ pub fn write_tx_blocks<T: Pixel>(
         skip,
         qidx,
         &ac.array,
+        angle_delta.y,
         0,
         rdo_type,
         need_recon_pixel,
@@ -1942,6 +1948,7 @@ pub fn write_tx_blocks<T: Pixel>(
             skip,
             qidx,
             &ac.array,
+            angle_delta.uv,
             alpha,
             rdo_type,
             need_recon_pixel,
@@ -1961,9 +1968,9 @@ pub fn write_tx_blocks<T: Pixel>(
 pub fn write_tx_tree<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w: &mut dyn Writer, luma_mode: PredictionMode,
-  tile_bo: TileBlockOffset, bsize: BlockSize, tx_size: TxSize,
-  tx_type: TxType, skip: bool, luma_only: bool, rdo_type: RDOType,
-  need_recon_pixel: bool,
+  angle_delta_y: i8, tile_bo: TileBlockOffset, bsize: BlockSize,
+  tx_size: TxSize, tx_type: TxType, skip: bool, luma_only: bool,
+  rdo_type: RDOType, need_recon_pixel: bool,
 ) -> (bool, ScaledDistortion) {
   if skip {
     return (false, ScaledDistortion::zero());
@@ -2004,6 +2011,7 @@ pub fn write_tx_tree<T: Pixel>(
     skip,
     qidx,
     ac,
+    angle_delta_y,
     0,
     rdo_type,
     need_recon_pixel,
@@ -2078,6 +2086,7 @@ pub fn write_tx_tree<T: Pixel>(
             skip,
             qidx,
             ac,
+            angle_delta_y,
             0,
             rdo_type,
             need_recon_pixel,
@@ -2135,6 +2144,7 @@ pub fn encode_block_with_modes<T: Pixel>(
     if cdef_coded { w_post_cdef } else { w_pre_cdef },
     mode_luma,
     mode_chroma,
+    mode_decision.angle_delta,
     ref_frames,
     mvs,
     bsize,
@@ -2691,6 +2701,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         if cdef_coded { w_post_cdef } else { w_pre_cdef },
         mode_luma,
         mode_chroma,
+        part_decision.angle_delta,
         ref_frames,
         mvs,
         bsize,
