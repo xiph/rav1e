@@ -62,7 +62,7 @@ pub fn sse_wxh_4x4(c: &mut Criterion) {
   let src1 = init_plane_u8(8, 8, 1);
   let src2 = init_plane_u8(8, 8, 2);
 
-  c.bench_function("sse_wxh_4z4", move |b| {
+  c.bench_function("sse_wxh_4x4", move |b| {
     b.iter(|| {
       rdo::sse_wxh(
         &src1.region(Area::Rect { x: 0, y: 0, width: 4, height: 4 }),
@@ -117,7 +117,7 @@ pub fn sse_wxh_hbd_4x4(c: &mut Criterion) {
   let src1 = init_plane_u16(8, 8, 1);
   let src2 = init_plane_u16(8, 8, 2);
 
-  c.bench_function("sse_wxh_hbd_4z4", move |b| {
+  c.bench_function("sse_wxh_hbd_4x4", move |b| {
     b.iter(|| {
       rdo::sse_wxh(
         &src1.region(Area::Rect { x: 0, y: 0, width: 4, height: 4 }),
