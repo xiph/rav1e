@@ -11,96 +11,97 @@ use crate::cpu_features::CpuFeatureLevel;
 use crate::tiling::PlaneRegionMut;
 use crate::transform::inverse::*;
 use crate::transform::*;
-use crate::Pixel;
+use crate::{Pixel, PixelType};
 
 use crate::asm::shared::transform::inverse::*;
+use crate::asm::shared::transform::*;
 
-pub trait InvTxfm2D: native::InvTxfm2D {
-  fn match_tx_type_avx2(tx_type: TxType) -> InvTxfmFunc;
-  fn match_tx_type_ssse3(tx_type: TxType) -> InvTxfmFunc;
-
-  fn inv_txfm2d_add<T>(
-    input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, tx_type: TxType,
-    bd: usize, cpu: CpuFeatureLevel,
-  ) where
-    T: Pixel,
-  {
-    let function: Option<InvTxfmFunc> = if std::mem::size_of::<T>() == 1
-      && cpu >= CpuFeatureLevel::AVX2
-    {
-      Some(Self::match_tx_type_avx2(tx_type))
-    } else if std::mem::size_of::<T>() == 1 && cpu >= CpuFeatureLevel::SSSE3 {
-      Some(Self::match_tx_type_ssse3(tx_type))
-    } else {
-      None
-    };
-
-    if let Some(func) = function {
-      call_inverse_func(func, input, output, Self::W, Self::H, bd);
-    } else {
-      <Self as native::InvTxfm2D>::inv_txfm2d_add(
-        input, output, tx_type, bd, cpu,
-      );
+pub fn inverse_transform_add<T: Pixel>(
+  input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, tx_size: TxSize,
+  tx_type: TxType, bd: usize, cpu: CpuFeatureLevel,
+) {
+  match T::type_enum() {
+    PixelType::U8 => {
+      if let Some(func) = INV_TXFM_FNS[cpu.as_index()]
+        [get_tx_size_idx(tx_size)][get_tx_type_idx(tx_type)]
+      {
+        return call_inverse_func(
+          func,
+          input,
+          output,
+          tx_size.width(),
+          tx_size.height(),
+          bd,
+        );
+      }
     }
-  }
+    PixelType::U16 => {}
+  };
+
+  native::inverse_transform_add(input, output, tx_size, tx_type, bd, cpu);
 }
 
 macro_rules! decl_itx_fns {
   // Takes a 2d list of tx types for W and H
   ([$([$(($ENUM:pat, $TYPE1:ident, $TYPE2:ident)),*]),*], $W:expr, $H:expr,
-   $OPT:ident) => {
+   $OPT_LOWER:ident, $OPT_UPPER:ident) => {
     paste::item! {
       // For each tx type, declare an function for the current WxH
       $(
         $(
           extern {
             // Note: type1 and type2 are flipped
-            fn [<rav1e_inv_txfm_add_ $TYPE2 _$TYPE1 _$W x $H _$OPT>](
+            fn [<rav1e_inv_txfm_add_ $TYPE2 _$TYPE1 _$W x $H _$OPT_LOWER>](
               dst: *mut u8, dst_stride: libc::ptrdiff_t, coeff: *mut i16,
               eob: i32
             );
           }
         )*
       )*
+      // Create a lookup table for the tx types declared above
+      const [<INV_TXFM_FNS_$W _$H _$OPT_UPPER>]: [Option<InvTxfmFunc>; TX_TYPES] = {
+        let mut out: [Option<InvTxfmFunc>; 16] = [None; 16];
+        $(
+          $(
+            out[get_tx_type_idx($ENUM)] = Some([<rav1e_inv_txfm_add_$TYPE2 _$TYPE1 _$W x $H _$OPT_LOWER>]);
+          )*
+        )*
+        out
+      };
     }
   };
 }
 
-macro_rules! impl_itx_fns {
-  ($TYPES:tt, $W:expr, $H:expr, [$($OPT:ident),+]) => {
-    $(
-      decl_itx_fns!($TYPES, $W, $H, $OPT);
-    )*
+macro_rules! create_wxh_tables {
+  // Create a lookup table for each cpu feature
+  ([$([$(($W:expr, $H:expr)),*]),*], $OPT_LOWER:ident, $OPT_UPPER:ident) => {
     paste::item! {
-      // Implement InvTxfm2D for WxH
-      impl InvTxfm2D for crate::util::[<Block $W x $H>] {
+      const [<INV_TXFM_FNS_$OPT_UPPER>]: [[Option<InvTxfmFunc>; TX_TYPES]; 32] = {
+        let mut out: [[Option<InvTxfmFunc>; TX_TYPES]; 32] = [[None; TX_TYPES]; 32];
+        // For each dimension, add an entry to the table
         $(
-          impl_itx_fns!($TYPES, $W, $H, $OPT);
+          $(
+            out[get_tx_size_idx(TxSize::[<TX_ $W X $H>])] = [<INV_TXFM_FNS_$W _$H _$OPT_UPPER>];
+          )*
         )*
-      }
+        out
+      };
     }
   };
 
-  // Takes a 2d list of tx types for W and H
-  ([$([$(($ENUM:pat, $TYPE1:ident, $TYPE2:ident)),*]),*], $W:expr, $H:expr,
-   $OPT:ident) => {
-    paste::item! {
-      fn [<match_tx_type_$OPT>](tx_type: TxType) -> InvTxfmFunc {
-        // Match tx types we declared earlier to its rust enum
-        match tx_type {
-          $(
-            $(
-              // Suppress unreachable pattern warning for _
-              a if a == $ENUM => {
-                // Note: type1 and type2 are flipped
-                [<rav1e_inv_txfm_add_$TYPE2 _$TYPE1 _$W x $H _$OPT>]
-              },
-            )*
-          )*
-          _ => unreachable!()
-        }
-      }
-    }
+  // Loop through cpu features
+  ($DIMS:tt, [$(($OPT_LOWER:ident, $OPT_UPPER:ident)),+]) => {
+    $(
+      create_wxh_tables!($DIMS, $OPT_LOWER, $OPT_UPPER);
+    )*
+  };
+}
+
+macro_rules! impl_itx_fns {
+  ($TYPES:tt, $W:expr, $H:expr, [$(($OPT_LOWER:ident, $OPT_UPPER:ident)),+]) => {
+    $(
+      decl_itx_fns!($TYPES, $W, $H, $OPT_LOWER, $OPT_UPPER);
+    )*
   };
 
   // Loop over a list of dimensions
@@ -119,6 +120,12 @@ macro_rules! impl_itx_fns {
     impl_itx_fns!([$TYPES64, $TYPES32, $TYPES16], $DIMS16, $OPT);
     impl_itx_fns!(
       [$TYPES64, $TYPES32, $TYPES16, $TYPES84], $DIMS84, $OPT
+    );
+
+    // Pool all of the dimensions together to create a table for each cpu
+    // feature level.
+    create_wxh_tables!(
+      [$DIMS64, $DIMS32, $DIMS16, $DIMS84], $OPT
     );
   };
 }
@@ -152,8 +159,18 @@ impl_itx_fns!(
     (TxType::H_FLIPADST, identity, flipadst)
   ],
   [(16, 8), (8, 16), (16, 4), (4, 16), (8, 8), (8, 4), (4, 8), (4, 4)],
-  [avx2, ssse3]
+  [(avx2, AVX2), (ssse3, SSSE3)]
 );
+
+static INV_TXFM_FNS: [[[Option<InvTxfmFunc>; TX_TYPES]; 32];
+  CpuFeatureLevel::len()] = {
+  let mut out: [[[Option<InvTxfmFunc>; TX_TYPES]; 32];
+    CpuFeatureLevel::len()] = [[[None; TX_TYPES]; 32]; CpuFeatureLevel::len()];
+  out[CpuFeatureLevel::SSSE3 as usize] = INV_TXFM_FNS_SSSE3;
+  out[CpuFeatureLevel::SSE4_1 as usize] = INV_TXFM_FNS_SSSE3;
+  out[CpuFeatureLevel::AVX2 as usize] = INV_TXFM_FNS_AVX2;
+  out
+};
 
 #[cfg(test)]
 mod test {
@@ -175,8 +192,6 @@ mod test {
             test_transform(
               [<TX_ $W X $H>],
               $ENUM,
-              <crate::util::[<Block $W x $H>] as native::InvTxfm2D>::inv_txfm2d_add,
-              crate::util::[<Block $W x $H>]::inv_txfm2d_add,
               $OPT_ENUM,
             );
           }
