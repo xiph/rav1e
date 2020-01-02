@@ -1473,8 +1473,8 @@ function inv_txfm_add_16x4_neon
         mov             x15, x30
         movi            v4.8h,  #0
 
-.irp i, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
-        ld1             {v\i\().4h}, [x2]
+.irp i, v16.4h, v17.4h, v18.4h, v19.4h, v20.4h, v21.4h, v22.4h, v23.4h, v24.4h, v25.4h, v26.4h, v27.4h, v28.4h, v29.4h, v30.4h, v31.4h
+        ld1             {\i},    [x2]
         st1             {v4.4h}, [x2], #8
 .endr
 
@@ -1484,8 +1484,8 @@ function inv_txfm_add_16x4_neon
         ins             v17.d[1], v21.d[0]
         ins             v18.d[1], v22.d[0]
         ins             v19.d[1], v23.d[0]
-.irp i, 16, 17, 18, 19
-        srshr           v\i\().8h,  v\i\().8h,  #1
+.irp i, v16.8h, v17.8h, v18.8h, v19.8h
+        srshr           \i,  \i,  #1
 .endr
         transpose_4x8h  v16, v17, v18, v19, v2,  v3,  v4,  v5
         blr             x5
@@ -1517,8 +1517,8 @@ function inv_txfm_add_4x16_neon
         b.lt            1f
 
         add             x6,  x2,  #16
-.irp i, 16, 17, 18, 19
-        ld1             {v\i\().8h}, [x6]
+.irp i, v16.8h, v17.8h, v18.8h, v19.8h
+        ld1             {\i},    [x6]
         st1             {v2.8h}, [x6], x11
 .endr
         blr             x4
@@ -1534,18 +1534,18 @@ function inv_txfm_add_4x16_neon
 
         b               2f
 1:
-.irp i, 24, 25, 26, 27, 28, 29, 30, 31
-        movi            v\i\().4h,  #0
+.irp i, v24.4h, v25.4h, v26.4h, v27.4h, v28.4h, v29.4h, v30.4h, v31.4h
+        movi            \i,  #0
 .endr
 2:
         movi            v2.8h,   #0
-.irp i, 16, 17, 18, 19
-        ld1             {v\i\().8h}, [x2]
+.irp i, v16.8h, v17.8h, v18.8h, v19.8h
+        ld1             {\i},    [x2]
         st1             {v2.8h}, [x2], x11
 .endr
         blr             x4
-.irp i, 16, 17, 18, 19
-        srshr           v\i\().8h,  v\i\().8h,  #1
+.irp i, v16.8h, v17.8h, v18.8h, v19.8h
+        srshr           \i,  \i,  #1
 .endr
         transpose_4x8h  v16, v17, v18, v19, v4,  v5,  v6,  v7
         ins             v20.d[0], v16.d[1]
@@ -1606,8 +1606,8 @@ function inv_txfm_add_16x8_neon
         mov             w16, #2896*8
         dup             v0.4h,   w16
 
-.irp i, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
-        ld1             {v\i\().8h}, [x2]
+.irp i, v16.8h, v17.8h, v18.8h, v19.8h, v20.8h, v21.8h, v22.8h, v23.8h, v24.8h, v25.8h, v26.8h, v27.8h, v28.8h, v29.8h, v30.8h, v31.8h
+        ld1             {\i},    [x2]
         st1             {v4.8h}, [x2], #16
 .endr
 
@@ -1615,8 +1615,8 @@ function inv_txfm_add_16x8_neon
         scale_input     .8h, v0.h[0], v24, v25, v26, v27, v28, v29, v30, v31
         blr             x4
 
-.irp i, 16, 17, 18, 19, 20, 21, 22, 23
-        srshr           v\i\().8h,  v\i\().8h,  #1
+.irp i, v16.8h, v17.8h, v18.8h, v19.8h, v20.8h, v21.8h, v22.8h, v23.8h
+        srshr           \i,  \i,  #1
 .endr
         transpose_8x8h  v16, v17, v18, v19, v20, v21, v22, v23, v2, v3
 
@@ -1655,8 +1655,8 @@ function inv_txfm_add_8x16_neon
         b.lt            1f
 
         add             x6,  x2,  #16
-.irp i, 16, 17, 18, 19, 20, 21, 22, 23
-        ld1             {v\i\().8h}, [x6]
+.irp i, v16.8h, v17.8h, v18.8h, v19.8h, v20.8h, v21.8h, v22.8h, v23.8h
+        ld1             {\i},    [x6]
         st1             {v4.8h}, [x6], x11
 .endr
         scale_input     .8h, v0.h[0], v16, v17, v18, v19, v20, v21, v22, v23
@@ -1675,8 +1675,8 @@ function inv_txfm_add_8x16_neon
         b               2f
 
 1:
-.irp i, 24, 25, 26, 27, 28, 29, 30, 31
-        movi            v\i\().8h,  #0
+.irp i, v24.8h, v25.8h, v26.8h, v27.8h, v28.8h, v29.8h, v30.8h, v31.8h
+        movi            \i,  #0
 .endr
 
 2:
@@ -1684,15 +1684,15 @@ function inv_txfm_add_8x16_neon
         mov             w16, #2896*8
         dup             v0.4h,   w16
 
-.irp i, 16, 17, 18, 19, 20, 21, 22, 23
-        ld1             {v\i\().8h}, [x2]
+.irp i, v16.8h, v17.8h, v18.8h, v19.8h, v20.8h, v21.8h, v22.8h, v23.8h
+        ld1             {\i},    [x2]
         st1             {v4.8h}, [x2], x11
 .endr
         scale_input     .8h, v0.h[0], v16, v17, v18, v19, v20, v21, v22, v23
         blr             x4
 
-.irp i, 16, 17, 18, 19, 20, 21, 22, 23
-        srshr           v\i\().8h,  v\i\().8h,  #1
+.irp i, v16.8h, v17.8h, v18.8h, v19.8h, v20.8h, v21.8h, v22.8h, v23.8h
+        srshr           \i,  \i,  #1
 .endr
 
         transpose_8x8h  v16, v17, v18, v19, v20, v21, v22, v23, v2, v3
