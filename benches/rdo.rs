@@ -2,6 +2,7 @@ use criterion::*;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use rav1e::bench::context::{BlockOffset, PlaneBlockOffset};
+use rav1e::bench::cpu_features::CpuFeatureLevel;
 use rav1e::bench::encoder::{
   FrameInvariants, Sequence, IMPORTANCE_BLOCK_SIZE,
 };
@@ -44,6 +45,7 @@ pub fn cdef_dist_wxh_8x8(c: &mut Criterion) {
 pub fn sse_wxh_8x8(c: &mut Criterion) {
   let src1 = init_plane_u8(8, 8, 1);
   let src2 = init_plane_u8(8, 8, 2);
+  let cpu = CpuFeatureLevel::default();
 
   c.bench_function("sse_wxh_8x8", move |b| {
     b.iter(|| {
@@ -53,6 +55,7 @@ pub fn sse_wxh_8x8(c: &mut Criterion) {
         8,
         8,
         |_, _| 1.0,
+        cpu,
       )
     })
   });
@@ -61,6 +64,7 @@ pub fn sse_wxh_8x8(c: &mut Criterion) {
 pub fn sse_wxh_4x4(c: &mut Criterion) {
   let src1 = init_plane_u8(8, 8, 1);
   let src2 = init_plane_u8(8, 8, 2);
+  let cpu = CpuFeatureLevel::default();
 
   c.bench_function("sse_wxh_4x4", move |b| {
     b.iter(|| {
@@ -70,6 +74,7 @@ pub fn sse_wxh_4x4(c: &mut Criterion) {
         4,
         4,
         |_, _| 1.0,
+        cpu,
       )
     })
   });
@@ -82,6 +87,7 @@ pub fn sse_wxh_2x2(c: &mut Criterion) {
   src1.cfg.ydec = 1;
   src2.cfg.xdec = 1;
   src2.cfg.ydec = 1;
+  let cpu = CpuFeatureLevel::default();
 
   c.bench_function("sse_wxh_2x2", move |b| {
     b.iter(|| {
@@ -91,6 +97,7 @@ pub fn sse_wxh_2x2(c: &mut Criterion) {
         4,
         4,
         |_, _| 1.0,
+        cpu,
       )
     })
   });
@@ -99,6 +106,7 @@ pub fn sse_wxh_2x2(c: &mut Criterion) {
 pub fn sse_wxh_hbd_8x8(c: &mut Criterion) {
   let src1 = init_plane_u16(8, 8, 1);
   let src2 = init_plane_u16(8, 8, 2);
+  let cpu = CpuFeatureLevel::default();
 
   c.bench_function("sse_wxh_hbd_8x8", move |b| {
     b.iter(|| {
@@ -108,6 +116,7 @@ pub fn sse_wxh_hbd_8x8(c: &mut Criterion) {
         8,
         8,
         |_, _| 1.0,
+        cpu,
       )
     })
   });
@@ -116,6 +125,7 @@ pub fn sse_wxh_hbd_8x8(c: &mut Criterion) {
 pub fn sse_wxh_hbd_4x4(c: &mut Criterion) {
   let src1 = init_plane_u16(8, 8, 1);
   let src2 = init_plane_u16(8, 8, 2);
+  let cpu = CpuFeatureLevel::default();
 
   c.bench_function("sse_wxh_hbd_4x4", move |b| {
     b.iter(|| {
@@ -125,6 +135,7 @@ pub fn sse_wxh_hbd_4x4(c: &mut Criterion) {
         4,
         4,
         |_, _| 1.0,
+        cpu,
       )
     })
   });
@@ -137,6 +148,7 @@ pub fn sse_wxh_hbd_2x2(c: &mut Criterion) {
   src1.cfg.ydec = 1;
   src2.cfg.xdec = 1;
   src2.cfg.ydec = 1;
+  let cpu = CpuFeatureLevel::default();
 
   c.bench_function("sse_wxh_hbd_2x2", move |b| {
     b.iter(|| {
@@ -146,6 +158,7 @@ pub fn sse_wxh_hbd_2x2(c: &mut Criterion) {
         4,
         4,
         |_, _| 1.0,
+        cpu,
       )
     })
   });

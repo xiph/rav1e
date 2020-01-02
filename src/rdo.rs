@@ -234,7 +234,7 @@ pub fn cdef_dist_wxh<T: Pixel, F: Fn(Area, BlockSize) -> f64>(
 // Sum of Squared Error for a wxh block
 pub fn sse_wxh<T: Pixel, F: Fn(Area, BlockSize) -> f64>(
   src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, w: usize, h: usize,
-  compute_bias: F,
+  compute_bias: F, _cpu: CpuFeatureLevel,
 ) -> Distortion {
   assert!(w & (MI_SIZE - 1) == 0);
   assert!(h & (MI_SIZE - 1) == 0);
@@ -243,20 +243,36 @@ pub fn sse_wxh<T: Pixel, F: Fn(Area, BlockSize) -> f64>(
   // importance block size in a non-subsampled plane.
   let imp_block_w = IMPORTANCE_BLOCK_SIZE.min(w);
   let imp_block_h = IMPORTANCE_BLOCK_SIZE.min(h);
-  let imp_bsize = BlockSize::from_width_and_height(imp_block_w, imp_block_h);
   let block_w = imp_block_w >> src1.plane_cfg.xdec;
   let block_h = imp_block_h >> src1.plane_cfg.ydec;
 
+  #[cfg(nasm_x86_64)]
+  {
+    use crate::asm::x86::rdo::*;
+    if _cpu >= CpuFeatureLevel::SSE2 && block_w == 8 && block_h == 8 {
+      return unsafe { sse_wxh_8x8_sse2(src1, src2, w, h, compute_bias) };
+    }
+  }
+
+  let imp_bsize = BlockSize::from_width_and_height(imp_block_w, imp_block_h);
+  sse_wxh_native(src1, src2, w, h, block_w, block_h, imp_bsize, compute_bias)
+}
+
+fn sse_wxh_native<T: Pixel, F: Fn(Area, BlockSize) -> f64>(
+  src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, w: usize, h: usize,
+  block_w: usize, block_h: usize, imp_bsize: BlockSize, compute_bias: F,
+) -> Distortion {
   let mut sse = Distortion::zero();
   for block_y in 0..h / block_h {
-    for block_x in 0..w / block_w {
-      let mut value = 0;
+    let y_offset = block_y * block_h;
 
+    for block_x in 0..w / block_w {
+      let x_offset = block_x * block_w;
+
+      let mut value = 0;
       for j in 0..block_h {
-        let s1 = &src1[block_y * block_h + j]
-          [block_x * block_w..(block_x + 1) * block_w];
-        let s2 = &src2[block_y * block_h + j]
-          [block_x * block_w..(block_x + 1) * block_w];
+        let s1 = &src1[y_offset + j][x_offset..(x_offset + block_w)];
+        let s2 = &src2[y_offset + j][x_offset..(x_offset + block_w)];
 
         let row_sse = s1
           .iter()
@@ -271,10 +287,7 @@ pub fn sse_wxh<T: Pixel, F: Fn(Area, BlockSize) -> f64>(
 
       let bias = compute_bias(
         // StartingAt gives the correct block offset.
-        Area::StartingAt {
-          x: (block_x * block_w) as isize,
-          y: (block_y * block_h) as isize,
-        },
+        Area::StartingAt { x: x_offset as isize, y: y_offset as isize },
         imp_bsize,
       );
       sse += RawDistortion::new(value) * bias;
@@ -320,6 +333,7 @@ fn compute_distortion<T: Pixel>(
           bsize,
         )
       },
+      fi.cpu_feature_level,
     ),
   } * fi.dist_scale[0];
 
@@ -352,6 +366,7 @@ fn compute_distortion<T: Pixel>(
               bsize,
             )
           },
+          fi.cpu_feature_level,
         ) * fi.dist_scale[p];
       }
     };
@@ -382,6 +397,7 @@ fn compute_tx_distortion<T: Pixel>(
           bsize,
         )
       },
+      fi.cpu_feature_level,
     ) * fi.dist_scale[0]
   } else {
     tx_dist
@@ -416,6 +432,7 @@ fn compute_tx_distortion<T: Pixel>(
               bsize,
             )
           },
+          fi.cpu_feature_level,
         ) * fi.dist_scale[p];
       }
     }
@@ -1361,6 +1378,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
           uv_tx_size.width(),
           uv_tx_size.height(),
           |_, _| 1., // We're not doing RDO here.
+          cpu,
         )
         .0
       };
@@ -1808,7 +1826,14 @@ fn rdo_loop_plane_error<T: Pixel>(
           cdef_dist_wxh_8x8(&in_region, &test_region, fi.sequence.bit_depth)
             * bias
         } else {
-          sse_wxh(&in_region, &test_region, 8 >> xdec, 8 >> ydec, |_, _| bias)
+          sse_wxh(
+            &in_region,
+            &test_region,
+            8 >> xdec,
+            8 >> ydec,
+            |_, _| bias,
+            fi.cpu_feature_level,
+          )
         };
       }
     }
