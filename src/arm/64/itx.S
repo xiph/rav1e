@@ -148,13 +148,6 @@ endconst
 .endif
 .endm
 
-.macro sqrshrn_sz d0, s0, s1, shift, sz
-        sqrshrn         \d0\().4h, \s0\().4s, \shift
-.ifc \sz, .8h
-        sqrshrn2        \d0\().8h, \s1\().4s, \shift
-.endif
-.endm
-
 .macro scale_input sz, c, r0, r1, r2 r3, r4, r5, r6, r7
         sqrdmulh        \r0\sz,  \r0\sz,  \c
         sqrdmulh        \r1\sz,  \r1\sz,  \c
@@ -165,31 +158,6 @@ endconst
         sqrdmulh        \r5\sz,  \r5\sz,  \c
         sqrdmulh        \r6\sz,  \r6\sz,  \c
         sqrdmulh        \r7\sz,  \r7\sz,  \c
-.endif
-.endm
-
-.macro scale_wide sz, c, r0, r1, r2 r3, r4, r5, r6, r7
-        smull_sz        v2,  v3,  \r0, \c,  \sz
-        smull_sz        v4,  v5,  \r1, \c,  \sz
-        smull_sz        v6,  v7,  \r2, \c,  \sz
-        sqrshrn_sz      \r0, v2,  v3,  #12, \sz
-        smull_sz        v2,  v3,  \r3, \c,  \sz
-        sqrshrn_sz      \r1, v4,  v5,  #12, \sz
-.ifnb \r4
-        smull_sz        v4,  v5,  \r4, \c,  \sz
-.endif
-        sqrshrn_sz      \r2, v6,  v7,  #12, \sz
-.ifnb \r4
-        smull_sz        v6,  v7,  \r5, \c,  \sz
-.endif
-        sqrshrn_sz      \r3, v2,  v3,  #12, \sz
-.ifnb \r4
-        smull_sz        v2,  v3,  \r6, \c,  \sz
-        sqrshrn_sz      \r4, v4,  v5,  #12, \sz
-        smull_sz        v4,  v5,  \r7, \c,  \sz
-        sqrshrn_sz      \r5, v6,  v7,  #12, \sz
-        sqrshrn_sz      \r6, v2,  v3,  #12, \sz
-        sqrshrn_sz      \r7, v4,  v5,  #12, \sz
 .endif
 .endm
 
@@ -606,38 +574,30 @@ function inv_flipadst_8x4_neon
 endfunc
 
 function inv_identity_4x4_neon
-        mov             w16, #5793
+        mov             w16, #(5793-4096)*8
         dup             v0.4h,   w16
-        smull           v4.4s,   v16.4h,  v0.h[0]
-        smull           v5.4s,   v17.4h,  v0.h[0]
-        smull           v6.4s,   v18.4h,  v0.h[0]
-        smull           v7.4s,   v19.4h,  v0.h[0]
-        sqrshrn         v16.4h,  v4.4s,   #12
-        sqrshrn         v17.4h,  v5.4s,   #12
-        sqrshrn         v18.4h,  v6.4s,   #12
-        sqrshrn         v19.4h,  v7.4s,   #12
+        sqrdmulh        v4.4h,   v16.4h,  v0.h[0]
+        sqrdmulh        v5.4h,   v17.4h,  v0.h[0]
+        sqrdmulh        v6.4h,   v18.4h,  v0.h[0]
+        sqrdmulh        v7.4h,   v19.4h,  v0.h[0]
+        sqadd           v16.4h,  v16.4h,  v4.4h
+        sqadd           v17.4h,  v17.4h,  v5.4h
+        sqadd           v18.4h,  v18.4h,  v6.4h
+        sqadd           v19.4h,  v19.4h,  v7.4h
         ret
 endfunc
 
 function inv_identity_8x4_neon
-        mov             w16, #5793
+        mov             w16, #(5793-4096)*8
         dup             v0.4h,   w16
-        smull           v2.4s,   v16.4h,  v0.h[0]
-        smull2          v3.4s,   v16.8h,  v0.h[0]
-        smull           v4.4s,   v17.4h,  v0.h[0]
-        smull2          v5.4s,   v17.8h,  v0.h[0]
-        sqrshrn         v16.4h,  v2.4s,   #12
-        sqrshrn2        v16.8h,  v3.4s,   #12
-        smull           v6.4s,   v18.4h,  v0.h[0]
-        smull2          v7.4s,   v18.8h,  v0.h[0]
-        sqrshrn         v17.4h,  v4.4s,   #12
-        sqrshrn2        v17.8h,  v5.4s,   #12
-        smull           v2.4s,   v19.4h,  v0.h[0]
-        smull2          v3.4s,   v19.8h,  v0.h[0]
-        sqrshrn         v18.4h,  v6.4s,   #12
-        sqrshrn2        v18.8h,  v7.4s,   #12
-        sqrshrn         v19.4h,  v2.4s,   #12
-        sqrshrn2        v19.8h,  v3.4s,   #12
+        sqrdmulh        v4.8h,   v16.8h,  v0.h[0]
+        sqrdmulh        v5.8h,   v17.8h,  v0.h[0]
+        sqrdmulh        v6.8h,   v18.8h,  v0.h[0]
+        sqrdmulh        v7.8h,   v19.8h,  v0.h[0]
+        sqadd           v16.8h,  v16.8h,  v4.8h
+        sqadd           v17.8h,  v17.8h,  v5.8h
+        sqadd           v18.8h,  v18.8h,  v6.8h
+        sqadd           v19.8h,  v19.8h,  v7.8h
         ret
 endfunc
 
@@ -1360,23 +1320,23 @@ function inv_flipadst_4x16_neon
 endfunc
 
 function inv_identity_8x16_neon
-        mov             w16, #2*5793
+        mov             w16, #2*(5793-4096)*8
         dup             v0.4h,   w16
 .irp i, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
-        smull           v2.4s,   v\i\().4h,  v0.h[0]
-        smull2          v3.4s,   v\i\().8h,  v0.h[0]
-        sqrshrn         v\i\().4h,  v2.4s,   #12
-        sqrshrn2        v\i\().8h,  v3.4s,   #12
+        sqrdmulh        v2.8h,      v\i\().8h,  v0.h[0]
+        sqadd           v\i\().8h,  v\i\().8h,  v\i\().8h
+        sqadd           v\i\().8h,  v\i\().8h,  v2.8h
 .endr
         ret
 endfunc
 
 function inv_identity_4x16_neon
-        mov             w16, #2*5793
+        mov             w16, #2*(5793-4096)*8
         dup             v0.4h,   w16
 .irp i, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
-        smull           v2.4s,   v\i\().4h,  v0.h[0]
-        sqrshrn         v\i\().4h,  v2.4s,   #12
+        sqrdmulh        v2.4h,      v\i\().4h,  v0.h[0]
+        sqadd           v\i\().4h,  v\i\().4h,  v\i\().4h
+        sqadd           v\i\().4h,  v\i\().4h,  v2.4h
 .endr
         ret
 endfunc
@@ -1393,6 +1353,22 @@ endfunc
 .irp i, v16.8h, v17.8h, v18.8h, v19.8h, v20.8h, v21.8h, v22.8h, v23.8h, v24.8h, v25.8h, v26.8h, v27.8h, v28.8h, v29.8h, v30.8h, v31.8h
         sqrdmulh        v2.8h,   \i,      \c
         srshr           v2.8h,   v2.8h,   #1
+        sqadd           \i,      \i,      v2.8h
+.endr
+.endm
+
+.macro identity_8x8_shift1 c
+.irp i, v16.8h, v17.8h, v18.8h, v19.8h, v20.8h, v21.8h, v22.8h, v23.8h
+        sqrdmulh        v2.8h,   \i,      \c
+        srshr           v2.8h,   v2.8h,   #1
+        sqadd           \i,      \i,      v2.8h
+.endr
+.endm
+
+.macro identity_8x8 c
+.irp i, v16.8h, v17.8h, v18.8h, v19.8h, v20.8h, v21.8h, v22.8h, v23.8h
+        sqrdmulh        v2.8h,   \i,      \c
+        sqadd           \i,      \i,      \i
         sqadd           \i,      \i,      v2.8h
 .endr
 .endm
@@ -2282,7 +2258,7 @@ endfunc
 .macro def_identity_1632 w, h, wshort, hshort
 function inv_txfm_add_identity_identity_\w\()x\h\()_neon, export=1
         mov             w16, #2896*8
-        mov             w17, #2*5793
+        mov             w17, #2*(5793-4096)*8
         dup             v1.4h,   w16
         movi            v0.8h,   #0
         mov             v1.h[1], w17
@@ -2302,12 +2278,11 @@ function inv_txfm_add_identity_identity_\w\()x\h\()_neon, export=1
 
 .if \w == 16
         // 16x32
-        scale_wide      .8h, v1.h[1], v16, v17, v18, v19, v20, v21, v22, v23
-        shift_8_regs    srshr, 1
+        identity_8x8_shift1 v1.h[1]
 .else
         // 32x16
         shift_8_regs    sqshl, 1
-        scale_wide      .8h, v1.h[1], v16, v17, v18, v19, v20, v21, v22, v23
+        identity_8x8 v1.h[1]
 .endif
 
         transpose_8x8h  v16, v17, v18, v19, v20, v21, v22, v23, v4, v5
