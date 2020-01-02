@@ -54,17 +54,8 @@ pub mod test {
   use crate::transform::*;
   use rand::random;
 
-  pub type TestedInverseFn = fn(
-    input: &[i16],
-    output: &mut PlaneRegionMut<'_, u8>,
-    tx_type: TxType,
-    bd: usize,
-    cpu: CpuFeatureLevel,
-  );
-
   pub fn test_transform(
-    tx_size: TxSize, tx_type: TxType, ref_func: TestedInverseFn,
-    test_func: TestedInverseFn, test_cpu: CpuFeatureLevel,
+    tx_size: TxSize, tx_type: TxType, cpu: CpuFeatureLevel,
   ) {
     let mut src_storage = [0u8; 64 * 64];
     let src = &mut src_storage[..tx_size.area()];
@@ -93,10 +84,18 @@ pub mod test {
     );
     let mut native_dst = dst.clone();
 
-    test_func(freq, &mut dst.as_region_mut(), tx_type, 8, test_cpu);
-    ref_func(
+    inverse_transform_add(
+      freq,
+      &mut dst.as_region_mut(),
+      tx_size,
+      tx_type,
+      8,
+      cpu,
+    );
+    inverse_transform_add(
       freq,
       &mut native_dst.as_region_mut(),
+      tx_size,
       tx_type,
       8,
       CpuFeatureLevel::NATIVE,

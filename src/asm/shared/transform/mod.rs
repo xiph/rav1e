@@ -8,3 +8,14 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 pub mod inverse;
+
+use crate::transform::*;
+
+pub const fn get_tx_size_idx(tx_size: TxSize) -> usize {
+  (tx_size as usize) & 31
+}
+
+pub const fn get_tx_type_idx(tx_type: TxType) -> usize {
+  // TX_TYPES is 2^4 or 16
+  (tx_type as usize) & (TX_TYPES - 1)
+}

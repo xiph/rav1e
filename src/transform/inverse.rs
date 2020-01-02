@@ -17,7 +17,6 @@ cfg_if::cfg_if! {
   }
 }
 
-use crate::cpu_features::CpuFeatureLevel;
 use crate::tiling::PlaneRegionMut;
 use crate::util::*;
 
@@ -28,6 +27,7 @@ use super::consts::*;
 use super::get_1d_tx_types;
 use super::get_rect_tx_log_ratio;
 use super::half_btf;
+use super::TxSize;
 use super::TxType;
 
 static COSPI_INV: [i32; 64] = [
@@ -1585,38 +1585,41 @@ pub(crate) mod native {
   use super::*;
   use crate::cpu_features::CpuFeatureLevel;
   use crate::util::clamp;
+
+  use simd_helpers::cold_for_target_arch;
   use std::cmp;
 
-  pub trait InvTxfm2D: Dim {
-    const INTERMEDIATE_SHIFT: usize;
+  #[cold_for_target_arch("x86_64", "aarch64")]
+  pub fn inverse_transform_add<T>(
+    input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, tx_size: TxSize,
+    tx_type: TxType, bd: usize, _cpu: CpuFeatureLevel,
+  ) where
+    T: Pixel,
+  {
+    let width: usize = tx_size.width();
+    let height: usize = tx_size.height();
 
-    fn inv_txfm2d_add<T>(
-      input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, tx_type: TxType,
-      bd: usize, _cpu: CpuFeatureLevel,
-    ) where
-      T: Pixel,
-    {
-      // Only use at most 32 columns and 32 rows of input coefficients.
-      let input: &[T::Coeff] = &input[..Self::W.min(32) * Self::H.min(32)];
+    // Only use at most 32 columns and 32 rows of input coefficients.
+    let input: &[T::Coeff] = &input[..width.min(32) * height.min(32)];
 
-      // For 64 point transforms, rely on the last 32 columns being initialized
-      //   to zero for filling out missing input coeffs.
-      let buffer = &mut [0i32; 64 * 64][..Self::W * Self::H];
-      let rect_type = get_rect_tx_log_ratio(Self::W, Self::H);
-      let tx_types_1d = get_1d_tx_types(tx_type);
+    // For 64 point transforms, rely on the last 32 columns being initialized
+    //   to zero for filling out missing input coeffs.
+    let buffer = &mut [0i32; 64 * 64][..width * height];
+    let rect_type = get_rect_tx_log_ratio(width, height);
+    let tx_types_1d = get_1d_tx_types(tx_type);
 
-      // perform inv txfm on every row
-      let range = bd + 8;
-      let txfm_fn = INV_TXFM_FNS[tx_types_1d.1 as usize][Self::W.ilog() - 3];
-      for (r, buffer_slice) in
-        // 64 point transforms only signal 32 coeffs. We only take chunks of 32
-        //   and skip over the last 32 transforms here.
-        (0..Self::H.min(32)).zip(buffer.chunks_mut(Self::W))
+    // perform inv txfm on every row
+    let range = bd + 8;
+    let txfm_fn = INV_TXFM_FNS[tx_types_1d.1 as usize][width.ilog() - 3];
+    for (r, buffer_slice) in
+      // 64 point transforms only signal 32 coeffs. We only take chunks of 32
+      //   and skip over the last 32 transforms here.
+      (0..height.min(32)).zip(buffer.chunks_mut(width))
       {
         // For 64 point transforms, rely on the last 32 elements being
         //   initialized to zero for filling out the missing coeffs.
         let mut temp_in: [i32; 64] = [0; 64];
-        for (raw, clamped) in input[r..].iter().map(|a| i32::cast_from(*a)).step_by(Self::H.min(32)).zip(temp_in.iter_mut()) {
+        for (raw, clamped) in input[r..].iter().map(|a| i32::cast_from(*a)).step_by(height.min(32)).zip(temp_in.iter_mut()) {
           let val = if rect_type.abs() == 1 {
             round_shift(raw * INV_SQRT2, SQRT2_BITS)
           } else {
@@ -1627,98 +1630,35 @@ pub(crate) mod native {
         txfm_fn(&temp_in, buffer_slice, range);
       }
 
-      // perform inv txfm on every col
-      let range = cmp::max(bd + 6, 16);
-      let txfm_fn = INV_TXFM_FNS[tx_types_1d.0 as usize][Self::H.ilog() - 3];
-      for c in 0..Self::W {
-        let mut temp_in: [i32; 64] = [0; 64];
-        let mut temp_out: [i32; 64] = [0; 64];
-        for (raw, clamped) in
-          buffer[c..].iter().step_by(Self::W).zip(temp_in.iter_mut())
-        {
-          *clamped =
-            clamp_value(round_shift(*raw, Self::INTERMEDIATE_SHIFT), range);
-        }
-        txfm_fn(&temp_in, &mut temp_out, range);
-        for (temp, out) in temp_out
-          .iter()
-          .zip(output.rows_iter_mut().map(|row| &mut row[c]).take(Self::H))
-        {
-          let v: i32 = (*out).as_();
-          let v = clamp(v + round_shift(*temp, 4), 0, (1 << bd) - 1);
-          *out = T::cast_from(v);
-        }
+    // perform inv txfm on every col
+    let range = cmp::max(bd + 6, 16);
+    let txfm_fn = INV_TXFM_FNS[tx_types_1d.0 as usize][height.ilog() - 3];
+    for c in 0..width {
+      let mut temp_in: [i32; 64] = [0; 64];
+      let mut temp_out: [i32; 64] = [0; 64];
+      for (raw, clamped) in
+        buffer[c..].iter().step_by(width).zip(temp_in.iter_mut())
+      {
+        *clamped = clamp_value(
+          round_shift(*raw, INV_INTERMEDIATE_SHIFTS[tx_size as usize]),
+          range,
+        );
+      }
+      txfm_fn(&temp_in, &mut temp_out, range);
+      for (temp, out) in temp_out
+        .iter()
+        .zip(output.rows_iter_mut().map(|row| &mut row[c]).take(height))
+      {
+        let v: i32 = (*out).as_();
+        let v = clamp(v + round_shift(*temp, 4), 0, (1 << bd) - 1);
+        *out = T::cast_from(v);
       }
     }
   }
 
   /* From AV1 Spec.
   https://aomediacodec.github.io/av1-spec/#2d-inverse-transform-process
-
-  Transform_Row_Shift[ TX_SIZES_ALL ] = {
-    0, 1, 2, 2, 2, 0, 0, 1, 1,
-    1, 1, 1, 1, 1, 1, 2, 2, 2, 2
-  }*/
-
-  macro_rules! impl_inv_txs {
-    ($(($W:expr, $H:expr)),+ $SH:expr) => {
-      $(
-        paste::item! {
-          impl InvTxfm2D for crate::util::[<Block $W x $H>] {
-            const INTERMEDIATE_SHIFT: usize = $SH;
-          }
-        }
-      )*
-    }
-  }
-
-  impl_inv_txs! { (4, 4), (4, 8), (8, 4) 0 }
-
-  impl_inv_txs! { (8, 8), (8, 16), (16, 8) 1 }
-  impl_inv_txs! { (4, 16), (16, 4), (16, 32), (32, 16) 1 }
-  impl_inv_txs! { (32, 64), (64, 32) 1 }
-
-  impl_inv_txs! { (16, 16), (16, 64), (64, 16), (64, 64) 2 }
-  impl_inv_txs! { (32, 32), (8, 32), (32, 8) 2 }
+  */
+  const INV_INTERMEDIATE_SHIFTS: [usize; TxSize::TX_SIZES_ALL] =
+    [0, 1, 2, 2, 2, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2];
 }
-
-macro_rules! impl_iht_fns {
-  ($(($W:expr, $H:expr)),+) => {
-    $(
-      paste::item! {
-        pub fn [<iht $W x $H _add>]<T: Pixel>(
-          input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, tx_type: TxType,
-          bit_depth: usize, cpu: CpuFeatureLevel
-        ) where
-          T: Pixel,
-        {
-          crate::util::[<Block $W x $H>]::inv_txfm2d_add(
-            input, output, tx_type, bit_depth, cpu
-          );
-        }
-      }
-    )*
-  }
-}
-
-impl_iht_fns!(
-  (64, 64),
-  (64, 32),
-  (32, 64),
-  (16, 64),
-  (64, 16),
-  (32, 32),
-  (32, 16),
-  (16, 32),
-  (32, 8),
-  (8, 32),
-  (16, 16),
-  (16, 8),
-  (8, 16),
-  (16, 4),
-  (4, 16),
-  (8, 8),
-  (8, 4),
-  (4, 8),
-  (4, 4)
-);
