@@ -9,6 +9,14 @@
 
 #![allow(non_upper_case_globals)]
 
+cfg_if::cfg_if! {
+  if #[cfg(nasm_x86_64)] {
+    pub use crate::asm::x86::quantize::*;
+  } else {
+    pub use self::native::*;
+  }
+}
+
 use crate::transform::{TxSize, TxType};
 use crate::util::*;
 
@@ -323,29 +331,34 @@ impl QuantizationContext {
   }
 }
 
-pub fn dequantize<T: Coefficient>(
-  qindex: u8, coeffs: &[T], _eob: usize, rcoeffs: &mut [T], tx_size: TxSize,
-  bit_depth: usize, dc_delta_q: i8, ac_delta_q: i8,
-) {
-  let log_tx_scale = get_log_tx_scale(tx_size) as i32;
-  let offset = (1 << log_tx_scale) - 1;
+pub mod native {
+  use super::*;
+  use crate::cpu_features::CpuFeatureLevel;
 
-  let dc_quant = dc_q(qindex, dc_delta_q, bit_depth) as i32;
-  let ac_quant = ac_q(qindex, ac_delta_q, bit_depth) as i32;
+  pub fn dequantize<T: Coefficient>(
+    qindex: u8, coeffs: &[T], _eob: usize, rcoeffs: &mut [T], tx_size: TxSize,
+    bit_depth: usize, dc_delta_q: i8, ac_delta_q: i8, _cpu: CpuFeatureLevel,
+  ) {
+    let log_tx_scale = get_log_tx_scale(tx_size) as i32;
+    let offset = (1 << log_tx_scale) - 1;
 
-  for (i, (r, c)) in rcoeffs
-    .iter_mut()
-    .zip(coeffs.iter().map(|&c| i32::cast_from(c)))
-    .enumerate()
-  {
-    let quant = if i == 0 { dc_quant } else { ac_quant };
-    *r = T::cast_from((c * quant + ((c >> 31) & offset)) >> log_tx_scale);
+    let dc_quant = dc_q(qindex, dc_delta_q, bit_depth) as i32;
+    let ac_quant = ac_q(qindex, ac_delta_q, bit_depth) as i32;
+
+    for (i, (r, c)) in rcoeffs
+      .iter_mut()
+      .zip(coeffs.iter().map(|&c| i32::cast_from(c)))
+      .enumerate()
+    {
+      let quant = if i == 0 { dc_quant } else { ac_quant };
+      *r = T::cast_from((c * quant + ((c >> 31) & offset)) >> log_tx_scale);
+    }
   }
 }
 
 // LUTS --------------------------------------------------------------------
-const MINQ: usize = 0;
-const MAXQ: usize = 255;
+pub const MINQ: usize = 0;
+pub const MAXQ: usize = 255;
 const QINDEX_RANGE: usize = MAXQ - MINQ + 1;
 
 #[rustfmt::skip]
