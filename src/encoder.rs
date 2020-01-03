@@ -1255,6 +1255,7 @@ pub fn encode_tx_block<T: Pixel>(
     fi.sequence.bit_depth,
     fi.dc_delta_q[p],
     fi.ac_delta_q[p],
+    fi.cpu_feature_level,
   );
 
   let mut tx_dist: u64 = 0;

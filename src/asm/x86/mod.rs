@@ -13,4 +13,5 @@ pub mod ec;
 pub mod lrf;
 pub mod mc;
 pub mod predict;
+pub mod quantize;
 pub mod transform;
