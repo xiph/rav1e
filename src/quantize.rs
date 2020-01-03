@@ -94,13 +94,13 @@ pub fn select_ac_qi(quantizer: i64, bit_depth: usize) -> u8 {
 pub struct QuantizationContext {
   log_tx_scale: usize,
   dc_quant: u32,
-  dc_offset: i32,
+  dc_offset: u32,
   dc_mul_add: (u32, u32, u32),
 
   ac_quant: u32,
-  ac_offset_eob: i32,
-  ac_offset0: i32,
-  ac_offset1: i32,
+  ac_offset_eob: u32,
+  ac_offset0: u32,
+  ac_offset1: u32,
   ac_mul_add: (u32, u32, u32),
 }
 
@@ -122,18 +122,22 @@ fn divu_gen(d: u32) -> (u32, u32, u32) {
 }
 
 #[inline]
-fn divu_pair(x: i32, d: (u32, u32, u32)) -> i32 {
-  let y = if x < 0 { -x } else { x } as u64;
+fn divu_pair(x: u32, d: (u32, u32, u32)) -> u32 {
+  let x = x as u64;
   let (a, b, shift) = d;
   let shift = shift as u64;
   let a = a as u64;
   let b = b as u64;
 
-  let y = (((a * y + b) >> 32) >> shift) as i32;
-  if x < 0 {
-    -y
+  (((a * x + b) >> 32) >> shift) as u32
+}
+
+#[inline]
+fn copysign(value: u32, signed: i32) -> i32 {
+  if signed < 0 {
+    -(value as i32)
   } else {
-    y
+    value as i32
   }
 }
 
@@ -145,7 +149,7 @@ mod test {
   #[test]
   fn test_divu_pair() {
     for d in 1..1024 {
-      for x in -1000..1000 {
+      for x in 0..1000 {
         let ab = divu_gen(d as u32);
         assert_eq!(x / d, divu_pair(x, ab));
       }
@@ -227,14 +231,11 @@ impl QuantizationContext {
     // post-deadzoning.
     //
     // [1] https://people.xiph.org/~jm/notes/theoretical_results.pdf
-    self.dc_offset =
-      self.dc_quant as i32 * (if is_intra { 109 } else { 108 }) / 256;
-    self.ac_offset0 =
-      self.ac_quant as i32 * (if is_intra { 98 } else { 97 }) / 256;
-    self.ac_offset1 =
-      self.ac_quant as i32 * (if is_intra { 109 } else { 108 }) / 256;
+    self.dc_offset = self.dc_quant * (if is_intra { 109 } else { 108 }) / 256;
+    self.ac_offset0 = self.ac_quant * (if is_intra { 98 } else { 97 }) / 256;
+    self.ac_offset1 = self.ac_quant * (if is_intra { 109 } else { 108 }) / 256;
     self.ac_offset_eob =
-      self.ac_quant as i32 * (if is_intra { 88 } else { 44 }) / 256;
+      self.ac_quant * (if is_intra { 88 } else { 44 }) / 256;
   }
 
   #[inline]
@@ -249,9 +250,10 @@ impl QuantizationContext {
     qcoeffs[0] = {
       let coeff: i32 =
         i32::cast_from(coeffs[0]) << (self.log_tx_scale as usize);
-      T::cast_from(divu_pair(
-        coeff + (coeff.signum() * self.dc_offset),
-        self.dc_mul_add,
+      let abs_coeff = coeff.abs() as u32;
+      T::cast_from(copysign(
+        divu_pair(abs_coeff + self.dc_offset, self.dc_mul_add),
+        coeff,
       ))
     };
 
@@ -285,24 +287,23 @@ impl QuantizationContext {
     let mut level_mode = 1;
     for &pos in scan.iter().take(eob).skip(1) {
       let coeff = i32::cast_from(coeffs[pos as usize]) << self.log_tx_scale;
-      let level0 =
-        T::cast_from(divu_pair(i32::cast_from(coeff.abs()), self.ac_mul_add));
-      let offset = if level0 > T::cast_from(1 - level_mode) {
+      let abs_coeff = coeff.abs() as u32;
+
+      let level0 = divu_pair(abs_coeff, self.ac_mul_add);
+      let offset = if level0 > 1 - level_mode {
         self.ac_offset1
       } else {
         self.ac_offset0
       };
-      let qcoeff = T::cast_from(divu_pair(
-        coeff + (coeff.signum() * offset),
-        self.ac_mul_add,
-      ));
-      qcoeffs[pos as usize] = qcoeff;
 
-      if level_mode != 0 && qcoeff == T::cast_from(0) {
+      let abs_qcoeff: u32 = divu_pair(abs_coeff + offset, self.ac_mul_add);
+      if level_mode != 0 && abs_qcoeff == 0 {
         level_mode = 0;
-      } else if qcoeff.abs() > T::cast_from(1) {
+      } else if abs_qcoeff > 1 {
         level_mode = 1;
       }
+
+      qcoeffs[pos as usize] = T::cast_from(copysign(abs_qcoeff, coeff));
     }
 
     for &pos in scan.iter().skip(eob) {
