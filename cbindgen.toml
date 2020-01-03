@@ -5,6 +5,7 @@ include_guard = "RAV1E_H"
 tab_width = 4
 style = "Type"
 language = "C"
+cpp_compat = true
 
 [parse]
 parse_deps = true
