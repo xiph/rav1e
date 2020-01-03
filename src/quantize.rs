@@ -306,9 +306,8 @@ impl QuantizationContext {
       qcoeffs[pos as usize] = T::cast_from(copysign(abs_qcoeff, coeff));
     }
 
-    for &pos in scan.iter().skip(eob) {
-      qcoeffs[pos as usize] = T::cast_from(0);
-    }
+    // Rather than zeroing the tail in scan order, assume that qcoeffs is
+    // pre-filled with zeros.
 
     // Check the eob is correct
     debug_assert_eq!(
