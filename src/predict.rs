@@ -155,6 +155,8 @@ impl PredictionMode {
 
     let angle = match mode {
       PredictionMode::UV_CFL_PRED => alpha as isize,
+      PredictionMode::H_PRED => 180,
+      PredictionMode::V_PRED => 90,
       PredictionMode::D45_PRED => 45,
       PredictionMode::D135_PRED => 135,
       PredictionMode::D117_PRED => 113,
@@ -184,8 +186,9 @@ impl PredictionMode {
   #[inline(always)]
   pub fn angle_delta_count(self) -> i8 {
     match self {
-      // TODO add H_PRED and V_PRED after implement angle delta for pred_h and pred_v
-      PredictionMode::D45_PRED
+      PredictionMode::H_PRED
+      | PredictionMode::V_PRED
+      | PredictionMode::D45_PRED
       | PredictionMode::D135_PRED
       | PredictionMode::D117_PRED
       | PredictionMode::D153_PRED
@@ -473,8 +476,12 @@ pub(crate) mod native {
         height,
         bit_depth,
       ),
-      PredictionMode::H_PRED => pred_h(dst, left_slice, width, height),
-      PredictionMode::V_PRED => pred_v(dst, above_slice, width, height),
+      PredictionMode::H_PRED if angle == 180 => {
+        pred_h(dst, left_slice, width, height)
+      }
+      PredictionMode::V_PRED if angle == 90 => {
+        pred_v(dst, above_slice, width, height)
+      }
       PredictionMode::PAETH_PRED => {
         pred_paeth(dst, above_slice, left_slice, top_left[0], width, height)
       }
@@ -487,7 +494,9 @@ pub(crate) mod native {
       PredictionMode::SMOOTH_V_PRED => {
         pred_smooth_v(dst, above_slice, left_slice, width, height)
       }
-      PredictionMode::D45_PRED
+      PredictionMode::H_PRED
+      | PredictionMode::V_PRED
+      | PredictionMode::D45_PRED
       | PredictionMode::D135_PRED
       | PredictionMode::D117_PRED
       | PredictionMode::D153_PRED

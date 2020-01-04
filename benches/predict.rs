@@ -141,6 +141,11 @@ pub fn intra_bench<T: Pixel>(
     PixelType::U8 => 8,
     PixelType::U16 => 10,
   };
+  let angle = match mode {
+    PredictionMode::H_PRED => 180,
+    PredictionMode::V_PRED => 90,
+    _ => 0,
+  };
   b.iter(|| {
     dispatch_predict_intra::<T>(
       mode,
@@ -149,7 +154,7 @@ pub fn intra_bench<T: Pixel>(
       TxSize::TX_4X4,
       bitdepth,
       &ac,
-      0,
+      angle,
       &edge_buf,
       cpu,
     );
