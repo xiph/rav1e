@@ -109,10 +109,10 @@ pub fn dispatch_predict_intra<T: Pixel>(
             PredictionVariant::BOTH => rav1e_ipred_cfl_neon,
           })(dst_ptr, stride, edge_ptr, w, h, ac_ptr, angle);
         }
-        PredictionMode::H_PRED => {
+        PredictionMode::H_PRED if angle == 180 => {
           rav1e_ipred_h_neon(dst_ptr, stride, edge_ptr, w, h, angle);
         }
-        PredictionMode::V_PRED => {
+        PredictionMode::V_PRED if angle == 90 => {
           rav1e_ipred_v_neon(dst_ptr, stride, edge_ptr, w, h, angle);
         }
         PredictionMode::PAETH_PRED => {
