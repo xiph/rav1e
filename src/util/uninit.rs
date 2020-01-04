@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019, The rav1e contributors. All rights reserved
+// Copyright (c) 2019, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -7,16 +7,16 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-mod align;
-#[macro_use]
-mod cdf;
-mod dim;
-mod math;
-mod pixel;
-mod uninit;
+use std::mem::MaybeUninit;
 
-pub use align::*;
-pub use dim::*;
-pub use math::*;
-pub use pixel::*;
-pub use uninit::*;
+pub fn init_slice_repeat_mut<T: Copy>(
+  slice: &'_ mut [MaybeUninit<T>], value: T,
+) -> &'_ mut [T] {
+  // Fill all of slice
+  for a in slice.iter_mut() {
+    *a = MaybeUninit::new(value);
+  }
+
+  // Defined behavior, since all elements of slice are initialized
+  unsafe { &mut *(slice as *mut [std::mem::MaybeUninit<T>] as *mut [T]) }
+}
