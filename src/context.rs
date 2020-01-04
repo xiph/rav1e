@@ -34,6 +34,7 @@ use crate::util::*;
 
 use arrayvec::*;
 use std::default::Default;
+use std::mem::MaybeUninit;
 use std::ops::{Index, IndexMut};
 use std::*;
 
@@ -3958,18 +3959,20 @@ impl<'a> ContextWriter<'a> {
       av1_scan_orders[tx_size as usize][tx_type as usize].scan;
     let width = av1_get_coded_tx_size(tx_size).width();
     let height = av1_get_coded_tx_size(tx_size).height();
-    let mut coeffs_storage: AlignedArray<[T; 32 * 32]> =
+
+    // Create a slice with coeffs in scan order
+    let mut coeffs_storage: AlignedArray<[MaybeUninit<T>; 32 * 32]> =
       AlignedArray::uninitialized();
-    let coeffs = &mut coeffs_storage.array[..width * height];
-
-    // Zero initialize
-    for coeff in coeffs.iter_mut() {
-      *coeff = T::cast_from(0);
-    }
-
-    for (i, &scan_idx) in scan.iter().take(eob).enumerate() {
-      coeffs[i] = coeffs_in[scan_idx as usize];
-    }
+    let coeffs: &[T] = {
+      let coeffs = init_slice_repeat_mut(
+        &mut coeffs_storage.array[..width * height],
+        T::cast_from(0),
+      );
+      for (i, &scan_idx) in scan.iter().take(eob).enumerate() {
+        coeffs[i] = coeffs_in[scan_idx as usize];
+      }
+      coeffs
+    };
 
     let mut cul_level =
       coeffs.iter().take(eob).map(|c| u32::cast_from(c.abs())).sum();
