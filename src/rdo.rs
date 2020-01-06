@@ -425,31 +425,22 @@ fn compute_tx_distortion<T: Pixel>(
 
 /// Compute a scaling factor to multiply the distortion of a block by,
 /// this factor is determined using temporal RDO.
-///
-/// Note: this can be applied at any block size, but is not linear in the block
-/// size, so the scaled distortion of four 8x8 blocks cannot be directly
-/// compared to the scaled distortion of one 16x16 blocks which is problematic
-/// for RDO. Thankfully we normally compute distortion using <= 8x8 blocks, so
-/// currently this is only a problem when `tx_domain_distortion` is on,
-/// we might want to turn off temporal RDO in that case.
 pub fn compute_distortion_scale<T: Pixel>(
   fi: &FrameInvariants<T>, frame_bo: PlaneBlockOffset, bsize: BlockSize,
 ) -> f64 {
-  let x1 = frame_bo.0.x >> IMPORTANCE_BLOCK_TO_BLOCK_SHIFT;
-  let y1 = frame_bo.0.y >> IMPORTANCE_BLOCK_TO_BLOCK_SHIFT;
-  let x2 = (x1 + bsize.width_imp_b()).min(fi.w_in_imp_b);
-  let y2 = (y1 + bsize.height_imp_b()).min(fi.h_in_imp_b);
-
-  let mut total_propagate_cost = 0_f64;
-  let mut total_intra_cost = 0_f64;
-  for y in y1..y2 {
-    for x in x1..x2 {
-      total_intra_cost +=
-        fi.lookahead_intra_costs[y * fi.w_in_imp_b + x] as f64;
-      total_propagate_cost +=
-        fi.block_importances[y * fi.w_in_imp_b + x] as f64;
-    }
+  if !fi.config.temporal_rdo() {
+    return 1.;
   }
+  // EncoderConfig::temporal_rdo() should always return false in situations
+  // where distortion is computed on > 8x8 blocks, so we should never hit this
+  // assert.
+  assert!(bsize <= BlockSize::BLOCK_8X8);
+
+  let x = frame_bo.0.x >> IMPORTANCE_BLOCK_TO_BLOCK_SHIFT;
+  let y = frame_bo.0.y >> IMPORTANCE_BLOCK_TO_BLOCK_SHIFT;
+
+  let propagate_cost = fi.block_importances[y * fi.w_in_imp_b + x] as f64;
+  let intra_cost = fi.lookahead_intra_costs[y * fi.w_in_imp_b + x] as f64;
 
   // The mbtree paper \cite{mbtree} uses the following formula:
   //
@@ -488,12 +479,12 @@ pub fn compute_distortion_scale<T: Pixel>(
   //   url={https://pdfs.semanticscholar.org/032f/1ab7d9db385780a02eb2d579af8303b266d2.pdf}
   // }
 
-  if total_intra_cost == 0. {
+  if intra_cost == 0. {
     return 1.; // no scaling
   }
 
   let strength = 1.0; // empirical, see comment above
-  let frac = (total_intra_cost + total_propagate_cost) / total_intra_cost;
+  let frac = (intra_cost + propagate_cost) / intra_cost;
   frac.powf(strength / 3.0)
 }
 

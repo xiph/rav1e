@@ -195,6 +195,20 @@ impl EncoderConfig {
   pub fn frame_rate(&self) -> f64 {
     Rational::from_reciprocal(self.time_base).as_f64()
   }
+
+  /// Is temporal RDO enabled ?
+  pub fn temporal_rdo(&self) -> bool {
+    // `compute_distortion_scale` computes a scaling factor for the distortion
+    // of an 8x8 block (4x4 blocks simply use the scaling of the enclosing 8x8
+    // block). As long as distortion is always computed on <= 8x8 blocks, this
+    // has the property that the scaled distortion of a 2Nx2N block is always
+    // equal to the sum of the scaled distortions of the NxN sub-blocks it's
+    // made of, this is a necessary property to be able to do RDO between
+    // multiple partition sizes properly. Unfortunately, when tx domain
+    // distortion is used, distortion is only known at the tx block level which
+    // might be bigger than 8x8. So temporal RDO is always disabled in that case.
+    !self.speed_settings.tx_domain_distortion
+  }
 }
 
 impl fmt::Display for EncoderConfig {

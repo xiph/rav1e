@@ -1247,8 +1247,10 @@ impl<T: Pixel> ContextInner<T> {
       return Err(EncoderStatus::LimitReached);
     }
 
-    // Compute the block importances for the current output frame.
-    self.compute_block_importances();
+    if self.config.temporal_rdo() {
+      // Compute the block importances for the current output frame.
+      self.compute_block_importances();
+    }
 
     let cur_output_frameno = self.output_frameno;
 
