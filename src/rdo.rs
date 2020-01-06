@@ -1806,7 +1806,7 @@ fn rdo_loop_plane_error<T: Pixel>(
           ts.to_frame_block_offset(bo),
           BlockSize::BLOCK_8X8,
         );
-        err += if pli == 0 {
+        err += if pli == 0 && fi.config.tune == Tune::Psychovisual {
           cdef_dist_wxh_8x8(&in_region, &test_region, fi.sequence.bit_depth)
             * bias
         } else {
