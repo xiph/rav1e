@@ -1807,6 +1807,9 @@ fn rdo_loop_plane_error<T: Pixel>(
           BlockSize::BLOCK_8X8,
         );
         err += if pli == 0 {
+          // For loop filters, We intentionally use cdef_dist even with
+          // `--tune Psnr`. Using SSE instead gives no PSNR gain but has a
+          // significant negative impact on other metrics and visual quality.
           cdef_dist_wxh_8x8(&in_region, &test_region, fi.sequence.bit_depth)
             * bias
         } else {
