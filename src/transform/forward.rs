@@ -96,83 +96,94 @@ pub mod native {
     }
   }
 
+  fn fwd_txfm2d<T: Coefficient>(
+    input: &[i16], output: &mut [T], stride: usize, tx_size: TxSize,
+    tx_type: TxType, bd: usize,
+  ) {
+    // Note when assigning txfm_size_col, we use the txfm_size from the
+    // row configuration and vice versa. This is intentionally done to
+    // accurately perform rectangular transforms. When the transform is
+    // rectangular, the number of columns will be the same as the
+    // txfm_size stored in the row cfg struct. It will make no difference
+    // for square transforms.
+    let txfm_size_col = tx_size.width();
+    let txfm_size_row = tx_size.height();
+
+    let mut tmp1: AlignedArray<[i32; 64 * 64]> = AlignedArray::uninitialized();
+    let mut tmp2: AlignedArray<[i32; 64 * 64]> = AlignedArray::uninitialized();
+    let buf1 = &mut tmp1.array[..txfm_size_col * txfm_size_row];
+    let buf2 = &mut tmp2.array[..txfm_size_col * txfm_size_row];
+
+    let cfg = Txfm2DFlipCfg::fwd(tx_type, tx_size, bd);
+
+    let txfm_func_col = get_func(cfg.txfm_type_col);
+    let txfm_func_row = get_func(cfg.txfm_type_row);
+
+    // Columns
+    for c in 0..txfm_size_col {
+      let mut col_flip_backing: AlignedArray<[i32; 64]> =
+        AlignedArray::uninitialized();
+      let col_flip = &mut col_flip_backing.array[..txfm_size_row];
+      if cfg.ud_flip {
+        // flip upside down
+        for r in 0..txfm_size_row {
+          col_flip[r] = (input[(txfm_size_row - r - 1) * stride + c]).into();
+        }
+      } else {
+        for r in 0..txfm_size_row {
+          col_flip[r] = (input[r * stride + c]).into();
+        }
+      }
+
+      let mut tx_output_backing: AlignedArray<[i32; 64]> =
+        AlignedArray::uninitialized();
+      let tx_output = &mut tx_output_backing.array[..txfm_size_row];
+      av1_round_shift_array(col_flip, txfm_size_row, -cfg.shift[0]);
+      txfm_func_col(&col_flip, tx_output);
+      av1_round_shift_array(tx_output, txfm_size_row, -cfg.shift[1]);
+      if cfg.lr_flip {
+        for r in 0..txfm_size_row {
+          // flip from left to right
+          buf1[r * txfm_size_col + (txfm_size_col - c - 1)] = tx_output[r];
+        }
+      } else {
+        for r in 0..txfm_size_row {
+          buf1[r * txfm_size_col + c] = tx_output[r];
+        }
+      }
+    }
+
+    // Rows
+    for r in 0..txfm_size_row {
+      txfm_func_row(
+        &buf1[r * txfm_size_col..],
+        &mut buf2[r * txfm_size_col..],
+      );
+      av1_round_shift_array(
+        &mut buf2[r * txfm_size_col..],
+        txfm_size_col,
+        -cfg.shift[2],
+      );
+      for c in 0..txfm_size_col {
+        output[c * txfm_size_row + r] =
+          T::cast_from(buf2[r * txfm_size_col + c]);
+      }
+    }
+  }
+
   pub trait FwdTxfm2D: Dim {
     fn fwd_txfm2d_daala<T: Coefficient>(
       input: &[i16], output: &mut [T], stride: usize, tx_type: TxType,
       bd: usize, _cpu: CpuFeatureLevel,
     ) {
-      let mut tmp1: AlignedArray<[i32; 64 * 64]> =
-        AlignedArray::uninitialized();
-      let mut tmp2: AlignedArray<[i32; 64 * 64]> =
-        AlignedArray::uninitialized();
-      let buf1 = &mut tmp1.array[..Self::W * Self::H];
-      let buf2 = &mut tmp2.array[..Self::W * Self::H];
-
-      let cfg =
-        Txfm2DFlipCfg::fwd(tx_type, TxSize::by_dims(Self::W, Self::H), bd);
-
-      // Note when assigning txfm_size_col, we use the txfm_size from the
-      // row configuration and vice versa. This is intentionally done to
-      // accurately perform rectangular transforms. When the transform is
-      // rectangular, the number of columns will be the same as the
-      // txfm_size stored in the row cfg struct. It will make no difference
-      // for square transforms.
-      let txfm_size_col = TxSize::width(cfg.tx_size);
-      let txfm_size_row = TxSize::height(cfg.tx_size);
-
-      let txfm_func_col = get_func(cfg.txfm_type_col);
-      let txfm_func_row = get_func(cfg.txfm_type_row);
-
-      // Columns
-      for c in 0..txfm_size_col {
-        let mut col_flip_backing: AlignedArray<[i32; 64]> =
-          AlignedArray::uninitialized();
-        let col_flip = &mut col_flip_backing.array[..txfm_size_row];
-        if cfg.ud_flip {
-          // flip upside down
-          for r in 0..txfm_size_row {
-            col_flip[r] = (input[(txfm_size_row - r - 1) * stride + c]).into();
-          }
-        } else {
-          for r in 0..txfm_size_row {
-            col_flip[r] = (input[r * stride + c]).into();
-          }
-        }
-
-        let mut tx_output_backing: AlignedArray<[i32; 64]> =
-          AlignedArray::uninitialized();
-        let tx_output = &mut tx_output_backing.array[..txfm_size_row];
-        av1_round_shift_array(col_flip, txfm_size_row, -cfg.shift[0]);
-        txfm_func_col(&col_flip, tx_output);
-        av1_round_shift_array(tx_output, txfm_size_row, -cfg.shift[1]);
-        if cfg.lr_flip {
-          for r in 0..txfm_size_row {
-            // flip from left to right
-            buf1[r * txfm_size_col + (txfm_size_col - c - 1)] = tx_output[r];
-          }
-        } else {
-          for r in 0..txfm_size_row {
-            buf1[r * txfm_size_col + c] = tx_output[r];
-          }
-        }
-      }
-
-      // Rows
-      for r in 0..txfm_size_row {
-        txfm_func_row(
-          &buf1[r * txfm_size_col..],
-          &mut buf2[r * txfm_size_col..],
-        );
-        av1_round_shift_array(
-          &mut buf2[r * txfm_size_col..],
-          txfm_size_col,
-          -cfg.shift[2],
-        );
-        for c in 0..txfm_size_col {
-          output[c * txfm_size_row + r] =
-            T::cast_from(buf2[r * txfm_size_col + c]);
-        }
-      }
+      fwd_txfm2d(
+        input,
+        output,
+        stride,
+        TxSize::by_dims(Self::W, Self::H),
+        tx_type,
+        bd,
+      );
     }
   }
 
