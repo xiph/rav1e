@@ -113,7 +113,7 @@ jobs:
         matrix.conf == 'grcov-coveralls'
       env:
         LINK: http://debian-archive.trafficmanager.net/debian/pool/main/a/aom
-        AOM_VERSION: 1.0.0.errata1-2
+        AOM_VERSION: 1.0.0.errata1-3
         AOM_DEV_SHA256: >-
           fd07d90dafe1512d79c1734adb1c4f33215f40856e89e9d505c7e8c8b0ae6a0f
         AOM_LIB_SHA256: >-
