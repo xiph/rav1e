@@ -1262,8 +1262,6 @@ pub fn encode_tx_block<T: Pixel>(
     fi.cpu_feature_level,
   );
 
-  let mut tx_dist: u64 = 0;
-
   if !fi.use_tx_domain_distortion || need_recon_pixel {
     inverse_transform_add(
       rcoeffs,
@@ -1274,9 +1272,10 @@ pub fn encode_tx_block<T: Pixel>(
       fi.cpu_feature_level,
     );
   }
-  if rdo_type.needs_tx_dist() {
+
+  let tx_dist = if rdo_type.needs_tx_dist() {
     // Store tx-domain distortion of this block
-    tx_dist = coeffs
+    let mut raw_tx_dist = coeffs
       .iter()
       .zip(
         // rcoeffs above 32 rows/cols are always 0. The first 32x32 is stored
@@ -1291,17 +1290,24 @@ pub fn encode_tx_block<T: Pixel>(
 
     let tx_dist_scale_bits = 2 * (3 - get_log_tx_scale(tx_size));
     let tx_dist_scale_rounding_offset = 1 << (tx_dist_scale_bits - 1);
-    tx_dist = (tx_dist + tx_dist_scale_rounding_offset) >> tx_dist_scale_bits;
-  }
 
-  if rdo_type == RDOType::TxDistEstRate {
-    // look up rate and distortion in table
-    let estimated_rate = estimate_rate(fi.base_q_idx, tx_size, tx_dist);
-    w.add_bits_frac(estimated_rate as u32);
-  }
-  let bias =
-    compute_distortion_scale(fi, ts.to_frame_block_offset(tx_bo), bsize);
-  (has_coeff, RawDistortion::new(tx_dist) * bias * fi.dist_scale[p])
+    raw_tx_dist =
+      (raw_tx_dist + tx_dist_scale_rounding_offset) >> tx_dist_scale_bits;
+
+    if rdo_type == RDOType::TxDistEstRate {
+      // look up rate and distortion in table
+      let estimated_rate = estimate_rate(fi.base_q_idx, tx_size, raw_tx_dist);
+      w.add_bits_frac(estimated_rate as u32);
+    }
+
+    let bias =
+      compute_distortion_scale(fi, ts.to_frame_block_offset(tx_bo), bsize);
+    RawDistortion::new(raw_tx_dist) * bias * fi.dist_scale[p]
+  } else {
+    ScaledDistortion::zero()
+  };
+
+  (has_coeff, tx_dist)
 }
 
 pub fn motion_compensate<T: Pixel>(
