@@ -190,7 +190,7 @@ impl PredictionMode {
       | PredictionMode::D117_PRED
       | PredictionMode::D153_PRED
       | PredictionMode::D207_PRED
-      | PredictionMode::D63_PRED => 7,
+      | PredictionMode::D63_PRED => 1,  // Until the desync is fixed, enforce to 1
       _ => 1,
     }
   }
