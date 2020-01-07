@@ -54,9 +54,20 @@ declare_asm_dist_fn![
   (rav1e_sad8x8_sse2, u8),
   (rav1e_sad8x16_sse2, u8),
   (rav1e_sad8x32_sse2, u8),
+  (rav1e_sad16x4_sse2, u8),
+  (rav1e_sad16x8_sse2, u8),
   (rav1e_sad16x16_sse2, u8),
+  (rav1e_sad16x32_sse2, u8),
+  (rav1e_sad16x64_sse2, u8),
+  (rav1e_sad32x8_sse2, u8),
+  (rav1e_sad32x16_sse2, u8),
   (rav1e_sad32x32_sse2, u8),
+  (rav1e_sad32x64_sse2, u8),
+  (rav1e_sad64x16_sse2, u8),
+  (rav1e_sad64x32_sse2, u8),
   (rav1e_sad64x64_sse2, u8),
+  (rav1e_sad64x128_sse2, u8),
+  (rav1e_sad128x64_sse2, u8),
   (rav1e_sad128x128_sse2, u8),
   // SSE4
   (rav1e_satd_4x4_sse4, u8),
@@ -260,9 +271,23 @@ static SAD_FNS_SSE2: [Option<SadFn>; DIST_FNS_LENGTH] = {
   out[BLOCK_8X16 as usize] = Some(rav1e_sad8x16_sse2);
   out[BLOCK_8X32 as usize] = Some(rav1e_sad8x32_sse2);
 
+  out[BLOCK_16X4 as usize] = Some(rav1e_sad16x4_sse2);
+  out[BLOCK_16X8 as usize] = Some(rav1e_sad16x8_sse2);
   out[BLOCK_16X16 as usize] = Some(rav1e_sad16x16_sse2);
+  out[BLOCK_16X32 as usize] = Some(rav1e_sad16x32_sse2);
+  out[BLOCK_16X64 as usize] = Some(rav1e_sad16x64_sse2);
+
+  out[BLOCK_32X8 as usize] = Some(rav1e_sad32x8_sse2);
+  out[BLOCK_32X16 as usize] = Some(rav1e_sad32x16_sse2);
   out[BLOCK_32X32 as usize] = Some(rav1e_sad32x32_sse2);
+  out[BLOCK_32X64 as usize] = Some(rav1e_sad32x64_sse2);
+
+  out[BLOCK_64X16 as usize] = Some(rav1e_sad64x16_sse2);
+  out[BLOCK_64X32 as usize] = Some(rav1e_sad64x32_sse2);
   out[BLOCK_64X64 as usize] = Some(rav1e_sad64x64_sse2);
+  out[BLOCK_64X128 as usize] = Some(rav1e_sad64x128_sse2);
+
+  out[BLOCK_128X64 as usize] = Some(rav1e_sad128x64_sse2);
   out[BLOCK_128X128 as usize] = Some(rav1e_sad128x128_sse2);
 
   out
