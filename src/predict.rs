@@ -129,9 +129,8 @@ impl PredictionMode {
   }
   pub fn predict_intra<T: Pixel>(
     self, tile_rect: TileRect, dst: &mut PlaneRegionMut<'_, T>,
-    tx_size: TxSize, bit_depth: usize, ac: &[i16], angle_delta: i8,
-    alpha: i16, edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>,
-    cpu: CpuFeatureLevel,
+    tx_size: TxSize, bit_depth: usize, ac: &[i16], alpha: i16,
+    edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>, cpu: CpuFeatureLevel,
   ) {
     assert!(self.is_intra());
     let &Rect { x: frame_x, y: frame_y, .. } = dst.rect();
@@ -162,7 +161,7 @@ impl PredictionMode {
       PredictionMode::D207_PRED => 203,
       PredictionMode::D63_PRED => 67,
       _ => 0,
-    } + (angle_delta * ANGLE_STEP) as isize;
+    };
 
     dispatch_predict_intra::<T>(
       mode, variant, dst, tx_size, bit_depth, ac, angle, edge_buf, cpu,
@@ -179,20 +178,6 @@ impl PredictionMode {
 
   pub fn is_directional(self) -> bool {
     self >= PredictionMode::V_PRED && self <= PredictionMode::D63_PRED
-  }
-
-  #[inline(always)]
-  pub fn angle_delta_count(self) -> i8 {
-    match self {
-      // TODO add H_PRED and V_PRED after implement angle delta for pred_h and pred_v
-      PredictionMode::D45_PRED
-      | PredictionMode::D135_PRED
-      | PredictionMode::D117_PRED
-      | PredictionMode::D153_PRED
-      | PredictionMode::D207_PRED
-      | PredictionMode::D63_PRED => 7,
-      _ => 1,
-    }
   }
 
   pub fn predict_inter<T: Pixel>(
@@ -341,18 +326,6 @@ pub enum FilterIntraMode {
   FILTER_INTRA_MODES,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct AngleDelta {
-  pub y: i8,
-  pub uv: i8,
-}
-
-impl Default for AngleDelta {
-  fn default() -> Self {
-    Self { y: 0, uv: 0 }
-  }
-}
-
 // Weights are quadratic from '1' to '1 / block_size', scaled by 2^sm_weight_log2_scale.
 const sm_weight_log2_scale: u8 = 8;
 
@@ -389,8 +362,6 @@ const NEED_BOTTOMLEFT: u8 = 1 << 5;
 /*const INTRA_EDGE_FILT: usize = 3;
 const INTRA_EDGE_TAPS: usize = 5;
 const MAX_UPSAMPLE_SZ: usize = 16;*/
-
-const ANGLE_STEP: i8 = 3;
 
 #[allow(unused)]
 pub static extend_modes: [u8; INTRA_MODES] = [
@@ -810,6 +781,7 @@ pub(crate) mod native {
     bit_depth: usize,
   ) {
     let sample_max = ((1 << bit_depth) - 1) as i32;
+    let _angle_delta = 0;
 
     let p_angle = angle; // TODO use Mode_to_Angle
 
