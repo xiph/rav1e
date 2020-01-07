@@ -1267,8 +1267,14 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
   });
 
   // Find the best angle delta for the current best prediction mode
-  let luma_angle_delta_count = best.pred_mode_luma.angle_delta_count();
-  let chroma_angle_delta_count = best.pred_mode_chroma.angle_delta_count();
+  let mut luma_angle_delta_count = best.pred_mode_luma.angle_delta_count();
+  let mut chroma_angle_delta_count = best.pred_mode_chroma.angle_delta_count();
+
+  // Workaround for the desync
+  if bsize.width() < 8 || bsize.height() < 8 {
+    luma_angle_delta_count = 1;
+    chroma_angle_delta_count = 1;
+  }
 
   'luma_loop: for i in 0..luma_angle_delta_count {
     for j in 0..chroma_angle_delta_count {
