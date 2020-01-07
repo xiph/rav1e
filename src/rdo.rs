@@ -803,7 +803,6 @@ pub fn rdo_mode_decision<T: Pixel>(
     let chroma_mode = PredictionMode::UV_CFL_PRED;
     let cw_checkpoint = cw.checkpoint();
     let wr: &mut dyn Writer = &mut WriterCounter::new();
-    let angle_delta = AngleDelta { y: best.angle_delta.y, uv: 0 };
 
     write_tx_blocks(
       fi,
@@ -812,7 +811,7 @@ pub fn rdo_mode_decision<T: Pixel>(
       wr,
       best.pred_mode_luma,
       best.pred_mode_luma,
-      angle_delta,
+      best.angle_delta,
       tile_bo,
       bsize,
       best.tx_size,
@@ -850,7 +849,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         wr,
         best.pred_mode_luma,
         chroma_mode,
-        angle_delta,
+        best.angle_delta,
         best.ref_frames,
         best.mvs,
         bsize,
@@ -875,7 +874,6 @@ pub fn rdo_mode_decision<T: Pixel>(
       if rd < best.rd_cost {
         best.rd_cost = rd;
         best.pred_mode_chroma = chroma_mode;
-        best.angle_delta = angle_delta;
         best.has_coeff = has_coeff;
         best.pred_cfl_params = cfl;
       }
