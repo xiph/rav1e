@@ -975,8 +975,8 @@ pub(crate) mod native {
 
     // Initialize above and left edge buffers of the largest possible needed size if upsampled
     // The first value is the top left pixel, also mutable and indexed at -1 in the spec
-    let mut above_filtered: Vec<T> = vec![T::cast_from(0); width * 4 + 1];
-    let mut left_filtered: Vec<T> = vec![T::cast_from(0); height * 4 + 1];
+    let mut above_filtered: Vec<T> = vec![T::cast_from(0); (width + height) * 2 + 1];
+    let mut left_filtered: Vec<T> = vec![T::cast_from(0); (width + height) * 2 + 1];
 
     let left_clone: &mut [T] = &mut left.clone().to_owned();
     left_clone.as_mut().reverse();
