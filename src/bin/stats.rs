@@ -179,7 +179,7 @@ impl ProgressInfo {
       .frame_info
       .iter()
       .filter(|frame| frame.frame_type == frame_type)
-      .map(|frame| frame.enc_stats.block_size_counts.values().sum::<usize>())
+      .map(|frame| frame.enc_stats.block_size_counts.iter().sum::<usize>())
       .sum()
   }
 
@@ -188,7 +188,7 @@ impl ProgressInfo {
       .frame_info
       .iter()
       .filter(|frame| frame.frame_type == frame_type)
-      .map(|frame| frame.enc_stats.tx_type_counts.values().sum::<usize>())
+      .map(|frame| frame.enc_stats.tx_type_counts.iter().sum::<usize>())
       .sum()
   }
 
@@ -203,9 +203,7 @@ impl ProgressInfo {
       .frame_info
       .iter()
       .filter(|frame| frame.frame_type == frame_type)
-      .map(|frame| {
-        frame.enc_stats.block_size_counts.get(&bsize).copied().unwrap_or(0)
-      })
+      .map(|frame| frame.enc_stats.block_size_counts[bsize as usize])
       .sum::<usize>() as f32
       / count as f32
       * 100.
@@ -237,9 +235,7 @@ impl ProgressInfo {
       .frame_info
       .iter()
       .filter(|frame| frame.frame_type == frame_type)
-      .map(|frame| {
-        frame.enc_stats.tx_type_counts.get(&txtype).copied().unwrap_or(0)
-      })
+      .map(|frame| frame.enc_stats.tx_type_counts[txtype as usize])
       .sum::<usize>() as f32
       / count as f32
       * 100.
@@ -250,9 +246,7 @@ impl ProgressInfo {
       .frame_info
       .iter()
       .filter(|frame| frame.frame_type == frame_type)
-      .map(|frame| {
-        frame.enc_stats.luma_pred_mode_counts.values().sum::<usize>()
-      })
+      .map(|frame| frame.enc_stats.luma_pred_mode_counts.iter().sum::<usize>())
       .sum()
   }
 
@@ -264,7 +258,7 @@ impl ProgressInfo {
       .iter()
       .filter(|frame| frame.frame_type == frame_type)
       .map(|frame| {
-        frame.enc_stats.chroma_pred_mode_counts.values().sum::<usize>()
+        frame.enc_stats.chroma_pred_mode_counts.iter().sum::<usize>()
       })
       .sum()
   }
@@ -280,14 +274,7 @@ impl ProgressInfo {
       .frame_info
       .iter()
       .filter(|frame| frame.frame_type == frame_type)
-      .map(|frame| {
-        frame
-          .enc_stats
-          .luma_pred_mode_counts
-          .get(&pred_mode)
-          .copied()
-          .unwrap_or(0)
-      })
+      .map(|frame| frame.enc_stats.luma_pred_mode_counts[pred_mode as usize])
       .sum::<usize>() as f32
       / count as f32
       * 100.
@@ -304,14 +291,7 @@ impl ProgressInfo {
       .frame_info
       .iter()
       .filter(|frame| frame.frame_type == frame_type)
-      .map(|frame| {
-        frame
-          .enc_stats
-          .chroma_pred_mode_counts
-          .get(&pred_mode)
-          .copied()
-          .unwrap_or(0)
-      })
+      .map(|frame| frame.enc_stats.chroma_pred_mode_counts[pred_mode as usize])
       .sum::<usize>() as f32
       / count as f32
       * 100.
