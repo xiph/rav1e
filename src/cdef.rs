@@ -11,6 +11,7 @@ use crate::context::*;
 use crate::encoder::FrameInvariants;
 use crate::frame::Frame;
 use crate::frame::*;
+use crate::hawktracer::*;
 use crate::tiling::*;
 use crate::util::{clamp, msb, CastFromPrimitive, Pixel};
 
@@ -537,6 +538,7 @@ pub fn cdef_filter_superblock<T: Pixel>(
 // CDEF parameters are stored for each 64 by 64 block of pixels.
 // The CDEF filter is applied on each 8 by 8 block of pixels.
 // Reference: http://av1-spec.argondesign.com/av1-spec/av1-spec.html#cdef-process
+#[hawktracer(cdef_filter_frame)]
 pub fn cdef_filter_frame<T: Pixel>(
   fi: &FrameInvariants<T>, rec: &mut Frame<T>, blocks: &FrameBlocks,
 ) {
