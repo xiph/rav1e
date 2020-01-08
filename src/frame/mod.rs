@@ -13,7 +13,6 @@ use crate::context::SB_SIZE;
 use crate::mc::SUBPEL_FILTER_SIZE;
 use crate::util::*;
 
-#[cfg(test)]
 use crate::tiling::*;
 
 mod plane;
@@ -81,13 +80,10 @@ impl<T: Pixel> FramePad for Frame<T> {
 
 /// Public Trait for new Tile of a frame
 pub(crate) trait AsTile<T: Pixel> {
-  #[cfg(test)]
   fn as_tile(&self) -> Tile<'_, T>;
-  #[cfg(test)]
   fn as_tile_mut(&mut self) -> TileMut<'_, T>;
 }
 
-#[cfg(test)]
 impl<T: Pixel> AsTile<T> for Frame<T> {
   #[inline(always)]
   fn as_tile(&self) -> Tile<'_, T> {
