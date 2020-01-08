@@ -14,7 +14,6 @@ use crate::context::SB_SIZE;
 use crate::mc::SUBPEL_FILTER_SIZE;
 use crate::util::*;
 
-#[cfg(test)]
 use crate::tiling::*;
 
 mod plane;
@@ -96,14 +95,12 @@ impl<T: Pixel> Frame<T> {
   }
 
   #[inline(always)]
-  #[cfg(test)]
   pub(crate) fn as_tile(&self) -> Tile<'_, T> {
     let PlaneConfig { width, height, .. } = self.planes[0].cfg;
     Tile::new(self, TileRect { x: 0, y: 0, width, height })
   }
 
   #[inline(always)]
-  #[cfg(test)]
   pub fn as_tile_mut(&mut self) -> TileMut<'_, T> {
     let PlaneConfig { width, height, .. } = self.planes[0].cfg;
     TileMut::new(self, TileRect { x: 0, y: 0, width, height })
