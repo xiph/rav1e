@@ -92,6 +92,8 @@ pub enum PredictionMode {
   NEW_NEWMV,
 }
 
+pub const PREDICTION_MODES: usize = 28;
+
 #[derive(Copy, Clone, Debug)]
 pub enum PredictionVariant {
   NONE,
