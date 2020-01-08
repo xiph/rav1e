@@ -10,7 +10,6 @@
 use crate::api::FrameType;
 use crate::context::*;
 use crate::encoder::FrameInvariants;
-use crate::encoder::FrameState;
 use crate::hawktracer::*;
 use crate::partition::RefType::*;
 use crate::predict::PredictionMode::*;
@@ -1531,12 +1530,10 @@ fn sse_plane<T: Pixel>(
 // Deblocks all edges in all planes of a frame
 #[hawktracer(deblock_filter_frame)]
 pub fn deblock_filter_frame<T: Pixel>(
-  ts: &mut TileStateMut<T>, blocks: &TileBlocks,
+  deblock: &DeblockState, tile: &mut TileMut<T>, blocks: &TileBlocks,
   crop_w: usize, crop_h: usize, bd: usize
 ) {
-  let deblock = &ts.deblock;
-  let ts_rec = &mut ts.rec;
-  (&mut ts_rec.planes).par_iter_mut().enumerate().for_each(
+  (&mut tile.planes).par_iter_mut().enumerate().for_each(
     |(pli, mut plane)| {
       deblock_plane(deblock, &mut plane, pli, blocks, crop_w, crop_h, bd);
     },
@@ -1544,13 +1541,15 @@ pub fn deblock_filter_frame<T: Pixel>(
 }
 
 fn sse_optimize<T: Pixel>(
-  ts: &mut TileStateMut<T>, blocks: &TileBlocks,
+  rec: &Tile<T>,
+  input: &Tile<T>,
+  blocks: &TileBlocks,
   crop_w: usize, crop_h: usize, bd: usize
 ) -> [u8;4] {
   // i64 allows us to accumulate a total of ~ 35 bits worth of pixels
   assert!(
-    ts.input_tile.planes[0].plane_cfg.width.ilog() +
-      ts.input_tile.planes[0].plane_cfg.height.ilog() < 35
+    input.planes[0].plane_cfg.width.ilog() +
+      input.planes[0].plane_cfg.height.ilog() < 35
   );
   let mut level = [0;4];
   
@@ -1559,8 +1558,8 @@ fn sse_optimize<T: Pixel>(
     let mut h_tally: [i64; MAX_LOOP_FILTER + 2] = [0; MAX_LOOP_FILTER + 2];
 
     sse_plane(
-      &ts.rec.planes[pli].as_const(),
-      &ts.input_tile.planes[pli],
+      &rec.planes[pli],
+      &input.planes[pli],
       &mut v_tally,
       &mut h_tally,
       pli,
@@ -1608,9 +1607,13 @@ fn sse_optimize<T: Pixel>(
 }
 
 #[hawktracer(deblock_filter_optimize)]
-pub fn deblock_filter_optimize<T: Pixel>(
-  fi: &FrameInvariants<T>, fs: &mut FrameState<T>, blocks: &FrameBlocks,
-) {
+pub fn deblock_filter_optimize<T: Pixel> (
+  fi: &FrameInvariants<T>,
+  rec: &Tile<T>,
+  input: &Tile<T>,
+  blocks: &TileBlocks,
+  crop_w: usize, crop_h: usize, bd: usize
+) -> [u8; 4] {
   if fi.config.speed_settings.fast_deblock {
     let q = ac_q(fi.base_q_idx, 0, fi.sequence.bit_depth) as i32;
     let level = clamp(
@@ -1641,20 +1644,16 @@ pub fn deblock_filter_optimize<T: Pixel>(
       0,
       MAX_LOOP_FILTER as i32,
     ) as u8;
-
-    fs.deblock.levels[0] = level;
-    fs.deblock.levels[1] = level;
-    fs.deblock.levels[2] = level;
-    fs.deblock.levels[3] = level;
+    [level; 4]
   } else {
     // Deblocking happens in 4x4 (luma) units; luma x,y are clipped to
     // the *crop frame* of the entire frame by 4x4 block.
-    let levels = sse_optimize(
-      &mut fs.as_tile_state_mut(),
-      &blocks.as_tile_blocks(),
-      fi.width,
-      fi.height,
-      fi.sequence.bit_depth);
-    fs.deblock.levels = levels;
+    sse_optimize(
+      rec,
+      input,
+      blocks,
+      crop_w,
+      crop_h,
+      bd)
   }
 }
