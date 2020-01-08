@@ -24,6 +24,7 @@ use crate::frame::PlaneConfig;
 use crate::frame::PlaneMutSlice;
 use crate::frame::PlaneOffset;
 use crate::frame::PlaneSlice;
+use crate::hawktracer::*;
 use crate::util::clamp;
 use crate::util::CastFromPrimitive;
 use crate::util::ILog;
@@ -1434,6 +1435,7 @@ impl RestorationState {
     }
   }
 
+  #[hawktracer(lrf_filter_frame)]
   pub fn lrf_filter_frame<T: Pixel>(
     &mut self, out: &mut Frame<T>, pre_cdef: &Frame<T>,
     fi: &FrameInvariants<T>,

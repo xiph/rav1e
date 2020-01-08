@@ -12,6 +12,7 @@ use crate::context::*;
 use crate::encoder::FrameInvariants;
 use crate::encoder::FrameState;
 use crate::frame::*;
+use crate::hawktracer::*;
 use crate::partition::RefType::*;
 use crate::predict::PredictionMode::*;
 use crate::quantize::*;
@@ -1514,6 +1515,7 @@ fn sse_plane<T: Pixel>(
 }
 
 // Deblocks all edges in all planes of a frame
+#[hawktracer(deblock_filter_frame)]
 pub fn deblock_filter_frame<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, blocks: &FrameBlocks,
 ) {
@@ -1582,6 +1584,7 @@ fn sse_optimize<T: Pixel>(
   }
 }
 
+#[hawktracer(deblock_filter_optimize)]
 pub fn deblock_filter_optimize<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, blocks: &FrameBlocks,
 ) {
