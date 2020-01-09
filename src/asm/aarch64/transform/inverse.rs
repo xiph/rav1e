@@ -17,8 +17,8 @@ use crate::asm::shared::transform::inverse::*;
 use crate::asm::shared::transform::*;
 
 pub fn inverse_transform_add<T: Pixel>(
-  input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, tx_size: TxSize,
-  tx_type: TxType, bd: usize, cpu: CpuFeatureLevel,
+  input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, eob: usize,
+  tx_size: TxSize, tx_type: TxType, bd: usize, cpu: CpuFeatureLevel,
 ) {
   match T::type_enum() {
     PixelType::U8 => {
@@ -29,6 +29,7 @@ pub fn inverse_transform_add<T: Pixel>(
           func,
           input,
           output,
+          eob,
           tx_size.width(),
           tx_size.height(),
           bd,
@@ -38,7 +39,7 @@ pub fn inverse_transform_add<T: Pixel>(
     PixelType::U16 => {}
   };
 
-  native::inverse_transform_add(input, output, tx_size, tx_type, bd, cpu);
+  native::inverse_transform_add(input, output, eob, tx_size, tx_type, bd, cpu);
 }
 
 macro_rules! decl_itx_fns {

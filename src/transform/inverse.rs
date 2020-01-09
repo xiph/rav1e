@@ -1591,8 +1591,8 @@ pub(crate) mod native {
 
   #[cold_for_target_arch("x86_64", "aarch64")]
   pub fn inverse_transform_add<T>(
-    input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, tx_size: TxSize,
-    tx_type: TxType, bd: usize, _cpu: CpuFeatureLevel,
+    input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, _eob: usize,
+    tx_size: TxSize, tx_type: TxType, bd: usize, _cpu: CpuFeatureLevel,
   ) where
     T: Pixel,
   {
