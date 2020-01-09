@@ -236,7 +236,10 @@ mod test {
       (PredictionMode::H_PRED, PredictionVariant::BOTH),
       (PredictionMode::D45_PRED, PredictionVariant::BOTH),
       (PredictionMode::D135_PRED, PredictionVariant::BOTH),
+      (PredictionMode::D113_PRED, PredictionVariant::BOTH),
+      (PredictionMode::D157_PRED, PredictionVariant::BOTH),
       (PredictionMode::D203_PRED, PredictionVariant::BOTH),
+      (PredictionMode::D67_PRED, PredictionVariant::BOTH),
       (PredictionMode::SMOOTH_PRED, PredictionVariant::BOTH),
       (PredictionMode::SMOOTH_V_PRED, PredictionVariant::BOTH),
       (PredictionMode::SMOOTH_H_PRED, PredictionVariant::BOTH),
@@ -247,21 +250,20 @@ mod test {
       let angles = match mode {
         PredictionMode::V_PRED => [81, 84, 87, 90, 93, 96, 99].iter(),
         PredictionMode::H_PRED => [171, 174, 177, 180, 183, 186, 189].iter(),
-        PredictionMode::D45_PRED => [
-          3, 6, 9, 14, 17, 20, 23, 26, 29, 32, 36, 39, 42, 45, 48, 51, 54, 58,
-          61, 64, 67, 70, 73, 76,
-        ]
-        .iter(),
-        PredictionMode::D135_PRED => [
-          104, 107, 110, 113, 116, 119, 122, 126, 129, 132, 135, 138, 141,
-          144, 148, 151, 154, 157, 160, 163, 166,
-        ]
-        .iter(),
-        PredictionMode::D203_PRED => [
-          194, 197, 200, 203, 206, 209, 212, 216, 219, 222, 225, 228, 231,
-          234, 238, 241, 244, 247, 250, 253, 256, 261, 264, 267,
-        ]
-        .iter(),
+        PredictionMode::D45_PRED => [36, 39, 42, 45, 48, 51, 54].iter(),
+        PredictionMode::D135_PRED => {
+          [126, 129, 132, 135, 138, 141, 144].iter()
+        }
+        PredictionMode::D113_PRED => {
+          [104, 107, 110, 113, 116, 119, 122].iter()
+        }
+        PredictionMode::D157_PRED => {
+          [148, 151, 154, 157, 160, 163, 166].iter()
+        }
+        PredictionMode::D203_PRED => {
+          [194, 197, 200, 203, 206, 209, 212].iter()
+        }
+        PredictionMode::D67_PRED => [58, 61, 64, 67, 70, 73, 76].iter(),
         _ => [0].iter(),
       };
       for angle in angles {
@@ -297,7 +299,14 @@ mod test {
           &edge_buf,
           cpu,
         );
-        assert_eq!(expected, &output.data[..]);
+        assert_eq!(
+          expected,
+          &output.data[..],
+          "mode={:?} variant={:?} angle={}",
+          *mode,
+          *variant,
+          *angle
+        );
       }
     }
   }
