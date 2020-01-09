@@ -753,7 +753,9 @@ impl<T: Pixel> ContextInner<T> {
     {
       self
         .compute_lookahead_motion_vectors(self.next_lookahead_output_frameno);
-      self.compute_lookahead_intra_costs(self.next_lookahead_output_frameno);
+      if self.config.temporal_rdo() {
+        self.compute_lookahead_intra_costs(self.next_lookahead_output_frameno);
+      }
       self.next_lookahead_output_frameno += 1;
     }
   }
