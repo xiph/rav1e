@@ -31,6 +31,8 @@ use crate::tiling::*;
 use crate::transform::*;
 use crate::util::*;
 
+// TODO: Review the order of this list.
+// The order impacts compression efficiency.
 pub static RAV1E_INTRA_MODES: &[PredictionMode] = &[
   PredictionMode::DC_PRED,
   PredictionMode::H_PRED,
@@ -145,8 +147,8 @@ impl PredictionMode {
     let mode = match self {
       PredictionMode::PAETH_PRED => match variant {
         PredictionVariant::NONE => PredictionMode::DC_PRED,
-        PredictionVariant::LEFT => PredictionMode::H_PRED,
         PredictionVariant::TOP => PredictionMode::V_PRED,
+        PredictionVariant::LEFT => PredictionMode::H_PRED,
         PredictionVariant::BOTH => PredictionMode::PAETH_PRED,
       },
       PredictionMode::UV_CFL_PRED if alpha == 0 => PredictionMode::DC_PRED,
@@ -154,15 +156,15 @@ impl PredictionMode {
     };
 
     let angle = match mode {
-      PredictionMode::UV_CFL_PRED => alpha as isize,
-      PredictionMode::H_PRED => 180,
       PredictionMode::V_PRED => 90,
+      PredictionMode::H_PRED => 180,
       PredictionMode::D45_PRED => 45,
       PredictionMode::D135_PRED => 135,
       PredictionMode::D113_PRED => 113,
       PredictionMode::D157_PRED => 157,
       PredictionMode::D203_PRED => 203,
       PredictionMode::D67_PRED => 67,
+      PredictionMode::UV_CFL_PRED => alpha as isize,
       _ => 0,
     } + (angle_delta * ANGLE_STEP) as isize;
 
@@ -186,8 +188,8 @@ impl PredictionMode {
   #[inline(always)]
   pub fn angle_delta_count(self) -> i8 {
     match self {
-      PredictionMode::H_PRED
-      | PredictionMode::V_PRED
+      PredictionMode::V_PRED
+      | PredictionMode::H_PRED
       | PredictionMode::D45_PRED
       | PredictionMode::D135_PRED
       | PredictionMode::D113_PRED
@@ -461,38 +463,11 @@ pub(crate) mod native {
           PredictionVariant::BOTH => pred_dc,
         })(dst, above_slice, left_slice, width, height, bit_depth)
       }
-      PredictionMode::UV_CFL_PRED => (match variant {
-        PredictionVariant::NONE => pred_cfl_128,
-        PredictionVariant::LEFT => pred_cfl_left,
-        PredictionVariant::TOP => pred_cfl_top,
-        PredictionVariant::BOTH => pred_cfl,
-      })(
-        dst,
-        &ac,
-        angle as i16,
-        above_slice,
-        left_slice,
-        width,
-        height,
-        bit_depth,
-      ),
-      PredictionMode::H_PRED if angle == 180 => {
-        pred_h(dst, left_slice, width, height)
-      }
       PredictionMode::V_PRED if angle == 90 => {
         pred_v(dst, above_slice, width, height)
       }
-      PredictionMode::PAETH_PRED => {
-        pred_paeth(dst, above_slice, left_slice, top_left[0], width, height)
-      }
-      PredictionMode::SMOOTH_PRED => {
-        pred_smooth(dst, above_slice, left_slice, width, height)
-      }
-      PredictionMode::SMOOTH_H_PRED => {
-        pred_smooth_h(dst, above_slice, left_slice, width, height)
-      }
-      PredictionMode::SMOOTH_V_PRED => {
-        pred_smooth_v(dst, above_slice, left_slice, width, height)
+      PredictionMode::H_PRED if angle == 180 => {
+        pred_h(dst, left_slice, width, height)
       }
       PredictionMode::H_PRED
       | PredictionMode::V_PRED
@@ -507,6 +482,33 @@ pub(crate) mod native {
         left_and_left_below_slice,
         top_left,
         angle as usize,
+        width,
+        height,
+        bit_depth,
+      ),
+      PredictionMode::SMOOTH_PRED => {
+        pred_smooth(dst, above_slice, left_slice, width, height)
+      }
+      PredictionMode::SMOOTH_V_PRED => {
+        pred_smooth_v(dst, above_slice, left_slice, width, height)
+      }
+      PredictionMode::SMOOTH_H_PRED => {
+        pred_smooth_h(dst, above_slice, left_slice, width, height)
+      }
+      PredictionMode::PAETH_PRED => {
+        pred_paeth(dst, above_slice, left_slice, top_left[0], width, height)
+      }
+      PredictionMode::UV_CFL_PRED => (match variant {
+        PredictionVariant::NONE => pred_cfl_128,
+        PredictionVariant::LEFT => pred_cfl_left,
+        PredictionVariant::TOP => pred_cfl_top,
+        PredictionVariant::BOTH => pred_cfl,
+      })(
+        dst,
+        &ac,
+        angle as i16,
+        above_slice,
+        left_slice,
         width,
         height,
         bit_depth,
