@@ -147,11 +147,11 @@ pub fn dispatch_predict_intra<T: Pixel>(
         PredictionMode::H_PRED
         | PredictionMode::V_PRED
         | PredictionMode::D45_PRED
-        | PredictionMode::D63_PRED
-        | PredictionMode::D117_PRED
+        | PredictionMode::D67_PRED
+        | PredictionMode::D113_PRED
         | PredictionMode::D135_PRED
-        | PredictionMode::D153_PRED
-        | PredictionMode::D207_PRED => {
+        | PredictionMode::D157_PRED
+        | PredictionMode::D203_PRED => {
           (if angle <= 90 {
             rav1e_ipred_z1_avx2
           } else if angle < 180 {
@@ -240,7 +240,7 @@ mod test {
       (PredictionMode::SMOOTH_V_PRED, PredictionVariant::BOTH),
       (PredictionMode::D45_PRED, PredictionVariant::BOTH),
       (PredictionMode::D135_PRED, PredictionVariant::BOTH),
-      (PredictionMode::D207_PRED, PredictionVariant::BOTH),
+      (PredictionMode::D203_PRED, PredictionVariant::BOTH),
     ]
     .iter()
     {
@@ -255,7 +255,7 @@ mod test {
           144, 148, 151, 154, 157, 160, 163, 166,
         ]
         .iter(),
-        PredictionMode::D207_PRED => [
+        PredictionMode::D203_PRED => [
           194, 197, 200, 203, 206, 209, 212, 216, 219, 222, 225, 228, 231,
           234, 238, 241, 244, 247, 250, 253, 256, 261, 264, 267,
         ]

@@ -506,13 +506,13 @@ impl ProgressInfo {
         ),
       );
       info!(
-      "        D: 45: {:.1}% | 63: {:.1}% | 117: {:.1}% | 135: {:.1}% | 153: {:.1}% | 207: {:.1}%",
+      "        D: 45: {:.1}% | 67: {:.1}% | 113: {:.1}% | 135: {:.1}% | 157: {:.1}% | 203: {:.1}%",
       self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::D45_PRED, frame_type),
-      self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::D63_PRED, frame_type),
-      self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::D117_PRED, frame_type),
+      self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::D67_PRED, frame_type),
+      self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::D113_PRED, frame_type),
       self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::D135_PRED, frame_type),
-      self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::D153_PRED, frame_type),
-      self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::D207_PRED, frame_type),
+      self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::D157_PRED, frame_type),
+      self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::D203_PRED, frame_type),
     );
     } else if frame_type == FrameType::INTER {
       info!(
@@ -563,13 +563,13 @@ impl ProgressInfo {
         self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::UV_CFL_PRED, frame_type),
       );
       info!(
-        "         D: 45: {:.1}% | 63: {:.1}% | 117: {:.1}% | 135: {:.1}% | 153: {:.1}% | 207: {:.1}%",
+        "         D: 45: {:.1}% | 67: {:.1}% | 113: {:.1}% | 135: {:.1}% | 157: {:.1}% | 203: {:.1}%",
         self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::D45_PRED, frame_type),
-        self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::D63_PRED, frame_type),
-        self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::D117_PRED, frame_type),
+        self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::D67_PRED, frame_type),
+        self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::D113_PRED, frame_type),
         self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::D135_PRED, frame_type),
-        self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::D153_PRED, frame_type),
-        self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::D207_PRED, frame_type),
+        self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::D157_PRED, frame_type),
+        self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::D203_PRED, frame_type),
       );
     } else if frame_type == FrameType::INTER {
       info!(

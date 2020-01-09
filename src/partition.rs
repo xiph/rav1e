@@ -558,19 +558,19 @@ pub fn get_intra_edges<T: Pixel>(
 
       needs_left = (!dc_or_cfl || x != 0)
         && !(mode == PredictionMode::D45_PRED
-          || mode == PredictionMode::D63_PRED);
+          || mode == PredictionMode::D67_PRED);
       needs_topleft = mode == PredictionMode::PAETH_PRED
         || mode == PredictionMode::H_PRED
         || mode == PredictionMode::V_PRED
-        || mode == PredictionMode::D117_PRED
+        || mode == PredictionMode::D113_PRED
         || mode == PredictionMode::D135_PRED
-        || mode == PredictionMode::D153_PRED;
+        || mode == PredictionMode::D157_PRED;
       needs_top = !dc_or_cfl || y != 0;
       needs_topright = mode == PredictionMode::V_PRED
         || mode == PredictionMode::D45_PRED
-        || mode == PredictionMode::D63_PRED;
+        || mode == PredictionMode::D67_PRED;
       needs_bottomleft =
-        mode == PredictionMode::H_PRED || mode == PredictionMode::D207_PRED;
+        mode == PredictionMode::H_PRED || mode == PredictionMode::D203_PRED;
     }
 
     // Needs left
