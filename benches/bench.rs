@@ -8,6 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 mod dist;
+mod plane;
 mod predict;
 mod rdo;
 mod transform;
@@ -22,6 +23,7 @@ use rav1e::bench::predict::*;
 use rav1e::bench::rdo::*;
 use rav1e::bench::transform::*;
 
+use crate::plane::plane;
 use crate::rdo::rdo;
 use crate::transform::{forward_transforms, inverse_transforms};
 
@@ -213,5 +215,6 @@ criterion_main!(
   forward_transforms,
   inverse_transforms,
   ec,
-  rdo
+  rdo,
+  plane
 );
