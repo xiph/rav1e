@@ -8,6 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::frame::*;
+use crate::hawktracer::*;
 use crate::tiling::*;
 use crate::util::*;
 
@@ -22,6 +23,7 @@ pub struct ActivityMask {
 }
 
 impl ActivityMask {
+  #[hawktracer(activity_mask_from_plane)]
   pub fn from_plane<T: Pixel>(luma_plane: &Plane<T>) -> ActivityMask {
     let PlaneConfig { width, height, .. } = luma_plane.cfg;
 
