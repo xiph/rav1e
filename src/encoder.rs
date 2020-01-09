@@ -1266,6 +1266,7 @@ pub fn encode_tx_block<T: Pixel>(
     inverse_transform_add(
       rcoeffs,
       &mut rec.subregion_mut(area),
+      eob,
       tx_size,
       tx_type,
       fi.sequence.bit_depth,

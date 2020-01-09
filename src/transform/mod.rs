@@ -403,6 +403,7 @@ pub fn forward_transform<T: Coefficient>(
 mod test {
   use super::TxType::*;
   use super::*;
+  use crate::context::av1_get_coded_tx_size;
   use crate::frame::*;
   use rand::random;
 
@@ -411,6 +412,7 @@ mod test {
   ) {
     let cpu = CpuFeatureLevel::default();
 
+    let coeff_area: usize = av1_get_coded_tx_size(tx_size).area();
     let mut src_storage = [T::cast_from(0); 64 * 64];
     let src = &mut src_storage[..tx_size.area()];
     // dynamic allocation: test
@@ -431,6 +433,7 @@ mod test {
     inverse_transform_add(
       freq,
       &mut dst.as_region_mut(),
+      coeff_area,
       tx_size,
       tx_type,
       8,
