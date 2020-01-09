@@ -41,10 +41,10 @@ pub static RAV1E_INTRA_MODES: &[PredictionMode] = &[
   PredictionMode::PAETH_PRED,
   PredictionMode::D45_PRED,
   PredictionMode::D135_PRED,
-  PredictionMode::D117_PRED,
-  PredictionMode::D153_PRED,
-  PredictionMode::D207_PRED,
-  PredictionMode::D63_PRED,
+  PredictionMode::D113_PRED,
+  PredictionMode::D157_PRED,
+  PredictionMode::D203_PRED,
+  PredictionMode::D67_PRED,
 ];
 
 pub static RAV1E_INTER_MODES_MINIMAL: &[PredictionMode] =
@@ -64,12 +64,12 @@ pub enum PredictionMode {
   DC_PRED,     // Average of above and left pixels
   V_PRED,      // Vertical
   H_PRED,      // Horizontal
-  D45_PRED,    // Directional 45  deg = round(arctan(1/1) * 180/pi)
-  D135_PRED,   // Directional 135 deg = 180 - 45
-  D117_PRED,   // Directional 117 deg = 180 - 63
-  D153_PRED,   // Directional 153 deg = 180 - 27
-  D207_PRED,   // Directional 207 deg = 180 + 27
-  D63_PRED,    // Directional 63  deg = round(arctan(2/1) * 180/pi)
+  D45_PRED,    // Directional 45  degree
+  D135_PRED,   // Directional 135 degree
+  D113_PRED,   // Directional 113 degree
+  D157_PRED,   // Directional 157 degree
+  D203_PRED,   // Directional 203 degree
+  D67_PRED,    // Directional 67  degree
   SMOOTH_PRED, // Combination of horizontal and vertical interpolation
   SMOOTH_V_PRED,
   SMOOTH_H_PRED,
@@ -159,10 +159,10 @@ impl PredictionMode {
       PredictionMode::V_PRED => 90,
       PredictionMode::D45_PRED => 45,
       PredictionMode::D135_PRED => 135,
-      PredictionMode::D117_PRED => 113,
-      PredictionMode::D153_PRED => 157,
-      PredictionMode::D207_PRED => 203,
-      PredictionMode::D63_PRED => 67,
+      PredictionMode::D113_PRED => 113,
+      PredictionMode::D157_PRED => 157,
+      PredictionMode::D203_PRED => 203,
+      PredictionMode::D67_PRED => 67,
       _ => 0,
     } + (angle_delta * ANGLE_STEP) as isize;
 
@@ -180,7 +180,7 @@ impl PredictionMode {
   }
 
   pub fn is_directional(self) -> bool {
-    self >= PredictionMode::V_PRED && self <= PredictionMode::D63_PRED
+    self >= PredictionMode::V_PRED && self <= PredictionMode::D67_PRED
   }
 
   #[inline(always)]
@@ -190,10 +190,10 @@ impl PredictionMode {
       | PredictionMode::V_PRED
       | PredictionMode::D45_PRED
       | PredictionMode::D135_PRED
-      | PredictionMode::D117_PRED
-      | PredictionMode::D153_PRED
-      | PredictionMode::D207_PRED
-      | PredictionMode::D63_PRED => 7,
+      | PredictionMode::D113_PRED
+      | PredictionMode::D157_PRED
+      | PredictionMode::D203_PRED
+      | PredictionMode::D67_PRED => 7,
       _ => 1,
     }
   }
@@ -498,10 +498,10 @@ pub(crate) mod native {
       | PredictionMode::V_PRED
       | PredictionMode::D45_PRED
       | PredictionMode::D135_PRED
-      | PredictionMode::D117_PRED
-      | PredictionMode::D153_PRED
-      | PredictionMode::D207_PRED
-      | PredictionMode::D63_PRED => pred_directional(
+      | PredictionMode::D113_PRED
+      | PredictionMode::D157_PRED
+      | PredictionMode::D203_PRED
+      | PredictionMode::D67_PRED => pred_directional(
         dst,
         above_slice,
         left_and_left_below_slice,

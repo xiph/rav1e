@@ -618,10 +618,10 @@ static intra_mode_to_tx_type_context: [TxType; INTRA_MODES] = [
   DCT_ADST,  // H
   DCT_DCT,   // D45
   ADST_ADST, // D135
-  ADST_DCT,  // D117
-  DCT_ADST,  // D153
-  DCT_ADST,  // D207
-  ADST_DCT,  // D63
+  ADST_DCT,  // D113
+  DCT_ADST,  // D157
+  DCT_ADST,  // D203
+  ADST_DCT,  // D67
   ADST_ADST, // SMOOTH
   ADST_DCT,  // SMOOTH_V
   DCT_ADST,  // SMOOTH_H
@@ -634,10 +634,10 @@ static uv2y: [PredictionMode; UV_INTRA_MODES] = [
   H_PRED,        // UV_H_PRED
   D45_PRED,      // UV_D45_PRED
   D135_PRED,     // UV_D135_PRED
-  D117_PRED,     // UV_D117_PRED
-  D153_PRED,     // UV_D153_PRED
-  D207_PRED,     // UV_D207_PRED
-  D63_PRED,      // UV_D63_PRED
+  D113_PRED,     // UV_D113_PRED
+  D157_PRED,     // UV_D157_PRED
+  D203_PRED,     // UV_D203_PRED
+  D67_PRED,      // UV_D67_PRED
   SMOOTH_PRED,   // UV_SMOOTH_PRED
   SMOOTH_V_PRED, // UV_SMOOTH_V_PRED
   SMOOTH_H_PRED, // UV_SMOOTH_H_PRED
