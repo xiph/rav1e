@@ -296,81 +296,89 @@ unsafe fn round_shift_array_avx2(arr: &mut [I32X8], size: usize, bit: i8) {
   }
 }
 
-pub trait FwdTxfm2D: native::FwdTxfm2D {
-  fn fwd_txfm2d_daala<T: Coefficient>(
-    input: &[i16], output: &mut [T], stride: usize, tx_type: TxType,
-    bd: usize, cpu: CpuFeatureLevel,
-  ) {
-    if cpu >= CpuFeatureLevel::AVX2 {
-      return unsafe {
-        Self::fwd_txfm2d_daala_avx2(input, output, stride, tx_type, bd);
-      };
+/// For classifying the number of rows and columns in a transform. Used to
+/// select the operations to perform for different vector lengths.
+#[derive(Debug, Clone, Copy)]
+enum SizeClass1D {
+  X4,
+  X8UP,
+}
+
+impl SizeClass1D {
+  fn from_length(len: usize) -> Self {
+    assert!(len.is_power_of_two());
+    use SizeClass1D::*;
+    match len {
+      4 => X4,
+      _ => X8UP,
+    }
+  }
+}
+
+#[allow(clippy::identity_op, clippy::erasing_op)]
+#[target_feature(enable = "avx2")]
+unsafe fn fwd_txfm2d_avx2<T: Coefficient>(
+  input: &[i16], output: &mut [T], stride: usize, tx_size: TxSize,
+  tx_type: TxType, bd: usize,
+) {
+  // Note when assigning txfm_size_col, we use the txfm_size from the
+  // row configuration and vice versa. This is intentionally done to
+  // accurately perform rectangular transforms. When the transform is
+  // rectangular, the number of columns will be the same as the
+  // txfm_size stored in the row cfg struct. It will make no difference
+  // for square transforms.
+  let txfm_size_col = tx_size.width();
+  let txfm_size_row = tx_size.height();
+
+  let col_class = SizeClass1D::from_length(txfm_size_col);
+  let row_class = SizeClass1D::from_length(txfm_size_row);
+
+  let mut tmp: AlignedArray<[I32X8; 64 * 64 / 8]> =
+    AlignedArray::uninitialized();
+  let buf = &mut tmp.array[..txfm_size_col * (txfm_size_row / 8).max(1)];
+  let tx_in = &mut [I32X8::zero(); 64];
+  let tx_out = &mut [I32X8::zero(); 64];
+  let cfg = Txfm2DFlipCfg::fwd(tx_type, tx_size, bd);
+
+  let txfm_func_col = get_func_i32x8(cfg.txfm_type_col);
+  let txfm_func_row = get_func_i32x8(cfg.txfm_type_row);
+
+  // Columns
+  for cg in (0..txfm_size_col).step_by(8) {
+    let shift = cfg.shift[0] as u8;
+    #[target_feature(enable = "avx2")]
+    #[inline]
+    unsafe fn load_columns(input_ptr: *const i16, shift: u8) -> I32X8 {
+      // TODO: load 64-bits for x4 wide columns
+      shift_left(
+        I32X8::new(_mm256_cvtepi16_epi32(_mm_loadu_si128(
+          input_ptr as *const _,
+        ))),
+        shift,
+      )
+    }
+    if cfg.ud_flip {
+      // flip upside down
+      for r in 0..txfm_size_row {
+        let input_ptr =
+          input[(txfm_size_row - r - 1) * stride + cg..].as_ptr();
+        tx_in[r] = load_columns(input_ptr, shift);
+      }
+    } else {
+      for r in 0..txfm_size_row {
+        let input_ptr = input[r * stride + cg..].as_ptr();
+        tx_in[r] = load_columns(input_ptr, shift);
+      }
     }
 
-    <Self as native::FwdTxfm2D>::fwd_txfm2d_daala(
-      input, output, stride, tx_type, bd, cpu,
-    );
-  }
+    txfm_func_col(tx_in, tx_out);
 
-  #[allow(clippy::identity_op, clippy::erasing_op)]
-  #[target_feature(enable = "avx2")]
-  unsafe fn fwd_txfm2d_daala_avx2<T: Coefficient>(
-    input: &[i16], output: &mut [T], stride: usize, tx_type: TxType, bd: usize,
-  ) {
-    let mut tmp: AlignedArray<[I32X8; 64 * 64 / 8]> =
-      AlignedArray::uninitialized();
-    let buf = &mut tmp.array[..Self::W * (Self::H / 8).max(1)];
-    let tx_in = &mut [I32X8::zero(); 64];
-    let tx_out = &mut [I32X8::zero(); 64];
-    let cfg =
-      Txfm2DFlipCfg::fwd(tx_type, TxSize::by_dims(Self::W, Self::H), bd);
+    round_shift_array_avx2(tx_out, txfm_size_row, -cfg.shift[1]);
 
-    // Note when assigning txfm_size_col, we use the txfm_size from the
-    // row configuration and vice versa. This is intentionally done to
-    // accurately perform rectangular transforms. When the transform is
-    // rectangular, the number of columns will be the same as the
-    // txfm_size stored in the row cfg struct. It will make no difference
-    // for square transforms.
-    let txfm_size_col = TxSize::width(cfg.tx_size);
-    let txfm_size_row = TxSize::height(cfg.tx_size);
-
-    let txfm_func_col = get_func_i32x8(cfg.txfm_type_col);
-    let txfm_func_row = get_func_i32x8(cfg.txfm_type_row);
-
-    // Columns
-    for cg in (0..txfm_size_col).step_by(8) {
-      let shift = cfg.shift[0] as u8;
-      #[target_feature(enable = "avx2")]
-      #[inline]
-      unsafe fn load_columns(input_ptr: *const i16, shift: u8) -> I32X8 {
-        // TODO: load 64-bits for x4 wide columns
-        shift_left(
-          I32X8::new(_mm256_cvtepi16_epi32(_mm_loadu_si128(
-            input_ptr as *const _,
-          ))),
-          shift,
-        )
-      }
-      if cfg.ud_flip {
-        // flip upside down
-        for r in 0..txfm_size_row {
-          let input_ptr =
-            input[(txfm_size_row - r - 1) * stride + cg..].as_ptr();
-          tx_in[r] = load_columns(input_ptr, shift);
-        }
-      } else {
-        for r in 0..txfm_size_row {
-          let input_ptr = input[r * stride + cg..].as_ptr();
-          tx_in[r] = load_columns(input_ptr, shift);
-        }
-      }
-
-      txfm_func_col(tx_in, tx_out);
-
-      round_shift_array_avx2(tx_out, txfm_size_row, -cfg.shift[1]);
-
-      for rg in (0..txfm_size_row).step_by(8) {
-        if txfm_size_row >= 8 && txfm_size_col >= 8 {
+    // Transpose the array. Select the appropriate method to do so.
+    match (row_class, col_class) {
+      (SizeClass1D::X8UP, SizeClass1D::X8UP) => {
+        for rg in (0..txfm_size_row).step_by(8) {
           let buf = &mut buf[(rg / 8 * txfm_size_col) + cg..];
           let buf = &mut buf[..8];
           let input = &tx_out[rg..];
@@ -388,7 +396,10 @@ pub trait FwdTxfm2D: native::FwdTxfm2D {
           buf[5] = transposed.5;
           buf[6] = transposed.6;
           buf[7] = transposed.7;
-        } else if txfm_size_row >= 8 && txfm_size_col == 4 {
+        }
+      }
+      (SizeClass1D::X8UP, SizeClass1D::X4) => {
+        for rg in (0..txfm_size_row).step_by(8) {
           let buf = &mut buf[(rg / 8 * txfm_size_col) + cg..];
           let buf = &mut buf[..4];
           let input = &tx_out[rg..];
@@ -402,47 +413,53 @@ pub trait FwdTxfm2D: native::FwdTxfm2D {
           buf[1] = transposed.1;
           buf[2] = transposed.2;
           buf[3] = transposed.3;
-        } else if txfm_size_row == 4 && txfm_size_col >= 8 {
-          let buf = &mut buf[(rg / 8 * txfm_size_col) + cg..];
-          let buf = &mut buf[..8];
-          let input = &tx_out[rg..];
-          let input = &input[..8];
-          let transposed =
-            transpose_4x8_avx2((input[0], input[1], input[2], input[3]));
-
-          buf[0] = transposed.0;
-          buf[1] = transposed.1;
-          buf[2] = transposed.2;
-          buf[3] = transposed.3;
-          buf[4] = transposed.4;
-          buf[5] = transposed.5;
-          buf[6] = transposed.6;
-          buf[7] = transposed.7;
-        } else if txfm_size_row == 4 && txfm_size_col == 4 {
-          let buf = &mut buf[(rg / 8 * txfm_size_col) + cg..];
-          let buf = &mut buf[..4];
-          let input = &tx_out[rg..];
-          let input = &input[..4];
-          let transposed =
-            transpose_4x4_avx2((input[0], input[1], input[2], input[3]));
-
-          buf[0] = transposed.0;
-          buf[1] = transposed.1;
-          buf[2] = transposed.2;
-          buf[3] = transposed.3;
         }
       }
-    }
+      (SizeClass1D::X4, SizeClass1D::X8UP) => {
+        // Don't need to loop over rows
+        let buf = &mut buf[cg..];
+        let buf = &mut buf[..8];
+        let input = &tx_out[..8];
+        let transposed =
+          transpose_4x8_avx2((input[0], input[1], input[2], input[3]));
 
-    // Rows
-    for rg in (0..txfm_size_row).step_by(8) {
-      if cfg.lr_flip {
-        buf[rg / 8 * txfm_size_col..][..txfm_size_col].reverse();
+        buf[0] = transposed.0;
+        buf[1] = transposed.1;
+        buf[2] = transposed.2;
+        buf[3] = transposed.3;
+        buf[4] = transposed.4;
+        buf[5] = transposed.5;
+        buf[6] = transposed.6;
+        buf[7] = transposed.7;
       }
-      txfm_func_row(&buf[rg / 8 * txfm_size_col..], tx_out);
-      round_shift_array_avx2(tx_out, txfm_size_col, -cfg.shift[2]);
-      for c in 0..txfm_size_col {
-        if txfm_size_row >= 8 {
+      (SizeClass1D::X4, SizeClass1D::X4) => {
+        // Don't need to loop over rows
+        let buf = &mut buf[..4];
+        let input = &tx_out[..4];
+        let transposed =
+          transpose_4x4_avx2((input[0], input[1], input[2], input[3]));
+
+        buf[0] = transposed.0;
+        buf[1] = transposed.1;
+        buf[2] = transposed.2;
+        buf[3] = transposed.3;
+      }
+    }
+  }
+
+  // Rows
+  for rg in (0..txfm_size_row).step_by(8) {
+    if cfg.lr_flip {
+      buf[rg / 8 * txfm_size_col..][..txfm_size_col].reverse();
+    }
+    txfm_func_row(&buf[rg / 8 * txfm_size_col..], tx_out);
+    round_shift_array_avx2(tx_out, txfm_size_col, -cfg.shift[2]);
+
+    // Write out the coefficients using the correct method for transforms of
+    // this size.
+    match row_class {
+      SizeClass1D::X8UP => {
+        for c in 0..txfm_size_col {
           match T::Pixel::type_enum() {
             PixelType::U8 => {
               let lo = _mm256_castsi256_si128(tx_out[c].vec());
@@ -459,7 +476,10 @@ pub trait FwdTxfm2D: native::FwdTxfm2D {
               );
             }
           }
-        } else {
+        }
+      }
+      SizeClass1D::X4 => {
+        for c in 0..txfm_size_col {
           match T::Pixel::type_enum() {
             PixelType::U8 => {
               let lo = _mm256_castsi256_si128(tx_out[c].vec());
@@ -477,6 +497,30 @@ pub trait FwdTxfm2D: native::FwdTxfm2D {
           }
         }
       }
+    }
+  }
+}
+
+pub trait FwdTxfm2D: native::FwdTxfm2D {
+  fn fwd_txfm2d_daala<T: Coefficient>(
+    input: &[i16], output: &mut [T], stride: usize, tx_type: TxType,
+    bd: usize, cpu: CpuFeatureLevel,
+  ) {
+    if cpu >= CpuFeatureLevel::AVX2 {
+      unsafe {
+        fwd_txfm2d_avx2(
+          input,
+          output,
+          stride,
+          TxSize::by_dims(Self::W, Self::H),
+          tx_type,
+          bd,
+        );
+      }
+    } else {
+      <Self as native::FwdTxfm2D>::fwd_txfm2d_daala(
+        input, output, stride, tx_type, bd, cpu,
+      );
     }
   }
 }
