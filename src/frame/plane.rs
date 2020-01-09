@@ -411,7 +411,7 @@ impl<T: Pixel> Plane<T> {
     }
   }
 
-  pub(crate) fn downsample_from(&mut self, src: &Plane<T>) {
+  pub fn downsample_from(&mut self, src: &Plane<T>) {
     let width = self.cfg.width;
     let height = self.cfg.height;
     let xorigin = self.cfg.xorigin;
