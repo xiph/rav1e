@@ -23,7 +23,7 @@ use crate::transform::TxSize;
 use crate::util::*;
 
 // LAST_FRAME through ALTREF_FRAME correspond to slots 0-6.
-#[derive(PartialEq, Eq, PartialOrd, Copy, Clone)]
+#[derive(PartialEq, Eq, PartialOrd, Copy, Clone, Debug)]
 pub enum RefType {
   INTRA_FRAME = 0,
   LAST_FRAME = 1,

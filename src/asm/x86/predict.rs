@@ -9,7 +9,9 @@
 
 use crate::context::MAX_TX_SIZE;
 use crate::cpu_features::CpuFeatureLevel;
-use crate::predict::{native, PredictionMode, PredictionVariant};
+use crate::predict::{
+  native, IntraEdgeFilterParameters, PredictionMode, PredictionVariant,
+};
 use crate::tiling::PlaneRegionMut;
 use crate::transform::TxSize;
 use crate::util::AlignedArray;
@@ -85,20 +87,12 @@ decl_cfl_pred_fn! {
 pub fn dispatch_predict_intra<T: Pixel>(
   mode: PredictionMode, variant: PredictionVariant,
   dst: &mut PlaneRegionMut<'_, T>, tx_size: TxSize, bit_depth: usize,
-  ac: &[i16], angle: isize, enable_edge_filter: bool,
+  ac: &[i16], angle: isize, ief_params: Option<IntraEdgeFilterParameters>,
   edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>, cpu: CpuFeatureLevel,
 ) {
   let call_native = |dst: &mut PlaneRegionMut<'_, T>| {
     native::dispatch_predict_intra(
-      mode,
-      variant,
-      dst,
-      tx_size,
-      bit_depth,
-      ac,
-      angle,
-      enable_edge_filter,
-      edge_buf,
+      mode, variant, dst, tx_size, bit_depth, ac, angle, ief_params, edge_buf,
       cpu,
     );
   };
@@ -286,7 +280,7 @@ mod test {
             bit_depth,
             &ac,
             *angle,
-            false,
+            None,
             &edge_buf,
             cpu,
           );
@@ -306,7 +300,7 @@ mod test {
           bit_depth,
           &ac,
           *angle,
-          false,
+          None,
           &edge_buf,
           cpu,
         );

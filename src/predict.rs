@@ -151,7 +151,7 @@ impl PredictionMode {
   pub fn predict_intra<T: Pixel>(
     self, tile_rect: TileRect, dst: &mut PlaneRegionMut<'_, T>,
     tx_size: TxSize, bit_depth: usize, ac: &[i16], intra_param: IntraParam,
-    enable_edge_filter: bool,
+    ief_params: Option<IntraEdgeFilterParameters>,
     edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>, cpu: CpuFeatureLevel,
   ) {
     assert!(self.is_intra());
@@ -189,15 +189,7 @@ impl PredictionMode {
     };
 
     dispatch_predict_intra::<T>(
-      mode,
-      variant,
-      dst,
-      tx_size,
-      bit_depth,
-      ac,
-      angle,
-      enable_edge_filter,
-      edge_buf,
+      mode, variant, dst, tx_size, bit_depth, ac, angle, ief_params, edge_buf,
       cpu,
     );
   }
@@ -394,6 +386,15 @@ impl Default for AngleDelta {
   }
 }
 
+#[derive(Copy, Clone)]
+pub struct IntraEdgeFilterParameters {
+  pub plane: usize,
+  pub above_ref_frame_types: Option<[RefType; 2]>,
+  pub left_ref_frame_types: Option<[RefType; 2]>,
+  pub above_mode: Option<PredictionMode>,
+  pub left_mode: Option<PredictionMode>,
+}
+
 // Weights are quadratic from '1' to '1 / block_size', scaled by 2^sm_weight_log2_scale.
 const sm_weight_log2_scale: u8 = 8;
 
@@ -446,7 +447,7 @@ pub(crate) mod native {
   pub fn dispatch_predict_intra<T: Pixel>(
     mode: PredictionMode, variant: PredictionVariant,
     dst: &mut PlaneRegionMut<'_, T>, tx_size: TxSize, bit_depth: usize,
-    ac: &[i16], angle: isize, enable_edge_filter: bool,
+    ac: &[i16], angle: isize, ief_params: Option<IntraEdgeFilterParameters>,
     edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>, _cpu: CpuFeatureLevel,
   ) {
     let width = tx_size.width();
@@ -491,7 +492,7 @@ pub(crate) mod native {
         width,
         height,
         bit_depth,
-        enable_edge_filter,
+        ief_params,
       ),
       PredictionMode::SMOOTH_PRED => {
         pred_smooth(dst, above_slice, left_slice, width, height)
@@ -822,11 +823,14 @@ pub(crate) mod native {
     pred_cfl_inner(output, ac, alpha, width, height, bit_depth);
   }
 
+  #[allow(clippy::clone_double_ref)]
   pub(crate) fn pred_directional<T: Pixel>(
     output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
     top_left: &[T], p_angle: usize, width: usize, height: usize,
-    bit_depth: usize, enable_edge_filter: bool,
+    bit_depth: usize, ief_params: Option<IntraEdgeFilterParameters>,
   ) {
+    #[allow(clippy::collapsible_if)]
+    #[allow(clippy::needless_return)]
     fn select_ief_strength(
       width: usize, height: usize, smooth_filter: bool, angle_delta: isize,
     ) -> u8 {
@@ -933,7 +937,7 @@ pub(crate) mod native {
     fn upsample_edge<T: Pixel>(size: usize, edge: &mut [T], bit_depth: usize) {
       let mut dup = Vec::with_capacity(size + 3);
       dup.push(edge[0]); // top left pixel
-      for i in 0..size + 1 {
+      for i in 0..=size {
         dup.push(edge[i]); // [i + 1]
       }
       dup.push(edge[size]); // [size + 2]
@@ -946,7 +950,7 @@ pub(crate) mod native {
       edge[0] = dup[0];
 
       for i in 0..size {
-        let mut s = dup[i].to_i32().unwrap() * -1
+        let mut s = -dup[i].to_i32().unwrap()
           + (9 * dup[i + 1].to_i32().unwrap())
           + (9 * dup[i + 2].to_i32().unwrap())
           - dup[i + 3].to_i32().unwrap();
@@ -961,8 +965,6 @@ pub(crate) mod native {
 
     let sample_max = ((1 << bit_depth) - 1) as i32;
 
-    let smooth_filter = false;
-
     let max_x = output.plane_cfg.width as isize - 1;
     let max_y = output.plane_cfg.height as isize - 1;
 
@@ -973,17 +975,45 @@ pub(crate) mod native {
     let mut left_edge: &[T] = left;
     let mut top_left_edge: T = top_left[0];
 
+    let enable_edge_filter = ief_params.is_some();
+
     // Initialize above and left edge buffers of the largest possible needed size if upsampled
     // The first value is the top left pixel, also mutable and indexed at -1 in the spec
-    let mut above_filtered: Vec<T> = vec![T::cast_from(0); (width + height) * 2 + 1];
-    let mut left_filtered: Vec<T> = vec![T::cast_from(0); (width + height) * 2 + 1];
+    let mut above_filtered: Vec<T> =
+      vec![T::cast_from(0); (width + height) * 2 + 1];
+    let mut left_filtered: Vec<T> =
+      vec![T::cast_from(0); (width + height) * 2 + 1];
 
     let left_clone: &mut [T] = &mut left.clone().to_owned();
     left_clone.as_mut().reverse();
 
     if enable_edge_filter {
-      above_filtered[1..above.len() + 1].clone_from_slice(above);
-      left_filtered[1..left.len() + 1].clone_from_slice(left_clone);
+      above_filtered[1..=above.len()].clone_from_slice(above);
+      left_filtered[1..=left.len()].clone_from_slice(&left_clone);
+
+      let params = ief_params.unwrap();
+
+      let above_smooth = match params.above_mode {
+        Some(PredictionMode::SMOOTH_PRED)
+        | Some(PredictionMode::SMOOTH_V_PRED)
+        | Some(PredictionMode::SMOOTH_H_PRED) => {
+          params.plane == 0
+            || params.above_ref_frame_types.unwrap()[0] == RefType::INTRA_FRAME
+        }
+        _ => false,
+      };
+
+      let left_smooth = match params.left_mode {
+        Some(PredictionMode::SMOOTH_PRED)
+        | Some(PredictionMode::SMOOTH_V_PRED)
+        | Some(PredictionMode::SMOOTH_H_PRED) => {
+          params.plane == 0
+            || params.left_ref_frame_types.unwrap()[0] == RefType::INTRA_FRAME
+        }
+        _ => false,
+      };
+
+      let smooth_filter = above_smooth || left_smooth;
 
       if p_angle != 90 && p_angle != 180 {
         let top_left_px =
@@ -1008,9 +1038,6 @@ pub(crate) mod native {
             + if p_angle > 180 { width } else { 0 }
             + 1, // left
         );
-
-        // TODO let smooth_filter = true in this scope IF the left
-        // or above blocks are coded with a smooth prediction mode
 
         if output.rect().y > 0 {
           let filter_strength = select_ief_strength(
@@ -1165,12 +1192,10 @@ pub(crate) mod native {
             let l = left_edge.len() - 1;
             let a: i32 = if !enable_edge_filter && base < 0 {
               top_left_edge
+            } else if (base + offset_left as isize) == -2 {
+              left_edge[0]
             } else {
-              if (base + offset_left as isize) == -2 {
-                left_edge[0]
-              } else {
-                left_edge[l - (base + offset_left as isize) as usize]
-              }
+              left_edge[l - (base + offset_left as isize) as usize]
             }
             .into();
             let b: i32 = if (base + offset_left as isize) == -2 {
@@ -1321,7 +1346,7 @@ mod test {
         4,
         4,
         8,
-        false,
+        None,
       );
       assert_eq!(&output.data[..], expected);
     }

@@ -14,7 +14,8 @@ use crate::encoder::*;
 use crate::frame::*;
 use crate::lrf::{IntegralImageBuffer, SOLVE_IMAGE_SIZE};
 use crate::mc::MotionVector;
-use crate::partition::REF_FRAMES;
+use crate::partition::{RefType, REF_FRAMES};
+use crate::predict::PredictionMode;
 use crate::quantize::*;
 use crate::rdo::*;
 use crate::stats::EncoderStats;
@@ -62,8 +63,29 @@ pub struct TileStateMut<'a, T: Pixel> {
   pub restoration: TileRestorationStateMut<'a>,
   pub half_res_pmvs: &'a mut Vec<BlockPmv>,
   pub mvs: Vec<TileMotionVectorsMut<'a>>,
+  pub coded_block_info: Vec<Vec<CodedBlockInfo>>, // indexed in MI units
   pub integral_buffer: IntegralImageBuffer,
   pub enc_stats: EncoderStats,
+}
+
+/// Contains information for a coded block that is
+/// useful to persist. For example, the intra edge
+/// filter requires surrounding coded block information.
+#[derive(Debug, Clone, Copy)]
+pub struct CodedBlockInfo {
+  pub luma_mode: PredictionMode,
+  pub chroma_mode: PredictionMode,
+  pub reference_types: [RefType; 2],
+}
+
+impl Default for CodedBlockInfo {
+  fn default() -> Self {
+    CodedBlockInfo {
+      luma_mode: PredictionMode::DC_PRED,
+      chroma_mode: PredictionMode::DC_PRED,
+      reference_types: [RefType::INTRA_FRAME, RefType::NONE_FRAME],
+    }
+  }
 }
 
 impl<'a, T: Pixel> TileStateMut<'a, T> {
@@ -135,6 +157,13 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
           )
         })
         .collect(),
+      coded_block_info: vec![
+        vec![
+          CodedBlockInfo::default();
+          width >> MI_SIZE_LOG2
+        ];
+        height >> MI_SIZE_LOG2
+      ],
       integral_buffer: IntegralImageBuffer::zeroed(SOLVE_IMAGE_SIZE),
       enc_stats: EncoderStats::default(),
     }

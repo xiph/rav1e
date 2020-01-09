@@ -80,7 +80,7 @@ pub struct PartitionGroupParameters {
   pub part_modes: ArrayVec<[PartitionParameters; 4]>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PartitionParameters {
   pub rd_cost: f64,
   pub bo: TileBlockOffset,
@@ -1151,6 +1151,9 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
           let rec = &mut ts.rec.planes[0];
           let mut rec_region =
             rec.subregion_mut(Area::BlockStartingAt { bo: tile_bo.0 });
+
+          let ief_params = None; // TODO: see if it is worth applying during RDO
+
           // FIXME: If tx partition is used, luma_mode.predict_intra() should be called for each tx block
           luma_mode.predict_intra(
             tile_rect,
@@ -1159,7 +1162,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
             fi.sequence.bit_depth,
             &[0i16; 2],
             IntraParam::None,
-            fi.sequence.enable_intra_edge_filter,
+            ief_params,
             &edge_buf,
             fi.cpu_feature_level,
           );
@@ -1340,7 +1343,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
           fi.sequence.bit_depth,
           &ac.array,
           IntraParam::Alpha(alpha),
-          fi.sequence.enable_intra_edge_filter,
+          None,
           &edge_buf,
           fi.cpu_feature_level,
         );

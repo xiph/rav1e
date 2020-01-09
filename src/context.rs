@@ -1844,7 +1844,7 @@ impl<'a> BlockContext<'a> {
   }
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum CFLSign {
   CFL_SIGN_ZERO = 0,
   CFL_SIGN_NEG = 1,
@@ -1861,7 +1861,7 @@ use crate::context::CFLSign::*;
 const CFL_SIGNS: usize = 3;
 static cfl_sign_value: [i16; CFL_SIGNS] = [0, -1, 1];
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct CFLParams {
   sign: [CFLSign; 2],
   scale: [u8; 2],
