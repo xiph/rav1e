@@ -652,7 +652,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
         let wr = &mut WriterCounter::new();
         let tell = wr.tell_frac();
 
-        if bsize >= BlockSize::BLOCK_8X8 && bsize.is_sqr() {
+        if bsize.gte(BlockSize::BLOCK_8X8) && bsize.is_sqr() {
           cw.write_partition(
             wr,
             tile_bo,
@@ -1595,7 +1595,7 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
 
   debug_assert!(subsize != BlockSize::BLOCK_INVALID);
 
-  let cost = if bsize >= BlockSize::BLOCK_8X8 {
+  let cost = if bsize.gte(BlockSize::BLOCK_8X8) {
     let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
     let tell = w.tell_frac();
     cw.write_partition(w, tile_bo, partition, bsize);
@@ -1663,7 +1663,7 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
       return None;
     }
 
-    if subsize >= BlockSize::BLOCK_8X8 && subsize.is_sqr() {
+    if subsize.gte(BlockSize::BLOCK_8X8) && subsize.is_sqr() {
       let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
       cw.write_partition(w, offset, PartitionType::PARTITION_NONE, subsize);
     }
@@ -1711,16 +1711,18 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
     let mut child_modes = ArrayVec::<[_; 4]>::new();
 
     let cost = match partition {
-      PARTITION_NONE if bsize <= BlockSize::BLOCK_64X64 => rdo_partition_none(
-        fi,
-        ts,
-        cw,
-        bsize,
-        tile_bo,
-        pmv_idx,
-        inter_cfg,
-        &mut child_modes,
-      ),
+      PARTITION_NONE if bsize.lte(BlockSize::BLOCK_64X64) => {
+        rdo_partition_none(
+          fi,
+          ts,
+          cw,
+          bsize,
+          tile_bo,
+          pmv_idx,
+          inter_cfg,
+          &mut child_modes,
+        )
+      }
       PARTITION_SPLIT | PARTITION_HORZ | PARTITION_VERT => {
         rdo_partition_simple(
           fi,

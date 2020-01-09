@@ -335,6 +335,10 @@ impl BlockSize {
       || (self.width() == other.width() && self.height() == other.height())
   }
 
+  pub fn lte(self, other: BlockSize) -> bool {
+    !self.greater_than(other)
+  }
+
   pub fn subsize(self, partition: PartitionType) -> BlockSize {
     use PartitionType::*;
 

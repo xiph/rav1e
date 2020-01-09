@@ -1649,7 +1649,7 @@ impl<'a> BlockContext<'a> {
     &mut self, bo: TileBlockOffset, bsize: BlockSize, xdec: usize, ydec: usize,
   ) {
     const num_planes: usize = 3;
-    let nplanes = if bsize >= BLOCK_8X8 {
+    let nplanes = if bsize.gte(BLOCK_8X8) {
       3
     } else {
       1 + (num_planes - 1) * has_chroma(bo, bsize, xdec, ydec) as usize
@@ -2059,7 +2059,7 @@ impl<'a> ContextWriter<'a> {
     bsize: BlockSize,
   ) {
     debug_assert!(bsize.is_sqr());
-    assert!(bsize >= BlockSize::BLOCK_8X8);
+    assert!(bsize.gte(BlockSize::BLOCK_8X8));
     let hbs = bsize.width_mi() / 2;
     let has_cols = (bo.0.x + hbs) < self.bc.blocks.cols();
     let has_rows = (bo.0.y + hbs) < self.bc.blocks.rows();
@@ -2082,7 +2082,7 @@ impl<'a> ContextWriter<'a> {
         p == PartitionType::PARTITION_SPLIT
           || p == PartitionType::PARTITION_HORZ
       );
-      assert!(bsize > BlockSize::BLOCK_8X8);
+      assert!(bsize.greater_than(BlockSize::BLOCK_8X8));
       let mut cdf = [0u16; 2];
       ContextWriter::partition_gather_vert_alike(
         &mut cdf,
@@ -2095,7 +2095,7 @@ impl<'a> ContextWriter<'a> {
         p == PartitionType::PARTITION_SPLIT
           || p == PartitionType::PARTITION_VERT
       );
-      assert!(bsize > BlockSize::BLOCK_8X8);
+      assert!(bsize.greater_than(BlockSize::BLOCK_8X8));
       let mut cdf = [0u16; 2];
       ContextWriter::partition_gather_horz_alike(
         &mut cdf,

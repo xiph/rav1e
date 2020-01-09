@@ -1698,7 +1698,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
   }
 
   if !is_inter {
-    if luma_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
+    if luma_mode.is_directional() && bsize.gte(BlockSize::BLOCK_8X8) {
       cw.write_angle_delta(w, angle_delta.y, luma_mode);
     }
     if has_chroma(tile_bo, bsize, xdec, ydec) {
@@ -1707,7 +1707,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
         assert!(bsize.cfl_allowed());
         cw.write_cfl_alphas(w, cfl);
       }
-      if chroma_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
+      if chroma_mode.is_directional() && bsize.gte(BlockSize::BLOCK_8X8) {
         cw.write_angle_delta(w, angle_delta.uv, chroma_mode);
       }
     }
@@ -2530,7 +2530,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       // FIXME: sub-8x8 inter blocks not supported for non-4:2:0 sampling
       !fi.frame_type.has_inter()
         || fi.config.chroma_sampling == ChromaSampling::Cs420
-        || bsize > BlockSize::BLOCK_8X8
+        || bsize.greater_than(BlockSize::BLOCK_8X8)
     )
   {
     debug_assert!(bsize.is_sqr());
