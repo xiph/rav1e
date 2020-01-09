@@ -22,7 +22,9 @@ use crate::me::*;
 use crate::partition::PartitionType::*;
 use crate::partition::RefType::*;
 use crate::partition::*;
-use crate::predict::{AngleDelta, IntraParam, PredictionMode};
+use crate::predict::{
+  AngleDelta, IntraEdgeFilterParameters, IntraParam, PredictionMode,
+};
 use crate::quantize::*;
 use crate::rate::bexp64;
 use crate::rate::q57;
@@ -131,7 +133,7 @@ pub struct Sequence {
   pub still_picture: bool, // Video is a single frame still picture
   pub reduced_still_picture_hdr: bool, // Use reduced header for still picture
   pub enable_filter_intra: bool, // enables/disables filter_intra
-  pub enable_intra_edge_filter: bool, // enables/disables corner/edge/upsampling
+  pub enable_intra_edge_filter: bool, // enables/disables corner/edge filtering and upsampling
   pub enable_interintra_compound: bool, // enables/disables interintra_compound
   pub enable_masked_compound: bool,   // enables/disables masked compound
   pub enable_dual_filter: bool,       // 0 - disable dual interpolation filter
@@ -221,8 +223,7 @@ impl Sequence {
       still_picture: config.still_picture,
       reduced_still_picture_hdr: false, // FIXME: config.still_picture,
       enable_filter_intra: false,
-      // FIXME: incompatible with smooth prediction modes
-      enable_intra_edge_filter: false,
+      enable_intra_edge_filter: false, // FIXME: does not work with asm
       enable_interintra_compound: false,
       enable_masked_compound: false,
       enable_dual_filter: false,
@@ -1150,6 +1151,81 @@ pub fn encode_tx_block<T: Pixel>(
     "mode.is_intra()={:#?}, plane={:#?}, tx_size.block_size()={:#?}, plane_bsize={:#?}, need_recon_pixel={:#?}",
     mode.is_intra(), p, tx_size.block_size(), plane_bsize, need_recon_pixel);
 
+  let ief_params = if fi.sequence.enable_intra_edge_filter {
+    let (bo_x, bo_y) = (tile_partition_bo.0.x, tile_partition_bo.0.y);
+    let above_block_info = if p == 0 {
+      if bo_y == 0 {
+        None
+      } else {
+        Some(ts.coded_block_info[bo_y - 1][bo_x])
+      }
+    } else {
+      let (mut bo_x_uv, mut bo_y_uv) = (bo_x, bo_y);
+      if bo_x & 1 == 0 {
+        bo_x_uv += 1
+      };
+      if bo_y & 1 == 1 {
+        bo_y_uv -= 1
+      };
+      if bo_y_uv == 0 {
+        None
+      } else {
+        Some(ts.coded_block_info[bo_y_uv - 1][bo_x_uv])
+      }
+    };
+    let left_block_info = if p == 0 {
+      if bo_x == 0 {
+        None
+      } else {
+        Some(ts.coded_block_info[bo_y][bo_x - 1])
+      }
+    } else {
+      let (mut bo_x_uv, mut bo_y_uv) = (bo_x, bo_y);
+      if bo_x & 1 == 1 {
+        bo_x_uv -= 1
+      };
+      if bo_y & 1 == 0 {
+        bo_y_uv += 1
+      };
+      if bo_x_uv == 0 {
+        None
+      } else {
+        Some(ts.coded_block_info[bo_y_uv][bo_x_uv - 1])
+      }
+    };
+
+    IntraEdgeFilterParameters {
+      plane: p,
+      above_mode: match above_block_info {
+        Some(bi) => match p {
+          0 => bi.luma_mode,
+          _ => bi.chroma_mode,
+        }
+        .into(),
+        None => None,
+      },
+      left_mode: match left_block_info {
+        Some(bi) => match p {
+          0 => bi.luma_mode,
+          _ => bi.chroma_mode,
+        }
+        .into(),
+        None => None,
+      },
+      above_ref_frame_types: match above_block_info {
+        Some(bi) => Some(bi.reference_types),
+        None => None,
+      },
+      left_ref_frame_types: match left_block_info {
+        Some(bi) => Some(bi.reference_types),
+        None => None,
+      },
+    }
+    .into()
+  } else {
+    None
+  };
+
   if mode.is_intra() {
     let bit_depth = fi.sequence.bit_depth;
     let edge_buf = get_intra_edges(
@@ -1170,7 +1246,7 @@ pub fn encode_tx_block<T: Pixel>(
       bit_depth,
       ac,
       pred_intra_param,
-      fi.sequence.enable_intra_edge_filter,
+      ief_params,
       &edge_buf,
       fi.cpu_feature_level,
     );
@@ -1751,6 +1827,19 @@ pub fn encode_block_post_cdef<T: Pixel>(
     ts.enc_stats.chroma_pred_mode_counts[chroma_mode as usize] += pixels;
     if skip {
       ts.enc_stats.skip_block_count += pixels;
+    }
+  }
+
+  if fi.sequence.enable_intra_edge_filter {
+    for y in 0..bsize.height_mi() {
+      for x in 0..bsize.width_mi() {
+        ts.coded_block_info[tile_bo.0.y + y][tile_bo.0.x + x].luma_mode =
+          luma_mode;
+        ts.coded_block_info[tile_bo.0.y + y][tile_bo.0.x + x].chroma_mode =
+          chroma_mode;
+        ts.coded_block_info[tile_bo.0.y + y][tile_bo.0.x + x]
+          .reference_types = ref_frames;
+      }
     }
   }
 

@@ -87,7 +87,7 @@ pub(crate) fn estimate_intra_costs<T: Pixel>(
         bit_depth,
         &[], // Not used by DC_PRED
         IntraParam::None,
-        false, // Not used by DC_PRED
+        None, // Not used by DC_PRED
         &edge_buf,
         cpu_feature_level,
       );

@@ -155,7 +155,7 @@ pub fn intra_bench<T: Pixel>(
       bitdepth,
       &ac,
       angle,
-      false,
+      None,
       &edge_buf,
       cpu,
     );
