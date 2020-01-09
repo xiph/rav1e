@@ -546,8 +546,8 @@ pub fn get_intra_edges<T: Pixel>(
       mode = match mode {
         PredictionMode::PAETH_PRED => match (x, y) {
           (0, 0) => PredictionMode::DC_PRED,
-          (_, 0) => PredictionMode::H_PRED,
           (0, _) => PredictionMode::V_PRED,
+          (_, 0) => PredictionMode::H_PRED,
           _ => PredictionMode::PAETH_PRED,
         },
         _ => mode,
@@ -559,12 +559,12 @@ pub fn get_intra_edges<T: Pixel>(
       needs_left = (!dc_or_cfl || x != 0)
         && !(mode == PredictionMode::D45_PRED
           || mode == PredictionMode::D67_PRED);
-      needs_topleft = mode == PredictionMode::PAETH_PRED
+      needs_topleft = mode == PredictionMode::V_PRED
         || mode == PredictionMode::H_PRED
-        || mode == PredictionMode::V_PRED
-        || mode == PredictionMode::D113_PRED
         || mode == PredictionMode::D135_PRED
-        || mode == PredictionMode::D157_PRED;
+        || mode == PredictionMode::D113_PRED
+        || mode == PredictionMode::D157_PRED
+        || mode == PredictionMode::PAETH_PRED;
       needs_top = !dc_or_cfl || y != 0;
       needs_topright = mode == PredictionMode::V_PRED
         || mode == PredictionMode::D45_PRED

@@ -39,21 +39,21 @@ decl_angular_ipred_fn! {
   rav1e_ipred_dc_left_ssse3,
   rav1e_ipred_dc_top_avx2,
   rav1e_ipred_dc_top_ssse3,
-  rav1e_ipred_h_avx2,
-  rav1e_ipred_h_ssse3,
   rav1e_ipred_v_avx2,
   rav1e_ipred_v_ssse3,
-  rav1e_ipred_paeth_avx2,
-  rav1e_ipred_paeth_ssse3,
-  rav1e_ipred_smooth_avx2,
-  rav1e_ipred_smooth_ssse3,
-  rav1e_ipred_smooth_h_avx2,
-  rav1e_ipred_smooth_h_ssse3,
-  rav1e_ipred_smooth_v_avx2,
-  rav1e_ipred_smooth_v_ssse3,
+  rav1e_ipred_h_avx2,
+  rav1e_ipred_h_ssse3,
   rav1e_ipred_z1_avx2,
   rav1e_ipred_z2_avx2,
-  rav1e_ipred_z3_avx2
+  rav1e_ipred_z3_avx2,
+  rav1e_ipred_smooth_avx2,
+  rav1e_ipred_smooth_ssse3,
+  rav1e_ipred_smooth_v_avx2,
+  rav1e_ipred_smooth_v_ssse3,
+  rav1e_ipred_smooth_h_avx2,
+  rav1e_ipred_smooth_h_ssse3,
+  rav1e_ipred_paeth_avx2,
+  rav1e_ipred_paeth_ssse3
 }
 
 macro_rules! decl_cfl_pred_fn {
@@ -117,6 +117,40 @@ pub fn dispatch_predict_intra<T: Pixel>(
             PredictionVariant::BOTH => rav1e_ipred_dc_avx2,
           })(dst_ptr, stride, edge_ptr, w, h, angle);
         }
+        PredictionMode::V_PRED if angle == 90 => {
+          rav1e_ipred_v_avx2(dst_ptr, stride, edge_ptr, w, h, angle);
+        }
+        PredictionMode::H_PRED if angle == 180 => {
+          rav1e_ipred_h_avx2(dst_ptr, stride, edge_ptr, w, h, angle);
+        }
+        PredictionMode::V_PRED
+        | PredictionMode::H_PRED
+        | PredictionMode::D45_PRED
+        | PredictionMode::D135_PRED
+        | PredictionMode::D113_PRED
+        | PredictionMode::D157_PRED
+        | PredictionMode::D203_PRED
+        | PredictionMode::D67_PRED => {
+          (if angle <= 90 {
+            rav1e_ipred_z1_avx2
+          } else if angle < 180 {
+            rav1e_ipred_z2_avx2
+          } else {
+            rav1e_ipred_z3_avx2
+          })(dst_ptr, stride, edge_ptr, w, h, angle);
+        }
+        PredictionMode::SMOOTH_PRED => {
+          rav1e_ipred_smooth_avx2(dst_ptr, stride, edge_ptr, w, h, angle);
+        }
+        PredictionMode::SMOOTH_V_PRED => {
+          rav1e_ipred_smooth_v_avx2(dst_ptr, stride, edge_ptr, w, h, angle);
+        }
+        PredictionMode::SMOOTH_H_PRED => {
+          rav1e_ipred_smooth_h_avx2(dst_ptr, stride, edge_ptr, w, h, angle);
+        }
+        PredictionMode::PAETH_PRED => {
+          rav1e_ipred_paeth_avx2(dst_ptr, stride, edge_ptr, w, h, angle);
+        }
         PredictionMode::UV_CFL_PRED => {
           let ac_ptr = ac.as_ptr() as *const _;
           (match variant {
@@ -125,40 +159,6 @@ pub fn dispatch_predict_intra<T: Pixel>(
             PredictionVariant::TOP => rav1e_ipred_cfl_top_avx2,
             PredictionVariant::BOTH => rav1e_ipred_cfl_avx2,
           })(dst_ptr, stride, edge_ptr, w, h, ac_ptr, angle);
-        }
-        PredictionMode::H_PRED if angle == 180 => {
-          rav1e_ipred_h_avx2(dst_ptr, stride, edge_ptr, w, h, angle);
-        }
-        PredictionMode::V_PRED if angle == 90 => {
-          rav1e_ipred_v_avx2(dst_ptr, stride, edge_ptr, w, h, angle);
-        }
-        PredictionMode::PAETH_PRED => {
-          rav1e_ipred_paeth_avx2(dst_ptr, stride, edge_ptr, w, h, angle);
-        }
-        PredictionMode::SMOOTH_PRED => {
-          rav1e_ipred_smooth_avx2(dst_ptr, stride, edge_ptr, w, h, angle);
-        }
-        PredictionMode::SMOOTH_H_PRED => {
-          rav1e_ipred_smooth_h_avx2(dst_ptr, stride, edge_ptr, w, h, angle);
-        }
-        PredictionMode::SMOOTH_V_PRED => {
-          rav1e_ipred_smooth_v_avx2(dst_ptr, stride, edge_ptr, w, h, angle);
-        }
-        PredictionMode::H_PRED
-        | PredictionMode::V_PRED
-        | PredictionMode::D45_PRED
-        | PredictionMode::D67_PRED
-        | PredictionMode::D113_PRED
-        | PredictionMode::D135_PRED
-        | PredictionMode::D157_PRED
-        | PredictionMode::D203_PRED => {
-          (if angle <= 90 {
-            rav1e_ipred_z1_avx2
-          } else if angle < 180 {
-            rav1e_ipred_z2_avx2
-          } else {
-            rav1e_ipred_z3_avx2
-          })(dst_ptr, stride, edge_ptr, w, h, angle);
         }
         _ => call_native(dst),
       }
@@ -172,6 +172,24 @@ pub fn dispatch_predict_intra<T: Pixel>(
             PredictionVariant::BOTH => rav1e_ipred_dc_ssse3,
           })(dst_ptr, stride, edge_ptr, w, h, angle);
         }
+        PredictionMode::V_PRED if angle == 90 => {
+          rav1e_ipred_v_ssse3(dst_ptr, stride, edge_ptr, w, h, angle);
+        }
+        PredictionMode::H_PRED if angle == 180 => {
+          rav1e_ipred_h_ssse3(dst_ptr, stride, edge_ptr, w, h, angle);
+        }
+        PredictionMode::SMOOTH_PRED => {
+          rav1e_ipred_smooth_ssse3(dst_ptr, stride, edge_ptr, w, h, angle);
+        }
+        PredictionMode::SMOOTH_V_PRED => {
+          rav1e_ipred_smooth_v_ssse3(dst_ptr, stride, edge_ptr, w, h, angle);
+        }
+        PredictionMode::SMOOTH_H_PRED => {
+          rav1e_ipred_smooth_h_ssse3(dst_ptr, stride, edge_ptr, w, h, angle);
+        }
+        PredictionMode::PAETH_PRED => {
+          rav1e_ipred_paeth_ssse3(dst_ptr, stride, edge_ptr, w, h, angle);
+        }
         PredictionMode::UV_CFL_PRED => {
           let ac_ptr = ac.as_ptr() as *const _;
           (match variant {
@@ -180,24 +198,6 @@ pub fn dispatch_predict_intra<T: Pixel>(
             PredictionVariant::TOP => rav1e_ipred_cfl_top_ssse3,
             PredictionVariant::BOTH => rav1e_ipred_cfl_ssse3,
           })(dst_ptr, stride, edge_ptr, w, h, ac_ptr, angle);
-        }
-        PredictionMode::H_PRED if angle == 180 => {
-          rav1e_ipred_h_ssse3(dst_ptr, stride, edge_ptr, w, h, angle);
-        }
-        PredictionMode::V_PRED if angle == 90 => {
-          rav1e_ipred_v_ssse3(dst_ptr, stride, edge_ptr, w, h, angle);
-        }
-        PredictionMode::PAETH_PRED => {
-          rav1e_ipred_paeth_ssse3(dst_ptr, stride, edge_ptr, w, h, angle);
-        }
-        PredictionMode::SMOOTH_PRED => {
-          rav1e_ipred_smooth_ssse3(dst_ptr, stride, edge_ptr, w, h, angle);
-        }
-        PredictionMode::SMOOTH_H_PRED => {
-          rav1e_ipred_smooth_h_ssse3(dst_ptr, stride, edge_ptr, w, h, angle);
-        }
-        PredictionMode::SMOOTH_V_PRED => {
-          rav1e_ipred_smooth_v_ssse3(dst_ptr, stride, edge_ptr, w, h, angle);
         }
         _ => call_native(dst),
       }
@@ -234,17 +234,19 @@ mod test {
       (PredictionMode::DC_PRED, PredictionVariant::NONE),
       (PredictionMode::V_PRED, PredictionVariant::BOTH),
       (PredictionMode::H_PRED, PredictionVariant::BOTH),
-      (PredictionMode::PAETH_PRED, PredictionVariant::BOTH),
-      (PredictionMode::SMOOTH_PRED, PredictionVariant::BOTH),
-      (PredictionMode::SMOOTH_H_PRED, PredictionVariant::BOTH),
-      (PredictionMode::SMOOTH_V_PRED, PredictionVariant::BOTH),
       (PredictionMode::D45_PRED, PredictionVariant::BOTH),
       (PredictionMode::D135_PRED, PredictionVariant::BOTH),
       (PredictionMode::D203_PRED, PredictionVariant::BOTH),
+      (PredictionMode::SMOOTH_PRED, PredictionVariant::BOTH),
+      (PredictionMode::SMOOTH_V_PRED, PredictionVariant::BOTH),
+      (PredictionMode::SMOOTH_H_PRED, PredictionVariant::BOTH),
+      (PredictionMode::PAETH_PRED, PredictionVariant::BOTH),
     ]
     .iter()
     {
       let angles = match mode {
+        PredictionMode::V_PRED => [81, 84, 87, 90, 93, 96, 99].iter(),
+        PredictionMode::H_PRED => [171, 174, 177, 180, 183, 186, 189].iter(),
         PredictionMode::D45_PRED => [
           3, 6, 9, 14, 17, 20, 23, 26, 29, 32, 36, 39, 42, 45, 48, 51, 54, 58,
           61, 64, 67, 70, 73, 76,
@@ -260,8 +262,6 @@ mod test {
           234, 238, 241, 244, 247, 250, 253, 256, 261, 264, 267,
         ]
         .iter(),
-        PredictionMode::H_PRED => [171, 174, 177, 180, 183, 186, 189].iter(),
-        PredictionMode::V_PRED => [81, 84, 87, 90, 93, 96, 99].iter(),
         _ => [0].iter(),
       };
       for angle in angles {

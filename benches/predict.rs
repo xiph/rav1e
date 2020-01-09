@@ -64,17 +64,21 @@ pub fn pred_bench(c: &mut Criterion) {
   bench_pred_fn(c, "intra_dc_top_4x4", |b: &mut Bencher| {
     intra_bench::<u16>(b, PredictionMode::DC_PRED, PredictionVariant::TOP)
   });
-  bench_pred_fn(c, "intra_h_4x4", |b: &mut Bencher| {
-    intra_bench::<u16>(b, PredictionMode::H_PRED, PredictionVariant::BOTH)
-  });
   bench_pred_fn(c, "intra_v_4x4", |b: &mut Bencher| {
     intra_bench::<u16>(b, PredictionMode::V_PRED, PredictionVariant::BOTH)
   });
-  bench_pred_fn(c, "intra_paeth_4x4", |b: &mut Bencher| {
-    intra_bench::<u16>(b, PredictionMode::PAETH_PRED, PredictionVariant::BOTH)
+  bench_pred_fn(c, "intra_h_4x4", |b: &mut Bencher| {
+    intra_bench::<u16>(b, PredictionMode::H_PRED, PredictionVariant::BOTH)
   });
   bench_pred_fn(c, "intra_smooth_4x4", |b: &mut Bencher| {
     intra_bench::<u16>(b, PredictionMode::SMOOTH_PRED, PredictionVariant::BOTH)
+  });
+  bench_pred_fn(c, "intra_smooth_v_4x4", |b: &mut Bencher| {
+    intra_bench::<u16>(
+      b,
+      PredictionMode::SMOOTH_V_PRED,
+      PredictionVariant::BOTH,
+    )
   });
   bench_pred_fn(c, "intra_smooth_h_4x4", |b: &mut Bencher| {
     intra_bench::<u16>(
@@ -83,12 +87,8 @@ pub fn pred_bench(c: &mut Criterion) {
       PredictionVariant::BOTH,
     )
   });
-  bench_pred_fn(c, "intra_smooth_v_4x4", |b: &mut Bencher| {
-    intra_bench::<u16>(
-      b,
-      PredictionMode::SMOOTH_V_PRED,
-      PredictionVariant::BOTH,
-    )
+  bench_pred_fn(c, "intra_paeth_4x4", |b: &mut Bencher| {
+    intra_bench::<u16>(b, PredictionMode::PAETH_PRED, PredictionVariant::BOTH)
   });
   bench_pred_fn(c, "intra_dc_4x4_u8", |b: &mut Bencher| {
     intra_bench::<u8>(b, PredictionMode::DC_PRED, PredictionVariant::BOTH)
@@ -102,17 +102,21 @@ pub fn pred_bench(c: &mut Criterion) {
   bench_pred_fn(c, "intra_dc_top_4x4_u8", |b: &mut Bencher| {
     intra_bench::<u8>(b, PredictionMode::DC_PRED, PredictionVariant::TOP)
   });
-  bench_pred_fn(c, "intra_h_4x4_u8", |b: &mut Bencher| {
-    intra_bench::<u8>(b, PredictionMode::H_PRED, PredictionVariant::BOTH)
-  });
   bench_pred_fn(c, "intra_v_4x4_u8", |b: &mut Bencher| {
     intra_bench::<u8>(b, PredictionMode::V_PRED, PredictionVariant::BOTH)
   });
-  bench_pred_fn(c, "intra_paeth_4x4_u8", |b: &mut Bencher| {
-    intra_bench::<u8>(b, PredictionMode::PAETH_PRED, PredictionVariant::BOTH)
+  bench_pred_fn(c, "intra_h_4x4_u8", |b: &mut Bencher| {
+    intra_bench::<u8>(b, PredictionMode::H_PRED, PredictionVariant::BOTH)
   });
   bench_pred_fn(c, "intra_smooth_4x4_u8", |b: &mut Bencher| {
     intra_bench::<u8>(b, PredictionMode::SMOOTH_PRED, PredictionVariant::BOTH)
+  });
+  bench_pred_fn(c, "intra_smooth_v_4x4_u8", |b: &mut Bencher| {
+    intra_bench::<u8>(
+      b,
+      PredictionMode::SMOOTH_V_PRED,
+      PredictionVariant::BOTH,
+    )
   });
   bench_pred_fn(c, "intra_smooth_h_4x4_u8", |b: &mut Bencher| {
     intra_bench::<u8>(
@@ -121,12 +125,8 @@ pub fn pred_bench(c: &mut Criterion) {
       PredictionVariant::BOTH,
     )
   });
-  bench_pred_fn(c, "intra_smooth_v_4x4_u8", |b: &mut Bencher| {
-    intra_bench::<u8>(
-      b,
-      PredictionMode::SMOOTH_V_PRED,
-      PredictionVariant::BOTH,
-    )
+  bench_pred_fn(c, "intra_paeth_4x4_u8", |b: &mut Bencher| {
+    intra_bench::<u8>(b, PredictionMode::PAETH_PRED, PredictionVariant::BOTH)
   });
 }
 
@@ -142,8 +142,8 @@ pub fn intra_bench<T: Pixel>(
     PixelType::U16 => 10,
   };
   let angle = match mode {
-    PredictionMode::H_PRED => 180,
     PredictionMode::V_PRED => 90,
+    PredictionMode::H_PRED => 180,
     _ => 0,
   };
   b.iter(|| {

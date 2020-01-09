@@ -35,12 +35,12 @@ decl_angular_ipred_fn! {
   rav1e_ipred_dc_128_neon,
   rav1e_ipred_dc_left_neon,
   rav1e_ipred_dc_top_neon,
-  rav1e_ipred_h_neon,
   rav1e_ipred_v_neon,
-  rav1e_ipred_paeth_neon,
+  rav1e_ipred_h_neon,
   rav1e_ipred_smooth_neon,
+  rav1e_ipred_smooth_v_neon,
   rav1e_ipred_smooth_h_neon,
-  rav1e_ipred_smooth_v_neon
+  rav1e_ipred_paeth_neon
 }
 
 macro_rules! decl_cfl_pred_fn {
@@ -100,6 +100,24 @@ pub fn dispatch_predict_intra<T: Pixel>(
             PredictionVariant::BOTH => rav1e_ipred_dc_neon,
           })(dst_ptr, stride, edge_ptr, w, h, angle);
         }
+        PredictionMode::V_PRED if angle == 90 => {
+          rav1e_ipred_v_neon(dst_ptr, stride, edge_ptr, w, h, angle);
+        }
+        PredictionMode::H_PRED if angle == 180 => {
+          rav1e_ipred_h_neon(dst_ptr, stride, edge_ptr, w, h, angle);
+        }
+        PredictionMode::SMOOTH_PRED => {
+          rav1e_ipred_smooth_neon(dst_ptr, stride, edge_ptr, w, h, angle);
+        }
+        PredictionMode::SMOOTH_V_PRED => {
+          rav1e_ipred_smooth_v_neon(dst_ptr, stride, edge_ptr, w, h, angle);
+        }
+        PredictionMode::SMOOTH_H_PRED => {
+          rav1e_ipred_smooth_h_neon(dst_ptr, stride, edge_ptr, w, h, angle);
+        }
+        PredictionMode::PAETH_PRED => {
+          rav1e_ipred_paeth_neon(dst_ptr, stride, edge_ptr, w, h, angle);
+        }
         PredictionMode::UV_CFL_PRED => {
           let ac_ptr = ac.as_ptr() as *const _;
           (match variant {
@@ -108,24 +126,6 @@ pub fn dispatch_predict_intra<T: Pixel>(
             PredictionVariant::TOP => rav1e_ipred_cfl_top_neon,
             PredictionVariant::BOTH => rav1e_ipred_cfl_neon,
           })(dst_ptr, stride, edge_ptr, w, h, ac_ptr, angle);
-        }
-        PredictionMode::H_PRED if angle == 180 => {
-          rav1e_ipred_h_neon(dst_ptr, stride, edge_ptr, w, h, angle);
-        }
-        PredictionMode::V_PRED if angle == 90 => {
-          rav1e_ipred_v_neon(dst_ptr, stride, edge_ptr, w, h, angle);
-        }
-        PredictionMode::PAETH_PRED => {
-          rav1e_ipred_paeth_neon(dst_ptr, stride, edge_ptr, w, h, angle);
-        }
-        PredictionMode::SMOOTH_PRED => {
-          rav1e_ipred_smooth_neon(dst_ptr, stride, edge_ptr, w, h, angle);
-        }
-        PredictionMode::SMOOTH_H_PRED => {
-          rav1e_ipred_smooth_h_neon(dst_ptr, stride, edge_ptr, w, h, angle);
-        }
-        PredictionMode::SMOOTH_V_PRED => {
-          rav1e_ipred_smooth_v_neon(dst_ptr, stride, edge_ptr, w, h, angle);
         }
         _ => call_native(dst),
       }
