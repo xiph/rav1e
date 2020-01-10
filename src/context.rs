@@ -1381,7 +1381,7 @@ impl TileBlockOffset {
   }
 }
 
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct Block {
   pub mode: PredictionMode,
   pub partition: PartitionType,
