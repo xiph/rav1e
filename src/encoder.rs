@@ -367,29 +367,10 @@ impl<T: Pixel> FrameState<T> {
     let rs = RestorationState::new(fi, &frame);
     let luma_width = frame.planes[0].cfg.width;
     let luma_height = frame.planes[0].cfg.height;
-    let luma_padding_x = frame.planes[0].cfg.xpad;
-    let luma_padding_y = frame.planes[0].cfg.ypad;
 
-    let mut hres = Plane::new(
-      luma_width / 2,
-      luma_height / 2,
-      1,
-      1,
-      luma_padding_x / 2,
-      luma_padding_y / 2,
-    );
-    hres.downsample_from(&frame.planes[0]);
-    hres.pad(fi.width, fi.height);
-    let mut qres = Plane::new(
-      luma_width / 4,
-      luma_height / 4,
-      2,
-      2,
-      luma_padding_x / 4,
-      luma_padding_y / 4,
-    );
-    qres.downsample_from(&hres);
-    qres.pad(fi.width, fi.height);
+    //let mut hres = Plane::downsample_from(&frame.planes[0], fi.width, fi.height);
+    //let mut qres = Plane::downsample_from(&hres, fi.width, fi.height);
+    let (hres, qres) = Plane::downsample_from_2x(&frame.planes[0], fi.width, fi.height);
 
     Self {
       sb_size_log2: fi.sb_size_log2(),
