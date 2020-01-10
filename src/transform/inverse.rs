@@ -1613,22 +1613,27 @@ pub(crate) mod native {
     let txfm_fn = INV_TXFM_FNS[tx_types_1d.1 as usize][width.ilog() - 3];
     for (r, buffer_slice) in
       // 64 point transforms only signal 32 coeffs. We only take chunks of 32
-      //   and skip over the last 32 transforms here.
+    //   and skip over the last 32 transforms here.
       (0..height.min(32)).zip(buffer.chunks_mut(width))
+    {
+      // For 64 point transforms, rely on the last 32 elements being
+      //   initialized to zero for filling out the missing coeffs.
+      let mut temp_in: [i32; 64] = [0; 64];
+      for (raw, clamped) in input[r..]
+        .iter()
+        .map(|a| i32::cast_from(*a))
+        .step_by(height.min(32))
+        .zip(temp_in.iter_mut())
       {
-        // For 64 point transforms, rely on the last 32 elements being
-        //   initialized to zero for filling out the missing coeffs.
-        let mut temp_in: [i32; 64] = [0; 64];
-        for (raw, clamped) in input[r..].iter().map(|a| i32::cast_from(*a)).step_by(height.min(32)).zip(temp_in.iter_mut()) {
-          let val = if rect_type.abs() == 1 {
-            round_shift(raw * INV_SQRT2, SQRT2_BITS)
-          } else {
-            raw
-          };
-          *clamped = clamp_value(val, range);
-        }
-        txfm_fn(&temp_in, buffer_slice, range);
+        let val = if rect_type.abs() == 1 {
+          round_shift(raw * INV_SQRT2, SQRT2_BITS)
+        } else {
+          raw
+        };
+        *clamped = clamp_value(val, range);
       }
+      txfm_fn(&temp_in, buffer_slice, range);
+    }
 
     // perform inv txfm on every col
     let range = cmp::max(bd + 6, 16);
