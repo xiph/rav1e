@@ -707,6 +707,54 @@ pub mod test {
   }
 
   #[test]
+  fn test_plane_downsample() {
+    #[rustfmt::skip]
+    let plane = Plane::<u8> {
+      data: PlaneData::from_slice(&[
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 1, 2, 3, 4, 0, 0,
+        0, 0, 8, 7, 6, 5, 0, 0,
+        0, 0, 9, 8, 7, 6, 0, 0,
+        0, 0, 2, 3, 4, 5, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+      ]),
+      cfg: PlaneConfig {
+        stride: 8,
+        alloc_height: 9,
+        width: 4,
+        height: 4,
+        xdec: 0,
+        ydec: 0,
+        xpad: 0,
+        ypad: 0,
+        xorigin: 2,
+        yorigin: 3,
+      },
+    };
+    let mut downsampled = Plane::<u8>::new(2, 2, 1, 1, 0, 0);
+    downsampled.downsample_from(&plane);
+    downsampled.pad(4, 4);
+
+    #[rustfmt::skip]
+    assert_eq!(
+      &[
+        5, 5, 5, 5, 5, 5, 5, 5,
+        5, 5, 5, 5, 5, 5, 5, 5,
+        5, 5, 5, 5, 5, 5, 5, 5,
+        5, 5, 5, 5, 5, 5, 5, 5,
+        6, 6, 6, 6, 6, 6, 6, 6,
+        6, 6, 6, 6, 6, 6, 6, 6,
+        6, 6, 6, 6, 6, 6, 6, 6,
+        6, 6, 6, 6, 6, 6, 6, 6,
+      ][..],
+      &downsampled.data[..]
+    );
+  }
+
+  #[test]
   fn test_plane_pad() {
     #[rustfmt::skip]
     let mut plane = Plane::<u8> {
