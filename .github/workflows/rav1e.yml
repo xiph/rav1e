@@ -49,6 +49,7 @@ jobs:
       matrix:
         conf:
          - 1.36.0-tests
+         - aom-tests
          - dav1d-tests
          - grcov-coveralls
          - bench
@@ -59,6 +60,8 @@ jobs:
         include:
          - conf: 1.36.0-tests
            toolchain: 1.36.0
+         - conf: aom-tests
+           toolchain: stable
          - conf: dav1d-tests
            toolchain: stable
          - conf: grcov-coveralls
@@ -104,6 +107,22 @@ jobs:
       run: |
         echo "$LINK/nasm_${NASM_VERSION}_amd64.deb" >> DEBS
         echo "$NASM_SHA256 nasm_${NASM_VERSION}_amd64.deb" >> CHECKSUMS
+    - name: Add aom
+      if: >
+        matrix.conf == '1.36.0-tests' || matrix.conf == 'aom-tests' ||
+        matrix.conf == 'grcov-coveralls'
+      env:
+        LINK: http://ppa.launchpad.net/jonathonf/ffmpeg-4/ubuntu/pool/main/a/aom
+        AOM_VERSION: 1.0.0.errata1-2ubuntu3~18.04.york0
+        AOM_DEV_SHA256: >-
+          ae037dfebb8da8b11fac15dff21f145d9bc16655f4ab0129b6bb10762f4ec62e
+        AOM_LIB_SHA256: >-
+          995a062b1dee9b90e748f5f2a16ef1e1c864a12a116593854358f0f77c954be2
+      run: |
+        echo "$LINK/libaom-dev_${AOM_VERSION}_amd64.deb" >> DEBS
+        echo "$LINK/libaom0_${AOM_VERSION}_amd64.deb" >> DEBS
+        echo "$AOM_DEV_SHA256 libaom-dev_${AOM_VERSION}_amd64.deb" >> CHECKSUMS
+        echo "$AOM_LIB_SHA256 libaom0_${AOM_VERSION}_amd64.deb" >> CHECKSUMS
     - name: Add dav1d
       if: >
         matrix.conf == '1.36.0-tests' || matrix.conf == 'dav1d-tests' ||
@@ -176,7 +195,13 @@ jobs:
       if: matrix.toolchain == '1.36.0' && matrix.conf == '1.36.0-tests'
       run: |
         cargo test --verbose \
-                   --features=decode_test_dav1d,quick_test,capi
+                   --features=decode_test,decode_test_dav1d,quick_test,capi
+    - name: Run aom tests
+      if: matrix.toolchain == 'stable' && matrix.conf == 'aom-tests'
+      run: |
+        cargo test --verbose --release \
+                   --features=decode_test \
+                   --color=always -- --color=always --ignored
     - name: Run dav1d tests
       if: matrix.toolchain == 'stable' && matrix.conf == 'dav1d-tests'
       run: |
@@ -220,7 +245,7 @@ jobs:
           -Zprofile -Ccodegen-units=1 -Clink-dead-code -Coverflow-checks=off
           -Zno-landing-pads
       run: |
-        cargo test --features=decode_test_dav1d,quick_test --verbose
+        cargo test --features=decode_test,decode_test_dav1d,quick_test --verbose
     - name: Run grcov
       if: matrix.conf == 'grcov-coveralls'
       id: coverage
