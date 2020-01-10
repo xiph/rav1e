@@ -258,6 +258,25 @@ impl<T: Pixel> Plane<T> {
     Plane { data, cfg }
   }
 
+  /// Allocates and returns an uninitialized plane.
+  unsafe fn new_uninitialized(
+    width: usize, height: usize, xdec: usize, ydec: usize, xpad: usize,
+    ypad: usize,
+  ) -> Self {
+    let cfg = PlaneConfig::new(
+      width,
+      height,
+      xdec,
+      ydec,
+      xpad,
+      ypad,
+      mem::size_of::<T>(),
+    );
+    let data = PlaneData::new_uninitialized(cfg.stride * cfg.alloc_height);
+
+    Plane { data, cfg }
+  }
+
   #[cfg(any(test, feature = "bench"))]
   pub fn wrap(data: Vec<T>, stride: usize) -> Self {
     let len = data.len();
@@ -411,19 +430,34 @@ impl<T: Pixel> Plane<T> {
     }
   }
 
-  pub fn downsample_from(&mut self, src: &Plane<T>) {
-    let width = self.cfg.width;
-    let height = self.cfg.height;
-    let xorigin = self.cfg.xorigin;
-    let yorigin = self.cfg.yorigin;
-    let stride = self.cfg.stride;
+  pub fn downsampled(
+    &self, frame_width: usize, frame_height: usize,
+  ) -> Plane<T> {
+    let src = self;
+    // unsafe: all pixels initialized in this function
+    let mut new = unsafe {
+      Plane::new_uninitialized(
+        src.cfg.width / 2,
+        src.cfg.height / 2,
+        src.cfg.xdec + 1,
+        src.cfg.ydec + 1,
+        src.cfg.xpad / 2,
+        src.cfg.ypad / 2,
+      )
+    };
+
+    let width = new.cfg.width;
+    let height = new.cfg.height;
+    let xorigin = new.cfg.xorigin;
+    let yorigin = new.cfg.yorigin;
+    let stride = new.cfg.stride;
 
     assert!(width * 2 == src.cfg.width);
     assert!(height * 2 == src.cfg.height);
 
     for row in 0..height {
       let base = (yorigin + row) * stride + xorigin;
-      let dst = &mut self.data[base..base + width];
+      let dst = &mut new.data[base..base + width];
 
       for col in 0..width {
         let mut sum = 0;
@@ -435,6 +469,8 @@ impl<T: Pixel> Plane<T> {
         dst[col] = T::cast_from(avg);
       }
     }
+    new.pad(frame_width, frame_height);
+    new
   }
 
   /// Iterates over the pixels in the plane, skipping the padding.
@@ -734,9 +770,7 @@ pub mod test {
         yorigin: 3,
       },
     };
-    let mut downsampled = Plane::<u8>::new(2, 2, 1, 1, 0, 0);
-    downsampled.downsample_from(&plane);
-    downsampled.pad(4, 4);
+    let downsampled = plane.downsampled(4, 4);
 
     #[rustfmt::skip]
     assert_eq!(
