@@ -2889,18 +2889,24 @@ fn encode_tile_group<T: Pixel>(
     deblock_filter_frame(fi, fs, &blocks);
   }
 
-  // Until the loop filters are pipelined, we'll need to keep
-  // around a copy of both the pre- and post-cdef frame.
-  let pre_cdef_frame = fs.rec.clone();
-
-  /* TODO: Don't apply if lossless */
-  let rec = Arc::make_mut(&mut fs.rec);
-  if fi.sequence.enable_cdef {
-    cdef_filter_frame(fi, rec, &blocks);
-  }
-  /* TODO: Don't apply if lossless */
   if fi.sequence.enable_restoration {
+    // Until the loop filters are pipelined, we'll need to keep
+    // around a copy of both the pre- and post-cdef frame.
+    let pre_cdef_frame = fs.rec.clone();
+
+    /* TODO: Don't apply if lossless */
+    let rec = Arc::make_mut(&mut fs.rec);
+    if fi.sequence.enable_cdef {
+      cdef_filter_frame(fi, rec, &blocks);
+    }
+    /* TODO: Don't apply if lossless */
     fs.restoration.lrf_filter_frame(rec, &pre_cdef_frame, &fi);
+  } else {
+    /* TODO: Don't apply if lossless */
+    let rec = Arc::make_mut(&mut fs.rec);
+    if fi.sequence.enable_cdef {
+      cdef_filter_frame(fi, rec, &blocks);
+    }
   }
 
   let (idx_max, max_len) = raw_tiles
