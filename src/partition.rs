@@ -114,9 +114,7 @@ pub enum PartitionType {
   PARTITION_INVALID,
 }
 
-#[derive(
-  Debug, Copy, Clone, PartialEq, PartialOrd, Ord, Eq, Serialize, Deserialize,
-)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BlockSize {
   BLOCK_4X4,
   BLOCK_4X8,
@@ -141,6 +139,21 @@ pub enum BlockSize {
   BLOCK_16X64,
   BLOCK_64X16,
   BLOCK_INVALID,
+}
+
+impl PartialOrd for BlockSize {
+  fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    use std::cmp::Ordering::{Equal, Greater, Less};
+    match (
+      self.width().cmp(&other.width()),
+      self.height().cmp(&other.height()),
+    ) {
+      (Greater, Less) | (Less, Greater) => None,
+      (Equal, Equal) => Some(Equal),
+      (Greater, _) | (_, Greater) => Some(Greater),
+      (Less, _) | (_, Less) => Some(Less),
+    }
+  }
 }
 
 impl BlockSize {
