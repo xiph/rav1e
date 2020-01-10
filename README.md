@@ -54,7 +54,7 @@ RUSTFLAGS="-C target-cpu=native" cargo build --release
 or
 
 ```
-RUSTFLAGS="-C target-features=+avx2,+fma" cargo build --release
+RUSTFLAGS="-C target-feature=+avx2,+fma" cargo build --release
 ```
 
 The resulting binary will not work on cpus that do not sport the same set of SIMD extensions enabled.
