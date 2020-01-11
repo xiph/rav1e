@@ -1592,12 +1592,16 @@ impl<'a> BlockContext<'a> {
     &mut self, plane: usize, bo: TileBlockOffset, tx_size: TxSize,
     xdec: usize, ydec: usize, value: u8,
   ) {
-    for bx in 0..tx_size.width_mi() {
-      self.above_coeff_context[plane][(bo.0.x >> xdec) + bx] = value;
+    for above in &mut self.above_coeff_context[plane][(bo.0.x >> xdec)..]
+      [..tx_size.width_mi()]
+    {
+      *above = value;
     }
     let bo_y = bo.y_in_sb();
-    for by in 0..tx_size.height_mi() {
-      self.left_coeff_context[plane][(bo_y >> ydec) + by] = value;
+    for left in &mut self.left_coeff_context[plane][(bo_y >> ydec)..]
+      [..tx_size.height_mi()]
+    {
+      *left = value;
     }
   }
 
