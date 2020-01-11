@@ -4119,11 +4119,11 @@ impl<'a> ContextWriter<'a> {
     // starting with the sign of DC (if applicable)
     for c in 0..eob {
       let v = coeffs[c];
-      let level = v.abs();
-      if level == T::cast_from(0) {
+      if v == T::cast_from(0) {
         continue;
       }
 
+      let level = v.abs();
       let sign = if v < T::cast_from(0) { 1 } else { 0 };
       if c == 0 {
         symbol_with_update!(
