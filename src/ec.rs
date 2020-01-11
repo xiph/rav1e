@@ -594,14 +594,7 @@ where
   /// 'level': passed in value to encode
   fn write_golomb(&mut self, level: u32) {
     let x = level + 1;
-    let mut i = x;
-    let mut length = 0;
-
-    while i != 0 {
-      i >>= 1;
-      length += 1;
-    }
-    debug_assert!(length > 0);
+    let length = 32 - x.leading_zeros();
 
     for _ in 0..length - 1 {
       self.bit(0);
