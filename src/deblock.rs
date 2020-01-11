@@ -19,6 +19,7 @@ use crate::quantize::*;
 use crate::util::Pixel;
 use crate::util::{clamp, ILog};
 use crate::DeblockState;
+use rayon::iter::*;
 use std::cmp;
 use std::sync::Arc;
 
@@ -1519,10 +1520,13 @@ fn sse_plane<T: Pixel>(
 pub fn deblock_filter_frame<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, blocks: &FrameBlocks,
 ) {
+  let deblock = &fs.deblock;
   let fs_rec = Arc::make_mut(&mut fs.rec);
-  for pli in 0..PLANES {
-    deblock_plane(fi, &fs.deblock, &mut fs_rec.planes[pli], pli, blocks);
-  }
+  (&mut fs_rec.planes).par_iter_mut().enumerate().for_each(
+    |(pli, mut plane)| {
+      deblock_plane(fi, deblock, &mut plane, pli, blocks);
+    },
+  );
 }
 
 fn sse_optimize<T: Pixel>(
