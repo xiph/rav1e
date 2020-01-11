@@ -3705,27 +3705,11 @@ impl<'a> ContextWriter<'a> {
   pub fn write_block_deblock_deltas(
     &mut self, w: &mut dyn Writer, bo: TileBlockOffset, multi: bool,
   ) {
-    let block = &self.bc.blocks[bo];
-    let deltas = if multi { FRAME_LF_COUNT + PLANES - 3 } else { 1 };
-    for i in 0..deltas {
-      let delta = block.deblock_deltas[i];
-      let abs: u32 = delta.abs() as u32;
+    fn write_block_delta(w: &mut dyn Writer, cdf: &mut [u16], delta: i8) {
+      let abs = delta.abs() as u32;
 
-      if multi {
-        symbol_with_update!(
-          self,
-          w,
-          cmp::min(abs, DELTA_LF_SMALL),
-          &mut self.fc.deblock_delta_multi_cdf[i]
-        );
-      } else {
-        symbol_with_update!(
-          self,
-          w,
-          cmp::min(abs, DELTA_LF_SMALL),
-          &mut self.fc.deblock_delta_cdf
-        );
-      };
+      w.symbol_with_update(cmp::min(abs, DELTA_LF_SMALL), cdf);
+
       if abs >= DELTA_LF_SMALL {
         let bits = msb(abs as i32 - 1) as u32;
         w.literal(3, bits - 1);
@@ -3734,6 +3718,21 @@ impl<'a> ContextWriter<'a> {
       if abs > 0 {
         w.bool(delta < 0, 16384);
       }
+    }
+
+    let block = &self.bc.blocks[bo];
+    if multi {
+      let deltas_count = FRAME_LF_COUNT + PLANES - 3;
+      let deltas = &block.deblock_deltas[..deltas_count];
+      let cdfs = &mut self.fc.deblock_delta_multi_cdf[..deltas_count];
+
+      for (&delta, cdf) in deltas.iter().zip(cdfs.iter_mut()) {
+        write_block_delta(w, cdf, delta);
+      }
+    } else {
+      let delta = block.deblock_deltas[0];
+      let cdf = &mut self.fc.deblock_delta_cdf;
+      write_block_delta(w, cdf, delta);
     }
   }
 
