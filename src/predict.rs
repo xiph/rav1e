@@ -133,9 +133,8 @@ impl PredictionMode {
   }
   pub fn predict_intra<T: Pixel>(
     self, tile_rect: TileRect, dst: &mut PlaneRegionMut<'_, T>,
-    tx_size: TxSize, bit_depth: usize, ac: &[i16], angle_delta: i8,
-    alpha: i16, edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>,
-    cpu: CpuFeatureLevel,
+    tx_size: TxSize, bit_depth: usize, ac: &[i16], intra_param: IntraParam,
+    edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>, cpu: CpuFeatureLevel,
   ) {
     assert!(self.is_intra());
     let &Rect { x: frame_x, y: frame_y, .. } = dst.rect();
@@ -145,6 +144,15 @@ impl PredictionMode {
     let y = frame_y as usize - tile_rect.y;
 
     let variant = PredictionVariant::new(x, y);
+
+    let alpha = match intra_param {
+      IntraParam::Alpha(val) => val,
+      _ => 0,
+    };
+    let angle_delta = match intra_param {
+      IntraParam::Angle_delta(val) => val,
+      _ => 0,
+    };
 
     let mode = match self {
       PredictionMode::PAETH_PRED => match variant {
@@ -346,6 +354,13 @@ pub enum FilterIntraMode {
   FILTER_D157_PRED,
   FILTER_PAETH_PRED,
   FILTER_INTRA_MODES,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum IntraParam {
+  Angle_delta(i8),
+  Alpha(i16),
+  None,
 }
 
 #[derive(Debug, Clone, Copy)]

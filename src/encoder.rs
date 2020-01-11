@@ -22,7 +22,7 @@ use crate::me::*;
 use crate::partition::PartitionType::*;
 use crate::partition::RefType::*;
 use crate::partition::*;
-use crate::predict::{AngleDelta, PredictionMode};
+use crate::predict::{AngleDelta, IntraParam, PredictionMode};
 use crate::quantize::*;
 use crate::rate::bexp64;
 use crate::rate::q57;
@@ -1143,8 +1143,7 @@ pub fn encode_tx_block<T: Pixel>(
   skip: bool,
   qidx: u8,
   ac: &[i16],
-  angle_delta: i8,
-  alpha: i16,
+  pred_intra_param: IntraParam,
   rdo_type: RDOType,
   need_recon_pixel: bool,
 ) -> (bool, ScaledDistortion) {
@@ -1182,8 +1181,7 @@ pub fn encode_tx_block<T: Pixel>(
       tx_size,
       bit_depth,
       &ac,
-      angle_delta,
-      alpha,
+      pred_intra_param,
       &edge_buf,
       fi.cpu_feature_level,
     );
@@ -1886,8 +1884,7 @@ pub fn write_tx_blocks<T: Pixel>(
         skip,
         qidx,
         &ac.array,
-        angle_delta.y,
-        0,
+        IntraParam::Angle_delta(angle_delta.y),
         rdo_type,
         need_recon_pixel,
       );
@@ -1971,8 +1968,11 @@ pub fn write_tx_blocks<T: Pixel>(
             skip,
             qidx,
             &ac.array,
-            angle_delta.uv,
-            alpha,
+            if chroma_mode.is_cfl() {
+              IntraParam::Alpha(alpha)
+            } else {
+              IntraParam::Angle_delta(angle_delta.uv)
+            },
             rdo_type,
             need_recon_pixel,
           );
@@ -2034,8 +2034,7 @@ pub fn write_tx_tree<T: Pixel>(
     skip,
     qidx,
     ac,
-    angle_delta_y,
-    0,
+    IntraParam::Angle_delta(angle_delta_y),
     rdo_type,
     need_recon_pixel,
   );
@@ -2109,8 +2108,7 @@ pub fn write_tx_tree<T: Pixel>(
             skip,
             qidx,
             ac,
-            angle_delta_y,
-            0,
+            IntraParam::Angle_delta(angle_delta_y),
             rdo_type,
             need_recon_pixel,
           );
