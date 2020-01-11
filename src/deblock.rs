@@ -16,6 +16,7 @@ use crate::hawktracer::*;
 use crate::partition::RefType::*;
 use crate::predict::PredictionMode::*;
 use crate::quantize::*;
+use crate::tiling::{Area, PlaneRegion, PlaneRegionMut};
 use crate::util::Pixel;
 use crate::util::{clamp, ILog};
 use crate::DeblockState;
@@ -317,7 +318,7 @@ const fn filter_wide14_12(
 
 #[inline]
 fn copy_horizontal<T: Pixel>(
-  dst: &mut PlaneMutSlice<'_, T>, x: usize, y: usize, src: &[i32],
+  dst: &mut PlaneRegionMut<'_, T>, x: usize, y: usize, src: &[i32],
 ) {
   let row = &mut dst[y][x..];
   for (dst, src) in row.iter_mut().take(src.len()).zip(src) {
@@ -327,7 +328,7 @@ fn copy_horizontal<T: Pixel>(
 
 #[inline]
 fn copy_vertical<T: Pixel>(
-  dst: &mut PlaneMutSlice<'_, T>, x: usize, y: usize, src: &[i32],
+  dst: &mut PlaneRegionMut<'_, T>, x: usize, y: usize, src: &[i32],
 ) {
   for (i, v) in src.iter().enumerate() {
     let p = &mut dst[y + i][x];
@@ -396,7 +397,7 @@ fn deblock_size4_inner(
 
 // Assumes rec[0] is set 2 taps back from the edge
 fn deblock_v_size4<T: Pixel>(
-  rec: &mut PlaneMutSlice<'_, T>, level: usize, bd: usize,
+  rec: &mut PlaneRegionMut<'_, T>, level: usize, bd: usize,
 ) {
   for y in 0..4 {
     let p = &rec[y];
@@ -409,7 +410,7 @@ fn deblock_v_size4<T: Pixel>(
 
 // Assumes rec[0] is set 2 taps back from the edge
 fn deblock_h_size4<T: Pixel>(
-  rec: &mut PlaneMutSlice<'_, T>, level: usize, bd: usize,
+  rec: &mut PlaneRegionMut<'_, T>, level: usize, bd: usize,
 ) {
   for x in 0..4 {
     let vals =
@@ -423,7 +424,7 @@ fn deblock_h_size4<T: Pixel>(
 // Assumes rec[0] and src[0] are set 2 taps back from the edge.
 // Accesses four taps, accumulates four pixels into the tally
 fn sse_size4<T: Pixel>(
-  rec: &PlaneSlice<'_, T>, src: &PlaneSlice<'_, T>,
+  rec: &PlaneRegion<'_, T>, src: &PlaneRegion<'_, T>,
   tally: &mut [i64; MAX_LOOP_FILTER + 2], horizontal_p: bool, bd: usize,
 ) {
   for i in 0..4 {
@@ -521,7 +522,7 @@ fn deblock_size6_inner(
 
 // Assumes slice[0] is set 3 taps back from the edge
 fn deblock_v_size6<T: Pixel>(
-  rec: &mut PlaneMutSlice<'_, T>, level: usize, bd: usize,
+  rec: &mut PlaneRegionMut<'_, T>, level: usize, bd: usize,
 ) {
   for y in 0..4 {
     let p = &rec[y];
@@ -535,7 +536,7 @@ fn deblock_v_size6<T: Pixel>(
 
 // Assumes slice[0] is set 3 taps back from the edge
 fn deblock_h_size6<T: Pixel>(
-  rec: &mut PlaneMutSlice<'_, T>, level: usize, bd: usize,
+  rec: &mut PlaneRegionMut<'_, T>, level: usize, bd: usize,
 ) {
   for x in 0..4 {
     let vals = [
@@ -555,7 +556,7 @@ fn deblock_h_size6<T: Pixel>(
 // Assumes rec[0] and src[0] are set 3 taps back from the edge.
 // Accesses six taps, accumulates four pixels into the tally
 fn sse_size6<T: Pixel>(
-  rec: &PlaneSlice<'_, T>, src: &PlaneSlice<'_, T>,
+  rec: &PlaneRegion<'_, T>, src: &PlaneRegion<'_, T>,
   tally: &mut [i64; MAX_LOOP_FILTER + 2], horizontal_p: bool, bd: usize,
 ) {
   let flat = 1 << (bd - 8);
@@ -692,7 +693,7 @@ fn deblock_size8_inner(
 
 // Assumes rec[0] is set 4 taps back from the edge
 fn deblock_v_size8<T: Pixel>(
-  rec: &mut PlaneMutSlice<'_, T>, level: usize, bd: usize,
+  rec: &mut PlaneRegionMut<'_, T>, level: usize, bd: usize,
 ) {
   for y in 0..4 {
     let p = &rec[y];
@@ -714,7 +715,7 @@ fn deblock_v_size8<T: Pixel>(
 
 // Assumes rec[0] is set 4 taps back from the edge
 fn deblock_h_size8<T: Pixel>(
-  rec: &mut PlaneMutSlice<'_, T>, level: usize, bd: usize,
+  rec: &mut PlaneRegionMut<'_, T>, level: usize, bd: usize,
 ) {
   for x in 0..4 {
     let vals = [
@@ -736,7 +737,7 @@ fn deblock_h_size8<T: Pixel>(
 // Assumes rec[0] and src[0] are set 4 taps back from the edge.
 // Accesses eight taps, accumulates six pixels into the tally
 fn sse_size8<T: Pixel>(
-  rec: &PlaneSlice<'_, T>, src: &PlaneSlice<'_, T>,
+  rec: &PlaneRegion<'_, T>, src: &PlaneRegion<'_, T>,
   tally: &mut [i64; MAX_LOOP_FILTER + 2], horizontal_p: bool, bd: usize,
 ) {
   let flat = 1 << (bd - 8);
@@ -881,7 +882,7 @@ fn deblock_size14_inner(
 
 // Assumes rec[0] is set 7 taps back from the edge
 fn deblock_v_size14<T: Pixel>(
-  rec: &mut PlaneMutSlice<'_, T>, level: usize, bd: usize,
+  rec: &mut PlaneRegionMut<'_, T>, level: usize, bd: usize,
 ) {
   for y in 0..4 {
     let p = &rec[y];
@@ -909,7 +910,7 @@ fn deblock_v_size14<T: Pixel>(
 
 // Assumes rec[0] is set 7 taps back from the edge
 fn deblock_h_size14<T: Pixel>(
-  rec: &mut PlaneMutSlice<'_, T>, level: usize, bd: usize,
+  rec: &mut PlaneRegionMut<'_, T>, level: usize, bd: usize,
 ) {
   for x in 0..4 {
     let vals = [
@@ -937,7 +938,7 @@ fn deblock_h_size14<T: Pixel>(
 // Assumes rec[0] and src[0] are set 7 taps back from the edge.
 // Accesses fourteen taps, accumulates twelve pixels into the tally
 fn sse_size14<T: Pixel>(
-  rec: &PlaneSlice<'_, T>, src: &PlaneSlice<'_, T>,
+  rec: &PlaneRegion<'_, T>, src: &PlaneRegion<'_, T>,
   tally: &mut [i64; MAX_LOOP_FILTER + 2], horizontal_p: bool, bd: usize,
 ) {
   let flat = 1 << (bd - 8);
@@ -1122,20 +1123,24 @@ fn filter_v_edge<T: Pixel>(
       let level = deblock_level(deblock, block, prev_block, pli, true);
       if level > 0 {
         let po = bo.plane_offset(&p.cfg);
-        let mut plane_slice = p.mut_slice(po);
-        plane_slice.x -= (filter_size >> 1) as isize;
+        let mut plane_region = p.region_mut(Area::Rect {
+          x: po.x - (filter_size >> 1) as isize,
+          y: po.y,
+          width: filter_size,
+          height: 4,
+        });
         match filter_size {
           4 => {
-            deblock_v_size4(&mut plane_slice, level, bd);
+            deblock_v_size4(&mut plane_region, level, bd);
           }
           6 => {
-            deblock_v_size6(&mut plane_slice, level, bd);
+            deblock_v_size6(&mut plane_region, level, bd);
           }
           8 => {
-            deblock_v_size8(&mut plane_slice, level, bd);
+            deblock_v_size8(&mut plane_region, level, bd);
           }
           14 => {
-            deblock_v_size14(&mut plane_slice, level, bd);
+            deblock_v_size14(&mut plane_region, level, bd);
           }
           _ => unreachable!(),
         }
@@ -1162,25 +1167,27 @@ fn sse_v_edge<T: Pixel>(
     let filter_size =
       deblock_size(block, prev_block, rec_plane, pli, true, block_edge);
     if filter_size > 0 {
-      let po = {
-        let mut po = bo.plane_offset(&rec_plane.cfg); // rec and src have identical subsampling
-        po.x -= (filter_size >> 1) as isize;
-        po
+      let po = bo.plane_offset(&rec_plane.cfg);
+      let rect: Area = Area::Rect {
+        x: po.x - (filter_size >> 1) as isize,
+        y: po.y,
+        width: filter_size,
+        height: 4,
       };
-      let rec_slice = rec_plane.slice(po);
-      let src_slice = src_plane.slice(po);
+      let rec_region = rec_plane.region(rect);
+      let src_region = src_plane.region(rect);
       match filter_size {
         4 => {
-          sse_size4(&rec_slice, &src_slice, tally, false, bd);
+          sse_size4(&rec_region, &src_region, tally, false, bd);
         }
         6 => {
-          sse_size6(&rec_slice, &src_slice, tally, false, bd);
+          sse_size6(&rec_region, &src_region, tally, false, bd);
         }
         8 => {
-          sse_size8(&rec_slice, &src_slice, tally, false, bd);
+          sse_size8(&rec_region, &src_region, tally, false, bd);
         }
         14 => {
-          sse_size14(&rec_slice, &src_slice, tally, false, bd);
+          sse_size14(&rec_region, &src_region, tally, false, bd);
         }
         _ => unreachable!(),
       }
@@ -1208,20 +1215,24 @@ fn filter_h_edge<T: Pixel>(
       let level = deblock_level(deblock, block, prev_block, pli, false);
       if level > 0 {
         let po = bo.plane_offset(&p.cfg);
-        let mut plane_slice = p.mut_slice(po);
-        plane_slice.y -= (filter_size >> 1) as isize;
+        let mut plane_region = p.region_mut(Area::Rect {
+          x: po.x,
+          y: po.y - (filter_size >> 1) as isize,
+          width: 4,
+          height: filter_size,
+        });
         match filter_size {
           4 => {
-            deblock_h_size4(&mut plane_slice, level, bd);
+            deblock_h_size4(&mut plane_region, level, bd);
           }
           6 => {
-            deblock_h_size6(&mut plane_slice, level, bd);
+            deblock_h_size6(&mut plane_region, level, bd);
           }
           8 => {
-            deblock_h_size8(&mut plane_slice, level, bd);
+            deblock_h_size8(&mut plane_region, level, bd);
           }
           14 => {
-            deblock_h_size14(&mut plane_slice, level, bd);
+            deblock_h_size14(&mut plane_region, level, bd);
           }
           _ => unreachable!(),
         }
@@ -1248,25 +1259,27 @@ fn sse_h_edge<T: Pixel>(
     let filter_size =
       deblock_size(block, prev_block, rec_plane, pli, true, block_edge);
     if filter_size > 0 {
-      let po = {
-        let mut po = bo.plane_offset(&rec_plane.cfg); // rec and src have identical subsampling
-        po.y -= (filter_size >> 1) as isize;
-        po
+      let po = bo.plane_offset(&rec_plane.cfg);
+      let rect: Area = Area::Rect {
+        x: po.x,
+        y: po.y - (filter_size >> 1) as isize,
+        width: 4,
+        height: filter_size,
       };
-      let rec_slice = rec_plane.slice(po);
-      let src_slice = src_plane.slice(po);
+      let rec_region = rec_plane.region(rect);
+      let src_region = src_plane.region(rect);
       match filter_size {
         4 => {
-          sse_size4(&rec_slice, &src_slice, tally, true, bd);
+          sse_size4(&rec_region, &src_region, tally, true, bd);
         }
         6 => {
-          sse_size6(&rec_slice, &src_slice, tally, true, bd);
+          sse_size6(&rec_region, &src_region, tally, true, bd);
         }
         8 => {
-          sse_size8(&rec_slice, &src_slice, tally, true, bd);
+          sse_size8(&rec_region, &src_region, tally, true, bd);
         }
         14 => {
-          sse_size14(&rec_slice, &src_slice, tally, true, bd);
+          sse_size14(&rec_region, &src_region, tally, true, bd);
         }
         _ => unreachable!(),
       }
