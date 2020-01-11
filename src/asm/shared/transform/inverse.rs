@@ -54,7 +54,7 @@ pub mod test {
   use rand::{random, thread_rng, Rng};
 
   pub fn pick_eob<T: Coefficient>(
-    coeffs: &mut [T], tx_size: TxSize, tx_type: TxType, sub_w: usize,
+    coeffs: &mut [T], tx_size: TxSize, tx_type: TxType, sub_h: usize,
   ) -> usize {
     /* From dav1d
      * copy the topleft coefficients such that the return value (being the
@@ -63,9 +63,9 @@ pub mod test {
      * dimensions are non-zero. This leads to braching to specific optimized
      * simd versions (e.g. dc-only) so that we get full asm coverage in this
      * test */
-    let coeff_w = av1_get_coded_tx_size(tx_size).width();
-    let sub_high: usize = if sub_w > 0 { sub_w * 8 - 1 } else { 0 };
-    let sub_low: usize = if sub_w > 1 { sub_high - 8 } else { 0 };
+    let coeff_h = av1_get_coded_tx_size(tx_size).height();
+    let sub_high: usize = if sub_h > 0 { sub_h * 8 - 1 } else { 0 };
+    let sub_low: usize = if sub_h > 1 { sub_high - 8 } else { 0 };
     let mut eob = 0;
     let mut exit = 0;
 
@@ -75,8 +75,8 @@ pub mod test {
       exit = i;
 
       let rc = pos as usize;
-      let rcx = rc % coeff_w;
-      let rcy = rc / coeff_w;
+      let rcx = rc % coeff_h;
+      let rcy = rc / coeff_h;
 
       if rcx > sub_high || rcy > sub_high {
         break;
@@ -98,7 +98,7 @@ pub mod test {
   pub fn test_transform(
     tx_size: TxSize, tx_type: TxType, cpu: CpuFeatureLevel,
   ) {
-    let sub_w_iterations: usize = match tx_size.height().max(tx_size.width()) {
+    let sub_h_iterations: usize = match tx_size.height().max(tx_size.width()) {
       4 => 2,
       8 => 2,
       16 => 3,
@@ -106,7 +106,7 @@ pub mod test {
       _ => unreachable!(),
     };
 
-    for sub_w in 0..sub_w_iterations {
+    for sub_h in 0..sub_h_iterations {
       let mut src_storage = [0u8; 64 * 64];
       let src = &mut src_storage[..tx_size.area()];
       let mut dst = Plane::wrap(vec![0u8; tx_size.area()], tx_size.width());
@@ -133,7 +133,7 @@ pub mod test {
         CpuFeatureLevel::NATIVE,
       );
 
-      let eob: usize = pick_eob(freq, tx_size, tx_type, sub_w);
+      let eob: usize = pick_eob(freq, tx_size, tx_type, sub_h);
       let mut native_dst = dst.clone();
 
       inverse_transform_add(
