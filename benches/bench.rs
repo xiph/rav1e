@@ -108,8 +108,7 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
               false,
               qindex as u8,
               ac,
-              0,
-              0,
+              IntraParam::None,
               RDOType::PixelDistRealRate,
               true,
             );

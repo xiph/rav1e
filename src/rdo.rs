@@ -28,7 +28,7 @@ use crate::motion_compensate;
 use crate::partition::RefType::*;
 use crate::partition::*;
 use crate::predict::{
-  AngleDelta, PredictionMode, RAV1E_INTER_COMPOUND_MODES,
+  AngleDelta, IntraParam, PredictionMode, RAV1E_INTER_COMPOUND_MODES,
   RAV1E_INTER_MODES_MINIMAL, RAV1E_INTRA_MODES,
 };
 use crate::rdo_tables::*;
@@ -1164,8 +1164,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
             tx_size,
             fi.sequence.bit_depth,
             &[0i16; 2],
-            0,
-            0,
+            IntraParam::None,
             &edge_buf,
             fi.cpu_feature_level,
           );
@@ -1345,8 +1344,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
           uv_tx_size,
           bit_depth,
           &ac.array,
-          0,
-          alpha,
+          IntraParam::Alpha(alpha),
           &edge_buf,
           cpu,
         );

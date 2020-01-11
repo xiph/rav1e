@@ -13,7 +13,7 @@ use crate::encoder::{
 use crate::frame::{AsRegion, PlaneOffset};
 use crate::hawktracer::*;
 use crate::partition::{get_intra_edges, BlockSize};
-use crate::predict::PredictionMode;
+use crate::predict::{IntraParam, PredictionMode};
 use crate::tiling::{Area, TileRect};
 use crate::transform::TxSize;
 use crate::{Frame, Pixel};
@@ -86,8 +86,7 @@ pub(crate) fn estimate_intra_costs<T: Pixel>(
         tx_size,
         bit_depth,
         &[], // Not used by DC_PRED.
-        0,   // Not used by DC_PRED.
-        0,   // Not used by DC_PRED.
+        IntraParam::None,
         &edge_buf,
         cpu_feature_level,
       );
