@@ -331,14 +331,6 @@ static k_eob_group_start: [u16; 12] =
   [0, 1, 2, 3, 5, 9, 17, 33, 65, 129, 257, 513];
 static k_eob_offset_bits: [u16; 12] = [0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 
-fn clip_max3(x: u8) -> u8 {
-  if x > 3 {
-    3
-  } else {
-    x
-  }
-}
-
 // The ctx offset table when TX is TX_CLASS_2D.
 // TX col and row indices are clamped to 4
 
@@ -3797,21 +3789,21 @@ impl<'a> ContextWriter<'a> {
 
     // May version.
     // Note: AOMMIN(level, 3) is useless for decoder since level < 3.
-    let mut mag = clip_max3(levels[1]); // { 1, 0 }
-    mag += clip_max3(levels[(1 << bhl) + TX_PAD_HOR]); // { 0, 1 }
+    let mut mag = cmp::min(3, levels[1]); // { 1, 0 }
+    mag += cmp::min(3, levels[(1 << bhl) + TX_PAD_HOR]); // { 0, 1 }
 
     if tx_class == TX_CLASS_2D {
-      mag += clip_max3(levels[(1 << bhl) + TX_PAD_HOR + 1]); // { 1, 1 }
-      mag += clip_max3(levels[2]); // { 2, 0 }
-      mag += clip_max3(levels[(2 << bhl) + (2 << TX_PAD_HOR_LOG2)]); // { 0, 2 }
+      mag += cmp::min(3, levels[(1 << bhl) + TX_PAD_HOR + 1]); // { 1, 1 }
+      mag += cmp::min(3, levels[2]); // { 2, 0 }
+      mag += cmp::min(3, levels[(2 << bhl) + (2 << TX_PAD_HOR_LOG2)]); // { 0, 2 }
     } else if tx_class == TX_CLASS_VERT {
-      mag += clip_max3(levels[2]); // { 2, 0 }
-      mag += clip_max3(levels[3]); // { 3, 0 }
-      mag += clip_max3(levels[4]); // { 4, 0 }
+      mag += cmp::min(3, levels[2]); // { 2, 0 }
+      mag += cmp::min(3, levels[3]); // { 3, 0 }
+      mag += cmp::min(3, levels[4]); // { 4, 0 }
     } else {
-      mag += clip_max3(levels[(2 << bhl) + (2 << TX_PAD_HOR_LOG2)]); // { 0, 2 }
-      mag += clip_max3(levels[(3 << bhl) + (3 << TX_PAD_HOR_LOG2)]); // { 0, 3 }
-      mag += clip_max3(levels[(4 << bhl) + (4 << TX_PAD_HOR_LOG2)]); // { 0, 4 }
+      mag += cmp::min(3, levels[(2 << bhl) + (2 << TX_PAD_HOR_LOG2)]); // { 0, 2 }
+      mag += cmp::min(3, levels[(3 << bhl) + (3 << TX_PAD_HOR_LOG2)]); // { 0, 3 }
+      mag += cmp::min(3, levels[(4 << bhl) + (4 << TX_PAD_HOR_LOG2)]); // { 0, 4 }
     }
 
     mag as usize
