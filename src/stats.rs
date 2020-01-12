@@ -15,7 +15,7 @@ use std::ops::{Add, AddAssign};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EncoderStats {
   /// Stores count of pixels belonging to each block size in this frame
-  pub block_size_counts: [usize; BlockSize::BLOCK_SIZES],
+  pub block_size_counts: [usize; BlockSize::BLOCK_SIZES_ALL],
   /// Stores count of pixels belonging to skip blocks in this frame
   pub skip_block_count: usize,
   /// Stores count of pixels belonging to each transform type in this frame
@@ -29,7 +29,7 @@ pub struct EncoderStats {
 impl Default for EncoderStats {
   fn default() -> Self {
     EncoderStats {
-      block_size_counts: [0; BlockSize::BLOCK_SIZES],
+      block_size_counts: [0; BlockSize::BLOCK_SIZES_ALL],
       skip_block_count: 0,
       tx_type_counts: [0; TX_TYPES],
       luma_pred_mode_counts: [0; PREDICTION_MODES],
