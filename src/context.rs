@@ -1660,13 +1660,16 @@ impl<'a> BlockContext<'a> {
       let bw = plane_bsize.width_mi();
       let bh = plane_bsize.height_mi();
 
-      for bx in 0..bw {
-        self.above_coeff_context[plane][(bo.0.x >> xdec2) + bx] = 0;
+      for above in
+        &mut self.above_coeff_context[plane][(bo.0.x >> xdec2)..][..bw]
+      {
+        *above = 0;
       }
 
       let bo_y = bo.y_in_sb();
-      for by in 0..bh {
-        self.left_coeff_context[plane][(bo_y >> ydec2) + by] = 0;
+      for left in &mut self.left_coeff_context[plane][(bo_y >> ydec2)..][..bh]
+      {
+        *left = 0;
       }
     }
   }
@@ -1712,12 +1715,12 @@ impl<'a> BlockContext<'a> {
     // update the partition context at the end notes. set partition bits
     // of block sizes larger than the current one to be one, and partition
     // bits of smaller block sizes to be zero.
-    for i in 0..bw >> 1 {
-      above_ctx[i as usize] = partition_context_lookup[subsize as usize][0];
+    for above in &mut above_ctx[..bw >> 1] {
+      *above = partition_context_lookup[subsize as usize][0];
     }
 
-    for i in 0..bh >> 1 {
-      left_ctx[i as usize] = partition_context_lookup[subsize as usize][1];
+    for left in &mut left_ctx[..bh >> 1] {
+      *left = partition_context_lookup[subsize as usize][1];
     }
   }
 
