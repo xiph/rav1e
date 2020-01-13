@@ -754,7 +754,7 @@ impl<T: Pixel> FrameInvariants<T> {
     fi.intra_only = false;
     fi.idx_in_group_output =
       inter_cfg.get_idx_in_group_output(output_frameno_in_gop);
-    fi.tx_mode_select = false;
+    fi.tx_mode_select = fi.config.speed_settings.rdo_tx_decision;
 
     fi.order_hint =
       inter_cfg.get_order_hint(output_frameno_in_gop, fi.idx_in_group_output);
@@ -1718,9 +1718,22 @@ pub fn encode_block_post_cdef<T: Pixel>(
       if !is_inter {
         cw.write_tx_size_intra(w, tile_bo, bsize, tx_size);
         cw.bc.update_tx_size_context(tile_bo, bsize, tx_size, false);
-      } /*else {  // TODO (yushin): write_tx_size_inter(), i.e. var-tx
-
-        }*/
+      } else {
+        // write var_tx_size
+        // if here, TxMode == TX_MODE_SELECT && bsize > BLOCK_4X4 && is_inter && !skip && !Lossless
+        debug_assert!(fi.tx_mode_select);
+        debug_assert!(bsize > BlockSize::BLOCK_4X4);
+        debug_assert!(is_inter);
+        debug_assert!(!skip);
+        let max_tx_size = max_txsize_rect_lookup[bsize as usize];
+        debug_assert!(
+          max_tx_size.block_size() <= BlockSize::BLOCK_64X64,
+          "tx split for TxSize > 64x64 is not implemented yet."
+        );
+        let txfm_split = false;
+        // TODO: Revise write_tx_size_inter() for txfm_split = true
+        cw.write_tx_size_inter(w, tile_bo, bsize, max_tx_size, txfm_split);
+      }
     } else {
       cw.bc.update_tx_size_context(tile_bo, bsize, tx_size, is_inter && skip);
     }
