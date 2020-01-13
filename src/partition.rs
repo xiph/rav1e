@@ -114,9 +114,7 @@ pub enum PartitionType {
   PARTITION_INVALID,
 }
 
-#[derive(
-  Debug, Copy, Clone, PartialEq, PartialOrd, Ord, Eq, Serialize, Deserialize,
-)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BlockSize {
   BLOCK_4X4,
   BLOCK_4X8,
@@ -141,6 +139,22 @@ pub enum BlockSize {
   BLOCK_16X64,
   BLOCK_64X16,
   BLOCK_INVALID,
+}
+
+impl PartialOrd for BlockSize {
+  #[inline(always)]
+  fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    use std::cmp::Ordering::{Equal, Greater, Less};
+    match (
+      self.width().cmp(&other.width()),
+      self.height().cmp(&other.height()),
+    ) {
+      (Greater, Less) | (Less, Greater) => None,
+      (Equal, Equal) => Some(Equal),
+      (Greater, _) | (_, Greater) => Some(Greater),
+      (Less, _) | (_, Less) => Some(Less),
+    }
+  }
 }
 
 impl BlockSize {
@@ -323,16 +337,6 @@ impl BlockSize {
     let offset_y = if ydec != 0 && self.height_log2() == 2 { -1 } else { 0 };
 
     (offset_x, offset_y)
-  }
-
-  pub fn greater_than(self, other: BlockSize) -> bool {
-    (self.width() > other.width() && self.height() >= other.height())
-      || (self.width() >= other.width() && self.height() > other.height())
-  }
-
-  pub fn gte(self, other: BlockSize) -> bool {
-    self.greater_than(other)
-      || (self.width() == other.width() && self.height() == other.height())
   }
 
   pub fn subsize(self, partition: PartitionType) -> BlockSize {
