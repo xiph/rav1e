@@ -1722,7 +1722,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
 
   // write tx_size here
   if fi.tx_mode_select {
-    if bsize.greater_than(BlockSize::BLOCK_4X4) && !(is_inter && skip) {
+    if bsize > BlockSize::BLOCK_4X4 && !(is_inter && skip) {
       if !is_inter {
         cw.write_tx_size_intra(w, tile_bo, bsize, tx_size);
         cw.bc.update_tx_size_context(tile_bo, bsize, tx_size, false);
@@ -2208,7 +2208,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
   // Always split if the current partition is too large, i.e. right or bottom tile border
   let must_split = (tile_bo.0.x + bsw as usize > ts.mi_width
     || tile_bo.0.y + bsh as usize > ts.mi_height
-    || bsize.greater_than(BlockSize::BLOCK_64X64))
+    || bsize > BlockSize::BLOCK_64X64)
     && is_square;
 
   // must_split overrides the minimum partition size when applicable
@@ -2228,7 +2228,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
 
   // Code the whole block
   if !must_split {
-    let cost = if bsize.gte(BlockSize::BLOCK_8X8) && is_square {
+    let cost = if bsize >= BlockSize::BLOCK_8X8 && is_square {
       let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
       let tell = w.tell_frac();
       cw.write_partition(w, tile_bo, PartitionType::PARTITION_NONE, bsize);
@@ -2237,7 +2237,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       0.0
     };
 
-    let pmv_inner_idx = if bsize.greater_than(BlockSize::BLOCK_32X32) {
+    let pmv_inner_idx = if bsize > BlockSize::BLOCK_32X32 {
       0
     } else {
       ((tile_bo.0.x & 32) >> 5) + ((tile_bo.0.y & 32) >> 4) + 1
@@ -2333,7 +2333,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       let mut child_modes = ArrayVec::<[PartitionParameters; 4]>::new();
       rd_cost = 0.0;
 
-      if bsize.gte(BlockSize::BLOCK_8X8) {
+      if bsize >= BlockSize::BLOCK_8X8 {
         let w: &mut W =
           if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
         let tell = w.tell_frac();
@@ -2416,7 +2416,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       assert!(best_partition != PartitionType::PARTITION_NONE || !must_split);
       let subsize = bsize.subsize(best_partition);
 
-      if bsize.gte(BlockSize::BLOCK_8X8) {
+      if bsize >= BlockSize::BLOCK_8X8 {
         let w: &mut W =
           if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
         cw.write_partition(w, tile_bo, best_partition, bsize);
@@ -2454,7 +2454,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
   assert!(best_partition != PartitionType::PARTITION_INVALID);
 
   if is_square
-    && bsize.gte(BlockSize::BLOCK_8X8)
+    && bsize >= BlockSize::BLOCK_8X8
     && (bsize == BlockSize::BLOCK_8X8
       || best_partition != PartitionType::PARTITION_SPLIT)
   {
@@ -2492,7 +2492,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   // Always split if the current partition is too large, i.e. right or bottom tile border
   let must_split = (tile_bo.0.x + bsw as usize > ts.mi_width
     || tile_bo.0.y + bsh as usize > ts.mi_height
-    || bsize.greater_than(BlockSize::BLOCK_64X64))
+    || bsize > BlockSize::BLOCK_64X64)
     && is_square;
 
   let mut rdo_output =
@@ -2572,7 +2572,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
 
   let subsize = bsize.subsize(partition);
 
-  if bsize.gte(BlockSize::BLOCK_8X8) && is_square {
+  if bsize >= BlockSize::BLOCK_8X8 && is_square {
     let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
     cw.write_partition(w, tile_bo, partition, bsize);
   }
@@ -2583,7 +2583,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         // The optimal prediction mode is known from a previous iteration
         rdo_output.part_modes[0].clone()
       } else {
-        let pmv_inner_idx = if bsize.greater_than(BlockSize::BLOCK_32X32) {
+        let pmv_inner_idx = if bsize > BlockSize::BLOCK_32X32 {
           0
         } else {
           ((tile_bo.0.x & 32) >> 5) + ((tile_bo.0.y & 32) >> 4) + 1
@@ -2803,7 +2803,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   }
 
   if is_square
-    && bsize.gte(BlockSize::BLOCK_8X8)
+    && bsize >= BlockSize::BLOCK_8X8
     && (bsize == BlockSize::BLOCK_8X8
       || partition != PartitionType::PARTITION_SPLIT)
   {

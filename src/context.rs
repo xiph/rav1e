@@ -2178,7 +2178,7 @@ impl<'a> ContextWriter<'a> {
     }
 
     debug_assert!(!self.bc.blocks[bo].is_inter());
-    debug_assert!(bsize.greater_than(BlockSize::BLOCK_4X4));
+    debug_assert!(bsize > BlockSize::BLOCK_4X4);
 
     let tx_size_ctx = self.get_tx_size_context(bo, bsize);
     let depth = tx_size_to_depth(tx_size, bsize);

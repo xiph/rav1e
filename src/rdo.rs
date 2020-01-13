@@ -1256,7 +1256,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
     );
   });
 
-  if bsize.gte(BlockSize::BLOCK_8X8) {
+  if bsize >= BlockSize::BLOCK_8X8 {
     // Find the best angle delta for the current best prediction mode
     let luma_angle_delta_count = best.pred_mode_luma.angle_delta_count();
     let chroma_angle_delta_count = best.pred_mode_chroma.angle_delta_count();
@@ -1634,7 +1634,7 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
   let pmv_idxs = partitions
     .iter()
     .map(|&offset| {
-      if subsize.greater_than(BlockSize::BLOCK_32X32) {
+      if subsize > BlockSize::BLOCK_32X32 {
         0
       } else {
         ((offset.0.x & 32) >> 5) + ((offset.0.y & 32) >> 4) + 1
