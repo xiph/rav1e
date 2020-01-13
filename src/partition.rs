@@ -142,6 +142,7 @@ pub enum BlockSize {
 }
 
 impl PartialOrd for BlockSize {
+  #[inline(always)]
   fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
     use std::cmp::Ordering::{Equal, Greater, Less};
     match (
