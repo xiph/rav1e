@@ -880,7 +880,7 @@ cglobal iidentity_4x8_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     pmulhrsw             m1, m0, [coeffq]
     pmulhrsw             m1, m0
     pmulhrsw             m0, m1, [o(pw_1697x8)]
-    paddw                m1, m0
+    paddsw               m1, m0
     pmulhrsw             m1, [o(pw_2048)]
     punpcklwd            m1, m1
     punpckhdq            m2, m1, m1
@@ -903,7 +903,7 @@ cglobal iidentity_4x8_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     punpcklqdq           m0, m2
     mova                 m4, [o(pw_2896x8)]
     pmulhrsw             m0, m4
-    paddw                m0, m0
+    paddsw               m0, m0
     pmulhrsw             m0, m4
     pmulhrsw             m0, [o(pw_2048)]
     mova                 m1, m0
@@ -1159,10 +1159,10 @@ cglobal iidentity_8x4_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     pmulhrsw             m1, m3, [coeffq+16*1]
     pmulhrsw             m2, m3, [coeffq+16*2]
     pmulhrsw             m3,     [coeffq+16*3]
-    paddw                m0, m0
-    paddw                m1, m1
-    paddw                m2, m2
-    paddw                m3, m3
+    paddsw               m0, m0
+    paddsw               m1, m1
+    paddsw               m2, m2
+    paddsw               m3, m3
 
     punpckhwd            m4, m0, m1
     punpcklwd            m0, m1
@@ -1184,10 +1184,10 @@ cglobal iidentity_8x4_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     pmulhrsw             m5, m7, m1
     pmulhrsw             m6, m7, m2
     pmulhrsw             m7, m3
-    paddw                m0, m4
-    paddw                m1, m5
-    paddw                m2, m6
-    paddw                m3, m7
+    paddsw               m0, m4
+    paddsw               m1, m5
+    paddsw               m2, m6
+    paddsw               m3, m7
     jmp m(iadst_8x4_internal).end
 
 %macro INV_TXFM_8X8_FN 2-3 -1 ; type1, type2, fast_thresh
