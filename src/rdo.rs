@@ -300,7 +300,7 @@ fn compute_distortion<T: Pixel>(
         bsize.height(),
         fi.sequence.bit_depth,
         |bias_area, bsize| {
-          compute_distortion_scale(
+          distortion_scale(
             fi,
             input_region.subregion(bias_area).frame_block_offset(),
             bsize,
@@ -314,7 +314,7 @@ fn compute_distortion<T: Pixel>(
       bsize.width(),
       bsize.height(),
       |bias_area, bsize| {
-        compute_distortion_scale(
+        distortion_scale(
           fi,
           input_region.subregion(bias_area).frame_block_offset(),
           bsize,
@@ -346,7 +346,7 @@ fn compute_distortion<T: Pixel>(
           w_uv,
           h_uv,
           |bias_area, bsize| {
-            compute_distortion_scale(
+            distortion_scale(
               fi,
               input_region.subregion(bias_area).frame_block_offset(),
               bsize,
@@ -376,7 +376,7 @@ fn compute_tx_distortion<T: Pixel>(
       bsize.width(),
       bsize.height(),
       |bias_area, bsize| {
-        compute_distortion_scale(
+        distortion_scale(
           fi,
           input_region.subregion(bias_area).frame_block_offset(),
           bsize,
@@ -410,7 +410,7 @@ fn compute_tx_distortion<T: Pixel>(
           w_uv,
           h_uv,
           |bias_area, bsize| {
-            compute_distortion_scale(
+            distortion_scale(
               fi,
               input_region.subregion(bias_area).frame_block_offset(),
               bsize,
@@ -425,7 +425,7 @@ fn compute_tx_distortion<T: Pixel>(
 
 /// Compute a scaling factor to multiply the distortion of a block by,
 /// this factor is determined using temporal RDO.
-pub fn compute_distortion_scale<T: Pixel>(
+pub fn distortion_scale<T: Pixel>(
   fi: &FrameInvariants<T>, frame_bo: PlaneBlockOffset, bsize: BlockSize,
 ) -> f64 {
   if !fi.config.temporal_rdo() {
@@ -1793,7 +1793,7 @@ fn rdo_loop_plane_error<T: Pixel>(
         let test_region =
           test_plane.region(Area::BlockStartingAt { bo: test_bo.0 });
 
-        let bias = compute_distortion_scale(
+        let bias = distortion_scale(
           fi,
           ts.to_frame_block_offset(bo),
           BlockSize::BLOCK_8X8,
