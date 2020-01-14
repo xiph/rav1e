@@ -1032,10 +1032,21 @@ impl<T: Pixel> ContextInner<T> {
       self.frame_data.insert(output_frameno, output_frame_data);
     }
 
-    #[cfg(feature = "dump_lookahead_data")]
-    {
-      if !output_framenos.is_empty() {
-        let fi = &mut self.frame_data.get_mut(&output_framenos[0]).unwrap().fi;
+    if !output_framenos.is_empty() {
+      let fi = &mut self.frame_data.get_mut(&output_framenos[0]).unwrap().fi;
+      let block_importances = fi.block_importances.iter();
+      let lookahead_intra_costs = fi.lookahead_intra_costs.iter();
+      let distortion_scales = fi.distortion_scales.iter_mut();
+      for ((&propagate_cost, &intra_cost), distortion_scale) in
+        block_importances.zip(lookahead_intra_costs).zip(distortion_scales)
+      {
+        *distortion_scale = crate::rdo::distortion_scale_for(
+          propagate_cost as f64,
+          intra_cost as f64,
+        );
+      }
+      #[cfg(feature = "dump_lookahead_data")]
+      {
         use byteorder::{NativeEndian, WriteBytesExt};
         let mut buf = vec![];
         buf.write_u64::<NativeEndian>(fi.h_in_imp_b as u64).unwrap();
