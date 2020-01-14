@@ -223,7 +223,7 @@ impl Sequence {
       still_picture: config.still_picture,
       reduced_still_picture_hdr: false, // FIXME: config.still_picture,
       enable_filter_intra: false,
-      enable_intra_edge_filter: false, // FIXME: does not work with asm
+      enable_intra_edge_filter: true,
       enable_interintra_compound: false,
       enable_masked_compound: false,
       enable_dual_filter: false,
@@ -1151,80 +1151,81 @@ pub fn encode_tx_block<T: Pixel>(
     "mode.is_intra()={:#?}, plane={:#?}, tx_size.block_size()={:#?}, plane_bsize={:#?}, need_recon_pixel={:#?}",
     mode.is_intra(), p, tx_size.block_size(), plane_bsize, need_recon_pixel);
 
-  let ief_params = if fi.sequence.enable_intra_edge_filter {
-    let (bo_x, bo_y) = (tile_partition_bo.0.x, tile_partition_bo.0.y);
-    let above_block_info = if p == 0 {
-      if bo_y == 0 {
-        None
+  let ief_params =
+    if mode.is_directional() && fi.sequence.enable_intra_edge_filter {
+      let (bo_x, bo_y) = (tile_partition_bo.0.x, tile_partition_bo.0.y);
+      let above_block_info = if p == 0 {
+        if bo_y == 0 {
+          None
+        } else {
+          Some(ts.coded_block_info[bo_y - 1][bo_x])
+        }
       } else {
-        Some(ts.coded_block_info[bo_y - 1][bo_x])
-      }
-    } else {
-      let (mut bo_x_uv, mut bo_y_uv) = (bo_x, bo_y);
-      if bo_x & 1 == 0 {
-        bo_x_uv += 1
+        let (mut bo_x_uv, mut bo_y_uv) = (bo_x, bo_y);
+        if bo_x & 1 == 0 {
+          bo_x_uv += 1
+        };
+        if bo_y & 1 == 1 {
+          bo_y_uv -= 1
+        };
+        if bo_y_uv == 0 {
+          None
+        } else {
+          Some(ts.coded_block_info[bo_y_uv - 1][bo_x_uv])
+        }
       };
-      if bo_y & 1 == 1 {
-        bo_y_uv -= 1
-      };
-      if bo_y_uv == 0 {
-        None
+      let left_block_info = if p == 0 {
+        if bo_x == 0 {
+          None
+        } else {
+          Some(ts.coded_block_info[bo_y][bo_x - 1])
+        }
       } else {
-        Some(ts.coded_block_info[bo_y_uv - 1][bo_x_uv])
-      }
-    };
-    let left_block_info = if p == 0 {
-      if bo_x == 0 {
-        None
-      } else {
-        Some(ts.coded_block_info[bo_y][bo_x - 1])
-      }
-    } else {
-      let (mut bo_x_uv, mut bo_y_uv) = (bo_x, bo_y);
-      if bo_x & 1 == 1 {
-        bo_x_uv -= 1
+        let (mut bo_x_uv, mut bo_y_uv) = (bo_x, bo_y);
+        if bo_x & 1 == 1 {
+          bo_x_uv -= 1
+        };
+        if bo_y & 1 == 0 {
+          bo_y_uv += 1
+        };
+        if bo_x_uv == 0 {
+          None
+        } else {
+          Some(ts.coded_block_info[bo_y_uv][bo_x_uv - 1])
+        }
       };
-      if bo_y & 1 == 0 {
-        bo_y_uv += 1
-      };
-      if bo_x_uv == 0 {
-        None
-      } else {
-        Some(ts.coded_block_info[bo_y_uv][bo_x_uv - 1])
-      }
-    };
 
-    IntraEdgeFilterParameters {
-      plane: p,
-      above_mode: match above_block_info {
-        Some(bi) => match p {
-          0 => bi.luma_mode,
-          _ => bi.chroma_mode,
-        }
-        .into(),
-        None => None,
-      },
-      left_mode: match left_block_info {
-        Some(bi) => match p {
-          0 => bi.luma_mode,
-          _ => bi.chroma_mode,
-        }
-        .into(),
-        None => None,
-      },
-      above_ref_frame_types: match above_block_info {
-        Some(bi) => Some(bi.reference_types),
-        None => None,
-      },
-      left_ref_frame_types: match left_block_info {
-        Some(bi) => Some(bi.reference_types),
-        None => None,
-      },
-    }
-    .into()
-  } else {
-    None
-  };
+      IntraEdgeFilterParameters {
+        plane: p,
+        above_mode: match above_block_info {
+          Some(bi) => match p {
+            0 => bi.luma_mode,
+            _ => bi.chroma_mode,
+          }
+          .into(),
+          None => None,
+        },
+        left_mode: match left_block_info {
+          Some(bi) => match p {
+            0 => bi.luma_mode,
+            _ => bi.chroma_mode,
+          }
+          .into(),
+          None => None,
+        },
+        above_ref_frame_types: match above_block_info {
+          Some(bi) => Some(bi.reference_types),
+          None => None,
+        },
+        left_ref_frame_types: match left_block_info {
+          Some(bi) => Some(bi.reference_types),
+          None => None,
+        },
+      }
+      .into()
+    } else {
+      None
+    };
 
   if mode.is_intra() {
     let bit_depth = fi.sequence.bit_depth;
