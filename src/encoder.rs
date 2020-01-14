@@ -789,12 +789,14 @@ impl<T: Pixel> FrameInvariants<T> {
 
     fi.pyramid_level = inter_cfg.get_level(fi.idx_in_group_output);
 
-    fi.frame_type =
-      if (inter_cfg.switch_frame_interval > 0) && (fi.pyramid_level == 0) {
-        FrameType::SWITCH
-      } else {
-        FrameType::INTER
-      };
+    fi.frame_type = if (inter_cfg.switch_frame_interval > 0)
+      && (output_frameno_in_gop % inter_cfg.switch_frame_interval == 0)
+      && (fi.pyramid_level == 0)
+    {
+      FrameType::SWITCH
+    } else {
+      FrameType::INTER
+    };
     fi.error_resilient =
       if fi.frame_type == FrameType::SWITCH { true } else { error_resilient };
 
