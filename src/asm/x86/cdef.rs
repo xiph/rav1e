@@ -9,7 +9,6 @@
 
 use crate::cdef::*;
 use crate::cpu_features::CpuFeatureLevel;
-#[cfg(feature = "check_asm")]
 use crate::frame::*;
 use crate::tiling::PlaneRegionMut;
 use crate::util::*;
@@ -152,6 +151,67 @@ pub(crate) static CDEF_FILTER_FNS: [[Option<CdefFilterFn>; 4];
 
 pub(crate) static CDEF_FILTER_HBD_FNS: [[Option<CdefFilterHBDFn>; 4];
   CpuFeatureLevel::len()] = [[None; 4]; CpuFeatureLevel::len()];
+
+type CdefDirFn =
+  unsafe extern fn(tmp: *const u16, tmp_stride: isize, var: *mut u32) -> i32;
+
+#[inline(always)]
+#[allow(clippy::let_and_return)]
+pub(crate) fn cdef_find_dir<T: Pixel>(
+  img: &PlaneSlice<'_, u16>, var: &mut u32, coeff_shift: usize,
+  cpu: CpuFeatureLevel,
+) -> i32 {
+  let call_native =
+    |var: &mut u32| native::cdef_find_dir::<T>(img, var, coeff_shift, cpu);
+
+  #[cfg(feature = "check_asm")]
+  let (ref_dir, ref_var) = {
+    let mut var: u32 = 0;
+    let dir = call_native(&mut var);
+    (dir, var)
+  };
+
+  let dir = match T::type_enum() {
+    PixelType::U8 => {
+      if let Some(func) = CDEF_DIR_FNS[cpu.as_index()] {
+        unsafe {
+          // Different from the version in dav1d. This version takes 16-bit
+          // input, even when working with 8 bit input. Mostly done to limit
+          // the amount of code being impacted.
+          (func)(
+            img.as_ptr() as *const u16,
+            u16::to_asm_stride(img.plane.cfg.stride),
+            var as *mut u32,
+          )
+        }
+      } else {
+        call_native(var)
+      }
+    }
+    PixelType::U16 => call_native(var),
+  };
+
+  #[cfg(feature = "check_asm")]
+  {
+    assert_eq!(dir, ref_dir);
+    assert_eq!(*var, ref_var);
+  }
+
+  dir
+}
+
+extern {
+  fn rav1e_cdef_dir_avx2(
+    tmp: *const u16, tmp_stride: isize, var: *mut u32,
+  ) -> i32;
+}
+
+pub(crate) static CDEF_DIR_FNS: [Option<CdefDirFn>; CpuFeatureLevel::len()] = {
+  let mut out: [Option<CdefDirFn>; CpuFeatureLevel::len()] =
+    [None; CpuFeatureLevel::len()];
+  out[CpuFeatureLevel::AVX2 as usize] = Some(rav1e_cdef_dir_avx2);
+  out
+};
 
 #[cfg(test)]
 mod test {

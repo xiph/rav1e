@@ -1903,6 +1903,7 @@ pub fn rdo_loop_decision<T: Pixel>(
     (
       input,
       cdef_analyze_superblock_range(
+        fi,
         input,
         &cw.bc.blocks.as_const(),
         sbo_0,

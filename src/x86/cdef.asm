@@ -28,6 +28,10 @@
 %if ARCH_X86_64
 
 SECTION_RODATA 32
+pd_47130256: dd 4, 7, 1, 3, 0, 2, 5, 6
+div_table: dd 840, 420, 280, 210, 168, 140, 120, 105
+           dd 420, 210, 140, 105
+shufw_6543210x: db 12, 13, 10, 11, 8, 9, 6, 7, 4, 5, 2, 3, 0, 1, 14, 15
 shufb_lohi: db 0, 8, 1, 9, 2, 10, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15
 tap_table: ; masks for 8 bit shifts
            db 0xFF, 0x7F, 0x3F, 0x1F, 0x0F, 0x07, 0x03, 0x01
@@ -51,6 +55,7 @@ tap_table: ; masks for 8 bit shifts
            db  0,  1,  0, -1,  1,  2,  0,  0
            db  0,  0,  1,  2,  1,  2,  0,  0
            db  0, -1,  1,  2,  0,  1,  0,  0
+pw_128: times 2 dw 128
 pw_2048: times 2 dw 2048
 
 SECTION .text
@@ -256,4 +261,200 @@ cglobal cdef_filter_%1x%2, 4, 12, 16, 64
 CDEF_FILTER 8, 8
 CDEF_FILTER 4, 8
 CDEF_FILTER 4, 4
+
+INIT_YMM avx2
+cglobal cdef_dir, 3, 4, 15, src, stride, var, stride3
+    ; Instead of loading 8-bit values and unpacking like dav1d, values are
+    ; already converted to 16-bit.
+    lea       stride3q, [strideq*3]
+    mova           xm0, [srcq+strideq*0]
+    mova           xm1, [srcq+strideq*1]
+    mova           xm2, [srcq+strideq*2]
+    mova           xm3, [srcq+stride3q]
+    lea           srcq, [srcq+strideq*4]
+    vinserti128     m3, [srcq+strideq*0], 1
+    vinserti128     m2, [srcq+strideq*1], 1
+    vinserti128     m1, [srcq+strideq*2], 1
+    vinserti128     m0, [srcq+stride3q], 1
+    vpbroadcastd    m8, [pw_128]
+
+    psubw           m0, m8
+    psubw           m1, m8
+    psubw           m2, m8
+    psubw           m3, m8
+
+    ; shuffle registers to generate partial_sum_diag[0-1] together
+    vpermq          m7, m0, q1032
+    vpermq          m6, m1, q1032
+    vpermq          m5, m2, q1032
+    vpermq          m4, m3, q1032
+
+    ; start with partial_sum_hv[0-1]
+    paddw           m8, m0, m1
+    paddw           m9, m2, m3
+    phaddw         m10, m0, m1
+    phaddw         m11, m2, m3
+    paddw           m8, m9
+    phaddw         m10, m11
+    vextracti128   xm9, m8, 1
+    vextracti128  xm11, m10, 1
+    paddw          xm8, xm9                 ; partial_sum_hv[1]
+    phaddw        xm10, xm11                ; partial_sum_hv[0]
+    vinserti128     m8, xm10, 1
+    vpbroadcastd    m9, [div_table+44]
+    pmaddwd         m8, m8
+    pmulld          m8, m9                  ; cost6[2a-d] | cost2[a-d]
+
+    ; create aggregates [lower half]:
+    ; m9 = m0:01234567+m1:x0123456+m2:xx012345+m3:xxx01234+
+    ;      m4:xxxx0123+m5:xxxxx012+m6:xxxxxx01+m7:xxxxxxx0
+    ; m10=             m1:7xxxxxxx+m2:67xxxxxx+m3:567xxxxx+
+    ;      m4:4567xxxx+m5:34567xxx+m6:234567xx+m7:1234567x
+    ; and [upper half]:
+    ; m9 = m0:xxxxxxx0+m1:xxxxxx01+m2:xxxxx012+m3:xxxx0123+
+    ;      m4:xxx01234+m5:xx012345+m6:x0123456+m7:01234567
+    ; m10= m0:1234567x+m1:234567xx+m2:34567xxx+m3:4567xxxx+
+    ;      m4:567xxxxx+m5:67xxxxxx+m6:7xxxxxxx
+    ; and then shuffle m11 [shufw_6543210x], unpcklwd, pmaddwd, pmulld, paddd
+
+    pslldq          m9, m1, 2
+    psrldq         m10, m1, 14
+    pslldq         m11, m2, 4
+    psrldq         m12, m2, 12
+    pslldq         m13, m3, 6
+    psrldq         m14, m3, 10
+    paddw           m9, m11
+    paddw          m10, m12
+    paddw           m9, m13
+    paddw          m10, m14
+    pslldq         m11, m4, 8
+    psrldq         m12, m4, 8
+    pslldq         m13, m5, 10
+    psrldq         m14, m5, 6
+    paddw           m9, m11
+    paddw          m10, m12
+    paddw           m9, m13
+    paddw          m10, m14
+    pslldq         m11, m6, 12
+    psrldq         m12, m6, 4
+    pslldq         m13, m7, 14
+    psrldq         m14, m7, 2
+    paddw           m9, m11
+    paddw          m10, m12
+    paddw           m9, m13
+    paddw          m10, m14                 ; partial_sum_diag[0/1][8-14,zero]
+    vbroadcasti128 m14, [shufw_6543210x]
+    vbroadcasti128 m13, [div_table+16]
+    vbroadcasti128 m12, [div_table+0]
+    paddw           m9, m0                  ; partial_sum_diag[0/1][0-7]
+    pshufb         m10, m14
+    punpckhwd      m11, m9, m10
+    punpcklwd       m9, m10
+    pmaddwd        m11, m11
+    pmaddwd         m9, m9
+    pmulld         m11, m13
+    pmulld          m9, m12
+    paddd           m9, m11                 ; cost0[a-d] | cost4[a-d]
+
+    ; merge horizontally and vertically for partial_sum_alt[0-3]
+    paddw          m10, m0, m1
+    paddw          m11, m2, m3
+    paddw          m12, m4, m5
+    paddw          m13, m6, m7
+    phaddw          m0, m4
+    phaddw          m1, m5
+    phaddw          m2, m6
+    phaddw          m3, m7
+
+    ; create aggregates [lower half]:
+    ; m4 = m10:01234567+m11:x0123456+m12:xx012345+m13:xxx01234
+    ; m11=              m11:7xxxxxxx+m12:67xxxxxx+m13:567xxxxx
+    ; and [upper half]:
+    ; m4 = m10:xxx01234+m11:xx012345+m12:x0123456+m13:01234567
+    ; m11= m10:567xxxxx+m11:67xxxxxx+m12:7xxxxxxx
+    ; and then pshuflw m11 3012, unpcklwd, pmaddwd, pmulld, paddd
+
+    pslldq          m4, m11, 2
+    psrldq         m11, 14
+    pslldq          m5, m12, 4
+    psrldq         m12, 12
+    pslldq          m6, m13, 6
+    psrldq         m13, 10
+    paddw           m4, m10
+    paddw          m11, m12
+    vpbroadcastd   m12, [div_table+44]
+    paddw           m5, m6
+    paddw          m11, m13                 ; partial_sum_alt[3/2] right
+    vbroadcasti128 m13, [div_table+32]
+    paddw           m4, m5                  ; partial_sum_alt[3/2] left
+    pshuflw         m5, m11, q3012
+    punpckhwd       m6, m11, m4
+    punpcklwd       m4, m5
+    pmaddwd         m6, m6
+    pmaddwd         m4, m4
+    pmulld          m6, m12
+    pmulld          m4, m13
+    paddd           m4, m6                  ; cost7[a-d] | cost5[a-d]
+
+    ; create aggregates [lower half]:
+    ; m5 = m0:01234567+m1:x0123456+m2:xx012345+m3:xxx01234
+    ; m1 =             m1:7xxxxxxx+m2:67xxxxxx+m3:567xxxxx
+    ; and [upper half]:
+    ; m5 = m0:xxx01234+m1:xx012345+m2:x0123456+m3:01234567
+    ; m1 = m0:567xxxxx+m1:67xxxxxx+m2:7xxxxxxx
+    ; and then pshuflw m1 3012, unpcklwd, pmaddwd, pmulld, paddd
+
+    pslldq          m5, m1, 2
+    psrldq          m1, 14
+    pslldq          m6, m2, 4
+    psrldq          m2, 12
+    pslldq          m7, m3, 6
+    psrldq          m3, 10
+    paddw           m5, m0
+    paddw           m1, m2
+    paddw           m6, m7
+    paddw           m1, m3                  ; partial_sum_alt[0/1] right
+    paddw           m5, m6                  ; partial_sum_alt[0/1] left
+    pshuflw         m0, m1, q3012
+    punpckhwd       m1, m5
+    punpcklwd       m5, m0
+    pmaddwd         m1, m1
+    pmaddwd         m5, m5
+    pmulld          m1, m12
+    pmulld          m5, m13
+    paddd           m5, m1                  ; cost1[a-d] | cost3[a-d]
+
+    mova           xm0, [pd_47130256+ 16]
+    mova            m1, [pd_47130256]
+    phaddd          m9, m8
+    phaddd          m5, m4
+    phaddd          m9, m5
+    vpermd          m0, m9                  ; cost[0-3]
+    vpermd          m1, m9                  ; cost[4-7] | cost[0-3]
+
+    ; now find the best cost
+    pmaxsd         xm2, xm0, xm1
+    pshufd         xm3, xm2, q1032
+    pmaxsd         xm2, xm3
+    pshufd         xm3, xm2, q2301
+    pmaxsd         xm2, xm3 ; best cost
+
+    ; find the idx using minpos
+    ; make everything other than the best cost negative via subtraction
+    ; find the min of unsigned 16-bit ints to sort out the negative values
+    psubd          xm4, xm1, xm2
+    psubd          xm3, xm0, xm2
+    packssdw       xm3, xm4
+    phminposuw     xm3, xm3
+
+    ; convert idx to 32-bits
+    psrld          xm3, 16
+    movd           eax, xm3
+
+    ; get idx^4 complement
+    vpermd          m3, m1
+    psubd          xm2, xm3
+    psrld          xm2, 10
+    movd        [varq], xm2
+    RET
 %endif ; ARCH_X86_64
