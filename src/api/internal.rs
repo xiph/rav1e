@@ -1053,15 +1053,11 @@ impl<T: Pixel> ContextInner<T> {
         buf.write_u64::<NativeEndian>(fi.w_in_imp_b as u64).unwrap();
         for y in 0..fi.h_in_imp_b {
           for x in 0..fi.w_in_imp_b {
-            let propagate_cost = fi.block_importances[y * fi.w_in_imp_b + x];
-            let intra_cost =
-              fi.lookahead_intra_costs[y * fi.w_in_imp_b + x] as f32;
-            let res = if propagate_cost == 0. {
-              1.
-            } else {
-              (intra_cost + propagate_cost) / intra_cost
-            };
-            buf.write_f32::<NativeEndian>(res).unwrap();
+            buf
+              .write_f32::<NativeEndian>(
+                fi.distortion_scales[y * fi.w_in_imp_b + x] as f32,
+              )
+              .unwrap();
           }
         }
         ::std::fs::write(format!("{}-imps.bin", fi.input_frameno), buf)
