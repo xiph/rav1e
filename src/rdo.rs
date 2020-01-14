@@ -28,8 +28,8 @@ use crate::motion_compensate;
 use crate::partition::RefType::*;
 use crate::partition::*;
 use crate::predict::{
-  AngleDelta, IntraParam, PredictionMode, RAV1E_INTER_COMPOUND_MODES,
-  RAV1E_INTER_MODES_MINIMAL, RAV1E_INTRA_MODES,
+  AngleDelta, IntraEdgeFilterParameters, IntraParam, PredictionMode,
+  RAV1E_INTER_COMPOUND_MODES, RAV1E_INTER_MODES_MINIMAL, RAV1E_INTRA_MODES,
 };
 use crate::rdo_tables::*;
 use crate::tiling::*;
@@ -1144,6 +1144,45 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
           None,
         )
       };
+
+      let ief_params = if fi.sequence.enable_intra_edge_filter {
+        let (bo_x, bo_y) = (tile_bo.0.x, tile_bo.0.y);
+        let above_block_info = if bo_y == 0 {
+          None
+        } else {
+          Some(ts.coded_block_info[bo_y - 1][bo_x])
+        };
+
+        let left_block_info = if bo_x == 0 {
+          None
+        } else {
+          Some(ts.coded_block_info[bo_y][bo_x - 1])
+        };
+
+        IntraEdgeFilterParameters {
+          plane: 0,
+          above_mode: match above_block_info {
+            Some(bi) => Some(bi.luma_mode),
+            None => None,
+          },
+          left_mode: match left_block_info {
+            Some(bi) => Some(bi.luma_mode),
+            None => None,
+          },
+          above_ref_frame_types: match above_block_info {
+            Some(bi) => Some(bi.reference_types),
+            None => None,
+          },
+          left_ref_frame_types: match left_block_info {
+            Some(bi) => Some(bi.reference_types),
+            None => None,
+          },
+        }
+        .into()
+      } else {
+        None
+      };
+
       intra_mode_set
         .iter()
         .map(|&luma_mode| {
@@ -1151,8 +1190,6 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
           let rec = &mut ts.rec.planes[0];
           let mut rec_region =
             rec.subregion_mut(Area::BlockStartingAt { bo: tile_bo.0 });
-
-          let ief_params = None; // TODO: see if it is worth applying during RDO
 
           // FIXME: If tx partition is used, luma_mode.predict_intra() should be called for each tx block
           luma_mode.predict_intra(
@@ -1162,7 +1199,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
             fi.sequence.bit_depth,
             &[0i16; 2],
             IntraParam::None,
-            ief_params,
+            if luma_mode.is_directional() { ief_params } else { None },
             &edge_buf,
             fi.cpu_feature_level,
           );

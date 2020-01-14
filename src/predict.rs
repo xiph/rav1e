@@ -395,6 +395,32 @@ pub struct IntraEdgeFilterParameters {
   pub left_mode: Option<PredictionMode>,
 }
 
+impl IntraEdgeFilterParameters {
+  pub fn use_smooth_filter(self) -> bool {
+    let above_smooth = match self.above_mode {
+      Some(PredictionMode::SMOOTH_PRED)
+      | Some(PredictionMode::SMOOTH_V_PRED)
+      | Some(PredictionMode::SMOOTH_H_PRED) => {
+        self.plane == 0
+          || self.above_ref_frame_types.unwrap()[0] == RefType::INTRA_FRAME
+      }
+      _ => false,
+    };
+
+    let left_smooth = match self.left_mode {
+      Some(PredictionMode::SMOOTH_PRED)
+      | Some(PredictionMode::SMOOTH_V_PRED)
+      | Some(PredictionMode::SMOOTH_H_PRED) => {
+        self.plane == 0
+          || self.left_ref_frame_types.unwrap()[0] == RefType::INTRA_FRAME
+      }
+      _ => false,
+    };
+
+    above_smooth || left_smooth
+  }
+}
+
 // Weights are quadratic from '1' to '1 / block_size', scaled by 2^sm_weight_log2_scale.
 const sm_weight_log2_scale: u8 = 8;
 
@@ -917,6 +943,8 @@ pub(crate) mod native {
         return;
       }
 
+      // Copy the edge buffer to avoid predicting from
+      // just-filtered samples.
       let mut edge_filtered = vec![T::cast_from(0); edge.len()];
       edge_filtered.copy_from_slice(&edge[..edge.len()]);
 
@@ -991,29 +1019,7 @@ pub(crate) mod native {
       above_filtered[1..=above.len()].clone_from_slice(above);
       left_filtered[1..=left.len()].clone_from_slice(&left_clone);
 
-      let params = ief_params.unwrap();
-
-      let above_smooth = match params.above_mode {
-        Some(PredictionMode::SMOOTH_PRED)
-        | Some(PredictionMode::SMOOTH_V_PRED)
-        | Some(PredictionMode::SMOOTH_H_PRED) => {
-          params.plane == 0
-            || params.above_ref_frame_types.unwrap()[0] == RefType::INTRA_FRAME
-        }
-        _ => false,
-      };
-
-      let left_smooth = match params.left_mode {
-        Some(PredictionMode::SMOOTH_PRED)
-        | Some(PredictionMode::SMOOTH_V_PRED)
-        | Some(PredictionMode::SMOOTH_H_PRED) => {
-          params.plane == 0
-            || params.left_ref_frame_types.unwrap()[0] == RefType::INTRA_FRAME
-        }
-        _ => false,
-      };
-
-      let smooth_filter = above_smooth || left_smooth;
+      let smooth_filter = ief_params.unwrap().use_smooth_filter();
 
       if p_angle != 90 && p_angle != 180 {
         let top_left_px =

@@ -134,13 +134,29 @@ pub fn dispatch_predict_intra<T: Pixel>(
         | PredictionMode::D157_PRED
         | PredictionMode::D203_PRED
         | PredictionMode::D67_PRED => {
-          (if angle <= 90 {
-            rav1e_ipred_z1_avx2
-          } else if angle < 180 {
-            rav1e_ipred_z2_avx2
+          let enable_ief = ief_params.is_some() as libc::c_int;
+
+          if enable_ief > 0 {
+            // FIXME: segfaults with smooth filter, desyncs without
+            call_native(dst);
           } else {
-            rav1e_ipred_z3_avx2
-          })(dst_ptr, stride, edge_ptr, w, h, angle);
+            let ief_smooth_filter = if let Some(params) = ief_params {
+              params.use_smooth_filter()
+            } else {
+              false
+            } as libc::c_int;
+            // dav1d assembly uses the unused integer bits to hold IEF parameters
+            let angle_with_flags =
+              angle | (enable_ief << 10) | (ief_smooth_filter << 9);
+
+            (if angle <= 90 {
+              rav1e_ipred_z1_avx2
+            } else if angle < 180 {
+              rav1e_ipred_z2_avx2
+            } else {
+              rav1e_ipred_z3_avx2
+            })(dst_ptr, stride, edge_ptr, w, h, angle_with_flags);
+          }
         }
         PredictionMode::SMOOTH_PRED => {
           rav1e_ipred_smooth_avx2(dst_ptr, stride, edge_ptr, w, h, angle);
