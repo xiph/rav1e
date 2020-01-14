@@ -12,6 +12,7 @@ use crate::transform::forward::native;
 use crate::transform::forward_shared::*;
 use crate::transform::*;
 use crate::util::*;
+use std::mem::MaybeUninit;
 
 #[cfg(target_arch = "x86")]
 use std::arch::x86::*;
@@ -336,7 +337,6 @@ unsafe fn fwd_txfm2d_avx2<T: Coefficient>(
   let mut tmp: AlignedArray<[I32X8; 64 * 64 / 8]> =
     AlignedArray::uninitialized();
   let buf = &mut tmp.array[..txfm_size_col * (txfm_size_row / 8).max(1)];
-  let tx_in = &mut [I32X8::zero(); 64];
   let cfg = Txfm2DFlipCfg::fwd(tx_type, tx_size, bd);
 
   let txfm_func_col = get_func_i32x8(cfg.txfm_type_col);
@@ -356,21 +356,26 @@ unsafe fn fwd_txfm2d_avx2<T: Coefficient>(
         shift,
       )
     }
+
+    // Avoid zero initialization
+    let tx_in = &mut [MaybeUninit::<I32X8>::uninit(); 64][..txfm_size_row];
+
     if cfg.ud_flip {
       // flip upside down
-      for r in 0..txfm_size_row {
-        let input_ptr =
-          input[(txfm_size_row - r - 1) * stride + cg..].as_ptr();
-        tx_in[r] = load_columns(input_ptr, shift);
+      for (in_slice, out_reg) in
+        input[cg..].chunks(stride).zip(tx_in.iter_mut().rev())
+      {
+        *out_reg = MaybeUninit::new(load_columns(in_slice.as_ptr(), shift));
       }
     } else {
-      for r in 0..txfm_size_row {
-        let input_ptr = input[r * stride + cg..].as_ptr();
-        tx_in[r] = load_columns(input_ptr, shift);
+      for (in_slice, out_reg) in
+        input[cg..].chunks(stride).zip(tx_in.iter_mut())
+      {
+        *out_reg = MaybeUninit::new(load_columns(in_slice.as_ptr(), shift));
       }
     }
 
-    let col_coeffs = &mut tx_in[..txfm_size_row];
+    let col_coeffs = assume_slice_init_mut(tx_in);
 
     txfm_func_col(col_coeffs);
     round_shift_array_avx2(col_coeffs, txfm_size_row, -cfg.shift[1]);
