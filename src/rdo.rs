@@ -439,9 +439,10 @@ pub fn compute_distortion_scale<T: Pixel>(
   let x = frame_bo.0.x >> IMPORTANCE_BLOCK_TO_BLOCK_SHIFT;
   let y = frame_bo.0.y >> IMPORTANCE_BLOCK_TO_BLOCK_SHIFT;
 
-  let propagate_cost = fi.block_importances[y * fi.w_in_imp_b + x] as f64;
-  let intra_cost = fi.lookahead_intra_costs[y * fi.w_in_imp_b + x] as f64;
+  fi.distortion_scales[y * fi.w_in_imp_b + x]
+}
 
+pub fn distortion_scale_for(propagate_cost: f64, intra_cost: f64) -> f64 {
   // The mbtree paper \cite{mbtree} uses the following formula:
   //
   //     QP_delta = -strength * log2(1 + (propagate_cost / intra_cost))
