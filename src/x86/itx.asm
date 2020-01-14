@@ -3452,8 +3452,8 @@ ALIGN function_align
     IDTX16                0, 1, 15
     mova                 m1, [rsp+32*0]
     pmulhrsw            m15, m1
-    paddw                m1, m1
-    paddw               m15, m1
+    paddsw               m1, m1
+    paddsw              m15, m1
     jmp m(idct_16x16_internal).end
 
 %define o_base iadst4_dconly2a + 128
