@@ -17,8 +17,8 @@ use interpolate_name::interpolate_test;
 fn setup_encoder<T: Pixel>(
   w: usize, h: usize, speed: usize, quantizer: usize, bit_depth: usize,
   chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
-  bitrate: i32, low_latency: bool, no_scene_detection: bool,
-  rdo_lookahead_frames: usize,
+  bitrate: i32, low_latency: bool, switch_frame_interval: u64,
+  no_scene_detection: bool, rdo_lookahead_frames: usize,
 ) -> Context<T> {
   assert!(bit_depth == 8 || std::mem::size_of::<T>() > 1);
   let mut enc = EncoderConfig::with_speed_preset(speed);
@@ -26,6 +26,7 @@ fn setup_encoder<T: Pixel>(
   enc.min_key_frame_interval = min_keyint;
   enc.max_key_frame_interval = max_keyint;
   enc.low_latency = low_latency;
+  enc.switch_frame_interval = switch_frame_interval;
   enc.width = w;
   enc.height = h;
   enc.bit_depth = bit_depth;
@@ -80,6 +81,7 @@ fn flush(low_lantency: bool, no_scene_detection: bool) {
     200,
     0,
     low_lantency,
+    0,
     no_scene_detection,
     10,
   );
@@ -133,6 +135,7 @@ fn flush_unlimited(low_lantency: bool, no_scene_detection: bool) {
     200,
     0,
     low_lantency,
+    0,
     no_scene_detection,
     10,
   );
@@ -211,6 +214,7 @@ fn output_frameno_low_latency_minus(missing: u64) {
     5,
     0,
     true,
+    0,
     true,
     10,
   );
@@ -258,6 +262,51 @@ fn output_frameno_low_latency_minus(missing: u64) {
   );
 }
 
+#[test]
+fn switch_frame_interval() {
+  // Test output_frameno configurations when there are <missing> less frames
+  // than the perfect subgop size, in no-reorder mode.
+
+  let mut ctx = setup_encoder::<u8>(
+    64,
+    80,
+    10,
+    100,
+    8,
+    ChromaSampling::Cs420,
+    5,
+    5,
+    0,
+    true,
+    2,
+    true,
+    10,
+  );
+  let limit = 10;
+  send_frames(&mut ctx, limit, 0);
+  ctx.flush();
+
+  let data = get_frame_invariants(ctx)
+    .map(|fi| (fi.input_frameno, fi.frame_type))
+    .collect::<Vec<_>>();
+
+  assert_eq!(
+    &data[..],
+    &[
+      (0, FrameType::KEY),
+      (1, FrameType::INTER),
+      (2, FrameType::SWITCH),
+      (3, FrameType::INTER),
+      (4, FrameType::SWITCH),
+      (5, FrameType::KEY),
+      (6, FrameType::INTER),
+      (7, FrameType::SWITCH),
+      (8, FrameType::INTER),
+      (9, FrameType::SWITCH),
+    ][..]
+  );
+}
+
 #[interpolate_test(0, 0)]
 #[interpolate_test(1, 1)]
 fn pyramid_level_low_latency_minus(missing: u64) {
@@ -275,6 +324,7 @@ fn pyramid_level_low_latency_minus(missing: u64) {
     5,
     0,
     true,
+    0,
     true,
     10,
   );
@@ -309,6 +359,7 @@ fn output_frameno_reorder_minus(missing: u64) {
     5,
     0,
     false,
+    0,
     true,
     10,
   );
@@ -437,6 +488,7 @@ fn pyramid_level_reorder_minus(missing: u64) {
     5,
     0,
     false,
+    0,
     true,
     10,
   );
@@ -564,6 +616,7 @@ fn output_frameno_reorder_scene_change_at(scene_change_at: u64) {
     5,
     0,
     false,
+    0,
     false,
     10,
   );
@@ -670,6 +723,7 @@ fn pyramid_level_reorder_scene_change_at(scene_change_at: u64) {
     5,
     0,
     false,
+    0,
     false,
     10,
   );
@@ -776,6 +830,7 @@ fn output_frameno_incremental_reorder_minus(missing: u64) {
     5,
     0,
     false,
+    0,
     true,
     10,
   );
@@ -906,6 +961,7 @@ fn output_frameno_incremental_reorder_scene_change_at(scene_change_at: u64) {
     5,
     0,
     false,
+    0,
     false,
     10,
   );
@@ -1025,6 +1081,7 @@ fn output_frameno_incremental_reorder_keyframe_at(kf_at: u64) {
     5,
     0,
     false,
+    0,
     false,
     10,
   );
@@ -1139,6 +1196,7 @@ fn output_frameno_no_scene_change_at_short_flash(flash_at: u64) {
     5,
     0,
     false,
+    0,
     false,
     10,
   );
@@ -1191,6 +1249,7 @@ fn output_frameno_no_scene_change_at_max_len_flash() {
     10,
     0,
     false,
+    0,
     false,
     10,
   );
@@ -1249,6 +1308,7 @@ fn output_frameno_scene_change_past_max_len_flash() {
     10,
     0,
     false,
+    0,
     false,
     10,
   );
@@ -1313,6 +1373,7 @@ fn output_frameno_no_scene_change_at_multiple_flashes() {
     10,
     0,
     false,
+    0,
     false,
     10,
   );
@@ -1477,6 +1538,7 @@ fn lookahead_size_properly_bounded(
     100,
     0,
     false,
+    0,
     true,
     rdo_lookahead,
   );
