@@ -1279,18 +1279,26 @@ pub fn encode_tx_block<T: Pixel>(
 
   let tx_dist = if rdo_type.needs_tx_dist() {
     // Store tx-domain distortion of this block
+    // rcoeffs above 32 rows/cols aren't held in the array, because they are
+    // always 0. The first 32x32 is stored first in coeffs so we can iterate
+    // over coeffs and rcoeffs for the first 32 rows/cols. For the
+    // coefficients above 32 rows/cols, we iterate over the rest of coeffs
+    // with the assumption that rcoeff coefficients are zero.
     let mut raw_tx_dist = coeffs
       .iter()
-      .zip(
-        // rcoeffs above 32 rows/cols are always 0. The first 32x32 is stored
-        // first in coeffs, so just chain repeating zeroes to rcoeff.
-        rcoeffs.iter().chain(std::iter::repeat(&T::Coeff::cast_from(0))),
-      )
-      .map(|(a, b)| {
-        let c = i32::cast_from(*a) - i32::cast_from(*b);
+      .zip(rcoeffs.iter())
+      .map(|(&a, &b)| {
+        let c = i32::cast_from(a) - i32::cast_from(b);
         (c * c) as u64
       })
-      .sum::<u64>();
+      .sum::<u64>()
+      + coeffs[rcoeffs.len()..]
+        .iter()
+        .map(|&a| {
+          let c = i32::cast_from(a);
+          (c * c) as u64
+        })
+        .sum::<u64>();
 
     let tx_dist_scale_bits = 2 * (3 - get_log_tx_scale(tx_size));
     let tx_dist_scale_rounding_offset = 1 << (tx_dist_scale_bits - 1);
