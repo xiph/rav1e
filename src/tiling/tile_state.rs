@@ -197,4 +197,56 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
       y: self.sbo.0.y + tile_sbo.0.y,
     })
   }
+
+  pub fn above_block_info(
+    &self, bo: TileBlockOffset, plane: usize,
+  ) -> Option<CodedBlockInfo> {
+    let (bo_x, bo_y) = (bo.0.x, bo.0.y);
+    if plane == 0 {
+      if bo_y == 0 {
+        None
+      } else {
+        Some(self.coded_block_info[bo_y - 1][bo_x])
+      }
+    } else {
+      let (mut bo_x_uv, mut bo_y_uv) = (bo_x, bo_y);
+      if bo_x & 1 == 0 {
+        bo_x_uv += 1
+      };
+      if bo_y & 1 == 1 {
+        bo_y_uv -= 1
+      };
+      if bo_y_uv == 0 {
+        None
+      } else {
+        Some(self.coded_block_info[bo_y_uv - 1][bo_x_uv])
+      }
+    }
+  }
+
+  pub fn left_block_info(
+    &self, bo: TileBlockOffset, plane: usize,
+  ) -> Option<CodedBlockInfo> {
+    let (bo_x, bo_y) = (bo.0.x, bo.0.y);
+    if plane == 0 {
+      if bo_x == 0 {
+        None
+      } else {
+        Some(self.coded_block_info[bo_y][bo_x - 1])
+      }
+    } else {
+      let (mut bo_x_uv, mut bo_y_uv) = (bo_x, bo_y);
+      if bo_x & 1 == 1 {
+        bo_x_uv -= 1
+      };
+      if bo_y & 1 == 0 {
+        bo_y_uv += 1
+      };
+      if bo_x_uv == 0 {
+        None
+      } else {
+        Some(self.coded_block_info[bo_y_uv][bo_x_uv - 1])
+      }
+    }
+  }
 }
