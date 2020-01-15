@@ -1146,39 +1146,13 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
       };
 
       let ief_params = if fi.sequence.enable_intra_edge_filter {
-        let (bo_x, bo_y) = (tile_bo.0.x, tile_bo.0.y);
-        let above_block_info = if bo_y == 0 {
-          None
-        } else {
-          Some(ts.coded_block_info[bo_y - 1][bo_x])
-        };
-
-        let left_block_info = if bo_x == 0 {
-          None
-        } else {
-          Some(ts.coded_block_info[bo_y][bo_x - 1])
-        };
-
-        IntraEdgeFilterParameters {
-          plane: 0,
-          above_mode: match above_block_info {
-            Some(bi) => Some(bi.luma_mode),
-            None => None,
-          },
-          left_mode: match left_block_info {
-            Some(bi) => Some(bi.luma_mode),
-            None => None,
-          },
-          above_ref_frame_types: match above_block_info {
-            Some(bi) => Some(bi.reference_types),
-            None => None,
-          },
-          left_ref_frame_types: match left_block_info {
-            Some(bi) => Some(bi.reference_types),
-            None => None,
-          },
-        }
-        .into()
+        let above_block_info = ts.above_block_info(tile_bo, 0);
+        let left_block_info = ts.left_block_info(tile_bo, 0);
+        Some(IntraEdgeFilterParameters::new(
+          0,
+          above_block_info,
+          left_block_info,
+        ))
       } else {
         None
       };

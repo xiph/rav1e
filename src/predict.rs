@@ -396,6 +396,39 @@ pub struct IntraEdgeFilterParameters {
 }
 
 impl IntraEdgeFilterParameters {
+  pub fn new(
+    plane: usize, above_ctx: Option<CodedBlockInfo>,
+    left_ctx: Option<CodedBlockInfo>,
+  ) -> Self {
+    IntraEdgeFilterParameters {
+      plane,
+      above_mode: match above_ctx {
+        Some(bi) => match plane {
+          0 => bi.luma_mode,
+          _ => bi.chroma_mode,
+        }
+        .into(),
+        None => None,
+      },
+      left_mode: match left_ctx {
+        Some(bi) => match plane {
+          0 => bi.luma_mode,
+          _ => bi.chroma_mode,
+        }
+        .into(),
+        None => None,
+      },
+      above_ref_frame_types: match above_ctx {
+        Some(bi) => Some(bi.reference_types),
+        None => None,
+      },
+      left_ref_frame_types: match left_ctx {
+        Some(bi) => Some(bi.reference_types),
+        None => None,
+      },
+    }
+  }
+
   pub fn use_smooth_filter(self) -> bool {
     let above_smooth = match self.above_mode {
       Some(PredictionMode::SMOOTH_PRED)
