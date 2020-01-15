@@ -247,12 +247,9 @@ impl QuantizationContext {
   }
 
   #[inline]
-  pub fn quantize<T>(
+  pub fn quantize<T: Coefficient>(
     &self, coeffs: &[T], qcoeffs: &mut [T], tx_size: TxSize, tx_type: TxType,
-  ) -> usize
-  where
-    T: Coefficient,
-  {
+  ) -> usize {
     let scan = av1_scan_orders[tx_size as usize][tx_type as usize].scan;
 
     qcoeffs[0] = {

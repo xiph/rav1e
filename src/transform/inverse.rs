@@ -1590,12 +1590,10 @@ pub(crate) mod native {
   use std::cmp;
 
   #[cold_for_target_arch("x86_64", "aarch64")]
-  pub fn inverse_transform_add<T>(
+  pub fn inverse_transform_add<T: Pixel>(
     input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, _eob: usize,
     tx_size: TxSize, tx_type: TxType, bd: usize, _cpu: CpuFeatureLevel,
-  ) where
-    T: Pixel,
-  {
+  ) {
     let width: usize = tx_size.width();
     let height: usize = tx_size.height();
 
