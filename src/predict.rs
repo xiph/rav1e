@@ -996,18 +996,22 @@ pub(crate) mod native {
     }
 
     fn upsample_edge<T: Pixel>(size: usize, edge: &mut [T], bit_depth: usize) {
-      let mut dup = Vec::with_capacity(size + 3);
-      dup.push(edge[0]); // top left pixel
-      for i in 0..=size {
-        dup.push(edge[i]); // [i + 1]
-      }
-      dup.push(edge[size]); // [size + 2]
+      // The input edge should be valid in the -1..size range,
+      // where the -1 index is the top-left edge pixel. Since
+      // negative indices are unsafe in Rust, the caller is
+      // expected to globally offset it by 1, which makes the
+      // input range 0..=size.
+      let mut dup = vec![T::cast_from(0); size + 3];
+      dup[0] = edge[0];
+      dup[1..=size + 1].copy_from_slice(&edge[0..=size]);
+      dup[size + 2] = edge[size];
 
-      // Past here the edge is being filtered, and
-      // its effective range is shifted from -1..size-1
-      // to -2..size-2, affecting future offsets.
-      // It would be less confusing if we could actually
-      // use negative offsets in our slices, but this is Rust.
+      // Past here the edge is being filtered, and its
+      // effective range is shifted from -1..size to
+      // -2..2*size-1. Again, because this is safe Rust,
+      // we cannot use negative indices, and the actual range
+      // will be 0..=2*size. The caller is expected to adjust
+      // its indices on receipt of the filtered edge.
       edge[0] = dup[0];
 
       for i in 0..size {
@@ -1015,9 +1019,7 @@ pub(crate) mod native {
           + (9 * dup[i + 1].to_i32().unwrap())
           + (9 * dup[i + 2].to_i32().unwrap())
           - dup[i + 3].to_i32().unwrap();
-        s = ((((s + 8) as f32 / 16.0).floor()) as i32)
-          .max(0)
-          .min(2i32.pow(bit_depth.try_into().unwrap()) - 1);
+        s = (((s + 8) / 16) as i32).max(0).min((1 << bit_depth) - 1);
 
         edge[2 * i + 1] = T::cast_from(s);
         edge[2 * i + 2] = dup[i + 2];
@@ -1029,8 +1031,8 @@ pub(crate) mod native {
     let max_x = output.plane_cfg.width as isize - 1;
     let max_y = output.plane_cfg.height as isize - 1;
 
-    let mut upsample_above = 0;
-    let mut upsample_left = 0;
+    let mut upsample_above = false;
+    let mut upsample_left = false;
 
     let mut above_edge: &[T] = above;
     let mut left_edge: &[T] = left;
@@ -1054,6 +1056,7 @@ pub(crate) mod native {
       let smooth_filter = ief_params.unwrap().use_smooth_filter();
 
       if p_angle != 90 && p_angle != 180 {
+        // Filter the top left pixel, if needed.
         let top_left_px =
           if p_angle > 90 && p_angle < 180 && width + height >= 24 {
             let (l, a, tl): (u32, u32, u32) =
@@ -1107,9 +1110,8 @@ pub(crate) mod native {
         height,
         smooth_filter,
         p_angle as isize - 90,
-      )
-      .into();
-      if upsample_above == 1 {
+      );
+      if upsample_above {
         upsample_edge(num_px.0, &mut above_filtered[..], bit_depth);
       }
       upsample_left = select_ief_upsample(
@@ -1117,9 +1119,8 @@ pub(crate) mod native {
         height,
         smooth_filter,
         p_angle as isize - 180,
-      )
-      .into();
-      if upsample_left == 1 {
+      );
+      if upsample_left {
         upsample_edge(num_px.1, &mut left_filtered[..], bit_depth);
       }
 
@@ -1179,6 +1180,8 @@ pub(crate) mod native {
 
     // edge buffer index offsets applied due to the fact
     // that we cannot safely use negative indices in Rust
+    let upsample_above = upsample_above as usize;
+    let upsample_left = upsample_left as usize;
     let offset_above = (enable_edge_filter as usize) << upsample_above;
     let offset_left = (enable_edge_filter as usize) << upsample_left;
 
