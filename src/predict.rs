@@ -1045,12 +1045,11 @@ pub(crate) mod native {
     let mut left_filtered: Vec<T> =
       vec![T::cast_from(0); (width + height) * 2 + 1];
 
-    let left_clone: &mut [T] = &mut left.clone().to_owned();
-    left_clone.as_mut().reverse();
-
     if enable_edge_filter {
       above_filtered[1..=above.len()].clone_from_slice(above);
-      left_filtered[1..=left.len()].clone_from_slice(&left_clone);
+      for i in 1..=left.len() {
+        left_filtered[i] = left[left.len() - i];
+      }
 
       let smooth_filter = ief_params.unwrap().use_smooth_filter();
 
@@ -1058,7 +1057,7 @@ pub(crate) mod native {
         let top_left_px =
           if p_angle > 90 && p_angle < 180 && width + height >= 24 {
             let (l, a, tl): (u32, u32, u32) =
-              (left_clone[0].into(), above[0].into(), top_left[0].into());
+              (left_filtered[1].into(), above[0].into(), top_left[0].into());
             let s = l * 5 + tl * 6 + a * 5;
             T::cast_from((s + (1 << 3)) >> 4)
           } else {
