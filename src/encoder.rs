@@ -1767,12 +1767,10 @@ pub fn encode_block_post_cdef<T: Pixel>(
   if fi.sequence.enable_intra_edge_filter {
     for y in 0..bsize.height_mi() {
       for x in 0..bsize.width_mi() {
-        ts.coded_block_info[tile_bo.0.y + y][tile_bo.0.x + x].luma_mode =
-          luma_mode;
-        ts.coded_block_info[tile_bo.0.y + y][tile_bo.0.x + x].chroma_mode =
-          chroma_mode;
-        ts.coded_block_info[tile_bo.0.y + y][tile_bo.0.x + x]
-          .reference_types = ref_frames;
+        let bi = &mut ts.coded_block_info[tile_bo.0.y + y][tile_bo.0.x + x];
+        bi.luma_mode = luma_mode;
+        bi.chroma_mode = chroma_mode;
+        bi.reference_types = ref_frames;
       }
     }
   }
