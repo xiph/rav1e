@@ -233,8 +233,6 @@ pub(crate) mod native {
   #[cfg(test)]
   mod test {
     use super::*;
-    use crate::api::*;
-    use crate::encoder::*;
 
     #[test]
     fn check_max_element() {
