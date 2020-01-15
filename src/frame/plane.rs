@@ -258,6 +258,25 @@ impl<T: Pixel> Plane<T> {
     Plane { data, cfg }
   }
 
+  /// Allocates and returns an uninitialized plane.
+  unsafe fn new_uninitialized(
+    width: usize, height: usize, xdec: usize, ydec: usize, xpad: usize,
+    ypad: usize,
+  ) -> Self {
+    let cfg = PlaneConfig::new(
+      width,
+      height,
+      xdec,
+      ydec,
+      xpad,
+      ypad,
+      mem::size_of::<T>(),
+    );
+    let data = PlaneData::new_uninitialized(cfg.stride * cfg.alloc_height);
+
+    Plane { data, cfg }
+  }
+
   #[cfg(any(test, feature = "bench"))]
   pub fn wrap(data: Vec<T>, stride: usize) -> Self {
     let len = data.len();
@@ -435,6 +454,62 @@ impl<T: Pixel> Plane<T> {
         dst[col] = T::cast_from(avg);
       }
     }
+  }
+
+  /// produces a hres and qres downsampled frame
+  pub(crate) fn downsample_from_2x(src: &Plane<T>, frame_width: usize, frame_height: usize) -> (Plane<T>, Plane<T>) {
+    // unsafe: all pixels initialized in this function
+    let mut hres = unsafe { Plane::new_uninitialized(
+      src.cfg.width / 2,
+      src.cfg.height / 2,
+      src.cfg.xdec + 1,
+      src.cfg.ydec + 1,
+      src.cfg.xpad / 2,
+      src.cfg.ypad / 2,
+    ) };
+    let mut qres = unsafe { Plane::new_uninitialized(
+      hres.cfg.width / 2,
+      hres.cfg.height / 2,
+      hres.cfg.xdec + 1,
+      hres.cfg.ydec + 1,
+      hres.cfg.xpad / 2,
+      hres.cfg.ypad / 2,
+    ) };
+
+    let width = qres.cfg.width;
+    let height = qres.cfg.height;
+    let xorigin = qres.cfg.xorigin;
+    let yorigin = qres.cfg.yorigin;
+    let stride = qres.cfg.stride;
+
+    assert!(width * 4 == src.cfg.width);
+    assert!(height * 4 == src.cfg.height);
+
+    for q_row in 0..height {
+      for q_col in 0..width {
+        let mut h_avg = [0; 4];
+        for h_row in 0..2 {
+          for h_col in 0..2 {
+            let mut h_sum = 0;
+            h_sum += u32::cast_from(src.p(4 * q_col + 2 * h_col, 4 * q_row + 2 * h_row));
+            h_sum += u32::cast_from(src.p(4 * q_col + 2 * h_col + 1, 4 * q_row + 2 * h_row));
+            h_sum += u32::cast_from(src.p(4 * q_col + 2 * h_col, 4 * q_row + 2 * h_row + 1));
+            h_sum += u32::cast_from(src.p(4 * q_col + 2 * h_col + 1, 4 * q_row + 2 * h_col + 1));
+            h_avg[h_col*2+h_row] = (h_sum + 2) >> 2;
+            let base = (hres.cfg.yorigin + q_row * 2 + h_row) * hres.cfg.stride + hres.cfg.xorigin;
+            let dst = &mut hres.data[base..base + hres.cfg.width];
+            dst[q_col*2 + h_col] = T::cast_from(h_avg[h_col*2+h_row]);
+          }
+        }
+        let q_avg = (h_avg[0] + h_avg[1] + h_avg[2] + h_avg[3] + 2) >> 2;
+        let base = (yorigin + q_row) * stride + xorigin;
+        let dst = &mut qres.data[base..base + width];
+        dst[q_col] = T::cast_from(q_avg);
+      }
+    }
+    hres.pad(frame_width, frame_height);
+    hres.pad(frame_width, frame_height);
+    (hres, qres)
   }
 
   /// Iterates over the pixels in the plane, skipping the padding.
