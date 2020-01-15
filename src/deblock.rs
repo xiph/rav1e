@@ -1288,6 +1288,7 @@ fn sse_h_edge<T: Pixel>(
 }
 
 // Deblocks all edges, vertical and horizontal, in a single plane
+#[hawktracer(deblock_plane)]
 pub fn deblock_plane<T: Pixel>(
   fi: &FrameInvariants<T>, deblock: &DeblockState, p: &mut Plane<T>,
   pli: usize, blocks: &FrameBlocks,
