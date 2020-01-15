@@ -1070,9 +1070,12 @@ def_fns_48 8, 4
         rshrn_sz        v27, v6,  v7,  #12, \sz                   // t14a
 
         smull_smlsl     v4,  v5,  v29, v23, v0.h[2], v0.h[3], \sz // -> t13a
-        neg             v29\sz,  v29\sz
-        smull_smlsl     v6,  v7,  v29, v23, v0.h[3], v0.h[2], \sz // -> t10a
+        smull_smlal     v6,  v7,  v29, v23, v0.h[3], v0.h[2], \sz // -> t10a
         rshrn_sz        v29, v4,  v5,  #12, \sz                   // t13a
+        neg             v6.4s,   v6.4s
+.ifc \sz, .8h
+        neg             v7.4s,   v7.4s
+.endif
         rshrn_sz        v23, v6,  v7,  #12, \sz                   // t10a
 
         sqsub           v2\sz,   v17\sz,  v19\sz  // t11a
