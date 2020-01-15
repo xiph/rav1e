@@ -20,6 +20,7 @@ use crate::quantize::*;
 use crate::rdo::*;
 use crate::stats::EncoderStats;
 use crate::util::*;
+use std::ops::{Index, IndexMut};
 use std::sync::Arc;
 
 /// Tiled view of FrameState
@@ -63,7 +64,7 @@ pub struct TileStateMut<'a, T: Pixel> {
   pub restoration: TileRestorationStateMut<'a>,
   pub half_res_pmvs: &'a mut Vec<BlockPmv>,
   pub mvs: Vec<TileMotionVectorsMut<'a>>,
-  pub coded_block_info: Vec<Vec<CodedBlockInfo>>, // indexed in MI units
+  pub coded_block_info: MiTileState,
   pub integral_buffer: IntegralImageBuffer,
   pub enc_stats: EncoderStats,
 }
@@ -85,6 +86,39 @@ impl Default for CodedBlockInfo {
       chroma_mode: PredictionMode::DC_PRED,
       reference_types: [RefType::INTRA_FRAME, RefType::NONE_FRAME],
     }
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct MiTileState {
+  mi_width: usize,
+  mi_height: usize,
+  mi_block_info: Vec<CodedBlockInfo>,
+}
+
+impl MiTileState {
+  pub fn new(mi_width: usize, mi_height: usize) -> Self {
+    MiTileState {
+      mi_width,
+      mi_height,
+      mi_block_info: vec![CodedBlockInfo::default(); mi_width * mi_height],
+    }
+  }
+}
+
+impl Index<usize> for MiTileState {
+  type Output = [CodedBlockInfo];
+
+  #[inline(always)]
+  fn index(&self, index: usize) -> &Self::Output {
+    &self.mi_block_info[index * self.mi_width..(index + 1) * self.mi_width]
+  }
+}
+
+impl IndexMut<usize> for MiTileState {
+  #[inline(always)]
+  fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+    &mut self.mi_block_info[index * self.mi_width..(index + 1) * self.mi_width]
   }
 }
 
@@ -157,13 +191,10 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
           )
         })
         .collect(),
-      coded_block_info: vec![
-        vec![
-          CodedBlockInfo::default();
-          width >> MI_SIZE_LOG2
-        ];
-        height >> MI_SIZE_LOG2
-      ],
+      coded_block_info: MiTileState::new(
+        width >> MI_SIZE_LOG2,
+        height >> MI_SIZE_LOG2,
+      ),
       integral_buffer: IntegralImageBuffer::zeroed(SOLVE_IMAGE_SIZE),
       enc_stats: EncoderStats::default(),
     }
