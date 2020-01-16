@@ -121,6 +121,20 @@ impl Default for PredictionMode {
   }
 }
 
+pub fn intra_mode_to_angle(mode: PredictionMode) -> isize {
+  match mode {
+    PredictionMode::V_PRED => 90,
+    PredictionMode::H_PRED => 180,
+    PredictionMode::D45_PRED => 45,
+    PredictionMode::D135_PRED => 135,
+    PredictionMode::D113_PRED => 113,
+    PredictionMode::D157_PRED => 157,
+    PredictionMode::D203_PRED => 203,
+    PredictionMode::D67_PRED => 67,
+    _ => 0,
+  }
+}
+
 impl PredictionMode {
   pub fn is_compound(self) -> bool {
     self >= PredictionMode::NEAREST_NEARESTMV
@@ -166,17 +180,9 @@ impl PredictionMode {
     };
 
     let angle = match mode {
-      PredictionMode::V_PRED => 90,
-      PredictionMode::H_PRED => 180,
-      PredictionMode::D45_PRED => 45,
-      PredictionMode::D135_PRED => 135,
-      PredictionMode::D113_PRED => 113,
-      PredictionMode::D157_PRED => 157,
-      PredictionMode::D203_PRED => 203,
-      PredictionMode::D67_PRED => 67,
       PredictionMode::UV_CFL_PRED => alpha as isize,
-      _ => 0,
-    } + (angle_delta * ANGLE_STEP) as isize;
+      _ => intra_mode_to_angle(mode) + (angle_delta * ANGLE_STEP) as isize,
+    };
 
     dispatch_predict_intra::<T>(
       mode, variant, dst, tx_size, bit_depth, ac, angle, edge_buf, cpu,
@@ -834,12 +840,10 @@ pub(crate) mod native {
 
   pub(crate) fn pred_directional<T: Pixel>(
     output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
-    top_left: &[T], angle: usize, width: usize, height: usize,
+    top_left: &[T], p_angle: usize, width: usize, height: usize,
     bit_depth: usize,
   ) {
     let sample_max = ((1 << bit_depth) - 1) as i32;
-
-    let p_angle = angle; // TODO use Mode_to_Angle
 
     let upsample_above = 0;
     let upsample_left = 0;
