@@ -87,6 +87,9 @@ pub const TX_SETS_INTER: usize = 4;
 
 pub const TXFM_PARTITION_CONTEXTS: usize =
   ((TxSize::TX_SIZES - TxSize::TX_8X8 as usize) * 6 - 3);
+
+const MAX_VARTX_DEPTH: usize = 2;
+
 const MAX_REF_MV_STACK_SIZE: usize = 8;
 pub const REF_CAT_LEVEL: u32 = 640;
 
@@ -110,7 +113,7 @@ pub static av1_tx_used: [[usize; TX_TYPES]; TX_SETS] = [
 ];
 
 // Maps set types above to the indices used for intra
-static tx_set_index_intra: [i8; TX_SETS] = [0, -1, 2, 1, -1, -16];
+static tx_set_index_intra: [i8; TX_SETS] = [0, -1, 2, 1, -1, -1];
 // Maps set types above to the indices used for inter
 static tx_set_index_inter: [i8; TX_SETS] = [0, 3, -1, -1, 2, 1];
 
@@ -2188,80 +2191,107 @@ impl<'a> ContextWriter<'a> {
   // Used to decide the cdf (context) for txfm_split
   fn get_above_tx_width(
     &self, bo: TileBlockOffset, _bsize: BlockSize, _tx_size: TxSize,
+    first_tx: bool,
   ) -> usize {
     let has_above = bo.0.y > 0;
-    // TODO: if ( tx block is topmost within a partition )
-    if !has_above {
-      return 64;
+    if first_tx {
+      if !has_above {
+        return 64;
+      }
+      let above_blk = self.bc.blocks.above_of(bo);
+      if above_blk.skip && above_blk.is_inter() {
+        return above_blk.bsize.width();
+      }
     }
-    let above_blk = self.bc.blocks.above_of(bo);
-    if above_blk.skip && above_blk.is_inter() {
-      return above_blk.bsize.width();
-    };
-
     self.bc.above_tx_context[bo.0.x] as usize
   }
 
   fn get_left_tx_height(
     &self, bo: TileBlockOffset, _bsize: BlockSize, _tx_size: TxSize,
+    first_tx: bool,
   ) -> usize {
     let has_left = bo.0.x > 0;
-    // TODO: if ( tx block is leftmost within a partition )
-    if !has_left {
-      return 64;
+    if first_tx {
+      if !has_left {
+        return 64;
+      }
+      let left_blk = self.bc.blocks.left_of(bo);
+      if left_blk.skip && left_blk.is_inter() {
+        return left_blk.bsize.height();
+      }
     }
-    let left_blk = self.bc.blocks.left_of(bo);
-    if left_blk.skip && left_blk.is_inter() {
-      return left_blk.bsize.height();
-    };
-
     self.bc.left_tx_context[bo.y_in_sb()] as usize
   }
 
   fn txfm_partition_context(
-    &self, bo: TileBlockOffset, bsize: BlockSize, tx_size: TxSize,
+    &self, bo: TileBlockOffset, bsize: BlockSize, tx_size: TxSize, tbx: usize,
+    tby: usize,
   ) -> usize {
+    debug_assert!(tx_size > TX_4X4);
+    debug_assert!(bsize > BlockSize::BLOCK_4X4);
+
     // TODO: from 2nd level partition, must know whether the tx block is the topmost(or leftmost) within a partition
-    let above =
-      (self.get_above_tx_width(bo, bsize, tx_size) < tx_size.width()) as usize;
-    let left = (self.get_left_tx_height(bo, bsize, tx_size) < tx_size.height())
-      as usize;
+    let above = (self.get_above_tx_width(bo, bsize, tx_size, tby == 0)
+      < tx_size.width()) as usize;
+    let left = (self.get_left_tx_height(bo, bsize, tx_size, tbx == 0)
+      < tx_size.height()) as usize;
 
-    let mut category = TXFM_PARTITION_CONTEXTS;
     let max_tx_size: TxSize = bsize.tx_size().sqr_up();
+    let category: usize = (tx_size.sqr_up() != max_tx_size) as usize
+      + (TxSize::TX_SIZES as usize - 1 - max_tx_size as usize) * 2;
 
-    if max_tx_size >= TxSize::TX_8X8 {
-      category = (tx_size.sqr_up() != max_tx_size
-        && max_tx_size > TxSize::TX_8X8) as usize
-        + (TxSize::TX_SIZES as usize - 1 - max_tx_size as usize) * 2;
-    }
-    debug_assert!(category != TXFM_PARTITION_CONTEXTS);
+    debug_assert!(category < TXFM_PARTITION_CONTEXTS);
 
     category * 3 + above + left
   }
 
   pub fn write_tx_size_inter(
     &mut self, w: &mut dyn Writer, bo: TileBlockOffset, bsize: BlockSize,
-    tx_size: TxSize, txfm_split: bool,
+    tx_size: TxSize, txfm_split: bool, tbx: usize, tby: usize, depth: usize,
   ) {
     debug_assert!(self.bc.blocks[bo].is_inter());
     debug_assert!(bsize > BlockSize::BLOCK_4X4);
     debug_assert!(!tx_size.is_rect() || bsize.is_rect_tx_allowed());
 
-    let ctx = self.txfm_partition_context(bo, bsize, tx_size);
+    if tx_size != TX_4X4 && depth < MAX_VARTX_DEPTH {
+      let ctx = self.txfm_partition_context(bo, bsize, tx_size, tbx, tby);
 
-    symbol_with_update!(
-      self,
-      w,
-      txfm_split as u32,
-      &mut self.fc.txfm_partition_cdf[ctx]
-    );
+      symbol_with_update!(
+        self,
+        w,
+        txfm_split as u32,
+        &mut self.fc.txfm_partition_cdf[ctx]
+      );
+    } else {
+      debug_assert!(!txfm_split);
+    }
 
     if !txfm_split {
-      self.bc.update_tx_size_context(bo, bsize, tx_size, false);
+      self.bc.update_tx_size_context(bo, tx_size.block_size(), tx_size, false);
     } else {
-      // TODO: if txfm_split == true, call write_tx_size_inter() for each of tx block in a partition
-      unimplemented!()
+      // if txfm_split == true, split one level only
+      let split_tx_size = sub_tx_size_map[tx_size as usize];
+      let bw = bsize.width_mi() / split_tx_size.width_mi();
+      let bh = bsize.height_mi() / split_tx_size.height_mi();
+
+      for by in 0..bh {
+        for bx in 0..bw {
+          let tx_bo = TileBlockOffset(BlockOffset {
+            x: bo.0.x + bx * split_tx_size.width_mi(),
+            y: bo.0.y + by * split_tx_size.height_mi(),
+          });
+          self.write_tx_size_inter(
+            w,
+            tx_bo,
+            bsize,
+            split_tx_size,
+            false,
+            bx,
+            by,
+            depth + 1,
+          );
+        }
+      }
     }
   }
 

@@ -602,15 +602,19 @@ pub fn rdo_tx_size_type<T: Pixel>(
   luma_mode: PredictionMode, ref_frames: [RefType; 2], mvs: [MotionVector; 2],
   skip: bool,
 ) -> (TxSize, TxType) {
+  let is_inter = !luma_mode.is_intra();
   let mut tx_size = max_txsize_rect_lookup[bsize as usize];
+
+  if fi.enable_inter_txfm_split && is_inter && !skip {
+    tx_size = sub_tx_size_map[tx_size as usize]; // Always choose one level split size
+  }
+
   let mut best_tx_type = TxType::DCT_DCT;
   let mut best_tx_size = tx_size;
   let mut best_rd = std::f64::MAX;
-  let is_inter = !luma_mode.is_intra();
 
-  let do_rdo_tx_size = fi.tx_mode_select
-    && fi.config.speed_settings.rdo_tx_decision
-    && luma_mode.is_intra();
+  let do_rdo_tx_size =
+    fi.tx_mode_select && fi.config.speed_settings.rdo_tx_decision && !is_inter;
   let rdo_tx_depth = if do_rdo_tx_size { 2 } else { 0 };
   let mut cw_checkpoint = None;
 
@@ -1449,7 +1453,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
   } else {
     RDOType::PixelDistRealRate
   };
-  let need_recon_pixel = tx_size.block_size() != bsize;
+  let need_recon_pixel = tx_size.block_size() != bsize && !is_inter;
 
   for &tx_type in tx_types {
     // Skip unsupported transform types
