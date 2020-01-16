@@ -1155,24 +1155,54 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
   let num_modes_rdo: usize;
   let mut modes = ArrayVec::<[_; INTRA_MODES]>::new();
 
+  // Reduce number of prediction modes at higher speed levels
+  num_modes_rdo = if (fi.frame_type == FrameType::KEY
+    && fi.config.speed_settings.prediction_modes
+      >= PredictionModesSetting::ComplexKeyframes)
+    || (fi.frame_type.has_inter()
+      && fi.config.speed_settings.prediction_modes
+        >= PredictionModesSetting::ComplexAll)
+  {
+    7
+  } else {
+    3
+  };
+
+  let intra_mode_set = RAV1E_INTRA_MODES;
+
+  // Find mode with lowest rate cost
+  {
+    let mut z = 32768;
+    let probs_all = if fi.frame_type.has_inter() {
+      cw.get_cdf_intra_mode(bsize)
+    } else {
+      cw.get_cdf_intra_mode_kf(tile_bo)
+    }
+    .iter()
+    .take(INTRA_MODES)
+    .map(|&a| {
+      let d = z - a;
+      z = a;
+      d
+    })
+    .collect::<ArrayVec<[_; INTRA_MODES]>>();
+
+    let mut probs = intra_mode_set
+      .iter()
+      .map(|&a| (a, probs_all[a as usize]))
+      .collect::<ArrayVec<[_; INTRA_MODES]>>();
+    probs.sort_by_key(|a| !a.1);
+
+    probs
+      .iter()
+      .take(if fi.tx_mode_select { num_modes_rdo } else { num_modes_rdo / 2 })
+      .for_each(|&(luma_mode, _prob)| modes.push(luma_mode));
+  }
+
   // If tx partition (i.e. fi.tx_mode_select) is enabled, don't use below intra prediction screening
   if !fi.tx_mode_select {
     let tx_size = bsize.tx_size();
 
-    // Reduce number of prediction modes at higher speed levels
-    num_modes_rdo = if (fi.frame_type == FrameType::KEY
-      && fi.config.speed_settings.prediction_modes
-        >= PredictionModesSetting::ComplexKeyframes)
-      || (fi.frame_type.has_inter()
-        && fi.config.speed_settings.prediction_modes
-          >= PredictionModesSetting::ComplexAll)
-    {
-      7
-    } else {
-      3
-    };
-
-    let intra_mode_set = RAV1E_INTRA_MODES;
     let mut satds = {
       // FIXME: If tx partition is used, this whole sads block should be fixed
       debug_assert!(bsize == tx_size.block_size());
@@ -1245,42 +1275,11 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
     };
 
     satds.sort_by_key(|a| a.1);
-
-    // Find mode with lowest rate cost
-    let mut z = 32768;
-    let probs_all = if fi.frame_type.has_inter() {
-      cw.get_cdf_intra_mode(bsize)
-    } else {
-      cw.get_cdf_intra_mode_kf(tile_bo)
-    }
-    .iter()
-    .take(INTRA_MODES)
-    .map(|&a| {
-      let d = z - a;
-      z = a;
-      d
-    })
-    .collect::<ArrayVec<[_; INTRA_MODES]>>();
-
-    let mut probs = intra_mode_set
-      .iter()
-      .map(|&a| (a, probs_all[a as usize]))
-      .collect::<ArrayVec<[_; INTRA_MODES]>>();
-    probs.sort_by_key(|a| !a.1);
-
-    probs
-      .iter()
-      .take(num_modes_rdo / 2)
-      .for_each(|&(luma_mode, _prob)| modes.push(luma_mode));
     satds.iter().take(num_modes_rdo).for_each(|&(luma_mode, _stad)| {
       if !modes.contains(&luma_mode) {
         modes.push(luma_mode)
       }
     });
-  } else {
-    modes.extend(RAV1E_INTRA_MODES.iter().copied());
-    num_modes_rdo = modes.len();
-    debug_assert!(num_modes_rdo == RAV1E_INTRA_MODES.len());
   }
 
   debug_assert!(num_modes_rdo >= 1);
