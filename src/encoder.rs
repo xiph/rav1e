@@ -528,6 +528,7 @@ pub struct FrameInvariants<T: Pixel> {
   pub pyramid_level: u64,
   pub enable_early_exit: bool,
   pub tx_mode_select: bool,
+  pub enable_inter_txfm_split: bool,
   pub default_filter: FilterMode,
   /// If true, this `FrameInvariants` corresponds to an invalid frame and
   /// should be ignored. Invalid frames occur when a subgop is prematurely
@@ -734,6 +735,7 @@ impl<T: Pixel> FrameInvariants<T> {
       cpu_feature_level: Default::default(),
       activity_mask: Default::default(),
       enable_segmentation: config.speed_settings.enable_segmentation,
+      enable_inter_txfm_split: config.speed_settings.enable_inter_tx_split,
     }
   }
 
@@ -758,7 +760,8 @@ impl<T: Pixel> FrameInvariants<T> {
     fi.intra_only = false;
     fi.idx_in_group_output =
       inter_cfg.get_idx_in_group_output(output_frameno_in_gop);
-    fi.tx_mode_select = fi.config.speed_settings.rdo_tx_decision;
+    fi.tx_mode_select =
+      fi.config.speed_settings.rdo_tx_decision || fi.enable_inter_txfm_split;
 
     fi.order_hint =
       inter_cfg.get_order_hint(output_frameno_in_gop, fi.idx_in_group_output);
@@ -1730,25 +1733,36 @@ pub fn encode_block_post_cdef<T: Pixel>(
 
   // write tx_size here
   if fi.tx_mode_select {
-    if bsize > BlockSize::BLOCK_4X4 && !(is_inter && skip) {
+    if bsize > BlockSize::BLOCK_4X4 && (!is_inter || !skip) {
       if !is_inter {
         cw.write_tx_size_intra(w, tile_bo, bsize, tx_size);
         cw.bc.update_tx_size_context(tile_bo, bsize, tx_size, false);
       } else {
         // write var_tx_size
-        // if here, TxMode == TX_MODE_SELECT && bsize > BLOCK_4X4 && is_inter && !skip && !Lossless
+        // if here, bsize > BLOCK_4X4 && is_inter && !skip && !Lossless
         debug_assert!(fi.tx_mode_select);
         debug_assert!(bsize > BlockSize::BLOCK_4X4);
         debug_assert!(is_inter);
         debug_assert!(!skip);
         let max_tx_size = max_txsize_rect_lookup[bsize as usize];
-        debug_assert!(
-          max_tx_size.block_size() <= BlockSize::BLOCK_64X64,
-          "tx split for TxSize > 64x64 is not implemented yet."
-        );
-        let txfm_split = false;
+        debug_assert!(max_tx_size.block_size() <= BlockSize::BLOCK_64X64);
+
+        //TODO: "&& tx_size.block_size() < bsize" will be replaced with tx-split info for a partition
+        //  once it is available.
+        let txfm_split =
+          fi.enable_inter_txfm_split && tx_size.block_size() < bsize;
+
         // TODO: Revise write_tx_size_inter() for txfm_split = true
-        cw.write_tx_size_inter(w, tile_bo, bsize, max_tx_size, txfm_split);
+        cw.write_tx_size_inter(
+          w,
+          tile_bo,
+          bsize,
+          max_tx_size,
+          txfm_split,
+          0,
+          0,
+          0,
+        );
       }
     } else {
       cw.bc.update_tx_size_context(tile_bo, bsize, tx_size, is_inter && skip);
@@ -1947,13 +1961,6 @@ pub fn write_tx_blocks<T: Pixel>(
   }
 
   if bw_uv > 0 && bh_uv > 0 {
-    // TODO: Disable these asserts temporarilly, since chroma_sampling_422_aom and chroma_sampling_444_aom
-    // tests seems trigerring them as well, which should not
-    // TODO: Not valid if partition > 64x64 && chroma != 420
-    /*if xdec == 1 && ydec == 1 {
-      assert!(bw_uv == 1, "bw_uv = {}, bh_uv = {}", bw_uv, bh_uv);
-      assert!(bh_uv == 1, "bw_uv = {}, bh_uv = {}", bw_uv, bh_uv);
-    }*/
     let uv_tx_type = if uv_tx_size.width() >= 32 || uv_tx_size.height() >= 32 {
       TxType::DCT_DCT
     } else {
@@ -2018,8 +2025,6 @@ pub fn write_tx_blocks<T: Pixel>(
   (partition_has_coeff, tx_dist)
 }
 
-// FIXME: For now, assume tx_mode is LARGEST_TX, so var-tx is not implemented yet,
-// which means only one tx block exist for a inter mode partition.
 pub fn write_tx_tree<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w: &mut dyn Writer, luma_mode: PredictionMode,
@@ -2037,6 +2042,7 @@ pub fn write_tx_tree<T: Pixel>(
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let ac = &[0i16; 0];
   let mut partition_has_coeff: bool = false;
+  let mut tx_dist = ScaledDistortion::zero();
 
   ts.qc.update(
     qidx,
@@ -2047,40 +2053,54 @@ pub fn write_tx_tree<T: Pixel>(
     0,
   );
 
-  let po = tile_bo.plane_offset(&ts.input.planes[0].cfg);
-  let (has_coeff, dist) = encode_tx_block(
-    fi,
-    ts,
-    cw,
-    w,
-    0,
-    tile_bo,
-    0,
-    0,
-    tile_bo,
-    luma_mode,
-    tx_size,
-    tx_type,
-    bsize,
-    po,
-    skip,
-    qidx,
-    ac,
-    IntraParam::Angle_delta(angle_delta_y),
-    rdo_type,
-    need_recon_pixel,
-  );
-  partition_has_coeff |= has_coeff;
-  let mut tx_dist = dist;
+  // TODO: If tx-parition more than only 1-level, this code does not work.
+  // It should recursively traverse the tx block that are split recursivelty by calling write_tx_tree(),
+  // as defined in https://aomediacodec.github.io/av1-spec/#transform-tree-syntax
+  for by in 0..bh {
+    for bx in 0..bw {
+      let tx_bo = TileBlockOffset(BlockOffset {
+        x: tile_bo.0.x + bx * tx_size.width_mi(),
+        y: tile_bo.0.y + by * tx_size.height_mi(),
+      });
+
+      let po = tx_bo.plane_offset(&ts.input.planes[0].cfg);
+      let (has_coeff, dist) = encode_tx_block(
+        fi,
+        ts,
+        cw,
+        w,
+        0,
+        tile_bo,
+        0,
+        0,
+        tx_bo,
+        luma_mode,
+        tx_size,
+        tx_type,
+        bsize,
+        po,
+        skip,
+        qidx,
+        ac,
+        IntraParam::Angle_delta(angle_delta_y),
+        rdo_type,
+        need_recon_pixel,
+      );
+      partition_has_coeff |= has_coeff;
+      tx_dist += dist;
+    }
+  }
 
   if luma_only {
     return (partition_has_coeff, tx_dist);
   };
 
+  let max_tx_size = max_txsize_rect_lookup[bsize as usize];
+  debug_assert!(max_tx_size.block_size() <= BlockSize::BLOCK_64X64);
   let uv_tx_size = bsize.largest_chroma_tx_size(xdec, ydec);
 
-  let mut bw_uv = (bw * tx_size.width_mi()) >> xdec;
-  let mut bh_uv = (bh * tx_size.height_mi()) >> ydec;
+  let mut bw_uv = max_tx_size.width_mi() >> xdec;
+  let mut bh_uv = max_tx_size.height_mi() >> ydec;
 
   if (bw_uv == 0 || bh_uv == 0) && has_chroma(tile_bo, bsize, xdec, ydec) {
     bw_uv = 1;
@@ -2091,14 +2111,8 @@ pub fn write_tx_tree<T: Pixel>(
   bh_uv /= uv_tx_size.height_mi();
 
   if bw_uv > 0 && bh_uv > 0 {
-    // TODO: Disable these asserts temporarilly, since chroma_sampling_422_aom and chroma_sampling_444_aom
-    // tests seems trigerring them as well, which should not
-    // TODO: Not valid if partition > 64x64 && chroma != 420
-    /*if xdec == 1 && ydec == 1 {
-      debug_assert!(bw_uv == 1, "bw_uv = {}, bh_uv = {}", bw_uv, bh_uv);
-      debug_assert!(bh_uv == 1, "bw_uv = {}, bh_uv = {}", bw_uv, bh_uv);
-    }*/
-    let uv_tx_type = if has_coeff { tx_type } else { TxType::DCT_DCT }; // if inter mode, uv_tx_type == tx_type
+    let uv_tx_type =
+      if partition_has_coeff { tx_type } else { TxType::DCT_DCT }; // if inter mode, uv_tx_type == tx_type
 
     for p in 1..3 {
       ts.qc.update(
@@ -2114,9 +2128,9 @@ pub fn write_tx_tree<T: Pixel>(
         for bx in 0..bw_uv {
           let tx_bo = TileBlockOffset(BlockOffset {
             x: tile_bo.0.x + ((bx * uv_tx_size.width_mi()) << xdec)
-              - ((bw * tx_size.width_mi() == 1) as usize) * xdec,
+              - (max_tx_size.width_mi() == 1) as usize * xdec,
             y: tile_bo.0.y + ((by * uv_tx_size.height_mi()) << ydec)
-              - ((bh * tx_size.height_mi() == 1) as usize) * ydec,
+              - (max_tx_size.height_mi() == 1) as usize * ydec,
           });
 
           let mut po = tile_bo.plane_offset(&ts.input.planes[p].cfg);

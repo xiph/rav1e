@@ -326,6 +326,9 @@ pub struct SpeedSettings {
 
   /// Use segmentation.
   pub enable_segmentation: bool,
+
+  /// Enable tx split for inter mode block.
+  pub enable_inter_tx_split: bool,
 }
 
 impl Default for SpeedSettings {
@@ -355,6 +358,7 @@ impl Default for SpeedSettings {
       use_satd_subpel: true,
       non_square_partition: true,
       enable_segmentation: true,
+      enable_inter_tx_split: false,
     }
   }
 }
@@ -395,6 +399,7 @@ impl SpeedSettings {
       use_satd_subpel: Self::use_satd_subpel(speed),
       non_square_partition: Self::non_square_partition_preset(speed),
       enable_segmentation: Self::enable_segmentation_preset(speed),
+      enable_inter_tx_split: Self::enable_inter_tx_split_preset(speed),
     }
   }
 
@@ -505,6 +510,11 @@ impl SpeedSettings {
   // solution we should be able to enable segmentation at all speeds.
   const fn enable_segmentation_preset(speed: usize) -> bool {
     speed == 0
+  }
+
+  // FIXME: With unknown reasons, inter_tx_split does not work if reduced_tx_set is false
+  const fn enable_inter_tx_split_preset(speed: usize) -> bool {
+    speed == 10
   }
 }
 
