@@ -424,8 +424,7 @@ impl WriterBase<WriterRecorder> {
   /// storage and into the passed in Writer, which may be an Encoder
   /// or another Recorder.  Clears the Recorder after replay.
   pub fn replay(&mut self, dest: &mut dyn StorageBackend) {
-    for i in 0..self.s.storage.len() {
-      let (fl, fh, nms) = self.s.storage[i];
+    for &(fl, fh, nms) in &self.s.storage {
       dest.store(fl, fh, nms);
     }
     self.rng = 0x8000;
