@@ -392,27 +392,25 @@ $($s)* fn daala_fdct_ii_4<T: TxOperations>(
 }
 
 #[$m]
-pub $($s)* fn daala_fdct4<T: TxOperations>(input: &[T], output: &mut [T]) {
-  assert!(input.len() >= 4);
-  assert!(output.len() >= 4);
+pub $($s)* fn daala_fdct4<T: TxOperations>(coeffs: &mut [T]) {
+  assert!(coeffs.len() >= 4);
   let mut temp_out: [T; 4] = [T::zero(); 4];
-  daala_fdct_ii_4(input[0], input[1], input[2], input[3], &mut temp_out);
+  daala_fdct_ii_4(coeffs[0], coeffs[1], coeffs[2], coeffs[3], &mut temp_out);
 
-  output[0] = temp_out[0];
-  output[1] = temp_out[2];
-  output[2] = temp_out[1];
-  output[3] = temp_out[3];
+  coeffs[0] = temp_out[0];
+  coeffs[1] = temp_out[2];
+  coeffs[2] = temp_out[1];
+  coeffs[3] = temp_out[3];
 }
 
 #[$m]
-pub $($s)* fn daala_fdst_vii_4<T: TxOperations>(input: &[T], output: &mut [T]) {
-  assert!(input.len() >= 4);
-  assert!(output.len() >= 4);
+pub $($s)* fn daala_fdst_vii_4<T: TxOperations>(coeffs: &mut [T]) {
+  assert!(coeffs.len() >= 4);
 
-  let q0 = input[0];
-  let q1 = input[1];
-  let q2 = input[2];
-  let q3 = input[3];
+  let q0 = coeffs[0];
+  let q1 = coeffs[1];
+  let q2 = coeffs[2];
+  let q3 = coeffs[3];
   let t0 = q1.add(q3);
   // t1 = (q0 + q1 - q3)/2
   let t1 = q1.add(q0.sub_avg(t0));
@@ -431,10 +429,10 @@ pub $($s)* fn daala_fdst_vii_4<T: TxOperations>(input: &[T], output: &mut [T]) {
   let t4 = t4.tx_mul((467, 11));
   let t3h = t3.rshift1();
   let u4 = t4.add(t3h);
-  output[0] = t0.add(u4);
-  output[1] = t1;
-  output[2] = t0.add(t2.sub(t3h));
-  output[3] = t2.add(t3.sub(u4));
+  coeffs[0] = t0.add(u4);
+  coeffs[1] = t1;
+  coeffs[2] = t0.add(t2.sub(t3h));
+  coeffs[3] = t2.add(t3.sub(u4));
 }
 
 #[$m]
@@ -519,30 +517,29 @@ $($s)* fn daala_fdct_ii_8<T: TxOperations>(
 }
 
 #[$m]
-pub $($s)* fn daala_fdct8<T: TxOperations>(input: &[T], output: &mut [T]) {
-  assert!(input.len() >= 8);
-  assert!(output.len() >= 8);
+pub $($s)* fn daala_fdct8<T: TxOperations>(coeffs: &mut [T]) {
+  assert!(coeffs.len() >= 8);
   let mut temp_out: [T; 8] = [T::zero(); 8];
   daala_fdct_ii_8(
-    input[0],
-    input[1],
-    input[2],
-    input[3],
-    input[4],
-    input[5],
-    input[6],
-    input[7],
+    coeffs[0],
+    coeffs[1],
+    coeffs[2],
+    coeffs[3],
+    coeffs[4],
+    coeffs[5],
+    coeffs[6],
+    coeffs[7],
     &mut temp_out,
   );
 
-  output[0] = temp_out[0];
-  output[1] = temp_out[4];
-  output[2] = temp_out[2];
-  output[3] = temp_out[6];
-  output[4] = temp_out[1];
-  output[5] = temp_out[5];
-  output[6] = temp_out[3];
-  output[7] = temp_out[7];
+  coeffs[0] = temp_out[0];
+  coeffs[1] = temp_out[4];
+  coeffs[2] = temp_out[2];
+  coeffs[3] = temp_out[6];
+  coeffs[4] = temp_out[1];
+  coeffs[5] = temp_out[5];
+  coeffs[6] = temp_out[3];
+  coeffs[7] = temp_out[7];
 }
 
 #[$m]
@@ -602,30 +599,29 @@ pub $($s)* fn daala_fdst_iv_8<T: TxOperations>(
 }
 
 #[$m]
-pub $($s)* fn daala_fdst8<T: TxOperations>(input: &[T], output: &mut [T]) {
-  assert!(input.len() >= 8);
-  assert!(output.len() >= 8);
+pub $($s)* fn daala_fdst8<T: TxOperations>(coeffs: &mut [T]) {
+  assert!(coeffs.len() >= 8);
   let mut temp_out: [T; 8] = [T::zero(); 8];
   daala_fdst_iv_8(
-    input[0],
-    input[1],
-    input[2],
-    input[3],
-    input[4],
-    input[5],
-    input[6],
-    input[7],
+    coeffs[0],
+    coeffs[1],
+    coeffs[2],
+    coeffs[3],
+    coeffs[4],
+    coeffs[5],
+    coeffs[6],
+    coeffs[7],
     &mut temp_out,
   );
 
-  output[0] = temp_out[0];
-  output[1] = temp_out[4];
-  output[2] = temp_out[2];
-  output[3] = temp_out[6];
-  output[4] = temp_out[1];
-  output[5] = temp_out[5];
-  output[6] = temp_out[3];
-  output[7] = temp_out[7];
+  coeffs[0] = temp_out[0];
+  coeffs[1] = temp_out[4];
+  coeffs[2] = temp_out[2];
+  coeffs[3] = temp_out[6];
+  coeffs[4] = temp_out[1];
+  coeffs[5] = temp_out[5];
+  coeffs[6] = temp_out[3];
+  coeffs[7] = temp_out[7];
 }
 
 #[$m]
@@ -753,46 +749,45 @@ $($s)* fn daala_fdct_ii_16<T: TxOperations>(
 }
 
 #[$m]
-$($s)* fn daala_fdct16<T: TxOperations>(input: &[T], output: &mut [T]) {
-  assert!(input.len() >= 16);
-  assert!(output.len() >= 16);
+$($s)* fn daala_fdct16<T: TxOperations>(coeffs: &mut [T]) {
+  assert!(coeffs.len() >= 16);
   let mut temp_out: [T; 16] = [T::zero(); 16];
   daala_fdct_ii_16(
-    input[0],
-    input[1],
-    input[2],
-    input[3],
-    input[4],
-    input[5],
-    input[6],
-    input[7],
-    input[8],
-    input[9],
-    input[10],
-    input[11],
-    input[12],
-    input[13],
-    input[14],
-    input[15],
+    coeffs[0],
+    coeffs[1],
+    coeffs[2],
+    coeffs[3],
+    coeffs[4],
+    coeffs[5],
+    coeffs[6],
+    coeffs[7],
+    coeffs[8],
+    coeffs[9],
+    coeffs[10],
+    coeffs[11],
+    coeffs[12],
+    coeffs[13],
+    coeffs[14],
+    coeffs[15],
     &mut temp_out,
   );
 
-  output[0] = temp_out[0];
-  output[1] = temp_out[8];
-  output[2] = temp_out[4];
-  output[3] = temp_out[12];
-  output[4] = temp_out[2];
-  output[5] = temp_out[10];
-  output[6] = temp_out[6];
-  output[7] = temp_out[14];
-  output[8] = temp_out[1];
-  output[9] = temp_out[9];
-  output[10] = temp_out[5];
-  output[11] = temp_out[13];
-  output[12] = temp_out[3];
-  output[13] = temp_out[11];
-  output[14] = temp_out[7];
-  output[15] = temp_out[15];
+  coeffs[0] = temp_out[0];
+  coeffs[1] = temp_out[8];
+  coeffs[2] = temp_out[4];
+  coeffs[3] = temp_out[12];
+  coeffs[4] = temp_out[2];
+  coeffs[5] = temp_out[10];
+  coeffs[6] = temp_out[6];
+  coeffs[7] = temp_out[14];
+  coeffs[8] = temp_out[1];
+  coeffs[9] = temp_out[9];
+  coeffs[10] = temp_out[5];
+  coeffs[11] = temp_out[13];
+  coeffs[12] = temp_out[3];
+  coeffs[13] = temp_out[11];
+  coeffs[14] = temp_out[7];
+  coeffs[15] = temp_out[15];
 }
 
 #[$m]
@@ -921,46 +916,45 @@ $($s)* fn daala_fdst_iv_16<T: TxOperations>(
 }
 
 #[$m]
-$($s)* fn daala_fdst16<T: TxOperations>(input: &[T], output: &mut [T]) {
-  assert!(input.len() >= 16);
-  assert!(output.len() >= 16);
+$($s)* fn daala_fdst16<T: TxOperations>(coeffs: &mut [T]) {
+  assert!(coeffs.len() >= 16);
   let mut temp_out: [T; 16] = [T::zero(); 16];
   daala_fdst_iv_16(
-    input[0],
-    input[1],
-    input[2],
-    input[3],
-    input[4],
-    input[5],
-    input[6],
-    input[7],
-    input[8],
-    input[9],
-    input[10],
-    input[11],
-    input[12],
-    input[13],
-    input[14],
-    input[15],
+    coeffs[0],
+    coeffs[1],
+    coeffs[2],
+    coeffs[3],
+    coeffs[4],
+    coeffs[5],
+    coeffs[6],
+    coeffs[7],
+    coeffs[8],
+    coeffs[9],
+    coeffs[10],
+    coeffs[11],
+    coeffs[12],
+    coeffs[13],
+    coeffs[14],
+    coeffs[15],
     &mut temp_out,
   );
 
-  output[0] = temp_out[0];
-  output[1] = temp_out[8];
-  output[2] = temp_out[4];
-  output[3] = temp_out[12];
-  output[4] = temp_out[2];
-  output[5] = temp_out[10];
-  output[6] = temp_out[6];
-  output[7] = temp_out[14];
-  output[8] = temp_out[1];
-  output[9] = temp_out[9];
-  output[10] = temp_out[5];
-  output[11] = temp_out[13];
-  output[12] = temp_out[3];
-  output[13] = temp_out[11];
-  output[14] = temp_out[7];
-  output[15] = temp_out[15];
+  coeffs[0] = temp_out[0];
+  coeffs[1] = temp_out[8];
+  coeffs[2] = temp_out[4];
+  coeffs[3] = temp_out[12];
+  coeffs[4] = temp_out[2];
+  coeffs[5] = temp_out[10];
+  coeffs[6] = temp_out[6];
+  coeffs[7] = temp_out[14];
+  coeffs[8] = temp_out[1];
+  coeffs[9] = temp_out[9];
+  coeffs[10] = temp_out[5];
+  coeffs[11] = temp_out[13];
+  coeffs[12] = temp_out[3];
+  coeffs[13] = temp_out[11];
+  coeffs[14] = temp_out[7];
+  coeffs[15] = temp_out[15];
 }
 
 #[$m]
@@ -1188,78 +1182,77 @@ $($s)* fn daala_fdct_ii_32<T: TxOperations>(
 }
 
 #[$m]
-$($s)* fn daala_fdct32<T: TxOperations>(input: &[T], output: &mut [T]) {
-  assert!(input.len() >= 32);
-  assert!(output.len() >= 32);
+$($s)* fn daala_fdct32<T: TxOperations>(coeffs: &mut [T]) {
+  assert!(coeffs.len() >= 32);
   let mut temp_out: [T; 32] = [T::zero(); 32];
   daala_fdct_ii_32(
-    input[0],
-    input[1],
-    input[2],
-    input[3],
-    input[4],
-    input[5],
-    input[6],
-    input[7],
-    input[8],
-    input[9],
-    input[10],
-    input[11],
-    input[12],
-    input[13],
-    input[14],
-    input[15],
-    input[16],
-    input[17],
-    input[18],
-    input[19],
-    input[20],
-    input[21],
-    input[22],
-    input[23],
-    input[24],
-    input[25],
-    input[26],
-    input[27],
-    input[28],
-    input[29],
-    input[30],
-    input[31],
+    coeffs[0],
+    coeffs[1],
+    coeffs[2],
+    coeffs[3],
+    coeffs[4],
+    coeffs[5],
+    coeffs[6],
+    coeffs[7],
+    coeffs[8],
+    coeffs[9],
+    coeffs[10],
+    coeffs[11],
+    coeffs[12],
+    coeffs[13],
+    coeffs[14],
+    coeffs[15],
+    coeffs[16],
+    coeffs[17],
+    coeffs[18],
+    coeffs[19],
+    coeffs[20],
+    coeffs[21],
+    coeffs[22],
+    coeffs[23],
+    coeffs[24],
+    coeffs[25],
+    coeffs[26],
+    coeffs[27],
+    coeffs[28],
+    coeffs[29],
+    coeffs[30],
+    coeffs[31],
     &mut temp_out,
   );
 
-  output[0] = temp_out[0];
-  output[1] = temp_out[16];
-  output[2] = temp_out[8];
-  output[3] = temp_out[24];
-  output[4] = temp_out[4];
-  output[5] = temp_out[20];
-  output[6] = temp_out[12];
-  output[7] = temp_out[28];
-  output[8] = temp_out[2];
-  output[9] = temp_out[18];
-  output[10] = temp_out[10];
-  output[11] = temp_out[26];
-  output[12] = temp_out[6];
-  output[13] = temp_out[22];
-  output[14] = temp_out[14];
-  output[15] = temp_out[30];
-  output[16] = temp_out[1];
-  output[17] = temp_out[17];
-  output[18] = temp_out[9];
-  output[19] = temp_out[25];
-  output[20] = temp_out[5];
-  output[21] = temp_out[21];
-  output[22] = temp_out[13];
-  output[23] = temp_out[29];
-  output[24] = temp_out[3];
-  output[25] = temp_out[19];
-  output[26] = temp_out[11];
-  output[27] = temp_out[27];
-  output[28] = temp_out[7];
-  output[29] = temp_out[23];
-  output[30] = temp_out[15];
-  output[31] = temp_out[31];
+  coeffs[0] = temp_out[0];
+  coeffs[1] = temp_out[16];
+  coeffs[2] = temp_out[8];
+  coeffs[3] = temp_out[24];
+  coeffs[4] = temp_out[4];
+  coeffs[5] = temp_out[20];
+  coeffs[6] = temp_out[12];
+  coeffs[7] = temp_out[28];
+  coeffs[8] = temp_out[2];
+  coeffs[9] = temp_out[18];
+  coeffs[10] = temp_out[10];
+  coeffs[11] = temp_out[26];
+  coeffs[12] = temp_out[6];
+  coeffs[13] = temp_out[22];
+  coeffs[14] = temp_out[14];
+  coeffs[15] = temp_out[30];
+  coeffs[16] = temp_out[1];
+  coeffs[17] = temp_out[17];
+  coeffs[18] = temp_out[9];
+  coeffs[19] = temp_out[25];
+  coeffs[20] = temp_out[5];
+  coeffs[21] = temp_out[21];
+  coeffs[22] = temp_out[13];
+  coeffs[23] = temp_out[29];
+  coeffs[24] = temp_out[3];
+  coeffs[25] = temp_out[19];
+  coeffs[26] = temp_out[11];
+  coeffs[27] = temp_out[27];
+  coeffs[28] = temp_out[7];
+  coeffs[29] = temp_out[23];
+  coeffs[30] = temp_out[15];
+  coeffs[31] = temp_out[31];
 }
 
 #[$m]
@@ -1604,9 +1597,8 @@ $($s)* fn daala_fdst_iv_32_asym<T: TxOperations>(
 
 #[allow(clippy::identity_op)]
 #[$m]
-$($s)* fn daala_fdct64<T: TxOperations>(input: &[T], output: &mut [T]) {
-  assert!(input.len() >= 64);
-  assert!(output.len() >= 64);
+$($s)* fn daala_fdct64<T: TxOperations>(coeffs: &mut [T]) {
+  assert!(coeffs.len() >= 64);
   // Use arrays to avoid ridiculous variable names
   let mut asym: [(T, T); 32] = [(T::zero(), T::zero()); 32];
   let mut half: [T; 32] = [T::zero(); 32];
@@ -1625,22 +1617,22 @@ $($s)* fn daala_fdct64<T: TxOperations>(input: &[T], output: &mut [T]) {
       asym[i] = b;
       asym[31 - i] = c;
     }
-    butterfly_pair(&mut half, &mut asym, input, 0);
-    butterfly_pair(&mut half, &mut asym, input, 1);
-    butterfly_pair(&mut half, &mut asym, input, 2);
-    butterfly_pair(&mut half, &mut asym, input, 3);
-    butterfly_pair(&mut half, &mut asym, input, 4);
-    butterfly_pair(&mut half, &mut asym, input, 5);
-    butterfly_pair(&mut half, &mut asym, input, 6);
-    butterfly_pair(&mut half, &mut asym, input, 7);
-    butterfly_pair(&mut half, &mut asym, input, 8);
-    butterfly_pair(&mut half, &mut asym, input, 9);
-    butterfly_pair(&mut half, &mut asym, input, 10);
-    butterfly_pair(&mut half, &mut asym, input, 11);
-    butterfly_pair(&mut half, &mut asym, input, 12);
-    butterfly_pair(&mut half, &mut asym, input, 13);
-    butterfly_pair(&mut half, &mut asym, input, 14);
-    butterfly_pair(&mut half, &mut asym, input, 15);
+    butterfly_pair(&mut half, &mut asym, coeffs, 0);
+    butterfly_pair(&mut half, &mut asym, coeffs, 1);
+    butterfly_pair(&mut half, &mut asym, coeffs, 2);
+    butterfly_pair(&mut half, &mut asym, coeffs, 3);
+    butterfly_pair(&mut half, &mut asym, coeffs, 4);
+    butterfly_pair(&mut half, &mut asym, coeffs, 5);
+    butterfly_pair(&mut half, &mut asym, coeffs, 6);
+    butterfly_pair(&mut half, &mut asym, coeffs, 7);
+    butterfly_pair(&mut half, &mut asym, coeffs, 8);
+    butterfly_pair(&mut half, &mut asym, coeffs, 9);
+    butterfly_pair(&mut half, &mut asym, coeffs, 10);
+    butterfly_pair(&mut half, &mut asym, coeffs, 11);
+    butterfly_pair(&mut half, &mut asym, coeffs, 12);
+    butterfly_pair(&mut half, &mut asym, coeffs, 13);
+    butterfly_pair(&mut half, &mut asym, coeffs, 14);
+    butterfly_pair(&mut half, &mut asym, coeffs, 15);
   }
 
   let mut temp_out: [T; 64] = [T::zero(); 64];
@@ -1728,44 +1720,27 @@ $($s)* fn daala_fdct64<T: TxOperations>(input: &[T], output: &mut [T]) {
     output[2 + i * 4] = tmp[16 + j];
     output[3 + i * 4] = tmp[48 + j];
   }
-  reorder_4(output, 0, temp_out, 0);
-  reorder_4(output, 1, temp_out, 8);
-  reorder_4(output, 2, temp_out, 4);
-  reorder_4(output, 3, temp_out, 12);
-  reorder_4(output, 4, temp_out, 2);
-  reorder_4(output, 5, temp_out, 10);
-  reorder_4(output, 6, temp_out, 6);
-  reorder_4(output, 7, temp_out, 14);
+  reorder_4(coeffs, 0, temp_out, 0);
+  reorder_4(coeffs, 1, temp_out, 8);
+  reorder_4(coeffs, 2, temp_out, 4);
+  reorder_4(coeffs, 3, temp_out, 12);
+  reorder_4(coeffs, 4, temp_out, 2);
+  reorder_4(coeffs, 5, temp_out, 10);
+  reorder_4(coeffs, 6, temp_out, 6);
+  reorder_4(coeffs, 7, temp_out, 14);
 
-  reorder_4(output, 8, temp_out, 1);
-  reorder_4(output, 9, temp_out, 9);
-  reorder_4(output, 10, temp_out, 5);
-  reorder_4(output, 11, temp_out, 13);
-  reorder_4(output, 12, temp_out, 3);
-  reorder_4(output, 13, temp_out, 11);
-  reorder_4(output, 14, temp_out, 7);
-  reorder_4(output, 15, temp_out, 15);
+  reorder_4(coeffs, 8, temp_out, 1);
+  reorder_4(coeffs, 9, temp_out, 9);
+  reorder_4(coeffs, 10, temp_out, 5);
+  reorder_4(coeffs, 11, temp_out, 13);
+  reorder_4(coeffs, 12, temp_out, 3);
+  reorder_4(coeffs, 13, temp_out, 11);
+  reorder_4(coeffs, 14, temp_out, 7);
+  reorder_4(coeffs, 15, temp_out, 15);
 }
 
 #[$m]
-pub $($s)* fn fidentity4<T: TxOperations>(input: &[T], output: &mut [T]) {
-  output[..4].copy_from_slice(&input[..4]);
-}
-
-#[$m]
-pub $($s)* fn fidentity8<T: TxOperations>(input: &[T], output: &mut [T]) {
-  output[..8].copy_from_slice(&input[..8]);
-}
-
-#[$m]
-$($s)* fn fidentity16<T: TxOperations>(input: &[T], output: &mut [T]) {
-  output[..16].copy_from_slice(&input[..16]);
-}
-
-#[$m]
-$($s)* fn fidentity32<T: TxOperations>(input: &[T], output: &mut [T]) {
-  output[..32].copy_from_slice(&input[..32]);
-}
+pub $($s)* fn fidentity<T: TxOperations>(_coeffs: &mut [T]) {}
 
 }
 

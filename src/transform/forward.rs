@@ -75,7 +75,7 @@ pub mod native {
 
   impl_1d_tx!();
 
-  type TxfmFunc = dyn Fn(&[i32], &mut [i32]);
+  type TxfmFunc = dyn Fn(&mut [i32]);
 
   fn get_func(t: TxfmType) -> &'static TxfmFunc {
     use self::TxfmType::*;
@@ -88,10 +88,10 @@ pub mod native {
       ADST4 => &daala_fdst_vii_4,
       ADST8 => &daala_fdst8,
       ADST16 => &daala_fdst16,
-      Identity4 => &fidentity4,
-      Identity8 => &fidentity8,
-      Identity16 => &fidentity16,
-      Identity32 => &fidentity32,
+      Identity4 => &fidentity,
+      Identity8 => &fidentity,
+      Identity16 => &fidentity,
+      Identity32 => &fidentity,
       _ => unreachable!(),
     }
   }
@@ -109,10 +109,8 @@ pub mod native {
     let txfm_size_col = tx_size.width();
     let txfm_size_row = tx_size.height();
 
-    let mut tmp1: AlignedArray<[i32; 64 * 64]> = AlignedArray::uninitialized();
-    let mut tmp2: AlignedArray<[i32; 64 * 64]> = AlignedArray::uninitialized();
-    let buf1 = &mut tmp1.array[..txfm_size_col * txfm_size_row];
-    let buf2 = &mut tmp2.array[..txfm_size_col * txfm_size_row];
+    let mut tmp: AlignedArray<[i32; 64 * 64]> = AlignedArray::uninitialized();
+    let buf = &mut tmp.array[..txfm_size_col * txfm_size_row];
 
     let cfg = Txfm2DFlipCfg::fwd(tx_type, tx_size, bd);
 
@@ -121,52 +119,42 @@ pub mod native {
 
     // Columns
     for c in 0..txfm_size_col {
-      let mut col_flip_backing: AlignedArray<[i32; 64]> =
+      let mut col_coeffs_backing: AlignedArray<[i32; 64]> =
         AlignedArray::uninitialized();
-      let col_flip = &mut col_flip_backing.array[..txfm_size_row];
+      let col_coeffs = &mut col_coeffs_backing.array[..txfm_size_row];
       if cfg.ud_flip {
         // flip upside down
         for r in 0..txfm_size_row {
-          col_flip[r] = (input[(txfm_size_row - r - 1) * stride + c]).into();
+          col_coeffs[r] = (input[(txfm_size_row - r - 1) * stride + c]).into();
         }
       } else {
         for r in 0..txfm_size_row {
-          col_flip[r] = (input[r * stride + c]).into();
+          col_coeffs[r] = (input[r * stride + c]).into();
         }
       }
 
-      let mut tx_output_backing: AlignedArray<[i32; 64]> =
-        AlignedArray::uninitialized();
-      let tx_output = &mut tx_output_backing.array[..txfm_size_row];
-      av1_round_shift_array(col_flip, txfm_size_row, -cfg.shift[0]);
-      txfm_func_col(&col_flip, tx_output);
-      av1_round_shift_array(tx_output, txfm_size_row, -cfg.shift[1]);
+      av1_round_shift_array(col_coeffs, txfm_size_row, -cfg.shift[0]);
+      txfm_func_col(col_coeffs);
+      av1_round_shift_array(col_coeffs, txfm_size_row, -cfg.shift[1]);
       if cfg.lr_flip {
         for r in 0..txfm_size_row {
           // flip from left to right
-          buf1[r * txfm_size_col + (txfm_size_col - c - 1)] = tx_output[r];
+          buf[r * txfm_size_col + (txfm_size_col - c - 1)] = col_coeffs[r];
         }
       } else {
         for r in 0..txfm_size_row {
-          buf1[r * txfm_size_col + c] = tx_output[r];
+          buf[r * txfm_size_col + c] = col_coeffs[r];
         }
       }
     }
 
     // Rows
     for r in 0..txfm_size_row {
-      txfm_func_row(
-        &buf1[r * txfm_size_col..],
-        &mut buf2[r * txfm_size_col..],
-      );
-      av1_round_shift_array(
-        &mut buf2[r * txfm_size_col..],
-        txfm_size_col,
-        -cfg.shift[2],
-      );
+      let row_coeffs = &mut buf[r * txfm_size_col..];
+      txfm_func_row(row_coeffs);
+      av1_round_shift_array(row_coeffs, txfm_size_col, -cfg.shift[2]);
       for c in 0..txfm_size_col {
-        output[c * txfm_size_row + r] =
-          T::cast_from(buf2[r * txfm_size_col + c]);
+        output[c * txfm_size_row + r] = T::cast_from(row_coeffs[c]);
       }
     }
   }
