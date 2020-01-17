@@ -1172,7 +1172,6 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
 
   // Find mode with lowest rate cost
   {
-    let mut z = 32768;
     let probs_all = if fi.frame_type.has_inter() {
       cw.get_cdf_intra_mode(bsize)
     } else {
@@ -1180,23 +1179,16 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
     }
     .iter()
     .take(INTRA_MODES)
-    .map(|&a| {
-      let d = z - a;
-      z = a;
-      d
+    .scan(32768, |z, &a| {
+      let d = *z - a;
+      *z = a;
+      Some(!d)
     })
     .collect::<ArrayVec<[_; INTRA_MODES]>>();
 
-    let mut probs = intra_mode_set
-      .iter()
-      .map(|&a| (a, probs_all[a as usize]))
-      .collect::<ArrayVec<[_; INTRA_MODES]>>();
-    probs.sort_by_key(|a| !a.1);
-
-    probs
-      .iter()
-      .take(num_modes_rdo / 2)
-      .for_each(|&(luma_mode, _prob)| modes.push(luma_mode));
+    modes.try_extend_from_slice(intra_mode_set).unwrap();
+    modes.sort_by_key(|&a| probs_all[a as usize]);
+    modes.truncate(num_modes_rdo / 2);
   }
 
   // If tx partition (i.e. fi.tx_mode_select) is enabled, the below intra prediction screening
