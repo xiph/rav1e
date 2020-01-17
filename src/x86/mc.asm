@@ -566,7 +566,7 @@ INIT_YMM avx2
     lea                 t2d, [hq+(3<<8)]
 .v_w128_loop:
     PUT_BILIN_V_W32
-    mov                  hb, t2b
+    movzx                hd, t2b
     add                  t0, 32
     add                  t1, 32
     mov                dstq, t0
@@ -1492,7 +1492,7 @@ cglobal prep_bilin, 3, 7, 0, tmp, src, stride, w, h, mxy, stride3
     add                tmpq, 32*16
     sub                  hd, 2
     jg .v_w128_loop
-    mov                  hb, t2b
+    movzx                hd, t2b
     add                  t0, 64
     add                  t1, 32
     mov                tmpq, t0
@@ -1758,7 +1758,7 @@ cglobal prep_bilin, 3, 7, 0, tmp, src, stride, w, h, mxy, stride3
     mova        [tmpq-32*4], m2
     sub                  hd, 2
     jg .hv_w64_loop
-    mov                  hb, t2b
+    movzx                hd, t2b
     add                  t0, 32
     add                  t1, 16
     mov                tmpq, t0
@@ -1841,7 +1841,7 @@ cglobal prep_bilin, 3, 7, 0, tmp, src, stride, w, h, mxy, stride3
     add                tmpq, 32*16
     sub                  hd, 2
     jg .hv_w128_loop
-    mov                  hb, t2b
+    movzx                hd, t2b
     add                  t0, mmsize
     add                  t1, mmsize/2
     mov                tmpq, t0
@@ -2247,7 +2247,7 @@ cglobal put_8tap, 4, 9, 0, dst, ds, src, ss, w, h, mx, my, ss3
     lea                dstq, [dstq+dsq*2]
     sub                  hd, 2
     jg .v_w16_loop
-    mov                  hb, r6b
+    movzx                hd, r6b
     add                  r4, 16
     add                  r7, 16
     mov                dstq, r4
@@ -2516,7 +2516,7 @@ cglobal put_8tap, 4, 9, 0, dst, ds, src, ss, w, h, mx, my, ss3
     lea                dstq, [dstq+dsq*2]
     sub                  hd, 2
     jg .hv_w8_loop
-    mov                  hb, r6b
+    movzx                hd, r6b
     add                  r4, 8
     add                  r7, 8
     mov                dstq, r4
