@@ -437,8 +437,8 @@ impl<T: Pixel> Plane<T> {
     // unsafe: all pixels initialized in this function
     let mut new = unsafe {
       Plane::new_uninitialized(
-        src.cfg.width / 2,
-        src.cfg.height / 2,
+        (src.cfg.width + 1) / 2,
+        (src.cfg.height + 1) / 2,
         src.cfg.xdec + 1,
         src.cfg.ydec + 1,
         src.cfg.xpad / 2,
