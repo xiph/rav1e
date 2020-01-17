@@ -1195,12 +1195,13 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
 
     probs
       .iter()
-      .take(if fi.tx_mode_select { num_modes_rdo } else { num_modes_rdo / 2 })
+      .take(num_modes_rdo / 2)
       .for_each(|&(luma_mode, _prob)| modes.push(luma_mode));
   }
 
-  // If tx partition (i.e. fi.tx_mode_select) is enabled, don't use below intra prediction screening
-  if !fi.tx_mode_select {
+  // If tx partition (i.e. fi.tx_mode_select) is enabled, the below intra prediction screening
+  // may be improved by emulating prediction for each tx block.
+  {
     let tx_size = bsize.tx_size();
 
     let mut satds = {
