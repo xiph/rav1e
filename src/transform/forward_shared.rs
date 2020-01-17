@@ -392,7 +392,7 @@ $($s)* fn daala_fdct_ii_4<T: TxOperations>(
 }
 
 #[$m]
-pub $($s)* fn daala_fdct4<T: TxOperations>(coeffs: &mut [T]) {
+$($s)* fn daala_fdct4<T: TxOperations>(coeffs: &mut [T]) {
   assert!(coeffs.len() >= 4);
   let mut temp_out: [T; 4] = [T::zero(); 4];
   daala_fdct_ii_4(coeffs[0], coeffs[1], coeffs[2], coeffs[3], &mut temp_out);
@@ -404,7 +404,7 @@ pub $($s)* fn daala_fdct4<T: TxOperations>(coeffs: &mut [T]) {
 }
 
 #[$m]
-pub $($s)* fn daala_fdst_vii_4<T: TxOperations>(coeffs: &mut [T]) {
+$($s)* fn daala_fdst_vii_4<T: TxOperations>(coeffs: &mut [T]) {
   assert!(coeffs.len() >= 4);
 
   let q0 = coeffs[0];
@@ -517,7 +517,7 @@ $($s)* fn daala_fdct_ii_8<T: TxOperations>(
 }
 
 #[$m]
-pub $($s)* fn daala_fdct8<T: TxOperations>(coeffs: &mut [T]) {
+$($s)* fn daala_fdct8<T: TxOperations>(coeffs: &mut [T]) {
   assert!(coeffs.len() >= 8);
   let mut temp_out: [T; 8] = [T::zero(); 8];
   daala_fdct_ii_8(
@@ -543,7 +543,7 @@ pub $($s)* fn daala_fdct8<T: TxOperations>(coeffs: &mut [T]) {
 }
 
 #[$m]
-pub $($s)* fn daala_fdst_iv_8<T: TxOperations>(
+$($s)* fn daala_fdst_iv_8<T: TxOperations>(
   r0: T, r1: T, r2: T, r3: T, r4: T, r5: T, r6: T, r7: T, output: &mut [T],
 ) {
   // Stage 0
@@ -599,7 +599,7 @@ pub $($s)* fn daala_fdst_iv_8<T: TxOperations>(
 }
 
 #[$m]
-pub $($s)* fn daala_fdst8<T: TxOperations>(coeffs: &mut [T]) {
+$($s)* fn daala_fdst8<T: TxOperations>(coeffs: &mut [T]) {
   assert!(coeffs.len() >= 8);
   let mut temp_out: [T; 8] = [T::zero(); 8];
   daala_fdst_iv_8(
@@ -1740,7 +1740,7 @@ $($s)* fn daala_fdct64<T: TxOperations>(coeffs: &mut [T]) {
 }
 
 #[$m]
-pub $($s)* fn fidentity<T: TxOperations>(_coeffs: &mut [T]) {}
+$($s)* fn fidentity<T: TxOperations>(_coeffs: &mut [T]) {}
 
 }
 
