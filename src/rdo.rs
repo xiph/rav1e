@@ -1188,17 +1188,14 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
 
     modes.try_extend_from_slice(intra_mode_set).unwrap();
     modes.sort_by_key(|&a| probs_all[a as usize]);
-    modes.truncate(num_modes_rdo / 2);
   }
 
   // If tx partition (i.e. fi.tx_mode_select) is enabled, the below intra prediction screening
   // may be improved by emulating prediction for each tx block.
   {
-    let tx_size = bsize.tx_size();
-
-    let mut satds = {
+    let satds = {
       // FIXME: If tx partition is used, this whole sads block should be fixed
-      debug_assert!(bsize == tx_size.block_size());
+      let tx_size = bsize.tx_size();
       let edge_buf = {
         let rec = &ts.rec.planes[0].as_const();
         let po = tile_bo.plane_offset(rec.plane_cfg);
@@ -1228,51 +1225,41 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
         None
       };
 
-      intra_mode_set
-        .iter()
-        .map(|&luma_mode| {
-          let tile_rect = ts.tile_rect();
-          let rec = &mut ts.rec.planes[0];
-          let mut rec_region =
-            rec.subregion_mut(Area::BlockStartingAt { bo: tile_bo.0 });
+      let mut satds_all = [0; INTRA_MODES];
+      for &luma_mode in modes.iter().skip(num_modes_rdo / 2) {
+        let tile_rect = ts.tile_rect();
+        let rec = &mut ts.rec.planes[0];
+        let mut rec_region =
+          rec.subregion_mut(Area::BlockStartingAt { bo: tile_bo.0 });
+        // FIXME: If tx partition is used, luma_mode.predict_intra() should be called for each tx block
+        luma_mode.predict_intra(
+          tile_rect,
+          &mut rec_region,
+          tx_size,
+          fi.sequence.bit_depth,
+          &[0i16; 2],
+          IntraParam::None,
+          if luma_mode.is_directional() { ief_params } else { None },
+          &edge_buf,
+          fi.cpu_feature_level,
+        );
 
-          // FIXME: If tx partition is used, luma_mode.predict_intra() should be called for each tx block
-          luma_mode.predict_intra(
-            tile_rect,
-            &mut rec_region,
-            tx_size,
-            fi.sequence.bit_depth,
-            &[0i16; 2],
-            IntraParam::None,
-            if luma_mode.is_directional() { ief_params } else { None },
-            &edge_buf,
-            fi.cpu_feature_level,
-          );
+        let plane_org = ts.input_tile.planes[0]
+          .subregion(Area::BlockStartingAt { bo: tile_bo.0 });
+        let plane_ref = rec_region.as_const();
 
-          let plane_org = ts.input_tile.planes[0]
-            .subregion(Area::BlockStartingAt { bo: tile_bo.0 });
-          let plane_ref = rec_region.as_const();
-
-          (
-            luma_mode,
-            get_satd(
-              &plane_org,
-              &plane_ref,
-              tx_size.block_size(),
-              fi.sequence.bit_depth,
-              fi.cpu_feature_level,
-            ),
-          )
-        })
-        .collect::<ArrayVec<[_; INTRA_MODES]>>()
+        satds_all[luma_mode as usize] = get_satd(
+          &plane_org,
+          &plane_ref,
+          tx_size.block_size(),
+          fi.sequence.bit_depth,
+          fi.cpu_feature_level,
+        );
+      }
+      satds_all
     };
 
-    satds.sort_by_key(|a| a.1);
-    satds.iter().take(num_modes_rdo).for_each(|&(luma_mode, _stad)| {
-      if !modes.contains(&luma_mode) {
-        modes.push(luma_mode)
-      }
-    });
+    modes[num_modes_rdo / 2..].sort_by_key(|&a| satds[a as usize]);
   }
 
   debug_assert!(num_modes_rdo >= 1);
