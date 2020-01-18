@@ -242,17 +242,9 @@ pub enum TxSet {
   // Discrete Trig transforms w/o flip (4) + Identity (1)
   TX_SET_DTT4_IDTX, // TX_SET_INTRA_2
   // Discrete Trig transforms w/o flip (4) + Identity (1) + 1D Hor/vert DCT (2)
-  // for 16x16 only
-  TX_SET_DTT4_IDTX_1DDCT_16X16,
-  // Discrete Trig transforms w/o flip (4) + Identity (1) + 1D Hor/vert DCT (2)
   TX_SET_DTT4_IDTX_1DDCT, // TX_SET_INTRA_1
-  // Discrete Trig transforms w/ flip (9) + Identity (1)
-  TX_SET_DTT9_IDTX,
   // Discrete Trig transforms w/ flip (9) + Identity (1) + 1D Hor/Ver DCT (2)
   TX_SET_DTT9_IDTX_1DDCT, // TX_SET_INTER_2
-  // Discrete Trig transforms w/ flip (9) + Identity (1) + 1D Hor/Ver (6)
-  // for 16x16 only
-  TX_SET_ALL16_16X16,
   // Discrete Trig transforms w/ flip (9) + Identity (1) + 1D Hor/Ver (6)
   TX_SET_ALL16, // TX_SET_INTER_1
 }
