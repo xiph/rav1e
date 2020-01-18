@@ -81,9 +81,10 @@ pub const EXT_PARTITION_TYPES: usize = 10;
 
 pub const TX_SIZE_SQR_CONTEXTS: usize = 4; // Coded tx_size <= 32x32, so is the # of CDF contexts from tx sizes
 
-pub const TX_SETS: usize = 9;
+pub const TX_SETS: usize = 6;
 pub const TX_SETS_INTRA: usize = 3;
 pub const TX_SETS_INTER: usize = 4;
+
 pub const TXFM_PARTITION_CONTEXTS: usize =
   ((TxSize::TX_SIZES - TxSize::TX_8X8 as usize) * 6 - 3);
 const MAX_REF_MV_STACK_SIZE: usize = 8;
@@ -98,33 +99,27 @@ const DELTA_Q_SMALL: u32 = 3;
 pub const DELTA_Q_PROBS: usize = DELTA_Q_SMALL as usize;
 
 // Number of transform types in each set type
-static num_tx_set: [usize; TX_SETS] = [1, 2, 5, 7, 7, 10, 12, 16, 16];
+static num_tx_set: [usize; TX_SETS] = [1, 2, 5, 7, 12, 16];
 pub static av1_tx_used: [[usize; TX_TYPES]; TX_SETS] = [
   [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
   [1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
   [1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0],
-  [1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0],
-  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
   [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0],
-  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
   [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
 ];
 
 // Maps set types above to the indices used for intra
-static tx_set_index_intra: [i8; TX_SETS] = [0, -1, 2, -1, 1, -1, -1, -1, -16];
+static tx_set_index_intra: [i8; TX_SETS] = [0, -1, 2, 1, -1, -16];
 // Maps set types above to the indices used for inter
-static tx_set_index_inter: [i8; TX_SETS] = [0, 3, -1, -1, -1, -1, 2, -1, 1];
+static tx_set_index_inter: [i8; TX_SETS] = [0, 3, -1, -1, 2, 1];
 
 static av1_tx_ind: [[usize; TX_TYPES]; TX_SETS] = [
   [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   [1, 3, 4, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   [1, 5, 6, 4, 0, 0, 0, 0, 0, 0, 2, 3, 0, 0, 0, 0],
-  [1, 5, 6, 4, 0, 0, 0, 0, 0, 0, 2, 3, 0, 0, 0, 0],
-  [1, 2, 3, 6, 4, 5, 7, 8, 9, 0, 0, 0, 0, 0, 0, 0],
   [3, 4, 5, 8, 6, 7, 9, 10, 11, 0, 1, 2, 0, 0, 0, 0],
-  [7, 8, 9, 12, 10, 11, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6],
   [7, 8, 9, 12, 10, 11, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6],
 ];
 
