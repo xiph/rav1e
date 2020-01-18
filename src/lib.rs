@@ -46,6 +46,15 @@
 #![allow(clippy::wrong_self_convention)]
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::comparison_chain)]
+#![warn(clippy::expl_impl_clone_on_copy)]
+#![warn(clippy::linkedlist)]
+#![warn(clippy::map_flatten)]
+#![warn(clippy::mem_forget)]
+#![warn(clippy::mut_mut)]
+#![warn(clippy::mutex_integer)]
+#![warn(clippy::needless_continue)]
+#![warn(clippy::path_buf_push_overwrite)]
+#![warn(clippy::range_plus_one)]
 
 // Override assert! and assert_eq! in tests
 #[cfg(test)]
