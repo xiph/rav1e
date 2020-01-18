@@ -12,7 +12,9 @@ use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use rav1e::bench::cpu_features::*;
 use rav1e::bench::transform;
-use rav1e::bench::transform::{forward_transform, TxSize, TxType};
+use rav1e::bench::transform::{
+  forward_transform, get_valid_txfm_types, TxSize,
+};
 
 fn init_buffers(size: usize) -> (Vec<i32>, Vec<i32>) {
   let mut ra = ChaChaRng::from_seed([0; 32]);
@@ -72,35 +74,6 @@ pub fn av1_iadst8(c: &mut Criterion) {
   c.bench_function("av1_iadst8_8", move |b| {
     b.iter(|| transform::inverse::av1_iadst8(&input[..], &mut output[..], 16))
   });
-}
-
-fn get_valid_txfm_types(tx_size: TxSize) -> &'static [TxType] {
-  let size_sq = tx_size.sqr_up();
-  use TxType::*;
-  if size_sq == TxSize::TX_64X64 {
-    &[DCT_DCT]
-  } else if size_sq == TxSize::TX_32X32 {
-    &[DCT_DCT, IDTX]
-  } else {
-    &[
-      DCT_DCT,
-      ADST_DCT,
-      DCT_ADST,
-      ADST_ADST,
-      FLIPADST_DCT,
-      DCT_FLIPADST,
-      FLIPADST_FLIPADST,
-      ADST_FLIPADST,
-      FLIPADST_ADST,
-      IDTX,
-      V_DCT,
-      H_DCT,
-      V_ADST,
-      H_ADST,
-      V_FLIPADST,
-      H_FLIPADST,
-    ]
-  }
 }
 
 pub fn bench_forward_transforms(c: &mut Criterion) {
