@@ -1437,6 +1437,7 @@ impl Default for Block {
   }
 }
 
+#[derive(Clone, Copy)]
 pub struct TXB_CTX {
   pub txb_skip_ctx: usize,
   pub dc_sign_ctx: usize,
@@ -1509,7 +1510,7 @@ const PARTITION_CONTEXT_MAX_WIDTH: usize =
 
 const COEFF_CONTEXT_MAX_WIDTH: usize = MAX_TILE_WIDTH / MI_SIZE;
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct BlockContextCheckpoint {
   cdef_coded: bool,
   above_partition_context: [u8; PARTITION_CONTEXT_MAX_WIDTH],
