@@ -153,8 +153,31 @@ pub mod native {
       let row_coeffs = &mut buf[r * txfm_size_col..];
       txfm_func_row(row_coeffs);
       av1_round_shift_array(row_coeffs, txfm_size_col, -cfg.shift[2]);
-      for c in 0..txfm_size_col {
-        output[c * txfm_size_row + r] = T::cast_from(row_coeffs[c]);
+
+      // Store output in at most 32x32 chunks so that the first 32x32
+      // coefficients are stored first. When we don't have 64 rows, there is no
+      // change in order. With 64 rows, the chunks are in this order
+      //  - First 32 rows and first 32 cols
+      //  - Last 32 rows and first 32 cols
+      //  - First 32 rows and last 32 cols
+      //  - Last 32 rows and last 32 cols
+
+      // Output is grouped into 32x32 chunks so a stride of at most 32 is
+      // used for each chunk.
+      let output_stride = txfm_size_row.min(32);
+
+      // Split the first 32 rows from the last 32 rows
+      let output = &mut output
+        [(r >= 32) as usize * output_stride * txfm_size_col.min(32)..];
+
+      for cg in (0..txfm_size_col).step_by(32) {
+        // Split the first 32 cols from the last 32 cols
+        let output = &mut output[txfm_size_row * cg..];
+
+        for c in 0..txfm_size_col.min(32) {
+          output[c * output_stride + (r & 31)] =
+            T::cast_from(row_coeffs[c + cg]);
+        }
       }
     }
   }
@@ -211,19 +234,7 @@ pub fn fht64x64<T: Coefficient>(
   bit_depth: usize, cpu: CpuFeatureLevel,
 ) {
   assert!(tx_type == TxType::DCT_DCT);
-  let mut aligned: AlignedArray<[T; 4096]> = AlignedArray::uninitialized();
-  let tmp = &mut aligned.array;
-
-  //Block64x64::fwd_txfm2d(input, &mut tmp, stride, tx_type, bit_depth, cpu);
-  Block64x64::fwd_txfm2d_daala(input, tmp, stride, tx_type, bit_depth, cpu);
-
-  for i in 0..2 {
-    for (row_out, row_in) in
-      output[2048 * i..].chunks_mut(32).zip(tmp[32 * i..].chunks(64)).take(64)
-    {
-      row_out.copy_from_slice(&row_in[..32]);
-    }
-  }
+  Block64x64::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth, cpu);
 }
 
 pub fn fht4x8<T: Coefficient>(
@@ -275,18 +286,7 @@ pub fn fht32x64<T: Coefficient>(
   bit_depth: usize, cpu: CpuFeatureLevel,
 ) {
   assert!(tx_type == TxType::DCT_DCT);
-  let mut aligned: AlignedArray<[T; 2048]> = AlignedArray::uninitialized();
-  let tmp = &mut aligned.array;
-
-  Block32x64::fwd_txfm2d_daala(input, tmp, stride, tx_type, bit_depth, cpu);
-
-  for i in 0..2 {
-    for (row_out, row_in) in
-      output[1024 * i..].chunks_mut(32).zip(tmp[32 * i..].chunks(64)).take(32)
-    {
-      row_out.copy_from_slice(&row_in[..32]);
-    }
-  }
+  Block32x64::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth, cpu);
 }
 
 pub fn fht64x32<T: Coefficient>(
@@ -294,14 +294,7 @@ pub fn fht64x32<T: Coefficient>(
   bit_depth: usize, cpu: CpuFeatureLevel,
 ) {
   assert!(tx_type == TxType::DCT_DCT);
-  let mut aligned: AlignedArray<[T; 2048]> = AlignedArray::uninitialized();
-  let tmp = &mut aligned.array;
-
-  Block64x32::fwd_txfm2d_daala(input, tmp, stride, tx_type, bit_depth, cpu);
-
-  for (row_out, row_in) in output.chunks_mut(32).zip(tmp.chunks(32)).take(64) {
-    row_out.copy_from_slice(&row_in[..32]);
-  }
+  Block64x32::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth, cpu);
 }
 
 pub fn fht4x16<T: Coefficient>(
@@ -339,18 +332,7 @@ pub fn fht16x64<T: Coefficient>(
   bit_depth: usize, cpu: CpuFeatureLevel,
 ) {
   assert!(tx_type == TxType::DCT_DCT);
-  let mut aligned: AlignedArray<[T; 1024]> = AlignedArray::uninitialized();
-  let tmp = &mut aligned.array;
-
-  Block16x64::fwd_txfm2d_daala(input, tmp, stride, tx_type, bit_depth, cpu);
-
-  for i in 0..2 {
-    for (row_out, row_in) in
-      output[512 * i..].chunks_mut(32).zip(tmp[32 * i..].chunks(64)).take(16)
-    {
-      row_out.copy_from_slice(&row_in[..32]);
-    }
-  }
+  Block16x64::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth, cpu);
 }
 
 pub fn fht64x16<T: Coefficient>(
@@ -358,12 +340,5 @@ pub fn fht64x16<T: Coefficient>(
   bit_depth: usize, cpu: CpuFeatureLevel,
 ) {
   assert!(tx_type == TxType::DCT_DCT);
-  let mut aligned: AlignedArray<[T; 1024]> = AlignedArray::uninitialized();
-  let tmp = &mut aligned.array;
-
-  Block64x16::fwd_txfm2d_daala(input, tmp, stride, tx_type, bit_depth, cpu);
-
-  for (row_out, row_in) in output.chunks_mut(16).zip(tmp.chunks(16)).take(64) {
-    row_out.copy_from_slice(&row_in[..16]);
-  }
+  Block64x16::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth, cpu);
 }

@@ -462,26 +462,44 @@ unsafe fn fwd_txfm2d_avx2<T: Coefficient>(
     // this size.
     match row_class {
       SizeClass1D::X8UP => {
-        for c in 0..txfm_size_col {
-          match T::Pixel::type_enum() {
-            PixelType::U8 => {
-              let lo = _mm256_castsi256_si128(row_coeffs[c].vec());
-              let hi = _mm256_extracti128_si256(row_coeffs[c].vec(), 1);
-              _mm_storeu_si128(
-                output[c * txfm_size_row + rg..].as_mut_ptr() as *mut _,
-                _mm_packs_epi32(lo, hi),
-              );
-            }
-            PixelType::U16 => {
-              _mm256_storeu_si256(
-                output[c * txfm_size_row + rg..].as_mut_ptr() as *mut _,
-                row_coeffs[c].vec(),
-              );
+        // Store output in at most 32x32 chunks. See native code for details.
+
+        // Output is grouped into 32x32 chunks so a stride of at most 32 is
+        // used for each chunk
+        let output_stride = txfm_size_row.min(32);
+
+        // Split the first 32 rows from the last 32 rows and offset by rg % 32
+        let output = &mut output[(rg & 31)
+          + (rg >= 32) as usize * output_stride * txfm_size_col.min(32)..];
+
+        for cg in (0..txfm_size_col).step_by(32) {
+          // Offset by zero or half of output
+          let output = &mut output[txfm_size_row * cg..];
+
+          for c in 0..txfm_size_col.min(32) {
+            match T::Pixel::type_enum() {
+              PixelType::U8 => {
+                let vec = row_coeffs[c + cg].vec();
+                let lo = _mm256_castsi256_si128(vec);
+                let hi = _mm256_extracti128_si256(vec, 1);
+                _mm_storeu_si128(
+                  output[c * output_stride..].as_mut_ptr() as *mut _,
+                  _mm_packs_epi32(lo, hi),
+                );
+              }
+              PixelType::U16 => {
+                _mm256_storeu_si256(
+                  output[c * output_stride..].as_mut_ptr() as *mut _,
+                  row_coeffs[c + cg].vec(),
+                );
+              }
             }
           }
         }
       }
       SizeClass1D::X4 => {
+        // Write out coefficients in normal order - it isn't possible to have
+        // more than 32 rows.
         for c in 0..txfm_size_col {
           match T::Pixel::type_enum() {
             PixelType::U8 => {
