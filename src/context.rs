@@ -557,39 +557,29 @@ pub fn get_tx_set(
   let tx_size_sqr_up = tx_size.sqr_up();
   let tx_size_sqr = tx_size.sqr();
 
-  if tx_size.width() >= 64 || tx_size.height() >= 64 {
+  if tx_size_sqr_up.block_size() > BlockSize::BLOCK_32X32 {
     return TxSet::TX_SET_DCTONLY;
   }
 
-  if tx_size_sqr_up == TxSize::TX_32X32 {
-    return if is_inter {
+  return if is_inter {
+    if use_reduced_set || tx_size_sqr_up == TxSize::TX_32X32 {
       TxSet::TX_SET_DCT_IDTX
-    } else {
-      TxSet::TX_SET_DCTONLY
-    };
-  }
-
-  if use_reduced_set {
-    return if is_inter {
-      TxSet::TX_SET_DCT_IDTX
-    } else {
-      TxSet::TX_SET_DTT4_IDTX
-    };
-  }
-
-  if is_inter {
-    return if tx_size_sqr == TxSize::TX_16X16 {
+    } else if tx_size_sqr == TxSize::TX_16X16 {
       TxSet::TX_SET_DTT9_IDTX_1DDCT
     } else {
       TxSet::TX_SET_ALL16
-    };
-  }
-
-  if tx_size_sqr == TxSize::TX_16X16 {
-    TxSet::TX_SET_DTT4_IDTX
+    }
   } else {
-    TxSet::TX_SET_DTT4_IDTX_1DDCT
-  }
+    if tx_size_sqr_up == TxSize::TX_32X32 {
+      TxSet::TX_SET_DCTONLY
+    } else if use_reduced_set {
+      TxSet::TX_SET_DTT4_IDTX
+    } else if tx_size_sqr == TxSize::TX_16X16 {
+      TxSet::TX_SET_DTT4_IDTX
+    } else {
+      TxSet::TX_SET_DTT4_IDTX_1DDCT
+    }
+  };
 }
 
 fn get_tx_set_index(
