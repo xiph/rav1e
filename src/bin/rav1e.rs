@@ -16,6 +16,15 @@
 #![allow(clippy::verbose_bit_mask)]
 #![allow(clippy::unreadable_literal)]
 #![allow(clippy::many_single_char_names)]
+#![warn(clippy::expl_impl_clone_on_copy)]
+#![warn(clippy::linkedlist)]
+#![warn(clippy::map_flatten)]
+#![warn(clippy::mem_forget)]
+#![warn(clippy::mut_mut)]
+#![warn(clippy::mutex_integer)]
+#![warn(clippy::needless_continue)]
+#![warn(clippy::path_buf_push_overwrite)]
+#![warn(clippy::range_plus_one)]
 
 #[macro_use]
 extern crate err_derive;
