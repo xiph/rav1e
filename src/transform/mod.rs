@@ -399,6 +399,36 @@ pub fn forward_transform<T: Coefficient>(
   }
 }
 
+#[cfg(any(test, feature = "bench"))]
+pub fn get_valid_txfm_types(tx_size: TxSize) -> &'static [TxType] {
+  let size_sq = tx_size.sqr_up();
+  use TxType::*;
+  if size_sq == TxSize::TX_64X64 {
+    &[DCT_DCT]
+  } else if size_sq == TxSize::TX_32X32 {
+    &[DCT_DCT, IDTX]
+  } else {
+    &[
+      DCT_DCT,
+      ADST_DCT,
+      DCT_ADST,
+      ADST_ADST,
+      FLIPADST_DCT,
+      DCT_FLIPADST,
+      FLIPADST_FLIPADST,
+      ADST_FLIPADST,
+      FLIPADST_ADST,
+      IDTX,
+      V_DCT,
+      H_DCT,
+      V_ADST,
+      H_ADST,
+      V_FLIPADST,
+      H_FLIPADST,
+    ]
+  }
+}
+
 #[cfg(test)]
 mod test {
   use super::TxType::*;
