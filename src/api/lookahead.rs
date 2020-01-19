@@ -189,7 +189,7 @@ pub(crate) fn compute_motion_vectors<T: Pixel>(
       let ts = &mut ctx.ts;
 
       // Compute the quarter-resolution motion vectors.
-      let tile_pmvs = build_coarse_pmvs(fi, ts, &inter_cfg);
+      let tile_pmvs = build_coarse_pmvs(fi, ts, inter_cfg);
 
       // Compute the half-resolution motion vectors.
       let mut half_res_pmvs = Vec::with_capacity(ts.sb_height * ts.sb_width);

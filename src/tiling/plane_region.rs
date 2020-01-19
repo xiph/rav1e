@@ -405,7 +405,7 @@ impl<'a, T: Pixel> PlaneRegionMut<'a, T> {
     };
     PlaneRegionMut {
       data,
-      plane_cfg: &self.plane_cfg,
+      plane_cfg: self.plane_cfg,
       rect: absolute_rect,
       phantom: PhantomData,
     }
@@ -538,7 +538,7 @@ impl<'a, T: Pixel> Iterator for VertWindows<'a, T> {
       self.output_rect.y += n as isize;
       let output = PlaneRegion {
         data: self.data,
-        plane_cfg: &self.plane_cfg,
+        plane_cfg: self.plane_cfg,
         rect: self.output_rect,
         phantom: PhantomData,
       };
@@ -572,7 +572,7 @@ impl<'a, T: Pixel> Iterator for HorzWindows<'a, T> {
       self.output_rect.x += n as isize;
       let output = PlaneRegion {
         data: self.data,
-        plane_cfg: &self.plane_cfg,
+        plane_cfg: self.plane_cfg,
         rect: self.output_rect,
         phantom: PhantomData,
       };

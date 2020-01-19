@@ -596,7 +596,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     // FIXME: Not sure whether putting frame/render size here is good idea
     if fi.intra_only {
       if frame_size_override_flag {
-        self.write_frame_size_override(&fi);
+        self.write_frame_size_override(fi);
       }
       if fi.sequence.enable_superres {
         unimplemented!();
@@ -633,7 +633,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         unimplemented!();
       } else {
         if frame_size_override_flag {
-          self.write_frame_size_override(&fi);
+          self.write_frame_size_override(fi);
         }
         if fi.sequence.enable_superres {
           unimplemented!();

@@ -52,6 +52,7 @@
 #![warn(clippy::mem_forget)]
 #![warn(clippy::mut_mut)]
 #![warn(clippy::mutex_integer)]
+#![warn(clippy::needless_borrow)]
 #![warn(clippy::needless_continue)]
 #![warn(clippy::path_buf_push_overwrite)]
 #![warn(clippy::range_plus_one)]
