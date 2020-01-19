@@ -339,7 +339,7 @@ impl<T: Pixel> ContextInner<T> {
             break;
           }
 
-          self.compute_keyframe_placement(&cur_lookahead_frames);
+          self.compute_keyframe_placement(cur_lookahead_frames);
         }
       } else {
         self.compute_keyframe_placement(&lookahead_frames);
@@ -739,7 +739,7 @@ impl<T: Pixel> ContextInner<T> {
   ) {
     if self.keyframes_forced.contains(&self.next_lookahead_frame)
       || self.keyframe_detector.analyze_next_frame(
-        &lookahead_frames,
+        lookahead_frames,
         self.next_lookahead_frame,
         *self.keyframes.iter().last().unwrap(),
         &self.config,
@@ -854,7 +854,7 @@ impl<T: Pixel> ContextInner<T> {
           .map(|data| &mut data.fi.block_importances)
         {
           update_block_importances(
-            &fi,
+            fi,
             mvs,
             frame,
             reference_frame,

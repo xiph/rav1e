@@ -92,7 +92,7 @@ impl SceneChangeDetector {
     }
 
     self.exclude_scene_flashes(
-      &frame_set,
+      frame_set,
       input_frameno,
       inter_cfg,
       previous_keyframe,

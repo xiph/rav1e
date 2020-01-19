@@ -684,7 +684,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
           tx_size,
           tx_type,
           mode_context,
-          &mv_stack,
+          mv_stack,
           rdo_type,
           need_recon_pixel,
           false,
@@ -1090,7 +1090,7 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
       ts,
       cw,
       rdo_type,
-      &cw_checkpoint,
+      cw_checkpoint,
       &mut best,
       mvs,
       ref_frames_set[i],
@@ -1137,7 +1137,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
       debug_assert!(bsize == tx_size.block_size());
       let edge_buf = {
         let rec = &ts.rec.planes[0].as_const();
-        let po = tile_bo.plane_offset(&rec.plane_cfg);
+        let po = tile_bo.plane_offset(rec.plane_cfg);
         // FIXME: If tx partition is used, get_intra_edges() should be called for each tx block
         get_intra_edges(
           rec,
@@ -1245,7 +1245,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
       ts,
       cw,
       rdo_type,
-      &cw_checkpoint,
+      cw_checkpoint,
       &mut best,
       mvs,
       ref_frames,
@@ -1291,7 +1291,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
           ts,
           cw,
           rdo_type,
-          &cw_checkpoint,
+          cw_checkpoint,
           &mut best,
           mvs,
           ref_frames,
@@ -1874,7 +1874,7 @@ pub fn rdo_loop_decision<T: Pixel>(
   }
   // Initialize cdef output
   for pli in 0..PLANES {
-    let po = tile_sbo.plane_offset(&ts.rec.planes[pli].plane_cfg);
+    let po = tile_sbo.plane_offset(ts.rec.planes[pli].plane_cfg);
     let rec_region =
       ts.rec.planes[pli].subregion(Area::StartingAt { x: po.x, y: po.y });
     let width = lrf_input.planes[pli].cfg.width.min(rec_region.rect().width);
@@ -1937,7 +1937,7 @@ pub fn rdo_loop_decision<T: Pixel>(
             let mut rate = 0;
             cdef_filter_superblock(
               fi,
-              &cdef_input,
+              cdef_input,
               &mut lrf_input,
               &cw.bc.blocks.as_const(),
               loop_sbo,
@@ -2078,7 +2078,7 @@ pub fn rdo_loop_decision<T: Pixel>(
           // both below and above (padding)
           cdef_filter_superblock(
             fi,
-            &cdef_input,
+            cdef_input,
             &mut lrf_input,
             &cw.bc.blocks.as_const(),
             loop_sbo,

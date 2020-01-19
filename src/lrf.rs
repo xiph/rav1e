@@ -701,7 +701,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
         &mut f_r2_1,
         y,
         stripe_w,
-        &cdeffed,
+        cdeffed,
         fi.cpu_feature_level,
       );
       [&f_r2_0, &f_r2_1]
@@ -710,7 +710,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
         &mut f_r2_0,
         y,
         stripe_w,
-        &cdeffed,
+        cdeffed,
         fi.cpu_feature_level,
       );
       // share results for both rows
@@ -742,7 +742,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
           &mut f_r1,
           y,
           stripe_w,
-          &cdeffed,
+          cdeffed,
           fi.cpu_feature_level,
         );
       } else {
@@ -750,7 +750,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
           &mut f_r1,
           y,
           stripe_w,
-          &cdeffed,
+          cdeffed,
           fi.cpu_feature_level,
         );
       }
@@ -788,7 +788,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
         &mut out[y],
         line,
         &f_r1,
-        &f_r2_ab[dy],
+        f_r2_ab[dy],
         stripe_w,
         bit_depth,
         w0,
@@ -914,12 +914,12 @@ pub fn sgrproj_solve<T: Pixel>(
         &mut f_r2_1,
         y,
         cdef_w,
-        &cdeffed,
+        cdeffed,
         fi.cpu_feature_level,
       );
       [&f_r2_0, &f_r2_1]
     } else {
-      sgrproj_box_f_r0(&mut f_r2_0, y, cdef_w, &cdeffed, fi.cpu_feature_level);
+      sgrproj_box_f_r0(&mut f_r2_0, y, cdef_w, cdeffed, fi.cpu_feature_level);
       // share results for both rows
       [&f_r2_0, &f_r2_0]
     };
@@ -949,11 +949,11 @@ pub fn sgrproj_solve<T: Pixel>(
           &mut f_r1,
           y,
           cdef_w,
-          &cdeffed,
+          cdeffed,
           fi.cpu_feature_level,
         );
       } else {
-        sgrproj_box_f_r0(&mut f_r1, y, cdef_w, &cdeffed, fi.cpu_feature_level);
+        sgrproj_box_f_r0(&mut f_r1, y, cdef_w, cdeffed, fi.cpu_feature_level);
       }
 
       #[inline(always)]
@@ -1005,7 +1005,7 @@ pub fn sgrproj_solve<T: Pixel>(
         &cdeffed[y],
         &input[y],
         &f_r1,
-        &f_r2_01[dy],
+        f_r2_01[dy],
         cdef_w,
       );
     }

@@ -384,7 +384,7 @@ pub fn cdef_sb_padded_frame_copy<T: Pixel>(
     let &Rect { width, height, .. } = tile.planes[p].rect();
     /*let w = width as isize;
     let h = height as isize;*/
-    let offset = sbo.plane_offset(&tile.planes[p].plane_cfg);
+    let offset = sbo.plane_offset(tile.planes[p].plane_cfg);
     let mut out_region =
       out.planes[p].region_mut(Area::StartingAt { x: -ipad, y: -ipad });
     for y in 0..((sb_v_size >> ydec) + pad * 2) as isize {

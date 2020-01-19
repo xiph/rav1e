@@ -528,7 +528,7 @@ pub(crate) mod native {
         PredictionVariant::BOTH => pred_cfl,
       })(
         dst,
-        &ac,
+        ac,
         angle as i16,
         above_slice,
         left_slice,
@@ -811,7 +811,7 @@ pub(crate) mod native {
     left: &[T], width: usize, height: usize, bit_depth: usize,
   ) {
     pred_dc(output, above, left, width, height, bit_depth);
-    pred_cfl_inner(output, &ac, alpha, width, height, bit_depth);
+    pred_cfl_inner(output, ac, alpha, width, height, bit_depth);
   }
 
   pub(crate) fn pred_cfl_128<T: Pixel>(
@@ -819,7 +819,7 @@ pub(crate) mod native {
     left: &[T], width: usize, height: usize, bit_depth: usize,
   ) {
     pred_dc_128(output, above, left, width, height, bit_depth);
-    pred_cfl_inner(output, &ac, alpha, width, height, bit_depth);
+    pred_cfl_inner(output, ac, alpha, width, height, bit_depth);
   }
 
   pub(crate) fn pred_cfl_left<T: Pixel>(
@@ -827,7 +827,7 @@ pub(crate) mod native {
     left: &[T], width: usize, height: usize, bit_depth: usize,
   ) {
     pred_dc_left(output, above, left, width, height, bit_depth);
-    pred_cfl_inner(output, &ac, alpha, width, height, bit_depth);
+    pred_cfl_inner(output, ac, alpha, width, height, bit_depth);
   }
 
   pub(crate) fn pred_cfl_top<T: Pixel>(
@@ -835,7 +835,7 @@ pub(crate) mod native {
     left: &[T], width: usize, height: usize, bit_depth: usize,
   ) {
     pred_dc_top(output, above, left, width, height, bit_depth);
-    pred_cfl_inner(output, &ac, alpha, width, height, bit_depth);
+    pred_cfl_inner(output, ac, alpha, width, height, bit_depth);
   }
 
   pub(crate) fn pred_directional<T: Pixel>(

@@ -133,7 +133,7 @@ pub fn get_subset_predictors<T: Pixel>(
 
   // EPZS subset C predictors.
 
-  if let Some(ref frame_ref) = frame_ref_opt {
+  if let Some(frame_ref) = frame_ref_opt {
     let prev_frame_mvs = &frame_ref.frame_mvs[ref_frame_id];
 
     let frame_bo = PlaneBlockOffset(BlockOffset {
@@ -484,7 +484,7 @@ impl MotionEstimation for DiamondSearch {
     let mut predictors = get_subset_predictors::<T>(
       tile_bo_adj,
       pmvs.iter().cloned().filter_map(identity).collect(),
-      &tile_mvs,
+      tile_mvs,
       frame_ref,
       ref_frame.to_index(),
     );
@@ -497,7 +497,7 @@ impl MotionEstimation for DiamondSearch {
     diamond_me_search(
       fi,
       frame_po,
-      &ts.input_hres,
+      ts.input_hres,
       &rec.input_hres,
       &predictors,
       fi.sequence.bit_depth,
@@ -636,7 +636,7 @@ impl MotionEstimation for FullSearch {
             bsize.width() >> 1,
             bsize.height() >> 1,
           ),
-          &ts.input_hres,
+          ts.input_hres,
           &rec.input_hres,
           best_mv,
           lowest_cost,
@@ -732,7 +732,7 @@ fn diamond_me_search<T: Pixel>(
     po,
     p_org,
     p_ref,
-    &predictors,
+    predictors,
     bit_depth,
     pmv,
     lambda,
@@ -857,9 +857,9 @@ fn compute_mv_rd_cost<T: Pixel>(
   plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>,
 ) -> u64 {
   let sad = if use_satd {
-    get_satd(&plane_org, &plane_ref, bsize, bit_depth, fi.cpu_feature_level)
+    get_satd(plane_org, plane_ref, bsize, bit_depth, fi.cpu_feature_level)
   } else {
-    get_sad(&plane_org, &plane_ref, bsize, bit_depth, fi.cpu_feature_level)
+    get_sad(plane_org, plane_ref, bsize, bit_depth, fi.cpu_feature_level)
   };
 
   let rate1 = get_mv_rate(cand_mv, pmv[0], fi.allow_high_precision_mv);
@@ -1068,7 +1068,7 @@ pub fn estimate_motion_ss4<T: Pixel>(
       y_lo,
       y_hi,
       BlockSize::from_width_and_height(blk_w >> 2, blk_h >> 2),
-      &ts.input_qres,
+      ts.input_qres,
       &rec.input_qres,
       &mut best_mv,
       &mut lowest_cost,

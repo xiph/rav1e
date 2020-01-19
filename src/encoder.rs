@@ -1165,7 +1165,7 @@ pub fn encode_tx_block<T: Pixel>(
       &mut rec.subregion_mut(area),
       tx_size,
       bit_depth,
-      &ac,
+      ac,
       pred_intra_param,
       &edge_buf,
       fi.cpu_feature_level,
@@ -1218,7 +1218,7 @@ pub fn encode_tx_block<T: Pixel>(
       w,
       p,
       tx_bo,
-      &qcoeffs,
+      qcoeffs,
       eob,
       mode,
       tx_size,
@@ -1326,7 +1326,7 @@ pub fn motion_compensate<T: Pixel>(
       if p == 0 { bsize } else { bsize.subsampled_size(u_xdec, u_ydec) };
 
     let rec = &mut ts.rec.planes[p];
-    let po = tile_bo.plane_offset(&rec.plane_cfg);
+    let po = tile_bo.plane_offset(rec.plane_cfg);
     let &PlaneConfig { xdec, ydec, .. } = rec.plane_cfg;
     let tile_rect = luma_tile_rect.decimated(xdec, ydec);
 
@@ -2905,7 +2905,7 @@ fn encode_tile_group<T: Pixel>(
       cdef_filter_frame(fi, rec, &blocks);
     }
     /* TODO: Don't apply if lossless */
-    fs.restoration.lrf_filter_frame(rec, &pre_cdef_frame, &fi);
+    fs.restoration.lrf_filter_frame(rec, &pre_cdef_frame, fi);
   } else {
     /* TODO: Don't apply if lossless */
     let rec = Arc::make_mut(&mut fs.rec);
@@ -2950,7 +2950,7 @@ fn build_raw_tile_group(
       let tile_size_minus_1 = raw_tile.len() - 1;
       bw.write_le(max_tile_size_bytes, tile_size_minus_1 as u64).unwrap();
     }
-    bw.write_bytes(&raw_tile).unwrap();
+    bw.write_bytes(raw_tile).unwrap();
   }
   raw
 }
