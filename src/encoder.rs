@@ -2208,7 +2208,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
   let bsh = bsize.height_mi();
   let is_square = bsize.is_sqr();
 
-  // FIXME: ask codeview what to write before assert before committing
+  // TODO: Update for 128x128 superblocks
   assert!(fi.partition_range.max <= BlockSize::BLOCK_64X64);
   // Always split if the current partition is too large, i.e. right or bottom tile border
   let must_split = (tile_bo.0.x + bsw as usize > ts.mi_width
@@ -2494,7 +2494,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   let is_square = bsize.is_sqr();
   let rdo_type = RDOType::PixelDistRealRate;
 
-  // FIXME: ask codeview what to write before assert before committing
+  // TODO: Update for 128x128 superblocks
   assert!(fi.partition_range.max <= BlockSize::BLOCK_64X64);
   // Always split if the current partition is too large, i.e. right or bottom tile border
   let must_split = (tile_bo.0.x + bsw as usize > ts.mi_width
