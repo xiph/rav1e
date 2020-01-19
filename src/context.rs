@@ -556,25 +556,21 @@ pub fn get_tx_set(
     return TxSet::TX_SET_DCTONLY;
   }
 
-  return if is_inter {
+  if is_inter {
     if use_reduced_set || tx_size_sqr_up == TxSize::TX_32X32 {
-      TxSet::TX_SET_DCT_IDTX
+      TxSet::TX_SET_INTER_3
     } else if tx_size_sqr == TxSize::TX_16X16 {
-      TxSet::TX_SET_DTT9_IDTX_1DDCT
+      TxSet::TX_SET_INTER_2
     } else {
-      TxSet::TX_SET_ALL16
+      TxSet::TX_SET_INTER_1
     }
+  } else if tx_size_sqr_up == TxSize::TX_32X32 {
+    TxSet::TX_SET_DCTONLY
+  } else if use_reduced_set || tx_size_sqr == TxSize::TX_16X16 {
+    TxSet::TX_SET_INTRA_2
   } else {
-    if tx_size_sqr_up == TxSize::TX_32X32 {
-      TxSet::TX_SET_DCTONLY
-    } else if use_reduced_set {
-      TxSet::TX_SET_DTT4_IDTX
-    } else if tx_size_sqr == TxSize::TX_16X16 {
-      TxSet::TX_SET_DTT4_IDTX
-    } else {
-      TxSet::TX_SET_DTT4_IDTX_1DDCT
-    }
-  };
+    TxSet::TX_SET_INTRA_1
+  }
 }
 
 fn get_tx_set_index(
