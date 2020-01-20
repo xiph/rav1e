@@ -1054,9 +1054,9 @@ impl<T: Pixel> ContextInner<T> {
         for y in 0..fi.h_in_imp_b {
           for x in 0..fi.w_in_imp_b {
             buf
-              .write_f32::<NativeEndian>(
-                fi.distortion_scales[y * fi.w_in_imp_b + x] as f32,
-              )
+              .write_f32::<NativeEndian>(f64::from(
+                fi.distortion_scales[y * fi.w_in_imp_b + x],
+              ) as f32)
               .unwrap();
           }
         }

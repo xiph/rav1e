@@ -4,6 +4,7 @@ use rand_chacha::ChaChaRng;
 
 use rav1e::bench::frame::AsRegion;
 use rav1e::bench::rdo;
+use rav1e::bench::rdo::DistortionScale;
 use rav1e::bench::tiling::Area;
 use rav1e::prelude::Plane;
 
@@ -25,7 +26,7 @@ pub fn cdef_dist_wxh_8x8(c: &mut Criterion) {
         8,
         8,
         8,
-        |_, _| 1.0,
+        |_, _| DistortionScale::default(),
       )
     })
   });
@@ -42,7 +43,7 @@ pub fn sse_wxh_8x8(c: &mut Criterion) {
         &src2.region(Area::Rect { x: 0, y: 0, width: 8, height: 8 }),
         8,
         8,
-        |_, _| 1.0,
+        |_, _| DistortionScale::default(),
       )
     })
   });
@@ -59,7 +60,7 @@ pub fn sse_wxh_4x4(c: &mut Criterion) {
         &src2.region(Area::Rect { x: 0, y: 0, width: 4, height: 4 }),
         4,
         4,
-        |_, _| 1.0,
+        |_, _| DistortionScale::default(),
       )
     })
   });
@@ -80,7 +81,7 @@ pub fn sse_wxh_2x2(c: &mut Criterion) {
         &src2.region(Area::Rect { x: 0, y: 0, width: 4, height: 4 }),
         4,
         4,
-        |_, _| 1.0,
+        |_, _| DistortionScale::default(),
       )
     })
   });
