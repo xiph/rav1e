@@ -11,7 +11,6 @@ matrix:
     - platform: arm64
 
 install:
-    - call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvarsx86_arm64.bat"
     - appveyor DownloadFile https://win.rustup.rs/ -FileName rustup-init.exe
     - appveyor DownloadFile https://people.xiph.org/~tdaede/nasm-2.14.02-win64.zip -FileName nasm.zip
     - appveyor DownloadFile https://github.com/mozilla/sccache/releases/download/0.2.11/sccache-0.2.11-x86_64-pc-windows-msvc.tar.gz
@@ -37,12 +36,13 @@ build_script:
     - cargo build --release --no-default-features --features binaries --target=%target%
 
 test_script:
-    - cargo test --target=%target% --verbose
+    -
+    - cargo test --release --target=%target% --verbose
 
 artifacts:
     - path: target\$(target)\release\rav1e.exe
       name: rav1e-$(platform)
-      
+
 deploy:
   - provider: GitHub
     artifact: target\$(target)\release\rav1e.exe
