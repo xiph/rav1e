@@ -612,7 +612,7 @@ pub fn rdo_tx_size_type<T: Pixel>(
     && fi.config.speed_settings.rdo_tx_decision
     && luma_mode.is_intra();
   let rdo_tx_depth = if do_rdo_tx_size { 2 } else { 0 };
-  let cw_checkpoint = cw.checkpoint();
+  let mut cw_checkpoint = None;
 
   for _ in 0..=rdo_tx_depth {
     let tx_set = get_tx_set(tx_size, is_inter, fi.use_reduced_tx_set);
@@ -624,6 +624,12 @@ pub fn rdo_tx_size_type<T: Pixel>(
     if !do_rdo_tx_size && !do_rdo_tx_type {
       return (best_tx_size, best_tx_type);
     };
+
+    if cw_checkpoint.is_none() {
+      // Only runs on the first iteration of the loop.
+      // Avoids creating the checkpoint if we early exit above.
+      cw_checkpoint = Some(cw.checkpoint());
+    }
 
     let tx_types =
       if do_rdo_tx_type { RAV1E_TX_TYPES } else { &[TxType::DCT_DCT] };
@@ -647,7 +653,7 @@ pub fn rdo_tx_size_type<T: Pixel>(
     );
 
     let next_tx_size = sub_tx_size_map[tx_size as usize];
-    cw.rollback(&cw_checkpoint);
+    cw.rollback(cw_checkpoint.as_ref().unwrap());
 
     if next_tx_size == tx_size {
       break;
