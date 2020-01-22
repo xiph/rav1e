@@ -65,7 +65,7 @@ jobs:
          - conf: dav1d-tests
            toolchain: stable
          - conf: grcov-coveralls
-           toolchain: nightly-2019-12-02
+           toolchain: beta
          - conf: bench
            toolchain: stable
          - conf: doc
