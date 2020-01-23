@@ -266,7 +266,12 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     self.write_bit(fi.sequence.reduced_still_picture_hdr)?; // reduced_still_picture_header
 
     if fi.sequence.reduced_still_picture_hdr {
+      assert_eq!(fi.sequence.timing_info_present, false);
+      assert_eq!(fi.sequence.decoder_model_info_present_flag, false);
+      assert_eq!(fi.sequence.operating_points_cnt_minus_1, 0);
+      assert_eq!(fi.sequence.operating_point_idc[0], 0);
       self.write(5, 31)?; // level
+      assert_eq!(fi.sequence.tier[0], 0);
     } else {
       self.write_bit(fi.sequence.timing_info_present)?; // timing info present
 
@@ -317,7 +322,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     }
 
     self.write_bit(seq.use_128x128_superblock)?;
-    self.write_bit(seq.enable_filter_intra)?; // enable filter intra
+    self.write_bit(seq.enable_filter_intra)?;
     self.write_bit(seq.enable_intra_edge_filter)?;
 
     if seq.reduced_still_picture_hdr {
@@ -511,18 +516,22 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       );
     }
 
-    if fi.allow_screen_content_tools == 2 {
+    if fi.allow_screen_content_tools > 0 {
       if fi.sequence.force_integer_mv == 2 {
         self.write_bit(fi.force_integer_mv != 0)?;
       } else {
         assert!(fi.force_integer_mv == fi.sequence.force_integer_mv);
       }
-    } else {
-      assert!(
-        fi.allow_screen_content_tools
-          == fi.sequence.force_screen_content_tools
-      );
     }
+
+    assert!(
+      fi.force_integer_mv
+        == if fi.frame_type == FrameType::KEY || fi.intra_only {
+          1
+        } else {
+          0
+        }
+    );
 
     if fi.sequence.frame_id_numbers_present_flag {
       unimplemented!();

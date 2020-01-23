@@ -216,10 +216,10 @@ impl Sequence {
       delta_frame_id_length: DELTA_FRAME_ID_LENGTH,
       use_128x128_superblock: false,
       order_hint_bits_minus_1: 5,
-      force_screen_content_tools: if config.still_picture { 2 } else { 0 },
+      force_screen_content_tools: 0, // 2 if using the reduced still picture header
       force_integer_mv: 2,
       still_picture: config.still_picture,
-      reduced_still_picture_hdr: false, // FIXME: config.still_picture,
+      reduced_still_picture_hdr: false, // TODO: requires writing palette mode info
       enable_filter_intra: false,
       enable_intra_edge_filter: false,
       enable_interintra_compound: false,
@@ -660,7 +660,7 @@ impl<T: Pixel> FrameInvariants<T> {
       large_scale_tile: false,
       disable_cdf_update: false,
       allow_screen_content_tools: sequence.force_screen_content_tools,
-      force_integer_mv: 0,
+      force_integer_mv: 1,
       primary_ref_frame: PRIMARY_REF_NONE,
       refresh_frame_flags: ALL_REF_FRAMES_MASK,
       allow_intrabc: false,
@@ -752,6 +752,7 @@ impl<T: Pixel> FrameInvariants<T> {
   ) -> Self {
     let mut fi = previous_fi.clone();
     fi.intra_only = false;
+    fi.force_integer_mv = 0; // note: should be 1 if fi.intra_only is true
     fi.idx_in_group_output =
       inter_cfg.get_idx_in_group_output(output_frameno_in_gop);
     fi.tx_mode_select = fi.config.speed_settings.rdo_tx_decision;
@@ -1702,7 +1703,16 @@ pub fn encode_block_post_cdef<T: Pixel>(
         cw.write_angle_delta(w, angle_delta.uv, chroma_mode);
       }
     }
-    // TODO: Extra condition related to palette mode, see `read_filter_intra_mode_info` in decodemv.c
+
+    if fi.allow_screen_content_tools > 0
+      && bsize >= BlockSize::BLOCK_8X8
+      && bsize.width() <= 64
+      && bsize.height() <= 64
+    {
+      // TODO: write palette mode info
+      unimplemented!();
+    }
+
     if fi.sequence.enable_filter_intra
       && luma_mode == PredictionMode::DC_PRED
       && bsize.width() <= 32
