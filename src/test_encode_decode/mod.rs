@@ -69,7 +69,7 @@ pub(crate) trait TestDecoder<T: Pixel> {
     limit: usize, bit_depth: usize, chroma_sampling: ChromaSampling,
     min_keyint: u64, max_keyint: u64, switch_frame_interval: u64,
     low_latency: bool, error_resilient: bool, bitrate: i32,
-    tile_cols_log2: usize, tile_rows_log2: usize,
+    tile_cols_log2: usize, tile_rows_log2: usize, still_picture: bool,
   ) {
     let mut ra = ChaChaRng::from_seed([0; 32]);
 
@@ -88,6 +88,7 @@ pub(crate) trait TestDecoder<T: Pixel> {
       bitrate,
       tile_cols_log2,
       tile_rows_log2,
+      still_picture,
     );
 
     debug!(
@@ -157,6 +158,7 @@ fn setup_encoder<T: Pixel>(
   chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
   switch_frame_interval: u64, low_latency: bool, error_resilient: bool,
   bitrate: i32, tile_cols_log2: usize, tile_rows_log2: usize,
+  still_picture: bool,
 ) -> Context<T> {
   assert!(bit_depth == 8 || std::mem::size_of::<T>() > 1);
   let mut enc = EncoderConfig::with_speed_preset(speed);
@@ -173,6 +175,7 @@ fn setup_encoder<T: Pixel>(
   enc.bitrate = bitrate;
   enc.tile_cols = 1 << tile_cols_log2;
   enc.tile_rows = 1 << tile_rows_log2;
+  enc.still_picture = still_picture;
 
   let cfg = Config { enc, threads: 0 };
 
@@ -209,6 +212,7 @@ fn speed(s: usize, decoder: &str) {
       0,
       0,
       0,
+      false,
     );
   }
 }
@@ -295,6 +299,7 @@ fn dimension(w: usize, h: usize, decoder: &str) {
     0,
     0,
     0,
+    false,
   );
 }
 
@@ -322,6 +327,7 @@ fn quantizer(decoder: &str, q: usize) {
       0,
       0,
       0,
+      false,
     );
   }
 }
@@ -370,6 +376,7 @@ fn bitrate(decoder: &str) {
         r,
         0,
         0,
+        false,
       );
     }
   }
@@ -401,6 +408,7 @@ fn keyframes(decoder: &str) {
     0,
     0,
     0,
+    false,
   );
 }
 
@@ -431,6 +439,7 @@ fn reordering(decoder: &str) {
       0,
       0,
       0,
+      false,
     );
   }
 }
@@ -463,6 +472,7 @@ fn reordering_short_video(decoder: &str) {
     0,
     0,
     0,
+    false,
   );
 }
 
@@ -493,6 +503,7 @@ fn error_resilient(decoder: &str) {
     0,
     0,
     0,
+    false,
   );
 }
 
@@ -523,6 +534,7 @@ fn error_resilient_reordering(decoder: &str) {
       0,
       0,
       0,
+      false,
     );
   }
 }
@@ -554,6 +566,7 @@ fn switch_frame(decoder: &str) {
     0,
     0,
     0,
+    false,
   );
 }
 
@@ -584,6 +597,7 @@ fn odd_size_frame_with_full_rdo(decoder: &str) {
     0,
     0,
     0,
+    false,
   );
 }
 
@@ -615,6 +629,7 @@ fn low_bit_depth(decoder: &str) {
     0,
     0,
     0,
+    false,
   );
 }
 
@@ -642,6 +657,7 @@ fn high_bit_depth(decoder: &str, depth: usize) {
     0,
     0,
     0,
+    false,
   );
 }
 
@@ -672,6 +688,7 @@ fn chroma_sampling(decoder: &str, cs: ChromaSampling) {
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(
     w, h, speed, quantizer, limit, 8, cs, 15, 15, 0, true, false, 0, 0, 0,
+    false,
   );
 }
 
@@ -720,6 +737,37 @@ fn tile_encoding_with_stretched_restoration_units(decoder: &str) {
     0,
     2,
     2,
+    false,
+  );
+}
+
+#[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
+#[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
+fn still_picture_mode(decoder: &str) {
+  let limit = 1;
+  let w = 480;
+  let h = 304;
+  let speed = 6;
+  let qindex = 100;
+
+  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+  dec.encode_decode(
+    w,
+    h,
+    speed,
+    qindex,
+    limit,
+    8,
+    Default::default(),
+    0,
+    0,
+    0,
+    false,
+    false,
+    0,
+    0,
+    0,
+    true,
   );
 }
 
