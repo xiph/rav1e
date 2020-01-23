@@ -4151,12 +4151,12 @@ impl<'a> ContextWriter<'a> {
 
     let bhl = Self::get_txb_bhl(tx_size);
 
-    for (c, (&pos, &v)) in scan.iter().zip(coeffs.iter()).rev().enumerate() {
+    for (c, (&pos, &v)) in scan.iter().zip(coeffs.iter()).enumerate().rev() {
       let pos = pos as usize;
       let coeff_ctx = coeff_contexts.array[pos];
       let level = v.abs();
 
-      if c == 0 {
+      if c == eob - 1 {
         symbol_with_update!(
           self,
           w,
