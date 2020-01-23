@@ -187,11 +187,11 @@ mod test {
       };
 
       for &eob in &eobs {
-        let mut qcoeffs = AlignedArray::new([0i16; 32 * 32]);
-        let mut rcoeffs = AlignedArray::new([0i16; 32 * 32]);
+        let mut qcoeffs = Aligned::new([0i16; 32 * 32]);
+        let mut rcoeffs = Aligned::new([0i16; 32 * 32]);
 
         // Generate quantized coefficients upto the eob
-        for (i, qcoeff) in qcoeffs.array.iter_mut().enumerate().take(eob) {
+        for (i, qcoeff) in qcoeffs.data.iter_mut().enumerate().take(eob) {
           *qcoeff =
             rng.gen::<i16>() / if i == 0 { dc_quant } else { ac_quant };
         }
@@ -199,9 +199,9 @@ mod test {
         // Rely on quantize's internal tests
         dequantize(
           qindex,
-          &qcoeffs.array,
+          &qcoeffs.data,
           eob,
-          &mut rcoeffs.array,
+          &mut rcoeffs.data,
           tx_size,
           bd,
           0,

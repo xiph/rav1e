@@ -696,7 +696,7 @@ fn diamond_me_search<T: Pixel>(
   center_mv: &mut MotionVector, center_mv_cost: &mut u64, subpixel: bool,
   ref_frame: RefType,
 ) {
-  use crate::util::AlignedArray;
+  use crate::util::Aligned;
 
   let cfg = PlaneConfig::new(
     bsize.width(),
@@ -708,7 +708,7 @@ fn diamond_me_search<T: Pixel>(
     std::mem::size_of::<T>(),
   );
 
-  let mut buf: AlignedArray<[T; 128 * 128]> = AlignedArray::uninitialized();
+  let mut buf: Aligned<[T; 128 * 128]> = Aligned::uninitialized();
 
   let diamond_pattern = [(1i16, 0i16), (0, 1), (-1, 0), (0, -1)];
   let (mut diamond_radius, diamond_radius_end, mut tmp_region_opt) = {
@@ -719,7 +719,7 @@ fn diamond_me_search<T: Pixel>(
       (
         4i16,
         if fi.allow_high_precision_mv { 1i16 } else { 2i16 },
-        Some(PlaneRegionMut::from_slice(&mut buf.array, &cfg, rect)),
+        Some(PlaneRegionMut::from_slice(&mut buf.data, &cfg, rect)),
       )
     } else {
       // Full pixel motion estimation

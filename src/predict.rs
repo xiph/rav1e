@@ -152,7 +152,7 @@ impl PredictionMode {
     self, tile_rect: TileRect, dst: &mut PlaneRegionMut<'_, T>,
     tx_size: TxSize, bit_depth: usize, ac: &[i16], intra_param: IntraParam,
     ief_params: Option<IntraEdgeFilterParameters>,
-    edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>, cpu: CpuFeatureLevel,
+    edge_buf: &Aligned<[T; 4 * MAX_TX_SIZE + 1]>, cpu: CpuFeatureLevel,
   ) {
     assert!(self.is_intra());
     let &Rect { x: frame_x, y: frame_y, .. } = dst.rect();
@@ -272,8 +272,8 @@ impl PredictionMode {
         );
       }
     } else {
-      let mut tmp: [AlignedArray<[i16; 128 * 128]>; 2] =
-        [AlignedArray::uninitialized(), AlignedArray::uninitialized()];
+      let mut tmp: [Aligned<[i16; 128 * 128]>; 2] =
+        [Aligned::uninitialized(), Aligned::uninitialized()];
       for i in 0..2 {
         if let Some(ref rec) = fi.rec_buffer.frames
           [fi.ref_frames[ref_frames[i].to_index()] as usize]
@@ -281,7 +281,7 @@ impl PredictionMode {
           let (row_frac, col_frac, src) =
             get_params(&rec.frame.planes[p], frame_po, mvs[i]);
           prep_8tap(
-            &mut tmp[i].array,
+            &mut tmp[i].data,
             src,
             width,
             height,
@@ -296,8 +296,8 @@ impl PredictionMode {
       }
       mc_avg(
         dst,
-        &tmp[0].array,
-        &tmp[1].array,
+        &tmp[0].data,
+        &tmp[1].data,
         width,
         height,
         fi.sequence.bit_depth,
@@ -498,7 +498,7 @@ pub(crate) mod native {
   use crate::tiling::PlaneRegionMut;
   use crate::transform::TxSize;
   use crate::util::round_shift;
-  use crate::util::AlignedArray;
+  use crate::util::Aligned;
   use crate::Pixel;
   use std::mem::size_of;
 
@@ -507,13 +507,13 @@ pub(crate) mod native {
     mode: PredictionMode, variant: PredictionVariant,
     dst: &mut PlaneRegionMut<'_, T>, tx_size: TxSize, bit_depth: usize,
     ac: &[i16], angle: isize, ief_params: Option<IntraEdgeFilterParameters>,
-    edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>, _cpu: CpuFeatureLevel,
+    edge_buf: &Aligned<[T; 4 * MAX_TX_SIZE + 1]>, _cpu: CpuFeatureLevel,
   ) {
     let width = tx_size.width();
     let height = tx_size.height();
 
     // left pixels are ordered from bottom to top and right-aligned
-    let (left, not_left) = edge_buf.array.split_at(2 * MAX_TX_SIZE);
+    let (left, not_left) = edge_buf.data.split_at(2 * MAX_TX_SIZE);
     let (top_left, above) = not_left.split_at(1);
 
     let above_slice = &above[..width + height];
@@ -1282,14 +1282,14 @@ mod test {
 
   #[test]
   fn pred_matches_u8() {
-    let mut edge_buf: AlignedArray<[u8; 2 * MAX_TX_SIZE + 1]> =
-      AlignedArray::uninitialized();
-    for i in 0..edge_buf.array.len() {
-      edge_buf.array[i] = (i + 32).saturating_sub(MAX_TX_SIZE).as_();
+    let mut edge_buf: Aligned<[u8; 2 * MAX_TX_SIZE + 1]> =
+      Aligned::uninitialized();
+    for i in 0..edge_buf.data.len() {
+      edge_buf.data[i] = (i + 32).saturating_sub(MAX_TX_SIZE).as_();
     }
-    let left = &edge_buf.array[MAX_TX_SIZE - 4..MAX_TX_SIZE];
-    let above = &edge_buf.array[MAX_TX_SIZE + 1..MAX_TX_SIZE + 5];
-    let top_left = edge_buf.array[MAX_TX_SIZE];
+    let left = &edge_buf.data[MAX_TX_SIZE - 4..MAX_TX_SIZE];
+    let above = &edge_buf.data[MAX_TX_SIZE + 1..MAX_TX_SIZE + 5];
+    let top_left = edge_buf.data[MAX_TX_SIZE];
 
     let mut output = Plane::wrap(vec![0u8; 4 * 4], 4);
 
@@ -1341,9 +1341,9 @@ mod test {
       [33, 34, 35, 36, 31, 31, 32, 33, 30, 30, 30, 31, 29, 30, 30, 30]
     );
 
-    let left = &edge_buf.array[MAX_TX_SIZE - 8..MAX_TX_SIZE];
-    let above = &edge_buf.array[MAX_TX_SIZE + 1..MAX_TX_SIZE + 9];
-    let top_left = &edge_buf.array[MAX_TX_SIZE..MAX_TX_SIZE + 1];
+    let left = &edge_buf.data[MAX_TX_SIZE - 8..MAX_TX_SIZE];
+    let above = &edge_buf.data[MAX_TX_SIZE + 1..MAX_TX_SIZE + 9];
+    let top_left = &edge_buf.data[MAX_TX_SIZE..MAX_TX_SIZE + 1];
     let angles = [
       3, 6, 9, 14, 17, 20, 23, 26, 29, 32, 36, 39, 42, 45, 48, 51, 54, 58, 61,
       64, 67, 70, 73, 76, 81, 84, 87,
