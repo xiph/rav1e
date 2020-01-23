@@ -34,7 +34,6 @@ use crate::util::*;
 
 use arrayvec::*;
 use std::default::Default;
-use std::mem::MaybeUninit;
 use std::ops::{Index, IndexMut};
 use std::*;
 
@@ -4052,26 +4051,16 @@ impl<'a> ContextWriter<'a> {
     //assert!(!is_inter);
     // Note: Both intra and inter mode uses inter scan order. Surprised?
     let scan: &[u16] =
-      av1_scan_orders[tx_size as usize][tx_type as usize].scan;
-    let width = av1_get_coded_tx_size(tx_size).width();
+      &av1_scan_orders[tx_size as usize][tx_type as usize].scan[..eob];
     let height = av1_get_coded_tx_size(tx_size).height();
 
     // Create a slice with coeffs in scan order
-    let mut coeffs_storage: AlignedArray<[MaybeUninit<T>; 32 * 32]> =
-      AlignedArray::uninitialized();
-    let coeffs: &[T] = {
-      let coeffs = init_slice_repeat_mut(
-        &mut coeffs_storage.array[..width * height],
-        T::cast_from(0),
-      );
-      for (i, &scan_idx) in scan.iter().take(eob).enumerate() {
-        coeffs[i] = coeffs_in[scan_idx as usize];
-      }
-      coeffs
-    };
+    let mut coeffs_storage: AlignedArray<ArrayVec<[T; 32 * 32]>> =
+      AlignedArray::new(ArrayVec::new());
+    let coeffs = &mut coeffs_storage.array;
+    coeffs.extend(scan.iter().map(|&scan_idx| coeffs_in[scan_idx as usize]));
 
-    let mut cul_level =
-      coeffs.iter().take(eob).map(|c| u32::cast_from(c.abs())).sum();
+    let mut cul_level = coeffs.iter().map(|c| u32::cast_from(c.abs())).sum();
 
     let txs_ctx = Self::get_txsize_entropy_ctx(tx_size);
     let txb_ctx =
@@ -4162,13 +4151,12 @@ impl<'a> ContextWriter<'a> {
 
     let bhl = Self::get_txb_bhl(tx_size);
 
-    for c in (0..eob).rev() {
-      let pos = scan[c] as usize;
+    for (c, (&pos, &v)) in scan.iter().zip(coeffs.iter()).rev().enumerate() {
+      let pos = pos as usize;
       let coeff_ctx = coeff_contexts.array[pos];
-      let v = coeffs[c];
       let level = v.abs();
 
-      if c == eob - 1 {
+      if c == 0 {
         symbol_with_update!(
           self,
           w,
@@ -4213,8 +4201,7 @@ impl<'a> ContextWriter<'a> {
 
     // Loop to code all signs in the transform block,
     // starting with the sign of DC (if applicable)
-    for c in 0..eob {
-      let v = coeffs[c];
+    for (c, &v) in coeffs.iter().enumerate() {
       if v == T::cast_from(0) {
         continue;
       }
