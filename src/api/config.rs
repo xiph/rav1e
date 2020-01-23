@@ -485,8 +485,8 @@ impl SpeedSettings {
     true
   }
 
-  const fn lrf_preset(_speed: usize) -> bool {
-    true
+  const fn lrf_preset(speed: usize) -> bool {
+    speed <= 9
   }
 
   fn sgr_complexity_preset(speed: usize) -> SGRComplexityLevel {
