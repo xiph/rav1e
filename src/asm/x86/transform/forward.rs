@@ -318,7 +318,7 @@ impl SizeClass1D {
 
 #[allow(clippy::identity_op, clippy::erasing_op)]
 #[target_feature(enable = "avx2")]
-unsafe fn fwd_txfm2d_avx2<T: Coefficient>(
+unsafe fn forward_transform_avx2<T: Coefficient>(
   input: &[i16], output: &mut [T], stride: usize, tx_size: TxSize,
   tx_type: TxType, bd: usize,
 ) {
@@ -526,31 +526,21 @@ unsafe fn fwd_txfm2d_avx2<T: Coefficient>(
   }
 }
 
-pub trait FwdTxfm2D: native::FwdTxfm2D {
-  fn fwd_txfm2d_daala<T: Coefficient>(
-    input: &[i16], output: &mut [T], stride: usize, tx_type: TxType,
-    bd: usize, cpu: CpuFeatureLevel,
-  ) {
-    if cpu >= CpuFeatureLevel::AVX2 {
-      unsafe {
-        fwd_txfm2d_avx2(
-          input,
-          output,
-          stride,
-          TxSize::by_dims(Self::W, Self::H),
-          tx_type,
-          bd,
-        );
-      }
-    } else {
-      <Self as native::FwdTxfm2D>::fwd_txfm2d_daala(
-        input, output, stride, tx_type, bd, cpu,
-      );
+pub fn forward_transform<T: Coefficient>(
+  input: &[i16], output: &mut [T], stride: usize, tx_size: TxSize,
+  tx_type: TxType, bd: usize, cpu: CpuFeatureLevel,
+) {
+  assert!(valid_av1_transform(tx_size, tx_type));
+  if cpu >= CpuFeatureLevel::AVX2 {
+    unsafe {
+      forward_transform_avx2(input, output, stride, tx_size, tx_type, bd);
     }
+  } else {
+    native::forward_transform(
+      input, output, stride, tx_size, tx_type, bd, cpu,
+    );
   }
 }
-
-impl_fwd_txs!();
 
 #[cfg(test)]
 mod test {

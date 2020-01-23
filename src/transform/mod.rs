@@ -13,14 +13,13 @@
 #[macro_use]
 pub mod forward_shared;
 
-use self::forward::*;
+pub use self::forward::forward_transform;
 pub use self::inverse::inverse_transform_add;
 
 use crate::context::MI_SIZE_LOG2;
 use crate::partition::{BlockSize, BlockSize::*};
 use crate::util::*;
 
-use crate::cpu_features::CpuFeatureLevel;
 use TxSize::*;
 
 pub mod forward;
@@ -361,33 +360,17 @@ const HTX_TAB: [TxType1D; TX_TYPES] = [
   TxType1D::FLIPADST,
 ];
 
-pub fn forward_transform<T: Coefficient>(
-  input: &[i16], output: &mut [T], stride: usize, tx_size: TxSize,
-  tx_type: TxType, bit_depth: usize, cpu: CpuFeatureLevel,
-) {
-  use self::TxSize::*;
-  match tx_size {
-    TX_4X4 => fht4x4(input, output, stride, tx_type, bit_depth, cpu),
-    TX_8X8 => fht8x8(input, output, stride, tx_type, bit_depth, cpu),
-    TX_16X16 => fht16x16(input, output, stride, tx_type, bit_depth, cpu),
-    TX_32X32 => fht32x32(input, output, stride, tx_type, bit_depth, cpu),
-    TX_64X64 => fht64x64(input, output, stride, tx_type, bit_depth, cpu),
-
-    TX_4X8 => fht4x8(input, output, stride, tx_type, bit_depth, cpu),
-    TX_8X4 => fht8x4(input, output, stride, tx_type, bit_depth, cpu),
-    TX_8X16 => fht8x16(input, output, stride, tx_type, bit_depth, cpu),
-    TX_16X8 => fht16x8(input, output, stride, tx_type, bit_depth, cpu),
-    TX_16X32 => fht16x32(input, output, stride, tx_type, bit_depth, cpu),
-    TX_32X16 => fht32x16(input, output, stride, tx_type, bit_depth, cpu),
-    TX_32X64 => fht32x64(input, output, stride, tx_type, bit_depth, cpu),
-    TX_64X32 => fht64x32(input, output, stride, tx_type, bit_depth, cpu),
-
-    TX_4X16 => fht4x16(input, output, stride, tx_type, bit_depth, cpu),
-    TX_16X4 => fht16x4(input, output, stride, tx_type, bit_depth, cpu),
-    TX_8X32 => fht8x32(input, output, stride, tx_type, bit_depth, cpu),
-    TX_32X8 => fht32x8(input, output, stride, tx_type, bit_depth, cpu),
-    TX_16X64 => fht16x64(input, output, stride, tx_type, bit_depth, cpu),
-    TX_64X16 => fht64x16(input, output, stride, tx_type, bit_depth, cpu),
+pub fn valid_av1_transform(tx_size: TxSize, tx_type: TxType) -> bool {
+  let size_sq = tx_size.sqr_up();
+  use TxSize::*;
+  use TxType::*;
+  match (size_sq, tx_type) {
+    (TX_64X64, DCT_DCT) => true,
+    (TX_64X64, _) => false,
+    (TX_32X32, DCT_DCT) => true,
+    (TX_32X32, IDTX) => true,
+    (TX_32X32, _) => false,
+    (_, _) => true,
   }
 }
 
@@ -426,6 +409,7 @@ mod test {
   use super::TxType::*;
   use super::*;
   use crate::context::av1_get_coded_tx_size;
+  use crate::cpu_features::CpuFeatureLevel;
   use crate::frame::*;
   use rand::random;
 
