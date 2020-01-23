@@ -148,25 +148,6 @@ impl Txfm2DFlipCfg {
   }
 }
 
-macro_rules! impl_fwd_txs {
-  () => {
-    impl_fwd_txs! { (4, 4), (8, 8), (16, 16), (32, 32), (64, 64) }
-    impl_fwd_txs! { (4, 8), (8, 16), (16, 32), (32, 64) }
-    impl_fwd_txs! { (8, 4), (16, 8), (32, 16), (64, 32) }
-    impl_fwd_txs! { (4, 16), (8, 32), (16, 64) }
-    impl_fwd_txs! { (16, 4), (32, 8), (64, 16) }
-  };
-
-  ($(($W:expr, $H:expr)),+) => {
-    $(
-      paste::item! {
-        pub use crate::util::[<Block $W x $H>];
-        impl FwdTxfm2D for [<Block $W x $H>] {}
-      }
-    )*
-  }
-}
-
 macro_rules! store_coeffs {
   ( $arr:expr, $( $x:expr ),* ) => {
       {

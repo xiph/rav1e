@@ -25,8 +25,9 @@ pub mod native {
 
   use crate::transform::av1_round_shift_array;
   use crate::transform::forward_shared::*;
-  use crate::transform::Dim;
+  use crate::transform::valid_av1_transform;
   use crate::transform::TxSize;
+  use simd_helpers::cold_for_target_arch;
 
   pub trait TxOperations: Copy {
     fn zero() -> Self;
@@ -96,10 +97,13 @@ pub mod native {
     }
   }
 
-  fn fwd_txfm2d<T: Coefficient>(
+  #[cold_for_target_arch("x86_64")]
+  pub fn forward_transform<T: Coefficient>(
     input: &[i16], output: &mut [T], stride: usize, tx_size: TxSize,
-    tx_type: TxType, bd: usize,
+    tx_type: TxType, bd: usize, _cpu: CpuFeatureLevel,
   ) {
+    assert!(valid_av1_transform(tx_size, tx_type));
+
     // Note when assigning txfm_size_col, we use the txfm_size from the
     // row configuration and vice versa. This is intentionally done to
     // accurately perform rectangular transforms. When the transform is
@@ -181,164 +185,4 @@ pub mod native {
       }
     }
   }
-
-  pub trait FwdTxfm2D: Dim {
-    fn fwd_txfm2d_daala<T: Coefficient>(
-      input: &[i16], output: &mut [T], stride: usize, tx_type: TxType,
-      bd: usize, _cpu: CpuFeatureLevel,
-    ) {
-      fwd_txfm2d(
-        input,
-        output,
-        stride,
-        TxSize::by_dims(Self::W, Self::H),
-        tx_type,
-        bd,
-      );
-    }
-  }
-
-  impl_fwd_txs!();
-}
-
-pub fn fht4x4<T: Coefficient>(
-  input: &[i16], output: &mut [T], stride: usize, tx_type: TxType,
-  bit_depth: usize, cpu: CpuFeatureLevel,
-) {
-  Block4x4::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth, cpu);
-}
-
-pub fn fht8x8<T: Coefficient>(
-  input: &[i16], output: &mut [T], stride: usize, tx_type: TxType,
-  bit_depth: usize, cpu: CpuFeatureLevel,
-) {
-  Block8x8::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth, cpu);
-}
-
-pub fn fht16x16<T: Coefficient>(
-  input: &[i16], output: &mut [T], stride: usize, tx_type: TxType,
-  bit_depth: usize, cpu: CpuFeatureLevel,
-) {
-  Block16x16::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth, cpu);
-}
-
-pub fn fht32x32<T: Coefficient>(
-  input: &[i16], output: &mut [T], stride: usize, tx_type: TxType,
-  bit_depth: usize, cpu: CpuFeatureLevel,
-) {
-  Block32x32::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth, cpu);
-}
-
-pub fn fht64x64<T: Coefficient>(
-  input: &[i16], output: &mut [T], stride: usize, tx_type: TxType,
-  bit_depth: usize, cpu: CpuFeatureLevel,
-) {
-  assert!(tx_type == TxType::DCT_DCT);
-  Block64x64::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth, cpu);
-}
-
-pub fn fht4x8<T: Coefficient>(
-  input: &[i16], output: &mut [T], stride: usize, tx_type: TxType,
-  bit_depth: usize, cpu: CpuFeatureLevel,
-) {
-  Block4x8::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth, cpu);
-}
-
-pub fn fht8x4<T: Coefficient>(
-  input: &[i16], output: &mut [T], stride: usize, tx_type: TxType,
-  bit_depth: usize, cpu: CpuFeatureLevel,
-) {
-  Block8x4::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth, cpu);
-}
-
-pub fn fht8x16<T: Coefficient>(
-  input: &[i16], output: &mut [T], stride: usize, tx_type: TxType,
-  bit_depth: usize, cpu: CpuFeatureLevel,
-) {
-  Block8x16::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth, cpu);
-}
-
-pub fn fht16x8<T: Coefficient>(
-  input: &[i16], output: &mut [T], stride: usize, tx_type: TxType,
-  bit_depth: usize, cpu: CpuFeatureLevel,
-) {
-  Block16x8::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth, cpu);
-}
-
-pub fn fht16x32<T: Coefficient>(
-  input: &[i16], output: &mut [T], stride: usize, tx_type: TxType,
-  bit_depth: usize, cpu: CpuFeatureLevel,
-) {
-  assert!(tx_type == TxType::DCT_DCT || tx_type == TxType::IDTX);
-  Block16x32::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth, cpu);
-}
-
-pub fn fht32x16<T: Coefficient>(
-  input: &[i16], output: &mut [T], stride: usize, tx_type: TxType,
-  bit_depth: usize, cpu: CpuFeatureLevel,
-) {
-  assert!(tx_type == TxType::DCT_DCT || tx_type == TxType::IDTX);
-  Block32x16::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth, cpu);
-}
-
-pub fn fht32x64<T: Coefficient>(
-  input: &[i16], output: &mut [T], stride: usize, tx_type: TxType,
-  bit_depth: usize, cpu: CpuFeatureLevel,
-) {
-  assert!(tx_type == TxType::DCT_DCT);
-  Block32x64::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth, cpu);
-}
-
-pub fn fht64x32<T: Coefficient>(
-  input: &[i16], output: &mut [T], stride: usize, tx_type: TxType,
-  bit_depth: usize, cpu: CpuFeatureLevel,
-) {
-  assert!(tx_type == TxType::DCT_DCT);
-  Block64x32::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth, cpu);
-}
-
-pub fn fht4x16<T: Coefficient>(
-  input: &[i16], output: &mut [T], stride: usize, tx_type: TxType,
-  bit_depth: usize, cpu: CpuFeatureLevel,
-) {
-  Block4x16::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth, cpu);
-}
-
-pub fn fht16x4<T: Coefficient>(
-  input: &[i16], output: &mut [T], stride: usize, tx_type: TxType,
-  bit_depth: usize, cpu: CpuFeatureLevel,
-) {
-  Block16x4::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth, cpu);
-}
-
-pub fn fht8x32<T: Coefficient>(
-  input: &[i16], output: &mut [T], stride: usize, tx_type: TxType,
-  bit_depth: usize, cpu: CpuFeatureLevel,
-) {
-  assert!(tx_type == TxType::DCT_DCT || tx_type == TxType::IDTX);
-  Block8x32::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth, cpu);
-}
-
-pub fn fht32x8<T: Coefficient>(
-  input: &[i16], output: &mut [T], stride: usize, tx_type: TxType,
-  bit_depth: usize, cpu: CpuFeatureLevel,
-) {
-  assert!(tx_type == TxType::DCT_DCT || tx_type == TxType::IDTX);
-  Block32x8::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth, cpu);
-}
-
-pub fn fht16x64<T: Coefficient>(
-  input: &[i16], output: &mut [T], stride: usize, tx_type: TxType,
-  bit_depth: usize, cpu: CpuFeatureLevel,
-) {
-  assert!(tx_type == TxType::DCT_DCT);
-  Block16x64::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth, cpu);
-}
-
-pub fn fht64x16<T: Coefficient>(
-  input: &[i16], output: &mut [T], stride: usize, tx_type: TxType,
-  bit_depth: usize, cpu: CpuFeatureLevel,
-) {
-  assert!(tx_type == TxType::DCT_DCT);
-  Block64x16::fwd_txfm2d_daala(input, output, stride, tx_type, bit_depth, cpu);
 }
