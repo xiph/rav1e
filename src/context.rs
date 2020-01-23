@@ -4055,9 +4055,9 @@ impl<'a> ContextWriter<'a> {
     let height = av1_get_coded_tx_size(tx_size).height();
 
     // Create a slice with coeffs in scan order
-    let mut coeffs_storage: AlignedArray<ArrayVec<[T; 32 * 32]>> =
-      AlignedArray::new(ArrayVec::new());
-    let coeffs = &mut coeffs_storage.array;
+    let mut coeffs_storage: Aligned<ArrayVec<[T; 32 * 32]>> =
+      Aligned::new(ArrayVec::new());
+    let coeffs = &mut coeffs_storage.data;
     coeffs.extend(scan.iter().map(|&scan_idx| coeffs_in[scan_idx as usize]));
 
     let mut cul_level = coeffs.iter().map(|c| u32::cast_from(c.abs())).sum();
@@ -4137,8 +4137,8 @@ impl<'a> ContextWriter<'a> {
       }
     }
 
-    let mut coeff_contexts: AlignedArray<[i8; MAX_TX_SQUARE]> =
-      AlignedArray::uninitialized();
+    let mut coeff_contexts: Aligned<[i8; MAX_TX_SQUARE]> =
+      Aligned::uninitialized();
 
     self.get_nz_map_contexts(
       levels,
@@ -4146,14 +4146,14 @@ impl<'a> ContextWriter<'a> {
       eob as u16,
       tx_size,
       tx_class,
-      &mut coeff_contexts.array,
+      &mut coeff_contexts.data,
     );
 
     let bhl = Self::get_txb_bhl(tx_size);
 
     for (c, (&pos, &v)) in scan.iter().zip(coeffs.iter()).enumerate().rev() {
       let pos = pos as usize;
-      let coeff_ctx = coeff_contexts.array[pos];
+      let coeff_ctx = coeff_contexts.data[pos];
       let level = v.abs();
 
       if c == eob - 1 {

@@ -525,16 +525,16 @@ pub fn get_intra_edges<T: Pixel>(
   tx_size: TxSize,
   bit_depth: usize,
   opt_mode: Option<PredictionMode>,
-) -> AlignedArray<[T; 4 * MAX_TX_SIZE + 1]> {
+) -> Aligned<[T; 4 * MAX_TX_SIZE + 1]> {
   let plane_cfg = &dst.plane_cfg;
 
-  let mut edge_buf: AlignedArray<[T; 4 * MAX_TX_SIZE + 1]> =
-    AlignedArray::uninitialized();
+  let mut edge_buf: Aligned<[T; 4 * MAX_TX_SIZE + 1]> =
+    Aligned::uninitialized();
   let base = 128u16 << (bit_depth - 8);
 
   {
     // left pixels are ordered from bottom to top and right-aligned
-    let (left, not_left) = edge_buf.array.split_at_mut(2 * MAX_TX_SIZE);
+    let (left, not_left) = edge_buf.data.split_at_mut(2 * MAX_TX_SIZE);
     let (top_left, above) = not_left.split_at_mut(1);
 
     let x = po.x as usize;

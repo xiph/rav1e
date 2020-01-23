@@ -20,14 +20,14 @@ use rav1e::bench::util::*;
 pub const BLOCK_SIZE: BlockSize = BlockSize::BLOCK_32X32;
 
 pub fn generate_block<T: Pixel>(
-  rng: &mut ChaChaRng, edge_buf: &mut AlignedArray<[T; 257]>,
+  rng: &mut ChaChaRng, edge_buf: &mut Aligned<[T; 257]>,
 ) -> (Plane<T>, Vec<i16>) {
   let block = Plane::wrap(
     vec![T::cast_from(0); BLOCK_SIZE.width() * BLOCK_SIZE.height()],
     BLOCK_SIZE.width(),
   );
   let ac: Vec<i16> = (0..(32 * 32)).map(|_| rng.gen()).collect();
-  for v in edge_buf.array.iter_mut() {
+  for v in edge_buf.data.iter_mut() {
     *v = T::cast_from(rng.gen::<u8>());
   }
 
@@ -134,7 +134,7 @@ pub fn intra_bench<T: Pixel>(
   b: &mut Bencher, mode: PredictionMode, variant: PredictionVariant,
 ) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
-  let mut edge_buf = AlignedArray::uninitialized();
+  let mut edge_buf = Aligned::uninitialized();
   let (mut block, ac) = generate_block::<T>(&mut rng, &mut edge_buf);
   let cpu = CpuFeatureLevel::default();
   let bitdepth = match T::type_enum() {

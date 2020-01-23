@@ -334,9 +334,8 @@ unsafe fn fwd_txfm2d_avx2<T: Coefficient>(
   let col_class = SizeClass1D::from_length(txfm_size_col);
   let row_class = SizeClass1D::from_length(txfm_size_row);
 
-  let mut tmp: AlignedArray<[I32X8; 64 * 64 / 8]> =
-    AlignedArray::uninitialized();
-  let buf = &mut tmp.array[..txfm_size_col * (txfm_size_row / 8).max(1)];
+  let mut tmp: Aligned<[I32X8; 64 * 64 / 8]> = Aligned::uninitialized();
+  let buf = &mut tmp.data[..txfm_size_col * (txfm_size_row / 8).max(1)];
   let cfg = Txfm2DFlipCfg::fwd(tx_type, tx_size, bd);
 
   let txfm_func_col = get_func_i32x8(cfg.txfm_type_col);

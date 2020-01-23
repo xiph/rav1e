@@ -1196,21 +1196,20 @@ pub fn encode_tx_block<T: Pixel>(
   }
 
   let coded_tx_area = av1_get_coded_tx_size(tx_size).area();
-  let mut residual_storage: AlignedArray<[i16; 64 * 64]> =
-    AlignedArray::uninitialized();
-  let mut coeffs_storage: AlignedArray<[T::Coeff; 64 * 64]> =
-    AlignedArray::uninitialized();
-  let mut qcoeffs_storage: AlignedArray<[MaybeUninit<T::Coeff>; 32 * 32]> =
-    AlignedArray::uninitialized();
-  let mut rcoeffs_storage: AlignedArray<[T::Coeff; 32 * 32]> =
-    AlignedArray::uninitialized();
-  let residual = &mut residual_storage.array[..tx_size.area()];
-  let coeffs = &mut coeffs_storage.array[..tx_size.area()];
+  let mut residual_storage: Aligned<[i16; 64 * 64]> = Aligned::uninitialized();
+  let mut coeffs_storage: Aligned<[T::Coeff; 64 * 64]> =
+    Aligned::uninitialized();
+  let mut qcoeffs_storage: Aligned<[MaybeUninit<T::Coeff>; 32 * 32]> =
+    Aligned::uninitialized();
+  let mut rcoeffs_storage: Aligned<[T::Coeff; 32 * 32]> =
+    Aligned::uninitialized();
+  let residual = &mut residual_storage.data[..tx_size.area()];
+  let coeffs = &mut coeffs_storage.data[..tx_size.area()];
   let qcoeffs = init_slice_repeat_mut(
-    &mut qcoeffs_storage.array[..coded_tx_area],
+    &mut qcoeffs_storage.data[..coded_tx_area],
     T::Coeff::cast_from(0),
   );
-  let rcoeffs = &mut rcoeffs_storage.array[..coded_tx_area];
+  let rcoeffs = &mut rcoeffs_storage.data[..coded_tx_area];
 
   diff(
     residual,
@@ -1890,7 +1889,7 @@ pub fn write_tx_blocks<T: Pixel>(
   assert_ne!(qidx, 0); // lossless is not yet supported
 
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
-  let mut ac: AlignedArray<[i16; 32 * 32]> = AlignedArray::uninitialized();
+  let mut ac: Aligned<[i16; 32 * 32]> = Aligned::uninitialized();
   let mut partition_has_coeff: bool = false;
   let mut tx_dist = ScaledDistortion::zero();
   let do_chroma = has_chroma(tile_bo, bsize, xdec, ydec);
@@ -1929,7 +1928,7 @@ pub fn write_tx_blocks<T: Pixel>(
         po,
         skip,
         qidx,
-        &ac.array,
+        &ac.data,
         IntraParam::Angle_delta(angle_delta.y),
         rdo_type,
         need_recon_pixel,
@@ -1957,7 +1956,7 @@ pub fn write_tx_blocks<T: Pixel>(
   bh_uv /= uv_tx_size.height_mi();
 
   if chroma_mode.is_cfl() {
-    luma_ac(&mut ac.array, ts, tile_bo, bsize);
+    luma_ac(&mut ac.data, ts, tile_bo, bsize);
   }
 
   if bw_uv > 0 && bh_uv > 0 {
@@ -2006,7 +2005,7 @@ pub fn write_tx_blocks<T: Pixel>(
             po,
             skip,
             qidx,
-            &ac.array,
+            &ac.data,
             if chroma_mode.is_cfl() {
               IntraParam::Alpha(alpha)
             } else {

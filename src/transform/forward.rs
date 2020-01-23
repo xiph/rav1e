@@ -109,8 +109,8 @@ pub mod native {
     let txfm_size_col = tx_size.width();
     let txfm_size_row = tx_size.height();
 
-    let mut tmp: AlignedArray<[i32; 64 * 64]> = AlignedArray::uninitialized();
-    let buf = &mut tmp.array[..txfm_size_col * txfm_size_row];
+    let mut tmp: Aligned<[i32; 64 * 64]> = Aligned::uninitialized();
+    let buf = &mut tmp.data[..txfm_size_col * txfm_size_row];
 
     let cfg = Txfm2DFlipCfg::fwd(tx_type, tx_size, bd);
 
@@ -119,9 +119,9 @@ pub mod native {
 
     // Columns
     for c in 0..txfm_size_col {
-      let mut col_coeffs_backing: AlignedArray<[i32; 64]> =
-        AlignedArray::uninitialized();
-      let col_coeffs = &mut col_coeffs_backing.array[..txfm_size_row];
+      let mut col_coeffs_backing: Aligned<[i32; 64]> =
+        Aligned::uninitialized();
+      let col_coeffs = &mut col_coeffs_backing.data[..txfm_size_row];
       if cfg.ud_flip {
         // flip upside down
         for r in 0..txfm_size_row {

@@ -34,7 +34,7 @@ use crate::predict::{
 use crate::rdo_tables::*;
 use crate::tiling::*;
 use crate::transform::{TxSet, TxSize, TxType, RAV1E_TX_TYPES};
-use crate::util::{AlignedArray, CastFromPrimitive, Pixel};
+use crate::util::{Aligned, CastFromPrimitive, Pixel};
 use crate::write_tx_blocks;
 use crate::write_tx_tree;
 use crate::Tune;
@@ -1361,8 +1361,8 @@ pub fn rdo_cfl_alpha<T: Pixel>(
   let uv_tx_size = bsize.largest_chroma_tx_size(xdec, ydec);
   debug_assert!(bsize.subsampled_size(xdec, ydec) == uv_tx_size.block_size());
 
-  let mut ac: AlignedArray<[i16; 32 * 32]> = AlignedArray::uninitialized();
-  luma_ac(&mut ac.array, ts, tile_bo, bsize);
+  let mut ac: Aligned<[i16; 32 * 32]> = Aligned::uninitialized();
+  luma_ac(&mut ac.data, ts, tile_bo, bsize);
   let best_alpha: ArrayVec<[i16; 2]> = (1..3)
     .map(|p| {
       let &PlaneConfig { xdec, ydec, .. } = ts.rec.planes[p].plane_cfg;
@@ -1389,7 +1389,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
           &mut rec_region,
           uv_tx_size,
           fi.sequence.bit_depth,
-          &ac.array,
+          &ac.data,
           IntraParam::Alpha(alpha),
           None,
           &edge_buf,

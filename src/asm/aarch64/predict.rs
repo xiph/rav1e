@@ -14,7 +14,7 @@ use crate::predict::{
 };
 use crate::tiling::PlaneRegionMut;
 use crate::transform::TxSize;
-use crate::util::AlignedArray;
+use crate::util::Aligned;
 use crate::Pixel;
 use libc;
 use std::mem::size_of;
@@ -71,7 +71,7 @@ pub fn dispatch_predict_intra<T: Pixel>(
   mode: PredictionMode, variant: PredictionVariant,
   dst: &mut PlaneRegionMut<'_, T>, tx_size: TxSize, bit_depth: usize,
   ac: &[i16], angle: isize, ief_params: Option<IntraEdgeFilterParameters>,
-  edge_buf: &AlignedArray<[T; 4 * MAX_TX_SIZE + 1]>, cpu: CpuFeatureLevel,
+  edge_buf: &Aligned<[T; 4 * MAX_TX_SIZE + 1]>, cpu: CpuFeatureLevel,
 ) {
   let call_native = |dst: &mut PlaneRegionMut<'_, T>| {
     native::dispatch_predict_intra(
@@ -88,7 +88,7 @@ pub fn dispatch_predict_intra<T: Pixel>(
     let dst_ptr = dst.data_ptr_mut() as *mut _;
     let stride = dst.plane_cfg.stride as libc::ptrdiff_t;
     let edge_ptr =
-      edge_buf.array.as_ptr().offset(2 * MAX_TX_SIZE as isize) as *const _;
+      edge_buf.data.as_ptr().offset(2 * MAX_TX_SIZE as isize) as *const _;
     let w = tx_size.width() as libc::c_int;
     let h = tx_size.height() as libc::c_int;
     let angle = angle as libc::c_int;
