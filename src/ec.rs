@@ -188,17 +188,15 @@ impl StorageBackend for WriterBase<WriterCounter> {
   fn store(&mut self, fl: u16, fh: u16, nms: u16) {
     let (_l, r) = self.lr_compute(fl, fh, nms);
     let d = 16 - r.ilog();
-    let mut c = self.cnt;
-    let mut s = c + (d as i16);
+    let mut s = self.cnt + (d as i16);
 
-    if s >= 0 {
-      c += 16;
-      if s >= 8 {
-        self.s.bytes += 1;
-        c -= 8;
-      }
+    if s >= 8 {
       self.s.bytes += 1;
-      s = c + (d as i16) - 24;
+      s -= 8;
+    }
+    if s >= 0 {
+      self.s.bytes += 1;
+      s -= 8;
     }
     self.rng = r << d;
     self.cnt = s;
@@ -229,17 +227,15 @@ impl StorageBackend for WriterBase<WriterRecorder> {
   fn store(&mut self, fl: u16, fh: u16, nms: u16) {
     let (_l, r) = self.lr_compute(fl, fh, nms);
     let d = 16 - r.ilog();
-    let mut c = self.cnt;
-    let mut s = c + (d as i16);
+    let mut s = self.cnt + (d as i16);
 
-    if s >= 0 {
-      c += 16;
-      if s >= 8 {
-        self.s.bytes += 1;
-        c -= 8;
-      }
+    if s >= 8 {
       self.s.bytes += 1;
-      s = c + (d as i16) - 24;
+      s -= 8;
+    }
+    if s >= 0 {
+      self.s.bytes += 1;
+      s -= 8;
     }
     self.rng = r << d;
     self.cnt = s;
