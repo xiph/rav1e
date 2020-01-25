@@ -20,11 +20,13 @@ pub enum CpuFeatureLevel {
   #[arg_enum(alias = "sse4.1")]
   SSE4_1,
   AVX2,
+  AVX512,
+  AVX512ICL,
 }
 
 impl CpuFeatureLevel {
   pub const fn len() -> usize {
-    CpuFeatureLevel::AVX2 as usize + 1
+    CpuFeatureLevel::AVX512ICL as usize + 1
   }
 
   #[inline(always)]
@@ -35,7 +37,29 @@ impl CpuFeatureLevel {
 
 impl Default for CpuFeatureLevel {
   fn default() -> CpuFeatureLevel {
-    let detected: CpuFeatureLevel = if is_x86_feature_detected!("avx2") {
+    fn avx512_detected() -> bool {
+      is_x86_feature_detected!("avx512bw")
+        && is_x86_feature_detected!("avx512cd")
+        && is_x86_feature_detected!("avx512dq")
+        && is_x86_feature_detected!("avx512f")
+        && is_x86_feature_detected!("avx512vl")
+    }
+    fn avx512icl_detected() -> bool {
+      avx512_detected()
+        // && is_x86_feature_detected!("avx512bitalg")
+        // && is_x86_feature_detected!("avx512clmulqdq")
+        && is_x86_feature_detected!("avx512ifma")
+        // && is_x86_feature_detected!("avx512vaes")
+        && is_x86_feature_detected!("avx512vbmi")
+        // && is_x86_feature_detected!("avx512vbmi2")
+        && is_x86_feature_detected!("avx512vpopcntdq")
+    }
+
+    let detected: CpuFeatureLevel = if avx512icl_detected() {
+      CpuFeatureLevel::AVX512ICL
+    } else if avx512_detected() {
+      CpuFeatureLevel::AVX512
+    } else if is_x86_feature_detected!("avx2") {
       CpuFeatureLevel::AVX2
     } else if is_x86_feature_detected!("sse4.1") {
       CpuFeatureLevel::SSE4_1
@@ -77,7 +101,7 @@ macro_rules! cpu_function_lookup_table {
         out[$key as usize] = $value;
         set[$key as usize] = true;
       )*
-      cpu_function_lookup_table!(waterfall_cpu_features(out, set, [SSE2, SSSE3, SSE4_1, AVX2]));
+      cpu_function_lookup_table!(waterfall_cpu_features(out, set, [SSE2, SSSE3, SSE4_1, AVX2, AVX512, AVX512ICL]));
       out
     };
   };
