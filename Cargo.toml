@@ -99,8 +99,7 @@ vergen = { version = "3", path = "crates/vergen" }
 rustc_version = "0.2"
 
 [build-dependencies.nasm-rs]
-version = "0.1"
-path = "crates/nasm_rs/"
+version = "0.1.7"
 optional = true
 features = ["parallel"]
 
@@ -150,7 +149,7 @@ codegen-units = 1
 lto = true
 
 [workspace]
-members = [".", "ivf", "crates/nasm_rs"]
+members = [".", "ivf"]
 
 [package.metadata.docs.rs]
 no-default-features = true
