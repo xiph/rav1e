@@ -490,7 +490,7 @@ impl SpeedSettings {
   }
 
   fn sgr_complexity_preset(speed: usize) -> SGRComplexityLevel {
-    if speed <= 9 {
+    if speed <= 8 {
       SGRComplexityLevel::Full
     } else {
       SGRComplexityLevel::Reduced
