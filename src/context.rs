@@ -3014,16 +3014,18 @@ impl<'a> ContextWriter<'a> {
       let border_h = 128 + blk_h as isize * 8;
       let mvx_min =
         -(frame_bo.0.x as isize) * (8 * MI_SIZE) as isize - border_w;
-      let mvx_max =
-        (self.bc.blocks.frame_cols - frame_bo.0.x - blk_w / MI_SIZE) as isize
-          * (8 * MI_SIZE) as isize
-          + border_w;
+      let mvx_max = (self.bc.blocks.frame_cols()
+        - frame_bo.0.x
+        - blk_w / MI_SIZE) as isize
+        * (8 * MI_SIZE) as isize
+        + border_w;
       let mvy_min =
         -(frame_bo.0.y as isize) * (8 * MI_SIZE) as isize - border_h;
-      let mvy_max =
-        (self.bc.blocks.frame_rows - frame_bo.0.y - blk_h / MI_SIZE) as isize
-          * (8 * MI_SIZE) as isize
-          + border_h;
+      let mvy_max = (self.bc.blocks.frame_rows()
+        - frame_bo.0.y
+        - blk_h / MI_SIZE) as isize
+        * (8 * MI_SIZE) as isize
+        + border_h;
       mv.this_mv.row =
         (mv.this_mv.row as isize).max(mvy_min).min(mvy_max) as i16;
       mv.this_mv.col =

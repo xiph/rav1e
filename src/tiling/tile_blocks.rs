@@ -40,8 +40,8 @@ pub struct TileBlocksMut<'a> {
   y: usize,
   cols: usize,
   rows: usize,
-  pub frame_cols: usize,
-  pub frame_rows: usize,
+  frame_cols: usize,
+  frame_rows: usize,
   phantom: PhantomData<&'a mut Block>,
 }
 
@@ -90,6 +90,16 @@ macro_rules! tile_blocks_common {
       #[inline(always)]
       pub const fn rows(&self) -> usize {
         self.rows
+      }
+
+      #[inline(always)]
+      pub const fn frame_cols(&self) -> usize {
+        self.frame_cols
+      }
+
+      #[inline(always)]
+      pub const fn frame_rows(&self) -> usize {
+        self.frame_rows
       }
 
       #[inline(always)]
