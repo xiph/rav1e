@@ -572,7 +572,7 @@ pub fn get_intra_edges<T: Pixel>(
         || mode == PredictionMode::D203_PRED
         || mode == PredictionMode::D67_PRED
         || mode == PredictionMode::PAETH_PRED;
-      needs_top = !dc_or_cfl || y != 0;
+      needs_top = (!dc_or_cfl || y != 0) && mode != PredictionMode::D203_PRED;
       needs_topright = mode == PredictionMode::V_PRED
         || mode == PredictionMode::D45_PRED
         || mode == PredictionMode::D67_PRED;
