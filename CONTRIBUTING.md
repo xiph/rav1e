@@ -108,7 +108,13 @@ Install `cargo-fuzz` with `cargo install cargo-fuzz`. Running fuzz targets requi
 /path/to/dav1d -i out.ivf -o dec.y4m
 ```
 
-3. Compare if the reconstruction and decoded video match.
+3. Remove the y4m sequence header to see the difference in frame header or data
 ```
-cmp rec.y4m dec.y4m
+tail -n+2 rec.y4m > rec
+tail -n+2 dec.y4m > dec
+```
+
+4. Compare if the reconstruction and decoded video match.
+```
+cmp rec dec
 ```
