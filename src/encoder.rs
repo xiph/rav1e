@@ -218,10 +218,10 @@ impl Sequence {
       delta_frame_id_length: DELTA_FRAME_ID_LENGTH,
       use_128x128_superblock: false,
       order_hint_bits_minus_1: 5,
-      force_screen_content_tools: 0, // 2 if using the reduced still picture header
+      force_screen_content_tools: if config.still_picture { 2 } else { 0 },
       force_integer_mv: 2,
       still_picture: config.still_picture,
-      reduced_still_picture_hdr: false, // TODO: requires writing palette mode info
+      reduced_still_picture_hdr: config.still_picture,
       enable_filter_intra: false,
       enable_intra_edge_filter: true,
       enable_interintra_compound: false,
@@ -1727,8 +1727,16 @@ pub fn encode_block_post_cdef<T: Pixel>(
       && bsize.width() <= 64
       && bsize.height() <= 64
     {
-      // TODO: write palette mode info
-      unimplemented!();
+      cw.write_use_palette_mode(
+        w,
+        false,
+        bsize,
+        tile_bo,
+        luma_mode,
+        chroma_mode,
+        xdec,
+        ydec,
+      );
     }
 
     if fi.sequence.enable_filter_intra
@@ -2975,10 +2983,12 @@ fn encode_tile_group<T: Pixel>(
     .max_by_key(|&(_, len)| len)
     .unwrap();
 
-  // use the biggest tile (in bytes) for CDF update
-  fs.context_update_tile_id = idx_max;
-  fs.cdfs = cdfs[idx_max];
-  fs.cdfs.reset_counts();
+  if !fi.disable_frame_end_update_cdf {
+    // use the biggest tile (in bytes) for CDF update
+    fs.context_update_tile_id = idx_max;
+    fs.cdfs = cdfs[idx_max];
+    fs.cdfs.reset_counts();
+  }
 
   let max_tile_size_bytes = ((max_len.ilog() + 7) / 8) as u32;
   debug_assert!(max_tile_size_bytes > 0 && max_tile_size_bytes <= 4);
