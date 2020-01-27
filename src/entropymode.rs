@@ -14,9 +14,9 @@ use crate::partition::*;
 use crate::predict::*;
 use crate::transform::*;
 
-const PALATTE_BSIZE_CTXS: usize = 7;
-const PALETTE_Y_MODE_CONTEXTS: usize = 3;
-const PALETTE_UV_MODE_CONTEXTS: usize = 2;
+pub const PALETTE_BSIZE_CTXS: usize = 7;
+pub const PALETTE_Y_MODE_CONTEXTS: usize = 3;
+pub const PALETTE_UV_MODE_CONTEXTS: usize = 2;
 const PALETTE_COLOR_INDEX_CONTEXTS: usize = 5;
 const CDFMAX: u16 = 32768;
 const BLOCK_SIZE_GROUPS: usize = 4;
@@ -1190,7 +1190,7 @@ pub static default_comp_bwdref_cdf: [[[u16; cdf_size!(2)]; BWD_REFS - 1];
 #[allow(unused)]
 pub static default_palette_y_size_cdf: [[u16;
   cdf_size!(PaletteSize::PALETTE_SIZES as usize)];
-  PALATTE_BSIZE_CTXS] = [
+  PALETTE_BSIZE_CTXS] = [
   cdf!(7952, 13000, 18149, 21478, 25527, 29241),
   cdf!(7139, 11421, 16195, 19544, 23666, 28073),
   cdf!(7788, 12741, 17325, 20500, 24315, 28530),
@@ -1203,7 +1203,7 @@ pub static default_palette_y_size_cdf: [[u16;
 #[allow(unused)]
 pub static default_palette_uv_size_cdf: [[u16;
   cdf_size!(PaletteSize::PALETTE_SIZES as usize)];
-  PALATTE_BSIZE_CTXS] = [
+  PALETTE_BSIZE_CTXS] = [
   cdf!(8713, 19979, 27128, 29609, 31331, 32272),
   cdf!(5839, 15573, 23581, 26947, 29848, 31700),
   cdf!(4426, 11260, 17999, 21483, 25863, 29430),
@@ -1213,10 +1213,9 @@ pub static default_palette_uv_size_cdf: [[u16;
   cdf!(1269, 5435, 10433, 18963, 21700, 25865),
 ];
 
-#[allow(unused)]
-pub static default_palette_y_mode_cdf: [[[u16; cdf_size!(2)];
+pub static default_palette_y_mode_cdfs: [[[u16; cdf_size!(2)];
   PALETTE_Y_MODE_CONTEXTS];
-  PALATTE_BSIZE_CTXS] = [
+  PALETTE_BSIZE_CTXS] = [
   [cdf!(31676), cdf!(3419), cdf!(1261)],
   [cdf!(31912), cdf!(2859), cdf!(980)],
   [cdf!(31823), cdf!(3400), cdf!(781)],
@@ -1226,8 +1225,7 @@ pub static default_palette_y_mode_cdf: [[[u16; cdf_size!(2)];
   [cdf!(32450), cdf!(7946), cdf!(129)],
 ];
 
-#[allow(unused)]
-pub static default_palette_uv_mode_cdf: [[u16; cdf_size!(2)];
+pub static default_palette_uv_mode_cdfs: [[u16; cdf_size!(2)];
   PALETTE_UV_MODE_CONTEXTS] = [cdf!(32461), cdf!(21488)];
 
 #[allow(unused)]

@@ -210,6 +210,10 @@ impl BlockSize {
     }
   }
 
+  pub fn width_mi_log2(self) -> usize {
+    self.width_log2() - 2
+  }
+
   pub fn width_mi(self) -> usize {
     self.width() >> MI_SIZE_LOG2
   }
@@ -233,6 +237,10 @@ impl BlockSize {
       BLOCK_64X128 | BLOCK_128X128 => 7,
       BLOCK_INVALID => unreachable!(),
     }
+  }
+
+  pub fn height_mi_log2(self) -> usize {
+    self.height_log2() - 2
   }
 
   pub fn height_mi(self) -> usize {

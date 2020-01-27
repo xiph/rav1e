@@ -724,6 +724,9 @@ pub struct CDFContext {
   intra_inter_cdfs: [[u16; 3]; INTRA_INTER_CONTEXTS],
   angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES],
   filter_intra_cdfs: [[u16; 3]; BlockSize::BLOCK_SIZES_ALL],
+  palette_y_mode_cdfs:
+    [[[u16; 3]; PALETTE_Y_MODE_CONTEXTS]; PALETTE_BSIZE_CTXS],
+  palette_uv_mode_cdfs: [[u16; 3]; PALETTE_UV_MODE_CONTEXTS],
   comp_mode_cdf: [[u16; 3]; COMP_INTER_CONTEXTS],
   comp_ref_type_cdf: [[u16; 3]; COMP_REF_TYPE_CONTEXTS],
   comp_ref_cdf: [[[u16; 3]; FWD_REFS - 1]; REF_CONTEXTS],
@@ -787,6 +790,8 @@ impl CDFContext {
       intra_inter_cdfs: default_intra_inter_cdf,
       angle_delta_cdf: default_angle_delta_cdf,
       filter_intra_cdfs: default_filter_intra_cdfs,
+      palette_y_mode_cdfs: default_palette_y_mode_cdfs,
+      palette_uv_mode_cdfs: default_palette_uv_mode_cdfs,
       comp_mode_cdf: default_comp_mode_cdf,
       comp_ref_type_cdf: default_comp_ref_type_cdf,
       comp_ref_cdf: default_comp_ref_cdf,
@@ -898,6 +903,8 @@ impl CDFContext {
     reset_2d!(self.intra_inter_cdfs);
     reset_2d!(self.angle_delta_cdf);
     reset_2d!(self.filter_intra_cdfs);
+    reset_3d!(self.palette_y_mode_cdfs);
+    reset_2d!(self.palette_uv_mode_cdfs);
     reset_2d!(self.comp_mode_cdf);
     reset_2d!(self.comp_ref_type_cdf);
     reset_3d!(self.comp_ref_cdf);
@@ -985,6 +992,14 @@ impl CDFContext {
       self.filter_intra_cdfs.first().unwrap().as_ptr() as usize;
     let filter_intra_cdfs_end =
       filter_intra_cdfs_start + size_of_val(&self.filter_intra_cdfs);
+    let palette_y_mode_cdfs_start =
+      self.palette_y_mode_cdfs.first().unwrap().as_ptr() as usize;
+    let palette_y_mode_cdfs_end =
+      palette_y_mode_cdfs_start + size_of_val(&self.palette_y_mode_cdfs);
+    let palette_uv_mode_cdfs_start =
+      self.palette_uv_mode_cdfs.first().unwrap().as_ptr() as usize;
+    let palette_uv_mode_cdfs_end =
+      palette_uv_mode_cdfs_start + size_of_val(&self.palette_uv_mode_cdfs);
     let comp_mode_cdf_start =
       self.comp_mode_cdf.first().unwrap().as_ptr() as usize;
     let comp_mode_cdf_end =
@@ -1087,6 +1102,16 @@ impl CDFContext {
       ("intra_inter_cdfs", intra_inter_cdfs_start, intra_inter_cdfs_end),
       ("angle_delta_cdf", angle_delta_cdf_start, angle_delta_cdf_end),
       ("filter_intra_cdfs", filter_intra_cdfs_start, filter_intra_cdfs_end),
+      (
+        "palette_y_mode_cdfs",
+        palette_y_mode_cdfs_start,
+        palette_y_mode_cdfs_end,
+      ),
+      (
+        "palette_uv_mode_cdfs",
+        palette_uv_mode_cdfs_start,
+        palette_uv_mode_cdfs_end,
+      ),
       ("comp_mode_cdf", comp_mode_cdf_start, comp_mode_cdf_end),
       ("comp_ref_type_cdf", comp_ref_type_cdf_start, comp_ref_type_cdf_end),
       ("comp_ref_cdf", comp_ref_cdf_start, comp_ref_cdf_end),
@@ -2397,6 +2422,39 @@ impl<'a> ContextWriter<'a> {
       enable as u32,
       &mut self.fc.filter_intra_cdfs[block_size as usize]
     );
+  }
+
+  pub fn write_use_palette_mode(
+    &mut self, w: &mut dyn Writer, enable: bool, bsize: BlockSize,
+    bo: TileBlockOffset, luma_mode: PredictionMode,
+    chroma_mode: PredictionMode, xdec: usize, ydec: usize,
+  ) {
+    if enable {
+      unimplemented!(); // TODO
+    }
+
+    let (ctx_luma, ctx_chroma) = (0, 0); // TODO: increase based on surrounding block info
+
+    if luma_mode == PredictionMode::DC_PRED {
+      let bsize_ctx = bsize.width_mi_log2() + bsize.height_mi_log2() - 2;
+      symbol_with_update!(
+        self,
+        w,
+        enable as u32,
+        &mut self.fc.palette_y_mode_cdfs[bsize_ctx][ctx_luma]
+      );
+    }
+
+    if has_chroma(bo, bsize, xdec, ydec)
+      && chroma_mode == PredictionMode::DC_PRED
+    {
+      symbol_with_update!(
+        self,
+        w,
+        enable as u32,
+        &mut self.fc.palette_uv_mode_cdfs[ctx_chroma]
+      );
+    }
   }
 
   fn find_valid_row_offs(
