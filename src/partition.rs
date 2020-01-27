@@ -525,6 +525,8 @@ pub fn get_intra_edges<T: Pixel>(
   tx_size: TxSize,
   bit_depth: usize,
   opt_mode: Option<PredictionMode>,
+  enable_intra_edge_filter: bool,
+  intra_param: IntraParam,
 ) -> Aligned<[T; 4 * MAX_TX_SIZE + 1]> {
   let plane_cfg = &dst.plane_cfg;
 
@@ -545,6 +547,7 @@ pub fn get_intra_edges<T: Pixel>(
     let mut needs_top = true;
     let mut needs_topright = true;
     let mut needs_bottomleft = true;
+    let mut needs_topleft_filter = false;
 
     if let Some(mut mode) = opt_mode {
       mode = match mode {
@@ -563,21 +566,31 @@ pub fn get_intra_edges<T: Pixel>(
       needs_left = (!dc_or_cfl || x != 0)
         && !(mode == PredictionMode::D45_PRED
           || mode == PredictionMode::D67_PRED);
-      needs_topleft = mode == PredictionMode::V_PRED
-        || mode == PredictionMode::H_PRED
-        || mode == PredictionMode::D45_PRED
-        || mode == PredictionMode::D135_PRED
-        || mode == PredictionMode::D113_PRED
-        || mode == PredictionMode::D157_PRED
-        || mode == PredictionMode::D203_PRED
-        || mode == PredictionMode::D67_PRED
-        || mode == PredictionMode::PAETH_PRED;
+      needs_topleft = mode == PredictionMode::PAETH_PRED
+        || if enable_intra_edge_filter {
+          mode.is_directional()
+        } else {
+          mode == PredictionMode::V_PRED
+            || mode == PredictionMode::H_PRED
+            || mode == PredictionMode::D135_PRED
+            || mode == PredictionMode::D113_PRED
+            || mode == PredictionMode::D157_PRED
+        };
       needs_top = (!dc_or_cfl || y != 0) && mode != PredictionMode::D203_PRED;
       needs_topright = mode == PredictionMode::V_PRED
         || mode == PredictionMode::D45_PRED
         || mode == PredictionMode::D67_PRED;
       needs_bottomleft =
         mode == PredictionMode::H_PRED || mode == PredictionMode::D203_PRED;
+      needs_topleft_filter = {
+        let p_angle = intra_mode_to_angle(mode)
+          + match intra_param {
+            IntraParam::AngleDelta(val) => (val * ANGLE_STEP) as isize,
+            _ => 0,
+          };
+
+        enable_intra_edge_filter && p_angle > 90 && p_angle < 180
+      };
     }
 
     // Needs left
@@ -595,16 +608,6 @@ pub fn get_intra_edges<T: Pixel>(
       }
     }
 
-    // Needs top-left
-    if needs_topleft {
-      top_left[0] = match (x, y) {
-        (0, 0) => T::cast_from(base),
-        (_, 0) => dst[0][x - 1],
-        (0, _) => dst[y - 1][0],
-        _ => dst[y - 1][x - 1],
-      };
-    }
-
     // Needs top
     if needs_top {
       if y != 0 {
@@ -615,6 +618,25 @@ pub fn get_intra_edges<T: Pixel>(
         for v in above[..tx_size.width()].iter_mut() {
           *v = val;
         }
+      }
+    }
+
+    // Needs top-left
+    if needs_topleft {
+      top_left[0] = match (x, y) {
+        (0, 0) => T::cast_from(base),
+        (_, 0) => dst[0][x - 1],
+        (0, _) => dst[y - 1][0],
+        _ => dst[y - 1][x - 1],
+      };
+
+      let (w, h) = (tx_size.width(), tx_size.height());
+      if needs_topleft_filter && w + h >= 24 {
+        let (l, a, tl): (u32, u32, u32) =
+          (left[left.len() - 1].into(), above[0].into(), top_left[0].into());
+        let s = l * 5 + tl * 6 + a * 5;
+
+        top_left[0] = T::cast_from((s + (1 << 3)) >> 4);
       }
     }
 

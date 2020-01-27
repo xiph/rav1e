@@ -1220,6 +1220,8 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
           tx_size,
           fi.sequence.bit_depth,
           None,
+          fi.sequence.enable_intra_edge_filter,
+          IntraParam::None,
         )
       };
 
@@ -1380,6 +1382,8 @@ pub fn rdo_cfl_alpha<T: Pixel>(
         uv_tx_size,
         fi.sequence.bit_depth,
         Some(PredictionMode::UV_CFL_PRED),
+        fi.sequence.enable_intra_edge_filter,
+        IntraParam::None,
       );
       let mut alpha_cost = |alpha: i16| -> u64 {
         let mut rec_region =

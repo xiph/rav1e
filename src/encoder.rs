@@ -1178,6 +1178,8 @@ pub fn encode_tx_block<T: Pixel>(
       tx_size,
       bit_depth,
       Some(mode),
+      fi.sequence.enable_intra_edge_filter,
+      pred_intra_param,
     );
     mode.predict_intra(
       tile_rect,
@@ -1939,7 +1941,7 @@ pub fn write_tx_blocks<T: Pixel>(
         skip,
         qidx,
         &ac.data,
-        IntraParam::Angle_delta(angle_delta.y),
+        IntraParam::AngleDelta(angle_delta.y),
         rdo_type,
         need_recon_pixel,
       );
@@ -2019,7 +2021,7 @@ pub fn write_tx_blocks<T: Pixel>(
             if chroma_mode.is_cfl() {
               IntraParam::Alpha(alpha)
             } else {
-              IntraParam::Angle_delta(angle_delta.uv)
+              IntraParam::AngleDelta(angle_delta.uv)
             },
             rdo_type,
             need_recon_pixel,
@@ -2091,7 +2093,7 @@ pub fn write_tx_tree<T: Pixel>(
         skip,
         qidx,
         ac,
-        IntraParam::Angle_delta(angle_delta_y),
+        IntraParam::AngleDelta(angle_delta_y),
         rdo_type,
         need_recon_pixel,
       );
@@ -2163,7 +2165,7 @@ pub fn write_tx_tree<T: Pixel>(
             skip,
             qidx,
             ac,
-            IntraParam::Angle_delta(angle_delta_y),
+            IntraParam::AngleDelta(angle_delta_y),
             rdo_type,
             need_recon_pixel,
           );

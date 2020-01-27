@@ -65,6 +65,8 @@ pub(crate) fn estimate_intra_costs<T: Pixel>(
         TxSize::TX_8X8,
         bit_depth,
         Some(PredictionMode::DC_PRED),
+        false,
+        IntraParam::None,
       );
 
       let mut plane_after_prediction_region = plane_after_prediction

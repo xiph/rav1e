@@ -32,7 +32,7 @@ use crate::transform::*;
 use crate::util::*;
 use std::convert::TryInto;
 
-const ANGLE_STEP: i8 = 3;
+pub const ANGLE_STEP: i8 = 3;
 
 // TODO: Review the order of this list.
 // The order impacts compression efficiency.
@@ -168,7 +168,7 @@ impl PredictionMode {
       _ => 0,
     };
     let angle_delta = match intra_param {
-      IntraParam::Angle_delta(val) => val,
+      IntraParam::AngleDelta(val) => val,
       _ => 0,
     };
 
@@ -369,7 +369,7 @@ pub enum FilterIntraMode {
 
 #[derive(Copy, Clone, Debug)]
 pub enum IntraParam {
-  Angle_delta(i8),
+  AngleDelta(i8),
   Alpha(i16),
   None,
 }
@@ -1036,7 +1036,7 @@ pub(crate) mod native {
 
     let mut above_edge: &[T] = above;
     let mut left_edge: &[T] = left;
-    let mut top_left_edge: T = top_left[0];
+    let top_left_edge: T = top_left[0];
 
     let enable_edge_filter = ief_params.is_some();
 
@@ -1056,20 +1056,8 @@ pub(crate) mod native {
       let smooth_filter = ief_params.unwrap().use_smooth_filter();
 
       if p_angle != 90 && p_angle != 180 {
-        // Filter the top left pixel, if needed.
-        let top_left_px =
-          if p_angle > 90 && p_angle < 180 && width + height >= 24 {
-            let (l, a, tl): (u32, u32, u32) =
-              (left_filtered[1].into(), above[0].into(), top_left[0].into());
-            let s = l * 5 + tl * 6 + a * 5;
-            T::cast_from((s + (1 << 3)) >> 4)
-          } else {
-            top_left[0]
-          };
-
-        above_filtered[0] = top_left_px;
-        left_filtered[0] = top_left_px;
-        top_left_edge = top_left_px;
+        above_filtered[0] = top_left_edge;
+        left_filtered[0] = top_left_edge;
 
         let num_px = (
           width.min((max_x - output.rect().x + 1).try_into().unwrap())
