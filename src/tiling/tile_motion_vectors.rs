@@ -9,44 +9,35 @@
 
 use crate::mc::MotionVector;
 use crate::me::*;
+use crate::util::{Slice2D, Slice2DMut};
 
-use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
-use std::slice;
 
 /// Tiled view of FrameMotionVectors
 #[derive(Debug)]
 pub struct TileMotionVectors<'a> {
-  data: *const MotionVector,
+  data: Slice2D<'a, MotionVector>,
   // expressed in mi blocks
   // private to guarantee borrowing rules
   x: usize,
   y: usize,
-  cols: usize,
-  rows: usize,
-  stride: usize, // number of cols in the underlying FrameMotionVectors
-  phantom: PhantomData<&'a MotionVector>,
 }
 
 /// Mutable tiled view of FrameMotionVectors
 #[derive(Debug)]
 pub struct TileMotionVectorsMut<'a> {
-  data: *mut MotionVector,
+  data: Slice2DMut<'a, MotionVector>,
   // expressed in mi blocks
   // private to guarantee borrowing rules
   x: usize,
   y: usize,
-  cols: usize,
-  rows: usize,
-  stride: usize, // number of cols in the underlying FrameMotionVectors
-  phantom: PhantomData<&'a mut MotionVector>,
 }
 
 // common impl for TileMotionVectors and TileMotionVectorsMut
 macro_rules! tile_motion_vectors_common {
   // $name: TileMotionVectors or TileMotionVectorsMut
   // $opt_mut: nothing or mut
-  ($name:ident $(,$opt_mut:tt)?) => {
+  ($name:ident, $slice:ident $(,$opt_mut:tt)?) => {
     impl<'a> $name<'a> {
 
       #[inline(always)]
@@ -60,34 +51,30 @@ macro_rules! tile_motion_vectors_common {
         assert!(x + cols <= frame_mvs.cols);
         assert!(y + rows <= frame_mvs.rows);
         Self {
-          data: & $($opt_mut)? frame_mvs[y][x],
+          data: $slice ::new(& $($opt_mut)? frame_mvs[y][x], cols, rows, frame_mvs.cols),
           x,
           y,
-          cols,
-          rows,
-          stride: frame_mvs.cols,
-          phantom: PhantomData,
         }
       }
 
       #[inline(always)]
-      pub const fn x(&self) -> usize {
+      pub fn x(&self) -> usize {
         self.x
       }
 
       #[inline(always)]
-      pub const fn y(&self) -> usize {
+      pub fn y(&self) -> usize {
         self.y
       }
 
       #[inline(always)]
-      pub const fn cols(&self) -> usize {
-        self.cols
+      pub fn cols(&self) -> usize {
+        self.data.width()
       }
 
       #[inline(always)]
-      pub const fn rows(&self) -> usize {
-        self.rows
+      pub fn rows(&self) -> usize {
+        self.data.height()
       }
     }
 
@@ -99,41 +86,25 @@ macro_rules! tile_motion_vectors_common {
 
       #[inline(always)]
       fn index(&self, index: usize) -> &Self::Output {
-        assert!(index < self.rows);
-        unsafe {
-          let ptr = self.data.add(index * self.stride);
-          slice::from_raw_parts(ptr, self.cols)
-        }
+        &self.data[index]
       }
     }
   }
 }
 
-tile_motion_vectors_common!(TileMotionVectors);
-tile_motion_vectors_common!(TileMotionVectorsMut, mut);
+tile_motion_vectors_common!(TileMotionVectors, Slice2D);
+tile_motion_vectors_common!(TileMotionVectorsMut, Slice2DMut, mut);
 
 impl TileMotionVectorsMut<'_> {
   #[inline(always)]
-  pub const fn as_const(&self) -> TileMotionVectors<'_> {
-    TileMotionVectors {
-      data: self.data,
-      x: self.x,
-      y: self.y,
-      cols: self.cols,
-      rows: self.rows,
-      stride: self.stride,
-      phantom: PhantomData,
-    }
+  pub fn as_const(&self) -> TileMotionVectors<'_> {
+    TileMotionVectors { data: self.data.as_const(), x: self.x, y: self.y }
   }
 }
 
 impl IndexMut<usize> for TileMotionVectorsMut<'_> {
   #[inline(always)]
   fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-    assert!(index < self.rows);
-    unsafe {
-      let ptr = self.data.add(index * self.stride);
-      slice::from_raw_parts_mut(ptr, self.cols)
-    }
+    &mut self.data[index]
   }
 }
