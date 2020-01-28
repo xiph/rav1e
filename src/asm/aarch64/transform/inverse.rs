@@ -170,13 +170,11 @@ impl_itx_fns!(
   [(neon, NEON)]
 );
 
-static INV_TXFM_FNS: [[[Option<InvTxfmFunc>; TX_TYPES]; 32];
-  CpuFeatureLevel::len()] = {
-  let mut out: [[[Option<InvTxfmFunc>; TX_TYPES]; 32];
-    CpuFeatureLevel::len()] = [[[None; TX_TYPES]; 32]; CpuFeatureLevel::len()];
-  out[CpuFeatureLevel::NEON as usize] = INV_TXFM_FNS_NEON;
-  out
-};
+cpu_function_lookup_table!(
+  INV_TXFM_FNS: [[[Option<InvTxfmFunc>; TX_TYPES]; 32]],
+  default: [[None; TX_TYPES]; 32],
+  [NEON]
+);
 
 #[cfg(test)]
 mod test {

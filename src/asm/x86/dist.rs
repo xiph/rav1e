@@ -324,17 +324,11 @@ static SAD_FNS_AVX2: [Option<SadFn>; DIST_FNS_LENGTH] = {
   out
 };
 
-pub static SAD_FNS: [[Option<SadFn>; DIST_FNS_LENGTH];
-  CpuFeatureLevel::len()] = {
-  let mut out = [[None; DIST_FNS_LENGTH]; CpuFeatureLevel::len()];
-
-  out[CpuFeatureLevel::SSE2 as usize] = SAD_FNS_SSE2;
-  out[CpuFeatureLevel::SSSE3 as usize] = SAD_FNS_SSE2;
-  out[CpuFeatureLevel::SSE4_1 as usize] = SAD_FNS_SSE2;
-  out[CpuFeatureLevel::AVX2 as usize] = SAD_FNS_AVX2;
-
-  out
-};
+cpu_function_lookup_table!(
+  SAD_FNS: [[Option<SadFn>; DIST_FNS_LENGTH]],
+  default: [None; DIST_FNS_LENGTH],
+  [SSE2, AVX2]
+);
 
 static SAD_HBD_FNS_SSSE3: [Option<SadHBDFn>; DIST_FNS_LENGTH] = {
   let mut out: [Option<SadHBDFn>; DIST_FNS_LENGTH] = [None; DIST_FNS_LENGTH];
@@ -369,16 +363,11 @@ static SAD_HBD_FNS_SSSE3: [Option<SadHBDFn>; DIST_FNS_LENGTH] = {
   out
 };
 
-pub(crate) static SAD_HBD_FNS: [[Option<SadHBDFn>; DIST_FNS_LENGTH];
-  CpuFeatureLevel::len()] = {
-  let mut out = [[None; DIST_FNS_LENGTH]; CpuFeatureLevel::len()];
-
-  out[CpuFeatureLevel::SSSE3 as usize] = SAD_HBD_FNS_SSSE3;
-  out[CpuFeatureLevel::SSE4_1 as usize] = SAD_HBD_FNS_SSSE3;
-  out[CpuFeatureLevel::AVX2 as usize] = SAD_HBD_FNS_SSSE3;
-
-  out
-};
+cpu_function_lookup_table!(
+  SAD_HBD_FNS: [[Option<SadHBDFn>; DIST_FNS_LENGTH]],
+  default: [None; DIST_FNS_LENGTH],
+  [SSSE3]
+);
 
 static SATD_FNS_SSSE3: [Option<SatdFn>; DIST_FNS_LENGTH] = {
   let mut out: [Option<SatdFn>; DIST_FNS_LENGTH] = [None; DIST_FNS_LENGTH];
@@ -390,7 +379,7 @@ static SATD_FNS_SSSE3: [Option<SatdFn>; DIST_FNS_LENGTH] = {
   out
 };
 
-static SATD_FNS_SSE4: [Option<SatdFn>; DIST_FNS_LENGTH] = {
+static SATD_FNS_SSE4_1: [Option<SatdFn>; DIST_FNS_LENGTH] = {
   let mut out: [Option<SatdFn>; DIST_FNS_LENGTH] = [None; DIST_FNS_LENGTH];
 
   use BlockSize::*;
@@ -434,19 +423,17 @@ static SATD_FNS_AVX2: [Option<SatdFn>; DIST_FNS_LENGTH] = {
   out
 };
 
-pub(crate) static SATD_FNS: [[Option<SatdFn>; DIST_FNS_LENGTH];
-  CpuFeatureLevel::len()] = {
-  let mut out = [[None; DIST_FNS_LENGTH]; CpuFeatureLevel::len()];
+cpu_function_lookup_table!(
+  SATD_FNS: [[Option<SatdFn>; DIST_FNS_LENGTH]],
+  default: [None; DIST_FNS_LENGTH],
+  [SSSE3, SSE4_1, AVX2]
+);
 
-  out[CpuFeatureLevel::SSSE3 as usize] = SATD_FNS_SSSE3;
-  out[CpuFeatureLevel::SSE4_1 as usize] = SATD_FNS_SSE4;
-  out[CpuFeatureLevel::AVX2 as usize] = SATD_FNS_AVX2;
-
-  out
-};
-
-pub(crate) static SATD_HBD_FNS: [[Option<SatdHBDFn>; DIST_FNS_LENGTH];
-  CpuFeatureLevel::len()] = [[None; DIST_FNS_LENGTH]; CpuFeatureLevel::len()];
+cpu_function_lookup_table!(
+  SATD_HBD_FNS: [[Option<SatdHBDFn>; DIST_FNS_LENGTH]],
+  default: [None; DIST_FNS_LENGTH],
+  []
+);
 
 #[cfg(test)]
 mod test {

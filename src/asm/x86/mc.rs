@@ -310,16 +310,17 @@ decl_mc_fns!(
   (BILINEAR, BILINEAR, rav1e_put_bilin)
 );
 
-pub(crate) static PUT_FNS: [[Option<PutFn>; 16]; CpuFeatureLevel::len()] = {
-  let mut out = [[None; 16]; CpuFeatureLevel::len()];
-  out[CpuFeatureLevel::SSSE3 as usize] = PUT_FNS_SSSE3;
-  out[CpuFeatureLevel::SSE4_1 as usize] = PUT_FNS_SSSE3;
-  out[CpuFeatureLevel::AVX2 as usize] = PUT_FNS_AVX2;
-  out
-};
+cpu_function_lookup_table!(
+  PUT_FNS: [[Option<PutFn>; 16]],
+  default: [None; 16],
+  [SSSE3, AVX2]
+);
 
-pub(crate) static PUT_HBD_FNS: [[Option<PutHBDFn>; 16];
-  CpuFeatureLevel::len()] = [[None; 16]; CpuFeatureLevel::len()];
+cpu_function_lookup_table!(
+  PUT_HBD_FNS: [[Option<PutHBDFn>; 16]],
+  default: [None; 16],
+  []
+);
 
 macro_rules! decl_mct_fns {
   ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),+) => {
@@ -370,16 +371,17 @@ decl_mct_fns!(
   (BILINEAR, BILINEAR, rav1e_prep_bilin)
 );
 
-pub(crate) static PREP_FNS: [[Option<PrepFn>; 16]; CpuFeatureLevel::len()] = {
-  let mut out = [[None; 16]; CpuFeatureLevel::len()];
-  out[CpuFeatureLevel::SSSE3 as usize] = PREP_FNS_SSSE3;
-  out[CpuFeatureLevel::SSE4_1 as usize] = PREP_FNS_SSSE3;
-  out[CpuFeatureLevel::AVX2 as usize] = PREP_FNS_AVX2;
-  out
-};
+cpu_function_lookup_table!(
+  PREP_FNS: [[Option<PrepFn>; 16]],
+  default: [None; 16],
+  [SSSE3, AVX2]
+);
 
-pub(crate) static PREP_HBD_FNS: [[Option<PrepHBDFn>; 16];
-  CpuFeatureLevel::len()] = [[None; 16]; CpuFeatureLevel::len()];
+cpu_function_lookup_table!(
+  PREP_HBD_FNS: [[Option<PrepHBDFn>; 16]],
+  default: [None; 16],
+  []
+);
 
 extern {
   fn rav1e_avg_ssse3(
@@ -393,14 +395,10 @@ extern {
   );
 }
 
-pub(crate) static AVG_FNS: [Option<AvgFn>; CpuFeatureLevel::len()] = {
-  let mut out: [Option<AvgFn>; CpuFeatureLevel::len()] =
-    [None; CpuFeatureLevel::len()];
-  out[CpuFeatureLevel::SSSE3 as usize] = Some(rav1e_avg_ssse3);
-  out[CpuFeatureLevel::SSE4_1 as usize] = Some(rav1e_avg_ssse3);
-  out[CpuFeatureLevel::AVX2 as usize] = Some(rav1e_avg_avx2);
-  out
-};
+cpu_function_lookup_table!(
+  AVG_FNS: [Option<AvgFn>],
+  default: None,
+  [(SSSE3, Some(rav1e_avg_ssse3)), (AVX2, Some(rav1e_avg_avx2))]
+);
 
-pub(crate) static AVG_HBD_FNS: [Option<AvgHBDFn>; CpuFeatureLevel::len()] =
-  [None; CpuFeatureLevel::len()];
+cpu_function_lookup_table!(AVG_HBD_FNS: [Option<AvgHBDFn>], default: None, []);

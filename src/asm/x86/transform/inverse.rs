@@ -163,15 +163,11 @@ impl_itx_fns!(
   [(avx2, AVX2), (ssse3, SSSE3)]
 );
 
-static INV_TXFM_FNS: [[[Option<InvTxfmFunc>; TX_TYPES]; 32];
-  CpuFeatureLevel::len()] = {
-  let mut out: [[[Option<InvTxfmFunc>; TX_TYPES]; 32];
-    CpuFeatureLevel::len()] = [[[None; TX_TYPES]; 32]; CpuFeatureLevel::len()];
-  out[CpuFeatureLevel::SSSE3 as usize] = INV_TXFM_FNS_SSSE3;
-  out[CpuFeatureLevel::SSE4_1 as usize] = INV_TXFM_FNS_SSSE3;
-  out[CpuFeatureLevel::AVX2 as usize] = INV_TXFM_FNS_AVX2;
-  out
-};
+cpu_function_lookup_table!(
+  INV_TXFM_FNS: [[[Option<InvTxfmFunc>; TX_TYPES]; 32]],
+  default: [[None; TX_TYPES]; 32],
+  [SSSE3, AVX2]
+);
 
 #[cfg(test)]
 mod test {
