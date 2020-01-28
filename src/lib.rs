@@ -90,10 +90,11 @@ pub mod capi;
 
 #[macro_use]
 mod transform;
+#[macro_use]
+mod cpu_features;
 
 mod activity;
 pub(crate) mod asm;
-mod cpu_features;
 mod dist;
 mod ec;
 mod partition;

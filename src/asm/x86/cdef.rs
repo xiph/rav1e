@@ -141,16 +141,17 @@ static CDEF_FILTER_FNS_AVX2: [Option<CdefFilterFn>; 4] = {
   out
 };
 
-pub(crate) static CDEF_FILTER_FNS: [[Option<CdefFilterFn>; 4];
-  CpuFeatureLevel::len()] = {
-  let mut out: [[Option<CdefFilterFn>; 4]; CpuFeatureLevel::len()] =
-    [[None; 4]; CpuFeatureLevel::len()];
-  out[CpuFeatureLevel::AVX2 as usize] = CDEF_FILTER_FNS_AVX2;
-  out
-};
+cpu_function_lookup_table!(
+  CDEF_FILTER_FNS: [[Option<CdefFilterFn>; 4]],
+  default: [None; 4],
+  [AVX2]
+);
 
-pub(crate) static CDEF_FILTER_HBD_FNS: [[Option<CdefFilterHBDFn>; 4];
-  CpuFeatureLevel::len()] = [[None; 4]; CpuFeatureLevel::len()];
+cpu_function_lookup_table!(
+  CDEF_FILTER_HBD_FNS: [[Option<CdefFilterHBDFn>; 4]],
+  default: [None; 4],
+  []
+);
 
 type CdefDirFn =
   unsafe extern fn(tmp: *const u16, tmp_stride: isize, var: *mut u32) -> i32;
@@ -206,12 +207,11 @@ extern {
   ) -> i32;
 }
 
-pub(crate) static CDEF_DIR_FNS: [Option<CdefDirFn>; CpuFeatureLevel::len()] = {
-  let mut out: [Option<CdefDirFn>; CpuFeatureLevel::len()] =
-    [None; CpuFeatureLevel::len()];
-  out[CpuFeatureLevel::AVX2 as usize] = Some(rav1e_cdef_dir_avx2);
-  out
-};
+cpu_function_lookup_table!(
+  CDEF_DIR_FNS: [Option<CdefDirFn>],
+  default: None,
+  [(AVX2, Some(rav1e_cdef_dir_avx2))]
+);
 
 #[cfg(test)]
 mod test {

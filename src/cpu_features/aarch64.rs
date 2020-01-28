@@ -43,3 +43,67 @@ impl Default for CpuFeatureLevel {
     }
   }
 }
+
+// Create a static lookup table for CPUFeatureLevel enums
+// Note: keys are CpuFeatureLevels without any prefix (no CpuFeatureLevel::)
+macro_rules! cpu_function_lookup_table {
+  ($pub:vis, $name:ident: [$type:ty], default: $empty:expr, [$(($key:ident, $value:expr)),*]) => {
+    $pub static $name: [$type; crate::cpu_features::CpuFeatureLevel::len()] = {
+      use crate::cpu_features::CpuFeatureLevel;
+      #[allow(unused_mut)]
+      let mut out: [$type; CpuFeatureLevel::len()] = [$empty; CpuFeatureLevel::len()];
+
+      // Can't use out[0][.] == $empty in static as of rust 1.40
+      #[allow(unused_mut)]
+      let mut set: [bool; CpuFeatureLevel::len()] = [false; CpuFeatureLevel::len()];
+
+      #[allow(unused_imports)]
+      use CpuFeatureLevel::*;
+      $(
+        out[$key as usize] = $value;
+        set[$key as usize] = true;
+      )*
+      cpu_function_lookup_table!(waterfall_cpu_features(out, set, [NEON]));
+      out
+    };
+  };
+
+  // Fill empty output functions with the existent functions they support.
+  // cpus should be in order of lowest cpu level to highest
+  // Used like an internal function
+  // Put in here to avoid adding more public macros
+  (waterfall_cpu_features($out:ident, $set:ident, [$($cpu:ident),*])) => {
+    // Use an array to emulate if statements (not supported in static as of
+    // rust 1.40). Setting best[0] (false) and best[1] (true) is equivalent to
+    // doing nothing and overriding our value respectively.
+    #[allow(unused_assignments)]
+    let mut best = [$out[0], $out[0]];
+    $(
+      // If the current entry has a function, update out best function.
+      best[$set[$cpu as usize] as usize] = $out[$cpu as usize];
+      // Update our current entry. Does nothing if it already had a function.
+      $out[$cpu as usize] = best[1];
+    )*
+  };
+
+  // version for default visibility
+  ($name:ident: [$type:ty], default: $empty:expr, [$(($key:ident, $value:expr)),*]) => {
+    cpu_function_lookup_table!(pub(self), $name: [$type], default: $empty, [$(($key, $value)),*]);
+  };
+
+  // use $name_$key as our values
+  ($pub:vis, $name:ident: [$type:ty], default: $empty:expr, [$($key:ident),*]) => {
+    paste::item!{
+      cpu_function_lookup_table!(
+        $pub, $name: [$type], default: $empty, [$(($key, [<$name _$key>])),*]
+      );
+    }
+  };
+
+  // version for default visibility
+  ($name:ident: [$type:ty], default: $empty:expr, [$($key:ident),*]) => {
+    cpu_function_lookup_table!(
+      pub(self), $name: [$type], default: $empty, [$($key),*]
+    );
+  };
+}

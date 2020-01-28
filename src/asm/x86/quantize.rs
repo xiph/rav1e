@@ -29,12 +29,11 @@ type DequantizeFn = unsafe fn(
   ac_delta_q: i8,
 );
 
-static DEQUANTIZE_FNS: [Option<DequantizeFn>; CpuFeatureLevel::len()] = {
-  let mut out: [Option<DequantizeFn>; CpuFeatureLevel::len()] =
-    [None; CpuFeatureLevel::len()];
-  out[CpuFeatureLevel::AVX2 as usize] = Some(dequantize_avx2);
-  out
-};
+cpu_function_lookup_table!(
+  DEQUANTIZE_FNS: [Option<DequantizeFn>],
+  default: None,
+  [(AVX2, Some(dequantize_avx2))]
+);
 
 pub fn dequantize<T: Coefficient>(
   qindex: u8, coeffs: &[T], eob: usize, rcoeffs: &mut [T], tx_size: TxSize,
