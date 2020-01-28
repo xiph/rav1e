@@ -568,37 +568,23 @@ pub fn get_intra_edges<T: Pixel>(
         _ => mode,
       };
 
+      let p_angle = intra_mode_to_angle(mode)
+        + match intra_param {
+          IntraParam::AngleDelta(val) => (val * ANGLE_STEP) as isize,
+          _ => 0,
+        };
+
       let dc_or_cfl =
         mode == PredictionMode::DC_PRED || mode == PredictionMode::UV_CFL_PRED;
 
-      needs_left = (!dc_or_cfl || x != 0)
-        && !(mode == PredictionMode::D45_PRED
-          || mode == PredictionMode::D67_PRED);
+      needs_left = (!dc_or_cfl || x != 0) || (p_angle > 90 && p_angle != 180);
       needs_topleft = mode == PredictionMode::PAETH_PRED
-        || if enable_intra_edge_filter {
-          mode.is_directional()
-        } else {
-          mode == PredictionMode::V_PRED
-            || mode == PredictionMode::H_PRED
-            || mode == PredictionMode::D135_PRED
-            || mode == PredictionMode::D113_PRED
-            || mode == PredictionMode::D157_PRED
-        };
-      needs_top = (!dc_or_cfl || y != 0) && mode != PredictionMode::D203_PRED;
-      needs_topright = mode == PredictionMode::V_PRED
-        || mode == PredictionMode::D45_PRED
-        || mode == PredictionMode::D67_PRED;
-      needs_bottomleft =
-        mode == PredictionMode::H_PRED || mode == PredictionMode::D203_PRED;
-      needs_topleft_filter = {
-        let p_angle = intra_mode_to_angle(mode)
-          + match intra_param {
-            IntraParam::AngleDelta(val) => (val * ANGLE_STEP) as isize,
-            _ => 0,
-          };
-
-        enable_intra_edge_filter && p_angle > 90 && p_angle < 180
-      };
+        || (mode.is_directional() && p_angle != 90 && p_angle != 180);
+      needs_top = (!dc_or_cfl || y != 0) || (p_angle != 90 && p_angle < 180);
+      needs_topright = p_angle <= 90;
+      needs_bottomleft = p_angle >= 180;
+      needs_topleft_filter =
+        enable_intra_edge_filter && p_angle > 90 && p_angle < 180;
     }
 
     // Needs left
