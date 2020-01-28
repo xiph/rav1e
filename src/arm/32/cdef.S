@@ -407,7 +407,7 @@ function cdef_filter\w\()_neon, export=1
 
         handle_pixel    q14, q15, r4,  q7,  q6,  lr
 
-        sub             r5,  r5,  #11        // x8 -= 2*(2+4); x8 += 1;
+        sub             r5,  r5,  #11        // r5 -= 2*(2+4); r5 += 1;
         subs            lr,  lr,  #1         // sec_tap-- (value)
         add             r8,  r8,  #1         // pri_taps++ (pointer)
         bne             2b
@@ -430,7 +430,7 @@ function cdef_filter\w\()_neon, export=1
         vst1.32         {d0[1]}, [r0, :32], r1
 .endif
 
-        // Reset pri_taps/sec_taps back to the original point
+        // Reset pri_taps and directions back to the original point
         sub             r5,  r5,  #2
         sub             r8,  r8,  #2
 
