@@ -44,7 +44,6 @@ use crate::partition::PartitionType::*;
 use arrayvec::*;
 use itertools::izip;
 use std;
-use std::fmt;
 use std::vec::Vec;
 
 #[derive(Copy, Clone, PartialEq)]
@@ -202,7 +201,7 @@ fn cdef_dist_wxh_8x8<T: Pixel>(
 }
 
 #[allow(unused)]
-pub fn cdef_dist_wxh<T: Pixel, F: Fn(Area, BlockSize) -> DistortionScale>(
+pub fn cdef_dist_wxh<T: Pixel, F: Fn(Area, BlockSize) -> f64>(
   src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, w: usize, h: usize,
   bit_depth: usize, compute_bias: F,
 ) -> Distortion {
@@ -232,7 +231,7 @@ pub fn cdef_dist_wxh<T: Pixel, F: Fn(Area, BlockSize) -> DistortionScale>(
 }
 
 // Sum of Squared Error for a wxh block
-pub fn sse_wxh<T: Pixel, F: Fn(Area, BlockSize) -> DistortionScale>(
+pub fn sse_wxh<T: Pixel, F: Fn(Area, BlockSize) -> f64>(
   src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, w: usize, h: usize,
   compute_bias: F,
 ) -> Distortion {
@@ -427,9 +426,9 @@ fn compute_tx_distortion<T: Pixel>(
 /// this factor is determined using temporal RDO.
 pub fn distortion_scale<T: Pixel>(
   fi: &FrameInvariants<T>, frame_bo: PlaneBlockOffset, bsize: BlockSize,
-) -> DistortionScale {
+) -> f64 {
   if !fi.config.temporal_rdo() {
-    return DistortionScale::default();
+    return 1.;
   }
   // EncoderConfig::temporal_rdo() should always return false in situations
   // where distortion is computed on > 8x8 blocks, so we should never hit this
@@ -442,9 +441,7 @@ pub fn distortion_scale<T: Pixel>(
   fi.distortion_scales[y * fi.w_in_imp_b + x]
 }
 
-pub fn distortion_scale_for(
-  propagate_cost: f64, intra_cost: f64,
-) -> DistortionScale {
+pub fn distortion_scale_for(propagate_cost: f64, intra_cost: f64) -> f64 {
   // The mbtree paper \cite{mbtree} uses the following formula:
   //
   //     QP_delta = -strength * log2(1 + (propagate_cost / intra_cost))
@@ -483,18 +480,13 @@ pub fn distortion_scale_for(
   // }
 
   if intra_cost == 0. {
-    return DistortionScale::default(); // no scaling
+    return 1.; // no scaling
   }
 
   let strength = 1.0; // empirical, see comment above
   let frac = (intra_cost + propagate_cost) / intra_cost;
-  DistortionScale::new(frac.powf(strength / 3.0))
+  frac.powf(strength / 3.0)
 }
-
-/// Fixed point arithmetic version of distortion scale
-#[repr(transparent)]
-#[derive(Copy, Clone)]
-pub struct DistortionScale(u32);
 
 #[repr(transparent)]
 pub struct RawDistortion(u64);
@@ -505,56 +497,16 @@ pub struct Distortion(u64);
 #[repr(transparent)]
 pub struct ScaledDistortion(u64);
 
-impl DistortionScale {
-  /// Bits past the radix point
-  const SHIFT: u32 = 12;
-  /// Number of bits used. Determines the max value.
-  /// 24 bits is likely excessive.
-  const BITS: u32 = 24;
-
-  pub fn new(scale: f64) -> Self {
-    Self(
-      (scale * (1 << Self::SHIFT) as f64 + 0.5)
-        .min(((1 << Self::BITS as u64) - 1) as f64) as u32,
-    )
-  }
-
-  /// Multiply, round and shift
-  /// Internal implementation, so don't use multiply trait.
-  fn mul_u64(self, dist: u64) -> u64 {
-    (self.0 as u64 * dist + (1 << Self::SHIFT >> 1)) >> Self::SHIFT
-  }
-}
-
-// Default value for DistortionScale is a fixed point 1
-impl Default for DistortionScale {
-  fn default() -> Self {
-    Self(1 << Self::SHIFT)
-  }
-}
-
-impl fmt::Debug for DistortionScale {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "{}", f64::from(*self))
-  }
-}
-
-impl From<DistortionScale> for f64 {
-  fn from(scale: DistortionScale) -> Self {
-    scale.0 as f64 / (1 << DistortionScale::SHIFT) as f64
-  }
-}
-
 impl RawDistortion {
   pub fn new(dist: u64) -> Self {
     Self(dist)
   }
 }
 
-impl std::ops::Mul<DistortionScale> for RawDistortion {
+impl std::ops::Mul<f64> for RawDistortion {
   type Output = Distortion;
-  fn mul(self, rhs: DistortionScale) -> Distortion {
-    Distortion(rhs.mul_u64(self.0))
+  fn mul(self, rhs: f64) -> Distortion {
+    Distortion((self.0 as f64 * rhs) as u64)
   }
 }
 
@@ -1404,7 +1356,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
           &rec_region.as_const(),
           uv_tx_size.width(),
           uv_tx_size.height(),
-          |_, _| DistortionScale::default(), // We're not doing RDO here.
+          |_, _| 1., // We're not doing RDO here.
         )
         .0
       };
