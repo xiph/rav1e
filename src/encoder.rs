@@ -461,6 +461,7 @@ pub struct SegmentationState {
   pub last_active_segid: u8,
   pub features: [[bool; SegLvl::SEG_LVL_MAX as usize]; 8],
   pub data: [[i16; SegLvl::SEG_LVL_MAX as usize]; 8],
+  pub act_lut: [usize; 8],
 }
 
 impl Default for SegmentationState {
@@ -473,6 +474,7 @@ impl Default for SegmentationState {
       last_active_segid: 0,
       features: [[false; SegLvl::SEG_LVL_MAX as usize]; 8],
       data: [[0; SegLvl::SEG_LVL_MAX as usize]; 8],
+      act_lut: [0, 1, 2, 3, 4, 5, 6, 7],
     }
   }
 }

@@ -478,13 +478,16 @@ pub fn distortion_scale<T: Pixel>(
   //   url={https://pdfs.semanticscholar.org/032f/1ab7d9db385780a02eb2d579af8303b266d2.pdf}
   // }
 
+  let var = fi.activity_mask.variance_at(frame_bo.0.x, frame_bo.0.y);
+  let act_bias = 1.0f64 /* (fi.activity_mask.avg_var / var) */;
+
   if intra_cost == 0. {
-    return 1.; // no scaling
+    return act_bias
   }
 
   let strength = 1.0; // empirical, see comment above
   let frac = (intra_cost + propagate_cost) / intra_cost;
-  frac.powf(strength / 3.0)
+  frac.powf(strength / 3.0) * act_bias
 }
 
 #[repr(transparent)]
@@ -639,19 +642,10 @@ fn luma_chroma_mode_rdo<T: Pixel>(
   let mut chroma_rdo = |skip: bool| -> bool {
     let mut zero_distortion = false;
 
-    // If skip is true or segmentation is turned off, sidx is not coded.
-    let sidx_range = if skip || !fi.enable_segmentation {
-      0..=0
-    } else if fi.base_q_idx as i16
-      + ts.segmentation.data[2][SegLvl::SEG_LVL_ALT_Q as usize]
-      < 1
-    {
-      0..=1
-    } else {
-      0..=2
-    };
+    let rec = &ts.rec.planes[0].as_const();
+    let po = tile_bo.plane_offset(rec.plane_cfg);
+    let sidx = fi.activity_mask.segid_at(ts.segmentation, po.x as usize, po.y as usize);
 
-    for sidx in sidx_range {
       cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, sidx);
 
       let (tx_size, tx_type) = rdo_tx_size_type(
@@ -733,7 +727,6 @@ fn luma_chroma_mode_rdo<T: Pixel>(
 
         cw.rollback(cw_checkpoint);
       }
-    }
 
     zero_distortion
   };

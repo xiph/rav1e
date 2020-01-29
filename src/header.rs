@@ -986,8 +986,13 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
   fn write_segment_data<T: Pixel>(
     &mut self, fi: &FrameInvariants<T>, segmentation: &SegmentationState,
   ) -> io::Result<()> {
-    assert_eq!(fi.enable_segmentation, segmentation.enabled);
-    self.write_bit(fi.enable_segmentation)?;
+    assert!(fi.enable_segmentation);
+
+    self.write_bit(segmentation.enabled)?;
+
+    if segmentation.enabled == false {
+        return Ok(())
+    }
 
     if segmentation.enabled {
       if fi.primary_ref_frame == PRIMARY_REF_NONE {

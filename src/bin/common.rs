@@ -341,6 +341,13 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .long("speed-test")
         .takes_value(true)
     )
+    .arg(
+      Arg::with_name("AQ_MULT")
+        .help("asdasdasdasdasd")
+        .long("aq-mult")
+        .takes_value(true)
+        .default_value("-9")
+    )
     .subcommand(SubCommand::with_name("advanced")
                 .setting(AppSettings::Hidden)
                 .about("Advanced features")
@@ -612,6 +619,7 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
   cfg.rdo_lookahead_frames =
     matches.value_of("RDO_LOOKAHEAD_FRAMES").unwrap_or("40").parse().unwrap();
   cfg.show_psnr = matches.is_present("PSNR");
+  cfg.aq_mult = matches.value_of("AQ_MULT").unwrap().parse().unwrap();
   cfg.tune = matches.value_of("TUNE").unwrap().parse().unwrap();
 
   if cfg.tune == Tune::Psychovisual {

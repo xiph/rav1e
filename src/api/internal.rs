@@ -1139,9 +1139,8 @@ impl<T: Pixel> ContextInner<T> {
         frame_data.fi.set_quantizers(&qps);
       }
 
-      // TODO: replace with ActivityMask::from_plane() when
-      // the activity mask is actually used.
-      frame_data.fi.activity_mask = ActivityMask::default();
+      frame_data.fi.activity_mask =
+        ActivityMask::from_plane(&frame_data.fi, &frame_data.fs.input.planes[0]);
 
       let data =
         encode_frame(&frame_data.fi, &mut frame_data.fs, &self.inter_cfg);

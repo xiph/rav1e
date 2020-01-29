@@ -11,107 +11,151 @@ use crate::frame::*;
 use crate::hawktracer::*;
 use crate::tiling::*;
 use crate::util::*;
+use crate::transform::*;
+use crate::cpu_features::CpuFeatureLevel;
+use crate::SegmentationState;
+use crate::FrameInvariants;
+use TxSize::*;
 
 #[derive(Debug, Default, Clone)]
 pub struct ActivityMask {
   variances: Vec<f64>,
-  // Width and height of the original frame that is masked
   width: usize,
-  height: usize,
-  // Side of unit (square) activity block in log2
   granularity: usize,
+
+  pub tot_bins: usize,
+  pub seg_bins: [usize; 8],
+  pub avg_var: f64,
 }
 
 impl ActivityMask {
   #[hawktracer(activity_mask_from_plane)]
-  pub fn from_plane<T: Pixel>(luma_plane: &Plane<T>) -> ActivityMask {
-    let PlaneConfig { width, height, .. } = luma_plane.cfg;
+  pub fn from_plane<T: Pixel>(fi: &FrameInvariants<T>, luma_plane: &Plane<T>) -> ActivityMask {
+    let granularity: usize = 3; /* Granularity of the map */
+    let act_granularity: usize = 4; /* Granularity of the activity data, if != granularity it repeats */
+    let tot_pix: usize = (1 << granularity) * (1 << granularity);
 
-    let granularity = 3;
+    /* Aligned width and height to the activity data */
+    let width = (((luma_plane.cfg.width >> act_granularity) << act_granularity)) + (1 << act_granularity);
+    let height = (((luma_plane.cfg.height >> act_granularity) << act_granularity)) + (1 << act_granularity);
+
+    let mut variances =
+      Vec::with_capacity((width >> granularity) * (height >> granularity));
+    variances.resize((width >> granularity) * (height >> granularity), 0f64);
 
     let aligned_luma = Rect {
       x: 0_isize,
       y: 0_isize,
-      width: (width >> granularity) << granularity,
-      height: (height >> granularity) << granularity,
+      width: width,
+      height: height,
     };
     let luma = PlaneRegion::new(luma_plane, aligned_luma);
 
-    let mut variances =
-      Vec::with_capacity((height >> granularity) * (width >> granularity));
+    let mut freq_storage: Aligned<[T::Coeff; 64 * 64]> = Aligned::uninitialized();
+    let mut src_storage: Aligned<[i16; 64 * 64]> = Aligned::uninitialized();
 
-    for y in 0..height >> granularity {
-      for x in 0..width >> granularity {
+    let mut avg_var = 0f64;
+    let mut max = 0f64;
+
+    for y in 0..height >> act_granularity {
+      for x in 0..width >> act_granularity {
         let block_rect = Area::Rect {
-          x: (x << granularity) as isize,
-          y: (y << granularity) as isize,
-          width: 8,
-          height: 8,
+          x: (x << act_granularity) as isize,
+          y: (y << act_granularity) as isize,
+          width: 1 << act_granularity,
+          height: 1 << act_granularity,
         };
 
         let block = luma.subregion(block_rect);
 
-        let mean: f64 = block
-          .rows_iter()
-          .flatten()
-          .map(|&pix| {
-            let pix: i16 = CastFromPrimitive::cast_from(pix);
-            pix as f64
-          })
-          .sum::<f64>()
-          / 64.0_f64;
-        let variance: f64 = block
-          .rows_iter()
-          .flatten()
-          .map(|&pix| {
-            let pix: i16 = CastFromPrimitive::cast_from(pix);
-            (pix as f64 - mean).powi(2)
-          })
-          .sum::<f64>();
-        variances.push(variance);
+        let cpu = CpuFeatureLevel::default();
+        let tx_size = match act_granularity {
+                2 => TX_4X4,
+                3 => TX_8X8,
+                4 => TX_16X16,
+                5 => TX_32X32,
+                6 => TX_64X64,
+                _ => unreachable!(),
+            };
+
+        let tx_type = TxType::DCT_DCT;
+
+        let src = &mut src_storage.data[..tx_size.area()];
+        let freq = &mut freq_storage.data[..tx_size.area()];
+
+        for y in 0..(1 << act_granularity) {
+            let l = &block[y];
+            for x in 0..(1 << act_granularity) {
+                src[y * (1 << act_granularity) + x] = l[x].as_();
+            }
+        }
+
+        forward_transform(src, freq, tx_size.width(), tx_size, tx_type, 8, cpu);
+
+        let mut sum_f = 0f64;
+
+        for y in 0..(1 << act_granularity) {
+            for x in 0..(1 << act_granularity) {
+                if (x < 4) && (y < 4) { continue };
+                let coeff = freq[y*(1 << act_granularity) + x];
+                sum_f += i32::cast_from(coeff).abs() as f64;
+            }
+        }
+
+        sum_f /= (tot_pix - 4*4) as f64;
+        avg_var += sum_f;
+        max = max.max(sum_f);
+
+        /* Copy down to granularity */
+        for i in 0..(1 << (act_granularity - granularity)) {
+            for j in 0..(1 << (act_granularity - granularity)) {
+                let loc = variances.get_mut((((x << act_granularity) >> granularity) + j) + (width >> granularity) * (((y << act_granularity) >> granularity) + i));
+                match loc {
+                    Some(val) => *val = sum_f,
+                    None => unreachable!(),
+                }
+            }
+        }
+
       }
     }
-    ActivityMask { variances, width, height, granularity }
+
+    let mut seg_bins = [0usize; 8];
+    for i in 0..variances.len() {
+        let element = variances.get_mut(i);
+        match element {
+            Some(x) => {
+                *x = (*x / max) * 7f64;
+                seg_bins[(*x).round() as usize] += 1;
+            }
+            None => unreachable!(),
+        }
+    }
+
+    let tot_bins = variances.len();
+
+    avg_var /= tot_bins as f64;
+    avg_var /= max;
+    avg_var *= 7f64;
+
+    ActivityMask { variances, width, granularity, tot_bins, seg_bins, avg_var }
   }
 
-  pub fn variance_at(&self, x: usize, y: usize) -> Option<f64> {
-    let (dec_width, dec_height) =
-      (self.width >> self.granularity, self.height >> self.granularity);
-    if x > dec_width || y > dec_height {
-      None
-    } else {
-      Some(*self.variances.get(x + dec_width * y).unwrap())
+  pub fn segid_at(&self, segmentation: &SegmentationState, x: usize, y: usize) -> u8 {
+    let dec_width = self.width >> self.granularity;
+    let res = self.variances.get((x >> self.granularity) + dec_width * (y >> self.granularity));
+    match res {
+        Some(val) => return segmentation.act_lut[(*val).round() as usize] as u8,
+        None => unreachable!(),
     }
   }
 
-  pub fn mean_activity_of(&self, rect: Rect) -> Option<f64> {
-    let Rect { x, y, width, height } = rect;
-    let (x, y) = (x as usize, y as usize);
-    let granularity = self.granularity;
-    let (dec_x, dec_y) = (x >> granularity, y >> granularity);
-    let (dec_width, dec_height) =
-      (width >> granularity, height >> granularity);
-
-    if x > self.width
-      || y > self.height
-      || (x + width) > self.width
-      || (y + height) > self.height
-      || dec_width == 0
-      || dec_height == 0
-    {
-      // Region lies out of the frame or is smaller than 8x8 on some axis
-      None
-    } else {
-      let activity = self
-        .variances
-        .chunks_exact(self.width >> granularity)
-        .skip(dec_y)
-        .take(dec_height)
-        .map(|row| row.iter().skip(dec_x).take(dec_width).sum::<f64>())
-        .sum::<f64>()
-        / (dec_width as f64 * dec_height as f64);
-
-      Some(activity.cbrt().sqrt())
+  pub fn variance_at(&self, x: usize, y: usize) -> f64 {
+    let dec_width = self.width >> self.granularity;
+    let res = self.variances.get((x >> self.granularity) + dec_width * (y >> self.granularity));
+    match res {
+        Some(val) => return *val,
+        None => unreachable!(),
     }
   }
 }
