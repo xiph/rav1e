@@ -581,7 +581,7 @@ pub fn get_intra_edges<T: Pixel>(
       needs_topleft = mode == PredictionMode::PAETH_PRED
         || (mode.is_directional() && p_angle != 90 && p_angle != 180);
       needs_top = (!dc_or_cfl || y != 0) || (p_angle != 90 && p_angle < 180);
-      needs_topright = p_angle <= 90;
+      needs_topright = mode.is_directional() && p_angle <= 90;
       needs_bottomleft = p_angle >= 180;
       needs_topleft_filter =
         enable_intra_edge_filter && p_angle > 90 && p_angle < 180;
