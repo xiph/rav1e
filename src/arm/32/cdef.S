@@ -150,7 +150,7 @@
 
 // void dav1d_cdef_paddingX_neon(uint16_t *tmp, const pixel *src,
 //                               ptrdiff_t src_stride, const pixel (*left)[2],
-//                               /*const*/ pixel *const top[2], int h,
+//                               const pixel *const top, int h,
 //                               enum CdefEdgeFlags edges);
 
 // n1 = s0/d0
@@ -175,10 +175,9 @@ function cdef_padding\w\()_neon, export=1
         b               3f
 1:
         // CDEF_HAVE_TOP
-        ldr             r7,  [r4]
-        ldr             lr,  [r4, #4]
+        add             r7,  r4,  r2
         sub             r0,  r0,  #2*(2*\stride)
-        pad_top_bottom  r7,  lr,  \w, \stride, \n1, \w1, \n2, \w2, \align, 0
+        pad_top_bottom  r4,  r7,  \w, \stride, \n1, \w1, \n2, \w2, \align, 0
 
         // Middle section
 3:

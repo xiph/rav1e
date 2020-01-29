@@ -139,7 +139,7 @@
 
 // void dav1d_cdef_paddingX_neon(uint16_t *tmp, const pixel *src,
 //                               ptrdiff_t src_stride, const pixel (*left)[2],
-//                               /*const*/ pixel *const top[2], int h,
+//                               const pixel *const top, int h,
 //                               enum CdefEdgeFlags edges);
 
 .macro padding_func w, stride, rn, rw
@@ -157,9 +157,8 @@ function cdef_padding\w\()_neon, export=1
         b               3f
 1:
         // CDEF_HAVE_TOP
-        ldr             x8,  [x4]
-        ldr             x9,  [x4, #8]
-        pad_top_bottom  x8,  x9, \w, \stride, \rn, \rw, 0
+        add             x9,  x4,  x2
+        pad_top_bottom  x4,  x9, \w, \stride, \rn, \rw, 0
 
         // Middle section
 3:
