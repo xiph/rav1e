@@ -216,23 +216,20 @@ cglobal cdef_filter_%1x%2, 4, 10, 16, 2 * 16 + (%2+4)*%3, \
 .body_done:
 
     ; top
-    DEFINE_ARGS dst, stride, left, top2, pri, sec, stride3, top1, edge
     test         edgeb, 4                    ; have_top
     jz .no_top
-    mov          top1q, [top2q+0*gprsize]
-    mov          top2q, [top2q+1*gprsize]
     test         edgeb, 1                    ; have_left
     jz .top_no_left
     test         edgeb, 2                    ; have_right
     jz .top_no_right
-    pmovzxbw        m1, [top1q-(%1/2)]
-    pmovzxbw        m2, [top2q-(%1/2)]
+    pmovzxbw        m1, [topq+strideq*0-(%1/2)]
+    pmovzxbw        m2, [topq+strideq*1-(%1/2)]
     movu  [px-2*%3-%1], m1
     movu  [px-1*%3-%1], m2
     jmp .top_done
 .top_no_right:
-    pmovzxbw        m1, [top1q-%1]
-    pmovzxbw        m2, [top2q-%1]
+    pmovzxbw        m1, [topq+strideq*0-%1]
+    pmovzxbw        m2, [topq+strideq*1-%1]
     movu [px-2*%3-%1*2], m1
     movu [px-1*%3-%1*2], m2
     movd [px-2*%3+%1*2], xm14
@@ -241,8 +238,8 @@ cglobal cdef_filter_%1x%2, 4, 10, 16, 2 * 16 + (%2+4)*%3, \
 .top_no_left:
     test         edgeb, 2                   ; have_right
     jz .top_no_left_right
-    pmovzxbw        m1, [top1q]
-    pmovzxbw        m2, [top2q]
+    pmovzxbw        m1, [topq+strideq*0]
+    pmovzxbw        m2, [topq+strideq*1]
     mova   [px-2*%3+0], m1
     mova   [px-1*%3+0], m2
     movd   [px-2*%3-4], xm14
@@ -250,14 +247,14 @@ cglobal cdef_filter_%1x%2, 4, 10, 16, 2 * 16 + (%2+4)*%3, \
     jmp .top_done
 .top_no_left_right:
 %if %1 == 4
-    movd           xm1, [top1q]
-    pinsrd         xm1, [top2q], 1
+    movd           xm1, [topq+strideq*0]
+    pinsrd         xm1, [topq+strideq*1], 1
     pmovzxbw       xm1, xm1
     movq   [px-2*%3+0], xm1
     movhps [px-1*%3+0], xm1
 %else
-    pmovzxbw       xm1, [top1q]
-    pmovzxbw       xm2, [top2q]
+    pmovzxbw       xm1, [topq+strideq*0]
+    pmovzxbw       xm2, [topq+strideq*1]
     mova   [px-2*%3+0], xm1
     mova   [px-1*%3+0], xm2
 %endif
