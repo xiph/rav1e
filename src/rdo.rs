@@ -737,6 +737,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
           ts,
           cw,
           wr,
+          &mut Vec::new(),
           luma_mode,
           chroma_mode,
           angle_delta,
@@ -867,6 +868,7 @@ pub fn rdo_mode_decision<T: Pixel>(
       ts,
       cw,
       wr,
+      &mut Vec::new(),
       best.pred_mode_luma,
       best.pred_mode_luma,
       angle_delta,
@@ -881,6 +883,7 @@ pub fn rdo_mode_decision<T: Pixel>(
       true,
     );
     cw.rollback(&cw_checkpoint);
+
     if fi.sequence.chroma_sampling != ChromaSampling::Cs400 {
       if let Some(cfl) = rdo_cfl_alpha(ts, tile_bo, bsize, fi) {
         let wr: &mut dyn Writer = &mut WriterCounter::new();
@@ -900,6 +903,7 @@ pub fn rdo_mode_decision<T: Pixel>(
           ts,
           cw,
           wr,
+          &mut Vec::new(),
           best.pred_mode_luma,
           chroma_mode,
           angle_delta,
@@ -1574,6 +1578,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
         ts,
         cw,
         wr,
+        &mut Vec::new(),
         mode,
         0,
         tile_bo,
@@ -1591,6 +1596,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
         ts,
         cw,
         wr,
+        &mut Vec::new(),
         mode,
         mode,
         AngleDelta::default(),
@@ -1785,6 +1791,7 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
       cw,
       w_pre_cdef,
       w_post_cdef,
+      &mut Vec::new(),
       subsize,
       offset,
       &mode_decision,

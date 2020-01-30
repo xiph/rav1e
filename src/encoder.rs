@@ -1084,6 +1084,27 @@ fn get_qidx<T: Pixel>(
   qidx
 }
 
+pub struct VarianceStats {
+  // 6 + 6 + 8...12 bits + sign
+  pub s1: i32,
+  // 6 + 6 + (8...12)*2 bits
+  pub s2: u64,
+  pub plane: usize,
+  pub npixels: usize,
+  pub dc_qidx: u8,
+  pub ac_qidx: u8,
+  pub is_intra: bool,
+}
+
+impl VarianceStats {
+  pub fn new(
+    s1: i32, s2: u64, plane: usize, npixels: usize, dc_qidx: u8, ac_qidx: u8,
+    is_intra: bool,
+  ) -> VarianceStats {
+    VarianceStats { s1, s2, plane, npixels, dc_qidx, ac_qidx, is_intra }
+  }
+}
+
 // For a transform block,
 // predict, transform, quantize, write coefficients to a bitstream,
 // dequantize, inverse-transform.
@@ -1115,7 +1136,7 @@ pub fn encode_tx_block<T: Pixel>(
   pred_intra_param: IntraParam,
   rdo_type: RDOType,
   need_recon_pixel: bool,
-) -> (bool, ScaledDistortion) {
+) -> (bool, ScaledDistortion, VarianceStats) {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[p].cfg;
   let tile_rect = ts.tile_rect().decimated(xdec, ydec);
   let area = Area::BlockStartingAt { bo: tx_bo.0 };
@@ -1173,10 +1194,6 @@ pub fn encode_tx_block<T: Pixel>(
     );
   }
 
-  if skip {
-    return (false, ScaledDistortion::zero());
-  }
-
   let coded_tx_area = av1_get_coded_tx_size(tx_size).area();
   let mut residual_storage: Aligned<[i16; 64 * 64]> = Aligned::uninitialized();
   let mut coeffs_storage: Aligned<[T::Coeff; 64 * 64]> =
@@ -1200,6 +1217,31 @@ pub fn encode_tx_block<T: Pixel>(
     tx_size.width(),
     tx_size.height(),
   );
+
+  let mut s1: i32 = 0;
+  let mut s2: u64 = 0;
+  for r in residual.iter().take(tx_size.area()) {
+    let d = *r as i32;
+    s1 += d;
+    s2 += (d * d) as u64;
+  }
+  let dc_qidx =
+    (qidx as isize + fi.dc_delta_q[p] as isize).max(0).min(255) as u8;
+  let ac_qidx =
+    (qidx as isize + fi.ac_delta_q[p] as isize).max(0).min(255) as u8;
+  let vs = VarianceStats::new(
+    s1,
+    s2,
+    p,
+    tx_size.area(),
+    dc_qidx,
+    ac_qidx,
+    mode.is_intra(),
+  );
+
+  if skip {
+    return (false, ScaledDistortion::zero(), vs);
+  }
 
   forward_transform(
     residual,
@@ -1298,7 +1340,7 @@ pub fn encode_tx_block<T: Pixel>(
     ScaledDistortion::zero()
   };
 
-  (has_coeff, tx_dist)
+  (has_coeff, tx_dist, vs)
 }
 
 pub fn motion_compensate<T: Pixel>(
@@ -1564,12 +1606,13 @@ pub fn encode_block_pre_cdef<T: Pixel>(
 
 pub fn encode_block_post_cdef<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, w: &mut dyn Writer, luma_mode: PredictionMode,
-  chroma_mode: PredictionMode, angle_delta: AngleDelta,
-  ref_frames: [RefType; 2], mvs: [MotionVector; 2], bsize: BlockSize,
-  tile_bo: TileBlockOffset, skip: bool, cfl: CFLParams, tx_size: TxSize,
-  tx_type: TxType, mode_context: usize, mv_stack: &[CandidateMV],
-  rdo_type: RDOType, need_recon_pixel: bool, record_stats: bool,
+  cw: &mut ContextWriter, w: &mut dyn Writer, vstats: &mut Vec<VarianceStats>,
+  luma_mode: PredictionMode, chroma_mode: PredictionMode,
+  angle_delta: AngleDelta, ref_frames: [RefType; 2], mvs: [MotionVector; 2],
+  bsize: BlockSize, tile_bo: TileBlockOffset, skip: bool, cfl: CFLParams,
+  tx_size: TxSize, tx_type: TxType, mode_context: usize,
+  mv_stack: &[CandidateMV], rdo_type: RDOType, need_recon_pixel: bool,
+  record_stats: bool,
 ) -> (bool, ScaledDistortion) {
   let planes =
     if fi.sequence.chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
@@ -1824,6 +1867,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
       ts,
       cw,
       w,
+      vstats,
       luma_mode,
       angle_delta.y,
       tile_bo,
@@ -1841,6 +1885,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
       ts,
       cw,
       w,
+      vstats,
       luma_mode,
       chroma_mode,
       angle_delta,
@@ -1902,11 +1947,11 @@ pub fn luma_ac<T: Pixel>(
 
 pub fn write_tx_blocks<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, w: &mut dyn Writer, luma_mode: PredictionMode,
-  chroma_mode: PredictionMode, angle_delta: AngleDelta,
-  tile_bo: TileBlockOffset, bsize: BlockSize, tx_size: TxSize,
-  tx_type: TxType, skip: bool, cfl: CFLParams, luma_only: bool,
-  rdo_type: RDOType, need_recon_pixel: bool,
+  cw: &mut ContextWriter, w: &mut dyn Writer, vstats: &mut Vec<VarianceStats>,
+  luma_mode: PredictionMode, chroma_mode: PredictionMode,
+  angle_delta: AngleDelta, tile_bo: TileBlockOffset, bsize: BlockSize,
+  tx_size: TxSize, tx_type: TxType, skip: bool, cfl: CFLParams,
+  luma_only: bool, rdo_type: RDOType, need_recon_pixel: bool,
 ) -> (bool, ScaledDistortion) {
   let bw = bsize.width_mi() / tx_size.width_mi();
   let bh = bsize.height_mi() / tx_size.height_mi();
@@ -1937,7 +1982,7 @@ pub fn write_tx_blocks<T: Pixel>(
       });
 
       let po = tx_bo.plane_offset(&ts.input.planes[0].cfg);
-      let (has_coeff, dist) = encode_tx_block(
+      let (has_coeff, dist, vs) = encode_tx_block(
         fi,
         ts,
         cw,
@@ -1959,6 +2004,7 @@ pub fn write_tx_blocks<T: Pixel>(
         rdo_type,
         need_recon_pixel,
       );
+      vstats.push(vs);
       partition_has_coeff |= has_coeff;
       tx_dist += dist;
     }
@@ -2017,7 +2063,7 @@ pub fn write_tx_blocks<T: Pixel>(
           let mut po = tile_bo.plane_offset(&ts.input.planes[p].cfg);
           po.x += (bx * uv_tx_size.width()) as isize;
           po.y += (by * uv_tx_size.height()) as isize;
-          let (has_coeff, dist) = encode_tx_block(
+          let (has_coeff, dist, vs) = encode_tx_block(
             fi,
             ts,
             cw,
@@ -2043,6 +2089,7 @@ pub fn write_tx_blocks<T: Pixel>(
             rdo_type,
             need_recon_pixel,
           );
+          vstats.push(vs);
           partition_has_coeff |= has_coeff;
           tx_dist += dist;
         }
@@ -2055,10 +2102,10 @@ pub fn write_tx_blocks<T: Pixel>(
 
 pub fn write_tx_tree<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, w: &mut dyn Writer, luma_mode: PredictionMode,
-  angle_delta_y: i8, tile_bo: TileBlockOffset, bsize: BlockSize,
-  tx_size: TxSize, tx_type: TxType, skip: bool, luma_only: bool,
-  rdo_type: RDOType, need_recon_pixel: bool,
+  cw: &mut ContextWriter, w: &mut dyn Writer, vstats: &mut Vec<VarianceStats>,
+  luma_mode: PredictionMode, angle_delta_y: i8, tile_bo: TileBlockOffset,
+  bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool,
+  luma_only: bool, rdo_type: RDOType, need_recon_pixel: bool,
 ) -> (bool, ScaledDistortion) {
   if skip {
     return (false, ScaledDistortion::zero());
@@ -2092,7 +2139,7 @@ pub fn write_tx_tree<T: Pixel>(
       });
 
       let po = tx_bo.plane_offset(&ts.input.planes[0].cfg);
-      let (has_coeff, dist) = encode_tx_block(
+      let (has_coeff, dist, vs) = encode_tx_block(
         fi,
         ts,
         cw,
@@ -2114,6 +2161,7 @@ pub fn write_tx_tree<T: Pixel>(
         rdo_type,
         need_recon_pixel,
       );
+      vstats.push(vs);
       partition_has_coeff |= has_coeff;
       tx_dist += dist;
     }
@@ -2169,7 +2217,7 @@ pub fn write_tx_tree<T: Pixel>(
           let mut po = tile_bo.plane_offset(&ts.input.planes[p].cfg);
           po.x += (bx * uv_tx_size.width()) as isize;
           po.y += (by * uv_tx_size.height()) as isize;
-          let (has_coeff, dist) = encode_tx_block(
+          let (has_coeff, dist, vs) = encode_tx_block(
             fi,
             ts,
             cw,
@@ -2191,6 +2239,7 @@ pub fn write_tx_tree<T: Pixel>(
             rdo_type,
             need_recon_pixel,
           );
+          vstats.push(vs);
           partition_has_coeff |= has_coeff;
           tx_dist += dist;
         }
@@ -2204,7 +2253,8 @@ pub fn write_tx_tree<T: Pixel>(
 pub fn encode_block_with_modes<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer,
-  w_post_cdef: &mut dyn Writer, bsize: BlockSize, tile_bo: TileBlockOffset,
+  w_post_cdef: &mut dyn Writer, vstats: &mut Vec<VarianceStats>,
+  bsize: BlockSize, tile_bo: TileBlockOffset,
   mode_decision: &PartitionParameters, rdo_type: RDOType, record_stats: bool,
 ) {
   let (mode_luma, mode_chroma) =
@@ -2242,6 +2292,7 @@ pub fn encode_block_with_modes<T: Pixel>(
     ts,
     cw,
     if cdef_coded { w_post_cdef } else { w_pre_cdef },
+    vstats,
     mode_luma,
     mode_chroma,
     mode_decision.angle_delta,
@@ -2264,8 +2315,8 @@ pub fn encode_block_with_modes<T: Pixel>(
 fn encode_partition_bottomup<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
-  bsize: BlockSize, tile_bo: TileBlockOffset, ref_rd_cost: f64,
-  inter_cfg: &InterConfig,
+  vstats: &mut Vec<VarianceStats>, bsize: BlockSize, tile_bo: TileBlockOffset,
+  ref_rd_cost: f64, inter_cfg: &InterConfig,
 ) -> PartitionGroupParameters {
   let rdo_type = RDOType::PixelDistRealRate;
   let mut rd_cost = std::f64::MAX;
@@ -2306,6 +2357,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
   let cw_checkpoint = cw.checkpoint();
   let w_pre_checkpoint = w_pre_cdef.checkpoint();
   let w_post_checkpoint = w_post_cdef.checkpoint();
+  let vstats_checkpoint = vstats.len();
 
   // Code the whole block
   if !must_split {
@@ -2345,6 +2397,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
         cw,
         w_pre_cdef,
         w_post_cdef,
+        vstats,
         bsize,
         tile_bo,
         &mode_decision,
@@ -2394,6 +2447,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       cw.rollback(&cw_checkpoint);
       w_pre_cdef.rollback(&w_pre_checkpoint);
       w_post_cdef.rollback(&w_post_checkpoint);
+      vstats.truncate(vstats_checkpoint);
 
       let subsize = bsize.subsize(partition);
       let hbsw = subsize.width_mi(); // Half the block size width in blocks
@@ -2438,6 +2492,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
           cw,
           w_pre_cdef,
           w_post_cdef,
+          vstats,
           subsize,
           offset,
           best_rd,
@@ -2479,6 +2534,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       cw.rollback(&cw_checkpoint);
       w_pre_cdef.rollback(&w_pre_checkpoint);
       w_post_cdef.rollback(&w_post_checkpoint);
+      vstats.truncate(vstats_checkpoint);
 
       assert!(best_partition != PartitionType::PARTITION_NONE || !must_split);
       let subsize = bsize.subsize(best_partition);
@@ -2508,6 +2564,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
           cw,
           w_pre_cdef,
           w_post_cdef,
+          vstats,
           mode.bsize,
           mode.bo,
           &mode,
@@ -2544,7 +2601,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
 fn encode_partition_topdown<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
-  bsize: BlockSize, tile_bo: TileBlockOffset,
+  vstats: &mut Vec<VarianceStats>, bsize: BlockSize, tile_bo: TileBlockOffset,
   block_output: &Option<PartitionGroupParameters>, inter_cfg: &InterConfig,
 ) {
   if tile_bo.0.x >= cw.bc.blocks.cols() || tile_bo.0.y >= cw.bc.blocks.rows() {
@@ -2782,6 +2839,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         ts,
         cw,
         if cdef_coded { w_post_cdef } else { w_pre_cdef },
+        vstats,
         mode_luma,
         mode_chroma,
         part_decision.angle_delta,
@@ -2814,6 +2872,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
             cw,
             w_pre_cdef,
             w_post_cdef,
+            vstats,
             subsize,
             mode.bo,
             &Some(PartitionGroupParameters {
@@ -2852,6 +2911,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
             cw,
             w_pre_cdef,
             w_post_cdef,
+            vstats,
             subsize,
             offset,
             &None,
@@ -3456,6 +3516,7 @@ fn encode_tile<'a, T: Pixel>(
   let mut last_lru_coded = [-1; 3];
 
   // main loop
+  println!("f {}", fi.input_frameno);
   for sby in 0..ts.sb_height {
     cw.bc.reset_left_contexts(planes);
 
@@ -3473,6 +3534,8 @@ fn encode_tile<'a, T: Pixel>(
       cw.bc.cdef_coded = false;
       cw.bc.code_deltas = fi.delta_q_present;
 
+      let mut vstats: Vec<VarianceStats> = Vec::new();
+
       // Encode SuperBlock
       if fi.config.speed_settings.encode_bottomup {
         encode_partition_bottomup(
@@ -3481,6 +3544,7 @@ fn encode_tile<'a, T: Pixel>(
           &mut cw,
           &mut sbs_qe.w_pre_cdef,
           &mut sbs_qe.w_post_cdef,
+          &mut vstats,
           BlockSize::BLOCK_64X64,
           tile_bo,
           std::f64::MAX,
@@ -3493,10 +3557,30 @@ fn encode_tile<'a, T: Pixel>(
           &mut cw,
           &mut sbs_qe.w_pre_cdef,
           &mut sbs_qe.w_post_cdef,
+          &mut vstats,
           BlockSize::BLOCK_64X64,
           tile_bo,
           &None,
           inter_cfg,
+        );
+      }
+
+      for vs in vstats {
+        // We output whether or not the whole frame is intra_only, because the
+        //  statistics of intra blocks in inter frames are vastly different
+        //  from those in all-intra frames (and much more similar to inter
+        //  block statistics) due to what they have to compete with to be
+        //  chosen by RDO (i.e., other inter modes).
+        println!(
+          "b {} {} {} {} {} {} {} {}",
+          vs.s1,
+          vs.s2,
+          vs.plane,
+          vs.npixels,
+          vs.dc_qidx,
+          vs.ac_qidx,
+          (vs.is_intra as i32),
+          fi.intra_only as i32
         );
       }
 
