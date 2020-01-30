@@ -15,15 +15,14 @@ for arg in "$@"; do
   esac
 done
 
-if [ -z "$SEQ" ]; then
-  SEQ=nyan.y4m
+if [ -z "$SEQ" ] && SEQ=nyan.y4m && [ ! -f nyan.y4m ]; then
   #SEQ10=nyan10.y4m
   #SEQ12=nyan12.y4m
 
-  if type wget > /dev/null 2>&1; then
-    wget -nc https://mf4.xiph.org/~ltrudeau/videos/nyan.y4m
-  elif type curl > /dev/null 2>&1; then
-    curl -fkLs https://mf4.xiph.org/~ltrudeau/videos/nyan.y4m -o nyan.y4m
+  if ! wget -nc https://mf4.xiph.org/~ltrudeau/videos/nyan.y4m &&
+    ! curl -fkLs https://mf4.xiph.org/~ltrudeau/videos/nyan.y4m -o nyan.y4m; then
+    echo "wget and curl not found or failed!" >&2
+    exit 1
   fi
   #wget -nc https://people.xiph.org/~tdaede/nyan10.y4m
   #wget -nc https://people.xiph.org/~tdaede/nyan12.y4m
