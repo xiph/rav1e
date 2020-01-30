@@ -489,13 +489,7 @@ pub fn distortion_scale_for(
   //   url={https://pdfs.semanticscholar.org/032f/1ab7d9db385780a02eb2d579af8303b266d2.pdf}
   // }
 
-  if intra_cost == 0. {
-    return DistortionScale::default(); // no scaling
-  }
-
-  let strength = 1.0; // empirical, see comment above
-  let frac = (intra_cost + propagate_cost) / intra_cost;
-  DistortionScale::new(frac.powf(strength / 3.0))
+  DistortionScale::default() // no scaling
 }
 
 /// Fixed point arithmetic version of distortion scale
@@ -712,16 +706,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
     let mut zero_distortion = false;
 
     // If skip is true or segmentation is turned off, sidx is not coded.
-    let sidx_range = if skip || !fi.enable_segmentation {
-      0..=0
-    } else if fi.base_q_idx as i16
-      + ts.segmentation.data[2][SegLvl::SEG_LVL_ALT_Q as usize]
-      < 1
-    {
-      0..=1
-    } else {
-      0..=2
-    };
+    let sidx_range = 0..=0;
 
     for sidx in sidx_range {
       cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, sidx);
