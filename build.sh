@@ -9,7 +9,7 @@ unset IS_RELEASE
 
 for arg in "$@"; do
   case $arg in
-  --debug) unset IS_RELEASE ;; # Uneeded, but explicit
+  --debug) unset IS_RELEASE ;; # Unneeded, but explicit
   --release) IS_RELEASE=true ;;
   *) continue ;;
   esac
