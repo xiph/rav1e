@@ -51,6 +51,12 @@ if ! type cargo > /dev/null 2>&1; then
   exit 1
 fi
 
+if ! cargo build ${IS_RELEASE:+--release}; then
+  e=$?
+  echo "Failed to build rav1e" >&2
+  exit $e
+fi
+
 if ! cargo run --bin rav1e ${IS_RELEASE:+--release} -- "$SEQ" -o $ENC_FILE -s 3 -r $REC_FILE; then
   echo "rav1e failed to run" >&2
   exit 1
