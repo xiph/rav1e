@@ -31,7 +31,7 @@ fi
 if [ ! -f $SEQ ]; then
   echo "ERROR: Failed to find $SEQ" >&2
   echo "Please recheck the variables" >&2
-  exit 1 # terminate and indicate error
+  exit 1
 fi
 
 # File containing the encoded sequence
