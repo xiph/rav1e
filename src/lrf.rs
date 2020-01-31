@@ -338,7 +338,7 @@ fn sgrproj_sum_finish(
   } else if z == 0 {
     1
   } else {
-    (((z << SGRPROJ_SGR_BITS) + z / 2) / (z + 1))
+    ((z << SGRPROJ_SGR_BITS) + z / 2) / (z + 1)
   };
   let b = ((1 << SGRPROJ_SGR_BITS) - a) * sum * one_over_n;
   (a, (b + (1 << SGRPROJ_RECIP_BITS >> 1)) >> SGRPROJ_RECIP_BITS)
