@@ -85,38 +85,44 @@ function \type\()_8bpc_neon, export=1
         \type           v4,  v0,  v1,  v2,  v3
         sub             x7,  x7,  w4, uxtw
         br              x7
+40:
+        add             x7,  x0,  x1
+        lsl             x1,  x1,  #1
 4:
         cmp             w5,  #4
         st1             {v4.s}[0],  [x0], x1
-        st1             {v4.s}[1],  [x0], x1
+        st1             {v4.s}[1],  [x7], x1
         st1             {v4.s}[2],  [x0], x1
-        st1             {v4.s}[3],  [x0], x1
+        st1             {v4.s}[3],  [x7], x1
         b.eq            0f
         \type           v5,  v0,  v1,  v2,  v3
         cmp             w5,  #8
         st1             {v5.s}[0],  [x0], x1
-        st1             {v5.s}[1],  [x0], x1
+        st1             {v5.s}[1],  [x7], x1
         st1             {v5.s}[2],  [x0], x1
-        st1             {v5.s}[3],  [x0], x1
+        st1             {v5.s}[3],  [x7], x1
         b.eq            0f
         \type           v4,  v0,  v1,  v2,  v3
         st1             {v4.s}[0],  [x0], x1
-        st1             {v4.s}[1],  [x0], x1
+        st1             {v4.s}[1],  [x7], x1
         \type           v5,  v0,  v1,  v2,  v3
         st1             {v4.s}[2],  [x0], x1
-        st1             {v4.s}[3],  [x0], x1
+        st1             {v4.s}[3],  [x7], x1
         st1             {v5.s}[0],  [x0], x1
-        st1             {v5.s}[1],  [x0], x1
+        st1             {v5.s}[1],  [x7], x1
         st1             {v5.s}[2],  [x0], x1
-        st1             {v5.s}[3],  [x0], x1
+        st1             {v5.s}[3],  [x7], x1
         ret
+80:
+        add             x7,  x0,  x1
+        lsl             x1,  x1,  #1
 8:
         st1             {v4.d}[0],  [x0], x1
         \type           v5,  v0,  v1,  v2,  v3
-        st1             {v4.d}[1],  [x0], x1
+        st1             {v4.d}[1],  [x7], x1
         st1             {v5.d}[0],  [x0], x1
         subs            w5,  w5,  #4
-        st1             {v5.d}[1],  [x0], x1
+        st1             {v5.d}[1],  [x7], x1
         b.le            0f
         \type           v4,  v0,  v1,  v2,  v3
         b               8b
@@ -185,8 +191,8 @@ L(\type\()_tbl):
         .hword L(\type\()_tbl) -  640b
         .hword L(\type\()_tbl) -  320b
         .hword L(\type\()_tbl) -   16b
-        .hword L(\type\()_tbl) -    8b
-        .hword L(\type\()_tbl) -    4b
+        .hword L(\type\()_tbl) -   80b
+        .hword L(\type\()_tbl) -   40b
 endfunc
 .endm
 
