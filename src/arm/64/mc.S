@@ -2073,9 +2073,9 @@ L(\type\()_8tap_filter_2):
         st1             {v3.4h}, [\ds2], \d_strd
 .endif
         b.le            0f
-        mov             v16.16b, v18.16b
-        mov             v17.16b, v28.16b
-        mov             v18.16b, v29.16b
+        mov             v16.8b,  v18.8b
+        mov             v17.8b,  v28.8b
+        mov             v18.8b,  v29.8b
         b               4b
 
 480:    // 4x8, 4x16, 4x32 hv
