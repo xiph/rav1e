@@ -917,65 +917,77 @@ impl<T: Pixel> FrameInvariants<T> {
 
     let q = bexp64(qps.log_target_q as i64 + q57(QSCALE)) as f32;
     /* These coefficients were trained on libaom. */
-    if !self.intra_only {
-      let predicted_y_f1 = clamp(
-        (-q * q * 0.0000023593946_f32 + q * 0.0068615186_f32 + 0.02709886_f32)
-          .round() as i32,
-        0,
-        15,
-      );
-      let predicted_y_f2 = clamp(
-        (-q * q * 0.00000057629734_f32 + q * 0.0013993345_f32 + 0.03831067_f32)
-          .round() as i32,
-        0,
-        3,
-      );
-      let predicted_uv_f1 = clamp(
-        (-q * q * 0.0000007095069_f32 + q * 0.0034628846_f32 + 0.00887099_f32)
-          .round() as i32,
-        0,
-        15,
-      );
-      let predicted_uv_f2 = clamp(
-        (q * q * 0.00000023874085_f32 + q * 0.00028223585_f32 + 0.05576307_f32)
-          .round() as i32,
-        0,
-        3,
-      );
-      self.cdef_y_strengths[0] =
-        (predicted_y_f1 * CDEF_SEC_STRENGTHS as i32 + predicted_y_f2) as u8;
-      self.cdef_uv_strengths[0] =
-        (predicted_uv_f1 * CDEF_SEC_STRENGTHS as i32 + predicted_uv_f2) as u8;
+    let (y_f1, y_f2, uv_f1, uv_f2) = if !self.intra_only {
+      (
+        clamp(
+          (-q * q * 0.0000023593946_f32
+            + q * 0.0068615186_f32
+            + 0.02709886_f32)
+            .round() as i32,
+          0,
+          15,
+        ),
+        clamp(
+          (-q * q * 0.00000057629734_f32
+            + q * 0.0013993345_f32
+            + 0.03831067_f32)
+            .round() as i32,
+          0,
+          3,
+        ),
+        clamp(
+          (-q * q * 0.0000007095069_f32
+            + q * 0.0034628846_f32
+            + 0.00887099_f32)
+            .round() as i32,
+          0,
+          15,
+        ),
+        clamp(
+          (q * q * 0.00000023874085_f32
+            + q * 0.00028223585_f32
+            + 0.05576307_f32)
+            .round() as i32,
+          0,
+          3,
+        ),
+      )
     } else {
-      let predicted_y_f1 = clamp(
-        (q * q * 0.0000033731974_f32 + q * 0.008070594_f32 + 0.0187634_f32)
-          .round() as i32,
-        0,
-        15,
-      );
-      let predicted_y_f2 = clamp(
-        (-q * q * -0.0000029167343_f32 + q * 0.0027798624_f32 + 0.0079405_f32)
-          .round() as i32,
-        0,
-        3,
-      );
-      let predicted_uv_f1 = clamp(
-        (-q * q * 0.0000130790995_f32 + q * 0.012892405_f32 - 0.00748388_f32)
-          .round() as i32,
-        0,
-        15,
-      );
-      let predicted_uv_f2 = clamp(
-        (q * q * 0.0000032651783_f32 + q * 0.00035520183_f32 + 0.00228092_f32)
-          .round() as i32,
-        0,
-        3,
-      );
-      self.cdef_y_strengths[0] =
-        (predicted_y_f1 * CDEF_SEC_STRENGTHS as i32 + predicted_y_f2) as u8;
-      self.cdef_uv_strengths[0] =
-        (predicted_uv_f1 * CDEF_SEC_STRENGTHS as i32 + predicted_uv_f2) as u8;
-    }
+      (
+        clamp(
+          (q * q * 0.0000033731974_f32 + q * 0.008070594_f32 + 0.0187634_f32)
+            .round() as i32,
+          0,
+          15,
+        ),
+        clamp(
+          (-q * q * -0.0000029167343_f32
+            + q * 0.0027798624_f32
+            + 0.0079405_f32)
+            .round() as i32,
+          0,
+          3,
+        ),
+        clamp(
+          (-q * q * 0.0000130790995_f32 + q * 0.012892405_f32 - 0.00748388_f32)
+            .round() as i32,
+          0,
+          15,
+        ),
+        clamp(
+          (q * q * 0.0000032651783_f32
+            + q * 0.00035520183_f32
+            + 0.00228092_f32)
+            .round() as i32,
+          0,
+          3,
+        ),
+      )
+    };
+
+    self.cdef_y_strengths[0] = (y_f1 * CDEF_SEC_STRENGTHS as i32 + y_f2) as u8;
+    self.cdef_uv_strengths[0] =
+      (uv_f1 * CDEF_SEC_STRENGTHS as i32 + uv_f2) as u8;
   }
 
   #[inline(always)]
