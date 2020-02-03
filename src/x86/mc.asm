@@ -2072,8 +2072,8 @@ cglobal put_8tap, 4, 9, 0, dst, ds, src, ss, w, h, mx, my, ss3
     WIN64_SPILL_XMM      16
     movzx               mxd, myb
     shr                 myd, 16
-    cmp                  hd, 4
-    cmovle              myd, mxd
+    cmp                  hd, 6
+    cmovs               myd, mxd
     tzcnt               r6d, wd
     movzx               r6d, word [r8+r6*2+table_offset(put, _8tap_v)]
     vpbroadcastd         m7, [pw_512]
@@ -2293,8 +2293,8 @@ cglobal put_8tap, 4, 9, 0, dst, ds, src, ss, w, h, mx, my, ss3
     vpbroadcastd         m7, [r8+mxq*8+subpel_filters-put_avx2+2]
     movzx               mxd, myb
     shr                 myd, 16
-    cmp                  hd, 4
-    cmovle              myd, mxd
+    cmp                  hd, 6
+    cmovs               myd, mxd
     vpbroadcastq         m0, [r8+myq*8+subpel_filters-put_avx2]
     lea                ss3q, [ssq*3]
     sub                srcq, ss3q
@@ -2434,8 +2434,8 @@ cglobal put_8tap, 4, 9, 0, dst, ds, src, ss, w, h, mx, my, ss3
     vpbroadcastd        m11, [r8+mxq*8+subpel_filters-put_avx2+4]
     movzx               mxd, myb
     shr                 myd, 16
-    cmp                  hd, 4
-    cmovle              myd, mxd
+    cmp                  hd, 6
+    cmovs               myd, mxd
     vpbroadcastq         m0, [r8+myq*8+subpel_filters-put_avx2]
     lea                ss3q, [ssq*3]
     sub                srcq, ss3q
@@ -5136,34 +5136,34 @@ cglobal emu_edge, 10, 13, 1, bw, bh, iw, ih, x, y, dst, dstride, src, sstride, \
     xor                r12d, r12d
     lea                 r10, [ihq-1]
     cmp                  yq, ihq
-    cmovl               r10, yq
+    cmovs               r10, yq
     test                 yq, yq
-    cmovl               r10, r12
+    cmovs               r10, r12
     imul                r10, sstrideq
     add                srcq, r10
 
     ; ref += iclip(x, 0, iw - 1)
     lea                 r10, [iwq-1]
     cmp                  xq, iwq
-    cmovl               r10, xq
+    cmovs               r10, xq
     test                 xq, xq
-    cmovl               r10, r12
+    cmovs               r10, r12
     add                srcq, r10
 
     ; bottom_ext = iclip(y + bh - ih, 0, bh - 1)
     lea          bottomextq, [yq+bhq]
     sub          bottomextq, ihq
     lea                  r3, [bhq-1]
-    cmovl        bottomextq, r12
+    cmovs        bottomextq, r12
 
     DEFINE_ARGS bw, bh, iw, ih, x, topext, dst, dstride, src, sstride, \
                 bottomext, rightext
 
     ; top_ext = iclip(-y, 0, bh - 1)
     neg             topextq
-    cmovl           topextq, r12
+    cmovs           topextq, r12
     cmp          bottomextq, bhq
-    cmovge       bottomextq, r3
+    cmovns       bottomextq, r3
     cmp             topextq, bhq
     cmovg           topextq, r3
 
@@ -5171,18 +5171,18 @@ cglobal emu_edge, 10, 13, 1, bw, bh, iw, ih, x, y, dst, dstride, src, sstride, \
     lea           rightextq, [xq+bwq]
     sub           rightextq, iwq
     lea                  r2, [bwq-1]
-    cmovl         rightextq, r12
+    cmovs         rightextq, r12
 
     DEFINE_ARGS bw, bh, iw, ih, leftext, topext, dst, dstride, src, sstride, \
                 bottomext, rightext
 
     ; left_ext = iclip(-x, 0, bw - 1)
     neg            leftextq
-    cmovl          leftextq, r12
+    cmovs          leftextq, r12
     cmp           rightextq, bwq
-    cmovge        rightextq, r2
+    cmovns        rightextq, r2
     cmp            leftextq, bwq
-    cmovge         leftextq, r2
+    cmovns         leftextq, r2
 
     DEFINE_ARGS bw, centerh, centerw, dummy, leftext, topext, \
                 dst, dstride, src, sstride, bottomext, rightext

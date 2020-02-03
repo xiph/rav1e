@@ -4587,8 +4587,8 @@ cglobal idct_32x8_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
 cglobal inv_txfm_add_identity_identity_8x32, 4, 6, 8, 16*4, dst, stride, coeff, eob, tx2
     mov                    r5d, 4
     mov                   tx2d, 2
-    cmp                   eobd, 106
-    cmovg                 tx2d, r5d
+    cmp                   eobd, 107
+    cmovns                tx2d, r5d
     mov                    r3d, tx2d
 %if ARCH_X86_32
     LEA                     r5, $$
@@ -4617,8 +4617,8 @@ cglobal inv_txfm_add_identity_identity_8x32, 4, 6, 8, 16*4, dst, stride, coeff, 
 cglobal inv_txfm_add_identity_identity_32x8, 4, 6, 8, 16*4, dst, stride, coeff, eob, tx2
     mov                    r5d, 4
     mov                   tx2d, 2
-    cmp                   eobd, 106
-    cmovg                 tx2d, r5d
+    cmp                   eobd, 107
+    cmovns                tx2d, r5d
     mov                    r3d, tx2d
 %if ARCH_X86_32
     LEA                     r5, $$

@@ -222,9 +222,9 @@ cglobal generate_grain_y, 2, 7 + 2 * ARCH_X86_64, 16, buf, fg_data
     movsx         val0d, byte [bufq+xq]
     add           val3d, val0d
     cmp           val3d, maxd
-    cmovg         val3d, maxd
+    cmovns        val3d, maxd
     cmp           val3d, mind
-    cmovl         val3d, mind
+    cmovs         val3d, mind
     mov  byte [bufq+xq], val3b
     ; keep val3d in-place as left for next x iteration
     inc              xq
@@ -778,9 +778,9 @@ cglobal generate_grain_uv_420, 1, 7 + 3 * ARCH_X86_64, 16, buf, bufy, fg_data, u
     movsx         val0d, byte [bufq+xq]
     add           val3d, val0d
     cmp           val3d, maxd
-    cmovg         val3d, maxd
+    cmovns        val3d, maxd
     cmp           val3d, mind
-    cmovl         val3d, mind
+    cmovs         val3d, mind
     mov  byte [bufq+xq], val3b
     ; keep val3d in-place as left for next x iteration
     inc              xq
