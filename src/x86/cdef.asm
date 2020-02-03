@@ -375,9 +375,9 @@ cglobal cdef_filter_%1x%2, 4, 10, 16, 2 * 16 + (%2+4)*%3, \
     sub       dampingd, 31
     xor          zerod, zerod
     add        pridmpd, dampingd
-    cmovl      pridmpd, zerod
+    cmovs      pridmpd, zerod
     add        secdmpd, dampingd
-    cmovl      secdmpd, zerod
+    cmovs      secdmpd, zerod
     mov        [rsp+0], pridmpq                 ; pri_shift
     mov        [rsp+8], secdmpq                 ; sec_shift
 
