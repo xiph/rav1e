@@ -1425,7 +1425,7 @@ cglobal put_8tap, 1, 9, 0, dst, ds, src, ss, w, h, mx, my, ss3
     jmp                  wq
 .h_w2:
 %if ARCH_X86_32
-    and                 mxd, 0xff
+    and                 mxd, 0x7f
 %else
     movzx               mxd, mxb
 %endif
@@ -1455,7 +1455,7 @@ cglobal put_8tap, 1, 9, 0, dst, ds, src, ss, w, h, mx, my, ss3
     RET
 .h_w4:
 %if ARCH_X86_32
-    and                 mxd, 0xff
+    and                 mxd, 0x7f
 %else
     movzx               mxd, mxb
 %endif
@@ -1850,7 +1850,11 @@ cglobal put_8tap, 1, 9, 0, dst, ds, src, ss, w, h, mx, my, ss3
     %assign stack_offset org_stack_offset
     cmp                  wd, 4
     jg .hv_w8
-    and                 mxd, 0xff
+%if ARCH_X86_32
+    and                 mxd, 0x7f
+%else
+    movzx               mxd, mxb
+%endif
     dec                srcq
     movd                 m1, [base_reg+mxq*8+subpel_filters-put_ssse3+2]
 %if ARCH_X86_32
@@ -2511,7 +2515,7 @@ cglobal prep_8tap, 1, 9, 0, tmp, src, stride, w, h, mx, my, stride3
     jmp                  wq
 .h_w4:
 %if ARCH_X86_32
-    and                 mxd, 0xff
+    and                 mxd, 0x7f
 %else
     movzx               mxd, mxb
 %endif
@@ -2635,7 +2639,7 @@ cglobal prep_8tap, 1, 9, 0, tmp, src, stride, w, h, mx, my, stride3
 .v:
 %if ARCH_X86_32
     mov                 mxd, myd
-    and                 mxd, 0xff
+    and                 mxd, 0x7f
 %else
  %assign stack_offset org_stack_offset
     WIN64_SPILL_XMM      16
@@ -2849,12 +2853,12 @@ cglobal prep_8tap, 1, 9, 0, tmp, src, stride, w, h, mx, my, stride3
     %assign stack_offset org_stack_offset
     cmp                  wd, 4
     jg .hv_w8
-    and                 mxd, 0xff
+    and                 mxd, 0x7f
     movd                 m1, [base_reg+mxq*8+subpel_filters-prep_ssse3+2]
 %if ARCH_X86_32
     mov                 mxd, myd
-    and                 mxd, 0xff
     shr                 myd, 16
+    and                 mxd, 0x7f
     cmp                  hd, 4
     cmovle              myd, mxd
     movq                 m0, [base_reg+myq*8+subpel_filters-prep_ssse3]
@@ -3101,9 +3105,9 @@ cglobal prep_8tap, 1, 9, 0, tmp, src, stride, w, h, mx, my, stride3
  %define             accuv0  [rsp+mmsize*11]
  %define             accuv1  [rsp+mmsize*12]
     movq                 m1, [base_reg+mxq*8+subpel_filters-prep_ssse3]
-    movzx               mxd, myw
-    and                 mxd, 0xff
+    mov                 mxd, myd
     shr                 myd, 16
+    and                 mxd, 0x7f
     cmp                  hd, 4
     cmovle              myd, mxd
     movq                 m5, [base_reg+myq*8+subpel_filters-prep_ssse3]
