@@ -623,9 +623,9 @@ cglobal cdef_filter_%1x%2, 2, 7, 8, - 7 * 16 - (%2+4)*%3, \
     sub        secdmpd, dampingd
     xor       dampingd, dampingd
     neg        pridmpd
-    cmovl      pridmpd, dampingd
+    cmovs      pridmpd, dampingd
     neg        secdmpd
-    cmovl      secdmpd, dampingd
+    cmovs      secdmpd, dampingd
  %if ARCH_X86_64
     mov       [rsp+ 0], pridmpq                 ; pri_shift
     mov       [rsp+16], secdmpq                 ; sec_shift
