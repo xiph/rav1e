@@ -167,7 +167,7 @@ cglobal msac_decode_symbol_adapt4, 0, 6, 6
 %endif
     lea            t5, [t2+gprsize]
     cmp            t5, rcx
-    jg .refill_eob
+    ja .refill_eob
     mov            t2, [t2]
     lea           ecx, [t1+23]
     add           t1d, 16
@@ -195,7 +195,7 @@ cglobal msac_decode_symbol_adapt4, 0, 6, 6
     sub           ecx, t1d ; c
 .refill_eob_loop:
     cmp            t2, t5
-    jge .refill_eob_end    ; eob reached
+    jae .refill_eob_end    ; eob reached
     movzx         t1d, byte [t2]
     inc            t2
     shl            t1, cl
