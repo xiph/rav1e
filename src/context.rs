@@ -59,7 +59,9 @@ pub const SB_SIZE: usize = (1 << SB_SIZE_LOG2);
 const SB_SQUARE: usize = (SB_SIZE * SB_SIZE);
 
 pub const MAX_TX_SIZE: usize = 64;
-const MAX_TX_SQUARE: usize = MAX_TX_SIZE * MAX_TX_SIZE;
+
+pub const MAX_CODED_TX_SIZE: usize = 32;
+const MAX_CODED_TX_SQUARE: usize = MAX_CODED_TX_SIZE * MAX_CODED_TX_SIZE;
 
 pub const INTRA_MODES: usize = 13;
 pub const UV_INTRA_MODES: usize = 14;
@@ -255,8 +257,9 @@ const TX_PAD_BOTTOM: usize = 4;
 const TX_PAD_VER: usize = (TX_PAD_TOP + TX_PAD_BOTTOM);
 // Pad 16 extra bytes to avoid reading overflow in SIMD optimization.
 const TX_PAD_END: usize = 16;
-const TX_PAD_2D: usize =
-  ((MAX_TX_SIZE + TX_PAD_HOR) * (MAX_TX_SIZE + TX_PAD_VER) + TX_PAD_END);
+const TX_PAD_2D: usize = ((MAX_CODED_TX_SIZE + TX_PAD_HOR)
+  * (MAX_CODED_TX_SIZE + TX_PAD_VER)
+  + TX_PAD_END);
 
 const TX_CLASSES: usize = 3;
 
@@ -4197,7 +4200,7 @@ impl<'a> ContextWriter<'a> {
       }
     }
 
-    let mut coeff_contexts: Aligned<[i8; MAX_TX_SQUARE]> =
+    let mut coeff_contexts: Aligned<[i8; MAX_CODED_TX_SQUARE]> =
       Aligned::uninitialized();
 
     self.get_nz_map_contexts(
