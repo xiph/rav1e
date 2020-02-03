@@ -4626,7 +4626,7 @@ cglobal inv_txfm_add_identity_identity_16x32, 4, 5, 13, dst, stride, c, eob
     pxor                 m0, m0
     mov                 r0d, 8
     cmp                  cq, rax
-    jg .zero_loop
+    ja .zero_loop
 .zero_loop_half:
     mova         [rax+64*0], m0
     mova         [rax+64*1], m0
@@ -4702,7 +4702,7 @@ cglobal inv_txfm_add_identity_identity_32x16, 4, 6, 12, dst, stride, c, eob
     mov                 r0d, 4
     mov                 r1d, 8
     cmp                  cq, rax
-    cmovg               r0d, r1d
+    cmova               r0d, r1d
 .zero_loop:
     mova         [rax+32*0], m0
     mova         [rax+32*1], m0
@@ -4848,7 +4848,7 @@ cglobal inv_txfm_add_dct_dct_32x32, 4, 4, 0, dst, stride, c, eob
     call m(inv_txfm_add_dct_dct_16x32).pass2_end
     lea               tmp3q, [tmp1q-32*32]
     cmp               tmp2q, tmp3q
-    jl .ret
+    jb .ret
     sub               tmp2q, 32*32
     sub                dstq, r3
     lea                  r2, [r2+r3+16]
