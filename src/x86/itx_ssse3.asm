@@ -2026,7 +2026,7 @@ cglobal iidentity_4x16_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     movd                 m1, [o(pw_2896x8)]
     pmulhrsw             m0, m1, [coeffq]
 %ifidn %2, dct
-    movd                m2, [o(pw_16384)]
+    movd                 m2, [o(pw_16384)]
     mov            [coeffq], eobd
     mov                 r2d, 2
     lea                tx2q, [o(m(inv_txfm_add_dct_dct_16x4).end)]
@@ -4483,7 +4483,7 @@ cglobal inv_txfm_add_dct_dct_32x8, 4, 6, 8, 16*36, dst, stride, coeff, eob, tx2
     add                   dstq, strideq
     dec                    r3d
     jg .loop
-    jmp                tx2q
+    jmp                   tx2q
 
 .end:
     RET
@@ -4551,7 +4551,7 @@ cglobal idct_32x8_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
 
 .end3:
     mov                   dstq, r3
-    lea                     r3, [r3+8]
+    add                     r3, 8
     lea                   tx2q, [o(m(idct_32x8_internal).end4)]
     jmp   m(idct_8x8_internal).pass2_main
 
@@ -4564,7 +4564,7 @@ cglobal idct_32x8_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
 
 .end5:
     mov                   dstq, r3
-    lea                     r3, [r3+8]
+    add                     r3, 8
     lea                   tx2q, [o(m(idct_32x8_internal).end6)]
     jmp   m(idct_8x8_internal).pass2_main
 
@@ -4721,7 +4721,7 @@ cglobal idct_16x32_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     mova   [rsp+gprsize+16*23], m5                        ;in5
     mova   [rsp+gprsize+16*22], m7                        ;in7
 
-    cmp                eobd, 150
+    cmp                   eobd, 150
     jg .full
 
     mova                    m1, m4                        ;in4
@@ -5036,24 +5036,20 @@ cglobal idct_32x16_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
 cglobal inv_txfm_add_identity_identity_16x32, 4, 6, 8, 16*4, dst, stride, coeff, eob, tx2
     %undef cmp
 
-    mov                     r4, 1
-    mov                     r5, 2
+    mov                    r4d, eobd
     cmp                   eobd, 43                ;if (eob > 43)
-    cmovg                   r4, r5                ;  iteration_count++
-    inc                     r5
-    cmp                   eobd, 150               ;if (eob > 150)
-    cmovg                   r4, r5                ;  iteration_count++
-    inc                     r5
-    cmp                   eobd, 278               ;if (eob > 278)
-    cmovg                   r4, r5                ;  iteration_count++
+    sbb                    r3d, r3d               ;  iteration_count++
+    cmp                    r4d, 150               ;if (eob > 150)
+    sbb                    r3d, 0                 ;  iteration_count++
+    cmp                    r4d, 278               ;if (eob > 278)
+    sbb                    r3d, -4                ;  iteration_count++
 
 %if ARCH_X86_32
     LEA                     r5, $$
 %endif
-    lea                     r3, [dstq+8]
-    mov             [rsp+16*3], r3
-    mov                     r3, r4
-    mov     [rsp+gprsize+16*3], r4
+    lea                     r4, [dstq+8]
+    mov             [rsp+16*3], r4
+    mov     [rsp+gprsize+16*3], r3d
     mov   [rsp+gprsize*2+16*3], coeffq
 
 .loop:
@@ -5089,15 +5085,15 @@ cglobal inv_txfm_add_identity_identity_16x32, 4, 6, 8, 16*4, dst, stride, coeff,
     call  m(idct_8x8_internal).end3
     lea                   dstq, [dstq+strideq*2]
     add                 coeffq, 16
-    dec                     r3
+    dec                    r3d
     jg .loop
     mov                 coeffq, [rsp+gprsize*2+16*3]
     add                 coeffq, 64*8
-    mov                     r3, [rsp+gprsize+16*3]
+    mov                    r3d, [rsp+gprsize+16*3]
     xor                   dstq, dstq
     mov     [rsp+gprsize+16*3], dstq
     mov                   dstq, [rsp+16*3]
-    test                    r3, r3
+    test                   r3d, r3d
     jnz .loop
     RET
 
@@ -5105,20 +5101,19 @@ cglobal inv_txfm_add_identity_identity_16x32, 4, 6, 8, 16*4, dst, stride, coeff,
 cglobal inv_txfm_add_identity_identity_32x16, 4, 6, 8, 16*4, dst, stride, coeff, eob, tx2
     %undef cmp
 
-    mov                     r4, 12                ;0100b
-    mov                     r5, 136               ;1000 1000b
-    cmp                   eobd, 43                ;if (eob > 43)
-    cmovg                   r4, r5                ;  iteration_count+2
-    mov                     r5, 34952             ;1000 1000 1000 1000b
-    cmp                   eobd, 150               ;if (eob > 150)
-    cmovg                   r4, r5                ;  iteration_count += 4
+    mov                    r4d, 12                ;0100b
+    mov                    r5d, 136               ;1000 1000b
+    cmp                   eobd, 44                ;if (eob > 43)
+    cmovns                 r4d, r5d               ;  iteration_count+2
+    cmp                   eobd, 151               ;if (eob > 150)
+    mov                    r3d, 34952             ;1000 1000 1000 1000b
+    cmovs                  r3d, r4d               ;  iteration_count += 4
 
 %if ARCH_X86_32
     LEA                     r5, $$
 %endif
-    lea                     r3, [dstq+8]
-    mov             [rsp+16*3], r3
-    mov                     r3, r4
+    lea                     r4, [dstq+8]
+    mov             [rsp+16*3], r4
 
 .loop:
     LOAD_8ROWS          coeffq, 32, 1
@@ -5147,16 +5142,13 @@ cglobal inv_txfm_add_identity_identity_32x16, 4, 6, 8, 16*4, dst, stride, coeff,
 
 .loop_end:
     add                 coeffq, 16
-    shr                     r3, 2
-    test                    r3, r3
+    shr                    r3d, 2
     jz .ret
-    test                    r3, 2
+    test                   r3d, 2
     jnz .loop
-    mov                     r4, r3
-    and                     r4, 1
-    shl                     r4, 3
-    add                 coeffq, r4
-    add                 coeffq, 32*7
+    mov                    r4d, r3d
+    and                    r4d, 1
+    lea                 coeffq, [coeffq+r4*8+32*7]
     mov                   dstq, [rsp+16*3]
     lea                     r4, [dstq+8]
     mov             [rsp+16*3], r4
@@ -5189,17 +5181,16 @@ cglobal inv_txfm_add_dct_dct_32x32, 4, 6, 8, 16*36, dst, stride, coeff, eob, tx2
 cglobal idct_32x32_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     %undef cmp
 
-    mov                     r5, 4
-    mov                     r4, 2
+    mov                    r4d, 2
     sub                   eobd, 136
-    cmovge                  r4, r5
+    mov  [rsp+gprsize*1+16*35], eobd
+    mov                    r3d, 4
+    cmovs                  r3d, r4d
 
 %if ARCH_X86_32
     LEA                     r5, $$
 %endif
 
-    mov  [rsp+gprsize*1+16*35], eobd
-    mov                     r3, r4
     mov  [rsp+gprsize*2+16*35], coeffq
 
 .pass1_loop:
@@ -5295,17 +5286,17 @@ cglobal idct_32x32_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     SAVE_8ROWS    coeffq+64*24, 64
 
     add                 coeffq, 16
-    dec                     r3
+    dec                    r3d
     jg .pass1_loop
 
 
 .pass2:
     mov                 coeffq, [rsp+gprsize*2+16*35]
-    mov                     r3, 4
+    mov                    r3d, 4
     lea                   tx2q, [o(m(idct_32x32_internal).pass2_end)]
 
 .pass2_loop:
-    mov  [rsp+gprsize*3+16*35], r3
+    mov  [rsp+gprsize*3+16*35], r3d
     lea                     r3, [dstq+8]
     mov  [rsp+gprsize*2+16*35], r3
 
@@ -5405,8 +5396,8 @@ cglobal idct_32x32_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     lea                   tx2q, [o(m(idct_32x32_internal).pass2_end)]
     add                 coeffq, 16*32
     mov                   dstq, [rsp+gprsize*2+16*35]
-    mov                     r3, [rsp+gprsize*3+16*35]
-    dec                     r3
+    mov                    r3d, [rsp+gprsize*3+16*35]
+    dec                    r3d
     jg .pass2_loop
 
     ret
@@ -5415,21 +5406,20 @@ cglobal idct_32x32_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
 cglobal inv_txfm_add_identity_identity_32x32, 4, 6, 8, 16*5, dst, stride, coeff, eob, tx2
     %undef cmp
 
-    mov                     r4, 2
-    mov                     r5, 4
+    mov                    r4d, 2
     cmp                   eobd, 136
-    cmovge                  r4, r5
+    mov                    r3d, 4
+    cmovs                  r3d, r4d
 
 %if ARCH_X86_32
     LEA                     r5, $$
 %endif
 
-    lea                     r3, [dstq+8]
-    mov   [rsp+gprsize*0+16*3], r3
-    mov   [rsp+gprsize*1+16*3], r4
-    mov   [rsp+gprsize*2+16*3], r4
+    lea                     r4, [dstq+8]
+    mov   [rsp+gprsize*0+16*3], r4
+    mov   [rsp+gprsize*1+16*3], r3d
+    mov   [rsp+gprsize*2+16*3], r3d
     mov   [rsp+gprsize*3+16*3], coeffq
-    mov                     r3, r4
 
 .loop:
     LOAD_8ROWS          coeffq, 64
@@ -5449,11 +5439,11 @@ cglobal inv_txfm_add_identity_identity_32x32, 4, 6, 8, 16*5, dst, stride, coeff,
     REPX   {mova [coeffq+64*x], m7}, 0,  1,  2,  3,  4,  5,  6,  7
 
     add                 coeffq, 16
-    dec                     r3
+    dec                    r3d
     jg .loop
 
-    mov                     r4, [rsp+gprsize*2+16*3]
-    dec                     r4
+    mov                    r4d, [rsp+gprsize*2+16*3]
+    dec                    r4d
     jle .ret
 
     mov                   dstq, [rsp+gprsize*0+16*3]
@@ -5462,7 +5452,7 @@ cglobal inv_txfm_add_identity_identity_32x32, 4, 6, 8, 16*5, dst, stride, coeff,
     lea                     r3, [dstq+8]
     add                 coeffq, 64*8
     mov   [rsp+gprsize*0+16*3], r3
-    mov                     r3, [rsp+gprsize*1+16*3]
+    mov                    r3d, [rsp+gprsize*1+16*3]
     mov   [rsp+gprsize*3+16*3], coeffq
     jmp .loop
 
@@ -5496,17 +5486,16 @@ cglobal inv_txfm_add_dct_dct_16x64, 4, 6, 8, 16*68, dst, stride, coeff, eob, tx2
 cglobal idct_16x64_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     %undef cmp
 
-    mov                     r5, 4
-    mov                     r4, 2
+    mov                    r4d, 2
     sub                   eobd, 151
-    cmovge                  r4, r5
+    mov  [rsp+gprsize*1+16*67], eobd
+    mov                    r3d, 4
+    cmovs                  r3d, r4d
 
 %if ARCH_X86_32
     LEA                     r5, $$
 %endif
 
-    mov  [rsp+gprsize*1+16*67], eobd
-    mov                     r3, r4
     mov  [rsp+gprsize*2+16*67], coeffq
 
 .pass1_loop:
@@ -5531,17 +5520,17 @@ cglobal idct_16x64_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     SAVE_8ROWS     coeffq+64*0, 64
 
     add                 coeffq, 16
-    dec                     r3
+    dec                    r3d
     jg .pass1_loop
 
     mov                 coeffq, [rsp+gprsize*2+16*67]
-    mov                     r3, 2
+    mov                    r3d, 2
     lea                     r4, [dstq+8]
     mov  [rsp+gprsize*2+16*67], r4
     lea                     r4, [o(m(idct_16x64_internal).end1)]
 
 .pass2_loop:
-    mov  [rsp+gprsize*3+16*67], r3
+    mov  [rsp+gprsize*3+16*67], r3d
     mov                   eobd, [rsp+gprsize*1+16*67]
 
     mova                    m0, [coeffq+16*4 ]            ;in1
@@ -5673,12 +5662,12 @@ cglobal idct_16x64_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     sub                    rsp, 16*32
 
     mov                   dstq, [rsp+gprsize*2+16*67]
-    mov                     r3, [rsp+gprsize*3+16*67]
+    mov                    r3d, [rsp+gprsize*3+16*67]
     lea                     r4, [dstq+8]
     mov  [rsp+gprsize*2+16*67], r4
     lea                     r4, [o(m(idct_16x64_internal).end1)]
 
-    dec                     r3
+    dec                    r3d
     jg .pass2_loop
     ret
 
@@ -6648,17 +6637,16 @@ cglobal inv_txfm_add_dct_dct_32x64, 4, 6, 8, 16*68, dst, stride, coeff, eob, tx2
 cglobal idct_32x64_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     %undef cmp
 
-    mov                     r5, 4
-    mov                     r4, 2
+    mov                    r4d, 2
     sub                   eobd, 136
-    cmovge                  r4, r5
+    mov  [rsp+gprsize*1+16*67], eobd
+    mov                    r3d, 4
+    cmovs                  r3d, r4d
 
 %if ARCH_X86_32
     LEA                     r5, $$
 %endif
 
-    mov  [rsp+gprsize*1+16*67], eobd
-    mov                     r3, r4
     mov  [rsp+gprsize*2+16*67], coeffq
 
 .pass1_loop:
@@ -6744,12 +6732,12 @@ cglobal idct_32x64_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     SAVE_8ROWS    coeffq+64*24, 64
 
     add                 coeffq, 16
-    dec                     r3
+    dec                    r3d
     jg .pass1_loop
 
 .pass2:
     mov                 coeffq, [rsp+gprsize*2+16*67]
-    mov                     r3, 4
+    mov                    r3d, 4
     lea                     r4, [dstq+8]
     mov  [rsp+gprsize*2+16*67], r4
     lea                     r4, [o(m(idct_16x64_internal).end1)]
@@ -6782,17 +6770,16 @@ cglobal inv_txfm_add_dct_dct_64x32, 4, 6, 8, 16*197, dst, stride, coeff, eob, tx
 cglobal idct_64x32_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     %undef cmp
 
-    mov                     r5, 4
-    mov                     r4, 2
+    mov                    r4d, 2
     sub                   eobd, 136
-    cmovge                  r4, r5
+    mov  [rsp+gprsize*1+16*67], eobd
+    mov                    r3d, 4
+    cmovs                  r3d, r4d
 
 %if ARCH_X86_32
     LEA                     r5, $$
 %endif
 
-    mov  [rsp+gprsize*1+16*67], eobd
-    mov                     r3, r4
     mov  [rsp+gprsize*2+16*67], coeffq
     mov  [rsp+gprsize*3+16*67], dstq
     lea                   dstq, [rsp+gprsize+16*69]
@@ -6907,7 +6894,7 @@ cglobal idct_64x32_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
 
     add                 coeffq, 16
     add                   dstq, 16
-    dec                     r3
+    dec                    r3d
     jg .pass1_loop
 
 .pass2:
@@ -6917,7 +6904,7 @@ cglobal idct_64x32_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     lea                   dstq, [dstq+32]
     mov  [rsp+gprsize*1+16*35], eobd
     lea                   tx2q, [o(m(idct_64x32_internal).pass2_end)]
-    mov                     r3, 4
+    mov                    r3d, 4
     jmp m(idct_32x32_internal).pass2_loop
 
 .pass2_end:
@@ -6929,15 +6916,15 @@ cglobal idct_64x32_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     lea                   tx2q, [o(m(idct_64x32_internal).pass2_end)]
     add                 coeffq, 16*32
     mov                   dstq, [rsp+gprsize*2+16*35]
-    mov                     r3, [rsp+gprsize*3+16*35]
-    dec                     r3
+    mov                    r3d, [rsp+gprsize*3+16*35]
+    dec                    r3d
     jg m(idct_32x32_internal).pass2_loop
 
 .pass2_end2:
     mov                   dstq, [rsp+gprsize*3+16*67]
     mov                 coeffq, [rsp+gprsize*2+16*67]
     lea                   tx2q, [o(m(idct_32x32_internal).pass2_end)]
-    mov                     r3, 4
+    mov                    r3d, 4
     jmp m(idct_32x32_internal).pass2_loop
 
 
@@ -6963,17 +6950,17 @@ cglobal inv_txfm_add_dct_dct_64x64, 4, 6, 8, 16*197, dst, stride, coeff, eob, tx
 cglobal idct_64x64_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     %undef cmp
 
-    mov                     r5, 4
-    mov                     r4, 2
+    mov                    r5d, 4
+    mov                    r4d, 2
     sub                   eobd, 136
-    cmovge                  r4, r5
+    cmovns                 r4d, r5d
 
 %if ARCH_X86_32
     LEA                     r5, $$
 %endif
 
     mov  [rsp+gprsize*1+16*67], eobd
-    mov                     r3, r4
+    mov                    r3d, r4d
     mov  [rsp+gprsize*4+16*67], coeffq
     mov  [rsp+gprsize*3+16*67], dstq
     lea                   dstq, [rsp+gprsize+16*69]
@@ -7096,14 +7083,14 @@ cglobal idct_64x64_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
 
     add                 coeffq, 16
     add                   dstq, 16
-    dec                     r3
+    dec                    r3d
     jg .pass1_loop
 
 .pass2:
     mov                   dstq, [rsp+gprsize*3+16*67]
     mov                 coeffq, [rsp+gprsize*2+16*67]
     lea                   dstq, [dstq+32]
-    mov                     r3, 4
+    mov                    r3d, 4
     lea                     r4, [dstq+8]
     mov  [rsp+gprsize*2+16*67], r4
     lea                     r4, [o(m(idct_64x64_internal).pass2_end)]
@@ -7122,18 +7109,18 @@ cglobal idct_64x64_internal, 0, 0, 0, dst, stride, coeff, eob, tx2
     sub                    rsp, 16*32
 
     mov                   dstq, [rsp+gprsize*2+16*67]
-    mov                     r3, [rsp+gprsize*3+16*67]
+    mov                    r3d, [rsp+gprsize*3+16*67]
     lea                     r4, [dstq+8]
     mov  [rsp+gprsize*2+16*67], r4
     lea                     r4, [o(m(idct_64x64_internal).pass2_end)]
 
-    dec                     r3
+    dec                    r3d
     jg  m(idct_16x64_internal).pass2_loop
 
 .pass2_end2:
     mov                 coeffq, [rsp+gprsize*4+16*67]
     mov                   dstq, [rsp+gprsize*2+16*67]
-    mov                     r3, 4
+    mov                    r3d, 4
     sub                   dstq, 72
     lea                     r4, [dstq+8]
     mov  [rsp+gprsize*2+16*67], r4
