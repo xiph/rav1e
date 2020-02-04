@@ -66,11 +66,6 @@ fn poly2(q: f32, a: f32, b: f32, c: f32) -> f32 {
   q * q * a + q * b + c
 }
 
-#[inline(always)]
-fn neg_poly2(q: f32, a: f32, b: f32, c: f32) -> f32 {
-  -q * q * a + q * b + c
-}
-
 pub static TEMPORAL_DELIMITER: [u8; 2] = [0x12, 0x00];
 
 const MAX_NUM_TEMPORAL_LAYERS: usize = 8;
@@ -941,9 +936,9 @@ impl<T: Pixel> FrameInvariants<T> {
       /* These coefficients were trained on libaom. */
       if !self.intra_only {
           let predicted_y_f1 = clamp(
-                  neg_poly2(
+                  poly2(
                   q,
-                  0.0000023593946_f32,
+                  -0.0000023593946_f32,
                   0.0068615186_f32,
                   0.02709886_f32)
                   .round() as i32,
@@ -951,9 +946,9 @@ impl<T: Pixel> FrameInvariants<T> {
                   15,
                   );
           let predicted_y_f2 = clamp(
-                  neg_poly2(
+                  poly2(
                   q,
-                  0.00000057629734_f32,
+                  -0.00000057629734_f32,
                   0.0013993345_f32,
                   0.03831067_f32)
                   .round() as i32,
@@ -961,9 +956,9 @@ impl<T: Pixel> FrameInvariants<T> {
                   3,
                   );
           let predicted_uv_f1 = clamp(
-                  neg_poly2(
+                  poly2(
                   q,
-                  0.0000007095069_f32,
+                  -0.0000007095069_f32,
                   0.0034628846_f32,
                   0.00887099_f32)
                   .round() as i32,
@@ -996,9 +991,9 @@ impl<T: Pixel> FrameInvariants<T> {
                   15,
                   );
           let predicted_y_f2 = clamp(
-                  neg_poly2(
+                  poly2(
                   q,
-                  -0.0000029167343_f32,
+                  0.0000029167343_f32,
                   0.0027798624_f32,
                   0.0079405_f32)
                   .round() as i32,
@@ -1006,9 +1001,9 @@ impl<T: Pixel> FrameInvariants<T> {
                   3,
                   );
           let predicted_uv_f1 = clamp(
-                  neg_poly2(
+                  poly2(
                   q,
-                  0.0000130790995_f32,
+                  -0.0000130790995_f32,
                   0.012892405_f32,
                   -0.00748388_f32)
                   .round() as i32,
