@@ -1935,7 +1935,7 @@ pub fn rdo_loop_decision<T: Pixel>(
   // need to make sure we don't fall into a limit cycle.  Track our
   // best cost at LRF so that we can break if we get a solution that doesn't
   // improve at the reconstruction stage.
-  let mut best_lrf_cost = [[-1.0; MAX_LRU_SIZE * MAX_LRU_SIZE]; PLANES];
+  let mut best_lrf_cost = [[-1.0; PLANES]; MAX_LRU_SIZE * MAX_LRU_SIZE];
 
   // Loop filter RDO is an iterative process and we need temporary
   // scratch data to hold the results of deblocking, cdef, and the
@@ -2129,7 +2129,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                 )
               } {
                 // We have a valid LRU, apply LRF, compute error
-                match best_lrf[pli][lru_y * lru_w[pli] + lru_x] {
+                match best_lrf[lru_y * lru_w[pli] + lru_x][pli] {
                   RestorationFilter::None {} => {
                     err += rdo_loop_plane_error(
                       base_sbo,
@@ -2147,7 +2147,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                       cw.count_lrf_switchable(
                         w,
                         &ts.restoration.as_const(),
-                        best_lrf[pli][lru_y * lru_w[pli] + lru_x],
+                        best_lrf[lru_y * lru_w[pli] + lru_x][pli],
                         pli,
                       )
                     } else {
@@ -2201,7 +2201,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                     rate += cw.count_lrf_switchable(
                       w,
                       &ts.restoration.as_const(),
-                      best_lrf[pli][lru_y * lru_w[pli] + lru_x],
+                      best_lrf[lru_y * lru_w[pli] + lru_x][pli],
                       pli,
                     );
                   }
@@ -2306,9 +2306,9 @@ pub fn rdo_loop_decision<T: Pixel>(
               let src_plane = &src_subset.planes[pli]; // uncompressed input for reference
               let lrf_in_plane = &lrf_input.planes[pli];
               let lrf_po = loop_sbo.plane_offset(&src_plane.cfg);
-              let mut best_new_lrf = best_lrf[pli][lru_y * lru_w[pli] + lru_x];
+              let mut best_new_lrf = best_lrf[lru_y * lru_w[pli] + lru_x][pli];
               let mut best_cost =
-                best_lrf_cost[pli][lru_y * lru_w[pli] + lru_x];
+                best_lrf_cost[lru_y * lru_w[pli] + lru_x][pli];
 
               // Check the no filter option
               {
@@ -2335,7 +2335,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                 // Was this choice actually an improvement?
                 if best_cost < 0. || cost < best_cost {
                   best_cost = cost;
-                  best_lrf_cost[pli][lru_y * lru_w[pli] + lru_x] = cost;
+                  best_lrf_cost[lru_y * lru_w[pli] + lru_x][pli] = cost;
                   best_new_lrf = RestorationFilter::None;
                 }
               }
@@ -2415,15 +2415,15 @@ pub fn rdo_loop_decision<T: Pixel>(
                 let cost = compute_rd_cost(fi, rate, err);
                 if cost < best_cost {
                   best_cost = cost;
-                  best_lrf_cost[pli][lru_y * lru_w[pli] + lru_x] = cost;
+                  best_lrf_cost[lru_y * lru_w[pli] + lru_x][pli] = cost;
                   best_new_lrf = current_lrf;
                 }
               }
 
-              if best_lrf[pli][lru_y * lru_w[pli] + lru_x]
+              if best_lrf[lru_y * lru_w[pli] + lru_x][pli]
                 .notequal(best_new_lrf)
               {
-                best_lrf[pli][lru_y * lru_w[pli] + lru_x] = best_new_lrf;
+                best_lrf[lru_y * lru_w[pli] + lru_x][pli] = best_new_lrf;
                 lrf_change = true;
                 if let Some(ru) = ts.restoration.planes[pli]
                   .restoration_unit_mut(base_sbo + loop_sbo)
