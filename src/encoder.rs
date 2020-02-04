@@ -62,8 +62,8 @@ pub enum CDEFSearchMethod {
 }
 
 #[inline(always)]
-fn poly2(q: f32, a: f32, b: f32, c: f32) -> f32 {
-  q * q * a + q * b + c
+fn poly2(q: f32, a: f32, b: f32, c: f32) -> i32 {
+  (q * q * a + q * b + c).round() as i32
 }
 
 pub static TEMPORAL_DELIMITER: [u8; 2] = [0x12, 0x00];
@@ -940,8 +940,7 @@ impl<T: Pixel> FrameInvariants<T> {
                   q,
                   -0.0000023593946_f32,
                   0.0068615186_f32,
-                  0.02709886_f32)
-                  .round() as i32,
+                  0.02709886_f32),
                   0,
                   15,
                   );
@@ -950,8 +949,7 @@ impl<T: Pixel> FrameInvariants<T> {
                   q,
                   -0.00000057629734_f32,
                   0.0013993345_f32,
-                  0.03831067_f32)
-                  .round() as i32,
+                  0.03831067_f32),
                   0,
                   3,
                   );
@@ -960,8 +958,7 @@ impl<T: Pixel> FrameInvariants<T> {
                   q,
                   -0.0000007095069_f32,
                   0.0034628846_f32,
-                  0.00887099_f32)
-                  .round() as i32,
+                  0.00887099_f32),
                   0,
                   15,
                   );
@@ -970,8 +967,7 @@ impl<T: Pixel> FrameInvariants<T> {
                   q,
                   0.00000023874085_f32,
                   0.00028223585_f32,
-                  0.05576307_f32)
-                  .round() as i32,
+                  0.05576307_f32),
                   0,
                   3,
                   );
@@ -985,8 +981,7 @@ impl<T: Pixel> FrameInvariants<T> {
                   q,
                   0.0000033731974_f32,
                   0.008070594_f32,
-                  0.0187634_f32)
-                  .round() as i32,
+                  0.0187634_f32),
                   0,
                   15,
                   );
@@ -995,8 +990,7 @@ impl<T: Pixel> FrameInvariants<T> {
                   q,
                   0.0000029167343_f32,
                   0.0027798624_f32,
-                  0.0079405_f32)
-                  .round() as i32,
+                  0.0079405_f32),
                   0,
                   3,
                   );
@@ -1005,8 +999,7 @@ impl<T: Pixel> FrameInvariants<T> {
                   q,
                   -0.0000130790995_f32,
                   0.012892405_f32,
-                  -0.00748388_f32)
-                  .round() as i32,
+                  -0.00748388_f32),
                   0,
                   15,
                   );
@@ -1015,8 +1008,7 @@ impl<T: Pixel> FrameInvariants<T> {
                   q,
                   0.0000032651783_f32,
                   0.00035520183_f32,
-                  0.00228092_f32)
-                  .round() as i32,
+                  0.00228092_f32),
                   0,
                   3,
                   );
