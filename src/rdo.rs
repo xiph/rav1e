@@ -46,7 +46,6 @@ use arrayvec::*;
 use itertools::izip;
 use std;
 use std::fmt;
-use std::vec::Vec;
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum RDOType {
@@ -1923,18 +1922,20 @@ pub fn rdo_loop_decision<T: Pixel>(
   let pixel_w = crop_w.min(sb_w << SUPERBLOCK_TO_PLANE_SHIFT);
   let pixel_h = crop_h.min(sb_h << SUPERBLOCK_TO_PLANE_SHIFT);
 
-  let mut best_index = vec![-1; sb_w * sb_h];
-  let mut best_lrf = ArrayVec::<[Vec<RestorationFilter>; 3]>::new();
+  // Based on `RestorationState::new`
+  const MAX_SB_SHIFT: usize = 4;
+  const MAX_SB_SIZE: usize = 1 << MAX_SB_SHIFT;
+  const MAX_LRU_SIZE: usize = MAX_SB_SIZE;
+
+  let mut best_index = [-1; MAX_SB_SIZE * MAX_SB_SIZE];
+  let mut best_lrf =
+    [[RestorationFilter::None; MAX_LRU_SIZE * MAX_LRU_SIZE]; PLANES];
 
   // due to imprecision in the reconstruction parameter solver, we
   // need to make sure we don't fall into a limit cycle.  Track our
   // best cost at LRF so that we can break if we get a solution that doesn't
   // improve at the reconstruction stage.
-  let mut best_lrf_cost = ArrayVec::<[Vec<f64>; 3]>::new();
-  for pli in 0..PLANES {
-    best_lrf.push(vec![RestorationFilter::None; lru_h[pli] * lru_w[pli]]);
-    best_lrf_cost.push(vec![-1.0; lru_h[pli] * lru_w[pli]]);
-  }
+  let mut best_lrf_cost = [[-1.0; MAX_LRU_SIZE * MAX_LRU_SIZE]; PLANES];
 
   // Loop filter RDO is an iterative process and we need temporary
   // scratch data to hold the results of deblocking, cdef, and the
