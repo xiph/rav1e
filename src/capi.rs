@@ -524,6 +524,9 @@ unsafe fn option_match(
         enc.max_key_frame_interval,
       );
     }
+    "switch_frame_interval" => {
+      enc.switch_frame_interval = value.parse().map_err(|_| ())?
+    }
     "reservoir_frame_delay" => {
       enc.reservoir_frame_delay = Some(value.parse().map_err(|_| ())?)
     }
