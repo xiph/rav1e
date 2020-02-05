@@ -28,11 +28,11 @@
 #include "src/arm/asm.S"
 #include "util.S"
 
-// void dav1d_wiener_filter_h_neon(int16_t *dst, const pixel (*left)[4],
-//                                 const pixel *src, ptrdiff_t stride,
-//                                 const int16_t fh[7], const intptr_t w,
-//                                 int h, enum LrEdgeFlags edges);
-function wiener_filter_h_neon, export=1
+// void dav1d_wiener_filter_h_8bpc_neon(int16_t *dst, const pixel (*left)[4],
+//                                      const pixel *src, ptrdiff_t stride,
+//                                      const int16_t fh[7], const intptr_t w,
+//                                      int h, enum LrEdgeFlags edges);
+function wiener_filter_h_8bpc_neon, export=1
         mov             w8,  w5
         ld1             {v0.8h},  [x4]
         mov             w9,  #(1 << 14) - (1 << 2)
@@ -306,11 +306,11 @@ L(variable_shift_tbl):
 .purgem filter
 endfunc
 
-// void dav1d_wiener_filter_v_neon(pixel *dst, ptrdiff_t stride,
-//                                 const int16_t *mid, int w, int h,
-//                                 const int16_t fv[7], enum LrEdgeFlags edges,
-//                                 ptrdiff_t mid_stride);
-function wiener_filter_v_neon, export=1
+// void dav1d_wiener_filter_v_8bpc_neon(pixel *dst, ptrdiff_t stride,
+//                                      const int16_t *mid, int w, int h,
+//                                      const int16_t fv[7], enum LrEdgeFlags edges,
+//                                      ptrdiff_t mid_stride);
+function wiener_filter_v_8bpc_neon, export=1
         mov             w8,  w4
         ld1             {v0.8h},  [x5]
         movi            v1.8h, #128
@@ -482,9 +482,9 @@ function wiener_filter_v_neon, export=1
 .purgem filter
 endfunc
 
-// void dav1d_copy_narrow_neon(pixel *dst, ptrdiff_t stride,
-//                             const pixel *src, int w, int h);
-function copy_narrow_neon, export=1
+// void dav1d_copy_narrow_8bpc_neon(pixel *dst, ptrdiff_t stride,
+//                                  const pixel *src, int w, int h);
+function copy_narrow_8bpc_neon, export=1
         adr             x5,  L(copy_narrow_tbl)
         ldrh            w6,  [x5, w3, uxtw #1]
         sub             x5,  x5,  w6, uxth
