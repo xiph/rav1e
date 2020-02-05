@@ -1540,7 +1540,7 @@ endfunc
 
 #define FILTER_OUT_STRIDE 384
 
-// void dav1d_sgr_finish_filter1_neon(coef *tmp,
+// void dav1d_sgr_finish_filter1_neon(int16_t *tmp,
 //                                    const pixel *src, const ptrdiff_t stride,
 //                                    const int32_t *a, const int16_t *b,
 //                                    const int w, const int h);
@@ -1657,7 +1657,7 @@ function sgr_finish_filter1_neon, export=1
         ret
 endfunc
 
-// void dav1d_sgr_finish_filter2_neon(coef *tmp,
+// void dav1d_sgr_finish_filter2_neon(int16_t *tmp,
 //                                    const pixel *src, const ptrdiff_t stride,
 //                                    const int32_t *a, const int16_t *b,
 //                                    const int w, const int h);
@@ -1809,7 +1809,7 @@ endfunc
 
 // void dav1d_sgr_weighted1_neon(pixel *dst, const ptrdiff_t dst_stride,
 //                               const pixel *src, const ptrdiff_t src_stride,
-//                               const coef *t1, const int w, const int h,
+//                               const int16_t *t1, const int w, const int h,
 //                               const int wt);
 function sgr_weighted1_neon, export=1
         dup             v31.8h, w7
@@ -1889,7 +1889,7 @@ endfunc
 
 // void dav1d_sgr_weighted2_neon(pixel *dst, const ptrdiff_t stride,
 //                               const pixel *src, const ptrdiff_t src_stride,
-//                               const coef *t1, const coef *t2,
+//                               const int16_t *t1, const int16_t *t2,
 //                               const int w, const int h,
 //                               const int16_t wt[2]);
 function sgr_weighted2_neon, export=1
