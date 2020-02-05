@@ -311,7 +311,7 @@ fn init_logger() {
 }
 
 cfg_if::cfg_if! {
-  if #[cfg(target_os = "windows")] {
+  if #[cfg(any(target_os = "windows", target_arch = "wasm32"))] {
     fn print_rusage() {
       eprintln!("Windows benchmarking is not supported currently.");
     }
