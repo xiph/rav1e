@@ -8,7 +8,7 @@ before_install:
   - mkdir -p "$DEPS_DIR/bin"
   - export PATH="$PATH:$DEPS_DIR/bin"
   - if [ "$TRAVIS_CPU_ARCH" == "arm64" ]; then source "$TRAVIS_BUILD_DIR/.travis/install-sccache.sh"; fi
-  - if [ "$TRAVIS_CPU_ARCH" == "arm64" ]; export SCCACHE_CACHE_SIZE=200M SCCACHE_DIR="$TRAVIS_HOME/.cache/sccache"; fi
+  - if [ "$TRAVIS_CPU_ARCH" == "arm64" ]; then export SCCACHE_CACHE_SIZE=200M SCCACHE_DIR="$TRAVIS_HOME/.cache/sccache"; fi
   - bash "$TRAVIS_BUILD_DIR/.travis/install-aom.sh"
   - bash "$TRAVIS_BUILD_DIR/.travis/install-dav1d.sh"
   - cd "$TRAVIS_BUILD_DIR"
