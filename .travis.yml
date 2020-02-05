@@ -26,5 +26,12 @@ jobs:
     - name: "Arm build and test"
       rust: stable
       arch: arm64
-      script:
-        - cargo test --features=decode_test,decode_test_dav1d,quick_test,capi --verbose
+      script: cargo test --features=decode_test,decode_test_dav1d,quick_test,capi --verbose
+    - name: "Power build and test"
+      rust: stable
+      arch: ppc64le
+      script: cargo test --features=decode_test,decode_test_dav1d,quick_test,capi --verbose
+    - name: "IBM Z build and test"
+      rust: stable
+      arch: s390x
+      script: cargo test --features=decode_test,decode_test_dav1d,quick_test,capi --verbose
