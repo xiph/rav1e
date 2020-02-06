@@ -437,8 +437,8 @@ impl<T: Pixel> Plane<T> {
     // unsafe: all pixels initialized in this function
     let mut new = unsafe {
       Plane::new_uninitialized(
-        src.cfg.width / 2,
-        src.cfg.height / 2,
+        (src.cfg.width + 1) / 2,
+        (src.cfg.height + 1) / 2,
         src.cfg.xdec + 1,
         src.cfg.ydec + 1,
         src.cfg.xpad / 2,
@@ -452,8 +452,8 @@ impl<T: Pixel> Plane<T> {
     let yorigin = new.cfg.yorigin;
     let stride = new.cfg.stride;
 
-    assert!(width * 2 == src.cfg.width);
-    assert!(height * 2 == src.cfg.height);
+    assert!(width * 2 <= src.cfg.stride - src.cfg.xorigin);
+    assert!(height * 2 <= src.cfg.alloc_height - src.cfg.yorigin);
 
     for row in 0..height {
       let base = (yorigin + row) * stride + xorigin;
@@ -787,7 +787,51 @@ pub mod test {
       &downsampled.data[..]
     );
   }
+  #[test]
+  fn test_plane_downsample_odd() {
+    #[rustfmt::skip]
+    let plane = Plane::<u8> {
+      data: PlaneData::from_slice(&[
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 1, 2, 3, 4, 0, 0,
+        0, 0, 8, 7, 6, 5, 0, 0,
+        0, 0, 9, 8, 7, 6, 0, 0,
+        0, 0, 2, 3, 4, 5, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+      ]),
+      cfg: PlaneConfig {
+        stride: 8,
+        alloc_height: 9,
+        width: 3,
+        height: 3,
+        xdec: 0,
+        ydec: 0,
+        xpad: 0,
+        ypad: 0,
+        xorigin: 2,
+        yorigin: 3,
+      },
+    };
+    let downsampled = plane.downsampled(3, 3);
 
+    #[rustfmt::skip]
+    assert_eq!(
+      &[
+        5, 5, 5, 5, 5, 5, 5, 5,
+        5, 5, 5, 5, 5, 5, 5, 5,
+        5, 5, 5, 5, 5, 5, 5, 5,
+        5, 5, 5, 5, 5, 5, 5, 5,
+        6, 6, 6, 6, 6, 6, 6, 6,
+        6, 6, 6, 6, 6, 6, 6, 6,
+        6, 6, 6, 6, 6, 6, 6, 6,
+        6, 6, 6, 6, 6, 6, 6, 6,
+      ][..],
+      &downsampled.data[..]
+    );
+  }
   #[test]
   fn test_plane_pad() {
     #[rustfmt::skip]
