@@ -43,7 +43,6 @@ use crate::util::*;
 use arg_enum_proc_macro::ArgEnum;
 use arrayvec::*;
 use bitstream_io::{BigEndian, BitWriter};
-use rayon::iter::*;
 
 use std::collections::VecDeque;
 use std::io::Write;
@@ -52,6 +51,7 @@ use std::sync::Arc;
 use std::{fmt, io, mem};
 
 use crate::hawktracer::*;
+use crate::rayon::iter::*;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]

@@ -20,9 +20,10 @@ use crate::tiling::{Area, PlaneRegion, PlaneRegionMut};
 use crate::util::Pixel;
 use crate::util::{clamp, ILog};
 use crate::DeblockState;
-use rayon::iter::*;
 use std::cmp;
 use std::sync::Arc;
+
+use crate::rayon::iter::*;
 
 fn deblock_adjusted_level(
   deblock: &DeblockState, block: &Block, pli: usize, vertical: bool,

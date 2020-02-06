@@ -741,7 +741,7 @@ impl Config {
     // performance issues.
     info!("CPU Feature Level: {}", CpuFeatureLevel::default());
 
-    let pool = rayon::ThreadPoolBuilder::new()
+    let pool = crate::rayon::ThreadPoolBuilder::new()
       .num_threads(self.threads)
       .build()
       .unwrap();

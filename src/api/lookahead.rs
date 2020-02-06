@@ -14,10 +14,10 @@ use crate::frame::{AsRegion, PlaneOffset};
 use crate::hawktracer::*;
 use crate::partition::{get_intra_edges, BlockSize};
 use crate::predict::{IntraParam, PredictionMode};
+use crate::rayon::iter::*;
 use crate::tiling::{Area, TileRect};
 use crate::transform::TxSize;
 use crate::{Frame, Pixel};
-use rayon::prelude::*;
 use std::sync::Arc;
 
 pub(crate) const IMP_BLOCK_MV_UNITS_PER_PIXEL: i64 = 8;
