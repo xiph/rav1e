@@ -266,17 +266,21 @@ impl QuantizationContext {
     // zero everything else.
     // This threshold is such that `abs(coeff) < deadzone` implies:
     // (abs(coeff << log_tx_scale) + ac_offset_eob) / ac_quant == 0
-    let deadzone = (self.ac_quant as usize - self.ac_offset_eob as usize)
-      .align_power_of_two_and_shift(self.log_tx_scale)
-      as i32;
+    let deadzone = T::cast_from(
+      (self.ac_quant as usize - self.ac_offset_eob as usize)
+        .align_power_of_two_and_shift(self.log_tx_scale),
+    );
     let eob = {
       // We skip the DC coefficient since it has its own quantizer index.
-      let eob_minus_two = scan[1..]
-        .iter()
-        .rposition(|&i| i32::cast_from(coeffs[i as usize].abs()) >= deadzone);
-      eob_minus_two
-        .map(|n| n + 2)
-        .unwrap_or(if qcoeffs[0] == T::cast_from(0) { 0 } else { 1 })
+      let eob_minus_two =
+        scan[1..].iter().rposition(|&i| coeffs[i as usize].abs() >= deadzone);
+      eob_minus_two.map(|n| n + 2).unwrap_or_else(|| {
+        if qcoeffs[0] == T::cast_from(0) {
+          0
+        } else {
+          1
+        }
+      })
     };
 
     // Here we use different rounding biases depending on whether we've
