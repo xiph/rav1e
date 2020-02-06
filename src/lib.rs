@@ -85,6 +85,74 @@ mod hawktracer {
   }
 }
 
+mod rayon {
+  cfg_if::cfg_if! {
+    if #[cfg(target_arch="wasm32")] {
+      pub struct ThreadPoolBuilder ();
+      impl ThreadPoolBuilder {
+        pub fn new() -> ThreadPoolBuilder {
+          ThreadPoolBuilder()
+        }
+        pub fn build(self) -> Result<ThreadPool, ()> {
+          Ok(ThreadPool())
+        }
+        pub fn num_threads(self, _num_threads: usize) -> ThreadPoolBuilder {
+          ThreadPoolBuilder()
+        }
+      }
+      pub struct ThreadPool ();
+      impl ThreadPool {
+        pub fn install<OP, R>(&self, op: OP) -> R where
+              OP: FnOnce() -> R + Send,
+                  R: Send, {
+          op()
+        }
+      }
+
+      pub mod iter {
+        pub trait IntoParallelIterator {
+            type Iter: Iterator<Item = Self::Item>;
+            type Item: Send;
+
+            fn into_par_iter(self) -> Self::Iter;
+        }
+
+        impl<I: IntoIterator> IntoParallelIterator for I where
+          I::Item : Send {
+          type Item = I::Item;
+          type Iter = I::IntoIter;
+
+          fn into_par_iter(self) -> I::IntoIter {
+            self.into_iter()
+          }
+        }
+
+        pub trait IntoParallelRefMutIterator<'data> {
+            type Iter: IntoParallelIterator<Item = Self::Item>;
+            type Item: Send + 'data;
+
+            fn par_iter_mut(&'data mut self) -> Self::Iter;
+        }
+
+        impl<'data, I: 'data + ?Sized> IntoParallelRefMutIterator<'data> for I
+        where
+            &'data mut I: IntoParallelIterator,
+        {
+            type Iter = <&'data mut I as IntoParallelIterator>::Iter;
+            type Item = <&'data mut I as IntoParallelIterator>::Item;
+
+            fn par_iter_mut(&'data mut self) -> Self::Iter {
+                self.into_par_iter()
+            }
+        }
+
+      }
+    } else {
+      pub use rayon::*;
+    }
+  }
+}
+
 #[cfg(any(cargo_c, feature = "capi"))]
 pub mod capi;
 
