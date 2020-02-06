@@ -137,13 +137,13 @@
 .endif
 .endm
 
-// void dav1d_cdef_paddingX_neon(uint16_t *tmp, const pixel *src,
-//                               ptrdiff_t src_stride, const pixel (*left)[2],
-//                               const pixel *const top, int h,
-//                               enum CdefEdgeFlags edges);
+// void dav1d_cdef_paddingX_8bpc_neon(uint16_t *tmp, const pixel *src,
+//                                    ptrdiff_t src_stride, const pixel (*left)[2],
+//                                    const pixel *const top, int h,
+//                                    enum CdefEdgeFlags edges);
 
 .macro padding_func w, stride, rn, rw
-function cdef_padding\w\()_neon, export=1
+function cdef_padding\w\()_8bpc_neon, export=1
         movi            v30.8h,  #0x80, lsl #8
         mov             v31.16b, v30.16b
         sub             x0,  x0,  #2*(2*\stride+2)
@@ -312,9 +312,10 @@ endconst
 3:
 .endm
 
-// void dav1d_cdef_filterX_neon(pixel *dst, ptrdiff_t dst_stride,
-//                              const uint16_t *tmp, int pri_strength,
-//                              int sec_strength, int dir, int damping, int h);
+// void dav1d_cdef_filterX_8bpc_neon(pixel *dst, ptrdiff_t dst_stride,
+//                                   const uint16_t *tmp, int pri_strength,
+//                                   int sec_strength, int dir, int damping,
+//                                   int h);
 .macro filter_func w, pri, sec, min, suffix
 function cdef_filter\w\suffix\()_neon
 .if \pri
@@ -439,7 +440,7 @@ filter_func \w, pri=1, sec=0, min=0, suffix=_pri
 filter_func \w, pri=0, sec=1, min=0, suffix=_sec
 filter_func \w, pri=1, sec=1, min=1, suffix=_pri_sec
 
-function cdef_filter\w\()_neon, export=1
+function cdef_filter\w\()_8bpc_neon, export=1
         cbnz            w3,  1f // pri_strength
         b               cdef_filter\w\()_sec_neon // only sec
 1:
@@ -461,9 +462,9 @@ const alt_fact
         .short         420, 210, 140, 105, 105, 105, 105, 105, 140, 210, 420, 0
 endconst
 
-// int dav1d_cdef_find_dir_neon(const pixel *img, const ptrdiff_t stride,
-//                              unsigned *const var)
-function cdef_find_dir_neon, export=1
+// int dav1d_cdef_find_dir_8bpc_neon(const pixel *img, const ptrdiff_t stride,
+//                                   unsigned *const var)
+function cdef_find_dir_8bpc_neon, export=1
         sub             sp,  sp,  #32 // cost
         mov             w3,  #8
         movi            v31.16b, #128
