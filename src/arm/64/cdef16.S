@@ -1,6 +1,6 @@
 /*
  * Copyright © 2018, VideoLAN and dav1d authors
- * Copyright © 2019, Martin Storsjo
+ * Copyright © 2020, Martin Storsjo
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,28 +29,24 @@
 #include "util.S"
 #include "cdef_tmpl.S"
 
-.macro pad_top_bottom s1, s2, w, stride, rn, rw, ret
+.macro pad_top_bot_16 s1, s2, w, stride, reg, ret
         tst             w6,  #1 // CDEF_HAVE_LEFT
         b.eq            2f
         // CDEF_HAVE_LEFT
-        sub             \s1,  \s1,  #2
-        sub             \s2,  \s2,  #2
+        sub             \s1,  \s1,  #4
+        sub             \s2,  \s2,  #4
         tst             w6,  #2 // CDEF_HAVE_RIGHT
         b.eq            1f
         // CDEF_HAVE_LEFT+CDEF_HAVE_RIGHT
-        ldr             \rn\()0, [\s1]
-        ldr             s1,      [\s1, #\w]
-        ldr             \rn\()2, [\s2]
-        ldr             s3,      [\s2, #\w]
-        uxtl            v0.8h,   v0.8b
-        uxtl            v1.8h,   v1.8b
-        uxtl            v2.8h,   v2.8b
-        uxtl            v3.8h,   v3.8b
-        str             \rw\()0, [x0]
-        str             d1,      [x0, #2*\w]
+        ldr             \reg\()0, [\s1]
+        ldr             d1,       [\s1, #2*\w]
+        ldr             \reg\()2, [\s2]
+        ldr             d3,       [\s2, #2*\w]
+        str             \reg\()0, [x0]
+        str             d1,       [x0, #2*\w]
         add             x0,  x0,  #2*\stride
-        str             \rw\()2, [x0]
-        str             d3,      [x0, #2*\w]
+        str             \reg\()2, [x0]
+        str             d3,       [x0, #2*\w]
 .if \ret
         ret
 .else
@@ -60,21 +56,17 @@
 
 1:
         // CDEF_HAVE_LEFT+!CDEF_HAVE_RIGHT
-        ldr             \rn\()0, [\s1]
-        ldr             h1,      [\s1, #\w]
-        ldr             \rn\()2, [\s2]
-        ldr             h3,      [\s2, #\w]
-        uxtl            v0.8h,   v0.8b
-        uxtl            v1.8h,   v1.8b
-        uxtl            v2.8h,   v2.8b
-        uxtl            v3.8h,   v3.8b
-        str             \rw\()0, [x0]
-        str             s1,      [x0, #2*\w]
-        str             s31,     [x0, #2*\w+4]
+        ldr             \reg\()0, [\s1]
+        ldr             s1,       [\s1, #2*\w]
+        ldr             \reg\()2, [\s2]
+        ldr             s3,       [\s2, #2*\w]
+        str             \reg\()0, [x0]
+        str             s1,       [x0, #2*\w]
+        str             s31,      [x0, #2*\w+4]
         add             x0,  x0,  #2*\stride
-        str             \rw\()2, [x0]
-        str             s3,      [x0, #2*\w]
-        str             s31,     [x0, #2*\w+4]
+        str             \reg\()2, [x0]
+        str             s3,       [x0, #2*\w]
+        str             s31,      [x0, #2*\w+4]
 .if \ret
         ret
 .else
@@ -87,21 +79,17 @@
         tst             w6,  #2 // CDEF_HAVE_RIGHT
         b.eq            1f
         // !CDEF_HAVE_LEFT+CDEF_HAVE_RIGHT
-        ldr             \rn\()0, [\s1]
-        ldr             h1,      [\s1, #\w]
-        ldr             \rn\()2, [\s2]
-        ldr             h3,      [\s2, #\w]
-        uxtl            v0.8h,  v0.8b
-        uxtl            v1.8h,  v1.8b
-        uxtl            v2.8h,  v2.8b
-        uxtl            v3.8h,  v3.8b
+        ldr             \reg\()0, [\s1]
+        ldr             s1,       [\s1, #2*\w]
+        ldr             \reg\()2, [\s2]
+        ldr             s3,       [\s2, #2*\w]
         str             s31, [x0]
-        stur            \rw\()0, [x0, #4]
-        str             s1,      [x0, #4+2*\w]
+        stur            \reg\()0, [x0, #4]
+        str             s1,       [x0, #4+2*\w]
         add             x0,  x0,  #2*\stride
         str             s31, [x0]
-        stur            \rw\()2, [x0, #4]
-        str             s3,      [x0, #4+2*\w]
+        stur            \reg\()2, [x0, #4]
+        str             s3,       [x0, #4+2*\w]
 .if \ret
         ret
 .else
@@ -111,17 +99,15 @@
 
 1:
         // !CDEF_HAVE_LEFT+!CDEF_HAVE_RIGHT
-        ldr             \rn\()0, [\s1]
-        ldr             \rn\()1, [\s2]
-        uxtl            v0.8h,  v0.8b
-        uxtl            v1.8h,  v1.8b
-        str             s31,     [x0]
-        stur            \rw\()0, [x0, #4]
-        str             s31,     [x0, #4+2*\w]
+        ldr             \reg\()0, [\s1]
+        ldr             \reg\()1, [\s2]
+        str             s31,      [x0]
+        stur            \reg\()0, [x0, #4]
+        str             s31,      [x0, #4+2*\w]
         add             x0,  x0,  #2*\stride
-        str             s31,     [x0]
-        stur            \rw\()1, [x0, #4]
-        str             s31,     [x0, #4+2*\w]
+        str             s31,      [x0]
+        stur            \reg\()1, [x0, #4]
+        str             s31,      [x0, #4+2*\w]
 .if \ret
         ret
 .else
@@ -130,21 +116,21 @@
 3:
 .endm
 
-.macro load_n_incr dst, src, incr, w
+.macro load_n_incr_16 dst, src, incr, w
 .if \w == 4
-        ld1             {\dst\().s}[0], [\src], \incr
+        ld1             {\dst\().4h}, [\src], \incr
 .else
-        ld1             {\dst\().8b},   [\src], \incr
+        ld1             {\dst\().8h}, [\src], \incr
 .endif
 .endm
 
-// void dav1d_cdef_paddingX_8bpc_neon(uint16_t *tmp, const pixel *src,
-//                                    ptrdiff_t src_stride, const pixel (*left)[2],
-//                                    const pixel *const top, int h,
-//                                    enum CdefEdgeFlags edges);
+// void dav1d_cdef_paddingX_16bpc_neon(uint16_t *tmp, const pixel *src,
+//                                     ptrdiff_t src_stride, const pixel (*left)[2],
+//                                     const pixel *const top, int h,
+//                                     enum CdefEdgeFlags edges);
 
-.macro padding_func w, stride, rn, rw
-function cdef_padding\w\()_8bpc_neon, export=1
+.macro padding_func_16 w, stride, reg
+function cdef_padding\w\()_16bpc_neon, export=1
         movi            v30.8h,  #0x80, lsl #8
         mov             v31.16b, v30.16b
         sub             x0,  x0,  #2*(2*\stride+2)
@@ -159,7 +145,7 @@ function cdef_padding\w\()_8bpc_neon, export=1
 1:
         // CDEF_HAVE_TOP
         add             x9,  x4,  x2
-        pad_top_bottom  x4,  x9, \w, \stride, \rn, \rw, 0
+        pad_top_bot_16  x4,  x9, \w, \stride, \reg, 0
 
         // Middle section
 3:
@@ -170,29 +156,24 @@ function cdef_padding\w\()_8bpc_neon, export=1
         b.eq            1f
         // CDEF_HAVE_LEFT+CDEF_HAVE_RIGHT
 0:
-        ld1             {v0.h}[0], [x3], #2
-        ldr             h2,      [x1, #\w]
-        load_n_incr     v1,  x1,  x2,  \w
+        ld1             {v0.s}[0], [x3], #4
+        ldr             s2,       [x1, #2*\w]
+        load_n_incr_16  v1,  x1,  x2,  \w
         subs            w5,  w5,  #1
-        uxtl            v0.8h,  v0.8b
-        uxtl            v1.8h,  v1.8b
-        uxtl            v2.8h,  v2.8b
-        str             s0,      [x0]
-        stur            \rw\()1, [x0, #4]
-        str             s2,      [x0, #4+2*\w]
+        str             s0,       [x0]
+        stur            \reg\()1, [x0, #4]
+        str             s2,       [x0, #4+2*\w]
         add             x0,  x0,  #2*\stride
         b.gt            0b
         b               3f
 1:
         // CDEF_HAVE_LEFT+!CDEF_HAVE_RIGHT
-        ld1             {v0.h}[0], [x3], #2
-        load_n_incr     v1,  x1,  x2,  \w
+        ld1             {v0.s}[0], [x3], #4
+        load_n_incr_16  v1,  x1,  x2,  \w
         subs            w5,  w5,  #1
-        uxtl            v0.8h,  v0.8b
-        uxtl            v1.8h,  v1.8b
-        str             s0,      [x0]
-        stur            \rw\()1, [x0, #4]
-        str             s31,     [x0, #4+2*\w]
+        str             s0,       [x0]
+        stur            \reg\()1, [x0, #4]
+        str             s31,      [x0, #4+2*\w]
         add             x0,  x0,  #2*\stride
         b.gt            1b
         b               3f
@@ -201,25 +182,22 @@ function cdef_padding\w\()_8bpc_neon, export=1
         b.eq            1f
         // !CDEF_HAVE_LEFT+CDEF_HAVE_RIGHT
 0:
-        ldr             h1,      [x1, #\w]
-        load_n_incr     v0,  x1,  x2,  \w
+        ldr             s1,       [x1, #2*\w]
+        load_n_incr_16  v0,  x1,  x2,  \w
         subs            w5,  w5,  #1
-        uxtl            v0.8h,  v0.8b
-        uxtl            v1.8h,  v1.8b
-        str             s31,     [x0]
-        stur            \rw\()0, [x0, #4]
-        str             s1,      [x0, #4+2*\w]
+        str             s31,      [x0]
+        stur            \reg\()0, [x0, #4]
+        str             s1,       [x0, #4+2*\w]
         add             x0,  x0,  #2*\stride
         b.gt            0b
         b               3f
 1:
         // !CDEF_HAVE_LEFT+!CDEF_HAVE_RIGHT
-        load_n_incr     v0,  x1,  x2,  \w
+        load_n_incr_16  v0,  x1,  x2,  \w
         subs            w5,  w5,  #1
-        uxtl            v0.8h,  v0.8b
-        str             s31,     [x0]
-        stur            \rw\()0, [x0, #4]
-        str             s31,     [x0, #4+2*\w]
+        str             s31,      [x0]
+        stur            \reg\()0, [x0, #4]
+        str             s31,      [x0, #4+2*\w]
         add             x0,  x0,  #2*\stride
         b.gt            1b
 
@@ -235,16 +213,16 @@ function cdef_padding\w\()_8bpc_neon, export=1
 1:
         // CDEF_HAVE_BOTTOM
         add             x9,  x1,  x2
-        pad_top_bottom  x1,  x9, \w, \stride, \rn, \rw, 1
+        pad_top_bot_16  x1,  x9, \w, \stride, \reg, 1
 endfunc
 .endm
 
-padding_func 8, 16, d, q
-padding_func 4, 8,  s, d
+padding_func_16 8, 16, q
+padding_func_16 4, 8,  d
 
 tables
 
-filter 8, 8
-filter 4, 8
+filter 8, 16
+filter 4, 16
 
-find_dir 8
+find_dir 16
