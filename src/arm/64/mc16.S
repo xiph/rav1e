@@ -2434,3 +2434,230 @@ endfunc
 
 filter_fn put,  x0, x1, x2, x3, w4, w5, w6, x6, w7, x7, w8, x9, x10
 filter_fn prep, x0, x8, x1, x2, w3, w4, w5, x5, w6, x6, w7, x9, x10
+
+.macro load_filter_row dst, src, inc
+        asr             w13, \src, #10
+        ldr             \dst, [x11, w13, sxtw #3]
+        add             \src, \src, \inc
+.endm
+
+function warp_filter_horz_neon
+        add             w12, w5,  #512
+
+        ld1             {v16.8h, v17.8h}, [x2], x3
+
+        load_filter_row d0, w12, w7
+        load_filter_row d1, w12, w7
+        load_filter_row d2, w12, w7
+        sxtl            v0.8h,   v0.8b
+        load_filter_row d3, w12, w7
+        sxtl            v1.8h,   v1.8b
+        load_filter_row d4, w12, w7
+        sxtl            v2.8h,   v2.8b
+        load_filter_row d5, w12, w7
+        sxtl            v3.8h,   v3.8b
+        load_filter_row d6, w12, w7
+        sxtl            v4.8h,   v4.8b
+        load_filter_row d7, w12, w7
+        sxtl            v5.8h,   v5.8b
+        ext             v18.16b, v16.16b, v17.16b, #2*1
+        smull           v8.4s,   v16.4h,  v0.4h
+        smull2          v9.4s,   v16.8h,  v0.8h
+        sxtl            v6.8h,   v6.8b
+        ext             v19.16b, v16.16b, v17.16b, #2*2
+        smull           v10.4s,  v18.4h,  v1.4h
+        smull2          v11.4s,  v18.8h,  v1.8h
+        sxtl            v7.8h,   v7.8b
+        ext             v20.16b, v16.16b, v17.16b, #2*3
+        smull           v0.4s,   v19.4h,  v2.4h
+        smull2          v1.4s,   v19.8h,  v2.8h
+        ext             v21.16b, v16.16b, v17.16b, #2*4
+        addp            v8.4s,   v8.4s,   v9.4s
+        smull           v2.4s,   v20.4h,  v3.4h
+        smull2          v3.4s,   v20.8h,  v3.8h
+        ext             v22.16b, v16.16b, v17.16b, #2*5
+        addp            v9.4s,   v10.4s,  v11.4s
+        smull           v10.4s,  v21.4h,  v4.4h
+        smull2          v11.4s,  v21.8h,  v4.8h
+        ext             v23.16b, v16.16b, v17.16b, #2*6
+        addp            v0.4s,   v0.4s,   v1.4s
+        smull           v18.4s,  v22.4h,  v5.4h
+        smull2          v19.4s,  v22.8h,  v5.8h
+        ext             v16.16b, v16.16b, v17.16b, #2*7
+        addp            v1.4s,   v2.4s,   v3.4s
+        addp            v2.4s,   v10.4s,  v11.4s
+        smull           v20.4s,  v23.4h,  v6.4h
+        smull2          v21.4s,  v23.8h,  v6.8h
+        addp            v3.4s,   v18.4s,  v19.4s
+        smull           v22.4s,  v16.4h,  v7.4h
+        smull2          v23.4s,  v16.8h,  v7.8h
+        addp            v4.4s,   v20.4s,  v21.4s
+        addp            v5.4s,   v22.4s,  v23.4s
+
+        addp            v8.4s,   v8.4s,   v9.4s
+        addp            v0.4s,   v0.4s,   v1.4s
+        addp            v2.4s,   v2.4s,   v3.4s
+        addp            v4.4s,   v4.4s,   v5.4s
+
+        addp            v16.4s,  v8.4s,   v0.4s
+        addp            v17.4s,  v2.4s,   v4.4s
+
+        add             w5,  w5,  w8
+
+        srshl           v16.4s,  v16.4s,  v14.4s // -(7 - intermediate_bits)
+        srshl           v17.4s,  v17.4s,  v14.4s // -(7 - intermediate_bits)
+
+        ret
+endfunc
+
+// void dav1d_warp_affine_8x8_16bpc_neon(
+//         pixel *dst, const ptrdiff_t dst_stride,
+//         const pixel *src, const ptrdiff_t src_stride,
+//         const int16_t *const abcd, int mx, int my,
+//         const int bitdepth_max)
+.macro warp t
+function warp_affine_8x8\t\()_16bpc_neon, export=1
+        stp             d8,  d9,  [sp, #-0x40]!
+        stp             d10, d11, [sp, #0x10]
+        stp             d12, d13, [sp, #0x20]
+        stp             d14, d15, [sp, #0x30]
+
+.ifb \t
+        dup             v15.8h,  w7        // bitdepth_max
+.else
+        movi            v15.8h,  #(PREP_BIAS >> 8), lsl #8
+.endif
+        clz             w7,  w7
+                                           // intermediate_bits = clz(bitdepth_max) - 18
+.ifb \t
+        sub             w8,  w7,  #11      // 7 + intermediate_bits = clz(bitdepth_max) - 18 + 7
+.endif
+        sub             w7,  w7,  #25      // -(7 - intermediate_bits)
+.ifb \t
+        neg             w8,  w8            // -(7 + intermediate_bits)
+.endif
+        dup             v14.4s,  w7        // -(7 - intermediate_bits)
+.ifb \t
+        dup             v13.4s,  w8        // -(7 + intermediate_bits)
+.endif
+
+        ldr             x4,  [x4]
+        sbfx            x7,  x4, #0,  #16
+        sbfx            x8,  x4, #16, #16
+        sbfx            x9,  x4, #32, #16
+        sbfx            x4,  x4, #48, #16
+        mov             w10, #8
+        sub             x2,  x2,  x3, lsl #1
+        sub             x2,  x2,  x3
+        sub             x2,  x2,  #6
+        movrel          x11, X(mc_warp_filter), 64*8
+        mov             x15, x30
+.ifnb \t
+        lsl             x1,  x1,  #1
+.endif
+
+        bl              warp_filter_horz_neon
+        xtn             v24.4h,  v16.4s
+        xtn2            v24.8h,  v17.4s
+        bl              warp_filter_horz_neon
+        xtn             v25.4h,  v16.4s
+        xtn2            v25.8h,  v17.4s
+        bl              warp_filter_horz_neon
+        xtn             v26.4h,  v16.4s
+        xtn2            v26.8h,  v17.4s
+        bl              warp_filter_horz_neon
+        xtn             v27.4h,  v16.4s
+        xtn2            v27.8h,  v17.4s
+        bl              warp_filter_horz_neon
+        xtn             v28.4h,  v16.4s
+        xtn2            v28.8h,  v17.4s
+        bl              warp_filter_horz_neon
+        xtn             v29.4h,  v16.4s
+        xtn2            v29.8h,  v17.4s
+        bl              warp_filter_horz_neon
+        xtn             v30.4h,  v16.4s
+        xtn2            v30.8h,  v17.4s
+
+1:
+        add             w14, w6,  #512
+        bl              warp_filter_horz_neon
+        xtn             v31.4h,  v16.4s
+        xtn2            v31.8h,  v17.4s
+
+        load_filter_row d0, w14, w9
+        load_filter_row d1, w14, w9
+        load_filter_row d2, w14, w9
+        load_filter_row d3, w14, w9
+        load_filter_row d4, w14, w9
+        load_filter_row d5, w14, w9
+        load_filter_row d6, w14, w9
+        load_filter_row d7, w14, w9
+        transpose_8x8b  v0, v1, v2, v3, v4, v5, v6, v7, v16, v17
+        sxtl            v0.8h,   v0.8b
+        sxtl            v1.8h,   v1.8b
+        sxtl            v2.8h,   v2.8b
+        sxtl            v3.8h,   v3.8b
+        sxtl            v4.8h,   v4.8b
+        sxtl            v5.8h,   v5.8b
+        sxtl            v6.8h,   v6.8b
+        sxtl            v7.8h,   v7.8b
+
+        // This ordering of smull/smlal/smull2/smlal2 is highly
+        // beneficial for Cortex A53 here.
+        smull           v16.4s,  v24.4h,  v0.4h
+        smlal           v16.4s,  v25.4h,  v1.4h
+        smlal           v16.4s,  v26.4h,  v2.4h
+        smlal           v16.4s,  v27.4h,  v3.4h
+        smlal           v16.4s,  v28.4h,  v4.4h
+        smlal           v16.4s,  v29.4h,  v5.4h
+        smlal           v16.4s,  v30.4h,  v6.4h
+        smlal           v16.4s,  v31.4h,  v7.4h
+        smull2          v17.4s,  v24.8h,  v0.8h
+        smlal2          v17.4s,  v25.8h,  v1.8h
+        smlal2          v17.4s,  v26.8h,  v2.8h
+        smlal2          v17.4s,  v27.8h,  v3.8h
+        smlal2          v17.4s,  v28.8h,  v4.8h
+        smlal2          v17.4s,  v29.8h,  v5.8h
+        smlal2          v17.4s,  v30.8h,  v6.8h
+        smlal2          v17.4s,  v31.8h,  v7.8h
+
+        mov             v24.16b, v25.16b
+        mov             v25.16b, v26.16b
+.ifb \t
+        srshl           v16.4s,  v16.4s,  v13.4s // -(7 + intermediate_bits)
+        srshl           v17.4s,  v17.4s,  v13.4s // -(7 + intermediate_bits)
+.else
+        rshrn           v16.4h,  v16.4s,  #7
+        rshrn2          v16.8h,  v17.4s,  #7
+.endif
+        mov             v26.16b, v27.16b
+.ifb \t
+        sqxtun          v16.4h,  v16.4s
+        sqxtun2         v16.8h,  v17.4s
+.else
+        sub             v16.8h,  v16.8h,  v15.8h // PREP_BIAS
+.endif
+        mov             v27.16b, v28.16b
+        mov             v28.16b, v29.16b
+.ifb \t
+        umin            v16.8h,  v16.8h,  v15.8h // bitdepth_max
+.endif
+        mov             v29.16b, v30.16b
+        mov             v30.16b, v31.16b
+        subs            w10, w10, #1
+        st1             {v16.8h}, [x0], x1
+
+        add             w6,  w6,  w4
+        b.gt            1b
+
+        ldp             d14, d15, [sp, #0x30]
+        ldp             d12, d13, [sp, #0x20]
+        ldp             d10, d11, [sp, #0x10]
+        ldp             d8,  d9,  [sp], 0x40
+
+        br              x15
+endfunc
+.endm
+
+warp
+warp t
