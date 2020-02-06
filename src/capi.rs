@@ -790,6 +790,17 @@ pub unsafe extern fn rav1e_config_parse_int(
   if option_match(cfg, key, val.as_ptr()) == Ok(()) {
     0
   } else {
+    config_parse_bool(cfg, key, value)
+  }
+}
+
+unsafe fn config_parse_bool(
+  cfg: *mut Config, key: *const c_char, value: c_int,
+) -> c_int {
+  let val = CString::new(if value != 0 { "true" } else { "false" }).unwrap();
+  if option_match(cfg, key, val.as_ptr()) == Ok(()) {
+    0
+  } else {
     -1
   }
 }
