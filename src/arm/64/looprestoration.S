@@ -950,7 +950,7 @@ function sgr_box5_h_neon, export=1
         b               2f
 0:
         // !LR_HAVE_LEFT, fill v1 with the leftmost byte
-        // and shift v0 to have 2x the first byte at the front.
+        // and shift v0 to have 3x the first byte at the front.
         dup             v1.16b, v0.b[0]
         dup             v5.16b, v4.b[0]
         // Move x3 back to account for the last 3 bytes we loaded before,
