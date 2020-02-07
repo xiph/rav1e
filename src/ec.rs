@@ -190,14 +190,9 @@ impl StorageBackend for WriterBase<WriterCounter> {
     let d = 16 - r.ilog();
     let mut s = self.cnt + (d as i16);
 
-    if s >= 8 {
-      self.s.bytes += 1;
-      s -= 8;
-    }
-    if s >= 0 {
-      self.s.bytes += 1;
-      s -= 8;
-    }
+    self.s.bytes += (s >= 0) as usize + (s >= 8) as usize;
+    s -= 8 * ((s >= 0) as i16 + (s >= 8) as i16);
+
     self.rng = r << d;
     self.cnt = s;
   }
@@ -229,14 +224,9 @@ impl StorageBackend for WriterBase<WriterRecorder> {
     let d = 16 - r.ilog();
     let mut s = self.cnt + (d as i16);
 
-    if s >= 8 {
-      self.s.bytes += 1;
-      s -= 8;
-    }
-    if s >= 0 {
-      self.s.bytes += 1;
-      s -= 8;
-    }
+    self.s.bytes += (s >= 0) as usize + (s >= 8) as usize;
+    s -= 8 * ((s >= 0) as i16 + (s >= 8) as i16);
+
     self.rng = r << d;
     self.cnt = s;
     self.s.storage.push((fl, fh, nms));
