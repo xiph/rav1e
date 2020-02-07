@@ -1,11 +1,12 @@
 use crate::api::internal::InterConfig;
 use crate::config::EncoderConfig;
 use crate::context::{
-  BlockOffset, FrameBlocks, SuperBlockOffset, TileBlockOffset,
-  TileSuperBlockOffset,
+  BlockOffset, FrameBlocks, PlaneSuperBlockOffset, SuperBlockOffset,
+  TileBlockOffset, TileSuperBlockOffset,
 };
 use crate::cpu_features::CpuFeatureLevel;
 use crate::dist::get_satd;
+use crate::encoder::BlockPmv;
 use crate::encoder::{
   build_coarse_pmvs, build_full_res_pmvs, build_half_res_pmvs,
   FrameInvariants, FrameState, Sequence, IMPORTANCE_BLOCK_SIZE,
@@ -15,7 +16,7 @@ use crate::hawktracer::*;
 use crate::partition::{get_intra_edges, BlockSize};
 use crate::predict::{IntraParam, PredictionMode};
 use crate::rayon::iter::*;
-use crate::tiling::{Area, TileRect};
+use crate::tiling::{Area, TileRect, TileStateMut};
 use crate::transform::TxSize;
 use crate::{Frame, Pixel};
 use std::sync::Arc;
@@ -178,6 +179,33 @@ pub(crate) fn estimate_inter_costs<T: Pixel>(
   inter_costs.into_boxed_slice()
 }
 
+#[hawktracer(compute_motion_vectors_per_tile)]
+fn compute_motion_vectors_per_tile<T: Pixel>(
+  ts: &mut TileStateMut<T>, fi: &FrameInvariants<T>, inter_cfg: &InterConfig,
+) -> (PlaneSuperBlockOffset, Vec<BlockPmv>) {
+  // Compute the quarter-resolution motion vectors.
+  let tile_pmvs = build_coarse_pmvs(fi, ts, inter_cfg);
+
+  // Compute the half-resolution motion vectors.
+  let mut half_res_pmvs = Vec::with_capacity(ts.sb_height * ts.sb_width);
+  for sby in 0..ts.sb_height {
+    for sbx in 0..ts.sb_width {
+      let tile_sbo = TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
+      half_res_pmvs.push(build_half_res_pmvs(fi, ts, tile_sbo, &tile_pmvs));
+    }
+  }
+
+  // Compute the full-resolution motion vectors.
+  for sby in 0..ts.sb_height {
+    for sbx in 0..ts.sb_width {
+      let tile_sbo = TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
+      build_full_res_pmvs(fi, ts, tile_sbo, &half_res_pmvs);
+    }
+  }
+
+  (ts.sbo, half_res_pmvs)
+}
+
 #[hawktracer(compute_motion_vectors)]
 pub(crate) fn compute_motion_vectors<T: Pixel>(
   fi: &mut FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
@@ -190,31 +218,7 @@ pub(crate) fn compute_motion_vectors<T: Pixel>(
     .into_par_iter()
     .map(|mut ctx| {
       let ts = &mut ctx.ts;
-
-      // Compute the quarter-resolution motion vectors.
-      let tile_pmvs = build_coarse_pmvs(fi, ts, inter_cfg);
-
-      // Compute the half-resolution motion vectors.
-      let mut half_res_pmvs = Vec::with_capacity(ts.sb_height * ts.sb_width);
-      for sby in 0..ts.sb_height {
-        for sbx in 0..ts.sb_width {
-          let tile_sbo =
-            TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
-          half_res_pmvs
-            .push(build_half_res_pmvs(fi, ts, tile_sbo, &tile_pmvs));
-        }
-      }
-
-      // Compute the full-resolution motion vectors.
-      for sby in 0..ts.sb_height {
-        for sbx in 0..ts.sb_width {
-          let tile_sbo =
-            TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
-          build_full_res_pmvs(fi, ts, tile_sbo, &half_res_pmvs);
-        }
-      }
-
-      (ts.sbo, half_res_pmvs)
+      compute_motion_vectors_per_tile(ts, fi, inter_cfg)
     })
     .collect::<Vec<_>>();
 }
