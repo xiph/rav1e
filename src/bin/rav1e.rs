@@ -195,7 +195,7 @@ fn process_frame<T: Pixel, D: Decoder>(
 }
 
 fn do_encode<T: Pixel, D: Decoder>(
-  cfg: Config, verbose: bool, mut progress: ProgressInfo,
+  cfg: Config, verbose: Verbose, mut progress: ProgressInfo,
   output: &mut dyn Muxer, source: &mut Source<D>,
   pass1file_name: Option<&String>, pass2file_name: Option<&String>,
   mut y4m_enc: Option<y4m::Encoder<'_, Box<dyn Write>>>,
@@ -227,23 +227,27 @@ fn do_encode<T: Pixel, D: Decoder>(
     &mut buf_pos,
     y4m_enc.as_mut(),
   )? {
-    for frame in frame_info {
-      progress.add_frame(frame.clone());
-      if verbose {
-        info!("{} - {}", frame, progress);
-      } else {
-        // Print a one-line progress indicator that overrides itself with every update
-        eprint!("\r{}                    ", progress);
-      };
-    }
+    if verbose != Verbose::Quiet {
+      for frame in frame_info {
+        progress.add_frame(frame.clone());
+        if verbose == Verbose::Verbose {
+          info!("{} - {}", frame, progress);
+        } else {
+          // Print a one-line progress indicator that overrides itself with every update
+          eprint!("\r{}                    ", progress);
+        };
+      }
 
-    output.flush().unwrap();
+      output.flush().unwrap();
+    }
   }
-  if !verbose {
-    // Clear out the temporary progress indicator
-    eprint!("\r");
+  if verbose != Verbose::Quiet {
+    if verbose == Verbose::Verbose {
+      // Clear out the temporary progress indicator
+      eprint!("\r");
+    }
+    progress.print_summary(verbose == Verbose::Verbose);
   }
-  progress.print_summary(verbose);
   Ok(())
 }
 

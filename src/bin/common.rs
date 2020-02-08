@@ -25,6 +25,13 @@ pub struct EncoderIO {
   pub rec: Option<Box<dyn Write>>,
 }
 
+#[derive(PartialEq)]
+pub enum Verbose {
+  Quiet,
+  Normal,
+  Verbose,
+}
+
 pub struct CliOptions {
   pub io: EncoderIO,
   pub enc: EncoderConfig,
@@ -32,7 +39,7 @@ pub struct CliOptions {
   pub color_range_specified: bool,
   pub override_time_base: bool,
   pub skip: usize,
-  pub verbose: bool,
+  pub verbose: Verbose,
   pub benchmark: bool,
   pub threads: usize,
   pub pass1file_name: Option<String>,
@@ -323,6 +330,12 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .short("v")
     )
     .arg(
+      Arg::with_name("QUIET")
+        .help("Do not output any status message")
+        .long("quiet")
+        .short("q")
+    )
+    .arg(
       Arg::with_name("PSNR")
         .help("Calculate and display PSNR metrics")
         .long("psnr")
@@ -434,6 +447,14 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
 
   let enc = enc.map_or_else(|| parse_config(&matches), Ok)?;
 
+  let verbose = if matches.is_present("QUIET") {
+    Verbose::Quiet
+  } else if matches.is_present("VERBOSE") {
+    Verbose::Verbose
+  } else {
+    Verbose::Normal
+  };
+
   Ok(CliOptions {
     io,
     enc,
@@ -444,7 +465,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     override_time_base: matches.is_present("FRAME_RATE"),
     skip: matches.value_of("SKIP").unwrap().parse().unwrap(),
     benchmark: matches.is_present("BENCHMARK"),
-    verbose: matches.is_present("VERBOSE"),
+    verbose,
     threads,
     pass1file_name: matches.value_of("FIRST_PASS").map(|s| s.to_owned()),
     pass2file_name: matches.value_of("SECOND_PASS").map(|s| s.to_owned()),
