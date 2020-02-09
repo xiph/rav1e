@@ -844,11 +844,11 @@ L(box3_variable_shift_tbl):
         umull2          v6.8h,   v4.16b,  v4.16b
 
         add3            4
+        subs            w5,  w5,  #4
         st1             {v3.4h},  [x1],  #8
         st1             {v7.4h},  [x11], #8
         st1             {v26.4s}, [x0],  #16
         st1             {v28.4s}, [x10], #16
-        subs            w5,  w5,  #4
         b.le            9f
         ext             v0.16b,  v0.16b,  v0.16b, #4
         ext             v4.16b,  v4.16b,  v4.16b, #4
@@ -1114,11 +1114,11 @@ L(box5_variable_shift_tbl):
         umull2          v6.8h,   v4.16b,  v4.16b
 
         add5            4
+        subs            w5,  w5,  #4
         st1             {v3.4h},  [x1],  #8
         st1             {v7.4h},  [x11], #8
         st1             {v26.4s}, [x0],  #16
         st1             {v28.4s}, [x10], #16
-        subs            w5,  w5,  #4
         b.le            9f
         ext             v0.16b,  v0.16b,  v0.16b, #4
         ext             v1.16b,  v1.16b,  v2.16b, #8
