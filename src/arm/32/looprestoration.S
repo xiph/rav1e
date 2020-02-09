@@ -925,11 +925,11 @@ L(box3_variable_shift_tbl):
         vmull.u8        q6,  d9,  d9
 
         add3            4
+        subs            r5,  r5,  #4
         vst1.16         {d6},  [r1,  :64]!
         vst1.16         {d14}, [r11, :64]!
         vst1.32         {q12}, [r0,  :128]!
         vst1.32         {q8},  [r10, :128]!
-        subs            r5,  r5,  #4
         ble             9f
         vext.8          q0,  q0,  q0,  #4
         vext.8          q1,  q1,  q2,  #8
@@ -1215,11 +1215,11 @@ L(box5_variable_shift_tbl):
         vmull.u8        q6,  d9,  d9
 
         add5            4
+        subs            r5,  r5,  #4
         vst1.16         {d6},  [r1,  :64]!
         vst1.16         {d14}, [r11, :64]!
         vst1.32         {q12}, [r0,  :128]!
         vst1.32         {q10}, [r10, :128]!
-        subs            r5,  r5,  #4
         ble             9f
         vext.8          q0,  q0,  q0,  #4
         vext.8          q1,  q1,  q2,  #8
