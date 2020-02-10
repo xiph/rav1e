@@ -1,0 +1,11 @@
+[package]
+name = "v_frame"
+version = "0.1.0"
+description = "Video Frame data structions, part of rav1e"
+license = "BSD-2-Clause"
+authors = ["Luca Barbato <lu_zero@gentoo.org>"]
+edition = "2018"
+
+
+[dependencies]
+num-traits = "0.2"
