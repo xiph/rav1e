@@ -1148,3 +1148,5 @@ L(box5_variable_shift_tbl):
         ret
 .purgem add5
 endfunc
+
+sgr_funcs 8
