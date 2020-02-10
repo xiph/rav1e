@@ -10,6 +10,7 @@
 
 #![allow(non_camel_case_types)]
 
+use crate::activity::ActivityMask;
 use crate::api::*;
 use crate::cdef::*;
 use crate::context::*;
@@ -137,6 +138,7 @@ pub fn estimate_rate(qindex: u8, ts: TxSize, fast_distortion: u64) -> u64 {
 #[inline(never)]
 fn cdef_dist_wxh_8x8<T: Pixel>(
   src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, bit_depth: usize,
+  svar: i64,
 ) -> RawDistortion {
   debug_assert!(src1.plane_cfg.xdec == 0);
   debug_assert!(src1.plane_cfg.ydec == 0);
@@ -146,8 +148,6 @@ fn cdef_dist_wxh_8x8<T: Pixel>(
   let coeff_shift = bit_depth - 8;
 
   // Sum into columns to improve auto-vectorization
-  let mut sum_s_cols: [u16; 8] = [0; 8];
-  let mut sum_d_cols: [u16; 8] = [0; 8];
   let mut sum_s2_cols: [u32; 8] = [0; 8];
   let mut sum_d2_cols: [u32; 8] = [0; 8];
   let mut sum_sd_cols: [u32; 8] = [0; 8];
@@ -155,20 +155,12 @@ fn cdef_dist_wxh_8x8<T: Pixel>(
   for j in 0..8 {
     let row1 = &src1[j][0..8];
     let row2 = &src2[j][0..8];
-    for (sum_s, sum_d, sum_s2, sum_d2, sum_sd, s, d) in izip!(
-      &mut sum_s_cols,
-      &mut sum_d_cols,
-      &mut sum_s2_cols,
-      &mut sum_d2_cols,
-      &mut sum_sd_cols,
-      row1,
-      row2
-    ) {
+    for (sum_s2, sum_d2, sum_sd, s, d) in
+      izip!(&mut sum_s2_cols, &mut sum_d2_cols, &mut sum_sd_cols, row1, row2)
+    {
       // Don't convert directly to u32 to allow better vectorization
       let s: u16 = u16::cast_from(*s);
       let d: u16 = u16::cast_from(*d);
-      *sum_s += s;
-      *sum_d += d;
 
       // Convert to u32 to avoid overflows when multiplying
       let s: u32 = s as u32;
@@ -181,29 +173,25 @@ fn cdef_dist_wxh_8x8<T: Pixel>(
   }
 
   // Sum together the sum of columns
-  let sum_s: i64 =
-    sum_s_cols.iter().map(|&a| u32::cast_from(a)).sum::<u32>() as i64;
-  let sum_d: i64 =
-    sum_d_cols.iter().map(|&a| u32::cast_from(a)).sum::<u32>() as i64;
   let sum_s2: i64 = sum_s2_cols.iter().sum::<u32>() as i64;
   let sum_d2: i64 = sum_d2_cols.iter().sum::<u32>() as i64;
   let sum_sd: i64 = sum_sd_cols.iter().sum::<u32>() as i64;
 
   // Use sums to calculate distortion
-  let svar = sum_s2 - ((sum_s * sum_s + 32) >> 6);
-  let dvar = sum_d2 - ((sum_d * sum_d + 32) >> 6);
   let sse = (sum_d2 + sum_s2 - 2 * sum_sd) as f64;
-  //The two constants were tuned for CDEF, but can probably be better tuned for use in general RDO
+  // Linear fit at QP 80 to the function including reconstruction variance
   let ssim_boost = (4033_f64 / 16_384_f64)
-    * (svar + dvar + (16_384 << (2 * coeff_shift))) as f64
-    / f64::sqrt(((16_265_089i64 << (4 * coeff_shift)) + svar * dvar) as f64);
+    * (svar + svar + (16_384 << (2 * coeff_shift))) as f64
+    / f64::sqrt(((16_265_089i64 << (4 * coeff_shift)) + svar * svar) as f64)
+    * 0.869_873_046_875f64
+    + 0.150_146_484_375f64;
   RawDistortion::new((sse * ssim_boost + 0.5_f64) as u64)
 }
 
 #[allow(unused)]
 pub fn cdef_dist_wxh<T: Pixel, F: Fn(Area, BlockSize) -> f64>(
   src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, w: usize, h: usize,
-  bit_depth: usize, compute_bias: F,
+  bit_depth: usize, compute_bias: F, activity_mask: &ActivityMask,
 ) -> Distortion {
   assert!(w & 0x7 == 0);
   assert!(h & 0x7 == 0);
@@ -220,6 +208,11 @@ pub fn cdef_dist_wxh<T: Pixel, F: Fn(Area, BlockSize) -> f64>(
         &src1.subregion(area),
         &src2.subregion(area),
         bit_depth,
+        activity_mask
+          .variance_at(
+            (src1.rect().x + i * 8) as usize,
+            (src1.rect().y + j * 8) as usize,
+          ) as i64,
       );
 
       // cdef is always called on non-subsampled planes, so BLOCK_8X8 is
@@ -305,6 +298,7 @@ fn compute_distortion<T: Pixel>(
             bsize,
           )
         },
+        &fi.activity_mask,
       )
     }
     Tune::Psnr | Tune::Psychovisual => sse_wxh(
@@ -1792,11 +1786,17 @@ fn rdo_loop_plane_error<T: Pixel>(
           ts.to_frame_block_offset(bo),
           BlockSize::BLOCK_8X8,
         );
+        let block_variance = fi
+          .activity_mask
+          .variance_at(
+            in_region.rect().x as usize,
+            in_region.rect().y as usize,
+          ) as i64;
         err += if pli == 0 {
           // For loop filters, We intentionally use cdef_dist even with
           // `--tune Psnr`. Using SSE instead gives no PSNR gain but has a
           // significant negative impact on other metrics and visual quality.
-          cdef_dist_wxh_8x8(&in_region, &test_region, fi.sequence.bit_depth)
+          cdef_dist_wxh_8x8(&in_region, &test_region, fi.sequence.bit_depth, block_variance)
             * bias
         } else {
           sse_wxh(&in_region, &test_region, 8 >> xdec, 8 >> ydec, |_, _| bias)
