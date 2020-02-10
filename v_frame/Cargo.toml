@@ -8,4 +8,5 @@ edition = "2018"
 
 
 [dependencies]
+cfg-if = "0.1"
 num-traits = "0.2"

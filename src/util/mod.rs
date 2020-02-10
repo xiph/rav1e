@@ -10,11 +10,10 @@
 mod align;
 #[macro_use]
 mod cdf;
-mod math;
-mod pixel;
 mod uninit;
 
+pub use v_frame::math::*;
+pub use v_frame::pixel::*;
+
 pub use align::*;
-pub use math::*;
-pub use pixel::*;
 pub use uninit::*;
