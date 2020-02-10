@@ -1,9 +1,8 @@
-pub mod pixel;
 pub mod math;
+pub mod pixel;
+pub mod plane;
 
 pub mod preamble {
-  pub use crate::pixel::*;
   pub use crate::math::*;
+  pub use crate::pixel::*;
 }
-
-

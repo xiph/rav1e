@@ -423,14 +423,14 @@ mod test {
             let test_mvs = [MotionVector { row: 0, col: 0 }, MotionVector { row: 4, col: 0 }, MotionVector { row: 0, col: 4 }, MotionVector { row: 4, col: 4 }];
             if $BD > 8 {
               // dynamic allocation: test
-              let mut src = Plane::wrap(vec![0u16; 64 * 64], 64);
+              let mut src = Plane::from_slice(&vec![0u16; 64 * 64], 64);
               for s in src.data.iter_mut() {
                 *s = random::<u8>() as u16 * $BD / 8;
               }
               // dynamic allocation: test
-              let mut dst1 = Plane::wrap(vec![0u16; 64 * 64], 64);
+              let mut dst1 = Plane::from_slice(&vec![0u16; 64 * 64], 64);
               // dynamic allocation: test
-              let mut dst2 = Plane::wrap(vec![0u16; 64 * 64], 64);
+              let mut dst2 = Plane::from_slice(&vec![0u16; 64 * 64], 64);
 
               for mv in &test_mvs {
                 let (row_frac, col_frac, src) = get_params(&src, PlaneOffset { x: 0, y: 0 }, *mv);
@@ -441,14 +441,14 @@ mod test {
               }
             } else {
               // dynamic allocation: test
-              let mut src = Plane::wrap(vec![0u8; 64 * 64], 64);
+              let mut src = Plane::from_slice(&vec![0u8; 64 * 64], 64);
               for s in src.data.iter_mut() {
                 *s = random::<u8>();
               }
               // dynamic allocation: test
-              let mut dst1 = Plane::wrap(vec![0u8; 64 * 64], 64);
+              let mut dst1 = Plane::from_slice(&vec![0u8; 64 * 64], 64);
               // dynamic allocation: test
-              let mut dst2 = Plane::wrap(vec![0u8; 64 * 64], 64);
+              let mut dst2 = Plane::from_slice(&vec![0u8; 64 * 64], 64);
 
               for mv in &test_mvs {
                 let (row_frac, col_frac, src) = get_params(&src, PlaneOffset { x: 0, y: 0 }, *mv);
@@ -515,7 +515,7 @@ mod test {
 
             if $BD > 8 {
               // dynamic allocation: test
-              let mut src = Plane::wrap(vec![0u16; 64 * 64], 64);
+              let mut src = Plane::from_slice(&vec![0u16; 64 * 64], 64);
               for s in src.data.iter_mut() {
                 *s = random::<u8>() as u16 * $BD / 8;
               }
@@ -527,7 +527,7 @@ mod test {
               }
             } else {
               // dynamic allocation: test
-              let mut src = Plane::wrap(vec![0u8; 64 * 64], 64);
+              let mut src = Plane::from_slice(&vec![0u8; 64 * 64], 64);
               for s in src.data.iter_mut() {
                 *s = random::<u8>();
               }

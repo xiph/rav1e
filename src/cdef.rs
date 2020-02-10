@@ -679,7 +679,7 @@ mod test {
     //  . . . . . . .
     for plane in &mut frame.planes {
       let PlaneConfig { width, height, .. } = plane.cfg;
-      let mut slice = plane.as_mut_slice();
+      let mut slice = plane.mut_slice(PlaneOffset::default());
       for col in 0..width {
         for row in 0..height {
           slice[row][col] = (row + col) as u16;
