@@ -687,12 +687,12 @@ endfunc
 
 #define SUM_STRIDE (384+16)
 
-// void dav1d_sgr_box3_h_neon(int32_t *sumsq, int16_t *sum,
-//                            const pixel (*left)[4],
-//                            const pixel *src, const ptrdiff_t stride,
-//                            const int w, const int h,
-//                            const enum LrEdgeFlags edges);
-function sgr_box3_h_neon, export=1
+// void dav1d_sgr_box3_h_8bpc_neon(int32_t *sumsq, int16_t *sum,
+//                                 const pixel (*left)[4],
+//                                 const pixel *src, const ptrdiff_t stride,
+//                                 const int w, const int h,
+//                                 const enum LrEdgeFlags edges);
+function sgr_box3_h_8bpc_neon, export=1
         push            {r4-r11,lr}
         vpush           {q4-q7}
         ldrd            r4,  r5,  [sp, #100]
@@ -961,12 +961,12 @@ L(box3_variable_shift_tbl):
 .purgem add3
 endfunc
 
-// void dav1d_sgr_box5_h_neon(int32_t *sumsq, int16_t *sum,
-//                            const pixel (*left)[4],
-//                            const pixel *src, const ptrdiff_t stride,
-//                            const int w, const int h,
-//                            const enum LrEdgeFlags edges);
-function sgr_box5_h_neon, export=1
+// void dav1d_sgr_box5_h_8bpc_neon(int32_t *sumsq, int16_t *sum,
+//                                 const pixel (*left)[4],
+//                                 const pixel *src, const ptrdiff_t stride,
+//                                 const int w, const int h,
+//                                 const enum LrEdgeFlags edges);
+function sgr_box5_h_8bpc_neon, export=1
         push            {r4-r11,lr}
         vpush           {q4-q7}
         ldrd            r4,  r5,  [sp, #100]
@@ -1661,11 +1661,11 @@ endfunc
 
 #define FILTER_OUT_STRIDE 384
 
-// void dav1d_sgr_finish_filter1_neon(int16_t *tmp,
-//                                    const pixel *src, const ptrdiff_t stride,
-//                                    const int32_t *a, const int16_t *b,
-//                                    const int w, const int h);
-function sgr_finish_filter1_neon, export=1
+// void dav1d_sgr_finish_filter1_8bpc_neon(int16_t *tmp,
+//                                         const pixel *src, const ptrdiff_t stride,
+//                                         const int32_t *a, const int16_t *b,
+//                                         const int w, const int h);
+function sgr_finish_filter1_8bpc_neon, export=1
         push            {r4-r11,lr}
         vpush           {q4-q7}
         ldrd            r4,  r5,  [sp, #100]
@@ -1765,11 +1765,11 @@ function sgr_finish_filter1_neon, export=1
         pop             {r4-r11,pc}
 endfunc
 
-// void dav1d_sgr_finish_filter2_neon(int16_t *tmp,
-//                                    const pixel *src, const ptrdiff_t stride,
-//                                    const int32_t *a, const int16_t *b,
-//                                    const int w, const int h);
-function sgr_finish_filter2_neon, export=1
+// void dav1d_sgr_finish_filter2_8bpc_neon(int16_t *tmp,
+//                                         const pixel *src, const ptrdiff_t stride,
+//                                         const int32_t *a, const int16_t *b,
+//                                         const int w, const int h);
+function sgr_finish_filter2_8bpc_neon, export=1
         push            {r4-r11,lr}
         vpush           {q4-q7}
         ldrd            r4,  r5,  [sp, #100]
@@ -1925,11 +1925,11 @@ function sgr_finish_filter2_neon, export=1
         pop             {r4-r11,pc}
 endfunc
 
-// void dav1d_sgr_weighted1_neon(pixel *dst, const ptrdiff_t dst_stride,
-//                               const pixel *src, const ptrdiff_t src_stride,
-//                               const int16_t *t1, const int w, const int h,
-//                               const int wt);
-function sgr_weighted1_neon, export=1
+// void dav1d_sgr_weighted1_8bpc_neon(pixel *dst, const ptrdiff_t dst_stride,
+//                                    const pixel *src, const ptrdiff_t src_stride,
+//                                    const int16_t *t1, const int w, const int h,
+//                                    const int wt);
+function sgr_weighted1_8bpc_neon, export=1
         push            {r4-r9,lr}
         ldrd            r4,  r5,  [sp, #28]
         ldrd            r6,  r7,  [sp, #36]
@@ -2009,12 +2009,12 @@ function sgr_weighted1_neon, export=1
         pop             {r4-r9,pc}
 endfunc
 
-// void dav1d_sgr_weighted2_neon(pixel *dst, const ptrdiff_t stride,
-//                               const pixel *src, const ptrdiff_t src_stride,
-//                               const int16_t *t1, const int16_t *t2,
-//                               const int w, const int h,
-//                               const int16_t wt[2]);
-function sgr_weighted2_neon, export=1
+// void dav1d_sgr_weighted2_8bpc_neon(pixel *dst, const ptrdiff_t stride,
+//                                    const pixel *src, const ptrdiff_t src_stride,
+//                                    const int16_t *t1, const int16_t *t2,
+//                                    const int w, const int h,
+//                                    const int16_t wt[2]);
+function sgr_weighted2_8bpc_neon, export=1
         push            {r4-r11,lr}
         ldrd            r4,  r5,  [sp, #36]
         ldrd            r6,  r7,  [sp, #44]
