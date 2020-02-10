@@ -328,10 +328,13 @@ function sgr_box5_v_neon, export=1
 endfunc
 
 // void dav1d_sgr_calc_ab1_neon(int32_t *a, int16_t *b,
-//                              const int w, const int h, const int strength);
+//                              const int w, const int h, const int strength,
+//                              const int bitdepth_max);
 // void dav1d_sgr_calc_ab2_neon(int32_t *a, int16_t *b,
-//                              const int w, const int h, const int strength);
+//                              const int w, const int h, const int strength,
+//                              const int bitdepth_max);
 function sgr_calc_ab1_neon, export=1
+        clz             w9,  w5
         add             x3,  x3,  #2 // h += 2
         movi            v31.4s,   #9 // n
         mov             x5,  #455
@@ -340,6 +343,7 @@ function sgr_calc_ab1_neon, export=1
 endfunc
 
 function sgr_calc_ab2_neon, export=1
+        clz             w9,  w5
         add             x3,  x3,  #3  // h += 3
         asr             x3,  x3,  #1  // h /= 2
         movi            v31.4s,   #25 // n
@@ -348,14 +352,17 @@ function sgr_calc_ab2_neon, export=1
 endfunc
 
 function sgr_calc_ab_neon
+        sub             w9,  w9,  #24  // -bitdepth_min_8
         movrel          x12, X(sgr_x_by_x)
         ld1             {v16.16b, v17.16b, v18.16b}, [x12]
+        dup             v6.8h,    w9   // -bitdepth_min_8
         movi            v19.16b,  #5
         movi            v20.8b,   #55  // idx of last 5
         movi            v21.8b,   #72  // idx of last 4
         movi            v22.8b,   #101 // idx of last 3
         movi            v23.8b,   #169 // idx of last 2
         movi            v24.8b,   #254 // idx of last 1
+        saddl           v7.4s,    v6.4h,   v6.4h  // -2*bitdepth_min_8
         add             x2,  x2,  #2 // w += 2
         add             x7,  x2,  #7
         bic             x7,  x7,  #7 // aligned w
@@ -373,10 +380,13 @@ function sgr_calc_ab_neon
         subs            x2,  x2,  #8
         ld1             {v0.4s, v1.4s}, [x0]   // a
         ld1             {v2.8h}, [x1]          // b
+        srshl           v0.4s,  v0.4s,  v7.4s
+        srshl           v1.4s,  v1.4s,  v7.4s
+        srshl           v4.8h,  v2.8h,  v6.8h
         mul             v0.4s,  v0.4s,  v31.4s // a * n
         mul             v1.4s,  v1.4s,  v31.4s // a * n
-        umull           v3.4s,  v2.4h,  v2.4h  // b * b
-        umull2          v4.4s,  v2.8h,  v2.8h  // b * b
+        umull           v3.4s,  v4.4h,  v4.4h  // b * b
+        umull2          v4.4s,  v4.8h,  v4.8h  // b * b
         uqsub           v0.4s,  v0.4s,  v3.4s  // imax(a * n - b * b, 0)
         uqsub           v1.4s,  v1.4s,  v4.4s  // imax(a * n - b * b, 0)
         mul             v0.4s,  v0.4s,  v28.4s // p * s
@@ -389,13 +399,13 @@ function sgr_calc_ab_neon
         cmhi            v26.8b, v0.8b,  v21.8b // = -1 if sgr_x_by_x[v0] < 4
         tbl             v1.8b, {v16.16b, v17.16b, v18.16b}, v0.8b
         cmhi            v27.8b, v0.8b,  v22.8b // = -1 if sgr_x_by_x[v0] < 3
-        cmhi            v5.8b,  v0.8b,  v23.8b // = -1 if sgr_x_by_x[v0] < 2
+        cmhi            v4.8b,  v0.8b,  v23.8b // = -1 if sgr_x_by_x[v0] < 2
         add             v25.8b, v25.8b, v26.8b
-        cmhi            v6.8b,  v0.8b,  v24.8b // = -1 if sgr_x_by_x[v0] < 1
-        add             v27.8b, v27.8b, v5.8b
-        add             v6.8b,  v6.8b,  v19.8b
+        cmhi            v5.8b,  v0.8b,  v24.8b // = -1 if sgr_x_by_x[v0] < 1
+        add             v27.8b, v27.8b, v4.8b
+        add             v5.8b,  v5.8b,  v19.8b
         add             v25.8b, v25.8b, v27.8b
-        add             v1.8b,  v1.8b,  v6.8b
+        add             v1.8b,  v1.8b,  v5.8b
         add             v1.8b,  v1.8b,  v25.8b
         uxtl            v1.8h,  v1.8b          // x
 
