@@ -26,6 +26,7 @@ pub struct ActivityMask {
   pub tot_bins: usize,
   pub seg_bins: [usize; 8],
   pub avg_var: f64,
+  pub var_scale: f64,
 }
 
 impl ActivityMask {
@@ -138,7 +139,9 @@ impl ActivityMask {
     avg_var /= max;
     avg_var *= 7f64;
 
-    ActivityMask { variances, width, granularity, tot_bins, seg_bins, avg_var }
+    let var_scale = max / 7f64;
+
+    ActivityMask { variances, width, granularity, tot_bins, seg_bins, avg_var, var_scale }
   }
 
   pub fn segid_at(&self, segmentation: &SegmentationState, x: usize, y: usize) -> u8 {
@@ -154,7 +157,8 @@ impl ActivityMask {
     let dec_width = self.width >> self.granularity;
     let res = self.variances.get((x >> self.granularity) + dec_width * (y >> self.granularity));
     match res {
-        Some(val) => return *val,
+        // Fit to 8x8 variance at QP 80 on objective-1-fast
+        Some(val) => return (*val * self.var_scale - 80f64).max(0f64) * 168f64,
         None => unreachable!(),
     }
   }
