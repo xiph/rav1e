@@ -182,9 +182,10 @@ fn cdef_dist_wxh_8x8<T: Pixel>(
   // Linear fit at QP 80 to the function including reconstruction variance
   let ssim_boost = (4033_f64 / 16_384_f64)
     * (svar + svar + (16_384 << (2 * coeff_shift))) as f64
-    / f64::sqrt(((16_265_089i64 << (4 * coeff_shift)) + svar * svar) as f64)
-    * 0.869_873_046_875f64
-    + 0.150_146_484_375f64;
+    / f64::sqrt(((16_265_089i64 << (4 * coeff_shift)) + svar * svar) as f64);
+
+  let ssim_boost = ssim_boost * 0.9499451379949585f64 + 0.12503340427342588;
+
   RawDistortion::new((sse * ssim_boost + 0.5_f64) as u64)
 }
 
