@@ -74,7 +74,7 @@ endconst
         ld1             {\d2\().d}[1], [x9]         // p1
 .endif
 .endm
-.macro handle_pixel s1, s2, threshold, thresh_vec, shift, tap, min
+.macro handle_pixel s1, s2, thresh_vec, shift, tap, min
 .if \min
         umin            v2.8h,   v2.8h,  \s1\().8h
         smax            v3.8h,   v3.8h,  \s1\().8h
@@ -98,7 +98,6 @@ endconst
         smax            v22.8h, v22.8h, v20.8h      // constrain() = imax(imin(diff, clip), -clip)
         mla             v1.8h,  v18.8h, v19.8h      // sum += taps[k] * constrain()
         mla             v1.8h,  v22.8h, v19.8h      // sum += taps[k] * constrain()
-3:
 .endm
 
 // void dav1d_cdef_filterX_Ybpc_neon(pixel *dst, ptrdiff_t dst_stride,
@@ -182,7 +181,7 @@ function cdef_filter\w\suffix\()_\bpc\()bpc_neon
 .if \pri
         ldrb            w10, [x8]                   // *pri_taps
 
-        handle_pixel    v4,  v5,  w3,  v25.8h, v24.8h, w10, \min
+        handle_pixel    v4,  v5,  v25.8h, v24.8h, w10, \min
 .endif
 
 .if \sec
@@ -190,9 +189,9 @@ function cdef_filter\w\suffix\()_\bpc\()bpc_neon
         ldrb            w9,  [x5]                   // off3
         load_px         v4,  v5,  \w
 
-        handle_pixel    v6,  v7,  w4,  v27.8h, v26.8h, w11, \min
+        handle_pixel    v6,  v7,  v27.8h, v26.8h, w11, \min
 
-        handle_pixel    v4,  v5,  w4,  v27.8h, v26.8h, w11, \min
+        handle_pixel    v4,  v5,  v27.8h, v26.8h, w11, \min
 
         sub             x5,  x5,  #11               // x5 -= 2*(2+4); x5 += 1;
 .else
