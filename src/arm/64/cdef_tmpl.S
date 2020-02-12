@@ -103,13 +103,18 @@ endconst
 // void dav1d_cdef_filterX_Ybpc_neon(pixel *dst, ptrdiff_t dst_stride,
 //                                   const uint16_t *tmp, int pri_strength,
 //                                   int sec_strength, int dir, int damping,
-//                                   int h);
+//                                   int h, size_t edges);
 .macro filter_func w, bpc, pri, sec, min, suffix
 function cdef_filter\w\suffix\()_\bpc\()bpc_neon
+.if \bpc == 8
+        ldr             w8,  [sp]                   // bitdepth_max
+        cmp             w8,  #0xf
+        b.eq            cdef_filter\w\suffix\()_edged_8bpc_neon
+.endif
 .if \pri
 .if \bpc == 16
-        ldr             w8,  [sp]                   // bitdepth_max
-        clz             w9,  w8
+        ldr             w9,  [sp, #8]               // bitdepth_max
+        clz             w9,  w9
         sub             w9,  w9,  #24               // -bitdepth_min_8
         neg             w9,  w9                     // bitdepth_min_8
 .endif
