@@ -310,7 +310,7 @@ endconst
         vld1.16         {\d22}, [r9]         // p1
 .endif
 .endm
-.macro handle_pixel s1, s2, threshold, thresh_vec, shift, tap, min
+.macro handle_pixel s1, s2, thresh_vec, shift, tap, min
 .if \min
         vmin.u16        q2,  q2,  \s1
         vmax.s16        q3,  q3,  \s1
@@ -334,7 +334,6 @@ endconst
         vmax.s16        q13, q13, q11        // constrain() = imax(imin(diff, clip), -clip)
         vmla.i16        q1,  q10, q9         // sum += taps[k] * constrain()
         vmla.i16        q1,  q13, q9         // sum += taps[k] * constrain()
-3:
 .endm
 
 // void dav1d_cdef_filterX_8bpc_neon(pixel *dst, ptrdiff_t dst_stride,
@@ -407,7 +406,7 @@ function cdef_filter\w\suffix\()_neon
 .if \pri
         ldrb            r12, [r8]            // *pri_taps
 
-        handle_pixel    q14, q15, r3,  q5,  q4,  r12, \min
+        handle_pixel    q14, q15, q5,  q4,  r12, \min
 .endif
 
 .if \sec
@@ -416,11 +415,11 @@ function cdef_filter\w\suffix\()_neon
         add             r5,  r5,  #8         // +2*4
         ldrsb           r9,  [r5]            // off3
 
-        handle_pixel    q14, q15, r4,  q7,  q6,  lr, \min
+        handle_pixel    q14, q15, q7,  q6,  lr, \min
 
         load_px         d28, d29, d30, d31, \w
 
-        handle_pixel    q14, q15, r4,  q7,  q6,  lr, \min
+        handle_pixel    q14, q15, q7,  q6,  lr, \min
 
         sub             r5,  r5,  #11        // r5 -= 2*(2+4); r5 += 1;
 .else
