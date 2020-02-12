@@ -42,7 +42,7 @@ bench = []
 check_asm = []
 capi = []
 tracing = ["rust_hawktracer"]
-serialize = ["serde", "toml"]
+serialize = ["serde", "toml", "v_frame/serialize"]
 
 # Enables debug dumping of lookahead computation results, specifically:
 # - i-qres.png: quarter-resolution luma planes,
