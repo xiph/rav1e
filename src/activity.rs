@@ -157,8 +157,8 @@ impl ActivityMask {
     let dec_width = self.width >> self.granularity;
     let res = self.variances.get((x >> self.granularity) + dec_width * (y >> self.granularity));
     match res {
-        // Fit to 8x8 variance at QP 80 on objective-1-fast
-        Some(val) => return (*val * self.var_scale) * 60f64,
+        /* Tuned to 16x16 varience from 3976852114 samples of a variety of pictures */
+        Some(val) => return (*val * self.var_scale) * 202.35866724f64,
         None => unreachable!(),
     }
   }
