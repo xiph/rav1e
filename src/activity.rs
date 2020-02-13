@@ -158,7 +158,7 @@ impl ActivityMask {
     let res = self.variances.get((x >> self.granularity) + dec_width * (y >> self.granularity));
     match res {
         /* Tuned to 16x16 varience from 3976852114 samples of a variety of pictures */
-        Some(val) => return (*val * self.var_scale) * 202.35866724f64,
+        Some(val) => return (*val * self.var_scale) * 188.04406752f64,
         None => unreachable!(),
     }
   }
