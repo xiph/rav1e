@@ -776,8 +776,7 @@ impl<T: Pixel> FrameInvariants<T> {
     fi.force_integer_mv = 0; // note: should be 1 if fi.intra_only is true
     fi.idx_in_group_output =
       inter_cfg.get_idx_in_group_output(output_frameno_in_gop);
-    fi.tx_mode_select =
-      fi.config.speed_settings.rdo_tx_decision || fi.enable_inter_txfm_split;
+    fi.tx_mode_select = fi.enable_inter_txfm_split;
 
     fi.order_hint =
       inter_cfg.get_order_hint(output_frameno_in_gop, fi.idx_in_group_output);
