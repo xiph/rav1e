@@ -129,16 +129,82 @@ CDEF_FILTER_JMP_TABLE 8x8
 
 SECTION .text
 
-%macro ACCUMULATE_TAP_BYTE 7 ; tap_offset, shift, mask, strength, mul_tap, w, h
+%macro PREP_REGS 2 ; w, h
+    ; off1/2/3[k] [6 total] from [tapq+12+(dir+0/2/6)*2+k]
+    mov           dird, r6m
+    lea         tableq, [cdef_filter_%1x%2_jmptable]
+    lea           dirq, [tableq+dirq*2*4]
+%if %1 == 4
+ %if %2 == 4
+  DEFINE_ARGS dst, stride, left, top, pri, sec, \
+              table, dir, dirjmp, dst4, stride3, k
+ %else
+  DEFINE_ARGS dst, stride, left, top, pri, sec, \
+              table, dir, dirjmp, dst4, dst8, stride3, k
+    lea          dst8q, [dstq+strideq*8]
+ %endif
+%else
+  DEFINE_ARGS dst, stride, h, top1, pri, sec, \
+              table, dir, dirjmp, top2, dst4, stride3, k
+    mov             hq, -8
+    lea          top1q, [top1q+strideq*0]
+    lea          top2q, [top1q+strideq*1]
+%endif
+    lea          dst4q, [dstq+strideq*4]
+%if %1 == 4
+    lea       stride3q, [strideq*3]
+%endif
+%endmacro
+
+%macro LOAD_BLOCK 2-3 0 ; w, h, init_min_max
+    mov             kd, 1
+    pxor           m15, m15                     ; sum
+%if %2 == 8
+    pxor           m12, m12
+ %if %1 == 4
+    movd           xm4, [dstq +strideq*0]
+    movd           xm6, [dstq +strideq*1]
+    movd           xm5, [dstq +strideq*2]
+    movd           xm7, [dstq +stride3q ]
+    vinserti128     m4, [dst4q+strideq*0], 1
+    vinserti128     m6, [dst4q+strideq*1], 1
+    vinserti128     m5, [dst4q+strideq*2], 1
+    vinserti128     m7, [dst4q+stride3q ], 1
+    punpckldq       m4, m6
+    punpckldq       m5, m7
+ %else
+    movq           xm4, [dstq+strideq*0]
+    movq           xm5, [dstq+strideq*1]
+    vinserti128     m4, [dstq+strideq*2], 1
+    vinserti128     m5, [dstq+stride3q ], 1
+ %endif
+    punpcklqdq      m4, m5
+%else
+    movd           xm4, [dstq+strideq*0]
+    movd           xm5, [dstq+strideq*1]
+    vinserti128     m4, [dstq+strideq*2], 1
+    vinserti128     m5, [dstq+stride3q ], 1
+    punpckldq       m4, m5
+%endif
+%if %3 == 1
+    mova            m7, m4                      ; min
+    mova            m8, m4                      ; max
+%endif
+%endmacro
+
+%macro ACCUMULATE_TAP_BYTE 7-8 0 ; tap_offset, shift, mask, strength
+                                 ; mul_tap, w, h, clip
     ; load p0/p1
     movsxd     dirjmpq, [dirq+kq*4+%1*2*4]
     add        dirjmpq, tableq
     call       dirjmpq
 
+%if %8 == 1
     pmaxub          m7, m5
     pminub          m8, m5
     pmaxub          m7, m6
     pminub          m8, m6
+%endif
 
     ; accumulate sum[m15] over p0/p1
 %if %7 == 4
@@ -148,7 +214,7 @@ SECTION .text
     psubusb         m5, m6, m5
     por             m9, m5     ; abs_diff_p01(p01 - px)
     pcmpeqb         m5, m9
-    por             m5, m3
+    por             m5, %5
     psignb          m6, %5, m5
     psrlw           m5, m9, %2 ; emulate 8-bit shift
     pand            m5, %3
@@ -167,8 +233,8 @@ SECTION .text
     pcmpeqb         m6, m11
     punpckhbw      m10, m9, m11
     punpcklbw       m9, m11
-    por             m5, m3
-    por            m11, m6, m3
+    por             m5, %5
+    por            m11, m6, %5
     punpckhbw       m6, m5, m11
     punpcklbw       m5, m11
     psignb         m11, %5, m6
@@ -188,7 +254,107 @@ SECTION .text
 %endif
 %endmacro
 
-%macro ACCUMULATE_TAP_WORD 6 ; tap_offset, shift, mask, strength, mul_tap, w
+%macro ADJUST_PIXEL 4-5 0 ; w, h, zero, pw_2048, clip
+%if %2 == 4
+ %if %5 == 1
+    punpcklbw       m4, %3
+ %endif
+    pcmpgtw         %3, m15
+    paddw          m15, %3
+    pmulhrsw       m15, %4
+ %if %5 == 0
+    packsswb       m15, m15
+    paddb           m4, m15
+ %else
+    paddw           m4, m15
+    packuswb        m4, m4 ; clip px in [0x0,0xff]
+    pminub          m4, m7
+    pmaxub          m4, m8
+ %endif
+    vextracti128   xm5, m4, 1
+    movd   [dstq+strideq*0], xm4
+    movd   [dstq+strideq*2], xm5
+    pextrd [dstq+strideq*1], xm4, 1
+    pextrd [dstq+stride3q ], xm5, 1
+%else
+    pcmpgtw         m6, %3, m12
+    pcmpgtw         m5, %3, m15
+    paddw          m12, m6
+    paddw          m15, m5
+ %if %5 == 1
+    punpckhbw       m5, m4, %3
+    punpcklbw       m4, %3
+ %endif
+    pmulhrsw       m12, %4
+    pmulhrsw       m15, %4
+ %if %5 == 0
+    packsswb       m15, m12
+    paddb           m4, m15
+ %else
+    paddw           m5, m12
+    paddw           m4, m15
+    packuswb        m4, m5 ; clip px in [0x0,0xff]
+    pminub          m4, m7
+    pmaxub          m4, m8
+ %endif
+    vextracti128   xm5, m4, 1
+ %if %1 == 4
+    movd   [dstq +strideq*0], xm4
+    movd   [dst4q+strideq*0], xm5
+    pextrd [dstq +strideq*1], xm4, 1
+    pextrd [dst4q+strideq*1], xm5, 1
+    pextrd [dstq +strideq*2], xm4, 2
+    pextrd [dst4q+strideq*2], xm5, 2
+    pextrd [dstq +stride3q ], xm4, 3
+    pextrd [dst4q+stride3q ], xm5, 3
+ %else
+    movq   [dstq+strideq*0], xm4
+    movq   [dstq+strideq*2], xm5
+    movhps [dstq+strideq*1], xm4
+    movhps [dstq+stride3q ], xm5
+ %endif
+%endif
+%endmacro
+
+%macro BORDER_PREP_REGS 2 ; w, h
+    ; off1/2/3[k] [6 total] from [tapq+12+(dir+0/2/6)*2+k]
+    mov           dird, r6m
+    lea           dirq, [tableq+dirq*2+14]
+%if %1*%2*2/mmsize > 1
+ %if %1 == 4
+    DEFINE_ARGS dst, stride, dir, stk, pri, sec, stride3, h, off, k
+ %else
+    DEFINE_ARGS dst, stride, dir, stk, pri, sec, h, off, k
+ %endif
+    mov             hd, %1*%2*2/mmsize
+%else
+    DEFINE_ARGS dst, stride, dir, stk, pri, sec, stride3, off, k
+%endif
+    lea           stkq, [px]
+    pxor           m11, m11
+%endmacro
+
+%macro BORDER_LOAD_BLOCK 2-3 0 ; w, h, init_min_max
+    mov             kd, 1
+%if %1 == 4
+    movq           xm4, [stkq+32*0]
+    movhps         xm4, [stkq+32*1]
+    movq           xm5, [stkq+32*2]
+    movhps         xm5, [stkq+32*3]
+    vinserti128     m4, xm5, 1
+%else
+    mova           xm4, [stkq+32*0]             ; px
+    vinserti128     m4, [stkq+32*1], 1
+%endif
+    pxor           m15, m15                     ; sum
+%if %3 == 1
+    mova            m7, m4                      ; max
+    mova            m8, m4                      ; min
+%endif
+%endmacro
+
+%macro ACCUMULATE_TAP_WORD 6-7 0 ; tap_offset, shift, mask, strength
+                                 ; mul_tap, w, clip
     ; load p0/p1
     movsx         offq, byte [dirq+kq+%1]       ; off1
 %if %6 == 4
@@ -212,6 +378,7 @@ SECTION .text
     movu           xm6, [stkq+offq*2+32*0]      ; p1
     vinserti128     m6, [stkq+offq*2+32*1], 1
 %endif
+%if %7 == 1
     ; out of bounds values are set to a value that is a both a large unsigned
     ; value and a negative signed value.
     ; use signed max and unsigned min to remove them
@@ -219,6 +386,7 @@ SECTION .text
     pminuw          m8, m5                      ; min after p0
     pmaxsw          m7, m6                      ; max after p1
     pminuw          m8, m6                      ; min after p1
+%endif
 
     ; accumulate sum[m15] over p0/p1
     ; calculate difference before converting
@@ -241,6 +409,28 @@ SECTION .text
     pminub          m5, m9
     pmaddubsw       m5, m10
     paddw          m15, m5
+%endmacro
+
+%macro BORDER_ADJUST_PIXEL 2-3 0 ; w, pw_2048, clip
+    pcmpgtw         m9, m11, m15
+    paddw          m15, m9
+    pmulhrsw       m15, %2
+    paddw           m4, m15
+%if %3 == 1
+    pminsw          m4, m7
+    pmaxsw          m4, m8
+%endif
+    packuswb        m4, m4
+    vextracti128   xm5, m4, 1
+%if %1 == 4
+    movd [dstq+strideq*0], xm4
+    pextrd [dstq+strideq*1], xm4, 1
+    movd [dstq+strideq*2], xm5
+    pextrd [dstq+stride3q], xm5, 1
+%else
+    movq [dstq+strideq*0], xm4
+    movq [dstq+strideq*1], xm5
+%endif
 %endmacro
 
 %macro CDEF_FILTER 2 ; w, h
@@ -304,21 +494,24 @@ cglobal cdef_filter_%1x%2, 4, 9, 0, dst, stride, left, top, \
 %endif
 
  DEFINE_ARGS dst, stride, left, top, pri, secdmp, zero, pridmp, damping
-    movifnidn     prid, prim
-%if UNIX64
-    movd           xm0, prid
-    movd           xm1, secdmpd
-%endif
     mov       dampingd, r7m
-    lzcnt      pridmpd, prid
-    lzcnt      secdmpd, secdmpm
-    sub       dampingd, 31
     xor          zerod, zerod
+    movifnidn     prid, prim
+    sub       dampingd, 31
+    movifnidn  secdmpd, secdmpm
+    or            prid, 0
+    jz .sec_only
+    movd           xm0, prid
+    lzcnt      pridmpd, prid
     add        pridmpd, dampingd
     cmovs      pridmpd, zerod
+    mov        [rsp+0], pridmpq                 ; pri_shift
+    or         secdmpd, 0
+    jz .pri_only
+    movd           xm1, secdmpd
+    lzcnt      secdmpd, secdmpd
     add        secdmpd, dampingd
     cmovs      secdmpd, zerod
-    mov        [rsp+0], pridmpq                 ; pri_shift
     mov        [rsp+8], secdmpq                 ; sec_shift
 
  DEFINE_ARGS dst, stride, left, top, pri, secdmp, table, pridmp
@@ -328,132 +521,29 @@ cglobal cdef_filter_%1x%2, 4, 9, 0, dst, stride, left, top, \
 
     ; pri/sec_taps[k] [4 total]
  DEFINE_ARGS dst, stride, left, top, pri, sec, table, dir
-%if UNIX64
     vpbroadcastb    m0, xm0                     ; pri_strength
     vpbroadcastb    m1, xm1                     ; sec_strength
-%else
-    vpbroadcastb    m0, prim
-    vpbroadcastb    m1, secm
-%endif
     and           prid, 1
     lea           priq, [tableq+priq*2+8]       ; pri_taps
     lea           secq, [tableq+12]             ; sec_taps
 
-    ; off1/2/3[k] [6 total] from [tapq+12+(dir+0/2/6)*2+k]
-    mov           dird, r6m
-    lea         tableq, [cdef_filter_%1x%2_jmptable]
-    lea           dirq, [tableq+dirq*2*4]
-%if %1 == 4
- %if %2 == 4
-  DEFINE_ARGS dst, stride, left, top, pri, sec, \
-              table, dir, dirjmp, dst4, stride3, k
- %else
-  DEFINE_ARGS dst, stride, left, top, pri, sec, \
-              table, dir, dirjmp, dst4, dst8, stride3, k
-    lea          dst8q, [dstq+strideq*8]
- %endif
-%else
-  DEFINE_ARGS dst, stride, h, top1, pri, sec, \
-              table, dir, dirjmp, top2, dst4, stride3, k
-    mov             hq, -8
-    lea          top1q, [top1q+strideq*0]
-    lea          top2q, [top1q+strideq*1]
-%endif
-    lea          dst4q, [dstq+strideq*4]
-%if %1 == 4
-    lea       stride3q, [strideq*3]
-%endif
+    PREP_REGS       %1, %2
 %if %1*%2 > mmsize
 .v_loop:
 %endif
-    mov             kd, 1
-    pxor           m15, m15                     ; sum
-%if %2 == 8
-    pxor           m12, m12
- %if %1 == 4
-    movd           xm4, [dstq +strideq*0]
-    movd           xm6, [dstq +strideq*1]
-    movd           xm5, [dstq +strideq*2]
-    movd           xm7, [dstq +stride3q ]
-    vinserti128     m4, [dst4q+strideq*0], 1
-    vinserti128     m6, [dst4q+strideq*1], 1
-    vinserti128     m5, [dst4q+strideq*2], 1
-    vinserti128     m7, [dst4q+stride3q ], 1
-    punpckldq       m4, m6
-    punpckldq       m5, m7
- %else
-    movq           xm4, [dstq+strideq*0]
-    movq           xm5, [dstq+strideq*1]
-    vinserti128     m4, [dstq+strideq*2], 1
-    vinserti128     m5, [dstq+stride3q ], 1
- %endif
-    punpcklqdq      m4, m5
-%else
-    movd           xm4, [dstq+strideq*0]
-    movd           xm5, [dstq+strideq*1]
-    vinserti128     m4, [dstq+strideq*2], 1
-    vinserti128     m5, [dstq+stride3q ], 1
-    punpckldq       m4, m5
-%endif
-    mova            m7, m4                      ; min
-    mova            m8, m4                      ; max
+    LOAD_BLOCK      %1, %2, 1
 .k_loop:
-    vpbroadcastb    m2, [priq+kq]               ; pri_taps
-    vpbroadcastb    m3, [secq+kq]               ; sec_taps
-
-    ACCUMULATE_TAP_BYTE 2, [rsp+0], m13, m0, m2, %1, %2 ; dir + 0
-    ACCUMULATE_TAP_BYTE 4, [rsp+8], m14, m1, m3, %1, %2 ; dir + 2
-    ACCUMULATE_TAP_BYTE 0, [rsp+8], m14, m1, m3, %1, %2 ; dir - 2
+    vpbroadcastb    m2, [priq+kq]                          ; pri_taps
+    vpbroadcastb    m3, [secq+kq]                          ; sec_taps
+    ACCUMULATE_TAP_BYTE 2, [rsp+0], m13, m0, m2, %1, %2, 1 ; dir + 0
+    ACCUMULATE_TAP_BYTE 4, [rsp+8], m14, m1, m3, %1, %2, 1 ; dir + 2
+    ACCUMULATE_TAP_BYTE 0, [rsp+8], m14, m1, m3, %1, %2, 1 ; dir - 2
     dec             kq
     jge .k_loop
 
     vpbroadcastd   m10, [pw_2048]
     pxor            m9, m9
-%if %2 == 4
-    punpcklbw       m4, m9
-    pcmpgtw         m9, m15
-    paddw          m15, m9
-    pmulhrsw       m15, m10
-    paddw           m4, m15
-    packuswb        m4, m4 ; clip px in [0x0,0xff]
-    pminub          m4, m7
-    pmaxub          m4, m8
-    vextracti128   xm5, m4, 1
-    movd   [dstq+strideq*0], xm4
-    movd   [dstq+strideq*2], xm5
-    pextrd [dstq+strideq*1], xm4, 1
-    pextrd [dstq+stride3q ], xm5, 1
-%else
-    pcmpgtw         m6, m9, m12
-    pcmpgtw         m5, m9, m15
-    paddw          m12, m6
-    paddw          m15, m5
-    punpckhbw       m5, m4, m9
-    punpcklbw       m4, m9
-    pmulhrsw       m12, m10
-    pmulhrsw       m15, m10
-    paddw           m5, m12
-    paddw           m4, m15
-    packuswb        m4, m5 ; clip px in [0x0,0xff]
-    pminub          m4, m7
-    pmaxub          m4, m8
-    vextracti128   xm5, m4, 1
- %if %1 == 4
-    movd   [dstq +strideq*0], xm4
-    movd   [dst4q+strideq*0], xm5
-    pextrd [dstq +strideq*1], xm4, 1
-    pextrd [dst4q+strideq*1], xm5, 1
-    pextrd [dstq +strideq*2], xm4, 2
-    pextrd [dst4q+strideq*2], xm5, 2
-    pextrd [dstq +stride3q ], xm4, 3
-    pextrd [dst4q+stride3q ], xm5, 3
- %else
-    movq   [dstq+strideq*0], xm4
-    movq   [dstq+strideq*2], xm5
-    movhps [dstq+strideq*1], xm4
-    movhps [dstq+stride3q ], xm5
- %endif
-%endif
+    ADJUST_PIXEL    %1, %2, m9, m10, 1
 %if %1*%2 > mmsize
     mov           dstq, dst4q
     lea          top1q, [rsp+0x90]
@@ -461,6 +551,76 @@ cglobal cdef_filter_%1x%2, 4, 9, 0, dst, stride, left, top, \
     lea          dst4q, [dst4q+strideq*4]
     add             hq, 4
     jl .v_loop
+%endif
+    RET
+
+.pri_only:
+ DEFINE_ARGS dst, stride, left, top, pri, _, table, pridmp
+    lea         tableq, [tap_table]
+    vpbroadcastb   m13, [tableq+pridmpq]        ; pri_shift_mask
+    ; pri/sec_taps[k] [4 total]
+ DEFINE_ARGS dst, stride, left, top, pri, _, table, dir
+    vpbroadcastb    m0, xm0                     ; pri_strength
+    and           prid, 1
+    lea           priq, [tableq+priq*2+8]       ; pri_taps
+    PREP_REGS       %1, %2
+    vpbroadcastd    m3, [pw_2048]
+    pxor            m1, m1
+%if %1*%2 > mmsize
+.pri_v_loop:
+%endif
+    LOAD_BLOCK      %1, %2
+.pri_k_loop:
+    vpbroadcastb    m2, [priq+kq]                       ; pri_taps
+    ACCUMULATE_TAP_BYTE 2, [rsp+0], m13, m0, m2, %1, %2 ; dir + 0
+    dec             kq
+    jge .pri_k_loop
+    ADJUST_PIXEL    %1, %2, m1, m3
+%if %1*%2 > mmsize
+    mov           dstq, dst4q
+    lea          top1q, [rsp+0x90]
+    lea          top2q, [rsp+0xA0]
+    lea          dst4q, [dst4q+strideq*4]
+    add             hq, 4
+    jl .pri_v_loop
+%endif
+    RET
+
+.sec_only:
+ DEFINE_ARGS dst, stride, left, top, _, secdmp, zero, _, damping
+    movd           xm1, secdmpd
+    lzcnt      secdmpd, secdmpd
+    add        secdmpd, dampingd
+    cmovs      secdmpd, zerod
+    mov        [rsp+8], secdmpq                 ; sec_shift
+ DEFINE_ARGS dst, stride, left, top, _, secdmp, table
+    lea         tableq, [tap_table]
+    vpbroadcastb   m14, [tableq+secdmpq]        ; sec_shift_mask
+    ; pri/sec_taps[k] [4 total]
+ DEFINE_ARGS dst, stride, left, top, _, sec, table, dir
+    vpbroadcastb    m1, xm1                     ; sec_strength
+    lea           secq, [tableq+12]             ; sec_taps
+    PREP_REGS       %1, %2
+    vpbroadcastd    m2, [pw_2048]
+    pxor            m0, m0
+%if %1*%2 > mmsize
+.sec_v_loop:
+%endif
+    LOAD_BLOCK      %1, %2
+.sec_k_loop:
+    vpbroadcastb    m3, [secq+kq]                       ; sec_taps
+    ACCUMULATE_TAP_BYTE 4, [rsp+8], m14, m1, m3, %1, %2 ; dir + 2
+    ACCUMULATE_TAP_BYTE 0, [rsp+8], m14, m1, m3, %1, %2 ; dir - 2
+    dec             kq
+    jge .sec_k_loop
+    ADJUST_PIXEL    %1, %2, m0, m2
+%if %1*%2 > mmsize
+    mov           dstq, dst4q
+    lea          top1q, [rsp+0x90]
+    lea          top2q, [rsp+0xA0]
+    lea          dst4q, [dst4q+strideq*4]
+    add             hq, 4
+    jl .sec_v_loop
 %endif
     RET
 
@@ -1343,21 +1503,24 @@ cglobal cdef_filter_%1x%2, 4, 9, 0, dst, stride, left, top, \
     ; register to shuffle values into after packing
     vbroadcasti128 m12, [shufb_lohi]
 
-    movifnidn     prid, prim
     mov       dampingd, r7m
-    lzcnt      pridmpd, prid
-%if UNIX64
-    movd           xm0, prid
-    movd           xm1, secdmpd
-%endif
-    lzcnt      secdmpd, secdmpm
-    sub       dampingd, 31
     xor          zerod, zerod
+    movifnidn     prid, prim
+    sub       dampingd, 31
+    movifnidn  secdmpd, secdmpm
+    or            prid, 0
+    jz .border_sec_only
+    movd           xm0, prid
+    lzcnt      pridmpd, prid
     add        pridmpd, dampingd
     cmovs      pridmpd, zerod
+    mov        [rsp+0], pridmpq                 ; pri_shift
+    or         secdmpd, 0
+    jz .border_pri_only
+    movd           xm1, secdmpd
+    lzcnt      secdmpd, secdmpd
     add        secdmpd, dampingd
     cmovs      secdmpd, zerod
-    mov        [rsp+0], pridmpq                 ; pri_shift
     mov        [rsp+8], secdmpq                 ; sec_shift
 
     DEFINE_ARGS dst, stride, pridmp, table, pri, secdmp, stride3
@@ -1367,79 +1530,28 @@ cglobal cdef_filter_%1x%2, 4, 9, 0, dst, stride, left, top, \
 
     ; pri/sec_taps[k] [4 total]
     DEFINE_ARGS dst, stride, dir, table, pri, sec, stride3
-%if UNIX64
     vpbroadcastb    m0, xm0                     ; pri_strength
     vpbroadcastb    m1, xm1                     ; sec_strength
-%else
-    vpbroadcastb    m0, prim
-    vpbroadcastb    m1, secm
-%endif
     and           prid, 1
     lea           priq, [tableq+priq*2+8]       ; pri_taps
     lea           secq, [tableq+12]             ; sec_taps
 
-    ; off1/2/3[k] [6 total] from [tapq+12+(dir+0/2/6)*2+k]
-    mov           dird, r6m
-    lea           dirq, [tableq+dirq*2+14]
-%if %1*%2*2/mmsize > 1
- %if %1 == 4
-    DEFINE_ARGS dst, stride, dir, stk, pri, sec, stride3, h, off, k
- %else
-    DEFINE_ARGS dst, stride, dir, stk, pri, sec, h, off, k
- %endif
-    mov             hd, %1*%2*2/mmsize
-%else
-    DEFINE_ARGS dst, stride, dir, stk, pri, sec, stride3, off, k
-%endif
-    lea           stkq, [px]
-    pxor           m11, m11
+    BORDER_PREP_REGS %1, %2
 %if %1*%2*2/mmsize > 1
 .border_v_loop:
 %endif
-    mov             kd, 1
-%if %1 == 4
-    movq           xm4, [stkq+32*0]
-    movhps         xm4, [stkq+32*1]
-    movq           xm5, [stkq+32*2]
-    movhps         xm5, [stkq+32*3]
-    vinserti128     m4, xm5, 1
-%else
-    mova           xm4, [stkq+32*0]             ; px
-    vinserti128     m4, [stkq+32*1], 1
-%endif
-    pxor           m15, m15                     ; sum
-    mova            m7, m4                      ; max
-    mova            m8, m4                      ; min
+    BORDER_LOAD_BLOCK %1, %2, 1
 .border_k_loop:
     vpbroadcastb    m2, [priq+kq]               ; pri_taps
     vpbroadcastb    m3, [secq+kq]               ; sec_taps
-
-    ACCUMULATE_TAP_WORD 0*2, [rsp+0], m13, m0, m2, %1
-    ACCUMULATE_TAP_WORD 2*2, [rsp+8], m14, m1, m3, %1
-    ACCUMULATE_TAP_WORD 6*2, [rsp+8], m14, m1, m3, %1
-
+    ACCUMULATE_TAP_WORD 0*2, [rsp+0], m13, m0, m2, %1, 1
+    ACCUMULATE_TAP_WORD 2*2, [rsp+8], m14, m1, m3, %1, 1
+    ACCUMULATE_TAP_WORD 6*2, [rsp+8], m14, m1, m3, %1, 1
     dec             kq
     jge .border_k_loop
 
     vpbroadcastd   m10, [pw_2048]
-    pcmpgtw         m9, m11, m15
-    paddw          m15, m9
-    pmulhrsw       m15, m10
-    paddw           m4, m15
-    pminsw          m4, m7
-    pmaxsw          m4, m8
-    packuswb        m4, m4
-    vextracti128   xm5, m4, 1
-%if %1 == 4
-    movd [dstq+strideq*0], xm4
-    pextrd [dstq+strideq*1], xm4, 1
-    movd [dstq+strideq*2], xm5
-    pextrd [dstq+stride3q], xm5, 1
-%else
-    movq [dstq+strideq*0], xm4
-    movq [dstq+strideq*1], xm5
-%endif
-
+    BORDER_ADJUST_PIXEL %1, m10, 1
 %if %1*%2*2/mmsize > 1
  %define vloop_lines (mmsize/(%1*2))
     lea           dstq, [dstq+strideq*vloop_lines]
@@ -1447,7 +1559,70 @@ cglobal cdef_filter_%1x%2, 4, 9, 0, dst, stride, left, top, \
     dec             hd
     jg .border_v_loop
 %endif
+    RET
 
+.border_pri_only:
+ DEFINE_ARGS dst, stride, pridmp, table, pri, _, stride3
+    lea         tableq, [tap_table]
+    vpbroadcastb   m13, [tableq+pridmpq]        ; pri_shift_mask
+ DEFINE_ARGS dst, stride, dir, table, pri, _, stride3
+    vpbroadcastb    m0, xm0                     ; pri_strength
+    and           prid, 1
+    lea           priq, [tableq+priq*2+8]       ; pri_taps
+    BORDER_PREP_REGS %1, %2
+    vpbroadcastd    m1, [pw_2048]
+%if %1*%2*2/mmsize > 1
+.border_pri_v_loop:
+%endif
+    BORDER_LOAD_BLOCK %1, %2
+.border_pri_k_loop:
+    vpbroadcastb    m2, [priq+kq]               ; pri_taps
+    ACCUMULATE_TAP_WORD 0*2, [rsp+0], m13, m0, m2, %1
+    dec             kq
+    jge .border_pri_k_loop
+    BORDER_ADJUST_PIXEL %1, m1
+%if %1*%2*2/mmsize > 1
+ %define vloop_lines (mmsize/(%1*2))
+    lea           dstq, [dstq+strideq*vloop_lines]
+    add           stkq, 32*vloop_lines
+    dec             hd
+    jg .border_pri_v_loop
+%endif
+    RET
+
+.border_sec_only:
+ DEFINE_ARGS dst, stride, _, damping, _, secdmp, stride3, zero
+    movd           xm1, secdmpd
+    lzcnt      secdmpd, secdmpd
+    add        secdmpd, dampingd
+    cmovs      secdmpd, zerod
+    mov        [rsp+8], secdmpq                 ; sec_shift
+ DEFINE_ARGS dst, stride, _, table, _, secdmp, stride3
+    lea         tableq, [tap_table]
+    vpbroadcastb   m14, [tableq+secdmpq]        ; sec_shift_mask
+ DEFINE_ARGS dst, stride, dir, table, _, sec, stride3
+    vpbroadcastb    m1, xm1                     ; sec_strength
+    lea           secq, [tableq+12]             ; sec_taps
+    BORDER_PREP_REGS %1, %2
+    vpbroadcastd    m0, [pw_2048]
+%if %1*%2*2/mmsize > 1
+.border_sec_v_loop:
+%endif
+    BORDER_LOAD_BLOCK %1, %2
+.border_sec_k_loop:
+    vpbroadcastb    m3, [secq+kq]               ; sec_taps
+    ACCUMULATE_TAP_WORD 2*2, [rsp+8], m14, m1, m3, %1
+    ACCUMULATE_TAP_WORD 6*2, [rsp+8], m14, m1, m3, %1
+    dec             kq
+    jge .border_sec_k_loop
+    BORDER_ADJUST_PIXEL %1, m0
+%if %1*%2*2/mmsize > 1
+ %define vloop_lines (mmsize/(%1*2))
+    lea           dstq, [dstq+strideq*vloop_lines]
+    add           stkq, 32*vloop_lines
+    dec             hd
+    jg .border_sec_v_loop
+%endif
     RET
 %endmacro
 
