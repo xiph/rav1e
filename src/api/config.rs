@@ -251,6 +251,10 @@ impl fmt::Display for EncoderConfig {
         self.speed_settings.non_square_partition.to_string(),
       ),
       ("enable_timing_info", self.enable_timing_info.to_string()),
+      (
+        "fine_directional_intra",
+        self.speed_settings.fine_directional_intra.to_string(),
+      ),
     ];
     write!(
       f,
@@ -329,6 +333,9 @@ pub struct SpeedSettings {
 
   /// Enable tx split for inter mode block.
   pub enable_inter_tx_split: bool,
+
+  /// Use fine directional intra prediction
+  pub fine_directional_intra: bool,
 }
 
 impl Default for SpeedSettings {
@@ -359,6 +366,7 @@ impl Default for SpeedSettings {
       non_square_partition: true,
       enable_segmentation: true,
       enable_inter_tx_split: false,
+      fine_directional_intra: false,
     }
   }
 }
@@ -400,6 +408,7 @@ impl SpeedSettings {
       non_square_partition: Self::non_square_partition_preset(speed),
       enable_segmentation: Self::enable_segmentation_preset(speed),
       enable_inter_tx_split: Self::enable_inter_tx_split_preset(speed),
+      fine_directional_intra: Self::fine_directional_intra_preset(speed),
     }
   }
 
@@ -515,6 +524,10 @@ impl SpeedSettings {
   // FIXME: With unknown reasons, inter_tx_split does not work if reduced_tx_set is false
   const fn enable_inter_tx_split_preset(speed: usize) -> bool {
     speed >= 9
+  }
+
+  fn fine_directional_intra_preset(speed: usize) -> bool {
+    speed <= 1 || speed >= 6
   }
 }
 
