@@ -324,7 +324,7 @@ endconst
         vqsub.u16       q9,  \thresh_vec, q9 // clip = imax(0, threshold - (abs(diff) >> shift))
         vqsub.u16       q12, \thresh_vec, q12// clip = imax(0, threshold - (abs(diff) >> shift))
         vsub.i16        q10, \s1, q0         // diff = p0 - px
-        vsub.u16        q13, \s2, q0         // diff = p1 - px
+        vsub.i16        q13, \s2, q0         // diff = p1 - px
         vneg.s16        q8,  q9              // -clip
         vneg.s16        q11, q12             // -clip
         vmin.s16        q10, q10, q9         // imin(diff, clip)
