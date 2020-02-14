@@ -135,7 +135,7 @@ impl ActivityMask {
             let element = variances.get_mut(y * (width >> granularity) + x);
             match element {
                 Some(x) => {
-                    *x = *x * temporal_act;
+                    *x = *x;
                     avg_var += *x;
                     max = max.max(*x);
                 }
@@ -183,7 +183,7 @@ impl ActivityMask {
     let res = self.variances.get((x >> self.granularity) + dec_width * (y >> self.granularity));
     match res {
         /* Tuned to 16x16 varience from 3976852114 samples of a variety of pictures */
-        Some(val) => return (*val * self.var_scale) * 60f64,
+        Some(val) => return (*val * self.var_scale) * 202.35866724f64,
         None => unreachable!(),
     }
   }
