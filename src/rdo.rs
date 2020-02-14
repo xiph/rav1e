@@ -140,8 +140,6 @@ fn cdef_dist_wxh_8x8<T: Pixel>(
   src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, bit_depth: usize,
   svar: i64,
 ) -> RawDistortion {
-  use byteorder::{LittleEndian, WriteBytesExt};
-  use std::io::{self, Write};
   debug_assert!(src1.plane_cfg.xdec == 0);
   debug_assert!(src1.plane_cfg.ydec == 0);
   debug_assert!(src2.plane_cfg.xdec == 0);
@@ -150,8 +148,6 @@ fn cdef_dist_wxh_8x8<T: Pixel>(
   let coeff_shift = bit_depth - 8;
 
   // Sum into columns to improve auto-vectorization
-  let mut sum_s_cols: [u16; 8] = [0; 8];
-  let mut sum_d_cols: [u16; 8] = [0; 8];
   let mut sum_s2_cols: [u32; 8] = [0; 8];
   let mut sum_d2_cols: [u32; 8] = [0; 8];
   let mut sum_sd_cols: [u32; 8] = [0; 8];
@@ -159,9 +155,7 @@ fn cdef_dist_wxh_8x8<T: Pixel>(
   for j in 0..8 {
     let row1 = &src1[j][0..8];
     let row2 = &src2[j][0..8];
-    for (sum_s, sum_d, sum_s2, sum_d2, sum_sd, s, d) in izip!(
-      &mut sum_s_cols,
-      &mut sum_d_cols,
+    for (sum_s2, sum_d2, sum_sd, s, d) in izip!(
       &mut sum_s2_cols,
       &mut sum_d2_cols,
       &mut sum_sd_cols,
@@ -171,8 +165,6 @@ fn cdef_dist_wxh_8x8<T: Pixel>(
       // Don't convert directly to u32 to allow better vectorization
       let s: u16 = u16::cast_from(*s);
       let d: u16 = u16::cast_from(*d);
-      *sum_s += s;
-      *sum_d += d;
 
       // Convert to u32 to avoid overflows when multiplying
       let s: u32 = s as u32;
@@ -185,47 +177,18 @@ fn cdef_dist_wxh_8x8<T: Pixel>(
   }
 
   // Sum together the sum of columns
-  let sum_s: i64 =
-    sum_s_cols.iter().map(|&a| u32::cast_from(a)).sum::<u32>() as i64;
-  let sum_d: i64 =
-    sum_d_cols.iter().map(|&a| u32::cast_from(a)).sum::<u32>() as i64;
   let sum_s2: i64 = sum_s2_cols.iter().sum::<u32>() as i64;
   let sum_d2: i64 = sum_d2_cols.iter().sum::<u32>() as i64;
   let sum_sd: i64 = sum_sd_cols.iter().sum::<u32>() as i64;
 
   // Use sums to calculate distortion
-  let dvar = sum_d2 - ((sum_d * sum_d + 32) >> 6);
   let sse = (sum_d2 + sum_s2 - 2 * sum_sd) as f64;
-
-
-  /* For svar <=> svar_orig tuning */
-  /*
-  let svar_orig = sum_s2 - ((sum_s * sum_s + 32) >> 6);
-  let mut buf = ArrayVec::<[u8; 16]>::new();
-  buf.write_f64::<LittleEndian>(svar as f64).unwrap();
-  buf.write_f64::<LittleEndian>(svar_orig as f64).unwrap();
-  io::stdout().lock().write_all(&buf);
-  let svar = svar_orig;
-  */
-
 
   let ssim_boost = (4033_f64 / 16_384_f64)
     * (svar + svar + (16_384 << (2 * coeff_shift))) as f64
     / f64::sqrt(((16_265_089i64 << (4 * coeff_shift)) + svar * svar) as f64);
 
-
-  /* For ssim_boost <=> ssim_boost_orig turning */
-  let ssim_boost_orig = (4033_f64 / 16_384_f64)
-    * (svar + dvar + (16_384 << (2 * coeff_shift))) as f64
-    / f64::sqrt(((16_265_089i64 << (4 * coeff_shift)) + svar * dvar) as f64);
-
-  let mut buf = ArrayVec::<[u8; 16]>::new();
-  buf.write_f64::<LittleEndian>(ssim_boost).unwrap();
-  buf.write_f64::<LittleEndian>(ssim_boost_orig).unwrap();
-  io::stdout().lock().write_all(&buf);
-
-  /* Tuned on 2600468480 samples of various images and videos */
-  let ssim_boost = ssim_boost * 0.9699451379949585f64 + 0.12503340427342588f64;
+  let ssim_boost = ssim_boost * 0.9499451379949585f64 + 0.12503340427342588f64;
 
   RawDistortion::new((sse * ssim_boost + 0.5_f64) as u64)
 }
@@ -463,67 +426,7 @@ fn compute_tx_distortion<T: Pixel>(
 pub fn distortion_scale<T: Pixel>(
   fi: &FrameInvariants<T>, frame_bo: PlaneBlockOffset, bsize: BlockSize,
 ) -> f64 {
-  if !fi.config.temporal_rdo() {
-    return 1.;
-  }
-  // EncoderConfig::temporal_rdo() should always return false in situations
-  // where distortion is computed on > 8x8 blocks, so we should never hit this
-  // assert.
-  assert!(bsize <= BlockSize::BLOCK_8X8);
-
-  let x = frame_bo.0.x >> IMPORTANCE_BLOCK_TO_BLOCK_SHIFT;
-  let y = frame_bo.0.y >> IMPORTANCE_BLOCK_TO_BLOCK_SHIFT;
-
-  let propagate_cost = fi.block_importances[y * fi.w_in_imp_b + x] as f64;
-  let intra_cost = fi.lookahead_intra_costs[y * fi.w_in_imp_b + x] as f64;
-
-  // The mbtree paper \cite{mbtree} uses the following formula:
-  //
-  //     QP_delta = -strength * log2(1 + (propagate_cost / intra_cost))
-  //
-  // Since this is H.264, this corresponds to the following quantizer:
-  //
-  //     Q' = Q * 2^(QP_delta/6)
-  //
-  // Since lambda is proportial to Q^2, this means we want to minimize:
-  //
-  //     D + lambda' * R
-  //   = D + 2^(QP_delta / 3) * lambda * R
-  //
-  // If we want to keep lambda fixed, we can instead scale distortion and
-  // minimize:
-  //
-  //     D * scale + lambda * R
-  //
-  // where:
-  //
-  //     scale = 2^(QP_delta / -3)
-  //           = (1 + (propagate_cost / intra_cost))^(strength / 3)
-  //
-  //  The original paper empirically chooses strength = 2.0, but strength = 1.0
-  //  seems to work best in rav1e currently, this may have something to do with
-  //  the fact that they use 16x16 blocks whereas our "importance blocks" are
-  //  8x8, but everything should be scale invariant here so that's weird.
-  //
-  // @article{mbtree,
-  //   title={A novel macroblock-tree algorithm for high-performance
-  //    optimization of dependent video coding in H.264/AVC},
-  //   author={Garrett-Glaser, Jason},
-  //   journal={Tech. Rep.},
-  //   year={2009},
-  //   url={https://pdfs.semanticscholar.org/032f/1ab7d9db385780a02eb2d579af8303b266d2.pdf}
-  // }
-
-  let var = fi.activity_mask.variance_at(frame_bo.0.x, frame_bo.0.y);
-  let act_bias = 1.0f64 /* (fi.activity_mask.avg_var / var) */;
-
-  if intra_cost == 0. {
-    return act_bias
-  }
-
-  let strength = 1.0; // empirical, see comment above
-  let frac = (intra_cost + propagate_cost) / intra_cost;
-  frac.powf(strength / 3.0) * act_bias
+  return 1.0f64
 }
 
 #[repr(transparent)]

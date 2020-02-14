@@ -96,8 +96,6 @@ pub fn segmentation_optimize<T: Pixel>(
                 }
             }
 
-            println!("Remapped = {} to {}, ss {} ({}) and {} ({})", prev_id, remap_segment_tab[i], seg_bins[prev_id], tmp_delta[prev_id], seg_bins[remap_segment_tab[i]], tmp_delta[remap_segment_tab[i]]);
-
             let num_2bins = seg_bins[remap_segment_tab[i]] + seg_bins[prev_id];
             let mut ratio_new = (seg_bins[remap_segment_tab[i]] as f64) / (num_2bins as f64);
             let mut ratio_old = (seg_bins[prev_id] as f64) / (num_2bins as f64);
@@ -152,18 +150,11 @@ pub fn segmentation_optimize<T: Pixel>(
         }
     }
 
-    println!("Num seg = {}, Center = {}", num_segments, avg_var);
-    for i in 0..8 {
-        println!("    {} -> {} : {}", i, remap_segment_tab[i], seg_delta[remap_segment_tab[i]]);
-    }
-
     fs.segmentation.act_lut = remap_segment_tab;
 
     for i in 0..num_segments {
         fs.segmentation.features[i][SegLvl::SEG_LVL_ALT_Q as usize] = true;
         fs.segmentation.data[i][SegLvl::SEG_LVL_ALT_Q as usize] = (seg_delta[i].round() as i16).max(offset_lower_limit);
-
-        println!("Seg {} = {}", i, fs.segmentation.data[i][SegLvl::SEG_LVL_ALT_Q as usize]);
     }
 
     /* Figure out parameters */
