@@ -140,6 +140,8 @@ fn cdef_dist_wxh_8x8<T: Pixel>(
   src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, bit_depth: usize,
   svar: i64,
 ) -> RawDistortion {
+  use byteorder::{LittleEndian, WriteBytesExt};
+  use std::io::{self, Write};
   debug_assert!(src1.plane_cfg.xdec == 0);
   debug_assert!(src1.plane_cfg.ydec == 0);
   debug_assert!(src2.plane_cfg.xdec == 0);
@@ -148,6 +150,8 @@ fn cdef_dist_wxh_8x8<T: Pixel>(
   let coeff_shift = bit_depth - 8;
 
   // Sum into columns to improve auto-vectorization
+  let mut sum_s_cols: [u16; 8] = [0; 8];
+  let mut sum_d_cols: [u16; 8] = [0; 8];
   let mut sum_s2_cols: [u32; 8] = [0; 8];
   let mut sum_d2_cols: [u32; 8] = [0; 8];
   let mut sum_sd_cols: [u32; 8] = [0; 8];
@@ -155,12 +159,20 @@ fn cdef_dist_wxh_8x8<T: Pixel>(
   for j in 0..8 {
     let row1 = &src1[j][0..8];
     let row2 = &src2[j][0..8];
-    for (sum_s2, sum_d2, sum_sd, s, d) in
-      izip!(&mut sum_s2_cols, &mut sum_d2_cols, &mut sum_sd_cols, row1, row2)
-    {
+    for (sum_s, sum_d, sum_s2, sum_d2, sum_sd, s, d) in izip!(
+      &mut sum_s_cols,
+      &mut sum_d_cols,
+      &mut sum_s2_cols,
+      &mut sum_d2_cols,
+      &mut sum_sd_cols,
+      row1,
+      row2
+    ) {
       // Don't convert directly to u32 to allow better vectorization
       let s: u16 = u16::cast_from(*s);
       let d: u16 = u16::cast_from(*d);
+      *sum_s += s;
+      *sum_d += d;
 
       // Convert to u32 to avoid overflows when multiplying
       let s: u32 = s as u32;
@@ -173,16 +185,44 @@ fn cdef_dist_wxh_8x8<T: Pixel>(
   }
 
   // Sum together the sum of columns
+  let sum_s: i64 =
+    sum_s_cols.iter().map(|&a| u32::cast_from(a)).sum::<u32>() as i64;
+  let sum_d: i64 =
+    sum_d_cols.iter().map(|&a| u32::cast_from(a)).sum::<u32>() as i64;
   let sum_s2: i64 = sum_s2_cols.iter().sum::<u32>() as i64;
   let sum_d2: i64 = sum_d2_cols.iter().sum::<u32>() as i64;
   let sum_sd: i64 = sum_sd_cols.iter().sum::<u32>() as i64;
 
   // Use sums to calculate distortion
+  let dvar = sum_d2 - ((sum_d * sum_d + 32) >> 6);
   let sse = (sum_d2 + sum_s2 - 2 * sum_sd) as f64;
-  // Linear fit at QP 80 to the function including reconstruction variance
+
+
+  /* For svar <=> svar_orig tuning */
+  /*
+  let svar_orig = sum_s2 - ((sum_s * sum_s + 32) >> 6);
+  let mut buf = ArrayVec::<[u8; 16]>::new();
+  buf.write_f64::<LittleEndian>(svar as f64).unwrap();
+  buf.write_f64::<LittleEndian>(svar_orig as f64).unwrap();
+  io::stdout().lock().write_all(&buf);
+  let svar = svar_orig;
+  */
+
+
   let ssim_boost = (4033_f64 / 16_384_f64)
     * (svar + svar + (16_384 << (2 * coeff_shift))) as f64
     / f64::sqrt(((16_265_089i64 << (4 * coeff_shift)) + svar * svar) as f64);
+
+
+  /* For ssim_boost <=> ssim_boost_orig turning */
+  let ssim_boost_orig = (4033_f64 / 16_384_f64)
+    * (svar + dvar + (16_384 << (2 * coeff_shift))) as f64
+    / f64::sqrt(((16_265_089i64 << (4 * coeff_shift)) + svar * dvar) as f64);
+
+  let mut buf = ArrayVec::<[u8; 16]>::new();
+  buf.write_f64::<LittleEndian>(ssim_boost).unwrap();
+  buf.write_f64::<LittleEndian>(ssim_boost_orig).unwrap();
+  io::stdout().lock().write_all(&buf);
 
   /* Tuned on 2600468480 samples of various images and videos */
   let ssim_boost = ssim_boost * 0.9699451379949585f64 + 0.12503340427342588f64;

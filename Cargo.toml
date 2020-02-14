@@ -32,7 +32,7 @@ binaries = [
     "console",
     "better-panic",
 ]
-default = ["binaries", "asm", "signal_support"]
+default = ["binaries", "asm", "signal_support", "byteorder"]
 asm = ["nasm-rs", "cc"]
 signal_support = ["signal-hook"]
 dump_ivf = ["ivf"]
