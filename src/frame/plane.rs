@@ -354,7 +354,7 @@ impl<T: Pixel> Plane<T> {
     }
   }
 
-  pub(crate) fn slice(&self, po: PlaneOffset) -> PlaneSlice<'_, T> {
+  pub fn slice(&self, po: PlaneOffset) -> PlaneSlice<'_, T> {
     PlaneSlice { plane: self, x: po.x, y: po.y }
   }
 
